@@ -7,11 +7,16 @@
 #include "engine/kernel/detail/Context.hpp"
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -716,29 +721,194 @@ private:
 template <class SetTag>
 struct ParamTraits<SetRead<SetTag>> : Detail::HandleTraits<SetRead<SetTag>, TypeList<Access::SetReadOf<SetTag>>, true> {};
 
+// ---- ExclusiveWorld (spec S-10, S-13 to S-18; K0, v8-arch-gyo2-nested-schedule)
+
+// The single-writer resources an ExclusiveWorld writes: ExclusiveWorld<Writes<R...>>.
+// Each listed resource is a resource write of the System (counted as its
+// writer: D-E2; checked like any write: Z2, D-E18, affinity). Shared resources
+// need no listing.
+template <class... Resources>
+struct Writes {};
+
+namespace Detail {
+
+template <class>
+inline constexpr bool kAlwaysFalse = false;
+
+template <class T>
+struct IsMut : std::false_type {};
+template <class T>
+struct IsMut<Mut<T>> : std::true_type {};
+
+template <class T>
+struct IsReferenceWrapper : std::false_type {};
+template <class T>
+struct IsReferenceWrapper<std::reference_wrapper<T>> : std::true_type {};
+
+// Any extent: a fixed-extent span is not a std::ranges::view in older standard libraries.
+template <class T>
+struct IsSpan : std::false_type {};
+template <class T, std::size_t N>
+struct IsSpan<std::span<T, N>> : std::true_type {};
+
+// Spec S-13 (K0, v8-arch-gyo2-closure-may-return-values): what a Read or
+// Modify closure may not return, because it can point into the World and
+// dangle after RunSchedule: a pointer, a reference, Mut, std::reference_wrapper,
+// a std::span, a standard view, an iterator; std::pair and std::tuple are
+// looked into, item by item. A whole copy is fine. A pointer hidden in the
+// author's own struct or in std::optional is not caught (LIM-3).
+template <class R>
+struct PointsIntoWorld;
+template <class R>
+inline constexpr bool kPointsIntoWorld = PointsIntoWorld<R>::value;
+
+template <class R>
+struct PointsIntoWorld
+    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||
+                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||
+                         std::ranges::view<std::remove_cv_t<R>> ||
+                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};
+template <class A, class B>
+struct PointsIntoWorld<std::pair<A, B>> : std::bool_constant<kPointsIntoWorld<A> || kPointsIntoWorld<B>> {};
+template <class A, class B>
+struct PointsIntoWorld<const std::pair<A, B>> : PointsIntoWorld<std::pair<A, B>> {};
+template <class... T>
+struct PointsIntoWorld<std::tuple<T...>> : std::bool_constant<(kPointsIntoWorld<T> || ...)> {};
+template <class... T>
+struct PointsIntoWorld<const std::tuple<T...>> : PointsIntoWorld<std::tuple<T...>> {};
+
+// A closure F that takes Arg and returns a value that does not point into the World.
+template <class F, class Arg>
+concept ExclusiveClosure = std::invocable<F&, Arg> && !kPointsIntoWorld<std::invoke_result_t<F&, Arg>>;
+
+// The result of a Read or Modify: Err when a rule refuses the access (S-13 to
+// S-16); otherwise what the closure returned, or nothing when the entity has
+// no T or the resource is absent (the closure was not called). A closure that
+// returns void gives whether it was called.
+template <class R>
+struct VisitResultOf {
+    using Type = Engine::Base::Result<std::optional<R>, KernelError>;
+};
+template <>
+struct VisitResultOf<void> {
+    using Type = Engine::Base::Result<bool, KernelError>;
+};
+
+// Counts the closures running on one handle (RunSchedule is refused inside one: X-14).
+class ClosureScope {
+public:
+    explicit ClosureScope(std::uint32_t& depth) noexcept : depth_(depth) { ++depth_; }
+    ~ClosureScope() { --depth_; }
+    ClosureScope(const ClosureScope&) = delete;
+    ClosureScope& operator=(const ClosureScope&) = delete;
+
+private:
+    std::uint32_t& depth_;
+};
+
+} // namespace Detail
+
+template <class R>
+using VisitResult = typename Detail::VisitResultOf<R>::Type;
+
 // Untyped access to the whole World; zone B only (S-13); the only parameter
-// (S-10). Conflicts with every System of its stage.
-class ExclusiveWorld final : Detail::Handle {
+// (S-10). Conflicts with every System of its stage. Written ExclusiveWorld<>
+// with nothing to list, ExclusiveWorld<Writes<R...>> to write single-writer
+// resources (one name, v8-arch-gyo2-nested-declaration-approved).
+template <class Declared = Writes<>>
+class ExclusiveWorld {
+    static_assert(Detail::kAlwaysFalse<Declared>,
+                  "GYO_KERNEL_REJECT_EXCLUSIVE_DECLARATION: ExclusiveWorld takes Writes<Resources...> or nothing "
+                  "(ExclusiveWorld<>)");
+};
+
+template <class... Listed>
+class ExclusiveWorld<Writes<Listed...>> final : Detail::Handle {
     GYO_KERNEL_HANDLE(ExclusiveWorld) : Handle(call), stamp_(call.stamp) {}
 
 public:
-    // Reads any column (spec S-13: ExclusiveWorld reads everything).
-    template <class T>
-    [[nodiscard]] const T* Get(EntityId entity) const {
+    // Reads entity's T through f(const T&), any component (S-13). Nothing, and
+    // f not called, when the entity has no T. No pointer leaves: f's result is
+    // returned, and it may not point into the World (S-13, K0).
+    template <class T, class F>
+        requires Detail::ExclusiveClosure<F, const T&>
+    [[nodiscard]] VisitResult<std::invoke_result_t<F&, const T&>> Read(EntityId entity, F&& f) {
         Check("ExclusiveWorld");
-        const auto* cell =
-            static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, Detail::ComponentIdOf(*world_, KeyOf<T>()))).Find(entity);
-        return cell != nullptr ? &cell->value : nullptr;
+        const auto* cell = Column<T>().Find(entity);
+        if (cell == nullptr) return Absent<std::invoke_result_t<F&, const T&>>();
+        return Call<const T&>(f, cell->value);
     }
 
-    // Writes only zone B, Shared columns; anything else is Err in every build (S-13).
-    template <class T>
-    [[nodiscard]] Engine::Base::Result<Mut<T>, KernelError> GetMut(EntityId entity) {
+    // Writes entity's T through f(T&): only zone B, Shared columns; anything
+    // else is Err in every build (S-13). The cell's changed stamp is set when
+    // f is called (whether or not f changes the value).
+    template <class T, class F>
+        requires Detail::ExclusiveClosure<F, T&>
+    [[nodiscard]] VisitResult<std::invoke_result_t<F&, T&>> Modify(EntityId entity, F&& f) {
         Check("ExclusiveWorld");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         const ComponentId component = Detail::ComponentIdOf(*world_, KeyOf<T>());
         if (auto error = Detail::CheckExclusiveWrite(call, component, entity)) return Engine::Base::Err(std::move(*error));
-        return Mut<T>(static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, component)).Find(entity), stamp_);
+        auto* cell = static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, component)).Find(entity);
+        if (cell == nullptr) return Absent<std::invoke_result_t<F&, T&>>();
+        cell->changed = stamp_;
+        return Call<T&>(f, cell->value);
+    }
+
+    // Reads resource T through f(const T&): any resource but KernelSettings and
+    // one whose thread affinity the runner does not satisfy, which are Err
+    // (S-15, S-16). Nothing, and f not called, when the resource is absent.
+    template <class T, class F>
+        requires Detail::ExclusiveClosure<F, const T&>
+    [[nodiscard]] VisitResult<std::invoke_result_t<F&, const T&>> Read(F&& f) {
+        Check("ExclusiveWorld");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        const ResourceId resource = Detail::ResourceIdOf(*world_, KeyOf<T>());
+        if (auto error = Detail::CheckExclusiveRead(call, resource)) return Engine::Base::Err(std::move(*error));
+        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));
+        if (!slot.value) return Absent<std::invoke_result_t<F&, const T&>>();
+        return Call<const T&>(f, *slot.value);
+    }
+
+    // Writes resource T through f(T&): a zone B Shared resource, or one listed
+    // in Writes<...>; another is Err (S-13 zone C, S-14 single writer not
+    // listed), as is one it may not read (S-15, S-16). Only the value: a resource is
+    // not added or removed here. The changed stamp is set when f is called.
+    template <class T, class F>
+        requires Detail::ExclusiveClosure<F, T&>
+    [[nodiscard]] VisitResult<std::invoke_result_t<F&, T&>> Modify(F&& f) {
+        Check("ExclusiveWorld");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        const ResourceId resource = Detail::ResourceIdOf(*world_, KeyOf<T>());
+        if (auto error = Detail::CheckExclusiveRead(call, resource)) return Engine::Base::Err(std::move(*error));
+        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {
+            return Engine::Base::Err(std::move(*error));
+        }
+        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));
+        if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();
+        slot.changed = stamp_;
+        return Call<T&>(f, *slot.value);
+    }
+
+    // Runs another schedule of this World, whole, now (K0; spec E.2). Err, the
+    // World interrupted and the error reported once by the outermost Run, when
+    // refused (Detail::RunNested lists why) or when the inner schedule fails;
+    // pass it on. Afterwards this handle stays usable: its sync epoch is the
+    // World's again (W-4) and its writes take a new stamp, after every stamp of
+    // the inner schedule, whether the run succeeded, failed, was refused or was
+    // left by an exception the System catches.
+    [[nodiscard]] Engine::Base::Result<void, KernelError> RunSchedule(std::string_view schedule) {
+        Check("ExclusiveWorld");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        // On every way back, an exception included.
+        struct Renew {
+            ExclusiveWorld& self;
+            ~Renew() {
+                self.syncEpoch_ = Detail::CurrentSyncEpoch(*self.world_);
+                self.stamp_ = Detail::NextStamp(*self.world_);
+            }
+        } renew{*this};
+        return Detail::RunNested(call, schedule, closures_ > 0);
     }
 
     // There is no untyped spawn (spec A.1): always Err, in every build (S-13, J-45).
@@ -749,10 +919,39 @@ public:
     }
 
 private:
+    template <class T>
+    [[nodiscard]] Detail::Column<T>& Column() const {
+        return static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, Detail::ComponentIdOf(*world_, KeyOf<T>())));
+    }
+
+    template <class R>
+    [[nodiscard]] static VisitResult<R> Absent() {
+        if constexpr (std::is_void_v<R>) {
+            return false;
+        } else {
+            return std::optional<R>();
+        }
+    }
+
+    template <class Arg, class F, class Value>
+    [[nodiscard]] VisitResult<std::invoke_result_t<F&, Arg>> Call(F& f, Value& value) {
+        using R = std::invoke_result_t<F&, Arg>;
+        Detail::ClosureScope scope(closures_);
+        if constexpr (std::is_void_v<R>) {
+            std::invoke(f, static_cast<Arg>(value));
+            return true;
+        } else {
+            return std::optional<R>(std::invoke(f, static_cast<Arg>(value)));
+        }
+    }
+
     ChangeStamp stamp_;
+    std::uint32_t closures_ = 0;
 };
-template <>
-struct ParamTraits<ExclusiveWorld> : Detail::HandleTraits<ExclusiveWorld, TypeList<Access::WholeWorld>, false> {
+template <class... Listed>
+struct ParamTraits<ExclusiveWorld<Writes<Listed...>>>
+    : Detail::HandleTraits<ExclusiveWorld<Writes<Listed...>>,
+                           TypeList<Access::WholeWorld, Access::ResourceWrite<Listed>...>, false> {
     static constexpr bool sole = true;
 };
 

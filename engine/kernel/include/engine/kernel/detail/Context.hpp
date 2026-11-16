@@ -25,6 +25,7 @@
 namespace GYO::Kernel {
 
 class World;
+class Product;
 struct AccessSet;
 // The kernel's own diagnostics record of a dropped spawn (World.hpp; spec F-13).
 struct RejectedSpawn;
@@ -54,8 +55,11 @@ struct AccessEntry {
 // to it for both). Derived from the Registry's AccessSet when the Product is made.
 struct AccessDesc {
     std::vector<AccessEntry> entries;
-    // ExclusiveWorld: reads every column and resource; writes zone B Shared data
-    // (checked by the ExclusiveWorld handle, which returns Err otherwise: S-13).
+    // ExclusiveWorld: reads every column and resource (but KernelSettings and a
+    // resource whose affinity the runner does not satisfy: S-15); writes zone B
+    // Shared data and the resources its Writes<...> lists, which are entries of
+    // this description (checked by the ExclusiveWorld handle, which returns Err
+    // otherwise: S-13, S-14).
     bool wholeWorld = false;
 };
 
@@ -110,6 +114,10 @@ struct Record {
 // call's serial number instead.
 struct SystemContext {
     World* world = nullptr;
+    // The Executor running this World's schedules: ExclusiveWorld::RunSchedule
+    // runs a schedule through it (K0). One World per Product today (T5 makes it
+    // "this World's Executor").
+    Product* executor = nullptr;
     const AccessDesc* access = nullptr;
     std::string_view name;
     std::string_view schedule;
@@ -188,6 +196,21 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 [[nodiscard]] std::size_t ResourceCount(const World& world) noexcept;
 [[nodiscard]] std::vector<ComponentId> SetMembersOf(const World& world, TypeKey setTag);
 
+// K0 (v8-arch-gyo2-nested-schedule): runs schedule from inside the running
+// exclusive System call (ExclusiveWorld::RunSchedule; Executor.cpp). Refused
+// with Err, the World interrupted and the error reported once by the outermost
+// Run: from a hook (X-13), inside a Read or Modify closure (X-14), an unknown
+// name (X-12), Startup (H-12) or while Startup runs (H-13), an extract schedule
+// (X-15), a schedule running already at any level (X-11). An Interrupted World
+// runs nothing: the error a nested level left is returned.
+[[nodiscard]] Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
+                                                                bool inClosure);
+// The World's sync epoch now (a handle renews its own after a nested run, W-4).
+[[nodiscard]] std::uint64_t CurrentSyncEpoch(const World& world) noexcept;
+// Takes a new stamp (+1; spec E.2: after a nested run, the exclusive System's
+// later writes carry a stamp of their own).
+[[nodiscard]] ChangeStamp NextStamp(World& world) noexcept;
+
 // Records a deferred command of the current call (spec F.1). GYO_ASSERT when
 // the World is Applying and the caller is not a hook (spec F-5).
 void Push(SystemContext& call, Record record);
@@ -203,12 +226,20 @@ void Push(SystemContext& call, Record record);
 // CallError) or nothing.
 //   F-10  untyped Commands insert / remove on a zone C or Exclusive column;
 //   Z5    a zone B call despawning an entity that has a zone C column;
-//   S-13  an ExclusiveWorld write to a column or resource outside zone B Shared.
+//   S-13  an ExclusiveWorld write to a column or resource outside zone B Shared;
+//   S-14  an ExclusiveWorld write to a zone B single-writer resource its
+//         Writes<...> does not list (listed: true when it does);
+//   S-15  an ExclusiveWorld read of KernelSettings;
+//   S-16  an ExclusiveWorld read of a resource whose thread affinity the running
+//         schedule's runner does not satisfy.
 [[nodiscard]] std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component,
                                                              EntityId entity, bool insert);
 [[nodiscard]] std::optional<KernelError> CheckDespawn(SystemContext& call, EntityId entity);
 [[nodiscard]] std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component,
                                                              EntityId entity);
+[[nodiscard]] std::optional<KernelError> CheckExclusiveResourceWrite(SystemContext& call, ResourceId resource,
+                                                                     bool listed);
+[[nodiscard]] std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource);
 
 // The allotter resource of the World (spec A.1), or nullptr when none is declared.
 [[nodiscard]] ResourceBase* AllotterSlot(World& world) noexcept;

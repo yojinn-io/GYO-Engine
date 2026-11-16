@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -373,6 +374,50 @@ std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId 
                          ": ExclusiveWorld writes only zone B, Shared data");
 }
 
+std::optional<KernelError> CheckExclusiveResourceWrite(SystemContext& call, ResourceId resource, bool listed) {
+    const ResourceInfo& info = call.world->data_->resources[resource];
+    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;
+    if (info.zone != Zone::B) {
+        // Spec S-13: zone C data is never an ExclusiveWorld's (listing it is Z2 at startup).
+        return CallError(call, KernelErrorCode::ExclusiveWorldWrite, "S-13",
+                         "ExclusiveWorld write of resource '" + info.name +
+                             "' (zone C): ExclusiveWorld writes only zone B data");
+    }
+    return CallError(call, KernelErrorCode::UndeclaredResourceWrite, "S-14",
+                     "ExclusiveWorld write of resource '" + info.name +
+                         "', which has a single writer (not Shared) and is not listed in this System's "
+                         "ExclusiveWorld<Writes<...>>: list it there to be counted as its writer");
+}
+
+std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource) {
+    const World& world = *call.world;
+    const ResourceInfo& info = world.data_->resources[resource];
+    if (resource == world.data_->kernelSettings) {
+        // LIM-6, D-E18: the verification switches must not change a simulation result.
+        return CallError(call, KernelErrorCode::UnreadableResource, "S-15",
+                         "ExclusiveWorld read of KernelSettings: only the kernel reads it, so the verification "
+                         "switches cannot change what a System does");
+    }
+    const Detail::ScheduleRecord* schedule = world.data_->FindSchedule(std::string(call.schedule));
+    const std::string runner = schedule != nullptr ? schedule->options.runner : std::string();
+    if (!info.affinity.IsAny() && info.affinity.role != runner) {
+        // X-3 at run time: a System's other reads are checked at startup; this one is not in its signature.
+        return CallError(call, KernelErrorCode::UnreadableResource, "S-16",
+                         "ExclusiveWorld read of resource '" + info.name + "' by System '" + std::string(call.name) +
+                             "': the resource needs thread role '" + info.affinity.role + "' but schedule '" +
+                             std::string(call.schedule) + "' runs on '" + runner + "'");
+    }
+    return std::nullopt;
+}
+
+std::uint64_t CurrentSyncEpoch(const World& world) noexcept {
+    return world.syncEpoch_;
+}
+
+ChangeStamp NextStamp(World& world) noexcept {
+    return ++world.stamp_;
+}
+
 ResourceBase* AllotterSlot(World& world) noexcept {
     return world.data_->allotter ? world.resources_[*world.data_->allotter].get() : nullptr;
 }
@@ -438,6 +483,7 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
     Detail::SystemContext call;
     call.world = this;
+    call.executor = executor_;
     call.access = &hookAccess_[hook];
     call.name = record.name;
     call.schedule = schedule;
@@ -525,6 +571,42 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         return *rejectTick;
     };
 
+    // K0: the running level's records start at its windowBase; the records
+    // before it are the outer levels', applied later at their own sync points.
+    const std::size_t base = runStack_.empty() ? 0 : runStack_.back().windowBase;
+    GYO_ASSERT(base <= window_.size());
+    // The level being applied is the innermost one (its records are the tail).
+    GYO_ASSERT(runStack_.empty() || runStack_.back().schedule == schedule);
+
+    // Z5 across levels (K0, spec F.2 steps 0 and 2): a zone C insert, or
+    // SpawnWithId, an outer level recorded into target and has not applied yet,
+    // in the window or in its schedule's hook queue. The text names the level
+    // and the schedule.
+    auto zoneCInsertInto = [](const Record& r, EntityId target) {
+        return r.emitterZone == Zone::C && r.entity == target &&
+               (r.kind == RecordKind::Insert || (r.kind == RecordKind::Spawn && r.withId));
+    };
+    auto outerInsert = [&](EntityId target) -> std::string {
+        for (std::size_t level = 0; level + 1 < runStack_.size(); ++level) {
+            const std::string where = "level " + std::to_string(level) + " of " + std::to_string(runStack_.size()) +
+                                      " (schedule '" + std::string(runStack_[level].schedule) + "')";
+            const std::size_t end = std::min(runStack_[level + 1].windowBase, window_.size());
+            for (std::size_t i = runStack_[level].windowBase; i < end; ++i) {
+                if (zoneCInsertInto(window_[i], target)) {
+                    return "a zone C call of the outer run at " + where + ", '" + std::string(window_[i].emitter) +
+                           "', recorded an insert into it that its sync point has not applied yet";
+                }
+            }
+            for (const Record& r : HookQueueOf(runStack_[level].schedule).records) {
+                if (zoneCInsertInto(r, target)) {
+                    return "zone C hook '" + std::string(r.emitter) + "' of the outer run at " + where +
+                           " recorded an insert into it, still in that schedule's hook queue";
+                }
+            }
+        }
+        return {};
+    };
+
     // One phase: step 0 applies the hook queue this way, steps 1 to 7 the window's records.
     // pending: records of the same window not applied by this phase (step 0
     // checks the window's zone C inserts too: a zone B hook's despawn recorded
@@ -550,6 +632,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                     }
                 }
             }
+            if (reason.empty()) reason = outerInsert(target);
             if (!reason.empty()) {
                 return Engine::Base::Err(kernelError(KernelErrorCode::ZoneCDespawn, "Z5",
                                                      "a zone B despawn of entity " + std::to_string(target) +
@@ -568,7 +651,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);
             if (at == entities_.end() || *at != id) continue;
             // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole
-            // entity; then destroy in ascending ComponentId (W-7). (Architect's recommendation (a), pending the user.)
+            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)
             for (std::size_t c = 0; c < columns_.size(); ++c) {
                 if (!columns_[c]->Contains(id)) continue;
                 auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);
@@ -786,8 +869,9 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     std::vector<Record> hookRecords = std::move(queue.records);
     queue.records.clear();
     queue.recSeq = 0;
-    std::vector<Record> windowRecords = std::move(window_);
-    window_.clear();
+    std::vector<Record> windowRecords(std::make_move_iterator(window_.begin() + static_cast<std::ptrdiff_t>(base)),
+                                      std::make_move_iterator(window_.end()));
+    window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());
     const std::vector<Record> none;
     if (Result step0 = phase(hookRecords, windowRecords); !step0) return step0;
     // Steps 1 to 7.
