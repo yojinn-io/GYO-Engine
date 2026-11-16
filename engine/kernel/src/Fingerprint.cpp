@@ -57,8 +57,10 @@ namespace {
 
 // The Plan fingerprint's format: 2 since the hook rounds after the last sync
 // point and the schedule's hook round limit (v8-arch-gyo2-hook-flush); 3 since
-// the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject).
-constexpr std::uint32_t kFingerprintVersion = 3;
+// the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject); 4
+// since the kernel runs Startup before the first other schedule and a System may
+// run a schedule (v8-arch-gyo2-nested-schedule; neither is a Plan step).
+constexpr std::uint32_t kFingerprintVersion = 4;
 // The Registry fingerprint's format: 2 since initial value declarations are
 // hashed (v8-arch-gyo2-funnel-check).
 constexpr std::uint32_t kRegistryFingerprintVersion = 2;
@@ -66,8 +68,10 @@ constexpr std::uint32_t kRegistryFingerprintVersion = 2;
 // schedules that hold zone C steps, and the sync points around those steps; 3
 // since the initial value declarations of zone C components; 4 since the hook
 // rounds after the last sync point and the schedule's hook round limit; 5 since
-// the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject).
-constexpr std::uint32_t kCFingerprintVersion = 5;
+// the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject); 6
+// since the kernel runs Startup and a System may run a schedule
+// (v8-arch-gyo2-nested-schedule).
+constexpr std::uint32_t kCFingerprintVersion = 6;
 
 class Bytes {
 public:

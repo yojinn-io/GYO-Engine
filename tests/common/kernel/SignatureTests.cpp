@@ -27,7 +27,7 @@ SystemResult SpawnGiven(SpawnWithId<Bundle<TestHealth>>) { return Ok(); }
 SystemResult RemoveBodies(Despawn) { return Ok(); }
 SystemResult ReadReplicated(SetRead<ReplicatedSet>) { return Ok(); }
 SystemResult KeepCount(Local<std::int32_t>, Query<Read<TestMode>>) { return Ok(); }
-SystemResult EditWorld(ExclusiveWorld) { return Ok(); }
+SystemResult EditWorld(ExclusiveWorld<>) { return Ok(); }
 SystemResult StampTick(CurrentTick, Query<Write<TestHealth>>) { return Ok(); }
 SystemResult TraceVel(DiagnosticsWriter<TestRecord>, Query<Read<TestVel>>) { return Ok(); }
 SystemResult ExtractPos(Extract<Read<TestPos>>, ExtractRes<TestRes>, Query<Write<TestMarker>>) { return Ok(); }
@@ -53,7 +53,7 @@ SystemResult ReadsAndWritesAcross(Query<Read<TestPos>>, Query<Write<TestPos>>) {
 SystemResult ResBoth(Res<TestRes>, ResMut<TestRes>) { return Ok(); }
 SystemResult EventBoth(EventReader<TestEvent>, EventWriter<TestEvent>) { return Ok(); }
 SystemResult ReadsTwice(Query<Read<TestPos>>, Query<Read<TestPos>, Read<TestVel>>) { return Ok(); }
-SystemResult WorldAndMore(ExclusiveWorld, Res<TestRes>) { return Ok(); }
+SystemResult WorldAndMore(ExclusiveWorld<>, Res<TestRes>) { return Ok(); }
 using R = Res<TestRes>;
 SystemResult Seventeen(R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R) { return Ok(); }
 SystemResult Sixteen(R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R) { return Ok(); }
@@ -119,7 +119,7 @@ TEST_CASE("J-10: ExclusiveWorld alone, at most 16 parameters; handles cannot be 
     static_assert(!std::is_default_constructible_v<Query<Read<TestPos>>>);
     static_assert(!std::is_copy_constructible_v<ResMut<TestRes>>);
     static_assert(!std::is_default_constructible_v<Commands>);
-    static_assert(!std::is_copy_constructible_v<ExclusiveWorld>);
+    static_assert(!std::is_copy_constructible_v<ExclusiveWorld<>>);
     // Extract<Write<T>> has no ParamTraits (DI-KS 13).
     CHECK_FALSE(ParamTraits<Extract<Write<TestPos>>>::valid);
 }
@@ -170,7 +170,7 @@ TEST_CASE("J-12: every parameter type's Contribution equals the hand-written exp
     CHECK(SameSet<C<GYO::Kernel::Despawn>, TypeList<Access::Despawn>>);
     CHECK(SameSet<C<SetRead<ReplicatedSet>>, TypeList<SetReadOf<ReplicatedSet>>>);
     CHECK(SameSet<C<Local<std::int32_t>>, TypeList<LocalState<std::int32_t>>>);
-    CHECK(SameSet<C<ExclusiveWorld>, TypeList<WholeWorld>>);
+    CHECK(SameSet<C<ExclusiveWorld<>>, TypeList<WholeWorld>>);
     CHECK(SameSet<C<CurrentTick>, TypeList<DomainTickRead>>);
     CHECK(SameSet<C<DiagnosticsWriter<TestRecord>>, TypeList<Access::Diagnostics<TestRecord>>>);
     CHECK(SameSet<C<Extract<Read<TestPos>>>, TypeList<ExtractComponentRead<TestPos>>>);
