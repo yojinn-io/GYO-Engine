@@ -27,6 +27,20 @@
 // caught: the World becomes Interrupted the same way and the exception goes on.
 // Running an Interrupted World is a GYO_ASSERT (rebuild it: a new Product).
 //
+// Nested runs (K0, v8-arch-gyo2-nested-schedule): a System holding
+// ExclusiveWorld<...> may run another schedule (ExclusiveWorld::RunSchedule).
+// The inner schedule runs whole, the same way (its own stamps, sync points,
+// hook rounds, tick and event trim); the records the outer level has not
+// applied stay at its own next sync point (W-3, F.2). An error inside does not
+// call the handler: the World is Interrupted, the error is left for the
+// outermost Run, which reports it once with the outer System's context; the
+// Executor stops after every System that returns to an Interrupted World.
+//
+// Startup (spec H-12): a World has at most one Startup schedule. The first Run
+// of any other schedule runs it whole first (its tick, if any, after it); the
+// main program may run it itself before that, once. A second Run of Startup is
+// a GYO_ASSERT.
+//
 // v1 is Serial only (LIM-2). The Product owns no thread (DI-KS 15): Run is called
 // on the schedule's runner thread by the Host.
 
@@ -39,6 +53,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -58,8 +73,9 @@ public:
     [[nodiscard]] World& GetWorld() noexcept { return world_; }
     [[nodiscard]] const World& GetWorld() const noexcept { return world_; }
 
-    // Runs one schedule's Plan once (spec E.2). GYO_ASSERT: the World is Ready
-    // and the schedule exists.
+    // Runs one schedule's Plan once (spec E.2), first Startup when it has not
+    // run (H-12). GYO_ASSERT: the World is Ready (so not from inside a System),
+    // the schedule exists, and Startup is run at most once.
     Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
     // The Executor's handler: called once per Err (target/error-handling DI 2:
@@ -81,12 +97,30 @@ private:
         std::vector<MountState> mounts;
     };
 
-    Engine::Base::Result<void, KernelError> Fail(KernelError error);
+    friend Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
+
+    // One schedule's Plan (spec E.2): the outermost level, or nested inside the
+    // running exclusive System's call.
+    Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
+    // Spec H-12: marks Startup as run and runs it while startupRunning_ is set.
+    Engine::Base::Result<void, KernelError> RunStartup(std::string_view schedule);
+    Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+                                                          bool inClosure);
+    // Spec E.5: interrupts the World and drops every record. The outermost level
+    // calls the handler; a nested one leaves the error instead (its first one).
+    Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
+
+    // One level of the run stack (World::runStack_): pushed for the Plan's
+    // duration and popped on every way out; an exception through it interrupts
+    // the World, drops the records and, nested, leaves NestedRunAborted.
+    class LevelGuard;
 
     const Registry* registry_;
     World world_;
     std::vector<SystemState> systems_;
     std::function<void(const KernelError&)> handler_;
+    // The World's Startup schedule (at most one, D-E21), if any.
+    std::optional<std::string> startup_;
 };
 
 } // namespace GYO::Kernel

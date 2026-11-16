@@ -127,14 +127,15 @@ struct Golden {
 // registries; the same on every L1 platform (declaration judgement 4). Plan
 // format 2 and the values re-taken by v8-arch-gyo2-hook-flush (the hook round
 // limit is hashed; KernelSettings grew); Plan format 3 and the values re-taken by
-// v8-arch-gyo2-spawn-reject (the sync point drops spawn records): the judgement is unchanged.
+// v8-arch-gyo2-spawn-reject (the sync point drops spawn records); Plan format 4 and the values
+// re-taken by v8-arch-gyo2-nested-schedule (the kernel runs Startup): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "3:a45e583b02b532634842d2fb27afd45314f96e2e52526efb0488543f1a517f36",
-     "2:0ccf9712af4f0f91562766b6b843446cf6e48a244d57cdea72e737b768762159"},
-    {"deferred", &DeferredRegistry, "3:c56973ee1dae1ee9597db7a42166d00e52b5c4f88e9834d5139cf887769986e5",
-     "2:e64afa016ef8d8bb64debdf104bce8f384a4ad983ed23cfbf477e834d4dbb17d"},
-    {"events", &EventRegistry, "3:544d7e049047ff817780078a8d7090a711bb19249a5af3705f1a5fe4b39eb903",
-     "2:bf8e375debff9dac702f0500bc10fbebdfa1c697b5e4b0d4789255eafa82c383"},
+    {"mixed", &MixedRegistry, "4:c0d743702bb4dca9a301a3fda644afdee532de606666e5fe415fc2f0a3013d6d",
+     "2:2bddd23682ef1c576f646abc215dc1907d865e74787615d8374c630ee1526303"},
+    {"deferred", &DeferredRegistry, "4:81bb293c1dd239f933b52c91269fcba749150db8adab91d4955c8fcf1957adca",
+     "2:b06c39d63a57bcdb8733b7046edb7ca5d7e930c471df8223b94a12f23f907df9"},
+    {"events", &EventRegistry, "4:89ed1121727437c62a4d045f369acb7c8b3f8e6f3efea1b469608530051a0bd9",
+     "2:0ca59b03ed6e11fdcc83ff7e23afa2e05e8181f0e471bdcfcca3ab9a2edb520d"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
@@ -633,5 +634,5 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E2 -> E3 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
     CHECK(report.find("gyo.kernel.plans 2") == 0);
-    CHECK(report.find("fingerprint 3:") != std::string::npos);
+    CHECK(report.find("fingerprint 4:") != std::string::npos);
 }

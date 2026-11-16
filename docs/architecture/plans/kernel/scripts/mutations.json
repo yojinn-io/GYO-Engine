@@ -2907,13 +2907,13 @@
     },
     {
       "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten)",
+      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "CFingerprint\\(\\)\\.version == 5U"
+      "expect": "CFingerprint\\(\\)\\.version == 6U"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -3534,23 +3534,23 @@
     },
     {
       "id": "hf-no-rounds",
-      "what": "no hook rounds after the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "no hook rounds after the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (false) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: fixed-step end*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-one-round",
-      "what": "one hook round, no loop (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "one hook round, no loop (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
       "replace": "                if (!world.HookQueueOf(scheduleName).records.empty()) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: a chain of three rounds*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-limit-off-by-one",
@@ -3664,33 +3664,33 @@
     },
     {
       "id": "hf-startup-skipped",
-      "what": "no hook rounds in a startup schedule (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "no hook rounds in a startup schedule (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && !record->options.startup) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: run once*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-only-with-trim",
-      "what": "hook rounds only when an event trim follows the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "hook rounds only when an event trim follows the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && position + 1 < plan->steps.size()) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: run once*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-verification-only",
-      "what": "hook rounds only with verification on (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "hook rounds only with verification on (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && world.verification_) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: fixed-step end*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-not-applying",
@@ -3704,13 +3704,13 @@
     },
     {
       "id": "hf-first-queue",
-      "what": "the rounds read the first schedule's hook queue (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "the rounds read the first schedule's hook queue (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
       "replace": "                while (!world.hookQueues_.front().records.empty()) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: fixed-step end*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-recseq-constant",
@@ -3774,30 +3774,30 @@
     },
     {
       "id": "hf-limit-not-err",
-      "what": "at the limit the rest is left in the queue, no Err (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "at the limit the rest is left in the queue, no Err (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
       "replace": "                        break;\n                    }\n                    ++round;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the default limit*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-limit-no-break-hook",
-      "what": "the limit's Err calls no break hook (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the limit's Err calls no break hook (v8-arch-gyo2-hook-flush, spec F-12) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
-      "replace": "                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
+      "replace": "                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: at the limit*",
       "expect": "\\(breaks\\ >\\ 0\\)\\ ==\\ breakOn"
     },
     {
       "id": "hf-limit-handler-twice",
-      "what": "the limit's Err reaches the handler twice (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the limit's Err reaches the handler twice (v8-arch-gyo2-hook-flush, spec F-12) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
-      "replace": "                        guard.Disarm();\n                        if (handler_) handler_(error);\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "find": "                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
+      "replace": "                        if (handler_) handler_(error);\n                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: at the limit*",
       "expect": "J\\-54:\\ the\\ handler\\ ran\\ 2\\ times"
@@ -3874,23 +3874,23 @@
     },
     {
       "id": "hf-plan-version-kept",
-      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (find and expect rewritten for version 3 by v8-arch-gyo2-spawn-reject)",
+      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (find and expect rewritten for version 3 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 3;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
       "replace": "constexpr std::uint32_t kFingerprintVersion = 1;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "planOf\\(none,\\ \"Tick\"\\)\\.version\\ ==\\ 3U"
+      "expect": "planOf\\(none,\\ \\\"Tick\\\"\\)\\.version\\ ==\\ 4U"
     },
     {
       "id": "hf-c-version-kept",
-      "what": "the C fingerprint format stays 4, the hook-flush format (v8-arch-gyo2-hook-flush, spec F-12; find, replace and expect rewritten for version 5 by v8-arch-gyo2-spawn-reject)",
+      "what": "the C fingerprint format stays 4, the hook-flush format (v8-arch-gyo2-hook-flush, spec F-12; find, replace and expect rewritten for version 5 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 4;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 5U"
+      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 6U"
     },
     {
       "id": "hf-registry-schedule-field",
@@ -3974,10 +3974,10 @@
     },
     {
       "id": "we-j35-throw-not-interrupted",
-      "what": "J-35 (E.5): an exception does not interrupt the World (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-35 (E.5): an exception does not interrupt the World (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "            state_ = WorldState::Interrupted;\n            (world_.*discard_)();",
-      "replace": "            state_ = WorldState::Ready;\n            (world_.*discard_)();",
+      "find": "            world_.state_ = WorldState::Interrupted;\n            world_.DiscardDeferred();\n            if (nested_",
+      "replace": "            world_.state_ = WorldState::Ready;\n            world_.DiscardDeferred();\n            if (nested_",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
       "expect": "a\\ System\\ throws"
@@ -4064,9 +4064,9 @@
     },
     {
       "id": "we-adv-ready-window-compare-off",
-      "what": "J-35 (Fable): no comparison when Run starts (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-35 (Fable): no comparison when Run starts (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (world.verification_) {\n        const std::vector<std::string> changed = world.CompareBefore();",
+      "find": "    if (!nested && world.verification_) {\n        const std::vector<std::string> changed = world.CompareBefore();",
       "replace": "    if (false) {\n        const std::vector<std::string> changed = world.CompareBefore();",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
@@ -4204,10 +4204,10 @@
     },
     {
       "id": "we-j3-16-executor-swallows",
-      "what": "J-32b (J.3 #16): the Executor swallows a call's Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-32b (J.3 #16): the Executor swallows a call's Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed)) {",
-      "replace": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed); false && error) {",
+      "find": "            if (error) {\n                error->Wrap(\"Executor: \" + StepText(scheduleName, position, system.options.name));",
+      "replace": "            if (false && error) {\n                error->Wrap(\"Executor: \" + StepText(scheduleName, position, system.options.name));",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
       "expect": "expected\\ Err\\ UntypedWrite"
@@ -4234,10 +4234,10 @@
     },
     {
       "id": "we-j53-step5-skipped-when-false",
-      "what": "J-53: step 5 is skipped when a condition is false (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-53: step 5 is skipped when a condition is false (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed)) {",
-      "replace": "            if (std::optional<KernelError> error = (call.stamp == mountState.lastRun ? Detail::CombineCall(call, std::move(result), changed) : std::nullopt)) {",
+      "find": "            std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);",
+      "replace": "            std::optional<KernelError> error = (call.stamp == mountState.lastRun ? Detail::CombineCall(call, std::move(result), changed) : std::nullopt);",
       "target": "gyo_kernel_tests",
       "cases": "J-53:*",
       "expect": "HasCode\\(result,\\ KernelErrorCode::AccessViolation\\)"
@@ -4274,10 +4274,10 @@
     },
     {
       "id": "we-adv-epoch-assert-removed",
-      "what": "J-3 W-3 (Fable): the membership epoch assertion is gone (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-3 W-3 (Fable): the membership epoch assertion is gone (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "            GYO_ASSERT(world.MembershipEpoch() == structure);\n",
-      "replace": "            static_cast<void>(structure);\n",
+      "find": "            GYO_ASSERT(world.MembershipEpoch() == world.runStack_[level].structure);\n",
+      "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-3:*",
       "expect": "J\\-3:\\ a\\ membership\\ change\\ inside\\ a\\ System\\ call\\ fails\\ the\\ epoch\\ check"
@@ -4456,10 +4456,10 @@
       "id": "hf-limit-break-hook-twice",
       "file": "engine/kernel/src/Executor.cpp",
       "target": "gyo_kernel_tests",
-      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
-      "replace": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
+      "replace": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
       "expect": "J\\-54: the limit's Err called the break hook 2 times",
-      "what": "the limit's Err calls the break hook twice (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "the limit's Err calls the break hook twice (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "cases": "J-54: at a schedule's own limit*"
     },
     {
@@ -4468,8 +4468,8 @@
       "target": "gyo_kernel_tests",
       "find": "        if (plan->steps[position].kind == StepKind::SyncPoint) lastSync = position;",
       "replace": "        if (plan->steps[position].kind == StepKind::SyncPoint &&\n            (lastSync == plan->steps.size() || plan->steps[lastSync + 1].kind != StepKind::EventTrim)) lastSync = position;",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)",
-      "what": "the rounds follow the sync point before the event trim (declared: 輪跟著清舊事件那一步走) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf",
+      "what": "the rounds follow the sync point before the event trim (declared: 輪跟著清舊事件那一步走) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "cases": "J-54: an event trim at an earlier sync point*",
       "ran_as": "ck-decl-rounds-follow-trim",
       "note": "宣告判定 2「輪跟著清舊事件那一步走」"
@@ -4478,10 +4478,10 @@
       "id": "hf-limit-not-interrupted",
       "file": "engine/kernel/src/Executor.cpp",
       "target": "gyo_kernel_tests",
-      "find": "                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
-      "replace": "                        guard.Disarm();\n                        world.DiscardDeferred();\n                        if (handler_) handler_(error);\n                        world.state_ = WorldState::Ready;\n                        return Engine::Base::Err(std::move(error));\n                    }\n                    ++round;",
+      "find": "                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
+      "replace": "                        world.DiscardDeferred();\n                        if (handler_) handler_(error);\n                        world.state_ = WorldState::Ready;\n                        return Engine::Base::Err(std::move(error));\n                    }\n                    ++round;",
       "expect": "rig\\->world\\(\\)\\.State\\(\\)\\ ==\\ WorldState::Interrupted",
-      "what": "at the limit the World is not interrupted (declared: 不中斷) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "at the limit the World is not interrupted (declared: 不中斷) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "cases": "J-54: at the limit*",
       "ran_as": "ck-decl-limit-not-interrupted",
       "note": "宣告判定 2「不中斷」"
@@ -5320,23 +5320,23 @@
     },
     {
       "id": "sr-plan-version-not-bumped",
-      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 3;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
       "replace": "constexpr std::uint32_t kFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
-      "expect": "J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 3"
+      "expect": "J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 4"
     },
     {
       "id": "sr-c-version-not-bumped",
-      "what": "fingerprint: the C fingerprint version stays 4 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "what": "fingerprint: the C fingerprint version stays 4 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 4;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
-      "expect": "J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 5"
+      "expect": "J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 6"
     },
     {
       "id": "sr-j32-alive-applied",
@@ -5427,6 +5427,1086 @@
       "target": "gyo_kernel_tests",
       "expect": "variant KERNEL_DIAGNOSTICS compiled",
       "expect_build_failure": true
+    },
+    {
+      "id": "ns-nested-end-ready",
+      "what": "a nested Run sets the World back to Ready when it ends (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (!nested) world.state_ = WorldState::Ready;",
+      "replace": "    world.state_ = WorldState::Ready;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: back in the outer System the World is still*",
+      "expect": "\\[ns\\-back\\-state\\]"
+    },
+    {
+      "id": "ns-epoch-check-skipped-for-exclusive",
+      "what": "W-3: no membership check after a call that holds ExclusiveWorld (it may have run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            GYO_ASSERT(world.MembershipEpoch() == world.runStack_[level].structure);",
+      "replace": "            GYO_ASSERT(state.access.wholeWorld || world.MembershipEpoch() == world.runStack_[level].structure);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an exclusive System's own membership change behind the World API after*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
+    },
+    {
+      "id": "ns-entry-epoch-check-removed",
+      "what": "W-3: the nested entry does not check membership before the run (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    GYO_ASSERT(world.MembershipEpoch() == world.runStack_.back().structure);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an exclusive System's own membership change behind the World API before*",
+      "expect": "\\[ns\\-own\\-membership\\-before\\]"
+    },
+    {
+      "id": "ns-entry-baseline-not-renewed",
+      "what": "the outer step's membership baseline is not renewed after a nested run (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            world_.runStack_.back().structure = world_.MembershipEpoch();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the inner schedule spawns and despawns*",
+      "expect": "GYO_ASSERT failed: world\\.MembershipEpoch\\(\\) == world\\.runStack_\\[level\\]\\.structure"
+    },
+    {
+      "id": "ns-entry-retake-only",
+      "what": "A.6: the nested entry takes fresh snapshots without comparing first (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        const std::vector<std::string> changed = world.CompareAfter(*call.access);",
+      "replace": "        world.TakeSnapshots();\n        const std::vector<std::string> changed;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: verification on: a forbidden write before*",
+      "expect": "\\[ns\\-ver\\-before\\]"
+    },
+    {
+      "id": "ns-entry-no-compare-no-retake",
+      "what": "A.6: the nested entry neither compares nor takes snapshots (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        const std::vector<std::string> changed = world.CompareAfter(*call.access);",
+      "replace": "        const std::vector<std::string> changed;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: verification on: the exclusive System's writes*",
+      "expect": "\\[ns\\-ver\\-quiet\\]"
+    },
+    {
+      "id": "ns-entry-violation-enters",
+      "what": "A.6: a change found at the nested entry is reported but the nested run goes ahead (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            return Fail(std::move(error), true);\n        }\n    }\n    // On every way back",
+      "replace": "            static_cast<void>(Fail(std::move(error), true));\n        }\n    }\n    // On every way back",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: verification on: a forbidden write before*",
+      "expect": "\\[ns\\-ver\\-before\\]"
+    },
+    {
+      "id": "ns-rebase-no-retake",
+      "what": "A.6: no fresh snapshots after a nested run (an exception left the inner writes uncompared) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (world_.verification_) world_.TakeSnapshots();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the inner schedule throws after a sync point*",
+      "expect": "\\[ns\\-throw\\-after\\-sync\\-blame\\]"
+    },
+    {
+      "id": "ns-hook-allowed",
+      "what": "X-13: a hook may run a schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (call.hook) {\n        return refuse(KernelErrorCode::HookRunsSchedule",
+      "replace": "    if (false) {\n        return refuse(KernelErrorCode::HookRunsSchedule",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused and swallowed: RunSchedule in a hook",
+      "expect": "\\[ns\\-hook\\-refused\\]"
+    },
+    {
+      "id": "ns-closure-allowed",
+      "what": "X-14: a closure may run a schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (inClosure) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused and swallowed: RunSchedule inside a Read closure",
+      "expect": "\\[ns\\-closure\\-run\\]"
+    },
+    {
+      "id": "ns-unknown-asserts",
+      "what": "X-12: an unknown name is a GYO_ASSERT instead of Err (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (record == nullptr) {\n        return refuse(KernelErrorCode::UnknownSchedule",
+      "replace": "    GYO_ASSERT(record != nullptr);\n    if (false) {\n        return refuse(KernelErrorCode::UnknownSchedule",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused and swallowed: an unknown schedule",
+      "expect": "GYO_ASSERT failed: record != nullptr"
+    },
+    {
+      "id": "ns-startup-nestable",
+      "what": "H-12: a System may run Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (record->options.startup) {\n        return refuse(",
+      "replace": "    if (false) {\n        return refuse(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: a System runs Startup*",
+      "expect": "\\[ns\\-st\\-nested\\]"
+    },
+    {
+      "id": "ns-extract-nestable",
+      "what": "X-15: a System may run an extract schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (record->options.extract) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused and swallowed: an extract schedule",
+      "expect": "\\[ns\\-extract\\]"
+    },
+    {
+      "id": "ns-startup-running-allows-nested",
+      "what": "H-12: while Startup runs, a System may run another schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (world.startupRunning_) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: an exclusive System of Startup runs another*",
+      "expect": "\\[ns\\-st\\-running\\]"
+    },
+    {
+      "id": "ns-self-allowed",
+      "what": "X-11: a running schedule may run again (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (running.schedule == record->options.name) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused and swallowed: the running schedule itself",
+      "expect": "\\[ns\\-self\\]"
+    },
+    {
+      "id": "ns-self-innermost-only",
+      "what": "X-11: only the innermost level is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    for (const World::RunLevel& running : world.runStack_) {",
+      "replace": "    for (const World::RunLevel& running : std::vector<World::RunLevel>{world.runStack_.back()}) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused and swallowed: an outer level's schedule*",
+      "expect": "\\[ns\\-self\\-outer\\]"
+    },
+    {
+      "id": "ns-self-outermost-only",
+      "what": "X-11: only the outermost level is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    for (const World::RunLevel& running : world.runStack_) {",
+      "replace": "    for (const World::RunLevel& running : std::vector<World::RunLevel>{world.runStack_.front()}) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: B runs B*",
+      "expect": "\\[ns\\-self\\-middle\\]"
+    },
+    {
+      "id": "ns-interrupted-runs",
+      "what": "E.5: an Interrupted World runs a nested schedule again (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (world.state_ == WorldState::Interrupted) {\n        // Spec E.5 (K0): an Interrupted World runs nothing",
+      "replace": "    if (false) {\n        // Spec E.5 (K0): an Interrupted World runs nothing",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after an interruption RunSchedule*",
+      "expect": "\\[ns\\-again\\]"
+    },
+    {
+      "id": "ns-nested-calls-handler",
+      "what": "E.5: a nested level calls the handler too (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (nested) {\n        // K0 (spec E.5): reported once",
+      "replace": "    if (false) {\n        // K0 (spec E.5): reported once",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an inner System's Err is reported once*",
+      "expect": "\\[ns\\-err\\-once\\]"
+    },
+    {
+      "id": "ns-left-error-not-kept",
+      "what": "E.5: a nested failure leaves no error (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (!world_.leftError_) world_.leftError_ = error;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after an interruption RunSchedule*",
+      "expect": "\\[ns\\-again\\]"
+    },
+    {
+      "id": "ns-left-error-overwritten",
+      "what": "E.5: the left error is the last one, not the innermost (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (!world_.leftError_) world_.leftError_ = error;",
+      "replace": "        world_.leftError_ = error;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the left error is the innermost one",
+      "expect": "\\[ns\\-left\\-innermost\\]"
+    },
+    {
+      "id": "ns-left-error-not-listed",
+      "what": "E.5: the left error is not listed in the outer call's errors (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                call.returned.push_back(*world.leftError_);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the outer System returns another Err*",
+      "expect": "\\[ns\\-err\\-other\\]"
+    },
+    {
+      "id": "ns-left-error-listed-twice",
+      "what": "E.5: the left error is listed again when the call has it already (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (interrupted && world.leftError_ && !Listed(call.returned, *world.leftError_)) {",
+      "replace": "            if (interrupted && world.leftError_) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused* swallowed* then a valid schedule*",
+      "expect": "\\[ns\\-left\\-listed\\-once\\]"
+    },
+    {
+      "id": "ns-refusal-does-not-interrupt",
+      "what": "E.5: a refused call returns Err but leaves the World running (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        return Fail(Detail::CallError(call, code, rule, std::move(message)), true);",
+      "replace": "        return Engine::Base::Result<void, KernelError>(Engine::Base::Err(Detail::CallError(call, code, rule, std::move(message))));",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: refused* swallowed* then a valid schedule*",
+      "expect": "\\[ns\\-refusal\\-interrupts\\]"
+    },
+    {
+      "id": "ns-guard-not-popped-on-throw",
+      "what": "the run stack keeps the level an exception left (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world_.runStack_.pop_back();\n        if (std::uncaught_exceptions() > exceptions_) {",
+      "replace": "        if (std::uncaught_exceptions() <= exceptions_) world_.runStack_.pop_back();\n        if (std::uncaught_exceptions() > exceptions_) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after a caught exception*",
+      "expect": "\\[ns\\-throw\\-again\\]"
+    },
+    {
+      "id": "ns-no-abort-error",
+      "what": "X-16: an exception through a nested level leaves no NestedRunAborted naming the inner schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (nested_ && !world_.leftError_) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the inner schedule throws after a sync point*",
+      "expect": "\\[ns\\-throw\\-after\\-sync\\]"
+    },
+    {
+      "id": "ns-nested-tick-not-advanced",
+      "what": "B5: a nested Run of a clock schedule does not advance its tick (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (record->options.clock) {\n        const std::size_t d",
+      "replace": "    if (record->options.clock && !nested) {\n        const std::size_t d",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an exclusive System runs a clock schedule 3 times*",
+      "expect": "\\[ns\\-run\\-k\\]"
+    },
+    {
+      "id": "ns-nested-events-not-trimmed",
+      "what": "F.3: a nested Run does not trim events (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            world.TrimEvents(domain);",
+      "replace": "            if (!nested) world.TrimEvents(domain);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: events written inside*",
+      "expect": "\\[ns\\-events\\]"
+    },
+    {
+      "id": "ns-exclusive-no-boundary-compare",
+      "what": "A.6: no boundary comparison after a call that holds ExclusiveWorld (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (world.verification_) changed = world.CompareAfter(state.access);",
+      "replace": "            if (world.verification_ && !state.access.wholeWorld) changed = world.CompareAfter(state.access);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: verification on: the same write through a kept address after*",
+      "expect": "\\[ns\\-ver\\-address\\-after\\]"
+    },
+    {
+      "id": "ns-run-from-a-system",
+      "what": "X-9: Product::Run accepts a Running World (any System could run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    GYO_ASSERT(world.state_ == WorldState::Ready);\n    const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));",
+      "replace": "    const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: a plain System reaching Product::Run*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
+    },
+    {
+      "id": "ns-st-explicit-again",
+      "what": "H-12: the main program may run Startup again (twice, or after the kernel ran it) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        GYO_ASSERT(!world.startupRan_);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: the main program runs Startup a*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
+    },
+    {
+      "id": "ns-st-not-auto",
+      "what": "H-12: the kernel does not run Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (startup_ && !world.startupRan_) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: the kernel runs Startup once*",
+      "expect": "\\[ns\\-st\\-once\\]"
+    },
+    {
+      "id": "ns-st-clock-only",
+      "what": "H-12: Startup runs only before a clock schedule (the replaced wording) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (startup_ && !world.startupRan_) {",
+      "replace": "    if (startup_ && !world.startupRan_ && record->options.clock) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: which schedules trigger Startup*",
+      "expect": "\\[ns\\-st\\-trigger\\]"
+    },
+    {
+      "id": "ns-st-not-marked-auto",
+      "what": "H-12: a run of Startup is not marked as run (the kernel runs it every time) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    world_.startupRan_ = true;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: the kernel runs Startup once*",
+      "expect": "\\[ns\\-st\\-once\\]"
+    },
+    {
+      "id": "ns-st-not-marked-explicit",
+      "what": "H-12: the main program's run of Startup is not marked as run (the kernel runs it again) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    world_.startupRan_ = true;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: the main program runs Startup first*",
+      "expect": "\\[ns\\-st\\-main\\-first\\]"
+    },
+    {
+      "id": "ns-st-after",
+      "what": "H-12: Startup runs after the schedule that triggers it (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    return RunPlan(record->options.name, false);",
+      "replace": "        Engine::Base::Result<void, KernelError> first = RunPlan(record->options.name, false);\n        if (!first) return first;\n        return RunStartup(*startup_);\n    }\n    return RunPlan(record->options.name, false);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: the kernel runs Startup once*",
+      "expect": "\\[ns\\-st\\-first\\]"
+    },
+    {
+      "id": "ns-st-error-ignored",
+      "what": "H-12: the triggering schedule runs after Startup returned Err (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;",
+      "replace": "        static_cast<void>(RunStartup(*startup_));",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: Startup returns Err*",
+      "expect": "\\[ns\\-st\\-error\\]"
+    },
+    {
+      "id": "ns-st-tick-first-read",
+      "what": "H-12: the clock schedule's tick advances before Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (startup_ && !world.startupRan_) {",
+      "replace": "    if (record->options.clock) ++world.ticks_[static_cast<std::size_t>(record->options.domain)];\n    if (startup_ && !world.startupRan_) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: Startup runs before the tick advances*",
+      "expect": "\\[ns\\-st\\-tick\\]"
+    },
+    {
+      "id": "ns-st-tick-first-error",
+      "what": "H-12: the tick advances although Startup returned Err (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (startup_ && !world.startupRan_) {",
+      "replace": "    if (record->options.clock) ++world.ticks_[static_cast<std::size_t>(record->options.domain)];\n    if (startup_ && !world.startupRan_) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: Startup returns Err*",
+      "expect": "\\[ns\\-st\\-error\\-tick\\]"
+    },
+    {
+      "id": "ns-st-tick-stamp",
+      "what": "H-12: the first tick's stamp is Startup's first step (as if the tick advanced before Startup) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        slot = World::TickStampSlot{tick, world.stamp_ + 1, true};",
+      "replace": "        slot = World::TickStampSlot{tick, (world.startupRan_ && tick == 1) ? ChangeStamp{1} : world.stamp_ + 1, true};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: Startup runs before the tick advances*",
+      "expect": "\\[ns\\-st\\-stamp\\]"
+    },
+    {
+      "id": "ns-st-error-not-reported",
+      "what": "H-12: Startup's Err takes the nested path (the handler is not called) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    return RunPlan(schedule, false);\n}",
+      "replace": "    return RunPlan(schedule, true);\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: Startup returns Err*",
+      "expect": "\\[ns\\-st\\-error\\-once\\]"
+    },
+    {
+      "id": "ns-st-running-not-cleared",
+      "what": "H-12: 'Startup is running' stays set after Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    ~StartupScope() { running_ = false; }",
+      "replace": "    ~StartupScope() {}",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: which schedules trigger Startup*",
+      "expect": "\\[ns\\-st\\-trigger\\-nested\\]"
+    },
+    {
+      "id": "ns-st-no-retake",
+      "what": "A.6: Startup's sync points take no fresh snapshots (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.TakeSnapshots();\n        return std::nullopt;\n    };",
+      "replace": "        if (!world.startupRunning_) world.TakeSnapshots();\n        return std::nullopt;\n    };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: Startup's sync point changes membership with no hook*",
+      "expect": "\\[ns\\-st\\-verify\\-plain\\]"
+    },
+    {
+      "id": "ns-segment-whole-window",
+      "what": "F.2: a nested level's sync points take every level's records (its windowBase is 0) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "world_.runStack_.push_back(World::RunLevel{schedule, world_.window_.size(), world_.MembershipEpoch()});",
+      "replace": "world_.runStack_.push_back(World::RunLevel{schedule, 0, world_.MembershipEpoch()});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the records of the outer level stay there*",
+      "expect": "\\[ns\\-outer\\-records\\-unseen\\]"
+    },
+    {
+      "id": "ns-segment-outer-dropped",
+      "what": "F.2: a nested sync point drops the outer levels' records (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());",
+      "replace": "    window_.clear();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the records of the outer level stay there*",
+      "expect": "GYO_ASSERT failed: base <= window_\\.size\\(\\)"
+    },
+    {
+      "id": "ns-segment-old-assert",
+      "what": "F-12: a Run ends with the whole window empty (the assert before K0) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    GYO_ASSERT(world.window_.size() == world.runStack_[level].windowBase && world.HookQueueOf(scheduleName).records.empty());",
+      "replace": "    GYO_ASSERT(world.window_.empty() && world.HookQueueOf(scheduleName).records.empty());",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the records of the outer level stay there*",
+      "expect": "GYO_ASSERT failed: world\\.window_\\.empty\\(\\)"
+    },
+    {
+      "id": "ns-round-whole-window",
+      "what": "F-12: the hook rounds of a nested Run take the outer levels' records [caught by the Run-end assert] (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    const std::size_t base = runStack_.empty() ? 0 : runStack_.back().windowBase;",
+      "replace": "    const std::size_t base = trackRoundRecorders_ || runStack_.empty() ? 0 : runStack_.back().windowBase;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the records of the outer level stay there*",
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase"
+    },
+    {
+      "id": "ns-z5-outer-window-skipped",
+      "what": "Z5: the recheck does not look at the outer levels' records (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t i = runStack_[level].windowBase; i < end; ++i) {",
+      "replace": "            for (std::size_t i = end; i < end; ++i) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an outer zone C insert into E and an inner*",
+      "expect": "\\[ns\\-z5\\-outer\\]"
+    },
+    {
+      "id": "ns-z5-nearest-level-only",
+      "what": "Z5: only the level right outside is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (std::size_t level = 0; level + 1 < runStack_.size(); ++level) {",
+      "replace": "        for (std::size_t level = runStack_.size() >= 2 ? runStack_.size() - 2 : 0; level + 1 < runStack_.size(); ++level) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: three levels* the zone C insert in the outermost*",
+      "expect": "\\[ns\\-z5\\-three\\-levels\\]"
+    },
+    {
+      "id": "ns-z5-outermost-only",
+      "what": "Z5: only the outermost level is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (std::size_t level = 0; level + 1 < runStack_.size(); ++level) {",
+      "replace": "        for (std::size_t level = 0; level + 1 < runStack_.size() && level == 0; ++level) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: three levels* the zone C insert in the middle level: Z5*",
+      "expect": "\\[ns\\-z5\\-middle\\-level\\]"
+    },
+    {
+      "id": "ns-z5-outer-hook-skipped",
+      "what": "Z5: the outer schedules' hook queues are not looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (const Record& r : HookQueueOf(runStack_[level].schedule).records) {",
+      "replace": "            for (const Record& r : HookQueueOf(runStack_.back().schedule).records) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the zone C insert is in the outer schedule's hook queue*",
+      "expect": "\\[ns\\-z5\\-outer\\-hook\\]"
+    },
+    {
+      "id": "ns-z5-outer-withid-skipped",
+      "what": "Z5: an outer SpawnWithId is not taken for an insert (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "               (r.kind == RecordKind::Insert || (r.kind == RecordKind::Spawn && r.withId));",
+      "replace": "               r.kind == RecordKind::Insert;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the outer zone C call spawns E with SpawnWithId*",
+      "expect": "\\[ns\\-z5\\-outer\\-withid\\]"
+    },
+    {
+      "id": "ns-z5-outer-any-zone",
+      "what": "Z5: an outer zone B insert stops an inner despawn too (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        return r.emitterZone == Zone::C && r.entity == target &&",
+      "replace": "        return r.entity == target &&",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an outer zone B insert into E*",
+      "expect": "ZoneCDespawn \\[Z5\\]"
+    },
+    {
+      "id": "ns-z5-outer-any-entity",
+      "what": "Z5: an outer zone C insert into another entity stops the despawn (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        return r.emitterZone == Zone::C && r.entity == target &&",
+      "replace": "        return r.emitterZone == Zone::C &&",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an outer zone C insert into another entity*",
+      "expect": "\\[ns\\-z5\\-other\\-entity\\]"
+    },
+    {
+      "id": "ns-z5-message-no-schedule",
+      "what": "Z5: the message does not name the outer level's schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "\" (schedule '\" + std::string(runStack_[level].schedule) + \"')\";",
+      "replace": "\"\";",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: an outer zone C insert into E and an inner*",
+      "expect": "\\[ns\\-z5\\-outer\\-where\\]"
+    },
+    {
+      "id": "ns-inner-applies-outer-hooks",
+      "what": "F.2 step 0: a nested sync point applies the outermost schedule's hook queue (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    // Step 0: the previous window's hook records first; hooks they trigger record into the next window.\n    HookQueue& queue = HookQueueOf(schedule);",
+      "replace": "    // Step 0: the previous window's hook records first; hooks they trigger record into the next window.\n    HookQueue& queue = HookQueueOf(runStack_.front().schedule);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the outer schedule's hook queue*",
+      "expect": "\\[ns\\-outer\\-hooks\\]"
+    },
+    {
+      "id": "ns-inner-drops-outer-hooks",
+      "what": "a nested Run starts by dropping every queue (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    GYO_ASSERT(world.HookQueueOf(scheduleName).records.empty());\n    // Spec F-12: the hook rounds follow",
+      "replace": "    if (nested) world.DiscardDeferred();\n    GYO_ASSERT(world.HookQueueOf(scheduleName).records.empty());\n    // Spec F-12: the hook rounds follow",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the outer schedule's hook queue*",
+      "expect": "\\[ns\\-outer\\-hooks\\]"
+    },
+    {
+      "id": "ns-res-unlisted-writable",
+      "what": "S-14: an unlisted single-writer resource is written (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;",
+      "replace": "    if (info.zone == Zone::B) return std::nullopt;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: resources: a listed single-writer*",
+      "expect": "\\[ns\\-res\\-unlisted\\]"
+    },
+    {
+      "id": "ns-res-shared-needs-listing",
+      "what": "S-14: a Shared resource must be listed too (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;",
+      "replace": "    if (info.zone == Zone::B && listed) return std::nullopt;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: resources: a listed single-writer*",
+      "expect": "UndeclaredResourceWrite \\[S-14\\]: ExclusiveWorld write of resource 'Out'"
+    },
+    {
+      "id": "ns-res-zone-c-writable",
+      "what": "S-13: a zone C resource is written (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared || listed || info.zone == Zone::C) return std::nullopt;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: refused writes and reads*",
+      "expect": "\\[ns\\-refused\\-untouched\\]"
+    },
+    {
+      "id": "ns-res-settings-readable",
+      "what": "S-15: KernelSettings is read (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (resource == world.data_->kernelSettings) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-50: KernelSettings read or written through ExclusiveWorld*",
+      "expect": "\\[ns\\-res\\-settings\\]"
+    },
+    {
+      "id": "ns-res-affinity-readable",
+      "what": "S-16: a resource whose affinity the runner does not satisfy is read (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (!info.affinity.IsAny() && info.affinity.role != runner) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: resources: one whose affinity*",
+      "expect": "\\[ns\\-res\\-affinity\\]"
+    },
+    {
+      "id": "ns-res-layer1-unlisted-declared",
+      "what": "A.6 layer 1: every zone B resource write of an ExclusiveWorld counts as declared (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                const ResourceInfo& info = data_->resources[id];\n                declared = info.zone == Zone::B && info.writePolicy == WritePolicy::Shared;",
+      "replace": "                const ResourceInfo& info = data_->resources[id];\n                declared = info.zone == Zone::B;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: verification on: an unlisted single-writer resource written through the World API*",
+      "expect": "\\[ns\\-ver\\-w5\\]"
+    },
+    {
+      "id": "ns-res-layer2-unlisted-declared",
+      "what": "A.6 layer 2: every zone B resource change of an ExclusiveWorld counts as declared (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            const ResourceInfo& info = data_->resources[id];\n            if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return true;",
+      "replace": "            const ResourceInfo& info = data_->resources[id];\n            if (info.zone == Zone::B) return true;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: verification on: an unlisted single-writer resource written through a kept*",
+      "expect": "\\[ns\\-ver\\-address\\]"
+    },
+    {
+      "id": "ns-handle-epoch-not-renewed",
+      "what": "W-4: the handle's sync epoch is not renewed after a nested run (J-4 guard) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                self.syncEpoch_ = Detail::CurrentSyncEpoch(*self.world_);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after a nested run the handle is valid*",
+      "expect": "\\[ns\\-stamp\\-handle\\]"
+    },
+    {
+      "id": "ns-handle-epoch-success-only",
+      "what": "W-4: the handle is renewed only when the nested run succeeded (J-4 guard) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        } renew{*this};\n        return Detail::RunNested(call, schedule, closures_ > 0);",
+      "replace": "        };\n        Engine::Base::Result<void, KernelError> ran = Detail::RunNested(call, schedule, closures_ > 0);\n        if (ran) Renew{*this}.self.closures_ += 0;\n        return ran;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after the inner schedule fails the handle still writes*",
+      "expect": "\\[ns\\-stamp\\-after\\-error\\]"
+    },
+    {
+      "id": "ns-handle-not-renewed-on-throw",
+      "what": "W-4: the handle is not renewed when an exception leaves the nested run (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            ~Renew() {\n",
+      "replace": "            ~Renew() {\n                if (std::uncaught_exceptions() > 0) return;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the inner schedule throws after a sync point*",
+      "expect": "\\[ns\\-throw\\-handle\\]"
+    },
+    {
+      "id": "ns-stamp-not-renewed",
+      "what": "E.2: the handle keeps its step's stamp after a nested run (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                self.stamp_ = Detail::NextStamp(*self.world_);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after a nested run the handle is valid*",
+      "expect": "\\[ns\\-stamp\\-changed\\]"
+    },
+    {
+      "id": "ns-stamp-reused",
+      "what": "E.2: the stamp after a nested run is the last one taken, not a new one (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                self.stamp_ = Detail::NextStamp(*self.world_);",
+      "replace": "                self.stamp_ = Detail::CurrentStamp(*self.world_);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after a nested run the handle is valid*",
+      "expect": "\\[ns\\-stamp\\-after\\]"
+    },
+    {
+      "id": "ns-z5-outer-hook-outermost-only",
+      "what": "Z5: only the outermost schedule's hook queue is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (const Record& r : HookQueueOf(runStack_[level].schedule).records) {",
+      "replace": "            for (const Record& r : HookQueueOf(runStack_.front().schedule).records) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: three levels* the zone C insert in the middle level's hook queue*",
+      "expect": "\\[ns\\-z5\\-middle\\-hook\\]"
+    },
+    {
+      "id": "ns-st-settings-after-startup",
+      "what": "H-12: KernelSettings is read after Startup (Startup runs with verification off) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (!world.hasRun_) {",
+      "replace": "    if (!world.hasRun_ && !world.startupRunning_) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: verification is on while Startup runs*",
+      "expect": "\\[ns\\-st\\-verification\\]"
+    },
+    {
+      "id": "ns-decl-ingress-allowed",
+      "what": "S-14: an exclusive System may be ingress (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (access.exclusive && system.options.ingress) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: declarations*",
+      "expect": "\\[ns\\-decl\\-ingress\\]"
+    },
+    {
+      "id": "ns-decl-ingress-by-stage",
+      "what": "S-14: reported for an exclusive System in the ingress stage, flag or not (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (access.exclusive && system.options.ingress) {",
+      "replace": "        if (access.exclusive && (system.options.ingress || system.options.mounts.front().stage == \"In\")) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: declarations: a listed zone C*",
+      "expect": "\\[ns\\-decl\\-ingress\\-stage\\]"
+    },
+    {
+      "id": "ns-decl-hook-writes-allowed",
+      "what": "S-14: a hook may take ExclusiveWorld<Writes<...>> (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (resolver.access.exclusive && std::any_of(",
+      "replace": "        if (false && std::any_of(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: declarations: a listed zone C*",
+      "expect": "\\[ns\\-decl\\-hook\\]"
+    },
+    {
+      "id": "ns-two-startups-allowed",
+      "what": "H-12: two Startup schedules are not an error (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (!startupSchedule.empty()) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: two Startup schedules*",
+      "expect": "\\[ns\\-st\\-two\\]"
+    },
+    {
+      "id": "ns-j45-zone-c-writable",
+      "what": "S-13 (J-45): ExclusiveWorld writes a zone C column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared || info.zone == Zone::C) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "expected Err ExclusiveWorldWrite"
+    },
+    {
+      "id": "ns-j45-exclusive-writable",
+      "what": "S-13 (J-45): ExclusiveWorld writes a zone B single-writer column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "replace": "    if (info.zone == Zone::B) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "expected Err ExclusiveWorldWrite"
+    },
+    {
+      "id": "ns-j45-spawn-ok",
+      "what": "S-13 (J-45): ExclusiveWorld::Spawn returns Ok (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::ExclusiveWorldWrite,\n                                                   \"S-13\", \"ExclusiveWorld cannot spawn: there is no untyped spawn\"));",
+      "replace": "        return EntityId{0};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "expected Err ExclusiveWorldWrite"
+    },
+    {
+      "id": "ns-plan-version-not-bumped",
+      "what": "the Plan fingerprint format stays 3 (the kernel runs Startup; a System runs a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
+      "replace": "constexpr std::uint32_t kFingerprintVersion = 3;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "planOf\\(none, \\\"Tick\\\"\\)\\.version == 4U"
+    },
+    {
+      "id": "ns-c-version-not-bumped",
+      "what": "the C fingerprint format stays 5 (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: the C fingerprint sees*",
+      "expect": "CFingerprint\\(\\)\\.version == 6U"
+    },
+    {
+      "id": "ns-modify-no-changed",
+      "what": "W-11: Modify does not mark the cell changed (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        cell->changed = stamp_;\n        return Call<T&>(f, cell->value);",
+      "replace": "        return Call<T&>(f, cell->value);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: after a nested run the handle is valid*",
+      "expect": "\\[ns\\-stamp\\-changed\\]"
+    },
+    {
+      "id": "ns-modify-resource-entry-stamp",
+      "what": "W-11: a resource Modify marks the stamp the System's step took, not the handle's (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        slot.changed = stamp_;\n        return Call<T&>(f, *slot.value);",
+      "replace": "        slot.changed = call.stamp;\n        return Call<T&>(f, *slot.value);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: a resource Modify between two nested runs*",
+      "expect": "\\[ns\\-stamp\\-resource\\]"
+    },
+    {
+      "id": "ns-modify-checks-after-call",
+      "what": "S-13: Modify calls f and only then checks the write (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        if (auto error = Detail::CheckExclusiveWrite(call, component, entity)) return Engine::Base::Err(std::move(*error));\n        auto* cell = static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, component)).Find(entity);\n        if (cell == nullptr) return Absent<std::invoke_result_t<F&, T&>>();\n        cell->changed = stamp_;\n        return Call<T&>(f, cell->value);",
+      "replace": "        auto* cell = static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, component)).Find(entity);\n        if (cell == nullptr) return Absent<std::invoke_result_t<F&, T&>>();\n        cell->changed = stamp_;\n        auto done = Call<T&>(f, cell->value);\n        if (auto error = Detail::CheckExclusiveWrite(call, component, entity)) return Engine::Base::Err(std::move(*error));\n        return done;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: refused writes and reads*",
+      "expect": "\\[ns\\-refused\\-untouched\\]"
+    },
+    {
+      "id": "ns-modify-resource-no-read-check",
+      "what": "S-15: a resource Modify skips the read check (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        if (auto error = Detail::CheckExclusiveRead(call, resource)) return Engine::Base::Err(std::move(*error));\n        if (auto error = Detail::CheckExclusiveResourceWrite(",
+      "replace": "        if (auto error = Detail::CheckExclusiveResourceWrite(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: refused writes and reads*",
+      "expect": "\\[ns\\-refused\\-untouched\\]"
+    },
+    {
+      "id": "ns-read-component-non-const",
+      "what": "S-13: a component Read gives f a T& (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return Call<const T&>(f, cell->value);",
+      "replace": "        return Call<T&>(f, const_cast<T&>(cell->value));",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: Read gives the closure a const reference*",
+      "expect": "\\[ns\\-read\\-const\\]"
+    },
+    {
+      "id": "ns-read-resource-non-const",
+      "what": "S-13: a resource Read gives f a T& (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return Call<const T&>(f, *slot.value);",
+      "replace": "        return Call<T&>(f, *slot.value);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: Read gives the closure a const reference*",
+      "expect": "\\[ns\\-read\\-const\\]"
+    },
+    {
+      "id": "ns-absent-component-present",
+      "what": "a missing component counts as present (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            return std::optional<R>();",
+      "replace": "            return std::optional<R>(R{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: an entity without the component*",
+      "expect": "\\[ns\\-absent\\]"
+    },
+    {
+      "id": "ns-absent-void-called",
+      "what": "a missing component counts as 'f called' for a void closure (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            return false;\n        } else {\n            return std::optional<R>();",
+      "replace": "            return true;\n        } else {\n            return std::optional<R>();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: an entity without the component*",
+      "expect": "\\[ns\\-absent\\]"
+    },
+    {
+      "id": "ns-absent-resource-present",
+      "what": "an absent resource counts as present (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            return std::optional<R>();",
+      "replace": "            return std::optional<R>(R{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: resources: any is read*",
+      "expect": "\\[ns\\-res\\-absent\\]"
+    },
+    {
+      "id": "ns-closure-depth-not-decremented",
+      "what": "X-14: a closure's depth stays counted after it ends (by an exception the System caught) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    ~ClosureScope() { --depth_; }",
+      "replace": "    ~ClosureScope() {}",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: a closure that throws*",
+      "expect": "ClosureRunsSchedule \\[X-14\\]"
+    },
+    {
+      "id": "ns-closure-depth-flag",
+      "what": "X-14: the closure depth is a flag (an inner closure's end clears it) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    ~ClosureScope() { --depth_; }",
+      "replace": "    ~ClosureScope() { depth_ = 0; }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: after an inner closure ends*",
+      "expect": "\\[ns\\-closure\\-depth\\]"
+    },
+    {
+      "id": "ns-listed-not-counted",
+      "what": "D-E2: the listed resources are not resource writes of the System (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                           TypeList<Access::WholeWorld, Access::ResourceWrite<Listed>...>, false> {",
+      "replace": "                           TypeList<Access::WholeWorld>, false> {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15: a resource an ExclusiveWorld lists*",
+      "expect": "\\[ns\\-res\\-counted\\]"
+    },
+    {
+      "id": "ns-closure-pointer",
+      "what": "a closure may return a pointer (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "replace": "    : std::bool_constant<std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-void\\-pointer\\]"
+    },
+    {
+      "id": "ns-closure-reference",
+      "what": "a closure may return a reference (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "replace": "    : std::bool_constant<std::is_pointer_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-reference\\]"
+    },
+    {
+      "id": "ns-closure-mut",
+      "what": "a closure may return Mut (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "replace": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || false ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-mut\\]"
+    },
+    {
+      "id": "ns-closure-refwrap",
+      "what": "a closure may return std::reference_wrapper (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "replace": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         false || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-refwrap\\]"
+    },
+    {
+      "id": "ns-closure-view",
+      "what": "a closure may return a standard view (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "replace": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         false ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-view\\]"
+    },
+    {
+      "id": "ns-closure-iterator",
+      "what": "a closure may return an iterator (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "replace": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         false> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-iterator\\]"
+    },
+    {
+      "id": "ns-closure-const-ignored",
+      "what": "a const return type is not looked through (no remove_cv) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<std::remove_cv_t<R>>::value ||\n                         IsReferenceWrapper<std::remove_cv_t<R>>::value || IsSpan<std::remove_cv_t<R>>::value ||\n                         std::ranges::view<std::remove_cv_t<R>> ||\n                         std::input_or_output_iterator<std::remove_cv_t<R>>> {};",
+      "replace": "    : std::bool_constant<std::is_pointer_v<R> || std::is_reference_v<R> || IsMut<R>::value ||\n                         IsReferenceWrapper<R>::value || IsSpan<R>::value ||\n                         std::ranges::view<R> ||\n                         std::input_or_output_iterator<R>> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-const\\]"
+    },
+    {
+      "id": "ns-closure-pair",
+      "what": "std::pair's items are not looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "struct PointsIntoWorld<std::pair<A, B>> : std::bool_constant<kPointsIntoWorld<A> || kPointsIntoWorld<B>> {};",
+      "replace": "struct PointsIntoWorld<std::pair<A, B>> : std::false_type {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-pair\\-tuple\\]"
+    },
+    {
+      "id": "ns-closure-tuple",
+      "what": "std::tuple's items are not looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "struct PointsIntoWorld<std::tuple<T...>> : std::bool_constant<(kPointsIntoWorld<T> || ...)> {};",
+      "replace": "struct PointsIntoWorld<std::tuple<T...>> : std::false_type {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-pair\\-tuple\\]"
+    },
+    {
+      "id": "ns-closure-not-recursive",
+      "what": "a pair inside a pair is not looked into (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "struct PointsIntoWorld<std::pair<A, B>> : std::bool_constant<kPointsIntoWorld<A> || kPointsIntoWorld<B>> {};",
+      "replace": "struct PointsIntoWorld<std::pair<A, B>> : std::bool_constant<std::is_pointer_v<A> || std::is_reference_v<A> || std::is_pointer_v<B> || std::is_reference_v<B>> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-recursion\\]"
+    },
+    {
+      "id": "ns-closure-const-pair",
+      "what": "a const std::pair is not looked into (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "struct PointsIntoWorld<const std::pair<A, B>> : PointsIntoWorld<std::pair<A, B>> {};",
+      "replace": "struct PointsIntoWorld<const std::pair<A, B>> : std::false_type {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: *point*",
+      "expect": "\\[ns\\-closure\\-const\\]"
+    },
+    {
+      "id": "ns-nested-end-ready-overwrite",
+      "what": "a nested Run sets the World back to Ready (seen by a World API overwrite, no membership change) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (!nested) world.state_ = WorldState::Ready;",
+      "replace": "    world.state_ = WorldState::Ready;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: back in the outer System a World API overwrite*",
+      "expect": "\\[ns\\-back\\-overwrite\\]"
+    },
+    {
+      "id": "ns-exclusive-movable",
+      "what": "B.4 point 8: ExclusiveWorld gets a move constructor (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    ChangeStamp stamp_;\n    std::uint32_t closures_ = 0;\n};",
+      "replace": "public:\n    ExclusiveWorld(ExclusiveWorld&& other) noexcept;\n\nprivate:\n    ChangeStamp stamp_;\n    std::uint32_t closures_ = 0;\n};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: ExclusiveWorld handles are neither*",
+      "expect": "\\[ns\\-exclusive\\-not\\-movable\\]"
+    },
+    {
+      "id": "ns-renew-adopts-call",
+      "what": "W-4: renewing the handle after RunSchedule also adopts the running call (another call's handle stops being stale) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                self.syncEpoch_ = Detail::CurrentSyncEpoch(*self.world_);",
+      "replace": "                self.syncEpoch_ = Detail::CurrentSyncEpoch(*self.world_);\n                self.callSerial_ = Detail::RequireCall(*self.world_).callSerial;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: verification on: another call's ExclusiveWorld handle*",
+      "expect": "\\[ns\\-w4\\-other\\-call\\]"
+    },
+    {
+      "id": "ns-modify-resource-checks-after-call",
+      "what": "S-14: a resource Modify calls f and only then checks the write (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {\n            return Engine::Base::Err(std::move(*error));\n        }\n        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();\n        slot.changed = stamp_;\n        return Call<T&>(f, *slot.value);",
+      "replace": "        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();\n        slot.changed = stamp_;\n        auto done = Call<T&>(f, *slot.value);\n        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {\n            return Engine::Base::Err(std::move(*error));\n        }\n        return done;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: refused writes and reads*",
+      "expect": "\\[ns\\-refused\\-untouched\\]"
+    },
+    {
+      "id": "ns-startup-listed-counted",
+      "what": "B.3: a Startup-only exclusive System's listed resource is counted as a writer (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (schedule != nullptr && !schedule->options.startup) counted = true;",
+      "replace": "            if (schedule != nullptr) counted = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15: a resource listed by an exclusive System mounted on Startup only*",
+      "expect": "Finish failed: D-E2 S-11: 'Flag' is Exclusive but has 2 writers"
     }
   ]
 }

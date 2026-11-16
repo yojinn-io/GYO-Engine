@@ -499,31 +499,33 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
 
 namespace {
 
-SystemResult ExclusiveWritesZoneC(ExclusiveWorld world) {
-    auto r = world.GetMut<Pos>(1);
+SystemResult ExclusiveWritesZoneC(ExclusiveWorld<> world) {
+    auto r = world.Modify<Pos>(1, [](Pos& pos) { pos.x += 1; });
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveWritesExclusive(ExclusiveWorld world) {
-    auto r = world.GetMut<Mode>(1);
+SystemResult ExclusiveWritesExclusive(ExclusiveWorld<> world) {
+    auto r = world.Modify<Mode>(1, [](Mode& mode) { mode.m += 1; });
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveSpawns(ExclusiveWorld world) {
+SystemResult ExclusiveSpawns(ExclusiveWorld<> world) {
     auto r = world.Spawn();
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveWritesZoneCShared(ExclusiveWorld world) {
-    auto r = world.GetMut<CShared>(1);
+SystemResult ExclusiveWritesZoneCShared(ExclusiveWorld<> world) {
+    auto r = world.Modify<CShared>(1, [](CShared& value) { value.s += 1; });
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveAllowed(ExclusiveWorld world) {
-    const Pos* pos = world.Get<Pos>(1);
-    auto tag = world.GetMut<Tag>(1);
+SystemResult ExclusiveAllowed(ExclusiveWorld<> world) {
+    auto pos = world.Read<Pos>(1, [](const Pos& p) { return p.x; });
+    if (!pos) return Engine::Base::Err(std::move(pos).error());
+    if (!*pos) return Ok();
+    const std::int32_t x = **pos;
+    auto tag = world.Modify<Tag>(1, [x](Tag& t) { t.t = x + 1; });
     if (!tag) return Engine::Base::Err(std::move(tag).error());
-    if (pos != nullptr && *tag) tag->Get().t = pos->x + 1;
     return Ok();
 }
 

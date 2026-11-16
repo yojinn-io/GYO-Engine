@@ -31,7 +31,7 @@ SystemResult Nothing() { return Ok(); }
 SystemResult InsertA(CommandsFor<Inserts<SharedA>, Removes<>>) { return Ok(); }
 SystemResult FilterWithA(Query<Write<SharedB>, With<SharedA>>) { return Ok(); }
 SystemResult WriteInputRes(ResMut<TestInput>) { return Ok(); }
-SystemResult EditWorld(ExclusiveWorld) { return Ok(); }
+SystemResult EditWorld(ExclusiveWorld<>) { return Ok(); }
 SystemResult ReadMarker(Query<Read<TestMarker>>) { return Ok(); }
 SystemResult ReadMarkerC(Query<Read<TestVel>>) { return Ok(); }
 SystemResult WriteRes(ResMut<TestRes>) { return Ok(); }
@@ -501,7 +501,7 @@ Built CVariant(const std::string& change) {
 TEST_CASE("J-18: the C fingerprint sees zone C hooks, the schedule's rollback and sync points between zone C steps") {
     Built base = CVariant("");
     KERNEL_REQUIRE_OK(base);
-    CHECK(base.registry->Frozen().CFingerprint().version == 5U);
+    CHECK(base.registry->Frozen().CFingerprint().version == 6U);
     // The "sync" variant really moves Mid between the zone C steps.
     const Plan& plain = *base.registry->Frozen().PlanOf("FixedUpdate");
     CHECK(PositionOf(plain, "Mid") > PositionOf(plain, "ReadA"));

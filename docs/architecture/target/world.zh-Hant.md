@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
+更新：2026-11-16（§3 成員不變的範圍、DI 3 的 stamp：`v8-arch-gyo2-nested-schedule`）；2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
 本文件只寫**使用者已裁決**的部分與它們的後果；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 實體的鍵（使用者 2026-11-11 決定，spec K.3 第 1 項）
@@ -17,7 +17,7 @@
 
 ## 2. change stamp（使用者 2026-11-11 決定，spec K.3 第 2 項）
 
-- 每格一個 `uint64` 的 `added` 與 `changed`。stamp 是 World **依 Plan 順序推進的全域計數**（跨同一 World 的所有 schedule 單調）：每一個 Plan 步驟（System 或同步點）開始時取下一個值；條件為假被跳過的 System 也消耗它的值。除了執行計畫的每一步，「跑完時清空的每一輪」也各取一個新的記號；記號仍然只往前走（spec F-12）。取值依 Plan 順序而不依完成先後，所以 Parallel 與 Serial 相同；不是 (c) 資料。
+- 每格一個 `uint64` 的 `added` 與 `changed`。stamp 是 World **依 Plan 順序推進的全域計數**（跨同一 World 的所有 schedule 單調）：每一個 Plan 步驟（System 或同步點）開始時取下一個值；條件為假被跳過的 System 也消耗它的值。除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號；記號仍然只往前走（spec F-12、E.2）。取值依 Plan 順序而不依完成先後，所以 Parallel 與 Serial 相同；不是 (c) 資料。
 - stamp **單調、不重置、不回滾、跨世代（World 重建）不比較**。溢出無實際可能（u64）。
 - tick 的視角由 `tickStamps[domain]`（有上限的環形表：tick → 該 tick 第一個 stamp）換算；複製層以 `changed > tickStamps[T+1] − 1` 判「比 Ledger 確認的 tick T 新」。
 - **stamp 不是 (c) 資料**：不進回滾快照、不回滾；(c) 區 System 不得用它做變更過濾（spec G-3：Match 執行一次與 Client 回滾重跑時「上次執行之後的變更」不同，兩端的 stamp 毫無關係）。
@@ -38,7 +38,7 @@
 
 ## 4. 結構變更的套用（使用者 2026-11-11 決定，spec K.3 第 4 項）
 
-- 生成、刪除、加欄、移欄在 System 執行期間只進延後佇列；Running 期間成員不變（spec W-3）。
+- 生成、刪除、加欄、移欄在 System 執行期間只進延後佇列；一般的 System 執行期間成員不變，獨占的 System 只在它跑的 schedule 的同步點變（spec W-3；[DI-KS 18](kernel.zh-Hant.md#di-ks-18)）。記下的變更在記它的那張 schedule 的同步點、用那張的位置套用（[DI-KS 19](kernel.zh-Hant.md#di-ks-19)）。
 - **Despawn 不算獨占寫者、不產生衝突邊**：它是成員關係的結束，不是值的寫入；同一窗內的查詢結果不受 despawn 記錄影響。(c) 資料的保護由區規則 Z5（帶 (c) 欄的實體只能由 (c) 的 System 刪除；記錄當下查、以 Err 回傳，F.2 第 2 步再複核本窗 (c) 的待套用 insert／spawn）。
 - **同步點的套用順序寫死**（spec F.2）：hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource。計畫最後一個同步點之後的 hook 清空輪，每一輪用同一個順序套用（spec F-12）。despawn 階段依 EntityId 升冪、冪等（同一 id 記兩次只處理一次）、對窗開始時不存在的 id 無作用。despawn 排在 spawn 之前，是為了同一窗內「刪 X 再以同 id 生成 X」（重連）成立。
 - **生成那一步丟掉不能生成的那一筆**（spec F-13；kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9)）：往活著的 id 生成、同一個同步點生成同一個 id 兩次、`SpawnWithId` 的 id 落在配發器的範圍——那一筆丟掉並留 `RejectedSpawn` 明細，不是錯誤，`Run` 照常（`v8-arch-gyo2-spawn-reject`，使用者 2026-11-15）。
@@ -71,7 +71,7 @@
 
 1. **鍵的疊代順序只來自數值**——受 kernel [DI-KS 3](kernel.zh-Hant.md#di-ks-3) 約束：**全文與守衛見該條，改動前必讀**。
 2. **World 不配發、不重用鍵；世代切換＝重建 World**——受 kernel [DI-KS 4](kernel.zh-Hant.md#di-ks-4)、[DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
-3. **stamp 是依 Plan 順序推進的全域計數、單調、不進 (c)**：跳過的 System 也消耗；除了執行計畫的每一步，「跑完時清空的每一輪」也各取一個新的記號，記號仍然只往前走（spec F-12（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准））；同一 World 的執行歷史相同時序列相同；Changed／Added 的「上次執行」以掛點為單位；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38、J-52。
+3. **stamp 是依 Plan 順序推進的全域計數、單調、不進 (c)**：跳過的 System 也消耗；除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號，記號仍然只往前走（spec F-12（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准）；巢狀（`v8-arch-gyo2-nested-schedule`，使用者 2026-11-15 核准））；同一 World 的執行歷史相同時序列相同；Changed／Added 的「上次執行」以掛點為單位；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38、J-52。
 4. **寫入政策預設獨占，獨占是啟動檢查**——受 kernel [DI-KS 6](kernel.zh-Hant.md#di-ks-6) 約束：**全文與守衛見該條，改動前必讀**。
 5. **結構變更只在同步點與最後一個同步點之後的 hook 清空輪、順序寫死、Despawn 不是寫者**——受 kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9) 約束：**全文與守衛見該條，改動前必讀**。
 6. **事件屬於一個 clock domain，只在它的 clock schedule 內讀寫**——受 kernel [DI-KS 10](kernel.zh-Hant.md#di-ks-10)、[DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。

@@ -131,8 +131,10 @@ struct SyncPointOptions {
 struct ScheduleOptions {
     std::string name;
     Domain domain = Domain::None;
-    // Runs once before every clock schedule; its writers do not count as
-    // writers of an Exclusive column (spec B.3).
+    // At most one per World (D-E21). The kernel runs it whole, once, before
+    // the first Run of any other schedule; no System runs it and it runs no
+    // other schedule (spec H-12, H-13). So its writers do not count as writers
+    // of an Exclusive column or resource (spec B.3).
     bool startup = false;
     // Its Run advances the domain tick; one per domain (H-1, D-E12).
     bool clock = false;
