@@ -2,6 +2,8 @@
 
 **版本：v3（2026-11-14）。** Owner：架構（架構師會話）。批次：`v8-arch-gyo2-vocabulary-v3`。**狀態：v3 照使用者 2026-11-14 的回饋改寫：正文每個詞是一般的技術定義，來歷移到附錄。v3 沒有經過別模型的檢查。**
 
+**2026-11-16 修訂（`v8-arch-gyo2-module-plugin-definition`）**：Module 與 Plugin 的定義照使用者 2026-11-16 的改定重寫（第 0 節末、4.1 的 Plugin 列、4.3 的 Module 列）。改了什麼見附錄 B.0。
+
 v3 和 v2 的差別：
 - 詞條不增不減，處置大多不變（變的見附錄 B）。
 - 「意思」一欄改寫成技術定義：讀者不必知道這個專案的歷史，也看得懂這個詞在 GYO2 指什麼。
@@ -32,14 +34,14 @@ v3 和 v2 的差別：
 
 照這段話定的：
 - **產品分兩種：Game 與 Tool。**
-- **Module 與 Plugin 的分法是「少了它，完整的遊戲還成不成立」**，不是「接不接第三方」：
+- **Module 與 Plugin 的分法是「少了它，完整的遊戲還成不成立」**，不是「接不接第三方」（2026-11-16 起由本節末的改定取代）：
   - Module：在 Engine 裡。少了它，遊戲不成立。例：JSON 函式庫、SDL。
   - Plugin：在 Engine 外。少了它，遊戲仍然成立，只是功能受限。例：網路、ImGui。
-- SDL 的接入歸 Engine，是 Module。
+- SDL 的接入歸 Engine，是 Module。（2026-11-16 起改為 Plugin，見本節末。）
 
 這個分法帶出的後續（都還沒做，列著等之後判）：
 - 帶過來的 audio、之後的渲染與輸入，各自算 Module 還是 Plugin，要用同一個問題逐一問。
-- SDL 與 JSON 函式庫帶回 gyo2 時歸 Module。
+- SDL 與 JSON 函式庫帶回 gyo2 時歸 Module。（2026-11-16 起 SDL 改為 Plugin，JSON 仍是 Module，見本節末。）
 - AGENTS §6 的用詞要照這個分法改（見下）。
 
 **同日再追加**（回覆上面三個後續）：
@@ -54,6 +56,26 @@ v3 和 v2 的差別：
 - **通用機制裡那個「一個 World 加上跑它的 Executor」的型別叫 `Product`。** 「App」這個詞在 gyo2 的新文件裡不用。
 - **「遊戲成不成立」看的是完整的遊戲。** Match 不算完整的遊戲，它屬於產品端；不拿它當 Module 分法的反例。
 - **AGENTS §6 的用詞要改**，以 gyo2 為準；master 的 AGENTS 不動。條文的改法另給使用者看過再改。
+
+**2026-11-16 改定**（使用者，從任務卡 gyo2-kernel-app-boundary 分出的側邊會話；決定表 `v8-arch-gyo2-module-plugin-owner-definition`，取代 `v8-arch-gyo2-module-plugin-game-tool` 的判準）：
+
+> 這樣清晰多了，我之前想分，有分不開合一起又難受的感覺少了好多，特別是SDL這樣的，帶著一堆插件，合到Engine里覺得在自己的系統裡又有一坨子系統，不合又動不了。
+
+> 用【O3DE 的 core／extras】的方式，我們自己維護的放Module，官方維護的放Plugin。（JSON雖然是外部但是介面是我們的，所以也放Module）
+
+> SDL 放plugin，網絡放 Module
+
+> 你的讀法沒錯，但是Module / Plugin就不換名字了，改定義就行。
+
+照這段話定的：
+- **名字不換，只改定義。** 判準從「少了它，完整的遊戲還成不成立」改成**誰維護、介面是誰的**：
+  - Module：我們自己維護、介面是我們的。在 Engine 裡。外部函式庫完全藏在我們的介面後面的也算。例：JSON——yyjson 是外部的，介面是我們的。
+  - Plugin：第三方官方維護、接進來用的。在 Engine 外。例：SDL 家族、ImGui。
+- **歸屬**：Module——Kernel、編排層、時間、執行緒、OS、base、math、JSON、權威檢查、狀態機、audio、網路；Plugin——SDL 家族（視窗、輸入、GPU 後端、SDL_image、SDL_ttf）、ImGui。
+- **網路**：登記型別的名字 `NetPlugin` 改成 `NetModule`，放在 Engine 裡，不放 `plugins/net/`。程式還不在 gyo2 上，實作時照新名字。
+- **權威檢查**是 Module。同日再改（決定表 `v8-arch-gyo2-authority-is-game-design`，方向，細節未定）：權威判定是遊戲設計的一部分，權威檢查做成策略式的 Module，**由作者選一個策略**（例：不用、伺服器權威、P2P 回滾），由策略決定開哪些檢查；權威 Module 自己登記並代為登記進 Kernel，Kernel 不存標籤（`v8-arch-gyo2-authority-own-registration`）。原話：「這個東西本身就是遊戲邏輯的一部分，是否權威，走什麼協議，其實都是看遊戲如何設計的，例如我做格鬥遊戲，就直接p2p了。」「不不不，我的意思是由作者去選。」
+- **參照的例子**：O3DE 把官方的 gem 分成兩個 repo——core（`o3de/o3de`，自己能建置、不依賴 core 以外的東西）與 extras（`o3de-extras`，官方認可但不是建置必需），各有自己的登記。我們借的是「分兩類、各一份清單」的形狀；分類的依據是誰維護、介面是誰的。Unity 的內建模組（`com.unity.modules.*`）隨引擎附帶、可以逐個關掉，是「Module 隨 Engine、可以不選」的前例。來源與其他引擎的比較：主 checkout `build/evidence/gyo2-module-plugin-definition/references.md`。
+- **還沒確認**（第 6 節第 5 點）：產品（作者）能不能在 Module 登記檔裡只選部分 Module；SDL 的 adapter（我們寫、實作 Engine 定的後端介面）歸哪；ufbx 歸哪。
 
 **「有問題的是解釋」的讀法**（架構師提出、使用者 2026-11-14 回「這個方向沒錯」）：詞本身是通用的技術名詞，照用；v2 的解釋把它們說成「舊 Kernel 設計的…」「PvP 的…」，還加了「（舊）」這類限定，這才是問題。v3 照這個讀法改寫。
 
@@ -99,7 +121,7 @@ v3 和 v2 的差別：
 | Resource | World 裡不屬於任何實體的值；每個型別最多一個。例：設定、統計、和外部交換資料的緩衝 | 加限定詞 | 一律寫英文「Resource」。中文「資源」留給性能預算與 OS 資源（記憶體、檔案、執行緒）。GPU 上的物件叫什麼，另定 |
 | System | 一個普通函式，World 在 schedule 裡呼叫它。參數的型別就是它的存取宣告（讀什麼、寫什麼）；回傳 `SystemResult`。詳見 [System 說明頁](system-contract-page.zh-Hant.md) | 沿用 | AGENTS 的「子系統」寫全稱「Subsystem」 |
 | Schedule | 一組 System 與它們的執行計畫：有名字、屬於一個 clock domain（或不屬於）、分成依序執行的 stage、指定由哪個執行緒角色呼叫。System 的先後由 `before`／`after` 排出，不照登記的先後。名字由產品給，通用機制不內建任何 schedule | 沿用 | 動詞「排程」的一般語意照用 |
-| Plugin | **Engine 外的可選部分**：少了它，完整的遊戲仍然成立，只是功能受限。例：網路、ImGui。以 `plugins/` 下的一個套件交付 | 加限定詞 | 一個 Plugin 往 World 登記用的類別寫「`Plugin` 型別」：啟動時向 Registry 登記元件、Resource、事件、System 與 schedule，只在啟動時被呼叫。Module 用的另一種是「`Module` 型別」（見 4.3）。現行程式只有單一的 `Plugin` 型別，Module 也用它；拆成兩種是使用者 2026-11-14 的決定，程式還沒改（第 6 節第 2 點）。AGENTS 的「Plugin System」照原文。和 Module 是一對，見 4.3 |
+| Plugin | **第三方官方維護、接進來用的部分**：在 Engine 外，產品選用。例：SDL 家族（視窗、輸入、GPU 後端、SDL_image、SDL_ttf）、ImGui。以 `plugins/` 下的一個套件交付 | 加限定詞 | 一個 Plugin 往 World 登記用的類別寫「`Plugin` 型別」：啟動時向 Registry 登記元件、Resource、事件、System 與 schedule，只在啟動時被呼叫。Module 用的另一種是「`Module` 型別」（見 4.3）。現行程式只有單一的 `Plugin` 型別，Module 也用它；拆成兩種是使用者 2026-11-14 的決定，程式還沒改（第 6 節第 2 點）。AGENTS 的「Plugin System」照原文。和 Module 是一對，見 4.3 |
 | Product | **`Product` 型別**：一個 World、建出它的凍結 Registry，以及依序執行 schedule 的 Executor，三者的組合。它本身不持有執行緒；`Run(schedule)` 由 runner 呼叫。System 回 `Err` 時，它把錯誤交給產品登記的 handler 一次，並讓 World 進入 Interrupted | 加限定詞 | AGENTS 的 Product（有 owner 的遊戲或工具）寫中文「產品」；產品分 Game 與 Tool 兩種。程式與文件裡寫成 `Product`（程式碼格式）時才指型別。「App」不用 |
 | Extract | 從一個 World 單向讀資料到另一個 World 的步驟：在標成 extract 的 schedule 裡，System 用 `Extract<Read<T>>`、`ExtractRes<T>` 唯讀地看來源 World，寫進自己的 World。來源不能寫。典型用途是把模擬的資料交給渲染 | 沿用 | 同左 |
 | Asset | 一份從檔案載入、在程式裡用 id 或 handle 參照的內容（模型、貼圖、聲音、關卡資料等）。gyo2 目前還沒有 asset 的程式 | 沿用 | `assets/` 是內容根目錄的名字 |
@@ -126,7 +148,7 @@ v3 和 v2 的差別：
 | Snapshot | 不單用 | 加限定詞 | 某一刻狀態的完整拷貝，依用途寫「wire 快照」（網路上傳給對方的狀態）、「回滾快照」（倒回去重算用）、「驗證快照」（比對兩次執行是否一致用） |
 | Registry、登記表 | **Registry**：收下產品給的 `Plugin` 清單，依序讓每個 plugin 登記，檢查全部登記，凍結，並替每個 schedule 排出執行計畫（Plan）。凍結後不能再登記 | 加限定詞 | 建置系統的產品清單寫「產品登記檔」。決定舊概念去留的那張表寫「去留登記表」 |
 | Layer | 不單用 | 加限定詞 | 「架構層」：Engine、plugins、產品這種依賴方向固定的分層。「基盤／應用之分」：AGENTS §2 依「改了它上面要跟著改多少」的分法。「渲染層」：畫面合成的一層 |
-| Module | **Engine 內的必要部分**：少了它，完整的遊戲不成立。以 `engine/<名字>/` 一個目錄、一個 CMake target 交付。接第三方函式庫的也算，例：JSON 函式庫、SDL | 沿用 | Go 的 module、C++20 的 module 照各自語言的意思，寫「Go module」「C++ module」。一個 Module 往 World 登記用的類別寫「`Module` 型別」（使用者 2026-11-14 定拆型別，程式還沒改；不進 World 的 Module 沒有它）。Module 的登記檔寫「Module 登記檔」。和 Plugin 是一對：差別是 Engine 內或外，判準是「少了它，完整的遊戲還成不成立」 |
+| Module | **我們自己維護、介面是我們的部分**：在 Engine 裡，以 `engine/<名字>/` 一個目錄、一個 CMake target 交付。用到外部函式庫、但外部函式庫完全藏在我們的介面後面的也算，例：JSON（yyjson 是外部的，介面是我們的）。例：Kernel、時間、執行緒、OS、math、JSON、狀態機、audio、網路 | 沿用 | Go 的 module、C++20 的 module 照各自語言的意思，寫「Go module」「C++ module」。一個 Module 往 World 登記用的類別寫「`Module` 型別」（使用者 2026-11-14 定拆型別，程式還沒改；不進 World 的 Module 沒有它）。Module 的登記檔寫「Module 登記檔」。和 Plugin 是一對：判準是誰維護、介面是誰的（使用者 2026-11-16，第 0 節末；取代 2026-11-14 的「少了它，完整的遊戲還成不成立」）。AGENTS §1、§3、§12 的「Module」是一般的程式模組，照原文讀 |
 | Stage | 不單用 | 加限定詞 | schedule 的一段寫「stage（舊）」：一個 schedule 由幾個 stage 依序組成，每個 stage 結束時有一個同步點，套用這段裡記下的延後變更。打包的暫存目錄、shader 的階段（`ShaderStage`）照各自領域的詞。「stage」不當動詞用 |
 | Scene | 不單用 | 不用它命名新概念 | 關卡的資料寫「關卡內容」，渲染的輸入寫「渲染輸入」。可以生成的實體範本（Bevy 的 Scene）要不要有，另判 |
 | Input | **玩家的輸入**（鍵盤、滑鼠、手把），以及處理它的輸入模組 | 加限定詞 | 欄角色 Input（可以被入口 System 寫的決定性資料）寫「Input 欄角色（舊）」 |
@@ -160,14 +182,19 @@ v3 和 v2 的差別：
 1. **第 1 節的界線**：這張表只管名字；定義照現況寫，內容與歸屬留給去留登記表。
 2. **Plugin 的兩個意思**：「Engine 外的可選部分」（第 0 節）與通用機制的「`Plugin` 型別」（登記單位）是兩件事。現行程式裡，`Plugin` 型別的子類別只出現在 kernel 的測試裡，沒有任何 Module 用它。之後若有 Module 要把元件、Resource 或 System 放進 World（例：SDL 把輸入寫進 World），就得寫一個 `Plugin` 型別的子類別，名字會變成「SDL 是 Module，型別卻叫 `SdlPlugin`」。Module 要不要往 World 登記還沒定；要不要替 `Plugin` 型別換名字，請你決定。
    - **使用者 2026-11-14 的決定**（原話）：「OK，那還是我的標準，但是建立2張登記表，一個Module，一個Plugin。Module優先與Plugin」；對「純函式庫要不要進表」：「純函數也登記，但是需要標明純函數式。不會被被World使用。」；對「這張表的用途是 (a) 看得到 Engine 有什麼、產品用了什麼，或 (b) 執行時擋下沒登記的使用」：「(a)，照你的建議做」。
-   - 照這個決定：Module 與 Plugin 的分法仍是「少了它，完整的遊戲還成不成立」。Module 清單與 Plugin 清單各一份，放在建置層、只有一處；每一列寫名字、標記（進 World／不進 World）、依賴；CMake 照它 link；執行時的 Registry 只收「進 World」的登記單位，由這份清單產生，不另外手寫；Module 排在 Plugin 前面。標記叫「不進 World」（library-only），不叫「純函數」：JSON、ufbx 會配置記憶體、有的會讀檔。
+   - 照這個決定：Module 與 Plugin 的分法仍是「少了它，完整的遊戲還成不成立」（2026-11-16 起判準改為誰維護、介面是誰的，見第 0 節末；兩份登記檔與兩種型別不變，照新定義重分）。Module 清單與 Plugin 清單各一份，放在建置層、只有一處；每一列寫名字、標記（進 World／不進 World）、依賴；CMake 照它 link；執行時的 Registry 只收「進 World」的登記單位，由這份清單產生，不另外手寫；Module 排在 Plugin 前面。標記叫「不進 World」（library-only），不叫「純函數」：JSON、ufbx 會配置記憶體、有的會讀檔。
    - 同日再確認（原話）：「拆成兩種型別，優先也包含依賴方向」。也就是：登記單位拆成 Module 用與 Plugin 用兩種型別，取代單一的 `Plugin` 型別；「Module 優先」包含順序（Module 先登記）與依賴方向（Plugin 可以依賴 Module，Module 不能依賴 Plugin）。
    - 名字（使用者同日：「你參照命名規則起就行」，由本會話照[命名規範](rebuild-naming.zh-Hant.md)起）：
      - 兩種型別：`GYO::Kernel::Module` 與 `GYO::Kernel::Plugin`。名字直接指使用者的兩個概念（N5：名字是概念的標籤）；放在通用機制的命名空間（N17）。
-     - 子類別的名字：Plugin 照 N20 以 `Plugin` 結尾（例 `NetPlugin`）；Module 比照以 `Module` 結尾（例 `SdlModule`）。N20 目前只寫 Plugin，Module 這一半要補進命名規範。
+     - 子類別的名字：Plugin 照 N20 以 `Plugin` 結尾（例 `ImGuiPlugin`）；Module 比照以 `Module` 結尾（例 `NetModule`）。例子照 2026-11-16 的歸屬改過（原寫 `NetPlugin`、`SdlModule`）。N20 目前只寫 Plugin，Module 這一半要補進命名規範。
      - 兩份清單：「Module 登記檔」「Plugin 登記檔」，比照既有的「產品登記檔」（N8）；不叫「登記表」，因為那個詞已被去留登記表用掉。
 3. **Product 的兩個意思**：中文「產品」（Game 或 Tool）與 `Product` 型別（一個 World 加上 Executor）。v3 用中文與程式碼格式區分；若覺得仍會混淆，請你決定要不要另取型別名。
 4. **Kernel 算不算 Module**：照 Module 的判準，少了通用機制，遊戲也不成立；但[命名規範](rebuild-naming.zh-Hant.md) N17 把通用機制（`GYO::Kernel::`）與 Module（`GYO::Engine::<Module>::`）分成兩個根。v3 照 N17 把兩者分開寫。
+   - 2026-11-16：使用者把 Kernel 列在 Module（我們自己維護，第 0 節末）。namespace 仍照 N17 分兩根。
+5. **Module／Plugin 改定後還沒確認的**（2026-11-16，`v8-arch-gyo2-module-plugin-definition` 列給使用者，尚未回覆）：
+   - **產品（作者）能不能只選部分 Module**：作者選不選權威 Module、選哪個策略，以這個為前提。前例：O3DE 的專案在 `<project>/Code/enabled_gems.cmake` 列要用的 gem；Unity 的內建模組可以逐個關掉。
+   - **SDL 的 adapter 歸哪**：adapter 是我們寫的、實作 Engine 定的後端介面。讀法之一：JSON 的第三方型別完全藏住，所以是 Module；SDL 的 adapter 會對產品露出 SDL 型別（ImGui 的 SDL 後端要用），又帶一族子函式庫，所以整包是 Plugin。可檢查的形式是「第三方型別有沒有露出我們的介面」。這個讀法沒有經使用者確認。
+   - **ufbx 歸哪**：2026-11-13 的組成文件把它列為必備後端的 plugin；若完全藏在我們的模型載入介面後面，照 JSON 的理由會是 Module。
 
 ## 7. 範囲の限界
 
@@ -191,7 +218,7 @@ v3 和 v2 的差別：
 | Resource | (i) AGENTS 的「資源」：性能與資源的預算、OS 資源；(ii) 舊程式的 `ModelResource`、`TextResource`、`ResourceHandle`（沒帶過來）；(iii) 舊 Kernel 設計：ECS 的 Resource；Bevy 同詞（`bevy_ecs/src/resource.rs:87`） | 不加限定指 (iii)，寫英文 |
 | System | (i) AGENTS 的 Subsystem；(ii) 舊 Kernel 設計：一個 System 函式 | (ii) 照程式定義 |
 | Schedule | 舊 Kernel 設計：一組排好順序的 System；Bevy 同詞（`bevy_ecs/src/schedule/schedule.rs:413`）。audio 的 `Scheduled` 是動詞 | 照程式定義 |
-| Plugin | (i) 使用者 2026-11-11：「層與目錄叫 plugins，單個才叫 plugin」，指 `plugins/` 下的一個套件；(ii) 舊 Kernel 設計：登記的類別 `Plugin`（`Registry.hpp:60`）；Bevy 的 `Plugin` 是這個意思（`bevy_app/src/plugin.rs:57`）；(iii) AGENTS.md:659「Plugin System」指外掛機制；(iv) 使用者 2026-11-14：Engine 外、少了遊戲仍成立的部分 | 不加限定指 (iv)（它包含 (i) 的套件）。(ii) 寫「`Plugin` 型別」。v2 寫「plugin 套件」，v3 改成以 (iv) 定義，見附錄 B |
+| Plugin | (i) 使用者 2026-11-11：「層與目錄叫 plugins，單個才叫 plugin」，指 `plugins/` 下的一個套件；(ii) 舊 Kernel 設計：登記的類別 `Plugin`（`Registry.hpp:60`）；Bevy 的 `Plugin` 是這個意思（`bevy_app/src/plugin.rs:57`）；(iii) AGENTS.md:659「Plugin System」指外掛機制；(iv) 使用者 2026-11-14：Engine 外、少了遊戲仍成立的部分；(v) 使用者 2026-11-16：第三方官方維護、接進來用的部分（取代 (iv)） | 不加限定指 (v)（它包含 (i) 的套件）。(ii) 寫「`Plugin` 型別」。v2 寫「plugin 套件」，v3 改成以 (iv) 定義，見附錄 B |
 | Product（v2 的 App 列） | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：原本叫 Runtime 的型別，2026-11-13 定名 `App`（`v8-arch-kernel-app-name`），2026-11-14 改叫 `Product`（`v8-arch-gyo2-product-type-name`）。Bevy 的 App 底下有多個 SubApp、每個 SubApp 一個 World，和 gyo2 的 `Product`（一個 World）不同 | 詞條名從 App 改成 Product，見附錄 B |
 | Extract | 舊 Kernel 設計：把資料從主 World 單向取到渲染 World；Bevy 同詞 | 照程式定義 |
 | Asset | (i) `assets/<產品>` 內容根目錄；(ii) 舊程式的 `AssetManager`、`AssetHandle`；(iii) 舊 Kernel 設計的 `Assets<T>`；Bevy 的 `Assets`（`bevy_asset/src/assets.rs:288`） | 寫一般定義 |
@@ -218,7 +245,7 @@ v3 和 v2 的差別：
 | Snapshot | (i) PvP wire 的 `WorldSnapshot`、`SnapshotFrame`；(ii) 舊 Kernel 設計：回滾用、驗證用的快照 | 寫法同 v2，定義改成用途 |
 | Registry、登記表 | (i) 舊 Kernel 設計的 `Registry.hpp`；(ii) 建置的 `GyoAppRegistry.cmake`、`projects.csv`；(iii) `LoaderRegistry`（沒帶過來）；(iv) [判斷機制](rebuild-judgment-rules.zh-Hant.md)第 5 節的登記表 | (i) 照程式定義 |
 | Layer | (i) AGENTS §6 的架構層；(ii) AGENTS §2「層の区別」；(iii) `CompositeLayer`（`RenderTypes.hpp:98`） | 同 v2 |
-| Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module。使用者 2026-11-14 給了 Module 與 Plugin 的分法（第 0 節） | 照第 0 節定義 |
+| Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module。使用者 2026-11-14 給了 Module 與 Plugin 的分法（第 0 節）；2026-11-16 改成「誰維護、介面是誰的」（第 0 節末） | 照第 0 節末的定義 |
 | Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | (iii) 寫「stage（舊）」 |
 | Scene | (i) `SceneCapture`（`Renderer.hpp:12`）、`PreviewScene`；(ii) 舊 Kernel 設計：Loading 的「場景」階段、渲染的輸入；(iii) Bevy 的 `Scene`（`bevy_scene/src/scene.rs:49`）：可以生成的實體範本 | 同 v2 |
 | Input | (i) 玩家的輸入、輸入模組；(ii) 舊 Kernel 設計：欄角色 `Input`、boundary 輸入 | (ii) 寫「Input 欄角色（舊）」 |
@@ -242,6 +269,13 @@ v3 和 v2 的差別：
 | Player、Peer、Match、Gateway；PvP 意思的 Client | PvP 產品的概念；舊 Kernel 的條文裡也出現 | 同 v2 |
 
 ## 附錄 B. 各版的變動
+
+### B.0 2026-11-16 的修訂（`v8-arch-gyo2-module-plugin-definition`）
+
+| 詞 | v3 | 修訂後 | 理由 |
+|---|---|---|---|
+| Module | Engine 內的必要部分：少了它，完整的遊戲不成立；例：JSON 函式庫、SDL | 我們自己維護、介面是我們的部分；例：JSON、網路 | 使用者 2026-11-16（`v8-arch-gyo2-module-plugin-owner-definition`） |
+| Plugin | Engine 外的可選部分：少了它，完整的遊戲仍成立；例：網路、ImGui | 第三方官方維護、接進來用的部分；例：SDL 家族、ImGui | 同上 |
 
 ### B.1 v3 相對 v2
 

@@ -198,6 +198,8 @@ workflow 那端（`package_plan`）用 `GYO_SELECTED_TOOLS` 是否為空來決�
   | 文字輸入的契約（組字、確定、候選視窗的位置、UTF-8） | 沒有。input、text 不帶 | 同上 |
   | 驗收 | — | 見下面第 2 點 |
 
+  （2026-11-16 註：Module／Plugin 的判準改成「誰維護、介面是誰的」，SDL 改為 Plugin、網路改為 Module，見[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 0 節末。本表照當時的定義寫，不改。）
+
   檢查者的看法（Fable 自己的判斷，不是使用者的決定）：
   1. KeepTool 適合當 R3 的第一個產品，也適合當 R1 的名指 Feature：它小，卻一次用到 Module（SDL）、Plugin（ImGui）、Tool 三層與打包；SDL adapter 放哪、ImGui plugin 怎麼接、文字輸入的契約要保證什麼，都可以從它推出來（AGENTS §2 的 Feature → Contract → Architecture）。
   2. 「輸入法能用」CI 驗不到：runner 沒有輸入法。CI 能驗的是「文字輸入事件的路徑」（合成的組字與確定事件進得了 ImGui 的輸入框、候選視窗位置有設）；真的輸入法要在 Windows、macOS、Linux 實機上按一次。現在的發佈規則是「tools 線不需要實機證據」（`release_channels.py` 的 `train_release_evidence`），要不要為 KeepTool 改，得一起定。
