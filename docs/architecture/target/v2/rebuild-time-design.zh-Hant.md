@@ -612,6 +612,7 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 | 狀態機 (b) 區（`v8-arch-gyo2-state-machine`；宣告已核准 2026-11-16，`v8-arch-gyo2-state-machine-declaration-approved`） | Engine 的 Module `engine/state_machine`，Kernel 不改：每個值一張進入／離開的 schedule、子狀態一層、兩種要求、狀態機不碰時間。宣告在分支 `claude/gyo2-state-machine-520d19`（25c3949b）。估 8 到 11 小時 | K0、T3 併入之後，使用者說開始 |
 | (c) 區的獨占套用（使用者 2026-11-15～16，`v8-arch-gyo2-zone-c-exclusive-apply`） | Kernel：允許 (c) 區的獨占 System，登記時列出它要寫的 (c) 區 Resource 與它會跑的 schedule，啟動時檢查，C 指紋收進這一筆。推翻規格 S-13，改 DI-KS 2、Z2 與 C 指紋的內容；K0 寫下的「獨占的 System 只能是 (b) 區」那幾句跟著改。**另有事前宣告** | 狀態機 (b) 區之後；需要 K0 |
 | 狀態機 (c) 區（`v8-arch-gyo2-state-machine-zone-c-both-shapes`） | Module 這一側的 (c) 區：介面已在狀態機的宣告裡定（`RegisterStateMachine<S, Zone::C>(…, Change)`，那一批用約束擋下）；`Change` 這個參數要不要留，到這一批再問使用者。**另有事前宣告** | (c) 區的獨占套用之後 |
+| Kernel 與 App 的邊界（使用者 2026-11-16，`v8-arch-gyo2-kernel-app-boundary-first`） | 組裝、runner、登記單位的生命週期、開局與迴圈的順序、多個 World 放在哪一層；Kernel 是否只留 `bevy_ecs` 那一半。會重看 runner 由登記單位安裝（11-11）、`GYO::Kernel::Module`／`Plugin`（11-14）、T2 的「Kernel：可呼叫的 runner」、K0 的「開局由 Kernel 跑」。**任務卡 gyo2-kernel-app-boundary；先定，下面那一批等它** | T2、T3、T5 與建世界的階段都等它 |
 | 建世界的階段（使用者 2026-11-16 定方向，`v8-arch-gyo2-build-world-phase-is-mechanism`） | 機制是「建世界的階段」：遊戲開始跑之前、寫者不計；開局、Loading、讀檔是遊戲流程的名字，Loading 有沒有由作者決定。會改 runtime-composition DI 3 與 3a、DI-KS 6、`Domain::Loading`，並和 K0 的「Startup 由 Kernel 跑一次」對上（可不可以分批跑多次）。**另有事前宣告；範圍與位置待使用者定** | 和 T3（runner 推動）有關；讀檔與狀態機 (b) 區都會用到 |
 | 之後 | World 之間的事件；回滾 | 名指的 Feature |
 
