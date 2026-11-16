@@ -30,6 +30,16 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
     case KernelErrorCode::StructureBroken: return "StructureBroken";
     case KernelErrorCode::HookRoundLimit: return "HookRoundLimit";
+    case KernelErrorCode::ScheduleRunning: return "ScheduleRunning";
+    case KernelErrorCode::UnknownSchedule: return "UnknownSchedule";
+    case KernelErrorCode::StartupNotNestable: return "StartupNotNestable";
+    case KernelErrorCode::StartupRunning: return "StartupRunning";
+    case KernelErrorCode::ExtractNotNestable: return "ExtractNotNestable";
+    case KernelErrorCode::HookRunsSchedule: return "HookRunsSchedule";
+    case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
+    case KernelErrorCode::UndeclaredResourceWrite: return "UndeclaredResourceWrite";
+    case KernelErrorCode::UnreadableResource: return "UnreadableResource";
+    case KernelErrorCode::NestedRunAborted: return "NestedRunAborted";
     }
     return "Unknown";
 }
@@ -102,6 +112,7 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE18: return "D-E18";
     case StartupCode::DE19: return "D-E19";
     case StartupCode::DE20: return "D-E20";
+    case StartupCode::DE21: return "D-E21";
     case StartupCode::RE1: return "R-E1";
     case StartupCode::RE2: return "R-E2";
     case StartupCode::RE3: return "R-E3";
@@ -874,6 +885,7 @@ void CheckInitialValues(RegistryData& data) {
 void CheckSchedules(RegistryData& data) {
     std::map<Domain, std::vector<std::string>> clocks;
     std::set<Domain> usedDomains;
+    std::string startupSchedule;
     for (const ScheduleRecord& record : data.schedules) {
         const ScheduleOptions& s = record.options;
         std::set<std::string> stages;
@@ -914,6 +926,15 @@ void CheckSchedules(RegistryData& data) {
                                                    "', which is neither a stage end nor a sync point", {s.name});
         }
         if (s.startup) {
+            // Spec H-12: one Startup schedule per World; every plugin's startup Systems go into it.
+            if (!startupSchedule.empty()) {
+                data.Error(StartupCode::DE21, "H-12",
+                           "schedules '" + startupSchedule + "' and '" + s.name +
+                               "' are both Startup schedules; a World has at most one",
+                           {startupSchedule, s.name});
+            } else {
+                startupSchedule = s.name;
+            }
             if (s.clock || s.domain != Domain::None) {
                 data.Error(StartupCode::DE12, "H-1", "startup schedule '" + s.name + "' has a clock or a domain", {s.name});
             }
@@ -1104,6 +1125,13 @@ void ResolveSystems(RegistryData& data) {
         }
         if (resolver.usesExtract) {
             data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
+                       {hook.name}, {SourceText(hook.source)});
+        }
+        if (resolver.access.exclusive && std::any_of(resolver.access.writes.begin(), resolver.access.writes.end(),
+                                                     [](const AccessKey& key) { return key.kind == AccessKind::Resource; })) {
+            // Spec S-18 (K0): a hook writes through deferred records; it lists no resource writes.
+            data.Error(StartupCode::DE7, "S-18",
+                       subject + " takes ExclusiveWorld<Writes<...>>; a hook may take ExclusiveWorld<> only",
                        {hook.name}, {SourceText(hook.source)});
         }
         if (hook.zone == Zone::C) {
@@ -1301,6 +1329,13 @@ void CheckSystems(RegistryData& data) {
                 data.Error(StartupCode::DE7, "Z3", subject + " is zone C and ingress; ingress Systems are zone B",
                            {name}, {source});
             }
+        }
+        if (access.exclusive && system.options.ingress) {
+            // Spec S-17 (K0): Z2's ingress exception would let it write zone C boundary input.
+            data.Error(StartupCode::DE7, "S-17",
+                       subject + " takes ExclusiveWorld and is ingress; an ingress System declares the boundary input "
+                                 "it writes in its signature",
+                       {name}, {source});
         }
         const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);
         const AccessSet zoneAccess = ZoneAccess(access, funnel);

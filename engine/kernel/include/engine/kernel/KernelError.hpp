@@ -60,6 +60,30 @@ enum class KernelErrorCode : std::uint8_t {
     // Spec F-12: the hook rounds after the last sync point of a Run did not empty
     // the schedule's hook queue within the limit.
     HookRoundLimit,
+    // The codes below come with nested runs (ExclusiveWorld::RunSchedule; K0,
+    // v8-arch-gyo2-nested-schedule). Each refusal interrupts the World and is
+    // reported once, by the outermost Run.
+    // Spec X-11: the schedule is running already (this level or an outer one).
+    ScheduleRunning,
+    // Spec X-12: no schedule of that name is registered.
+    UnknownSchedule,
+    // Spec H-12: Startup is run by the kernel only; a System cannot run it.
+    StartupNotNestable,
+    // Spec H-13: while Startup runs, no other schedule runs.
+    StartupRunning,
+    // Spec X-15: an extract schedule is not run from inside a System.
+    ExtractNotNestable,
+    // Spec X-13: a hook runs while a sync point applies its records, so it runs no schedule.
+    HookRunsSchedule,
+    // Spec X-14: a schedule is not run from inside a Read or Modify closure.
+    ClosureRunsSchedule,
+    // Spec S-14: an ExclusiveWorld write to a single-writer resource its Writes<...> does not list.
+    UndeclaredResourceWrite,
+    // Spec S-15: an ExclusiveWorld read of KernelSettings; S-16: of a resource
+    // whose thread affinity the schedule's runner does not satisfy.
+    UnreadableResource,
+    // Spec X-16: an exception left a nested run (the outer System caught it).
+    NestedRunAborted,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;
@@ -94,12 +118,14 @@ struct KernelError {
     [[nodiscard]] std::string Text() const;
 };
 
-// The startup error codes of spec D.2's table (D-E1 to D-E20, R-E1 to R-E6,
+// The startup error codes of spec D.2's table (D-E1 to D-E21, R-E1 to R-E6,
 // X-E1 to X-E3, F-E1). The enum value is not part of any fingerprint or file:
 // the text form (ToString) is.
 enum class StartupCode : std::uint8_t {
     DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE8, DE9, DE10,
     DE11, DE12, DE13, DE14, DE15, DE16, DE17, DE18, DE19, DE20,
+    // A World with two Startup schedules (spec H-12; v8-arch-gyo2-nested-schedule).
+    DE21,
     RE1, RE2, RE3, RE4, RE5, RE6,
     XE1, XE2, XE3,
     FE1,
