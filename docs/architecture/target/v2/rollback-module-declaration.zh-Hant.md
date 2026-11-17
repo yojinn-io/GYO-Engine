@@ -1,9 +1,9 @@
-# 回滾 Module：事前宣告（修訂 4）
+# 回滾 Module：事前宣告（修訂 5）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。**
 > 批次代號：`v8-arch-gyo2-rollback-module`。
 > **這是「Kernel 與編排層的邊界」拆出來的子份之一**（`v8-arch-gyo2-boundary-split-integrator-first`）。統合是邊界卡的 `kernel-app-boundary-declaration.zh-Hant.md`（分支 `claude/gyo2-kernel-app-boundary-4af68c`；修訂 4 照 16c84630，以第 15 節與 2.1 的新決定為準）。**以統合為準、不改統合定過的事。**
-> **使用者 2026-11-17 核准**（HANDOFF `v8-arch-gyo2-rollback-module-declaration-approved`）。原話：本卡「核准」；主會話確認時「是，回滾那份要核准」。核准的版本是修訂 4 加補正（7dfd7167）。**核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更（例：D-E16 的案從 Kernel 搬到回滾 Module），在實作那一批的事前宣告逐案列出、逐條核准。核准時四份的最後一次換模型檢查還在跑；查到回滾份要改時，由統合通知本卡，改完交使用者再看。核准宣告不等於開始實作：實作照第 11 節的批次，排在統合第 8 節第四條線裡。
+> **使用者 2026-11-17 核准**（HANDOFF `v8-arch-gyo2-rollback-module-declaration-approved`）。原話：本卡「核准」；主會話確認時「是，回滾那份要核准」。核准的版本是修訂 4 加補正（7dfd7167）。**核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更（例：D-E16 的案從 Kernel 搬到回滾 Module），在實作那一批的事前宣告逐案列出、逐條核准。核准之後的第四輪換模型檢查（Fable／high，`four-docs-adversarial-check-r4.md`）要回滾份改幾處，照統合 35e8a1f3 第 16 節改成修訂 5；**修訂 5 的改動待使用者再看**（改動清單在修訂紀錄）。核准宣告不等於開始實作：實作照第 11 節的批次，排在統合第 8 節第四條線裡。
 
 **修訂紀錄**：
 - 修訂 0（b55af62e）：初版，回報統合六件。
@@ -11,10 +11,11 @@
 - 修訂 2（d8125486）：照統合修訂 19 與第一輪四份交叉檢查（Derived、公開登記、存活集合）。
 - 修訂 3（1875ffb1）：照統合修訂 20 與第二輪檢查（R-2 的前提、巢狀 schedule、Match）。
 - 修訂 4（2026-11-17）：照統合 16c84630 第 15 節與使用者的新決定——重跑由 `ExclusiveWorld` 的 System 當場整批放回再巢狀跑固定步；事件分 `Message`／`Event`，`Message` 不回滾、Kernel 不加事件原語；伺服器權威不數寫者、讀寫規則兩半都拿掉，所以豁免寫者與「重跑者與還原者名單」拿掉、R-2 的前提全歸作者；官方策略的細部照統合 15.4；第三輪檢查（`four-docs-adversarial-check-r3.md`）第 3、6、17、18、19 條；第 10 節改成已定的紀錄。
+- 修訂 5（2026-11-17）：照第四輪檢查與統合 35e8a1f3 第 16 節——(1) 寫明官方的還原、重跑 System 是不帶 `Writes<…>` 的 `ExclusiveWorld` System、記錄 System 只寫歷史 Resource，權威不需要回滾的名單；重跑退 tick 也走這條（5.5、7.2）。(2) `rollback.Input<T>` 與權威的 `.input` 是同一型別的兩種身分；沒有回滾策略的 World 上沒有作用（5.4、5.5、6.3）。(3)「重跑中」改成照 lightyear：決定回滾之後、還原之前立起，重跑完放下（5.3、5.5、R-2 的突變）。(4) 兩個方向的檢查與 R-7：hook 與 observer 算在觸發它的 System 所在的一側，從 World 外面觸發的不屬任何一側；hook 不能帶 `MessageReader`（7.1、R-7、5.5 末）。(5) 收統合移來的 RC 11（第 9 節）。(6) 第 0 節讀權威修訂 4；權威份 5.11 → 5.11；2.1 把讀寫規則拿掉分開列。
 
 ## 0. 依據
 
-**讀的版本**：程式 `origin/gyo2` f00433b0；統合 16c84630（第 1、2.1、3、8、9.1、15 節）；權威份修訂 3（`claude/gyo2-authority-module` 9efe5e1a）第 4.3、4.4、5.14、6.16 節；游標份修訂 3（`claude/gyo2-event-cursor` bafc4050）；HANDOFF 在 `claude/gyo2-time-design`；讀檔卡的宣告修訂 5（`claude/gyo2-restore-entry-a4929d` a3caf87a）第 7、8 節；時間設計 `rebuild-time-design.zh-Hant.md`（修訂 4）第 4、6 節；舊規格 `docs/architecture/plans/kernel/spec.zh-Hant.md` A.1（Derived）、E 節（hook 的參數）、H.5、H.8、H.11（只帶設計思想，不照搬）；`target/kernel.zh-Hant.md` DI-KS 12。
+**讀的版本**：程式 `origin/gyo2` f00433b0；統合 16c84630（第 1、2.1、3、8、9.1、15 節）；權威份修訂 4（`claude/gyo2-authority-module` 2440b336）第 4.3、4.4、5.11、6.16 節；統合 35e8a1f3 第 16 節；游標份修訂 3（`claude/gyo2-event-cursor` bafc4050）；HANDOFF 在 `claude/gyo2-time-design`；讀檔卡的宣告修訂 5（`claude/gyo2-restore-entry-a4929d` a3caf87a）第 7、8 節；時間設計 `rebuild-time-design.zh-Hant.md`（修訂 4）第 4、6 節；舊規格 `docs/architecture/plans/kernel/spec.zh-Hant.md` A.1（Derived）、E 節（hook 的參數）、H.5、H.8、H.11（只帶設計思想，不照搬）；`target/kernel.zh-Hant.md` DI-KS 12。
 
 **別家的做法**：
 - 本份的證據：主 checkout `build/evidence/gyo2-rollback-module/rollback-other-engines.md`。lightyear 736e1695、Unity Netcode 7.2.0 由主會話讀原始碼；GGRS 25bd998、bevy_ggrs b2c42e8 由子 agent（web-fetch，Opus／medium）讀 GitHub 的原始碼，raw 檔沒有行號，只到檔名與項目。
@@ -61,7 +62,8 @@
 | `v8-arch-gyo2-system-declares-immediate-structural-change`（11-17，side chat） | 不替回滾開 DI-KS 18 的例外；System 登記時宣告能不能當場改成員；回滾的重跑由可以改成員的特別 System 做 | 「這樣，不用開例外，建機制，System在初始化是給一個聲明，可以做成員變更（回滾）和不能做成員變更（普通System），並建立不同的判定和限制，這個選擇權和風險交給作者。你認為如何？」 |
 | `v8-arch-gyo2-immediate-change-via-exclusive-world`（11-17） | 那個宣告沿用 `ExclusiveWorld`；DI-KS 18 改寫成「普通 System 只經同步點；`ExclusiveWorld` 可以當場改」 | 「沿用 ExclusiveWorld」 |
 | `v8-arch-gyo2-events-two-kinds-like-bevy`（11-17，side chat） | 保留式改名 `Message`、新增推送式 `Event`＋`Observer` | 「OK，照Bevy的來」 |
-| `v8-arch-gyo2-authority-no-writer-count`（11-17，side chat） | 伺服器權威不數寫者；連帶讀寫規則兩半都拿掉（統合 15.3，卡片照使用者的原則判） | 「那就參照別人的權威策略」 |
+| `v8-arch-gyo2-authority-no-writer-count`（11-17，side chat） | 伺服器權威不數寫者 | 「那就參照別人的權威策略」 |
+| `v8-arch-gyo2-authority-rw-rules-removed-by-principle`（11-17；**卡片照使用者的原則判，不是使用者逐字定的**，統合 15.3） | 判定資料的讀寫規則兩半都拿掉；和上一列是兩筆不同的判定 | —（不是使用者的話） |
 | `v8-arch-gyo2-confirm-derived-removals`（11-17；代號待主會話定） | 確認清單核准（統合 15.6） | 「核准」 |
 | `v8-arch-gyo2-clock-out-of-kernel`（11-17） | tick 在時間 Module | 見統合 2.1 |
 | `v8-arch-gyo2-time-plan-two` (5)（11-14） | 「事件：……可回滾的 schedule 不參與」——使用者定的只有這一句；兩個方向、依位置讀、走 Ingress、啟動時檢查是時間設計 6.3 (2) 的提案 | 見 HANDOFF |
@@ -144,9 +146,9 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 |---|---|---|---|
 | 啟動檢查 | 編排層 build → Kernel 建 Plan → finish 之後（L5 的順序） | 讀唯讀登記表（L6）與回滾的公開登記，回傳啟動錯誤；P2P 佔位在這裡報錯 | lightyear plugin build |
 | 記錄 | 步的 schedule 每跑完一步之後（記錄的 System 由回滾 Module 掛在步的 schedule 最後；stage 由登記時給） | 存這一步的狀態 | lightyear `UpdateHistory`；bevy_ggrs `SaveWorld` |
-| 判斷要不要回滾 | 每一輪、步的 schedule 開始之前（回滾的 `ExclusiveWorld` System 裡） | 讀外面送進來的資料（權威狀態、遠端輸入），決定退回哪一步或不退 | lightyear `Check`；GGRS `check_simulation_consistency` |
-| 還原 | 決定要回滾之後（同一個 `ExclusiveWorld` System，當場改） | 把狀態退回目標步；先記下要給修正用的值 | lightyear `Prepare`；bevy_ggrs `LoadWorld` |
-| 重跑 | 還原之後（同一個 System 巢狀跑） | 立起「重跑中」、退回 tick、巢狀跑 k 次步的 schedule、放下「重跑中」 | lightyear `run_rollback` |
+| 判斷要不要回滾 | 每一輪、步的 schedule 開始之前（回滾的 `ExclusiveWorld` System 裡） | 讀外面送進來的資料（權威狀態、遠端輸入），決定退回哪一步或不退；**決定回滾就立起「重跑中」** | lightyear `Check`；GGRS `check_simulation_consistency` |
+| 還原 | 決定要回滾之後（同一個 `ExclusiveWorld` System，當場改；「重跑中」已立起） | 把狀態退回目標步；先記下要給修正用的值 | lightyear `Prepare`；bevy_ggrs `LoadWorld` |
+| 重跑 | 還原之後（同一個 System 巢狀跑） | 退回 tick、巢狀跑 k 次步的 schedule；**重跑完放下「重跑中」** | lightyear `run_rollback`；「重跑中」的起落照 lightyear：判斷時插入 `Rollback` Resource（`rollback.rs:427`）、還原（`:880`）、重跑（`:1186`）、結束時拿掉（`:1324`） |
 | 修正 | 每一幀（畫面那一側） | 依重跑前後的差，算這一幀畫面要加的偏移 | lightyear `VisualCorrection` |
 
 - 作者可以只覆寫其中幾個（繼承官方實作改裝），也可以全部自寫（L21）。
@@ -161,9 +163,9 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 | **可回滾的資料**：`rollback.Component<T>(options)`、`rollback.Resource<R>(options)` | 登記了就是可回滾（Yes），沒登記就是不回滾（No）。options：比較函式（預設 `==`）、修正函式（選填）。型別要可複製（登記時編譯期檢查；Kernel 的 `kStorable` 只要求可移動，`Storage.hpp:60-63`）。**步的 schedule 上有生成時，配發器要登記成可回滾的 Resource**（否則重跑時 `Spawn` 拿到不同編號） | 策略；權威的 Z6、B3 | 舊 `Rollback::Yes／No` |
 | **Derived**：`rollback.Derived<T>()` | 每一步在讀者之前由同一張 schedule 的立即寫者重算；不進歷史、還原時不動。啟動檢查：每張步的 schedule 與巢狀 schedule 裡，這種資料的每個讀者之前，順序圖上要有同一張 schedule 的 `Write<T>` 寫者，違反是啟動錯誤（讀 L6 的順序圖，統合 3.3）。系譜：舊規格 A.1 的 Derived（修訂 S15）；lightyear、bevy_ggrs 沒有對應的概念 | 策略；權威的 Z6 | 舊 `Rollback::Derived`、Kernel 的 D-E16（`Scheduler.cpp:500-525`） |
 | **步的 schedule**：`rollback.StepSchedule(name, recordStage)` | 回滾的單位：記錄掛在它每跑完一步之後，重跑時巢狀跑 k 次的就是它 | 策略（記錄、重跑）；跨 schedule 的訊息檢查；權威的 Z6、D-E15 | 舊 `rollbackEnabled` |
-| **巢狀跑的 schedule**：`rollback.NestedSchedule(name, stepSchedule)` | 從步的 schedule 裡巢狀跑的 schedule（例：作者的狀態值在兩端同一個 tick 自己換時，套用的 System 在固定步裡跑「進入／離開」那幾張）。重跑時會被跑到，所以算可回滾的一部分；**不記錄、不當重跑的單位**，只進檢查的範圍。要另外登記的理由：Kernel 的巢狀跑目標是執行時才給的名字（`ExclusiveWorld::RunSchedule(std::string_view)`，`Params.hpp:900`），啟動時從登記表推不出來 | 跨 schedule 的訊息檢查、Derived 的檢查；權威的 5.14 | （新） |
+| **巢狀跑的 schedule**：`rollback.NestedSchedule(name, stepSchedule)` | 從步的 schedule 裡巢狀跑的 schedule（例：作者的狀態值在兩端同一個 tick 自己換時，套用的 System 在固定步裡跑「進入／離開」那幾張）。重跑時會被跑到，所以算可回滾的一部分；**不記錄、不當重跑的單位**，只進檢查的範圍。要另外登記的理由：Kernel 的巢狀跑目標是執行時才給的名字（`ExclusiveWorld::RunSchedule(std::string_view)`，`Params.hpp:900`），啟動時從登記表推不出來 | 跨 schedule 的訊息檢查、Derived 的檢查；權威份 5.11 | （新） |
 | **重跑時不跑**：`rollback.SkipDuringResimulation(...)` | 在 `AddSystem` 當下給那個 System 的 Mount 掛一個 Kernel 的一般執行條件（讀「重跑中」Resource；`Registry.hpp:125-138` 的 `conditions`，只能在 `AddSystem` 當下給，L24 (6)），並記進公開登記。用在輸入的入口、送網路、播音效 | 策略；權威的 D-E15（伺服器權威策略替作者把入口登記進來，L24 (4)） | 舊 `notInRollback` |
-| **輸入歷史**：`rollback.Input<T>(capacity)` | 按 tick 索引、有上限的環（World 的 Resource，回滾 Module 持有）；入口 System 在一般的步寫進「目前的 tick」，重跑時策略照重跑的 tick 讀出。輸入歷史本身不回滾 | 策略；權威的 Z8（輸入不能登記成可回滾） | 舊 `role = Input` 的 `InputRing`（統合 15.1：「回滾的策略也要自己的輸入歷史」，lightyear `input_buffer.rs:25-39`、Unity `ICommandData` 64 筆） |
+| **輸入歷史**：`rollback.Input<T>(capacity)` | 按 tick 索引、有上限的環（World 的 Resource，回滾 Module 持有）；入口 System 在一般的步寫進「目前的 tick」，重跑時策略照重跑的 tick 讀出。輸入歷史本身不回滾。**和權威的 `.input` 是同一個型別的兩種身分**（統合第 16 節）：權威的 `.input` 標它是判定的輸入（Z8 讀本頁的公開登記，輸入不能登記成可回滾的狀態）；`rollback.Input<T>` 宣告回滾策略替它保留按 tick 索引的歷史。**沒有回滾策略的 World（Match）上 `rollback.Input<T>` 沒有作用**：不建環、不改寫入，輸入照常是權威的判定輸入 | 策略；權威份 5.11 的 Z8 | 舊 `role = Input` 的 `InputRing`（統合 15.1：「回滾的策略也要自己的輸入歷史」，lightyear `input_buffer.rs:25-39`、Unity `ICommandData` 64 筆） |
 
 - **誰登記巢狀 schedule**：作者（狀態機不依賴回滾，L26 的同形）；伺服器權威策略要不要在 `OnRegister` 代登記、要不要加交叉檢查，由權威份定。漏登記的後果：那幾張 schedule 不在檢查的範圍裡；回滾 Module 看不到巢狀跑，不能在執行時抓（寫進限制）。
 - **重複登記的規則**（和權威份 4.3「作者的為準」統一，第三輪檢查第 19 條）：每個登記入口帶一個來源——作者自己登記，或代為登記（伺服器權威策略呼叫時標成代為）。不論先後，作者自己的登記為準、蓋過代為登記；兩筆都是作者自己的而 options 不同，是啟動錯誤；兩筆都是代為登記而 options 不同，也是啟動錯誤。「代為」不是特權（任何呼叫者都可以標，只代表「可以被作者蓋過」），所以不違反 L21 的「沒有特權」。
@@ -177,14 +179,16 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 2. **記錄**：每步之後，對每個可回滾的欄，只記這一步改過的格（`changed` 大於上一次記錄時的 stamp）；刪掉的格記「這一步沒有」；存活集合的變化一起記。
 3. **權威狀態的入口**：網路 Module（L23）或作者把「第 T 步的權威值」交給回滾 Module 的入口（Resource 或函式，實作批定）。
 4. **判斷**：模式三種（照 lightyear）——一律回滾、比對後不同才回滾（預設）、關閉；比對＝權威值對歷史第 T 步。超過最大深度的請求丟掉並記診斷。
-5. **還原**（在 `ExclusiveWorld` 的 System 裡當場做）：可回滾的每一欄與存活集合放回第 T 步；**沒變的格不寫、不推 stamp**（照 Unity，用登記的比較函式；卡片照 L17 判：少掉一批假的「改過了」，比較函式本來就登記了）；有變的格寫入並**標目前 stamp**；成員有變的**跑 hook**（統合 15.4，照 lightyear；hook 在當場改成員時的時機由統合處理）。Derived 不動。還原不算寫者（舊規格 B.3；伺服器權威也不再數寫者）。
-6. **重跑**（同一個 System）：立起「重跑中」（登記「重跑時不跑」的 System 被擋下）→ tick 退回 T（第 7.2 節）→ 巢狀跑 k 次步的 schedule、每次照時間 Module 的規則推進 tick、讀輸入歷史的那一格 → 放下「重跑中」。
+5. **還原**（在 `ExclusiveWorld` 的 System 裡當場做；判斷決定回滾時「重跑中」已立起，照 lightyear）：可回滾的每一欄與存活集合放回第 T 步；**沒變的格不寫、不推 stamp**（照 Unity，用登記的比較函式；卡片照 L17 判：少掉一批假的「改過了」，比較函式本來就登記了）；有變的格寫入並**標目前 stamp**；成員有變的**跑 hook**（統合 15.4，照 lightyear；hook 在當場改成員時的時機由統合處理）。Derived 不動。還原不算寫者（舊規格 B.3；伺服器權威也不再數寫者）。
+6. **重跑**（同一個 System）：tick 退回 T（第 7.2 節）→ 巢狀跑 k 次步的 schedule（登記「重跑時不跑」的 System 被擋下）、每次照時間 Module 的規則推進 tick、讀輸入歷史的那一格 → 放下「重跑中」。
+9. **官方的回滾 System 在啟動時看得到什麼**（統合第 16 節）：還原與重跑是一個**不帶 `Writes<…>` 標註**的 `ExclusiveWorld` System；記錄是只寫歷史 Resource 的一般 System。所以啟動時從登記表看不到它們寫判定資料或 tick——權威的 C 指紋、Z6、「tick 只有一個來源」的檢查都不必扣掉回滾，也不需要回滾公開名單。重跑時退 tick 也在這個 `ExclusiveWorld` System 裡做（第 7.2 節）。作者自寫的策略若給它的 System 加了 `Writes<…>`，權威怎麼看由權威份定。
+10. **沒有回滾策略的 World**：記錄、判斷、還原、重跑都不跑；`rollback.Input<T>` 沒有作用（第 5.4 節）；公開登記照樣可讀（權威的交叉檢查在這種 World 不適用，權威份 5.11）。
 7. **修正**：還原前記下每個有修正函式的格在畫面上的值；重跑後誤差＝舊值 − 新值，存在那個實體的修正元件上；每幀依衰減設定（預設指數，照 lightyear `CorrectionPolicy`）縮小；畫面讀「新值＋誤差」。修正元件與它的 System 屬回滾 Module，掛在每幀的哪個 stage 由作者決定。
 8. **啟動檢查**：Derived 的順序（第 5.4 節）；巢狀 schedule 登記的所屬是步的 schedule；`time-plan-two` (5) 兩個方向（第 7.1 節），違反是啟動錯誤；副作用不檢查（統合 15.4）。
 
 **卡片照 L17 判、不採的**：lightyear「預測期間刪實體改成停用、不真刪」。理由：GYO 的 Kernel 沒有「停用的實體」，要加就是 Kernel 職責清單多一項（L17 要停下問）；lightyear 這樣做是為了避開 OnRemove 在回滾時的副作用，但官方實作本來就選了還原時跑 hook，作者要的副作用改用 observer（下一點）。
 
-**hook 讀不到「重跑中」**：hook 的參數只有 `HookCtx`、讀該實體的元件、`Commands`、訊息寫者、診斷（舊規格 E 節；`Params.hpp:982`），讀不到 Resource。所以 hook 只該維護衍生資料（例：空間索引，還原時重算正好），有副作用的反應（音效、特效）寫成 observer——observer 是 System，讀得到「重跑中」（統合 15.1）。寫進說明頁。
+**hook 讀不到「重跑中」**：hook 的參數只有 `HookCtx`、讀該實體的元件、`Commands`、訊息寫者、診斷（舊規格 E 節；`Params.hpp:982`），讀不到 Resource，**也不能帶 `MessageReader`**（統合 15.1 修訂 32：照 Bevy 的 hook 沒有游標）。所以 hook 只該維護衍生資料（例：空間索引，還原時重算正好），有副作用的反應（音效、特效）寫成 observer——observer 是 System，讀得到「重跑中」（統合 15.1）。寫進說明頁。
 
 ### 5.6 P2P 佔位：輸入觸發、存整個狀態
 
@@ -233,7 +237,7 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 | (c) System 不得有 Local | R-2 的前提，作者的責任（第 9 節） |
 | domain tick 只有一個來源且在快照內 | tick 在時間 Module（L2）；重跑時由回滾策略退回（第 7.2 節） |
 | 快照含 `rollback = Yes` 的欄與 Resource、配發器、Fixed domain 事件緩衝 | 欄、Resource、配發器：可回滾的資料的登記；事件緩衝：不進（統合 15.1） |
-| 不含 role=Input 的歷史 | 輸入歷史由回滾 Module 自己存、不回滾（第 5.4 節） |
+| 不含 role=Input 的歷史 | 輸入歷史由回滾 Module 自己存、不回滾（`rollback.Input<T>`，第 5.4 節）；「這是判定的輸入」是權威的 `.input`，同一型別的另一個身分；沒有回滾策略的 World 上 `rollback.Input<T>` 沒有作用 |
 | 重跑與一次跑完逐位元相同（stamps 除外） | R-2（作者負責前提） |
 | 可回滾 schedule 的 ingress 在重跑中不執行 | 「重跑時不跑」的登記 |
 | 只由 Host 在 Ready 呼叫 | 改成由 `ExclusiveWorld` 的 System 做（使用者） |
@@ -250,6 +254,7 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 - **`time-plan-two` (5)「可回滾的 schedule 不參與」照舊**，由回滾策略在啟動時檢查，兩個方向（官方實作違反是啟動錯誤）：
   - 步的 schedule 與巢狀 schedule 裡寫的 `Message`，不能有不在這些 schedule 裡的讀者（例：固定步寫「命中」、每幀讀來播音效）；
   - 步的 schedule 與巢狀 schedule 裡讀的 `Message`，不能有不在這些 schedule 裡的寫者（例：每幀寫 UI 指令、固定步讀）。
+  - **hook 與 observer 算哪一側**（統合第 16 節）：算在觸發它的那個 System 所在的一側（固定步裡的 System 觸發的 observer 寫的訊息，算固定步那一側）；從 World 外面觸發的（外面在 Ready 時觸發）不屬任何一側，不進這兩個方向的檢查。hook 只會寫訊息、不能讀（不能帶 `MessageReader`）。
   - 讀 L6 交出的「每種訊息有哪些讀者、寫者」（游標份提、統合准）。這種資料要過界時，作者用 Resource 或元件，或從固定步觸發推送式事件、由 observer 讀「重跑中」。作者自寫的策略可以不檢查（L21）。
 - 被回滾的那一側自己的讀者在重跑時讀到重寫的訊息；第 T 步寫、第 T+1 步讀的訊息，重跑時游標已推過、讀不到——這是 R-2 的前提之一（第 9 節）。
 
@@ -257,15 +262,16 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 
 - 回滾在登記檔依賴時間 Module，直接寫時間 Module 公開的 tick（L27 的型別）把它退回 T，跑完回到現在；固定步的累加器（時間設計 `FixedTime`／`TickAccumulator`）不能退。
 - **給時間 Module 宣告的要求**：
-  1. tick 是回滾策略能寫的 Resource（L27 公開型別）。
+  1. tick 是回滾策略能寫的 Resource（L27 公開型別）。**重跑者用 `ExclusiveWorld` 退 tick，不經 tick 的寫者名單**（統合第 16 節）：時間宣告的「tick 只有一個來源」與權威的 tick 檢查看的是有型別的寫者，回滾的 `ExclusiveWorld` System 不帶 `Writes<…>`，不在那份名單裡、也不必加進去。tick 是判定資料又不登記成可回滾，Z6 對它例外（統合第 16 節、權威份 5.11）。
   2. 重跑時巢狀跑步的 schedule，每一步 tick 怎麼推進（步的 schedule 自己推，或時間 Module 給「推進一步」的函式讓重跑迴圈呼叫），在時間的宣告定；重跑時 System 讀到的固定步時間要等於第一次跑那一步時的值（lightyear `rollback_fixed_time` 的做法）。
   3. **「重跑中」Resource 由時間 Module 登記、恆在**（第 5.7 節）。
 
 ### 7.3 權威 Module（L22、L24、L25、統合 15.3）
 
 - 方向：權威 → 回滾。回滾不讀權威的任何東西。
-- **交叉檢查**：Z6、Z8、D-E15、B3 是伺服器權威策略讀回滾公開登記的檢查（L24；權威份 5.14）。本頁保證那些登記可讀、穩定（R-6）。
-- **沒有豁免寫者、沒有「重跑者與還原者名單」**：伺服器權威不數寫者、讀寫規則兩半都拿掉（`authority-no-writer-count`、統合 15.3），修訂 2、3 的名單拿掉。
+- **交叉檢查**：Z6、Z8、D-E15、B3 是伺服器權威策略讀回滾公開登記的檢查（L24；權威份 5.11）。本頁保證那些登記可讀、穩定（R-6）。
+- **沒有豁免寫者、沒有「重跑者與還原者名單」**：伺服器權威不數寫者（`authority-no-writer-count`），讀寫規則兩半都拿掉（`authority-rw-rules-removed-by-principle`，統合 15.3），修訂 2、3 的名單拿掉。官方的回滾 System 不帶 `Writes<…>`，權威啟動時本來就看不到它寫判定資料（第 5.5 節第 9 點）。
+- **輸入**：權威的 `.input` 與回滾的 `rollback.Input<T>` 是同一型別的兩種身分（第 5.4 節），兩份互引。
 - **R-2 的前提不再由權威守**：讀寫規則拿掉後，權威不檢查判定的 System 讀什麼、用不用 `Local`；前提全部是作者的責任（第 9 節）。權威的交叉檢查只看登記（例：判定寫的資料有沒有登記成可回滾），和前提有部分重疊，但不守讀的那一半。
 - **代為登記**：用作者的 `Registrar`、在建 Plan 之前（L24 (6)、L25）；重複登記的規則見第 5.4 節（作者的為準，和權威份 4.3 一致）。
 - 權威狀態的入口：Client 收到伺服器覆蓋的那條路，搬運由網路 Module 做（L23）。
@@ -328,13 +334,13 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
   6. 步的 schedule 上有生成時，配發器登記成可回滾。
   7. 輸入的入口登記成「重跑時不跑」。
   **誰守**：**作者的責任**（統合 15.4：lightyear、Unity Netcode 都不檢查決定性）。伺服器權威不再守（讀寫規則拿掉，統合 15.3）；它的交叉檢查（Z6、Z8、D-E15、B3）只看登記，和前提 1、6、7 有部分重疊。回滾 Module 不加新的檢查。說明頁寫清這七條（bevy_ggrs 也把 `Local`、訊息寫在 pitfalls）。
-  守衛：回滾 Module 的等價測試（測試自己滿足全部前提）；突變：漏退配發器、漏退 tick、漏退存活集合、還原時漏掉被刪的格、「重跑中」沒立。（舊 H-5 的思想）
+  守衛：回滾 Module 的等價測試（測試自己滿足全部前提）；突變：漏退配發器、漏退 tick、漏退存活集合、還原時漏掉被刪的格、「重跑中」沒立、「重跑中」在還原之後才立（還原時跑的 hook 觸發的 observer 讀到「不在重跑」）、重跑完沒放下。（舊 H-5 的思想）
 - **R-3 不認得權威、網路、狀態機**：回滾 Module 不 include 它們。守衛：依賴掃描。
 - **R-4 沒選就沒有**：產品不選回滾 Module 時，Kernel 與編排層裡沒有任何回滾的狀態或分支；World 沒選回滾策略時，沒有歷史、不記錄。守衛：Kernel 的掃描（統合附錄的 `rollback` 相關識別字 0 命中）；沒有策略的 World 的測試。
 - **R-5 歷史不跨世代**：換 World 之後，舊 World 的歷史不能還原到新 World。守衛：測試。
 - **R-6 公開的登記可讀、穩定**：可回滾的資料、Derived、步的 schedule、巢狀 schedule、重跑時不跑、輸入歷史，都經公開介面讀得到，啟動檢查之後不變（准動態插入的 World 另照第 7.5 節）。權威的交叉檢查依賴它。守衛：讀取介面的測試。
-- **R-7 Derived 的順序條件**（取代 Kernel 的 D-E16）：步的 schedule 與巢狀 schedule 裡，Derived 的每個讀者之前，順序圖上有同一張 schedule 的立即寫者；違反是啟動錯誤。守衛：Kernel 現有的三處 D-E16 案搬來（有立即寫者通過、沒寫者或只有延後寫者失敗、不可回滾的 schedule 不檢查）；「重跑第一步讀到重算值」新寫；突變：只看直接邊不看路徑、把延後寫算成立即寫、漏掉 Resource、漏掉巢狀 schedule。
-- **RC**：職責清單（第 5.1 節）要多加一項，或判不出某樣東西屬回滾還是別層（L17）；Kernel 為了回滾要多加第 6.1 節以外的原語；P2P 實作時發現第 6.1 節的原語不夠。
+- **R-7 Derived 的順序條件**（取代 Kernel 的 D-E16）：步的 schedule 與巢狀 schedule 裡，Derived 的每個讀者之前，順序圖上有同一張 schedule 的立即寫者；違反是啟動錯誤。讀者含 observer（hook 讀得到該實體的元件，也算），算在觸發它的 System 所在的一側（統合第 16 節）；從 World 外面觸發的不屬任何一側。守衛：Kernel 現有的三處 D-E16 案搬來（有立即寫者通過、沒寫者或只有延後寫者失敗、不可回滾的 schedule 不檢查）；「重跑第一步讀到重算值」新寫；突變：只看直接邊不看路徑、把延後寫算成立即寫、漏掉 Resource、漏掉巢狀 schedule。
+- **RC**：職責清單（第 5.1 節）要多加一項，或判不出某樣東西屬回滾還是別層（L17）；Kernel 為了回滾要多加第 6.1 節以外的原語；P2P 實作時發現第 6.1 節的原語不夠；**回滾等價破裂**（由 Kernel 的 RC 11 移來，統合第 9.1 節修訂 32）：R-2 的等價測試在 L1 平台因回滾 Module 以外的原因（Math、編譯器）失敗——停下，交使用者選「R-2 的『逐位元相同』改寫」或「官方實作支援的範圍縮小」，不在回滾 Module 裡繞過。舊 RC 11 的守衛 J-42 在 gyo2 沒有實作（Kernel 只有註解），現在的守衛是 R-2 的等價測試。
 
 ---
 
