@@ -28,9 +28,10 @@
 // once (spec D.2, D-5). After Finish nothing can register: Registrar is only
 // handed to Build (spec R-2).
 //
-// The Product type (GYO::Kernel::Product: one World, its Registry, its schedules and
-// their executor policy; kernel HANDOFF v8-arch-kernel-app-name) runs a frozen
-// Registry's schedules (Product.hpp).
+// The WorldExecutor type (GYO::Kernel::WorldExecutor: one World, its Registry, its
+// schedules and their executor policy; kernel HANDOFF v8-arch-kernel-app-name,
+// v8-arch-gyo2-kernel-world-exec-type) runs a frozen Registry's schedules
+// (WorldExecutor.hpp).
 
 namespace GYO::Kernel {
 
@@ -45,7 +46,7 @@ public:
     FinishContext(const FinishContext&) = delete;
     FinishContext& operator=(const FinishContext&) = delete;
 
-    // One runner per Product; a second is R-E6. The runner callable arrives with
+    // One runner per WorldExecutor; a second is R-E6. The runner callable arrives with
     // the batches that run schedules; this batch records who installs it.
     void InstallRunner(std::string_view runner);
 

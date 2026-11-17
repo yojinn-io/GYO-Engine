@@ -1,9 +1,9 @@
-// The Serial Executor (spec E.2, E.5; Product.hpp). The only kernel file that logs:
+// The Serial Executor (spec E.2, E.5; WorldExecutor.hpp). The only kernel file that logs:
 // its default handler writes a kernel error's whole chain to stderr once
 // (target/error-handling DI 2; tests/common/kernel/kernel_guard.py K6 exempts
 // files named Executor*).
 
-#include "engine/kernel/Product.hpp"
+#include "engine/kernel/WorldExecutor.hpp"
 
 #include "engine/kernel/detail/RegistryData.hpp"
 
@@ -29,7 +29,7 @@ void DefaultHandler(const KernelError& error) {
 
 } // namespace
 
-Product::Product(const Registry& registry, std::string worldName)
+WorldExecutor::WorldExecutor(const Registry& registry, std::string worldName)
     : registry_(&registry), world_(registry, std::move(worldName)), handler_(&DefaultHandler) {
     const Detail::RegistryData& data = *world_.data_;
     for (const Detail::SystemRecord& system : data.systems) {
@@ -48,9 +48,9 @@ Product::Product(const Registry& registry, std::string worldName)
     }
 }
 
-Product::~Product() = default;
+WorldExecutor::~WorldExecutor() = default;
 
-VerificationReport Product::Verification() const {
+VerificationReport WorldExecutor::Verification() const {
     VerificationReport report;
     report.world = world_.name_;
     report.accessVerification = world_.verification_;
@@ -62,7 +62,7 @@ VerificationReport Product::Verification() const {
     return report;
 }
 
-Engine::Base::Result<void, KernelError> Product::Fail(KernelError error, bool nested) {
+Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested) {
     error.world = world_.name_;
     world_.state_ = WorldState::Interrupted;
     world_.DiscardDeferred();
@@ -117,7 +117,7 @@ private:
 // records not yet applied are dropped; a nested level also leaves
 // NestedRunAborted for the outermost Run (the outer System may catch the
 // exception and return).
-class Product::LevelGuard {
+class WorldExecutor::LevelGuard {
 public:
     LevelGuard(World& world, std::string_view schedule, bool nested)
         : world_(world), schedule_(schedule), nested_(nested), exceptions_(std::uncaught_exceptions()) {
@@ -143,7 +143,7 @@ private:
     int exceptions_;
 };
 
-Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) {
+Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view schedule) {
     World& world = world_;
     // E.5: an Interrupted World runs no more (X-9). A System reaching this
     // through a kept pointer finds the World Running: also a GYO_ASSERT (only
@@ -164,13 +164,13 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
     return RunPlan(record->options.name, false);
 }
 
-Engine::Base::Result<void, KernelError> Product::RunStartup(std::string_view schedule) {
+Engine::Base::Result<void, KernelError> WorldExecutor::RunStartup(std::string_view schedule) {
     world_.startupRan_ = true;
     StartupScope running(world_.startupRunning_);
     return RunPlan(schedule, false);
 }
 
-Engine::Base::Result<void, KernelError> Product::RunPlan(std::string_view schedule, bool nested) {
+Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view schedule, bool nested) {
     World& world = world_;
     const Detail::RegistryData& data = *world_.data_;
     const std::string scheduleName(schedule);
@@ -428,7 +428,7 @@ Engine::Base::Result<void, KernelError> Product::RunPlan(std::string_view schedu
     return {};
 }
 
-Engine::Base::Result<void, KernelError> Product::RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                                bool inClosure) {
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;

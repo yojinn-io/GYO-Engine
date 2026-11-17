@@ -260,7 +260,7 @@ std::unique_ptr<Rig> MakeFlushRig(std::function<void(Registrar&)> build, Limits 
             build(r);
         },
         verification);
-    if (rig->product) {
+    if (rig->executor) {
         KernelSettings settings{verification, breakOn};
         if (productLimit) settings.hookRoundLimit = *productLimit;
         rig->world().SetResource(settings);
@@ -407,7 +407,7 @@ TEST_CASE("J-54: a schedule's own limit overrides the product's default, larger 
 
 TEST_CASE("J-54: the product's default is per World") {
     auto two = MakeFlushRig(ChainSystems, {}, false, 2U);
-    Product other(*two->built.registry, "other-world");
+    WorldExecutor other(*two->built.registry, "other-world");
     std::vector<KernelError> otherRecorded;
     other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});

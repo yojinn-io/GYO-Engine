@@ -2,7 +2,7 @@
 // it: no zone, role or rollback is declared anywhere in this file.
 //
 // "skeleton:" cases check behaviour: Systems are registered, the Plan orders
-// them, a Product runs them against a World, and the result matches a
+// them, a WorldExecutor runs them against a World, and the result matches a
 // scenario worked out by hand.
 // "limits:" cases only measure and print (startup analysis against the number
 // of Systems; a tick against the number of entities). They assert correctness,
@@ -166,7 +166,7 @@ void Game(Registrar& r) {
 std::unique_ptr<WorldTest::Rig> StartGame() {
     Deaths().clear();
     auto rig = WorldTest::MakeRig(Game);
-    if (!rig->product) return rig;
+    if (!rig->executor) return rig;
     rig->world().SetResource(Gravity{1});
     rig->world().SetResource(Paused{0});
     rig->world().SetResource(Stats{0, 0});
@@ -186,7 +186,7 @@ std::vector<std::string> StepNames(const Plan& plan) {
 
 TEST_CASE("skeleton: the Plan follows before and after, not the registration order") {
     auto rig = StartGame();
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     const Plan* plan = rig->built.registry->Frozen().PlanOf("Tick");
     REQUIRE(plan != nullptr);
     CHECK(StepNames(*plan) == std::vector<std::string>{"Spawner", "ApplyGravity", "Move", "HurtBelowFloor", "ApplyHits",
@@ -195,7 +195,7 @@ TEST_CASE("skeleton: the Plan follows before and after, not the registration ord
 
 TEST_CASE("skeleton: eight ticks of the game give the hand-worked result") {
     auto rig = StartGame();
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     World& world = rig->world();
 
     // A thing spawned in tick t has been simulated k = now - t + 1 times:
@@ -263,7 +263,7 @@ TEST_CASE("skeleton: a System that returns Err stops the Run and interrupts the 
         GameData(r);
         r.AddSystem<&Fails>(In("Fails", "Simulate"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     const auto result = rig->Run();
     CHECK_FALSE(static_cast<bool>(result));
     CHECK(rig->world().State() == WorldState::Interrupted);
@@ -291,7 +291,7 @@ TEST_CASE("skeleton: an Err reaches the handler once, with the chain of where it
         GameData(r);
         r.AddSystem<&SpawnsWave>(In("SpawnsWave", "Input"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     rig->world().SetResource(RangeAllotter::Of(1, 2));  // room for two of the three
     const auto result = rig->Run();
     REQUIRE_FALSE(static_cast<bool>(result));
@@ -334,7 +334,7 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
         r.Component<Shield>({.name = "Shield"});
         r.AddSystem<&RecordsBothOrders>(In("RecordsBothOrders", "Input"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     World& world = rig->world();
     world.SetResource(RangeAllotter::Of(500, 599));
     world.Insert(1, Position{0, 0});
@@ -355,7 +355,7 @@ TEST_CASE("skeleton: two writers with no order are tied by registration and list
         r.AddSystem<&WritePositionA>(In("AddOne", "Simulate"));
         r.AddSystem<&WritePositionB>(In("Double", "Simulate"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
     REQUIRE(frozen.TieBreaks().size() == 1);
     CHECK(frozen.TieBreaks()[0].first == "AddOne");
@@ -441,7 +441,7 @@ struct TickCost {
     double despawn = 0;
 };
 
-// One Product per measured System, so a tick's time is that System's.
+// One WorldExecutor per measured System, so a tick's time is that System's.
 template <auto Fn>
 double TimeTicks(std::size_t entities, const char* name, int ticks, double* fillMs = nullptr) {
     auto rig = WorldTest::MakeRig(
@@ -450,7 +450,7 @@ double TimeTicks(std::size_t entities, const char* name, int ticks, double* fill
             r.AddSystem<Fn>(In(name, "Simulate"));
         },
         false);
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     World& world = rig->world();
     world.SetResource(Stats{0, 0});
     world.SetResource(RangeAllotter::Of(10'000'000, 20'000'000));

@@ -233,12 +233,12 @@ SystemResult DriveThenErase(ExclusiveWorld<> world) {
     EraseTagOfOne();
     return Ok();
 }
-Product*& KeptProduct() {
-    static Product* product = nullptr;
-    return product;
+WorldExecutor*& KeptExecutor() {
+    static WorldExecutor* executor = nullptr;
+    return executor;
 }
 SystemResult PlainRunsThroughKeptPointer(Query<Read<Tag>>) {
-    static_cast<void>(KeptProduct()->Run("Tick"));
+    static_cast<void>(KeptExecutor()->Run("Tick"));
     return Ok();
 }
 } // namespace
@@ -282,14 +282,14 @@ TEST_CASE("J-56: an exclusive System's own membership change behind the World AP
     KeptWorld() = nullptr;
 }
 
-TEST_CASE("J-56: a plain System reaching Product::Run through a kept pointer fails a GYO_ASSERT") {
+TEST_CASE("J-56: a plain System reaching WorldExecutor::Run through a kept pointer fails a GYO_ASSERT") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&PlainRunsThroughKeptPointer>(In("Plain", "Frame", "Drive"));
     });
-    KeptProduct() = rig->product.get();
+    KeptExecutor() = rig->executor.get();
     GYO_CHECK_ASSERTS(rig->Run("Frame"));
-    KeptProduct() = nullptr;
+    KeptExecutor() = nullptr;
 }
 
 // ---- J-56: the outer level's records

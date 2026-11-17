@@ -1,6 +1,7 @@
 #pragma once
 
-// Product (spec section 0 "Runtime", E; kernel HANDOFF v8-arch-kernel-app-name):
+// WorldExecutor (spec section 0 "Runtime", E; kernel HANDOFF v8-arch-kernel-app-name,
+// v8-arch-gyo2-kernel-world-exec-type):
 // one World, the frozen Registry it was made from, and the Serial Executor
 // that runs that Registry's schedules (target/kernel DI-KS 2, 9, 14; spec E.2).
 //
@@ -25,7 +26,7 @@
 // Interrupted, every record not yet applied is discarded, diagnostics are kept,
 // and Run returns the Err (spec E.5). An exception from a System or hook is not
 // caught: the World becomes Interrupted the same way and the exception goes on.
-// Running an Interrupted World is a GYO_ASSERT (rebuild it: a new Product).
+// Running an Interrupted World is a GYO_ASSERT (rebuild it: a new WorldExecutor).
 //
 // Nested runs (K0, v8-arch-gyo2-nested-schedule): a System holding
 // ExclusiveWorld<...> may run another schedule (ExclusiveWorld::RunSchedule).
@@ -41,7 +42,7 @@
 // main program may run it itself before that, once. A second Run of Startup is
 // a GYO_ASSERT.
 //
-// v1 is Serial only (LIM-2). The Product owns no thread (DI-KS 15): Run is called
+// v1 is Serial only (LIM-2). The WorldExecutor owns no thread (DI-KS 15): Run is called
 // on the schedule's runner thread by the Host.
 
 #include "engine/base/Result.hpp"
@@ -61,14 +62,14 @@
 
 namespace GYO::Kernel {
 
-class Product {
+class WorldExecutor {
 public:
-    // registry must be frozen and outlive the Product. worldName identifies this
-    // Product's World in errors and verification reports (spec A.6).
-    explicit Product(const Registry& registry, std::string worldName = {});
-    ~Product();
-    Product(const Product&) = delete;
-    Product& operator=(const Product&) = delete;
+    // registry must be frozen and outlive the WorldExecutor. worldName identifies this
+    // WorldExecutor's World in errors and verification reports (spec A.6).
+    explicit WorldExecutor(const Registry& registry, std::string worldName = {});
+    ~WorldExecutor();
+    WorldExecutor(const WorldExecutor&) = delete;
+    WorldExecutor& operator=(const WorldExecutor&) = delete;
 
     [[nodiscard]] World& GetWorld() noexcept { return world_; }
     [[nodiscard]] const World& GetWorld() const noexcept { return world_; }

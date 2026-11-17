@@ -3,7 +3,7 @@
 // World (spec A; target/world.zh-Hant.md; target/kernel DI-KS 2, 3, 4, 6, 9,
 // 10, 11, 14).
 //
-// One Product's data: columns, resources, event buffers, the deferred queue,
+// One WorldExecutor's data: columns, resources, event buffers, the deferred queue,
 // change stamps, domain ticks and its state. Made from a frozen Registry; its
 // lifetime is one generation (spec A.1: a generation change is a new World,
 // made from the same frozen Registry).
@@ -46,7 +46,7 @@
 
 namespace GYO::Kernel {
 
-class Product;
+class WorldExecutor;
 
 // Spec A.1 state (Building is the Registry's: a World is made only from a frozen Registry).
 enum class WorldState : std::uint8_t {
@@ -298,7 +298,7 @@ public:
     void SetBreakHook(std::function<void(const KernelError&)> hook) { breakHook_ = std::move(hook); }
 
 private:
-    friend class Product;
+    friend class WorldExecutor;
     friend Detail::SystemContext* Detail::CurrentCall(World&) noexcept;
     friend Detail::SystemContext& Detail::RequireCall(World&);
     friend ComponentId Detail::ComponentIdOf(const World&, TypeKey);
@@ -350,7 +350,7 @@ private:
     [[nodiscard]] ChangeStamp WriteStamp() const noexcept { return state_ == WorldState::Ready ? stamp_ + 1 : stamp_; }
     void MarkApiWritten(Detail::EntryKind kind, std::uint32_t id) const;
 
-    // ---- Executor side (Product, World.cpp)
+    // ---- Executor side (WorldExecutor, World.cpp)
 
     // F.2: applies the running level's deferred records (window_ from its
     // windowBase; K0) and the schedule's hook queue (spawn records that cannot
@@ -405,7 +405,7 @@ private:
     // from its windowBase (RunLevel), applied and cut off at that level's sync
     // points; the outer levels' records wait, untouched, for their own.
     std::vector<Detail::Record> window_;
-    // K0: the schedules running now, outermost first (spec E.2; Product::Run
+    // K0: the schedules running now, outermost first (spec E.2; WorldExecutor::Run
     // pushes the first, ExclusiveWorld::RunSchedule the others). A schedule is on
     // it at most once (X-11).
     struct RunLevel {
@@ -468,9 +468,9 @@ private:
     std::vector<bool> excluded_;
 
     std::vector<Detail::AccessDesc> hookAccess_;
-    // The Product running this World (set by it): a hook's call carries it too,
+    // The WorldExecutor running this World (set by it): a hook's call carries it too,
     // so ExclusiveWorld::RunSchedule in a hook reaches the refusal (X-13).
-    Product* executor_ = nullptr;
+    WorldExecutor* executor_ = nullptr;
     std::function<void(const KernelError&)> breakHook_;
 };
 

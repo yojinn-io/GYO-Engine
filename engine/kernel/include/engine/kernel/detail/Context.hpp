@@ -25,7 +25,7 @@
 namespace GYO::Kernel {
 
 class World;
-class Product;
+class WorldExecutor;
 struct AccessSet;
 // The kernel's own diagnostics record of a dropped spawn (World.hpp; spec F-13).
 struct RejectedSpawn;
@@ -52,7 +52,7 @@ struct AccessEntry {
 };
 
 // The access description a System and a hook share (spec F.6: tlCurrent points
-// to it for both). Derived from the Registry's AccessSet when the Product is made.
+// to it for both). Derived from the Registry's AccessSet when the WorldExecutor is made.
 struct AccessDesc {
     std::vector<AccessEntry> entries;
     // ExclusiveWorld: reads every column and resource (but KernelSettings and a
@@ -115,9 +115,9 @@ struct Record {
 struct SystemContext {
     World* world = nullptr;
     // The Executor running this World's schedules: ExclusiveWorld::RunSchedule
-    // runs a schedule through it (K0). One World per Product today (T5 makes it
+    // runs a schedule through it (K0). One World per WorldExecutor today (T5 makes it
     // "this World's Executor").
-    Product* executor = nullptr;
+    WorldExecutor* executor = nullptr;
     const AccessDesc* access = nullptr;
     std::string_view name;
     std::string_view schedule;
