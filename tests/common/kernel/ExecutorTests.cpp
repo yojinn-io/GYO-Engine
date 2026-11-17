@@ -162,6 +162,17 @@ SystemResult ExclusiveReadsBound(ExclusiveWorld<> world) {
     if (!value) return Engine::Base::Err(std::move(value).error());
     return Ok();
 }
+SystemResult CommandsSetsBound(Commands commands) {
+    commands.SetResource(Bound{4});
+    return Ok();
+}
+SystemResult ExclusiveSetsBound(ExclusiveWorld<> world) {
+    if (auto set = world.SetResource(Bound{5}); !set) return Engine::Base::Err(std::move(set).error());
+    return Ok();
+}
+const void* BoundThread(World& world) {
+    return Detail::ResourceAt(world, Detail::ResourceIdOf(world, KeyOf<Bound>())).thread;
+}
 
 std::unique_ptr<Rig> BoundRig(void (*add)(Registrar&)) {
     return MakeRig([add](Registrar& r) {
@@ -190,6 +201,32 @@ TEST_CASE("J-6: a thread-bound resource is used on the thread it was put in on; 
     CHECK_MESSAGE(!Asserts([&] { rig->world().SetResource(Bound{3}); }),
                   "J-6 thread-bound: after a removal the thread is forgotten and another thread puts it in");
     CHECK(rig->world().Resource<Bound>()->value == 3);
+}
+
+// Only the same thread here: the thread token can be handed to a new thread
+// after one ends (DI-KS 14's declared limit), so this case never relies on two
+// threads having different tokens.
+TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetResource or by ExclusiveWorld takes the applying thread") {
+    SUBCASE("Commands::SetResource, applied at the sync point") {
+        auto rig = BoundRig([](Registrar& r) {
+            r.AddSystem<&CommandsSetsBound>(B("CommandsSetsBound", "A"));
+            r.AddSystem<&ReadsBound>(B("ReadsBound", "B"));
+        });
+        Log().clear();
+        CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
+        CHECK(Log() == std::vector<std::string>{"bound 4"});
+        CHECK_MESSAGE(BoundThread(rig->world()) == Detail::CurrentThreadToken(), "[ks-s6-thread-bound] the sync point did not record its thread");
+    }
+    SUBCASE("ExclusiveWorld::SetResource, now") {
+        auto rig = BoundRig([](Registrar& r) {
+            r.AddSystem<&ExclusiveSetsBound>(B("ExclusiveSetsBound", "A"));
+            r.AddSystem<&ReadsBound>(B("ReadsBound", "B"));
+        });
+        Log().clear();
+        CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
+        CHECK(Log() == std::vector<std::string>{"bound 5"});
+        CHECK_MESSAGE(BoundThread(rig->world()) == Detail::CurrentThreadToken(), "[ks-s5-thread-bound] the immediate change did not record its thread");
+    }
 }
 
 TEST_CASE("J-6: a thread-bound resource touched on another thread fails a GYO_ASSERT") {
@@ -595,6 +632,15 @@ SystemResult ExclusiveAllowed(ExclusiveWorld<> world) {
     return Ok();
 }
 
+SystemResult ExclusiveSpawns(ExclusiveWorld<> world) {
+    auto id = world.Spawn(Tag{3});
+    if (!id) return Engine::Base::Err(std::move(id).error());
+    auto tag = world.Read<Tag>(*id, [](const Tag& t) { return t.t; });
+    if (!tag) return Engine::Base::Err(std::move(tag).error());
+    Log().push_back("spawned " + std::to_string(*id) + " tag " + std::to_string(tag->value_or(-1)));
+    return Ok();
+}
+
 std::unique_ptr<Rig> ExclusiveRig(void (*add)(Registrar&), bool verification) {
     auto rig = MakeRig([add](Registrar& r) {
         Data(r);
@@ -609,9 +655,9 @@ std::unique_ptr<Rig> ExclusiveRig(void (*add)(Registrar&), bool verification) {
 } // namespace
 
 // ExclusiveWorld reads and writes any component and resource value
-// (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1); a zone C System still may not
-// hold it (S-13 at startup, a zone rule of a later batch). Its typed Spawn comes
-// with the immediate structural changes (segment 3 of this batch).
+// (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1) and spawns with a type
+// (v8-arch-gyo2-immediate-change-via-exclusive-world, DI-KS 18); a zone C
+// System still may not hold it (S-13 at startup, a zone rule of a later batch).
 TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build; a zone C System may not hold it") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
     SUBCASE("zone C holding it: Finish fails") {
@@ -636,6 +682,18 @@ TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build; a zo
         rig->world().Insert(1, CShared{0});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE(rig->world().Get<CShared>(1)->s == 1, "J-45 written: a zone C, Shared value");
+    }
+    SUBCASE("spawn: the typed Spawn gives an id from the allotter, and the entity is there in the call") {
+        auto rig = ExclusiveRig([](Registrar& r) {
+            r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
+            r.Allotter<RangeAllotter>();
+            r.AddSystem<&ExclusiveSpawns>(B("X", "A"));
+        }, false);
+        rig->world().SetResource(RangeAllotter::Of(10, 19));
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(Log() == std::vector<std::string>{"spawned 10 tag 3"}, "J-45 spawn: " << (Log().empty() ? std::string("nothing") : Log().front()));
+        CHECK(rig->world().Get<Tag>(10)->t == 3);
     }
     SUBCASE("zone B Shared write and any read pass, also with verification on") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveAllowed>(B("X", "A")); }, true);
