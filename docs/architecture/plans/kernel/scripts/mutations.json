@@ -2944,10 +2944,10 @@
     },
     {
       "id": "rs-iv-fc3-step0-skipped",
-      "what": "step 5a does not run for the hook records applied at step 0 (initial value, v8-arch-gyo2-funnel-check)",
+      "what": "step 5a does not run for the hook records applied at step 0 (initial value, v8-arch-gyo2-funnel-check) (replace rewritten for v8-arch-gyo2-kernel-subtract-structure: the phase has no pending list; step 0's records are the hooks')",
       "file": "engine/kernel/src/World.cpp",
       "find": "if (!data_->initialValues.empty()) {",
-      "replace": "if (!data_->initialValues.empty() && pending.empty()) {",
+      "replace": "if (!data_->initialValues.empty() && (records.empty() || !records.front().emitterHook)) {",
       "target": "gyo_kernel_tests",
       "cases": "initial value:*",
       "expect": "TEST CASE:\\s+initial value: a request recorded by a hook is filled at the next sync point"
@@ -4474,10 +4474,10 @@
     },
     {
       "id": "we-sym-tlcurrent-renamed",
-      "what": "judgement 6: tlCurrent is renamed, so the required allowed symbol is missing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "what": "judgement 6: tlCurrent is renamed, so the required allowed symbol is missing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts) (find and replace extended to CurrentThreadToken by v8-arch-gyo2-kernel-subtract-structure)",
       "file": "engine/kernel/src/Verification.cpp",
-      "find": "thread_local SystemContext* tlCurrent = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrent;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrent = call;\n}",
-      "replace": "thread_local SystemContext* tlCurrentCall = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrentCall;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrentCall = call;\n}",
+      "find": "thread_local SystemContext* tlCurrent = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrent;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrent = call;\n}\n\nconst void* CurrentThreadToken() noexcept {\n    return &tlCurrent;\n}",
+      "replace": "thread_local SystemContext* tlCurrentCall = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrentCall;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrentCall = call;\n}\n\nconst void* CurrentThreadToken() noexcept {\n    return &tlCurrentCall;\n}",
       "target": "gyo_kernel",
       "command": [
         "{python}",
@@ -5760,10 +5760,10 @@
     },
     {
       "id": "sr-drop-is-err",
-      "what": "F-13: a dropped spawn ends the sync point with an Err (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "what": "F-13: a dropped spawn ends the sync point with an Err (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (replace rewritten for v8-arch-gyo2-kernel-subtract-structure: the kernelError helper is gone)",
       "file": "engine/kernel/src/World.cpp",
       "find": "                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);",
-      "replace": "                if (dropped[i - first]) return Engine::Base::Err(kernelError(KernelErrorCode::StructureBroken, \"F-13\", \"dropped\"));",
+      "replace": "                if (dropped[i - first]) return Engine::Base::Err(KernelError(KernelErrorCode::StructureBroken, \"F-13\", \"dropped\"));",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ player\\-7:\\ Run\\ ok"
@@ -6550,10 +6550,10 @@
     },
     {
       "id": "ns-modify-resource-entry-stamp",
-      "what": "W-11: a resource Modify marks the stamp the System's step took, not the handle's (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "W-11: a resource Modify marks the stamp the System's step took, not the handle's (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (replace rewritten for v8-arch-gyo2-kernel-subtract-structure: Modify no longer holds call)",
       "file": "engine/kernel/include/engine/kernel/Params.hpp",
       "find": "        slot.changed = stamp_;\n        return Call<T&>(f, *slot.value);",
-      "replace": "        slot.changed = call.stamp;\n        return Call<T&>(f, *slot.value);",
+      "replace": "        slot.changed = Detail::RequireCall(*world_).stamp;\n        return Call<T&>(f, *slot.value);",
       "target": "gyo_kernel_tests",
       "cases": "J-57: a resource Modify between two nested runs*",
       "expect": "\\[ns\\-stamp\\-resource\\]"
@@ -6979,12 +6979,13 @@
     },
     {
       "id": "ks-diks15-code-without-text",
-      "what": "DI-KS 15: a StartupCode loses its text, so the list of codes no longer matches (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "what": "DI-KS 15: a StartupCode loses its case in ToString, so the compiler refuses the switch (the -Wswitch / C4062 error pragma around ToString, ac55aa12) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "    case StartupCode::DE21: return \"D-E21\";\n",
       "replace": "",
       "target": "gyo_kernel_tests",
-      "expect": "DI\\-KS 15 codes: the StartupCode values are",
+      "expect": "enumeration value 'DE21' not handled in switch",
+      "expect_build_failure": true,
       "cases": "DI-KS 15:*"
     },
     {
@@ -7149,10 +7150,10 @@
     },
     {
       "id": "ks-s2-re7-without-text",
-      "what": "DI-KS 15: R-E7 has no text, so the list of codes no longer matches (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "DI-KS 15: R-E7 has an empty text, so the list of codes no longer matches (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "    case StartupCode::RE7: return \"R-E7\";\n",
-      "replace": "",
+      "replace": "    case StartupCode::RE7: return \"\";\n",
       "target": "gyo_kernel_tests",
       "expect": "DI\\-KS 15 codes: the StartupCode values are",
       "cases": "DI-KS 15:*"
