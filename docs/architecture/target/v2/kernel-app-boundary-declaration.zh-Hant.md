@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 19）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 20）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -11,7 +11,7 @@
 - 權威 Module、事件游標、回滾 Module（2026-11-17 加入）的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。修訂 11（同日）：L11 定案（回滾獨立 Module、策略）；新增 L21（策略的構造）；子卡加回滾份。修訂 12（同日）：L16 定案。修訂 13（同日）：Loading 卡已歸檔，「交給 Loading 卡」改成「生成世界之後另開一份宣告，放編排層」。修訂 14（同日）：L17 定案（兩條核心、每層的職責清單、agent 自己判、對照同類型多家）；第 10 節的待判事項全部定完。修訂 15（同日）：L15 定案（產品可以只選部分 Module）。修訂 16（同日）：收游標份修訂 0 回報的七處介面與六條新關聯（L5、L6、L11、L13）；批次先後與主會話的批次表對齊的提案（第 8 節）。修訂 17（同日）：收回滾份修訂 0 回報的六件（L11 原語、L20 回滾→時間、新增 L22）；重跑在哪裡發動交使用者。修訂 18（同日）：收權威份修訂 0 回報的 N1～N8（L6、L10 補充；新增 L23～L28）；N5 交使用者。修訂 19（同日）：四份一起送 Fable／high 交叉檢查（15 條／10 必改；證據 `four-docs-adversarial-check.md`），處理見第 13 節；新增 L29、L30；要問使用者的題目合併去重、排好順序（第 14 節）。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。修訂 11（同日）：L11 定案（回滾獨立 Module、策略）；新增 L21（策略的構造）；子卡加回滾份。修訂 12（同日）：L16 定案。修訂 13（同日）：Loading 卡已歸檔，「交給 Loading 卡」改成「生成世界之後另開一份宣告，放編排層」。修訂 14（同日）：L17 定案（兩條核心、每層的職責清單、agent 自己判、對照同類型多家）；第 10 節的待判事項全部定完。修訂 15（同日）：L15 定案（產品可以只選部分 Module）。修訂 16（同日）：收游標份修訂 0 回報的七處介面與六條新關聯（L5、L6、L11、L13）；批次先後與主會話的批次表對齊的提案（第 8 節）。修訂 17（同日）：收回滾份修訂 0 回報的六件（L11 原語、L20 回滾→時間、新增 L22）；重跑在哪裡發動交使用者。修訂 18（同日）：收權威份修訂 0 回報的 N1～N8（L6、L10 補充；新增 L23～L28）；N5 交使用者。修訂 19（同日）：四份一起送 Fable／high 交叉檢查（15 條／10 必改；證據 `four-docs-adversarial-check.md`），處理見第 13 節；新增 L29、L30；要問使用者的題目合併去重、排好順序（第 14 節）。修訂 20（同日）：四份修正後送 Fable／high 第二輪檢查（17 條新的／6 必改；上一輪 15 條：已解決 6、部分 8、子份解決統合沒跟上 1；證據 `four-docs-adversarial-check-r2.md`），統合的部分本頁已改，處理見第 13 節末；第 14 節重排。
 
 ## 0. 依據
 
@@ -32,14 +32,14 @@
 | L1 | 分層與歸屬（第 3 節） | 統合 | 權威、游標、回滾、生成世界、時間、狀態機 | Kernel、編排層 | 已定（第 2.1 節的決定） |
 | L2 | **時鐘與 tick 移出 Kernel，到時間的 Module**（`Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1） | 統合 | 游標（順序鍵、上限的單位不能用 tick）、權威（「tick 只有一個來源」由伺服器權威策略檢查）、時間 T1／T3、L8、L20 | Kernel 公開介面、時間 Module | **已定**（2026-11-17，`v8-arch-gyo2-clock-out-of-kernel`；第 10 節第 1 件） |
 | L3 | **執行期的攔截**（第 7.3 節的六條） | 統合 | 權威（改靠 digest 比對與伺服器覆蓋抓錯，內容在 L12） | Kernel 公開介面（拿掉） | **已定**（2026-11-17，`v8-arch-gyo2-no-runtime-interception`）：拿掉執行期的攔截；伺服器權威改靠 digest 比對與伺服器覆蓋來抓錯（使用者的原話只到這裡）。「Kernel 不加觀察點」是卡片的說法、不在原話裡，和 11-15 的「誰實際寫的」排錯工具相關，見 L30 |
-| L4 | **生成世界時寫進去的初始值算不算寫者** | 統合 | 權威（寫者規則只數「修改」）、生成世界（不受綁） | 權威 | **已定**（2026-11-17，`v8-arch-gyo2-init-values-like-bevy`）：參照 Bevy——初始值在建立實體的當下給（`Spawn` 帶的值、`InitialValue`），生成世界就是一般流程裡的 schedule，不另設「寫入不算」的階段；伺服器權威只數修改既有值的寫者。「對已存在的實體插入元件」算建立還是修改，由權威份定 |
+| L4 | **生成世界時寫進去的初始值算不算寫者** | 統合 | 權威（寫者規則只數「修改」）、生成世界（不受綁） | 權威 | **已定**（2026-11-17，`v8-arch-gyo2-init-values-like-bevy`）：參照 Bevy——初始值在建立實體的當下給（`Spawn` 帶的值、`InitialValue`），生成世界就是一般流程裡的 schedule，不另設「寫入不算」的階段；伺服器權威只數修改既有值的寫者。「對已存在的實體插入元件」算建立還是修改，由權威份定。**每幀 System 裡 `Spawn` 帶的值是否也取代 11-14 的漏斗，見 L28（待使用者）** |
 | L5 | **登記的生命週期與動態插入** | 統合 | 編排層骨架、權威（檢查時機；PvP 宣告不允許）、指令集（未來） | Kernel 公開介面（`Registry`、`WorldExecutor`） | **已定**（2026-11-17，`v8-arch-gyo2-dynamic-insert-per-world`）：Kernel 提供「開 Registrar」「建 Plan」兩步、可重複呼叫；編排層 build → 建 Plan → finish → 權威檢查；World 在 Ready 時可再登記或拿掉 System、下一次執行前重建受影響的 Plan（「凍結」只代表這一次執行的 Plan 已排好）；**每個 World 建立時宣告准不准動態插入**，預設允許、不保證指紋一致；不允許時插入被拒絕：回傳執行時錯誤、記警告、不退出、World 照跑；伺服器權威策略在啟動時要求它的 World 宣告不允許。這一批只定契約與介面，Plan 的重建先薄。**游標的接點**（游標份新關聯 1）：重建 Plan 時同一步更新游標表（新讀者從哪讀起、被拿掉的讀者釋放保留，行為由游標份定） |
 | L6 | Kernel 交出的唯讀登記資訊（第 3.3 節） | 統合 | 權威、除錯工具、編輯器、指令集 | `FrozenRegistry` | **已定**（2026-11-17，`v8-arch-gyo2-read-only-registry-view`）：交出唯讀的表（補上 hooks、`InitialValue`、schedule 選項與 stage、順序圖），帶版本號、每次重建 Plan 加一；交出去的參照只在當前版本有效（或交複本）；修改一律走 `Registrar`（L5 的關卡）；**另交出每種事件的上限與讀者名單**（游標份新關聯 2）；**另交出每個 World 建立時的宣告**（准不准動態插入等，權威份 N4：策略要在啟動時核對） |
 | L7 | `ExclusiveWorld` 的存取與 `Writes<…>` | 統合 | 權威（數寫者）、狀態機、時間（驅動固定步的 System）、指令集 | `Params.hpp`、驗證（`World.cpp`） | **已定**（2026-11-17，`v8-arch-gyo2-exclusive-writes-optional`）：隨 L3，`ExclusiveWorld` 能用閉包讀寫任何元件與 Resource 的值（不再分區、不再回 Err）；`Writes<…>` 留作**選填**的標註，Kernel 不解讀，伺服器權威策略可以拿它數寫者。留下的 Kernel 機制：閉包與回傳值不指回 World（DI-KS 21）、結構變更只經同步點（DI-KS 18）、唯一參數（S-10）。指令的插入照 L5 的宣告 |
 | L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 統合 | 游標（事件順序鍵也不能用 tick） | Kernel | 隨 L2：改用 Kernel 自己的計數（stamp 或同步點序號；「Kernel 讀時間 Module 的 Resource」違反第 3 節的依賴方向）。用哪一個由實作批定。**統合 2026-11-17 照 L17 判**（修訂 19）：計數是 Kernel 自己的（World 的儲存與同步點，DI-KS 15 的清單內），選 stamp 或同步點序號是實作的細節、不是層的邊界，不問使用者 |
 | L9 | D-E18（System 不准宣告 `Res`／`ResMut<KernelSettings>`） | 統合 | — | Kernel | **已定**（2026-11-17，`v8-arch-gyo2-kernel-settings-read-write`）：拿掉 D-E18；System 准讀准寫 `KernelSettings`，**下一次最外層的 Run 才生效**（Kernel 每次最外層 Run 開始時重讀，取代「第一次 Run 時快取」）；`KernelSettings` 只放開發與調校的設定（驗證、出錯時停下、hook 清空輪上限）；L5 的開關不在這裡 |
 | L10 | Registry 與 Plan 指紋改版、golden 重產（第 3.4 節） | 統合（改版這件事）；游標（Plan 的 `EventTrim`）、權威（C 指紋） | 三份 | 指紋格式 | 已定為後果；重產次數見第 8 節。**跨端比較的指紋不用 Kernel 的編號**（權威份 N3）：Client 的模擬 World 比 Match 多登記一般資料，同一份判定資料拿到的 `ComponentId` 會不同（`Fingerprint.cpp:340-352` 現在寫的是 Kernel 的 id）；C 指紋與之後的 wire id 用權威份第 6.8 節選的編號（使用者判）。Registry 與 Plan 指紋只在同一端比，照舊用 Kernel 的編號 |
-| L11 | **回滾的機制放哪** | 統合（Kernel 的原語）；**回滾份**（回滾 Module 的設計） | 權威（伺服器權威策略選用某個回滾策略）、游標（事件進不進快照）、狀態機 | Kernel（原語）、回滾 Module、權威 Module | **已定**（2026-11-17，`v8-arch-gyo2-rollback-module-strategy`）：Kernel 只給原語（讀寫整欄、設 stamp、整批複製／替換之類，具體清單由回滾份回報統合定）；回滾是**獨立的 Module**，有自己的策略：`RollbackStrategy` interface＋官方實作，作者可以自己寫，也可以繼承官方實作改裝；第一版官方只實作 PvP Client 要的「狀態觸發、逐元件歷史、平滑修正」，P2P 的「輸入觸發、存整個狀態」佔位、選了啟動時報錯；伺服器權威策略依賴回滾 Module（登記檔，L20）。回滾的設計另開第四份宣告。**事件進不進快照**（游標份新關聯 3）：要進的話，原語要有「取出／放回一種事件的紀錄、寫入序號、讀者游標」；Kernel 只有游標一種讀法。使用者 11-14 的「可回滾的 schedule 不參與」（`time-plan-two` (5)）的檢查，從 Kernel 的啟動檢查移到回滾策略讀 L6，落點統合照 L17 判（回滾的規則屬回滾 Module）。**修訂 19 更正：內容不是全部不變**——使用者核准的時間設計 6.3 (2) 還寫了「它自己的讀者維持依位置讀」與「每幀那一側要送資料進可回滾的固定步，照規格既有的規則走 Ingress」；前者被游標份 4.8 拿掉（Kernel 只有游標一種讀法），後者的 Ingress 隨區移到權威 Module（3.2）。這兩處要請使用者確認（第 14 節）。另外，PvP Client 的固定步是可回滾的：游標份拿來當 Feature 的「音效時刻（PvP）」「固定步寫命中、每幀讀」若照回滾官方策略的跨 schedule 檢查會被擋；游標份要註明 PvP Client 的模擬不走這條路，或由第 14 節的事件題目一起定。**回滾份修訂 0（`claude/gyo2-rollback-module-8bac02` b55af62e）回報的原語，統合 2026-11-17 照 L17 判**：Kernel 給——整欄讀出（id、added、changed、值）；整欄放回（成員與值一次換掉）；指定 stamp 寫回（或明確標目前 stamp；系譜 Bevy `set_last_changed`）；Resource 的 stamp 與存在一起讀寫；跑 hook 與不跑 hook 兩條結構變更的路都給（由策略選）；**實體存活集合的讀出與放回**（修訂 19 補：存活是獨立的 `entities_`，`World.cpp:89`、`:129-134`，不從欄推出；只放回欄而不放回存活集合，T 之後才生成、現在還活著的實體會讓重跑的 `Spawn` 被丟成 `IdAlive`）。這些在 World 是 Ready 時從外面可用（「Ready 時從外面跑 hook」Kernel 現在沒有，`World.hpp:181`，是新機制）；**在獨占 System 裡能不能用（動 DI-KS 18）交使用者**（第 10 節第 12 件）。Kernel 拿掉 `DiagnosticsBuffer::Entry::rollbackActive`（`detail/Storage.hpp:229-233`）；`RejectedSpawn` 不加 `rollbackActive`（讀檔卡的要求），作者讀回滾 Module 的「重跑中」旗標——Kernel 不認得回滾（DI-KS 15 的職責清單） |
+| L11 | **回滾的機制放哪** | 統合（Kernel 的原語）；**回滾份**（回滾 Module 的設計） | 權威（伺服器權威策略選用某個回滾策略）、游標（事件進不進快照）、狀態機 | Kernel（原語）、回滾 Module、權威 Module | **已定**（2026-11-17，`v8-arch-gyo2-rollback-module-strategy`）：Kernel 只給原語（讀寫整欄、設 stamp、整批複製／替換之類，具體清單由回滾份回報統合定）；回滾是**獨立的 Module**，有自己的策略：`RollbackStrategy` interface＋官方實作，作者可以自己寫，也可以繼承官方實作改裝；第一版官方只實作 PvP Client 要的「狀態觸發、逐元件歷史、平滑修正」，P2P 的「輸入觸發、存整個狀態」佔位、選了啟動時報錯；伺服器權威策略依賴回滾 Module（登記檔，L20）。回滾的設計另開第四份宣告。**事件進不進快照**（游標份新關聯 3）：要進的話，原語要有「取出／放回一種事件的紀錄、寫入序號、讀者游標」；Kernel 只有游標一種讀法。使用者 11-14 的「可回滾的 schedule 不參與」（`time-plan-two` (5)）的檢查，從 Kernel 的啟動檢查移到回滾策略讀 L6，落點統合照 L17 判（回滾的規則屬回滾 Module）。**修訂 19 更正：內容不是全部不變**——時間設計 6.3 (2)（主會話的設計稿；使用者在 `time-plan-two` 定下的內容只有 (5)「可回滾的 schedule 不參與」那一句，修訂 20 更正）還寫了「它自己的讀者維持依位置讀」與「每幀那一側要送資料進可回滾的固定步，照規格既有的規則走 Ingress」；前者被游標份 4.8 拿掉（Kernel 只有游標一種讀法），後者的 Ingress 隨區移到權威 Module（3.2）。這兩處要請使用者確認（第 14 節）。另外，PvP Client 的固定步是可回滾的：游標份拿來當 Feature 的「音效時刻（PvP）」「固定步寫命中、每幀讀」若照回滾官方策略的跨 schedule 檢查會被擋；游標份要註明 PvP Client 的模擬不走這條路，或由第 14 節的事件題目一起定。6.3 (2) 的原文兩個方向都擋（「它也不讀別的時鐘的事件」）：每幀寫、固定步讀在 PvP Client 同樣被擋（修訂 20 補）。**回滾份修訂 0（`claude/gyo2-rollback-module-8bac02` b55af62e）回報的原語，統合 2026-11-17 照 L17 判**：Kernel 給——整欄讀出（id、added、changed、值）；整欄放回（成員與值一次換掉）；指定 stamp 寫回（或明確標目前 stamp；系譜 Bevy `set_last_changed`）；Resource 的 stamp 與存在一起讀寫；跑 hook 與不跑 hook 兩條結構變更的路都給（由策略選）；**實體存活集合的讀出與放回**（修訂 19 補：存活是獨立的 `entities_`，`World.cpp:89`、`:129-134`，不從欄推出；只放回欄而不放回存活集合，T 之後才生成、現在還活著的實體會讓重跑的 `Spawn` 被丟成 `IdAlive`）。這些在 World 是 Ready 時從外面可用（「Ready 時從外面寫而且跑 hook」Kernel 現在沒有，`World.hpp:181`，是新機制；只在第 14 節第 2 題選「runner 發動」且還原選「跑 hook」時才有人用，隨那兩題，修訂 20 補）；**在獨占 System 裡能不能用（動 DI-KS 18）交使用者**（第 10 節第 12 件）。Kernel 拿掉 `DiagnosticsBuffer::Entry::rollbackActive`（`detail/Storage.hpp:229-233`）；`RejectedSpawn` 不加 `rollbackActive`（讀檔卡的要求），作者讀回滾 Module 的「重跑中」旗標——Kernel 不認得回滾（DI-KS 15 的職責清單） |
 | L12 | 伺服器權威檢查哪些、預設區、C 指紋與 G-5 匯出的內容、digest 比對與伺服器覆蓋、(c) 區獨占套用的新形狀、權威 Module 的名字；`AuthorityStrategy` interface 的形狀 | **權威** | 統合（缺口回報）、狀態機 (c) 區、回滾份 | 權威 Module | 待權威份；回滾的內容移到回滾份（L11） |
 | L13 | 事件游標：游標放哪、上限與單位、丟棄記錄、不執行的讀者、順序鍵、跨時鐘事件的網路要求（11-14「也要兼容網絡部分」） | **游標** | 統合（L2、L11）、時間 | Kernel 的事件 API（`EventReader`、`EventWriter`、`World::EventPayloads`、Plan 的 `EventTrim`）——**只限這些；動到別的 Kernel 介面回報統合**。游標份修訂 0（`claude/gyo2-event-cursor` facc0846）回報的七處，統合 2026-11-17 照 L17 判（都在 Kernel 的「事件」職責內或屬既定的層，不問使用者）：(1) `EventOptions` 加上限——准；(2) `ScheduleOptions::eventTrim` 與 D-E1 的 eventTrim 檢查拿掉——准（3.2 補列）；(3) World 上取走丟棄明細的函式（照 `RejectedSpawn` 的形）——准；(4) World 摘要的格式：摘要涵蓋「World 裡的資料」，游標若定在 World（游標份 4.1）就含、寫入序號同；摘要改版併入 L10；權威的 digest 要不要含游標由權威份定；(5) L6 的唯讀登記表交出每種事件的上限與讀者名單——准（L6 的延伸）；(6) 存取驗證：推游標不算寫事件、快照把游標表與事件內容分開——准（驗證的內部）；(7) 預設上限不放 `KernelSettings`——准（L9：`KernelSettings` 只放開發與調校） | 待游標份（8 件交使用者） |
 | L14 | 生成世界的形狀（每個 World 一次或分批、誰推動、什麼時候算好、讀取畫面） | **生成世界的宣告**（之後另開一份，放編排層；生成世界的宣告已在使用者要求下歸檔，L16 的答案記在 `recovered-from-stale-cards.zh-Hant.md` 第 2 節，分支 `claude/gyo2-time-design`） | 統合（L4、L16） | 編排層 | 等統合；L4 定了之後不再綁 Kernel 減法 |
@@ -52,7 +52,7 @@
 | L21 | **策略的構造**（權威與回滾共用）：interface 是契約、保證不變；Engine 附官方實作，和作者寫的走同一個插口、沒有特權；作者可以從頭實作 interface（廢掉官方的），也可以繼承官方實作改裝——後者是作者的選擇，官方實作的內部不保證不變 | 統合 | 權威份、回滾份 | 權威 Module、回滾 Module | **已定**（2026-11-17，`v8-arch-gyo2-strategy-interface-impl`）；C++ 的寫法：虛函式的抽象基底類別（GYO 的 `Plugin` 已是這個寫法，`Registry.hpp:60-75`） |
 | L22 | **權威的登記與回滾的登記**：PvP 裡「伺服器權威的元件」與「Client 可回滾的元件」幾乎同一組型別；單機時間倒流只有後者 | 統合（關係）；權威份、回滾份（細節） | 權威、回滾 | 權威 Module、回滾 Module | **統合 2026-11-17 照 L17 判**：兩件是不同的事實（「誰說了算」與「能不能回到過去」），各自的 Module 各自登記，不違反 AGENTS §9；為了 PvP 的作者不寫兩次，伺服器權威策略可以替作者把它的權威元件登記進回滾 Module（和權威 Module 替作者登記進 Kernel 同形，`authority-own-registration`）；權威不讀回滾的內部，只用回滾 Module 的公開登記 |
 | L23 | **網路／複製的 Module**（權威份 N1）：伺服器覆蓋的「搬運」、連線時交換 C 指紋、執行中送 digest、wire id 都需要一個呼叫者 | 統合（歸屬）；網路 Module 的宣告（之後，PvP 移植時） | 權威、回滾 | 網路 Module | **統合 2026-11-17 照 L17 判**：歸 Engine 的網路 Module（`v8-arch-gyo2-module-plugin-owner-definition`：網路是 Module，`NetModule`）；權威份只定「規定」（比什麼、何時比、不一致怎麼辦、覆蓋的規則），搬運與交換由網路 Module 做；網路 Module 的設計不在這一輪，權威份把它要的介面列成需求。**修訂 19 補**：網路 Module 把伺服器的值寫進 Client 的模擬 World，在伺服器權威策略看來是「多一個寫者」——網路 Module 要用權威 Module 的「豁免寫者的登記」（L24）把它的寫入 System 登記成不算寫者，列進需求 |
-| L24 | **回滾相關的宣告與檢查歸誰**（權威份 N2）：`rollback` 的 Yes／No／Derived、Z6、Z8、D-E15、D-E16；伺服器權威怎麼接回滾策略；重跑時推 tick 算不算寫者 | 統合 | 權威、回滾、時間 | 權威、回滾 Module | **統合 2026-11-17 照 L17 判**：「哪些資料可回滾」（Yes／No）與 Derived（每 tick 在讀者之前重算）是回滾 Module 的登記與檢查（D-E16 讀 L6 的順序圖）；Z6、Z8、D-E15 這類「判定資料 × 回滾」的交叉規則是伺服器權威策略的檢查，讀回滾 Module 的公開登記（L22）；**作者各自選權威策略與回滾策略，伺服器權威只檢查兩者相容、不指定**（限制只放作者自選處）；回滾的還原與重跑時退 tick 不算寫者（舊規格 B.3「不算寫者：Runtime 的回滾還原」；lightyear 同）。**修訂 19 補（統合照 L17 判）**：(1) 回滾份要接 Derived 與 D-E16（修訂 1 全文沒有）；要不帶的話寫明並交使用者。(2) 權威份要接 Z6、Z8、D-E15（修訂 0 的 5.0 仍寫「不在這份」）。(3) 「不算寫者」要讓策略認得出來：權威 Module 提供公開的**豁免寫者的登記**；回滾 Module 公開它的重跑者與還原者、由它自己（或伺服器權威策略代為）登記豁免；網路 Module 同（L23）；作者自寫的回滾策略也走同一個登記。(4) 「ingress 在重跑中不執行」不是使用者的題目：回滾 Module 提供「重跑時不跑」的公開登記，伺服器權威策略替作者把它的 ingress 登記進去（L22 同形；回滾不依賴權威）。(5) 可回滾的 schedule 要有登記處：`rollbackEnabled` 已移出 Kernel，回滾 Module 要登記並公開「哪些 schedule 可回滾」（記錄的掛點、跨 schedule 事件的檢查、Z6 都讀它） |
+| L24 | **回滾相關的宣告與檢查歸誰**（權威份 N2）：`rollback` 的 Yes／No／Derived、Z6、Z8、D-E15、D-E16；伺服器權威怎麼接回滾策略；重跑時推 tick 算不算寫者 | 統合 | 權威、回滾、時間 | 權威、回滾 Module | **統合 2026-11-17 照 L17 判**：「哪些資料可回滾」（Yes／No）與 Derived（每 tick 在讀者之前重算）是回滾 Module 的登記與檢查（D-E16 讀 L6 的順序圖）；Z6、Z8、D-E15 這類「判定資料 × 回滾」的交叉規則是伺服器權威策略的檢查，讀回滾 Module 的公開登記（L22）；**作者各自選權威策略與回滾策略，伺服器權威只檢查兩者相容、不指定**（限制只放作者自選處）；回滾的還原與重跑時退 tick 不算寫者（舊規格 B.3「不算寫者：Runtime 的回滾還原」；lightyear 同）。**修訂 19 補（統合照 L17 判）**：(1) 回滾份要接 Derived 與 D-E16（修訂 1 全文沒有）；要不帶的話寫明並交使用者。(2) 權威份要接 Z6、Z8、D-E15（修訂 0 的 5.0 仍寫「不在這份」）。(3) 「不算寫者」要讓策略認得出來：權威 Module 提供公開的**豁免寫者的登記**；回滾 Module 公開重跑者與還原者的名單，伺服器權威策略讀名單代為登記豁免（修訂 20 更正：回滾不依賴權威，不能自己登記）；網路 Module 同（L23）；作者自寫的回滾策略由作者在產品裡登記；時間 Module 的 tick 驅動者與 Client 對時改 tick 也要有處理（權威份 5.6、6.11）。(6) 代為登記（回滾的元件、「重跑時不跑」、豁免、只標記）要在建 Plan 之前做：「重跑時不跑」是 Mount 上的執行條件（`Registry.hpp:125-138`），只能在 `AddSystem` 當下給，伺服器權威的 World 又不准動態插入（L5）。權威份 4.4 要寫明這個時機（策略的 interface 加 build 時機，或由權威 Module 的登記入口依已選的策略做、策略要先選定），掛第 14 節第 3 題。(4) 「ingress 在重跑中不執行」不是使用者的題目：回滾 Module 提供「重跑時不跑」的公開登記，伺服器權威策略替作者把它的 ingress 登記進去（L22 同形；回滾不依賴權威）。(5) 可回滾的 schedule 要有登記處：`rollbackEnabled` 已移出 Kernel，回滾 Module 要登記並公開「哪些 schedule 可回滾」（記錄的掛點、跨 schedule 事件的檢查、Z6 都讀它） |
 | L25 | **代為登記時的 owner**（權威份 N6） | 統合 | 權威、回滾（L22 也代為登記） | Kernel（3.5 的 owner） | **統合 2026-11-17 照 L17 判**：代為登記的 Module 用作者的 `Registrar`，owner 照舊是作者的登記單位；否則 `InitialValue` 的「只有擁有者能宣告」會誤報 |
 | L26 | **狀態機 (c) 區的接法**（權威份 N7）：狀態機 Module 不依賴權威（單機也用） | 統合（關係）；權威份、狀態機 (c) 區的批（細節） | 狀態機 | 權威、狀態機 Module | **統合 2026-11-17 照 L17 判**：同 L22 的形——狀態機公開它的登記，伺服器權威策略可以替作者把狀態機的套用 System 登記成判定的；狀態機不依賴權威 |
 | L27 | **時間 Module 要公開 tick 的型別與驅動者**（權威份 N8），驅動者標 `ExclusiveWorld<Writes<Tick>>`（L7 的選填標註） | 統合（要求）；時間的宣告（之後） | 權威（「tick 只有一個來源」） | 時間 Module | **統合 2026-11-17 照 L17 判**：列為時間宣告的要求 |
@@ -179,7 +179,8 @@ Kernel engine/kernel          World、ECS 元件／Resource／事件、System �
 | 開局的寫者豁免（`Registry.cpp:1448-1457`） | DI-KS 6 | L4 |
 | `Domain`（含 `Loading`）、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1；`EventOptions::domain` | `Declarations.hpp:56-62`、`Executor.cpp:192-196`、`World.hpp:453-461`、`Params.hpp:645` | 時間 Module（L2）；事件的歸屬改游標（L13） |
 | `ScheduleOptions::runner`、`Affinity` 的啟動比對、`kMainRole`；H-2／D-E13、X-3／D-E10、X-E2、X-E3 | DI-KS 14 | runner 安排；Resource 自己斷言（3.1） |
-| `Zone`、`WritePolicy`、`Role::Input`、`Rollback`、`external`、`ingress`、`ingressStage`、`rollbackEnabled`、`notInRollback`、`rollbackSafe`、`DigestSet`、`RequireExplicitZones`、`parallelGuardTest`；D-E2；D-E7 的區規則部分（含 S-6、S-7 `Local` `:1319`、S-8 的「(c) 不得宣告 Io effect」`:1313`、S-9、S-17 `:1335`）；D-E9（`:1510`）；D-E11 與 X-E1（`:1423`）；D-E15；D-E16；Z3；digest 的 R-E4；`CFingerprint`、`ExportZoneCSources`；記錄的 `emitterZone`（`detail/Context.hpp:90`）、`RejectedSpawn::emitterZone`（`World.hpp:86`） | `Declarations.hpp`、`Registry.*`、`Fingerprint.cpp`、`World.*`、`Executor.cpp` | 權威 Module（內容 L12；豁免 L4）；執行期的攔截拿掉（L3）：`emitterZone`、Z5 的呼叫當下與同步點複核、W-6b 都不再存在 |
+| `Zone`、`WritePolicy`、`Role::Input`、`external`、`ingress`、`ingressStage`、`DigestSet`、`RequireExplicitZones`、`parallelGuardTest`；D-E2；D-E7 的區規則部分（含 S-6、S-7 `Local` `:1319`、S-8 的「(c) 不得宣告 Io effect」`:1313`、S-9、S-17 `:1335`）；D-E9（`:1510`）；D-E11 與 X-E1（`:1423`）；D-E15（「判定資料 × 回滾」的交叉檢查，L24）；Z3；digest 的 R-E4；`CFingerprint`、`ExportZoneCSources`；記錄的 `emitterZone`（`detail/Context.hpp:90`）、`RejectedSpawn::emitterZone`（`World.hpp:86`） | `Declarations.hpp`、`Registry.*`、`Fingerprint.cpp`、`World.*`、`Executor.cpp` | 權威 Module（內容 L12；豁免 L4）；執行期的攔截拿掉（L3）：`emitterZone`、Z5 的呼叫當下與同步點複核、W-6b 都不再存在 |
+| `Rollback`（Yes／No／Derived）、`rollbackEnabled`、`notInRollback`、`rollbackSafe`；D-E16；Rewind／Replay（只有註解、沒有實作：`Registry.hpp:136`、`detail/Storage.hpp:231`） | `Declarations.hpp`、`Registry.*`、`Scheduler.cpp:500-525` | 回滾 Module（L11、L24；修訂 20 從權威那一列拆出） |
 | `RequireExplicitOrder`、D-E8 | `Registry.hpp:255`、`Scheduler.cpp` | **拿掉**；`TieBreaks` 留 |
 | `ScheduleOptions::eventTrim`、D-E1 的 eventTrim 檢查（`Registry.cpp:924`）、Plan 的 `StepKind::EventTrim` | `Declarations.hpp`、`Plan.hpp:36`、`Scheduler.cpp:218-226`、`Executor.cpp:417-420` | 拿掉；修剪改游標（L13，游標份 4.7 定時機） |
 | `effects`／`Registrar::Effect` | `SystemOptions::effects` | 留 Kernel（同 effect 的兩個 System 是衝突邊） |
@@ -205,10 +206,10 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 
 1. **需要它的 Feature 或目的**：使用者的 Review 目的（「Kernel是機制，那組裝放在哪裡？」「Kernel其實就是個ECS」）；第 5.4 節的 Feature 表。
 2. **現在的問題**：Kernel 混了 `bevy_ecs` 與 `bevy_app` 兩半（`inventory.md` 第 1、2 節）；並疊加了四家都沒有放在核心的規則，單機也要承擔。
-3. **變化的邊界**：Kernel／編排層（新）／權威 Module（新）／時間 Module；Kernel 的公開介面（`Plugin`、`Product`、`Registry`（L5）、`ScheduleOptions`、`ComponentOptions`、`ResourceOptions`、`EventOptions`、`SystemOptions`、`Mount`、`Registrar`、`FrozenRegistry`（L6）、`KernelErrorCode`、`StartupCode`、`AccessKind`、`Plan`、`RejectedSpawn`、`ColumnInfo` 等的 `ownerPlugin`）；Registry 與 Plan 指紋的格式。
-4. **影響的 Module／Product／Tool**：`engine/kernel`；新 `engine/orchestration`；新權威 Module；`engine/time` 與時間 Module（L2）；狀態機 Module（已核准未實作，L18）；`tests/common/kernel` 的 15 個測試檔 329 個案例與守衛腳本（`kernel_guard.py`、`naming_guard.py`、`kernel_symbols.py`、`store_stamp_guard.py`、`zone_c_export_check.py`、`zone_c_fixture/`、`compile_fail/`）；突變清單（558 個，碰到移出概念的約 176～201 個）。gyo2 上沒有產品與工具。
-5. **Dependency Direction**：新增 編排層→Kernel、各 Module→編排層（登記單位型別）、權威→Kernel（讀取面）；產品→編排層。Kernel 不依賴任何新層。
-6. **Ownership**：登記單位的生命週期、runner、遊戲初始化、多個 World、執行緒安排、啟動錯誤的彙整：Kernel → 編排層。寫者、區、digest、回滾的規則：Kernel → 權威。時鐘與 tick：Kernel → 時間 Module。事件的保留：時鐘 → 游標（仍在 Kernel）。owner 都是架構（架構師會話）。
+3. **變化的邊界**：Kernel／編排層（新）／權威 Module（新）／回滾 Module（新）／時間 Module；Kernel 的公開介面（`Plugin`、`Product`、`Registry`（L5）、`ScheduleOptions`、`ComponentOptions`、`ResourceOptions`、`EventOptions`、`SystemOptions`、`Mount`、`Registrar`、`FrozenRegistry`（L6）、`KernelErrorCode`、`StartupCode`、`AccessKind`、`Plan`、`RejectedSpawn`、`ColumnInfo` 等的 `ownerPlugin`）；Registry 與 Plan 指紋的格式。
+4. **影響的 Module／Product／Tool**：`engine/kernel`；新 `engine/orchestration`；新權威 Module、新回滾 Module；`engine/time` 與時間 Module（L2）；狀態機 Module（已核准未實作，L18）；`tests/common/kernel` 的 15 個測試檔 329 個案例與守衛腳本（`kernel_guard.py`、`naming_guard.py`、`kernel_symbols.py`、`store_stamp_guard.py`、`zone_c_export_check.py`、`zone_c_fixture/`、`compile_fail/`）；突變清單（558 個，碰到移出概念的約 176～201 個）。gyo2 上沒有產品與工具。
+5. **Dependency Direction**：新增 編排層→Kernel、各 Module→編排層（登記單位型別）、權威→Kernel（讀取面）、回滾→Kernel（原語、讀取面）、權威→回滾（公開登記，L11、L24）；產品→編排層。Kernel 不依賴任何新層。
+6. **Ownership**：登記單位的生命週期、runner、遊戲初始化、多個 World、執行緒安排、啟動錯誤的彙整：Kernel → 編排層。寫者、區、digest 與「判定資料 × 回滾」的交叉規則：Kernel → 權威。哪些資料與 schedule 可回滾、Derived：Kernel → 回滾 Module。時鐘與 tick：Kernel → 時間 Module。事件的保留：時鐘 → 游標（仍在 Kernel）。owner 都是架構（架構師會話）。
 7. **為什麼不能更小**：比過「留在 Kernel 但預設關」（設計稿第 4 節），使用者選移出；「只改名與文件」不解決單機承擔規則的問題。搬動已合併程式（K0 的開局排程與 J-58；`Plugin`／清單檢查；`StrictOrderTests`）是代價，列在第 8 節。
 
 ---
@@ -287,7 +288,8 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | J-27 | (c) Parallel 無守衛 id 失敗；Parallel 未實作 D-E17（`SchedulerTests.cpp:324-350`） | 拆：D-E17 留；(c) 守衛 id 移出 | 不選權威時 (c) Parallel 的守衛 id 不查 | 無 | Kernel／權威 |
 | J-44 | (c) 登記順序 20 種排列：全部 D-E8，或結果都不變 | 拿掉（有歧義的排列在剩下那支必然失敗） | 「(c) 對登記順序不敏感」不再保證 | 無 | 不由機制守 |
 | `StrictOrderTests.cpp`（8 案） | `RequireExplicitOrder` | 拿掉 | (b) 嚴格模式消失 | 無 | 不由機制守 |
-| J-24 | 每個啟動錯誤碼一個最小 Registry | 拆：保留的碼留；R-E1／R-E3／R-E6 搬編排層；區、寫者、digest、回滾的碼移權威；**刪**：D-E8、D-E10、D-E12、D-E13、D-E18、D-E21、X-E2、X-E3、F-E1 | 刪的碼不再報 | 無 | 各新 owner |
+| J-24 | 每個啟動錯誤碼一個最小 Registry | 拆：保留的碼留；R-E1／R-E3／R-E6 搬編排層；區、寫者、digest、D-E15 的碼移權威；回滾的宣告與 D-E16 的碼移回滾 Module；**刪**：D-E8、D-E10、D-E12、D-E13、D-E18、D-E21、X-E2、X-E3、F-E1 | 刪的碼不再報 | 無 | 各新 owner |
+| D-E15、Z6、Z8、D-E16 的案（D-E16：`SchedulerTests.cpp:586-593`、`CoverageTests.cpp:112-118`、`:307-313`） | 回滾 × 判定資料的交叉規則；Derived 在讀者之前重算 | 移出：D-E15、Z6、Z8 → 權威的交叉檢查；D-E16 → 回滾 Module（修訂 20 補） | 不選權威時交叉規則全部通過；不選回滾時 Derived 不查 | 無 | 權威／回滾 |
 | J-28 | `Role(Main)` 的 System 放錯執行緒 finish 失敗（gyo2 只有這半，`SchedulerTests.cpp:353`） | 拿掉；新增「綁執行緒的 Resource 被別的執行緒碰到就斷言」 | 啟動時不再擋 | 存取時斷言（新） | Kernel（Resource） |
 | J-30 | stamp 序列與 tickStamps | 改：stamp 序列留；tickStamps（tick 視角）移時間 Module 或拿掉，由時間的宣告定 | tick 視角的換算不再由 Kernel 保證 | 無 | Kernel／時間 |
 | J-32 | 結構變更的決定性 | 留 | 無 | 無 | Kernel |
@@ -338,14 +340,16 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 | Kernel 減法・結構段 | 不需要新家的：`Product` 改名 `WorldExecutor`；登記與建 Plan 兩步、可重複（L5 的 Kernel 半）；唯讀帶版本號的登記表（L6）；`ExclusiveWorld` 整個 World 的值的讀寫、`Writes<…>` 選填（L7）；`KernelSettings` 每次最外層 Run 重讀、拿掉 D-E18（L9）；拿掉執行期攔截（L3）；拿掉歧義錯誤與 `RequireExplicitOrder`（`StrictOrderTests` 退役）；拿掉執行緒的啟動檢查、加綁執行緒 Resource 的斷言；指紋改版、golden 重產（第一次） | 本宣告核准 | Opus／high；Fable／high；§14.4 檢證者 Fable／high | 10～14 h |
 | 編排層的骨架 | 新 Module `engine/orchestration`；`Module`／`Plugin` 型別與生命週期、依賴從登記檔讀（L20）、R-E1／R-E3／R-E6 搬出；`Product`；遊戲初始化清單（O-1；J-58 改寫搬來，Kernel 的開局排程同批拿掉）；runner 介面與只跑一次的 runner；每個 World 准不准動態插入（L5 的編排半）；啟動錯誤的彙整（O-5） | 結構段；PR #240 合併 | Opus／high；Fable／high | 10～14 h |
 | 時間 Module ＋ 事件游標 ＋ 拿掉時鐘（同一條線） | 時間 Module 持有時鐘與 tick（L2）；事件游標（游標份）；Kernel 拿掉 `Domain`、`clock`、`CurrentTick`、`DomainTick`、tickStamps、`eventTrim` 與 `EventTrim` 步、D-E12、F-E1；golden 重產（第二次） | 骨架（runner）；時間與游標兩份宣告核准 | 各自的宣告 | 各自的宣告 |
-| 權威 Module ＋ 回滾 Module ＋ 拿掉權威規則（同一條線） | 權威、回滾照各自的宣告；Kernel 拿掉寫者數量、digest 禁 Shared、區（`Zone`、`Role`、`Rollback`、`ingress` 等）、回滾的宣告與 Rewind／Replay，交出回滾原語（L11） | 骨架；時間 Module（權威依賴它，L20）；兩份宣告核准 | 各自的宣告 | Kernel 這一半 8～12 h（守衛的搬遷與約 200 個突變的處置）；其餘各自估。**線內的先後**（修訂 19 補）：Kernel 給回滾原語 → 回滾 Module 的公開登記（可回滾的資料與 schedule、重跑者、重跑時不跑）→ 權威 Module 的骨架與豁免寫者的登記 → 權威的交叉檢查（Z6、Z8、D-E15）→ 拿掉 Kernel 的權威與回滾規則；golden 重產（第三次：拿掉的 zone、writePolicy、role、rollback、ingress、rollbackSafe 都在 Registry 指紋，`Fingerprint.cpp:11-18`） |
+| 權威 Module ＋ 回滾 Module ＋ 拿掉權威規則（同一條線） | 權威、回滾照各自的宣告；Kernel 拿掉寫者數量、digest 禁 Shared、區（`Zone`、`Role`、`Rollback`、`ingress` 等）、回滾的宣告（Rewind／Replay 只有註解、沒有實作可拿），交出回滾原語（L11） | 骨架；時間 Module（權威依賴它，L20）；兩份宣告核准 | 各自的宣告 | Kernel 這一半 8～12 h（守衛的搬遷與約 200 個突變的處置）；其餘各自估。**線內的先後**（修訂 19 補）：Kernel 給回滾原語 → 回滾 Module 的公開登記（可回滾的資料與 schedule、重跑者、重跑時不跑；回滾份第 11 節的第一批）→ 權威 Module 的骨架與豁免寫者的登記（回滾的官方策略，回滾份第 11 節的第二批，排在公開登記之後、和權威骨架互不依賴） → 權威的交叉檢查（Z6、Z8、D-E15）→ 拿掉 Kernel 的權威與回滾規則；golden 重產（第三次：拿掉的 zone、writePolicy、role、rollback、ingress、rollbackSafe 都在 Registry 指紋，`Fingerprint.cpp:11-18`） |
 | 之後 | 生成世界（另一份宣告，放編排層）；多個 World（T5）與交換點（原 T2）在編排層；狀態機 (b) 區照它已核准的宣告 | 骨架 | 各自的宣告 | — |
 
 先後的理由：結構段沒有新家要等，先拿掉，編排層骨架要用它的兩步 API；骨架先於各 Module（它們以登記單位接進來）；時鐘的移出和時間 Module、事件游標同一條線，事件的修剪不會有「舊的拿掉、新的還沒有」的空窗；權威規則的移出和權威、回滾 Module 同一條線，守衛不會有空窗；L4 定了之後，生成世界不再綁 Kernel 減法。golden 重產三次（結構段、時鐘那一條線、權威那一條線；修訂 19 更正，原寫兩次）。
 
 **時間 Module 的宣告**（修訂 19 補）：第三、四條線都要經過它，它累積了 L2、L19、L27、回滾份 7.2（重跑退 tick）、游標份 4.6（tick 放在事件內容）的要求。現在沒有 owner；本頁提議由主會話開一張卡寫它，排在第三條線之前（待主會話與使用者）。
 
-**權威份與回滾份的批次草案**：權威份第 10 節仍寫「kernel-subtraction＋生成世界同一條線」、依賴「N2、N4、N6 定案」，要改成本節的五段；回滾份沒有批次草案，要補（第 13 節通知）。
+**權威份與回滾份的批次草案**：權威份第 10 節（03320e5e）已改成本節的五段，回滾份第 11 節（d8125486）已補（修訂 20 更新）。
+
+**執行期攔截拿掉之後的空窗**（修訂 20 補）：結構段就拿掉執行期的攔截（L3），接手的 digest 比對與伺服器覆蓋要等網路 Module（權威份 5.9：第一版沒有網路，digest 只用在回歸測試）。這段期間 untyped `Commands`、`ExclusiveWorld`、`Despawn`、外部寫入對判定資料的錯誤沒有東西抓；gyo2 上目前沒有產品。
 
 ---
 
@@ -367,7 +371,7 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 | 12 | 改寫（L11） | Kernel 提供回滾用的原語（清單由回滾份定），不提供 Rewind／Replay／Restore 與「哪些資料要回滾」的判斷；回滾在回滾 Module |
 | 13 | 留「Extract 參數唯讀、無寫回、只在 extract schedule」；來源 World 與時機移編排層 | — |
 | 14 | 改寫 | 保留：Running 期間外部不碰 World（W-6）；同一個 World 同一時間只被一條執行緒跑（`WorldExecutor::RunSchedule` 進入時斷言；系譜 Bevy 的 `&mut World`）；World 的生命期是一個世代，世代切換＝重建 World。移出：一 World 一執行緒角色的啟動檢查（改成綁執行緒的 Resource 自己斷言）；每 domain 一 clock schedule（L2，移時間 Module） |
-| 15 | 改寫（取代 15 與 22 的例外） | **Kernel 的職責是 ECS**（L17）。職責清單（修訂 19 逐列對到第 3.1 節）：(1) World 的儲存——實體存活集合、元件欄、Resource，與 World 摘要（`World::Summary`，`World.cpp:1051`）；(2) 事件（游標，L13）；(3) System 參數與存取推導（含 `effects`、唯讀的 Extract 參數）；(4) schedule、Plan、`WorldExecutor` 與執行（含巢狀跑）；(5) 延後變更與同步點；(6) hook；(7) 生成——配發器、`InitialValue`、丟掉不能生成的那一筆與 `RejectedSpawn` 明細；(8) 存取驗證（開發版）與診斷紀錄；(9) 唯讀的登記表、Registry 與 Plan 指紋；(10) `KernelSettings`；(11) 綁執行緒的 Resource 碰錯時的斷言；(12) 給上層用的原語，只限下列：整欄讀出、整欄放回、指定 stamp 寫回、Resource 的 stamp 與存在一起讀寫、實體存活集合的讀出與放回、跑與不跑 hook 的兩條結構變更路（L11；多一種就是清單多一項）。不在清單上的不放進 Kernel：不內建 schedule 或 stage 名；不認得開局、時鐘、區、權威、回滾策略、產品、執行緒角色；不擁有執行緒、不讀時鐘或亂數。啟動錯誤只有第 3.1 節列的那幾種（守衛：`StartupCode` 的列舉值與清單比對）。判斷某樣東西屬不屬於清單，對照同類型的多家 ECS 實作（Bevy、flecs、Unity Entities、Unreal Mass 等）的位置與設計原因 |
+| 15 | 改寫（取代 15 與 22 的例外） | **Kernel 的職責是 ECS**（L17）。職責清單（修訂 19 逐列對到第 3.1 節）：(1) World 的儲存——實體存活集合、元件欄、Resource，與 World 摘要（`World::Summary`，`World.cpp:1051`）；(2) 事件（游標，L13）；(3) System 參數與存取推導（含 `effects`、唯讀的 Extract 參數）；(4) schedule、Plan、`WorldExecutor` 與執行（含巢狀跑）；(5) 延後變更與同步點；(6) hook；(7) 生成——配發器、`InitialValue`、丟掉不能生成的那一筆與 `RejectedSpawn` 明細；(8) 存取驗證（開發版）與診斷紀錄；(9) 唯讀的登記表、Registry 與 Plan 指紋；(10) `KernelSettings`；(11) 綁執行緒的 Resource 碰錯時的斷言；(12) 登記——`Registrar`、開 Registrar 與建 Plan 兩步、動態插入的宣告與拒絕、owner 的保存（修訂 20 補，3.1 第 3 列、3.5）；(13) 給上層用的原語，只限下列：整欄讀出、整欄放回、指定 stamp 寫回、Resource 的 stamp 與存在一起讀寫、實體存活集合的讀出與放回、跑與不跑 hook 的兩條結構變更路（「Ready 時從外面寫而且跑 hook」隨第 14 節第 2 題與還原跑不跑 hook；L11；多一種就是清單多一項）。不在清單上的不放進 Kernel：不內建 schedule 或 stage 名；不認得開局、時鐘、區、權威、回滾策略、產品、執行緒角色；不擁有執行緒、不讀時鐘或亂數。啟動錯誤只有第 3.1 節列的那幾種（守衛：`StartupCode` 的列舉值與清單比對）。判斷某樣東西屬不屬於清單，對照同類型的多家 ECS 實作（Bevy、flecs、Unity Entities、Unreal Mass 等）的位置與設計原因 |
 | 16～18、20、21 | 留；刪去開局、區的措辭 | — |
 | 19 | 留；Z5 那一句拿掉（L3） | — |
 | 22 | 移出 → 編排層 O-1 | — |
@@ -487,31 +491,57 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 | `v8-arch-gyo2-funnel-block-b1-b3-fingerprint-a`（11-14） | 原話「B1–B3 要擋，指紋用方案 A」：擋 B1（ingress 經 Input 的請求造出 (c) 區 State）、B2（(c) 區的 System 造出 Input）、B3（開回滾的 schedule 裡出現不回滾的 (c) 區元件）；宣告一律寫進指紋、格式版本加一。理由：沒有說 | `kernel-is-ecs-no-restrictions`（11-16）、`rollback-module-strategy`（11-17） | 沒有單獨回應 | B1、B2 隨區移權威份；B3 是「判定資料 × 回滾」，照 L24 歸伺服器權威策略的交叉檢查；方案 A 的「宣告進指紋」隨 C 指紋移權威份，Registry 指紋照 3.4 改版。列進第 14 節的確認清單 |
 | `v8-arch-gyo2-who-wrote-debug-tool`（11-15） | 原話「執行時記下『這個值實際是誰寫的』，這個能保留嗎？我認為排錯非常有用。」、確認「3. 另外排一批。」；K0 實作時守「每一個記號要對得回唯一的一步」 | `no-runtime-interception`（11-17） | 沒有：L3 的原話只說拿掉攔截、改靠 digest 與覆蓋；「Kernel 不加觀察點」是卡片的說法 | L30，第 14 節問 |
 
+### 第二輪檢查的處理（修訂 20）
+
+證據 `four-docs-adversarial-check-r2.md`。讀的版本：統合 1f0e5dac、權威 03320e5e、回滾 d8125486、游標 96fae7dc。
+
+| 發現 | 統合（本頁） | 通知子份 |
+|---|---|---|
+| 1 統合沒跟上 L24：回滾的宣告與 D-E16 仍送權威；J-46 不存在、Rewind／Replay 沒有實作 | 3.2 拆列；第 4 節第 3～6 項；J-24；7.2 加一列；第 8 節更正 | 回滾：「J-46 搬來」改成三處實際的案、重跑那一段是新寫 |
+| 2 「回滾自己登記豁免」和「回滾不依賴權威」相抵 | L24 (3) | 權威 4.8、回滾 5.4：只留「回滾公開名單、伺服器權威策略代為登記」 |
+| 3 策略的 interface 沒有登記時的時機 | L24 (6)；第 3 題 | 權威 4.4 二擇一寫明 |
+| 4 tick 驅動者過不了規則 1；6.11 依賴 6.4 | L24 (3)；第 14 節重排 | 權威 5.6、6.11、4.8 |
+| 5 C 指紋的內容沒有一節列出 | — | 權威 5.8 加「進／不進／待判」表；6.14 第 3 條照表改寫 |
+| 6 R-2 前提缺一半 | 第 14 節加一題 | 回滾 R-2 列出前提與誰守 |
+| 7 第 3 題的題目 | 第 14 節第 3 題拆四個子題 | 回滾：建議與 Match 的情形對不上 |
+| 8 第 14 節的順序與選項 | 重排；第 10 題三個選項；第 15 題改成確認題 | — |
+| 9 事件 × 回滾三份寫法不同 | L11 更正（使用者定的只有 (5)；兩個方向都擋） | 游標第 11 節第 3 條；游標、回滾補「每幀寫、固定步讀」；原語寫清放回哪些讀者的游標 |
+| 10 巢狀跑的 schedule 算不算可回滾 | — | 回滾 5.4 寫規則，權威 5.14 引用 |
+| 11 代為登記進回滾的範圍 | — | 權威 4.3 |
+| 12 DI-KS 15 缺登記；新機制無條件列入 | 9.1 加 (12)、原語標條件；L11 | 回滾第 6 節第 6 列標條件 |
+| 13 L3 的接手要到網路 Module | 第 8 節寫明空窗 | 權威 4.4：`OnMismatch`、`Digest` 標「形狀待網路 Module」 |
+| 14 權威對狀態機、網路的依賴 | — | 權威 4.2、第 9 節、8.1 |
+| 15 規則 1 對生成怎麼算 | 第 1 題分「數量」與「誰能寫」 | 權威 5.3 加一句 |
+| 16 互讀舊版與殘留舊句 | L4 指向 L28；第 8 節末段更新 | 三份互讀最新版；權威 L3 列、補 L30 |
+| 17 規則照查 | — | 回滾第 10 節的引號；權威 6.3、6.5、6.11 用描述名；「N」三義 |
+
 ---
 
-## 14. 要問使用者的題目：合併去重、排好順序
+## 14. 要問使用者的題目：合併去重、排好順序（修訂 20 重排）
 
-來源：統合第 10 節第 12、13 件；權威份第 6 節（13 件）；回滾份第 10 節（5 件）；游標份第 4 節（8 件）；四份交叉檢查新增的。排序的根據是「先定的會改變後面哪些」；同一列的子題一起問。每題問的時候先講遊戲的例子，再列別家的做法與公平的選項，一次一題。
+來源：統合第 10 節第 12、13 件；權威份第 6 節（14 件，含 6.14 確認清單）；回滾份第 10 節；游標份第 4 節（8 件）；兩輪交叉檢查新增的。排序的根據是「先定的會改變後面哪些」；同一列的子題一起問。每題問的時候先講遊戲的例子，再列別家的做法與公平的選項，一次一題。
 
 | 順序 | 題目 | 合併自 | 先定它會改變後面的 |
 |---|---|---|---|
-| 1 | **生成時帶的值算不算寫者：L4 是否取代 11-14 的「作者用漏斗」** | 統合 13（L28） | 權威 P6、5.1、6.3、6.7；讀檔卡；漏斗工具 |
-| 2 | **回滾的重跑在哪裡發動**（獨占 System 裡巢狀跑／World 閒置時由 runner 呼叫／兩條都給） | 統合 12；回滾修訂 0 第 1 件 | DI-KS 18；回滾 2、3 件（hook、stamp）；L24 豁免登記要登記誰 |
-| 3 | **回滾策略選在哪一層、哪些 World 可以沒有回滾、選了 Module 沒選策略怎麼辦** | L29；權威 6.2、6.13；回滾第 5 件 | 權威 4.7；回滾 5.6；編排層 O-5 的錯誤 |
-| 4 | **寫者規則數不數、預設哪邊** | 權威 6.3 | 權威 6.6（digest 禁 Shared）、6.11（tick 只有一個來源的形狀）、6.7（插入是建立還是修改） |
-| 5 | 4 的後續：digest 禁 Shared → tick 只有一個來源的檢查形狀 → 對已存在的實體插入元件 | 權威 6.6、6.11、6.7 | — |
-| 6 | **經權威登記的就是判定資料嗎** | 權威 6.5 | 權威 6.4、6.8、6.12 |
-| 7 | 6 的後續：System 的區怎麼來 → C 指紋與 wire id 用的編號 → G-5 匯出留不留 | 權威 6.4、6.8、6.12 | — |
-| 8 | **游標放哪、誰算一個讀者** | 游標 4.1 | 游標 4.3；回滾的事件題；digest 含不含游標 |
+| 1 | **生成時帶的值算不算寫者：L4 是否取代 11-14 的「作者用漏斗」**；分開講「數量」（寫者幾個）與「誰能寫」（權威 5.3 規則 1：生成世界、讀檔的 System 生成帶判定資料的實體會不會被擋） | 統合 13（L28）；第二輪第 15 條 | 權威 P6、5.1、5.3、6.3、6.7；讀檔卡；漏斗工具 |
+| 2 | **回滾的重跑在哪裡發動**（獨占 System 裡巢狀跑／World 閒置時由 runner 呼叫／兩條都給） | 統合 12；回滾修訂 0 第 1 件 | DI-KS 18；「Ready 時從外面寫而且跑 hook」要不要；第 13 題；豁免名單 |
+| 3 | **策略選在哪一層**，四個子題：權威策略的層；回滾策略的層；哪些 World 可以沒有回滾（Match）；兩邊各自沒選策略怎麼辦（含「被依賴帶進來的 Module 算不算選了」、代為登記的時機要求策略先選定） | L29；權威 6.2、6.13；回滾第 5 件；第二輪第 3、7 條 | 權威 4.4、4.7；回滾 5.6；編排層 O-5 |
+| 4 | **寫者規則數不數、預設哪邊** | 權威 6.3 | 第 5、7 題的一部分 |
+| 5 | 4 的後續：對已存在的實體插入元件算建立還是修改 | 權威 6.7 | — |
+| 6 | **經權威登記的就是判定資料嗎** | 權威 6.5 | 第 7 題 |
+| 7 | 6 的後續：System 的區怎麼來 → 「tick 只有一個來源」的檢查形狀（隨前者；tick 驅動者怎麼過規則 1）→ C 指紋與 wire id 用的編號 → G-5 匯出留不留 | 權威 6.4、6.11、6.8、6.12 | — |
+| 8 | **游標放哪、誰算一個讀者** | 游標 4.1 | 第 9、10 題；digest 含不含游標 |
 | 9 | 不執行的讀者、新讀者從哪讀起 | 游標 4.3 | — |
-| 10 | **事件在回滾裡**：進不進快照／跨 schedule 的檢查多嚴（改寫 11-14 的「可回滾的 schedule 不參與」：報錯或只警告）／時間設計 6.3 (2) 的「依位置讀」與「走 Ingress」拿掉的確認 | 回滾第 4 件的事件半；L11 更正；交叉檢查第 4、5 條 | 回滾 R-2；游標的 PvP Client 註記；digest 的範圍 |
-| 11 | **回滾的歷史存在哪**（World 裡／回滾 Module 自己） | 回滾第 1 件 | digest 要不要排除它 |
-| 12 | **digest 比什麼**（含不含事件與游標） | 權威 6.9 的「比什麼」；交叉檢查第 12 條 | — |
-| 13 | 還原時跑不跑 hook、stamp 怎麼標 | 回滾第 2、3 件 | — |
-| 14 | 副作用的提醒（重跑時播腳步聲）：不檢查／啟動時用 effect 提醒 | 回滾第 4 件的副作用半 | — |
-| 15 | **「誰實際寫的」排錯工具**：照 11-15 另外排一批、Kernel 寫入關口只留記號／隨 L3 不做 | L30 | Kernel 職責清單（DI-KS 15）要不要多一項 |
-| 16 | **確認清單：由既定決定推出而拿掉的規則**（D-E9、K.3 第 5 項、Z3 的 stage、(c) 獨占套用的新形狀、`emitterZone` 不給替代、漏斗 B1～B3 的去處） | 交叉檢查第 11 條 | — |
-| 17 | 彼此獨立的：權威 Module 的名字；事件上限（單位、預設、滿了）；丟棄記錄；順序鍵；修剪時機；跨 World 與網路的形狀；紀錄要不要帶時間標記 | 權威 6.1；游標 4.2、4.4、4.5、4.7、4.8、4.6 | 游標 4.6 和時間 Module 的宣告相關 |
-| 18 | **批次的先後**（主會話 5d78a872 的五段＋本頁第 8 節修訂 19 的補充） | 統合第 8 節 | — |
+| 10 | **事件在回滾裡**：進不進快照（進的話放回哪些讀者的游標）／跨 schedule 的檢查多嚴（報錯、只警告、不檢查；改寫 11-14 的「可回滾的 schedule 不參與」；兩個方向）／時間設計 6.3 (2) 的「依位置讀」與「走 Ingress」拿掉的確認 | 回滾第 4 件的事件半；L11 更正；兩輪檢查 | Kernel 原語清單是否多一項；回滾公開登記要不要加事件；權威 5.14 對事件怎麼算；回滾 R-2；游標 4.6 |
+| 11 | 紀錄要不要帶時間標記、tick 放在哪（PvP 的音效時刻） | 游標 4.6 | 時間 Module 的宣告 |
+| 12 | **回滾等價（R-2）的前提由誰守**：選了伺服器權威時由權威的檢查守；沒選時作者負責／回滾 Module 自己加檢查（新規則） | 第二輪第 6 條 | — |
+| 13 | **回滾的歷史存在哪**（World 裡／回滾 Module 自己） | 回滾第 1 件 | digest 要不要排除它 |
+| 14 | **digest 比什麼**（含不含事件與游標）→ digest 禁 Shared | 權威 6.9 的「比什麼」、6.6；第一輪第 12 條、第二輪第 8 條 (a) | — |
+| 15 | 還原時跑不跑 hook、stamp 怎麼標 | 回滾第 2、3 件 | — |
+| 16 | 副作用的提醒（重跑時播腳步聲）：不檢查／啟動時用 effect 提醒 | 回滾第 4 件的副作用半 | — |
+| 17 | **「誰實際寫的」排錯工具（確認題）**：11-15 已定保留、另外排一批；只問「記號留在 Kernel 的寫入關口，算不算 Kernel 職責清單（DI-KS 15）多一項」 | L30；第二輪第 8 條 (e) | DI-KS 15 |
+| 18 | **確認清單：由既定決定推出而拿掉的規則** | 權威 6.14 | — |
+| 19 | 彼此獨立的：權威 Module 的名字；事件上限（單位、預設、滿了）；丟棄記錄；順序鍵；修剪時機；跨 World 與網路的形狀 | 權威 6.1；游標 4.2、4.4、4.5、4.7、4.8 | — |
+| 20 | **批次的先後**（主會話 5d78a872 的五段＋本頁第 8 節的補充）；**時間 Module 的宣告由誰寫**（本頁提議主會話開卡） | 統合第 8 節 | — |
 
-**不問的**：權威 6.9 的「何時比」「不一致怎麼辦」延到網路 Module 的宣告（L23）；權威 6.10 沒有選項；L8 統合已判；Derived 只在回滾份提議不帶時才問。
+**不問的**：權威 6.9 的「何時比」「不一致怎麼辦」延到網路 Module 的宣告（L23）；權威 6.10 沒有選項；L8 統合已判；Derived 回滾份已接、不提議不帶。
