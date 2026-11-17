@@ -43,7 +43,7 @@
 | L12 | 伺服器權威檢查哪些、預設區、C 指紋與 G-5 匯出的內容、digest 比對與伺服器覆蓋、(c) 區獨占套用的新形狀、權威 Module 的名字；`AuthorityStrategy` interface 的形狀 | **權威** | 統合（缺口回報）、狀態機 (c) 區、回滾份 | 權威 Module | 待權威份；回滾的內容移到回滾份（L11） |
 | L13 | 事件游標：游標放哪、上限與單位、丟棄記錄、不執行的讀者、順序鍵、跨時鐘事件的網路要求（11-14「也要兼容網絡部分」） | **游標** | 統合（L2、L11）、時間 | Kernel 的事件 API（`EventReader`、`EventWriter`、`World::EventPayloads`、Plan 的 `EventTrim`）——**只限這些；動到別的 Kernel 介面回報統合** | 待游標份 |
 | L14 | 生成世界的形狀（每個 World 一次或分批、誰推動、什麼時候算好、讀取畫面） | **生成世界的宣告**（之後另開一份，放編排層；生成世界的宣告已在使用者要求下歸檔，L16 的答案記在 `recovered-from-stale-cards.zh-Hant.md` 第 2 節，分支 `claude/gyo2-time-design`） | 統合（L4、L16） | 編排層 | 等統合；L4 定了之後不再綁 Kernel 減法 |
-| L15 | 產品能不能只選部分 Module（「產品選用權威」的前提） | 定義卡（PR #240） | 權威 | 建置層 | 待使用者 |
+| L15 | 產品能不能只選部分 Module（「產品選用權威」的前提） | 主會話（定義卡已完成並歸檔，主會話直接問使用者，定了轉本卡） | 權威 | 建置層 | 待使用者 |
 | L16 | 兩層的讀法：Engine（編排層）認得遊戲初始化與生成世界的階段、Kernel 不認得 | 統合 | 生成世界 | — | **已定**（2026-11-17，`v8-arch-gyo2-two-layers-like-bevy`）：照 Bevy——`bevy_app` 認得開局（`Main` 的開局清單，`bevy_app/src/main_schedule.rs:213-305`），`bevy_ecs` 不認得（搜不到 startup）。編排層認得、排流程；Kernel 只跑被叫的 schedule |
 | L17 | 替換條件與歸屬的判斷方式（取代「兩次以上」） | 統合 | 權威、游標、回滾（它們的 RC 同理） | — | **已定**（2026-11-17，`v8-arch-gyo2-layer-duty-lists`）：固定兩條核心——「Engine 只提供機制」「Kernel 的職責是 ECS」；每層寫一份可核對的職責清單；不在清單上的預設放別層，**由 agent 自己判、不問使用者**；判斷時要對照**同類型的多家實作**（Kernel 是 ECS，就看 ECS 引擎），找出它們的設計原因再交叉比較，取它們的能力、不取技術債；替換條件改成「某層的職責清單要多加一項，或判不出屬於哪一層」就停下來問 |
 | L18 | 狀態機 (b) 區（已核准）的影響：初始進入改由編排層的遊戲初始化保證；`ExclusiveWorld` 隨 L7；`RegisterStateMachine<S, Zone::C>` 的 `Zone` 隨 L12 | 統合列影響；狀態機卡處理 | 狀態機卡 | 狀態機 Module | 列出，不判 |
