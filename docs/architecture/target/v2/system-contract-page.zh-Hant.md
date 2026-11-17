@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-18（第 3～6 節、第 9～11 節：`v8-arch-gyo2-kernel-subtract-structure` 第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource；兩步登記與 `ExclusiveWorld` 的當場改在第 2、3 段）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-18（第 3～6 節、第 9～11 節：`v8-arch-gyo2-kernel-subtract-structure` 第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource；`ExclusiveWorld` 的當場改在第 3 段）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -144,7 +144,7 @@ AllotterExhausted [W-9]: the entity allotter's range is used up world=test-world
 
 `KernelSettings` 還有一個不是開關的欄 `hookRoundLimit`：hook 連鎖的上限的產品預設（第 9 節）。
 
-**啟動時的錯誤**是另一條路：`Registry::Finish` 把所有問題收齊，一次回傳一份 `StartupReport`，每一條寫明是誰、在哪裡登記的；產品決定怎麼印、要不要啟動。
+**啟動時的錯誤**是另一條路：`Registry::BuildPlans`（或第一次的 `Registry::Finish`）把所有問題收齊，一次回傳一份 `StartupReport`，每一條寫明是誰、在哪裡登記的；產品決定怎麼印、要不要啟動。遊戲跑起來之後再登記的那一輪失敗，只是那一輪丟掉、World 照跑（第 12 節）。
 
 **這些是誰定的**（使用者 2026-11-11、11-12，經側邊會話轉述；規格 K.3 第 17 項、§讀法、E.5；決定表的 `v8-arch-kernel-result-errors`、`v8-arch-kernel-verification-not-assert`、`v8-arch-kernel-break-hook`）：
 - 不採「常開的檢查巨集」，改採 Go 式的錯誤處理，原則是不靜默。理由：相對於斷言的直接終止，`Result` 給得出上下文鏈，也讓 World 停在已知的狀態。
@@ -392,3 +392,15 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 - 開局裡有 System 回報錯誤：觸發它的那一次執行回報錯誤，World 中斷，原本要跑的那張不跑、它的 tick 也不推進。
 - **開局之後要先空跑幾步（例如物理預熱）**：自己寫一個 System——每幀那張裡的獨占 System，讀一個旗標 Resource，還沒做過就跑幾次固定步、把旗標設起來。
 
+## 12. 登記兩步、跑起來之後再登記
+
+（`v8-arch-gyo2-kernel-subtract-structure` 第 2 段；規則全文在 [target/kernel](../kernel.zh-Hant.md) DI-KS 25、26。編排層把它接到登記檔與指令在下一批。）
+
+- **兩步**：`registry.Register(owner, [](Registrar& r) { … })` 開一個 `Registrar`，只在回呼裡有效；`registry.BuildPlans()` 建 Plan。兩步可以重複：建好之後可以再開。`owner` 是誰登記的（名字＋序號），Kernel 只存、只比相等、只拿來印。舊的 `Registry(plugins).Finish()` 照舊能用，它就是第一次的兩步（下一批搬到編排層）。
+- **什麼時候看得到**：之後一輪登記的東西，`BuildPlans` 成功之前外面看不到（`FrozenRegistry` 與 World 都還是舊的）。成功時版本號加一；用這份 Registry 建的 World 下一次被用到時自己接上，所以建好之後、下一次 `Run` 之前，World API 就能用新的元件與 Resource。舊的 System 保留 `Changed` 的基準與 `Local`。
+- **失敗**：建 Plan 失敗或呼叫 `DiscardRegistrations()`，那一輪整個丟掉，Registry 與 World 留在上一個版本，那一輪發出的 id 作廢、下一輪接著上一版發。
+- **之後一輪准什麼**：新的元件、Resource、事件、具名集合、schedule、stage、System 的集合、effect、System，`RemoveSystem`，在既有的 schedule 上掛新 System。不准（R-E7，那一輪丟掉、World 照跑）：對已有的元件加 hook 或初始值宣告、對已有的具名集合加成員、開局的 schedule 與在它上面掛 System、配發器、`DigestSet`、`RequireExplicitZones`。
+- **拿掉 System**：`r.RemoveSystem("名字")`，下一次 `BuildPlans` 生效；不在表裡回 false。`FrozenRegistry::Systems()` 照樣列出它（`removed` 為真）；同一個名字可以再登記；還有別的 System 的 before／after 指著它時建 Plan 失敗（D-E4）。
+- **World 准不准**：`WorldExecutor(registry, "名字", WorldOptions{.dynamicInsert = false})`。只要有一個這樣的 World 活著，那份 Registry 的 `Register` 就回 `DynamicInsertRefused`、什麼都不改（同一份 Registry 上准的 World 也一起被擋）。要不要記警告由呼叫的人決定（Kernel 只回傳錯誤）。准的時候不保證兩端的指紋一致。
+- **不能做的**（斷言）：在 `Register` 的回呼裡再呼叫 `Register`／`BuildPlans`／`DiscardRegistrations`；有登記待建時建 World；在用這份 Registry 建的 World 的 System 或 hook 裡呼叫那三個（別的 Registry 可以）。同一份 Registry 的登記與它的 World 的建立、銷毀、執行，要在同一條執行緒上做或由呼叫的人排好（Kernel 看不到，[共用規則頁](../../../cross-component-rules.md) CCR-5）。
+- **讀登記表**：`FrozenRegistry` 另外交出 `Version()`、`Hooks()`、`InitialValues()`、`Schedules()`、`Sets()`、`OrderGraph(schedule)`（解析後的順序，System 對 System，每條標來源：stage、宣告、同步點、平手）、`SystemInfo::effects`。`FrozenRegistry` 物件一直有效，它交出的清單在版本號變了之後要重新讀（CCR-4）。

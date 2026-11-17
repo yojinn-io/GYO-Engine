@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-18（`v8-arch-gyo2-kernel-subtract-structure` 第 1 段（拿掉）：DI-KS 1、2、5、6、14、15 改寫，DI-KS 19 刪去 Z5 一句，DI-KS 20 改名，DI-KS 23 拿掉，DI-KS 24 新增，RC 3 拿掉，RC 16 新增；照[事前宣告](v2/kernel-subtract-structure-declaration.zh-Hant.md)第 7 節，第一段核准，DI 的最終文字在合併前的第二段核准）；2026-11-16（`v8-arch-gyo2-nested-schedule`：DI-KS 1、2、6、9、15 改寫，DI-KS 16～23 與 RC 15 新增）；2026-11-13（`v8-arch-a6-revision`）。Owner：架構（架構師會話）。部件：`engine/kernel`（World、System 契約、Registry、Scheduler、Executor）。
+更新：2026-11-18（`v8-arch-gyo2-kernel-subtract-structure` 第 2 段（登記）：DI-KS 3、4、13 改寫，DI-KS 15 的啟動錯誤多 R-E7，DI-KS 25、26 與 RC 17 新增；同一宣告第 7 節，DI 的最終文字在合併前的第二段核准）；2026-11-18（`v8-arch-gyo2-kernel-subtract-structure` 第 1 段（拿掉）：DI-KS 1、2、5、6、14、15 改寫，DI-KS 19 刪去 Z5 一句，DI-KS 20 改名，DI-KS 23 拿掉，DI-KS 24 新增，RC 3 拿掉，RC 16 新增；照[事前宣告](v2/kernel-subtract-structure-declaration.zh-Hant.md)第 7 節，第一段核准，DI 的最終文字在合併前的第二段核准）；2026-11-16（`v8-arch-gyo2-nested-schedule`：DI-KS 1、2、6、9、15 改寫，DI-KS 16～23 與 RC 15 新增）；2026-11-13（`v8-arch-a6-revision`）。Owner：架構（架構師會話）。部件：`engine/kernel`（World、System 契約、Registry、Scheduler、Executor）。
 
 **改任何用到 Kernel 的部件之前，先讀這一頁。** Kernel 的 `Design Invariants` 與 `Replacement Criteria` 全文只在這裡（使用者 2026-11-13 決定：條款的出處要有一個明確的位置，文件太散反而沒人讀）。其他部件頁（world、system-contract、scheduler、determinism、runtime-composition、error-handling）裡與本頁同一性質的條，保留條款標題，內容改成指向本頁那一條的連結（每條有自己的錨點 `#di-ks-n`、`#rc-n`）；部件頁自己特有的規則留在部件頁，不進本頁。
 
@@ -23,11 +23,11 @@
 〔併自 system-contract DI 2、error-handling DI 1〕`Result<void, KernelError>` 是回傳契約，Ok 是正常路徑；Err 帶完整上下文，逐層包一層（上下文鏈）；存取驗證記下的違規與 System 自己的 Err 是並列清單、不互包；release 目標的測試也要看到 Err 與 Interrupted。補守衛：J-10（回傳型別）、J-35。
 
 <a id="di-ks-3"></a>
-**DI-KS 3.** **順序只來自 id 與 Plan。** 每個欄依 EntityId（u64 的數值，Kernel 不解讀 index／generation 兩段）嚴格升冪，查詢依升冪或交集的升冪產出；World、Scheduler、Executor 不用雜湊順序、指標比較、執行緒完成順序決定任何順序。守衛：J-1、J-2、J-9。（DI-K3 的一部分；W-1、W-2、W-10）
-〔併自 world DI 1、scheduler DI 3〕World 對 `EntityId` 只做 64 位元整數比較；任何疊代、交集、同步點套用的順序都以它為鍵。每個 schedule 的 Plan 唯一、只在 finish 建一次，只取決於登記序與宣告，不依雜湊、位址、執行緒、平台；Running 期間不重建。補守衛：J-20。
+**DI-KS 3.** **順序只來自 id 與 Plan；Plan 在兩次成功的 `BuildPlans` 之間不變，同樣的登記得到同樣的 Plan。** 每個欄依 EntityId（u64 的數值，Kernel 不解讀 index／generation 兩段）嚴格升冪，查詢依升冪或交集的升冪產出；World、Scheduler、Executor 不用雜湊順序、指標比較、執行緒完成順序決定任何順序。守衛：J-1、J-2、J-9、J-20；「DI-KS 3: a second round …」（第二輪只加一個無關的 System，`TieBreaks`、既有的 effects、順序圖、沒動到的 schedule 的 Plan 指紋都不變；`RegistrationRoundTests.cpp`）。（DI-K3 的一部分；W-1、W-2、W-10；`v8-arch-gyo2-kernel-subtract-structure` 3.2）
+〔併自 world DI 1、scheduler DI 3〕World 對 `EntityId` 只做 64 位元整數比較；任何疊代、交集、同步點套用的順序都以它為鍵。每個 schedule 的 Plan 唯一，只在 `BuildPlans`（或第一次的 `Finish`）成功時建，衍生的欄位（存取集合、effects、平手、Plan、順序圖、指紋）每次從登記的輸入重算；只取決於登記序與宣告，不依雜湊、位址、執行緒、平台；用這份 Registry 建的 World 在跑時不重建（DI-KS 26）。補守衛：J-20。
 
 <a id="di-ks-4"></a>
-**DI-KS 4.** **id 由登記順序或配發器決定，凍結後不變。** ComponentId、ResourceId、EventTypeId、registrationSeq＝登記順序；TypeKey 只用於行程內查表；執行期 id 不上 wire、不進 digest；World 不配發實體 id；配發器是產品的 Resource，鍵格式固定為低 32 index、高 32 generation，配發策略（PvP：單調不重用、generation 恆 0）由產品宣告；stale 句柄的偵測能力取決於策略，Kernel 只保證鍵還活著。守衛：J-8、J-18、J-19；掃描。（DI-K3；R-1～R-3、W-9；使用者 2026-11-11 K.3 第 1 項）
+**DI-KS 4.** **id 由登記順序或配發器決定；建 Plan 成功的版本發出的 id 在之後的登記與重建中不變，新的往後加；失敗或放棄的那一輪發出的 id 作廢。** ComponentId、ResourceId、EventTypeId、registrationSeq＝登記順序（拿掉的 System 留墓碑，它的 registrationSeq 不重發）；TypeKey 只用於行程內查表；執行期 id 不上 wire、不進 digest；World 不配發實體 id；配發器是產品的 Resource，鍵格式固定為低 32 index、高 32 generation，配發策略（PvP：單調不重用、generation 恆 0）由產品宣告；stale 句柄的偵測能力取決於策略，Kernel 只保證鍵還活著。守衛：J-8、J-18、J-19；掃描；「DI-KS 4: a failed BuildPlans …」「DI-KS 4: DiscardRegistrations …」（失敗或放棄那一輪的 id 作廢、留下的 id 不變；`RegistrationRoundTests.cpp`）。（DI-K3；R-1～R-3、W-9；使用者 2026-11-11 K.3 第 1 項；`v8-arch-gyo2-kernel-subtract-structure` 3.2 規則 1）
 〔併自 world DI 2〕World 內沒有配發、回收、歸零的操作；世代切換＝重建 World。J-8 含突變「用盡時回繞」「加 Reset 歸零」。
 
 <a id="di-ks-5"></a>
@@ -62,13 +62,13 @@
 
 <a id="di-ks-13"></a>
 **DI-KS 13.** **渲染只經 Extract 以 const 方式讀來源 World，無反饋。** 守衛：J-43。（DI-K7；H-6）
-〔併自 runtime-composition DI 1〕渲染 World 有自己的 Registry；來源 World 的 Registry 必須先凍結；`Extract<Write<…>>` 不存在（編譯失敗測試）。補守衛：J-16。
+〔併自 runtime-composition DI 1〕渲染 World 有自己的 Registry；來源的 Registry 至少建好過一次 Plan（D-E14；來源之後再登記時表物件位址不變、id 只往後加，讀它的 Registry 下一次建 Plan 讀到新的內容）；`Extract<Write<…>>` 不存在（編譯失敗測試）。補守衛：J-16；D-E14 的案；「DI-KS 13: an extract source registers again …」（`RegistrationRoundTests.cpp`）。（`v8-arch-gyo2-kernel-subtract-structure` 3.2 規則 10）
 
 <a id="di-ks-14"></a>
 **DI-KS 14.** **同一個 World 同一時間只被一條執行緒跑；綁執行緒的 Resource 被別的執行緒碰到就斷言；每個 domain 一個 clock schedule、每個 domain 的事件只在它的 clock schedule 內。** 哪條執行緒跑哪張 schedule 由呼叫的人安排，Kernel 不在啟動時檢查（拿掉 H-2「一 World 一執行緒角色」、X-3）。標 `threadBound` 的 Resource 記下放進值的那條執行緒；別的執行緒碰它（`Res`／`ResMut`、`ExclusiveWorld`、World API 的讀寫、蓋寫、拿掉、`World::Summary`、有值時銷毀 World）是斷言；拿掉值之後忘掉記號。Kernel 自己在 Run 裡取快照與邊界比對時讀它的位元組不算。執行緒的記號是 Kernel 既有 `thread_local` 變數的位址：結束的執行緒的位址可能被新的執行緒拿到，這時抓不到（限界）。外部系統不持有、不修改 World，只經 Link 類 Resource 在交換點、World Ready 時交換，Running 期間不碰 System 側緩衝；World 的生命期是一個世代，世代切換＝重建 World。時鐘的部分隨時間 Module 那一批（第 3 條）移出。守衛：J-15、J-6（含「綁執行緒的 Resource」兩案與 `kernel.J-6_thread_bound_destroy`）、J-37；審查。（W-6、W-9、H-1、I-1～I-4、F-9；修訂：S4／S11／S14／N3；`v8-arch-gyo2-thread-binding-by-runner`；系譜 Bevy `bevy_ecs/src/storage/non_send.rs`）
 
 <a id="di-ks-15"></a>
-**DI-KS 15.** **Kernel 的職責是 ECS。** 職責清單：(1) World 的儲存——實體存活集合、元件欄、Resource，與 World 摘要（`World::Summary`）；(2) 事件——保留式與推送式（推送式隨事件那一批加入）；(3) System 參數與存取推導（含 `effects`、唯讀的 Extract 參數）；(4) schedule、Plan、`WorldExecutor` 與執行（含巢狀跑）；(5) 延後變更與同步點（含 Resource 的增刪）；(6) hook；(7) 生成——配發器、`InitialValue`、丟掉不能生成的那一筆與 `RejectedSpawn` 明細；(8) 存取驗證（開發版）與診斷紀錄；(9) 唯讀的登記表、Registry 與 Plan 指紋；(10) `KernelSettings`；(11) 綁執行緒的 Resource 碰錯時的斷言；(12) 登記——`Registrar`、開 Registrar 與建 Plan 兩步、動態插入的宣告與拒絕、owner 的保存；(13) 給上層用的原語（整欄讀出、整欄放回、指定 stamp 寫回、Resource 的 stamp 與存在一起讀寫、實體存活集合的讀出與放回、跑 hook 的結構變更路；隨權威＋回滾那一批加入）。不在清單上的不放進 Kernel：不內建 schedule 或 stage 名；不認得開局、時鐘、區、權威、回滾策略、產品、執行緒角色；不擁有執行緒、不讀時鐘或亂數。啟動錯誤只有統合宣告第 3.1 節列的那幾種（守衛：`StartupCode` 的列舉值與清單比對）。判斷某樣東西屬不屬於清單，對照同類型的多家 ECS 實作（Bevy、flecs、Unity Entities、Unreal Mass 等）的位置與設計原因。守衛：J-9；H-7 的掃描；「DI-KS 15: the StartupCode values …」（`RegistryTests.cpp`）；審查。（[統合宣告](v2/kernel-app-boundary-declaration.zh-Hant.md)第 9.1 節；L17；`v8-arch-gyo2-kernel-subtract-structure`）
+**DI-KS 15.** **Kernel 的職責是 ECS。** 職責清單：(1) World 的儲存——實體存活集合、元件欄、Resource，與 World 摘要（`World::Summary`）；(2) 事件——保留式與推送式（推送式隨事件那一批加入）；(3) System 參數與存取推導（含 `effects`、唯讀的 Extract 參數）；(4) schedule、Plan、`WorldExecutor` 與執行（含巢狀跑）；(5) 延後變更與同步點（含 Resource 的增刪）；(6) hook；(7) 生成——配發器、`InitialValue`、丟掉不能生成的那一筆與 `RejectedSpawn` 明細；(8) 存取驗證（開發版）與診斷紀錄；(9) 唯讀的登記表、Registry 與 Plan 指紋；(10) `KernelSettings`；(11) 綁執行緒的 Resource 碰錯時的斷言；(12) 登記——`Registrar`、開 Registrar 與建 Plan 兩步、動態插入的宣告與拒絕、owner 的保存；(13) 給上層用的原語（整欄讀出、整欄放回、指定 stamp 寫回、Resource 的 stamp 與存在一起讀寫、實體存活集合的讀出與放回、跑 hook 的結構變更路；隨權威＋回滾那一批加入）。不在清單上的不放進 Kernel：不內建 schedule 或 stage 名；不認得開局、時鐘、區、權威、回滾策略、產品、執行緒角色；不擁有執行緒、不讀時鐘或亂數。啟動錯誤只有統合宣告第 3.1 節列的那幾種，加上 R-E7（之後一輪登記了只准第一次的東西；屬第 (12) 項「登記」之內，不是清單多一項；`v8-arch-gyo2-kernel-subtract-structure` 3.2 規則 6）（守衛：`StartupCode` 的列舉值與清單比對）。判斷某樣東西屬不屬於清單，對照同類型的多家 ECS 實作（Bevy、flecs、Unity Entities、Unreal Mass 等）的位置與設計原因。守衛：J-9；H-7 的掃描；「DI-KS 15: the StartupCode values …」（`RegistryTests.cpp`）；審查。（[統合宣告](v2/kernel-app-boundary-declaration.zh-Hant.md)第 9.1 節；L17；`v8-arch-gyo2-kernel-subtract-structure`）
 
 過渡表（此刻仍在 Kernel、隨哪一批拿掉；拿掉時同一個變更改這張表與上面那個守衛）：
 
@@ -109,6 +109,12 @@
 
 <a id="di-ks-24"></a>
 **DI-KS 24.** **`KernelSettings` 下一次 `Run` 生效。** 只放開發與調校的設定，System（`Res`／`ResMut`、run 條件、hook、`ExclusiveWorld`）與外面都可以讀寫；每次 `WorldExecutor::Run` 呼叫開始時讀一次（開局在同一次 `Run` 裡先跑時不再讀，巢狀的 `RunSchedule` 不重讀）；驗證開關翻轉時第二層的快照全部作廢重取；`hookRoundLimit == 0` 在每次 `Run` 開始時斷言；它被拿掉時用預設值。會改變 World 規則的開關（例：准不准動態插入）在建 World 時的選項，執行中不能改。守衛：J-50、J-54 改過的案；J-50「System 改的值下一次 Run 生效」「開、關兩次 Run、再開不誤報」「巢狀不重讀」「開局改的值下一次 Run 生效」、J-54「拿掉之後用預設值」。（`v8-arch-gyo2-kernel-settings-read-write`；統合 L9；系譜 Bevy `FallbackErrorHandler`）
+
+<a id="di-ks-25"></a>
+**DI-KS 25.** **登記表唯讀、帶版本。** Kernel 交出的登記資訊（`FrozenRegistry`：元件、Resource、事件、System（含 `effects`、`removed`、`annotatedWrites`）、hook、`InitialValue`、schedule 的選項與 stage 順序、具名的 System 集合、每張 schedule 解析後的順序圖、Plan、平手、指紋）唯讀、帶版本號（`Version()`：建好前 0、`Plugin::Finish` 裡 0、第一次成功 1、之後每次成功加一、失敗不加）；`FrozenRegistry` 物件一直有效（`World::Types()` 交出的參照可以留著），它交出的 span 與指標只在當前版本有效、`BuildPlans` 成功之後作廢；修改只走 `Registrar`；第一次建 Plan 之後，登記到一半的內容在建好之前看不到（之後一輪寫暫存副本，成功時把內容換進同一個表物件；第一次之前沒有 World，`Plugin::Finish` 讀的就是正在建的表）。拿到的參照在版本號變了之後重新讀（共用規則頁）。守衛：「DI-KS 25: …」各案（`RegistrationRoundTests.cpp`）。（統合 L6；`v8-arch-gyo2-read-only-registry-view`；`v8-arch-gyo2-kernel-subtract-structure` 3.2 規則 1、3.3；系譜 Bevy `Schedule::graph()`、`ComponentInfo::hooks()`，flecs `rebuild_count`）
+
+<a id="di-ks-26"></a>
+**DI-KS 26.** **動態插入照 World 的宣告。** 登記分兩步、可以重複：`Register(owner, build)` 開一個只在 `build` 回呼裡有效的 `Registrar`，`BuildPlans()` 建 Plan；World 建立時宣告准不准在 Ready 時再登記或拿掉 System（`WorldOptions::dynamicInsert`，由 `World::Options()` 交出，屬於 World）。不准時 `Register` 回執行時錯誤 `DynamicInsertRefused`、不改 Registry 與 World（記警告是呼叫的人的事，共用規則頁）；一個不准就擋整份 Registry；中斷的 World 不擋。准時 `BuildPlans` 成功後，用它建的 World 下一次被用到時（World API、`WorldExecutor::Run`）自己接上：新登記的欄、Resource、事件緩衝、驗證的排除表往後加，hook 與每個 System 的存取全部重算，每個 System 的執行狀態照 registrationSeq 重建（留下的保留 `lastRun` 與 `Local`，拿掉的丟掉）；指紋跟著重算，不保證兩端一致。失敗或 `DiscardRegistrations` 的那一輪丟掉、Registry 與 World 留在上一個版本（第一次失敗時 Registry 不能用）。之後一輪只准新的元件、Resource、事件、具名集合、schedule（開局的除外）、stage、System 的集合、effect、System、`RemoveSystem` 與在既有 schedule 上掛新 System；對上一個版本已有的元件加 hook 或 `InitialValue`、對已有的具名集合加成員、開局的 schedule 與它上面的掛載、配發器、`DigestSet`、`RequireExplicitZones` 是 R-E7（這一輪丟掉、World 照跑）。拿掉的 System 留墓碑。斷言：`build` 回呼裡再呼叫 `Register`／`BuildPlans`／`DiscardRegistrations`；有暫存副本時建 World；這份 Registry 建的 World 的 System 或 hook 裡呼叫那三個（別的 Registry 不受限）。呼叫的人的規則（Kernel 看不到）：同一份 Registry 的登記與用它建的 World 的建立、銷毀、執行，在同一條執行緒上做，或由呼叫的人排好不重疊（共用規則頁）。Registry 不記 World 的名單，只記兩個計數（活著的 World、宣告不准的 World）。守衛：J-19 改過的案；「DI-KS 26: …」各案（`RegistrationRoundTests.cpp`）。（統合 L5；`v8-arch-gyo2-dynamic-insert-per-world`；`v8-arch-gyo2-kernel-subtract-structure` 3.2；系譜 Bevy `Schedule::initialize`、flecs pipeline 的重建；「每個 World 宣告」是使用者的設計）
 
 ### Replacement Criteria
 
@@ -162,3 +168,6 @@
 
 <a id="rc-16"></a>
 **RC 16.** **Kernel 又長出限制**：Kernel 的職責清單（DI-KS 15）要多加一項，或判不出某樣東西屬不屬 ECS——不數次數，出現就停下來問（L17）。（`v8-arch-gyo2-kernel-subtract-structure`；統合宣告第 9.1 節）
+
+<a id="rc-17"></a>
+**RC 17.** **動態登記的接上不夠**（草案）：World 接上新版本時漏了某張表、因此出缺陷兩次以上；或每多一種准登記的東西都要另寫接上的程式；或產品需要准與不准動態插入的 World 共用一份 Registry。→ 停下來比較「每個 World 釘住一個不可變的版本」（事前宣告第 3.2 節退掉的選項 (c)）。「兩次以上」沒有根據，是提案的數字。（`v8-arch-gyo2-kernel-subtract-structure` 第 7 節）
