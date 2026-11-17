@@ -16,7 +16,7 @@
 namespace GYO::Kernel::Detail {
 
 // The kernel's own registrations (KernelSettings, effect Diagnostics) belong
-// to no plugin of the Host list.
+// to no registration owner.
 inline constexpr std::uint32_t kKernelOwner = 0xFFFFFFFFU;
 inline constexpr const char* kKernelOwnerName = "kernel";
 inline constexpr const char* kDiagnosticsEffect = "Diagnostics";
@@ -82,10 +82,14 @@ struct SystemRecord {
     std::source_location source;
     std::uint32_t owner;
     RegistrationSeq seq;
-    // Filled at finish.
+    // Filled at every BuildPlans (cleared first).
     AccessSet access;
     std::vector<EffectId> effects;
     bool domainTick = false;
+    // Registrar::RemoveSystem: a tombstone. seq stays its index in systems (the
+    // Scheduler, the Plans and the Executor index by it); never resolved,
+    // checked, planned or hashed.
+    bool removed = false;
 };
 
 struct HookRecord {
@@ -113,8 +117,33 @@ struct InitialValueRecord {
     ComponentId requestId = 0;
 };
 
+// The size of each registration input when the pending copy of a later round
+// was made: what is at or past these counts was registered in this round
+// (declaration 3.2 rule 6, R-E7).
+struct RoundBase {
+    std::size_t components = 0;
+    std::size_t namedSets = 0;
+    std::vector<std::size_t> setMembers;
+    std::size_t schedules = 0;
+    std::size_t systems = 0;
+    std::size_t hooks = 0;
+    std::size_t initialValues = 0;
+    std::size_t allotterDeclarations = 0;
+    std::uint32_t digestMarks = 0;
+    std::uint32_t explicitZoneCalls = 0;
+};
+
+// One schedule's resolved order (FrozenRegistry::OrderGraph), built with its Plan.
+struct ScheduleOrder {
+    std::string schedule;
+    std::vector<OrderEdge> edges;
+};
+
 struct RegistryData {
     std::vector<PluginRecord> plugins;
+    // Registration owners in the order of their first Register (the owner
+    // index of every record is a position here).
+    std::vector<RegistrationOwner> owners;
     std::vector<TypeEntry> types;
     std::vector<ColumnInfo> components;
     std::vector<ResourceInfo> resources;
@@ -147,14 +176,39 @@ struct RegistryData {
 
     // Registrar::RequireExplicitZones: an Unset zone is an error instead of zone B.
     bool explicitZones = false;
+    // Calls of Registrar::DigestSet and RequireExplicitZones (R-E7 in a later round).
+    std::uint32_t digestMarks = 0;
+    std::uint32_t explicitZoneCalls = 0;
     std::vector<StartupError> errors;
+    // The first BuildPlans (or Finish) has started: SetExtractSource is closed.
     bool finished = false;
-    // True only while plugins' Build functions run (Registrar asserts it).
+    // True only while a Register call's build callable runs (Registrar asserts it).
     bool building = false;
+    // A BuildPlans has succeeded (version >= 1).
     bool frozen = false;
+    // The first round failed: the Registry is not usable.
+    bool failed = false;
+    // The first round has a Register since the Registry was made or discarded.
+    bool registered = false;
+    // FrozenRegistry::Version (DI-KS 25).
+    std::uint64_t version = 0;
+    // Set in a later round's pending copy.
+    RoundBase base;
+    // Derived at every BuildPlans (cleared first; declaration 3.2 rule 2).
     std::vector<Plan> plans;
     std::vector<TieBreak> ties;
     std::vector<SystemInfo> systemInfos;
+    std::vector<HookInfo> hookInfos;
+    std::vector<InitialValueInfo> initialValueInfos;
+    std::vector<ScheduleInfo> scheduleInfos;
+    std::vector<SetInfo> setInfos;
+    std::vector<ScheduleOrder> orders;
+    // The Worlds made from this Registry that are alive, and those of them that
+    // declare no dynamic insert (DI-KS 26). Changed by World's constructor and
+    // destructor through a const pointer, never copied into or out of a
+    // pending round. Not the Worlds themselves: the Registry does not know them.
+    mutable std::uint32_t liveWorlds = 0;
+    mutable std::uint32_t refusingWorlds = 0;
 
     [[nodiscard]] std::string OwnerName(std::uint32_t owner) const;
     [[nodiscard]] const TypeEntry* FindType(TypeKey key) const noexcept;
@@ -170,8 +224,9 @@ struct RegistryData {
 [[nodiscard]] const char* DomainName(Domain domain) noexcept;
 [[nodiscard]] const char* ZoneName(Zone zone) noexcept;
 
-// Scheduler.cpp: builds every schedule's Plan into data.plans, reporting
-// D-E4, D-E5, D-E6, D-E16 into data.errors. Access sets must be resolved.
+// Scheduler.cpp: builds every schedule's Plan into data.plans and its resolved
+// order into data.orders, reporting D-E4, D-E5, D-E6, D-E16 into data.errors.
+// Access sets must be resolved.
 void BuildPlans(RegistryData& data);
 
 // Fingerprint.cpp.

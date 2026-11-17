@@ -25,8 +25,8 @@
 // World the error was found in (spec A.6: a violation carries the World's
 // identity). The code enum is the kernel module's own (no global error enum).
 //
-// StartupReport: every startup error of one Registry::Finish, collected and
-// reported at once (spec D.2, D-5). A startup error is a Runtime Error of the
+// StartupReport: every startup error of one Registry::BuildPlans (or Finish),
+// collected and reported at once (spec D.2, D-5). A startup error is a Runtime Error of the
 // composer (the plugin list and declarations are wrong): the Host refuses to
 // start and decides what to print (spec D.4).
 
@@ -73,6 +73,11 @@ enum class KernelErrorCode : std::uint8_t {
     ClosureRunsSchedule,
     // Spec X-16: an exception left a nested run (the outer System caught it).
     NestedRunAborted,
+    // DI-KS 26 (v8-arch-gyo2-dynamic-insert-per-world): Registry::Register while a
+    // live World made from the Registry declares no dynamic insert
+    // (WorldOptions::dynamicInsert = false). Nothing was registered; the caller
+    // logs the warning (target/error-handling DI 2: the kernel logs in one place).
+    DynamicInsertRefused,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;
@@ -118,6 +123,9 @@ enum class StartupCode : std::uint8_t {
     // A World with two Startup schedules (spec H-12; v8-arch-gyo2-nested-schedule).
     DE21,
     RE1, RE2, RE3, RE4, RE5, RE6,
+    // A later round of Registry::Register / BuildPlans registered what only the
+    // first round may (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6).
+    RE7,
     XE1,
     FE1,
 };
@@ -149,7 +157,7 @@ enum class StartupReportCode : std::uint8_t {
 
 [[nodiscard]] std::string_view ToString(StartupReportCode code) noexcept;
 
-// The Err side of Registry::Finish: all errors, in the order the analysis found
+// The Err side of Registry::BuildPlans and Finish: all errors, in the order the analysis found
 // them (deterministic: plugin list order, registration order, schedule order).
 struct StartupReport {
     StartupReportCode code;

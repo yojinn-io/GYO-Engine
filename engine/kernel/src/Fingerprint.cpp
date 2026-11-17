@@ -8,13 +8,16 @@
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version (the
 //     constants below).
-// Registry fingerprint (format 3): plugin names in list order; components, resources,
+// Registry fingerprint (format 3): registration owner names in the order of
+// their first Register (Finish registers the plugins in list order, so the
+// same names as the plugin list); components, resources,
 // events in id order (name, size, align, zone, writePolicy, role, rollback;
 // resources add external and threadBound; events have name, domain, zone);
 // effects; named sets (name, members, digest); the allotter; schedules (every
 // ScheduleOptions field but hookRoundLimit, which the Plan fingerprint holds);
-// sets; Systems in registrationSeq order (name, zone, ingress, effects,
-// rollbackSafe, mounts with every field, access set with its annotatedWrites);
+// sets; Systems in registrationSeq order, removed ones (tombstones) left out
+// (name, zone, ingress, effects, rollbackSafe, mounts with every field, access
+// set with its annotatedWrites);
 // hooks (name, component, trigger, zone, access); initial value
 // declarations (Registrar::InitialValue; target and request ComponentId, in the
 // (requestId, targetId) order Finish leaves them in); then every Plan's
@@ -279,8 +282,8 @@ Fingerprint PlanFingerprintOf(const Plan& plan) {
 Fingerprint RegistryFingerprintOf(const RegistryData& data) {
     Bytes out;
     Header(out, "gyo.kernel.registry", kRegistryFingerprintVersion);
-    out.U32(data.plugins.size());
-    for (const PluginRecord& plugin : data.plugins) out.Str(plugin.name);
+    out.U32(data.owners.size());
+    for (const RegistrationOwner& owner : data.owners) out.Str(owner.name);
     out.U32(data.components.size());
     for (const ColumnInfo& info : data.components) ColumnBytes(out, info);
     out.U32(data.resources.size());
@@ -312,8 +315,10 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
         out.U32(set.conditions.size());
         for (const ConditionRef& condition : set.conditions) out.Str(condition.Name());
     }
-    out.U32(data.systems.size());
-    for (const SystemRecord& system : data.systems) SystemBytes(out, system);
+    out.U32(std::count_if(data.systems.begin(), data.systems.end(), [](const SystemRecord& s) { return !s.removed; }));
+    for (const SystemRecord& system : data.systems) {
+        if (!system.removed) SystemBytes(out, system);
+    }
     out.U32(data.hooks.size());
     for (const HookRecord& hook : data.hooks) {
         out.Str(hook.name);
@@ -360,9 +365,9 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
         out.Str(data.events[id].name);
         out.Enum(data.events[id].domain);
     }
-    out.U32(count(data.systems, [](const SystemRecord& s) { return s.options.zone == Zone::C; }));
+    out.U32(count(data.systems, [](const SystemRecord& s) { return !s.removed && s.options.zone == Zone::C; }));
     for (const SystemRecord& system : data.systems) {
-        if (system.options.zone == Zone::C) SystemBytes(out, system);
+        if (!system.removed && system.options.zone == Zone::C) SystemBytes(out, system);
     }
     out.U32(count(data.hooks, [](const HookRecord& h) { return h.zone == Zone::C; }));
     for (const HookRecord& hook : data.hooks) {
@@ -484,7 +489,7 @@ Engine::Base::Result<std::string, KernelError> FrozenRegistry::ExportZoneCSource
         return {};
     };
     for (const Detail::SystemRecord& system : data.systems) {
-        if (system.options.zone != Zone::C) continue;
+        if (system.removed || system.options.zone != Zone::C) continue;
         if (auto added = add(system.source, "a zone C System", system.options.name); !added) {
             return Engine::Base::Err(std::move(added).error());
         }

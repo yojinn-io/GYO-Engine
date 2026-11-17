@@ -21,7 +21,11 @@
 //   5. the Plan: Kahn's algorithm taking, among ready nodes, the System with
 //      the lowest registrationSeq; a sync point or the trim only when no
 //      System is ready (spec D.2 step 12). The tie key is registrationSeq
-//      alone: no name, no address, no hash (spec D-10).
+//      alone: no name, no address, no hash (spec D-10);
+//   6. the resolved order (FrozenRegistry::OrderGraph): every order edge,
+//      tie edges included, with sync points, stage ends and the trim expanded
+//      so each edge is System to System, labelled with its source.
+// Removed Systems (tombstones) are not nodes. Built again at every BuildPlans.
 // No hash containers anywhere (DI-KS 3); maps are ordered.
 
 #include "engine/kernel/detail/RegistryData.hpp"
@@ -34,6 +38,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -175,6 +180,7 @@ private:
             for (std::size_t i = 0; i < data_.systems.size(); ++i) {
                 const SystemRecord& system =
                     data_.systems[data_.schedulerShuffle != 0 ? data_.systems.size() - 1 - i : i];
+                if (system.removed) continue;
                 for (std::size_t m = 0; m < system.options.mounts.size(); ++m) {
                     const Mount& mount = system.options.mounts[m];
                     if (mount.schedule != s_.name || mount.stage != stageName) continue;
@@ -203,10 +209,12 @@ private:
         }
     }
 
-    void AddEdge(std::size_t from, std::size_t to) {
+    // source: what the edge comes from (OrderGraph); the first one added is kept.
+    void AddEdge(std::size_t from, std::size_t to, OrderSource source = OrderSource::Stage) {
         if (direct_->Test(from, to)) return;
         direct_->Set(from, to);
         succ_[from].push_back(to);
+        edgeSource_.emplace(std::make_pair(from, to), source);
     }
 
     void StageEdges() {
@@ -241,7 +249,7 @@ private:
         if (trim_ == kNone) return;
         const std::vector<std::size_t> after = succ_[trimAfter_];
         for (std::size_t node : after) {
-            if (node != trim_) AddEdge(trim_, node);
+            if (node != trim_) AddEdge(trim_, node, edgeSource_.at(std::make_pair(trimAfter_, node)));
         }
     }
 
@@ -298,7 +306,7 @@ private:
                 edges_.push_back(DeclaredEdge{nodes_[from].name, nodes_[to].name, dataflow, extended});
             }
         }
-        if (sf == st) AddEdge(from, to);
+        if (sf == st) AddEdge(from, to, OrderSource::Declared);
     }
 
     void DeclaredEdges() {
@@ -429,7 +437,7 @@ private:
     }
 
     void AddTieEdge(std::size_t first, std::size_t second) {
-        AddEdge(first, second);
+        AddEdge(first, second, OrderSource::TieBreak);
         for (std::size_t x = 0; x < nodes_.size(); ++x) {
             if (x == first || reach_->Test(x, first)) {
                 reach_->Set(x, second);
@@ -522,6 +530,51 @@ private:
         }
         plan.declaredEdges = std::move(edges_);
         data_.plans.push_back(std::move(plan));
+        MakeOrder();
+    }
+
+    // FrozenRegistry::OrderGraph: from each System, the Systems reached by one
+    // direct edge or through non-System nodes only. A direct edge keeps its own
+    // source (Declared or TieBreak); a path through other nodes is SyncPoint
+    // when one of its edges is declared (a before / after to or from a named
+    // sync point: the only declared edges that reach a non-System node), Stage
+    // otherwise. A pair reached both ways is listed with each source.
+    void MakeOrder() {
+        std::set<std::tuple<RegistrationSeq, RegistrationSeq, OrderSource>> edges;
+        for (std::size_t from = 0; from < nodes_.size(); ++from) {
+            if (!IsSystem(from)) continue;
+            const RegistrationSeq first = nodes_[from].system;
+            // (node, through a declared edge or named sync point) pairs to walk.
+            std::vector<std::pair<std::size_t, bool>> pending;
+            std::set<std::pair<std::size_t, bool>> seen;
+            for (std::size_t to : succ_[from]) {
+                const OrderSource source = edgeSource_.at(std::make_pair(from, to));
+                if (IsSystem(to)) {
+                    edges.emplace(first, nodes_[to].system, source);
+                    continue;
+                }
+                const std::pair<std::size_t, bool> state{to, source != OrderSource::Stage};
+                if (seen.insert(state).second) pending.push_back(state);
+            }
+            while (!pending.empty()) {
+                const auto [node, declared] = pending.back();
+                pending.pop_back();
+                for (std::size_t to : succ_[node]) {
+                    const bool through = declared || edgeSource_.at(std::make_pair(node, to)) != OrderSource::Stage;
+                    if (IsSystem(to)) {
+                        edges.emplace(first, nodes_[to].system, through ? OrderSource::SyncPoint : OrderSource::Stage);
+                        continue;
+                    }
+                    const std::pair<std::size_t, bool> state{to, through};
+                    if (seen.insert(state).second) pending.push_back(state);
+                }
+            }
+        }
+        ScheduleOrder order{s_.name, {}};
+        for (const auto& [first, second, source] : edges) {
+            order.edges.push_back(OrderEdge{data_.systems[first].options.name, data_.systems[second].options.name, source});
+        }
+        data_.orders.push_back(std::move(order));
     }
 
     static constexpr std::size_t kNone = ~std::size_t{0};
@@ -539,6 +592,7 @@ private:
     std::unique_ptr<BitRows> direct_;
     std::unique_ptr<BitRows> reach_;
     std::vector<std::vector<std::size_t>> succ_;
+    std::map<std::pair<std::size_t, std::size_t>, OrderSource> edgeSource_;
     std::set<std::pair<RegistrationSeq, RegistrationSeq>> declaredPairs_;
     std::vector<DeclaredEdge> edges_;
     std::vector<std::pair<std::size_t, std::size_t>> conflicts_;

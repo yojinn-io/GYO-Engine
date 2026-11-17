@@ -29,15 +29,10 @@ void DefaultHandler(const KernelError& error) {
 
 } // namespace
 
-WorldExecutor::WorldExecutor(const Registry& registry, std::string worldName)
-    : registry_(&registry), world_(registry, std::move(worldName)), handler_(&DefaultHandler) {
+WorldExecutor::WorldExecutor(const Registry& registry, std::string worldName, WorldOptions options)
+    : registry_(&registry), world_(registry, std::move(worldName), options), handler_(&DefaultHandler) {
     const Detail::RegistryData& data = *world_.data_;
-    for (const Detail::SystemRecord& system : data.systems) {
-        SystemState state;
-        state.access = Detail::MakeAccessDesc(system.access);
-        state.mounts.resize(system.options.mounts.size());
-        systems_.push_back(std::move(state));
-    }
+    Attach();
     world_.executor_ = this;
     // Spec H-12: at most one (D-E21 at Finish).
     for (const Detail::ScheduleRecord& schedule : data.schedules) {
@@ -49,6 +44,29 @@ WorldExecutor::WorldExecutor(const Registry& registry, std::string worldName)
 }
 
 WorldExecutor::~WorldExecutor() = default;
+
+void WorldExecutor::Attach() {
+    world_.Sync();
+    const Detail::RegistryData& data = *world_.data_;
+    if (version_ == data.version) return;
+    std::vector<SystemState> rebuilt;
+    rebuilt.reserve(data.systems.size());
+    for (const Detail::SystemRecord& system : data.systems) {
+        SystemState state;
+        if (!system.removed) {
+            state.access = Detail::MakeAccessDesc(system.access);
+            // registrationSeq is the index: the same System as before, with the same mounts.
+            if (system.seq < systems_.size() && systems_[system.seq].mounts.size() == system.options.mounts.size()) {
+                state.mounts = std::move(systems_[system.seq].mounts);
+            } else {
+                state.mounts.resize(system.options.mounts.size());
+            }
+        }
+        rebuilt.push_back(std::move(state));
+    }
+    systems_ = std::move(rebuilt);
+    version_ = data.version;
+}
 
 VerificationReport WorldExecutor::Verification() const {
     VerificationReport report;
@@ -149,6 +167,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
     // through a kept pointer finds the World Running: also a GYO_ASSERT (only
     // ExclusiveWorld::RunSchedule runs a schedule from inside a System, K0).
     GYO_ASSERT(world.state_ == WorldState::Ready);
+    Attach();
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
     ReadSettings();

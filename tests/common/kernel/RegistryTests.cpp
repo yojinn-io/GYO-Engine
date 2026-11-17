@@ -173,7 +173,11 @@ TEST_CASE("J-19: removing the owner plugin gives R-E4 to every System that uses 
     CHECK(without.result.error().detail.find("ReadVel") != std::string::npos);
 }
 
-TEST_CASE("J-19: registering after Finish is impossible by type") {
+// Group H of v8-arch-gyo2-kernel-subtract-structure (declaration 5.1): registering
+// again after the Plans are built is Registry::Register's job now
+// (RegistrationRoundTests.cpp, DI-KS 26); what stays is that a Registrar exists
+// only inside a Register call's build callable or Plugin::Build.
+TEST_CASE("J-19: a Registrar exists only inside Register and Plugin::Build") {
     // FinishContext has no Registrar and Registrar has no public constructor.
     static_assert(!std::is_constructible_v<Registrar, Registry&>);
     static_assert(!std::is_default_constructible_v<Registrar>);
@@ -235,9 +239,10 @@ TEST_CASE("DI-KS 15: the StartupCode values are the kernel's kept codes plus the
         if (text != "Unknown") codes.emplace_back(text);
     }
     std::sort(codes.begin(), codes.end());
-    // Kept (integration declaration section 3.1; segment 2 of v8-arch-gyo2-kernel-subtract-structure adds R-E7).
+    // Kept (integration declaration section 3.1, plus R-E7: a later round registered what only the first round
+    // may; declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6, inside duty (12) "registration").
     std::vector<std::string> expected{"D-E1", "D-E3", "D-E4", "D-E5", "D-E6", "D-E7", "D-E14", "D-E17", "D-E19", "D-E20",
-                                      "R-E2", "R-E4", "R-E5"};
+                                      "R-E2", "R-E4", "R-E5", "R-E7"};
     // In transition, still in the kernel: Startup and the plugin list (batch 2, the orchestration layer: D-E21,
     // R-E1, R-E3, R-E6); clock and event domains (batch 3: D-E12, F-E1); zones, the writer count and rollback
     // declarations (batch 4, authority and rollback: D-E2, D-E9, D-E11, D-E15, D-E16, X-E1).

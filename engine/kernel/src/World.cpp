@@ -47,24 +47,48 @@ std::string CallText(const Detail::SystemContext& call) {
 
 // ---- Construction
 
-World::World(const Registry& registry, std::string name)
-    : registry_(&registry), frozen_(&registry.Frozen()), data_(registry.data_.get()), name_(std::move(name)) {
+World::World(const Registry& registry, std::string name, WorldOptions options)
+    : registry_(&registry), frozen_(&registry.Frozen()), data_(registry.data_.get()), name_(std::move(name)),
+      options_(options) {
+    // DI-KS 26: not while a round is pending (it would attach to a version it
+    // never saw registered).
+    GYO_ASSERT(registry.pending_ == nullptr);
+    AttachVersion();
+    // The kernel's own resource is present from the start (the Host or a System may overwrite it).
+    static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data_->kernelSettings]).value = KernelSettings{};
+    ++data_->liveWorlds;
+    if (!options_.dynamicInsert) ++data_->refusingWorlds;
+}
+
+void World::Sync() const {
+    if (version_ != data_->version) const_cast<World&>(*this).AttachVersion();
+}
+
+// Declaration 3.2 rule 5: ids only grow, so new storage is appended; the hooks'
+// access descriptions are all made again (a later round changes no existing
+// one, rule 6, but nothing here relies on it). Made while no hook records, so
+// a hook queue's address never changes while a hook records into it.
+void World::AttachVersion() {
+    GYO_ASSERT(state_ != WorldState::Running && state_ != WorldState::Applying);
     const Detail::RegistryData& data = *data_;
     GYO_ASSERT(data.columnMakers.size() == data.components.size());
     GYO_ASSERT(data.resourceMakers.size() == data.resources.size());
     GYO_ASSERT(data.eventMakers.size() == data.events.size());
-    for (Detail::MakeColumnFn make : data.columnMakers) {
-        GYO_ASSERT(make != nullptr);
-        columns_.push_back(make());
+    for (std::size_t c = columns_.size(); c < data.columnMakers.size(); ++c) {
+        GYO_ASSERT(data.columnMakers[c] != nullptr);
+        columns_.push_back(data.columnMakers[c]());
     }
-    for (Detail::MakeResourceFn make : data.resourceMakers) resources_.push_back(make());
-    for (Detail::MakeEventsFn make : data.eventMakers) events_.push_back(make());
-    // The kernel's own resource is present from the start (the Host or a System may overwrite it).
-    static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data.kernelSettings]).value = KernelSettings{};
-    excluded_.assign(columns_.size(), false);
+    for (std::size_t r = resources_.size(); r < data.resourceMakers.size(); ++r) resources_.push_back(data.resourceMakers[r]());
+    for (std::size_t e = events_.size(); e < data.eventMakers.size(); ++e) events_.push_back(data.eventMakers[e]());
+    excluded_.resize(columns_.size(), false);
+    hookAccess_.clear();
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
-    // Made up front: a bucket's address never changes while a hook records into it.
-    for (const Detail::ScheduleRecord& schedule : data.schedules) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});
+    for (const Detail::ScheduleRecord& schedule : data.schedules) {
+        const bool known = std::any_of(hookQueues_.begin(), hookQueues_.end(),
+                                       [&](const HookQueue& queue) { return queue.schedule == schedule.options.name; });
+        if (!known) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});
+    }
+    version_ = data.version;
 }
 
 World::HookQueue& World::HookQueueOf(std::string_view schedule) {
@@ -80,6 +104,8 @@ World::HookQueue& World::HookQueueOf(std::string_view schedule) {
 World::~World() {
     for (std::size_t r = 0; r < resources_.size(); ++r) CheckThread(static_cast<ResourceId>(r));
     for (auto& column : columns_) column.reset();
+    --data_->liveWorlds;
+    if (!options_.dynamicInsert) --data_->refusingWorlds;
 }
 
 void World::CheckThread(ResourceId id) const {
@@ -95,6 +121,7 @@ void World::BindThread(ResourceId id) {
 // ---- Public reads and Host writes
 
 bool World::Alive(EntityId id) const {
+    Sync();
     if (state_ == WorldState::Running || state_ == WorldState::Applying) {
         GYO_ASSERT(Detail::CurrentCall(const_cast<World&>(*this)) != nullptr);  // W-6
     }
@@ -102,6 +129,7 @@ bool World::Alive(EntityId id) const {
 }
 
 std::span<const EntityId> World::Entities() const {
+    Sync();
     if (state_ == WorldState::Running || state_ == WorldState::Applying) {
         GYO_ASSERT(Detail::CurrentCall(const_cast<World&>(*this)) != nullptr);  // W-6
     }
@@ -110,6 +138,7 @@ std::span<const EntityId> World::Entities() const {
 
 bool World::Despawn(EntityId id) {
     GYO_ASSERT(state_ == WorldState::Ready);  // W-3
+    Sync();
     if (!std::binary_search(entities_.begin(), entities_.end(), id)) return false;
     for (std::size_t c = 0; c < columns_.size(); ++c) {
         if (columns_[c]->Contains(id)) {
@@ -221,19 +250,28 @@ SystemContext& RequireCall(World& world) {
     return *call;
 }
 
+const RegistryData* RegistryDataOf(const World& world) noexcept {
+    return world.data_;
+}
+
+// The type lookups are every typed entry's first step (World API and handles),
+// so they attach the World to a new Registry version (declaration 3.2 rule 5).
 ComponentId ComponentIdOf(const World& world, TypeKey key) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Component);
     return entry->id;
 }
 
 ResourceId ResourceIdOf(const World& world, TypeKey key) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Resource);
     return entry->id;
 }
 
 EventTypeId EventIdOf(const World& world, TypeKey key) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Event);
     return entry->id;
@@ -306,6 +344,7 @@ std::size_t ResourceCount(const World& world) noexcept {
 }
 
 std::vector<ComponentId> SetMembersOf(const World& world, TypeKey setTag) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(setTag);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::SetTag);
     return world.data_->namedSets[entry->id].members;
@@ -909,6 +948,7 @@ constexpr std::uint32_t kSummaryVersion = 1;
 // they are: the kernel tests use types without padding.
 Fingerprint World::Summary() const {
     GYO_ASSERT(state_ == WorldState::Ready || state_ == WorldState::Interrupted);
+    Sync();
     SummaryBytes out;
     out.Str("gyo.kernel.world-summary");
     out.U32(kSummaryVersion);

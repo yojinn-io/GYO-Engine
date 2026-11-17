@@ -4,9 +4,20 @@
 // 10, 11, 14).
 //
 // One WorldExecutor's data: columns, resources, event buffers, the deferred queue,
-// change stamps, domain ticks and its state. Made from a frozen Registry; its
-// lifetime is one generation (spec A.1: a generation change is a new World,
-// made from the same frozen Registry).
+// change stamps, domain ticks and its state. Made from a Registry that has
+// built its Plans; its lifetime is one generation (spec A.1: a generation
+// change is a new World, made from the same Registry).
+//
+// Versions (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 5):
+// the World remembers the Registry version it is attached to. Every entry (the
+// public functions below, the handles' lookups, WorldExecutor::Run) first
+// compares it with the Registry's and, when they differ, attaches: storage for
+// the new components, resources and event buffers and a hook queue for each
+// new schedule are added, the verification exclusions grow, the hooks' access
+// descriptions are made again. The Registry keeps no list of its Worlds, only
+// two counters this class changes (live Worlds, and those that declare no
+// dynamic insert); so making and destroying a World, like registering, is on
+// the thread that registers, or ordered by the caller (DI-KS 26).
 //
 // The public functions below are the Host's (state Ready) and, inside a running
 // System, a path that does not go through a handle (a World* kept in a global,
@@ -45,6 +56,14 @@
 namespace GYO::Kernel {
 
 class WorldExecutor;
+
+// What a World declares when it is made (DI-KS 26, L5). dynamicInsert: whether
+// Registry::Register may add to the Registry it was made from while it lives;
+// false makes every Register on that Registry return DynamicInsertRefused.
+// Fixed for the World's life.
+struct WorldOptions {
+    bool dynamicInsert = true;
+};
 
 // Spec A.1 state (Building is the Registry's: a World is made only from a frozen Registry).
 enum class WorldState : std::uint8_t {
@@ -99,8 +118,9 @@ struct RejectedSpawn {
 
 class World {
 public:
-    // registry must be frozen and outlive the World.
-    explicit World(const Registry& registry, std::string name = {});
+    // registry must have built its Plans, have no pending round (GYO_ASSERT)
+    // and outlive the World.
+    explicit World(const Registry& registry, std::string name = {}, WorldOptions options = {});
     ~World();
     World(const World&) = delete;
     World& operator=(const World&) = delete;
@@ -108,6 +128,8 @@ public:
     [[nodiscard]] WorldState State() const noexcept { return state_; }
     [[nodiscard]] const std::string& Name() const noexcept { return name_; }
     [[nodiscard]] const FrozenRegistry& Types() const noexcept { return *frozen_; }
+    // The declaration it was made with (it belongs to the World, not to the Registry).
+    [[nodiscard]] const WorldOptions& Options() const noexcept { return options_; }
     // Whether an Executor has started a Run on this World.
     [[nodiscard]] bool HasRun() const noexcept { return hasRun_; }
 
@@ -305,6 +327,7 @@ private:
     friend class WorldExecutor;
     friend Detail::SystemContext* Detail::CurrentCall(World&) noexcept;
     friend Detail::SystemContext& Detail::RequireCall(World&);
+    friend const Detail::RegistryData* Detail::RegistryDataOf(const World&) noexcept;
     friend ComponentId Detail::ComponentIdOf(const World&, TypeKey);
     friend ResourceId Detail::ResourceIdOf(const World&, TypeKey);
     friend EventTypeId Detail::EventIdOf(const World&, TypeKey);
@@ -329,6 +352,13 @@ private:
     friend void Detail::AddDiagnostics(World&, TypeKey, std::unique_ptr<Detail::DiagnosticsBase>);
     friend std::optional<KernelError> Detail::CombineCall(Detail::SystemContext&, Engine::Base::Result<void, KernelError>,
                                                           const std::vector<std::string>&);
+
+    // Attaches to the Registry's version when it is not the one attached
+    // (declaration 3.2 rule 5). Cheap when equal: one comparison.
+    void Sync() const;
+    // GYO_ASSERT: not Running or Applying (a Registry never builds while one
+    // of its Worlds runs: rule 4).
+    void AttachVersion();
 
     template <class T>
     [[nodiscard]] Detail::Column<T>& TypedColumn(ComponentId id) const {
@@ -395,6 +425,9 @@ private:
     const FrozenRegistry* frozen_;
     const Detail::RegistryData* data_;
     std::string name_;
+    WorldOptions options_;
+    // The Registry version the storage below matches (0: none yet).
+    std::uint64_t version_ = 0;
     WorldState state_ = WorldState::Ready;
     bool hasRun_ = false;
     bool verification_ = false;

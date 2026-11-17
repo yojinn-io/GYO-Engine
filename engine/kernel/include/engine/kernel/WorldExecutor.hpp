@@ -65,9 +65,10 @@ namespace GYO::Kernel {
 
 class WorldExecutor {
 public:
-    // registry must be frozen and outlive the WorldExecutor. worldName identifies this
-    // WorldExecutor's World in errors and verification reports (spec A.6).
-    explicit WorldExecutor(const Registry& registry, std::string worldName = {});
+    // registry must have built its Plans and outlive the WorldExecutor. worldName
+    // identifies this WorldExecutor's World in errors and verification reports
+    // (spec A.6); options is the World's declaration (WorldOptions, DI-KS 26).
+    explicit WorldExecutor(const Registry& registry, std::string worldName = {}, WorldOptions options = {});
     ~WorldExecutor();
     WorldExecutor(const WorldExecutor&) = delete;
     WorldExecutor& operator=(const WorldExecutor&) = delete;
@@ -76,8 +77,10 @@ public:
     [[nodiscard]] const World& GetWorld() const noexcept { return world_; }
 
     // Runs one schedule's Plan once (spec E.2), first Startup when it has not
-    // run (H-12). GYO_ASSERT: the World is Ready (so not from inside a System),
-    // the schedule exists, and Startup is run at most once.
+    // run (H-12); first attaches the World and the Systems' state to a new
+    // Registry version (declaration 3.2 rule 5). GYO_ASSERT: the World is Ready
+    // (so not from inside a System), the schedule exists, and Startup is run at
+    // most once.
     Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
     // The Executor's handler: called once per Err (target/error-handling DI 2:
@@ -110,6 +113,11 @@ private:
                                                           bool inClosure);
     // J-50 (DI-KS 24): reads KernelSettings, once per Run call, before Startup.
     void ReadSettings();
+    // Declaration 3.2 rule 5: attaches the World, then makes every System's
+    // state again by registrationSeq when the Registry's version is not the
+    // one attached: the access descriptions all made again; a kept System
+    // keeps its mounts' lastRun and Local<T>; a removed one's state is dropped.
+    void Attach();
     // Spec E.5: interrupts the World and drops every record. The outermost level
     // calls the handler; a nested one leaves the error instead (its first one).
     Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
@@ -121,7 +129,10 @@ private:
 
     const Registry* registry_;
     World world_;
+    // By registrationSeq; a removed System's entry is empty.
     std::vector<SystemState> systems_;
+    // The Registry version systems_ matches (0: none yet).
+    std::uint64_t version_ = 0;
     std::function<void(const KernelError&)> handler_;
     // The World's Startup schedule (at most one, D-E21), if any.
     std::optional<std::string> startup_;
