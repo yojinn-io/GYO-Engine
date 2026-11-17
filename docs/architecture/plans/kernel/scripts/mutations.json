@@ -4083,6 +4083,146 @@
       "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:1\",\\ \"0:1\"\\}"
     },
     {
+      "id": "td-despawn-onremove-descending",
+      "what": "F.2 step 2: a despawn calls OnRemove in descending ComponentId (the property we-j7-despawn-reverse hit before its find was retargeted) (v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( badge-removed:1/7 mode-removed:1/3 tag-removed:1/2 tag-removed-second:1/2 == "
+    },
+    {
+      "id": "we-despawn-onremove-interleaved",
+      "what": "F.2 step 2: OnRemove and destroy interleave per component (the user chose every OnRemove first, 2026-11-16) (carried from claude/arch-kernel-world-exec 3d87d916 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }",
+      "replace": "                if (!hooked) return hooked;\n                columns_[c]->Erase(id);\n            }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\) == \"mode-removed sees tag:7\""
+    },
+    {
+      "id": "td-despawn-onremove-absent-components",
+      "what": "F.2 step 2: a despawn calls OnRemove for components the entity does not have (v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1/2 tag-removed-second:1/2 mode-removed:1/3 spare-removed:1/6 badge-removed:1/7"
+    },
+    {
+      "id": "td-despawn-cells-kept",
+      "what": "F.2 step 2: a despawn destroys no cell (caught first by the kernel's W-1 structure check, before the case's own CHECK; expect tied to the new case by the adversarial check) (v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
+      "replace": "            entities_.erase(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "TEST CASE:  J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed[^=]*StructureBroken \\[W-1\\]: column 'Tag' has entity 1, which is not alive"
+    },
+    {
+      "id": "td-adv-despawn-onremove-never-for-highest-column",
+      "what": "F.2 step 2: a despawn runs no OnRemove for the World's highest ComponentId (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "            for (std::size_t c = 0; c + 1 < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1/2 tag-removed-second:1/2 mode-removed:1/3 == "
+    },
+    {
+      "id": "td-adv-despawn-highest-column-not-destroyed",
+      "what": "F.2 step 2: a despawn does not destroy the cell of the World's highest ComponentId (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
+      "replace": "            for (std::size_t c = 0; c + 1 < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "TEST CASE:  J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed[^=]*StructureBroken \\[W-1\\]: column 'Badge' has entity 1, which is not alive"
+    },
+    {
+      "id": "td-adv-despawn-dead-id-check-weakened",
+      "what": "F.2 step 2: a despawn of an id that is not alive reaches the next alive id (caught first by the W-1 structure check) (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first",
+      "replace": "            if (at == entities_.end()) continue;\n            // OnRemove for every component first",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "TEST CASE:  J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed[^=]*StructureBroken \\[W-1\\]: column 'Tag' has entity 4, which is not alive"
+    },
+    {
+      "id": "td-adv-despawn-componentless-entity-stays-alive",
+      "what": "F.2 step 2: a despawned entity with no cell stays in the alive list (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
+      "replace": "            bool erasedAny = false;\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                erasedAny = columns_[c]->Erase(id) || erasedAny;\n            }\n            if (!erasedAny) continue;\n            entities_.erase(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "a despawn of an entity without cells removes it from the alive list"
+    },
+    {
+      "id": "td-adv-despawn-onremove-error-swallowed",
+      "what": "F.2 step 2: an Err from a despawn's OnRemove hook is ignored (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);",
+      "replace": "                (void)RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "an Err from a despawn's OnRemove hook is not swallowed"
+    },
+    {
+      "id": "td-adv-onremove-hooks-of-one-component-reversed",
+      "what": "F.4: the OnRemove hooks of one component run in reverse registration order (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (std::size_t h = 0; h < data_->hooks.size(); ++h) {\n        const Detail::HookRecord& hook = data_->hooks[h];\n        if (hook.trigger != trigger || !hook.componentId || *hook.componentId != component) continue;\n",
+      "replace": "    for (std::size_t n = 0; n < data_->hooks.size(); ++n) {\n        const std::size_t h = trigger == HookTrigger::OnRemove ? data_->hooks.size() - 1 - n : n;\n        const Detail::HookRecord& hook = data_->hooks[h];\n        if (hook.trigger != trigger || !hook.componentId || *hook.componentId != component) continue;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed-second:1/2 tag-removed:1/2 mode-removed:1/3 badge-removed:1/7 == "
+    },
+    {
+      "id": "td-adv-onremove-only-first-hook-of-a-component",
+      "what": "F.4: only the first OnRemove hook of a component runs (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        auto result = RunHook(h, entity, component, planPos, schedule, stamp);\n        if (!result) return result;\n",
+      "replace": "        auto result = RunHook(h, entity, component, planPos, schedule, stamp);\n        if (!result || trigger == HookTrigger::OnRemove) return result;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1/2 mode-removed:1/3 badge-removed:1/7 == "
+    },
+    {
+      "id": "td-adv-onremove-hook-context-component-wrong",
+      "what": "F.4: HookCtx::Component() of a hook is always ComponentId 0 (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    call.hookComponent = component;\n",
+      "replace": "    call.hookComponent = 0;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1/0 tag-removed-second:1/0 mode-removed:1/0 badge-removed:1/0 == "
+    },
+    {
+      "id": "td-adv-despawn-all-entities-onremove-before-any-destroy",
+      "what": "F.2 step 2: the OnRemove hooks of every despawned entity run before any entity's cells are destroyed (per entity order kept) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n",
+      "replace": "                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1\\(other-tag=20\\) mode-removed:1\\(other-tag=20\\) tag-removed:2\\(other-tag=10\\) mode-removed:2\\(other-tag=10\\) == "
+    },
+    {
+      "id": "td-adv-despawn-onremove-component-major-across-entities",
+      "what": "F.2 step 2: OnRemove runs in (ComponentId, EntityId) order across the despawned entities instead of (EntityId, ComponentId) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n",
+      "replace": "        for (std::size_t c = 0; c < columns_.size(); ++c) {\n            for (EntityId id : despawns) {\n                if (!std::binary_search(entities_.begin(), entities_.end(), id)) continue;\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1 tag-removed:2 mode-removed:1 mode-removed:2 == "
+    },
+    {
       "id": "we-j32-despawn-record-order",
       "what": "J-32 (J.3 #1): despawns applied in record order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
       "file": "engine/kernel/src/World.cpp",
@@ -4291,6 +4431,610 @@
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
       "expect": "HasCode\\(result,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-j1-insert-append",
+      "what": "J-1: a column insert appends instead of keeping key order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "Engine::EntityStore::InsertEntity(cells, Cell<T>{id, stamp, stamp, std::move(value)});",
+      "replace": "cells.push_back(Cell<T>{id, stamp, stamp, std::move(value)});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-1:*",
+      "expect": "static_cast<bool>\\(kernelRunResult\\)"
+    },
+    {
+      "id": "we-j1-erase-swap-pop",
+      "what": "J-1: a column erase swaps with the last cell and pops (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "        if (!Engine::EntityStore::EraseEntity(cells, id)) return false;",
+      "replace": "        Cell<T>* found = Engine::EntityStore::FindEntity(cells, id);\n        if (found == nullptr) return false;\n        std::swap(*found, cells.back());\n        cells.pop_back();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-1:*",
+      "expect": "static_cast<bool>\\(kernelRunResult\\)"
+    },
+    {
+      "id": "we-j2-alive-append",
+      "what": "J-2 (J.3 #7): the alive-entity list keeps insertion order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    entities_.insert(at, id);",
+      "replace": "    entities_.push_back(id);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-2:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j4-handle-copyable",
+      "what": "J-4: kernel handles become copyable (and so movable) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    Handle(const Handle&) = delete;\n    Handle& operator=(const Handle&) = delete;",
+      "replace": "    Handle(const Handle&) = default;\n    Handle& operator=(const Handle&) = default;",
+      "target": "gyo_kernel_tests",
+      "expect": "variant HANDLE_COPY compiled",
+      "expect_build_failure": true
+    },
+    {
+      "id": "we-j7-world-dtor-reverse",
+      "what": "J-7: the World destroys its columns in descending ComponentId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (auto& column : columns_) column.reset();",
+      "replace": "    for (auto it = columns_.rbegin(); it != columns_.rend(); ++it) it->reset();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-7:*",
+      "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:3\",\\ \"1:5\",\\ \"0:3\",\\ \"0:5\"\\}"
+    },
+    {
+      "id": "we-j7-column-dtor-descending",
+      "what": "J-7: a column destroys its cells in descending EntityId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "        std::reverse(cells.begin(), cells.end());\n        while (!cells.empty()) cells.pop_back();",
+      "replace": "        while (!cells.empty()) cells.pop_back();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-7:*",
+      "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:3\",\\ \"1:5\",\\ \"0:3\",\\ \"0:5\"\\}"
+    },
+    {
+      "id": "we-j8-allotter-wraps",
+      "what": "J-8 (J.3 #9): the allotter wraps to its first id when used up (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "        if (id == last) {\n            exhausted = true;\n        } else {",
+      "replace": "        if (id == last) {\n            next = first;\n        } else {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "allotter\\.Allot\\(\\)\\ ==\\ std::nullopt"
+    },
+    {
+      "id": "we-j8-allotter-reset",
+      "what": "J-8: the allotter gains a Reset (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};",
+      "replace": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n    void Reset() noexcept { next = first; exhausted = false; }\n};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "RangeAllotter must not have a Reset"
+    },
+    {
+      "id": "we-w11-mut-no-mark",
+      "what": "J-11 (W-11): Mut gives the value for writing without marking the changed stamp (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        cell_->changed = stamp_;\n        return cell_->value;",
+      "replace": "        return cell_->value;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-11:*",
+      "expect": "Mirror\\(\\)\\ ==\\ full"
+    },
+    {
+      "id": "we-w11-mut-no-mark-j30",
+      "what": "J-30 (W-11): Mut gives the value for writing without marking the changed stamp (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        cell_->changed = stamp_;\n        return cell_->value;",
+      "replace": "        return cell_->value;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "first\\ ==\\ std::vector<ChangeStamp>\\{0,\\ 6,\\ 3,\\ 1,\\ 12,\\ 9,\\ 1\\}"
+    },
+    {
+      "id": "we-j32b-untyped-unchecked",
+      "what": "J-32b (F-10): untyped Commands write any column (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j32b-debug-only",
+      "what": "J-32b (J.3 #16): the untyped check only in a debug build (the release-like target must fail) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {\n",
+      "replace": "std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-adv-untyped-zone-half",
+      "what": "F-10 (Fable): untyped Commands checks only the write policy (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j32b-z5-record-off",
+      "what": "J-32b (Z5): a zone B despawn of zone C data is not checked when recorded (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call.zone != Zone::B) return std::nullopt;",
+      "replace": "    return std::nullopt;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "result\\.error\\(\\)\\.Text\\(\\)\\.find\\(\"System\\ 'ZoneBDespawnsZoneC'\"\\)\\ !=\\ std::string::npos"
+    },
+    {
+      "id": "we-j36-no-same-tick",
+      "what": "J-36 (F-7): a reader after its writer reads only the next tick (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            const bool current = record.tick == tick_ && record.writerPos < position_;",
+      "replace": "            const bool current = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
+    },
+    {
+      "id": "we-j36-trim-early",
+      "what": "J-36 (F-7): the trim drops the current tick too (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "events_[e]->Trim(ticks_[DomainIndex(domain)]);",
+      "replace": "events_[e]->Trim(ticks_[DomainIndex(domain)] + 1);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
+    },
+    {
+      "id": "we-j36-swap-compare",
+      "what": "J-36: the previous tick's records compared the wrong way (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "record.tick == tick_ - 1 && record.writerPos > position_;",
+      "replace": "record.tick == tick_ - 1 && record.writerPos < position_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
+    },
+    {
+      "id": "we-j12-fetch-side-effect",
+      "what": "J-12 (B.4 point 7): a Fetch with a side effect (ResMut advances the call's stamp) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "stamp_(call.stamp) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
+      "replace": "stamp_(call.stamp++) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*",
+      "expect": "world\\.Stamps<Tag>\\(1\\)\\->second\\ ==\\ 1"
+    },
+    {
+      "id": "we-sym-tlcurrent-renamed",
+      "what": "judgement 6: tlCurrent is renamed, so the required allowed symbol is missing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/Verification.cpp",
+      "find": "thread_local SystemContext* tlCurrent = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrent;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrent = call;\n}",
+      "replace": "thread_local SystemContext* tlCurrentCall = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrentCall;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrentCall = call;\n}",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor",
+        "--require",
+        "tlCurrent"
+      ],
+      "expect": "required allowed symbol missing: tlCurrent",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "we-k5-any-engine-prefix",
+      "what": "K5 (Delta-3 widening): the allowlist becomes any engine/ include (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/\",)",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_other_engine_modules_and_products_are_reported"
+    },
+    {
+      "id": "we-k5-entity-store-prefix-unbounded",
+      "what": "K5: the entity_store entry loses its trailing slash (engine/entity_store_extra passes) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store\", \"engine/kernel/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_other_engine_modules_and_products_are_reported"
+    },
+    {
+      "id": "we-k5-entity-store-dropped",
+      "what": "K5: entity_store is not allowed (the real kernel include is reported) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ],
+      "expect": "K5 engine/entity_store/EntityColumns.hpp"
+    },
+    {
+      "id": "we-k5-entity-store-dropped-selftest",
+      "what": "K5: entity_store is not allowed (the self-test's passing case fails) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_entity_store_include_passes"
+    },
+    {
+      "id": "we-k5-backslash-parent",
+      "what": "K5: '..' is looked for between '/' only (a backslash path escapes) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "\"..\" not in re.split(r\"[/\\\\]\", target)",
+      "replace": "\"..\" not in target.split(\"/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_parent_directory_in_a_project_include_is_reported"
+    },
+    {
+      "id": "we-stamp-guard-rule-off",
+      "what": "target/world section 6 guard: the stamp words are never reported (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "tests/common/kernel/store_stamp_guard.py",
+      "find": "            for match in S1.finditer(line):",
+      "replace": "            for match in S1.finditer(\"\"):",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_store_stamp_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_(stamp|change|added)"
+    },
+    {
+      "id": "we-stamp-guard-store-names-stamp",
+      "what": "target/world section 6: engine/entity_store names a stamp (in a comment) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "// swap-and-pop, no tombstone).",
+      "replace": "// swap-and-pop, no tombstone; the changed stamp is kept).",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/store_stamp_guard.py"
+      ],
+      "expect": "S1 changed"
+    },
+    {
+      "id": "we-adv-stamp-guard-camel-suffix",
+      "what": "target/world 6 (Fable): entity_store names changeTick and lastChanged (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "// swap-and-pop, no tombstone).",
+      "replace": "// swap-and-pop, no tombstone; changeTick and lastChanged are kept).",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/store_stamp_guard.py"
+      ],
+      "expect": "S1 changeTick"
+    },
+    {
+      "id": "we-adv-excluded-columns-not-reported",
+      "what": "LIM-6 condition 2 (Fable): the report omits excluded columns (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; expect names rig->product, after the App to Product rename)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (world_.excluded_[c]) report.excludedColumns.push_back(data.components[c].name);",
+      "replace": "        if (false && world_.excluded_[c]) report.excludedColumns.push_back(data.components[c].name);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "rig\\->product\\->Verification\\(\\)\\.excludedColumns\\ ==\\ std::vector<std::string>\\{\"Pos\"\\}"
+    },
+    {
+      "id": "we-adv-added-is-changed",
+      "what": "Added<T> filters by the changed stamp (Fable) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return (added ? column.AddedAt(low) : column.ChangedAt(low)) > lastRun_;",
+      "replace": "        return (added ? column.ChangedAt(low) : column.ChangedAt(low)) > lastRun_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"added:1\\ added:0\""
+    },
+    {
+      "id": "we-adv-event-trim-never",
+      "what": "F.3 (Fable): the trim drops nothing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "events_[e]->Trim(ticks_[DomainIndex(domain)]);",
+      "replace": "events_[e]->Trim(0);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "rig\\->world\\(\\)\\.EventPayloads<Ping>\\(\\)\\.empty\\(\\)"
+    },
+    {
+      "id": "we-adv-hookctx-in-system-allowed",
+      "what": "F.4 (Fable): HookCtx in a System is not stopped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        GYO_ASSERT(call.hook);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-adv-host-write-current-stamp",
+      "what": "J-30 (Fable): a Host write in Ready carries the current stamp (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/include/engine/kernel/World.hpp",
+      "find": "return state_ == WorldState::Ready ? stamp_ + 1 : stamp_; }",
+      "replace": "return stamp_; }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"added:1\\ added:0\""
+    },
+    {
+      "id": "we-j3-structural-allowed",
+      "what": "J-3: a structural World API call while Running is allowed (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        GYO_ASSERT(!structural);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-j3-spawn-immediate",
+      "what": "J-3, J-31: Spawn applies its bundle inside the call (the epoch check catches it) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0; expect follows the K0 membership assert, which compares per run level)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        Detail::Push(call, std::move(record));\n        return *id;",
+      "replace": "        for (auto& part : record.bundle) part.value->PutInto(Detail::ColumnAt(*world_, part.component), *id, 0);\n        return *id;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "GYO_ASSERT failed: world\\.MembershipEpoch\\(\\) == world\\.runStack_\\[level\\]\\.structure"
+    },
+    {
+      "id": "we-j4-handle-check-off",
+      "what": "J-4: the handle serial / sync-epoch check never reports (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call->callSerial == callSerial && world.syncEpoch_ == syncEpoch) return;",
+      "replace": "    return;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::StaleHandle\\)"
+    },
+    {
+      "id": "we-j4-boundary-off",
+      "what": "J-4: the comparison after the call finds nothing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!declaredWrite(kind, id) && snapshot.valid && Differs(snapshot, bytes)) changed.push_back(name);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "HasCode\\(second,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-j5-layer1-off",
+      "what": "J-5: layer 1 never checks (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!verification_) return;\n        const Detail::AccessDesc& access = *call->access;",
+      "replace": "        return;\n        const Detail::AccessDesc& access = *call->access;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-j5-id-not-mode",
+      "what": "J-5 (J.3 #12): layer 1 compares the id, not the mode (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if ((entry->modes & mode) == mode || (mode == Detail::kModeRead && (entry->modes & Detail::kModeWrite) != 0)) {",
+      "replace": "            if (true) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-j5-boundary-off",
+      "what": "J-5: the comparison after the call finds nothing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!declaredWrite(kind, id) && snapshot.valid && Differs(snapshot, bytes)) changed.push_back(name);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-j3-16-violations-dropped",
+      "what": "J-5 (J.3 #16): violations of a call are dropped instead of returned as Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    std::vector<KernelError> list = std::move(call.errors);",
+      "replace": "    std::vector<KernelError> list;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-j6-no-current-call",
+      "what": "J-6 (W-6): a World access while Running with no current System is allowed (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        // W-6: in a run, only a System or hook of this World on this thread touches it.\n        GYO_ASSERT(call != nullptr);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-j6b-host-zone-c",
+      "what": "J-6 (W-6b): the Host writes zone C state after the first Run (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "world\\.Insert\\(2,\\ Pos\\{2\\}\\)"
+    },
+    {
+      "id": "we-j32-spawn-before-despawn",
+      "what": "J-32: spawn and remove applied before despawn (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; find rebuilt from the post-K0 ApplySync: step 2 moved after step 4)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.emitterZone = spawn.emitterZone;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.tick = tickOfSchedule();\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n",
+      "replace": "        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.emitterZone = spawn.emitterZone;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.tick = tickOfSchedule();\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "despawn then spawn with the same id: the new entity lives[^=]*CHECK\\( world\\.Alive\\(4\\) \\) is NOT correct"
+    },
+    {
+      "id": "we-j32b-dropped-err-lost",
+      "what": "J-32b (J.3 #16): a kernel Err the System dropped is lost (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (KernelError& dropped : call.returned) list.push_back(std::move(dropped));\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j45-exclusive-unchecked",
+      "what": "J-45 (S-13): ExclusiveWorld writes any column (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j45-debug-only",
+      "what": "J-45 (J.3 #16): the ExclusiveWorld check only in a debug build (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n",
+      "replace": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j53-after-diff-dropped",
+      "what": "J-53: differences of the comparison after the call are not reported (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (const std::string& storage : changed) {",
+      "replace": "    for (const std::string& storage : std::vector<std::string>{}) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-53:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-adv-dropped-err-beside-own-err-lost",
+      "what": "J.3 #16 (Fable): a kernel Err the System dropped is lost when it returns another Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if (!ContainsError(own, returned)) list.push_back(std::move(returned));\n",
+      "replace": "            if (false && !ContainsError(own, returned)) list.push_back(std::move(returned));\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "result\\.error\\(\\)\\.Has\\(KernelErrorCode::UntypedWrite\\)"
+    },
+    {
+      "id": "we-adv-exclusive-zone-half",
+      "what": "S-13 (Fable): ExclusiveWorld checks only the write policy (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-adv-j4-serial-half-dropped",
+      "what": "J-4 (Fable): only the sync epoch is compared (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call->callSerial == callSerial && world.syncEpoch_ == syncEpoch) return;",
+      "replace": "    if (world.syncEpoch_ == syncEpoch) return;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::StaleHandle\\)"
+    },
+    {
+      "id": "we-adv-interrupted-write-allowed",
+      "what": "E.5 (Fable): a Host write to an Interrupted World is not stopped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        GYO_ASSERT(mode == Detail::kModeRead);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "rig\\->world\\(\\)\\.Insert\\(2,\\ Tag\\{2\\}\\)"
+    },
+    {
+      "id": "we-adv-j6b-host-zone-c-resource",
+      "what": "J-6 W-6b (Fable): the Host writes a zone C state resource after the first Run (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input || info.external);\n",
+      "replace": "            static_cast<void>(info);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "world\\.SetResource\\(CRes\\{1\\}\\)"
     },
     {
       "id": "hf-limit-source-always-settings",

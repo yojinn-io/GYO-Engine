@@ -629,6 +629,199 @@ TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrit
     }
 }
 
+// ---- J-32: the order of a despawn's OnRemove calls (spec F.2 step 2, W-7; the
+// user chose 2026-11-16: every OnRemove first, in ascending ComponentId, then the
+// cells are destroyed, so each hook reads the whole entity; v8-arch-gyo2-test-debts)
+
+namespace {
+
+// Registered after Data(): Spare then Badge, so Badge has the highest ComponentId
+// of the World (Pos, Vel, Tag, Mode, Boundary, CShared, Spare, Badge), the
+// despawned entity's components are not adjacent ids, and one hooked id (Spare)
+// is absent from it.
+struct Spare { std::int32_t s; };  // zone B, Shared; the despawned entity does not have it
+struct Badge { std::int32_t b; };  // zone B, Shared
+
+std::string Seen(const char* name, const std::int32_t* value) {
+    return std::string(name) + "=" + (value != nullptr ? std::to_string(*value) : std::string("gone"));
+}
+// "<hook>:<entity>/<HookCtx component>(<the entity's other cells>)"
+std::string Head(const char* hook, const HookCtx& ctx) {
+    return std::string(hook) + ":" + std::to_string(ctx.Entity()) + "/" + std::to_string(ctx.Component());
+}
+SystemResult TagRemovedSeesAll(HookCtx ctx, Query<Read<Mode>> modes, Query<Read<Badge>> badges) {
+    const Mode* mode = modes.Get<Mode>(ctx.Entity());
+    const Badge* badge = badges.Get<Badge>(ctx.Entity());
+    Log().push_back(Head("tag-removed", ctx) + "(" + Seen("mode", mode ? &mode->m : nullptr) + "," +
+                    Seen("badge", badge ? &badge->b : nullptr) + ")");
+    return Ok();
+}
+// A second OnRemove hook of Tag: hooks of one component run in registration order (F.4).
+SystemResult TagRemovedSecond(HookCtx ctx, Query<Read<Tag>> tags) {
+    const Tag* tag = tags.Get<Tag>(ctx.Entity());
+    Log().push_back(Head("tag-removed-second", ctx) + "(" + Seen("tag", tag ? &tag->t : nullptr) + ")");
+    return Ok();
+}
+SystemResult ModeRemovedSeesAll(HookCtx ctx, Query<Read<Tag>> tags, Query<Read<Badge>> badges) {
+    const Tag* tag = tags.Get<Tag>(ctx.Entity());
+    const Badge* badge = badges.Get<Badge>(ctx.Entity());
+    Log().push_back(Head("mode-removed", ctx) + "(" + Seen("tag", tag ? &tag->t : nullptr) + "," +
+                    Seen("badge", badge ? &badge->b : nullptr) + ")");
+    return Ok();
+}
+SystemResult BadgeRemovedSeesAll(HookCtx ctx, Query<Read<Tag>> tags, Query<Read<Mode>> modes) {
+    const Tag* tag = tags.Get<Tag>(ctx.Entity());
+    const Mode* mode = modes.Get<Mode>(ctx.Entity());
+    Log().push_back(Head("badge-removed", ctx) + "(" + Seen("tag", tag ? &tag->t : nullptr) + "," +
+                    Seen("mode", mode ? &mode->m : nullptr) + ")");
+    return Ok();
+}
+SystemResult SpareRemoved(HookCtx ctx) {
+    Log().push_back(Head("spare-removed", ctx));
+    return Ok();
+}
+SystemResult ModeRemovedFails(HookCtx ctx) {
+    Log().push_back(Head("mode-removed-fails", ctx));
+    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the OnRemove of Mode fails"));
+}
+// Despawns 1 (three cells), 3 (never alive; 4 is alive and above it) and 6 (alive, no cell).
+SystemResult DespawnOneThreeSix(Despawn despawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    for (EntityId id : {EntityId{6}, EntityId{3}, EntityId{1}}) {
+        if (auto r = despawn.Entity(id); !r) return r;
+    }
+    return Ok();
+}
+
+// The hook name of each log line, in call order ("tag-removed:1/2(...)" -> "tag-removed:1/2").
+std::string CallOrder(const std::vector<std::string>& log) {
+    std::string out;
+    for (const std::string& line : log) {
+        if (!out.empty()) out += " ";
+        out += line.substr(0, line.find('('));
+    }
+    return out;
+}
+
+void RegisterDespawnOrderData(Registrar& r) {
+    Data(r);
+    r.Component<Spare>({.name = "Spare", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Badge>({.name = "Badge", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+}
+
+} // namespace
+
+TEST_CASE("J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed") {
+    auto rig = MakeRig([](Registrar& r) {
+        RegisterDespawnOrderData(r);
+        r.AddSystem<&DespawnOneThreeSix>(B("DespawnOneThreeSix", "A"));
+        // Hooks registered in descending ComponentId: the call order must follow the
+        // ComponentId, not the hook registration order; Tag's two hooks keep theirs.
+        r.Hook<Badge, &BadgeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "BadgeRemovedSeesAll", .zone = Zone::B});
+        r.Hook<Spare, &SpareRemoved>(HookTrigger::OnRemove, {.name = "SpareRemoved", .zone = Zone::B});
+        r.Hook<Mode, &ModeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesAll", .zone = Zone::B});
+        r.Hook<Tag, &TagRemovedSeesAll>(HookTrigger::OnRemove, {.name = "TagRemovedSeesAll", .zone = Zone::B});
+        r.Hook<Tag, &TagRemovedSecond>(HookTrigger::OnRemove, {.name = "TagRemovedSecond", .zone = Zone::B});
+    });
+    World& world = rig->world();
+    // Inserted in an order unlike the ComponentId order.
+    world.Insert(1, Badge{6});
+    world.Insert(1, Tag{7});
+    world.Insert(1, Mode{1});
+    // Entity 4 is not despawned (a despawn of 3, never alive, must not reach it).
+    world.Insert(4, Tag{20});
+    world.Insert(4, Spare{2});
+    // Entity 6 is alive with no cell.
+    world.Insert(6, Tag{60});
+    REQUIRE(world.Remove<Tag>(6));
+    REQUIRE(world.Alive(6));
+    Log().clear();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(CallOrder(Log()) == "tag-removed:1/2 tag-removed-second:1/2 mode-removed:1/3 badge-removed:1/7",
+                  "J-32: a despawn calls the OnRemove hooks of each component the entity has, once, in ascending "
+                  "ComponentId, a component's hooks in registration order");
+    CHECK_MESSAGE(Join(Log()) == "tag-removed:1/2(mode=1,badge=6) tag-removed-second:1/2(tag=7) "
+                                 "mode-removed:1/3(tag=7,badge=6) badge-removed:1/7(tag=7,mode=1)",
+                  "J-32: every OnRemove of a despawn reads the whole entity (no cell destroyed before the last OnRemove)");
+    CHECK_FALSE(world.Alive(1));
+    CHECK_MESSAGE((world.Get<Tag>(1) == nullptr && world.Get<Mode>(1) == nullptr && world.Get<Badge>(1) == nullptr),
+                  "J-32: a despawn destroys every cell of the entity");
+    CHECK_MESSAGE(!world.Alive(6), "J-32: a despawn of an entity without cells removes it from the alive list");
+    CHECK_MESSAGE(world.Alive(4), "J-32: a despawn of an id that is not alive does nothing to another entity");
+    REQUIRE(world.Get<Tag>(4) != nullptr);
+    CHECK(world.Get<Tag>(4)->t == 20);
+    REQUIRE(world.Get<Spare>(4) != nullptr);
+    CHECK(world.Get<Spare>(4)->s == 2);
+}
+
+namespace {
+
+// These two hooks read the other despawned entity's Tag, which spec F.4 does not
+// let a hook do (a hook reads its own entity); the kernel does not stop it, so the
+// test uses it to see the order across entities (user 2026-11-16: one entity is
+// finished, cells destroyed and gone from the alive list, before the next one's
+// OnRemove runs).
+std::string OtherTag(const HookCtx& ctx, const Query<Read<Tag>>& tags) {
+    const EntityId other = ctx.Entity() == 1 ? EntityId{2} : EntityId{1};
+    const Tag* tag = tags.Get<Tag>(other);
+    return Seen("other-tag", tag ? &tag->t : nullptr);
+}
+SystemResult TagRemovedSeesOther(HookCtx ctx, Query<Read<Tag>> tags) {
+    Log().push_back("tag-removed:" + std::to_string(ctx.Entity()) + "(" + OtherTag(ctx, tags) + ")");
+    return Ok();
+}
+SystemResult ModeRemovedSeesOther(HookCtx ctx, Query<Read<Tag>> tags) {
+    Log().push_back("mode-removed:" + std::to_string(ctx.Entity()) + "(" + OtherTag(ctx, tags) + ")");
+    return Ok();
+}
+// Recorded 2 then 1: the despawn step sorts them.
+SystemResult DespawnTwoThenOne(Despawn despawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    if (auto r = despawn.Entity(2); !r) return r;
+    return despawn.Entity(1);
+}
+
+} // namespace
+
+TEST_CASE("J-32: two despawns in one window: one entity is finished before the next one's OnRemove runs") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&DespawnTwoThenOne>(B("DespawnTwoThenOne", "A"));
+        r.Hook<Tag, &TagRemovedSeesOther>(HookTrigger::OnRemove, {.name = "TagRemovedSeesOther", .zone = Zone::B});
+        r.Hook<Mode, &ModeRemovedSeesOther>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesOther", .zone = Zone::B});
+    });
+    World& world = rig->world();
+    world.Insert(1, Tag{10});
+    world.Insert(1, Mode{1});
+    world.Insert(2, Tag{20});
+    world.Insert(2, Mode{2});
+    Log().clear();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(CallOrder(Log()) == "tag-removed:1 mode-removed:1 tag-removed:2 mode-removed:2",
+                  "J-32: despawns run in ascending EntityId, each entity's OnRemove hooks together");
+    CHECK_MESSAGE(Join(Log()) == "tag-removed:1(other-tag=20) mode-removed:1(other-tag=20) "
+                                 "tag-removed:2(other-tag=gone) mode-removed:2(other-tag=gone)",
+                  "J-32: an earlier despawned entity is gone when a later one's OnRemove runs");
+    CHECK_FALSE(world.Alive(1));
+    CHECK_FALSE(world.Alive(2));
+}
+
+TEST_CASE("J-32: an Err from a despawn's OnRemove hook is the Run's Err") {
+    auto rig = MakeRig([](Registrar& r) {
+        RegisterDespawnOrderData(r);
+        r.AddSystem<&DespawnOneAtTickOne>(B("DespawnOneAtTickOne", "A"));
+        r.Hook<Mode, &ModeRemovedFails>(HookTrigger::OnRemove, {.name = "ModeRemovedFails", .zone = Zone::B});
+    });
+    rig->world().Insert(1, Tag{7});
+    rig->world().Insert(1, Mode{1});
+    Log().clear();
+    const auto result = rig->Run();
+    REQUIRE_MESSAGE(!static_cast<bool>(result), "J-32: an Err from a despawn's OnRemove hook is not swallowed");
+    CHECK(Join(Log()) == "mode-removed-fails:1/3");
+    CHECK_MESSAGE(result.error().Text().find("ModeRemovedFails") != std::string::npos,
+                  "J-32: the Err of a despawn's OnRemove names the hook: " << result.error().Text());
+}
+
 // ---- J-33 (F-3)
 
 namespace {
