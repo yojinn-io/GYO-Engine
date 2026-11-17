@@ -7436,6 +7436,366 @@
       "target": "gyo_kernel_tests",
       "expect": "stage edge",
       "cases": "DI-KS 25: the order graph*"
+    },
+    {
+      "id": "ks-s5-change-deferred",
+      "what": "S5: the immediate change goes into the window and waits for the sync point (not applied now) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
+      "replace": "    world.window_.push_back(std::move(change.front()));\n    change.clear();\n    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: ExclusiveWorld::Spawn takes an id*",
+      "expect": "\\[ks\\-s5\\-spawn\\]"
+    },
+    {
+      "id": "ks-s5-j45-spawn-deferred",
+      "what": "D2: ExclusiveWorld's typed Spawn is not applied in the call (J-45's spawn subcase) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
+      "replace": "    world.window_.push_back(std::move(change.front()));\n    change.clear();\n    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "J\\-45\\ spawn"
+    },
+    {
+      "id": "ks-s5-change-stamp",
+      "what": "S5: the change carries a new stamp instead of the handle's (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
+      "replace": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, world.stamp_ + 1, &change);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: ExclusiveWorld::Spawn takes an id*",
+      "expect": "\\[ks\\-s5\\-spawn\\-stamp\\]"
+    },
+    {
+      "id": "ks-s5-no-allotter-code",
+      "what": "S5: Spawn with no allotter reports AllotterExhausted instead of NoAllotter (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "KernelErrorCode::NoAllotter, \"A.1\",",
+      "replace": "KernelErrorCode::AllotterExhausted, \"A.1\",",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: ExclusiveWorld::Spawn with no allotter*",
+      "expect": "\\[ks\\-s5\\-no\\-allotter\\]"
+    },
+    {
+      "id": "ks-s5-reject-not-read",
+      "what": "S5: SpawnWithId does not say why a spawn was dropped (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        outcome.rejected = buffer->entries.back().record.reason;",
+      "replace": "        static_cast<void>(buffer);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: ExclusiveWorld::SpawnWithId spawns now; an id in the allotter range or alive is not spawned*",
+      "expect": "\\[ks\\-s5\\-spawn\\-with\\-id\\]"
+    },
+    {
+      "id": "ks-s5-level-spawn-applied",
+      "what": "S5: the immediate change also applies this level's records (DI-KS 19), so the earlier spawn of the same id is applied with it (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (immediate != nullptr) return phase(*immediate);",
+      "replace": "    if (immediate != nullptr) {\n        for (std::size_t i = base; i < window_.size(); ++i) immediate->push_back(std::move(window_[i]));\n        window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());\n        return phase(*immediate);\n    }",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 19:*",
+      "expect": "\\[ks\\-s5\\-level\\-spawn\\-dropped\\]"
+    },
+    {
+      "id": "ks-s5-changed-insert",
+      "what": "S5: Insert says true for an entity that is not alive (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    case Detail::RecordKind::Despawn: outcome.changed = alive; break;",
+      "replace": "    case Detail::RecordKind::Despawn: outcome.changed = true; break;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: Insert*",
+      "expect": "\\[ks\\-s5\\-members\\]"
+    },
+    {
+      "id": "ks-s5-changed-remove",
+      "what": "S5: Remove says true when the entity had no such component (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "outcome.changed = world.columns_[record.id]->Contains(record.entity);",
+      "replace": "outcome.changed = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: Insert*",
+      "expect": "\\[ks\\-s5\\-members\\]"
+    },
+    {
+      "id": "ks-s5-changed-resource",
+      "what": "S5: RemoveResource says true when the resource was absent (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "outcome.changed = world.resources_[record.id]->Present();",
+      "replace": "outcome.changed = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: SetResource and RemoveResource now*",
+      "expect": "\\[ks\\-s5\\-resources\\]"
+    },
+    {
+      "id": "ks-s5-handle-not-restamped",
+      "what": "S5: the handle's stamp is not renewed after an immediate change (later writes share the change's stamp) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                handle.stamp_ = Detail::NextStamp(*handle.world_);",
+      "replace": "                static_cast<void>(Detail::NextStamp(*handle.world_));",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: Insert*",
+      "expect": "\\[ks\\-s5\\-handle\\-restamped\\]"
+    },
+    {
+      "id": "ks-s5-handle-epoch-kept",
+      "what": "S5: the handle's sync epoch is not renewed after the hook rounds of an immediate change (W-4 then reports it stale) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                handle.syncEpoch_ = Detail::CurrentSyncEpoch(*handle.world_);",
+      "replace": "                static_cast<void>(Detail::CurrentSyncEpoch(*handle.world_));",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: verification on: immediate changes*",
+      "expect": "\\[ks\\-s5\\-verification\\-quiet\\]"
+    },
+    {
+      "id": "ks-s5-baseline-not-updated",
+      "what": "S5: the membership baseline is not moved after an immediate change, so the next immediate change of the same call fails its W-3 check (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            subject_.runStack_.back().structure = subject_.MembershipEpoch();\n            if (subject_.verification_) subject_.TakeSnapshots();",
+      "replace": "            if (subject_.verification_) subject_.TakeSnapshots();",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: Insert*",
+      "expect": "GYO_ASSERT failed: world\\.MembershipEpoch\\(\\) == baseline"
+    },
+    {
+      "id": "ks-s5-nested-baseline-not-updated",
+      "what": "S5: the membership baseline is not moved after an immediate change, so a nested run after it fails its W-3 check (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            subject_.runStack_.back().structure = subject_.MembershipEpoch();\n            if (subject_.verification_) subject_.TakeSnapshots();",
+      "replace": "            if (subject_.verification_) subject_.TakeSnapshots();",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: a nested schedule*",
+      "expect": "GYO_ASSERT failed: world\\.MembershipEpoch\\(\\) == world\\.runStack_\\.back\\(\\)\\.structure"
+    },
+    {
+      "id": "ks-s5-hook-records-not-applied",
+      "what": "S5: what the hooks of an immediate change record is not applied before it returns (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    while (!own.records.empty()) {",
+      "replace": "    while (false && !own.records.empty()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: what the hooks of an immediate change*",
+      "expect": "\\[ks\\-s5\\-hook\\-rounds\\-now\\]"
+    },
+    {
+      "id": "ks-s5-hook-target-ignored",
+      "what": "S5: a hook an immediate change runs records into the schedule's hook queue, so nothing is applied before it returns (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    HookQueue& queue = hookTarget_ != nullptr ? *hookTarget_ : HookQueueOf(schedule);",
+      "replace": "    HookQueue& queue = HookQueueOf(schedule);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: what the hooks of an immediate change*",
+      "expect": "\\[ks\\-s5\\-hook\\-rounds\\-now\\]"
+    },
+    {
+      "id": "ks-s5-applies-level-records",
+      "what": "S5: the immediate change also applies this level's records not yet at their sync point (DI-KS 19) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (immediate != nullptr) return phase(*immediate);",
+      "replace": "    if (immediate != nullptr) {\n        for (std::size_t i = base; i < window_.size(); ++i) immediate->push_back(std::move(window_[i]));\n        window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());\n        return phase(*immediate);\n    }",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: what the hooks of an immediate change*",
+      "expect": "\\[ks\\-s5\\-hook\\-rounds\\-now\\]"
+    },
+    {
+      "id": "ks-s5-applies-hook-queue",
+      "what": "S5: the hook rounds of an immediate change also apply the schedule's hook queue (DI-KS 19) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        std::vector<Detail::Record> recorded = std::move(own.records);",
+      "replace": "        std::vector<Detail::Record> recorded = std::move(own.records);\n        for (Detail::Record& r : world.HookQueueOf(call.schedule).records) recorded.push_back(std::move(r));\n        world.HookQueueOf(call.schedule).records.clear();",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: what the hooks of an immediate change*",
+      "expect": "\\[ks\\-s5\\-hook\\-rounds\\-now\\]"
+    },
+    {
+      "id": "ks-s5-round-no-stamp",
+      "what": "S5: a hook round of an immediate change reuses the change's stamp (F-6: each round takes its own) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        const ChangeStamp roundStamp = ++world.stamp_;\n        applied = world.ApplySync(call.planPos, call.schedule, roundStamp, &recorded);",
+      "replace": "        const ChangeStamp roundStamp = stamp;\n        applied = world.ApplySync(call.planPos, call.schedule, roundStamp, &recorded);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: what the hooks of an immediate change*",
+      "expect": "\\[ks\\-s5\\-round\\-stamp\\]"
+    },
+    {
+      "id": "ks-s5-round-no-epoch",
+      "what": "S5: a hook round of an immediate change does not advance the sync epoch (F-6) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.trackRoundRecorders_ = false;\n        ++world.syncEpoch_;",
+      "replace": "        world.trackRoundRecorders_ = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: what the hooks of an immediate change*",
+      "expect": "\\[ks\\-s5\\-round\\-epoch\\]"
+    },
+    {
+      "id": "ks-s5-limit-settings-only",
+      "what": "S5: the hook rounds of an immediate change use KernelSettings' limit even when the schedule declares one (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    const std::uint32_t limit = schedule->options.hookRoundLimit.value_or(world.hookRoundLimit_);",
+      "replace": "    const std::uint32_t limit = world.hookRoundLimit_;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: the hook rounds of an immediate change stop*",
+      "expect": "\\[ks\\-s5\\-round\\-limit\\-schedule\\]"
+    },
+    {
+      "id": "ks-s5-closure-not-refused",
+      "what": "S5: an immediate change inside a Read or Modify closure is not refused (DI-KS 21) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (closureOpen) {\n        return stop(",
+      "replace": "    if (false) {\n        return stop(",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 21:*",
+      "expect": "\\[ks\\-s5\\-closure\\-refused\\]"
+    },
+    {
+      "id": "ks-s5-hook-not-refused",
+      "what": "S5: an immediate change through a hook's ExclusiveWorld<> is not refused (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (call.hook) {\n        return stop(",
+      "replace": "    if (false) {\n        return stop(",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: an immediate change through a hook*",
+      "expect": "\\[ks\\-s5\\-hook\\-refused\\]"
+    },
+    {
+      "id": "ks-s5-detour-baseline-set",
+      "what": "S5: the immediate change sets the baseline to the current value instead of checking it first, hiding an earlier change behind the handle (declaration section 12 item 1) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    const std::uint64_t baseline = world.runStack_.back().structure;\n    GYO_ASSERT(world.MembershipEpoch() == baseline);",
+      "replace": "    world.runStack_.back().structure = world.MembershipEpoch();",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: a membership change behind the handle before*",
+      "expect": "\\[ks\\-s5\\-detour\\-before\\]"
+    },
+    {
+      "id": "ks-s5-detour-after-unchecked",
+      "what": "W-3: no membership check after a call that holds ExclusiveWorld, so a change behind the handle after an immediate change is missed (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            GYO_ASSERT(world.MembershipEpoch() == world.runStack_[level].structure);",
+      "replace": "            GYO_ASSERT(state.access.wholeWorld || world.MembershipEpoch() == world.runStack_[level].structure);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: a membership change behind the handle after*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
+    },
+    {
+      "id": "ks-s5-no-compare-first",
+      "what": "S5: with verification on, the System's own changes are not compared before the immediate change, so the snapshots after it hide one it does not declare (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (world.verification_) {\n        const std::vector<std::string> undeclared = world.CompareAfter(*call.access);\n        if (!undeclared.empty()) {\n            std::vector<KernelError> list;\n            for (const std::string& storage : undeclared) {\n                KernelError error(KernelErrorCode::BoundaryChange,\n                                  \"'\" + storage + \"' changed during \" + where +",
+      "replace": "    if (false) {\n        const std::vector<std::string> undeclared = world.CompareAfter(*call.access);\n        if (!undeclared.empty()) {\n            std::vector<KernelError> list;\n            for (const std::string& storage : undeclared) {\n                KernelError error(KernelErrorCode::BoundaryChange,\n                                  \"'\" + storage + \"' changed during \" + where +",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: verification on: a write the System does not declare*",
+      "expect": "\\[ks\\-s5\\-verification\\-before\\]"
+    },
+    {
+      "id": "ks-s5-compare-before-not-own-account",
+      "what": "S5: the comparison before an immediate change is a Ready-window one, not on the System's own account, so its declared writes are reported (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        const std::vector<std::string> undeclared = world.CompareAfter(*call.access);\n        if (!undeclared.empty()) {\n            std::vector<KernelError> list;\n            for (const std::string& storage : undeclared) {\n                KernelError error(KernelErrorCode::BoundaryChange,\n                                  \"'\" + storage + \"' changed during \" + where +",
+      "replace": "        const std::vector<std::string> undeclared = world.CompareBefore();\n        if (!undeclared.empty()) {\n            std::vector<KernelError> list;\n            for (const std::string& storage : undeclared) {\n                KernelError error(KernelErrorCode::BoundaryChange,\n                                  \"'\" + storage + \"' changed during \" + where +",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: verification on: immediate changes*",
+      "expect": "\\[ks\\-s5\\-verification\\-quiet\\]"
+    },
+    {
+      "id": "ks-s6-set-not-recorded",
+      "what": "S6: Commands::SetResource records nothing (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n    }\n\n    template <class T>\n    void RemoveResource() {",
+      "replace": "        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        static_cast<void>(call);\n    }\n\n    template <class T>\n    void RemoveResource() {",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: Commands::SetResource and RemoveResource are applied*",
+      "expect": "\\[ks\\-s6\\-plan\\-order\\]"
+    },
+    {
+      "id": "ks-s6-set-at-record-time",
+      "what": "S6: Commands::SetResource puts the value in when it is recorded, not at the sync point (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n    }\n\n    template <class T>\n    void RemoveResource() {",
+      "replace": "        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        record.value->PutInto(Detail::ResourceAt(*world_, record.id));\n    }\n\n    template <class T>\n    void RemoveResource() {",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: Commands::SetResource and RemoveResource are applied*",
+      "expect": "\\[ks\\-s6\\-deferred\\]"
+    },
+    {
+      "id": "ks-s6-hook-set-at-record-time",
+      "what": "S6: a hook's Commands::SetResource is put in when recorded, not in the next window (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n    }\n\n    template <class T>\n    void RemoveResource() {",
+      "replace": "        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        record.value->PutInto(Detail::ResourceAt(*world_, record.id));\n    }\n\n    template <class T>\n    void RemoveResource() {",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: a hook's Commands::SetResource*",
+      "expect": "\\[ks\\-s6\\-hook\\-next\\-window\\]"
+    },
+    {
+      "id": "ks-s6-remove-not-recorded",
+      "what": "S6: Commands::RemoveResource records nothing (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    void RemoveResource() {\n        Check(\"Commands\");\n        Detail::Push(Detail::RequireCall(*world_),\n                     Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));",
+      "replace": "    void RemoveResource() {\n        Check(\"Commands\");\n        static_cast<void>(Detail::RequireCall(*world_));\n        static_cast<void>(Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: Commands::SetResource and RemoveResource are applied*",
+      "expect": "\\[ks\\-s6\\-record\\-order\\]"
+    },
+    {
+      "id": "ks-s6-plan-order-reversed",
+      "what": "S6: the resource step orders one resource's records by descending planPos (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            return std::make_tuple(a->id, a->planPos, a->recSeq) < std::make_tuple(b->id, b->planPos, b->recSeq);",
+      "replace": "            return std::make_tuple(a->id, b->planPos, a->recSeq) < std::make_tuple(b->id, a->planPos, b->recSeq);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: Commands::SetResource and RemoveResource are applied*",
+      "expect": "\\[ks\\-s6\\-plan\\-order\\]"
+    },
+    {
+      "id": "ks-s6-record-order-reversed",
+      "what": "S6: the resource step orders one call's records of one resource by descending recSeq (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            return std::make_tuple(a->id, a->planPos, a->recSeq) < std::make_tuple(b->id, b->planPos, b->recSeq);",
+      "replace": "            return std::make_tuple(a->id, a->planPos, b->recSeq) < std::make_tuple(b->id, b->planPos, a->recSeq);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: Commands::SetResource and RemoveResource are applied*",
+      "expect": "\\[ks\\-s6\\-record\\-order\\]"
+    },
+    {
+      "id": "ks-s6-no-stamp",
+      "what": "S6: the resource step does not mark the resource with the sync point's stamp (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            slot.changed = stamp;\n        }\n        return {};",
+      "replace": "        }\n        return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 9: Commands::SetResource and RemoveResource are applied*",
+      "expect": "\\[ks\\-s6\\-stamp\\]"
+    },
+    {
+      "id": "ks-s6-sync-bind-missing",
+      "what": "S10 (segment 1 gap): a thread-bound resource put in at the sync point's resource step does not record the applying thread (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                BindThread(op->id);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6: a thread-bound resource put in*",
+      "expect": "\\[ks\\-s6\\-thread\\-bound\\]"
+    },
+    {
+      "id": "ks-s4-layer1-not-declared",
+      "what": "S4 (segment 1 gap): layer 1 takes an exclusive System's World API writes of components and resources as undeclared (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Event) declared = true;",
+      "replace": "        if (false) declared = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5: an exclusive System*",
+      "expect": "\\[ks\\-s4\\-layer1\\-declared\\]"
+    },
+    {
+      "id": "ks-s4-layer1-events-declared",
+      "what": "S4 (segment 1 gap): layer 1 takes an exclusive System's World API read of an event buffer as declared (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Event) declared = true;",
+      "replace": "        if (access.wholeWorld) declared = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5: an exclusive System*",
+      "expect": "\\[ks\\-s4\\-layer1\\-events\\]"
     }
   ]
 }
