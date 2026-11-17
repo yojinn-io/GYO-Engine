@@ -611,11 +611,11 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 ### 15.5 還交使用者的
 
 1. ~~判定資料的讀寫規則~~：照使用者的原則判（15.3），B1～B3 的改寫進下面的確認清單。
-2. **確認清單**（一次看完）：由已定的決定推出、會推翻使用者較早決定的——權威 6.14（D-E9、K.3 第 5 項、Z3 的 stage、(c) 獨占套用的新形狀、`emitterZone`、漏斗 B1～B3、漏斗不再是必經之路）；`shared-means-no-owner`、`exclusive-declared-writes` 的「列出來的算寫者」、`writer-unit-system`、`despawn-not-writer`（隨不數寫者）。
+2. ~~確認清單~~（**已核准**，15.6）：由已定的決定推出、會推翻使用者較早決定的——權威 6.14（D-E9、K.3 第 5 項、Z3 的 stage、(c) 獨占套用的新形狀、`emitterZone`、漏斗 B1～B3、漏斗不再是必經之路）；`shared-means-no-owner`、`exclusive-declared-writes` 的「列出來的算寫者」、`writer-unit-system`、`despawn-not-writer`（隨不數寫者）。
 
 第 14 節的其他題目由本節取代。
 
-### 15.6 確認清單（修訂 28；交使用者一次看完）
+### 15.6 確認清單（修訂 28；**使用者 2026-11-17 核准**：「核准」，`v8-arch-gyo2-confirm-derived-removals`，代號待主會話定）
 
 | # | 較早的決定（使用者的話） | 改成 | 推自 |
 |---|---|---|---|
