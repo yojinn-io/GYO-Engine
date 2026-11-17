@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 26）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 27）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -11,7 +11,7 @@
 - 權威 Module、事件游標、回滾 Module（2026-11-17 加入）的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。修訂 11（同日）：L11 定案（回滾獨立 Module、策略）；新增 L21（策略的構造）；子卡加回滾份。修訂 12（同日）：L16 定案。修訂 13（同日）：Loading 卡已歸檔，「交給 Loading 卡」改成「生成世界之後另開一份宣告，放編排層」。修訂 14（同日）：L17 定案（兩條核心、每層的職責清單、agent 自己判、對照同類型多家）；第 10 節的待判事項全部定完。修訂 15（同日）：L15 定案（產品可以只選部分 Module）。修訂 16（同日）：收游標份修訂 0 回報的七處介面與六條新關聯（L5、L6、L11、L13）；批次先後與主會話的批次表對齊的提案（第 8 節）。修訂 17（同日）：收回滾份修訂 0 回報的六件（L11 原語、L20 回滾→時間、新增 L22）；重跑在哪裡發動交使用者。修訂 18（同日）：收權威份修訂 0 回報的 N1～N8（L6、L10 補充；新增 L23～L28）；N5 交使用者。修訂 19（同日）：四份一起送 Fable／high 交叉檢查（15 條／10 必改；證據 `four-docs-adversarial-check.md`），處理見第 13 節；新增 L29、L30；要問使用者的題目合併去重、排好順序（第 14 節）。修訂 20（同日）：四份修正後送 Fable／high 第二輪檢查（17 條新的／6 必改；上一輪 15 條：已解決 6、部分 8、子份解決統合沒跟上 1；證據 `four-docs-adversarial-check-r2.md`），統合的部分本頁已改，處理見第 13 節末；第 14 節重排。修訂 21（同日）：收權威份修訂 2（4a4f177b）——L26 改成作者用名字標記、權威與狀態機互不依賴；權威 6.15 排進第 14 節第 7 題；權威 4.4 的代為登記時機列進第 3 題的材料。修訂 22（同日）：使用者在 side chat 定第 14 節第 4 題——伺服器權威策略不數寫者（`v8-arch-gyo2-authority-no-writer-count`）；L28 不用定；第 14 節去掉因此不用問的題；權威份照這個決定出新修訂、列出連帶影響，之後四份再做一次換模型的交叉檢查（使用者同意的做法）。修訂 23（同日）：收權威份修訂 3（9efe5e1a）——`WritePolicy` 改成拿掉；權威 6.16（判定資料的讀寫規則）排進第 14 節第 1 題；豁免寫者的登記隨 6.16。修訂 24（同日）：使用者在 side chat 定第 14 節第 2 題——不替回滾開 DI-KS 18 的例外，改建機制：System 登記時宣告能不能當場改成員（`v8-arch-gyo2-system-declares-immediate-structural-change`，代號待主會話定）；第三輪檢查（21 條／9 必改）未處理，收口照停止回報等使用者選路。修訂 25（同日）：使用者選「先問會收斂的題、一題一題來」，並要求先問底層機制；第一題定了：可以當場改成員的宣告沿用 `ExclusiveWorld`（`v8-arch-gyo2-immediate-change-via-exclusive-world`，代號待主會話定）。修訂 26（同日）：使用者在 side chat 定事件照 Bevy 分兩種——現在的保留式改名（對應 Bevy `Message`）、增加推送式（對應 Bevy `Event`＋`Observer`），位置照 Bevy（`bevy_ecs` → Kernel）（`v8-arch-gyo2-events-two-kinds-like-bevy`，代號待主會話定）；Kernel 職責清單因此多一項，由這個決定涵蓋。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。修訂 11（同日）：L11 定案（回滾獨立 Module、策略）；新增 L21（策略的構造）；子卡加回滾份。修訂 12（同日）：L16 定案。修訂 13（同日）：Loading 卡已歸檔，「交給 Loading 卡」改成「生成世界之後另開一份宣告，放編排層」。修訂 14（同日）：L17 定案（兩條核心、每層的職責清單、agent 自己判、對照同類型多家）；第 10 節的待判事項全部定完。修訂 15（同日）：L15 定案（產品可以只選部分 Module）。修訂 16（同日）：收游標份修訂 0 回報的七處介面與六條新關聯（L5、L6、L11、L13）；批次先後與主會話的批次表對齊的提案（第 8 節）。修訂 17（同日）：收回滾份修訂 0 回報的六件（L11 原語、L20 回滾→時間、新增 L22）；重跑在哪裡發動交使用者。修訂 18（同日）：收權威份修訂 0 回報的 N1～N8（L6、L10 補充；新增 L23～L28）；N5 交使用者。修訂 19（同日）：四份一起送 Fable／high 交叉檢查（15 條／10 必改；證據 `four-docs-adversarial-check.md`），處理見第 13 節；新增 L29、L30；要問使用者的題目合併去重、排好順序（第 14 節）。修訂 20（同日）：四份修正後送 Fable／high 第二輪檢查（17 條新的／6 必改；上一輪 15 條：已解決 6、部分 8、子份解決統合沒跟上 1；證據 `four-docs-adversarial-check-r2.md`），統合的部分本頁已改，處理見第 13 節末；第 14 節重排。修訂 21（同日）：收權威份修訂 2（4a4f177b）——L26 改成作者用名字標記、權威與狀態機互不依賴；權威 6.15 排進第 14 節第 7 題；權威 4.4 的代為登記時機列進第 3 題的材料。修訂 22（同日）：使用者在 side chat 定第 14 節第 4 題——伺服器權威策略不數寫者（`v8-arch-gyo2-authority-no-writer-count`）；L28 不用定；第 14 節去掉因此不用問的題；權威份照這個決定出新修訂、列出連帶影響，之後四份再做一次換模型的交叉檢查（使用者同意的做法）。修訂 23（同日）：收權威份修訂 3（9efe5e1a）——`WritePolicy` 改成拿掉；權威 6.16（判定資料的讀寫規則）排進第 14 節第 1 題；豁免寫者的登記隨 6.16。修訂 24（同日）：使用者在 side chat 定第 14 節第 2 題——不替回滾開 DI-KS 18 的例外，改建機制：System 登記時宣告能不能當場改成員（`v8-arch-gyo2-system-declares-immediate-structural-change`，代號待主會話定）；第三輪檢查（21 條／9 必改）未處理，收口照停止回報等使用者選路。修訂 25（同日）：使用者選「先問會收斂的題、一題一題來」，並要求先問底層機制；第一題定了：可以當場改成員的宣告沿用 `ExclusiveWorld`（`v8-arch-gyo2-immediate-change-via-exclusive-world`，代號待主會話定）。修訂 26（同日）：使用者在 side chat 定事件照 Bevy 分兩種——現在的保留式改名（對應 Bevy `Message`）、增加推送式（對應 Bevy `Event`＋`Observer`），位置照 Bevy（`bevy_ecs` → Kernel）（`v8-arch-gyo2-events-two-kinds-like-bevy`，代號待主會話定）；Kernel 職責清單因此多一項，由這個決定涵蓋。修訂 27（同日）：使用者「什麼都要我來定，乾脆代碼我也自己寫好了。名字你有命名規範。例子你有源碼。」——第 14 節的題目重篩，能照 L17 判的由統合判（第 15 節），只剩兩件交使用者。
 
 ## 0. 依據
 
@@ -523,7 +523,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 
 ---
 
-## 14. 要問使用者的題目：合併去重、排好順序（修訂 20 重排）
+## 14. 要問使用者的題目：合併去重、排好順序（修訂 20 重排；**修訂 27 起由第 15 節取代，只留作紀錄**）
 
 來源：統合第 10 節第 12、13 件；權威份第 6 節（15 件，含 6.14 確認清單、6.15）；回滾份第 10 節；游標份第 4 節（8 件）；兩輪交叉檢查新增的。排序的根據是「先定的會改變後面哪些」；同一列的子題一起問。每題問的時候先講遊戲的例子，再列別家的做法與公平的選項，一次一題。
 
@@ -555,3 +555,62 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 **順序的說明**（修訂 22）：第 4 題定了之後，權威份要出新修訂、四份再做一次交叉檢查；第 2、3 題與游標、回滾的題不受影響，可以先問；第 1、6、7 題用權威份修訂 3（9efe5e1a）的材料。
 
 **不問的**：權威 6.9 的「何時比」「不一致怎麼辦」延到網路 Module 的宣告（L23）；權威 6.10 沒有選項；L8 統合已判；Derived 回滾份已接、不提議不帶。
+
+---
+
+## 15. 統合照 L17 判的（修訂 27）
+
+使用者 2026-11-17 被逐題問設計細節後說：「什麼都要我來定，乾脆代碼我也自己寫好了。名字你有命名規範。例子你有源碼。」所以第 14 節的題目重篩：名字照命名規範、細節照別家原始碼，由統合（或 side chat）照 L17 自己判，**下表都標「卡片照 L17 判，不是使用者的話」**。只把三類交使用者：會推翻使用者之前的決定的、別家做法分歧且真的有取捨的、某層職責清單要多一項的。官方策略的內部選擇（作者可以替換，L21）一律自己判。
+
+### 15.1 底層機制（Kernel）
+
+| 項目 | 判定 | 系譜 |
+|---|---|---|
+| 推送式事件（side chat 照 L17 判，2026-11-17） | 名字：保留式 `Message`、`MessageReader`、`MessageWriter`、`MessageOptions`（取代 `Event*`）；推送式 `Event`、`Observer`、觸發 `Trigger`、observer 參數 `On<E>`；事件型別名用過去式（naming DI 2）。觸發：`ExclusiveWorld` 與 Host 的 `Trigger` 當場跑 observer；一般 System 用 `Commands` 的 `Trigger`，在同步點套用時觸發；observer 依登記順序跑。hook 不併入，同一個變更先 hook 再 observer；元件生命週期觸發 observer 先不做（沒有名指的 Feature），介面不擋。observer 是 System，存取照簽名推出、照存取驗證，在觸發點跑、不進 Plan 的步驟（同 hook）。DI-KS 15 第 (2) 項「事件」涵蓋兩種，不算多一項 | Bevy `World::trigger`（`event/mod.rs:14-16`）、`Commands::trigger`（`system/commands/mod.rs:1160`）、`On<E>`（`observer/system_param.rs:25`）、hook 先於 observer（`world/entity_access/mod.rs:1344-1345`） |
+| 保留式（`Message`）的游標放哪 | 放在 World，以（掛載點、訊息種類）為鍵 | 照游標修剪（使用者 `event-trim-by-cursor`）要求 Kernel 讀得到全部游標；Bevy 放 `Local` 的理由（保留不看游標，`messages.rs:72-77`）在 GYO 不成立 |
+| 誰算一個讀者 | System 掛載、run 條件、hook 都是讀者，各有游標；推游標不算寫入 | Bevy `on_message` 條件自帶游標（`schedule/condition.rs:1148-1154`，註解：不推會一直誤判） |
+| 從沒跑過的讀者、新讀者 | 跑過一次才拉住保留；第一次跑從還留著的最舊一筆讀起 | Bevy 新游標讀到緩衝裡還在的（`messages.rs:175-176`） |
+| 上限 | 每種訊息留幾筆，預設 1024、登記時可改（沒有量測根據，是預設值）；滿了丟最舊、記一筆；不給「滿了算錯誤」 | 使用者「丟了有記錄」；時間設計 6.3 (1) 自己寫的陷阱（UI 指令設成錯誤、暫停時整個 World 停） |
+| 丟棄記錄 | World 記明細、runner 在交換點取走（照 `RejectedSpawn` 的形） | GYO 自己的 `spawn-reject-details-unbounded-runner-takes` |
+| 順序鍵 | 每種訊息一個單調遞增的寫入序號 | Bevy `MessageId { id }`（`mod.rs:120-123`） |
+| 修剪時機 | 每次最外層 Run 結束（hook 清空輪之後）修剪讀過的；寫入時碰到上限當場丟最舊 | GYO `hook-flush-not-in-plan-bump-versions`；Bevy 一幀輪替一次 |
+| 時間標記 | 紀錄只帶序號；要 tick 的訊息自己在內容裡帶 | Bevy 的 Messages 不帶 tick；replicon 的 tick 在它自己的佇列（`server_message.rs:481`、`:501-513`） |
+| 事件進回滾快照 | 不進：`Message` 不回滾，Kernel 不加事件的原語；推送式不保留、重跑時重新觸發，observer 讀「重跑中」自己判斷。使用者 `time-plan-two` (5)「可回滾的 schedule 不參與」照舊，由回滾策略在啟動時檢查（兩個方向） | lightyear、bevy_ggrs 都不回滾訊息；lightyear `is_rollback()`（`manager.rs:403-408`） |
+| 「誰實際寫的」的記號 | 不在這一輪定：使用者 11-15 已定「另外排一批」，記號放不放 Kernel 的寫入關口在那一批的宣告定；要放時是 Kernel 職責清單多一項，那時照 L17 停下問 | — |
+
+### 15.2 編排與 Module 的接法
+
+| 項目 | 判定 | 系譜 |
+|---|---|---|
+| 策略選在哪一層 | 權威策略與回滾策略都選在 World（建 World 時的選項，在各 Module build 之前），因為登記、Plan、Registry 都是每個 World 一份；沒有回滾策略的 World 就是不回滾、不報錯（Match）；回滾 Module 建起來就登記「重跑中」Resource（恆為不在重跑）；World 有權威登記卻沒選權威策略是啟動錯誤 | Unity Netcode 每個 World 各自是 Client／Server World；lightyear、bevy_ggrs 裝了 plugin 就有預設行為 |
+| 代為登記的時機 | 策略在建 World 時就選定，權威 Module 的登記入口交給已選的策略（`OnRegister`），一定在建 Plan 之前 | 權威份 4.4 |
+| 批次先後、時間 Module 的宣告由誰寫 | 交主會話排（不是使用者的題目） | — |
+
+### 15.3 權威（官方的伺服器權威策略；作者可替換）
+
+| 項目 | 判定 | 系譜 |
+|---|---|---|
+| Module 的名字 | `Authority`（`engine/authority`） | 使用者與所有決定都用「權威」；replicon 自稱 server-authoritative |
+| 經權威登記的就是判定資料 | 是，不另填屬性；「要不要複製」是網路 Module 自己的登記 | lightyear、replicon 的複製登記都在網路套件 |
+| 「tick 只有一個來源」 | 專用檢查：只准時間 Module 公開的驅動者與對時寫 tick | 使用者 11-17 `clock-out-of-kernel` 已把這條歸伺服器權威策略；拿掉會推翻它 |
+| C 指紋與 wire id 的編號 | 權威登記的順序 | replicon `registry.rs:111-124`（順序進協議雜湊） |
+| G-5 的兩份匯出 | 留 | 權威份 5.12 |
+| digest 比什麼 | 全部的判定元件與 Resource，作者可排除；不含訊息與游標 | lightyear 只算登記了雜湊的元件（`checksum.rs`、`registry/deterministic.rs:47-75`） |
+| 「何時比」「不一致怎麼辦」、跨 World 與網路的形狀 | 延到網路 Module 的宣告 | L23 |
+| System 是不是判定的、輸入入口的先後 | 隨第 14 節還交使用者的「判定資料的讀寫規則」 | — |
+
+### 15.4 回滾（官方策略；作者可替換）
+
+| 項目 | 判定 | 系譜 |
+|---|---|---|
+| 歷史存哪 | World 裡的 Resource | bevy_ggrs |
+| 還原跑不跑 hook、stamp | 跑 hook；標目前 stamp | lightyear、bevy_ggrs |
+| 副作用的提醒 | 不檢查；作者讀「重跑中」 | lightyear、bevy_ggrs 都不檢查 |
+| 回滾等價的前提由誰守 | 沒選伺服器權威時是作者的責任（回滾不加新規則）；選了時由權威的規則守多少，隨「判定資料的讀寫規則」 | lightyear、bevy_ggrs 都不檢查 |
+
+### 15.5 還交使用者的
+
+1. **判定資料的讀寫規則**（權威 6.16）：拿掉「寫的一半」會推翻使用者 11-14 的「B1–B3 要擋」。
+2. **確認清單**（一次看完）：由已定的決定推出、會推翻使用者較早決定的——權威 6.14（D-E9、K.3 第 5 項、Z3 的 stage、(c) 獨占套用的新形狀、`emitterZone`、漏斗 B1～B3、漏斗不再是必經之路）；`shared-means-no-owner`、`exclusive-declared-writes` 的「列出來的算寫者」、`writer-unit-system`、`despawn-not-writer`（隨不數寫者）。
+
+第 14 節的其他題目由本節取代。
