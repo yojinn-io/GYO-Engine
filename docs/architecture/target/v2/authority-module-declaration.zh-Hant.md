@@ -16,7 +16,7 @@
 |---|---|
 | 程式 | `gyo2` f00433b0（Kernel 的程式和統合讀的 cb6bccca 相同） |
 | 決定表 | HANDOFF，分支 `claude/gyo2-time-design` |
-| 統合 | 35e8a1f3（第 15 節；15.6 確認清單第 1～10 件使用者核准，`v8-arch-gyo2-confirm-derived-removals`，第 11～13 件待使用者；第 16 節第四輪檢查的判定） |
+| 統合 | 35e8a1f3（第 15 節；15.6 確認清單第 1～10 件使用者核准，`v8-arch-gyo2-confirm-derived-removals`，第 11～13 件使用者核准（`v8-arch-gyo2-confirm-derived-removals-11-13`）；第 16 節第四輪檢查的判定） |
 | 回滾份 | 3ca4caf5（分支 `claude/gyo2-rollback-module-8bac02`）：公開登記 `rollback.Component<T>`、`rollback.Resource<R>`（沒登記＝不回滾）、`rollback.Derived<T>()`、**步的 schedule** `rollback.StepSchedule(name, recordStage)`、從它巢狀跑的 schedule `rollback.NestedSchedule(name, stepSchedule)`、重跑時不跑 `rollback.SkipDuringResimulation(...)`、輸入的歷史 `rollback.Input<T>(capacity)`；重複登記作者的為準、不論先後，登記帶「作者／代為」的來源（5.4）；「重跑中」Resource 放在時間 Module（時間宣告的要求；不收時退回由回滾 Module 登記，恆在）；官方的還原與重跑 System 是不帶 `Writes<…>` 標註的 `ExclusiveWorld` System（統合 16）；回滾不依賴權威。**本文的「可回滾 schedule」＝步的 schedule 與從它巢狀跑的 schedule** |
 | 回收清單 | `recovered-from-stale-cards.zh-Hant.md`（同 HANDOFF 的分支） |
 | 舊規格（只取設計思想） | `docs/architecture/plans/kernel/spec.zh-Hant.md`：B.3、G 節、K.3 |
@@ -44,7 +44,7 @@
 | # | 統合的結論（摘） | 本份怎麼用 |
 |---|---|---|
 | L1 | 分層：產品 → 各 Module → 編排層 → Kernel；箭頭朝下 | 權威 Module 依賴編排層的登記單位型別與 Kernel；Kernel、編排層不認得權威 |
-| L2 | 時鐘與 tick 移到時間 Module；「tick 只有一個來源、System 不得寫」與「(c) 區的時間只來自 tick」歸伺服器權威策略 | 5.4：前者用專用檢查；後者隨讀寫規則拿掉而不再由啟動檢查守——**待使用者確認**（統合 15.6 第 11 件） |
+| L2 | 時鐘與 tick 移到時間 Module；「tick 只有一個來源、System 不得寫」與「(c) 區的時間只來自 tick」歸伺服器權威策略 | 5.4：前者用專用檢查；後者隨讀寫規則拿掉而不再由啟動檢查守——**已核准**（`v8-arch-gyo2-confirm-derived-removals-11-13`，使用者「核准確認清單 11～13」） |
 | L3 | Kernel 拿掉執行期的攔截；伺服器權威改靠 digest 比對與伺服器覆蓋抓錯（使用者的原話只到這裡） | 權威只有啟動時的檢查與執行中的計算，不攔寫入 |
 | L4 | 初始值在建立當下給、不算寫者（P13 之後「寫者」不再數） | 不影響本份；生成不受任何規則管（5.2） |
 | L5 | Kernel 兩步、可重複；編排層 build → 建 Plan → finish → 權威檢查；每個 World 宣告准不准動態插入；伺服器權威要求不准 | 4.5、5.5 |
@@ -229,9 +229,9 @@ World 有權威登記（任何一個權威登記入口被呼叫過）卻沒選�
 | `RejectedSpawn::emitterZone` | 拿掉、不給替代 | 確認清單第 7 條 |
 | Z6、漏斗 B3、Z8、D-E15（判定資料 × 回滾） | **留**：伺服器權威讀回滾公開登記的交叉檢查；Z6 對 tick 例外 | L24；確認清單第 1 條；統合 16；5.11 |
 | D-E16（Derived 的順序）、可回滾的 Yes／No | 回滾 Module | L24 |
-| X-2、D-E11、X-E1（DI-KS 7；含 (c) 的 schedule 宣告 Parallel 要守衛測試） | 拿掉：「含 (c) 的 schedule」已無定義；Parallel 未實作仍由 Kernel 的 D-E17 擋——**待使用者確認**（統合 15.6 第 13 件）。不同意時要補：「宣告 Parallel 的 schedule 若有寫判定資料的 System，要指名逐位元相同的守衛測試」（不用區也做得到） | P14 的連帶 |
+| X-2、D-E11、X-E1（DI-KS 7；含 (c) 的 schedule 宣告 Parallel 要守衛測試） | 拿掉：「含 (c) 的 schedule」已無定義；Parallel 未實作仍由 Kernel 的 D-E17 擋——**已核准**（`v8-arch-gyo2-confirm-derived-removals-11-13`，使用者「核准確認清單 11～13」） | P14 的連帶 |
 | tick 只有一個來源（DI-KS 8） | **留**：專用檢查 | L2；統合 15.3；5.4 |
-| (c) 區的時間只來自 tick（K.3 第 11 項） | 不再由啟動檢查守，只剩 G-5 的來源掃描與 digest——**待使用者確認**（統合 15.6 第 11 件）；不同意時要補的見 5.4 | P14 的連帶；5.4 |
+| (c) 區的時間只來自 tick（K.3 第 11 項） | 不再由啟動檢查守，只剩 G-5 的來源掃描與 digest——**已核准**（`v8-arch-gyo2-confirm-derived-removals-11-13`，使用者「核准確認清單 11～13」） | P14 的連帶；5.4 |
 | C 指紋、G-5 兩份匯出 | 留；編號改用權威登記順序 | 統合 15.3；5.5、5.9 |
 | World 不准動態插入 | 留 | L5；5.5 |
 
@@ -252,7 +252,7 @@ World 有權威登記（任何一個權威登記入口被呼叫過）卻沒選�
 - 「System 是不是判定的」不用問，作者不標判定的 System。
 - 規則 2（不用 `Local`、不宣告 Io、不用 `Changed`）拿掉——它的對象是「判定的 System」。
 - 生成帶的值不受任何規則管（生成世界、讀檔的一般 System 可以生成判定實體）；兩端初始狀態不同，連線後由 digest 看出來。
-- `funnel-one-principle`（11-14 使用者「好，照這個方向改」：寫請求的人在區的檢查裡當作也寫了目標）沒有對象了，拿掉——**待使用者確認**（統合 15.6 第 12 件）。不同意時：它只能掛在區的檢查上，要留就得重開 P14。
+- `funnel-one-principle`（11-14 使用者「好，照這個方向改」：寫請求的人在區的檢查裡當作也寫了目標）沒有對象了，拿掉——**已核准**（`v8-arch-gyo2-confirm-derived-removals-11-13`，使用者「核准確認清單 11～13」）。
 - 回滾等價的前提（可回滾的資料只被可回滾 schedule 上的 System 寫等）是作者的責任；伺服器權威只守 5.11 那幾條。
 - 判定的 System 讀了只在一端有的資料（UI、設定）造成的分岔，只能靠 digest 與覆蓋。
 
@@ -271,7 +271,7 @@ World 有權威登記（任何一個權威登記入口被呼叫過）卻沒選�
 - 看不到的：untyped 的寫入、獨占 System 沒標註的寫入（L3、L7）。回滾的重跑把 tick 退回（回滾份 7.2）是不帶 `Writes<…>` 標註的 `ExclusiveWorld` System 做的（統合 16），啟動時看不到，不會被這條擋。
 - 對時只在 Client 有：它不在 C 指紋裡（名單是時間 Module 的事，不進指紋）。
 
-**(c) 區的時間只來自 tick**（K.3 第 11 項，L2 歸伺服器權威策略）：原本靠「判定的 System 只讀判定資料」（每幀時間、牆鐘的取樣不是判定資料）。P14 拿掉讀的一半之後，**這條不再由啟動檢查守**；剩下 G-5 的來源掃描（判定程式碼不 include `<chrono>` 等，5.9）與 digest。這是 P14 推出來的後果——**待使用者確認**（統合 15.6 第 11 件）；文字和統合一致。**不同意時要補**：一條只針對時間的讀取檢查——「寫判定資料的 System、hook、observer 不讀時間 Module 公開的非 tick 時間 Resource（每幀時間、真實時間）」，要時間 Module 公開那幾個型別。
+**(c) 區的時間只來自 tick**（K.3 第 11 項，L2 歸伺服器權威策略）：原本靠「判定的 System 只讀判定資料」（每幀時間、牆鐘的取樣不是判定資料）。P14 拿掉讀的一半之後，**這條不再由啟動檢查守**；剩下 G-5 的來源掃描（判定程式碼不 include `<chrono>` 等，5.9）與 digest。這是 P14 推出來的後果——**已核准**（`v8-arch-gyo2-confirm-derived-removals-11-13`，使用者「核准確認清單 11～13」）；文字和統合一致。（修訂 5 列的「不同意時要補的時間讀取檢查」不需要了。）
 
 時間設計 DI 2「`RealTime`、`VirtualTime`、`FixedTime` 各只有一個寫者…既有的獨占寫入檢查就是守衛」（`rebuild-time-design.zh-Hant.md:544`）的守衛隨 P13 沒有了；列進時間 Module 宣告的要求（第 8.2 節）。
 
@@ -384,7 +384,7 @@ World 有權威登記（任何一個權威登記入口被呼叫過）卻沒選�
 | 6.10 伺服器覆蓋的歸屬 | 不是題目（L23、L11） | 統合 | — |
 | 6.11 tick 只有一個來源 | 專用檢查（只准時間 Module 公開的驅動者與對時寫） | 統合照 L17 判 | 統合 15.3 |
 | 6.12 G-5 匯出 | 留 | 統合照 L17 判 | 統合 15.3 |
-| 6.14 確認清單 | 第 1～10 件**已核准**；第 11～13 件（(c) 的時間只來自 tick、`funnel-one-principle`、X-2）**待使用者確認** | **使用者**（第 1～10 件「核准」） | `v8-arch-gyo2-confirm-derived-removals` |
+| 6.14 確認清單 | 第 1～10 件**已核准**；第 11～13 件（(c) 的時間只來自 tick、`funnel-one-principle`、X-2）也**已核准** | **使用者**（第 1～10 件「核准」；第 11～13 件「核准確認清單 11～13」，`v8-arch-gyo2-confirm-derived-removals-11-13`） | `v8-arch-gyo2-confirm-derived-removals` |
 | 6.15 入口的先後 | 拿掉（P14） | 統合照 L17 判 | 統合 15.3 |
 | 6.16 判定資料的讀寫規則 | 兩半都拿掉 | 統合照使用者的原則判 | 統合 15.3 |
 
@@ -450,7 +450,7 @@ World 有權威登記（任何一個權威登記入口被呼叫過）卻沒選�
 
 ### 8.2 修訂 4 新回報的
 
-1. **「(c) 區的時間只來自 tick」不再由啟動檢查守**（5.4）：L2 把它歸伺服器權威策略（`clock-out-of-kernel`），它原本靠「判定的 System 只讀判定資料」；15.3 拿掉讀的一半之後，只剩 G-5 的來源掃描與 digest。這是 P14 推出來的，改寫了使用者 11-11 K.3 第 11 項與 11-17 L2 的一句。**統合已列進確認清單第 11 件，待使用者確認**（另補了第 12 件 `funnel-one-principle`、第 13 件 X-2）。
+1. **「(c) 區的時間只來自 tick」不再由啟動檢查守**（5.4）：L2 把它歸伺服器權威策略（`clock-out-of-kernel`），它原本靠「判定的 System 只讀判定資料」；15.3 拿掉讀的一半之後，只剩 G-5 的來源掃描與 digest。這是 P14 推出來的，改寫了使用者 11-11 K.3 第 11 項與 11-17 L2 的一句。統合列進確認清單第 11 件（另補第 12 件 `funnel-one-principle`、第 13 件 X-2），三件都**已核准**（`v8-arch-gyo2-confirm-derived-removals-11-13`，使用者「核准確認清單 11～13」）；修訂 5 寫的「不同意時要補什麼」不需要了。
 2. **時間設計 DI 2 的守衛沒了**：「`RealTime`、`VirtualTime`、`FixedTime` 各只有一個寫者…既有的獨占寫入檢查就是守衛」（`rebuild-time-design.zh-Hant.md:544`）隨 P13 失去守衛，列進時間 Module 宣告的要求。
 3. **`OneEndOnly` 標記**（5.5、4.3）：為了 C 指紋能收「寫判定資料的 System」又不收只在一端的。網路 Module 的需求多一條（8.1）。
 4. **讀檔卡**：統合 L28 寫過「讀檔放回的值不算寫者，已通知讀檔卡」；現在要改通知成「不數寫者、也不檢查誰寫判定資料」（P13、P14）。
@@ -515,5 +515,5 @@ World 有權威登記（任何一個權威登記入口被呼叫過）卻沒選�
 - 回滾 Module 的公開登記照回滾份 3ca4caf5 的名字（第 0 節）；5.11 只寫要讀什麼。
 - 別家的做法來自子 agent 讀本機原始碼（0.1），卡片抽查了一部分；Unity 讀的是非官方鏡像。
 - 舊規格只取設計思想；舊的具體做法（`InputRing`、`HostClockSample`、`Restore`）不帶進來。
-- 待使用者確認的三件（統合 15.6 第 11～13 件）：「(c) 區的時間只來自 tick」不再由啟動檢查守（5.4）、`funnel-one-principle` 拿掉（5.2）、X-2 拿掉（5.0）。各自寫了不同意時要補什麼。
+- 統合 15.6 第 11～13 件（「(c) 區的時間只來自 tick」不再由啟動檢查守、`funnel-one-principle` 拿掉、X-2 拿掉）**已核准**（`v8-arch-gyo2-confirm-derived-removals-11-13`，使用者「核准確認清單 11～13」）。
 - 修訂 0～2 送過三輪四份交叉檢查；修訂 3、4 沒有單獨送，收口時四份再一起送一次（統合卡負責）。
