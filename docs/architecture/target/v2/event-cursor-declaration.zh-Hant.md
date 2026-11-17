@@ -1,263 +1,182 @@
-# 事件游標：事前宣告（修訂 3）
+# 事件游標：事前宣告（修訂 4）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-event-cursor`。
-> 這一份是「Kernel 與編排層的邊界」拆成三份裡的事件游標份（`v8-arch-gyo2-boundary-split-integrator-first`）。**以統合為準**：統合 `kernel-app-boundary-declaration.zh-Hant.md`（分支 `claude/gyo2-kernel-app-boundary-4af68c`，本頁對齊的是修訂 20，20f62ae1）定過的事，本頁不改；本頁發現的新關聯列在第 11 節、已回報統合那張卡。收口時三份一起送換模型檢查，由統合那張卡負責。
+> 這一份是「Kernel 與編排層的邊界」拆成的子份裡，Kernel 事件那一份（`v8-arch-gyo2-boundary-split-integrator-first`）。**以統合為準**：統合 `kernel-app-boundary-declaration.zh-Hant.md`（分支 `claude/gyo2-kernel-app-boundary-4af68c`，本頁對齊修訂 28，16c84630）定過的事，本頁不改。
 
-**修訂紀錄**：修訂 0（facc0846）回報統合第 5.2 節的七處介面與第 11 節的六條新關聯。修訂 1（2026-11-17）：統合修訂 16 照 L17 判了那七處與新關聯（第 5.2 節、第 11 節改成統合的判定），並提了新的批次先後（第 10 節）。第 4 節要使用者判的八件不變。修訂 2（2026-11-17）：照統合修訂 19（1f0e5dac，四份交叉檢查 Fable／high 之後）改兩處——註明 PvP Client 的模擬（可回滾的固定步）不走「固定步寫、每幀讀」的路，留給統合第 14 節第 10 題；時間設計 6.3 (2) 的「依位置讀」與「走 Ingress」改依統合 L11 的更正寫成使用者的確認題。第 4 節的八件併入統合第 14 節的順序（第 8、9、10、17 題），本卡不另外問。修訂 3（2026-11-17）：照統合修訂 20（20f62ae1，第二輪交叉檢查 Fable／high 之後）——第 0 節的表照統合修訂 20 更新（L8、L10、L13）；第 11 節第 3 條拿掉「內容不變」；PvP Client 的註記補上「每幀寫、固定步讀」那個方向；第 4.8 節寫明放回哪些讀者的游標由統合第 14 節第 10 題一起定；時間設計 6.3 (2) 改照統合的更正寫成主會話的設計稿；題號照統合第 14 節的 20 題。
+**修訂紀錄**：修訂 0（facc0846）寫出八件要使用者判的題目，並回報七處介面與六條新關聯。修訂 1（c55f1253）照統合修訂 16 記下那七處的判定。修訂 2（96fae7dc）、修訂 3（bafc4050）照統合修訂 19、20 的交叉檢查補 PvP Client 的註記與回滾的題目。**修訂 4（2026-11-17，最後一版）**：使用者定「事件照 Bevy 分兩種」（`v8-arch-gyo2-events-two-kinds-like-bevy`），保留式改名 `Message`，推送式（`Event`、`Observer`）併入本頁；八件題目由統合照 L17 判（統合第 15.1 節），第 4 節改成判定的紀錄。選項的比較表留在 git 歷史（修訂 3，bafc4050，第 4 節）。之後四份一起做一次換模型檢查，再請使用者核准（統合那張卡負責）。
 
 ---
 
 ## 0. 引用統合的關聯表
 
-統合第 1 節的關聯表裡，本頁開頭要引用的七條（「事項」與「狀態」欄照統合修訂 20 摘錄；統合在 L5、L6、L9、L11 加了本頁回報的關聯，見第 11 節）：
+統合第 1 節的關聯表裡，本頁開頭要引用的七條（「狀態」欄照統合修訂 28 摘錄）：
 
-| # | 事項 | 狀態（統合修訂 20） | 本頁怎麼用 |
+| # | 事項 | 狀態（統合修訂 28） | 本頁怎麼用 |
 |---|---|---|---|
-| L1 | 分層與歸屬（統合第 3 節） | 已定 | 事件的緩衝、游標、修剪留在 Kernel（統合 3.1「事件改游標」）；跨 World、經網路的轉送不在 Kernel |
-| L2 | 時鐘與 tick 移出 Kernel，到時間的 Module（`Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1） | **已定**（`v8-arch-gyo2-clock-out-of-kernel`） | 事件的順序鍵與上限的單位**不能用 tick**；`EventOptions::domain` 沒有了，「事件屬於哪個時鐘」不再存在，F-9 與 F-E1 一起拿掉 |
-| L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 隨 L2：改用 Kernel 自己的計數（stamp 或同步點序號）。**統合照 L17 判**（修訂 19）：計數是 Kernel 自己的（World 的儲存與同步點，DI-KS 15 的清單內）；選 stamp 或同步點序號是實作的細節、不是層的邊界，不問使用者，由實作批定 | 丟棄記錄上的時間標記用 L8 定的那一個計數，本頁不另選（第 4.4 節） |
-| L10 | Registry 與 Plan 指紋改版、golden 重產 | 已定為後果；游標份負責 Plan 的 `EventTrim`。統合另記：跨端比較的指紋不用 Kernel 的編號（權威份）；Registry 與 Plan 指紋只在同一端比，照舊用 Kernel 的編號 | 拿掉 Plan 的 `EventTrim` 步與 `ScheduleOptions::eventTrim`，Plan 與 Registry 指紋改版、golden 重產（第 8 節） |
-| L11 | 回滾的機制放哪 | **已定**（`v8-arch-gyo2-rollback-module-strategy`）：Kernel 只給原語，清單由回滾份回報統合定；回滾是獨立的 Module，有策略。事件進快照時的原語（取出／放回紀錄、寫入序號、讀者游標）已記入；「可回滾的 schedule 不參與」的檢查移到回滾策略讀 L6；修訂 19、20 更正「內容不是全部不變」（見第 1 節） | 「事件進不進快照」「可回滾的部分不參與」怎麼落地，依回滾份回報的原語清單；本頁兩種結果各寫一段（第 4.8 節第三段） |
-| L13 | 事件游標：游標放哪、上限與單位、丟棄記錄、不執行的讀者、順序鍵、跨時鐘事件的網路要求 | 待游標份（8 件交使用者） | 本頁的範圍。介面變更只限事件 API（`EventReader`、`EventWriter`、`World::EventPayloads`、Plan 的 `EventTrim`）；動到別的 Kernel 介面的，列在第 5.2 節並回報統合 |
-| L17 | 替換條件與歸屬的判斷方式 | **已定**（`v8-arch-gyo2-layer-duty-lists`）：兩條核心＋每層的職責清單；agent 自己判；判斷時對照同類型多家實作 | 統合 DI-KS 15 的 Kernel 職責清單有「事件（游標）」一項；本頁每個選項都對照 Bevy、flecs、Unity 的事件，第 9 節的 RC 用「清單多一項」 |
+| L1 | 分層與歸屬（統合第 3 節） | 已定 | 兩種事件都留在 Kernel（照 `bevy_ecs`，`events-two-kinds-like-bevy`）；跨 World、經網路的轉送不在 Kernel |
+| L2 | 時鐘與 tick 移出 Kernel，到時間的 Module（`Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1） | **已定**（`v8-arch-gyo2-clock-out-of-kernel`） | 訊息的順序鍵與上限的單位不用 tick；訊息不屬於任何時鐘，F-9 與 F-E1 一起拿掉 |
+| L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 改用 Kernel 自己的計數（stamp 或同步點序號）。**統合照 L17 判**（修訂 19）：選哪一個是實作的細節、不問使用者，由實作批定 | 丟棄記錄要標時間時，用 L8 定的那個計數 |
+| L10 | Registry 與 Plan 指紋改版、golden 重產 | 已定為後果；跨端比較的指紋不用 Kernel 的編號（權威份）；Registry 與 Plan 指紋只在同一端比，照舊用 Kernel 的編號 | 拿掉 Plan 的 `EventTrim` 步與 `ScheduleOptions::eventTrim`；observer 的登記進 Registry 指紋；golden 重產併入「時間 Module＋事件游標＋拿掉時鐘」那一條線（統合第 8 節的第二次） |
+| L11 | 回滾的機制放哪 | **已定**（`v8-arch-gyo2-rollback-module-strategy`）：Kernel 只給原語；回滾是獨立的 Module，有策略。事件進不進快照由統合 15.1 判：不進 | `Message` 不回滾、Kernel 不加事件的原語；推送式不保留、重跑時重新觸發 |
+| L13 | 事件游標 | 待游標份；**修訂 26**：事件照 Bevy 分兩種，游標份的內容只適用於保留式（改名）；推送式另立（名字、時機、和 hook 的關係、observer 的存取）。兩者的細節由統合 15.1 照 L17 判 | 本頁的範圍：保留式的游標與修剪，加上推送式（統合要求一併寫進本頁，因為本頁是 Kernel 事件的那一份） |
+| L17 | 替換條件與歸屬的判斷方式 | **已定**（`v8-arch-gyo2-layer-duty-lists`）：兩條核心＋每層的職責清單；agent 自己判；判斷時對照同類型多家實作 | 統合 DI-KS 15 第 (2) 項「事件」涵蓋兩種，不算 Kernel 職責清單多一項；第 9 節的 RC 用「清單多一項」 |
 
 ---
 
 ## 1. 依據
 
-**讀的版本**：程式 `origin/gyo2` f00433b0；統合修訂 15（`origin/claude/gyo2-kernel-app-boundary-4af68c` 6ba6124d），修訂 1 對齊統合修訂 16（13b640f4）；HANDOFF 與時間設計 `origin/claude/gyo2-time-design` 2416d4c0。參考實作的出處整理在主 checkout `build/evidence/gyo2-event-cursor/reference-engines-events.md`。
+**讀的版本**：程式 `origin/gyo2` f00433b0（2026-11-17 沒有新 commit）；統合修訂 28（16c84630）的第 2.1、15.1、15.6 節與第 8 節；HANDOFF 與時間設計 `origin/claude/gyo2-time-design` 2416d4c0。
 
-**使用者的決定**（原話以 HANDOFF 為準）：
+**證據**（主 checkout）：
+- `build/evidence/gyo2-kernel-app-boundary/section15-cross-engine.md`：統合第 15 節的七家對照（Opus／high，讀本地原始碼：bevy 6a911653f、flecs 09790b5f7、com.unity.entities 4630ff5、com.unity.netcode c4cabf4、MassSample ca98258、lightyear 736e1695、bevy_replicon d80c849）。本頁的系譜欄照它寫。
+- `build/evidence/gyo2-event-cursor/reference-engines-events.md`：本卡修訂 0 讀的出處。
+
+**使用者的決定**（原話以 HANDOFF 與統合 2.1 為準）：
 
 | 代號 | 和本頁有關的內容 |
 |---|---|
-| `v8-arch-gyo2-event-trim-by-cursor`（11-16） | Kernel 丟掉所有讀者都讀過的、或超過上限的事件紀錄，丟了有記錄，不需要知道時鐘。理由（使用者的）：「它讓『不漏讀』成為 Kernel 自己的保證，不必依賴編排層排得對。」現在的 `EventTrim` 步與 DI-KS 10 要改 |
+| `v8-arch-gyo2-events-two-kinds-like-bevy`（11-17，side chat；代號待主會話定） | 事件照 Bevy 分兩種：保留式改名，對應 Bevy 的 `Message`；增加推送式，對應 Bevy 的 `Event`＋`Observer`；兩種都在 Kernel。原話：「OK，照Bevy的來，1）改名。2）增加一個 推送式。位置參照Bevy來放。」比過：只留保留式／只有推送式（flecs）／兩種都給（Bevy）← 選 |
+| `v8-arch-gyo2-event-trim-by-cursor`（11-16） | Kernel 丟掉所有讀者都讀過的、或超過上限的紀錄，丟了有記錄，不需要知道時鐘。理由（使用者的）：「它讓『不漏讀』成為 Kernel 自己的保證，不必依賴編排層排得對。」 |
 | `v8-arch-gyo2-time-plan-two`（11-14）第 5、8 項 | (5)「事件：每個讀者一個游標；留到讀過或碰到上限，丟了有記錄；可回滾的 schedule 不參與」。(8)「經網路的事件：這一輪定形狀，做法照 bevy_replicon 那一型（作者照常寫讀、中間送、帶 tick），PvP 移植時做」 |
-| `v8-arch-gyo2-cross-clock-events-open`（11-14）＋`-three-clarifications` (3) | 跨時鐘的事件放開；「不光要考慮單機，也要兼容網絡部分」——使用者 11-14 說明「這是要求」 |
+| `v8-arch-gyo2-cross-clock-events-open`（11-14）＋`-three-clarifications` (3) | 跨時鐘的事件放開；「不光要考慮單機，也要兼容網絡部分」（使用者說明「這是要求」） |
 | `v8-arch-gyo2-kernel-is-ecs-no-restrictions`（11-16） | Kernel 是 ECS，不疊加限制 |
 | `v8-arch-gyo2-same-input-same-result`（11-15） | 同樣的輸入、同樣的結果（單執行緒）；「這一幀固定步跑幾步」算輸入 |
-| `v8-arch-gyo2-clock-out-of-kernel`（11-17） | 見 L2 |
-| `v8-arch-gyo2-dynamic-insert-per-world`（11-17） | World 在 Ready 時可以再登記或拿掉 System、下一次執行前重建 Plan（統合 L5）；本頁要定新讀者與被拿掉的讀者怎麼處理游標（第 4.3 節） |
-| `v8-arch-gyo2-engine-not-rigid`（11-17，通用考量） | 預設方便、不禁止別的做法，限制只放在作者自選的地方 |
+| `v8-arch-gyo2-dynamic-insert-per-world`（11-17） | World 在 Ready 時可以再登記或拿掉 System、下一次執行前重建 Plan（統合 L5） |
 
-**規格與時間設計裡寫的、沒有單獨問過使用者的**：規格 F.3、F.8 取捨 3「事件無游標、依 Plan 位置讀，理由是回滾不必處理游標」；時間設計第 6.2 節的游標細節（「游標是每個（讀者的掛載點、事件）一個序號，放在 World」「讀者第一次執行時游標是 0」）、第 6.3 節「滿了可以設成錯誤」「可回滾的 schedule 自己的讀者維持依位置讀」。這些是時間設計的提案，使用者在 `time-plan-two` 定的只有上面 (5) 那一句。本頁把它們當成材料，不當成已定。**依統合 L11 的更正（修訂 19、20）**：時間設計 6.3 (2) 是主會話的設計稿，使用者在 `time-plan-two` 定下的只有 (5)「可回滾的 schedule 不參與」那一句；設計稿 6.3 (2) 還寫了「它也不讀別的時鐘的事件」（兩個方向都擋）、「它自己的讀者維持依位置讀」與「每幀那一側要送資料進可回滾的固定步，照規格既有的規則走 Ingress」；前者被本頁第 4.8 節拿掉（Kernel 只有游標一種讀法），後者隨區移到權威 Module（統合 3.2）。這兩處列成使用者的確認題（統合第 14 節第 10 題），不當成已定。
+**統合照 L17 判的**（統合 15.1；使用者 11-17 說「什麼都要我來定，乾脆代碼我也自己寫好了。名字你有命名規範。例子你有源碼。」之後，名字照命名規範、細節照別家原始碼由統合判）：本頁第 3、4 節標「統合照 L17 判」的各條。**這些不是使用者的話。**
+
+**時間設計 6.3 (2)**：主會話的設計稿（使用者在 `time-plan-two` 定下的只有 (5) 那一句）。設計稿寫的「可回滾那一側自己的讀者維持依位置讀」，本頁不採（Kernel 只有游標一種讀法）；「走 Ingress」隨區移到權威 Module（統合 3.2）。
 
 ---
 
 ## 2. 先用遊戲講
 
-**射擊遊戲，一個 World。** 每幀的 schedule 裡，「讀手把」寫一筆「玩家按了開火」。中間一個獨占的 System（時間 Module 的）依真實時間跑固定步零到數次；固定步裡的「生成子彈」讀「開火」。每幀的「播槍口火光」也讀「開火」。固定步裡的「子彈落地」寫「命中」，每幀的「播命中音效」讀「命中」。
+**射擊遊戲，一個 World，固定步不回滾（單機、PvP 的 Match）。**
 
-**現在（gyo2）怎麼跑**：每種事件屬於一個時鐘。「開火」屬於每幀，「生成子彈」在固定步讀它就是啟動錯誤 F-E1；作者只能自己用 Resource 轉接。緩衝只留兩個 tick，讀者依 Plan 位置讀；「播槍口火光」掛了 run 條件「不在暫停」，暫停那一幀被跳過，那一幀的「開火」它就永遠讀不到了（規格 F.3 寫明的代價）。
+**保留式（`Message`）**：每幀的「讀手把」寫一筆「按下了開火」。中間一個獨占的 System（時間 Module 的）依真實時間跑固定步零到數次；固定步裡的「生成子彈」讀它。每幀的「播槍口火光」也讀它。固定步裡的「子彈落地」寫「命中了」，每幀的「播命中音效」讀。
 
-**照已定的方向（Kernel 沒有時鐘、每個讀者一個游標）會變成**：
+- 這一幀固定步跑 0 次：「生成子彈」沒跑，它的游標停著，訊息留著，下一幀讀到。
+- 這一幀固定步跑 3 次：「生成子彈」第一次讀到上次以來的全部，後兩次沒有新的。三筆「命中了」，「播命中音效」下次一次讀到三筆。
+- 「播槍口火光」暫停時被 run 條件跳過：游標停著，恢復後一次讀到（上限以內）。
+- 暫停很久：碰到上限，最舊的丟掉；這次 Run 結束時記一筆「丟了幾筆、哪段序號、誰沒讀到」。
+- 「遊戲結束畫面」的讀者從沒跑過：它不拉住保留；第一次跑時從還留著的最舊一筆讀起。
 
-- 這一幀固定步跑 0 次：「生成子彈」沒跑，它的游標停著，「開火」留著，下一幀固定步跑時讀到。
-- 這一幀固定步跑 3 次：「生成子彈」第一次讀到上一次以來的全部「開火」，後兩次沒有新的。「子彈落地」三次寫了三筆「命中」，「播命中音效」下一次跑時一次讀到三筆。
-- 「播槍口火光」暫停時被跳過：它的游標停著，恢復後一次讀到暫停期間累積的（上限以內）。
-- 暫停很久，「開火」一直有人寫、沒人讀：碰到上限，最舊的丟掉，丟了記一筆。
+**推送式（`Event`＋`Observer`）**：「角色身上加了『著火』元件」時，一個 observer 當場生成火焰粒子；作者自訂的「門被打開了」事件，由開門的獨占 System 觸發，observer 當場播音效。一般 System 觸發的（經 `Commands`），等到同步點才跑 observer。推送式不保留：當下沒有 observer，就沒有人收到。
 
-Kernel 不知道「固定步」「每幀」「暫停」是什麼；它只看「每種事件有哪些讀者、每個讀者讀到第幾筆」。這就是使用者說的「『不漏讀』成為 Kernel 自己的保證，不必依賴編排層排得對」。
+Kernel 不知道「固定步」「每幀」「暫停」是什麼；保留式只看「每種訊息有哪些讀者、每個讀者讀到第幾筆」。
 
-**這個例子的固定步不回滾**（單機、PvP 的 Match）。PvP Client 的模擬是可回滾的固定步：照回滾 Module 官方策略的跨 schedule 檢查（使用者 11-14「可回滾的 schedule 不參與」，落點在回滾策略，統合 L11），兩個方向在 PvP Client 都會被擋：「固定步寫『命中』、每幀讀」，以及本節主例的「每幀寫『開火』、固定步讀」（時間設計 6.3 (2)：可回滾的部分的事件不給別的時鐘讀，它也不讀別的時鐘的事件）。PvP Client 的事件怎麼走，由統合第 14 節第 10 題「事件在回滾裡」一起定；本頁不替它選路。
-
----
-
-## 3. 由決定直接推出的（不再問）
-
-| 事 | 推自 |
-|---|---|
-| 每個讀者一個游標；Kernel 照游標修剪：一筆紀錄在「所有讀者都讀過」或「被上限擠掉」時丟掉 | `event-trim-by-cursor`、`time-plan-two` (5) |
-| 丟掉沒被全部讀者讀過的紀錄時記一筆 | 同上（「丟了有記錄」） |
-| 讀者被 run 條件跳過、或所在 schedule 這一次沒跑，游標不動，下次補讀（上限以內） | 「讀者在上限內不漏讀」由 Kernel 保證（L13） |
-| 事件不屬於任何時鐘；任何 schedule 的 System 都能讀寫任何事件；F-9、F-E1、J-37 拿掉；`EventOptions::domain` 拿掉 | L2、`cross-clock-events-open` |
-| Plan 不再有 `EventTrim` 步；`ScheduleOptions::eventTrim` 與 D-E1 的 eventTrim 檢查（`Registry.cpp:924`）拿掉 | `event-trim-by-cursor`（不靠編排層排得對，所以修剪不是 Plan 裡要排的步驟）、L10 |
-| 順序鍵與上限的單位不用 tick；紀錄不再存 tick | L2 |
-| 一個 System 不能同時讀寫同一種事件（`SystemTraits.hpp:119-121`）、同一種事件的寫者彼此衝突、讀者與寫者衝突：照舊 | 存取推導留 Kernel（統合 3.1）；這三條讓第 4.5 節的寫入序號在 Serial 與將來的 Parallel 下都決定 |
-| 同樣的寫入與讀取順序 → 同樣的游標、同樣的保留、同樣的讀到內容 | `same-input-same-result` |
-| 被拿掉的讀者（L5 的動態拿掉）：重建 Plan 時它的游標一起拿掉，只被它拉住的紀錄可以修剪 | L5；游標屬於讀者 |
+**PvP Client**：模擬是可回滾的固定步。使用者 11-14「可回滾的 schedule 不參與」照舊，由回滾策略在啟動時檢查兩個方向（統合 15.1）。所以「每幀寫、固定步讀」「固定步寫、每幀讀」在 PvP Client 的模擬裡都不走保留式訊息：輸入照回滾策略自己的輸入歷史（統合 15.1：lightyear、Unity 都把要重播的輸入放在按 tick 索引的環）；命中音效照現行 PvP 的做法，由畫面那一側從快照偵測（時間設計 6.4）。
 
 ---
 
-## 4. 要使用者判的
+## 3. 已定的事
 
-**問的順序由統合定**（修訂 20 第 14 節，共 20 題）：4.1 是第 8 題、4.3 是第 9 題、4.8 的回滾那一段併進第 10 題「事件在回滾裡」、4.6 是第 11 題（排在第 10 題之後）；4.2、4.4、4.5、4.7、4.8 的其餘列在第 19 題（彼此獨立的）。統合合併去重後一次排好再問，本卡不另外問。
+「誰定」欄：**使用者**＝HANDOFF 或統合 2.1 的使用者決定；**由決定推出**＝本頁從使用者決定直接推出；**統合照 L17 判**＝統合 15.1 的判定，不是使用者的話。
 
-每件先講遊戲的例子，再列選項；**建議**另外標，不是已定。選項的名字是描述，不是代號。
+### 3.1 兩種事件與名字
 
-### 4.1 游標放哪、誰算一個讀者
-
-**例子**：「開火」有「生成子彈」「播槍口火光」兩個讀者。Kernel 要丟掉一筆「開火」，得先知道兩個讀者都讀過了。另外，作者寫了一個 run 條件「這一幀有沒有人按開火」——它讀「開火」嗎？讀了算不算一個讀者？
-
-**第一問：游標放哪**
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
+| 事 | 定了什麼 | 誰定 | 系譜 |
 |---|---|---|---|
-| **放在 World，以（掛載點、事件）為鍵**（建議） | 時間設計第 6.2 節的細節；規格 F.8 的提案 3（游標在 World，以 (System, 通道) 為鍵，當時沒選） | World 多一張表；動態插入或拿掉 System 時跟著加減；存取驗證的快照要把游標表和事件內容分開（讀者推游標不算寫事件） | Kernel 修剪時要讀得到全部讀者的游標——這是 `event-trim-by-cursor` 的直接要求 |
-| **放在讀者參數自己的狀態，另外向 World 登記一份** | Bevy：`MessageReader` 的游標是 System 的 `Local`（`message_reader.rs:38-39`） | 同一個事實兩處各一份（AGENTS §9）；Bevy 這樣放是因為它的保留不看游標（固定輪替兩次，`messages.rs:72-77`），游標不必讓別人看到——GYO 的保留要看游標，這個理由不成立 | 無 |
+| 分兩種、都在 Kernel | 保留式＋推送式，位置照 `bevy_ecs` | 使用者（`events-two-kinds-like-bevy`） | Bevy 兩種都在 `bevy_ecs`；flecs 只有推送式；Unity Entities 核心沒有推送式（section15-cross-engine.md 第 1、2 條） |
+| 保留式的名字 | `Message`、`MessageReader`、`MessageWriter`、`MessageOptions`（取代 `Event*`） | 統合照 L17 判（命名規範） | Bevy `Message`、`MessageReader`、`MessageWriter` |
+| 推送式的名字 | `Event`、`Observer`、觸發 `Trigger`、observer 的參數 `On<E>`；事件型別名用過去式（naming DI 2） | 統合照 L17 判 | `Observer` 三家共通；觸發 Bevy 叫 trigger、flecs 叫 emit；`On<E>` 照 Bevy |
 
-建議放在 World 的理由：第二個選項的系譜理由（保留不看游標）在 GYO 已經不成立。
+### 3.2 保留式（`Message`）
 
-**第二問：誰算一個讀者**
-
-System 掛載算一個讀者沒有爭議（同一個 System 掛在兩張 schedule 是兩個讀者）。要問的是 run 條件與 hook：
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
+| 事 | 定了什麼 | 誰定 | 系譜 |
 |---|---|---|---|
-| **run 條件與 hook 也是讀者，各有自己的游標**（建議） | Bevy 的 `on_message` 條件自帶游標、讀了就消耗（`schedule/condition.rs:1148-1154`，註解寫明不消耗會一直誤判成真） | run 條件是唯讀參數（`SystemTraits.hpp:22`），推自己的游標要寫明「游標不算寫入」；條件每次被求值都會推游標，被短路跳過的條件不推 | 「有人按開火才跑」這類條件；沒有點名的 Feature |
-| **run 條件與 hook 不能讀事件**（啟動錯誤） | 無先例 | 作者要改成「System 讀事件、寫一個旗標 Resource、條件讀旗標」；和 `engine-not-rigid`（不禁止別的做法）相抵 | 無 |
-| **run 條件只看、不推、不算讀者** | 無先例 | 條件看到的和它管的 System 讀到的可能不同（條件看到一筆、System 被跑之前那一筆被擠掉）；條件每次都看到同一批舊紀錄（Bevy 註解指出的誤判） | 無 |
+| 每個讀者一個游標，照游標修剪 | 一筆紀錄在「所有拉住保留的讀者都讀過」或「被上限擠掉」時丟掉；丟了有記錄；不靠時鐘 | 使用者（`event-trim-by-cursor`、`time-plan-two` (5)） | — |
+| 不執行的讀者 | 被 run 條件跳過、或所在 schedule 這一次沒跑，游標不動，下次補讀（上限以內） | 由決定推出（「讀者在上限內不漏讀」由 Kernel 保證，L13） | — |
+| 游標放哪 | 放在 World，以（掛載點、訊息種類）為鍵 | 統合照 L17 判 | **GYO 從使用者決定推出，不是照別家**：照游標修剪，Kernel 必須讀得到全部游標。別家：Bevy 放每個 System 的 `Local`（`message_reader.rs:38-41`），因為它的保留固定兩次 update、不看游標（`messages.rs:69-77`）；flecs 沒有保留式、建議自己做 queue（`ObserversManual.md:105-112`）；lightyear 的接收器只能取走一次、沒有游標（`receive.rs:61-64`）；replicon 沿用 Bevy 的 `Messages`。代價：停跑的讀者拉住保留，靠上限擋 |
+| 誰算一個讀者 | System 掛載、run 條件、hook、observer 都是讀者，各有游標（同一個 System 掛兩處是兩個讀者）；推游標不算寫入 | 統合照 L17 判（observer 那一項由本頁補：observer 是 System，見 3.3） | Bevy `on_message` 條件自帶游標、讀了就消耗（`schedule/condition.rs:1148-1154`）；讀者與讀者可以並行（`message_reader.rs:30-33`）；Bevy 的 observer 也是 System、可以帶 `MessageReader`（`observer/mod.rs:30`） |
+| 從沒跑過的讀者、新讀者 | 跑過一次才拉住保留；第一次跑從還留著的最舊一筆讀起。L5 動態插入的讀者同樣 | 統合照 L17 判 | Bevy 新游標讀到緩衝裡還留著的（`messages.rs:175-178`）；Bevy 另有 `get_cursor_current` 只讀之後的（`:180-186`），GYO 不給 |
+| 被拿掉的讀者 | L5 拿掉 System 時，重建 Plan 的同一步拿掉它的游標；只被它拉住的紀錄可以修剪 | 由決定推出（L5；統合已記為 L13×L5） | — |
+| 上限 | 每種訊息留幾筆，預設 1024，登記時可改（沒有量測根據，是預設值）；滿了丟最舊；不給「滿了算錯誤」 | 統合照 L17 判 | 別家分歧：Unity Netcode 輸入環 64 筆、滿了覆蓋最舊（`ICommandData.cs:169`、`:263-266`）；lightyear 待放緩衝 4096 筆、滿了拒收新的並報錯（`receive.rs:243-254`，為了防不可信的網路灌入擠掉別人的訊息）；Bevy 沒有筆數上限、超過兩次 update 靜默丟（`messages.rs:36-37`、`:79`）；replicon 沒有上限（`message_queue.rs:15-30`）。GYO 的訊息在行程內，照 Unity 丟最舊 |
+| 丟棄記錄 | 每次 Run 按訊息種類聚合一筆：丟了幾筆、被丟的序號範圍、沒讀到的讀者；World 記、runner 在交換點取走；不逐筆記明細（免得讀者停住時明細本身無限長）。丟棄是結果、不是錯誤，不中斷 World | 統合照 L17 判；「丟了有記錄」是使用者的 | **只有 GYO 留一份可取走的記錄**（使用者「丟了有記錄」）：lightyear 按種類聚合一行 `warn!`（`receive.rs:451`）、Unity 過期 RPC 只警告（`RpcCommandRequest.cs:100`）、Bevy 靜默。聚合的形狀照 lightyear；「World 記、runner 取走」照 GYO 的 `RejectedSpawn`（`spawn-reject-details-unbounded-runner-takes`、`-is-result-not-error`） |
+| 順序鍵 | 每種訊息一個單調遞增的寫入序號（64 位元，不回捲）；讀者依序號讀 | 統合照 L17 判 | 多家一致：Bevy `MessageId.id`（`message/mod.rs:109-123`）、lightyear（remote_tick, next_sequence）（`receive.rs:105-116`）、flecs 自訂事件依發出順序（`ObserversManual.md:2714`）。同一種訊息的寫者彼此衝突、被 Plan 排成先後（`SystemTraits.hpp:119-121` 一個 System 不能同時讀寫同一種），所以序號是決定性的 |
+| 修剪時機 | 每次最外層 Run 結束時（hook 清空輪之後）修剪讀過的；寫入時碰到上限當場丟最舊；巢狀跑不修剪；不在 Plan 裡 | 統合照 L17 判 | 多家一致（每個外層幀一次）：Bevy 每幀在 First 輪替（`sub_app.rs:91-98`），為了怕固定步還沒讀就丟，另加閘門（`bevy_time/lib.rs:102-106`、`message/update.rs:14-50`）——照游標修剪正好解掉這個問題；lightyear 每幀在 Last 清（`receive.rs:55`）。不在 Plan 裡照 GYO 的 hook 清空輪（`hook-flush-not-in-plan-bump-versions`） |
+| 時間標記 | 紀錄只帶序號；要 tick 的訊息自己在內容裡帶（寫的 System 讀時間 Module 的 Resource） | 統合照 L17 判 | 多家一致（核心不帶 tick、網路層自己加）：Bevy 紀錄只有 id＋內容（`message/mod.rs:104-107`）；replicon 的 tick 在自己的佇列（`server_message.rs:481-513`）；lightyear 在接收紀錄的 metadata（`receive.rs:66-75`）；Unity `ICommandData` 把 Tick 放內容（`ICommandData.cs:65-72`） |
+| `World::EventPayloads` | 改名為 `World::MessagePayloads`，照舊是 runner 與測試用的唯讀檢視，列出還留著的紀錄、依序號；不推任何游標、不算讀者 | 由決定推出（改名隨 3.1） | — |
+| 驗證與摘要 | 推游標不算寫訊息；存取驗證的快照把游標表與訊息內容分開；World 摘要含游標與寫入序號（摘要涵蓋「World 裡的資料」），摘要改版併入 L10 | 統合照 L17 判（修訂 16） | — |
 
-### 4.2 上限：單位、預設值、滿了怎麼辦
+### 3.3 推送式（`Event`＋`Observer`）
 
-**例子**：暫停時固定步不跑，「生成子彈」不讀；玩家在暫停選單裡一直按開火，「讀手把」每幀照寫。1 小時之後恢復，Kernel 要留多少？
-
-已定：碰到上限就丟，丟了有記錄（`event-trim-by-cursor`）。要問的是上限用什麼量、預設多少、要不要另給一種「滿了算錯誤」。
-
-**單位**（L2：不能用 tick）
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
+| 事 | 定了什麼 | 誰定 | 系譜 |
 |---|---|---|---|
-| **每種事件留幾筆**（建議） | 無直接先例：Bevy 沒有上限、不呼叫 update 就無限長大（`messages.rs:79`）；Unity Netcode 的 RPC 不丟、只警告 | 一種事件寫得很頻繁時，筆數換算成時間是幾秒，作者要自己算 | 記憶體預算（統合 5.3「事件游標的記憶體上限是預算項目」）：記憶體＝筆數 × 紀錄大小，直接可算 |
-| **Kernel 自己的計數下的「年齡」**（例：經過幾次最外層 Run，或 L8 定的那個計數） | Unity Netcode 的 `MaxRpcAgeFrames`（單位是模擬幀，只警告不丟，`NetDebug.cs:288-293`）；Bevy 的「兩次 update」 | Kernel 不知道一次 Run 是一幀還是一個固定步（巢狀跑時更不一定）；年齡不限記憶體：一次 Run 寫一萬筆照樣留 | 無 |
-| **每種事件留多少位元組** | 無先例 | 等於筆數 × 大小，只是換了說法；作者要知道紀錄的大小 | 同第一個 |
+| 觸發的時機 | 兩條：`ExclusiveWorld` 與 World 外面的呼叫者（統合稱 Host）觸發，observer 當場跑；一般 System 經 `Commands` 觸發，延到同步點跑 | 統合照 L17 判 | flecs「操作延後時 observer 跟著延到同步點」（`ObserversManual.md:2598`）；Bevy `World::trigger` 當場（`event/mod.rs:14-16`）、`Commands::trigger` 延後（`system/commands/mod.rs:1160`） |
+| 同一點內 observer 的先後 | 決定性（同樣的登記得到同樣的順序），但不對作者承諾是登記順序 | 統合照 L17 判（修訂 28 更正） | flecs 明寫先後 undefined、不要依賴（`ObserversManual.md:2702-2703`）；Bevy 寫順序任意（`observer/distributed_storage.rs:153-155`）。同一點內多次觸發依觸發的先後送達：flecs 自訂事件依發出順序（`:2711-2714`） |
+| 和 hook 的關係 | hook 留著、不併入：一個元件每種一個 hook；新增時 hook 在 observer 之前、移除時 hook 在 observer 之後（GYO 現行 OnRemove 的先後在實作批對照） | 統合照 L17 判 | flecs（hook 一定在 observer 之前、移除時在之後，`ObserversManual.md:128-142`）；Bevy（`world/entity_access/mod.rs:1344-1345`）；Mass 只有 observer processor（MassSample `MSPhysicsInitProcessors.cpp:244-245`、`:360-361`）；Unity Entities 核心沒有推送式 |
+| 元件的新增與移除觸發 observer | 放進這次的契約，和自訂事件同一批實作（Bevy 的 `On<Add<T>>` 那一型） | 統合照 L17 判（先前「先不做」撤回） | 三家都有：Bevy `On<Add<T>>`、flecs OnAdd／OnRemove／OnSet、Mass `ObservedOperations` |
+| observer 是什麼 | observer 是 System：存取照簽名推出、照存取驗證；在觸發點跑、不進 Plan 的步驟（同 hook） | 統合照 L17 判 | Bevy 的 observer 是 System（`observer/mod.rs:30`）；GYO 的 hook 已是帶參數的 System 形（`Params.hpp:984-998` 的 `HookCtx`） |
+| 保留與回滾 | 推送式不保留；回滾重跑時重新觸發，observer 讀回滾 Module 的「重跑中」自己判斷 | 統合照 L17 判 | lightyear 用 `Rollback` Resource 判斷重跑中（`core/timeline.rs:332-350`）；Unity `IsFirstTimeFullyPredictingTick`（`NetworkTime.cs:39-44`） |
+| 歸屬 | 統合 DI-KS 15 第 (2) 項「事件」涵蓋兩種，不算 Kernel 職責清單多一項 | 統合照 L17 判 | — |
 
-**預設值**：建議每種事件 1024 筆，登記時可以改（例：「玩家按了開火」這種一秒最多幾十筆的，1024 筆在每秒 240 筆時約 4.3 秒）。這個數字**沒有量測根據**，是建議；記憶體估算見第 7.3 節。
+**本頁照 L17 補的細節**（Kernel 事件的職責內，沒有推翻使用者的決定；收口檢查時請檢查者一併看）：
 
-**滿了怎麼辦**：
+- observer 自己用 `Commands` 記的延後變更（含再觸發的事件），照 hook 的規則：進下一窗，最後一個同步點之後由 hook 清空輪一輪一輪套用、有上限（F-12）。理由：和 hook 同一條路，就不會在同一個同步點裡無上限地連鎖（`v8-arch-gyo2-hook-queue-flush-at-run-end` 的理由）。確切的佇列（和 hook 共用還是分開）在實作批對照 Bevy、flecs 定。
+- `ExclusiveWorld` 當場觸發時，observer 在獨占 System 的呼叫裡跑，等同巢狀的一次 System 呼叫：照巢狀執行的規則（DI-KS 16～21：句柄、stamp、出錯記一次）。observer 裡不能再巢狀跑 schedule（同 hook，X-13）。
+- observer 的登記進 Registry 指紋（L10），交進唯讀登記表（L6：觸發、元件或事件型別、存取、登記者）。
 
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
+### 3.4 跨時鐘、跨 World、網路與回滾
+
+| 事 | 定了什麼 | 誰定 | 系譜 |
 |---|---|---|---|
-| **只有「丟最舊、記一筆」一種**（建議） | 使用者的決定的字面；Kernel 照 `spawn-reject-is-result-not-error` 的路：丟掉是結果，不是錯誤 | 不能丟的事件（作者認為）也會被丟；作者讀丟棄記錄自己處理 | `event-trim-by-cursor` |
-| **登記時可以選「滿了算錯誤」，World 中斷** | 時間設計第 6.3 節的提案（沒有被定） | 時間設計自己寫了陷阱：UI 指令設成錯誤，暫停時固定步不讀，碰到上限整個 World 停掉；Kernel 不知道誰會被暫停，啟動時提醒不了 | 沒有點名的 Feature |
+| 同一 World、不同時鐘 | 時鐘不在 Kernel；訊息不屬於任何時鐘，任何 schedule 的 System 都能讀寫任何訊息；游標保證不漏讀（上限內）；F-9、F-E1、J-37、`MessageOptions` 裡的 domain 拿掉 | 使用者（L2、`cross-clock-events-open`）＋由決定推出 | — |
+| 兩個 World 之間、經網路 | 照 replicon 的形狀：轉送是網路（或交換資料的）Module 的一般讀者與寫者，tick 由那個 Module 自己加；Kernel 不加外部游標；做法延到網路 Module 的宣告（統合 L23） | 使用者（`time-plan-two` (8) 的方向）＋統合照 L17 判 | replicon 寫進 Bevy 的 `Messages`（`server_message.rs:493`），tick 在自己的佇列（`:481-513`） |
+| 回滾 | `Message` 不回滾，Kernel 不加訊息的原語；「可回滾的 schedule 不參與」照舊，由回滾策略在啟動時檢查兩個方向（讀 L6 的讀者名單）；推送式不保留、重跑時重新觸發 | 使用者（`time-plan-two` (5)）＋統合照 L17 判 | lightyear 訊息不回滾（`core/timeline.rs:332-350`、`manager.rs:403-408`）；Unity RPC 不回滾。兩家都把要重播的輸入放在另一個按 tick 索引的環（lightyear `input_buffer.rs:25-39`、Unity `ICommandData` 64 筆） |
+| Kernel 只有一種讀法 | 保留式只有游標；不做時間設計 6.3 (2) 的「依位置讀」 | 由決定推出（照游標修剪） | — |
 
-### 4.3 不執行的讀者，與新讀者從哪裡讀起
+---
 
-「被 run 條件跳過」與「所在 schedule 這一次沒跑」由決定直接推出（第 3 節：游標不動、下次補讀）。剩下兩問。
+## 4. 修訂 3 第 4 節八件題目的處理
 
-**第一問：從來沒跑過的讀者，拉不拉住保留？**
+修訂 3 的八件都由統合照 L17 判（統合 15.1，2026-11-17），**不是使用者的話**。選項的比較表在 git 歷史（bafc4050）。
 
-**例子**：「遊戲結束畫面」的 schedule 裡有一個讀者讀「玩家死亡」，遊戲沒結束之前這張 schedule 從來沒跑。另外，除錯工具的一張 schedule，平常不跑。
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
+| 修訂 3 的題目 | 修訂 3 的建議 | 統合的判定 | 和建議的差別 |
 |---|---|---|---|
-| **登記了就是讀者**（Kernel 不分跑沒跑過） | 時間設計第 6.2 節的寫法（「讀者第一次執行時游標是 0」） | 從沒跑的 schedule 讓那種事件一直頂到上限，之後每多寫一筆就記一筆丟棄——丟棄記錄被這種情形淹沒，真正的漏讀反而看不到；記憶體每種事件都停在上限 | 「遊戲結束畫面要讀到這一局全部的死亡」——上限以內讀得到 |
-| **跑過一次才拉住**（建議）；第一次跑之前不算讀者 | Bevy 的保留本來就不看讀者；Bevy 新游標預設讀到緩衝裡還在的（`messages.rs:175-176`） | 「第一次跑時從哪讀起」要另定（下一問）；遊戲結束畫面只讀得到「還留著」的死亡（被別的讀者讀完就清掉了） | 不拖累從不跑的 schedule |
-| **讀者上可以宣告「不拉住保留」**，預設拉住 | 無先例 | 多一個讀者的選項；作者要知道哪些讀者會長期不跑 | 無點名 |
-
-**第二問：新讀者（第一次跑，或 L5 動態插入的）從哪裡讀起？**
-
-**例子**：作者用指令在執行中加上「顯示擊殺訊息」這個 System（L5 的指令集）。加上去之前已經有十筆「擊殺」還留著（因為別的讀者還沒讀完）。
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
-|---|---|---|---|
-| **從還留著的最舊一筆**（建議） | Bevy `get_cursor`、`MessageReader` 的預設（Local 預設 0，`messages.rs:175-176`）；時間設計第 6.2 節 | 讀到「加上它之前」的事；讀到幾筆取決於別的讀者的進度（同樣的輸入仍是同樣的結果） | 沒有點名；時間設計第 6.2 節留了一個小題「跨時鐘的讀者要不要跳過它那張 schedule 開始跑之前的舊紀錄」，作者傾向跳過——時鐘已不在 Kernel，這個小題變成本題 |
-| **從現在開始**（只讀之後寫的） | Bevy `get_cursor_current`（`messages.rs:180-182`） | 讀者第一次跑之前寫的永遠讀不到；如果選「登記了就是讀者」，這一問就不會發生在一般讀者身上 | 指令集加上的機能不處理過去的事 |
-| **讀者上宣告從哪裡開始**，預設上面兩者之一 | Bevy 兩種游標都給，作者自己挑（但 `MessageReader` 只給預設那一種） | 多一個讀者的選項 | 無點名 |
-
-兩問互相牽動：選「登記了就是讀者」時，一般讀者沒有「新讀者」問題，只剩動態插入的讀者。
-
-### 4.4 丟棄的記錄：放哪、記什麼、誰取走
-
-**例子**：暫停 1 小時，「開火」被丟了兩萬筆。誰會知道？
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
-|---|---|---|---|
-| **World 記一筆明細，runner 取走**（建議） | GYO 自己的 `RejectedSpawn`：明細放 World、不設上限、runner 在交換點取走（`spawn-reject-details-unbounded-runner-takes`、`-is-result-not-error`） | 一次丟很多時只記一筆（事件型別、這一次丟了幾筆、沒讀到的讀者有哪些、L8 定的計數）；連續丟會連續記，明細沒有上限，靠 runner 取走 | 使用者的決定「丟了有記錄」；除錯工具 |
-| **讀者上給「漏了幾筆」** | Bevy `missed_messages`（`message_cursor.rs:131-136`），但 Bevy 丟的時候不記任何東西 | 遊戲邏輯可以自己反應（例：漏了就重新同步）；記錄分散在讀者上，外面看不到 | 沒有點名 |
-| **兩者都給** | — | 兩處 | 同上 |
-
-記錄的時間標記：用 L8 定的 Kernel 計數（stamp 或同步點序號），本頁不另選。丟棄不是錯誤，不中斷 World、不叫錯誤處理。
-
-### 4.5 順序鍵
-
-**例子**：同一幀裡，「讀手把」寫了一筆「開火」，固定步裡的 hook 也寫了一筆「開火」（例如武器過熱自動開火），巢狀跑的固定步又寫了一筆。讀者要照什麼順序讀到這三筆？
-
-現在是（tick、寫者在 Plan 的位置、序號）。tick 沒有了；「寫者在 Plan 的位置」在巢狀跑時是兩張不同的 Plan，彼此比大小沒有意義。
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
-|---|---|---|---|
-| **每種事件一個單調遞增的寫入序號，照寫入的先後**（建議） | Bevy：`MessageId { id: usize }`，每種訊息一個計數（`mod.rs:120-123`）；游標就是這個序號 | 順序＝實際寫入的先後。同一種事件的寫者彼此衝突（第 3 節），Serial 下照 Plan 排、Parallel 下也被序列化，所以同樣的輸入得到同樣的序號；hook 寫的照它在同步點被跑的時候 | 跨 schedule、巢狀跑都有定義；游標與保留都只用這一個數 |
-| **（L8 的 Kernel 計數、寫者位置、序號）** | 現在的形狀把 tick 換掉 | 巢狀跑時寫者位置跨 Plan 不可比；三個欄位排出來的結果和寫入先後相同（Serial 下），多兩欄沒有多保證什麼 | 無 |
-
-序號不回捲：64 位元，每秒一百萬筆寫五十萬年。
-
-### 4.6 紀錄要不要帶「時間標記」，tick 要放在哪
-
-**例子**：「播命中音效」要知道「命中」發生在第幾個固定步，好把起音對到那一步被顯示的時刻（2026-10-30 定的音效時刻：遠端射擊、命中、受擊＝把事件的 tick 換成那個 tick 被顯示的時間；HANDOFF「音效，不要丟」）。現在的紀錄帶 tick，tick 移出 Kernel 之後，這個數從哪裡來？
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
-|---|---|---|---|
-| **紀錄只帶序號；要 tick 的，事件內容自己帶**（建議） | Bevy 的 Messages 不帶 tick；bevy_replicon 的 tick 在它自己的佇列裡，不進 ECS 的紀錄（`server_message.rs:481`、`:501-513`） | 寫「命中」的 System 要多讀一個時間 Module 的 Resource（它本來就在固定步裡，讀得到）；每個要 tick 的事件型別各自加欄位 | 音效時刻（PvP，2026-10-30；PvP Client 可回滾的固定步裡的路線見本節末） |
-| **紀錄帶 L8 定的 Kernel 計數，讀者讀得到** | 無先例 | 時間 Module 要自己記「Kernel 計數 → tick」的對照；Kernel 的紀錄多一欄，所有事件都付 | 同上，但要多一張對照表 |
-| **紀錄帶寫者給的、Kernel 不解讀的標記（一個 64 位元數）** | 無先例 | 所有寫者多一個參數（或預設值）；同一欄在不同 Module 有不同意思，Kernel 不知道 | 同上 |
-
-**PvP Client 的註記**：上表拿「命中」的音效當例子，「命中」在固定步寫、每幀讀。PvP Client 的固定步可回滾，這條跨 schedule 的路照回滾官方策略會被擋；反方向的「每幀寫開火、固定步讀」也一樣（第 2 節末）；PvP Client 的命中音效從哪裡來（例如照 2026-10-30 的做法由畫面那一側從快照偵測，或另一條路）由統合第 14 節第 10 題一起定。上表的選項對不回滾的固定步（單機、Match）照樣成立。
-
-### 4.7 修剪的時機
-
-**例子**：一幀裡「開火」寫了、兩個讀者都讀了。這一筆什麼時候真的從記憶體拿掉？
-
-不放在 Plan 裡（第 3 節）。由 Kernel 自己在固定的時機做：
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
-|---|---|---|---|
-| **每次最外層 Run 結束時（hook 清空輪之後）修剪讀過的；寫入時碰到上限當場丟最舊**（建議） | GYO 的 hook 清空輪：Executor 在固定時機做、不寫進 Plan（`hook-flush-not-in-plan-bump-versions`）；Bevy 一幀輪替一次 | 讀過的紀錄最多多留到這次 Run 結束；巢狀跑不修剪 | 記憶體上限守得住（寫入時就擋）；修剪不靠誰排 |
-| **每個同步點修剪** | 規格現在的 `eventTrim` 掛在同步點 | 每個同步點都掃一次所有事件型別；早一點放記憶體 | 無點名 |
-| **只在寫入時修剪（上限或讀過的都在寫入時清）** | 無先例 | 寫入路徑變重；沒有寫入時讀過的紀錄留著（不超過上限） | 無點名 |
-
-三個選項的結果都只取決於寫入與讀取的順序，`same-input-same-result` 都滿足；存取驗證的快照在修剪之後重取（現在 `Executor.cpp:417-420` 的做法）。
-
-### 4.8 跨時鐘、跨 World 與網路（「也要兼容網絡部分」）
-
-使用者的要求是「不光要考慮單機，也要兼容網絡部分」（`cross-clock-events-open`、`three-clarifications` (3)：「這是要求」），方向是「照 bevy_replicon 那一型（作者照常寫讀、中間送、帶 tick），PvP 移植時做」（`time-plan-two` (8)）。分三段。
-
-**同一個 World、不同的時鐘（單機）**：時鐘已不在 Kernel（L2）。Kernel 裡沒有「跨時鐘」這回事，第 2 節的例子全部成立；游標保證不漏讀（上限內）。不需要再判。
-
-**兩個 World 之間、經網路**：照 replicon 的形狀，中間那一段是網路 Module（或交換 World 資料的 Module）的一個**一般讀者**：它在來源 World 用 `EventReader` 讀（有自己的游標，所以也拉住保留、也受上限），加上 tick（讀時間 Module 的 Resource；依賴照 L20 寫在登記檔），送出；目的地那一側由同一個 Module 的 System 在該寫的時候用 `EventWriter` 寫進目的地 World（replicon 把「還不到時候」的先放在自己的佇列，`server_message.rs:501-513`）。Kernel 為這一段**不加任何東西**：
-
-| 選項 | 系譜 | 代價 | 需要它的 Feature |
-|---|---|---|---|
-| **轉送用一般的讀者與寫者，Kernel 不加外部游標**（建議） | bevy_replicon（Bevy 的 `Messages` 不知道網路） | 轉送的 Module 要有一個在 World 裡跑的 System；它的 tick 放在它自己的封包或佇列（第 4.6 節的第一個選項） | PvP 移植時名指的事件（還沒有名指；時間設計第 6.4 節） |
-| **Kernel 給「World 外面的讀者」**（runner 在交換點拿著游標讀） | 時間設計第 6.4 節的形狀（「在來源的交換點『出』取走」）；無外部先例 | Kernel 多一種讀者、要在 Ready 時讀寫游標表；`World::EventPayloads` 之外多一個外部介面 | 同上 |
-
-`World::EventPayloads` 照舊是「Host 與測試用的唯讀檢視、列出全部還留著的紀錄」：不推任何游標、不算讀者。
-
-**回滾（依 L11）**：`time-plan-two` (5) 定了「可回滾的 schedule 不參與」。L2 與統合 3.2 把 `rollbackEnabled` 移出 Kernel，所以 Kernel 不再知道哪張 schedule 可回滾，這條要由回滾 Module 落地。理由（時間設計第 6.3 節）只有一個是使用者以外也成立的事實：回滾重跑時，另一側已讀過的事件會重新發出，被推翻的收不回來。依回滾份回報給統合的原語清單，兩種結果：
-
-- **回滾份把事件列入原語**（例：「取出／放回一種事件的全部紀錄、寫入序號、讀者游標」）：回滾 Module 在快照時取出、還原時放回，重跑時被回滾的那一側讀到的和第一次相同（游標、序號一起還原），`same-input-same-result` 成立；「另一側的讀者」是否允許，由回滾策略讀唯讀登記表（L6：哪些讀者讀哪些事件）在啟動時檢查——「可回滾的 schedule 不參與」就落在這裡。Kernel 只需要這組原語，**不需要**時間設計第 6.3 節寫的「可回滾的 schedule 自己的讀者維持依位置讀」那第二種讀法。
-  **放回哪些讀者的游標**：全部讀者一起退回，會讓不回滾那一側（每幀）的讀者把已讀過的重讀一次（回滾份 7.1 指出）；只退回被回滾那一側的讀者，每幀那一側不重讀，但重跑時重新寫入的紀錄序號要和第一次相同，否則每幀那一側會把重寫的當成新的再讀一次。原語要能指定「放回哪些讀者的游標」還是一律全部，由統合第 14 節第 10 題（「進的話放回哪些讀者的游標」）一起定，本頁不選。
-- **回滾份不把事件列入原語**：事件不還原，重跑時重新發出；被回滾那一側自己的讀者也會讀到重複的。處理交給回滾策略與作者（lightyear 給 `is_rollback()` 讓 System 自己判，`manager.rs:403-408`）。Kernel 不變。
-
-哪一種由回滾份定（L11：原語清單由回滾份回報統合定）。**修訂 2**：統合修訂 19 把這一段併進第 14 節第 10 題（進不進快照、跨 schedule 的檢查多嚴、時間設計 6.3 (2) 兩處拿掉的確認），由使用者一起定。本頁對兩種結果的要求只有一條：**Kernel 只有游標一種讀法**——如果回滾份需要第二種讀法，那是 Kernel 職責清單（統合 DI-KS 15）要多一項，照 L17 停下來問。
+| 4.1 游標放哪、誰算一個讀者 | 放 World；run 條件與 hook 也是讀者 | 同建議 | 無；observer 隨「是 System」也是讀者（本頁補） |
+| 4.2 上限的單位、預設、滿了 | 每種事件 1024 筆；只丟最舊 | 同建議 | 無 |
+| 4.3 不執行的讀者、新讀者 | 跑過一次才拉住；從最舊一筆讀起 | 同建議 | 無 |
+| 4.4 丟棄的記錄 | World 記一筆明細、runner 取走 | 改成每次 Run 按種類聚合一筆（筆數、序號範圍、沒讀到的讀者），不逐筆 | 照 lightyear 的聚合；免得明細本身無限長 |
+| 4.5 順序鍵 | 每種一個寫入序號 | 同建議 | 無 |
+| 4.6 時間標記 | 只帶序號、tick 放內容 | 同建議 | 無 |
+| 4.7 修剪時機 | 最外層 Run 結束＋寫入時碰上限 | 同建議 | 無 |
+| 4.8 跨 World、網路、回滾 | 轉送用一般讀寫；回滾兩種結果各寫一段 | 轉送照建議、延到網路 Module；回滾判「不進」，Kernel 不加訊息的原語 | 修訂 3 的「放回哪些讀者的游標」不再需要 |
 
 ---
 
 ## 5. 介面變更
 
-### 5.1 在範圍內的（事件 API）
+### 5.1 保留式（L13 的事件 API，改名）
 
 | 介面 | 現在 | 改成 |
 |---|---|---|
-| `EventReader<E>::Read()` | 依 Plan 位置與 tick 挑（`Params.hpp:417-438`），呼叫幾次都回同一批 | 回「序號比這個讀者的游標大的全部紀錄」，依序號；這次 System 呼叫結束時游標推到讀到的最後一筆（同一次呼叫裡多次 `Read()` 回同一批）。第 4.4 節若選「讀者上給漏了幾筆」，加一個唯讀的查詢 |
-| `EventReader<E>` 的建構 | 讀 `DomainTick`、`EventDomain`（`Params.hpp:413-414`） | 讀游標表裡自己那一格；不讀時鐘 |
-| `EventWriter<E>::Send()` | 紀錄 `{tick, seq, writerPos, payload}`（`Params.hpp:458-459`） | 紀錄 `{seq, payload}`（第 4.6 節若選帶計數或標記，再加一欄）；寫入時碰到上限丟最舊、記丟棄 |
-| `Detail::EventBuffer<E>::Record`、`Trim(keepFrom)` | 帶 tick、照 tick 修剪（`detail/Storage.hpp:187-210`） | 只帶序號；修剪照「全部讀者游標的最小值」與上限 |
-| `World::EventPayloads<E>()` | 全部還留著的紀錄的內容（`World.hpp:222-232`） | 不變（依序號）；寫明「不推游標、不算讀者」 |
-| Plan 的 `StepKind::EventTrim` | `Plan.hpp:36`、`Scheduler.cpp:218-226`、`:263-270`、`Executor.cpp:417-420` | 拿掉；修剪在第 4.7 節選的時機，由 Executor 做、不寫進 Plan |
+| `EventReader<E>` → `MessageReader<M>` | 依 Plan 位置與 tick 挑（`Params.hpp:417-438`）；建構時讀 `DomainTick`、`EventDomain`（`:413-414`） | `Read()` 回「序號比這個讀者的游標大的全部紀錄」，依序號；這次呼叫結束時游標推到讀到的最後一筆（同一次呼叫裡多次 `Read()` 回同一批）；不讀時鐘 |
+| `EventWriter<E>` → `MessageWriter<M>` | 紀錄 `{tick, seq, writerPos, payload}`（`Params.hpp:458-459`） | 紀錄 `{seq, payload}`；寫入時碰到上限丟最舊、累計到這次 Run 的丟棄記錄 |
+| `Detail::EventBuffer<E>` | 帶 tick、照 tick 修剪（`detail/Storage.hpp:170-210`） | 改名；只帶序號；修剪照「拉住保留的讀者游標的最小值」與上限 |
+| `World::EventPayloads<E>()` → `World::MessagePayloads<M>()` | `World.hpp:222-232` | 改名；依序號；不推游標 |
+| `EventOptions` → `MessageOptions` | `name`、`zone`、`domain`（`Declarations.hpp:99-105`） | `name` 留；`domain` 拿掉（L2）；`zone` 拿掉（統合 3.2）；加上限（預設 1024）——統合修訂 16 准 |
+| Plan 的 `StepKind::EventTrim`、`ScheduleOptions::eventTrim`、D-E1 的 eventTrim 檢查 | `Plan.hpp:36`、`Scheduler.cpp:218-226`、`:263-270`、`Executor.cpp:417-420`、`Declarations.hpp:148-150`、`Registry.cpp:924` | 拿掉——統合修訂 16 准 |
+| 存取種類 `Access::EventRead`／`EventWrite` | `Access.hpp:88-95` | 改名 `MessageRead`／`MessageWrite`；衝突規則照舊 |
+| 丟棄記錄的取走 | 無 | World 上一個取走函式（照 `RejectedSpawn` 的形）——統合修訂 16 准 |
+| 唯讀登記表（L6） | 有事件的名字 | 加每種訊息的上限與讀者名單——統合修訂 16 准 |
 
-### 5.2 超出事件 API、統合已判的
+### 5.2 推送式（新增；統合要求寫進本頁）
 
-這幾處是游標的直接後果，但不在 L13 寫的事件 API 裡；修訂 0 回報統合。**統合修訂 16 照 L17 判定：七處都在 Kernel「事件」的職責內或屬既定的層，直接判、不問使用者。** 各條後面的「統合判定」是統合的話，不是使用者的決定：
+| 介面 | 內容 |
+|---|---|
+| 事件型別的登記 | `Registrar` 登記一種 `Event`（型別名用過去式） |
+| `Observer` 的登記 | 登記一個 observer System：要觀察的事件（自訂事件，或某個元件的 Add／Remove），參數 `On<E>` 取得事件內容與目標（照 Bevy `On<E>`）；其餘參數照一般 System 推存取 |
+| 觸發 `Trigger` | `ExclusiveWorld` 與 World 外面的呼叫者：當場；`Commands`：延到同步點 |
+| 存取與驗證 | observer 的存取照簽名推出、照存取驗證；`On<E>` 唯讀 |
+| 唯讀登記表（L6）與指紋（L10） | 交出 observer（觸發、型別、存取、登記者）；observer 的登記進 Registry 指紋 |
 
-1. `EventOptions`：拿掉 `domain`（L2 已列）與 `zone`（統合 3.2 已列）之外，要**加上限**（第 4.2 節）。**統合判定：准。**
-2. `ScheduleOptions::eventTrim` 拿掉、D-E1 的 eventTrim 檢查拿掉（統合 3.2 的 L2 那一列已經列了 `EventOptions::domain`；`eventTrim` 在統合 3.1 寫「`EventTrim` 步隨游標拿掉」與附錄的掃描式，沒有寫到 `ScheduleOptions` 那一欄）。**統合判定：准，統合 3.2 已補列（含 Plan 的 `EventTrim` 步）。**
-3. 丟棄記錄的取走介面（第 4.4 節）：World 上一個像 `RejectedSpawn` 那樣的「取走明細」的函式。**統合判定：准。**
-4. World 的摘要（`World.cpp:1055-1080`，現在含每種事件的全部紀錄內容）要不要含游標與寫入序號：兩個 World 紀錄相同、游標不同，之後讀到的會不同；摘要不含它們就晚一步才看得出分歧。這是摘要格式的改版。**統合判定：摘要涵蓋「World 裡的資料」；游標若照第 4.1 節放在 World 就含，寫入序號同；摘要改版併入 L10。權威的 digest 要不要含游標由權威份定，不在本頁。**
-5. 唯讀登記表（L6）：要交出「每種事件的上限」與「每種事件有哪些讀者」（回滾策略檢查「可回滾的不參與」、除錯工具都要用）。**統合判定：准（L6 的延伸）。**
-6. 存取驗證（A.6、DI-KS 2）：讀者推游標不算寫入事件；快照要把游標表和事件內容分開（`World.cpp:954`、`:973`、`:1010` 現在整塊比對事件緩衝）。**統合判定：准。**
-7. 若第 4.2 節要一個 World 層級的預設上限：放 `KernelSettings` 會碰到 L9（`KernelSettings` 只放開發與調校、下一次 Run 生效）；本頁建議不放，預設是常數、每種事件登記時可改。**統合判定：准，不放（L9）。**
+hook（`OnAdd`／`OnRemove`、`HookCtx`）照舊，不改名、不併入。
+
+### 5.3 不在本頁的
+
+World 摘要的格式改版（含游標與寫入序號）併入 L10；`KernelSettings` 不放預設上限（L9）。這兩處統合修訂 16 已判。
 
 ---
 
@@ -265,13 +184,13 @@ System 掛載算一個讀者沒有爭議（同一個 System 掛在兩張 schedul
 
 統合第 4 節已寫這一批的七項；本頁只寫差分。
 
-1. **Feature**：第 2 節的射擊例子（固定步讀每幀寫的指令、每幀讀固定步寫的結果、暫停時的讀者不漏讀）；`cross-clock-events-open` 的「放開」；`time-plan-two` (8) 的經網路事件的形狀。
-2. **現在的問題**：讀取依 Plan 位置與 tick；跨時鐘是啟動錯誤；被 run 條件跳過的讀者漏讀；修剪是 Plan 裡要排對的一步。時鐘移出之後，這套讀法沒有 tick 可以依靠。
-3. **變化的邊界**：Kernel 的事件 API（第 5.1 節）；Plan 少一種步驟；第 5.2 節回報統合的各處。
-4. **影響**：`engine/kernel`（`Params.hpp`、`detail/Storage.hpp`、`World.*`、`Scheduler.cpp`、`Executor.cpp`、`Registry.cpp`、`Fingerprint.cpp`、`Declarations.hpp`）；`tests/common/kernel` 的事件案例（J-36、J-37、J-54 與 J-56 的修剪案、`HookFlushTests.cpp`、`WorldTests.cpp` 的讀者案）；時間 Module（不必再排修剪；`time-plan-two` 的「事件：照時鐘」部分從時間設計拿掉）；回滾 Module（第 4.8 節）。
-5. **Dependency Direction**：不變。轉送事件的 Module 依賴時間 Module（拿 tick）照 L20 寫在登記檔；Kernel 不依賴它們。
-6. **Ownership**：「事件留多久」從「時鐘＋Plan 裡的修剪步」改成「Kernel 照游標與上限」（統合第 4 節第 6 項已列）。「可回滾的不參與」從 Kernel 的啟動檢查（時間設計提案）改成回滾 Module 的事（第 4.8 節）。
-7. **為什麼不能更小**：只把 tick 換成別的計數、保留現在的「依位置讀」：沒有時鐘，就沒有「一 tick」可以界定兩格緩衝；而且使用者已定「照游標修剪」。只給跨時鐘的讀者游標（時間設計第 6.2 節的第二個選項）：Kernel 裡已經沒有「跨時鐘」可以分辨。
+1. **Feature**：第 2 節的射擊例子（固定步讀每幀寫的指令、每幀讀固定步的結果、暫停時的讀者不漏讀；元件新增時當場生成粒子、開門當場播音效）；`cross-clock-events-open` 的「放開」；`time-plan-two` (8) 的經網路事件的形狀；`events-two-kinds-like-bevy` 的兩種事件。
+2. **現在的問題**：讀取依 Plan 位置與 tick；跨時鐘是啟動錯誤；被 run 條件跳過的讀者漏讀；修剪是 Plan 裡要排對的一步；沒有推送式，作者要「當場反應」只能靠 hook（每個元件每種一個）。
+3. **變化的邊界**：Kernel 的事件 API（第 5.1 節，改名＋游標）；新的推送式介面（第 5.2 節）；Plan 少一種步驟。
+4. **影響**：`engine/kernel`（`Params.hpp`、`Access.hpp`、`SystemTraits.hpp`、`detail/Storage.hpp`、`World.*`、`Scheduler.cpp`、`Executor.cpp`、`Registry.*`、`Fingerprint.cpp`、`Declarations.hpp`）；`tests/common/kernel` 的事件案例（J-36、J-37、J-54 與 J-56 的修剪案、`HookFlushTests.cpp`、`WorldTests.cpp`、`SignatureTests.cpp`、`SkeletonTests.cpp` 的讀寫者）；`naming_guard.py`、`kernel_symbols.py` 的名字清單；時間 Module（不必排修剪）；回滾 Module（檢查「可回滾的不參與」、提供「重跑中」）。
+5. **Dependency Direction**：不變。轉送訊息的 Module 依賴時間 Module（拿 tick）照 L20 寫在登記檔。
+6. **Ownership**：「事件留多久」從「時鐘＋Plan 裡的修剪步」改成「Kernel 照游標與上限」；「可回滾的不參與」從 Kernel 的啟動檢查（時間設計提案）改成回滾策略的事。
+7. **為什麼不能更小**：只把 tick 換成別的計數、保留「依位置讀」：沒有時鐘就沒有「一 tick」界定兩格緩衝，而且使用者已定照游標修剪。推送式不做：使用者已定兩種都給。
 
 ---
 
@@ -279,24 +198,24 @@ System 掛載算一個讀者沒有爭議（同一個 System 掛在兩張 schedul
 
 ### 7.1 為什麼算基盤
 
-事件 API 在每個讀寫事件的 System 裡；讀取規則一改，所有依「本 tick／下 tick」寫的遊戲邏輯都受影響。上面已積或排著要積的：時間 Module（不再負責修剪）、狀態機（「要求」若走事件）、回滾 Module、網路的轉送、音效（第 4.6 節）。
+事件 API 在每個讀寫事件的 System 裡；讀取規則與名字一改，所有讀寫事件的遊戲邏輯都受影響。上面已積或排著要積的：時間 Module、狀態機、回滾 Module、網路的轉送、音效。
 
 ### 7.2 予見的根據 → 要求
 
 | 根據（出處） | 要求 |
 |---|---|
-| 射擊遊戲：每幀寫指令、固定步 0～N 步讀（`same-input-same-result` 的例子；時間設計第 4 節） | 讀者在任何次數的執行之間不漏讀（上限內）；同一筆對同一讀者恰好一次 |
+| 射擊遊戲：每幀寫指令、固定步 0～N 步讀（`same-input-same-result` 的例子） | 讀者在任何次數的執行之間不漏讀（上限內）；同一筆對同一讀者恰好一次 |
 | 暫停時固定步不跑（`time-plan-two` (6)；狀態機的「暫停時不跑遊戲邏輯」） | 長期不跑的讀者有上限、丟了有記錄 |
-| 指令集（使用者 11-17，L5） | 動態加上與拿掉的讀者有定義（第 4.3 節） |
-| 經網路的事件（`time-plan-two` (8)，PvP 移植時） | 一般讀者就能轉送；tick 不必在 Kernel 的紀錄裡 |
-| 音效時刻（2026-10-30，PvP） | 讀者拿得到事件發生在哪一步（第 4.6 節）；PvP Client 可回滾的固定步那一條路由統合第 14 節第 10 題定（第 2 節末） |
-| 回滾（L11，PvP Client） | 事件與游標可以整批取出與放回（若回滾份需要） |
-| 參考實作：Bevy（游標粒度、序號）、bevy_replicon（tick 在網路 Module）、Unity Netcode（年齡只警告）、flecs（推送、不保留） | 「怎麼做」：見各選項的系譜欄 |
+| 指令集（使用者 11-17，L5） | 動態加上與拿掉的讀者有定義 |
+| 經網路的事件（`time-plan-two` (8)，PvP 移植時） | 一般讀者就能轉送；tick 不在 Kernel 的紀錄裡 |
+| 音效時刻（2026-10-30，PvP） | 單機與 Match：訊息內容自己帶 tick；PvP Client：畫面那一側從快照偵測（第 2 節末） |
+| 兩種事件（`events-two-kinds-like-bevy`） | 推送式當場或同步點觸發、hook 與 observer 先後固定、observer 照存取驗證 |
+| 參考實作：七家（section15-cross-engine.md） | 「怎麼做」：見第 3 節的系譜欄 |
 
 ### 7.3 預算
 
-- **記憶體**：每種事件 ≤ 上限 × 紀錄大小；紀錄＝內容＋8 位元組序號（＋第 4.6 節若選帶標記，再 8 位元組）。建議預設 1024 筆：內容 32 位元組的事件約 40 KB；一個 World 100 種事件全部頂滿約 4 MB。游標表：每個（讀者、事件）8 位元組。**這些是算的，沒有量**；實作批在一個 host 上量實際的峰值，與這裡比。
-- **時間**：讀取從「掃全部紀錄、挑兩個 tick」變成「從游標往後掃」，不會更慢；修剪每次最外層 Run 一次（第 4.7 節建議），每種事件掃一次讀者游標取最小值。本批不設執行時間的判定，實作批若要設，事前宣告。
+- **記憶體**：每種訊息 ≤ 上限 × 紀錄大小；紀錄＝內容＋8 位元組序號。預設 1024 筆：內容 32 位元組的訊息約 40 KB；一個 World 100 種訊息全部頂滿約 4 MB。游標表：每個（讀者、訊息種類）8 位元組。丟棄記錄：每次 Run 每種訊息至多一筆，大小和讀者數成正比。**這些是算的，沒有量**；實作批在一個 host 上量實際的峰值，與這裡比。
+- **時間**：讀取從「掃全部紀錄、挑兩個 tick」變成「從游標往後掃」；修剪每次最外層 Run 一次。推送式的成本隨 observer 數，本批不設執行時間的判定；實作批若要設，事前宣告。
 
 ---
 
@@ -304,29 +223,37 @@ System 掛載算一個讀者沒有爭議（同一個 System 掛在兩張 schedul
 
 | 守衛 | 守的性質 | 處置 | 放寬的面 | 收緊的面 | 之後由誰守 |
 |---|---|---|---|---|---|
-| J-36（F-7、F-8） | 讀者依位置與 tick 讀；每筆對每個執行了的讀者恰好一次；隔兩 tick 讀不到；順序 (tick, writerPos, seq)；hook 事件的 writerPos | 改 | 「隔兩 tick（T＋1 修剪之後）讀不到」不再成立：沒讀過的讀者之後仍讀得到（上限內）；順序從 (tick, writerPos, seq) 改成寫入序號（Serial 下兩者同序，巢狀跑時舊的鍵沒有定義） | 被 run 條件跳過、schedule 沒跑的讀者下次補讀（以前錯過）；「每筆對每個讀者恰好一次」從「執行了的讀者」擴大到全部讀者（上限內）；碰到上限有丟棄記錄 | Kernel |
-| J-37（F-9、F-E1） | 事件跨 domain、同 domain 的非 clock schedule 讀寫是啟動錯誤 | 拿掉（統合 7.2 已列） | 跨時鐘、任何 schedule 都能讀寫 | 無 | 游標保證不漏讀 |
-| J-54 的「清舊事件不在預設位置」「輪裡出錯時清舊事件不做」 | 修剪排在清空輪之前、出錯時不修剪 | 改：修剪改在清空輪之後的固定時機（第 4.7 節）；「出錯時不修剪」留 | 無 | 無 | Kernel |
-| J-56 的「內層 clock 修剪」 | 巢狀跑的內層 clock schedule 修剪 | 改：巢狀跑不修剪，只在最外層 Run 結束時（第 4.7 節建議） | 內層讀過的紀錄多留到最外層結束 | 無 | Kernel |
-| J-24 的 F-E1、D-E1 的 eventTrim 案 | 錯誤代號各一個最小 Registry | 刪這兩案（F-E1 已在統合 7.2 的 J-24 刪除清單） | 不再報 | 無 | — |
-| J-18、J-20 的 golden | Plan 決定性、指紋 | 改：`EventTrim` 步拿掉，golden 重產（L10） | 舊 golden 不再比對 | 無 | Kernel |
+| J-36（F-7、F-8） | 讀者依位置與 tick 讀；每筆對每個執行了的讀者恰好一次；隔兩 tick 讀不到；順序 (tick, writerPos, seq)；hook 事件的 writerPos | 改（改名＋游標） | 「隔兩 tick 讀不到」不再成立：沒讀過的讀者之後仍讀得到（上限內）；順序改成寫入序號（Serial 下兩者同序，巢狀跑時舊的鍵沒有定義） | 被 run 條件跳過、schedule 沒跑的讀者下次補讀；「每筆對每個讀者恰好一次」擴大到全部跑過的讀者（上限內）；碰到上限有聚合的丟棄記錄 | Kernel |
+| J-37（F-9、F-E1） | 事件跨 domain、同 domain 的非 clock schedule 讀寫是啟動錯誤 | 拿掉（統合 7.2 已列） | 任何 schedule 都能讀寫 | 無 | 游標保證不漏讀 |
+| J-54 的「清舊事件不在預設位置」「輪裡出錯時清舊事件不做」 | 修剪排在清空輪之前、出錯時不修剪 | 改：修剪改在清空輪之後；「出錯時不修剪」留 | 無 | 無 | Kernel |
+| J-56 的「內層 clock 修剪」 | 巢狀跑的內層修剪 | 改：巢狀跑不修剪，只在最外層 Run 結束時 | 內層讀過的紀錄多留到最外層結束 | 無 | Kernel |
+| J-24 的 F-E1、D-E1 的 eventTrim 案 | 錯誤代號各一個最小 Registry | 刪這兩案 | 不再報 | 無 | — |
+| J-18、J-20 的 golden | Plan 決定性、指紋 | 改：`EventTrim` 步拿掉、observer 進 Registry 指紋，golden 重產（L10） | 舊 golden 不再比對 | 無 | Kernel |
+| `SignatureTests.cpp` 的事件案（`:23`、`:54`、`:162`） | 簽名推出的存取、同一 System 不能讀寫同一種 | 改名（判定不變） | 無 | 無 | Kernel |
 | `HookFlushTests.cpp:134-145`、`WorldTests.cpp:772-800` 的讀者 | 用 `CurrentTick` 判讀到的時機 | 改：改用寫入序號與讀者的執行次數判 | 逐案 | 逐案 | Kernel |
-| 新 | 上限與丟棄記錄、不執行的讀者、新讀者的起點、動態拿掉的讀者釋放保留、run 條件的游標（依第 4 節的選擇） | 新增 | 無 | 全部是新的性質 | Kernel |
+| `naming_guard.py`、`kernel_symbols.py` | 命名、符號清單 | 改：`Event*` → `Message*`；加 `Event`、`Observer`、`Trigger`、`On` | 無 | 範圍變大 | 同 |
+| 新：保留式 | 上限與聚合的丟棄記錄、不執行的讀者補讀、從沒跑過的不拉住、新讀者從最舊讀起、動態拿掉的讀者釋放保留、run 條件與 hook 與 observer 的游標、修剪時機、推游標不算寫入（驗證不誤報） | 新增 | 無 | 全部是新的性質 | Kernel |
+| 新：推送式 | 當場與同步點兩條時機；hook 與 observer 的先後（新增時 hook 先、移除時 hook 後）；元件 Add／Remove 觸發；observer 的存取驗證；observer 的延後變更照 hook 規則；同樣的登記得到同樣的 observer 順序；observer 不能巢狀跑 schedule | 新增 | 無 | 全部是新的性質 | Kernel |
 
-**突變**：事件相關的現有突變照 J-36 的改寫逐條判；新性質（游標不動、補讀、上限、丟棄記錄、修剪時機、新讀者起點）各配突變，預期的失敗寫明是哪一個案例。DI-KS 10 的新守衛照 AGENTS §14.2 送換模型的敵對式檢查（作者與檢查者不同模型）。
+**突變**：事件相關的現有突變照 J-36 的改寫逐條判；新性質各配突變，預期的失敗寫明是哪一個案例。DI-KS 10 的新守衛照 AGENTS §14.2 送換模型的敵對式檢查。
 
 ---
 
 ## 9. Design Invariants 與 Replacement Criteria（草案；核准後在實作批寫進 `target/kernel.zh-Hant.md`）
 
-**DI-KS 10（改寫）**：**每個讀者一個游標，在 World；讀者在上限內不漏讀，Kernel 自己保證。** 事件不屬於任何時鐘；每種事件一個寫入序號，讀者讀到「序號比游標大」的全部紀錄、依序號；被 run 條件跳過、所在 schedule 沒跑的讀者游標不動、下次補讀；一筆紀錄在全部讀者讀過時修剪，或被上限擠掉時丟掉並記一筆；修剪不在 Plan 裡、不靠任何人排；Kernel 只有游標一種讀法。守衛：J-36 改寫、新增的上限與丟棄案例。（依第 4 節的選擇補上：誰算讀者、新讀者的起點、修剪的時機。）
+**DI-KS 10（改寫）**：**事件有兩種，都在 Kernel，都不看時鐘。**
+- **保留式（`Message`）**：每個讀者一個游標，在 World，以（掛載點、訊息種類）為鍵；System 掛載、run 條件、hook、observer 都是讀者；讀者在上限內不漏讀，Kernel 自己保證——被 run 條件跳過、所在 schedule 沒跑的讀者游標不動、下次補讀；跑過一次的讀者才拉住保留，第一次跑從還留著的最舊一筆讀起；每種訊息一個寫入序號，讀者依序號讀；一筆紀錄在拉住保留的讀者都讀過時修剪（每次最外層 Run 結束），或被上限擠掉時丟掉並在這次 Run 按種類聚合記一筆；修剪不在 Plan 裡；推游標不算寫入；Kernel 只有游標一種讀法；訊息不回滾。
+- **推送式（`Event`＋`Observer`）**：不保留；`ExclusiveWorld` 與 World 外面的觸發當場跑 observer，`Commands` 的觸發延到同步點；同一點內 observer 的先後是決定性的、不承諾是登記順序；元件新增時 hook 在 observer 之前、移除時在之後；observer 是 System，存取照簽名推出、照存取驗證，不進 Plan 的步驟。
+- 守衛：J-36 改寫、第 8 節新增的兩組。
 
-**DI-KS 14**：「每個 domain 的事件只在它的 clock schedule 內」那一句拿掉（統合 9.1 已把 DI-KS 14 改寫，本頁只確認事件那一半隨游標拿掉）。
+**DI-KS 11**：「hook 只有 OnAdd／OnRemove、同步執行、依登記順序」照統合 9.1；補一句「和 observer 的先後見 DI-KS 10」。
+
+**DI-KS 14**：「每個 domain 的事件只在它的 clock schedule 內」那一句拿掉（統合 9.1 已改寫，本頁確認）。
 
 **Replacement Criteria**（加進 Kernel 的 RC，照 L17 不數次數）：
-
-- 為了某一種事件、某一種策略（回滾、網路），事件機制要多一種讀法或多一種保留規則——等於 Kernel 職責清單「事件（游標）」那一項要拆成兩項，停下來問。
-- 游標要知道時鐘、schedule 的語意（哪張是固定步、哪張會暫停）才做得對。
+- 為了某一種事件、某一種策略（回滾、網路），事件機制要多一種讀法、多一種保留規則或多一種觸發時機——Kernel 職責清單「事件」那一項要拆成更多項，停下來問。
+- 游標或修剪要知道時鐘、schedule 的語意（哪張是固定步、哪張會暫停）才做得對。
+- observer 需要進 Plan 的步驟、或要對作者承諾 observer 的先後，才做得出某個 Feature。
 - 上限的預設值或丟棄記錄要依產品分支（共通層出現產品專屬的判斷，AGENTS §9）。
 
 ---
@@ -335,25 +262,29 @@ System 掛載算一個讀者沒有爭議（同一個 System 掛在兩張 schedul
 
 | 批 | 內容 | 依賴 | 實作者／審查者 | 估計 |
 |---|---|---|---|---|
-| 事件游標的實作 | 第 5.1 節；第 5.2 節經統合定下的部分；第 8 節的守衛與突變；golden 重產 | 本宣告與統合核准；Kernel 減法的「結構段」、編排層骨架；**和時間 Module、拿掉時鐘與 `EventTrim` 同一條線**（修剪不留空窗）。這個先後是統合修訂 16 的提案；主會話已在 `rebuild-batch-plan.zh-Hant.md`（`claude/gyo2-time-design` 5d78a872）照它重排，待使用者確認 | 上段（公開介面、Design Invariants）：Opus／high；審查 Fable／high；§14.4 的檢證者 Fable／high；DI-KS 10 守衛的敵對式檢查 Fable／high | 8～12 h（游標表與修剪 3～4 h、上限與丟棄記錄 1～2 h、拿掉 `EventTrim`／`eventTrim`／F-9 1 h、J-36 改寫與新案例 2～3 h、突變與檢查 1～2 h）；這是讀程式量估的 |
+| 事件游標的實作（保留式改名＋游標；推送式） | 第 5.1、5.2 節；第 8 節的守衛與突變；golden 重產 | 本宣告與統合核准；Kernel 減法的「結構段」、編排層骨架；**和時間 Module、拿掉時鐘與 `EventTrim` 同一條線**（統合第 8 節；主會話已在 `rebuild-batch-plan.zh-Hant.md` 照它重排，待使用者確認） | 上段（公開介面、Design Invariants）：Opus／high；審查 Fable／high；§14.4 的檢證者 Fable／high；DI-KS 10 守衛的敵對式檢查 Fable／high | 保留式 8～12 h（游標表與修剪 3～4 h、上限與聚合的丟棄記錄 1～2 h、改名與拿掉 `EventTrim`／`eventTrim`／F-9 1～2 h、J-36 改寫與新案例 2～3 h、突變與檢查 1～2 h）；推送式 8～12 h（登記與觸發、兩條時機、和 hook 的先後、元件 Add／Remove 觸發、存取驗證、測試與突變）。這是讀程式量估的 |
+
+推送式在線內排在保留式之後（同一條 PR 線），因為 observer 也是保留式的讀者，游標表要先有。
 
 ---
 
-## 11. 新關聯（修訂 0 回報；統合修訂 16 的處理附在各條後面）
+## 11. 關聯（修訂 0 回報的，與修訂 4 新加的）
 
-1. **L13 × L5（動態插入）**：新讀者從哪裡讀起、被拿掉的讀者釋放保留，要在「重建 Plan」那一步更新 World 的游標表（第 4.3 節）。L5 已定，本頁只定游標的行為；但重建 Plan 時要通知游標表，這是 L5 的骨架要留的接點。**統合：已記進關聯表（重建 Plan 時同一步更新游標表）。**
-2. **L13 × L6（唯讀登記表）**：登記表要交出每種事件的上限與讀者名單（第 5.2 節第 5 條）。**統合：已記進關聯表。**
-3. **L13 × L11（回滾原語）**：回滾份若要事件進快照，原語清單要有「取出／放回一種事件的紀錄、寫入序號、讀者游標」；「可回滾的不參與」由回滾策略讀 L6 檢查，Kernel 不再檢查（第 4.8 節）。`time-plan-two` (5) 的那一句因此從 Kernel 移到回滾 Module——**統合：落點照 L17 判（回滾的規則屬回滾 Module），檢查改由回滾策略讀 L6；事件進快照時的原語（取出／放回紀錄、寫入序號、讀者游標）記進 L11，回滾份會引用。修訂 19、20 更正：內容不是全部不變——時間設計 6.3 (2)（主會話的設計稿）的「依位置讀」被本頁拿掉、「走 Ingress」隨區移權威，兩處與「放回哪些讀者的游標」、跨 schedule 的檢查多嚴（兩個方向）一起列在統合第 14 節第 10 題。**
-4. **L13 × L9（`KernelSettings`）**：預設上限不放 `KernelSettings`（第 5.2 節第 7 條）。**統合：已記進關聯表。**
-5. **L13 × 摘要與存取驗證**：World 摘要的格式、驗證快照的分法（第 5.2 節第 4、6 條），不在 L13 的介面清單。**統合：已判（第 5.2 節第 4、6 條）。**
-6. **批次的先後不一致**：統合第 8 節寫「游標在拿掉 Plan 的 `EventTrim` 之前」，事件游標的實作排在骨架之後、Kernel 減法之前；主會話的批次表 `rebuild-batch-plan.zh-Hant.md`（分支 `claude/gyo2-time-design`）寫「事件游標的實作」依賴「事件游標的宣告、Kernel 減法」。本頁不判，請統合或主會話對齊。**統合：修訂 16 第 8 節改成和批次表對齊的提案——Kernel 減法拆成「結構段」與後段；結構段 → 編排層骨架 → 時間 Module＋事件游標＋拿掉時鐘與 `EventTrim` 同一條線 → 權威＋回滾＋拿掉權威規則同一條線。主會話與使用者還沒確認（第 10 節照這個寫）。**
+修訂 0 回報的六條，統合都已處理（修訂 16、19、20、28）：L13×L5（重建 Plan 時同一步更新游標表）、L13×L6（交出上限與讀者名單）、L13×L9（預設上限不放 `KernelSettings`）、L13×摘要與驗證、L13×L11（判定為不進快照、Kernel 不加訊息的原語；「可回滾的不參與」的檢查移到回滾策略，兩個方向）、批次先後（統合第 8 節與主會話的批次表已對齊）。
+
+**修訂 4 新加的**（推送式帶來的；都在 Kernel 事件的職責內，本頁照 L17 寫在第 3.3 節末，收口檢查時請檢查者一併看）：
+
+1. **observer × hook 清空輪（F-12）**：observer 的延後變更走 hook 的規則（下一窗、清空輪、上限）。
+2. **observer × 巢狀執行（DI-KS 16～21）**：`ExclusiveWorld` 當場觸發時 observer 等同巢狀的一次 System 呼叫；observer 不能巢狀跑 schedule。
+3. **observer × L6、L10**：observer 交進唯讀登記表、進 Registry 指紋。
+4. **observer × 回滾**：推送式不保留、重跑時重新觸發；讀「重跑中」要依賴回滾 Module（統合 15.2 已記「重跑中」放哪交回滾份考慮）。
 
 ---
 
 ## 12. 範圍的限界
 
 - 這是宣告，沒有寫程式、沒有量測；第 7.3 節的記憶體與第 10 節的時間是算的、估的。
-- 參考實作讀的是原始碼的片段（出處在 `build/evidence/gyo2-event-cursor/reference-engines-events.md`）；Unity 讀的是非官方鏡像；Unreal Mass 沒有讀（它沒有緩衝式事件的公開資料，本頁沒有查證）；lightyear「回滾不特別處理訊息」是「沒找到」，不是讀到明文。
-- 使用者的原話照 HANDOFF（`claude/gyo2-time-design` 2416d4c0）與統合的轉載，沒有重讀原始對話。
-- L8 的計數用哪一個（stamp 或同步點序號）統合照 L17 判為實作細節、不問使用者，由實作批定；丟棄記錄的時間標記跟 L8。
-- 本頁沒有送檢查；收口時與權威份、回滾份一起送換模型檢查（統合那張卡負責）。
+- 系譜照 `section15-cross-engine.md`（子 agent 讀本地原始碼）與本卡修訂 0 讀的出處；Mass 只有範例專案、Unreal 引擎本體不在本地；本地沒有 bevy_ggrs。
+- 第 3、4 節標「統合照 L17 判」的是統合的判定，不是使用者的話；使用者的原話照 HANDOFF（`claude/gyo2-time-design` 2416d4c0）與統合 2.1 的轉載，沒有重讀原始對話。
+- 第 3.3 節末「本頁照 L17 補的細節」三條是本卡的判斷，沒有經統合逐條確認；收口檢查請一併看。
+- 本頁沒有送檢查；四份一起送換模型檢查由統合那張卡負責。
