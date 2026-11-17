@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 6）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 7）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -11,7 +11,7 @@
 - 權威 Module 的宣告、事件游標的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。
 
 ## 0. 依據
 
@@ -33,7 +33,7 @@
 | L2 | **時鐘與 tick 移出 Kernel，到時間的 Module**（`Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1） | 統合 | 游標（順序鍵、上限的單位不能用 tick）、權威（「tick 只有一個來源」由伺服器權威策略檢查）、時間 T1／T3、L8、L20 | Kernel 公開介面、時間 Module | **已定**（2026-11-17，`v8-arch-gyo2-clock-out-of-kernel`；第 10 節第 1 件） |
 | L3 | **執行期的攔截**（第 7.3 節的六條） | 統合 | 權威（改靠 digest 比對與伺服器覆蓋抓錯，內容在 L12） | Kernel 公開介面（拿掉） | **已定**（2026-11-17，`v8-arch-gyo2-no-runtime-interception`）：拿掉執行期的攔截，Kernel 不加觀察點；伺服器權威改靠 digest 比對與伺服器覆蓋來抓錯 |
 | L4 | **生成世界時寫進去的初始值算不算寫者** | 統合 | 權威（寫者規則只數「修改」）、Loading（不受綁） | 權威 | **已定**（2026-11-17，`v8-arch-gyo2-init-values-like-bevy`）：參照 Bevy——初始值在建立實體的當下給（`Spawn` 帶的值、`InitialValue`），生成世界就是一般流程裡的 schedule，不另設「寫入不算」的階段；伺服器權威只數修改既有值的寫者。「對已存在的實體插入元件」算建立還是修改，由權威份定 |
-| L5 | **`Registry::Finish` 拆段與登記單位的生命週期** | 統合 | 編排層骨架、權威（檢查時機） | Kernel 公開介面（`Registry`） | 待使用者（第 10 節第 4 件，有建議） |
+| L5 | **登記的生命週期與動態插入** | 統合 | 編排層骨架、權威（檢查時機；PvP 宣告不允許）、指令集（未來） | Kernel 公開介面（`Registry`、`WorldExecutor`） | **已定**（2026-11-17，`v8-arch-gyo2-dynamic-insert-per-world`）：Kernel 提供「開 Registrar」「建 Plan」兩步、可重複呼叫；編排層 build → 建 Plan → finish → 權威檢查；World 在 Ready 時可再登記或拿掉 System、下一次執行前重建受影響的 Plan（「凍結」只代表這一次執行的 Plan 已排好）；**每個 World 建立時宣告准不准動態插入**，預設允許、不保證指紋一致；不允許時插入被拒絕：回傳執行時錯誤、記警告、不退出、World 照跑；伺服器權威策略在啟動時要求它的 World 宣告不允許。這一批只定契約與介面，Plan 的重建先薄 |
 | L6 | Kernel 交出的唯讀登記資訊（第 3.3 節） | 統合 | 權威 | `FrozenRegistry` | 待使用者（第 10 節第 5 件） |
 | L7 | `ExclusiveWorld` 的存取與 `Writes<…>` | 統合 | 權威（數寫者）、狀態機、時間（驅動固定步的 System） | `Params.hpp`、驗證（`World.cpp`） | 待使用者（第 10 節第 6 件） |
 | L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 統合 | 游標（事件順序鍵也不能用 tick） | Kernel | 隨 L2：改用 Kernel 自己的計數（stamp 或同步點序號；「Kernel 讀時間 Module 的 Resource」違反第 3 節的依賴方向）。用哪一個由實作批定，**卡片的推論，使用者沒判** |
@@ -82,6 +82,7 @@
 | `v8-arch-gyo2-no-runtime-interception`（11-17） | 拿掉執行期的攔截（第 7.3 節六條）；伺服器權威改靠 digest 比對與伺服器覆蓋抓錯 | 「別家如何決定的？」→（卡片查四家：觀察點只在結構變更或整格替換、沒有一家讓外部掛鉤拒絕寫入、網路權威靠伺服器覆蓋；看法改成拿掉）「拿掉執行期的攔截，伺服器權威改靠 digest 比對與伺服器覆蓋來抓錯。」 |
 | `v8-arch-gyo2-init-values-like-bevy`（11-17） | 生成世界的初始值在建立當下給、不算寫者；不設豁免的階段 | 「這個可以參照Bevy。」 |
 | `v8-arch-gyo2-engine-not-rigid`（11-17，通用考量） | 做 Engine 不把規則釘死：預設方便、不禁止別的做法，限制只放在作者自選的地方；先懂別家為何這樣做；很多開源都這樣做就不頭鐵；拿不準交使用者 | 「我們做的是給別人用的東西，如何什麼東西都釘死…我們的限制會把別人的idea卡死。」「如果很多開源項目都這麼幹，就不要頭鐵了…你拿不準的可以交給我，這個是度的問題。」 |
+| `v8-arch-gyo2-dynamic-insert-per-world`（11-17） | 執行中可以插入 System；每個 World 宣告准不准（預設准、不保證指紋一致）；不准時拒絕、回傳錯誤、記警告、不退出 | 「那我先問一個問題，動態插入系統有什麼好處？用例子回答。」→「我明白了，這個就類似於指令模式，現在啟動的world沒有系統，但是動態插入可以讓我使用指令，動態加入這個機能，這個應該才是最核心的。未來我自己要做指令集。也是要考慮的。」→「我再問一個問題，GYO能走2條路嗎？我不要求作者一定不能動態插入，而是在World裡聲明，如果World的宣告可以，那就可以動態插入系統，但是，寫明不保證指紋一致性。如果宣告不行，那麼就不能動態插入，插入就拒絕，返回信息（不退出，但是System無法插入，日誌報警告）。」→（卡片複述並列四點建議：預設允許、宣告在建 World 時、拒絕回 Result＋警告、允許時指紋不保證一致）「對的。」 |
 
 ### 2.2 被這一批改寫的較早決定
 
@@ -104,6 +105,7 @@
 | 狀態機宣告（11-16 核准，`state-machine-declaration-approved`） | Kernel 不改；初始進入在開局之後；(c) 區介面 `RegisterStateMachine<S, Zone::C>` | `game-init-list`（11-16） | 部分：「初始進入在開局之後」可維持或改成插進清單，由狀態機卡另定 | L18 |
 | `v8-arch-gyo2-product-type-name`（11-14：Kernel 的型別叫 `Product`） | 「這個不叫 App 了，太模糊 直接用 Product」 | `kernel-world-exec-type`（11-16） | 有：使用者選「保留一個型別、另取名」，`Product` 的名字搬上去 | Kernel 的型別改名 `WorldExecutor` |
 | `v8-arch-gyo2-cross-clock-events-open`（11-14） | 跨時鐘事件放開；「不光要考慮單機，也要兼容網絡部分」 | `event-trim-by-cursor`（11-16） | 部分：游標保證不漏讀回應了「放開」；「兼容網絡」沒有回應 | 游標份（L13） |
+| DI-KS 3、規格 D-1、D-6（Plan 在 Finish 建一次、永不重建）、R-2（凍結後不能登記）（11-11～13 核准） | 決定性；網路的 wire id 依登記順序，「finish 後登錄不可再變（wire id 的前提）」（`docs/architecture/plans/kernel/networking.zh-Hant.md` 第 5 列） | `dynamic-insert-per-world`（11-17） | 有：使用者點名未來的指令集（「動態插入可以讓我使用指令，動態加入這個機能」），並用「每個 World 宣告」保住 PvP 的需要 | 改：Plan 在兩次執行之間可重建；凍結不再是永久；不允許的 World 照舊不變 |
 | `v8-arch-gyo2-module-plugin-registers`（11-14） | 型別 `GYO::Kernel::Module`／`Plugin`、兩份登記檔、Module 在 Plugin 前 | `module-plugin-owner-definition`（11-16）、PR #240 | 有：判準換了，兩份登記檔與型別保留 | 型別搬到編排層（命名空間改） |
 | runtime-composition DI 2（11-13：一個 Runtime 一個 runner）、DI 3／3a（11-11、11-13：世界內容只經 Loading；使用者 11-11 的理由「如果現在物件稀少可以算成是Startup，那麼未來東西越來越多呢」）、DI 4（一 World 一執行緒） | — | `game-init-list`、`build-world-phase-is-mechanism`、`thread-binding-by-runner`（11-16） | DI 2：照舊，改成一個 `Product` 一個 runner；DI 3／3a：11-11 的理由由 Loading 卡的「可分批」回應；DI 4：「別人掉過的坑」 | 文件不改（統一處理）；DI 3 交 Loading 卡；DI 4 改成存取時斷言 |
 
@@ -205,6 +207,7 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | 作者自寫策略、格鬥遊戲的 P2P（11-16，只佔位） | Kernel 不為某個策略增加知識 |
 | 狀態機的「進入初始狀態」要讀到設定（11-15 的 Bevy 例子） | 遊戲初始化清單可插入 |
 | Bevy 0.10 拿掉整個 World 綁執行緒（soundness #3310） | 執行緒的保證放在需要它的 Resource |
+| 未來的指令集（使用者 11-17 點名：「未來我自己要做指令集」） | World 在 Ready 時可再登記 System、重建 Plan；每個 World 宣告准不准 |
 
 ### 5.3 預算
 
@@ -220,6 +223,7 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | 遊戲初始化可插入 | 所有遊戲（狀態機的例子） | 使用者 11-16 |
 | 讀取畫面與分批載入 | PvP Client；原話沒有指定其他 Product | 使用者 11-11 |
 | 作者自寫策略、P2P 回滾 | 格鬥遊戲（使用者舉例，沒有點名為要做的 Product） | 使用者 11-16 |
+| 指令集（執行中用指令加上或拿掉機能） | 原話沒有指定 Product | 使用者 11-17 |
 
 ---
 
@@ -253,7 +257,7 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | J-14、J-16、J-17、J-38～J-41、J-47 的 Z1 案 | 區規則、digest 禁 Shared、(c) 來源掃描 | 移出 | 不選權威時全部通過 | 無 | 權威 |
 | J-15 | 第二個寫者失敗；Startup 不計；Shared 兩寫者通過 | 移出；「Startup 不計」改成「建立時的值不計」（L4） | 不選權威時兩寫者通過 | 無 | 權威 |
 | J-18、J-20 | id 依登記順序；Plan 決定性；指紋跨平台 golden | 改：golden 重產（L10） | 舊 golden 不再比對 | 無 | Kernel |
-| J-19 | 登記單位的重複、requires、凍結後登記、build／finish 順序、型別兩次、R-E4 | 拆：登記單位那半搬編排層（順序隨 L5 改）；R-E2／R-E4 留 | 待 L5 | 無 | 編排層／Kernel |
+| J-19 | 登記單位的重複、requires、凍結後登記、build／finish 順序、型別兩次、R-E4 | 拆：登記單位那半搬編排層（順序照 L5：build → 建 Plan → finish）；「凍結後登記」改成：World 宣告允許時可以、不允許時回傳錯誤並記警告；R-E2／R-E4 留 | 允許的 World 執行中可以登記 | 不允許的 World 從斷言改成回傳錯誤（不退出） | 編排層／Kernel |
 | J-21、J-23 | 衝突邊有先後；(b) 平手依 registrationSeq | 改：平手範圍擴大到所有衝突對 | 無 | (c) 也照登記順序 | Kernel |
 | J-22 | (c) 歧義在 finish 失敗；`SchedulerTests.cpp:250`、`:265` 守「哪些對算衝突」與 before／after 的效果 | 改：歧義失敗的案拿掉；「哪些對算衝突」「加 before 後的先後」的案留 | 沒有先後的衝突對在 (c) 也通過 | 無 | Kernel（衝突判定）；歧義不由機制守 |
 | J-25 | With／Without 不減少衝突（斷言 `ErrorCount(DE8) == 1`，`SchedulerTests.cpp:313-320`） | 改：改用 `TieBreaks` 或衝突邊斷言 | 無（同一個性質換觀察方式） | 無 | Kernel |
@@ -324,7 +328,8 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 |---|---|---|
 | 1 | 留；`ExclusiveWorld` 的 Contribution 待 L7 | — |
 | 2 | 前半留；後半拿掉（L3） | 驗證開著時，經 World 的未宣告存取與 System 邊界的淨變化記為違規、以 Err 回傳；驗證是開發工具 |
-| 3、4 | 留 | — |
+| 3 | 改寫 | 順序只來自 id 與 Plan；Plan 在兩次執行之間可以重建（World 宣告允許動態插入時），同樣的登記得到同樣的 Plan |
+| 4 | 留 | — |
 | 5 | 改寫 | 衝突與順序分開；沒有順序的衝突對照登記順序平手並列在 `TieBreaks`，不是錯誤；Kernel 不保證結果對登記順序不敏感 |
 | 6、7、8 | 移出 → 權威（8 的「domain tick 只有一個來源、System 不得寫」隨 L2 移伺服器權威策略） | — |
 | 9 | 留；刪「(c) 區」措辭 | — |
@@ -338,13 +343,14 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 | 19 | 留；Z5 那一句拿掉（L3） | — |
 | 22 | 移出 → 編排層 O-1 | — |
 | 23 | 待 L7 | — |
+| 新 | 新增 | **動態插入照 World 的宣告**：World 建立時宣告准不准在 Ready 時再登記或拿掉 System；不准時，插入回傳執行時錯誤、記警告、不改 World；准時，下一次執行前重建受影響的 Plan，指紋跟著重算、不保證兩端一致 |
 
 Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、14、15 留；RC 3（觸發條件是 D-E8）拿掉；RC 10、11 隨規則移權威；RC 12（X-2 的守衛移權威）移權威；RC 1 的 (c) 條件、RC 9 改寫掉 (c) 與 J-17；RC 7「Host 又長回來」**保留原條件**、改寫主詞（舊的 Host 職責現在在編排層：「第一個真實能力接進機制時仍要改編排層的迴圈或 Kernel 本體；或 H.7 以外的協調邏輯在兩個以上產品中重複」），另**新增** RC「Kernel 又長出限制：Kernel 為某一種產品或策略加了欄位、啟動檢查或執行期分支（例如重新認得開局、區），次數見 L17」；RC 8 留。
 
 ### 9.2 編排層（新頁 `target/v2/orchestration.zh-Hant.md`）
 
 - **O-1 遊戲初始化**：一個 `Product` 一份遊戲初始化清單，行程啟動時跑一次、在所有 World 開始每幀之前跑完、跑在主 World；清單內的先後由作者與 Module 插入；編排層保證「整份一次、在前」，不保證清單內的先後。守衛：J-58 改寫。
-- **O-2 登記單位**：依登記檔順序 build → Kernel 凍結並建 Plan → 依同順序 finish（L5 的建議形狀）→ 選了的檢查（權威）；Module 在 Plugin 之前（PR #240）；**依賴只從登記檔讀**（L20），缺依賴或依賴排在後面是啟動錯誤、不重排；名字重複是啟動錯誤；一個 `Product` 至多一個 runner。守衛：J-19 的登記單位那半（requires 的案改成讀登記檔）。
+- **O-2 登記單位**：依登記檔順序 build → Kernel 建 Plan → 依同順序 finish → 選了的檢查（權威）（L5）；執行中的插入（指令等）照同一條路再走一次；Module 在 Plugin 之前（PR #240）；**依賴只從登記檔讀**（L20），缺依賴或依賴排在後面是啟動錯誤、不重排；名字重複是啟動錯誤；一個 `Product` 至多一個 runner。守衛：J-19 的登記單位那半（requires 的案改成讀登記檔）。
 - **O-3 runner**：runner 擁有迴圈、決定哪條執行緒跑哪個 World；只呼叫 `WorldExecutor::RunSchedule` 與交換點，不排 System 的先後。守衛：掃描（`engine/orchestration` 不呼叫 System、不讀 Plan 的步驟）。
 - **O-4 中性**：編排層不帶任何第三方能力，不認得產品、權威策略、時鐘的語意。守衛：依賴掃描（`engine/orchestration` 只 link Kernel 與 base）、`naming_guard`。
 - **O-5 啟動錯誤一次收齊**：Kernel 的啟動錯誤與編排層、各 Module 的錯誤彙整成一份回報；Kernel 失敗時，依賴 `FrozenRegistry` 的檢查不跑，回報寫明「因 Kernel 錯誤而未檢查」。錯誤型別：編排層自己的報告型別包住 Kernel 的 `StartupReport` 與各 Module 的錯誤（Kernel 的 `StartupCode` 不擴充）。
@@ -361,7 +367,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 1. **時鐘與 tick**（L2）：**已定（2026-11-17）——移到時間的 Module**，作者可選；「tick 只有一個來源」歸伺服器權威策略。原話見第 2.1 節。比過的：留在 Kernel、只拿掉流程名字（現在的做法）／移到時間的 Module（建議；Bevy `bevy_time`、Unity 的 World 時間）。理由（使用者的）：「tick的控制之前也是pvp的需求，這個明顯是遊戲需求入侵了Engine設計」。查證：K.3 第 11 項（`spec.zh-Hant.md:1219`）的內容是 (c) 區（PvP 的權威與回滾）的時間來源。
 2. **執行期的攔截**（L3）：**已定（2026-11-17）——拿掉**；伺服器權威改靠 digest 比對與伺服器覆蓋來抓錯。比過的：Kernel 提供中性觀察點、策略在觀察點拒絕（卡片原建議；四家的觀察點只到觀察，沒有拒絕的前例，Bevy 明寫每次寫入呼叫 hook 成本太高，`bevy_ecs/src/component/mod.rs:705-712`）／選了伺服器權威就禁那幾種參數（蓋不到三條）／拿掉（四家共同的做法；卡片查完後改建議這個）。理由：卡片的（四家的做法；不讓 Kernel 為策略長出分支）；使用者照說，沒有另外說。證據 `runtime-interception-other-engines.md`。後果：untyped `Commands`、`ExclusiveWorld`、`Despawn`、外部寫入對權威資料的錯誤不會當場被抓，要等 digest 比對或被伺服器覆蓋。
 3. **生成世界時寫進去的初始值**（L4）：**已定（2026-11-17）——參照 Bevy**：初始值在建立實體的當下給，不設「寫入不算」的階段；伺服器權威只數修改既有值的寫者。比過的：建立時的值不算寫者（建議；Bevy required components `bevy_ecs/src/world/mod.rs:400-411`、場景在每幀的 `SpawnScene` 生成 `bevy_scene/src/lib.rs:98-104`；flecs prefab `docs/PrefabsManual.md:18-39`；Unity `EntityManager.Instantiate` `EntityManager.cs:3513`）／編排層保證生成期間不跑每幀、權威信任（K0 的延伸，無先例）／權威自己核對編排層的清單（無先例）／另一個 World 建好再搬（Unity 串流載入；要 Kernel 加跨 World 搬移）。理由：使用者「這個可以參照Bevy」。證據 `init-values-other-engines.md`。
-4. **`Registry::Finish` 拆段**（L5）。現在 `Plugin::Finish` 在檢查、建 Plan、凍結**之前**呼叫（`Registry.cpp:1561-1574`），權威檢查要用的 Plan 與順序圖還沒有。建議：Kernel 的 `Registry` 只提供「開一個 `Registrar`」與「凍結（全部檢查、建 Plan、算指紋）」兩步；編排層依序 build → 凍結 → finish → 權威檢查。系譜：Bevy 的 build → ready → finish → cleanup 也是 App 呼叫、World 不知道；退掉的：保留 Kernel 呼叫登記單位（Kernel 仍認得登記單位）。代價：finish 之後就不能再改 Plan（現在 finish 本來就不能登記）。
+4. **登記的生命週期與動態插入**（L5）：**已定（2026-11-17）**——見關聯表 L5 與第 2.1 節。比過的：生命週期——Kernel 兩步、編排層依序呼叫（建議）／照 Bevy 第一次跑才建 Plan；凍結——照舊永遠凍結／預設可改、PvP 鎖住（Bevy `schedule.rs:637-650` 圖有改動才重建；flecs `pipeline.c:269-277`；Unity 執行中可建 System）；開關——使用者提出「每個 World 宣告」（四家都沒有這種開關；Bevy 最接近的是 Finished 之後加 Plugin 就 panic，`bevy_app/src/app.rs:642-652`）。理由（使用者的）：未來的指令集；「我不要求作者一定不能動態插入，而是在World裡聲明」。卡片補的理由（使用者看過）：L3 拿掉執行期攔截後，權威策略擋不到執行中的插入，World 自己的宣告補上這個缺口。
 5. **Kernel 交出的唯讀登記資訊**（L6，第 3.3 節）：交出 hooks、`InitialValue`、schedule 選項、順序圖／不交，權威只依賴自己的登記。「不交」和已定的「伺服器權威連線時比 C 指紋」相抵（C 指紋讀的正是這些）。系譜：Bevy 的 `Schedules`、`ScheduleGraph` 公開可讀；Unity 的 `World.Systems` 可列舉。需要它的：PvP 的伺服器權威。
 6. **`ExclusiveWorld` 的存取**（L7）。現在 Contribution 是「讀全部、寫 zone B 且 Shared 的全部」，驗證也這樣定義，S-18 也依賴 `Writes<…>`。
    - 整個 World 的讀寫（Bevy 的 `&mut World`）：Kernel 不再列寫入。後果：權威策略數寫者時，獨占的 System 算每一欄的寫者——狀態機與時間的驅動固定步都用 `ExclusiveWorld`，伺服器權威下會撞寫者規則（除非權威份另定）。
