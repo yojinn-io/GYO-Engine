@@ -17,7 +17,7 @@
 | 程式 | `gyo2` f00433b0（Kernel 的程式和統合讀的 cb6bccca 相同） |
 | 決定表 | HANDOFF，分支 `claude/gyo2-time-design` |
 | 統合 | 修訂 28，16c84630（第 15 節；15.6 確認清單使用者核准，`v8-arch-gyo2-confirm-derived-removals`） |
-| 回滾份 | 1875ffb1（分支 `claude/gyo2-rollback-module-8bac02`）：公開登記 `rollback.Component<T>`、`rollback.Resource<R>`（沒登記＝不回滾）、可回滾的 schedule `rollback.Schedule(name)`、巢狀跑的 schedule 的登記、重跑時不跑 `rollback.SkipDuringResimulation(...)`、「重跑中」Resource（回滾 Module 建起來就登記，恆在）；回滾不依賴權威 |
+| 回滾份 | 修訂 4，1f83041f（分支 `claude/gyo2-rollback-module-8bac02`）：公開登記 `rollback.Component<T>`、`rollback.Resource<R>`（沒登記＝不回滾）、可回滾的 schedule `rollback.Schedule(name)`、巢狀跑的 schedule 的登記、重跑時不跑 `rollback.SkipDuringResimulation(...)`；重複登記作者的為準、不論先後，登記帶「作者／代為」的來源（5.4）；「重跑中」Resource 放在時間 Module（時間宣告的要求；不收時退回由回滾 Module 登記，恆在）；回滾不依賴權威 |
 | 回收清單 | `recovered-from-stale-cards.zh-Hant.md`（同 HANDOFF 的分支） |
 | 舊規格（只取設計思想） | `docs/architecture/plans/kernel/spec.zh-Hant.md`：B.3、G 節、K.3 |
 | 證據 | 主 checkout `build/evidence/gyo2-authority-module/other-engines-authority.md`（本份的偵察）；`build/evidence/gyo2-kernel-app-boundary/`（`section15-cross-engine.md`、`four-docs-adversarial-check*.md`、`single-writer-origin-and-pvp.md` 等） |
@@ -167,9 +167,9 @@ Client 的模擬 World 也選伺服器權威，再選回滾策略（L29）。它
 - 回滾的選項（只是轉交給回滾 Module 的登記，事實存在回滾 Module，L24）：`rollback = 可回滾（預設）／不回滾／Derived／不代登記`。
 
 **代為登記進回滾 Module**（L22；統合 15.2 統一了假設）：
-- 回滾 Module 建起來就登記「重跑中」與它的公開登記，所以代為登記**一律做**，不必先知道那個 World 有沒有回滾策略；沒有回滾策略時登記不生效（Match）。
+- 「重跑中」Resource 恆在（放在時間 Module；時間宣告不收時退回由回滾 Module 登記，回滾份修訂 4），回滾 Module 的公開登記建起來就在，所以代為登記**一律做**，不必先知道那個 World 有沒有回滾策略；沒有回滾策略時登記不生效（Match）。`OnRegister` 不讀「重跑中」的值，只透過 `rollback.SkipDuringResimulation` 掛上讀它的執行條件。
 - 預設：經權威登記的判定元件與 Resource，由策略代為呼叫 `rollback.Component<T>`／`rollback.Resource<R>`（可回滾）；**外部輸入的暫存一律不代登記**（Z8）。作者用上面的回滾選項改成不回滾、Derived，或「不代登記、我自己登記」。
-- 作者已經自己登記進回滾 Module 的型別不代登記（作者的為準）；之後才自己登記同一個型別，由回滾 Module 的重複登記規則處理（回滾份定）。
+- 重複登記照回滾份 5.4 的規則：**作者的為準、不論先後**——作者先登記，策略就不代登記；策略先代為登記、作者後登記，也是作者的蓋過代為的。登記帶「作者／代為」的來源，代為不是特權（和 L21 同理）。權威 Module 不另外判。
 
 **前例**：lightyear 的 `register_component` 同時登記進 ECS（`crates/replication/replication/src/registry/mod.rs:196-200`），預測串在同一個登記上（`app.component::<C>().predict()`，`crates/replication/prediction/src/registry.rs:741-748`）；replicon `app.replicate::<C>()`（`src/shared/replication/rules.rs:23`）；Unity 寫在型別的屬性上（11-16 比過，使用者選自己登記）。
 
