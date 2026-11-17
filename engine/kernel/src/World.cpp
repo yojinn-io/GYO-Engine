@@ -191,15 +191,9 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         return;
     case WorldState::Ready:
         if (mode == Detail::kModeRead) return;
-        if (kind == Detail::EntryKind::Component) {
-            const ColumnInfo& info = data_->components[id];
-            // W-6b: after the first Run the Host writes no zone C state.
-            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input);
-        } else if (kind == Detail::EntryKind::Resource) {
-            const ResourceInfo& info = data_->resources[id];
-            // W-6b, J-50: KernelSettings only before the first Run.
+        if (kind == Detail::EntryKind::Resource) {
+            // J-50: KernelSettings only before the first Run.
             GYO_ASSERT(!hasRun_ || id != data_->kernelSettings);
-            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input || info.external);
         }
         MarkApiWritten(kind, id);
         return;
@@ -340,29 +334,6 @@ KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rul
     if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
     call.returned.push_back(error);
     return error;
-}
-
-std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {
-    const ColumnInfo& info = call.world->data_->components[component];
-    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;
-    return CallError(call, KernelErrorCode::UntypedWrite, "F-10",
-                     std::string("untyped Commands ") + (insert ? "insert" : "remove") + " of component '" + info.name +
-                         "' (ComponentId " + std::to_string(component) + ", " +
-                         (info.zone == Zone::C ? "zone C" : "Exclusive") + ") on entity " + std::to_string(entity) +
-                         ": untyped Commands write only zone B, Shared columns; use CommandsFor");
-}
-
-std::optional<KernelError> CheckDespawn(SystemContext& call, EntityId entity) {
-    if (call.zone != Zone::B) return std::nullopt;
-    World& world = *call.world;
-    for (std::size_t c = 0; c < world.columns_.size(); ++c) {
-        if (world.data_->components[c].zone == Zone::C && world.columns_[c]->Contains(entity)) {
-            return CallError(call, KernelErrorCode::ZoneCDespawn, "Z5",
-                             "a zone B call despawns entity " + std::to_string(entity) + ", which has zone C component '" +
-                                 world.data_->components[c].name + "'");
-        }
-    }
-    return std::nullopt;
 }
 
 std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {
@@ -550,15 +521,6 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     using Detail::RecordKind;
     using Result = Engine::Base::Result<void, KernelError>;
 
-    auto kernelError = [&](KernelErrorCode code, std::string rule, std::string message) {
-        KernelError error(code, std::move(message));
-        error.rule = std::move(rule);
-        error.world = name_;
-        error.Wrap("sync point at step " + std::to_string(planPos) + " of schedule '" + std::string(schedule) + "'");
-        if (breakOnKernelError_ && breakHook_) breakHook_(error);
-        return error;
-    };
-
     // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
     std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
     // The schedule's domain tick for a RejectedSpawn record, looked up only when one is dropped.
@@ -578,68 +540,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     // The level being applied is the innermost one (its records are the tail).
     GYO_ASSERT(runStack_.empty() || runStack_.back().schedule == schedule);
 
-    // Z5 across levels (K0, spec F.2 steps 0 and 2): a zone C insert, or
-    // SpawnWithId, an outer level recorded into target and has not applied yet,
-    // in the window or in its schedule's hook queue. The text names the level
-    // and the schedule.
-    auto zoneCInsertInto = [](const Record& r, EntityId target) {
-        return r.emitterZone == Zone::C && r.entity == target &&
-               (r.kind == RecordKind::Insert || (r.kind == RecordKind::Spawn && r.withId));
-    };
-    auto outerInsert = [&](EntityId target) -> std::string {
-        for (std::size_t level = 0; level + 1 < runStack_.size(); ++level) {
-            const std::string where = "level " + std::to_string(level) + " of " + std::to_string(runStack_.size()) +
-                                      " (schedule '" + std::string(runStack_[level].schedule) + "')";
-            const std::size_t end = std::min(runStack_[level + 1].windowBase, window_.size());
-            for (std::size_t i = runStack_[level].windowBase; i < end; ++i) {
-                if (zoneCInsertInto(window_[i], target)) {
-                    return "a zone C call of the outer run at " + where + ", '" + std::string(window_[i].emitter) +
-                           "', recorded an insert into it that its sync point has not applied yet";
-                }
-            }
-            for (const Record& r : HookQueueOf(runStack_[level].schedule).records) {
-                if (zoneCInsertInto(r, target)) {
-                    return "zone C hook '" + std::string(r.emitter) + "' of the outer run at " + where +
-                           " recorded an insert into it, still in that schedule's hook queue";
-                }
-            }
-        }
-        return {};
-    };
-
     // One phase: step 0 applies the hook queue this way, steps 1 to 7 the window's records.
-    // pending: records of the same window not applied by this phase (step 0
-    // checks the window's zone C inserts too: a zone B hook's despawn recorded
-    // before a zone C insert of the next window; K-S10).
-    auto phase = [&](std::vector<Record>& records, const std::vector<Record>& pending) -> Result {
-        // Z5 recheck (spec F.2 steps 0 and 2; B-11): before any despawn of this
-        // phase, every zone B emitter's target is checked once; a hit applies none.
-        for (const Record& despawn : records) {
-            if (despawn.kind != RecordKind::Despawn || despawn.emitterZone != Zone::B) continue;
-            const EntityId target = despawn.entity;
-            std::string reason;
-            for (std::size_t c = 0; c < columns_.size() && reason.empty(); ++c) {
-                if (data_->components[c].zone == Zone::C && columns_[c]->Contains(target)) {
-                    reason = "it has zone C component '" + data_->components[c].name + "'";
-                }
-            }
-            for (const std::vector<Record>* list : {static_cast<const std::vector<Record>*>(&records), &pending}) {
-                for (const Record& other : *list) {
-                    if (!reason.empty()) break;
-                    if (other.emitterZone != Zone::C || other.entity != target) continue;
-                    if (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId)) {
-                        reason = "a zone C call inserts into it in the same window";
-                    }
-                }
-            }
-            if (reason.empty()) reason = outerInsert(target);
-            if (!reason.empty()) {
-                return Engine::Base::Err(kernelError(KernelErrorCode::ZoneCDespawn, "Z5",
-                                                     "a zone B despawn of entity " + std::to_string(target) +
-                                                         " at the sync point: " + reason + "; no despawn applied"));
-            }
-        }
-
+    auto phase = [&](std::vector<Record>& records) -> Result {
         // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.
         std::vector<EntityId> despawns;
         for (const Record& r : records) {
@@ -872,10 +774,9 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     std::vector<Record> windowRecords(std::make_move_iterator(window_.begin() + static_cast<std::ptrdiff_t>(base)),
                                       std::make_move_iterator(window_.end()));
     window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());
-    const std::vector<Record> none;
-    if (Result step0 = phase(hookRecords, windowRecords); !step0) return step0;
+    if (Result step0 = phase(hookRecords); !step0) return step0;
     // Steps 1 to 7.
-    if (Result rest = phase(windowRecords, none); !rest) return rest;
+    if (Result rest = phase(windowRecords); !rest) return rest;
     // Step 8.
     ++syncEpoch_;
     return {};

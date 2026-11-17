@@ -58,7 +58,7 @@ SystemResult ChurnSystem(SpawnWithId<Bundle<Col<0>, Col<1>, Col<2>, Col<3>, Col<
     for (int i = 0; i < 4; ++i) {
         const EntityId id = churn->next++;
         spawn.New(id, Col<0>{}, Col<1>{}, Col<2>{}, Col<3>{}, Col<4>{}, Col<5>{}, Col<6>{}, Col<7>{});
-        if (auto r = despawn.Entity(churn->oldest++); !r) return r;
+        despawn.Entity(churn->oldest++);
     }
     return Ok();
 }

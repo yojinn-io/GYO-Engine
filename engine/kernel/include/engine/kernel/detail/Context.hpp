@@ -86,7 +86,7 @@ struct Record {
     std::uint32_t id = 0;
     std::uint32_t planPos = 0;
     std::uint32_t recSeq = 0;
-    // The emitter's zone (Z5's recheck at the sync point).
+    // The emitter's zone (RejectedSpawn::emitterZone; goes with the zones, a later batch).
     Zone emitterZone = Zone::B;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
@@ -135,7 +135,7 @@ struct SystemContext {
     // the Executor as siblings beside the System's own Err (spec B.4 point 7,
     // E.2 step 5); the System never sees them.
     std::vector<KernelError> errors;
-    // Errors a kernel API returned to the System as Err (F-10, Z5, S-13, W-9).
+    // Errors a kernel API returned to the System as Err (S-13, W-9).
     // The System should pass them on; one it drops is listed by the Executor all
     // the same (nothing is silent, target/error-handling).
     std::vector<KernelError> returned;
@@ -221,20 +221,15 @@ void Push(SystemContext& call, Record record);
 // breakOnKernelError is on (target/system-contract 2b).
 [[nodiscard]] KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message);
 
-// The always-on checks of the untyped paths (target/error-handling "the added
+// The always-on checks of ExclusiveWorld (target/error-handling "the added
 // row"): each returns the error (already recorded in call.errors through
 // CallError) or nothing.
-//   F-10  untyped Commands insert / remove on a zone C or Exclusive column;
-//   Z5    a zone B call despawning an entity that has a zone C column;
 //   S-13  an ExclusiveWorld write to a column or resource outside zone B Shared;
 //   S-14  an ExclusiveWorld write to a zone B single-writer resource its
 //         Writes<...> does not list (listed: true when it does);
 //   S-15  an ExclusiveWorld read of KernelSettings;
 //   S-16  an ExclusiveWorld read of a resource whose thread affinity the running
 //         schedule's runner does not satisfy.
-[[nodiscard]] std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component,
-                                                             EntityId entity, bool insert);
-[[nodiscard]] std::optional<KernelError> CheckDespawn(SystemContext& call, EntityId entity);
 [[nodiscard]] std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component,
                                                              EntityId entity);
 [[nodiscard]] std::optional<KernelError> CheckExclusiveResourceWrite(SystemContext& call, ResourceId resource,

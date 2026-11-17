@@ -195,10 +195,7 @@ SystemResult TrailOnSystemPath(HookCtx ctx) {
     return Ok();
 }
 SystemResult BulletDespawnsSix(HookCtx, Despawn despawn) {
-    return despawn.Entity(6);
-}
-SystemResult ZoneCSeedInsertsPosIntoSix(HookCtx, CommandsFor<Inserts<Pos>, Removes<>> commands) {
-    commands.Insert(6, Pos{6});
+    despawn.Entity(6);
     return Ok();
 }
 SystemResult ZoneCSeedInsertsVelIntoTwo(HookCtx, CommandsFor<Inserts<Vel>, Removes<>> commands) {
@@ -219,7 +216,8 @@ SystemResult FilledAddsScore(HookCtx ctx, CommandsFor<Inserts<Score>, Removes<>>
     return Ok();
 }
 SystemResult BulletDespawnsThree(HookCtx, Despawn despawn) {
-    return despawn.Entity(3);
+    despawn.Entity(3);
+    return Ok();
 }
 SystemResult BulletRemovesScoreOfFour(HookCtx, CommandsFor<Inserts<>, Removes<Score>> commands) {
     commands.Remove<Score>(4);
@@ -606,23 +604,6 @@ TEST_CASE("J-54: a round is applied while the World is Applying (F-5)") {
 }
 
 TEST_CASE("J-54: a round is a whole application") {
-    SUBCASE("a zone B despawn and a zone C insert of one round: Z5, no despawn") {
-        auto rig = MakeFlushRig(
-            [](Registrar& r) {
-                r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-                r.AddSystem<&ZoneCSpawnsSeed>(Put("ZoneCSpawnsSeed", "Tick", "C", Zone::C));
-                r.Hook<Bullet, &BulletDespawnsSix>(HookTrigger::OnAdd, {.name = "BulletDespawnsSix", .zone = Zone::B});
-                r.Hook<Seed, &ZoneCSeedInsertsPosIntoSix>(HookTrigger::OnAdd, {.name = "ZoneCSeedInsertsPosIntoSix", .zone = Zone::C});
-            },
-            {}, false);
-        rig->world().Insert(6, Tag{6});
-        const auto result = rig->Run();
-        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
-        REQUIRE_FALSE(static_cast<bool>(result));
-        CHECK(result.error().Text().find("hook round 1") != std::string::npos);
-        CHECK(rig->world().Alive(6));
-        CHECK(rig->world().Get<Pos>(6) == nullptr);
-    }
     SUBCASE("an initial value request in a round is filled there; its target's OnAdd records into the next round") {
         auto rig = MakeFlushRig([](Registrar& r) {
             r.InitialValue<Filled, &FilledFrom>();
@@ -687,7 +668,7 @@ TEST_CASE("J-54: rounds are separate applications") {
         REQUIRE(rig->world().Get<Score>(9) != nullptr);
         CHECK(rig->world().Get<Score>(9)->s == 6);
     }
-    SUBCASE("a zone B despawn in round 1 and a zone C insert in round 2: dropped and counted, no Z5") {
+    SUBCASE("a zone B despawn in round 1 and a zone C insert in round 2: dropped and counted") {
         auto rig = MakeFlushRig(
             [](Registrar& r) {
                 r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));

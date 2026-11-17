@@ -21,7 +21,7 @@
 //   local                  LocalState
 //   exclusive              WholeWorld (ExclusiveWorld)
 //   extract                ExtractComponentRead / ExtractResourceRead (read-only, source World)
-//   untyped commands       UntypedCommands (checked at run time; spec F.1, F-10)
+//   untyped commands       UntypedCommands (spec F.1; not checked at run time)
 
 namespace GYO::Kernel {
 

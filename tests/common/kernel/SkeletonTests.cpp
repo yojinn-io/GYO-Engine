@@ -110,7 +110,7 @@ SystemResult Reap(Query<Read<Health>> healths, Despawn despawn) {
     Engine::Base::Result<void, KernelError> result;
     healths.ForEach([&](EntityId id, const Health& health) {
         if (health.hp > 0 || !result) return;
-        if (auto r = despawn.Entity(id); !r) result = Engine::Base::Err(std::move(r).error());
+        despawn.Entity(id);
     });
     return result;
 }
@@ -319,7 +319,7 @@ SystemResult RecordsBothOrders(Spawn<Bundle<Armor>> spawn, Despawn despawn,
                                CommandsFor<Inserts<Shield>, Removes<Shield>> shields) {
     auto made = spawn.New(Armor{1});
     if (!made) return Engine::Base::Err(std::move(made).error());
-    if (auto r = despawn.Entity(made.value()); !r) return Engine::Base::Err(std::move(r).error());
+    despawn.Entity(made.value());
     shields.Insert(1, Shield{7});
     shields.Remove<Shield>(1);
     return Ok();
@@ -408,7 +408,7 @@ SystemResult ReapHundred(Query<Read<Health>> healths, Despawn despawn) {
     healths.ForEach([&](EntityId id, const Health&) {
         if (left <= 0 || !result) return;
         --left;
-        if (auto r = despawn.Entity(id); !r) result = Engine::Base::Err(std::move(r).error());
+        despawn.Entity(id);
     });
     return result;
 }

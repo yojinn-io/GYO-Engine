@@ -467,34 +467,28 @@ private:
 template <class E>
 struct ParamTraits<EventWriter<E>> : Detail::HandleTraits<EventWriter<E>, TypeList<Access::EventWrite<E>>, false> {};
 
-// Untyped deferred insert / remove of zone B, Shared columns only (spec F.1);
-// checked when recorded, at run time (F-10). No access, no conflict edge.
+// Untyped deferred insert / remove of any column (spec F.1). No access, no
+// conflict edge, not counted as a writer; nothing checks the column at run time
+// (v8-arch-gyo2-no-runtime-interception: authority data written by mistake is
+// caught by digest comparison and the server's overwrite, not here).
 class Commands final : Detail::Handle {
     GYO_KERNEL_HANDLE(Commands) : Handle(call) {}
 
 public:
-    // Deferred insert into a zone B, Shared column; any other column is Err
-    // (spec F.1, F-10: a Programmer Error returned as Err, in every build).
     template <class T>
-    [[nodiscard]] Engine::Base::Result<void, KernelError> Insert(EntityId entity, T value) {
+    void Insert(EntityId entity, T value) {
         Check("Commands");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
-        const ComponentId component = Detail::ComponentIdOf(*world_, KeyOf<T>());
-        if (auto error = Detail::CheckUntypedCommand(call, component, entity, true)) return Engine::Base::Err(std::move(*error));
-        Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, component);
+        Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));
         record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
         Detail::Push(call, std::move(record));
-        return {};
     }
 
     template <class T>
-    [[nodiscard]] Engine::Base::Result<void, KernelError> Remove(EntityId entity) {
+    void Remove(EntityId entity) {
         Check("Commands");
-        Detail::SystemContext& call = Detail::RequireCall(*world_);
-        const ComponentId component = Detail::ComponentIdOf(*world_, KeyOf<T>());
-        if (auto error = Detail::CheckUntypedCommand(call, component, entity, false)) return Engine::Base::Err(std::move(*error));
-        Detail::Push(call, Detail::Record::Of(Detail::RecordKind::Remove, entity, component));
-        return {};
+        Detail::Push(Detail::RequireCall(*world_),
+                     Detail::Record::Of(Detail::RecordKind::Remove, entity, Detail::ComponentIdOf(*world_, KeyOf<T>())));
     }
 };
 template <>
@@ -592,19 +586,15 @@ template <class... C>
 struct ParamTraits<SpawnWithId<Bundle<C...>>>
     : Detail::HandleTraits<SpawnWithId<Bundle<C...>>, TypeList<Access::DeferredInsert<C>...>, false> {};
 
-// Not a writer, no conflict edge (spec B.3, B.9 trade-off 1); Z5 at run time.
+// Not a writer, no conflict edge (spec B.3, B.9 trade-off 1).
 class Despawn final : Detail::Handle {
     GYO_KERNEL_HANDLE(Despawn) : Handle(call) {}
 
 public:
-    // Deferred despawn (spec F.2 step 2). A zone B System despawning an entity
-    // that has a zone C column is Err when recorded (spec Z5).
-    [[nodiscard]] Engine::Base::Result<void, KernelError> Entity(EntityId entity) {
+    // Deferred despawn (spec F.2 step 2) of any entity.
+    void Entity(EntityId entity) {
         Check("Despawn");
-        Detail::SystemContext& call = Detail::RequireCall(*world_);
-        if (auto error = Detail::CheckDespawn(call, entity)) return Engine::Base::Err(std::move(*error));
-        Detail::Push(call, Detail::Record::Of(Detail::RecordKind::Despawn, entity));
-        return {};
+        Detail::Push(Detail::RequireCall(*world_), Detail::Record::Of(Detail::RecordKind::Despawn, entity));
     }
 };
 template <>

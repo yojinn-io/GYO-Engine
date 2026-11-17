@@ -1,6 +1,6 @@
 // A System holding ExclusiveWorld<...> runs another schedule (K0,
 // v8-arch-gyo2-nested-schedule; declaration section 6 judgement 1):
-//   J-56  nested runs (spec E.2, E.5, F.2, W-3, W-4, X-11 to X-16, Z5);
+//   J-56  nested runs (spec E.2, E.5, F.2, W-3, W-4, X-11 to X-16);
 //   J-57  ExclusiveWorld's closures and resource access (spec S-13 to S-15);
 //   J-58  Startup run by the kernel (spec H-12).
 // Each CHECK carries a tag in brackets ("[ns-...]"): the mutants of the batch
@@ -213,7 +213,7 @@ SystemResult SpawnSeventy(SpawnWithId<Bundle<Tag>> spawn) {
     return Ok();
 }
 SystemResult DespawnOne(Despawn despawn) {
-    if (auto r = despawn.Entity(1); !r) return r;
+    despawn.Entity(1);
     return Ok();
 }
 SystemResult LookForMembers(Query<Read<Tag>> tags) {
@@ -355,40 +355,16 @@ TEST_CASE("J-56: the records of the outer level stay there: the inner schedule n
                   "[ns-outer-records-same] the nested run changed the outer records' result");
 }
 
-// ---- J-56: an outer insert meets an inner despawn (Z5 across levels)
+// ---- J-56: an outer insert meets an inner despawn
 
 namespace {
 SystemResult InsertTagOnFive(CommandsFor<Inserts<Tag>, Removes<>> commands) {
     commands.Insert(5, Tag{5});
     return Ok();
 }
-SystemResult InsertVelOnFive(CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(5, Vel{5});
-    return Ok();
-}
-SystemResult SpawnVelFive(SpawnWithId<Bundle<Vel>> spawn) {
-    spawn.New(5, Vel{5});
-    return Ok();
-}
 SystemResult DespawnFive(Despawn despawn) {
-    if (auto r = despawn.Entity(5); !r) return r;
+    despawn.Entity(5);
     return Ok();
-}
-// OnAdd<Tag> (zone C): records Vel into the schedule's hook queue.
-SystemResult TagToVel(HookCtx ctx, CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(ctx.Entity(), Vel{9});
-    return Ok();
-}
-
-void CheckZ5Across(Rig& rig, const std::string& tag, const std::string& where) {
-    rig.world().Insert(5, Mode{5});
-    const auto result = rig.Run("Frame");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[" << tag << "] the inner despawn was applied: " << Joined());
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::ZoneCDespawn), "[" << tag << "] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find(where) != std::string::npos,
-                  "[" << tag << "-where] the message does not name " << where << ": " << result.error().Text());
-    CHECK_MESSAGE(rig.world().Alive(5), "[" << tag << "] entity 5 was despawned");
-    CHECK(rig.recorded.size() == 1);
 }
 } // namespace
 
@@ -404,53 +380,6 @@ TEST_CASE("J-56: an outer zone B insert into E and an inner despawn of E: the ou
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
     CHECK_MESSAGE(!rig->world().Alive(5), "[ns-z5-b]");
     CHECK_MESSAGE(rig->world().DroppedMissingEntity() == 1, "[ns-z5-b] dropped " << rig->world().DroppedMissingEntity());
-}
-
-TEST_CASE("J-56: an outer zone C insert into E and an inner zone B despawn of E: Z5 at the inner sync point, E stays") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-outer", "level 0 of 2 (schedule 'Frame')");
-}
-
-TEST_CASE("J-56: three levels, the zone C insert in the outermost: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&Drive>(In("Driver2", "Step", "S"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Step"};
-    Runs()["Driver2"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-three-levels", "level 0 of 3 (schedule 'Frame')");
-}
-
-TEST_CASE("J-56: the zone C insert is in the outer schedule's hook queue: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertTagOnFive>(In("Seed", "Frame", "In"));
-        r.Hook<Tag, &TagToVel>(HookTrigger::OnAdd, {.name = "TagToVel", .zone = Zone::C});
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-outer-hook", "hook 'TagToVel' of the outer run at level 0 of 2");
-}
-
-TEST_CASE("J-56: the outer zone C call spawns E with SpawnWithId: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&SpawnVelFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-outer-withid", "level 0 of 2 (schedule 'Frame')");
 }
 
 // ---- J-56: the outer schedule's hook queue
@@ -496,7 +425,7 @@ TEST_CASE("J-56: the outer schedule's hook queue is neither applied nor dropped 
 
 namespace {
 SystemResult DespawnSeven(Despawn despawn) {
-    if (auto r = despawn.Entity(7); !r) return r;
+    despawn.Entity(7);
     return Ok();
 }
 SystemResult SpawnSeven(SpawnWithId<Bundle<Tag>> spawn) {
@@ -855,7 +784,7 @@ SystemResult RunInsideClosure(ExclusiveWorld<> world) {
     return Ok();
 }
 SystemResult DespawnSix(Despawn despawn) {
-    if (auto r = despawn.Entity(6); !r) return r;
+    despawn.Entity(6);
     return Ok();
 }
 SystemResult HookRunsSchedule(ExclusiveWorld<> world) {
@@ -1668,45 +1597,6 @@ TEST_CASE("J-56: B runs B (a level that is not the outermost runs itself): refus
 }
 
 namespace {
-SystemResult InsertVelOnFiveThenDrive(CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(5, Vel{5});
-    return Ok();
-}
-SystemResult InsertVelOnFour(CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(4, Vel{4});
-    return Ok();
-}
-} // namespace
-
-TEST_CASE("J-56: three levels, the zone C insert in the middle level: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&InsertVelOnFiveThenDrive>(In("Middle", "Step", "S", Zone::C, {"Driver2"}));
-        r.AddSystem<&Drive>(In("Driver2", "Step", "S"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Step"};
-    Runs()["Driver2"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-middle-level", "level 1 of 3 (schedule 'Step')");
-}
-
-TEST_CASE("J-56: an outer zone C insert into another entity does not stop an inner despawn") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFour>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    rig->world().Insert(4, Mode{4});
-    rig->world().Insert(5, Mode{5});
-    Runs()["Driver"] = {"Tick"};
-    const auto result = rig->Run("Frame");
-    CHECK_MESSAGE(static_cast<bool>(result), "[ns-z5-other-entity] " << Text(result));
-    CHECK(!rig->world().Alive(5));
-}
-
-namespace {
 bool g_called = false;
 SystemResult WritesRefused(ExclusiveWorld<> world) {
     g_called = false;
@@ -1860,61 +1750,15 @@ TEST_CASE("J-57: declarations: ExclusiveWorld<Writes<...>> with the ingress flag
 // ---- Added after the line-by-line review (Opus/xhigh, build/evidence/gyo2-nested-schedule/impl-review-opus-xhigh.md)
 
 namespace {
-SystemResult InsertTagOnSixInside(CommandsFor<Inserts<Tag>, Removes<>> commands) {
-    commands.Insert(6, Tag{6});
-    return Ok();
-}
-SystemResult InsertTagOnFiveB(CommandsFor<Inserts<Tag>, Removes<>> commands) {
-    commands.Insert(5, Tag{5});
-    return Ok();
-}
 SystemResult BootTampers(Query<Read<Tag>>) {
     g_mode->m = 9;  // not declared: verification on in Startup too (KernelSettings read when Startup starts)
     return Ok();
 }
 SystemResult DespawnSixInside(Despawn despawn) {
-    if (auto r = despawn.Entity(6); !r) return r;
+    despawn.Entity(6);
     return Ok();
 }
 } // namespace
-
-TEST_CASE("J-56: the inner sync point fails after its step 0 applied hook records (no hook ran): nothing blamed on the outer System") {
-    // Tick A inserts Tag on 6; OnAdd<Tag> records Mode into Tick's hook queue; Tick B's sync point applies it at
-    // step 0 (no hook on Mode, so no snapshot is taken there), then fails Z5 against the outer zone C insert into 5.
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&InsertTagOnSixInside>(In("Seed", "Tick", "A"));
-        r.Hook<Tag, &TagToMode>(HookTrigger::OnAdd, {.name = "TagToMode", .zone = Zone::B});
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "B"));
-    });
-    rig->world().Insert(5, Pos{5});
-    rig->world().Insert(6, Pos{6});
-    Runs()["Driver"] = {"Tick"};
-    const auto result = rig->Run("Frame");
-    REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::ZoneCDespawn), "[ns-fail-after-sync-blame] " << result.error().Text());
-    CHECK_MESSAGE(!result.error().Has(KernelErrorCode::BoundaryChange), "[ns-fail-after-sync-blame] " << result.error().Text());
-    CHECK(rig->recorded.size() == 1);
-}
-
-TEST_CASE("J-56: three levels, the zone C insert in the middle level's hook queue: Z5 all the same") {
-    // Mid: stage S1 inserts Tag on 5; its sync point runs the zone C hook TagToVel, whose record waits in Mid's hook
-    // queue for the next sync point; stage S2's exclusive System runs Tick, which despawns 5.
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.Schedule(Schedule("Mid", Domain::Fixed, false, {"S1", "S2"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&InsertTagOnFiveB>(In("Seed", "Mid", "S1"));
-        r.Hook<Tag, &TagToVel>(HookTrigger::OnAdd, {.name = "TagToVel", .zone = Zone::C});
-        r.AddSystem<&Drive>(In("Driver2", "Mid", "S2"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Mid"};
-    Runs()["Driver2"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-middle-hook", "hook 'TagToVel' of the outer run at level 1 of 3 (schedule 'Mid')");
-}
 
 TEST_CASE("J-58: verification is on while Startup runs: an undeclared write in Startup is reported, naming its System") {
     auto rig = NestRig([](Registrar& r) {

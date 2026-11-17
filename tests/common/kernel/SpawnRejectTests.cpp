@@ -120,7 +120,7 @@ SystemResult LogRemoveBody(HookCtx ctx) {
     return Ok();
 }
 SystemResult DespawnThenSpawnSeven(Despawn despawn, SpawnWithId<Bundle<Body>> spawn) {
-    if (auto r = despawn.Entity(7); !r) return r;
+    despawn.Entity(7);
     spawn.New(7, Body{77});
     return Ok();
 }
@@ -133,7 +133,10 @@ SystemResult FlagTwentyAndTwentyOne(SpawnWithId<Bundle<Signal>> spawn) {
     spawn.New(21, Signal{21});
     return Ok();
 }
-SystemResult HookDespawnsSeven(HookCtx, Despawn despawn) { return despawn.Entity(7); }
+SystemResult HookDespawnsSeven(HookCtx, Despawn despawn) {
+    despawn.Entity(7);
+    return Ok();
+}
 SystemResult SpawnSevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
     if (tick.Tick() == 1) spawn.New(7, Body{77});
     return Ok();
@@ -190,7 +193,7 @@ SystemResult SpawnElevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick t
 }
 SystemResult DespawnThenSpawnElevenAtTickOne(Despawn despawn, SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
     if (tick.Tick() != 1) return Ok();
-    if (auto r = despawn.Entity(11); !r) return r;
+    despawn.Entity(11);
     spawn.New(11, Body{1111});
     return Ok();
 }
@@ -243,7 +246,7 @@ SystemResult SpawnHundredTag(SpawnWithId<Bundle<Tag>> spawn) {
     return Ok();
 }
 SystemResult DespawnThenSpawnHundredFifty(Despawn despawn, SpawnWithId<Bundle<Body>> spawn) {
-    if (auto r = despawn.Entity(150); !r) return r;
+    despawn.Entity(150);
     spawn.New(150, Body{150});
     return Ok();
 }
@@ -277,7 +280,10 @@ SystemResult SpawnSevenAlways(SpawnWithId<Bundle<Body>> spawn) {
     return Ok();
 }
 SystemResult FailsInB() { return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "FailsInB fails")); }
-SystemResult ZoneBDespawnsE(Despawn despawn) { return despawn.Entity(60); }
+SystemResult ZoneBDespawnsE(Despawn despawn) {
+    despawn.Entity(60);
+    return Ok();
+}
 SystemResult ZoneCSpawnsE(SpawnWithId<Bundle<CPos>> spawn) {
     spawn.New(60, CPos{60});
     return Ok();
@@ -755,17 +761,21 @@ TEST_CASE("J-55: the records, the count and the World's states") {
     }
 }
 
-TEST_CASE("J-55: a zone B despawn and a zone C spawn of one id are still Z5") {
+// Z5 went with the run-time interception (v8-arch-gyo2-no-runtime-interception):
+// the despawn (step 2) applies before the spawn (step 4), so 60 comes back new.
+TEST_CASE("J-55: a zone B despawn and a zone C spawn of one id: the despawn applies first, then the spawn") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&ZoneBDespawnsE>(In("ZoneBDespawnsE", "A"));
         r.AddSystem<&ZoneCSpawnsE>(In("ZoneCSpawnsE", "A", Zone::C));
     });
     rig->world().Insert(60, Tag{1});
-    const auto result = rig->Run();
-    CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-55 z5: Z5 as before");
-    CHECK(rig->world().State() == WorldState::Interrupted);
-    CHECK(rig->world().Alive(60));
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(rig->world().State() == WorldState::Ready);
+    REQUIRE_MESSAGE(rig->world().Alive(60), "J-55 despawn-then-spawn: 60 is spawned again");
+    REQUIRE(rig->world().Get<CPos>(60) != nullptr);
+    CHECK(rig->world().Get<CPos>(60)->x == 60);
+    CHECK_MESSAGE(rig->world().Get<Tag>(60) == nullptr, "J-55 despawn-then-spawn: the old entity's Tag is gone");
     CHECK(rig->world().RejectedSpawns() == 0);
 }
 

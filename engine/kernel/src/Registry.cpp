@@ -24,8 +24,6 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::BoundaryChange: return "BoundaryChange";
     case KernelErrorCode::PreCallChange: return "PreCallChange";
     case KernelErrorCode::StaleHandle: return "StaleHandle";
-    case KernelErrorCode::UntypedWrite: return "UntypedWrite";
-    case KernelErrorCode::ZoneCDespawn: return "ZoneCDespawn";
     case KernelErrorCode::ExclusiveWorldWrite: return "ExclusiveWorldWrite";
     case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
     case KernelErrorCode::StructureBroken: return "StructureBroken";

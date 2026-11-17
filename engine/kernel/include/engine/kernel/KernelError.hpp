@@ -21,7 +21,7 @@
 //   siblings  the sibling list, horizontal: independent errors of one System
 //             call (each access-verification violation, the System's own Err)
 //             side by side, never wrapped into one another (code Siblings).
-// rule names the broken rule ("W-5", "F-10", "Z5", "S-13", ...); world names the
+// rule names the broken rule ("W-5", "W-9", "S-13", ...); world names the
 // World the error was found in (spec A.6: a violation carries the World's
 // identity). The code enum is the kernel module's own (no global error enum).
 //
@@ -47,10 +47,6 @@ enum class KernelErrorCode : std::uint8_t {
     PreCallChange,
     // Spec W-4: a handle used outside the System call that fetched it, or after a sync point.
     StaleHandle,
-    // Spec F.1, F-10: untyped Commands on a zone C or Exclusive column.
-    UntypedWrite,
-    // Spec Z5: a zone B emitter despawns an entity with zone C columns (when recorded, or the sync point's recheck).
-    ZoneCDespawn,
     // Spec S-13: an ExclusiveWorld write outside zone B Shared data, or an untyped spawn.
     ExclusiveWorldWrite,
     // Spec A.1, W-9: the allotter's range is used up (reported, never wrapped).

@@ -4,7 +4,7 @@
 // J-11 full against incremental rebuild (W-11), J-12 Fetch has no order
 // dependence (spec B.4 point 7), J-44 the World summary (D-9).
 // target/kernel DI-KS 2, 6, 9, 12 (B-12 half), 14; spec E.2, E.5, X-1 to X-5,
-// F.2 steps 0 and 2, W-6b, LIM-6.
+// F.2 steps 0 and 2, LIM-6.
 
 #include "WorldTestSupport.hpp"
 
@@ -33,7 +33,7 @@ constexpr bool kNdebug =
     false;
 #endif
 
-// ---- J-6 (W-6, W-6b)
+// ---- J-6 (W-6)
 
 // The Host's code reached while a schedule runs, with no System of this World
 // current on the thread (as on a thread a System started itself: spec R-03).
@@ -52,7 +52,7 @@ SystemResult Idle(Query<Read<Tag>>) { return Ok(); }
 
 } // namespace
 
-TEST_CASE("J-6: a World access while Running with no System current fails a GYO_ASSERT; Host writes to zone C state after the first Run too") {
+TEST_CASE("J-6: a World access while Running with no System current fails a GYO_ASSERT; the Host writes any data in Ready") {
     {
         // Verification off: the always-on GYO_ASSERT alone must stop it.
         auto rig = MakeRig([](Registrar& r) {
@@ -72,10 +72,8 @@ TEST_CASE("J-6: a World access while Running with no System current fails a GYO_
         World& world = rig->world();
         world.Insert(1, Pos{1});  // before the first Run: the initial content
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        GYO_CHECK_ASSERTS(world.Insert(2, Pos{2}));
-        GYO_CHECK_ASSERTS(world.GetMut<Pos>(1));
-        GYO_CHECK_ASSERTS(world.SetResource(CRes{1}));
-        // Boundary (role Input) and zone B data: the Host may write them in Ready.
+        // No run-time interception (v8-arch-gyo2-no-runtime-interception): zone C state too
+        // after the first Run (W-6b is gone); boundary (role Input) and zone B data as before.
         world.Insert(1, Boundary{1});
         world.Insert(1, Tag{1});
         world.SetResource(Out{3});
@@ -244,38 +242,23 @@ TEST_CASE("J-30: a skipped System takes its stamp; the same history gives the sa
     CHECK(StampsOfTwoRuns() == first);
 }
 
-// ---- J-32b (F-10, Z5)
+// ---- J-32b (untyped Commands; a kernel Err the System drops)
 
 namespace {
 
-SystemResult UntypedIntoZoneC(Commands commands) {
-    if (auto r = commands.Insert(1, Pos{1}); !r) return Engine::Base::Err(std::move(r).error().Wrap("UntypedIntoZoneC"));
-    return Ok();
-}
-SystemResult UntypedIntoExclusive(Commands commands) {
-    if (auto r = commands.Remove<Mode>(1); !r) return Engine::Base::Err(std::move(r).error().Wrap("UntypedIntoExclusive"));
-    return Ok();
-}
 SystemResult UntypedIntoShared(Commands commands) {
-    if (auto r = commands.Insert(1, Tag{5}); !r) return Engine::Base::Err(std::move(r).error());
+    commands.Insert(1, Tag{5});
     return Ok();
 }
-SystemResult UntypedIntoZoneCShared(Commands commands) {
-    if (auto r = commands.Insert(1, CShared{1}); !r) return Engine::Base::Err(std::move(r).error());
-    return Ok();
-}
-// Drops the kernel Err and returns another one: both are reported.
-SystemResult DroppedBesideOwn(Commands commands) {
-    static_cast<void>(commands.Insert(1, Pos{1}));
+// Spawn::New on a used-up allotter is a kernel Err (W-9). Drops it and returns
+// another one: both are reported.
+SystemResult DroppedBesideOwn(Spawn<Bundle<Tag>> spawn) {
+    static_cast<void>(spawn.New(Tag{1}));
     return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "own"));
 }
 // Drops the Err it got: the Executor reports it all the same.
-SystemResult UntypedDropped(Commands commands) {
-    static_cast<void>(commands.Insert(1, Pos{1}));
-    return Ok();
-}
-SystemResult ZoneBDespawnsZoneC(Despawn despawn) {
-    if (auto r = despawn.Entity(1); !r) return Engine::Base::Err(std::move(r).error().Wrap("ZoneBDespawnsZoneC"));
+SystemResult SpawnDropped(Spawn<Bundle<Tag>> spawn) {
+    static_cast<void>(spawn.New(Tag{1}));
     return Ok();
 }
 
@@ -293,66 +276,30 @@ void CheckErrOnce(Rig& rig, KernelErrorCode code, const char* rule) {
 
 } // namespace
 
-TEST_CASE("J-32b: untyped Commands on zone C or Exclusive data and a zone B despawn of zone C data are Err in every build") {
+// The F-10 and Z5 halves went with the run-time interception
+// (v8-arch-gyo2-no-runtime-interception). A kernel Err the System drops is still
+// reported (CallError lists it in call.returned): the trigger is now Spawn::New
+// on a used-up allotter (W-9), the only kernel Err a plain System's call returns.
+TEST_CASE("J-32b: untyped Commands write zone B Shared columns; a kernel Err the System drops is still reported") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
-    SUBCASE("untyped insert into a zone C column") {
-        auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&UntypedIntoZoneC>(B("UntypedIntoZoneC", "A"));
-        }, false);
-        rig->world().Insert(1, Tag{0});
-        CheckErrOnce(*rig, KernelErrorCode::UntypedWrite, "F-10");
-        CHECK(rig->world().Get<Pos>(1) == nullptr);
-    }
-    SUBCASE("untyped remove from an Exclusive column") {
-        auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&UntypedIntoExclusive>(B("UntypedIntoExclusive", "A"));
-        }, false);
-        rig->world().Insert(1, Mode{0});
-        CheckErrOnce(*rig, KernelErrorCode::UntypedWrite, "F-10");
-        CHECK(rig->world().Get<Mode>(1) != nullptr);
-    }
     SUBCASE("a dropped Err is still reported") {
         auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&UntypedDropped>(B("UntypedDropped", "A"));
+            Data(r, true);
+            r.AddSystem<&SpawnDropped>(B("SpawnDropped", "A"));
         }, false);
-        CheckErrOnce(*rig, KernelErrorCode::UntypedWrite, "F-10");
-    }
-    SUBCASE("untyped insert into a zone C, Shared column") {
-        auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&UntypedIntoZoneCShared>(B("UntypedIntoZoneCShared", "A"));
-        }, false);
-        rig->world().Insert(1, Tag{0});
-        CheckErrOnce(*rig, KernelErrorCode::UntypedWrite, "F-10");
+        rig->world().SetResource(RangeAllotter::Of(1, 0));  // used up
+        CheckErrOnce(*rig, KernelErrorCode::AllotterExhausted, "W-9");
     }
     SUBCASE("a dropped Err beside the System's own Err") {
         auto rig = MakeRig([](Registrar& r) {
-            Data(r);
+            Data(r, true);
             r.AddSystem<&DroppedBesideOwn>(B("DroppedBesideOwn", "A"));
         }, false);
+        rig->world().SetResource(RangeAllotter::Of(1, 0));  // used up
         const auto result = rig->Run();
         REQUIRE_FALSE(static_cast<bool>(result));
-        CHECK(result.error().Has(KernelErrorCode::UntypedWrite));
+        CHECK(result.error().Has(KernelErrorCode::AllotterExhausted));
         CHECK(result.error().Has(KernelErrorCode::SystemFailed));
-    }
-    SUBCASE("a zone B despawn of an entity with a zone C column") {
-        auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&ZoneBDespawnsZoneC>(B("ZoneBDespawnsZoneC", "A"));
-        }, false);
-        rig->world().Insert(1, Pos{0});
-        const auto result = rig->Run();
-        REQUIRE_FALSE(static_cast<bool>(result));
-        CHECK(result.error().Has(KernelErrorCode::ZoneCDespawn));
-        // Caught when recorded (returned to the System, which wrapped it), not only by the sync point's recheck.
-        CHECK_MESSAGE(result.error().Text().find("System 'ZoneBDespawnsZoneC'") != std::string::npos, result.error().Text());
-        CHECK(result.error().Text().find("sync point at step") == std::string::npos);
-        CHECK(rig->world().State() == WorldState::Interrupted);
-        CHECK(rig->recorded.size() == 1);
-        CHECK(rig->world().Alive(1));
     }
     SUBCASE("zone B, Shared: allowed") {
         auto rig = MakeRig([](Registrar& r) {
@@ -396,9 +343,6 @@ SystemResult HookWritesThroughReadPointer(HookCtx, Query<Read<Pos>> pos) {
     if (const Pos* p = pos.Get<Pos>(2)) const_cast<Pos*>(p)->x = 64;
     return Ok();
 }
-SystemResult HookDespawnsZoneC(HookCtx ctx, Despawn despawn) {
-    return despawn.Entity(ctx.Entity() + 1);
-}
 } // namespace
 
 TEST_CASE("J-35: a hook returns Err: the World is interrupted and the leaf keeps its code and rule") {
@@ -426,20 +370,6 @@ TEST_CASE("J-35: a hook returns Err: the World is interrupted and the leaf keeps
         CHECK(HasCode(result, KernelErrorCode::BoundaryChange));
         REQUIRE_FALSE(static_cast<bool>(result));
         CHECK(result.error().Text().find("hook 'HookWritesThroughReadPointer'") != std::string::npos);
-    }
-    SUBCASE("a zone B hook despawns zone C data: Z5 with its rule") {
-        auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
-            r.Hook<Tag, &HookDespawnsZoneC>(HookTrigger::OnAdd, {.name = "HookDespawnsZoneC", .zone = Zone::B});
-        }, false);
-        rig->world().Insert(2, Pos{2});
-        const auto result = rig->Run();
-        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
-        REQUIRE_FALSE(static_cast<bool>(result));
-        bool z5 = false;
-        for (const KernelError* leaf : result.error().Leaves()) z5 = z5 || leaf->rule == "Z5";
-        CHECK(z5);
     }
 }
 
@@ -575,7 +505,7 @@ TEST_CASE("J-45: ExclusiveWorld writes only zone B Shared data; anything else, a
     }
 }
 
-// ---- J-50 (LIM-6, W-6b, D-E18)
+// ---- J-50 (LIM-6, D-E18)
 
 namespace {
 
@@ -642,20 +572,10 @@ TEST_CASE("J-50: KernelSettings is read when the first Run starts and cannot cha
 
 namespace {
 
-// Entity 1 has only zone B data when the despawn is recorded; a zone C System
-// inserts a zone C column into it in the same window.
-SystemResult ZoneBDespawns(Despawn despawn) {
-    if (auto r = despawn.Entity(1); !r) return r;
-    if (auto r = despawn.Entity(0); !r) return r;  // a smaller, legal despawn: not applied either
-    return Ok();
-}
-SystemResult ZoneCInserts(CommandsFor<Inserts<Pos>, Removes<>> commands) {
-    commands.Insert(1, Pos{1});
-    return Ok();
-}
-// A zone B hook that despawns the entity whose Tag was added (when only zone B data is on it).
+// A zone B hook that despawns the entity whose Tag was added.
 SystemResult HookDespawns(HookCtx ctx, Despawn despawn) {
-    return despawn.Entity(ctx.Entity());
+    despawn.Entity(ctx.Entity());
+    return Ok();
 }
 SystemResult InsertTagOnce(CommandsFor<Inserts<Tag>, Removes<>> commands, CurrentTick tick) {
     if (tick.Tick() == 1) commands.Insert(1, Tag{1});
@@ -666,31 +586,6 @@ SystemResult ZoneCInsertsAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, Cu
     return Ok();
 }
 
-// Entity 1 has only zone B data when the zone B despawn is recorded; a zone C
-// hook recorded a zone C insert into it at the sync point before, applied at
-// step 0 of the next: at step 2 the entity has a zone C column.
-SystemResult SpawnVelOnce(SpawnWithId<Bundle<Vel>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(2, Vel{2});
-    return Ok();
-}
-SystemResult ZoneCHookInsertsPos(HookCtx, CommandsFor<Inserts<Pos>, Removes<>> commands) {
-    commands.Insert(1, Pos{1});
-    return Ok();
-}
-
-SystemResult ZoneCInsertsAtOne(CommandsFor<Inserts<Pos>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 1) commands.Insert(1, Pos{2});
-    return Ok();
-}
-SystemResult ZoneBDespawnsAtOne(Despawn despawn, CurrentTick tick) {
-    if (tick.Tick() == 1) return despawn.Entity(1);
-    return Ok();
-}
-
-SystemResult ZoneCRespawns(SpawnWithId<Bundle<Pos>> spawn) {
-    spawn.New(1, Pos{1});
-    return Ok();
-}
 bool FlagIsOn(Res<Flag> flag) { return flag->on != 0; }
 SystemResult SeeChangesWhenOn(Query<Read<Tag>, Changed<Tag>> changed) {
     Log().push_back("changed:" + std::to_string(changed.Count()));
@@ -707,44 +602,10 @@ SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32
 
 } // namespace
 
-TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mount") {
-    SUBCASE("a zone C insert in the same window: kernel-level Err, no despawn applied") {
-        auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&ZoneBDespawns>(B("ZoneBDespawns", "A"));
-            r.AddSystem<&ZoneCInserts>(C("ZoneCInserts", "A"));
-        }, false);
-        rig->world().Insert(0, Tag{0});
-        rig->world().Insert(1, Tag{1});
-        const auto result = rig->Run();
-        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
-        CHECK(rig->world().State() == WorldState::Interrupted);
-        CHECK(rig->recorded.size() == 1);
-        CHECK(rig->world().Alive(0));
-        CHECK(rig->world().Alive(1));
-    }
-    SUBCASE("a zone B hook's despawn and a zone C insert in the hook's next window") {
-        ScheduleOptions two;
-        two.name = "Tick";
-        two.domain = Domain::Fixed;
-        two.clock = true;
-        two.stages = {"A", "B"};
-        auto rig = MakeRig([two](Registrar& r) {
-            r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-            r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Component<Mode>({.name = "Mode", .zone = Zone::B});
-            r.Schedule(two);
-            r.AddSystem<&InsertTagOnce>(B("InsertTagOnce", "A"));
-            r.AddSystem<&ZoneCInsertsAtOne>(C("ZoneCInsertsAtOne", "B"));
-            r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns", .zone = Zone::B});
-        }, false);
-        rig->world().Insert(1, Mode{0});
-        // Tag added at the end of A; the hook records despawn(1); B's window inserts Pos into 1; B's step 0 rechecks.
-        const auto result = rig->Run();
-        CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-52: step 0 rechecks the hook's despawn against the window");
-        CHECK(rig->world().Alive(1));
-        CHECK(rig->world().Get<Pos>(1) == nullptr);
-    }
+// The Z5 recheck at the sync point went with the run-time interception
+// (v8-arch-gyo2-no-runtime-interception); what stays is how a hook's despawn and
+// a later insert into the same entity come out, and the per-mount state.
+TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local are per mount") {
     SUBCASE("one stage: a hook's despawn at the only sync point is applied by the hook rounds of the same Run") {
         ScheduleOptions one;
         one.name = "Tick";
@@ -768,18 +629,6 @@ TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mou
         CHECK(rig->world().DroppedMissingEntity() == dropped + 1);
         CHECK(rig->world().Get<Pos>(1) == nullptr);
     }
-    SUBCASE("a zone C SpawnWithId in the same window") {
-        auto rig = MakeRig([](Registrar& r) {
-            Data(r);
-            r.AddSystem<&ZoneBDespawns>(B("ZoneBDespawns", "A"));
-            r.AddSystem<&ZoneCRespawns>(C("ZoneCRespawns", "A"));
-        }, false);
-        rig->world().Insert(0, Tag{0});
-        rig->world().Insert(1, Tag{1});
-        const auto result = rig->Run();
-        CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-52: a zone C SpawnWithId in the window is rechecked");
-        CHECK(rig->world().Alive(0));
-    }
     SUBCASE("a skipped mount keeps its last-run stamp") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
@@ -794,31 +643,6 @@ TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mou
         rig->world().SetResource(Flag{1});
         KERNEL_REQUIRE_RUN_OK(rig->Run());  // runs: the insert made before the skipped run is still a change
         CHECK(Join(Log()) == "changed:1");
-    }
-    SUBCASE("a zone C column applied at step 0 is seen by step 2's recheck") {
-        ScheduleOptions two;
-        two.name = "Tick";
-        two.domain = Domain::Fixed;
-        two.clock = true;
-        two.stages = {"A", "B"};
-        auto rig = MakeRig([two](Registrar& r) {
-            r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-            r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
-            r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Schedule(two);
-            r.AddSystem<&SpawnVelOnce>(C("SpawnVelOnce", "A"));
-            r.AddSystem<&ZoneBDespawnsAtOne>(B("ZoneBDespawnsAtOne", "B"));
-            r.Hook<Vel, &ZoneCHookInsertsPos>(HookTrigger::OnAdd, {.name = "ZoneCHookInsertsPos", .zone = Zone::C});
-        }, false);
-        rig->world().Insert(1, Tag{1});
-        // Vel on 2 at the end of A; the zone C hook records Pos into 1; B records despawn(1) while 1 has only Tag.
-        const auto result = rig->Run();
-        CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-52: step 2 sees the zone C column step 0 applied");
-        CHECK(rig->world().Alive(1));
-        // The sync point's recheck caught it, not the check when the despawn was recorded.
-        REQUIRE_FALSE(static_cast<bool>(result));
-        CHECK(result.error().Text().find("at the sync point") != std::string::npos);
-        CHECK(result.error().Text().find("System 'ZoneBDespawnsAtOne'") == std::string::npos);
     }
     SUBCASE("two mounts keep their own last-run stamp and Local") {
         auto rig = MakeRig([](Registrar& r) {

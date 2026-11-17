@@ -15,8 +15,6 @@
 //         this thread: GYO_ASSERT (always on);
 //   W-3   a structural change (insert, remove, despawn, resource presence)
 //         outside Ready: GYO_ASSERT (always on);
-//   W-6b  a Host write in Ready after the first Run to zone C data other than a
-//         boundary (role Input) or external resource: GYO_ASSERT (always on);
 //   W-5   inside a System or hook, with verification on: an undeclared
 //         (id, mode) is a violation recorded in the call and returned as Err by
 //         the Executor (spec A.6 layer 1). The access itself still happens:
@@ -110,7 +108,7 @@ public:
     [[nodiscard]] WorldState State() const noexcept { return state_; }
     [[nodiscard]] const std::string& Name() const noexcept { return name_; }
     [[nodiscard]] const FrozenRegistry& Types() const noexcept { return *frozen_; }
-    // Whether an Executor has started a Run on this World (W-6b, J-50).
+    // Whether an Executor has started a Run on this World (J-50).
     [[nodiscard]] bool HasRun() const noexcept { return hasRun_; }
 
     // ---- Entities and component values
@@ -202,7 +200,7 @@ public:
     }
 
     // Host, Ready only. KernelSettings may be written only before the first Run
-    // (W-6b, J-50: the Executor reads it once, when the first Run starts).
+    // (J-50: the Executor reads it once, when the first Run starts).
     template <class T>
     void SetResource(T value) {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
@@ -317,8 +315,6 @@ private:
     friend std::vector<ComponentId> Detail::SetMembersOf(const World&, TypeKey);
     friend void Detail::Push(Detail::SystemContext&, Detail::Record);
     friend KernelError Detail::CallError(Detail::SystemContext&, KernelErrorCode, std::string, std::string);
-    friend std::optional<KernelError> Detail::CheckUntypedCommand(Detail::SystemContext&, ComponentId, EntityId, bool);
-    friend std::optional<KernelError> Detail::CheckDespawn(Detail::SystemContext&, EntityId);
     friend std::optional<KernelError> Detail::CheckExclusiveWrite(Detail::SystemContext&, ComponentId, EntityId);
     friend std::optional<KernelError> Detail::CheckExclusiveResourceWrite(Detail::SystemContext&, ResourceId, bool);
     friend std::optional<KernelError> Detail::CheckExclusiveRead(Detail::SystemContext&, ResourceId);
@@ -354,9 +350,9 @@ private:
 
     // F.2: applies the running level's deferred records (window_ from its
     // windowBase; K0) and the schedule's hook queue (spawn records that cannot
-    // spawn are dropped and recorded, spec F-13); Err from a hook or the Z5
-    // recheck, which also looks at the records the outer levels keep and their
-    // schedules' hook queues. stamp: the sync point's stamp.
+    // spawn are dropped and recorded, spec F-13); Err from a hook. The outer
+    // levels' records and their schedules' hook queues are not looked at.
+    // stamp: the sync point's stamp.
     Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
                                                       ChangeStamp stamp);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
