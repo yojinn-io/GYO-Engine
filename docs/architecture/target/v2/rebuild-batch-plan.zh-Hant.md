@@ -15,7 +15,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 邊界的統合 `v8-arch-gyo2-kernel-app-boundary` | 分層、職責清單、跨份的關聯表 L1～L21 | 邊界卡範圍的待判全部定完；等下面三份寫完，一起送換模型檢查，再請使用者核准 | — |
 | 權威 Module 的宣告 `v8-arch-gyo2-authority-module` | 伺服器權威策略檢查什麼、策略 interface、代為登記、digest 比對與伺服器覆蓋、佔位策略 | **使用者 2026-11-17 核准修訂 4**（2440b336，`v8-arch-gyo2-authority-module-declaration-approved`）；核准時最後一次換模型檢查還沒做完，檢查的發現若要改權威份，交使用者再看 | 統合 |
 | 回滾 Module 的宣告 `v8-arch-gyo2-rollback-module` | `RollbackStrategy` interface、第一版的狀態觸發、要 Kernel 給的原語清單 | **使用者 2026-11-17 核准修訂 4 含補正**（7dfd7167，`v8-arch-gyo2-rollback-module-declaration-approved`）；核准時最後一次換模型檢查還在跑，檢查的發現若要改回滾份，交使用者再看 | 統合 |
-| 事件游標的宣告 `v8-arch-gyo2-event-cursor` | 讀者游標、上限與單位（不用 tick）、修剪、丟棄的記錄。2026-11-17 起範圍擴大成「事件」：保留式改名 `Message`，加推送式 `Event`＋`Observer` 一節（照統合第 15.1 節的判定；主會話排，同一張卡寫，因為兩種共用名字、觸發點與回滾的交界） | 修訂 0 寫完（分支 `claude/gyo2-event-cursor` facc0846），已交統合；使用者要判的 8 件在第 4 節，等收口後問 | 統合 |
+| 事件游標的宣告 `v8-arch-gyo2-event-cursor` | 讀者游標、上限與單位（不用 tick）、修剪、丟棄的記錄。2026-11-17 起範圍擴大成「事件」：保留式改名 `Message`，加推送式 `Event`＋`Observer` 一節（照統合第 15.1 節的判定；主會話排，同一張卡寫，因為兩種共用名字、觸發點與回滾的交界） | **使用者 2026-11-17 核准修訂 4**（4b94e3ea，`v8-arch-gyo2-event-cursor-declaration-approved`）；核准時最後一次換模型檢查還在跑，檢查的發現若要改游標份，交使用者再看 | 統合 |
 | 讀檔的宣告 `v8-arch-gyo2-restore-entry` | 讀檔一律在新的 World、編號兩種寫法、hook | 進行中，等使用者回 5.3；對回滾、權威的要求等那兩份收口後對齊 | 回滾、權威 |
 
 三份子宣告並行寫；寫完由統合那張卡一起送換模型檢查（`v8-arch-gyo2-boundary-split-integrator-first`）。
