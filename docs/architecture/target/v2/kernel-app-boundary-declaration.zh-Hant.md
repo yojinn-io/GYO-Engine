@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 10）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 11）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -8,10 +8,10 @@
 > 「其實我想拆成3份，但是我怕有關聯的內容你會誤判。有這個可能性嗎」「就是併發3份然後有一個統合對麼。」
 
 - 統合（本頁）先立：層與歸屬、**跨份的關聯表（第 1 節）**、會改 Kernel 公開介面的項目。
-- 權威 Module 的宣告、事件游標的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
+- 權威 Module、事件游標、回滾 Module（2026-11-17 加入）的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。修訂 11（同日）：L11 定案（回滾獨立 Module、策略）；新增 L21（策略的構造）；子卡加回滾份。
 
 ## 0. 依據
 
@@ -39,8 +39,8 @@
 | L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 統合 | 游標（事件順序鍵也不能用 tick） | Kernel | 隨 L2：改用 Kernel 自己的計數（stamp 或同步點序號；「Kernel 讀時間 Module 的 Resource」違反第 3 節的依賴方向）。用哪一個由實作批定，**卡片的推論，使用者沒判** |
 | L9 | D-E18（System 不准宣告 `Res`／`ResMut<KernelSettings>`） | 統合 | — | Kernel | **已定**（2026-11-17，`v8-arch-gyo2-kernel-settings-read-write`）：拿掉 D-E18；System 准讀准寫 `KernelSettings`，**下一次最外層的 Run 才生效**（Kernel 每次最外層 Run 開始時重讀，取代「第一次 Run 時快取」）；`KernelSettings` 只放開發與調校的設定（驗證、出錯時停下、hook 清空輪上限）；L5 的開關不在這裡 |
 | L10 | Registry 與 Plan 指紋改版、golden 重產（第 3.4 節） | 統合（改版這件事）；游標（Plan 的 `EventTrim`）、權威（C 指紋） | 三份 | 指紋格式 | 已定為後果；重產次數見第 8 節 |
-| L11 | **回滾的機制放哪**（快照、Rewind／Replay、Restore；DI-KS 12） | 統合（若放 Kernel 就是 Kernel 介面） | 權威（哪些資料進快照）、游標（事件進不進快照） | Kernel 或權威 | 待使用者（第 10 節第 8 件） |
-| L12 | 伺服器權威檢查哪些、預設區、C 指紋與 G-5 匯出的內容、回滾限制的內容、(c) 區獨占套用的新形狀、權威 Module 的名字 | **權威** | 統合（缺口回報）、狀態機 (c) 區 | 權威 Module | 待權威份 |
+| L11 | **回滾的機制放哪** | 統合（Kernel 的原語）；**回滾份**（回滾 Module 的設計） | 權威（伺服器權威策略選用某個回滾策略）、游標（事件進不進快照）、狀態機 | Kernel（原語）、回滾 Module、權威 Module | **已定**（2026-11-17，`v8-arch-gyo2-rollback-module-strategy`）：Kernel 只給原語（讀寫整欄、設 stamp、整批複製／替換之類，具體清單由回滾份回報統合定）；回滾是**獨立的 Module**，有自己的策略：`RollbackStrategy` interface＋官方實作，作者可以自己寫，也可以繼承官方實作改裝；第一版官方只實作 PvP Client 要的「狀態觸發、逐元件歷史、平滑修正」，P2P 的「輸入觸發、存整個狀態」佔位、選了啟動時報錯；伺服器權威策略依賴回滾 Module（登記檔，L20）。回滾的設計另開第四份宣告 |
+| L12 | 伺服器權威檢查哪些、預設區、C 指紋與 G-5 匯出的內容、digest 比對與伺服器覆蓋、(c) 區獨占套用的新形狀、權威 Module 的名字；`AuthorityStrategy` interface 的形狀 | **權威** | 統合（缺口回報）、狀態機 (c) 區、回滾份 | 權威 Module | 待權威份；回滾的內容移到回滾份（L11） |
 | L13 | 事件游標：游標放哪、上限與單位、丟棄記錄、不執行的讀者、順序鍵、跨時鐘事件的網路要求（11-14「也要兼容網絡部分」） | **游標** | 統合（L2、L11）、時間 | Kernel 的事件 API（`EventReader`、`EventWriter`、`World::EventPayloads`、Plan 的 `EventTrim`）——**只限這些；動到別的 Kernel 介面回報統合** | 待游標份 |
 | L14 | 生成世界的形狀（每個 World 一次或分批、誰推動、什麼時候算好） | Loading 卡 | 統合（L4） | 編排層 | 等統合 |
 | L15 | 產品能不能只選部分 Module（「產品選用權威」的前提） | 定義卡（PR #240） | 權威 | 建置層 | 待使用者 |
@@ -49,9 +49,11 @@
 | L18 | 狀態機 (b) 區（已核准）的影響：初始進入改由編排層的遊戲初始化保證；`ExclusiveWorld` 隨 L7；`RegisterStateMachine<S, Zone::C>` 的 `Zone` 隨 L12 | 統合列影響；狀態機卡處理 | 狀態機卡 | 狀態機 Module | 列出，不判 |
 | L19 | 時間設計 T2（runner、交換函式的登記）、T5（多個 World）改在編排層；T4 改成游標份；T1／T3 的時間 Module 持有時鐘與 tick（L2） | 統合 | 時間設計 | 編排層、時間 Module | 已定（位置） |
 | L20 | **Module 之間的依賴**（例：伺服器權威策略要檢查「tick 只有一個來源」，權威 Module 依賴時間 Module） | 統合（編排層讀登記檔、檢查）＋定義卡或建置層的批（登記檔的格式） | 權威、游標、時間、狀態機 | 編排層、建置層；Kernel 不參與 | **已定**（2026-11-17，`v8-arch-gyo2-module-deps-in-registers`）：依賴**只寫在 Module／Plugin 登記檔**的「依賴」欄（11-14 已定每列寫依賴、CMake 照它 link）；編排層從登記檔讀出依賴並在 build 時檢查（O-2）；**程式碼裡不另外寫 `Requires`**；不做策略層級的依賴，權威 Module 整個依賴時間 Module。登記檔給 CMake 與編排層兩邊讀的格式，在編排層骨架批或建置層的批定 |
+| L21 | **策略的構造**（權威與回滾共用）：interface 是契約、保證不變；Engine 附官方實作，和作者寫的走同一個插口、沒有特權；作者可以從頭實作 interface（廢掉官方的），也可以繼承官方實作改裝——後者是作者的選擇，官方實作的內部不保證不變 | 統合 | 權威份、回滾份 | 權威 Module、回滾 Module | **已定**（2026-11-17，`v8-arch-gyo2-strategy-interface-impl`）；C++ 的寫法：虛函式的抽象基底類別（GYO 的 `Plugin` 已是這個寫法，`Registry.hpp:60-75`） |
 
-**兩張子卡的範圍**（一句話）：
-- **權威 Module**：照 L12 重新評估伺服器權威策略到底檢查什麼，並設計策略介面、權威 Module 的登記、佔位策略；以 L1～L7、L10、L11 的統合結論為前提。開頭引用 L1、L3、L4、L5、L6、L7、L10、L11、L12、L15、L17、L18。
+**三張子卡的範圍**（一句話；回滾份 2026-11-17 加入）：
+- **權威 Module**：照 L12 重新評估伺服器權威策略到底檢查什麼，並設計策略介面、權威 Module 的登記、佔位策略；以 L1～L7、L10、L11 的統合結論為前提。開頭引用 L1、L3、L4、L5、L6、L7、L10、L11、L12、L15、L17、L18、L20、L21。
+- **回滾 Module**：照 L11、L21 設計 `RollbackStrategy` interface 與第一版官方實作（狀態觸發、逐元件歷史、平滑修正）、P2P 的佔位，以及需要 Kernel 提供的原語（回報統合定）；以 L1、L2、L5、L6、L10、L11、L13、L20、L21 為前提。開頭引用 L1、L2、L5、L6、L10、L11、L13、L17、L20、L21。
 - **事件游標**：照 L13 設計讀者游標與修剪，「讀者在上限內不漏讀」由 Kernel 保證；以 L2、L8、L10、L11 為前提。開頭引用 L1、L2、L8、L10、L11、L13、L17。
 
 ---
@@ -86,6 +88,8 @@
 | `v8-arch-gyo2-read-only-registry-view`（11-17） | Kernel 交出唯讀的登記表、帶版本號；參照只在當前版本有效；修改只走登記 | 「交出是什麼意思，公開出去可以修改還是說，外部能讀到？」→「和剛才的system插入有關聯嗎？」→（卡片列三處關聯與整體形狀）「可以」 |
 | `v8-arch-gyo2-exclusive-writes-optional`（11-17） | `ExclusiveWorld` 能寫任何值（隨 L3）；`Writes<…>` 留作選填標註 | 「現在的GYO呢？」→「這題，你和看下上面的決策，例如System可以動態插入那樣的（如果開啟的話）。」→「我看不懂你在說啥？不是在說World是否能讀寫的問題嗎？我讓你看上面的決策想問是否有關聯。」→（卡片列關聯：這一題大半已由 L3 定，只剩 `Writes<…>` 留不留）「嗯，可以留選填。」 |
 | `v8-arch-gyo2-kernel-settings-read-write`（11-17） | System 准讀准寫 `KernelSettings`，下一次 Run 生效；拿掉 D-E18 | 「你的調查，只有半分，3家也是只讀不寫嗎？」→（卡片重查：三家都准寫，差在生效時機）「這個問題是不是涉及上面決策的開關？」→（卡片答 L5 的開關不能放進可寫的設定）「但是L5的開關說的是System的插入。但是這題說的是系統的寫入值。是一樣的嗎？」→（卡片：不一樣，L5 的開關本來就在建 World 時的選項）「這個照建議。」 |
+| `v8-arch-gyo2-rollback-module-strategy`（11-17） | Kernel 只給原語；回滾是獨立的 Module、有策略（interface＋官方實作），第一版只實作狀態觸發，P2P 佔位；另開第四份宣告 | 「Kernel 只給原語，回滾放權威 Module 的策略，我在想回滾要不要和權威放一起。你的看法呢」→「我在繼續問問題，這樣可以找到本質性的問題。問題：回滾有策略嗎？」→「不是，我是說本質上如果回滾有策略，就不能單單有官方默認實現，而是相當於一個interface、有官方實現，作者也可以自己複寫。否則作者無法達到自己的目的」→「這2件事，照建議。」 |
+| `v8-arch-gyo2-strategy-interface-impl`（11-17） | 權威與回滾的策略都是 interface＋官方實作；作者可自寫或繼承改裝（選擇，不是做法） | 「權威 Module 也是一樣的構造（作者可以複寫，或者繼承改裝），如果是java就是一個interface + imple，但是C++我不知道有沒有類似的方式。」→「繼承官方實作改裝是選擇，而不是做法，你可以繼承改裝，也可以廢棄掉官方做法，而用自己的實現接上。」 |
 
 ### 2.2 被這一批改寫的較早決定
 
@@ -341,7 +345,7 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 | 9 | 留；刪「(c) 區」措辭 | — |
 | 10 | 改寫（游標份） | 讀者游標內不漏讀，Kernel 自己保證 |
 | 11 | 留；「寫入計入獨占」「(c) 的 hook 衝突」移出 | hook 只有 OnAdd／OnRemove、同步執行、依登記順序 |
-| 12 | 待 L11 | — |
+| 12 | 改寫（L11） | Kernel 提供回滾用的原語（清單由回滾份定），不提供 Rewind／Replay／Restore 與「哪些資料要回滾」的判斷；回滾在回滾 Module |
 | 13 | 留「Extract 參數唯讀、無寫回、只在 extract schedule」；來源 World 與時機移編排層 | — |
 | 14 | 改寫 | 保留：Running 期間外部不碰 World（W-6）；同一個 World 同一時間只被一條執行緒跑（`WorldExecutor::RunSchedule` 進入時斷言；系譜 Bevy 的 `&mut World`）；World 的生命期是一個世代，世代切換＝重建 World。移出：一 World 一執行緒角色的啟動檢查（改成綁執行緒的 Resource 自己斷言）；每 domain 一 clock schedule（L2，移時間 Module） |
 | 15 | 改寫（取代 15 與 22 的例外） | Kernel 只做 ECS：不內建 schedule 或 stage 名；不認得開局、時鐘、區、權威、產品、執行緒角色；不擁有執行緒、不讀時鐘或亂數。啟動錯誤只有第 3.1 節列的那幾種：`StartupCode` 的列舉值等於那份清單（守衛：列舉值與清單比對的測試） |
@@ -379,7 +383,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 5. **Kernel 交出的唯讀登記資訊**（L6）：**已定（2026-11-17）**——見第 3.3 節。比過的：交出唯讀的表（建議；三家都這樣）／不交（作者自寫的策略與工具看不到；和已定的「連線比 C 指紋」相抵）／讀改同一份（flecs）。理由：卡片的（三家的做法；不交與 C 指紋相抵；修改只走一條路才守得住 L5 的關卡）；使用者「可以」，沒有另外說。
 6. **`ExclusiveWorld` 的存取**（L7）：**已定（2026-11-17）**——見關聯表 L7。和前面的關聯：大半由 L3 定（「只能寫一般區 Shared、其他回 Err」是 L3 拿掉的六條之一）；插入 System 照 L5；改登記只走 `Registrar`（L6）。只剩的一問：`Writes<…>` 留作選填（建議）／拿掉（完全照 Bevy）→ 留作選填。系譜：Bevy 獨占系統 `&mut World` 不列寫入（`multi_threaded.rs:173`、`:506`）、flecs `immediate`（`docs/Systems.md:1500-1512`）、Unity `SystemBase` 直接用 `EntityManager`；K0 的 `exclusive-declared-writes`（使用者 11-15「要保證誰寫，別開shared」）。理由：卡片的（不解讀的標註、不擋任何人，PvP 想查誰寫時可用）；使用者「嗯，可以留選填」。證據 `exclusive-access-other-engines.md`。
 7. **D-E18**（L9）：**已定（2026-11-17）**——見關聯表 L9。比過的：准讀准寫、下一次 Run 生效（建議；Bevy `FallbackErrorHandler` 是 Resource，「schedule 正在跑時改，要等跑完才生效」`bevy_ecs/src/error/handler.rs:110-117`）／准讀、寫只在兩次執行之間（flecs `ecs_set_threads`「never while running a system or pipeline」`include/flecs/addons/pipeline.h:216-221`）／准讀不准寫（卡片前一版，依據不完整）／照舊不准（現在）。其他：Bevy `ScheduleBuildSettings` 隨時可設（`schedule.rs:556-576`）、`App::set_error_handler` 只能設一次（`bevy_app/src/app.rs:1471-1499`）；Unity `World.SetTime`（`World.cs:365-372`）。理由：卡片的（三家都准寫；開發中用指令打開驗證接上指令集）；使用者「這個照建議」。卡片第一次的調查只查了「讀」，使用者指出；也一度把 L5 的開關和這一題扯在一起，使用者指出不是同一件事。
-8. **回滾的機制放哪**（L11；gyo2 還沒實作）：Kernel（World 的快照與還原是 ECS 的機制，策略只決定哪些資料進快照）／權威 Module／PvP。系譜：lightyear 在網路套件；flecs v3 的 snapshot 在 addon、v4 拿掉；Unity Netcode 在套件。需要它的：PvP Client 的預測與回滾、P2P 回滾（佔位）。
+8. **回滾的機制放哪**（L11）：**已定（2026-11-17）**——見關聯表 L11、L21。比過的：Kernel 只給原語、回滾放權威（卡片第一版）→ 回滾獨立成 Module（卡片第二版；lightyear 把 `lightyear_prediction` 與 `lightyear_replication` 分成兩個 crate，`crates/replication/prediction/Cargo.toml:2`、`:29`，決定性同步也依賴它，`crates/deterministic/deterministic_replication/Cargo.toml:16`、`:25`）／Kernel 提供完整的快照與還原（現在的 DI-KS 12；flecs v3 snapshot 在 addon、v4 拿掉）／放 PvP 產品。回滾有策略：lightyear `RollbackPolicy`（觸發來源 state／input，模式 Always／Check／Disabled，深度上限，`manager.rs:15-63`）與 `CorrectionPolicy`（`correction.rs:1034`）；GGPO、GekkoNet 由遊戲提供存讀回呼。理由（使用者的）：「如果回滾有策略，就不能單單有官方默認實現…否則作者無法達到自己的目的」。證據 `rollback-placement-other-engines.md`。
 9. **兩層的讀法**（L16）：Engine（編排層與權威）認得生成世界的階段、Kernel 不認得。確認或更正。
 10. **新 RC 的次數**（L17）：「兩次以上」沒有根據，是提案者給的。照用／「一次就停下報告」／其他。
 11. **Module 之間的依賴**（L20）：**已定（2026-11-17）**——依賴只寫在登記檔，編排層讀出並檢查；程式碼不寫 `Requires`；不做策略層級的依賴，權威 Module 整個依賴時間 Module。比過的：只寫登記檔（建議；系譜 O3DE `gem.json`＋`enabled_gems`、Unreal `.uplugin`）／Module 自己引入依賴（flecs `ecs_import`，可重入；代價：登記檔看不出實際用了什麼）／照舊程式碼寫 `Requires`、編排層檢查（登記檔與程式碼各一份，違反 AGENTS §9）。理由：卡片的（合 11-14「登記檔是為了看得到用了什麼」、同一事實一處）；使用者「這個照你建議」，沒有另外說。證據 `module-dependencies-other-engines.md`。
