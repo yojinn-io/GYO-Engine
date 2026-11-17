@@ -14,7 +14,7 @@
 
 資料（兩份偵察，Opus／high，唯讀）：主 checkout `build/evidence/gyo2-time-v2/scout-a-judgments.md`（既有判定的原文與出處）、`scout-b-code-facts.md`（程式的事實）。
 
-用詞：這份文件裡「時間基準」指 `Time::MonotonicClock`；「時鐘」指事件與 schedule 所屬的 `Domain`（`Fixed`、`Frame`、`Loading`，舊稱 clock domain）；「tick」只指固定步的步數，其他的寫「計數」。
+用詞：這份文件裡「時間基準」指 `Time::MonotonicClock`；「時鐘」指事件與 schedule 所屬的 `Domain`（`Fixed`、`Frame`、`Loading`，舊稱 clock domain；**2026-11-17 起 `Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick` 都移出 Kernel 到時間的 Module，`v8-arch-gyo2-clock-out-of-kernel`，下文寫在 Kernel 的地方照此讀**）；「tick」只指固定步的步數，其他的寫「計數」。
 
 ---
 
@@ -140,7 +140,7 @@ Time::MonotonicClock（唯一的時間基準）
 
 - 全部用整數奈秒。倍率是浮點數，只在算「這一輪前進多少」時乘一次，乘完取整數。
 - 三個都是 (b) 區的 Resource。**誰寫（決定 1：B）**：runner 每輪只把取樣的時間點寫進 World（一個對外交換用的 Resource，在交換點「進」）；外層 schedule 最前面的「時間的 System」從它算出 `RealTime` 與 `VirtualTime`；驅動固定步的 System 更新 `FixedTime`。這兩個 System 由 Engine 提供。
-- **`FixedTime` 不放 tick**（規格 G.7 取捨 3、H-1；規格寫的，我認為理由獨立成立）：tick 要和事件緩衝一起被還原，放進 Resource 就有兩個來源。現在第幾個 tick 只經 `CurrentTick` 讀。累加器也不記 tick。
+- **`FixedTime` 不放 tick**（規格 G.7 取捨 3、H-1；規格寫的，我認為理由獨立成立）：tick 要和事件緩衝一起被還原，放進 Resource 就有兩個來源。現在第幾個 tick 只經 `CurrentTick` 讀。累加器也不記 tick。（**2026-11-17 改**：時鐘與 tick 移出 Kernel、到時間的 Module，作者可選，`v8-arch-gyo2-clock-out-of-kernel`；tick 在時間 Module 裡存在哪裡、和回滾怎麼一起還原，待時間 Module 那一批重新定）；事件改成照游標修剪、不用 tick（`v8-arch-gyo2-event-trim-by-cursor`），「和事件緩衝一起還原」這條理由要重看。
 - 步長只在一處手動維持：組裝時給 runner 的設定。`FixedTime.step` 與 PvP 的 `FixedStep{stepNs}` 都由它寫入。步長存成整數奈秒，組裝時可以用頻率或時間長度給，預設 64 Hz（使用者 2026-11-16，`v8-arch-gyo2-t1-three-items`；PvP 移植時也改成 64 Hz）。
 - **System 不自己讀時間基準**。不是 System 的 Engine 程式照舊讀（等待器醒來後重讀、音效後端每塊取樣、IO 的到達時刻）。
 
@@ -163,7 +163,7 @@ Time::MonotonicClock（唯一的時間基準）
 
 ### 3.2 決定性區的時間不變
 
-**你定過的**（K.3 第 11 項，2026-11-11）：(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入；System 自己讀時間基準禁止。
+**你定過的**（K.3 第 11 項，2026-11-11）：(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入；System 自己讀時間基準禁止。**2026-11-17 改寫**：使用者說這是「pvp的需求」「遊戲需求入侵了Engine設計」——tick 移到時間的 Module；「tick 只有一個來源、System 不得寫」與「(c) 區的時間只來自 tick」歸伺服器權威策略（`v8-arch-gyo2-clock-out-of-kernel`）。
 
 這份設計不改它：
 - 三個時間 Resource 都是 (b) 區，(c) 區的 System 讀不到（既有的 Z1 檢查，`ZoneRuleTests.cpp` J-39）。
@@ -259,7 +259,7 @@ B 要做的事：
 | | 舊的 `FixedTickRuntime` | 新 |
 |---|---|---|
 | 時間 | `double` 秒 | 整數奈秒 |
-| tick 計數 | 有 | 沒有；tick 只在 World |
+| tick 計數 | 有 | 沒有；tick 只在 World（2026-11-17 改：在時間的 Module，`v8-arch-gyo2-clock-out-of-kernel`） |
 | 追趕上限 | 自己丟整步，不回報給時間那一層 | 不丟步。時間的 System 在寫 `VirtualTime` 之前已經把超過上限的整步扣掉（第 3.4 節），所以累加器只斷言這一輪沒有超過上限 |
 | 介面 | `Advance(elapsed, callback)` | `Add(delta)` 回傳這一輪跑幾步；`Overstep()`；`UntilNextStep()`；`Reset()` |
 | 放哪裡 | `engine/runtime`，用到 `engine/math` | `engine/time`，只用標準函式庫（`time.md` DI 10 不變） |
@@ -534,7 +534,7 @@ master 的 target 條文在 `gyo2` 上是「R0 決定不帶，但檔案還在、
 3. 變動的邊界：新增 Engine 的 Module `runner`；Kernel 新增「獨占的 System 跑一張 schedule」、交換函式的登記、事件的游標與保留；決定 2 定了之後 `Product` 持有多個 World 與多份 Registry。
 4. 影響：`engine/kernel`、`engine/time`、新的 `engine/runner`；上面列的測試。產品與工具目前都不在 `gyo2` 上。
 5. 依賴方向：`runner` → `kernel`、`time`、`threads`。`kernel` 不依賴 `runner`、`time`。`time` 照舊只依賴 base。之後 audio 等 Module 要讀 `RealTime` 時，依賴的是 `time` 裡的型別，不是 `runner`。
-6. Ownership：取樣歸 runner；時間的三個 Resource、累加的餘數歸 World，由 Engine 的兩個 System 寫（決定 1：B）；「現在第幾個 tick」歸 World，不變；「這一輪跑幾次固定步」從 Host 的職責變成 World 裡一個 System 的職責；同一個 World 內跨時鐘事件的傳遞從 Host 的職責變成 Kernel 的職責。
+6. Ownership：取樣歸 runner；時間的三個 Resource、累加的餘數歸 World，由 Engine 的兩個 System 寫（決定 1：B）；「現在第幾個 tick」歸 World，不變（2026-11-17 改：歸時間的 Module，`v8-arch-gyo2-clock-out-of-kernel`）；「這一輪跑幾次固定步」從 Host 的職責變成 World 裡一個 System 的職責；同一個 World 內跨時鐘事件的傳遞從 Host 的職責變成 Kernel 的職責。
 7. 為什麼不能更小：只補 runner 而不定時間，每個產品會各寫一套時間的 Resource；只開放跨時鐘事件而不改保留，一輪多個 tick 時就會漏。多 World 的持有者（決定 2）現在定，是因為 Extract 與交換點都要知道「另一個 World 是誰」；可以更小的是跨 World 的事件，所以延後（決定 7）。
 
 **Design Invariants 與 Replacement Criteria**（草案，各批實作前定稿並附守衛）：
