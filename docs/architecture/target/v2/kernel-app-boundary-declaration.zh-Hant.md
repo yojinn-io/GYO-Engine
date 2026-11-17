@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 11）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 12）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -11,7 +11,7 @@
 - 權威 Module、事件游標、回滾 Module（2026-11-17 加入）的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。修訂 11（同日）：L11 定案（回滾獨立 Module、策略）；新增 L21（策略的構造）；子卡加回滾份。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。修訂 11（同日）：L11 定案（回滾獨立 Module、策略）；新增 L21（策略的構造）；子卡加回滾份。修訂 12（同日）：L16 定案。
 
 ## 0. 依據
 
@@ -44,7 +44,7 @@
 | L13 | 事件游標：游標放哪、上限與單位、丟棄記錄、不執行的讀者、順序鍵、跨時鐘事件的網路要求（11-14「也要兼容網絡部分」） | **游標** | 統合（L2、L11）、時間 | Kernel 的事件 API（`EventReader`、`EventWriter`、`World::EventPayloads`、Plan 的 `EventTrim`）——**只限這些；動到別的 Kernel 介面回報統合** | 待游標份 |
 | L14 | 生成世界的形狀（每個 World 一次或分批、誰推動、什麼時候算好） | Loading 卡 | 統合（L4） | 編排層 | 等統合 |
 | L15 | 產品能不能只選部分 Module（「產品選用權威」的前提） | 定義卡（PR #240） | 權威 | 建置層 | 待使用者 |
-| L16 | 兩層的讀法：Engine（編排層、權威）認得生成世界的階段、Kernel 不認得 | 統合 | Loading | — | 待使用者（第 10 節第 9 件） |
+| L16 | 兩層的讀法：Engine（編排層）認得遊戲初始化與生成世界的階段、Kernel 不認得 | 統合 | Loading | — | **已定**（2026-11-17，`v8-arch-gyo2-two-layers-like-bevy`）：照 Bevy——`bevy_app` 認得開局（`Main` 的開局清單，`bevy_app/src/main_schedule.rs:213-305`），`bevy_ecs` 不認得（搜不到 startup）。編排層認得、排流程；Kernel 只跑被叫的 schedule |
 | L17 | 新 RC 的次數（「兩次以上」沒有根據） | 統合 | 權威、游標（它們的 RC 同理） | — | 待使用者（第 10 節第 10 件） |
 | L18 | 狀態機 (b) 區（已核准）的影響：初始進入改由編排層的遊戲初始化保證；`ExclusiveWorld` 隨 L7；`RegisterStateMachine<S, Zone::C>` 的 `Zone` 隨 L12 | 統合列影響；狀態機卡處理 | 狀態機卡 | 狀態機 Module | 列出，不判 |
 | L19 | 時間設計 T2（runner、交換函式的登記）、T5（多個 World）改在編排層；T4 改成游標份；T1／T3 的時間 Module 持有時鐘與 tick（L2） | 統合 | 時間設計 | 編排層、時間 Module | 已定（位置） |
@@ -90,6 +90,7 @@
 | `v8-arch-gyo2-kernel-settings-read-write`（11-17） | System 准讀准寫 `KernelSettings`，下一次 Run 生效；拿掉 D-E18 | 「你的調查，只有半分，3家也是只讀不寫嗎？」→（卡片重查：三家都准寫，差在生效時機）「這個問題是不是涉及上面決策的開關？」→（卡片答 L5 的開關不能放進可寫的設定）「但是L5的開關說的是System的插入。但是這題說的是系統的寫入值。是一樣的嗎？」→（卡片：不一樣，L5 的開關本來就在建 World 時的選項）「這個照建議。」 |
 | `v8-arch-gyo2-rollback-module-strategy`（11-17） | Kernel 只給原語；回滾是獨立的 Module、有策略（interface＋官方實作），第一版只實作狀態觸發，P2P 佔位；另開第四份宣告 | 「Kernel 只給原語，回滾放權威 Module 的策略，我在想回滾要不要和權威放一起。你的看法呢」→「我在繼續問問題，這樣可以找到本質性的問題。問題：回滾有策略嗎？」→「不是，我是說本質上如果回滾有策略，就不能單單有官方默認實現，而是相當於一個interface、有官方實現，作者也可以自己複寫。否則作者無法達到自己的目的」→「這2件事，照建議。」 |
 | `v8-arch-gyo2-strategy-interface-impl`（11-17） | 權威與回滾的策略都是 interface＋官方實作；作者可自寫或繼承改裝（選擇，不是做法） | 「權威 Module 也是一樣的構造（作者可以複寫，或者繼承改裝），如果是java就是一個interface + imple，但是C++我不知道有沒有類似的方式。」→「繼承官方實作改裝是選擇，而不是做法，你可以繼承改裝，也可以廢棄掉官方做法，而用自己的實現接上。」 |
+| `v8-arch-gyo2-two-layers-like-bevy`（11-17） | 編排層認得遊戲初始化與生成世界的階段、Kernel 不認得（照 Bevy 的 `bevy_app`／`bevy_ecs`） | 「用Bevy的方式走，」 |
 
 ### 2.2 被這一批改寫的較早決定
 
@@ -384,7 +385,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 6. **`ExclusiveWorld` 的存取**（L7）：**已定（2026-11-17）**——見關聯表 L7。和前面的關聯：大半由 L3 定（「只能寫一般區 Shared、其他回 Err」是 L3 拿掉的六條之一）；插入 System 照 L5；改登記只走 `Registrar`（L6）。只剩的一問：`Writes<…>` 留作選填（建議）／拿掉（完全照 Bevy）→ 留作選填。系譜：Bevy 獨占系統 `&mut World` 不列寫入（`multi_threaded.rs:173`、`:506`）、flecs `immediate`（`docs/Systems.md:1500-1512`）、Unity `SystemBase` 直接用 `EntityManager`；K0 的 `exclusive-declared-writes`（使用者 11-15「要保證誰寫，別開shared」）。理由：卡片的（不解讀的標註、不擋任何人，PvP 想查誰寫時可用）；使用者「嗯，可以留選填」。證據 `exclusive-access-other-engines.md`。
 7. **D-E18**（L9）：**已定（2026-11-17）**——見關聯表 L9。比過的：准讀准寫、下一次 Run 生效（建議；Bevy `FallbackErrorHandler` 是 Resource，「schedule 正在跑時改，要等跑完才生效」`bevy_ecs/src/error/handler.rs:110-117`）／准讀、寫只在兩次執行之間（flecs `ecs_set_threads`「never while running a system or pipeline」`include/flecs/addons/pipeline.h:216-221`）／准讀不准寫（卡片前一版，依據不完整）／照舊不准（現在）。其他：Bevy `ScheduleBuildSettings` 隨時可設（`schedule.rs:556-576`）、`App::set_error_handler` 只能設一次（`bevy_app/src/app.rs:1471-1499`）；Unity `World.SetTime`（`World.cs:365-372`）。理由：卡片的（三家都准寫；開發中用指令打開驗證接上指令集）；使用者「這個照建議」。卡片第一次的調查只查了「讀」，使用者指出；也一度把 L5 的開關和這一題扯在一起，使用者指出不是同一件事。
 8. **回滾的機制放哪**（L11）：**已定（2026-11-17）**——見關聯表 L11、L21。比過的：Kernel 只給原語、回滾放權威（卡片第一版）→ 回滾獨立成 Module（卡片第二版；lightyear 把 `lightyear_prediction` 與 `lightyear_replication` 分成兩個 crate，`crates/replication/prediction/Cargo.toml:2`、`:29`，決定性同步也依賴它，`crates/deterministic/deterministic_replication/Cargo.toml:16`、`:25`）／Kernel 提供完整的快照與還原（現在的 DI-KS 12；flecs v3 snapshot 在 addon、v4 拿掉）／放 PvP 產品。回滾有策略：lightyear `RollbackPolicy`（觸發來源 state／input，模式 Always／Check／Disabled，深度上限，`manager.rs:15-63`）與 `CorrectionPolicy`（`correction.rs:1034`）；GGPO、GekkoNet 由遊戲提供存讀回呼。理由（使用者的）：「如果回滾有策略，就不能單單有官方默認實現…否則作者無法達到自己的目的」。證據 `rollback-placement-other-engines.md`。
-9. **兩層的讀法**（L16）：Engine（編排層與權威）認得生成世界的階段、Kernel 不認得。確認或更正。
+9. **兩層的讀法**（L16）：**已定（2026-11-17）——照 Bevy**：編排層認得、Kernel 不認得。使用者 11-16 的兩句（「世界生成階段（初始化）Engine不認識，那Engine如何排列流程？」「ECS，是不是不應該有（階段）這個概念」）分別指兩層。系譜：Bevy（`bevy_app` 的 `Main` 開局清單；`bevy_ecs` 零命中）、flecs（pipeline addon 的 `OnStart`；core 只預留 id）、Unity（Entities 沒有 World 級開局）。原話：「用Bevy的方式走，」
 10. **新 RC 的次數**（L17）：「兩次以上」沒有根據，是提案者給的。照用／「一次就停下報告」／其他。
 11. **Module 之間的依賴**（L20）：**已定（2026-11-17）**——依賴只寫在登記檔，編排層讀出並檢查；程式碼不寫 `Requires`；不做策略層級的依賴，權威 Module 整個依賴時間 Module。比過的：只寫登記檔（建議；系譜 O3DE `gem.json`＋`enabled_gems`、Unreal `.uplugin`）／Module 自己引入依賴（flecs `ecs_import`，可重入；代價：登記檔看不出實際用了什麼）／照舊程式碼寫 `Requires`、編排層檢查（登記檔與程式碼各一份，違反 AGENTS §9）。理由：卡片的（合 11-14「登記檔是為了看得到用了什麼」、同一事實一處）；使用者「這個照你建議」，沒有另外說。證據 `module-dependencies-other-engines.md`。
 
