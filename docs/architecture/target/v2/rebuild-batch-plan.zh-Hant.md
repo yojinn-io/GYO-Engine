@@ -15,7 +15,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 邊界的統合 `v8-arch-gyo2-kernel-app-boundary` | 分層、職責清單、跨份的關聯表 L1～L21 | 邊界卡範圍的待判全部定完；等下面三份寫完，一起送換模型檢查，再請使用者核准 | — |
 | 權威 Module 的宣告 `v8-arch-gyo2-authority-module` | 伺服器權威策略檢查什麼、策略 interface、代為登記、digest 比對與伺服器覆蓋、佔位策略 | 修訂 0 寫完（分支 `claude/gyo2-authority-module` 0b802f5e），已交統合；使用者要判的 13 件，等收口後問 | 統合 |
 | 回滾 Module 的宣告 `v8-arch-gyo2-rollback-module` | `RollbackStrategy` interface、第一版的狀態觸發、要 Kernel 給的原語清單 | 修訂 0 寫完（分支 `claude/gyo2-rollback-module-8bac02` b55af62e），已交統合；使用者要判的 7 件在第 10 節，等收口後問 | 統合 |
-| 事件游標的宣告 `v8-arch-gyo2-event-cursor` | 讀者游標、上限與單位（不用 tick）、修剪、丟棄的記錄 | 修訂 0 寫完（分支 `claude/gyo2-event-cursor` facc0846），已交統合；使用者要判的 8 件在第 4 節，等收口後問 | 統合 |
+| 事件游標的宣告 `v8-arch-gyo2-event-cursor` | 讀者游標、上限與單位（不用 tick）、修剪、丟棄的記錄。2026-11-17 起範圍擴大成「事件」：保留式改名 `Message`，加推送式 `Event`＋`Observer` 一節（照統合第 15.1 節的判定；主會話排，同一張卡寫，因為兩種共用名字、觸發點與回滾的交界） | 修訂 0 寫完（分支 `claude/gyo2-event-cursor` facc0846），已交統合；使用者要判的 8 件在第 4 節，等收口後問 | 統合 |
 | 讀檔的宣告 `v8-arch-gyo2-restore-entry` | 讀檔一律在新的 World、編號兩種寫法、hook | 進行中，等使用者回 5.3；對回滾、權威的要求等那兩份收口後對齊 | 回滾、權威 |
 
 三份子宣告並行寫；寫完由統合那張卡一起送換模型檢查（`v8-arch-gyo2-boundary-split-integrator-first`）。
@@ -28,7 +28,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 |---|---|---|---|
 | 1. Kernel 減法・結構段 | 不需要新家的部分：`Product` 改名 `WorldExecutor`；登記與建 Plan 兩步、可重複；唯讀帶版本號的登記表；`ExclusiveWorld` 全讀寫、`Writes<…>` 選填；`KernelSettings` 每次最外層 `Run` 重讀、拿掉 D-E18；拿掉執行期攔截（L3）；拿掉歧義的偵測與 `RequireExplicitOrder`（#228）；拿掉執行緒的啟動檢查（改成 Resource 斷言）。守這些限制的守衛與突變一起處理（K0 剛加的部分也在內） | 新的一批 | 統合 |
 | 2. 編排層的骨架 | `engine/orchestration`：`Product`、runner、build → 建 Plan → finish → 策略檢查、遊戲初始化清單、Module／Plugin 登記檔的讀取與依賴檢查、每個 World 准不准動態插入。**同一批拿掉 Kernel 的開局排程**，J-58 改寫後搬到編排層 | 舊 T2、T5 的一部分 | 1（兩步的 API） |
-| 3. 時間 Module＋事件游標（同一條線） | 舊 T1 的型別與累加器（四件待使用者，見下）、時鐘與 tick 移入、時間的 System、驅動固定步的獨占 System；事件游標照它的宣告；**同一條線拿掉 Kernel 的時鐘、`Domain` 與 `EventTrim`** | 舊 T1、T3、T4 | 2；事件游標的宣告。純型別的部分可以先做 |
+| 3. 時間 Module＋事件（同一條線） | 舊 T1 的型別與累加器、時鐘與 tick 移入、時間的 System、驅動固定步的獨占 System；事件照 `v8-arch-gyo2-events-two-kinds-like-bevy` 分兩種：保留式改名 `Message` 並照游標的宣告修剪，推送式 `Event`＋`Observer`（含生命週期觸發）照統合第 15.1 節；**同一條線拿掉 Kernel 的時鐘、`Domain` 與 `EventTrim`** | 舊 T1、T3、T4 | 2；事件游標的宣告。純型別的部分可以先做 |
 | 4. 權威 Module＋回滾 Module（同一條線） | 照各自的宣告；**同一條線拿掉 Kernel 的權威規則**（寫者數量、digest、區規則與 Z5、回滾的宣告與 Rewind／Replay） | — | 各自的宣告、2、3 |
 | 5. 生成世界（重做） | 每個 World 各自、可以多次、可以分批；放編排層；Kernel 不認得階段（`-two-layers-like-bevy`）。新卡從回收清單第 2 節起 | 已歸檔的「重新評估 Loading」 | 2 |
 | 5. 多個 World、交換點 | 照統合 | — | 2 |
