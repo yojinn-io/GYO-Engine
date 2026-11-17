@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 9）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 10）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -11,7 +11,7 @@
 - 權威 Module 的宣告、事件游標的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。修訂 5（同日）：L3 定案（拿掉執行期攔截）。修訂 6（同日）：L4 定案；7.3 補有型別／無型別的範圍；記通用考量 `engine-not-rigid`。修訂 7（同日）：L5 定案（生命週期、動態插入、每個 World 的宣告）。修訂 8（同日）：L6 定案（唯讀登記表、版本號）。修訂 9（同日）：L7 定案（`Writes<…>` 選填）。修訂 10（同日）：L9 定案（`KernelSettings` 准讀准寫、下一次 Run 生效）。
 
 ## 0. 依據
 
@@ -37,7 +37,7 @@
 | L6 | Kernel 交出的唯讀登記資訊（第 3.3 節） | 統合 | 權威、除錯工具、編輯器、指令集 | `FrozenRegistry` | **已定**（2026-11-17，`v8-arch-gyo2-read-only-registry-view`）：交出唯讀的表（補上 hooks、`InitialValue`、schedule 選項與 stage、順序圖），帶版本號、每次重建 Plan 加一；交出去的參照只在當前版本有效（或交複本）；修改一律走 `Registrar`（L5 的關卡） |
 | L7 | `ExclusiveWorld` 的存取與 `Writes<…>` | 統合 | 權威（數寫者）、狀態機、時間（驅動固定步的 System）、指令集 | `Params.hpp`、驗證（`World.cpp`） | **已定**（2026-11-17，`v8-arch-gyo2-exclusive-writes-optional`）：隨 L3，`ExclusiveWorld` 能用閉包讀寫任何元件與 Resource 的值（不再分區、不再回 Err）；`Writes<…>` 留作**選填**的標註，Kernel 不解讀，伺服器權威策略可以拿它數寫者。留下的 Kernel 機制：閉包與回傳值不指回 World（DI-KS 21）、結構變更只經同步點（DI-KS 18）、唯一參數（S-10）。指令的插入照 L5 的宣告 |
 | L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 統合 | 游標（事件順序鍵也不能用 tick） | Kernel | 隨 L2：改用 Kernel 自己的計數（stamp 或同步點序號；「Kernel 讀時間 Module 的 Resource」違反第 3 節的依賴方向）。用哪一個由實作批定，**卡片的推論，使用者沒判** |
-| L9 | D-E18（System 不准宣告 `Res`／`ResMut<KernelSettings>`） | 統合 | — | Kernel | 待使用者（第 10 節第 7 件） |
+| L9 | D-E18（System 不准宣告 `Res`／`ResMut<KernelSettings>`） | 統合 | — | Kernel | **已定**（2026-11-17，`v8-arch-gyo2-kernel-settings-read-write`）：拿掉 D-E18；System 准讀准寫 `KernelSettings`，**下一次最外層的 Run 才生效**（Kernel 每次最外層 Run 開始時重讀，取代「第一次 Run 時快取」）；`KernelSettings` 只放開發與調校的設定（驗證、出錯時停下、hook 清空輪上限）；L5 的開關不在這裡 |
 | L10 | Registry 與 Plan 指紋改版、golden 重產（第 3.4 節） | 統合（改版這件事）；游標（Plan 的 `EventTrim`）、權威（C 指紋） | 三份 | 指紋格式 | 已定為後果；重產次數見第 8 節 |
 | L11 | **回滾的機制放哪**（快照、Rewind／Replay、Restore；DI-KS 12） | 統合（若放 Kernel 就是 Kernel 介面） | 權威（哪些資料進快照）、游標（事件進不進快照） | Kernel 或權威 | 待使用者（第 10 節第 8 件） |
 | L12 | 伺服器權威檢查哪些、預設區、C 指紋與 G-5 匯出的內容、回滾限制的內容、(c) 區獨占套用的新形狀、權威 Module 的名字 | **權威** | 統合（缺口回報）、狀態機 (c) 區 | 權威 Module | 待權威份 |
@@ -85,6 +85,7 @@
 | `v8-arch-gyo2-dynamic-insert-per-world`（11-17） | 執行中可以插入 System；每個 World 宣告准不准（預設准、不保證指紋一致）；不准時拒絕、回傳錯誤、記警告、不退出 | 「那我先問一個問題，動態插入系統有什麼好處？用例子回答。」→「我明白了，這個就類似於指令模式，現在啟動的world沒有系統，但是動態插入可以讓我使用指令，動態加入這個機能，這個應該才是最核心的。未來我自己要做指令集。也是要考慮的。」→「我再問一個問題，GYO能走2條路嗎？我不要求作者一定不能動態插入，而是在World裡聲明，如果World的宣告可以，那就可以動態插入系統，但是，寫明不保證指紋一致性。如果宣告不行，那麼就不能動態插入，插入就拒絕，返回信息（不退出，但是System無法插入，日誌報警告）。」→（卡片複述並列四點建議：預設允許、宣告在建 World 時、拒絕回 Result＋警告、允許時指紋不保證一致）「對的。」 |
 | `v8-arch-gyo2-read-only-registry-view`（11-17） | Kernel 交出唯讀的登記表、帶版本號；參照只在當前版本有效；修改只走登記 | 「交出是什麼意思，公開出去可以修改還是說，外部能讀到？」→「和剛才的system插入有關聯嗎？」→（卡片列三處關聯與整體形狀）「可以」 |
 | `v8-arch-gyo2-exclusive-writes-optional`（11-17） | `ExclusiveWorld` 能寫任何值（隨 L3）；`Writes<…>` 留作選填標註 | 「現在的GYO呢？」→「這題，你和看下上面的決策，例如System可以動態插入那樣的（如果開啟的話）。」→「我看不懂你在說啥？不是在說World是否能讀寫的問題嗎？我讓你看上面的決策想問是否有關聯。」→（卡片列關聯：這一題大半已由 L3 定，只剩 `Writes<…>` 留不留）「嗯，可以留選填。」 |
+| `v8-arch-gyo2-kernel-settings-read-write`（11-17） | System 准讀准寫 `KernelSettings`，下一次 Run 生效；拿掉 D-E18 | 「你的調查，只有半分，3家也是只讀不寫嗎？」→（卡片重查：三家都准寫，差在生效時機）「這個問題是不是涉及上面決策的開關？」→（卡片答 L5 的開關不能放進可寫的設定）「但是L5的開關說的是System的插入。但是這題說的是系統的寫入值。是一樣的嗎？」→（卡片：不一樣，L5 的開關本來就在建 World 時的選項）「這個照建議。」 |
 
 ### 2.2 被這一批改寫的較早決定
 
@@ -144,12 +145,12 @@ Kernel engine/kernel          World、ECS 元件／Resource／事件、System �
 | 巢狀跑 schedule | `ExclusiveWorld::RunSchedule`（DI-KS 16～21） | 刪去開局、區、clock 相關的分支 |
 | 存取驗證（開發版） | W-5、A.6 | `ExclusiveWorld` 的已宣告集合以「zone B 且 Shared」定義（`World.cpp:154-157`、`:983-987`），隨 L7 改寫 |
 | `FrozenRegistry`、Registry 指紋 | `Registry.hpp:504-555`、`Fingerprint.cpp` | 讀取面（3.3）；指紋改版（3.4） |
-| `KernelSettings` | `Registry.hpp:389-393` | D-E18 待 L9 |
+| `KernelSettings` | `Registry.hpp:389-393` | 拿掉 D-E18；准讀准寫，下一次最外層 Run 生效（L9） |
 | `InitialValue`、`SpawnWithId`／配發器、丟掉不能生成的那一筆 | — | 區規則的部分移出；計數待 L8 |
 | Extract 參數（唯讀）、`ScheduleOptions::extract`、`ExtractNotNestable`、finish 時用來源 Registry 解 Extract 的 id（`Registry.cpp:343-355`）、D-E14（來源未設或未凍結，`:1060`） | — | 來源 World 與執行時機移編排層；`SetExtractSource` 留作 finish 的輸入 |
 | 綁執行緒的 Resource 記來源執行緒、碰錯斷言（**新**，取代 H-2、X-3 的啟動檢查） | `ResourceOptions::affinity` 改義 | 系譜 Bevy `bevy_ecs/src/storage/non_send.rs:74-84` |
 
-**Kernel 保留的啟動錯誤**：R-E2；R-E4（不含 digest set `Registry.cpp:487`）；R-E5；D-E1（不含 Z3 的 ingress stage `:909`；eventTrim `:925` 隨游標）；D-E3（沒有配發器，`:1047`、`:1118`）；D-E4、D-E5、D-E6；D-E7 的機制規則——H-6 Extract 只在 extract schedule（`:1127`、`:1376`）、S-8 的「Diagnostics 只能來自 `DiagnosticsWriter`」（`:1079`）、S-18 hook 不得用 `ExclusiveWorld<Writes<…>>`（`:1133`）；D-E14（`:1060`）；D-E17；D-E19；D-E20；D-E18 待 L9。D-E12、F-E1 拿掉（L2）。
+**Kernel 保留的啟動錯誤**：R-E2；R-E4（不含 digest set `Registry.cpp:487`）；R-E5；D-E1（不含 Z3 的 ingress stage `:909`；eventTrim `:925` 隨游標）；D-E3（沒有配發器，`:1047`、`:1118`）；D-E4、D-E5、D-E6；D-E7 的機制規則——H-6 Extract 只在 extract schedule（`:1127`、`:1376`）、S-8 的「Diagnostics 只能來自 `DiagnosticsWriter`」（`:1079`）、S-18 hook 不得用 `ExclusiveWorld<Writes<…>>`（`:1133`）；D-E14（`:1060`）；D-E17；D-E19；D-E20。D-E18 拿掉（L9）。D-E12、F-E1 拿掉（L2）。
 **Kernel 保留的執行期錯誤**（`KernelErrorCode`）：驗證、巢狀、hook、配發器、結構、Extract 相關的保留；`UntypedWrite`、`ZoneCDespawn`、`ExclusiveWorldWrite` 拿掉（L3）；`UndeclaredResourceWrite` 拿掉（L7）；`StartupNotNestable`、`StartupRunning` 拿掉。
 
 ### 3.2 移出 Kernel 的（去處）
@@ -269,7 +270,7 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | J-27 | (c) Parallel 無守衛 id 失敗；Parallel 未實作 D-E17（`SchedulerTests.cpp:324-350`） | 拆：D-E17 留；(c) 守衛 id 移出 | 不選權威時 (c) Parallel 的守衛 id 不查 | 無 | Kernel／權威 |
 | J-44 | (c) 登記順序 20 種排列：全部 D-E8，或結果都不變 | 拿掉（有歧義的排列在剩下那支必然失敗） | 「(c) 對登記順序不敏感」不再保證 | 無 | 不由機制守 |
 | `StrictOrderTests.cpp`（8 案） | `RequireExplicitOrder` | 拿掉 | (b) 嚴格模式消失 | 無 | 不由機制守 |
-| J-24 | 每個啟動錯誤碼一個最小 Registry | 拆：保留的碼留；R-E1／R-E3／R-E6 搬編排層；區、寫者、digest、回滾的碼移權威；**刪**：D-E8、D-E10、D-E12、D-E13、D-E21、X-E2、X-E3、F-E1 | 刪的碼不再報 | 無 | 各新 owner |
+| J-24 | 每個啟動錯誤碼一個最小 Registry | 拆：保留的碼留；R-E1／R-E3／R-E6 搬編排層；區、寫者、digest、回滾的碼移權威；**刪**：D-E8、D-E10、D-E12、D-E13、D-E18、D-E21、X-E2、X-E3、F-E1 | 刪的碼不再報 | 無 | 各新 owner |
 | J-28 | `Role(Main)` 的 System 放錯執行緒 finish 失敗（gyo2 只有這半，`SchedulerTests.cpp:353`） | 拿掉；新增「綁執行緒的 Resource 被別的執行緒碰到就斷言」 | 啟動時不再擋 | 存取時斷言（新） | Kernel（Resource） |
 | J-30 | stamp 序列與 tickStamps | 改：stamp 序列留；tickStamps（tick 視角）移時間 Module 或拿掉，由時間的宣告定 | tick 視角的換算不再由 Kernel 保證 | 無 | Kernel／時間 |
 | J-32 | 結構變更的決定性 | 留 | 無 | 無 | Kernel |
@@ -278,7 +279,7 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | J-36 | 事件讀到的時機、隔兩 tick 讀不到、順序鍵 | 改（游標份） | 待游標份 | 待游標份 | Kernel |
 | J-37 | 事件跨 domain 失敗 | 拿掉（在游標批，和 F-E1 一起） | 跨時鐘讀寫通過 | 無 | 游標保證不漏讀 |
 | J-45、J-57 的 Resource 與區的案 | `ExclusiveWorld` 的區與寫入限制 | 拿掉（L3、L7）；J-57 的閉包案留 | 獨占 System 寫 (c)／Exclusive、寫沒列出的單一寫者 Resource 都不再回 Err | 無 | 閉包：Kernel；寫入：不由機制守（權威可讀 `Writes<…>` 標註） |
-| J-50 | `KernelSettings` | 留（D-E18 案待 L9） | 待 L9 | 無 | Kernel |
+| J-50 | `KernelSettings`：System 宣告 `Res` 是 D-E18；第一次 Run 後外部再寫斷言；第一次 Run 時才讀到 | 改（L9）：D-E18 案拿掉；「第一次 Run 後再寫斷言」拿掉；改成「每次最外層 Run 開始時讀到最新值、Run 中途改的值下一次 Run 才生效」 | System 可以讀寫；第一次 Run 後也能改 | 「下一次 Run 生效」成為守的性質 | Kernel |
 | J-52 | Z5 複核 | 拿掉（L3） | 同窗 (b) despawn 碰 (c) insert 不再中斷 | 無 | 不由機制守 |
 | J-54、J-55 | hook 清空輪、丟掉不能生成的那一筆 | 留；「上限在 C 指紋」移出；「event trim」隨游標；「startup」隨編排層；「record 的 tick」待 L8；「指紋版本」隨 L10 | 逐案在實作批列 | 逐案 | Kernel |
 | J-56 | 巢狀執行 | 留；Z5 七案拿掉（L3）；clock tick 的案移時間 Module、內層 clock 修剪隨游標；extract 案留；單一寫者 Resource 的驗證案拿掉（L7） | 逐案 | 逐案 | Kernel |
@@ -348,6 +349,7 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 | 19 | 留；Z5 那一句拿掉（L3） | — |
 | 22 | 移出 → 編排層 O-1 | — |
 | 23 | 移出 → 權威（`Writes<…>` 留作選填標註，L7） | — |
+| 新 | 新增 | **Kernel 的設定下一次 Run 生效**：`KernelSettings` 只放開發與調校的設定，System 與外部都可以讀寫，每次最外層 Run 開始時重讀；會改變 World 規則的開關（例如 L5 的動態插入）放在建 World 時的選項、執行中不能改 |
 | 新 | 新增 | **登記表唯讀、帶版本**：Kernel 交出的登記資訊是唯讀的、帶版本號；交出去的參照只在當前版本有效；修改只走 `Registrar` |
 | 新 | 新增 | **動態插入照 World 的宣告**：World 建立時宣告准不准在 Ready 時再登記或拿掉 System；不准時，插入回傳執行時錯誤、記警告、不改 World；准時，下一次執行前重建受影響的 Plan，指紋跟著重算、不保證兩端一致 |
 
@@ -376,7 +378,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 4. **登記的生命週期與動態插入**（L5）：**已定（2026-11-17）**——見關聯表 L5 與第 2.1 節。比過的：生命週期——Kernel 兩步、編排層依序呼叫（建議）／照 Bevy 第一次跑才建 Plan；凍結——照舊永遠凍結／預設可改、PvP 鎖住（Bevy `schedule.rs:637-650` 圖有改動才重建；flecs `pipeline.c:269-277`；Unity 執行中可建 System）；開關——使用者提出「每個 World 宣告」（四家都沒有這種開關；Bevy 最接近的是 Finished 之後加 Plugin 就 panic，`bevy_app/src/app.rs:642-652`）。理由（使用者的）：未來的指令集；「我不要求作者一定不能動態插入，而是在World裡聲明」。卡片補的理由（使用者看過）：L3 拿掉執行期攔截後，權威策略擋不到執行中的插入，World 自己的宣告補上這個缺口。
 5. **Kernel 交出的唯讀登記資訊**（L6）：**已定（2026-11-17）**——見第 3.3 節。比過的：交出唯讀的表（建議；三家都這樣）／不交（作者自寫的策略與工具看不到；和已定的「連線比 C 指紋」相抵）／讀改同一份（flecs）。理由：卡片的（三家的做法；不交與 C 指紋相抵；修改只走一條路才守得住 L5 的關卡）；使用者「可以」，沒有另外說。
 6. **`ExclusiveWorld` 的存取**（L7）：**已定（2026-11-17）**——見關聯表 L7。和前面的關聯：大半由 L3 定（「只能寫一般區 Shared、其他回 Err」是 L3 拿掉的六條之一）；插入 System 照 L5；改登記只走 `Registrar`（L6）。只剩的一問：`Writes<…>` 留作選填（建議）／拿掉（完全照 Bevy）→ 留作選填。系譜：Bevy 獨占系統 `&mut World` 不列寫入（`multi_threaded.rs:173`、`:506`）、flecs `immediate`（`docs/Systems.md:1500-1512`）、Unity `SystemBase` 直接用 `EntityManager`；K0 的 `exclusive-declared-writes`（使用者 11-15「要保證誰寫，別開shared」）。理由：卡片的（不解讀的標註、不擋任何人，PvP 想查誰寫時可用）；使用者「嗯，可以留選填」。證據 `exclusive-access-other-engines.md`。
-7. **D-E18**（L9）：留（`KernelSettings` 是 Kernel 自己的、第一次 Run 時快取，執行中改它沒有效果）／拿掉（疊加的規則；`kernel-is-ecs-no-restrictions` 列在第二類、範圍未選）。
+7. **D-E18**（L9）：**已定（2026-11-17）**——見關聯表 L9。比過的：准讀准寫、下一次 Run 生效（建議；Bevy `FallbackErrorHandler` 是 Resource，「schedule 正在跑時改，要等跑完才生效」`bevy_ecs/src/error/handler.rs:110-117`）／准讀、寫只在兩次執行之間（flecs `ecs_set_threads`「never while running a system or pipeline」`include/flecs/addons/pipeline.h:216-221`）／准讀不准寫（卡片前一版，依據不完整）／照舊不准（現在）。其他：Bevy `ScheduleBuildSettings` 隨時可設（`schedule.rs:556-576`）、`App::set_error_handler` 只能設一次（`bevy_app/src/app.rs:1471-1499`）；Unity `World.SetTime`（`World.cs:365-372`）。理由：卡片的（三家都准寫；開發中用指令打開驗證接上指令集）；使用者「這個照建議」。卡片第一次的調查只查了「讀」，使用者指出；也一度把 L5 的開關和這一題扯在一起，使用者指出不是同一件事。
 8. **回滾的機制放哪**（L11；gyo2 還沒實作）：Kernel（World 的快照與還原是 ECS 的機制，策略只決定哪些資料進快照）／權威 Module／PvP。系譜：lightyear 在網路套件；flecs v3 的 snapshot 在 addon、v4 拿掉；Unity Netcode 在套件。需要它的：PvP Client 的預測與回滾、P2P 回滾（佔位）。
 9. **兩層的讀法**（L16）：Engine（編排層與權威）認得生成世界的階段、Kernel 不認得。確認或更正。
 10. **新 RC 的次數**（L17）：「兩次以上」沒有根據，是提案者給的。照用／「一次就停下報告」／其他。
@@ -397,7 +399,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 
 `git grep -n -P "<式子>" -- engine/kernel` 0 命中；每個式子先在 cb6bccca 用已知例命中一次證明有效；用終了碼區分 0 命中（1）與失敗（其他）。macOS 的 git grep 加 `-E` 不認 `\b`（同一式子 0 命中），一律用 `-P`。式子：
 
-- 一定拿掉的：`\b(Zone|WritePolicy|Rollback)::`、`\bRole::Input\b`、`\bRequireExplicit(Zones|Order)\b`、`\bemitterZone\b`、`\brollbackEnabled\b`、`\bnotInRollback\b`、`\brollbackSafe\b`、`\bingress(Stage)?\b`、`\bDigestSet\b`、`\bCFingerprint\b`、`\bExportZoneCSources\b`、`\bparallelGuardTest\b`、`\bstartupRan_\b`、`\bStartup(NotNestable|Running)\b`、`\bInstallRunner\b`、`\bFinishContext\b`、`\bkMainRole\b`、`\bDomain::Loading\b`、`\bownerPlugin\b`、`\bDE(8|10|13|21)\b`、`\bXE[23]\b`
+- 一定拿掉的：`\b(Zone|WritePolicy|Rollback)::`、`\bRole::Input\b`、`\bRequireExplicit(Zones|Order)\b`、`\bemitterZone\b`、`\brollbackEnabled\b`、`\bnotInRollback\b`、`\brollbackSafe\b`、`\bingress(Stage)?\b`、`\bDigestSet\b`、`\bCFingerprint\b`、`\bExportZoneCSources\b`、`\bparallelGuardTest\b`、`\bstartupRan_\b`、`\bStartup(NotNestable|Running)\b`、`\bInstallRunner\b`、`\bFinishContext\b`、`\bkMainRole\b`、`\bDomain::Loading\b`、`\bownerPlugin\b`、`\bDE(8|10|13|18|21)\b`、`\bXE[23]\b`
 - 時鐘（L2 已定）：`\bDomain::`、`\bclock\b`、`\bCurrentTick\b`、`\bDomainTick\b`、`\btickStamps_\b`、`\beventTrim\b|\bEventTrim\b`（後者在游標批）、`\bDE12\b`、`\bFE1\b`
 - 執行期攔截（L3 已定）：`\bUntypedWrite\b`、`\bZoneCDespawn\b`、`\bExclusiveWorldWrite\b`、`\bCheckDespawn\b`（`World.cpp:355` 的 Z5 呼叫當下；`Despawn` 本身留，檢查函式拿掉）、`"Z5"`（規則字串，`World.cpp:360`、`:637`）
 - `ExclusiveWorld` 的區限制（L7 已定）：`\bUndeclaredResourceWrite\b`
