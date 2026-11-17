@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 3）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 4）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -11,7 +11,7 @@
 - 權威 Module 的宣告、事件游標的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。修訂 4（同日）：L20 定案。
 
 ## 0. 依據
 
@@ -48,7 +48,7 @@
 | L17 | 新 RC 的次數（「兩次以上」沒有根據） | 統合 | 權威、游標（它們的 RC 同理） | — | 待使用者（第 10 節第 10 件） |
 | L18 | 狀態機 (b) 區（已核准）的影響：初始進入改由編排層的遊戲初始化保證；`ExclusiveWorld` 隨 L7；`RegisterStateMachine<S, Zone::C>` 的 `Zone` 隨 L12 | 統合列影響；狀態機卡處理 | 狀態機卡 | 狀態機 Module | 列出，不判 |
 | L19 | 時間設計 T2（runner、交換函式的登記）、T5（多個 World）改在編排層；T4 改成游標份；T1／T3 的時間 Module 持有時鐘與 tick（L2） | 統合 | 時間設計 | 編排層、時間 Module | 已定（位置） |
-| L20 | **Module 之間的依賴**：作者選的 Module 之間有依賴（例：伺服器權威策略要檢查「tick 只有一個來源」，依賴時間 Module；時間 Module 依賴編排層的 runner）。依賴怎麼宣告、誰檢查、缺了怎麼報 | 統合（編排層的檢查）＋定義卡（Module 登記檔的「依賴」欄，11-14 已定每列寫依賴） | 權威、游標、時間、狀態機 | 編排層、建置層 | 使用者 2026-11-17 指出「這個依賴需要處理」；做法**待使用者確認讀法**（第 10 節第 11 件） |
+| L20 | **Module 之間的依賴**（例：伺服器權威策略要檢查「tick 只有一個來源」，權威 Module 依賴時間 Module） | 統合（編排層讀登記檔、檢查）＋定義卡或建置層的批（登記檔的格式） | 權威、游標、時間、狀態機 | 編排層、建置層；Kernel 不參與 | **已定**（2026-11-17，`v8-arch-gyo2-module-deps-in-registers`）：依賴**只寫在 Module／Plugin 登記檔**的「依賴」欄（11-14 已定每列寫依賴、CMake 照它 link）；編排層從登記檔讀出依賴並在 build 時檢查（O-2）；**程式碼裡不另外寫 `Requires`**；不做策略層級的依賴，權威 Module 整個依賴時間 Module。登記檔給 CMake 與編排層兩邊讀的格式，在編排層骨架批或建置層的批定 |
 
 **兩張子卡的範圍**（一句話）：
 - **權威 Module**：照 L12 重新評估伺服器權威策略到底檢查什麼，並設計策略介面、權威 Module 的登記、佔位策略；以 L1～L7、L10、L11 的統合結論為前提。開頭引用 L1、L3、L4、L5、L6、L7、L10、L11、L12、L15、L17、L18。
@@ -78,6 +78,7 @@
 | `v8-arch-gyo2-pre-v2-target-docs-later`（11-16） | v2 之前的 target 文件先不動 | 「之前就先不管了。後面統一處理」 |
 | `v8-arch-gyo2-boundary-split-integrator-first`（11-17） | 拆三份、統合先立 | 見本頁開頭 |
 | `v8-arch-gyo2-clock-out-of-kernel`（11-17） | 時鐘與 tick 移出 Kernel，到時間的 Module；作者可選；「tick 只有一個來源」隨權威 | 「照建議，並修改相關文檔。我記得tick的控制之前也是pvp的需求，這個明顯是遊戲需求入侵了Engine設計。剝離出去給其他Module實現最好，和權威一樣，作者可以選，不過能多Module是有依賴關係的，這個依賴需要處理。」 |
+| `v8-arch-gyo2-module-deps-in-registers`（11-17） | Module 之間的依賴只寫在登記檔，編排層讀出並檢查；程式碼不寫 `Requires`；權威 Module 整個依賴時間 Module | 「其他家的這個依賴關係如何處理？」→（卡片查四家，建議只寫在登記檔）「這個照你建議。」 |
 
 ### 2.2 被這一批改寫的較早決定
 
@@ -148,7 +149,7 @@ Kernel engine/kernel          World、ECS 元件／Resource／事件、System �
 
 | 移出 | 現在 | 去處 |
 |---|---|---|
-| 登記單位 `Plugin`／`Requires`／`Finish`／`InstallRunner`；R-E1、R-E3、R-E6 | `Registry.hpp:41-75`、`Registry.cpp:646-724`、`:1520` | 編排層（L5） |
+| 登記單位 `Plugin`／`Requires`／`Finish`／`InstallRunner`；R-E1、R-E3、R-E6 | `Registry.hpp:41-75`、`Registry.cpp:646-724`、`:1520` | 編排層（L5）；`Requires()` 拿掉，依賴改從登記檔讀（L20） |
 | `Product` 這個名字 | `Product.hpp` | 編排層 |
 | 開局的排程（K0）、`ScheduleOptions::startup`（`Declarations.hpp:138`）、D-E21、`StartupNotNestable`、`StartupRunning` | `Executor.cpp:151-170`、`:457-468`；DI-KS 22 | 遊戲初始化清單（編排層）；生成世界交 Loading 卡 |
 | 開局的寫者豁免（`Registry.cpp:1448-1457`） | DI-KS 6 | L4 |
@@ -333,7 +334,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 ### 9.2 編排層（新頁 `target/v2/orchestration.zh-Hant.md`）
 
 - **O-1 遊戲初始化**：一個 `Product` 一份遊戲初始化清單，行程啟動時跑一次、在所有 World 開始每幀之前跑完、跑在主 World；清單內的先後由作者與 Module 插入；編排層保證「整份一次、在前」，不保證清單內的先後。守衛：J-58 改寫。
-- **O-2 登記單位**：依登記檔順序 build → Kernel 凍結並建 Plan → 依同順序 finish（L5 的建議形狀）→ 選了的檢查（權威）；Module 在 Plugin 之前（PR #240）；requires 只檢查、不重排；名字重複是啟動錯誤；一個 `Product` 至多一個 runner。守衛：J-19 的登記單位那半。
+- **O-2 登記單位**：依登記檔順序 build → Kernel 凍結並建 Plan → 依同順序 finish（L5 的建議形狀）→ 選了的檢查（權威）；Module 在 Plugin 之前（PR #240）；**依賴只從登記檔讀**（L20），缺依賴或依賴排在後面是啟動錯誤、不重排；名字重複是啟動錯誤；一個 `Product` 至多一個 runner。守衛：J-19 的登記單位那半（requires 的案改成讀登記檔）。
 - **O-3 runner**：runner 擁有迴圈、決定哪條執行緒跑哪個 World；只呼叫 `WorldExecutor::RunSchedule` 與交換點，不排 System 的先後。守衛：掃描（`engine/orchestration` 不呼叫 System、不讀 Plan 的步驟）。
 - **O-4 中性**：編排層不帶任何第三方能力，不認得產品、權威策略、時鐘的語意。守衛：依賴掃描（`engine/orchestration` 只 link Kernel 與 base）、`naming_guard`。
 - **O-5 啟動錯誤一次收齊**：Kernel 的啟動錯誤與編排層、各 Module 的錯誤彙整成一份回報；Kernel 失敗時，依賴 `FrozenRegistry` 的檢查不跑，回報寫明「因 Kernel 錯誤而未檢查」。錯誤型別：編排層自己的報告型別包住 Kernel 的 `StartupReport` 與各 Module 的錯誤（Kernel 的 `StartupCode` 不擴充）。
@@ -363,7 +364,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 8. **回滾的機制放哪**（L11；gyo2 還沒實作）：Kernel（World 的快照與還原是 ECS 的機制，策略只決定哪些資料進快照）／權威 Module／PvP。系譜：lightyear 在網路套件；flecs v3 的 snapshot 在 addon、v4 拿掉；Unity Netcode 在套件。需要它的：PvP Client 的預測與回滾、P2P 回滾（佔位）。
 9. **兩層的讀法**（L16）：Engine（編排層與權威）認得生成世界的階段、Kernel 不認得。確認或更正。
 10. **新 RC 的次數**（L17）：「兩次以上」沒有根據，是提案者給的。照用／「一次就停下報告」／其他。
-11. **Module 之間的依賴**（L20）：使用者 11-17「不過能多Module是有依賴關係的，這個依賴需要處理」。卡片的讀法（待確認）：依賴寫在 Module 登記檔的「依賴」欄（11-14 已定每列寫依賴、CMake 照它 link），編排層 build 時檢查（O-2 的 requires），策略也可以宣告它依賴的 Module（伺服器權威策略依賴時間 Module）；作者選了 Module 卻缺它依賴的，啟動錯誤（建置時能查到的在 configure 時報）。
+11. **Module 之間的依賴**（L20）：**已定（2026-11-17）**——依賴只寫在登記檔，編排層讀出並檢查；程式碼不寫 `Requires`；不做策略層級的依賴，權威 Module 整個依賴時間 Module。比過的：只寫登記檔（建議；系譜 O3DE `gem.json`＋`enabled_gems`、Unreal `.uplugin`）／Module 自己引入依賴（flecs `ecs_import`，可重入；代價：登記檔看不出實際用了什麼）／照舊程式碼寫 `Requires`、編排層檢查（登記檔與程式碼各一份，違反 AGENTS §9）。理由：卡片的（合 11-14「登記檔是為了看得到用了什麼」、同一事實一處）；使用者「這個照你建議」，沒有另外說。證據 `module-dependencies-other-engines.md`。
 
 ---
 
