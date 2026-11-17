@@ -88,6 +88,12 @@ void World::AttachVersion() {
                                        [&](const HookQueue& queue) { return queue.schedule == schedule.options.name; });
         if (!known) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});
     }
+    // Every table indexed by a registry id has the new version's size (a missed
+    // one would be read past its end later; RC 17).
+    GYO_ASSERT(events_.size() == data.events.size());
+    GYO_ASSERT(excluded_.size() == data.components.size());
+    GYO_ASSERT(hookAccess_.size() == data.hooks.size());
+    GYO_ASSERT(hookQueues_.size() == data.schedules.size());
     version_ = data.version;
 }
 
@@ -248,10 +254,6 @@ SystemContext& RequireCall(World& world) {
     SystemContext* call = CurrentCall(world);
     GYO_ASSERT(call != nullptr);  // W-6
     return *call;
-}
-
-const RegistryData* RegistryDataOf(const World& world) noexcept {
-    return world.data_;
 }
 
 // The type lookups are every typed entry's first step (World API and handles),

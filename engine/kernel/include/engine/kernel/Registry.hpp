@@ -674,8 +674,9 @@ public:
     // build registered takes effect at the next successful BuildPlans. Err
     // DynamicInsertRefused (a Runtime Error; the Registry and every World are
     // unchanged): a live World made from this Registry declares no dynamic
-    // insert. GYO_ASSERT: called inside build, or from a System or hook of a
-    // World made from this Registry, or after a failed first round.
+    // insert. GYO_ASSERT: called inside build, or while a World made from
+    // this Registry is inside a Run (from its Systems, hooks, initial value
+    // functions or other Worlds they run), or after a failed first round.
     template <class Build>
     Engine::Base::Result<void, KernelError> Register(RegistrationOwner owner, Build&& build) {
         Engine::Base::Result<std::uint32_t, KernelError> opened = OpenRegistrar(std::move(owner));
@@ -735,9 +736,9 @@ private:
     // The table the open round writes: the pending copy after the first
     // successful BuildPlans, the tables themselves before it.
     [[nodiscard]] Detail::RegistryData& Target() noexcept;
-    // GYO_ASSERT: no System or hook of a World made from this Registry is
-    // running on this thread (declaration 3.2 rule 4).
-    void RequireNotInOwnWorld() const;
+    // GYO_ASSERT: no World made from this Registry is inside a Run
+    // (declaration 3.2 rule 4).
+    void RequireNoWorldRunning() const;
 
     std::unique_ptr<Detail::RegistryData> data_;
     // The round registered after the first successful BuildPlans; null otherwise.

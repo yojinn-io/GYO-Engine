@@ -203,12 +203,17 @@ struct RegistryData {
     std::vector<ScheduleInfo> scheduleInfos;
     std::vector<SetInfo> setInfos;
     std::vector<ScheduleOrder> orders;
-    // The Worlds made from this Registry that are alive, and those of them that
-    // declare no dynamic insert (DI-KS 26). Changed by World's constructor and
-    // destructor through a const pointer, never copied into or out of a
-    // pending round. Not the Worlds themselves: the Registry does not know them.
+    // The Worlds made from this Registry that are alive, those of them that
+    // declare no dynamic insert, and those inside a WorldExecutor::Run (DI-KS
+    // 26). The first two are changed by World's constructor and destructor,
+    // the third by Run (raised on entry, lowered on every way out; a nested
+    // RunSchedule does not count again); all through a const pointer, never
+    // copied into or out of a pending round. Not the Worlds themselves: the
+    // Registry does not know them. Not atomic (kernel_guard K3): another
+    // thread's Run is the caller's rule (CCR-5).
     mutable std::uint32_t liveWorlds = 0;
     mutable std::uint32_t refusingWorlds = 0;
+    mutable std::uint32_t runningWorlds = 0;
 
     [[nodiscard]] std::string OwnerName(std::uint32_t owner) const;
     [[nodiscard]] const TypeEntry* FindType(TypeKey key) const noexcept;

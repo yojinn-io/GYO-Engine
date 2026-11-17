@@ -176,11 +176,6 @@ private:
 
 // ---- World operations for the handles (World.cpp)
 
-struct RegistryData;
-// The Registry tables world was made from (Registry asserts that a System of
-// its own Worlds does not register: declaration 3.2 rule 4).
-[[nodiscard]] const RegistryData* RegistryDataOf(const World& world) noexcept;
-
 // The call currently running on this thread in world, or nullptr.
 [[nodiscard]] SystemContext* CurrentCall(World& world) noexcept;
 // W-6: GYO_ASSERT that a System or hook of this World is running on this thread.

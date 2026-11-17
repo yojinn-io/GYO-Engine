@@ -4,7 +4,6 @@
 
 #include "engine/kernel/detail/RegistryData.hpp"
 
-#include "engine/kernel/detail/Context.hpp"
 
 #include "engine/base/Assert.hpp"
 
@@ -1556,45 +1555,58 @@ void FillSystemInfos(RegistryData& data) {
 // Systems, remove Systems and mount new Systems on existing schedules. What
 // would change something the previous version already built is R-E7: the round
 // is dropped and the Worlds go on (a mistyped command does not stop the game).
-// Runs before CheckInitialValues, which sorts the declarations.
+// Each message starts with the kind refused. Runs before CheckInitialValues,
+// which sorts the declarations.
 void CheckLaterRound(RegistryData& data) {
     const RoundBase& base = data.base;
-    const auto refuse = [&](std::string message, std::vector<std::string> subjects, std::vector<std::string> sources = {}) {
-        data.Error(StartupCode::RE7, "L5", std::move(message) + " (only the first round may; the round is dropped)",
+    const auto refuse = [&](const char* kind, std::string message, std::vector<std::string> subjects,
+                            std::vector<std::string> sources = {}) {
+        data.Error(StartupCode::RE7, "L5",
+                   std::string(kind) + ": " + std::move(message) + " (only the first round may; the round is dropped)",
                    std::move(subjects), std::move(sources));
     };
     for (std::size_t h = base.hooks; h < data.hooks.size(); ++h) {
         const HookRecord& hook = data.hooks[h];
         if (hook.componentId && *hook.componentId < base.components) {
             // Its cells that exist ran no OnAdd but would run OnRemove (Bevy refuses too).
-            refuse(data.OwnerName(hook.owner) + " adds hook '" + hook.name + "' to component '" +
-                       data.components[*hook.componentId].name + "', which the previous version has",
+            refuse("hook", data.OwnerName(hook.owner) + " adds hook '" + hook.name + "' to component '" +
+                               data.components[*hook.componentId].name + "', which the previous version has",
                    {hook.name, data.components[*hook.componentId].name}, {SourceText(hook.source)});
         }
     }
+    const auto oldComponent = [&](TypeKey key) -> const TypeEntry* {
+        const TypeEntry* entry = data.FindType(key);
+        return entry != nullptr && entry->role == TypeRole::Component && entry->id < base.components ? entry : nullptr;
+    };
     for (std::size_t i = base.initialValues; i < data.initialValues.size(); ++i) {
         const InitialValueRecord& record = data.initialValues[i];
-        const TypeEntry* target = data.FindType(record.target);
-        if (target != nullptr && target->role == TypeRole::Component && target->id < base.components) {
-            refuse(data.OwnerName(record.owner) + " declares the initial value of component '" +
-                       data.components[target->id].name + "', which the previous version has",
+        // An old Target: its cells that exist were never filled. An old
+        // Request: the entities that have it already never get the Target.
+        if (const TypeEntry* target = oldComponent(record.target)) {
+            refuse("InitialValue Target", data.OwnerName(record.owner) + " declares the initial value of component '" +
+                                              data.components[target->id].name + "', which the previous version has",
                    {data.components[target->id].name, data.OwnerName(record.owner)}, {SourceText(record.source)});
+        }
+        if (const TypeEntry* request = oldComponent(record.request)) {
+            refuse("InitialValue Request", data.OwnerName(record.owner) + " declares an initial value requested by component '" +
+                                               data.components[request->id].name + "', which the previous version has",
+                   {data.components[request->id].name, data.OwnerName(record.owner)}, {SourceText(record.source)});
         }
     }
     for (std::size_t n = 0; n < base.namedSets && n < data.namedSets.size(); ++n) {
         const NamedSetRecord& set = data.namedSets[n];
         for (std::size_t m = base.setMembers[n]; m < set.pendingMembers.size(); ++m) {
             // Would change the access of Systems and hooks that read the set.
-            refuse(data.OwnerName(set.memberOwners[m]) + " adds a member to named set '" + set.name +
-                       "', which the previous version has",
+            refuse("set member", data.OwnerName(set.memberOwners[m]) + " adds a member to named set '" + set.name +
+                                     "', which the previous version has",
                    {set.name, data.OwnerName(set.memberOwners[m])});
         }
     }
     for (std::size_t i = base.schedules; i < data.schedules.size(); ++i) {
         const ScheduleRecord& schedule = data.schedules[i];
         if (schedule.options.startup) {
-            refuse(data.OwnerName(schedule.owner) + " registers Startup schedule '" + schedule.options.name +
-                       "' (Startup runs once and has run)",
+            refuse("startup schedule", data.OwnerName(schedule.owner) + " registers Startup schedule '" +
+                                           schedule.options.name + "' (Startup runs once and has run)",
                    {schedule.options.name, data.OwnerName(schedule.owner)});
         }
     }
@@ -1604,17 +1616,20 @@ void CheckLaterRound(RegistryData& data) {
         for (const Mount& mount : system.options.mounts) {
             const ScheduleRecord* schedule = data.FindSchedule(mount.schedule);
             if (schedule != nullptr && schedule->options.startup) {
-                refuse("System '" + system.options.name + "' is mounted in Startup schedule '" + mount.schedule +
-                           "' (Startup runs once and has run)",
+                refuse("startup mount", "System '" + system.options.name + "' is mounted in Startup schedule '" +
+                                            mount.schedule + "' (Startup runs once and has run)",
                        {system.options.name, mount.schedule}, {SourceText(system.source)});
             }
         }
     }
     for (std::size_t i = base.allotterDeclarations; i < data.allotterDeclarations.size(); ++i) {
-        refuse(data.OwnerName(data.allotterOwners[i]) + " declares an allotter", {data.OwnerName(data.allotterOwners[i])});
+        refuse("allotter", data.OwnerName(data.allotterOwners[i]) + " declares an allotter",
+               {data.OwnerName(data.allotterOwners[i])});
     }
-    if (data.digestMarks > base.digestMarks) refuse("a named set is marked as the digest set", {"DigestSet"});
-    if (data.explicitZoneCalls > base.explicitZoneCalls) refuse("explicit zones are required", {"RequireExplicitZones"});
+    if (data.digestMarks > base.digestMarks) refuse("DigestSet", "a named set is marked as the digest set", {"DigestSet"});
+    if (data.explicitZoneCalls > base.explicitZoneCalls) {
+        refuse("RequireExplicitZones", "explicit zones are required", {"RequireExplicitZones"});
+    }
 }
 
 // What every round resolves before plugins' Finish may read the tables (named
@@ -1667,20 +1682,24 @@ bool PlanStage(RegistryData& data) {
 void Adopt(RegistryData& into, RegistryData&& round) {
     const std::uint32_t liveWorlds = into.liveWorlds;
     const std::uint32_t refusingWorlds = into.refusingWorlds;
+    const std::uint32_t runningWorlds = into.runningWorlds;
     into = std::move(round);
     into.liveWorlds = liveWorlds;
     into.refusingWorlds = refusingWorlds;
+    into.runningWorlds = runningWorlds;
 }
 
 } // namespace
 } // namespace Detail
 
-void Registry::RequireNotInOwnWorld() const {
-    // A System or hook of a World made from this Registry would rebuild the Plan
-    // and Systems its Executor holds (declaration 3.2 rule 4). Another
+void Registry::RequireNoWorldRunning() const {
+    // While a World made from this Registry is inside a Run, its Executor holds
+    // the Plan, the Systems and the initial values of this version: anything
+    // the Run calls (a System, a hook, an initial value function, another
+    // World's Run) would rebuild them under it (declaration 3.2 rule 4). The
+    // count covers the whole call chain, not only the innermost call. Another
     // Registry's Worlds are not concerned.
-    const Detail::SystemContext* call = Detail::CurrentThreadCall();
-    GYO_ASSERT(call == nullptr || call->world == nullptr || Detail::RegistryDataOf(*call->world) != data_.get());
+    GYO_ASSERT(data_->runningWorlds == 0);
 }
 
 Detail::RegistryData& Registry::Target() noexcept {
@@ -1690,7 +1709,7 @@ Detail::RegistryData& Registry::Target() noexcept {
 Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(RegistrationOwner owner) {
     GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
     GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)
-    RequireNotInOwnWorld();
+    RequireNoWorldRunning();
     if (data_->refusingWorlds > 0) {
         // DI-KS 26: one World that declares no dynamic insert refuses for the whole Registry.
         KernelError error(KernelErrorCode::DynamicInsertRefused,
@@ -1733,7 +1752,7 @@ void Registry::CloseRegistrar() noexcept {
 Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
     GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
     GYO_ASSERT(!data_->failed);
-    RequireNotInOwnWorld();
+    RequireNoWorldRunning();
     if (pending_) {
         // A later round: built on the copy; the tables change only when it succeeds.
         Detail::RegistryData& round = *pending_;
@@ -1767,7 +1786,7 @@ Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
 void Registry::DiscardRegistrations() {
     GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
     GYO_ASSERT(!data_->failed);
-    RequireNotInOwnWorld();
+    RequireNoWorldRunning();
     if (pending_) {
         pending_.reset();
         return;

@@ -8,7 +8,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -25,6 +27,7 @@ std::string Join(const std::vector<std::string>& parts) {
 struct Later { std::int32_t v; };
 struct LaterRes { std::int64_t v; };
 struct Other { std::int32_t v; };
+struct LaterEvent { std::uint32_t n; };
 
 const RegistrationOwner kBase{"base", 0};
 const RegistrationOwner kCommand{"command", 1};
@@ -63,6 +66,8 @@ SystemResult Plain(Query<Read<Tag>>) { return Ok(); }
 SystemResult OnTag(HookCtx) { return Ok(); }
 bool FlagIsSet(Res<Flag> flag) { return flag->on != 0; }
 Mode ModeFromLater(const Later& later) { return Mode{later.v}; }
+Other OtherFromTag(const Tag& tag) { return Other{tag.t}; }
+Other OtherFromLater(const Later& later) { return Other{later.v}; }
 SystemResult ExtractPosOf(Extract<Read<TestPos>>) { return Ok(); }
 SystemResult ExtractVelOf(Extract<Read<TestVel>>) { return Ok(); }
 SystemResult AnnotatesFlag(ExclusiveWorld<Writes<Flag>>) { return Ok(); }
@@ -80,6 +85,45 @@ SystemResult RegistersFromSystem(Res<Flag>) {
 }
 SystemResult BuildsFromSystem(Res<Flag>) {
     static_cast<void>(KeptRegistry()->BuildPlans());
+    return Ok();
+}
+SystemResult DiscardsFromSystem(Res<Flag>) {
+    KeptRegistry()->DiscardRegistrations();
+    return Ok();
+}
+SystemResult HookRegisters(HookCtx) {
+    static_cast<void>(KeptRegistry()->Register(kCommand, [](Registrar&) {}));
+    return Ok();
+}
+SystemResult InsertsMode(CommandsFor<Inserts<Mode>, Removes<>> commands) {
+    commands.Insert(1, Mode{1});
+    return Ok();
+}
+// Not a System or hook: user code the kernel calls while a sync point applies.
+Mode ModeFromLaterRegisters(const Later& later) {
+    static_cast<void>(KeptRegistry()->Register(kCommand, [](Registrar&) {}));
+    return Mode{later.v};
+}
+SystemResult InsertsLater(CommandsFor<Inserts<Later>, Removes<>> commands) {
+    commands.Insert(1, Later{1});
+    return Ok();
+}
+// Another Registry's World that a System runs (test side: a System captures nothing).
+WorldExecutor*& KeptExecutor() {
+    static WorldExecutor* executor = nullptr;
+    return executor;
+}
+SystemResult RunsKeptExecutor(Res<Flag>) {
+    static_cast<void>(KeptExecutor()->Run("Tick"));
+    return Ok();
+}
+SystemResult Throws(Res<Flag>) { throw std::runtime_error("planned throw"); }
+SystemResult SendsLater(EventWriter<LaterEvent> out) {
+    out.Send(LaterEvent{7});
+    return Ok();
+}
+SystemResult OnLaterAdd(HookCtx, Query<Read<Tag>> tags) {
+    Log().push_back("later hook:" + std::to_string(tags.Count()));
     return Ok();
 }
 
@@ -103,6 +147,20 @@ void FirstRound(Registry& registry, void (*build)(Registrar&) = &Base) {
 
 void Quiet(WorldExecutor& executor, std::vector<KernelError>& recorded) {
     executor.SetErrorHandler([&recorded](const KernelError& error) { recorded.push_back(error); });
+}
+
+// The expression of the GYO_ASSERT that step fails, or empty. Lets a test
+// report an assertion with its own label (outside GYO_CHECK_ASSERTS the
+// default handler would abort the run).
+template <class Step>
+std::string AssertionIn(Step&& step) {
+    ::Engine::Test::ScopedAssertionHandler scope;
+    try {
+        std::forward<Step>(step)();
+    } catch (const ::Engine::Base::AssertionFailure& failure) {
+        return std::string(failure.expression);
+    }
+    return {};
 }
 
 } // namespace
@@ -353,27 +411,43 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
     WorldExecutor executor(registry, "rounds");
     std::vector<KernelError> recorded;
     Quiet(executor, recorded);
-    const auto refused = [&](auto build) {
+    // kind: what the R-E7 message names first (declaration 3.2 rule 6); each
+    // SUBCASE's failure text carries it, so a mutant's expected text is its kind.
+    const auto refused = [&](const std::string& kind, auto build) {
         REQUIRE(Done(registry.Register(kBase, build)));
         const auto result = registry.BuildPlans();
-        CHECK_MESSAGE(ErrorCount(result, StartupCode::RE7) == 1, "R-E7 count: " << Describe(result));
+        CHECK_MESSAGE(ErrorCount(result, StartupCode::RE7) == 1, "R-E7 count (" << kind << "): " << Describe(result));
+        if (!result) {
+            const std::vector<StartupError>& errors = result.error().errors;
+            const bool named = std::any_of(errors.begin(), errors.end(), [&](const StartupError& error) {
+                return error.code == StartupCode::RE7 && error.message.rfind(kind + ": ", 0) == 0;
+            });
+            CHECK_MESSAGE(named, "R-E7 kind (" << kind << ") not named: " << Describe(result));
+        }
         CHECK(registry.Frozen().Version() == 1U);
         KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     };
     SUBCASE("a hook on a component the previous version has") {
-        refused([](Registrar& r) { r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag", .zone = Zone::B}); });
+        refused("hook", [](Registrar& r) { r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag", .zone = Zone::B}); });
     }
-    SUBCASE("an initial value of a component the previous version has") {
-        refused([](Registrar& r) {
+    SUBCASE("an initial value whose Target the previous version has") {
+        refused("InitialValue Target", [](Registrar& r) {
             r.Component<Later>({.name = "Later", .zone = Zone::B});
             r.InitialValue<Mode, &ModeFromLater>();
         });
     }
+    SUBCASE("an initial value whose Request the previous version has") {
+        // Entities that have Tag already would never get Other (S2 of the segment 2 review).
+        refused("InitialValue Request", [](Registrar& r) {
+            r.Component<Other>({.name = "Other", .zone = Zone::B});
+            r.InitialValue<Other, &OtherFromTag>();
+        });
+    }
     SUBCASE("a member of a named set the previous version has") {
-        refused([](Registrar& r) { r.AddToSet<ReplicatedSet, Tag>(); });
+        refused("set member", [](Registrar& r) { r.AddToSet<ReplicatedSet, Tag>(); });
     }
     SUBCASE("a Startup schedule") {
-        refused([](Registrar& r) {
+        refused("startup schedule", [](Registrar& r) {
             ScheduleOptions second;
             second.name = "Boot2";
             second.startup = true;
@@ -382,30 +456,58 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
         });
     }
     SUBCASE("a System mounted in the Startup schedule") {
-        refused([](Registrar& r) { r.AddSystem<&Plain>(Sys("BootPlain", Zone::B, {At("Boot", "Only")})); });
+        refused("startup mount", [](Registrar& r) { r.AddSystem<&Plain>(Sys("BootPlain", Zone::B, {At("Boot", "Only")})); });
     }
     SUBCASE("an allotter") {
-        refused([](Registrar& r) {
+        refused("allotter", [](Registrar& r) {
             r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
             r.Allotter<RangeAllotter>();
         });
     }
     SUBCASE("the digest set") {
-        refused([](Registrar& r) { r.DigestSet<ReplicatedSet>(); });
+        refused("DigestSet", [](Registrar& r) { r.DigestSet<ReplicatedSet>(); });
     }
     SUBCASE("explicit zones") {
-        refused([](Registrar& r) { r.RequireExplicitZones(); });
+        refused("RequireExplicitZones", [](Registrar& r) { r.RequireExplicitZones(); });
+    }
+    SUBCASE("every kind in one round") {
+        REQUIRE(Done(registry.Register(kBase, [](Registrar& r) {
+            r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag", .zone = Zone::B});
+            r.Component<Later>({.name = "Later", .zone = Zone::B});
+            r.Component<Other>({.name = "Other", .zone = Zone::B});
+            r.InitialValue<Mode, &ModeFromLater>();
+            r.InitialValue<Other, &OtherFromTag>();
+            r.AddToSet<ReplicatedSet, Tag>();
+            ScheduleOptions second;
+            second.name = "Boot2";
+            second.startup = true;
+            second.stages = {"Only"};
+            r.Schedule(second);
+            r.AddSystem<&Plain>(Sys("BootPlain", Zone::B, {At("Boot", "Only")}));
+            r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
+            r.Allotter<RangeAllotter>();
+            r.DigestSet<ReplicatedSet>();
+            r.RequireExplicitZones();
+        })));
+        const auto result = registry.BuildPlans();
+        const std::size_t count = ErrorCount(result, StartupCode::RE7);
+        CHECK_MESSAGE(count == 9, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
+        CHECK(registry.Frozen().Version() == 1U);
+        KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     }
     SUBCASE("what a later round may: a hook and an initial value of new components, a new named set") {
         REQUIRE(Done(registry.Register(kBase, [](Registrar& r) {
             r.Component<Later>({.name = "Later", .zone = Zone::B});
             r.Component<Other>({.name = "Other", .zone = Zone::B});
             r.Hook<Later, &OnTag>(HookTrigger::OnAdd, {.name = "OnLater", .zone = Zone::B});
+            r.InitialValue<Other, &OtherFromLater>();
             r.NamedSet<DigestTag>("Fresh");
             r.AddToSet<DigestTag, Tag>();
         })));
         const auto result = registry.BuildPlans();
         CHECK_MESSAGE(Done(result), Describe(result));
+        CHECK(registry.Frozen().Version() == 2U);
+        CHECK_MESSAGE(registry.Frozen().InitialValues().size() == 1, "a later round's initial value of new components");
     }
 }
 
@@ -425,10 +527,10 @@ TEST_CASE("DI-KS 26: a World that declares no dynamic insert refuses Register fo
         REQUIRE_MESSAGE(!Done(result), "a World that declares no dynamic insert did not refuse");
         CHECK(result.error().code == KernelErrorCode::DynamicInsertRefused);
         CHECK_FALSE(called);
-        // Nothing changed: no pending round (a World may be made), nothing to build.
-        WorldExecutor another(registry, "another");
+        // Nothing changed: nothing to build, no pending round (a World may be made).
         CHECK(Done(registry.BuildPlans()));
-        CHECK(registry.Frozen().Version() == 1U);
+        CHECK_MESSAGE(registry.Frozen().Version() == 1U, "a refused Register left a round pending");
+        WorldExecutor another(registry, "another");
         CHECK_FALSE(registry.Frozen().ComponentIdOf<Later>().has_value());
         KERNEL_REQUIRE_RUN_OK(allowing.Run("Tick"));
     }
@@ -439,37 +541,58 @@ TEST_CASE("DI-KS 26: a World that declares no dynamic insert refuses Register fo
     CHECK(registry.Frozen().Version() == 2U);
 }
 
-TEST_CASE("DI-KS 26: an Interrupted World does not block Register") {
-    Registry registry;
-    FirstRound(registry, [](Registrar& r) {
-        Base(r);
-        r.AddSystem<&Fails>(B("Fails", "C"));
-    });
-    WorldExecutor executor(registry, "interrupted");
-    std::vector<KernelError> recorded;
-    Quiet(executor, recorded);
-    executor.GetWorld().SetResource(Flag{0});
-    REQUIRE_FALSE(Done(executor.Run("Tick")));
-    REQUIRE(executor.GetWorld().State() == WorldState::Interrupted);
-    REQUIRE_MESSAGE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); })),
-                    "an Interrupted World blocked Register");
-    CHECK(Done(registry.BuildPlans()));
-    CHECK(registry.Frozen().Version() == 2U);
+TEST_CASE("DI-KS 26: an Interrupted World does not count as running; one that declares no dynamic insert still refuses") {
+    SUBCASE("left by an exception, allows dynamic insert: Register goes on") {
+        Registry registry;
+        FirstRound(registry, [](Registrar& r) {
+            Base(r);
+            r.AddSystem<&Throws>(B("Throws", "C"));
+        });
+        WorldExecutor executor(registry, "interrupted");
+        executor.GetWorld().SetResource(Flag{0});
+        CHECK_THROWS_AS(static_cast<void>(executor.Run("Tick")), std::runtime_error);
+        REQUIRE(executor.GetWorld().State() == WorldState::Interrupted);
+        bool registered = false;
+        const std::string asserted = AssertionIn([&] {
+            registered = Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); }));
+        });
+        REQUIRE_MESSAGE(asserted.empty(), "an Interrupted World counts as running: " << asserted);
+        REQUIRE(registered);
+        CHECK(Done(registry.BuildPlans()));
+        CHECK(registry.Frozen().Version() == 2U);
+    }
+    SUBCASE("left by an Err, declares no dynamic insert: Register is still refused") {
+        Registry registry;
+        FirstRound(registry, [](Registrar& r) {
+            Base(r);
+            r.AddSystem<&Fails>(B("Fails", "C"));
+        });
+        WorldExecutor executor(registry, "interrupted", WorldOptions{false});
+        std::vector<KernelError> recorded;
+        Quiet(executor, recorded);
+        executor.GetWorld().SetResource(Flag{0});
+        REQUIRE_FALSE(Done(executor.Run("Tick")));
+        REQUIRE(executor.GetWorld().State() == WorldState::Interrupted);
+        const auto result = registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); });
+        REQUIRE_MESSAGE(!Done(result), "an Interrupted World that declares no dynamic insert stopped refusing");
+        CHECK(result.error().code == KernelErrorCode::DynamicInsertRefused);
+        CHECK(registry.Frozen().Version() == 1U);
+    }
 }
 
-TEST_CASE("DI-KS 26: a System of a World made from the Registry may not register or build; another Registry's may") {
+TEST_CASE("DI-KS 26: while a World made from the Registry runs, nothing may register, build or discard; another Registry may") {
     Registry registry;
     FirstRound(registry, [](Registrar& r) {
         Base(r);
         r.AddSystem<&RegistersFromSystem>(B("RegistersFromSystem", "A"));
     });
     SUBCASE("Register from its own World's System") {
-        WorldExecutor executor(registry, "own");
+        WorldExecutor registersOwn(registry, "own");
         std::vector<KernelError> recorded;
-        Quiet(executor, recorded);
-        executor.GetWorld().SetResource(Flag{0});
+        Quiet(registersOwn, recorded);
+        registersOwn.GetWorld().SetResource(Flag{0});
         KeptRegistry() = &registry;
-        GYO_CHECK_ASSERTS(executor.Run("Tick"));
+        GYO_CHECK_ASSERTS(registersOwn.Run("Tick"));
     }
     SUBCASE("BuildPlans from its own World's System") {
         Registry builds;
@@ -477,10 +600,65 @@ TEST_CASE("DI-KS 26: a System of a World made from the Registry may not register
             Data(r);
             r.AddSystem<&BuildsFromSystem>(B("BuildsFromSystem", "A"));
         });
-        WorldExecutor executor(builds, "own");
-        executor.GetWorld().SetResource(Flag{0});
+        WorldExecutor buildsOwn(builds, "own");
+        buildsOwn.GetWorld().SetResource(Flag{0});
         KeptRegistry() = &builds;
-        GYO_CHECK_ASSERTS(executor.Run("Tick"));
+        GYO_CHECK_ASSERTS(buildsOwn.Run("Tick"));
+    }
+    SUBCASE("DiscardRegistrations from its own World's System") {
+        Registry discards;
+        FirstRound(discards, [](Registrar& r) {
+            Data(r);
+            r.AddSystem<&DiscardsFromSystem>(B("DiscardsFromSystem", "A"));
+        });
+        WorldExecutor discardsOwn(discards, "own");
+        discardsOwn.GetWorld().SetResource(Flag{0});
+        KeptRegistry() = &discards;
+        GYO_CHECK_ASSERTS(discardsOwn.Run("Tick"));
+    }
+    SUBCASE("Register from its own World's hook") {
+        Registry hooked;
+        FirstRound(hooked, [](Registrar& r) {
+            Data(r);
+            r.Hook<Mode, &HookRegisters>(HookTrigger::OnAdd, {.name = "HookRegisters", .zone = Zone::B});
+            r.AddSystem<&InsertsMode>(B("InsertsMode", "A"));
+        });
+        WorldExecutor hookOwn(hooked, "own");
+        hookOwn.GetWorld().Insert(1, Tag{1});
+        KeptRegistry() = &hooked;
+        GYO_CHECK_ASSERTS(hookOwn.Run("Tick"));
+    }
+    SUBCASE("Register from an initial value function at a sync point") {
+        // Not a System or hook: the review's S1 (the Executor holds the initial values while it applies).
+        Registry filled;
+        FirstRound(filled, [](Registrar& r) {
+            Data(r);
+            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.InitialValue<Mode, &ModeFromLaterRegisters>();
+            r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
+        });
+        WorldExecutor initialValueOwn(filled, "own");
+        initialValueOwn.GetWorld().Insert(1, Tag{1});
+        KeptRegistry() = &filled;
+        GYO_CHECK_ASSERTS(initialValueOwn.Run("Tick"));
+    }
+    SUBCASE("Register from another Registry's World, run by its own World's System") {
+        // The review's M1: the innermost call is the other World's System; the outer World is running.
+        Registry outer;
+        FirstRound(outer, [](Registrar& r) {
+            Data(r);
+            r.AddSystem<&RunsKeptExecutor>(B("RunsKeptExecutor", "A"));
+            r.AddSystem<&Plain>(B("Plain", "C"));
+        });
+        WorldExecutor nestedOuter(outer, "outer");
+        WorldExecutor inner(registry, "inner");
+        nestedOuter.GetWorld().SetResource(Flag{0});
+        inner.GetWorld().SetResource(Flag{0});
+        KeptRegistry() = &outer;
+        KeptExecutor() = &inner;
+        GYO_CHECK_ASSERTS(nestedOuter.Run("Tick"));
+        CHECK_MESSAGE(outer.Frozen().Version() == 1U, "the outer Registry was rebuilt while its World ran");
+        KeptExecutor() = nullptr;
     }
     SUBCASE("another Registry") {
         Registry target;
@@ -493,6 +671,153 @@ TEST_CASE("DI-KS 26: a System of a World made from the Registry may not register
         CHECK(target.Frozen().ComponentIdOf<Later>().has_value());
     }
     KeptRegistry() = nullptr;
+}
+
+TEST_CASE("DI-KS 26: BuildPlans and DiscardRegistrations inside a build callable are asserts") {
+    Registry buildInside;
+    FirstRound(buildInside);
+    GYO_CHECK_ASSERTS(buildInside.Register(kCommand, [&](Registrar&) { static_cast<void>(buildInside.BuildPlans()); }));
+    buildInside.DiscardRegistrations();
+    Registry discardInside;
+    FirstRound(discardInside);
+    GYO_CHECK_ASSERTS(discardInside.Register(kCommand, [&](Registrar&) { discardInside.DiscardRegistrations(); }));
+    discardInside.DiscardRegistrations();
+    // The first round too.
+    Registry firstBuildInside;
+    GYO_CHECK_ASSERTS(firstBuildInside.Register(kBase, [&](Registrar&) { static_cast<void>(firstBuildInside.BuildPlans()); }));
+}
+
+TEST_CASE("DI-KS 26: a build callable that throws leaves its registrations in the round") {
+    Registry registry;
+    FirstRound(registry);
+    CHECK_THROWS_AS(static_cast<void>(registry.Register(kCommand, [](Registrar& r) {
+        r.Component<Later>({.name = "Later", .zone = Zone::B});
+        throw std::runtime_error("planned throw");
+    })), std::runtime_error);
+    // The round is pending (a World may not be made) and goes on with the next Register.
+    GYO_CHECK_ASSERTS(World(registry, "late"));
+    bool registered = false;
+    const std::string asserted = AssertionIn([&] {
+        registered = Done(registry.Register(kCommand, [](Registrar& r) { r.Resource<LaterRes>({.name = "LaterRes", .zone = Zone::B}); }));
+    });
+    REQUIRE_MESSAGE(asserted.empty(), "a build that threw left its Registrar open: " << asserted);
+    REQUIRE(registered);
+    const auto built = registry.BuildPlans();
+    REQUIRE_MESSAGE(Done(built), Describe(built));
+    CHECK(registry.Frozen().ComponentIdOf<Later>().has_value());
+    CHECK(registry.Frozen().ResourceIdOf<LaterRes>().has_value());
+    CHECK(registry.Frozen().Version() == 2U);
+}
+
+TEST_CASE("DI-KS 4: DiscardRegistrations in the first round drops what was registered") {
+    Registry registry;
+    REQUIRE(Done(registry.Register(kBase, &Base)));
+    registry.DiscardRegistrations();
+    CHECK(Done(registry.BuildPlans()));
+    CHECK_MESSAGE(!registry.IsFrozen(), "a first-round discard kept the round");
+    REQUIRE(Done(registry.Register(kBase, &Base)));
+    const auto built = registry.BuildPlans();
+    REQUIRE_MESSAGE(Done(built), Describe(built));
+    CHECK(registry.Frozen().Version() == 1U);
+    CHECK(registry.Frozen().ComponentIdOf<Pos>() == 0U);
+}
+
+TEST_CASE("DI-KS 26: after a failed first round, Register is an assert") {
+    Registry failedFirst;
+    REQUIRE(Done(failedFirst.Register(kBase, [](Registrar& r) {
+        Data(r);
+        r.AddSystem<&UsesUnknown>(B("UsesUnknown", "A"));
+    })));
+    REQUIRE_FALSE(Done(failedFirst.BuildPlans()));
+    GYO_CHECK_ASSERTS(failedFirst.Register(kCommand, [](Registrar&) {}));
+}
+
+TEST_CASE("DI-KS 26: Finish is only the first round") {
+    Registry registeredFirst;
+    REQUIRE(Done(registeredFirst.Register(kBase, &Base)));
+    GYO_CHECK_ASSERTS(registeredFirst.Finish());
+    Registry builtFirst;
+    FirstRound(builtFirst);
+    GYO_CHECK_ASSERTS(builtFirst.Finish());
+}
+
+TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (verification on)") {
+    Registry registry;
+    FirstRound(registry);
+    WorldExecutor executor(registry, "attach");
+    std::vector<KernelError> recorded;
+    Quiet(executor, recorded);
+    World& world = executor.GetWorld();
+    world.SetResource(KernelSettings{true, false});
+    world.Insert(1, Tag{1});
+    KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
+    Log().clear();
+    // Each SUBCASE adds one kind of table, so a table the World misses fails only its own label.
+    SUBCASE("event buffers") {
+        REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
+            r.Event<LaterEvent>({.name = "LaterEvent", .zone = Zone::B, .domain = Domain::Fixed});
+            r.AddSystem<&SendsLater>(B("SendsLater", "A"));
+        })));
+        REQUIRE(Done(registry.BuildPlans()));
+        std::string ran;
+        std::size_t payloads = 0;
+        const std::string asserted = AssertionIn([&] {
+            ran = Text(executor.Run("Tick"));
+            payloads = world.EventPayloads<LaterEvent>().size();
+        });
+        REQUIRE_MESSAGE(asserted.empty(), "attach (event buffers): " << asserted);
+        CHECK_MESSAGE(ran == "ok", "attach (event buffers): " << ran);
+        CHECK_MESSAGE(payloads == 1, "attach (event buffers): payloads " << payloads);
+    }
+    SUBCASE("verification exclusions") {
+        // ExcludeFromVerification is for a World that has not run: one made before the round.
+        WorldExecutor unrun(registry, "unrun");
+        REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); })));
+        REQUIRE(Done(registry.BuildPlans()));
+        std::vector<std::string> excluded;
+        const std::string asserted = AssertionIn([&] {
+            unrun.GetWorld().ExcludeFromVerification<Later>();
+            excluded = unrun.Verification().excludedColumns;
+        });
+        REQUIRE_MESSAGE(asserted.empty(), "attach (verification exclusions): " << asserted);
+        CHECK_MESSAGE(excluded == std::vector<std::string>{"Later"}, "attach (verification exclusions): " << Join(excluded));
+    }
+    SUBCASE("hook access") {
+        REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
+            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Hook<Later, &OnLaterAdd>(HookTrigger::OnAdd, {.name = "OnLaterAdd", .zone = Zone::B});
+            r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
+        })));
+        REQUIRE(Done(registry.BuildPlans()));
+        std::string ran;
+        const std::string asserted = AssertionIn([&] { ran = Text(executor.Run("Tick")); });
+        REQUIRE_MESSAGE(asserted.empty(), "attach (hook access): " << asserted);
+        CHECK_MESSAGE(ran == "ok", "attach (hook access): " << ran);
+        CHECK_MESSAGE(std::find(Log().begin(), Log().end(), "later hook:1") != Log().end(),
+                      "attach (hook access): the hook did not run: " << Join(Log()));
+    }
+    SUBCASE("hook queues") {
+        REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
+            ScheduleOptions late;
+            late.name = "Late";
+            late.domain = Domain::Frame;
+            late.clock = true;
+            late.stages = {"Only"};
+            r.Schedule(late);
+            r.AddSystem<&NewSystem>(Sys("LateSystem", Zone::B, {At("Late", "Only")}));
+        })));
+        REQUIRE(Done(registry.BuildPlans()));
+        std::string late;
+        std::string tick;
+        const std::string asserted = AssertionIn([&] {
+            late = Text(executor.Run("Late"));
+            tick = Text(executor.Run("Tick"));
+        });
+        REQUIRE_MESSAGE(asserted.empty(), "attach (hook queues): " << asserted);
+        CHECK_MESSAGE(late == "ok", "attach (hook queues): " << late);
+        CHECK(tick == "ok");
+        CHECK_MESSAGE(Join(Log()) == "new old run2 changed:0", "attach (hook queues): " << Join(Log()));
+    }
 }
 
 TEST_CASE("DI-KS 26: Register inside a build callable, and a World made while a round is pending, are asserts") {
@@ -561,6 +886,14 @@ TEST_CASE("DI-KS 13: an extract source registers again, then the Registry that r
     REQUIRE(vel != nullptr);
     const std::vector<AccessKey> expectedReads{{AccessKind::Component, *source.Frozen().ComponentIdOf<TestVel>()}};
     CHECK_MESSAGE(vel->access.extractReads == expectedReads, "extract reads of the rebuilt source");
+}
+
+TEST_CASE("DI-KS 13: SetExtractSource after the first BuildPlans is an assert") {
+    Registry source;
+    FirstRound(source);
+    Registry builtReader;
+    FirstRound(builtReader);
+    GYO_CHECK_ASSERTS(builtReader.SetExtractSource(source));
 }
 
 // ---- S3: the read-only, versioned view (DI-KS 25)

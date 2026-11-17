@@ -9,15 +9,19 @@
 // change is a new World, made from the same Registry).
 //
 // Versions (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 5):
-// the World remembers the Registry version it is attached to. Every entry (the
-// public functions below, the handles' lookups, WorldExecutor::Run) first
-// compares it with the Registry's and, when they differ, attaches: storage for
-// the new components, resources and event buffers and a hook queue for each
-// new schedule are added, the verification exclusions grow, the hooks' access
-// descriptions are made again. The Registry keeps no list of its Worlds, only
-// two counters this class changes (live Worlds, and those that declare no
-// dynamic insert); so making and destroying a World, like registering, is on
-// the thread that registers, or ordered by the caller (DI-KS 26).
+// the World remembers the Registry version it is attached to. Every entry that
+// uses a table indexed by a registry id (the type lookups of the public
+// functions and handles, Alive, Entities, Despawn, Summary, WorldExecutor::Run)
+// first compares it with the Registry's and, when they differ, attaches:
+// storage for the new components, resources and event buffers and a hook queue
+// for each new schedule are added, the verification exclusions grow, the
+// hooks' access descriptions are made again. Entries that use no such table
+// (State, Name, Options, Stamp, Tick, ...) do not compare. The Registry keeps
+// no list of its Worlds, only counters: two this class changes (live Worlds,
+// and those that declare no dynamic insert) and one WorldExecutor::Run changes
+// (Worlds inside a Run); so making, destroying and running a World, like
+// registering, is on the thread that registers, or ordered by the caller
+// (DI-KS 26).
 //
 // The public functions below are the Host's (state Ready) and, inside a running
 // System, a path that does not go through a handle (a World* kept in a global,
@@ -327,7 +331,6 @@ private:
     friend class WorldExecutor;
     friend Detail::SystemContext* Detail::CurrentCall(World&) noexcept;
     friend Detail::SystemContext& Detail::RequireCall(World&);
-    friend const Detail::RegistryData* Detail::RegistryDataOf(const World&) noexcept;
     friend ComponentId Detail::ComponentIdOf(const World&, TypeKey);
     friend ResourceId Detail::ResourceIdOf(const World&, TypeKey);
     friend EventTypeId Detail::EventIdOf(const World&, TypeKey);

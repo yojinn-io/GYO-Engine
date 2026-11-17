@@ -128,6 +128,22 @@ private:
     bool& running_;
 };
 
+// Declaration 3.2 rule 4: the Registry counts its Worlds inside a Run, raised
+// when Run starts and lowered on every way out (an exception included), so
+// Register, BuildPlans and DiscardRegistrations assert while anything a Run
+// calls is on the stack. A nested RunSchedule does not come through Run and
+// does not count again.
+class RunningScope {
+public:
+    explicit RunningScope(std::uint32_t& running) noexcept : running_(running) { ++running_; }
+    ~RunningScope() { --running_; }
+    RunningScope(const RunningScope&) = delete;
+    RunningScope& operator=(const RunningScope&) = delete;
+
+private:
+    std::uint32_t& running_;
+};
+
 } // namespace
 
 // Spec E.5 and K0: one level of the run stack. An exception from a System or
@@ -167,6 +183,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
     // through a kept pointer finds the World Running: also a GYO_ASSERT (only
     // ExclusiveWorld::RunSchedule runs a schedule from inside a System, K0).
     GYO_ASSERT(world.state_ == WorldState::Ready);
+    RunningScope running(world.data_->runningWorlds);
     Attach();
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
