@@ -614,3 +614,18 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 2. **確認清單**（一次看完）：由已定的決定推出、會推翻使用者較早決定的——權威 6.14（D-E9、K.3 第 5 項、Z3 的 stage、(c) 獨占套用的新形狀、`emitterZone`、漏斗 B1～B3、漏斗不再是必經之路）；`shared-means-no-owner`、`exclusive-declared-writes` 的「列出來的算寫者」、`writer-unit-system`、`despawn-not-writer`（隨不數寫者）。
 
 第 14 節的其他題目由本節取代。
+
+### 15.6 確認清單（修訂 28；交使用者一次看完）
+
+| # | 較早的決定（使用者的話） | 改成 | 推自 |
+|---|---|---|---|
+| 1 | `funnel-block-b1-b3-fingerprint-a`（11-14）「B1–B3 要擋」 | B1、B2 不擋；B3（開回滾的 schedule 裡出現不回滾的判定元件）照擋，改由伺服器權威策略的回滾交叉檢查做；「指紋用方案 A」隨 C 指紋移權威 Module | 判定資料的讀寫規則兩半都拿掉（15.3） |
+| 2 | `spawn-writer-funnel`（11-14）「選 3 項，讓作者自己做處理，但是 Engine 提供漏斗工具支持。」 | 漏斗不再是 Engine 的必經之路；`InitialValue` 留在 Kernel 當作者自選的寫法 | `authority-no-writer-count` |
+| 3 | `shared-means-no-owner`（11-15）「如果作者不想那麼麻煩，可以直接設成shared」「要保證誰寫，別開shared。」 | `Shared` 標記拿掉（沒有寫者數量，就沒有「多寫者」要標） | `authority-no-writer-count` |
+| 4 | `exclusive-declared-writes`（11-15）`ExclusiveWorld<Writes<…>>` 列出來的算寫者 | `Writes<…>` 照 L7 留作選填標註，只剩讓策略看得到獨占 System 寫了什麼；不再算進寫者 | `authority-no-writer-count` |
+| 5 | 規格 B.3 的寫者單位、「Despawn 不算寫者」等數寫者的細則 | 隨寫者數量一起拿掉 | `authority-no-writer-count` |
+| 6 | `zone-c-exclusive-apply`（11-15～16）Kernel 加「(c) 區的獨占套用」、啟動時檢查 | 不加進 Kernel；狀態機的套用 System 由作者用名字標記給權威（L26） | `kernel-is-ecs-no-restrictions`、讀寫規則拿掉 |
+| 7 | `spawn-reject-zone-c-blocked-by-zone-b`（11-15）明細帶記錄者的區 `emitterZone` | 「丟掉那一筆」照留；`emitterZone` 拿掉、不給替代（沒有區了） | 區移出 Kernel、讀寫規則拿掉 |
+| 8 | 規格的 D-E9（(c) 區 hook 衝突是錯誤） | 拿掉：hook 照登記順序，C 指紋含 hook 的登記順序 | `no-ambiguity-detection` |
+| 9 | K.3 第 5 項（(b) 讀 (c) 的順序要寫清楚） | 拿掉：照登記順序平手，不是錯誤 | `no-ambiguity-detection` |
+| 10 | Z3（輸入入口要在指定 stage） | 拿掉 | 讀寫規則拿掉 |
