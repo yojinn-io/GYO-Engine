@@ -1796,30 +1796,30 @@
     },
     {
       "id": "rs-j17-zone-b-listed",
-      "what": "J-17: zone B Systems are listed too (find rewritten by v8-arch-gyo2-test-debts: 4e68b589 moved the path checks into the add lambda shared with the initial values)",
+      "what": "J-17: zone B Systems are listed too (find rewritten by v8-arch-gyo2-test-debts: 4e68b589 moved the path checks into the add lambda shared with the initial values) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "        if (system.options.zone != Zone::C) continue;\n        if (auto added = add(system.source, \"a zone C System\"",
-      "replace": "        if (auto added = add(system.source, \"a zone C System\"",
+      "find": "        if (system.removed || system.options.zone != Zone::C) continue;\n        if (auto added = add(system.source, \"a zone C System\"",
+      "replace": "        if (system.removed) continue;\n        if (auto added = add(system.source, \"a zone C System\"",
       "target": "gyo_kernel_tests",
       "cases": "J-17:*",
       "expect": "static_cast<bool>\\(empty\\)"
     },
     {
       "id": "rs-j18-plugins-reversed",
-      "what": "J-18: plugins are built in reverse list order",
+      "what": "J-18: plugins are built in reverse list order (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "    for (std::size_t i = 0; i < data.plugins.size(); ++i) {\n        if (!data.plugins[i].built) continue;\n        Registrar registrar(data, static_cast<std::uint32_t>(i));",
-      "replace": "    for (std::size_t j = data.plugins.size(); j-- > 0;) {\n        const std::size_t i = j;\n        if (!data.plugins[i].built) continue;\n        Registrar registrar(data, static_cast<std::uint32_t>(i));",
+      "find": "    for (std::size_t i = 0; i < data.plugins.size(); ++i) {\n        if (!data.plugins[i].built) continue;\n        Plugin* plugin = data.plugins[i].plugin;",
+      "replace": "    for (std::size_t j = data.plugins.size(); j-- > 0;) {\n        const std::size_t i = j;\n        if (!data.plugins[i].built) continue;\n        Plugin* plugin = data.plugins[i].plugin;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
       "expect": "ComponentIdOf<TestPos>\\(\\) == 0U"
     },
     {
       "id": "rs-j19-duplicate-built",
-      "what": "J-19: a duplicate plugin is built anyway",
+      "what": "J-19: a duplicate plugin is built anyway (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (!data.plugins[i].built) continue;\n        Registrar registrar(",
-      "replace": "        Registrar registrar(",
+      "find": "        if (!data.plugins[i].built) continue;\n        Plugin* plugin = data.plugins[i].plugin;",
+      "replace": "        Plugin* plugin = data.plugins[i].plugin;",
       "target": "gyo_kernel_tests",
       "cases": "J-19:*",
       "expect": "b\\.builds == 0"
@@ -1896,10 +1896,10 @@
     },
     {
       "id": "rs-j24-stop-at-first",
-      "what": "J-24: Finish stops at the first errors found",
+      "what": "J-24: Finish stops at the first errors found (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "    Detail::CheckExclusiveWriters(data);\n    Detail::CheckHookConflicts(data);\n    Detail::BuildPlans(data);",
-      "replace": "    if (!data.errors.empty()) return Engine::Base::Err(StartupReport(std::move(data.errors)));\n    Detail::CheckExclusiveWriters(data);\n    Detail::CheckHookConflicts(data);\n    Detail::BuildPlans(data);",
+      "find": "    CheckExclusiveWriters(data);\n    CheckHookConflicts(data);\n    BuildPlans(data);",
+      "replace": "    if (!data.errors.empty()) return false;\n    CheckExclusiveWriters(data);\n    CheckHookConflicts(data);\n    BuildPlans(data);",
       "target": "gyo_kernel_tests",
       "cases": "J-24:*",
       "expect": "report\\.Has\\(StartupCode::DE4\\)"
@@ -2476,10 +2476,10 @@
     },
     {
       "id": "rs-adv-cfp-all-zones",
-      "what": "the C fingerprint hashes zone B Systems too (Fable adversarial check, 2026-11-13)",
+      "what": "the C fingerprint hashes zone B Systems too (Fable adversarial check, 2026-11-13) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "        if (system.options.zone == Zone::C) SystemBytes(out, system);",
-      "replace": "        SystemBytes(out, system);",
+      "find": "        if (!system.removed && system.options.zone == Zone::C) SystemBytes(out, system);",
+      "replace": "        if (!system.removed) SystemBytes(out, system);",
       "expect": "withZoneBOnlyChange",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*"
@@ -2546,9 +2546,9 @@
     },
     {
       "id": "rs-adv-system-name-twice",
-      "what": "two Systems with one name are accepted (before / after then resolves to the later one) (Fable adversarial check, 2026-11-13)",
+      "what": "two Systems with one name are accepted (before / after then resolves to the later one) (Fable adversarial check, 2026-11-13) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (existing.options.name == options.name) {",
+      "find": "        if (!existing.removed && existing.options.name == options.name) {",
       "replace": "        if (false) {",
       "expect": "sameName",
       "target": "gyo_kernel_tests",
@@ -2707,10 +2707,10 @@
     },
     {
       "id": "rs-fix-b4-finish-before-resolve",
-      "what": "B4: plugins' Finish runs before Systems are listed",
+      "what": "B4: plugins' Finish runs before Systems are listed (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "    Detail::FillSystemInfos(data);\n    if (data.errors.empty()) {",
-      "replace": "    if (data.errors.empty()) {",
+      "find": "    ResolveSystems(data);\n    FillSystemInfos(data);\n}",
+      "replace": "    ResolveSystems(data);\n}",
       "target": "gyo_kernel_tests",
       "cases": "J-19:*",
       "expect": "systems == 1"
@@ -6240,10 +6240,10 @@
     },
     {
       "id": "ns-run-from-a-system",
-      "what": "X-9: Product::Run accepts a Running World (any System could run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "X-9: Product::Run accepts a Running World (any System could run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    GYO_ASSERT(world.state_ == WorldState::Ready);\n    const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));",
-      "replace": "    const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));",
+      "find": "    GYO_ASSERT(world.state_ == WorldState::Ready);\n    Attach();",
+      "replace": "    Attach();",
       "target": "gyo_kernel_tests",
       "cases": "J-56: a plain System reaching WorldExecutor::Run*",
       "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
@@ -6986,6 +6986,456 @@
       "target": "gyo_kernel_tests",
       "expect": "DI\\-KS 15 codes: the StartupCode values are",
       "cases": "DI-KS 15:*"
+    },
+    {
+      "id": "ks-s2-pending-written-directly",
+      "what": "S2: a later round writes the live tables, so what it registers is visible before its BuildPlans (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data_->frozen && !pending_) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "expect": "pending round visible in the Registry view",
+      "cases": "DI-KS 25: what a later round registers*"
+    },
+    {
+      "id": "ks-s2-failed-round-kept",
+      "what": "S2: a failed later round replaces the tables anyway (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            StartupReport report(std::move(round.errors));\n            pending_.reset();",
+      "replace": "            StartupReport report(std::move(round.errors));\n            round.version = data_->version + 1;\n            Detail::Adopt(*data_, std::move(round));\n            pending_.reset();",
+      "target": "gyo_kernel_tests",
+      "expect": "a failed round raised the version",
+      "cases": "DI-KS 4: a failed BuildPlans*"
+    },
+    {
+      "id": "ks-s2-discard-ignored",
+      "what": "S2: DiscardRegistrations keeps the pending round (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (pending_) {\n        pending_.reset();\n        return;\n    }\n    if (data_->frozen || !data_->registered) return;",
+      "replace": "    if (pending_) {\n        return;\n    }\n    if (data_->frozen || !data_->registered) return;",
+      "target": "gyo_kernel_tests",
+      "expect": "a discarded round was built",
+      "cases": "DI-KS 4: DiscardRegistrations*"
+    },
+    {
+      "id": "ks-s2-empty-build-bumps",
+      "what": "S2: a BuildPlans with nothing registered raises the version (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data.frozen || !data.registered) return {};  // nothing registered since the last BuildPlans",
+      "replace": "    if (data.frozen) { ++data.version; return {}; }\n    if (!data.registered) return {};",
+      "target": "gyo_kernel_tests",
+      "expect": "an empty BuildPlans raised the version",
+      "cases": "DI-KS 26: BuildPlans with nothing registered*"
+    },
+    {
+      "id": "ks-s2-ties-not-cleared",
+      "what": "S2 rule 2: the ties of the last version are not cleared before the Plans are built again (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    data.plans.clear();\n    data.ties.clear();\n    data.orders.clear();\n    CheckSystems(data);",
+      "replace": "    data.plans.clear();\n    data.orders.clear();\n    CheckSystems(data);",
+      "target": "gyo_kernel_tests",
+      "expect": "ties after the second round",
+      "cases": "DI-KS 3: a second round*"
+    },
+    {
+      "id": "ks-s2-orders-not-cleared",
+      "what": "S2 rule 2: the order graphs of the last version are not cleared (the first one found is stale) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    data.plans.clear();\n    data.ties.clear();\n    data.orders.clear();\n    CheckSystems(data);",
+      "replace": "    data.plans.clear();\n    data.ties.clear();\n    CheckSystems(data);",
+      "target": "gyo_kernel_tests",
+      "expect": "the order graph names a removed System",
+      "cases": "DI-KS 26: RemoveSystem"
+    },
+    {
+      "id": "ks-s2-plans-not-cleared",
+      "what": "S2 rule 2: the Plans of the last version are not cleared before they are built again (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    data.plans.clear();\n    data.ties.clear();\n    data.orders.clear();\n    CheckSystems(data);",
+      "replace": "    data.ties.clear();\n    data.orders.clear();\n    CheckSystems(data);",
+      "target": "gyo_kernel_tests",
+      "expect": "plans listed once",
+      "cases": "DI-KS 3: a second round*"
+    },
+    {
+      "id": "ks-s2-re7-unchecked",
+      "what": "S2 rule 6: a later round is not checked for R-E7 at all (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        CheckLaterRound(data);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-old-hook",
+      "what": "S2 rule 6: a hook on a component of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (hook.componentId && *hook.componentId < base.components) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-old-initial-value",
+      "what": "S2 rule 6: an initial value of a component of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (target != nullptr && target->role == TypeRole::Component && target->id < base.components) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-old-set-member",
+      "what": "S2 rule 6: a member added to a named set of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        for (std::size_t m = base.setMembers[n]; m < set.pendingMembers.size(); ++m) {",
+      "replace": "        for (std::size_t m = set.pendingMembers.size(); m < set.pendingMembers.size(); ++m) {",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-startup-schedule",
+      "what": "S2 rule 6: a later Startup schedule passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (schedule.options.startup) {\n            refuse(",
+      "replace": "        if (false) {\n            refuse(",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-startup-mount",
+      "what": "S2 rule 6: a System mounted in the Startup schedule by a later round passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (schedule != nullptr && schedule->options.startup) {\n                refuse(",
+      "replace": "            if (false) {\n                refuse(",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-allotter",
+      "what": "S2 rule 6: a later allotter declaration passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    for (std::size_t i = base.allotterDeclarations; i < data.allotterDeclarations.size(); ++i) {",
+      "replace": "    for (std::size_t i = data.allotterDeclarations.size(); i < data.allotterDeclarations.size(); ++i) {",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-digest",
+      "what": "S2 rule 6: a later DigestSet passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data.digestMarks > base.digestMarks) refuse(",
+      "replace": "    if (false) refuse(",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-explicit-zones",
+      "what": "S2 rule 6: a later RequireExplicitZones passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data.explicitZoneCalls > base.explicitZoneCalls) refuse(",
+      "replace": "    if (false) refuse(",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-without-text",
+      "what": "DI-KS 15: R-E7 has no text, so the list of codes no longer matches (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    case StartupCode::RE7: return \"R-E7\";\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 15 codes: the StartupCode values are",
+      "cases": "DI-KS 15:*"
+    },
+    {
+      "id": "ks-s2-remove-marks-nothing",
+      "what": "S2 rule 7: RemoveSystem says true but leaves the System in (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            system.removed = true;\n            return true;",
+      "replace": "            return true;",
+      "target": "gyo_kernel_tests",
+      "expect": "a removed System ran",
+      "cases": "DI-KS 26: RemoveSystem"
+    },
+    {
+      "id": "ks-s2-tombstone-reused",
+      "what": "S2 rule 7: a new System gets the registrationSeq of a tombstone (seq counts live Systems) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    const auto seq = static_cast<RegistrationSeq>(data.systems.size());",
+      "replace": "    const auto seq = static_cast<RegistrationSeq>(std::count_if(data.systems.begin(), data.systems.end(), [](const Detail::SystemRecord& s) { return !s.removed; }));",
+      "target": "gyo_kernel_tests",
+      "expect": "the tombstone's registrationSeq was given again",
+      "cases": "DI-KS 26: RemoveSystem"
+    },
+    {
+      "id": "ks-s2-tombstone-planned",
+      "what": "S2 rule 7: a removed System is still a node of its schedules (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                if (system.removed) continue;\n                for (std::size_t m = 0;",
+      "replace": "                for (std::size_t m = 0;",
+      "target": "gyo_kernel_tests",
+      "expect": "D\\-E4 count after the removal",
+      "cases": "DI-KS 26: removing a System another one orders against*"
+    },
+    {
+      "id": "ks-s2-removed-state-kept",
+      "what": "S2 rule 5: a removed System's state (Local) is kept when the Executor attaches (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        SystemState state;\n        if (!system.removed) {",
+      "replace": "        SystemState state;\n        if (system.removed && system.seq < systems_.size()) state = std::move(systems_[system.seq]);\n        if (!system.removed) {",
+      "target": "gyo_kernel_tests",
+      "expect": "removed state: ",
+      "cases": "DI-KS 26: RemoveSystem"
+    },
+    {
+      "id": "ks-s2-local-lost",
+      "what": "S2 rule 5: a kept System's mounts (lastRun, Local) are made new when the Executor attaches (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                state.mounts = std::move(systems_[system.seq].mounts);",
+      "replace": "                state.mounts.resize(system.options.mounts.size());",
+      "target": "gyo_kernel_tests",
+      "expect": "round state: ",
+      "cases": "DI-KS 26: a System registered after the first BuildPlans*"
+    },
+    {
+      "id": "ks-s2-not-attached-at-entry",
+      "what": "S2 rule 5: the World does not attach at its entries (only a new WorldExecutor would see the version) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (version_ != data_->version) const_cast<World&>(*this).AttachVersion();",
+      "replace": "    static_cast<void>(version_);",
+      "target": "gyo_kernel_tests",
+      "expect": "attach at the World API entry \\(summary\\)",
+      "cases": "DI-KS 26: after BuildPlans*"
+    },
+    {
+      "id": "ks-s2-refusal-ignored",
+      "what": "S2 rule 8: a World that declares no dynamic insert does not refuse (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data_->refusingWorlds > 0) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "expect": "a World that declares no dynamic insert did not refuse",
+      "cases": "DI-KS 26: a World that declares no dynamic insert*"
+    },
+    {
+      "id": "ks-s2-refusal-leaves-pending",
+      "what": "S2 rule 8: a refused Register has already made the pending round (the Registry changed) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data_->refusingWorlds > 0) {",
+      "replace": "    if (data_->frozen && !pending_) pending_ = std::make_unique<Detail::RegistryData>(*data_);\n    if (data_->refusingWorlds > 0) {",
+      "target": "gyo_kernel_tests",
+      "expect": "registry\\.pending_ == nullptr",
+      "cases": "DI-KS 26: a World that declares no dynamic insert*"
+    },
+    {
+      "id": "ks-s2-refusing-not-uncounted",
+      "what": "S2 rule 5: destroying a refusing World does not lower the refusing count (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    --data_->liveWorlds;\n    if (!options_.dynamicInsert) --data_->refusingWorlds;",
+      "replace": "    --data_->liveWorlds;",
+      "target": "gyo_kernel_tests",
+      "expect": "Register refused after the refusing World is gone",
+      "cases": "DI-KS 26: a World that declares no dynamic insert*"
+    },
+    {
+      "id": "ks-s2-interrupted-refuses",
+      "what": "S2 rule 5: an Interrupted World counts as refusing (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    error.world = world_.name_;\n    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
+      "replace": "    error.world = world_.name_;\n    if (world_.state_ != WorldState::Interrupted) ++world_.data_->refusingWorlds;\n    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
+      "target": "gyo_kernel_tests",
+      "expect": "an Interrupted World blocked Register",
+      "cases": "DI-KS 26: an Interrupted World*"
+    },
+    {
+      "id": "ks-s2-own-world-unchecked",
+      "what": "S2 rule 4: a System of a World made from the Registry may register and build (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(call == nullptr || call->world == nullptr || Detail::RegistryDataOf(*call->world) != data_.get());",
+      "replace": "    static_cast<void>(call);",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: executor\\.Run",
+      "cases": "DI-KS 26: a System of a World made from the Registry*"
+    },
+    {
+      "id": "ks-s2-reentry-unchecked",
+      "what": "S2 rule 3: Register inside a build callable is accepted (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)\n    GYO_ASSERT(!data_->failed);  // a failed",
+      "replace": "    GYO_ASSERT(!data_->failed);  // a failed",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: registry\\.Register",
+      "cases": "DI-KS 26: Register inside a build callable*"
+    },
+    {
+      "id": "ks-s2-world-while-pending",
+      "what": "S2 rule 8: a World may be made while a round is pending (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    GYO_ASSERT(registry.pending_ == nullptr);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: World\\(registry",
+      "cases": "DI-KS 26: Register inside a build callable*"
+    },
+    {
+      "id": "ks-s2-plugin-finish-again",
+      "what": "S2 rule 9: a later BuildPlans calls the plugins' Finish again (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        round.version = data_->version + 1;\n        round.registered = false;",
+      "replace": "        for (Detail::PluginRecord& plugin : data_->plugins) {\n            if (!plugin.built) continue;\n            FinishContext context(*this, 0);\n            plugin.plugin->Finish(frozen_, context);\n        }\n        round.version = data_->version + 1;\n        round.registered = false;",
+      "target": "gyo_kernel_tests",
+      "expect": "Plugin::Finish ran again",
+      "cases": "DI-KS 26: after Finish*"
+    },
+    {
+      "id": "ks-s2-extract-first-version-only",
+      "what": "S2 rule 10 (DI-KS 13): an extract source is read only at its first version (a rebuilt source counts as not built) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (source == nullptr || !source->frozen) {",
+      "replace": "        if (source == nullptr || !source->frozen || source->version != 1) {",
+      "target": "gyo_kernel_tests",
+      "expect": "extract reads of the rebuilt source",
+      "cases": "DI-KS 13:*"
+    },
+    {
+      "id": "ks-s3-version-not-raised",
+      "what": "S3: a later successful BuildPlans keeps the version (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        round.version = data_->version + 1;\n        round.registered = false;",
+      "replace": "        round.version = data_->version;\n        round.registered = false;",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 version after a later round",
+      "cases": "DI-KS 25: the version is 0*"
+    },
+    {
+      "id": "ks-s3-version-before-finish",
+      "what": "S3: the first round's version is 1 already when the plugins' Finish runs (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    data.finished = true;\n    // Registration is closed:",
+      "replace": "    data.finished = true;\n    data.version = 1;\n    // Registration is closed:",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 version inside Plugin::Finish",
+      "cases": "DI-KS 25: the version is 0*"
+    },
+    {
+      "id": "ks-s3-failed-raises-version",
+      "what": "S3: a failed later round raises the version (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            StartupReport report(std::move(round.errors));\n            pending_.reset();",
+      "replace": "            StartupReport report(std::move(round.errors));\n            ++data_->version;\n            pending_.reset();",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 version after a failed round",
+      "cases": "DI-KS 25: the version is 0*"
+    },
+    {
+      "id": "ks-s3-hooks-unlisted",
+      "what": "S3: Hooks() lists nothing (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        data.hookInfos.push_back(",
+      "replace": "        if (false) data.hookInfos.push_back(",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 hooks listed",
+      "cases": "DI-KS 25: hooks*"
+    },
+    {
+      "id": "ks-s3-initial-values-unlisted",
+      "what": "S3: InitialValues() lists nothing (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        data.initialValueInfos.push_back(",
+      "replace": "        if (false) data.initialValueInfos.push_back(",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 initial values listed",
+      "cases": "DI-KS 25: hooks*"
+    },
+    {
+      "id": "ks-s3-schedules-unlisted",
+      "what": "S3: Schedules() lists nothing (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        data.scheduleInfos.push_back(",
+      "replace": "        if (false) data.scheduleInfos.push_back(",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 schedules listed",
+      "cases": "DI-KS 25: hooks*"
+    },
+    {
+      "id": "ks-s3-sets-unlisted",
+      "what": "S3: Sets() lists nothing (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        data.setInfos.push_back(",
+      "replace": "        if (false) data.setInfos.push_back(",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 sets listed",
+      "cases": "DI-KS 25: hooks*"
+    },
+    {
+      "id": "ks-s3-set-conditions-dropped",
+      "what": "S3: a set's run conditions are not named in Sets() (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        for (const ConditionRef& condition : set.conditions) conditions.push_back(condition.Name());\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 set conditions",
+      "cases": "DI-KS 25: hooks*"
+    },
+    {
+      "id": "ks-s3-effects-unlisted",
+      "what": "S3: SystemInfo::effects is left empty (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "data.OwnerName(system.owner), system.effects, system.removed});",
+      "replace": "data.OwnerName(system.owner), {}, system.removed});",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 25 System effects",
+      "cases": "DI-KS 25: hooks*"
+    },
+    {
+      "id": "ks-s3-tie-edge-as-declared",
+      "what": "S3: a tie edge is labelled Declared in the order graph (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "        AddEdge(first, second, OrderSource::TieBreak);",
+      "replace": "        AddEdge(first, second, OrderSource::Declared);",
+      "target": "gyo_kernel_tests",
+      "expect": "tie edge",
+      "cases": "DI-KS 25: the order graph*"
+    },
+    {
+      "id": "ks-s3-declared-edge-as-stage",
+      "what": "S3: a declared edge is labelled Stage in the order graph (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "        if (sf == st) AddEdge(from, to, OrderSource::Declared);",
+      "replace": "        if (sf == st) AddEdge(from, to);",
+      "target": "gyo_kernel_tests",
+      "expect": "declared System edge",
+      "cases": "DI-KS 25: the order graph*"
+    },
+    {
+      "id": "ks-s3-sync-path-as-stage",
+      "what": "S3: a path through a sync point with a declared edge on it is labelled Stage (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "through ? OrderSource::SyncPoint : OrderSource::Stage",
+      "replace": "through ? OrderSource::Stage : OrderSource::Stage",
+      "target": "gyo_kernel_tests",
+      "expect": "sync point edge",
+      "cases": "DI-KS 25: the order graph*"
+    },
+    {
+      "id": "ks-s3-order-not-expanded",
+      "what": "S3: the order graph keeps only direct System-to-System edges (sync points and stage ends not expanded) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                if (seen.insert(state).second) pending.push_back(state);\n            }\n            while",
+      "replace": "                static_cast<void>(state);\n            }\n            while",
+      "target": "gyo_kernel_tests",
+      "expect": "stage edge",
+      "cases": "DI-KS 25: the order graph*"
     }
   ]
 }
