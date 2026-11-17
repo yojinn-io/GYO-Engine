@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 2）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 3）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -11,7 +11,7 @@
 - 權威 Module 的宣告、事件游標的宣告由主會話另開卡，**以本頁為準、不改本頁定過的事**；發現新的關聯回報本卡。
 - 收口：三份一起送換模型檢查（本卡負責），專找「每份都說是別份負責」的縫，缺口補回本頁，再請使用者逐件定。
 
-**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。
+**修訂紀錄**：修訂 0、1 各送 Fable／high 敵對式檢查（16 條／12 必改；15 條／9 必改；證據 `declaration-r0-adversarial-check.md`、`declaration-r1-adversarial-check.md`）。修訂 1 在 git 歷史（d169e1f7）。修訂 2 改寫成統合，修訂 1 檢查的處理見第 12 節。修訂 3（2026-11-17）：L2 時鐘定案、新增 L20 Module 之間的依賴。
 
 ## 0. 依據
 
@@ -30,13 +30,13 @@
 | # | 事項 | 誰定 | 誰等它 | 動到誰的介面 | 狀態 |
 |---|---|---|---|---|---|
 | L1 | 分層與歸屬（第 3 節） | 統合 | 權威、游標、Loading、時間、狀態機 | Kernel、編排層 | 已定（第 2.1 節的決定） |
-| L2 | **時鐘與 tick 留在 Kernel 還是移到時間的 Module**（`Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`） | 統合 | 游標（順序鍵、上限的單位）、權威（「tick 只有一個來源」由誰守）、時間 T1／T3、L8 | Kernel 公開介面 | **待使用者**（第 10 節第 1 件） |
+| L2 | **時鐘與 tick 移出 Kernel，到時間的 Module**（`Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1） | 統合 | 游標（順序鍵、上限的單位不能用 tick）、權威（「tick 只有一個來源」由伺服器權威策略檢查）、時間 T1／T3、L8、L20 | Kernel 公開介面、時間 Module | **已定**（2026-11-17，`v8-arch-gyo2-clock-out-of-kernel`；第 10 節第 1 件） |
 | L3 | **執行期的攔截**（第 7.3 節的六條） | 統合 | 權威（要不要、怎麼掛） | Kernel 公開介面（掛鉤或參數限制） | **待使用者**（第 10 節第 2 件） |
 | L4 | **生成世界的寫者豁免由誰保證** | 統合 | 權威（檢查內容）、Loading（生成世界的形狀） | 編排層、權威 | **待使用者**（第 10 節第 3 件） |
 | L5 | **`Registry::Finish` 拆段與登記單位的生命週期** | 統合 | 編排層骨架、權威（檢查時機） | Kernel 公開介面（`Registry`） | 待使用者（第 10 節第 4 件，有建議） |
 | L6 | Kernel 交出的唯讀登記資訊（第 3.3 節） | 統合 | 權威 | `FrozenRegistry` | 待使用者（第 10 節第 5 件） |
 | L7 | `ExclusiveWorld` 的存取與 `Writes<…>` | 統合 | 權威（數寫者）、狀態機、時間（驅動固定步的 System） | `Params.hpp`、驗證（`World.cpp`） | 待使用者（第 10 節第 6 件） |
-| L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 統合 | 游標（事件順序鍵若也不靠時鐘） | Kernel | 依 L2 |
+| L8 | 不靠時鐘的計數（`RejectedSpawn`、診斷紀錄帶的 tick） | 統合 | 游標（事件順序鍵也不能用 tick） | Kernel | 隨 L2：改用 Kernel 自己的計數（stamp 或同步點序號；「Kernel 讀時間 Module 的 Resource」違反第 3 節的依賴方向）。用哪一個由實作批定，**卡片的推論，使用者沒判** |
 | L9 | D-E18（System 不准宣告 `Res`／`ResMut<KernelSettings>`） | 統合 | — | Kernel | 待使用者（第 10 節第 7 件） |
 | L10 | Registry 與 Plan 指紋改版、golden 重產（第 3.4 節） | 統合（改版這件事）；游標（Plan 的 `EventTrim`）、權威（C 指紋） | 三份 | 指紋格式 | 已定為後果；重產次數見第 8 節 |
 | L11 | **回滾的機制放哪**（快照、Rewind／Replay、Restore；DI-KS 12） | 統合（若放 Kernel 就是 Kernel 介面） | 權威（哪些資料進快照）、游標（事件進不進快照） | Kernel 或權威 | 待使用者（第 10 節第 8 件） |
@@ -47,7 +47,8 @@
 | L16 | 兩層的讀法：Engine（編排層、權威）認得生成世界的階段、Kernel 不認得 | 統合 | Loading | — | 待使用者（第 10 節第 9 件） |
 | L17 | 新 RC 的次數（「兩次以上」沒有根據） | 統合 | 權威、游標（它們的 RC 同理） | — | 待使用者（第 10 節第 10 件） |
 | L18 | 狀態機 (b) 區（已核准）的影響：初始進入改由編排層的遊戲初始化保證；`ExclusiveWorld` 隨 L7；`RegisterStateMachine<S, Zone::C>` 的 `Zone` 隨 L12 | 統合列影響；狀態機卡處理 | 狀態機卡 | 狀態機 Module | 列出，不判 |
-| L19 | 時間設計 T2（runner、交換函式的登記）、T5（多個 World）改在編排層；T4 改成游標份 | 統合 | 時間設計 | 編排層 | 已定（位置） |
+| L19 | 時間設計 T2（runner、交換函式的登記）、T5（多個 World）改在編排層；T4 改成游標份；T1／T3 的時間 Module 持有時鐘與 tick（L2） | 統合 | 時間設計 | 編排層、時間 Module | 已定（位置） |
+| L20 | **Module 之間的依賴**：作者選的 Module 之間有依賴（例：伺服器權威策略要檢查「tick 只有一個來源」，依賴時間 Module；時間 Module 依賴編排層的 runner）。依賴怎麼宣告、誰檢查、缺了怎麼報 | 統合（編排層的檢查）＋定義卡（Module 登記檔的「依賴」欄，11-14 已定每列寫依賴） | 權威、游標、時間、狀態機 | 編排層、建置層 | 使用者 2026-11-17 指出「這個依賴需要處理」；做法**待使用者確認讀法**（第 10 節第 11 件） |
 
 **兩張子卡的範圍**（一句話）：
 - **權威 Module**：照 L12 重新評估伺服器權威策略到底檢查什麼，並設計策略介面、權威 Module 的登記、佔位策略；以 L1～L7、L10、L11 的統合結論為前提。開頭引用 L1、L3、L4、L5、L6、L7、L10、L11、L12、L15、L17、L18。
@@ -76,6 +77,7 @@
 | `v8-arch-gyo2-no-ambiguity-detection`（11-16） | Kernel 照登記順序平手、不報錯；Kernel 與權威策略都不偵測歧義；伺服器權威連線時比 C 指紋 | 「偵測歧義其實是很麻煩的。我個人覺得沒必要。」「可以。」 |
 | `v8-arch-gyo2-pre-v2-target-docs-later`（11-16） | v2 之前的 target 文件先不動 | 「之前就先不管了。後面統一處理」 |
 | `v8-arch-gyo2-boundary-split-integrator-first`（11-17） | 拆三份、統合先立 | 見本頁開頭 |
+| `v8-arch-gyo2-clock-out-of-kernel`（11-17） | 時鐘與 tick 移出 Kernel，到時間的 Module；作者可選；「tick 只有一個來源」隨權威 | 「照建議，並修改相關文檔。我記得tick的控制之前也是pvp的需求，這個明顯是遊戲需求入侵了Engine設計。剝離出去給其他Module實現最好，和權威一樣，作者可以選，不過能多Module是有依賴關係的，這個依賴需要處理。」 |
 
 ### 2.2 被這一批改寫的較早決定
 
@@ -85,9 +87,10 @@
 |---|---|---|---|---|
 | `v8-arch-kernel-exclusive-default`（11-11）、`v8-arch-gyo2-check-history-first` 第 3 點（11-14）、`v8-arch-gyo2-exclusive-default-already-decided`（11-15：「預設是單一寫者」，訂正紀錄） | 預設獨占、Shared 才可多寫；理由欄「權威判定，要可回滾、可比對」 | `kernel-is-ecs-no-restrictions`、`authority-is-game-design`（11-16） | 有：卡片 11-16 查了歷史（理念出自 PvP 的 Gateway、案例全是 PvP），使用者看過後說「權威判定落的太深了…本身就是遊戲邏輯的一部分」 | 寫者規則移出 Kernel，內容由權威份重新評估（L12） |
 | `v8-arch-gyo2-zone-default-b`（11-14：`Zone`、`Role`、`Rollback`、`DigestSet`、`CFingerprint`、zone C 匯出全部留；`Zone` 不填視為 B；`RequireExplicitZones`；「B，先把骨架跑通」） | 讓單機與工具作者不用多寫 | `kernel-is-ecs-no-restrictions`（11-16） | 部分：11-14 的理由（單機不多寫）在移出後仍成立；「全部留在 Kernel」被「先移出」取代 | 移出 Kernel，內容由權威份重新評估 |
-| `check-history-first` 第 2 點（11-14：`Domain` 四個值留著） | 「Loading 不是 PVP 特有的，而是遊戲都有。」 | `build-world-phase-is-mechanism`（11-16：「有沒有是作者決定的，而不是Engine」） | **只有 Loading**：使用者更正了 Loading 的理由；Fixed／Frame 與整個時鐘沒有談到 | `Domain` 封閉列舉裡的 Loading 拿掉；時鐘本身留不留待 L2 |
+| `check-history-first` 第 2 點（11-14：`Domain` 四個值留著） | 「Loading 不是 PVP 特有的，而是遊戲都有。」 | `build-world-phase-is-mechanism`（11-16：「有沒有是作者決定的，而不是Engine」） | **只有 Loading**：使用者更正了 Loading 的理由；整個時鐘在 11-17 另定（`clock-out-of-kernel`） | `Domain` 整個移出 Kernel（L2） |
 | `check-history-first` 第 5、6 點（11-14：`DigestSet` 不急；`Zone`／`Role`／`Rollback`／`CFingerprint` 照不照原核准的切） | 「digest 用不用先不急定。」 | `kernel-is-ecs-no-restrictions`（11-16） | 部分：使用者定「先移出」，沒有回答 digest 的去留 | 移出 Kernel；去留由權威份 |
-| K.3 第 11 項（11-11）、DI-KS 8、12「domain tick 只有一個來源、任何 System 不得寫、在快照內」；`v8-arch-gyo2-fixed-step-in-world`、`v8-arch-gyo2-time-plan-two`（11-14：固定步由 World 裡的 System 驅動；`Product` 多個 World） | tick 是決定性的唯一時間來源 | — | 沒有較新的決定 | 待 L2；L2 選「移出」才會改寫它們 |
+| K.3 第 11 項（11-11：(c) 區的時間只來自 domain tick 與被記錄的 boundary 輸入，例 PvP 的 `HostClockSample`、輸入的到達時刻；`spec.zh-Hant.md:1219`、`:789`）、DI-KS 8、12「domain tick 只有一個來源、任何 System 不得寫、在快照內」 | tick 是 (c) 區（PvP 的權威與回滾）唯一的時間來源 | `clock-out-of-kernel`（11-17） | 有：「我記得tick的控制之前也是pvp的需求，這個明顯是遊戲需求入侵了Engine設計」 | tick 移到時間 Module；「(c) 區的時間只來自 tick」「tick 只有一個來源」歸伺服器權威策略（L12）；DI-KS 8、12 的這部分移出 |
+| `v8-arch-gyo2-fixed-step-in-world`、`v8-arch-gyo2-time-plan-two`（11-14：固定步由 World 裡的獨占 System 驅動；`Product` 多個 World） | 「固定步這個我不想限制作者的遊戲邏輯」 | `clock-out-of-kernel`（11-17） | 不衝突：驅動固定步的 System 本來就在時間 Module；改的只是 tick 存在哪裡（Kernel 的 domain tick → 時間 Module 的 Resource） | 照舊；時間設計 T1／T3 照 L2 改寫 tick 的存放 |
 | `v8-arch-gyo2-strict-order`（11-14，PR #228 已合併） | `RequireExplicitOrder`；使用者「合併」，五項沒有逐條核准 | `no-ambiguity-detection`（11-16） | 有：「偵測歧義其實是很麻煩的…普通程序無法判斷」 | 拿掉；`StrictOrderTests.cpp` 8 案與 11 條突變退役 |
 | DI-KS 5「(c) 歧義是啟動錯誤」「(c) 區對登記順序不敏感」（11-13 核准） | 決定性區不得依登記順序決定結果 | `no-ambiguity-detection`（11-16） | 部分：使用者的原話是「偵測歧義其實是很麻煩的…」與對側邊會話建議的「可以。」；「登記順序相同時平手是決定性的、比指紋抓版本不同」是側邊會話的說明，不是使用者的話 | 平手是 Kernel 的決定性行為；「對登記順序不敏感」不再保證（第 7 節列為放寬的面） |
 | K0：`startup-run-by-kernel`、`startup-before-any-schedule`（11-15，#239）；DI-KS 22 | Kernel 排第一、只跑一次、執行中不准跑別的；「系統必須的，就不讓作者碰」 | `game-init-list`（11-16） | 有：「Engine只提供機制」 | 遊戲初始化清單在編排層（可插入）；生成世界交 Loading 卡；寫者豁免待 L4 |
@@ -126,11 +129,11 @@ Kernel engine/kernel          World、ECS 元件／Resource／事件、System �
 | 留下 | 現在的位置 | 改什麼 |
 |---|---|---|
 | World、ECS 元件、Resource、事件緩衝 | `World.hpp`、`detail/Storage.hpp` | 事件改游標（L13） |
-| System 參數與「存取從簽名推出」 | `Params.hpp`、`SystemTraits.hpp`、`Access.hpp` | `CurrentTick`、`AccessKind::DomainTick` 待 L2；`ExclusiveWorld` 待 L7 |
+| System 參數與「存取從簽名推出」 | `Params.hpp`、`SystemTraits.hpp`、`Access.hpp` | `CurrentTick`、`AccessKind::DomainTick` 拿掉（L2）；`ExclusiveWorld` 待 L7 |
 | 登記動作 | `Registrar` | 拿掉 zone、寫入政策、區與回滾的旗標、`DigestSet`、`RequireExplicitZones`、`RequireExplicitOrder`；登記單位的身分由編排層給（3.5） |
-| schedule、Plan、Serial 執行、同步點、hook 清空輪 | `Plan.hpp`、`Scheduler.cpp`、`Executor.cpp` | Plan 的 `domain` 待 L2；`EventTrim` 步隨游標拿掉 |
+| schedule、Plan、Serial 執行、同步點、hook 清空輪 | `Plan.hpp`、`Scheduler.cpp`、`Executor.cpp` | Plan 的 `domain` 拿掉（L2）；`EventTrim` 步隨游標拿掉 |
 | `WorldExecutor`（現在的 `Product` 改名） | `Product.hpp` | 拿掉開局的排程（K0） |
-| 巢狀跑 schedule | `ExclusiveWorld::RunSchedule`（DI-KS 16～21） | 刪去開局、區相關的分支；clock 相關待 L2 |
+| 巢狀跑 schedule | `ExclusiveWorld::RunSchedule`（DI-KS 16～21） | 刪去開局、區、clock 相關的分支 |
 | 存取驗證（開發版） | W-5、A.6 | `ExclusiveWorld` 的已宣告集合以「zone B 且 Shared」定義（`World.cpp:154-157`、`:983-987`），隨 L7 改寫 |
 | `FrozenRegistry`、Registry 指紋 | `Registry.hpp:504-555`、`Fingerprint.cpp` | 讀取面（3.3）；指紋改版（3.4） |
 | `KernelSettings` | `Registry.hpp:389-393` | D-E18 待 L9 |
@@ -138,7 +141,7 @@ Kernel engine/kernel          World、ECS 元件／Resource／事件、System �
 | Extract 參數（唯讀）、`ScheduleOptions::extract`、`ExtractNotNestable`、finish 時用來源 Registry 解 Extract 的 id（`Registry.cpp:343-355`）、D-E14（來源未設或未凍結，`:1060`） | — | 來源 World 與執行時機移編排層；`SetExtractSource` 留作 finish 的輸入 |
 | 綁執行緒的 Resource 記來源執行緒、碰錯斷言（**新**，取代 H-2、X-3 的啟動檢查） | `ResourceOptions::affinity` 改義 | 系譜 Bevy `bevy_ecs/src/storage/non_send.rs:74-84` |
 
-**Kernel 保留的啟動錯誤**：R-E2；R-E4（不含 digest set `Registry.cpp:487`）；R-E5；D-E1（不含 Z3 的 ingress stage `:909`；eventTrim `:925` 隨游標）；D-E3（沒有配發器，`:1047`、`:1118`）；D-E4、D-E5、D-E6；D-E7 的機制規則——H-6 Extract 只在 extract schedule（`:1127`、`:1376`）、S-8 的「Diagnostics 只能來自 `DiagnosticsWriter`」（`:1079`）、S-18 hook 不得用 `ExclusiveWorld<Writes<…>>`（`:1133`，隨 L7）；D-E14（`:1060`）；D-E17；D-E19；D-E20；D-E18 待 L9。D-E12、F-E1 待 L2。
+**Kernel 保留的啟動錯誤**：R-E2；R-E4（不含 digest set `Registry.cpp:487`）；R-E5；D-E1（不含 Z3 的 ingress stage `:909`；eventTrim `:925` 隨游標）；D-E3（沒有配發器，`:1047`、`:1118`）；D-E4、D-E5、D-E6；D-E7 的機制規則——H-6 Extract 只在 extract schedule（`:1127`、`:1376`）、S-8 的「Diagnostics 只能來自 `DiagnosticsWriter`」（`:1079`）、S-18 hook 不得用 `ExclusiveWorld<Writes<…>>`（`:1133`，隨 L7）；D-E14（`:1060`）；D-E17；D-E19；D-E20；D-E18 待 L9。D-E12、F-E1 拿掉（L2）。
 **Kernel 保留的執行期錯誤**（`KernelErrorCode`）：驗證、巢狀、hook、配發器、結構、Extract 相關的保留；`UntypedWrite`、`ZoneCDespawn`、`ExclusiveWorldWrite`、`UndeclaredResourceWrite` 待 L3／L7；`StartupNotNestable`、`StartupRunning` 拿掉。
 
 ### 3.2 移出 Kernel 的（去處）
@@ -149,7 +152,7 @@ Kernel engine/kernel          World、ECS 元件／Resource／事件、System �
 | `Product` 這個名字 | `Product.hpp` | 編排層 |
 | 開局的排程（K0）、`ScheduleOptions::startup`（`Declarations.hpp:138`）、D-E21、`StartupNotNestable`、`StartupRunning` | `Executor.cpp:151-170`、`:457-468`；DI-KS 22 | 遊戲初始化清單（編排層）；生成世界交 Loading 卡 |
 | 開局的寫者豁免（`Registry.cpp:1448-1457`） | DI-KS 6 | L4 |
-| `Domain` 列舉裡的 `Loading` | `Declarations.hpp:61` | 拿掉（`build-world-phase-is-mechanism`）；其餘時鐘待 L2 |
+| `Domain`（含 `Loading`）、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1；`EventOptions::domain` | `Declarations.hpp:56-62`、`Executor.cpp:192-196`、`World.hpp:453-461`、`Params.hpp:645` | 時間 Module（L2）；事件的歸屬改游標（L13） |
 | `ScheduleOptions::runner`、`Affinity` 的啟動比對、`kMainRole`；H-2／D-E13、X-3／D-E10、X-E2、X-E3 | DI-KS 14 | runner 安排；Resource 自己斷言（3.1） |
 | `Zone`、`WritePolicy`、`Role::Input`、`Rollback`、`external`、`ingress`、`ingressStage`、`rollbackEnabled`、`notInRollback`、`rollbackSafe`、`DigestSet`、`RequireExplicitZones`、`parallelGuardTest`；D-E2；D-E7 的區規則部分（含 S-6、S-7 `Local` `:1319`、S-8 的「(c) 不得宣告 Io effect」`:1313`、S-9、S-17 `:1335`）；D-E9（`:1510`）；D-E11 與 X-E1（`:1423`）；D-E15；D-E16；Z3；digest 的 R-E4；`CFingerprint`、`ExportZoneCSources`；記錄的 `emitterZone`（`detail/Context.hpp:90`）、`RejectedSpawn::emitterZone`（`World.hpp:86`） | `Declarations.hpp`、`Registry.*`、`Fingerprint.cpp`、`World.*`、`Executor.cpp` | 權威 Module（內容 L12；執行期 L3；豁免 L4） |
 | `RequireExplicitOrder`、D-E8 | `Registry.hpp:255`、`Scheduler.cpp` | **拿掉**；`TieBreaks` 留 |
@@ -173,10 +176,10 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 
 1. **需要它的 Feature 或目的**：使用者的 Review 目的（「Kernel是機制，那組裝放在哪裡？」「Kernel其實就是個ECS」）；第 5.4 節的 Feature 表。
 2. **現在的問題**：Kernel 混了 `bevy_ecs` 與 `bevy_app` 兩半（`inventory.md` 第 1、2 節）；並疊加了四家都沒有放在核心的規則，單機也要承擔。
-3. **變化的邊界**：Kernel／編排層（新）／權威 Module（新）／時間（待 L2）；Kernel 的公開介面（`Plugin`、`Product`、`Registry`（L5）、`ScheduleOptions`、`ComponentOptions`、`ResourceOptions`、`EventOptions`、`SystemOptions`、`Mount`、`Registrar`、`FrozenRegistry`（L6）、`KernelErrorCode`、`StartupCode`、`AccessKind`、`Plan`、`RejectedSpawn`、`ColumnInfo` 等的 `ownerPlugin`）；Registry 與 Plan 指紋的格式。
-4. **影響的 Module／Product／Tool**：`engine/kernel`；新 `engine/orchestration`；新權威 Module；`engine/time`（L2）；狀態機 Module（已核准未實作，L18）；`tests/common/kernel` 的 15 個測試檔 329 個案例與守衛腳本（`kernel_guard.py`、`naming_guard.py`、`kernel_symbols.py`、`store_stamp_guard.py`、`zone_c_export_check.py`、`zone_c_fixture/`、`compile_fail/`）；突變清單（558 個，碰到移出概念的約 176～201 個）。gyo2 上沒有產品與工具。
+3. **變化的邊界**：Kernel／編排層（新）／權威 Module（新）／時間 Module；Kernel 的公開介面（`Plugin`、`Product`、`Registry`（L5）、`ScheduleOptions`、`ComponentOptions`、`ResourceOptions`、`EventOptions`、`SystemOptions`、`Mount`、`Registrar`、`FrozenRegistry`（L6）、`KernelErrorCode`、`StartupCode`、`AccessKind`、`Plan`、`RejectedSpawn`、`ColumnInfo` 等的 `ownerPlugin`）；Registry 與 Plan 指紋的格式。
+4. **影響的 Module／Product／Tool**：`engine/kernel`；新 `engine/orchestration`；新權威 Module；`engine/time` 與時間 Module（L2）；狀態機 Module（已核准未實作，L18）；`tests/common/kernel` 的 15 個測試檔 329 個案例與守衛腳本（`kernel_guard.py`、`naming_guard.py`、`kernel_symbols.py`、`store_stamp_guard.py`、`zone_c_export_check.py`、`zone_c_fixture/`、`compile_fail/`）；突變清單（558 個，碰到移出概念的約 176～201 個）。gyo2 上沒有產品與工具。
 5. **Dependency Direction**：新增 編排層→Kernel、各 Module→編排層（登記單位型別）、權威→Kernel（讀取面）；產品→編排層。Kernel 不依賴任何新層。
-6. **Ownership**：登記單位的生命週期、runner、遊戲初始化、多個 World、執行緒安排、啟動錯誤的彙整：Kernel → 編排層。寫者、區、digest、回滾的規則：Kernel → 權威。時鐘：待 L2。事件的保留：時鐘 → 游標（仍在 Kernel）。owner 都是架構（架構師會話）。
+6. **Ownership**：登記單位的生命週期、runner、遊戲初始化、多個 World、執行緒安排、啟動錯誤的彙整：Kernel → 編排層。寫者、區、digest、回滾的規則：Kernel → 權威。時鐘與 tick：Kernel → 時間 Module。事件的保留：時鐘 → 游標（仍在 Kernel）。owner 都是架構（架構師會話）。
 7. **為什麼不能更小**：比過「留在 Kernel 但預設關」（設計稿第 4 節），使用者選移出；「只改名與文件」不解決單機承擔規則的問題。搬動已合併程式（K0 的開局排程與 J-58；`Plugin`／清單檢查；`StrictOrderTests`）是代價，列在第 8 節。
 
 ---
@@ -241,7 +244,7 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | 守衛（gyo2 現有） | 守的性質 | 處置 | 放寬的面 | 收緊的面 | 之後由誰守 |
 |---|---|---|---|---|---|
 | J-1～J-5、J-7～J-11、J-13、J-26、J-29、J-31、J-33、J-35、J-53 | 儲存順序、句柄、簽名、編譯失敗、條件、同步點、例外、驗證 | 留（逐案確認準備資料裡的 `Zone::` 等只是移除參數） | 無 | 無 | Kernel |
-| J-12 | 簽名推出的存取集合 | 改：`CurrentTick` 待 L2、`ExclusiveWorld` 待 L7 | 待定 | 待定 | Kernel |
+| J-12 | 簽名推出的存取集合 | 改：`CurrentTick` 拿掉（L2）、`ExclusiveWorld` 待 L7 | 待定 | 待定 | Kernel |
 | J-6 | Running 期間外部讀寫斷言；Ready 時外部寫 (c) 欄斷言（W-6b） | 前半留；後半待 L3 | 待 L3 | 無 | Kernel／待 L3 |
 | J-14、J-16、J-17、J-38～J-41、J-47 的 Z1 案 | 區規則、digest 禁 Shared、(c) 來源掃描 | 移出 | 不選權威時全部通過 | 無 | 權威 |
 | J-15 | 第二個寫者失敗；Startup 不計；Shared 兩寫者通過 | 移出；「Startup 不計」待 L4 | 不選權威時兩寫者通過 | 無 | 權威 |
@@ -253,9 +256,9 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | J-27 | (c) Parallel 無守衛 id 失敗；Parallel 未實作 D-E17（`SchedulerTests.cpp:324-350`） | 拆：D-E17 留；(c) 守衛 id 移出 | 不選權威時 (c) Parallel 的守衛 id 不查 | 無 | Kernel／權威 |
 | J-44 | (c) 登記順序 20 種排列：全部 D-E8，或結果都不變 | 拿掉（有歧義的排列在剩下那支必然失敗） | 「(c) 對登記順序不敏感」不再保證 | 無 | 不由機制守 |
 | `StrictOrderTests.cpp`（8 案） | `RequireExplicitOrder` | 拿掉 | (b) 嚴格模式消失 | 無 | 不由機制守 |
-| J-24 | 每個啟動錯誤碼一個最小 Registry | 拆：保留的碼留；R-E1／R-E3／R-E6 搬編排層；區、寫者、digest、回滾的碼移權威；**刪**：D-E8、D-E10、D-E13、D-E21、X-E2、X-E3；D-E12、F-E1 待 L2 | 刪的碼不再報 | 無 | 各新 owner |
+| J-24 | 每個啟動錯誤碼一個最小 Registry | 拆：保留的碼留；R-E1／R-E3／R-E6 搬編排層；區、寫者、digest、回滾的碼移權威；**刪**：D-E8、D-E10、D-E12、D-E13、D-E21、X-E2、X-E3、F-E1 | 刪的碼不再報 | 無 | 各新 owner |
 | J-28 | `Role(Main)` 的 System 放錯執行緒 finish 失敗（gyo2 只有這半，`SchedulerTests.cpp:353`） | 拿掉；新增「綁執行緒的 Resource 被別的執行緒碰到就斷言」 | 啟動時不再擋 | 存取時斷言（新） | Kernel（Resource） |
-| J-30 | stamp 序列與 tickStamps | 改：tickStamps 待 L2 | 待 L2 | 無 | Kernel |
+| J-30 | stamp 序列與 tickStamps | 改：stamp 序列留；tickStamps（tick 視角）移時間 Module 或拿掉，由時間的宣告定 | tick 視角的換算不再由 Kernel 保證 | 無 | Kernel／時間 |
 | J-32 | 結構變更的決定性 | 留 | 無 | 無 | Kernel |
 | J-32b | untyped `Commands` 動 (c)／Exclusive、(b) despawn 帶 (c) 欄回 Err（`ExecutorTests.cpp:296`） | 待 L3 | 待 L3 | 無 | 待 L3 |
 | J-34 | hook 依登記順序、下一窗生效；(c) hook 衝突 D-E9 | 前半留；D-E9 案移出 | Kernel 不再擋 (c) hook 衝突 | 無 | Kernel／權威 |
@@ -265,7 +268,7 @@ Kernel 不再認得 `Plugin`，但 `InitialValue` 的「只有擁有者能宣告
 | J-50 | `KernelSettings` | 留（D-E18 案待 L9） | 待 L9 | 無 | Kernel |
 | J-52 | Z5 複核 | 待 L3 | 待 L3 | 無 | 待 L3 |
 | J-54、J-55 | hook 清空輪、丟掉不能生成的那一筆 | 留；「上限在 C 指紋」移出；「event trim」隨游標；「startup」隨編排層；「record 的 tick」待 L8；「指紋版本」隨 L10 | 逐案在實作批列 | 逐案 | Kernel |
-| J-56 | 巢狀執行 | 留；Z5 七案待 L3；clock tick 與內層 clock 修剪待 L2／游標；extract 案留；單一寫者 Resource 的驗證案待 L7 | 逐案 | 逐案 | Kernel |
+| J-56 | 巢狀執行 | 留；Z5 七案待 L3；clock tick 的案移時間 Module、內層 clock 修剪隨游標；extract 案留；單一寫者 Resource 的驗證案待 L7 | 逐案 | 逐案 | Kernel |
 | J-58 | Startup 由 Kernel 跑 | **改**：寫成遊戲初始化清單（O-1）搬到編排層；Kernel 的版本在減法批拿掉 | 「Startup 執行中跑別的」「一個 World 兩張」不再是錯誤 | 「整份一次、在所有 World 每幀之前」 | 編排層 |
 | 沒有 J 編號：`InitialValueTests`（45）、`SkeletonTests`（9，含「Exclusive 拒第二個寫者」）、Plan export（2） | 初始值、漏斗寫者、骨架 | 初始值的填入留；Z1／Z2／Z3／Z6 與漏斗寫者、C 指紋、zone C 匯出的案移出；Skeleton 的寫者案移出 | 不選權威時通過 | 無 | Kernel／權威 |
 | `naming_guard.py`、`kernel_guard.py`、`kernel_symbols.py` | 命名、Kernel 目錄的掃描 | 改：掃描根加 `engine/orchestration` 與權威 Module | 無 | 範圍變大 | 同 |
@@ -294,11 +297,11 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 |---|---|---|---|---|
 | `v8-arch-gyo2-orchestration-skeleton` | 新 Module `engine/orchestration`；登記單位型別與生命週期、R-E1／R-E3／R-E6 搬出；`Registry::Finish` 拆段（L5）；`Product` 搬上來、`WorldExecutor` 改名；owner 身分（3.5）；遊戲初始化清單（O-1，**暫時**呼叫 Kernel 現有的 Startup 機制，J-58 與寫者豁免留在 Kernel 到減法批；兩套並存的期間寫在 dev_log）；runner 介面與只跑一次的 runner；啟動錯誤的彙整（O-5） | 本宣告核准；PR #240 合併 | Opus／high；Fable／high | 12～16 h |
 | 事件游標 | 游標份的宣告；含 F-E1、J-37 的拿掉與 Plan 的 `EventTrim` | 本宣告核准；骨架 | 游標份定 | 游標份定 |
-| 時間（T1、T3 改寫） | 時間設計；L2 選「移出」時 `Domain` 拿掉之前必須有它 | 骨架（runner）；游標；L2 | — | — |
+| 時間（T1、T3 改寫） | 時間設計：時間 Module 持有時鐘與 tick（L2）；`Domain` 拿掉之前必須有它 | 骨架（runner）；游標 | — | — |
 | `v8-arch-gyo2-kernel-subtraction` ＋ 權威 Module ＋ 生成世界（同一條 PR 線） | Kernel 拿掉開局排程、執行緒啟動檢查、歧義錯誤與 `RequireExplicitOrder`、區／寫者／digest／回滾的宣告與檢查、Loading 列舉值；L2、L3、L7、L8、L9 照使用者的決定；讀取面（L6）；指紋改版、golden 重產；綁執行緒 Resource 的斷言；權威 Module 照它的宣告；**生成世界的形狀（Loading 卡）與 L4 的保證要在同一條線**，否則 J-15 的「Startup 不計」在 Kernel 拿掉後沒有新家 | 前面各批；權威份與 Loading 卡的宣告核准 | Opus／high；Fable／high；§14.4 檢證者 Fable／high | Kernel 減法 16～24 h（含約 200 個突變的搬遷與退役、golden 重產、讀取面、新守衛的突變檢查）；權威與生成世界另估 |
 | 之後 | 多個 World（T5）與交換點（原 T2）在編排層 | 骨架 | 各自的宣告 | — |
 
-先後的理由：骨架先立，Module 才有地方接、權威檢查才有凍結後的時機；游標在拿掉 Plan 的 `EventTrim` 之前；時間在拿掉時鐘之前（若 L2 選移出；`CurrentTick` 在 10 個測試檔用了 74 處）；Kernel 減法、權威、生成世界同一條線，守衛不會有「從 Kernel 拿掉、新家還沒接上」的空窗。golden 會重產兩次（游標批改 Plan、減法批改 Registry 與 Plan），已計入估計。
+先後的理由：骨架先立，Module 才有地方接、權威檢查才有凍結後的時機；游標在拿掉 Plan 的 `EventTrim` 之前；時間在拿掉時鐘之前（L2；`CurrentTick` 在 10 個測試檔用了 74 處）；Kernel 減法、權威、生成世界同一條線，守衛不會有「從 Kernel 拿掉、新家還沒接上」的空窗。golden 會重產兩次（游標批改 Plan、減法批改 Registry 與 Plan），已計入估計。
 
 ---
 
@@ -312,14 +315,14 @@ navigator 的上段（公開介面、Design Invariants），實作者不用小�
 | 2 | 前半留；後半待 L3 | 驗證開著時，經 World 的未宣告存取與 System 邊界的淨變化記為違規、以 Err 回傳；驗證是開發工具 |
 | 3、4 | 留 | — |
 | 5 | 改寫 | 衝突與順序分開；沒有順序的衝突對照登記順序平手並列在 `TieBreaks`，不是錯誤；Kernel 不保證結果對登記順序不敏感 |
-| 6、7、8 | 移出 → 權威（8 的「domain tick 只有一個來源、System 不得寫」待 L2） | — |
+| 6、7、8 | 移出 → 權威（8 的「domain tick 只有一個來源、System 不得寫」隨 L2 移伺服器權威策略） | — |
 | 9 | 留；刪「(c) 區」措辭 | — |
 | 10 | 改寫（游標份） | 讀者游標內不漏讀，Kernel 自己保證 |
 | 11 | 留；「寫入計入獨占」「(c) 的 hook 衝突」移出 | hook 只有 OnAdd／OnRemove、同步執行、依登記順序 |
 | 12 | 待 L11 | — |
 | 13 | 留「Extract 參數唯讀、無寫回、只在 extract schedule」；來源 World 與時機移編排層 | — |
-| 14 | 改寫 | 保留：Running 期間外部不碰 World（W-6）；同一個 World 同一時間只被一條執行緒跑（`WorldExecutor::RunSchedule` 進入時斷言；系譜 Bevy 的 `&mut World`）；World 的生命期是一個世代，世代切換＝重建 World。移出：一 World 一執行緒角色的啟動檢查（改成綁執行緒的 Resource 自己斷言）；每 domain 一 clock schedule 待 L2 |
-| 15 | 改寫（取代 15 與 22 的例外） | Kernel 只做 ECS：不內建 schedule 或 stage 名；不認得開局、區、權威、產品、執行緒角色（時鐘待 L2）；不擁有執行緒、不讀時鐘或亂數。啟動錯誤只有第 3.1 節列的那幾種：`StartupCode` 的列舉值等於那份清單（守衛：列舉值與清單比對的測試） |
+| 14 | 改寫 | 保留：Running 期間外部不碰 World（W-6）；同一個 World 同一時間只被一條執行緒跑（`WorldExecutor::RunSchedule` 進入時斷言；系譜 Bevy 的 `&mut World`）；World 的生命期是一個世代，世代切換＝重建 World。移出：一 World 一執行緒角色的啟動檢查（改成綁執行緒的 Resource 自己斷言）；每 domain 一 clock schedule（L2，移時間 Module） |
+| 15 | 改寫（取代 15 與 22 的例外） | Kernel 只做 ECS：不內建 schedule 或 stage 名；不認得開局、時鐘、區、權威、產品、執行緒角色；不擁有執行緒、不讀時鐘或亂數。啟動錯誤只有第 3.1 節列的那幾種：`StartupCode` 的列舉值等於那份清單（守衛：列舉值與清單比對的測試） |
 | 16～18、20、21 | 留；刪去開局、區的措辭 | — |
 | 19 | 留；Z5 那一句待 L3 | — |
 | 22 | 移出 → 編排層 O-1 | — |
@@ -344,9 +347,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 
 ## 10. 要使用者判的（會改 Kernel 公開介面，在統合定）
 
-1. **時鐘與 tick 留在 Kernel 還是移到時間的 Module**（L2）。例子：PvP 的 Match 用固定步跑模擬，每一步 tick 加一。
-   - 留在 Kernel，只拿掉 `Domain` 封閉列舉裡的流程名字、改成作者宣告時鐘：Kernel 照舊在 clock schedule 開頭推 tick、System 不准寫 tick。系譜：現在的做法；K.3 第 11 項、DI-KS 8／12「tick 只有一個來源」由機制保證。代價：Kernel 仍認得「時鐘」；游標之後時鐘在 Kernel 只剩 tick 與 `CurrentTick`。需要它的：PvP（回滾與決定性）、單機的固定步（時間設計 T3）。
-   - 移到時間的 Module：tick 是時間 Module 寫的 Resource；Kernel 不認得時鐘。系譜：Bevy 的 `bevy_time`；Unity 的 World 時間由一般 System 推。代價：「tick 只有一個來源」改由權威策略檢查（單機沒人守）；`CurrentTick` 拿掉；DI-KS 8／12、K.3 第 11 項、`fixed-step-in-world` 的寫法要改；Kernel 減法要排在時間之後；計數（L8）要另找來源。
+1. **時鐘與 tick**（L2）：**已定（2026-11-17）——移到時間的 Module**，作者可選；「tick 只有一個來源」歸伺服器權威策略。原話見第 2.1 節。比過的：留在 Kernel、只拿掉流程名字（現在的做法）／移到時間的 Module（建議；Bevy `bevy_time`、Unity 的 World 時間）。理由（使用者的）：「tick的控制之前也是pvp的需求，這個明顯是遊戲需求入侵了Engine設計」。查證：K.3 第 11 項（`spec.zh-Hant.md:1219`）的內容是 (c) 區（PvP 的權威與回滾）的時間來源。
 2. **執行期的攔截**（L3，第 7.3 節的六條）：Kernel 提供中性的檢查掛鉤（呼叫當下＋套用前兩種）／選了伺服器權威就禁止那幾種參數（蓋不到其中三條）／拿掉執行期的攔截（作者自律）。系譜：Unity 的 job safety 是核心裡的執行期檢查；四家都沒有區的執行期規則。需要它的：PvP 的伺服器權威（回滾與 digest 的正確性）。
 3. **生成世界的寫者豁免由誰保證**（L4）。例子：PvP 的 Match 讀地圖時，生成世界的 System 寫了玩家的初始位置，之後每幀只有移動的 System 寫位置。
    - 編排層保證「生成世界期間不跑每幀清單」，權威策略信任這個保證、不計生成世界的寫者。代價：Loading 卡的形狀要配合（同一條線）。
@@ -362,6 +363,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 8. **回滾的機制放哪**（L11；gyo2 還沒實作）：Kernel（World 的快照與還原是 ECS 的機制，策略只決定哪些資料進快照）／權威 Module／PvP。系譜：lightyear 在網路套件；flecs v3 的 snapshot 在 addon、v4 拿掉；Unity Netcode 在套件。需要它的：PvP Client 的預測與回滾、P2P 回滾（佔位）。
 9. **兩層的讀法**（L16）：Engine（編排層與權威）認得生成世界的階段、Kernel 不認得。確認或更正。
 10. **新 RC 的次數**（L17）：「兩次以上」沒有根據，是提案者給的。照用／「一次就停下報告」／其他。
+11. **Module 之間的依賴**（L20）：使用者 11-17「不過能多Module是有依賴關係的，這個依賴需要處理」。卡片的讀法（待確認）：依賴寫在 Module 登記檔的「依賴」欄（11-14 已定每列寫依賴、CMake 照它 link），編排層 build 時檢查（O-2 的 requires），策略也可以宣告它依賴的 Module（伺服器權威策略依賴時間 Module）；作者選了 Module 卻缺它依賴的，啟動錯誤（建置時能查到的在 configure 時報）。
 
 ---
 
@@ -376,10 +378,10 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 
 ### 附錄：減法批之後的掃描（判定之一）
 
-`git grep -n -P "<式子>" -- engine/kernel` 0 命中；每個式子先在 cb6bccca 用已知例命中一次證明有效；用終了碼區分 0 命中（1）與失敗（其他）。macOS 的 git grep 加 `-E` 不認 `\b`（同一式子 0 命中），一律用 `-P`。式子（依 L2、L3、L7 的結果增減）：
+`git grep -n -P "<式子>" -- engine/kernel` 0 命中；每個式子先在 cb6bccca 用已知例命中一次證明有效；用終了碼區分 0 命中（1）與失敗（其他）。macOS 的 git grep 加 `-E` 不認 `\b`（同一式子 0 命中），一律用 `-P`。式子（依 L3、L7 的結果增減）：
 
 - 一定拿掉的：`\b(Zone|WritePolicy|Rollback)::`、`\bRole::Input\b`、`\bRequireExplicit(Zones|Order)\b`、`\bemitterZone\b`、`\brollbackEnabled\b`、`\bnotInRollback\b`、`\brollbackSafe\b`、`\bingress(Stage)?\b`、`\bDigestSet\b`、`\bCFingerprint\b`、`\bExportZoneCSources\b`、`\bparallelGuardTest\b`、`\bstartupRan_\b`、`\bStartup(NotNestable|Running)\b`、`\bInstallRunner\b`、`\bFinishContext\b`、`\bkMainRole\b`、`\bDomain::Loading\b`、`\bownerPlugin\b`、`\bDE(8|10|13|21)\b`、`\bXE[23]\b`
-- 依 L2：`\bDomain::`、`\bclock\b`、`\bCurrentTick\b`、`\bDomainTick\b`、`\beventTrim\b|\bEventTrim\b`（後者在游標批）、`\bDE12\b`、`\bFE1\b`
+- 時鐘（L2 已定）：`\bDomain::`、`\bclock\b`、`\bCurrentTick\b`、`\bDomainTick\b`、`\btickStamps_\b`、`\beventTrim\b|\bEventTrim\b`（後者在游標批）、`\bDE12\b`、`\bFE1\b`
 - 依 L3／L7：`\bUntypedWrite\b`、`\bZoneCDespawn\b`、`\bExclusiveWorldWrite\b`、`\bUndeclaredResourceWrite\b`
 - 另一個判定：`StartupCode` 的列舉值等於第 3.1 節的清單（測試比對）。
 
