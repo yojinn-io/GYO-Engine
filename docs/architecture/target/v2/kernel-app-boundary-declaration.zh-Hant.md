@@ -1,4 +1,4 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 36）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 37）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -651,7 +651,7 @@ Kernel 的 RC：RC 4、5（D-8 誤報是排程的事，留 Kernel）、6、13、
 |---|---|---|
 | 回滾的還原者與重跑者：權威讀「回滾公開的名單」，回滾已拿掉名單 | 回滾官方的還原、重跑 System 是不帶 `Writes<…>` 標註的 `ExclusiveWorld` System、記錄 System 只寫歷史 Resource，啟動時看不到它們寫判定資料與 tick；權威 C 指紋、Z6、tick 檢查都不需要「扣掉回滾名單」 | 回滾份寫明這一句；權威份刪掉「扣掉回滾名單」 |
 | 外部輸入兩份各接一次（權威 `.input`、回滾 `rollback.Input<T>`） | 同一個型別兩種身分：權威的 `.input` 標它是判定的輸入（Z8：不能登記成可回滾的狀態，讀回滾的公開登記）；回滾的 `rollback.Input<T>` 宣告回滾策略替它保留按 tick 索引的歷史。沒有回滾策略的 World（Match），`rollback.Input<T>` 沒有作用，輸入照常是權威的判定輸入、進 digest 與否照權威的 digest 規則 | 兩份各寫一句、互引 |
-| observer 沒進權威與回滾的檢查 | 凡寫「System 或 hook」的檢查都含 observer。**修訂 35 更正（窄複查必改 1）**：「觸發它的 System 在哪一側」啟動時算不出來（`Commands` 沒有存取宣告，`Params.hpp:470-471`；唯讀登記表沒有「誰觸發哪種事件」），所以 hook 與 observer **不分側**——Z6 照現行的形：World 有可回滾的 schedule 時，hook 或 observer 寫的判定資料要可回滾或 Derived（現行 `Registry.cpp:1430-1443` 對 hook 就是這樣）；回滾的跨 schedule 訊息檢查與 R-7（Derived 在讀者之前重算）對 hook 與 observer 列進「啟動時看不到的」，作者負責（hook 本來就不能讀 `Message`）。C 指紋收 observer 的存取；先後只在 GYO 承諾「多登記無關的 observer 不改變其餘 observer 的相對先後」時才收，游標份不承諾就不收、靠 digest | 權威份、回滾份、游標份 |
+| observer 沒進權威與回滾的檢查 | 凡寫「System 或 hook」的檢查都含 observer。**修訂 35 更正（窄複查必改 1）**：「觸發它的 System 在哪一側」啟動時算不出來（`Commands` 沒有存取宣告，`Params.hpp:470-471`；唯讀登記表沒有「誰觸發哪種事件」），所以 hook 與 observer **不分側**——Z6 照現行的形：World 有可回滾的 schedule 時，hook 或 observer 寫的判定資料要可回滾、不能是 Derived（現行 `Registry.cpp:1435-1437` 對 hook 只准 `Rollback::Yes`；Derived 是由 schedule 的立即寫者在讀者之前重算，hook 寫它會衝突；修訂 37 照權威份更正）；回滾的跨 schedule 訊息檢查與 R-7（Derived 在讀者之前重算）對 hook 與 observer 列進「啟動時看不到的」，作者負責（hook 本來就不能讀 `Message`）。C 指紋收 observer 的存取；先後只在 GYO 承諾「多登記無關的 observer 不改變其餘 observer 的相對先後」時才收，游標份不承諾就不收、靠 digest | 權威份、回滾份、游標份 |
 | 「重跑中」在還原之後才立起 | 照 lightyear：決定回滾之後、還原之前立起，重跑完放下（`rollback.rs:427`、`:880`、`:1186`、`:1324`） | 回滾份 5.3、5.5 |
 | 外面在 Ready 時觸發 observer，延後變更何時套用 | 觸發回來之前當場套用，是一次完整的同步點套用（跑 hook、觸發新增移除的 observer），一輪一輪套到空，上限用 `KernelSettings` 的 hook 清空輪上限、超過照 F-12。**修訂 36 更正系譜**：這是從 GYO 自己的 F-12 推出來的，不是照 Bevy——Bevy 的 `World::trigger` 本身不套用命令，observer 記的命令留到下一次 `World::flush` 才套用、連鎖沒有上限（`observer/mod.rs:63-72`、`world/mod.rs:3215-3218`；游標份修訂 6 讀原始碼發現）；外面在 Ready 時直接寫（不跑 hook）也不觸發新增移除的 observer | 游標份 3.3 |
 | tick 是判定資料又不登記成可回滾，Z6 可能擋到 | Z6 對時間 Module 公開的 tick 例外（由策略直接退回，回滾 R-2 前提 1）；列為時間宣告的要求之一 | 權威份 5.11；第 8 節時間宣告的要求 |
