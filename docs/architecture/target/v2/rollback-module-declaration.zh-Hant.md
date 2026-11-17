@@ -214,13 +214,13 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 | 2 | **整欄放回**：把一欄的成員與值一次換成給定的集合；沒變的格不動 | 還原；P2P 整個狀態 | 只能逐格；`Insert` 是插入排序 | Unity `CopyAndReplaceEntitiesFrom`；舊 GYO H.5 |
 | 3 | **實體存活集合的讀出與放回** | 存活是 World 自己的一份清單 `entities_`（`World.cpp:89`、`:129-134`）；只放回欄時，第 T 步之後生成、現在還活著的實體會讓重跑的 `Spawn` 被丟成 `IdAlive` | 讀有；放回只能逐個 | bevy_ggrs 的實體快照 |
 | 4 | **Resource 的存在與值一起讀寫** | 可回滾的 Resource（含配發器）退回時連「有沒有」一起退 | `SetResource`／`RemoveResource` 有 | bevy_ggrs `ResourceSnapshotPlugin` |
-| 5 | **上面全部在 `ExclusiveWorld` 裡可以當場用**，寫入標目前 stamp，成員變化跑 hook | 重跑由 `ExclusiveWorld` 的 System 做（使用者 `immediate-change-via-exclusive-world`） | `ExclusiveWorld` 的閉包隨 L7 能讀寫任何值；當場改成員是 DI-KS 18 改寫後的新能力；hook 時機、快照重取、限制由統合處理 | lightyear、bevy_ggrs 在拿到整個 World 的 System 裡做 |
+| 5 | **指定 stamp 寫回**：寫一格（或整欄）時由呼叫者給 `changed`（與 `added`） | 官方實作不用（它標目前 stamp、沒變就不寫）；作者自寫的策略可能要（例：倒帶時保留歷史的 stamp）。**統合照 L17 判留**（8a864c6c）：Bevy 核心本來就有 `set_last_changed`（`bevy_ecs/src/change_detection/params.rs:1546`），是 ECS 的能力；`engine-not-rigid` 不禁止別的做法。修訂 4 原本建議拿掉，收回 | 外面寫入一律標「下一個 stamp」（`WriteStamp()`，`World.hpp:350`），不能指定 | Bevy `set_last_changed` |
+| 6 | **上面全部在 `ExclusiveWorld` 裡可以當場用**，寫入標目前 stamp，成員變化跑 hook | 重跑由 `ExclusiveWorld` 的 System 做（使用者 `immediate-change-via-exclusive-world`） | `ExclusiveWorld` 的閉包隨 L7 能讀寫任何值；當場改成員是 DI-KS 18 改寫後的新能力；hook 時機、快照重取、限制由統合處理 | lightyear、bevy_ggrs 在拿到整個 World 的 System 裡做 |
 
-### 6.2 不要了（修訂 4；**回報統合**，因為和統合 L11 修訂 17 的判定不同）
+### 6.2 不要了（修訂 4；統合照 L17 判，8a864c6c）
 
 - **「Ready 時從外面寫而且跑 hook」**：只在「runner 發動」時有人用；使用者定了在 `ExclusiveWorld` 裡做，不需要了。
-- **「不跑 hook 的結構變更」那一條路**：統合修訂 17 准過「兩條路都給、由策略選」。現在官方實作定了跑 hook（統合 15.4），P2P 照 bevy_ggrs 也是跑；不跑 hook 的那條沒有點名的 Feature（AGENTS §1：不為將來可能需要而一般化），建議拿掉。外面在 Ready 時寫本來就不跑 hook（`World.hpp:181`），那是現有行為，不是為回滾加的。
-- **「指定任意 stamp 寫回」**：同理。官方實作只要「寫了就標目前 stamp、沒變就不寫」；Bevy `set_last_changed` 的用途沒有點名的 Feature 用到。建議拿掉，只留「標目前 stamp」（就是一般寫入的行為）。
+- **「不跑 hook 的結構變更」那一條路**：統合修訂 17 准過「兩條路都給、由策略選」。現在官方實作定了跑 hook（統合 15.4），P2P 照 bevy_ggrs 也是跑；不跑 hook 的那條沒有點名的 Feature（AGENTS §1：不為將來可能需要而一般化），**統合同意拿掉**（Bevy 的 hook 也一律會跑）。外面在 Ready 時寫本來就不跑 hook（`World.hpp:181`），那是現有行為，不是為回滾加的。
 - **事件的原語**（取出／放回訊息紀錄、序號、游標）：統合 15.1 判 `Message` 不回滾、Kernel 不加。
 
 ### 6.3 從 Kernel 拿掉的、舊 DI-KS 12 的去處
@@ -309,10 +309,10 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 | 第三輪第 18 條（「重跑中」登記進哪些 World） | 第 5.7 節：放時間 Module，建進哪個 World 就登記在哪個 World |
 | 第三輪第 19 條（代登記與作者登記的先後） | 第 5.4 節：作者的為準，不論先後 |
 
-**回報統合、等統合定的**（不問使用者）：
-1. 第 6.2 節：拿掉「不跑 hook 的結構變更」與「指定任意 stamp 寫回」兩項原語（統合修訂 17 准過，現在沒有點名的 Feature）。
-2. 第 5.7 節：「重跑中」Resource 放時間 Module，列為時間宣告的要求（時間 Module 的職責清單多一項；時間宣告不收時退回回滾 Module）。
-3. 第 5.4 節的重複登記規則：權威份 4.3「作者在代登記之後才自己登記……由回滾 Module 照它的規則處理」現在的結果也是「作者的為準」，兩份一致；若權威份要改寫那一句，照本頁。
+**回報統合、統合照 L17 判的**（8a864c6c，不問使用者）：
+1. 第 6.2 節的兩項原語：「不跑 hook 的結構變更」拿掉；「指定 stamp 寫回」**留**（Bevy 核心的 `set_last_changed`；`engine-not-rigid`），移回第 6.1 節第 5 列。
+2. 「重跑中」Resource 放時間 Module：同意，列進統合第 8 節「時間 Module 的宣告」的要求；時間宣告不收時退回由回滾 Module 登記、恆在。
+3. 重複登記「作者的為準」：統合已轉權威份對齊 4.3。
 
 ---
 
@@ -351,9 +351,10 @@ C++ 寫法照 L21：虛函式的抽象基底類別。官方實作與作者的實
 | R-2 的前提由誰守 | 作者的責任；回滾不加檢查；權威不再守 | 統合照 L17（15.3、15.4） | lightyear、Unity Netcode 都不檢查 |
 | 歷史存哪 | World 的 Resource | 統合照 L17（15.4） | Unity 同形 |
 | 還原跑不跑 hook、stamp | 跑 hook；標目前 stamp；沒變的不寫（卡片照 L17 加，照 Unity） | 統合照 L17（15.4）；最後一項卡片照 L17 | lightyear；Unity `GhostUpdateSystem.cs:1520-1530` |
+| 「指定 stamp 寫回」留不留 | 留（官方不用，作者自寫的策略可用） | 統合照 L17（8a864c6c） | Bevy `set_last_changed` |
 | 刪實體改停用 | 不採 | 卡片照 L17 | 第 5.5 節（要 Kernel 多一項職責） |
 | 副作用的提醒 | 不檢查；作者讀「重跑中」 | 統合照 L17（15.4） | lightyear `is_in_rollback`、Unity `IsFirstTimeFullyPredictingTick` |
-| 「重跑中」放哪 | 時間 Module（待統合與時間宣告確認） | 卡片照 L17 | lightyear core timeline、Unity `NetworkTime` |
+| 「重跑中」放哪 | 時間 Module（統合同意；時間宣告不收時退回回滾 Module） | 卡片照 L17，統合同意（8a864c6c） | lightyear core timeline、Unity `NetworkTime` |
 | ingress 在重跑中不執行 | 「重跑時不跑」的公開登記，伺服器權威策略代登記 | 統合照 L17（L24 (4)） | — |
 
 ---
