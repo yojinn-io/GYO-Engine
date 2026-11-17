@@ -381,10 +381,13 @@ Tool ──→ Engine
 Engine は具体的な Game や Tool に依存してはならない。
 
 再利用可能な部品は Module と Plugin に分ける。
-判断の一文：それがないと、完全な Game が成立しないか。
+判断の一文：誰が保守し、外に見せる Interface は誰のものか。
 
-* Module：Engine の中に置く。それがないと Game が成立しない（例：JSON の Library、SDL）。
-* Plugin：Engine の外に置く。それがなくても Game は成立するが、機能が限られる（例：ネットワーク、ImGui）。
+* Module：自分たちが保守し、Interface も自分たちのもの。Engine の中に置く。
+  外部の Library を使っていても、自分たちの Interface の後ろに完全に隠れていれば Module である。
+* Plugin：第三者が公式に保守するものを、接いで使う部品。Engine の外に置く。
+
+どの部品がどちらに当たるかは、架構の文書に書く。
 
 Plugin は Engine から参照されない（下位の層は上位の層を参照しない）。
 層の構成と依存の規則は、`docs/architecture/README.md` の〈Layers and dependencies〉から辿る。
