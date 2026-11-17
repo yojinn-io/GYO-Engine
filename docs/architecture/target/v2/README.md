@@ -24,8 +24,8 @@
 - [rebuild-diagram-review.zh-Hant.md](rebuild-diagram-review.zh-Hant.md)：11 月 11 日三張圖的重新評審（用詞、思路、資料的流向）。
 - [rebuild-1111-decisions-status.zh-Hant.md](rebuild-1111-decisions-status.zh-Hant.md)：11 月 11 日那批機制的決定在 gyo2 上的現況。
 - [rebuild-time-design.zh-Hant.md](rebuild-time-design.zh-Hant.md)：時間、固定步、runner、跨時鐘事件的設計 v2（修訂 4）。主要的決定已定（第 0 節，使用者 2026-11-14）；第 2 節以後的選項表是決定之前寫的，留作紀錄。
-- [kernel-nested-schedule-declaration.zh-Hant.md](kernel-nested-schedule-declaration.zh-Hant.md)：事前宣告（K0）：獨占 World 的 System 可以跑一張 schedule。四件事使用者已定（2026-11-15）；整份宣告與第 10 節的細節待核准。
-- [time-types-declaration.zh-Hant.md](time-types-declaration.zh-Hant.md)：事前宣告（T1）：累加器與時間的型別。草稿，待核准。
+- [kernel-nested-schedule-declaration.zh-Hant.md](kernel-nested-schedule-declaration.zh-Hant.md)：事前宣告（K0）：獨占 World 的 System 可以跑一張 schedule。使用者 2026-11-16 核准，#239 已實作。
+- [time-types-declaration.zh-Hant.md](time-types-declaration.zh-Hant.md)：事前宣告（T1）：累加器與時間的型別。修訂 2 草稿，**已過時**：時鐘與 tick 移出 Kernel 後，由主會話併進時間 Module 的宣告重寫（批次表第二段第 3 條）。
 - [nested-queue-spike-synthesis.zh-Hant.md](nested-queue-spike-synthesis.zh-Hant.md)：巢狀時延後的變更怎麼放——三個探索（兩個試做、一個掃描）的統合。草稿，待對抗檢查與使用者判。
 - [stamp-order-spike-synthesis.zh-Hant.md](stamp-order-spike-synthesis.zh-Hant.md)：外層刪除、裡面用同一個編號生成——「用 stamp 分先後」三個探索的統合。草稿，待對抗檢查與使用者判。
 
@@ -37,7 +37,11 @@
 - [rebuild-r0b-report.zh-Hant.md](rebuild-r0b-report.zh-Hant.md)：R0b 的報告（刪除舊實現；第 3 節是 R0b-3 的判定變更）。
 - [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 - [spawn-reject-declaration.zh-Hant.md](spawn-reject-declaration.zh-Hant.md)：`v8-arch-gyo2-spawn-reject` 的事前宣告（同步點丟掉不能生成的那一筆；修訂 2，使用者 2026-11-15 核准）。
+- [kernel-app-boundary-declaration.zh-Hant.md](kernel-app-boundary-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-app-boundary` 的事前宣告（統合）：Kernel 只做 ECS、另立編排層、每層的職責清單、跨份的關聯表、確認清單 13 件；修訂 38，使用者 2026-11-17 核准（c1be70eb）。推導與四家對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
+- [authority-module-declaration.zh-Hant.md](authority-module-declaration.zh-Hant.md)：`v8-arch-gyo2-authority-module` 的事前宣告（權威 Module：策略 interface、伺服器權威策略、代為登記、digest；不數寫者；邊界統合的子份）；修訂 4 與之後的改動，使用者 2026-11-17 核准（7f9bbb85）。
 - [rollback-module-declaration.zh-Hant.md](rollback-module-declaration.zh-Hant.md)：`v8-arch-gyo2-rollback-module` 的事前宣告（回滾 Module：`RollbackStrategy` interface、第一版官方實作、P2P 佔位、要 Kernel 給的原語；邊界統合的子份，修訂 4 使用者 2026-11-17 核准（7dfd7167）；修訂 5、6 照第四輪檢查與窄複查改，使用者 2026-11-17 核准（9418fcf1））。
+- [event-cursor-declaration.zh-Hant.md](event-cursor-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor` 的事前宣告（事件：保留式改名 `Message` 與游標修剪，推送式 `Event`＋`Observer`；邊界統合的子份）；修訂 4 與修訂 5、6，使用者 2026-11-17 核准（758f651f）。
+- [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
 
 ## dev_log
 
@@ -58,4 +62,4 @@
 - 圖三 `networking-systems.svg` 沒有改過，留在 [`../../plans/kernel/diagrams/`](../../plans/kernel/diagrams/)；網路的圖等機制完成後再處理（`v8-arch-gyo2-network-diagram-after-mechanism`）。
 - 規格（`spec.zh-Hant.md`）、mechanism、blueprint、networking、spike-report 等 11 月 11 日到 13 日的文件留在 `plans/kernel/`，本資料夾的文件引用它們時連到那裡。
 - [recovered-from-stale-cards.zh-Hant.md](recovered-from-stale-cards.zh-Hant.md)：從前提已變的任務卡（狀態機、重新評估 Loading）回收的資源，以及哪些舊設計不要帶進來（2026-11-17）。
-- [rebuild-batch-plan.zh-Hant.md](rebuild-batch-plan.zh-Hant.md)：GYO2 批次表（2026-11-17 重排，取代時間設計第 11 節的表）：設計段、統合核准之後的實作段、等使用者的小事。
+- [rebuild-batch-plan.zh-Hant.md](rebuild-batch-plan.zh-Hant.md)：GYO2 批次表（2026-11-17 重排，取代時間設計第 11 節的表）：設計段（2026-11-17 完成）、統合核准之後的實作段、不擋路的小事。
