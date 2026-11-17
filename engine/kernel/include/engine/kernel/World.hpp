@@ -105,13 +105,19 @@ struct RejectedSpawn {
     std::string emitter;
     bool emitterIsHook = false;
     Zone emitterZone = Zone::B;
-    // Recorded by Spawn (the allotter's id), not SpawnWithId.
+    // Recorded by Spawn (the allotter's id: Spawn<Bundle<C...>> or
+    // ExclusiveWorld::Spawn), not SpawnWithId.
     bool fromAllotter = false;
-    // The schedule whose sync point dropped it.
+    // The schedule whose sync point dropped it (for an immediate change of
+    // ExclusiveWorld, the exclusive System's schedule).
     std::string schedule;
-    // The record's Plan position: a System's step; for a hook, the sync point that triggered it.
+    // The record's Plan position: a System's step; for a hook, the sync point
+    // that triggered it, or, when an immediate change of ExclusiveWorld ran the
+    // hook, the exclusive System's step.
     std::uint32_t step = 0;
-    // The sync point that dropped it (for a hook round, the last sync point of the Plan).
+    // The sync point that dropped it (for a hook round, the last sync point of
+    // the Plan); for an immediate change of ExclusiveWorld and the hook rounds
+    // it runs, the exclusive System's step (no sync point applied it).
     std::uint32_t appliedAt = 0;
     // The schedule's domain tick (0 without a clock).
     std::uint64_t tick = 0;

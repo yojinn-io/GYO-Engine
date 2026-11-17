@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -413,7 +413,7 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 
 | 函式 | 回傳 | 說明 |
 |---|---|---|
-| `Spawn<C…>(值…)` | `Result<EntityId>` | id 由配發器發（同 `Spawn<Bundle<…>>`）；沒有宣告配發器是 `NoAllotter`，用完是 `AllotterExhausted` |
+| `Spawn<C…>(值…)` | `Result<std::optional<EntityId>>` | id 由配發器發（同 `Spawn<Bundle<…>>`）；配發器發的 id 還活著時不生成、回傳沒有 id，並照第 10 節記一筆 `RejectedSpawn`（用配發器生成），手上不會拿到別人的 id；沒有宣告配發器是 `NoAllotter`，用完是 `AllotterExhausted`（這次不生成、呼叫繼續，System 回傳後這次 Run 以它結束） |
 | `SpawnWithId<C…>(id, 值…)` | `Result<std::optional<SpawnRejectReason>>` | 沒有東西表示生成了；不能生成（id 在這個 World 的配發範圍、或還活著）時不生成、回傳理由，並照第 10 節記一筆 `RejectedSpawn` |
 | `Insert<T>(id, 值)` | `Result<bool>` | 加上或蓋過；實體不在時不插入、回 false，也計入 `DroppedMissingEntity` |
 | `Remove<T>(id)` | `Result<bool>` | 先跑 OnRemove 再拿掉；沒有那個元件回 false |
@@ -423,7 +423,8 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 - **當場生效**：呼叫回來時就改好了；做法和同步點套用一筆紀錄一樣（新的格先填初始值的宣告、再跑 OnAdd；拿掉時先跑 OnRemove）。這些 hook 記的變更也在回來之前一輪一輪套用到空（第 9 節的例外），上限同清空輪，超過是 `HookRoundLimit`、World 中斷。
 - **不動別人的紀錄**：這張 schedule 還沒到同步點的紀錄（同一個 stage 排在前面的 System 記的）和 hook 佇列都不會被提前套用。所以前面的 System 記了「用同一個 id 生成」、這裡又當場生成了，前面那一筆到同步點會被丟掉並留明細（`IdAlive`）。
 - **變更記號**：變更用這次呼叫的記號；每一輪 hook 套用各取新的。回來之後手上的 `ExclusiveWorld` 照常可用，之後的寫入排在這些記號之後（和跑完 `RunSchedule` 一樣）。
-- **不能做的**：在 `Read`／`Modify` 的閉包裡呼叫（`ClosureChangesMembership`）、hook 拿到的 `ExclusiveWorld<>` 呼叫（`HookChangesMembership`）——都是程式的 bug，World 會中斷、錯誤只報一次。不經這些函式、經 World API 或儲存本身改成員，不論在當場改之前或之後，都是斷言（使用者 2026-11-17 選「保留」）。只在序列執行。
+- **不能做的**：在 `Read`／`Modify` 的閉包裡呼叫（`ClosureChangesMembership`）、hook 拿到的 `ExclusiveWorld<>` 呼叫（`HookChangesMembership`）——都是程式的 bug，World 會中斷、錯誤只報一次。
+- **例外**：當場改觸發的 hook 或初始值函式丟出例外時，World 在例外離開那一刻中斷：還沒套用的紀錄丟掉，已經套用的留著。System 接住例外繼續跑也一樣：之後的當場改不做、回傳留下的錯誤，這次 Run 結束時錯誤處理收到一次 `ImmediateChangeAborted`（同巢狀跑的 `NestedRunAborted`）。不經這些函式、經 World API 或儲存本身改成員，不論在當場改之前或之後，都是斷言（使用者 2026-11-17 選「保留」）。只在序列執行。
 - **存取驗證打開時**：當場改本身不算違規；但在它之前，這個 System 在宣告外的改動（例：經存下的位址寫事件緩衝）會先被比對出來，這次變更就不做、回 `BoundaryChange`、World 中斷（同巢狀跑之前）。
 - **一般的 System 要增刪 Resource**：用 `Commands` 的 `SetResource`／`RemoveResource`，在同步點的 resource 那一步依 Resource 的編號、Plan 的位置、記錄的先後套用；hook 也可以用（下一窗生效）。
 

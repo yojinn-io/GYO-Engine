@@ -100,6 +100,45 @@ TEST_CASE("J-18: two Finishes of the same plugin list give the same fingerprint"
     CHECK(a.registry->Frozen().CFingerprint() == b.registry->Frozen().CFingerprint());
 }
 
+// The two fields v8-arch-gyo2-kernel-subtract-structure added to the Registry
+// fingerprint (declaration 3.4, 3.11; DI-KS 3): each changes it.
+namespace {
+SystemResult EditsNothingListed(ExclusiveWorld<>) { return Ok(); }
+SystemResult EditsListingOther(ExclusiveWorld<Writes<TestOtherRes>>) { return Ok(); }
+Built BoundOrNot(bool threadBound) {
+    return Finish({{"test", [threadBound](Registrar& r) {
+                        Schedules(r);
+                        r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B, .threadBound = threadBound});
+                    }}});
+}
+template <auto System>
+Built Editing() {
+    return Finish({{"test", [](Registrar& r) {
+                        r.Schedule(UpdateSchedule());
+                        r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
+                        r.AddSystem<System>(Sys("Edit", Zone::B, {At("Update", "First")}));
+                    }}});
+}
+} // namespace
+
+TEST_CASE("J-18: the Registry fingerprint sees threadBound") {
+    const Built plain = BoundOrNot(false);
+    const Built bound = BoundOrNot(true);
+    KERNEL_REQUIRE_OK(plain);
+    KERNEL_REQUIRE_OK(bound);
+    CHECK_MESSAGE(plain.registry->Frozen().RegistryFingerprint() != bound.registry->Frozen().RegistryFingerprint(),
+                  "J-18 threadBound: two Registries that differ only in ResourceOptions::threadBound have one fingerprint");
+}
+
+TEST_CASE("J-18: the Registry fingerprint sees annotatedWrites") {
+    const Built none = Editing<&EditsNothingListed>();
+    const Built listed = Editing<&EditsListingOther>();
+    KERNEL_REQUIRE_OK(none);
+    KERNEL_REQUIRE_OK(listed);
+    CHECK_MESSAGE(none.registry->Frozen().RegistryFingerprint() != listed.registry->Frozen().RegistryFingerprint(),
+                  "J-18 annotatedWrites: ExclusiveWorld<> and ExclusiveWorld<Writes<R>> give one fingerprint");
+}
+
 TEST_CASE("J-19: lookup creates no id; build runs once per plugin; finish after every build, in list order") {
     std::vector<std::string> calls;
     TestPlugin first("first", [&](Registrar& r) { calls.push_back("build first"); Movement(r); }, {},

@@ -452,6 +452,27 @@ TEST_CASE("J-54: KernelSettings is read when each Run starts; a limit of 0 is re
     }
 }
 
+namespace {
+// Lowers the World's hook round limit in the Run (a System may declare KernelSettings, DI-KS 24).
+SystemResult LowersLimit(ResMut<KernelSettings> settings) {
+    settings->hookRoundLimit = 2;
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-54: a System's write of the hook round limit counts from the next Run, not in the Run that made it") {
+    auto rig = MakeFlushRig([](Registrar& r) {
+        ChainSystems(r);
+        r.AddSystem<&LowersLimit>(Put("LowersLimit", "Tick", "C"));
+    }, {}, false);
+    const auto first = RunChain(*rig, 3);
+    CHECK_MESSAGE(static_cast<bool>(first), "J-54 same Run: the limit a System wrote counted in its own Run: " << Text(first));
+    if (first) {
+        CHECK_MESSAGE(HasCode(RunChain(*rig, 3), KernelErrorCode::HookRoundLimit),
+                      "J-54 next Run: the limit a System wrote was not read when the next Run started");
+    }
+}
+
 TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; versions") {
     auto build = [](Limits limits) {
         return Finish({{"test", [limits](Registrar& r) {

@@ -12,7 +12,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -92,11 +94,13 @@ SystemResult LogTagAdd(HookCtx ctx) {
 }
 // Two hooks that keep recording: Ball added -> Bat in, Ball out; Bat added -> Ball in, Bat out.
 SystemResult BallToBat(HookCtx ctx, Commands commands) {
+    Log().push_back("round hook ball");
     commands.Insert(ctx.Entity(), Bat{1});
     commands.Remove<Ball>(ctx.Entity());
     return Ok();
 }
 SystemResult BatToBall(HookCtx ctx, Commands commands) {
+    Log().push_back("round hook bat");
     commands.Insert(ctx.Entity(), Ball{1});
     commands.Remove<Bat>(ctx.Entity());
     return Ok();
@@ -126,10 +130,11 @@ SystemResult SpawnNow(ExclusiveWorld<> world) {
     Log().push_back("stamp " + std::to_string(Current().stamp));
     auto id = world.Spawn(Hp{5});
     if (!id) return Engine::Base::Err(std::move(id).error());
-    auto hp = world.Read<Hp>(*id, [](const Hp& h) { return h.v; });
-    auto shield = world.Read<Shield>(*id, [](const Shield& s) { return s.v; });
+    if (!*id) return Ok();
+    auto hp = world.Read<Hp>(**id, [](const Hp& h) { return h.v; });
+    auto shield = world.Read<Shield>(**id, [](const Shield& s) { return s.v; });
     if (!hp || !shield) return Ok();
-    Log().push_back("spawned " + std::to_string(*id) + " hp " + std::to_string(hp->value_or(-1)) + " shield " +
+    Log().push_back("spawned " + std::to_string(**id) + " hp " + std::to_string(hp->value_or(-1)) + " shield " +
                     std::to_string(shield->value_or(-1)));
     return Ok();
 }
@@ -225,6 +230,40 @@ SystemResult StartsBall(ExclusiveWorld<> world) {
     return Ok();
 }
 
+// ---- An exception leaving an immediate change (DI-KS 18, spec E.5)
+
+// OnAdd<Mode>: throws while the immediate change applies.
+SystemResult ModeThrows(HookCtx) {
+    Log().push_back("hook throws");
+    throw std::runtime_error("hook threw");
+}
+SystemResult CatchesThenChanges(ExclusiveWorld<> world) {
+    try {
+        auto done = world.Insert<Mode>(1, Mode{1});
+        Log().push_back("insert " + Outcome(done));
+    } catch (const std::runtime_error&) {
+        Log().push_back("caught");
+    }
+    Log().push_back("again " + Outcome(world.Insert<Hp>(1, Hp{2})));
+    return Ok();
+}
+SystemResult LogsLater(Query<Read<Pos>>) {
+    Log().push_back("later");
+    return Ok();
+}
+
+// ---- Spawn when the allotter's id is alive (declaration 3.5 table; F-13)
+
+std::string Spawned(const std::optional<EntityId>& id) { return id ? "spawned " + std::to_string(*id) : std::string("not spawned"); }
+SystemResult SpawnsOverAlive(ExclusiveWorld<> world) {
+    for (int i = 0; i < 2; ++i) {
+        auto id = world.Spawn(Hp{5});
+        if (!id) return Engine::Base::Err(std::move(id).error());
+        Log().push_back(Spawned(*id));
+    }
+    return Ok();
+}
+
 // ---- Refusals
 
 SystemResult InsertInsideClosure(ExclusiveWorld<> world) {
@@ -244,6 +283,82 @@ SystemResult DespawnSix(Despawn despawn) {
     return Ok();
 }
 
+// ---- Paths the implementation chose (pinned; segment 3 line review, Task B)
+
+// Whether f fails a GYO_ASSERT on this thread.
+bool Asserts(const std::function<void()>& f) {
+    ::Engine::Test::ScopedAssertionHandler scope;
+    try {
+        f();
+    } catch (const ::Engine::Base::AssertionFailure&) {
+        return true;
+    }
+    return false;
+}
+// OnAdd<Mode> / OnAdd<Tag>: a hook's own Err.
+SystemResult ModeFails(HookCtx) {
+    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
+}
+SystemResult TagFails(HookCtx) {
+    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the round hook's own Err"));
+}
+// OnAdd<Mode>: the World's state while the immediate change runs the hook.
+SystemResult LogsState(HookCtx) {
+    const WorldState state = Current().world->State();
+    Log().push_back(std::string("hook state ") + (state == WorldState::Applying ? "Applying" : state == WorldState::Running ? "Running" : "other"));
+    return Ok();
+}
+// Drops the Err of the change on purpose: the Executor reports it all the same.
+SystemResult InsertsModeDropsErr(ExclusiveWorld<> world) {
+    Log().push_back("insert " + Outcome(world.Insert<Mode>(1, Mode{1})));
+    return Ok();
+}
+SystemResult RefusedThenAgain(ExclusiveWorld<> world) {
+    std::string inner = "not called";
+    auto r = world.Modify<Hp>(1, [&world, &inner](Hp&) { inner = Outcome(world.Insert<Mode>(1, Mode{1})); });
+    static_cast<void>(r);
+    Log().push_back("inside " + inner);
+    Log().push_back(std::string("state ") + (Current().world->State() == WorldState::Interrupted ? "Interrupted" : "not interrupted"));
+    Log().push_back("after " + Outcome(world.Insert<Mode>(1, Mode{2})));
+    return Ok();
+}
+SystemResult LaterRecords(Commands commands) {
+    commands.Insert(1, Tag{7});
+    Log().push_back("later recorded");
+    return Ok();
+}
+SystemResult SeesTag80(Query<Read<Tag>> tags) {
+    Log().push_back(std::string(Current().name) + " tag80 " + (tags.Contains(80) ? "yes" : "no"));
+    return Ok();
+}
+SystemResult InnerInserts(ExclusiveWorld<> world) {
+    auto done = world.Insert<Mode>(1, Mode{1});
+    Log().push_back("inner insert " + Outcome(done));
+    if (!done) return Engine::Base::Err(std::move(done).error());
+    auto has = world.Read<Tag>(1, [](const Tag&) {});
+    Log().push_back(std::string("inner sees tag ") + (has && *has ? "yes" : "no"));
+    return Ok();
+}
+SystemResult OuterRunsInner(ExclusiveWorld<> world) {
+    if (auto ran = world.RunSchedule("Inner"); !ran) return Engine::Base::Err(std::move(ran).error());
+    auto done = world.Insert<Hp>(1, Hp{3});
+    Log().push_back("outer insert " + Outcome(done));
+    if (!done) return Engine::Base::Err(std::move(done).error());
+    return Ok();
+}
+SystemResult SpawnsThenGoesOn(ExclusiveWorld<> world) {
+    Log().push_back("spawn " + Outcome(world.Spawn(Hp{5})));
+    Log().push_back("later " + Outcome(world.Insert<Hp>(1, Hp{2})));
+    return Ok();
+}
+SystemResult FirstStep(Query<Read<Pos>>) { return Ok(); }
+SystemResult SpawnsOverLiveId(ExclusiveWorld<> world) {
+    Log().push_back("planPos " + std::to_string(Current().planPos));
+    auto done = world.SpawnWithId(1, Hp{1});
+    if (!done) return Engine::Base::Err(std::move(done).error());
+    return Ok();
+}
+
 // ---- Membership behind the handle (W-3)
 
 void EraseTagOfOne() {
@@ -257,6 +372,7 @@ SystemResult EraseThenInsert(ExclusiveWorld<> world) {
 SystemResult InsertThenErase(ExclusiveWorld<> world) {
     auto done = world.Insert<Hp>(1, Hp{1});
     if (!done) return Engine::Base::Err(std::move(done).error());
+    Log().push_back("insert ok");
     EraseTagOfOne();
     return Ok();
 }
@@ -505,6 +621,11 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
         CHECK_MESSAGE(HasCode(result, KernelErrorCode::HookRoundLimit), "[ks-s5-round-limit] " << Text(result));
         CHECK_MESSAGE(Text(result).find("within 2 rounds") != std::string::npos, "[ks-s5-round-limit-schedule] " << Text(result));
         CHECK_MESSAGE(Text(result).find("schedule's declaration") != std::string::npos, "[ks-s5-round-limit-schedule] " << Text(result));
+        // The change runs BallToBat (its records: round 1's); round 1 runs BatToBall, round 2 BallToBat; then the limit.
+        CHECK_MESSAGE(Joined() == "round hook ball | round hook bat | round hook ball | ball HookRoundLimit",
+                      "[ks-s5-round-limit-count] " << Joined());
+        CHECK_MESSAGE(Text(result).find("records left after round 2") != std::string::npos, "[ks-s5-round-limit-count] " << Text(result));
+        CHECK_MESSAGE(Text(result).find("recorded by 'BallToBat'") != std::string::npos, "[ks-s5-round-limit-recorders] " << Text(result));
         CHECK(rig->recorded.size() == 1);
         CHECK(rig->world().State() == WorldState::Interrupted);
     }
@@ -524,6 +645,49 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
         CHECK_MESSAGE(Text(result).find("within 3 rounds") != std::string::npos, "[ks-s5-round-limit-settings] " << Text(result));
         CHECK(rig->recorded.size() == 1);
     }
+}
+
+TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive spawns nothing, returns no id and is recorded") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r, true);
+        r.AddSystem<&SpawnsOverAlive>(B("Driver", "A"));
+    });
+    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    rig->world().Insert(100, Tag{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Joined() == "not spawned | add Hp 101 | spawned 101", "[ks-s5-spawn-alive-empty] " << Joined());
+    CHECK_MESSAGE(rig->world().Get<Hp>(100) == nullptr, "[ks-s5-spawn-alive-empty] Hp went onto the live entity 100");
+    const std::vector<RejectedSpawn> rejected = rig->world().Diagnostics<RejectedSpawn>();
+    REQUIRE_MESSAGE(rejected.size() == 1, "[ks-s5-spawn-alive-recorded] " << rejected.size());
+    CHECK(rejected[0].entity == 100);
+    CHECK(rejected[0].reason == SpawnRejectReason::IdAlive);
+    CHECK(rejected[0].fromAllotter);
+    CHECK(rejected[0].emitter == "Driver");
+}
+
+// ---- S5: an exception that leaves an immediate change (spec E.5; like X-16)
+
+TEST_CASE("DI-KS 18: an exception that leaves an immediate change interrupts the World; caught by the System, ImmediateChangeAborted is reported once") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
+        r.Hook<Mode, &ModeThrows>(HookTrigger::OnAdd, {.name = "ModeThrows", .zone = Zone::B});
+        r.AddSystem<&CatchesThenChanges>(B("Driver", "A"));
+        r.AddSystem<&LogsLater>(B("Later", "B"));
+    });
+    rig->world().Insert(1, Pos{1});
+    Log().clear();
+    const auto result = rig->Run();
+    // The second change finds the World interrupted: it is not made and returns the error left.
+    CHECK_MESSAGE(Joined() == "hook throws | caught | again ImmediateChangeAborted", "[ks-s5-throw-interrupts] " << Joined());
+    CHECK_MESSAGE(HasCode(result, KernelErrorCode::ImmediateChangeAborted), "[ks-s5-throw-interrupts] " << Text(result));
+    CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-throw-reported-once] the handler was called " << rig->recorded.size() << " times");
+    CHECK(rig->world().State() == WorldState::Interrupted);
+    CHECK_MESSAGE(Text(result).find("System 'Driver'") != std::string::npos, "[ks-s5-throw-interrupts] " << Text(result));
+    // What was applied stays (the World is read for diagnosis only); the record the first hook made is dropped.
+    CHECK_MESSAGE(rig->world().Get<Mode>(1) != nullptr, "[ks-s5-throw-applied-stays]");
+    CHECK_MESSAGE(rig->world().Get<Tag>(1) == nullptr, "[ks-s5-throw-records-dropped] the first hook's record was applied");
+    CHECK_MESSAGE(rig->world().Get<Hp>(1) == nullptr, "[ks-s5-throw-interrupts] the change after the exception was made");
 }
 
 // ---- S5: refusals (declaration 3.5 point 3)
@@ -558,6 +722,161 @@ TEST_CASE("DI-KS 18: an immediate change through a hook's ExclusiveWorld<> is Ho
     CHECK(rig->world().Get<Tag>(7) == nullptr);
 }
 
+// ---- S5: the paths the implementation chose (segment 3 line review, S2 and Task B)
+
+TEST_CASE("DI-KS 18: a hook's Err inside an immediate change interrupts the World and is reported once, named as an immediate change") {
+    SUBCASE("a hook the change itself runs") {
+        auto rig = ImmediateRig([](Registrar& r) {
+            Immediate(r);
+            r.Hook<Mode, &ModeFails>(HookTrigger::OnAdd, {.name = "ModeFails", .zone = Zone::B});
+            r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A"));
+        });
+        rig->world().Insert(1, Pos{1});
+        const auto result = rig->Run();
+        CHECK_MESSAGE(Logged("insert SystemFailed"), "[ks-s5-hook-err-own-phase] " << Joined());
+        CHECK_MESSAGE(HasCode(result, KernelErrorCode::SystemFailed), "[ks-s5-hook-err-own-phase] " << Text(result));
+        CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-hook-err-own-phase] handler calls " << rig->recorded.size());
+        CHECK(rig->world().State() == WorldState::Interrupted);
+        // The hook ran at the exclusive System's step 0, not at a sync point.
+        CHECK_MESSAGE(Text(result).find("at hook 'ModeFails' at step 0 (an immediate change) of schedule 'Tick'") != std::string::npos,
+                      "[ks-s5-hook-err-context] " << Text(result));
+        CHECK_MESSAGE(Text(result).find("sync point") == std::string::npos, "[ks-s5-hook-err-context] " << Text(result));
+    }
+    SUBCASE("a hook a round runs") {
+        auto rig = ImmediateRig([](Registrar& r) {
+            Immediate(r);
+            r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
+            r.Hook<Tag, &TagFails>(HookTrigger::OnAdd, {.name = "TagFails", .zone = Zone::B});
+            r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A"));
+        });
+        rig->world().Insert(1, Pos{1});
+        const auto result = rig->Run();
+        CHECK_MESSAGE(Logged("insert SystemFailed"), "[ks-s5-hook-err-round] " << Joined());
+        CHECK_MESSAGE(HasCode(result, KernelErrorCode::SystemFailed), "[ks-s5-hook-err-round] " << Text(result));
+        CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-hook-err-round] handler calls " << rig->recorded.size());
+        CHECK(rig->world().State() == WorldState::Interrupted);
+        CHECK_MESSAGE(Text(result).find("hook round 1 of an immediate change by System 'Driver'") != std::string::npos,
+                      "[ks-s5-hook-err-round] " << Text(result));
+    }
+}
+
+TEST_CASE("DI-KS 21: the closure refusal interrupts the World at once; an immediate change on an Interrupted World returns the error left and changes nothing") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.AddSystem<&RefusedThenAgain>(B("Driver", "A"));
+    });
+    rig->world().Insert(1, Hp{1});
+    const auto result = rig->Run();
+    CHECK_MESSAGE(Logged("inside ClosureChangesMembership"), "[ks-s5-closure-refused] " << Joined());
+    CHECK_MESSAGE(Logged("state Interrupted"), "[ks-s5-closure-refusal-interrupts] " << Joined());
+    CHECK_MESSAGE(Logged("after ClosureChangesMembership"), "[ks-s5-interrupted-no-change] " << Joined());
+    CHECK_MESSAGE(rig->world().Get<Mode>(1) == nullptr, "[ks-s5-interrupted-no-change] the change was made on an Interrupted World");
+    CHECK(HasCode(result, KernelErrorCode::ClosureChangesMembership));
+    CHECK(rig->recorded.size() == 1);
+}
+
+TEST_CASE("DI-KS 18: after an immediate change returns, a System of the same stage records as usual (the World is Running again)") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A", {"Later"}));
+        r.AddSystem<&LaterRecords>(B("Later", "A"));
+    });
+    rig->world().Insert(1, Pos{1});
+    const bool asserted = Asserts([&] { static_cast<void>(rig->Run()); });
+    CHECK_MESSAGE(!asserted, "[ks-s5-running-after-change] a record after the change failed a GYO_ASSERT: " << Joined());
+    CHECK_MESSAGE(Logged("later recorded"), "[ks-s5-running-after-change] " << Joined());
+}
+
+TEST_CASE("DI-KS 18: a hook an immediate change runs sees the World Applying (F-5)") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.Hook<Mode, &LogsState>(HookTrigger::OnAdd, {.name = "LogsState", .zone = Zone::B});
+        r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A"));
+    });
+    rig->world().Insert(1, Pos{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Logged("hook state Applying"), "[ks-s5-hook-sees-applying] " << Joined());
+}
+
+TEST_CASE("DI-KS 19: after an immediate change, a hook of a later sync point records into the schedule's hook queue again") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
+        r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A", {"Seed"}));
+        r.AddSystem<&SeedMode80>(B("Seed", "A"));
+        r.AddSystem<&SeesTag80>(B("InB", "B"));
+        r.AddSystem<&SeesTag80>(B("InC", "C"));
+    });
+    rig->world().Insert(1, Pos{1});
+    const auto result = rig->Run();
+    CHECK_MESSAGE(static_cast<bool>(result), "[ks-s5-hook-target-reset] " << Text(result));
+    CHECK_MESSAGE(Logged("InB tag80 no"), "[ks-s5-hook-target-reset] " << Joined());
+    CHECK_MESSAGE(Logged("InC tag80 yes"), "[ks-s5-hook-target-reset] " << Joined());
+}
+
+TEST_CASE("DI-KS 18: an immediate change by an exclusive System of a nested schedule keeps that level's membership baseline") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        ScheduleOptions inner;
+        inner.name = "Inner";
+        inner.domain = Domain::Fixed;
+        inner.stages = {"I1", "I2"};
+        r.Schedule(inner);
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
+        // Stage I1 changes membership at its sync point, so the inner level's baseline is not the outer level's.
+        r.AddSystem<&SeedMode80>(Sys("InnerSeed", Zone::B, {At("Inner", "I1")}));
+        r.AddSystem<&InnerInserts>(Sys("Inner", Zone::B, {At("Inner", "I2")}));
+        r.AddSystem<&OuterRunsInner>(B("Outer", "A"));
+    });
+    rig->world().Insert(1, Pos{1});
+    const auto result = rig->Run();
+    CHECK_MESSAGE(static_cast<bool>(result), "[ks-s5-nested-level-change] " << Text(result));
+    CHECK_MESSAGE(Logged("inner sees tag yes"), "[ks-s5-nested-level-change] " << Joined());
+    CHECK_MESSAGE(Logged("outer insert ok"), "[ks-s5-nested-level-change] " << Joined());
+}
+
+TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn with the allotter used up is AllotterExhausted") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r, true);
+        r.AddSystem<&SpawnWithoutAllotter>(B("Driver", "A"));
+    });
+    rig->world().SetResource(RangeAllotter::Of(5, 4));  // used up
+    const auto result = rig->Run();
+    CHECK_MESSAGE(Logged("spawn AllotterExhausted"), "[ks-s5-allotter-exhausted] " << Joined());
+    CHECK_MESSAGE(HasCode(result, KernelErrorCode::AllotterExhausted), "[ks-s5-allotter-exhausted] " << Text(result));
+    CHECK(rig->recorded.size() == 1);
+}
+
+TEST_CASE("DI-KS 18: NoAllotter: the change is not made, the call goes on, and the Run ends in that Err") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.AddSystem<&SpawnsThenGoesOn>(B("Driver", "A"));
+    });
+    rig->world().Insert(1, Pos{1});
+    const auto result = rig->Run();
+    CHECK_MESSAGE(Joined() == "spawn NoAllotter | add Hp 1 | later ok", "[ks-s5-no-allotter-goes-on] " << Joined());
+    CHECK_MESSAGE(rig->world().Get<Hp>(1) != nullptr, "[ks-s5-no-allotter-goes-on] the later change was not made");
+    CHECK_MESSAGE(HasCode(result, KernelErrorCode::NoAllotter), "[ks-s5-no-allotter-reported] " << Text(result));
+    CHECK(rig->recorded.size() == 1);
+    CHECK(rig->world().State() == WorldState::Interrupted);
+}
+
+TEST_CASE("DI-KS 18: the RejectedSpawn of an immediate SpawnWithId carries the System's Plan position as step and appliedAt") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.AddSystem<&FirstStep>(B("First", "A", {"Driver"}));
+        r.AddSystem<&SpawnsOverLiveId>(B("Driver", "A"));
+    });
+    rig->world().Insert(1, Pos{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const std::vector<RejectedSpawn> rejected = rig->world().Diagnostics<RejectedSpawn>();
+    REQUIRE(rejected.size() == 1);
+    CHECK_MESSAGE(Logged("planPos " + std::to_string(rejected[0].step)), "[ks-s5-rejected-step] step " << rejected[0].step << ", " << Joined());
+    CHECK_MESSAGE(rejected[0].step >= 1, "[ks-s5-rejected-step] step " << rejected[0].step);
+    CHECK_MESSAGE(rejected[0].appliedAt == rejected[0].step, "[ks-s5-rejected-applied-at] appliedAt " << rejected[0].appliedAt);
+    CHECK(rejected[0].schedule == "Tick");
+}
+
 // ---- S5: membership behind the handle (declaration section 12 item 1, (a))
 
 TEST_CASE("DI-KS 18: a membership change behind the handle before an immediate change fails a GYO_ASSERT") {
@@ -579,8 +898,11 @@ TEST_CASE("DI-KS 18: a membership change behind the handle after an immediate ch
     });
     rig->world().Insert(1, Tag{1});
     KeptWorld() = &rig->world();
-    GYO_CHECK_ASSERTS(rig->Run());
+    const bool asserted = Asserts([&] { static_cast<void>(rig->Run()); });
     KeptWorld() = nullptr;
+    // The change itself went through: the assertion is the one after the call, not one inside the change.
+    CHECK_MESSAGE(Logged("insert ok"), "[ks-s5-detour-after-insert] the change did not go through: " << Joined());
+    CHECK_MESSAGE(asserted, "[ks-s5-detour-after] the change went through and the detour after it was not caught: " << Joined());
 }
 
 TEST_CASE("DI-KS 18: a nested schedule run after an immediate change sees it") {

@@ -242,6 +242,8 @@ SystemResult ExclusiveWritesThroughWorldApi(ExclusiveWorld<>) {
     KeptWorld()->GetMut<Tag>(1)->t = 42;
     KeptWorld()->ResourceMut<Flag>()->on = 43;
     KeptWorld()->ResourceMut<Out>()->value = 44;
+    KeptWorld()->GetMut<Mode>(1)->m = 45;          // zone B, single writer
+    KeptWorld()->ResourceMut<CRes>()->value = 46;  // zone C
     return Ok();
 }
 SystemResult ExclusiveReadsEventsThroughWorldApi(ExclusiveWorld<>) {
@@ -254,12 +256,16 @@ TEST_CASE("J-5: an exclusive System's World API writes of components and resourc
     SUBCASE("components and resources") {
         auto rig = RigWith([](Registrar& r) { r.AddSystem<&ExclusiveWritesThroughWorldApi>(B("Exclusive", "A")); }, true,
                            "exclusive-api");
+        rig->world().Insert(1, Mode{0});
+        rig->world().SetResource(CRes{0});
         KeptWorld() = &rig->world();
         const auto result = rig->Run();
         KeptWorld() = nullptr;
         CHECK_MESSAGE(static_cast<bool>(result), "[ks-s4-layer1-declared] " << Text(result));
         CHECK(rig->world().Get<Pos>(1)->x == 41);
         CHECK(rig->world().Resource<Out>()->value == 44);
+        CHECK(rig->world().Get<Mode>(1)->m == 45);
+        CHECK(rig->world().Resource<CRes>()->value == 46);
     }
     SUBCASE("events") {
         auto rig = RigWith([](Registrar& r) { r.AddSystem<&ExclusiveReadsEventsThroughWorldApi>(B("Exclusive", "A")); }, true,

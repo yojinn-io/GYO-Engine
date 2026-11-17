@@ -155,7 +155,7 @@ Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
 
 TEST_CASE("J-20: the Plan is built the same twice and with shuffled internal containers; golden fingerprints") {
     for (const Golden& golden : kGoldens) {
-        CAPTURE(golden.name);
+        CAPTURE(std::string(golden.name));
         Built first = BuildGolden(golden);
         Built second = BuildGolden(golden);
         KERNEL_REQUIRE_OK(first);
@@ -289,7 +289,7 @@ TEST_CASE("J-22: adding before or after orders the (c) cases and leaves no tie")
 TEST_CASE("J-22: pairs that do not conflict give no tie (deferred write against immediate read, immediate write, With)") {
     const auto noTie = [](const Built& built, const char* what) {
         REQUIRE_MESSAGE(static_cast<bool>(built.result), Describe(built));
-        CHECK_MESSAGE(Ties(built).empty(), "J-22 no conflict: " << what);
+        CHECK_MESSAGE(Ties(built).empty(), "J-22 no conflict: " << std::string(what));
     };
     noTie(WithShared([](Registrar& r) {
               r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
@@ -711,4 +711,7 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
     CHECK(report.find("gyo.kernel.plans 3") == 0);
     CHECK(report.find("fingerprint 5:") != std::string::npos);
+    // The whole schedule line of format 3 (no runner since v8-arch-gyo2-kernel-subtract-structure).
+    CHECK_MESSAGE(report.find("\nschedule FixedUpdate domain=Fixed clock=1 startup=0 rollback=0\n") != std::string::npos,
+                  "Plan export: the schedule line\n" << report);
 }

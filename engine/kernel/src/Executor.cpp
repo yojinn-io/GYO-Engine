@@ -116,6 +116,16 @@ KernelError NestedAbortError(const World& world, const std::string& what) {
     return error;
 }
 
+// where: the System and its Plan position, as "System 'Name' (schedule 'S', step N)".
+KernelError ImmediateAbortError(const World& world, const std::string& where) {
+    KernelError error(KernelErrorCode::ImmediateChangeAborted,
+                      "an exception left an immediate change by " + where +
+                          " and the System caught it; the World is interrupted");
+    error.rule = "DI-KS 18";
+    error.world = world.Name();
+    return error;
+}
+
 // Spec H-12: startupRunning_ is set for Startup's Run and cleared on every way out.
 class StartupScope {
 public:
@@ -681,17 +691,30 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
     record.emitterHook = false;
     record.emitterKey = call.access;
 
-    // From here, on every way back (an exception a hook throws included): the
-    // change's own queue is let go, the World is Running again, and the step's
-    // new membership baseline and fresh snapshots are taken, since this change
-    // and its hooks' are the System's declared work (declaration 3.5 point 2).
+    // From here, on every way back: the change's own queue is let go, the
+    // World is Running again, and the step's new membership baseline and fresh
+    // snapshots are taken, since this change and its hooks' are the System's
+    // declared work (declaration 3.5 point 2). An exception that leaves the
+    // change (a hook or an InitialValue function threw) interrupts the World at
+    // once, like a level of the run stack (spec E.5): the records of every
+    // level not yet applied are dropped, what was applied stays, and the error
+    // is left for the outermost Run in case the System catches the exception
+    // (DI-KS 18; like X-16). The Executor catches nothing. trackRoundRecorders_
+    // is reset here for that path only (every other way back reset it).
     class Settle {
     public:
-        explicit Settle(World& world) noexcept : subject_(world) {}
+        Settle(World& world, const std::string& where) noexcept
+            : subject_(world), where_(where), exceptions_(std::uncaught_exceptions()) {}
         ~Settle() {
             subject_.hookTarget_ = nullptr;
             subject_.trackRoundRecorders_ = false;
-            if (subject_.state_ == WorldState::Applying) subject_.state_ = WorldState::Running;
+            if (std::uncaught_exceptions() > exceptions_) {
+                subject_.state_ = WorldState::Interrupted;
+                subject_.DiscardDeferred();
+                if (!subject_.leftError_) subject_.leftError_ = ImmediateAbortError(subject_, where_);
+            } else if (subject_.state_ == WorldState::Applying) {
+                subject_.state_ = WorldState::Running;
+            }
             subject_.runStack_.back().structure = subject_.MembershipEpoch();
             if (subject_.verification_) subject_.TakeSnapshots();
         }
@@ -700,11 +723,13 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
 
     private:
         World& subject_;
+        const std::string& where_;
+        int exceptions_;
     };
     // What the hooks this change runs record: applied below, before the change
     // returns; never the schedule's hook queue nor this level's window (DI-KS 19).
     World::HookQueue own{std::string(call.schedule), {}, 0};
-    Settle settle(world);
+    Settle settle(world, where);
     world.hookTarget_ = &own;
     // Spec F-5: while records are applied only hooks record (the System is waiting).
     world.state_ = WorldState::Applying;

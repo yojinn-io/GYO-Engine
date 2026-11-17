@@ -908,10 +908,15 @@ public:
     // changed what it does not declare before the call (A.6). A membership
     // change behind the handle, before or after, fails a GYO_ASSERT (W-3).
 
-    // Spawns with an id from the World's allotter (like Spawn<Bundle<C...>>):
-    // Err NoAllotter when none is declared, AllotterExhausted when used up.
+    // Spawns with an id from the World's allotter (like Spawn<Bundle<C...>>)
+    // and returns it. Nothing when the id the allotter gave is alive: the spawn
+    // is dropped and recorded as a RejectedSpawn (spec F-13, fromAllotter), and
+    // the caller holds no id of another entity. Err NoAllotter when none is
+    // declared, AllotterExhausted when used up: the change is not made and the
+    // call goes on, and the Run ends in that Err when the System returns
+    // (DI-KS 2, as for Spawn<Bundle<C...>>::New).
     template <class... C>
-    [[nodiscard]] Engine::Base::Result<EntityId, KernelError> Spawn(C... values) {
+    [[nodiscard]] Engine::Base::Result<std::optional<EntityId>, KernelError> Spawn(C... values) {
         static_assert(sizeof...(C) > 0, "ExclusiveWorld::Spawn names at least one component");
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, 0);
@@ -920,7 +925,8 @@ public:
          ...);
         auto done = Change(std::move(record));
         if (!done) return Engine::Base::Err(std::move(done).error());
-        return done->entity;
+        if (done->rejected) return std::optional<EntityId>{};
+        return std::optional<EntityId>{done->entity};
     }
 
     // Spawns with a given id. Nothing when it spawned; otherwise why it did not

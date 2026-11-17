@@ -37,10 +37,13 @@ bool ContainsError(const KernelError& error, const KernelError& wanted) {
                        [&](const KernelError& sibling) { return ContainsError(sibling, wanted); });
 }
 
+// A hook names the sync point step that ran it, or the step of the exclusive
+// System whose immediate change ran it.
 std::string CallText(const Detail::SystemContext& call) {
+    const bool syncPoint = call.hook && !call.immediateChange;
     return std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "' (schedule '" +
-           std::string(call.schedule) + "', " + (call.hook ? "sync point " : "") + "step " +
-           std::to_string(call.planPos) + ")";
+           std::string(call.schedule) + "', " + (syncPoint ? "sync point " : "") + "step " +
+           std::to_string(call.planPos) + (call.immediateChange ? ", an immediate change" : "") + ")";
 }
 
 } // namespace
@@ -464,6 +467,7 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.callSerial = ++callSerial_;
     call.syncEpoch = syncEpoch_;
     // S5: a hook an immediate change ran records into that change's own queue.
+    call.immediateChange = hookTarget_ != nullptr;
     HookQueue& queue = hookTarget_ != nullptr ? *hookTarget_ : HookQueueOf(schedule);
     call.queue = &queue.records;
     call.recSeq = &queue.recSeq;
@@ -484,8 +488,10 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);
     if (!error) return {};
     // One more layer of the context chain (vertical), not a sibling: the leaves keep their codes and rules.
-    error->Wrap("hook '" + record.name + "' at sync point step " + std::to_string(planPos) + " of schedule '" +
-                std::string(schedule) + "'");
+    error->Wrap("hook '" + record.name + "' at " +
+                (call.immediateChange ? "step " + std::to_string(planPos) + " (an immediate change)"
+                                      : "sync point step " + std::to_string(planPos)) +
+                " of schedule '" + std::string(schedule) + "'");
     return Engine::Base::Err(std::move(*error));
 }
 

@@ -81,7 +81,8 @@ enum class KernelErrorCode : std::uint8_t {
     // The codes below come with ExclusiveWorld's immediate structural changes
     // (declaration v8-arch-gyo2-kernel-subtract-structure 3.5; DI-KS 18, 21).
     // ExclusiveWorld::Spawn with no allotter declared (D-E3 cannot see at
-    // startup that an exclusive System spawns). The World goes on.
+    // startup that an exclusive System spawns). The change is not made and the
+    // call goes on; the Run ends in this Err when the System returns (DI-KS 2).
     NoAllotter,
     // An immediate change inside a Read or Modify closure: the reference the
     // closure holds would not survive it (like X-14). The World is interrupted.
@@ -89,6 +90,10 @@ enum class KernelErrorCode : std::uint8_t {
     // An immediate change through a hook's ExclusiveWorld<>: a hook runs while
     // records are applied (like X-13). The World is interrupted.
     HookChangesMembership,
+    // An exception left an immediate change (a hook or an InitialValue function
+    // it ran threw) and the System caught it (like X-16, NestedRunAborted). The
+    // World was interrupted when the exception left the change.
+    ImmediateChangeAborted,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;

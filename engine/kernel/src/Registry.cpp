@@ -40,6 +40,7 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::NoAllotter: return "NoAllotter";
     case KernelErrorCode::ClosureChangesMembership: return "ClosureChangesMembership";
     case KernelErrorCode::HookChangesMembership: return "HookChangesMembership";
+    case KernelErrorCode::ImmediateChangeAborted: return "ImmediateChangeAborted";
     }
     return "Unknown";
 }
@@ -90,6 +91,16 @@ std::string_view ToString(StartupReportCode code) noexcept {
     return "Unknown";
 }
 
+// DI-KS 15: every StartupCode has its text, so the guard that lists the codes by
+// their text ("DI-KS 15: the StartupCode values ...", RegistryTests.cpp) sees
+// every code. A value without a case is a build error, not a warning.
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wswitch"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(error : 4062)
+#endif
 std::string_view ToString(StartupCode code) noexcept {
     switch (code) {
     case StartupCode::DE1: return "D-E1";
@@ -121,6 +132,11 @@ std::string_view ToString(StartupCode code) noexcept {
     }
     return "Unknown";
 }
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 StartupReport::StartupReport(std::vector<StartupError> found)
     : code(StartupReportCode::StartupFailed),

@@ -123,6 +123,9 @@ struct SystemContext {
     std::uint32_t planPos = 0;
     Zone zone = Zone::B;
     bool hook = false;
+    // A hook an immediate change of ExclusiveWorld runs (S5): planPos is the
+    // exclusive System's step, not a sync point's (the error text says so).
+    bool immediateChange = false;
     Domain domain = Domain::None;
     std::uint64_t tick = 0;
     // The stamp this step took (spec E.2 step 3) and the mount's last-run stamp (B-12).
@@ -214,7 +217,8 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 // from the allotter; changed, whether there was something to change (Insert:
 // the entity is alive; Remove: the cell was there; Despawn: the entity was
 // alive; RemoveResource: it was present); rejected, why a spawn was dropped
-// and recorded (spec F-13).
+// and recorded (spec F-13; for an allotter's id that is alive too, so
+// ExclusiveWorld::Spawn returns no id).
 struct ImmediateOutcome {
     EntityId entity = 0;
     bool changed = false;
@@ -232,9 +236,13 @@ struct ImmediateOutcome {
 // from a hook (HookChangesMembership), inside a Read or Modify closure
 // (ClosureChangesMembership), with verification on when the System changed
 // what it does not declare before (A.6, compared first); an Interrupted World
-// changes nothing and returns the left error. Err, the World going on: no
-// allotter (NoAllotter), the allotter used up (AllotterExhausted).
-// GYO_ASSERT: the membership changed behind the handle before (W-3).
+// changes nothing and returns the left error. An exception that leaves the
+// change (a hook or an InitialValue function threw) interrupts the World and
+// leaves ImmediateChangeAborted for the outermost Run. Err, the change not
+// made and the call going on (the Run ends in that Err when the System
+// returns, DI-KS 2): no allotter (NoAllotter), the allotter used up
+// (AllotterExhausted). GYO_ASSERT: the membership changed behind the handle
+// before (W-3).
 [[nodiscard]] Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
                                                                                 ChangeStamp stamp, bool inClosure);
 

@@ -783,7 +783,7 @@ void CheckSwallowed(Rig& rig, KernelErrorCode code, const char* rule, const std:
     if (std::string_view(rule).empty() == false) {
         bool ruled = false;
         for (const KernelError* leaf : result.error().Leaves()) ruled = ruled || leaf->rule == rule;
-        CHECK_MESSAGE(ruled, "[" << tag << "] rule " << rule << ": " << result.error().Text());
+        CHECK_MESSAGE(ruled, "[" << tag << "] rule " << std::string(rule) << ": " << result.error().Text());
     }
     CHECK_MESSAGE(rig.world().State() == WorldState::Interrupted, "[" << tag << "]");
     CHECK_MESSAGE(rig.recorded.size() == 1, "[" << tag << "] the handler was called " << rig.recorded.size() << " times");
@@ -1289,11 +1289,14 @@ TEST_CASE("J-50: KernelSettings read and written through ExclusiveWorld: the rea
         rig->world().Insert(1, Pos{1});
         KeptWorld() = &rig->world();
         const auto first = rig->Run("Frame");
-        const auto second = rig->Run("Frame");
-        KeptWorld() = nullptr;
+        // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
         CHECK_MESSAGE(static_cast<bool>(first), "[ns-res-settings] the write counted in its own Run: " << Text(first));
-        CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
-                      "[ns-res-settings] the write was not read when the next Run started: " << Text(second));
+        if (first) {
+            const auto second = rig->Run("Frame");
+            CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                          "[ns-res-settings] the write was not read when the next Run started: " << Text(second));
+        }
+        KeptWorld() = nullptr;
     }
 }
 
@@ -1308,11 +1311,14 @@ TEST_CASE("J-50: a nested RunSchedule does not read KernelSettings again; the ne
     Runs()["Driver"] = {"Tick"};
     KeptWorld() = &rig->world();
     const auto first = rig->Run("Frame");
-    const auto second = rig->Run("Frame");
-    KeptWorld() = nullptr;
+    // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
     CHECK_MESSAGE(static_cast<bool>(first), "[ks-nested-reread] the nested run read KernelSettings again: " << Text(first));
-    CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
-                  "[ks-next-run] the next outermost Run did not read KernelSettings: " << Text(second));
+    if (first) {
+        const auto second = rig->Run("Frame");
+        CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                      "[ks-next-run] the next outermost Run did not read KernelSettings: " << Text(second));
+    }
+    KeptWorld() = nullptr;
 }
 
 TEST_CASE("J-50: a Startup System's change of KernelSettings counts from the next Run, not in the Run that ran Startup") {
@@ -1325,11 +1331,14 @@ TEST_CASE("J-50: a Startup System's change of KernelSettings counts from the nex
     rig->world().Insert(1, Pos{1});
     KeptWorld() = &rig->world();
     const auto first = rig->Run("Tick");
-    const auto second = rig->Run("Tick");
-    KeptWorld() = nullptr;
+    // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
     CHECK_MESSAGE(static_cast<bool>(first), "[ks-startup-same-run] Startup's write counted in its own Run: " << Text(first));
-    CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
-                  "[ks-startup-next-run] Startup's write was not read when the next Run started: " << Text(second));
+    if (first) {
+        const auto second = rig->Run("Tick");
+        CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                      "[ks-startup-next-run] Startup's write was not read when the next Run started: " << Text(second));
+    }
+    KeptWorld() = nullptr;
 }
 
 // ---- J-58: Startup run by the kernel
@@ -1653,7 +1662,8 @@ TEST_CASE("J-57: ExclusiveWorld writes and reads any value: the closure is calle
     rig->world().SetResource(CRes{1});
     rig->world().SetResource(Flag{1});
     rig->world().SetResource(Pinned{1});
-    static_cast<void>(rig->Run("Frame"));
+    const auto result = rig->Run("Frame");
+    CHECK_MESSAGE(static_cast<bool>(result), "[ns-written] the Run reported a write of the exclusive System: " << Text(result));
     CHECK_MESSAGE(Logged("codes ok ok ok ok ok ok called"), "[ns-written] " << Joined());
     CHECK_MESSAGE((rig->world().Get<Pos>(1)->x == 100 && rig->world().Get<Mode>(1)->m == 100 && rig->world().Resource<CRes>()->value == 100 &&
                       rig->world().Resource<Flag>()->on == 100 && rig->world().Resource<Pinned>()->value == 100),

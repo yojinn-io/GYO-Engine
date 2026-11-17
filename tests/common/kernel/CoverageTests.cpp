@@ -48,6 +48,8 @@ SystemResult HookSpawns(Spawn<Bundle<TestPos>>) { return Ok(); }
 SystemResult HookKeepsLocal(Local<int>, Query<Read<TestPos>>) { return Ok(); }
 bool VelChanged(Query<Changed<TestVel>>) { return true; }
 bool SettingsOn(Res<KernelSettings>) { return true; }
+SystemResult HookReadsSettings(Res<KernelSettings>) { return Ok(); }
+SystemResult HookWritesSettings(ResMut<KernelSettings>) { return Ok(); }
 bool ResIsSet(Res<TestRes>) { return true; }
 bool ReplicatedAny(SetRead<ReplicatedSet>) { return true; }
 
@@ -96,8 +98,11 @@ TEST_CASE("J-19: a Registrar or FinishContext cannot be copied or moved out of i
 // ---- B2: one schedule's errors are collected, not stopped at the first
 
 // The second error used to be an ambiguity (D-E8), which went with the ambiguity
-// detection (v8-arch-gyo2-no-ambiguity-detection); each case keeps two errors of
-// one schedule from two steps of its analysis.
+// detection (v8-arch-gyo2-no-ambiguity-detection). The first case keeps two errors
+// of one step of the analysis (D-E4 and D-E5 both come from the declared-order
+// step); the second keeps one of that step (D-E4) and one of a later step
+// (D-E16), so only the second shows that the analysis goes on after a step that
+// found an error.
 TEST_CASE("J-24: a missing target and an order against the stage order in one schedule are both reported") {
     Built built = FinishOne([](Registrar& r) {
         SharedData(r);
@@ -116,7 +121,8 @@ TEST_CASE("J-24: a missing target and a Derived read with no writer in one sched
         r.AddSystem<&ReadDerived>(Sys("UseDerived", Zone::C, Sim()));
     }, true);
     CHECK(ErrorCount(built, StartupCode::DE4) == 1);
-    CHECK(ErrorCount(built, StartupCode::DE16) == 1);
+    CHECK_MESSAGE(ErrorCount(built, StartupCode::DE16) == 1,
+                  "[rs-b2-after-declared] the analysis stopped after the declared-order step found an error: " << Describe(built));
 }
 
 // ---- B4: plugins' Finish reads final named sets and Systems
@@ -197,6 +203,18 @@ TEST_CASE("J-24: a mount's or a set's run condition may read KernelSettings") {
         r.AddSystem<&ReadMarker>(Sys("Gated", Zone::B, {InSet(At("Update", "First"), "Gated")}));
     });
     KERNEL_REQUIRE_OK(setSettings);
+}
+
+// D-E18 is gone for hooks too (v8-arch-gyo2-kernel-subtract-structure 3.7).
+TEST_CASE("J-24: a hook may declare KernelSettings, read or write") {
+    Built reads = FinishOne([](Registrar& r) {
+        r.Hook<TestMarker, &HookReadsSettings>(HookTrigger::OnAdd, {.name = "HookReadsSettings", .zone = Zone::B});
+    });
+    CHECK_MESSAGE(static_cast<bool>(reads.result), "[ks-s7-hook-settings] Res<KernelSettings> in a hook: " << Describe(reads));
+    Built writes = FinishOne([](Registrar& r) {
+        r.Hook<TestMarker, &HookWritesSettings>(HookTrigger::OnRemove, {.name = "HookWritesSettings", .zone = Zone::B});
+    });
+    CHECK_MESSAGE(static_cast<bool>(writes.result), "[ks-s7-hook-settings] ResMut<KernelSettings> in a hook: " << Describe(writes));
 }
 
 TEST_CASE("J-47: a set's run condition reading a named set with a zone B member makes a zone C member fail (Z1)") {

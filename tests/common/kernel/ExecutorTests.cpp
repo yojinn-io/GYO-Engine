@@ -81,6 +81,10 @@ TEST_CASE("J-6: a World access while Running with no System current fails a GYO_
         world.Insert(1, Boundary{1});
         world.Insert(1, Tag{1});
         world.SetResource(Out{3});
+        world.Insert(1, Pos{2});
+        world.SetResource(CRes{4});
+        CHECK_MESSAGE((world.Get<Pos>(1)->x == 2 && world.Resource<CRes>()->value == 4),
+                      "[ks-s8-host-zone-c] the Host's zone C writes after the first Run were not made");
         KERNEL_REQUIRE_RUN_OK(rig->Run());
     }
 }
@@ -170,6 +174,14 @@ SystemResult ExclusiveSetsBound(ExclusiveWorld<> world) {
     if (auto set = world.SetResource(Bound{5}); !set) return Engine::Base::Err(std::move(set).error());
     return Ok();
 }
+SystemResult CommandsRemovesBound(Commands commands) {
+    commands.RemoveResource<Bound>();
+    return Ok();
+}
+SystemResult ExclusiveRemovesBound(ExclusiveWorld<> world) {
+    if (auto removed = world.RemoveResource<Bound>(); !removed) return Engine::Base::Err(std::move(removed).error());
+    return Ok();
+}
 const void* BoundThread(World& world) {
     return Detail::ResourceAt(world, Detail::ResourceIdOf(world, KeyOf<Bound>())).thread;
 }
@@ -196,7 +208,10 @@ TEST_CASE("J-6: a thread-bound resource is used on the thread it was put in on; 
     CHECK_MESSAGE(!Asserts([&] { static_cast<void>(rig->world().Summary()); }), "J-6 thread-bound: the same thread reads the summary");
     Worker worker;
     rig->world().RemoveResource<Bound>();
-    worker.Do([&] { rig->world().SetResource(Bound{2}); });
+    bool asserted = false;
+    worker.Do([&] { asserted = Asserts([&] { rig->world().SetResource(Bound{2}); }); });
+    // Judged here, on this thread: when the thread was not forgotten the worker's put-in failed a GYO_ASSERT.
+    REQUIRE_MESSAGE(!asserted, "[ks-s10-thread-forgotten] after World::RemoveResource the thread was kept: another thread could not put it in");
     worker.Do([&] { rig->world().RemoveResource<Bound>(); });
     CHECK_MESSAGE(!Asserts([&] { rig->world().SetResource(Bound{3}); }),
                   "J-6 thread-bound: after a removal the thread is forgotten and another thread puts it in");
@@ -229,9 +244,29 @@ TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetRe
     }
 }
 
+// Only the same thread here, as above: the stored thread is read back, not compared with another thread's.
+TEST_CASE("J-6: a thread-bound resource taken out by a sync point's Commands::RemoveResource or by ExclusiveWorld forgets its thread") {
+    SUBCASE("Commands::RemoveResource, applied at the sync point") {
+        auto rig = BoundRig([](Registrar& r) { r.AddSystem<&CommandsRemovesBound>(B("CommandsRemovesBound", "A")); });
+        rig->world().SetResource(Bound{1});
+        REQUIRE(BoundThread(rig->world()) == Detail::CurrentThreadToken());
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK(rig->world().Resource<Bound>() == nullptr);
+        CHECK_MESSAGE(BoundThread(rig->world()) == nullptr, "[ks-s6-thread-forgotten] the sync point's removal kept the thread");
+    }
+    SUBCASE("ExclusiveWorld::RemoveResource, now") {
+        auto rig = BoundRig([](Registrar& r) { r.AddSystem<&ExclusiveRemovesBound>(B("ExclusiveRemovesBound", "A")); });
+        rig->world().SetResource(Bound{1});
+        REQUIRE(BoundThread(rig->world()) == Detail::CurrentThreadToken());
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK(rig->world().Resource<Bound>() == nullptr);
+        CHECK_MESSAGE(BoundThread(rig->world()) == nullptr, "[ks-s6-thread-forgotten] the immediate removal kept the thread");
+    }
+}
+
 TEST_CASE("J-6: a thread-bound resource touched on another thread fails a GYO_ASSERT") {
     struct Touch {
-        const char* what;
+        std::string what;
         void (*add)(Registrar&);
         std::function<void(Rig&)> touch;
     };
@@ -247,15 +282,30 @@ TEST_CASE("J-6: a thread-bound resource touched on another thread fails a GYO_AS
         {"an overwrite with World::SetResource", nullptr, [](Rig& rig) { rig.world().SetResource(Bound{9}); }},
         {"World::RemoveResource", nullptr, [](Rig& rig) { rig.world().RemoveResource<Bound>(); }},
         {"World::Summary", nullptr, [](Rig& rig) { static_cast<void>(rig.world().Summary()); }},
+        // The resource step of a sync point and of an immediate change (S6, S5).
+        {"Commands::SetResource at a sync point", [](Registrar& r) { r.AddSystem<&CommandsSetsBound>(B("CommandsSetsBound", "A")); },
+         [](Rig& rig) { static_cast<void>(rig.Run()); }},
+        {"Commands::RemoveResource at a sync point", [](Registrar& r) { r.AddSystem<&CommandsRemovesBound>(B("CommandsRemovesBound", "A")); },
+         [](Rig& rig) { static_cast<void>(rig.Run()); }},
+        {"ExclusiveWorld::SetResource", [](Registrar& r) { r.AddSystem<&ExclusiveSetsBound>(B("ExclusiveSetsBound", "A")); },
+         [](Rig& rig) { static_cast<void>(rig.Run()); }},
+        {"ExclusiveWorld::RemoveResource", [](Registrar& r) { r.AddSystem<&ExclusiveRemovesBound>(B("ExclusiveRemovesBound", "A")); },
+         [](Rig& rig) { static_cast<void>(rig.Run()); }},
     };
     for (const Touch& touch : touches) {
         CAPTURE(touch.what);
         Worker worker;
         std::unique_ptr<Rig> rig = BoundRig(touch.add);
         worker.Do([&] { rig->world().SetResource(Bound{1}); });
-        CHECK_MESSAGE(Asserts([&] { touch.touch(*rig); }), "J-6 thread-bound: " << touch.what << " on another thread did not assert");
-        // The thread that put it in destroys the World (destroying it elsewhere would assert too).
-        worker.Do([&] { rig.reset(); });
+        const bool asserted = Asserts([&] { touch.touch(*rig); });
+        CHECK_MESSAGE(asserted, "J-6 thread-bound: " << touch.what << " on another thread did not assert");
+        if (asserted) {
+            // The thread that put it in destroys the World (destroying it elsewhere would assert too).
+            worker.Do([&] { rig.reset(); });
+        } else {
+            // The touch may have taken the resource to this thread: no thread can destroy it without an assertion.
+            static_cast<void>(rig.release());
+        }
     }
 }
 
@@ -428,6 +478,14 @@ SystemResult UntypedIntoShared(Commands commands) {
     commands.Insert(1, Tag{5});
     return Ok();
 }
+// No run-time interception (S8): untyped Commands of a zone B System into a zone C
+// column and a single-writer column are recorded and applied like any other.
+SystemResult UntypedIntoAnyColumn(Commands commands) {
+    commands.Insert(1, Pos{7});
+    commands.Insert(1, Mode{8});
+    commands.Remove<Pos>(2);
+    return Ok();
+}
 // Spawn::New on a used-up allotter is a kernel Err (W-9). Drops it and returns
 // another one: both are reported.
 SystemResult DroppedBesideOwn(Spawn<Bundle<Tag>> spawn) {
@@ -488,6 +546,21 @@ TEST_CASE("J-32b: untyped Commands write zone B Shared columns; a kernel Err the
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         REQUIRE(rig->world().Get<Tag>(1) != nullptr);
         CHECK(rig->world().Get<Tag>(1)->t == 5);
+        CHECK(rig->recorded.empty());
+    }
+    SUBCASE("any column: zone C and single-writer columns are applied too") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&UntypedIntoAnyColumn>(B("UntypedIntoAnyColumn", "A"));
+        }, false);
+        rig->world().Insert(1, Tag{0});
+        rig->world().Insert(2, Pos{2});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE((rig->world().Get<Pos>(1) != nullptr && rig->world().Get<Pos>(1)->x == 7),
+                      "J-32b any column: the untyped insert was not applied (zone C)");
+        CHECK_MESSAGE((rig->world().Get<Mode>(1) != nullptr && rig->world().Get<Mode>(1)->m == 8),
+                      "J-32b any column: the untyped insert was not applied (single writer)");
+        CHECK_MESSAGE(rig->world().Get<Pos>(2) == nullptr, "J-32b any column: the untyped remove was not applied (zone C)");
         CHECK(rig->recorded.empty());
     }
 }
@@ -635,9 +708,10 @@ SystemResult ExclusiveAllowed(ExclusiveWorld<> world) {
 SystemResult ExclusiveSpawns(ExclusiveWorld<> world) {
     auto id = world.Spawn(Tag{3});
     if (!id) return Engine::Base::Err(std::move(id).error());
-    auto tag = world.Read<Tag>(*id, [](const Tag& t) { return t.t; });
+    if (!*id) return Ok();
+    auto tag = world.Read<Tag>(**id, [](const Tag& t) { return t.t; });
     if (!tag) return Engine::Base::Err(std::move(tag).error());
-    Log().push_back("spawned " + std::to_string(*id) + " tag " + std::to_string(tag->value_or(-1)));
+    Log().push_back("spawned " + std::to_string(**id) + " tag " + std::to_string(tag->value_or(-1)));
     return Ok();
 }
 
@@ -710,6 +784,10 @@ SystemResult ReadUndeclared(Query<Read<Tag>>) {
     static_cast<void>(KeptWorld()->Get<Pos>(1));
     return Ok();
 }
+SystemResult ReadUndeclaredWhenKept(Query<Read<Tag>>) {
+    if (KeptWorld() != nullptr) static_cast<void>(KeptWorld()->Get<Pos>(1));
+    return Ok();
+}
 // Turns access verification on (KernelSettings is an ordinary resource: D-E18 is gone).
 SystemResult TurnVerificationOn(ResMut<KernelSettings> settings) {
     settings->accessVerification = true;
@@ -737,6 +815,24 @@ TEST_CASE("J-50: KernelSettings is read when each Run starts; the Host writes it
         CHECK_MESSAGE(HasCode(next, KernelErrorCode::AccessViolation),
                       "J-50 next Run: the Host's write between Runs was not read when the next Run started");
         CHECK(clean->executor->Verification().accessVerification);
+    }
+    {
+        // breakOnKernelError turned on between two Runs: the break hook is called in the next Run.
+        auto late = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&ReadUndeclared>(B("ReadUndeclared", "A"));
+        }, false);
+        late->world().Insert(1, Pos{1});
+        int breaks = 0;
+        late->world().SetBreakHook([&breaks](const KernelError&) { ++breaks; });
+        KeptWorld() = &late->world();
+        KERNEL_REQUIRE_RUN_OK(late->Run());
+        late->world().SetResource(KernelSettings{true, true});
+        const auto next = late->Run();
+        KeptWorld() = nullptr;
+        CHECK(HasCode(next, KernelErrorCode::AccessViolation));
+        CHECK_MESSAGE(breaks > 0, "J-50 next Run: breakOnKernelError written between Runs was not read (break hook calls " << breaks << ")");
+        CHECK(late->executor->Verification().breakOnKernelError);
     }
 
     auto rig = MakeRig([](Registrar& r) {
@@ -781,11 +877,36 @@ TEST_CASE("J-50: a System's change of KernelSettings takes effect at the next Ru
     rig->world().Insert(1, Pos{1});
     KeptWorld() = &rig->world();
     const auto first = rig->Run();
-    const auto second = rig->Run();
-    KeptWorld() = nullptr;
+    // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
     CHECK_MESSAGE(static_cast<bool>(first), "J-50 same Run: verification turned on in the Run that wrote it: " << Text(first));
-    CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
-                  "J-50 next Run: a System's write of KernelSettings was not read when the next Run started");
+    if (first) {
+        const auto second = rig->Run();
+        CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                      "J-50 next Run: a System's write of KernelSettings was not read when the next Run started");
+    }
+    KeptWorld() = nullptr;
+}
+
+TEST_CASE("J-50: KernelSettings removed between two Runs: the next Run uses the defaults (verification and break off)") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&ReadUndeclaredWhenKept>(B("ReadUndeclaredWhenKept", "A"));
+    }, false);
+    rig->world().Insert(1, Pos{1});
+    rig->world().SetResource(KernelSettings{true, true});
+    int breaks = 0;
+    rig->world().SetBreakHook([&breaks](const KernelError&) { ++breaks; });
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // no World kept: nothing undeclared is read yet
+    REQUIRE(rig->executor->Verification().accessVerification);
+    REQUIRE(rig->executor->Verification().breakOnKernelError);
+    rig->world().RemoveResource<KernelSettings>();
+    KeptWorld() = &rig->world();
+    const auto next = rig->Run();
+    KeptWorld() = nullptr;
+    CHECK_MESSAGE(!rig->executor->Verification().accessVerification, "J-50 removed: accessVerification kept the last value");
+    CHECK_MESSAGE(!rig->executor->Verification().breakOnKernelError, "J-50 removed: breakOnKernelError kept the last value");
+    CHECK_MESSAGE(static_cast<bool>(next), "J-50 removed: the undeclared read was reported: " << Text(next));
+    CHECK(breaks == 0);
 }
 
 TEST_CASE("J-50: verification on, off for two Runs while data changes, on again: no false report") {
@@ -818,6 +939,18 @@ SystemResult InsertTagOnce(CommandsFor<Inserts<Tag>, Removes<>> commands, Curren
     if (tick.Tick() == 1) commands.Insert(1, Tag{1});
     return Ok();
 }
+SystemResult DespawnsOne(Despawn despawn) {
+    despawn.Entity(1);
+    return Ok();
+}
+SystemResult TagHookDespawnsOne(HookCtx, Despawn despawn) {
+    despawn.Entity(1);
+    return Ok();
+}
+SystemResult TagsTwo(CommandsFor<Inserts<Tag>, Removes<>> commands) {
+    commands.Insert(2, Tag{2});
+    return Ok();
+}
 SystemResult ZoneCInsertsAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, CurrentTick tick) {
     if (tick.Tick() == 2) commands.Insert(1, Pos{2});
     return Ok();
@@ -838,6 +971,31 @@ SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32
 }
 
 } // namespace
+
+// Z5 is gone (S8): a zone B System's or hook's despawn of an entity that holds a
+// zone C column is recorded and applied like any other.
+TEST_CASE("J-52: a zone B despawn of an entity with a zone C column is applied (no Z5)") {
+    SUBCASE("a zone B System") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&DespawnsOne>(B("DespawnsOne", "A"));
+        }, false);
+        rig->world().Insert(1, Pos{1});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 zone C entity: the despawn was not applied (System)");
+    }
+    SUBCASE("a zone B hook") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.Hook<Tag, &TagHookDespawnsOne>(HookTrigger::OnAdd, {.name = "TagHookDespawnsOne", .zone = Zone::B});
+            r.AddSystem<&TagsTwo>(B("TagsTwo", "A"));
+        }, false);
+        rig->world().Insert(1, Pos{1});
+        rig->world().Insert(2, Pos{2});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 zone C entity: the despawn was not applied (hook)");
+    }
+}
 
 // The Z5 recheck at the sync point went with the run-time interception
 // (v8-arch-gyo2-no-runtime-interception); what stays is how a hook's despawn and
