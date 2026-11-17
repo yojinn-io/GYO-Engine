@@ -1,4 +1,6 @@
-# Kernel 與編排層的邊界：事前宣告（統合；修訂 38）
+# Kernel 與編排層的邊界：事前宣告（統合；修訂 38；**已核准**）
+
+> **核准**：使用者 2026-11-17「全部核准」——本頁修訂 38（c1be70eb）與權威份（7f9bbb85）、回滾份（9418fcf1）、游標份（758f651f）的修訂、讀檔修訂 11 一起核准（主會話轉達；HANDOFF `v8-arch-gyo2-five-declarations-approved`，8ac7ae16）。**這不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。併入 gyo2 的路由由主會話與使用者定。
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-kernel-app-boundary`。推導與四家（Bevy、flecs、Unity Entities、Unreal Mass）的對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
