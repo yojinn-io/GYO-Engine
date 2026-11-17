@@ -38,7 +38,7 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "2:1162cbf8b5eb8d24bbda07184d0a4dd1467a439a407a8a344bdf271db4feec9c";
+    "3:6534b886c3f029f5a429893934c62c158e2d94990567484927bad55b19ec7179";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {
@@ -62,7 +62,7 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
     CHECK(frozen.SystemNamed("WriteHealth")->registrationSeq == 1U);
     MESSAGE("J-18 registry fingerprint: " << frozen.RegistryFingerprint().Text());
     CHECK(frozen.RegistryFingerprint().Text() == kJ18RegistryGolden);
-    CHECK(frozen.RegistryFingerprint().version == 2U);
+    CHECK(frozen.RegistryFingerprint().version == 3U);
 }
 
 TEST_CASE("J-18: swapping two plugins gives ids in the new order") {
@@ -222,4 +222,30 @@ TEST_CASE("J-24: R-E1 to R-E4 each from a minimal Registry, all in one report") 
     CHECK(report.Has(StartupCode::RE3));
     CHECK(report.Has(StartupCode::RE4));  // TestHealth's owner "dup" (the second) was not built
     CHECK(report.errors.size() >= 4);
+}
+
+// DI-KS 15 (target/kernel.zh-Hant.md): the startup errors are only the kept list
+// of the kernel's duties, plus the codes still in transition (taken out by a
+// later batch: then they leave this table in the same change). Read through
+// ToString: an enum value without a text is "Unknown" and not a code.
+TEST_CASE("DI-KS 15: the StartupCode values are the kernel's kept codes plus the codes still in transition") {
+    std::vector<std::string> codes;
+    for (int value = 0; value <= 255; ++value) {
+        const std::string_view text = ToString(static_cast<StartupCode>(value));
+        if (text != "Unknown") codes.emplace_back(text);
+    }
+    std::sort(codes.begin(), codes.end());
+    // Kept (integration declaration section 3.1; segment 2 of v8-arch-gyo2-kernel-subtract-structure adds R-E7).
+    std::vector<std::string> expected{"D-E1", "D-E3", "D-E4", "D-E5", "D-E6", "D-E7", "D-E14", "D-E17", "D-E19", "D-E20",
+                                      "R-E2", "R-E4", "R-E5"};
+    // In transition, still in the kernel: Startup and the plugin list (batch 2, the orchestration layer: D-E21,
+    // R-E1, R-E3, R-E6); clock and event domains (batch 3: D-E12, F-E1); zones, the writer count and rollback
+    // declarations (batch 4, authority and rollback: D-E2, D-E9, D-E11, D-E15, D-E16, X-E1).
+    for (const char* code : {"D-E21", "R-E1", "R-E3", "R-E6", "D-E12", "F-E1", "D-E2", "D-E9", "D-E11", "D-E15", "D-E16", "X-E1"}) {
+        expected.emplace_back(code);
+    }
+    std::sort(expected.begin(), expected.end());
+    std::string listed;
+    for (const std::string& code : codes) listed += (listed.empty() ? "" : " ") + code;
+    CHECK_MESSAGE(codes == expected, "DI-KS 15 codes: the StartupCode values are " << listed);
 }

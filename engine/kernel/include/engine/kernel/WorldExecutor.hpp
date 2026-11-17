@@ -43,7 +43,8 @@
 // a GYO_ASSERT.
 //
 // v1 is Serial only (LIM-2). The WorldExecutor owns no thread (DI-KS 15): Run is called
-// on the schedule's runner thread by the Host.
+// on one thread at a time by the caller, who decides which thread runs what
+// (DI-KS 14); a thread-bound resource asserts when another thread touches it.
 
 #include "engine/base/Result.hpp"
 #include "engine/kernel/KernelError.hpp"

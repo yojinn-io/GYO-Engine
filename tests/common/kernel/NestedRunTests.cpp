@@ -1099,7 +1099,7 @@ TEST_CASE("J-57: a closure inside a closure reads another component") {
 // ---- J-57: resources
 
 namespace {
-struct Pinned { std::int32_t value; };  // resource, zone B, affinity "Render"
+struct Pinned { std::int32_t value; };  // resource, zone B, thread-bound
 
 SystemResult ReadsResources(ExclusiveWorld<> world) {
     auto out = world.Read<Out>([](const Out& o) { return o.value; });
@@ -1119,11 +1119,6 @@ SystemResult ReadsAbsentResource(ExclusiveWorld<> world) {
     });
     if (!out) return Engine::Base::Err(std::move(out).error());
     Log().push_back(std::string("absent out ") + (*out ? "value" : "nothing") + (called ? " called" : " not called"));
-    return Ok();
-}
-SystemResult ReadsPinned(ExclusiveWorld<> world) {
-    auto pinned = world.Read<Pinned>([](const Pinned& p) { return p.value; });
-    if (!pinned) return Engine::Base::Err(std::move(pinned).error());
     return Ok();
 }
 SystemResult ReadsSettings(ExclusiveWorld<> world) {
@@ -1173,11 +1168,11 @@ SystemResult Ingress(ExclusiveWorld<>) { return Ok(); }
 
 void ResourceRig(Registrar& r) {
     Nest(r);
-    r.Resource<Pinned>({.name = "Pinned", .zone = Zone::B, .affinity = Affinity::Named("Render")});
+    r.Resource<Pinned>({.name = "Pinned", .zone = Zone::B, .threadBound = true});
 }
 } // namespace
 
-TEST_CASE("J-57: resources: any is read; one absent is not; KernelSettings is Err") {
+TEST_CASE("J-57: resources: any is read; one absent is not") {
     {
         auto rig = NestRig([](Registrar& r) {
             ResourceRig(r);
@@ -1197,23 +1192,6 @@ TEST_CASE("J-57: resources: any is read; one absent is not; KernelSettings is Er
         KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
         CHECK_MESSAGE(Logged("absent out nothing not called"), "[ns-res-absent] " << Joined());
     }
-}
-
-TEST_CASE("J-57: resources: one whose affinity the runner does not satisfy is Err, the World interrupted, the message names the System and the resource") {
-    auto rig = NestRig([](Registrar& r) {
-        ResourceRig(r);
-        r.AddSystem<&ReadsPinned>(In("ReadsPinned", "Frame", "Drive"));
-    });
-    rig->world().SetResource(Pinned{1});
-    const auto result = rig->Run("Frame");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-res-affinity] read");
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::UnreadableResource), "[ns-res-affinity] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find("[S-16]") != std::string::npos, "[ns-res-affinity] rule: " << result.error().Text());
-    const std::string text = result.error().Text();
-    CHECK_MESSAGE((text.find("'Pinned'") != std::string::npos && text.find("'ReadsPinned'") != std::string::npos &&
-                      text.find("Render") != std::string::npos),
-                  "[ns-res-affinity] " << text);
-    CHECK(rig->world().State() == WorldState::Interrupted);
 }
 
 TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an unlisted single-writer one are written") {
@@ -1676,9 +1654,9 @@ TEST_CASE("J-57: ExclusiveWorld writes and reads any value: the closure is calle
     rig->world().SetResource(Flag{1});
     rig->world().SetResource(Pinned{1});
     static_cast<void>(rig->Run("Frame"));
-    CHECK_MESSAGE(Logged("codes ok ok ok ok ok UnreadableResource called"), "[ns-written] " << Joined());
+    CHECK_MESSAGE(Logged("codes ok ok ok ok ok ok called"), "[ns-written] " << Joined());
     CHECK_MESSAGE((rig->world().Get<Pos>(1)->x == 100 && rig->world().Get<Mode>(1)->m == 100 && rig->world().Resource<CRes>()->value == 100 &&
-                      rig->world().Resource<Flag>()->on == 100 && rig->world().Resource<Pinned>()->value == 1),
+                      rig->world().Resource<Flag>()->on == 100 && rig->world().Resource<Pinned>()->value == 100),
                   "[ns-written] a value was not written");
 }
 

@@ -76,8 +76,20 @@ World::HookQueue& World::HookQueueOf(std::string_view schedule) {
 }
 
 // Spec W-7: columns in ascending ComponentId order, each in ascending EntityId order (Column's destructor).
+// DI-KS 14: a thread-bound resource's value is destroyed only on its thread.
 World::~World() {
+    for (std::size_t r = 0; r < resources_.size(); ++r) CheckThread(static_cast<ResourceId>(r));
     for (auto& column : columns_) column.reset();
+}
+
+void World::CheckThread(ResourceId id) const {
+    if (!data_->resources[id].threadBound) return;
+    const Detail::ResourceBase& slot = *resources_[id];
+    GYO_ASSERT(slot.thread == nullptr || slot.thread == Detail::CurrentThreadToken());
+}
+
+void World::BindThread(ResourceId id) {
+    if (data_->resources[id].threadBound) resources_[id]->thread = Detail::CurrentThreadToken();
 }
 
 // ---- Public reads and Host writes
@@ -260,6 +272,7 @@ ColumnBase& ColumnAt(World& world, ComponentId id) {
 
 ResourceBase& ResourceAt(World& world, ResourceId id) {
     RequireRunningCall(world);
+    world.CheckThread(id);
     return *world.resources_[id];
 }
 
@@ -321,21 +334,6 @@ KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rul
     if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
     call.returned.push_back(error);
     return error;
-}
-
-std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource) {
-    const World& world = *call.world;
-    const ResourceInfo& info = world.data_->resources[resource];
-    const Detail::ScheduleRecord* schedule = world.data_->FindSchedule(std::string(call.schedule));
-    const std::string runner = schedule != nullptr ? schedule->options.runner : std::string();
-    if (!info.affinity.IsAny() && info.affinity.role != runner) {
-        // X-3 at run time: a System's other reads are checked at startup; this one is not in its signature.
-        return CallError(call, KernelErrorCode::UnreadableResource, "S-16",
-                         "ExclusiveWorld read of resource '" + info.name + "' by System '" + std::string(call.name) +
-                             "': the resource needs thread role '" + info.affinity.role + "' but schedule '" +
-                             std::string(call.schedule) + "' runs on '" + runner + "'");
-    }
-    return std::nullopt;
 }
 
 std::uint64_t CurrentSyncEpoch(const World& world) noexcept {
@@ -713,10 +711,13 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         });
         for (Record* op : resourceOps) {
             Detail::ResourceBase& slot = *resources_[op->id];
+            CheckThread(op->id);
             if (op->kind == RecordKind::ResourceInsert) {
                 op->value->PutInto(slot);
+                BindThread(op->id);
             } else {
                 slot.Reset();
+                slot.thread = nullptr;
             }
             slot.changed = stamp;
         }
@@ -926,6 +927,7 @@ Fingerprint World::Summary() const {
     out.U32(resources_.size() - 1);
     for (std::size_t r = 0; r < resources_.size(); ++r) {
         if (r == data_->kernelSettings) continue;
+        CheckThread(static_cast<ResourceId>(r));
         out.U8(resources_[r]->Present() ? 1U : 0U);
         out.Raw(resources_[r]->StorageBytes());
     }

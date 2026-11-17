@@ -184,6 +184,7 @@ public:
     template <class T>
     [[nodiscard]] const T* Resource() const {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeRead, false);
         const auto& slot = TypedResource<T>(resource);
         return slot.value ? &*slot.value : nullptr;
@@ -192,6 +193,7 @@ public:
     template <class T>
     [[nodiscard]] T* ResourceMut() {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeWrite, false);
         auto& slot = TypedResource<T>(resource);
         if (!slot.value) return nullptr;
@@ -204,17 +206,21 @@ public:
     template <class T>
     void SetResource(T value) {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeWrite, true);
         auto& slot = TypedResource<T>(resource);
         slot.value = std::move(value);
         slot.changed = WriteStamp();
+        BindThread(resource);
     }
 
     template <class T>
     void RemoveResource() {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeWrite, true);
         TypedResource<T>(resource).value.reset();
+        TypedResource<T>(resource).thread = nullptr;
     }
 
     // ---- Events (read-only views for the Host and tests: every record kept)
@@ -315,7 +321,6 @@ private:
     friend std::vector<ComponentId> Detail::SetMembersOf(const World&, TypeKey);
     friend void Detail::Push(Detail::SystemContext&, Detail::Record);
     friend KernelError Detail::CallError(Detail::SystemContext&, KernelErrorCode, std::string, std::string);
-    friend std::optional<KernelError> Detail::CheckExclusiveRead(Detail::SystemContext&, ResourceId);
     friend std::uint64_t Detail::CurrentSyncEpoch(const World&) noexcept;
     friend ChangeStamp Detail::NextStamp(World&) noexcept;
     friend Detail::ResourceBase* Detail::AllotterSlot(World&) noexcept;
@@ -337,6 +342,10 @@ private:
     // The checks of every public access (see the file comment). structural:
     // insert, remove, despawn or resource presence.
     void Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, bool structural) const;
+    // DI-KS 14: a thread-bound resource that holds a value is touched only on the
+    // thread that put it in (GYO_ASSERT); BindThread records this thread.
+    void CheckThread(ResourceId id) const;
+    void BindThread(ResourceId id);
     void MakeAlive(EntityId id);
     // The stamp a write through the World API carries: in a run, the current
     // step's; in Ready, the stamp the next step will take (a Host write belongs

@@ -34,7 +34,6 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::ExtractNotNestable: return "ExtractNotNestable";
     case KernelErrorCode::HookRunsSchedule: return "HookRunsSchedule";
     case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
-    case KernelErrorCode::UnreadableResource: return "UnreadableResource";
     case KernelErrorCode::NestedRunAborted: return "NestedRunAborted";
     }
     return "Unknown";
@@ -96,10 +95,8 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE6: return "D-E6";
     case StartupCode::DE7: return "D-E7";
     case StartupCode::DE9: return "D-E9";
-    case StartupCode::DE10: return "D-E10";
     case StartupCode::DE11: return "D-E11";
     case StartupCode::DE12: return "D-E12";
-    case StartupCode::DE13: return "D-E13";
     case StartupCode::DE14: return "D-E14";
     case StartupCode::DE15: return "D-E15";
     case StartupCode::DE16: return "D-E16";
@@ -114,8 +111,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::RE5: return "R-E5";
     case StartupCode::RE6: return "R-E6";
     case StartupCode::XE1: return "X-E1";
-    case StartupCode::XE2: return "X-E2";
-    case StartupCode::XE3: return "X-E3";
     case StartupCode::FE1: return "F-E1";
     }
     return "Unknown";
@@ -409,7 +404,7 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
     }
     data.resources.push_back(ResourceInfo{std::move(options.name), shape.size, shape.align, options.writePolicy,
                                           options.zone, options.role, options.rollback, options.external,
-                                          std::move(options.affinity), data.OwnerName(plugin_)});
+                                          options.threadBound, data.OwnerName(plugin_)});
     data.resourceMakers.push_back(make);
     return id;
 }
@@ -649,7 +644,7 @@ Registry::Registry(std::vector<Plugin*> plugins)
                                            Detail::TypeRole::Resource, data.kernelSettings, Detail::kKernelOwner});
     data.resources.push_back(ResourceInfo{"KernelSettings", sizeof(KernelSettings), alignof(KernelSettings),
                                           WritePolicy::Exclusive, Zone::B, Role::State, Rollback::No, true,
-                                          Affinity::Any(), Detail::kKernelOwnerName});
+                                          false, Detail::kKernelOwnerName});
     data.resourceMakers.push_back(&Detail::MakeResource<KernelSettings>);
     data.effects.push_back(Detail::EffectRecord{Detail::kDiagnosticsEffect, Detail::kKernelOwner});
 }
@@ -938,9 +933,6 @@ void CheckSchedules(RegistryData& data) {
             data.Error(StartupCode::DE17, "X-2", "schedule '" + s.name + "' declares Parallel; v1 has only Serial (LIM-2)",
                        {s.name});
         }
-        if (s.runner.empty()) {
-            data.Error(StartupCode::DE13, "H-2", "schedule '" + s.name + "' names no runner", {s.name});
-        }
     }
     for (Domain domain : usedDomains) {
         const std::vector<std::string>& names = clocks[domain];
@@ -950,16 +942,6 @@ void CheckSchedules(RegistryData& data) {
                        std::string("domain ") + DomainName(domain) + " has " + std::to_string(names.size()) +
                            " clock schedules; a World has exactly one per domain",
                        subjects);
-        }
-    }
-    for (std::size_t i = 1; i < data.schedules.size(); ++i) {
-        const ScheduleOptions& first = data.schedules[0].options;
-        const ScheduleOptions& other = data.schedules[i].options;
-        if (other.runner != first.runner && !other.runner.empty() && !first.runner.empty()) {
-            data.Error(StartupCode::DE13, "H-2",
-                       "schedules '" + first.name + "' (runner " + first.runner + ") and '" + other.name + "' (runner " +
-                           other.runner + ") of one World run on different threads; two threads need two Worlds",
-                       {first.name, other.name});
         }
     }
 }
@@ -1370,22 +1352,6 @@ void CheckSystems(RegistryData& data) {
                                subject + " uses event '" + event.name + "' (domain " + DomainName(event.domain) +
                                    ") in schedule '" + s.name + "', which is not that domain's clock schedule",
                                {name, event.name, s.name}, {source});
-                }
-            }
-            // Affinity (spec E.3, X-3): of the System, then of every resource it touches.
-            const auto checkAffinity = [&](const Affinity& affinity, const std::string& holder) {
-                if (affinity.IsAny() || affinity.role == s.runner) return;
-                const bool main = affinity.role == kMainRole;
-                data.Error(main ? StartupCode::XE2 : StartupCode::XE3, StartupCode::DE10, "X-3",
-                           holder + " needs thread role '" + affinity.role + "' but schedule '" + s.name +
-                               "' runs on '" + s.runner + "'",
-                           {name, s.name}, {source});
-            };
-            checkAffinity(system.options.affinity, subject);
-            for (const AccessKey& key : TouchedKeys(access)) {
-                if (key.kind == AccessKind::Resource) {
-                    checkAffinity(data.resources[key.id].affinity,
-                                  subject + " (through resource '" + data.resources[key.id].name + "')");
                 }
             }
             if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty() &&

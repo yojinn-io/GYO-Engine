@@ -25,6 +25,10 @@ void SetCurrentThreadCall(SystemContext* call) noexcept {
     tlCurrent = call;
 }
 
+const void* CurrentThreadToken() noexcept {
+    return &tlCurrent;
+}
+
 AccessDesc MakeAccessDesc(const AccessSet& access) {
     AccessDesc desc;
     desc.wholeWorld = access.exclusive;

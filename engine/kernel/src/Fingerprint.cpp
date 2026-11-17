@@ -6,28 +6,28 @@
 //   - a u32 is 4 bytes little-endian; a flag or enum is one byte (the enum's
 //     underlying value);
 //   - a list is its length as u32, then its elements;
-//   - every fingerprint starts with its format string and version
-//     ("gyo.kernel.registry" 2, "gyo.kernel.registry-c" 4, "gyo.kernel.plan" 2).
-// Registry fingerprint (format 2): plugin names in list order; components, resources,
+//   - every fingerprint starts with its format string and version (the
+//     constants below).
+// Registry fingerprint (format 3): plugin names in list order; components, resources,
 // events in id order (name, size, align, zone, writePolicy, role, rollback;
-// resources add external and affinity; events have name, domain, zone);
+// resources add external and threadBound; events have name, domain, zone);
 // effects; named sets (name, members, digest); the allotter; schedules (every
-// ScheduleOptions field but hookRoundLimit, which the Plan fingerprint holds:
-// adding it here would change this format, whose version stays 2); sets; Systems in registrationSeq order (name, zone,
-// ingress, affinity, effects, rollbackSafe, mounts with every field, access
-// set); hooks (name, component, trigger, zone, access); initial value
+// ScheduleOptions field but hookRoundLimit, which the Plan fingerprint holds);
+// sets; Systems in registrationSeq order (name, zone, ingress, effects,
+// rollbackSafe, mounts with every field, access set with its annotatedWrites);
+// hooks (name, component, trigger, zone, access); initial value
 // declarations (Registrar::InitialValue; target and request ComponentId, in the
 // (requestId, targetId) order Finish leaves them in); then every Plan's
 // fingerprint in schedule order. The function of a declaration is not hashed:
 // its address differs per build. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint (format 4): only zone C data, zone C Systems (with mounts and
+// C fingerprint (format 7): only zone C data, zone C Systems (with mounts and
 // access), zone C hooks and the initial value declarations of zone C
 // components, each section counted; and for every schedule that
 // runs a zone C System, its rollbackEnabled, stages, eventTrim and hook round
 // limit (a flag, then the value when declared), and its Plan reduced to the
 // zone C System steps plus every sync point and the trim (spec H.3; review B6).
-// Plan fingerprint (format 2): schedule name, domain, each step's kind and
+// Plan fingerprint (format 5): schedule name, domain, each step's kind and
 // name, then the hook round limit (a flag, then the value when declared).
 // The hook rounds after the last sync point (spec F-12) are not a step; the
 // Plan and C formats were raised (1 to 2, 3 to 4) when they were added, so the
@@ -59,19 +59,26 @@ namespace {
 // point and the schedule's hook round limit (v8-arch-gyo2-hook-flush); 3 since
 // the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject); 4
 // since the kernel runs Startup before the first other schedule and a System may
-// run a schedule (v8-arch-gyo2-nested-schedule; neither is a Plan step).
-constexpr std::uint32_t kFingerprintVersion = 4;
+// run a schedule (v8-arch-gyo2-nested-schedule; neither is a Plan step); 5 since
+// a conflicting pair with no order is a tie in zone C too and KernelSettings is
+// read when each Run starts (v8-arch-gyo2-kernel-subtract-structure; no Plan
+// step changed: the rule of hook-flush-not-in-plan-bump-versions).
+constexpr std::uint32_t kFingerprintVersion = 5;
 // The Registry fingerprint's format: 2 since initial value declarations are
-// hashed (v8-arch-gyo2-funnel-check).
-constexpr std::uint32_t kRegistryFingerprintVersion = 2;
+// hashed (v8-arch-gyo2-funnel-check); 3 since the thread roles left (no schedule
+// runner role, no System thread role; a resource's threadBound flag) and ExclusiveWorld's
+// Writes<...> is an annotation (annotatedWrites) (v8-arch-gyo2-kernel-subtract-structure).
+constexpr std::uint32_t kRegistryFingerprintVersion = 3;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
 // since the initial value declarations of zone C components; 4 since the hook
 // rounds after the last sync point and the schedule's hook round limit; 5 since
 // the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject); 6
 // since the kernel runs Startup and a System may run a schedule
-// (v8-arch-gyo2-nested-schedule).
-constexpr std::uint32_t kCFingerprintVersion = 6;
+// (v8-arch-gyo2-nested-schedule); 7 since the System and resource bytes it shares
+// with the Registry fingerprint changed and the Plan rules did
+// (v8-arch-gyo2-kernel-subtract-structure).
+constexpr std::uint32_t kCFingerprintVersion = 7;
 
 class Bytes {
 public:
@@ -124,6 +131,7 @@ void Access(Bytes& out, const AccessSet& access) {
     out.Ids(access.deferredWrites);
     out.Ids(access.setReads);
     out.Keys(access.extractReads);
+    out.Ids(access.annotatedWrites);
     out.Flag(access.changeFilters);
     out.Flag(access.local);
     out.Flag(access.exclusive);
@@ -148,7 +156,6 @@ void SystemBytes(Bytes& out, const SystemRecord& system) {
     out.Str(system.options.name);
     out.Enum(system.options.zone);
     out.Flag(system.options.ingress);
-    out.Str(system.options.affinity.role);
     out.Ids(system.effects);
     out.Flag(system.options.rollbackSafe);
     out.U32(system.options.mounts.size());
@@ -175,7 +182,7 @@ void ResourceBytes(Bytes& out, const ResourceInfo& info) {
     out.Enum(info.role);
     out.Enum(info.rollback);
     out.Flag(info.external);
-    out.Str(info.affinity.role);
+    out.Flag(info.threadBound);
 }
 
 void ScheduleBytes(Bytes& out, const ScheduleOptions& s) {
@@ -195,7 +202,6 @@ void ScheduleBytes(Bytes& out, const ScheduleOptions& s) {
     out.Str(s.eventTrim);
     out.Enum(s.executor);
     out.Str(s.parallelGuardTest);
-    out.Str(s.runner);
 }
 
 void PlanBytes(Bytes& out, const Plan& plan) {
@@ -410,7 +416,7 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
 
 std::string FrozenRegistry::ExportPlans() const {
     const Detail::RegistryData& data = *data_;
-    std::string out = "gyo.kernel.plans 2\n";
+    std::string out = "gyo.kernel.plans 3\n";
     out += "registry " + Detail::RegistryFingerprintOf(data).Text() + "\n";
     out += "registry_c " + Detail::CFingerprintOf(data).Text() + "\n";
     for (const Plan& plan : data.plans) {
@@ -419,7 +425,7 @@ std::string FrozenRegistry::ExportPlans() const {
         if (schedule != nullptr) {
             out += std::string(" clock=") + (schedule->options.clock ? "1" : "0") +
                    " startup=" + (schedule->options.startup ? "1" : "0") +
-                   " rollback=" + (schedule->options.rollbackEnabled ? "1" : "0") + " runner=" + schedule->options.runner;
+                   " rollback=" + (schedule->options.rollbackEnabled ? "1" : "0");
         }
         out += "\n";
         out += "  hook-round-limit " + (plan.hookRoundLimit ? std::to_string(*plan.hookRoundLimit) : std::string("default")) + "\n";

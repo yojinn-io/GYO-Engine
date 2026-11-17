@@ -772,10 +772,10 @@ struct PointsIntoWorld<const std::tuple<T...>> : PointsIntoWorld<std::tuple<T...
 template <class F, class Arg>
 concept ExclusiveClosure = std::invocable<F&, Arg> && !kPointsIntoWorld<std::invoke_result_t<F&, Arg>>;
 
-// The result of a Read or Modify: Err when a rule refuses the access (S-16);
-// otherwise what the closure returned, or nothing when the entity has
-// no T or the resource is absent (the closure was not called). A closure that
-// returns void gives whether it was called.
+// The result of a Read or Modify: what the closure returned, or nothing when the
+// entity has no T or the resource is absent (the closure was not called). A
+// closure that returns void gives whether it was called. Still a Result: the
+// immediate structural changes of this batch's segment 3 return Err.
 template <class R>
 struct VisitResultOf {
     using Type = Engine::Base::Result<std::optional<R>, KernelError>;
@@ -843,32 +843,29 @@ public:
         return Call<T&>(f, cell->value);
     }
 
-    // Reads resource T through f(const T&): any resource, KernelSettings too,
-    // but one whose thread affinity the runner does not satisfy, which is Err
-    // (S-16). Nothing, and f not called, when the resource is absent.
+    // Reads resource T through f(const T&): any resource, KernelSettings too (a
+    // thread-bound one only on its thread: GYO_ASSERT, DI-KS 14). Nothing, and
+    // f not called, when the resource is absent.
     template <class T, class F>
         requires Detail::ExclusiveClosure<F, const T&>
     [[nodiscard]] VisitResult<std::invoke_result_t<F&, const T&>> Read(F&& f) {
         Check("ExclusiveWorld");
-        Detail::SystemContext& call = Detail::RequireCall(*world_);
         const ResourceId resource = Detail::ResourceIdOf(*world_, KeyOf<T>());
-        if (auto error = Detail::CheckExclusiveRead(call, resource)) return Engine::Base::Err(std::move(*error));
         auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));
         if (!slot.value) return Absent<std::invoke_result_t<F&, const T&>>();
         return Call<const T&>(f, *slot.value);
     }
 
     // Writes resource T through f(T&): any resource, KernelSettings too (a
-    // change counts from the next Run), listed in Writes<...> or not; one it
-    // may not read is Err (S-16). Only the value: a resource is not added or
-    // removed here. The changed stamp is set when f is called.
+    // change counts from the next Run), listed in Writes<...> or not (a
+    // thread-bound one only on its thread: GYO_ASSERT, DI-KS 14). Only the
+    // value: a resource is not added or removed here. The changed stamp is set
+    // when f is called.
     template <class T, class F>
         requires Detail::ExclusiveClosure<F, T&>
     [[nodiscard]] VisitResult<std::invoke_result_t<F&, T&>> Modify(F&& f) {
         Check("ExclusiveWorld");
-        Detail::SystemContext& call = Detail::RequireCall(*world_);
         const ResourceId resource = Detail::ResourceIdOf(*world_, KeyOf<T>());
-        if (auto error = Detail::CheckExclusiveRead(call, resource)) return Engine::Base::Err(std::move(*error));
         auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));
         if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();
         slot.changed = stamp_;

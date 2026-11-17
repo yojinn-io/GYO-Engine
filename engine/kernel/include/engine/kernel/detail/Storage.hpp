@@ -149,6 +149,9 @@ public:
     virtual void Reset() noexcept = 0;
 
     ChangeStamp changed = 0;
+    // A thread-bound resource (ResourceOptions::threadBound): the thread its
+    // value was put in on (Detail::CurrentThreadToken), or nullptr with no value.
+    const void* thread = nullptr;
 
 protected:
     ResourceBase() = default;

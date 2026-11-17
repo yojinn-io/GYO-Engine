@@ -1,7 +1,7 @@
-// Spec J-20 to J-25, J-27 (D-E17 half), J-28 (finish half), J-44, the
+// Spec J-20 to J-25, J-27 (D-E17 half), J-44, the
 // scheduler half of J-24, the Plan fingerprint goldens (declaration judgement 4)
 // and the Plan export with its dataflow ratio (judgement 7).
-// target/kernel DI-KS 3, 5, 7, 14; spec D.1 to D.3, X-2, X-3, H-1, H-2.
+// target/kernel DI-KS 3, 5, 7; spec D.1 to D.3, X-2, H-1.
 
 #include "KernelTestSupport.hpp"
 
@@ -130,14 +130,16 @@ struct Golden {
 // format 2 and the values re-taken by v8-arch-gyo2-hook-flush (the hook round
 // limit is hashed; KernelSettings grew); Plan format 3 and the values re-taken by
 // v8-arch-gyo2-spawn-reject (the sync point drops spawn records); Plan format 4 and the values
-// re-taken by v8-arch-gyo2-nested-schedule (the kernel runs Startup): the judgement is unchanged.
+// re-taken by v8-arch-gyo2-nested-schedule (the kernel runs Startup); Plan format 5 and Registry
+// format 3 and the values re-taken by v8-arch-gyo2-kernel-subtract-structure (no runner or
+// affinity, threadBound and annotatedWrites hashed): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "4:c0d743702bb4dca9a301a3fda644afdee532de606666e5fe415fc2f0a3013d6d",
-     "2:2bddd23682ef1c576f646abc215dc1907d865e74787615d8374c630ee1526303"},
-    {"deferred", &DeferredRegistry, "4:81bb293c1dd239f933b52c91269fcba749150db8adab91d4955c8fcf1957adca",
-     "2:b06c39d63a57bcdb8733b7046edb7ca5d7e930c471df8223b94a12f23f907df9"},
-    {"events", &EventRegistry, "4:89ed1121727437c62a4d045f369acb7c8b3f8e6f3efea1b469608530051a0bd9",
-     "2:0ca59b03ed6e11fdcc83ff7e23afa2e05e8181f0e471bdcfcca3ab9a2edb520d"},
+    {"mixed", &MixedRegistry, "5:916723dbf66dab54200b55c52779e2a593b3a29080234c89b9e53285fcfe1a29",
+     "3:6fb58b7073db8afb4910f67f88a28dfa1723652a44ff32df61ad11a88e3779f7"},
+    {"deferred", &DeferredRegistry, "5:fb78e3ee31dde531649a6f2072eaed55ddb50e2629116ddc8ca5dc58583ff9cf",
+     "3:08f84e3617bddf161a2127bfe53be275a62f2ecc6344031fc0b8d2544c073ee6"},
+    {"events", &EventRegistry, "5:b8a709bfb46379bdec41f0b4fcfd6a917a6fdbc1566cb038817c8dc5aa82e222",
+     "3:6acba502d550c34aee7d6f9417951b61fbc672a81220696595506582f10f5491"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
@@ -501,54 +503,6 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
     CHECK(KernelTest::ErrorCount(c, StartupCode::DE11) == 1);
 }
 
-// ---- J-28 (finish half; X-3, H-3)
-
-TEST_CASE("J-28: a Main System on a role runner fails (X-E2); a named role on another runner fails (X-E3)") {
-    const auto roleSchedule = [](Registrar& r) {
-        ScheduleOptions s = FixedSchedule();
-        s.runner = "sim";
-        r.Schedule(s);
-        ScheduleOptions u = UpdateSchedule();
-        u.runner = "sim";
-        r.Schedule(u);
-    };
-    Built main = Finish({{"test", [&](Registrar& r) {
-                              RegisterCommonData(r);
-                              roleSchedule(r);
-                              SystemOptions o = Sys("NeedsMain", Zone::B, {At("FixedUpdate", "Present")});
-                              o.affinity = Affinity::Named(kMainRole);
-                              r.AddSystem<&ReadMarker>(o);
-                          }}});
-    CHECK(KernelTest::ErrorCount(main, StartupCode::XE2) == 1);
-    REQUIRE_FALSE(static_cast<bool>(main.result));
-    CHECK(KernelTest::ErrorCount(main, StartupCode::DE10) == 1);
-    Built named = Finish({{"test", [&](Registrar& r) {
-                               RegisterCommonData(r);
-                               roleSchedule(r);
-                               SystemOptions o = Sys("NeedsAudio", Zone::B, {At("FixedUpdate", "Present")});
-                               o.affinity = Affinity::Named("audio");
-                               r.AddSystem<&ReadMarker>(o);
-                           }}});
-    CHECK(KernelTest::ErrorCount(named, StartupCode::XE3) == 1);
-    Built resource = Finish({{"test", [&](Registrar& r) {
-                                  RegisterCommonData(r);
-                                  r.Resource<TestLink>({.name = "Window", .zone = Zone::B, .external = true,
-                                                        .affinity = Affinity::Named(kMainRole)});
-                                  roleSchedule(r);
-                                  const auto touch = [](Res<TestLink>) -> SystemResult { return {}; };
-                                  r.AddSystem<decltype(touch)>(Sys("TouchWindow", Zone::B, {At("Update", "First")}));
-                              }}});
-    CHECK(KernelTest::ErrorCount(resource, StartupCode::XE2) == 1);
-    Built fine = Finish({{"test", [&](Registrar& r) {
-                              RegisterCommonData(r);
-                              roleSchedule(r);
-                              SystemOptions o = Sys("OnSim", Zone::B, {At("FixedUpdate", "Present")});
-                              o.affinity = Affinity::Named("sim");
-                              r.AddSystem<&ReadMarker>(o);
-                          }}});
-    KERNEL_REQUIRE_OK(fine);
-}
-
 // ---- J-44 (D-9)
 
 namespace {
@@ -648,7 +602,7 @@ TEST_CASE("J-24: D-E9 (zone C hooks on one trigger conflict)") {
     }));
 }
 
-TEST_CASE("J-24: D-E12 (clock schedules per domain), D-E13 (one World on two threads)") {
+TEST_CASE("J-24: D-E12 (clock schedules per domain)") {
     Built twoClocks = FinishOne([](Registrar& r) {
         ScheduleOptions s = UpdateSchedule();
         s.name = "SecondFrame";
@@ -661,14 +615,6 @@ TEST_CASE("J-24: D-E12 (clock schedules per domain), D-E13 (one World on two thr
                                 r.Schedule(s);
                             }}});
     CHECK(KernelTest::ErrorCount(noClock, StartupCode::DE12) == 1);
-    Built threads = FinishOne([](Registrar& r) {
-        ScheduleOptions s = UpdateSchedule();
-        s.name = "Late";
-        s.clock = false;
-        s.runner = "other";
-        r.Schedule(s);
-    });
-    CHECK(KernelTest::ErrorCount(threads, StartupCode::DE13) == 1);
 }
 
 TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
@@ -763,6 +709,6 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E1 -> E4 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E2 -> E3 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
-    CHECK(report.find("gyo.kernel.plans 2") == 0);
-    CHECK(report.find("fingerprint 4:") != std::string::npos);
+    CHECK(report.find("gyo.kernel.plans 3") == 0);
+    CHECK(report.find("fingerprint 5:") != std::string::npos);
 }

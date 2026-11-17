@@ -55,9 +55,8 @@ struct AccessEntry {
 // to it for both). Derived from the Registry's AccessSet when the WorldExecutor is made.
 struct AccessDesc {
     std::vector<AccessEntry> entries;
-    // ExclusiveWorld: reads and writes every column and resource (DI-KS 1; but
-    // a resource whose affinity the runner does not satisfy: S-16); the event
-    // buffers are not in it. Its Writes<...> annotation adds no entry.
+    // ExclusiveWorld: reads and writes every column and resource (DI-KS 1); the
+    // event buffers are not in it. Its Writes<...> annotation adds no entry.
     bool wholeWorld = false;
 };
 
@@ -133,7 +132,7 @@ struct SystemContext {
     // the Executor as siblings beside the System's own Err (spec B.4 point 7,
     // E.2 step 5); the System never sees them.
     std::vector<KernelError> errors;
-    // Errors a kernel API returned to the System as Err (S-16, W-9, nested-run refusals).
+    // Errors a kernel API returned to the System as Err (W-9, nested-run refusals).
     // The System should pass them on; one it drops is listed by the Executor all
     // the same (nothing is silent, target/error-handling).
     std::vector<KernelError> returned;
@@ -151,6 +150,11 @@ struct SystemContext {
 // set and cleared by the Executor around every System and hook call.
 [[nodiscard]] SystemContext* CurrentThreadCall() noexcept;
 void SetCurrentThreadCall(SystemContext* call) noexcept;
+// This thread's identity for a thread-bound resource (DI-KS 14): the address of
+// tlCurrent, different on every thread that is alive. A thread that has ended
+// may hand its address to a new one, which is then not told apart (a declared
+// limit). No <thread> in the kernel (kernel_guard K3).
+[[nodiscard]] const void* CurrentThreadToken() noexcept;
 
 // Sets tlCurrent for one call and restores the previous value on exit, also
 // when the call throws (spec E.5: the Executor does not catch).
@@ -219,12 +223,6 @@ void Push(SystemContext& call, Record record);
 // breakOnKernelError is on (target/system-contract 2b).
 [[nodiscard]] KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message);
 
-// The always-on check of ExclusiveWorld (target/error-handling "the added
-// row"): returns the error (already recorded in call.errors through CallError)
-// or nothing.
-//   S-16  an ExclusiveWorld read of a resource whose thread affinity the running
-//         schedule's runner does not satisfy.
-[[nodiscard]] std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource);
 
 // The allotter resource of the World (spec A.1), or nullptr when none is declared.
 [[nodiscard]] ResourceBase* AllotterSlot(World& world) noexcept;

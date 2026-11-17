@@ -47,7 +47,7 @@ public:
     FinishContext& operator=(const FinishContext&) = delete;
 
     // One runner per WorldExecutor; a second is R-E6. The runner callable arrives with
-    // the batches that run schedules; this batch records who installs it.
+    // the orchestration layer; this records who installs it.
     void InstallRunner(std::string_view runner);
 
 private:
@@ -143,7 +143,6 @@ struct SystemOptions {
     Zone zone = Zone::Unset;
     // Zone B only: may write role=Input (c) data, in the ingress stage (Z3).
     bool ingress = false;
-    Affinity affinity;
     // Effect names registered with Registrar::Effect. "Diagnostics" cannot be
     // written here; it comes only from DiagnosticsWriter<T> (spec S-8).
     std::vector<std::string> effects;
@@ -449,7 +448,7 @@ struct ResourceInfo {
     Role role;
     Rollback rollback;
     bool external;
-    Affinity affinity;
+    bool threadBound;
     std::string ownerPlugin;
 };
 

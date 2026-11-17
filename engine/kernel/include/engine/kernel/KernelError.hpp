@@ -71,9 +71,6 @@ enum class KernelErrorCode : std::uint8_t {
     HookRunsSchedule,
     // Spec X-14: a schedule is not run from inside a Read or Modify closure.
     ClosureRunsSchedule,
-    // Spec S-16: an ExclusiveWorld read of a resource whose thread affinity the
-    // schedule's runner does not satisfy.
-    UnreadableResource,
     // Spec X-16: an exception left a nested run (the outer System caught it).
     NestedRunAborted,
 };
@@ -110,16 +107,18 @@ struct KernelError {
     [[nodiscard]] std::string Text() const;
 };
 
-// The startup error codes of spec D.2's table (D-E1 to D-E21, R-E1 to R-E6,
-// X-E1 to X-E3, F-E1). The enum value is not part of any fingerprint or file:
-// the text form (ToString) is.
+// The startup error codes of spec D.2's table that the kernel still has: its
+// kept list and the codes later batches take out (DI-KS 15; the guard
+// "DI-KS 15: the StartupCode values ..." in tests/common/kernel/RegistryTests.cpp
+// holds both lists). The enum value is not part of any fingerprint or file: the
+// text form (ToString) is.
 enum class StartupCode : std::uint8_t {
-    DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE9, DE10,
-    DE11, DE12, DE13, DE14, DE15, DE16, DE17, DE19, DE20,
+    DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE9,
+    DE11, DE12, DE14, DE15, DE16, DE17, DE19, DE20,
     // A World with two Startup schedules (spec H-12; v8-arch-gyo2-nested-schedule).
     DE21,
     RE1, RE2, RE3, RE4, RE5, RE6,
-    XE1, XE2, XE3,
+    XE1,
     FE1,
 };
 
@@ -129,9 +128,8 @@ struct StartupError {
     // The code of this error.
     StartupCode code;
     // Spec D.2's step the error was found in, when the step has its own code
-    // distinct from code (affinity: code X-E2 or X-E3, step D-E10; a (c)
-    // Parallel schedule without a guard: code X-E1, step D-E11). Otherwise
-    // equal to code.
+    // distinct from code (a (c) Parallel schedule without a guard: code X-E1,
+    // step D-E11). Otherwise equal to code.
     StartupCode step;
     // The rule broken, for people: "Z1", "S-12", "H-1", ...
     std::string rule;

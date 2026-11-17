@@ -10,10 +10,14 @@
 
 #include <algorithm>
 #include <array>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -78,6 +82,143 @@ TEST_CASE("J-6: a World access while Running with no System current fails a GYO_
         world.Insert(1, Tag{1});
         world.SetResource(Out{3});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
+    }
+}
+
+// ---- J-6: a thread-bound resource (ResourceOptions::threadBound; v8-arch-gyo2-thread-binding-by-runner)
+
+namespace {
+
+struct Bound { std::int64_t value; };  // resource, zone B, thread-bound
+
+// One thread kept alive for a whole case, so the thread a value was put in on
+// stays the same thread (a thread that ends may hand its identity to the next).
+class Worker {
+public:
+    Worker() : thread_([this] { Loop(); }) {}
+    ~Worker() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stop_ = true;
+        }
+        wake_.notify_all();
+        thread_.join();
+    }
+    Worker(const Worker&) = delete;
+    Worker& operator=(const Worker&) = delete;
+
+    // Runs task on the worker and waits for it.
+    void Do(std::function<void()> task) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        task_ = std::move(task);
+        wake_.notify_all();
+        done_.wait(lock, [this] { return !task_; });
+    }
+
+private:
+    void Loop() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        for (;;) {
+            wake_.wait(lock, [this] { return stop_ || task_; });
+            if (task_) {
+                task_();
+                task_ = nullptr;
+                done_.notify_all();
+            } else if (stop_) {
+                return;
+            }
+        }
+    }
+
+    std::mutex mutex_;
+    std::condition_variable wake_;
+    std::condition_variable done_;
+    std::function<void()> task_;
+    bool stop_ = false;
+    std::thread thread_;
+};
+
+// Whether f fails a GYO_ASSERT on this thread.
+bool Asserts(const std::function<void()>& f) {
+    ::Engine::Test::ScopedAssertionHandler scope;
+    try {
+        f();
+    } catch (const ::Engine::Base::AssertionFailure&) {
+        return true;
+    }
+    return false;
+}
+
+SystemResult ReadsBound(Res<Bound> bound) {
+    Log().push_back("bound " + std::to_string(bound->value));
+    return Ok();
+}
+SystemResult WritesBound(ResMut<Bound> bound) {
+    bound->value += 1;
+    return Ok();
+}
+SystemResult ExclusiveReadsBound(ExclusiveWorld<> world) {
+    auto value = world.Read<Bound>([](const Bound& b) { return b.value; });
+    if (!value) return Engine::Base::Err(std::move(value).error());
+    return Ok();
+}
+
+std::unique_ptr<Rig> BoundRig(void (*add)(Registrar&)) {
+    return MakeRig([add](Registrar& r) {
+        Data(r);
+        r.Resource<Bound>({.name = "Bound", .zone = Zone::B, .threadBound = true});
+        if (add != nullptr) add(r);
+    }, false);
+}
+
+} // namespace
+
+TEST_CASE("J-6: a thread-bound resource is used on the thread it was put in on; after a removal another thread may put it in") {
+    auto rig = BoundRig([](Registrar& r) {
+        r.AddSystem<&ReadsBound>(B("ReadsBound", "A"));
+        r.AddSystem<&ExclusiveReadsBound>(B("ExclusiveReadsBound", "B"));
+    });
+    rig->world().SetResource(Bound{1});
+    Log().clear();
+    CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the same thread runs it");
+    CHECK(Log() == std::vector<std::string>{"bound 1"});
+    CHECK_MESSAGE(!Asserts([&] { static_cast<void>(rig->world().Summary()); }), "J-6 thread-bound: the same thread reads the summary");
+    Worker worker;
+    rig->world().RemoveResource<Bound>();
+    worker.Do([&] { rig->world().SetResource(Bound{2}); });
+    worker.Do([&] { rig->world().RemoveResource<Bound>(); });
+    CHECK_MESSAGE(!Asserts([&] { rig->world().SetResource(Bound{3}); }),
+                  "J-6 thread-bound: after a removal the thread is forgotten and another thread puts it in");
+    CHECK(rig->world().Resource<Bound>()->value == 3);
+}
+
+TEST_CASE("J-6: a thread-bound resource touched on another thread fails a GYO_ASSERT") {
+    struct Touch {
+        const char* what;
+        void (*add)(Registrar&);
+        std::function<void(Rig&)> touch;
+    };
+    const std::vector<Touch> touches{
+        {"Res in a System", [](Registrar& r) { r.AddSystem<&ReadsBound>(B("ReadsBound", "A")); },
+         [](Rig& rig) { static_cast<void>(rig.Run()); }},
+        {"ResMut in a System", [](Registrar& r) { r.AddSystem<&WritesBound>(B("WritesBound", "A")); },
+         [](Rig& rig) { static_cast<void>(rig.Run()); }},
+        {"an ExclusiveWorld read", [](Registrar& r) { r.AddSystem<&ExclusiveReadsBound>(B("ExclusiveReadsBound", "A")); },
+         [](Rig& rig) { static_cast<void>(rig.Run()); }},
+        {"World::Resource", nullptr, [](Rig& rig) { static_cast<void>(rig.world().Resource<Bound>()); }},
+        {"World::ResourceMut", nullptr, [](Rig& rig) { static_cast<void>(rig.world().ResourceMut<Bound>()); }},
+        {"an overwrite with World::SetResource", nullptr, [](Rig& rig) { rig.world().SetResource(Bound{9}); }},
+        {"World::RemoveResource", nullptr, [](Rig& rig) { rig.world().RemoveResource<Bound>(); }},
+        {"World::Summary", nullptr, [](Rig& rig) { static_cast<void>(rig.world().Summary()); }},
+    };
+    for (const Touch& touch : touches) {
+        CAPTURE(touch.what);
+        Worker worker;
+        std::unique_ptr<Rig> rig = BoundRig(touch.add);
+        worker.Do([&] { rig->world().SetResource(Bound{1}); });
+        CHECK_MESSAGE(Asserts([&] { touch.touch(*rig); }), "J-6 thread-bound: " << touch.what << " on another thread did not assert");
+        // The thread that put it in destroys the World (destroying it elsewhere would assert too).
+        worker.Do([&] { rig.reset(); });
     }
 }
 
