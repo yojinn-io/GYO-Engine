@@ -167,3 +167,9 @@ PR [#236](https://github.com/yojinn-io/GYO-Engine/pull/236)（目標 `gyo2`；�
 ## 證據
 
 全部在這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-test-debts/`（git 不追蹤）：`configure1.log`、`build1.log`；第一件 `find-scan-base.log`、`part1-mutants.log`；第三件 `we-missing.json`（54 個沒搬的原文）、`locate.py`（找目標所在的函式）、`part3-candidates.json`、`part3-ids.txt`、`part3-candidates-run1.log`、`part3-candidates-run2.log`、`part3-catalog-run.log`；第二件 `j32-run.log`、`j32-run2.log`、`cells-kept-manual.log`、`dead-id-manual.log`、`part2-ids.txt`、`part2-mutants-run1.log`～`part2-mutants-run5.log`、`j32-run3.log`、`ctest1.log`～`ctest3.log`（本機 `cpu|shader` 96/96）、對抗檢查 `mutation-check-fable/`；K0 合併之後 `post-k0-scan.log`、`build8-postk0.log`、`ctest4-postk0.log`、`k0-wait-21.json`、`k0-wait-candidates.json`、`k0-wait-run1.log`、`j32-spawn-before-despawn.json`、`spawn-before-despawn-manual.log`、`manual-we-j3-spawn-immediate.log`、`manual-we-hook-queue-one-per-world.log`、`postk0-ids.txt`、`postk0-run.log`。
+
+## 合併（2026-11-17，主會話補）
+
+使用者 2026-11-17「合併 #236 和 #238」：#236 併入 `gyo2`（f18dda4f；只改文件，L1 照範圍判斷沒有跑、CI gate 通過），#238 併入（15ba81ef；合併前 L1 三平台通過）。合併後 `cross-platform.yml --ref gyo2`（run 44083143739）全部通過。
+
+11-16 15:21 對 f00433b0（#240 合併後）的 `cross-platform.yml`（run 43895471531）是 failure：macos-arm64 的 L1 與 toolchain 兩個 job 被取消（cancelled），CI gate 照規則把取消判成失敗；linux-x64、windows-x64 都通過。不是程式的失敗，也不是 #236、#238 造成的。取消的原因沒有查（GitHub 的 job 紀錄只有 cancelled）。

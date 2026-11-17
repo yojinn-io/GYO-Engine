@@ -26,10 +26,10 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 
 | 批 | 做什麼（新前提下的範圍） | 取代 | 依賴 |
 |---|---|---|---|
-| 1. Kernel 減法・結構段 | 不需要新家的部分：`Product` 改名 `WorldExecutor`；登記與建 Plan 兩步、可重複；唯讀帶版本號的登記表；`ExclusiveWorld` 全讀寫、`Writes<…>` 選填；`KernelSettings` 每次最外層 `Run` 重讀、拿掉 D-E18；拿掉執行期攔截（L3）；拿掉歧義的偵測與 `RequireExplicitOrder`（#228）；拿掉執行緒的啟動檢查（改成 Resource 斷言）。守這些限制的守衛與突變一起處理（K0 剛加的部分也在內） | 新的一批 | 統合 |
+| 1. Kernel 減法・結構段 | 不需要新家的部分：`Product` 改名 `WorldExecutor`；登記與建 Plan 兩步、可重複；唯讀帶版本號的登記表；`ExclusiveWorld` 全讀寫、`Writes<…>` 選填；`KernelSettings` 每次最外層 `Run` 重讀、拿掉 D-E18；拿掉執行期攔截（L3）；拿掉歧義的偵測與 `RequireExplicitOrder`（#228）；拿掉執行緒的啟動檢查（改成 Resource 斷言）。守這些限制的守衛與突變一起處理（K0 剛加的部分也在內；`we-j3-spawn-immediate` 隨 `ExclusiveWorld` 可當場改成員退役） | 新的一批 | 統合 |
 | 2. 編排層的骨架 | `engine/orchestration`：`Product`、runner、build → 建 Plan → finish → 策略檢查、遊戲初始化清單、Module／Plugin 登記檔的讀取與依賴檢查、每個 World 准不准動態插入。**同一批拿掉 Kernel 的開局排程**，J-58 改寫後搬到編排層。讀檔卡的要求（修訂 10）：建 World 後、第一次 Run 前給作者一個時機（讀檔要：設配發器範圍的下界、放暫存的存檔資料與 Resource 的預設值；實體由生成世界裡的 System 放回；統合修訂 33 已收，形狀在本批宣告定；Kernel 那一半屬 DI-KS 15 第 (7) 項「生成」）；判定要有讀檔的案例。另兩條（讀檔卡修訂 11）：執行中丟掉現在的 World、建新的（遊戲中讀檔靠它）；遊戲初始化跑在第一個 World，丟掉第一個 World 後那些內容怎麼處理，以及 `new-world-default` 原話的「經開局」對新 World 是什麼意思 | 舊 T2、T5 的一部分 | 1（兩步的 API） |
 | 3. 時間 Module＋事件（同一條線） | 舊 T1 的型別與累加器、時鐘與 tick 移入、時間的 System、驅動固定步的獨占 System（讀檔卡的要求：時間的 Resource 能被讀檔放回；「重跑中」的 Resource 由時間 Module 收，不收時退回回滾 Module）；事件照 `v8-arch-gyo2-events-two-kinds-like-bevy` 分兩種：保留式改名 `Message` 並照游標的宣告修剪，推送式 `Event`＋`Observer`（含生命週期觸發）照統合第 15.1 節；**同一條線拿掉 Kernel 的時鐘、`Domain` 與 `EventTrim`** | 舊 T1、T3、T4 | 2；事件游標的宣告。純型別的部分可以先做 |
-| 4. 權威 Module＋回滾 Module（同一條線） | 照各自的宣告；**同一條線拿掉 Kernel 的權威規則**（寫者數量、digest、區規則與 Z5、回滾的宣告與 Rewind／Replay） | — | 各自的宣告、2、3 |
+| 4. 權威 Module＋回滾 Module（同一條線） | 照各自的宣告；**同一條線拿掉 Kernel 的權威規則**（寫者數量、digest、區規則與 Z5、回滾的宣告與 Rewind／Replay）。守它們的突變一起處理：Z5、寫者數量、區規則相關的 `we-*`、`td-*` 裡的 W-1 期待、`rs-j17-zone-b-listed`（測試舊帳卡交接） | — | 各自的宣告、2、3 |
 | 5. 生成世界（重做） | 每個 World 各自、可以多次、可以分批；放編排層；Kernel 不認得階段（`-two-layers-like-bevy`）。新卡從回收清單第 2 節起。讀檔卡的要求：讀檔 System 掛在生成世界的方式，判定要有讀檔的案例 | 已歸檔的「重新評估 Loading」 | 2 |
 | 5. 多個 World、交換點 | 照統合 | — | 2 |
 | 5. 狀態機（重做成修訂 8） | 只改建立在舊前提上的地方：`RequestSilent` 還要不要、(c) 區改走權威策略、插進遊戲初始化清單、套用 System 的插法、以 D-E2／R-E2 為守衛的 DI；遊戲看得到的行為照舊（回收清單第 1 節）。(b) 區的部分照統合 | 已歸檔的狀態機卡 | 權威 Module 的宣告；實作依賴 2、3（(c) 區依賴 4） |
