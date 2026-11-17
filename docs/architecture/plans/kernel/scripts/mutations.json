@@ -616,11 +616,11 @@
     },
     {
       "id": "ks-links-extra",
-      "what": "gyo_kernel links one more target (Delta-1 dependency)",
+      "what": "gyo_kernel links one more target (Delta-1 and Delta-3 dependencies) (find and expect taken from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts: world-exec added GYO::EntityStore)",
       "file": "engine/kernel/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_kernel PUBLIC GYO::Base)",
-      "replace": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::Math)",
-      "expect": "gyo_kernel links .*expected exactly GYO::Base",
+      "find": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore)",
+      "replace": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore GYO::Math)",
+      "expect": "gyo_kernel links GYO::Base;GYO::EntityStore;GYO::Math; expected exactly",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true
     },
@@ -706,11 +706,11 @@
     },
     {
       "id": "ks-adv-include-allowlist-widened",
-      "what": "the project include allowlist gains engine/os (review B4)",
+      "what": "the project include allowlist gains engine/os (review B4) (find, replace and expect taken from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts: world-exec added engine/entity_store/)",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\")",
-      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\", \"engine/os/\")",
-      "expect": "FAIL: test_k5_project_allowlist_is_exactly_base_and_kernel",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\", \"engine/os/\")",
+      "expect": "FAIL: test_k5_project_allowlist_is_exactly_base_entity_store_and_kernel",
       "command": [
         "{python}",
         "-B",
@@ -1106,9 +1106,9 @@
     },
     {
       "id": "ks-k5-parent-directory",
-      "what": "a project include with .. is accepted (review A2)",
+      "what": "a project include with .. is accepted (review A2) (find taken from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts: world-exec split on backslashes too)",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": " and \"..\" not in target.split(\"/\")",
+      "find": " and \"..\" not in re.split(r\"[/\\\\]\", target)",
       "replace": "",
       "expect": "FAIL: test_k5_parent_directory_in_a_project_include_is_reported",
       "command": [
@@ -1816,10 +1816,10 @@
     },
     {
       "id": "rs-j17-zone-b-listed",
-      "what": "J-17: zone B Systems are listed too",
+      "what": "J-17: zone B Systems are listed too (find rewritten by v8-arch-gyo2-test-debts: 4e68b589 moved the path checks into the add lambda shared with the initial values)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "        if (system.options.zone != Zone::C) continue;\n        const std::string path",
-      "replace": "        const std::string path",
+      "find": "        if (system.options.zone != Zone::C) continue;\n        if (auto added = add(system.source, \"a zone C System\"",
+      "replace": "        if (auto added = add(system.source, \"a zone C System\"",
       "target": "gyo_kernel_tests",
       "cases": "J-17:*",
       "expect": "static_cast<bool>\\(empty\\)"
