@@ -56,3 +56,4 @@
 - 圖三 `networking-systems.svg` 沒有改過，留在 [`../../plans/kernel/diagrams/`](../../plans/kernel/diagrams/)；網路的圖等機制完成後再處理（`v8-arch-gyo2-network-diagram-after-mechanism`）。
 - 規格（`spec.zh-Hant.md`）、mechanism、blueprint、networking、spike-report 等 11 月 11 日到 13 日的文件留在 `plans/kernel/`，本資料夾的文件引用它們時連到那裡。
 - [recovered-from-stale-cards.zh-Hant.md](recovered-from-stale-cards.zh-Hant.md)：從前提已變的任務卡（狀態機、重新評估 Loading）回收的資源，以及哪些舊設計不要帶進來（2026-11-17）。
+- [rebuild-batch-plan.zh-Hant.md](rebuild-batch-plan.zh-Hant.md)：GYO2 批次表（2026-11-17 重排，取代時間設計第 11 節的表）：設計段、統合核准之後的實作段、等使用者的小事。

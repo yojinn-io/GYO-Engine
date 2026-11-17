@@ -601,7 +601,7 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 
 ## 11. 批次（決定 1：B；其餘照我建議的選項排，你改了就重排）
 
-> **2026-11-17 註：這張表的 T2、T3、T5、「(c) 區的獨占套用」「建世界的階段」「狀態機」幾列建立在 Kernel 管組裝、限制在 Kernel 的前提上，已過時，不要照排。** 使用者 2026-11-16 起定了 Kernel 只做 ECS、另立編排層、開局拆成遊戲初始化與生成世界、權威檢查是策略式的 Module（HANDOFF `v8-arch-gyo2-kernel-is-ecs-no-restrictions` 等）。新的排法等邊界的統合宣告核准後重排。從過時的卡回收了什麼、哪些不要帶進來，見 [recovered-from-stale-cards.zh-Hant.md](recovered-from-stale-cards.zh-Hant.md)。
+> **2026-11-17 註：這張表的 T2、T3、T5、「(c) 區的獨占套用」「建世界的階段」「狀態機」幾列建立在 Kernel 管組裝、限制在 Kernel 的前提上，已過時，不要照排。** 使用者 2026-11-16 起定了 Kernel 只做 ECS、另立編排層、開局拆成遊戲初始化與生成世界、權威檢查是策略式的 Module（HANDOFF `v8-arch-gyo2-kernel-is-ecs-no-restrictions` 等）。新的排法見 [rebuild-batch-plan.zh-Hant.md](rebuild-batch-plan.zh-Hant.md)（2026-11-17 重排，取代這張表）。從過時的卡回收了什麼、哪些不要帶進來，見 [recovered-from-stale-cards.zh-Hant.md](recovered-from-stale-cards.zh-Hant.md)。
 
 | 批 | 內容 | 依賴 |
 |---|---|---|
