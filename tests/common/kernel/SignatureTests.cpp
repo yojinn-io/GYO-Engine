@@ -179,6 +179,26 @@ TEST_CASE("J-12: every parameter type's Contribution equals the hand-written exp
     CHECK(!SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>, TypeList<Access::Spawn, DeferredInsert<TestPos>>>);
 }
 
+// Writes<R...> is an annotation (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1):
+// no resource write, not a writer; the listed resources are in annotatedWrites.
+TEST_CASE("J-12: ExclusiveWorld<Writes<R>> is no write of R: R is in annotatedWrites only") {
+    using namespace GYO::Kernel::Access;
+    CHECK_MESSAGE((SameSet<C<ExclusiveWorld<Writes<TestRes>>>, TypeList<WholeWorld, AnnotatedWrite<TestRes>>>),
+                  "J-12 annotation: the Contribution of ExclusiveWorld<Writes<TestRes>>");
+    Built built = FinishOne([](Registrar& r) {
+        const auto lists = [](ExclusiveWorld<Writes<TestOtherRes>>) -> SystemResult { return {}; };
+        r.AddSystem<decltype(lists)>(Sys("Lists", Zone::B, {At("Update", "First")}));
+    });
+    KERNEL_REQUIRE_OK(built);
+    const SystemInfo* info = built.registry->Frozen().SystemNamed("Lists");
+    REQUIRE(info != nullptr);
+    const ResourceId listed = *built.registry->Frozen().ResourceIdOf<TestOtherRes>();
+    CHECK(info->access.exclusive);
+    CHECK_MESSAGE(info->access.writes.empty(), "J-12 annotation: a listed resource is not a write");
+    CHECK_MESSAGE(info->access.annotatedWrites == std::vector<ResourceId>{listed},
+                  "J-12 annotation: annotatedWrites holds the listed resource");
+}
+
 namespace {
 
 // The source World of the extract case: its own Registry, frozen first.

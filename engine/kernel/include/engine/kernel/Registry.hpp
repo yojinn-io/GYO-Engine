@@ -363,13 +363,15 @@ struct SchedulerShuffleProbe {
     static void Set(Registry& registry, std::uint32_t seed);
 };
 
-// The kernel's own resource (spec section "reading" / A.6): the access
-// verification switch, breakOnKernelError and the product's default hook round
-// limit (spec F-12), written by the Host before the first Run, read only by the
-// kernel (cached when the first Run starts). One per World. Registered by the
-// Registry before any plugin (ResourceId 0); a System that declares Res or
-// ResMut of it is D-E18. hookRoundLimit is not a startup switch (LIM-6 does not
-// apply to it) and is in no fingerprint; 0 is a GYO_ASSERT at the first Run.
+// The kernel's own resource (spec section "reading" / A.6; DI-KS 24): the
+// access verification switch, breakOnKernelError and the product's default hook
+// round limit (spec F-12). Development and tuning settings only: the Host, a
+// System (Res / ResMut), a hook, a run condition and ExclusiveWorld may read
+// and write it, at any time. The kernel reads it once, when each
+// WorldExecutor::Run call starts, so a change counts from the next Run (a nested
+// RunSchedule does not read it again). Without it the defaults below are used.
+// One per World. Registered by the Registry before any plugin (ResourceId 0).
+// hookRoundLimit is in no fingerprint; 0 is a GYO_ASSERT when a Run starts.
 struct KernelSettings {
     bool accessVerification = false;
     bool breakOnKernelError = false;
@@ -413,6 +415,10 @@ struct AccessSet {
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;
+    // The resources an ExclusiveWorld<Writes<R...>> lists (DI-KS 1): an
+    // annotation for the authority policy to read; not a write, not a writer,
+    // no conflict. In the Registry fingerprint.
+    std::vector<ResourceId> annotatedWrites;
     bool changeFilters = false;
     bool local = false;
     bool exclusive = false;

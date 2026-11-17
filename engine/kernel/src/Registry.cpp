@@ -24,7 +24,6 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::BoundaryChange: return "BoundaryChange";
     case KernelErrorCode::PreCallChange: return "PreCallChange";
     case KernelErrorCode::StaleHandle: return "StaleHandle";
-    case KernelErrorCode::ExclusiveWorldWrite: return "ExclusiveWorldWrite";
     case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
     case KernelErrorCode::StructureBroken: return "StructureBroken";
     case KernelErrorCode::HookRoundLimit: return "HookRoundLimit";
@@ -35,7 +34,6 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::ExtractNotNestable: return "ExtractNotNestable";
     case KernelErrorCode::HookRunsSchedule: return "HookRunsSchedule";
     case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
-    case KernelErrorCode::UndeclaredResourceWrite: return "UndeclaredResourceWrite";
     case KernelErrorCode::UnreadableResource: return "UnreadableResource";
     case KernelErrorCode::NestedRunAborted: return "NestedRunAborted";
     }
@@ -106,7 +104,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE15: return "D-E15";
     case StartupCode::DE16: return "D-E16";
     case StartupCode::DE17: return "D-E17";
-    case StartupCode::DE18: return "D-E18";
     case StartupCode::DE19: return "D-E19";
     case StartupCode::DE20: return "D-E20";
     case StartupCode::DE21: return "D-E21";
@@ -269,7 +266,6 @@ public:
 
     AccessSet access;
     bool domainTick = false;
-    bool kernelSettings = false;
 
     void Parameter(std::size_t position) override { position_ = position; }
 
@@ -280,9 +276,6 @@ public:
     }
     void Resource(TypeKey type, AccessMode mode) override {
         if (const auto id = Lookup(type, TypeRole::Resource, "resource")) {
-            if (*id == data_.kernelSettings) {
-                kernelSettings = true;
-            }
             (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Resource, *id});
         }
     }
@@ -316,6 +309,9 @@ public:
     }
     void Local() override { access.local = true; }
     void WholeWorld() override { access.exclusive = true; }
+    void AnnotatedWrite(TypeKey resource) override {
+        if (const auto id = Lookup(resource, TypeRole::Resource, "resource")) access.annotatedWrites.push_back(*id);
+    }
     void Diagnostics() override { access.diagnostics = true; }
     void ExtractComponent(TypeKey component) override { Extract(component, TypeRole::Component, AccessKind::Component); }
     void ExtractResource(TypeKey resource) override { Extract(resource, TypeRole::Resource, AccessKind::Resource); }
@@ -368,6 +364,7 @@ void Normalize(AccessSet& access) {
     SortUnique(access.deferredInserts);
     SortUnique(access.setReads);
     SortUnique(access.extractReads);
+    SortUnique(access.annotatedWrites);
 }
 
 } // namespace
@@ -968,8 +965,8 @@ void CheckSchedules(RegistryData& data) {
 }
 
 // A run condition's access joins its System's (spec S-4, E.4): every read,
-// filter, set read, domain tick and the KernelSettings and extract flags, so
-// the System's checks (S-9, D-E18, Z1, D-E14) see it. Conditions are read-only
+// filter, set read, domain tick and the extract flag, so the System's checks
+// (S-9, Z1, D-E14) see it. Conditions are read-only
 // by type (S-5), so nothing is written.
 void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
     into.access.reads.insert(into.access.reads.end(), condition.access.reads.begin(), condition.access.reads.end());
@@ -982,7 +979,6 @@ void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
     into.access.changeFilters = into.access.changeFilters || condition.access.changeFilters;
     into.access.local = into.access.local || condition.access.local;
     into.domainTick = into.domainTick || condition.domainTick;
-    into.kernelSettings = into.kernelSettings || condition.kernelSettings;
     into.usesExtract = into.usesExtract || condition.usesExtract;
 }
 
@@ -1040,12 +1036,6 @@ void ResolveSystems(RegistryData& data) {
                                      "declare an allotter resource)",
                            {system.options.name}, {SourceText(system.source)});
             }
-        }
-        if (resolver.kernelSettings) {
-            data.Error(StartupCode::DE18, "A.6",
-                       subject + " declares Res or ResMut of KernelSettings; only the Host writes it and only the "
-                                 "kernel reads it",
-                       {system.options.name, "KernelSettings"}, {SourceText(system.source)});
         }
         if (resolver.usesExtract && (data.extractSource == nullptr || !data.extractSource->frozen)) {
             data.Error(StartupCode::DE14, "H-6",
@@ -1110,19 +1100,8 @@ void ResolveSystems(RegistryData& data) {
                            {hook.name}, {SourceText(hook.source)});
             }
         }
-        if (resolver.kernelSettings) {
-            data.Error(StartupCode::DE18, "A.6", subject + " declares Res or ResMut of KernelSettings",
-                       {hook.name, "KernelSettings"}, {SourceText(hook.source)});
-        }
         if (resolver.usesExtract) {
             data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
-                       {hook.name}, {SourceText(hook.source)});
-        }
-        if (resolver.access.exclusive && std::any_of(resolver.access.writes.begin(), resolver.access.writes.end(),
-                                                     [](const AccessKey& key) { return key.kind == AccessKind::Resource; })) {
-            // Spec S-18 (K0): a hook writes through deferred records; it lists no resource writes.
-            data.Error(StartupCode::DE7, "S-18",
-                       subject + " takes ExclusiveWorld<Writes<...>>; a hook may take ExclusiveWorld<> only",
                        {hook.name}, {SourceText(hook.source)});
         }
         if (hook.zone == Zone::C) {

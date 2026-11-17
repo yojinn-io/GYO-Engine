@@ -151,6 +151,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
     GYO_ASSERT(world.state_ == WorldState::Ready);
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
+    ReadSettings();
     if (record->options.startup) {
         // Spec H-12: the main program may run Startup itself, once, before the kernel has.
         GYO_ASSERT(!world.startupRan_);
@@ -162,6 +163,25 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
         if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;
     }
     return RunPlan(record->options.name, false);
+}
+
+void WorldExecutor::ReadSettings() {
+    World& world = world_;
+    // KernelSettings is read once, when each Run call starts (J-50, DI-KS 24),
+    // before Startup: a change made by a System, Startup's included, counts
+    // from the next Run. A nested RunSchedule does not come here.
+    const auto& settings =
+        static_cast<const Detail::ResourceSlot<KernelSettings>&>(*world.resources_[world.data_->kernelSettings]);
+    const bool verification = settings.value && settings.value->accessVerification;
+    // Snapshots taken before the switch went off are stale (nothing was compared
+    // since), and none were kept while it was off: a flip drops them all.
+    if (verification != world.verification_) world.DropSnapshots();
+    world.verification_ = verification;
+    world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;
+    world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;
+    // Spec F-12: a limit of 0 is a Programmer Error (the Host's or a System's write).
+    GYO_ASSERT(world.hookRoundLimit_ >= 1);
+    world.hasRun_ = true;
 }
 
 Engine::Base::Result<void, KernelError> WorldExecutor::RunStartup(std::string_view schedule) {
@@ -179,16 +199,6 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
     GYO_ASSERT(plan != nullptr && record != nullptr);
     const Domain domain = record->options.domain;
 
-    // KernelSettings is read once, when the first Run starts (LIM-6, J-50).
-    if (!world.hasRun_) {
-        const auto& settings = static_cast<const Detail::ResourceSlot<KernelSettings>&>(*world.resources_[data.kernelSettings]);
-        world.verification_ = settings.value && settings.value->accessVerification;
-        world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;
-        world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;
-        // Spec F-12: a limit of 0 is the Host's misuse (a precondition).
-        GYO_ASSERT(world.hookRoundLimit_ >= 1);
-        world.hasRun_ = true;
-    }
     // The domain tick: advanced only by the domain's clock schedule's Run, first
     // (spec section 0, B5); a nested Run of it too (K0).
     if (record->options.clock) {

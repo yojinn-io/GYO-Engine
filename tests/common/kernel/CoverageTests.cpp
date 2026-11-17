@@ -45,7 +45,6 @@ SystemResult ExtractPos(Extract<Read<TestPos>>) { return Ok(); }
 SystemResult HookWritesHealth(Query<Write<TestHealth>>) { return Ok(); }
 SystemResult HookWritesMode(Query<Write<TestMode>>) { return Ok(); }
 SystemResult HookSpawns(Spawn<Bundle<TestPos>>) { return Ok(); }
-SystemResult HookReadsSettings(Res<KernelSettings>) { return Ok(); }
 SystemResult HookKeepsLocal(Local<int>, Query<Read<TestPos>>) { return Ok(); }
 bool VelChanged(Query<Changed<TestVel>>) { return true; }
 bool SettingsOn(Res<KernelSettings>) { return true; }
@@ -185,18 +184,19 @@ TEST_CASE("J-38: a Changed filter in a mount's or a set's run condition makes a 
     CHECK(HasRule(setChanged, StartupCode::DE7, "S-9"));
 }
 
-TEST_CASE("J-24: KernelSettings read by a mount's or a set's run condition is D-E18") {
+// D-E18 is gone (v8-arch-gyo2-kernel-settings-read-write): KernelSettings is read and written like any resource.
+TEST_CASE("J-24: a mount's or a set's run condition may read KernelSettings") {
     Built conditionSettings = FinishOne([](Registrar& r) {
         Mount m = At("Update", "First");
         m.conditions.push_back(Condition<&SettingsOn>("SettingsOn"));
         r.AddSystem<&ReadMarker>(Sys("Gated", Zone::B, {m}));
     });
-    CHECK(ErrorCount(conditionSettings, StartupCode::DE18) == 1);
+    KERNEL_REQUIRE_OK(conditionSettings);
     Built setSettings = FinishOne([](Registrar& r) {
         r.Set({.name = "Gated", .schedule = "Update"}, {Condition<&SettingsOn>("SettingsOn")});
         r.AddSystem<&ReadMarker>(Sys("Gated", Zone::B, {InSet(At("Update", "First"), "Gated")}));
     });
-    CHECK(ErrorCount(setSettings, StartupCode::DE18) == 1);
+    KERNEL_REQUIRE_OK(setSettings);
 }
 
 TEST_CASE("J-47: a set's run condition reading a named set with a zone B member makes a zone C member fail (Z1)") {
@@ -278,15 +278,11 @@ TEST_CASE("J-14: a hook without a zone fails under RequireExplicitZones and is z
     CHECK(HasRule(hookLocal, StartupCode::DE7, "S-7"));
 }
 
-TEST_CASE("J-24: a hook that spawns without an allotter (D-E3) or reads KernelSettings (D-E18)") {
+TEST_CASE("J-24: a hook that spawns without an allotter (D-E3)") {
     Built hookSpawn = FinishOne([](Registrar& r) {
         r.Hook<TestVel, &HookSpawns>(HookTrigger::OnAdd, {.name = "OnVel", .zone = Zone::C});
     });
     CHECK(ErrorCount(hookSpawn, StartupCode::DE3) == 1);
-    Built hookSettings = FinishOne([](Registrar& r) {
-        r.Hook<TestMarker, &HookReadsSettings>(HookTrigger::OnAdd, {.name = "OnMarker", .zone = Zone::B});
-    });
-    CHECK(ErrorCount(hookSettings, StartupCode::DE18) == 1);
 }
 
 TEST_CASE("J-39: a zone C System may read the domain tick (it is the (c) time source)") {

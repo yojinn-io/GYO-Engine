@@ -711,12 +711,13 @@ private:
 template <class SetTag>
 struct ParamTraits<SetRead<SetTag>> : Detail::HandleTraits<SetRead<SetTag>, TypeList<Access::SetReadOf<SetTag>>, true> {};
 
-// ---- ExclusiveWorld (spec S-10, S-13 to S-18; K0, v8-arch-gyo2-nested-schedule)
+// ---- ExclusiveWorld (spec S-10, S-13; K0, v8-arch-gyo2-nested-schedule;
+// v8-arch-gyo2-exclusive-writes-optional)
 
-// The single-writer resources an ExclusiveWorld writes: ExclusiveWorld<Writes<R...>>.
-// Each listed resource is a resource write of the System (counted as its
-// writer: D-E2; checked like any write: Z2, D-E18, affinity). Shared resources
-// need no listing.
+// An optional annotation: ExclusiveWorld<Writes<R...>> names resources the
+// System means to write, for the authority policy to read (AccessSet::
+// annotatedWrites). It is not a write: not counted as a writer (D-E2), no zone
+// rule, no conflict. ExclusiveWorld writes every resource with or without it.
 template <class... Resources>
 struct Writes {};
 
@@ -771,8 +772,8 @@ struct PointsIntoWorld<const std::tuple<T...>> : PointsIntoWorld<std::tuple<T...
 template <class F, class Arg>
 concept ExclusiveClosure = std::invocable<F&, Arg> && !kPointsIntoWorld<std::invoke_result_t<F&, Arg>>;
 
-// The result of a Read or Modify: Err when a rule refuses the access (S-13 to
-// S-16); otherwise what the closure returned, or nothing when the entity has
+// The result of a Read or Modify: Err when a rule refuses the access (S-16);
+// otherwise what the closure returned, or nothing when the entity has
 // no T or the resource is absent (the closure was not called). A closure that
 // returns void gives whether it was called.
 template <class R>
@@ -801,10 +802,11 @@ private:
 template <class R>
 using VisitResult = typename Detail::VisitResultOf<R>::Type;
 
-// Untyped access to the whole World; zone B only (S-13); the only parameter
-// (S-10). Conflicts with every System of its stage. Written ExclusiveWorld<>
-// with nothing to list, ExclusiveWorld<Writes<R...>> to write single-writer
-// resources (one name, v8-arch-gyo2-nested-declaration-approved).
+// Untyped access to the whole World: reads and writes every component and
+// resource value (events are not in it; DI-KS 1). Zone B only (S-13, a zone
+// rule at startup); the only parameter (S-10). Conflicts with every System of
+// its stage. Written ExclusiveWorld<>, or ExclusiveWorld<Writes<R...>> with the
+// optional annotation (one name, v8-arch-gyo2-nested-declaration-approved).
 template <class Declared = Writes<>>
 class ExclusiveWorld {
     static_assert(Detail::kAlwaysFalse<Declared>,
@@ -829,25 +831,21 @@ public:
         return Call<const T&>(f, cell->value);
     }
 
-    // Writes entity's T through f(T&): only zone B, Shared columns; anything
-    // else is Err in every build (S-13). The cell's changed stamp is set when
-    // f is called (whether or not f changes the value).
+    // Writes entity's T through f(T&), any component. The cell's changed stamp
+    // is set when f is called (whether or not f changes the value).
     template <class T, class F>
         requires Detail::ExclusiveClosure<F, T&>
     [[nodiscard]] VisitResult<std::invoke_result_t<F&, T&>> Modify(EntityId entity, F&& f) {
         Check("ExclusiveWorld");
-        Detail::SystemContext& call = Detail::RequireCall(*world_);
-        const ComponentId component = Detail::ComponentIdOf(*world_, KeyOf<T>());
-        if (auto error = Detail::CheckExclusiveWrite(call, component, entity)) return Engine::Base::Err(std::move(*error));
-        auto* cell = static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, component)).Find(entity);
+        auto* cell = Column<T>().Find(entity);
         if (cell == nullptr) return Absent<std::invoke_result_t<F&, T&>>();
         cell->changed = stamp_;
         return Call<T&>(f, cell->value);
     }
 
-    // Reads resource T through f(const T&): any resource but KernelSettings and
-    // one whose thread affinity the runner does not satisfy, which are Err
-    // (S-15, S-16). Nothing, and f not called, when the resource is absent.
+    // Reads resource T through f(const T&): any resource, KernelSettings too,
+    // but one whose thread affinity the runner does not satisfy, which is Err
+    // (S-16). Nothing, and f not called, when the resource is absent.
     template <class T, class F>
         requires Detail::ExclusiveClosure<F, const T&>
     [[nodiscard]] VisitResult<std::invoke_result_t<F&, const T&>> Read(F&& f) {
@@ -860,10 +858,10 @@ public:
         return Call<const T&>(f, *slot.value);
     }
 
-    // Writes resource T through f(T&): a zone B Shared resource, or one listed
-    // in Writes<...>; another is Err (S-13 zone C, S-14 single writer not
-    // listed), as is one it may not read (S-15, S-16). Only the value: a resource is
-    // not added or removed here. The changed stamp is set when f is called.
+    // Writes resource T through f(T&): any resource, KernelSettings too (a
+    // change counts from the next Run), listed in Writes<...> or not; one it
+    // may not read is Err (S-16). Only the value: a resource is not added or
+    // removed here. The changed stamp is set when f is called.
     template <class T, class F>
         requires Detail::ExclusiveClosure<F, T&>
     [[nodiscard]] VisitResult<std::invoke_result_t<F&, T&>> Modify(F&& f) {
@@ -871,9 +869,6 @@ public:
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         const ResourceId resource = Detail::ResourceIdOf(*world_, KeyOf<T>());
         if (auto error = Detail::CheckExclusiveRead(call, resource)) return Engine::Base::Err(std::move(*error));
-        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {
-            return Engine::Base::Err(std::move(*error));
-        }
         auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));
         if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();
         slot.changed = stamp_;
@@ -899,13 +894,6 @@ public:
             }
         } renew{*this};
         return Detail::RunNested(call, schedule, closures_ > 0);
-    }
-
-    // There is no untyped spawn (spec A.1): always Err, in every build (S-13, J-45).
-    [[nodiscard]] Engine::Base::Result<EntityId, KernelError> Spawn() {
-        Check("ExclusiveWorld");
-        return Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::ExclusiveWorldWrite,
-                                                   "S-13", "ExclusiveWorld cannot spawn: there is no untyped spawn"));
     }
 
 private:
@@ -941,7 +929,7 @@ private:
 template <class... Listed>
 struct ParamTraits<ExclusiveWorld<Writes<Listed...>>>
     : Detail::HandleTraits<ExclusiveWorld<Writes<Listed...>>,
-                           TypeList<Access::WholeWorld, Access::ResourceWrite<Listed>...>, false> {
+                           TypeList<Access::WholeWorld, Access::AnnotatedWrite<Listed>...>, false> {
     static constexpr bool sole = true;
 };
 

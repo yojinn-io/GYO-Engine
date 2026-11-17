@@ -108,7 +108,7 @@ public:
     [[nodiscard]] WorldState State() const noexcept { return state_; }
     [[nodiscard]] const std::string& Name() const noexcept { return name_; }
     [[nodiscard]] const FrozenRegistry& Types() const noexcept { return *frozen_; }
-    // Whether an Executor has started a Run on this World (J-50).
+    // Whether an Executor has started a Run on this World.
     [[nodiscard]] bool HasRun() const noexcept { return hasRun_; }
 
     // ---- Entities and component values
@@ -199,8 +199,8 @@ public:
         return &*slot.value;
     }
 
-    // Host, Ready only. KernelSettings may be written only before the first Run
-    // (J-50: the Executor reads it once, when the first Run starts).
+    // Host, Ready only. KernelSettings too, at any time in Ready: the Executor
+    // reads it once, when each WorldExecutor::Run starts (J-50, DI-KS 24).
     template <class T>
     void SetResource(T value) {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
@@ -315,8 +315,6 @@ private:
     friend std::vector<ComponentId> Detail::SetMembersOf(const World&, TypeKey);
     friend void Detail::Push(Detail::SystemContext&, Detail::Record);
     friend KernelError Detail::CallError(Detail::SystemContext&, KernelErrorCode, std::string, std::string);
-    friend std::optional<KernelError> Detail::CheckExclusiveWrite(Detail::SystemContext&, ComponentId, EntityId);
-    friend std::optional<KernelError> Detail::CheckExclusiveResourceWrite(Detail::SystemContext&, ResourceId, bool);
     friend std::optional<KernelError> Detail::CheckExclusiveRead(Detail::SystemContext&, ResourceId);
     friend std::uint64_t Detail::CurrentSyncEpoch(const World&) noexcept;
     friend ChangeStamp Detail::NextStamp(World&) noexcept;
@@ -370,6 +368,9 @@ private:
     // Layer 2 (spec A.6): snapshots and comparisons.
     using Snapshot = Detail::Snapshot;
     void TakeSnapshots();
+    // Drops every snapshot: the next comparison takes fresh ones and reports
+    // nothing (the verification switch changed, J-50).
+    void DropSnapshots() noexcept;
     // Names of storages changed outside the World API since the last snapshot.
     [[nodiscard]] std::vector<std::string> CompareBefore();
     // Names of storages access does not declare as written that changed during the call.
@@ -432,8 +433,8 @@ private:
     };
     std::vector<HookQueue> hookQueues_;
     [[nodiscard]] HookQueue& HookQueueOf(std::string_view schedule);
-    // Spec F-12: the product's default hook round limit (KernelSettings, cached
-    // when the first Run starts), and the hooks that recorded during the current
+    // Spec F-12: the product's default hook round limit (KernelSettings, read
+    // when each Run starts), and the hooks that recorded during the current
     // hook round (HookData index, call order; for the limit's message).
     std::uint32_t hookRoundLimit_ = 8;
     bool trackRoundRecorders_ = false;

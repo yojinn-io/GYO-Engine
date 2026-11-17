@@ -425,7 +425,7 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
     }
 }
 
-// ---- J-45 (S-13)
+// ---- J-45 (S-13: zone C does not hold ExclusiveWorld; it writes any value)
 
 namespace {
 
@@ -436,11 +436,6 @@ SystemResult ExclusiveWritesZoneC(ExclusiveWorld<> world) {
 }
 SystemResult ExclusiveWritesExclusive(ExclusiveWorld<> world) {
     auto r = world.Modify<Mode>(1, [](Mode& mode) { mode.m += 1; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
-    return Ok();
-}
-SystemResult ExclusiveSpawns(ExclusiveWorld<> world) {
-    auto r = world.Spawn();
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
@@ -472,7 +467,11 @@ std::unique_ptr<Rig> ExclusiveRig(void (*add)(Registrar&), bool verification) {
 
 } // namespace
 
-TEST_CASE("J-45: ExclusiveWorld writes only zone B Shared data; anything else, and a spawn, is Err in every build") {
+// ExclusiveWorld reads and writes any component and resource value
+// (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1); a zone C System still may not
+// hold it (S-13 at startup, a zone rule of a later batch). Its typed Spawn comes
+// with the immediate structural changes (segment 3 of this batch).
+TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build; a zone C System may not hold it") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
     SUBCASE("zone C holding it: Finish fails") {
         const Built built = Finish({{"test", [](Registrar& r) {
@@ -483,20 +482,19 @@ TEST_CASE("J-45: ExclusiveWorld writes only zone B Shared data; anything else, a
     }
     SUBCASE("zone C write") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneC>(B("X", "A")); }, false);
-        CheckErrOnce(*rig, KernelErrorCode::ExclusiveWorldWrite, "S-13");
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(rig->world().Get<Pos>(1)->x == 8, "J-45 written: a zone C value");
     }
     SUBCASE("Exclusive write") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesExclusive>(B("X", "A")); }, false);
-        CheckErrOnce(*rig, KernelErrorCode::ExclusiveWorldWrite, "S-13");
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(rig->world().Get<Mode>(1)->m == 2, "J-45 written: an Exclusive value");
     }
     SUBCASE("zone C, Shared write") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneCShared>(B("X", "A")); }, false);
         rig->world().Insert(1, CShared{0});
-        CheckErrOnce(*rig, KernelErrorCode::ExclusiveWorldWrite, "S-13");
-    }
-    SUBCASE("spawn") {
-        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveSpawns>(B("X", "A")); }, false);
-        CheckErrOnce(*rig, KernelErrorCode::ExclusiveWorldWrite, "S-13");
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(rig->world().Get<CShared>(1)->s == 1, "J-45 written: a zone C, Shared value");
     }
     SUBCASE("zone B Shared write and any read pass, also with verification on") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveAllowed>(B("X", "A")); }, true);
@@ -505,34 +503,41 @@ TEST_CASE("J-45: ExclusiveWorld writes only zone B Shared data; anything else, a
     }
 }
 
-// ---- J-50 (LIM-6, D-E18)
+// ---- J-50 (LIM-6; KernelSettings read when each Run starts)
 
 namespace {
 
-SystemResult ReadsSettings(Res<KernelSettings>) { return Ok(); }
 SystemResult ReadUndeclared(Query<Read<Tag>>) {
     static_cast<void>(KeptWorld()->Get<Pos>(1));
+    return Ok();
+}
+// Turns access verification on (KernelSettings is an ordinary resource: D-E18 is gone).
+SystemResult TurnVerificationOn(ResMut<KernelSettings> settings) {
+    settings->accessVerification = true;
     return Ok();
 }
 
 } // namespace
 
-TEST_CASE("J-50: KernelSettings is read when the first Run starts and cannot change after it; no System declares it") {
-    CHECK(HasError(Finish({{"test", [](Registrar& r) {
-                               Data(r);
-                               r.AddSystem<&ReadsSettings>(B("ReadsSettings", "A"));
-                           }}}),
-                   StartupCode::DE18));
-
+// KernelSettings is read once when each WorldExecutor::Run call starts
+// (v8-arch-gyo2-kernel-settings-read-write, DI-KS 24): the Host may write it
+// between Runs and a System may declare it; a change counts from the next Run.
+TEST_CASE("J-50: KernelSettings is read when each Run starts; the Host writes it between Runs too") {
     {
-        // After a clean first Run the World is Ready: only the KernelSettings rule stops the write.
         auto clean = MakeRig([](Registrar& r) {
             Data(r);
-            r.AddSystem<&Idle>(B("Idle", "A"));
+            r.AddSystem<&ReadUndeclared>(B("ReadUndeclared", "A"));
         }, false);
-        KERNEL_REQUIRE_RUN_OK(clean->Run());
-        CHECK(clean->world().State() == WorldState::Ready);
-        GYO_CHECK_ASSERTS(clean->world().SetResource(KernelSettings{true, false}));
+        clean->world().Insert(1, Pos{1});
+        KeptWorld() = &clean->world();
+        KERNEL_REQUIRE_RUN_OK(clean->Run());  // verification off: the undeclared read is not reported
+        clean->world().SetResource(KernelSettings{true, false});
+        CHECK_FALSE(clean->executor->Verification().accessVerification);
+        const auto next = clean->Run();
+        KeptWorld() = nullptr;
+        CHECK_MESSAGE(HasCode(next, KernelErrorCode::AccessViolation),
+                      "J-50 next Run: the Host's write between Runs was not read when the next Run started");
+        CHECK(clean->executor->Verification().accessVerification);
     }
 
     auto rig = MakeRig([](Registrar& r) {
@@ -566,6 +571,39 @@ TEST_CASE("J-50: KernelSettings is read when the first Run starts and cannot cha
         CHECK_MESSAGE((breaks > 0) == breakOn, "breakOnKernelError " << breakOn << ", break hook calls " << breaks);
         CHECK(breaking->executor->Verification().breakOnKernelError == breakOn);
     }
+}
+
+TEST_CASE("J-50: a System's change of KernelSettings takes effect at the next Run, not in the Run that made it") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&TurnVerificationOn>(B("TurnVerificationOn", "A"));
+        r.AddSystem<&ReadUndeclared>(B("ReadUndeclared", "B"));
+    }, false);
+    rig->world().Insert(1, Pos{1});
+    KeptWorld() = &rig->world();
+    const auto first = rig->Run();
+    const auto second = rig->Run();
+    KeptWorld() = nullptr;
+    CHECK_MESSAGE(static_cast<bool>(first), "J-50 same Run: verification turned on in the Run that wrote it: " << Text(first));
+    CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                  "J-50 next Run: a System's write of KernelSettings was not read when the next Run started");
+}
+
+TEST_CASE("J-50: verification on, off for two Runs while data changes, on again: no false report") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&WriteTagOne>(B("WriteTagOne", "A"));
+    }, true);
+    rig->world().Insert(1, Tag{0});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    rig->world().SetResource(KernelSettings{false, false});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // Tag changes while nothing is compared
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    rig->world().SetResource(KernelSettings{true, false});
+    const auto result = rig->Run();
+    CHECK_MESSAGE(static_cast<bool>(result),
+                  "J-50 flip: the snapshots from before verification was off were compared: " << Text(result));
+    CHECK(rig->world().Get<Tag>(1)->t == 4);
 }
 
 // ---- J-52 (F.2 steps 0 and 2, B-12)

@@ -45,7 +45,6 @@ SystemResult ReadMarker(Query<Read<TestMarker>>) { return Ok(); }
 SystemResult Nothing() { return Ok(); }
 SystemResult ReadPos(Query<Read<TestPos>>) { return Ok(); }
 SystemResult SpawnPos(Spawn<Bundle<TestPos>>) { return Ok(); }
-SystemResult ReadSettings(Res<KernelSettings>) { return Ok(); }
 SystemResult HookWritesA(Query<Write<SharedA>>) { return Ok(); }
 SystemResult HookReadsA(Query<Read<SharedA>>) { return Ok(); }
 SystemResult ReadDerived(Query<Read<TestDerived>>) { return Ok(); }
@@ -613,18 +612,9 @@ TEST_CASE("J-24: D-E1 (missing schedule or stage), D-E19 (two mounts in one sche
     CHECK(KernelTest::ErrorCount(twice, StartupCode::DE19) == 1);
 }
 
-TEST_CASE("J-24: D-E3 (Spawn without an allotter), D-E18 (Res of KernelSettings)") {
+TEST_CASE("J-24: D-E3 (Spawn without an allotter)") {
     Built spawn = FinishOne([](Registrar& r) { r.AddSystem<&SpawnPos>(Sys("SpawnPos", Zone::C, Sim())); });
     CHECK(KernelTest::ErrorCount(spawn, StartupCode::DE3) == 1);
-    Built settings = FinishOne([](Registrar& r) {
-        r.AddSystem<&ReadSettings>(Sys("ReadSettings", Zone::B, {At("Update", "First")}));
-    });
-    CHECK(KernelTest::ErrorCount(settings, StartupCode::DE18) == 1);
-    const auto writes = [](ResMut<KernelSettings>) -> SystemResult { return {}; };
-    Built settingsMut = FinishOne([&](Registrar& r) {
-        r.AddSystem<decltype(writes)>(Sys("WriteSettings", Zone::B, {At("Update", "First")}));
-    });
-    CHECK(KernelTest::ErrorCount(settingsMut, StartupCode::DE18) == 1);
 }
 
 TEST_CASE("J-24: D-E4 (missing target), D-E5 (against stage order), D-E6 (cycle)") {

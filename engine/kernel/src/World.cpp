@@ -59,7 +59,7 @@ World::World(const Registry& registry, std::string name)
     }
     for (Detail::MakeResourceFn make : data.resourceMakers) resources_.push_back(make());
     for (Detail::MakeEventsFn make : data.eventMakers) events_.push_back(make());
-    // The kernel's own resource is present from the start (the Host overwrites it before the first Run).
+    // The kernel's own resource is present from the start (the Host or a System may overwrite it).
     static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data.kernelSettings]).value = KernelSettings{};
     excluded_.assign(columns_.size(), false);
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
@@ -146,17 +146,8 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         if (!verification_) return;
         const Detail::AccessDesc& access = *call->access;
         bool declared = false;
-        if (access.wholeWorld && kind != Detail::EntryKind::Event) {
-            if (mode == Detail::kModeRead) {
-                declared = true;
-            } else if (kind == Detail::EntryKind::Component) {
-                const ColumnInfo& info = data_->components[id];
-                declared = info.zone == Zone::B && info.writePolicy == WritePolicy::Shared;
-            } else {
-                const ResourceInfo& info = data_->resources[id];
-                declared = info.zone == Zone::B && info.writePolicy == WritePolicy::Shared;
-            }
-        }
+        // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
+        if (access.wholeWorld && kind != Detail::EntryKind::Event) declared = true;
         const auto entry = std::lower_bound(access.entries.begin(), access.entries.end(), std::make_pair(kind, id),
                                             [](const Detail::AccessEntry& e, const std::pair<Detail::EntryKind, std::uint32_t>& k) {
                                                 return e.kind != k.first ? e.kind < k.first : e.id < k.second;
@@ -191,10 +182,6 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         return;
     case WorldState::Ready:
         if (mode == Detail::kModeRead) return;
-        if (kind == Detail::EntryKind::Resource) {
-            // J-50: KernelSettings only before the first Run.
-            GYO_ASSERT(!hasRun_ || id != data_->kernelSettings);
-        }
         MarkApiWritten(kind, id);
         return;
     }
@@ -336,39 +323,9 @@ KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rul
     return error;
 }
 
-std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {
-    const ColumnInfo& info = call.world->data_->components[component];
-    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;
-    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, "S-13",
-                     "ExclusiveWorld write of component '" + info.name + "' (" +
-                         (info.zone == Zone::C ? "zone C" : "Exclusive") + ") on entity " + std::to_string(entity) +
-                         ": ExclusiveWorld writes only zone B, Shared data");
-}
-
-std::optional<KernelError> CheckExclusiveResourceWrite(SystemContext& call, ResourceId resource, bool listed) {
-    const ResourceInfo& info = call.world->data_->resources[resource];
-    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;
-    if (info.zone != Zone::B) {
-        // Spec S-13: zone C data is never an ExclusiveWorld's (listing it is Z2 at startup).
-        return CallError(call, KernelErrorCode::ExclusiveWorldWrite, "S-13",
-                         "ExclusiveWorld write of resource '" + info.name +
-                             "' (zone C): ExclusiveWorld writes only zone B data");
-    }
-    return CallError(call, KernelErrorCode::UndeclaredResourceWrite, "S-14",
-                     "ExclusiveWorld write of resource '" + info.name +
-                         "', which has a single writer (not Shared) and is not listed in this System's "
-                         "ExclusiveWorld<Writes<...>>: list it there to be counted as its writer");
-}
-
 std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource) {
     const World& world = *call.world;
     const ResourceInfo& info = world.data_->resources[resource];
-    if (resource == world.data_->kernelSettings) {
-        // LIM-6, D-E18: the verification switches must not change a simulation result.
-        return CallError(call, KernelErrorCode::UnreadableResource, "S-15",
-                         "ExclusiveWorld read of KernelSettings: only the kernel reads it, so the verification "
-                         "switches cannot change what a System does");
-    }
     const Detail::ScheduleRecord* schedule = world.data_->FindSchedule(std::string(call.schedule));
     const std::string runner = schedule != nullptr ? schedule->options.runner : std::string();
     if (!info.affinity.IsAny() && info.affinity.role != runner) {
@@ -855,6 +812,12 @@ void World::TakeSnapshots() {
     for (std::size_t e = 0; e < events_.size(); ++e) Take(eventSnapshots_[e], events_[e]->StorageBytes());
 }
 
+void World::DropSnapshots() noexcept {
+    columnSnapshots_.clear();
+    resourceSnapshots_.clear();
+    eventSnapshots_.clear();
+}
+
 std::vector<std::string> World::CompareBefore() {
     std::vector<std::string> changed;
     columnSnapshots_.resize(columns_.size());
@@ -879,14 +842,8 @@ std::vector<std::string> World::CompareBefore() {
 std::vector<std::string> World::CompareAfter(const Detail::AccessDesc& access) {
     std::vector<std::string> changed;
     auto declaredWrite = [&](Detail::EntryKind kind, std::uint32_t id) {
-        if (access.wholeWorld && kind == Detail::EntryKind::Component) {
-            const ColumnInfo& info = data_->components[id];
-            if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return true;
-        }
-        if (access.wholeWorld && kind == Detail::EntryKind::Resource) {
-            const ResourceInfo& info = data_->resources[id];
-            if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return true;
-        }
+        // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
+        if (access.wholeWorld && kind != Detail::EntryKind::Event) return true;
         for (const Detail::AccessEntry& entry : access.entries) {
             if (entry.kind == kind && entry.id == id && (entry.modes & Detail::kModeWrite) != 0) return true;
         }

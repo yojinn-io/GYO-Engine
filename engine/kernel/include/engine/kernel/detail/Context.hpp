@@ -55,11 +55,9 @@ struct AccessEntry {
 // to it for both). Derived from the Registry's AccessSet when the WorldExecutor is made.
 struct AccessDesc {
     std::vector<AccessEntry> entries;
-    // ExclusiveWorld: reads every column and resource (but KernelSettings and a
-    // resource whose affinity the runner does not satisfy: S-15); writes zone B
-    // Shared data and the resources its Writes<...> lists, which are entries of
-    // this description (checked by the ExclusiveWorld handle, which returns Err
-    // otherwise: S-13, S-14).
+    // ExclusiveWorld: reads and writes every column and resource (DI-KS 1; but
+    // a resource whose affinity the runner does not satisfy: S-16); the event
+    // buffers are not in it. Its Writes<...> annotation adds no entry.
     bool wholeWorld = false;
 };
 
@@ -135,7 +133,7 @@ struct SystemContext {
     // the Executor as siblings beside the System's own Err (spec B.4 point 7,
     // E.2 step 5); the System never sees them.
     std::vector<KernelError> errors;
-    // Errors a kernel API returned to the System as Err (S-13, W-9).
+    // Errors a kernel API returned to the System as Err (S-16, W-9, nested-run refusals).
     // The System should pass them on; one it drops is listed by the Executor all
     // the same (nothing is silent, target/error-handling).
     std::vector<KernelError> returned;
@@ -221,19 +219,11 @@ void Push(SystemContext& call, Record record);
 // breakOnKernelError is on (target/system-contract 2b).
 [[nodiscard]] KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message);
 
-// The always-on checks of ExclusiveWorld (target/error-handling "the added
-// row"): each returns the error (already recorded in call.errors through
-// CallError) or nothing.
-//   S-13  an ExclusiveWorld write to a column or resource outside zone B Shared;
-//   S-14  an ExclusiveWorld write to a zone B single-writer resource its
-//         Writes<...> does not list (listed: true when it does);
-//   S-15  an ExclusiveWorld read of KernelSettings;
+// The always-on check of ExclusiveWorld (target/error-handling "the added
+// row"): returns the error (already recorded in call.errors through CallError)
+// or nothing.
 //   S-16  an ExclusiveWorld read of a resource whose thread affinity the running
 //         schedule's runner does not satisfy.
-[[nodiscard]] std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component,
-                                                             EntityId entity);
-[[nodiscard]] std::optional<KernelError> CheckExclusiveResourceWrite(SystemContext& call, ResourceId resource,
-                                                                     bool listed);
 [[nodiscard]] std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource);
 
 // The allotter resource of the World (spec A.1), or nullptr when none is declared.

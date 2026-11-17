@@ -425,11 +425,19 @@ TEST_CASE("J-54: the rounds are counted from 1 in every Run") {
     }
 }
 
-TEST_CASE("J-54: KernelSettings is read at the first Run only; a limit of 0 is rejected") {
-    SUBCASE("KernelSettings written after the first Run fails a GYO_ASSERT (J-50)") {
+TEST_CASE("J-54: KernelSettings is read when each Run starts; a limit of 0 is rejected") {
+    SUBCASE("KernelSettings written after the first Run is read when the next Run starts (J-50)") {
+        auto rig = MakeFlushRig(ChainSystems);
+        KERNEL_REQUIRE_RUN_OK(RunChain(*rig, 3));
+        rig->world().SetResource(KernelSettings{true, false, 2});
+        CHECK_MESSAGE(HasCode(RunChain(*rig, 3), KernelErrorCode::HookRoundLimit),
+                      "J-54 next Run: a limit the Host wrote after the first Run was not read by the next Run");
+    }
+    SUBCASE("a limit of 0 written between two Runs fails a GYO_ASSERT when the next Run starts") {
         auto rig = MakeFlushRig(ChainSystems);
         KERNEL_REQUIRE_RUN_OK(RunChain(*rig, 0));
-        GYO_CHECK_ASSERTS(rig->world().SetResource(KernelSettings{true, false, 3}));
+        rig->world().SetResource(KernelSettings{true, false, 0});
+        GYO_CHECK_ASSERTS(RunChain(*rig, 0));
     }
     SUBCASE("a schedule's limit of 0 is D-E20") {
         Limits limits;
@@ -839,6 +847,15 @@ TEST_CASE("J-54: a World whose KernelSettings was removed before the first Run u
     auto over = MakeFlushRig(ChainSystems, {}, false);
     over->world().RemoveResource<KernelSettings>();
     CHECK_MESSAGE(HasCode(RunChain(*over, 9), KernelErrorCode::HookRoundLimit), "J-54: a World without KernelSettings has no limit of 8");
+}
+
+TEST_CASE("J-54: KernelSettings removed between two Runs: the next Run uses the default limit of 8") {
+    auto rig = MakeFlushRig(ChainSystems, {}, true, 2U);
+    KERNEL_REQUIRE_RUN_OK(RunChain(*rig, 2));
+    rig->world().RemoveResource<KernelSettings>();
+    const auto eight = RunChain(*rig, 8);
+    CHECK_MESSAGE(static_cast<bool>(eight), "J-54 removed: the Run after KernelSettings was removed did not use the default limit of 8: "
+                                                << Text(eight));
 }
 
 // hf-c-fp-eight-as-unset, hf-plan-fp-value-shifted, hf-c-fp-value-shifted, hf-registry-fp-schedule-field-when-declared,

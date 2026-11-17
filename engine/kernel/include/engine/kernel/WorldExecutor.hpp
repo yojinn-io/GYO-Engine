@@ -84,7 +84,7 @@ public:
     void SetErrorHandler(std::function<void(const KernelError&)> handler) { handler_ = std::move(handler); }
 
     // The fields of a "verification on" report (target/system-contract 2b
-    // condition 2). Meaningful once the first Run has read KernelSettings.
+    // condition 2): the KernelSettings the last Run started with.
     [[nodiscard]] VerificationReport Verification() const;
 
 private:
@@ -107,6 +107,8 @@ private:
     Engine::Base::Result<void, KernelError> RunStartup(std::string_view schedule);
     Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                           bool inClosure);
+    // J-50 (DI-KS 24): reads KernelSettings, once per Run call, before Startup.
+    void ReadSettings();
     // Spec E.5: interrupts the World and drops every record. The outermost level
     // calls the handler; a nested one leaves the error instead (its first one).
     Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
