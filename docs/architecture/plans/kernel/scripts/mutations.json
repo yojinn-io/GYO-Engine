@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them).",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them). kernel-subtract-structure (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md, section 6; ids ks-s<item>-, ks-diks15-): segment 1 retired 48 mutants whose rule left the kernel (ambiguity D-E8, run-time interception F-10 / Z5 / W-6b, ExclusiveWorld write limits S-13 / S-14 / S-15 / S-16 / S-18, D-E18, thread roles D-E10 / D-E13 / X-E2 / X-E3, the untyped ExclusiveWorld::Spawn, and ns-plan-version-not-bumped as a duplicate) and rewrote the ones whose find or expect moved.",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -1465,44 +1465,24 @@
       ]
     },
     {
-      "id": "rs-j3-2-ambiguity-tie-j22",
-      "what": "J.3 #2: (c) ambiguity becomes a registration-order tie (J-22)",
-      "file": "engine/kernel/src/Scheduler.cpp",
-      "find": "if (sa.options.zone == Zone::C || sb.options.zone == Zone::C) {",
-      "replace": "if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-22:*",
-      "expect": "immediate\\.result"
-    },
-    {
-      "id": "rs-j3-2-ambiguity-tie-j44",
-      "what": "J.3 #2: (c) ambiguity becomes a registration-order tie (J-44)",
-      "file": "engine/kernel/src/Scheduler.cpp",
-      "find": "if (sa.options.zone == Zone::C || sb.options.zone == Zone::C) {",
-      "replace": "if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-44:*",
-      "expect": "Permuted\\(kAmbiguous|built\\.result"
-    },
-    {
       "id": "rs-j3-3-deferred-not-counted",
-      "what": "J.3 #3: deferred writes do not conflict (J-22)",
+      "what": "J.3 #3: deferred writes do not conflict (J-22) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Scheduler.cpp",
       "find": "if (Intersects(a.access.deferredWrites, b.access.deferredWrites, &component)) {",
       "replace": "if (false) {",
       "target": "gyo_kernel_tests",
       "cases": "J-22:*",
-      "expect": "deferred\\.result"
+      "expect": "J\\-22 tie: two deferred writes of one component are one tie"
     },
     {
       "id": "rs-j3-3-event-writes-not-counted",
-      "what": "J.3 #3: event writes do not count (J-22)",
+      "what": "J.3 #3: event writes do not count (J-22) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "(mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Event, *id});",
       "replace": "if (mode == AccessMode::Read) access.reads.push_back({AccessKind::Event, *id});",
       "target": "gyo_kernel_tests",
       "cases": "J-22:*",
-      "expect": "events\\.result"
+      "expect": "J\\-22 tie: two writers of one event are one tie"
     },
     {
       "id": "rs-j3-4-z1-removed",
@@ -1886,13 +1866,13 @@
     },
     {
       "id": "rs-j22-deferred-vs-read",
-      "what": "J-22: a deferred write against an immediate read counts as a conflict",
+      "what": "J-22: a deferred write against an immediate read counts as a conflict (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Scheduler.cpp",
       "find": "    if (Intersects(a.access.deferredWrites, b.access.deferredWrites, &component)) {",
       "replace": "    std::vector<ComponentId> readsB;\n    for (const AccessKey& k : b.access.reads) if (k.kind == AccessKind::Component) readsB.push_back(k.id);\n    if (Intersects(a.access.deferredWrites, b.access.deferredWrites, &component) || Intersects(a.access.deferredWrites, readsB, &component)) {",
       "target": "gyo_kernel_tests",
       "cases": "J-22:*",
-      "expect": "pairs that are not ambiguous"
+      "expect": "J\\-22 no conflict: a deferred write against an immediate read"
     },
     {
       "id": "rs-j27-parallel-allowed",
@@ -1913,26 +1893,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-27:*",
       "expect": "ErrorCount\\(.*StartupCode::XE1\\)"
-    },
-    {
-      "id": "rs-j28-affinity-unchecked",
-      "what": "J-28: thread roles are not checked",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "                if (affinity.IsAny() || affinity.role == s.runner) return;",
-      "replace": "                return;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-28:*",
-      "expect": "ErrorCount\\(.*StartupCode::XE2\\)"
-    },
-    {
-      "id": "rs-j28-main-is-named",
-      "what": "J-28: a Main role is reported as a named role",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "                const bool main = affinity.role == kMainRole;",
-      "replace": "                const bool main = false;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-28:*",
-      "expect": "ErrorCount\\(.*StartupCode::XE2\\)"
     },
     {
       "id": "rs-j24-stop-at-first",
@@ -1995,16 +1955,6 @@
       "expect": "ErrorCount\\(.*StartupCode::DE12\\)"
     },
     {
-      "id": "rs-j24-de13-removed",
-      "what": "J-24: schedules on different runners are accepted",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (other.runner != first.runner && !other.runner.empty() && !first.runner.empty()) {",
-      "replace": "        if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*",
-      "expect": "ErrorCount\\(.*StartupCode::DE13\\)"
-    },
-    {
       "id": "rs-j24-de14-removed",
       "what": "J-24: an unfrozen extract source is accepted",
       "file": "engine/kernel/src/Registry.cpp",
@@ -2033,16 +1983,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-24:*",
       "expect": "ErrorCount\\(.*StartupCode::DE16\\)"
-    },
-    {
-      "id": "rs-j24-de18-resmut-only",
-      "what": "J-24: only ResMut of KernelSettings is reported",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (*id == data_.kernelSettings) {",
-      "replace": "            if (*id == data_.kernelSettings && mode == AccessMode::Write) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*",
-      "expect": "ErrorCount\\(settings, StartupCode::DE18\\)"
     },
     {
       "id": "rs-j24-de19-removed",
@@ -2396,11 +2336,11 @@
     },
     {
       "id": "rs-adv-exclusive-no-conflict",
-      "what": "D.1 condition 2: ExclusiveWorld no longer conflicts with the Systems of its stage (Fable adversarial check, 2026-11-13)",
+      "what": "D.1 condition 2: ExclusiveWorld no longer conflicts with the Systems of its stage (Fable adversarial check, 2026-11-13) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Scheduler.cpp",
       "find": "    if (a.access.exclusive || b.access.exclusive) return \"ExclusiveWorld\";",
       "replace": "    if (false) return \"ExclusiveWorld\";",
-      "expect": "ErrorCount\\(exclusive, StartupCode::DE8\\)",
+      "expect": "J\\-22 exclusive: ExclusiveWorld conflicts with every System of its stage",
       "target": "gyo_kernel_tests",
       "cases": "J-22:*"
     },
@@ -2503,16 +2443,6 @@
       "expect": "conditionChanged",
       "target": "gyo_kernel_tests",
       "cases": "J-38:*"
-    },
-    {
-      "id": "rs-adv-condition-settings-dropped",
-      "what": "D-E18 through a run condition is not reported (Fable adversarial check, 2026-11-13)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "    into.kernelSettings = into.kernelSettings || condition.kernelSettings;\n",
-      "replace": "",
-      "expect": "conditionSettings",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*"
     },
     {
       "id": "rs-adv-exclusive-resource-writers-skipped",
@@ -2767,13 +2697,13 @@
     },
     {
       "id": "rs-fix-b2-stop-after-declared-edges",
-      "what": "B2: a schedule stops at its first D-E4 / D-E5",
+      "what": "B2: a schedule stops at its first D-E4 / D-E5 (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Scheduler.cpp",
       "find": "        DeclaredEdges();\n",
       "replace": "        DeclaredEdges();\n        if (failed_) return;\n",
       "target": "gyo_kernel_tests",
       "cases": "J-24:*",
-      "expect": "ErrorCount\\(built, StartupCode::DE8\\) == 1"
+      "expect": "ErrorCount\\(built, StartupCode::DE16\\) == 1"
     },
     {
       "id": "rs-fix-b4-finish-before-resolve",
@@ -2907,13 +2837,13 @@
     },
     {
       "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "CFingerprint\\(\\)\\.version == 6U"
+      "expect": "CFingerprint\\(\\)\\.version == 7U"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -3274,13 +3204,13 @@
     },
     {
       "id": "rs-iv-registry-version-1",
-      "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check)",
+      "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 2;",
-      "replace": "constexpr std::uint32_t kRegistryFingerprintVersion = 1;",
+      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 3;",
+      "replace": "constexpr std::uint32_t kRegistryFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "RegistryFingerprint\\(\\)\\.version == 2U"
+      "expect": "RegistryFingerprint\\(\\)\\.version == 3U"
     },
     {
       "id": "rs-iv-fx4-note-for-any-kind",
@@ -3594,10 +3524,10 @@
     },
     {
       "id": "hf-product-limit-not-read",
-      "what": "KernelSettings::hookRoundLimit is not cached (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "KernelSettings::hookRoundLimit is not cached (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "        world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;",
-      "replace": "        world.hookRoundLimit_ = KernelSettings{}.hookRoundLimit;",
+      "find": "    world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;",
+      "replace": "    world.hookRoundLimit_ = KernelSettings{}.hookRoundLimit;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the product's default*",
       "expect": "J\\-54:\\ KernelSettings::hookRoundLimit\\ not\\ read"
@@ -3814,9 +3744,9 @@
     },
     {
       "id": "hf-product-zero-allowed",
-      "what": "a product default of 0 is not a GYO_ASSERT (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "a product default of 0 is not a GYO_ASSERT (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "        GYO_ASSERT(world.hookRoundLimit_ >= 1);\n",
+      "find": "    GYO_ASSERT(world.hookRoundLimit_ >= 1);\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-54: KernelSettings is read*",
@@ -3874,30 +3804,30 @@
     },
     {
       "id": "hf-plan-version-kept",
-      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (find and expect rewritten for version 3 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (find and expect rewritten for version 3 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 5;",
       "replace": "constexpr std::uint32_t kFingerprintVersion = 1;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "planOf\\(none,\\ \\\"Tick\\\"\\)\\.version\\ ==\\ 4U"
+      "expect": "planOf\\(none,\\ \\\"Tick\\\"\\)\\.version\\ ==\\ 5U"
     },
     {
       "id": "hf-c-version-kept",
-      "what": "the C fingerprint format stays 4, the hook-flush format (v8-arch-gyo2-hook-flush, spec F-12; find, replace and expect rewritten for version 5 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "the C fingerprint format stays 4, the hook-flush format (v8-arch-gyo2-hook-flush, spec F-12; find, replace and expect rewritten for version 5 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 4;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 6U"
+      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 7U"
     },
     {
       "id": "hf-registry-schedule-field",
-      "what": "the Registry fingerprint's schedule section hashes the limit (its format changes, its version does not) (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the Registry fingerprint's schedule section hashes the limit (its format changes, its version does not) (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "    out.Str(s.runner);\n}",
-      "replace": "    out.Str(s.runner);\n    out.U32(s.hookRoundLimit.value_or(0U));\n}",
+      "find": "    out.Str(s.parallelGuardTest);\n}",
+      "replace": "    out.Str(s.parallelGuardTest);\n    out.U32(s.hookRoundLimit.value_or(0U));\n}",
       "target": "gyo_kernel_tests",
       "cases": "J-18: ids follow*",
       "expect": "frozen\\.RegistryFingerprint\\(\\)\\.Text\\(\\)\\ ==\\ kJ18RegistryGolden"
@@ -3914,13 +3844,13 @@
     },
     {
       "id": "hf-export-version-kept",
-      "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "    std::string out = \"gyo.kernel.plans 2\\n\";",
-      "replace": "    std::string out = \"gyo.kernel.plans 1\\n\";",
+      "find": "    std::string out = \"gyo.kernel.plans 3\\n\";",
+      "replace": "    std::string out = \"gyo.kernel.plans 2\\n\";",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 2\"\\)\\ ==\\ 0"
+      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 3\"\\)\\ ==\\ 0"
     },
     {
       "id": "hf-no-snapshot-after-rounds",
@@ -3934,10 +3864,10 @@
     },
     {
       "id": "we-j34-hook-immediate",
-      "what": "J-34 (F-4): hook records applied in the same Applying (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-34 (F-4): hook records applied in the same Applying (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "    if (Result rest = phase(windowRecords, none); !rest) return rest;",
-      "replace": "    if (Result rest = phase(windowRecords, none); !rest) return rest;\n    {\n        std::vector<Record> again = std::move(queue.records);\n        queue.records.clear();\n        queue.recSeq = 0;\n        if (Result now = phase(again, none); !now) return now;\n    }",
+      "find": "    if (Result rest = phase(windowRecords); !rest) return rest;",
+      "replace": "    if (Result rest = phase(windowRecords); !rest) return rest;\n    {\n        std::vector<Record> again = std::move(queue.records);\n        queue.records.clear();\n        queue.recSeq = 0;\n        if (Result now = phase(again); !now) return now;\n    }",
       "target": "gyo_kernel_tests",
       "cases": "J-34:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"first:4\\ second:4\\ modes@1:0\""
@@ -4001,36 +3931,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-33:*",
       "expect": "rig\\->world\\(\\)\\.SyncEpoch\\(\\)\\ ==\\ epochBefore\\ \\+\\ 4"
-    },
-    {
-      "id": "we-j52-step0-unchecked",
-      "what": "J-52: step 0 does not look at the window's zone C inserts (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (Result step0 = phase(hookRecords, windowRecords); !step0) return step0;",
-      "replace": "    if (Result step0 = phase(hookRecords, none); !step0) return step0;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-52:*",
-      "expect": "J\\-52: step 0 rechecks the hook's despawn against the window"
-    },
-    {
-      "id": "we-j52-recheck-pending-only",
-      "what": "J-52: the Z5 recheck looks only at pending zone C inserts (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "                if (data_->components[c].zone == Zone::C && columns_[c]->Contains(target)) {\n                    reason = \"it has zone C component",
-      "replace": "                if (false) {\n                    reason = \"it has zone C component",
-      "target": "gyo_kernel_tests",
-      "cases": "J-52:*",
-      "expect": "J\\-52: step 2 sees the zone C column step 0 applied"
-    },
-    {
-      "id": "we-adv-z5-ignores-spawnwithid",
-      "what": "J-52 (Fable): the Z5 recheck ignores a pending zone C SpawnWithId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "                    if (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId)) {",
-      "replace": "                    if (other.kind == RecordKind::Insert) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-52:*",
-      "expect": "J\\-52: a zone C SpawnWithId in the window is rechecked"
     },
     {
       "id": "we-j36-hook-writerpos-zero",
@@ -4344,20 +4244,20 @@
     },
     {
       "id": "we-j3-16-executor-swallows",
-      "what": "J-32b (J.3 #16): the Executor swallows a call's Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "J-32b (J.3 #16): the Executor swallows a call's Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (error) {\n                error->Wrap(\"Executor: \" + StepText(scheduleName, position, system.options.name));",
       "replace": "            if (false && error) {\n                error->Wrap(\"Executor: \" + StepText(scheduleName, position, system.options.name));",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "expected\\ Err\\ UntypedWrite"
+      "expect": "expected\\ Err\\ AllotterExhausted"
     },
     {
       "id": "we-j50-settings-not-read",
-      "what": "J-50: the first Run does not read the verification switch (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-50: the first Run does not read the verification switch (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "        world.verification_ = settings.value && settings.value->accessVerification;",
-      "replace": "        world.verification_ = false;",
+      "find": "    world.verification_ = verification;",
+      "replace": "    world.verification_ = false;",
       "target": "gyo_kernel_tests",
       "cases": "J-50:*",
       "expect": "HasCode\\(result,\\ KernelErrorCode::AccessViolation\\)"
@@ -4384,10 +4284,10 @@
     },
     {
       "id": "we-adv-break-hook-not-read",
-      "what": "LIM-6 (Fable): breakOnKernelError is never read (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "LIM-6 (Fable): breakOnKernelError is never read (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "        world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;",
-      "replace": "        world.breakOnKernelError_ = false;",
+      "find": "    world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;",
+      "replace": "    world.breakOnKernelError_ = false;",
       "target": "gyo_kernel_tests",
       "cases": "J-50:*",
       "expect": "\\(breaks\\ >\\ 0\\)\\ ==\\ breakOn"
@@ -4531,46 +4431,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-30:*",
       "expect": "first\\ ==\\ std::vector<ChangeStamp>\\{0,\\ 6,\\ 3,\\ 1,\\ 12,\\ 9,\\ 1\\}"
-    },
-    {
-      "id": "we-j32b-untyped-unchecked",
-      "what": "J-32b (F-10): untyped Commands write any column (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
-      "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
-      "target": "gyo_kernel_tests",
-      "cases": "J-32b:*",
-      "expect": "static_cast<bool>\\(result\\)"
-    },
-    {
-      "id": "we-j32b-debug-only",
-      "what": "J-32b (J.3 #16): the untyped check only in a debug build (the release-like target must fail) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {\n",
-      "replace": "std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
-      "target": "gyo_kernel_tests",
-      "cases": "J-32b:*",
-      "expect": "static_cast<bool>\\(result\\)"
-    },
-    {
-      "id": "we-adv-untyped-zone-half",
-      "what": "F-10 (Fable): untyped Commands checks only the write policy (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
-      "replace": "    if (info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
-      "target": "gyo_kernel_tests",
-      "cases": "J-32b:*",
-      "expect": "static_cast<bool>\\(result\\)"
-    },
-    {
-      "id": "we-j32b-z5-record-off",
-      "what": "J-32b (Z5): a zone B despawn of zone C data is not checked when recorded (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (call.zone != Zone::B) return std::nullopt;",
-      "replace": "    return std::nullopt;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-32b:*",
-      "expect": "result\\.error\\(\\)\\.Text\\(\\)\\.find\\(\"System\\ 'ZoneBDespawnsZoneC'\"\\)\\ !=\\ std::string::npos"
     },
     {
       "id": "we-j36-no-same-tick",
@@ -4788,13 +4648,13 @@
     },
     {
       "id": "we-adv-excluded-columns-not-reported",
-      "what": "LIM-6 condition 2 (Fable): the report omits excluded columns (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; expect names rig->product, after the App to Product rename)",
+      "what": "LIM-6 condition 2 (Fable): the report omits excluded columns (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; expect names rig->product, after the App to Product rename) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "        if (world_.excluded_[c]) report.excludedColumns.push_back(data.components[c].name);",
       "replace": "        if (false && world_.excluded_[c]) report.excludedColumns.push_back(data.components[c].name);",
       "target": "gyo_kernel_tests",
       "cases": "J-5:*",
-      "expect": "rig\\->product\\->Verification\\(\\)\\.excludedColumns\\ ==\\ std::vector<std::string>\\{\"Pos\"\\}"
+      "expect": "rig\\->executor\\->Verification\\(\\)\\.excludedColumns\\ ==\\ std::vector<std::string>\\{\"Pos\"\\}"
     },
     {
       "id": "we-adv-added-is-changed",
@@ -4927,16 +4787,6 @@
       "expect": "rig\\->Run\\(\\)"
     },
     {
-      "id": "we-j6b-host-zone-c",
-      "what": "J-6 (W-6b): the Host writes zone C state after the first Run (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-6:*",
-      "expect": "world\\.Insert\\(2,\\ Pos\\{2\\}\\)"
-    },
-    {
       "id": "we-j32-spawn-before-despawn",
       "what": "J-32: spawn and remove applied before despawn (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; find rebuilt from the post-K0 ApplySync: step 2 moved after step 4)",
       "file": "engine/kernel/src/World.cpp",
@@ -4957,26 +4807,6 @@
       "expect": "static_cast<bool>\\(result\\)"
     },
     {
-      "id": "we-j45-exclusive-unchecked",
-      "what": "J-45 (S-13): ExclusiveWorld writes any column (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
-      "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "static_cast<bool>\\(result\\)"
-    },
-    {
-      "id": "we-j45-debug-only",
-      "what": "J-45 (J.3 #16): the ExclusiveWorld check only in a debug build (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n",
-      "replace": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "static_cast<bool>\\(result\\)"
-    },
-    {
       "id": "we-j53-after-diff-dropped",
       "what": "J-53: differences of the comparison after the call are not reported (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
       "file": "engine/kernel/src/World.cpp",
@@ -4988,23 +4818,13 @@
     },
     {
       "id": "we-adv-dropped-err-beside-own-err-lost",
-      "what": "J.3 #16 (Fable): a kernel Err the System dropped is lost when it returns another Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "what": "J.3 #16 (Fable): a kernel Err the System dropped is lost when it returns another Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/World.cpp",
       "find": "            if (!ContainsError(own, returned)) list.push_back(std::move(returned));\n",
       "replace": "            if (false && !ContainsError(own, returned)) list.push_back(std::move(returned));\n",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "result\\.error\\(\\)\\.Has\\(KernelErrorCode::UntypedWrite\\)"
-    },
-    {
-      "id": "we-adv-exclusive-zone-half",
-      "what": "S-13 (Fable): ExclusiveWorld checks only the write policy (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
-      "replace": "    if (info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "static_cast<bool>\\(result\\)"
+      "expect": "result\\.error\\(\\)\\.Has\\(KernelErrorCode::AllotterExhausted\\)"
     },
     {
       "id": "we-adv-j4-serial-half-dropped",
@@ -5025,16 +4845,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
       "expect": "rig\\->world\\(\\)\\.Insert\\(2,\\ Tag\\{2\\}\\)"
-    },
-    {
-      "id": "we-adv-j6b-host-zone-c-resource",
-      "what": "J-6 W-6b (Fable): the Host writes a zone C state resource after the first Run (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input || info.external);\n",
-      "replace": "            static_cast<void>(info);\n",
-      "target": "gyo_kernel_tests",
-      "cases": "J-6:*",
-      "expect": "world\\.SetResource\\(CRes\\{1\\}\\)"
     },
     {
       "id": "hf-limit-source-always-settings",
@@ -5150,10 +4960,10 @@
       "id": "hf-registry-fp-schedule-field-when-declared",
       "file": "engine/kernel/src/Fingerprint.cpp",
       "target": "gyo_kernel_tests",
-      "find": "    out.Str(s.runner);\n}",
-      "replace": "    out.Str(s.runner);\n    if (s.hookRoundLimit) out.U32(*s.hookRoundLimit);\n}",
+      "find": "    out.Str(s.parallelGuardTest);\n}",
+      "replace": "    out.Str(s.parallelGuardTest);\n    if (s.hookRoundLimit) out.U32(*s.hookRoundLimit);\n}",
       "expect": "J\\-54: Registry fingerprint of a declared limit of 5",
-      "what": "the Registry fingerprint's schedule section hashes a declared limit (format changed, version not; the goldens without a limit stay) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "the Registry fingerprint's schedule section hashes a declared limit (format changed, version not; the goldens without a limit stay) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "cases": "J-54: a declared limit's fingerprints*"
     },
     {
@@ -5291,18 +5101,6 @@
       "note": "同上"
     },
     {
-      "id": "hf-round-skips-z5",
-      "file": "engine/kernel/src/World.cpp",
-      "target": "gyo_kernel_tests",
-      "find": "            if (despawn.kind != RecordKind::Despawn || despawn.emitterZone != Zone::B) continue;",
-      "replace": "            if (despawn.kind != RecordKind::Despawn || despawn.emitterZone != Zone::B || trackRoundRecorders_) continue;",
-      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)",
-      "what": "a round does no Z5 recheck (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
-      "cases": "J-54: a round is a whole application*",
-      "ran_as": "ck-decl-round-skips-z5",
-      "note": "同上"
-    },
-    {
       "id": "hf-round-skips-onremove",
       "file": "engine/kernel/src/World.cpp",
       "target": "gyo_kernel_tests",
@@ -5349,18 +5147,6 @@
       "cases": "J-54: the default limit*",
       "ran_as": "ck-limit-check-before-empty",
       "note": "宣告沒列：第 N 輪清空了仍然回 Err"
-    },
-    {
-      "id": "we-j50-settings-writable",
-      "what": "J-50 (W-6b): KernelSettings writable after the first Run (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            GYO_ASSERT(!hasRun_ || id != data_->kernelSettings);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-50:*",
-      "expect": "clean\\->world\\(\\)\\.SetResource\\(KernelSettings\\{true,\\ false\\}\\)",
-      "ran_as": "we-j50-settings-writable",
-      "note": "master 的 we-*，沒搬；J-54 的「第一次 Run 之後改 KernelSettings」靠它守的斷言"
     },
     {
       "id": "sr-alive-applied",
@@ -6013,16 +5799,6 @@
       "expect": "J\\-55\\ order:\\ 7\\ before\\ 9"
     },
     {
-      "id": "sr-z5-skips-spawn",
-      "what": "Z5 recheck: a zone C SpawnWithId in the window no longer counts (it might be dropped) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "                    if (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId)) {",
-      "replace": "                    if (other.kind == RecordKind::Insert) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-55:*",
-      "expect": "J\\-55\\ z5:\\ Z5\\ as\\ before"
-    },
-    {
       "id": "sr-same-call-inserts-dropped",
       "what": "3.2: inserts of the call whose spawn was dropped are dropped too (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/World.cpp",
@@ -6064,23 +5840,23 @@
     },
     {
       "id": "sr-plan-version-not-bumped",
-      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
-      "replace": "constexpr std::uint32_t kFingerprintVersion = 2;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 5;",
+      "replace": "constexpr std::uint32_t kFingerprintVersion = 4;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
-      "expect": "J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 4"
+      "expect": "J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 5"
     },
     {
       "id": "sr-c-version-not-bumped",
-      "what": "fingerprint: the C fingerprint version stays 4 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "fingerprint: the C fingerprint version stays 4 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 4;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 6;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
-      "expect": "J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 6"
+      "expect": "J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 7"
     },
     {
       "id": "sr-j32-alive-applied",
@@ -6454,22 +6230,22 @@
     },
     {
       "id": "ns-exclusive-no-boundary-compare",
-      "what": "A.6: no boundary comparison after a call that holds ExclusiveWorld (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "A.6: no boundary comparison after a call that holds ExclusiveWorld (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (world.verification_) changed = world.CompareAfter(state.access);",
       "replace": "            if (world.verification_ && !state.access.wholeWorld) changed = world.CompareAfter(state.access);",
       "target": "gyo_kernel_tests",
-      "cases": "J-56: verification on: the same write through a kept address after*",
+      "cases": "J-56: verification on: a write of an event buffer behind EventWriter after*",
       "expect": "\\[ns\\-ver\\-address\\-after\\]"
     },
     {
       "id": "ns-run-from-a-system",
-      "what": "X-9: Product::Run accepts a Running World (any System could run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "X-9: Product::Run accepts a Running World (any System could run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "    GYO_ASSERT(world.state_ == WorldState::Ready);\n    const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));",
       "replace": "    const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));",
       "target": "gyo_kernel_tests",
-      "cases": "J-56: a plain System reaching Product::Run*",
+      "cases": "J-56: a plain System reaching WorldExecutor::Run*",
       "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
     },
     {
@@ -6643,86 +6419,6 @@
       "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase"
     },
     {
-      "id": "ns-z5-outer-window-skipped",
-      "what": "Z5: the recheck does not look at the outer levels' records (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            for (std::size_t i = runStack_[level].windowBase; i < end; ++i) {",
-      "replace": "            for (std::size_t i = end; i < end; ++i) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: an outer zone C insert into E and an inner*",
-      "expect": "\\[ns\\-z5\\-outer\\]"
-    },
-    {
-      "id": "ns-z5-nearest-level-only",
-      "what": "Z5: only the level right outside is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "        for (std::size_t level = 0; level + 1 < runStack_.size(); ++level) {",
-      "replace": "        for (std::size_t level = runStack_.size() >= 2 ? runStack_.size() - 2 : 0; level + 1 < runStack_.size(); ++level) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: three levels* the zone C insert in the outermost*",
-      "expect": "\\[ns\\-z5\\-three\\-levels\\]"
-    },
-    {
-      "id": "ns-z5-outermost-only",
-      "what": "Z5: only the outermost level is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "        for (std::size_t level = 0; level + 1 < runStack_.size(); ++level) {",
-      "replace": "        for (std::size_t level = 0; level + 1 < runStack_.size() && level == 0; ++level) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: three levels* the zone C insert in the middle level: Z5*",
-      "expect": "\\[ns\\-z5\\-middle\\-level\\]"
-    },
-    {
-      "id": "ns-z5-outer-hook-skipped",
-      "what": "Z5: the outer schedules' hook queues are not looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            for (const Record& r : HookQueueOf(runStack_[level].schedule).records) {",
-      "replace": "            for (const Record& r : HookQueueOf(runStack_.back().schedule).records) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: the zone C insert is in the outer schedule's hook queue*",
-      "expect": "\\[ns\\-z5\\-outer\\-hook\\]"
-    },
-    {
-      "id": "ns-z5-outer-withid-skipped",
-      "what": "Z5: an outer SpawnWithId is not taken for an insert (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "               (r.kind == RecordKind::Insert || (r.kind == RecordKind::Spawn && r.withId));",
-      "replace": "               r.kind == RecordKind::Insert;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: the outer zone C call spawns E with SpawnWithId*",
-      "expect": "\\[ns\\-z5\\-outer\\-withid\\]"
-    },
-    {
-      "id": "ns-z5-outer-any-zone",
-      "what": "Z5: an outer zone B insert stops an inner despawn too (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "        return r.emitterZone == Zone::C && r.entity == target &&",
-      "replace": "        return r.entity == target &&",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: an outer zone B insert into E*",
-      "expect": "ZoneCDespawn \\[Z5\\]"
-    },
-    {
-      "id": "ns-z5-outer-any-entity",
-      "what": "Z5: an outer zone C insert into another entity stops the despawn (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "        return r.emitterZone == Zone::C && r.entity == target &&",
-      "replace": "        return r.emitterZone == Zone::C &&",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: an outer zone C insert into another entity*",
-      "expect": "\\[ns\\-z5\\-other\\-entity\\]"
-    },
-    {
-      "id": "ns-z5-message-no-schedule",
-      "what": "Z5: the message does not name the outer level's schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "\" (schedule '\" + std::string(runStack_[level].schedule) + \"')\";",
-      "replace": "\"\";",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: an outer zone C insert into E and an inner*",
-      "expect": "\\[ns\\-z5\\-outer\\-where\\]"
-    },
-    {
       "id": "ns-inner-applies-outer-hooks",
       "what": "F.2 step 0: a nested sync point applies the outermost schedule's hook queue (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/World.cpp",
@@ -6741,76 +6437,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-56: the outer schedule's hook queue*",
       "expect": "\\[ns\\-outer\\-hooks\\]"
-    },
-    {
-      "id": "ns-res-unlisted-writable",
-      "what": "S-14: an unlisted single-writer resource is written (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;",
-      "replace": "    if (info.zone == Zone::B) return std::nullopt;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: resources: a listed single-writer*",
-      "expect": "\\[ns\\-res\\-unlisted\\]"
-    },
-    {
-      "id": "ns-res-shared-needs-listing",
-      "what": "S-14: a Shared resource must be listed too (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;",
-      "replace": "    if (info.zone == Zone::B && listed) return std::nullopt;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: resources: a listed single-writer*",
-      "expect": "UndeclaredResourceWrite \\[S-14\\]: ExclusiveWorld write of resource 'Out'"
-    },
-    {
-      "id": "ns-res-zone-c-writable",
-      "what": "S-13: a zone C resource is written (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;",
-      "replace": "    if (info.writePolicy == WritePolicy::Shared || listed || info.zone == Zone::C) return std::nullopt;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: refused writes and reads*",
-      "expect": "\\[ns\\-refused\\-untouched\\]"
-    },
-    {
-      "id": "ns-res-settings-readable",
-      "what": "S-15: KernelSettings is read (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (resource == world.data_->kernelSettings) {",
-      "replace": "    if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-50: KernelSettings read or written through ExclusiveWorld*",
-      "expect": "\\[ns\\-res\\-settings\\]"
-    },
-    {
-      "id": "ns-res-affinity-readable",
-      "what": "S-16: a resource whose affinity the runner does not satisfy is read (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (!info.affinity.IsAny() && info.affinity.role != runner) {",
-      "replace": "    if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: resources: one whose affinity*",
-      "expect": "\\[ns\\-res\\-affinity\\]"
-    },
-    {
-      "id": "ns-res-layer1-unlisted-declared",
-      "what": "A.6 layer 1: every zone B resource write of an ExclusiveWorld counts as declared (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "                const ResourceInfo& info = data_->resources[id];\n                declared = info.zone == Zone::B && info.writePolicy == WritePolicy::Shared;",
-      "replace": "                const ResourceInfo& info = data_->resources[id];\n                declared = info.zone == Zone::B;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: verification on: an unlisted single-writer resource written through the World API*",
-      "expect": "\\[ns\\-ver\\-w5\\]"
-    },
-    {
-      "id": "ns-res-layer2-unlisted-declared",
-      "what": "A.6 layer 2: every zone B resource change of an ExclusiveWorld counts as declared (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            const ResourceInfo& info = data_->resources[id];\n            if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return true;",
-      "replace": "            const ResourceInfo& info = data_->resources[id];\n            if (info.zone == Zone::B) return true;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: verification on: an unlisted single-writer resource written through a kept*",
-      "expect": "\\[ns\\-ver\\-address\\]"
     },
     {
       "id": "ns-handle-epoch-not-renewed",
@@ -6863,21 +6489,11 @@
       "expect": "\\[ns\\-stamp\\-after\\]"
     },
     {
-      "id": "ns-z5-outer-hook-outermost-only",
-      "what": "Z5: only the outermost schedule's hook queue is looked at (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            for (const Record& r : HookQueueOf(runStack_[level].schedule).records) {",
-      "replace": "            for (const Record& r : HookQueueOf(runStack_.front().schedule).records) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: three levels* the zone C insert in the middle level's hook queue*",
-      "expect": "\\[ns\\-z5\\-middle\\-hook\\]"
-    },
-    {
       "id": "ns-st-settings-after-startup",
-      "what": "H-12: KernelSettings is read after Startup (Startup runs with verification off) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "H-12: KernelSettings is read after Startup (Startup runs with verification off) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (!world.hasRun_) {",
-      "replace": "    if (!world.hasRun_ && !world.startupRunning_) {",
+      "find": "    ReadSettings();\n    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    return RunPlan(record->options.name, false);",
+      "replace": "    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        ReadSettings();\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    ReadSettings();\n    return RunPlan(record->options.name, false);",
       "target": "gyo_kernel_tests",
       "cases": "J-58: verification is on while Startup runs*",
       "expect": "\\[ns\\-st\\-verification\\]"
@@ -6903,16 +6519,6 @@
       "expect": "\\[ns\\-decl\\-ingress\\-stage\\]"
     },
     {
-      "id": "ns-decl-hook-writes-allowed",
-      "what": "S-14: a hook may take ExclusiveWorld<Writes<...>> (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (resolver.access.exclusive && std::any_of(",
-      "replace": "        if (false && std::any_of(",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: declarations: a listed zone C*",
-      "expect": "\\[ns\\-decl\\-hook\\]"
-    },
-    {
       "id": "ns-two-startups-allowed",
       "what": "H-12: two Startup schedules are not an error (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/Registry.cpp",
@@ -6923,54 +6529,14 @@
       "expect": "\\[ns\\-st\\-two\\]"
     },
     {
-      "id": "ns-j45-zone-c-writable",
-      "what": "S-13 (J-45): ExclusiveWorld writes a zone C column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "replace": "    if (info.writePolicy == WritePolicy::Shared || info.zone == Zone::C) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "expected Err ExclusiveWorldWrite"
-    },
-    {
-      "id": "ns-j45-exclusive-writable",
-      "what": "S-13 (J-45): ExclusiveWorld writes a zone B single-writer column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "replace": "    if (info.zone == Zone::B) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "expected Err ExclusiveWorldWrite"
-    },
-    {
-      "id": "ns-j45-spawn-ok",
-      "what": "S-13 (J-45): ExclusiveWorld::Spawn returns Ok (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "        return Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::ExclusiveWorldWrite,\n                                                   \"S-13\", \"ExclusiveWorld cannot spawn: there is no untyped spawn\"));",
-      "replace": "        return EntityId{0};",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "expected Err ExclusiveWorldWrite"
-    },
-    {
-      "id": "ns-plan-version-not-bumped",
-      "what": "the Plan fingerprint format stays 3 (the kernel runs Startup; a System runs a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
-      "replace": "constexpr std::uint32_t kFingerprintVersion = 3;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-54: the schedule's limit is in*",
-      "expect": "planOf\\(none, \\\"Tick\\\"\\)\\.version == 4U"
-    },
-    {
       "id": "ns-c-version-not-bumped",
-      "what": "the C fingerprint format stays 5 (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "the C fingerprint format stays 5 (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 6;",
       "target": "gyo_kernel_tests",
       "cases": "J-18: the C fingerprint sees*",
-      "expect": "CFingerprint\\(\\)\\.version == 6U"
+      "expect": "CFingerprint\\(\\)\\.version == 7U"
     },
     {
       "id": "ns-modify-no-changed",
@@ -6991,26 +6557,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-57: a resource Modify between two nested runs*",
       "expect": "\\[ns\\-stamp\\-resource\\]"
-    },
-    {
-      "id": "ns-modify-checks-after-call",
-      "what": "S-13: Modify calls f and only then checks the write (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "        if (auto error = Detail::CheckExclusiveWrite(call, component, entity)) return Engine::Base::Err(std::move(*error));\n        auto* cell = static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, component)).Find(entity);\n        if (cell == nullptr) return Absent<std::invoke_result_t<F&, T&>>();\n        cell->changed = stamp_;\n        return Call<T&>(f, cell->value);",
-      "replace": "        auto* cell = static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, component)).Find(entity);\n        if (cell == nullptr) return Absent<std::invoke_result_t<F&, T&>>();\n        cell->changed = stamp_;\n        auto done = Call<T&>(f, cell->value);\n        if (auto error = Detail::CheckExclusiveWrite(call, component, entity)) return Engine::Base::Err(std::move(*error));\n        return done;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: refused writes and reads*",
-      "expect": "\\[ns\\-refused\\-untouched\\]"
-    },
-    {
-      "id": "ns-modify-resource-no-read-check",
-      "what": "S-15: a resource Modify skips the read check (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "        if (auto error = Detail::CheckExclusiveRead(call, resource)) return Engine::Base::Err(std::move(*error));\n        if (auto error = Detail::CheckExclusiveResourceWrite(",
-      "replace": "        if (auto error = Detail::CheckExclusiveResourceWrite(",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: refused writes and reads*",
-      "expect": "\\[ns\\-refused\\-untouched\\]"
     },
     {
       "id": "ns-read-component-non-const",
@@ -7081,16 +6627,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-57: after an inner closure ends*",
       "expect": "\\[ns\\-closure\\-depth\\]"
-    },
-    {
-      "id": "ns-listed-not-counted",
-      "what": "D-E2: the listed resources are not resource writes of the System (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "                           TypeList<Access::WholeWorld, Access::ResourceWrite<Listed>...>, false> {",
-      "replace": "                           TypeList<Access::WholeWorld>, false> {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-15: a resource an ExclusiveWorld lists*",
-      "expect": "\\[ns\\-res\\-counted\\]"
     },
     {
       "id": "ns-closure-pointer",
@@ -7233,24 +6769,223 @@
       "expect": "\\[ns\\-w4\\-other\\-call\\]"
     },
     {
-      "id": "ns-modify-resource-checks-after-call",
-      "what": "S-14: a resource Modify calls f and only then checks the write (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {\n            return Engine::Base::Err(std::move(*error));\n        }\n        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();\n        slot.changed = stamp_;\n        return Call<T&>(f, *slot.value);",
-      "replace": "        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();\n        slot.changed = stamp_;\n        auto done = Call<T&>(f, *slot.value);\n        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {\n            return Engine::Base::Err(std::move(*error));\n        }\n        return done;",
+      "id": "ks-s9-zone-c-tie-unlisted",
+      "what": "S9: a conflicting pair with a zone C side is ordered but not listed in TieBreaks (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
+      "replace": "                    if (sa.options.zone != Zone::C && sb.options.zone != Zone::C) data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
       "target": "gyo_kernel_tests",
-      "cases": "J-57: refused writes and reads*",
-      "expect": "\\[ns\\-refused\\-untouched\\]"
+      "expect": "J\\-22 tie: an immediate write against a read is one tie",
+      "cases": "J-22:*"
     },
     {
-      "id": "ns-startup-listed-counted",
-      "what": "B.3: a Startup-only exclusive System's listed resource is counted as a writer (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (schedule != nullptr && !schedule->options.startup) counted = true;",
-      "replace": "            if (schedule != nullptr) counted = true;",
+      "id": "ks-s9-tie-without-schedule",
+      "what": "S9: a tie does not name its schedule (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
+      "replace": "                    data_.ties.push_back(TieBreak{std::string(), sa.options.name, sb.options.name});",
       "target": "gyo_kernel_tests",
-      "cases": "J-15: a resource listed by an exclusive System mounted on Startup only*",
-      "expect": "Finish failed: D-E2 S-11: 'Flag' is Exclusive but has 2 writers"
+      "expect": "J\\-23 tie: TieBreak::schedule names the schedule",
+      "cases": "J-23: a pair with no order is tied*"
+    },
+    {
+      "id": "ks-s9-first-tie-only",
+      "what": "S9: only the first tie of a Registry is listed (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
+      "replace": "                    if (data_.ties.empty()) data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-23 all ties: every pair of both schedules",
+      "cases": "J-23: every tie of every schedule*"
+    },
+    {
+      "id": "ks-s9-set-order-dropped",
+      "what": "S9: a set's before / after is not applied, so its members are tied instead (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "            if (members == setMembers_.end()) continue;",
+      "replace": "            continue;",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-23 declared: a set's after leaves no tie",
+      "cases": "J-23: a declared before*"
+    },
+    {
+      "id": "ks-s9-tie-with-zone-c-error",
+      "what": "S9: a zone C side still makes the pair a startup error (the removed D-E8 back as D-E7) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
+      "replace": "                    if (sa.options.zone == Zone::C || sb.options.zone == Zone::C) { Error(StartupCode::DE7, \"D-3\", \"zone C pair\", {}); continue; }\n                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
+      "target": "gyo_kernel_tests",
+      "expect": "D\\-E7 D\\-3: zone C pair",
+      "cases": "J-55: two zone C Systems*"
+    },
+    {
+      "id": "ks-s4-writes-counted",
+      "what": "S4: ExclusiveWorld<Writes<R...>> counts R as a resource write again (the inverse of the retired ns-listed-not-counted) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "TypeList<Access::WholeWorld, Access::AnnotatedWrite<Listed>...>",
+      "replace": "TypeList<Access::WholeWorld, Access::ResourceWrite<Listed>...>",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-12 annotation: the Contribution of ExclusiveWorld<Writes<TestRes>>",
+      "cases": "J-12: ExclusiveWorld<Writes<R>> is no write*"
+    },
+    {
+      "id": "ks-s4-annotation-not-recorded",
+      "what": "S4: the listed resources are not recorded in annotatedWrites (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (const auto id = Lookup(resource, TypeRole::Resource, \"resource\")) access.annotatedWrites.push_back(*id);",
+      "replace": "        static_cast<void>(Lookup(resource, TypeRole::Resource, \"resource\"));",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-12 annotation: annotatedWrites holds the listed resource",
+      "cases": "J-12: ExclusiveWorld<Writes<R>> is no write*"
+    },
+    {
+      "id": "ks-s4-layer2-shared-only",
+      "what": "S4: layer 2 takes an exclusive System's writes as declared only for Shared data (the old S-13 shape) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Event) return true;",
+      "replace": "        if (access.wholeWorld && kind == Detail::EntryKind::Component && data_->components[id].writePolicy == WritePolicy::Shared) return true;\n        if (access.wholeWorld && kind == Detail::EntryKind::Resource && data_->resources[id].writePolicy == WritePolicy::Shared) return true;",
+      "target": "gyo_kernel_tests",
+      "expect": "\\[ns\\-ver\\-quiet\\]",
+      "cases": "J-56: verification on: the exclusive System's writes*"
+    },
+    {
+      "id": "ks-s7-first-run-only",
+      "what": "S7: KernelSettings is read at the first Run only (a System's or the Host's write between Runs is never read) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    ReadSettings();\n    if (record->options.startup) {",
+      "replace": "    if (!world.hasRun_) ReadSettings();\n    if (record->options.startup) {",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-50 next Run",
+      "cases": "J-50:*"
+    },
+    {
+      "id": "ks-s7-first-run-only-limit",
+      "what": "S7: KernelSettings is read at the first Run only (the hook round limit written between Runs) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    ReadSettings();\n    if (record->options.startup) {",
+      "replace": "    if (!world.hasRun_) ReadSettings();\n    if (record->options.startup) {",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-54 next Run",
+      "cases": "J-54: KernelSettings is read*"
+    },
+    {
+      "id": "ks-s7-nested-reread",
+      "what": "S7: a nested RunSchedule reads KernelSettings again (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    Engine::Base::Result<void, KernelError> ran = [&] {\n        Rebase rebase(world);",
+      "replace": "    ReadSettings();\n    Engine::Base::Result<void, KernelError> ran = [&] {\n        Rebase rebase(world);",
+      "target": "gyo_kernel_tests",
+      "expect": "\\[ks\\-nested\\-reread\\]",
+      "cases": "J-50: a nested RunSchedule*"
+    },
+    {
+      "id": "ks-s7-flip-keeps-snapshots",
+      "what": "S7: a flip of the verification switch keeps the snapshots taken before it went off (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (verification != world.verification_) world.DropSnapshots();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-50 flip: the snapshots from before verification was off were compared",
+      "cases": "J-50: verification on*"
+    },
+    {
+      "id": "ks-s7-startup-change-same-run",
+      "what": "S7: KernelSettings is read after Startup, so Startup's change counts in its own Run (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    ReadSettings();\n    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    return RunPlan(record->options.name, false);",
+      "replace": "    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        ReadSettings();\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    ReadSettings();\n    return RunPlan(record->options.name, false);",
+      "target": "gyo_kernel_tests",
+      "expect": "\\[ks\\-startup\\-same\\-run\\]",
+      "cases": "J-50: a Startup System's change*"
+    },
+    {
+      "id": "ks-s7-removed-limit-one",
+      "what": "S7: a Run after KernelSettings was removed gets a limit of 1, not the default 8 (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;",
+      "replace": "settings.value ? settings.value->hookRoundLimit : 1U;",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-54 removed",
+      "cases": "J-54: KernelSettings removed between*"
+    },
+    {
+      "id": "ks-s7-exclusive-settings-hidden",
+      "what": "S7: an ExclusiveWorld read of KernelSettings finds nothing (S-15 back in another shape) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value) return Absent<std::invoke_result_t<F&, const T&>>();",
+      "replace": "        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value || resource == 0) return Absent<std::invoke_result_t<F&, const T&>>();",
+      "target": "gyo_kernel_tests",
+      "expect": "\\[ns\\-res\\-settings\\] read",
+      "cases": "J-50: KernelSettings read and written through ExclusiveWorld*"
+    },
+    {
+      "id": "ks-s10-thread-unchecked",
+      "what": "S10: a thread-bound resource is not compared with the touching thread (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    GYO_ASSERT(slot.thread == nullptr || slot.thread == Detail::CurrentThreadToken());",
+      "replace": "    static_cast<void>(slot);",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-6 thread\\-bound: .* on another thread did not assert",
+      "cases": "J-6: a thread-bound resource touched*"
+    },
+    {
+      "id": "ks-s10-handles-unchecked",
+      "what": "S10: Res, ResMut and ExclusiveWorld (ResourceAt) do not check the thread (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    RequireRunningCall(world);\n    world.CheckThread(id);\n    return *world.resources_[id];",
+      "replace": "    RequireRunningCall(world);\n    return *world.resources_[id];",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-6 thread\\-bound: Res in a System on another thread did not assert",
+      "cases": "J-6: a thread-bound resource touched*"
+    },
+    {
+      "id": "ks-s10-summary-unchecked",
+      "what": "S10: World::Summary does not check the thread (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (r == data_->kernelSettings) continue;\n        CheckThread(static_cast<ResourceId>(r));",
+      "replace": "        if (r == data_->kernelSettings) continue;",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-6 thread\\-bound: World::Summary on another thread did not assert",
+      "cases": "J-6: a thread-bound resource touched*"
+    },
+    {
+      "id": "ks-s10-bind-skipped",
+      "what": "S10: putting a value in does not record the thread (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (data_->resources[id].threadBound) resources_[id]->thread = Detail::CurrentThreadToken();",
+      "replace": "    static_cast<void>(id);",
+      "target": "gyo_kernel_tests",
+      "expect": "J\\-6 thread\\-bound: .* on another thread did not assert",
+      "cases": "J-6: a thread-bound resource touched*"
+    },
+    {
+      "id": "ks-s10-remove-keeps-thread",
+      "what": "S10: removing the value does not forget the thread (the worker's put-in then fails the assertion on the worker, which aborts) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/include/engine/kernel/World.hpp",
+      "find": "        TypedResource<T>(resource).thread = nullptr;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "GYO_ASSERT failed: slot\\.thread == nullptr \\|\\| slot\\.thread == Detail::CurrentThreadToken\\(\\)",
+      "cases": "J-6: a thread-bound resource is used*"
+    },
+    {
+      "id": "ks-s10-destroy-unchecked",
+      "what": "S10: destroying the World does not check the thread of a thread-bound value (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (std::size_t r = 0; r < resources_.size(); ++r) CheckThread(static_cast<ResourceId>(r));\n",
+      "replace": "",
+      "target": "gyo_kernel_thread_bound_probe",
+      "expect": "thread\\-bound destroy: no GYO_ASSERT"
+    },
+    {
+      "id": "ks-diks15-code-without-text",
+      "what": "DI-KS 15: a StartupCode loses its text, so the list of codes no longer matches (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    case StartupCode::DE21: return \"D-E21\";\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "DI\\-KS 15 codes: the StartupCode values are",
+      "cases": "DI-KS 15:*"
     }
   ]
 }
