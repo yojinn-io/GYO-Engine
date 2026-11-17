@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-18（第 3～6 節、第 9～11 節：`v8-arch-gyo2-kernel-subtract-structure` 第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource；`ExclusiveWorld` 的當場改在第 3 段）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -56,10 +56,10 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 | `SpawnWithId<Bundle<…>>` | 用指定的 id 生成（讀檔、連線） | 延後寫 |
 | `Despawn` | 刪除任何實體，下一個同步點生效（`Entity(id)` 不回傳東西） | 不算寫者 |
 | `CommandsFor<Inserts<…>, Removes<…>>` | 延後加上或移除指定的元件 | 延後寫 |
-| `Commands` | 延後加減任何元件，型別在函式體裡才決定（`Insert`、`Remove` 不回傳東西） | 無：不進衝突、不算寫者，執行期也不檢查 |
+| `Commands` | 延後加減任何元件，型別在函式體裡才決定（`Insert`、`Remove` 不回傳東西）；延後放進或拿掉 Resource（`SetResource`、`RemoveResource`，在同步點的 resource 那一步套用） | 無：不進衝突、不算寫者，執行期也不檢查 |
 | `Local<T>` | 這個 System 自己的狀態，跨 tick 保留 | 無 |
 | `CurrentTick` | 現在是第幾個 tick | 讀 tick |
-| `ExclusiveWorld<>`、`ExclusiveWorld<Writes<R…>>` | 在閉包裡讀寫整個 World（`Read<T>`、`Modify<T>`）、跑別的 schedule（`RunSchedule`）；必須是唯一的參數；只能是 (b) 區（第 11 節） | 讀寫所有元件與 Resource 的值（事件不在內）；`Writes<R…>` 是選填的標註，不算寫者 |
+| `ExclusiveWorld<>`、`ExclusiveWorld<Writes<R…>>` | 在閉包裡讀寫整個 World（`Read<T>`、`Modify<T>`）、當場生成／插入／拿掉／刪除實體與增刪 Resource（第 11.6 節）、跑別的 schedule（`RunSchedule`）；必須是唯一的參數；只能是 (b) 區（第 11 節） | 讀寫所有元件與 Resource 的值（事件不在內）；`Writes<R…>` 是選填的標註，不算寫者 |
 | `Extract<Read<T>>`、`ExtractRes<T>` | 在 extract 的 schedule 裡讀來源 World；沒有寫的版本 | 讀來源 |
 | `SetRead<Tag>`、`DiagnosticsWriter<R>` | 讀一組具名的元件；寫診斷紀錄 | 讀；無 |
 
@@ -83,7 +83,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 - **綁執行緒的 Resource**：標 `threadBound` 的 Resource 記下值放進去的那條執行緒；別的執行緒用 `Res`／`ResMut`、`ExclusiveWorld`、World API 碰它，蓋寫、拿掉它，讀 World 摘要，或在值還在時銷毀 World，都是斷言。拿掉值之後換執行緒放回可以。哪條執行緒跑哪張 schedule 由組裝的人安排，啟動時不再檢查（使用者 2026-11-16：「別人掉過的坑，我沒必要在跳一次。」；照 Bevy 的 `NonSend`）。
 - **同步點**：每個 stage 結束時套用延後的變更。在前一個 stage 生成的實體，下一個 stage 就看得到。
 - **事件**：排在寫入者後面的 System，當個 tick 就讀得到。
-- **hook**：元件被加上或移除時，在同步點呼叫登記的函式。hook 記的變更什麼時候生效，見第 9 節。
+- **hook**：元件被加上或移除時，在同步點呼叫登記的函式（`ExclusiveWorld` 當場改時當場呼叫，第 11.6 節）。hook 記的變更什麼時候生效，見第 9 節。
 - **啟動檢查**：順序成環、獨占的元件有第二個寫者、用到沒登記的型別，啟動時一次全部報出來。
 - **出錯**：見下一節。
 
@@ -136,7 +136,7 @@ AllotterExhausted [W-9]: the entity allotter's range is used up world=test-world
   at Executor: step 0 'SpawnsWave' of schedule 'Tick'
 ```
 
-**會產生 `Err` 的來源**：System 自己回傳的；hook 回傳的；機制自己查到的（配發器用完、存取驗證抓到沒宣告的存取、巢狀跑被拒絕）。執行期不再攔 untyped `Commands`、`Despawn`、`ExclusiveWorld` 對判定資料的寫入（使用者 2026-11-17：「拿掉執行期的攔截，伺服器權威改靠 digest 比對與伺服器覆蓋來抓錯。」；網路 Module 之前這段沒有東西抓）。
+**會產生 `Err` 的來源**：System 自己回傳的；hook 回傳的；機制自己查到的（配發器用完或沒有宣告、存取驗證抓到沒宣告的存取、巢狀跑被拒絕、當場改被拒絕）。執行期不再攔 untyped `Commands`、`Despawn`、`ExclusiveWorld` 對判定資料的寫入（使用者 2026-11-17：「拿掉執行期的攔截，伺服器權威改靠 digest 比對與伺服器覆蓋來抓錯。」；網路 Module 之前這段沒有東西抓）。
 
 **兩個開關**，在 `KernelSettings` 這個 Resource 裡。產品、System（`Res`／`ResMut`、run 條件、hook、`ExclusiveWorld`）都可以讀寫；機制在每次 `Run` 開始時讀一次，所以改了從**下一次 `Run`** 生效（開局在同一次 `Run` 裡先跑時改的也一樣；巢狀跑的 schedule 不重讀）。拿掉它就用預設值。
 - **存取驗證**：開著時，機制比對每個 System 實際碰了什麼和它宣告了什麼，不合就是 `Err`。成本隨 World 的大小增加，所以可以關；關掉時這一類不會被查到。
@@ -239,6 +239,7 @@ SystemResult Spawner(Spawn<Bundle<Arrival>> spawn) { ... spawn.New(Arrival{0, 10
 - 清空輪有上限。預設 8；產品可以在 `KernelSettings::hookRoundLimit` 改預設（下一次 `Run` 生效；0 在 `Run` 開始時斷言）；每張 schedule 可以在 `ScheduleOptions::hookRoundLimit` 另外指定（會進指紋）。最少 1，0 在啟動時擋下。
 - 碰到上限是程式的錯誤：這次執行停下、World 中斷，錯誤會點名 schedule、上限來自哪裡、最後一輪還在記東西的 hook。
 - **Engine 的上限是保險，不是遊戲規則；連鎖幾次該停由遊戲自己的 System 來數。**
+- **例外：`ExclusiveWorld` 當場改成員觸發的 hook**（第 11.6 節）記的變更，在那次呼叫回傳前就一輪一輪套用到空，只套用這些（同步點還沒套用的紀錄與這張 schedule 的 hook 佇列不動），上限同上（使用者 2026-11-17 選「當場套用到空」；這條路才用，同步點的規則不變）。
 - 提醒：每一輪清空是一次完整的套用。連鎖很長的玩法（例：棋子效果連動），更適合用自己的 System 加佇列來結算——這是作者的選擇，Engine 不擋。
 
 **一個不固定的情形（每幀生成；巢狀執行做好之後才會出現）：**
@@ -339,7 +340,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 
 ### 11.2 延後的變更在哪裡套用
 
-規則只有一句：**記下的變更，在記它的那張 schedule 的下一個同步點套用。** 外層還沒套用的留在外層，裡面那張看不到；獨占的 System 自己沒有記延後變更的路徑。
+規則只有一句：**記下的變更，在記它的那張 schedule 的下一個同步點套用。** 外層還沒套用的留在外層，裡面那張看不到；獨占的 System 自己沒有記延後變更的路徑，它的結構變更是當場改（第 11.6 節），當場改也不會把這些紀錄提前套用。
 
 **每次都一樣的**
 
@@ -377,10 +378,10 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 ### 11.4 讀寫資料：閉包
 
 - 元件與 Resource 都在閉包裡讀寫：`world.Read<T>(實體, f)`、`world.Modify<T>(實體, f)`；Resource 不帶實體：`world.Read<R>(f)`、`world.Modify<R>(f)`。介面不交出指標（沒有 `Get`、`GetMut`）。
-- 閉包可以回傳值：`auto hp = world.Read<Health>(player, [](const Health& h) { return h.value; });`。結果是 `Result<std::optional<值>, KernelError>`：沒有值是實體沒有那個元件（或 Resource 不存在），f 沒有被呼叫；f 回 `void` 時結果是「有沒有呼叫 f」。值的讀寫不再有回 Err 的情形（第 2、3 段的當場改會用到 Err）。
+- 閉包可以回傳值：`auto hp = world.Read<Health>(player, [](const Health& h) { return h.value; });`。結果是 `Result<std::optional<值>, KernelError>`：沒有值是實體沒有那個元件（或 Resource 不存在），f 沒有被呼叫；f 回 `void` 時結果是「有沒有呼叫 f」。值的讀寫不會回 Err（回 Err 的是當場改，第 11.6 節）。
 - **需要的值在閉包裡取出來回傳**；不要回傳指標、參考、`Mut`、`std::reference_wrapper`、`std::span`、`std::string_view` 這類檢視、迭代器（編譯不過，放在 `std::pair`／`std::tuple` 裡也一樣，所以 `return std::tie(...)` 編譯不過）；也不要把它們藏在自己的結構、`std::optional` 裡或存到外面的變數（編譯會過，但 `RunSchedule` 之後就是懸空的，屬於 LIM-3）。
 - 閉包裡可以再開閉包；閉包裡不能跑 schedule（回 Err）。`Modify` 在呼叫 f 的當下記變更，f 沒有真的改值也算。
-- **元件與 Resource**：讀寫任何元件、任何 Resource 的值，`KernelSettings` 也可以（改了下一次 `Run` 生效）；綁執行緒的 Resource 只在它的執行緒上（第 5 節）。存取驗證打開時，這些寫入不算未宣告；事件緩衝不在內。只能讀寫值，還不能新增或移除 Resource（第 3 段）。
+- **元件與 Resource**：讀寫任何元件、任何 Resource 的值，`KernelSettings` 也可以（改了下一次 `Run` 生效）；綁執行緒的 Resource 只在它的執行緒上（第 5 節）。存取驗證打開時，這些寫入不算未宣告；事件緩衝不在內。放進或拿掉 Resource 用 `SetResource`／`RemoveResource`（第 11.6 節）。
 - **`Writes<R…>` 是選填的標註**：`ExclusiveWorld<Writes<Score, Round>>` 只把 `Score`、`Round` 記進登記表（`SystemInfo::access.annotatedWrites`），給權威的策略看獨占 System 寫了什麼；不改變存取、不算寫者、不受區規則檢查（使用者：「嗯，可以留選填」；`v8-arch-gyo2-exclusive-writes-optional`）。hook 也可以帶。
 - 獨占的 System 不能同時是 ingress（啟動錯誤，S-17，隨區規則那一批拿掉）。
 
@@ -391,6 +392,40 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 - 開局只放固定的設定，世界內容走 Loading。開局裡不能跑別的 schedule（回 Err）；作者的 System 不能跑開局（回 Err）。
 - 開局裡有 System 回報錯誤：觸發它的那一次執行回報錯誤，World 中斷，原本要跑的那張不跑、它的 tick 也不推進。
 - **開局之後要先空跑幾步（例如物理預熱）**：自己寫一個 System——每幀那張裡的獨占 System，讀一個旗標 Resource，還沒做過就跑幾次固定步、把旗標設起來。
+
+### 11.6 當場改成員與增刪 Resource
+
+（`v8-arch-gyo2-kernel-subtract-structure` 第 3 段；使用者 2026-11-17：「沿用 ExclusiveWorld」。條文在 [Kernel 文件](../kernel.zh-Hant.md#di-ks-18) DI-KS 9、18、19、21。）
+
+用讀檔當例子：讀檔的 System 把存檔裡的實體一個一個放回去、把 Resource 換掉，接著跑固定步讓畫面追上。
+
+```cpp
+SystemResult LoadSave(ExclusiveWorld<> world) {
+    for (const SavedUnit& unit : saved.units) {
+        auto spawned = world.SpawnWithId(unit.id, Position{unit.x, unit.y}, Health{unit.hp});
+        if (!spawned) return Engine::Base::Err(std::move(spawned).error());
+        if (*spawned) { /* 沒生成：理由在 *spawned，也記進了 RejectedSpawn */ }
+    }
+    if (auto set = world.SetResource(Round{saved.round}); !set) return Engine::Base::Err(std::move(set).error());
+    return world.RunSchedule("FixedUpdate");   // 裡面看得到剛放回去的實體
+}
+```
+
+| 函式 | 回傳 | 說明 |
+|---|---|---|
+| `Spawn<C…>(值…)` | `Result<EntityId>` | id 由配發器發（同 `Spawn<Bundle<…>>`）；沒有宣告配發器是 `NoAllotter`，用完是 `AllotterExhausted` |
+| `SpawnWithId<C…>(id, 值…)` | `Result<std::optional<SpawnRejectReason>>` | 沒有東西表示生成了；不能生成（id 在這個 World 的配發範圍、或還活著）時不生成、回傳理由，並照第 10 節記一筆 `RejectedSpawn` |
+| `Insert<T>(id, 值)` | `Result<bool>` | 加上或蓋過；實體不在時不插入、回 false，也計入 `DroppedMissingEntity` |
+| `Remove<T>(id)` | `Result<bool>` | 先跑 OnRemove 再拿掉；沒有那個元件回 false |
+| `Despawn(id)` | `Result<bool>` | 每個元件先跑 OnRemove，再依元件的編號拿掉（同同步點）；實體不在回 false |
+| `SetResource<T>(值)`、`RemoveResource<T>()` | `Result<void>`、`Result<bool>` | 放進（蓋過）或拿掉 Resource；綁執行緒的記下這條執行緒；拿掉時不在回 false |
+
+- **當場生效**：呼叫回來時就改好了；做法和同步點套用一筆紀錄一樣（新的格先填初始值的宣告、再跑 OnAdd；拿掉時先跑 OnRemove）。這些 hook 記的變更也在回來之前一輪一輪套用到空（第 9 節的例外），上限同清空輪，超過是 `HookRoundLimit`、World 中斷。
+- **不動別人的紀錄**：這張 schedule 還沒到同步點的紀錄（同一個 stage 排在前面的 System 記的）和 hook 佇列都不會被提前套用。所以前面的 System 記了「用同一個 id 生成」、這裡又當場生成了，前面那一筆到同步點會被丟掉並留明細（`IdAlive`）。
+- **變更記號**：變更用這次呼叫的記號；每一輪 hook 套用各取新的。回來之後手上的 `ExclusiveWorld` 照常可用，之後的寫入排在這些記號之後（和跑完 `RunSchedule` 一樣）。
+- **不能做的**：在 `Read`／`Modify` 的閉包裡呼叫（`ClosureChangesMembership`）、hook 拿到的 `ExclusiveWorld<>` 呼叫（`HookChangesMembership`）——都是程式的 bug，World 會中斷、錯誤只報一次。不經這些函式、經 World API 或儲存本身改成員，不論在當場改之前或之後，都是斷言（使用者 2026-11-17 選「保留」）。只在序列執行。
+- **存取驗證打開時**：當場改本身不算違規；但在它之前，這個 System 在宣告外的改動（例：經存下的位址寫事件緩衝）會先被比對出來，這次變更就不做、回 `BoundaryChange`、World 中斷（同巢狀跑之前）。
+- **一般的 System 要增刪 Resource**：用 `Commands` 的 `SetResource`／`RemoveResource`，在同步點的 resource 那一步依 Resource 的編號、Plan 的位置、記錄的先後套用；hook 也可以用（下一窗生效）。
 
 ## 12. 登記兩步、跑起來之後再登記
 
