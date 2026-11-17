@@ -14,7 +14,7 @@
 
 資料（兩份偵察，Opus／high，唯讀）：主 checkout `build/evidence/gyo2-time-v2/scout-a-judgments.md`（既有判定的原文與出處）、`scout-b-code-facts.md`（程式的事實）。
 
-用詞：這份文件裡「時間基準」指 `Time::MonotonicClock`；「時鐘」指事件與 schedule 所屬的 `Domain`（`Fixed`、`Frame`、`Loading`，舊稱 clock domain）；「tick」只指固定步的步數，其他的寫「計數」。
+用詞：這份文件裡「時間基準」指 `Time::MonotonicClock`；「時鐘」指事件與 schedule 所屬的 `Domain`（`Fixed`、`Frame`、`Loading`，舊稱 clock domain；**2026-11-17 起 `Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick` 都移出 Kernel 到時間的 Module，`v8-arch-gyo2-clock-out-of-kernel`，下文寫在 Kernel 的地方照此讀**）；「tick」只指固定步的步數，其他的寫「計數」。
 
 ---
 
@@ -140,7 +140,7 @@ Time::MonotonicClock（唯一的時間基準）
 
 - 全部用整數奈秒。倍率是浮點數，只在算「這一輪前進多少」時乘一次，乘完取整數。
 - 三個都是 (b) 區的 Resource。**誰寫（決定 1：B）**：runner 每輪只把取樣的時間點寫進 World（一個對外交換用的 Resource，在交換點「進」）；外層 schedule 最前面的「時間的 System」從它算出 `RealTime` 與 `VirtualTime`；驅動固定步的 System 更新 `FixedTime`。這兩個 System 由 Engine 提供。
-- **`FixedTime` 不放 tick**（規格 G.7 取捨 3、H-1；規格寫的，我認為理由獨立成立）：tick 要和事件緩衝一起被還原，放進 Resource 就有兩個來源。現在第幾個 tick 只經 `CurrentTick` 讀。累加器也不記 tick。
+- **`FixedTime` 不放 tick**（規格 G.7 取捨 3、H-1；規格寫的，我認為理由獨立成立）：tick 要和事件緩衝一起被還原，放進 Resource 就有兩個來源。現在第幾個 tick 只經 `CurrentTick` 讀。累加器也不記 tick。（**2026-11-17 改**：時鐘與 tick 移出 Kernel、到時間的 Module，作者可選，`v8-arch-gyo2-clock-out-of-kernel`；tick 在時間 Module 裡存在哪裡、和回滾怎麼一起還原，待時間 Module 那一批重新定）；事件改成照游標修剪、不用 tick（`v8-arch-gyo2-event-trim-by-cursor`），「和事件緩衝一起還原」這條理由要重看。
 - 步長只在一處手動維持：組裝時給 runner 的設定。`FixedTime.step` 與 PvP 的 `FixedStep{stepNs}` 都由它寫入。步長存成整數奈秒，組裝時可以用頻率或時間長度給，預設 64 Hz（使用者 2026-11-16，`v8-arch-gyo2-t1-three-items`；PvP 移植時也改成 64 Hz）。
 - **System 不自己讀時間基準**。不是 System 的 Engine 程式照舊讀（等待器醒來後重讀、音效後端每塊取樣、IO 的到達時刻）。
 
@@ -163,7 +163,7 @@ Time::MonotonicClock（唯一的時間基準）
 
 ### 3.2 決定性區的時間不變
 
-**你定過的**（K.3 第 11 項，2026-11-11）：(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入；System 自己讀時間基準禁止。
+**你定過的**（K.3 第 11 項，2026-11-11）：(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入；System 自己讀時間基準禁止。**2026-11-17 改寫**：使用者說這是「pvp的需求」「遊戲需求入侵了Engine設計」——tick 移到時間的 Module；「tick 只有一個來源、System 不得寫」與「(c) 區的時間只來自 tick」歸伺服器權威策略（`v8-arch-gyo2-clock-out-of-kernel`）。
 
 這份設計不改它：
 - 三個時間 Resource 都是 (b) 區，(c) 區的 System 讀不到（既有的 Z1 檢查，`ZoneRuleTests.cpp` J-39）。
@@ -259,7 +259,7 @@ B 要做的事：
 | | 舊的 `FixedTickRuntime` | 新 |
 |---|---|---|
 | 時間 | `double` 秒 | 整數奈秒 |
-| tick 計數 | 有 | 沒有；tick 只在 World |
+| tick 計數 | 有 | 沒有；tick 只在 World（2026-11-17 改：在時間的 Module，`v8-arch-gyo2-clock-out-of-kernel`） |
 | 追趕上限 | 自己丟整步，不回報給時間那一層 | 不丟步。時間的 System 在寫 `VirtualTime` 之前已經把超過上限的整步扣掉（第 3.4 節），所以累加器只斷言這一輪沒有超過上限 |
 | 介面 | `Advance(elapsed, callback)` | `Add(delta)` 回傳這一輪跑幾步；`Overstep()`；`UntilNextStep()`；`Reset()` |
 | 放哪裡 | `engine/runtime`，用到 `engine/math` | `engine/time`，只用標準函式庫（`time.md` DI 10 不變） |
@@ -534,7 +534,7 @@ master 的 target 條文在 `gyo2` 上是「R0 決定不帶，但檔案還在、
 3. 變動的邊界：新增 Engine 的 Module `runner`；Kernel 新增「獨占的 System 跑一張 schedule」、交換函式的登記、事件的游標與保留；決定 2 定了之後 `Product` 持有多個 World 與多份 Registry。
 4. 影響：`engine/kernel`、`engine/time`、新的 `engine/runner`；上面列的測試。產品與工具目前都不在 `gyo2` 上。
 5. 依賴方向：`runner` → `kernel`、`time`、`threads`。`kernel` 不依賴 `runner`、`time`。`time` 照舊只依賴 base。之後 audio 等 Module 要讀 `RealTime` 時，依賴的是 `time` 裡的型別，不是 `runner`。
-6. Ownership：取樣歸 runner；時間的三個 Resource、累加的餘數歸 World，由 Engine 的兩個 System 寫（決定 1：B）；「現在第幾個 tick」歸 World，不變；「這一輪跑幾次固定步」從 Host 的職責變成 World 裡一個 System 的職責；同一個 World 內跨時鐘事件的傳遞從 Host 的職責變成 Kernel 的職責。
+6. Ownership：取樣歸 runner；時間的三個 Resource、累加的餘數歸 World，由 Engine 的兩個 System 寫（決定 1：B）；「現在第幾個 tick」歸 World，不變（2026-11-17 改：歸時間的 Module，`v8-arch-gyo2-clock-out-of-kernel`）；「這一輪跑幾次固定步」從 Host 的職責變成 World 裡一個 System 的職責；同一個 World 內跨時鐘事件的傳遞從 Host 的職責變成 Kernel 的職責。
 7. 為什麼不能更小：只補 runner 而不定時間，每個產品會各寫一套時間的 Resource；只開放跨時鐘事件而不改保留，一輪多個 tick 時就會漏。多 World 的持有者（決定 2）現在定，是因為 Extract 與交換點都要知道「另一個 World 是誰」；可以更小的是跨 World 的事件，所以延後（決定 7）。
 
 **Design Invariants 與 Replacement Criteria**（草案，各批實作前定稿並附守衛）：
@@ -601,6 +601,8 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 
 ## 11. 批次（決定 1：B；其餘照我建議的選項排，你改了就重排）
 
+> **2026-11-17 註：這張表的 T2、T3、T5、「(c) 區的獨占套用」「建世界的階段」「狀態機」幾列建立在 Kernel 管組裝、限制在 Kernel 的前提上，已過時，不要照排。** 使用者 2026-11-16 起定了 Kernel 只做 ECS、另立編排層、開局拆成遊戲初始化與生成世界、權威檢查是策略式的 Module（HANDOFF `v8-arch-gyo2-kernel-is-ecs-no-restrictions` 等）。新的排法見 [rebuild-batch-plan.zh-Hant.md](rebuild-batch-plan.zh-Hant.md)（2026-11-17 重排，取代這張表）。從過時的卡回收了什麼、哪些不要帶進來，見 [recovered-from-stale-cards.zh-Hant.md](recovered-from-stale-cards.zh-Hant.md)。
+
 | 批 | 內容 | 依賴 |
 |---|---|---|
 | K0 | Kernel：獨占 World 的 System 可以在執行中跑一張 schedule。**事前宣告先給你看** | 決定 1（已定） |
@@ -610,8 +612,11 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 | T4 | Kernel：事件的游標、保留、上限、啟動檢查 | 決定 4、8 |
 | T5 | `Product` 多個 World；Extract 的執行；組合（二）（三）的迴圈邏輯 | 決定 2；先定 5.1 表裡的四個問題 |
 | 另外已定、還沒排的 | 登記單位拆成 `Module`／`Plugin` 兩種型別與兩份登記檔（`v8-arch-gyo2-module-plugin-registers`）；KeepTool（`v8-arch-gyo2-keeptool`，會帶回 SDL 與 ImGui，需要有視窗的 runner） | 建議在 T2 之前或一起做型別拆分；KeepTool 在 T3、T5 之後 |
-| 狀態機（使用者 2026-11-15，`v8-arch-gyo2-state-machine-scheduled`、`v8-arch-gyo2-k0-start-and-state-machine-plan`） | 遊戲狀態的切換（進主選單、進關卡、進暫停）：狀態的值、進入／離開狀態時跑一次的 schedule、只在某個狀態下才跑的 System（用 run 條件讀狀態）。Bevy 的 States 當參考實作，不照搬 | 排在 T3 之後（要用 K0 與 T3 的每幀骨架） |
-| (c) 區的獨占套用（使用者 2026-11-15～16，`v8-arch-gyo2-zone-c-exclusive-apply`） | Kernel：允許 (c) 區的獨占 System，登記時列出它要寫的 (c) 區 Resource 與它會跑的 schedule，啟動時檢查，C 指紋收進這一筆。推翻規格 S-13，改 DI-KS 2、Z2 與 C 指紋的內容。**另有事前宣告** | 排在狀態機那一批之後；需要 K0 |
+| 狀態機 (b) 區（`v8-arch-gyo2-state-machine`；宣告已核准 2026-11-16，`v8-arch-gyo2-state-machine-declaration-approved`） | Engine 的 Module `engine/state_machine`，Kernel 不改：每個值一張進入／離開的 schedule、子狀態一層、兩種要求、狀態機不碰時間。宣告在分支 `claude/gyo2-state-machine-520d19`（25c3949b）。估 8 到 11 小時 | K0、T3 併入之後，使用者說開始 |
+| (c) 區的獨占套用（使用者 2026-11-15～16，`v8-arch-gyo2-zone-c-exclusive-apply`） | Kernel：允許 (c) 區的獨占 System，登記時列出它要寫的 (c) 區 Resource 與它會跑的 schedule，啟動時檢查，C 指紋收進這一筆。推翻規格 S-13，改 DI-KS 2、Z2 與 C 指紋的內容；K0 寫下的「獨占的 System 只能是 (b) 區」那幾句跟著改。**另有事前宣告** | 狀態機 (b) 區之後；需要 K0 |
+| 狀態機 (c) 區（`v8-arch-gyo2-state-machine-zone-c-both-shapes`） | Module 這一側的 (c) 區：介面已在狀態機的宣告裡定（`RegisterStateMachine<S, Zone::C>(…, Change)`，那一批用約束擋下）；`Change` 這個參數要不要留，到這一批再問使用者。**另有事前宣告** | (c) 區的獨占套用之後 |
+| Kernel 與 App 的邊界（使用者 2026-11-16，`v8-arch-gyo2-kernel-app-boundary-first`） | 組裝、runner、登記單位的生命週期、開局與迴圈的順序、多個 World 放在哪一層；Kernel 是否只留 `bevy_ecs` 那一半。會重看 runner 由登記單位安裝（11-11）、`GYO::Kernel::Module`／`Plugin`（11-14）、T2 的「Kernel：可呼叫的 runner」、K0 的「開局由 Kernel 跑」。**任務卡 gyo2-kernel-app-boundary；先定，下面那一批等它** | T2、T3、T5 與建世界的階段都等它 |
+| 建世界的階段（使用者 2026-11-16 定方向，`v8-arch-gyo2-build-world-phase-is-mechanism`） | 機制是「建世界的階段」：遊戲開始跑之前、寫者不計；開局、Loading、讀檔是遊戲流程的名字，Loading 有沒有由作者決定。會改 runtime-composition DI 3 與 3a、DI-KS 6、`Domain::Loading`，並和 K0 的「Startup 由 Kernel 跑一次」對上（可不可以分批跑多次）。**另有事前宣告；範圍與位置待使用者定** | 和 T3（runner 推動）有關；讀檔與狀態機 (b) 區都會用到 |
 | 之後 | World 之間的事件；回滾 | 名指的 Feature |
 
 每一批開工前各有事前宣告；判定用的測試先列突變。K0 和 T2 都要改 `Product::Run`，K0 和 T4 都要改事件的修剪與 Executor，所以要排先後：K0 → T2 → T4。T1 可以和 K0 並行。K0 是這幾批裡最大的。
