@@ -147,9 +147,6 @@ struct RegistryData {
 
     // Registrar::RequireExplicitZones: an Unset zone is an error instead of zone B.
     bool explicitZones = false;
-    // Registrar::RequireExplicitOrder: the plugins that called it, in call order,
-    // each once. Not empty: an ambiguous pair is D-E8 instead of a tie.
-    std::vector<std::uint32_t> explicitOrderOwners;
     std::vector<StartupError> errors;
     bool finished = false;
     // True only while plugins' Build functions run (Registrar asserts it).
@@ -174,7 +171,7 @@ struct RegistryData {
 [[nodiscard]] const char* ZoneName(Zone zone) noexcept;
 
 // Scheduler.cpp: builds every schedule's Plan into data.plans, reporting
-// D-E4, D-E5, D-E6, D-E8, D-E16 into data.errors. Access sets must be resolved.
+// D-E4, D-E5, D-E6, D-E16 into data.errors. Access sets must be resolved.
 void BuildPlans(RegistryData& data);
 
 // Fingerprint.cpp.

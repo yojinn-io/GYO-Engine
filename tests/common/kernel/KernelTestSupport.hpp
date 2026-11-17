@@ -194,6 +194,17 @@ inline std::size_t ErrorCount(const Engine::Base::Result<void, StartupReport>& r
     return result ? 0 : result.error().Count(code);
 }
 
+// The ties of a finished Registry, each as "schedule: first > second", in the order
+// FrozenRegistry::TieBreaks lists them (empty after a failed Finish).
+inline std::vector<std::string> Ties(const Built& built) {
+    std::vector<std::string> out;
+    if (!built.result) return out;
+    for (const TieBreak& tie : built.registry->Frozen().TieBreaks()) {
+        out.push_back(tie.schedule + ": " + tie.first + " > " + tie.second);
+    }
+    return out;
+}
+
 inline std::vector<std::string> SystemSteps(const Plan& plan) {
     std::vector<std::string> names;
     for (const Step& step : plan.steps) {

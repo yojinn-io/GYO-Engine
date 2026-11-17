@@ -122,7 +122,7 @@ struct KernelError {
 // X-E1 to X-E3, F-E1). The enum value is not part of any fingerprint or file:
 // the text form (ToString) is.
 enum class StartupCode : std::uint8_t {
-    DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE8, DE9, DE10,
+    DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE9, DE10,
     DE11, DE12, DE13, DE14, DE15, DE16, DE17, DE18, DE19, DE20,
     // A World with two Startup schedules (spec H-12; v8-arch-gyo2-nested-schedule).
     DE21,

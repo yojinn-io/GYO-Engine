@@ -96,25 +96,27 @@ TEST_CASE("J-19: a Registrar or FinishContext cannot be copied or moved out of i
 
 // ---- B2: one schedule's errors are collected, not stopped at the first
 
-TEST_CASE("J-24: a missing target and an ambiguity in one schedule are both reported") {
+// The second error used to be an ambiguity (D-E8), which went with the ambiguity
+// detection (v8-arch-gyo2-no-ambiguity-detection); each case keeps two errors of
+// one schedule from two steps of its analysis.
+TEST_CASE("J-24: a missing target and an order against the stage order in one schedule are both reported") {
     Built built = FinishOne([](Registrar& r) {
         SharedData(r);
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim({"Gone"})));
-        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
+        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, {At("FixedUpdate", "Present", {"WriteA"})}));
     });
     CHECK(ErrorCount(built, StartupCode::DE4) == 1);
-    CHECK(ErrorCount(built, StartupCode::DE8) == 1);
+    CHECK(ErrorCount(built, StartupCode::DE5) == 1);
 }
 
-TEST_CASE("J-24: an ambiguity and a Derived read with no writer in one schedule are both reported") {
+TEST_CASE("J-24: a missing target and a Derived read with no writer in one schedule are both reported") {
     Built built = FinishOne([](Registrar& r) {
         SharedData(r);
         r.Component<TestDerived>({.name = "TestDerived", .zone = Zone::C, .rollback = Rollback::Derived});
-        r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
-        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
+        r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim({"Gone"})));
         r.AddSystem<&ReadDerived>(Sys("UseDerived", Zone::C, Sim()));
     }, true);
-    CHECK(ErrorCount(built, StartupCode::DE8) == 1);
+    CHECK(ErrorCount(built, StartupCode::DE4) == 1);
     CHECK(ErrorCount(built, StartupCode::DE16) == 1);
 }
 
@@ -209,13 +211,15 @@ TEST_CASE("J-47: a set's run condition reading a named set with a zone B member 
 
 // ---- D.1 conditions 2 and 3
 
-TEST_CASE("J-22: a zone B ExclusiveWorld System conflicts with a zone C System of its stage (D-E8 without order)") {
+TEST_CASE("J-22: a zone B ExclusiveWorld System conflicts with a zone C System of its stage (a tie without order)") {
     Built exclusive = FinishOne([](Registrar& r) {
         SharedData(r);
         r.AddSystem<&EditWorld>(Sys("EditWorld", Zone::B, Sim()));
         r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
     });
-    CHECK(ErrorCount(exclusive, StartupCode::DE8) == 1);
+    KERNEL_REQUIRE_OK(exclusive);
+    CHECK_MESSAGE(Ties(exclusive) == std::vector<std::string>{"FixedUpdate: EditWorld > ReadA"},
+                  "J-22 exclusive: ExclusiveWorld conflicts with every System of its stage");
 }
 
 TEST_CASE("J-23: two zone B Systems declaring one effect conflict and are ordered by registration") {

@@ -840,8 +840,15 @@ SystemResult ZoneCSpawnsNineVel(SpawnWithId<Bundle<CVel>> spawn) {
     spawn.New(9, CVel{9});
     return Ok();
 }
-SystemResult ZoneCSpawnsNinePosAgain(SpawnWithId<Bundle<CPos>> spawn) {
-    spawn.New(9, CPos{10});
+// Zone C and Shared, so two spawners of one bundle are not also two writers of an
+// Exclusive column (D-E2 would fail Finish and hide the tie).
+struct CSharedPos { std::int32_t x; };
+SystemResult ZoneCSpawnsNineShared(SpawnWithId<Bundle<CSharedPos>> spawn) {
+    spawn.New(9, CSharedPos{9});
+    return Ok();
+}
+SystemResult ZoneCSpawnsNineSharedAgain(SpawnWithId<Bundle<CSharedPos>> spawn) {
+    spawn.New(9, CSharedPos{10});
     return Ok();
 }
 
@@ -989,7 +996,7 @@ TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and anothe
 }
 
 // Whether the two Systems of "two emitters" really do not conflict: the same shape in zone C,
-// where a conflict without a declared order is a Finish error.
+// where a conflict without a declared order is a tie listed in TieBreaks.
 TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with one bundle they do") {
     SUBCASE("disjoint bundles: Finish succeeds in both orders, both spawns of 9 are dropped, the World is the same") {
         Fingerprint summaries[2];
@@ -1005,6 +1012,8 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
                     r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
                 }
             });
+            CHECK_MESSAGE(rig->built.registry->Frozen().TieBreaks().empty(),
+                          "J-55 zone-c-pair: disjoint bundles give no tie");
             KERNEL_REQUIRE_RUN_OK(rig->Run());
             CHECK_MESSAGE(!rig->world().Alive(9), "J-55 zone-c-pair: 9 is not spawned");
             const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
@@ -1015,14 +1024,19 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
         }
         CHECK_MESSAGE(summaries[0] == summaries[1], "J-55 zone-c-pair: the World is the same in both orders");
     }
-    SUBCASE("one bundle: the two Systems conflict, Finish fails without a declared order") {
+    SUBCASE("one bundle: the two Systems conflict, tied by registration without a declared order") {
         Built built = Finish({{"test", [](Registrar& r) {
                                    Base(r);
-                                   r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
-                                   r.AddSystem<&ZoneCSpawnsNinePosAgain>(In("ZoneCSpawnsNinePosAgain", "A", Zone::C));
+                                   r.Component<CSharedPos>({.name = "CSharedPos", .zone = Zone::C,
+                                                            .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+                                   r.AddSystem<&ZoneCSpawnsNineShared>(In("ZoneCSpawnsNineShared", "A", Zone::C));
+                                   r.AddSystem<&ZoneCSpawnsNineSharedAgain>(In("ZoneCSpawnsNineSharedAgain", "A", Zone::C));
                                }}});
-        CHECK_MESSAGE(!built.result, "J-55 zone-c-pair: Finish fails for two zone C Systems that spawn one bundle");
-        MESSAGE(Describe(built));
+        REQUIRE_MESSAGE(static_cast<bool>(built.result), Describe(built));
+        const auto ties = built.registry->Frozen().TieBreaks();
+        CHECK_MESSAGE((ties.size() == 1 && ties[0].first == "ZoneCSpawnsNineShared" &&
+                       ties[0].second == "ZoneCSpawnsNineSharedAgain"),
+                      "J-55 zone-c-pair: two zone C Systems that spawn one bundle conflict (one tie)");
     }
 }
 

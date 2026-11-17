@@ -99,7 +99,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE5: return "D-E5";
     case StartupCode::DE6: return "D-E6";
     case StartupCode::DE7: return "D-E7";
-    case StartupCode::DE8: return "D-E8";
     case StartupCode::DE9: return "D-E9";
     case StartupCode::DE10: return "D-E10";
     case StartupCode::DE11: return "D-E11";
@@ -498,12 +497,6 @@ void Registrar::DeclareAllotter(TypeKey resource, Detail::AllotterOps ops) {
 void Registrar::RequireExplicitZones() {
     GYO_ASSERT(data_->building);
     data_->explicitZones = true;
-}
-
-void Registrar::RequireExplicitOrder() {
-    GYO_ASSERT(data_->building);
-    std::vector<std::uint32_t>& owners = data_->explicitOrderOwners;
-    if (std::find(owners.begin(), owners.end(), plugin_) == owners.end()) owners.push_back(plugin_);
 }
 
 void Registrar::Schedule(ScheduleOptions options) {
