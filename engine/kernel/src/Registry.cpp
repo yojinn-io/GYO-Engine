@@ -38,6 +38,9 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
     case KernelErrorCode::NestedRunAborted: return "NestedRunAborted";
     case KernelErrorCode::DynamicInsertRefused: return "DynamicInsertRefused";
+    case KernelErrorCode::NoAllotter: return "NoAllotter";
+    case KernelErrorCode::ClosureChangesMembership: return "ClosureChangesMembership";
+    case KernelErrorCode::HookChangesMembership: return "HookChangesMembership";
     }
     return "Unknown";
 }

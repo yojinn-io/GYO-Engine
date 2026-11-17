@@ -490,6 +490,26 @@ public:
         Detail::Push(Detail::RequireCall(*world_),
                      Detail::Record::Of(Detail::RecordKind::Remove, entity, Detail::ComponentIdOf(*world_, KeyOf<T>())));
     }
+
+    // Deferred resource insert and remove (spec F.2 step 7, by (ResourceId,
+    // planPos, recSeq); declaration 3.6). Not in the conflict graph, like the
+    // rest of Commands. A thread-bound resource takes the applying thread.
+    template <class T>
+    void SetResource(T value) {
+        Check("Commands");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        Detail::Record record =
+            Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));
+        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
+        Detail::Push(call, std::move(record));
+    }
+
+    template <class T>
+    void RemoveResource() {
+        Check("Commands");
+        Detail::Push(Detail::RequireCall(*world_),
+                     Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));
+    }
 };
 template <>
 struct ParamTraits<Commands> : Detail::HandleTraits<Commands, TypeList<Access::UntypedCommands>, false> {};
@@ -774,8 +794,8 @@ concept ExclusiveClosure = std::invocable<F&, Arg> && !kPointsIntoWorld<std::inv
 
 // The result of a Read or Modify: what the closure returned, or nothing when the
 // entity has no T or the resource is absent (the closure was not called). A
-// closure that returns void gives whether it was called. Still a Result: the
-// immediate structural changes of this batch's segment 3 return Err.
+// closure that returns void gives whether it was called. A Result, like the
+// handle's other calls (its immediate structural changes return Err).
 template <class R>
 struct VisitResultOf {
     using Type = Engine::Base::Result<std::optional<R>, KernelError>;
@@ -803,9 +823,10 @@ template <class R>
 using VisitResult = typename Detail::VisitResultOf<R>::Type;
 
 // Untyped access to the whole World: reads and writes every component and
-// resource value (events are not in it; DI-KS 1). Zone B only (S-13, a zone
-// rule at startup); the only parameter (S-10). Conflicts with every System of
-// its stage. Written ExclusiveWorld<>, or ExclusiveWorld<Writes<R...>> with the
+// resource value (events are not in it; DI-KS 1) and changes membership and
+// resources now (DI-KS 18; declaration 3.5). Zone B only (S-13, a zone rule at
+// startup); the only parameter (S-10). Conflicts with every System of its
+// stage. Written ExclusiveWorld<>, or ExclusiveWorld<Writes<R...>> with the
 // optional annotation (one name, v8-arch-gyo2-nested-declaration-approved).
 template <class Declared = Writes<>>
 class ExclusiveWorld {
@@ -859,7 +880,7 @@ public:
     // Writes resource T through f(T&): any resource, KernelSettings too (a
     // change counts from the next Run), listed in Writes<...> or not (a
     // thread-bound one only on its thread: GYO_ASSERT, DI-KS 14). Only the
-    // value: a resource is not added or removed here. The changed stamp is set
+    // value: SetResource and RemoveResource add and remove one. The changed stamp is set
     // when f is called.
     template <class T, class F>
         requires Detail::ExclusiveClosure<F, T&>
@@ -870,6 +891,105 @@ public:
         if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();
         slot.changed = stamp_;
         return Call<T&>(f, *slot.value);
+    }
+
+    // ---- Immediate structural changes (DI-KS 18; declaration
+    // v8-arch-gyo2-kernel-subtract-structure 3.5). Each is applied now, as a
+    // sync point applies its record (spec F.2): a new cell gets its initial
+    // values and then OnAdd, a removed one OnRemove first, in the sync point's
+    // order; what those hooks record is applied before the call returns, round
+    // after round up to the schedule's hook round limit (HookRoundLimit, the
+    // World interrupted), and only that: this level's deferred records and the
+    // schedule's hook queue wait for their sync point (DI-KS 19). The change
+    // carries this handle's stamp; afterwards the handle takes a new stamp and
+    // sync epoch, like after RunSchedule. Refused with Err, the World
+    // interrupted: in a Read or Modify closure (ClosureChangesMembership), in a
+    // hook (HookChangesMembership), and, with verification on, when this System
+    // changed what it does not declare before the call (A.6). A membership
+    // change behind the handle, before or after, fails a GYO_ASSERT (W-3).
+
+    // Spawns with an id from the World's allotter (like Spawn<Bundle<C...>>):
+    // Err NoAllotter when none is declared, AllotterExhausted when used up.
+    template <class... C>
+    [[nodiscard]] Engine::Base::Result<EntityId, KernelError> Spawn(C... values) {
+        static_assert(sizeof...(C) > 0, "ExclusiveWorld::Spawn names at least one component");
+        Check("ExclusiveWorld");
+        Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, 0);
+        (record.bundle.push_back(Detail::BundleValue{Detail::ComponentIdOf(*world_, KeyOf<C>()),
+                                                     std::make_unique<Detail::TypedBox<C>>(std::move(values))}),
+         ...);
+        auto done = Change(std::move(record));
+        if (!done) return Engine::Base::Err(std::move(done).error());
+        return done->entity;
+    }
+
+    // Spawns with a given id. Nothing when it spawned; otherwise why it did not
+    // (its id is in this World's allotter range, or alive), the spawn recorded
+    // as a RejectedSpawn (spec F-13, one place for the record and the count).
+    template <class... C>
+    [[nodiscard]] Engine::Base::Result<std::optional<SpawnRejectReason>, KernelError> SpawnWithId(EntityId id,
+                                                                                                  C... values) {
+        static_assert(sizeof...(C) > 0, "ExclusiveWorld::SpawnWithId names at least one component");
+        Check("ExclusiveWorld");
+        Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, id);
+        record.withId = true;
+        (record.bundle.push_back(Detail::BundleValue{Detail::ComponentIdOf(*world_, KeyOf<C>()),
+                                                     std::make_unique<Detail::TypedBox<C>>(std::move(values))}),
+         ...);
+        auto done = Change(std::move(record));
+        if (!done) return Engine::Base::Err(std::move(done).error());
+        return done->rejected;
+    }
+
+    // Inserts or overwrites entity's T. false, nothing inserted, when the
+    // entity is not alive (counted in DroppedMissingEntity, spec F.2 step 5).
+    template <class T>
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> Insert(EntityId entity, T value) {
+        Check("ExclusiveWorld");
+        Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));
+        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
+        auto done = Change(std::move(record));
+        if (!done) return Engine::Base::Err(std::move(done).error());
+        return done->changed;
+    }
+
+    // Removes entity's T after its OnRemove hooks; false when it had none.
+    template <class T>
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> Remove(EntityId entity) {
+        Check("ExclusiveWorld");
+        auto done = Change(Detail::Record::Of(Detail::RecordKind::Remove, entity, Detail::ComponentIdOf(*world_, KeyOf<T>())));
+        if (!done) return Engine::Base::Err(std::move(done).error());
+        return done->changed;
+    }
+
+    // Despawns entity: every component's OnRemove first, then each component in
+    // ascending ComponentId (v8-arch-gyo2-despawn-notify-all-then-destroy).
+    // false when it is not alive.
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> Despawn(EntityId entity) {
+        Check("ExclusiveWorld");
+        auto done = Change(Detail::Record::Of(Detail::RecordKind::Despawn, entity));
+        if (!done) return Engine::Base::Err(std::move(done).error());
+        return done->changed;
+    }
+
+    // Puts resource T in (or overwrites it); a thread-bound one takes this thread.
+    template <class T>
+    [[nodiscard]] Engine::Base::Result<void, KernelError> SetResource(T value) {
+        Check("ExclusiveWorld");
+        Detail::Record record = Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));
+        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
+        auto done = Change(std::move(record));
+        if (!done) return Engine::Base::Err(std::move(done).error());
+        return {};
+    }
+
+    // Takes resource T out; false when it was absent.
+    template <class T>
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> RemoveResource() {
+        Check("ExclusiveWorld");
+        auto done = Change(Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));
+        if (!done) return Engine::Base::Err(std::move(done).error());
+        return done->changed;
     }
 
     // Runs another schedule of this World, whole, now (K0; spec E.2). Err, the
@@ -894,6 +1014,21 @@ public:
     }
 
 private:
+    // One immediate change (Detail::ApplyImmediate). On every way back, an
+    // exception included, the handle takes the World's sync epoch and a new
+    // stamp, after every stamp the change and its hook rounds took.
+    [[nodiscard]] Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Change(Detail::Record record) {
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        struct Restamp {
+            ExclusiveWorld& handle;
+            ~Restamp() {
+                handle.syncEpoch_ = Detail::CurrentSyncEpoch(*handle.world_);
+                handle.stamp_ = Detail::NextStamp(*handle.world_);
+            }
+        } restamp{*this};
+        return Detail::ApplyImmediate(call, std::move(record), stamp_, closures_ > 0);
+    }
+
     template <class T>
     [[nodiscard]] Detail::Column<T>& Column() const {
         return static_cast<Detail::Column<T>&>(Detail::ColumnAt(*world_, Detail::ComponentIdOf(*world_, KeyOf<T>())));

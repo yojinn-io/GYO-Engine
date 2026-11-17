@@ -461,7 +461,8 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.lastRun = 0;
     call.callSerial = ++callSerial_;
     call.syncEpoch = syncEpoch_;
-    HookQueue& queue = HookQueueOf(schedule);
+    // S5: a hook an immediate change ran records into that change's own queue.
+    HookQueue& queue = hookTarget_ != nullptr ? *hookTarget_ : HookQueueOf(schedule);
     call.queue = &queue.records;
     call.recSeq = &queue.recSeq;
     const std::size_t recordsBefore = queue.records.size();
@@ -510,7 +511,7 @@ struct NewCell {
 } // namespace
 
 Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                         ChangeStamp stamp) {
+                                                         ChangeStamp stamp, std::vector<Detail::Record>* immediate) {
     using Detail::Record;
     using Detail::RecordKind;
     using Result = Engine::Base::Result<void, KernelError>;
@@ -762,6 +763,11 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         }
         return {};
     };
+
+    // S5 (declaration 3.5 point 1): an immediate change, or one round of what
+    // the hooks it ran recorded; only those records. This level's window and the
+    // schedule's hook queue wait for their sync point (DI-KS 19).
+    if (immediate != nullptr) return phase(*immediate);
 
     // Step 0: the previous window's hook records first; hooks they trigger record into the next window.
     HookQueue& queue = HookQueueOf(schedule);

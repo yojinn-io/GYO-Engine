@@ -29,6 +29,8 @@ class WorldExecutor;
 struct AccessSet;
 // The kernel's own diagnostics record of a dropped spawn (World.hpp; spec F-13).
 struct RejectedSpawn;
+// Why a spawn was dropped (World.hpp defines the values; spec F-13).
+enum class SpawnRejectReason : std::uint8_t;
 
 namespace Detail {
 
@@ -212,6 +214,35 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 // runs nothing: the error a nested level left is returned.
 [[nodiscard]] Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
                                                                 bool inClosure);
+// What an immediate structural change of ExclusiveWorld did (declaration
+// v8-arch-gyo2-kernel-subtract-structure 3.5): entity, the id a Spawn took
+// from the allotter; changed, whether there was something to change (Insert:
+// the entity is alive; Remove: the cell was there; Despawn: the entity was
+// alive; RemoveResource: it was present); rejected, why a spawn was dropped
+// and recorded (spec F-13).
+struct ImmediateOutcome {
+    EntityId entity = 0;
+    bool changed = false;
+    std::optional<SpawnRejectReason> rejected;
+};
+
+// S5 (DI-KS 18; Executor.cpp): applies one record of the running exclusive
+// System call now, as a sync point applies it (spec F.2: the same steps, the
+// hooks it triggers run now), with the handle's stamp; then, round after round,
+// only what those hooks recorded (each round a new stamp and sync epoch + 1),
+// up to the schedule's hook round limit (spec F-12). Neither the running
+// level's records nor the schedule's hook queue are applied (DI-KS 19). A Spawn
+// record with withId false takes its id from the allotter here. Refused with
+// Err, the World interrupted and the error reported once by the outermost Run:
+// from a hook (HookChangesMembership), inside a Read or Modify closure
+// (ClosureChangesMembership), with verification on when the System changed
+// what it does not declare before (A.6, compared first); an Interrupted World
+// changes nothing and returns the left error. Err, the World going on: no
+// allotter (NoAllotter), the allotter used up (AllotterExhausted).
+// GYO_ASSERT: the membership changed behind the handle before (W-3).
+[[nodiscard]] Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
+                                                                                ChangeStamp stamp, bool inClosure);
+
 // The World's sync epoch now (a handle renews its own after a nested run, W-4).
 [[nodiscard]] std::uint64_t CurrentSyncEpoch(const World& world) noexcept;
 // Takes a new stamp (+1; spec E.2: after a nested run, the exclusive System's

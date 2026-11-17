@@ -78,6 +78,17 @@ enum class KernelErrorCode : std::uint8_t {
     // (WorldOptions::dynamicInsert = false). Nothing was registered; the caller
     // logs the warning (target/error-handling DI 2: the kernel logs in one place).
     DynamicInsertRefused,
+    // The codes below come with ExclusiveWorld's immediate structural changes
+    // (declaration v8-arch-gyo2-kernel-subtract-structure 3.5; DI-KS 18, 21).
+    // ExclusiveWorld::Spawn with no allotter declared (D-E3 cannot see at
+    // startup that an exclusive System spawns). The World goes on.
+    NoAllotter,
+    // An immediate change inside a Read or Modify closure: the reference the
+    // closure holds would not survive it (like X-14). The World is interrupted.
+    ClosureChangesMembership,
+    // An immediate change through a hook's ExclusiveWorld<>: a hook runs while
+    // records are applied (like X-13). The World is interrupted.
+    HookChangesMembership,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;

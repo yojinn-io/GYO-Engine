@@ -389,9 +389,11 @@ private:
     // windowBase; K0) and the schedule's hook queue (spawn records that cannot
     // spawn are dropped and recorded, spec F-13); Err from a hook. The outer
     // levels' records and their schedules' hook queues are not looked at.
-    // stamp: the sync point's stamp.
+    // stamp: the sync point's stamp. immediate (S5, WorldExecutor::ImmediateFrom):
+    // applies only these records, as one phase of steps 2 to 7; the window, the
+    // hook queue and the sync epoch are left alone.
     Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                      ChangeStamp stamp);
+                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
     void RecordRejectedSpawn(RejectedSpawn rejected);
     // Spec E.5: discards every record not yet applied (hook queue included).
@@ -475,6 +477,10 @@ private:
     };
     std::vector<HookQueue> hookQueues_;
     [[nodiscard]] HookQueue& HookQueueOf(std::string_view schedule);
+    // S5: while an immediate change of ExclusiveWorld applies, the queue its
+    // hooks record into instead of the schedule's (WorldExecutor::ImmediateFrom
+    // applies it before the change returns); nullptr otherwise.
+    HookQueue* hookTarget_ = nullptr;
     // Spec F-12: the product's default hook round limit (KernelSettings, read
     // when each Run starts), and the hooks that recorded during the current
     // hook round (HookData index, call order; for the limit's message).

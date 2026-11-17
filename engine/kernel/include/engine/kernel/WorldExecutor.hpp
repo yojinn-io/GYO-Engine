@@ -103,6 +103,9 @@ private:
     };
 
     friend Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
+    friend Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
+                                                                                            Detail::Record, ChangeStamp,
+                                                                                            bool);
 
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
@@ -111,6 +114,10 @@ private:
     Engine::Base::Result<void, KernelError> RunStartup(std::string_view schedule);
     Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                           bool inClosure);
+    // S5 (Detail::ApplyImmediate): an immediate structural change of the running exclusive System call.
+    Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
+                                                                              Detail::Record record, ChangeStamp stamp,
+                                                                              bool closureOpen);
     // J-50 (DI-KS 24): reads KernelSettings, once per Run call, before Startup.
     void ReadSettings();
     // Declaration 3.2 rule 5: attaches the World, then makes every System's
