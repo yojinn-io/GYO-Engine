@@ -1,6 +1,6 @@
 # 事前宣告：Kernel 減法・結構段（`v8-arch-gyo2-kernel-subtract-structure`）
 
-更新：2026-11-17（修訂 2）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：第一段核准（2026-11-17），實作中。**
+更新：2026-11-17（修訂 2）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：第一段核准（2026-11-17）；三段實作完成（2026-11-18，至 ac55aa12）；S10 停在 AGENTS §14 的停止條件、等使用者選修法；合併前的第二段核准未做。**
 
 > **核准**：使用者 2026-11-17 在主會話對第 12 節四件回「照建議」（主會話轉達；HANDOFF `v8-arch-gyo2-kernel-subtract-structure-declaration-approved`）：(1) J-56 兩案保留（(a)）；(2) 當場改成員觸發的 hook 記下的變更在呼叫回傳前當場套用到空（(a)）；(3) 核准修訂 2（cd553b2d）的方向與設計——這是第一段核准，第二段照第 9 節在合併前帶檢證、§14.2 的檢查與突變結果再請核准；(4) 當場套用與換上新版本兩段做逐行複核，改用 **Fable／xhigh**（實作者是 Opus，照 navigator 換模型；檔位高於主會話，使用者已同意）。修訂 2 不再送檢查。
 
@@ -326,6 +326,23 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 
 `RegistryTests` :103、:125（`IsFrozen` 的語意：兩步之後「建好過 Plan」）；`HookFlushTests` :408、`ExecutorTests` :446、`NestedRunTests` :285（`Product` → `WorldExecutor`）；`HookFlushTests` :674（標題的「no Z5」）；`NestedRunTests` :574、:1167、:1368、:1850、:2018（`Writes<Flag>` 變成標註，判定不變）、:1265（準備資料的 `.affinity` 改成 `.threadBound`、標題過時的字拿掉）；輔助：`WorldTestSupport.hpp` 的 `Rig::product`、`WorldExecRecord.cpp:149`。CMake：`kernel.strict_order` 的 ctest 拿掉；`GYO_KERNEL_J_ENTRIES` 只拿掉 J-28（`SchedulerTests` :355 是它唯一的案例；比對 0 案的項目會讓 ctest 失敗）。J-32b 與 J-45 **留著**：`ExecutorTests` :296、:545 是拆開不是拿掉，留下的斷言只經 `kernel.J-32b`、`kernel.J-45` 跑（`kernel.others` 排除 `J-*`，`CMakeLists.txt:60-69`）。回傳型別改 `void`（第 3.6 節）：`Commands::Insert`／`Remove`、`Despawn::Entity` 的呼叫處把 `if (auto r = …; !r) return r;` 改成直接呼叫（判定不變；處數在實作時列進 dev_log）。
 
+### 5.6 檢證（G-7）之後的更正（`g7-verification-fable-high.md`，Fable／high，讀 3bf480a8）
+
+G-7 的結論：第 5.1 節 C、D2、E、F、G、H 成立；A、B、D、I 成立但要更正下列文字；第 5.2 節各列成立（`:99` 要更正）。第二次修正（ac55aa12）處理了它指出的測試缺陷與指紋缺口。
+
+| 位置 | 更正 |
+|---|---|
+| 組 A `SchedulerTests` :216 | 「Plan 照登記順序」只在四組裡的兩組斷言，不是四組 |
+| 組 A 的緩的面 | 舊的案斷言「這一對在哪一筆資料上衝突」；`TieBreak` 沒有這個欄位，所以**衝突在哪一筆資料上不再有守衛**（只守哪兩個 System 平手） |
+| 組 B `ExecutorTests` :296 | 拿掉的是 UntypedWrite 的三段，不是五段；`:316`、`:331` 兩段換了觸發留下（第 5.2 節） |
+| 組 B 第 4 欄 | 列的三個守衛存在、也抓得到「沒計數」的突變，但沒有一個是原本 Z5 的那個輸入本身；第二次修正另加了正面案（Host 在第一次 Run 後寫 zone C、zone B 刪除帶 zone C 欄的實體、untyped `Commands` 寫 zone C 欄都照做） |
+| 組 D `NestedRunTests` :1758 | 「閉包都被呼叫」是一個共用的旗標，實際證明的是五個寫進去的值 |
+| 組 I | 新案用的是句柄的 `Insert`，不是 `Spawn` |
+| 第 5.2 節 `CoverageTests` :99 | D-E4 與 D-E5 出自同一個分析步驟，`:99` 殺不了 `rs-fix-b2-stop-after-declared-edges`；殺它的是 `:109`（D-E4＋D-E16），第二次修正把那一句檢查加了標記、改了 `:98-100` 的註解 |
+| 測試缺陷（已修） | `SchedulerTests.cpp:292` 等五處把 `const char*` 標籤印成位址，對應的突變永遠對不上預期；ac55aa12 改成印文字 |
+| 指紋缺口（已修） | `threadBound`、`annotatedWrites` 寫成常數也沒有測試失敗；ac55aa12 加了指紋的守衛與 Plan 匯出那一行的整行比對 |
+| 沒列在第 5 節的案 | `AccessCheckTests.cpp:253`（J-5 加了 Mode 與 CRes 的寫，第二次修正）；`HookFlushTests.cpp:436-441`（「兩次 Run 之間上限 0」照舊，另有專屬突變 `ks-s7-zero-limit-first-run-only`）；舊 `SchedulerTests` :250 的反向登記順序照舊 |
+
 ---
 
 ## 6. 突變的處置
@@ -529,3 +546,56 @@ Replacement Criteria：
 | NN12 | 第 3.10 節：Kernel 內部的快照不算碰到 |
 | NN13 | 第 11 節 |
 | NN14 | G-2 的證據位置、第 9 節的撤回 |
+
+---
+
+## 14. 實作中的偏差與補充（卡片照 L17 判；第二段核准時看）
+
+三段的實作者都是 Opus／high；換表與接上（段 2）、當場套用（段 3）各由 Fable／xhigh 逐行複核；G-7（§14.4 檢證）與段 1 的 G-8（§14.2）由 Fable／high 做。報告都在主 checkout `build/evidence/gyo2-kernel-subtract-structure/`。下面是宣告沒寫、實作時補上或改掉的；都在已核准的方向內，但沒有逐條給你看過。
+
+### 14.1 停下的一件（要你定）
+
+**S10 綁執行緒的 Resource 的執行緒記號**：第 3.10 節「用 `thread_local` 的位址當記號」不可靠——macOS 的 `thread_local` 用到才配置，第一次碰 Kernel 的執行緒可能拿到剛結束的別條執行緒的同一塊記憶體。探針 `kernel.J-6_thread_bound_destroy` 壓力跑 300 次漏 20 次（`segment1/s10-probe-stress.log`）；G-8 另跑一次漏 9 次，主執行緒先讀過記號時漏 0 次。選項：(a) 放寬 K3、只准 `std::this_thread::get_id()`（建議；Bevy 的 `NonSend` 這樣取）；(b) 由 `engine/base` 給執行緒 id；(c) 保留位址記號、寫明會漏抓、拿掉銷毀的檢查與探針。修正沒有提交；探針留著，所以 ctest 會偶發失敗。
+
+### 14.2 設計上的補充
+
+| 項 | 做法 | 理由 |
+|---|---|---|
+| `Register`／`BuildPlans`／`DiscardRegistrations` 的前提斷言 | 改成「這份 Registry 有 World 正在跑（計數不是 0）就斷言」，取代「這條執行緒上正在跑的 System 屬於這份 Registry 的 World」 | 段 2 的逐行複核找到原本的檢查只看最內層呼叫：World A 的 System 跑另一份 Registry 的 World B、B 的 System 回頭重建 A 的 Registry，正在跑的 Plan 被釋放（ASan 證實）；`InitialValue` 的函式在同步點裡重建也一樣。計數同時抓到兩者。它沒有收窄已核准的能力：規則 4 本來就規定同一份 Registry 的登記和它的 World 的執行不重疊（主會話問過，見對話；計數不是原子的，跨執行緒只是盡力抓到違規）。要支援「多個 World 在不同執行緒、共用一份 Registry、跑著時登記」得換成 RC 17 的「每個 World 釘住一個版本」 |
+| 中斷的 World 與拒絕 | 宣告不准動態插入、已中斷的 World 照樣拒絕（它還活著）；「中斷的 World 不擋登記」只指它不觸發「正在跑」的前提。規則 5 與 DI-KS 26 的措辭照此改 | 段 2 複核 S4 |
+| R-E7 對 `InitialValue` | Target 或 Request 任一是舊版本的就是 R-E7；R-E7 的訊息開頭寫是哪一種 | 段 2 複核 S2、S6 |
+| 當場改之前發現宣告外的改動 | 回 `BoundaryChange`、不做變更、World 中斷（比照 `RunNestedFrom` 的拒絕） | 段 3 實作者的判斷 |
+| 當場套用時 hook 回 Err | World 中斷（同同步點） | 同上 |
+| 已中斷的 World 上當場改 | 不改、回傳留下的錯誤（同 `RunSchedule`） | 同上 |
+| 例外離開當場改（hook 或 `InitialValue` 的函式丟出、被獨占 System 接住） | World 立刻中斷，留一個錯誤（新碼 `ImmediateChangeAborted`）給最外層的 Run 回報一次；句子加進 DI-KS 18 | 段 3 複核的必改：原本會帶著改到一半的狀態繼續跑、hook 已記的變更靜靜丟掉。比照 K0 已核准的 X-16（DI-KS 17） |
+| 當場的 `Spawn<C…>` 拿到配發器給的、仍然活著的 id | 回傳型別改成 `Result<std::optional<EntityId>, KernelError>`：不生成、回傳空，照 F-13 記一筆 `RejectedSpawn` | 段 3 複核 S1：原本回傳那個 id，呼叫的人會拿著別的實體的 id。第 3.5 節的表原寫 `Result<EntityId, KernelError>` |
+| 當場改的 `Insert` | 實體活著就回 true（蓋寫也算） | 段 3 實作者的判斷 |
+| 當場改觸發的 hook 出錯時的訊息 | 寫「step N（當場改）」，不寫「sync point step N」；`SystemContext` 加一個旗標 | 段 3 複核 S3 |
+| 第一輪的 `DiscardRegistrations` | 表重設成只剩 Kernel 自己的登記；Plugin 清單與 Extract 來源留著 | 段 2 實作者 |
+| 拿掉的 System 的墓碑 | 不算進 Registry 與 C 指紋（只數還在的）；`SystemNamed` 先找還在的、沒有再找最新的墓碑 | 段 2 實作者；golden 不用為墓碑重產 |
+| 指紋裡的 owner | 只雜湊名字，不含序號 | 段 2 實作者 |
+| `OrderGraph` | 經所有非 System 的節點展開成 System 對 System、不重複的（first, second, 來源）；會跨 stage、每張 schedule 最多 O(n²)、同一對可以有幾種來源；「同步點」來源指經過同步點的宣告邊 | 段 2 實作者 |
+| `SystemInfo::effects` | 放 `EffectId`，不放名字 | 段 2 實作者 |
+| 接上新版本 | World 在 Running／Applying 時接上是斷言；接上後斷言四張表（事件緩衝、驗證的排除表、hook 的存取、hook 佇列）的大小 | 段 2 實作者、段 2 複核 S3 |
+| `StartupCode` 沒有文字 | 變成建置錯誤（`ToString(StartupCode)` 的 switch 開 `-Wswitch`／C4062）；對應的突變改成預期建置失敗 | 第二次修正（G-8 指出原本抓不到） |
+| `Commands::Insert`／`Remove`、`Despawn::Entity` 改回傳 `void` | 呼叫處 25 處跟著改 | 段 1（第 3.6 節已宣告） |
+| D-E14 的訊息 | 改成「還沒建好過 Plan」 | 段 2 |
+
+### 14.3 測試與突變的補充
+
+- `SpawnRejectTests` :993 第 2 段：要讓 finish 通過，生成的元件改成 zone C 的 Shared（原本是 Exclusive、兩個生成者會碰到還在的 D-E2）。判定照第 5.1 節組 A。
+- `CoverageTests` :109 的第二個錯誤用 D-E4（第 5.2 節只寫了 :99）。
+- 綁執行緒的 Resource 在別的執行緒銷毀的檢查：解構子不能把例外丟給 doctest，另做探針執行檔 `gyo_kernel_thread_bound_probe`、ctest `kernel.J-6_thread_bound_destroy`（宣告沒列）。
+- 換觀察方式留下或搬家的案（J-23 三案、`NestedRunTests` :605／:646、J-22 的「沒有平手」）改前改後都通過，沒有 Red；檢出力由各自的突變證明。
+- 新案：`RegistrationRoundTests.cpp`（段 2）、`ImmediateChangeTests.cpp`（段 3）、兩次修正補的守衛；`kernel.zh-Hant.md` 的 DI-KS 3、14、15、24 的守衛清單加了新案的名字（只是守衛清單；條文本身只有 DI-KS 18 多一句）。
+- 突變清單 624 → 759：段 1 退役 48、改寫 26、新增 22；段 2 新增 45、重新找錨點 8；第一次修正退役 1、改寫 12、新增 18；段 3 新增 36；第二次修正新增 63、改寫 13。等價而沒加的：`ks-s2-effects-not-cleared`（排序去重把重複吃掉）；抓不到的：段 3 複核 N3、N6。`ns-c-version-not-bumped` 和 `hf-c-version-kept` 重複，沒有退役（留給整理）。
+- 跳過的小問題（段 2 複核）：N1（`~Registry` 斷言活著的 World 數：用丟例外的斷言處理器測不了、拿掉計數又要改 DI 的字）、N2（空的 `Register` 算不算一輪，是定義問題）、N3（等價突變）、N5（段 2 之前就有的死欄位）、N7、N8（行為或設計的改變，見 `segment2-line-review-fable-xhigh.md`）。
+
+### 14.4 檢查的結果
+
+| 檢查 | 結果 |
+|---|---|
+| 段 2 逐行複核（Fable／xhigh，3f721dda） | 必改 1、建議改 6、小問題 9 → 第一次修正（e172fa86～3bf480a8）處理 |
+| 段 3 逐行複核（Fable／xhigh，98e1bc38） | 必改 1、建議改 3、小問題 8；§14.2：找到 19 處、提 16 個突變 → 第二次修正（ac55aa12）處理 |
+| G-7 §14.4 檢證（Fable／high，3bf480a8） | 沒有不成立的組；6 處文字更正（第 5.6 節）、1 個測試缺陷、1 個指紋缺口 → 已修 |
+| G-8 段 1 的 §14.2（Fable／high，3bf480a8） | 檢查者 Fable 5.2／high；找到 45 處；加進去時殺掉 22／45、18 處當時抓不到、5 處錯的失敗 → 第二次修正補了 18 處的測試與 5 處的訊息；第二次修正跑的 180 個突變全部在預期的失敗下被殺掉 |
