@@ -6240,10 +6240,10 @@
     },
     {
       "id": "ns-run-from-a-system",
-      "what": "X-9: Product::Run accepts a Running World (any System could run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
+      "what": "X-9: Product::Run accepts a Running World (any System could run a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    GYO_ASSERT(world.state_ == WorldState::Ready);\n    Attach();",
-      "replace": "    Attach();",
+      "find": "    GYO_ASSERT(world.state_ == WorldState::Ready);\n    RunningScope running",
+      "replace": "    RunningScope running",
       "target": "gyo_kernel_tests",
       "cases": "J-56: a plain System reaching WorldExecutor::Run*",
       "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
@@ -7059,92 +7059,92 @@
     },
     {
       "id": "ks-s2-re7-unchecked",
-      "what": "S2 rule 6: a later round is not checked for R-E7 at all (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a later round is not checked for R-E7 at all (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "        CheckLaterRound(data);\n",
       "replace": "",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(all kinds\\) = 0",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-old-hook",
-      "what": "S2 rule 6: a hook on a component of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a hook on a component of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "        if (hook.componentId && *hook.componentId < base.components) {",
       "replace": "        if (false) {",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(hook\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-old-initial-value",
-      "what": "S2 rule 6: an initial value of a component of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: an initial value of a component of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (target != nullptr && target->role == TypeRole::Component && target->id < base.components) {",
-      "replace": "        if (false) {",
+      "find": "        if (const TypeEntry* target = oldComponent(record.target)) {",
+      "replace": "        if (const TypeEntry* target = nullptr) {",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(InitialValue Target\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-old-set-member",
-      "what": "S2 rule 6: a member added to a named set of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a member added to a named set of the previous version passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "        for (std::size_t m = base.setMembers[n]; m < set.pendingMembers.size(); ++m) {",
       "replace": "        for (std::size_t m = set.pendingMembers.size(); m < set.pendingMembers.size(); ++m) {",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(set member\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-startup-schedule",
-      "what": "S2 rule 6: a later Startup schedule passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a later Startup schedule passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "        if (schedule.options.startup) {\n            refuse(",
       "replace": "        if (false) {\n            refuse(",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(startup schedule\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-startup-mount",
-      "what": "S2 rule 6: a System mounted in the Startup schedule by a later round passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a System mounted in the Startup schedule by a later round passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "            if (schedule != nullptr && schedule->options.startup) {\n                refuse(",
       "replace": "            if (false) {\n                refuse(",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(startup mount\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-allotter",
-      "what": "S2 rule 6: a later allotter declaration passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a later allotter declaration passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "    for (std::size_t i = base.allotterDeclarations; i < data.allotterDeclarations.size(); ++i) {",
       "replace": "    for (std::size_t i = data.allotterDeclarations.size(); i < data.allotterDeclarations.size(); ++i) {",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(allotter\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-digest",
-      "what": "S2 rule 6: a later DigestSet passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a later DigestSet passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "    if (data.digestMarks > base.digestMarks) refuse(",
       "replace": "    if (false) refuse(",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(DigestSet\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
       "id": "ks-s2-re7-explicit-zones",
-      "what": "S2 rule 6: a later RequireExplicitZones passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 6: a later RequireExplicitZones passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "    if (data.explicitZoneCalls > base.explicitZoneCalls) refuse(",
-      "replace": "    if (false) refuse(",
+      "find": "    if (data.explicitZoneCalls > base.explicitZoneCalls) {",
+      "replace": "    if (false) {",
       "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count",
+      "expect": "R\\-E7 count \\(RequireExplicitZones\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
@@ -7229,12 +7229,12 @@
     },
     {
       "id": "ks-s2-refusal-leaves-pending",
-      "what": "S2 rule 8: a refused Register has already made the pending round (the Registry changed) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
+      "what": "S2 rule 8: a refused Register has already made the pending round (the Registry changed) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
       "find": "    if (data_->refusingWorlds > 0) {",
       "replace": "    if (data_->frozen && !pending_) pending_ = std::make_unique<Detail::RegistryData>(*data_);\n    if (data_->refusingWorlds > 0) {",
       "target": "gyo_kernel_tests",
-      "expect": "registry\\.pending_ == nullptr",
+      "expect": "a refused Register left a round pending",
       "cases": "DI-KS 26: a World that declares no dynamic insert*"
     },
     {
@@ -7248,24 +7248,14 @@
       "cases": "DI-KS 26: a World that declares no dynamic insert*"
     },
     {
-      "id": "ks-s2-interrupted-refuses",
-      "what": "S2 rule 5: an Interrupted World counts as refusing (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    error.world = world_.name_;\n    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
-      "replace": "    error.world = world_.name_;\n    if (world_.state_ != WorldState::Interrupted) ++world_.data_->refusingWorlds;\n    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
-      "target": "gyo_kernel_tests",
-      "expect": "an Interrupted World blocked Register",
-      "cases": "DI-KS 26: an Interrupted World*"
-    },
-    {
       "id": "ks-s2-own-world-unchecked",
-      "what": "S2 rule 4: a System of a World made from the Registry may register and build (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "    GYO_ASSERT(call == nullptr || call->world == nullptr || Detail::RegistryDataOf(*call->world) != data_.get());",
-      "replace": "    static_cast<void>(call);",
+      "what": "S2 rule 4: no World counts as running, so Register / BuildPlans / DiscardRegistrations are not checked during a Run (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    RunningScope running(world.data_->runningWorlds);\n",
+      "replace": "",
       "target": "gyo_kernel_tests",
-      "expect": "expected GYO_ASSERT to fail: executor\\.Run",
-      "cases": "DI-KS 26: a System of a World made from the Registry*"
+      "expect": "expected GYO_ASSERT to fail: nestedOuter\\.Run",
+      "cases": "DI-KS 26: while a World made from the Registry runs*"
     },
     {
       "id": "ks-s2-reentry-unchecked",
@@ -7306,6 +7296,186 @@
       "target": "gyo_kernel_tests",
       "expect": "extract reads of the rebuilt source",
       "cases": "DI-KS 13:*"
+    },
+    {
+      "id": "ks-s2-re7-old-initial-value-request",
+      "what": "S2 rule 6: an initial value whose Request the previous version has passes (review S2) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (const TypeEntry* request = oldComponent(record.request)) {",
+      "replace": "        if (const TypeEntry* request = nullptr) {",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 count \\(InitialValue Request\\)",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-re7-kind-unnamed",
+      "what": "S2 rule 6: the R-E7 message does not name the kind refused (review S6) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                   std::string(kind) + \": \" + std::move(message) + \" (only the first round may; the round is dropped)\",",
+      "replace": "                   (static_cast<void>(kind), std::move(message) + \" (only the first round may; the round is dropped)\"),",
+      "target": "gyo_kernel_tests",
+      "expect": "R\\-E7 kind \\(hook\\) not named",
+      "cases": "DI-KS 26: a later round may not register*"
+    },
+    {
+      "id": "ks-s2-register-while-running",
+      "what": "S2 rule 4: Register is not checked while a World of the Registry runs (review M1) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)\n    RequireNoWorldRunning();\n",
+      "replace": "    GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)\n",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: registersOwn\\.Run",
+      "cases": "DI-KS 26: while a World made from the Registry runs*"
+    },
+    {
+      "id": "ks-s2-build-while-running",
+      "what": "S2 rule 4: BuildPlans is not checked while a World of the Registry runs (review M1) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        // A later round",
+      "replace": "    GYO_ASSERT(!data_->failed);\n    if (pending_) {\n        // A later round",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: buildsOwn\\.Run",
+      "cases": "DI-KS 26: while a World made from the Registry runs*"
+    },
+    {
+      "id": "ks-s2-discard-while-running",
+      "what": "S2 rule 4: DiscardRegistrations is not checked while a World of the Registry runs (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        pending_.reset();",
+      "replace": "    GYO_ASSERT(!data_->failed);\n    if (pending_) {\n        pending_.reset();",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: discardsOwn\\.Run",
+      "cases": "DI-KS 26: while a World made from the Registry runs*"
+    },
+    {
+      "id": "ks-s2-running-not-lowered-on-throw",
+      "what": "S2 rules 4 and 5: an exception out of Run leaves the World counted as running (review S4) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    ~RunningScope() { --running_; }",
+      "replace": "    ~RunningScope() { if (std::uncaught_exceptions() == 0) --running_; }",
+      "target": "gyo_kernel_tests",
+      "expect": "an Interrupted World counts as running",
+      "cases": "DI-KS 26: an Interrupted World*"
+    },
+    {
+      "id": "ks-s2-interrupted-stops-refusing",
+      "what": "S2 rules 5 and 8: an Interrupted World that declares no dynamic insert stops refusing (review S4) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    error.world = world_.name_;\n    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
+      "replace": "    error.world = world_.name_;\n    if (!world_.options_.dynamicInsert && world_.state_ != WorldState::Interrupted) --world_.data_->refusingWorlds;\n    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
+      "target": "gyo_kernel_tests",
+      "expect": "an Interrupted World that declares no dynamic insert stopped refusing",
+      "cases": "DI-KS 26: an Interrupted World*"
+    },
+    {
+      "id": "ks-s2-attach-events-first-only",
+      "what": "S2 rule 5: a World adds event buffers only at its first attach (review S3) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (std::size_t e = events_.size(); e < data.eventMakers.size(); ++e) events_.push_back(data.eventMakers[e]());",
+      "replace": "    if (version_ == 0) for (std::size_t e = events_.size(); e < data.eventMakers.size(); ++e) events_.push_back(data.eventMakers[e]());",
+      "target": "gyo_kernel_tests",
+      "expect": "attach \\(event buffers\\)",
+      "cases": "DI-KS 26: an existing World attaches*"
+    },
+    {
+      "id": "ks-s2-attach-exclusions-first-only",
+      "what": "S2 rule 5: a World grows the verification exclusions only at its first attach (review S3) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    excluded_.resize(columns_.size(), false);",
+      "replace": "    if (version_ == 0) excluded_.resize(columns_.size(), false);",
+      "target": "gyo_kernel_tests",
+      "expect": "attach \\(verification exclusions\\)",
+      "cases": "DI-KS 26: an existing World attaches*"
+    },
+    {
+      "id": "ks-s2-attach-hook-access-first-only",
+      "what": "S2 rule 5: a World makes the hooks' access only at its first attach (review S3) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    hookAccess_.clear();\n    for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));",
+      "replace": "    if (version_ == 0) {\n    hookAccess_.clear();\n    for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));\n    }",
+      "target": "gyo_kernel_tests",
+      "expect": "attach \\(hook access\\)",
+      "cases": "DI-KS 26: an existing World attaches*"
+    },
+    {
+      "id": "ks-s2-attach-hook-queues-first-only",
+      "what": "S2 rule 5: a World adds hook queues only at its first attach (review S3) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!known) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});",
+      "replace": "        if (!known && version_ == 0) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});",
+      "target": "gyo_kernel_tests",
+      "expect": "attach \\(hook queues\\)",
+      "cases": "DI-KS 26: an existing World attaches*"
+    },
+    {
+      "id": "ks-s2-build-inside-build-unchecked",
+      "what": "S2 rule 3: BuildPlans inside a build callable is accepted (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)\n    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        // A later round",
+      "replace": "    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        // A later round",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: buildInside\\.Register",
+      "cases": "DI-KS 26: BuildPlans and DiscardRegistrations inside a build callable*"
+    },
+    {
+      "id": "ks-s2-discard-inside-build-unchecked",
+      "what": "S2 rule 3: DiscardRegistrations inside a build callable is accepted (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)\n    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        pending_.reset();",
+      "replace": "    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        pending_.reset();",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: discardInside\\.Register",
+      "cases": "DI-KS 26: BuildPlans and DiscardRegistrations inside a build callable*"
+    },
+    {
+      "id": "ks-s2-register-after-failed-first-round",
+      "what": "S2 rule 9: Register after a failed first round is accepted (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: failedFirst\\.Register",
+      "cases": "DI-KS 26: after a failed first round*"
+    },
+    {
+      "id": "ks-s2-finish-not-first",
+      "what": "S2 rule 9: Finish is accepted after the first round started (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    GYO_ASSERT(!data.finished && !data.registered);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: registeredFirst\\.Finish",
+      "cases": "DI-KS 26: Finish is only the first round*"
+    },
+    {
+      "id": "ks-s2-extract-source-after-build",
+      "what": "S2 rule 10: SetExtractSource after the first BuildPlans is accepted (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "void Registry::SetExtractSource(const Registry& source) {\n    GYO_ASSERT(!data_->finished);\n",
+      "replace": "void Registry::SetExtractSource(const Registry& source) {\n",
+      "target": "gyo_kernel_tests",
+      "expect": "expected GYO_ASSERT to fail: builtReader\\.SetExtractSource",
+      "cases": "DI-KS 13: SetExtractSource after the first BuildPlans*"
+    },
+    {
+      "id": "ks-s2-first-discard-ignored",
+      "what": "S2 rule 1: DiscardRegistrations in the first round keeps what was registered (review N4) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data_->frozen || !data_->registered) return;\n    // The first round writes the tables",
+      "replace": "    return;\n    // The first round writes the tables",
+      "target": "gyo_kernel_tests",
+      "expect": "a first\\-round discard kept the round",
+      "cases": "DI-KS 4: DiscardRegistrations in the first round*"
+    },
+    {
+      "id": "ks-s2-throwing-build-left-open",
+      "what": "S2 rule 3: a build callable that throws leaves the Registrar open (review N4) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "file": "engine/kernel/include/engine/kernel/Registry.hpp",
+      "find": "        RegistrarScope scope(*this);\n        Registrar registrar(Target(), *opened);\n        std::forward<Build>(build)(registrar);\n        return {};",
+      "replace": "        Registrar registrar(Target(), *opened);\n        std::forward<Build>(build)(registrar);\n        CloseRegistrar();\n        return {};",
+      "target": "gyo_kernel_tests",
+      "expect": "a build that threw left its Registrar open",
+      "cases": "DI-KS 26: a build callable that throws*"
     },
     {
       "id": "ks-s3-version-not-raised",
