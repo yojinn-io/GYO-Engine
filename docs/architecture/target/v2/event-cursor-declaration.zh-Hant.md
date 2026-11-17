@@ -1,21 +1,21 @@
-# 事件游標：事前宣告（修訂 5）
+# 事件游標：事前宣告（修訂 6）
 
 > **核准**：使用者 2026-11-17 在主會話核准修訂 4（4b94e3ea），原話「核准游標」（HANDOFF `v8-arch-gyo2-event-cursor-declaration-approved`）。核准本宣告不等於 AGENTS §14.4 的判定變更核准：守衛判定的變更仍在實作批逐案列出、逐條請使用者核准。核准時，四份一起的最後一次換模型檢查還在跑；檢查若要改本頁，由統合那張卡通知，改完交使用者再看。
-> **修訂 5 尚待使用者再看**：第四輪檢查（Fable／high）後，統合修訂 32（35e8a1f3）要本頁改五處，改動清單見修訂紀錄；修訂 5 的內容沒有經使用者核准。
+> **修訂 5、6 尚待使用者再看**：第四輪檢查（Fable／high）與它的窄複查後，統合要本頁改七處（修訂 5 五處、修訂 6 兩處），改動清單見修訂紀錄；修訂 5、6 的內容沒有經使用者核准。
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-event-cursor`。
-> 這一份是「Kernel 與編排層的邊界」拆成的子份裡，Kernel 事件那一份（`v8-arch-gyo2-boundary-split-integrator-first`）。**以統合為準**：統合 `kernel-app-boundary-declaration.zh-Hant.md`（分支 `claude/gyo2-kernel-app-boundary-4af68c`，本頁對齊修訂 32，35e8a1f3）定過的事，本頁不改。
+> 這一份是「Kernel 與編排層的邊界」拆成的子份裡，Kernel 事件那一份（`v8-arch-gyo2-boundary-split-integrator-first`）。**以統合為準**：統合 `kernel-app-boundary-declaration.zh-Hant.md`（分支 `claude/gyo2-kernel-app-boundary-4af68c`，本頁對齊 598d58ff）定過的事，本頁不改。
 
-**修訂紀錄**：修訂 0（facc0846）寫出八件要使用者判的題目，並回報七處介面與六條新關聯。修訂 1（c55f1253）照統合修訂 16 記下那七處的判定。修訂 2（96fae7dc）、修訂 3（bafc4050）照統合修訂 19、20 的交叉檢查補 PvP Client 的註記與回滾的題目。**修訂 4（2026-11-17，最後一版）**：使用者定「事件照 Bevy 分兩種」（`v8-arch-gyo2-events-two-kinds-like-bevy`），保留式改名 `Message`，推送式（`Event`、`Observer`）併入本頁；八件題目由統合照 L17 判（統合第 15.1 節），第 4 節改成判定的紀錄。選項的比較表留在 git 歷史（修訂 3，bafc4050，第 4 節）。之後四份一起做一次換模型檢查，再請使用者核准（統合那張卡負責）。**修訂 5（2026-11-17）**：照第四輪檢查（`build/evidence/gyo2-kernel-app-boundary/four-docs-adversarial-check-r4.md`）與統合修訂 32（15.1、15.2、第 16 節、DI-KS 18）改五處——(1)「重跑中」放時間 Module（時間宣告不收時退回由回滾 Module 登記、恆在）：第 3.3 節、第 6 節第 4 項、第 11 節第 4 條；(2) hook 不能帶 `MessageReader`、不算讀者：第 3.2 節、第 4 節、第 8 節、DI-KS 10；(3) observer 不准帶 `ExclusiveWorld`、hook 的 `ExclusiveWorld<>` 不能當場改成員：第 3.3 節、第 8 節、DI-KS 10；(4) 第 3.3 節末的細節補兩個情形（外面在 Ready 時觸發、外面在 Ready 時直接寫）；(5) 第 0、1、12 節的統合與 HANDOFF 版本。
+**修訂紀錄**：修訂 0（facc0846）寫出八件要使用者判的題目，並回報七處介面與六條新關聯。修訂 1（c55f1253）照統合修訂 16 記下那七處的判定。修訂 2（96fae7dc）、修訂 3（bafc4050）照統合修訂 19、20 的交叉檢查補 PvP Client 的註記與回滾的題目。**修訂 4（2026-11-17，最後一版）**：使用者定「事件照 Bevy 分兩種」（`v8-arch-gyo2-events-two-kinds-like-bevy`），保留式改名 `Message`，推送式（`Event`、`Observer`）併入本頁；八件題目由統合照 L17 判（統合第 15.1 節），第 4 節改成判定的紀錄。選項的比較表留在 git 歷史（修訂 3，bafc4050，第 4 節）。之後四份一起做一次換模型檢查，再請使用者核准（統合那張卡負責）。**修訂 5（2026-11-17）**：照第四輪檢查（`build/evidence/gyo2-kernel-app-boundary/four-docs-adversarial-check-r4.md`）與統合修訂 32（15.1、15.2、第 16 節、DI-KS 18）改五處——(1)「重跑中」放時間 Module（時間宣告不收時退回由回滾 Module 登記、恆在）：第 3.3 節、第 6 節第 4 項、第 11 節第 4 條；(2) hook 不能帶 `MessageReader`、不算讀者：第 3.2 節、第 4 節、第 8 節、DI-KS 10；(3) observer 不准帶 `ExclusiveWorld`、hook 的 `ExclusiveWorld<>` 不能當場改成員：第 3.3 節、第 8 節、DI-KS 10；(4) 第 3.3 節末的細節補兩個情形（外面在 Ready 時觸發、外面在 Ready 時直接寫）；(5) 第 0、1、12 節的統合與 HANDOFF 版本。**修訂 6（2026-11-17）**：照第四輪必改的窄複查（`build/evidence/gyo2-kernel-app-boundary/four-docs-narrow-check-r4-fixes.md`）與統合 598d58ff 改兩處——(1) 第 3.3 節末「World 外面在 Ready 時觸發」補寫套用時跑不跑 hook、觸不觸發 observer、連鎖的上限（本卡照 L17 判）；(2) 第 3.3 節 observer 的先後補「不承諾多登記無關的 observer 時其餘的相對先後不變」。
 
 ---
 
 ## 0. 引用統合的關聯表
 
-統合第 1 節的關聯表裡，本頁開頭要引用的七條（「狀態」欄照統合修訂 32 摘錄）：
+統合第 1 節的關聯表裡，本頁開頭要引用的七條（「狀態」欄照統合 598d58ff 摘錄）：
 
-| # | 事項 | 狀態（統合修訂 32） | 本頁怎麼用 |
+| # | 事項 | 狀態（統合 598d58ff） | 本頁怎麼用 |
 |---|---|---|---|
 | L1 | 分層與歸屬（統合第 3 節） | 已定 | 兩種事件都留在 Kernel（照 `bevy_ecs`，`events-two-kinds-like-bevy`）；跨 World、經網路的轉送不在 Kernel |
 | L2 | 時鐘與 tick 移出 Kernel，到時間的 Module（`Domain`、`ScheduleOptions::clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、D-E12、F-E1） | **已定**（`v8-arch-gyo2-clock-out-of-kernel`） | 訊息的順序鍵與上限的單位不用 tick；訊息不屬於任何時鐘，F-9 與 F-E1 一起拿掉 |
@@ -109,7 +109,7 @@ Kernel 不知道「固定步」「每幀」「暫停」是什麼；保留式只�
 | 事 | 定了什麼 | 誰定 | 系譜 |
 |---|---|---|---|
 | 觸發的時機 | 兩條：`ExclusiveWorld` 與 World 外面的呼叫者（統合稱 Host）觸發，observer 當場跑；一般 System 經 `Commands` 觸發，延到同步點跑 | 統合照 L17 判 | flecs「操作延後時 observer 跟著延到同步點」（`ObserversManual.md:2598`）；Bevy `World::trigger` 當場（`event/mod.rs:14-16`）、`Commands::trigger` 延後（`system/commands/mod.rs:1160`） |
-| 同一點內 observer 的先後 | 決定性（同樣的登記得到同樣的順序），但不對作者承諾是登記順序 | 統合照 L17 判（修訂 28 更正） | flecs 明寫先後 undefined、不要依賴（`ObserversManual.md:2702-2703`）；Bevy 寫順序任意（`observer/distributed_storage.rs:153-155`）。同一點內多次觸發依觸發的先後送達：flecs 自訂事件依發出順序（`:2711-2714`） |
+| 同一點內 observer 的先後 | 決定性（同樣的登記得到同樣的順序），但不對作者承諾是登記順序；**也不承諾多登記一個無關的 observer 時，其餘 observer 的相對先後不變**（修訂 6；所以權威的 C 指紋只收 observer 的存取、不收先後，統合判） | 統合照 L17 判（修訂 28 更正） | flecs 明寫先後 undefined、不要依賴（`ObserversManual.md:2702-2703`）；Bevy 寫順序任意（`observer/distributed_storage.rs:153-155`）。同一點內多次觸發依觸發的先後送達：flecs 自訂事件依發出順序（`:2711-2714`） |
 | 和 hook 的關係 | hook 留著、不併入：一個元件每種一個 hook；新增時 hook 在 observer 之前、移除時 hook 在 observer 之後（GYO 現行 OnRemove 的先後在實作批對照） | 統合照 L17 判 | flecs（hook 一定在 observer 之前、移除時在之後，`ObserversManual.md:128-142`）；Bevy（`world/entity_access/mod.rs:1344-1345`）；Mass 只有 observer processor（MassSample `MSPhysicsInitProcessors.cpp:244-245`、`:360-361`）；Unity Entities 核心沒有推送式 |
 | 元件的新增與移除觸發 observer | 放進這次的契約，和自訂事件同一批實作（Bevy 的 `On<Add<T>>` 那一型） | 統合照 L17 判（先前「先不做」撤回） | 三家都有：Bevy `On<Add<T>>`、flecs OnAdd／OnRemove／OnSet、Mass `ObservedOperations` |
 | observer 是什麼 | observer 是 System：存取照簽名推出、照存取驗證；在觸發點跑、不進 Plan 的步驟（同 hook） | 統合照 L17 判 | Bevy 的 observer 是 System（`observer/mod.rs:30`）；GYO 的 hook 已是帶參數的 System 形（`Params.hpp:984-998` 的 `HookCtx`） |
@@ -122,7 +122,11 @@ Kernel 不知道「固定步」「每幀」「暫停」是什麼；保留式只�
 - observer 自己用 `Commands` 記的延後變更（含再觸發的事件），照 hook 的規則：進下一窗，最後一個同步點之後由 hook 清空輪一輪一輪套用、有上限（F-12）。理由：和 hook 同一條路，就不會在同一個同步點裡無上限地連鎖（`v8-arch-gyo2-hook-queue-flush-at-run-end` 的理由）。確切的佇列（和 hook 共用還是分開）在實作批對照 Bevy、flecs 定。
 - `ExclusiveWorld` 當場觸發時，observer 在獨占 System 的呼叫裡跑，等同巢狀的一次 System 呼叫：照巢狀執行的規則（DI-KS 16～21：句柄、stamp、出錯記一次）。observer 裡不能再巢狀跑 schedule（同 hook，X-13）。
 - observer 的登記進 Registry 指紋（L10），交進唯讀登記表（L6：觸發、元件或事件型別、存取、登記者）。
-- **World 外面在 Ready 時觸發**（修訂 5，統合第 16 節）：照 Bevy `World::trigger`，觸發回來之後當場套用 observer 記的延後變更（不等下一次 Run）。
+- **World 外面在 Ready 時觸發**（修訂 5，統合第 16 節）：觸發回來之前，當場套用 observer 記的延後變更（不等下一次 Run）。**套用的規則**（修訂 6，本卡照 L17 判）：
+  - 套用就是一次完整的同步點套用（F.2 的順序）：跑 hook，觸發元件新增與移除的 observer；那些 observer 再記的延後變更（含再觸發的事件）留到下一輪。
+  - 一輪一輪套用到空，和 hook 清空輪（F-12）用同一個上限：這個 World 的 `KernelSettings` 的 hook 清空輪上限（Ready 時沒有 schedule，所以沒有 schedule 自己的上限）。第 N 輪之後仍有紀錄是錯誤（`HookRoundLimit`），處理照 F-12：觸發回傳錯誤、World 中斷、剩下的丟掉、已套用的輪不退回。
+  - 理由：Ready 時沒有 Run 結束時的清空輪可以接手，延後變更不當場套用就會留到下一次 Run 的第一個同步點，觸發的效果看不到；用 hook 清空輪同一套規則與上限，就不會無上限地連鎖，作者也只記一套。
+  - 系譜：Bevy 6a911653f 的 `World::trigger` 本身不套用（`observer/mod.rs:63-72`、`:111-122`），observer 記的命令留在 World 的命令佇列，下一次 `World::flush`（`world/mod.rs:3215-3218`，多數 World 操作會呼叫）才套用，而且連鎖沒有上限；GYO 改成觸發回來前就套用、加上限，是從自己的 F-12 推出來的，不是照 Bevy。
 - **World 外面在 Ready 時直接寫**（不跑 hook 的那條路，修訂 5，統合第 16 節）：也不觸發元件新增與移除的 observer。
 
 ### 3.4 跨時鐘、跨 World、網路與回滾
