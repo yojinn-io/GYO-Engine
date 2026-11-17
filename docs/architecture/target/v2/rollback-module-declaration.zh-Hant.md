@@ -3,7 +3,7 @@
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。**
 > 批次代號：`v8-arch-gyo2-rollback-module`。
 > **這是「Kernel 與編排層的邊界」拆出來的子份之一**（`v8-arch-gyo2-boundary-split-integrator-first`）。統合是邊界卡的 `kernel-app-boundary-declaration.zh-Hant.md`（分支 `claude/gyo2-kernel-app-boundary-4af68c`；修訂 4 照 16c84630，以第 15 節與 2.1 的新決定為準）。**以統合為準、不改統合定過的事。**
-> **使用者 2026-11-17 核准**（HANDOFF `v8-arch-gyo2-rollback-module-declaration-approved`）。原話：本卡「核准」；主會話確認時「是，回滾那份要核准」。核准的版本是修訂 4 加補正（7dfd7167）。**核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更（例：D-E16 的案從 Kernel 搬到回滾 Module），在實作那一批的事前宣告逐案列出、逐條核准。核准之後的第四輪換模型檢查（Fable／high，`four-docs-adversarial-check-r4.md`）要回滾份改幾處，照統合 35e8a1f3 第 16 節改成修訂 5；**修訂 5、6 的改動待使用者再看**（改動清單在修訂紀錄）。核准宣告不等於開始實作：實作照第 11 節的批次，排在統合第 8 節第四條線裡。
+> **使用者 2026-11-17 核准**（HANDOFF `v8-arch-gyo2-rollback-module-declaration-approved`）。原話：本卡「核准」；主會話確認時「是，回滾那份要核准」。核准的版本是修訂 4 加補正（7dfd7167）。**核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更（例：D-E16 的案從 Kernel 搬到回滾 Module），在實作那一批的事前宣告逐案列出、逐條核准。核准之後的第四輪換模型檢查（Fable／high，`four-docs-adversarial-check-r4.md`）要回滾份改幾處，照統合 35e8a1f3 第 16 節改成修訂 5；**修訂 5、6 2026-11-17 使用者核准（「全部核准」；HANDOFF `v8-arch-gyo2-five-declarations-approved`；版本 9418fcf1）**（改動清單在修訂紀錄）。核准宣告不等於開始實作：實作照第 11 節的批次，排在統合第 8 節第四條線裡。
 
 **修訂紀錄**：
 - 修訂 0（b55af62e）：初版，回報統合六件。
