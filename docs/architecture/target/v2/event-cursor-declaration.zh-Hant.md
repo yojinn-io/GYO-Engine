@@ -1,5 +1,7 @@
 # 事件游標：事前宣告（修訂 4）
 
+> **核准**：使用者 2026-11-17 在主會話核准修訂 4（4b94e3ea），原話「核准游標」（HANDOFF `v8-arch-gyo2-event-cursor-declaration-approved`）。核准本宣告不等於 AGENTS §14.4 的判定變更核准：守衛判定的變更仍在實作批逐案列出、逐條請使用者核准。核准時，四份一起的最後一次換模型檢查還在跑；檢查若要改本頁，由統合那張卡通知，改完交使用者再看。
+
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准之前不實作、不改任何條文與守衛。核准本宣告不等於 AGENTS §14.4 的判定變更核准**：每一個守衛判定的變更，在實作那一批的事前宣告逐案列出、逐條核准。
 > 批次代號：`v8-arch-gyo2-event-cursor`。
 > 這一份是「Kernel 與編排層的邊界」拆成的子份裡，Kernel 事件那一份（`v8-arch-gyo2-boundary-split-integrator-first`）。**以統合為準**：統合 `kernel-app-boundary-declaration.zh-Hant.md`（分支 `claude/gyo2-kernel-app-boundary-4af68c`，本頁對齊修訂 28，16c84630）定過的事，本頁不改。
