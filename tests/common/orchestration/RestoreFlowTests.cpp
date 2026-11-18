@@ -104,7 +104,7 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
         {
             WarningCounter warnings;
             auto refused = p.ReplaceWorld("Main", O::ReplaceRequest{Unsupported(), {"Load"}, O::ReplaceOrder::BuildNewFirst});
-            REQUIRE_FALSE(static_cast<bool>(refused));
+            REQUIRE_FALSE_MESSAGE(static_cast<bool>(refused), "[or-restore-fail-a] replaced despite the refused save");
             CHECK_MESSAGE(refused.error().code == O::OrchestrationErrorCode::ReplacePrepareFailed, "[or-restore-fail-a] " << refused.error().message);
             CHECK_MESSAGE(refused.error().reporterCode == "save-version-unsupported", "[or-restore-reporter-code]");
             CHECK_MESSAGE(warnings.Warnings() == 1, "[or-restore-fail-warn] " << warnings.Warnings());
@@ -113,7 +113,7 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
         SaveData broken = TheSave();
         broken.unreadable = true;
         auto unreadable = p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(broken), {"Load"}, O::ReplaceOrder::BuildNewFirst});
-        REQUIRE_FALSE(static_cast<bool>(unreadable));
+        REQUIRE_FALSE_MESSAGE(static_cast<bool>(unreadable), "[or-restore-fail-b] replaced despite the unreadable save");
         CHECK_MESSAGE(unreadable.error().code == O::OrchestrationErrorCode::ReplaceScheduleFailed, "[or-restore-fail-b]");
         CHECK_MESSAGE(GoldOf(p) == 30, "[or-restore-keep-old-b] " << GoldOf(p));
         CHECK(static_cast<bool>(p.RunFrame()));
@@ -156,7 +156,7 @@ TEST_CASE("restore: case 6, what game initialization put in the first World: a m
     p.World("Main").GetWorld().ResourceMut<KeyBindings>()->jump = 7;  // the options menu changed it
     REQUIRE(p.World("Main").GetWorld().Resource<Score>()->v == 5);
     auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{Unsupported(), {"Load"}});
-    REQUIRE_FALSE(static_cast<bool>(failed));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(failed), "[or-carry-back] replaced despite the refused save");
     CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 7, "[or-carry-back] the old World lost KeyBindings");
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}})));
     CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 7, "[or-carry-over] KeyBindings did not carry over");

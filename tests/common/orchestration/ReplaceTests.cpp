@@ -85,7 +85,7 @@ TEST_CASE("O-8: a Check that fails on the second registration: ReplaceRegistrati
     REQUIRE(static_cast<bool>(p.RunFrame()));
     WarningCounter warnings;
     auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{});
-    REQUIRE_FALSE(static_cast<bool>(replaced));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(replaced), "[or-replace-check-fails] replaced despite the Check error");
     CHECK_MESSAGE(replaced.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-replace-check-fails]");
     CHECK_MESSAGE(warnings.Warnings() == 1, "[or-replace-check-warn]");
     CHECK_MESSAGE(static_cast<bool>(p.RunFrame()), "[or-replace-check-old-goes-on]");
@@ -176,7 +176,7 @@ TEST_CASE("O-10: a marked type the new registration lacks: ReplaceCarryOverFaile
     O::Product& p = **built;
     p.World("Main").GetWorld().SetResource(Volume{6});
     auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{});
-    REQUIRE_FALSE(static_cast<bool>(failed));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(failed), "[or-carry-unregistered] replaced anyway");
     CHECK_MESSAGE(failed.error().code == O::OrchestrationErrorCode::ReplaceCarryOverFailed, "[or-carry-unregistered]");
     CHECK_MESSAGE(p.World("Main").GetWorld().Resource<Volume>()->level == 6, "[or-carry-unregistered-back]");
 }

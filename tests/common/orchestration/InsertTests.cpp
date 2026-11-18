@@ -83,8 +83,9 @@ TEST_CASE("O-9: a build that throws: the pending round is dropped, so a replacem
         thrown = true;
     }
     REQUIRE(thrown);
-    CHECK_MESSAGE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})), "[or-insert-throw-discards]");
-    CHECK(static_cast<bool>(p.InsertSystems("Main", "console", AddMark())));
+    auto again = p.InsertSystems("Main", "console", AddMark());
+    CHECK_MESSAGE(static_cast<bool>(again), "[or-insert-throw-discards] the half round was kept: " << (again ? "" : again.error().detail));
+    CHECK_MESSAGE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})), "[or-insert-throw-discards] replacement");
 }
 
 TEST_CASE("O-9: an owner name that is a unit's or the Product's: OwnerTaken") {

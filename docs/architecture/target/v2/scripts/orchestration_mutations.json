@@ -1,0 +1,406 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the orchestration skeleton batch (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9; ids or-). Behaviour tests only: the scans of section 7.4 wait for the scenario segment (v8-arch-gyo2-guards-after-mechanism-stable).",
+ "mutants": [
+  {
+   "id": "or-configure-skipped",
+   "what": "O-2: a unit's Configure is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        unit.unit->Configure(setup);\n",
+   "replace": "        (void)setup;\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "\\[or\\-lifecycle\\-order\\]"
+  },
+  {
+   "id": "or-finish-skipped",
+   "what": "O-2: Finish is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        units_[index].unit->Finish(frozen, context);",
+   "replace": "        (void)context;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "\\[or\\-lifecycle\\-order\\]"
+  },
+  {
+   "id": "or-check-skipped",
+   "what": "O-2: Check is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        units_[index].unit->Check(frozen, context);",
+   "replace": "        (void)context;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "\\[or\\-lifecycle\\-order\\]"
+  },
+  {
+   "id": "or-not-checked-unmarked",
+   "what": "O-5: a kernel failure is not marked as \"not checked\"",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        result.notChecked = true;",
+   "replace": "        result.notChecked = false;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-5:*",
+   "expect": "\\[or\\-not\\-checked\\]"
+  },
+  {
+   "id": "or-oe1-silent",
+   "what": "O-E1 is not reported",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            errors.push_back({OrchestrationCode::OE1,",
+   "replace": "            if (false) errors.push_back({OrchestrationCode::OE1,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "O\\-E1 missing"
+  },
+  {
+   "id": "or-oe2-file-and-library",
+   "what": "O-E2: an instance in the wrong file or of a library row is accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (row == nullptr || row->kind != kind || row->libraryOnly) {",
+   "replace": "        if (row == nullptr) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E2:*",
+   "expect": "\\[or\\-oe2\\]"
+  },
+  {
+   "id": "or-oe3-later-unseen",
+   "what": "O-E3: a dependency that comes later is not told apart",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                    if (at(k + 1, slot.units.size())) {",
+   "replace": "                    if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3:*",
+   "expect": "\\[or\\-oe3\\-later\\]"
+  },
+  {
+   "id": "or-oe3-module-on-plugin",
+   "what": "O-E3: a Module may depend on a Plugin",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                } else if (row->kind == UnitKind::Module && depRow->kind == UnitKind::Plugin) {",
+   "replace": "                } else if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3:*",
+   "expect": "\\[or\\-oe3\\-plugin\\]"
+  },
+  {
+   "id": "or-oe3-library-required",
+   "what": "O-E3: a library-only dependency must be a unit of the World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                } else if (!depRow->libraryOnly) {",
+   "replace": "                } else if (true) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3:*",
+   "expect": "\\[or\\-oe3\\-library\\]"
+  },
+  {
+   "id": "or-oe4-silent",
+   "what": "O-E4: two runners are accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (runners.size() > 1) {",
+   "replace": "    if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "O\\-E4 missing"
+  },
+  {
+   "id": "or-oe5-anchor-silent",
+   "what": "O-E5: a missing game-initialization anchor is not reported",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (const std::string& anchor : gameInit.missingAnchors_) {",
+   "replace": "    for (const std::string& anchor : std::vector<std::string>{}) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: two insertions*",
+   "expect": "\\[or\\-gi\\-anchor\\]"
+  },
+  {
+   "id": "or-oe5-gameinit-unchecked",
+   "what": "O-E5: game initialization names are not checked against the first World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (firstWorld) {\n        for (const std::string& name : gameInit_) {",
+   "replace": "    if (false) {\n        for (const std::string& name : gameInit_) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: two insertions*",
+   "expect": "\\[or\\-gi\\-not\\-schedule\\]"
+  },
+  {
+   "id": "or-oe6-duplicate-world",
+   "what": "O-E6: two Worlds of one name are accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!worldNames.insert(world.name).second) {",
+   "replace": "        if (!worldNames.insert(world.name).second && false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "O\\-E6 missing"
+  },
+  {
+   "id": "or-oe7-silent",
+   "what": "O-E7: a failing prepare at startup is not reported",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            errors.push_back({OrchestrationCode::OE7,",
+   "replace": "            if (false) errors.push_back({OrchestrationCode::OE7,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E7:*",
+   "expect": "\\[or\\-oe7\\]"
+  },
+  {
+   "id": "or-unit-error-ignored",
+   "what": "O-5: a unit-reported error does not stop the build",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!errors.empty() || !unitErrors.empty() || kernelFailed) {",
+   "replace": "    if (!errors.empty() || kernelFailed) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: the World context*",
+   "expect": "\\[or\\-finish\\-report\\]"
+  },
+  {
+   "id": "or-gi-every-frame",
+   "what": "O-1: game initialization runs at every frame",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    GYO_ASSERT(!gameInitRan_);\n    gameInitRan_ = true;",
+   "replace": "    gameInitRan_ = false;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: insertions place*",
+   "expect": "\\[or\\-gi\\-order\\-once\\]"
+  },
+  {
+   "id": "or-gi-last-world",
+   "what": "O-1: game initialization runs on the last World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (auto ran = RunOn(worlds_.front(), schedule); !ran) return ran;",
+   "replace": "        if (auto ran = RunOn(worlds_.back(), schedule); !ran) return ran;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: game initialization runs on the first World only*",
+   "expect": "\\[or\\-gi\\-first\\-world\\]"
+  },
+  {
+   "id": "or-gi-error-ignored",
+   "what": "O-1: a failing game initialization schedule does not stop RunFrame",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (auto ran = RunOn(worlds_.front(), schedule); !ran) return ran;",
+   "replace": "        static_cast<void>(RunOn(worlds_.front(), schedule));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: a failing game initialization*",
+   "expect": "\\[or\\-gi\\-error\\]"
+  },
+  {
+   "id": "or-insert-before-as-after",
+   "what": "O-1: InsertBefore inserts after the anchor",
+   "file": "engine/orchestration/src/Setup.cpp",
+   "find": "    names_.insert(at, std::move(schedule));",
+   "replace": "    names_.insert(at + 1, std::move(schedule));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: insertions place*",
+   "expect": "\\[or\\-gi\\-order\\-once\\]"
+  },
+  {
+   "id": "or-runframe-no-gameinit",
+   "what": "O-1: RunFrame does not run game initialization first",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    for (WorldSlot& slot : worlds_) {",
+   "replace": "    for (WorldSlot& slot : worlds_) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: insertions place*",
+   "expect": "\\[or\\-gi\\-order\\-once\\]"
+  },
+  {
+   "id": "or-runschedule-no-gameinit",
+   "what": "O-1: RunSchedule does not run game initialization first",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule);",
+   "replace": "    return RunOn(*slot, schedule);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: RunSchedule runs*",
+   "expect": "\\[or\\-gi\\-runschedule\\]"
+  },
+  {
+   "id": "or-runner-not-called",
+   "what": "O-3: an installed runner is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (runner_) return runner_(*this);",
+   "replace": "    if (runner_) return RunnerExit{};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3:*",
+   "expect": "\\[or\\-runner\\-installed\\]"
+  },
+  {
+   "id": "or-prepare-skipped-at-startup",
+   "what": "O-7: prepare functions do not run at startup",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), slot.unitPrepares, nullptr);",
+   "replace": "        ::Engine::Base::Result<void, OrchestrationError> prepared{};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: prepare order*",
+   "expect": "\\[or\\-prepare\\-order\\]"
+  },
+  {
+   "id": "or-prepare-order-reversed",
+   "what": "O-7: the description's prepare runs before the units'",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (const PrepareFn& fn : unitPrepares) {\n        if (auto done = call(fn); !done) return done;\n    }\n    for (const PrepareFn& fn : slot.description.prepare) {\n        if (auto done = call(fn); !done) return done;\n    }",
+   "replace": "    for (const PrepareFn& fn : slot.description.prepare) {\n        if (auto done = call(fn); !done) return done;\n    }\n    for (const PrepareFn& fn : unitPrepares) {\n        if (auto done = call(fn); !done) return done;\n    }",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: prepare order*",
+   "expect": "\\[or\\-prepare\\-order\\]"
+  },
+  {
+   "id": "or-extra-skipped",
+   "what": "O-8: the replacement's extra prepare is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "request.extra ? &request.extra : nullptr",
+   "replace": "nullptr",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 3*",
+   "expect": "\\[or\\-restore\\-new\\-world\\]"
+  },
+  {
+   "id": "or-beforeswap-skipped",
+   "what": "O-8: beforeSwap schedules do not run",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        for (const std::string& schedule : request.beforeSwap) {",
+   "replace": "        for (const std::string& schedule : std::vector<std::string>{}) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 3*",
+   "expect": "\\[or\\-restore\\-new\\-world\\]"
+  },
+  {
+   "id": "or-prepare-failure-swaps",
+   "what": "O-8: a failing extra still swaps the new World in",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            giveBack(moved);\n            return fail(std::move(prepared).error());",
+   "replace": "            static_cast<void>(prepared);",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 4*",
+   "expect": "\\[or\\-restore\\-fail\\-a\\]"
+  },
+  {
+   "id": "or-old-world-kept",
+   "what": "O-8: the old World is not destroyed",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.executor.reset();\n    slot.registry.reset();\n    slot.registry = std::move(registration.registry);",
+   "replace": "    static_cast<void>(slot.executor.release());\n    static_cast<void>(slot.registry.release());\n    slot.registry = std::move(registration.registry);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: replacing registers again*",
+   "expect": "\\[or\\-replace\\-old\\-destroyed\\]"
+  },
+  {
+   "id": "or-replace-gameinit-again",
+   "what": "O-8: replacing runs game initialization again",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!gameInitRan_) {\n            if (firstWorld) {",
+   "replace": "        if (true) {\n            if (firstWorld) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 3*",
+   "expect": "\\[or\\-restore\\-no\\-game\\-init\\]"
+  },
+  {
+   "id": "or-replace-check-ignored",
+   "what": "O-8: a Check error of the new registration is ignored",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!registration.registry || !errors.empty() || !unitErrors.empty()) {",
+   "replace": "    if (!registration.registry) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a Check that fails*",
+   "expect": "\\[or\\-replace\\-check\\-fails\\]"
+  },
+  {
+   "id": "or-handler-not-kept",
+   "what": "O-8: the error handler is not set on the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (slot.handler) executor->SetErrorHandler(slot.handler);",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the error handler*",
+   "expect": "\\[or\\-replace\\-handler\\-kept\\]"
+  },
+  {
+   "id": "or-drop-old-later",
+   "what": "O-8: DropOldFirst destroys the old World only at the swap",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (dropOldFirst && slot.executor) {",
+   "replace": "    if (false && dropOldFirst && slot.executor) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: DropOldFirst*",
+   "expect": "\\[or\\-drop\\-old\\-first\\-order\\]"
+  },
+  {
+   "id": "or-carry-not-put",
+   "what": "O-10: carried values are not put into the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-10: two types*",
+   "expect": "\\[or\\-carry\\-"
+  },
+  {
+   "id": "or-carry-not-given-back",
+   "what": "O-10: a failed replacement does not give the carried values back",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            giveBack(moved);\n            return fail(std::move(prepared).error());",
+   "replace": "            return fail(std::move(prepared).error());",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 6*",
+   "expect": "\\[or\\-carry\\-back\\]"
+  },
+  {
+   "id": "or-carry-unregistered-ignored",
+   "what": "O-10: a carried type the new World lacks is not refused",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!entry.registered(world)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-10: a marked type*",
+   "expect": "\\[or\\-carry\\-unregistered\\]"
+  },
+  {
+   "id": "or-carry-held-dropped",
+   "what": "O-10: values held after a DropOldFirst failure are dropped",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        moved = std::move(slot.held);",
+   "replace": "        moved.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-10: after a DropOldFirst*",
+   "expect": "\\[or\\-carry\\-held\\]"
+  },
+  {
+   "id": "or-insert-no-warning",
+   "what": "O-9: a refused insert logs no warning",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) +\n             \": refused, the World declares no dynamic insert\");",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: a refusing World*",
+   "expect": "\\[or\\-insert\\-warn\\-once\\]"
+  },
+  {
+   "id": "or-insert-two-warnings",
+   "what": "O-9: a refused insert logs two warnings",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "replace": "        Warn(\"again\");\n        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: a refusing World*",
+   "expect": "\\[or\\-insert\\-warn\\-once\\]"
+  },
+  {
+   "id": "or-insert-throw-keeps-round",
+   "what": "O-9: a throwing insert keeps its half round",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            slot->registry->DiscardRegistrations();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: a build that throws*",
+   "expect": "\\[or\\-insert\\-throw\\-discards\\]"
+  },
+  {
+   "id": "or-owner-not-checked",
+   "what": "O-9: an owner name taken by a unit is accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (taken) {",
+   "replace": "    if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: an owner name*",
+   "expect": "\\[or\\-insert\\-owner\\]"
+  }
+ ]
+}

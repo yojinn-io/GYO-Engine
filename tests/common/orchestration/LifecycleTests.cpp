@@ -192,7 +192,7 @@ TEST_CASE("O-2: the World context names each World; a Finish error is reported w
         if (f.WorldName() == "Side") f.Report("bad", "side only");
     };
     auto built = O::Product::Build(TwoWorlds(), Units().Module("net", calls).Take());
-    REQUIRE_FALSE(static_cast<bool>(built));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(built), "[or-finish-report] built despite a reported error");
     REQUIRE(built.error().unitErrors.size() == 1);
     CHECK_MESSAGE((built.error().unitErrors[0].unit == "net" && built.error().unitErrors[0].world == "Side" &&
                    built.error().unitErrors[0].code == "bad"),

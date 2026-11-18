@@ -112,6 +112,14 @@ TEST_CASE("O-1: RunSchedule runs game initialization first; explicit RunGameInit
     }
 }
 
+TEST_CASE("O-1: game initialization runs on the first World only (both Worlds have A)") {
+    Log().clear();
+    auto built = O::Product::Build(Game({"A"}), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    REQUIRE(static_cast<bool>((*built)->RunGameInit()));
+    CHECK_MESSAGE(Joined() == "a", "[or-gi-first-world] " << Joined());
+}
+
 TEST_CASE("O-1: RunGameInit a second time, or after RunFrame: GYO_ASSERT") {
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
