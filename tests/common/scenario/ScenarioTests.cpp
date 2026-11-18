@@ -8,6 +8,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,11 @@ using namespace Walker;
 namespace {
 
 std::string Text(const std::optional<int>& v) { return v ? std::to_string(*v) : std::string("absent"); }
+std::string SeenText(const std::vector<bool>& seen) {
+    std::string out;
+    for (bool b : seen) out += b ? '1' : '0';
+    return out;
+}
 
 O::Product& Built(::Engine::Base::Result<std::unique_ptr<O::Product>, O::ProductStartupReport>& built) {
     REQUIRE_MESSAGE(static_cast<bool>(built), "[sc-s1-1-built] " << (built ? std::string() : built.error().detail));
@@ -39,7 +45,8 @@ SaveData PlayUntilSave(O::Product& p) {
     // S1-2: RunSchedule runs game initialization first (O-1).
     REQUIRE_MESSAGE(static_cast<bool>(p.RunSchedule("Main", "PlacePlayer")), "[sc-s1-2-ran]");
     const K::World& w = p.World("Main").GetWorld();
-    CHECK_MESSAGE((Seen().bootRuns == 1 && ScoreOf(w) == 0), "[sc-s1-2-boot-first] boot " << Seen().bootRuns << " score " << Text(ScoreOf(w)));
+    CHECK_MESSAGE((Seen().bootRuns == 1 && ScoreOf(w) == 0), "[sc-s1-2-boot-ran] boot " << Seen().bootRuns << " score " << Text(ScoreOf(w)));
+    CHECK_MESSAGE((Seen().order == std::vector<std::string>{"boot", "place"}), "[sc-s1-2-boot-first] " << Seen().order.size() << " entries, first " << (Seen().order.empty() ? std::string("none") : Seen().order.front()));
     CHECK_MESSAGE((w.Keys<Player>() == std::vector<K::EntityId>{1}), "[sc-s1-2-player-id]");
     CHECK_MESSAGE(XOf(w, 1) == 0, "[sc-s1-2-player-at-origin] " << Text(XOf(w, 1)));
 
@@ -49,7 +56,7 @@ SaveData PlayUntilSave(O::Product& p) {
     CHECK_MESSAGE((XOf(w3, 1) == 5 && ScoreOf(w3) == 5), "[sc-s1-3-walked] x " << Text(XOf(w3, 1)) << " score " << Text(ScoreOf(w3)));
     CHECK_MESSAGE(BestOf(w3) == 1, "[sc-s1-3-best-set] " << Text(BestOf(w3)));
     CHECK_MESSAGE((Seen().bestSeenBeforeSync == std::vector<bool>{false, true, true, true, true}),
-                  "[sc-s1-3-best-at-sync] BestScore was visible before its sync point, or never");
+                  "[sc-s1-3-best-at-sync] seen before the sync point, frame by frame: " << SeenText(Seen().bestSeenBeforeSync));
     CHECK_MESSAGE(Seen().bootRuns == 1, "[sc-s1-3-boot-once] " << Seen().bootRuns);
 
     // S1-4: the console inserts Accelerate before Walk (DI-KS 26); five frames at speed 2.
@@ -64,24 +71,33 @@ SaveData PlayUntilSave(O::Product& p) {
     CHECK_MESSAGE((save.player == 1 && save.x == 15 && save.score == 10 && save.best == 1 && save.next == 2),
                   "[sc-s1-5-save] player " << save.player << " x " << save.x << " score " << save.score << " best " << save.best
                                            << " next " << save.next);
+    // Two more frames before the load: the old World moves on (x 19, score 12), so
+    // what the load puts back is told apart from what the old World still has.
+    Frames(p, 2, "after the save");
+    REQUIRE_MESSAGE((XOf(p.World("Main").GetWorld(), 1) == 19 && ScoreOf(p.World("Main").GetWorld()) == 12), "[sc-s1-5-moved-on]");
     return save;
 }
 
 // S1-6 to S1-9 (and S1-10's check) after a load with the given order.
 void LoadAndPlay(O::Product& p, const SaveData& save, O::ReplaceOrder order) {
-    const int destroyedBefore = WorldLife::Destroyed();
+    const WorldLife* oldLife = p.World("Main").GetWorld().Resource<WorldLife>();
+    REQUIRE(oldLife != nullptr);
+    const int oldSerial = oldLife->serial;
+    const int bootBefore = Seen().bootRuns;
     // S1-6: replace the World from the description, the save in the extra, Load before the swap (O-7, O-8).
     auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(save), {"Load"}, order});
     REQUIRE_MESSAGE(static_cast<bool>(replaced), "[sc-s1-6-replaced] " << (replaced ? std::string() : replaced.error().message + " " + replaced.error().detail));
     const K::World& w = p.World("Main").GetWorld();
 
     // S1-7: LoadSave put the player back with its id on the spot and saw it in the same System (DI-KS 18).
+    CHECK_MESSAGE(!Seen().playerRejected.has_value(), "[sc-s1-7-put-rejected] reason " << (Seen().playerRejected ? static_cast<int>(*Seen().playerRejected) : -1));
     CHECK_MESSAGE(Seen().playerSeenOnSpot == 15, "[sc-s1-7-on-spot] " << Text(Seen().playerSeenOnSpot));
     CHECK_MESSAGE((w.Keys<Player>() == std::vector<K::EntityId>{1} && XOf(w, 1) == 15), "[sc-s1-7-player-back]");
     const Velocity* v = w.Get<Velocity>(1);
     CHECK_MESSAGE((v != nullptr && v->x == 1), "[sc-s1-7-default-velocity]");
     CHECK_MESSAGE((ScoreOf(w) == 10 && BestOf(w) == 1), "[sc-s1-7-scores] " << Text(ScoreOf(w)) << " " << Text(BestOf(w)));
     CHECK_MESSAGE((Seen().cursor.has_value() && *Seen().cursor >= save.next), "[sc-s1-7-cursor-above-range]");
+    CHECK_MESSAGE((Seen().cursor.has_value() && w.Keys<Cursor>() == std::vector<K::EntityId>{*Seen().cursor}), "[sc-s1-7-cursor-in-world]");
     CHECK_MESSAGE(w.RejectedSpawns() == 0, "[sc-s1-7-nothing-dropped] " << w.RejectedSpawns());
 
     // S1-10: the key bindings came over as the player left them; the score is the save's.
@@ -89,11 +105,16 @@ void LoadAndPlay(O::Product& p, const SaveData& save, O::ReplaceOrder order) {
 
     // S1-8: a new registration (no Accelerate), game initialization not again, the old World gone.
     CHECK_MESSAGE(w.Types().SystemNamed("Accelerate") == nullptr, "[sc-s1-8-registration-new]");
-    CHECK_MESSAGE(Seen().bootRuns == 1, "[sc-s1-8-no-game-init] " << Seen().bootRuns);
-    CHECK_MESSAGE(WorldLife::Destroyed() == destroyedBefore + 1, "[sc-s1-8-old-gone] " << WorldLife::Destroyed() - destroyedBefore);
+    CHECK_MESSAGE(Seen().bootRuns == bootBefore, "[sc-s1-8-no-game-init] " << Seen().bootRuns);
+    const std::vector<int>& destroyed = WorldLife::Destroyed();
+    CHECK_MESSAGE(std::count(destroyed.begin(), destroyed.end(), oldSerial) == 1, "[sc-s1-8-old-gone] " << std::count(destroyed.begin(), destroyed.end(), oldSerial));
+    const WorldLife* newLife = w.Resource<WorldLife>();
+    CHECK_MESSAGE((newLife != nullptr && newLife->serial != oldSerial &&
+                   std::count(destroyed.begin(), destroyed.end(), newLife->serial) == 0), "[sc-s1-8-new-alive]");
     Frames(p, 5, "S1-8");
     const K::World& w8 = p.World("Main").GetWorld();
     CHECK_MESSAGE((XOf(w8, 1) == 20 && ScoreOf(w8) == 15), "[sc-s1-8-walked] x " << Text(XOf(w8, 1)) << " score " << Text(ScoreOf(w8)));
+    CHECK_MESSAGE(Seen().bootRuns == bootBefore, "[sc-s1-8-no-game-init-after-frames] " << Seen().bootRuns);
 
     // S1-9: between two Runs the console inserts Accelerate again (DI-KS 26 rule 4).
     REQUIRE_MESSAGE(static_cast<bool>(p.InsertSystems("Main", "console", &InsertAccelerate)), "[sc-s1-9-inserted]");
@@ -132,6 +153,10 @@ TEST_CASE("scenario segment 1: S1-7b, the lower bound forgotten: the cursor's sp
     CHECK_MESSAGE(Seen().handledSpawnError == K::KernelErrorCode::AllottedIdAlive, "[sc-s1-7b-alive] the cursor's spawn did not return AllottedIdAlive");
     CHECK_MESSAGE(!Seen().cursor.has_value(), "[sc-s1-7b-no-cursor]");
     CHECK_MESSAGE(w.RejectedSpawns() == 1, "[sc-s1-7b-recorded] " << w.RejectedSpawns());
+    const auto rejected = w.Diagnostics<K::RejectedSpawn>();
+    CHECK_MESSAGE((rejected.size() == 1 && rejected[0].fromAllotter && rejected[0].entity == 1 &&
+                   rejected[0].reason == K::SpawnRejectReason::IdAlive && rejected[0].emitter == "LoadSave"),
+                  "[sc-s1-7b-record-is-the-cursor]");
     CHECK_MESSAGE(w.State() != K::WorldState::Interrupted, "[sc-s1-7b-goes-on]");
     CHECK_MESSAGE(XOf(w, 1) == 15, "[sc-s1-7b-player-kept] " << Text(XOf(w, 1)));
     Frames(p, 1, "S1-7b");

@@ -29,7 +29,8 @@ TEST_CASE("O-9: an allowing World: the inserted System runs from the next frame;
     REQUIRE(static_cast<bool>(p.RunFrame()));
     Log().clear();
     REQUIRE(static_cast<bool>(p.InsertSystems("Main", "console", AddMark())));
-    CHECK_MESSAGE((!Logged("finish audio@Main v2") && !Logged("check audio@Main")), "[or-insert-no-lifecycle] " << Joined());
+    // Nothing of the unit's lifecycle runs, at any version, until the next frame.
+    CHECK_MESSAGE(Log().empty(), "[or-insert-no-lifecycle] " << Joined());
     REQUIRE(static_cast<bool>(p.RunFrame()));
     CHECK_MESSAGE(Logged("i"), "[or-insert-runs] " << Joined());
 }

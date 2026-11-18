@@ -67,11 +67,15 @@ inline constexpr K::EntityId kLast = 1000000;
 // What the game's Systems saw, for the checks (the test's own record, not game state).
 struct Notes {
     int bootRuns = 0;
+    // The order Boot and PlacePlayer ran in ("boot", "place").
+    std::vector<std::string> order;
     // BestScore as Peek saw it each frame, after CountScore and before the sync point.
     std::vector<bool> bestSeenBeforeSync;
     // LoadSave: the player's x read back right after SpawnWithId; the cursor's id.
     std::optional<int> playerSeenOnSpot;
     std::optional<K::EntityId> cursor;
+    // LoadSave: why SpawnWithId did not put the player back (DI-KS 18: a dropped spawn is Ok with its reason).
+    std::optional<K::SpawnRejectReason> playerRejected;
     // LoadSave: the code of a spawn LoadSave handled itself.
     std::optional<K::KernelErrorCode> handledSpawnError;
 };
@@ -80,13 +84,16 @@ inline Notes& Seen() {
     return notes;
 }
 
-// Counts the destruction of the last live copy (moves hand the life over): the
-// old World is gone when its copy is destroyed.
+// Each World's prepare puts one with a new serial; the destruction of its last
+// live copy (moves hand the life over) records the serial, so a check can tell
+// which World is gone.
 struct WorldLife {
+    int serial = 0;
     bool live = true;
-    WorldLife() = default;
-    WorldLife(WorldLife&& other) noexcept : live(other.live) { other.live = false; }
+    WorldLife() : serial(++Issued()) {}
+    WorldLife(WorldLife&& other) noexcept : serial(other.serial), live(other.live) { other.live = false; }
     WorldLife& operator=(WorldLife&& other) noexcept {
+        serial = other.serial;
         live = other.live;
         other.live = false;
         return *this;
@@ -94,11 +101,15 @@ struct WorldLife {
     WorldLife(const WorldLife&) = delete;
     WorldLife& operator=(const WorldLife&) = delete;
     ~WorldLife() {
-        if (live) ++Destroyed();
+        if (live) Destroyed().push_back(serial);
     }
-    static int& Destroyed() {
-        static int count = 0;
-        return count;
+    static int& Issued() {
+        static int issued = 0;
+        return issued;
+    }
+    static std::vector<int>& Destroyed() {
+        static std::vector<int> destroyed;
+        return destroyed;
     }
 };
 
@@ -109,12 +120,14 @@ inline K::SystemResult Fail(K::KernelError error) { return ::Engine::Base::Err(s
 // Game initialization: the score starts at 0, the key bindings at 1.
 inline K::SystemResult Boot(K::ExclusiveWorld<> world) {
     ++Seen().bootRuns;
+    Seen().order.push_back("boot");
     if (auto set = world.SetResource(Score{0}); !set) return Fail(std::move(set).error());
     if (auto set = world.SetResource(KeyBindings{1}); !set) return Fail(std::move(set).error());
     return {};
 }
 
 inline K::SystemResult PlacePlayer(K::ExclusiveWorld<> world) {
+    Seen().order.push_back("place");
     auto spawned = world.Spawn(Player{}, Position{0, 0}, Velocity{1, 0});
     if (!spawned) return Fail(std::move(spawned).error());
     return {};
@@ -131,7 +144,7 @@ inline K::SystemResult Walk(K::Query<K::Read<Velocity>, K::Write<Position>> walk
 }
 
 // One point a frame; the first point also records the best score through Commands
-// (applied at the sync point, DI-KS 15 (5)).
+// (a deferred change, applied at the sync point: DI-KS 9).
 inline K::SystemResult CountScore(K::ResMut<Score> score, K::Res<BestScore> best, K::Commands commands) {
     score->v += 1;
     if (!best.Present()) commands.SetResource(BestScore{score.Read().v});
@@ -165,6 +178,11 @@ inline K::SystemResult LoadSave(K::ExclusiveWorld<> world) {
     if (save.hasPlayer) {
         auto put = world.SpawnWithId(save.player, Player{}, Position{save.x, save.y}, Velocity{1, 0});
         if (!put) return Fail(std::move(put).error());
+        if (*put) {
+            // Dropped (its id is in the allotter's range, or alive): the game records why and goes on.
+            Seen().playerRejected = **put;
+            return {};
+        }
         auto x = world.Read<Position>(save.player, [](const Position& p) { return p.x; });
         if (!x) return Fail(std::move(x).error());
         Seen().playerSeenOnSpot = *x;

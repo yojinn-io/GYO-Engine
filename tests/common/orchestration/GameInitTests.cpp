@@ -154,7 +154,10 @@ TEST_CASE("O-1: a failing game initialization schedule: RunFrame returns it, no 
     CHECK_MESSAGE(again.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-interrupted] " << again.error().message);
 }
 
-TEST_CASE("O-1: an empty list: RunFrame runs the frame list directly; a setting changed in game initialization counts from the next schedule") {
+// That a changed KernelSettings takes effect from the next outermost Run is the
+// kernel's J-50 (NestedRunTests); here only that each game initialization
+// schedule is a Run of its own, so the next one sees the change.
+TEST_CASE("O-1: an empty list: RunFrame runs the frame list directly; game initialization schedules are separate Runs (a setting written in one is there in the next)") {
     Log().clear();
     O::ProductDescription d = Game({"A", "B"});
     d.worlds.resize(1);

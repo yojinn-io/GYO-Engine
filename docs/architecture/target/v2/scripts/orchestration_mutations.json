@@ -969,7 +969,7 @@
   },
   {
    "id": "ur-row-count-unchecked",
-   "what": "step 3 (unit registers): a row with too few columns is read (reading the missing column then fails elsewhere, so the case reports the wrong reason)",
+   "what": "step 3 (unit registers): a row with the wrong number of columns is read (the row with ten columns is accepted)",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(NOT fields EQUAL columns)\n",
    "replace": "        if(FALSE)\n",
@@ -979,7 +979,7 @@
     "-P",
     "tests/common/cmake/UnitRegistryTests.cmake"
    ],
-   "expect": "Unit\\ register\\ case\\ 'row_count'\\ did\\ not\\ report",
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'row_excess'\\ was\\ accepted",
    "timeout": 300
   },
   {
@@ -999,7 +999,7 @@
   },
   {
    "id": "ur-yes-no-loose",
-   "what": "step 3 (unit registers): anything but yes reads as no ('maybe' reads as no, and the row then fails as an in-World row without a unit)",
+   "what": "step 3 (unit registers): anything but yes reads as no (the bad_yes_no row is then a valid in-World row)",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "    elseif(lowered STREQUAL \"no\")\n",
    "replace": "    elseif(TRUE)\n",
@@ -1009,7 +1009,7 @@
     "-P",
     "tests/common/cmake/UnitRegistryTests.cmake"
    ],
-   "expect": "Unit\\ register\\ case\\ 'bad_yes_no'\\ did\\ not\\ report",
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_yes_no'\\ was\\ accepted",
    "timeout": 300
   },
   {
@@ -1029,7 +1029,7 @@
   },
   {
    "id": "ur-world-without-unit",
-   "what": "step 3 (unit registers): an in-World row without a unit is read",
+   "what": "step 3 (unit registers): an in-World row without a unit is read (the header check then refuses the empty header with another message)",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(NOT library_only AND (value_unit STREQUAL \"\" OR value_header STREQUAL \"\"))\n",
    "replace": "        if(FALSE)\n",
@@ -1039,7 +1039,7 @@
     "-P",
     "tests/common/cmake/UnitRegistryTests.cmake"
    ],
-   "expect": "Invalid\\ unit\\ register\\ case\\ 'unit_without_header'\\ was\\ accepted",
+   "expect": "Unit\\ register\\ case\\ 'unit_without_header'\\ did\\ not\\ report",
    "timeout": 300
   },
   {
@@ -1069,7 +1069,7 @@
     "-P",
     "tests/common/cmake/UnitRegistryTests.cmake"
    ],
-   "expect": "Unit\\ register\\ case\\ 'missing_dep'\\ did\\ not\\ report",
+   "expect": "(?s)Unit register case 'missing_dep' did not report.*which comes later",
    "timeout": 300
   },
   {
@@ -1084,7 +1084,7 @@
     "-P",
     "tests/common/cmake/UnitRegistryTests.cmake"
    ],
-   "expect": "Unit\\ register\\ case\\ 'module_on_plugin'\\ did\\ not\\ report",
+   "expect": "(?s)Unit register case 'module_on_plugin' did not report.*which comes later",
    "timeout": 300
   },
   {
@@ -1230,7 +1230,7 @@
    "replace": "    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
    "target": "gyo_orchestration_include_order",
    "expect_build_failure": true,
-   "expect": "no\\ member\\ named\\ 'Base'\\ in\\ namespace\\ 'GYO::Engine'",
+   "expect": "(?s)gyo_orchestration_include_order\\.dir.*no member named 'Base' in namespace 'GYO::Engine'",
    "platforms": [
     "darwin"
    ],
@@ -1268,7 +1268,7 @@
    "replace": "        static_cast<void>(call);\n        static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, Detail::ResourceIdOf(*world_, KeyOf<T>()))).value.emplace(std::move(value));\n",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
-   "expect": "\\[sc-s1-3-best-at-sync\\]"
+   "expect": "\\[sc-s1-3-best-at-sync\\] seen before the sync point, frame by frame: 11111"
   },
   {
    "id": "sc-insert-not-hooked",
@@ -1282,7 +1282,7 @@
   },
   {
    "id": "sc-replace-keeps-old",
-   "what": "step 4 (scenario segment 1): S1-8: the replacement keeps the old World and its Registry (the swap is skipped)",
+   "what": "step 4 (scenario segment 1): S1-8: the replacement keeps the old World and its Registry (the swap is skipped) (the whole swap is skipped; reusing only the old Registry is g8s-old-registry-reused)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    slot.executor.reset();\n    slot.registry.reset();\n    slot.registry = std::move(registration.registry);\n    slot.executor = std::move(fresh);\n",
    "replace": "    fresh.reset();\n",
@@ -1298,7 +1298,7 @@
    "replace": "        return RangeAllotter{1, last, 1, first > last};",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
-   "expect": "\\[sc-s1-7-on-spot\\]"
+   "expect": "\\[sc-s1-7-put-rejected\\]"
   },
   {
    "id": "sc-spawn-with-id-deferred",
@@ -1308,11 +1308,11 @@
    "replace": "        Detail::Push(Detail::RequireCall(*world_), std::move(record));\n        return std::optional<SpawnRejectReason>{};",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
-   "expect": "\\[sc-s1-7-on-spot\\]"
+   "expect": "\\[sc-s1-7-on-spot\\] absent"
   },
   {
    "id": "sc-allotted-alive-fails",
-   "what": "step 4 (scenario segment 1): S1-7b: a spawn the allotter gives a live id returns an error the game cannot tell from a failure (its load fails, the World is interrupted)",
+   "what": "step 4 (scenario segment 1): S1-7b: a spawn the allotter gives a live id returns an error the game cannot tell from a failure (its load fails, the World is interrupted) (the World is interrupted by the game itself, which fails on a code it does not know; the kernel side, the Err reaching the Run, is g8s-allotted-alive-ends-run)",
    "file": "engine/kernel/include/engine/kernel/Params.hpp",
    "find": "KernelErrorCode::AllottedIdAlive, \"F-13\",",
    "replace": "KernelErrorCode::SystemFailed, \"F-13\",",
@@ -1359,6 +1359,721 @@
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-10-carried\\]"
+  },
+  {
+   "id": "g8s3-default-prefix",
+   "what": "step 3 G-8 (S1): g8s3-default-prefix",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    set(prefix GYO_UNITS)\n",
+   "replace": "    set(prefix GYO_UNITS_UNSET)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "The\\ default\\ table\\ lacks\\ 'UnitEntry<Module>\\{\"walk\"",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-registers-prefix-shared",
+   "what": "step 3 G-8 (S2): g8s3-registers-prefix-shared",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        set(prefix _GYO_UNITS_${target})\n",
+   "replace": "        set(prefix GYO_UNITS)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "REGISTERS\\ leaves\\ the\\ loaded\\ registers\\ alone:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-depends-last-only",
+   "what": "step 3 G-8 (S3): g8s3-depends-last-only",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            string(APPEND depends_cpp \"\\\"${dep}\\\", \")\n",
+   "replace": "            set(depends_cpp \"\\\"${dep}\\\", \")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+lacks\\s+'units\\.rows\\.push_back\\(RegisterRow\\{\\\"aux\\\"",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-private-depends-last-only",
+   "what": "step 3 G-8 (S3): g8s3-private-depends-last-only",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            string(APPEND private_cpp \"\\\"${dep}\\\", \")\n",
+   "replace": "            set(private_cpp \"\\\"${dep}\\\", \")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+lacks\\s+'units\\.rows\\.push_back\\(RegisterRow\\{\\\"extra\\\"",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-select-private-dep-unchecked",
+   "what": "step 3 G-8 (S4): g8s3-select-private-dep-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        foreach(dep IN LISTS depends private)\n            get_property(dep_library_only",
+   "replace": "        foreach(dep IN LISTS depends)\n            get_property(dep_library_only",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'private_needed_not_listed'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-message-file-dropped",
+   "what": "step 3 G-8 (S5): g8s3-message-file-dropped",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_FILE \"${csv}\")\n",
+   "replace": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_FILE \"\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'duplicate'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-message-row-dropped",
+   "what": "step 3 G-8 (S5): g8s3-message-row-dropped",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_ROW \"${row}\")\n",
+   "replace": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_ROW \"0\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'missing_dep'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-world-header-without-unit",
+   "what": "step 3 G-8 (S6): g8s3-world-header-without-unit",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT library_only AND (value_unit STREQUAL \"\" OR value_header STREQUAL \"\"))\n",
+   "replace": "        if(NOT library_only AND value_header STREQUAL \"\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'header_without_unit'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-row-excess-columns",
+   "what": "step 3 G-8 (S7): g8s3-row-excess-columns",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT fields EQUAL columns)\n",
+   "replace": "        if(fields LESS columns)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'row_excess'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-header-excess-columns",
+   "what": "step 3 G-8 (S7): g8s3-header-excess-columns",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT header_count EQUAL columns)\n",
+   "replace": "    if(header_count LESS columns)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'header_excess'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-link-unregistered-allowed",
+   "what": "step 3 G-8 (S8): g8s3-link-unregistered-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT name IN_LIST order)\n        message(FATAL_ERROR \"gyo_link_registered_dependencies:",
+   "replace": "    if(FALSE)\n        message(FATAL_ERROR \"gyo_link_registered_dependencies:",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'link_unregistered'\\ was\\ configured",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-link-no-target-unchecked",
+   "what": "step 3 G-8 (S8): g8s3-link-no-target-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT TARGET ${target})\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'link_no_target'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-interface-private-dropped",
+   "what": "step 3 G-8 (S8): g8s3-interface-private-dropped",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(private_targets)\n            message(FATAL_ERROR",
+   "replace": "        if(FALSE)\n            message(FATAL_ERROR",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'link_interface_private'\\ was\\ configured",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-registers-arity-unchecked",
+   "what": "step 3 G-8 (S9): g8s3-registers-arity-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT register_count EQUAL 2)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'registers_three'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-missing-header-unchecked",
+   "what": "step 3 G-8 (S9): g8s3-missing-header-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(count EQUAL 0)\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'empty_file'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-plugins-carried-by-default",
+   "what": "step 3 G-8 (K1): g8s3-plugins-carried-by-default",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        elseif(name IN_LIST ARG_PLUGINS)\n",
+   "replace": "        else()\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "default\\ selection:\\ in\\-World\\ Modules\\ with\\ default\\ yes:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-empty-name-allowed",
+   "what": "step 3 G-8 (K2): g8s3-empty-name-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name STREQUAL \"\")\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'empty_name'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-no-target-allowed",
+   "what": "step 3 G-8 (K3): g8s3-no-target-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(value_target STREQUAL \"\")\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'no_target'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-header-count-unchecked",
+   "what": "step 3 G-8 (K4): g8s3-header-count-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT header_count EQUAL columns)\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'header_count'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-default-library-allowed",
+   "what": "step 3 G-8 (K5): g8s3-default-library-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(default_on AND (library_only OR kind STREQUAL \"Plugin\"))\n",
+   "replace": "        if(default_on AND kind STREQUAL \"Plugin\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'default_library'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-library-header-allowed",
+   "what": "step 3 G-8 (K6): g8s3-library-header-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(library_only AND (NOT value_unit STREQUAL \"\" OR NOT value_header STREQUAL \"\"))\n",
+   "replace": "        if(library_only AND NOT value_unit STREQUAL \"\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'library_with_header'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-public-as-private",
+   "what": "step 3 G-8 (K7): g8s3-public-as-private",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            target_link_libraries(${target} PUBLIC ${public_targets})\n",
+   "replace": "            target_link_libraries(${target} PRIVATE ${public_targets})\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "extra's\\ registered\\ links:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-interface-branch-off",
+   "what": "step 3 G-8 (K8): g8s3-interface-branch-off",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(type STREQUAL \"INTERFACE_LIBRARY\")\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "The\\ probe\\ project\\ did\\ not\\ configure",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-disable-names-unvalidated",
+   "what": "step 3 G-8 (K9): g8s3-disable-names-unvalidated",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    foreach(list_name IN ITEMS DISABLE_MODULES MODULES PLUGINS)\n",
+   "replace": "    foreach(list_name IN ITEMS MODULES PLUGINS)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'disable_unknown'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-modules-list-ignored",
+   "what": "step 3 G-8 (K10): g8s3-modules-list-ignored",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
+   "replace": "            if(default_on AND NOT name IN_LIST ARG_DISABLE_MODULES)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "disable,\\ add\\ a\\ default\\-no\\ Module\\ and\\ a\\ Plugin:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-all-in-world-instantiated",
+   "what": "step 3 G-8 (K11): g8s3-all-in-world-instantiated",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name IN_LIST selected)\n            get_property(unit GLOBAL",
+   "replace": "        if(NOT library_only)\n            get_property(unit GLOBAL",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+carries\\s+'Test::Off'",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-rows-twice",
+   "what": "step 3 G-8 (S14): g8s3-rows-twice (only the C++ cases see it)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "${rows}${modules}${plugins}",
+   "replace": "${rows}${rows}${modules}${plugins}",
+   "target": "gyo_orchestration_units_tests",
+   "cases": "units:*",
+   "expect": "\\[or-units-rows\\]"
+  },
+  {
+   "id": "g8s3-modules-twice",
+   "what": "step 3 G-8 (S14): g8s3-modules-twice (only the C++ cases see it)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "${rows}${modules}${plugins}",
+   "replace": "${rows}${modules}${modules}${plugins}",
+   "target": "gyo_orchestration_units_tests",
+   "cases": "units:*",
+   "expect": "\\[or-units-carried-modules\\]"
+  },
+  {
+   "id": "ur-configure-depends-missing",
+   "what": "step 3 G-8 follow-up: a register is not a configure dependency (an edited register would not re-run configure)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS \"${csv}\")\n",
+   "replace": "",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "is\\ not\\ a\\ configure\\ dependency",
+   "timeout": 300
+  },
+  {
+   "id": "ur-name-charset-unchecked",
+   "what": "step 3 G-8 follow-up: a name that is not a directory name is read",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT name MATCHES \"^[a-z][a-z0-9_]*$\")\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_name'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-unit-charset-unchecked",
+   "what": "step 3 G-8 follow-up: a unit that is not a C++ class name is written into the generated table",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT value_unit MATCHES \"^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$\")\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_unit'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-header-charset-unchecked",
+   "what": "step 3 G-8 follow-up: a header that is not a path is written into the generated table",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT value_header MATCHES \"^[A-Za-z0-9_][A-Za-z0-9_./-]*$\")\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_header'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-default-needs-unlisted-allowed",
+   "what": "step 3 G-8 follow-up: a default Module may depend on an in-World row that is not default",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(default_on AND NOT dep_library_only AND NOT dep_default)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'default_needs_listed'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-disable-not-default-allowed",
+   "what": "step 3 G-8 follow-up: DISABLE_MODULES may name a Module that is not carried by default",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT default_on)\n            message(FATAL_ERROR \"gyo_product_units: DISABLE_MODULES names",
+   "replace": "        if(FALSE)\n            message(FATAL_ERROR \"gyo_product_units: DISABLE_MODULES names",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'disable_not_default'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-disable-and-list-allowed",
+   "what": "step 3 G-8 follow-up: a name in both DISABLE_MODULES and MODULES is allowed (MODULES wins silently)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name IN_LIST ARG_MODULES)\n            message(FATAL_ERROR",
+   "replace": "        if(FALSE)\n            message(FATAL_ERROR",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'disable_and_list'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-selection-unparsed-ignored",
+   "what": "step 3 G-8 follow-up: an unknown argument to the selection is ignored",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(DEFINED ARG_UNPARSED_ARGUMENTS)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS)\")",
+   "replace": "    if(FALSE)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS)\")",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'unknown_argument'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-product-unparsed-ignored",
+   "what": "step 3 G-8 follow-up: an unknown argument to gyo_product_units is ignored (the product then gets the default selection)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(DEFINED ARG_UNPARSED_ARGUMENTS)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS, REGISTERS)\")",
+   "replace": "    if(FALSE)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS, REGISTERS)\")",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'unknown_argument'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-registers-empty-ignored",
+   "what": "step 3 G-8 follow-up: REGISTERS with no paths falls back to the loaded registers silently",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(ARG_REGISTERS OR \"REGISTERS\" IN_LIST ARG_KEYWORDS_MISSING_VALUES)\n",
+   "replace": "    if(ARG_REGISTERS)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'registers_none'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-dep-defined-unchecked",
+   "what": "step 3 G-8 follow-up: a dependency whose target is not defined yet is linked (the register order would not be the build order)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT TARGET ${dep_target})\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'dep_not_defined'\\ was\\ configured",
+   "timeout": 300
+  },
+  {
+   "id": "or-insert-reruns-finish",
+   "what": "G-7 (group B): a dynamic insert runs every unit Finish of the World again (declaration section 9 \"插入後重跑 Finish\"; moved from the kernel catalog ks-s2-plugin-finish-again)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: an allowing World*",
+   "expect": "\\[or-insert-no-lifecycle\\]"
+  },
+  {
+   "id": "or-finish-before-plans",
+   "what": "G-7 (group B): Finish also runs before BuildPlans (it would read version 0, no Plan; moved from the kernel catalog ks-s3-version-before-finish) (the kernel refuses the read-only view before a successful BuildPlans, so the Product build aborts at that assertion)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once*",
+   "expect": "GYO_ASSERT failed: data_->frozen"
+  },
+  {
+   "id": "or-gi-domain-unchecked",
+   "what": "G-7 (group A): a game initialization schedule with no domain is accepted (D-E12 until batch 3)",
+   "file": "engine/kernel/src/Registry.cpp",
+   "find": "        if (s.domain == Domain::None) {\n            data.Error(StartupCode::DE12",
+   "replace": "        if (false) {\n            data.Error(StartupCode::DE12",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: until batch 3*",
+   "expect": "\\[or-gi-domain\\]"
+  },
+  {
+   "id": "or-gi-writer-uncounted",
+   "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4)",
+   "file": "engine/kernel/src/Registry.cpp",
+   "find": "        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;",
+   "replace": "        if (true) continue;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: until batch 3*",
+   "expect": "\\[or-gi-writer-counted\\]"
+  },
+  {
+   "id": "g8s-old-world-leaked",
+   "what": "step 4 G-8: S1-8: the old World is not destroyed by the replacement (leaked)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.executor.reset();\n    slot.registry.reset();\n    slot.registry = std::move(registration.registry);",
+   "replace": "    static_cast<void>(slot.executor.release());\n    static_cast<void>(slot.registry.release());\n    slot.registry = std::move(registration.registry);",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-old-gone\\] 0"
+  },
+  {
+   "id": "g8s-gameinit-inside-replace",
+   "what": "step 4 G-8: S1-8: the replacement itself runs game initialization again on the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!gameInitRan_) {\n            if (firstWorld) {",
+   "replace": "        if (true) {\n            if (firstWorld) {",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-no-game-init\\] 2"
+  },
+  {
+   "id": "g8s-old-registry-reused",
+   "what": "step 4 G-8: S1-8: the new World is built on the old Registry (the inserted System stays)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
+   "replace": "    if (slot.registry) std::swap(registration.registry, slot.registry);\n    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-registration-new\\]"
+  },
+  {
+   "id": "g8s-allotted-alive-ends-run",
+   "what": "step 4 G-8: S1-7b: AllottedIdAlive is recorded as the Run's error (the World is interrupted although the System handled it)",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+   "replace": "Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-replaced\\]"
+  },
+  {
+   "id": "g8s-drop-old-held-dropped",
+   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved = std::move(slot.held);",
+   "replace": "    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved;",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-10-carried\\] 0"
+  },
+  {
+   "id": "g8s-insert-plans-not-built",
+   "what": "step 4 G-8: S1-4: an inserted System is registered but its Plan is never built (not hooked up)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto built = slot->registry->BuildPlans();\n",
+   "replace": "    ::Engine::Base::Result<void, Kernel::StartupReport> built{};\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-4-accelerated\\] x 10 score 10"
+  },
+  {
+   "id": "g8s-allotter-reject-not-recorded",
+   "what": "step 4 G-8: S1-7b: a spawn the allotter gives a live id is dropped without a RejectedSpawn (and the caller gets the live id)",
+   "file": "engine/kernel/src/World.cpp",
+   "find": "            RecordRejectedSpawn(std::move(rejected));\n",
+   "replace": "            if (spawn.withId) RecordRejectedSpawn(std::move(rejected));\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-recorded\\] 0"
+  },
+  {
+   "id": "g8s-runschedule-gameinit-after",
+   "what": "step 4 G-8: S1-2: RunSchedule runs the schedule first and game initialization after it",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule);",
+   "replace": "    if (!gameInitRan_) {\n        if (auto ran = RunOn(*slot, schedule); !ran) return ran;\n        return RunGameInit();\n    }\n    return RunOn(*slot, schedule);",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-2-boot-first\\]"
+  },
+  {
+   "id": "g8s-spawn-returns-other-id",
+   "what": "step 4 G-8: S1-7: ExclusiveWorld::Spawn returns an id that is not the entity it spawned",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        return done->entity;\n",
+   "replace": "        return done->entity + 1;\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7-cursor-in-world\\]"
+  },
+  {
+   "id": "g8s-rejected-not-from-allotter",
+   "what": "step 4 G-8: S1-7b: the RejectedSpawn of an allotter spawn is recorded as not from the allotter",
+   "file": "engine/kernel/src/World.cpp",
+   "find": "            rejected.fromAllotter = !spawn.withId;\n",
+   "replace": "            rejected.fromAllotter = false;\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-record-is-the-cursor\\]"
   }
  ]
 }

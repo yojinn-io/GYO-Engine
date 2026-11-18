@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them). kernel-subtract-structure (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md, section 6; ids ks-s<item>-, ks-diks15-): segment 1 retired 48 mutants whose rule left the kernel (ambiguity D-E8, run-time interception F-10 / Z5 / W-6b, ExclusiveWorld write limits S-13 / S-14 / S-15 / S-16 / S-18, D-E18, thread roles D-E10 / D-E13 / X-E2 / X-E3, the untyped ExclusiveWorld::Spawn, and ns-plan-version-not-bumped as a duplicate) and rewrote the ones whose find or expect moved.",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them). kernel-subtract-structure (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md, section 6; ids ks-s<item>-, ks-diks15-): segment 1 retired 48 mutants whose rule left the kernel (ambiguity D-E8, run-time interception F-10 / Z5 / W-6b, ExclusiveWorld write limits S-13 / S-14 / S-15 / S-16 / S-18, D-E18, thread roles D-E10 / D-E13 / X-E2 / X-E3, the untyped ExclusiveWorld::Spawn, and ns-plan-version-not-bumped as a duplicate) and rewrote the ones whose find or expect moved. orchestration-skeleton (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9): step 2 took the Startup schedule and the registration units (Plugin, Registry::Finish, R-E1/R-E3/R-E6) out of the kernel. Retired with their property: rs-j15-startup-counted, ns-startup-nestable, ns-startup-running-allows-nested, ns-st-clock-only, ns-st-tick-first-read, ns-st-tick-first-error, ns-st-tick-stamp, ns-st-running-not-cleared, ns-st-no-retake, ns-two-startups-allowed, ks-s2-re7-startup-schedule, ks-s2-re7-startup-mount, ks-s7-startup-change-same-run, ns-st-settings-after-startup, ks-s2-finish-not-first, rs-j18-plugins-reversed (rs-j18-plugins-reversed: ids are now taken in the Registrar call itself, there is no loop over registration units to reverse). Moved to the orchestration catalog docs/architecture/target/v2/scripts/orchestration_mutations.json (the mutant that guards the property there in brackets): ns-st-not-auto (or-runframe-no-gameinit, or-runschedule-no-gameinit); ns-st-not-marked-auto (or-gi-every-frame); ns-st-not-marked-explicit (or-gi-every-frame, g8-gi-flag-only-on-success); ns-st-explicit-again (g8-gameinit-twice-allowed); ns-st-after (or-runframe-no-gameinit); ns-st-error-ignored (or-gi-error-ignored); ns-st-error-not-reported (or-gi-error-ignored); rs-j19-duplicate-built (or-oe1-silent, g8-oe1-second-used); rs-j19-requires-unchecked (or-oe3-later-unseen, g8-oe3-missing-silent); rs-j24-re6-removed (or-oe4-silent); ks-s2-plugin-finish-again (or-insert-reruns-finish); ks-s3-version-before-finish (or-finish-before-plans). Rewritten for the new code: the fingerprint and export versions (Registry 4, Plan 6, C 8, export 4), rs-sym-* (anchor Registry::~Registry), ks-s7-first-run-only*, ks-diks15-code-without-text (DE5), ks-links-extra (the link now comes from the register).",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -616,10 +616,10 @@
     },
     {
       "id": "ks-links-extra",
-      "what": "gyo_kernel links one more target (Delta-1 and Delta-3 dependencies) (find and expect taken from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts: world-exec added GYO::EntityStore)",
+      "what": "gyo_kernel links one more target (Delta-1 and Delta-3 dependencies) (find and expect taken from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts: world-exec added GYO::EntityStore) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore)",
-      "replace": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore GYO::Math)",
+      "find": "gyo_link_registered_dependencies(kernel)\n",
+      "replace": "gyo_link_registered_dependencies(kernel)\ntarget_link_libraries(gyo_kernel PUBLIC GYO::Math)\n",
       "expect": "gyo_kernel links GYO::Base;GYO::EntityStore;GYO::Math; expected exactly",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true
@@ -1755,16 +1755,6 @@
       "expect": "io, StartupCode::DE7, \"S-8\""
     },
     {
-      "id": "rs-j15-startup-counted",
-      "what": "J-15: Startup writers count",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (schedule != nullptr && !schedule->options.startup) counted = true;",
-      "replace": "            if (schedule != nullptr) counted = true;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-15:*",
-      "expect": "\\(startup\\)\\.result"
-    },
-    {
       "id": "rs-j16-digest-shared-allowed",
       "what": "J-16: a Shared column in the digest set is accepted",
       "file": "engine/kernel/src/Registry.cpp",
@@ -1803,36 +1793,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-17:*",
       "expect": "static_cast<bool>\\(empty\\)"
-    },
-    {
-      "id": "rs-j18-plugins-reversed",
-      "what": "J-18: plugins are built in reverse list order (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "    for (std::size_t i = 0; i < data.plugins.size(); ++i) {\n        if (!data.plugins[i].built) continue;\n        Plugin* plugin = data.plugins[i].plugin;",
-      "replace": "    for (std::size_t j = data.plugins.size(); j-- > 0;) {\n        const std::size_t i = j;\n        if (!data.plugins[i].built) continue;\n        Plugin* plugin = data.plugins[i].plugin;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*",
-      "expect": "ComponentIdOf<TestPos>\\(\\) == 0U"
-    },
-    {
-      "id": "rs-j19-duplicate-built",
-      "what": "J-19: a duplicate plugin is built anyway (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (!data.plugins[i].built) continue;\n        Plugin* plugin = data.plugins[i].plugin;",
-      "replace": "        Plugin* plugin = data.plugins[i].plugin;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-19:*",
-      "expect": "b\\.builds == 0"
-    },
-    {
-      "id": "rs-j19-requires-unchecked",
-      "what": "J-19: requires is not checked",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (!earlier) {",
-      "replace": "            if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-19:*",
-      "expect": "ErrorCount\\(.*StartupCode::RE3\\)"
     },
     {
       "id": "rs-j19-type-twice-allowed",
@@ -2005,16 +1965,6 @@
       "expect": "ErrorCount\\(.*StartupCode::RE5\\)"
     },
     {
-      "id": "rs-j24-re6-removed",
-      "what": "J-24: two runners are accepted",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "    if (data.runners.size() > 1) {",
-      "replace": "    if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*",
-      "expect": "ErrorCount\\(.*StartupCode::RE6\\)"
-    },
-    {
       "id": "rs-j24-de6-removed",
       "what": "J-24: a cycle is not reported",
       "file": "engine/kernel/src/Scheduler.cpp",
@@ -2116,10 +2066,10 @@
     },
     {
       "id": "rs-sym-inline-g",
-      "what": "judgement 9: a namespace-scope inline variable in the kernel (no static keyword)",
+      "what": "judgement 9: a namespace-scope inline variable in the kernel (no static keyword) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "Plugin::~Plugin() = default;",
-      "replace": "inline int g = 0;\nPlugin::~Plugin() { ++g; }",
+      "find": "Registry::~Registry() = default;",
+      "replace": "inline int g = 0;\nRegistry::~Registry() { ++g; }",
       "target": "gyo_kernel",
       "command": [
         "{python}",
@@ -2139,10 +2089,10 @@
     },
     {
       "id": "rs-sym-anonymous",
-      "what": "judgement 9: an anonymous-namespace variable in the kernel",
+      "what": "judgement 9: an anonymous-namespace variable in the kernel (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "Plugin::~Plugin() = default;",
-      "replace": "namespace { int counter = 0; }\nPlugin::~Plugin() { ++counter; }",
+      "find": "Registry::~Registry() = default;",
+      "replace": "namespace { int counter = 0; }\nRegistry::~Registry() { ++counter; }",
       "target": "gyo_kernel",
       "command": [
         "{python}",
@@ -2837,13 +2787,13 @@
     },
     {
       "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 8;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "CFingerprint\\(\\)\\.version == 7U"
+      "expect": "CFingerprint\\(\\)\\.version == 8U"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -3204,13 +3154,13 @@
     },
     {
       "id": "rs-iv-registry-version-1",
-      "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 3;",
+      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 4;",
       "replace": "constexpr std::uint32_t kRegistryFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "RegistryFingerprint\\(\\)\\.version == 3U"
+      "expect": "RegistryFingerprint\\(\\)\\.version == 4U"
     },
     {
       "id": "rs-iv-fx4-note-for-any-kind",
@@ -3804,23 +3754,23 @@
     },
     {
       "id": "hf-plan-version-kept",
-      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (find and expect rewritten for version 3 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (find and expect rewritten for version 3 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 5;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 6;",
       "replace": "constexpr std::uint32_t kFingerprintVersion = 1;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "planOf\\(none,\\ \\\"Tick\\\"\\)\\.version\\ ==\\ 5U"
+      "expect": "planOf\\(none,\\ \\\"Tick\\\"\\)\\.version\\ ==\\ 6U"
     },
     {
       "id": "hf-c-version-kept",
-      "what": "the C fingerprint format stays 4, the hook-flush format (v8-arch-gyo2-hook-flush, spec F-12; find, replace and expect rewritten for version 5 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "the C fingerprint format stays 4, the hook-flush format (v8-arch-gyo2-hook-flush, spec F-12; find, replace and expect rewritten for version 5 by v8-arch-gyo2-spawn-reject) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 8;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 4;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 7U"
+      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 8U"
     },
     {
       "id": "hf-registry-schedule-field",
@@ -3844,13 +3794,13 @@
     },
     {
       "id": "hf-export-version-kept",
-      "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "    std::string out = \"gyo.kernel.plans 3\\n\";",
+      "find": "    std::string out = \"gyo.kernel.plans 4\\n\";",
       "replace": "    std::string out = \"gyo.kernel.plans 2\\n\";",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 3\"\\)\\ ==\\ 0"
+      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 4\"\\)\\ ==\\ 0"
     },
     {
       "id": "hf-no-snapshot-after-rounds",
@@ -5023,10 +4973,10 @@
       "find": "        if (plan->steps[position].kind == StepKind::SyncPoint) lastSync = position;",
       "replace": "        if (plan->steps[position].kind == StepKind::SyncPoint &&\n            (lastSync == plan->steps.size() || plan->steps[lastSync + 1].kind != StepKind::EventTrim)) lastSync = position;",
       "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf",
-      "what": "the rounds follow the sync point before the event trim (declared: \u8f2a\u8ddf\u8457\u6e05\u820a\u4e8b\u4ef6\u90a3\u4e00\u6b65\u8d70) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "the rounds follow the sync point before the event trim (declared: 輪跟著清舊事件那一步走) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "cases": "J-54: an event trim at an earlier sync point*",
       "ran_as": "ck-decl-rounds-follow-trim",
-      "note": "\u5ba3\u544a\u5224\u5b9a 2\u300c\u8f2a\u8ddf\u8457\u6e05\u820a\u4e8b\u4ef6\u90a3\u4e00\u6b65\u8d70\u300d"
+      "note": "宣告判定 2「輪跟著清舊事件那一步走」"
     },
     {
       "id": "hf-limit-not-interrupted",
@@ -5035,10 +4985,10 @@
       "find": "                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
       "replace": "                        world.DiscardDeferred();\n                        if (handler_) handler_(error);\n                        world.state_ = WorldState::Ready;\n                        return Engine::Base::Err(std::move(error));\n                    }\n                    ++round;",
       "expect": "rig\\->world\\(\\)\\.State\\(\\)\\ ==\\ WorldState::Interrupted",
-      "what": "at the limit the World is not interrupted (declared: \u4e0d\u4e2d\u65b7) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "at the limit the World is not interrupted (declared: 不中斷) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "cases": "J-54: at the limit*",
       "ran_as": "ck-decl-limit-not-interrupted",
-      "note": "\u5ba3\u544a\u5224\u5b9a 2\u300c\u4e0d\u4e2d\u65b7\u300d"
+      "note": "宣告判定 2「不中斷」"
     },
     {
       "id": "hf-round-count-kept",
@@ -5047,10 +4997,10 @@
       "find": "                std::uint32_t round = 0;\n",
       "replace": "                static std::uint32_t kept = 0;\n                std::uint32_t& round = kept;\n",
       "expect": "static_cast<bool>\\(kernelRunResult\\)",
-      "what": "the round count is not reset per Run (declared: \u8f2a\u6578\u4e0d\u6b78\u96f6) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "the round count is not reset per Run (declared: 輪數不歸零) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: the rounds are counted from 1*",
       "ran_as": "ck-decl-round-count-kept",
-      "note": "\u5ba3\u544a\u5224\u5b9a 2\u300c\u8f2a\u6578\u4e0d\u6b78\u96f6\u300d"
+      "note": "宣告判定 2「輪數不歸零」"
     },
     {
       "id": "hf-trim-before-rounds",
@@ -5059,10 +5009,10 @@
       "find": "            if (position == lastSync) {\n",
       "replace": "            if (position == lastSync) {\n                if (position + 1 < plan->steps.size() && plan->steps[position + 1].kind == StepKind::EventTrim) world.TrimEvents(domain);\n",
       "expect": "J\\-54:\\ the\\ event\\ trim\\ ran\\ after\\ an\\ Err\\ in\\ a\\ round",
-      "what": "the event trim runs before the rounds (declared: \u6e05\u7a7a\u6392\u5230\u6e05\u820a\u4e8b\u4ef6\u4e4b\u5f8c) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "the event trim runs before the rounds (declared: 清空排到清舊事件之後) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: an Err in a round*",
       "ran_as": "ck-decl-rounds-after-trim",
-      "note": "\u5ba3\u544a\u5224\u5b9a 2\u300c\u6e05\u7a7a\u6392\u5230\u6e05\u820a\u4e8b\u4ef6\u4e4b\u5f8c\u300d"
+      "note": "宣告判定 2「清空排到清舊事件之後」"
     },
     {
       "id": "hf-round-skips-despawn",
@@ -5071,10 +5021,10 @@
       "find": "            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);",
       "replace": "            if (r.kind == RecordKind::Despawn && !trackRoundRecorders_) despawns.push_back(r.entity);",
       "expect": "JoinLog\\(\\)\\ ==\\ \"removed:3\\ removed:4\"",
-      "what": "a round applies no despawn (declared: \u8f2a\u7684\u5957\u7528\u53e6\u5beb\u4e00\u4efd\u53ea\u8655\u7406\u751f\u6210\u8207\u63d2\u5165) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "a round applies no despawn (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: a round is a whole application*",
       "ran_as": "ck-decl-round-skips-despawn",
-      "note": "\u5ba3\u544a\u5224\u5b9a 2\u300c\u8f2a\u7684\u5957\u7528\u53e6\u5beb\u4e00\u4efd\u53ea\u8655\u7406\u751f\u6210\u8207\u63d2\u5165\u300d"
+      "note": "宣告判定 2「輪的套用另寫一份只處理生成與插入」"
     },
     {
       "id": "hf-round-skips-remove",
@@ -5083,10 +5033,10 @@
       "find": "            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);",
       "replace": "            if (r.kind == RecordKind::Remove && !trackRoundRecorders_) removes.emplace_back(r.entity, r.id);",
       "expect": "JoinLog\\(\\)\\ ==\\ \"removed:3\\ removed:4\"",
-      "what": "a round applies no remove (declared: \u8f2a\u7684\u5957\u7528\u53e6\u5beb\u4e00\u4efd\u53ea\u8655\u7406\u751f\u6210\u8207\u63d2\u5165) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "a round applies no remove (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: a round is a whole application*",
       "ran_as": "ck-decl-round-skips-remove",
-      "note": "\u540c\u4e0a"
+      "note": "同上"
     },
     {
       "id": "hf-round-skips-initial-values",
@@ -5095,10 +5045,10 @@
       "find": "        if (!data_->initialValues.empty()) {",
       "replace": "        if (!data_->initialValues.empty() && !trackRoundRecorders_) {",
       "expect": "rig\\->world\\(\\)\\.Get<Filled>\\(1\\)\\ !=\\ nullptr",
-      "what": "a round fills no initial value (declared: \u8f2a\u7684\u5957\u7528\u53e6\u5beb\u4e00\u4efd\u53ea\u8655\u7406\u751f\u6210\u8207\u63d2\u5165) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "a round fills no initial value (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: a round is a whole application*",
       "ran_as": "ck-decl-round-skips-initial-values",
-      "note": "\u540c\u4e0a"
+      "note": "同上"
     },
     {
       "id": "hf-round-skips-onremove",
@@ -5110,7 +5060,7 @@
       "what": "a round's despawn runs no OnRemove (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: a round is a whole application*",
       "ran_as": "ck-round-skips-onremove-despawn",
-      "note": "\u540c\u4e0a"
+      "note": "同上"
     },
     {
       "id": "hf-plan-limit-not-carried",
@@ -5122,7 +5072,7 @@
       "what": "the Scheduler does not carry the schedule's limit into the Plan (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: the schedule's limit is in*",
       "ran_as": "ck-plan-limit-not-carried",
-      "note": "\u5ba3\u544a\u6c92\u5217\uff1aScheduler \u6c92\u628a\u6307\u5b9a\u503c\u5e36\u9032 Plan"
+      "note": "宣告沒列：Scheduler 沒把指定值帶進 Plan"
     },
     {
       "id": "hf-default-limit-nine",
@@ -5134,7 +5084,7 @@
       "what": "the default limit is 9 (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: the default limit*",
       "ran_as": "ck-default-limit-nine",
-      "note": "\u5ba3\u544a\u6c92\u5217\uff1a\u9810\u8a2d\u503c\u672c\u8eab\uff088\uff09"
+      "note": "宣告沒列：預設值本身（8）"
     },
     {
       "id": "hf-limit-check-before-empty",
@@ -5146,7 +5096,7 @@
       "what": "the limit is an Err even when round N emptied the queue (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: the default limit*",
       "ran_as": "ck-limit-check-before-empty",
-      "note": "\u5ba3\u544a\u6c92\u5217\uff1a\u7b2c N \u8f2a\u6e05\u7a7a\u4e86\u4ecd\u7136\u56de Err"
+      "note": "宣告沒列：第 N 輪清空了仍然回 Err"
     },
     {
       "id": "sr-alive-applied",
@@ -5420,7 +5370,7 @@
     },
     {
       "id": "sr-dropped-counts-as-spawned",
-      "what": "F-13: a record dropped as alive is listed as spawned at this sync point (declared \u300c\u88ab\u4e1f\u7684\u90a3\u7b46\u7b97\u9032\u751f\u6210\u904e\u300d) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "what": "F-13: a record dropped as alive is listed as spawned at this sync point (declared 「被丟的那筆算進生成過」) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/World.cpp",
       "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
       "replace": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                            if (c == candidates.front() && !spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, spawns[c]->emitter});",
@@ -5840,23 +5790,23 @@
     },
     {
       "id": "sr-plan-version-not-bumped",
-      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 5;",
-      "replace": "constexpr std::uint32_t kFingerprintVersion = 4;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 6;",
+      "replace": "constexpr std::uint32_t kFingerprintVersion = 5;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
-      "expect": "J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 5"
+      "expect": "J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 6"
     },
     {
       "id": "sr-c-version-not-bumped",
-      "what": "fingerprint: the C fingerprint version stays 4 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "fingerprint: the C fingerprint version stays 4 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 6;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 8;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 7;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
-      "expect": "J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 7"
+      "expect": "J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 8"
     },
     {
       "id": "sr-j32-alive-applied",
@@ -6059,16 +6009,6 @@
       "expect": "GYO_ASSERT failed: record != nullptr"
     },
     {
-      "id": "ns-startup-nestable",
-      "what": "H-12: a System may run Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (record->options.startup) {\n        return refuse(",
-      "replace": "    if (false) {\n        return refuse(",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: a System runs Startup*",
-      "expect": "\\[ns\\-st\\-nested\\]"
-    },
-    {
       "id": "ns-extract-nestable",
       "what": "X-15: a System may run an extract schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/Executor.cpp",
@@ -6077,16 +6017,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-56: refused and swallowed: an extract schedule",
       "expect": "\\[ns\\-extract\\]"
-    },
-    {
-      "id": "ns-startup-running-allows-nested",
-      "what": "H-12: while Startup runs, a System may run another schedule (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (world.startupRunning_) {",
-      "replace": "    if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: an exclusive System of Startup runs another*",
-      "expect": "\\[ns\\-st\\-running\\]"
     },
     {
       "id": "ns-self-allowed",
@@ -6249,136 +6179,6 @@
       "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
     },
     {
-      "id": "ns-st-explicit-again",
-      "what": "H-12: the main program may run Startup again (twice, or after the kernel ran it) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "        GYO_ASSERT(!world.startupRan_);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: the main program runs Startup a*",
-      "expect": "expected\\ GYO_ASSERT\\ to\\ fail"
-    },
-    {
-      "id": "ns-st-not-auto",
-      "what": "H-12: the kernel does not run Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (startup_ && !world.startupRan_) {",
-      "replace": "    if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: the kernel runs Startup once*",
-      "expect": "\\[ns\\-st\\-once\\]"
-    },
-    {
-      "id": "ns-st-clock-only",
-      "what": "H-12: Startup runs only before a clock schedule (the replaced wording) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (startup_ && !world.startupRan_) {",
-      "replace": "    if (startup_ && !world.startupRan_ && record->options.clock) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: which schedules trigger Startup*",
-      "expect": "\\[ns\\-st\\-trigger\\]"
-    },
-    {
-      "id": "ns-st-not-marked-auto",
-      "what": "H-12: a run of Startup is not marked as run (the kernel runs it every time) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    world_.startupRan_ = true;\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: the kernel runs Startup once*",
-      "expect": "\\[ns\\-st\\-once\\]"
-    },
-    {
-      "id": "ns-st-not-marked-explicit",
-      "what": "H-12: the main program's run of Startup is not marked as run (the kernel runs it again) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    world_.startupRan_ = true;\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: the main program runs Startup first*",
-      "expect": "\\[ns\\-st\\-main\\-first\\]"
-    },
-    {
-      "id": "ns-st-after",
-      "what": "H-12: Startup runs after the schedule that triggers it (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    return RunPlan(record->options.name, false);",
-      "replace": "        Engine::Base::Result<void, KernelError> first = RunPlan(record->options.name, false);\n        if (!first) return first;\n        return RunStartup(*startup_);\n    }\n    return RunPlan(record->options.name, false);",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: the kernel runs Startup once*",
-      "expect": "\\[ns\\-st\\-first\\]"
-    },
-    {
-      "id": "ns-st-error-ignored",
-      "what": "H-12: the triggering schedule runs after Startup returned Err (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;",
-      "replace": "        static_cast<void>(RunStartup(*startup_));",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: Startup returns Err*",
-      "expect": "\\[ns\\-st\\-error\\]"
-    },
-    {
-      "id": "ns-st-tick-first-read",
-      "what": "H-12: the clock schedule's tick advances before Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (startup_ && !world.startupRan_) {",
-      "replace": "    if (record->options.clock) ++world.ticks_[static_cast<std::size_t>(record->options.domain)];\n    if (startup_ && !world.startupRan_) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: Startup runs before the tick advances*",
-      "expect": "\\[ns\\-st\\-tick\\]"
-    },
-    {
-      "id": "ns-st-tick-first-error",
-      "what": "H-12: the tick advances although Startup returned Err (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (startup_ && !world.startupRan_) {",
-      "replace": "    if (record->options.clock) ++world.ticks_[static_cast<std::size_t>(record->options.domain)];\n    if (startup_ && !world.startupRan_) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: Startup returns Err*",
-      "expect": "\\[ns\\-st\\-error\\-tick\\]"
-    },
-    {
-      "id": "ns-st-tick-stamp",
-      "what": "H-12: the first tick's stamp is Startup's first step (as if the tick advanced before Startup) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "        slot = World::TickStampSlot{tick, world.stamp_ + 1, true};",
-      "replace": "        slot = World::TickStampSlot{tick, (world.startupRan_ && tick == 1) ? ChangeStamp{1} : world.stamp_ + 1, true};",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: Startup runs before the tick advances*",
-      "expect": "\\[ns\\-st\\-stamp\\]"
-    },
-    {
-      "id": "ns-st-error-not-reported",
-      "what": "H-12: Startup's Err takes the nested path (the handler is not called) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    return RunPlan(schedule, false);\n}",
-      "replace": "    return RunPlan(schedule, true);\n}",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: Startup returns Err*",
-      "expect": "\\[ns\\-st\\-error\\-once\\]"
-    },
-    {
-      "id": "ns-st-running-not-cleared",
-      "what": "H-12: 'Startup is running' stays set after Startup (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    ~StartupScope() { running_ = false; }",
-      "replace": "    ~StartupScope() {}",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: which schedules trigger Startup*",
-      "expect": "\\[ns\\-st\\-trigger\\-nested\\]"
-    },
-    {
-      "id": "ns-st-no-retake",
-      "what": "A.6: Startup's sync points take no fresh snapshots (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "        world.TakeSnapshots();\n        return std::nullopt;\n    };",
-      "replace": "        if (!world.startupRunning_) world.TakeSnapshots();\n        return std::nullopt;\n    };",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: Startup's sync point changes membership with no hook*",
-      "expect": "\\[ns\\-st\\-verify\\-plain\\]"
-    },
-    {
       "id": "ns-segment-whole-window",
       "what": "F.2: a nested level's sync points take every level's records (its windowBase is 0) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/Executor.cpp",
@@ -6489,16 +6289,6 @@
       "expect": "\\[ns\\-stamp\\-after\\]"
     },
     {
-      "id": "ns-st-settings-after-startup",
-      "what": "H-12: KernelSettings is read after Startup (Startup runs with verification off) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    ReadSettings();\n    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    return RunPlan(record->options.name, false);",
-      "replace": "    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        ReadSettings();\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    ReadSettings();\n    return RunPlan(record->options.name, false);",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: verification is on while Startup runs*",
-      "expect": "\\[ns\\-st\\-verification\\]"
-    },
-    {
       "id": "ns-decl-ingress-allowed",
       "what": "S-14: an exclusive System may be ingress (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/Registry.cpp",
@@ -6519,24 +6309,14 @@
       "expect": "\\[ns\\-decl\\-ingress\\-stage\\]"
     },
     {
-      "id": "ns-two-startups-allowed",
-      "what": "H-12: two Startup schedules are not an error (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (!startupSchedule.empty()) {",
-      "replace": "            if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: two Startup schedules*",
-      "expect": "\\[ns\\-st\\-two\\]"
-    },
-    {
       "id": "ns-c-version-not-bumped",
-      "what": "the C fingerprint format stays 5 (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "the C fingerprint format stays 5 (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 7;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 6;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 8;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 7;",
       "target": "gyo_kernel_tests",
       "cases": "J-18: the C fingerprint sees*",
-      "expect": "CFingerprint\\(\\)\\.version == 7U"
+      "expect": "CFingerprint\\(\\)\\.version == 8U"
     },
     {
       "id": "ns-modify-no-changed",
@@ -6850,20 +6630,20 @@
     },
     {
       "id": "ks-s7-first-run-only",
-      "what": "S7: KernelSettings is read at the first Run only (a System's or the Host's write between Runs is never read) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "what": "S7: KernelSettings is read at the first Run only (a System's or the Host's write between Runs is never read) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    ReadSettings();\n    if (record->options.startup) {",
-      "replace": "    if (!world.hasRun_) ReadSettings();\n    if (record->options.startup) {",
+      "find": "    ReadSettings();\n    return RunPlan(record->options.name, false);",
+      "replace": "    if (!world.hasRun_) ReadSettings();\n    return RunPlan(record->options.name, false);",
       "target": "gyo_kernel_tests",
       "expect": "J\\-50 next Run",
       "cases": "J-50:*"
     },
     {
       "id": "ks-s7-first-run-only-limit",
-      "what": "S7: KernelSettings is read at the first Run only (the hook round limit written between Runs) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "what": "S7: KernelSettings is read at the first Run only (the hook round limit written between Runs) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    ReadSettings();\n    if (record->options.startup) {",
-      "replace": "    if (!world.hasRun_) ReadSettings();\n    if (record->options.startup) {",
+      "find": "    ReadSettings();\n    return RunPlan(record->options.name, false);",
+      "replace": "    if (!world.hasRun_) ReadSettings();\n    return RunPlan(record->options.name, false);",
       "target": "gyo_kernel_tests",
       "expect": "J\\-54 next Run",
       "cases": "J-54: KernelSettings is read*"
@@ -6887,16 +6667,6 @@
       "target": "gyo_kernel_tests",
       "expect": "J\\-50 flip: the snapshots from before verification was off were compared",
       "cases": "J-50: verification on*"
-    },
-    {
-      "id": "ks-s7-startup-change-same-run",
-      "what": "S7: KernelSettings is read after Startup, so Startup's change counts in its own Run (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    ReadSettings();\n    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    return RunPlan(record->options.name, false);",
-      "replace": "    if (record->options.startup) {\n        // Spec H-12: the main program may run Startup itself, once, before the kernel has.\n        GYO_ASSERT(!world.startupRan_);\n        ReadSettings();\n        return RunStartup(record->options.name);\n    }\n    // Spec H-12: Startup runs whole before the first Run of any other schedule\n    // (before its tick advances), once.\n    if (startup_ && !world.startupRan_) {\n        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;\n    }\n    ReadSettings();\n    return RunPlan(record->options.name, false);",
-      "target": "gyo_kernel_tests",
-      "expect": "\\[ks\\-startup\\-same\\-run\\]",
-      "cases": "J-50: a Startup System's change*"
     },
     {
       "id": "ks-s7-removed-limit-one",
@@ -6979,12 +6749,12 @@
     },
     {
       "id": "ks-diks15-code-without-text",
-      "what": "DI-KS 15: a StartupCode loses its case in ToString, so the compiler refuses the switch (the -Wswitch / C4062 error pragma around ToString, ac55aa12) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "what": "DI-KS 15: a StartupCode loses its case in ToString, so the compiler refuses the switch (the -Wswitch / C4062 error pragma around ToString, ac55aa12) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "    case StartupCode::DE21: return \"D-E21\";\n",
+      "find": "    case StartupCode::DE5: return \"D-E5\";\n",
       "replace": "",
       "target": "gyo_kernel_tests",
-      "expect": "enumeration value 'DE21' not handled in switch",
+      "expect": "enumeration value 'DE5' not handled in switch",
       "expect_build_failure": true,
       "cases": "DI-KS 15:*"
     },
@@ -7096,26 +6866,6 @@
       "replace": "        for (std::size_t m = set.pendingMembers.size(); m < set.pendingMembers.size(); ++m) {",
       "target": "gyo_kernel_tests",
       "expect": "R\\-E7 count \\(set member\\)",
-      "cases": "DI-KS 26: a later round may not register*"
-    },
-    {
-      "id": "ks-s2-re7-startup-schedule",
-      "what": "S2 rule 6: a later Startup schedule passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (schedule.options.startup) {\n            refuse(",
-      "replace": "        if (false) {\n            refuse(",
-      "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count \\(startup schedule\\)",
-      "cases": "DI-KS 26: a later round may not register*"
-    },
-    {
-      "id": "ks-s2-re7-startup-mount",
-      "what": "S2 rule 6: a System mounted in the Startup schedule by a later round passes (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (schedule != nullptr && schedule->options.startup) {\n                refuse(",
-      "replace": "            if (false) {\n                refuse(",
-      "target": "gyo_kernel_tests",
-      "expect": "R\\-E7 count \\(startup mount\\)",
       "cases": "DI-KS 26: a later round may not register*"
     },
     {
@@ -7279,16 +7029,6 @@
       "cases": "DI-KS 26: Register inside a build callable*"
     },
     {
-      "id": "ks-s2-plugin-finish-again",
-      "what": "S2 rule 9: a later BuildPlans calls the plugins' Finish again (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        round.version = data_->version + 1;\n        round.registered = false;",
-      "replace": "        for (Detail::PluginRecord& plugin : data_->plugins) {\n            if (!plugin.built) continue;\n            FinishContext context(*this, 0);\n            plugin.plugin->Finish(frozen_, context);\n        }\n        round.version = data_->version + 1;\n        round.registered = false;",
-      "target": "gyo_kernel_tests",
-      "expect": "Plugin::Finish ran again",
-      "cases": "DI-KS 26: after Finish*"
-    },
-    {
       "id": "ks-s2-extract-first-version-only",
       "what": "S2 rule 10 (DI-KS 13): an extract source is read only at its first version (a rebuilt source counts as not built) (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
       "file": "engine/kernel/src/Registry.cpp",
@@ -7439,16 +7179,6 @@
       "cases": "DI-KS 26: after a failed first round*"
     },
     {
-      "id": "ks-s2-finish-not-first",
-      "what": "S2 rule 9: Finish is accepted after the first round started (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "    GYO_ASSERT(!data.finished && !data.registered);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "expect": "expected GYO_ASSERT to fail: registeredFirst\\.Finish",
-      "cases": "DI-KS 26: Finish is only the first round*"
-    },
-    {
       "id": "ks-s2-extract-source-after-build",
       "what": "S2 rule 10: SetExtractSource after the first BuildPlans is accepted (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/kernel/src/Registry.cpp",
@@ -7486,16 +7216,6 @@
       "replace": "        round.version = data_->version;\n        round.registered = false;",
       "target": "gyo_kernel_tests",
       "expect": "DI\\-KS 25 version after a later round",
-      "cases": "DI-KS 25: the version is 0*"
-    },
-    {
-      "id": "ks-s3-version-before-finish",
-      "what": "S3: the first round's version is 1 already when the plugins' Finish runs (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "    data.finished = true;\n    // Registration is closed:",
-      "replace": "    data.finished = true;\n    data.version = 1;\n    // Registration is closed:",
-      "target": "gyo_kernel_tests",
-      "expect": "DI\\-KS 25 version inside Plugin::Finish",
       "cases": "DI-KS 25: the version is 0*"
     },
     {

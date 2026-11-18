@@ -363,3 +363,35 @@ TEST_CASE("O-9: the refusal warning names the World and the owner") {
     CHECK_MESSAGE((WarningCounter::Last().find("'Main'") != std::string::npos && WarningCounter::Last().find("'console'") != std::string::npos),
                   "[or-insert-warning-text] " << WarningCounter::Last());
 }
+
+// ---- Kernel rules that game initialization schedules are under (G-7, groups A and E)
+
+K::SystemResult WriteTagBoot(K::Query<K::Write<Tag>>) { return {}; }
+K::SystemResult WriteTagFrame(K::Query<K::Write<Tag>>) { return {}; }
+
+TEST_CASE("O-1: until batch 3 a game initialization schedule belongs to a domain (D-E12); game initialization and the frame both writing one column is D-E2") {
+    Log().clear();
+    O::ProductDescription noDomain;
+    noDomain.name = "game";
+    noDomain.gameInit = {"Boot"};
+    noDomain.worlds.push_back(World("Main", [](O::WorldSetup& s) {
+        K::ScheduleOptions boot = Once("Boot");
+        boot.domain = K::Domain::None;
+        Basics(s.Registrar(), {boot});
+    }));
+    auto refused = O::Product::Build(std::move(noDomain), Units().Take());
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(refused), "[or-gi-domain] built");
+    CHECK_MESSAGE(refused.error().detail.find("'Boot' belongs to no clock domain") != std::string::npos, "[or-gi-domain] " << refused.error().detail);
+
+    O::ProductDescription twoWriters;
+    twoWriters.name = "game";
+    twoWriters.gameInit = {"Boot"};
+    twoWriters.worlds.push_back(World("Main", [](O::WorldSetup& s) {
+        Basics(s.Registrar(), {Once("Boot"), FrameClock("Tick")});
+        s.Registrar().AddSystem<&WriteTagBoot>(In("WriteBoot", "Boot"));
+        s.Registrar().AddSystem<&WriteTagFrame>(In("WriteFrame", "Tick"));
+    }, {"Tick"}));
+    auto counted = O::Product::Build(std::move(twoWriters), Units().Take());
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(counted), "[or-gi-writer-counted] built");
+    CHECK_MESSAGE(counted.error().detail.find("D-E2") != std::string::npos, "[or-gi-writer-counted] " << counted.error().detail);
+}

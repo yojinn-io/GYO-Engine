@@ -31,14 +31,14 @@ TEST_CASE("units: the generated table has every register row in file order, with
     REQUIRE(units.rows.size() == 7);
     const O::RegisterRow& kernel = units.rows[1];
     CHECK_MESSAGE((kernel.libraryOnly && !kernel.defaultOn && kernel.depends == std::vector<std::string>{"base"}),
-                  "[or-units-row-fields] kernel");
+                  "[or-units-row-kernel]");
     const O::RegisterRow& extra = units.rows[3];
     CHECK_MESSAGE((extra.kind == O::UnitKind::Module && !extra.libraryOnly && !extra.defaultOn &&
                    extra.depends == std::vector<std::string>{"walk"} &&
                    extra.privateDepends == std::vector<std::string>{"base"}),
-                  "[or-units-row-fields] extra");
+                  "[or-units-row-extra]");
     CHECK_MESSAGE((units.rows[4].defaultOn && units.rows[5].kind == O::UnitKind::Plugin && !units.rows[5].defaultOn),
-                  "[or-units-row-fields] off, tool");
+                  "[or-units-row-off-tool]");
 }
 
 TEST_CASE("units: the generated table carries default Modules minus the disabled, plus the listed Module and Plugin") {
@@ -47,8 +47,8 @@ TEST_CASE("units: the generated table carries default Modules minus the disabled
     for (const auto& entry : units.modules) modules.push_back(entry.row);
     std::vector<std::string> plugins;
     for (const auto& entry : units.plugins) plugins.push_back(entry.row);
-    CHECK_MESSAGE((modules == std::vector<std::string>{"walk", "extra"}), "[or-units-carried] " << Joined(modules));
-    CHECK_MESSAGE((plugins == std::vector<std::string>{"tool"}), "[or-units-carried] " << Joined(plugins));
+    CHECK_MESSAGE((modules == std::vector<std::string>{"walk", "extra"}), "[or-units-carried-modules] " << Joined(modules));
+    CHECK_MESSAGE((plugins == std::vector<std::string>{"tool"}), "[or-units-carried-plugins] " << Joined(plugins));
     for (const auto& entry : units.modules) CHECK(entry.unit != nullptr);
     for (const auto& entry : units.plugins) CHECK(entry.unit != nullptr);
 }
