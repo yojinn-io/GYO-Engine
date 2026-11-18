@@ -224,7 +224,7 @@ S8 之後 `Commands::Insert`、`Commands::Remove`、`Despawn::Entity` 不再有�
 
 - 拿掉 `ScheduleOptions::runner`、`SystemOptions::affinity`、`Affinity`、`kMainRole`；啟動錯誤 D-E10、D-E13、X-E2、X-E3。
 - `ResourceOptions::affinity` 改成 `bool threadBound`（卡片照 L17 判名字：Bevy 叫 `NonSend`，GYO 的登記選項是形容詞或名詞的成員，例 `external`、`rollbackSafe`）：值放進去時記下那條執行緒（`World::SetResource`、`ExclusiveWorld::SetResource`、同步點套用的 `Commands::SetResource`）。之後在別的執行緒**碰到就斷言**，碰到包括：`Res`／`ResMut`、`ExclusiveWorld` 的讀寫與增刪、World API 的讀寫、`SetResource` 蓋過既有的值、`RemoveResource`、`World::Summary()`，以及**有值時銷毀 World**；Kernel 自己在 Run 裡取快照與邊界比對時讀它的位元組不算（那是 Run 所在的執行緒做的內部複製，碰錯的話 System 的存取已經先斷言）（Bevy 也查銷毀，`non_send.rs:34-46`）。拿掉值之後忘掉記號，換執行緒再放可以。
-- 執行緒的記號用 Kernel 既有的 `thread_local` 變數的位址（每條執行緒不同），不引入 `<thread>`——守衛 K3 禁止 Kernel 用它（卡片照 L17 判）。限界：執行緒結束後，新的執行緒可能拿到同一個位址，這時抓不到（第 11 節）。
+- 執行緒的記號用 Kernel 既有的 `thread_local` 變數的位址（每條執行緒不同），不引入 `<thread>`——守衛 K3 禁止 Kernel 用它（卡片照 L17 判）。限界：執行緒結束後，新的執行緒可能拿到同一個位址，這時抓不到（第 11 節）。**實作時這個做法不可靠而停下，2026-11-18 使用者改定為 Base 的執行緒序號，見第 14.1 節。**
 - 系譜：Bevy `bevy_ecs/src/storage/non_send.rs:74-84`（插入時記執行緒、別的執行緒存取就 panic）。使用者 11-16「別人掉過的坑，我沒必要在跳一次。」
 
 ### 3.11 S11：指紋
@@ -462,7 +462,7 @@ Replacement Criteria：
 - 別家的系譜：Bevy 讀本地原始碼（6a911653f）的指定行；flecs 讀本地 checkout（09790b5f7）的 `docs/Systems.md` 與 `pipeline.c`；其餘照統合的證據，沒有重讀。
 - 當場改成員之後的當場套用、暫存副本換上時 World 的接上，是設計推導，沒有試做；實作時若發現和巢狀的紀錄（DI-KS 19）、存取驗證或既有的參照衝突，照 AGENTS §14 停下回報。
 - 第 5、6 節的逐案清單由偵察者（Opus／high）讀程式寫成，本卡讀了主表、敵對式檢查者（Fable／high）抽查。
-- 空窗：(1) 執行期攔截拿掉後到網路 Module 之前，判定資料被 untyped 路徑寫錯沒有東西抓（統合第 8 節）；(2) `DynamicInsertRefused` 的警告在編排層之前沒有人記；(3) 別的執行緒上的 World 在跑時呼叫 `Register`／`BuildPlans`，Kernel 抓不到（共用規則頁的一列）；(4) 綁執行緒的記號在執行緒結束後可能被新執行緒重用，這時抓不到。
+- 空窗：(1) 執行期攔截拿掉後到網路 Module 之前，判定資料被 untyped 路徑寫錯沒有東西抓（統合第 8 節）；(2) `DynamicInsertRefused` 的警告在編排層之前沒有人記；(3) 別的執行緒上的 World 在跑時呼叫 `Register`／`BuildPlans`，Kernel 抓不到（共用規則頁的一列）；(4) 綁執行緒的記號在執行緒結束後可能被新執行緒重用，這時抓不到（已由第 14.1 節的決定解掉：記號改成 Base 的執行緒序號）。
 - 依 L5 的順序「build → 建 Plan → finish → 權威檢查」，`BuildPlans` 成功之後才跑的策略檢查若失敗，Kernel 沒辦法撤回已換上的版本（型別留著，只能 `RemoveSystem`）；由編排層那一批定怎麼處理。
 - `NestedRunTests` :1881 退役後，「裡面的同步點在第 0 步之後失敗、沒有 hook 跑過」的程式路徑沒有觸發方法、留著沒有測試。
 
@@ -553,9 +553,22 @@ Replacement Criteria：
 
 三段的實作者都是 Opus／high；換表與接上（段 2）、當場套用（段 3）各由 Fable／xhigh 逐行複核；G-7（§14.4 檢證）與段 1 的 G-8（§14.2）由 Fable／high 做。報告都在主 checkout `build/evidence/gyo2-kernel-subtract-structure/`。下面是宣告沒寫、實作時補上或改掉的；都在已核准的方向內，但沒有逐條給你看過。
 
-### 14.1 停下的一件（要你定）
+### 14.1 停下的一件（2026-11-18 使用者已定，見文末「決定」）
 
 **S10 綁執行緒的 Resource 的執行緒記號**：第 3.10 節「用 `thread_local` 的位址當記號」不可靠——macOS 的 `thread_local` 用到才配置，第一次碰 Kernel 的執行緒可能拿到剛結束的別條執行緒的同一塊記憶體。探針 `kernel.J-6_thread_bound_destroy` 壓力跑 300 次漏 20 次（`segment1/s10-probe-stress.log`）；G-8 另跑一次漏 9 次，主執行緒先讀過記號時漏 0 次。選項：(a) 放寬 K3、只准 `std::this_thread::get_id()`（建議；Bevy 的 `NonSend` 這樣取）；(b) 由 `engine/base` 給執行緒 id；(c) 保留位址記號、寫明會漏抓、拿掉銷毀的檢查與探針。修正沒有提交；探針留著，所以 ctest 會偶發失敗。
+
+**決定（使用者，side chat 2026-11-18 轉交）**：選 (b)，並改語義。原話：「修改語義，不是做執行緒序號，而是做一個基礎發號器，只不過 thread 用來做一個系統中不會重複執行緒序號。」「這個是基礎發號器，可以由多個系統使用，就像 Sha256 本身就是算 hash 而已，也不會說這個就是 pvp 專用的。」對「`CurrentThreadSerial()` 也放 Base」答「ok」。理由：發號器是不帶領域的通用機制，和 `Sha256` 同類，合乎 Base「只靠標準庫、和領域無關」的定位（Base 已用 atomic／`thread_local`）；號碼跨時間唯一，解決 macOS 位址重用；Kernel 不碰 `<thread>`，K3 不變。
+
+**做法**：
+- `engine/base/include/engine/base/IdIssuer.hpp`（header-only）：`IdIssuer::Next()`（`atomic` 的 `fetch_add`，從 1 起、不給 0、同一個發號器不重複不回收；用完 2^64 個是斷言）；`CurrentThreadSerial()`（執行緒第一次要時從 `Detail::threadSerials` 拿一個號存在 `thread_local`，之後固定）。名字照轉交的形狀（`IdIssuer`、`CurrentThreadSerial`）。
+- Kernel：`ResourceBase::thread` 改成 `std::uint64_t`（0＝沒有值）；拿掉 `Detail::CurrentThreadToken()`；`World::CheckThread`／`BindThread` 用 `Engine::Base::CurrentThreadSerial()`。
+- 測試：`tests/common/base/IdIssuerTests.cpp`（5 案，含「一條執行緒結束後才開始的執行緒拿不到它的號」200 輪）；`gyo_base_tests` 連 `Threads::Threads`。
+- 守衛：`kernel_symbols.py` 的 FOREIGN 加 Base 的兩個名字（`Engine::Base::Detail::threadSerials`、`Engine::Base::Detail::threadSerial`），自測試跟著改成「四個 FOREIGN」並加三個長得像的名字。**這是 DI 守衛的判定變更、有緩的面，要你核准**（第 14.5 節）。
+- 結果：探針壓力跑 300 次、斷言 300 次、漏 0 次（修正前漏 20 次；`s10-fix/probe-stress-300.log`）；ctest `cpu|shader` 98/98；突變：S10 相關改寫 6、新增 6（Base 5、記號守衛 1），連同記號守衛與 Base 的全部 20 個殺掉（`s10-fix/s10-mutants.log`、`symbols-mutants.log`）；`bs-id-issuer-not-atomic` 是機率性的（8 執行緒×10000），另跑兩次都殺掉。
+- DI-KS 14 的條文（**使用者 2026-11-18「照建議」核准，已改**；另加一句「Kernel 只用 `CurrentThreadSerial()`」）：「執行緒的記號是位址、會漏抓（限界）」改成「Base 的執行緒序號（同一次執行裡不重複、不回收、不為 0；0 表示沒有值），結束的執行緒的號碼不會落到新的執行緒手上；記號不是 World 的資料，不進值的位元組、摘要、快照、指紋」，守衛清單加 `gyo_base_tests` 的 `IdIssuer`／`CurrentThreadSerial` 各案。限界拿掉、只收緊。
+- 2026-11-18 曾轉交「整個 Base 改成有 `.cpp` 的函式庫、狀態改成 `.cpp` 的 static」，實作到一半時使用者撤回（side chat：「我改想法了，只處理IdIssuer，base裡面只有hpp。」「不不不，IdIssuer也不用cpp。」）。已還原，Base 與 `IdIssuer` 都只有標頭；上面 FOREIGN 加兩個名字的做法照舊、等核准。撤回前的改動另存在會話暫存區，沒有進 repo。
+- 敵對式檢查（Fable 5.2／high，`s10-fix/adversarial-check-fable-high.md`）：候選 28 個、殺 14；建議補的 11 處照做——Base 第 5 案每輪查不為 0；J-6 加三案（反方向與「綁的執行緒結束後、新執行緒去碰」、沒標 `threadBound` 的 Resource 任何執行緒可用、兩條執行緒放進同樣的值摘要相同）；J-56 新案加「Ping 真的寫進去」的正例；記號守衛自測試加 5 個長得像的名字與兩種格式的正例；過時的註解改掉。取進清單的候選 21 個（`bs-*`、`ks-s10-*`、`ns-rebase-no-retake-*`）。沒補的：拿掉發完 2^64 的斷言（測不到，標頭註解寫明）、「只有例外時才重取快照」（讀程式判斷為等價，未證明）。
+- **已定（使用者 2026-11-18「照建議」：不准）**：Kernel 原始碼能不能直接用 `Engine::Base::IdIssuer`（一個 atomic 計數器）。K3 只認 `std::atomic`／`<atomic>`，現在經 `IdIssuer` 可以繞過（`adv-k3-kernel-uses-id-issuer` 活著）。做法：`kernel_guard.py` 加 K8「engine/kernel 裡出現 `IdIssuer` 或 Base 的 `threadSerials`／`threadSerial` 是 finding，只准 `CurrentThreadSerial`」（理由，主會話給的：K3 不讓 Kernel 自己持有跨執行緒的狀態，S10 只要「現在是哪條執行緒」）。
 
 ### 14.2 設計上的補充
 
@@ -599,3 +612,86 @@ Replacement Criteria：
 | 段 3 逐行複核（Fable／xhigh，98e1bc38） | 必改 1、建議改 3、小問題 8；§14.2：找到 19 處、提 16 個突變 → 第二次修正（ac55aa12）處理 |
 | G-7 §14.4 檢證（Fable／high，3bf480a8） | 沒有不成立的組；6 處文字更正（第 5.6 節）、1 個測試缺陷、1 個指紋缺口 → 已修 |
 | G-8 段 1 的 §14.2（Fable／high，3bf480a8） | 檢查者 Fable 5.2／high；找到 45 處；加進去時殺掉 22／45、18 處當時抓不到、5 處錯的失敗 → 第二次修正補了 18 處的測試與 5 處的訊息；第二次修正跑的 180 個突變全部在預期的失敗下被殺掉 |
+
+### 14.5 S10 修正的守衛變更（AGENTS §14.4；DI 守衛；使用者 2026-11-18「照建議」核准）
+
+`tests/common/kernel/kernel_symbols.py`（kernel 函式庫的可寫資料記號；registry-schedule 宣告判定 9、spec J-9）與它的自測試 `test_kernel_symbols.py`：
+
+1. **守的性質**：kernel 自己沒有可寫的全域狀態，只准 TypeKey 的錨與 `tlCurrent`；別的模組的 inline 變數因為 include 而出現在 kernel 的物件檔裡時，各自列名、單獨一行回報，不靜靜放過。
+2. **緩的面**：以前出現 `Engine::Base::Detail::threadSerials`（發號器）或 `Engine::Base::Detail::threadSerial`（執行緒的號碼）就失敗，現在當成 FOREIGN 通過。只有這兩個完整的名字；`GYO::Kernel` 裡同名的變數、名字多一截的、`Engine::Base` 外層同名的都仍然失敗。
+3. **緊的面**：自測試多八個長得像的名字（`GYO::Kernel::Detail::threadSerial`／`threadSerials`、`Engine::Base::threadSerial`／`threadSerials`、`Engine::Base::Detail::threadSerialsCopy`、`Engine::Base::Detail::threadSerialX`、`Engine::Base::Detail::Inner::threadSerial`、`GYO::Base::Detail::threadSerial`）要被抓到；SYSV 與 Mach-O 兩種格式各有這兩個名字被判成 foreign 的正例（Windows 沒有真函式庫那一跑，靠它）；FOREIGN 清單固定成這四個。
+4. **緩的面守的性質由誰繼續守**：這兩個變數是 Base 的（`IdIssuer.hpp`），由 `gyo_base_tests` 的 `IdIssuer`／`CurrentThreadSerial` 各案與突變 `bs-*` 守行為；kernel 自己另開一個同名的會被突變 `ks-s10-kernel-own-thread-serial` 證明仍然擋下；`kernel_guard.py` K4 仍擋 kernel 原始碼裡的 `thread_local`／`static`。
+5. **根據與證據**：使用者 2026-11-18 選 (b)「Base 提供、Kernel 用」，Base 是 header-only，Kernel 呼叫 `CurrentThreadSerial()` 必然把這兩個 inline 變數帶進 kernel 的物件檔（和既有的 assertion handler 同一種情形）。舊版守衛對現在的函式庫回報這兩個「不允許」、新版只把它們列為 foreign（`s10-fix/symbols-old-vs-new.log`）；記號守衛與 Base 相關的突變 20 個全部殺掉（`s10-fix/symbols-mutants.log`）。
+
+### 14.6 完整突變跑出的補充（3c333d4b、aa6e65c0）
+
+- 在 ac55aa12 完整跑一次：758 個殺 747；沒殺的 11 個在基準 a08c16f6 重跑分類。基準就沒殺的 3 個（`ks-real-product-name`、`rs-sample-capture-accepted`、`rs-sample-return-accepted`）不是這批造成，沒動。這批改名讓 6 個編不過，改 find／replace 後殺掉。
+- 這批設計讓 2 個活下來，使用者（同一次 side chat）定「都補測試」：`hf-product-limit-static` 補「另一個 World 在這個 World 的 Run 裡面跑，上限仍是各自的」（跨 World 巢狀 Run 可行）；`ns-rebase-no-retake` 補「內層排程寫事件後丟出、外層接住，事件的寫入不算到外層頭上」。兩案是新增（只收緊），兩個突變的 cases／expect 指向新案，在預期的失敗下殺掉（`survivor-tests-2-mutants.log`）。
+
+### 14.7 S10 三件的決定（使用者 2026-11-18，主會話轉交）
+
+主會話列出三件與建議，使用者答「照建議」：(1) 核准 `kernel_symbols.py` 的 FOREIGN 加 `Engine::Base::Detail::threadSerials`、`threadSerial`（第 14.5 節；Base 維持只有標頭，撤回的那則照舊有效）；(2) 核准 DI-KS 14 改寫（已改 `target/kernel.zh-Hant.md`）；(3) Kernel 不准直接用 `IdIssuer`，`kernel_guard.py` 加 K8。比過的選項：(1) 核准／不核准；(3) 不准、加守衛／准、寫進 K3 的說明。理由：使用者沒有另外說；(3) 的理由是主會話的建議。
+
+**K8 的做法**：`kernel_guard.py` 的 K8：engine/kernel 裡出現識別字 `IdIssuer`、`threadSerials`、`threadSerial` 是 finding（註解與字串抹掉之後讀；Executor 的檔也讀；CMakeLists.txt 在 `#` 註解之外也讀；include 那一行不讀）。限界寫進說明：`##` 貼字、接行、asm 標籤與 `__atomic_*` 內建；K2～K8 共用的抹除函式讀錯有前綴的字元字面量與 raw string（J-9 既有的缺口）。
+
+**K8 的 §14.2 檢查**（Fable 5.2／high，`k8/adversarial-check-fable-high.md`）：找到 19 處（繞路 7、誤報 4、守衛改壞而自測試抓不到 8）。照建議：自測試補 8 案（含一個斷言寫錯的修正：`"threadSerial"` 是 `"K8 threadSerials"` 的子字串）、CMakeLists 也讀、include 行不讀、說明寫限界。突變：K8 的 4＋取進的 9＋補的 3＝16 個，連同 kernel_guard 既有的突變共 71 個全部殺掉（`k8/mutants-after-check.log`）。沒修、列成後續：抹除函式的既有缺口（動到 K2～K8 全部的判定，屬 DI 守衛變更）；`engine/entity_store` 持有 `IdIssuer` 時兩個守衛都放行（別的 owner 的守衛 W3，要使用者或架構師定）；K3 不認 `__atomic_*`／`__sync_*`／`_Interlocked*`／`_Atomic`。
+
+---
+
+## 15. 第二段核准的材料（合併前；照第 9 節）
+
+這一次請你核准三樣：第 5.1 節九組的緩的面、第 5.2 節裡 Design Invariants 的守衛各列、第 7 節的最終文字（現在 `target/kernel.zh-Hant.md` 的樣子，含第 14 節的偏差）。已經另外定過、不再問的：第 12 節四件（2026-11-17）、S10 三件（第 14.7 節）、兩個活下來的突變補測試（第 14.6 節）。被退回的組，合併前把那一組的改動撤回。
+
+### 15.1 先宣告的判定
+
+| # | 狀態 |
+|---|---|
+| G-1 ctest | 本機（macOS arm64）`cpu|shader` 98/98 |
+| G-2 照表處置與 Red | 各段的 Red／Green 在證據的 `segment1/`～`segment3/`、`segment2-fix/`、`fix2/` |
+| G-3 掃描 0 命中 | 27 個式子 0 命中（每個先在 a08c16f6 命中過；最後一次在 K8 之後，`k8/g3-scan.log`） |
+| G-4 突變 | ac55aa12 完整跑一次 758 個殺 747；沒殺的 11 個在基準上分類：3 個基準就沒殺（不是這批造成，留作後續）、6 個改名讓它編不過（已修、殺掉）、2 個這批的設計讓它活下來（已補測試、殺掉）。之後的 S10、K8 相關突變全部殺掉。清單 624 → 802 |
+| G-5 守衛腳本 | 全過（144 項） |
+| G-6 L1 三平台 | 等 PR |
+| G-7 §14.4 檢證 | Fable／high：沒有不成立的組，6 處文字更正（第 5.6 節）、1 個測試缺陷與 1 個指紋缺口已修 |
+| G-8 §14.2 檢查 | 段 1（Fable／high，找到 45 處，已補）、段 2 與段 3 的逐行複核（Fable／xhigh，各一個必改，已修）、S10（Fable 5.2／high，28 個候選，建議的 11 處已補）、K8（Fable 5.2／high，19 處，建議的已補；第 14.7 節） |
+
+### 15.2 第 5.1 節各組（緩的面：以前會失敗、現在通過的）
+
+| 組 | 用遊戲講 | 緩的面 | G-7 |
+|---|---|---|---|
+| A 歧義 | 兩個 System 都寫主角血量、沒寫先後：不再報錯，照登記順序排、列進 `TieBreaks` | 沒有先後的衝突對都通過；**衝突在哪一筆資料上不再有守衛**（只守哪兩個 System 平手） | 成立（文字更正 2 處） |
+| B 執行期攔截 | untyped `Commands` 寫 zone C、zone B 刪掉帶 zone C 欄的實體：照做，同一窗的 zone C 插入丟掉並計數 | 這些寫入與刪除都通過；網路 Module 之前沒有東西抓 | 成立（更正 2 處；另加正面案） |
+| C 外面寫 zone C | 第一次 Run 之後 Host 改 zone C 的狀態：照做 | W-6b 的斷言拿掉 | 成立 |
+| D `ExclusiveWorld` 寫入 | 讀檔與回滾的獨占 System 寫任何元件與 Resource | 寫入都成功、驗證不報 | 成立（更正 1 處） |
+| D2 生成 | 獨占 System 可以當場生成實體 | 以前一律 Err | 成立 |
+| E `Writes<…>` | 列出的 Resource 不算寫者 | Z2、D-E18、S-18 都通過啟動 | 成立 |
+| F `KernelSettings` | 除錯指令改設定，下一次 Run 生效 | 宣告、讀、寫都准 | 成立 |
+| G 執行緒啟動檢查 | 不在啟動時擋，改成碰到時斷言 | 啟動時不再擋 | 成立 |
+| H 再登記 | 准動態插入的 World 在 Ready 時可以再登記或拿掉 System | 以前 finish 之後拿不到 Registrar | 成立 |
+| I 繞路改成員 | 選 (a) 保留：繞過句柄改成員照樣斷言 | 無 | 成立（更正 1 處） |
+
+### 15.3 第 5.2 節裡 Design Invariants 的守衛
+
+| 列 | 守的 DI | 改什麼 | G-7 |
+|---|---|---|---|
+| `CoverageTests` :99、:109、`SchedulerTests` :597（J-24） | DI-KS 5 | 第二個錯誤換成留下的碼 | 成立；`:99` 殺不了 `rs-fix-b2-stop-after-declared-edges`，殺它的是 `:109`（已標記） |
+| `ExecutorTests` :316、:331（J-32b） | DI-KS 2 | 觸發換成 `AllotterExhausted` | 成立 |
+| 指紋 golden 各處 | DI-KS 3 | Registry 2→3、Plan 4→5、C 6→7、匯出標頭 2→3 | 成立；`threadBound`、`annotatedWrites` 的指紋缺口已補守衛 |
+
+### 15.4 第 7 節的最終文字
+
+照第 7 節的表改寫，另有實作中加的（第 14.2 節）：DI-KS 18 加「例外離開當場改時 World 中斷（`ImmediateChangeAborted`）」；規則 5 與 DI-KS 26 寫明「已中斷的 World 照樣拒絕」；DI-KS 14 照 S10 的決定改寫並加「Kernel 只用 `CurrentThreadSerial()`」（K8）。RC 3 拿掉；RC 16 新增；RC 17、RC 18 以草案新增（第 12 節第 2 件選了 (a)）。
+
+### 15.5 實作中新出現、請一起看的
+
+| 項 | 做法 | 會不會改到已核准的能力 |
+|---|---|---|
+| 登記的前提 | 這份 Registry 有 World 正在跑（計數不是 0）時 `Register`／`BuildPlans`／`DiscardRegistrations` 是斷言 | 不會：規則 4 本來就規定登記和它的 World 的執行不重疊；計數不是原子的，跨執行緒只是盡力抓。要「多個 World 在不同執行緒共用一份 Registry、跑著時登記」得走 RC 17 |
+| 當場的 `Spawn<C…>` 拿到還活著的 id | 回傳 `Result<std::optional<EntityId>, KernelError>`：不生成、回傳空、記一筆 `RejectedSpawn` | 第 3.5 節原寫 `Result<EntityId, …>`；回傳型別變了 |
+| 例外離開當場改 | World 立刻中斷，留一個錯誤給最外層的 Run | 比照 K0 已核准的 X-16 |
+| `StartupCode` 沒有文字 | 變成建置錯誤（`-Wswitch`／C4062） | 只收緊 |
+| 拿掉的 System | 留墓碑，不算進指紋 | 不會 |
+
+### 15.6 合併前還要做的
+
+L1 三平台（PR 上）；Windows 與 Linux 本機沒跑過。不在這批範圍、建議另開的：基準就沒殺掉的 3 個突變（`ks-real-product-name`、`rs-sample-capture-accepted`、`rs-sample-return-accepted`）；K2～K8 共用的抹除函式讀錯有前綴的字面量；`engine/entity_store` 能不能持有 `IdIssuer`（W3 不認它，要定）；K3 不認編譯器的原子內建。

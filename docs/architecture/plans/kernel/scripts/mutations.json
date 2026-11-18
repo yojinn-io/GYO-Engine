@@ -8994,6 +8994,328 @@
       "target": "gyo_kernel_tests",
       "cases": "J-56: the inner schedule writes an event and throws*",
       "expect": "\\[ns\\-throw\\-event\\-blame\\][\\s\\S]*'event Ping' changed during System 'Driver'"
+    },
+    {
+      "id": "ks-k8-rule-dropped",
+      "what": "kernel_guard does not apply K8 (K8, S10 decision 3: the kernel uses CurrentThreadSerial only; user 2026-11-18, v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    for match in K8.finditer(code):\n        number = line_of(code, match.start())\n        if not DIRECTIVE.match(code_lines[number - 1]):\n            yield number, \"K8\", match.group(0)\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_id_issuer_is_reported"
+    },
+    {
+      "id": "ks-k8-serial-state-unnamed",
+      "what": "K8 names IdIssuer only, not Base's thread serial state (K8, S10 decision 3: the kernel uses CurrentThreadSerial only; user 2026-11-18, v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials?)\\b\")",
+      "replace": "K8 = re.compile(r\"\\bIdIssuer\\b\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_base_thread_serial_state_is_reported"
+    },
+    {
+      "id": "ks-k8-current-serial-refused",
+      "what": "K8 also refuses CurrentThreadSerial, the one way the kernel may ask (K8, S10 decision 3: the kernel uses CurrentThreadSerial only; user 2026-11-18, v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials?)\\b\")",
+      "replace": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials?|CurrentThreadSerial)\\b\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_current_thread_serial_and_the_include_are_clean"
+    },
+    {
+      "id": "ks-k8-kernel-keeps-an-issuer",
+      "what": "the kernel keeps an IdIssuer of its own: the guard on the real tree reports K8 (K8, S10 decision 3: the kernel uses CurrentThreadSerial only; user 2026-11-18, v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "void World::BindThread(ResourceId id) {\n",
+      "replace": "Engine::Base::IdIssuer& KernelIssuer();\n\nvoid World::BindThread(ResourceId id) {\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ],
+      "expect": "World\\.cpp:\\d+: K8 IdIssuer"
+    },
+    {
+      "id": "ks-k8-singular-dropped",
+      "what": "K8 names threadSerials only, not the thread_local threadSerial (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials?)\\b\")",
+      "replace": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials)\\b\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_base_thread_serial_state_is_reported"
+    },
+    {
+      "id": "ks-k8-needs-base-qualifier",
+      "what": "K8 reports IdIssuer only when written Base::IdIssuer, so a use after using is missed (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials?)\\b\")",
+      "replace": "K8 = re.compile(r\"\\b(?:Base::IdIssuer|threadSerials?)\\b\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_id_issuer_after_using_is_reported"
+    },
+    {
+      "id": "ks-k8-needs-detail-qualifier",
+      "what": "K8 reports the serial state only when written Detail::threadSerial(s), so a use after using namespace is missed (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials?)\\b\")",
+      "replace": "K8 = re.compile(r\"\\b(?:IdIssuer|Detail::threadSerials?)\\b\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_serial_state_after_using_namespace_is_reported"
+    },
+    {
+      "id": "ks-k8-no-word-bounds",
+      "what": "K8 matches inside longer names (MyIdIssuer, threadSerialNumber) (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K8 = re.compile(r\"\\b(?:IdIssuer|threadSerials?)\\b\")",
+      "replace": "K8 = re.compile(r\"(?:IdIssuer|threadSerials?)\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_longer_names_are_clean"
+    },
+    {
+      "id": "ks-k8-skips-preprocessor-lines",
+      "what": "K8 does not read preprocessor lines, so #define ISSUER Engine::Base::IdIssuer passes (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    for match in K8.finditer(code):\n",
+      "replace": "    for match in K8.finditer(re.sub(r\"(?m)^[ \\t]*#[^\\n]*\", lambda m: \" \" * len(m.group(0)), code)):\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_in_a_macro_definition_is_reported"
+    },
+    {
+      "id": "ks-k8-cmake-definition",
+      "what": "engine/kernel/CMakeLists.txt gives IdIssuer another name with a compile definition (CMakeLists.txt is read for K1 only) (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/CMakeLists.txt",
+      "find": "target_compile_features(gyo_kernel PUBLIC cxx_std_20)",
+      "replace": "target_compile_features(gyo_kernel PUBLIC cxx_std_20)\ntarget_compile_definitions(gyo_kernel PRIVATE GYO_KERNEL_COUNTER=Engine::Base::IdIssuer)",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ],
+      "expect": "CMakeLists\\.txt:\\d+: K8 IdIssuer"
+    },
+    {
+      "id": "ks-k8-skips-executor-files",
+      "what": "K8 is skipped for Executor files like K6 (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        if not DIRECTIVE.match(code_lines[number - 1]):\n",
+      "replace": "        if not executor_file and not DIRECTIVE.match(code_lines[number - 1]):\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_executor_file_is_checked"
+    },
+    {
+      "id": "ks-k8-skips-source-files",
+      "what": "K8 is applied to headers only, not to .cpp files (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        if not DIRECTIVE.match(code_lines[number - 1]):\n",
+      "replace": "        if Path(relative).suffix != \".cpp\" and not DIRECTIVE.match(code_lines[number - 1]):\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_in_a_source_file_is_reported"
+    },
+    {
+      "id": "ks-k8-line-always-1",
+      "what": "a K8 finding always says line 1 (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        if not DIRECTIVE.match(code_lines[number - 1]):\n            yield number, \"K8\", match.group(0)\n",
+      "replace": "        if not DIRECTIVE.match(code_lines[number - 1]):\n            yield 1, \"K8\", match.group(0)\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_finding_names_its_line"
+    },
+    {
+      "id": "ks-k8-include-line-read",
+      "what": "K8 reads include lines, so the header the kernel needs is refused (K8 follow-up to its adversarial check; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        if not DIRECTIVE.match(code_lines[number - 1]):\n            yield number, \"K8\", match.group(0)\n",
+      "replace": "        if True:\n            yield number, \"K8\", match.group(0)\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_angle_bracket_include_is_clean"
+    },
+    {
+      "id": "ks-k8-cmake-unread",
+      "what": "K8 does not read CMakeLists.txt (K8 follow-up to its adversarial check; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "            for match in K8.finditer(line.split(\"#\", 1)[0]):\n",
+      "replace": "            for match in K8.finditer(\"\"):\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_in_cmake_lists_is_reported"
+    },
+    {
+      "id": "ks-k8-cmake-comment-read",
+      "what": "K8 reads CMake comments (K8 follow-up to its adversarial check; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "            for match in K8.finditer(line.split(\"#\", 1)[0]):\n",
+      "replace": "            for match in K8.finditer(line):\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k8_comment_in_cmake_lists_is_clean"
     }
   ]
 }
