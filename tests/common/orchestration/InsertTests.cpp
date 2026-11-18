@@ -64,7 +64,7 @@ TEST_CASE("O-9: BuildPlans fails (R-E7): InsertBuildFailed, one warning, the Wor
     REQUIRE_FALSE(static_cast<bool>(inserted));
     CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::InsertBuildFailed, "[or-insert-build-failed]");
     CHECK_MESSAGE(inserted.error().detail.find("R-E7") != std::string::npos, "[or-insert-build-failed] " << inserted.error().detail);
-    CHECK(warnings.Warnings() == 1);
+    CHECK_MESSAGE(warnings.Warnings() == 1, "[or-insert-build-warn] " << warnings.Warnings());
     CHECK(p.World("Main").GetWorld().Types().Version() == 1);
     CHECK(static_cast<bool>(p.RunFrame()));
 }

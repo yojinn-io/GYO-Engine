@@ -197,14 +197,36 @@ inline O::ProductDescription Game(Options options = {}) {
     return d;
 }
 
+// Values read for checks; -1 when the Resource is absent (never a null dereference in an assertion).
+inline int JumpOf(O::Product& p, std::string_view world = "Main") {
+    const KeyBindings* k = p.World(world).GetWorld().Resource<KeyBindings>();
+    return k == nullptr ? -1 : k->jump;
+}
+inline int VolumeOf(O::Product& p, std::string_view world = "Main") {
+    const Volume* v = p.World(world).GetWorld().Resource<Volume>();
+    return v == nullptr ? -1 : v->level;
+}
+inline int ScoreOf(O::Product& p, std::string_view world = "Main") {
+    const Score* v = p.World(world).GetWorld().Resource<Score>();
+    return v == nullptr ? -1 : v->v;
+}
+
 // Counts orchestration warnings (Engine::Base::Log) while alive.
 class WarningCounter {
 public:
-    WarningCounter() : previous_(Engine::Base::SetLogHandler(&Count)) { Counter().store(0); }
+    WarningCounter() : previous_(Engine::Base::SetLogHandler(&Count)) {
+        Counter().store(0);
+        Last().clear();
+    }
     ~WarningCounter() { Engine::Base::SetLogHandler(previous_); }
     WarningCounter(const WarningCounter&) = delete;
     WarningCounter& operator=(const WarningCounter&) = delete;
     [[nodiscard]] int Warnings() const { return Counter().load(); }
+    // The text of the last orchestration warning (single-threaded tests only).
+    [[nodiscard]] static std::string& Last() {
+        static std::string last;
+        return last;
+    }
 
 private:
     static std::atomic<int>& Counter() {
@@ -212,7 +234,13 @@ private:
         return counter;
     }
     static void Count(const Engine::Base::LogMessage& message) noexcept {
-        if (message.level == Engine::Base::LogLevel::Warning && message.category == "orchestration") ++Counter();
+        if (message.level == Engine::Base::LogLevel::Warning && message.category == "orchestration") {
+            ++Counter();
+            try {
+                Last() = std::string(message.text);
+            } catch (...) {
+            }
+        }
     }
     Engine::Base::LogHandler previous_;
 };

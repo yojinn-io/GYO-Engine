@@ -26,7 +26,7 @@ K::SystemResult ReplaceFromInside(K::Query<K::Read<Tag>>) {
 
 } // namespace
 
-TEST_CASE("O-8: prepare order (units, description, extra), beforeSwap after them, before the swap") {
+TEST_CASE("O-8: prepare order (units, description, extra), beforeSwap after them") {
     Log().clear();
     Calls unit;
     unit.build = [](O::WorldSetup& s) { s.Prepare(Note("unit prepare")); };
@@ -45,7 +45,8 @@ TEST_CASE("O-8: prepare order (units, description, extra), beforeSwap after them
     const auto unitAt = joined.find("unit prepare");
     const auto extraAt = joined.find("extra");
     const auto loadAt = joined.find("L");
-    CHECK_MESSAGE((unitAt < joined.find("description prepare") && joined.find("description prepare") < extraAt && extraAt < loadAt),
+    CHECK_MESSAGE((loadAt != std::string::npos && unitAt < joined.find("description prepare") &&
+                   joined.find("description prepare") < extraAt && extraAt < loadAt),
                   "[or-replace-order] " << joined);
 }
 
@@ -154,14 +155,14 @@ TEST_CASE("O-10: two types (a unit's and the product's) carry over; prepare sees
     Log().clear();
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
     CHECK_MESSAGE(Logged("volume present"), "[or-carry-before-prepare] " << Joined());
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<Volume>()->level == 9, "[or-carry-unit-type]");
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 4, "[or-carry-product-type]");
+    CHECK_MESSAGE(VolumeOf(p) == 9, "[or-carry-unit-type]");
+    CHECK_MESSAGE(JumpOf(p) == 4, "[or-carry-product-type]");
     p.World("Main").GetWorld().RemoveResource<Volume>();
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<Volume>()->level == 3, "[or-carry-absent]");
+    CHECK_MESSAGE(VolumeOf(p) == 3, "[or-carry-absent]");
 }
 
-TEST_CASE("O-10: a marked type the new registration lacks: ReplaceCarryOverFailed, the value goes back; DropOldFirst keeps it for the next one") {
+TEST_CASE("O-10: a marked type the new registration lacks: ReplaceCarryOverFailed, the value goes back") {
     int builds = 0;
     O::ProductDescription d = Game();
     d.worlds[0].build = [&](O::WorldSetup& s) {
@@ -178,7 +179,7 @@ TEST_CASE("O-10: a marked type the new registration lacks: ReplaceCarryOverFaile
     auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(failed), "[or-carry-unregistered] replaced anyway");
     CHECK_MESSAGE(failed.error().code == O::OrchestrationErrorCode::ReplaceCarryOverFailed, "[or-carry-unregistered]");
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<Volume>()->level == 6, "[or-carry-unregistered-back]");
+    CHECK_MESSAGE(VolumeOf(p) == 6, "[or-carry-unregistered-back]");
 }
 
 TEST_CASE("O-10: after a DropOldFirst failure the held value is carried by the next replacement of the place") {
@@ -196,7 +197,7 @@ TEST_CASE("O-10: after a DropOldFirst failure the held value is carried by the n
     REQUIRE_FALSE(static_cast<bool>(failed));
     REQUIRE(!p.HasWorld("Main"));
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 8, "[or-carry-held]");
+    CHECK_MESSAGE(JumpOf(p) == 8, "[or-carry-held]");
 }
 
 TEST_CASE("O-8: an exception from extra leaves the old World as it was") {
@@ -214,6 +215,6 @@ TEST_CASE("O-8: an exception from extra leaves the old World as it was") {
         thrown = true;
     }
     CHECK(thrown);
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 2, "[or-replace-throw-keeps-old]");
+    CHECK_MESSAGE(JumpOf(p) == 2, "[or-replace-throw-keeps-old]");
     CHECK(static_cast<bool>(p.RunFrame()));
 }

@@ -41,7 +41,7 @@ TEST_CASE("O-2: Configure once each before any Build; per World Build in order, 
     CHECK_MESSAGE(Log() == expected, "[or-lifecycle-order] " << Joined());
 }
 
-TEST_CASE("O-2: a World's units list limits who builds there; a World with no unit and an empty product build still builds") {
+TEST_CASE("O-2: a World's units list limits who builds there; a World with no product build still builds") {
     Log().clear();
     O::ProductDescription d;
     d.name = "game";
@@ -172,7 +172,7 @@ TEST_CASE("O-E3: missing, later (not reordered), a Module on a Plugin, a library
         O::ProductDescription d = TwoWorlds();
         d.worlds[1].units = {"authority"};
         auto built = O::Product::Build(std::move(d), Units().Module("time").Module("authority", {}, {"time"}).Take());
-        REQUIRE_FALSE(static_cast<bool>(built));
+        REQUIRE_FALSE_MESSAGE(static_cast<bool>(built), "[or-oe3-world] built with a World leaving the dependency out");
         CHECK_MESSAGE(built.error().detail.find("not used by World 'Side'") != std::string::npos,
                       "[or-oe3-world] " << built.error().detail);
     }

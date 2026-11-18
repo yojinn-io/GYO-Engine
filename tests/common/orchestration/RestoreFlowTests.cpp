@@ -25,9 +25,10 @@ O::PrepareFn Unsupported() {
     };
 }
 
-// Three frames, a dropped spawn and an inserted System: the "current game" before a load.
+// Four frames (four rocks: not the save's three entities), a dropped spawn and an
+// inserted System: the "current game" before a load.
 void PlayABit(O::Product& p) {
-    for (int i = 0; i < 3; ++i) REQUIRE(static_cast<bool>(p.RunFrame()));
+    for (int i = 0; i < 4; ++i) REQUIRE(static_cast<bool>(p.RunFrame()));
     REQUIRE(static_cast<bool>(p.RunSchedule("Main", "Junk")));
     REQUIRE(static_cast<bool>(p.InsertSystems("Main", "console", [](K::Registrar& r) {
         r.AddSystem<&Mark<'i'>>(In("Inserted", "Play"));
@@ -80,11 +81,12 @@ TEST_CASE("restore: case 3, loading in game: only what the load puts back, gold 
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     PlayABit(p);
-    REQUIRE(GoldOf(p) == 30);
+    REQUIRE(GoldOf(p) == 40);
     REQUIRE(p.World("Main").GetWorld().RejectedSpawns() == 1);
     auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}, O::ReplaceOrder::BuildNewFirst});
     REQUIRE_MESSAGE(static_cast<bool>(replaced), replaced.error().message << " " << replaced.error().detail);
     K::World& w = p.World("Main").GetWorld();
+    CHECK_MESSAGE(w.Resource<SaveData>() != nullptr, "[or-restore-extra-ran] the new World has no SaveData");
     CHECK_MESSAGE(Entities(p) == 3, "[or-restore-new-world] " << Entities(p));
     CHECK_MESSAGE(GoldOf(p) == 120, "[or-restore-gold] " << GoldOf(p));
     CHECK_MESSAGE(w.RejectedSpawns() == 0, "[or-restore-new-records] " << w.RejectedSpawns());
@@ -109,13 +111,13 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
             CHECK_MESSAGE(refused.error().reporterCode == "save-version-unsupported", "[or-restore-reporter-code]");
             CHECK_MESSAGE(warnings.Warnings() == 1, "[or-restore-fail-warn] " << warnings.Warnings());
         }
-        CHECK_MESSAGE((GoldOf(p) == 30 && Entities(p) == 3), "[or-restore-keep-old] gold " << GoldOf(p) << " entities " << Entities(p));
+        CHECK_MESSAGE((GoldOf(p) == 40 && Entities(p) == 4), "[or-restore-keep-old] gold " << GoldOf(p) << " entities " << Entities(p));
         SaveData broken = TheSave();
         broken.unreadable = true;
         auto unreadable = p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(broken), {"Load"}, O::ReplaceOrder::BuildNewFirst});
         REQUIRE_FALSE_MESSAGE(static_cast<bool>(unreadable), "[or-restore-fail-b] replaced despite the unreadable save");
         CHECK_MESSAGE(unreadable.error().code == O::OrchestrationErrorCode::ReplaceScheduleFailed, "[or-restore-fail-b]");
-        CHECK_MESSAGE(GoldOf(p) == 30, "[or-restore-keep-old-b] " << GoldOf(p));
+        CHECK_MESSAGE(GoldOf(p) == 40, "[or-restore-keep-old-b] " << GoldOf(p));
         CHECK(static_cast<bool>(p.RunFrame()));
     }
     SUBCASE("(c) DropOldFirst refused: the place is empty and RunFrame says WorldMissing; (d) a readable save fills it") {
@@ -154,13 +156,13 @@ TEST_CASE("restore: case 6, what game initialization put in the first World: a m
     O::Product& p = **built;
     REQUIRE(static_cast<bool>(p.RunFrame()));
     p.World("Main").GetWorld().ResourceMut<KeyBindings>()->jump = 7;  // the options menu changed it
-    REQUIRE(p.World("Main").GetWorld().Resource<Score>()->v == 5);
+    REQUIRE(ScoreOf(p) == 5);
     auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{Unsupported(), {"Load"}});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(failed), "[or-carry-back] replaced despite the refused save");
     const KeyBindings* kept = p.World("Main").GetWorld().Resource<KeyBindings>();
     REQUIRE_MESSAGE(kept != nullptr, "[or-carry-back] the old World lost KeyBindings");
     CHECK_MESSAGE(kept->jump == 7, "[or-carry-back] the old World's KeyBindings changed");
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}})));
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 7, "[or-carry-over] KeyBindings did not carry over");
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<Score>()->v == 0, "[or-carry-only-marked] Score carried over");
+    CHECK_MESSAGE(JumpOf(p) == 7, "[or-carry-over] KeyBindings did not carry over");
+    CHECK_MESSAGE(ScoreOf(p) == 0, "[or-carry-only-marked] Score carried over");
 }
