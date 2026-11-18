@@ -8,6 +8,9 @@ add_subdirectory(entity_store)
 # The general mechanism (Registry, System contract, Scheduler, Plan) is a leaf
 # directly above Base.
 add_subdirectory(kernel)
+# The orchestration layer (registration units, Product, game initialization,
+# runner, World replacement) sits directly above the kernel.
+add_subdirectory(orchestration)
 # The OS layer sits directly above Base and below every module that needs the
 # operating system (docs/architecture/os.md).
 add_subdirectory(os)
