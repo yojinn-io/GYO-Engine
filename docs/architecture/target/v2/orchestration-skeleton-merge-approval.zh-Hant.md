@@ -73,7 +73,7 @@
 
 ## 4. 第 10 節：Design Invariants 的最終文字
 
-- Kernel：[target/kernel.zh-Hant.md](../kernel.zh-Hant.md) 的 DI-KS 3、6、15、16～22 的前言、22（拿掉，由 O-1 取代）、24、25、26、RC 7（移到編排層 RC-O1）、RC 13（c4098ab1 起的文字）。
+- Kernel：[target/kernel.zh-Hant.md](../kernel.zh-Hant.md) 的 DI-KS 3、6、15、16～22 的前言、18（補「直接放實體不看配發器」一句，使用者已定，見第 5 節第 7 點）、22（拿掉，由 O-1 取代）、24、25、26、RC 7（移到編排層 RC-O1）、RC 13（c4098ab1 起的文字）。
 - 編排層：新頁 [orchestration.zh-Hant.md](orchestration.zh-Hant.md) 的 O-1～O-10 與 RC-O1～RC-O9。第 3 步之後 O-6 的守衛欄寫上 `cmake.UnitRegistry`、`orchestration.units`。
 
 ## 5. 和宣告不同的地方
@@ -85,7 +85,7 @@
 5. **小處**：ctest 名照既有命名寫成 `cmake.UnitRegistry`（判定 1 寫 `cmake.unit_registry`）；突變執行器加 `{cmake}` 佔位符；`RunGameInit`／`RunFrame`／`RunSchedule` 回 `OrchestrationError`（宣告草圖寫 `KernelError`）；帶過去的值從中斷的新 World 取回時經讀取的檢視移出。
 6. **第 2 步漏做、這次補上的**：Kernel 突變清單照第 9 節處理（退役 16、搬到編排層 12、改寫 16；清單的 `description` 寫明每一個去了哪裡）。G-7 順帶查到的。
 
-7. **要你判的一件（第 4 步 G-8）**：scenario S1-7b 的佈置靠「外部的 `World::Insert` 不檢查配發器的範圍」（`extra` 自己放回玩家、id 1 落在配發器的範圍裡）。被檢查的行為（`ExclusiveWorld::Spawn` 回 `AllottedIdAlive`、World 照跑）有條文（DI-KS 18）；佈置這一半，宣告 3.8 與 `World.hpp` 只說可以外部寫入，沒有「落在範圍內也成立」的條文——照宣告 8.2 是第三種（契約沒承諾過）的邊。選項：在 DI-KS 18 或 `World` 的說明補一句「外部寫入不檢查配發器的範圍」（契約承認現狀）；或維持現狀、把 S1-7b 標成依賴未承諾的行為。
+7. **已定（第 4 步 G-8 提出的一件）**：scenario S1-7b 的佈置靠「外部的 `World::Insert` 不檢查配發器的範圍」，原本沒有條文。使用者 2026-11-18「照建議」（主會話轉達，`v8-arch-gyo2-direct-insert-no-allotter-range`）：在 DI-KS 18 補一句——直接放實體時不檢查、也不移動配發器的範圍，由作者負責。已補（[target/kernel](../kernel.zh-Hant.md#di-ks-18) DI-KS 18 的「直接放實體不看配發器」），S1-7b 改成引用它，它也列進 DI-KS 18 的守衛。
 
 ## 6. 數字
 
