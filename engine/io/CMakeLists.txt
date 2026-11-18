@@ -32,8 +32,7 @@ target_include_directories(gyo_io PUBLIC
 )
 
 target_compile_features(gyo_io PUBLIC cxx_std_20)
-target_link_libraries(gyo_io
-    PUBLIC GYO::Base
-    # The native file system calls the OS layer; stream helpers use Math scalars.
-    PRIVATE GYO::Math GYO::Os
-)
+# Engine-internal links come from engine/config/modules.csv (O-6): Base public;
+# Math (stream helpers use its scalars) and the OS layer (the native file
+# system) private.
+gyo_link_registered_dependencies(io)

@@ -1,0 +1,6 @@
+name,target,description,library_only,default,depends,private_depends,unit,header
+base,GYO::Base,A library-only row (synthetic register),yes,no,,,,
+kernel,GYO::Kernel,A library-only row with a dependency,yes,no,base,,,
+walk,gyo_orchestration_test_units,An in-World Module carried by default,no,yes,kernel,,OrchUnits::WalkModule,orchestration_units/Units.hpp
+extra,gyo_orchestration_test_units,An in-World Module the product lists,no,no,walk,base,OrchUnits::ExtraModule,orchestration_units/Units.hpp
+off,gyo_orchestration_test_units,An in-World Module carried by default that the product disables,no,yes,,,OrchUnits::OffModule,orchestration_units/Units.hpp

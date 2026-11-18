@@ -602,7 +602,7 @@ public:
     // Spec G-5: the source files of zone C Systems as gyo.zone-c-sources v1
     // JSON. Err when a registration site is outside repositoryRoot or
     // ownerRoot, so the list never names a file the scanner cannot read.
-    [[nodiscard]] Engine::Base::Result<std::string, KernelError> ExportZoneCSources(
+    [[nodiscard]] ::Engine::Base::Result<std::string, KernelError> ExportZoneCSources(
         const ZoneCSourcesOptions& options) const;
 
 private:
@@ -638,9 +638,9 @@ public:
     // this Registry is inside a Run (from its Systems, hooks, initial value
     // functions or other Worlds they run), or after a failed first round.
     template <class Build>
-    Engine::Base::Result<void, KernelError> Register(RegistrationOwner owner, Build&& build) {
-        Engine::Base::Result<std::uint32_t, KernelError> opened = OpenRegistrar(std::move(owner));
-        if (!opened) return Engine::Base::Err(std::move(opened).error());
+    ::Engine::Base::Result<void, KernelError> Register(RegistrationOwner owner, Build&& build) {
+        ::Engine::Base::Result<std::uint32_t, KernelError> opened = OpenRegistrar(std::move(owner));
+        if (!opened) return ::Engine::Base::Err(std::move(opened).error());
         RegistrarScope scope(*this);
         Registrar registrar(Target(), *opened);
         std::forward<Build>(build)(registrar);
@@ -653,7 +653,7 @@ public:
     // version stays. Err: every startup error at once; the round is dropped and
     // the Registry and its Worlds stay on the previous version (a failed first
     // round leaves the Registry unusable).
-    Engine::Base::Result<void, StartupReport> BuildPlans();
+    ::Engine::Base::Result<void, StartupReport> BuildPlans();
 
     // Drops the round registered since the last BuildPlans (its ids are void).
     void DiscardRegistrations();
@@ -684,7 +684,7 @@ private:
     };
 
     // Ok: the owner's index in the table this round writes (Target()).
-    Engine::Base::Result<std::uint32_t, KernelError> OpenRegistrar(RegistrationOwner owner);
+    ::Engine::Base::Result<std::uint32_t, KernelError> OpenRegistrar(RegistrationOwner owner);
     void CloseRegistrar() noexcept;
     // The table the open round writes: the pending copy after the first
     // successful BuildPlans, the tables themselves before it.

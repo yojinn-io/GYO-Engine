@@ -14,6 +14,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/GyoApps.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/GyoTools.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/GyoAppProject.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/GyoPackaging.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/GyoUnitRegistry.cmake")
 # Design Invariant 11 of docs/architecture/os.md: every Windows executable of
 # the repository's own sources declares UTF-8 as its ANSI code page. The
 # directories added below are recorded; the manifest is applied once every
@@ -45,8 +46,22 @@ add_compile_options("$<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang,GNU>:-ffp-contra
 # dependency a product adds from its own directory, but not to third_party.
 add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
                     "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")
+# The Module and Plugin registers name the engine's Modules, the Plugins and
+# their dependencies (Design Invariant O-6 of
+# docs/architecture/target/v2/orchestration.zh-Hant.md); engine/CMakeLists.txt
+# adds the Modules in register order, the Plugins follow from plugins/.
+gyo_load_unit_registers(GYO_UNITS "${GYO_REPOSITORY_ROOT}/engine/config/modules.csv"
+                        "${GYO_REPOSITORY_ROOT}/engine/config/plugins.csv")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/engine")
+get_property(_gyo_units GLOBAL PROPERTY GYO_UNITS_ORDER)
+foreach(_gyo_unit IN LISTS _gyo_units)
+    get_property(_gyo_kind GLOBAL PROPERTY GYO_UNITS_${_gyo_unit}_KIND)
+    if(_gyo_kind STREQUAL "Plugin")
+        add_subdirectory("${GYO_REPOSITORY_ROOT}/plugins/${_gyo_unit}" "plugins/${_gyo_unit}")
+        gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/plugins/${_gyo_unit}")
+    endif()
+endforeach()
 foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
     set(GYO_APP_SOURCE_DIR "${GYO_REPOSITORY_ROOT}/apps/${GYO_CURRENT_APP}")
     set(GYO_APP_BINARY_DIR "${PROJECT_BINARY_DIR}/apps/${GYO_CURRENT_APP}")

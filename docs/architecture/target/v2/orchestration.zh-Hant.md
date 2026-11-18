@@ -26,7 +26,7 @@ Owner：架構。程式：`engine/orchestration/`（`GYO::Engine::Orchestration`
 **O-5 啟動錯誤一次收齊。** Kernel 的 `StartupReport`（每個 World 一份，原封不動；Kernel 的 `StartupCode` 不擴充）、編排層的 `OrchestrationCode`（O-E1～O-E7）、各登記單位在 `Finish`／`Check` 回報的錯誤（它自己的碼）收成一份 `ProductStartupReport`；準備函式的錯誤（O-E7）在建好的 World 上才會出現，另成一份。執行時的錯誤 `OrchestrationError` 是另一組碼，準備函式回報的碼原樣帶出（存檔版本 Module 的拒絕靠它分辨）。守衛：`orchestration.O-5` 各案。
 
 <a id="o-6"></a>
-**O-6 依賴只在登記檔。** Module／Plugin 之間的依賴只寫在 `engine/config/modules.csv`、`plugins.csv`（使用者 `v8-arch-gyo2-module-deps-in-registers`）；`engine/` 的子目錄、引擎內 link 與產品的登記單位表由它產生；編排層建立 `Product` 時檢查（缺、在後、Module 依賴 Plugin 是 O-E3，不重排）。進 World 的 Module 照 `default` 欄預設帶、產品可以關；`default=no` 的與 Plugin 由產品列出。守衛：登記檔的 `cmake -P` 行為案例、依賴各案；引擎 CMakeLists 的 link 掃描延後。
+**O-6 依賴只在登記檔。** Module／Plugin 之間的依賴只寫在 `engine/config/modules.csv`、`plugins.csv`（使用者 `v8-arch-gyo2-module-deps-in-registers`）；`engine/` 的子目錄、引擎內 link 與產品的登記單位表由它產生；編排層建立 `Product` 時檢查（缺、在後、Module 依賴 Plugin 是 O-E3，不重排）。進 World 的 Module 照 `default` 欄預設帶、產品可以關；`default=no` 的與 Plugin 由產品列出。守衛：`cmake.UnitRegistry`（登記檔的讀取與驗證、產品帶哪些單位、產生的表與 link，`cmake -P`）、`orchestration.units`（產生的表建得起 `Product`）、`orchestration.O-E3` 的依賴各案；引擎 CMakeLists 的 link 掃描延後。
 
 <a id="o-7"></a>
 **O-7 準備時機。** 每個 World 建好之後（啟動與每次替換）、第一次 Run 之前，照「帶過去 → 登記單位的準備 → 描述的準備 → 替換帶的 `extra`」的順序呼叫；準備放預設值時不蓋掉已經在的值；失敗時這個 World 不用。守衛：`orchestration.O-8` 的準備各案；讀檔案例。

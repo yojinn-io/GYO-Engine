@@ -951,6 +951,294 @@
    "target": "gyo_orchestration_tests",
    "cases": "O-1: D4:*",
    "expect": "\\[or\\-d4\\-not\\-marked\\]"
+  },
+  {
+   "id": "ur-header-unchecked",
+   "what": "segment 3 (unit registers): the header's column names are not checked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT actual STREQUAL expected)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'header_name'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-row-count-unchecked",
+   "what": "segment 3 (unit registers): a row with too few columns is read (reading the missing column then fails elsewhere, so the case reports the wrong reason)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT fields EQUAL columns)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'row_count'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-duplicate-allowed",
+   "what": "segment 3 (unit registers): a name in both files (or twice) is allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name IN_LIST order)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'duplicate'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-yes-no-loose",
+   "what": "segment 3 (unit registers): anything but yes reads as no ('maybe' reads as no, and the row then fails as an in-World row without a unit)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    elseif(lowered STREQUAL \"no\")\n",
+   "replace": "    elseif(TRUE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'bad_yes_no'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-library-unit-allowed",
+   "what": "segment 3 (unit registers): a library-only row may name a unit",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(library_only AND (NOT value_unit STREQUAL \"\" OR NOT value_header STREQUAL \"\"))\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'library_with_unit'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-world-without-unit",
+   "what": "segment 3 (unit registers): an in-World row without a unit is read",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT library_only AND (value_unit STREQUAL \"\" OR value_header STREQUAL \"\"))\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'unit_without_header'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-default-plugin-allowed",
+   "what": "segment 3 (unit registers): a Plugin or library row may be default yes",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(default_on AND (library_only OR kind STREQUAL \"Plugin\"))\n",
+   "replace": "        if(default_on AND library_only)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'default_plugin'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-missing-dep-as-later",
+   "what": "segment 3 (unit registers): a dependency on no row is reported as 'comes later'",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT dep IN_LIST order)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'missing_dep'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-module-on-plugin-as-later",
+   "what": "segment 3 (unit registers): a Module's Plugin dependency is reported only as 'comes later'",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(kind STREQUAL \"Module\" AND dep_kind STREQUAL \"Plugin\")\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'module_on_plugin'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-later-dep-allowed",
+   "what": "segment 3 (unit registers): a dependency on a later row is allowed (the order would be changed)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT dep IN_LIST seen)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'later_dep'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-select-unknown-allowed",
+   "what": "segment 3 (unit registers): a selection names a row that is no in-World unit of that kind",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT name IN_LIST order OR NOT kind STREQUAL wanted_kind OR library_only)\n",
+   "replace": "            if(NOT name IN_LIST order)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'select_library'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-default-ignored",
+   "what": "segment 3 (unit registers): default yes does not carry a Module",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
+   "replace": "            if(name IN_LIST ARG_MODULES)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "default\\ selection:\\ in\\-World\\ Modules\\ with\\ default\\ yes:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-disable-ignored",
+   "what": "segment 3 (unit registers): DISABLE_MODULES does not remove a default Module",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
+   "replace": "            if(default_on OR name IN_LIST ARG_MODULES)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "disable,\\ add\\ a\\ default\\-no\\ Module\\ and\\ a\\ Plugin:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-select-dep-unchecked",
+   "what": "segment 3 (unit registers): a carried unit's in-World dependency may be left out",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT dep_library_only AND NOT dep IN_LIST selected)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'disable_needed'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-rows-only-carried",
+   "what": "segment 3 (unit registers): the generated table lists only the carried units' rows",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        string(APPEND rows \"    units.rows.push_back(RegisterRow{\\\"${name}\\\", UnitKind::${kind}, ${library_cpp}, ${default_cpp}, {${depends_cpp}}, {${private_cpp}}});\\n\")\n",
+   "replace": "        if(name IN_LIST selected)\n        string(APPEND rows \"    units.rows.push_back(RegisterRow{\\\"${name}\\\", UnitKind::${kind}, ${library_cpp}, ${default_cpp}, {${depends_cpp}}, {${private_cpp}}});\\n\")\n        endif()\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "The\\ generated\\ table\\ lacks\\ 'units\\.rows\\.push_back\\(RegisterRow\\{\"core\"",
+   "timeout": 300
+  },
+  {
+   "id": "ur-plugins-not-generated",
+   "what": "segment 3 (unit registers): carried Plugins get no instance",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "                string(APPEND plugins \"    units.plugins.push_back(UnitEntry<Plugin>{\\\"${name}\\\", std::make_unique<${unit}>()});\\n\")\n",
+   "replace": "",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+lacks\\s+'units\\.plugins\\.push_back\\(UnitEntry<Plugin>\\{\\\"tool\\\"",
+   "timeout": 300
+  },
+  {
+   "id": "ur-unit-targets-not-linked",
+   "what": "segment 3 (unit registers): the product does not link the carried units' targets",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            list(APPEND link_targets \"${unit_target}\")\n",
+   "replace": "",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "the\\ product's\\ links:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-private-as-public",
+   "what": "segment 3 (unit registers): private_depends are linked PUBLIC",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            target_link_libraries(${target} PRIVATE ${private_targets})\n",
+   "replace": "            target_link_libraries(${target} PUBLIC ${private_targets})\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "extra's\\ registered\\ links:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-include-order-kernel-unqualified",
+   "what": "segment 3 (include order): a kernel header names Engine::Base unqualified inside GYO::Kernel (the check is the build of the include-order objects; the command after it only completes the run)",
+   "file": "engine/kernel/include/engine/kernel/WorldExecutor.hpp",
+   "find": "    ::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
+   "replace": "    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
+   "target": "gyo_orchestration_include_order",
+   "expect_build_failure": true,
+   "expect": "no\\ member\\ named\\ 'Base'\\ in\\ namespace\\ 'GYO::Engine'",
+   "platforms": [
+    "darwin"
+   ],
+   "command": [
+    "{python}",
+    "-c",
+    "pass"
+   ]
   }
  ]
 }

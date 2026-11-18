@@ -34,7 +34,8 @@ target_include_directories(gyo_os PUBLIC
 )
 
 target_compile_features(gyo_os PUBLIC cxx_std_20)
-target_link_libraries(gyo_os PUBLIC GYO::Base)
+# Engine-internal links come from engine/config/modules.csv (O-6).
+gyo_link_registered_dependencies(os)
 if(NOT WIN32)
     # pthread_setname_np (Thread): the system's thread library, as Design
     # Invariant 3 allows (D69).

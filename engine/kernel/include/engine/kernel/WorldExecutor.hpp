@@ -79,7 +79,7 @@ public:
     // the Systems' state to a new Registry version (declaration 3.2 rule 5).
     // GYO_ASSERT: the World is Ready (so not from inside a System) and the
     // schedule exists.
-    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
+    ::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
     // The Executor's handler: called once per Err (target/error-handling DI 2:
     // the only place a kernel error is logged). Default: the whole chain to stderr.
@@ -100,18 +100,18 @@ private:
         std::vector<MountState> mounts;
     };
 
-    friend Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
-    friend Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
+    friend ::Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
+    friend ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
                                                                                             Detail::Record, ChangeStamp,
                                                                                             bool);
 
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
-    Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
-    Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+    ::Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
+    ::Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                           bool inClosure);
     // S5 (Detail::ApplyImmediate): an immediate structural change of the running exclusive System call.
-    Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
+    ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
                                                                               Detail::Record record, ChangeStamp stamp,
                                                                               bool closureOpen);
     // J-50 (DI-KS 24): reads KernelSettings, once per Run call.
@@ -123,7 +123,7 @@ private:
     void Attach();
     // Spec E.5: interrupts the World and drops every record. The outermost level
     // calls the handler; a nested one leaves the error instead (its first one).
-    Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
+    ::Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
 
     // One level of the run stack (World::runStack_): pushed for the Plan's
     // duration and popped on every way out; an exception through it interrupts

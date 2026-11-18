@@ -1,6 +1,6 @@
 # 編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：進行中——段 1、段 2 完成；段 1 的 G-8 處理完（突變 95/95）；進行段 3（登記檔）。**
+日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：進行中——段 1～段 3 完成；進行段 4（scenario 第一段）。**
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[orchestration-skeleton-declaration.zh-Hant.md](../architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md) 修訂 7；使用者 2026-11-18「核准」第一段（主會話轉達）。修訂 0 送 Fable／high 敵對式檢查（必改 10、建議改 16、小問題 8，報告 `declaration-r0-adversarial-check.md`）。實作者 Opus／high。
 
@@ -14,6 +14,8 @@
 | 段 2 Kernel 減法 | 81e1d231 | 拿掉開局排程（`startup`、`RunStartup`、J-58 等）與登記單位（`Plugin`、`FinishContext`、`Registry` 的 vector 與 `Finish()`、R-E1／R-E3／R-E6）；測試輔助改兩步（`RegisterAll`）；指紋 Registry 4、Plan 6、C 8，匯出 `gyo.kernel.plans 4`；golden 更新 |
 | G-8 找到的缺陷 D1、D3、D4 | 01ce5137 | 各先寫失敗的案（Red，`segment1/g8-defects-red.log`）再修（Green，`g8-defects-green.log`）：D1 替換中斷的 World 失敗時不寫回它（值留在暫存處）；D3 `extra` 丟例外時記一次警告再往外傳；D4 第一個 World 的位置是空的時遊戲初始化回 `WorldMissing`、不記為已跑。D5（`UnitSlot::isModule` 只寫不讀）拿掉 |
 | G-8 的測試補強與突變 | 本提交 | 新 `CoverageTests.cpp`（約 20 案：O-E6 三種、只有 Kernel 錯誤、`privateDepends`、Plugin 依賴 Plugin、產品的 build 最後、每幀清單的插入／錨點／錯誤、`RunSchedule` 的中斷與空位、`UnknownWorld`、預設 runner 的失敗等）；W1～W13 的處理（標記、非空檢查、四幀、比對碼與警告訊息）；突變清單加 52 個 G-8 候補與 D1／D3／D4 各一個，共 95；Kernel 與編排層的 DI 文字草稿（`target/kernel.zh-Hant.md`、新頁 `target/v2/orchestration.zh-Hant.md`；最終文字在第二段核准） |
+
+| 段 3 登記檔 | 本提交 | `engine/config/modules.csv`（十列，全部 `library_only=yes`）、`plugins.csv`（只有表頭）；`build/cmake/GyoUnitRegistry.cmake`（讀取與驗證、`gyo_unit_selection`、`gyo_link_registered_dependencies`、`gyo_product_units`）；`engine/CMakeLists.txt` 照登記檔的列序加子目錄，各 Module 的引擎內 link 換成 `gyo_link_registered_dependencies`（第三方的 link 照舊）；`GyoBuild.cmake` 讀登記檔、Plugin 從 `plugins/<name>` 加；測試 `cmake.UnitRegistry`（`tests/common/cmake/UnitRegistryTests.cmake`）與 `orchestration.units`（合成登記檔 `tests/common/orchestration/units/`）；Kernel 標頭改寫 `::Engine::`（下述缺陷）與 include 順序的編譯守衛 |
 
 ## 驗證與經過
 
@@ -34,11 +36,17 @@
   - **D2 不改，第二段核准時請使用者確認讀法**：`RunFrame` 碰到空位或中斷的 World 就停下回傳，排在後面的 World 那一次不跑。宣告 3.4 寫「有錯就停下回傳」，7.3 寫「`RunFrame` 回 `WorldMissing` 且別的 World 照跑」；我讀成「別的 World 之後照樣能用 `RunSchedule` 跑、不被拖垮」，案 `O-8: RunSchedule on an interrupted or empty World; another World still runs…`（`CoverageTests.cpp`）守這個讀法。
 - **完整突變 95 個：94 殺、1 活**（`segment1/mutants-after-g8.log`）。活的 `g8-anchor-last-occurrence`：重複錨點只測了 `InsertAfter`，補 `InsertBefore` 的一段後殺掉（`mutants-after-g8-anchor-fix.log`）。**95/95。**
 
+- **段 3**：
+  - `ctest --preset test -L "cpu|shader"` 112 項全過（原 110＋`orchestration.units`、`cmake.UnitRegistry`；`segment3/ctest-segment3.log`）。
+  - **G-3 的 link 比對**（`segment3/g3_links.py`、`g3_links.log`）：引擎各 CMakeLists 的 `target_link_libraries(` 裡的 `GYO::` 別名在 0f1f2d21 命中 13 個（8 個檔），現在 0；configure 後十個引擎 target 的 `LINK_LIBRARIES`／`INTERFACE_LINK_LIBRARIES`（`link_dump.cmake` 在 configure 結束時傾印，`links-before.txt` 取自 01ce5137 的副本、`links-after.txt`）**集合逐一相同；順序只有 `gyo_threads` 不同**（`GYO::Time;Threads::Threads;GYO::Os` → `GYO::Time;GYO::Os;Threads::Threads`）：登記的依賴一次 link 完，第三方的 `Threads::Threads` 排到後面。宣告寫「逐一相同」，這一點第二段核准時報告（link 的先後不改變連結器拿到的東西：CMake 依依賴排靜態函式庫）。
+  - **缺陷（§14.3）：Kernel 標頭在先開了 `GYO::Engine` 的翻譯單位裡編不過**。產生的 `<target>_units.cpp` 先 include 編排層的標頭，`namespace GYO::Engine::Orchestration` 一開，Kernel 標頭在 `GYO::Kernel` 裡未限定的 `Engine::Base`、`Engine::EntityStore` 就先找到 `GYO::Engine`、編譯失敗（Red：`segment3/header-order-red.log`）。編排層是第一個 `GYO::Engine` 的 Module（N17；帶過來的模組根仍是 `::Engine`，架構師排的機械改名在之後），所以第一次出現。修法：Kernel 公開標頭的 49 處改寫 `::Engine::`（行為不變；`src/` 不改，因為它不會先開 `GYO::Engine`）；Kernel 突變清單裡 find 含這幾行的 3 個跟著改（改前改後都恰好命中一次）。守衛：`gyo_orchestration_include_order`（每個編排層公開標頭先 include、再 include 全部 Kernel 公開標頭，各一個翻譯單位，隨測試一起建）；把 `WorldExecutor.hpp` 的一處改回未限定時它編不過（7 處錯誤，`include-order-mutant.log`），還原後通過（`include-order-green.log`）。之後的 `GYO::Engine` Module（例：權威 Module）在改名批之前都會碰到同一件事，轉交主會話。
+  - **段 3 的突變 19 個：19 殺**（`segment3/mutants-segment3.log`、`mutants-segment3-expect-fix.log`）。登記檔的讀取與驗證 10、帶哪些單位 4、產生的表與 link 4（`cmake -P` 經突變執行器的 `command` 跑），include 順序 1（建置失敗才算殺）。第一輪 3 個是 `expect` 寫錯（拿掉欄數檢查後是讀欄時另一處失敗、`maybe` 讀成 `no` 後以「進 World 卻沒有單位」失敗、CMake 把長訊息換行），改成各自專屬的式子後殺掉；測試不動。
+  - 和宣告不同的小處：測試名照 `tests/common/cmake` 既有的命名寫成 `cmake.UnitRegistry`（宣告判定 1 寫 `cmake.unit_registry`）；突變執行器 `run_mutations.py` 的 `command` 加 `{cmake}` 佔位符（向後相容），讓登記檔的突變能跑 `cmake -P`。
+
 ## 下一步
 
-1. 段 3（登記檔）：兩份 CSV、`build/cmake/GyoUnitRegistry.cmake`、`engine/` 的子目錄與 link、`gyo_product_units` 與它的測試 target、`cmake -P` 測試、G-3 的 link 比對。
-2. 段 4（scenario 第一段）。
-3. 文件（說明頁、v2 README 的索引）、完整突變、G-7、段 2～4 的 G-8；第二段核准的資料。
+1. 段 4（scenario 第一段）。
+2. 文件（說明頁、v2 README 的索引）、完整突變、G-7、段 2～4 的 G-8；第二段核准的資料。
 
 ## 證據
 
