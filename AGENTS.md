@@ -256,6 +256,10 @@ Architecture Delta は禁止事項ではない。
 * Engine の Design Invariants がどの文書にあり、どれが効くかは、`docs/architecture/README.md` の〈Design Invariants〉に従う。
   見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
 * 可能なものは、ガードとなる Test も用意する。
+* ガードを立てる時期：振る舞いを固定する Test（ゲームの流れに沿って機構を通しで動かす scenario test、単体 Test）は、機構と同時に書く。
+  実装の方式に縛るガード（名前・記号・構造を走査する Script、書き手の数の検査など）と、それを守るミューテーションは、
+  その機構を含む scenario test が通るまで立てない。それまでは Design Invariants を文書に書き、Review で守る。
+  理由：設計がまだ検証されていないうちに実装方式のガードを立てると、設計を覆すときに多くの規則に触れ、変えられなくなる。
 * Component を変更する前に、その owner の `Design Invariants` 節を読む。
 * 該当節に反する変更は、変更が小さくても Architecture Delta として扱い、ユーザーの同意を得る。
 * 節そのものの変更・削除も、ユーザーの同意を要する Architecture Delta とする。
