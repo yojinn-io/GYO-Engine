@@ -1,8 +1,8 @@
 # 事前宣告：編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-更新：2026-11-18（修訂 2）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等第一段核准（方向與設計）；核准之前不改程式。**
+更新：2026-11-18（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等第一段核准（方向與設計）；核准之前不改程式。**
 
-經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。修訂 2 收使用者對第 14 節第 3 件的決定（重跑登記），只改它牽連的地方。
+經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。修訂 2 收使用者對第 14 節第 3 件的決定（重跑登記），修訂 3 收第 2 件的決定（不重跑生命週期），都只改它牽連的地方。
 
 性質：實作批的事前宣告（AGENTS §3 的 Architecture Delta、§2 的基盤 Architecture、§14.4 的判定變更、Design Invariants 的變更）。實作段第 2 批。
 
@@ -315,7 +315,7 @@ struct ReplaceRequest {
 1. `registry.Register({owner, 序號}, build)`：回 `DynamicInsertRefused` → 經 `Log` 記一次警告（World 名、owner、「這個 World 宣告不准動態插入」），回傳 `InsertRefused`；什麼都沒變（CCR-3）。`build` 丟例外 → 3.4「例外」。
 2. `registry.BuildPlans()`：失敗（例：R-E7）→ 記一次警告（帶 Kernel 的報告）、回傳 `InsertBuildFailed`；Registry 與 World 留在上一個版本（DI-KS 26）。
 3. 成功：World 下一次被用到時自己接上（DI-KS 26）；編排層持有的唯讀登記表參照照 CCR-4 重讀。
-- **不重跑 `Finish` 與 `Check`**（和統合 O-2 草案的「執行中的插入照同一條路再走一次」不同，**第 14 節第 2 件請你確認**）。
+- **不重跑 `Finish` 與 `Check`，也不通知**（使用者 2026-11-18 定，`v8-arch-gyo2-dynamic-insert-no-lifecycle-rerun`；**改寫** HANDOFF `v8-arch-gyo2-dynamic-insert-per-world` 與統合 O-2 草案的「執行中的插入（指令等）照同一條路再走一次」那半句）。使用者：「不重跑，理由還是之前的那個，如果作者有需求就自己設計。系統有支持，最關鍵的是，Build 、Finish、Check都屬於Module自己的東西，如果一個system可以重置Module的生命週期，會讓系統層級分不開。」比過的：不重跑、不通知 ←選／重跑（HANDOFF 原文）／只通知、不能否決／能否決（改第 1 批的兩步）。後果（side chat 補的，不是使用者的話）：Module 在 `Finish` 建的衍生資料插入後可能過期，Module 用登記表的版本號自己發現（CCR-4）；需要檢查保證的策略（伺服器權威）本來就要求它的 World 不准動態插入（權威份 4.5）。
 - 動態插入的 System 在這個 World 被替換（讀檔）時一律重置（3.9，`restore-reruns-registration`）。
 - 指令集從 System 呼叫插入，和 3.9 的通道一起留到每幀迴圈的 runner 那一批。
 
@@ -406,7 +406,7 @@ struct ReplaceRequest {
 7. **為什麼不能更小**：拿掉開局與 `Plugin` 而不建編排層，Kernel 的測試與遊戲初始化沒有新家（統合第 8 節「拿掉某條限制和接手它的新家放在同一條線」）；只建 `Product` 不做登記檔，依賴只能寫在程式碼（`Requires`），和 L20 相反；登記檔寫依賴而 CMakeLists 不讀，依賴兩處（AGENTS §9）；準備與替換不在本批，讀檔的實作（第 5 條）沒有前提。比過、沒採的較小做法：「`Kernel::Plugin` 原地留著、編排層包一層」——Kernel 照樣認得登記單位與 runner，L17 的職責清單不成立。
 
 **和統合（與批次表、讀檔宣告）不同的**：
-1. 動態插入不重跑 `Finish` 與 `Check`（統合 O-2 草案；第 14 節第 2 件）。
+1. 動態插入不重跑 `Finish` 與 `Check`、也不通知（使用者 2026-11-18 定 `dynamic-insert-no-lifecycle-rerun`，改寫統合 O-2 草案與 HANDOFF `dynamic-insert-per-world` 的「照同一條路再走」；3.10）。
 2. 登記單位多一個產品層一次的 `Configure`；產品自己的遊戲程式由描述的回呼登記（3.3）。
 3. runner 在 `Configure` 裝，不在 finish（3.7）。
 4. golden 重產多一次（統合第 8 節算三次，3.11）。
@@ -579,7 +579,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 「守衛」欄：行為的測試照常；腳本守衛延後的寫「延後（7.4）；這段期間靠文件與審查」。
 
 - **O-1 遊戲初始化**：一個 `Product` 一份清單，行程一次、在所有 World 的第一幀與任何 `RunSchedule` 之前跑完、跑在第一個 World；明確呼叫只准一次；清單的順序照插入（插入當下解析錨點，錨點不在是啟動錯誤）。守衛：O-1 的行為案例；scenario S1-2。
-- **O-2 登記單位與生命週期**：產品層一次 `Configure`（產品的最後）；每個 World：照順序 `Build`（Module 先、產品的最後）→ Kernel `BuildPlans` → 照順序 `Finish` → 照順序 `Check`；Kernel 有啟動錯誤的 World 不跑 `Finish`、`Check` 與清單檢查；出錯的單位不用、其餘照做、一起收齊；有任何錯誤就不建任何 World；動態插入只走 Kernel 的兩步（**看第 14 節第 2 件**）；替換 World 時對那個 World 重走 `Build`～`Check`，登記單位以 World 名為鍵的資料在 `Build` 時重設；選項包只轉交。守衛：O-2 各案。
+- **O-2 登記單位與生命週期**：產品層一次 `Configure`（產品的最後）；每個 World：照順序 `Build`（Module 先、產品的最後）→ Kernel `BuildPlans` → 照順序 `Finish` → 照順序 `Check`；Kernel 有啟動錯誤的 World 不跑 `Finish`、`Check` 與清單檢查；出錯的單位不用、其餘照做、一起收齊；有任何錯誤就不建任何 World；動態插入只走 Kernel 的兩步，不重跑 `Finish`／`Check`、不通知——它們屬於登記單位自己的生命週期，System 不能重置它（`dynamic-insert-no-lifecycle-rerun`）；替換 World 時對那個 World 重走 `Build`～`Check`，登記單位以 World 名為鍵的資料在 `Build` 時重設；選項包只轉交。守衛：O-2 各案。
 - **O-3 runner**：一個 `Product` 至多一個，在 `Configure` 裝；沒有時只跑一次；runner 只呼叫 `Product` 的執行入口，不排 System 的先後。守衛：O-3 的行為案例；「不讀 Plan 的步驟」的掃描延後（7.4），這段期間靠審查。
 - **O-4 職責**：**編排層的職責是組裝與流程**（L17）。職責清單：登記單位與生命週期（含產品自己的登記）；依賴的讀取與檢查；`Product`（World 群、runner、World 的準備與替換）；遊戲初始化與每幀的清單；生成世界的流程（第 5 條）；交換點、extract 的時機、執行緒的安排（第 5 條）；啟動錯誤的彙整與編排層自己的警告。不帶任何第三方能力；不認得產品、策略的語意、時鐘、回滾。守衛：依賴只有 Kernel 與 Base（登記檔）；include 掃描與 `naming_guard` 延後（7.4），這段期間靠審查。（「World 的準備與替換」寫在「`Product`」那一項之內，是統合 O-4「`Product`（World 群與 runner）」的細分——**這個歸法請你一起確認**，第 14 節。）
 - **O-5 啟動錯誤一次收齊**：Kernel 的 `StartupReport`、編排層的 `OrchestrationCode`、各登記單位的錯誤收成一份（準備的錯誤另一份）；Kernel 的 `StartupCode` 不擴充。守衛：O-5 各案。
@@ -691,16 +691,9 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 
 建議「帶過去」。決定性的例子是選項選單：遊戲中改過的值在 World 裡，只有「帶過去」不用作者另外同步。三家的分布：明確搬資料的只有 Unity Entities 核心（`MoveEntitiesFrom`）；放在 World 外的容器是遊戲引擎（Unreal、Godot、Unity 的 GameObject 層）的常見做法；Bevy、flecs 沒有這個問題（不換 World）。
 
-### 第 2 件：動態插入要不要重跑 `Finish` 與 `Check`（確認：和統合 O-2 草案、HANDOFF `dynamic-insert-per-world` 的「定下的」不同）
+### 第 2 件：動態插入要不要重跑 `Finish` 與 `Check`——**已定：不重跑、不通知**（使用者 2026-11-18，`v8-arch-gyo2-dynamic-insert-no-lifecycle-rerun`）
 
-統合 9.2 的 O-2 草案與 HANDOFF `dynamic-insert-per-world` 的「定下的」（該列自己註明：使用者的「對的。」可能只確認了讀法）寫「執行中的插入（指令等）照同一條路再走一次」。本宣告改成**只走 Kernel 的兩步、不重跑**（3.10）。
-
-- **遊戲**：開發中用指令加一個「顯示碰撞框」的 System。照草案，加完要再跑一次所有 Module 的 `Finish` 與策略的 `Check`。
-- **為什麼不照草案**：Kernel 的 `BuildPlans` 成功就換上新版本，之後才跑的 `Check` 失敗，Kernel 撤不回（第 1 批宣告第 11 節）——結果是「報錯了、但 System 已經插進去」；需要檢查保證的策略本來就要求它的 World 不准動態插入（伺服器權威，權威份 4.5）；Bevy、flecs、Unity 執行中加 System 都不重跑 finish 或檢查。
-- **不重跑的代價**：Module 在 `Finish` 裡從唯讀登記表建的衍生資料（例：權威的 C 指紋、之後網路的 wire id 表）在插入後過期，而 Module 收不到通知（CCR-4 只給版本號讓人輪詢）。
-- **另外兩條路**：(1) **只通知、不能否決**：插入成功後呼叫每個登記單位的「登記表換版了」（能重建衍生資料、不能拒絕），不動 Kernel；代價是登記單位多一個函式，現在沒有點名的 Feature 用它。(2) **能否決**：Kernel 加「建好但先不換上」的一步，讓 `Check` 在換上之前否決；代價是改第 1 批剛核准的兩步。
-
-建議照本宣告（不重跑、不通知；衍生資料靠 CCR-4 的版本號）。選 (1) 本批加那個函式；選 (2) 本批停下、先改 Kernel 的兩步。
+使用者在 side chat 定（經主會話轉交），原話、比過的選項與理由收在 3.10。這個決定改寫 HANDOFF `v8-arch-gyo2-dynamic-insert-per-world` 與統合 O-2 草案的「執行中的插入（指令等）照同一條路再走一次」那半句。本宣告已照它改（3.10、10.2 O-2、第 6 節差分第 1 項）。
 
 ### 第 3 件：換 World 時，登記沿用還是重跑——**已定：重跑**（使用者 2026-11-18，`v8-arch-gyo2-restore-reruns-registration`）
 
@@ -772,3 +765,5 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 **修訂 1 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-scenario-tests`（第 8 節）；`v8-arch-gyo2-guards-after-mechanism-stable` 與它的補充「機制穩定＝涵蓋它的 scenario 段通過」（第 7 節開頭、7.4）；主會話照 L17 判的「scenario 第一段涵蓋第 1 批的機制」（8.2 的「涵蓋的第 1 批機制」欄）與「`TieBreaks` 那一步延到第 4 批」（8.2 最後一列）；`v8-arch-gyo2-scenario-failure-by-contract`（8.4）；`v8-arch-gyo2-scenario-cross-engine-check` 與它的兩則補充（8.2 的「別家」欄與分類、8.4、第 14 節第 3 件）。
 
 **修訂 2 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-restore-reruns-registration`——第 14 節第 3 件定為重跑（3.9 的步驟 1 與「重新登記」、2.2 的 extract、3.10、7.3 O-9、8.2 S1-5／S1-7～S1-9（存檔不存速度，讀檔後「加速」不在、重新加入）、10.2 O-2／O-8、RC-O9、判定 2 案例 3、判定 3 的突變、第 6 節差分第 9 項、第 13 節）。第 1、2、4、5 件使用者還在定，沒有改。
+
+**修訂 3 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-dynamic-insert-no-lifecycle-rerun`——第 14 節第 2 件定為不重跑、不通知（3.10 收原話、選項、理由與後果；10.2 O-2；第 6 節差分第 1 項；註明改寫 HANDOFF `dynamic-insert-per-world` 的半句）。第 1、4、5 件使用者還在定，沒有改。
