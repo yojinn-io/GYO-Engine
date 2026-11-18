@@ -1,6 +1,6 @@
 # Kernel 減法・結構段（`v8-arch-gyo2-kernel-subtract-structure`）
 
-日期：2026-11-17～18。分支 `claude/eloquent-joliot-aedd90`（從 `gyo2` a08c16f6 快轉）。第二段核准：使用者 2026-11-18 核准（宣告第 15 節開頭）；PR 開往 `gyo2`，合併等使用者。
+日期：2026-11-17～18。分支 `claude/eloquent-joliot-aedd90`（從 `gyo2` a08c16f6 快轉）。第二段核准：使用者 2026-11-18 核准（宣告第 15 節開頭）。**已合併（PR #242，merge 0f1f2d21，2026-11-18）。**
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[kernel-subtract-structure-declaration.zh-Hant.md](../architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md) 修訂 2（cd553b2d）；使用者 2026-11-17 在主會話「照建議」核准第一段（HANDOFF `v8-arch-gyo2-kernel-subtract-structure-declaration-approved`）。宣告的修訂 0、1 各送 Fable／high 敵對式檢查與窄複查。實作者 Opus／high（三段＋兩次修正）；逐行複核 Fable／xhigh（使用者同意）；§14.4 檢證與 §14.2 檢查 Fable／high。
 
@@ -27,6 +27,7 @@
   - **這批的設計讓突變活下來**（使用者 2026-11-18 定「都補測試」，aa6e65c0 補了，兩個都在預期的失敗下殺掉，`survivor-tests-2-mutants.log`）：`hf-product-limit-static`（S7 讓每次 Run 開頭都重讀 `KernelSettings`，靜態與每個 World 一份在現有測試裡分不出來；只有另一個 World 在這個 World 的 Run 裡面跑時才分得出）、`ns-rebase-no-retake`（S4 讓 `ExclusiveWorld` 宣告寫全部、事件除外，內層排程改的東西不再算到外層 System 頭上；只有內層寫事件時才分得出）。
 - S10 修正（使用者 2026-11-18 選 (b)、改語義成 Base 的通用發號器；宣告第 14.1、14.5 節）：`engine/base/include/engine/base/IdIssuer.hpp`（`IdIssuer`、`CurrentThreadSerial`），Kernel 綁執行緒的記號改用執行緒序號。探針壓力跑 300 次、漏 0（修正前漏 20；`s10-fix/probe-stress-300.log`，檢查者另跑 300 次也是 0）。敵對式檢查（Fable 5.2／high）候選 28 個、殺 14，建議補的 11 處照做（Base 第 5 案查不為 0、J-6 加三案、J-56 新案加正例、記號守衛自測試加長得像的名字與兩種格式的正例），取 21 個候選進清單。最後：ctest 98/98、Kernel doctest 382 案、守衛腳本 130 項；S10／Base／記號守衛／兩個補測的突變 57 個中殺 56、1 個只在 Linux 跑、1 個因標頭註解變成 stale，改 find 後殺掉（`s10-fix/after-check-mutants.log`、`after-check-stale-fixed.log`）。突變清單 759 → 786。
 - 檢查：段 2 逐行複核（必改 1）、段 3 逐行複核（必改 1）、G-7（沒有不成立的組，6 處文字更正）、G-8（找到 45 處，補齊）。處理都在宣告第 14.4 節。
+- **G-6 成立**（2026-11-18，第 2 批「編排層的骨架」的宣告卡補記）：PR #242 的 L1 三平台通過——linux-x64 5m12s、macos-arm64 4m33s、windows-x64 5m52s；CI gate 通過；run 44243311890。Windows 與 Linux 是這一批第一次跑（本機只在 macOS 上跑過）。
 
 ## 停下的與待定的
 
