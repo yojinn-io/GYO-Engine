@@ -1,8 +1,8 @@
 # 事前宣告：編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-更新：2026-11-18（修訂 4）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等第一段核准（方向與設計）；核准之前不改程式。**
+更新：2026-11-18（修訂 5）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等第一段核准（方向與設計）；核准之前不改程式。**
 
-經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。修訂 2 收使用者對第 14 節第 3 件的決定（重跑登記），修訂 3 收第 2 件的決定（不重跑生命週期），修訂 4 收第 4 件的決定（替換的先後作者選），都只改它牽連的地方。
+經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。修訂 2 收使用者對第 14 節第 3 件的決定（重跑登記），修訂 3 收第 2 件的決定（不重跑生命週期），修訂 4 收第 4 件的決定（替換的先後作者選），修訂 5 收第 4 件的補充（存檔版本 Module，不在本批），都只改它牽連的地方。
 
 性質：實作批的事前宣告（AGENTS §3 的 Architecture Delta、§2 的基盤 Architecture、§14.4 的判定變更、Design Invariants 的變更）。實作段第 2 批。
 
@@ -70,6 +70,7 @@
 | 每幀迴圈的 runner 與 System 端的請求通道（結束、替換 World、從指令插入；照 Bevy 的 `AppExit` 是一種訊息） | 第一個需要它的批。訊息在第 3 條改名 `Message`，先做會白改一次（3.9） |
 | 大型靜態地圖放在 World 外、多個 World 共用（Unity `BlobAssetReference` 那一型） | 資產或地圖那一批（`replace-order-author-choice` 的後續；BigMap 換圖時才會碰到） |
 | 存檔的版本轉換 | 不做（`save-unaware-means-format-only`）；產品自己管版本，太舊的檔不支援、讓玩家開新檔（使用者 2026-11-18） |
+| 存檔版本 Module（`v8-arch-gyo2-save-version-module`：預設不啟用、啟用後過時的存檔直接拒絕；使用者明說不放編排層） | 批次表第 5 條（讀檔的實作同一條線或緊接其後）。本批要做到的只有兩件：讀檔失敗的路接得住它的拒絕（3.9「存檔讀不了」）、登記檔擺得下「預設不帶的 Module」（3.2 的 `default` 欄） |
 | 時鐘、`Domain`、tick | 第 3 條。之前遊戲初始化的 schedule 要屬於一個 domain（3.6） |
 | 寫者數量 D-E2、`Shared` | 第 4 條。之前遊戲初始化的 System 照樣算寫者（第 7.1 節組 E） |
 | 權威、回滾、時間、狀態機這些 Module 本身 | 各自的批 |
@@ -97,6 +98,7 @@
 | `target` | link 用的別名（例 `GYO::EntityStore`、`GYO::Io`）。N14 的別名大小寫不規則（`entity_store` → `EntityStore`），從名字推不出；既有的 `gyo_expect_links` 比的是別名字面，所以一律 link 這一欄 |
 | `description` | 一句話 |
 | `library_only` | `yes`＝不進 World（只當函式庫用，沒有登記單位）；`no`＝進 World |
+| `default` | 進 World 的 Module：`yes`＝產品預設帶（可以關）、`no`＝預設不帶（產品要列出才帶；例：使用者明說「默認不啟用」的存檔版本 Module，`save-version-module`）；不進 World 的列與 `plugins.csv` 一律 `no`（Plugin 預設不帶） |
 | `depends` | 依賴的 Module／Plugin 名字，`;` 分隔；CMake 以 PUBLIC（`INTERFACE` 函式庫以 INTERFACE）link |
 | `private_depends` | 同上，CMake 以 PRIVATE link（現在 `io` → `math`、`os`，`threads` → `os` 是 PRIVATE；混成 PUBLIC 會把 OS 層的標頭漏給 io 的使用者） |
 | `unit`、`header` | 進 World 的那一列：登記單位的完整類別名與標頭；不進 World 的列留空 |
@@ -106,8 +108,8 @@
 **CMake 讀取**（新檔 `build/cmake/GyoUnitRegistry.cmake`，可以用 `cmake -P` 跑）：
 1. **驗證檔案**（configure 時 `FATAL_ERROR`，訊息寫檔名、列、原因）：表頭不對；兩份檔裡名字重複；依賴指到不存在的名字或排在後面的列；Module 依賴 Plugin；`library_only` 和 `unit`／`header` 對不上。
 2. **`engine/` 的子目錄與各 Module 的 link 從它來**：`engine/CMakeLists.txt` 照 `modules.csv` 的列序 `add_subdirectory`；每個 `engine/<name>/CMakeLists.txt` 的引擎內 `GYO::<Module>` link 換成 `gyo_link_registered_dependencies(<name>)`；第三方的 link（`Threads::Threads`、`shell32`）照舊留在 CMakeLists。卡片照 L17 判：AGENTS §9「同じ事実を手動で維持する場所は、一か所に限定する」，11-14 的原話「CMake 照它 link」。別家：O3DE 把 Gem 的依賴寫在 `gem.json`、CMake 的 target 依賴另寫（兩處）；Unreal 的 Module 依賴寫在 `.Build.cs`、Plugin 依賴在 `.uplugin`，UBT 照它們建（一處）。取一處。`tests/common/*` 的五處 `gyo_expect_links` 是既有的獨立核對（不是第二個來源，它們讀 link 的結果比對），照「第 1 批已立的守衛不拆」留著、不改；`gyo_orchestration` 不加新的一處（第 7.4 節延後）。
-3. **替產品產生登記單位的表**：`gyo_product_units(<target> [DISABLE_MODULES <名字>…] [PLUGINS <名字>…] [REGISTERS <modules.csv> <plugins.csv>])`：
-   - 預設帶 `modules.csv` 裡**所有進 World 的 Module**；`DISABLE_MODULES` 關掉列出的；Plugin 預設不帶，`PLUGINS` 列出才帶。關掉的是帶上的單位依賴的、或列了不存在的名字，configure 時 `FATAL_ERROR`（檢查 S16；執行時 `Product::Build` 照舊再檢查，因為 `RegisteredUnits` 可以手寫）。
+3. **替產品產生登記單位的表**：`gyo_product_units(<target> [DISABLE_MODULES <名字>…] [MODULES <名字>…] [PLUGINS <名字>…] [REGISTERS <modules.csv> <plugins.csv>])`：
+   - 預設帶 `modules.csv` 裡**進 World 且 `default=yes` 的 Module**；`DISABLE_MODULES` 關掉列出的；`default=no` 的 Module 要在 `MODULES` 列出才帶；Plugin 預設不帶，`PLUGINS` 列出才帶。關掉的是帶上的單位依賴的、或列了不存在的名字，configure 時 `FATAL_ERROR`（檢查 S16；執行時 `Product::Build` 照舊再檢查，因為 `RegisteredUnits` 可以手寫）。
    - link 帶上的登記單位的 target；在 `<target>` 的 binary 目錄產生 `<target>_units.cpp`，定義 `RegisteredUnits MakeRegisteredUnits()`：兩份登記檔的全部列，與帶上的登記單位的實例（照登記檔的順序，每個實例和它那一列配成一對；Module 的實例放 `std::unique_ptr<Module>`、Plugin 的放 `std::unique_ptr<Plugin>`，放錯是編譯錯誤）。
    - `REGISTERS` 給測試用（共通測試用合成的登記檔，AGENTS §7）。
    - 產品選什麼寫在**產品自己的建置描述**（它自己的 `CMakeLists.txt` 裡這一個呼叫）：產品的新增、刪除只動它自己的內容與登記（AGENTS §7）。
@@ -232,7 +234,7 @@ public:
 | O-E6 | World 描述錯誤：沒有 World、名字重複、`units` 指到沒帶上的單位 | 新 |
 | O-E7 | 啟動時準備函式回傳錯誤 | 新 |
 
-執行時的錯誤 `OrchestrationError` 另一組碼（不和啟動碼共用，檢查 N5）：`ReplacePrepareFailed`、`ReplaceScheduleFailed`、`InsertRefused`（包住 Kernel 的 `DynamicInsertRefused`）、`InsertBuildFailed`（包住 Kernel 的建 Plan 報告）、`WorldInterrupted`、`WorldMissing`、`ReplaceRegistrationFailed`、`OwnerTaken`（3.10）。準備函式回傳 `OrchestrationError`，作者填 `PrepareFailed` 與自己的訊息。碼的寫法照 Kernel 的「R-E1」「D-E1」（卡片照 L17 判，前綴 O 取 orchestration）。
+執行時的錯誤 `OrchestrationError` 另一組碼（不和啟動碼共用，檢查 N5）：`ReplacePrepareFailed`、`ReplaceScheduleFailed`、`InsertRefused`（包住 Kernel 的 `DynamicInsertRefused`）、`InsertBuildFailed`（包住 Kernel 的建 Plan 報告）、`WorldInterrupted`、`WorldMissing`、`ReplaceRegistrationFailed`、`OwnerTaken`（3.10）。準備函式回傳 `OrchestrationError`，作者填 `PrepareFailed`、自己的碼（字串）與訊息；`ReplaceWorld` 的錯誤原樣帶著它（3.9：存檔版本 Module 的拒絕靠這個分辨）。碼的寫法照 Kernel 的「R-E1」「D-E1」（卡片照 L17 判，前綴 O 取 orchestration）。
 
 ### 3.6 O6：遊戲初始化清單與每幀的清單
 
@@ -307,6 +309,7 @@ struct ReplaceRequest {
 4. 全部成功：新的放進這個位置。**任何一步失敗或丟例外**：銷毀新的，位置保持空的，回傳對的碼並記一次警告；帶過去的值留在暫存處，下一次替換這個位置時照樣帶。runner 的收拾（說明頁寫明）：再呼叫 `ReplaceWorld` 填上別的內容（例：回主選單的 World、另一份存檔），或結束；空的位置在 `RunFrame` 回 `WorldMissing`。
 
 **存檔讀不了**（使用者 2026-11-18）：「壞檔問題是最嚴重的Bug，通常是來自於系統更新…我認為這個是系統層級是無解的，只能在運營端處理，或者提供存檔轉換功能。通常製作的時候直接上version 管理。太老的檔案不支持。讓玩家自己開新檔。」——Engine 不做存檔的版本轉換（`save-unaware-means-format-only`）；Engine 做的是讓讀檔失敗是安全的：預設先建新的、舊 World 照跑、錯誤回給作者（side chat 的讀法，不是使用者的話）。判定裡的壞檔用「版本不支援」當例子。
+- **存檔版本 Module 的拒絕接得住，不改介面**（第 5 條做那個 Module；本批只確認路）：拒絕出現在準備（`extra` 或登記單位的準備回錯誤）或讀檔的 schedule（System 回錯誤）。前者 `ReplaceWorld` 回 `ReplacePrepareFailed`、後者回 `ReplaceScheduleFailed`；`BuildNewFirst` 時舊 World 照跑，`DropOldFirst` 時位置是空的、`RunFrame` 回 `WorldMissing`；啟動時讀檔被拒是 O-E7。準備函式回傳的錯誤帶回報者自己的碼（字串，例：那個 Module 的「版本不支援」）與訊息，`ReplaceWorld` 原樣放進它回傳的錯誤裡，作者分得出是版本被拒還是別的失敗（和登記單位在 `Finish`／`Check` 回報的形狀一樣，3.5）。
 
 **重新登記**（`v8-arch-gyo2-restore-reruns-registration`）：使用者：「讀檔應該只有一種解釋就是返回到某一時刻的狀態。」「乾脆讀檔就全部重來，也不管指令了，標準的回到某個狀態。作者想要測試，就自己設計測試流程來規避插入系統的重置。」——問到能不能分清指令輸入與遊戲中的設計（分不清：同一個插入入口，來源只能呼叫的人自己填；Bevy、flecs、Unity 都不分）之後：「對，分不清就別冒險，我們已經有入口了，用不用是作者的決定。」比過的：沿用同一份 Registry（本卡修訂 1 的建議）／重跑（flecs、Unity）←選／依來源分（指令保留並給還原指令、遊戲追加的還原；因分不清來源而不採）。
 - 「全部重來」只到這個 World 的登記（照產品描述），不是重開行程：遊戲初始化照舊只跑一次（第 14 節第 1 件照舊要定）。
@@ -637,7 +640,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 1. **啟動時讀檔**：描述的準備把配發器範圍訂成 `[900, 上限]`、放暫存的存檔資料與金幣的預設值 0；`RunSchedule("Main","Load")`（遊戲初始化先跑；`SpawnWithId` 帶完整 bundle 放回、金幣改成 120），再 `RunFrame`（`Play` 生成一個選單實體）。之後：編號 12、57、58 在、值與存檔相同、`ChaseTarget` 仍是 12、選單實體的編號 ≥ 900、金幣 120、沒有被丟的生成。
 2. **沒有移下界就整批被丟**（對照組）：同上但範圍 `[1, 上限]`：每一筆以 `IdInAllotterRange` 被丟並記紀錄——證明是準備時機讓案例 1 成立。
 3. **遊戲中讀檔**：先跑三幀（生成實體、金幣改成 50、製造一筆被丟的生成），再動態插入一個 System；`ReplaceWorld("Main", {extra: 讀存檔; beforeSwap: Load})`。之後：只有讀檔放回的與之後生成的實體；金幣 120；動態插入的 System 不在；被丟的紀錄從空的開始；遊戲初始化的計數仍是 1；下一幀 `Play` 跑在新 World。
-4. **讀檔失敗**：預設 `BuildNewFirst`——(a) `extra` 回 Err（存檔的版本不支援）；(b) `Load` 回 Err（存檔的實體部分讀不了）：兩者都回對的碼、警告一次；舊 World 的實體與金幣 50 照舊、再跑一幀沒有錯誤。`DropOldFirst`——(c) `extra` 回 Err（版本不支援）：回對的碼、警告一次；位置是空的，`RunFrame` 回 `WorldMissing`；(d) 接著用一份可以讀的存檔 `ReplaceWorld`：成功、之後和案例 3 的結果相同。
+4. **讀檔失敗**：預設 `BuildNewFirst`——(a) `extra` 回 Err（存檔的版本不支援，碼 `"save-version-unsupported"`；回傳的錯誤帶著這個碼）；(b) `Load` 回 Err（存檔的實體部分讀不了）：兩者都回對的碼、警告一次；舊 World 的實體與金幣 50 照舊、再跑一幀沒有錯誤。`DropOldFirst`——(c) `extra` 回 Err（版本不支援）：回對的碼、警告一次；位置是空的，`RunFrame` 回 `WorldMissing`；(d) 接著用一份可以讀的存檔 `ReplaceWorld`：成功、之後和案例 3 的結果相同。
 5. **讀兩次相同**：同一份存檔換兩次 World：兩次的 `Summary()` 相同。
 6. **遊戲初始化放進第一個 World 的東西**（**待第 14 節第 1 件**）：建議的做法下——遊戲初始化放 `KeyBindings`（宣告帶過去）與 `Score`（不帶），第二幀把 `KeyBindings` 改掉；`ReplaceWorld` 之後 `KeyBindings` 是改過的值、`Score` 回到準備的預設值、帶過去在所有準備之前；`extra` 失敗之後舊 World 的 `KeyBindings` 還在。
 
@@ -773,3 +776,5 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 **修訂 3 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-dynamic-insert-no-lifecycle-rerun`——第 14 節第 2 件定為不重跑、不通知（3.10 收原話、選項、理由與後果；10.2 O-2；第 6 節差分第 1 項；註明改寫 HANDOFF `dynamic-insert-per-world` 的半句）。第 1、4、5 件使用者還在定，沒有改。
 
 **修訂 4 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-replace-order-author-choice`——第 14 節第 4 件定為作者選、預設先建新的（`ReplaceRequest::order`；`DropOldFirst` 的步驟與失敗後的空位置、`WorldMissing`；壞檔的原話與「Engine 不做存檔版本轉換」；5.2 加 BigMap 為點名的 Feature；2.2 加「大型靜態地圖放 World 外共用」與「存檔版本轉換」；7.3 O-9、8.2 S1-6／S1-6c、10.2 O-8、判定 2 案例 4 (a)～(d)、判定 2 的突變、第 13 節）。第 1、5 件使用者還在定，沒有改。
+
+**修訂 5 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-save-version-module`（不在本批，批次表第 5 條）——2.2 加一列；3.9 確認讀檔失敗的路接得住它的拒絕、不改介面（準備的錯誤帶回報者自己的碼並原樣轉出，3.5 同步）；登記檔加 `default` 欄與 `gyo_product_units` 的 `MODULES` 引數，擺得下「預設不帶的 Module」；判定 2 案例 4(a) 檢查碼被轉出。第 1、5 件使用者還在定，沒有改。
