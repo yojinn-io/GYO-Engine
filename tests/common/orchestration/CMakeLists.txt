@@ -9,6 +9,7 @@ add_executable(gyo_orchestration_tests
     ReplaceTests.cpp
     InsertTests.cpp
     RestoreFlowTests.cpp
+    DefectTests.cpp
 )
 target_include_directories(gyo_orchestration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gyo_orchestration_tests PRIVATE GYO::Orchestration gyo_test_support doctest::doctest)

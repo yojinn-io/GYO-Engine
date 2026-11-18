@@ -119,7 +119,6 @@ private:
     struct UnitSlot {
         std::string row;
         Detail::RegistrationUnit* unit = nullptr;
-        bool isModule = true;
         std::uint32_t seq = 0;
     };
     struct WorldSlot {

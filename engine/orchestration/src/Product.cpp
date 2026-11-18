@@ -81,7 +81,7 @@ Product::~Product() = default;
                               {rowName}});
             return;
         }
-        self.units_.push_back(UnitSlot{rowName, unit, kind == UnitKind::Module, seq++});
+        self.units_.push_back(UnitSlot{rowName, unit, seq++});
     };
     for (UnitEntry<Module>& entry : self.owned_.modules) take(entry.row, entry.unit.get(), UnitKind::Module);
     for (UnitEntry<Plugin>& entry : self.owned_.plugins) take(entry.row, entry.unit.get(), UnitKind::Plugin);
@@ -359,6 +359,13 @@ void Product::RequireNotRunning() const {
 ::Engine::Base::Result<void, OrchestrationError> Product::RunGameInit() {
     RequireNotRunning();
     GYO_ASSERT(!gameInitRan_);
+    // The first World's place is empty (a DropOldFirst replacement failed):
+    // nothing ran, so game initialization is not counted as run.
+    if (!worlds_.empty() && !worlds_.front().executor) {
+        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldMissing,
+                                                      "World " + Quoted(worlds_.front().description.name) +
+                                                          " is empty: game initialization waits until it is filled"));
+    }
     gameInitRan_ = true;
     if (worlds_.empty()) return {};
     for (const std::string& schedule : gameInit_) {
@@ -468,24 +475,29 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
     Kernel::World& world = fresh->GetWorld();
 
     // Step 2: carry the marked Resources over, before every prepare function (section 3.12).
-    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved;
-    if (dropOldFirst || !slot.executor) {
-        // The holding place (an earlier DropOldFirst failure left values there too).
-        moved = std::move(slot.held);
-        slot.held.clear();
-    } else {
+    // The holding place first (an earlier failure left values there), then
+    // what the old World still has of the marked types.
+    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved = std::move(slot.held);
+    slot.held.clear();
+    if (!dropOldFirst && slot.executor) {
         for (const Detail::CarryEntry& entry : slot.carries) {
+            const bool held = std::any_of(moved.begin(), moved.end(), [&](const auto& m) { return m.first.key == entry.key; });
+            if (held) continue;
             if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));
         }
     }
-    // The values back where they came from: the old World, or the holding place.
+    // The values back where they came from: the old World when it can take
+    // them (it is there and not interrupted: an interrupted World is never
+    // written, spec E.5), otherwise the holding place.
+    const bool backToOld = !dropOldFirst && slot.executor &&
+                           slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted;
     auto giveBack = [&](std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>>& values) {
         for (auto& [entry, box] : values) {
             if (!box) {
                 box = entry.take(world);
                 if (!box) continue;
             }
-            if (dropOldFirst || !slot.executor) {
+            if (!backToOld) {
                 slot.held.emplace_back(entry, std::move(box));
             } else {
                 entry.put(slot.executor->GetWorld(), box);
@@ -540,6 +552,7 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
         }
     } catch (...) {
         giveBack(moved);
+        Warn("ReplaceWorld " + Quoted(name) + ": an exception left the replacement; the old World goes on");
         throw;
     }
 
