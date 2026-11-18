@@ -260,7 +260,7 @@ AccessKey Tick(Domain d) { return {AccessKind::DomainTick, static_cast<std::uint
 TEST_CASE("J-12: every signature's access set in ids equals the hand-written expectation") {
     Built source = SourceWorld();
     KERNEL_REQUIRE_OK(source);
-    TestPlugin plugin("j12", [](Registrar& r) {
+    const auto build = [](Registrar& r) {
         RegisterJ12Data(r);
         int stage = 0;
         const auto at = [&stage]() { return std::vector<Mount>{At("Update", "S" + std::to_string(stage++))}; };
@@ -287,10 +287,10 @@ TEST_CASE("J-12: every signature's access set in ids equals the hand-written exp
         r.AddSystem<&GatedWrite>(Sys("GatedWrite", Zone::B, {gated}));
         const auto lambda = [](Query<Read<TestVel>>, ResMut<TestRes>) -> SystemResult { return {}; };
         r.AddSystem<decltype(lambda)>(Sys("LambdaSystem", Zone::B, at()));
-    });
-    Registry registry({&plugin});
+    };
+    Registry registry;
     registry.SetExtractSource(*source.registry);
-    const auto result = registry.Finish();
+    const auto result = RegisterAll(registry, {{"j12", build}});
     REQUIRE_MESSAGE(static_cast<bool>(result), (result ? std::string() : result.error().detail));
     const FrozenRegistry& frozen = registry.Frozen();
     const auto access = [&](const char* name) -> const AccessSet& {

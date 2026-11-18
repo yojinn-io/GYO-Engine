@@ -557,12 +557,12 @@ public:
     // Allots the id now (spec A.1: at record time, so the sync point can order
     // by id) and records the spawn; the entity appears after the sync point (F-1).
     // An exhausted allotter is Err, never a wrapped id (W-9).
-    [[nodiscard]] Engine::Base::Result<EntityId, KernelError> New(C... values) {
+    [[nodiscard]] ::Engine::Base::Result<EntityId, KernelError> New(C... values) {
         Check("Spawn");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         const std::optional<EntityId> id = Detail::Allot(*world_);
         if (!id) {
-            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
+            return ::Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
                                                        "the entity allotter's range is used up"));
         }
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, *id);
@@ -798,11 +798,11 @@ concept ExclusiveClosure = std::invocable<F&, Arg> && !kPointsIntoWorld<std::inv
 // handle's other calls (its immediate structural changes return Err).
 template <class R>
 struct VisitResultOf {
-    using Type = Engine::Base::Result<std::optional<R>, KernelError>;
+    using Type = ::Engine::Base::Result<std::optional<R>, KernelError>;
 };
 template <>
 struct VisitResultOf<void> {
-    using Type = Engine::Base::Result<bool, KernelError>;
+    using Type = ::Engine::Base::Result<bool, KernelError>;
 };
 
 // Counts the closures running on one handle (RunSchedule is refused inside one: X-14).
@@ -917,7 +917,7 @@ public:
     // call goes on, and the Run ends in that Err when the System returns
     // (DI-KS 2, as for Spawn<Bundle<C...>>::New).
     template <class... C>
-    [[nodiscard]] Engine::Base::Result<EntityId, KernelError> Spawn(C... values) {
+    [[nodiscard]] ::Engine::Base::Result<EntityId, KernelError> Spawn(C... values) {
         static_assert(sizeof...(C) > 0, "ExclusiveWorld::Spawn names at least one component");
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, 0);
@@ -925,9 +925,9 @@ public:
                                                      std::make_unique<Detail::TypedBox<C>>(std::move(values))}),
          ...);
         auto done = Change(std::move(record));
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return ::Engine::Base::Err(std::move(done).error());
         if (done->rejected) {
-            return Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, "F-13",
+            return ::Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, "F-13",
                                                          "the allotter gave id " + std::to_string(done->entity) +
                                                              ", which is alive: nothing spawned, recorded as a RejectedSpawn"));
         }
@@ -938,7 +938,7 @@ public:
     // (its id is in this World's allotter range, or alive), the spawn recorded
     // as a RejectedSpawn (spec F-13, one place for the record and the count).
     template <class... C>
-    [[nodiscard]] Engine::Base::Result<std::optional<SpawnRejectReason>, KernelError> SpawnWithId(EntityId id,
+    [[nodiscard]] ::Engine::Base::Result<std::optional<SpawnRejectReason>, KernelError> SpawnWithId(EntityId id,
                                                                                                   C... values) {
         static_assert(sizeof...(C) > 0, "ExclusiveWorld::SpawnWithId names at least one component");
         Check("ExclusiveWorld");
@@ -948,58 +948,58 @@ public:
                                                      std::make_unique<Detail::TypedBox<C>>(std::move(values))}),
          ...);
         auto done = Change(std::move(record));
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return ::Engine::Base::Err(std::move(done).error());
         return done->rejected;
     }
 
     // Inserts or overwrites entity's T. false, nothing inserted, when the
     // entity is not alive (counted in DroppedMissingEntity, spec F.2 step 5).
     template <class T>
-    [[nodiscard]] Engine::Base::Result<bool, KernelError> Insert(EntityId entity, T value) {
+    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> Insert(EntityId entity, T value) {
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));
         record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
         auto done = Change(std::move(record));
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return ::Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
     // Removes entity's T after its OnRemove hooks; false when it had none.
     template <class T>
-    [[nodiscard]] Engine::Base::Result<bool, KernelError> Remove(EntityId entity) {
+    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> Remove(EntityId entity) {
         Check("ExclusiveWorld");
         auto done = Change(Detail::Record::Of(Detail::RecordKind::Remove, entity, Detail::ComponentIdOf(*world_, KeyOf<T>())));
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return ::Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
     // Despawns entity: every component's OnRemove first, then each component in
     // ascending ComponentId (v8-arch-gyo2-despawn-notify-all-then-destroy).
     // false when it is not alive.
-    [[nodiscard]] Engine::Base::Result<bool, KernelError> Despawn(EntityId entity) {
+    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> Despawn(EntityId entity) {
         Check("ExclusiveWorld");
         auto done = Change(Detail::Record::Of(Detail::RecordKind::Despawn, entity));
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return ::Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
     // Puts resource T in (or overwrites it); a thread-bound one takes this thread.
     template <class T>
-    [[nodiscard]] Engine::Base::Result<void, KernelError> SetResource(T value) {
+    [[nodiscard]] ::Engine::Base::Result<void, KernelError> SetResource(T value) {
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));
         record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
         auto done = Change(std::move(record));
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return ::Engine::Base::Err(std::move(done).error());
         return {};
     }
 
     // Takes resource T out; false when it was absent.
     template <class T>
-    [[nodiscard]] Engine::Base::Result<bool, KernelError> RemoveResource() {
+    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> RemoveResource() {
         Check("ExclusiveWorld");
         auto done = Change(Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return ::Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
@@ -1010,7 +1010,7 @@ public:
     // World's again (W-4) and its writes take a new stamp, after every stamp of
     // the inner schedule, whether the run succeeded, failed, was refused or was
     // left by an exception the System catches.
-    [[nodiscard]] Engine::Base::Result<void, KernelError> RunSchedule(std::string_view schedule) {
+    [[nodiscard]] ::Engine::Base::Result<void, KernelError> RunSchedule(std::string_view schedule) {
         Check("ExclusiveWorld");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         // On every way back, an exception included.
@@ -1028,7 +1028,7 @@ private:
     // One immediate change (Detail::ApplyImmediate). On every way back, an
     // exception included, the handle takes the World's sync epoch and a new
     // stamp, after every stamp the change and its hook rounds took.
-    [[nodiscard]] Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Change(Detail::Record record) {
+    [[nodiscard]] ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Change(Detail::Record record) {
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         struct Restamp {
             ExclusiveWorld& handle;

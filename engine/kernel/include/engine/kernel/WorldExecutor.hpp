@@ -37,10 +37,9 @@
 // outermost Run, which reports it once with the outer System's context; the
 // Executor stops after every System that returns to an Interrupted World.
 //
-// Startup (spec H-12): a World has at most one Startup schedule. The first Run
-// of any other schedule runs it whole first (its tick, if any, after it); the
-// main program may run it itself before that, once. A second Run of Startup is
-// a GYO_ASSERT.
+// The kernel knows no game initialization or startup schedule: which schedule
+// runs when, and once, is the orchestration layer's (engine/orchestration,
+// v8-arch-gyo2-orchestration-skeleton; DI-KS 15).
 //
 // v1 is Serial only (LIM-2). The WorldExecutor owns no thread (DI-KS 15): Run is called
 // on one thread at a time by the caller, who decides which thread runs what
@@ -76,12 +75,11 @@ public:
     [[nodiscard]] World& GetWorld() noexcept { return world_; }
     [[nodiscard]] const World& GetWorld() const noexcept { return world_; }
 
-    // Runs one schedule's Plan once (spec E.2), first Startup when it has not
-    // run (H-12); first attaches the World and the Systems' state to a new
-    // Registry version (declaration 3.2 rule 5). GYO_ASSERT: the World is Ready
-    // (so not from inside a System), the schedule exists, and Startup is run at
-    // most once.
-    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
+    // Runs one schedule's Plan once (spec E.2); first attaches the World and
+    // the Systems' state to a new Registry version (declaration 3.2 rule 5).
+    // GYO_ASSERT: the World is Ready (so not from inside a System) and the
+    // schedule exists.
+    ::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
     // The Executor's handler: called once per Err (target/error-handling DI 2:
     // the only place a kernel error is logged). Default: the whole chain to stderr.
@@ -102,23 +100,21 @@ private:
         std::vector<MountState> mounts;
     };
 
-    friend Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
-    friend Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
+    friend ::Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
+    friend ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
                                                                                             Detail::Record, ChangeStamp,
                                                                                             bool);
 
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
-    Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
-    // Spec H-12: marks Startup as run and runs it while startupRunning_ is set.
-    Engine::Base::Result<void, KernelError> RunStartup(std::string_view schedule);
-    Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+    ::Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
+    ::Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                           bool inClosure);
     // S5 (Detail::ApplyImmediate): an immediate structural change of the running exclusive System call.
-    Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
+    ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
                                                                               Detail::Record record, ChangeStamp stamp,
                                                                               bool closureOpen);
-    // J-50 (DI-KS 24): reads KernelSettings, once per Run call, before Startup.
+    // J-50 (DI-KS 24): reads KernelSettings, once per Run call.
     void ReadSettings();
     // Declaration 3.2 rule 5: attaches the World, then makes every System's
     // state again by registrationSeq when the Registry's version is not the
@@ -127,7 +123,7 @@ private:
     void Attach();
     // Spec E.5: interrupts the World and drops every record. The outermost level
     // calls the handler; a nested one leaves the error instead (its first one).
-    Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
+    ::Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
 
     // One level of the run stack (World::runStack_): pushed for the Plan's
     // duration and popped on every way out; an exception through it interrupts
@@ -141,8 +137,6 @@ private:
     // The Registry version systems_ matches (0: none yet).
     std::uint64_t version_ = 0;
     std::function<void(const KernelError&)> handler_;
-    // The World's Startup schedule (at most one, D-E21), if any.
-    std::optional<std::string> startup_;
 };
 
 } // namespace GYO::Kernel

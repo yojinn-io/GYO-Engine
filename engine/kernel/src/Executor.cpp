@@ -31,16 +31,8 @@ void DefaultHandler(const KernelError& error) {
 
 WorldExecutor::WorldExecutor(const Registry& registry, std::string worldName, WorldOptions options)
     : registry_(&registry), world_(registry, std::move(worldName), options), handler_(&DefaultHandler) {
-    const Detail::RegistryData& data = *world_.data_;
     Attach();
     world_.executor_ = this;
-    // Spec H-12: at most one (D-E21 at Finish).
-    for (const Detail::ScheduleRecord& schedule : data.schedules) {
-        if (schedule.options.startup) {
-            startup_ = schedule.options.name;
-            break;
-        }
-    }
 }
 
 WorldExecutor::~WorldExecutor() = default;
@@ -126,18 +118,6 @@ KernelError ImmediateAbortError(const World& world, const std::string& where) {
     return error;
 }
 
-// Spec H-12: startupRunning_ is set for Startup's Run and cleared on every way out.
-class StartupScope {
-public:
-    explicit StartupScope(bool& running) noexcept : running_(running) { running_ = true; }
-    ~StartupScope() { running_ = false; }
-    StartupScope(const StartupScope&) = delete;
-    StartupScope& operator=(const StartupScope&) = delete;
-
-private:
-    bool& running_;
-};
-
 // Declaration 3.2 rule 4: the Registry counts its Worlds inside a Run, raised
 // when Run starts and lowered on every way out (an exception included), so
 // Register, BuildPlans and DiscardRegistrations assert while anything a Run
@@ -198,24 +178,14 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
     ReadSettings();
-    if (record->options.startup) {
-        // Spec H-12: the main program may run Startup itself, once, before the kernel has.
-        GYO_ASSERT(!world.startupRan_);
-        return RunStartup(record->options.name);
-    }
-    // Spec H-12: Startup runs whole before the first Run of any other schedule
-    // (before its tick advances), once.
-    if (startup_ && !world.startupRan_) {
-        if (Engine::Base::Result<void, KernelError> ran = RunStartup(*startup_); !ran) return ran;
-    }
     return RunPlan(record->options.name, false);
 }
 
 void WorldExecutor::ReadSettings() {
     World& world = world_;
-    // KernelSettings is read once, when each Run call starts (J-50, DI-KS 24),
-    // before Startup: a change made by a System, Startup's included, counts
-    // from the next Run. A nested RunSchedule does not come here.
+    // KernelSettings is read once, when each Run call starts (J-50, DI-KS 24):
+    // a change made by a System counts from the next Run. A nested RunSchedule
+    // does not come here.
     const auto& settings =
         static_cast<const Detail::ResourceSlot<KernelSettings>&>(*world.resources_[world.data_->kernelSettings]);
     const bool verification = settings.value && settings.value->accessVerification;
@@ -228,12 +198,6 @@ void WorldExecutor::ReadSettings() {
     // Spec F-12: a limit of 0 is a Programmer Error (the Host's or a System's write).
     GYO_ASSERT(world.hookRoundLimit_ >= 1);
     world.hasRun_ = true;
-}
-
-Engine::Base::Result<void, KernelError> WorldExecutor::RunStartup(std::string_view schedule) {
-    world_.startupRan_ = true;
-    StartupScope running(world_.startupRunning_);
-    return RunPlan(schedule, false);
 }
 
 Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view schedule, bool nested) {
@@ -510,18 +474,9 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::Sys
     if (record == nullptr) {
         return refuse(KernelErrorCode::UnknownSchedule, "X-12", who + " runs " + target + ", which is not registered");
     }
-    if (record->options.startup) {
-        return refuse(KernelErrorCode::StartupNotNestable, "H-12",
-                      who + " runs Startup " + target + ": the kernel runs Startup, once, before any other schedule");
-    }
     if (record->options.extract) {
         return refuse(KernelErrorCode::ExtractNotNestable, "X-15",
                       who + " runs extract " + target + ": an extract schedule runs with rollback-extract only");
-    }
-    if (world.startupRunning_) {
-        return refuse(KernelErrorCode::StartupRunning, "H-13",
-                      who + " runs " + target + " while Startup schedule '" + std::string(world.runStack_.front().schedule) +
-                          "' runs: Startup's Systems are not counted as writers, so Startup runs alone, start to end");
     }
     for (const World::RunLevel& running : world.runStack_) {
         if (running.schedule == record->options.name) {

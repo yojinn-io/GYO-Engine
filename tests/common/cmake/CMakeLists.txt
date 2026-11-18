@@ -1,4 +1,4 @@
-foreach(suite AppRegistry ToolRegistry AcceptanceToken Component MsvcRuntime ProjectComposition ProductPackaging GoService ProcessCodePage)
+foreach(suite AppRegistry ToolRegistry UnitRegistry AcceptanceToken Component MsvcRuntime ProjectComposition ProductPackaging GoService ProcessCodePage)
     add_test(NAME "cmake.${suite}"
         COMMAND "${CMAKE_COMMAND}"
             "-DGENERATOR=${CMAKE_GENERATOR}"
@@ -9,3 +9,5 @@ foreach(suite AppRegistry ToolRegistry AcceptanceToken Component MsvcRuntime Pro
     set_tests_properties("cmake.${suite}" PROPERTIES LABELS "cpu;build" TIMEOUT 180)
 endforeach()
 set_tests_properties(cmake.ProjectComposition PROPERTIES TIMEOUT 600)
+# Two configures and about forty child processes: room for the Visual Studio generator.
+set_tests_properties(cmake.UnitRegistry PROPERTIES TIMEOUT 300)

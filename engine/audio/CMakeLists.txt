@@ -13,4 +13,5 @@ target_include_directories(gyo_audio PUBLIC
 )
 
 target_compile_features(gyo_audio PUBLIC cxx_std_20)
-target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time)
+# Engine-internal links come from engine/config/modules.csv (O-6).
+gyo_link_registered_dependencies(audio)

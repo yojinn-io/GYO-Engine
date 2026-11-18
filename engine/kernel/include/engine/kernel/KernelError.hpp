@@ -25,9 +25,9 @@
 // World the error was found in (spec A.6: a violation carries the World's
 // identity). The code enum is the kernel module's own (no global error enum).
 //
-// StartupReport: every startup error of one Registry::BuildPlans (or Finish),
+// StartupReport: every startup error of one Registry::BuildPlans,
 // collected and reported at once (spec D.2, D-5). A startup error is a Runtime Error of the
-// composer (the plugin list and declarations are wrong): the Host refuses to
+// composer (the registrations are wrong): the Host refuses to
 // start and decides what to print (spec D.4).
 
 namespace GYO::Kernel {
@@ -61,10 +61,6 @@ enum class KernelErrorCode : std::uint8_t {
     ScheduleRunning,
     // Spec X-12: no schedule of that name is registered.
     UnknownSchedule,
-    // Spec H-12: Startup is run by the kernel only; a System cannot run it.
-    StartupNotNestable,
-    // Spec H-13: while Startup runs, no other schedule runs.
-    StartupRunning,
     // Spec X-15: an extract schedule is not run from inside a System.
     ExtractNotNestable,
     // Spec X-13: a hook runs while a sync point applies its records, so it runs no schedule.
@@ -142,9 +138,7 @@ struct KernelError {
 enum class StartupCode : std::uint8_t {
     DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE9,
     DE11, DE12, DE14, DE15, DE16, DE17, DE19, DE20,
-    // A World with two Startup schedules (spec H-12; v8-arch-gyo2-nested-schedule).
-    DE21,
-    RE1, RE2, RE3, RE4, RE5, RE6,
+    RE2, RE4, RE5,
     // A later round of Registry::Register / BuildPlans registered what only the
     // first round may (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6).
     RE7,
@@ -164,7 +158,7 @@ struct StartupError {
     // The rule broken, for people: "Z1", "S-12", "H-1", ...
     std::string rule;
     std::string message;
-    // Every party the error names (System, component, plugin, schedule names),
+    // Every party the error names (System, component, owner, schedule names),
     // so a report always says who is involved (spec D-5: "names both sides").
     std::vector<std::string> subjects;
     // Registration sites of the Systems and hooks involved, "file:line".
@@ -180,7 +174,7 @@ enum class StartupReportCode : std::uint8_t {
 [[nodiscard]] std::string_view ToString(StartupReportCode code) noexcept;
 
 // The Err side of Registry::BuildPlans and Finish: all errors, in the order the analysis found
-// them (deterministic: plugin list order, registration order, schedule order).
+// them (deterministic: owner order, registration order, schedule order).
 struct StartupReport {
     StartupReportCode code;
     std::string message;

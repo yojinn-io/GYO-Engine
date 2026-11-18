@@ -1,0 +1,2279 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the orchestration skeleton batch (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9; ids or-). Behaviour tests only: the scans of section 7.4 wait for the scenario segment (v8-arch-gyo2-guards-after-mechanism-stable). G-8 (Fable/high, build/evidence/gyo2-orchestration-skeleton/segment1/g8-check-fable-high.md) added g8- candidates; not added (with the reason): g8-owner-seq-constant: no observable behaviour of the owner sequence (the kernel only compares owners for equality); g8-replace-inside-run-unchecked: equivalent under test: the kernel asserts too (W-3), GYO_CHECK_ASSERTS takes any assertion; g8-old-registry-first: undefined behaviour (use after free) without a sanitizer: not a reliable mutant; g8-carry-box-kept: equivalent for the carried types (one int; move equals copy). v8-arch-gyo2-broken-world-ends-product (user decision, merge approval item 4): one broken World ends the Product. Retired with their property: or-carry-held-dropped (the holding place is gone (an empty place ends the Product; g8s-drop-old-held-dropped guards the values a DropOldFirst replacement takes out)); or-d1-hold-not-old (an interrupted World is not replaced any more); g8-runon-unchecked (RunOn checks nothing now; Ended() at each entry point does (or-ended-*)); g8-runframe-interrupted-unchecked (or-ended-runframe-unchecked); g8-insert-empty-place-code (or-ended-insert-unchecked and or-ended-code-swapped). Rewritten for the new code (find only, or as noted in what): or-gi-last-world, or-gi-error-ignored, g8-gi-flag-only-on-success, or-runschedule-no-gameinit, g8s-runschedule-gameinit-after, or-drop-old-later, g8-frame-list-reversed, g8-frame-error-ignored, g8-replace-gameinit-skipped-on-new, g8-swap-keeps-old-lists, g8-throw-no-giveback, g8s-drop-old-held-dropped, or-d4-empty-first-counted. Added: or-ended-*, or-failure-*, or-drop-fail-*, or-throw-*, or-run-throw-unrecorded. The same day the user took the logging back out (logging is a mechanism of its own, not part of the orchestration layer): the log parameter and its or-log-* mutants never landed; or-failure-logged guards that the layer does not log.",
+ "mutants": [
+  {
+   "id": "or-configure-skipped",
+   "what": "O-2: a unit's Configure is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        unit.unit->Configure(setup);\n",
+   "replace": "        (void)setup;\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "\\[or\\-lifecycle\\-order\\] configure game \\|"
+  },
+  {
+   "id": "or-finish-skipped",
+   "what": "O-2: Finish is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        units_[index].unit->Finish(frozen, context);",
+   "replace": "        (void)context;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "build window@Main \\| check time@Main"
+  },
+  {
+   "id": "or-check-skipped",
+   "what": "O-2: Check is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        units_[index].unit->Check(frozen, context);",
+   "replace": "        (void)context;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "finish window@Main v1 \\| build time@Side"
+  },
+  {
+   "id": "or-not-checked-unmarked",
+   "what": "O-5: a kernel failure is not marked as \"not checked\"",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        result.notChecked = true;",
+   "replace": "        result.notChecked = false;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-5:*",
+   "expect": "\\[or\\-not\\-checked\\]"
+  },
+  {
+   "id": "or-oe1-silent",
+   "what": "O-E1 is not reported",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            errors.push_back({OrchestrationCode::OE1,",
+   "replace": "            if (false) errors.push_back({OrchestrationCode::OE1,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "O\\-E1 missing"
+  },
+  {
+   "id": "or-oe2-file-and-library",
+   "what": "O-E2: an instance in the wrong file or of a library row is accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (row == nullptr || row->kind != kind || row->libraryOnly) {",
+   "replace": "        if (row == nullptr) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E2:*",
+   "expect": "\\[or\\-oe2\\]"
+  },
+  {
+   "id": "or-oe3-later-unseen",
+   "what": "O-E3: a dependency that comes later is not told apart",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                    if (at(k + 1, slot.units.size())) {",
+   "replace": "                    if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3:*",
+   "expect": "\\[or\\-oe3\\-later\\]"
+  },
+  {
+   "id": "or-oe3-module-on-plugin",
+   "what": "O-E3: a Module may depend on a Plugin",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                } else if (row->kind == UnitKind::Module && depRow->kind == UnitKind::Plugin) {",
+   "replace": "                } else if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3:*",
+   "expect": "\\[or\\-oe3\\-plugin\\]"
+  },
+  {
+   "id": "or-oe3-library-required",
+   "what": "O-E3: a library-only dependency must be a unit of the World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                } else if (!depRow->libraryOnly) {",
+   "replace": "                } else if (true) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3:*",
+   "expect": "\\[or\\-oe3\\-library\\]"
+  },
+  {
+   "id": "or-oe4-silent",
+   "what": "O-E4: two runners are accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (runners.size() > 1) {",
+   "replace": "    if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "O\\-E4 missing"
+  },
+  {
+   "id": "or-oe5-anchor-silent",
+   "what": "O-E5: a missing game-initialization anchor is not reported",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (const std::string& anchor : gameInit.missingAnchors_) {",
+   "replace": "    for (const std::string& anchor : std::vector<std::string>{}) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: two insertions*",
+   "expect": "\\[or\\-gi\\-anchor\\]"
+  },
+  {
+   "id": "or-oe5-gameinit-unchecked",
+   "what": "O-E5: game initialization names are not checked against the first World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (firstWorld) {\n        for (const std::string& name : gameInit_) {",
+   "replace": "    if (false) {\n        for (const std::string& name : gameInit_) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: two insertions*",
+   "expect": "\\[or\\-gi\\-not\\-schedule\\]"
+  },
+  {
+   "id": "or-oe6-duplicate-world",
+   "what": "O-E6: two Worlds of one name are accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!worldNames.insert(world.name).second) {",
+   "replace": "        if (!worldNames.insert(world.name).second && false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "O\\-E6 missing"
+  },
+  {
+   "id": "or-oe7-silent",
+   "what": "O-E7: a failing prepare at startup is not reported",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            errors.push_back({OrchestrationCode::OE7,",
+   "replace": "            if (false) errors.push_back({OrchestrationCode::OE7,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E7:*",
+   "expect": "\\[or\\-oe7\\]"
+  },
+  {
+   "id": "or-unit-error-ignored",
+   "what": "O-5: a unit-reported error does not stop the build",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!errors.empty() || !unitErrors.empty() || kernelFailed) {",
+   "replace": "    if (!errors.empty() || kernelFailed) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: the World context*",
+   "expect": "\\[or\\-finish\\-report\\]"
+  },
+  {
+   "id": "or-gi-every-frame",
+   "what": "O-1: game initialization runs at every frame",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    gameInitRan_ = true;\n    if (worlds_.empty()) return {};",
+   "replace": "    gameInitRan_ = false;\n    if (worlds_.empty()) return {};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: insertions place*",
+   "expect": "\\[or\\-gi\\-order\\-once\\] a \\| b \\| c \\| l \\| t \\| s \\| a \\| b"
+  },
+  {
+   "id": "or-gi-last-world",
+   "what": "O-1: game initialization runs on the last World (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;",
+   "replace": "        if (auto ran = RunOn(worlds_.back(), schedule, \"RunGameInit\"); !ran) return ran;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: game initialization runs on the first World only*",
+   "expect": "\\[or\\-gi\\-first\\-world\\]"
+  },
+  {
+   "id": "or-gi-error-ignored",
+   "what": "O-1: a failing game initialization schedule does not stop RunFrame (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;",
+   "replace": "        static_cast<void>(RunOn(worlds_.front(), schedule, \"RunGameInit\"));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: a failing game initialization*",
+   "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
+  },
+  {
+   "id": "or-insert-before-as-after",
+   "what": "O-1: InsertBefore inserts after the anchor",
+   "file": "engine/orchestration/src/Setup.cpp",
+   "find": "    names_.insert(at, std::move(schedule));",
+   "replace": "    names_.insert(at + 1, std::move(schedule));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: insertions place*",
+   "expect": "\\[or\\-gi\\-order\\-once\\] a \\| c \\| l \\| b"
+  },
+  {
+   "id": "or-runframe-no-gameinit",
+   "what": "O-1: RunFrame does not run game initialization first",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    for (WorldSlot& slot : worlds_) {",
+   "replace": "    for (WorldSlot& slot : worlds_) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: insertions place*",
+   "expect": "\\[or\\-gi\\-order\\-once\\] t \\| s \\| t \\| s"
+  },
+  {
+   "id": "or-runschedule-no-gameinit",
+   "what": "O-1: RunSchedule does not run game initialization first (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "replace": "    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: RunSchedule runs*",
+   "expect": "\\[or\\-gi\\-runschedule\\]"
+  },
+  {
+   "id": "or-runner-not-called",
+   "what": "O-3: an installed runner is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (runner_) return runner_(*this);",
+   "replace": "    if (runner_) return RunnerExit{};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3:*",
+   "expect": "\\[or\\-runner\\-installed\\]"
+  },
+  {
+   "id": "or-prepare-skipped-at-startup",
+   "what": "O-7: prepare functions do not run at startup",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), slot.unitPrepares, nullptr);",
+   "replace": "        ::Engine::Base::Result<void, OrchestrationError> prepared{};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: prepare order*",
+   "expect": "\\[or\\-prepare\\-order\\] (?!.*prepare)"
+  },
+  {
+   "id": "or-prepare-order-reversed",
+   "what": "O-7: the description's prepare runs before the units'",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (const PrepareFn& fn : unitPrepares) {\n        if (auto done = call(fn); !done) return done;\n    }\n    for (const PrepareFn& fn : slot.description.prepare) {\n        if (auto done = call(fn); !done) return done;\n    }",
+   "replace": "    for (const PrepareFn& fn : slot.description.prepare) {\n        if (auto done = call(fn); !done) return done;\n    }\n    for (const PrepareFn& fn : unitPrepares) {\n        if (auto done = call(fn); !done) return done;\n    }",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: prepare order*",
+   "expect": "\\[or\\-prepare\\-order\\].*description prepare \\| unit prepare"
+  },
+  {
+   "id": "or-extra-skipped",
+   "what": "O-8: the replacement's extra prepare is not called",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "request.extra ? &request.extra : nullptr",
+   "replace": "nullptr",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 3*",
+   "expect": "\\[or\\-restore\\-extra\\-ran\\]"
+  },
+  {
+   "id": "or-beforeswap-skipped",
+   "what": "O-8: beforeSwap schedules do not run",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        for (const std::string& schedule : request.beforeSwap) {",
+   "replace": "        for (const std::string& schedule : std::vector<std::string>{}) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 3*",
+   "expect": "\\[or\\-restore\\-new\\-world\\] 0"
+  },
+  {
+   "id": "or-prepare-failure-swaps",
+   "what": "O-8: a failing extra still swaps the new World in",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            giveBack(moved);\n            return fail(std::move(prepared).error());",
+   "replace": "            static_cast<void>(prepared);",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 4*",
+   "expect": "\\[or\\-restore\\-fail\\-a\\]"
+  },
+  {
+   "id": "or-old-world-kept",
+   "what": "O-8: the old World is not destroyed",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.executor.reset();\n    slot.registry.reset();\n    slot.registry = std::move(registration.registry);",
+   "replace": "    static_cast<void>(slot.executor.release());\n    static_cast<void>(slot.registry.release());\n    slot.registry = std::move(registration.registry);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: replacing registers again*",
+   "expect": "\\[or\\-replace\\-old\\-destroyed\\]"
+  },
+  {
+   "id": "or-replace-gameinit-again",
+   "what": "O-8: replacing runs game initialization again",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!gameInitRan_) {\n            if (firstWorld) {",
+   "replace": "        if (true) {\n            if (firstWorld) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 3*",
+   "expect": "\\[or\\-restore\\-no\\-game\\-init\\]"
+  },
+  {
+   "id": "or-replace-check-ignored",
+   "what": "O-8: a Check error of the new registration is ignored",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!registration.registry || !errors.empty() || !unitErrors.empty()) {",
+   "replace": "    if (!registration.registry) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a Check that fails*",
+   "expect": "\\[or\\-replace\\-check\\-fails\\]"
+  },
+  {
+   "id": "or-handler-not-kept",
+   "what": "O-8: the error handler is not set on the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (slot.handler) executor->SetErrorHandler(slot.handler);",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the error handler*",
+   "expect": "\\[or\\-replace\\-handler\\-kept\\]"
+  },
+  {
+   "id": "or-drop-old-later",
+   "what": "O-8: DropOldFirst destroys the old World only at the swap (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
+   "replace": "    if (false && dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: DropOldFirst*",
+   "expect": "\\[or\\-drop\\-old\\-first\\-order\\]"
+  },
+  {
+   "id": "or-carry-not-put",
+   "what": "O-10: carried values are not put into the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-10: two types*",
+   "expect": "\\[or\\-carry\\-unit\\-type\\]"
+  },
+  {
+   "id": "or-carry-not-given-back",
+   "what": "O-10: a failed replacement does not give the carried values back",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            giveBack(moved);\n            return fail(std::move(prepared).error());",
+   "replace": "            return fail(std::move(prepared).error());",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 6*",
+   "expect": "\\[or\\-carry\\-back\\]"
+  },
+  {
+   "id": "or-carry-unregistered-ignored",
+   "what": "O-10: a carried type the new World lacks is not refused",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!entry.registered(world)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-10: a marked type*",
+   "expect": "\\[or\\-carry\\-unregistered\\]"
+  },
+  {
+   "id": "or-insert-no-warning",
+   "what": "O-9: a refused insert logs no warning",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) +\n             \": refused, the World declares no dynamic insert\");",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: a refusing World*",
+   "expect": "\\[or\\-insert\\-warn\\-once\\] 0"
+  },
+  {
+   "id": "or-insert-two-warnings",
+   "what": "O-9: a refused insert logs two warnings",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "replace": "        Warn(\"again\");\n        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: a refusing World*",
+   "expect": "\\[or\\-insert\\-warn\\-once\\] 2"
+  },
+  {
+   "id": "or-insert-throw-keeps-round",
+   "what": "O-9: a throwing insert keeps its half round",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            slot->registry->DiscardRegistrations();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: a build that throws*",
+   "expect": "\\[or\\-insert\\-throw\\-discards\\]"
+  },
+  {
+   "id": "or-owner-not-checked",
+   "what": "O-9: an owner name taken by a unit is accepted",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (taken) {",
+   "replace": "    if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: an owner name*",
+   "expect": "\\[or\\-insert\\-owner\\]"
+  },
+  {
+   "id": "g8-kernel-only-failure",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!errors.empty() || !unitErrors.empty() || kernelFailed) {",
+   "replace": "    if (!errors.empty() || !unitErrors.empty() || (kernelFailed && false)) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-5: a kernel error alone*",
+   "expect": "TEST CASE:  O\\-5: a kernel error alone stops the build"
+  },
+  {
+   "id": "g8-oe6-no-world",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (description.worlds.empty()) errors.push_back(",
+   "replace": "    if (false) errors.push_back(",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E6:*",
+   "expect": "\\[or\\-oe6\\-no\\-world\\]"
+  },
+  {
+   "id": "g8-oe6-unit-not-carried",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (!carried) {",
+   "replace": "            if (false && !carried) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E6:*",
+   "expect": "\\[or\\-oe6\\-not\\-carried\\]"
+  },
+  {
+   "id": "g8-oe6-duplicate-world-built",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            errors.push_back({OrchestrationCode::OE6, \"two Worlds are named \" + Quoted(world.name), {world.name}});\n            continue;",
+   "replace": "            errors.push_back({OrchestrationCode::OE6, \"two Worlds are named \" + Quoted(world.name), {world.name}});",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E6:*",
+   "expect": "\\[or\\-oe6\\-dup\\-not\\-built\\]"
+  },
+  {
+   "id": "g8-oe2-wrong-row-used",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                              {rowName}});\n            return;\n        }\n        if (!seenRows.insert(rowName).second) {",
+   "replace": "                              {rowName}});\n            if (row == nullptr) return;\n        }\n        if (!seenRows.insert(rowName).second) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E2: refused*",
+   "expect": "\\[or\\-oe2\\-unused\\]"
+  },
+  {
+   "id": "g8-oe3-private-depends-unread",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            deps.insert(deps.end(), row->privateDepends.begin(), row->privateDepends.end());\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3: private*",
+   "expect": "\\[or\\-oe3\\-private\\]"
+  },
+  {
+   "id": "g8-oe3-plugin-on-plugin",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                } else if (row->kind == UnitKind::Module && depRow->kind == UnitKind::Plugin) {",
+   "replace": "                } else if (depRow->kind == UnitKind::Plugin) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3: private*",
+   "expect": "\\[or\\-oe3\\-plugin\\-on\\-plugin\\]"
+  },
+  {
+   "id": "g8-product-build-before-units",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n",
+   "replace": "    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: the product's own build*",
+   "expect": "\\[or\\-product\\-build\\-last\\]"
+  },
+  {
+   "id": "g8-bare-world-no-own-register",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},",
+   "replace": "    auto own = !world.build ? ::Engine::Base::Result<void, Kernel::KernelError>{} : registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: the product's own build*",
+   "expect": "TEST CASE:  O\\-2: the product's own build"
+  },
+  {
+   "id": "g8-frame-insertions-dropped",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    registration.frame = std::move(frame.names_);",
+   "replace": "    registration.frame = world.frame;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: units insert*",
+   "expect": "\\[or\\-frame\\-order\\]"
+  },
+  {
+   "id": "g8-frame-anchor-silent",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (const std::string& anchor : frame.missingAnchors_) {",
+   "replace": "    for (const std::string& anchor : std::vector<std::string>{}) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: units insert*",
+   "expect": "\\[or\\-frame\\-anchor\\]"
+  },
+  {
+   "id": "g8-frame-list-reversed",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n        }",
+   "replace": "        for (std::size_t at = slot.frame.size(); at-- > 0;) {\n            if (auto ran = RunOn(slot, slot.frame[at], \"RunFrame\"); !ran) return ran;\n        }",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: units insert*",
+   "expect": "\\[or\\-frame\\-order\\]"
+  },
+  {
+   "id": "g8-frame-error-ignored",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;",
+   "replace": "            static_cast<void>(RunOn(slot, schedule, \"RunFrame\"));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: a failing frame*",
+   "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
+  },
+  {
+   "id": "g8-anchor-last-occurrence",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Setup.cpp",
+   "find": "void ScheduleList::InsertBefore(std::string_view anchor, std::string schedule) {\n    const auto at = std::find(names_.begin(), names_.end(), anchor);",
+   "replace": "void ScheduleList::InsertBefore(std::string_view anchor, std::string schedule) {\n    auto at = names_.end();\n    for (auto it = names_.begin(); it != names_.end(); ++it) {\n        if (*it == anchor) at = it;\n    }",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: units insert*",
+   "expect": "\\[or\\-anchor\\-first\\]"
+  },
+  {
+   "id": "g8-runschedule-unknown-world-code",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));",
+   "replace": "OrchestrationErrorCode::WorldMissing, \"no World \" + Quoted(world)));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: unknown World names*",
+   "expect": "\\[or\\-unknown\\-world\\-run\\]"
+  },
+  {
+   "id": "g8-replace-unknown-world-code",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(name)));",
+   "replace": "OrchestrationErrorCode::WorldMissing, \"no World \" + Quoted(name)));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: unknown World names*",
+   "expect": "\\[or\\-unknown\\-world\\-replace\\]"
+  },
+  {
+   "id": "g8-insert-unknown-world-code",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(worldName)));",
+   "replace": "OrchestrationErrorCode::WorldMissing, \"no World \" + Quoted(worldName)));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: unknown World names*",
+   "expect": "\\[or\\-unknown\\-world\\-insert\\]"
+  },
+  {
+   "id": "g8-default-runner-always-success",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (ran) return RunnerExit{};",
+   "replace": "    if (ran || true) return RunnerExit{};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3: the default runner reports*",
+   "expect": "\\[or\\-runner\\-default\\-failure\\]"
+  },
+  {
+   "id": "g8-gi-flag-only-on-success",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    gameInitRan_ = true;\n    if (worlds_.empty()) return {};\n    for (const std::string& schedule : gameInit_) {\n        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;\n    }\n    return {};",
+   "replace": "    if (worlds_.empty()) return {};\n    for (const std::string& schedule : gameInit_) {\n        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;\n    }\n    gameInitRan_ = true;\n    return {};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: a failed game initialization counts*",
+   "expect": "expected GYO_ASSERT to fail"
+  },
+  {
+   "id": "g8-replace-first-world-always",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    const bool firstWorld = &slot == &worlds_.front();",
+   "replace": "    const bool firstWorld = true;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: replacing a World that is not the first*",
+   "expect": "TEST CASE:  O\\-8: replacing a World that is not the first"
+  },
+  {
+   "id": "g8-replace-gameinit-skipped-on-new",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                for (const std::string& schedule : gameInit_) {\n                    failedSchedule = schedule;",
+   "replace": "                for (const std::string& schedule : std::vector<std::string>{}) {\n                    failedSchedule = schedule;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: replacing before game initialization ran*",
+   "expect": "\\[or\\-replace\\-first\\-before\\-gi\\]"
+  },
+  {
+   "id": "g8-replace-gameinit-flag-unset",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                gameInitRan_ = true;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: replacing before game initialization ran*",
+   "expect": "\\[or\\-replace\\-first\\-before\\-gi\\]"
+  },
+  {
+   "id": "g8-replace-other-world-no-gameinit",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            } else if (auto ran = RunGameInit(); !ran) {",
+   "replace": "            } else if (auto ran = ::Engine::Base::Result<void, OrchestrationError>{}; !ran) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: replacing before game initialization ran*",
+   "expect": "\\[or\\-replace\\-other\\-before\\-gi\\]"
+  },
+  {
+   "id": "g8-beforeswap-failure-no-giveback",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                giveBack(moved);\n                return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
+   "replace": "                return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a failing beforeSwap*",
+   "expect": "\\[or\\-beforeswap\\-giveback\\]"
+  },
+  {
+   "id": "g8-beforeswap-failure-no-warning",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
+   "replace": "                return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a failing beforeSwap*",
+   "expect": "\\[or\\-beforeswap\\-warn\\]"
+  },
+  {
+   "id": "g8-replace-report-dropped",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "\"registering World \" + Quoted(name) + \" again failed\", report.detail));",
+   "replace": "\"registering World \" + Quoted(name) + \" again failed\", std::string()));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a failing beforeSwap*",
+   "expect": "\\[or\\-replace\\-report\\]"
+  },
+  {
+   "id": "g8-replace-list-errors-ignored",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!registration.registry || !errors.empty() || !unitErrors.empty()) {",
+   "replace": "    if (!registration.registry || !unitErrors.empty()) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a registration that differs*",
+   "expect": "\\[or\\-replace\\-list\\-error\\]"
+  },
+  {
+   "id": "g8-carry-from-interrupted-dropped",
+   "what": "G-8 candidate (g8-check-fable-high.md) (retargeted by v8-arch-gyo2-broken-world-ends-product: the read path now serves only giving the value back from a new World a failed beforeSwap interrupted)",
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "                const T* kept = world.Resource<T>();\n                if (kept == nullptr) return nullptr;\n                return std::make_shared<T>(std::move(*const_cast<T*>(kept)));",
+   "replace": "                return nullptr;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a failing beforeSwap*",
+   "expect": "\\[or\\-beforeswap\\-giveback\\]"
+  },
+  {
+   "id": "g8-swap-keeps-old-lists",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.frame = std::move(registration.frame);\n    slot.unitPrepares = std::move(registration.unitPrepares);\n    slot.carries = std::move(registration.carries);\n    slot.lastSchedule.clear();",
+   "replace": "    slot.lastSchedule.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a registration that differs*",
+   "expect": "\\[or\\-swap\\-new\\-frame\\]"
+  },
+  {
+   "id": "g8-replace-prepare-from-old-registration",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "Prepare(slot, world, registration.unitPrepares, request.extra",
+   "replace": "Prepare(slot, world, slot.unitPrepares, request.extra",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a registration that differs*",
+   "expect": "\\[or\\-swap\\-new\\-prepare\\]"
+  },
+  {
+   "id": "g8-insert-warning-text",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) +\n             \": refused, the World declares no dynamic insert\");",
+   "replace": "        Warn(\"refused\");",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: the refusal warning names*",
+   "expect": "\\[or\\-insert\\-warning\\-text\\]"
+  },
+  {
+   "id": "g8-check-report-unit",
+   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);",
+   "replace": "        WorldCheck context(world.name, world.name, world.dynamicInsert, world.options, unitErrors);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-5: a Check error names*",
+   "expect": "\\[or\\-check\\-unit\\-name\\]"
+  },
+  {
+   "id": "g8-check-inside-finish-loop",
+   "what": "G-8 candidate: O-2: Configure once each* | \\[or\\-lifecycle\\-order\\].*finish time@Main v1 \\| check time@Main",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (std::size_t index : slot.units) {\n        WorldFinish context(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(frozen, context);\n    }\n    for (std::size_t index : slot.units) {\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);\n        units_[index].unit->Check(frozen, context);\n    }",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish finishContext(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(frozen, finishContext);\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);\n        units_[index].unit->Check(frozen, context);\n    }",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "\\[or\\-lifecycle\\-order\\].*finish time@Main v1 \\| check time@Main"
+  },
+  {
+   "id": "g8-plugins-before-modules",
+   "what": "G-8 candidate: O-2: Configure once each* | \\[or\\-lifecycle\\-order\\] configure window",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (UnitEntry<Module>& entry : self.owned_.modules) take(entry.row, entry.unit.get(), UnitKind::Module);\n    for (UnitEntry<Plugin>& entry : self.owned_.plugins) take(entry.row, entry.unit.get(), UnitKind::Plugin);",
+   "replace": "    for (UnitEntry<Plugin>& entry : self.owned_.plugins) take(entry.row, entry.unit.get(), UnitKind::Plugin);\n    for (UnitEntry<Module>& entry : self.owned_.modules) take(entry.row, entry.unit.get(), UnitKind::Module);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once each*",
+   "expect": "\\[or\\-lifecycle\\-order\\] configure window"
+  },
+  {
+   "id": "g8-oe1-second-used",
+   "what": "G-8 candidate: O-E1:* | \\[or\\-oe1\\-second\\-unused\\]",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "{rowName}});\n            return;\n        }\n        self.units_.push_back(",
+   "replace": "{rowName}});\n        }\n        self.units_.push_back(",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "\\[or\\-oe1\\-second\\-unused\\]"
+  },
+  {
+   "id": "g8-oe3-missing-silent",
+   "what": "G-8 candidate: O-E1:* | O\\-E3 missing",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                    problem = \"is in no register file\";",
+   "replace": "                    problem.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E1:*",
+   "expect": "O\\-E3 missing"
+  },
+  {
+   "id": "g8-oe3-world-leaves-out",
+   "what": "G-8 candidate: O-E3:* | LifecycleTests.cpp:173 REQUIRE_FALSE has no tag",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                    } else if (!at(0, k)) {",
+   "replace": "                    } else if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-E3:*",
+   "expect": "\\[or\\-oe3\\-world\\]"
+  },
+  {
+   "id": "g8-oe5-frame-name-unchecked",
+   "what": "G-8 candidate: O-5:* | \\[or\\-report\\-oe5\\]",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (const std::string& name : frame.names_) {\n        if (!HasSchedule(frozen, name)) {",
+   "replace": "    for (const std::string& name : frame.names_) {\n        if (false && !HasSchedule(frozen, name)) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-5:*",
+   "expect": "\\[or\\-report\\-oe5\\]"
+  },
+  {
+   "id": "g8-units-filter-ignored",
+   "what": "G-8 candidate: O-2: a World's units list* | \\[or\\-units\\-filter\\]",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (world.units.empty() ||\n                std::find(world.units.begin(), world.units.end(), self.units_[i].row) != world.units.end()) {",
+   "replace": "            if (true) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: a World's units list*",
+   "expect": "\\[or\\-units\\-filter\\]"
+  },
+  {
+   "id": "g8-check-sees-true",
+   "what": "G-8 candidate: O-2: options reach* | \\[or\\-check\\-declaration\\] Check saw",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "units_[index].row, world.dynamicInsert, world.options, unitErrors);",
+   "replace": "units_[index].row, true, world.options, unitErrors);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: options reach*",
+   "expect": "\\[or\\-check\\-declaration\\] Check saw"
+  },
+  {
+   "id": "g8-insert-after-as-before",
+   "what": "G-8 candidate: O-1: insertions place* | \\[or\\-gi\\-order\\-once\\] a \\| b \\| l \\| c",
+   "file": "engine/orchestration/src/Setup.cpp",
+   "find": "    names_.insert(at + 1, std::move(schedule));",
+   "replace": "    names_.insert(at, std::move(schedule));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: insertions place*",
+   "expect": "\\[or\\-gi\\-order\\-once\\] a \\| b \\| l \\| c"
+  },
+  {
+   "id": "g8-beforeswap-failure-swaps",
+   "what": "G-8 candidate: restore: case 4* | \\[or\\-restore\\-fail\\-b\\] replaced despite",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                giveBack(moved);\n                return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule) + \" on the new World \" + Quoted(name) + \" failed\",\n                                       std::move(ran).error()));",
+   "replace": "                break;",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore: case 4*",
+   "expect": "\\[or\\-restore\\-fail\\-b\\] replaced despite"
+  },
+  {
+   "id": "g8-carry-after-prepare",
+   "what": "G-8 candidate: O-10: two types* | \\[or\\-carry\\-before\\-prepare\\]",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);\n\n    try {\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }",
+   "replace": "\n    try {\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }\n        for (auto& [entry, box] : moved) entry.put(world, box);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-10: two types*",
+   "expect": "\\[or\\-carry\\-before\\-prepare\\]"
+  },
+  {
+   "id": "g8-insert-build-no-warning",
+   "what": "G-8 candidate: O-9: BuildPlans fails* | InsertTests.cpp:67 CHECK(warnings.Warnings() == 1) has no tag",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) + \": BuildPlans failed: \" + report.detail);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: BuildPlans fails*",
+   "expect": "\\[or\\-insert\\-build\\-warn\\]"
+  },
+  {
+   "id": "g8-carry-unregistered-no-giveback",
+   "what": "G-8 candidate: O-10: a marked type* | null dereference at ReplaceTests.cpp:181",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            giveBack(moved);\n            return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
+   "replace": "            return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-10: a marked type*",
+   "expect": "\\[or\\-carry\\-unregistered\\-back\\]"
+  },
+  {
+   "id": "g8-gameinit-twice-allowed",
+   "what": "G-8 candidate: O-1: RunGameInit a second time* | expected GYO_ASSERT to fail: \\(\\*built\\)->RunGameInit\\(\\)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    GYO_ASSERT(!gameInitRan_);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: RunGameInit a second time*",
+   "expect": "expected GYO_ASSERT to fail: \\(\\*built\\)->RunGameInit\\(\\)"
+  },
+  {
+   "id": "g8-run-twice-allowed",
+   "what": "G-8 candidate: O-3:* | expected GYO_ASSERT to fail: \\(\\*built\\)->Run\\(\\)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    GYO_ASSERT(!ran_);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3: no runner*",
+   "expect": "expected GYO_ASSERT to fail: \\(\\*built\\)->Run\\(\\)"
+  },
+  {
+   "id": "g8-handler-set-late",
+   "what": "G-8 candidate: O-1: a failing game initialization* | \\[or\\-gi\\-error\\-once\\]",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (slot->executor) slot->executor->SetErrorHandler(slot->handler);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: a failing game initialization*",
+   "expect": "\\[or\\-gi\\-error\\-once\\]"
+  },
+  {
+   "id": "g8-throw-no-giveback",
+   "what": "G-8 candidate: an exception from extra does not give the carried value back (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        giveBack(moved);\n        if (!dropOldFirst) {\n            Warn(",
+   "replace": "        if (!dropOldFirst) {\n            Warn(",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: an exception from extra*",
+   "expect": "\\[or\\-replace\\-throw\\-keeps\\-old\\]"
+  },
+  {
+   "id": "or-d3-throw-no-warn",
+   "what": "D3: an exception from extra logs no warning",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        Warn(\"ReplaceWorld \" + Quoted(name) + \": an exception left the replacement; the old World goes on\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: D3:*",
+   "expect": "\\[or\\-d3\\-throw\\-warns\\] 0"
+  },
+  {
+   "id": "or-d4-empty-first-counted",
+   "what": "D4: game initialization on an empty first place counts as run (rewritten for v8-arch-gyo2-broken-world-ends-product: an empty place ends the Product; the case that reaches RunGameInit itself is the outside one)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    GYO_ASSERT(!gameInitRan_);\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    gameInitRan_ = true;",
+   "replace": "    GYO_ASSERT(!gameInitRan_);\n    gameInitRan_ = true;\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a World interrupted outside the Product*",
+   "expect": "\\[or\\-ended\\-gameinit\\]"
+  },
+  {
+   "id": "ur-header-unchecked",
+   "what": "step 3 (unit registers): the header's column names are not checked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT actual STREQUAL expected)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'header_name'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-row-count-unchecked",
+   "what": "step 3 (unit registers): a row with the wrong number of columns is read (the row with ten columns is accepted)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT fields EQUAL columns)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'row_excess'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-duplicate-allowed",
+   "what": "step 3 (unit registers): a name in both files (or twice) is allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name IN_LIST order)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'duplicate'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-yes-no-loose",
+   "what": "step 3 (unit registers): anything but yes reads as no (the bad_yes_no row is then a valid in-World row)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    elseif(lowered STREQUAL \"no\")\n",
+   "replace": "    elseif(TRUE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_yes_no'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-library-unit-allowed",
+   "what": "step 3 (unit registers): a library-only row may name a unit",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(library_only AND (NOT value_unit STREQUAL \"\" OR NOT value_header STREQUAL \"\"))\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'library_with_unit'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-world-without-unit",
+   "what": "step 3 (unit registers): an in-World row without a unit is read (the header check then refuses the empty header with another message)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT library_only AND (value_unit STREQUAL \"\" OR value_header STREQUAL \"\"))\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'unit_without_header'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-default-plugin-allowed",
+   "what": "step 3 (unit registers): a Plugin or library row may be default yes",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(default_on AND (library_only OR kind STREQUAL \"Plugin\"))\n",
+   "replace": "        if(default_on AND library_only)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'default_plugin'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-missing-dep-as-later",
+   "what": "step 3 (unit registers): a dependency on no row is reported as 'comes later'",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT dep IN_LIST order)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)Unit register case 'missing_dep' did not report.*which comes later",
+   "timeout": 300
+  },
+  {
+   "id": "ur-module-on-plugin-as-later",
+   "what": "step 3 (unit registers): a Module's Plugin dependency is reported only as 'comes later'",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(kind STREQUAL \"Module\" AND dep_kind STREQUAL \"Plugin\")\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)Unit register case 'module_on_plugin' did not report.*which comes later",
+   "timeout": 300
+  },
+  {
+   "id": "ur-later-dep-allowed",
+   "what": "step 3 (unit registers): a dependency on a later row is allowed (the order would be changed)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT dep IN_LIST seen)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'later_dep'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-select-unknown-allowed",
+   "what": "step 3 (unit registers): a selection names a row that is no in-World unit of that kind",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT name IN_LIST order OR NOT kind STREQUAL wanted_kind OR library_only)\n",
+   "replace": "            if(NOT name IN_LIST order)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'select_library'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-default-ignored",
+   "what": "step 3 (unit registers): default yes does not carry a Module",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
+   "replace": "            if(name IN_LIST ARG_MODULES)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "default\\ selection:\\ in\\-World\\ Modules\\ with\\ default\\ yes:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-disable-ignored",
+   "what": "step 3 (unit registers): DISABLE_MODULES does not remove a default Module",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
+   "replace": "            if(default_on OR name IN_LIST ARG_MODULES)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "disable,\\ add\\ a\\ default\\-no\\ Module\\ and\\ a\\ Plugin:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-select-dep-unchecked",
+   "what": "step 3 (unit registers): a carried unit's in-World dependency may be left out",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT dep_library_only AND NOT dep IN_LIST selected)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'disable_needed'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-rows-only-carried",
+   "what": "step 3 (unit registers): the generated table lists only the carried units' rows",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        string(APPEND rows \"    units.rows.push_back(RegisterRow{\\\"${name}\\\", UnitKind::${kind}, ${library_cpp}, ${default_cpp}, {${depends_cpp}}, {${private_cpp}}});\\n\")\n",
+   "replace": "        if(name IN_LIST selected)\n        string(APPEND rows \"    units.rows.push_back(RegisterRow{\\\"${name}\\\", UnitKind::${kind}, ${library_cpp}, ${default_cpp}, {${depends_cpp}}, {${private_cpp}}});\\n\")\n        endif()\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "The\\ generated\\ table\\ lacks\\ 'units\\.rows\\.push_back\\(RegisterRow\\{\"core\"",
+   "timeout": 300
+  },
+  {
+   "id": "ur-plugins-not-generated",
+   "what": "step 3 (unit registers): carried Plugins get no instance",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "                string(APPEND plugins \"    units.plugins.push_back(UnitEntry<Plugin>{\\\"${name}\\\", std::make_unique<${unit}>()});\\n\")\n",
+   "replace": "",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+lacks\\s+'units\\.plugins\\.push_back\\(UnitEntry<Plugin>\\{\\\"tool\\\"",
+   "timeout": 300
+  },
+  {
+   "id": "ur-unit-targets-not-linked",
+   "what": "step 3 (unit registers): the product does not link the carried units' targets",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            list(APPEND link_targets \"${unit_target}\")\n",
+   "replace": "",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "the\\ product's\\ links:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-private-as-public",
+   "what": "step 3 (unit registers): private_depends are linked PUBLIC",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            target_link_libraries(${target} PRIVATE ${private_targets})\n",
+   "replace": "            target_link_libraries(${target} PUBLIC ${private_targets})\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "extra's\\ registered\\ links:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "ur-include-order-kernel-unqualified",
+   "what": "step 3 (include order): a kernel header names Engine::Base unqualified inside GYO::Kernel (the check is the build of the include-order objects; the command after it only completes the run)",
+   "file": "engine/kernel/include/engine/kernel/WorldExecutor.hpp",
+   "find": "    ::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
+   "replace": "    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
+   "target": "gyo_orchestration_include_order",
+   "expect_build_failure": true,
+   "expect": "(?s)gyo_orchestration_include_order\\.dir.*no member named 'Base' in namespace 'GYO::Engine'",
+   "platforms": [
+    "darwin"
+   ],
+   "command": [
+    "{python}",
+    "-c",
+    "pass"
+   ]
+  },
+  {
+   "id": "sc-gameinit-every-frame",
+   "what": "step 4 (scenario segment 1): S1-2/S1-3: game initialization runs again every frame (the score restarts)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    gameInitRan_ = true;\n    if (worlds_.empty()) return {};",
+   "replace": "    gameInitRan_ = false;\n    if (worlds_.empty()) return {};",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-3-walked\\]"
+  },
+  {
+   "id": "sc-commands-resource-never",
+   "what": "step 4 (scenario segment 1): S1-3: Commands::SetResource never reaches the World",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        Detail::Record record =\n            Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n",
+   "replace": "        static_cast<void>(call);\n        static_cast<void>(value);\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-3-best-set\\]"
+  },
+  {
+   "id": "sc-commands-resource-at-once",
+   "what": "step 4 (scenario segment 1): S1-3: Commands::SetResource is visible before its sync point",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        Detail::Record record =\n            Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n",
+   "replace": "        static_cast<void>(call);\n        static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, Detail::ResourceIdOf(*world_, KeyOf<T>()))).value.emplace(std::move(value));\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-3-best-at-sync\\] seen before the sync point, frame by frame: 11111"
+  },
+  {
+   "id": "sc-insert-not-hooked",
+   "what": "step 4 (scenario segment 1): S1-4: an inserted System is not registered",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "[&](Kernel::Registrar& registrar) { build(registrar); });",
+   "replace": "[&](Kernel::Registrar&) {});",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-4-accelerated\\]"
+  },
+  {
+   "id": "sc-replace-keeps-old",
+   "what": "step 4 (scenario segment 1): S1-8: the replacement keeps the old World and its Registry (the swap is skipped) (the whole swap is skipped; reusing only the old Registry is g8s-old-registry-reused)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.executor.reset();\n    slot.registry.reset();\n    slot.registry = std::move(registration.registry);\n    slot.executor = std::move(fresh);\n",
+   "replace": "    fresh.reset();\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-registration-new\\]"
+  },
+  {
+   "id": "sc-lower-bound-not-moved",
+   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets",
+   "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+   "find": "        return RangeAllotter{first, last, first, first > last};",
+   "replace": "        return RangeAllotter{1, last, 1, first > last};",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7-put-rejected\\]"
+  },
+  {
+   "id": "sc-spawn-with-id-deferred",
+   "what": "step 4 (scenario segment 1): S1-7: ExclusiveWorld::SpawnWithId is deferred to the sync point (the same System cannot see the entity)",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        auto done = Change(std::move(record));\n        if (!done) return ::Engine::Base::Err(std::move(done).error());\n        return done->rejected;",
+   "replace": "        Detail::Push(Detail::RequireCall(*world_), std::move(record));\n        return std::optional<SpawnRejectReason>{};",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7-on-spot\\] absent"
+  },
+  {
+   "id": "sc-allotted-alive-fails",
+   "what": "step 4 (scenario segment 1): S1-7b: a spawn the allotter gives a live id returns an error the game cannot tell from a failure (its load fails, the World is interrupted) (the World is interrupted by the game itself, which fails on a code it does not know; the kernel side, the Err reaching the Run, is g8s-allotted-alive-ends-run)",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "KernelErrorCode::AllottedIdAlive, \"F-13\",",
+   "replace": "KernelErrorCode::SystemFailed, \"F-13\",",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-replaced\\]"
+  },
+  {
+   "id": "sc-replace-reruns-gameinit",
+   "what": "step 4 (scenario segment 1): S1-8: a replacement runs game initialization again",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.nextInsertSeq = 0;\n    return {};\n}",
+   "replace": "    slot.nextInsertSeq = 0;\n    gameInitRan_ = false;\n    return {};\n}",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-walked\\]"
+  },
+  {
+   "id": "sc-replaced-refuses-insert",
+   "what": "step 4 (scenario segment 1): S1-9: the replaced World declares no dynamic insert",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);",
+   "replace": "    std::unique_ptr<Kernel::WorldExecutor> fresh = std::make_unique<Kernel::WorldExecutor>(*registration.registry, slot.description.name, Kernel::WorldOptions{false});",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-9-inserted\\]"
+  },
+  {
+   "id": "sc-keys-not-carried",
+   "what": "step 4 (scenario segment 1): S1-10: the marked KeyBindings are not put into the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);\n",
+   "replace": "",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-10-carried\\]"
+  },
+  {
+   "id": "sc-keys-overwritten-by-prepare",
+   "what": "step 4 (scenario segment 1): S1-10: the game's prepare overwrites the carried KeyBindings with its default (an author's prepare, O-7)",
+   "file": "tests/common/scenario/WalkerGame.hpp",
+   "find": "    if (w.Resource<KeyBindings>() == nullptr) w.SetResource(KeyBindings{0});",
+   "replace": "    w.SetResource(KeyBindings{0});",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-10-carried\\]"
+  },
+  {
+   "id": "g8s3-default-prefix",
+   "what": "step 3 G-8 (S1): g8s3-default-prefix",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    set(prefix GYO_UNITS)\n",
+   "replace": "    set(prefix GYO_UNITS_UNSET)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "The\\ default\\ table\\ lacks\\ 'UnitEntry<Module>\\{\"walk\"",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-registers-prefix-shared",
+   "what": "step 3 G-8 (S2): g8s3-registers-prefix-shared",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        set(prefix _GYO_UNITS_${target})\n",
+   "replace": "        set(prefix GYO_UNITS)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "REGISTERS\\ leaves\\ the\\ loaded\\ registers\\ alone:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-depends-last-only",
+   "what": "step 3 G-8 (S3): g8s3-depends-last-only",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            string(APPEND depends_cpp \"\\\"${dep}\\\", \")\n",
+   "replace": "            set(depends_cpp \"\\\"${dep}\\\", \")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+lacks\\s+'units\\.rows\\.push_back\\(RegisterRow\\{\\\"aux\\\"",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-private-depends-last-only",
+   "what": "step 3 G-8 (S3): g8s3-private-depends-last-only",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            string(APPEND private_cpp \"\\\"${dep}\\\", \")\n",
+   "replace": "            set(private_cpp \"\\\"${dep}\\\", \")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+lacks\\s+'units\\.rows\\.push_back\\(RegisterRow\\{\\\"extra\\\"",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-select-private-dep-unchecked",
+   "what": "step 3 G-8 (S4): g8s3-select-private-dep-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        foreach(dep IN LISTS depends private)\n            get_property(dep_library_only",
+   "replace": "        foreach(dep IN LISTS depends)\n            get_property(dep_library_only",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'private_needed_not_listed'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-message-file-dropped",
+   "what": "step 3 G-8 (S5): g8s3-message-file-dropped",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_FILE \"${csv}\")\n",
+   "replace": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_FILE \"\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'duplicate'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-message-row-dropped",
+   "what": "step 3 G-8 (S5): g8s3-message-row-dropped",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_ROW \"${row}\")\n",
+   "replace": "        set_property(GLOBAL PROPERTY ${prefix}_${name}_ROW \"0\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'missing_dep'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-world-header-without-unit",
+   "what": "step 3 G-8 (S6): g8s3-world-header-without-unit",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT library_only AND (value_unit STREQUAL \"\" OR value_header STREQUAL \"\"))\n",
+   "replace": "        if(NOT library_only AND value_header STREQUAL \"\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'header_without_unit'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-row-excess-columns",
+   "what": "step 3 G-8 (S7): g8s3-row-excess-columns",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT fields EQUAL columns)\n",
+   "replace": "        if(fields LESS columns)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'row_excess'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-header-excess-columns",
+   "what": "step 3 G-8 (S7): g8s3-header-excess-columns",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT header_count EQUAL columns)\n",
+   "replace": "    if(header_count LESS columns)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'header_excess'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-link-unregistered-allowed",
+   "what": "step 3 G-8 (S8): g8s3-link-unregistered-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT name IN_LIST order)\n        message(FATAL_ERROR \"gyo_link_registered_dependencies:",
+   "replace": "    if(FALSE)\n        message(FATAL_ERROR \"gyo_link_registered_dependencies:",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'link_unregistered'\\ was\\ configured",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-link-no-target-unchecked",
+   "what": "step 3 G-8 (S8): g8s3-link-no-target-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT TARGET ${target})\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'link_no_target'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-interface-private-dropped",
+   "what": "step 3 G-8 (S8): g8s3-interface-private-dropped",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(private_targets)\n            message(FATAL_ERROR",
+   "replace": "        if(FALSE)\n            message(FATAL_ERROR",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'link_interface_private'\\ was\\ configured",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-registers-arity-unchecked",
+   "what": "step 3 G-8 (S9): g8s3-registers-arity-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT register_count EQUAL 2)\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'registers_three'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-missing-header-unchecked",
+   "what": "step 3 G-8 (S9): g8s3-missing-header-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(count EQUAL 0)\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'empty_file'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-plugins-carried-by-default",
+   "what": "step 3 G-8 (K1): g8s3-plugins-carried-by-default",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        elseif(name IN_LIST ARG_PLUGINS)\n",
+   "replace": "        else()\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "default\\ selection:\\ in\\-World\\ Modules\\ with\\ default\\ yes:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-empty-name-allowed",
+   "what": "step 3 G-8 (K2): g8s3-empty-name-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name STREQUAL \"\")\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'empty_name'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-no-target-allowed",
+   "what": "step 3 G-8 (K3): g8s3-no-target-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(value_target STREQUAL \"\")\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'no_target'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-header-count-unchecked",
+   "what": "step 3 G-8 (K4): g8s3-header-count-unchecked",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(NOT header_count EQUAL columns)\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'header_count'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-default-library-allowed",
+   "what": "step 3 G-8 (K5): g8s3-default-library-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(default_on AND (library_only OR kind STREQUAL \"Plugin\"))\n",
+   "replace": "        if(default_on AND kind STREQUAL \"Plugin\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'default_library'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-library-header-allowed",
+   "what": "step 3 G-8 (K6): g8s3-library-header-allowed",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(library_only AND (NOT value_unit STREQUAL \"\" OR NOT value_header STREQUAL \"\"))\n",
+   "replace": "        if(library_only AND NOT value_unit STREQUAL \"\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'library_with_header'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-public-as-private",
+   "what": "step 3 G-8 (K7): g8s3-public-as-private",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            target_link_libraries(${target} PUBLIC ${public_targets})\n",
+   "replace": "            target_link_libraries(${target} PRIVATE ${public_targets})\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "extra's\\ registered\\ links:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-interface-branch-off",
+   "what": "step 3 G-8 (K8): g8s3-interface-branch-off",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(type STREQUAL \"INTERFACE_LIBRARY\")\n",
+   "replace": "    if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "The\\ probe\\ project\\ did\\ not\\ configure",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-disable-names-unvalidated",
+   "what": "step 3 G-8 (K9): g8s3-disable-names-unvalidated",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    foreach(list_name IN ITEMS DISABLE_MODULES MODULES PLUGINS)\n",
+   "replace": "    foreach(list_name IN ITEMS MODULES PLUGINS)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Unit\\ register\\ case\\ 'disable_unknown'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-modules-list-ignored",
+   "what": "step 3 G-8 (K10): g8s3-modules-list-ignored",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
+   "replace": "            if(default_on AND NOT name IN_LIST ARG_DISABLE_MODULES)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "disable,\\ add\\ a\\ default\\-no\\ Module\\ and\\ a\\ Plugin:\\ expected",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-all-in-world-instantiated",
+   "what": "step 3 G-8 (K11): g8s3-all-in-world-instantiated",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name IN_LIST selected)\n            get_property(unit GLOBAL",
+   "replace": "        if(NOT library_only)\n            get_property(unit GLOBAL",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "(?s)generated\\s+table\\s+carries\\s+'Test::Off'",
+   "timeout": 300
+  },
+  {
+   "id": "g8s3-rows-twice",
+   "what": "step 3 G-8 (S14): g8s3-rows-twice (only the C++ cases see it)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "${rows}${modules}${plugins}",
+   "replace": "${rows}${rows}${modules}${plugins}",
+   "target": "gyo_orchestration_units_tests",
+   "cases": "units:*",
+   "expect": "\\[or-units-rows\\]"
+  },
+  {
+   "id": "g8s3-modules-twice",
+   "what": "step 3 G-8 (S14): g8s3-modules-twice (only the C++ cases see it)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "${rows}${modules}${plugins}",
+   "replace": "${rows}${modules}${modules}${plugins}",
+   "target": "gyo_orchestration_units_tests",
+   "cases": "units:*",
+   "expect": "\\[or-units-carried-modules\\]"
+  },
+  {
+   "id": "ur-configure-depends-missing",
+   "what": "step 3 G-8 follow-up: a register is not a configure dependency (an edited register would not re-run configure)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS \"${csv}\")\n",
+   "replace": "",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "is\\ not\\ a\\ configure\\ dependency",
+   "timeout": 300
+  },
+  {
+   "id": "ur-name-charset-unchecked",
+   "what": "step 3 G-8 follow-up: a name that is not a directory name is read",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT name MATCHES \"^[a-z][a-z0-9_]*$\")\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_name'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-unit-charset-unchecked",
+   "what": "step 3 G-8 follow-up: a unit that is not a C++ class name is written into the generated table",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT value_unit MATCHES \"^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$\")\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_unit'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-header-charset-unchecked",
+   "what": "step 3 G-8 follow-up: a header that is not a path is written into the generated table",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(NOT value_header MATCHES \"^[A-Za-z0-9_][A-Za-z0-9_./-]*$\")\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_header'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-default-needs-unlisted-allowed",
+   "what": "step 3 G-8 follow-up: a default Module may depend on an in-World row that is not default",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(default_on AND NOT dep_library_only AND NOT dep_default)\n",
+   "replace": "            if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'default_needs_listed'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-disable-not-default-allowed",
+   "what": "step 3 G-8 follow-up: DISABLE_MODULES may name a Module that is not carried by default",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT default_on)\n            message(FATAL_ERROR \"gyo_product_units: DISABLE_MODULES names",
+   "replace": "        if(FALSE)\n            message(FATAL_ERROR \"gyo_product_units: DISABLE_MODULES names",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'disable_not_default'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-disable-and-list-allowed",
+   "what": "step 3 G-8 follow-up: a name in both DISABLE_MODULES and MODULES is allowed (MODULES wins silently)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name IN_LIST ARG_MODULES)\n            message(FATAL_ERROR",
+   "replace": "        if(FALSE)\n            message(FATAL_ERROR",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'disable_and_list'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-selection-unparsed-ignored",
+   "what": "step 3 G-8 follow-up: an unknown argument to the selection is ignored",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(DEFINED ARG_UNPARSED_ARGUMENTS)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS)\")",
+   "replace": "    if(FALSE)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS)\")",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\ unit\\ register\\ case\\ 'unknown_argument'\\ was\\ accepted",
+   "timeout": 300
+  },
+  {
+   "id": "ur-product-unparsed-ignored",
+   "what": "step 3 G-8 follow-up: an unknown argument to gyo_product_units is ignored (the product then gets the default selection)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(DEFINED ARG_UNPARSED_ARGUMENTS)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS, REGISTERS)\")",
+   "replace": "    if(FALSE)\n        message(FATAL_ERROR \"gyo_product_units: unknown arguments '${ARG_UNPARSED_ARGUMENTS}' (DISABLE_MODULES, MODULES, PLUGINS, REGISTERS)\")",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'unknown_argument'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-registers-empty-ignored",
+   "what": "step 3 G-8 follow-up: REGISTERS with no paths falls back to the loaded registers silently",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "    if(ARG_REGISTERS OR \"REGISTERS\" IN_LIST ARG_KEYWORDS_MISSING_VALUES)\n",
+   "replace": "    if(ARG_REGISTERS)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'registers_none'\\ did\\ not\\ report",
+   "timeout": 300
+  },
+  {
+   "id": "ur-dep-defined-unchecked",
+   "what": "step 3 G-8 follow-up: a dependency whose target is not defined yet is linked (the register order would not be the build order)",
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT TARGET ${dep_target})\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Refused\\ probe\\ 'dep_not_defined'\\ was\\ configured",
+   "timeout": 300
+  },
+  {
+   "id": "or-insert-reruns-finish",
+   "what": "G-7 (group B): a dynamic insert runs every unit Finish of the World again (declaration section 9 \"插入後重跑 Finish\"; moved from the kernel catalog ks-s2-plugin-finish-again)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-9: an allowing World*",
+   "expect": "\\[or-insert-no-lifecycle\\]"
+  },
+  {
+   "id": "or-finish-before-plans",
+   "what": "G-7 (group B): Finish also runs before BuildPlans (it would read version 0, no Plan; moved from the kernel catalog ks-s3-version-before-finish) (the kernel refuses the read-only view before a successful BuildPlans, so the Product build aborts at that assertion)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-2: Configure once*",
+   "expect": "GYO_ASSERT failed: data_->frozen"
+  },
+  {
+   "id": "or-gi-domain-unchecked",
+   "what": "G-7 (group A): a game initialization schedule with no domain is accepted (D-E12 until batch 3)",
+   "file": "engine/kernel/src/Registry.cpp",
+   "find": "        if (s.domain == Domain::None) {\n            data.Error(StartupCode::DE12",
+   "replace": "        if (false) {\n            data.Error(StartupCode::DE12",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: until batch 3*",
+   "expect": "\\[or-gi-domain\\]"
+  },
+  {
+   "id": "or-gi-writer-uncounted",
+   "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4)",
+   "file": "engine/kernel/src/Registry.cpp",
+   "find": "        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;",
+   "replace": "        if (true) continue;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: until batch 3*",
+   "expect": "\\[or-gi-writer-counted\\]"
+  },
+  {
+   "id": "g8s-old-world-leaked",
+   "what": "step 4 G-8: S1-8: the old World is not destroyed by the replacement (leaked)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.executor.reset();\n    slot.registry.reset();\n    slot.registry = std::move(registration.registry);",
+   "replace": "    static_cast<void>(slot.executor.release());\n    static_cast<void>(slot.registry.release());\n    slot.registry = std::move(registration.registry);",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-old-gone\\] 0"
+  },
+  {
+   "id": "g8s-gameinit-inside-replace",
+   "what": "step 4 G-8: S1-8: the replacement itself runs game initialization again on the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!gameInitRan_) {\n            if (firstWorld) {",
+   "replace": "        if (true) {\n            if (firstWorld) {",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-no-game-init\\] 2"
+  },
+  {
+   "id": "g8s-old-registry-reused",
+   "what": "step 4 G-8: S1-8: the new World is built on the old Registry (the inserted System stays)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
+   "replace": "    if (slot.registry) std::swap(registration.registry, slot.registry);\n    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-registration-new\\]"
+  },
+  {
+   "id": "g8s-allotted-alive-ends-run",
+   "what": "step 4 G-8: S1-7b: AllottedIdAlive is recorded as the Run's error (the World is interrupted although the System handled it)",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+   "replace": "Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-replaced\\]"
+  },
+  {
+   "id": "g8s-drop-old-held-dropped",
+   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World (find rewritten for v8-arch-gyo2-broken-world-ends-product: no holding place, DropOldFirst keeps the values in the replacement itself)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));\n        }\n        slot.executor.reset();",
+   "replace": "            static_cast<void>(entry.take(slot.executor->GetWorld()));\n        }\n        slot.executor.reset();",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-10-carried\\] 0"
+  },
+  {
+   "id": "g8s-insert-plans-not-built",
+   "what": "step 4 G-8: S1-4: an inserted System is registered but its Plan is never built (not hooked up)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto built = slot->registry->BuildPlans();\n",
+   "replace": "    ::Engine::Base::Result<void, Kernel::StartupReport> built{};\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-4-accelerated\\] x 10 score 10"
+  },
+  {
+   "id": "g8s-allotter-reject-not-recorded",
+   "what": "step 4 G-8: S1-7b: a spawn the allotter gives a live id is dropped without a RejectedSpawn (and the caller gets the live id)",
+   "file": "engine/kernel/src/World.cpp",
+   "find": "            RecordRejectedSpawn(std::move(rejected));\n",
+   "replace": "            if (spawn.withId) RecordRejectedSpawn(std::move(rejected));\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-recorded\\] 0"
+  },
+  {
+   "id": "g8s-runschedule-gameinit-after",
+   "what": "step 4 G-8: S1-2: RunSchedule runs the schedule first and game initialization after it (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "replace": "    if (!gameInitRan_) {\n        if (auto ran = RunOn(*slot, schedule, \"RunSchedule\"); !ran) return ran;\n        return RunGameInit();\n    }\n    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-2-boot-first\\]"
+  },
+  {
+   "id": "g8s-spawn-returns-other-id",
+   "what": "step 4 G-8: S1-7: ExclusiveWorld::Spawn returns an id that is not the entity it spawned",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        return done->entity;\n",
+   "replace": "        return done->entity + 1;\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7-cursor-in-world\\]"
+  },
+  {
+   "id": "g8s-rejected-not-from-allotter",
+   "what": "step 4 G-8: S1-7b: the RejectedSpawn of an allotter spawn is recorded as not from the allotter",
+   "file": "engine/kernel/src/World.cpp",
+   "find": "            rejected.fromAllotter = !spawn.withId;\n",
+   "replace": "            rejected.fromAllotter = false;\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-record-is-the-cursor\\]"
+  },
+  {
+   "id": "or-ended-runschedule-unchecked",
+   "what": "RunSchedule runs a healthy World while another is broken (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    RequireNotRunning();\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);",
+   "replace": "    RequireNotRunning();\n    WorldSlot* slot = Find(world);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-runschedule\\-other\\]"
+  },
+  {
+   "id": "or-ended-before-name",
+   "what": "RunSchedule looks the name up before checking the Worlds (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    RequireNotRunning();\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n",
+   "replace": "    RequireNotRunning();\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-before\\-name\\]"
+  },
+  {
+   "id": "or-ended-runframe-unchecked",
+   "what": "RunFrame runs the Worlds before the broken one (a half frame) (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    // Every World is checked before any runs: no half frame over a broken World.\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: with a broken World the whole frame*",
+   "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
+  },
+  {
+   "id": "or-ended-replace-unchecked",
+   "what": "ReplaceWorld replaces a broken World (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    // A replacement does not mend a broken World (v8-arch-gyo2-broken-world-ends-product).\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-ended\\-no\\-replace\\]"
+  },
+  {
+   "id": "or-ended-insert-unchecked",
+   "what": "InsertSystems inserts while a World is broken (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(worldName);",
+   "replace": "    WorldSlot* slot = Find(worldName);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-no\\-insert\\]"
+  },
+  {
+   "id": "or-ended-code-swapped",
+   "what": "the refusal names an interrupted World WorldMissing and an empty place WorldInterrupted (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    OrchestrationError error(missing ? OrchestrationErrorCode::WorldMissing : OrchestrationErrorCode::WorldInterrupted,",
+   "replace": "    OrchestrationError error(missing ? OrchestrationErrorCode::WorldInterrupted : OrchestrationErrorCode::WorldMissing,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-runschedule\\-other\\]"
+  },
+  {
+   "id": "or-ended-outside-unrecorded",
+   "what": "a World interrupted outside the Product is not seen (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (!slot.executor || slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted) continue;",
+   "replace": "            continue;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a World interrupted outside the Product*",
+   "expect": "\\[or\\-ended\\-gameinit\\]"
+  },
+  {
+   "id": "or-failure-not-attached",
+   "what": "the first error carries no failure (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        error.failure = Break(std::move(failure));\n        return ::Engine::Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
+   "replace": "        Break(std::move(failure));\n        return ::Engine::Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-set\\]"
+  },
+  {
+   "id": "or-failure-no-product",
+   "what": "the failure does not name the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure.product = name_;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-who\\]"
+  },
+  {
+   "id": "or-failure-no-schedule",
+   "what": "the failure does not name the schedule (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure.schedule = std::string(schedule);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-where\\]"
+  },
+  {
+   "id": "or-failure-no-domain",
+   "what": "the failure does not take the schedule's domain (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (info.options.name == schedule) failure.domain = info.options.domain;",
+   "replace": "        static_cast<void>(info);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-tick\\]"
+  },
+  {
+   "id": "or-failure-no-tick",
+   "what": "the failure does not read the tick (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure.tick = slot.executor->GetWorld().Tick(failure.domain);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-tick\\]"
+  },
+  {
+   "id": "or-failure-no-kernel-code",
+   "what": "the failure does not carry the kernel code (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        failure.kernelCode = kernelError.code;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-kernel\\]"
+  },
+  {
+   "id": "or-failure-no-last",
+   "what": "the last schedule is not remembered (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.lastSchedule = std::string(schedule);\n    return {};",
+   "replace": "    return {};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-last\\]"
+  },
+  {
+   "id": "or-failure-last-kept",
+   "what": "a new World keeps the old World's last schedule (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.lastSchedule.clear();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-failure\\-last\\-new\\-world\\]"
+  },
+  {
+   "id": "or-drop-fail-unrecorded",
+   "what": "a failed DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        } else if (dropOldFirst) {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-ended\\-drop\\-failure\\]"
+  },
+  {
+   "id": "or-drop-fail-kind",
+   "what": "a failed DropOldFirst replacement is recorded as Interrupted (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            failure.kind = WorldFailureKind::ReplacementFailed;\n            failure.entry = \"ReplaceWorld\";\n            failure.schedule = failedSchedule;\n            if",
+   "replace": "            failure.kind = WorldFailureKind::Interrupted;\n            failure.entry = \"ReplaceWorld\";\n            failure.schedule = failedSchedule;\n            if",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-ended\\-drop\\-failure\\-fields\\]"
+  },
+  {
+   "id": "or-throw-unrecorded",
+   "what": "an exception leaving a DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!failure_) {\n            WorldFailure failure;",
+   "replace": "        if (false) {\n            WorldFailure failure;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
+   "expect": "\\[or\\-ended\\-throw\\]"
+  },
+  {
+   "id": "or-throw-alloc-kind",
+   "what": "std::bad_alloc leaving a replacement is ReplacementFailed (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                failure.kind = WorldFailureKind::ResourceExhausted;\n                failure.where = \"std::bad_alloc left the replacement\";",
+   "replace": "                failure.kind = WorldFailureKind::ReplacementFailed;\n                failure.where = \"std::bad_alloc left the replacement\";",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
+   "expect": "\\[or\\-ended\\-throw\\-kind\\]"
+  },
+  {
+   "id": "or-run-throw-unrecorded",
+   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            failure.where = \"std::bad_alloc left the schedule\";\n            Break(std::move(failure));\n",
+   "replace": "            failure.where = \"std::bad_alloc left the schedule\";\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: std::bad_alloc leaving a schedule*",
+   "expect": "\\[or\\-run\\-throw\\]"
+  },
+  {
+   "id": "or-failure-logged",
+   "what": "the orchestration layer logs the failure itself (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure_ = std::move(failure);\n    return *failure_;",
+   "replace": "    failure_ = std::move(failure);\n    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", failure_->Text());\n    return *failure_;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-not\\-logged\\]"
+  },
+  {
+   "id": "or-failure-refusal-differs",
+   "what": "a refusal carries a failure that differs from the one recorded (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    error.failure = *failure_;\n    return error;",
+   "replace": "    error.failure = *failure_;\n    error.failure->lastSchedule.clear();\n    return error;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-same\\]"
+  },
+  {
+   "id": "or-failure-no-detail",
+   "what": "a refusal's detail does not carry the failure (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                             failure_->Text());\n    error.failure = *failure_;",
+   "replace": "                             std::string());\n    error.failure = *failure_;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-detail\\]"
+  },
+  {
+   "id": "or-failure-text-no-tick",
+   "what": "Text() leaves the tick out (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/OrchestrationError.cpp",
+   "find": "\", tick \" +\n                std::to_string(tick) + \")\"",
+   "replace": "\")\"",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-text\\]"
+  },
+  {
+   "id": "or-failure-text-no-where",
+   "what": "Text() leaves the kernel text or report out (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/OrchestrationError.cpp",
+   "find": "    if (!where.empty()) text += \"; \" + where;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-text\\]"
+  }
+ ]
+}

@@ -25,19 +25,15 @@ struct Bound {
     std::int64_t value;
 };
 
-class ProbePlugin final : public Plugin {
-public:
-    [[nodiscard]] std::string_view Name() const override { return "probe"; }
-    void Build(Registrar& r) override {
-        r.Resource<Bound>({.name = "Bound", .zone = Zone::B, .threadBound = true});
-        ScheduleOptions s;
-        s.name = "Tick";
-        s.domain = Domain::Fixed;
-        s.clock = true;
-        s.stages = {"A"};
-        r.Schedule(s);
-    }
-};
+void BuildProbe(Registrar& r) {
+    r.Resource<Bound>({.name = "Bound", .zone = Zone::B, .threadBound = true});
+    ScheduleOptions s;
+    s.name = "Tick";
+    s.domain = Domain::Fixed;
+    s.clock = true;
+    s.stages = {"A"};
+    r.Schedule(s);
+}
 
 void AssertedOnDestroy(const Engine::Base::AssertionFailure& failure) {
     std::printf("thread-bound destroy: GYO_ASSERT failed as expected: %s\n", failure.expression);
@@ -48,10 +44,10 @@ void AssertedOnDestroy(const Engine::Base::AssertionFailure& failure) {
 } // namespace
 
 int main() {
-    ProbePlugin plugin;
-    Registry registry({&plugin});
-    if (!registry.Finish()) {
-        std::printf("thread-bound destroy: Finish failed\n");
+    Registry registry;
+    static_cast<void>(registry.Register(RegistrationOwner{"probe", 0}, &BuildProbe));
+    if (!registry.BuildPlans()) {
+        std::printf("thread-bound destroy: BuildPlans failed\n");
         return 2;
     }
     auto executor = std::make_unique<WorldExecutor>(registry, "probe");

@@ -802,9 +802,9 @@ TEST_CASE("J-55: the fingerprint versions") {
         r.AddSystem<&SpawnSevenAlways>(In("SpawnSevenAlways", "A"));
     });
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
-    CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 5U, "J-55 versions: Plan fingerprint version 5");
-    CHECK_MESSAGE(frozen.CFingerprint().version == 7U, "J-55 versions: C fingerprint version 7");
-    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 3U, "J-55 versions: Registry fingerprint version 3");
+    CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 6U, "J-55 versions: Plan fingerprint version 6");
+    CHECK_MESSAGE(frozen.CFingerprint().version == 8U, "J-55 versions: C fingerprint version 8");
+    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 4U, "J-55 versions: Registry fingerprint version 4");
 }
 
 // ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)

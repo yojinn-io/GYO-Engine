@@ -8,9 +8,8 @@
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version (the
 //     constants below).
-// Registry fingerprint (format 3): registration owner names in the order of
-// their first Register (Finish registers the plugins in list order, so the
-// same names as the plugin list); components, resources,
+// Registry fingerprint (format 4): registration owner names in the order of
+// their first Register; components, resources,
 // events in id order (name, size, align, zone, writePolicy, role, rollback;
 // resources add external and threadBound; events have name, domain, zone);
 // effects; named sets (name, members, digest); the allotter; schedules (every
@@ -65,13 +64,16 @@ namespace {
 // run a schedule (v8-arch-gyo2-nested-schedule; neither is a Plan step); 5 since
 // a conflicting pair with no order is a tie in zone C too and KernelSettings is
 // read when each Run starts (v8-arch-gyo2-kernel-subtract-structure; no Plan
-// step changed: the rule of hook-flush-not-in-plan-bump-versions).
-constexpr std::uint32_t kFingerprintVersion = 5;
+// step changed: the rule of hook-flush-not-in-plan-bump-versions); 6 since the
+// kernel runs no Startup before the first other schedule (the orchestration
+// layer's game initialization; v8-arch-gyo2-orchestration-skeleton).
+constexpr std::uint32_t kFingerprintVersion = 6;
 // The Registry fingerprint's format: 2 since initial value declarations are
 // hashed (v8-arch-gyo2-funnel-check); 3 since the thread roles left (no schedule
 // runner role, no System thread role; a resource's threadBound flag) and ExclusiveWorld's
-// Writes<...> is an annotation (annotatedWrites) (v8-arch-gyo2-kernel-subtract-structure).
-constexpr std::uint32_t kRegistryFingerprintVersion = 3;
+// Writes<...> is an annotation (annotatedWrites) (v8-arch-gyo2-kernel-subtract-structure);
+// 4 since a schedule has no startup flag (v8-arch-gyo2-orchestration-skeleton).
+constexpr std::uint32_t kRegistryFingerprintVersion = 4;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
 // since the initial value declarations of zone C components; 4 since the hook
@@ -80,8 +82,9 @@ constexpr std::uint32_t kRegistryFingerprintVersion = 3;
 // since the kernel runs Startup and a System may run a schedule
 // (v8-arch-gyo2-nested-schedule); 7 since the System and resource bytes it shares
 // with the Registry fingerprint changed and the Plan rules did
-// (v8-arch-gyo2-kernel-subtract-structure).
-constexpr std::uint32_t kCFingerprintVersion = 7;
+// (v8-arch-gyo2-kernel-subtract-structure); 8 since the schedule bytes it shares
+// have no startup flag and the kernel runs no Startup (v8-arch-gyo2-orchestration-skeleton).
+constexpr std::uint32_t kCFingerprintVersion = 8;
 
 class Bytes {
 public:
@@ -191,7 +194,6 @@ void ResourceBytes(Bytes& out, const ResourceInfo& info) {
 void ScheduleBytes(Bytes& out, const ScheduleOptions& s) {
     out.Str(s.name);
     out.Enum(s.domain);
-    out.Flag(s.startup);
     out.Flag(s.clock);
     out.Flag(s.extract);
     out.Flag(s.rollbackEnabled);
@@ -421,7 +423,7 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
 
 std::string FrozenRegistry::ExportPlans() const {
     const Detail::RegistryData& data = *data_;
-    std::string out = "gyo.kernel.plans 3\n";
+    std::string out = "gyo.kernel.plans 4\n";
     out += "registry " + Detail::RegistryFingerprintOf(data).Text() + "\n";
     out += "registry_c " + Detail::CFingerprintOf(data).Text() + "\n";
     for (const Plan& plan : data.plans) {
@@ -429,7 +431,6 @@ std::string FrozenRegistry::ExportPlans() const {
         out += "schedule " + plan.schedule + " domain=" + Detail::DomainName(plan.domain);
         if (schedule != nullptr) {
             out += std::string(" clock=") + (schedule->options.clock ? "1" : "0") +
-                   " startup=" + (schedule->options.startup ? "1" : "0") +
                    " rollback=" + (schedule->options.rollbackEnabled ? "1" : "0");
         }
         out += "\n";

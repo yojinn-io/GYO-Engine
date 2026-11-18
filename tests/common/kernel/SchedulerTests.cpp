@@ -132,22 +132,22 @@ struct Golden {
 // v8-arch-gyo2-spawn-reject (the sync point drops spawn records); Plan format 4 and the values
 // re-taken by v8-arch-gyo2-nested-schedule (the kernel runs Startup); Plan format 5 and Registry
 // format 3 and the values re-taken by v8-arch-gyo2-kernel-subtract-structure (no runner or
-// affinity, threadBound and annotatedWrites hashed): the judgement is unchanged.
+// affinity, threadBound and annotatedWrites hashed); Plan format 6 and Registry format 4 and the
+// values re-taken by v8-arch-gyo2-orchestration-skeleton (no startup flag; the kernel runs no
+// Startup): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "5:916723dbf66dab54200b55c52779e2a593b3a29080234c89b9e53285fcfe1a29",
-     "3:6fb58b7073db8afb4910f67f88a28dfa1723652a44ff32df61ad11a88e3779f7"},
-    {"deferred", &DeferredRegistry, "5:fb78e3ee31dde531649a6f2072eaed55ddb50e2629116ddc8ca5dc58583ff9cf",
-     "3:08f84e3617bddf161a2127bfe53be275a62f2ecc6344031fc0b8d2544c073ee6"},
-    {"events", &EventRegistry, "5:b8a709bfb46379bdec41f0b4fcfd6a917a6fdbc1566cb038817c8dc5aa82e222",
-     "3:6acba502d550c34aee7d6f9417951b61fbc672a81220696595506582f10f5491"},
+    {"mixed", &MixedRegistry, "6:749f0533d19e426c86d1657da91fe326c99413cdc62b84b9c3cb12dcaf767fa4",
+     "4:37315bda21bf50c82627bc66978d4791082d6aa24c085754c50a8f749cd34dc2"},
+    {"deferred", &DeferredRegistry, "6:8ae234bdbd5e638b2b72461ebd84065ee9868b8510b5b1e08fec185cc1aac672",
+     "4:dd279239c5e74909cc697731149c84f573d93ce6416c42dcff4a1910dbab1b12"},
+    {"events", &EventRegistry, "6:226d0836d1b31101bdd2a93cb4c5faa1848f7900d4eb8709bd9bd765a4e4653d",
+     "4:94626fd4b7be9488feaae97d984e464926bd36f1e9e8eb39ece3d13707ecc8f4"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
-    Built built{{}, nullptr, {}};
-    built.plugins.push_back(std::make_unique<TestPlugin>("golden", golden.build));
-    built.registry = std::make_unique<Registry>(std::vector<Plugin*>{built.plugins.back().get()});
+    Built built{std::make_unique<Registry>(), {}};
     if (shuffle != 0) SchedulerShuffleProbe::Set(*built.registry, shuffle);
-    built.result = built.registry->Finish();
+    built.result = RegisterAll(*built.registry, {{"golden", golden.build}});
     return built;
 }
 
@@ -631,15 +631,14 @@ TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
     };
     Built unset = Finish({{"render", build}});
     CHECK(KernelTest::ErrorCount(unset, StartupCode::DE14) == 1);
-    TestPlugin sourcePlugin("source", [](Registrar& r) {
+    Registry source;
+    static_cast<void>(source.Register(RegistrationOwner{"source", 0}, [](Registrar& r) {
         r.Component<TestPos>({.name = "TestPos", .zone = Zone::C});
         r.Schedule(FixedSchedule());
-    });
-    Registry source({&sourcePlugin});
-    TestPlugin renderPlugin("render", build);
-    Registry render({&renderPlugin});
-    render.SetExtractSource(source);  // source not finished yet
-    const auto result = render.Finish();
+    }));
+    Registry render;
+    render.SetExtractSource(source);  // source has not built its Plans
+    const auto result = RegisterAll(render, {{"render", build}});
     CHECK(KernelTest::ErrorCount(result, StartupCode::DE14) == 1);
 }
 
@@ -709,9 +708,9 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E1 -> E4 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E2 -> E3 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
-    CHECK(report.find("gyo.kernel.plans 3") == 0);
-    CHECK(report.find("fingerprint 5:") != std::string::npos);
+    CHECK(report.find("gyo.kernel.plans 4") == 0);
+    CHECK(report.find("fingerprint 6:") != std::string::npos);
     // The whole schedule line of format 3 (no runner since v8-arch-gyo2-kernel-subtract-structure).
-    CHECK_MESSAGE(report.find("\nschedule FixedUpdate domain=Fixed clock=1 startup=0 rollback=0\n") != std::string::npos,
+    CHECK_MESSAGE(report.find("\nschedule FixedUpdate domain=Fixed clock=1 rollback=0\n") != std::string::npos,
                   "Plan export: the schedule line\n" << report);
 }

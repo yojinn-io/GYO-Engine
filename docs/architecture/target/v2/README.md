@@ -7,6 +7,7 @@
 
 ## 給作者看的
 
+- [orchestration.zh-Hant.md](orchestration.zh-Hant.md)：編排層（`engine/orchestration`）的 Design Invariants O-1～O-10 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-orchestration-skeleton` 合併前的合併前核准定稿）。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
 - [diagrams/mechanism-runtime.svg](diagrams/mechanism-runtime.svg)：圖一，一個 Product 的機制全貌（11 月 11 日的圖，只換名字）。
 - [diagrams/control-plane-revised.svg](diagrams/control-plane-revised.svg)：圖二，基礎的 System 契約（11 月 11 日的圖，換名字並調整）。
@@ -42,6 +43,8 @@
 - [rollback-module-declaration.zh-Hant.md](rollback-module-declaration.zh-Hant.md)：`v8-arch-gyo2-rollback-module` 的事前宣告（回滾 Module：`RollbackStrategy` interface、第一版官方實作、P2P 佔位、要 Kernel 給的原語；邊界統合的子份，修訂 4 使用者 2026-11-17 核准（7dfd7167）；修訂 5、6 照第四輪檢查與窄複查改，使用者 2026-11-17 核准（9418fcf1））。
 - [event-cursor-declaration.zh-Hant.md](event-cursor-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor` 的事前宣告（事件：保留式改名 `Message` 與游標修剪，推送式 `Event`＋`Observer`；邊界統合的子份）；修訂 4 與修訂 5、6，使用者 2026-11-17 核准（758f651f）。
 - [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
+- [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
+- [orchestration-skeleton-merge-approval.zh-Hant.md](orchestration-skeleton-merge-approval.zh-Hant.md)：同一批的合併前核准資料（判定的結果、照 G-7 改寫的第 7.1、7.2 節、第 10 節的最終文字、和宣告不同的地方、要你判的一件）。
 
 ## dev_log
 
@@ -55,6 +58,7 @@
 - [2026_11_15_gyo2_spawn_reject.zh-Hant.md](../../../dev_logs/2026_11_15_gyo2_spawn_reject.zh-Hant.md)：同步點丟掉不能生成的那一筆（三條斷言改成丟掉、留明細與總數、LIM-7、指紋升版）。
 - [2026_11_16_gyo2_nested_schedule.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_nested_schedule.zh-Hant.md)：K0，獨占 World 的 System 可以跑一張 schedule（巢狀執行、`ExclusiveWorld<…>` 的閉包與帶寫入的宣告、開局由 Kernel 跑、指紋升版）。
 - [2026_11_18_gyo2_kernel_subtract_structure.zh-Hant.md](../../../dev_logs/2026_11_18_gyo2_kernel_subtract_structure.zh-Hant.md)：Kernel 減法・結構段（改名 `WorldExecutor`、兩步登記、唯讀登記表、`ExclusiveWorld` 全讀寫與當場改、`KernelSettings` 可寫、拿掉執行期攔截與歧義偵測、執行緒改成綁執行緒的 Resource、指紋升版；S10 停下待定）。
+- [2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md](../../../dev_logs/2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md)：編排層的骨架（四步：編排層本體、Kernel 減法、登記檔、scenario 第一段；進行中）。
 - [2026_11_16_gyo2_module_plugin_definition.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_module_plugin_definition.zh-Hant.md)：Module／Plugin 的定義改成「誰維護、介面是誰的」，AGENTS §6 與 v2 文件對齊。
 - [2026_11_16_gyo2_test_debts.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_test_debts.zh-Hant.md)：Kernel 測試的三筆舊帳（四個對不上的突變、刪除實體時 OnRemove 的先後、還沒搬的 world-exec 突變）。
 

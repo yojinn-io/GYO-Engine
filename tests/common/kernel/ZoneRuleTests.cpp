@@ -185,17 +185,10 @@ TEST_CASE("J-15: a second writer of an Exclusive column fails, whatever the writ
     }
 }
 
-TEST_CASE("J-15: a Startup writer does not count; two writers of a Shared column pass") {
-    Built startup = FinishOne([](Registrar& r) {
-        ScheduleOptions s;
-        s.name = "Startup";
-        s.startup = true;
-        s.stages = {"Init"};
-        r.Schedule(s);
-        r.AddSystem<&WritePos>(Sys("WritePos", Zone::C, Simulate()));
-        r.AddSystem<&WritePosAgain>(Sys("InitPos", Zone::C, {At("Startup", "Init")}));
-    });
-    KERNEL_REQUIRE_OK(startup);
+// The Startup half went with the kernel's startup (v8-arch-gyo2-orchestration-skeleton,
+// declaration 7.1 group E): a game initialization schedule's writers count until
+// the writer count itself goes (batch 4).
+TEST_CASE("J-15: two writers of a Shared column pass") {
     Built shared = FinishOne([](Registrar& r) {
         r.AddSystem<&WriteMarker>(Sys("WriteMarker", Zone::B, {At("FixedUpdate", "Present")}));
         r.AddSystem<&WriteMarkerAgain>(Sys("WriteMarkerAgain", Zone::B, {At("Update", "First")}));

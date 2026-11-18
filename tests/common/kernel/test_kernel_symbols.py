@@ -15,7 +15,7 @@ Name                  Value           Class        Type         Size            
 GYO::Kernel::Detail::TypeKeyOf<GYO::Kernel::KernelSettings>::typeKeyAnchor|0000000000000000|   u  |            OBJECT|0000000000000001|     |.bss._ZN3GYO6Kernel6Detail9TypeKeyOfINS0_14KernelSettingsEE13typeKeyAnchorE
 Engine::Base::Detail::assertionHandler|0000000000000000|   V  |            OBJECT|0000000000000008|     |.data.rel.local._ZN6Engine4Base6Detail16assertionHandlerE
 Engine::Base::Detail::reportingAssertion|0000000000000000|   u  |               TLS|0000000000000001|     |.tbss._ZN6Engine4Base6Detail18reportingAssertionE
-vtable for GYO::Kernel::Plugin|0000000000000000|   V  |            OBJECT|0000000000000038|     |.data.rel.ro._ZTVN3GYO6Kernel6PluginE
+vtable for GYO::Kernel::Synthetic|0000000000000000|   V  |            OBJECT|0000000000000038|     |.data.rel.ro._ZTVN3GYO6Kernel9SyntheticE
 GYO::Kernel::ToString(GYO::Kernel::StartupCode)|0000000000000000|   T  |              FUNC|0000000000000120|     |.text
 operator new(unsigned long)|                |   U  |            NOTYPE|                |     |*UND*
 """
@@ -25,7 +25,7 @@ DARWIN = """
 000000000002bf20 (__DATA,__data) weak external Engine::Base::Detail::assertionHandler
 000000000002bf08 (__DATA,__thread_vars) weak external Engine::Base::Detail::reportingAssertion
 000000000031583b (__DATA,__thread_bss) non-external Engine::Base::Detail::reportingAssertion
-0000000000001000 (__DATA,__const) weak external vtable for GYO::Kernel::Plugin
+0000000000001000 (__DATA,__const) weak external vtable for GYO::Kernel::Synthetic
 0000000000000000 (__TEXT,__text) external GYO::Kernel::ToString(GYO::Kernel::StartupCode)
                  (undefined) external operator new(unsigned long)
 """
@@ -63,7 +63,7 @@ class Classification(unittest.TestCase):
 
     def test_sysv_read_only_and_text_and_undefined_are_not_writable(self):
         symbols = guard.parse_sysv(SYSV)
-        self.assertNotIn("vtable for GYO::Kernel::Plugin", symbols)
+        self.assertNotIn("vtable for GYO::Kernel::Synthetic", symbols)
         self.assertNotIn("GYO::Kernel::ToString(GYO::Kernel::StartupCode)", symbols)
         self.assertNotIn("operator new(unsigned long)", symbols)
         # .data.rel.local is writable (only .data.rel.ro is read-only after relocation).
@@ -71,7 +71,7 @@ class Classification(unittest.TestCase):
 
     def test_darwin_const_text_and_undefined_are_not_writable(self):
         symbols = guard.parse_darwin(DARWIN)
-        self.assertNotIn("vtable for GYO::Kernel::Plugin", symbols)
+        self.assertNotIn("vtable for GYO::Kernel::Synthetic", symbols)
         self.assertNotIn("GYO::Kernel::ToString(GYO::Kernel::StartupCode)", symbols)
         self.assertNotIn("operator new(unsigned long)", symbols)
 

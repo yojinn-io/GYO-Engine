@@ -64,20 +64,16 @@ void RegisterSystems(Registrar& r, std::integer_sequence<int, Chunk...>) {
     (RegisterChunk<Chunk * 100>(r, std::make_integer_sequence<int, 100>{}), ...);
 }
 
-class SyntheticPlugin final : public Plugin {
-public:
-    std::string_view Name() const override { return "synthetic"; }
-    void Build(Registrar& r) override {
-        RegisterColumns(r, std::make_integer_sequence<int, 50>{});
-        ScheduleOptions s;
-        s.name = "Update";
-        s.domain = Domain::Frame;
-        s.clock = true;
-        for (int i = 0; i < kStages; ++i) s.stages.push_back("Stage" + std::to_string(i));
-        r.Schedule(s);
-        RegisterSystems(r, std::make_integer_sequence<int, kSystems / 100>{});
-    }
-};
+void BuildSynthetic(Registrar& r) {
+    RegisterColumns(r, std::make_integer_sequence<int, 50>{});
+    ScheduleOptions s;
+    s.name = "Update";
+    s.domain = Domain::Frame;
+    s.clock = true;
+    for (int i = 0; i < kStages; ++i) s.stages.push_back("Stage" + std::to_string(i));
+    r.Schedule(s);
+    RegisterSystems(r, std::make_integer_sequence<int, kSystems / 100>{});
+}
 
 } // namespace
 
@@ -85,10 +81,10 @@ int main() {
     std::vector<double> ms;
     std::string fingerprint;
     for (int run = 0; run < 10; ++run) {
-        SyntheticPlugin plugin;
-        Registry registry({&plugin});
+        Registry registry;
         const auto start = std::chrono::steady_clock::now();
-        const auto result = registry.Finish();
+        static_cast<void>(registry.Register(RegistrationOwner{"synthetic", 0}, &BuildSynthetic));
+        const auto result = registry.BuildPlans();
         const auto end = std::chrono::steady_clock::now();
         if (!result) {
             std::printf("finish failed:\n%s\n", result.error().detail.c_str());

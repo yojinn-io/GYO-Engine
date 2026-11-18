@@ -202,10 +202,9 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 // exclusive System call (ExclusiveWorld::RunSchedule; Executor.cpp). Refused
 // with Err, the World interrupted and the error reported once by the outermost
 // Run: from a hook (X-13), inside a Read or Modify closure (X-14), an unknown
-// name (X-12), Startup (H-12) or while Startup runs (H-13), an extract schedule
-// (X-15), a schedule running already at any level (X-11). An Interrupted World
+// name (X-12), an extract schedule (X-15), a schedule running already at any level (X-11). An Interrupted World
 // runs nothing: the error a nested level left is returned.
-[[nodiscard]] Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
+[[nodiscard]] ::Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
                                                                 bool inClosure);
 // What an immediate structural change of ExclusiveWorld did (declaration
 // v8-arch-gyo2-kernel-subtract-structure 3.5): entity, the id a Spawn took
@@ -238,7 +237,7 @@ struct ImmediateOutcome {
 // returns, DI-KS 2): no allotter (NoAllotter), the allotter used up
 // (AllotterExhausted). GYO_ASSERT: the membership changed behind the handle
 // before (W-3).
-[[nodiscard]] Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
+[[nodiscard]] ::Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
                                                                                 ChangeStamp stamp, bool inClosure);
 
 // The World's sync epoch now (a handle renews its own after a nested run, W-4).
@@ -270,7 +269,7 @@ void Push(SystemContext& call, Record record);
 // violations, boundary differences (storage names), kernel errors the System
 // dropped, and the System's own Err, as one sibling list; nothing when the call
 // is clean. One error alone is returned as is.
-[[nodiscard]] std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result<void, KernelError> result,
+[[nodiscard]] std::optional<KernelError> CombineCall(SystemContext& call, ::Engine::Base::Result<void, KernelError> result,
                                                      const std::vector<std::string>& changed);
 
 // DiagnosticsWriter<T>'s World-side buffer (B-13).

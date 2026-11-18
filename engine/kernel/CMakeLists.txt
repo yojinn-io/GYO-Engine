@@ -20,7 +20,8 @@ target_include_directories(gyo_kernel PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore)
+# Engine-internal links come from engine/config/modules.csv (O-6).
+gyo_link_registered_dependencies(kernel)
 target_compile_features(gyo_kernel PUBLIC cxx_std_20)
 if(MSVC)
     target_compile_options(gyo_kernel PRIVATE /W4 /permissive-)

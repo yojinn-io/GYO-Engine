@@ -38,7 +38,7 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "3:6534b886c3f029f5a429893934c62c158e2d94990567484927bad55b19ec7179";
+    "4:0df74a525fe3eef56f735476dcb24b877220000232e664e9909ab353a07d4152";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {
@@ -62,7 +62,7 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
     CHECK(frozen.SystemNamed("WriteHealth")->registrationSeq == 1U);
     MESSAGE("J-18 registry fingerprint: " << frozen.RegistryFingerprint().Text());
     CHECK(frozen.RegistryFingerprint().Text() == kJ18RegistryGolden);
-    CHECK(frozen.RegistryFingerprint().version == 3U);
+    CHECK(frozen.RegistryFingerprint().version == 4U);
 }
 
 TEST_CASE("J-18: swapping two plugins gives ids in the new order") {
@@ -139,50 +139,17 @@ TEST_CASE("J-18: the Registry fingerprint sees annotatedWrites") {
                   "J-18 annotatedWrites: ExclusiveWorld<> and ExclusiveWorld<Writes<R>> give one fingerprint");
 }
 
-TEST_CASE("J-19: lookup creates no id; build runs once per plugin; finish after every build, in list order") {
-    std::vector<std::string> calls;
-    TestPlugin first("first", [&](Registrar& r) { calls.push_back("build first"); Movement(r); }, {},
-                     [&](const FrozenRegistry& frozen, FinishContext&) {
-                         calls.push_back("finish first");
-                         // Finish reads final ids; an unregistered type has none.
-                         CHECK(frozen.ComponentIdOf<TestHealth>() == 2U);
-                         CHECK_FALSE(frozen.ComponentIdOf<TestMarker>().has_value());
-                     });
-    TestPlugin second("second", [&](Registrar& r) { calls.push_back("build second"); Life(r); Schedules(r); }, {"first"},
-                      [&](const FrozenRegistry&, FinishContext&) { calls.push_back("finish second"); });
-    Registry registry({&first, &second});
-    const auto result = registry.Finish();
+// The plugin list (build once each, finish after every build in list order,
+// R-E1, R-E3) is the orchestration layer's since v8-arch-gyo2-orchestration-skeleton
+// (tests/common/orchestration, O-2, O-E1, O-E3).
+TEST_CASE("J-19: lookup creates no id; the view after BuildPlans has final ids") {
+    Registry registry;
+    const auto result = RegisterAll(registry, {{"first", Movement}, {"second", [](Registrar& r) { Life(r); Schedules(r); }}});
     REQUIRE(static_cast<bool>(result));
-    CHECK(calls == std::vector<std::string>{"build first", "build second", "finish first", "finish second"});
-    CHECK(first.builds == 1);
-    CHECK(second.finishes == 1);
+    CHECK(registry.Frozen().ComponentIdOf<TestHealth>() == 2U);
     CHECK_FALSE(registry.Frozen().ComponentIdOf<TestMarker>().has_value());
     CHECK(registry.Frozen().Components().size() == 3);
     CHECK(registry.IsFrozen());
-}
-
-TEST_CASE("J-19: a duplicate plugin name is R-E1 and the duplicate is not built") {
-    TestPlugin a("same", Movement);
-    TestPlugin b("same", Life);
-    TestPlugin host("host", Schedules);
-    Registry registry({&a, &b, &host});
-    const auto result = registry.Finish();
-    CHECK(KernelTest::ErrorCount(result, StartupCode::RE1) == 1);
-    REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK(a.builds == 1);
-    CHECK(b.builds == 0);
-    CHECK_FALSE(registry.IsFrozen());
-}
-
-TEST_CASE("J-19: a missing or later required plugin is R-E3; the kernel does not reorder") {
-    TestPlugin early("early", Movement, {"late", "absent"});
-    TestPlugin late("late", [](Registrar& r) { Life(r); Schedules(r); });
-    Registry registry({&early, &late});
-    const auto result = registry.Finish();
-    CHECK(KernelTest::ErrorCount(result, StartupCode::RE3) == 2);
-    REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK(result.error().detail.find("comes later") != std::string::npos);
-    CHECK(result.error().detail.find("not in the Host's list") != std::string::npos);
 }
 
 TEST_CASE("J-19: a type registered by two plugins is R-E2") {
@@ -215,16 +182,16 @@ TEST_CASE("J-19: removing the owner plugin gives R-E4 to every System that uses 
 // Group H of v8-arch-gyo2-kernel-subtract-structure (declaration 5.1): registering
 // again after the Plans are built is Registry::Register's job now
 // (RegistrationRoundTests.cpp, DI-KS 26); what stays is that a Registrar exists
-// only inside a Register call's build callable or Plugin::Build.
-TEST_CASE("J-19: a Registrar exists only inside Register and Plugin::Build") {
-    // FinishContext has no Registrar and Registrar has no public constructor.
+// only inside a Register call's build callable.
+TEST_CASE("J-19: a Registrar exists only inside Register") {
+    // Registrar has no public constructor.
     static_assert(!std::is_constructible_v<Registrar, Registry&>);
     static_assert(!std::is_default_constructible_v<Registrar>);
     static_assert(!std::is_copy_constructible_v<Registry>);
     CHECK(true);
 }
 
-TEST_CASE("J-24: R-E5 (two types share one key) and R-E6 (two runners) are reported") {
+TEST_CASE("J-24: R-E5 (two types share one key) is reported") {
     Built collision = Finish({{"movement", Movement}, {"forged", [](Registrar& r) {
                                   TypeKeyCollisionProbe::RegisterComponent(r, KeyOf<TestPos>(), 64, 8,
                                                                            {.name = "Forged", .zone = Zone::C});
@@ -233,38 +200,20 @@ TEST_CASE("J-24: R-E5 (two types share one key) and R-E6 (two runners) are repor
     CHECK(KernelTest::ErrorCount(collision, StartupCode::RE5) == 1);
     REQUIRE_FALSE(static_cast<bool>(collision.result));
     CHECK(KernelTest::ErrorCount(collision, StartupCode::RE2) == 0);
-
-    TestPlugin a("window", Movement, {}, [](const FrozenRegistry&, FinishContext& c) { c.InstallRunner("window"); });
-    TestPlugin b("headless", Schedules, {}, [](const FrozenRegistry&, FinishContext& c) { c.InstallRunner("headless"); });
-    Registry registry({&a, &b});
-    const auto result = registry.Finish();
-    CHECK(KernelTest::ErrorCount(result, StartupCode::RE6) == 1);
-    REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK(result.error().errors.front().subjects == std::vector<std::string>{"window", "headless"});
-
-    TestPlugin one("window", Movement, {}, [](const FrozenRegistry&, FinishContext& c) { c.InstallRunner("window"); });
-    TestPlugin other("host", Schedules);
-    Registry fine({&one, &other});
-    CHECK(static_cast<bool>(fine.Finish()));
 }
 
-TEST_CASE("J-24: R-E1 to R-E4 each from a minimal Registry, all in one report") {
-    TestPlugin dup1("dup", Movement, {"missing"});
-    TestPlugin dup2("dup", Life);
-    TestPlugin twice("twice", [](Registrar& r) {
-        r.Component<TestPos>({.name = "TestPos2", .zone = Zone::C});
-        Schedules(r);
-        r.AddSystem<&WriteHealth>(Sys("WriteHealth", Zone::C, {At("FixedUpdate", "Simulate")}));
-    });
-    Registry registry({&dup1, &dup2, &twice});
-    const auto result = registry.Finish();
-    REQUIRE_FALSE(static_cast<bool>(result));
-    const StartupReport& report = result.error();
-    CHECK(report.Has(StartupCode::RE1));
+TEST_CASE("J-24: R-E2 and R-E4 each from a minimal Registry, all in one report") {
+    Built built = Finish({{"twice", [](Registrar& r) {
+                               r.Component<TestPos>({.name = "TestPos", .zone = Zone::C});
+                               r.Component<TestPos>({.name = "TestPos2", .zone = Zone::C});
+                               Schedules(r);
+                               r.AddSystem<&WriteHealth>(Sys("WriteHealth", Zone::C, {At("FixedUpdate", "Simulate")}));
+                           }}});
+    REQUIRE_FALSE(static_cast<bool>(built.result));
+    const StartupReport& report = built.result.error();
     CHECK(report.Has(StartupCode::RE2));
-    CHECK(report.Has(StartupCode::RE3));
-    CHECK(report.Has(StartupCode::RE4));  // TestHealth's owner "dup" (the second) was not built
-    CHECK(report.errors.size() >= 4);
+    CHECK(report.Has(StartupCode::RE4));  // TestHealth is registered by no one
+    CHECK(report.errors.size() >= 2);
 }
 
 // DI-KS 15 (target/kernel.zh-Hant.md): the startup errors are only the kept list
@@ -282,10 +231,10 @@ TEST_CASE("DI-KS 15: the StartupCode values are the kernel's kept codes plus the
     // may; declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6, inside duty (12) "registration").
     std::vector<std::string> expected{"D-E1", "D-E3", "D-E4", "D-E5", "D-E6", "D-E7", "D-E14", "D-E17", "D-E19", "D-E20",
                                       "R-E2", "R-E4", "R-E5", "R-E7"};
-    // In transition, still in the kernel: Startup and the plugin list (batch 2, the orchestration layer: D-E21,
-    // R-E1, R-E3, R-E6); clock and event domains (batch 3: D-E12, F-E1); zones, the writer count and rollback
-    // declarations (batch 4, authority and rollback: D-E2, D-E9, D-E11, D-E15, D-E16, X-E1).
-    for (const char* code : {"D-E21", "R-E1", "R-E3", "R-E6", "D-E12", "F-E1", "D-E2", "D-E9", "D-E11", "D-E15", "D-E16", "X-E1"}) {
+    // In transition, still in the kernel: clock and event domains (batch 3: D-E12, F-E1); zones, the writer
+    // count and rollback declarations (batch 4, authority and rollback: D-E2, D-E9, D-E11, D-E15, D-E16, X-E1).
+    // (Startup and the plugin list, D-E21, R-E1, R-E3, R-E6, left with batch 2, the orchestration layer.)
+    for (const char* code : {"D-E12", "F-E1", "D-E2", "D-E9", "D-E11", "D-E15", "D-E16", "X-E1"}) {
         expected.emplace_back(code);
     }
     std::sort(expected.begin(), expected.end());

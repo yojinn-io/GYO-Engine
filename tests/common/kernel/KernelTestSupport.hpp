@@ -50,35 +50,20 @@ struct DigestTag {};
 
 inline SystemResult Ok() { return {}; }
 
-// A plugin whose Build is a function (the kernel tests' only plugin shape).
-class TestPlugin final : public Plugin {
-public:
-    TestPlugin(std::string name, std::function<void(Registrar&)> build, std::vector<std::string> required = {},
-               std::function<void(const FrozenRegistry&, FinishContext&)> finish = {})
-        : name_(std::move(name)), build_(std::move(build)), requires_(std::move(required)), finish_(std::move(finish)) {}
-
-    [[nodiscard]] std::string_view Name() const override { return name_; }
-    [[nodiscard]] std::vector<std::string_view> Requires() const override {
-        return std::vector<std::string_view>(requires_.begin(), requires_.end());
+// The kernel's two registration steps over functions, in list order: one
+// Register per (owner name, build), then BuildPlans. Registration units and
+// their lifecycle are the orchestration layer's (v8-arch-gyo2-orchestration-skeleton).
+inline Engine::Base::Result<void, StartupReport> RegisterAll(
+    Registry& registry, std::vector<std::pair<std::string, std::function<void(Registrar&)>>> builds) {
+    std::uint32_t seq = 0;
+    for (auto& [name, build] : builds) {
+        auto registered = registry.Register(RegistrationOwner{name, seq++}, [&](Registrar& r) {
+            if (build) build(r);
+        });
+        GYO_ASSERT(static_cast<bool>(registered));
     }
-    void Build(Registrar& registrar) override {
-        ++builds;
-        if (build_) build_(registrar);
-    }
-    void Finish(const FrozenRegistry& registry, FinishContext& context) override {
-        ++finishes;
-        if (finish_) finish_(registry, context);
-    }
-
-    int builds = 0;
-    int finishes = 0;
-
-private:
-    std::string name_;
-    std::function<void(Registrar&)> build_;
-    std::vector<std::string> requires_;
-    std::function<void(const FrozenRegistry&, FinishContext&)> finish_;
-};
+    return registry.BuildPlans();
+}
 
 // Schedules most tests use: a Frame clock schedule and a Fixed clock schedule
 // with an ingress stage and rollback.
@@ -133,22 +118,15 @@ inline void RegisterCommonData(Registrar& r) {
     r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
 }
 
-// Runs Finish over plugins built from functions, in list order.
+// Registers functions in list order and builds the Plans (RegisterAll).
 struct Built {
-    std::vector<std::unique_ptr<TestPlugin>> plugins;
     std::unique_ptr<Registry> registry;
     Engine::Base::Result<void, StartupReport> result;
 };
 
 inline Built Finish(std::vector<std::pair<std::string, std::function<void(Registrar&)>>> builds) {
-    Built built{{}, nullptr, {}};
-    std::vector<Plugin*> list;
-    for (auto& [name, build] : builds) {
-        built.plugins.push_back(std::make_unique<TestPlugin>(name, std::move(build)));
-        list.push_back(built.plugins.back().get());
-    }
-    built.registry = std::make_unique<Registry>(list);
-    built.result = built.registry->Finish();
+    Built built{std::make_unique<Registry>(), {}};
+    built.result = RegisterAll(*built.registry, std::move(builds));
     return built;
 }
 

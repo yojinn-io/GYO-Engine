@@ -335,7 +335,7 @@ private:
                     if (!Exists(name)) {
                         Error(StartupCode::DE4, "D.2",
                               subject + " is ordered " + (before ? "before" : "after") + " '" + name +
-                                  "', which schedule '" + s_.name + "' does not have (removed plugin? change the "
+                                  "', which schedule '" + s_.name + "' does not have (removed owner? change the "
                                   "reference explicitly)",
                               {system.options.name, name}, {source});
                         continue;
