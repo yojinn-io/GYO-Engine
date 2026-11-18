@@ -310,8 +310,11 @@ inline O::PrepareFn LoadInto(SaveData save) {
     };
 }
 
-// S1-7b: the extra forgets the lower bound and puts the player back itself
-// (an external write checks no range), so the save it leaves has no player.
+// S1-7b: the extra forgets the lower bound and puts the player back itself, so
+// the save it leaves has no player. A direct insert through the World API
+// neither checks nor moves the allotter's range; moving the lower bound on a
+// load is the author's job (DI-KS 18, "a direct insert does not look at the
+// allotter"; v8-arch-gyo2-direct-insert-no-allotter-range).
 inline O::PrepareFn LoadForgettingTheLowerBound(SaveData save) {
     return [save](K::World& w) -> ::Engine::Base::Result<void, O::OrchestrationError> {
         SaveData rest = save;

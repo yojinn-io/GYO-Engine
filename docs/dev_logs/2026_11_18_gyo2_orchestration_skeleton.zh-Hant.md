@@ -1,6 +1,6 @@
 # 編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：進行中——第 1～4 步完成；待完整突變、G-7、第 3、4 步的 G-8 與合併前核准。**
+日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：進行中——第 1～4 步、G-7、G-8、完整突變完成；待合併前核准。**
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[orchestration-skeleton-declaration.zh-Hant.md](../architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md) 修訂 7；使用者 2026-11-18「核准」（動工前核准；主會話轉達）。修訂 0 送 Fable／high 敵對式檢查（必改 10、建議改 16、小問題 8，報告 `declaration-r0-adversarial-check.md`）。實作者 Opus／high。
 
@@ -68,12 +68,14 @@
   - **G-7 順帶查到第 2 步漏做的事**：Kernel 突變清單沒照第 9 節處理，39 個 `find` 已經失效。補上：退役 16、搬到編排層 12（清單的 `description` 寫明每一個對到編排層的哪個突變）、改寫 16（版本號、`rs-sym-*` 的錨點、`ks-s7-first-run-only*`、`ks-diks15-code-without-text`、`ks-links-extra`）；剩 777 個、失效 0。
 - **和宣告第 4 節不同**：`docs/architecture/target/README.md` 的目標 Design Invariants 清單沒有改。那張表是 v2 之前的（只有 DI-KS 1～15，DI-KS 15 那一列還寫「Host 保留多時鐘」），本批改的 DI-KS 15、拿掉的 DI-KS 22 在它裡面不是同一個樣子；照 `pre-v2-target-docs-later` 先不動，合併前核准時一併報告。
 - **別家對照**：第 8.2 節的表（宣告時做，出處在 `scenario-cross-engine.md`）；scenario 第一段沒有新增步驟，沒有新的分歧。
+- **完整突變（cc5fe0e1，第 3、4 步都在內）**：編排層 179/179 殺（`mutants-full-orchestration-cc5fe0e1.log`）。Kernel 777 個（1 個只在 Linux、跳過）：769 殺、7 沒殺（`mutants-full-kernel-cc5fe0e1.log`）。本批造成的 4 個是清單過時：`hf-startup-skipped`（startup 旗標拿掉了，改成以 `clock` 判、守「非時鐘的單次 schedule 也跑 hook 輪」）、`we-j1-insert-append`（`::Engine::` 讓舊 `find` 只對到後半、留下 `::cells`）、`ks-s3-*` 兩個（DI-KS 25 的案在第 2 步改名）；改寫後 4/4 殺（`mutants-kernel-rewritten-4.log`）→ 773/776。剩 3 個在基準就沒殺（`ks-real-product-name`、`rs-sample-capture-accepted`、`rs-sample-return-accepted`），上一批已記錄、不在本批範圍，沒動。
+- **S1-7b 改成引用 DI-KS 18**：`LoadForgettingTheLowerBound` 與 S1-7b 案的註解引「直接放實體不看配發器」；`World::Insert` 的註解補一句「不檢查、也不移動配發器的範圍（DI-KS 18）」。ctest 113 項全過（`ctest-final2.log`）。
 
 ## 下一步
 
-1. 完整突變（清單全部）；G-7（Fable／high）；第 3 步 的 G-8（背景進行中）、第 4 步 的 G-8。
+1. 合併前核准（資料：[合併前核准](../architecture/target/v2/orchestration-skeleton-merge-approval.zh-Hant.md)），核准後開 PR、看 L1。
 2. 合併前核准的資料：第 7.1 節各組、第 7.2 節的 DI 守衛各列、第 10 節的最終文字、D2 的讀法、G-3 的 `gyo_threads` 順序、Kernel 標頭的 `::Engine::`。
 
 ## 證據
 
-主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-orchestration-skeleton/`（git 不追蹤）：`inventory-startup-plugin.md`、`declaration-r0-adversarial-check.md`、`scenario-cross-engine.md`；`segment1/`：`baseline-build.log`、`baseline-ctest.log`、`ctest-segment1.log`、`red-stub.log`、`green.log`、`mutants-segment1.log`、`unkilled/`、`unkilled-7-after-fix.log`、`g8-check-fable-high.md`、`g8-defects-red.log`、`g8-defects-green.log`、`mutants-after-g8.log`、`mutants-after-g8-anchor-fix.log`；`segment2/`：`ctest-segment2.log`、`g3_scan.py`、`g3_scan.log`；`segment3/`：`link_dump.cmake`、`links-before.txt`、`links-after.txt`、`g3_links.py`、`g3_links.log`、`header-order-red.log`、`include-order-mutant.log`、`include-order-green.log`、`ctest-segment3.log`、`mutants-segment3.log`、`mutants-segment3-expect-fix.log`；`segment4/`：`mutants-segment4.log`、`ctest-segment4.log`。
+主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-orchestration-skeleton/`（git 不追蹤）：`inventory-startup-plugin.md`、`declaration-r0-adversarial-check.md`、`scenario-cross-engine.md`；`segment1/`：`baseline-build.log`、`baseline-ctest.log`、`ctest-segment1.log`、`red-stub.log`、`green.log`、`mutants-segment1.log`、`unkilled/`、`unkilled-7-after-fix.log`、`g8-check-fable-high.md`、`g8-defects-red.log`、`g8-defects-green.log`、`mutants-after-g8.log`、`mutants-after-g8-anchor-fix.log`；`segment2/`：`ctest-segment2.log`、`g3_scan.py`、`g3_scan.log`；`segment3/`：`link_dump.cmake`、`links-before.txt`、`links-after.txt`、`g3_links.py`、`g3_links.log`、`header-order-red.log`、`include-order-mutant.log`、`include-order-green.log`、`ctest-segment3.log`、`mutants-segment3.log`、`mutants-segment3-expect-fix.log`；`segment4/`：`mutants-segment4.log`、`ctest-segment4.log`；最上層：`g7-verification-fable-high.md`、`ctest-final.log`、`ctest-final2.log`、`mutants-full-orchestration-cc5fe0e1.log`、`mutants-full-kernel-cc5fe0e1.log`、`mutants-kernel-rewritten-4.log`。

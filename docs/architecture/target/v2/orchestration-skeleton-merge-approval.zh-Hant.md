@@ -89,7 +89,18 @@
 
 ## 6. 數字
 
-（完整突變與最終 ctest 跑完後填。）
+證據都在主 checkout 的 `build/evidence/gyo2-orchestration-skeleton/`（git 不追蹤）。
+
+| 項目 | 結果 | 證據 |
+|---|---|---|
+| ctest（`test` preset，本機 macos-arm64） | 113 項全過 | `ctest-final2.log` |
+| 編排層突變清單（`target/v2/scripts/orchestration_mutations.json`） | **179/179 殺** | `mutants-full-orchestration-cc5fe0e1.log` |
+| Kernel 突變清單（`plans/kernel/scripts/mutations.json`） | 777 個：1 個這個平台跳過（`rs-sym-elf-bss-unread` 只在 Linux）；完整跑 769 殺、7 沒殺；本批造成的 4 個改寫後殺掉（`mutants-kernel-rewritten-4.log`）→ **773/776 殺** | `mutants-full-kernel-cc5fe0e1.log` |
+| Kernel 清單沒殺的 3 個 | 基準就沒殺掉、不是本批造成（上一批 `v8-arch-gyo2-kernel-subtract-structure` 已記錄、建議另開）：`ks-real-product-name`（`engine/config/projects.csv` 只剩表頭，K1 已沒有產品名可比）、`rs-sample-capture-accepted`、`rs-sample-return-accepted`（J-10 的樣本變體因別的編譯錯誤失敗，不是預期的那一句） | 上一批 `gyo2-kernel-subtract-structure/base-a08c16f6-unkilled-11.log` |
+| 本批造成、已改寫的 4 個 | `hf-startup-skipped`（Kernel 沒有 startup 旗標，改成「非時鐘的單次 schedule 不跑 hook 輪」）、`we-j1-insert-append`（Kernel 標頭改用 `::Engine::` 後 `find` 從 `::` 起）、`ks-s3-version-not-raised`、`ks-s3-failed-raises-version`（DI-KS 25 的案在第 2 步改名，`cases` 跟著改） | `mutants-kernel-rewritten-4.log` |
+| 敵對式檢查 | 宣告修訂 0（Fable／high）：必改 10、建議改 16、小問題 8；G-8 第 1 步（Fable／high）：突變候補 56、測試弱點 13、疑似缺陷 5（D1、D3、D4 是缺陷，已先 Red 後修）；第 3 步 G-8：33 處；第 4 步 G-8：23 處；G-7（Fable／high）：A～J 中 C、D、G、H、J 屬實，A、B、E、F 有出入，已照第 2 節改寫 | 各步的 `g8-check-fable-high.md`、`g7-verification-fable-high.md` |
+
+L1 三平台與 Windows／Linux 本機沒跑（要開 PR 才跑 L1；合併前核准之後才開 PR）。
 
 ## 7. 轉交（不在本批）
 

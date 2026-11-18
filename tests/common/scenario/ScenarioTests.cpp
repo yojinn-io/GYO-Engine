@@ -142,6 +142,9 @@ TEST_CASE("scenario segment 1: walk, score, insert, save, load into a new World,
     }
 }
 
+// S1-7b guards DI-KS 18 ("a direct insert does not look at the allotter"): the
+// player put back with World::Insert leaves the range at 1, so the next Spawn
+// gets a live id; the author handles AllottedIdAlive and the World goes on.
 TEST_CASE("scenario segment 1: S1-7b, the lower bound forgotten: the cursor's spawn gets AllottedIdAlive, handled, the World goes on") {
     Seen() = Notes{};
     auto built = O::Product::Build(Game(), O::RegisteredUnits{});

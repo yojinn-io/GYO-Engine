@@ -191,6 +191,7 @@ public:
     }
 
     // Host, Ready only: inserts or overwrites one value; the entity becomes alive.
+    // The allotter's range is neither checked nor moved (DI-KS 18).
     template <class T>
     void Insert(EntityId id, T value) {
         const ComponentId component = Detail::ComponentIdOf(*this, KeyOf<T>());
