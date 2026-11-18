@@ -7,6 +7,7 @@
 
 #include <doctest/doctest.h>
 
+#include <ostream>
 #include <string>
 #include <vector>
 

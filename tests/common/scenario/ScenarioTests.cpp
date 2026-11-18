@@ -9,6 +9,8 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+// MSVC: doctest messages stream std::string_view; that needs the full ostream.
+#include <ostream>
 #include <string>
 #include <vector>
 
