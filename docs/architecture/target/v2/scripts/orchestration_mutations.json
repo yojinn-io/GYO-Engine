@@ -954,7 +954,7 @@
   },
   {
    "id": "ur-header-unchecked",
-   "what": "segment 3 (unit registers): the header's column names are not checked",
+   "what": "step 3 (unit registers): the header's column names are not checked",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(NOT actual STREQUAL expected)\n",
    "replace": "        if(FALSE)\n",
@@ -969,7 +969,7 @@
   },
   {
    "id": "ur-row-count-unchecked",
-   "what": "segment 3 (unit registers): a row with too few columns is read (reading the missing column then fails elsewhere, so the case reports the wrong reason)",
+   "what": "step 3 (unit registers): a row with too few columns is read (reading the missing column then fails elsewhere, so the case reports the wrong reason)",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(NOT fields EQUAL columns)\n",
    "replace": "        if(FALSE)\n",
@@ -984,7 +984,7 @@
   },
   {
    "id": "ur-duplicate-allowed",
-   "what": "segment 3 (unit registers): a name in both files (or twice) is allowed",
+   "what": "step 3 (unit registers): a name in both files (or twice) is allowed",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(name IN_LIST order)\n",
    "replace": "        if(FALSE)\n",
@@ -999,7 +999,7 @@
   },
   {
    "id": "ur-yes-no-loose",
-   "what": "segment 3 (unit registers): anything but yes reads as no ('maybe' reads as no, and the row then fails as an in-World row without a unit)",
+   "what": "step 3 (unit registers): anything but yes reads as no ('maybe' reads as no, and the row then fails as an in-World row without a unit)",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "    elseif(lowered STREQUAL \"no\")\n",
    "replace": "    elseif(TRUE)\n",
@@ -1014,7 +1014,7 @@
   },
   {
    "id": "ur-library-unit-allowed",
-   "what": "segment 3 (unit registers): a library-only row may name a unit",
+   "what": "step 3 (unit registers): a library-only row may name a unit",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(library_only AND (NOT value_unit STREQUAL \"\" OR NOT value_header STREQUAL \"\"))\n",
    "replace": "        if(FALSE)\n",
@@ -1029,7 +1029,7 @@
   },
   {
    "id": "ur-world-without-unit",
-   "what": "segment 3 (unit registers): an in-World row without a unit is read",
+   "what": "step 3 (unit registers): an in-World row without a unit is read",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(NOT library_only AND (value_unit STREQUAL \"\" OR value_header STREQUAL \"\"))\n",
    "replace": "        if(FALSE)\n",
@@ -1044,7 +1044,7 @@
   },
   {
    "id": "ur-default-plugin-allowed",
-   "what": "segment 3 (unit registers): a Plugin or library row may be default yes",
+   "what": "step 3 (unit registers): a Plugin or library row may be default yes",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(default_on AND (library_only OR kind STREQUAL \"Plugin\"))\n",
    "replace": "        if(default_on AND library_only)\n",
@@ -1059,7 +1059,7 @@
   },
   {
    "id": "ur-missing-dep-as-later",
-   "what": "segment 3 (unit registers): a dependency on no row is reported as 'comes later'",
+   "what": "step 3 (unit registers): a dependency on no row is reported as 'comes later'",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            if(NOT dep IN_LIST order)\n",
    "replace": "            if(FALSE)\n",
@@ -1074,7 +1074,7 @@
   },
   {
    "id": "ur-module-on-plugin-as-later",
-   "what": "segment 3 (unit registers): a Module's Plugin dependency is reported only as 'comes later'",
+   "what": "step 3 (unit registers): a Module's Plugin dependency is reported only as 'comes later'",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            if(kind STREQUAL \"Module\" AND dep_kind STREQUAL \"Plugin\")\n",
    "replace": "            if(FALSE)\n",
@@ -1089,7 +1089,7 @@
   },
   {
    "id": "ur-later-dep-allowed",
-   "what": "segment 3 (unit registers): a dependency on a later row is allowed (the order would be changed)",
+   "what": "step 3 (unit registers): a dependency on a later row is allowed (the order would be changed)",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            if(NOT dep IN_LIST seen)\n",
    "replace": "            if(FALSE)\n",
@@ -1104,7 +1104,7 @@
   },
   {
    "id": "ur-select-unknown-allowed",
-   "what": "segment 3 (unit registers): a selection names a row that is no in-World unit of that kind",
+   "what": "step 3 (unit registers): a selection names a row that is no in-World unit of that kind",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            if(NOT name IN_LIST order OR NOT kind STREQUAL wanted_kind OR library_only)\n",
    "replace": "            if(NOT name IN_LIST order)\n",
@@ -1119,7 +1119,7 @@
   },
   {
    "id": "ur-default-ignored",
-   "what": "segment 3 (unit registers): default yes does not carry a Module",
+   "what": "step 3 (unit registers): default yes does not carry a Module",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
    "replace": "            if(name IN_LIST ARG_MODULES)\n",
@@ -1134,7 +1134,7 @@
   },
   {
    "id": "ur-disable-ignored",
-   "what": "segment 3 (unit registers): DISABLE_MODULES does not remove a default Module",
+   "what": "step 3 (unit registers): DISABLE_MODULES does not remove a default Module",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            if((default_on AND NOT name IN_LIST ARG_DISABLE_MODULES) OR name IN_LIST ARG_MODULES)\n",
    "replace": "            if(default_on OR name IN_LIST ARG_MODULES)\n",
@@ -1149,7 +1149,7 @@
   },
   {
    "id": "ur-select-dep-unchecked",
-   "what": "segment 3 (unit registers): a carried unit's in-World dependency may be left out",
+   "what": "step 3 (unit registers): a carried unit's in-World dependency may be left out",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            if(NOT dep_library_only AND NOT dep IN_LIST selected)\n",
    "replace": "            if(FALSE)\n",
@@ -1164,7 +1164,7 @@
   },
   {
    "id": "ur-rows-only-carried",
-   "what": "segment 3 (unit registers): the generated table lists only the carried units' rows",
+   "what": "step 3 (unit registers): the generated table lists only the carried units' rows",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        string(APPEND rows \"    units.rows.push_back(RegisterRow{\\\"${name}\\\", UnitKind::${kind}, ${library_cpp}, ${default_cpp}, {${depends_cpp}}, {${private_cpp}}});\\n\")\n",
    "replace": "        if(name IN_LIST selected)\n        string(APPEND rows \"    units.rows.push_back(RegisterRow{\\\"${name}\\\", UnitKind::${kind}, ${library_cpp}, ${default_cpp}, {${depends_cpp}}, {${private_cpp}}});\\n\")\n        endif()\n",
@@ -1179,7 +1179,7 @@
   },
   {
    "id": "ur-plugins-not-generated",
-   "what": "segment 3 (unit registers): carried Plugins get no instance",
+   "what": "step 3 (unit registers): carried Plugins get no instance",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "                string(APPEND plugins \"    units.plugins.push_back(UnitEntry<Plugin>{\\\"${name}\\\", std::make_unique<${unit}>()});\\n\")\n",
    "replace": "",
@@ -1194,7 +1194,7 @@
   },
   {
    "id": "ur-unit-targets-not-linked",
-   "what": "segment 3 (unit registers): the product does not link the carried units' targets",
+   "what": "step 3 (unit registers): the product does not link the carried units' targets",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            list(APPEND link_targets \"${unit_target}\")\n",
    "replace": "",
@@ -1209,7 +1209,7 @@
   },
   {
    "id": "ur-private-as-public",
-   "what": "segment 3 (unit registers): private_depends are linked PUBLIC",
+   "what": "step 3 (unit registers): private_depends are linked PUBLIC",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "            target_link_libraries(${target} PRIVATE ${private_targets})\n",
    "replace": "            target_link_libraries(${target} PUBLIC ${private_targets})\n",
@@ -1224,7 +1224,7 @@
   },
   {
    "id": "ur-include-order-kernel-unqualified",
-   "what": "segment 3 (include order): a kernel header names Engine::Base unqualified inside GYO::Kernel (the check is the build of the include-order objects; the command after it only completes the run)",
+   "what": "step 3 (include order): a kernel header names Engine::Base unqualified inside GYO::Kernel (the check is the build of the include-order objects; the command after it only completes the run)",
    "file": "engine/kernel/include/engine/kernel/WorldExecutor.hpp",
    "find": "    ::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
    "replace": "    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
@@ -1239,6 +1239,126 @@
     "-c",
     "pass"
    ]
+  },
+  {
+   "id": "sc-gameinit-every-frame",
+   "what": "step 4 (scenario segment 1): S1-2/S1-3: game initialization runs again every frame (the score restarts)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    gameInitRan_ = true;\n    if (worlds_.empty()) return {};",
+   "replace": "    gameInitRan_ = false;\n    if (worlds_.empty()) return {};",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-3-walked\\]"
+  },
+  {
+   "id": "sc-commands-resource-never",
+   "what": "step 4 (scenario segment 1): S1-3: Commands::SetResource never reaches the World",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        Detail::Record record =\n            Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n",
+   "replace": "        static_cast<void>(call);\n        static_cast<void>(value);\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-3-best-set\\]"
+  },
+  {
+   "id": "sc-commands-resource-at-once",
+   "what": "step 4 (scenario segment 1): S1-3: Commands::SetResource is visible before its sync point",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        Detail::Record record =\n            Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n",
+   "replace": "        static_cast<void>(call);\n        static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, Detail::ResourceIdOf(*world_, KeyOf<T>()))).value.emplace(std::move(value));\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-3-best-at-sync\\]"
+  },
+  {
+   "id": "sc-insert-not-hooked",
+   "what": "step 4 (scenario segment 1): S1-4: an inserted System is not registered",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "[&](Kernel::Registrar& registrar) { build(registrar); });",
+   "replace": "[&](Kernel::Registrar&) {});",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-4-accelerated\\]"
+  },
+  {
+   "id": "sc-replace-keeps-old",
+   "what": "step 4 (scenario segment 1): S1-8: the replacement keeps the old World and its Registry (the swap is skipped)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.executor.reset();\n    slot.registry.reset();\n    slot.registry = std::move(registration.registry);\n    slot.executor = std::move(fresh);\n",
+   "replace": "    fresh.reset();\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-registration-new\\]"
+  },
+  {
+   "id": "sc-lower-bound-not-moved",
+   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets",
+   "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+   "find": "        return RangeAllotter{first, last, first, first > last};",
+   "replace": "        return RangeAllotter{1, last, 1, first > last};",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7-on-spot\\]"
+  },
+  {
+   "id": "sc-spawn-with-id-deferred",
+   "what": "step 4 (scenario segment 1): S1-7: ExclusiveWorld::SpawnWithId is deferred to the sync point (the same System cannot see the entity)",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "        auto done = Change(std::move(record));\n        if (!done) return ::Engine::Base::Err(std::move(done).error());\n        return done->rejected;",
+   "replace": "        Detail::Push(Detail::RequireCall(*world_), std::move(record));\n        return std::optional<SpawnRejectReason>{};",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7-on-spot\\]"
+  },
+  {
+   "id": "sc-allotted-alive-fails",
+   "what": "step 4 (scenario segment 1): S1-7b: a spawn the allotter gives a live id returns an error the game cannot tell from a failure (its load fails, the World is interrupted)",
+   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "find": "KernelErrorCode::AllottedIdAlive, \"F-13\",",
+   "replace": "KernelErrorCode::SystemFailed, \"F-13\",",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-7b-replaced\\]"
+  },
+  {
+   "id": "sc-replace-reruns-gameinit",
+   "what": "step 4 (scenario segment 1): S1-8: a replacement runs game initialization again",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.nextInsertSeq = 0;\n    return {};\n}",
+   "replace": "    slot.nextInsertSeq = 0;\n    gameInitRan_ = false;\n    return {};\n}",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-8-walked\\]"
+  },
+  {
+   "id": "sc-replaced-refuses-insert",
+   "what": "step 4 (scenario segment 1): S1-9: the replaced World declares no dynamic insert",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);",
+   "replace": "    std::unique_ptr<Kernel::WorldExecutor> fresh = std::make_unique<Kernel::WorldExecutor>(*registration.registry, slot.description.name, Kernel::WorldOptions{false});",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-9-inserted\\]"
+  },
+  {
+   "id": "sc-keys-not-carried",
+   "what": "step 4 (scenario segment 1): S1-10: the marked KeyBindings are not put into the new World",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);\n",
+   "replace": "",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-10-carried\\]"
+  },
+  {
+   "id": "sc-keys-overwritten-by-prepare",
+   "what": "step 4 (scenario segment 1): S1-10: the game's prepare overwrites the carried KeyBindings with its default (an author's prepare, O-7)",
+   "file": "tests/common/scenario/WalkerGame.hpp",
+   "find": "    if (w.Resource<KeyBindings>() == nullptr) w.SetResource(KeyBindings{0});",
+   "replace": "    w.SetResource(KeyBindings{0});",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc-s1-10-carried\\]"
   }
  ]
 }

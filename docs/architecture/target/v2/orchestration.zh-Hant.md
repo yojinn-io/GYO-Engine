@@ -2,7 +2,7 @@
 
 Owner：架構。程式：`engine/orchestration/`（`GYO::Engine::Orchestration`，target `GYO::Orchestration`）。行為測試：`tests/common/orchestration/`。
 
-由來：[編排層骨架的事前宣告](orchestration-skeleton-declaration.zh-Hant.md)（`v8-arch-gyo2-orchestration-skeleton`，2026-11-18 第一段核准）；分層與職責在[統合宣告](kernel-app-boundary-declaration.zh-Hant.md)第 3 節、第 9.2 節。**本頁的文字在合併前的第二段核准時定稿**（宣告第 12 節）。
+由來：[編排層骨架的事前宣告](orchestration-skeleton-declaration.zh-Hant.md)（`v8-arch-gyo2-orchestration-skeleton`，2026-11-18 動工前核准）；分層與職責在[統合宣告](kernel-app-boundary-declaration.zh-Hant.md)第 3 節、第 9.2 節。**本頁的文字在合併前的合併前核准時定稿**（宣告第 12 節）。
 
 編排層在 Kernel 之上、各 Module 之下：它把登記單位（`Module`、`Plugin`）與產品自己的遊戲程式接進每個 World，排遊戲初始化與每幀的流程，替換 World，記自己的警告。Kernel 不認得它（統合 L16、`v8-arch-gyo2-two-layers-like-bevy`）。
 
