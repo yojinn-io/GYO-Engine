@@ -334,14 +334,16 @@ TEST_CASE("J-54: fixed-step end: a hook's records at the last sync point are app
     }
 }
 
-TEST_CASE("J-54: run once: a startup schedule's hook records at its last sync point are applied") {
+TEST_CASE("J-54: run once: a one-off schedule's hook records at its last sync point are applied") {
     for (const bool verification : {true, false}) {
         CAPTURE(verification);
         auto rig = MakeFlushRig(
             [](Registrar& r) {
                 ScheduleOptions once;
                 once.name = "Startup";
-                once.startup = true;
+                // A one-off schedule (the kernel has no startup since
+                // v8-arch-gyo2-orchestration-skeleton): Frame, no clock (Early is Frame's clock).
+                once.domain = Domain::Frame;
                 once.stages = {"S"};
                 r.Schedule(once);
                 r.AddSystem<&SpawnBulletOnce>(Put("SpawnBulletOnce", "Startup", "S"));
@@ -541,11 +543,11 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     CHECK(planOf(t5, "Tick") != planOf(t6, "Tick"));
     CHECK(t5.registry->Frozen().CFingerprint() != t6.registry->Frozen().CFingerprint());
     CHECK(planOf(t8, "Tick") != planOf(none, "Tick"));
-    CHECK(planOf(none, "Tick").version == 5U);
-    CHECK(none.registry->Frozen().CFingerprint().version == 7U);
-    CHECK(none.registry->Frozen().RegistryFingerprint().version == 3U);
+    CHECK(planOf(none, "Tick").version == 6U);
+    CHECK(none.registry->Frozen().CFingerprint().version == 8U);
+    CHECK(none.registry->Frozen().RegistryFingerprint().version == 4U);
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK(report.find("gyo.kernel.plans 3") == 0);
+    CHECK(report.find("gyo.kernel.plans 4") == 0);
     CHECK(report.find("  hook-round-limit 5\n") != std::string::npos);
     CHECK(report.find("  hook-round-limit default\n") != std::string::npos);
 }
@@ -752,11 +754,11 @@ TEST_CASE("J-54: rounds are separate applications") {
 }
 
 TEST_CASE("J-54: with verification on, the snapshots are taken again after the rounds") {
-    // Startup has no event trim after its last sync point, so nothing else takes the snapshots.
+    // The one-off schedule has no event trim after its last sync point, so nothing else takes the snapshots.
     auto rig = MakeFlushRig([](Registrar& r) {
         ScheduleOptions once;
         once.name = "Startup";
-        once.startup = true;
+        once.domain = Domain::Frame;
         once.stages = {"S"};
         r.Schedule(once);
         r.AddSystem<&SpawnBulletOnce>(Put("SpawnBulletOnce", "Startup", "S"));
@@ -932,14 +934,14 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
     const Built t8 = build(tick8);
     CHECK_MESSAGE(t8.registry->Frozen().CFingerprint() != none.registry->Frozen().CFingerprint(),
                   "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
-    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "5:aacb80017464cdd1b9b347c30581bc53aaf9ad52cfe3263188cc784ce790314f",
+    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "6:604ad4e568ed28a444509815cb45671f1cbf29414798233ba80f38dc6334a1ad",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "7:ca0e06b26a8b5cae94109cf60826a18ea2d85ceb1b0a92cbac2b7fd3ac07d2a7",
+    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "8:74dc5c8b1ea7321ad2ec0e35552ffe57b96ed87905246505f95b59b527f5258d",
                   "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "3:0e09213517429bb4326f8462d3419688ecf23334836d8a87d3e42e2721dfd441",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "4:f5130ccce6f336b6aa5c0ab1b6e01b9b95e60657ecc986fe565f3208bdecc024",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 5:") != std::string::npos,
+    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 6:") != std::string::npos,
                   "J-54: the export's hook-round-limit line is not right before the fingerprint line");
 }
 

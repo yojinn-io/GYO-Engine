@@ -1,8 +1,9 @@
 // A System holding ExclusiveWorld<...> runs another schedule (K0,
 // v8-arch-gyo2-nested-schedule; declaration section 6 judgement 1):
 //   J-56  nested runs (spec E.2, E.5, F.2, W-3, W-4, X-11 to X-16);
-//   J-57  ExclusiveWorld's closures and resource access (spec S-13, S-16);
-//   J-58  Startup run by the kernel (spec H-12).
+//   J-57  ExclusiveWorld's closures and resource access (spec S-13, S-16).
+// (J-58, Startup run by the kernel, left with v8-arch-gyo2-orchestration-skeleton:
+// game initialization is the orchestration layer's, tests/common/orchestration O-1.)
 // Each CHECK carries a tag in brackets ("[ns-...]"): the mutants of the batch
 // expect that tag (docs/architecture/plans/kernel/scripts/mutations.json, ids ns-).
 
@@ -28,7 +29,7 @@ namespace {
 using namespace WorldTest;
 
 // ---- Schedules: Frame (Frame clock, ingress stage In), Tick (Fixed clock, WorldTest's),
-// Step and Deep (Fixed, no clock), Boot (Startup), Extract (an extract schedule).
+// Step and Deep (Fixed, no clock), Extract (an extract schedule).
 
 ScheduleOptions Schedule(std::string name, Domain domain, bool clock, std::vector<std::string> stages) {
     ScheduleOptions s;
@@ -42,14 +43,6 @@ ScheduleOptions Schedule(std::string name, Domain domain, bool clock, std::vecto
 ScheduleOptions FrameSchedule() {
     ScheduleOptions s = Schedule("Frame", Domain::Frame, true, {"In", "Drive", "Out"});
     s.ingressStage = "In";
-    return s;
-}
-
-ScheduleOptions BootSchedule(std::string name = "Boot") {
-    ScheduleOptions s;
-    s.name = std::move(name);
-    s.startup = true;
-    s.stages = {"S"};
     return s;
 }
 
@@ -864,31 +857,6 @@ TEST_CASE("J-56: refused and swallowed: RunSchedule in a hook") {
     CHECK_MESSAGE((Logged("hook HookRunsSchedule") && !Logged("InA@Tick#1")), "[ns-hook-refused] " << Joined());
 }
 
-TEST_CASE("J-56: refused and swallowed: Startup, and another schedule while Startup runs") {
-    {
-        auto rig = NestRig([](Registrar& r) {
-            SwallowRig(r);
-            r.Schedule(BootSchedule());
-        });
-        Runs()["Driver"] = {"Boot"};
-        CheckSwallowed(*rig, KernelErrorCode::StartupNotNestable, "H-12", "ns-swallow-startup");
-    }
-    {
-        auto rig = NestRig([](Registrar& r) {
-            SwallowRig(r);
-            r.Schedule(BootSchedule());
-            r.AddSystem<&DriveSwallow>(In("BootDriver", "Boot", "S"));
-        });
-        Runs()["BootDriver"] = {"Tick"};
-        const auto result = rig->Run("Frame");
-        REQUIRE_FALSE(static_cast<bool>(result));
-        CHECK_MESSAGE(result.error().Has(KernelErrorCode::StartupRunning), "[ns-swallow-startup-running] " << result.error().Text());
-        CHECK_MESSAGE(result.error().Text().find("[H-13]") != std::string::npos, "[ns-swallow-startup-running] rule: " << result.error().Text());
-        CHECK(rig->recorded.size() == 1);
-        CHECK(rig->world().State() == WorldState::Interrupted);
-    }
-}
-
 // ---- J-56: two levels, hooks inside, events inside
 
 namespace {
@@ -1156,10 +1124,6 @@ SystemResult WritesUnlistedFlag(ExclusiveWorld<> world) {
     if (!flag) return Engine::Base::Err(std::move(flag).error());
     return Ok();
 }
-SystemResult AlsoWritesFlag(ResMut<Flag> flag) {
-    if (flag.Present()) flag->on += 1;
-    return Ok();
-}
 SystemResult ListsZoneC(ExclusiveWorld<Writes<CRes>>) { return Ok(); }
 SystemResult ListsSettings(ExclusiveWorld<Writes<KernelSettings>>) { return Ok(); }
 SystemResult ListedAndMore(ExclusiveWorld<Writes<Flag>>, Res<Out>) { return Ok(); }
@@ -1319,205 +1283,6 @@ TEST_CASE("J-50: a nested RunSchedule does not read KernelSettings again; the ne
                       "[ks-next-run] the next outermost Run did not read KernelSettings: " << Text(second));
     }
     KeptWorld() = nullptr;
-}
-
-TEST_CASE("J-50: a Startup System's change of KernelSettings counts from the next Run, not in the Run that ran Startup") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.Schedule(BootSchedule());
-        r.AddSystem<&TurnsVerificationOn>(In("TurnsOn", "Boot", "S"));
-        r.AddSystem<&ReadsPosUndeclared>(In("ReadsPosUndeclared", "Tick", "A"));
-    }, false);
-    rig->world().Insert(1, Pos{1});
-    KeptWorld() = &rig->world();
-    const auto first = rig->Run("Tick");
-    // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
-    CHECK_MESSAGE(static_cast<bool>(first), "[ks-startup-same-run] Startup's write counted in its own Run: " << Text(first));
-    if (first) {
-        const auto second = rig->Run("Tick");
-        CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
-                      "[ks-startup-next-run] Startup's write was not read when the next Run started: " << Text(second));
-    }
-    KeptWorld() = nullptr;
-}
-
-// ---- J-58: Startup run by the kernel
-
-namespace {
-SystemResult BootNote(Query<Read<Tag>>) {
-    Log().push_back("boot " + Here() + " fixed tick " + std::to_string(KeptWorld() != nullptr ? KeptWorld()->Tick(Domain::Fixed) : 99));
-    return Ok();
-}
-SystemResult FirstStamp(Query<Read<Tag>>) {
-    Log().push_back("first stamp " + std::to_string(Current().stamp));
-    return Ok();
-}
-SystemResult BootSeedsMode(SpawnWithId<Bundle<Mode>> spawn) {
-    spawn.New(30, Mode{30});
-    return Ok();
-}
-SystemResult BootFails(Query<Read<Tag>>) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boot failed"));
-}
-void BootRig(Registrar& r) {
-    Nest(r);
-    r.Schedule(BootSchedule());
-    r.AddSystem<&BootNote>(In("BootNote", "Boot", "S"));
-    r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
-}
-} // namespace
-
-TEST_CASE("J-58: the kernel runs Startup once, before the first System of the first other schedule") {
-    {
-        auto rig = NestRig(BootRig);
-        KeptWorld() = &rig->world();
-        KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));
-        KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));
-        KeptWorld() = nullptr;
-        CHECK_MESSAGE(std::count_if(Log().begin(), Log().end(), [](const std::string& l) { return l.rfind("boot ", 0) == 0; }) == 1,
-                      "[ns-st-once] " << Joined());
-        CHECK_MESSAGE((!Log().empty() && Log().front().rfind("boot BootNote@Boot", 0) == 0), "[ns-st-first] " << Joined());
-        CHECK_MESSAGE((Logged("InA@Tick#1") && Logged("InA@Tick#2")), "[ns-st-auto] " << Joined());
-    }
-    {
-        // No Startup: nothing happens first.
-        auto rig = NestRig([](Registrar& r) {
-            Nest(r);
-            r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
-        });
-        KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));
-        CHECK(Joined() == "InA@Tick#1");
-    }
-}
-
-TEST_CASE("J-58: Startup runs before the tick advances: its Systems read the old tick, the first tick's stamp is the schedule's own") {
-    auto rig = NestRig([](Registrar& r) {
-        BootRig(r);
-        r.AddSystem<&FirstStamp>(In("FirstStamp", "Tick", "A", Zone::B, {"InA"}));
-    });
-    KeptWorld() = &rig->world();
-    KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));
-    KeptWorld() = nullptr;
-    CHECK_MESSAGE(Logged("boot BootNote@Boot fixed tick 0"), "[ns-st-tick] " << Joined());
-    const auto first = std::find_if(Log().begin(), Log().end(), [](const std::string& l) { return l.rfind("first stamp ", 0) == 0; });
-    REQUIRE(first != Log().end());
-    const ChangeStamp stamp = std::stoull(first->substr(std::string("first stamp ").size()));
-    const std::optional<ChangeStamp> tickStamp = rig->world().TickStamp(Domain::Fixed, 1);
-    REQUIRE(tickStamp.has_value());
-    CHECK_MESSAGE(*tickStamp == stamp, "[ns-st-stamp] tick 1 starts at " << *tickStamp << ", the schedule's first step took " << stamp);
-}
-
-TEST_CASE("J-58: the hook records of Startup's last sync point are applied by its own hook rounds; verification on, no false report") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.Schedule(BootSchedule());
-        r.AddSystem<&BootSeedsMode>(In("BootSeeds", "Boot", "S"));
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-        r.Hook<Tag, &LogTagAdd>(HookTrigger::OnAdd, {.name = "LogTagAdd", .zone = Zone::B});
-        r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
-    });
-    const auto result = rig->Run("Tick");
-    CHECK_MESSAGE(static_cast<bool>(result), "[ns-st-verify] " << Text(result));
-    CHECK_MESSAGE(Logged("add 30@Boot"), "[ns-st-rounds] " << Joined());
-    CHECK_MESSAGE(rig->world().Get<Tag>(30) != nullptr, "[ns-st-rounds]");
-}
-
-TEST_CASE("J-58: the main program runs Startup first: it runs once in all") {
-    auto rig = NestRig(BootRig);
-    KERNEL_REQUIRE_RUN_OK(rig->Run("Boot"));
-    KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));
-    CHECK_MESSAGE(std::count_if(Log().begin(), Log().end(), [](const std::string& l) { return l.rfind("boot ", 0) == 0; }) == 1,
-                  "[ns-st-main-first] " << Joined());
-}
-
-TEST_CASE("J-58: a System runs Startup: Err, after Startup ran and in the Run that triggered it") {
-    for (const bool explicitFirst : {true, false}) {
-        CAPTURE(explicitFirst);
-        auto rig = NestRig([](Registrar& r) {
-            BootRig(r);
-            r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        });
-        Runs()["Driver"] = {"Boot"};
-        if (explicitFirst) KERNEL_REQUIRE_RUN_OK(rig->Run("Boot"));
-        const auto result = rig->Run("Frame");
-        REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-st-nested] a System ran Startup");
-        CHECK_MESSAGE(result.error().Has(KernelErrorCode::StartupNotNestable), "[ns-st-nested] " << result.error().Text());
-        CHECK_MESSAGE(std::count_if(Log().begin(), Log().end(), [](const std::string& l) { return l.rfind("boot ", 0) == 0; }) == 1,
-                      "[ns-st-nested] " << Joined());
-    }
-}
-
-TEST_CASE("J-58: an exclusive System of Startup runs another schedule: Err naming it and the schedule") {
-    auto rig = NestRig([](Registrar& r) {
-        BootRig(r);
-        r.AddSystem<&Drive>(In("BootDriver", "Boot", "S"));
-    });
-    Runs()["BootDriver"] = {"Tick"};
-    const auto result = rig->Run("Frame");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-st-running] Startup ran another schedule");
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::StartupRunning), "[ns-st-running] " << result.error().Text());
-    const std::string text = result.error().Text();
-    CHECK_MESSAGE((text.find("'BootDriver'") != std::string::npos && text.find("'Tick'") != std::string::npos), "[ns-st-running] " << text);
-    CHECK_MESSAGE(!Logged("InA@Tick#1"), "[ns-st-running] " << Joined());
-}
-
-TEST_CASE("J-58: two Startup schedules are D-E21 (H-12)") {
-    const Built built = Finish({{"test", [](Registrar& r) {
-                                    Nest(r);
-                                    r.Schedule(BootSchedule("Boot"));
-                                    r.Schedule(BootSchedule("Boot2"));
-                                }}});
-    CHECK_MESSAGE(HasRule(built, StartupCode::DE21, "H-12"), "[ns-st-two] " << Describe(built));
-    CHECK_MESSAGE(Codes(built) == std::vector<std::string>{"D-E21"}, "[ns-st-two] " << Describe(built));
-}
-
-TEST_CASE("J-58: the main program runs Startup a second time: GYO_ASSERT") {
-    auto rig = NestRig(BootRig);
-    KERNEL_REQUIRE_RUN_OK(rig->Run("Boot"));
-    GYO_CHECK_ASSERTS(rig->Run("Boot"));
-}
-
-TEST_CASE("J-58: the main program runs Startup after the kernel ran it: GYO_ASSERT") {
-    auto rig = NestRig(BootRig);
-    KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));
-    GYO_CHECK_ASSERTS(rig->Run("Boot"));
-}
-
-TEST_CASE("J-58: Startup returns Err: the triggering Run returns it, no System of that schedule runs, its tick does not advance") {
-    auto rig = NestRig([](Registrar& r) {
-        BootRig(r);
-        r.AddSystem<&BootFails>(In("BootFails", "Boot", "S", Zone::B, {}, {"BootNote"}));
-    });
-    const auto result = rig->Run("Tick");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-st-error] Startup's Err was not returned");
-    CHECK(result.error().Text().find("boot failed") != std::string::npos);
-    CHECK(rig->world().State() == WorldState::Interrupted);
-    CHECK_MESSAGE(!Logged("InA@Tick#1"), "[ns-st-error-x] " << Joined());
-    CHECK_MESSAGE(rig->world().Tick(Domain::Fixed) == 0, "[ns-st-error-tick] " << rig->world().Tick(Domain::Fixed));
-    CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-st-error-once] the handler was called " << rig->recorded.size() << " times");
-}
-
-TEST_CASE("J-58: which schedules trigger Startup: a clock schedule, a schedule without a clock, and never a nested run") {
-    {
-        auto rig = NestRig([](Registrar& r) {
-            BootRig(r);
-            r.AddSystem<&LogCall>(In("InStep", "Step", "S"));
-        });
-        KERNEL_REQUIRE_RUN_OK(rig->Run("Step"));
-        CHECK_MESSAGE((Log().size() == 2 && Log()[0].rfind("boot ", 0) == 0 && Log()[1] == "InStep@Step#0"), "[ns-st-trigger] " << Joined());
-    }
-    {
-        // Step advances no tick; its exclusive System runs Tick, a clock schedule: Startup ran before Step's first System.
-        auto rig = NestRig([](Registrar& r) {
-            BootRig(r);
-            r.AddSystem<&Drive>(In("Driver", "Step", "S"));
-        });
-        Runs()["Driver"] = {"Tick"};
-        const auto result = rig->Run("Step");
-        REQUIRE_MESSAGE(static_cast<bool>(result), "[ns-st-trigger-nested] " << Text(result));
-        CHECK_MESSAGE(Joined().rfind("boot BootNote@Boot fixed tick 99 | drive Driver@Step | InA@Tick#1", 0) == 0,
-                      "[ns-st-trigger-nested] " << Joined());
-    }
 }
 
 // ---- Added after the adversarial check of the mutant list (Fable/high,
@@ -1779,32 +1544,11 @@ TEST_CASE("J-57: declarations: ExclusiveWorld<Writes<...>> with the ingress flag
 // ---- Added after the line-by-line review (Opus/xhigh, build/evidence/gyo2-nested-schedule/impl-review-opus-xhigh.md)
 
 namespace {
-SystemResult BootTampers(Query<Read<Tag>>) {
-    g_mode->m = 9;  // not declared: verification on in Startup too (KernelSettings read when Startup starts)
-    return Ok();
-}
 SystemResult DespawnSixInside(Despawn despawn) {
     despawn.Entity(6);
     return Ok();
 }
 } // namespace
-
-TEST_CASE("J-58: verification is on while Startup runs: an undeclared write in Startup is reported, naming its System") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.Schedule(BootSchedule());
-        r.AddSystem<&BootTampers>(In("BootTampers", "Boot", "S"));
-        r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
-    });
-    rig->world().Insert(1, Mode{1});
-    g_mode = const_cast<Mode*>(rig->world().Get<Mode>(1));
-    const auto result = rig->Run("Tick");
-    g_mode = nullptr;
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-st-verification] Startup's undeclared write was not reported");
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::BoundaryChange), "[ns-st-verification] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find("'BootTampers'") != std::string::npos, "[ns-st-verification] " << result.error().Text());
-    CHECK(!Logged("InA@Tick#1"));
-}
 
 TEST_CASE("J-56: a hook of the inner schedule runs a schedule: refused, reported once, listed once") {
     auto rig = NestRig([](Registrar& r) {
@@ -1822,25 +1566,6 @@ TEST_CASE("J-56: a hook of the inner schedule runs a schedule: refused, reported
     CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-hook-refused-inner] the handler was called " << rig->recorded.size() << " times");
 }
 
-namespace {
-SystemResult BootSeedsModeOnly(SpawnWithId<Bundle<Mode>> spawn) {
-    spawn.New(31, Mode{31});
-    return Ok();
-}
-} // namespace
-
-TEST_CASE("J-58: Startup's sync point changes membership with no hook: verification on, the triggering Run reports nothing") {
-    // No hook runs at Startup's sync point, so only the Executor's snapshots after it keep Tick's Ready window quiet.
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.Schedule(BootSchedule());
-        r.AddSystem<&BootSeedsModeOnly>(In("BootSeeds", "Boot", "S"));
-        r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
-    });
-    const auto result = rig->Run("Tick");
-    CHECK_MESSAGE(static_cast<bool>(result), "[ns-st-verify-plain] " << Text(result));
-    CHECK(rig->world().Get<Mode>(31) != nullptr);
-}
 
 // ---- Added after the verification of the five points (Fable/high, AGENTS 14.4;
 // build/evidence/gyo2-nested-schedule/five-points-verify/)
@@ -1864,11 +1589,6 @@ SystemResult UseKeptExclusive(ExclusiveWorld<>) {
     const std::size_t afterSecond = call.errors.size();
     Log().push_back("reports " + std::to_string(afterRead - before) + " " + std::to_string(afterRun - afterRead) + " " +
                     std::to_string(afterSecond - afterRun) + (ran ? " ran ok" : " run failed"));
-    return Ok();
-}
-SystemResult BootWritesListedFlag(ExclusiveWorld<Writes<Flag>> world) {
-    auto r = world.Modify<Flag>([](Flag& f) { f.on = 21; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 } // namespace
@@ -1915,18 +1635,3 @@ TEST_CASE("J-56: verification on: another call's ExclusiveWorld handle is report
     CHECK_MESSAGE(Logged("reports 1 1 1 ran ok"), "[ns-w4-other-call] " << Joined());
 }
 
-TEST_CASE("J-15: a resource listed by an exclusive System mounted on Startup only is not counted") {
-    {
-        auto rig = NestRig([](Registrar& r) {
-            Nest(r);
-            r.Schedule(BootSchedule());
-            r.AddSystem<&BootWritesListedFlag>(In("BootWriter", "Boot", "S"));
-            r.AddSystem<&AlsoWritesFlag>(In("AlsoWritesFlag", "Tick", "A"));
-        });
-        REQUIRE_MESSAGE(static_cast<bool>(rig->built.result), "[ns-st-exempt-listed] " << Describe(rig->built));
-        rig->world().SetResource(Flag{0});
-        const auto result = rig->Run("Tick");
-        CHECK_MESSAGE(static_cast<bool>(result), "[ns-st-exempt-listed] " << Text(result));
-        CHECK(rig->world().Resource<Flag>()->on == 22);
-    }
-}

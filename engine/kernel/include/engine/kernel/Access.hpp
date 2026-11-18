@@ -6,7 +6,7 @@
 #include <cstddef>
 
 // Access entries: the elements of a parameter's Contribution (spec B.4 point
-// 3). A Contribution only collects types at compile time; Registry::Finish
+// 3). A Contribution only collects types at compile time; Registry::BuildPlans
 // turns each entry into ids through AccessResolver (spec B.4 point 6: type ->
 // id at registration, not at compile time; an unregistered type is R-E4).
 //

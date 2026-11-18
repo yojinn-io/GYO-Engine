@@ -63,17 +63,6 @@ SystemResult ChurnSystem(SpawnWithId<Bundle<Col<0>, Col<1>, Col<2>, Col<3>, Col<
     return Ok();
 }
 
-class FunctionPlugin final : public Plugin {
-public:
-    explicit FunctionPlugin(void (*build)(Registrar&, int), int arg) : build_(build), arg_(arg) {}
-    [[nodiscard]] std::string_view Name() const override { return "record"; }
-    void Build(Registrar& registrar) override { build_(registrar, arg_); }
-
-private:
-    void (*build_)(Registrar&, int);
-    int arg_;
-};
-
 template <int I>
 void RegisterColumn(Registrar& r) {
     r.Component<Col<I>>({.name = "Col" + std::to_string(I), .zone = Zone::C, .rollback = Rollback::Yes});
@@ -140,10 +129,10 @@ struct Stats {
 };
 
 Stats Measure(int mode, std::uint64_t entities, int runs, bool verification) {
-    FunctionPlugin plugin(&Build, mode);
-    Registry registry({&plugin});
-    if (!registry.Finish()) {
-        std::fprintf(stderr, "Finish failed (mode %d)\n", mode);
+    Registry registry;
+    static_cast<void>(registry.Register(RegistrationOwner{"record", 0}, [mode](Registrar& r) { Build(r, mode); }));
+    if (!registry.BuildPlans()) {
+        std::fprintf(stderr, "BuildPlans failed (mode %d)\n", mode);
         std::exit(2);
     }
     WorldExecutor executor(registry, "record");

@@ -26,18 +26,17 @@
 // returns; BuildPlans resolves what was registered, runs every startup check,
 // builds one Plan per schedule (Scheduler.cpp) and the fingerprints, and raises
 // the version. Every startup error is collected and returned at once (spec
-// D.2, D-5). The first round writes the tables directly (Plugin::Finish reads
-// them, version 0); after the first successful BuildPlans, a round writes a
+// D.2, D-5). The first round writes the tables directly (version 0); after the
+// first successful BuildPlans, a round writes a
 // pending copy whose contents replace the tables, in the same object, only when
 // its BuildPlans succeeds; a failed or discarded round leaves the Registry and
 // its Worlds on the previous version. A World attaches to a new version the
 // next time it is used (World.hpp).
 //
-// Finish keeps the plugin lifecycle of spec C.2 until the orchestration layer
-// takes it (batch 2): it calls every plugin's Build(Registrar&) in list order
-// (one Register each), checks requires, calls every plugin's
-// Finish(const FrozenRegistry&, FinishContext&) in the same order, then builds
-// the Plans. Only for the first round.
+// Registration units (Module, Plugin), their lifecycle, the runner and the
+// game initialization belong to the orchestration layer (engine/orchestration;
+// v8-arch-gyo2-orchestration-skeleton): the kernel only keeps who registered
+// (RegistrationOwner), never what kind of unit it was (DI-KS 15).
 //
 // The WorldExecutor type (GYO::Kernel::WorldExecutor: one World, its Registry, its
 // schedules and their executor policy; kernel HANDOFF v8-arch-kernel-app-name,
@@ -49,43 +48,6 @@ namespace GYO::Kernel {
 class FrozenRegistry;
 class Registrar;
 class Registry;
-
-// The context of Plugin::Finish (spec C.2 point 4): a plugin may install the
-// runner; there is no Registrar here, so registering is impossible by type.
-class FinishContext {
-public:
-    FinishContext(const FinishContext&) = delete;
-    FinishContext& operator=(const FinishContext&) = delete;
-
-    // One runner per WorldExecutor; a second is R-E6. The runner callable arrives with
-    // the orchestration layer; this records who installs it.
-    void InstallRunner(std::string_view runner);
-
-private:
-    friend class Registry;
-    FinishContext(Registry& registry, std::uint32_t owner) : registry_(&registry), owner_(owner) {}
-    Registry* registry_;
-    // The plugin's index in the Registry's owner list.
-    std::uint32_t owner_;
-};
-
-// A plugin (spec C.5): called only at startup.
-class Plugin {
-public:
-    virtual ~Plugin();
-    // A string constant of the plugin, not a compiler type name (bevy_core:10).
-    [[nodiscard]] virtual std::string_view Name() const = 0;
-    // Plugins that must come earlier in the Host's list (R-E3). The kernel does
-    // not reorder: list order is id order (spec C.2 point 3).
-    [[nodiscard]] virtual std::vector<std::string_view> Requires() const;
-    virtual void Build(Registrar& registrar) = 0;
-    virtual void Finish(const FrozenRegistry& registry, FinishContext& context);
-
-protected:
-    Plugin() = default;
-    Plugin(const Plugin&) = default;
-    Plugin& operator=(const Plugin&) = default;
-};
 
 // A run condition (spec E.4): a function or captureless lambda returning bool
 // with read-only parameters (S-5). Its reads join the System's reads (S-4).
@@ -192,7 +154,7 @@ struct RegistrationOwner {
     friend bool operator==(const RegistrationOwner&, const RegistrationOwner&) = default;
 };
 
-// Handed to the build callable of Registry::Register (and Plugin::Build) only.
+// Handed to the build callable of Registry::Register only.
 // Not copyable or movable, and every registration asserts that the Registry is
 // in a Register call, so a Registrar kept past it (a copy is impossible, a
 // pointer is caught) cannot register (GYO_ASSERT: a Programmer Error).
@@ -227,8 +189,8 @@ public:
     // "Io:file". Two Systems declaring the same effect conflict (spec D.1).
     EffectId Effect(std::string name);
 
-    // A named component set (spec C.1 namedSets, S13), owned by this plugin.
-    // Other plugins add members with AddToSet; SetRead<SetTag> reads them all.
+    // A named component set (spec C.1 namedSets, S13), owned by this owner.
+    // Other owners add members with AddToSet; SetRead<SetTag> reads them all.
     template <class SetTag>
     SetId NamedSet(std::string name) {
         return RegisterNamedSet(KeyOf<SetTag>(), std::move(name));
@@ -261,8 +223,8 @@ public:
     }
 
     // Makes a zone left Unset a startup error (D-E7, S-6) for the whole
-    // Registry instead of zone B. Called by the plugin that owns the product's
-    // (c) data, so a forgotten zone cannot pass as (b). Any plugin may call it;
+    // Registry instead of zone B. Called by the owner of the product's
+    // (c) data, so a forgotten zone cannot pass as (b). Any owner may call it;
     // calling it twice is the same as once.
     void RequireExplicitZones();
 
@@ -308,7 +270,7 @@ public:
         }
     }
 
-    // The initial value of component Target, declared by the plugin that owns
+    // The initial value of component Target, declared by the owner that registered
     // Target: when a cell of Request appears on an entity at a sync point (a
     // spawn bundle, or an insert onto an entity that had none) and the entity
     // has no Target, the kernel puts Fn(request) there at that same sync point,
@@ -399,7 +361,7 @@ struct SchedulerShuffleProbe {
 // and write it, at any time. The kernel reads it once, when each
 // WorldExecutor::Run call starts, so a change counts from the next Run (a nested
 // RunSchedule does not read it again). Without it the defaults below are used.
-// One per World. Registered by the Registry before any plugin (ResourceId 0).
+// One per World. Registered by the Registry before any owner (ResourceId 0).
 // hookRoundLimit is in no fingerprint; 0 is a GYO_ASSERT when a Run starts.
 struct KernelSettings {
     bool accessVerification = false;
@@ -590,8 +552,8 @@ struct ZoneCSourcesOptions {
 // a successful BuildPlans makes them stale. Changes go through Registrar only.
 class FrozenRegistry {
 public:
-    // 0 before the first successful BuildPlans (Plugin::Finish reads 0); 1
-    // after it; +1 at every later successful BuildPlans; a failed one keeps it.
+    // 0 before the first successful BuildPlans; 1 after it; +1 at every later
+    // successful BuildPlans; a failed one keeps it.
     [[nodiscard]] std::uint64_t Version() const noexcept;
 
     template <class T>
@@ -656,10 +618,8 @@ private:
 
 class Registry {
 public:
-    // No plugin list: registration goes through Register.
+    // Registration goes through Register, then BuildPlans.
     Registry();
-    // plugins: the Host's ordered list for Finish; the Registry does not own them.
-    explicit Registry(std::vector<Plugin*> plugins);
     ~Registry();
     Registry(const Registry&) = delete;
     Registry& operator=(const Registry&) = delete;
@@ -698,20 +658,13 @@ public:
     // Drops the round registered since the last BuildPlans (its ids are void).
     void DiscardRegistrations();
 
-    // Runs the plugin lifecycle once, as the first round (spec C.2): one
-    // Register per plugin in list order, the requires check, every plugin's
-    // Finish, then the Plans. Ok: version 1. Err: every startup error at once;
-    // the Registry is not usable.
-    Engine::Base::Result<void, StartupReport> Finish();
-
-    // Whether a BuildPlans (or Finish) has succeeded.
+    // Whether a BuildPlans has succeeded.
     [[nodiscard]] bool IsFrozen() const noexcept;
     // The read-only view (DI-KS 25). GYO_ASSERT: only after a successful
-    // BuildPlans or Finish.
+    // BuildPlans.
     [[nodiscard]] const FrozenRegistry& Frozen() const;
 
 private:
-    friend class FinishContext;
     friend struct SchedulerShuffleProbe;
     // The World is made from the tables (storage factories, hooks, the
     // allotter), keeps the two World counters and attaches to new versions.

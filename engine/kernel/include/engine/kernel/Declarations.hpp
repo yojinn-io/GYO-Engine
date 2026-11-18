@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-// The explicit half of a declaration (spec B.2): what a plugin states when it
+// The explicit half of a declaration (spec B.2): what an owner states when it
 // registers a component, resource, event, effect, schedule or System. The other
 // half, a System's data access, is derived from its parameter types
 // (Params.hpp); nothing here can declare access by hand (DI-KS 1).
@@ -52,7 +52,7 @@ enum class Rollback : std::uint8_t {
     Derived,
 };
 
-// A clock domain (spec section 0). Startup schedules have none.
+// A clock domain (spec section 0).
 enum class Domain : std::uint8_t {
     None,
     Fixed,
@@ -118,11 +118,6 @@ struct SyncPointOptions {
 struct ScheduleOptions {
     std::string name;
     Domain domain = Domain::None;
-    // At most one per World (D-E21). The kernel runs it whole, once, before
-    // the first Run of any other schedule; no System runs it and it runs no
-    // other schedule (spec H-12, H-13). So its writers do not count as writers
-    // of an Exclusive column or resource (spec B.3).
-    bool startup = false;
     // Its Run advances the domain tick; one per domain (H-1, D-E12).
     bool clock = false;
     // The only schedule kind where Extract parameters are legal (spec H.6).

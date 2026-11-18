@@ -30,8 +30,6 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::HookRoundLimit: return "HookRoundLimit";
     case KernelErrorCode::ScheduleRunning: return "ScheduleRunning";
     case KernelErrorCode::UnknownSchedule: return "UnknownSchedule";
-    case KernelErrorCode::StartupNotNestable: return "StartupNotNestable";
-    case KernelErrorCode::StartupRunning: return "StartupRunning";
     case KernelErrorCode::ExtractNotNestable: return "ExtractNotNestable";
     case KernelErrorCode::HookRunsSchedule: return "HookRunsSchedule";
     case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
@@ -120,13 +118,9 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE17: return "D-E17";
     case StartupCode::DE19: return "D-E19";
     case StartupCode::DE20: return "D-E20";
-    case StartupCode::DE21: return "D-E21";
-    case StartupCode::RE1: return "R-E1";
     case StartupCode::RE2: return "R-E2";
-    case StartupCode::RE3: return "R-E3";
     case StartupCode::RE4: return "R-E4";
     case StartupCode::RE5: return "R-E5";
-    case StartupCode::RE6: return "R-E6";
     case StartupCode::RE7: return "R-E7";
     case StartupCode::XE1: return "X-E1";
     case StartupCode::FE1: return "F-E1";
@@ -171,14 +165,6 @@ std::size_t Plan::NonDataflowEdgesExtended() const noexcept {
     return static_cast<std::size_t>(std::count_if(declaredEdges.begin(), declaredEdges.end(),
                                                   [](const DeclaredEdge& e) { return !e.dataflowExtended; }));
 }
-
-Plugin::~Plugin() = default;
-
-std::vector<std::string_view> Plugin::Requires() const {
-    return {};
-}
-
-void Plugin::Finish(const FrozenRegistry&, FinishContext&) {}
 
 namespace Detail {
 
@@ -389,13 +375,7 @@ void Normalize(AccessSet& access) {
 
 } // namespace Detail
 
-// ---- FinishContext, Registrar
-
-void FinishContext::InstallRunner(std::string_view runner) {
-    GYO_ASSERT(registry_->data_->finished && !registry_->data_->building && !registry_->data_->frozen);
-    registry_->data_->runners.emplace_back(runner);
-    registry_->data_->runnerOwners.push_back(owner_);
-}
+// ---- Registrar
 
 ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOptions options, Detail::MakeColumnFn make) {
     GYO_ASSERT(data_->building);
@@ -545,7 +525,7 @@ void Registrar::InsertStage(std::string_view schedule, std::string_view anchor, 
     }
     data.Error(StartupCode::DE1, "C.2",
                data.OwnerName(owner_) + " inserts stage '" + stage + "' into schedule '" + std::string(schedule) +
-                   "', which no earlier plugin registered",
+                   "', which no earlier owner registered",
                {data.OwnerName(owner_), std::string(schedule)});
 }
 
@@ -699,18 +679,7 @@ void AddKernelRegistrations(RegistryData& data) {
 } // namespace
 } // namespace Detail
 
-Registry::Registry() : Registry(std::vector<Plugin*>{}) {}
-
-Registry::Registry(std::vector<Plugin*> plugins)
-    : data_(std::make_unique<Detail::RegistryData>()), frozen_(*data_) {
-    for (Plugin* plugin : plugins) {
-        GYO_ASSERT(plugin != nullptr);
-        Detail::PluginRecord record{plugin, std::string(plugin->Name()), {}, false};
-        for (std::string_view required : plugin->Requires()) {
-            record.required.emplace_back(required);
-        }
-        data_->plugins.push_back(std::move(record));
-    }
+Registry::Registry() : data_(std::make_unique<Detail::RegistryData>()), frozen_(*data_) {
     Detail::AddKernelRegistrations(*data_);
 }
 
@@ -739,41 +708,7 @@ const FrozenRegistry& Registry::Frozen() const {
 namespace Detail {
 namespace {
 
-void CheckPluginList(RegistryData& data) {
-    for (std::size_t i = 0; i < data.plugins.size(); ++i) {
-        PluginRecord& record = data.plugins[i];
-        bool duplicate = false;
-        for (std::size_t j = 0; j < i; ++j) {
-            if (data.plugins[j].name == record.name) {
-                duplicate = true;
-                break;
-            }
-        }
-        if (duplicate) {
-            data.Error(StartupCode::RE1, "R-4", "plugin name '" + record.name + "' appears twice in the Host's list",
-                       {record.name});
-            continue;
-        }
-        record.built = true;
-        for (const std::string& required : record.required) {
-            bool earlier = false;
-            bool later = false;
-            for (std::size_t j = 0; j < data.plugins.size(); ++j) {
-                if (data.plugins[j].name != required) continue;
-                (j < i ? earlier : later) = true;
-            }
-            if (!earlier) {
-                data.Error(StartupCode::RE3, "C.2",
-                           "plugin '" + record.name + "' requires '" + required + "', which " +
-                               (later ? "comes later in the Host's list (the kernel does not reorder)"
-                                      : "is not in the Host's list"),
-                           {record.name, required});
-            }
-        }
-    }
-}
-
-// A zone left Unset is zone B unless a plugin asked for explicit zones
+// A zone left Unset is zone B unless an owner asked for explicit zones
 // (Registrar::RequireExplicitZones). Runs once registration is closed and
 // before every check, so the zone rules, the Plans and the fingerprints all
 // see the zone the declaration ends up with.
@@ -936,7 +871,6 @@ void CheckInitialValues(RegistryData& data) {
 void CheckSchedules(RegistryData& data) {
     std::map<Domain, std::vector<std::string>> clocks;
     std::set<Domain> usedDomains;
-    std::string startupSchedule;
     for (const ScheduleRecord& record : data.schedules) {
         const ScheduleOptions& s = record.options;
         std::set<std::string> stages;
@@ -976,26 +910,11 @@ void CheckSchedules(RegistryData& data) {
             data.Error(StartupCode::DE1, "D.1", "schedule '" + s.name + "' trims events at '" + s.eventTrim +
                                                    "', which is neither a stage end nor a sync point", {s.name});
         }
-        if (s.startup) {
-            // Spec H-12: one Startup schedule per World; every plugin's startup Systems go into it.
-            if (!startupSchedule.empty()) {
-                data.Error(StartupCode::DE21, "H-12",
-                           "schedules '" + startupSchedule + "' and '" + s.name +
-                               "' are both Startup schedules; a World has at most one",
-                           {startupSchedule, s.name});
-            } else {
-                startupSchedule = s.name;
-            }
-            if (s.clock || s.domain != Domain::None) {
-                data.Error(StartupCode::DE12, "H-1", "startup schedule '" + s.name + "' has a clock or a domain", {s.name});
-            }
+        if (s.domain == Domain::None) {
+            data.Error(StartupCode::DE12, "H-1", "schedule '" + s.name + "' belongs to no clock domain", {s.name});
         } else {
-            if (s.domain == Domain::None) {
-                data.Error(StartupCode::DE12, "H-1", "schedule '" + s.name + "' belongs to no clock domain", {s.name});
-            } else {
-                usedDomains.insert(s.domain);
-                if (s.clock) clocks[s.domain].push_back(s.name);
-            }
+            usedDomains.insert(s.domain);
+            if (s.clock) clocks[s.domain].push_back(s.name);
         }
         if (s.executor == ExecutorKind::Parallel) {
             data.Error(StartupCode::DE17, "X-2", "schedule '" + s.name + "' declares Parallel; v1 has only Serial (LIM-2)",
@@ -1458,7 +1377,7 @@ void CheckSystems(RegistryData& data) {
 }
 
 // D-E2: at most one writer of an Exclusive column or resource over every
-// non-Startup schedule; writers are counted per System, hooks included (DI-KS 6).
+// schedule; writers are counted per System, hooks included (DI-KS 6).
 void CheckExclusiveWriters(RegistryData& data) {
     std::map<AccessKey, std::vector<std::pair<std::string, std::string>>> writers;
     for (const SystemRecord& system : data.systems) {
@@ -1466,7 +1385,7 @@ void CheckExclusiveWriters(RegistryData& data) {
         bool counted = false;
         for (const Mount& mount : system.options.mounts) {
             const ScheduleRecord* schedule = data.FindSchedule(mount.schedule);
-            if (schedule != nullptr && !schedule->options.startup) counted = true;
+            if (schedule != nullptr) counted = true;
         }
         if (!counted) continue;
         for (const AccessKey& key : WrittenKeys(system.access)) {
@@ -1526,14 +1445,6 @@ void CheckHookConflicts(RegistryData& data) {
                            "' and one is zone C; hooks have no before / after to order them",
                        {a.name, b.name, shared}, {SourceText(a.source), SourceText(b.source)});
         }
-    }
-}
-
-void CheckRunners(RegistryData& data) {
-    if (data.runners.size() > 1) {
-        std::vector<std::string> subjects;
-        for (std::uint32_t owner : data.runnerOwners) subjects.push_back(data.OwnerName(owner));
-        data.Error(StartupCode::RE6, "C.2", "two plugins install a runner; a Product has one", std::move(subjects));
     }
 }
 
@@ -1619,26 +1530,6 @@ void CheckLaterRound(RegistryData& data) {
                    {set.name, data.OwnerName(set.memberOwners[m])});
         }
     }
-    for (std::size_t i = base.schedules; i < data.schedules.size(); ++i) {
-        const ScheduleRecord& schedule = data.schedules[i];
-        if (schedule.options.startup) {
-            refuse("startup schedule", data.OwnerName(schedule.owner) + " registers Startup schedule '" +
-                                           schedule.options.name + "' (Startup runs once and has run)",
-                   {schedule.options.name, data.OwnerName(schedule.owner)});
-        }
-    }
-    for (std::size_t i = base.systems; i < data.systems.size(); ++i) {
-        const SystemRecord& system = data.systems[i];
-        if (system.removed) continue;
-        for (const Mount& mount : system.options.mounts) {
-            const ScheduleRecord* schedule = data.FindSchedule(mount.schedule);
-            if (schedule != nullptr && schedule->options.startup) {
-                refuse("startup mount", "System '" + system.options.name + "' is mounted in Startup schedule '" +
-                                            mount.schedule + "' (Startup runs once and has run)",
-                       {system.options.name, mount.schedule}, {SourceText(system.source)});
-            }
-        }
-    }
     for (std::size_t i = base.allotterDeclarations; i < data.allotterDeclarations.size(); ++i) {
         refuse("allotter", data.OwnerName(data.allotterOwners[i]) + " declares an allotter",
                {data.OwnerName(data.allotterOwners[i])});
@@ -1649,8 +1540,8 @@ void CheckLaterRound(RegistryData& data) {
     }
 }
 
-// What every round resolves before plugins' Finish may read the tables (named
-// set members, the allotter, Systems' access sets): spec C.2 point 4. Derived
+// What every round resolves first (named set members, the allotter, Systems'
+// access sets). Derived
 // fields are cleared and made again (declaration 3.2 rule 2).
 void ResolveStage(RegistryData& data, bool laterRound) {
     ApplyDefaultZones(data);
@@ -1670,8 +1561,8 @@ void ResolveStage(RegistryData& data, bool laterRound) {
     FillSystemInfos(data);
 }
 
-// The checks that come after plugins' Finish, the Plans (spec C.2 points 5 and
-// 6) and their fingerprints. Ok when no error was found in the whole round.
+// The checks that come after resolving, the Plans (spec C.2 points 5 and 6)
+// and their fingerprints. Ok when no error was found in the whole round.
 bool PlanStage(RegistryData& data) {
     data.plans.clear();
     data.ties.clear();
@@ -1810,53 +1701,13 @@ void Registry::DiscardRegistrations() {
     }
     if (data_->frozen || !data_->registered) return;
     // The first round writes the tables: back to a Registry with only the
-    // kernel's registrations (its plugin list and extract source kept).
+    // kernel's registrations (its extract source kept).
     Detail::RegistryData fresh;
-    fresh.plugins = std::move(data_->plugins);
     fresh.extractSource = data_->extractSource;
     fresh.extractSourceSet = data_->extractSourceSet;
     fresh.schedulerShuffle = data_->schedulerShuffle;
     Detail::AddKernelRegistrations(fresh);
     Detail::Adopt(*data_, std::move(fresh));
-}
-
-Engine::Base::Result<void, StartupReport> Registry::Finish() {
-    Detail::RegistryData& data = *data_;
-    // The first round only (rule 9).
-    GYO_ASSERT(!data.finished && !data.registered);
-
-    Detail::CheckPluginList(data);
-    // Each plugin's owner index (Plugin::Finish's FinishContext).
-    std::vector<std::uint32_t> ownerOf(data.plugins.size(), 0);
-    for (std::size_t i = 0; i < data.plugins.size(); ++i) {
-        if (!data.plugins[i].built) continue;
-        Plugin* plugin = data.plugins[i].plugin;
-        const RegistrationOwner owner{data.plugins[i].name, static_cast<std::uint32_t>(i)};
-        static_cast<void>(Register(owner, [plugin](Registrar& registrar) { plugin->Build(registrar); }));
-        ownerOf[i] = static_cast<std::uint32_t>(data.owners.size() - 1);
-    }
-    data.finished = true;
-    // Registration is closed: resolve what plugins' Finish may read before
-    // calling it, so it reads final ids and sets (spec C.2 point 4). Plans and
-    // the Registry fingerprint come after Finish, as in spec C.2 points 5 and
-    // 6. With errors so far the ids are not final, so plugins' Finish is not called.
-    Detail::ResolveStage(data, false);
-    if (data.errors.empty()) {
-        for (std::size_t i = 0; i < data.plugins.size(); ++i) {
-            if (!data.plugins[i].built) continue;
-            FinishContext context(*this, ownerOf[i]);
-            data.plugins[i].plugin->Finish(frozen_, context);
-        }
-        Detail::CheckRunners(data);
-    }
-    if (!Detail::PlanStage(data)) {
-        data.failed = true;
-        return Engine::Base::Err(StartupReport(std::move(data.errors)));
-    }
-    data.registered = false;
-    data.version = 1;
-    data.frozen = true;
-    return {};
 }
 
 } // namespace GYO::Kernel

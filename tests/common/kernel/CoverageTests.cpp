@@ -83,15 +83,14 @@ TEST_CASE("J-24: a cycle downstream of an earlier System is reported with its ow
 
 // ---- A2: no registration after Finish
 
-TEST_CASE("J-19: a Registrar or FinishContext cannot be copied or moved out of its call") {
-    // Registrar lives on Finish's stack for one Build call; with copy and move deleted, nothing can keep a
-    // usable one past Build (a kept pointer dangles, which is outside the contract). Every registration also
-    // asserts the build phase (Registry.cpp) as a second line.
+TEST_CASE("J-19: a Registrar cannot be copied or moved out of its call") {
+    // Registrar lives on Register's stack for one build call; with copy and move deleted, nothing can keep a
+    // usable one past build (a kept pointer dangles, which is outside the contract). Every registration also
+    // asserts the build phase (Registry.cpp) as a second line. (The context of a registration unit's Finish
+    // moved to the orchestration layer: WorldFinish, v8-arch-gyo2-orchestration-skeleton.)
     static_assert(!std::is_copy_constructible_v<Registrar>);
     static_assert(!std::is_move_constructible_v<Registrar>);
     static_assert(!std::is_copy_assignable_v<Registrar>);
-    static_assert(!std::is_copy_constructible_v<FinishContext>);
-    static_assert(!std::is_move_constructible_v<FinishContext>);
     CHECK(true);
 }
 
@@ -125,24 +124,21 @@ TEST_CASE("J-24: a missing target and a Derived read with no writer in one sched
                   "[rs-b2-after-declared] the analysis stopped after the declared-order step found an error: " << Describe(built));
 }
 
-// ---- B4: plugins' Finish reads final named sets and Systems
+// ---- B4: the read-only view after BuildPlans has final named sets and Systems
+// (what a registration unit's Finish reads; the unit lifecycle is the orchestration layer's)
 
-TEST_CASE("J-19: a plugin's Finish sees resolved named sets and System access") {
-    std::vector<ComponentId> members;
-    std::size_t systems = 0;
-    TestPlugin plugin("replication", [](Registrar& r) {
-        RegisterCommonData(r);
-        r.NamedSet<ReplicatedSet>("Replicated");
-        r.AddToSet<ReplicatedSet, TestPos>();
-        r.AddToSet<ReplicatedSet, TestVel>();
-        r.Schedule(FixedSchedule());
-        r.AddSystem<&ReadMarker>(Sys("ShowMark", Zone::B, {At("FixedUpdate", "Present")}));
-    }, {}, [&](const FrozenRegistry& frozen, FinishContext&) {
-        members = frozen.SetMembers(0);
-        systems = frozen.Systems().size();
-    });
-    Registry registry({&plugin});
-    REQUIRE(static_cast<bool>(registry.Finish()));
+TEST_CASE("J-19: after BuildPlans the read-only view has resolved named sets and System access") {
+    Registry registry;
+    REQUIRE(static_cast<bool>(RegisterAll(registry, {{"replication", [](Registrar& r) {
+                                                  RegisterCommonData(r);
+                                                  r.NamedSet<ReplicatedSet>("Replicated");
+                                                  r.AddToSet<ReplicatedSet, TestPos>();
+                                                  r.AddToSet<ReplicatedSet, TestVel>();
+                                                  r.Schedule(FixedSchedule());
+                                                  r.AddSystem<&ReadMarker>(Sys("ShowMark", Zone::B, {At("FixedUpdate", "Present")}));
+                                              }}})));
+    const std::vector<ComponentId> members = registry.Frozen().SetMembers(0);
+    const std::size_t systems = registry.Frozen().Systems().size();
     CHECK(members.size() == 2);
     CHECK(systems == 1);
 }
@@ -519,7 +515,7 @@ Built CVariant(const std::string& change) {
 TEST_CASE("J-18: the C fingerprint sees zone C hooks, the schedule's rollback and sync points between zone C steps") {
     Built base = CVariant("");
     KERNEL_REQUIRE_OK(base);
-    CHECK(base.registry->Frozen().CFingerprint().version == 7U);
+    CHECK(base.registry->Frozen().CFingerprint().version == 8U);
     // The "sync" variant really moves Mid between the zone C steps.
     const Plan& plain = *base.registry->Frozen().PlanOf("FixedUpdate");
     CHECK(PositionOf(plain, "Mid") > PositionOf(plain, "ReadA"));

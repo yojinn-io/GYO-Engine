@@ -202,8 +202,7 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 // exclusive System call (ExclusiveWorld::RunSchedule; Executor.cpp). Refused
 // with Err, the World interrupted and the error reported once by the outermost
 // Run: from a hook (X-13), inside a Read or Modify closure (X-14), an unknown
-// name (X-12), Startup (H-12) or while Startup runs (H-13), an extract schedule
-// (X-15), a schedule running already at any level (X-11). An Interrupted World
+// name (X-12), an extract schedule (X-15), a schedule running already at any level (X-11). An Interrupted World
 // runs nothing: the error a nested level left is returned.
 [[nodiscard]] Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
                                                                 bool inClosure);

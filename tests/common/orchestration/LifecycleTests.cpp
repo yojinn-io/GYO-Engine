@@ -5,6 +5,8 @@
 
 #include "AssertTestSupport.hpp"
 
+#include <type_traits>
+
 using namespace OrchTest;
 
 namespace {
@@ -198,4 +200,13 @@ TEST_CASE("O-2: the World context names each World; a Finish error is reported w
     CHECK_MESSAGE((built.error().unitErrors[0].unit == "net" && built.error().unitErrors[0].world == "Side" &&
                    built.error().unitErrors[0].code == "bad"),
                   "[or-finish-report] " << built.error().detail);
+}
+
+TEST_CASE("O-2: the contexts cannot be copied or moved out of their call (J-19, moved from FinishContext)") {
+    static_assert(!std::is_copy_constructible_v<O::WorldFinish>);
+    static_assert(!std::is_move_constructible_v<O::WorldFinish>);
+    static_assert(!std::is_copy_constructible_v<O::WorldCheck>);
+    static_assert(!std::is_copy_constructible_v<O::WorldSetup>);
+    static_assert(!std::is_copy_constructible_v<O::ProductSetup>);
+    CHECK(true);
 }

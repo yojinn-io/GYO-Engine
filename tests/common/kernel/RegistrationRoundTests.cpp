@@ -402,11 +402,6 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
     FirstRound(registry, [](Registrar& r) {
         Base(r);
         r.NamedSet<ReplicatedSet>("Replicated");
-        ScheduleOptions boot;
-        boot.name = "Boot";
-        boot.startup = true;
-        boot.stages = {"Only"};
-        r.Schedule(boot);
     });
     WorldExecutor executor(registry, "rounds");
     std::vector<KernelError> recorded;
@@ -446,18 +441,6 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
     SUBCASE("a member of a named set the previous version has") {
         refused("set member", [](Registrar& r) { r.AddToSet<ReplicatedSet, Tag>(); });
     }
-    SUBCASE("a Startup schedule") {
-        refused("startup schedule", [](Registrar& r) {
-            ScheduleOptions second;
-            second.name = "Boot2";
-            second.startup = true;
-            second.stages = {"Only"};
-            r.Schedule(second);
-        });
-    }
-    SUBCASE("a System mounted in the Startup schedule") {
-        refused("startup mount", [](Registrar& r) { r.AddSystem<&Plain>(Sys("BootPlain", Zone::B, {At("Boot", "Only")})); });
-    }
     SUBCASE("an allotter") {
         refused("allotter", [](Registrar& r) {
             r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
@@ -478,12 +461,6 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
             r.InitialValue<Mode, &ModeFromLater>();
             r.InitialValue<Other, &OtherFromTag>();
             r.AddToSet<ReplicatedSet, Tag>();
-            ScheduleOptions second;
-            second.name = "Boot2";
-            second.startup = true;
-            second.stages = {"Only"};
-            r.Schedule(second);
-            r.AddSystem<&Plain>(Sys("BootPlain", Zone::B, {At("Boot", "Only")}));
             r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
             r.Allotter<RangeAllotter>();
             r.DigestSet<ReplicatedSet>();
@@ -491,7 +468,7 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
         })));
         const auto result = registry.BuildPlans();
         const std::size_t count = ErrorCount(result, StartupCode::RE7);
-        CHECK_MESSAGE(count == 9, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
+        CHECK_MESSAGE(count == 7, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
         CHECK(registry.Frozen().Version() == 1U);
         KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     }
@@ -732,15 +709,6 @@ TEST_CASE("DI-KS 26: after a failed first round, Register is an assert") {
     GYO_CHECK_ASSERTS(failedFirst.Register(kCommand, [](Registrar&) {}));
 }
 
-TEST_CASE("DI-KS 26: Finish is only the first round") {
-    Registry registeredFirst;
-    REQUIRE(Done(registeredFirst.Register(kBase, &Base)));
-    GYO_CHECK_ASSERTS(registeredFirst.Finish());
-    Registry builtFirst;
-    FirstRound(builtFirst);
-    GYO_CHECK_ASSERTS(builtFirst.Finish());
-}
-
 TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (verification on)") {
     Registry registry;
     FirstRound(registry);
@@ -833,16 +801,14 @@ TEST_CASE("DI-KS 26: Register inside a build callable, and a World made while a 
     CHECK(fine.State() == WorldState::Ready);
 }
 
-TEST_CASE("DI-KS 26: after Finish, Register adds a round; Plugin::Finish is not called again") {
-    TestPlugin plugin("base", [](Registrar& r) { Base(r); });
-    Registry registry({&plugin});
-    REQUIRE(Done(registry.Finish()));
+TEST_CASE("DI-KS 26: Register adds a later round; the owner list keeps the first owner first") {
+    Registry registry;
+    REQUIRE(Done(registry.Register(kBase, &Base)));
+    REQUIRE(Done(registry.BuildPlans()));
     REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.AddSystem<&NewSystem>(B("NewSystem", "B")); })));
     REQUIRE(Done(registry.BuildPlans()));
     CHECK(registry.Frozen().Version() == 2U);
-    CHECK(plugin.builds == 1);
-    CHECK_MESSAGE(plugin.finishes == 1, "Plugin::Finish ran again");
-    // The owner list keeps the plugin first and adds the new owner after it.
+    // The owner list keeps the first owner first and adds the new owner after it.
     CHECK(registry.Frozen().SystemNamed("NewSystem")->owner == "command");
     CHECK(registry.Frozen().SystemNamed("Counting")->owner == "base");
 }
@@ -898,13 +864,12 @@ TEST_CASE("DI-KS 13: SetExtractSource after the first BuildPlans is an assert") 
 
 // ---- S3: the read-only, versioned view (DI-KS 25)
 
-TEST_CASE("DI-KS 25: the version is 0 before and inside Plugin::Finish, 1 after, +1 per success, kept on failure") {
-    std::uint64_t inFinish = 99;
-    TestPlugin plugin("base", [](Registrar& r) { Base(r); }, {},
-                      [&](const FrozenRegistry& view, FinishContext&) { inFinish = view.Version(); });
-    Registry registry({&plugin});
-    REQUIRE(Done(registry.Finish()));
-    CHECK_MESSAGE(inFinish == 0U, "DI-KS 25 version inside Plugin::Finish");
+// What a registration unit's Finish reads (version 1, after the Plans) is the
+// orchestration layer's test since v8-arch-gyo2-orchestration-skeleton.
+TEST_CASE("DI-KS 25: the version is 1 after the first BuildPlans, +1 per success, kept on failure") {
+    Registry registry;
+    REQUIRE(Done(registry.Register(kBase, &Base)));
+    REQUIRE(Done(registry.BuildPlans()));
     const FrozenRegistry& view = registry.Frozen();
     CHECK(view.Version() == 1U);
     REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.AddSystem<&UsesUnknown>(B("UsesUnknown", "A")); })));

@@ -37,14 +37,6 @@ struct TypeEntry {
     std::uint32_t owner;
 };
 
-struct PluginRecord {
-    Plugin* plugin;
-    std::string name;
-    std::vector<std::string> required;
-    // False for a plugin whose name repeats an earlier one (R-E1): it is not built.
-    bool built = false;
-};
-
 struct EffectRecord {
     std::string name;
     std::uint32_t owner;
@@ -140,7 +132,6 @@ struct ScheduleOrder {
 };
 
 struct RegistryData {
-    std::vector<PluginRecord> plugins;
     // Registration owners in the order of their first Register (the owner
     // index of every record is a position here).
     std::vector<RegistrationOwner> owners;
@@ -167,8 +158,6 @@ struct RegistryData {
     std::vector<std::uint32_t> allotterOwners;
     std::optional<ResourceId> allotter;
     ResourceId kernelSettings = 0;
-    std::vector<std::string> runners;
-    std::vector<std::uint32_t> runnerOwners;
     const RegistryData* extractSource = nullptr;
     // Test seam (spec J-20): non-zero reorders the Scheduler's internal containers.
     std::uint32_t schedulerShuffle = 0;
@@ -180,7 +169,7 @@ struct RegistryData {
     std::uint32_t digestMarks = 0;
     std::uint32_t explicitZoneCalls = 0;
     std::vector<StartupError> errors;
-    // The first BuildPlans (or Finish) has started: SetExtractSource is closed.
+    // The first BuildPlans has started: SetExtractSource is closed.
     bool finished = false;
     // True only while a Register call's build callable runs (Registrar asserts it).
     bool building = false;
