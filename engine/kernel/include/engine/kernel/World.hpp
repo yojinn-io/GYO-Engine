@@ -252,7 +252,7 @@ public:
         CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeWrite, true);
         TypedResource<T>(resource).value.reset();
-        TypedResource<T>(resource).thread = nullptr;
+        TypedResource<T>(resource).thread = 0;
     }
 
     // ---- Events (read-only views for the Host and tests: every record kept)

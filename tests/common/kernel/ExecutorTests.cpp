@@ -8,6 +8,8 @@
 
 #include "WorldTestSupport.hpp"
 
+#include "engine/base/IdIssuer.hpp"
+
 #include <algorithm>
 #include <array>
 #include <condition_variable>
@@ -96,7 +98,7 @@ namespace {
 struct Bound { std::int64_t value; };  // resource, zone B, thread-bound
 
 // One thread kept alive for a whole case, so the thread a value was put in on
-// stays the same thread (a thread that ends may hand its identity to the next).
+// can still use it, remove it or destroy the World.
 class Worker {
 public:
     Worker() : thread_([this] { Loop(); }) {}
@@ -182,7 +184,9 @@ SystemResult ExclusiveRemovesBound(ExclusiveWorld<> world) {
     if (auto removed = world.RemoveResource<Bound>(); !removed) return Engine::Base::Err(std::move(removed).error());
     return Ok();
 }
-const void* BoundThread(World& world) {
+struct Free { std::int64_t value; };  // resource, zone B, not thread-bound
+
+std::uint64_t BoundThread(World& world) {
     return Detail::ResourceAt(world, Detail::ResourceIdOf(world, KeyOf<Bound>())).thread;
 }
 
@@ -218,9 +222,8 @@ TEST_CASE("J-6: a thread-bound resource is used on the thread it was put in on; 
     CHECK(rig->world().Resource<Bound>()->value == 3);
 }
 
-// Only the same thread here: the thread token can be handed to a new thread
-// after one ends (DI-KS 14's declared limit), so this case never relies on two
-// threads having different tokens.
+// The stored thread is read back on the same thread here; other threads are
+// the touched cases' and the other-direction cases'.
 TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetResource or by ExclusiveWorld takes the applying thread") {
     SUBCASE("Commands::SetResource, applied at the sync point") {
         auto rig = BoundRig([](Registrar& r) {
@@ -230,7 +233,7 @@ TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetRe
         Log().clear();
         CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
         CHECK(Log() == std::vector<std::string>{"bound 4"});
-        CHECK_MESSAGE(BoundThread(rig->world()) == Detail::CurrentThreadToken(), "[ks-s6-thread-bound] the sync point did not record its thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial(), "[ks-s6-thread-bound] the sync point did not record its thread");
     }
     SUBCASE("ExclusiveWorld::SetResource, now") {
         auto rig = BoundRig([](Registrar& r) {
@@ -240,27 +243,27 @@ TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetRe
         Log().clear();
         CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
         CHECK(Log() == std::vector<std::string>{"bound 5"});
-        CHECK_MESSAGE(BoundThread(rig->world()) == Detail::CurrentThreadToken(), "[ks-s5-thread-bound] the immediate change did not record its thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial(), "[ks-s5-thread-bound] the immediate change did not record its thread");
     }
 }
 
-// Only the same thread here, as above: the stored thread is read back, not compared with another thread's.
+// The same thread here, as above: the stored thread is read back.
 TEST_CASE("J-6: a thread-bound resource taken out by a sync point's Commands::RemoveResource or by ExclusiveWorld forgets its thread") {
     SUBCASE("Commands::RemoveResource, applied at the sync point") {
         auto rig = BoundRig([](Registrar& r) { r.AddSystem<&CommandsRemovesBound>(B("CommandsRemovesBound", "A")); });
         rig->world().SetResource(Bound{1});
-        REQUIRE(BoundThread(rig->world()) == Detail::CurrentThreadToken());
+        REQUIRE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial());
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Resource<Bound>() == nullptr);
-        CHECK_MESSAGE(BoundThread(rig->world()) == nullptr, "[ks-s6-thread-forgotten] the sync point's removal kept the thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == 0, "[ks-s6-thread-forgotten] the sync point's removal kept the thread");
     }
     SUBCASE("ExclusiveWorld::RemoveResource, now") {
         auto rig = BoundRig([](Registrar& r) { r.AddSystem<&ExclusiveRemovesBound>(B("ExclusiveRemovesBound", "A")); });
         rig->world().SetResource(Bound{1});
-        REQUIRE(BoundThread(rig->world()) == Detail::CurrentThreadToken());
+        REQUIRE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial());
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Resource<Bound>() == nullptr);
-        CHECK_MESSAGE(BoundThread(rig->world()) == nullptr, "[ks-s6-thread-forgotten] the immediate removal kept the thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == 0, "[ks-s6-thread-forgotten] the immediate removal kept the thread");
     }
 }
 
@@ -307,6 +310,69 @@ TEST_CASE("J-6: a thread-bound resource touched on another thread fails a GYO_AS
             static_cast<void>(rig.release());
         }
     }
+}
+
+TEST_CASE("J-6: the other direction: a thread-bound value asserts on a thread that took its serial later, also when the thread that put it in has ended") {
+    SUBCASE("put in on this thread, touched on a worker started afterwards") {
+        std::unique_ptr<Rig> rig = BoundRig(nullptr);
+        rig->world().SetResource(Bound{1});  // this thread has its serial by now; the worker takes a later one
+        Worker worker;
+        bool asserted = false;
+        worker.Do([&] { asserted = Asserts([&] { static_cast<void>(rig->world().Resource<Bound>()); }); });
+        CHECK_MESSAGE(asserted, "[ks-s10-later-thread] J-6 thread-bound: a worker started after the value was put in read it without an assertion");
+    }
+    SUBCASE("put in on a worker that has ended, touched on a worker started afterwards") {
+        // The case a thread_local address missed: the second worker may get the first one's storage.
+        std::unique_ptr<Rig> rig = BoundRig(nullptr);
+        {
+            Worker first;
+            first.Do([&] { rig->world().SetResource(Bound{1}); });
+        }
+        Worker second;
+        bool asserted = false;
+        second.Do([&] { asserted = Asserts([&] { static_cast<void>(rig->world().Resource<Bound>()); }); });
+        CHECK_MESSAGE(asserted, "[ks-s10-ended-thread] J-6 thread-bound: a worker started after the binding worker ended read it without an assertion");
+        // The thread that put it in has ended: no thread can destroy the World without an assertion.
+        static_cast<void>(rig.release());
+    }
+}
+
+TEST_CASE("J-6: a resource not marked threadBound is used on any thread") {
+    std::unique_ptr<Rig> rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.Resource<Free>({.name = "Free", .zone = Zone::B});
+    }, false);
+    Worker worker;
+    bool asserted = false;
+    worker.Do([&] { asserted = Asserts([&] { rig->world().SetResource(Free{1}); }); });
+    CHECK_MESSAGE(!asserted, "[ks-s10-unbound-free] J-6: a worker's put-in of a resource that is not thread-bound asserted");
+    bool here = Asserts([&] {
+        static_cast<void>(rig->world().Resource<Free>());
+        rig->world().SetResource(Free{2});
+        static_cast<void>(rig->world().Summary());
+    });
+    CHECK_MESSAGE(!here, "[ks-s10-unbound-free] J-6: reading, overwriting or summarizing on this thread a resource a worker put in asserted");
+    bool removed = false;
+    worker.Do([&] { removed = Asserts([&] { rig->world().RemoveResource<Free>(); rig->world().SetResource(Free{3}); }); });
+    CHECK_MESSAGE(!removed, "[ks-s10-unbound-free] J-6: a worker's removal and put-in of a resource this thread wrote asserted");
+    // Destroying the World checks every thread-bound value: only when nothing asserted is it safe here.
+    if (asserted || here || removed) static_cast<void>(rig.release());
+}
+
+TEST_CASE("J-6: the thread mark is not World data: the same value put in on two threads gives one summary") {
+    std::unique_ptr<Rig> here = BoundRig(nullptr);
+    std::unique_ptr<Rig> there = BoundRig(nullptr);
+    here->world().SetResource(Bound{7});
+    const std::string hereSummary = here->world().Summary().Text();
+    Worker worker;
+    std::string thereSummary;
+    worker.Do([&] {
+        there->world().SetResource(Bound{7});
+        thereSummary = there->world().Summary().Text();
+    });
+    CHECK_MESSAGE(hereSummary == thereSummary,
+                  "[ks-s10-mark-not-data] J-6: two Worlds with the same value put in on two threads have different summaries");
+    worker.Do([&] { there.reset(); });
 }
 
 // ---- J-26 (X-1)

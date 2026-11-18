@@ -7,6 +7,7 @@
 #include "engine/kernel/detail/RegistryData.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/IdIssuer.hpp"
 #include "engine/base/Sha256.hpp"
 
 #include <algorithm>
@@ -120,11 +121,11 @@ World::~World() {
 void World::CheckThread(ResourceId id) const {
     if (!data_->resources[id].threadBound) return;
     const Detail::ResourceBase& slot = *resources_[id];
-    GYO_ASSERT(slot.thread == nullptr || slot.thread == Detail::CurrentThreadToken());
+    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());
 }
 
 void World::BindThread(ResourceId id) {
-    if (data_->resources[id].threadBound) resources_[id]->thread = Detail::CurrentThreadToken();
+    if (data_->resources[id].threadBound) resources_[id]->thread = Engine::Base::CurrentThreadSerial();
 }
 
 // ---- Public reads and Host writes
@@ -765,7 +766,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                 BindThread(op->id);
             } else {
                 slot.Reset();
-                slot.thread = nullptr;
+                slot.thread = 0;
             }
             slot.changed = stamp;
         }

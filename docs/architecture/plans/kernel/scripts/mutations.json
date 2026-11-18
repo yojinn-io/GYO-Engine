@@ -4474,10 +4474,10 @@
     },
     {
       "id": "we-sym-tlcurrent-renamed",
-      "what": "judgement 6: tlCurrent is renamed, so the required allowed symbol is missing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts) (find and replace extended to CurrentThreadToken by v8-arch-gyo2-kernel-subtract-structure)",
+      "what": "judgement 6: tlCurrent is renamed, so the required allowed symbol is missing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts) (S10's CurrentThreadToken was added and removed again in v8-arch-gyo2-kernel-subtract-structure)",
       "file": "engine/kernel/src/Verification.cpp",
-      "find": "thread_local SystemContext* tlCurrent = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrent;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrent = call;\n}\n\nconst void* CurrentThreadToken() noexcept {\n    return &tlCurrent;\n}",
-      "replace": "thread_local SystemContext* tlCurrentCall = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrentCall;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrentCall = call;\n}\n\nconst void* CurrentThreadToken() noexcept {\n    return &tlCurrentCall;\n}",
+      "find": "thread_local SystemContext* tlCurrent = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrent;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrent = call;\n}",
+      "replace": "thread_local SystemContext* tlCurrentCall = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrentCall;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrentCall = call;\n}",
       "target": "gyo_kernel",
       "command": [
         "{python}",
@@ -6922,7 +6922,7 @@
       "id": "ks-s10-thread-unchecked",
       "what": "S10: a thread-bound resource is not compared with the touching thread (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (expect names a touch: v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "    GYO_ASSERT(slot.thread == nullptr || slot.thread == Detail::CurrentThreadToken());",
+      "find": "    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());",
       "replace": "    static_cast<void>(slot);",
       "target": "gyo_kernel_tests",
       "expect": "J\\-6 thread\\-bound: World::Resource on another thread did not assert",
@@ -6952,7 +6952,7 @@
       "id": "ks-s10-bind-skipped",
       "what": "S10: putting a value in does not record the thread (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (expect names a touch: v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "    if (data_->resources[id].threadBound) resources_[id]->thread = Detail::CurrentThreadToken();",
+      "find": "    if (data_->resources[id].threadBound) resources_[id]->thread = Engine::Base::CurrentThreadSerial();",
       "replace": "    static_cast<void>(id);",
       "target": "gyo_kernel_tests",
       "expect": "J\\-6 thread\\-bound: Res in a System on another thread did not assert",
@@ -6962,7 +6962,7 @@
       "id": "ks-s10-remove-keeps-thread",
       "what": "S10: removing the value does not forget the thread (the worker's put-in then fails the assertion on the worker, which aborts) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (expect is the case's own check: v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/kernel/include/engine/kernel/World.hpp",
-      "find": "        TypedResource<T>(resource).thread = nullptr;\n",
+      "find": "        TypedResource<T>(resource).thread = 0;\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "expect": "\\[ks\\-s10\\-thread\\-forgotten\\]",
@@ -8132,7 +8132,7 @@
       "id": "ks-s6-sync-remove-keeps-thread",
       "what": "S10: a removal at the resource step (a sync point, or ExclusiveWorld now) does not forget the thread (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "                slot.Reset();\n                slot.thread = nullptr;",
+      "find": "                slot.Reset();\n                slot.thread = 0;",
       "replace": "                slot.Reset();",
       "target": "gyo_kernel_tests",
       "cases": "J-6: a thread-bound resource taken out*",
@@ -8380,10 +8380,10 @@
     },
     {
       "id": "ks-s10-one-token-for-all-threads",
-      "what": "S10: every thread has the same token (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/kernel/src/Verification.cpp",
-      "find": "    return &tlCurrent;",
-      "replace": "    static const int same = 0;\n    return &same;",
+      "what": "S10: every thread has the same serial (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2; moved to Engine::Base::CurrentThreadSerial by the S10 fix)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    return Detail::threadSerial;\n}",
+      "replace": "    return 1;\n}",
       "target": "gyo_kernel_tests",
       "cases": "J-6: a thread-bound resource touched*",
       "expect": "J\\-6 thread\\-bound: .* on another thread did not assert"
@@ -8597,6 +8597,403 @@
       "target": "gyo_kernel_tests",
       "expect": "enumeration value 'DE8' not handled in switch|DE8.*not handled|C4062",
       "expect_build_failure": true
+    },
+    {
+      "id": "bs-id-issuer-no-advance",
+      "what": "IdIssuer::Next does not advance, so it hands one number out again (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "        const std::uint64_t id = next_.fetch_add(1, std::memory_order_relaxed);",
+      "replace": "        const std::uint64_t id = next_.load(std::memory_order_relaxed);",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: numbers start at 1*",
+      "expect": "\\[id\\-issuer\\-repeat\\]"
+    },
+    {
+      "id": "bs-id-issuer-one-source-for-all",
+      "what": "every IdIssuer shares one counter, so a second issuer continues the first one's numbers (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    std::atomic<std::uint64_t> next_{1};",
+      "replace": "    static inline constinit std::atomic<std::uint64_t> next_{1};",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: two issuers*",
+      "expect": "\\[id\\-issuer\\-shared\\]"
+    },
+    {
+      "id": "bs-id-issuer-not-atomic",
+      "what": "IdIssuer::Next reads and writes the counter in two steps, so two threads can take one number (probabilistic: 8 threads x 10000) (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "        const std::uint64_t id = next_.fetch_add(1, std::memory_order_relaxed);",
+      "replace": "        const std::uint64_t id = next_.load(std::memory_order_relaxed);\n        next_.store(id + 1, std::memory_order_relaxed);",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: Next() from several threads*",
+      "expect": "\\[id\\-issuer\\-race\\]"
+    },
+    {
+      "id": "bs-thread-serial-not-kept",
+      "what": "CurrentThreadSerial takes a new number on every call instead of keeping the thread's first one (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial;",
+      "replace": "    return Detail::threadSerials.Next();",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: the same number on one thread*",
+      "expect": "\\[thread\\-serial\\-changes\\]"
+    },
+    {
+      "id": "bs-thread-serial-issuer-per-thread",
+      "what": "the thread serials come from an issuer of each thread's own, so every thread gets 1 and a later thread repeats an earlier one's number (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "inline constinit IdIssuer threadSerials;",
+      "replace": "inline constinit thread_local IdIssuer threadSerials;",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: a thread started after another ended*",
+      "expect": "\\[thread\\-serial\\-reused\\]"
+    },
+    {
+      "id": "ks-s10-kernel-own-thread-serial",
+      "what": "the kernel keeps a thread serial of its own: kernel_symbols allows only Base's two names as foreign, not the same name in GYO::Kernel (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/kernel/src/Verification.cpp",
+      "find": "thread_local SystemContext* tlCurrent = nullptr;\n",
+      "replace": "thread_local SystemContext* tlCurrent = nullptr;\nthread_local std::uint64_t threadSerial = 0;\nstd::uint64_t* KeepThreadSerial() noexcept { return &threadSerial; }\n",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor",
+        "--require",
+        "tlCurrent"
+      ],
+      "expect": "writable data symbol not allowed: GYO::Kernel::Detail::threadSerial",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "bs-thread-serial-is-tls-address",
+      "what": "CurrentThreadSerial returns the address of the thread_local (the bug S10 fixes: macOS hands a ended thread's storage to a new thread) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial;",
+      "replace": "    return static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(&Detail::threadSerial));",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: a thread started after another ended*",
+      "expect": "\\[thread\\-serial\\-reused\\]"
+    },
+    {
+      "id": "bs-thread-serial-not-thread-local",
+      "what": "the serial is one variable for the process, not thread_local: every thread gets the first asker's number (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "inline constinit thread_local std::uint64_t threadSerial = 0;",
+      "replace": "inline constinit std::uint64_t threadSerial = 0;",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: a thread started after another ended*",
+      "expect": "\\[thread\\-serial\\-reused\\]"
+    },
+    {
+      "id": "bs-id-issuer-starts-at-zero",
+      "what": "IdIssuer starts at 0 and Next() does not assert: 0 is handed out (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure) (the assertion alone, for the 2^64-th number, is not reachable by a test: no mutant for it)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "        GYO_ASSERT(id != 0);\n        return id;\n    }\n\nprivate:\n    std::atomic<std::uint64_t> next_{1};",
+      "replace": "        return id;\n    }\n\nprivate:\n    std::atomic<std::uint64_t> next_{0};",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: numbers start at 1*",
+      "expect": "\\[id\\-issuer\\-zero\\]"
+    },
+    {
+      "id": "bs-id-issuer-starts-at-two",
+      "what": "IdIssuer starts at 2 (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    std::atomic<std::uint64_t> next_{1};",
+      "replace": "    std::atomic<std::uint64_t> next_{2};",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: numbers start at 1*",
+      "expect": "\\[id\\-issuer\\-first\\]"
+    },
+    {
+      "id": "bs-thread-serial-first-zero",
+      "what": "the first thread to ask gets serial 0 (the issuer's number minus 1) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "Detail::threadSerial = Detail::threadSerials.Next();",
+      "replace": "Detail::threadSerial = Detail::threadSerials.Next() - 1;",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: the same number on one thread*",
+      "expect": "\\[thread\\-serial\\-zero\\]"
+    },
+    {
+      "id": "bs-thread-serial-later-zero",
+      "what": "a thread that is not the first to ask gets 0: only the main thread's serial is checked against 0 (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial;",
+      "replace": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial == 5 ? 0 : Detail::threadSerial;",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: a thread started after another ended*",
+      "expect": "\\[thread\\-serial\\-zero\\] round"
+    },
+    {
+      "id": "ks-s10-check-ge",
+      "what": "CheckThread passes when the bound serial is larger than the touching thread's (a later thread's resource touched by an earlier thread) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());",
+      "replace": "    GYO_ASSERT(slot.thread == 0 || slot.thread >= Engine::Base::CurrentThreadSerial());",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "J\\-6 thread\\-bound: .* on another thread did not assert"
+    },
+    {
+      "id": "ks-s10-check-le",
+      "what": "CheckThread passes when the bound serial is smaller than the touching thread's (an earlier thread's resource touched by a later thread); judged by the J-6 doctest cases as ctest runs them (kernel.J-6) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());",
+      "replace": "    GYO_ASSERT(slot.thread == 0 || slot.thread <= Engine::Base::CurrentThreadSerial());",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6: the other direction*",
+      "expect": "\\[ks\\-s10\\-later\\-thread\\]"
+    },
+    {
+      "id": "ks-s10-every-resource-bound",
+      "what": "CheckThread and BindThread ignore ResourceOptions::threadBound: every resource is bound to the thread that put it in (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (!data_->resources[id].threadBound) return;\n    const Detail::ResourceBase& slot = *resources_[id];\n    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());\n}\n\nvoid World::BindThread(ResourceId id) {\n    if (data_->resources[id].threadBound) resources_[id]->thread = Engine::Base::CurrentThreadSerial();",
+      "replace": "    const Detail::ResourceBase& slot = *resources_[id];\n    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());\n}\n\nvoid World::BindThread(ResourceId id) {\n    resources_[id]->thread = Engine::Base::CurrentThreadSerial();",
+      "target": "gyo_kernel_tests",
+      "expect": "\\[ks\\-s10\\-unbound\\-free\\]",
+      "cases": "J-6: a resource not marked threadBound*"
+    },
+    {
+      "id": "ks-s10-mark-in-summary",
+      "what": "World::Summary writes the thread mark of a thread-bound resource that holds a value: the summary then depends on the order threads asked for their serial (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        out.U8(resources_[r]->Present() ? 1U : 0U);",
+      "replace": "        out.U8(resources_[r]->Present() ? 1U : 0U);\n        if (resources_[r]->thread != 0) out.U64(resources_[r]->thread);",
+      "target": "gyo_kernel_tests",
+      "expect": "\\[ks\\-s10\\-mark\\-not\\-data\\]",
+      "cases": "J-6: the thread mark is not World data*"
+    },
+    {
+      "id": "ks-s10-kernel-own-issuer",
+      "what": "the kernel keeps an issuer-named variable of its own (GYO::Kernel::Detail::threadSerials): not Base's foreign name (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/Verification.cpp",
+      "find": "thread_local SystemContext* tlCurrent = nullptr;\n",
+      "replace": "thread_local SystemContext* tlCurrent = nullptr;\nstd::uint64_t threadSerials = 1;\nstd::uint64_t* KeepThreadSerials() noexcept { return &threadSerials; }\n",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor",
+        "--require",
+        "tlCurrent"
+      ],
+      "expect": "writable data symbol not allowed: GYO::Kernel::Detail::threadSerials",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "ks-s10-k4-kernel-own-thread-serial",
+      "what": "declaration 14.5 point 4: a thread_local serial of the kernel's own in kernel source is reported by kernel_guard K4 (the same change as ks-s10-kernel-own-thread-serial, judged by the text guard) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/Verification.cpp",
+      "find": "thread_local SystemContext* tlCurrent = nullptr;\n",
+      "replace": "thread_local SystemContext* tlCurrent = nullptr;\nthread_local std::uint64_t threadSerial = 0;\nstd::uint64_t* KeepThreadSerial() noexcept { return &threadSerial; }\n",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ],
+      "expect": "K4 thread_local[^\\n]*threadSerial"
+    },
+    {
+      "id": "ks-s10-sym-issuer-any-namespace",
+      "what": "FOREIGN: threadSerials is foreign in any namespace (the kernel's own GYO::Kernel::Detail::threadSerials would pass) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "re.compile(r\"^Engine::Base::Detail::threadSerials$\")",
+      "replace": "re.compile(r\"^(?:\\w+::)*threadSerials$\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_lookalikes_of_allowed_names_are_found"
+    },
+    {
+      "id": "ks-s10-sym-serial-nested-namespace",
+      "what": "FOREIGN: threadSerial is foreign in any namespace under Engine::Base::Detail (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "re.compile(r\"^Engine::Base::Detail::threadSerial$\")",
+      "replace": "re.compile(r\"^Engine::Base::Detail::(?:\\w+::)*threadSerial$\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_lookalikes_of_allowed_names_are_found"
+    },
+    {
+      "id": "ks-s10-sym-serial-one-more-char",
+      "what": "FOREIGN: threadSerial plus any one character is foreign (threadSerialX) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "re.compile(r\"^Engine::Base::Detail::threadSerial$\")",
+      "replace": "re.compile(r\"^Engine::Base::Detail::threadSerial.?$\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_lookalikes_of_allowed_names_are_found"
+    },
+    {
+      "id": "ks-s10-sym-serial-other-root",
+      "what": "FOREIGN: threadSerial is foreign under any root namespace's Base::Detail (GYO::Base::Detail::threadSerial) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "re.compile(r\"^Engine::Base::Detail::threadSerial$\")",
+      "replace": "re.compile(r\"^\\w+::Base::Detail::threadSerial$\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_lookalikes_of_allowed_names_are_found"
+    },
+    {
+      "id": "ks-s10-sym-serial-pattern-dead",
+      "what": "FOREIGN: the thread serial's pattern matches nothing; the self-test has no nm line with Base's two names, so only the run on the real library can tell (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "re.compile(r\"^Engine::Base::Detail::threadSerial$\")",
+      "replace": "re.compile(r\"^Engine::Base::Detail::threadSerialNever$\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_base_thread_serials_are_foreign_in_both_formats"
+    },
+    {
+      "id": "ks-s10-sym-serial-pattern-dead-real",
+      "what": "FOREIGN: the thread serial's pattern matches nothing, judged on the real library (kernel.symbols) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "re.compile(r\"^Engine::Base::Detail::threadSerial$\")",
+      "replace": "re.compile(r\"^Engine::Base::Detail::threadSerialNever$\")",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor",
+        "--require",
+        "tlCurrent"
+      ],
+      "expect": "writable data symbol not allowed: Engine::Base::Detail::threadSerial\\n",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "ks-s10-sym-issuer-pattern-dead-real",
+      "what": "FOREIGN: the issuer's pattern matches nothing, judged on the real library (kernel.symbols) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "re.compile(r\"^Engine::Base::Detail::threadSerials$\")",
+      "replace": "re.compile(r\"^Engine::Base::Detail::threadSerialsNever$\")",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor",
+        "--require",
+        "tlCurrent"
+      ],
+      "expect": "writable data symbol not allowed: Engine::Base::Detail::threadSerials\\n",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "ns-rebase-no-retake-on-throw",
+      "what": "A.6: after a nested run, fresh snapshots only when no exception is leaving (the path the added J-56 case names) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (world_.verification_) world_.TakeSnapshots();\n",
+      "replace": "            if (world_.verification_ && std::uncaught_exceptions() == 0) world_.TakeSnapshots();\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the inner schedule writes an event and throws*",
+      "expect": "\\[ns\\-throw\\-event\\-blame\\]"
+    },
+    {
+      "id": "ns-rebase-no-retake-names-ping",
+      "what": "probe of the added J-56 case, expect corrected after reading the first probe's output (the blamed storage is on a later line of the logged text) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (world_.verification_) world_.TakeSnapshots();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-56: the inner schedule writes an event and throws*",
+      "expect": "\\[ns\\-throw\\-event\\-blame\\][\\s\\S]*'event Ping' changed during System 'Driver'"
     }
   ]
 }

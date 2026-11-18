@@ -155,11 +155,6 @@ struct SystemContext {
 // set and cleared by the Executor around every System and hook call.
 [[nodiscard]] SystemContext* CurrentThreadCall() noexcept;
 void SetCurrentThreadCall(SystemContext* call) noexcept;
-// This thread's identity for a thread-bound resource (DI-KS 14): the address of
-// tlCurrent, different on every thread that is alive. A thread that has ended
-// may hand its address to a new one, which is then not told apart (a declared
-// limit). No <thread> in the kernel (kernel_guard K3).
-[[nodiscard]] const void* CurrentThreadToken() noexcept;
 
 // Sets tlCurrent for one call and restores the previous value on exit, also
 // when the call throws (spec E.5: the Executor does not catch).

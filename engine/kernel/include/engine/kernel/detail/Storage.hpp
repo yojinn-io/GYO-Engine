@@ -150,8 +150,8 @@ public:
 
     ChangeStamp changed = 0;
     // A thread-bound resource (ResourceOptions::threadBound): the thread its
-    // value was put in on (Detail::CurrentThreadToken), or nullptr with no value.
-    const void* thread = nullptr;
+    // value was put in on (Engine::Base::CurrentThreadSerial), or 0 with no value.
+    std::uint64_t thread = 0;
 
 protected:
     ResourceBase() = default;

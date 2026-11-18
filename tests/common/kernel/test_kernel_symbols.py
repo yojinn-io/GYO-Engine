@@ -136,10 +136,29 @@ class Classification(unittest.TestCase):
             "GYO::Kernel::Detail::tlCurrent|0000000000000000|   b  |               TLS|0000000000000008|     |.tbss")))
         self.assertEqual(present, {"TypeKey anchor", "tlCurrent"})
 
-    def test_allowlist_is_exactly_two_kernel_names_and_two_foreign_names(self):
+    def test_allowlist_is_exactly_two_kernel_names_and_four_foreign_names(self):
         self.assertEqual(set(guard.KERNEL_ALLOWED), {"TypeKey anchor", "tlCurrent"})
-        self.assertEqual(set(guard.FOREIGN), {"GYO::Base assertion handler", "GYO::Base assertion reentry flag"})
+        self.assertEqual(set(guard.FOREIGN), {"GYO::Base assertion handler", "GYO::Base assertion reentry flag",
+                                              "GYO::Base thread serial issuer", "GYO::Base thread serial"})
         self.assertEqual(set(guard.TOOLCHAIN), {"GCC personality reference", "assembler section label"})
+
+    def test_base_thread_serials_are_foreign_in_both_formats(self):
+        # Base's IdIssuer.hpp: the issuer is ordinary data, the serial a thread_local (S10 of
+        # v8-arch-gyo2-kernel-subtract-structure). Both names reach the kernel library through
+        # CurrentThreadSerial(); here they are seen as foreign on every platform, Windows included.
+        _, foreign = self.assert_clean(guard.parse_sysv(sysv_with(
+            "Engine::Base::Detail::threadSerials|0000000000000000|   u  |            OBJECT|0000000000000008|     |"
+            ".data._ZN6Engine4Base6Detail13threadSerialsE",
+            "Engine::Base::Detail::threadSerial|0000000000000000|   u  |               TLS|0000000000000008|     |"
+            ".tbss._ZN6Engine4Base6Detail12threadSerialE")), "sysv")
+        self.assertIn("Engine::Base::Detail::threadSerials", foreign)
+        self.assertIn("Engine::Base::Detail::threadSerial", foreign)
+        _, foreign = self.assert_clean(guard.parse_darwin(darwin_with(
+            "0000000000018e58 (__DATA,__data) weak external Engine::Base::Detail::threadSerials",
+            "0000000000018e38 (__DATA,__thread_vars) weak external Engine::Base::Detail::threadSerial",
+            "00000000002c5340 (__DATA,__thread_bss) non-external Engine::Base::Detail::threadSerial$tlv$init")), "darwin")
+        self.assertIn("Engine::Base::Detail::threadSerials", foreign)
+        self.assertIn("Engine::Base::Detail::threadSerial", foreign)
 
     def test_lookalikes_of_allowed_names_are_found(self):
         for name in ("GYO::Kernel::Detail::TypeKeyOf<int>::typeKeyAnchorCopy",
@@ -147,7 +166,15 @@ class Classification(unittest.TestCase):
                      "Other::Detail::TypeKeyOf<int>::typeKeyAnchor",
                      "GYO::Kernel::tlCurrentCopy",
                      "Engine::Base::Detail::assertionHandlerCopy",
-                     "Engine::Base::Detail::logHandler"):
+                     "Engine::Base::Detail::logHandler",
+                     "GYO::Kernel::Detail::threadSerial",
+                     "GYO::Kernel::Detail::threadSerials",
+                     "Engine::Base::threadSerial",
+                     "Engine::Base::threadSerials",
+                     "Engine::Base::Detail::threadSerialsCopy",
+                     "Engine::Base::Detail::threadSerialX",
+                     "Engine::Base::Detail::Inner::threadSerial",
+                     "GYO::Base::Detail::threadSerial"):
             with self.subTest(name=name):
                 self.assert_found({name}, name)
 

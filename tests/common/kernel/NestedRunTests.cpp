@@ -1596,6 +1596,10 @@ TEST_CASE("J-56: the inner schedule writes an event and throws, the outer System
     REQUIRE_MESSAGE(Logged("caught"), "[ns-throw-event] the outer System did not catch: " << Joined());
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::NestedRunAborted), "[ns-throw-event] " << result.error().Text());
     CHECK_MESSAGE(!result.error().Has(KernelErrorCode::BoundaryChange), "[ns-throw-event-blame] " << result.error().Text());
+    // The Ping is in the buffer: the case would pass for nothing if the write were dropped.
+    const auto& pings = PingBuffer(rig->world()).records;
+    CHECK_MESSAGE(std::any_of(pings.begin(), pings.end(), [](const auto& record) { return record.payload.n == 55; }),
+                  "[ns-throw-event-written] the inner System's Ping is not in the buffer");
 }
 
 TEST_CASE("J-56: refused, swallowed, then a valid schedule in the same System: it does not run and the left error comes back") {
