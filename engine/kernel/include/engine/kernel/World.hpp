@@ -353,6 +353,7 @@ private:
     friend std::vector<ComponentId> Detail::SetMembersOf(const World&, TypeKey);
     friend void Detail::Push(Detail::SystemContext&, Detail::Record);
     friend KernelError Detail::CallError(Detail::SystemContext&, KernelErrorCode, std::string, std::string);
+    friend KernelError Detail::CallerError(Detail::SystemContext&, KernelErrorCode, std::string, std::string);
     friend std::uint64_t Detail::CurrentSyncEpoch(const World&) noexcept;
     friend ChangeStamp Detail::NextStamp(World&) noexcept;
     friend Detail::ResourceBase* Detail::AllotterSlot(World&) noexcept;

@@ -80,6 +80,12 @@ enum class KernelErrorCode : std::uint8_t {
     DynamicInsertRefused,
     // The codes below come with ExclusiveWorld's immediate structural changes
     // (declaration v8-arch-gyo2-kernel-subtract-structure 3.5; DI-KS 18, 21).
+    // ExclusiveWorld::Spawn: the id the World's allotter gave is alive. Nothing
+    // is spawned and the spawn is recorded as a RejectedSpawn (spec F-13,
+    // fromAllotter). Returned to the System only: like a spawn dropped at a sync
+    // point it is no error of the Run (it is not added to the call's errors), and
+    // the World is not interrupted.
+    AllottedIdAlive,
     // ExclusiveWorld::Spawn with no allotter declared (D-E3 cannot see at
     // startup that an exclusive System spawns). The change is not made and the
     // call goes on; the Run ends in this Err when the System returns (DI-KS 2).

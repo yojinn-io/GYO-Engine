@@ -381,6 +381,14 @@ KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rul
     return error;
 }
 
+KernelError CallerError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message) {
+    KernelError error(code, std::move(message));
+    error.rule = std::move(rule);
+    error.world = call.world->name_;
+    error.Wrap(CallText(call));
+    return error;
+}
+
 std::uint64_t CurrentSyncEpoch(const World& world) noexcept {
     return world.syncEpoch_;
 }

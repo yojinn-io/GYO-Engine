@@ -8150,13 +8150,13 @@
     },
     {
       "id": "ks-s5-spawn-alive-id-returned",
-      "what": "S5 (S1): ExclusiveWorld::Spawn returns the allotter's id when the spawn was dropped (the id is another entity's) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
+      "what": "S5 (S1): ExclusiveWorld::Spawn returns the allotter's id when the spawn was dropped (the id is another entity's) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2) (user decision 2026-11-18: Err, not an empty id; v8-arch-gyo2-kernel-subtract-structure)",
       "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "        if (done->rejected) return std::optional<EntityId>{};\n",
+      "find": "        if (done->rejected) {\n            return Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",\n                                                         \"the allotter gave id \" + std::to_string(done->entity) +\n                                                             \", which is alive: nothing spawned, recorded as a RejectedSpawn\"));\n        }\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive*",
-      "expect": "\\[ks\\-s5\\-spawn\\-alive\\-empty\\]"
+      "expect": "\\[ks\\-s5\\-spawn\\-alive\\-err\\]"
     },
     {
       "id": "ks-s5-hook-context-sync-point",
@@ -9316,6 +9316,36 @@
         "-v"
       ],
       "expect": "FAIL: test_k8_comment_in_cmake_lists_is_clean"
+    },
+    {
+      "id": "ks-s5-spawn-alive-ends-run",
+      "what": "the AllottedIdAlive Err is recorded as the call's error, so the Run ends in it (user decision 2026-11-18: Err, not an empty id; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            return Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+      "replace": "            return Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive*",
+      "expect": "\\[ks\\-s5\\-spawn\\-alive\\-not\\-run\\-error\\]"
+    },
+    {
+      "id": "ks-s5-caller-error-recorded",
+      "what": "CallerError records its error in call.returned like CallError (user decision 2026-11-18: Err, not an empty id; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    error.Wrap(CallText(call));\n    return error;\n}\n\nstd::uint64_t CurrentSyncEpoch",
+      "replace": "    error.Wrap(CallText(call));\n    call.returned.push_back(error);\n    return error;\n}\n\nstd::uint64_t CurrentSyncEpoch",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive*",
+      "expect": "\\[ks\\-s5\\-spawn\\-alive\\-not\\-run\\-error\\]"
+    },
+    {
+      "id": "ks-s5-spawn-alive-other-code",
+      "what": "the dropped spawn comes back with another code (AllotterExhausted) (user decision 2026-11-18: Err, not an empty id; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "KernelErrorCode::AllottedIdAlive, \"F-13\",",
+      "replace": "KernelErrorCode::AllotterExhausted, \"F-13\",",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive*",
+      "expect": "\\[ks\\-s5\\-spawn\\-alive\\-err\\]"
     }
   ]
 }

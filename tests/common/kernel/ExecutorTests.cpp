@@ -774,10 +774,9 @@ SystemResult ExclusiveAllowed(ExclusiveWorld<> world) {
 SystemResult ExclusiveSpawns(ExclusiveWorld<> world) {
     auto id = world.Spawn(Tag{3});
     if (!id) return Engine::Base::Err(std::move(id).error());
-    if (!*id) return Ok();
-    auto tag = world.Read<Tag>(**id, [](const Tag& t) { return t.t; });
+    auto tag = world.Read<Tag>(*id, [](const Tag& t) { return t.t; });
     if (!tag) return Engine::Base::Err(std::move(tag).error());
-    Log().push_back("spawned " + std::to_string(**id) + " tag " + std::to_string(tag->value_or(-1)));
+    Log().push_back("spawned " + std::to_string(*id) + " tag " + std::to_string(tag->value_or(-1)));
     return Ok();
 }
 

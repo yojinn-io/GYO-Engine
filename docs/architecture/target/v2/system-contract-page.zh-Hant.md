@@ -413,7 +413,7 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 
 | 函式 | 回傳 | 說明 |
 |---|---|---|
-| `Spawn<C…>(值…)` | `Result<std::optional<EntityId>>` | id 由配發器發（同 `Spawn<Bundle<…>>`）；配發器發的 id 還活著時不生成、回傳沒有 id，並照第 10 節記一筆 `RejectedSpawn`（用配發器生成），手上不會拿到別人的 id；沒有宣告配發器是 `NoAllotter`，用完是 `AllotterExhausted`（這次不生成、呼叫繼續，System 回傳後這次 Run 以它結束） |
+| `Spawn<C…>(值…)` | `Result<EntityId>` | id 由配發器發（同 `Spawn<Bundle<…>>`）；配發器發的 id 還活著時不生成、回錯誤碼 `AllottedIdAlive`，並照第 10 節記一筆 `RejectedSpawn`（用配發器生成），手上不會拿到別人的 id；這個錯誤只交給你的 System，不算這次 Run 的錯誤、World 不中斷；沒有宣告配發器是 `NoAllotter`，用完是 `AllotterExhausted`（這次不生成、呼叫繼續，System 回傳後這次 Run 以它結束） |
 | `SpawnWithId<C…>(id, 值…)` | `Result<std::optional<SpawnRejectReason>>` | 沒有東西表示生成了；不能生成（id 在這個 World 的配發範圍、或還活著）時不生成、回傳理由，並照第 10 節記一筆 `RejectedSpawn` |
 | `Insert<T>(id, 值)` | `Result<bool>` | 加上或蓋過；實體不在時不插入、回 false，也計入 `DroppedMissingEntity` |
 | `Remove<T>(id)` | `Result<bool>` | 先跑 OnRemove 再拿掉；沒有那個元件回 false |

@@ -130,11 +130,10 @@ SystemResult SpawnNow(ExclusiveWorld<> world) {
     Log().push_back("stamp " + std::to_string(Current().stamp));
     auto id = world.Spawn(Hp{5});
     if (!id) return Engine::Base::Err(std::move(id).error());
-    if (!*id) return Ok();
-    auto hp = world.Read<Hp>(**id, [](const Hp& h) { return h.v; });
-    auto shield = world.Read<Shield>(**id, [](const Shield& s) { return s.v; });
+    auto hp = world.Read<Hp>(*id, [](const Hp& h) { return h.v; });
+    auto shield = world.Read<Shield>(*id, [](const Shield& s) { return s.v; });
     if (!hp || !shield) return Ok();
-    Log().push_back("spawned " + std::to_string(**id) + " hp " + std::to_string(hp->value_or(-1)) + " shield " +
+    Log().push_back("spawned " + std::to_string(*id) + " hp " + std::to_string(hp->value_or(-1)) + " shield " +
                     std::to_string(shield->value_or(-1)));
     return Ok();
 }
@@ -254,12 +253,12 @@ SystemResult LogsLater(Query<Read<Pos>>) {
 
 // ---- Spawn when the allotter's id is alive (declaration 3.5 table; F-13)
 
-std::string Spawned(const std::optional<EntityId>& id) { return id ? "spawned " + std::to_string(*id) : std::string("not spawned"); }
+// The first Spawn gets the live id 100 (an Err for the System only, which goes
+// on); the second gets 101. The System returns Ok whatever the first gave.
 SystemResult SpawnsOverAlive(ExclusiveWorld<> world) {
     for (int i = 0; i < 2; ++i) {
         auto id = world.Spawn(Hp{5});
-        if (!id) return Engine::Base::Err(std::move(id).error());
-        Log().push_back(Spawned(*id));
+        Log().push_back(id ? "spawned " + std::to_string(*id) : "refused " + Code(id.error()));
     }
     return Ok();
 }
@@ -647,16 +646,19 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
     }
 }
 
-TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive spawns nothing, returns no id and is recorded") {
+TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive spawns nothing, returns Err AllottedIdAlive to the System only and is recorded") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r, true);
         r.AddSystem<&SpawnsOverAlive>(B("Driver", "A"));
     });
     rig->world().SetResource(RangeAllotter::Of(100, 199));
     rig->world().Insert(100, Tag{1});
-    KERNEL_REQUIRE_RUN_OK(rig->Run());
-    CHECK_MESSAGE(Joined() == "not spawned | add Hp 101 | spawned 101", "[ks-s5-spawn-alive-empty] " << Joined());
-    CHECK_MESSAGE(rig->world().Get<Hp>(100) == nullptr, "[ks-s5-spawn-alive-empty] Hp went onto the live entity 100");
+    const auto result = rig->Run();
+    CHECK_MESSAGE(static_cast<bool>(result), "[ks-s5-spawn-alive-not-run-error] the Run ended in the System-only Err: " << Text(result));
+    CHECK_MESSAGE(rig->recorded.empty(), "[ks-s5-spawn-alive-not-run-error] the error handler got " << rig->recorded.size());
+    CHECK_MESSAGE(rig->world().State() != WorldState::Interrupted, "[ks-s5-spawn-alive-not-interrupted] the World was interrupted");
+    CHECK_MESSAGE(Joined() == "refused AllottedIdAlive | add Hp 101 | spawned 101", "[ks-s5-spawn-alive-err] " << Joined());
+    CHECK_MESSAGE(rig->world().Get<Hp>(100) == nullptr, "[ks-s5-spawn-alive-err] Hp went onto the live entity 100");
     const std::vector<RejectedSpawn> rejected = rig->world().Diagnostics<RejectedSpawn>();
     REQUIRE_MESSAGE(rejected.size() == 1, "[ks-s5-spawn-alive-recorded] " << rejected.size());
     CHECK(rejected[0].entity == 100);

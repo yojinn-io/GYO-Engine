@@ -31,6 +31,7 @@
 ## 停下的與待定的
 
 - **S10 三件使用者 2026-11-18「照建議」**：核准 FOREIGN 加 Base 的兩個名字、核准 DI-KS 14 改寫、Kernel 只准用 `CurrentThreadSerial`。S10 提交 e4074799；K8（`kernel_guard.py`）與 DI-KS 14 的條文在下一個提交。K8 的 §14.2 檢查（Fable 5.2／high）找到 19 處，建議的已補；kernel_guard 的突變 71 個全部殺掉；最後 ctest 98/98、守衛腳本 144 項、G-3 27 式 0 命中（`k8/`）。突變清單 → 802。
+- **當場 `Spawn<C…>` 遇到還活著的 id**：使用者 2026-11-18「參考Go的成功和錯誤回傳，不要回空」。回傳型別回到 `Result<EntityId, KernelError>`，回錯誤碼 `AllottedIdAlive`（新碼；只交給呼叫的 System，`Detail::CallerError` 不記進這次呼叫的錯誤，所以 Run 不以它結束、World 不中斷），`RejectedSpawn` 照舊記（比照同步點丟掉的生成，F-13）。DI-KS 18 的那一句、System 契約的說明頁、宣告第 3.5、14.2、15.5 節跟著改。測試改寫 1 案、加 3 個突變、更新 1 個，相關突變 52 個全部殺掉（`spawn-alive-err/`）。
 - **第二段核准**的材料整理在宣告第 15 節（判定 G-1～G-8 的狀態、九組的緩的面與 G-7、DI 守衛、DI 最終文字、實作中新出現的）。
 
 ## 證據

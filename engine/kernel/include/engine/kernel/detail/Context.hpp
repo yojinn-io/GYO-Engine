@@ -256,6 +256,10 @@ void Push(SystemContext& call, Record record);
 // the API to return as Err. Calls the World's break hook first when
 // breakOnKernelError is on (target/system-contract 2b).
 [[nodiscard]] KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message);
+// The same error with the same context, for the caller only: not recorded in
+// call.returned (so the Run does not end in it) and no break hook (it is no
+// kernel error, like a spawn a sync point drops: spec F-13).
+[[nodiscard]] KernelError CallerError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message);
 
 
 // The allotter resource of the World (spec A.1), or nullptr when none is declared.

@@ -166,7 +166,7 @@ struct WorldOptions { bool dynamicInsert = true; };      // World 建立時的�
 
 | 函式 | 回傳 | 說明 |
 |---|---|---|
-| `Spawn<C…>(C… values)` | `Result<EntityId, KernelError>` | id 由配發器發（同 `Spawn<Bundle<C…>>::New`；用完是 `AllotterExhausted`）；**沒有宣告配發器是 Err（新碼 `NoAllotter`）**——D-E3 在啟動時看不到 `ExclusiveWorld` 會生成（現在 `Detail::Allot` 是斷言，`World.cpp:427`）。取代現在一律回 Err 的 `Spawn()` |
+| `Spawn<C…>(C… values)` | `Result<EntityId, KernelError>` | id 由配發器發（同 `Spawn<Bundle<C…>>::New`；用完是 `AllotterExhausted`）；**沒有宣告配發器是 Err（新碼 `NoAllotter`）**——D-E3 在啟動時看不到 `ExclusiveWorld` 會生成（現在 `Detail::Allot` 是斷言，`World.cpp:427`）。取代現在一律回 Err 的 `Spawn()`。（實作補充：配發器發的 id 還活著時回 Err `AllottedIdAlive`，只交給呼叫的 System，見第 14.2 節） |
 | `SpawnWithId<C…>(EntityId, C…)` | `Result<std::optional<SpawnRejectReason>, KernelError>` | 不能生成時不生成、回傳理由，並照 F-13 記一筆 `RejectedSpawn`（記錄的地方與計數只有一處）。這一層記下、還沒套用的同一個 id 的生成，之後在同步點照 F-13 被丟成 `IdAlive` |
 | `Insert<T>(EntityId, T)` | `Result<bool, KernelError>` | 實體不在時不插入、回 false，同時照 F.2 第 5 步計入 `DroppedMissingEntity`（計數只有一處，所以兩邊都有，是刻意的） |
 | `Remove<T>(EntityId)` | `Result<bool, KernelError>` | — |
@@ -581,7 +581,7 @@ Replacement Criteria：
 | 當場套用時 hook 回 Err | World 中斷（同同步點） | 同上 |
 | 已中斷的 World 上當場改 | 不改、回傳留下的錯誤（同 `RunSchedule`） | 同上 |
 | 例外離開當場改（hook 或 `InitialValue` 的函式丟出、被獨占 System 接住） | World 立刻中斷，留一個錯誤（新碼 `ImmediateChangeAborted`）給最外層的 Run 回報一次；句子加進 DI-KS 18 | 段 3 複核的必改：原本會帶著改到一半的狀態繼續跑、hook 已記的變更靜靜丟掉。比照 K0 已核准的 X-16（DI-KS 17） |
-| 當場的 `Spawn<C…>` 拿到配發器給的、仍然活著的 id | 回傳型別改成 `Result<std::optional<EntityId>, KernelError>`：不生成、回傳空，照 F-13 記一筆 `RejectedSpawn` | 段 3 複核 S1：原本回傳那個 id，呼叫的人會拿著別的實體的 id。第 3.5 節的表原寫 `Result<EntityId, KernelError>` |
+| 當場的 `Spawn<C…>` 拿到配發器給的、仍然活著的 id | 回傳型別維持 `Result<EntityId, KernelError>`：不生成、回錯誤碼 `AllottedIdAlive`（只交給呼叫的 System，不記進這次呼叫的錯誤、Run 不以它結束、World 不中斷），照 F-13 記一筆 `RejectedSpawn` | 段 3 複核 S1：原本回傳那個 id，呼叫的人會拿著別的實體的 id。實作時先改成 `Result<std::optional<EntityId>, …>`、回傳空；**使用者 2026-11-18 定「參考Go的成功和錯誤回傳，不要回空」**（主會話轉交），改回錯誤碼。錯誤碼名字、不中斷、`RejectedSpawn` 照舊記，卡片照 L17 判（比照同步點丟掉的生成：F-13，不是 Run 的錯誤） |
 | 當場改的 `Insert` | 實體活著就回 true（蓋寫也算） | 段 3 實作者的判斷 |
 | 當場改觸發的 hook 出錯時的訊息 | 寫「step N（當場改）」，不寫「sync point step N」；`SystemContext` 加一個旗標 | 段 3 複核 S3 |
 | 第一輪的 `DiscardRegistrations` | 表重設成只剩 Kernel 自己的登記；Plugin 清單與 Extract 來源留著 | 段 2 實作者 |
@@ -640,7 +640,7 @@ Replacement Criteria：
 
 ## 15. 第二段核准的材料（合併前；照第 9 節）
 
-這一次請你核准三樣：第 5.1 節九組的緩的面、第 5.2 節裡 Design Invariants 的守衛各列、第 7 節的最終文字（現在 `target/kernel.zh-Hant.md` 的樣子，含第 14 節的偏差）。已經另外定過、不再問的：第 12 節四件（2026-11-17）、S10 三件（第 14.7 節）、兩個活下來的突變補測試（第 14.6 節）。被退回的組，合併前把那一組的改動撤回。
+這一次請你核准三樣：第 5.1 節九組的緩的面、第 5.2 節裡 Design Invariants 的守衛各列、第 7 節的最終文字（現在 `target/kernel.zh-Hant.md` 的樣子，含第 14 節的偏差）。已經另外定過、不再問的：第 12 節四件（2026-11-17）、S10 三件（第 14.7 節）、兩個活下來的突變補測試（第 14.6 節）、當場 `Spawn<C…>` 遇到活著的 id 回錯誤碼（2026-11-18，15.5）。被退回的組，合併前把那一組的改動撤回。
 
 ### 15.1 先宣告的判定
 
@@ -649,7 +649,7 @@ Replacement Criteria：
 | G-1 ctest | 本機（macOS arm64）`cpu|shader` 98/98 |
 | G-2 照表處置與 Red | 各段的 Red／Green 在證據的 `segment1/`～`segment3/`、`segment2-fix/`、`fix2/` |
 | G-3 掃描 0 命中 | 27 個式子 0 命中（每個先在 a08c16f6 命中過；最後一次在 K8 之後，`k8/g3-scan.log`） |
-| G-4 突變 | ac55aa12 完整跑一次 758 個殺 747；沒殺的 11 個在基準上分類：3 個基準就沒殺（不是這批造成，留作後續）、6 個改名讓它編不過（已修、殺掉）、2 個這批的設計讓它活下來（已補測試、殺掉）。之後的 S10、K8 相關突變全部殺掉。清單 624 → 802 |
+| G-4 突變 | ac55aa12 完整跑一次 758 個殺 747；沒殺的 11 個在基準上分類：3 個基準就沒殺（不是這批造成，留作後續）、6 個改名讓它編不過（已修、殺掉）、2 個這批的設計讓它活下來（已補測試、殺掉）。之後的 S10、K8 相關突變全部殺掉。清單 624 → 805 |
 | G-5 守衛腳本 | 全過（144 項） |
 | G-6 L1 三平台 | 等 PR |
 | G-7 §14.4 檢證 | Fable／high：沒有不成立的組，6 處文字更正（第 5.6 節）、1 個測試缺陷與 1 個指紋缺口已修 |
@@ -687,7 +687,7 @@ Replacement Criteria：
 | 項 | 做法 | 會不會改到已核准的能力 |
 |---|---|---|
 | 登記的前提 | 這份 Registry 有 World 正在跑（計數不是 0）時 `Register`／`BuildPlans`／`DiscardRegistrations` 是斷言 | 不會：規則 4 本來就規定登記和它的 World 的執行不重疊；計數不是原子的，跨執行緒只是盡力抓。要「多個 World 在不同執行緒共用一份 Registry、跑著時登記」得走 RC 17 |
-| 當場的 `Spawn<C…>` 拿到還活著的 id | 回傳 `Result<std::optional<EntityId>, KernelError>`：不生成、回傳空、記一筆 `RejectedSpawn` | 第 3.5 節原寫 `Result<EntityId, …>`；回傳型別變了 |
+| 當場的 `Spawn<C…>` 拿到還活著的 id | 回錯誤碼 `AllottedIdAlive`、不生成、記一筆 `RejectedSpawn`；錯誤只交給呼叫的 System（Run 不以它結束、World 不中斷） | 使用者 2026-11-18 已定（不要回空）；回傳型別照第 3.5 節原樣；DI-KS 18 的那一句照此改寫 |
 | 例外離開當場改 | World 立刻中斷，留一個錯誤給最外層的 Run | 比照 K0 已核准的 X-16 |
 | `StartupCode` 沒有文字 | 變成建置錯誤（`-Wswitch`／C4062） | 只收緊 |
 | 拿掉的 System | 留墓碑，不算進指紋 | 不會 |
