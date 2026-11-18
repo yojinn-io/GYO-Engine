@@ -46,7 +46,7 @@ Status: introduced by the [Assert/Result plan](plans/result-unification/README.m
 1. **Classify each failure in this order.**
    1. Does it mean the program is wrong? Use `GYO_ASSERT`.
    2. Can a correct program fail here because of external data or the environment? Return a `Result` at the *first* point that validates that data; later re-checks of already validated data go back to step 1.
-   3. Is it only "not there", with one obvious reason? Use `std::optional`.
+   3. Is it only "not there", with one obvious reason? Use `std::optional`. A call that was asked to do something and refused (an id still alive, a full table) is a failure, not absence: return a `Result` with a code, never an empty optional, a null id or another special value. After Go: `v, err` for failure, `v, ok` for absence (2026-11-18, `v8-arch-gyo2-failure-is-not-absence`).
    4. Are there several problems or warnings to report? Return diagnostics.
    5. Is it a normal outcome of game rules? Use a domain type.
 2. **Data-validation APIs (wide contracts) return Result.** Some engine APIs are themselves the first validation point for data that comes from content or callers' input, for example `RenderQueue::Submit` (which `UiRenderer::Submit` relies on for sprite rectangles) and the model animation API. Bad input there is a Runtime Error and they return a `Result` with an `InvalidArgument`-style code. The list taken at the start of the plan is in [wide_contract_sites.tsv](plans/result-unification/baseline/wide_contract_sites.tsv); its state checks (not initialized, null pointers) later became assertions under rule 3.
