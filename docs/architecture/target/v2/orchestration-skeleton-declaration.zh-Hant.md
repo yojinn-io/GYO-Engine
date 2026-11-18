@@ -1,8 +1,8 @@
 # 事前宣告：編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-更新：2026-11-18（修訂 1）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等第一段核准（方向與設計）；核准之前不改程式。**
+更新：2026-11-18（修訂 2）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等第一段核准（方向與設計）；核准之前不改程式。**
 
-經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。
+經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。修訂 2 收使用者對第 14 節第 3 件的決定（重跑登記），只改它牽連的地方。
 
 性質：實作批的事前宣告（AGENTS §3 的 Architecture Delta、§2 的基盤 Architecture、§14.4 的判定變更、Design Invariants 的變更）。實作段第 2 批。
 
@@ -27,7 +27,7 @@
 
 **單機 2D 橫版。** 產品的 `main` 只寫「用預設的 Module、加上我自己的遊戲、跑起來」。編排層照 Module 登記檔把每個 Module 與產品自己的遊戲程式接進主 World：先登記（build），Kernel 建 Plan，再 finish，最後跑選了的檢查；全部過了才建 World。runner 先跑遊戲初始化清單一次（讀按鍵設定；狀態機把「進入主選單」插在它後面），再每幀跑每幀的清單。現在的 Kernel 自己認得「開局」（`ScheduleOptions::startup`），這一批把它拿掉、搬到編排層（使用者 11-17「用Bevy的方式走，」）。
 
-**RPG 在遊戲中讀檔。** 玩家在第 3 關按「讀取存檔 2」。編排層建一個新的 World（第 14 節第 3 件：用同一份登記），在第一次跑它之前給作者一個時機：把配發器範圍的下界移到存檔記的下一號之後、放好暫存的存檔資料與金幣的預設值 0；接著在新 World 上跑作者的讀檔 schedule（`ExclusiveWorld` 當場照存檔編號放回玩家與物品、金幣改成 120）；**全部成功才換上**（第 14 節第 4 件），存檔壞了就丟掉新的、舊的照跑。遊戲初始化不再跑（它是行程一次）。按鍵設定是遊戲初始化放進主 World 的，玩家在選項選單裡還改過——主 World 換掉之後它怎麼辦，是第 14 節第 1 件。
+**RPG 在遊戲中讀檔。** 玩家在第 3 關按「讀取存檔 2」。編排層照產品描述重新登記、建一個新的 World（使用者 2026-11-18 定：讀檔就是回到某一刻的狀態，之前動態插入的 System 一律重置），在第一次跑它之前給作者一個時機：把配發器範圍的下界移到存檔記的下一號之後、放好暫存的存檔資料與金幣的預設值 0；接著在新 World 上跑作者的讀檔 schedule（`ExclusiveWorld` 當場照存檔編號放回玩家與物品、金幣改成 120）；**全部成功才換上**（第 14 節第 4 件），存檔壞了就丟掉新的、舊的照跑。遊戲初始化不再跑（它是行程一次）。按鍵設定是遊戲初始化放進主 World 的，玩家在選項選單裡還改過——主 World 換掉之後它怎麼辦，是第 14 節第 1 件。
 
 **將來的指令集。** 輸入一行指令加一個 System。World 宣告准許時，編排層走 Kernel 的兩步（登記、建 Plan），下一幀那個 System 就跑；宣告不准時（PvP 的 Match），插入被拒、回傳錯誤、**記一次警告**、遊戲照跑（使用者 11-17：「插入就拒絕，返回信息（不退出，但是System無法插入，日誌報警告）」）。第 1 批只做了 Kernel 那一半，警告沒人記（第 1 批宣告第 11 節），這一批補上。
 
@@ -53,7 +53,7 @@
 | O6 | 遊戲初始化清單（產品一份、跑在第一個 World、行程一次、在第一幀之前）與每幀的清單（每個 World 一份）；清單可以在指定的 schedule 前後插入 | `game-init-list`、`two-layers-like-bevy`；統合 O-1 |
 | O7 | runner 的介面（由登記單位在 `Configure` 裝、一個 `Product` 至多一個）與預設的「只跑一次」runner | `thread-binding-by-runner`；統合 O-3、第 8 節本批那一列 |
 | O8 | 準備時機：建 World 之後、第一次 Run 之前，依序呼叫登記單位與產品給的準備函式 | 讀檔宣告修訂 10、11（5.1、5.8）；統合修訂 33 |
-| O9 | 執行中替換 World：建新的、準備、在新 World 上跑「換上之前的 schedule」（讀檔）、全部成功才換上；遊戲初始化不重跑；中斷的 World 也能被換掉 | 讀檔宣告修訂 11（5.7、第 8 節） |
+| O9 | 執行中替換 World：照產品描述重新登記、建新的、準備、在新 World 上跑「換上之前的 schedule」（讀檔）、全部成功才換上；遊戲初始化不重跑；中斷的 World 也能被換掉 | 讀檔宣告修訂 11（5.7、第 8 節） |
 | O10 | 動態插入的編排半：插入入口；拒絕或建 Plan 失敗時回傳錯誤、經 `Engine::Base::Log` 記一次警告、World 照跑 | `dynamic-insert-per-world`；統合 L5；CCR-3 |
 | O11 | **同一批拿掉 Kernel 的開局排程**：`ScheduleOptions::startup`、D-E21、D-E12 的開局那一支、`StartupNotNestable`、`StartupRunning`、DI-KS 22、World 與 `WorldExecutor` 的開局狀態；J-58 改寫後搬到編排層 | 批次表第 2 條；統合 3.2 第 3 列、7.2 J-58 列 |
 | O12 | **同一批拿掉 Kernel 的登記單位**：`Plugin`、`FinishContext`（含 `InstallRunner`）、`Registry(std::vector<Plugin*>)`、`Registry::Finish()`、R-E1、R-E3、R-E6；Registry、Plan、C 指紋與 Plan 匯出格式改版、golden 重產 | 統合 3.2 第 1 列、7.2 J-19、J-24 列；第 1 批宣告 3.2 規則 9 |
@@ -66,7 +66,7 @@
 | 留下的 | 隨哪一批 |
 |---|---|
 | 生成世界（每個 World 各自、可以多次、可以分批）；讀檔 System 掛在生成世界的方式 | 第 5 條「生成世界（重做）」。它接在本批 `ReplaceWorld` 的「換上之前的 schedule」與啟動時的同一個位置（3.9） |
-| 多個 World 之間的交換點、extract 的時機（`SetExtractSource` 要在讀的那一份第一次建 Plan 之前設，`Product::Build` 第 3 步每個 World 新建 Registry 時留這個位置）、執行緒的安排 | 第 5 條「多個 World、交換點」 |
+| 多個 World 之間的交換點、extract 的時機（`SetExtractSource` 要在讀的那一份第一次建 Plan 之前設，`Product::Build` 第 3 步每個 World 新建 Registry 時留這個位置）、執行緒的安排；**替換 World 會重建它的 Registry**（3.9），以它為 extract 來源的 World 的處理（依賴它的一起重建，或改 Kernel 讓 extract 來源可以換）在第 5 條定 | 第 5 條「多個 World、交換點」 |
 | 每幀迴圈的 runner 與 System 端的請求通道（結束、替換 World、從指令插入；照 Bevy 的 `AppExit` 是一種訊息） | 第一個需要它的批。訊息在第 3 條改名 `Message`，先做會白改一次（3.9） |
 | 時鐘、`Domain`、tick | 第 3 條。之前遊戲初始化的 schedule 要屬於一個 domain（3.6） |
 | 寫者數量 D-E2、`Shared` | 第 4 條。之前遊戲初始化的 System 照樣算寫者（第 7.1 節組 E） |
@@ -290,12 +290,19 @@ struct ReplaceRequest {
 ```
 
 `Product::ReplaceWorld(name, request)`，只能在兩次 `Run` 之間呼叫（在任何一個 World 的 `Run` 裡是斷言；CCR-5）。**建議的順序（第 14 節第 4 件）**：
-1. 用**同一份 Registry**（第 14 節第 3 件）、同一份 `WorldOptions` 建新的 `WorldExecutor`。
+1. **照產品描述重新登記**（使用者 2026-11-18 定，第 14 節第 3 件）：新建一份 `Kernel::Registry`，對這個 World 走一次 3.4 第 3、4 步——用到的登記單位依序 `Build`、產品的 `build`、`BuildPlans`、依序 `Finish`、依序 `Check`、清單檢查；`Configure` 不重跑（它是產品層一次的，遊戲初始化清單與 runner 不變）。任何錯誤：回傳 `ReplaceRegistrationFailed`（帶這一輪的報告），舊的照跑。再用同一份 `WorldOptions` 建新的 `WorldExecutor`。之前在這個 World 動態插入的 System（不論來自指令或遊戲本身）**一律不在**新 World。
 2. 帶過去（第 14 節第 1 件，採用時）：把宣告要帶的 Resource 從舊 World **移**到新 World。
 3. 準備：登記單位的 → 描述的 → `extra`。
 4. 在新 World 上依序 `Run` `beforeSwap` 的每一張（遊戲初始化沒跑過時照 3.6 先跑它——只會在啟動之後立刻替換時發生）。
-5. 全部成功：銷毀舊的，新的放進同一個位置（同一個名字、同一份每幀清單、同一個錯誤處理器）；先前從 `Product::World(name)` 拿到的參照作廢（說明頁寫明）。**任何一步失敗或丟例外**：帶過去的移回舊 World、銷毀新的、舊的照跑、回傳 `ReplacePrepareFailed`／`ReplaceScheduleFailed`（或把例外往外傳）並記一次警告。
+5. 全部成功：銷毀舊的 `WorldExecutor`、再銷毀舊的 Registry，新的放進同一個位置（同一個名字、同一份描述的每幀清單、同一個錯誤處理器）；先前從 `Product::World(name)` 拿到的參照作廢（說明頁寫明）。**任何一步失敗或丟例外**：帶過去的移回舊 World、銷毀新的、舊的照跑、回傳 `ReplacePrepareFailed`／`ReplaceScheduleFailed`（或把例外往外傳）並記一次警告。
 6. 遊戲初始化**不重跑**（行程一次；第一個 World 被換掉也一樣）。中斷的 World 也能被換掉。
+
+**重新登記**（`v8-arch-gyo2-restore-reruns-registration`）：使用者：「讀檔應該只有一種解釋就是返回到某一時刻的狀態。」「乾脆讀檔就全部重來，也不管指令了，標準的回到某個狀態。作者想要測試，就自己設計測試流程來規避插入系統的重置。」——問到能不能分清指令輸入與遊戲中的設計（分不清：同一個插入入口，來源只能呼叫的人自己填；Bevy、flecs、Unity 都不分）之後：「對，分不清就別冒險，我們已經有入口了，用不用是作者的決定。」比過的：沿用同一份 Registry（本卡修訂 1 的建議）／重跑（flecs、Unity）←選／依來源分（指令保留並給還原指令、遊戲追加的還原；因分不清來源而不採）。
+- 「全部重來」只到這個 World 的登記（照產品描述），不是重開行程：遊戲初始化照舊只跑一次（第 14 節第 1 件照舊要定）。
+- 作者要讓插入的 System 跨過讀檔，就把「插了什麼」存成自己的資料、讀檔後再插一次（入口已有）。
+- 登記單位的 `Build`／`Finish`／`Check` 對同一個 World 名會再被呼叫：Module 以 World 名為鍵記的東西，在 `Build` 時重設（說明頁與 O-2 寫明）。
+- 代價：每次讀檔重跑這個 World 的所有 build、finish、check（含策略的檢查）；第 5 條的 extract 若以這個 World 的 Registry 為來源，Registry 重建後來源失效（2.2）。
+- 讀兩次相同（判定 2 案例 5）照舊成立：同一份描述重新登記，得到同樣的 id 與 Plan。
 
 **「經開局」對新 World 的意思**：`new-world-default` 的原話（11-16）是「建一個新的 World，經開局與 Loading，由作者的讀檔 System 把存檔內容放回」。當時「開局」是 Kernel 每個 World 一次的 Startup；之後 `game-init-list` 把它切成遊戲初始化（行程一次、第一個 World）與生成世界（每個 World 各自），讀檔宣告第 15 節的確認清單（使用者 2026-11-17 核准）寫明新 World 走生成世界、遊戲初始化不再跑。本批的讀法：**「經開局」＝經這個 World 的準備與生成世界，不經遊戲初始化**。生成世界之前（第 5 條），由 `beforeSwap` 代替。
 
@@ -309,6 +316,7 @@ struct ReplaceRequest {
 2. `registry.BuildPlans()`：失敗（例：R-E7）→ 記一次警告（帶 Kernel 的報告）、回傳 `InsertBuildFailed`；Registry 與 World 留在上一個版本（DI-KS 26）。
 3. 成功：World 下一次被用到時自己接上（DI-KS 26）；編排層持有的唯讀登記表參照照 CCR-4 重讀。
 - **不重跑 `Finish` 與 `Check`**（和統合 O-2 草案的「執行中的插入照同一條路再走一次」不同，**第 14 節第 2 件請你確認**）。
+- 動態插入的 System 在這個 World 被替換（讀檔）時一律重置（3.9，`restore-reruns-registration`）。
 - 指令集從 System 呼叫插入，和 3.9 的通道一起留到每幀迴圈的 runner 那一批。
 
 ### 3.11 O11、O12：Kernel 拿掉的
@@ -406,6 +414,7 @@ struct ReplaceRequest {
 6. 準備時機的形狀（統合修訂 33 交本批定；3.8）與 World 替換（讀檔卡修訂 11 的要求；3.9）。替換的先後與讀檔宣告第 4、15 節的字面「丟掉現在的 World、建新的」相反（第 14 節第 4 件）。
 7. O-1 的文字：統合 9.2 草案寫「跑在主 World」「不保證清單內的先後」；本宣告寫「第一個 World」（使用者 `game-init-list` 的原話）與「保證插入定下的順序」（3.6；草案的「不保證」指作者沒寫先後的部分，本宣告的清單是作者用插入排出來的，順序就是作者給的）。O-4 的職責清單多寫「World 的準備與替換」「編排層自己的警告」（第 10.2 節、第 14 節的「一起確認」）。
 8. 時間估計 18～26 h（統合第 8 節 10～14 h；第 12 節）。
+9. 替換 World 時重建它的 Registry（使用者 2026-11-18 `restore-reruns-registration`；3.9）：讀檔宣告與統合都沒有寫登記怎麼處理，第 5 條的 extract 要接這個後果。
 
 ---
 
@@ -456,7 +465,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 | O-1 遊戲初始化 | 清單三張、一張 `InsertBefore`、一張 `InsertAfter`、兩個單位插同一個錨點：跑的順序；錨點不在：O-E5、那一筆沒插；同名兩次：跑兩次；只在第一個 World 跑；`RunFrame` 兩次只跑一次、在第一幀的第一張之前；`RunSchedule` 也先跑它；先 `RunGameInit` 再 `RunFrame`：一次；`RunGameInit` 第二次、`RunFrame` 之後再 `RunGameInit`：斷言；一張回 Err：`RunFrame` 回它、每幀清單一張都沒跑、處理器只被呼叫一次、之後 `RunFrame` 回 `WorldInterrupted` 不呼叫 Kernel；清單空：`RunFrame` 直接跑每幀；遊戲初始化改的 `KernelSettings` 從下一張生效 |
 | O-3 runner | 沒人裝：`Run()` 跑遊戲初始化與一幀、回 Success；裝了：runner 被呼叫一次、拿到同一個 `Product`；兩個裝：O-E4；`Run()` 第二次斷言 |
 | O-8 準備 | 準備的順序（登記單位照順序、再描述的）；準備時 World 是 Ready、還沒有任何 schedule 跑過；第一幀的 System 讀到準備放的值；準備回 Err：O-E7 |
-| O-9 替換 | 先動態插入一次（版本 2），再換：新 World 的 `Types()` 是同一個物件、插入的 System 還在（**待第 14 節第 3 件**）；舊 World 被銷毀（解構會計數的 Resource）；舊的實體與被丟的紀錄都不在、Resource 回到準備給的值；遊戲初始化沒有重跑；每幀清單與錯誤處理器照舊；`extra` 在登記單位與描述的準備之後；`beforeSwap` 在準備之後、換上之前；`extra` 回 Err、`beforeSwap` 的 schedule 回 Err、`extra` 丟例外：舊的 World 照舊（實體、Resource、還能再跑一幀）、回傳對的碼、警告一次（**待第 14 節第 4 件**）；換掉一個中斷的 World；在 Run 裡呼叫：斷言 |
+| O-9 替換 | 先動態插入一次（版本 2），再換：新 World 的 `Types()` 是新的物件、版本 1、插入的 System 不在；登記單位的 `Build`／`Finish`／`Check` 對這個 World 各被呼叫第二次、`Configure` 沒有；重新登記時 `Check` 回錯誤：`ReplaceRegistrationFailed`、舊的照跑；舊 World 被銷毀（解構會計數的 Resource）；舊的實體與被丟的紀錄都不在、Resource 回到準備給的值；遊戲初始化沒有重跑；每幀清單與錯誤處理器照舊；`extra` 在登記單位與描述的準備之後；`beforeSwap` 在準備之後、換上之前；`extra` 回 Err、`beforeSwap` 的 schedule 回 Err、`extra` 丟例外：舊的 World 照舊（實體、Resource、還能再跑一幀）、回傳對的碼、警告一次（**待第 14 節第 4 件**）；換掉一個中斷的 World；在 Run 裡呼叫：斷言 |
 | O-10 動態插入 | 准的 World：成功、新 System 下一幀跑；不准的 World：回 `InsertRefused`、`Log` 的處理器收到一次 `Warning`（帶 World 名與 owner）、World 照跑、版本不變；替換之後仍被拒、仍是一次；建 Plan 失敗（R-E7）：回 `InsertBuildFailed`、警告一次、World 留在舊版本；`build` 丟例外之後 `ReplaceWorld` 正常（暫存副本已丟）；owner 和登記單位同名：`OwnerTaken`；`Finish`／`Check` 沒有被再呼叫 |
 | 預設全帶（產生的表） | 合成的登記檔建一個測試 target：預設帶進 World 的 Module、不帶 Plugin；`DISABLE_MODULES` 關一個；`PLUGINS` 帶 Plugin；關掉被依賴的那個：configure 失敗（`cmake -P` 驗）；手寫的 `RegisteredUnits` 少了被依賴的：`Product::Build` 回 O-E3 |
 | 登記檔格式（`cmake -P`） | 表頭不對、名字重複（跨兩份）、依賴不存在、依賴在後、Module 依賴 Plugin、`library_only` 和 `unit`／`header` 對不上：各自 `FATAL_ERROR` 且訊息含檔名、列、原因；正確的檔通過；`gyo_link_registered_dependencies` 產生的 link 和改之前的一樣（既有的 `gyo_expect_links` 五處照舊通過） |
@@ -499,12 +508,12 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 | S1-2 | `RunSchedule("Main","PlacePlayer")`：遊戲初始化先跑（`Score` 是 0），玩家在 (0,0)、id 1 | O-1；DI-KS 9（同步點後成員可見） | — | Bevy `Startup` 只在第一次（`main_schedule.rs:289-297`）；flecs `OnStart`；Unity bootstrap 或 `OnCreate` | 全支持 |
 | S1-3 | `RunFrame` ×5：(5,0)、`Score` 5；第一幀之後 `BestScore` 存在 | O-1；DI-KS 15 (5)（`Commands` 增刪 Resource、同步點套用） | 4 一般 System 經 `Commands` 增刪 Resource | Bevy `Commands::insert_resource`（`commands/mod.rs:816`）；flecs 延後模式的 singleton 設值；Unity `EntityCommandBuffer`（singleton 是實體） | 全支持 |
 | S1-4 | `InsertSystems("Main","console", Accelerate)`；`RunFrame` ×5：(15,0)、`Score` 10 | O-10；DI-KS 26（准的 World 在 Ready 時再登記、下次被用到時接上） | 2 准動態插入的 World 再登記一個 System | Bevy `Schedules` 是 World 裡的 Resource、可再 `add_systems`；flecs `ecs_system_init` 任何時候；Unity 隨時 `CreateSystem` | 全支持 |
-| S1-5 | 存檔：讀出玩家的 id、位置、速度、`Score`、`BestScore`、配發器的下一號，寫進作者自己的 `SaveData` | `save-unaware-means-format-only`（格式是作者的） | — | Bevy `DynamicWorldBuilder`（`dynamic_world_builder.rs:373`）；flecs `ecs_world_to_json`；Unity `SerializeWorld`（`SerializeUtility.cs:739`） | 全支持 |
+| S1-5 | 存檔：讀出玩家的 id、位置、`Score`、`BestScore`、配發器的下一號，寫進作者自己的 `SaveData`（速度不存：存檔的核心是玩家狀態，`new-world-default`） | `save-unaware-means-format-only`（格式是作者的） | — | Bevy `DynamicWorldBuilder`（`dynamic_world_builder.rs:373`）；flecs `ecs_world_to_json`；Unity `SerializeWorld`（`SerializeUtility.cs:739`） | 全支持 |
 | S1-6 | `ReplaceWorld("Main", {extra: 放 SaveData、配發器下界＝下一號、Score 預設 0; beforeSwap: Load})` | O-7、O-8；讀檔宣告 5.1、5.8 | 5（換 World 之後在兩次 Run 之間能再登記，見 S1-9） | 丟掉 World 建新的：flecs `ecs_fini`＋重新 import、Unity 新 World＋bootstrap（`DeserializeWorld` 只收空 World）、**Bevy 沒有**（`Schedules` 放在 World 裡） | 分歧——**使用者已定**「一律在新的 World 讀」（`restore-entry-new-world-default`）；換上之前跑讀檔、失敗保留舊的：**待第 14 節第 4 件** |
-| S1-7 | `LoadSave`：`ExclusiveWorld` 當場 `SpawnWithId` 照存檔編號放回玩家（id 1、(15,0)、(2,0)），同一個 System 裡馬上看得到；`Score` 改成 10、`BestScore` 放回；再當場 `Spawn` 一個「游標」實體，id ≥ 下一號 | DI-KS 18（`ExclusiveWorld` 當場改成員）；讀檔宣告 5.1 | 3 `ExclusiveWorld` 當場生成 | 當場生成：Bevy `&mut World` 的 `spawn`、flecs `immediate` System、Unity 主執行緒的 `EntityManager`——全支持。照存檔編號放回：Bevy `World::spawn_at`（`world/mod.rs:1076`）、flecs `ecs_make_alive`（`flecs.h:3343`）、Unity 沒有（只重新配號） | 當場生成：全支持。照編號放回：分歧——**使用者已定**兩種寫法由作者選（`restore-entry-ids-author-choice`） |
+| S1-7 | `LoadSave`：`ExclusiveWorld` 當場 `SpawnWithId` 照存檔編號放回玩家（id 1、(15,0)、速度是預設的 (1,0)），同一個 System 裡馬上看得到；`Score` 改成 10、`BestScore` 放回；再當場 `Spawn` 一個「游標」實體，id ≥ 下一號 | DI-KS 18（`ExclusiveWorld` 當場改成員）；讀檔宣告 5.1 | 3 `ExclusiveWorld` 當場生成 | 當場生成：Bevy `&mut World` 的 `spawn`、flecs `immediate` System、Unity 主執行緒的 `EntityManager`——全支持。照存檔編號放回：Bevy `World::spawn_at`（`world/mod.rs:1076`）、flecs `ecs_make_alive`（`flecs.h:3343`）、Unity 沒有（只重新配號） | 當場生成：全支持。照編號放回：分歧——**使用者已定**兩種寫法由作者選（`restore-entry-ids-author-choice`） |
 | S1-7b（分支） | 同上，但 `extra` 忘了移配發器下界、改在準備裡直接 `Insert` 放回玩家（外部寫入不檢查範圍）：`LoadSave` 當場 `Spawn` 拿到配發器給的 id 1（活著）→ 回 `AllottedIdAlive`，`LoadSave` 處理這個錯誤、World 不中斷、記一筆 `RejectedSpawn` | DI-KS 18 的 `AllottedIdAlive` 那一句；error-handling 規則 1 第 3 步 | 3 同一個 id 還活著時當場 `Spawn` 回 `AllottedIdAlive` | Bevy `spawn_at` 對已生成的 id 回 `SpawnError::AlreadySpawned`（`entity/mod.rs:1186`），配發器發到手動生成的號會 panic（`world/mod.rs:1063-1067` 的說明）；flecs `ecs_make_alive` 以 `ecs_check` 擋（`src/entity.c:2795`）；Unity 沒有可比的情形 | 分歧——**使用者已定**回錯誤碼、不回空（`immediate-spawn-returns-error`） |
-| S1-8 | 換上之後 `RunFrame` ×5：(25,0)、`Score` 15；遊戲初始化的計數仍是 1；舊 World 已銷毀 | O-1、O-8 | — | 全支持（跑幀） | 全支持；「插入的 `Accelerate` 在新 World 還在」：**待第 14 節第 3 件**（位置的斷言不受影響：速度從存檔放回就是 (2,0)） |
-| S1-9 | 換上之後、兩次 Run 之間，再 `InsertSystems` 一個讀 `Score` 的 `ShowStats`：成功、下一幀跑 | DI-KS 26 規則 4（正在 Run 的 World 數為 0 時才能登記） | 5 正面：兩次 Run 之間能登記（在 Run 裡呼叫是斷言，情境走不進去，照舊由 `RegistrationRoundTests` 的單元測試守） | 同 S1-4 | 全支持 |
+| S1-8 | 換上之後 `RunFrame` ×5：(20,0)（「加速」不在，速度是 (1,0)）、`Score` 15；新 World 的唯讀登記表裡沒有 `Accelerate`；遊戲初始化的計數仍是 1；舊 World 已銷毀 | O-1、O-8；`restore-reruns-registration` | — | 重新登記：flecs、Unity 都重跑（`scenario-cross-engine.md`） | 分歧——**使用者已定**重跑（`restore-reruns-registration`） |
+| S1-9 | 換上之後、兩次 Run 之間，再 `InsertSystems` 加回 `Accelerate`：成功；下一幀 (22,0) | DI-KS 26 規則 4（正在 Run 的 World 數為 0 時才能登記） | 5 正面：兩次 Run 之間能登記（在 Run 裡呼叫是斷言，情境走不進去，照舊由 `RegistrationRoundTests` 的單元測試守） | 同 S1-4 | 全支持 |
 | S1-10 | 遊戲初始化在第一個 World 放的 `KeyBindings`（且第 3 幀時模擬選項選單把它改掉）在換 World 之後怎麼樣 | — | — | 帶過去：Unity Entities `EntityManager.MoveEntitiesFrom`（`EntityManager.cs:3941`）／`CopyEntitiesFrom`（`:3785`）；Bevy、flecs 沒有 | 分歧——**第 14 節第 1 件**，定之前不進判定 |
 | （不放） | 走路與加速都寫同一個元件、沒寫先後：照登記順序跑、`TieBreaks` 列出這一對 | DI-KS 5 | 6 拿掉歧義報錯 | — | **延到第 4 批**的段（D-E2 與 `Shared` 拿掉之後）；之前由第 1 批既有的單元測試守（主會話照 L17 判：不把新的情境建在已決定拿掉的 `Shared` 上） |
 
@@ -539,7 +548,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 | 退役（性質拿掉） | `ns-startup-nestable`、`ns-startup-running-allows-nested`、`ns-st-clock-only`、`ns-st-tick-first-read`、`ns-st-tick-first-error`、`ns-st-tick-stamp`、`ns-st-running-not-cleared`、`ns-st-no-retake`、`ns-two-startups-allowed`、`ks-s2-re7-startup-schedule`、`ks-s2-re7-startup-mount`、`rs-j15-startup-counted`、`ks-s7-startup-change-same-run`、`ns-st-settings-after-startup`、`ks-s2-finish-not-first`、`hf-startup-skipped`（`HookFlushTests` 改寫後若 `find` 仍在，改寫而不退役） | 第 7.1 節組 A、B、C、E、F，第 7.2 節組 G |
 | 搬到編排層、改寫 `find`／`expect` | `ns-st-not-auto`、`ns-st-not-marked-auto`、`ns-st-not-marked-explicit`、`ns-st-explicit-again`、`ns-st-after`、`ns-st-error-ignored`、`ns-st-error-not-reported`（→ O-1）；`rs-j19-duplicate-built`、`rs-j19-requires-unchecked`、`rs-j24-re6-removed`、`ks-s2-plugin-finish-again`（→ O-2、O-E1、O-E3、O-E4）；`ks-s3-version-before-finish`（→「`Finish` 讀到版本 1」）；`rs-fix-b4-finish-before-resolve`（殺它的 `CoverageTests` :130 搬到編排層） | 第 7.1 節組 A、B |
 | 改寫（`find` 碰到改動，性質留在 Kernel） | `rs-j18-plugins-reversed`（id 照 `Register` 的順序）、`rs-j19-type-twice-allowed`、`rs-j19-unregistered-silent`、`ks-diks15-code-without-text`（拿掉的 `DE21` 換成留下的碼）、`rs-sym-inline-g`、`rs-sym-anonymous`（錨點 `Plugin::~Plugin() = default;` 換掉）、`ks-s7-first-run-only`、`ks-s7-first-run-only-limit`（`find` 含 `if (record->options.startup) {`）、`ks-s11-export-runner-back`（期待的匯出行跟著變）、`rs-j24-*` 裡 `find` 在 `Registry::Finish` 附近的 | `find` 的那一行被改或刪 |
-| 新增（只給行為的測試） | 編排層、讀檔案例與 scenario 第一段的每個新案至少一個專屬突變；代表性的：`Configure` 在 `Build` 之後、`Finish` 在 `BuildPlans` 之前、`Check` 夾在 `Finish` 之間、Kernel 失敗時照樣 `Finish`、出錯的單位照樣 build、O-E1～O-E7 各拿掉一個、依賴不看順序、不進 World 的依賴也要求在清單、空的 World 不 `Register`、遊戲初始化每幀都跑、遊戲初始化跑在最後一個 World、`InsertBefore` 插成 after、`RunFrame`／`RunSchedule` 不先跑遊戲初始化、遊戲初始化 Err 時照跑每幀、中斷的 World 照樣呼叫 Kernel、準備在第一次 Run 之後才呼叫、準備的順序反過來、`beforeSwap` 在換上之後才跑、`extra` 失敗時換上新的、替換時不銷毀舊的、替換時重建 Registry、替換時重跑遊戲初始化、拒絕時不記警告、拒絕時記兩次、插入的 `build` 丟例外時不丟暫存副本、插入後重跑 `Finish`、預設不帶 Module、`DISABLE_MODULES` 無效、Plugin 預設帶、登記檔驗證的每一條拿掉一個 | 第 7.3、8 節 |
+| 新增（只給行為的測試） | 編排層、讀檔案例與 scenario 第一段的每個新案至少一個專屬突變；代表性的：`Configure` 在 `Build` 之後、`Finish` 在 `BuildPlans` 之前、`Check` 夾在 `Finish` 之間、Kernel 失敗時照樣 `Finish`、出錯的單位照樣 build、O-E1～O-E7 各拿掉一個、依賴不看順序、不進 World 的依賴也要求在清單、空的 World 不 `Register`、遊戲初始化每幀都跑、遊戲初始化跑在最後一個 World、`InsertBefore` 插成 after、`RunFrame`／`RunSchedule` 不先跑遊戲初始化、遊戲初始化 Err 時照跑每幀、中斷的 World 照樣呼叫 Kernel、準備在第一次 Run 之後才呼叫、準備的順序反過來、`beforeSwap` 在換上之後才跑、`extra` 失敗時換上新的、替換時不銷毀舊的、替換時沿用舊的 Registry（插入的 System 留著）、替換時重跑遊戲初始化、拒絕時不記警告、拒絕時記兩次、插入的 `build` 丟例外時不丟暫存副本、插入後重跑 `Finish`、預設不帶 Module、`DISABLE_MODULES` 無效、Plugin 預設帶、登記檔驗證的每一條拿掉一個 | 第 7.3、8 節 |
 | **不新增** | 守 7.4 那些腳本守衛的突變 | 延後（第 7.4 節） |
 
 每個退役或搬走的突變在清單裡寫理由；改寫與新增的突變的預期失敗寫成該突變專屬的訊息或案例名（§14.2）。
@@ -570,13 +579,13 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 「守衛」欄：行為的測試照常；腳本守衛延後的寫「延後（7.4）；這段期間靠文件與審查」。
 
 - **O-1 遊戲初始化**：一個 `Product` 一份清單，行程一次、在所有 World 的第一幀與任何 `RunSchedule` 之前跑完、跑在第一個 World；明確呼叫只准一次；清單的順序照插入（插入當下解析錨點，錨點不在是啟動錯誤）。守衛：O-1 的行為案例；scenario S1-2。
-- **O-2 登記單位與生命週期**：產品層一次 `Configure`（產品的最後）；每個 World：照順序 `Build`（Module 先、產品的最後）→ Kernel `BuildPlans` → 照順序 `Finish` → 照順序 `Check`；Kernel 有啟動錯誤的 World 不跑 `Finish`、`Check` 與清單檢查；出錯的單位不用、其餘照做、一起收齊；有任何錯誤就不建任何 World；動態插入只走 Kernel 的兩步（**看第 14 節第 2 件**）；選項包只轉交。守衛：O-2 各案。
+- **O-2 登記單位與生命週期**：產品層一次 `Configure`（產品的最後）；每個 World：照順序 `Build`（Module 先、產品的最後）→ Kernel `BuildPlans` → 照順序 `Finish` → 照順序 `Check`；Kernel 有啟動錯誤的 World 不跑 `Finish`、`Check` 與清單檢查；出錯的單位不用、其餘照做、一起收齊；有任何錯誤就不建任何 World；動態插入只走 Kernel 的兩步（**看第 14 節第 2 件**）；替換 World 時對那個 World 重走 `Build`～`Check`，登記單位以 World 名為鍵的資料在 `Build` 時重設；選項包只轉交。守衛：O-2 各案。
 - **O-3 runner**：一個 `Product` 至多一個，在 `Configure` 裝；沒有時只跑一次；runner 只呼叫 `Product` 的執行入口，不排 System 的先後。守衛：O-3 的行為案例；「不讀 Plan 的步驟」的掃描延後（7.4），這段期間靠審查。
 - **O-4 職責**：**編排層的職責是組裝與流程**（L17）。職責清單：登記單位與生命週期（含產品自己的登記）；依賴的讀取與檢查；`Product`（World 群、runner、World 的準備與替換）；遊戲初始化與每幀的清單；生成世界的流程（第 5 條）；交換點、extract 的時機、執行緒的安排（第 5 條）；啟動錯誤的彙整與編排層自己的警告。不帶任何第三方能力；不認得產品、策略的語意、時鐘、回滾。守衛：依賴只有 Kernel 與 Base（登記檔）；include 掃描與 `naming_guard` 延後（7.4），這段期間靠審查。（「World 的準備與替換」寫在「`Product`」那一項之內，是統合 O-4「`Product`（World 群與 runner）」的細分——**這個歸法請你一起確認**，第 14 節。）
 - **O-5 啟動錯誤一次收齊**：Kernel 的 `StartupReport`、編排層的 `OrchestrationCode`、各登記單位的錯誤收成一份（準備的錯誤另一份）；Kernel 的 `StartupCode` 不擴充。守衛：O-5 各案。
 - **O-6 依賴只在登記檔**：Module／Plugin 之間的依賴只寫在兩份 CSV；`engine/` 的子目錄、引擎內 link 與產品的登記單位表由它產生；編排層建立 `Product` 時檢查；Module 預設全帶、產品可以關，Plugin 由產品列出。守衛：登記檔的 `cmake -P` 行為案例；依賴各案；CMakeLists 的掃描延後（7.4）。
 - **O-7 準備時機**：每個 World 建好之後（啟動與每次替換）、第一次 Run 之前，照「（帶過去）→ 登記單位的 → 描述的 → 替換帶的」順序呼叫準備；失敗時這個 World 不用。守衛：O-8 各案；scenario S1-6。
-- **O-8 替換**：替換用同一份 Registry（**第 14 節第 3 件**）、先建新的、`beforeSwap` 在換上之前、任何一步失敗就保留舊的（**第 14 節第 4 件**）；遊戲初始化不重跑；只在兩次 Run 之間；中斷的 World 可以被換掉。守衛：O-9 各案、讀檔案例、scenario S1-6～S1-8。
+- **O-8 替換**：替換照產品描述重新登記（新的 Registry；之前動態插入的全部重置；`Configure` 與遊戲初始化不重跑；`restore-reruns-registration`）、先建新的、`beforeSwap` 在換上之前、任何一步失敗就保留舊的（**第 14 節第 4 件**）；遊戲初始化不重跑；只在兩次 Run 之間；中斷的 World 可以被換掉。守衛：O-9 各案、讀檔案例、scenario S1-6～S1-8。
 - **O-9 動態插入的警告**：Kernel 拒絕或建 Plan 失敗時，編排層經 `Engine::Base::Log` 記**一次** `Warning`、把錯誤回給呼叫的人、World 照跑。守衛：O-10 各案。
 
 **Replacement Criteria**（L17 的形式）：
@@ -587,6 +596,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 - RC-O5：編排層的職責清單（O-4）要多加一項，或判不出某樣東西屬於哪一層——不數次數，出現就停下來問。
 - RC-O6：登記檔的欄位不夠用，需要第二份描述同一件事的檔，或 CMake 與編排層讀出的依賴不一致；或「只用函式庫、不要登記單位」的 World 被 O-E3 擋到（3.2 的已知限界）。
 - RC-O7：替換 World 的某個用途需要「不重建 World 就換掉內容」（讀檔宣告 RC 第 1 條的同一件事）。
+- RC-O9：讀檔（替換 World）重跑登記的時間成為讀取時間的主要部分，或第 5 條的 extract 為了它要改 Kernel——停下來比較做法（`restore-reruns-registration` 的代價）。
 - RC-O8：scenario 的某一段為了通過，必須讓編排層知道某個 Module 或產品的語意（8.4 的第三種一直出現在編排層）。
 
 ---
@@ -614,7 +624,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 
 1. **啟動時讀檔**：描述的準備把配發器範圍訂成 `[900, 上限]`、放暫存的存檔資料與金幣的預設值 0；`RunSchedule("Main","Load")`（遊戲初始化先跑；`SpawnWithId` 帶完整 bundle 放回、金幣改成 120），再 `RunFrame`（`Play` 生成一個選單實體）。之後：編號 12、57、58 在、值與存檔相同、`ChaseTarget` 仍是 12、選單實體的編號 ≥ 900、金幣 120、沒有被丟的生成。
 2. **沒有移下界就整批被丟**（對照組）：同上但範圍 `[1, 上限]`：每一筆以 `IdInAllotterRange` 被丟並記紀錄——證明是準備時機讓案例 1 成立。
-3. **遊戲中讀檔**：先跑三幀（生成實體、金幣改成 50、製造一筆被丟的生成）；`ReplaceWorld("Main", {extra: 讀存檔; beforeSwap: Load})`。之後：只有讀檔放回的與之後生成的實體；金幣 120；被丟的紀錄從空的開始；遊戲初始化的計數仍是 1；下一幀 `Play` 跑在新 World。
+3. **遊戲中讀檔**：先跑三幀（生成實體、金幣改成 50、製造一筆被丟的生成），再動態插入一個 System；`ReplaceWorld("Main", {extra: 讀存檔; beforeSwap: Load})`。之後：只有讀檔放回的與之後生成的實體；金幣 120；動態插入的 System 不在；被丟的紀錄從空的開始；遊戲初始化的計數仍是 1；下一幀 `Play` 跑在新 World。
 4. **讀檔失敗不換**（**待第 14 節第 4 件**）：(a) `extra` 回 Err（存檔檔頭壞了）；(b) `Load` 回 Err（存檔的實體部分壞了）：兩者都回對的碼、警告一次；舊 World 的實體與金幣 50 照舊、再跑一幀沒有錯誤。
 5. **讀兩次相同**：同一份存檔換兩次 World：兩次的 `Summary()` 相同。
 6. **遊戲初始化放進第一個 World 的東西**（**待第 14 節第 1 件**）：建議的做法下——遊戲初始化放 `KeyBindings`（宣告帶過去）與 `Score`（不帶），第二幀把 `KeyBindings` 改掉；`ReplaceWorld` 之後 `KeyBindings` 是改過的值、`Score` 回到準備的預設值、帶過去在所有準備之前；`extra` 失敗之後舊 World 的 `KeyBindings` 還在。
@@ -623,7 +633,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 
 ### 判定 3：scenario test 第一段（`tests/common/scenario/ScenarioTests.cpp`）
 
-第 8.2 節 S1-1～S1-9 的每一步的檢查都成立（S1-6 的「失敗保留舊的」、S1-8 的「`Accelerate` 還在」、S1-10 待第 14 節）。失敗時照 8.4 分類報告。突變：至少各一個——遊戲初始化每幀都跑（S1-2、S1-3 的分數）、`Commands` 的 Resource 在同步點前就看得到或看不到（S1-3）、插入的 System 不接上（S1-4 的位置）、配發器下界不移（S1-7 的 id 被丟）、當場生成的實體同一個 System 看不到（S1-7）、`AllottedIdAlive` 中斷 World（S1-7b）、替換時重跑遊戲初始化（S1-8 的計數）、換上後不能再插入（S1-9）。
+第 8.2 節 S1-1～S1-9 的每一步的檢查都成立（S1-6 的「失敗保留舊的」、S1-10 待第 14 節）。失敗時照 8.4 分類報告。突變：至少各一個——遊戲初始化每幀都跑（S1-2、S1-3 的分數）、`Commands` 的 Resource 在同步點前就看得到或看不到（S1-3）、插入的 System 不接上（S1-4 的位置）、替換時沿用舊 Registry（S1-8 的位置與登記表）、配發器下界不移（S1-7 的 id 被丟）、當場生成的實體同一個 System 看不到（S1-7）、`AllottedIdAlive` 中斷 World（S1-7b）、替換時重跑遊戲初始化（S1-8 的計數）、換上後不能再插入（S1-9）。
 
 ---
 
@@ -662,6 +672,7 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 - 空窗：(1) System 端的請求通道（結束、替換 World、從指令插入）在每幀迴圈的 runner 那一批之前沒有，作者用自己的 Resource 與自己的 runner 接；(2) 遊戲初始化的 System 在第 4 條之前照樣算寫者（以前開局有豁免）；(3) 遊戲初始化的 schedule 在第 3 條之前要掛一個 domain；(4) 生成世界之前，讀檔的 schedule 由 `RunSchedule` 或 `beforeSwap` 去跑；(5) 7.4 的腳本守衛在第 3 批開頭之前沒有，編排層的 O-3、O-4、O-6 靠文件與審查。
 - 替換時兩個 World 同時存在（照第 14 節第 4 件的建議）：獨占的外部資源（視窗、音訊裝置、固定埠、檔案鎖）若由登記單位的準備取得，新 World 的準備會在舊的還握著時跑；本批沒有這類 Module，碰到時那個 Module 的宣告要處理（或作者選「先丟舊的」）。綁執行緒的 Resource 帶過去時在呼叫的執行緒上綁定，和舊的同一條，沒有跨執行緒的情形；第 5 條有多執行緒之後要重看。
 - 產生的 `<target>_units.cpp` 在本批只有測試 target 用；第一個真實產品接上時，`gyo_product_units` 和產品登記檔、打包的互動（AGENTS §7 的刪除檢查）要在那一批核一次。
+- 替換 World 重跑登記的時間沒有量（本批不碰執行效率）；第一個有讀取時間預算的產品出現時量（RC-O9）。
 - scenario 第一段的「放玩家」與「讀檔」由 runner 式的呼叫與 `beforeSwap` 代替生成世界；第 5 條換掉時，那兩步的判定照 8.3 改寫。
 
 ---
@@ -691,14 +702,9 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 
 建議照本宣告（不重跑、不通知；衍生資料靠 CCR-4 的版本號）。選 (1) 本批加那個函式；選 (2) 本批停下、先改 Kernel 的兩步。
 
-### 第 3 件：換 World 時，登記沿用還是重跑（分歧；`scenario-cross-engine-check`）
+### 第 3 件：換 World 時，登記沿用還是重跑——**已定：重跑**（使用者 2026-11-18，`v8-arch-gyo2-restore-reruns-registration`）
 
-- **遊戲**：先用指令加了「加速」，再讀檔換 World。沿用：新 World 還有「加速」；重跑：新 World 只有啟動時的登記。
-- **別家**：支持換 World 的兩家都**重跑**——flecs 的 System 是 World 裡的實體，換 World 就重新 import 模組；Unity 的 System 屬於 World，新 World 由 bootstrap 重新建。Bevy 不支持換 World（`Schedules` 放在 World 裡）。
-- **沿用（建議）**：GYO 的 Kernel 把登記（Registry）與資料（World）分開，DI-KS 14「世代切換＝重建 World」換的是資料；第 5 條的 extract 讓一個 World 的 Registry 指向另一個的 Registry（`SetExtractSource` 只能在第一次建 Plan 前設），換掉 Registry 會讓依賴它的指向已銷毀的物件；不用重跑每個 Module 的 build。代價：動態插入的 System 留著；要連登記都重來，重建整個 `Product`。
-- **重跑**：和 flecs、Unity 一致，新 World 和啟動時完全一樣；代價：每次換 World 重跑所有 build、finish、check（含策略檢查）；第 5 條的 extract 要連依賴它的 World 一起重建，或改 Kernel 讓 extract 來源可以換。
-
-建議沿用。理由：GYO 的 System 屬於 Registry、不屬於 World，和兩家的前提不同；extract 的連帶是第 5 條會碰到的實際問題。
+使用者在 side chat 定（經主會話轉交）：讀檔只有一種意思，回到某一刻的狀態；換 World 時照產品描述重新登記，所有動態插入的 System（含指令加的）一律重置；分不清插入的來源（指令或遊戲本身）就不冒險，作者要保留就自己存成資料、讀檔後再插。比過的選項：沿用同一份 Registry（本卡修訂 1 的建議）／重跑（flecs、Unity）←選／依來源分（因分不清來源而不採）。本宣告已照它改（3.9、3.10、7.3 O-9、8.2 S1-8～S1-9、10.2 O-2／O-8、判定 2 案例 3）。後果與留給第 5 條的 extract：3.9「重新登記」、2.2。
 
 ### 第 4 件：替換的先後（分歧；檢查 S6）
 
@@ -764,3 +770,5 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 | N8 extract 的位置 | 3.4 第 3 步、2.2 |
 
 **修訂 1 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-scenario-tests`（第 8 節）；`v8-arch-gyo2-guards-after-mechanism-stable` 與它的補充「機制穩定＝涵蓋它的 scenario 段通過」（第 7 節開頭、7.4）；主會話照 L17 判的「scenario 第一段涵蓋第 1 批的機制」（8.2 的「涵蓋的第 1 批機制」欄）與「`TieBreaks` 那一步延到第 4 批」（8.2 最後一列）；`v8-arch-gyo2-scenario-failure-by-contract`（8.4）；`v8-arch-gyo2-scenario-cross-engine-check` 與它的兩則補充（8.2 的「別家」欄與分類、8.4、第 14 節第 3 件）。
+
+**修訂 2 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-restore-reruns-registration`——第 14 節第 3 件定為重跑（3.9 的步驟 1 與「重新登記」、2.2 的 extract、3.10、7.3 O-9、8.2 S1-5／S1-7～S1-9（存檔不存速度，讀檔後「加速」不在、重新加入）、10.2 O-2／O-8、RC-O9、判定 2 案例 3、判定 3 的突變、第 6 節差分第 9 項、第 13 節）。第 1、2、4、5 件使用者還在定，沒有改。
