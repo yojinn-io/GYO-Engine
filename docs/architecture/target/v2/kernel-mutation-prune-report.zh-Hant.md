@@ -3,6 +3,8 @@
 日期：2026-11-18。分支 `claude/gyo2-mutation-prune-19c247`（基於 `8b912a1e`，第 2 批分支的最後一個 commit）。
 對象：`docs/architecture/plans/kernel/scripts/mutations.json`（777 個）。本頁只是提案：**第 1 步不改清單、測試、守衛**；你核准退役表之後，第 2 步（第 2 批合併進 `gyo2` 之後）才改。
 
+**第 2 步的結果（2026-11-19）**：清單 777 → **714**（直接退 41、合併 22、改寫 3）。合併試跑時 `ks-s5-nested-baseline-not-updated` 殺不掉（兩邊都是 GYO_ASSERT 讓行程中止），照第 7 節的決定留下，所以比第 4 節的 713 多 1。經過與證據在 [dev_log](../../../dev_logs/2026_11_19_gyo2_mutation_prune.zh-Hant.md)。本頁其餘部分是第 1 步的提案與決定，不改寫。
+
 用詞：**緩的面**＝退役之後，以前會被某個突變發現、之後不會被任何突變發現的情形；**接手**＝同一個改法或同一個性質之後由哪個突變證明。
 
 完整跑：第 2 批卡片在 `cc5fe0e1` 跑的整份清單（2026-11-18 19:57～22:57，約 180 分）：776 個執行、769 killed、1 個只在 Linux 跑而跳過、7 個不是 killed（第 3.4 節）。`cc5fe0e1` 到本分支基底 `8b912a1e` 只改了文件，程式與清單相同。之後第 2 批在 `b4b80832` 改寫了其中 4 個、4/4 殺掉（Kernel 773/776）；剩下 3 個歸本批（第 3.4 節）。
@@ -13,7 +15,7 @@
 - (c) 同一改法的 28 個裡，**20 個不是單純拿掉，而是「合併進接手」**：接手的 `cases` 與 expect 加上被拿掉的那句斷言，兩句仍由一個突變證明，沒有緩的面。合併還沒試跑；第 2 步合併不成的就留下，所以 35 是上限（第 3.2 節）。
 - 另外 **(d) 守衛腳本的突變 125 個**交你判斷（第 5 節）。敵對式檢查後我改了建議：只退 29 個「沒抓到過真實漏報、也不是子規則唯一證明」的；抓到過漏報的（審查 A 系列、K8 與 S10 的敵對式檢查）、fail-closed、子規則唯一的、實樹的正控制都留。使用者選了這個建議，總數是 713 個。
 - 777 → 七百出頭這個量級，代表**清單的大半是不同的改法**（不同的條件、順序、錯誤碼、預設值），不是重複。master 的 209 個只涵蓋 11-13 的兩批（足場＋登記排程，其中 197 個 gyo2 也有）；gyo2 之後的七批又加了 580 個（第 1.2 節）。要回到幾百個的量級，靠的不是這次退役，而是第 6 節的增長規則。
-- (e) 的 7 個都不是等價突變。4 個（`hf-startup-skipped`、`we-j1-insert-append`、`ks-s3-version-not-raised`、`ks-s3-failed-raises-version`）是第 2 批段 2、段 3 改程式時沒跟上的，**第 2 批已在 `b4b80832` 自己改寫、4/4 殺掉**；剩下 3 個在第 2 批開工前就殺不掉，歸本批：`ks-real-product-name` 退役（你已定），`rs-sample-capture-accepted`、`rs-sample-return-accepted` 改寫 expect、不退役（第 3.4 節）。
+- (e) 的 7 個都不是等價突變。4 個（`hf-startup-skipped`、`we-j1-insert-append`、`ks-s3-version-not-raised`、`ks-s3-failed-raises-version`）是第 2 批段 2、段 3 改程式時沒跟上的，**第 2 批已在 `b4b80832` 自己改寫、4/4 殺掉**；剩下 3 個在第 2 批開工前就殺不掉，歸本批：`ks-real-product-name` 改寫成角色詞、不退役（你已定，第 7 節第 3 題），`rs-sample-capture-accepted`、`rs-sample-return-accepted` 改寫 expect、不退役（第 3.4 節）。
 - 敵對式檢查（Fable 5.2／high）：找到 14 處，其中 8 處會失去檢出力；全部照它的意見改了報告（第 8 節）。最大的改動是 3.2 改用斷言的粒度算緩的面（多數改成合併），和 (d) 的建議從「退 78」改成「退 29」。
 
 ## 1. 組成
@@ -130,7 +132,7 @@ kernel-subtract-structure 一批就加了兩百多個，其中執行緒序號（
 
 ### 3.3 (c) 保護的對象已經不在（4 個；`ks-real-product-name` 改寫、不退）
 
-舊產品別名那 5 個（`ks-real-product-name`、`ks-k1-aliases-dropped`、`ks-adv-alias-dropped-*`）：使用者 2026-11-18 決定不再擋舊產品的名字、退役（第 7 節第 3 題）。
+舊產品別名那 5 個（`ks-real-product-name`、`ks-k1-aliases-dropped`、`ks-adv-alias-dropped-*`）：使用者 2026-11-18 決定不再擋舊產品的名字、退役（第 7 節第 3 題）。之後補問的結果（「其他的照你建議」）：`ks-real-product-name` 改寫成角色詞、不退役，退役的是 4 個別名突變。下表 `ks-real-product-name` 那一列是當時的判斷與選項，最終照第 7 節第 3 題。
 
 **`hf-startup-skipped` 從候選拿掉（留下）。** 初稿把它列在這裡，理由是 replace 用到已拿掉的 `record->options.startup`（完整跑 `build_failed`）。第 2 批在 `b4b80832` 把它改寫成 `if (position == lastSync && record->options.clock)`，也就是「非時鐘的單次 schedule 不跑 hook 輪次」，案例 `J-54: run once*`，4/4 裡已殺掉。重新判斷的結果如下。
 - 測試上已有涵蓋：`hf-only-with-trim`（`if (position == lastSync && position + 1 < plan->steps.size())`）用同一個案例、同一個 expect。那個案例的 schedule 只有一個 stage，最後一個同步點後面沒有別的步驟，所以兩個改法的效果相同，都是「這個單次 schedule 的 hook 記錄沒有套用」。照 (c) 的標準可以退。
@@ -154,7 +156,7 @@ kernel-subtract-structure 一批就加了兩百多個，其中執行緒序號（
 
 | id | 完整跑 | 原因（證據） | 處理 | 緩的面 |
 |---|---|---|---|---|
-| `ks-real-product-name` | survived | 沒有登記的產品（3.3） | 退役（已算在 3.3） | 見 3.3 |
+| `ks-real-product-name` | survived | 沒有登記的產品（3.3） | 改寫成角色詞、不退役（第 7 節第 3 題） | 見 3.3 與第 7 節第 3 題 |
 | `hf-startup-skipped` | build_failed | 引用已拿掉的 `record->options.startup` | **第 2 批已改寫（`b4b80832`）**、已殺掉；本批不退（3.3 的說明） | — |
 | `we-j1-insert-append` | build_failed | 第 2 批段 3（`a8065853`）把呼叫改成 `::Engine::EntityStore::InsertEntity(cells, …)`；find 只對到 `Engine::…` 那一段，換掉後前面留下 `::cells.push_back`，編譯不過 | **第 2 批已改寫（`b4b80832`）**：find 前面加 `::`（和本批的試跑同一個改法）→ killed | 無（同一個改法、同一個 expect） |
 | `ks-s3-version-not-raised` | survived | 第 2 批段 2（`81e1d231`）把測試名從「DI-KS 25: the version is 0 …」改成「… is 1 …」；`cases` 還是 `the version is 0*`，一個測試也沒跑，所以活著 | **第 2 批已改寫（`b4b80832`）**：`cases` 改成 `DI-KS 25: the version is 1*`（和本批的試跑相同）→ killed | 無 |
@@ -169,7 +171,7 @@ rs-sample 兩個的 expect 改寫（照 AGENTS §14.4 的 1～5）：
 4. 「compiled」那條分支是所有變體共用的，仍由 `rs-j11-self-conflict-off`、`rs-j13-condition-write-allowed`、`rs-adv-assert-member-removed`、`we-j4-handle-copyable`、`sr-static-assert-removed` 等證明。
 5. 證據：`rewrite_check.log`（2/2 killed）。前例：world-exec 分支 `50cb2050` 曾改成 `variant CAPTURE (compiled|failed without)`，gyo2 沒帶過來，所以 11-18 的完整跑又是 wrong_failure。本頁用指名標記的寫法，比前例嚴：前例連「失敗但訊息不對」的別的原因也算殺掉。限制：只在 macOS 驗過；`\s+` 依賴 CMake 把那句折行，別的平台若折法不同仍對得上，但沒驗過。
 
-第 2 批在 `b4b80832` 自己改寫了 `hf-startup-skipped`、`we-j1-insert-append`、`ks-s3-*` 這 4 個，4/4 殺掉（第 2 批的 commit 訊息：Kernel 773/776）。本批第 2 步以第 2 批合併後的 `gyo2` 為底，只處理剩下 3 個：`ks-real-product-name` 退役，rs-sample 兩個改寫 expect。
+第 2 批在 `b4b80832` 自己改寫了 `hf-startup-skipped`、`we-j1-insert-append`、`ks-s3-*` 這 4 個，4/4 殺掉（第 2 批的 commit 訊息：Kernel 773/776）。本批第 2 步以第 2 批合併後的 `gyo2` 為底，只處理剩下 3 個：`ks-real-product-name` 改寫成角色詞（不退役），rs-sample 兩個改寫 expect。
 
 ### 3.5 (b) 等價突變：0 個
 
@@ -235,7 +237,7 @@ scenario 第一段（S1-1～S1-10，走路計分）涵蓋的是登記與建 Plan
 | `ks-n3-suffix-dropped`、`ks-adv-n3-keywords-shrunk`、`ks-adv-n3-attributes-dropped` | N3：少 `Controller` 後綴、宣告關鍵字少幾個（B21）、不跳過屬性（B22） | 第一個的自測失去唯一的突變；後兩個同一自測還有 2 個 |
 | `rs-sym-common-unread`、`rs-sym-tlv-kept`、`rs-b8-toolchain-any-format` | 符號表：Mach-O `__common`、`$tlv$init` 的名字、工具鏈名字套到所有格式 | 第一個同一自測還有 1 個；後兩個的自測失去唯一的突變 |
 
-合計：退役後 107 種守衛 expect 裡，有 27 種沒有任何突變（上表 23 種，加上 3.2／3.3 的別名、`ks-real-product-name`、`we-k5-entity-store-dropped-selftest`）。逐個的分法與這張對照在證據檔 `guards_v2.py` 的輸出（第 9 節）。
+合計：退役後 107 種守衛 expect 裡，有 27 種沒有任何突變（上表 23 種，加上 3.2／3.3 的別名、`ks-real-product-name`、`we-k5-entity-store-dropped-selftest`）。這是 `ks-real-product-name` 改成改寫之前算的：改寫後它原來的 expect（`K1 ObjectFpsPvp`）不在清單裡，換成新的 expect、由它自己證明，所以實際是 26 種。逐個的分法與這張對照在證據檔 `guards_v2.py` 的輸出（第 9 節）。
 
 **選項**：
 1. **全留**（現狀）。
