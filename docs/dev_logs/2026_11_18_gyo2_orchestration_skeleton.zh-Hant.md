@@ -1,6 +1,6 @@
 # 編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：進行中——第 1～4 步、G-7、G-8、完整突變完成；待合併前核准。**
+日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：合併前核准（使用者 2026-11-19「核准，開 PR」）；PR 待 L1 與合併。**
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[orchestration-skeleton-declaration.zh-Hant.md](../architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md) 修訂 7；使用者 2026-11-18「核准」（動工前核准；主會話轉達）。修訂 0 送 Fable／high 敵對式檢查（必改 10、建議改 16、小問題 8，報告 `declaration-r0-adversarial-check.md`）。實作者 Opus／high。
 
@@ -78,7 +78,7 @@
 
 ## 下一步
 
-1. 合併前核准（資料：[合併前核准](../architecture/target/v2/orchestration-skeleton-merge-approval.zh-Hant.md)），核准後開 PR、看 L1。
+1. 合併前核准已過（2026-11-19）；開 PR 到 `gyo2`、看 L1 三平台。
 2. 合併前核准的資料：第 7.1 節各組、第 7.2 節的 DI 守衛各列、第 10 節的最終文字、D2 的讀法、G-3 的 `gyo_threads` 順序、Kernel 標頭的 `::Engine::`。
 
 ## 證據
