@@ -46,6 +46,7 @@
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
 - [orchestration-skeleton-merge-approval.zh-Hant.md](orchestration-skeleton-merge-approval.zh-Hant.md)：同一批的合併前核准資料（判定的結果、照 G-7 改寫的第 7.1、7.2 節、第 10 節的最終文字、和宣告不同的地方、要你判的一件）。
 - [kernel-mutation-prune-report.zh-Hant.md](kernel-mutation-prune-report.zh-Hant.md)：`v8-arch-gyo2-mutation-prune` 的盤點與退役表（Kernel 突變清單 777 個的分類、退役候選與緩的面、增長判準草案；使用者 2026-11-18 核定，777 → 714）。
+- [kernel-mutation-subsumption-report.zh-Hant.md](kernel-mutation-subsumption-report.zh-Hant.md)：同一批第 3 步的 subsumption 檢查（714 個逐個跑全部 Kernel 測試、最小集合 469、建議退 51 個；候選表，待使用者核准，清單未改）。
 
 ## dev_log
 
