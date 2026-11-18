@@ -12,6 +12,8 @@
 
 #include <functional>
 #include <memory>
+// MSVC: doctest messages stream std::string_view (ToString of the codes); that needs the full ostream.
+#include <ostream>
 #include <string>
 #include <vector>
 

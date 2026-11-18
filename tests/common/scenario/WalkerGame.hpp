@@ -15,6 +15,8 @@
 #include "engine/orchestration/Orchestration.hpp"
 
 #include <array>
+#include <type_traits>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -54,6 +56,9 @@ struct KeyBindings {
 // the World summary hashes a Resource's bytes.
 struct SaveData {
     bool hasPlayer = true;
+    // Zeroed bytes where padding would be: the kernel compares and hashes a
+    // Resource's raw bytes, and padding is not copied the same on every compiler.
+    std::array<std::uint8_t, 7> reserved{};
     K::EntityId player = 0;
     int x = 0;
     int y = 0;
@@ -61,6 +66,7 @@ struct SaveData {
     int best = 0;
     K::EntityId next = 0;
 };
+static_assert(std::has_unique_object_representations_v<SaveData>, "no padding: the kernel hashes the raw bytes");
 
 inline constexpr K::EntityId kLast = 1000000;
 
@@ -310,8 +316,11 @@ inline O::PrepareFn LoadInto(SaveData save) {
     };
 }
 
-// S1-7b: the extra forgets the lower bound and puts the player back itself
-// (an external write checks no range), so the save it leaves has no player.
+// S1-7b: the extra forgets the lower bound and puts the player back itself, so
+// the save it leaves has no player. A direct insert through the World API
+// neither checks nor moves the allotter's range; moving the lower bound on a
+// load is the author's job (DI-KS 18, "a direct insert does not look at the
+// allotter"; v8-arch-gyo2-direct-insert-no-allotter-range).
 inline O::PrepareFn LoadForgettingTheLowerBound(SaveData save) {
     return [save](K::World& w) -> ::Engine::Base::Result<void, O::OrchestrationError> {
         SaveData rest = save;

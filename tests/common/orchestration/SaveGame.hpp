@@ -10,7 +10,9 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace OrchTest::Save {
@@ -71,10 +73,15 @@ struct SaveData {
     };
     std::array<Ent, 3> ents{};
     int gold = 0;
+    // Zeroed bytes where padding would be: World::Summary hashes the raw bytes,
+    // and padding is not copied the same on every compiler (MSVC differed, L1).
+    std::int32_t reserved0 = 0;
     K::EntityId next = 0;
     // The entity part cannot be read: Load fails.
     bool unreadable = false;
+    std::array<std::uint8_t, 7> reserved1{};
 };
+static_assert(std::has_unique_object_representations_v<SaveData>, "no padding: World::Summary hashes the raw bytes");
 
 inline SaveData TheSave() {
     SaveData save;
@@ -217,11 +224,19 @@ public:
     WarningCounter() : previous_(Engine::Base::SetLogHandler(&Count)) {
         Counter().store(0);
         Last().clear();
+        ErrorCounter().store(0);
+        LastError().clear();
     }
     ~WarningCounter() { Engine::Base::SetLogHandler(previous_); }
     WarningCounter(const WarningCounter&) = delete;
     WarningCounter& operator=(const WarningCounter&) = delete;
     [[nodiscard]] int Warnings() const { return Counter().load(); }
+    // Error lines of the orchestration layer (a logged WorldFailure).
+    [[nodiscard]] int Errors() const { return ErrorCounter().load(); }
+    [[nodiscard]] static std::string& LastError() {
+        static std::string last;
+        return last;
+    }
     // The text of the last orchestration warning (single-threaded tests only).
     [[nodiscard]] static std::string& Last() {
         static std::string last;
@@ -233,7 +248,18 @@ private:
         static std::atomic<int> counter{0};
         return counter;
     }
+    static std::atomic<int>& ErrorCounter() {
+        static std::atomic<int> counter{0};
+        return counter;
+    }
     static void Count(const Engine::Base::LogMessage& message) noexcept {
+        if (message.level == Engine::Base::LogLevel::Error && message.category == "orchestration") {
+            ++ErrorCounter();
+            try {
+                LastError() = std::string(message.text);
+            } catch (...) {
+            }
+        }
         if (message.level == Engine::Base::LogLevel::Warning && message.category == "orchestration") {
             ++Counter();
             try {

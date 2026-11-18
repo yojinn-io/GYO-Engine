@@ -18,26 +18,9 @@ O::PrepareFn Refuse() {
 
 } // namespace
 
-TEST_CASE("O-8: D1: a failed replacement of an interrupted World returns the error; the carried value waits for the next one") {
-    O::ProductDescription d = Game();
-    d.worlds[0].build = [](O::WorldSetup& s) {
-        Register(s);
-        s.Registrar().AddSystem<&Fail>(In("FailJunk", "Junk"));
-    };
-    auto built = O::Product::Build(std::move(d), Units().Take());
-    ORCH_REQUIRE_BUILT(built);
-    O::Product& p = **built;
-    REQUIRE(static_cast<bool>(p.RunFrame()));
-    p.World("Main").GetWorld().ResourceMut<KeyBindings>()->jump = 6;
-    REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Main", "Junk")));  // the World is interrupted now
-    auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{Refuse(), {}, O::ReplaceOrder::BuildNewFirst});
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(failed), "[or-d1-interrupted-fail] replaced");
-    CHECK_MESSAGE(failed.error().code == O::OrchestrationErrorCode::ReplacePrepareFailed, "[or-d1-interrupted-fail]");
-    REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
-    const KeyBindings* carried = p.World("Main").GetWorld().Resource<KeyBindings>();
-    REQUIRE_MESSAGE(carried != nullptr, "[or-d1-held] KeyBindings is gone");
-    CHECK_MESSAGE(carried->jump == 6, "[or-d1-held] KeyBindings is " << carried->jump);
-}
+// D1 (a failed replacement of an interrupted World) left with the property it
+// guarded: an interrupted World is not replaced any more, the Product has ended
+// (v8-arch-gyo2-broken-world-ends-product; "O-8: a replacement does not mend a broken World").
 
 TEST_CASE("O-8: D3: an exception from extra logs one warning") {
     auto built = O::Product::Build(Game(), Units().Take());
@@ -55,7 +38,9 @@ TEST_CASE("O-8: D3: an exception from extra logs one warning") {
     CHECK_MESSAGE(warnings.Warnings() == 1, "[or-d3-throw-warns] " << warnings.Warnings());
 }
 
-TEST_CASE("O-1: D4: game initialization with the first World's place empty: WorldMissing, and it runs once the place is filled") {
+// D4 now: the empty place ends the Product, so game initialization never runs
+// (the place is not filled again; v8-arch-gyo2-broken-world-ends-product).
+TEST_CASE("O-1: D4: game initialization with the first World's place empty: WorldMissing, not counted as run") {
     BootRuns() = 0;
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
@@ -65,7 +50,5 @@ TEST_CASE("O-1: D4: game initialization with the first World's place empty: Worl
     REQUIRE_FALSE(static_cast<bool>(frame));
     CHECK(frame.error().code == O::OrchestrationErrorCode::WorldMissing);
     CHECK_MESSAGE(!p.GameInitRan(), "[or-d4-not-marked] game initialization counted as run on an empty place");
-    REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{{}, {}, O::ReplaceOrder::DropOldFirst})));
-    REQUIRE(static_cast<bool>(p.RunFrame()));
-    CHECK_MESSAGE(BootRuns() == 1, "[or-d4-runs-later] " << BootRuns());
+    CHECK_MESSAGE(BootRuns() == 0, "[or-d4-not-run] " << BootRuns());
 }

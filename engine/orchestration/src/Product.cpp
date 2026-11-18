@@ -8,6 +8,7 @@
 #include "engine/base/Log.hpp"
 
 #include <algorithm>
+#include <new>
 #include <set>
 #include <utility>
 
@@ -338,58 +339,109 @@ void Product::RequireNotRunning() const {
     }
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::string_view schedule) {
-    if (!slot.executor) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldMissing,
-                                                      "World " + Quoted(slot.description.name) + " is empty (a replacement failed)"));
+const WorldFailure& Product::Break(WorldFailure failure) {
+    // The first failure ends the Product; nothing runs after it, so there is no second.
+    GYO_ASSERT(!failure_);
+    failure.product = name_;
+    failure_ = std::move(failure);
+    return *failure_;
+}
+
+OrchestrationError Product::EndedError() const {
+    const bool missing = failure_->kind != WorldFailureKind::Interrupted;
+    OrchestrationError error(missing ? OrchestrationErrorCode::WorldMissing : OrchestrationErrorCode::WorldInterrupted,
+                             "World " + Quoted(failure_->world) + (missing ? " is empty" : " is interrupted") +
+                                 ": the Product has ended",
+                             failure_->Text());
+    error.failure = *failure_;
+    return error;
+}
+
+std::optional<OrchestrationError> Product::Ended() {
+    if (!failure_) {
+        // An interrupted World without a recorded failure was run outside the
+        // Product (WorldExecutor::Run called directly). An empty place without
+        // one is a DropOldFirst replacement in progress (its game initialization
+        // step); a failed one is always recorded.
+        for (WorldSlot& slot : worlds_) {
+            if (!slot.executor || slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted) continue;
+            WorldFailure failure;
+            failure.world = slot.description.name;
+            failure.kind = WorldFailureKind::Interrupted;
+            failure.entry = "outside the Product";
+            failure.lastSchedule = slot.lastSchedule;
+            Break(std::move(failure));
+            break;
+        }
     }
-    if (slot.executor->GetWorld().State() == Kernel::WorldState::Interrupted) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldInterrupted,
-                                                      "World " + Quoted(slot.description.name) + " is interrupted"));
+    if (!failure_) return std::nullopt;
+    return EndedError();
+}
+
+::Engine::Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::string_view schedule,
+                                                              std::string_view entry) {
+    // Read before the schedule runs, from the World while it is healthy.
+    WorldFailure failure;
+    failure.world = slot.description.name;
+    failure.entry = std::string(entry);
+    failure.schedule = std::string(schedule);
+    failure.lastSchedule = slot.lastSchedule;
+    for (const Kernel::ScheduleInfo& info : slot.registry->Frozen().Schedules()) {
+        if (info.options.name == schedule) failure.domain = info.options.domain;
     }
-    auto ran = slot.executor->Run(schedule);
+    failure.tick = slot.executor->GetWorld().Tick(failure.domain);
+    auto ran = [&] {
+        try {
+            return slot.executor->Run(schedule);
+        } catch (const std::bad_alloc&) {
+            failure.kind = WorldFailureKind::ResourceExhausted;
+            failure.where = "std::bad_alloc left the schedule";
+            Break(std::move(failure));
+            throw;
+        } catch (...) {
+            failure.kind = WorldFailureKind::Interrupted;
+            failure.where = "an exception left the schedule";
+            Break(std::move(failure));
+            throw;
+        }
+    }();
     if (!ran) {
-        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::ScheduleFailed,
+        Kernel::KernelError kernelError = std::move(ran).error();
+        failure.kind = WorldFailureKind::Interrupted;
+        failure.kernelCode = kernelError.code;
+        failure.where = kernelError.Text();
+        OrchestrationError error = FromKernel(OrchestrationErrorCode::ScheduleFailed,
                                               "schedule " + Quoted(schedule) + " on World " + Quoted(slot.description.name) + " failed",
-                                              std::move(ran).error()));
+                                              std::move(kernelError));
+        error.failure = Break(std::move(failure));
+        return ::Engine::Base::Err(std::move(error));
     }
+    slot.lastSchedule = std::string(schedule);
     return {};
 }
 
 ::Engine::Base::Result<void, OrchestrationError> Product::RunGameInit() {
     RequireNotRunning();
     GYO_ASSERT(!gameInitRan_);
-    // The first World's place is empty (a DropOldFirst replacement failed):
-    // nothing ran, so game initialization is not counted as run.
-    if (!worlds_.empty() && !worlds_.front().executor) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldMissing,
-                                                      "World " + Quoted(worlds_.front().description.name) +
-                                                          " is empty: game initialization waits until it is filled"));
-    }
+    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
     gameInitRan_ = true;
     if (worlds_.empty()) return {};
     for (const std::string& schedule : gameInit_) {
-        if (auto ran = RunOn(worlds_.front(), schedule); !ran) return ran;
+        if (auto ran = RunOn(worlds_.front(), schedule, "RunGameInit"); !ran) return ran;
     }
     return {};
 }
 
 ::Engine::Base::Result<void, OrchestrationError> Product::RunFrame() {
     RequireNotRunning();
+    // Every World is checked before any runs: no half frame over a broken World.
+    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
     if (!gameInitRan_) {
         if (auto ran = RunGameInit(); !ran) return ran;
     }
     for (WorldSlot& slot : worlds_) {
-        if (!slot.executor) {
-            return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldMissing,
-                                                          "World " + Quoted(slot.description.name) + " is empty (a replacement failed)"));
-        }
-        if (slot.executor->GetWorld().State() == Kernel::WorldState::Interrupted) {
-            return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldInterrupted,
-                                                          "World " + Quoted(slot.description.name) + " is interrupted"));
-        }
         for (const std::string& schedule : slot.frame) {
-            if (auto ran = RunOn(slot, schedule); !ran) return ran;
+            if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
         }
     }
     return {};
@@ -397,6 +449,7 @@ void Product::RequireNotRunning() const {
 
 ::Engine::Base::Result<void, OrchestrationError> Product::RunSchedule(std::string_view world, std::string_view schedule) {
     RequireNotRunning();
+    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
     WorldSlot* slot = Find(world);
     if (slot == nullptr) {
         return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(world)));
@@ -404,7 +457,7 @@ void Product::RequireNotRunning() const {
     if (!gameInitRan_) {
         if (auto ran = RunGameInit(); !ran) return ran;
     }
-    return RunOn(*slot, schedule);
+    return RunOn(*slot, schedule, "RunSchedule");
 }
 
 RunnerExit Product::Run() {
@@ -437,6 +490,8 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
 
 ::Engine::Base::Result<void, OrchestrationError> Product::ReplaceWorld(std::string_view name, ReplaceRequest request) {
     RequireNotRunning();
+    // A replacement does not mend a broken World (v8-arch-gyo2-broken-world-ends-product).
+    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
     WorldSlot* found = Find(name);
     if (found == nullptr) {
         return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(name)));
@@ -444,16 +499,36 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
     WorldSlot& slot = *found;
     const bool firstWorld = &slot == &worlds_.front();
     const bool dropOldFirst = request.order == ReplaceOrder::DropOldFirst;
+    // The schedule running when a step failed (WorldFailure::schedule of a DropOldFirst failure).
+    std::string failedSchedule;
     auto fail = [&](OrchestrationError error) -> ::Engine::Base::Result<void, OrchestrationError> {
         Warn("ReplaceWorld " + Quoted(name) + ": " + std::string(ToString(error.code)) + ": " + error.message +
              (error.reporterCode.empty() ? std::string() : " (" + error.reporterCode + ")"));
+        if (failure_) {
+            // Game initialization run from here broke the first World.
+            error.failure = *failure_;
+        } else if (dropOldFirst) {
+            // The old World is gone and the new one failed: the place stays empty, the Product has ended.
+            WorldFailure failure;
+            failure.world = slot.description.name;
+            failure.kind = WorldFailureKind::ReplacementFailed;
+            failure.entry = "ReplaceWorld";
+            failure.schedule = failedSchedule;
+            if (!error.kernel.empty()) failure.kernelCode = error.kernel.front().code;
+            failure.where = std::string(ToString(error.code)) + ": " + error.message +
+                            (error.reporterCode.empty() ? std::string() : " (" + error.reporterCode + ")") +
+                            (error.detail.empty() ? std::string() : ": " + error.detail);
+            failure.lastSchedule = slot.lastSchedule;
+            error.failure = Break(std::move(failure));
+        }
         return ::Engine::Base::Err(std::move(error));
     };
 
-    // DropOldFirst: the marked values go to the holding place, then the old World and its Registry go.
-    if (dropOldFirst && slot.executor) {
+    // DropOldFirst: the marked values are taken out, then the old World and its Registry go.
+    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved;
+    if (dropOldFirst) {
         for (const Detail::CarryEntry& entry : slot.carries) {
-            if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) slot.held.emplace_back(entry, std::move(box));
+            if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));
         }
         slot.executor.reset();
         slot.registry.reset();
@@ -474,32 +549,23 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
     std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);
     Kernel::World& world = fresh->GetWorld();
 
-    // Step 2: carry the marked Resources over, before every prepare function (section 3.12).
-    // The holding place first (an earlier failure left values there), then
-    // what the old World still has of the marked types.
-    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved = std::move(slot.held);
-    slot.held.clear();
-    if (!dropOldFirst && slot.executor) {
+    // Step 2: carry the marked Resources over, before every prepare function (section 3.12):
+    // what the old World has of the marked types (DropOldFirst took them out above).
+    if (!dropOldFirst) {
         for (const Detail::CarryEntry& entry : slot.carries) {
-            const bool held = std::any_of(moved.begin(), moved.end(), [&](const auto& m) { return m.first.key == entry.key; });
-            if (held) continue;
             if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));
         }
     }
-    // The values back where they came from: the old World when it can take
-    // them (it is there and not interrupted: an interrupted World is never
-    // written, spec E.5), otherwise the holding place.
-    const bool backToOld = !dropOldFirst && slot.executor &&
-                           slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted;
+    // A failure gives the values back to the old World (BuildNewFirst: it goes
+    // on, healthy). DropOldFirst has no old World: they go with the failed one
+    // (the Product has ended).
     auto giveBack = [&](std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>>& values) {
-        for (auto& [entry, box] : values) {
-            if (!box) {
-                box = entry.take(world);
-                if (!box) continue;
-            }
-            if (!backToOld) {
-                slot.held.emplace_back(entry, std::move(box));
-            } else {
+        if (!dropOldFirst) {
+            for (auto& [entry, box] : values) {
+                if (!box) {
+                    box = entry.take(world);
+                    if (!box) continue;
+                }
                 entry.put(slot.executor->GetWorld(), box);
             }
         }
@@ -528,6 +594,7 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
             if (firstWorld) {
                 gameInitRan_ = true;
                 for (const std::string& schedule : gameInit_) {
+                    failedSchedule = schedule;
                     auto ran = fresh->Run(schedule);
                     if (!ran) {
                         giveBack(moved);
@@ -542,6 +609,7 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
             }
         }
         for (const std::string& schedule : request.beforeSwap) {
+            failedSchedule = schedule;
             auto ran = fresh->Run(schedule);
             if (!ran) {
                 giveBack(moved);
@@ -552,7 +620,28 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
         }
     } catch (...) {
         giveBack(moved);
-        Warn("ReplaceWorld " + Quoted(name) + ": an exception left the replacement; the old World goes on");
+        if (!dropOldFirst) {
+            Warn("ReplaceWorld " + Quoted(name) + ": an exception left the replacement; the old World goes on");
+            throw;
+        }
+        Warn("ReplaceWorld " + Quoted(name) + ": an exception left the replacement; the place is empty");
+        if (!failure_) {
+            WorldFailure failure;
+            failure.world = slot.description.name;
+            failure.entry = "ReplaceWorld";
+            failure.schedule = failedSchedule;
+            failure.lastSchedule = slot.lastSchedule;
+            try {
+                throw;
+            } catch (const std::bad_alloc&) {
+                failure.kind = WorldFailureKind::ResourceExhausted;
+                failure.where = "std::bad_alloc left the replacement";
+            } catch (...) {
+                failure.kind = WorldFailureKind::ReplacementFailed;
+                failure.where = "an exception left the replacement";
+            }
+            Break(std::move(failure));
+        }
         throw;
     }
 
@@ -564,7 +653,7 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
     slot.frame = std::move(registration.frame);
     slot.unitPrepares = std::move(registration.unitPrepares);
     slot.carries = std::move(registration.carries);
-    slot.held.clear();
+    slot.lastSchedule.clear();
     slot.nextInsertSeq = 0;
     return {};
 }
@@ -572,12 +661,10 @@ void Product::SetErrorHandler(std::string_view world, std::function<void(const K
 ::Engine::Base::Result<void, OrchestrationError> Product::InsertSystems(std::string_view worldName, std::string owner,
                                                                       InsertFn build) {
     RequireNotRunning();
+    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
     WorldSlot* slot = Find(worldName);
     if (slot == nullptr) {
         return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(worldName)));
-    }
-    if (!slot->executor) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldMissing, "World " + Quoted(worldName) + " is empty"));
     }
     const bool taken = owner == name_ ||
                        std::any_of(units_.begin(), units_.end(), [&](const UnitSlot& unit) { return unit.row == owner; });

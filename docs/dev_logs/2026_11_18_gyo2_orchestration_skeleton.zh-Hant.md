@@ -1,6 +1,6 @@
 # 編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：進行中——第 1～4 步完成；待完整突變、G-7、第 3、4 步的 G-8 與合併前核准。**
+日期：2026-11-18～。分支 `claude/gyo2-orchestration-skeleton-67744c`（從 `gyo2` 0f1f2d21）。**狀態：合併前核准（使用者 2026-11-19「核准，開 PR」）；PR 待 L1 與合併。**
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[orchestration-skeleton-declaration.zh-Hant.md](../architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md) 修訂 7；使用者 2026-11-18「核准」（動工前核准；主會話轉達）。修訂 0 送 Fable／high 敵對式檢查（必改 10、建議改 16、小問題 8，報告 `declaration-r0-adversarial-check.md`）。實作者 Opus／high。
 
@@ -68,12 +68,22 @@
   - **G-7 順帶查到第 2 步漏做的事**：Kernel 突變清單沒照第 9 節處理，39 個 `find` 已經失效。補上：退役 16、搬到編排層 12（清單的 `description` 寫明每一個對到編排層的哪個突變）、改寫 16（版本號、`rs-sym-*` 的錨點、`ks-s7-first-run-only*`、`ks-diks15-code-without-text`、`ks-links-extra`）；剩 777 個、失效 0。
 - **和宣告第 4 節不同**：`docs/architecture/target/README.md` 的目標 Design Invariants 清單沒有改。那張表是 v2 之前的（只有 DI-KS 1～15，DI-KS 15 那一列還寫「Host 保留多時鐘」），本批改的 DI-KS 15、拿掉的 DI-KS 22 在它裡面不是同一個樣子；照 `pre-v2-target-docs-later` 先不動，合併前核准時一併報告。
 - **別家對照**：第 8.2 節的表（宣告時做，出處在 `scenario-cross-engine.md`）；scenario 第一段沒有新增步驟，沒有新的分歧。
+- **完整突變（cc5fe0e1，第 3、4 步都在內）**：編排層 179/179 殺（`mutants-full-orchestration-cc5fe0e1.log`）。Kernel 777 個（1 個只在 Linux、跳過）：769 殺、7 沒殺（`mutants-full-kernel-cc5fe0e1.log`）。本批造成的 4 個是清單過時：`hf-startup-skipped`（startup 旗標拿掉了，改成以 `clock` 判、守「非時鐘的單次 schedule 也跑 hook 輪」）、`we-j1-insert-append`（`::Engine::` 讓舊 `find` 只對到後半、留下 `::cells`）、`ks-s3-*` 兩個（DI-KS 25 的案在第 2 步改名）；改寫後 4/4 殺（`mutants-kernel-rewritten-4.log`）→ 773/776。剩 3 個在基準就沒殺（`ks-real-product-name`、`rs-sample-capture-accepted`、`rs-sample-return-accepted`），上一批已記錄、不在本批範圍，沒動。
+- **S1-7b 改成引用 DI-KS 18**：`LoadForgettingTheLowerBound` 與 S1-7b 案的註解引「直接放實體不看配發器」；`World::Insert` 的註解補一句「不檢查、也不移動配發器的範圍（DI-KS 18）」。ctest 113 項全過（`ctest-final2.log`）。
+- **D2 定了：一個 World 壞了，Product 就結束**（合併前核准第 4 件；使用者 2026-11-18，主會話轉達，`v8-arch-gyo2-broken-world-ends-product`；宣告修訂 8、O-11）。
+  - 實作：`Product` 的五個入口都先檢查所有 World（`Ended()`），有壞的就不跑、不改；`RunOn` 在跑之前讀 schedule 的 domain 與 tick，Kernel 回 Err 或例外離開時記下 `WorldFailure`（`Break()`，只記一次）；`DropOldFirst` 失敗（含例外，`std::bad_alloc` 是 `ResourceExhausted`）記 `ReplacementFailed`；在編排層外中斷的 World 由下一個入口記為「outside the Product」。同日更正（使用者「日誌是機制」）：先照第一則轉交寫的作者參數 `logWorldFailure` 與 `Log(Error, …)` 拿掉，編排層只回結構化的錯誤；當時跑到一半的完整突變停掉、作廢（停的時候 `or-prepare-skipped-at-startup` 還套在 `Product.cpp` 上，照它的 `find` 還原、確認和 HEAD 相同）。暫存處（`WorldSlot::held`）拿掉：空位不能再填，暫存的值沒有下一次。
+  - 測試：改寫 O-8 的「中斷或空的 World、別的照跑」一案，補「有壞的 World 時整幀不跑」「替換不能救」「只回錯誤、不寫日誌，之後的拒絕帶同一份」「在編排層外中斷」「`DropOldFirst` 裡丟例外」「schedule 裡丟 `bad_alloc`」；退役 D1、「`DropOldFirst` 失敗後暫存的值下次照樣帶」「從中斷的 World 帶過去」三案（性質不存在了）；改寫 D4、讀檔案例 4 (d)、處理器沿用一案。新案沒有另做 Red：新介面（`WorldFailure`、`Failure()`）在舊實作上編不過，Red 只會是編譯錯誤；檢出力由每個新斷言的專屬突變證明（下面）。
+  - 突變（D184：整份編排層清單）：199 個；完整跑 190 殺，沒殺的 9 個都是清單的錯（5 個 `cases` 帶逗號被 doctest 拆開、3 個 `expect`、1 個指到退役的案），改完 9/9 → 199/199（`broken-world/mutants-orchestration-full.log`、`mutants-orchestration-fix-9.log`）。Kernel 沒有改動，不重跑。ctest 113 項全過（`broken-world/ctest.log`）。
+  - 判斷（卡片照 L17）：`InsertSystems` 也被拒；入口的檢查排在「不認得的 World 名」之前；「發生前的動作」只收上一張成功的 schedule 與入口；System 不另立欄位（Kernel 錯誤文字的層次已帶，另立要改 Kernel 介面）。都列進合併前核准第 5 節。
+- **PR #244 的 L1（windows-x64）兩處失敗，都是測試的問題、引擎沒改**：
+  1. MSVC 編不過 `LifecycleTests.cpp`：doctest 的訊息寫入 `std::string_view`（碼的 `ToString`）需要完整的 `<ostream>`；三個測試的共用入口加 include（5aad6b4f）。第 1 步就有的檔，之前沒開 PR 跑 L1，現在才看到。
+  2. 讀檔案例 5「同一份存檔讀兩次、Summary 相同」只在 Windows 不同：`World::Summary` 照原始位元組算雜湊（`World.cpp:970` 的註解：padding 照原樣算，測試要用沒有 padding 的型別），讀檔案例的 `SaveData` 有 padding（`gold` 後 4 bytes、結尾 7 bytes），MSVC 複製時 padding 不同。兩個 `SaveData`（讀檔案例、scenario）把 padding 改成補零的欄位，加 `static_assert(std::has_unique_object_representations_v<…>)`。ctest 113 項全過；scenario 與讀檔的突變 28/28（`broken-world/mutants-after-padding-fix.log`）；Windows 的 log 在 `broken-world/l1-windows-fail*.log`。
 
 ## 下一步
 
-1. 完整突變（清單全部）；G-7（Fable／high）；第 3 步 的 G-8（背景進行中）、第 4 步 的 G-8。
+1. 合併前核准已過（2026-11-19）；開 PR 到 `gyo2`、看 L1 三平台。
 2. 合併前核准的資料：第 7.1 節各組、第 7.2 節的 DI 守衛各列、第 10 節的最終文字、D2 的讀法、G-3 的 `gyo_threads` 順序、Kernel 標頭的 `::Engine::`。
 
 ## 證據
 
-主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-orchestration-skeleton/`（git 不追蹤）：`inventory-startup-plugin.md`、`declaration-r0-adversarial-check.md`、`scenario-cross-engine.md`；`segment1/`：`baseline-build.log`、`baseline-ctest.log`、`ctest-segment1.log`、`red-stub.log`、`green.log`、`mutants-segment1.log`、`unkilled/`、`unkilled-7-after-fix.log`、`g8-check-fable-high.md`、`g8-defects-red.log`、`g8-defects-green.log`、`mutants-after-g8.log`、`mutants-after-g8-anchor-fix.log`；`segment2/`：`ctest-segment2.log`、`g3_scan.py`、`g3_scan.log`；`segment3/`：`link_dump.cmake`、`links-before.txt`、`links-after.txt`、`g3_links.py`、`g3_links.log`、`header-order-red.log`、`include-order-mutant.log`、`include-order-green.log`、`ctest-segment3.log`、`mutants-segment3.log`、`mutants-segment3-expect-fix.log`；`segment4/`：`mutants-segment4.log`、`ctest-segment4.log`。
+主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-orchestration-skeleton/`（git 不追蹤）：`inventory-startup-plugin.md`、`declaration-r0-adversarial-check.md`、`scenario-cross-engine.md`；`segment1/`：`baseline-build.log`、`baseline-ctest.log`、`ctest-segment1.log`、`red-stub.log`、`green.log`、`mutants-segment1.log`、`unkilled/`、`unkilled-7-after-fix.log`、`g8-check-fable-high.md`、`g8-defects-red.log`、`g8-defects-green.log`、`mutants-after-g8.log`、`mutants-after-g8-anchor-fix.log`；`segment2/`：`ctest-segment2.log`、`g3_scan.py`、`g3_scan.log`；`segment3/`：`link_dump.cmake`、`links-before.txt`、`links-after.txt`、`g3_links.py`、`g3_links.log`、`header-order-red.log`、`include-order-mutant.log`、`include-order-green.log`、`ctest-segment3.log`、`mutants-segment3.log`、`mutants-segment3-expect-fix.log`；`segment4/`：`mutants-segment4.log`、`ctest-segment4.log`；最上層：`g7-verification-fable-high.md`、`ctest-final.log`、`ctest-final2.log`、`mutants-full-orchestration-cc5fe0e1.log`、`mutants-full-kernel-cc5fe0e1.log`、`mutants-kernel-rewritten-4.log`；`broken-world/`：`build.log`、`ctest.log`、`mutants-orchestration-full.log`、`mutants-orchestration-fix-9.log`。

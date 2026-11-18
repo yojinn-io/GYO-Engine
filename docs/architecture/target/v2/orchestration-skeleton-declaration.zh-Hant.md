@@ -1,10 +1,10 @@
 # 事前宣告：編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-更新：2026-11-18（修訂 7）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：第一段核准（2026-11-18）；照第 12 節實作（段 1 → 段 4），合併前做第二段核准。**
+更新：2026-11-18（修訂 8）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：第一段核准（2026-11-18）；照第 12 節實作（段 1 → 段 4），合併前做第二段核准。**
 
 > **核准**：使用者 2026-11-18 在主會話對「方向和設計（新增 `engine/orchestration`、開局搬出 Kernel、Module 登記檔預設全帶可關、scenario 第一段）；7.1 五組放寬的方向（合併前再逐組核准）；6 條綁實作的守衛延到第 3 批開頭」與第 14 節五件的結果回「核准」（主會話轉達）。比過的選項：逐項核准或退回某項／全部核准 ←選。**這不是第 7.1、7.2 節判定變更的最終核准**：實作完、合併前帶 G-7、G-8 與突變結果做第二段核准，之前不開 PR。
 
-經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。修訂 2 收使用者對第 14 節第 3 件的決定（重跑登記），修訂 3 收第 2 件的決定（不重跑生命週期），修訂 4 收第 4 件的決定（替換的先後作者選），修訂 5 收第 4 件的補充（存檔版本 Module，不在本批），修訂 6 收第 1 件的決定（帶過去、做成機制），修訂 7 收第 5 件、O-4 的歸法與第一段核准，都只改它牽連的地方。
+經過：修訂 0（f9f74684）送 Fable／high 敵對式檢查，必改 10、建議改 16、小問題 8（報告 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，並收主會話轉來的使用者決定六則（scenario test、守衛延後、「機制穩定」的判準、scenario 失敗的分類、對照開源引擎的兩則）與主會話照 L17 的兩則判定（scenario 涵蓋第 1 批的機制、`TieBreaks` 那一步延到第 4 批）。處理對照在第 15 節。修訂 1 沒有再送檢查。修訂 2 收使用者對第 14 節第 3 件的決定（重跑登記），修訂 3 收第 2 件的決定（不重跑生命週期），修訂 4 收第 4 件的決定（替換的先後作者選），修訂 5 收第 4 件的補充（存檔版本 Module，不在本批），修訂 6 收第 1 件的決定（帶過去、做成機制），修訂 7 收第 5 件、O-4 的歸法與第一段核准，修訂 8 收合併前核准第 4 件（D2）的決定（一個 World 壞了 Product 就結束），都只改它牽連的地方。
 
 性質：實作批的事前宣告（AGENTS §3 的 Architecture Delta、§2 的基盤 Architecture、§14.4 的判定變更、Design Invariants 的變更）。實作段第 2 批。
 
@@ -214,7 +214,7 @@ public:
 
 **錯誤與警告的出口**（檢查 S5）：Kernel 的錯誤照舊只在 `WorldExecutor` 的錯誤處理器記一次（error-handling DI 2；編排層不改它的預設）；編排層自己的警告用既有的 `Engine::Base::Log(LogLevel::Warning, "orchestration", …)`（`engine/base/include/engine/base/Log.hpp:67`），不另立處理器（AGENTS §13：不和既有概念重複）。替換之後新的 `WorldExecutor` 的錯誤處理器沿用舊的那一個（`Product` 記住每個 World 設過的處理器）。
 
-**中斷的 World**（檢查 S1）：Kernel 對中斷的 World 再 `Run` 是斷言（`Executor.cpp:195`）。`Product` 記住哪個 World 中斷：`RunFrame`／`RunSchedule` 碰到它回錯誤 `WorldInterrupted`、不呼叫 Kernel；別的 World 照樣能跑；`ReplaceWorld` 可以換掉它（讀檔失敗後的收拾）。「先丟舊的」替換失敗後，那個位置是**空的**（3.9）：`RunFrame`／`RunSchedule` 碰到它回 `WorldMissing`、不呼叫 Kernel，別的 World 照樣能跑，`ReplaceWorld` 可以再填上。遊戲初始化失敗之後第一個 World 是中斷的，`RunFrame` 回 `WorldInterrupted`。
+**中斷的 World**（檢查 S1；修訂 8 照使用者 `v8-arch-gyo2-broken-world-ends-product` 改寫）：Kernel 對中斷的 World 再 `Run` 是斷言（`Executor.cpp:195`）。**一個 World 中斷，或它的位置是空的（「先丟舊的」替換失敗，3.9），`Product` 就結束**：`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`、`InsertSystems` 一律先檢查所有 World，有壞的就什麼都不跑、不改、不呼叫 Kernel，回 `WorldInterrupted` 或 `WorldMissing`，不論指名的是哪個 World——所以不留半幀；`ReplaceWorld` 不能拿來救它。錯誤回給 runner，由 runner 決定關掉程式或回主選單（另建一個 `Product`）。壞掉的那一刻，編排層與 Kernel 收集 `WorldFailure`（3.5），不在事後讀壞掉的 World。編排層不寫日誌，只回結構化的錯誤（同日更正：日誌不寫進編排層——使用者「日誌不要嵌入到功能中呀，日誌是機制」；要不要記、怎麼記是日誌機制的事，日誌機制先不排批次）。遊戲初始化失敗之後第一個 World 是中斷的，`RunFrame` 回 `WorldInterrupted`。（修訂 7 的寫法：中斷或空的那個回錯誤、別的 World 照樣能跑、`ReplaceWorld` 可以換掉或再填上——使用者撤掉，理由是等於吞錯誤。）
 
 **例外**（檢查 S4）：`Configure`／`Build`／`Finish`／`Check` 在 `Product::Build` 裡丟出例外：例外往外傳，`Product` 沒有建成、已建的 Registry 一起銷毀。`InsertSystems` 的 `build` 丟出例外：編排層先 `DiscardRegistrations`（Kernel 的規則 3 會把已記的留在暫存副本，留著的話下一次建 World 是斷言，`World.cpp:59`），再把例外往外傳。替換時準備或 schedule 丟出例外：照 3.9 第 4 步收拾，再往外傳。
 
@@ -236,7 +236,7 @@ public:
 | O-E6 | World 描述錯誤：沒有 World、名字重複、`units` 指到沒帶上的單位 | 新 |
 | O-E7 | 啟動時準備函式回傳錯誤 | 新 |
 
-執行時的錯誤 `OrchestrationError` 另一組碼（不和啟動碼共用，檢查 N5）：`ReplacePrepareFailed`、`ReplaceScheduleFailed`、`InsertRefused`（包住 Kernel 的 `DynamicInsertRefused`）、`InsertBuildFailed`（包住 Kernel 的建 Plan 報告）、`WorldInterrupted`、`WorldMissing`、`ReplaceRegistrationFailed`、`ReplaceCarryOverFailed`（3.12）、`OwnerTaken`（3.10）。準備函式回傳 `OrchestrationError`，作者填 `PrepareFailed`、自己的碼（字串）與訊息；`ReplaceWorld` 的錯誤原樣帶著它（3.9：存檔版本 Module 的拒絕靠這個分辨）。碼的寫法照 Kernel 的「R-E1」「D-E1」（卡片照 L17 判，前綴 O 取 orchestration）。
+執行時的錯誤 `OrchestrationError` 另一組碼（不和啟動碼共用，檢查 N5）：`ReplacePrepareFailed`、`ReplaceScheduleFailed`、`InsertRefused`（包住 Kernel 的 `DynamicInsertRefused`）、`InsertBuildFailed`（包住 Kernel 的建 Plan 報告）、`WorldInterrupted`、`WorldMissing`（修訂 8：兩者都表示 Product 已結束，錯誤上掛著 `WorldFailure`：Product 與 World、怎麼壞的 `Interrupted`／`ReplacementFailed`／`ResourceExhausted`、入口、schedule 與它的 domain 和 tick（跑之前讀）、Kernel 錯誤碼與錯誤文字或編排層的報告、發生前最後成功跑的 schedule；`Product::Failure()` 也讀得到。System 不另立欄位：Kernel 的錯誤文字的層次已帶 System 與步驟，另立欄位要改 Kernel 的介面）、`ReplaceRegistrationFailed`、`ReplaceCarryOverFailed`（3.12）、`OwnerTaken`（3.10）。準備函式回傳 `OrchestrationError`，作者填 `PrepareFailed`、自己的碼（字串）與訊息；`ReplaceWorld` 的錯誤原樣帶著它（3.9：存檔版本 Module 的拒絕靠這個分辨）。碼的寫法照 Kernel 的「R-E1」「D-E1」（卡片照 L17 判，前綴 O 取 orchestration）。
 
 ### 3.6 O6：遊戲初始化清單與每幀的清單
 
@@ -302,16 +302,16 @@ struct ReplaceRequest {
 3. 準備：登記單位的 → 描述的 → `extra`。
 4. 在新 World 上依序 `Run` `beforeSwap` 的每一張（遊戲初始化沒跑過時照 3.6 先跑它——只會在啟動之後立刻替換時發生）。
 5. 全部成功：銷毀舊的 `WorldExecutor`、再銷毀舊的 Registry，新的放進同一個位置（同一個名字、同一份描述的每幀清單、同一個錯誤處理器）；先前從 `Product::World(name)` 拿到的參照作廢（說明頁寫明）。**任何一步失敗或丟例外**：帶過去的移回舊 World、銷毀新的、舊的照跑、回傳 `ReplacePrepareFailed`／`ReplaceScheduleFailed`（或把例外往外傳）並記一次警告。
-6. 遊戲初始化**不重跑**（行程一次；第一個 World 被換掉也一樣）。中斷的 World、空的位置也能被換掉。
+6. 遊戲初始化**不重跑**（行程一次；第一個 World 被換掉也一樣）。只換健康的 World：有 World 中斷或空著時 `ReplaceWorld` 被拒（修訂 8，3.4）。
 
 **`DropOldFirst`**（地圖大到兩個 World 同時放不下時；使用者點名的 BigMap，5.2）：
-1. 帶過去（3.12）：把標記要帶的 Resource 從舊 World 移到 `Product` 的暫存處。
+1. 帶過去（3.12）：把標記要帶的 Resource 從舊 World 取出，由這次替換拿著。
 2. 銷毀舊的 `WorldExecutor`、再銷毀舊的 Registry；這個位置變成空的。
-3. 照上面的 1、3、4 重新登記、建新的、準備、跑 `beforeSwap`（帶過去從暫存處移入，在所有準備之前）。
-4. 全部成功：新的放進這個位置。**任何一步失敗或丟例外**：銷毀新的，位置保持空的，回傳對的碼並記一次警告；帶過去的值留在暫存處，下一次替換這個位置時照樣帶。runner 的收拾（說明頁寫明）：再呼叫 `ReplaceWorld` 填上別的內容（例：回主選單的 World、另一份存檔），或結束；空的位置在 `RunFrame` 回 `WorldMissing`。
+3. 照上面的 1、3、4 重新登記、建新的、準備、跑 `beforeSwap`（帶過去的值移入，在所有準備之前）。
+4. 全部成功：新的放進這個位置。**任何一步失敗或丟例外**：銷毀新的，位置保持空的，回傳對的碼並記一次警告；**Product 就此結束**（修訂 8，3.4）：記下 `WorldFailure`（`ReplacementFailed`；`std::bad_alloc` 是 `ResourceExhausted`），帶過去的值隨這次替換丟掉，之後的入口一律回 `WorldMissing`、不能再填。runner 的收拾：關掉程式或另建一個 `Product`（回主選單）。**外部資料（存檔版本、素材、網路快照）由作者在發出 `ReplaceRequest` 之前驗證**，失敗就回 `Result`、不發替換；編排層不驗證它們的內容（修訂 8，使用者 `v8-arch-gyo2-broken-world-ends-product` 第 3 點；程式正確時不會出現空位，出現了就是 bug 或資源耗盡）。（修訂 4 的寫法「帶過去的值留在暫存處」「再呼叫 `ReplaceWorld` 填上」隨修訂 8 撤掉。）
 
 **存檔讀不了**（使用者 2026-11-18）：「壞檔問題是最嚴重的Bug，通常是來自於系統更新…我認為這個是系統層級是無解的，只能在運營端處理，或者提供存檔轉換功能。通常製作的時候直接上version 管理。太老的檔案不支持。讓玩家自己開新檔。」——Engine 不做存檔的版本轉換（`save-unaware-means-format-only`）；Engine 做的是讓讀檔失敗是安全的：預設先建新的、舊 World 照跑、錯誤回給作者（side chat 的讀法，不是使用者的話）。判定裡的壞檔用「版本不支援」當例子。
-- **存檔版本 Module 的拒絕接得住，不改介面**（第 5 條做那個 Module；本批只確認路）：拒絕出現在準備（`extra` 或登記單位的準備回錯誤）或讀檔的 schedule（System 回錯誤）。前者 `ReplaceWorld` 回 `ReplacePrepareFailed`、後者回 `ReplaceScheduleFailed`；`BuildNewFirst` 時舊 World 照跑，`DropOldFirst` 時位置是空的、`RunFrame` 回 `WorldMissing`；啟動時讀檔被拒是 O-E7。準備函式回傳的錯誤帶回報者自己的碼（字串，例：那個 Module 的「版本不支援」）與訊息，`ReplaceWorld` 原樣放進它回傳的錯誤裡，作者分得出是版本被拒還是別的失敗（和登記單位在 `Finish`／`Check` 回報的形狀一樣，3.5）。
+- **存檔版本 Module 的拒絕接得住，不改介面**（第 5 條做那個 Module；本批只確認路）：拒絕出現在準備（`extra` 或登記單位的準備回錯誤）或讀檔的 schedule（System 回錯誤）。前者 `ReplaceWorld` 回 `ReplacePrepareFailed`、後者回 `ReplaceScheduleFailed`；`BuildNewFirst` 時舊 World 照跑，`DropOldFirst` 時位置是空的、Product 結束（修訂 8；所以選 `DropOldFirst` 時版本要在發替換之前驗）；啟動時讀檔被拒是 O-E7。準備函式回傳的錯誤帶回報者自己的碼（字串，例：那個 Module 的「版本不支援」）與訊息，`ReplaceWorld` 原樣放進它回傳的錯誤裡，作者分得出是版本被拒還是別的失敗（和登記單位在 `Finish`／`Check` 回報的形狀一樣，3.5）。
 
 **重新登記**（`v8-arch-gyo2-restore-reruns-registration`）：使用者：「讀檔應該只有一種解釋就是返回到某一時刻的狀態。」「乾脆讀檔就全部重來，也不管指令了，標準的回到某個狀態。作者想要測試，就自己設計測試流程來規避插入系統的重置。」——問到能不能分清指令輸入與遊戲中的設計（分不清：同一個插入入口，來源只能呼叫的人自己填；Bevy、flecs、Unity 都不分）之後：「對，分不清就別冒險，我們已經有入口了，用不用是作者的決定。」比過的：沿用同一份 Registry（本卡修訂 1 的建議）／重跑（flecs、Unity）←選／依來源分（指令保留並給還原指令、遊戲追加的還原；因分不清來源而不採）。
 - 「全部重來」只到這個 World 的登記（照產品描述），不是重開行程：遊戲初始化照舊只跑一次（第 14 節第 1 件照舊要定）。
@@ -360,9 +360,9 @@ template <class T> void WorldSetup::CarryOver();   // Build 裡（登記單位�
 
 - **機制，不是寫死**：任何 Resource 型別都能被標記；編排層只存「型別的身分（`TypeKey`）＋一個型別化的搬移函式」的清單，替換時照清單泛用地搬，不認得任何特定的型別或容器。各 Module（狀態機、時間）要不要帶自己的 Resource，用同一個標記自己決定。（side chat 對「機制」的讀法，不是使用者的話。）
 - **Engine 不看值的內容**：整個值照搬（`ResourceMut<T>` 取出、`SetResource<T>` 放進新 World，都是 Kernel 公開的 API），和 Unity `EntityManager.MoveEntitiesFrom` 一樣不解讀內容。**值裡不能存指向舊 World 的參照**（`EntityId`、指標、句柄）——這是作者的責任，寫在契約與 O-10；照 `guards-after-mechanism-stable` 不立實作面的守衛，靠文件與審查。
-- **時機**：在所有準備之前（3.8、3.9）；`DropOldFirst` 經 `Product` 的暫存處。準備函式放預設值時要先看值在不在（帶過來的已經在），不能蓋掉——契約寫明，說明頁給寫法。
-- **清單從哪來**：照**舊** World 的標記取出（重新登記之後新 World 也會有同一份標記，因為描述相同）；舊 World 裡沒有那個值的，不帶（新 World 照準備給的值）；新 World 沒有登記那個型別的，這次替換失敗（`ReplaceCarryOverFailed`）、值移回舊的（`DropOldFirst` 時留在暫存處）。
-- **失敗**：任何一步失敗或丟例外，帶過去的值移回舊 World（`DropOldFirst` 時留在暫存處，下次替換照樣帶）。
+- **時機**：在所有準備之前（3.8、3.9）；`DropOldFirst` 由這次替換拿著（修訂 8 起沒有暫存處）。準備函式放預設值時要先看值在不在（帶過來的已經在），不能蓋掉——契約寫明，說明頁給寫法。
+- **清單從哪來**：照**舊** World 的標記取出（重新登記之後新 World 也會有同一份標記，因為描述相同）；舊 World 裡沒有那個值的，不帶（新 World 照準備給的值）；新 World 沒有登記那個型別的，這次替換失敗（`ReplaceCarryOverFailed`）、值移回舊的（`DropOldFirst` 時隨失敗的替換丟掉，Product 結束）。
+- **失敗**：任何一步失敗或丟例外，帶過去的值移回舊 World（`DropOldFirst` 沒有舊 World：值隨失敗的替換丟掉，Product 結束，3.4；修訂 8）。
 - 帶過去的值在新 World 裡取得新的 stamp（`SetResource` 寫入當下），`Changed<T>` 對新 World 的第一批讀者成立。綁執行緒的 Resource 在呼叫的執行緒上重新綁定（同一條執行緒，第 13 節）。
 - 只帶 Resource，不帶實體（遊戲初始化生成的實體不帶；要帶的作者存成 Resource 或自己重建）。
 - 系譜：Unity Entities `EntityManager.MoveEntitiesFrom`（`Unity.Entities/EntityManager.cs:3941`）、`CopyEntitiesFrom`（`:3785`）在 World 之間搬資料、不解讀；Bevy、flecs 沒有（不換 World）。**退掉的**（使用者比過）：長留的放在 World 外、每個新 World 由準備放進去；第一個 World 不換。
@@ -499,7 +499,8 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 | O-1 遊戲初始化 | 清單三張、一張 `InsertBefore`、一張 `InsertAfter`、兩個單位插同一個錨點：跑的順序；錨點不在：O-E5、那一筆沒插；同名兩次：跑兩次；只在第一個 World 跑；`RunFrame` 兩次只跑一次、在第一幀的第一張之前；`RunSchedule` 也先跑它；先 `RunGameInit` 再 `RunFrame`：一次；`RunGameInit` 第二次、`RunFrame` 之後再 `RunGameInit`：斷言；一張回 Err：`RunFrame` 回它、每幀清單一張都沒跑、處理器只被呼叫一次、之後 `RunFrame` 回 `WorldInterrupted` 不呼叫 Kernel；清單空：`RunFrame` 直接跑每幀；遊戲初始化改的 `KernelSettings` 從下一張生效 |
 | O-3 runner | 沒人裝：`Run()` 跑遊戲初始化與一幀、回 Success；裝了：runner 被呼叫一次、拿到同一個 `Product`；兩個裝：O-E4；`Run()` 第二次斷言 |
 | O-8 準備 | 準備的順序（登記單位照順序、再描述的）；準備時 World 是 Ready、還沒有任何 schedule 跑過；第一幀的 System 讀到準備放的值；準備回 Err：O-E7 |
-| O-9 替換 | 先動態插入一次（版本 2），再換：新 World 的 `Types()` 是新的物件、版本 1、插入的 System 不在；登記單位的 `Build`／`Finish`／`Check` 對這個 World 各被呼叫第二次、`Configure` 沒有；重新登記時 `Check` 回錯誤：`ReplaceRegistrationFailed`、舊的照跑；舊 World 被銷毀（解構會計數的 Resource）；舊的實體與被丟的紀錄都不在、Resource 回到準備給的值；遊戲初始化沒有重跑；每幀清單與錯誤處理器照舊；`extra` 在登記單位與描述的準備之後；`beforeSwap` 在準備之後、換上之前；`extra` 回 Err、`beforeSwap` 的 schedule 回 Err、`extra` 丟例外：舊的 World 照舊（實體、Resource、還能再跑一幀）、回傳對的碼、警告一次；`DropOldFirst`：舊的在新的 Registry 建之前就銷毀（解構計數的先後）、成功時結果和預設相同、失敗時位置是空的、`RunFrame` 回 `WorldMissing` 且別的 World 照跑、再 `ReplaceWorld` 填上之後正常；換掉一個中斷的 World；在 Run 裡呼叫：斷言 |
+| O-9 替換 | 先動態插入一次（版本 2），再換：新 World 的 `Types()` 是新的物件、版本 1、插入的 System 不在；登記單位的 `Build`／`Finish`／`Check` 對這個 World 各被呼叫第二次、`Configure` 沒有；重新登記時 `Check` 回錯誤：`ReplaceRegistrationFailed`、舊的照跑；舊 World 被銷毀（解構會計數的 Resource）；舊的實體與被丟的紀錄都不在、Resource 回到準備給的值；遊戲初始化沒有重跑；每幀清單與錯誤處理器照舊；`extra` 在登記單位與描述的準備之後；`beforeSwap` 在準備之後、換上之前；`extra` 回 Err、`beforeSwap` 的 schedule 回 Err、`extra` 丟例外：舊的 World 照舊（實體、Resource、還能再跑一幀）、回傳對的碼、警告一次；`DropOldFirst`：舊的在新的 Registry 建之前就銷毀（解構計數的先後）、成功時結果和預設相同、失敗時位置是空的、Product 結束（修訂 8）；在 Run 裡呼叫：斷言 |
+| Product 結束（修訂 8） | 一個 World 中斷：別的 World 的 `RunSchedule`、`InsertSystems`、不認得的 World 名一律回 `WorldInterrupted`、什麼都沒跑，錯誤帶 `WorldFailure`（Product、World、`Interrupted`、入口、schedule、domain 與 tick、Kernel 碼與錯誤文字、上一張成功的 schedule）；有壞的 World 時整幀不跑（排在前面的 World 也沒前進：記錄與 tick 不變）；替換不能救：中斷的 World 兩種先後都被拒、它照舊在；空的位置兩種先後都填不上；`BuildNewFirst` 失敗不結束 Product；不寫日誌（`Warning`、`Error` 都沒有）、之後的拒絕帶同一份 `WorldFailure`、拒絕的 `detail` 是它的文字、文字含每一部分；在編排層外中斷的 World：`RunGameInit` 被拒、不記為已跑、記為「outside the Product」；`DropOldFirst` 裡丟例外：結束、`std::bad_alloc` 是 `ResourceExhausted`；schedule 裡丟 `std::bad_alloc`：由入口記下 |
 | O-10 動態插入 | 准的 World：成功、新 System 下一幀跑；不准的 World：回 `InsertRefused`、`Log` 的處理器收到一次 `Warning`（帶 World 名與 owner）、World 照跑、版本不變；替換之後仍被拒、仍是一次；建 Plan 失敗（R-E7）：回 `InsertBuildFailed`、警告一次、World 留在舊版本；`build` 丟例外之後 `ReplaceWorld` 正常（暫存副本已丟）；owner 和登記單位同名：`OwnerTaken`；`Finish`／`Check` 沒有被再呼叫 |
 | 預設全帶（產生的表） | 合成的登記檔建一個測試 target：預設帶進 World 的 Module、不帶 Plugin；`DISABLE_MODULES` 關一個；`PLUGINS` 帶 Plugin；關掉被依賴的那個：configure 失敗（`cmake -P` 驗）；手寫的 `RegisteredUnits` 少了被依賴的：`Product::Build` 回 O-E3 |
 | 登記檔格式（`cmake -P`） | 表頭不對、名字重複（跨兩份）、依賴不存在、依賴在後、Module 依賴 Plugin、`library_only` 和 `unit`／`header` 對不上：各自 `FATAL_ERROR` 且訊息含檔名、列、原因；正確的檔通過；`gyo_link_registered_dependencies` 產生的 link 和改之前的一樣（既有的 `gyo_expect_links` 五處照舊通過） |
@@ -619,9 +620,10 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 - **O-5 啟動錯誤一次收齊**：Kernel 的 `StartupReport`、編排層的 `OrchestrationCode`、各登記單位的錯誤收成一份（準備的錯誤另一份）；Kernel 的 `StartupCode` 不擴充。守衛：O-5 各案。
 - **O-6 依賴只在登記檔**：Module／Plugin 之間的依賴只寫在兩份 CSV；`engine/` 的子目錄、引擎內 link 與產品的登記單位表由它產生；編排層建立 `Product` 時檢查；Module 預設全帶、產品可以關，Plugin 由產品列出。守衛：登記檔的 `cmake -P` 行為案例；依賴各案；CMakeLists 的掃描延後（7.4）。
 - **O-7 準備時機**：每個 World 建好之後（啟動與每次替換）、第一次 Run 之前，照「帶過去 → 登記單位的 → 描述的 → 替換帶的」順序呼叫準備；準備放預設值時不蓋掉已經在的值；失敗時這個 World 不用。守衛：O-8 各案；scenario S1-6。
-- **O-8 替換**：替換照產品描述重新登記（新的 Registry；之前動態插入的全部重置；`Configure` 與遊戲初始化不重跑；`restore-reruns-registration`）、先後由作者選（預設先建新的：任何一步失敗就保留舊的；先丟舊的：失敗時位置是空的、`RunFrame` 回 `WorldMissing`、可以再填；`replace-order-author-choice`）、`beforeSwap` 在換上之前；遊戲初始化不重跑；只在兩次 Run 之間；中斷的 World 可以被換掉。守衛：O-9 各案、讀檔案例、scenario S1-6～S1-8。
-- **O-10 帶過去**：任何 Resource 型別都能被標記帶過去；編排層照標記清單泛用地搬（型別身分＋型別化的搬移函式），不認得特定型別、不看值的內容；在所有準備之前；失敗移回（`DropOldFirst` 留在暫存處）；值裡不能存指向舊 World 的參照，是作者的責任。守衛：判定 2 案例 6、scenario S1-10、O-9 的帶過去各案；「值裡沒有舊 World 的參照」不立守衛，靠文件與審查（`guards-after-mechanism-stable`）。
+- **O-8 替換**：替換照產品描述重新登記（新的 Registry；之前動態插入的全部重置；`Configure` 與遊戲初始化不重跑；`restore-reruns-registration`）、先後由作者選（預設先建新的：任何一步失敗就保留舊的；先丟舊的：失敗時位置是空的、Product 結束；`replace-order-author-choice`）、`beforeSwap` 在換上之前；遊戲初始化不重跑；只在兩次 Run 之間；只換健康的 World；編排層不驗證外部資料的內容，作者在發出 `ReplaceRequest` 之前驗證（修訂 8）。守衛：O-9 各案、讀檔案例、scenario S1-6～S1-8。
+- **O-10 帶過去**：任何 Resource 型別都能被標記帶過去；編排層照標記清單泛用地搬（型別身分＋型別化的搬移函式），不認得特定型別、不看值的內容；在所有準備之前；失敗移回（`DropOldFirst` 隨失敗的替換丟掉，修訂 8）；值裡不能存指向舊 World 的參照，是作者的責任。守衛：判定 2 案例 6、scenario S1-10、O-9 的帶過去各案；「值裡沒有舊 World 的參照」不立守衛，靠文件與審查（`guards-after-mechanism-stable`）。
 - **O-9 動態插入的警告**：Kernel 拒絕或建 Plan 失敗時，編排層經 `Engine::Base::Log` 記**一次** `Warning`、把錯誤回給呼叫的人、World 照跑。守衛：O-10 各案。
+- **O-11 一個 World 壞了，Product 就結束**（修訂 8，使用者 `v8-arch-gyo2-broken-world-ends-product`）：見 3.4「中斷的 World」；`WorldFailure` 在壞掉的那一刻收集；編排層不寫日誌（同日更正）。守衛：7.3「Product 結束」各案、判定 2 案例 4 (c)(d)。
 
 **Replacement Criteria**（L17 的形式）：
 - RC-O1（原 Kernel RC 7）：第一個真實能力接進機制時仍要改編排層的迴圈或 Kernel 本體；或編排層以外的協調邏輯在兩個以上產品中重複。
@@ -660,11 +662,11 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 1. **啟動時讀檔**：描述的準備把配發器範圍訂成 `[900, 上限]`、放暫存的存檔資料與金幣的預設值 0；`RunSchedule("Main","Load")`（遊戲初始化先跑；`SpawnWithId` 帶完整 bundle 放回、金幣改成 120），再 `RunFrame`（`Play` 生成一個選單實體）。之後：編號 12、57、58 在、值與存檔相同、`ChaseTarget` 仍是 12、選單實體的編號 ≥ 900、金幣 120、沒有被丟的生成。
 2. **沒有移下界就整批被丟**（對照組）：同上但範圍 `[1, 上限]`：每一筆以 `IdInAllotterRange` 被丟並記紀錄——證明是準備時機讓案例 1 成立。
 3. **遊戲中讀檔**：先跑三幀（生成實體、金幣改成 50、製造一筆被丟的生成），再動態插入一個 System；`ReplaceWorld("Main", {extra: 讀存檔; beforeSwap: Load})`。之後：只有讀檔放回的與之後生成的實體；金幣 120；動態插入的 System 不在；被丟的紀錄從空的開始；遊戲初始化的計數仍是 1；下一幀 `Play` 跑在新 World。
-4. **讀檔失敗**：預設 `BuildNewFirst`——(a) `extra` 回 Err（存檔的版本不支援，碼 `"save-version-unsupported"`；回傳的錯誤帶著這個碼）；(b) `Load` 回 Err（存檔的實體部分讀不了）：兩者都回對的碼、警告一次；舊 World 的實體與金幣 50 照舊、再跑一幀沒有錯誤。`DropOldFirst`——(c) `extra` 回 Err（版本不支援）：回對的碼、警告一次；位置是空的，`RunFrame` 回 `WorldMissing`；(d) 接著用一份可以讀的存檔 `ReplaceWorld`：成功、之後和案例 3 的結果相同。
+4. **讀檔失敗**：預設 `BuildNewFirst`——(a) `extra` 回 Err（存檔的版本不支援，碼 `"save-version-unsupported"`；回傳的錯誤帶著這個碼）；(b) `Load` 回 Err（存檔的實體部分讀不了）：兩者都回對的碼、警告一次；舊 World 的實體與金幣 50 照舊、再跑一幀沒有錯誤。`DropOldFirst`——(c) `extra` 回 Err（版本不支援）：回對的碼、警告一次；位置是空的，`RunFrame` 回 `WorldMissing`；(d) 接著用一份可以讀的存檔 `ReplaceWorld`：被拒（`WorldMissing`），位置仍是空的——Product 已結束（修訂 8；修訂 7 的 (d) 是「成功、和案例 3 相同」）。
 5. **讀兩次相同**：同一份存檔換兩次 World：兩次的 `Summary()` 相同。
-6. **遊戲初始化放進第一個 World 的東西**（3.12）：遊戲初始化放 `KeyBindings`（宣告帶過去）與 `Score`（不帶），第二幀把 `KeyBindings` 改掉；`ReplaceWorld` 之後 `KeyBindings` 是改過的值、`Score` 回到準備的預設值、帶過去在所有準備之前；`extra` 失敗之後舊 World 的 `KeyBindings` 還在；兩種不同的型別（一個是登記單位標記的、一個是產品標記的）都帶過去；舊 World 裡沒有那個值：不帶、新 World 是準備給的；新 World 沒有登記那個型別：`ReplaceCarryOverFailed`、值移回舊的；`DropOldFirst` 失敗後再替換：暫存處的值照樣帶進去。
+6. **遊戲初始化放進第一個 World 的東西**（3.12）：遊戲初始化放 `KeyBindings`（宣告帶過去）與 `Score`（不帶），第二幀把 `KeyBindings` 改掉；`ReplaceWorld` 之後 `KeyBindings` 是改過的值、`Score` 回到準備的預設值、帶過去在所有準備之前；`extra` 失敗之後舊 World 的 `KeyBindings` 還在；兩種不同的型別（一個是登記單位標記的、一個是產品標記的）都帶過去；舊 World 裡沒有那個值：不帶、新 World 是準備給的；新 World 沒有登記那個型別：`ReplaceCarryOverFailed`、值移回舊的。（修訂 7 的「`DropOldFirst` 失敗後再替換：暫存處的值照樣帶進去」隨修訂 8 撤掉。）
 
-案例 5 守的是「新 World」這份契約的後果，靠 World 的建構本身，沒有對應的突變（寫明，不算進檢出力）。突變：準備移到第一次 Run 之後（案例 1）、準備不呼叫（案例 1、2）、替換時保留舊實體（案例 3）、沿用舊的被丟紀錄（案例 3）、重跑遊戲初始化（案例 3）、失敗時換上新的（案例 4a、4b）、`beforeSwap` 在換上之後（案例 4b）、`DropOldFirst` 仍先建新的（解構先後）、`DropOldFirst` 失敗時留下半成的新 World（案例 4c 的 `WorldMissing`）、空的位置不能再填（案例 4d）、帶過去漏掉、帶過去在 `extra` 之後、失敗時不移回（案例 6）。
+案例 5 守的是「新 World」這份契約的後果，靠 World 的建構本身，沒有對應的突變（寫明，不算進檢出力）。突變：準備移到第一次 Run 之後（案例 1）、準備不呼叫（案例 1、2）、替換時保留舊實體（案例 3）、沿用舊的被丟紀錄（案例 3）、重跑遊戲初始化（案例 3）、失敗時換上新的（案例 4a、4b）、`beforeSwap` 在換上之後（案例 4b）、`DropOldFirst` 仍先建新的（解構先後）、`DropOldFirst` 失敗時留下半成的新 World（案例 4c 的 `WorldMissing`）、空的位置被再填上（案例 4d，修訂 8 反過來）、帶過去漏掉、帶過去在 `extra` 之後、失敗時不移回（案例 6）。
 
 ### 判定 3：scenario test 第一段（`tests/common/scenario/ScenarioTests.cpp`）
 
@@ -794,3 +796,5 @@ Red 的做法（§14.2、§14.3）：新介面先加宣告與空的實作（建�
 **修訂 6 收的轉交**（主會話，2026-11-18）：`v8-arch-gyo2-carry-over-mechanism`——第 14 節第 1 件定為帶過去、做成機制（新節 3.12：泛用的 `CarryOver<T>()`、不看值、值裡不能存舊 World 的參照是作者的責任、在所有準備之前、準備不能蓋掉、清單照舊 World 的標記、失敗移回；3.5 加 `ReplaceCarryOverFailed`；10.2 加 O-10；7.3、8.2 S1-10、判定 2 案例 6、判定 3 從「待定」改成判定）。O-4 的歸法使用者沒有表態，留在「一起確認」。第 5 件使用者還在定，沒有改。
 
 **修訂 7 收的轉交**（主會話，2026-11-18）：第 14 節第 5 件（Fable／high）與 O-4 的歸法（算原有項目）——使用者「照建議」；第一段核准（使用者「核准」）。第 12 節、第 14 節、10.2 O-4、開頭的狀態與核准行已改。
+
+**修訂 8 收的轉交**（主會話，2026-11-18，合併前核准第 4 件 D2）：`v8-arch-gyo2-broken-world-ends-product`——一個 World 壞了 Product 就結束：跑之前先檢查、不留半幀；不准拿替換來救；外部資料由作者在替換之前驗證（編排層只寫契約、不加機制）；錯誤回給 runner，內容完整、結構化（`WorldFailure` 在壞掉的那一刻收集、不讀壞掉的 World）。使用者原話（side chat，節錄）：「一個world其實是一個鏈，裡面的東西正確執行才能是完整的遊戲系統。而且正常情況下World是不會失敗的，如果失敗，還繼續，就是吞Error了。」「World 壞了，Product 就結束。……我們如果可以的話，也要記日誌。」「日誌是否使用是作者控制參數開啟的。就是和普通日誌一起，先不做那種商業級別的崩潰日誌。」比過的：照修訂 7（回 `WorldMissing`、別的 World 照跑；主會話原本的建議，撤回）／照實作（照順序跑到空位才停，留半幀）／先檢查、全部不跑、回錯誤 ←選／准健康的 World 單獨跑（分不出健康）／用存檔或快照替換來救（沒有替換的標準）。日誌：同日更正——編排層內建日誌、作者用參數開關（先轉來的，撤回）／編排層只回結構化錯誤，日誌另外當成機制 ←選（使用者：「等等，日誌不要嵌入到功能中呀，日誌是機制。先不急。」side chat 複述「編排層只回結構化錯誤；要不要記、怎麼記是日誌機制的事」，使用者：「是的。」）；日誌機制先不排批次。出處：HANDOFF `v8-arch-gyo2-broken-world-ends-product`（文件分支 656eae7d）。改了 3.4「中斷的 World」、3.5 的碼、3.9 兩種先後的步驟與存檔版本一項、3.12、7.3 O-9 列與新列「Product 結束」、10.2 O-8／O-10／O-11、判定 2 案例 4 (c)(d) 與案例 6、判定 2 的突變。**超出動工前核准的範圍**：錯誤內容 `WorldFailure`（`OrchestrationError::failure`、`Product::Failure()`）；`InsertSystems` 也照樣被拒（主會話列的是三個 Run 與替換，這一處卡片照 L17 判：Product 已結束、插入也是改它）——合併前核准資料第 5 節列出。
