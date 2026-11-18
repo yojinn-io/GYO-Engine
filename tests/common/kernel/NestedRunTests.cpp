@@ -1544,6 +1544,12 @@ SystemResult CatchAndReturnOk(ExclusiveWorld<> world) {
     Log().push_back(std::string("write after catch ") + (written ? "ok" : std::string(ToString(written.error().code))));
     return Ok();
 }
+// Sends a Ping (an event buffer, which the outer exclusive System does not
+// declare: DI-KS 1 leaves events out) and throws before its boundary comparison.
+SystemResult SendsPingThenThrows(EventWriter<Ping> pings) {
+    pings.Send(Ping{55});
+    throw std::runtime_error("thrown after an event write");
+}
 // Tick: stage A spawns 71 (a membership change at its sync point), stage B fails or throws.
 void FailsAfterSync(Registrar& r, bool throws) {
     Nest(r);
@@ -1577,6 +1583,19 @@ TEST_CASE("J-56: the inner schedule throws after a sync point changed membership
     CHECK_MESSAGE(result.error().Text().find("schedule 'Tick'") != std::string::npos, "[ns-throw-after-sync] " << result.error().Text());
     CHECK_MESSAGE(!result.error().Has(KernelErrorCode::StaleHandle), "[ns-throw-handle] " << result.error().Text());
     CHECK_MESSAGE(Logged("write after catch ok"), "[ns-throw-handle] " << Joined());
+}
+
+TEST_CASE("J-56: the inner schedule writes an event and throws, the outer System catches: the event write is not blamed on the outer System") {
+    auto rig = NestRig([](Registrar& r) {
+        Nest(r);
+        r.AddSystem<&CatchAndReturnOk>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&SendsPingThenThrows>(In("Throws", "Tick", "A"));
+    });
+    const auto result = rig->Run("Frame");
+    REQUIRE_FALSE(static_cast<bool>(result));
+    REQUIRE_MESSAGE(Logged("caught"), "[ns-throw-event] the outer System did not catch: " << Joined());
+    CHECK_MESSAGE(result.error().Has(KernelErrorCode::NestedRunAborted), "[ns-throw-event] " << result.error().Text());
+    CHECK_MESSAGE(!result.error().Has(KernelErrorCode::BoundaryChange), "[ns-throw-event-blame] " << result.error().Text());
 }
 
 TEST_CASE("J-56: refused, swallowed, then a valid schedule in the same System: it does not run and the left error comes back") {

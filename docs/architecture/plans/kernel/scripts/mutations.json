@@ -3534,13 +3534,13 @@
     },
     {
       "id": "hf-product-limit-static",
-      "what": "the product's default is one value for the process (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the product's default is one value for the process (v8-arch-gyo2-hook-flush, spec F-12) (cases and expect moved to a World run inside the Run by v8-arch-gyo2-kernel-subtract-structure: each Run now reads KernelSettings, so the old case no longer tells a static from a member)",
       "file": "engine/kernel/include/engine/kernel/World.hpp",
       "find": "    std::uint32_t hookRoundLimit_ = 8;",
       "replace": "    static inline std::uint32_t hookRoundLimit_ = 8;",
       "target": "gyo_kernel_tests",
-      "cases": "J-54: the product's default is per World*",
-      "expect": "J\\-54:\\ another\\ World's\\ KernelSettings\\ changed\\ this\\ World's\\ limit"
+      "cases": "J-54: the product's default stays per World when another World runs inside*",
+      "expect": "J\\-54: a World run inside this World's Run changed this World's limit"
     },
     {
       "id": "hf-round-no-stamp",
@@ -6020,13 +6020,13 @@
     },
     {
       "id": "ns-rebase-no-retake",
-      "what": "A.6: no fresh snapshots after a nested run (an exception left the inner writes uncompared) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "A.6: no fresh snapshots after a nested run (an exception left the inner writes uncompared) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (cases and expect moved to an inner event write by v8-arch-gyo2-kernel-subtract-structure: ExclusiveWorld now declares every component and resource, so only an event write is blamed)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (world_.verification_) world_.TakeSnapshots();\n",
       "replace": "",
       "target": "gyo_kernel_tests",
-      "cases": "J-56: the inner schedule throws after a sync point*",
-      "expect": "\\[ns\\-throw\\-after\\-sync\\-blame\\]"
+      "cases": "J-56: the inner schedule writes an event and throws*",
+      "expect": "\\[ns\\-throw\\-event\\-blame\\]"
     },
     {
       "id": "ns-hook-allowed",

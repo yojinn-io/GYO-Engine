@@ -17,6 +17,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -249,6 +250,18 @@ SystemResult MarkerAddsScore(HookCtx ctx, CommandsFor<Inserts<Score>, Removes<>>
     return Ok();
 }
 
+// Runs the World g_innerWorld points at once (then forgets it) from inside this
+// World's Run; g_innerResult tells whether it ran and how.
+WorldExecutor* g_innerWorld = nullptr;
+std::string g_innerResult;
+SystemResult RunsAnotherWorld(Res<Depth>) {
+    WorldExecutor* inner = std::exchange(g_innerWorld, nullptr);
+    if (inner == nullptr) return Ok();
+    const auto ran = inner->Run("Tick");
+    g_innerResult = ran ? std::string("ok") : ran.error().Text();
+    return Ok();
+}
+
 // A rig over Base plus build; KernelSettings with the given product default when set.
 std::unique_ptr<Rig> MakeFlushRig(std::function<void(Registrar&)> build, Limits limits = {}, bool verification = true,
                                   std::optional<std::uint32_t> productLimit = std::nullopt, bool breakOn = false) {
@@ -415,6 +428,27 @@ TEST_CASE("J-54: the product's default is per World") {
     other.GetWorld().SetResource(Depth{3});
     const auto result = other.Run("Tick");
     CHECK_MESSAGE(static_cast<bool>(result), "J-54: another World's KernelSettings changed this World's limit: " << Text(result));
+}
+
+TEST_CASE("J-54: the product's default stays per World when another World runs inside this World's Run") {
+    auto two = MakeFlushRig(
+        [](Registrar& r) {
+            ChainSystems(r);
+            r.AddSystem<&RunsAnotherWorld>(Put("RunsAnotherWorld", "Tick", "A"));
+        },
+        {}, false, 2U);
+    WorldExecutor other(*two->built.registry, "other-world");
+    std::vector<KernelError> otherRecorded;
+    other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
+    other.GetWorld().SetResource(KernelSettings{false, false});  // the default limit, 8
+    other.GetWorld().SetResource(Depth{0});
+    g_innerWorld = &other;
+    g_innerResult.clear();
+    const auto result = RunChain(*two, 3);
+    g_innerWorld = nullptr;
+    REQUIRE_MESSAGE(g_innerResult == "ok", "J-54 inner World: did not run inside the outer Run: " << g_innerResult);
+    CHECK_MESSAGE(HasCode(result, KernelErrorCode::HookRoundLimit),
+                  "J-54: a World run inside this World's Run changed this World's limit: " << Text(result));
 }
 
 TEST_CASE("J-54: the rounds are counted from 1 in every Run") {
