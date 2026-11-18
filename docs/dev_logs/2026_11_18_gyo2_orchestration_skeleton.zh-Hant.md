@@ -75,6 +75,9 @@
   - 測試：改寫 O-8 的「中斷或空的 World、別的照跑」一案，補「有壞的 World 時整幀不跑」「替換不能救」「只回錯誤、不寫日誌，之後的拒絕帶同一份」「在編排層外中斷」「`DropOldFirst` 裡丟例外」「schedule 裡丟 `bad_alloc`」；退役 D1、「`DropOldFirst` 失敗後暫存的值下次照樣帶」「從中斷的 World 帶過去」三案（性質不存在了）；改寫 D4、讀檔案例 4 (d)、處理器沿用一案。新案沒有另做 Red：新介面（`WorldFailure`、`Failure()`）在舊實作上編不過，Red 只會是編譯錯誤；檢出力由每個新斷言的專屬突變證明（下面）。
   - 突變（D184：整份編排層清單）：199 個；完整跑 190 殺，沒殺的 9 個都是清單的錯（5 個 `cases` 帶逗號被 doctest 拆開、3 個 `expect`、1 個指到退役的案），改完 9/9 → 199/199（`broken-world/mutants-orchestration-full.log`、`mutants-orchestration-fix-9.log`）。Kernel 沒有改動，不重跑。ctest 113 項全過（`broken-world/ctest.log`）。
   - 判斷（卡片照 L17）：`InsertSystems` 也被拒；入口的檢查排在「不認得的 World 名」之前；「發生前的動作」只收上一張成功的 schedule 與入口；System 不另立欄位（Kernel 錯誤文字的層次已帶，另立要改 Kernel 介面）。都列進合併前核准第 5 節。
+- **PR #244 的 L1（windows-x64）兩處失敗，都是測試的問題、引擎沒改**：
+  1. MSVC 編不過 `LifecycleTests.cpp`：doctest 的訊息寫入 `std::string_view`（碼的 `ToString`）需要完整的 `<ostream>`；三個測試的共用入口加 include（5aad6b4f）。第 1 步就有的檔，之前沒開 PR 跑 L1，現在才看到。
+  2. 讀檔案例 5「同一份存檔讀兩次、Summary 相同」只在 Windows 不同：`World::Summary` 照原始位元組算雜湊（`World.cpp:970` 的註解：padding 照原樣算，測試要用沒有 padding 的型別），讀檔案例的 `SaveData` 有 padding（`gold` 後 4 bytes、結尾 7 bytes），MSVC 複製時 padding 不同。兩個 `SaveData`（讀檔案例、scenario）把 padding 改成補零的欄位，加 `static_assert(std::has_unique_object_representations_v<…>)`。ctest 113 項全過；scenario 與讀檔的突變 28/28（`broken-world/mutants-after-padding-fix.log`）；Windows 的 log 在 `broken-world/l1-windows-fail*.log`。
 
 ## 下一步
 

@@ -10,7 +10,9 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace OrchTest::Save {
@@ -71,10 +73,15 @@ struct SaveData {
     };
     std::array<Ent, 3> ents{};
     int gold = 0;
+    // Zeroed bytes where padding would be: World::Summary hashes the raw bytes,
+    // and padding is not copied the same on every compiler (MSVC differed, L1).
+    std::int32_t reserved0 = 0;
     K::EntityId next = 0;
     // The entity part cannot be read: Load fails.
     bool unreadable = false;
+    std::array<std::uint8_t, 7> reserved1{};
 };
+static_assert(std::has_unique_object_representations_v<SaveData>, "no padding: World::Summary hashes the raw bytes");
 
 inline SaveData TheSave() {
     SaveData save;
