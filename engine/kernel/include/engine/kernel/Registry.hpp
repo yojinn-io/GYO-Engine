@@ -18,19 +18,31 @@
 #include <type_traits>
 #include <vector>
 
-// Registry (spec C; target/kernel DI-KS 3, 4, 5, 6, 8, 15).
+// Registry (spec C; target/kernel DI-KS 3, 4, 5, 6, 8, 15, 25, 26).
 //
-// Lifecycle (spec C.2): the Host lists plugins in order; Finish calls every
-// plugin's Build(Registrar&) in that order, checks requires, calls every
-// plugin's Finish(const FrozenRegistry&, FinishContext&) in the same order,
-// then freezes the Registry, builds one Plan per schedule (Scheduler.cpp) and
-// computes the fingerprints. Every startup error is collected and returned at
-// once (spec D.2, D-5). After Finish nothing can register: Registrar is only
-// handed to Build (spec R-2).
+// Registration has two steps that may repeat (declaration
+// v8-arch-gyo2-kernel-subtract-structure 3.2): Register opens a Registrar for
+// one owner, hands it to a build callable and closes it when the callable
+// returns; BuildPlans resolves what was registered, runs every startup check,
+// builds one Plan per schedule (Scheduler.cpp) and the fingerprints, and raises
+// the version. Every startup error is collected and returned at once (spec
+// D.2, D-5). The first round writes the tables directly (Plugin::Finish reads
+// them, version 0); after the first successful BuildPlans, a round writes a
+// pending copy whose contents replace the tables, in the same object, only when
+// its BuildPlans succeeds; a failed or discarded round leaves the Registry and
+// its Worlds on the previous version. A World attaches to a new version the
+// next time it is used (World.hpp).
 //
-// The Product type (GYO::Kernel::Product: one World, its Registry, its schedules and
-// their executor policy; kernel HANDOFF v8-arch-kernel-app-name) runs a frozen
-// Registry's schedules (Product.hpp).
+// Finish keeps the plugin lifecycle of spec C.2 until the orchestration layer
+// takes it (batch 2): it calls every plugin's Build(Registrar&) in list order
+// (one Register each), checks requires, calls every plugin's
+// Finish(const FrozenRegistry&, FinishContext&) in the same order, then builds
+// the Plans. Only for the first round.
+//
+// The WorldExecutor type (GYO::Kernel::WorldExecutor: one World, its Registry, its
+// schedules and their executor policy; kernel HANDOFF v8-arch-kernel-app-name,
+// v8-arch-gyo2-kernel-world-exec-type) runs a Registry's schedules
+// (WorldExecutor.hpp).
 
 namespace GYO::Kernel {
 
@@ -45,15 +57,16 @@ public:
     FinishContext(const FinishContext&) = delete;
     FinishContext& operator=(const FinishContext&) = delete;
 
-    // One runner per Product; a second is R-E6. The runner callable arrives with
-    // the batches that run schedules; this batch records who installs it.
+    // One runner per WorldExecutor; a second is R-E6. The runner callable arrives with
+    // the orchestration layer; this records who installs it.
     void InstallRunner(std::string_view runner);
 
 private:
     friend class Registry;
-    FinishContext(Registry& registry, std::uint32_t plugin) : registry_(&registry), plugin_(plugin) {}
+    FinishContext(Registry& registry, std::uint32_t owner) : registry_(&registry), owner_(owner) {}
     Registry* registry_;
-    std::uint32_t plugin_;
+    // The plugin's index in the Registry's owner list.
+    std::uint32_t owner_;
 };
 
 // A plugin (spec C.5): called only at startup.
@@ -142,7 +155,6 @@ struct SystemOptions {
     Zone zone = Zone::Unset;
     // Zone B only: may write role=Input (c) data, in the ingress stage (Z3).
     bool ingress = false;
-    Affinity affinity;
     // Effect names registered with Registrar::Effect. "Diagnostics" cannot be
     // written here; it comes only from DiagnosticsWriter<T> (spec S-8).
     std::vector<std::string> effects;
@@ -169,10 +181,21 @@ namespace Detail {
 struct RegistryData;
 }
 
-// Handed to Plugin::Build only (spec C.5). Not copyable or movable, and every
-// registration asserts that the Registry is still in its build phase, so a
-// Registrar kept past Build (a copy is impossible, a pointer is caught) cannot
-// register after Finish (spec R-2; GYO_ASSERT: a Programmer Error).
+// Who registers (the orchestration layer gives it; declaration 3.2): the kernel
+// only stores it, compares two for equality and prints the name. The first
+// Register of each owner fixes its place in the owner list of the Registry
+// fingerprint.
+struct RegistrationOwner {
+    std::string name;
+    std::uint32_t seq = 0;
+
+    friend bool operator==(const RegistrationOwner&, const RegistrationOwner&) = default;
+};
+
+// Handed to the build callable of Registry::Register (and Plugin::Build) only.
+// Not copyable or movable, and every registration asserts that the Registry is
+// in a Register call, so a Registrar kept past it (a copy is impossible, a
+// pointer is caught) cannot register (GYO_ASSERT: a Programmer Error).
 class Registrar {
 public:
     Registrar(const Registrar&) = delete;
@@ -211,6 +234,12 @@ public:
         return RegisterNamedSet(KeyOf<SetTag>(), std::move(name));
     }
 
+    // Removes the System of that name from the next BuildPlans on (declaration
+    // 3.2 rule 7): it leaves a tombstone (its registrationSeq is not reused;
+    // SystemInfo::removed) and its name may be registered again. False, and
+    // nothing recorded, when no System of that name is in the table.
+    bool RemoveSystem(std::string_view name);
+
     template <class SetTag, class T>
     void AddToSet() {
         AddSetMember(KeyOf<SetTag>(), KeyOf<T>());
@@ -236,23 +265,6 @@ public:
     // (c) data, so a forgotten zone cannot pass as (b). Any plugin may call it;
     // calling it twice is the same as once.
     void RequireExplicitZones();
-
-    // Makes an ambiguous pair a startup error (D-E8, rule M3b) for the whole
-    // Registry instead of a tie by registration order. An ambiguous pair is two
-    // Systems of one stage of one schedule whose access conflicts (spec D.1
-    // conditions 1 to 4) with no order path between them; a pair with a zone C
-    // side is D-E8 with or without this call. Every such pair of every schedule
-    // is reported at once, and each is fixed by declaring an order (a before /
-    // after of either System, or of a set it is in). There is no exemption for
-    // a pair: a Serial schedule runs the two in some order anyway, and
-    // before / after is how that order is written down. Without this call the
-    // pair is tied by registrationSeq and listed in FrozenRegistry::TieBreaks.
-    // Called by the plugin that must not let the Host's plugin order decide a
-    // conflicting pair; any plugin may call it; calling it twice is the same
-    // as once. It only adds startup errors: a Registry that finishes with it
-    // has the same tables and Plans as without it, so no fingerprint holds it
-    // (as with RequireExplicitZones).
-    void RequireExplicitOrder();
 
     void Schedule(ScheduleOptions options);
     // Inserts a stage before or after an existing stage of a schedule (spec C.2 point 2).
@@ -344,7 +356,7 @@ private:
         }
     };
 
-    Registrar(Detail::RegistryData& data, std::uint32_t plugin) : data_(&data), plugin_(plugin) {}
+    Registrar(Detail::RegistryData& data, std::uint32_t owner) : data_(&data), owner_(owner) {}
 
     ComponentId RegisterComponent(TypeKey key, Shape shape, ComponentOptions options, Detail::MakeColumnFn make);
     ResourceId RegisterResource(TypeKey key, Shape shape, ResourceOptions options, Detail::MakeResourceFn make);
@@ -360,7 +372,8 @@ private:
     void RegisterInitialValue(TypeKey target, TypeKey request, Detail::InitialValueFn put, std::source_location source);
 
     Detail::RegistryData* data_;
-    std::uint32_t plugin_;
+    // Index in the Registry's owner list.
+    std::uint32_t owner_;
 };
 
 // Test seam for R-E5 (spec C.4: TypeKey address collision). A linker that
@@ -379,13 +392,15 @@ struct SchedulerShuffleProbe {
     static void Set(Registry& registry, std::uint32_t seed);
 };
 
-// The kernel's own resource (spec section "reading" / A.6): the access
-// verification switch, breakOnKernelError and the product's default hook round
-// limit (spec F-12), written by the Host before the first Run, read only by the
-// kernel (cached when the first Run starts). One per World. Registered by the
-// Registry before any plugin (ResourceId 0); a System that declares Res or
-// ResMut of it is D-E18. hookRoundLimit is not a startup switch (LIM-6 does not
-// apply to it) and is in no fingerprint; 0 is a GYO_ASSERT at the first Run.
+// The kernel's own resource (spec section "reading" / A.6; DI-KS 24): the
+// access verification switch, breakOnKernelError and the product's default hook
+// round limit (spec F-12). Development and tuning settings only: the Host, a
+// System (Res / ResMut), a hook, a run condition and ExclusiveWorld may read
+// and write it, at any time. The kernel reads it once, when each
+// WorldExecutor::Run call starts, so a change counts from the next Run (a nested
+// RunSchedule does not read it again). Without it the defaults below are used.
+// One per World. Registered by the Registry before any plugin (ResourceId 0).
+// hookRoundLimit is in no fingerprint; 0 is a GYO_ASSERT when a Run starts.
 struct KernelSettings {
     bool accessVerification = false;
     bool breakOnKernelError = false;
@@ -429,6 +444,10 @@ struct AccessSet {
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;
+    // The resources an ExclusiveWorld<Writes<R...>> lists (DI-KS 1): an
+    // annotation for the authority policy to read; not a write, not a writer,
+    // no conflict. In the Registry fingerprint.
+    std::vector<ResourceId> annotatedWrites;
     bool changeFilters = false;
     bool local = false;
     bool exclusive = false;
@@ -447,7 +466,7 @@ struct ColumnInfo {
     Zone zone;
     Role role;
     Rollback rollback;
-    std::string ownerPlugin;
+    std::string owner;
 };
 
 struct ResourceInfo {
@@ -459,15 +478,15 @@ struct ResourceInfo {
     Role role;
     Rollback rollback;
     bool external;
-    Affinity affinity;
-    std::string ownerPlugin;
+    bool threadBound;
+    std::string owner;
 };
 
 struct EventInfo {
     std::string name;
     Domain domain;
     Zone zone;
-    std::string ownerPlugin;
+    std::string owner;
 };
 
 struct SystemInfo {
@@ -479,12 +498,76 @@ struct SystemInfo {
     AccessSet access;
     // "file:line" of the registration (spec B.1 source).
     std::string source;
-    std::string ownerPlugin;
+    std::string owner;
+    // The effects it declares, as ids (Registrar::Effect), ascending.
+    std::vector<EffectId> effects;
+    // A tombstone (Registrar::RemoveSystem): it does not run; its
+    // registrationSeq is not given to another System.
+    bool removed = false;
 };
 
-// One (b) pair the Scheduler ordered by registration (spec D.2 step 10): listed
-// at diagnostic level. Under Registrar::RequireExplicitOrder there is none:
-// such a pair is D-E8 instead.
+// One hook (Registrar::Hook; declaration 3.3).
+struct HookInfo {
+    std::string name;
+    HookTrigger trigger;
+    ComponentId component;
+    Zone zone;
+    AccessSet access;
+    std::string source;
+    std::string owner;
+};
+
+// One initial value declaration (Registrar::InitialValue), in the order the
+// sync point applies them: (request, target) ascending.
+struct InitialValueInfo {
+    ComponentId target;
+    ComponentId request;
+    std::string owner;
+    std::string source;
+};
+
+// One schedule: its options, stages in their final order (InsertStage applied).
+struct ScheduleInfo {
+    ScheduleOptions options;
+    std::string owner;
+};
+
+// One named System set (Registrar::Set): its options (before / after of the
+// set included) and the names of its run conditions.
+struct SetInfo {
+    SetOptions options;
+    std::vector<std::string> conditions;
+    std::string owner;
+};
+
+// Where an edge of a schedule's resolved order comes from (FrozenRegistry::OrderGraph).
+enum class OrderSource : std::uint8_t {
+    // Stage order alone (through stage ends).
+    Stage,
+    // A before / after naming the System or one of its sets.
+    Declared,
+    // A path through sync points with a declared before / after on it (to or
+    // from a named sync point).
+    SyncPoint,
+    // A conflicting pair with no order, ordered by registration (TieBreaks).
+    TieBreak,
+};
+
+// One edge of a schedule's resolved order, System to System: sets and sync
+// points are expanded, so first runs before second in the schedule's Plan.
+struct OrderEdge {
+    std::string first;
+    std::string second;
+    OrderSource source;
+
+    friend bool operator==(const OrderEdge&, const OrderEdge&) = default;
+};
+
+// One conflicting pair with no order path that the Scheduler ordered by
+// registration (spec D.2 step 10), zone C or not: listed at diagnostic level.
+// There is no ambiguity error (v8-arch-gyo2-no-ambiguity-detection): a Serial
+// schedule runs the two in some order anyway, and the kernel does not promise
+// a result that is the same in every registration order (DI-KS 5).
 struct TieBreak {
     std::string schedule;
     std::string first;
@@ -501,8 +584,16 @@ struct ZoneCSourcesOptions {
     std::string repoCommit;
 };
 
+// The read-only, versioned view of a Registry (DI-KS 25). The object itself
+// stays valid as long as the Registry; the spans and pointers it hands out
+// (Systems(), PlanOf, SystemNamed, ...) are valid for the current version only:
+// a successful BuildPlans makes them stale. Changes go through Registrar only.
 class FrozenRegistry {
 public:
+    // 0 before the first successful BuildPlans (Plugin::Finish reads 0); 1
+    // after it; +1 at every later successful BuildPlans; a failed one keeps it.
+    [[nodiscard]] std::uint64_t Version() const noexcept;
+
     template <class T>
     [[nodiscard]] std::optional<ComponentId> ComponentIdOf() const {
         return FindComponent(KeyOf<T>());
@@ -524,6 +615,15 @@ public:
     [[nodiscard]] std::span<const Plan> Plans() const noexcept;
     [[nodiscard]] const Plan* PlanOf(std::string_view schedule) const noexcept;
     [[nodiscard]] std::span<const TieBreak> TieBreaks() const noexcept;
+    [[nodiscard]] std::span<const HookInfo> Hooks() const noexcept;
+    [[nodiscard]] std::span<const InitialValueInfo> InitialValues() const noexcept;
+    [[nodiscard]] std::span<const ScheduleInfo> Schedules() const noexcept;
+    [[nodiscard]] std::span<const SetInfo> Sets() const noexcept;
+    // The resolved order of one schedule, System to System, each edge with its
+    // source, in (first, second) registrationSeq order; empty for an unknown
+    // schedule. The order D-E16 reads; a rollback Module reads it instead of
+    // resolving the order rules again.
+    [[nodiscard]] std::span<const OrderEdge> OrderGraph(std::string_view schedule) const noexcept;
     // Members of a named set (spec S13), in registration order of the members.
     [[nodiscard]] std::vector<ComponentId> SetMembers(SetId set) const;
 
@@ -556,31 +656,93 @@ private:
 
 class Registry {
 public:
-    // plugins: the Host's ordered list; the Registry does not own them.
+    // No plugin list: registration goes through Register.
+    Registry();
+    // plugins: the Host's ordered list for Finish; the Registry does not own them.
     explicit Registry(std::vector<Plugin*> plugins);
     ~Registry();
     Registry(const Registry&) = delete;
     Registry& operator=(const Registry&) = delete;
 
-    // The Registry an extract schedule reads from (spec H.6). It must be
-    // frozen when this Registry finishes (D-E14).
+    // The Registry an extract schedule reads from (spec H.6); before the first
+    // BuildPlans only. The source must have built its Plans at least once when
+    // this Registry builds (D-E14).
     void SetExtractSource(const Registry& source);
 
-    // Runs the whole lifecycle once (spec C.2). Ok: the Registry is frozen and
-    // every Plan is built. Err: every startup error at once; the Registry is
-    // not usable.
+    // Step 1 (declaration 3.2): opens a Registrar for owner, calls
+    // build(Registrar&) and closes the Registrar when build returns. Ok: what
+    // build registered takes effect at the next successful BuildPlans. Err
+    // DynamicInsertRefused (a Runtime Error; the Registry and every World are
+    // unchanged): a live World made from this Registry declares no dynamic
+    // insert. GYO_ASSERT: called inside build, or while a World made from
+    // this Registry is inside a Run (from its Systems, hooks, initial value
+    // functions or other Worlds they run), or after a failed first round.
+    template <class Build>
+    Engine::Base::Result<void, KernelError> Register(RegistrationOwner owner, Build&& build) {
+        Engine::Base::Result<std::uint32_t, KernelError> opened = OpenRegistrar(std::move(owner));
+        if (!opened) return Engine::Base::Err(std::move(opened).error());
+        RegistrarScope scope(*this);
+        Registrar registrar(Target(), *opened);
+        std::forward<Build>(build)(registrar);
+        return {};
+    }
+
+    // Step 2. Ok: the version +1, the Plans and fingerprints are built again;
+    // the Worlds made from this Registry attach the next time they are used.
+    // With nothing registered since the last BuildPlans: nothing happens, the
+    // version stays. Err: every startup error at once; the round is dropped and
+    // the Registry and its Worlds stay on the previous version (a failed first
+    // round leaves the Registry unusable).
+    Engine::Base::Result<void, StartupReport> BuildPlans();
+
+    // Drops the round registered since the last BuildPlans (its ids are void).
+    void DiscardRegistrations();
+
+    // Runs the plugin lifecycle once, as the first round (spec C.2): one
+    // Register per plugin in list order, the requires check, every plugin's
+    // Finish, then the Plans. Ok: version 1. Err: every startup error at once;
+    // the Registry is not usable.
     Engine::Base::Result<void, StartupReport> Finish();
 
+    // Whether a BuildPlans (or Finish) has succeeded.
     [[nodiscard]] bool IsFrozen() const noexcept;
-    // GYO_ASSERT: only after a successful Finish.
+    // The read-only view (DI-KS 25). GYO_ASSERT: only after a successful
+    // BuildPlans or Finish.
     [[nodiscard]] const FrozenRegistry& Frozen() const;
 
 private:
     friend class FinishContext;
     friend struct SchedulerShuffleProbe;
-    // The World is made from the frozen tables (storage factories, hooks, the allotter).
+    // The World is made from the tables (storage factories, hooks, the
+    // allotter), keeps the two World counters and attaches to new versions.
     friend class World;
+
+    // Closes the Registrar on every way out of build (an exception included:
+    // what was registered stays in the round, for the caller to drop or keep).
+    class RegistrarScope {
+    public:
+        explicit RegistrarScope(Registry& registry) noexcept : registry_(registry) {}
+        ~RegistrarScope() { registry_.CloseRegistrar(); }
+        RegistrarScope(const RegistrarScope&) = delete;
+        RegistrarScope& operator=(const RegistrarScope&) = delete;
+
+    private:
+        Registry& registry_;
+    };
+
+    // Ok: the owner's index in the table this round writes (Target()).
+    Engine::Base::Result<std::uint32_t, KernelError> OpenRegistrar(RegistrationOwner owner);
+    void CloseRegistrar() noexcept;
+    // The table the open round writes: the pending copy after the first
+    // successful BuildPlans, the tables themselves before it.
+    [[nodiscard]] Detail::RegistryData& Target() noexcept;
+    // GYO_ASSERT: no World made from this Registry is inside a Run
+    // (declaration 3.2 rule 4).
+    void RequireNoWorldRunning() const;
+
     std::unique_ptr<Detail::RegistryData> data_;
+    // The round registered after the first successful BuildPlans; null otherwise.
+    std::unique_ptr<Detail::RegistryData> pending_;
     FrozenRegistry frozen_;
 };
 

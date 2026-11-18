@@ -149,6 +149,9 @@ public:
     virtual void Reset() noexcept = 0;
 
     ChangeStamp changed = 0;
+    // A thread-bound resource (ResourceOptions::threadBound): the thread its
+    // value was put in on (Engine::Base::CurrentThreadSerial), or 0 with no value.
+    std::uint64_t thread = 0;
 
 protected:
     ResourceBase() = default;

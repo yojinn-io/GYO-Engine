@@ -38,7 +38,7 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "2:1162cbf8b5eb8d24bbda07184d0a4dd1467a439a407a8a344bdf271db4feec9c";
+    "3:6534b886c3f029f5a429893934c62c158e2d94990567484927bad55b19ec7179";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {
@@ -62,7 +62,7 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
     CHECK(frozen.SystemNamed("WriteHealth")->registrationSeq == 1U);
     MESSAGE("J-18 registry fingerprint: " << frozen.RegistryFingerprint().Text());
     CHECK(frozen.RegistryFingerprint().Text() == kJ18RegistryGolden);
-    CHECK(frozen.RegistryFingerprint().version == 2U);
+    CHECK(frozen.RegistryFingerprint().version == 3U);
 }
 
 TEST_CASE("J-18: swapping two plugins gives ids in the new order") {
@@ -98,6 +98,45 @@ TEST_CASE("J-18: two Finishes of the same plugin list give the same fingerprint"
     KERNEL_REQUIRE_OK(b);
     CHECK(a.registry->Frozen().RegistryFingerprint() == b.registry->Frozen().RegistryFingerprint());
     CHECK(a.registry->Frozen().CFingerprint() == b.registry->Frozen().CFingerprint());
+}
+
+// The two fields v8-arch-gyo2-kernel-subtract-structure added to the Registry
+// fingerprint (declaration 3.4, 3.11; DI-KS 3): each changes it.
+namespace {
+SystemResult EditsNothingListed(ExclusiveWorld<>) { return Ok(); }
+SystemResult EditsListingOther(ExclusiveWorld<Writes<TestOtherRes>>) { return Ok(); }
+Built BoundOrNot(bool threadBound) {
+    return Finish({{"test", [threadBound](Registrar& r) {
+                        Schedules(r);
+                        r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B, .threadBound = threadBound});
+                    }}});
+}
+template <auto System>
+Built Editing() {
+    return Finish({{"test", [](Registrar& r) {
+                        r.Schedule(UpdateSchedule());
+                        r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
+                        r.AddSystem<System>(Sys("Edit", Zone::B, {At("Update", "First")}));
+                    }}});
+}
+} // namespace
+
+TEST_CASE("J-18: the Registry fingerprint sees threadBound") {
+    const Built plain = BoundOrNot(false);
+    const Built bound = BoundOrNot(true);
+    KERNEL_REQUIRE_OK(plain);
+    KERNEL_REQUIRE_OK(bound);
+    CHECK_MESSAGE(plain.registry->Frozen().RegistryFingerprint() != bound.registry->Frozen().RegistryFingerprint(),
+                  "J-18 threadBound: two Registries that differ only in ResourceOptions::threadBound have one fingerprint");
+}
+
+TEST_CASE("J-18: the Registry fingerprint sees annotatedWrites") {
+    const Built none = Editing<&EditsNothingListed>();
+    const Built listed = Editing<&EditsListingOther>();
+    KERNEL_REQUIRE_OK(none);
+    KERNEL_REQUIRE_OK(listed);
+    CHECK_MESSAGE(none.registry->Frozen().RegistryFingerprint() != listed.registry->Frozen().RegistryFingerprint(),
+                  "J-18 annotatedWrites: ExclusiveWorld<> and ExclusiveWorld<Writes<R>> give one fingerprint");
 }
 
 TEST_CASE("J-19: lookup creates no id; build runs once per plugin; finish after every build, in list order") {
@@ -173,7 +212,11 @@ TEST_CASE("J-19: removing the owner plugin gives R-E4 to every System that uses 
     CHECK(without.result.error().detail.find("ReadVel") != std::string::npos);
 }
 
-TEST_CASE("J-19: registering after Finish is impossible by type") {
+// Group H of v8-arch-gyo2-kernel-subtract-structure (declaration 5.1): registering
+// again after the Plans are built is Registry::Register's job now
+// (RegistrationRoundTests.cpp, DI-KS 26); what stays is that a Registrar exists
+// only inside a Register call's build callable or Plugin::Build.
+TEST_CASE("J-19: a Registrar exists only inside Register and Plugin::Build") {
     // FinishContext has no Registrar and Registrar has no public constructor.
     static_assert(!std::is_constructible_v<Registrar, Registry&>);
     static_assert(!std::is_default_constructible_v<Registrar>);
@@ -222,4 +265,31 @@ TEST_CASE("J-24: R-E1 to R-E4 each from a minimal Registry, all in one report") 
     CHECK(report.Has(StartupCode::RE3));
     CHECK(report.Has(StartupCode::RE4));  // TestHealth's owner "dup" (the second) was not built
     CHECK(report.errors.size() >= 4);
+}
+
+// DI-KS 15 (target/kernel.zh-Hant.md): the startup errors are only the kept list
+// of the kernel's duties, plus the codes still in transition (taken out by a
+// later batch: then they leave this table in the same change). Read through
+// ToString: an enum value without a text is "Unknown" and not a code.
+TEST_CASE("DI-KS 15: the StartupCode values are the kernel's kept codes plus the codes still in transition") {
+    std::vector<std::string> codes;
+    for (int value = 0; value <= 255; ++value) {
+        const std::string_view text = ToString(static_cast<StartupCode>(value));
+        if (text != "Unknown") codes.emplace_back(text);
+    }
+    std::sort(codes.begin(), codes.end());
+    // Kept (integration declaration section 3.1, plus R-E7: a later round registered what only the first round
+    // may; declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6, inside duty (12) "registration").
+    std::vector<std::string> expected{"D-E1", "D-E3", "D-E4", "D-E5", "D-E6", "D-E7", "D-E14", "D-E17", "D-E19", "D-E20",
+                                      "R-E2", "R-E4", "R-E5", "R-E7"};
+    // In transition, still in the kernel: Startup and the plugin list (batch 2, the orchestration layer: D-E21,
+    // R-E1, R-E3, R-E6); clock and event domains (batch 3: D-E12, F-E1); zones, the writer count and rollback
+    // declarations (batch 4, authority and rollback: D-E2, D-E9, D-E11, D-E15, D-E16, X-E1).
+    for (const char* code : {"D-E21", "R-E1", "R-E3", "R-E6", "D-E12", "F-E1", "D-E2", "D-E9", "D-E11", "D-E15", "D-E16", "X-E1"}) {
+        expected.emplace_back(code);
+    }
+    std::sort(expected.begin(), expected.end());
+    std::string listed;
+    for (const std::string& code : codes) listed += (listed.empty() ? "" : " ") + code;
+    CHECK_MESSAGE(codes == expected, "DI-KS 15 codes: the StartupCode values are " << listed);
 }

@@ -246,7 +246,7 @@ struct Tracked {
 
 SystemResult DespawnOne(Despawn despawn, CurrentTick tick) {
     if (tick.Tick() == 1) {
-        if (auto r = despawn.Entity(1); !r) return r;
+        despawn.Entity(1);
     }
     return Ok();
 }
@@ -407,7 +407,7 @@ namespace {
 
 SystemResult InsertTagFive(CommandsFor<Inserts<Tag>, Removes<>> commands, Despawn despawn) {
     commands.Insert(5, Tag{50});
-    if (auto r = despawn.Entity(2); !r) return r;
+    despawn.Entity(2);
     return Ok();
 }
 SystemResult SpawnModeSeven(SpawnWithId<Bundle<Mode>> spawn) {
@@ -458,7 +458,7 @@ SystemResult RejoinAndDrop(Despawn despawn, SpawnWithId<Bundle<Mode>> spawn, Com
                            CurrentTick tick) {
     if (tick.Tick() != 1) return Ok();
     for (EntityId id : {4, 9, 3, 6}) {
-        if (auto r = despawn.Entity(id); !r) return r;
+        despawn.Entity(id);
     }
     spawn.New(4, Mode{2});
     commands.Insert(1, Tag{1});  // a new cell of entity 1: its OnAdd comes before the spawn's (entity 4)
@@ -552,7 +552,7 @@ SystemResult LogRemoveTag(HookCtx ctx, Query<Read<Tag>> tags) {
     return Ok();
 }
 SystemResult DespawnOneAtTickOne(Despawn despawn, CurrentTick tick) {
-    if (tick.Tick() == 1) return despawn.Entity(1);
+    if (tick.Tick() == 1) despawn.Entity(1);
     return Ok();
 }
 // OnRemove of Mode reads Tag (a smaller ComponentId) of the same entity during its despawn.
@@ -688,7 +688,7 @@ SystemResult ModeRemovedFails(HookCtx ctx) {
 SystemResult DespawnOneThreeSix(Despawn despawn, CurrentTick tick) {
     if (tick.Tick() != 1) return Ok();
     for (EntityId id : {EntityId{6}, EntityId{3}, EntityId{1}}) {
-        if (auto r = despawn.Entity(id); !r) return r;
+        despawn.Entity(id);
     }
     return Ok();
 }
@@ -777,8 +777,9 @@ SystemResult ModeRemovedSeesOther(HookCtx ctx, Query<Read<Tag>> tags) {
 // Recorded 2 then 1: the despawn step sorts them.
 SystemResult DespawnTwoThenOne(Despawn despawn, CurrentTick tick) {
     if (tick.Tick() != 1) return Ok();
-    if (auto r = despawn.Entity(2); !r) return r;
-    return despawn.Entity(1);
+    despawn.Entity(2);
+    despawn.Entity(1);
+    return Ok();
 }
 
 } // namespace

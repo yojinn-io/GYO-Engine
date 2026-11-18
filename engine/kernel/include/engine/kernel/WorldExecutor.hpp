@@ -1,6 +1,7 @@
 #pragma once
 
-// Product (spec section 0 "Runtime", E; kernel HANDOFF v8-arch-kernel-app-name):
+// WorldExecutor (spec section 0 "Runtime", E; kernel HANDOFF v8-arch-kernel-app-name,
+// v8-arch-gyo2-kernel-world-exec-type):
 // one World, the frozen Registry it was made from, and the Serial Executor
 // that runs that Registry's schedules (target/kernel DI-KS 2, 9, 14; spec E.2).
 //
@@ -25,7 +26,7 @@
 // Interrupted, every record not yet applied is discarded, diagnostics are kept,
 // and Run returns the Err (spec E.5). An exception from a System or hook is not
 // caught: the World becomes Interrupted the same way and the exception goes on.
-// Running an Interrupted World is a GYO_ASSERT (rebuild it: a new Product).
+// Running an Interrupted World is a GYO_ASSERT (rebuild it: a new WorldExecutor).
 //
 // Nested runs (K0, v8-arch-gyo2-nested-schedule): a System holding
 // ExclusiveWorld<...> may run another schedule (ExclusiveWorld::RunSchedule).
@@ -41,8 +42,9 @@
 // main program may run it itself before that, once. A second Run of Startup is
 // a GYO_ASSERT.
 //
-// v1 is Serial only (LIM-2). The Product owns no thread (DI-KS 15): Run is called
-// on the schedule's runner thread by the Host.
+// v1 is Serial only (LIM-2). The WorldExecutor owns no thread (DI-KS 15): Run is called
+// on one thread at a time by the caller, who decides which thread runs what
+// (DI-KS 14); a thread-bound resource asserts when another thread touches it.
 
 #include "engine/base/Result.hpp"
 #include "engine/kernel/KernelError.hpp"
@@ -61,21 +63,24 @@
 
 namespace GYO::Kernel {
 
-class Product {
+class WorldExecutor {
 public:
-    // registry must be frozen and outlive the Product. worldName identifies this
-    // Product's World in errors and verification reports (spec A.6).
-    explicit Product(const Registry& registry, std::string worldName = {});
-    ~Product();
-    Product(const Product&) = delete;
-    Product& operator=(const Product&) = delete;
+    // registry must have built its Plans and outlive the WorldExecutor. worldName
+    // identifies this WorldExecutor's World in errors and verification reports
+    // (spec A.6); options is the World's declaration (WorldOptions, DI-KS 26).
+    explicit WorldExecutor(const Registry& registry, std::string worldName = {}, WorldOptions options = {});
+    ~WorldExecutor();
+    WorldExecutor(const WorldExecutor&) = delete;
+    WorldExecutor& operator=(const WorldExecutor&) = delete;
 
     [[nodiscard]] World& GetWorld() noexcept { return world_; }
     [[nodiscard]] const World& GetWorld() const noexcept { return world_; }
 
     // Runs one schedule's Plan once (spec E.2), first Startup when it has not
-    // run (H-12). GYO_ASSERT: the World is Ready (so not from inside a System),
-    // the schedule exists, and Startup is run at most once.
+    // run (H-12); first attaches the World and the Systems' state to a new
+    // Registry version (declaration 3.2 rule 5). GYO_ASSERT: the World is Ready
+    // (so not from inside a System), the schedule exists, and Startup is run at
+    // most once.
     Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
     // The Executor's handler: called once per Err (target/error-handling DI 2:
@@ -83,7 +88,7 @@ public:
     void SetErrorHandler(std::function<void(const KernelError&)> handler) { handler_ = std::move(handler); }
 
     // The fields of a "verification on" report (target/system-contract 2b
-    // condition 2). Meaningful once the first Run has read KernelSettings.
+    // condition 2): the KernelSettings the last Run started with.
     [[nodiscard]] VerificationReport Verification() const;
 
 private:
@@ -98,6 +103,9 @@ private:
     };
 
     friend Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
+    friend Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
+                                                                                            Detail::Record, ChangeStamp,
+                                                                                            bool);
 
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
@@ -106,6 +114,17 @@ private:
     Engine::Base::Result<void, KernelError> RunStartup(std::string_view schedule);
     Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                           bool inClosure);
+    // S5 (Detail::ApplyImmediate): an immediate structural change of the running exclusive System call.
+    Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
+                                                                              Detail::Record record, ChangeStamp stamp,
+                                                                              bool closureOpen);
+    // J-50 (DI-KS 24): reads KernelSettings, once per Run call, before Startup.
+    void ReadSettings();
+    // Declaration 3.2 rule 5: attaches the World, then makes every System's
+    // state again by registrationSeq when the Registry's version is not the
+    // one attached: the access descriptions all made again; a kept System
+    // keeps its mounts' lastRun and Local<T>; a removed one's state is dropped.
+    void Attach();
     // Spec E.5: interrupts the World and drops every record. The outermost level
     // calls the handler; a nested one leaves the error instead (its first one).
     Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
@@ -117,7 +136,10 @@ private:
 
     const Registry* registry_;
     World world_;
+    // By registrationSeq; a removed System's entry is empty.
     std::vector<SystemState> systems_;
+    // The Registry version systems_ matches (0: none yet).
+    std::uint64_t version_ = 0;
     std::function<void(const KernelError&)> handler_;
     // The World's Startup schedule (at most one, D-E21), if any.
     std::optional<std::string> startup_;

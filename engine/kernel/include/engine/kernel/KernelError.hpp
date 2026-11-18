@@ -21,12 +21,12 @@
 //   siblings  the sibling list, horizontal: independent errors of one System
 //             call (each access-verification violation, the System's own Err)
 //             side by side, never wrapped into one another (code Siblings).
-// rule names the broken rule ("W-5", "F-10", "Z5", "S-13", ...); world names the
+// rule names the broken rule ("W-5", "W-9", "X-11", ...); world names the
 // World the error was found in (spec A.6: a violation carries the World's
 // identity). The code enum is the kernel module's own (no global error enum).
 //
-// StartupReport: every startup error of one Registry::Finish, collected and
-// reported at once (spec D.2, D-5). A startup error is a Runtime Error of the
+// StartupReport: every startup error of one Registry::BuildPlans (or Finish),
+// collected and reported at once (spec D.2, D-5). A startup error is a Runtime Error of the
 // composer (the plugin list and declarations are wrong): the Host refuses to
 // start and decides what to print (spec D.4).
 
@@ -47,12 +47,6 @@ enum class KernelErrorCode : std::uint8_t {
     PreCallChange,
     // Spec W-4: a handle used outside the System call that fetched it, or after a sync point.
     StaleHandle,
-    // Spec F.1, F-10: untyped Commands on a zone C or Exclusive column.
-    UntypedWrite,
-    // Spec Z5: a zone B emitter despawns an entity with zone C columns (when recorded, or the sync point's recheck).
-    ZoneCDespawn,
-    // Spec S-13: an ExclusiveWorld write outside zone B Shared data, or an untyped spawn.
-    ExclusiveWorldWrite,
     // Spec A.1, W-9: the allotter's range is used up (reported, never wrapped).
     AllotterExhausted,
     // Spec W-1 checked after a sync point with verification on.
@@ -77,13 +71,35 @@ enum class KernelErrorCode : std::uint8_t {
     HookRunsSchedule,
     // Spec X-14: a schedule is not run from inside a Read or Modify closure.
     ClosureRunsSchedule,
-    // Spec S-14: an ExclusiveWorld write to a single-writer resource its Writes<...> does not list.
-    UndeclaredResourceWrite,
-    // Spec S-15: an ExclusiveWorld read of KernelSettings; S-16: of a resource
-    // whose thread affinity the schedule's runner does not satisfy.
-    UnreadableResource,
     // Spec X-16: an exception left a nested run (the outer System caught it).
     NestedRunAborted,
+    // DI-KS 26 (v8-arch-gyo2-dynamic-insert-per-world): Registry::Register while a
+    // live World made from the Registry declares no dynamic insert
+    // (WorldOptions::dynamicInsert = false). Nothing was registered; the caller
+    // logs the warning (target/error-handling DI 2: the kernel logs in one place).
+    DynamicInsertRefused,
+    // The codes below come with ExclusiveWorld's immediate structural changes
+    // (declaration v8-arch-gyo2-kernel-subtract-structure 3.5; DI-KS 18, 21).
+    // ExclusiveWorld::Spawn: the id the World's allotter gave is alive. Nothing
+    // is spawned and the spawn is recorded as a RejectedSpawn (spec F-13,
+    // fromAllotter). Returned to the System only: like a spawn dropped at a sync
+    // point it is no error of the Run (it is not added to the call's errors), and
+    // the World is not interrupted.
+    AllottedIdAlive,
+    // ExclusiveWorld::Spawn with no allotter declared (D-E3 cannot see at
+    // startup that an exclusive System spawns). The change is not made and the
+    // call goes on; the Run ends in this Err when the System returns (DI-KS 2).
+    NoAllotter,
+    // An immediate change inside a Read or Modify closure: the reference the
+    // closure holds would not survive it (like X-14). The World is interrupted.
+    ClosureChangesMembership,
+    // An immediate change through a hook's ExclusiveWorld<>: a hook runs while
+    // records are applied (like X-13). The World is interrupted.
+    HookChangesMembership,
+    // An exception left an immediate change (a hook or an InitialValue function
+    // it ran threw) and the System caught it (like X-16, NestedRunAborted). The
+    // World was interrupted when the exception left the change.
+    ImmediateChangeAborted,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;
@@ -118,16 +134,21 @@ struct KernelError {
     [[nodiscard]] std::string Text() const;
 };
 
-// The startup error codes of spec D.2's table (D-E1 to D-E21, R-E1 to R-E6,
-// X-E1 to X-E3, F-E1). The enum value is not part of any fingerprint or file:
-// the text form (ToString) is.
+// The startup error codes of spec D.2's table that the kernel still has: its
+// kept list and the codes later batches take out (DI-KS 15; the guard
+// "DI-KS 15: the StartupCode values ..." in tests/common/kernel/RegistryTests.cpp
+// holds both lists). The enum value is not part of any fingerprint or file: the
+// text form (ToString) is.
 enum class StartupCode : std::uint8_t {
-    DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE8, DE9, DE10,
-    DE11, DE12, DE13, DE14, DE15, DE16, DE17, DE18, DE19, DE20,
+    DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE9,
+    DE11, DE12, DE14, DE15, DE16, DE17, DE19, DE20,
     // A World with two Startup schedules (spec H-12; v8-arch-gyo2-nested-schedule).
     DE21,
     RE1, RE2, RE3, RE4, RE5, RE6,
-    XE1, XE2, XE3,
+    // A later round of Registry::Register / BuildPlans registered what only the
+    // first round may (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6).
+    RE7,
+    XE1,
     FE1,
 };
 
@@ -137,9 +158,8 @@ struct StartupError {
     // The code of this error.
     StartupCode code;
     // Spec D.2's step the error was found in, when the step has its own code
-    // distinct from code (affinity: code X-E2 or X-E3, step D-E10; a (c)
-    // Parallel schedule without a guard: code X-E1, step D-E11). Otherwise
-    // equal to code.
+    // distinct from code (a (c) Parallel schedule without a guard: code X-E1,
+    // step D-E11). Otherwise equal to code.
     StartupCode step;
     // The rule broken, for people: "Z1", "S-12", "H-1", ...
     std::string rule;
@@ -159,7 +179,7 @@ enum class StartupReportCode : std::uint8_t {
 
 [[nodiscard]] std::string_view ToString(StartupReportCode code) noexcept;
 
-// The Err side of Registry::Finish: all errors, in the order the analysis found
+// The Err side of Registry::BuildPlans and Finish: all errors, in the order the analysis found
 // them (deterministic: plugin list order, registration order, schedule order).
 struct StartupReport {
     StartupReportCode code;

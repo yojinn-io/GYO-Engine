@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 // The explicit half of a declaration (spec B.2): what a plugin states when it
@@ -61,22 +60,6 @@ enum class Domain : std::uint8_t {
     Loading,
 };
 
-// Where a System or resource may run: any thread of the schedule's runner, or
-// one named thread role (spec E.3). The role "Main" is the platform thread.
-struct Affinity {
-    // Empty: Any.
-    std::string role;
-
-    [[nodiscard]] static Affinity Any() { return {}; }
-    [[nodiscard]] static Affinity Named(std::string name) { return Affinity{std::move(name)}; }
-    [[nodiscard]] bool IsAny() const noexcept { return role.empty(); }
-
-    friend bool operator==(const Affinity&, const Affinity&) = default;
-};
-
-// The thread role a schedule's Run is called on (spec D.1 runner).
-inline constexpr const char* kMainRole = "Main";
-
 struct ComponentOptions {
     std::string name;
     Zone zone = Zone::Unset;
@@ -93,7 +76,11 @@ struct ResourceOptions {
     Rollback rollback = Rollback::No;
     // Exchanged with the outside of the Product (spec I.2); always zone B (Z1, Z7).
     bool external = false;
-    Affinity affinity;
+    // Bound to the thread that puts the value in (DI-KS 14; Bevy's NonSend): a
+    // touch from any other thread is a GYO_ASSERT, destroying the World with a
+    // value included; removing the value forgets the thread. Which thread runs
+    // what is the orchestration layer's (v8-arch-gyo2-thread-binding-by-runner).
+    bool threadBound = false;
 };
 
 struct EventOptions {
@@ -151,8 +138,6 @@ struct ScheduleOptions {
     ExecutorKind executor = ExecutorKind::Serial;
     // Parallel only: the CTest that compares Serial and Parallel (spec X-2).
     std::string parallelGuardTest;
-    // The thread role that calls Run (spec D.1 runner).
-    std::string runner = kMainRole;
     // The most hook rounds after the last sync point of a Run (spec F-12). Empty:
     // the World's KernelSettings::hookRoundLimit. 0 is D-E20. In the Plan
     // fingerprint and, for a schedule that runs a zone C System, the C fingerprint.

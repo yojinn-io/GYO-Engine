@@ -4,6 +4,7 @@
 
 #include "engine/kernel/detail/RegistryData.hpp"
 
+
 #include "engine/base/Assert.hpp"
 
 #include <algorithm>
@@ -24,9 +25,6 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::BoundaryChange: return "BoundaryChange";
     case KernelErrorCode::PreCallChange: return "PreCallChange";
     case KernelErrorCode::StaleHandle: return "StaleHandle";
-    case KernelErrorCode::UntypedWrite: return "UntypedWrite";
-    case KernelErrorCode::ZoneCDespawn: return "ZoneCDespawn";
-    case KernelErrorCode::ExclusiveWorldWrite: return "ExclusiveWorldWrite";
     case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
     case KernelErrorCode::StructureBroken: return "StructureBroken";
     case KernelErrorCode::HookRoundLimit: return "HookRoundLimit";
@@ -37,9 +35,13 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::ExtractNotNestable: return "ExtractNotNestable";
     case KernelErrorCode::HookRunsSchedule: return "HookRunsSchedule";
     case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
-    case KernelErrorCode::UndeclaredResourceWrite: return "UndeclaredResourceWrite";
-    case KernelErrorCode::UnreadableResource: return "UnreadableResource";
     case KernelErrorCode::NestedRunAborted: return "NestedRunAborted";
+    case KernelErrorCode::DynamicInsertRefused: return "DynamicInsertRefused";
+    case KernelErrorCode::AllottedIdAlive: return "AllottedIdAlive";
+    case KernelErrorCode::NoAllotter: return "NoAllotter";
+    case KernelErrorCode::ClosureChangesMembership: return "ClosureChangesMembership";
+    case KernelErrorCode::HookChangesMembership: return "HookChangesMembership";
+    case KernelErrorCode::ImmediateChangeAborted: return "ImmediateChangeAborted";
     }
     return "Unknown";
 }
@@ -90,6 +92,16 @@ std::string_view ToString(StartupReportCode code) noexcept {
     return "Unknown";
 }
 
+// DI-KS 15: every StartupCode has its text, so the guard that lists the codes by
+// their text ("DI-KS 15: the StartupCode values ...", RegistryTests.cpp) sees
+// every code. A value without a case is a build error, not a warning.
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wswitch"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(error : 4062)
+#endif
 std::string_view ToString(StartupCode code) noexcept {
     switch (code) {
     case StartupCode::DE1: return "D-E1";
@@ -99,17 +111,13 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE5: return "D-E5";
     case StartupCode::DE6: return "D-E6";
     case StartupCode::DE7: return "D-E7";
-    case StartupCode::DE8: return "D-E8";
     case StartupCode::DE9: return "D-E9";
-    case StartupCode::DE10: return "D-E10";
     case StartupCode::DE11: return "D-E11";
     case StartupCode::DE12: return "D-E12";
-    case StartupCode::DE13: return "D-E13";
     case StartupCode::DE14: return "D-E14";
     case StartupCode::DE15: return "D-E15";
     case StartupCode::DE16: return "D-E16";
     case StartupCode::DE17: return "D-E17";
-    case StartupCode::DE18: return "D-E18";
     case StartupCode::DE19: return "D-E19";
     case StartupCode::DE20: return "D-E20";
     case StartupCode::DE21: return "D-E21";
@@ -119,13 +127,17 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::RE4: return "R-E4";
     case StartupCode::RE5: return "R-E5";
     case StartupCode::RE6: return "R-E6";
+    case StartupCode::RE7: return "R-E7";
     case StartupCode::XE1: return "X-E1";
-    case StartupCode::XE2: return "X-E2";
-    case StartupCode::XE3: return "X-E3";
     case StartupCode::FE1: return "F-E1";
     }
     return "Unknown";
 }
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 StartupReport::StartupReport(std::vector<StartupError> found)
     : code(StartupReportCode::StartupFailed),
@@ -172,7 +184,7 @@ namespace Detail {
 
 std::string RegistryData::OwnerName(std::uint32_t owner) const {
     if (owner == kKernelOwner) return kKernelOwnerName;
-    return owner < plugins.size() ? plugins[owner].name : std::string("?");
+    return owner < owners.size() ? owners[owner].name : std::string("?");
 }
 
 const TypeEntry* RegistryData::FindType(TypeKey key) const noexcept {
@@ -272,7 +284,6 @@ public:
 
     AccessSet access;
     bool domainTick = false;
-    bool kernelSettings = false;
 
     void Parameter(std::size_t position) override { position_ = position; }
 
@@ -283,9 +294,6 @@ public:
     }
     void Resource(TypeKey type, AccessMode mode) override {
         if (const auto id = Lookup(type, TypeRole::Resource, "resource")) {
-            if (*id == data_.kernelSettings) {
-                kernelSettings = true;
-            }
             (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Resource, *id});
         }
     }
@@ -319,6 +327,9 @@ public:
     }
     void Local() override { access.local = true; }
     void WholeWorld() override { access.exclusive = true; }
+    void AnnotatedWrite(TypeKey resource) override {
+        if (const auto id = Lookup(resource, TypeRole::Resource, "resource")) access.annotatedWrites.push_back(*id);
+    }
     void Diagnostics() override { access.diagnostics = true; }
     void ExtractComponent(TypeKey component) override { Extract(component, TypeRole::Component, AccessKind::Component); }
     void ExtractResource(TypeKey resource) override { Extract(resource, TypeRole::Resource, AccessKind::Resource); }
@@ -371,6 +382,7 @@ void Normalize(AccessSet& access) {
     SortUnique(access.deferredInserts);
     SortUnique(access.setReads);
     SortUnique(access.extractReads);
+    SortUnique(access.annotatedWrites);
 }
 
 } // namespace
@@ -382,20 +394,20 @@ void Normalize(AccessSet& access) {
 void FinishContext::InstallRunner(std::string_view runner) {
     GYO_ASSERT(registry_->data_->finished && !registry_->data_->building && !registry_->data_->frozen);
     registry_->data_->runners.emplace_back(runner);
-    registry_->data_->runnerOwners.push_back(plugin_);
+    registry_->data_->runnerOwners.push_back(owner_);
 }
 
 ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOptions options, Detail::MakeColumnFn make) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<ComponentId>(data.components.size());
-    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Component, id, plugin_, options.name)) {
+    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Component, id, owner_, options.name)) {
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
     data.components.push_back(ColumnInfo{std::move(options.name), shape.size, shape.align, shape.trivialRelocate,
                                          options.writePolicy, options.zone, options.role, options.rollback,
-                                         data.OwnerName(plugin_)});
+                                         data.OwnerName(owner_)});
     data.columnMakers.push_back(make);
     return id;
 }
@@ -409,13 +421,13 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<ResourceId>(data.resources.size());
-    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Resource, id, plugin_, options.name)) {
+    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Resource, id, owner_, options.name)) {
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
     data.resources.push_back(ResourceInfo{std::move(options.name), shape.size, shape.align, options.writePolicy,
                                           options.zone, options.role, options.rollback, options.external,
-                                          std::move(options.affinity), data.OwnerName(plugin_)});
+                                          options.threadBound, data.OwnerName(owner_)});
     data.resourceMakers.push_back(make);
     return id;
 }
@@ -424,11 +436,11 @@ EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions opti
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<EventTypeId>(data.events.size());
-    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Event, id, plugin_, options.name)) {
+    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Event, id, owner_, options.name)) {
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.events.push_back(EventInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(plugin_)});
+    data.events.push_back(EventInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(owner_)});
     data.eventMakers.push_back(make);
     return id;
 }
@@ -440,12 +452,12 @@ EffectId Registrar::Effect(std::string name) {
         if (data.effects[i].name == name) {
             data.Error(StartupCode::RE2, "R-6",
                        "effect '" + name + "' registered twice (first by " + data.OwnerName(data.effects[i].owner) +
-                           ", again by " + data.OwnerName(plugin_) + ")",
-                       {data.OwnerName(data.effects[i].owner), data.OwnerName(plugin_), name});
+                           ", again by " + data.OwnerName(owner_) + ")",
+                       {data.OwnerName(data.effects[i].owner), data.OwnerName(owner_), name});
             return static_cast<EffectId>(i);
         }
     }
-    data.effects.push_back(Detail::EffectRecord{std::move(name), plugin_});
+    data.effects.push_back(Detail::EffectRecord{std::move(name), owner_});
     return static_cast<EffectId>(data.effects.size() - 1);
 }
 
@@ -453,11 +465,11 @@ SetId Registrar::RegisterNamedSet(TypeKey key, std::string name) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<SetId>(data.namedSets.size());
-    if (!Detail::ClaimType(data, key, 0, 0, Detail::TypeRole::SetTag, id, plugin_, name)) {
+    if (!Detail::ClaimType(data, key, 0, 0, Detail::TypeRole::SetTag, id, owner_, name)) {
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.namedSets.push_back(Detail::NamedSetRecord{std::move(name), key, plugin_, {}, {}, {}, false});
+    data.namedSets.push_back(Detail::NamedSetRecord{std::move(name), key, owner_, {}, {}, {}, false});
     return id;
 }
 
@@ -467,43 +479,39 @@ void Registrar::AddSetMember(TypeKey set, TypeKey component) {
     for (Detail::NamedSetRecord& record : data.namedSets) {
         if (record.key == set) {
             record.pendingMembers.push_back(component);
-            record.memberOwners.push_back(plugin_);
+            record.memberOwners.push_back(owner_);
             return;
         }
     }
-    data.Error(StartupCode::RE4, "R-6", data.OwnerName(plugin_) + " adds a member to a named set that is not registered",
-               {data.OwnerName(plugin_)});
+    data.Error(StartupCode::RE4, "R-6", data.OwnerName(owner_) + " adds a member to a named set that is not registered",
+               {data.OwnerName(owner_)});
 }
 
 void Registrar::MarkDigestSet(TypeKey set) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
+    ++data.digestMarks;
     for (Detail::NamedSetRecord& record : data.namedSets) {
         if (record.key == set) {
             record.digest = true;
             return;
         }
     }
-    data.Error(StartupCode::RE4, "R-6", data.OwnerName(plugin_) + " marks a named set that is not registered as the digest set",
-               {data.OwnerName(plugin_)});
+    data.Error(StartupCode::RE4, "R-6", data.OwnerName(owner_) + " marks a named set that is not registered as the digest set",
+               {data.OwnerName(owner_)});
 }
 
 void Registrar::DeclareAllotter(TypeKey resource, Detail::AllotterOps ops) {
     GYO_ASSERT(data_->building);
     data_->allotterDeclarations.push_back(resource);
     data_->allotterDeclarationOps.push_back(ops);
-    data_->allotterOwners.push_back(plugin_);
+    data_->allotterOwners.push_back(owner_);
 }
 
 void Registrar::RequireExplicitZones() {
     GYO_ASSERT(data_->building);
     data_->explicitZones = true;
-}
-
-void Registrar::RequireExplicitOrder() {
-    GYO_ASSERT(data_->building);
-    std::vector<std::uint32_t>& owners = data_->explicitOrderOwners;
-    if (std::find(owners.begin(), owners.end(), plugin_) == owners.end()) owners.push_back(plugin_);
+    ++data_->explicitZoneCalls;
 }
 
 void Registrar::Schedule(ScheduleOptions options) {
@@ -511,11 +519,11 @@ void Registrar::Schedule(ScheduleOptions options) {
     Detail::RegistryData& data = *data_;
     if (const Detail::ScheduleRecord* existing = data.FindSchedule(options.name)) {
         data.Error(StartupCode::RE2, "C.2", "schedule '" + options.name + "' registered twice (first by " +
-                                               data.OwnerName(existing->owner) + ", again by " + data.OwnerName(plugin_) + ")",
-                   {data.OwnerName(existing->owner), data.OwnerName(plugin_), options.name});
+                                               data.OwnerName(existing->owner) + ", again by " + data.OwnerName(owner_) + ")",
+                   {data.OwnerName(existing->owner), data.OwnerName(owner_), options.name});
         return;
     }
-    data.schedules.push_back(Detail::ScheduleRecord{std::move(options), plugin_});
+    data.schedules.push_back(Detail::ScheduleRecord{std::move(options), owner_});
 }
 
 void Registrar::InsertStage(std::string_view schedule, std::string_view anchor, StagePlace place, std::string stage) {
@@ -527,18 +535,18 @@ void Registrar::InsertStage(std::string_view schedule, std::string_view anchor, 
         const auto at = std::find(stages.begin(), stages.end(), anchor);
         if (at == stages.end()) {
             data.Error(StartupCode::DE1, "C.2",
-                       data.OwnerName(plugin_) + " inserts stage '" + stage + "' next to stage '" + std::string(anchor) +
+                       data.OwnerName(owner_) + " inserts stage '" + stage + "' next to stage '" + std::string(anchor) +
                            "', which schedule '" + std::string(schedule) + "' does not have",
-                       {data.OwnerName(plugin_), std::string(schedule)});
+                       {data.OwnerName(owner_), std::string(schedule)});
             return;
         }
         stages.insert(place == StagePlace::Before ? at : at + 1, std::move(stage));
         return;
     }
     data.Error(StartupCode::DE1, "C.2",
-               data.OwnerName(plugin_) + " inserts stage '" + stage + "' into schedule '" + std::string(schedule) +
+               data.OwnerName(owner_) + " inserts stage '" + stage + "' into schedule '" + std::string(schedule) +
                    "', which no earlier plugin registered",
-               {data.OwnerName(plugin_), std::string(schedule)});
+               {data.OwnerName(owner_), std::string(schedule)});
 }
 
 void Registrar::Set(SetOptions options, std::vector<ConditionRef> conditions) {
@@ -548,11 +556,11 @@ void Registrar::Set(SetOptions options, std::vector<ConditionRef> conditions) {
         if (existing.options.schedule == options.schedule && existing.options.name == options.name) {
             data.Error(StartupCode::RE2, "C.1",
                        "set '" + options.name + "' of schedule '" + options.schedule + "' registered twice",
-                       {data.OwnerName(existing.owner), data.OwnerName(plugin_), options.name});
+                       {data.OwnerName(existing.owner), data.OwnerName(owner_), options.name});
             return;
         }
     }
-    data.sets.push_back(Detail::SetRecord{std::move(options), std::move(conditions), plugin_, {}, {}});
+    data.sets.push_back(Detail::SetRecord{std::move(options), std::move(conditions), owner_, {}, {}});
 }
 
 RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly,
@@ -561,34 +569,59 @@ RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::Resolve
     Detail::RegistryData& data = *data_;
     const auto seq = static_cast<RegistrationSeq>(data.systems.size());
     for (const Detail::SystemRecord& existing : data.systems) {
-        if (existing.options.name == options.name) {
+        // A tombstone's name is free again (declaration 3.2 rule 7).
+        if (!existing.removed && existing.options.name == options.name) {
             data.Error(StartupCode::RE2, "B.1",
                        "System name '" + options.name + "' registered twice (before / after and reports refer to "
                                                         "Systems by name)",
-                       {data.OwnerName(existing.owner), data.OwnerName(plugin_), options.name},
+                       {data.OwnerName(existing.owner), data.OwnerName(owner_), options.name},
                        {Detail::SourceText(existing.source), Detail::SourceText(source)});
             break;
         }
     }
     data.systems.push_back(
-        Detail::SystemRecord{std::move(options), resolve, extractOnly, run, source, plugin_, seq, {}, {}, false});
+        Detail::SystemRecord{std::move(options), resolve, extractOnly, run, source, owner_, seq, {}, {}, false, false});
     return seq;
+}
+
+bool Registrar::RemoveSystem(std::string_view name) {
+    GYO_ASSERT(data_->building);
+    for (Detail::SystemRecord& system : data_->systems) {
+        if (!system.removed && system.options.name == name) {
+            system.removed = true;
+            return true;
+        }
+    }
+    return false;
 }
 
 void Registrar::RegisterHook(TypeKey component, HookTrigger trigger, HookOptions options, Detail::ResolveFn resolve,
                              Detail::RunFn run, std::source_location source) {
     GYO_ASSERT(data_->building);
     data_->hooks.push_back(Detail::HookRecord{std::move(options.name), options.zone, component, trigger, resolve, run,
-                                              source, plugin_, std::nullopt, {}});
+                                              source, owner_, std::nullopt, {}});
 }
 
 void Registrar::RegisterInitialValue(TypeKey target, TypeKey request, Detail::InitialValueFn put,
                                      std::source_location source) {
     GYO_ASSERT(data_->building);
-    data_->initialValues.push_back(Detail::InitialValueRecord{target, request, put, source, plugin_});
+    data_->initialValues.push_back(Detail::InitialValueRecord{target, request, put, source, owner_});
 }
 
 // ---- FrozenRegistry
+
+std::uint64_t FrozenRegistry::Version() const noexcept { return data_->version; }
+std::span<const HookInfo> FrozenRegistry::Hooks() const noexcept { return data_->hookInfos; }
+std::span<const InitialValueInfo> FrozenRegistry::InitialValues() const noexcept { return data_->initialValueInfos; }
+std::span<const ScheduleInfo> FrozenRegistry::Schedules() const noexcept { return data_->scheduleInfos; }
+std::span<const SetInfo> FrozenRegistry::Sets() const noexcept { return data_->setInfos; }
+
+std::span<const OrderEdge> FrozenRegistry::OrderGraph(std::string_view schedule) const noexcept {
+    for (const Detail::ScheduleOrder& order : data_->orders) {
+        if (order.schedule == schedule) return order.edges;
+    }
+    return {};
+}
 
 std::span<const ColumnInfo> FrozenRegistry::Components() const noexcept { return data_->components; }
 std::span<const ResourceInfo> FrozenRegistry::Resources() const noexcept { return data_->resources; }
@@ -597,11 +630,15 @@ std::span<const SystemInfo> FrozenRegistry::Systems() const noexcept { return da
 std::span<const Plan> FrozenRegistry::Plans() const noexcept { return data_->plans; }
 std::span<const TieBreak> FrozenRegistry::TieBreaks() const noexcept { return data_->ties; }
 
+// The live System of that name; else the latest tombstone of it.
 const SystemInfo* FrozenRegistry::SystemNamed(std::string_view name) const noexcept {
+    const SystemInfo* tombstone = nullptr;
     for (const SystemInfo& info : data_->systemInfos) {
-        if (info.name == name) return &info;
+        if (info.name != name) continue;
+        if (!info.removed) return &info;
+        tombstone = &info;
     }
-    return nullptr;
+    return tombstone;
 }
 
 const Plan* FrozenRegistry::PlanOf(std::string_view schedule) const noexcept {
@@ -643,6 +680,27 @@ Fingerprint FrozenRegistry::CFingerprint() const {
 
 // ---- Registry
 
+namespace Detail {
+namespace {
+
+// The kernel's own registrations come first (ResourceId 0, EffectId 0), so they
+// never shift with the owners.
+void AddKernelRegistrations(RegistryData& data) {
+    data.kernelSettings = static_cast<ResourceId>(data.resources.size());
+    data.types.push_back(TypeEntry{KeyOf<KernelSettings>(), sizeof(KernelSettings), alignof(KernelSettings),
+                                   TypeRole::Resource, data.kernelSettings, kKernelOwner});
+    data.resources.push_back(ResourceInfo{"KernelSettings", sizeof(KernelSettings), alignof(KernelSettings),
+                                          WritePolicy::Exclusive, Zone::B, Role::State, Rollback::No, true, false,
+                                          kKernelOwnerName});
+    data.resourceMakers.push_back(&MakeResource<KernelSettings>);
+    data.effects.push_back(EffectRecord{kDiagnosticsEffect, kKernelOwner});
+}
+
+} // namespace
+} // namespace Detail
+
+Registry::Registry() : Registry(std::vector<Plugin*>{}) {}
+
 Registry::Registry(std::vector<Plugin*> plugins)
     : data_(std::make_unique<Detail::RegistryData>()), frozen_(*data_) {
     for (Plugin* plugin : plugins) {
@@ -653,17 +711,7 @@ Registry::Registry(std::vector<Plugin*> plugins)
         }
         data_->plugins.push_back(std::move(record));
     }
-    // The kernel's own registrations come first (ResourceId 0, EffectId 0), so
-    // they never shift with the plugin list.
-    Detail::RegistryData& data = *data_;
-    data.kernelSettings = static_cast<ResourceId>(data.resources.size());
-    data.types.push_back(Detail::TypeEntry{KeyOf<KernelSettings>(), sizeof(KernelSettings), alignof(KernelSettings),
-                                           Detail::TypeRole::Resource, data.kernelSettings, Detail::kKernelOwner});
-    data.resources.push_back(ResourceInfo{"KernelSettings", sizeof(KernelSettings), alignof(KernelSettings),
-                                          WritePolicy::Exclusive, Zone::B, Role::State, Rollback::No, true,
-                                          Affinity::Any(), Detail::kKernelOwnerName});
-    data.resourceMakers.push_back(&Detail::MakeResource<KernelSettings>);
-    data.effects.push_back(Detail::EffectRecord{Detail::kDiagnosticsEffect, Detail::kKernelOwner});
+    Detail::AddKernelRegistrations(*data_);
 }
 
 Registry::~Registry() = default;
@@ -745,38 +793,40 @@ void CheckData(RegistryData& data) {
     for (const ColumnInfo& info : data.components) {
         if (info.zone == Zone::Unset) {
             data.Error(StartupCode::DE7, "S-6", "component '" + info.name + "' declares no zone (there is no default)",
-                       {info.name, info.ownerPlugin});
+                       {info.name, info.owner});
         }
         if (info.role == Role::Input && info.rollback != Rollback::No) {
             data.Error(StartupCode::DE7, "Z8", "component '" + info.name + "' has role Input and must not roll back",
-                       {info.name, info.ownerPlugin});
+                       {info.name, info.owner});
         }
     }
     for (const ResourceInfo& info : data.resources) {
         if (info.zone == Zone::Unset) {
             data.Error(StartupCode::DE7, "S-6", "resource '" + info.name + "' declares no zone (there is no default)",
-                       {info.name, info.ownerPlugin});
+                       {info.name, info.owner});
         }
         if (info.external && info.zone == Zone::C) {
             data.Error(StartupCode::DE7, "Z1", "external resource '" + info.name + "' is zone C; external is always zone B",
-                       {info.name, info.ownerPlugin});
+                       {info.name, info.owner});
         }
         if (info.role == Role::Input && info.rollback != Rollback::No) {
             data.Error(StartupCode::DE7, "Z8", "resource '" + info.name + "' has role Input and must not roll back",
-                       {info.name, info.ownerPlugin});
+                       {info.name, info.owner});
         }
     }
     for (const EventInfo& info : data.events) {
         if (info.zone == Zone::Unset) {
             data.Error(StartupCode::DE7, "S-6", "event '" + info.name + "' declares no zone (there is no default)",
-                       {info.name, info.ownerPlugin});
+                       {info.name, info.owner});
         }
         if (info.domain == Domain::None) {
             data.Error(StartupCode::FE1, "F-9", "event '" + info.name + "' belongs to no clock domain",
-                       {info.name, info.ownerPlugin});
+                       {info.name, info.owner});
         }
     }
     // Allotter.
+    data.allotter.reset();
+    data.allotterOps = AllotterOps{};
     for (std::size_t i = 0; i < data.allotterDeclarations.size(); ++i) {
         const TypeEntry* entry = data.FindType(data.allotterDeclarations[i]);
         if (entry == nullptr || entry->role != TypeRole::Resource) {
@@ -795,6 +845,7 @@ void CheckData(RegistryData& data) {
     }
     // Named sets.
     for (NamedSetRecord& set : data.namedSets) {
+        set.members.clear();
         for (std::size_t i = 0; i < set.pendingMembers.size(); ++i) {
             const TypeEntry* entry = data.FindType(set.pendingMembers[i]);
             if (entry == nullptr || entry->role != TypeRole::Component) {
@@ -849,8 +900,8 @@ void CheckInitialValues(RegistryData& data) {
         if (target->owner != record.owner) {
             data.Error(StartupCode::RE4, "InitialValue",
                        declarer + " declares the initial value of component '" + targetInfo.name + "', which " +
-                           targetInfo.ownerPlugin + " owns; only the owner of a component declares its initial value",
-                       {targetInfo.name, declarer, targetInfo.ownerPlugin}, {source});
+                           targetInfo.owner + " owns; only the owner of a component declares its initial value",
+                       {targetInfo.name, declarer, targetInfo.owner}, {source});
             continue;
         }
         const bool repeated = std::any_of(valid.begin(), valid.end(), [&](const InitialValueRecord& other) {
@@ -950,9 +1001,6 @@ void CheckSchedules(RegistryData& data) {
             data.Error(StartupCode::DE17, "X-2", "schedule '" + s.name + "' declares Parallel; v1 has only Serial (LIM-2)",
                        {s.name});
         }
-        if (s.runner.empty()) {
-            data.Error(StartupCode::DE13, "H-2", "schedule '" + s.name + "' names no runner", {s.name});
-        }
     }
     for (Domain domain : usedDomains) {
         const std::vector<std::string>& names = clocks[domain];
@@ -964,21 +1012,11 @@ void CheckSchedules(RegistryData& data) {
                        subjects);
         }
     }
-    for (std::size_t i = 1; i < data.schedules.size(); ++i) {
-        const ScheduleOptions& first = data.schedules[0].options;
-        const ScheduleOptions& other = data.schedules[i].options;
-        if (other.runner != first.runner && !other.runner.empty() && !first.runner.empty()) {
-            data.Error(StartupCode::DE13, "H-2",
-                       "schedules '" + first.name + "' (runner " + first.runner + ") and '" + other.name + "' (runner " +
-                           other.runner + ") of one World run on different threads; two threads need two Worlds",
-                       {first.name, other.name});
-        }
-    }
 }
 
 // A run condition's access joins its System's (spec S-4, E.4): every read,
-// filter, set read, domain tick and the KernelSettings and extract flags, so
-// the System's checks (S-9, D-E18, Z1, D-E14) see it. Conditions are read-only
+// filter, set read, domain tick and the extract flag, so the System's checks
+// (S-9, Z1, D-E14) see it. Conditions are read-only
 // by type (S-5), so nothing is written.
 void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
     into.access.reads.insert(into.access.reads.end(), condition.access.reads.begin(), condition.access.reads.end());
@@ -991,12 +1029,16 @@ void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
     into.access.changeFilters = into.access.changeFilters || condition.access.changeFilters;
     into.access.local = into.access.local || condition.access.local;
     into.domainTick = into.domainTick || condition.domainTick;
-    into.kernelSettings = into.kernelSettings || condition.kernelSettings;
     into.usesExtract = into.usesExtract || condition.usesExtract;
 }
 
 void ResolveSystems(RegistryData& data) {
     for (SystemRecord& system : data.systems) {
+        // Derived: cleared, so a later BuildPlans does not add to the last one's (declaration 3.2 rule 2).
+        system.access = AccessSet{};
+        system.effects.clear();
+        system.domainTick = false;
+        if (system.removed) continue;
         const std::string subject = "System '" + system.options.name + "'";
         SystemResolver resolver(data, subject, SourceText(system.source));
         system.resolve(resolver);
@@ -1050,16 +1092,11 @@ void ResolveSystems(RegistryData& data) {
                            {system.options.name}, {SourceText(system.source)});
             }
         }
-        if (resolver.kernelSettings) {
-            data.Error(StartupCode::DE18, "A.6",
-                       subject + " declares Res or ResMut of KernelSettings; only the Host writes it and only the "
-                                 "kernel reads it",
-                       {system.options.name, "KernelSettings"}, {SourceText(system.source)});
-        }
         if (resolver.usesExtract && (data.extractSource == nullptr || !data.extractSource->frozen)) {
             data.Error(StartupCode::DE14, "H-6",
                        subject + " extracts from a source Registry that " +
-                           (data.extractSource == nullptr ? std::string("is not set") : std::string("is not frozen")),
+                           (data.extractSource == nullptr ? std::string("is not set")
+                                                      : std::string("has not built its Plans yet")),
                        {system.options.name}, {SourceText(system.source)});
         }
         // A System that reads and writes one key through two signatures (a
@@ -1097,6 +1134,7 @@ void ResolveSystems(RegistryData& data) {
     }
     for (HookRecord& hook : data.hooks) {
         const std::string subject = "hook '" + hook.name + "'";
+        hook.componentId.reset();
         const TypeEntry* entry = data.FindType(hook.component);
         if (entry == nullptr || entry->role != TypeRole::Component) {
             data.Error(StartupCode::RE4, "R-6", subject + " is attached to a type that is not a registered component",
@@ -1119,19 +1157,8 @@ void ResolveSystems(RegistryData& data) {
                            {hook.name}, {SourceText(hook.source)});
             }
         }
-        if (resolver.kernelSettings) {
-            data.Error(StartupCode::DE18, "A.6", subject + " declares Res or ResMut of KernelSettings",
-                       {hook.name, "KernelSettings"}, {SourceText(hook.source)});
-        }
         if (resolver.usesExtract) {
             data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
-                       {hook.name}, {SourceText(hook.source)});
-        }
-        if (resolver.access.exclusive && std::any_of(resolver.access.writes.begin(), resolver.access.writes.end(),
-                                                     [](const AccessKey& key) { return key.kind == AccessKind::Resource; })) {
-            // Spec S-18 (K0): a hook writes through deferred records; it lists no resource writes.
-            data.Error(StartupCode::DE7, "S-18",
-                       subject + " takes ExclusiveWorld<Writes<...>>; a hook may take ExclusiveWorld<> only",
                        {hook.name}, {SourceText(hook.source)});
         }
         if (hook.zone == Zone::C) {
@@ -1297,6 +1324,7 @@ void CheckSystems(RegistryData& data) {
     for (const ScheduleRecord& schedule : data.schedules) anyRollback = anyRollback || schedule.options.rollbackEnabled;
 
     for (const SystemRecord& system : data.systems) {
+        if (system.removed) continue;
         const std::string& name = system.options.name;
         const std::string subject = "System '" + name + "'";
         const std::string source = SourceText(system.source);
@@ -1402,22 +1430,6 @@ void CheckSystems(RegistryData& data) {
                                {name, event.name, s.name}, {source});
                 }
             }
-            // Affinity (spec E.3, X-3): of the System, then of every resource it touches.
-            const auto checkAffinity = [&](const Affinity& affinity, const std::string& holder) {
-                if (affinity.IsAny() || affinity.role == s.runner) return;
-                const bool main = affinity.role == kMainRole;
-                data.Error(main ? StartupCode::XE2 : StartupCode::XE3, StartupCode::DE10, "X-3",
-                           holder + " needs thread role '" + affinity.role + "' but schedule '" + s.name +
-                               "' runs on '" + s.runner + "'",
-                           {name, s.name}, {source});
-            };
-            checkAffinity(system.options.affinity, subject);
-            for (const AccessKey& key : TouchedKeys(access)) {
-                if (key.kind == AccessKind::Resource) {
-                    checkAffinity(data.resources[key.id].affinity,
-                                  subject + " (through resource '" + data.resources[key.id].name + "')");
-                }
-            }
             if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty() &&
                 unguardedParallel.insert(s.name).second) {
                 data.Error(StartupCode::XE1, StartupCode::DE11, "X-2",
@@ -1450,6 +1462,7 @@ void CheckSystems(RegistryData& data) {
 void CheckExclusiveWriters(RegistryData& data) {
     std::map<AccessKey, std::vector<std::pair<std::string, std::string>>> writers;
     for (const SystemRecord& system : data.systems) {
+        if (system.removed) continue;
         bool counted = false;
         for (const Mount& mount : system.options.mounts) {
             const ScheduleRecord* schedule = data.FindSchedule(mount.schedule);
@@ -1524,62 +1537,324 @@ void CheckRunners(RegistryData& data) {
     }
 }
 
+// The read-only view's lists (FrozenRegistry; DI-KS 25), made again at every BuildPlans.
 void FillSystemInfos(RegistryData& data) {
     data.systemInfos.clear();
     for (const SystemRecord& system : data.systems) {
         data.systemInfos.push_back(SystemInfo{system.options.name, system.seq, system.options.zone, system.options.ingress,
                                               system.options.mounts, system.access, SourceText(system.source),
-                                              data.OwnerName(system.owner)});
+                                              data.OwnerName(system.owner), system.effects, system.removed});
     }
+    data.hookInfos.clear();
+    for (const HookRecord& hook : data.hooks) {
+        data.hookInfos.push_back(HookInfo{hook.name, hook.trigger, hook.componentId.value_or(0), hook.zone, hook.access,
+                                          SourceText(hook.source), data.OwnerName(hook.owner)});
+    }
+    data.initialValueInfos.clear();
+    for (const InitialValueRecord& record : data.initialValues) {
+        data.initialValueInfos.push_back(InitialValueInfo{record.targetId, record.requestId, data.OwnerName(record.owner),
+                                                          SourceText(record.source)});
+    }
+    data.scheduleInfos.clear();
+    for (const ScheduleRecord& schedule : data.schedules) {
+        data.scheduleInfos.push_back(ScheduleInfo{schedule.options, data.OwnerName(schedule.owner)});
+    }
+    data.setInfos.clear();
+    for (const SetRecord& set : data.sets) {
+        std::vector<std::string> conditions;
+        for (const ConditionRef& condition : set.conditions) conditions.push_back(condition.Name());
+        data.setInfos.push_back(SetInfo{set.options, std::move(conditions), data.OwnerName(set.owner)});
+    }
+}
+
+// Declaration 3.2 rule 6: a later round may add components, resources, events,
+// named sets, schedules (not Startup), stages, System sets, effects and
+// Systems, remove Systems and mount new Systems on existing schedules. What
+// would change something the previous version already built is R-E7: the round
+// is dropped and the Worlds go on (a mistyped command does not stop the game).
+// Each message starts with the kind refused. Runs before CheckInitialValues,
+// which sorts the declarations.
+void CheckLaterRound(RegistryData& data) {
+    const RoundBase& base = data.base;
+    const auto refuse = [&](const char* kind, std::string message, std::vector<std::string> subjects,
+                            std::vector<std::string> sources = {}) {
+        data.Error(StartupCode::RE7, "L5",
+                   std::string(kind) + ": " + std::move(message) + " (only the first round may; the round is dropped)",
+                   std::move(subjects), std::move(sources));
+    };
+    for (std::size_t h = base.hooks; h < data.hooks.size(); ++h) {
+        const HookRecord& hook = data.hooks[h];
+        if (hook.componentId && *hook.componentId < base.components) {
+            // Its cells that exist ran no OnAdd but would run OnRemove (Bevy refuses too).
+            refuse("hook", data.OwnerName(hook.owner) + " adds hook '" + hook.name + "' to component '" +
+                               data.components[*hook.componentId].name + "', which the previous version has",
+                   {hook.name, data.components[*hook.componentId].name}, {SourceText(hook.source)});
+        }
+    }
+    const auto oldComponent = [&](TypeKey key) -> const TypeEntry* {
+        const TypeEntry* entry = data.FindType(key);
+        return entry != nullptr && entry->role == TypeRole::Component && entry->id < base.components ? entry : nullptr;
+    };
+    for (std::size_t i = base.initialValues; i < data.initialValues.size(); ++i) {
+        const InitialValueRecord& record = data.initialValues[i];
+        // An old Target: its cells that exist were never filled. An old
+        // Request: the entities that have it already never get the Target.
+        if (const TypeEntry* target = oldComponent(record.target)) {
+            refuse("InitialValue Target", data.OwnerName(record.owner) + " declares the initial value of component '" +
+                                              data.components[target->id].name + "', which the previous version has",
+                   {data.components[target->id].name, data.OwnerName(record.owner)}, {SourceText(record.source)});
+        }
+        if (const TypeEntry* request = oldComponent(record.request)) {
+            refuse("InitialValue Request", data.OwnerName(record.owner) + " declares an initial value requested by component '" +
+                                               data.components[request->id].name + "', which the previous version has",
+                   {data.components[request->id].name, data.OwnerName(record.owner)}, {SourceText(record.source)});
+        }
+    }
+    for (std::size_t n = 0; n < base.namedSets && n < data.namedSets.size(); ++n) {
+        const NamedSetRecord& set = data.namedSets[n];
+        for (std::size_t m = base.setMembers[n]; m < set.pendingMembers.size(); ++m) {
+            // Would change the access of Systems and hooks that read the set.
+            refuse("set member", data.OwnerName(set.memberOwners[m]) + " adds a member to named set '" + set.name +
+                                     "', which the previous version has",
+                   {set.name, data.OwnerName(set.memberOwners[m])});
+        }
+    }
+    for (std::size_t i = base.schedules; i < data.schedules.size(); ++i) {
+        const ScheduleRecord& schedule = data.schedules[i];
+        if (schedule.options.startup) {
+            refuse("startup schedule", data.OwnerName(schedule.owner) + " registers Startup schedule '" +
+                                           schedule.options.name + "' (Startup runs once and has run)",
+                   {schedule.options.name, data.OwnerName(schedule.owner)});
+        }
+    }
+    for (std::size_t i = base.systems; i < data.systems.size(); ++i) {
+        const SystemRecord& system = data.systems[i];
+        if (system.removed) continue;
+        for (const Mount& mount : system.options.mounts) {
+            const ScheduleRecord* schedule = data.FindSchedule(mount.schedule);
+            if (schedule != nullptr && schedule->options.startup) {
+                refuse("startup mount", "System '" + system.options.name + "' is mounted in Startup schedule '" +
+                                            mount.schedule + "' (Startup runs once and has run)",
+                       {system.options.name, mount.schedule}, {SourceText(system.source)});
+            }
+        }
+    }
+    for (std::size_t i = base.allotterDeclarations; i < data.allotterDeclarations.size(); ++i) {
+        refuse("allotter", data.OwnerName(data.allotterOwners[i]) + " declares an allotter",
+               {data.OwnerName(data.allotterOwners[i])});
+    }
+    if (data.digestMarks > base.digestMarks) refuse("DigestSet", "a named set is marked as the digest set", {"DigestSet"});
+    if (data.explicitZoneCalls > base.explicitZoneCalls) {
+        refuse("RequireExplicitZones", "explicit zones are required", {"RequireExplicitZones"});
+    }
+}
+
+// What every round resolves before plugins' Finish may read the tables (named
+// set members, the allotter, Systems' access sets): spec C.2 point 4. Derived
+// fields are cleared and made again (declaration 3.2 rule 2).
+void ResolveStage(RegistryData& data, bool laterRound) {
+    ApplyDefaultZones(data);
+    CheckData(data);
+    if (laterRound) {
+        // Needs hooks' component ids: resolved here first, again by ResolveSystems.
+        for (HookRecord& hook : data.hooks) {
+            const TypeEntry* entry = data.FindType(hook.component);
+            hook.componentId = entry != nullptr && entry->role == TypeRole::Component ? std::optional<ComponentId>(entry->id)
+                                                                                       : std::nullopt;
+        }
+        CheckLaterRound(data);
+    }
+    CheckInitialValues(data);
+    CheckSchedules(data);
+    ResolveSystems(data);
+    FillSystemInfos(data);
+}
+
+// The checks that come after plugins' Finish, the Plans (spec C.2 points 5 and
+// 6) and their fingerprints. Ok when no error was found in the whole round.
+bool PlanStage(RegistryData& data) {
+    data.plans.clear();
+    data.ties.clear();
+    data.orders.clear();
+    CheckSystems(data);
+    CheckExclusiveWriters(data);
+    CheckHookConflicts(data);
+    BuildPlans(data);
+    if (!data.errors.empty()) {
+        data.plans.clear();
+        data.ties.clear();
+        data.orders.clear();
+        return false;
+    }
+    for (Plan& plan : data.plans) {
+        plan.fingerprint = PlanFingerprintOf(plan);
+    }
+    return true;
+}
+
+// A successful later round: its tables replace the Registry's, in the same
+// object, so FrozenRegistry, the Worlds' table pointer and the extract-source
+// pointers of other Registries stay valid (declaration 3.2 rule 1). The World
+// counters belong to the object, not to a round.
+void Adopt(RegistryData& into, RegistryData&& round) {
+    const std::uint32_t liveWorlds = into.liveWorlds;
+    const std::uint32_t refusingWorlds = into.refusingWorlds;
+    const std::uint32_t runningWorlds = into.runningWorlds;
+    into = std::move(round);
+    into.liveWorlds = liveWorlds;
+    into.refusingWorlds = refusingWorlds;
+    into.runningWorlds = runningWorlds;
 }
 
 } // namespace
 } // namespace Detail
 
+void Registry::RequireNoWorldRunning() const {
+    // While a World made from this Registry is inside a Run, its Executor holds
+    // the Plan, the Systems and the initial values of this version: anything
+    // the Run calls (a System, a hook, an initial value function, another
+    // World's Run) would rebuild them under it (declaration 3.2 rule 4). The
+    // count covers the whole call chain, not only the innermost call. Another
+    // Registry's Worlds are not concerned.
+    GYO_ASSERT(data_->runningWorlds == 0);
+}
+
+Detail::RegistryData& Registry::Target() noexcept {
+    return pending_ ? *pending_ : *data_;
+}
+
+Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(RegistrationOwner owner) {
+    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
+    GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)
+    RequireNoWorldRunning();
+    if (data_->refusingWorlds > 0) {
+        // DI-KS 26: one World that declares no dynamic insert refuses for the whole Registry.
+        KernelError error(KernelErrorCode::DynamicInsertRefused,
+                          "Register by '" + owner.name + "' refused: " + std::to_string(data_->refusingWorlds) +
+                              " live World(s) made from this Registry declare no dynamic insert "
+                              "(WorldOptions::dynamicInsert = false); nothing was registered");
+        error.rule = "DI-KS 26";
+        return Engine::Base::Err(std::move(error));
+    }
+    if (data_->frozen && !pending_) {
+        // Rule 1: a later round writes a copy; its contents replace the tables only when it builds.
+        pending_ = std::make_unique<Detail::RegistryData>(*data_);
+        Detail::RegistryData& round = *pending_;
+        Detail::RoundBase& base = round.base;
+        base.components = round.components.size();
+        base.namedSets = round.namedSets.size();
+        base.setMembers.clear();
+        for (const Detail::NamedSetRecord& set : round.namedSets) base.setMembers.push_back(set.pendingMembers.size());
+        base.schedules = round.schedules.size();
+        base.systems = round.systems.size();
+        base.hooks = round.hooks.size();
+        base.initialValues = round.initialValues.size();
+        base.allotterDeclarations = round.allotterDeclarations.size();
+        base.digestMarks = round.digestMarks;
+        base.explicitZoneCalls = round.explicitZoneCalls;
+    }
+    Detail::RegistryData& target = Target();
+    target.registered = true;
+    std::uint32_t index = 0;
+    while (index < target.owners.size() && !(target.owners[index] == owner)) ++index;
+    if (index == target.owners.size()) target.owners.push_back(std::move(owner));
+    target.building = true;
+    return index;
+}
+
+void Registry::CloseRegistrar() noexcept {
+    Target().building = false;
+}
+
+Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
+    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
+    GYO_ASSERT(!data_->failed);
+    RequireNoWorldRunning();
+    if (pending_) {
+        // A later round: built on the copy; the tables change only when it succeeds.
+        Detail::RegistryData& round = *pending_;
+        Detail::ResolveStage(round, true);
+        if (!Detail::PlanStage(round)) {
+            StartupReport report(std::move(round.errors));
+            pending_.reset();
+            return Engine::Base::Err(std::move(report));
+        }
+        round.version = data_->version + 1;
+        round.registered = false;
+        Detail::Adopt(*data_, std::move(round));
+        pending_.reset();
+        return {};
+    }
+    Detail::RegistryData& data = *data_;
+    if (data.frozen || !data.registered) return {};  // nothing registered since the last BuildPlans
+    // The first round, on the tables themselves.
+    data.finished = true;
+    Detail::ResolveStage(data, false);
+    if (!Detail::PlanStage(data)) {
+        data.failed = true;
+        return Engine::Base::Err(StartupReport(std::move(data.errors)));
+    }
+    data.registered = false;
+    data.version = 1;
+    data.frozen = true;
+    return {};
+}
+
+void Registry::DiscardRegistrations() {
+    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
+    GYO_ASSERT(!data_->failed);
+    RequireNoWorldRunning();
+    if (pending_) {
+        pending_.reset();
+        return;
+    }
+    if (data_->frozen || !data_->registered) return;
+    // The first round writes the tables: back to a Registry with only the
+    // kernel's registrations (its plugin list and extract source kept).
+    Detail::RegistryData fresh;
+    fresh.plugins = std::move(data_->plugins);
+    fresh.extractSource = data_->extractSource;
+    fresh.extractSourceSet = data_->extractSourceSet;
+    fresh.schedulerShuffle = data_->schedulerShuffle;
+    Detail::AddKernelRegistrations(fresh);
+    Detail::Adopt(*data_, std::move(fresh));
+}
+
 Engine::Base::Result<void, StartupReport> Registry::Finish() {
     Detail::RegistryData& data = *data_;
-    GYO_ASSERT(!data.finished);
-    data.finished = true;
+    // The first round only (rule 9).
+    GYO_ASSERT(!data.finished && !data.registered);
 
     Detail::CheckPluginList(data);
-    data.building = true;
+    // Each plugin's owner index (Plugin::Finish's FinishContext).
+    std::vector<std::uint32_t> ownerOf(data.plugins.size(), 0);
     for (std::size_t i = 0; i < data.plugins.size(); ++i) {
         if (!data.plugins[i].built) continue;
-        Registrar registrar(data, static_cast<std::uint32_t>(i));
-        data.plugins[i].plugin->Build(registrar);
+        Plugin* plugin = data.plugins[i].plugin;
+        const RegistrationOwner owner{data.plugins[i].name, static_cast<std::uint32_t>(i)};
+        static_cast<void>(Register(owner, [plugin](Registrar& registrar) { plugin->Build(registrar); }));
+        ownerOf[i] = static_cast<std::uint32_t>(data.owners.size() - 1);
     }
-    data.building = false;
-    // Registration is closed: resolve what plugins' Finish may read (named set
-    // members, the allotter, Systems' access sets) before calling it, so it reads
-    // final ids and sets (spec C.2 point 4). Plans and the Registry fingerprint
-    // come after Finish, as in spec C.2 points 5 and 6. With errors so far the
-    // ids are not final, so plugins' Finish is not called.
-    Detail::ApplyDefaultZones(data);
-    Detail::CheckData(data);
-    Detail::CheckInitialValues(data);
-    Detail::CheckSchedules(data);
-    Detail::ResolveSystems(data);
-    Detail::FillSystemInfos(data);
+    data.finished = true;
+    // Registration is closed: resolve what plugins' Finish may read before
+    // calling it, so it reads final ids and sets (spec C.2 point 4). Plans and
+    // the Registry fingerprint come after Finish, as in spec C.2 points 5 and
+    // 6. With errors so far the ids are not final, so plugins' Finish is not called.
+    Detail::ResolveStage(data, false);
     if (data.errors.empty()) {
         for (std::size_t i = 0; i < data.plugins.size(); ++i) {
             if (!data.plugins[i].built) continue;
-            FinishContext context(*this, static_cast<std::uint32_t>(i));
+            FinishContext context(*this, ownerOf[i]);
             data.plugins[i].plugin->Finish(frozen_, context);
         }
         Detail::CheckRunners(data);
     }
-    Detail::CheckSystems(data);
-    Detail::CheckExclusiveWriters(data);
-    Detail::CheckHookConflicts(data);
-    Detail::BuildPlans(data);
-    if (!data.errors.empty()) {
-        data.plans.clear();
-        data.ties.clear();
+    if (!Detail::PlanStage(data)) {
+        data.failed = true;
         return Engine::Base::Err(StartupReport(std::move(data.errors)));
     }
-    for (Plan& plan : data.plans) {
-        plan.fingerprint = Detail::PlanFingerprintOf(plan);
-    }
+    data.registered = false;
+    data.version = 1;
     data.frozen = true;
     return {};
 }

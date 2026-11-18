@@ -7,6 +7,7 @@
 #include "engine/kernel/detail/RegistryData.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/IdIssuer.hpp"
 #include "engine/base/Sha256.hpp"
 
 #include <algorithm>
@@ -37,34 +38,67 @@ bool ContainsError(const KernelError& error, const KernelError& wanted) {
                        [&](const KernelError& sibling) { return ContainsError(sibling, wanted); });
 }
 
+// A hook names the sync point step that ran it, or the step of the exclusive
+// System whose immediate change ran it.
 std::string CallText(const Detail::SystemContext& call) {
+    const bool syncPoint = call.hook && !call.immediateChange;
     return std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "' (schedule '" +
-           std::string(call.schedule) + "', " + (call.hook ? "sync point " : "") + "step " +
-           std::to_string(call.planPos) + ")";
+           std::string(call.schedule) + "', " + (syncPoint ? "sync point " : "") + "step " +
+           std::to_string(call.planPos) + (call.immediateChange ? ", an immediate change" : "") + ")";
 }
 
 } // namespace
 
 // ---- Construction
 
-World::World(const Registry& registry, std::string name)
-    : registry_(&registry), frozen_(&registry.Frozen()), data_(registry.data_.get()), name_(std::move(name)) {
+World::World(const Registry& registry, std::string name, WorldOptions options)
+    : registry_(&registry), frozen_(&registry.Frozen()), data_(registry.data_.get()), name_(std::move(name)),
+      options_(options) {
+    // DI-KS 26: not while a round is pending (it would attach to a version it
+    // never saw registered).
+    GYO_ASSERT(registry.pending_ == nullptr);
+    AttachVersion();
+    // The kernel's own resource is present from the start (the Host or a System may overwrite it).
+    static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data_->kernelSettings]).value = KernelSettings{};
+    ++data_->liveWorlds;
+    if (!options_.dynamicInsert) ++data_->refusingWorlds;
+}
+
+void World::Sync() const {
+    if (version_ != data_->version) const_cast<World&>(*this).AttachVersion();
+}
+
+// Declaration 3.2 rule 5: ids only grow, so new storage is appended; the hooks'
+// access descriptions are all made again (a later round changes no existing
+// one, rule 6, but nothing here relies on it). Made while no hook records, so
+// a hook queue's address never changes while a hook records into it.
+void World::AttachVersion() {
+    GYO_ASSERT(state_ != WorldState::Running && state_ != WorldState::Applying);
     const Detail::RegistryData& data = *data_;
     GYO_ASSERT(data.columnMakers.size() == data.components.size());
     GYO_ASSERT(data.resourceMakers.size() == data.resources.size());
     GYO_ASSERT(data.eventMakers.size() == data.events.size());
-    for (Detail::MakeColumnFn make : data.columnMakers) {
-        GYO_ASSERT(make != nullptr);
-        columns_.push_back(make());
+    for (std::size_t c = columns_.size(); c < data.columnMakers.size(); ++c) {
+        GYO_ASSERT(data.columnMakers[c] != nullptr);
+        columns_.push_back(data.columnMakers[c]());
     }
-    for (Detail::MakeResourceFn make : data.resourceMakers) resources_.push_back(make());
-    for (Detail::MakeEventsFn make : data.eventMakers) events_.push_back(make());
-    // The kernel's own resource is present from the start (the Host overwrites it before the first Run).
-    static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data.kernelSettings]).value = KernelSettings{};
-    excluded_.assign(columns_.size(), false);
+    for (std::size_t r = resources_.size(); r < data.resourceMakers.size(); ++r) resources_.push_back(data.resourceMakers[r]());
+    for (std::size_t e = events_.size(); e < data.eventMakers.size(); ++e) events_.push_back(data.eventMakers[e]());
+    excluded_.resize(columns_.size(), false);
+    hookAccess_.clear();
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
-    // Made up front: a bucket's address never changes while a hook records into it.
-    for (const Detail::ScheduleRecord& schedule : data.schedules) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});
+    for (const Detail::ScheduleRecord& schedule : data.schedules) {
+        const bool known = std::any_of(hookQueues_.begin(), hookQueues_.end(),
+                                       [&](const HookQueue& queue) { return queue.schedule == schedule.options.name; });
+        if (!known) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});
+    }
+    // Every table indexed by a registry id has the new version's size (a missed
+    // one would be read past its end later; RC 17).
+    GYO_ASSERT(events_.size() == data.events.size());
+    GYO_ASSERT(excluded_.size() == data.components.size());
+    GYO_ASSERT(hookAccess_.size() == data.hooks.size());
+    GYO_ASSERT(hookQueues_.size() == data.schedules.size());
+    version_ = data.version;
 }
 
 World::HookQueue& World::HookQueueOf(std::string_view schedule) {
@@ -76,13 +110,28 @@ World::HookQueue& World::HookQueueOf(std::string_view schedule) {
 }
 
 // Spec W-7: columns in ascending ComponentId order, each in ascending EntityId order (Column's destructor).
+// DI-KS 14: a thread-bound resource's value is destroyed only on its thread.
 World::~World() {
+    for (std::size_t r = 0; r < resources_.size(); ++r) CheckThread(static_cast<ResourceId>(r));
     for (auto& column : columns_) column.reset();
+    --data_->liveWorlds;
+    if (!options_.dynamicInsert) --data_->refusingWorlds;
+}
+
+void World::CheckThread(ResourceId id) const {
+    if (!data_->resources[id].threadBound) return;
+    const Detail::ResourceBase& slot = *resources_[id];
+    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());
+}
+
+void World::BindThread(ResourceId id) {
+    if (data_->resources[id].threadBound) resources_[id]->thread = Engine::Base::CurrentThreadSerial();
 }
 
 // ---- Public reads and Host writes
 
 bool World::Alive(EntityId id) const {
+    Sync();
     if (state_ == WorldState::Running || state_ == WorldState::Applying) {
         GYO_ASSERT(Detail::CurrentCall(const_cast<World&>(*this)) != nullptr);  // W-6
     }
@@ -90,6 +139,7 @@ bool World::Alive(EntityId id) const {
 }
 
 std::span<const EntityId> World::Entities() const {
+    Sync();
     if (state_ == WorldState::Running || state_ == WorldState::Applying) {
         GYO_ASSERT(Detail::CurrentCall(const_cast<World&>(*this)) != nullptr);  // W-6
     }
@@ -98,6 +148,7 @@ std::span<const EntityId> World::Entities() const {
 
 bool World::Despawn(EntityId id) {
     GYO_ASSERT(state_ == WorldState::Ready);  // W-3
+    Sync();
     if (!std::binary_search(entities_.begin(), entities_.end(), id)) return false;
     for (std::size_t c = 0; c < columns_.size(); ++c) {
         if (columns_[c]->Contains(id)) {
@@ -146,17 +197,8 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         if (!verification_) return;
         const Detail::AccessDesc& access = *call->access;
         bool declared = false;
-        if (access.wholeWorld && kind != Detail::EntryKind::Event) {
-            if (mode == Detail::kModeRead) {
-                declared = true;
-            } else if (kind == Detail::EntryKind::Component) {
-                const ColumnInfo& info = data_->components[id];
-                declared = info.zone == Zone::B && info.writePolicy == WritePolicy::Shared;
-            } else {
-                const ResourceInfo& info = data_->resources[id];
-                declared = info.zone == Zone::B && info.writePolicy == WritePolicy::Shared;
-            }
-        }
+        // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
+        if (access.wholeWorld && kind != Detail::EntryKind::Event) declared = true;
         const auto entry = std::lower_bound(access.entries.begin(), access.entries.end(), std::make_pair(kind, id),
                                             [](const Detail::AccessEntry& e, const std::pair<Detail::EntryKind, std::uint32_t>& k) {
                                                 return e.kind != k.first ? e.kind < k.first : e.id < k.second;
@@ -191,16 +233,6 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         return;
     case WorldState::Ready:
         if (mode == Detail::kModeRead) return;
-        if (kind == Detail::EntryKind::Component) {
-            const ColumnInfo& info = data_->components[id];
-            // W-6b: after the first Run the Host writes no zone C state.
-            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input);
-        } else if (kind == Detail::EntryKind::Resource) {
-            const ResourceInfo& info = data_->resources[id];
-            // W-6b, J-50: KernelSettings only before the first Run.
-            GYO_ASSERT(!hasRun_ || id != data_->kernelSettings);
-            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input || info.external);
-        }
         MarkApiWritten(kind, id);
         return;
     }
@@ -228,19 +260,24 @@ SystemContext& RequireCall(World& world) {
     return *call;
 }
 
+// The type lookups are every typed entry's first step (World API and handles),
+// so they attach the World to a new Registry version (declaration 3.2 rule 5).
 ComponentId ComponentIdOf(const World& world, TypeKey key) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Component);
     return entry->id;
 }
 
 ResourceId ResourceIdOf(const World& world, TypeKey key) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Resource);
     return entry->id;
 }
 
 EventTypeId EventIdOf(const World& world, TypeKey key) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Event);
     return entry->id;
@@ -279,6 +316,7 @@ ColumnBase& ColumnAt(World& world, ComponentId id) {
 
 ResourceBase& ResourceAt(World& world, ResourceId id) {
     RequireRunningCall(world);
+    world.CheckThread(id);
     return *world.resources_[id];
 }
 
@@ -312,6 +350,7 @@ std::size_t ResourceCount(const World& world) noexcept {
 }
 
 std::vector<ComponentId> SetMembersOf(const World& world, TypeKey setTag) {
+    world.Sync();
     const TypeEntry* entry = world.data_->FindType(setTag);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::SetTag);
     return world.data_->namedSets[entry->id].members;
@@ -342,72 +381,12 @@ KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rul
     return error;
 }
 
-std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {
-    const ColumnInfo& info = call.world->data_->components[component];
-    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;
-    return CallError(call, KernelErrorCode::UntypedWrite, "F-10",
-                     std::string("untyped Commands ") + (insert ? "insert" : "remove") + " of component '" + info.name +
-                         "' (ComponentId " + std::to_string(component) + ", " +
-                         (info.zone == Zone::C ? "zone C" : "Exclusive") + ") on entity " + std::to_string(entity) +
-                         ": untyped Commands write only zone B, Shared columns; use CommandsFor");
-}
-
-std::optional<KernelError> CheckDespawn(SystemContext& call, EntityId entity) {
-    if (call.zone != Zone::B) return std::nullopt;
-    World& world = *call.world;
-    for (std::size_t c = 0; c < world.columns_.size(); ++c) {
-        if (world.data_->components[c].zone == Zone::C && world.columns_[c]->Contains(entity)) {
-            return CallError(call, KernelErrorCode::ZoneCDespawn, "Z5",
-                             "a zone B call despawns entity " + std::to_string(entity) + ", which has zone C component '" +
-                                 world.data_->components[c].name + "'");
-        }
-    }
-    return std::nullopt;
-}
-
-std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {
-    const ColumnInfo& info = call.world->data_->components[component];
-    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;
-    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, "S-13",
-                     "ExclusiveWorld write of component '" + info.name + "' (" +
-                         (info.zone == Zone::C ? "zone C" : "Exclusive") + ") on entity " + std::to_string(entity) +
-                         ": ExclusiveWorld writes only zone B, Shared data");
-}
-
-std::optional<KernelError> CheckExclusiveResourceWrite(SystemContext& call, ResourceId resource, bool listed) {
-    const ResourceInfo& info = call.world->data_->resources[resource];
-    if (info.zone == Zone::B && (info.writePolicy == WritePolicy::Shared || listed)) return std::nullopt;
-    if (info.zone != Zone::B) {
-        // Spec S-13: zone C data is never an ExclusiveWorld's (listing it is Z2 at startup).
-        return CallError(call, KernelErrorCode::ExclusiveWorldWrite, "S-13",
-                         "ExclusiveWorld write of resource '" + info.name +
-                             "' (zone C): ExclusiveWorld writes only zone B data");
-    }
-    return CallError(call, KernelErrorCode::UndeclaredResourceWrite, "S-14",
-                     "ExclusiveWorld write of resource '" + info.name +
-                         "', which has a single writer (not Shared) and is not listed in this System's "
-                         "ExclusiveWorld<Writes<...>>: list it there to be counted as its writer");
-}
-
-std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource) {
-    const World& world = *call.world;
-    const ResourceInfo& info = world.data_->resources[resource];
-    if (resource == world.data_->kernelSettings) {
-        // LIM-6, D-E18: the verification switches must not change a simulation result.
-        return CallError(call, KernelErrorCode::UnreadableResource, "S-15",
-                         "ExclusiveWorld read of KernelSettings: only the kernel reads it, so the verification "
-                         "switches cannot change what a System does");
-    }
-    const Detail::ScheduleRecord* schedule = world.data_->FindSchedule(std::string(call.schedule));
-    const std::string runner = schedule != nullptr ? schedule->options.runner : std::string();
-    if (!info.affinity.IsAny() && info.affinity.role != runner) {
-        // X-3 at run time: a System's other reads are checked at startup; this one is not in its signature.
-        return CallError(call, KernelErrorCode::UnreadableResource, "S-16",
-                         "ExclusiveWorld read of resource '" + info.name + "' by System '" + std::string(call.name) +
-                             "': the resource needs thread role '" + info.affinity.role + "' but schedule '" +
-                             std::string(call.schedule) + "' runs on '" + runner + "'");
-    }
-    return std::nullopt;
+KernelError CallerError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message) {
+    KernelError error(code, std::move(message));
+    error.rule = std::move(rule);
+    error.world = call.world->name_;
+    error.Wrap(CallText(call));
+    return error;
 }
 
 std::uint64_t CurrentSyncEpoch(const World& world) noexcept {
@@ -496,7 +475,9 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.lastRun = 0;
     call.callSerial = ++callSerial_;
     call.syncEpoch = syncEpoch_;
-    HookQueue& queue = HookQueueOf(schedule);
+    // S5: a hook an immediate change ran records into that change's own queue.
+    call.immediateChange = hookTarget_ != nullptr;
+    HookQueue& queue = hookTarget_ != nullptr ? *hookTarget_ : HookQueueOf(schedule);
     call.queue = &queue.records;
     call.recSeq = &queue.recSeq;
     const std::size_t recordsBefore = queue.records.size();
@@ -516,8 +497,10 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);
     if (!error) return {};
     // One more layer of the context chain (vertical), not a sibling: the leaves keep their codes and rules.
-    error->Wrap("hook '" + record.name + "' at sync point step " + std::to_string(planPos) + " of schedule '" +
-                std::string(schedule) + "'");
+    error->Wrap("hook '" + record.name + "' at " +
+                (call.immediateChange ? "step " + std::to_string(planPos) + " (an immediate change)"
+                                      : "sync point step " + std::to_string(planPos)) +
+                " of schedule '" + std::string(schedule) + "'");
     return Engine::Base::Err(std::move(*error));
 }
 
@@ -545,19 +528,10 @@ struct NewCell {
 } // namespace
 
 Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                         ChangeStamp stamp) {
+                                                         ChangeStamp stamp, std::vector<Detail::Record>* immediate) {
     using Detail::Record;
     using Detail::RecordKind;
     using Result = Engine::Base::Result<void, KernelError>;
-
-    auto kernelError = [&](KernelErrorCode code, std::string rule, std::string message) {
-        KernelError error(code, std::move(message));
-        error.rule = std::move(rule);
-        error.world = name_;
-        error.Wrap("sync point at step " + std::to_string(planPos) + " of schedule '" + std::string(schedule) + "'");
-        if (breakOnKernelError_ && breakHook_) breakHook_(error);
-        return error;
-    };
 
     // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
     std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
@@ -578,68 +552,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     // The level being applied is the innermost one (its records are the tail).
     GYO_ASSERT(runStack_.empty() || runStack_.back().schedule == schedule);
 
-    // Z5 across levels (K0, spec F.2 steps 0 and 2): a zone C insert, or
-    // SpawnWithId, an outer level recorded into target and has not applied yet,
-    // in the window or in its schedule's hook queue. The text names the level
-    // and the schedule.
-    auto zoneCInsertInto = [](const Record& r, EntityId target) {
-        return r.emitterZone == Zone::C && r.entity == target &&
-               (r.kind == RecordKind::Insert || (r.kind == RecordKind::Spawn && r.withId));
-    };
-    auto outerInsert = [&](EntityId target) -> std::string {
-        for (std::size_t level = 0; level + 1 < runStack_.size(); ++level) {
-            const std::string where = "level " + std::to_string(level) + " of " + std::to_string(runStack_.size()) +
-                                      " (schedule '" + std::string(runStack_[level].schedule) + "')";
-            const std::size_t end = std::min(runStack_[level + 1].windowBase, window_.size());
-            for (std::size_t i = runStack_[level].windowBase; i < end; ++i) {
-                if (zoneCInsertInto(window_[i], target)) {
-                    return "a zone C call of the outer run at " + where + ", '" + std::string(window_[i].emitter) +
-                           "', recorded an insert into it that its sync point has not applied yet";
-                }
-            }
-            for (const Record& r : HookQueueOf(runStack_[level].schedule).records) {
-                if (zoneCInsertInto(r, target)) {
-                    return "zone C hook '" + std::string(r.emitter) + "' of the outer run at " + where +
-                           " recorded an insert into it, still in that schedule's hook queue";
-                }
-            }
-        }
-        return {};
-    };
-
     // One phase: step 0 applies the hook queue this way, steps 1 to 7 the window's records.
-    // pending: records of the same window not applied by this phase (step 0
-    // checks the window's zone C inserts too: a zone B hook's despawn recorded
-    // before a zone C insert of the next window; K-S10).
-    auto phase = [&](std::vector<Record>& records, const std::vector<Record>& pending) -> Result {
-        // Z5 recheck (spec F.2 steps 0 and 2; B-11): before any despawn of this
-        // phase, every zone B emitter's target is checked once; a hit applies none.
-        for (const Record& despawn : records) {
-            if (despawn.kind != RecordKind::Despawn || despawn.emitterZone != Zone::B) continue;
-            const EntityId target = despawn.entity;
-            std::string reason;
-            for (std::size_t c = 0; c < columns_.size() && reason.empty(); ++c) {
-                if (data_->components[c].zone == Zone::C && columns_[c]->Contains(target)) {
-                    reason = "it has zone C component '" + data_->components[c].name + "'";
-                }
-            }
-            for (const std::vector<Record>* list : {static_cast<const std::vector<Record>*>(&records), &pending}) {
-                for (const Record& other : *list) {
-                    if (!reason.empty()) break;
-                    if (other.emitterZone != Zone::C || other.entity != target) continue;
-                    if (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId)) {
-                        reason = "a zone C call inserts into it in the same window";
-                    }
-                }
-            }
-            if (reason.empty()) reason = outerInsert(target);
-            if (!reason.empty()) {
-                return Engine::Base::Err(kernelError(KernelErrorCode::ZoneCDespawn, "Z5",
-                                                     "a zone B despawn of entity " + std::to_string(target) +
-                                                         " at the sync point: " + reason + "; no despawn applied"));
-            }
-        }
-
+    auto phase = [&](std::vector<Record>& records) -> Result {
         // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.
         std::vector<EntityId> despawns;
         for (const Record& r : records) {
@@ -854,15 +768,23 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         });
         for (Record* op : resourceOps) {
             Detail::ResourceBase& slot = *resources_[op->id];
+            CheckThread(op->id);
             if (op->kind == RecordKind::ResourceInsert) {
                 op->value->PutInto(slot);
+                BindThread(op->id);
             } else {
                 slot.Reset();
+                slot.thread = 0;
             }
             slot.changed = stamp;
         }
         return {};
     };
+
+    // S5 (declaration 3.5 point 1): an immediate change, or one round of what
+    // the hooks it ran recorded; only those records. This level's window and the
+    // schedule's hook queue wait for their sync point (DI-KS 19).
+    if (immediate != nullptr) return phase(*immediate);
 
     // Step 0: the previous window's hook records first; hooks they trigger record into the next window.
     HookQueue& queue = HookQueueOf(schedule);
@@ -872,10 +794,9 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     std::vector<Record> windowRecords(std::make_move_iterator(window_.begin() + static_cast<std::ptrdiff_t>(base)),
                                       std::make_move_iterator(window_.end()));
     window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());
-    const std::vector<Record> none;
-    if (Result step0 = phase(hookRecords, windowRecords); !step0) return step0;
+    if (Result step0 = phase(hookRecords); !step0) return step0;
     // Steps 1 to 7.
-    if (Result rest = phase(windowRecords, none); !rest) return rest;
+    if (Result rest = phase(windowRecords); !rest) return rest;
     // Step 8.
     ++syncEpoch_;
     return {};
@@ -954,6 +875,12 @@ void World::TakeSnapshots() {
     for (std::size_t e = 0; e < events_.size(); ++e) Take(eventSnapshots_[e], events_[e]->StorageBytes());
 }
 
+void World::DropSnapshots() noexcept {
+    columnSnapshots_.clear();
+    resourceSnapshots_.clear();
+    eventSnapshots_.clear();
+}
+
 std::vector<std::string> World::CompareBefore() {
     std::vector<std::string> changed;
     columnSnapshots_.resize(columns_.size());
@@ -978,14 +905,8 @@ std::vector<std::string> World::CompareBefore() {
 std::vector<std::string> World::CompareAfter(const Detail::AccessDesc& access) {
     std::vector<std::string> changed;
     auto declaredWrite = [&](Detail::EntryKind kind, std::uint32_t id) {
-        if (access.wholeWorld && kind == Detail::EntryKind::Component) {
-            const ColumnInfo& info = data_->components[id];
-            if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return true;
-        }
-        if (access.wholeWorld && kind == Detail::EntryKind::Resource) {
-            const ResourceInfo& info = data_->resources[id];
-            if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return true;
-        }
+        // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
+        if (access.wholeWorld && kind != Detail::EntryKind::Event) return true;
         for (const Detail::AccessEntry& entry : access.entries) {
             if (entry.kind == kind && entry.id == id && (entry.modes & Detail::kModeWrite) != 0) return true;
         }
@@ -1050,6 +971,7 @@ constexpr std::uint32_t kSummaryVersion = 1;
 // they are: the kernel tests use types without padding.
 Fingerprint World::Summary() const {
     GYO_ASSERT(state_ == WorldState::Ready || state_ == WorldState::Interrupted);
+    Sync();
     SummaryBytes out;
     out.Str("gyo.kernel.world-summary");
     out.U32(kSummaryVersion);
@@ -1068,6 +990,7 @@ Fingerprint World::Summary() const {
     out.U32(resources_.size() - 1);
     for (std::size_t r = 0; r < resources_.size(); ++r) {
         if (r == data_->kernelSettings) continue;
+        CheckThread(static_cast<ResourceId>(r));
         out.U8(resources_[r]->Present() ? 1U : 0U);
         out.Raw(resources_[r]->StorageBytes());
     }

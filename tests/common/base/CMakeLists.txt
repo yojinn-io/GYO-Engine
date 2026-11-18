@@ -2,10 +2,13 @@ add_executable(gyo_base_tests
     AssertTests.cpp
     ErrorTests.cpp
     Fnv1aTests.cpp
+    IdIssuerTests.cpp
     PreprocessorTests.cpp
     ResultTests.cpp
 )
-target_link_libraries(gyo_base_tests PRIVATE GYO::Base gyo_test_support doctest::doctest)
+# IdIssuerTests starts threads (the base library itself links nothing).
+find_package(Threads REQUIRED)
+target_link_libraries(gyo_base_tests PRIVATE GYO::Base gyo_test_support doctest::doctest Threads::Threads)
 # Same warning level as Math so header code that would warn in a consumer
 # fails here first.
 if(MSVC)

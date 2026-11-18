@@ -12,18 +12,20 @@
 //      a pair conflicts when one writes what the other reads or writes, either
 //      holds ExclusiveWorld, both declare one effect, or both defer a write of
 //      one component (spec D.1 conditions 1 to 4);
-//   4. a conflicting pair with no order path is ambiguous: either side zone C
-//      is D-E8; both zone B is D-E8 too when a plugin called
-//      Registrar::RequireExplicitOrder (rule M3b), otherwise the pair gets an
-//      edge from the lower registrationSeq to the higher and is listed as a
-//      tie (spec D.2 step 10). Pairs are taken in (seq, seq) order and the
-//      reachability is updated after each added edge, so the result is fixed
-//      and acyclic. An error adds no edge, so every ambiguous pair of the
-//      schedule is reported, not only the first;
+//   4. a conflicting pair with no order path gets an edge from the lower
+//      registrationSeq to the higher and is listed as a tie (spec D.2 step 10),
+//      zone C or not: there is no ambiguity error
+//      (v8-arch-gyo2-no-ambiguity-detection). Pairs are taken in (seq, seq)
+//      order and the reachability is updated after each added edge, so the
+//      result is fixed and acyclic;
 //   5. the Plan: Kahn's algorithm taking, among ready nodes, the System with
 //      the lowest registrationSeq; a sync point or the trim only when no
 //      System is ready (spec D.2 step 12). The tie key is registrationSeq
-//      alone: no name, no address, no hash (spec D-10).
+//      alone: no name, no address, no hash (spec D-10);
+//   6. the resolved order (FrozenRegistry::OrderGraph): every order edge,
+//      tie edges included, with sync points, stage ends and the trim expanded
+//      so each edge is System to System, labelled with its source.
+// Removed Systems (tombstones) are not nodes. Built again at every BuildPlans.
 // No hash containers anywhere (DI-KS 3); maps are ordered.
 
 #include "engine/kernel/detail/RegistryData.hpp"
@@ -36,6 +38,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -168,27 +171,6 @@ private:
         failed_ = true;
     }
 
-    // An ambiguous zone B pair under Registrar::RequireExplicitOrder (rule M3b):
-    // names both Systems, what they conflict on, where, who asked for explicit
-    // order, and how to fix it.
-    void ExplicitOrderError(const SystemRecord& first, const SystemRecord& second, std::size_t stage,
-                            const std::string& on) {
-        std::string requiredBy;
-        std::vector<std::string> subjects{first.options.name, second.options.name, on, s_.name};
-        for (std::uint32_t owner : data_.explicitOrderOwners) {
-            const std::string plugin = data_.OwnerName(owner);
-            requiredBy += (requiredBy.empty() ? "'" : ", '") + plugin + "'";
-            subjects.push_back(plugin);
-        }
-        Error(StartupCode::DE8, "M3b",
-              "Systems '" + first.options.name + "' and '" + second.options.name + "' in stage " + s_.stages[stage] +
-                  " of schedule '" + s_.name + "' conflict on " + on +
-                  " with no order, and explicit order is required (RequireExplicitOrder, by " + requiredBy +
-                  "): declare '" + first.options.name + "' before or after '" + second.options.name +
-                  "' (a before / after of either System, or of a set it is in)",
-              std::move(subjects), {SourceText(first.source), SourceText(second.source)});
-    }
-
     const SystemRecord& SystemOf(std::size_t node) const { return data_.systems[nodes_[node].system]; }
     bool IsSystem(std::size_t node) const { return nodes_[node].kind == StepKind::System; }
 
@@ -198,6 +180,7 @@ private:
             for (std::size_t i = 0; i < data_.systems.size(); ++i) {
                 const SystemRecord& system =
                     data_.systems[data_.schedulerShuffle != 0 ? data_.systems.size() - 1 - i : i];
+                if (system.removed) continue;
                 for (std::size_t m = 0; m < system.options.mounts.size(); ++m) {
                     const Mount& mount = system.options.mounts[m];
                     if (mount.schedule != s_.name || mount.stage != stageName) continue;
@@ -226,10 +209,12 @@ private:
         }
     }
 
-    void AddEdge(std::size_t from, std::size_t to) {
+    // source: what the edge comes from (OrderGraph); the first one added is kept.
+    void AddEdge(std::size_t from, std::size_t to, OrderSource source = OrderSource::Stage) {
         if (direct_->Test(from, to)) return;
         direct_->Set(from, to);
         succ_[from].push_back(to);
+        edgeSource_.emplace(std::make_pair(from, to), source);
     }
 
     void StageEdges() {
@@ -264,7 +249,7 @@ private:
         if (trim_ == kNone) return;
         const std::vector<std::size_t> after = succ_[trimAfter_];
         for (std::size_t node : after) {
-            if (node != trim_) AddEdge(trim_, node);
+            if (node != trim_) AddEdge(trim_, node, edgeSource_.at(std::make_pair(trimAfter_, node)));
         }
     }
 
@@ -321,7 +306,7 @@ private:
                 edges_.push_back(DeclaredEdge{nodes_[from].name, nodes_[to].name, dataflow, extended});
             }
         }
-        if (sf == st) AddEdge(from, to);
+        if (sf == st) AddEdge(from, to, OrderSource::Declared);
     }
 
     void DeclaredEdges() {
@@ -452,7 +437,7 @@ private:
     }
 
     void AddTieEdge(std::size_t first, std::size_t second) {
-        AddEdge(first, second);
+        AddEdge(first, second, OrderSource::TieBreak);
         for (std::size_t x = 0; x < nodes_.size(); ++x) {
             if (x == first || reach_->Test(x, first)) {
                 reach_->Set(x, second);
@@ -479,18 +464,6 @@ private:
                     if (on.empty()) continue;
                     conflicts_.emplace_back(a, b);
                     if (reach_->Test(a, b) || reach_->Test(b, a)) continue;  // data conflict, ordered
-                    if (sa.options.zone == Zone::C || sb.options.zone == Zone::C) {
-                        Error(StartupCode::DE8, "D-3",
-                              "Systems '" + sa.options.name + "' and '" + sb.options.name + "' in stage " +
-                                  s_.stages[stage] + " of schedule '" + s_.name + "' conflict on " + on +
-                                  " with no order, and one is zone C: declare before or after",
-                              {sa.options.name, sb.options.name, on}, {SourceText(sa.source), SourceText(sb.source)});
-                        continue;
-                    }
-                    if (!data_.explicitOrderOwners.empty()) {
-                        ExplicitOrderError(sa, sb, stage, on);
-                        continue;
-                    }
                     AddTieEdge(a, b);
                     data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});
                 }
@@ -557,6 +530,51 @@ private:
         }
         plan.declaredEdges = std::move(edges_);
         data_.plans.push_back(std::move(plan));
+        MakeOrder();
+    }
+
+    // FrozenRegistry::OrderGraph: from each System, the Systems reached by one
+    // direct edge or through non-System nodes only. A direct edge keeps its own
+    // source (Declared or TieBreak); a path through other nodes is SyncPoint
+    // when one of its edges is declared (a before / after to or from a named
+    // sync point: the only declared edges that reach a non-System node), Stage
+    // otherwise. A pair reached both ways is listed with each source.
+    void MakeOrder() {
+        std::set<std::tuple<RegistrationSeq, RegistrationSeq, OrderSource>> edges;
+        for (std::size_t from = 0; from < nodes_.size(); ++from) {
+            if (!IsSystem(from)) continue;
+            const RegistrationSeq first = nodes_[from].system;
+            // (node, through a declared edge or named sync point) pairs to walk.
+            std::vector<std::pair<std::size_t, bool>> pending;
+            std::set<std::pair<std::size_t, bool>> seen;
+            for (std::size_t to : succ_[from]) {
+                const OrderSource source = edgeSource_.at(std::make_pair(from, to));
+                if (IsSystem(to)) {
+                    edges.emplace(first, nodes_[to].system, source);
+                    continue;
+                }
+                const std::pair<std::size_t, bool> state{to, source != OrderSource::Stage};
+                if (seen.insert(state).second) pending.push_back(state);
+            }
+            while (!pending.empty()) {
+                const auto [node, declared] = pending.back();
+                pending.pop_back();
+                for (std::size_t to : succ_[node]) {
+                    const bool through = declared || edgeSource_.at(std::make_pair(node, to)) != OrderSource::Stage;
+                    if (IsSystem(to)) {
+                        edges.emplace(first, nodes_[to].system, through ? OrderSource::SyncPoint : OrderSource::Stage);
+                        continue;
+                    }
+                    const std::pair<std::size_t, bool> state{to, through};
+                    if (seen.insert(state).second) pending.push_back(state);
+                }
+            }
+        }
+        ScheduleOrder order{s_.name, {}};
+        for (const auto& [first, second, source] : edges) {
+            order.edges.push_back(OrderEdge{data_.systems[first].options.name, data_.systems[second].options.name, source});
+        }
+        data_.orders.push_back(std::move(order));
     }
 
     static constexpr std::size_t kNone = ~std::size_t{0};
@@ -574,6 +592,7 @@ private:
     std::unique_ptr<BitRows> direct_;
     std::unique_ptr<BitRows> reach_;
     std::vector<std::vector<std::size_t>> succ_;
+    std::map<std::pair<std::size_t, std::size_t>, OrderSource> edgeSource_;
     std::set<std::pair<RegistrationSeq, RegistrationSeq>> declaredPairs_;
     std::vector<DeclaredEdge> edges_;
     std::vector<std::pair<std::size_t, std::size_t>> conflicts_;

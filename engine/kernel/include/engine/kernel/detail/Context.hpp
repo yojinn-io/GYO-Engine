@@ -25,10 +25,12 @@
 namespace GYO::Kernel {
 
 class World;
-class Product;
+class WorldExecutor;
 struct AccessSet;
 // The kernel's own diagnostics record of a dropped spawn (World.hpp; spec F-13).
 struct RejectedSpawn;
+// Why a spawn was dropped (World.hpp defines the values; spec F-13).
+enum class SpawnRejectReason : std::uint8_t;
 
 namespace Detail {
 
@@ -52,14 +54,11 @@ struct AccessEntry {
 };
 
 // The access description a System and a hook share (spec F.6: tlCurrent points
-// to it for both). Derived from the Registry's AccessSet when the Product is made.
+// to it for both). Derived from the Registry's AccessSet when the WorldExecutor is made.
 struct AccessDesc {
     std::vector<AccessEntry> entries;
-    // ExclusiveWorld: reads every column and resource (but KernelSettings and a
-    // resource whose affinity the runner does not satisfy: S-15); writes zone B
-    // Shared data and the resources its Writes<...> lists, which are entries of
-    // this description (checked by the ExclusiveWorld handle, which returns Err
-    // otherwise: S-13, S-14).
+    // ExclusiveWorld: reads and writes every column and resource (DI-KS 1); the
+    // event buffers are not in it. Its Writes<...> annotation adds no entry.
     bool wholeWorld = false;
 };
 
@@ -86,7 +85,7 @@ struct Record {
     std::uint32_t id = 0;
     std::uint32_t planPos = 0;
     std::uint32_t recSeq = 0;
-    // The emitter's zone (Z5's recheck at the sync point).
+    // The emitter's zone (RejectedSpawn::emitterZone; goes with the zones, a later batch).
     Zone emitterZone = Zone::B;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
@@ -115,15 +114,18 @@ struct Record {
 struct SystemContext {
     World* world = nullptr;
     // The Executor running this World's schedules: ExclusiveWorld::RunSchedule
-    // runs a schedule through it (K0). One World per Product today (T5 makes it
+    // runs a schedule through it (K0). One World per WorldExecutor today (T5 makes it
     // "this World's Executor").
-    Product* executor = nullptr;
+    WorldExecutor* executor = nullptr;
     const AccessDesc* access = nullptr;
     std::string_view name;
     std::string_view schedule;
     std::uint32_t planPos = 0;
     Zone zone = Zone::B;
     bool hook = false;
+    // A hook an immediate change of ExclusiveWorld runs (S5): planPos is the
+    // exclusive System's step, not a sync point's (the error text says so).
+    bool immediateChange = false;
     Domain domain = Domain::None;
     std::uint64_t tick = 0;
     // The stamp this step took (spec E.2 step 3) and the mount's last-run stamp (B-12).
@@ -135,7 +137,7 @@ struct SystemContext {
     // the Executor as siblings beside the System's own Err (spec B.4 point 7,
     // E.2 step 5); the System never sees them.
     std::vector<KernelError> errors;
-    // Errors a kernel API returned to the System as Err (F-10, Z5, S-13, W-9).
+    // Errors a kernel API returned to the System as Err (W-9, nested-run refusals).
     // The System should pass them on; one it drops is listed by the Executor all
     // the same (nothing is silent, target/error-handling).
     std::vector<KernelError> returned;
@@ -205,6 +207,40 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 // runs nothing: the error a nested level left is returned.
 [[nodiscard]] Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
                                                                 bool inClosure);
+// What an immediate structural change of ExclusiveWorld did (declaration
+// v8-arch-gyo2-kernel-subtract-structure 3.5): entity, the id a Spawn took
+// from the allotter; changed, whether there was something to change (Insert:
+// the entity is alive; Remove: the cell was there; Despawn: the entity was
+// alive; RemoveResource: it was present); rejected, why a spawn was dropped
+// and recorded (spec F-13; for an allotter's id that is alive too, so
+// ExclusiveWorld::Spawn returns no id).
+struct ImmediateOutcome {
+    EntityId entity = 0;
+    bool changed = false;
+    std::optional<SpawnRejectReason> rejected;
+};
+
+// S5 (DI-KS 18; Executor.cpp): applies one record of the running exclusive
+// System call now, as a sync point applies it (spec F.2: the same steps, the
+// hooks it triggers run now), with the handle's stamp; then, round after round,
+// only what those hooks recorded (each round a new stamp and sync epoch + 1),
+// up to the schedule's hook round limit (spec F-12). Neither the running
+// level's records nor the schedule's hook queue are applied (DI-KS 19). A Spawn
+// record with withId false takes its id from the allotter here. Refused with
+// Err, the World interrupted and the error reported once by the outermost Run:
+// from a hook (HookChangesMembership), inside a Read or Modify closure
+// (ClosureChangesMembership), with verification on when the System changed
+// what it does not declare before (A.6, compared first); an Interrupted World
+// changes nothing and returns the left error. An exception that leaves the
+// change (a hook or an InitialValue function threw) interrupts the World and
+// leaves ImmediateChangeAborted for the outermost Run. Err, the change not
+// made and the call going on (the Run ends in that Err when the System
+// returns, DI-KS 2): no allotter (NoAllotter), the allotter used up
+// (AllotterExhausted). GYO_ASSERT: the membership changed behind the handle
+// before (W-3).
+[[nodiscard]] Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
+                                                                                ChangeStamp stamp, bool inClosure);
+
 // The World's sync epoch now (a handle renews its own after a nested run, W-4).
 [[nodiscard]] std::uint64_t CurrentSyncEpoch(const World& world) noexcept;
 // Takes a new stamp (+1; spec E.2: after a nested run, the exclusive System's
@@ -220,26 +256,11 @@ void Push(SystemContext& call, Record record);
 // the API to return as Err. Calls the World's break hook first when
 // breakOnKernelError is on (target/system-contract 2b).
 [[nodiscard]] KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message);
+// The same error with the same context, for the caller only: not recorded in
+// call.returned (so the Run does not end in it) and no break hook (it is no
+// kernel error, like a spawn a sync point drops: spec F-13).
+[[nodiscard]] KernelError CallerError(SystemContext& call, KernelErrorCode code, std::string rule, std::string message);
 
-// The always-on checks of the untyped paths (target/error-handling "the added
-// row"): each returns the error (already recorded in call.errors through
-// CallError) or nothing.
-//   F-10  untyped Commands insert / remove on a zone C or Exclusive column;
-//   Z5    a zone B call despawning an entity that has a zone C column;
-//   S-13  an ExclusiveWorld write to a column or resource outside zone B Shared;
-//   S-14  an ExclusiveWorld write to a zone B single-writer resource its
-//         Writes<...> does not list (listed: true when it does);
-//   S-15  an ExclusiveWorld read of KernelSettings;
-//   S-16  an ExclusiveWorld read of a resource whose thread affinity the running
-//         schedule's runner does not satisfy.
-[[nodiscard]] std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component,
-                                                             EntityId entity, bool insert);
-[[nodiscard]] std::optional<KernelError> CheckDespawn(SystemContext& call, EntityId entity);
-[[nodiscard]] std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component,
-                                                             EntityId entity);
-[[nodiscard]] std::optional<KernelError> CheckExclusiveResourceWrite(SystemContext& call, ResourceId resource,
-                                                                     bool listed);
-[[nodiscard]] std::optional<KernelError> CheckExclusiveRead(SystemContext& call, ResourceId resource);
 
 // The allotter resource of the World (spec A.1), or nullptr when none is declared.
 [[nodiscard]] ResourceBase* AllotterSlot(World& world) noexcept;
