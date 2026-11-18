@@ -86,11 +86,11 @@ TEST_CASE("O-1: two insertions before one anchor: the later one ends next to it;
     O::ProductDescription missing = Game();
     missing.configure = [](O::ProductSetup& s) { s.GameInit().InsertAfter("Nope", "B"); };
     auto refused = O::Product::Build(std::move(missing), Units().Take());
-    REQUIRE_FALSE(static_cast<bool>(refused));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(refused), "[or-gi-anchor] built with a missing anchor");
     CHECK_MESSAGE(refused.error().Has(O::OrchestrationCode::OE5), "[or-gi-anchor] " << refused.error().detail);
     O::ProductDescription unknown = Game({"A", "Nowhere"});
     auto unknownBuilt = O::Product::Build(std::move(unknown), Units().Take());
-    REQUIRE_FALSE(static_cast<bool>(unknownBuilt));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(unknownBuilt), "[or-gi-not-schedule] built with a name that is no schedule");
     CHECK_MESSAGE(unknownBuilt.error().Has(O::OrchestrationCode::OE5), "[or-gi-not-schedule] " << unknownBuilt.error().detail);
 }
 

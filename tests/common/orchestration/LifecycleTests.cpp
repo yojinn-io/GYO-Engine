@@ -146,7 +146,7 @@ TEST_CASE("O-E2: an instance in the wrong file and one of a library-only row") {
     units.Library("base").RowOnly(Row("window", O::UnitKind::Plugin)).Module("window", {}, {}, false).Module("base", {}, {}, false);
     O::ProductDescription d = TwoWorlds();
     auto built = O::Product::Build(std::move(d), units.Take());
-    REQUIRE_FALSE(static_cast<bool>(built));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(built), "[or-oe2] built with a wrong-file and a library-only instance");
     CHECK_MESSAGE(built.error().Count(O::OrchestrationCode::OE2) == 2, "[or-oe2] " << built.error().detail);
 }
 
@@ -158,8 +158,9 @@ TEST_CASE("O-E3: missing, later (not reordered), a Module on a Plugin, a library
     }
     SUBCASE("a Module on a Plugin") {
         auto built = O::Product::Build(TwoWorlds(), Units().Plugin("window").Module("ui", {}, {"window"}).Take());
-        REQUIRE_FALSE(static_cast<bool>(built));
-        CHECK_MESSAGE(built.error().Has(O::OrchestrationCode::OE3), "[or-oe3-plugin] " << built.error().detail);
+        REQUIRE_FALSE_MESSAGE(static_cast<bool>(built), "[or-oe3-plugin] built");
+        CHECK_MESSAGE(built.error().detail.find("a Module does not depend on a Plugin") != std::string::npos,
+                      "[or-oe3-plugin] the rule was not named: " << built.error().detail);
     }
     SUBCASE("a Plugin on a Module, and a library dependency, pass") {
         auto built = O::Product::Build(TwoWorlds(), Units().Library("kernel").Module("time", {}, {"kernel"}).Plugin("window", {}, {"time"}).Take());
@@ -181,7 +182,7 @@ TEST_CASE("O-E7: a prepare function that fails at startup comes in its own repor
         return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no config", {}, "config-missing"));
     });
     auto built = O::Product::Build(std::move(d), Units().Take());
-    REQUIRE_FALSE(static_cast<bool>(built));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(built), "[or-oe7] built despite the failing prepare");
     CHECK_MESSAGE(built.error().Has(O::OrchestrationCode::OE7), "[or-oe7] " << built.error().detail);
     CHECK_MESSAGE(built.error().detail.find("config-missing") != std::string::npos, "[or-oe7] " << built.error().detail);
 }

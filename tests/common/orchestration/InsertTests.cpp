@@ -93,7 +93,7 @@ TEST_CASE("O-9: an owner name that is a unit's or the Product's: OwnerTaken") {
     ORCH_REQUIRE_BUILT(built);
     for (const char* owner : {"audio", "rpg"}) {
         auto inserted = (*built)->InsertSystems("Main", owner, AddMark());
-        REQUIRE_FALSE(static_cast<bool>(inserted));
+        REQUIRE_FALSE_MESSAGE(static_cast<bool>(inserted), "[or-insert-owner] inserted as " << owner);
         CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::OwnerTaken, "[or-insert-owner] " << owner);
     }
 }

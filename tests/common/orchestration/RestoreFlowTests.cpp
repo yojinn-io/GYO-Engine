@@ -157,7 +157,9 @@ TEST_CASE("restore: case 6, what game initialization put in the first World: a m
     REQUIRE(p.World("Main").GetWorld().Resource<Score>()->v == 5);
     auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{Unsupported(), {"Load"}});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(failed), "[or-carry-back] replaced despite the refused save");
-    CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 7, "[or-carry-back] the old World lost KeyBindings");
+    const KeyBindings* kept = p.World("Main").GetWorld().Resource<KeyBindings>();
+    REQUIRE_MESSAGE(kept != nullptr, "[or-carry-back] the old World lost KeyBindings");
+    CHECK_MESSAGE(kept->jump == 7, "[or-carry-back] the old World's KeyBindings changed");
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}})));
     CHECK_MESSAGE(p.World("Main").GetWorld().Resource<KeyBindings>()->jump == 7, "[or-carry-over] KeyBindings did not carry over");
     CHECK_MESSAGE(p.World("Main").GetWorld().Resource<Score>()->v == 0, "[or-carry-only-marked] Score carried over");
