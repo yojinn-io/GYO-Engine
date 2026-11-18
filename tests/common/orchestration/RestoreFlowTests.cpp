@@ -96,7 +96,7 @@ TEST_CASE("restore: case 3, loading in game: only what the load puts back, gold 
     CHECK_MESSAGE(GoldOf(p) == 130, "[or-restore-frame-on-new] " << GoldOf(p));
 }
 
-TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World, DropOldFirst leaves the place empty until filled") {
+TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World, DropOldFirst leaves the place empty and ends the Product") {
     Log().clear();
     SUBCASE("(a) BuildNewFirst, the prepare refuses the save's version; (b) the entity part cannot be read") {
         auto built = O::Product::Build(Game(), Units().Take());
@@ -120,7 +120,7 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
         CHECK_MESSAGE(GoldOf(p) == 40, "[or-restore-keep-old-b] " << GoldOf(p));
         CHECK(static_cast<bool>(p.RunFrame()));
     }
-    SUBCASE("(c) DropOldFirst refused: the place is empty and RunFrame says WorldMissing; (d) a readable save fills it") {
+    SUBCASE("(c) DropOldFirst refused: the place is empty and RunFrame says WorldMissing; (d) a readable save does not fill it") {
         auto built = O::Product::Build(Game(), Units().Take());
         ORCH_REQUIRE_BUILT(built);
         O::Product& p = **built;
@@ -132,8 +132,8 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
         REQUIRE_FALSE(static_cast<bool>(frame));
         CHECK_MESSAGE(frame.error().code == O::OrchestrationErrorCode::WorldMissing, "[or-drop-old-missing] " << frame.error().message);
         auto filled = p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}, O::ReplaceOrder::DropOldFirst});
-        REQUIRE_MESSAGE(static_cast<bool>(filled), filled.error().message);
-        CHECK_MESSAGE((Entities(p) == 3 && GoldOf(p) == 120), "[or-drop-old-filled]");
+        REQUIRE_FALSE_MESSAGE(static_cast<bool>(filled), "[or-drop-old-not-filled] the empty place was filled");
+        CHECK_MESSAGE((filled.error().code == O::OrchestrationErrorCode::WorldMissing && !p.HasWorld("Main")), "[or-drop-old-not-filled]");
     }
 }
 

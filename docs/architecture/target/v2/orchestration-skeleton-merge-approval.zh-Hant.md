@@ -1,6 +1,6 @@
 # 合併前核准：編排層的骨架（`v8-arch-gyo2-orchestration-skeleton`）
 
-日期：2026-11-18。分支 `claude/gyo2-orchestration-skeleton-67744c`。事前宣告：[orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md) 修訂 7（2026-11-18 動工前核准）。經過與證據：[dev_log](../../../dev_logs/2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md)。
+日期：2026-11-18。分支 `claude/gyo2-orchestration-skeleton-67744c`。事前宣告：[orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md) 修訂 7（2026-11-18 動工前核准）；修訂 8 收本頁第 5 節第 1 點的決定。經過與證據：[dev_log](../../../dev_logs/2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md)。
 
 用詞：宣告正文的「段 1～段 4」＝「第 1～4 步」；「第二段核准」＝本頁的合併前核准。
 
@@ -74,11 +74,22 @@
 ## 4. 第 10 節：Design Invariants 的最終文字
 
 - Kernel：[target/kernel.zh-Hant.md](../kernel.zh-Hant.md) 的 DI-KS 3、6、15、16～22 的前言、18（補「直接放實體不看配發器」一句，使用者已定，見第 5 節第 7 點）、22（拿掉，由 O-1 取代）、24、25、26、RC 7（移到編排層 RC-O1）、RC 13（c4098ab1 起的文字）。
-- 編排層：新頁 [orchestration.zh-Hant.md](orchestration.zh-Hant.md) 的 O-1～O-10 與 RC-O1～RC-O9。第 3 步之後 O-6 的守衛欄寫上 `cmake.UnitRegistry`、`orchestration.units`。
+- 編排層：新頁 [orchestration.zh-Hant.md](orchestration.zh-Hant.md) 的 O-1～O-11 與 RC-O1～RC-O9（O-11 與 O-1、O-3、O-8、O-10 的改動是第 5 節第 1 點的決定帶來的）。第 3 步之後 O-6 的守衛欄寫上 `cmake.UnitRegistry`、`orchestration.units`。
 
 ## 5. 和宣告不同的地方
 
-1. **D2 的讀法**：`RunFrame` 碰到空位或中斷的 World 就停下回傳，排在後面的 World 那一次不跑；我讀成「之後仍能用 `RunSchedule` 跑別的 World」（宣告 7.3 寫「`RunFrame` 回 `WorldMissing` 且別的 World 照跑」），實作沒改，案 `O-8: RunSchedule on an interrupted or empty World; another World still runs…` 守這個讀法。若你的意思是同一次 `RunFrame` 裡別的 World 也要跑，要改實作。
+1. **已定（D2）：一個 World 壞了，Product 就結束**（使用者 2026-11-18，主會話轉達，`v8-arch-gyo2-broken-world-ends-product`；宣告修訂 8、[O-11](orchestration.zh-Hant.md#o-11)）。原本的讀法（空位或中斷的回錯誤、別的 World 照跑、`ReplaceWorld` 可以換掉或再填）撤掉，理由是等於吞錯誤。實作：
+   - `RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`、`InsertSystems` 都先檢查所有 World；有中斷或空著的就什麼都不跑、不改，回 `WorldInterrupted`／`WorldMissing`。不留半幀，也不准拿替換來救。`BuildNewFirst` 失敗不算壞（舊的照跑）。
+   - 壞掉的那一刻記下 `WorldFailure`，掛在錯誤上，`Product::Failure()` 也讀得到。內容是：Product 與 World、怎麼壞的（`Interrupted`／`ReplacementFailed`／`ResourceExhausted`）、入口、schedule 與它的 domain 和 tick（跑之前讀）、Kernel 碼與錯誤文字（文字帶 System 與步驟）或編排層的報告、上一張成功的 schedule。
+   - 編排層不寫日誌，只回結構化的錯誤（同日更正：使用者「日誌是機制」，不嵌進功能；日誌機制先不排批次）。先轉來的「作者參數控制一般 Log」已寫好又拿掉，沒有留下。
+   - 第 3 點（外部資料）只寫契約（O-8、宣告 3.9）：編排層不驗證外部資料的內容，作者在發替換之前驗證。不加機制。
+   - 測試：改寫 `O-8: RunSchedule on an interrupted…` 一案，並補「有壞的 World 時整幀不跑」「替換不能救」「只回錯誤、不寫日誌，之後的拒絕帶同一份」「在編排層外中斷」「`DropOldFirst` 裡丟例外」「schedule 裡丟 `bad_alloc`」各案。退役 3 案：D1、「`DropOldFirst` 失敗後暫存的值下次照樣帶」、「從中斷的 World 帶過去」，它們守的性質不存在了。改寫 3 處：D4、讀檔案例 4 (d)、處理器沿用一案。
+
+   **和動工前核准的範圍不同（請一併核准）**：
+   - 多了錯誤內容 `WorldFailure`（`OrchestrationError::failure`、`Product::Failure()`）。
+   - `InsertSystems` 也照樣被拒：主會話列的是三個 Run 與替換，這一處卡片照 L17 判，因為 Product 已結束，插入也是改它。
+   - 「發生前的動作」只收「上一張成功的 schedule」與入口：卡片照 L17 取最小可用。System 不另立欄位，因為 Kernel 錯誤文字的層次已帶 System 與步驟，另立欄位要改 Kernel 的介面。
+   - `DropOldFirst` 的暫存處拿掉：空位不能再填，暫存的值沒有下一次替換可帶。
 2. **G-3 的 link 順序**：十個引擎 target 的 link 集合和改之前相同；`gyo_threads` 的順序從 `GYO::Time;Threads::Threads;GYO::Os` 變成 `GYO::Time;GYO::Os;Threads::Threads`（登記的依賴一次 link 完，第三方的排到後面）。宣告寫「逐一相同」。
 3. **Kernel 標頭改寫 `::Engine::`**（第 3 步找到的缺陷）：編排層是第一個 `GYO::Engine` 的 Module，先 include 它再 include Kernel 標頭會編不過；Kernel 公開標頭 49 處改寫 `::Engine::`（行為不變），加 include 順序的編譯守衛。之後的 `GYO::Engine` Module 在命名空間改名批之前都會碰到同一件事。
 4. **`docs/architecture/target/README.md` 的 DI 清單沒改**：那張表是 v2 之前的（只有 DI-KS 1～15），照 `pre-v2-target-docs-later` 先不動。
@@ -99,6 +110,14 @@
 | Kernel 清單沒殺的 3 個 | 基準就沒殺掉、不是本批造成（上一批 `v8-arch-gyo2-kernel-subtract-structure` 已記錄、建議另開）：`ks-real-product-name`（`engine/config/projects.csv` 只剩表頭，K1 已沒有產品名可比）、`rs-sample-capture-accepted`、`rs-sample-return-accepted`（J-10 的樣本變體因別的編譯錯誤失敗，不是預期的那一句） | 上一批 `gyo2-kernel-subtract-structure/base-a08c16f6-unkilled-11.log` |
 | 本批造成、已改寫的 4 個 | `hf-startup-skipped`（Kernel 沒有 startup 旗標，改成「非時鐘的單次 schedule 不跑 hook 輪」）、`we-j1-insert-append`（Kernel 標頭改用 `::Engine::` 後 `find` 從 `::` 起）、`ks-s3-version-not-raised`、`ks-s3-failed-raises-version`（DI-KS 25 的案在第 2 步改名，`cases` 跟著改） | `mutants-kernel-rewritten-4.log` |
 | 敵對式檢查 | 宣告修訂 0（Fable／high）：必改 10、建議改 16、小問題 8；G-8 第 1 步（Fable／high）：突變候補 56、測試弱點 13、疑似缺陷 5（D1、D3、D4 是缺陷，已先 Red 後修）；第 3 步 G-8：33 處；第 4 步 G-8：23 處；G-7（Fable／high）：A～J 中 C、D、G、H、J 屬實，A、B、E、F 有出入，已照第 2 節改寫 | 各步的 `g8-check-fable-high.md`、`g7-verification-fable-high.md` |
+
+**D2 改完之後**（第 5 節第 1 點；證據在 `broken-world/`）：
+
+| 項目 | 結果 | 證據 |
+|---|---|---|
+| ctest | 113 項全過 | `broken-world/ctest.log` |
+| 編排層突變清單（D184：`Product.cpp` 大半重寫、測試也改了，整份都相關） | 199 個（179 退役 5、改寫 13、新增 25；另有日誌的 4 個寫了又隨更正拿掉）：完整跑 190 殺；沒殺的 9 個是清單的錯——5 個 `cases` 帶逗號（doctest 拿逗號分隔，一案都沒跑）、3 個 `expect` 不對（2 個現在撞到 Kernel 的「World 不是 Ready」斷言，1 個先失敗的是前一條斷言）、1 個指到退役的案（改指 beforeSwap 失敗那一案）；改完重跑 9/9 → **199/199 殺** | `broken-world/mutants-orchestration-full.log`、`mutants-orchestration-fix-9.log` |
+| Kernel 突變清單 | 沒重跑：這次 Kernel 沒有改動（D184）；上面 773/776 照舊 | — |
 
 L1 三平台與 Windows／Linux 本機沒跑（要開 PR 才跑 L1；合併前核准之後才開 PR）。
 

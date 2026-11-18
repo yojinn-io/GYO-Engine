@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the orchestration skeleton batch (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9; ids or-). Behaviour tests only: the scans of section 7.4 wait for the scenario segment (v8-arch-gyo2-guards-after-mechanism-stable). G-8 (Fable/high, build/evidence/gyo2-orchestration-skeleton/segment1/g8-check-fable-high.md) added g8- candidates; not added (with the reason): g8-owner-seq-constant: no observable behaviour of the owner sequence (the kernel only compares owners for equality); g8-replace-inside-run-unchecked: equivalent under test: the kernel asserts too (W-3), GYO_CHECK_ASSERTS takes any assertion; g8-old-registry-first: undefined behaviour (use after free) without a sanitizer: not a reliable mutant; g8-carry-box-kept: equivalent for the carried types (one int; move equals copy).",
+ "description": "Declared mutants of the orchestration skeleton batch (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9; ids or-). Behaviour tests only: the scans of section 7.4 wait for the scenario segment (v8-arch-gyo2-guards-after-mechanism-stable). G-8 (Fable/high, build/evidence/gyo2-orchestration-skeleton/segment1/g8-check-fable-high.md) added g8- candidates; not added (with the reason): g8-owner-seq-constant: no observable behaviour of the owner sequence (the kernel only compares owners for equality); g8-replace-inside-run-unchecked: equivalent under test: the kernel asserts too (W-3), GYO_CHECK_ASSERTS takes any assertion; g8-old-registry-first: undefined behaviour (use after free) without a sanitizer: not a reliable mutant; g8-carry-box-kept: equivalent for the carried types (one int; move equals copy). v8-arch-gyo2-broken-world-ends-product (user decision, merge approval item 4): one broken World ends the Product. Retired with their property: or-carry-held-dropped (the holding place is gone (an empty place ends the Product; g8s-drop-old-held-dropped guards the values a DropOldFirst replacement takes out)); or-d1-hold-not-old (an interrupted World is not replaced any more); g8-runon-unchecked (RunOn checks nothing now; Ended() at each entry point does (or-ended-*)); g8-runframe-interrupted-unchecked (or-ended-runframe-unchecked); g8-insert-empty-place-code (or-ended-insert-unchecked and or-ended-code-swapped). Rewritten for the new code (find only, or as noted in what): or-gi-last-world, or-gi-error-ignored, g8-gi-flag-only-on-success, or-runschedule-no-gameinit, g8s-runschedule-gameinit-after, or-drop-old-later, g8-frame-list-reversed, g8-frame-error-ignored, g8-replace-gameinit-skipped-on-new, g8-swap-keeps-old-lists, g8-throw-no-giveback, g8s-drop-old-held-dropped, or-d4-empty-first-counted. Added: or-ended-*, or-failure-*, or-drop-fail-*, or-throw-*, or-run-throw-unrecorded. The same day the user took the logging back out (logging is a mechanism of its own, not part of the orchestration layer): the log parameter and its or-log-* mutants never landed; or-failure-logged guards that the layer does not log.",
  "mutants": [
   {
    "id": "or-configure-skipped",
@@ -164,23 +164,23 @@
   },
   {
    "id": "or-gi-last-world",
-   "what": "O-1: game initialization runs on the last World",
+   "what": "O-1: game initialization runs on the last World (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (auto ran = RunOn(worlds_.front(), schedule); !ran) return ran;",
-   "replace": "        if (auto ran = RunOn(worlds_.back(), schedule); !ran) return ran;",
+   "find": "        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;",
+   "replace": "        if (auto ran = RunOn(worlds_.back(), schedule, \"RunGameInit\"); !ran) return ran;",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: game initialization runs on the first World only*",
    "expect": "\\[or\\-gi\\-first\\-world\\]"
   },
   {
    "id": "or-gi-error-ignored",
-   "what": "O-1: a failing game initialization schedule does not stop RunFrame",
+   "what": "O-1: a failing game initialization schedule does not stop RunFrame (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (auto ran = RunOn(worlds_.front(), schedule); !ran) return ran;",
-   "replace": "        static_cast<void>(RunOn(worlds_.front(), schedule));",
+   "find": "        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;",
+   "replace": "        static_cast<void>(RunOn(worlds_.front(), schedule, \"RunGameInit\"));",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: a failing game initialization*",
-   "expect": "\\[or\\-gi\\-error\\]"
+   "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
   },
   {
    "id": "or-insert-before-as-after",
@@ -204,10 +204,10 @@
   },
   {
    "id": "or-runschedule-no-gameinit",
-   "what": "O-1: RunSchedule does not run game initialization first",
+   "what": "O-1: RunSchedule does not run game initialization first (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule);",
-   "replace": "    return RunOn(*slot, schedule);",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "replace": "    return RunOn(*slot, schedule, \"RunSchedule\");",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: RunSchedule runs*",
    "expect": "\\[or\\-gi\\-runschedule\\]"
@@ -314,10 +314,10 @@
   },
   {
    "id": "or-drop-old-later",
-   "what": "O-8: DropOldFirst destroys the old World only at the swap",
+   "what": "O-8: DropOldFirst destroys the old World only at the swap (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (dropOldFirst && slot.executor) {",
-   "replace": "    if (false && dropOldFirst && slot.executor) {",
+   "find": "    if (dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
+   "replace": "    if (false && dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: DropOldFirst*",
    "expect": "\\[or\\-drop\\-old\\-first\\-order\\]"
@@ -351,16 +351,6 @@
    "target": "gyo_orchestration_tests",
    "cases": "O-10: a marked type*",
    "expect": "\\[or\\-carry\\-unregistered\\]"
-  },
-  {
-   "id": "or-carry-held-dropped",
-   "what": "O-10: values held after a DropOldFirst failure are dropped",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved = std::move(slot.held);",
-   "replace": "    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved;",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-10: after a DropOldFirst*",
-   "expect": "\\[or\\-carry\\-held\\]"
   },
   {
    "id": "or-insert-no-warning",
@@ -514,23 +504,23 @@
   },
   {
    "id": "g8-frame-list-reversed",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule); !ran) return ran;\n        }",
-   "replace": "        for (std::size_t at = slot.frame.size(); at-- > 0;) {\n            if (auto ran = RunOn(slot, slot.frame[at]); !ran) return ran;\n        }",
+   "find": "        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n        }",
+   "replace": "        for (std::size_t at = slot.frame.size(); at-- > 0;) {\n            if (auto ran = RunOn(slot, slot.frame[at], \"RunFrame\"); !ran) return ran;\n        }",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: units insert*",
    "expect": "\\[or\\-frame\\-order\\]"
   },
   {
    "id": "g8-frame-error-ignored",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            if (auto ran = RunOn(slot, schedule); !ran) return ran;",
-   "replace": "            static_cast<void>(RunOn(slot, schedule));",
+   "find": "            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;",
+   "replace": "            static_cast<void>(RunOn(slot, schedule, \"RunFrame\"));",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: a failing frame*",
-   "expect": "\\[or\\-frame\\-error\\]"
+   "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
   },
   {
    "id": "g8-anchor-last-occurrence",
@@ -541,26 +531,6 @@
    "target": "gyo_orchestration_tests",
    "cases": "O-1: units insert*",
    "expect": "\\[or\\-anchor\\-first\\]"
-  },
-  {
-   "id": "g8-runon-unchecked",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!slot.executor) {\n        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldMissing,\n                                                      \"World \" + Quoted(slot.description.name) + \" is empty (a replacement failed)\"));\n    }\n    if (slot.executor->GetWorld().State() == Kernel::WorldState::Interrupted) {\n        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldInterrupted,\n                                                      \"World \" + Quoted(slot.description.name) + \" is interrupted\"));\n    }\n    auto ran = slot.executor->Run(schedule);",
-   "replace": "    auto ran = slot.executor->Run(schedule);",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: RunSchedule on an interrupted*",
-   "expect": "TEST CASE:  O\\-8: RunSchedule on an interrupted"
-  },
-  {
-   "id": "g8-runframe-interrupted-unchecked",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (slot.executor->GetWorld().State() == Kernel::WorldState::Interrupted) {\n            return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::WorldInterrupted,\n                                                          \"World \" + Quoted(slot.description.name) + \" is interrupted\"));\n        }\n",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: RunSchedule on an interrupted*",
-   "expect": "\\[or\\-runframe\\-interrupted\\-empty\\]"
   },
   {
    "id": "g8-runschedule-unknown-world-code",
@@ -593,16 +563,6 @@
    "expect": "\\[or\\-unknown\\-world\\-insert\\]"
   },
   {
-   "id": "g8-insert-empty-place-code",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "OrchestrationErrorCode::WorldMissing, \"World \" + Quoted(worldName) + \" is empty\"));",
-   "replace": "OrchestrationErrorCode::UnknownWorld, \"World \" + Quoted(worldName) + \" is empty\"));",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: RunSchedule on an interrupted*",
-   "expect": "\\[or\\-insert\\-empty\\-place\\]"
-  },
-  {
    "id": "g8-default-runner-always-success",
    "what": "G-8 candidate (g8-check-fable-high.md)",
    "file": "engine/orchestration/src/Product.cpp",
@@ -614,10 +574,10 @@
   },
   {
    "id": "g8-gi-flag-only-on-success",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    gameInitRan_ = true;\n    if (worlds_.empty()) return {};\n    for (const std::string& schedule : gameInit_) {\n        if (auto ran = RunOn(worlds_.front(), schedule); !ran) return ran;\n    }\n    return {};",
-   "replace": "    if (worlds_.empty()) return {};\n    for (const std::string& schedule : gameInit_) {\n        if (auto ran = RunOn(worlds_.front(), schedule); !ran) return ran;\n    }\n    gameInitRan_ = true;\n    return {};",
+   "find": "    gameInitRan_ = true;\n    if (worlds_.empty()) return {};\n    for (const std::string& schedule : gameInit_) {\n        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;\n    }\n    return {};",
+   "replace": "    if (worlds_.empty()) return {};\n    for (const std::string& schedule : gameInit_) {\n        if (auto ran = RunOn(worlds_.front(), schedule, \"RunGameInit\"); !ran) return ran;\n    }\n    gameInitRan_ = true;\n    return {};",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: a failed game initialization counts*",
    "expect": "expected GYO_ASSERT to fail"
@@ -634,10 +594,10 @@
   },
   {
    "id": "g8-replace-gameinit-skipped-on-new",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "                for (const std::string& schedule : gameInit_) {\n                    auto ran = fresh->Run(schedule);",
-   "replace": "                for (const std::string& schedule : std::vector<std::string>{}) {\n                    auto ran = fresh->Run(schedule);",
+   "find": "                for (const std::string& schedule : gameInit_) {\n                    failedSchedule = schedule;",
+   "replace": "                for (const std::string& schedule : std::vector<std::string>{}) {\n                    failedSchedule = schedule;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: replacing before game initialization ran*",
    "expect": "\\[or\\-replace\\-first\\-before\\-gi\\]"
@@ -704,20 +664,20 @@
   },
   {
    "id": "g8-carry-from-interrupted-dropped",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (retargeted by v8-arch-gyo2-broken-world-ends-product: the read path now serves only giving the value back from a new World a failed beforeSwap interrupted)",
    "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
    "find": "                const T* kept = world.Resource<T>();\n                if (kept == nullptr) return nullptr;\n                return std::make_shared<T>(std::move(*const_cast<T*>(kept)));",
    "replace": "                return nullptr;",
    "target": "gyo_orchestration_tests",
-   "cases": "O-10: a value carries over from an interrupted*",
-   "expect": "\\[or\\-carry\\-from\\-interrupted\\]"
+   "cases": "O-8: a failing beforeSwap*",
+   "expect": "\\[or\\-beforeswap\\-giveback\\]"
   },
   {
    "id": "g8-swap-keeps-old-lists",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    slot.frame = std::move(registration.frame);\n    slot.unitPrepares = std::move(registration.unitPrepares);\n    slot.carries = std::move(registration.carries);\n    slot.held.clear();",
-   "replace": "    slot.held.clear();",
+   "find": "    slot.frame = std::move(registration.frame);\n    slot.unitPrepares = std::move(registration.unitPrepares);\n    slot.carries = std::move(registration.carries);\n    slot.lastSchedule.clear();",
+   "replace": "    slot.lastSchedule.clear();",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: a registration that differs*",
    "expect": "\\[or\\-swap\\-new\\-frame\\]"
@@ -914,23 +874,13 @@
   },
   {
    "id": "g8-throw-no-giveback",
-   "what": "G-8 candidate: an exception from extra does not give the carried value back",
+   "what": "G-8 candidate: an exception from extra does not give the carried value back (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        giveBack(moved);\n        Warn(\"ReplaceWorld \" + Quoted(name) + \": an exception left",
-   "replace": "        Warn(\"ReplaceWorld \" + Quoted(name) + \": an exception left",
+   "find": "        giveBack(moved);\n        if (!dropOldFirst) {\n            Warn(",
+   "replace": "        if (!dropOldFirst) {\n            Warn(",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception from extra*",
    "expect": "\\[or\\-replace\\-throw\\-keeps\\-old\\]"
-  },
-  {
-   "id": "or-d1-hold-not-old",
-   "what": "D1: a failed replacement writes the carried value back into the interrupted old World",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "                           slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted;",
-   "replace": "                           true;",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: D1:*",
-   "expect": "TEST CASE:  O\\-8: D1:"
   },
   {
    "id": "or-d3-throw-no-warn",
@@ -944,13 +894,13 @@
   },
   {
    "id": "or-d4-empty-first-counted",
-   "what": "D4: game initialization on an empty first place counts as run",
+   "what": "D4: game initialization on an empty first place counts as run (rewritten for v8-arch-gyo2-broken-world-ends-product: an empty place ends the Product; the case that reaches RunGameInit itself is the outside one)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!worlds_.empty() && !worlds_.front().executor) {",
-   "replace": "    if (false) {",
+   "find": "    GYO_ASSERT(!gameInitRan_);\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    gameInitRan_ = true;",
+   "replace": "    GYO_ASSERT(!gameInitRan_);\n    gameInitRan_ = true;\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));",
    "target": "gyo_orchestration_tests",
-   "cases": "O-1: D4:*",
-   "expect": "\\[or\\-d4\\-not\\-marked\\]"
+   "cases": "O-8: a World interrupted outside the Product*",
+   "expect": "\\[or\\-ended\\-gameinit\\]"
   },
   {
    "id": "ur-header-unchecked",
@@ -2017,10 +1967,10 @@
   },
   {
    "id": "g8s-drop-old-held-dropped",
-   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World",
+   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World (find rewritten for v8-arch-gyo2-broken-world-ends-product: no holding place, DropOldFirst keeps the values in the replacement itself)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved = std::move(slot.held);",
-   "replace": "    std::vector<std::pair<Detail::CarryEntry, std::shared_ptr<void>>> moved;",
+   "find": "            if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));\n        }\n        slot.executor.reset();",
+   "replace": "            static_cast<void>(entry.take(slot.executor->GetWorld()));\n        }\n        slot.executor.reset();",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-10-carried\\] 0"
@@ -2047,10 +1997,10 @@
   },
   {
    "id": "g8s-runschedule-gameinit-after",
-   "what": "step 4 G-8: S1-2: RunSchedule runs the schedule first and game initialization after it",
+   "what": "step 4 G-8: S1-2: RunSchedule runs the schedule first and game initialization after it (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule);",
-   "replace": "    if (!gameInitRan_) {\n        if (auto ran = RunOn(*slot, schedule); !ran) return ran;\n        return RunGameInit();\n    }\n    return RunOn(*slot, schedule);",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "replace": "    if (!gameInitRan_) {\n        if (auto ran = RunOn(*slot, schedule, \"RunSchedule\"); !ran) return ran;\n        return RunGameInit();\n    }\n    return RunOn(*slot, schedule, \"RunSchedule\");",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-2-boot-first\\]"
@@ -2074,6 +2024,256 @@
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-7b-record-is-the-cursor\\]"
+  },
+  {
+   "id": "or-ended-runschedule-unchecked",
+   "what": "RunSchedule runs a healthy World while another is broken (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    RequireNotRunning();\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);",
+   "replace": "    RequireNotRunning();\n    WorldSlot* slot = Find(world);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-runschedule\\-other\\]"
+  },
+  {
+   "id": "or-ended-before-name",
+   "what": "RunSchedule looks the name up before checking the Worlds (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    RequireNotRunning();\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n",
+   "replace": "    RequireNotRunning();\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-before\\-name\\]"
+  },
+  {
+   "id": "or-ended-runframe-unchecked",
+   "what": "RunFrame runs the Worlds before the broken one (a half frame) (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    // Every World is checked before any runs: no half frame over a broken World.\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: with a broken World the whole frame*",
+   "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
+  },
+  {
+   "id": "or-ended-replace-unchecked",
+   "what": "ReplaceWorld replaces a broken World (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    // A replacement does not mend a broken World (v8-arch-gyo2-broken-world-ends-product).\n    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-ended\\-no\\-replace\\]"
+  },
+  {
+   "id": "or-ended-insert-unchecked",
+   "what": "InsertSystems inserts while a World is broken (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(worldName);",
+   "replace": "    WorldSlot* slot = Find(worldName);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-no\\-insert\\]"
+  },
+  {
+   "id": "or-ended-code-swapped",
+   "what": "the refusal names an interrupted World WorldMissing and an empty place WorldInterrupted (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    OrchestrationError error(missing ? OrchestrationErrorCode::WorldMissing : OrchestrationErrorCode::WorldInterrupted,",
+   "replace": "    OrchestrationError error(missing ? OrchestrationErrorCode::WorldInterrupted : OrchestrationErrorCode::WorldMissing,",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-runschedule\\-other\\]"
+  },
+  {
+   "id": "or-ended-outside-unrecorded",
+   "what": "a World interrupted outside the Product is not seen (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (!slot.executor || slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted) continue;",
+   "replace": "            continue;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a World interrupted outside the Product*",
+   "expect": "\\[or\\-ended\\-gameinit\\]"
+  },
+  {
+   "id": "or-failure-not-attached",
+   "what": "the first error carries no failure (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        error.failure = Break(std::move(failure));\n        return ::Engine::Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
+   "replace": "        Break(std::move(failure));\n        return ::Engine::Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-set\\]"
+  },
+  {
+   "id": "or-failure-no-product",
+   "what": "the failure does not name the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure.product = name_;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-who\\]"
+  },
+  {
+   "id": "or-failure-no-schedule",
+   "what": "the failure does not name the schedule (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure.schedule = std::string(schedule);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-where\\]"
+  },
+  {
+   "id": "or-failure-no-domain",
+   "what": "the failure does not take the schedule's domain (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (info.options.name == schedule) failure.domain = info.options.domain;",
+   "replace": "        static_cast<void>(info);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-tick\\]"
+  },
+  {
+   "id": "or-failure-no-tick",
+   "what": "the failure does not read the tick (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure.tick = slot.executor->GetWorld().Tick(failure.domain);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-tick\\]"
+  },
+  {
+   "id": "or-failure-no-kernel-code",
+   "what": "the failure does not carry the kernel code (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        failure.kernelCode = kernelError.code;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-kernel\\]"
+  },
+  {
+   "id": "or-failure-no-last",
+   "what": "the last schedule is not remembered (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.lastSchedule = std::string(schedule);\n    return {};",
+   "replace": "    return {};",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: one interrupted World ends the Product*",
+   "expect": "\\[or\\-ended\\-failure\\-last\\]"
+  },
+  {
+   "id": "or-failure-last-kept",
+   "what": "a new World keeps the old World's last schedule (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.lastSchedule.clear();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-failure\\-last\\-new\\-world\\]"
+  },
+  {
+   "id": "or-drop-fail-unrecorded",
+   "what": "a failed DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        } else if (dropOldFirst) {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-ended\\-drop\\-failure\\]"
+  },
+  {
+   "id": "or-drop-fail-kind",
+   "what": "a failed DropOldFirst replacement is recorded as Interrupted (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            failure.kind = WorldFailureKind::ReplacementFailed;\n            failure.entry = \"ReplaceWorld\";\n            failure.schedule = failedSchedule;\n            if",
+   "replace": "            failure.kind = WorldFailureKind::Interrupted;\n            failure.entry = \"ReplaceWorld\";\n            failure.schedule = failedSchedule;\n            if",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: a replacement does not mend a broken World*",
+   "expect": "\\[or\\-ended\\-drop\\-failure\\-fields\\]"
+  },
+  {
+   "id": "or-throw-unrecorded",
+   "what": "an exception leaving a DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!failure_) {\n            WorldFailure failure;",
+   "replace": "        if (false) {\n            WorldFailure failure;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
+   "expect": "\\[or\\-ended\\-throw\\]"
+  },
+  {
+   "id": "or-throw-alloc-kind",
+   "what": "std::bad_alloc leaving a replacement is ReplacementFailed (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                failure.kind = WorldFailureKind::ResourceExhausted;\n                failure.where = \"std::bad_alloc left the replacement\";",
+   "replace": "                failure.kind = WorldFailureKind::ReplacementFailed;\n                failure.where = \"std::bad_alloc left the replacement\";",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
+   "expect": "\\[or\\-ended\\-throw\\-kind\\]"
+  },
+  {
+   "id": "or-run-throw-unrecorded",
+   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            failure.where = \"std::bad_alloc left the schedule\";\n            Break(std::move(failure));\n",
+   "replace": "            failure.where = \"std::bad_alloc left the schedule\";\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: std::bad_alloc leaving a schedule*",
+   "expect": "\\[or\\-run\\-throw\\]"
+  },
+  {
+   "id": "or-failure-logged",
+   "what": "the orchestration layer logs the failure itself (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    failure_ = std::move(failure);\n    return *failure_;",
+   "replace": "    failure_ = std::move(failure);\n    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", failure_->Text());\n    return *failure_;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-not\\-logged\\]"
+  },
+  {
+   "id": "or-failure-refusal-differs",
+   "what": "a refusal carries a failure that differs from the one recorded (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    error.failure = *failure_;\n    return error;",
+   "replace": "    error.failure = *failure_;\n    error.failure->lastSchedule.clear();\n    return error;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-same\\]"
+  },
+  {
+   "id": "or-failure-no-detail",
+   "what": "a refusal's detail does not carry the failure (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                             failure_->Text());\n    error.failure = *failure_;",
+   "replace": "                             std::string());\n    error.failure = *failure_;",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-detail\\]"
+  },
+  {
+   "id": "or-failure-text-no-tick",
+   "what": "Text() leaves the tick out (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/OrchestrationError.cpp",
+   "find": "\", tick \" +\n                std::to_string(tick) + \")\"",
+   "replace": "\")\"",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-text\\]"
+  },
+  {
+   "id": "or-failure-text-no-where",
+   "what": "Text() leaves the kernel text or report out (v8-arch-gyo2-broken-world-ends-product)",
+   "file": "engine/orchestration/src/OrchestrationError.cpp",
+   "find": "    if (!where.empty()) text += \"; \" + where;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: the failure is returned*",
+   "expect": "\\[or\\-failure\\-text\\]"
   }
  ]
 }

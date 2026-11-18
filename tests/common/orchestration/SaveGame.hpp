@@ -217,11 +217,19 @@ public:
     WarningCounter() : previous_(Engine::Base::SetLogHandler(&Count)) {
         Counter().store(0);
         Last().clear();
+        ErrorCounter().store(0);
+        LastError().clear();
     }
     ~WarningCounter() { Engine::Base::SetLogHandler(previous_); }
     WarningCounter(const WarningCounter&) = delete;
     WarningCounter& operator=(const WarningCounter&) = delete;
     [[nodiscard]] int Warnings() const { return Counter().load(); }
+    // Error lines of the orchestration layer (a logged WorldFailure).
+    [[nodiscard]] int Errors() const { return ErrorCounter().load(); }
+    [[nodiscard]] static std::string& LastError() {
+        static std::string last;
+        return last;
+    }
     // The text of the last orchestration warning (single-threaded tests only).
     [[nodiscard]] static std::string& Last() {
         static std::string last;
@@ -233,7 +241,18 @@ private:
         static std::atomic<int> counter{0};
         return counter;
     }
+    static std::atomic<int>& ErrorCounter() {
+        static std::atomic<int> counter{0};
+        return counter;
+    }
     static void Count(const Engine::Base::LogMessage& message) noexcept {
+        if (message.level == Engine::Base::LogLevel::Error && message.category == "orchestration") {
+            ++ErrorCounter();
+            try {
+                LastError() = std::string(message.text);
+            } catch (...) {
+            }
+        }
         if (message.level == Engine::Base::LogLevel::Warning && message.category == "orchestration") {
             ++Counter();
             try {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/kernel/Declarations.hpp"
 #include "engine/kernel/KernelError.hpp"
 
 #include <cstdint>
@@ -95,13 +96,58 @@ struct ProductStartupReport {
     [[nodiscard]] const Kernel::StartupReport* KernelReportOf(std::string_view world) const noexcept;
 };
 
+// How a World broke (v8-arch-gyo2-broken-world-ends-product).
+enum class WorldFailureKind : std::uint8_t {
+    // A schedule the Product ran returned a kernel Err, or an exception left it:
+    // the kernel interrupted the World (spec E.5).
+    Interrupted = 1,
+    // A DropOldFirst replacement failed after the old World was gone: the place is empty.
+    ReplacementFailed,
+    // std::bad_alloc left a Run or a DropOldFirst replacement.
+    ResourceExhausted,
+};
+
+[[nodiscard]] std::string_view ToString(WorldFailureKind kind) noexcept;
+
+// One World breaking ends the Product (v8-arch-gyo2-broken-world-ends-product):
+// what broke, gathered by the orchestration layer and the kernel at the moment
+// it broke, never read back from the broken World afterwards.
+struct WorldFailure {
+    std::string product;
+    std::string world;
+    WorldFailureKind kind = WorldFailureKind::Interrupted;
+    // The Product's entry point that broke it ("RunGameInit", "RunFrame",
+    // "RunSchedule", "ReplaceWorld"); "outside the Product" when the World was
+    // found interrupted without the Product running it (WorldExecutor::Run called directly).
+    std::string entry;
+    // The schedule that failed; empty when no schedule was running (a prepare
+    // function, a registration or a carry-over of a replacement failed).
+    std::string schedule;
+    // The schedule's domain and that domain's tick, read before the schedule ran.
+    Kernel::Domain domain = Kernel::Domain::None;
+    std::uint64_t tick = 0;
+    // The kernel error code, when the kernel reported one.
+    std::optional<Kernel::KernelErrorCode> kernelCode;
+    // The kernel error as text (its layers name the System and its step), or
+    // the orchestration layer's report of a failed replacement.
+    std::string where;
+    // What happened before: the last schedule the Product ran with success on
+    // this World; empty when none had.
+    std::string lastSchedule;
+
+    // The whole failure as one line (also the refusal's detail).
+    [[nodiscard]] std::string Text() const;
+};
+
 // Runtime codes of the Product's entry points (sections 3.4, 3.9, 3.10).
 enum class OrchestrationErrorCode : std::uint8_t {
     // A schedule run by RunGameInit, RunFrame or RunSchedule returned a kernel Err (in kernel).
     ScheduleFailed = 1,
-    // The World is interrupted (a schedule failed on it): nothing runs on it until it is replaced.
+    // A World of the Product is interrupted: the Product has ended, nothing runs
+    // and nothing is replaced (v8-arch-gyo2-broken-world-ends-product; in failure).
     WorldInterrupted,
-    // The World's place is empty (a DropOldFirst replacement failed): fill it with ReplaceWorld.
+    // A World's place is empty (a DropOldFirst replacement failed): the Product
+    // has ended, as for WorldInterrupted (in failure).
     WorldMissing,
     // No World of that name.
     UnknownWorld,
@@ -134,6 +180,9 @@ struct OrchestrationError {
     std::string reporterCode;
     // The kernel error behind ScheduleFailed, ReplaceScheduleFailed or InsertRefused (zero or one).
     std::vector<Kernel::KernelError> kernel;
+    // Set when a World of the Product is broken (this call broke it, or an
+    // earlier one did): the Product has ended.
+    std::optional<WorldFailure> failure;
 
     OrchestrationError(OrchestrationErrorCode errorCode, std::string errorMessage, std::string errorDetail = {},
                        std::string errorReporterCode = {})

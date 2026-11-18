@@ -27,6 +27,42 @@ std::string_view ToString(ProductStartupReportCode code) noexcept {
     return "?";
 }
 
+std::string_view ToString(WorldFailureKind kind) noexcept {
+    switch (kind) {
+    case WorldFailureKind::Interrupted: return "Interrupted";
+    case WorldFailureKind::ReplacementFailed: return "ReplacementFailed";
+    case WorldFailureKind::ResourceExhausted: return "ResourceExhausted";
+    }
+    return "unknown";
+}
+
+namespace {
+
+std::string_view DomainText(Kernel::Domain domain) noexcept {
+    switch (domain) {
+    case Kernel::Domain::None: return "none";
+    case Kernel::Domain::Fixed: return "fixed";
+    case Kernel::Domain::Frame: return "frame";
+    case Kernel::Domain::Loading: return "loading";
+    }
+    return "unknown";
+}
+
+} // namespace
+
+std::string WorldFailure::Text() const {
+    std::string text = "Product '" + product + "' ended: World '" + world + "' " + std::string(ToString(kind)) +
+                       " in " + entry;
+    if (!schedule.empty()) {
+        text += ", schedule '" + schedule + "' (domain " + std::string(DomainText(domain)) + ", tick " +
+                std::to_string(tick) + ")";
+    }
+    if (kernelCode) text += ", kernel " + std::string(Kernel::ToString(*kernelCode));
+    text += ", last schedule run: " + (lastSchedule.empty() ? std::string("none") : "'" + lastSchedule + "'");
+    if (!where.empty()) text += "; " + where;
+    return text;
+}
+
 std::string_view ToString(OrchestrationErrorCode code) noexcept {
     switch (code) {
     case OrchestrationErrorCode::ScheduleFailed: return "ScheduleFailed";

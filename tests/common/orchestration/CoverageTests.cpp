@@ -5,6 +5,9 @@
 
 #include "AssertTestSupport.hpp"
 
+#include <new>
+#include <stdexcept>
+
 using namespace OrchTest;
 using namespace OrchTest::Save;
 
@@ -186,27 +189,195 @@ TEST_CASE("O-1: a failing frame schedule stops RunFrame with ScheduleFailed") {
 
 // ---- Interrupted and empty Worlds, unknown names
 
-TEST_CASE("O-8: RunSchedule on an interrupted or empty World; another World still runs; RunFrame reports an interrupted World with an empty frame list") {
+// One broken World ends the Product (v8-arch-gyo2-broken-world-ends-product):
+// every entry point checks every World first, runs nothing and changes nothing.
+
+TEST_CASE("O-8: one interrupted World ends the Product: RunSchedule on another World, RunGameInit and InsertSystems run nothing; the failure says what broke") {
     Log().clear();
-    auto built = O::Product::Build(Two({"Tick"}, {}), Units().Take());
+    auto built = O::Product::Build(Two(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
-    REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Side", "Bad")));
-    auto interrupted = p.RunSchedule("Side", "A");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(interrupted), "[or-runschedule-interrupted] ran");
-    CHECK_MESSAGE(interrupted.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-runschedule-interrupted] code");
-    CHECK_MESSAGE(static_cast<bool>(p.RunSchedule("Main", "A")), "[or-other-world-runs]");
-    auto frame = p.RunFrame();
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(frame), "[or-runframe-interrupted-empty] RunFrame succeeded");
-    CHECK_MESSAGE(frame.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-runframe-interrupted-empty] code");
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    REQUIRE(p.Failure() == nullptr);
+    auto broke = p.RunSchedule("Side", "Bad");
+    REQUIRE_FALSE(static_cast<bool>(broke));
+    CHECK_MESSAGE(broke.error().code == O::OrchestrationErrorCode::ScheduleFailed, "[or-ended-first-error] code");
+    REQUIRE_MESSAGE((broke.error().failure.has_value() && p.Failure() != nullptr), "[or-ended-failure-set]");
+    const O::WorldFailure& f = *p.Failure();
+    CHECK_MESSAGE((f.product == "game" && f.world == "Side" && f.kind == O::WorldFailureKind::Interrupted), "[or-ended-failure-who] " << f.Text());
+    CHECK_MESSAGE((f.entry == "RunSchedule" && f.schedule == "Bad"), "[or-ended-failure-where] " << f.Text());
+    CHECK_MESSAGE((f.domain == K::Domain::Frame && f.tick == 1), "[or-ended-failure-tick] " << f.Text());
+    CHECK_MESSAGE((f.kernelCode == K::KernelErrorCode::SystemFailed && f.where.find("FailBad") != std::string::npos), "[or-ended-failure-kernel] " << f.Text());
+    CHECK_MESSAGE(f.lastSchedule == "Tick", "[or-ended-failure-last] " << f.Text());
+    Log().clear();
+    auto other = p.RunSchedule("Main", "A");
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(other), "[or-ended-runschedule-other] the healthy World ran");
+    CHECK_MESSAGE(other.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-ended-runschedule-other] code");
+    CHECK_MESSAGE((other.error().failure.has_value() && other.error().failure->world == "Side"), "[or-ended-names-broken] " << other.error().message);
+    CHECK_MESSAGE(!Logged("a"), "[or-ended-runschedule-other] " << Joined());
+    auto insert = p.InsertSystems("Main", "console", [](K::Registrar&) {});
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(insert), "[or-ended-no-insert] inserted");
+    CHECK_MESSAGE(insert.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-ended-no-insert] code");
+    auto unknown = p.RunSchedule("Nowhere", "A");
+    CHECK_MESSAGE((!unknown && unknown.error().code == O::OrchestrationErrorCode::WorldInterrupted), "[or-ended-before-name]");
+}
 
-    REQUIRE_FALSE(static_cast<bool>(p.ReplaceWorld("Side", O::ReplaceRequest{Refuse(), {}, O::ReplaceOrder::DropOldFirst})));
-    auto missing = p.RunSchedule("Side", "A");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(missing), "[or-runschedule-missing] ran");
-    CHECK_MESSAGE(missing.error().code == O::OrchestrationErrorCode::WorldMissing, "[or-runschedule-missing] code");
-    auto insert = p.InsertSystems("Side", "console", [](K::Registrar&) {});
-    REQUIRE_FALSE(static_cast<bool>(insert));
-    CHECK_MESSAGE(insert.error().code == O::OrchestrationErrorCode::WorldMissing, "[or-insert-empty-place]");
+TEST_CASE("O-8: with a broken World the whole frame does not run: a World before it does not advance") {
+    Log().clear();
+    auto built = O::Product::Build(Two(), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Side", "Bad")));
+    const std::uint64_t mainTick = p.World("Main").GetWorld().Tick(K::Domain::Frame);
+    Log().clear();
+    auto frame = p.RunFrame();
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(frame), "[or-ended-no-half-frame] RunFrame succeeded");
+    CHECK_MESSAGE(frame.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-ended-no-half-frame] code");
+    CHECK_MESSAGE(!Logged("t"), "[or-ended-no-half-frame] the first World ran its frame: " << Joined());
+    CHECK_MESSAGE(p.World("Main").GetWorld().Tick(K::Domain::Frame) == mainTick, "[or-ended-no-half-frame-tick]");
+}
+
+TEST_CASE("O-8: a replacement does not mend a broken World: an interrupted one, an empty place; a BuildNewFirst failure ends nothing") {
+    SUBCASE("interrupted") {
+        auto built = O::Product::Build(Two(), Units().Take());
+        ORCH_REQUIRE_BUILT(built);
+        O::Product& p = **built;
+        REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Side", "Bad")));
+        for (const O::ReplaceOrder order : {O::ReplaceOrder::BuildNewFirst, O::ReplaceOrder::DropOldFirst}) {
+            CAPTURE(static_cast<int>(order));
+            auto replaced = p.ReplaceWorld("Side", O::ReplaceRequest{{}, {}, order});
+            REQUIRE_FALSE_MESSAGE(static_cast<bool>(replaced), "[or-ended-no-replace] the interrupted World was replaced");
+            CHECK_MESSAGE(replaced.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-ended-no-replace] code");
+            CHECK_MESSAGE((p.HasWorld("Side") && p.World("Side").GetWorld().State() == K::WorldState::Interrupted), "[or-ended-no-replace-kept]");
+            CHECK_MESSAGE(!p.ReplaceWorld("Main", O::ReplaceRequest{{}, {}, order}), "[or-ended-no-replace-other]");
+        }
+    }
+    SUBCASE("empty place") {
+        Log().clear();
+        auto built = O::Product::Build(Two(), Units().Take());
+        ORCH_REQUIRE_BUILT(built);
+        O::Product& p = **built;
+        REQUIRE(static_cast<bool>(p.RunFrame()));
+        auto failed = p.ReplaceWorld("Side", O::ReplaceRequest{Refuse(), {}, O::ReplaceOrder::DropOldFirst});
+        REQUIRE_FALSE(static_cast<bool>(failed));
+        CHECK_MESSAGE(failed.error().code == O::OrchestrationErrorCode::ReplacePrepareFailed, "[or-ended-drop-code]");
+        REQUIRE_MESSAGE((failed.error().failure.has_value() && p.Failure() != nullptr), "[or-ended-drop-failure]");
+        const O::WorldFailure& f = *p.Failure();
+        CHECK_MESSAGE((f.world == "Side" && f.kind == O::WorldFailureKind::ReplacementFailed && f.entry == "ReplaceWorld" &&
+                       f.schedule.empty() && f.where.find("ReplacePrepareFailed") != std::string::npos && f.lastSchedule == "Tick"),
+                      "[or-ended-drop-failure-fields] " << f.Text());
+        Log().clear();
+        auto other = p.RunSchedule("Main", "A");
+        CHECK_MESSAGE((!other && other.error().code == O::OrchestrationErrorCode::WorldMissing && !Logged("a")), "[or-ended-missing-runs-nothing] " << Joined());
+        for (const O::ReplaceOrder order : {O::ReplaceOrder::BuildNewFirst, O::ReplaceOrder::DropOldFirst}) {
+            CAPTURE(static_cast<int>(order));
+            auto refill = p.ReplaceWorld("Side", O::ReplaceRequest{{}, {}, order});
+            REQUIRE_FALSE_MESSAGE(static_cast<bool>(refill), "[or-ended-no-refill] the empty place was filled");
+            CHECK_MESSAGE(refill.error().code == O::OrchestrationErrorCode::WorldMissing, "[or-ended-no-refill] code");
+            CHECK_MESSAGE(!p.HasWorld("Side"), "[or-ended-no-refill]");
+        }
+    }
+    SUBCASE("BuildNewFirst failure") {
+        auto built = O::Product::Build(Two(), Units().Take());
+        ORCH_REQUIRE_BUILT(built);
+        O::Product& p = **built;
+        auto failed = p.ReplaceWorld("Side", O::ReplaceRequest{Refuse(), {}, O::ReplaceOrder::BuildNewFirst});
+        REQUIRE_FALSE(static_cast<bool>(failed));
+        CHECK_MESSAGE((!failed.error().failure.has_value() && p.Failure() == nullptr), "[or-build-new-fail-goes-on]");
+        CHECK(static_cast<bool>(p.RunFrame()));
+        // The new World ran nothing yet: the old World's last schedule is not its.
+        REQUIRE(static_cast<bool>(p.ReplaceWorld("Side", O::ReplaceRequest{})));
+        REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Side", "Bad")));
+        REQUIRE(p.Failure() != nullptr);
+        CHECK_MESSAGE(p.Failure()->lastSchedule.empty(), "[or-failure-last-new-world] " << p.Failure()->Text());
+    }
+}
+
+TEST_CASE("O-8: the failure is returned, not logged: later refusals carry the same failure; Text() names every part") {
+    auto built = O::Product::Build(Two(), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    WarningCounter log;
+    auto broke = p.RunSchedule("Side", "Bad");
+    REQUIRE_FALSE(static_cast<bool>(broke));
+    auto frame = p.RunFrame();
+    auto other = p.RunSchedule("Main", "A");
+    REQUIRE((!frame && !other && broke.error().failure && frame.error().failure && other.error().failure));
+    CHECK_MESSAGE((log.Errors() == 0 && log.Warnings() == 0), "[or-failure-not-logged] errors " << log.Errors() << " warnings " << log.Warnings());
+    const std::string text = broke.error().failure->Text();
+    CHECK_MESSAGE((frame.error().failure->Text() == text && other.error().failure->Text() == text && p.Failure()->Text() == text),
+                  "[or-failure-same] " << frame.error().failure->Text());
+    CHECK_MESSAGE(frame.error().detail == text, "[or-failure-detail] " << frame.error().detail);
+    for (const char* part : {"'game'", "'Side'", "Interrupted", "RunSchedule", "'Bad'", "tick 1", "SystemFailed", "'Tick'", "FailBad"}) {
+        CHECK_MESSAGE(text.find(part) != std::string::npos, "[or-failure-text] " << part << " missing: " << text);
+    }
+}
+
+TEST_CASE("O-8: a World interrupted outside the Product ends it too; RunGameInit checks first and is not counted as run") {
+    auto built = O::Product::Build(Two(), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE_FALSE(static_cast<bool>(p.World("Side").Run("Bad")));
+    auto init = p.RunGameInit();
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(init), "[or-ended-gameinit] RunGameInit succeeded");
+    CHECK_MESSAGE(init.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-ended-gameinit] code");
+    CHECK_MESSAGE(!p.GameInitRan(), "[or-ended-gameinit] counted as run");
+    REQUIRE(p.Failure() != nullptr);
+    CHECK_MESSAGE((p.Failure()->world == "Side" && p.Failure()->entry == "outside the Product" && p.Failure()->lastSchedule.empty() &&
+                   !p.Failure()->kernelCode.has_value()),
+                  "[or-ended-outside-fields] " << p.Failure()->Text());
+    CHECK_MESSAGE(!p.RunFrame(), "[or-ended-outside] RunFrame succeeded");
+}
+
+namespace {
+
+K::SystemResult ThrowAlloc(K::Query<K::Read<Tag>>) {
+    throw std::bad_alloc();
+}
+
+} // namespace
+
+TEST_CASE("O-8: std::bad_alloc leaving a schedule ends the Product as ResourceExhausted, recorded by the entry point") {
+    O::ProductDescription d = Two();
+    d.worlds[1].build = [](O::WorldSetup& s) {
+        Basics(s.Registrar(), {FrameClock("Tick"), Once("Boom")});
+        s.Registrar().AddSystem<&ThrowAlloc>(In("ThrowAlloc", "Boom"));
+    };
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    CHECK_THROWS_AS(static_cast<void>(p.RunSchedule("Side", "Boom")), std::bad_alloc);
+    REQUIRE_MESSAGE(p.Failure() != nullptr, "[or-run-throw] no failure recorded");
+    CHECK_MESSAGE((p.Failure()->kind == O::WorldFailureKind::ResourceExhausted && p.Failure()->entry == "RunSchedule" &&
+                   p.Failure()->schedule == "Boom"),
+                  "[or-run-throw-kind] " << p.Failure()->Text());
+    CHECK_MESSAGE(!p.RunFrame(), "[or-run-throw-runs-nothing]");
+}
+
+TEST_CASE("O-8: an exception that leaves a DropOldFirst replacement ends the Product; std::bad_alloc is ResourceExhausted") {
+    for (const bool alloc : {false, true}) {
+        CAPTURE(alloc);
+        auto built = O::Product::Build(Two(), Units().Take());
+        ORCH_REQUIRE_BUILT(built);
+        O::Product& p = **built;
+        bool thrown = false;
+        try {
+            static_cast<void>(p.ReplaceWorld("Side", O::ReplaceRequest{[alloc](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+                if (alloc) throw std::bad_alloc();
+                throw std::runtime_error("disk gone");
+            }, {}, O::ReplaceOrder::DropOldFirst}));
+        } catch (...) {
+            thrown = true;
+        }
+        REQUIRE(thrown);
+        REQUIRE_MESSAGE(p.Failure() != nullptr, "[or-ended-throw] no failure recorded");
+        CHECK_MESSAGE(p.Failure()->kind == (alloc ? O::WorldFailureKind::ResourceExhausted : O::WorldFailureKind::ReplacementFailed),
+                      "[or-ended-throw-kind] " << p.Failure()->Text());
+        CHECK_MESSAGE(!p.RunFrame(), "[or-ended-throw-runs-nothing]");
+    }
 }
 
 TEST_CASE("O-8: unknown World names: UnknownWorld from RunSchedule, ReplaceWorld and InsertSystems") {
@@ -333,24 +504,6 @@ TEST_CASE("O-8: a registration that differs: the new frame list and prepare are 
     auto listError = p.ReplaceWorld("Main", O::ReplaceRequest{});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(listError), "[or-replace-list-error] replaced with a frame name that is no schedule");
     CHECK_MESSAGE(listError.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-replace-list-error] code");
-}
-
-TEST_CASE("O-10: a value carries over from an interrupted World") {
-    O::ProductDescription d = Game();
-    d.worlds[0].build = [](O::WorldSetup& s) {
-        Register(s);
-        s.Registrar().AddSystem<&Fail>(In("FailJunk", "Junk"));
-    };
-    auto built = O::Product::Build(std::move(d), Units().Take());
-    ORCH_REQUIRE_BUILT(built);
-    O::Product& p = **built;
-    REQUIRE(static_cast<bool>(p.RunFrame()));
-    p.World("Main").GetWorld().ResourceMut<KeyBindings>()->jump = 5;
-    REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Main", "Junk")));
-    REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
-    const KeyBindings* kb = p.World("Main").GetWorld().Resource<KeyBindings>();
-    REQUIRE_MESSAGE(kb != nullptr, "[or-carry-from-interrupted] gone");
-    CHECK_MESSAGE(kb->jump == 5, "[or-carry-from-interrupted] " << kb->jump);
 }
 
 TEST_CASE("O-9: the refusal warning names the World and the owner") {

@@ -92,7 +92,7 @@ TEST_CASE("O-8: a Check that fails on the second registration: ReplaceRegistrati
     CHECK_MESSAGE(static_cast<bool>(p.RunFrame()), "[or-replace-check-old-goes-on]");
 }
 
-TEST_CASE("O-8: the error handler is kept; an interrupted World can be replaced; ReplaceWorld inside a Run asserts") {
+TEST_CASE("O-8: the error handler is kept across a replacement; ReplaceWorld inside a Run asserts") {
     O::ProductDescription d = Game();
     d.worlds[0].build = [](O::WorldSetup& s) {
         Register(s);
@@ -105,14 +105,10 @@ TEST_CASE("O-8: the error handler is kept; an interrupted World can be replaced;
     gProduct = &p;
     int handled = 0;
     p.SetErrorHandler("Main", [&](const K::KernelError&) { ++handled; });
-    REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Main", "Junk")));
-    REQUIRE(handled == 1);
-    REQUIRE_FALSE(static_cast<bool>(p.RunFrame()));
-    REQUIRE_MESSAGE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})), "[or-replace-interrupted]");
-    REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Main", "Junk")));
-    CHECK_MESSAGE(handled == 2, "[or-replace-handler-kept] " << handled);
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
     CHECK(static_cast<bool>(p.RunSchedule("Main", "Load")));  // Inside checks the assertion
+    REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Main", "Junk")));
+    CHECK_MESSAGE(handled == 1, "[or-replace-handler-kept] " << handled);
     gProduct = nullptr;
 }
 
@@ -182,23 +178,9 @@ TEST_CASE("O-10: a marked type the new registration lacks: ReplaceCarryOverFaile
     CHECK_MESSAGE(VolumeOf(p) == 6, "[or-carry-unregistered-back]");
 }
 
-TEST_CASE("O-10: after a DropOldFirst failure the held value is carried by the next replacement of the place") {
-    auto built = O::Product::Build(Game(), Units().Take());
-    ORCH_REQUIRE_BUILT(built);
-    O::Product& p = **built;
-    REQUIRE(static_cast<bool>(p.RunFrame()));
-    p.World("Main").GetWorld().ResourceMut<KeyBindings>()->jump = 8;
-    auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
-                                                               return Engine::Base::Err(O::OrchestrationError(
-                                                                   O::OrchestrationErrorCode::PrepareFailed, "no"));
-                                                           },
-                                                           {},
-                                                           O::ReplaceOrder::DropOldFirst});
-    REQUIRE_FALSE(static_cast<bool>(failed));
-    REQUIRE(!p.HasWorld("Main"));
-    REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
-    CHECK_MESSAGE(JumpOf(p) == 8, "[or-carry-held]");
-}
+// "After a DropOldFirst failure the held value is carried by the next
+// replacement" left with its property: the empty place ends the Product, there
+// is no next replacement (v8-arch-gyo2-broken-world-ends-product).
 
 TEST_CASE("O-8: an exception from extra leaves the old World as it was") {
     auto built = O::Product::Build(Game(), Units().Take());
