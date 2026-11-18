@@ -1,7 +1,7 @@
 // A System holding ExclusiveWorld<...> runs another schedule (K0,
 // v8-arch-gyo2-nested-schedule; declaration section 6 judgement 1):
-//   J-56  nested runs (spec E.2, E.5, F.2, W-3, W-4, X-11 to X-16, Z5);
-//   J-57  ExclusiveWorld's closures and resource access (spec S-13 to S-15);
+//   J-56  nested runs (spec E.2, E.5, F.2, W-3, W-4, X-11 to X-16);
+//   J-57  ExclusiveWorld's closures and resource access (spec S-13, S-16);
 //   J-58  Startup run by the kernel (spec H-12).
 // Each CHECK carries a tag in brackets ("[ns-...]"): the mutants of the batch
 // expect that tag (docs/architecture/plans/kernel/scripts/mutations.json, ids ns-).
@@ -213,7 +213,7 @@ SystemResult SpawnSeventy(SpawnWithId<Bundle<Tag>> spawn) {
     return Ok();
 }
 SystemResult DespawnOne(Despawn despawn) {
-    if (auto r = despawn.Entity(1); !r) return r;
+    despawn.Entity(1);
     return Ok();
 }
 SystemResult LookForMembers(Query<Read<Tag>> tags) {
@@ -233,12 +233,12 @@ SystemResult DriveThenErase(ExclusiveWorld<> world) {
     EraseTagOfOne();
     return Ok();
 }
-Product*& KeptProduct() {
-    static Product* product = nullptr;
-    return product;
+WorldExecutor*& KeptExecutor() {
+    static WorldExecutor* executor = nullptr;
+    return executor;
 }
 SystemResult PlainRunsThroughKeptPointer(Query<Read<Tag>>) {
-    static_cast<void>(KeptProduct()->Run("Tick"));
+    static_cast<void>(KeptExecutor()->Run("Tick"));
     return Ok();
 }
 } // namespace
@@ -282,14 +282,14 @@ TEST_CASE("J-56: an exclusive System's own membership change behind the World AP
     KeptWorld() = nullptr;
 }
 
-TEST_CASE("J-56: a plain System reaching Product::Run through a kept pointer fails a GYO_ASSERT") {
+TEST_CASE("J-56: a plain System reaching WorldExecutor::Run through a kept pointer fails a GYO_ASSERT") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&PlainRunsThroughKeptPointer>(In("Plain", "Frame", "Drive"));
     });
-    KeptProduct() = rig->product.get();
+    KeptExecutor() = rig->executor.get();
     GYO_CHECK_ASSERTS(rig->Run("Frame"));
-    KeptProduct() = nullptr;
+    KeptExecutor() = nullptr;
 }
 
 // ---- J-56: the outer level's records
@@ -355,40 +355,16 @@ TEST_CASE("J-56: the records of the outer level stay there: the inner schedule n
                   "[ns-outer-records-same] the nested run changed the outer records' result");
 }
 
-// ---- J-56: an outer insert meets an inner despawn (Z5 across levels)
+// ---- J-56: an outer insert meets an inner despawn
 
 namespace {
 SystemResult InsertTagOnFive(CommandsFor<Inserts<Tag>, Removes<>> commands) {
     commands.Insert(5, Tag{5});
     return Ok();
 }
-SystemResult InsertVelOnFive(CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(5, Vel{5});
-    return Ok();
-}
-SystemResult SpawnVelFive(SpawnWithId<Bundle<Vel>> spawn) {
-    spawn.New(5, Vel{5});
-    return Ok();
-}
 SystemResult DespawnFive(Despawn despawn) {
-    if (auto r = despawn.Entity(5); !r) return r;
+    despawn.Entity(5);
     return Ok();
-}
-// OnAdd<Tag> (zone C): records Vel into the schedule's hook queue.
-SystemResult TagToVel(HookCtx ctx, CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(ctx.Entity(), Vel{9});
-    return Ok();
-}
-
-void CheckZ5Across(Rig& rig, const std::string& tag, const std::string& where) {
-    rig.world().Insert(5, Mode{5});
-    const auto result = rig.Run("Frame");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[" << tag << "] the inner despawn was applied: " << Joined());
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::ZoneCDespawn), "[" << tag << "] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find(where) != std::string::npos,
-                  "[" << tag << "-where] the message does not name " << where << ": " << result.error().Text());
-    CHECK_MESSAGE(rig.world().Alive(5), "[" << tag << "] entity 5 was despawned");
-    CHECK(rig.recorded.size() == 1);
 }
 } // namespace
 
@@ -404,53 +380,6 @@ TEST_CASE("J-56: an outer zone B insert into E and an inner despawn of E: the ou
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
     CHECK_MESSAGE(!rig->world().Alive(5), "[ns-z5-b]");
     CHECK_MESSAGE(rig->world().DroppedMissingEntity() == 1, "[ns-z5-b] dropped " << rig->world().DroppedMissingEntity());
-}
-
-TEST_CASE("J-56: an outer zone C insert into E and an inner zone B despawn of E: Z5 at the inner sync point, E stays") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-outer", "level 0 of 2 (schedule 'Frame')");
-}
-
-TEST_CASE("J-56: three levels, the zone C insert in the outermost: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&Drive>(In("Driver2", "Step", "S"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Step"};
-    Runs()["Driver2"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-three-levels", "level 0 of 3 (schedule 'Frame')");
-}
-
-TEST_CASE("J-56: the zone C insert is in the outer schedule's hook queue: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertTagOnFive>(In("Seed", "Frame", "In"));
-        r.Hook<Tag, &TagToVel>(HookTrigger::OnAdd, {.name = "TagToVel", .zone = Zone::C});
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-outer-hook", "hook 'TagToVel' of the outer run at level 0 of 2");
-}
-
-TEST_CASE("J-56: the outer zone C call spawns E with SpawnWithId: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&SpawnVelFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-outer-withid", "level 0 of 2 (schedule 'Frame')");
 }
 
 // ---- J-56: the outer schedule's hook queue
@@ -496,7 +425,7 @@ TEST_CASE("J-56: the outer schedule's hook queue is neither applied nor dropped 
 
 namespace {
 SystemResult DespawnSeven(Despawn despawn) {
-    if (auto r = despawn.Entity(7); !r) return r;
+    despawn.Entity(7);
     return Ok();
 }
 SystemResult SpawnSeven(SpawnWithId<Bundle<Tag>> spawn) {
@@ -536,7 +465,6 @@ TEST_CASE("J-56: despawned outside, spawned with the same id inside, the old one
 
 namespace {
 Mode* g_mode = nullptr;
-Flag* g_flag = nullptr;
 SystemResult WriteSharedAndListed(ExclusiveWorld<Writes<Flag>> world) {
     for (int round = 0; round < 2; ++round) {
         if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return Engine::Base::Err(std::move(r).error());
@@ -551,22 +479,24 @@ SystemResult TamperModeInside(Query<Read<Tag>>) {
     g_mode->m = 99;
     return Ok();
 }
-SystemResult TamperModeThenDrive(ExclusiveWorld<> world) {
-    g_mode->m = 98;
+// ExclusiveWorld declares every component and resource value (DI-KS 1), but not
+// the event buffers: a write there that does not go through an EventWriter is
+// what layer 2 still reports for an exclusive System.
+Detail::EventBuffer<Ping>& PingBuffer(World& world) {
+    return static_cast<Detail::EventBuffer<Ping>&>(Detail::EventsAt(world, Detail::EventIdOf(world, KeyOf<Ping>())));
+}
+SystemResult SendsPing(EventWriter<Ping> pings) {
+    pings.Send(Ping{1});
+    return Ok();
+}
+SystemResult TamperPingThenDrive(ExclusiveWorld<> world) {
+    PingBuffer(*Current().world).records.back().payload.n = 98;
     if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
-SystemResult FlagThroughWorldApi(ExclusiveWorld<>) {
-    if (Flag* flag = KeptWorld()->ResourceMut<Flag>()) flag->on = 5;
-    return Ok();
-}
-SystemResult FlagThroughKeptAddress(ExclusiveWorld<>) {
-    g_flag->on = 6;
-    return Ok();
-}
-SystemResult DriveThenFlagThroughKeptAddress(ExclusiveWorld<> world) {
+SystemResult DriveThenTamperPing(ExclusiveWorld<> world) {
     if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
-    g_flag->on = 7;
+    PingBuffer(*Current().world).records.back().payload.n = 7;
     return Ok();
 }
 } // namespace
@@ -605,55 +535,31 @@ TEST_CASE("J-56: verification on: an inner System's undeclared write is reported
 TEST_CASE("J-56: verification on: a forbidden write before the nested run is the exclusive System's, and the inner schedule does not run") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
-        r.AddSystem<&TamperModeThenDrive>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&TamperPingThenDrive>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&SendsPing>(In("SendsPing", "Tick", "A"));
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
-    rig->world().Insert(1, Mode{1});
-    g_mode = const_cast<Mode*>(rig->world().Get<Mode>(1));
+    KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));  // one Ping record of tick 1
+    Log().clear();
     const auto result = rig->Run("Frame");
-    g_mode = nullptr;
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-ver-before] the write before the nested run was not reported");
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::BoundaryChange), "[ns-ver-before] " << result.error().Text());
     CHECK_MESSAGE(result.error().Text().find("'Driver'") != std::string::npos, "[ns-ver-before] " << result.error().Text());
-    CHECK_MESSAGE(!Logged("InA@Tick#1"), "[ns-ver-before-not-run] the inner schedule ran: " << Joined());
+    CHECK_MESSAGE(result.error().Text().find("event Ping") != std::string::npos, "[ns-ver-before] " << result.error().Text());
+    CHECK_MESSAGE(!Logged("InA@Tick#2"), "[ns-ver-before-not-run] the inner schedule ran: " << Joined());
     CHECK(rig->recorded.size() == 1);
 }
 
-TEST_CASE("J-56: verification on: an unlisted single-writer resource written through the World API is reported when it happens (W-5)") {
+TEST_CASE("J-56: verification on: a write of an event buffer behind EventWriter after a nested run is reported at the boundary") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
-        r.AddSystem<&FlagThroughWorldApi>(In("Driver", "Frame", "Drive"));
-    });
-    rig->world().SetResource(Flag{0});
-    KeptWorld() = &rig->world();
-    const auto result = rig->Run("Frame");
-    KeptWorld() = nullptr;
-    CHECK_MESSAGE(HasCode(result, KernelErrorCode::AccessViolation), "[ns-ver-w5] " << Text(result));
-}
-
-TEST_CASE("J-56: verification on: an unlisted single-writer resource written through a kept address is reported at the boundary") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&FlagThroughKeptAddress>(In("Driver", "Frame", "Drive"));
-    });
-    rig->world().SetResource(Flag{0});
-    g_flag = rig->world().ResourceMut<Flag>();
-    const auto result = rig->Run("Frame");
-    g_flag = nullptr;
-    CHECK_MESSAGE(HasCode(result, KernelErrorCode::BoundaryChange), "[ns-ver-address] " << Text(result));
-}
-
-TEST_CASE("J-56: verification on: the same write through a kept address after a nested run is reported at the boundary") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&DriveThenFlagThroughKeptAddress>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&DriveThenTamperPing>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&SendsPing>(In("SendsPing", "Tick", "A"));
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
-    rig->world().SetResource(Flag{0});
-    g_flag = rig->world().ResourceMut<Flag>();
     const auto result = rig->Run("Frame");
-    g_flag = nullptr;
     CHECK_MESSAGE(HasCode(result, KernelErrorCode::BoundaryChange), "[ns-ver-address-after] " << Text(result));
+    CHECK_MESSAGE(Text(result).find("event Ping") != std::string::npos, "[ns-ver-address-after] " << Text(result));
     CHECK(Logged("InA@Tick#1"));
 }
 
@@ -855,7 +761,7 @@ SystemResult RunInsideClosure(ExclusiveWorld<> world) {
     return Ok();
 }
 SystemResult DespawnSix(Despawn despawn) {
-    if (auto r = despawn.Entity(6); !r) return r;
+    despawn.Entity(6);
     return Ok();
 }
 SystemResult HookRunsSchedule(ExclusiveWorld<> world) {
@@ -877,7 +783,7 @@ void CheckSwallowed(Rig& rig, KernelErrorCode code, const char* rule, const std:
     if (std::string_view(rule).empty() == false) {
         bool ruled = false;
         for (const KernelError* leaf : result.error().Leaves()) ruled = ruled || leaf->rule == rule;
-        CHECK_MESSAGE(ruled, "[" << tag << "] rule " << rule << ": " << result.error().Text());
+        CHECK_MESSAGE(ruled, "[" << tag << "] rule " << std::string(rule) << ": " << result.error().Text());
     }
     CHECK_MESSAGE(rig.world().State() == WorldState::Interrupted, "[" << tag << "]");
     CHECK_MESSAGE(rig.recorded.size() == 1, "[" << tag << "] the handler was called " << rig.recorded.size() << " times");
@@ -1193,7 +1099,7 @@ TEST_CASE("J-57: a closure inside a closure reads another component") {
 // ---- J-57: resources
 
 namespace {
-struct Pinned { std::int32_t value; };  // resource, zone B, affinity "Render"
+struct Pinned { std::int32_t value; };  // resource, zone B, thread-bound
 
 SystemResult ReadsResources(ExclusiveWorld<> world) {
     auto out = world.Read<Out>([](const Out& o) { return o.value; });
@@ -1215,19 +1121,23 @@ SystemResult ReadsAbsentResource(ExclusiveWorld<> world) {
     Log().push_back(std::string("absent out ") + (*out ? "value" : "nothing") + (called ? " called" : " not called"));
     return Ok();
 }
-SystemResult ReadsPinned(ExclusiveWorld<> world) {
-    auto pinned = world.Read<Pinned>([](const Pinned& p) { return p.value; });
-    if (!pinned) return Engine::Base::Err(std::move(pinned).error());
-    return Ok();
-}
 SystemResult ReadsSettings(ExclusiveWorld<> world) {
-    auto settings = world.Read<KernelSettings>([](const KernelSettings& s) { return s.accessVerification; });
+    auto settings = world.Read<KernelSettings>([](const KernelSettings& s) { return s.hookRoundLimit; });
     if (!settings) return Engine::Base::Err(std::move(settings).error());
+    Log().push_back("settings limit " + (*settings ? std::to_string(**settings) : std::string("absent")));
     return Ok();
 }
 SystemResult ModifiesSettings(ExclusiveWorld<> world) {
-    auto settings = world.Modify<KernelSettings>([](KernelSettings& s) { s.accessVerification = false; });
+    auto settings = world.Modify<KernelSettings>([](KernelSettings& s) { s.accessVerification = true; });
     if (!settings) return Engine::Base::Err(std::move(settings).error());
+    return Ok();
+}
+SystemResult ReadsPosUndeclared(Query<Read<Tag>>) {
+    static_cast<void>(KeptWorld()->Get<Pos>(1));
+    return Ok();
+}
+SystemResult TurnsVerificationOn(ResMut<KernelSettings> settings) {
+    settings->accessVerification = true;
     return Ok();
 }
 SystemResult WritesListedFlag(ExclusiveWorld<Writes<Flag>> world) {
@@ -1258,11 +1168,11 @@ SystemResult Ingress(ExclusiveWorld<>) { return Ok(); }
 
 void ResourceRig(Registrar& r) {
     Nest(r);
-    r.Resource<Pinned>({.name = "Pinned", .zone = Zone::B, .affinity = Affinity::Named("Render")});
+    r.Resource<Pinned>({.name = "Pinned", .zone = Zone::B, .threadBound = true});
 }
 } // namespace
 
-TEST_CASE("J-57: resources: any is read; one absent is not; KernelSettings is Err") {
+TEST_CASE("J-57: resources: any is read; one absent is not") {
     {
         auto rig = NestRig([](Registrar& r) {
             ResourceRig(r);
@@ -1284,24 +1194,7 @@ TEST_CASE("J-57: resources: any is read; one absent is not; KernelSettings is Er
     }
 }
 
-TEST_CASE("J-57: resources: one whose affinity the runner does not satisfy is Err, the World interrupted, the message names the System and the resource") {
-    auto rig = NestRig([](Registrar& r) {
-        ResourceRig(r);
-        r.AddSystem<&ReadsPinned>(In("ReadsPinned", "Frame", "Drive"));
-    });
-    rig->world().SetResource(Pinned{1});
-    const auto result = rig->Run("Frame");
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-res-affinity] read");
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::UnreadableResource), "[ns-res-affinity] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find("[S-16]") != std::string::npos, "[ns-res-affinity] rule: " << result.error().Text());
-    const std::string text = result.error().Text();
-    CHECK_MESSAGE((text.find("'Pinned'") != std::string::npos && text.find("'ReadsPinned'") != std::string::npos &&
-                      text.find("Render") != std::string::npos),
-                  "[ns-res-affinity] " << text);
-    CHECK(rig->world().State() == WorldState::Interrupted);
-}
-
-TEST_CASE("J-57: resources: a listed single-writer resource and a Shared one are written; an unlisted single-writer one is Err") {
+TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an unlisted single-writer one are written") {
     {
         auto rig = NestRig([](Registrar& r) {
             ResourceRig(r);
@@ -1323,29 +1216,33 @@ TEST_CASE("J-57: resources: a listed single-writer resource and a Shared one are
         CHECK(rig->world().Resource<Out>()->value == 13);
     }
     {
+        // Writes<...> is an annotation (v8-arch-gyo2-exclusive-writes-optional): an unlisted one is written too.
         auto rig = NestRig([](Registrar& r) {
             ResourceRig(r);
             r.AddSystem<&WritesUnlistedFlag>(In("Driver", "Frame", "Drive"));
         });
         rig->world().SetResource(Flag{0});
         const auto result = rig->Run("Frame");
-        REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-res-unlisted] an unlisted single-writer resource was written");
-        CHECK_MESSAGE(result.error().Has(KernelErrorCode::UndeclaredResourceWrite), "[ns-res-unlisted] " << result.error().Text());
-        CHECK(rig->world().Resource<Flag>()->on == 0);
+        CHECK_MESSAGE(static_cast<bool>(result), "[ns-res-unlisted] " << Text(result));
+        CHECK_MESSAGE(rig->world().Resource<Flag>()->on == 14, "[ns-res-unlisted] the unlisted resource was not written");
     }
 }
 
-TEST_CASE("J-57: declarations: a listed zone C resource is Z2, KernelSettings is D-E18, ingress is S-17, a hook with Writes is S-18") {
+// Writes<...> is an annotation (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1):
+// no resource write, so no zone rule, no D-E18 and no S-18 sees it. S-17 stays
+// (a zone rule, a later batch).
+TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a hook with Writes pass; ingress is S-17") {
     const Built zoneC = Finish({{"test", [](Registrar& r) {
                                     Nest(r);
                                     r.AddSystem<&ListsZoneC>(In("ListsZoneC", "Frame", "Drive"));
                                 }}});
-    CHECK_MESSAGE(HasRule(zoneC, StartupCode::DE7, "Z2"), "[ns-decl-zone-c] " << Describe(zoneC));
+    CHECK_MESSAGE(static_cast<bool>(zoneC.result), "[ns-decl-zone-c] " << Describe(zoneC));
+    // D-E18 is gone (v8-arch-gyo2-kernel-settings-read-write): listing KernelSettings passes.
     const Built settings = Finish({{"test", [](Registrar& r) {
                                        Nest(r);
                                        r.AddSystem<&ListsSettings>(In("ListsSettings", "Frame", "Drive"));
                                    }}});
-    CHECK_MESSAGE(HasError(settings, StartupCode::DE18), "[ns-decl-settings] " << Describe(settings));
+    CHECK_MESSAGE(static_cast<bool>(settings.result), "[ns-decl-settings] " << Describe(settings));
     const Built ingress = Finish({{"test", [](Registrar& r) {
                                       Nest(r);
                                       SystemOptions options = In("Ingress", "Frame", "In");
@@ -1362,7 +1259,7 @@ TEST_CASE("J-57: declarations: a listed zone C resource is Z2, KernelSettings is
                                    Nest(r);
                                    r.Hook<Tag, &HookWithWrites>(HookTrigger::OnAdd, {.name = "HookWithWrites", .zone = Zone::B});
                                }}});
-    CHECK_MESSAGE(HasRule(hook, StartupCode::DE7, "S-18"), "[ns-decl-hook] " << Describe(hook));
+    CHECK_MESSAGE(static_cast<bool>(hook.result), "[ns-decl-hook] " << Describe(hook));
 }
 
 TEST_CASE("J-10: ExclusiveWorld<Writes<...>> is the only parameter too") {
@@ -1370,39 +1267,78 @@ TEST_CASE("J-10: ExclusiveWorld<Writes<...>> is the only parameter too") {
     CHECK(SystemRejectionOfFunction<&WritesListedFlag>() == Rejection::None);
 }
 
-TEST_CASE("J-15: a resource an ExclusiveWorld lists has a second writer: D-E2 names both") {
-    const Built built = Finish({{"test", [](Registrar& r) {
-                                    Nest(r);
-                                    r.AddSystem<&WritesListedFlag>(In("ListsFlag", "Frame", "Drive"));
-                                    r.AddSystem<&AlsoWritesFlag>(In("AlsoWritesFlag", "Tick", "A"));
-                                }}});
-    REQUIRE_MESSAGE(HasError(built, StartupCode::DE2), "[ns-res-counted] " << Describe(built));
-    bool both = false;
-    for (const StartupError& error : built.result.error().errors) {
-        if (!error.Is(StartupCode::DE2)) continue;
-        const auto& s = error.subjects;
-        both = both || (std::find(s.begin(), s.end(), "ListsFlag") != s.end() && std::find(s.begin(), s.end(), "AlsoWritesFlag") != s.end());
+// S-15 is gone (v8-arch-gyo2-kernel-settings-read-write): ExclusiveWorld reads and
+// writes KernelSettings like any resource; a write counts from the next Run.
+TEST_CASE("J-50: KernelSettings read and written through ExclusiveWorld: the read gives the value, a write counts from the next Run") {
+    {
+        auto rig = NestRig([](Registrar& r) {
+            Nest(r);
+            r.AddSystem<&ReadsSettings>(In("Driver", "Frame", "Drive"));
+        });
+        rig->world().SetResource(KernelSettings{true, false, 5});
+        const auto result = rig->Run("Frame");
+        CHECK_MESSAGE(static_cast<bool>(result), "[ns-res-settings] read: " << Text(result));
+        CHECK_MESSAGE(Logged("settings limit 5"), "[ns-res-settings] read: " << Joined());
     }
-    CHECK_MESSAGE(both, "[ns-res-counted] " << Describe(built));
+    {
+        auto rig = NestRig([](Registrar& r) {
+            Nest(r);
+            r.AddSystem<&ModifiesSettings>(In("Driver", "Frame", "Drive"));
+            r.AddSystem<&ReadsPosUndeclared>(In("ReadsPosUndeclared", "Frame", "Out"));
+        }, false);
+        rig->world().Insert(1, Pos{1});
+        KeptWorld() = &rig->world();
+        const auto first = rig->Run("Frame");
+        // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
+        CHECK_MESSAGE(static_cast<bool>(first), "[ns-res-settings] the write counted in its own Run: " << Text(first));
+        if (first) {
+            const auto second = rig->Run("Frame");
+            CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                          "[ns-res-settings] the write was not read when the next Run started: " << Text(second));
+        }
+        KeptWorld() = nullptr;
+    }
 }
 
-TEST_CASE("J-50: KernelSettings read or written through ExclusiveWorld is Err at run time") {
-    for (const bool modify : {false, true}) {
-        CAPTURE(modify);
-        auto rig = NestRig([modify](Registrar& r) {
-            Nest(r);
-            if (modify) {
-                r.AddSystem<&ModifiesSettings>(In("Driver", "Frame", "Drive"));
-            } else {
-                r.AddSystem<&ReadsSettings>(In("Driver", "Frame", "Drive"));
-            }
-        });
-        const auto result = rig->Run("Frame");
-        REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-res-settings] KernelSettings was reached");
-        CHECK_MESSAGE(result.error().Has(KernelErrorCode::UnreadableResource), "[ns-res-settings] " << result.error().Text());
-        CHECK_MESSAGE(result.error().Text().find("[S-15]") != std::string::npos, "[ns-res-settings] rule: " << result.error().Text());
-        CHECK(rig->world().State() == WorldState::Interrupted);
+TEST_CASE("J-50: a nested RunSchedule does not read KernelSettings again; the next outermost Run does") {
+    auto rig = NestRig([](Registrar& r) {
+        Nest(r);
+        r.AddSystem<&TurnsVerificationOn>(In("TurnsOn", "Frame", "Drive", Zone::B, {"Driver"}));
+        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&ReadsPosUndeclared>(In("ReadsPosUndeclared", "Tick", "A"));
+    }, false);
+    rig->world().Insert(1, Pos{1});
+    Runs()["Driver"] = {"Tick"};
+    KeptWorld() = &rig->world();
+    const auto first = rig->Run("Frame");
+    // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
+    CHECK_MESSAGE(static_cast<bool>(first), "[ks-nested-reread] the nested run read KernelSettings again: " << Text(first));
+    if (first) {
+        const auto second = rig->Run("Frame");
+        CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                      "[ks-next-run] the next outermost Run did not read KernelSettings: " << Text(second));
     }
+    KeptWorld() = nullptr;
+}
+
+TEST_CASE("J-50: a Startup System's change of KernelSettings counts from the next Run, not in the Run that ran Startup") {
+    auto rig = NestRig([](Registrar& r) {
+        Nest(r);
+        r.Schedule(BootSchedule());
+        r.AddSystem<&TurnsVerificationOn>(In("TurnsOn", "Boot", "S"));
+        r.AddSystem<&ReadsPosUndeclared>(In("ReadsPosUndeclared", "Tick", "A"));
+    }, false);
+    rig->world().Insert(1, Pos{1});
+    KeptWorld() = &rig->world();
+    const auto first = rig->Run("Tick");
+    // Judged before the second Run: a failed first Run interrupts the World and the second would assert.
+    CHECK_MESSAGE(static_cast<bool>(first), "[ks-startup-same-run] Startup's write counted in its own Run: " << Text(first));
+    if (first) {
+        const auto second = rig->Run("Tick");
+        CHECK_MESSAGE(HasCode(second, KernelErrorCode::AccessViolation),
+                      "[ks-startup-next-run] Startup's write was not read when the next Run started: " << Text(second));
+    }
+    KeptWorld() = nullptr;
 }
 
 // ---- J-58: Startup run by the kernel
@@ -1608,6 +1544,12 @@ SystemResult CatchAndReturnOk(ExclusiveWorld<> world) {
     Log().push_back(std::string("write after catch ") + (written ? "ok" : std::string(ToString(written.error().code))));
     return Ok();
 }
+// Sends a Ping (an event buffer, which the outer exclusive System does not
+// declare: DI-KS 1 leaves events out) and throws before its boundary comparison.
+SystemResult SendsPingThenThrows(EventWriter<Ping> pings) {
+    pings.Send(Ping{55});
+    throw std::runtime_error("thrown after an event write");
+}
 // Tick: stage A spawns 71 (a membership change at its sync point), stage B fails or throws.
 void FailsAfterSync(Registrar& r, bool throws) {
     Nest(r);
@@ -1643,6 +1585,23 @@ TEST_CASE("J-56: the inner schedule throws after a sync point changed membership
     CHECK_MESSAGE(Logged("write after catch ok"), "[ns-throw-handle] " << Joined());
 }
 
+TEST_CASE("J-56: the inner schedule writes an event and throws, the outer System catches: the event write is not blamed on the outer System") {
+    auto rig = NestRig([](Registrar& r) {
+        Nest(r);
+        r.AddSystem<&CatchAndReturnOk>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&SendsPingThenThrows>(In("Throws", "Tick", "A"));
+    });
+    const auto result = rig->Run("Frame");
+    REQUIRE_FALSE(static_cast<bool>(result));
+    REQUIRE_MESSAGE(Logged("caught"), "[ns-throw-event] the outer System did not catch: " << Joined());
+    CHECK_MESSAGE(result.error().Has(KernelErrorCode::NestedRunAborted), "[ns-throw-event] " << result.error().Text());
+    CHECK_MESSAGE(!result.error().Has(KernelErrorCode::BoundaryChange), "[ns-throw-event-blame] " << result.error().Text());
+    // The Ping is in the buffer: the case would pass for nothing if the write were dropped.
+    const auto& pings = PingBuffer(rig->world()).records;
+    CHECK_MESSAGE(std::any_of(pings.begin(), pings.end(), [](const auto& record) { return record.payload.n == 55; }),
+                  "[ns-throw-event-written] the inner System's Ping is not in the buffer");
+}
+
 TEST_CASE("J-56: refused, swallowed, then a valid schedule in the same System: it does not run and the left error comes back") {
     auto rig = NestRig(SwallowRig);
     rig->world().Insert(1, Tag{1});
@@ -1665,45 +1624,6 @@ TEST_CASE("J-56: B runs B (a level that is not the outermost runs itself): refus
     const auto result = rig->Run("Frame");
     REQUIRE_FALSE(static_cast<bool>(result));
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::ScheduleRunning), "[ns-self-middle] " << result.error().Text());
-}
-
-namespace {
-SystemResult InsertVelOnFiveThenDrive(CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(5, Vel{5});
-    return Ok();
-}
-SystemResult InsertVelOnFour(CommandsFor<Inserts<Vel>, Removes<>> commands) {
-    commands.Insert(4, Vel{4});
-    return Ok();
-}
-} // namespace
-
-TEST_CASE("J-56: three levels, the zone C insert in the middle level: Z5 all the same") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&InsertVelOnFiveThenDrive>(In("Middle", "Step", "S", Zone::C, {"Driver2"}));
-        r.AddSystem<&Drive>(In("Driver2", "Step", "S"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Step"};
-    Runs()["Driver2"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-middle-level", "level 1 of 3 (schedule 'Step')");
-}
-
-TEST_CASE("J-56: an outer zone C insert into another entity does not stop an inner despawn") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFour>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    rig->world().Insert(4, Mode{4});
-    rig->world().Insert(5, Mode{5});
-    Runs()["Driver"] = {"Tick"};
-    const auto result = rig->Run("Frame");
-    CHECK_MESSAGE(static_cast<bool>(result), "[ns-z5-other-entity] " << Text(result));
-    CHECK(!rig->world().Alive(5));
 }
 
 namespace {
@@ -1755,7 +1675,7 @@ SystemResult ResourceStampAround(ExclusiveWorld<> world) {
 SystemResult IngressDeclared(ExclusiveWorld<Writes<Flag>>) { return Ok(); }
 } // namespace
 
-TEST_CASE("J-57: refused writes and reads do not call the closure and change nothing") {
+TEST_CASE("J-57: ExclusiveWorld writes and reads any value: the closure is called and the value written") {
     auto rig = NestRig([](Registrar& r) {
         ResourceRig(r);
         r.AddSystem<&WritesRefused>(In("Driver", "Frame", "Drive"));
@@ -1765,13 +1685,12 @@ TEST_CASE("J-57: refused writes and reads do not call the closure and change not
     rig->world().SetResource(CRes{1});
     rig->world().SetResource(Flag{1});
     rig->world().SetResource(Pinned{1});
-    static_cast<void>(rig->Run("Frame"));
-    CHECK_MESSAGE(Logged("codes ExclusiveWorldWrite ExclusiveWorldWrite ExclusiveWorldWrite UndeclaredResourceWrite UnreadableResource "
-                         "UnreadableResource not called"),
-                  "[ns-refused-untouched] " << Joined());
-    CHECK_MESSAGE((rig->world().Get<Pos>(1)->x == 1 && rig->world().Get<Mode>(1)->m == 1 && rig->world().Resource<CRes>()->value == 1 &&
-                      rig->world().Resource<Flag>()->on == 1 && rig->world().Resource<Pinned>()->value == 1),
-                  "[ns-refused-untouched] a refused write changed a value");
+    const auto result = rig->Run("Frame");
+    CHECK_MESSAGE(static_cast<bool>(result), "[ns-written] the Run reported a write of the exclusive System: " << Text(result));
+    CHECK_MESSAGE(Logged("codes ok ok ok ok ok ok called"), "[ns-written] " << Joined());
+    CHECK_MESSAGE((rig->world().Get<Pos>(1)->x == 100 && rig->world().Get<Mode>(1)->m == 100 && rig->world().Resource<CRes>()->value == 100 &&
+                      rig->world().Resource<Flag>()->on == 100 && rig->world().Resource<Pinned>()->value == 100),
+                  "[ns-written] a value was not written");
 }
 
 TEST_CASE("J-57: Read gives the closure a const reference, for a component and a resource") {
@@ -1860,61 +1779,15 @@ TEST_CASE("J-57: declarations: ExclusiveWorld<Writes<...>> with the ingress flag
 // ---- Added after the line-by-line review (Opus/xhigh, build/evidence/gyo2-nested-schedule/impl-review-opus-xhigh.md)
 
 namespace {
-SystemResult InsertTagOnSixInside(CommandsFor<Inserts<Tag>, Removes<>> commands) {
-    commands.Insert(6, Tag{6});
-    return Ok();
-}
-SystemResult InsertTagOnFiveB(CommandsFor<Inserts<Tag>, Removes<>> commands) {
-    commands.Insert(5, Tag{5});
-    return Ok();
-}
 SystemResult BootTampers(Query<Read<Tag>>) {
     g_mode->m = 9;  // not declared: verification on in Startup too (KernelSettings read when Startup starts)
     return Ok();
 }
 SystemResult DespawnSixInside(Despawn despawn) {
-    if (auto r = despawn.Entity(6); !r) return r;
+    despawn.Entity(6);
     return Ok();
 }
 } // namespace
-
-TEST_CASE("J-56: the inner sync point fails after its step 0 applied hook records (no hook ran): nothing blamed on the outer System") {
-    // Tick A inserts Tag on 6; OnAdd<Tag> records Mode into Tick's hook queue; Tick B's sync point applies it at
-    // step 0 (no hook on Mode, so no snapshot is taken there), then fails Z5 against the outer zone C insert into 5.
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.AddSystem<&InsertVelOnFive>(In("Early", "Frame", "Drive", Zone::C, {"Driver"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&InsertTagOnSixInside>(In("Seed", "Tick", "A"));
-        r.Hook<Tag, &TagToMode>(HookTrigger::OnAdd, {.name = "TagToMode", .zone = Zone::B});
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "B"));
-    });
-    rig->world().Insert(5, Pos{5});
-    rig->world().Insert(6, Pos{6});
-    Runs()["Driver"] = {"Tick"};
-    const auto result = rig->Run("Frame");
-    REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK_MESSAGE(result.error().Has(KernelErrorCode::ZoneCDespawn), "[ns-fail-after-sync-blame] " << result.error().Text());
-    CHECK_MESSAGE(!result.error().Has(KernelErrorCode::BoundaryChange), "[ns-fail-after-sync-blame] " << result.error().Text());
-    CHECK(rig->recorded.size() == 1);
-}
-
-TEST_CASE("J-56: three levels, the zone C insert in the middle level's hook queue: Z5 all the same") {
-    // Mid: stage S1 inserts Tag on 5; its sync point runs the zone C hook TagToVel, whose record waits in Mid's hook
-    // queue for the next sync point; stage S2's exclusive System runs Tick, which despawns 5.
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r);
-        r.Schedule(Schedule("Mid", Domain::Fixed, false, {"S1", "S2"}));
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&InsertTagOnFiveB>(In("Seed", "Mid", "S1"));
-        r.Hook<Tag, &TagToVel>(HookTrigger::OnAdd, {.name = "TagToVel", .zone = Zone::C});
-        r.AddSystem<&Drive>(In("Driver2", "Mid", "S2"));
-        r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
-    });
-    Runs()["Driver"] = {"Mid"};
-    Runs()["Driver2"] = {"Tick"};
-    CheckZ5Across(*rig, "ns-z5-middle-hook", "hook 'TagToVel' of the outer run at level 1 of 3 (schedule 'Mid')");
-}
 
 TEST_CASE("J-58: verification is on while Startup runs: an undeclared write in Startup is reported, naming its System") {
     auto rig = NestRig([](Registrar& r) {
@@ -2042,7 +1915,7 @@ TEST_CASE("J-56: verification on: another call's ExclusiveWorld handle is report
     CHECK_MESSAGE(Logged("reports 1 1 1 ran ok"), "[ns-w4-other-call] " << Joined());
 }
 
-TEST_CASE("J-15: a resource listed by an exclusive System mounted on Startup only is not counted; on Startup and Frame it is") {
+TEST_CASE("J-15: a resource listed by an exclusive System mounted on Startup only is not counted") {
     {
         auto rig = NestRig([](Registrar& r) {
             Nest(r);
@@ -2056,12 +1929,4 @@ TEST_CASE("J-15: a resource listed by an exclusive System mounted on Startup onl
         CHECK_MESSAGE(static_cast<bool>(result), "[ns-st-exempt-listed] " << Text(result));
         CHECK(rig->world().Resource<Flag>()->on == 22);
     }
-    const Built built = Finish({{"test", [](Registrar& r) {
-                                    Nest(r);
-                                    r.Schedule(BootSchedule());
-                                    r.AddSystem<&BootWritesListedFlag>(
-                                        Sys("BootAndFrame", Zone::B, {At("Boot", "S"), At("Frame", "Drive")}));
-                                    r.AddSystem<&AlsoWritesFlag>(In("AlsoWritesFlag", "Tick", "A"));
-                                }}});
-    CHECK_MESSAGE(HasError(built, StartupCode::DE2), "[ns-st-exempt-listed-counted] " << Describe(built));
 }

@@ -1,9 +1,9 @@
-// The Serial Executor (spec E.2, E.5; Product.hpp). The only kernel file that logs:
+// The Serial Executor (spec E.2, E.5; WorldExecutor.hpp). The only kernel file that logs:
 // its default handler writes a kernel error's whole chain to stderr once
 // (target/error-handling DI 2; tests/common/kernel/kernel_guard.py K6 exempts
 // files named Executor*).
 
-#include "engine/kernel/Product.hpp"
+#include "engine/kernel/WorldExecutor.hpp"
 
 #include "engine/kernel/detail/RegistryData.hpp"
 
@@ -29,15 +29,10 @@ void DefaultHandler(const KernelError& error) {
 
 } // namespace
 
-Product::Product(const Registry& registry, std::string worldName)
-    : registry_(&registry), world_(registry, std::move(worldName)), handler_(&DefaultHandler) {
+WorldExecutor::WorldExecutor(const Registry& registry, std::string worldName, WorldOptions options)
+    : registry_(&registry), world_(registry, std::move(worldName), options), handler_(&DefaultHandler) {
     const Detail::RegistryData& data = *world_.data_;
-    for (const Detail::SystemRecord& system : data.systems) {
-        SystemState state;
-        state.access = Detail::MakeAccessDesc(system.access);
-        state.mounts.resize(system.options.mounts.size());
-        systems_.push_back(std::move(state));
-    }
+    Attach();
     world_.executor_ = this;
     // Spec H-12: at most one (D-E21 at Finish).
     for (const Detail::ScheduleRecord& schedule : data.schedules) {
@@ -48,9 +43,32 @@ Product::Product(const Registry& registry, std::string worldName)
     }
 }
 
-Product::~Product() = default;
+WorldExecutor::~WorldExecutor() = default;
 
-VerificationReport Product::Verification() const {
+void WorldExecutor::Attach() {
+    world_.Sync();
+    const Detail::RegistryData& data = *world_.data_;
+    if (version_ == data.version) return;
+    std::vector<SystemState> rebuilt;
+    rebuilt.reserve(data.systems.size());
+    for (const Detail::SystemRecord& system : data.systems) {
+        SystemState state;
+        if (!system.removed) {
+            state.access = Detail::MakeAccessDesc(system.access);
+            // registrationSeq is the index: the same System as before, with the same mounts.
+            if (system.seq < systems_.size() && systems_[system.seq].mounts.size() == system.options.mounts.size()) {
+                state.mounts = std::move(systems_[system.seq].mounts);
+            } else {
+                state.mounts.resize(system.options.mounts.size());
+            }
+        }
+        rebuilt.push_back(std::move(state));
+    }
+    systems_ = std::move(rebuilt);
+    version_ = data.version;
+}
+
+VerificationReport WorldExecutor::Verification() const {
     VerificationReport report;
     report.world = world_.name_;
     report.accessVerification = world_.verification_;
@@ -62,7 +80,7 @@ VerificationReport Product::Verification() const {
     return report;
 }
 
-Engine::Base::Result<void, KernelError> Product::Fail(KernelError error, bool nested) {
+Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested) {
     error.world = world_.name_;
     world_.state_ = WorldState::Interrupted;
     world_.DiscardDeferred();
@@ -98,6 +116,16 @@ KernelError NestedAbortError(const World& world, const std::string& what) {
     return error;
 }
 
+// where: the System and its Plan position, as "System 'Name' (schedule 'S', step N)".
+KernelError ImmediateAbortError(const World& world, const std::string& where) {
+    KernelError error(KernelErrorCode::ImmediateChangeAborted,
+                      "an exception left an immediate change by " + where +
+                          " and the System caught it; the World is interrupted");
+    error.rule = "DI-KS 18";
+    error.world = world.Name();
+    return error;
+}
+
 // Spec H-12: startupRunning_ is set for Startup's Run and cleared on every way out.
 class StartupScope {
 public:
@@ -110,6 +138,22 @@ private:
     bool& running_;
 };
 
+// Declaration 3.2 rule 4: the Registry counts its Worlds inside a Run, raised
+// when Run starts and lowered on every way out (an exception included), so
+// Register, BuildPlans and DiscardRegistrations assert while anything a Run
+// calls is on the stack. A nested RunSchedule does not come through Run and
+// does not count again.
+class RunningScope {
+public:
+    explicit RunningScope(std::uint32_t& running) noexcept : running_(running) { ++running_; }
+    ~RunningScope() { --running_; }
+    RunningScope(const RunningScope&) = delete;
+    RunningScope& operator=(const RunningScope&) = delete;
+
+private:
+    std::uint32_t& running_;
+};
+
 } // namespace
 
 // Spec E.5 and K0: one level of the run stack. An exception from a System or
@@ -117,7 +161,7 @@ private:
 // records not yet applied are dropped; a nested level also leaves
 // NestedRunAborted for the outermost Run (the outer System may catch the
 // exception and return).
-class Product::LevelGuard {
+class WorldExecutor::LevelGuard {
 public:
     LevelGuard(World& world, std::string_view schedule, bool nested)
         : world_(world), schedule_(schedule), nested_(nested), exceptions_(std::uncaught_exceptions()) {
@@ -143,14 +187,17 @@ private:
     int exceptions_;
 };
 
-Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) {
+Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view schedule) {
     World& world = world_;
     // E.5: an Interrupted World runs no more (X-9). A System reaching this
     // through a kept pointer finds the World Running: also a GYO_ASSERT (only
     // ExclusiveWorld::RunSchedule runs a schedule from inside a System, K0).
     GYO_ASSERT(world.state_ == WorldState::Ready);
+    RunningScope running(world.data_->runningWorlds);
+    Attach();
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
+    ReadSettings();
     if (record->options.startup) {
         // Spec H-12: the main program may run Startup itself, once, before the kernel has.
         GYO_ASSERT(!world.startupRan_);
@@ -164,13 +211,32 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
     return RunPlan(record->options.name, false);
 }
 
-Engine::Base::Result<void, KernelError> Product::RunStartup(std::string_view schedule) {
+void WorldExecutor::ReadSettings() {
+    World& world = world_;
+    // KernelSettings is read once, when each Run call starts (J-50, DI-KS 24),
+    // before Startup: a change made by a System, Startup's included, counts
+    // from the next Run. A nested RunSchedule does not come here.
+    const auto& settings =
+        static_cast<const Detail::ResourceSlot<KernelSettings>&>(*world.resources_[world.data_->kernelSettings]);
+    const bool verification = settings.value && settings.value->accessVerification;
+    // Snapshots taken before the switch went off are stale (nothing was compared
+    // since), and none were kept while it was off: a flip drops them all.
+    if (verification != world.verification_) world.DropSnapshots();
+    world.verification_ = verification;
+    world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;
+    world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;
+    // Spec F-12: a limit of 0 is a Programmer Error (the Host's or a System's write).
+    GYO_ASSERT(world.hookRoundLimit_ >= 1);
+    world.hasRun_ = true;
+}
+
+Engine::Base::Result<void, KernelError> WorldExecutor::RunStartup(std::string_view schedule) {
     world_.startupRan_ = true;
     StartupScope running(world_.startupRunning_);
     return RunPlan(schedule, false);
 }
 
-Engine::Base::Result<void, KernelError> Product::RunPlan(std::string_view schedule, bool nested) {
+Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view schedule, bool nested) {
     World& world = world_;
     const Detail::RegistryData& data = *world_.data_;
     const std::string scheduleName(schedule);
@@ -179,16 +245,6 @@ Engine::Base::Result<void, KernelError> Product::RunPlan(std::string_view schedu
     GYO_ASSERT(plan != nullptr && record != nullptr);
     const Domain domain = record->options.domain;
 
-    // KernelSettings is read once, when the first Run starts (LIM-6, J-50).
-    if (!world.hasRun_) {
-        const auto& settings = static_cast<const Detail::ResourceSlot<KernelSettings>&>(*world.resources_[data.kernelSettings]);
-        world.verification_ = settings.value && settings.value->accessVerification;
-        world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;
-        world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;
-        // Spec F-12: a limit of 0 is the Host's misuse (a precondition).
-        GYO_ASSERT(world.hookRoundLimit_ >= 1);
-        world.hasRun_ = true;
-    }
     // The domain tick: advanced only by the domain's clock schedule's Run, first
     // (spec section 0, B5); a nested Run of it too (K0).
     if (record->options.clock) {
@@ -428,7 +484,7 @@ Engine::Base::Result<void, KernelError> Product::RunPlan(std::string_view schedu
     return {};
 }
 
-Engine::Base::Result<void, KernelError> Product::RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                                bool inClosure) {
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
@@ -535,11 +591,223 @@ Engine::Base::Result<void, KernelError> Product::RunNestedFrom(Detail::SystemCon
     return ran;
 }
 
+// S5 (declaration v8-arch-gyo2-kernel-subtract-structure 3.5; DI-KS 9, 18, 19,
+// 21): the checks in the order of RunNestedFrom, then the change applied as a
+// sync point applies its record, then the hook rounds of what its hooks recorded.
+Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::ImmediateFrom(Detail::SystemContext& call,
+                                                                                         Detail::Record record,
+                                                                                         ChangeStamp stamp, bool closureOpen) {
+    using Outcome = Engine::Base::Result<Detail::ImmediateOutcome, KernelError>;
+    World& world = world_;
+    const Detail::RegistryData& data = *world.data_;
+    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
+    const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
+    const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
+    // A refused or failed change: the World interrupted, the error left for the
+    // outermost Run (the Executor lists it as this call's error, whatever the
+    // System does with it).
+    auto stop = [&](KernelError error) -> Outcome {
+        Engine::Base::Result<void, KernelError> failed = Fail(std::move(error), true);
+        return Engine::Base::Err(std::move(failed).error());
+    };
+    if (call.hook) {
+        return stop(Detail::CallError(call, KernelErrorCode::HookChangesMembership, "DI-KS 18",
+                                      who + " changes membership now through ExclusiveWorld: a hook runs while records "
+                                            "are applied, so it records its changes instead"));
+    }
+    if (closureOpen) {
+        return stop(Detail::CallError(call, KernelErrorCode::ClosureChangesMembership, "DI-KS 21",
+                                      who + " changes membership now inside a Read or Modify closure: the value the "
+                                            "closure holds would not survive the change"));
+    }
+    if (world.state_ == WorldState::Interrupted) {
+        // Spec E.5: an Interrupted World changes no more; inside a call it was
+        // interrupted by a refusal or a nested level, which left its error.
+        GYO_ASSERT(world.leftError_.has_value());
+        return Engine::Base::Err(*world.leftError_);
+    }
+    // W-3 (declaration section 12 item 1, (a)): up to here nothing changed
+    // membership behind the handle; such a change would be hidden by the new
+    // baseline this change sets, so it is checked first.
+    const std::uint64_t baseline = world.runStack_.back().structure;
+    GYO_ASSERT(world.MembershipEpoch() == baseline);
+    // Spec A.6 layer 2, as before a nested run: the System's own changes so far
+    // are compared on its own account first, so the snapshots taken after the
+    // change do not hide one it does not declare (declaration 3.5 point 2).
+    if (world.verification_) {
+        const std::vector<std::string> undeclared = world.CompareAfter(*call.access);
+        if (!undeclared.empty()) {
+            std::vector<KernelError> list;
+            for (const std::string& storage : undeclared) {
+                KernelError error(KernelErrorCode::BoundaryChange,
+                                  "'" + storage + "' changed during " + where +
+                                      " before an immediate change, which it does not declare writing; the change was "
+                                      "not made");
+                error.rule = "A.6";
+                error.world = world.name_;
+                if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+                list.push_back(std::move(error));
+            }
+            KernelError error = list.front();
+            if (list.size() > 1) {
+                error = KernelError(KernelErrorCode::Siblings,
+                                    std::to_string(list.size()) + " errors before an immediate change by " + who);
+                error.world = world.name_;
+                error.siblings = std::move(list);
+            }
+            return stop(std::move(error));
+        }
+    }
+
+    Detail::ImmediateOutcome outcome;
+    if (record.kind == Detail::RecordKind::Spawn && !record.withId) {
+        // Like Spawn<Bundle<C...>>::New (W-9); D-E3 does not see at startup that an exclusive System spawns.
+        if (Detail::AllotterSlot(world) == nullptr) {
+            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::NoAllotter, "A.1",
+                                                       who + " spawns through ExclusiveWorld, and the World declares "
+                                                             "no allotter (Registrar::Allotter)"));
+        }
+        const std::optional<EntityId> id = Detail::Allot(world);
+        if (!id) {
+            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
+                                                       "the entity allotter's range is used up"));
+        }
+        record.entity = *id;
+        outcome.entity = *id;
+    }
+    const bool alive = std::binary_search(world.entities_.begin(), world.entities_.end(), record.entity);
+    switch (record.kind) {
+    case Detail::RecordKind::Insert:
+    case Detail::RecordKind::Despawn: outcome.changed = alive; break;
+    case Detail::RecordKind::Remove: outcome.changed = world.columns_[record.id]->Contains(record.entity); break;
+    case Detail::RecordKind::ResourceRemove: outcome.changed = world.resources_[record.id]->Present(); break;
+    default: break;
+    }
+    record.planPos = call.planPos;
+    record.recSeq = 0;
+    record.emitterZone = call.zone;
+    record.emitter = call.name;
+    record.emitterHook = false;
+    record.emitterKey = call.access;
+
+    // From here, on every way back: the change's own queue is let go, the
+    // World is Running again, and the step's new membership baseline and fresh
+    // snapshots are taken, since this change and its hooks' are the System's
+    // declared work (declaration 3.5 point 2). An exception that leaves the
+    // change (a hook or an InitialValue function threw) interrupts the World at
+    // once, like a level of the run stack (spec E.5): the records of every
+    // level not yet applied are dropped, what was applied stays, and the error
+    // is left for the outermost Run in case the System catches the exception
+    // (DI-KS 18; like X-16). The Executor catches nothing. trackRoundRecorders_
+    // is reset here for that path only (every other way back reset it).
+    class Settle {
+    public:
+        Settle(World& world, const std::string& where) noexcept
+            : subject_(world), where_(where), exceptions_(std::uncaught_exceptions()) {}
+        ~Settle() {
+            subject_.hookTarget_ = nullptr;
+            subject_.trackRoundRecorders_ = false;
+            if (std::uncaught_exceptions() > exceptions_) {
+                subject_.state_ = WorldState::Interrupted;
+                subject_.DiscardDeferred();
+                if (!subject_.leftError_) subject_.leftError_ = ImmediateAbortError(subject_, where_);
+            } else if (subject_.state_ == WorldState::Applying) {
+                subject_.state_ = WorldState::Running;
+            }
+            subject_.runStack_.back().structure = subject_.MembershipEpoch();
+            if (subject_.verification_) subject_.TakeSnapshots();
+        }
+        Settle(const Settle&) = delete;
+        Settle& operator=(const Settle&) = delete;
+
+    private:
+        World& subject_;
+        const std::string& where_;
+        int exceptions_;
+    };
+    // What the hooks this change runs record: applied below, before the change
+    // returns; never the schedule's hook queue nor this level's window (DI-KS 19).
+    World::HookQueue own{std::string(call.schedule), {}, 0};
+    Settle settle(world, where);
+    world.hookTarget_ = &own;
+    // Spec F-5: while records are applied only hooks record (the System is waiting).
+    world.state_ = WorldState::Applying;
+    auto failed = [&](Engine::Base::Result<void, KernelError> applied, const std::string& text) -> Outcome {
+        KernelError error = std::move(applied).error();
+        error.Wrap(text);
+        return stop(std::move(error));
+    };
+
+    // The change itself, with the handle's stamp: one phase of the sync point's steps 2 to 7.
+    const std::uint64_t rejectedBefore = world.rejectedSpawns_;
+    std::vector<Detail::Record> change;
+    change.push_back(std::move(record));
+    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);
+    if (!applied) return failed(std::move(applied), "Executor: immediate change by " + where);
+    if (world.rejectedSpawns_ > rejectedBefore) {
+        // Spec F-13: recorded in one place (World::RecordRejectedSpawn); read back from there.
+        const auto* buffer = static_cast<const Detail::DiagnosticsBuffer<RejectedSpawn>*>(
+            Detail::FindDiagnostics(world, KeyOf<RejectedSpawn>()));
+        GYO_ASSERT(buffer != nullptr && !buffer->entries.empty());
+        outcome.rejected = buffer->entries.back().record.reason;
+    }
+
+    // Spec F-12 for this change only (declaration section 12 item 2, (a)): round
+    // after round, each a whole application with its own stamp and sync epoch
+    // (F-6), until its hooks record nothing; the schedule's limit, or the World's.
+    const Detail::ScheduleRecord* schedule = data.FindSchedule(std::string(call.schedule));
+    GYO_ASSERT(schedule != nullptr);
+    const std::uint32_t limit = schedule->options.hookRoundLimit.value_or(world.hookRoundLimit_);
+    std::uint32_t round = 0;
+    auto roundText = [&](std::uint32_t r) {
+        return "Executor: hook round " + std::to_string(r) + " of an immediate change by " + where;
+    };
+    while (!own.records.empty()) {
+        if (round == limit) {
+            std::vector<std::size_t> recorders = world.roundRecorders_;
+            std::sort(recorders.begin(), recorders.end());
+            recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());
+            std::string names;
+            for (std::size_t hook : recorders) names += (names.empty() ? "'" : ", '") + data.hooks[hook].name + "'";
+            KernelError error(KernelErrorCode::HookRoundLimit,
+                              "the hook rounds of an immediate change by " + who + " did not empty within " +
+                                  std::to_string(limit) + " rounds (the limit of the " +
+                                  (schedule->options.hookRoundLimit ? "schedule's declaration" : "World's KernelSettings") +
+                                  " of schedule '" + std::string(call.schedule) + "'): " + std::to_string(own.records.size()) +
+                                  " records left after round " + std::to_string(round) + ", recorded by " + names);
+            error.rule = "F-12";
+            error.world = world.name_;
+            error.Wrap(roundText(round));
+            if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+            return stop(std::move(error));
+        }
+        ++round;
+        std::vector<Detail::Record> recorded = std::move(own.records);
+        own.records.clear();
+        own.recSeq = 0;
+        world.roundRecorders_.clear();
+        world.trackRoundRecorders_ = true;
+        const ChangeStamp roundStamp = ++world.stamp_;
+        applied = world.ApplySync(call.planPos, call.schedule, roundStamp, &recorded);
+        world.trackRoundRecorders_ = false;
+        ++world.syncEpoch_;
+        if (!applied) return failed(std::move(applied), roundText(round));
+    }
+    return outcome;
+}
+
 namespace Detail {
 
 Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule, bool inClosure) {
     GYO_ASSERT(call.executor != nullptr);
     return call.executor->RunNestedFrom(call, schedule, inClosure);
+}
+
+Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record, ChangeStamp stamp,
+                                                                   bool inClosure) {
+    GYO_ASSERT(call.executor != nullptr);
+    return call.executor->ImmediateFrom(call, std::move(record), stamp, inClosure);
 }
 
 } // namespace Detail

@@ -20,10 +20,11 @@ set(GYO_KERNEL_TEST_SOURCES
     ExecutorTests.cpp
     AccessCheckTests.cpp
     InitialValueTests.cpp
-    StrictOrderTests.cpp
     HookFlushTests.cpp
     SpawnRejectTests.cpp
     NestedRunTests.cpp
+    RegistrationRoundTests.cpp
+    ImmediateChangeTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )
@@ -51,6 +52,16 @@ gyo_kernel_test_executable(gyo_kernel_tests ${GYO_KERNEL_TEST_SOURCES})
 list(REVERSE GYO_KERNEL_TEST_SOURCES)
 gyo_kernel_test_executable(gyo_kernel_tests_reversed ${GYO_KERNEL_TEST_SOURCES})
 
+# DI-KS 14 (v8-arch-gyo2-thread-binding-by-runner): destroying a World whose
+# thread-bound resource was put in on another thread fails a GYO_ASSERT. A
+# destructor cannot throw to doctest, so the probe is its own process
+# (ThreadBoundProbe.cpp: exit 0 when the assertion fired).
+add_executable(gyo_kernel_thread_bound_probe ThreadBoundProbe.cpp)
+target_link_libraries(gyo_kernel_thread_bound_probe PRIVATE GYO::Kernel)
+add_test(NAME kernel.J-6_thread_bound_destroy COMMAND gyo_kernel_thread_bound_probe)
+set_tests_properties(kernel.J-6_thread_bound_destroy PROPERTIES LABELS "cpu" TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "thread-bound destroy: GYO_ASSERT failed as expected")
+
 # One ctest per J entry of the registry-schedule batch (declaration section 2)
 # and of the world-exec batch (world-exec declaration judgement 2), so each
 # appears by name in the L1 tests.xml. The doctest cases of entry J-n are named
@@ -58,7 +69,7 @@ gyo_kernel_test_executable(gyo_kernel_tests_reversed ${GYO_KERNEL_TEST_SOURCES})
 set(GYO_KERNEL_J_ENTRIES
     J-1 J-2 J-3 J-4 J-5 J-6 J-7 J-8
     J-10 J-11 J-12 J-13 J-14 J-15 J-16 J-17 J-18 J-19 J-20 J-21 J-22 J-23 J-24 J-25
-    J-26 J-27 J-28 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37 J-38 J-39 J-40 J-41
+    J-26 J-27 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37 J-38 J-39 J-40 J-41
     J-44 J-45 J-47 J-50 J-52 J-53 J-54 J-55 J-56 J-57 J-58)
 # A filter that matches no case would pass silently, so a run of zero cases fails.
 foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
@@ -66,11 +77,9 @@ foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
 endforeach()
 # Everything else in the executable (the Plan export and its dataflow ratio),
 # plus the J-18 link-order run.
-add_test(NAME kernel.others COMMAND gyo_kernel_tests "--test-case-exclude=J-*,strict order:*")
-# Registrar::RequireExplicitOrder (batch v8-arch-gyo2-strict-order; StrictOrderTests.cpp).
-add_test(NAME kernel.strict_order COMMAND gyo_kernel_tests "--test-case=strict order:*")
+add_test(NAME kernel.others COMMAND gyo_kernel_tests "--test-case-exclude=J-*")
 add_test(NAME kernel.J-18_link_order COMMAND gyo_kernel_tests_reversed "--test-case=J-18:*")
-foreach(test IN LISTS GYO_KERNEL_J_ENTRIES ITEMS others strict_order J-18_link_order)
+foreach(test IN LISTS GYO_KERNEL_J_ENTRIES ITEMS others J-18_link_order)
     set_tests_properties(kernel.${test} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 endforeach()

@@ -19,9 +19,10 @@
 //   setReads               SetReadOf (expanded at finish to the named set's components)
 //   diagnostics            Diagnostics (effect Diagnostics; no access, no conflict; spec S-8 exception)
 //   local                  LocalState
-//   exclusive              WholeWorld (ExclusiveWorld)
+//   exclusive              WholeWorld (ExclusiveWorld: every component and resource value, no event)
+//   annotatedWrites        AnnotatedWrite (ExclusiveWorld<Writes<R...>>: an annotation, not a write)
 //   extract                ExtractComponentRead / ExtractResourceRead (read-only, source World)
-//   untyped commands       UntypedCommands (checked at run time; spec F.1, F-10)
+//   untyped commands       UntypedCommands (spec F.1; not checked at run time)
 
 namespace GYO::Kernel {
 
@@ -53,6 +54,8 @@ public:
     virtual void SetRead(TypeKey setTag) = 0;
     virtual void Local() = 0;
     virtual void WholeWorld() = 0;
+    // A resource an ExclusiveWorld<Writes<R...>> lists: recorded, not a write.
+    virtual void AnnotatedWrite(TypeKey resource) = 0;
     virtual void Diagnostics() = 0;
     virtual void ExtractComponent(TypeKey component) = 0;
     virtual void ExtractResource(TypeKey resource) = 0;
@@ -132,6 +135,10 @@ struct LocalState {
 };
 struct WholeWorld {
     static void Resolve(Detail::AccessResolver& resolver) { resolver.WholeWorld(); }
+};
+template <class T>
+struct AnnotatedWrite {
+    static void Resolve(Detail::AccessResolver& resolver) { resolver.AnnotatedWrite(KeyOf<T>()); }
 };
 template <class Record>
 struct Diagnostics {

@@ -17,6 +17,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -195,10 +196,7 @@ SystemResult TrailOnSystemPath(HookCtx ctx) {
     return Ok();
 }
 SystemResult BulletDespawnsSix(HookCtx, Despawn despawn) {
-    return despawn.Entity(6);
-}
-SystemResult ZoneCSeedInsertsPosIntoSix(HookCtx, CommandsFor<Inserts<Pos>, Removes<>> commands) {
-    commands.Insert(6, Pos{6});
+    despawn.Entity(6);
     return Ok();
 }
 SystemResult ZoneCSeedInsertsVelIntoTwo(HookCtx, CommandsFor<Inserts<Vel>, Removes<>> commands) {
@@ -219,7 +217,8 @@ SystemResult FilledAddsScore(HookCtx ctx, CommandsFor<Inserts<Score>, Removes<>>
     return Ok();
 }
 SystemResult BulletDespawnsThree(HookCtx, Despawn despawn) {
-    return despawn.Entity(3);
+    despawn.Entity(3);
+    return Ok();
 }
 SystemResult BulletRemovesScoreOfFour(HookCtx, CommandsFor<Inserts<>, Removes<Score>> commands) {
     commands.Remove<Score>(4);
@@ -251,6 +250,18 @@ SystemResult MarkerAddsScore(HookCtx ctx, CommandsFor<Inserts<Score>, Removes<>>
     return Ok();
 }
 
+// Runs the World g_innerWorld points at once (then forgets it) from inside this
+// World's Run; g_innerResult tells whether it ran and how.
+WorldExecutor* g_innerWorld = nullptr;
+std::string g_innerResult;
+SystemResult RunsAnotherWorld(Res<Depth>) {
+    WorldExecutor* inner = std::exchange(g_innerWorld, nullptr);
+    if (inner == nullptr) return Ok();
+    const auto ran = inner->Run("Tick");
+    g_innerResult = ran ? std::string("ok") : ran.error().Text();
+    return Ok();
+}
+
 // A rig over Base plus build; KernelSettings with the given product default when set.
 std::unique_ptr<Rig> MakeFlushRig(std::function<void(Registrar&)> build, Limits limits = {}, bool verification = true,
                                   std::optional<std::uint32_t> productLimit = std::nullopt, bool breakOn = false) {
@@ -260,7 +271,7 @@ std::unique_ptr<Rig> MakeFlushRig(std::function<void(Registrar&)> build, Limits 
             build(r);
         },
         verification);
-    if (rig->product) {
+    if (rig->executor) {
         KernelSettings settings{verification, breakOn};
         if (productLimit) settings.hookRoundLimit = *productLimit;
         rig->world().SetResource(settings);
@@ -407,7 +418,7 @@ TEST_CASE("J-54: a schedule's own limit overrides the product's default, larger 
 
 TEST_CASE("J-54: the product's default is per World") {
     auto two = MakeFlushRig(ChainSystems, {}, false, 2U);
-    Product other(*two->built.registry, "other-world");
+    WorldExecutor other(*two->built.registry, "other-world");
     std::vector<KernelError> otherRecorded;
     other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});
@@ -419,6 +430,27 @@ TEST_CASE("J-54: the product's default is per World") {
     CHECK_MESSAGE(static_cast<bool>(result), "J-54: another World's KernelSettings changed this World's limit: " << Text(result));
 }
 
+TEST_CASE("J-54: the product's default stays per World when another World runs inside this World's Run") {
+    auto two = MakeFlushRig(
+        [](Registrar& r) {
+            ChainSystems(r);
+            r.AddSystem<&RunsAnotherWorld>(Put("RunsAnotherWorld", "Tick", "A"));
+        },
+        {}, false, 2U);
+    WorldExecutor other(*two->built.registry, "other-world");
+    std::vector<KernelError> otherRecorded;
+    other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
+    other.GetWorld().SetResource(KernelSettings{false, false});  // the default limit, 8
+    other.GetWorld().SetResource(Depth{0});
+    g_innerWorld = &other;
+    g_innerResult.clear();
+    const auto result = RunChain(*two, 3);
+    g_innerWorld = nullptr;
+    REQUIRE_MESSAGE(g_innerResult == "ok", "J-54 inner World: did not run inside the outer Run: " << g_innerResult);
+    CHECK_MESSAGE(HasCode(result, KernelErrorCode::HookRoundLimit),
+                  "J-54: a World run inside this World's Run changed this World's limit: " << Text(result));
+}
+
 TEST_CASE("J-54: the rounds are counted from 1 in every Run") {
     auto rig = MakeFlushRig(ChainSystems, {}, true, 2U);
     for (int run = 0; run < 3; ++run) {
@@ -427,11 +459,19 @@ TEST_CASE("J-54: the rounds are counted from 1 in every Run") {
     }
 }
 
-TEST_CASE("J-54: KernelSettings is read at the first Run only; a limit of 0 is rejected") {
-    SUBCASE("KernelSettings written after the first Run fails a GYO_ASSERT (J-50)") {
+TEST_CASE("J-54: KernelSettings is read when each Run starts; a limit of 0 is rejected") {
+    SUBCASE("KernelSettings written after the first Run is read when the next Run starts (J-50)") {
+        auto rig = MakeFlushRig(ChainSystems);
+        KERNEL_REQUIRE_RUN_OK(RunChain(*rig, 3));
+        rig->world().SetResource(KernelSettings{true, false, 2});
+        CHECK_MESSAGE(HasCode(RunChain(*rig, 3), KernelErrorCode::HookRoundLimit),
+                      "J-54 next Run: a limit the Host wrote after the first Run was not read by the next Run");
+    }
+    SUBCASE("a limit of 0 written between two Runs fails a GYO_ASSERT when the next Run starts") {
         auto rig = MakeFlushRig(ChainSystems);
         KERNEL_REQUIRE_RUN_OK(RunChain(*rig, 0));
-        GYO_CHECK_ASSERTS(rig->world().SetResource(KernelSettings{true, false, 3}));
+        rig->world().SetResource(KernelSettings{true, false, 0});
+        GYO_CHECK_ASSERTS(RunChain(*rig, 0));
     }
     SUBCASE("a schedule's limit of 0 is D-E20") {
         Limits limits;
@@ -443,6 +483,27 @@ TEST_CASE("J-54: KernelSettings is read at the first Run only; a limit of 0 is r
     SUBCASE("a product default of 0 fails a GYO_ASSERT at the first Run") {
         auto rig = MakeFlushRig(ChainSystems, {}, true, 0U);
         GYO_CHECK_ASSERTS(RunChain(*rig, 0));
+    }
+}
+
+namespace {
+// Lowers the World's hook round limit in the Run (a System may declare KernelSettings, DI-KS 24).
+SystemResult LowersLimit(ResMut<KernelSettings> settings) {
+    settings->hookRoundLimit = 2;
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-54: a System's write of the hook round limit counts from the next Run, not in the Run that made it") {
+    auto rig = MakeFlushRig([](Registrar& r) {
+        ChainSystems(r);
+        r.AddSystem<&LowersLimit>(Put("LowersLimit", "Tick", "C"));
+    }, {}, false);
+    const auto first = RunChain(*rig, 3);
+    CHECK_MESSAGE(static_cast<bool>(first), "J-54 same Run: the limit a System wrote counted in its own Run: " << Text(first));
+    if (first) {
+        CHECK_MESSAGE(HasCode(RunChain(*rig, 3), KernelErrorCode::HookRoundLimit),
+                      "J-54 next Run: the limit a System wrote was not read when the next Run started");
     }
 }
 
@@ -480,11 +541,11 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     CHECK(planOf(t5, "Tick") != planOf(t6, "Tick"));
     CHECK(t5.registry->Frozen().CFingerprint() != t6.registry->Frozen().CFingerprint());
     CHECK(planOf(t8, "Tick") != planOf(none, "Tick"));
-    CHECK(planOf(none, "Tick").version == 4U);
-    CHECK(none.registry->Frozen().CFingerprint().version == 6U);
-    CHECK(none.registry->Frozen().RegistryFingerprint().version == 2U);
+    CHECK(planOf(none, "Tick").version == 5U);
+    CHECK(none.registry->Frozen().CFingerprint().version == 7U);
+    CHECK(none.registry->Frozen().RegistryFingerprint().version == 3U);
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK(report.find("gyo.kernel.plans 2") == 0);
+    CHECK(report.find("gyo.kernel.plans 3") == 0);
     CHECK(report.find("  hook-round-limit 5\n") != std::string::npos);
     CHECK(report.find("  hook-round-limit default\n") != std::string::npos);
 }
@@ -606,23 +667,6 @@ TEST_CASE("J-54: a round is applied while the World is Applying (F-5)") {
 }
 
 TEST_CASE("J-54: a round is a whole application") {
-    SUBCASE("a zone B despawn and a zone C insert of one round: Z5, no despawn") {
-        auto rig = MakeFlushRig(
-            [](Registrar& r) {
-                r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-                r.AddSystem<&ZoneCSpawnsSeed>(Put("ZoneCSpawnsSeed", "Tick", "C", Zone::C));
-                r.Hook<Bullet, &BulletDespawnsSix>(HookTrigger::OnAdd, {.name = "BulletDespawnsSix", .zone = Zone::B});
-                r.Hook<Seed, &ZoneCSeedInsertsPosIntoSix>(HookTrigger::OnAdd, {.name = "ZoneCSeedInsertsPosIntoSix", .zone = Zone::C});
-            },
-            {}, false);
-        rig->world().Insert(6, Tag{6});
-        const auto result = rig->Run();
-        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
-        REQUIRE_FALSE(static_cast<bool>(result));
-        CHECK(result.error().Text().find("hook round 1") != std::string::npos);
-        CHECK(rig->world().Alive(6));
-        CHECK(rig->world().Get<Pos>(6) == nullptr);
-    }
     SUBCASE("an initial value request in a round is filled there; its target's OnAdd records into the next round") {
         auto rig = MakeFlushRig([](Registrar& r) {
             r.InitialValue<Filled, &FilledFrom>();
@@ -687,7 +731,7 @@ TEST_CASE("J-54: rounds are separate applications") {
         REQUIRE(rig->world().Get<Score>(9) != nullptr);
         CHECK(rig->world().Get<Score>(9)->s == 6);
     }
-    SUBCASE("a zone B despawn in round 1 and a zone C insert in round 2: dropped and counted, no Z5") {
+    SUBCASE("a zone B despawn in round 1 and a zone C insert in round 2: dropped and counted") {
         auto rig = MakeFlushRig(
             [](Registrar& r) {
                 r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
@@ -860,6 +904,15 @@ TEST_CASE("J-54: a World whose KernelSettings was removed before the first Run u
     CHECK_MESSAGE(HasCode(RunChain(*over, 9), KernelErrorCode::HookRoundLimit), "J-54: a World without KernelSettings has no limit of 8");
 }
 
+TEST_CASE("J-54: KernelSettings removed between two Runs: the next Run uses the default limit of 8") {
+    auto rig = MakeFlushRig(ChainSystems, {}, true, 2U);
+    KERNEL_REQUIRE_RUN_OK(RunChain(*rig, 2));
+    rig->world().RemoveResource<KernelSettings>();
+    const auto eight = RunChain(*rig, 8);
+    CHECK_MESSAGE(static_cast<bool>(eight), "J-54 removed: the Run after KernelSettings was removed did not use the default limit of 8: "
+                                                << Text(eight));
+}
+
 // hf-c-fp-eight-as-unset, hf-plan-fp-value-shifted, hf-c-fp-value-shifted, hf-registry-fp-schedule-field-when-declared,
 // hf-export-limit-line-moved. The three texts are fixed values (the same on the L1 platforms: fixed-width types only).
 TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 is not 'not declared' in the C fingerprint") {
@@ -879,14 +932,14 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
     const Built t8 = build(tick8);
     CHECK_MESSAGE(t8.registry->Frozen().CFingerprint() != none.registry->Frozen().CFingerprint(),
                   "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
-    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "4:07ec085069de9bdc6da673115cbab5c778d4f1cd92e7b094c8964f9eac00cef2",
+    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "5:aacb80017464cdd1b9b347c30581bc53aaf9ad52cfe3263188cc784ce790314f",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "6:e4bbf4d204512de4d589e0c3855e9532d231ac868f0dc103fcceef1c7a24d44e",
+    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "7:ca0e06b26a8b5cae94109cf60826a18ea2d85ceb1b0a92cbac2b7fd3ac07d2a7",
                   "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "2:3dc1d68548e6d466e09048b2cac6aa75f34f6bba5a8e638509b468ba3e193df1",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "3:0e09213517429bb4326f8462d3419688ecf23334836d8a87d3e42e2721dfd441",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 4:") != std::string::npos,
+    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 5:") != std::string::npos,
                   "J-54: the export's hook-round-limit line is not right before the fingerprint line");
 }
 

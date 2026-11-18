@@ -52,10 +52,21 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       vfprintf, puts, fputs, putchar, perror, fwrite, SDL_Log*. A file whose name starts with "Executor" is exempt
       from K6 only; every other rule applies to it.
   K7  the identifiers far, near, FAR and NEAR (macros in windef.h; PRs #152 and #163 each broke the MSVC build).
+  K8  GYO::Base's issuer of numbers in the kernel: the identifier IdIssuer, or Base's thread serial state
+      threadSerials / threadSerial. The kernel asks which thread runs through Engine::Base::CurrentThreadSerial()
+      only (DI-KS 14; user 2026-11-18, v8-arch-gyo2-kernel-subtract-structure): an IdIssuer is an atomic counter,
+      cross-thread state that K3 keeps out of the kernel but does not name. Read in every scanned file, the
+      Executor's included, and in CMakeLists.txt outside "#" comments (a target_compile_definitions alias). An
+      include line is not read (its target names the header the kernel needs for CurrentThreadSerial). The kernel's
+      own names may not be these three either. Limits (text level, the rest is review, like the scaffold
+      declaration's LIM-7): a name built by token pasting (##) or split by a line continuation, an asm label or a
+      compiler builtin such as __atomic_fetch_add; and the comment and literal blanking shared by K2-K8 does not
+      read a prefixed character literal (L'"') or a prefixed raw string (LR"(...)") right, so text after one on
+      the same line can hide a name (an existing gap of J-9, recorded apart).
   K0  a file under engine/kernel/ that this guard cannot scan: anything but SUFFIXES and CMakeLists.txt. A file
       type the guard does not read would otherwise pass every rule unseen.
 
-Comments and literals are blanked before K2-K7, keeping every line and column, so an include target is read from
+Comments and literals are blanked before K2-K8, keeping every line and column, so an include target is read from
 the raw text at the column where the code has the directive. Files are read as UTF-8 with an optional BOM. The scan root engine/kernel must exist and hold files: an
 empty or missing root is a finding, so the guard never passes by scanning nothing.
 
@@ -95,6 +106,7 @@ LOG_HEADERS = ("iostream", "cstdio", "print", "engine/base/Log.hpp")
 K6 = re.compile(r"\bLog\s*\(|\bSetLogHandler\b|\bstd::(?:c(?:out|err|log)|println|print)\b|\bSDL_Log\w*"
                 r"|(?<![\w:.])(?:std::)?(?:v?f?printf|f?puts|putchar|perror|fwrite)\s*\(")
 K7 = re.compile(r"\b(?:far|near|FAR|NEAR)\b")
+K8 = re.compile(r"\b(?:IdIssuer|threadSerials?)\b")
 DIRECTIVE = re.compile(r"^[ \t]*(?:#|%:)[ \t]*(?:include_next|include|import)\b")
 TARGET = re.compile(r"[ \t]*([<\"])([^>\"]+)[>\"]")
 # engine/entity_store/: Delta-3 of the migration plan (user 2026-11-13, world-exec): the World's columns are kept by
@@ -287,6 +299,10 @@ def file_findings(relative, raw, name_patterns):
     for pattern in [re.compile(p) for p in PRODUCT_ALIASES + ROLE_WORDS]:
         for match in pattern.finditer(raw):
             yield line_of(raw, match.start()), "K1", match.group(0)
+    if Path(relative).name == "CMakeLists.txt":
+        for number, line in enumerate(raw.split("\n"), start=1):
+            for match in K8.finditer(line.split("#", 1)[0]):
+                yield number, "K8", match.group(0)
     if Path(relative).suffix not in SUFFIXES:
         return
     executor_file = Path(relative).name.startswith("Executor")
@@ -333,6 +349,11 @@ def file_findings(relative, raw, name_patterns):
             yield line_of(code, match.start()), "K6", match.group(0).rstrip("( ")
     for match in K7.finditer(code):
         yield line_of(code, match.start()), "K7", match.group(0)
+    code_lines = code.split("\n")
+    for match in K8.finditer(code):
+        number = line_of(code, match.start())
+        if not DIRECTIVE.match(code_lines[number - 1]):
+            yield number, "K8", match.group(0)
 
 
 def all_files(root):

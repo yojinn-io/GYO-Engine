@@ -142,7 +142,7 @@ TEST_CASE("J-5: control: declared reads and writes never trip verification") {
     KeptWorld() = &rig->world();
     for (int i = 0; i < 2; ++i) KERNEL_REQUIRE_RUN_OK(rig->Run());
     // The "no violation" report carries the switch (target/system-contract 2b condition 2).
-    const VerificationReport report = rig->product->Verification();
+    const VerificationReport report = rig->executor->Verification();
     CHECK(report.accessVerification);
     CHECK_FALSE(report.breakOnKernelError);
     CHECK(report.world == "control");
@@ -173,7 +173,7 @@ TEST_CASE("J-5: (a) a reference kept from Read<T> and written in another System:
 
     KERNEL_REQUIRE_RUN_OK(pair.off->Run());
     CHECK(pair.off->world().Get<Pos>(1)->x == 99);
-    CHECK_FALSE(pair.off->product->Verification().accessVerification);
+    CHECK_FALSE(pair.off->executor->Verification().accessVerification);
     g_keptPos = nullptr;
 }
 
@@ -229,8 +229,53 @@ TEST_CASE("J-5: excluded columns are left out of the comparison and listed in th
     rig->world().ExcludeFromVerification<Pos>();
     KERNEL_REQUIRE_RUN_OK(rig->Run());  // not seen: Pos is excluded (the report says so)
     g_keptPos = nullptr;
-    CHECK(rig->product->Verification().excludedColumns == std::vector<std::string>{"Pos"});
+    CHECK(rig->executor->Verification().excludedColumns == std::vector<std::string>{"Pos"});
     CHECK(rig->world().Get<Pos>(1)->x == 31);
+}
+
+namespace {
+// An exclusive System declares every component and resource value (DI-KS 1), so
+// its writes through the World API are declared (layer 1); the event buffers
+// are not in it, and the World API's only way to an event buffer is a read.
+SystemResult ExclusiveWritesThroughWorldApi(ExclusiveWorld<>) {
+    KeptWorld()->GetMut<Pos>(1)->x = 41;
+    KeptWorld()->GetMut<Tag>(1)->t = 42;
+    KeptWorld()->ResourceMut<Flag>()->on = 43;
+    KeptWorld()->ResourceMut<Out>()->value = 44;
+    KeptWorld()->GetMut<Mode>(1)->m = 45;          // zone B, single writer
+    KeptWorld()->ResourceMut<CRes>()->value = 46;  // zone C
+    return Ok();
+}
+SystemResult ExclusiveReadsEventsThroughWorldApi(ExclusiveWorld<>) {
+    static_cast<void>(KeptWorld()->EventPayloads<Ping>());
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-5: an exclusive System's World API writes of components and resources are declared; its World API read of events is not") {
+    SUBCASE("components and resources") {
+        auto rig = RigWith([](Registrar& r) { r.AddSystem<&ExclusiveWritesThroughWorldApi>(B("Exclusive", "A")); }, true,
+                           "exclusive-api");
+        rig->world().Insert(1, Mode{0});
+        rig->world().SetResource(CRes{0});
+        KeptWorld() = &rig->world();
+        const auto result = rig->Run();
+        KeptWorld() = nullptr;
+        CHECK_MESSAGE(static_cast<bool>(result), "[ks-s4-layer1-declared] " << Text(result));
+        CHECK(rig->world().Get<Pos>(1)->x == 41);
+        CHECK(rig->world().Resource<Out>()->value == 44);
+        CHECK(rig->world().Get<Mode>(1)->m == 45);
+        CHECK(rig->world().Resource<CRes>()->value == 46);
+    }
+    SUBCASE("events") {
+        auto rig = RigWith([](Registrar& r) { r.AddSystem<&ExclusiveReadsEventsThroughWorldApi>(B("Exclusive", "A")); }, true,
+                           "exclusive-api");
+        KeptWorld() = &rig->world();
+        const auto result = rig->Run();
+        KeptWorld() = nullptr;
+        CHECK_MESSAGE(HasCode(result, KernelErrorCode::AccessViolation), "[ks-s4-layer1-events] " << Text(result));
+        CHECK_MESSAGE(Text(result).find("event 'Ping'") != std::string::npos, "[ks-s4-layer1-events] " << Text(result));
+    }
 }
 
 TEST_CASE("J-4: a handle kept past its call is a violation; a kept const T& written in a later run is caught; read only is not") {

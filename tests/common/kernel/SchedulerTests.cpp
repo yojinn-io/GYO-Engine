@@ -1,11 +1,14 @@
-// Spec J-20 to J-25, J-27 (D-E17 half), J-28 (finish half), J-44, the
+// Spec J-20 to J-25, J-27 (D-E17 half), J-44, the
 // scheduler half of J-24, the Plan fingerprint goldens (declaration judgement 4)
 // and the Plan export with its dataflow ratio (judgement 7).
-// target/kernel DI-KS 3, 5, 7, 14; spec D.1 to D.3, X-2, X-3, H-1, H-2.
+// target/kernel DI-KS 3, 5, 7; spec D.1 to D.3, X-2, H-1.
 
 #include "KernelTestSupport.hpp"
 
 #include <array>
+#include <functional>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -42,7 +45,6 @@ SystemResult ReadMarker(Query<Read<TestMarker>>) { return Ok(); }
 SystemResult Nothing() { return Ok(); }
 SystemResult ReadPos(Query<Read<TestPos>>) { return Ok(); }
 SystemResult SpawnPos(Spawn<Bundle<TestPos>>) { return Ok(); }
-SystemResult ReadSettings(Res<KernelSettings>) { return Ok(); }
 SystemResult HookWritesA(Query<Write<SharedA>>) { return Ok(); }
 SystemResult HookReadsA(Query<Read<SharedA>>) { return Ok(); }
 SystemResult ReadDerived(Query<Read<TestDerived>>) { return Ok(); }
@@ -128,14 +130,16 @@ struct Golden {
 // format 2 and the values re-taken by v8-arch-gyo2-hook-flush (the hook round
 // limit is hashed; KernelSettings grew); Plan format 3 and the values re-taken by
 // v8-arch-gyo2-spawn-reject (the sync point drops spawn records); Plan format 4 and the values
-// re-taken by v8-arch-gyo2-nested-schedule (the kernel runs Startup): the judgement is unchanged.
+// re-taken by v8-arch-gyo2-nested-schedule (the kernel runs Startup); Plan format 5 and Registry
+// format 3 and the values re-taken by v8-arch-gyo2-kernel-subtract-structure (no runner or
+// affinity, threadBound and annotatedWrites hashed): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "4:c0d743702bb4dca9a301a3fda644afdee532de606666e5fe415fc2f0a3013d6d",
-     "2:2bddd23682ef1c576f646abc215dc1907d865e74787615d8374c630ee1526303"},
-    {"deferred", &DeferredRegistry, "4:81bb293c1dd239f933b52c91269fcba749150db8adab91d4955c8fcf1957adca",
-     "2:b06c39d63a57bcdb8733b7046edb7ca5d7e930c471df8223b94a12f23f907df9"},
-    {"events", &EventRegistry, "4:89ed1121727437c62a4d045f369acb7c8b3f8e6f3efea1b469608530051a0bd9",
-     "2:0ca59b03ed6e11fdcc83ff7e23afa2e05e8181f0e471bdcfcca3ab9a2edb520d"},
+    {"mixed", &MixedRegistry, "5:916723dbf66dab54200b55c52779e2a593b3a29080234c89b9e53285fcfe1a29",
+     "3:6fb58b7073db8afb4910f67f88a28dfa1723652a44ff32df61ad11a88e3779f7"},
+    {"deferred", &DeferredRegistry, "5:fb78e3ee31dde531649a6f2072eaed55ddb50e2629116ddc8ca5dc58583ff9cf",
+     "3:08f84e3617bddf161a2127bfe53be275a62f2ecc6344031fc0b8d2544c073ee6"},
+    {"events", &EventRegistry, "5:b8a709bfb46379bdec41f0b4fcfd6a917a6fdbc1566cb038817c8dc5aa82e222",
+     "3:6acba502d550c34aee7d6f9417951b61fbc672a81220696595506582f10f5491"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
@@ -151,7 +155,7 @@ Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
 
 TEST_CASE("J-20: the Plan is built the same twice and with shuffled internal containers; golden fingerprints") {
     for (const Golden& golden : kGoldens) {
-        CAPTURE(golden.name);
+        CAPTURE(std::string(golden.name));
         Built first = BuildGolden(golden);
         Built second = BuildGolden(golden);
         KERNEL_REQUIRE_OK(first);
@@ -213,73 +217,101 @@ TEST_CASE("J-21: every conflict edge has a fixed order in the Plan") {
 
 // ---- J-22 (D-3)
 
-TEST_CASE("J-22: (c) ambiguity fails for immediate writes, deferred-deferred writes and event writes") {
+// No ambiguity detection (v8-arch-gyo2-no-ambiguity-detection): a conflicting pair
+// with no order is tied by registration order and listed, zone C or not. Which
+// pairs conflict is still guarded: each registry lists exactly its one pair.
+TEST_CASE("J-22: (c) conflicting pairs with no order are tied by registration: immediate writes, deferred-deferred "
+          "writes, event writes") {
     Built immediate = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
         r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
     });
-    CHECK(KernelTest::ErrorCount(immediate, StartupCode::DE8) == 1);
-    REQUIRE_FALSE(static_cast<bool>(immediate.result));
-    const StartupError& error = immediate.result.error().errors.front();
-    CHECK(error.subjects[0] == "WriteA");
-    CHECK(error.subjects[1] == "ReadA");
-    CHECK(error.sources.size() == 2);
+    KERNEL_REQUIRE_OK(immediate);
+    CHECK_MESSAGE(Ties(immediate) == std::vector<std::string>{"FixedUpdate: WriteA > ReadA"},
+                  "J-22 tie: an immediate write against a read is one tie");
+    CHECK(SystemSteps(*immediate.registry->Frozen().PlanOf("FixedUpdate")) == std::vector<std::string>{"WriteA", "ReadA"});
 
     Built deferred = WithShared([](Registrar& r) {
         r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
         r.AddSystem<&InsertA2>(Sys("InsertA2", Zone::C, Sim()));
     });
-    CHECK(KernelTest::ErrorCount(deferred, StartupCode::DE8) == 1);
-    REQUIRE_FALSE(static_cast<bool>(deferred.result));
+    KERNEL_REQUIRE_OK(deferred);
+    CHECK_MESSAGE(Ties(deferred) == std::vector<std::string>{"FixedUpdate: InsertA > InsertA2"},
+                  "J-22 tie: two deferred writes of one component are one tie");
+    CHECK(SystemSteps(*deferred.registry->Frozen().PlanOf("FixedUpdate")) ==
+          std::vector<std::string>{"InsertA", "InsertA2"});
 
     Built events = WithShared([](Registrar& r) {
         r.AddSystem<&SendEvent>(Sys("SendEvent", Zone::C, Sim()));
         r.AddSystem<&SendEvent2>(Sys("SendEvent2", Zone::C, Sim()));
     });
-    CHECK(KernelTest::ErrorCount(events, StartupCode::DE8) == 1);
-    REQUIRE_FALSE(static_cast<bool>(events.result));
+    KERNEL_REQUIRE_OK(events);
+    CHECK_MESSAGE(Ties(events) == std::vector<std::string>{"FixedUpdate: SendEvent > SendEvent2"},
+                  "J-22 tie: two writers of one event are one tie");
 
-    // (b) reading (c) data with no order to its (c) writer is ambiguous too (scheduler section 2).
+    // (b) reading (c) data with no order to its (c) writer conflicts too (scheduler section 2).
     Built presentation = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
         r.AddSystem<&ReadA>(Sys("ShowA", Zone::B, Sim()));
     });
-    CHECK(KernelTest::ErrorCount(presentation, StartupCode::DE8) == 1);
+    KERNEL_REQUIRE_OK(presentation);
+    CHECK_MESSAGE(Ties(presentation) == std::vector<std::string>{"FixedUpdate: WriteA > ShowA"},
+                  "J-22 tie: a (b) read of (c) data against its (c) writer is one tie");
 }
 
-TEST_CASE("J-22: adding before or after makes the (c) cases pass") {
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
+TEST_CASE("J-22: adding before or after orders the (c) cases and leaves no tie") {
+    // Each declared order is against registration order, so a tie edge in its place would show in the Plan.
+    Built immediate = WithShared([](Registrar& r) {
+        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim({"ReadA"})));
-        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
-    }));
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
-        r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
-        r.AddSystem<&InsertA2>(Sys("InsertA2", Zone::C, Sim({}, {"InsertA"})));
-    }));
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
-        r.AddSystem<&SendEvent>(Sys("SendEvent", Zone::C, Sim({"SendEvent2"})));
-        r.AddSystem<&SendEvent2>(Sys("SendEvent2", Zone::C, Sim()));
-    }));
+    });
+    KERNEL_REQUIRE_OK(immediate);
+    CHECK_MESSAGE(Ties(immediate).empty(), "J-22 declared: a before leaves no tie");
+    CHECK(SystemSteps(*immediate.registry->Frozen().PlanOf("FixedUpdate")) == std::vector<std::string>{"WriteA", "ReadA"});
+    Built deferred = WithShared([](Registrar& r) {
+        r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim({}, {"InsertA2"})));
+        r.AddSystem<&InsertA2>(Sys("InsertA2", Zone::C, Sim()));
+    });
+    KERNEL_REQUIRE_OK(deferred);
+    CHECK_MESSAGE(Ties(deferred).empty(), "J-22 declared: an after leaves no tie");
+    CHECK(SystemSteps(*deferred.registry->Frozen().PlanOf("FixedUpdate")) ==
+          std::vector<std::string>{"InsertA2", "InsertA"});
+    Built events = WithShared([](Registrar& r) {
+        r.AddSystem<&SendEvent>(Sys("SendEvent", Zone::C, Sim()));
+        r.AddSystem<&SendEvent2>(Sys("SendEvent2", Zone::C, Sim({"SendEvent"})));
+    });
+    KERNEL_REQUIRE_OK(events);
+    CHECK_MESSAGE(Ties(events).empty(), "J-22 declared: an event writers' before leaves no tie");
+    CHECK(SystemSteps(*events.registry->Frozen().PlanOf("FixedUpdate")) ==
+          std::vector<std::string>{"SendEvent2", "SendEvent"});
 }
 
-TEST_CASE("J-22: pairs that are not ambiguous pass (deferred write against immediate read, immediate write, With)") {
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
-        r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
-        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
-    }));
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
-        r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
-        r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
-    }));
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
-        r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
-        r.AddSystem<&FilterA>(Sys("FilterA", Zone::C, Sim()));
-    }));
+TEST_CASE("J-22: pairs that do not conflict give no tie (deferred write against immediate read, immediate write, With)") {
+    const auto noTie = [](const Built& built, const char* what) {
+        REQUIRE_MESSAGE(static_cast<bool>(built.result), Describe(built));
+        CHECK_MESSAGE(Ties(built).empty(), "J-22 no conflict: " << std::string(what));
+    };
+    noTie(WithShared([](Registrar& r) {
+              r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
+              r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
+          }),
+          "a deferred write against an immediate read");
+    noTie(WithShared([](Registrar& r) {
+              r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
+              r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
+          }),
+          "a deferred write against an immediate write");
+    noTie(WithShared([](Registrar& r) {
+              r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
+              r.AddSystem<&FilterA>(Sys("FilterA", Zone::C, Sim()));
+          }),
+          "a deferred write against a With");
     // Systems in different stages are ordered by the stage end.
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
-        r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
-        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, {At("FixedUpdate", "Present")}));
-    }));
+    noTie(WithShared([](Registrar& r) {
+              r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
+              r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, {At("FixedUpdate", "Present")}));
+          }),
+          "two stages");
 }
 
 // ---- J-23 (D-4, D-10)
@@ -308,6 +340,126 @@ TEST_CASE("J-23: (b) ties follow registrationSeq, not names") {
     CHECK(free.registry->Frozen().TieBreaks().empty());
 }
 
+// From StrictOrderTests (v8-arch-gyo2-strict-order), without RequireExplicitOrder,
+// which went with the ambiguity detection (v8-arch-gyo2-no-ambiguity-detection):
+// zone B data that allows several writers, as a product that never uses zones.
+namespace {
+
+struct OrderPos { std::int32_t x; };
+struct OrderCounter { std::int64_t value; };
+
+SystemResult WriteFirst(Query<Write<OrderPos>>) { return Ok(); }
+SystemResult WriteSecond(Query<Write<OrderPos>>) { return Ok(); }
+SystemResult WriteThird(Query<Write<OrderPos>>) { return Ok(); }
+SystemResult CountFirst(ResMut<OrderCounter>) { return Ok(); }
+SystemResult CountSecond(ResMut<OrderCounter>) { return Ok(); }
+
+ScheduleOptions OrderTick() {
+    ScheduleOptions s;
+    s.name = "Tick";
+    s.domain = Domain::Frame;
+    s.clock = true;
+    s.stages = {"Simulate", "Present"};
+    return s;
+}
+
+ScheduleOptions OrderStep() {
+    ScheduleOptions s;
+    s.name = "Step";
+    s.domain = Domain::Fixed;
+    s.clock = true;
+    s.stages = {"Simulate"};
+    return s;
+}
+
+// A System with no zone (zone B by default), mounted once.
+SystemOptions OrderIn(std::string name, std::string schedule, std::string stage, std::vector<std::string> before = {},
+                      std::vector<std::string> after = {}, std::vector<std::string> sets = {}) {
+    SystemOptions o;
+    o.name = std::move(name);
+    Mount m = At(std::move(schedule), std::move(stage), std::move(before), std::move(after));
+    m.sets = std::move(sets);
+    o.mounts.push_back(std::move(m));
+    return o;
+}
+
+// One plugin "game": Shared data (two writers are allowed), the two schedules, the given Systems.
+Built OrderGame(const std::function<void(Registrar&)>& systems) {
+    return KernelTest::Finish({{"game", [systems](Registrar& r) {
+                                    r.Component<OrderPos>({.name = "Pos", .writePolicy = WritePolicy::Shared});
+                                    r.Resource<OrderCounter>({.name = "Counter", .writePolicy = WritePolicy::Shared});
+                                    r.Schedule(OrderTick());
+                                    r.Schedule(OrderStep());
+                                    systems(r);
+                                }}});
+}
+
+} // namespace
+
+TEST_CASE("J-23: a declared before, after or set order leaves no tie and sets the order") {
+    // Every declared order is against registration order, so a tie in its place would show in the Plan.
+    Built before = OrderGame([](Registrar& r) {
+        r.AddSystem<&WriteFirst>(OrderIn("WriteFirst", "Tick", "Simulate"));
+        r.AddSystem<&WriteSecond>(OrderIn("WriteSecond", "Tick", "Simulate", {"WriteFirst"}));
+    });
+    KERNEL_REQUIRE_OK(before);
+    CHECK_MESSAGE(Ties(before).empty(), "J-23 declared: a before leaves no tie");
+    CHECK(SystemSteps(*before.registry->Frozen().PlanOf("Tick")) == std::vector<std::string>{"WriteSecond", "WriteFirst"});
+
+    Built after = OrderGame([](Registrar& r) {
+        r.AddSystem<&WriteFirst>(OrderIn("WriteFirst", "Tick", "Simulate", {}, {"WriteSecond"}));
+        r.AddSystem<&WriteSecond>(OrderIn("WriteSecond", "Tick", "Simulate"));
+    });
+    KERNEL_REQUIRE_OK(after);
+    CHECK_MESSAGE(Ties(after).empty(), "J-23 declared: an after leaves no tie");
+    CHECK(SystemSteps(*after.registry->Frozen().PlanOf("Tick")) == std::vector<std::string>{"WriteSecond", "WriteFirst"});
+
+    Built set = OrderGame([](Registrar& r) {
+        r.Set({.name = "Late", .schedule = "Tick", .after = {"WriteSecond"}});
+        r.AddSystem<&WriteFirst>(OrderIn("WriteFirst", "Tick", "Simulate", {}, {}, {"Late"}));
+        r.AddSystem<&WriteSecond>(OrderIn("WriteSecond", "Tick", "Simulate"));
+    });
+    KERNEL_REQUIRE_OK(set);
+    CHECK_MESSAGE(Ties(set).empty(), "J-23 declared: a set's after leaves no tie");
+    CHECK(SystemSteps(*set.registry->Frozen().PlanOf("Tick")) == std::vector<std::string>{"WriteSecond", "WriteFirst"});
+}
+
+TEST_CASE("J-23: every tie of every schedule is listed, in schedule then registration order, with its schedule") {
+    Built built = OrderGame([](Registrar& r) {
+        r.AddSystem<&WriteFirst>(OrderIn("WriteFirst", "Tick", "Simulate"));
+        r.AddSystem<&WriteSecond>(OrderIn("WriteSecond", "Tick", "Simulate"));
+        r.AddSystem<&WriteThird>(OrderIn("WriteThird", "Tick", "Simulate"));
+        r.AddSystem<&CountFirst>(OrderIn("CountFirst", "Step", "Simulate"));
+        r.AddSystem<&CountSecond>(OrderIn("CountSecond", "Step", "Simulate"));
+    });
+    KERNEL_REQUIRE_OK(built);
+    // WriteSecond > WriteThird is a tie of its own: the first two ties give no path between them.
+    const std::vector<std::string> expected{
+        "Tick: WriteFirst > WriteSecond",
+        "Tick: WriteFirst > WriteThird",
+        "Tick: WriteSecond > WriteThird",
+        "Step: CountFirst > CountSecond",
+    };
+    CHECK_MESSAGE(Ties(built) == expected, "J-23 all ties: every pair of both schedules, each with its schedule");
+    CHECK(SystemSteps(*built.registry->Frozen().PlanOf("Tick")) ==
+          std::vector<std::string>{"WriteFirst", "WriteSecond", "WriteThird"});
+    CHECK(SystemSteps(*built.registry->Frozen().PlanOf("Step")) == std::vector<std::string>{"CountFirst", "CountSecond"});
+}
+
+TEST_CASE("J-23: a pair with no order is tied by registration, listed with its schedule, and the Plan follows") {
+    Built built = OrderGame([](Registrar& r) {
+        r.AddSystem<&WriteFirst>(OrderIn("WriteFirst", "Tick", "Simulate"));
+        r.AddSystem<&WriteSecond>(OrderIn("WriteSecond", "Tick", "Simulate"));
+    });
+    KERNEL_REQUIRE_OK(built);
+    const auto ties = built.registry->Frozen().TieBreaks();
+    REQUIRE(ties.size() == 1);
+    CHECK_MESSAGE(ties[0].schedule == "Tick", "J-23 tie: TieBreak::schedule names the schedule");
+    CHECK(ties[0].first == "WriteFirst");
+    CHECK(ties[0].second == "WriteSecond");
+    CHECK(SystemSteps(*built.registry->Frozen().PlanOf("Tick")) == std::vector<std::string>{"WriteFirst", "WriteSecond"});
+}
+
 // ---- J-25 (D-8)
 
 TEST_CASE("J-25: With and Without do not remove a conflict") {
@@ -315,8 +467,9 @@ TEST_CASE("J-25: With and Without do not remove a conflict") {
         r.AddSystem<&WriteAWithB>(Sys("WithB", Zone::C, Sim()));
         r.AddSystem<&WriteAWithoutB>(Sys("WithoutB", Zone::C, Sim()));
     });
-    CHECK(KernelTest::ErrorCount(built, StartupCode::DE8) == 1);
-    REQUIRE_FALSE(static_cast<bool>(built.result));
+    KERNEL_REQUIRE_OK(built);
+    CHECK_MESSAGE(Ties(built) == std::vector<std::string>{"FixedUpdate: WithB > WithoutB"},
+                  "J-25: With and Without still conflict (one tie)");
 }
 
 // ---- J-27 (D-E17 half; LIM-2)
@@ -350,54 +503,6 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
     CHECK(KernelTest::ErrorCount(c, StartupCode::DE11) == 1);
 }
 
-// ---- J-28 (finish half; X-3, H-3)
-
-TEST_CASE("J-28: a Main System on a role runner fails (X-E2); a named role on another runner fails (X-E3)") {
-    const auto roleSchedule = [](Registrar& r) {
-        ScheduleOptions s = FixedSchedule();
-        s.runner = "sim";
-        r.Schedule(s);
-        ScheduleOptions u = UpdateSchedule();
-        u.runner = "sim";
-        r.Schedule(u);
-    };
-    Built main = Finish({{"test", [&](Registrar& r) {
-                              RegisterCommonData(r);
-                              roleSchedule(r);
-                              SystemOptions o = Sys("NeedsMain", Zone::B, {At("FixedUpdate", "Present")});
-                              o.affinity = Affinity::Named(kMainRole);
-                              r.AddSystem<&ReadMarker>(o);
-                          }}});
-    CHECK(KernelTest::ErrorCount(main, StartupCode::XE2) == 1);
-    REQUIRE_FALSE(static_cast<bool>(main.result));
-    CHECK(KernelTest::ErrorCount(main, StartupCode::DE10) == 1);
-    Built named = Finish({{"test", [&](Registrar& r) {
-                               RegisterCommonData(r);
-                               roleSchedule(r);
-                               SystemOptions o = Sys("NeedsAudio", Zone::B, {At("FixedUpdate", "Present")});
-                               o.affinity = Affinity::Named("audio");
-                               r.AddSystem<&ReadMarker>(o);
-                           }}});
-    CHECK(KernelTest::ErrorCount(named, StartupCode::XE3) == 1);
-    Built resource = Finish({{"test", [&](Registrar& r) {
-                                  RegisterCommonData(r);
-                                  r.Resource<TestLink>({.name = "Window", .zone = Zone::B, .external = true,
-                                                        .affinity = Affinity::Named(kMainRole)});
-                                  roleSchedule(r);
-                                  const auto touch = [](Res<TestLink>) -> SystemResult { return {}; };
-                                  r.AddSystem<decltype(touch)>(Sys("TouchWindow", Zone::B, {At("Update", "First")}));
-                              }}});
-    CHECK(KernelTest::ErrorCount(resource, StartupCode::XE2) == 1);
-    Built fine = Finish({{"test", [&](Registrar& r) {
-                              RegisterCommonData(r);
-                              roleSchedule(r);
-                              SystemOptions o = Sys("OnSim", Zone::B, {At("FixedUpdate", "Present")});
-                              o.affinity = Affinity::Named("sim");
-                              r.AddSystem<&ReadMarker>(o);
-                          }}});
-    KERNEL_REQUIRE_OK(fine);
-}
-
 // ---- J-44 (D-9)
 
 namespace {
@@ -412,14 +517,6 @@ constexpr std::array<Registration, 5> kOrdered{{
     [](Registrar& r) { r.AddSystem<&WriteC>(Sys("P3", Zone::C, Sim({"P4"}))); },
     [](Registrar& r) { r.AddSystem<&ReadAB>(Sys("P4", Zone::C, Sim({}, {"P1"}))); },
 }};
-// The same five with one order missing (P0 writes A, P4 reads A, no path between them).
-constexpr std::array<Registration, 5> kAmbiguous{{
-    [](Registrar& r) { r.AddSystem<&WriteA>(Sys("P0", Zone::C, Sim({"P1"}))); },
-    [](Registrar& r) { r.AddSystem<&FilterA>(Sys("P1", Zone::C, Sim({"P2"}))); },
-    [](Registrar& r) { r.AddSystem<&ReadB>(Sys("P2", Zone::C, Sim())); },
-    [](Registrar& r) { r.AddSystem<&WriteC>(Sys("P3", Zone::C, Sim({"P4"}))); },
-    [](Registrar& r) { r.AddSystem<&ReadA>(Sys("P4", Zone::C, Sim())); },
-}};
 
 Built Permuted(const std::array<Registration, 5>& systems, const std::array<int, 5>& order) {
     return WithShared([&](Registrar& r) {
@@ -429,7 +526,7 @@ Built Permuted(const std::array<Registration, 5>& systems, const std::array<int,
 
 } // namespace
 
-TEST_CASE("J-44: 20 registration orders of (c) Systems: either all D-E8, or every conflicting pair keeps its order") {
+TEST_CASE("J-44: 20 registration orders of (c) Systems: every conflicting pair keeps its declared order") {
     std::array<int, 5> order{0, 1, 2, 3, 4};
     std::vector<std::array<int, 5>> orders;
     // 20 permutations: every 6th of the 120, in lexicographic order, so first and last positions both vary.
@@ -453,11 +550,6 @@ TEST_CASE("J-44: 20 registration orders of (c) Systems: either all D-E8, or ever
         CHECK(firstBeforeSecond == reference);
     }
     CHECK(reference == std::vector<bool>{true, true, true, true, true});
-    for (const auto& permutation : orders) {
-        Built built = Permuted(kAmbiguous, permutation);
-        CHECK(KernelTest::ErrorCount(built, StartupCode::DE8) >= 1);
-        REQUIRE_FALSE(static_cast<bool>(built.result));
-    }
 }
 
 // ---- J-24 (scheduler and composition codes; D-5: each from a minimal Registry, names both sides)
@@ -474,18 +566,9 @@ TEST_CASE("J-24: D-E1 (missing schedule or stage), D-E19 (two mounts in one sche
     CHECK(KernelTest::ErrorCount(twice, StartupCode::DE19) == 1);
 }
 
-TEST_CASE("J-24: D-E3 (Spawn without an allotter), D-E18 (Res of KernelSettings)") {
+TEST_CASE("J-24: D-E3 (Spawn without an allotter)") {
     Built spawn = FinishOne([](Registrar& r) { r.AddSystem<&SpawnPos>(Sys("SpawnPos", Zone::C, Sim())); });
     CHECK(KernelTest::ErrorCount(spawn, StartupCode::DE3) == 1);
-    Built settings = FinishOne([](Registrar& r) {
-        r.AddSystem<&ReadSettings>(Sys("ReadSettings", Zone::B, {At("Update", "First")}));
-    });
-    CHECK(KernelTest::ErrorCount(settings, StartupCode::DE18) == 1);
-    const auto writes = [](ResMut<KernelSettings>) -> SystemResult { return {}; };
-    Built settingsMut = FinishOne([&](Registrar& r) {
-        r.AddSystem<decltype(writes)>(Sys("WriteSettings", Zone::B, {At("Update", "First")}));
-    });
-    CHECK(KernelTest::ErrorCount(settingsMut, StartupCode::DE18) == 1);
 }
 
 TEST_CASE("J-24: D-E4 (missing target), D-E5 (against stage order), D-E6 (cycle)") {
@@ -519,7 +602,7 @@ TEST_CASE("J-24: D-E9 (zone C hooks on one trigger conflict)") {
     }));
 }
 
-TEST_CASE("J-24: D-E12 (clock schedules per domain), D-E13 (one World on two threads)") {
+TEST_CASE("J-24: D-E12 (clock schedules per domain)") {
     Built twoClocks = FinishOne([](Registrar& r) {
         ScheduleOptions s = UpdateSchedule();
         s.name = "SecondFrame";
@@ -532,14 +615,6 @@ TEST_CASE("J-24: D-E12 (clock schedules per domain), D-E13 (one World on two thr
                                 r.Schedule(s);
                             }}});
     CHECK(KernelTest::ErrorCount(noClock, StartupCode::DE12) == 1);
-    Built threads = FinishOne([](Registrar& r) {
-        ScheduleOptions s = UpdateSchedule();
-        s.name = "Late";
-        s.clock = false;
-        s.runner = "other";
-        r.Schedule(s);
-    });
-    CHECK(KernelTest::ErrorCount(threads, StartupCode::DE13) == 1);
 }
 
 TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
@@ -599,16 +674,17 @@ TEST_CASE("J-24: several errors of different codes come back in one report") {
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim({"Gone"})));
         r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
         r.AddSystem<&SpawnPos>(Sys("SpawnPos", Zone::C, Sim()));
-        r.AddSystem<&ReadSettings>(Sys("ReadSettings", Zone::B, {At("Update", "First")}));
+        r.AddSystem<&ReadMarker>(Sys("Twice", Zone::B, {At("Update", "First"), At("Update", "Second")}));
         r.RequireExplicitZones();
-        r.AddSystem<&ReadMarker>(Sys("NoZone", Zone::Unset, {At("Update", "First")}));
+        const auto noZone = [](Query<Read<TestMarker>>) -> SystemResult { return {}; };
+        r.AddSystem<decltype(noZone)>(Sys("NoZone", Zone::Unset, {At("Update", "First")}));
     });
     REQUIRE_FALSE(static_cast<bool>(built.result));
     const StartupReport& report = built.result.error();
     CHECK(report.Has(StartupCode::DE3));
     CHECK(report.Has(StartupCode::DE4));
     CHECK(report.Has(StartupCode::DE7));
-    CHECK(report.Has(StartupCode::DE18));
+    CHECK(report.Has(StartupCode::DE19));
     CHECK(report.errors.size() >= 4);
     CHECK(report.detail.find("D-E4") != std::string::npos);
 }
@@ -633,6 +709,9 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E1 -> E4 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E2 -> E3 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
-    CHECK(report.find("gyo.kernel.plans 2") == 0);
-    CHECK(report.find("fingerprint 4:") != std::string::npos);
+    CHECK(report.find("gyo.kernel.plans 3") == 0);
+    CHECK(report.find("fingerprint 5:") != std::string::npos);
+    // The whole schedule line of format 3 (no runner since v8-arch-gyo2-kernel-subtract-structure).
+    CHECK_MESSAGE(report.find("\nschedule FixedUpdate domain=Fixed clock=1 startup=0 rollback=0\n") != std::string::npos,
+                  "Plan export: the schedule line\n" << report);
 }

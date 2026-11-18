@@ -3,10 +3,25 @@
 // World (spec A; target/world.zh-Hant.md; target/kernel DI-KS 2, 3, 4, 6, 9,
 // 10, 11, 14).
 //
-// One Product's data: columns, resources, event buffers, the deferred queue,
-// change stamps, domain ticks and its state. Made from a frozen Registry; its
-// lifetime is one generation (spec A.1: a generation change is a new World,
-// made from the same frozen Registry).
+// One WorldExecutor's data: columns, resources, event buffers, the deferred queue,
+// change stamps, domain ticks and its state. Made from a Registry that has
+// built its Plans; its lifetime is one generation (spec A.1: a generation
+// change is a new World, made from the same Registry).
+//
+// Versions (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 5):
+// the World remembers the Registry version it is attached to. Every entry that
+// uses a table indexed by a registry id (the type lookups of the public
+// functions and handles, Alive, Entities, Despawn, Summary, WorldExecutor::Run)
+// first compares it with the Registry's and, when they differ, attaches:
+// storage for the new components, resources and event buffers and a hook queue
+// for each new schedule are added, the verification exclusions grow, the
+// hooks' access descriptions are made again. Entries that use no such table
+// (State, Name, Options, Stamp, Tick, ...) do not compare. The Registry keeps
+// no list of its Worlds, only counters: two this class changes (live Worlds,
+// and those that declare no dynamic insert) and one WorldExecutor::Run changes
+// (Worlds inside a Run); so making, destroying and running a World, like
+// registering, is on the thread that registers, or ordered by the caller
+// (DI-KS 26).
 //
 // The public functions below are the Host's (state Ready) and, inside a running
 // System, a path that does not go through a handle (a World* kept in a global,
@@ -15,8 +30,6 @@
 //         this thread: GYO_ASSERT (always on);
 //   W-3   a structural change (insert, remove, despawn, resource presence)
 //         outside Ready: GYO_ASSERT (always on);
-//   W-6b  a Host write in Ready after the first Run to zone C data other than a
-//         boundary (role Input) or external resource: GYO_ASSERT (always on);
 //   W-5   inside a System or hook, with verification on: an undeclared
 //         (id, mode) is a violation recorded in the call and returned as Err by
 //         the Executor (spec A.6 layer 1). The access itself still happens:
@@ -46,7 +59,15 @@
 
 namespace GYO::Kernel {
 
-class Product;
+class WorldExecutor;
+
+// What a World declares when it is made (DI-KS 26, L5). dynamicInsert: whether
+// Registry::Register may add to the Registry it was made from while it lives;
+// false makes every Register on that Registry return DynamicInsertRefused.
+// Fixed for the World's life.
+struct WorldOptions {
+    bool dynamicInsert = true;
+};
 
 // Spec A.1 state (Building is the Registry's: a World is made only from a frozen Registry).
 enum class WorldState : std::uint8_t {
@@ -84,13 +105,19 @@ struct RejectedSpawn {
     std::string emitter;
     bool emitterIsHook = false;
     Zone emitterZone = Zone::B;
-    // Recorded by Spawn (the allotter's id), not SpawnWithId.
+    // Recorded by Spawn (the allotter's id: Spawn<Bundle<C...>> or
+    // ExclusiveWorld::Spawn), not SpawnWithId.
     bool fromAllotter = false;
-    // The schedule whose sync point dropped it.
+    // The schedule whose sync point dropped it (for an immediate change of
+    // ExclusiveWorld, the exclusive System's schedule).
     std::string schedule;
-    // The record's Plan position: a System's step; for a hook, the sync point that triggered it.
+    // The record's Plan position: a System's step; for a hook, the sync point
+    // that triggered it, or, when an immediate change of ExclusiveWorld ran the
+    // hook, the exclusive System's step.
     std::uint32_t step = 0;
-    // The sync point that dropped it (for a hook round, the last sync point of the Plan).
+    // The sync point that dropped it (for a hook round, the last sync point of
+    // the Plan); for an immediate change of ExclusiveWorld and the hook rounds
+    // it runs, the exclusive System's step (no sync point applied it).
     std::uint32_t appliedAt = 0;
     // The schedule's domain tick (0 without a clock).
     std::uint64_t tick = 0;
@@ -101,8 +128,9 @@ struct RejectedSpawn {
 
 class World {
 public:
-    // registry must be frozen and outlive the World.
-    explicit World(const Registry& registry, std::string name = {});
+    // registry must have built its Plans, have no pending round (GYO_ASSERT)
+    // and outlive the World.
+    explicit World(const Registry& registry, std::string name = {}, WorldOptions options = {});
     ~World();
     World(const World&) = delete;
     World& operator=(const World&) = delete;
@@ -110,7 +138,9 @@ public:
     [[nodiscard]] WorldState State() const noexcept { return state_; }
     [[nodiscard]] const std::string& Name() const noexcept { return name_; }
     [[nodiscard]] const FrozenRegistry& Types() const noexcept { return *frozen_; }
-    // Whether an Executor has started a Run on this World (W-6b, J-50).
+    // The declaration it was made with (it belongs to the World, not to the Registry).
+    [[nodiscard]] const WorldOptions& Options() const noexcept { return options_; }
+    // Whether an Executor has started a Run on this World.
     [[nodiscard]] bool HasRun() const noexcept { return hasRun_; }
 
     // ---- Entities and component values
@@ -186,6 +216,7 @@ public:
     template <class T>
     [[nodiscard]] const T* Resource() const {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeRead, false);
         const auto& slot = TypedResource<T>(resource);
         return slot.value ? &*slot.value : nullptr;
@@ -194,6 +225,7 @@ public:
     template <class T>
     [[nodiscard]] T* ResourceMut() {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeWrite, false);
         auto& slot = TypedResource<T>(resource);
         if (!slot.value) return nullptr;
@@ -201,22 +233,26 @@ public:
         return &*slot.value;
     }
 
-    // Host, Ready only. KernelSettings may be written only before the first Run
-    // (W-6b, J-50: the Executor reads it once, when the first Run starts).
+    // Host, Ready only. KernelSettings too, at any time in Ready: the Executor
+    // reads it once, when each WorldExecutor::Run starts (J-50, DI-KS 24).
     template <class T>
     void SetResource(T value) {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeWrite, true);
         auto& slot = TypedResource<T>(resource);
         slot.value = std::move(value);
         slot.changed = WriteStamp();
+        BindThread(resource);
     }
 
     template <class T>
     void RemoveResource() {
         const ResourceId resource = Detail::ResourceIdOf(*this, KeyOf<T>());
+        CheckThread(resource);
         Access(Detail::EntryKind::Resource, resource, Detail::kModeWrite, true);
         TypedResource<T>(resource).value.reset();
+        TypedResource<T>(resource).thread = 0;
     }
 
     // ---- Events (read-only views for the Host and tests: every record kept)
@@ -298,7 +334,7 @@ public:
     void SetBreakHook(std::function<void(const KernelError&)> hook) { breakHook_ = std::move(hook); }
 
 private:
-    friend class Product;
+    friend class WorldExecutor;
     friend Detail::SystemContext* Detail::CurrentCall(World&) noexcept;
     friend Detail::SystemContext& Detail::RequireCall(World&);
     friend ComponentId Detail::ComponentIdOf(const World&, TypeKey);
@@ -317,11 +353,7 @@ private:
     friend std::vector<ComponentId> Detail::SetMembersOf(const World&, TypeKey);
     friend void Detail::Push(Detail::SystemContext&, Detail::Record);
     friend KernelError Detail::CallError(Detail::SystemContext&, KernelErrorCode, std::string, std::string);
-    friend std::optional<KernelError> Detail::CheckUntypedCommand(Detail::SystemContext&, ComponentId, EntityId, bool);
-    friend std::optional<KernelError> Detail::CheckDespawn(Detail::SystemContext&, EntityId);
-    friend std::optional<KernelError> Detail::CheckExclusiveWrite(Detail::SystemContext&, ComponentId, EntityId);
-    friend std::optional<KernelError> Detail::CheckExclusiveResourceWrite(Detail::SystemContext&, ResourceId, bool);
-    friend std::optional<KernelError> Detail::CheckExclusiveRead(Detail::SystemContext&, ResourceId);
+    friend KernelError Detail::CallerError(Detail::SystemContext&, KernelErrorCode, std::string, std::string);
     friend std::uint64_t Detail::CurrentSyncEpoch(const World&) noexcept;
     friend ChangeStamp Detail::NextStamp(World&) noexcept;
     friend Detail::ResourceBase* Detail::AllotterSlot(World&) noexcept;
@@ -330,6 +362,13 @@ private:
     friend void Detail::AddDiagnostics(World&, TypeKey, std::unique_ptr<Detail::DiagnosticsBase>);
     friend std::optional<KernelError> Detail::CombineCall(Detail::SystemContext&, Engine::Base::Result<void, KernelError>,
                                                           const std::vector<std::string>&);
+
+    // Attaches to the Registry's version when it is not the one attached
+    // (declaration 3.2 rule 5). Cheap when equal: one comparison.
+    void Sync() const;
+    // GYO_ASSERT: not Running or Applying (a Registry never builds while one
+    // of its Worlds runs: rule 4).
+    void AttachVersion();
 
     template <class T>
     [[nodiscard]] Detail::Column<T>& TypedColumn(ComponentId id) const {
@@ -343,6 +382,10 @@ private:
     // The checks of every public access (see the file comment). structural:
     // insert, remove, despawn or resource presence.
     void Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, bool structural) const;
+    // DI-KS 14: a thread-bound resource that holds a value is touched only on the
+    // thread that put it in (GYO_ASSERT); BindThread records this thread.
+    void CheckThread(ResourceId id) const;
+    void BindThread(ResourceId id);
     void MakeAlive(EntityId id);
     // The stamp a write through the World API carries: in a run, the current
     // step's; in Ready, the stamp the next step will take (a Host write belongs
@@ -350,15 +393,17 @@ private:
     [[nodiscard]] ChangeStamp WriteStamp() const noexcept { return state_ == WorldState::Ready ? stamp_ + 1 : stamp_; }
     void MarkApiWritten(Detail::EntryKind kind, std::uint32_t id) const;
 
-    // ---- Executor side (Product, World.cpp)
+    // ---- Executor side (WorldExecutor, World.cpp)
 
     // F.2: applies the running level's deferred records (window_ from its
     // windowBase; K0) and the schedule's hook queue (spawn records that cannot
-    // spawn are dropped and recorded, spec F-13); Err from a hook or the Z5
-    // recheck, which also looks at the records the outer levels keep and their
-    // schedules' hook queues. stamp: the sync point's stamp.
+    // spawn are dropped and recorded, spec F-13); Err from a hook. The outer
+    // levels' records and their schedules' hook queues are not looked at.
+    // stamp: the sync point's stamp. immediate (S5, WorldExecutor::ImmediateFrom):
+    // applies only these records, as one phase of steps 2 to 7; the window, the
+    // hook queue and the sync epoch are left alone.
     Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                      ChangeStamp stamp);
+                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
     void RecordRejectedSpawn(RejectedSpawn rejected);
     // Spec E.5: discards every record not yet applied (hook queue included).
@@ -374,6 +419,9 @@ private:
     // Layer 2 (spec A.6): snapshots and comparisons.
     using Snapshot = Detail::Snapshot;
     void TakeSnapshots();
+    // Drops every snapshot: the next comparison takes fresh ones and reports
+    // nothing (the verification switch changed, J-50).
+    void DropSnapshots() noexcept;
     // Names of storages changed outside the World API since the last snapshot.
     [[nodiscard]] std::vector<std::string> CompareBefore();
     // Names of storages access does not declare as written that changed during the call.
@@ -389,6 +437,9 @@ private:
     const FrozenRegistry* frozen_;
     const Detail::RegistryData* data_;
     std::string name_;
+    WorldOptions options_;
+    // The Registry version the storage below matches (0: none yet).
+    std::uint64_t version_ = 0;
     WorldState state_ = WorldState::Ready;
     bool hasRun_ = false;
     bool verification_ = false;
@@ -405,7 +456,7 @@ private:
     // from its windowBase (RunLevel), applied and cut off at that level's sync
     // points; the outer levels' records wait, untouched, for their own.
     std::vector<Detail::Record> window_;
-    // K0: the schedules running now, outermost first (spec E.2; Product::Run
+    // K0: the schedules running now, outermost first (spec E.2; WorldExecutor::Run
     // pushes the first, ExclusiveWorld::RunSchedule the others). A schedule is on
     // it at most once (X-11).
     struct RunLevel {
@@ -436,8 +487,12 @@ private:
     };
     std::vector<HookQueue> hookQueues_;
     [[nodiscard]] HookQueue& HookQueueOf(std::string_view schedule);
-    // Spec F-12: the product's default hook round limit (KernelSettings, cached
-    // when the first Run starts), and the hooks that recorded during the current
+    // S5: while an immediate change of ExclusiveWorld applies, the queue its
+    // hooks record into instead of the schedule's (WorldExecutor::ImmediateFrom
+    // applies it before the change returns); nullptr otherwise.
+    HookQueue* hookTarget_ = nullptr;
+    // Spec F-12: the product's default hook round limit (KernelSettings, read
+    // when each Run starts), and the hooks that recorded during the current
     // hook round (HookData index, call order; for the limit's message).
     std::uint32_t hookRoundLimit_ = 8;
     bool trackRoundRecorders_ = false;
@@ -468,9 +523,9 @@ private:
     std::vector<bool> excluded_;
 
     std::vector<Detail::AccessDesc> hookAccess_;
-    // The Product running this World (set by it): a hook's call carries it too,
+    // The WorldExecutor running this World (set by it): a hook's call carries it too,
     // so ExclusiveWorld::RunSchedule in a hook reaches the refusal (X-13).
-    Product* executor_ = nullptr;
+    WorldExecutor* executor_ = nullptr;
     std::function<void(const KernelError&)> breakHook_;
 };
 

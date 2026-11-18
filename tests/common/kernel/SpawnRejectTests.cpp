@@ -120,7 +120,7 @@ SystemResult LogRemoveBody(HookCtx ctx) {
     return Ok();
 }
 SystemResult DespawnThenSpawnSeven(Despawn despawn, SpawnWithId<Bundle<Body>> spawn) {
-    if (auto r = despawn.Entity(7); !r) return r;
+    despawn.Entity(7);
     spawn.New(7, Body{77});
     return Ok();
 }
@@ -133,7 +133,10 @@ SystemResult FlagTwentyAndTwentyOne(SpawnWithId<Bundle<Signal>> spawn) {
     spawn.New(21, Signal{21});
     return Ok();
 }
-SystemResult HookDespawnsSeven(HookCtx, Despawn despawn) { return despawn.Entity(7); }
+SystemResult HookDespawnsSeven(HookCtx, Despawn despawn) {
+    despawn.Entity(7);
+    return Ok();
+}
 SystemResult SpawnSevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
     if (tick.Tick() == 1) spawn.New(7, Body{77});
     return Ok();
@@ -190,7 +193,7 @@ SystemResult SpawnElevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick t
 }
 SystemResult DespawnThenSpawnElevenAtTickOne(Despawn despawn, SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
     if (tick.Tick() != 1) return Ok();
-    if (auto r = despawn.Entity(11); !r) return r;
+    despawn.Entity(11);
     spawn.New(11, Body{1111});
     return Ok();
 }
@@ -243,7 +246,7 @@ SystemResult SpawnHundredTag(SpawnWithId<Bundle<Tag>> spawn) {
     return Ok();
 }
 SystemResult DespawnThenSpawnHundredFifty(Despawn despawn, SpawnWithId<Bundle<Body>> spawn) {
-    if (auto r = despawn.Entity(150); !r) return r;
+    despawn.Entity(150);
     spawn.New(150, Body{150});
     return Ok();
 }
@@ -277,7 +280,10 @@ SystemResult SpawnSevenAlways(SpawnWithId<Bundle<Body>> spawn) {
     return Ok();
 }
 SystemResult FailsInB() { return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "FailsInB fails")); }
-SystemResult ZoneBDespawnsE(Despawn despawn) { return despawn.Entity(60); }
+SystemResult ZoneBDespawnsE(Despawn despawn) {
+    despawn.Entity(60);
+    return Ok();
+}
 SystemResult ZoneCSpawnsE(SpawnWithId<Bundle<CPos>> spawn) {
     spawn.New(60, CPos{60});
     return Ok();
@@ -755,17 +761,21 @@ TEST_CASE("J-55: the records, the count and the World's states") {
     }
 }
 
-TEST_CASE("J-55: a zone B despawn and a zone C spawn of one id are still Z5") {
+// Z5 went with the run-time interception (v8-arch-gyo2-no-runtime-interception):
+// the despawn (step 2) applies before the spawn (step 4), so 60 comes back new.
+TEST_CASE("J-55: a zone B despawn and a zone C spawn of one id: the despawn applies first, then the spawn") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&ZoneBDespawnsE>(In("ZoneBDespawnsE", "A"));
         r.AddSystem<&ZoneCSpawnsE>(In("ZoneCSpawnsE", "A", Zone::C));
     });
     rig->world().Insert(60, Tag{1});
-    const auto result = rig->Run();
-    CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-55 z5: Z5 as before");
-    CHECK(rig->world().State() == WorldState::Interrupted);
-    CHECK(rig->world().Alive(60));
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(rig->world().State() == WorldState::Ready);
+    REQUIRE_MESSAGE(rig->world().Alive(60), "J-55 despawn-then-spawn: 60 is spawned again");
+    REQUIRE(rig->world().Get<CPos>(60) != nullptr);
+    CHECK(rig->world().Get<CPos>(60)->x == 60);
+    CHECK_MESSAGE(rig->world().Get<Tag>(60) == nullptr, "J-55 despawn-then-spawn: the old entity's Tag is gone");
     CHECK(rig->world().RejectedSpawns() == 0);
 }
 
@@ -792,9 +802,9 @@ TEST_CASE("J-55: the fingerprint versions") {
         r.AddSystem<&SpawnSevenAlways>(In("SpawnSevenAlways", "A"));
     });
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
-    CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 4U, "J-55 versions: Plan fingerprint version 4");
-    CHECK_MESSAGE(frozen.CFingerprint().version == 6U, "J-55 versions: C fingerprint version 6");
-    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 2U, "J-55 versions: Registry fingerprint version 2");
+    CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 5U, "J-55 versions: Plan fingerprint version 5");
+    CHECK_MESSAGE(frozen.CFingerprint().version == 7U, "J-55 versions: C fingerprint version 7");
+    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 3U, "J-55 versions: Registry fingerprint version 3");
 }
 
 // ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)
@@ -840,8 +850,15 @@ SystemResult ZoneCSpawnsNineVel(SpawnWithId<Bundle<CVel>> spawn) {
     spawn.New(9, CVel{9});
     return Ok();
 }
-SystemResult ZoneCSpawnsNinePosAgain(SpawnWithId<Bundle<CPos>> spawn) {
-    spawn.New(9, CPos{10});
+// Zone C and Shared, so two spawners of one bundle are not also two writers of an
+// Exclusive column (D-E2 would fail Finish and hide the tie).
+struct CSharedPos { std::int32_t x; };
+SystemResult ZoneCSpawnsNineShared(SpawnWithId<Bundle<CSharedPos>> spawn) {
+    spawn.New(9, CSharedPos{9});
+    return Ok();
+}
+SystemResult ZoneCSpawnsNineSharedAgain(SpawnWithId<Bundle<CSharedPos>> spawn) {
+    spawn.New(9, CSharedPos{10});
     return Ok();
 }
 
@@ -989,7 +1006,7 @@ TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and anothe
 }
 
 // Whether the two Systems of "two emitters" really do not conflict: the same shape in zone C,
-// where a conflict without a declared order is a Finish error.
+// where a conflict without a declared order is a tie listed in TieBreaks.
 TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with one bundle they do") {
     SUBCASE("disjoint bundles: Finish succeeds in both orders, both spawns of 9 are dropped, the World is the same") {
         Fingerprint summaries[2];
@@ -1005,6 +1022,8 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
                     r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
                 }
             });
+            CHECK_MESSAGE(rig->built.registry->Frozen().TieBreaks().empty(),
+                          "J-55 zone-c-pair: disjoint bundles give no tie");
             KERNEL_REQUIRE_RUN_OK(rig->Run());
             CHECK_MESSAGE(!rig->world().Alive(9), "J-55 zone-c-pair: 9 is not spawned");
             const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
@@ -1015,14 +1034,19 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
         }
         CHECK_MESSAGE(summaries[0] == summaries[1], "J-55 zone-c-pair: the World is the same in both orders");
     }
-    SUBCASE("one bundle: the two Systems conflict, Finish fails without a declared order") {
+    SUBCASE("one bundle: the two Systems conflict, tied by registration without a declared order") {
         Built built = Finish({{"test", [](Registrar& r) {
                                    Base(r);
-                                   r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
-                                   r.AddSystem<&ZoneCSpawnsNinePosAgain>(In("ZoneCSpawnsNinePosAgain", "A", Zone::C));
+                                   r.Component<CSharedPos>({.name = "CSharedPos", .zone = Zone::C,
+                                                            .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+                                   r.AddSystem<&ZoneCSpawnsNineShared>(In("ZoneCSpawnsNineShared", "A", Zone::C));
+                                   r.AddSystem<&ZoneCSpawnsNineSharedAgain>(In("ZoneCSpawnsNineSharedAgain", "A", Zone::C));
                                }}});
-        CHECK_MESSAGE(!built.result, "J-55 zone-c-pair: Finish fails for two zone C Systems that spawn one bundle");
-        MESSAGE(Describe(built));
+        REQUIRE_MESSAGE(static_cast<bool>(built.result), Describe(built));
+        const auto ties = built.registry->Frozen().TieBreaks();
+        CHECK_MESSAGE((ties.size() == 1 && ties[0].first == "ZoneCSpawnsNineShared" &&
+                       ties[0].second == "ZoneCSpawnsNineSharedAgain"),
+                      "J-55 zone-c-pair: two zone C Systems that spawn one bundle conflict (one tie)");
     }
 }
 

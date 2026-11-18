@@ -105,7 +105,7 @@ SystemResult SpawnsBodyB(Spawn<Bundle<Body>>) { return Ok(); }
 std::unique_ptr<WorldTest::Rig> Start(std::function<void(Registrar&)> build) {
     Seen().clear();
     auto rig = WorldTest::MakeRig(std::move(build));
-    if (rig->product) rig->world().SetResource(RangeAllotter::Of(100, 199));
+    if (rig->executor) rig->world().SetResource(RangeAllotter::Of(100, 199));
     return rig;
 }
 
@@ -136,7 +136,7 @@ TEST_CASE("initial value: two Systems request, one System writes, and the compon
         r.AddSystem<&CountNewBodies>(In("CountNewBodies", "Use"));
         r.Hook<Body, &BodyAdded>(HookTrigger::OnAdd, {.name = "BodyAdded"});
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     World& world = rig->world();
 
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -202,7 +202,7 @@ TEST_CASE("initial value: a component the entity already has is left as it is") 
         r.AddSystem<&SpawnsBoth>(In("SpawnsBoth", "Request"));
         r.Hook<Body, &BodyAdded>(HookTrigger::OnAdd, {.name = "BodyAdded"});
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     const EntityId id = rig->world().Entities()[0];
@@ -217,7 +217,7 @@ TEST_CASE("initial value: an insert of the request fills once; overwriting the r
         r.InitialValue<Body, &BodyFromRequest>();
         r.AddSystem<&InsertsRequests>(In("InsertsRequests", "Request"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     World& world = rig->world();
     world.Insert(7, Label{0});   // two entities that exist before the first tick
     world.Insert(8, Body{80});
@@ -244,7 +244,7 @@ TEST_CASE("initial value: a chain of declarations completes at one sync point") 
         r.InitialValue<Mass, &MassFromBody>();
         r.AddSystem<&RequestOne>(In("RequestOne", "Request"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     const EntityId id = rig->world().Entities()[0];
@@ -285,7 +285,7 @@ TEST_CASE("initial value: with two requests on one entity the lower ComponentId 
             if (!crateFirst) r.InitialValue<Body, &BodyFromCrate>();
             r.AddSystem<&SpawnsTwoRequests>(In("SpawnsTwoRequests", "Request"));
         });
-        REQUIRE(rig->product);
+        REQUIRE(rig->executor);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         REQUIRE(rig->world().Entities().size() == 1);
         const EntityId id = rig->world().Entities()[0];
@@ -299,7 +299,7 @@ TEST_CASE("initial value: the Host API does not fill (like hooks, sync points on
         Data(r);
         r.InitialValue<Body, &BodyFromRequest>();
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     rig->world().Insert(7, BodyAt{4});
     CHECK(rig->world().Get<Body>(7) == nullptr);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -440,7 +440,7 @@ TEST_CASE("initial value: the filled cell carries the stamp of the sync point th
         r.InitialValue<Mass, &MassFromBody>();
         r.AddSystem<&RequestOne>(In("RequestOne", "Request"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     const EntityId id = rig->world().Entities()[0];
@@ -468,7 +468,7 @@ TEST_CASE("initial value: OnAdd runs once for the request and once for every lin
         r.Hook<Mass, &MassAdded>(HookTrigger::OnAdd, {.name = "MassAdded"});
         r.Hook<Label, &LabelAdded>(HookTrigger::OnAdd, {.name = "LabelAdded"});
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     CHECK(SeenCount("request:") == 1);
@@ -485,7 +485,7 @@ TEST_CASE("initial value: a request recorded by a hook is filled at the next syn
         r.AddSystem<&LabelsCrates>(In("LabelsCrates", "Use"));
         r.Hook<Crate, &CrateAsksForBody>(HookTrigger::OnAdd, {.name = "CrateAsksForBody"});
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     const EntityId id = rig->world().Entities()[0];
@@ -513,7 +513,7 @@ TEST_CASE("initial value: one request gives the first value of two components") 
         r.InitialValue<Foreign, &ForeignFromRequest>();
         r.AddSystem<&RequestOne>(In("RequestOne", "Request"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     const EntityId id = rig->world().Entities()[0];
@@ -553,7 +553,7 @@ TEST_CASE("initial value: two declarations that name each other stop at one sync
         r.InitialValue<Mass, &MassFromBody>();
         r.AddSystem<&SpawnsMass>(In("SpawnsMass", "Request"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     const EntityId id = rig->world().Entities()[0];
@@ -713,8 +713,8 @@ TEST_CASE("initial value: a declaration changes the Registry fingerprint and, fo
     CHECK(base.CFingerprint() == zoneB.registry->Frozen().CFingerprint());  // zone B only: the C part is the same
     // One zone C declaration each, from different requests: the C part differs.
     CHECK(zoneC.registry->Frozen().CFingerprint() != otherZoneCRequest.registry->Frozen().CFingerprint());
-    CHECK(base.RegistryFingerprint().version == 2U);
-    CHECK(base.CFingerprint().version == 6U);
+    CHECK(base.RegistryFingerprint().version == 3U);
+    CHECK(base.CFingerprint().version == 7U);
 }
 
 namespace {
@@ -901,9 +901,9 @@ TEST_CASE("initial value: golden fingerprints of a Registry with two declaration
     MESSAGE("two declarations: registry " << both.registry->Frozen().RegistryFingerprint().Text() << " C "
                                           << both.registry->Frozen().CFingerprint().Text());
     CHECK(both.registry->Frozen().RegistryFingerprint().Text() ==
-          std::string("2:1bd07b69726cfbec4572325bf7f970636f8cb3592aa9dffcb136adccbc556b8b"));
+          std::string("3:65757616567486b254cea255282ca05269071493244b69c96af3d7c5f91a3064"));
     CHECK(both.registry->Frozen().CFingerprint().Text() ==
-          std::string("6:ec26aa56636c32c4a95a636b3ce70b5def939c7324b4903568e5b32935367854"));
+          std::string("7:073de7ae97c2729af846395ee06e9bb5a9e36d41744b55cba9533b877be6ccfa"));
 }
 
 namespace {
@@ -1286,7 +1286,7 @@ TEST_CASE("initial value: a request that appears through a chain is looked at af
         r.InitialValue<Body, &BodyFromCrate>();
         r.AddSystem<&SpawnsRequestAndCrate>(In("SpawnsRequestAndCrate", "Request"));
     });
-    REQUIRE(rig->product);
+    REQUIRE(rig->executor);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Entities().size() == 1);
     const EntityId id = rig->world().Entities()[0];

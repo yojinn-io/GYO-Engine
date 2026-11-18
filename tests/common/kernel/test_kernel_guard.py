@@ -280,6 +280,87 @@ class GuardTree(unittest.TestCase):
         self.header("struct Plane { float near; };")
         self.assertReported("K7", "near")
 
+    # K8 ---------------------------------------------------------------------------------------------------------
+
+    def test_k8_id_issuer_is_reported(self):
+        self.header("struct Ids { Engine::Base::IdIssuer issuer; };")
+        self.assertReported("K8", "IdIssuer")
+
+    def test_k8_id_issuer_after_using_is_reported(self):
+        # using namespace, so the use line itself does not spell Base::IdIssuer.
+        self.header("using namespace Engine::Base;\ninline IdIssuer& Issuer();")
+        self.assertReported("K8", "IdIssuer")
+
+    def test_k8_base_thread_serial_state_is_reported(self):
+        # One name per tree, matched at the end of the finding: "K8 threadSerials" contains "threadSerial".
+        for body, needle in (("inline auto Next() { return Engine::Base::Detail::threadSerials.Next(); }",
+                              "K8 threadSerials"),
+                             ("inline auto Mine() { return Engine::Base::Detail::threadSerial; }",
+                              "K8 threadSerial")):
+            with self.subTest(needle=needle):
+                self.header(body)
+                problems = guard.check(self.root)
+                self.assertTrue(any(p.endswith(needle) for p in problems), problems)
+
+    def test_k8_serial_state_after_using_namespace_is_reported(self):
+        for body, needle in (("using namespace Engine::Base::Detail;\ninline auto Next() { return threadSerials.Next(); }",
+                              "K8 threadSerials"),
+                             ("using namespace Engine::Base::Detail;\ninline auto Mine() { return threadSerial; }",
+                              "K8 threadSerial")):
+            with self.subTest(needle=needle):
+                self.header(body)
+                problems = guard.check(self.root)
+                self.assertTrue(any(p.endswith(needle) for p in problems), problems)
+
+    def test_k8_longer_names_are_clean(self):
+        self.header("struct EntityIdIssuer {}; struct IdIssuers {};\n"
+                    "inline constexpr int threadSerialNumber = 0; inline constexpr int bthreadSerials = 0;")
+        self.assertClean()
+
+    def test_k8_executor_file_is_checked(self):
+        self.write("engine/kernel/src/Executor.cpp",
+                   "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
+        self.assertReported("K8", "IdIssuer")
+
+    def test_k8_in_a_source_file_is_reported(self):
+        self.write("engine/kernel/src/World.cpp",
+                   "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
+        self.assertReported("K8", "IdIssuer")
+
+    def test_k8_finding_names_its_line(self):
+        self.header("struct Empty {};\nstruct Ids { Engine::Base::IdIssuer issuer; };")
+        self.assertReported("K8", "Added.hpp:4: K8 IdIssuer")
+
+    def test_k8_in_a_macro_definition_is_reported(self):
+        self.header("#define GYO_KERNEL_ISSUER Engine::Base::IdIssuer\nGYO_KERNEL_ISSUER& Issuer();")
+        self.assertReported("K8", "IdIssuer")
+
+    def test_k8_in_cmake_lists_is_reported(self):
+        self.write("engine/kernel/CMakeLists.txt",
+                   "add_library(gyo_kernel STATIC)\n# IdIssuer in a comment is not read\n"
+                   "target_compile_definitions(gyo_kernel PRIVATE GYO_COUNTER=Engine::Base::IdIssuer)\n")
+        self.assertReported("K8", "CMakeLists.txt:3: K8 IdIssuer")
+
+    def test_k8_comment_in_cmake_lists_is_clean(self):
+        self.write("engine/kernel/CMakeLists.txt", "add_library(gyo_kernel STATIC)  # no IdIssuer here\n")
+        self.assertClean()
+
+    def test_k8_angle_bracket_include_is_clean(self):
+        self.write("engine/kernel/src/World.cpp",
+                   "#include <engine/base/IdIssuer.hpp>\nnamespace GYO::Kernel {\n"
+                   "unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n")
+        self.assertClean()
+
+    def test_k8_current_thread_serial_and_the_include_are_clean(self):
+        self.write("engine/kernel/src/World.cpp",
+                   '#include "engine/base/IdIssuer.hpp"\nnamespace GYO::Kernel {\n'
+                   'unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n')
+        self.assertClean()
+
+    def test_k8_in_a_comment_or_literal_is_clean(self):
+        self.header('// an IdIssuer would be a counter\ninline const char* Why() { return "IdIssuer threadSerials"; }')
+        self.assertClean()
+
     # Scanning survives comments, literals and file types (adversarial check B1, B20, A1, A3) ---------------------
 
     def test_findings_after_a_line_comment_are_reported(self):
