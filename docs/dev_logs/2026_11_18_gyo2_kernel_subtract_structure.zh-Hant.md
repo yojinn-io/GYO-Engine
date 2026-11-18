@@ -1,6 +1,6 @@
 # Kernel 減法・結構段（`v8-arch-gyo2-kernel-subtract-structure`）
 
-日期：2026-11-17～18。分支 `claude/eloquent-joliot-aedd90`（從 `gyo2` a08c16f6 快轉）。**PR 未開**：等第二段核准（宣告第 15 節）。
+日期：2026-11-17～18。分支 `claude/eloquent-joliot-aedd90`（從 `gyo2` a08c16f6 快轉）。第二段核准：使用者 2026-11-18 核准（宣告第 15 節開頭）；PR 開往 `gyo2`，合併等使用者。
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[kernel-subtract-structure-declaration.zh-Hant.md](../architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md) 修訂 2（cd553b2d）；使用者 2026-11-17 在主會話「照建議」核准第一段（HANDOFF `v8-arch-gyo2-kernel-subtract-structure-declaration-approved`）。宣告的修訂 0、1 各送 Fable／high 敵對式檢查與窄複查。實作者 Opus／high（三段＋兩次修正）；逐行複核 Fable／xhigh（使用者同意）；§14.4 檢證與 §14.2 檢查 Fable／high。
 
@@ -32,7 +32,7 @@
 
 - **S10 三件使用者 2026-11-18「照建議」**：核准 FOREIGN 加 Base 的兩個名字、核准 DI-KS 14 改寫、Kernel 只准用 `CurrentThreadSerial`。S10 提交 e4074799；K8（`kernel_guard.py`）與 DI-KS 14 的條文在下一個提交。K8 的 §14.2 檢查（Fable 5.2／high）找到 19 處，建議的已補；kernel_guard 的突變 71 個全部殺掉；最後 ctest 98/98、守衛腳本 144 項、G-3 27 式 0 命中（`k8/`）。突變清單 → 802。
 - **當場 `Spawn<C…>` 遇到還活著的 id**：使用者 2026-11-18「參考Go的成功和錯誤回傳，不要回空」。回傳型別回到 `Result<EntityId, KernelError>`，回錯誤碼 `AllottedIdAlive`（新碼；只交給呼叫的 System，`Detail::CallerError` 不記進這次呼叫的錯誤，所以 Run 不以它結束、World 不中斷），`RejectedSpawn` 照舊記（比照同步點丟掉的生成，F-13）。DI-KS 18 的那一句、System 契約的說明頁、宣告第 3.5、14.2、15.5 節跟著改。測試改寫 1 案、加 3 個突變、更新 1 個，相關突變 52 個全部殺掉（`spawn-alive-err/`）。
-- **第二段核准**的材料整理在宣告第 15 節（判定 G-1～G-8 的狀態、九組的緩的面與 G-7、DI 守衛、DI 最終文字、實作中新出現的）。
+- **第二段核准**（2026-11-18 使用者「核准」）：材料整理在宣告第 15 節（判定 G-1～G-8 的狀態、九組的緩的面與 G-7、DI 守衛、DI 最終文字、實作中新出現的）。
 
 ## 證據
 
