@@ -224,7 +224,7 @@ Registry、Plan、C 三種指紋的版本號都升（6／4／8），export 標�
 
 ---
 
-## 5. 不另做 EventBus：Engine 機制的送法（**已定：照建議**，使用者 2026-11-19，第 11 節第 2 件）
+## 5. 不另做 EventBus：Engine 機制的送法（**已定：照建議**，使用者 2026-11-19，第 11 節第 2 件，`v8-arch-gyo2-event-delivery-rule`）
 
 從別家歸納的原則（`recon-c`；本卡的歸納，**使用者 2026-11-19 定：照建議，之後各批照它定送法、不再逐批問**）：**World 層級的廣播、讀者節奏不同 → 保留式 `Message`；針對某個實體或結構變更、要當下反應 → 推送式 `Event`；連續的狀態（時間前進、暫停、是否重跑中）→ 不發事件，讀 Resource**。在 Bevy 一致：`StateTransitionEvent`、`AppExit`、`AssetEvent` 是 Message；生命週期與 `bevy_scene::Ready` 是 Event；時間前進、暫停、lightyear 的 `Rollback` 是狀態。flecs 只有推送式，節奏不同時建議用 System 輪詢（`ObserversManual.md:104-126`）。
 
@@ -460,7 +460,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 這會改你列舉的範圍，所以交你定。
 
-### 第 2 件：Engine 機制的送法表（第 5 節）——**已定：照建議**（使用者 2026-11-19，side chat 轉達；代號待主會話定）
+### 第 2 件：Engine 機制的送法表（第 5 節）——**已定：照建議**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-event-delivery-rule`）
 
 **原話**：「嗯，這個照建議，你的歸納邏輯很清晰。」**定下的**：(1) 原則：整個 World 關心、讀的人節奏不同 → 保留式 `Message`；針對某個實體、要當下反應 → 推送式 `Event`；一直存在的狀態（暫停、第幾 tick、重跑中）→ 不發事件，讀 Resource。(2) 第 5 節的表照建議，含「時間 tick 不發事件」（縮小 `-no-separate-eventbus` 的列舉）。之後各批照這條原則定送法，不再逐批問。**比過的選項**：照原則定、時間 tick 不發 ←選／照原列舉每跑一步發一個事件（和固定步裡的 System 重複、每步多一份成本）／只採表、不立原則。**理由**：使用者說歸納邏輯清晰，沒有另外說。附帶：使用者原本以為 `Message` 是指定給某個 System 處理，side chat 更正後使用者說「那是我理解錯誤了，我還以為Message會to OOOOSystem來做的。」更正的內容寫在第 5 節原則下。
 
