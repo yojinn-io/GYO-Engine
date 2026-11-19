@@ -325,7 +325,9 @@ public:
 
     // The World summary of spec D-9: keys and values of every column, resource
     // values and event payloads, without stamps, tick stamps or Plan positions.
-    // Version 1 (Fingerprint.cpp). Readable in Ready and Interrupted.
+    // Version 1 (Fingerprint.cpp). Readable in Ready and Interrupted. Values
+    // are hashed as raw bytes: a type in the summary must have no padding (the
+    // author's responsibility; v8-arch-gyo2-summary-padding-a-then-c).
     [[nodiscard]] Fingerprint Summary() const;
 
     // The break hook called where a KernelError is made when

@@ -23,6 +23,7 @@
 #include "engine/entity_store/EntityId.hpp"
 
 #include <algorithm>
+#include <array>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -349,9 +350,12 @@ struct RangeAllotter {
     EntityId last = 0;
     EntityId next = 0;
     bool exhausted = false;
+    // Zero bytes where padding would be: World::Summary hashes a value's raw
+    // bytes, and padding has no set value (MSVC gave one save two summaries).
+    std::array<std::uint8_t, 7> reserved{};
 
     [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {
-        return RangeAllotter{first, last, first, first > last};
+        return RangeAllotter{first, last, first, first > last, {}};
     }
 
     [[nodiscard]] std::optional<EntityId> Allot() noexcept {
@@ -367,6 +371,8 @@ struct RangeAllotter {
 
     [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }
 };
+static_assert(std::has_unique_object_representations_v<RangeAllotter>,
+              "RangeAllotter has padding: World::Summary hashes its raw bytes");
 
 namespace Detail {
 
