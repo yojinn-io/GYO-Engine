@@ -420,7 +420,7 @@ C 的意思是：最小集合裡沒有突變能在同一個位置證明 X 的那
 2. **第 3b 節的 17 個**：留（建議），還是也退？
 3. **第 4 節的 7 個**：留（建議），還是也併進去？
 4. **第 5 節 C 的 170 個**：留（建議）？要退的話要逐個核准緩的面。
-5. **既有問題，另案處理（不在這次退役裡）**：7 個突變的 expect 是案例標題，而那幾個案例無條件印 MESSAGE，所以 expect 實際上是空的，只剩「`cases` 裡有東西失敗」。這 7 個是 `rs-iv-ff1`、`rs-iv-fb5`、`rs-iv-fb6`、`rs-iv-fb7`、`rs-iv-fb8`、`rs-iv-fb9`、`rs-iv-fb11`（第 9 節第 2 點）。照 AGENTS §14.2 要改寫 expect，建議列為後續。其中 `rs-iv-fb8` 是 `rs-iv-ff3-C-section-dropped` 的接手，第 3 節的合併會讓它的 expect 不再是空的（變嚴）。
+5. **既有問題，另案處理（不在這次退役裡）**：7 個突變的 expect 是案例標題，而那幾個案例無條件印 MESSAGE，所以 expect 實際上是空的，只剩「`cases` 裡有東西失敗」。這 7 個是 `rs-iv-ff1`、`rs-iv-fb5`、`rs-iv-fb6`、`rs-iv-fb7`、`rs-iv-fb8`、`rs-iv-fb9`、`rs-iv-fb11`（第 9 節第 2 點）。照 AGENTS §14.2 要改寫 expect，建議列為後續。**已處理（使用者 2026-11-19「把 7 個空 expect 你直接處理」）**：expect 改成指名各自打壞的那句 CHECK，7/7，見 dev_log 的「後續：7 個空 expect」。其中 `rs-iv-fb8` 是 `rs-iv-ff3-C-section-dropped` 的接手，第 3 節的合併會讓它的 expect 不再是空的（變嚴）。
 
 ## 9. 敵對式檢查
 
