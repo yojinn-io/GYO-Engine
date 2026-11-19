@@ -19,7 +19,7 @@
 
 - 每格一個 `uint64` 的 `added` 與 `changed`。stamp 是 World **依 Plan 順序推進的全域計數**（跨同一 World 的所有 schedule 單調）：每一個 Plan 步驟（System 或同步點）開始時取下一個值；條件為假被跳過的 System 也消耗它的值。除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號；記號仍然只往前走（spec F-12、E.2）。取值依 Plan 順序而不依完成先後，所以 Parallel 與 Serial 相同；不是 (c) 資料。
 - stamp **單調、不重置、不回滾、跨世代（World 重建）不比較**。溢出無實際可能（u64）。
-- ~~tick 的視角由 `tickStamps[domain]` 換算~~ **拿掉**（`v8-arch-gyo2-time-events` G5）：Kernel 沒有 tick，也不記「每個 tick 的第一個 stamp」；tick 在時間 Module（[`v2/world-time.zh-Hant.md`](v2/world-time.zh-Hant.md)）。需要「某個 tick 以來改過什麼」的作者或複製層用 `Changed<…>`，或自己記下那個 tick 開始時的 stamp。
+- ~~tick 的視角由 `tickStamps[domain]` 換算~~ **拿掉**（`v8-arch-gyo2-time-events` G5）：Kernel 沒有 tick，也不記「每個 tick 的第一個 stamp」；tick 在時間 Module（[`v2/world-time.zh-Hant.md`](v2/world-time.zh-Hant.md)）。需要「某個 tick 以來改過什麼」的作者或複製層用 `Changed<…>`（System 讀不到當下的 stamp，所以「自己記下那個 tick 開始時的 stamp」現在做不到；複製那一批需要時再加原語。`v8-arch-gyo2-time-events` 第 7 步依審查更正）。
 - **stamp 不是 (c) 資料**：不進回滾快照、不回滾；(c) 區 System 不得用它做變更過濾（spec G-3：Match 執行一次與 Client 回滾重跑時「上次執行之後的變更」不同，兩端的 stamp 毫無關係）。
 - 理由（為什麼不用遊戲 tick）：只用 tick 時，同一 tick 內排在讀者之後的寫入會被讀者永久漏掉（`T > T` 不成立），用 `>=` 則重複讀到。
 - 連動修改：blueprint DI-K5 與 networking §1 第 7 條原寫「以遊戲 tick 標記」，已各改一句。
