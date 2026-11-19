@@ -67,7 +67,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 | T1 的內容 | 現況或後來的決定 | 本頁的處理 |
 |---|---|---|
-| 型別放 `engine/time`，命名空間 `Engine::Time` | `time-plan-two` (7)「時間的型別留在 `engine/time`」；DI 10 規定 `gyo_time` 只連 `GYO::Base`＋`Threads`（`time.md:89-90`，守衛 `tests/common/time/CMakeLists.txt:37`） | **改了（使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定，推翻 `time-plan-two` (7)）**：遊戲時間全部放 `engine/world_time`，`engine/time` 照舊只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），DI 10、D29、名字都不動（第 3.1 節） |
+| 型別放 `engine/time`，命名空間 `Engine::Time` | `time-plan-two` (7)「時間的型別留在 `engine/time`」；DI 10 規定 `gyo_time` 只連 `GYO::Base`＋`Threads`（`time.md:89-90`，守衛 `tests/common/time/CMakeLists.txt:37`） | **改了（使用者 2026-11-19，「一起確認」第 3 條，`v8-arch-gyo2-game-time-in-world-time`，推翻 `time-plan-two` (7)）**：遊戲時間全部放 `engine/world_time`，`engine/time` 照舊只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），DI 10、D29、名字都不動（第 3.1 節） |
 | `FixedTime` 沒有累計、沒有 tick（T1 第 2.1、3 節第 7 條：「固定步裡的累計只能是 tick×步長」） | `-clock-out-of-kernel`：tick 移到時間 Module；回滾策略會退 tick（回滾 7.2） | **本卡照 L17 判，改 T1：`FixedTime` 有累計 `elapsed`**，每跑一步加一個步長（Bevy `Time<Fixed>` 每步 `advance_by`，`fixed.rs:216-227`；lightyear 回滾時從現在的累計減掉 k 步，`prediction/rollback.rs:1153-1183`；Unity Netcode `m_ElapsedTime - m_FixedTimeStep*tickAge`，`NetcodeClientPredictionRateManager.cs:288`——三家都是累計值）。T1 擔心「回滾時 tick 被還原、累計不會」：時間 Module 給「退回 k 步」的函式同時退 `Tick` 與累計（第 3.3 節），一處維持。修訂 0 的「`elapsed`＝`Tick`×步長」退掉：沒有一家這樣做，而且之後 Client 對時改 `Tick` 時累計會跟著跳。**使用者 2026-11-19 確認照建議**（`v8-arch-gyo2-fixed-time-accumulates`） |
 | 「兩個寫者要不要標成可多寫」（T1 第 8 節） | `-authority-no-writer-count`：Kernel 不數寫者 | 不再是問題；時間設計 DI 2「各只有一個寫者」改寫成約定（WT-5） |
 | 放進 World 之後摘要與 padding（T1 第 3 節第 9 條） | 使用者 `-summary-padding-a-then-c`（2026-11-19）：`World::Summary` 照原始位元組雜湊會算進 padding；先由編排層骨架卡補 Kernel 自己的型別、契約補「進摘要的型別不能有 padding」；正式解法（逐型別的雜湊）在第 4 批；比摘要的測試標「未完全解決」 | **第 3 批不改摘要的方式**。時間的型別、`TimeDiscarded`、本批新增進 World 的 Kernel 內部紀錄（游標表、`{seq, payload}`）都照契約沒有 padding，用 `static_assert`（`sizeof` 等於逐欄大小的加總；不用 `has_unique_object_representations_v`，它對浮點一律回 false）守。浮點的 +0／-0 與 NaN 位元組不同（使用者那次列的第三種毛病）：本批不處理，`VirtualTime.scale` 只會被寫成套用的倍率（不會產生 -0），寫進範圍的限界；逐型別雜湊在第 4 批解 |
@@ -106,8 +106,8 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 | 事 | 判定 | 理由與系譜 |
 |---|---|---|
-| `engine/time` | **不動**：照舊只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），DI 10（只連 Base＋Threads）、D29、名字都不動 | 使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定。三家都把「現在幾點、睡到幾點」放在 OS 介面那一層、把遊戲時間放在另一處並和 World 綁在一起：Bevy 的基本時間是 `Instant`（`bevy_platform`），遊戲時間全在 `bevy_time`；flecs 基本時間在 OS API（`ecs_os_now`、`ecs_os_sleep`），遊戲時間在 World 資訊與 timer addon；Unity 基本時間是 `Stopwatch`、`realtimeSinceStartup`，遊戲時間是 World 的 `TimeData` 與更新它的 System |
-| 遊戲時間（全部） | **新的 Engine Module** `engine/world_time`（命名空間 `GYO::Engine::WorldTime`、target `GYO::WorldTime`、登記單位 `WorldTimeModule`，編排層 `Module` 的子類）：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`、`TimeControl`、`TickAccumulator`、`AdvanceVirtual`、步長與兩個上限的設定、`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded`、兩個 System、跑一步／退回 k 步。純型別與算術的標頭（`TimeTypes.hpp`、`TickAccumulator.hpp`）**不 include `MonotonicClock.hpp`**（zone_scan 的 ZS1，`tests/common/zone_scan/zone_scan_rules.json:6`）；只有 `AdvanceTime` 的實作讀它。**本卡加的詞** | **使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定**。原話：「一個概念不要分為2個實作。看著太噁心了。有這種一個概念開始分裂的情況，就是壞味道的開始。」「不不不，你看看別家的實作，基本時間有什麼，而遊戲時間有什麼。…」「可以。不頭鐵」。比過：遊戲時間全部放 `world_time`、`engine/time` 只留時間基準 ←選／全部放 `engine/time` 並讓它連 Kernel（DI 10 要改，audio、threads 被迫連 Kernel）／維持分兩處（修訂 1～3 的寫法，使用者判為壞味道）。理由（使用者的）：一個概念不要分成兩個實作；看別家的分法、不頭鐵。side chat 的補充（不是使用者的話）：`time-plan-two` (7) 當時把「型別」與「時間基準」當成同一個概念，照別家的分界它們是兩個概念；現在 `engine/time` 裡沒有遊戲時間，分裂是 T1 與本宣告的計畫要讓它發生。名字：N17 要目錄、命名空間、target 一致；叫 `GYO::Engine::Time` 會遮住現有的 `::Engine::Time`。比過：`Clock`、`Timeline`、`GameTime`。系譜：Bevy `bevy_time` |
+| `engine/time` | **不動**：照舊只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），DI 10（只連 Base＋Threads）、D29、名字都不動 | 使用者 2026-11-19，「一起確認」第 3 條，`v8-arch-gyo2-game-time-in-world-time`。三家都把「現在幾點、睡到幾點」放在 OS 介面那一層、把遊戲時間放在另一處並和 World 綁在一起：Bevy 的基本時間是 `Instant`（`bevy_platform`），遊戲時間全在 `bevy_time`；flecs 基本時間在 OS API（`ecs_os_now`、`ecs_os_sleep`），遊戲時間在 World 資訊與 timer addon；Unity 基本時間是 `Stopwatch`、`realtimeSinceStartup`，遊戲時間是 World 的 `TimeData` 與更新它的 System |
+| 遊戲時間（全部） | **新的 Engine Module** `engine/world_time`（命名空間 `GYO::Engine::WorldTime`、target `GYO::WorldTime`、登記單位 `WorldTimeModule`，編排層 `Module` 的子類）：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`、`TimeControl`、`TickAccumulator`、`AdvanceVirtual`、步長與兩個上限的設定、`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded`、兩個 System、跑一步／退回 k 步。純型別與算術的標頭（`TimeTypes.hpp`、`TickAccumulator.hpp`）**不 include `MonotonicClock.hpp`**（zone_scan 的 ZS1，`tests/common/zone_scan/zone_scan_rules.json:6`）；只有 `AdvanceTime` 的實作讀它。**本卡加的詞** | **使用者 2026-11-19，「一起確認」第 3 條，`v8-arch-gyo2-game-time-in-world-time`**。原話：「一個概念不要分為2個實作。看著太噁心了。有這種一個概念開始分裂的情況，就是壞味道的開始。」「不不不，你看看別家的實作，基本時間有什麼，而遊戲時間有什麼。…」「可以。不頭鐵」。比過：遊戲時間全部放 `world_time`、`engine/time` 只留時間基準 ←選／全部放 `engine/time` 並讓它連 Kernel（DI 10 要改，audio、threads 被迫連 Kernel）／維持分兩處（修訂 1～3 的寫法，使用者判為壞味道）。理由（使用者的）：一個概念不要分成兩個實作；看別家的分法、不頭鐵。side chat 的補充（不是使用者的話）：`time-plan-two` (7) 當時把「型別」與「時間基準」當成同一個概念，照別家的分界它們是兩個概念；現在 `engine/time` 裡沒有遊戲時間，分裂是 T1 與本宣告的計畫要讓它發生。名字：N17 要目錄、命名空間、target 一致；叫 `GYO::Engine::Time` 會遮住現有的 `::Engine::Time`。比過：`Clock`、`Timeline`、`GameTime`。系譜：Bevy `bevy_time` |
 | 登記檔 | `engine/config/modules.csv` 加 `world_time,GYO::WorldTime,…,no,yes,base;kernel;orchestration;time,,WorldTimeModule,engine/world_time/WorldTimeModule.hpp`（`library_only=no`、`default=yes`；預設帶、產品可關，O-6） | `-module-deps-in-registers`。**第一個真的進 World 的 Engine Module**（現在十列都是 `library_only=yes`） |
 | include 順序 | `engine/world_time` 的程式一律寫 `::Engine::Base::`、`::Engine::Time::`；`gyo_orchestration_include_order` 的範圍本批就擴到 `world_time` 的公開標頭（含 `RunOneFixedStep` 那個樣板的標頭）。它是「各種順序都編得過」的行為檢查，不是綁實作的掃描，所以不延後 | 第 2 批的問題（dev_log `2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md:45`、a8065853）；時間 Module 在 `GYO::Engine` 底下 |
 
@@ -403,7 +403,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 | 決定 | 系譜 | 退掉的 | 決定的理由 | 需要它的 Feature（Product） |
 |---|---|---|---|---|
-| 遊戲時間全部在 `world_time`、`engine/time` 只留時間基準 | Bevy、flecs、Unity 都把基本時間放在 OS 介面層、遊戲時間另成一處 | 型別放 `engine/time`、System 放 `world_time`（修訂 1～3）；全部放 `engine/time` 並連 Kernel | 使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定：一個概念不分成兩個實作 | 固定步、暫停（①②③） |
+| 遊戲時間全部在 `world_time`、`engine/time` 只留時間基準 | Bevy、flecs、Unity 都把基本時間放在 OS 介面層、遊戲時間另成一處 | 型別放 `engine/time`、System 放 `world_time`（修訂 1～3）；全部放 `engine/time` 並連 Kernel | 使用者 2026-11-19，「一起確認」第 3 條，`v8-arch-gyo2-game-time-in-world-time`：一個概念不分成兩個實作 | 固定步、暫停（①②③） |
 | `FixedTime` 帶累計、退回用函式 | Bevy、lightyear、Unity 都是累計值 | `Tick`×步長（修訂 0；GYO 新導出，Client 對時改 `Tick` 時累計會跳） | 照三家一致的做法；退回在 `RewindFixedSteps` 一處 | 回滾（① Client）、作者讀固定步時間（②） |
 | 累加器 `Add` 回傳步數 | 舊 `FixedTickRuntime`；Bevy 一次 `expend` 一步 | 照 Bevy | 結果相同；`Add` 後餘數一定不足一步（T1 第 6 節） | 固定步（①②） |
 | 一幀步數上限（預設 5） | 舊的；Bevy 只靠 250 ms | 只用時間長度上限 | 使用者 `time-plan-two` (4) | 追不上時（①②） |
@@ -441,7 +441,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - **O-4**：補「編排層給 schedule 的預設骨架（名字與段落順序；作者可換或關）並經 Kernel 執行它；不認得時間，也不認得任何 Module 掛進去的是什麼」（第 3.6 節，`v8-arch-gyo2-orchestration-gives-schedule-skeleton`；本卡判不算職責清單多一項，**動工前核准時請你一併看**）。
 - **O-11**：`WorldFailure` 帶同步點序號、不帶 domain 與 tick（G6）；加一段（第 11 節第 1 件，使用者 2026-11-19，`v8-arch-gyo2-world-events-not-via-event`，含使用者「補過去」的三點）：「通知只在發出它的 World 健康時經 Kernel 的事件發；致命錯誤與 World 自己的壞掉、建立、替換不經事件，結構化錯誤回給 runner，最後一道把它寫出去的路直接呼叫、不經任何機制。World 健康時的警告（丟棄記錄、`TimeDiscarded` 等）照常經事件。World 的建立與替換由編排層知道；要讓新 World 裡的 System 知道，在它準備好之後往裡面寫 `Message`（讀檔那一批定）。」
 
-### 10.3 時間的型別（併進新頁 `target/v2/world-time.zh-Hant.md`；`time.md` 不加，使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定）
+### 10.3 時間的型別（併進新頁 `target/v2/world-time.zh-Hant.md`；`time.md` 不加，使用者 2026-11-19，「一起確認」第 3 條，`v8-arch-gyo2-game-time-in-world-time`）
 
 1. 累加器只做整數的算術：不讀時間基準、不記 tick、不丟時間；從上一次 `Reset` 起，加進去的總量恆等於步數×步長＋餘數；`Add` 之後餘數不足一步。
 2. 超過上限的量只在 `AdvanceVirtual` 一處算；有固定步時扣整步。
@@ -535,7 +535,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 - ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-t1-closed-by-time-events`）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
 - ~~第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）~~——**已確認：照建議**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-fixed-time-accumulates`）。原話：「照建議」。比過：同意（照 Bevy、lightyear、Unity 累加）←選／改回 T1 的沒有累計（作者自己用 tick×步長算）／tick×步長（修訂 0；Client 對時改 tick 時累計會跳）。
-- ~~第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放~~——**已改定**（使用者 2026-11-19，side chat 轉達；代號待主會話定）：遊戲時間全部放 `engine/world_time`，`engine/time` 只留時間基準，**推翻 `time-plan-two` (7)**。原話與比過的選項見第 3.1 節表。名字 `world_time`／`WorldTimeModule` 照用。
+- ~~第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放~~——**已改定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-game-time-in-world-time`）：遊戲時間全部放 `engine/world_time`，`engine/time` 只留時間基準，**推翻 `time-plan-two` (7)**。原話與比過的選項見第 3.1 節表。名字 `world_time`／`WorldTimeModule` 照用。
 - ~~第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達；代號待主會話定）。原話：先問「上一個問題有些變化，這個決議還成立嗎？」，side chat 逐點對過後「同意。」比過：同意／某處不同意（例：tick 從 0 開始、沒被取走的時間不記）。對過的結果寫在第 3.3 節末。
 - 第 3.6 節預設骨架的細節：`FixedUpdate` 的 stage 名、關掉骨架的選項的形、O-4 補句**不算編排層職責清單多一項**。
 - 第 3.4 節的取樣；第 3.5 節可存與不放回的清單。
