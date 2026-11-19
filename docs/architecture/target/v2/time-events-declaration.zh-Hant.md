@@ -522,7 +522,11 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 每組的「守的性質、緩的面、緊的面、之後由誰守」在表裡。G1、G2、G3、G5、G8 是你已定的決定（放開跨時鐘、時鐘移出、照游標修剪、L8）的直接後果；G4 的空窗是你接受過的（`-authority-guard-gap-later`）；G6 是 O-11 的守衛（DI 的守衛一律要你核准）；G7 是你已定的方向。**方向在動工前核准；逐組的最終核准在合併前帶突變結果與檢證者（Fable／high）報告再看一次**（和第 2 批同一個做法）。第 10 節的 DI 文字同樣。
 
-### 第 5 件：第 12 節的模型與檔位（四處 xhigh、Fable 的四個角色）
+### 第 5 件：第 12 節的模型與檔位——**已定：不用 xhigh**（使用者 2026-11-19，side chat 轉達；代號待主會話定）
+
+**原話**（依序）：(1)「敵對式審查 Fable用 hight 就夠了。新突變清單的敵對式檢查 用 Opus/high，xhight 太頻繁了，沒必要。」(2) side chat 指出 Opus 檢查 Opus 定的清單違反 AGENTS §14.2 與 navigator（檢查者要和定清單的人不同模型），列三個做法（檢查者維持 Fable／high／清單由 Fable 定、Opus 檢查／例外照 Opus 檢查），使用者回「a」（維持 Fable／high）。**定下的**：第 3、4、5 步的三段 xhigh 取消，全照 high（side chat 把「xhigh 太頻繁了，沒必要」讀成連這三段一起取消並請使用者更正，使用者沒有更正）；第 5 步的敵對式審查 Fable／high；新突變清單的敵對式檢查 Fable／high；實作者 Opus／high、審查者與 §14.4 檢證者 Fable／high 照原案。**比過的選項**：三段 xhigh＋第 5 步 Fable／xhigh 審查（原建議）／只留第 5 步的審查／都用 high ←接近此項，審查者 Fable／high。**理由**（使用者的）：Fable 用 high 就夠；xhigh 太頻繁、沒必要。這是檔位的下修，不低於 navigator 的下限（上段不用小模型、檢查者和作者不同模型）。
+
+以下是原本的標題，留作紀錄：第 12 節的模型與檔位（四處 xhigh、Fable 的四個角色）
 
 ### 一起確認（照 L17 自己判的，不同意請指出）
 
@@ -545,9 +549,9 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 |---|---|---|---|
 | 第 1 步 | E1：`PRODUCT_ALIASES`、延後守衛 1～6 與它們的突變 | 本卡 Opus／high | 3～5 h |
 | 第 2 步 | E2：時間的型別與累加器（測試先行） | 本卡 Opus／high | 3～4 h |
-| 第 3 步 | E3：`Message` 改名、游標、上限、丟棄記錄、拿掉 `EventTrim`（讀者先不靠 tick） | 本卡 Opus／high；**游標×修剪×存取驗證×巢狀跑的交界 xhigh** | 8～12 h |
-| 第 4 步 | E4＋E5＋E9：拿掉 Kernel 的時鐘、同步點序號、測試的閘門改寫、編排層的預設骨架（先做）、時間 Module、`modules.csv`、`WorldFailure` | 本卡 Opus／high；**`RunOneFixedStep`／`RewindFixedSteps` 的換入換出×巢狀跑×錯誤路徑 xhigh** | 15～21 h |
-| 第 5 步 | E6：`Event`、`Observer`、`Trigger`、`On<E>`、元件 Add／Remove | 本卡 Opus／high；**觸發點×同步點×巢狀跑×Ready 時觸發 xhigh** | 8～12 h |
+| 第 3 步 | E3：`Message` 改名、游標、上限、丟棄記錄、拿掉 `EventTrim`（讀者先不靠 tick） | 本卡 Opus／high | 8～12 h |
+| 第 4 步 | E4＋E5＋E9：拿掉 Kernel 的時鐘、同步點序號、測試的閘門改寫、編排層的預設骨架（先做）、時間 Module、`modules.csv`、`WorldFailure` | 本卡 Opus／high | 15～21 h |
+| 第 5 步 | E6：`Event`、`Observer`、`Trigger`、`On<E>`、元件 Add／Remove | 本卡 Opus／high | 8～12 h |
 | 第 6 步 | E7：scenario 第 2 段、`TimeDiscarded`、golden、DI 與文件、dev_log、預算量測 | 本卡 Opus／high | 3～5 h |
 | 第 7 步 | 完整突變（兩百多個被改到案例的突變的重跑在各步內）、新突變清單的敵對式檢查、§14.4 檢證、審查 | 見下 | 6～10 h |
 
@@ -556,8 +560,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | 角色 | 模型／檔位 | 理由 |
 |---|---|---|
 | 實作者 | Opus／high（本卡） | 上段；不用小模型 |
-| 第 3、4、5 步標 xhigh 的段 | 本卡照 xhigh 處理該段（**比本卡的 high 高，要你同意**） | ギアボックス：タイミング、決定性、再入 |
-| 第 5 步的敵對式審查 | xhigh-reviewer，指定 Fable／xhigh（**要你同意**） | observer 的重入與先後；和實作者不同模型 |
+| 第 5 步的敵對式審查 | Fable／high（使用者 2026-11-19：不用 xhigh） | observer 的重入與先後；和實作者不同模型 |
 | 審查者 | Fable／high | 和實作者不同模型 |
 | §14.4 檢證者（G1～G8） | Fable／high | 第 2 批同一個指定 |
 | 新突變清單的敵對式檢查 | Fable／high | §14.2；和定清單的人不同模型 |
