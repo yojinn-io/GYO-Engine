@@ -7641,6 +7641,316 @@
       "target": "gyo_kernel_tests",
       "cases": "J-36: the records are trimmed when the outermost Run ends*",
       "expect": "\\[msg\\-trim\\-after\\-rounds\\]"
+    },
+    {
+      "id": "obs-trigger-runs-nothing",
+      "what": "a trigger outside a sync point runs no observer (event cursor declaration 3.3: ExclusiveWorld::Trigger and the Host's run them now). Only this catches it: no other mutant touches the observers of RunTriggered",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    Engine::Base::Result<void, KernelError> ran =\n        world.RunObservers(ObserverTrigger::Event, id, payload.Payload(), target, planPos, schedule, 0, true);",
+      "replace": "    Engine::Base::Result<void, KernelError> ran = Engine::Base::Result<void, KernelError>{};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: ExclusiveWorld::Trigger runs the observers now*",
+      "expect": "\\[obs\\-now\\]"
+    },
+    {
+      "id": "obs-trigger-before-structural",
+      "what": "a Commands::Trigger runs its observers when the phase starts, before the despawns, inserts and resources of the same sync point (time-events declaration 4.2: the last step, after the resource step). The only mutant of where a deferred trigger is delivered",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        // The triggers (Commands::Trigger) wait for the last step, in record order.\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Trigger) triggers.push_back(&r);\n        }",
+      "replace": "        for (Record& r : records) {\n            if (r.kind != RecordKind::Trigger) continue;\n            auto early = RunObservers(ObserverTrigger::Event, r.id, r.value->Payload(), std::nullopt, planPos, schedule, stamp, false);\n            if (!early) return early;\n        }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: a Commands::Trigger runs the observers at the sync point*",
+      "expect": "\\[obs\\-deferred\\-last\\-step\\]"
+    },
+    {
+      "id": "obs-trigger-reverse-order",
+      "what": "the deferred triggers are delivered last recorded first (time-events declaration 4.2: in record order). The only mutant of the delivery order",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (const Record* r : triggers) {",
+      "replace": "        for (auto it = triggers.rbegin(); it != triggers.rend(); ++it) {\n            const Record* r = *it;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: a Commands::Trigger runs the observers at the sync point*",
+      "expect": "\\[obs\\-deferred\\-last\\-step\\]"
+    },
+    {
+      "id": "obs-add-observer-before-hook",
+      "what": "a new cell's Add observers run before its OnAdd hooks (time-events declaration 4.2: hook, then observer). The only mutant of the Add order",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (trigger == HookTrigger::OnRemove) {\n        auto observed = RunObservers(ObserverTrigger::Remove, component, nullptr, entity, planPos, schedule, stamp, false);\n        if (!observed) return observed;\n    }\n",
+      "replace": "    if (trigger == HookTrigger::OnRemove) {\n        auto observed = RunObservers(ObserverTrigger::Remove, component, nullptr, entity, planPos, schedule, stamp, false);\n        if (!observed) return observed;\n    }\n    if (trigger == HookTrigger::OnAdd) {\n        auto early = RunObservers(ObserverTrigger::Add, component, nullptr, entity, planPos, schedule, stamp, false);\n        if (!early) return early;\n        for (std::size_t h = 0; h < data_->hooks.size(); ++h) {\n            const Detail::HookRecord& hook = data_->hooks[h];\n            if (hook.trigger != trigger || !hook.componentId || *hook.componentId != component) continue;\n            auto result = RunHook(h, entity, component, planPos, schedule, stamp);\n            if (!result) return result;\n        }\n        return {};\n    }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: per (entity? component)? the OnAdd hooks run before*",
+      "expect": "\\[obs\\-add\\-order\\]"
+    },
+    {
+      "id": "obs-remove-observer-after-hook",
+      "what": "a leaving cell's Remove observers run after its OnRemove hooks (time-events declaration 4.2: observer, then hook). The only mutant of the Remove order",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (trigger == HookTrigger::OnRemove) {\n        auto observed = RunObservers(ObserverTrigger::Remove, component, nullptr, entity, planPos, schedule, stamp, false);\n        if (!observed) return observed;\n    }\n",
+      "replace": "    if (trigger == HookTrigger::OnRemove) {\n        for (std::size_t h = 0; h < data_->hooks.size(); ++h) {\n            const Detail::HookRecord& hook = data_->hooks[h];\n            if (hook.trigger != trigger || !hook.componentId || *hook.componentId != component) continue;\n            auto result = RunHook(h, entity, component, planPos, schedule, stamp);\n            if (!result) return result;\n        }\n        return RunObservers(ObserverTrigger::Remove, component, nullptr, entity, planPos, schedule, stamp, false);\n    }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: per (entity? component)? the Remove observers run before*,J-59: a despawn runs every cell's*",
+      "expect": "(?=[\\s\\S]*(?:\\[obs\\-remove\\-order\\]))[\\s\\S]*(?:\\[obs\\-despawn\\-order\\])"
+    },
+    {
+      "id": "obs-rounds-skipped",
+      "what": "what the observers of a trigger outside a sync point record is not applied before it returns (time-events declaration 4.2: the rounds). The only mutant of the trigger's rounds",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    while (!pending.records.empty()) {",
+      "replace": "    while (false && !pending.records.empty()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the Host's Trigger in Ready runs the observers now*",
+      "expect": "\\[obs\\-host\\-applied\\]"
+    },
+    {
+      "id": "obs-round-limit-off-by-one",
+      "what": "the trigger's rounds stop one round late (F-12: at most the limit). The only mutant of the trigger's limit comparison",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    while (!pending.records.empty()) {\n        if (round == limit) {",
+      "replace": "    while (!pending.records.empty()) {\n        if (round == limit + 1) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the Host's Trigger stops at KernelSettings*",
+      "expect": "\\[obs\\-host\\-limit\\]"
+    },
+    {
+      "id": "obs-host-limit-default",
+      "what": "the Host's trigger uses the default hook round limit instead of the World's KernelSettings (event cursor declaration 3.3: this World's KernelSettings). The only mutant of the Host trigger's limit source",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    const std::uint32_t limit = now.hookRoundLimit;",
+      "replace": "    const std::uint32_t limit = KernelSettings{}.hookRoundLimit;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the Host's Trigger stops at KernelSettings*",
+      "expect": "\\[obs\\-host\\-limit\\]"
+    },
+    {
+      "id": "obs-exclusive-limit-default",
+      "what": "ExclusiveWorld::Trigger's rounds ignore the World's KernelSettings limit (time-events declaration 4.2, as an immediate change: the schedule's, or the World's). The only mutant of that fallback",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    const std::uint32_t limit = running->options.hookRoundLimit.value_or(world.hookRoundLimit_);",
+      "replace": "    const std::uint32_t limit = running->options.hookRoundLimit.value_or(KernelSettings{}.hookRoundLimit);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: ExclusiveWorld::Trigger stops at the hook round limit*",
+      "expect": "\\[obs\\-exclusive\\-limit\\]"
+    },
+    {
+      "id": "obs-exclusive-limit-schedule-ignored",
+      "what": "ExclusiveWorld::Trigger's rounds ignore the schedule's declared limit (the schedule's first, as an immediate change). The only mutant of that branch",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    const std::uint32_t limit = running->options.hookRoundLimit.value_or(world.hookRoundLimit_);",
+      "replace": "    const std::uint32_t limit = world.hookRoundLimit_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the trigger's rounds use the schedule's declared*",
+      "expect": "\\[obs\\-exclusive\\-limit\\-schedule\\]"
+    },
+    {
+      "id": "obs-host-err-not-failed",
+      "what": "an error of the Host's trigger is returned without interrupting the World or calling the handler (event cursor declaration 3.3: the World interrupted, F-12). The only mutant of the Host trigger's failure",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (!ran) return Fail(std::move(ran).error(), false);",
+      "replace": "    if (!ran) return Engine::Base::Err(std::move(ran).error());",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the Host's Trigger stops at KernelSettings*",
+      "expect": "\\[obs\\-host\\-limit\\]"
+    },
+    {
+      "id": "obs-exclusive-err-not-left",
+      "what": "an error of ExclusiveWorld::Trigger is returned to the System only: the World is not interrupted and a System that drops it ends the Run Ok (DI-KS 16 to 21: reported once by the outermost Run). The only mutant of that path",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (!ran) return halt(std::move(ran).error());",
+      "replace": "    if (!ran) return Engine::Base::Err(std::move(ran).error());",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: an ExclusiveWorld::Trigger error the System drops*",
+      "expect": "\\[obs\\-exclusive\\-err\\-left\\]"
+    },
+    {
+      "id": "obs-hook-trigger-wrong-code",
+      "what": "a hook's ExclusiveWorld<> triggering now is refused with ClosureChangesMembership instead of HookChangesMembership (event cursor declaration 3.3: a hook's ExclusiveWorld<> changes nothing now; the kind of the refusal). Taking the refusal away is not a mutant: the W-3 assertion right after it aborts, so the failure could not be told apart (AGENTS 14.2). The only mutant of the refusal's kind",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        return halt(Detail::CallError(call, KernelErrorCode::HookChangesMembership, \"DI-KS 18\",",
+      "replace": "        return halt(Detail::CallError(call, KernelErrorCode::ClosureChangesMembership, \"DI-KS 18\",",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: a hook's ExclusiveWorld<> triggering now*",
+      "expect": "\\[obs\\-hook\\-trigger\\-refused\\]"
+    },
+    {
+      "id": "obs-closure-trigger-not-refused",
+      "what": "ExclusiveWorld::Trigger runs inside a Read or Modify closure (DI-KS 21). The only mutant of that refusal",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (closureOpen) {\n        return halt(",
+      "replace": "    if (false) {\n        return halt(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: ExclusiveWorld::Trigger inside a Read or Modify closure*",
+      "expect": "\\[obs\\-closure\\-trigger\\-refused\\]"
+    },
+    {
+      "id": "obs-order-registration",
+      "what": "the observers of one trigger run in registration order, not name order (the order is deterministic and does not follow registration; the C fingerprint holds no order). The only mutant of the run order",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    std::sort(data.observerOrder.begin(), data.observerOrder.end(), [&data](std::uint32_t a, std::uint32_t b) {\n        return data.observers[a].name < data.observers[b].name;\n    });",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the observers of one trigger run in the same order*",
+      "expect": "\\[obs\\-order\\]"
+    },
+    {
+      "id": "obs-reader-shares-system-cursor",
+      "what": "an observer's reader key is System 0's mount 0, so it shares that reader's cursor (event cursor declaration 3.2: an observer is a reader of its own). The only mutant of the observer's reader key",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        call.reader = Detail::ReaderKey{index, Detail::kObserverMount, 0, true};",
+      "replace": "        call.reader = Detail::ReaderKey{index, 0, 0, true};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: an observer is a message reader*",
+      "expect": "\\[obs\\-reader\\]"
+    },
+    {
+      "id": "obs-boundary-nothing-declared",
+      "what": "an observer's writes are compared after its call as if it declared none (event cursor declaration 3.3: its access is derived from its signature and verified; spec A.6 layer 2), so a write it declares is reported. The only mutant of the observer's layer 2 description",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (verification_) changed = CompareAfter(observerAccess_[index]);",
+      "replace": "        if (verification_) changed = CompareAfter(Detail::AccessDesc{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: an observer's access is verified*",
+      "expect": "\\[obs\\-access\\]"
+    },
+    {
+      "id": "obs-fingerprint-no-observers",
+      "what": "the observers are left out of the Registry fingerprint (event cursor declaration 5.2: an observer's registration is in it). The only mutant of that section",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.U32(data.observers.size());\n    for (const ObserverRecord& observer : data.observers) {\n        out.Str(observer.name);",
+      "replace": "    out.U32(0);\n    for (const ObserverRecord& observer : std::vector<ObserverRecord>{}) {\n        out.Str(observer.name);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: an observer changes the Registry fingerprint*",
+      "expect": "\\[obs\\-fingerprint\\]"
+    },
+    {
+      "id": "obs-cfp-no-observers",
+      "what": "the zone C observers are left out of the C fingerprint. The only mutant of that section",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.U32(count(data.observers, [](const ObserverRecord& o) { return o.zone == Zone::C; }));\n    for (std::uint32_t index : data.observerOrder) {",
+      "replace": "    out.U32(0);\n    for (std::uint32_t index : std::vector<std::uint32_t>{}) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: an observer changes the Registry fingerprint*",
+      "expect": "\\[obs\\-fingerprint\\]"
+    },
+    {
+      "id": "obs-cfp-registration-order",
+      "what": "the C fingerprint hashes the zone C observers in registration order (event cursor declaration 3.3: the C fingerprint holds no order of observers); the run order is left as it is. The only mutant of the C section's order",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    for (std::uint32_t index : data.observerOrder) {\n        const ObserverRecord& observer = data.observers[index];",
+      "replace": "    for (std::uint32_t index = 0; index < data.observers.size(); ++index) {\n        const ObserverRecord& observer = data.observers[index];",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: an observer changes the Registry fingerprint*",
+      "expect": "\\[obs\\-fingerprint\\]"
+    },
+    {
+      "id": "obs-name-twice-allowed",
+      "what": "two observers of one name are accepted (their names make the run order). The only mutant of R-E2 for observers",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (existing.name == options.name) {\n            data.Error(StartupCode::RE2, \"B.1\",\n                       \"observer name '\"",
+      "replace": "        if (false) {\n            data.Error(StartupCode::RE2, \"B.1\",\n                       \"observer name '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: observer startup errors*",
+      "expect": "\\[obs\\-startup\\-name\\]"
+    },
+    {
+      "id": "obs-unregistered-silent",
+      "what": "an observer of a type that is not a registered event is accepted (it would never run). The only mutant of R-E4 for observers",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (entry == nullptr || entry->role != wanted) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: observer startup errors*",
+      "expect": "\\[obs\\-startup\\-unregistered\\]"
+    },
+    {
+      "id": "obs-zone-c-local-allowed",
+      "what": "a zone C observer may hold Local<T> (time-events declaration 4.5: an observer's zone follows a hook's rule). The only mutant of the zone C forbids of observers",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            refuseInC(found.access.local, \"S-7\", \"has Local<T> (state outside the World)\");",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: observer startup errors*",
+      "expect": "\\[obs\\-startup\\-zone\\]"
+    },
+    {
+      "id": "obs-not-a-writer",
+      "what": "an observer's writes are not counted as writers (an observer is a System; DI-KS 6). The only mutant of D-E2 for observers",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                writers[key].emplace_back(\"observer \" + observer.name, SourceText(observer.source));",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: observer startup errors*",
+      "expect": "\\[obs\\-startup\\-writers\\]"
+    },
+    {
+      "id": "obs-event-zone-unset-allowed",
+      "what": "an event type with no zone passes under RequireExplicitZones (time-events declaration 4.5: a message type's rule). The only mutant of that check",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (info.zone == Zone::Unset) {\n            data.Error(StartupCode::DE7, \"S-6\", \"event '\"",
+      "replace": "        if (false) {\n            data.Error(StartupCode::DE7, \"S-6\", \"event '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: observer startup errors*",
+      "expect": "\\[obs\\-startup\\-zone\\-unset\\]"
+    },
+    {
+      "id": "obs-zone-unset-allowed",
+      "what": "an observer with no zone passes under RequireExplicitZones (a hook's rule). The only mutant of that check",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (observer.zone == Zone::Unset) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: observer startup errors*",
+      "expect": "\\[obs\\-startup\\-zone\\-unset\\]"
+    },
+    {
+      "id": "obs-later-round-allowed",
+      "what": "a later round may add an Add or Remove observer to a component the previous version has (like a hook: its cells ran no Add observer but would run Remove ones). The only mutant of R-E7 for observers",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (observer.trigger != ObserverTrigger::Event && observer.observedId && *observer.observedId < base.components) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: a later round may not add*",
+      "expect": "\\[obs\\-later\\-round\\]"
+    },
+    {
+      "id": "obs-trigger-no-own-stamp",
+      "what": "the observers of a trigger outside a sync point take no stamp of their own (DI-KS 16 to 21: like one nested System call). The only mutant of their stamps",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.RunObservers(ObserverTrigger::Event, id, payload.Payload(), target, planPos, schedule, 0, true);",
+      "replace": "        world.RunObservers(ObserverTrigger::Event, id, payload.Payload(), target, planPos, schedule, 0, false);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: an observer of a trigger outside a sync point takes a stamp*",
+      "expect": "\\[obs\\-trigger\\-stamp\\]"
+    },
+    {
+      "id": "obs-exclusive-trigger-stamp-not-renewed",
+      "what": "after ExclusiveWorld::Trigger the handle keeps its stamp, so its later writes carry a stamp older than the observers' (DI-KS 16 to 21, as after RunSchedule). The only mutant of the Trigger handle's renewal",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                owner.stamp_ = Detail::NextStamp(*owner.world_);",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: an observer of a trigger outside a sync point takes a stamp*",
+      "expect": "\\[obs\\-trigger\\-stamp\\-renewed\\]"
+    },
+    {
+      "id": "obs-host-precall-unchecked",
+      "what": "the Host's trigger does not compare the Ready window first, so a change outside the World API is not reported (spec A.6, as a Run's Ready window). The only mutant of that comparison",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        const std::vector<std::string> changed = world.CompareBefore();\n        if (!changed.empty()) {\n            std::string list;\n            for (const std::string& name : changed) list += (list.empty() ? \"\" : \", \") + name;\n            KernelError error(KernelErrorCode::PreCallChange,\n                              \"changed outside the World API before the Host's trigger",
+      "replace": "        const std::vector<std::string> changed;\n        if (!changed.empty()) {\n            std::string list;\n            for (const std::string& name : changed) list += (list.empty() ? \"\" : \", \") + name;\n            KernelError error(KernelErrorCode::PreCallChange,\n                              \"changed outside the World API before the Host's trigger",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the Host's Trigger with verification on*",
+      "expect": "\\[obs\\-host\\-precall\\]"
+    },
+    {
+      "id": "obs-host-settings-not-read",
+      "what": "the Host's trigger keeps the verification switch of the last Run, so before any Run an observer's undeclared write is not reported (DI-KS 24: KernelSettings read when it starts, as a Run). The only mutant of that read",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    world.verification_ = now.accessVerification;",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the Host's Trigger with verification on*",
+      "expect": "\\[obs\\-host\\-verification\\]"
     }
   ]
 }

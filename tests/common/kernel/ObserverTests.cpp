@@ -178,6 +178,32 @@ SystemResult OpenDoorOnEight(ExclusiveWorld<> world) {
     return Ok();
 }
 SystemResult RingNow(ExclusiveWorld<> world) { return world.Trigger(Rang{0}); }
+// Drops the trigger's Err: the World is interrupted all the same and the Run ends in it (reported once).
+SystemResult RingNowIgnoring(ExclusiveWorld<> world) {
+    (void)world.Trigger(Rang{0});
+    return Ok();
+}
+// Logs the Mode cell's changed stamp the observer gave it, then writes it after the trigger (a new stamp).
+SystemResult TouchModeOnDoor(On<DoorOpened> on, Query<Write<Mode>> modes) {
+    if (Mut<Mode> mode = modes.GetMut<Mode>(*on.Target())) mode->m = 1;
+    Log().push_back("obs-stamp:" + std::to_string(KeptWorld()->Stamps<Mode>(*on.Target())->second));
+    return Ok();
+}
+SystemResult OpenDoorThenTouch(ExclusiveWorld<> world) {
+    Log().push_back("own-stamp:" + std::to_string(KeptWorld()->Stamp()));
+    auto done = world.Trigger(DoorOpened{1}, EntityId{8});
+    if (!done) return done;
+    auto touched = world.Modify<Mode>(8, [](Mode& mode) { mode.m = 2; });
+    if (!touched) return Engine::Base::Err(touched.error());
+    Log().push_back("after-stamp:" + std::to_string(KeptWorld()->Stamps<Mode>(8)->second));
+    return Ok();
+}
+SystemResult ReadPings(MessageReader<Ping> pings) {
+    std::string line = "sys-read:";
+    for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
+    Log().push_back(line);
+    return Ok();
+}
 // Triggers inside a Read closure (refused).
 SystemResult TriggerInClosure(ExclusiveWorld<> world) {
     Engine::Base::Result<void, KernelError> inner = Engine::Base::Result<void, KernelError>{};
@@ -484,6 +510,62 @@ TEST_CASE("J-59: ExclusiveWorld::Trigger stops at the hook round limit: HookRoun
     CHECK_MESSAGE(rig->world().State() == WorldState::Interrupted, "[obs-exclusive-limit] the World is interrupted");
 }
 
+TEST_CASE("J-59: the trigger's rounds use the schedule's declared hook round limit before the World's") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        ScheduleOptions limited;
+        limited.name = "Limited";
+        limited.stages = {"A"};
+        limited.hookRoundLimit = 1;
+        r.Schedule(limited);
+        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.AddSystem<&RingNow>(Sys("RingNow", Zone::B, {At("Limited", "A")}));
+    });
+    rig->world().SetResource(KernelSettings{true, false, 5});
+    const auto ran = rig->Run("Limited");
+    CHECK_MESSAGE(HasCode(ran, KernelErrorCode::HookRoundLimit), "[obs-exclusive-limit-schedule] " << Text(ran));
+    CHECK_MESSAGE(LinesStartingWith("rang:") == 2, "[obs-exclusive-limit-schedule] " << Joined());
+}
+
+TEST_CASE("J-59: an ExclusiveWorld::Trigger error the System drops interrupts the World and ends the Run in it, reported once") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.AddSystem<&RingNowIgnoring>(B("RingNowIgnoring", "A"));
+    });
+    rig->world().SetResource(KernelSettings{true, false, 2});
+    const auto ran = rig->Run();
+    CHECK_MESSAGE(HasCode(ran, KernelErrorCode::HookRoundLimit), "[obs-exclusive-err-left] " << Text(ran));
+    CHECK_MESSAGE(rig->recorded.size() == 1, "[obs-exclusive-err-left] reported once");
+    CHECK_MESSAGE(rig->world().State() == WorldState::Interrupted, "[obs-exclusive-err-left] interrupted");
+}
+
+TEST_CASE("J-59: an observer of a trigger outside a sync point takes a stamp of its own; the exclusive System a new one after it") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Observer<DoorOpened, &TouchModeOnDoor>({.name = "touch-mode", .zone = Zone::B});
+        r.AddSystem<&OpenDoorThenTouch>(B("OpenDoorThenTouch", "A"));
+    }, false);
+    rig->world().Insert(8, Mode{0});
+    KeptWorld() = &rig->world();
+    const auto ran = rig->Run();
+    KeptWorld() = nullptr;
+    REQUIRE_MESSAGE(static_cast<bool>(ran), Text(ran));
+    REQUIRE(Log().size() == 3);
+    const auto stampIn = [](const std::string& line) { return std::stoull(line.substr(line.find(':') + 1)); };
+    const std::uint64_t own = stampIn(Log()[0]);
+    const std::uint64_t observer = stampIn(Log()[1]);
+    const std::uint64_t after = stampIn(Log()[2]);
+    CHECK_MESSAGE(observer > own, "[obs-trigger-stamp] the observer's stamp is its own: " << Joined());
+    CHECK_MESSAGE(after > observer, "[obs-trigger-stamp-renewed] the System writes after with a new stamp: " << Joined());
+}
+
 TEST_CASE("J-59: a hook's ExclusiveWorld<> triggering now is HookChangesMembership; the World is interrupted") {
     Log().clear();
     auto rig = MakeRig([](Registrar& r) {
@@ -564,12 +646,15 @@ TEST_CASE("J-59: an observer is a message reader with a cursor of its own: it re
         Data(r);
         Events(r);
         r.Observer<DoorOpened, &ReadPingsOnDoor>({.name = "read-pings", .zone = Zone::B});
+        // Registered first: System 0 mount 0 is a reader of Ping too, whose cursor is not the observer's.
+        r.AddSystem<&ReadPings>(B("ReadPings", "A", {}, {"WritePing"}));
         r.AddSystem<&WritePing>(B("WritePing", "A"));
         r.AddSystem<&TriggerDoorOnOddRuns>(B("TriggerDoorOnOddRuns", "A", {}, {"WritePing"}));
     });
     for (int run = 0; run < 3; ++run) KERNEL_REQUIRE_RUN_OK(rig->Run());
-    // Run 1 reads Ping 1; it does not run in Run 2; Run 3 reads 2 and 3 (its cursor waited, held back the record).
-    CHECK_MESSAGE(Joined() == "obs-read: 1 | obs-read: 2 3", "[obs-reader] " << Joined());
+    // The observer: Run 1 reads Ping 1; it does not run in Run 2; Run 3 reads 2 and 3 (its cursor waited and
+    // held the record back). The System reads each Run's.
+    CHECK_MESSAGE(Joined() == "sys-read: 1 | obs-read: 1 | sys-read: 2 | sys-read: 3 | obs-read: 2 3", "[obs-reader] " << Joined());
     const auto& readers = rig->built.registry->Frozen().Messages()[*rig->built.registry->Frozen().MessageIdOf<Ping>()].readers;
     bool listed = false;
     for (const MessageReaderInfo& reader : readers) listed = listed || (reader.observer && reader.system == "read-pings");
