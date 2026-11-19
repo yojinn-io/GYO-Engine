@@ -45,7 +45,7 @@
 
 | 規則 | 禁止 | 來源 |
 |---|---|---|
-| K1 | 產品、工具的名字與連線角色詞，分三組：(i) 從 `engine/config/projects.csv`、`tools.csv` 讀登記的 id（原樣與 CamelCase，例 `object_fps_pvp`／`ObjectFpsPvp`、`voxel_map_editor`／`VoxelMapEditor`）；(ii) 登記表推不出的產品別名 `RetroFPS`、`fps::pvp`、`\b[Pp]vp`、`Gyo::Tools`，腳本裡每個各一行註解寫出處（哪個產品的哪種名字、為什麼推不出）；(iii) 連線角色詞 `\bMatch\b`、`[Pp]layer`、`Gateway`，另一組常數，註明來源是 entity_store W1。登記表讀不到＝失敗（fail closed）。新增產品不必改腳本；刪除產品後它的 id 自動不再禁 | DI-KS 15、naming DI 4（R-7、J-9「無產品名」） |
+| K1 | 產品、工具的名字與連線角色詞，分三組：(i) 從 `engine/config/projects.csv`、`tools.csv` 讀登記的 id（原樣與 CamelCase，例 `object_fps_pvp`／`ObjectFpsPvp`、`voxel_map_editor`／`VoxelMapEditor`）；(ii) 登記表推不出的產品別名 `RetroFPS`、`fps::pvp`、`\b[Pp]vp`、`Gyo::Tools`，腳本裡每個各一行註解寫出處（哪個產品的哪種名字、為什麼推不出）；(iii) 連線角色詞 `\bMatch\b`、`[Pp]layer`、`Gateway`，另一組常數，註明來源是 entity_store W1。登記表讀不到＝失敗（fail closed）。新增產品不必改腳本；刪除產品後它的 id 自動不再禁。（2026-11-19 註：(ii) 已從腳本拿掉，舊產品別名不再擋——使用者 2026-11-18，`v8-arch-gyo2-drop-product-aliases`；角色詞改稱 (ii)） | DI-KS 15、naming DI 4（R-7、J-9「無產品名」） |
 | K2 | `unordered_*`、`std::hash` | DI-KS 3（W-10） |
 | K3 | 時鐘、亂數、執行緒、atomic：`<chrono>`、`<random>`、`<thread>`、`<atomic>`、`<mutex>` 等標頭與 `std::chrono`、`rand(` 等名字（照 entity_store W3）。**Parallel 模組的例外本批不設**：v1 只有 Serial（LIM-2），加 Parallel 時改腳本（審查可見） | DI-KS 3、DI-KS 15（W-10、X-8） |
 | K4 | 非 constexpr 的 `static`／`thread_local` 變數；白名單**恰好兩個符號名**：`tlCurrent`（`thread_local`）與 `TypeKey<T>` 的 `static inline char`（符號名在 registry-schedule 定案時寫進腳本；本批先登記為 `typeKeyTag`，型別必須是 `char`）。自測斷言白名單集合恰等於這兩個，加第三個就失敗 | DI-KS 3（spec A.6、J-9） |
