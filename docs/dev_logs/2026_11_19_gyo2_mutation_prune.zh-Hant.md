@@ -1,6 +1,6 @@
 # Kernel 突變清單的盤點與退役（`v8-arch-gyo2-mutation-prune`）
 
-日期：2026-11-18～19。分支 `claude/gyo2-mutation-prune-19c247`（從 `8b912a1e`；第 2 步前合併 `origin/gyo2` `f48af791`，即第 2 批 PR #244 合併後）。**狀態：第 2 步完成（22/22、ctest 113/113），PR 待 L1 與合併；之後做 subsumption 檢查（不改清單）。**
+日期：2026-11-18～19。分支 `claude/gyo2-mutation-prune-19c247`（從 `8b912a1e`；第 2 步前合併 `origin/gyo2` `f48af791`，即第 2 批 PR #244 合併後）。**狀態：第 2 步、第 3 步完成（清單 777 → 714 → 663），PR #246 待合併。**
 
 這一批由任務卡做（GYO2 主會話開出，使用者原話「開一個任務卡處理一下，master都沒到這個級別吧。」）。上段（觸及守衛與突變的判定）：實作者 Opus 5.5／high，敵對式檢查 Fable 5.2／high（使用者事先同意）。盤點與退役表：[kernel-mutation-prune-report.zh-Hant.md](../architecture/target/v2/kernel-mutation-prune-report.zh-Hant.md)。
 
@@ -11,7 +11,8 @@
 | 第 1 步 盤點與退役表（唯讀） | 5d91175c | 777 個逐個分類；五類候選（重複、等價、對象不在或已涵蓋、守衛、活著或訊息不符）與各自的緩的面；增長判準草案；Fable／high 敵對式檢查 14 處全部改進報告 |
 | 使用者決定 | d8ec86be、b262e477、331a9ef3 | 「那 31 個都退，照合併的做法」「舊產品別名不用擋了，那 5 個也退」「其他的照你建議」「要，第 2 步做完之後跑 subsumption 檢查」（報告第 7 節） |
 | 第 2 步 改清單 | 801e2d64 | 777 → 714：直接退 41、合併進接手 22（試跑合併不成的 1 個留下）、改寫 3（下述） |
-| 第 3 步 subsumption 檢查（不改清單） | 本提交 | 714 個逐個跑全部 Kernel 測試、記失敗集合；最小集合 469、候選 245（A 56、B 19、C 170），建議退 51 個；候選表 [kernel-mutation-subsumption-report.zh-Hant.md](../architecture/target/v2/kernel-mutation-subsumption-report.zh-Hant.md)，交使用者核准 |
+| 第 3 步 subsumption 檢查（不改清單） | f62c70b3 | 714 個逐個跑全部 Kernel 測試、記失敗集合；最小集合 469、候選 245（A 56、B 19、C 170），建議退 51 個；候選表 [kernel-mutation-subsumption-report.zh-Hant.md](../architecture/target/v2/kernel-mutation-subsumption-report.zh-Hant.md)，交使用者核准 |
+| 第 3 步 改清單（使用者核准後） | 本提交 | 714 → 663：候選表第 3 節的 51 個合併進 39 個接手（使用者 2026-11-19「照你建議的做」） |
 
 第 2 步的改動（腳本 `apply_step2.py`，見證據）：
 - **直接退 41**：
@@ -56,16 +57,26 @@
 - 窄複查（同一位檢查者 Fable 5.2／high）：68 個的位置條件全部成立；另外指出其中 17 個 X 與接手在同一行失敗、錯成的值不同，退了會少一個發現改鬆型弱化的突變。和 C 類「集合相同但 expect 對的值不同」同一類，為一致建議留，移到候選表第 3b 節交使用者。其餘 6 點是說法與過時數字，照改。
 - 最後建議：退 51 個（714 → 663），收到合併的接手 39 個試跑 39/39（`rec3_trial.log`）。
 
+### 第 3 步 改清單
+
+- 使用者決定（2026-11-19）：「照你建議的做」——候選表第 8 節：退 51 個（合併進接手）；第 3b 節的 17 個、第 4 節的 7 個、第 5 節 C 的 170 個留；7 個空 expect 列為後續。
+- 改法：`subsumption/apply_step3.py`，合併的邏輯和試跑的 `merge_trial.py` 相同。另外加兩件事：接手的 `what` 寫進每個併進來的 X 的 id 與原本的 `what`；清單的 `description` 加一段。
+- 和試跑用的 `rec3_catalog.json` 比：id 相同。有 16 個接手的 expect 不同，原因是去重後只剩一句時沒有改寫原本的 expect，試跑則包成 `[\s\S]*(?:…)`，兩者對 `re.search` 等價（逐一確認）。其餘欄位除 `what` 外完全相同。
+- 鏈式合併（接手又被退）：
+  - `sr-range-removed` 併進 `sr-dropped-made-alive`：它在第 2 步收的兩句（J-55 range-respawn／range-insert）隨整段 expect 一起移過去。
+  - `ns-rebase-no-retake-names-ping` 併進 `ns-rebase-no-retake-on-throw`：它是第 2 步直接退掉的 `ns-rebase-no-retake` 的接手。
+- 驗證：用正式清單跑 39 個接手 39/39（`step3_mutants.log`；09:35 開始，跑到最後一個時機器休眠，14:03 醒來後跑完，原始碼已還原）；`ctest --preset test -L "cpu|shader"` 113 項全過（`step3_ctest.log`，14:06 重跑存完整輸出）。
+
 ## 判定變更（AGENTS §14.4）
 
 - 退役 41 個的緩的面逐個寫在報告第 3、5 節，使用者 2026-11-18 核准（第 7 節）。
+- 第 3 步退役 51 個（合併）：刪除型的弱化沒有緩的面（每句斷言仍由接手在同一位置證明）；締める面是接手要每句都失敗才算殺掉。改鬆型的情形（值不同 17 個、次數不同 1 個）照使用者決定留下，見候選表第 3b、4 節。
 - 合併 23 個：沒有緩的面（每句斷言仍由一個突變證明）；締める面是接手以後要每句都失敗才算殺掉。
 - rs-sample 兩個：有緩める面（「failed without 標記」以前不算殺、現在算），1～5 在報告 3.4，使用者核准。
 - `ks-real-product-name`：守的性質從「登記的產品名進 Kernel」改成「角色詞進 Kernel」。舊的在 gyo2 本來就活著（沒有登記的產品），實際上沒有證明力；登記 id 那一半仍由自測 `test_k1_registered_product_id_is_reported` 與 `ks-k1-registry-ignored` 守。
 
 ## 後續（不在本批）
 
-- subsumption 檢查的候選表（第 3 步）交使用者核准；核准後另一個變更改清單（合併時保留 X 的 `what`，記下鏈式合併的接手）。
 - 7 個 expect 實際為空的突變（`rs-iv-ff1`、`rs-iv-fb5`～`fb9`、`rs-iv-fb11`：expect 是案例標題，而那幾個案例無條件印 MESSAGE）改寫 expect（AGENTS §14.2）。
 - 把 `PRODUCT_ALIASES` 從 `kernel_guard.py` 拿掉（守衛的改動）。
 - `bs-` 開頭的突變搬到 Base 的清單。
