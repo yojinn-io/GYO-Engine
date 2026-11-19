@@ -40,7 +40,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 6. JSON Module（最先） | **2026-11-20 動工前核准、實作中**（`v8-arch-gyo2-json-module-declaration-approved`；卡片分支 `claude/gyo2-json-module-9cb753`）。封裝的實作，早於日誌與 trace（`v8-arch-gyo2-json-early`）；走 yyjson＋自己的介面，只依賴 Base，可以和第 3 批並行 | master 用 nlohmann（不帶） | Base |
 | 6. 網路 Module | 網路是機制、在搬產品之前做（`v8-arch-gyo2-net-is-mechanism-first`）。照點名的功能逐一推 wire 需求、對照 lightyear、bevy_replicon、Unity Netcode；Gateway 原意（外部多種 Client、內部一套抽象協議、無狀態）；斷線偵測與重連只在 UDP 上 | master 的 `engine/net`、`services/gyo_gateway`（參考） | 3、4；多個 World 與交換點 |
 | 6. 日誌機制 | 兩個入口：平常訂閱事件、致命時從 runner 拿結構化錯誤；最後一道直接呼叫、不經任何機制（`-world-events-not-via-event` 的補充）；trace 一起看；紀錄格式要定 NaN／無限大的表示法（JSON Module 的 `Writer` 對它們回錯誤） | master 的 `engine/trace`（參考） | 2、3 |
-| 6. SDL（第一個 Plugin 批） | `engine/platform` 不回來，功能拆進各 Module，怎麼拆在這批分析（`v8-arch-gyo2-platform-obsolete-split-into-modules`）；plugins 目錄的建置；input、render、text、ui 依序回來 | master 的 platform、input、render、text、ui（參考） | 2、3 |
+| 6. SDL（第一個 Plugin 批） | `engine/platform` 不回來，功能拆進各 Module，怎麼拆在這批分析（`v8-arch-gyo2-platform-obsolete-split-into-modules`）；plugins 目錄的建置；input、render、text、ui 依序回來；碰外部組件的程式一律放各 Module 的 `src/adapters/<組件>/`（SDL 放 `src/adapters/sdl/`），同一批把 `engine/os` 的 `src/posix`、`src/windows` 搬到 `src/adapters/`（`v8-arch-gyo2-json-adapters-dir` 的推廣；搬檔時查守衛 glob 與突變 find 路徑） | master 的 platform、input、render、text、ui（參考） | 2、3 |
 | 6. asset | 資源目錄、載入、生命週期 | master 的 `engine/asset`（參考） | 2；JSON |
 | 6. 之後的小事（JSON Module 卡交來） | Kernel 指紋報告手寫 JSON 改用 JSON Module（要動 Kernel 的依賴，另議）；master 七份資料契約的驗證規則收緊，在各契約回到 `gyo2` 的批寫明；打包時附第三方授權告示（yyjson、fast_float 起） | JSON Module 宣告第 15 節 | JSON |
 
