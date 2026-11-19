@@ -1,6 +1,6 @@
 # 事前宣告：時間 Module＋事件（`v8-arch-gyo2-time-events`）
 
-更新：2026-11-19（修訂 1）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：待使用者的動工前核准。核准之前不改程式、條文、守衛。**
+更新：2026-11-19（修訂 2：收第 11 節第 1 件的使用者決定）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：待使用者的動工前核准。核准之前不改程式、條文、守衛。**
 
 經過：修訂 0（f7ad16a2）送 Fable 5.2／high 敵對式檢查：必改 8、建議改 14、小問題 12（報告 主 checkout `build/evidence/gyo2-time-events/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，並收主會話轉來的使用者決定 `v8-arch-gyo2-summary-padding-a-then-c`；處理對照在第 15 節。修訂 1 沒有再送檢查。
 
@@ -238,8 +238,8 @@ Registry、Plan、C 三種指紋的版本號都升（6／4／8），export 標�
 | 狀態機切換 | 列了 | `Message` `StateTransitionEvent`（`transitions.rs:236-291`） | 核心沒有 | `Message` | 一致 | 第 5 條 |
 | 讀檔完成 | 列了 | 推送式 `Ready`（`resolved_scene.rs:315`） | 同步函式 | 讀檔＝新 World；由新 World 的準備或生成世界的 System 發 `Message`，定案在讀檔的實作 | 一致（送法待定） | 第 5 條 |
 | 存檔版本被拒 | — | — | — | `Result` 的錯誤碼（O-5） | — | 第 5 條 |
-| World 壞掉（D2） | **列了** | 錯誤回呼 `FallbackErrorHandler`（`error/handler.rs:116`） | 直接呼叫日誌（`log.c:451`） | 第 11 節第 1 件 | 第 11 節第 1 件 | 日誌那一批 |
-| World 建立、替換 | — | 沒有事件（`app.rs:1235-1247`） | 沒有；`ecs_atfini` 回呼 | 同上 | — | 日誌那一批 |
+| World 壞掉（D2） | **列了** | 錯誤回呼 `FallbackErrorHandler`（`error/handler.rs:116`） | 直接呼叫日誌（`log.c:451`） | **已定（第 11 節第 1 件）**：不發事件；D2 的結構化錯誤回給 runner，日誌 Module 從 runner 拿 | 縮小（使用者已定） | 日誌那一批 |
+| World 建立、替換 | — | 沒有事件（`app.rs:1235-1247`） | 沒有；`ecs_atfini` 回呼 | **已定**：同上，不發事件 | — | 日誌那一批 |
 
 ---
 
@@ -411,7 +411,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 ### 10.2 編排層（`target/v2/orchestration.zh-Hant.md`）
 
 - **O-1**：拿掉「在第 3 條之前，遊戲初始化的 schedule 要屬於一個 domain」。
-- **O-11**：`WorldFailure` 帶同步點序號、不帶 domain 與 tick（G6）。
+- **O-11**：`WorldFailure` 帶同步點序號、不帶 domain 與 tick（G6）；加一句「World 自己的壞掉、建立、替換不經 Kernel 的事件發，錯誤回給 runner，日誌從 runner 拿」（第 11 節第 1 件，使用者 2026-11-19）。
 
 ### 10.3 時間的型別（`docs/architecture/time.md`，英文）
 
@@ -436,7 +436,11 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 ## 11. 要你定的
 
-### 第 1 件：World 自己的事（壞掉、建立、替換）不能從那個 World 的 `Event` 發——怎麼辦？（不擋本批；日誌那一批之前定）
+### 第 1 件：World 自己的事（壞掉、建立、替換）不能從那個 World 的 `Event` 發——怎麼辦？——**已定：錯誤照 D2 回給 runner，日誌 Module 從 runner 拿**（使用者 2026-11-19，side chat 轉達；代號待主會話定）
+
+**原話**：「選A，為何因為c++沒有try catch。錯誤你不知道會有多廣，到什麼程度，有可能Even機制本身已經壞了。所以你沒有辦法做Event的。如果Event不成功，就會連日誌都丟了。」（「Even」照原文，指 Event。）**理由**（使用者的）：錯誤的範圍與程度不知道，Event 機制本身可能已經壞了；經 Event 發，失敗時連日誌都會丟。side chat 把「c++沒有try catch」讀成「C++ 不能像託管語言那樣保證接住所有錯誤（例如記憶體被寫壞）」，沒有向使用者逐字確認。**定下的**：`-no-separate-eventbus` 的範圍收成「World 裡面的機制」；World 自己的壞掉、建立、替換是例外，走 D2 的結構化錯誤回給 runner；日誌 Module 怎麼接 runner 在日誌那一批定。合併前寫進編排層 O-11 一句（第 10.2 節）。
+
+以下是交你定時的說明，留作紀錄。
 
 **遊戲的例子**：PvP Client 的模擬 World 跑到第 3000 個 tick，某個 System 回了錯誤。照 D2（`-broken-world-ends-product`），World 中斷、Product 結束，`WorldFailure` 回給 runner。你在 `-no-separate-eventbus` 說「D2 的 World 壞掉」也從 Kernel 的 Event／Observer 發、日誌 Module 當訂閱者。但 `Event` 與 `Observer` 住在 World 裡：壞掉的 World 不能再跑 observer（D2：無法分辨是否健康）；「World 被建立、被換掉」時，那個 World 還不存在或正要被丟掉。
 
