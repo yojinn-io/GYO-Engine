@@ -64,6 +64,13 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       compiler builtin such as __atomic_fetch_add; and the comment and literal blanking shared by K2-K8 does not
       read a prefixed character literal (L'"') or a prefixed raw string (LR"(...)") right, so text after one on
       the same line can hide a name (an existing gap of J-9, recorded apart).
+  K9  a name of what moved out of the kernel to the orchestration layer: the registration units (Plugin,
+      FinishContext, InstallRunner, Requires(, the plugin list), game initialization (the startup schedule and its
+      checks) and the runner owners (DI-KS 15: the kernel knows no game initialization, registration unit or
+      runner). Read in the raw text of every scanned C/C++ file (comments and string literals included, so the old
+      rule codes "H-12"/"H-13" are seen). Kept from the one-time scan G-3 of the orchestration-skeleton
+      declaration (section 11), made standing by v8-arch-gyo2-time-events step 1 (that declaration's section 7.4).
+      StartupCode and StartupReport are the kernel's startup errors and stay allowed.
   K0  a file under engine/kernel/ that this guard cannot scan: anything but SUFFIXES and CMakeLists.txt. A file
       type the guard does not read would otherwise pass every rule unseen.
 
@@ -100,6 +107,12 @@ K6 = re.compile(r"\bLog\s*\(|\bSetLogHandler\b|\bstd::(?:c(?:out|err|log)|printl
                 r"|(?<![\w:.])(?:std::)?(?:v?f?printf|f?puts|putchar|perror|fwrite)\s*\(")
 K7 = re.compile(r"\b(?:far|near|FAR|NEAR)\b")
 K8 = re.compile(r"\b(?:IdIssuer|threadSerials?)\b")
+K9 = tuple(re.compile(p) for p in (
+    r"\bclass\s+Plugin\b", r"\bFinishContext\b", r"\bInstallRunner\b", r"\bRequires\s*\(",
+    r"std::vector<Plugin\s*\*>", r"Registry::Finish\b", r"\.startup\b", r"\bstartup(?:_|Ran_|Running_|Schedule)\b",
+    r"\bStartupScope\b", r"\bRunStartup\b", r"\bStartupNotNestable\b", r"\bStartupRunning\b", r"\bDE21\b",
+    r"\bRE[136]\b", r'"H-1[23]"', r"\bPluginRecord\b", r"\bCheckPluginList\b", r"\bCheckRunners\b",
+    r"\brunnerOwners\b"))
 DIRECTIVE = re.compile(r"^[ \t]*(?:#|%:)[ \t]*(?:include_next|include|import)\b")
 TARGET = re.compile(r"[ \t]*([<\"])([^>\"]+)[>\"]")
 # engine/entity_store/: Delta-3 of the migration plan (user 2026-11-13, world-exec): the World's columns are kept by
@@ -298,6 +311,9 @@ def file_findings(relative, raw, name_patterns):
                 yield number, "K8", match.group(0)
     if Path(relative).suffix not in SUFFIXES:
         return
+    for pattern in K9:
+        for match in pattern.finditer(raw):
+            yield line_of(raw, match.start()), "K9", match.group(0)
     executor_file = Path(relative).name.startswith("Executor")
     code = strip_comments_and_strings(raw)
     # Include targets in quotes are string literals, which the stripping blanks. The stripping keeps every line and

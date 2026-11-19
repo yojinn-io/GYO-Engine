@@ -7483,6 +7483,26 @@
       "target": "gyo_kernel_tests",
       "cases": "D-9: the kernel's RangeAllotter*",
       "expect": "\\[summary\\-padding\\-unique\\]"
+    },
+    {
+      "id": "ks-k9-dropped",
+      "what": "K9 (time-events step 1, DI-KS 15): the names moved out to the orchestration layer are no longer reported",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    for pattern in K9:\n",
+      "replace": "    for pattern in ():\n",
+      "expect": "FAIL: test_k9_every_moved_out_name_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
     }
   ]
 }

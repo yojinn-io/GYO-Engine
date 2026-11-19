@@ -25,7 +25,8 @@ Roots behave differently on purpose, and the self-test pins both:
   - a reverse root that does not exist is skipped (plugins/ does not exist yet), not a finding.
 spikes/ is not scanned (an independent project, namespace KernelSpike, deleted under migration plan U10).
 
-The table has one row in this batch. Product rows belong to the product owner and are to come from product-side
+The table has two rows: engine/kernel, and engine/orchestration (added by v8-arch-gyo2-time-events step 1, the
+guard the orchestration-skeleton declaration section 7.4 deferred until scenario segment 1 passed). Product rows belong to the product owner and are to come from product-side
 data (like the zone-c-sources list), proposed by the first product batch that needs them; they are not added
 to this common script (declaration LIM-4).
 
@@ -40,7 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kernel_guard import SUFFIXES as KERNEL_SUFFIXES, line_of, strip_comments_and_strings  # noqa: E402
 
-ROOTS = (("engine/kernel", "GYO::Kernel"),)
+ROOTS = (("engine/kernel", "GYO::Kernel"), ("engine/orchestration", "GYO::Engine::Orchestration"))
 REVERSE_ROOTS = ("engine", "apps", "tools", "framework", "plugins", "tests")
 SUFFIXES = KERNEL_SUFFIXES | {".m", ".mm"}  # the same C/C++ files kernel_guard reads, plus Objective-C++
 ROLE_SUFFIXES = ("Manager", "Renderer", "ViewModel", "Host", "Shell", "Runtime", "Controller")

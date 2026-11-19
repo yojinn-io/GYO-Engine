@@ -2274,6 +2274,116 @@
    "target": "gyo_orchestration_tests",
    "cases": "O-8: the failure is returned*",
    "expect": "\\[or\\-failure\\-text\\]"
+  },
+  {
+   "id": "or-guard-naming-root-dropped",
+   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration",
+   "file": "tests/common/kernel/naming_guard.py",
+   "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"))",
+   "replace": ",)",
+   "expect": "FAIL: test_n1_orchestration_other_namespace_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/kernel",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-guard-o4-third-party-allowed",
+   "what": "O-4 guard (time-events step 1): an angle-bracket include outside the standard library passes",
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": "        if bracket == \"<\" and name not in STANDARD_HEADERS:\n",
+   "replace": "        if False:\n",
+   "expect": "FAIL: test_o4_third_party_include_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-guard-o4-any-engine-allowed",
+   "what": "O-4 guard (time-events step 1): any engine/ header in quotes passes (a Module's internals)",
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": "ALLOWED_QUOTED = (\"engine/kernel/\", \"engine/base/\", \"engine/orchestration/\")",
+   "replace": "ALLOWED_QUOTED = (\"engine/\",)",
+   "expect": "FAIL: test_o4_module_include_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-guard-o3-dropped",
+   "what": "O-3 guard (time-events step 1): reading Plan steps or calling a System is not reported",
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": "    for match in O3.finditer(code):\n",
+   "replace": "    for match in ():\n",
+   "expect": "FAIL: test_o3_every_plan_and_system_call_name_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-guard-o6-dropped",
+   "what": "O-6 guard (time-events step 1): a hand-written engine link is not reported",
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": "        for alias in ALIAS.finditer(call.group(1)):\n",
+   "replace": "        for alias in ():\n",
+   "expect": "FAIL: test_o6_hand_written_engine_link_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-links-more",
+   "what": "O-4 link set (time-events step 1): gyo_orchestration links another module (configure-time check)",
+   "file": "engine/config/modules.csv",
+   "find": ",yes,no,kernel;base,,,",
+   "replace": ",yes,no,kernel;base;math,,,",
+   "target": "gyo_orchestration_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_orchestration links .*expected exactly\\s+GYO::Base;GYO::Kernel"
   }
  ]
 }

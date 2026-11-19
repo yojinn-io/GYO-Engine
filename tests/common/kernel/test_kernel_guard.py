@@ -122,6 +122,25 @@ class GuardTree(unittest.TestCase):
         self.assertIn("change the kernel", line)
         self.assertIn("change that product's registered id", line)
 
+    def test_k9_every_moved_out_name_is_reported(self):
+        for text, needle in (("class Plugin {};", "class Plugin"), ("struct FinishContext;", "FinishContext"),
+                             ("void InstallRunner();", "InstallRunner"), ("bool Requires(int);", "Requires("),
+                             ("std::vector<Plugin*> list;", "std::vector<Plugin*>"),
+                             ("void Registry::Finish() {}", "Registry::Finish"), ("o.startup = true;", ".startup"),
+                             ("bool startupRan_ = false;", "startupRan_"), ("struct StartupScope;", "StartupScope"),
+                             ("void RunStartup();", "RunStartup"), ("int StartupNotNestable;", "StartupNotNestable"),
+                             ("int StartupRunning;", "StartupRunning"), ("int DE21;", "DE21"), ("int RE3;", "RE3"),
+                             ('const char* rule = "H-12";', '"H-12"'), ("struct PluginRecord;", "PluginRecord"),
+                             ("void CheckPluginList();", "CheckPluginList"), ("void CheckRunners();", "CheckRunners"),
+                             ("int runnerOwners;", "runnerOwners")):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertReported("K9", needle)
+
+    def test_k9_startup_errors_stay_allowed(self):
+        self.header("enum class StartupCode { DE7 }; struct StartupReport {};")
+        self.assertFalse([p for p in guard.check(self.root) if ": K9 " in p])
+
     def test_k1_role_word_is_reported(self):
         self.header("struct MatchClock {}; // per Match")
         self.assertReported("K1", "Match")

@@ -72,3 +72,16 @@ foreach(_header IN LISTS _orchestration_headers)
 endforeach()
 add_library(gyo_orchestration_include_order OBJECT ${_order_sources})
 target_link_libraries(gyo_orchestration_include_order PRIVATE GYO::Orchestration)
+
+# The scans the skeleton declaration deferred (section 7.4), stood up by
+# v8-arch-gyo2-time-events step 1 once scenario segment 1 had passed:
+#   orchestration.guard  O-3 (no Plan step read, no System called), O-4 (the
+#                        include allowlist), O-6 (no hand-written engine link)
+# and the link set of the layer (O-4: it depends on the kernel and Base only).
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME orchestration.guard
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/orchestration_guard.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME orchestration.guard_selftest
+    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_orchestration_guard.py" -v)
+set_tests_properties(orchestration.guard orchestration.guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
+gyo_expect_links(gyo_orchestration GYO::Base GYO::Kernel)

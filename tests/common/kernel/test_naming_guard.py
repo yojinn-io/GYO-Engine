@@ -41,6 +41,8 @@ class GuardTree(unittest.TestCase):
         self.write("engine/kernel/include/engine/kernel/Clean.hpp", CLEAN_HEADER)
         self.write("engine/kernel/src/Clean.cpp", CLEAN_SOURCE)
         self.write("engine/time/include/engine/time/Clock.hpp", "namespace Engine::Time {\nstruct Clock {};\n}\n")
+        self.write("engine/orchestration/include/engine/orchestration/Clean.hpp",
+                   "namespace GYO::Engine::Orchestration {\nstruct Unit {};\n}\n")
 
     def tearDown(self):
         self._directory.cleanup()
@@ -65,6 +67,20 @@ class GuardTree(unittest.TestCase):
         self.assertClean()
 
     # N1 forward -------------------------------------------------------------------------------------------------
+
+    def test_n1_orchestration_other_namespace_is_reported(self):
+        self.write("engine/orchestration/src/Added.cpp", "namespace GYO::Kernel {\n}\n")
+        self.assertReported("N1", "namespace GYO::Kernel (expected GYO::Engine::Orchestration)")
+
+    def test_n1_orchestration_namespace_opened_outside_is_reported(self):
+        self.write("tests/common/orchestration/Added.cpp", "namespace GYO::Engine::Orchestration {\n}\n")
+        self.assertReported("N1", "GYO::Engine::Orchestration")
+
+    def test_n1_missing_orchestration_directory_is_reported(self):
+        import shutil
+        shutil.rmtree(self.root / "engine/orchestration")
+        self.assertIn("engine/orchestration: no source to scan (moved or renamed? update this guard)",
+                      guard.check(self.root))
 
     def test_n1_old_engine_namespace_in_kernel_is_reported(self):
         self.kernel_header("namespace Engine::Kernel {\n}\n")
