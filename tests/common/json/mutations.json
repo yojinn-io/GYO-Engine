@@ -410,6 +410,139 @@
    "target": "gyo_json_tests",
    "cases": "WriteValue: members in document order*",
    "expect": "out =="
+  },
+  {
+   "id": "jg-yyjson-rule-off",
+   "what": "J-1 guard: the yyjson include rule matches nothing",
+   "file": "tests/common/json/json_guard.py",
+   "find": "(?:[^>\\\"]*/)?yyjson\\.h[>\\\"]",
+   "replace": "(?:[^>\\\"]*/)?yyjson\\.never[>\\\"]",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/json",
+    "-p",
+    "test_json_guard.py"
+   ],
+   "expect": "FAIL: test_yyjson_outside_its_adapter"
+  },
+  {
+   "id": "jg-fastfloat-rule-off",
+   "what": "J-1 guard: the fast_float include rule matches nothing",
+   "file": "tests/common/json/json_guard.py",
+   "find": "[<\\\"]fast_float/[^>\\\"]*[>\\\"]",
+   "replace": "[<\\\"]fast_float_never/[^>\\\"]*[>\\\"]",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/json",
+    "-p",
+    "test_json_guard.py"
+   ],
+   "expect": "FAIL: test_fast_float_outside_its_adapter"
+  },
+  {
+   "id": "jg-link-rule-off",
+   "what": "J-1 guard: the link rule matches nothing",
+   "file": "tests/common/json/json_guard.py",
+   "find": "LINK = re.compile(r\"\\bgyo_(?:yyjson|fast_float)\\b\")",
+   "replace": "LINK = re.compile(r\"\\bgyo_never\\b\")",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/json",
+    "-p",
+    "test_json_guard.py"
+   ],
+   "expect": "FAIL: test_link_outside_the_module"
+  },
+  {
+   "id": "jg-any-place-allowed",
+   "what": "J-1 guard: an include counts as allowed wherever it is",
+   "file": "tests/common/json/json_guard.py",
+   "find": "                        if relative.startswith(home):",
+   "replace": "                        if True:",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/json",
+    "-p",
+    "test_json_guard.py"
+   ],
+   "expect": "FAIL: test_yyjson_in_the_other_adapter"
+  },
+  {
+   "id": "jg-no-positive-control",
+   "what": "J-1 guard: no allowed include in an adapter goes unnoticed",
+   "file": "tests/common/json/json_guard.py",
+   "find": "        if count == 0:\n",
+   "replace": "        if False:\n",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/json",
+    "-p",
+    "test_json_guard.py"
+   ],
+   "expect": "FAIL: test_positive_control_yyjson"
+  },
+  {
+   "id": "jg-missing-root-ignored",
+   "what": "J-1 guard: a missing scan root is skipped silently (fails open)",
+   "file": "tests/common/json/json_guard.py",
+   "find": "            errors.append(f\"scan root {top}/ not found under {root}\")\n",
+   "replace": "            pass\n",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/json",
+    "-p",
+    "test_json_guard.py"
+   ],
+   "expect": "FAIL: test_missing_root_fails_closed"
+  },
+  {
+   "id": "jg-tests-not-scanned",
+   "what": "J-1 guard: tests outside the adapter's own directory are not scanned",
+   "file": "tests/common/json/json_guard.py",
+   "find": "SCAN_ROOTS = (\"engine\", \"tests\")",
+   "replace": "SCAN_ROOTS = (\"engine\",)",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/json",
+    "-p",
+    "test_json_guard.py"
+   ],
+   "expect": "FAIL: test_other_tests_are_scanned"
   }
  ]
 }

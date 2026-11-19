@@ -16,6 +16,7 @@ add_executable(gyo_json_tests
     NumberTests.cpp
     WriteTests.cpp
     WriteAllocationTests.cpp
+    ScenarioTests.cpp
 )
 find_package(Threads REQUIRED)
 target_link_libraries(gyo_json_tests PRIVATE GYO::Json gyo_test_support doctest::doctest Threads::Threads)
@@ -62,3 +63,12 @@ add_test(NAME json.vectors.generate
 set_tests_properties(json.vectors.generate PROPERTIES LABELS "cpu" TIMEOUT 300 FIXTURES_SETUP gyo_json_vectors)
 add_test(NAME gyo_json_vector_tests COMMAND gyo_json_vector_tests ${_gyo_json_vectors})
 set_tests_properties(gyo_json_vector_tests PROPERTIES LABELS "cpu" TIMEOUT 300 FIXTURES_REQUIRED gyo_json_vectors)
+
+# Design Invariant J-1: yyjson and fast_float appear only in their adapter
+# directories (engine/json/src/adapters/<component>/); set up after the
+# scenario tests passed (declaration 8.5, AGENTS §3 on when to set up guards).
+add_test(NAME json.adapter_guard
+    COMMAND Python3::Interpreter -I "${CMAKE_CURRENT_SOURCE_DIR}/json_guard.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME json.adapter_guard_selftest
+    COMMAND Python3::Interpreter -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_json_guard.py" -v)
+set_tests_properties(json.adapter_guard json.adapter_guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
