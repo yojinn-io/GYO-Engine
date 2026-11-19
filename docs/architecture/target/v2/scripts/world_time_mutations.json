@@ -494,12 +494,12 @@
   },
   {
    "id": "wt-no-fixed-limits-default",
-   "what": "step 6 C: AdvanceTime uses the default caps instead of the World's TimeLimits (maxFrameDelta 100 ms is ignored). Only it catches the caps passed by the time Module (the existing Module cases all use the defaults)",
+   "what": "step 6 C: AdvanceTime uses the default caps instead of the World's TimeLimits (maxFrameDelta 100 ms is ignored). Only it catches the caps passed by the time Module (the existing Module cases all use the defaults). Step 7: cases narrowed to its own case: the new case 'maxStepsPerFrame comes from the settings' aborts on the RunFixedSteps step cap's GYO_ASSERT under this mutant and ended the run before it (README rule 1's exception)",
    "file": "engine/world_time/src/WorldTimeModule.cpp",
    "find": "hasFixedStep ? &fixed.accumulator : nullptr, config.limits);",
    "replace": "hasFixedStep ? &fixed.accumulator : nullptr, TimeLimits{});",
    "target": "gyo_world_time_tests",
-   "cases": "module:*",
+   "cases": "module: fixedStep = false: the cap is*",
    "expect": "\\[wt\\-no\\-fixed\\-limit\\-setting\\]"
   },
   {
