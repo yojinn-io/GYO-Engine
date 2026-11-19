@@ -150,7 +150,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 **步長**：只在建 World 時由 `WorldTimeModule` 的設定給（頻率或時間長度，預設 64 Hz）。執行中換步長本批不做。
 
-**和「遊戲時間全部放 `world_time`」對過**（side chat 逐點對、使用者 2026-11-19「同意」）：(1) 行為、名字、規則都不受影響；(2) 依賴更單純：`world_time` 只在取樣時用 `engine/time` 的 `MonotonicClock`，方向照舊 `world_time` → `time`；(3) **新增：`world_time` 內型別與取樣分標頭**——型別（含 `Tick`）一個標頭、不 include `MonotonicClock.hpp`，取樣（`AdvanceTime` 讀時鐘的部分）另一個標頭；理由：zone_scan 的 ZS1 禁 (c) 區的來源 include 時鐘，第 4 批判定的 System 要讀 `Tick`；以前靠型別在 `engine/time` 自然隔開，現在在 `world_time` 裡切開——這是檔案的切法，不是兩個實作；(4) T1 調整 (b) 第 1 處（`AdvanceVirtual` 是純函式）照舊留：「不經 Kernel 單獨測」這個理由變弱（測試會連到 Kernel），但它仍是純函式、測試只餵數字不建 World，「Bevy 把截斷放在時間型別自己的函式」照舊成立。
+**和「遊戲時間全部放 `world_time`」對過**（side chat 逐點對、使用者 2026-11-19「同意」，`v8-arch-gyo2-world-time-surface`）：(1) 行為、名字、規則都不受影響；(2) 依賴更單純：`world_time` 只在取樣時用 `engine/time` 的 `MonotonicClock`，方向照舊 `world_time` → `time`；(3) **新增：`world_time` 內型別與取樣分標頭**——型別（含 `Tick`）一個標頭、不 include `MonotonicClock.hpp`，取樣（`AdvanceTime` 讀時鐘的部分）另一個標頭；理由：zone_scan 的 ZS1 禁 (c) 區的來源 include 時鐘，第 4 批判定的 System 要讀 `Tick`；以前靠型別在 `engine/time` 自然隔開，現在在 `world_time` 裡切開——這是檔案的切法，不是兩個實作；(4) T1 調整 (b) 第 1 處（`AdvanceVirtual` 是純函式）照舊留：「不經 Kernel 單獨測」這個理由變弱（測試會連到 Kernel），但它仍是純函式、測試只餵數字不建 World，「Bevy 把截斷放在時間型別自己的函式」照舊成立。
 
 **時間 Module 的職責清單**（新 Component，本卡照 L17 寫）：(1) 把時間的 Resource 登記進它被建進的每個 World；(2) 取樣（照 `TimeSampling`；交換點做出來後，「取樣」這一項移給 runner，Resource 的形狀不變）；(3) 真實時間與可縮放時間的推進（暫停、倍率、上限、扣掉的記錄）；(4) 固定步的累加與驅動、`Tick`、退回 k 步；(5) `ActiveTime` 的切換；(6) 登記「重跑中」並放初始值（回滾 5.7 已核准由時間 Module 收）；(7) 發 `TimeDiscarded`。不在清單上的：回滾的判斷、還原與重跑（回滾 Module）；tick 只有一個來源的檢查（權威）；runner 的等待與交換點（編排層）；狀態（狀態機）。
 
@@ -536,7 +536,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-t1-closed-by-time-events`）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
 - ~~第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）~~——**已確認：照建議**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-fixed-time-accumulates`）。原話：「照建議」。比過：同意（照 Bevy、lightyear、Unity 累加）←選／改回 T1 的沒有累計（作者自己用 tick×步長算）／tick×步長（修訂 0；Client 對時改 tick 時累計會跳）。
 - ~~第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放~~——**已改定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-game-time-in-world-time`）：遊戲時間全部放 `engine/world_time`，`engine/time` 只留時間基準，**推翻 `time-plan-two` (7)**。原話與比過的選項見第 3.1 節表。名字 `world_time`／`WorldTimeModule` 照用。
-- ~~第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達；代號待主會話定）。原話：先問「上一個問題有些變化，這個決議還成立嗎？」，side chat 逐點對過後「同意。」比過：同意／某處不同意（例：tick 從 0 開始、沒被取走的時間不記）。對過的結果寫在第 3.3 節末。
+- ~~第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-world-time-surface`）。原話：先問「上一個問題有些變化，這個決議還成立嗎？」，side chat 逐點對過後「同意。」比過：同意／某處不同意（例：tick 從 0 開始、沒被取走的時間不記）。對過的結果寫在第 3.3 節末。
 - 第 3.6 節預設骨架的細節：`FixedUpdate` 的 stage 名、關掉骨架的選項的形、O-4 補句**不算編排層職責清單多一項**。
 - 第 3.4 節的取樣；第 3.5 節可存與不放回的清單。
 - 第 4.2、4.3 節的實作細節；第 4.5 節區規則的過渡（`MessageOptions::zone` 留到第 4 批）。
