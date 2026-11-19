@@ -68,7 +68,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 | T1 的內容 | 現況或後來的決定 | 本頁的處理 |
 |---|---|---|
 | 型別放 `engine/time`，命名空間 `Engine::Time` | `time-plan-two` (7) 照舊；DI 10 規定 `gyo_time` 只連 `GYO::Base`＋`Threads`（`time.md:89-90`，守衛 `tests/common/time/CMakeLists.txt:37`） | 照舊：純資料、純算術的型別在 `engine/time`。**只有放進 World 才有意義的**（`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded`）放 `engine/world_time`（第 3.1 節） |
-| `FixedTime` 沒有累計、沒有 tick（T1 第 2.1、3 節第 7 條：「固定步裡的累計只能是 tick×步長」） | `-clock-out-of-kernel`：tick 移到時間 Module；回滾策略會退 tick（回滾 7.2） | **本卡照 L17 判，改 T1：`FixedTime` 有累計 `elapsed`**，每跑一步加一個步長（Bevy `Time<Fixed>` 每步 `advance_by`，`fixed.rs:216-227`；lightyear 回滾時從現在的累計減掉 k 步，`prediction/rollback.rs:1153-1183`；Unity Netcode `m_ElapsedTime - m_FixedTimeStep*tickAge`，`NetcodeClientPredictionRateManager.cs:288`——三家都是累計值）。T1 擔心「回滾時 tick 被還原、累計不會」：時間 Module 給「退回 k 步」的函式同時退 `Tick` 與累計（第 3.3 節），一處維持。修訂 0 的「`elapsed`＝`Tick`×步長」退掉：沒有一家這樣做，而且之後 Client 對時改 `Tick` 時累計會跟著跳。**使用者 2026-11-19 確認照建議** |
+| `FixedTime` 沒有累計、沒有 tick（T1 第 2.1、3 節第 7 條：「固定步裡的累計只能是 tick×步長」） | `-clock-out-of-kernel`：tick 移到時間 Module；回滾策略會退 tick（回滾 7.2） | **本卡照 L17 判，改 T1：`FixedTime` 有累計 `elapsed`**，每跑一步加一個步長（Bevy `Time<Fixed>` 每步 `advance_by`，`fixed.rs:216-227`；lightyear 回滾時從現在的累計減掉 k 步，`prediction/rollback.rs:1153-1183`；Unity Netcode `m_ElapsedTime - m_FixedTimeStep*tickAge`，`NetcodeClientPredictionRateManager.cs:288`——三家都是累計值）。T1 擔心「回滾時 tick 被還原、累計不會」：時間 Module 給「退回 k 步」的函式同時退 `Tick` 與累計（第 3.3 節），一處維持。修訂 0 的「`elapsed`＝`Tick`×步長」退掉：沒有一家這樣做，而且之後 Client 對時改 `Tick` 時累計會跟著跳。**使用者 2026-11-19 確認照建議**（`v8-arch-gyo2-fixed-time-accumulates`） |
 | 「兩個寫者要不要標成可多寫」（T1 第 8 節） | `-authority-no-writer-count`：Kernel 不數寫者 | 不再是問題；時間設計 DI 2「各只有一個寫者」改寫成約定（WT-5） |
 | 放進 World 之後摘要與 padding（T1 第 3 節第 9 條） | 使用者 `-summary-padding-a-then-c`（2026-11-19）：`World::Summary` 照原始位元組雜湊會算進 padding；先由編排層骨架卡補 Kernel 自己的型別、契約補「進摘要的型別不能有 padding」；正式解法（逐型別的雜湊）在第 4 批；比摘要的測試標「未完全解決」 | **第 3 批不改摘要的方式**。時間的型別、`TimeDiscarded`、本批新增進 World 的 Kernel 內部紀錄（游標表、`{seq, payload}`）都照契約沒有 padding，用 `static_assert`（`sizeof` 等於逐欄大小的加總；不用 `has_unique_object_representations_v`，它對浮點一律回 false）守。浮點的 +0／-0 與 NaN 位元組不同（使用者那次列的第三種毛病）：本批不處理，`VirtualTime.scale` 只會被寫成套用的倍率（不會產生 -0），寫進範圍的限界；逐型別雜湊在第 4 批解 |
 | 「時間的 System 與驅動固定步的 System，T3」 | 「Module」重新定義（#240），編排層有登記單位（#244） | 本批做（第 3 節） |
@@ -533,7 +533,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 ### 一起確認（照 L17 自己判的，不同意請指出）
 
 - ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-t1-closed-by-time-events`）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
-- ~~第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）~~——**已確認：照建議**（使用者 2026-11-19，side chat 轉達；代號待主會話定）。原話：「照建議」。比過：同意（照 Bevy、lightyear、Unity 累加）←選／改回 T1 的沒有累計（作者自己用 tick×步長算）／tick×步長（修訂 0；Client 對時改 tick 時累計會跳）。
+- ~~第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）~~——**已確認：照建議**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-fixed-time-accumulates`）。原話：「照建議」。比過：同意（照 Bevy、lightyear、Unity 累加）←選／改回 T1 的沒有累計（作者自己用 tick×步長算）／tick×步長（修訂 0；Client 對時改 tick 時累計會跳）。
 - 第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放。
 - 第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」。
 - 第 3.6 節預設骨架的細節：`FixedUpdate` 的 stage 名、關掉骨架的選項的形、O-4 補句**不算編排層職責清單多一項**。
