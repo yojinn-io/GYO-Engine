@@ -12,8 +12,10 @@ set_tests_properties(gyo_json_component_tests PROPERTIES LABELS "cpu" TIMEOUT 60
 add_executable(gyo_json_tests
     test_main.cpp
     JsonErrorTests.cpp
+    ReadTests.cpp
 )
-target_link_libraries(gyo_json_tests PRIVATE GYO::Json gyo_test_support doctest::doctest)
+find_package(Threads REQUIRED)
+target_link_libraries(gyo_json_tests PRIVATE GYO::Json gyo_test_support doctest::doctest Threads::Threads)
 if(MSVC)
     target_compile_options(gyo_json_tests PRIVATE /W4 /permissive-)
 else()
@@ -36,3 +38,11 @@ function(gyo_expect_json_links)
     endforeach()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_json_links)
+
+# The adapter's internals (engine/json/src) and yyjson's allocator type: only
+# this directory may name them (J-1).
+add_executable(gyo_json_adapter_tests AdapterTests.cpp)
+target_include_directories(gyo_json_adapter_tests PRIVATE ${GYO_REPOSITORY_ROOT}/engine/json/src)
+target_link_libraries(gyo_json_adapter_tests PRIVATE GYO::Json gyo_yyjson doctest::doctest)
+add_test(NAME gyo_json_adapter_tests COMMAND gyo_json_adapter_tests)
+set_tests_properties(gyo_json_adapter_tests PROPERTIES LABELS "cpu" TIMEOUT 60)

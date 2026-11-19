@@ -6,6 +6,9 @@
 # any World (library_only in engine/config/modules.csv).
 add_library(gyo_json STATIC
     src/JsonError.cpp
+    src/Kind.cpp
+    src/TextPosition.cpp
+    src/adapters/yyjson/YyjsonDocument.cpp
 )
 add_library(GYO::Json ALIAS gyo_json)
 

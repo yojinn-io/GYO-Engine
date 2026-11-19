@@ -1,0 +1,105 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the JSON Module batch (docs/architecture/target/v2/json-module-declaration.zh-Hant.md, section 8.6; ids js-). Written step by step with the tests; the whole catalog goes to an adversarial check (Fable/high) at step 7. Not added (with the reason): the empty-text check before yyjson (equivalent: yyjson reports empty input as an error at offset 0 too); reading in place (YYJSON_READ_INSITU) and a move that does not empty its source (undefined behaviour without a sanitizer: not a reliable mutant); the std::bad_alloc catch in Parse (no injection point for the adapter's own allocations).",
+ "mutants": [
+  {
+   "id": "js-raw-flag-dropped",
+   "what": "J-3: numbers are converted by yyjson instead of handed over as raw text",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "text.size(), YYJSON_READ_NUMBER_AS_RAW,",
+   "replace": "text.size(), YYJSON_READ_NOFLAG,",
+   "target": "gyo_json_tests",
+   "cases": "ObjectView and ArrayView: document order*",
+   "expect": "CHECK\\( text\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "js-repeated-small-unchecked",
+   "what": "J-2: a repeated key in a small object (pairwise path) is not found",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "if (seen[j] == name) return RepeatedKey(key);",
+   "replace": "if (false) return RepeatedKey(key);",
+   "target": "gyo_json_tests",
+   "cases": "Parse: a key repeated in one object*",
+   "expect": "JsonErrorCode::RepeatedKey"
+  },
+  {
+   "id": "js-repeated-large-unchecked",
+   "what": "J-2: a repeated key in a large object (hash path) is not found",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "if (!seen.insert(StringOf(key)).second) return RepeatedKey(key);",
+   "replace": "seen.insert(StringOf(key));",
+   "target": "gyo_json_tests",
+   "cases": "Parse: repeated keys are found in large objects*",
+   "expect": "JsonErrorCode::RepeatedKey"
+  },
+  {
+   "id": "js-repeated-nested-unchecked",
+   "what": "J-2, J-9: objects inside containers are not walked, so their repeated keys pass",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "            stack_.push_back({unsafe_yyjson_get_first(value), yyjson_obj_size(value), 0, true, nullptr, 0});\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Parse: a key repeated in one object*",
+   "expect": "/x/0/k"
+  },
+  {
+   "id": "js-pointer-tilde-unescaped",
+   "what": "J-2 detail: '~' in a key is not escaped as ~0 in the JSON Pointer",
+   "file": "engine/json/src/TextPosition.cpp",
+   "find": "            pointer += \"~0\";",
+   "replace": "            pointer += '~';",
+   "target": "gyo_json_tests",
+   "cases": "Parse: JSON Pointer escapes*",
+   "expect": "c~0d"
+  },
+  {
+   "id": "js-column-off-by-one",
+   "what": "5.5: the column restarts at the newline itself instead of after it",
+   "file": "engine/json/src/TextPosition.cpp",
+   "find": "            lineStart = i + 1;",
+   "replace": "            lineStart = i;",
+   "target": "gyo_json_tests",
+   "cases": "Parse: a syntax error names*",
+   "expect": "line 2, column 13"
+  },
+  {
+   "id": "js-oom-as-syntax",
+   "what": "5.5, J-9: yyjson's allocation failure is reported as Syntax, not OutOfMemory",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "if (error.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION) return Err(OutOfMemoryError());",
+   "replace": "",
+   "target": "gyo_json_adapter_tests",
+   "expect": "JsonErrorCode::OutOfMemory"
+  },
+  {
+   "id": "js-wrongkind-detail-swapped",
+   "what": "5.2: WrongKind names the found kind as the expected one",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "std::string(\"expected \") + ToString(expected) + \", found \" + ToString(found)",
+   "replace": "std::string(\"expected \") + ToString(found) + \", found \" + ToString(expected)",
+   "target": "gyo_json_tests",
+   "cases": "Value: reading the wrong kind*",
+   "expect": "expected Array, found Object"
+  },
+  {
+   "id": "js-array-step-into-children",
+   "what": "J-9: the array walk steps to the next node instead of the next sibling (enters nested containers)",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "element_ = remaining_ == 0 ? nullptr : Wrap(unsafe_yyjson_get_next(Raw(element_)));",
+   "replace": "element_ = remaining_ == 0 ? nullptr : Wrap(Raw(element_) + 1);",
+   "target": "gyo_json_tests",
+   "cases": "ObjectView and ArrayView: walking steps over nested*",
+   "expect": "tail == std::vector<std::string_view>\\{\\\"3\\\", \\\"4\\\"\\}"
+  },
+  {
+   "id": "js-object-step-into-children",
+   "what": "J-9: the object walk skips a fixed two nodes instead of the value's whole subtree",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "key_ = remaining_ == 0 ? nullptr : Wrap(unsafe_yyjson_get_next(Raw(key_) + 1));",
+   "replace": "key_ = remaining_ == 0 ? nullptr : Wrap(Raw(key_) + 2);",
+   "target": "gyo_json_tests",
+   "cases": "ObjectView and ArrayView: walking steps over nested*",
+   "expect": "keys == std::vector<std::string_view>\\{\\\"a\\\", \\\"b\\\", \\\"c\\\"\\}"
+  }
+ ]
+}
