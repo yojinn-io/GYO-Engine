@@ -2236,13 +2236,13 @@
     },
     {
       "id": "rs-iv-fb11-C-count-dropped",
-      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks) (expect follows C format 9 (v8-arch-gyo2-time-events step 3))",
+      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks) (expect follows C format 9 (v8-arch-gyo2-time-events step 3)) (expect follows C format 10 (v8-arch-gyo2-time-events step 4))",
       "file": "engine/kernel/src/Fingerprint.cpp",
       "find": "    out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {\n        return data.components[rule.targetId].zone == Zone::C;\n    }));\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "CHECK\\( both\\.registry->Frozen\\(\\)\\.CFingerprint\\(\\)\\.Text\\(\\) == std::string\\(\"9:"
+      "expect": "CHECK\\( both\\.registry->Frozen\\(\\)\\.CFingerprint\\(\\)\\.Text\\(\\) == std::string\\(\"10:"
     },
     {
       "id": "rs-iv-fn4-system-Z6-without-funnel",
@@ -6992,13 +6992,13 @@
     },
     {
       "id": "ns-rebase-no-retake-on-throw",
-      "what": "A.6: after a nested run, fresh snapshots only when no exception is leaving (the path the added J-56 case names) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in ns-rebase-no-retake-names-ping [probe of the added J-56 case, expect corrected after reading the first probe's output (the blamed storage is on a later line of the logged text) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)])",
+      "what": "A.6: after a nested run, fresh snapshots only when no exception is leaving (the path the added J-56 case names) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in ns-rebase-no-retake-names-ping [probe of the added J-56 case, expect corrected after reading the first probe's output (the blamed storage is on a later line of the logged text) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)]) (expect follows the storage name 'message Ping' after the Message rename; found by the step 4 D184 run (v8-arch-gyo2-time-events))",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (world_.verification_) world_.TakeSnapshots();\n",
       "replace": "            if (world_.verification_ && std::uncaught_exceptions() == 0) world_.TakeSnapshots();\n",
       "target": "gyo_kernel_tests",
       "cases": "J-56: the inner schedule writes an event and throws*",
-      "expect": "(?=[\\s\\S]*(?:\\[ns\\-throw\\-event\\-blame\\]))[\\s\\S]*(?:\\[ns\\-throw\\-event\\-blame\\][\\s\\S]*'event Ping' changed during System 'Driver')"
+      "expect": "(?=[\\s\\S]*(?:\\[ns\\-throw\\-event\\-blame\\]))[\\s\\S]*(?:\\[ns\\-throw\\-event\\-blame\\][\\s\\S]*'message Ping' changed during System 'Driver')"
     },
     {
       "id": "ks-k8-rule-dropped",
