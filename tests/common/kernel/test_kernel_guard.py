@@ -127,15 +127,26 @@ class GuardTree(unittest.TestCase):
                              ("void InstallRunner();", "InstallRunner"), ("bool Requires(int);", "Requires("),
                              ("std::vector<Plugin*> list;", "std::vector<Plugin*>"),
                              ("void Registry::Finish() {}", "Registry::Finish"), ("o.startup = true;", ".startup"),
-                             ("bool startupRan_ = false;", "startupRan_"), ("struct StartupScope;", "StartupScope"),
+                             ("bool startupRan_ = false;", "startupRan_"), ("bool startup_ = false;", "startup_"),
+                             ("bool startupRunning_ = false;", "startupRunning_"), ("int startupSchedule;", "startupSchedule"),
+                             ("struct StartupScope;", "StartupScope"),
                              ("void RunStartup();", "RunStartup"), ("int StartupNotNestable;", "StartupNotNestable"),
-                             ("int StartupRunning;", "StartupRunning"), ("int DE21;", "DE21"), ("int RE3;", "RE3"),
-                             ('const char* rule = "H-12";', '"H-12"'), ("struct PluginRecord;", "PluginRecord"),
+                             ("int StartupRunning;", "StartupRunning"), ("int DE21;", "DE21"), ("int RE1;", "RE1"),
+                             ("int RE3;", "RE3"), ("int RE6;", "RE6"), ('const char* rule = "H-12";', '"H-12"'),
+                             ('const char* other = "H-13";', '"H-13"'), ("struct PluginRecord;", "PluginRecord"),
                              ("void CheckPluginList();", "CheckPluginList"), ("void CheckRunners();", "CheckRunners"),
                              ("int runnerOwners;", "runnerOwners")):
             with self.subTest(text=text):
                 self.header(text)
                 self.assertReported("K9", needle)
+
+    def test_k9_executor_file_is_checked(self):
+        self.write("engine/kernel/src/Executor.cpp", "namespace GYO::Kernel {\nvoid InstallRunner() {}\n}\n")
+        self.assertReported("K9", "InstallRunner")
+
+    def test_k9_in_a_source_file_is_reported(self):
+        self.write("engine/kernel/src/World.cpp", "namespace GYO::Kernel {\nvoid RunStartup() {}\n}\n")
+        self.assertReported("K9", "RunStartup")
 
     def test_k9_startup_errors_stay_allowed(self):
         self.header("enum class StartupCode { DE7 }; struct StartupReport {};")

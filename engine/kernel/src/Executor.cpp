@@ -21,6 +21,18 @@ namespace GYO::Kernel {
 
 namespace {
 
+// Spec F-12's message: the observers that recorded during the last round
+// (time-events declaration 4.2), after its hooks; sorted, each once; "" when none.
+std::string ObserverRecorderNames(std::vector<std::size_t> observers, const Detail::RegistryData& data, bool afterHooks) {
+    std::sort(observers.begin(), observers.end());
+    observers.erase(std::unique(observers.begin(), observers.end()), observers.end());
+    std::string names;
+    for (std::size_t observer : observers) {
+        names += (names.empty() ? (afterHooks ? "; observer '" : "observer '") : ", '") + data.observers[observer].name + "'";
+    }
+    return names;
+}
+
 void DefaultHandler(const KernelError& error) {
     const std::string text = error.Text();
     std::fprintf(stderr, "kernel error:\n%s", text.c_str());
@@ -394,13 +406,14 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
                         std::sort(recorders.begin(), recorders.end());
                         recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());
                         std::string names;
-                        for (std::size_t hook : recorders) names += (names.empty() ? "'" : ", '") + data.hooks[hook].name + "'";
+                        for (std::size_t hook : recorders) names += (names.empty() ? "hook '" : ", '") + data.hooks[hook].name + "'";
+                        names += ObserverRecorderNames(world.roundObserverRecorders_, data, !names.empty());
                         KernelError error(KernelErrorCode::HookRoundLimit,
                                           "the hook rounds of schedule '" + scheduleName + "' did not empty its hook queue within " +
                                               std::to_string(limit) + " rounds (the limit of the " +
                                               (record->options.hookRoundLimit ? "schedule's declaration" : "World's KernelSettings") +
                                               "): " + std::to_string(world.HookQueueOf(scheduleName).records.size()) +
-                                              " records remain, recorded in round " + std::to_string(round) + " by hook " + names);
+                                              " records remain, recorded in round " + std::to_string(round) + " by " + names);
                         error.rule = "F-12";
                         error.world = world.name_;
                         error.Wrap(roundText(round));
@@ -411,6 +424,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
                     // This level's records are all applied (the outer levels' wait: K0).
                     GYO_ASSERT(world.window_.size() == world.runStack_[level].windowBase);
                     world.roundRecorders_.clear();
+                    world.roundObserverRecorders_.clear();
                     world.trackRoundRecorders_ = true;
                     const ChangeStamp roundStamp = ++world.stamp_;
                     world.state_ = WorldState::Applying;
@@ -725,7 +739,8 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
             std::sort(recorders.begin(), recorders.end());
             recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());
             std::string names;
-            for (std::size_t hook : recorders) names += (names.empty() ? "'" : ", '") + data.hooks[hook].name + "'";
+            for (std::size_t hook : recorders) names += (names.empty() ? "hook '" : ", '") + data.hooks[hook].name + "'";
+            names += ObserverRecorderNames(world.roundObserverRecorders_, data, !names.empty());
             KernelError error(KernelErrorCode::HookRoundLimit,
                               "the hook rounds of an immediate change by " + who + " did not empty within " +
                                   std::to_string(limit) + " rounds (the limit of the " +
@@ -743,6 +758,7 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
         own.records.clear();
         own.recSeq = 0;
         world.roundRecorders_.clear();
+        world.roundObserverRecorders_.clear();
         world.trackRoundRecorders_ = true;
         const ChangeStamp roundStamp = ++world.stamp_;
         applied = world.ApplySync(call.planPos, call.schedule, roundStamp, &recorded);
@@ -797,13 +813,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTypeId 
             std::vector<std::size_t> hooks = world.roundRecorders_;
             std::sort(hooks.begin(), hooks.end());
             hooks.erase(std::unique(hooks.begin(), hooks.end()), hooks.end());
-            for (std::size_t hook : hooks) names += (names.empty() ? "hook '" : ", hook '") + data.hooks[hook].name + "'";
-            std::vector<std::size_t> observers = world.roundObserverRecorders_;
-            std::sort(observers.begin(), observers.end());
-            observers.erase(std::unique(observers.begin(), observers.end()), observers.end());
-            for (std::size_t observer : observers) {
-                names += (names.empty() ? "observer '" : ", observer '") + data.observers[observer].name + "'";
-            }
+            for (std::size_t hook : hooks) names += (names.empty() ? "hook '" : ", '") + data.hooks[hook].name + "'";
+            names += ObserverRecorderNames(world.roundObserverRecorders_, data, !names.empty());
             KernelError error(KernelErrorCode::HookRoundLimit,
                               "the rounds of the trigger of " + event + " by " + where + " did not empty within " +
                                   std::to_string(limit) + " rounds (the limit of the " + limitSource + "): " +

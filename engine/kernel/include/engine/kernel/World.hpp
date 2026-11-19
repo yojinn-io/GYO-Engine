@@ -576,7 +576,8 @@ private:
     std::vector<Detail::AccessDesc> observerAccess_;
     std::vector<ObserverState> observerState_;
     // The observers that recorded during the current hook round (their index;
-    // for the limit's message, beside roundRecorders_).
+    // for the limit's message, beside roundRecorders_; cleared with it when each
+    // round starts, so it never outgrows one round).
     std::vector<std::size_t> roundObserverRecorders_;
     // The WorldExecutor running this World (set by it): a hook's call carries it too,
     // so ExclusiveWorld::RunSchedule in a hook reaches the refusal (X-13).

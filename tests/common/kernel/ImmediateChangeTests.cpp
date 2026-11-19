@@ -419,6 +419,19 @@ SystemResult TamperPingThenChange(ExclusiveWorld<> world) {
     return Ok();
 }
 
+// The same tampering before ExclusiveWorld::Trigger (step 7): compared before the observers run.
+struct Knocked { std::uint32_t n; };  // event, zone B
+SystemResult LogKnock(On<Knocked>) {
+    Log().push_back("knocked");
+    return Ok();
+}
+SystemResult TamperPingThenTrigger(ExclusiveWorld<> world) {
+    PingBuffer(*Current().world).records.back().payload.n = 98;
+    auto done = world.Trigger(Knocked{1});
+    Log().push_back("trigger " + std::string(done ? "ok" : ToString(done.error().code)));
+    return done;
+}
+
 // ---- S6: Commands::SetResource / RemoveResource
 
 SystemResult SetsFlagOne(Commands commands) {
@@ -626,7 +639,7 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
         CHECK_MESSAGE(Joined() == "round hook ball | round hook bat | round hook ball | ball HookRoundLimit",
                       "[ks-s5-round-limit-count] " << Joined());
         CHECK_MESSAGE(Text(result).find("records left after round 2") != std::string::npos, "[ks-s5-round-limit-count] " << Text(result));
-        CHECK_MESSAGE(Text(result).find("recorded by 'BallToBat'") != std::string::npos, "[ks-s5-round-limit-recorders] " << Text(result));
+        CHECK_MESSAGE(Text(result).find("recorded by hook 'BallToBat'") != std::string::npos, "[ks-s5-round-limit-recorders] " << Text(result));
         CHECK(rig->recorded.size() == 1);
         CHECK(rig->world().State() == WorldState::Interrupted);
     }
@@ -999,4 +1012,18 @@ TEST_CASE("DI-KS 9: a hook's Commands::SetResource goes into the hook queue: app
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(Joined() == "InB out absent | InC out 80", "[ks-s6-hook-next-window] " << Joined());
+}
+
+TEST_CASE("J-59: verification on: a write the System does not declare, made before ExclusiveWorld::Trigger, is reported first; no observer runs") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.Event<Knocked>({.name = "Knocked", .zone = Zone::B});
+        r.Observer<Knocked, &LogKnock>({.name = "log-knock", .zone = Zone::B});
+        r.AddSystem<&SendsPing>(B("SendsPing", "A"));
+        r.AddSystem<&TamperPingThenTrigger>(B("Driver", "B"));
+    }, true);
+    const auto result = rig->Run();
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[obs-trigger-own-changes] the write before the trigger was not reported: " << Joined());
+    CHECK_MESSAGE((result.error().Has(KernelErrorCode::BoundaryChange) && !Logged("knocked") && Logged("trigger BoundaryChange")),
+                  "[obs-trigger-own-changes] " << result.error().Text() << " / " << Joined());
 }

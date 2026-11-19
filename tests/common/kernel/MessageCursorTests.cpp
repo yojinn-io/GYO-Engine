@@ -118,6 +118,11 @@ SystemResult SpawnTagEachRun(SpawnWithId<Bundle<Tag>> spawn, Local<std::uint32_t
     spawn.New(100 + ++*runs, Tag{1});
     return Ok();
 }
+// Two MessageReader<Ping> in one call: one reader.
+SystemResult ReadsWithTwoReaders(MessageReader<Ping> first, MessageReader<Ping> second) {
+    Log().push_back("two:" + Numbers(first.Read()) + "/" + Numbers(second.Read()));
+    return Ok();
+}
 SystemResult PingOnTag(HookCtx ctx, MessageWriter<Ping> pings) {
     pings.Send(Ping{static_cast<std::uint32_t>(ctx.Entity())});
     return Ok();
@@ -471,4 +476,67 @@ TEST_CASE("J-18: a message type's capacity changes the Registry fingerprint and,
     CHECK(b3.registry->Frozen().CFingerprint() == b4.registry->Frozen().CFingerprint());
     CHECK_MESSAGE(c3.registry->Frozen().CFingerprint() != c4.registry->Frozen().CFingerprint(),
                   "[msg-capacity-c-fp] a zone C type's capacity is not in the C fingerprint");
+}
+
+// ---- Step 7: the cases the adversarial check of the mutant list found missing
+
+TEST_CASE("J-36: the Registry's readers: a named set's run condition; two MessageReader of one call are one; a later BuildPlans lists them anew") {
+    Built built = Finish({{"test", [](Registrar& r) {
+                               Data(r);
+                               r.Set({.name = "Gated", .schedule = "Tick"}, {Condition<&HasPings>("HasPings")});
+                               SystemOptions member = B("Member", "B");
+                               member.mounts[0].sets = {"Gated"};
+                               r.AddSystem<&Reader>(std::move(member));
+                               r.AddSystem<&ReadsWithTwoReaders>(B("Twice", "C"));
+                           }}});
+    KERNEL_REQUIRE_OK(built);
+    const MessageInfo* ping = InfoNamed(built.registry->Frozen(), "Ping");
+    REQUIRE(ping != nullptr);
+    CHECK_MESSAGE(ReadersText(ping->readers).find("Member@Tick/HasPings") != std::string::npos,
+                  "[msg-registry-set-condition] " << ReadersText(ping->readers));
+    std::size_t twice = 0;
+    for (const MessageReaderInfo& reader : ping->readers) twice += reader.system == "Twice" ? 1U : 0U;
+    CHECK_MESSAGE(twice == 1, "[msg-registry-one-reader-per-call] " << ReadersText(ping->readers));
+    REQUIRE(static_cast<bool>(built.registry->Register(RegistrationOwner{"later", 9}, [](Registrar& r) {
+        CHECK(r.RemoveSystem("Twice"));
+    })));
+    REQUIRE(static_cast<bool>(built.registry->BuildPlans()));
+    const MessageInfo* after = InfoNamed(built.registry->Frozen(), "Ping");
+    REQUIRE(after != nullptr);
+    CHECK_MESSAGE(ReadersText(after->readers) == "Member@Tick, Member@Tick/HasPings", "[msg-registry-readers-rebuilt] " << ReadersText(after->readers));
+}
+
+TEST_CASE("J-36: a message type's capacity is at least 1: 0 is a Programmer Error at registration") {
+    GYO_CHECK_ASSERTS(Finish({{"test", [](Registrar& r) {
+        Data(r);
+        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 0});
+    }}}));
+}
+
+TEST_CASE("J-36: the World summary holds where each cursor has read to") {
+    // Two Worlds with the same records kept (Slow holds them) and the same resources; only Fast's cursor differs.
+    auto summary = [](bool fastRunsOn) {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&WriteEveryRun>(B("Write", "A"));
+            SystemOptions slow = B("Slow", "B");
+            slow.mounts[0].conditions = {Condition<&FlagOn>("FlagOn")};
+            r.AddSystem<&Reader>(std::move(slow));
+            SystemOptions fast = B("Fast", "C");
+            fast.mounts[0].conditions = {Condition<&OutSet>("OutSet")};
+            r.AddSystem<&LaterReader>(std::move(fast));
+        }, false);
+        rig->world().SetResource(Flag{1});
+        rig->world().SetResource(Out{1});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        rig->world().SetResource(Flag{0});
+        rig->world().SetResource(Out{fastRunsOn ? 1 : 0});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        rig->world().SetResource(Out{1});
+        REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "2 3");
+        return rig->world().Summary();
+    };
+    CHECK(summary(true) == summary(true));
+    CHECK_MESSAGE(summary(true) != summary(false), "[msg-summary-cursor-position] where a cursor has read to is not in the summary");
 }

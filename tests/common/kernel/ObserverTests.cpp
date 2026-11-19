@@ -27,6 +27,8 @@ using namespace WorldTest;
 
 struct DoorOpened { std::uint32_t door; };  // event, zone B
 struct Rang { std::uint32_t n; };           // event, zone B
+struct Knock { std::uint32_t n; };          // event, the fingerprint cases only
+struct Chirp { std::uint32_t n; };          // message, zone B, capacity 3
 
 std::string Joined() {
     std::string out;
@@ -263,6 +265,86 @@ SystemResult SpawnSecondTag(SpawnWithId<Bundle<Tag>> spawn) {
     return Ok();
 }
 
+// The limit's message names the observers of the last round only (M1, step 7): a converging chain whose
+// observers record in hook rounds, and Retrigger, which never converges.
+SystemResult TagOnMode(On<Add<Mode>> on, CommandsFor<Inserts<Tag>, Removes<>> commands) {
+    commands.Insert(*on.Target(), Tag{1});
+    return Ok();
+}
+SystemResult DoorOnTag(On<Add<Tag>>, Commands commands) {
+    commands.Trigger(DoorOpened{9});
+    return Ok();
+}
+SystemResult RangOnTagRemoved(On<Remove<Tag>>, Commands commands) {
+    commands.Trigger(Rang{0});
+    return Ok();
+}
+// Run 1: DoorOpened on entity 1 (its chain converges in the hook rounds); Run 2: Rang (never converges).
+SystemResult DoorThenRang(Commands commands, Res<TickCount> ticks) {
+    if (ticks->value == 1) commands.Trigger(DoorOpened{0}, EntityId{1});
+    if (ticks->value == 2) commands.Trigger(Rang{0});
+    return Ok();
+}
+// Two immediate changes: the first one's chain converges in its rounds, the second one's never does.
+SystemResult InsertThenRemoveNow(ExclusiveWorld<> world) {
+    auto inserted = world.Insert(1, Mode{1});
+    if (!inserted) return Engine::Base::Err(std::move(inserted).error());
+    auto removed = world.Remove<Tag>(1);
+    if (!removed) return Engine::Base::Err(std::move(removed).error());
+    return Ok();
+}
+
+// ---- Step 7 (the adversarial check of the mutant list): what no test caught
+
+SystemResult Idle(Local<std::uint32_t>) { return Ok(); }
+bool FlagSet(Res<Flag> flag) { return flag->on != 0; }
+SystemResult TriggerDoorFromRunTwo(Commands commands, Res<TickCount> ticks) {
+    if (ticks->value >= 2) commands.Trigger(DoorOpened{0});
+    return Ok();
+}
+SystemResult ChirpReader(MessageReader<Chirp> chirps) {
+    std::string line = "chirps:";
+    for (const Chirp* chirp : chirps.Read()) line += " " + std::to_string(chirp->n);
+    Log().push_back(line);
+    return Ok();
+}
+SystemResult WriteFiveChirpsOnce(MessageWriter<Chirp> chirps, Local<std::uint32_t> runs) {
+    if (++*runs != 1) return Ok();
+    for (std::uint32_t n = 1; n <= 5; ++n) chirps.Send(Chirp{n});
+    return Ok();
+}
+SystemResult ChirpTwiceOnDoor(On<DoorOpened>, MessageWriter<Chirp> chirps) {
+    chirps.Send(Chirp{100});
+    chirps.Send(Chirp{101});
+    return Ok();
+}
+SystemResult ReadsCRes(On<DoorOpened>, Res<CRes>) { return Ok(); }
+SystemResult ReadsPos(On<DoorOpened>, Query<Read<Pos>>) { return Ok(); }
+SystemResult LogChangedModes(On<DoorOpened>, Query<Read<Mode>, Changed<Mode>> changed) {
+    std::string line = "changed:";
+    for (EntityId id : changed.Entities()) line += " " + std::to_string(id);
+    Log().push_back(line);
+    return Ok();
+}
+SystemResult TouchModeTwoOnRunTwo(Query<Write<Mode>> modes, Res<TickCount> ticks) {
+    if (ticks->value != 2) return Ok();
+    if (Mut<Mode> mode = modes.GetMut<Mode>(2)) mode->m = 7;
+    return Ok();
+}
+// Writes the target's Tag (its stamp is the observer's) and records a Mode insert (applied by the round).
+SystemResult StampTagThenInsertMode(On<DoorOpened> on, Query<Write<Tag>> tags, CommandsFor<Inserts<Mode>, Removes<>> commands) {
+    if (Mut<Tag> tag = tags.GetMut<Tag>(*on.Target())) tag->t = 2;
+    commands.Insert(*on.Target(), Mode{1});
+    return Ok();
+}
+// Drops the first trigger's Err (the World is interrupted) and triggers again.
+SystemResult RingTwiceIgnoringFirst(ExclusiveWorld<> world) {
+    (void)world.Trigger(Rang{0});
+    auto second = world.Trigger(Rang{100});
+    Log().push_back(second ? std::string("second ok") : "second " + std::string(ToString(second.error().code)));
+    return Ok();
+}
+
 void LifecycleObservers(Registrar& r) {
     r.Hook<Tag, &HookTagAdded>(HookTrigger::OnAdd, {.name = "hook+Tag", .zone = Zone::B});
     r.Hook<Mode, &HookModeAdded>(HookTrigger::OnAdd, {.name = "hook+Mode", .zone = Zone::B});
@@ -418,10 +500,11 @@ TEST_CASE("J-59: the Host's Trigger stops at KernelSettings::hookRoundLimit: Hoo
     rig->world().SetResource(KernelSettings{true, false, 3});
     const auto triggered = rig->executor->Trigger(Rang{0});
     CHECK_MESSAGE(HasCode(triggered, KernelErrorCode::HookRoundLimit), "[obs-host-limit] " << Text(triggered));
-    // The trigger and three rounds ran; a fourth round is the error.
-    CHECK_MESSAGE(LinesStartingWith("rang:") == 4, "[obs-host-limit] " << Joined());
+    // The trigger and three rounds ran; a fourth round is the error. (Each check prints its value: the mutants of
+    // this case each expect their own, step 7.)
+    CHECK_MESSAGE(LinesStartingWith("rang:") == 4, "[obs-host-limit-rounds] " << LinesStartingWith("rang:") << " | " << Joined());
     CHECK_MESSAGE(Text(triggered).find("observer 'retrigger'") != std::string::npos, "[obs-host-limit] " << Text(triggered));
-    CHECK_MESSAGE(rig->recorded.size() == 1, "[obs-host-limit] reported once");
+    CHECK_MESSAGE(rig->recorded.size() == 1, "[obs-host-limit-once] reported " << rig->recorded.size());
     CHECK_MESSAGE(rig->world().State() == WorldState::Interrupted, "[obs-host-limit] the World is interrupted");
 }
 
@@ -527,6 +610,54 @@ TEST_CASE("J-59: the trigger's rounds use the schedule's declared hook round lim
     const auto ran = rig->Run("Limited");
     CHECK_MESSAGE(HasCode(ran, KernelErrorCode::HookRoundLimit), "[obs-exclusive-limit-schedule] " << Text(ran));
     CHECK_MESSAGE(LinesStartingWith("rang:") == 2, "[obs-exclusive-limit-schedule] " << Joined());
+}
+
+TEST_CASE("J-59: the hook rounds of a Run stop at the limit naming the observers of the last round, not those of earlier rounds or Runs") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door", .zone = Zone::B});
+        r.Observer<Add<Mode>, &TagOnMode>({.name = "tag-on-mode", .zone = Zone::B});
+        r.Observer<Add<Tag>, &DoorOnTag>({.name = "door-on-tag", .zone = Zone::B});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.AddSystem<&DoorThenRang>(B("DoorThenRang", "C"));
+    });
+    rig->world().SetResource(KernelSettings{true, false, 3});
+    rig->world().Insert(1, Pos{0});
+    // Run 1: the last sync point delivers DoorOpened; its rounds apply Mode (tag-on-mode records), Tag
+    // (door-on-tag records) and DoorOpened again (Mode is there: nothing more). Converges.
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Get<Tag>(1) != nullptr);
+    // Run 2: Rang at the last sync point; retrigger records in every round.
+    const auto ran = rig->Run();
+    REQUIRE_MESSAGE(HasCode(ran, KernelErrorCode::HookRoundLimit), Text(ran));
+    CHECK_MESSAGE(Text(ran).find("recorded in round 3 by observer 'retrigger'") != std::string::npos,
+                  "[obs-run-limit-names] " << Text(ran));
+    CHECK_MESSAGE((Text(ran).find("tag-on-mode") == std::string::npos && Text(ran).find("door-on-tag") == std::string::npos),
+                  "[obs-run-limit-last-round] " << Text(ran));
+}
+
+TEST_CASE("J-59: the hook rounds of an immediate change stop at the limit naming the observers of its last round, not of an earlier change") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Observer<DoorOpened, &LogDoor>({.name = "log-door", .zone = Zone::B});
+        r.Observer<Add<Mode>, &TagOnMode>({.name = "tag-on-mode", .zone = Zone::B});
+        r.Observer<Add<Tag>, &DoorOnTag>({.name = "door-on-tag", .zone = Zone::B});
+        r.Observer<Remove<Tag>, &RangOnTagRemoved>({.name = "rang-on-untag", .zone = Zone::B});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.AddSystem<&InsertThenRemoveNow>(B("InsertThenRemoveNow", "A"));
+    });
+    rig->world().SetResource(KernelSettings{true, false, 3});
+    rig->world().Insert(1, Pos{0});
+    // The insert's rounds: Tag (door-on-tag records in round 1), DoorOpened. The removal's: Rang, round after round.
+    const auto ran = rig->Run();
+    REQUIRE_MESSAGE(HasCode(ran, KernelErrorCode::HookRoundLimit), Text(ran));
+    CHECK_MESSAGE(LinesStartingWith("door:9") == 1, "[obs-immediate-limit-names] the first change converged: " << Joined());
+    CHECK_MESSAGE(Text(ran).find("recorded by observer 'retrigger'") != std::string::npos, "[obs-immediate-limit-names] " << Text(ran));
+    CHECK_MESSAGE(Text(ran).find("door-on-tag") == std::string::npos, "[obs-immediate-limit-last-round] " << Text(ran));
 }
 
 TEST_CASE("J-59: an ExclusiveWorld::Trigger error the System drops interrupts the World and ends the Run in it, reported once") {
@@ -696,6 +827,8 @@ TEST_CASE("J-59: the Registry lists the event types and the observers (trigger, 
     const ObserverInfo& added = frozen.Observers()[0];
     CHECK_MESSAGE((added.trigger == ObserverTrigger::Add && added.id == *frozen.ComponentIdOf<Mode>() && added.owner == "test"),
                   "[obs-registry]");
+    CHECK_MESSAGE(added.zone == Zone::B, "[obs-registry-zone]");
+    CHECK_MESSAGE(added.source.find("ObserverTests.cpp") != std::string::npos, "[obs-registry-source] " << added.source);
     const ObserverInfo& declared = frozen.Observers()[1];
     CHECK_MESSAGE((declared.trigger == ObserverTrigger::Event && declared.id == *frozen.EventIdOf<DoorOpened>()), "[obs-registry]");
     const AccessKey out{AccessKind::Resource, *frozen.ResourceIdOf<Out>()};
@@ -784,4 +917,138 @@ TEST_CASE("J-59: a later round may not add an Add or Remove observer to a compon
                                               r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = Zone::B});
                                           }}});
     CHECK_MESSAGE(static_cast<bool>(event), "[obs-later-round] an observer of an event type may come later");
+}
+
+// ---- Step 7: the cases the adversarial check of the mutant list found missing
+
+TEST_CASE("J-59: removing a System (L5) keeps the cursor of the observer with the same index") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.AddSystem<&Idle>(B("Removable", "A"));  // System 0, removed below
+        r.Observer<DoorOpened, &ReadPingsOnDoor>({.name = "read-pings", .zone = Zone::B});  // observer 0
+        r.AddSystem<&WritePing>(B("WritePing", "A"));
+        SystemOptions slow = B("Slow", "B");
+        slow.mounts[0].conditions = {Condition<&FlagSet>("FlagSet")};
+        r.AddSystem<&ReadPings>(std::move(slow));
+        r.AddSystem<&TriggerDoorFromRunTwo>(B("TriggerDoorFromRunTwo", "A", {}, {"WritePing"}));
+    });
+    rig->world().SetResource(Flag{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // Ping 1: Slow reads it; the observer has not run
+    rig->world().SetResource(Flag{0});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // Ping 2: Slow skipped holds it; the observer reads it
+    REQUIRE(static_cast<bool>(rig->built.registry->Register(RegistrationOwner{"later", 9}, [](Registrar& r) {
+        CHECK(r.RemoveSystem("Removable"));
+    })));
+    REQUIRE(static_cast<bool>(rig->built.registry->BuildPlans()));
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // Ping 3: the observer's cursor stayed, so 3 only (2 is still kept for Slow)
+    CHECK_MESSAGE(Joined() == "sys-read: 1 | obs-read: 2 | obs-read: 3", "[obs-cursor-kept-on-removal] " << Joined());
+}
+
+TEST_CASE("J-59: the Host's Trigger records its own DroppedMessages, not into the last Run's") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Message<Chirp>({.name = "Chirp", .zone = Zone::B, .capacity = 3});
+        r.AddSystem<&ChirpReader>(B("ChirpReader", "A"));
+        r.AddSystem<&WriteFiveChirpsOnce>(B("WriteChirps", "B"));
+        r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door", .zone = Zone::B});
+    });
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // five into three: 1 and 2 dropped; the reader holds 3 4 5
+    const auto triggered = rig->executor->Trigger(DoorOpened{1});
+    REQUIRE_MESSAGE(static_cast<bool>(triggered), Text(triggered));  // 100 and 101: 3 and 4 dropped
+    const std::vector<DroppedMessages> dropped = rig->world().TakeDiagnostics<DroppedMessages>();
+    REQUIRE_MESSAGE(dropped.size() == 2, "[obs-host-trigger-dropped-record] " << dropped.size() << " records"
+                                                                            << (dropped.empty() ? std::string() : " count " + std::to_string(dropped[0].count)));
+    CHECK_MESSAGE((dropped[1].count == 2 && dropped[1].firstSeq == 3 && dropped[1].lastSeq == 4),
+                  "[obs-host-trigger-dropped-record] " << dropped[1].count << " " << dropped[1].firstSeq << ".." << dropped[1].lastSeq);
+}
+
+TEST_CASE("J-18: the event types, an observer's zone and its access are in the Registry fingerprint; zone C ones in the C fingerprint") {
+    auto make = [](int variant) {
+        return Finish({{"test", [variant](Registrar& r) {
+                            Data(r);
+                            Events(r);
+                            switch (variant) {
+                            case 1: r.Event<Knock>({.name = "Knock", .zone = Zone::B}); break;
+                            case 2: r.Event<Knock>({.name = "Knock", .zone = Zone::C}); break;
+                            case 3: r.Observer<DoorOpened, &LogDoorA>({.name = "o", .zone = Zone::B}); break;
+                            case 4: r.Observer<DoorOpened, &LogDoorA>({.name = "o", .zone = Zone::C}); break;
+                            case 5: r.Observer<DoorOpened, &WritesDeclared>({.name = "o", .zone = Zone::B}); break;
+                            case 6: r.Observer<DoorOpened, &ReadsCRes>({.name = "o", .zone = Zone::C}); break;
+                            case 7: r.Observer<DoorOpened, &ReadsPos>({.name = "o", .zone = Zone::C}); break;
+                            default: break;
+                            }
+                        }}});
+    };
+    std::vector<Built> built;
+    for (int variant = 0; variant <= 7; ++variant) {
+        built.push_back(make(variant));
+        KERNEL_REQUIRE_OK(built.back());
+    }
+    const auto fp = [&](int v) { return built[v].registry->Frozen().RegistryFingerprint().Text(); };
+    const auto cfp = [&](int v) { return built[v].registry->Frozen().CFingerprint().Text(); };
+    CHECK_MESSAGE(fp(0) != fp(1), "[obs-fp-events] an event type is not in the Registry fingerprint");
+    CHECK(cfp(0) == cfp(1));  // a zone B event type is not in the C fingerprint
+    CHECK_MESSAGE(cfp(0) != cfp(2), "[obs-cfp-events] a zone C event type is not in the C fingerprint");
+    CHECK_MESSAGE(fp(3) != fp(4), "[obs-fp-observer-zone] an observer's zone is not in the Registry fingerprint");
+    CHECK_MESSAGE(fp(3) != fp(5), "[obs-fp-observer-access] an observer's access is not in the Registry fingerprint");
+    CHECK_MESSAGE(cfp(6) != cfp(7), "[obs-cfp-observer-access] a zone C observer's access is not in the C fingerprint");
+}
+
+TEST_CASE("J-59: a zone C observer's access follows the zone rules: a write of zone B data is a startup error (DI-KS 8)") {
+    auto built = Finish({{"test", [](Registrar& r) {
+                              Data(r);
+                              Events(r);
+                              r.Observer<DoorOpened, &WritesDeclared>({.name = "c-writes-b", .zone = Zone::C});
+                          }}});
+    CHECK_MESSAGE(!built.result, "[obs-zone-access] " << Describe(built));
+    CHECK_MESSAGE(Describe(built).find("c-writes-b") != std::string::npos, "[obs-zone-access] " << Describe(built));
+}
+
+TEST_CASE("J-59: an observer's Changed<T> sees what changed since the observer last ran") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Observer<DoorOpened, &LogChangedModes>({.name = "changed-modes", .zone = Zone::B});
+        r.AddSystem<&TouchModeTwoOnRunTwo>(B("TouchModeTwoOnRunTwo", "A"));
+        r.AddSystem<&TriggerDoor>(B("TriggerDoor", "B"));
+    });
+    rig->world().Insert(1, Mode{0});
+    rig->world().Insert(2, Mode{0});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Joined() == "changed: 1 2 | changed: 2", "[obs-last-run] " << Joined());
+}
+
+TEST_CASE("J-59: each round of the Host's Trigger takes a new stamp: the round's writes are newer than the observer's") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Observer<DoorOpened, &StampTagThenInsertMode>({.name = "stamp-tag", .zone = Zone::B});
+    });
+    rig->world().Insert(3, Tag{0});
+    const auto triggered = rig->executor->Trigger(DoorOpened{2}, EntityId{3});
+    REQUIRE_MESSAGE(static_cast<bool>(triggered), Text(triggered));
+    const auto tag = rig->world().Stamps<Tag>(3);
+    const auto mode = rig->world().Stamps<Mode>(3);
+    REQUIRE((tag.has_value() && mode.has_value()));
+    CHECK_MESSAGE(mode->second > tag->second, "[obs-round-new-stamp] observer " << tag->second << " round " << mode->second);
+}
+
+TEST_CASE("J-59: a second ExclusiveWorld::Trigger after a dropped Err returns that Err again and runs no observer") {
+    Log().clear();
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        Events(r);
+        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.AddSystem<&RingTwiceIgnoringFirst>(B("RingTwiceIgnoringFirst", "A"));
+    });
+    rig->world().SetResource(KernelSettings{true, false, 2});
+    const auto ran = rig->Run();
+    CHECK(HasCode(ran, KernelErrorCode::HookRoundLimit));
+    CHECK_MESSAGE((LinesStartingWith("rang:100") == 0 && Log().back() == "second HookRoundLimit"), "[obs-trigger-interrupted] " << Joined());
 }
