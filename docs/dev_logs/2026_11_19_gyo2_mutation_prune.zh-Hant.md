@@ -123,6 +123,15 @@
   4. 這個性質不再由別的判定守，是使用者的決定：gyo2 沒有這些產品。「讀 CMakeLists.txt」的性質由改寫後的自測（`Gateway`）照舊守。
   5. 根據：使用者 2026-11-19 的指示；證據 `build/evidence/gyo2-mutation-prune/drop_w1_mutants.log`（4/4 killed）。
 
+## 後續：bs- 突變搬到 Base 的清單（v8-arch-gyo2-move-bs-mutants）
+
+- 來由：第 1 步的盤點把 `bs-` 列為「放錯清單」（Base 的 `IdIssuer`／`CurrentThreadSerial`，target `gyo_base_tests`，不是 Kernel 的）。使用者 2026-11-19：「bs- 突變搬到 Base 的清單，你直接處理」。
+- 改動：
+  - 新增 `docs/architecture/target/v2/scripts/base_mutations.json`（GYO2 線 Base 的突變清單；之前沒有 Base 的清單）。10 個 `bs-` 原樣搬入，順序不變；description 寫出處（kernel-subtract-structure 的 S10 修正與它的敵對式檢查）、搬移的批次代號、`bs-id-issuer-not-atomic` 是機率性的。
+  - `docs/architecture/plans/kernel/scripts/mutations.json`：刪這 10 個（665 → 655），description 加一段指到新清單。
+- 判定變更：無。突變的 find、replace、cases、expect 都沒改，只換了清單。
+- 驗證（macOS arm64）：用新清單跑 10 個，10/10 killed（`build/evidence/gyo2-mutation-prune/move_bs_mutants.log`；機率性的 `bs-id-issuer-not-atomic` 這次也殺掉）。
+
 ## 判定變更（AGENTS §14.4）
 
 - 退役 41 個的緩的面逐個寫在報告第 3、5 節，使用者 2026-11-18 核准（第 7 節）。
@@ -135,8 +144,8 @@
 
 - ~~把 `PRODUCT_ALIASES` 從 `kernel_guard.py` 拿掉（守衛的改動）。~~ 已做，見上「後續：拿掉 PRODUCT_ALIASES」。
 - ~~`entity_store_guard.py` 的 W1 裡的舊產品名要不要一起拿掉（待使用者決定）。~~ 已做，見上「後續：拿掉 W1 的舊產品名」。
-- `bs-` 開頭的突變搬到 Base 的清單。
-- 第 6 節的增長判準交風紀委員看要不要寫進規則文件；GYO2 線先照做。
+- ~~`bs-` 開頭的突變搬到 Base 的清單。~~ 已做，見上「後續：bs- 突變搬到 Base 的清單」。
+- ~~第 6 節的增長判準交風紀委員看要不要寫進規則文件。~~ 風紀委員不在 gyo2 這條線；使用者 2026-11-19：「寫進規則文檔」，「寫到 AGENTS 的條款都是中立或者架構上的」→ 中立的原則寫進 `AGENTS.md` §14.5，具體判準（常數、守衛、×5 門檻、合併寫法、問與不問）寫進新增的 `tests/common/mutation/README.md`（日語）。報告第 6.2 節第 7 條的後半（`run_mutations.py` 只套用不跑測試的模式）是工具的事，沒寫進去。
 
 ## 證據
 
