@@ -90,6 +90,11 @@ class GuardTree(unittest.TestCase):
         self.assertIn("engine/orchestration: O0 no source to scan (moved or renamed? update this guard)",
                       guard.check(self.root))
 
+    def test_missing_engine_cmake_files_are_reported(self):
+        (self.root / "engine/orchestration/CMakeLists.txt").unlink()
+        (self.root / "engine/kernel/CMakeLists.txt").unlink()
+        self.assertIn("engine: O0 no engine/<module>/CMakeLists.txt to scan", guard.check(self.root))
+
 
 if __name__ == "__main__":
     unittest.main()
