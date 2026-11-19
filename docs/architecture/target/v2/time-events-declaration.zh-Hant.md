@@ -531,16 +531,25 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 以下是原本的標題，留作紀錄：第 12 節的模型與檔位（四處 xhigh、Fable 的四個角色）
 
-### 一起確認（照 L17 自己判的，不同意請指出）
+### 卡片照 L17 判的（使用者 2026-11-19 看過下面前 4 條；其餘照別家，未逐條看）
+
+使用者 2026-11-19（side chat）：「等等，我發現你又回去了，很多決議其實開源Engine裡面都有，我們不是可以參考的麼。」所以照別家答得出的各條由本卡照 L17 判、不逐條問；**只把和別家不同的地方列出來**（本節末）。
 
 - ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-t1-closed-by-time-events`）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
 - ~~第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）~~——**已確認：照建議**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-fixed-time-accumulates`）。原話：「照建議」。比過：同意（照 Bevy、lightyear、Unity 累加）←選／改回 T1 的沒有累計（作者自己用 tick×步長算）／tick×步長（修訂 0；Client 對時改 tick 時累計會跳）。
 - ~~第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放~~——**已改定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-game-time-in-world-time`）：遊戲時間全部放 `engine/world_time`，`engine/time` 只留時間基準，**推翻 `time-plan-two` (7)**。原話與比過的選項見第 3.1 節表。名字 `world_time`／`WorldTimeModule` 照用。
 - ~~第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-world-time-surface`）。原話：先問「上一個問題有些變化，這個決議還成立嗎？」，side chat 逐點對過後「同意。」比過：同意／某處不同意（例：tick 從 0 開始、沒被取走的時間不記）。對過的結果寫在第 3.3 節末。
-- 第 3.6 節預設骨架的細節：`FixedUpdate` 的 stage 名、關掉骨架的選項的形、O-4 補句**不算編排層職責清單多一項**。
-- 第 3.4 節的取樣；第 3.5 節可存與不放回的清單。
-- 第 4.2、4.3 節的實作細節；第 4.5 節區規則的過渡（`MessageOptions::zone` 留到第 4 批）。
-- 第 6.3 節延後守衛的判定；第 8 節和骨架卡那條 PR 的先後；第 9.2 節的預算。
+- 第 3.4 節的取樣、第 3.5 節的讀檔：**卡片照 L17 判**。取樣照 Bevy `TimeUpdateStrategy`；讀檔不放回 `RealTime`（Bevy `Time<Real>` 同樣是行程內的時間點）。
+- 第 4.2、4.3 節的實作細節、第 4.5 節區規則的過渡：**卡片照 L17 判**。照 flecs、Bevy（hook 帶 `MessageReader` 編譯失敗、observer 與 hook 共用佇列、新增 hook 先／移除 observer 先、依記錄先後送達、修剪後重拍驗證快照、同步點序號）；`MessageOptions::zone` 留到第 4 批是 GYO 的批次安排。
+- 第 6.3 節延後守衛、第 8 節和骨架卡摘要 PR 的先後、第 9.2 節的預算：**卡片照 L17 判**，照第 2 批的先例，沒有新的取捨。
+- 第 3.6 節預設骨架的細節（`FixedUpdate` 的 stage 名、關掉骨架的選項的形）：**卡片照 L17 判**，照 Bevy 的 `Main` 與 FixedMain 的段落（side chat 那則沒有列這條，本卡照同一原則歸進來）。
+
+**和別家不同的地方**（動工前核准時請你看這幾處）：
+1. **步長不隨存檔放回**（第 3.5 節）：Bevy 把整個 `Time<Fixed>` 放回會連步長一起放回；GYO 以這次的設定為準。理由：作者改了頻率後讀舊存檔，不該被舊步長蓋掉。
+2. **`Commands` 觸發的自訂事件放在同步點 F.2 的最後一步**（第 4.2 節）：Bevy 照指令記錄的先後逐筆執行；GYO 的同步點照種類分批，只能選一個位置，放最後讓 observer 看得到這個同步點的全部結構變更。
+3. **`FixedUpdate` 的 stage 名不加 `Fixed` 前綴**（第 3.6 節）：Bevy 的 FixedMain 是 `FixedFirst`…`FixedLast` 五張 schedule；GYO 是一張 schedule 裡的五個 stage，stage 名屬於各自的 schedule。
+
+**仍要你看的一項（職責清單）**：第 10.2 節 O-4 補句「編排層給 schedule 的預設骨架」**不算編排層職責清單多一項**（O-4 已列「遊戲初始化與每幀的清單」）——職責清單多不多一項是 L17 必須交你的那一類，所以不歸「照別家」。
 
 ---
 
