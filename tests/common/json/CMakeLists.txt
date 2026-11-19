@@ -13,6 +13,7 @@ add_executable(gyo_json_tests
     test_main.cpp
     JsonErrorTests.cpp
     ReadTests.cpp
+    NumberTests.cpp
 )
 find_package(Threads REQUIRED)
 target_link_libraries(gyo_json_tests PRIVATE GYO::Json gyo_test_support doctest::doctest Threads::Threads)
@@ -46,3 +47,16 @@ target_include_directories(gyo_json_adapter_tests PRIVATE ${GYO_REPOSITORY_ROOT}
 target_link_libraries(gyo_json_adapter_tests PRIVATE GYO::Json gyo_yyjson doctest::doctest)
 add_test(NAME gyo_json_adapter_tests COMMAND gyo_json_adapter_tests)
 set_tests_properties(gyo_json_adapter_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
+
+# The survey's number vectors on every L1 platform (decision v8-arch-json-fast-float):
+# regenerated into the build directory and checked to be the survey's set
+# (SHA-256), then every number compared with its correctly rounded reference.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_executable(gyo_json_vector_tests VectorTests.cpp)
+target_link_libraries(gyo_json_vector_tests PRIVATE GYO::Json)
+set(_gyo_json_vectors "${CMAKE_CURRENT_BINARY_DIR}/vectors")
+add_test(NAME json.vectors.generate
+    COMMAND Python3::Interpreter -I ${CMAKE_CURRENT_SOURCE_DIR}/vectors/gen_numbers.py ${_gyo_json_vectors})
+set_tests_properties(json.vectors.generate PROPERTIES LABELS "cpu" TIMEOUT 300 FIXTURES_SETUP gyo_json_vectors)
+add_test(NAME gyo_json_vector_tests COMMAND gyo_json_vector_tests ${_gyo_json_vectors})
+set_tests_properties(gyo_json_vector_tests PROPERTIES LABELS "cpu" TIMEOUT 300 FIXTURES_REQUIRED gyo_json_vectors)

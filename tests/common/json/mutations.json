@@ -100,6 +100,96 @@
    "target": "gyo_json_tests",
    "cases": "ObjectView and ArrayView: walking steps over nested*",
    "expect": "keys == std::vector<std::string_view>\\{\\\"a\\\", \\\"b\\\", \\\"c\\\"\\}"
+  },
+  {
+   "id": "js-number-unchecked-at-parse",
+   "what": "J-2: Parse does not check the numbers (a number nobody reads is not range-checked)",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "            if (Detail::DecimalToDouble(RawOf(value), converted) != Detail::DecimalRead::Ok) {",
+   "replace": "            if (false && Detail::DecimalToDouble(RawOf(value), converted) != Detail::DecimalRead::Ok) {",
+   "target": "gyo_json_tests",
+   "cases": "Parse: a number nobody reads*",
+   "expect": "REQUIRE_FALSE\\( document\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "js-overflow-accepted",
+   "what": "J-2: an infinite conversion is accepted",
+   "file": "engine/json/src/adapters/fast_float/DecimalToDouble.cpp",
+   "find": "    if (std::isinf(value)) return DecimalRead::OutOfRange;\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Parse: a number that overflows*",
+   "expect": "ParseError\\(\\\"1e400\\\"sv\\)"
+  },
+  {
+   "id": "js-underflow-accepted",
+   "what": "J-2: non-zero text that rounds to zero is accepted",
+   "file": "engine/json/src/adapters/fast_float/DecimalToDouble.cpp",
+   "find": "    if (value == 0.0 && HasNonZeroSignificand(text)) return DecimalRead::OutOfRange;\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Parse: a number that overflows*",
+   "expect": "ParseError\\(\\\"1e-400\\\"sv\\)"
+  },
+  {
+   "id": "js-zero-text-exponent-counted",
+   "what": "J-2: digits of the exponent count as significant, so zero text with a large exponent is called an underflow",
+   "file": "engine/json/src/NumberText.cpp",
+   "find": "        if (c == 'e' || c == 'E') return false;\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Parse: zero text is zero*",
+   "expect": "DoubleBits\\(\\\"0e999999\\\"sv\\)"
+  },
+  {
+   "id": "js-integer-literal-misses-E",
+   "what": "J-3: '1E2' (capital E) counts as an integer literal",
+   "file": "engine/json/src/NumberText.cpp",
+   "find": "return text.find_first_of(\".eE\") == std::string_view::npos;",
+   "replace": "return text.find_first_of(\".e\") == std::string_view::npos;",
+   "target": "gyo_json_tests",
+   "cases": "IsIntegerLiteral and AsNumberText",
+   "expect": "pattern == \\\"ii-----\\\""
+  },
+  {
+   "id": "js-integer-literal-misses-dot",
+   "what": "J-3: '1.0' counts as an integer literal",
+   "file": "engine/json/src/NumberText.cpp",
+   "find": "return text.find_first_of(\".eE\") == std::string_view::npos;",
+   "replace": "return text.find_first_of(\"eE\") == std::string_view::npos;",
+   "target": "gyo_json_tests",
+   "cases": "IsIntegerLiteral and AsNumberText",
+   "expect": "pattern == \\\"ii-----\\\""
+  },
+  {
+   "id": "js-uint-minus-zero-rejected",
+   "what": "J-3: AsUint64 rejects \"-0\" (the adapter's own case is lost)",
+   "file": "engine/json/src/NumberText.cpp",
+   "find": "        if (text == \"-0\") {",
+   "replace": "        if (false) {",
+   "target": "gyo_json_tests",
+   "cases": "AsInt64 and AsUint64*",
+   "expect": "U\\(values\\[5\\]\\) == \\\"u:0\\\""
+  },
+  {
+   "id": "js-uint-negative-as-zero",
+   "what": "J-3: a negative integer read unsigned is not NumberOutOfRange",
+   "file": "engine/json/src/NumberText.cpp",
+   "find": "        return IntegerRead::OutOfRange;\n    }\n    return ReadInteger(text, out);",
+   "replace": "        out = 0;\n        return IntegerRead::Ok;\n    }\n    return ReadInteger(text, out);",
+   "target": "gyo_json_tests",
+   "cases": "AsInt64 and AsUint64*",
+   "expect": "U\\(values\\[6\\]\\) == \\\"NumberOutOfRange\\\""
+  },
+  {
+   "id": "js-number-pointer-dropped",
+   "what": "5.5: an out-of-range number's detail loses its JSON Pointer",
+   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "find": "                                       Located(yyjson_get_raw(value), PointerToCurrent()));",
+   "replace": "                                       Located(yyjson_get_raw(value), std::string()));",
+   "target": "gyo_json_tests",
+   "cases": "Parse: a number nobody reads*",
+   "expect": "/list/1"
   }
  ]
 }

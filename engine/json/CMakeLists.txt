@@ -7,7 +7,9 @@
 add_library(gyo_json STATIC
     src/JsonError.cpp
     src/Kind.cpp
+    src/NumberText.cpp
     src/TextPosition.cpp
+    src/adapters/fast_float/DecimalToDouble.cpp
     src/adapters/yyjson/YyjsonDocument.cpp
 )
 add_library(GYO::Json ALIAS gyo_json)

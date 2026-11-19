@@ -17,7 +17,9 @@
 #include "ParseWith.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/json/Document.hpp"
+#include "../../NumberText.hpp"
 #include "../../TextPosition.hpp"
+#include "../fast_float/DecimalToDouble.hpp"
 
 namespace GYO::Engine::Json {
 
@@ -66,8 +68,11 @@ JsonError OutOfMemoryError() { return JsonError::Make(JsonErrorCode::OutOfMemory
 
 std::string_view StringOf(yyjson_val* value) noexcept { return {yyjson_get_str(value), yyjson_get_len(value)}; }
 
+std::string_view RawOf(yyjson_val* value) noexcept { return {yyjson_get_raw(value), yyjson_get_len(value)}; }
+
 // The strict checks yyjson leaves to the adapter, in one walk without
-// recursion (J-2, J-9): a key repeated in one object.
+// recursion (J-2, J-9): a key repeated in one object, and a number that does
+// not convert to a finite double or whose non-zero text rounds to zero.
 class Validation final {
 public:
     Validation(yyjson_doc* doc, const std::string_view text) : base_(doc->str_pool), text_(text) {}
@@ -112,6 +117,13 @@ private:
             stack_.push_back({unsafe_yyjson_get_first(value), yyjson_obj_size(value), 0, true, nullptr, 0});
         } else if (yyjson_is_arr(value)) {
             stack_.push_back({unsafe_yyjson_get_first(value), yyjson_arr_size(value), 0, false, nullptr, 0});
+        } else if (yyjson_is_raw(value)) {
+            double converted = 0.0;
+            if (Detail::DecimalToDouble(RawOf(value), converted) != Detail::DecimalRead::Ok) {
+                return JsonError::Make(JsonErrorCode::NumberOutOfRange,
+                                       "number out of range: " + std::string(RawOf(value)),
+                                       Located(yyjson_get_raw(value), PointerToCurrent()));
+            }
         }
         return std::nullopt;
     }
@@ -155,9 +167,13 @@ private:
     // Where a key or a raw number starts in the parsed text: yyjson's copy of
     // the input begins at str_pool and keeps every string's first byte at its
     // offset in the input (unescaping only shortens a string in place).
-    std::string Position(const char* inCopy) const {
-        if (base_ == nullptr) return {};
-        return Detail::LineAndColumn(text_, static_cast<std::size_t>(inCopy - base_)) + "; ";
+    // "line L, column C; <pointer>", leaving out what is unknown or empty
+    // (the root's pointer is empty).
+    std::string Located(const char* inCopy, const std::string& pointer) const {
+        std::string detail;
+        if (base_ != nullptr) detail = Detail::LineAndColumn(text_, static_cast<std::size_t>(inCopy - base_));
+        if (!pointer.empty()) detail += (detail.empty() ? "" : "; ") + pointer;
+        return detail;
     }
 
     JsonError RepeatedKey(yyjson_val* key) const {
@@ -165,7 +181,7 @@ private:
         Detail::AppendPointerToken(pointer, StringOf(key));
         return JsonError::Make(JsonErrorCode::RepeatedKey,
                                "repeated key '" + std::string(StringOf(key)) + "'",
-                               Position(yyjson_get_str(key)) + pointer);
+                               Located(yyjson_get_str(key), pointer));
     }
 
     const char* base_;
@@ -226,7 +242,10 @@ JsonResult<Document> Parse(const std::string_view text) { return Detail::ParseWi
 
 Kind Value::GetKind() const noexcept { return KindOf(Raw(node_)); }
 
-bool Value::IsIntegerLiteral() const noexcept { return false; }
+bool Value::IsIntegerLiteral() const noexcept {
+    yyjson_val* value = Raw(node_);
+    return yyjson_is_raw(value) && Detail::IsIntegerLiteral(RawOf(value));
+}
 
 JsonResult<bool> Value::AsBool() const {
     yyjson_val* value = Raw(node_);
@@ -234,16 +253,51 @@ JsonResult<bool> Value::AsBool() const {
     return yyjson_get_bool(value);
 }
 
+namespace {
+
+// The integer literal of a number value, or the error for anything else.
+JsonResult<std::string_view> IntegerText(yyjson_val* value) {
+    if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::Number, KindOf(value)));
+    const std::string_view text = RawOf(value);
+    if (!Detail::IsIntegerLiteral(text)) {
+        return Err(JsonError::Make(JsonErrorCode::WrongKind, "wrong kind",
+                                   "expected an integer literal, found " + std::string(text)));
+    }
+    return text;
+}
+
+JsonError IntegerOutOfRange(const std::string_view text, const char* type) {
+    return JsonError::Make(JsonErrorCode::NumberOutOfRange, "integer out of range",
+                           std::string(text) + " does not fit " + type);
+}
+
+} // namespace
+
 JsonResult<std::int64_t> Value::AsInt64() const {
-    return Err(WrongKindError(Kind::Number, KindOf(Raw(node_))));
+    auto text = IntegerText(Raw(node_));
+    if (!text) return Err(std::move(text).error());
+    std::int64_t out = 0;
+    if (Detail::ReadInt64(*text, out) != Detail::IntegerRead::Ok) return Err(IntegerOutOfRange(*text, "int64"));
+    return out;
 }
 
 JsonResult<std::uint64_t> Value::AsUint64() const {
-    return Err(WrongKindError(Kind::Number, KindOf(Raw(node_))));
+    auto text = IntegerText(Raw(node_));
+    if (!text) return Err(std::move(text).error());
+    std::uint64_t out = 0;
+    if (Detail::ReadUint64(*text, out) != Detail::IntegerRead::Ok) return Err(IntegerOutOfRange(*text, "uint64"));
+    return out;
 }
 
 JsonResult<double> Value::AsDouble() const {
-    return Err(WrongKindError(Kind::Number, KindOf(Raw(node_))));
+    yyjson_val* value = Raw(node_);
+    if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::Number, KindOf(value)));
+    double out = 0.0;
+    if (Detail::DecimalToDouble(RawOf(value), out) != Detail::DecimalRead::Ok) {
+        // Parse has checked every number already; kept for a Document built otherwise.
+        return Err(JsonError::Make(JsonErrorCode::NumberOutOfRange, "number out of range: " + std::string(RawOf(value))));
+    }
+    return out;
 }
 
 JsonResult<std::string_view> Value::AsString() const {
@@ -255,7 +309,7 @@ JsonResult<std::string_view> Value::AsString() const {
 JsonResult<std::string_view> Value::AsNumberText() const {
     yyjson_val* value = Raw(node_);
     if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::Number, KindOf(value)));
-    return std::string_view(yyjson_get_raw(value), yyjson_get_len(value));
+    return RawOf(value);
 }
 
 JsonResult<ObjectView> Value::AsObject() const {
