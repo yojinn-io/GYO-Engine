@@ -22,7 +22,7 @@
 
 - **全量 ctest**：本機（macOS x86_64）120/120（`ctest-final.log`）。
 - **突變**：本批清單 107/107 killed（`mutants-full-final.log`）。每步只跑相關的（D184），第 7 步跑完整一次。加的數與理由見合併前核准頁第 4 節（超過「條文數 × 5」）。
-- **數字向量**：L1 linux-x64（Python 3.12.3）與 windows-x64（Python 3.15.2）都重生出和調查相同的六個檔（SHA-256 一致），讀取 210,050、最短寫出 50,000，共 260,050，0 不一致（run 44564613610）。本機（Python 3.14.8）同。macos-arm64：第 1 步的 run 44556667124 綠；之後兩次被 GitHub 取消（runner 沒拿到，「capacity constraints」，0 個步驟），最後一次見合併前核准頁。
+- **數字向量**：L1 linux-x64（Python 3.12.3）與 windows-x64（Python 3.15.2）都重生出和調查相同的六個檔（SHA-256 一致），讀取 210,050、最短寫出 50,000，共 260,050，0 不一致（run 44564613610）。本機（Python 3.14.8）同。macos-arm64：第 1 步的 run 44556667124 綠；之後三次被 GitHub 取消（runner 沒拿到，「capacity constraints」，0 個步驟）。最後 **run 44577566411（7314c282）三平台綠**（macOS 以 Python 3.15.2 重生，SHA-256 一致；windows 只有既有的 `os.console_close` skipped）。windows 失敗過兩次，都是 MSVC 的 doctest 印 `string_view` 缺 `<ostream>`（44562576673、44574178460）。
 - **判定 3**（本機 JSONTestSuite 1ef36fa0）：`y_` 93 收＋兩件 `y_object_duplicated_key*` 回 `RepeatedKey`、`n_` 188 全拒、`i_` 拒 31 收 4、GYO 補充 24 件和調查一致。宣告原寫「`y_` 95 件全收」和 J-2 矛盾，結果出來後判定不成立，停下回報；使用者「這個照建議」更正（HANDOFF `v8-arch-gyo2-json-criterion3-corrected`）。
 - **判定 6**（本機，i9-9980HK）：5.3 MB 解析 54.7 ms（上限 150）、16 MiB 168.8 ms；和 yyjson 單獨解析的比 2.4～2.8 倍（上限 10）；一筆 473 位元組紀錄的寫出中位數 1.24 µs（上限 5）。沒有觸發停止條件。
 - **Red 的形式**：第 2 步是斷言失敗（`cmake.UnitRegistry`）；第 3、5 步是「還沒有實作」的連結失敗，不是斷言失敗；第 4 步是斷言失敗（`step4-red.txt`）；D1～D3 是斷言失敗（`d1-d3-red.txt`）。
@@ -36,4 +36,4 @@
 
 ## 證據
 
-主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-json-module/`（git 不追蹤，本機 macOS x86_64）：`reference-survey.md`、`declaration-r0-adversarial-check.md`、`download/`（下載 tarball 與 SHA-256，內容和 FetchContent 取得的逐位元組相同）、`l1-step1-44556667124/`、`l1-step4-44562576673/`（windows 的 `<ostream>` 失敗）、`l1-step5-44564613610/`、`step4-red.txt`、`d1-d3-red.txt`、`judgement3/`、`bench/`、`mutation-check-fable/`、`mutants-full-run1.log`、`mutants-full-final.log`、`ctest-final.log`。
+主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-json-module/`（git 不追蹤，本機 macOS x86_64）：`reference-survey.md`、`declaration-r0-adversarial-check.md`、`download/`（下載 tarball 與 SHA-256，內容和 FetchContent 取得的逐位元組相同）、`l1-step1-44556667124/`、`l1-step4-44562576673/`（windows 的 `<ostream>` 失敗）、`l1-step5-44564613610/`、`l1-final-44574178460/`、`l1-final-44577566411/`、`step4-red.txt`、`d1-d3-red.txt`、`judgement3/`、`bench/`、`mutation-check-fable/`、`mutants-full-run1.log`、`mutants-full-final.log`、`ctest-final.log`。

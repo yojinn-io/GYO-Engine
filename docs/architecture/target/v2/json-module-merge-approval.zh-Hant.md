@@ -10,15 +10,15 @@
 
 | # | 結果 | 證據（主 checkout `build/evidence/gyo2-json-module/`） |
 |---|---|---|
-| 1 | 本機全量 ctest 120/120（macOS x86_64）；L1：見本節末 | `ctest-final.log` |
-| 2 | 數字向量 0 不一致：L1 linux-x64（Python 3.12.3）、windows-x64（Python 3.15.2）與本機（3.14.8）都重生出和調查相同的六個檔（SHA-256 一致），260,050 個 0 不一致，數字串和 Python `repr` 也完全一致；結構化 golden 與往返 200,000 三平台綠（macOS 見本節末） | `l1-step5-44564613610/` 的 `tests.xml` |
+| 1 | 本機全量 ctest 120/120（macOS x86_64）；L1 三平台綠（run 44577566411，見本節末） | `ctest-final.log`、`l1-final-44577566411/` |
+| 2 | 數字向量 0 不一致：L1 linux-x64（Python 3.12.3）、windows-x64（3.15.2）、macos-arm64（3.15.2）與本機（3.14.8）都重生出和調查相同的六個檔（SHA-256 一致），260,050 個 0 不一致，數字串和 Python `repr` 也完全一致；結構化 golden 與往返 200,000 三平台綠 | `l1-final-44577566411/` 的 `tests.xml` |
 | 3 | **更正後成立**（第 2 節）：`y_` 93 收＋兩件 `y_object_duplicated_key*` 回 `RepeatedKey`；`n_` 188 全拒；`i_` 拒 31（字串、代理、編碼、BOM 24＋溢位 5＋下溢 2）收 4（超出 64 位元的整數 3＋500 層 1）；GYO 補充 24 件和調查一致 | `judgement3/results.txt` |
 | 4 | 突變 107/107 killed（Fable／high 檢查補過後） | `mutants-full-final.log` |
 | 5 | J-1 掃描：正例 yyjson 含入 3、fast_float 含入 1、yyjson 名字 69、fast_float 名字 1；其他位置 0；自我測試 22 件；`gyo_expect_links` 綠 | ctest `json.adapter_guard*` |
 | 6 | 沒有觸發停止條件：5.3 MB 解析 54.7 ms（上限 150）、16 MiB 168.8 ms；和 yyjson 單獨解析的比 2.4～2.8 倍（上限 10）；一筆 473 位元組紀錄的寫出中位數 1.24 µs（上限 5）；本機 i9-9980HK，一次 | `bench/results.txt` |
 | 7 | 件數一致（文首） | 同上 |
 
-**L1**：第 1 步的 run 44556667124 三平台綠。run 44562576673 的 windows-x64 失敗：MSVC 的 doctest 印 `std::string_view` 要 `<ostream>`（測試檔的問題，照 `OrchestrationTestSupport.hpp:16` 的先例補上）。run 44564613610 linux、windows 綠；macos-arm64 兩次被 GitHub 取消（「The job was not acquired by Runner of type hosted even after multiple attempts」，0 個步驟，runner 容量）。最後一次 run 44574178460（c8ba3a39）：L1_FINAL。
+**L1**：第 1 步的 run 44556667124 三平台綠。run 44562576673 的 windows-x64 失敗：MSVC 的 doctest 印 `std::string_view` 要 `<ostream>`（測試檔的問題，照 `OrchestrationTestSupport.hpp:16` 的先例補上）。run 44564613610 linux、windows 綠；macos-arm64 兩次被 GitHub 取消（「The job was not acquired by Runner of type hosted even after multiple attempts」，0 個步驟，runner 容量）。run 44574178460（c8ba3a39）的 windows-x64 又因同一原因失敗（第 7 步加的 `WriteAllocationTests.cpp` 比較 `string_view`），macOS 再次被取消；補 `<ostream>` 後 **run 44577566411（7314c282）三平台綠**：linux-x64 120 件、windows-x64 123 件（只有既有的 `os.console_close` 是 skipped：runner 收不到關閉主控台的事件，和本批無關）、macos-arm64 120 件；三平台的 json 測試各 7 件、數字向量各 260,050 個 0 不一致（macOS 以 Python 3.15.2 重生，SHA-256 一致）。證據 `l1-final-44577566411/`。
 
 ## 2. 判定 3 的更正（AGENTS §14.4 的格式）
 
