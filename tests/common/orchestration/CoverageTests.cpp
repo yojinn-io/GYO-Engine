@@ -126,6 +126,9 @@ TEST_CASE("O-2: the product's own build comes after every unit's; a World with n
     O::ProductDescription bare;
     bare.name = "game";
     bare.worlds.push_back(World("Bare"));
+    // The default skeleton off (time-events declaration 6.2): with it the orchestration layer's own Register would
+    // already make the World's Registry freeze, and the case would no longer test the product's own Register.
+    bare.worlds.back().skeleton = O::ScheduleSkeleton::Off;
     auto bareBuilt = O::Product::Build(std::move(bare), Units().Take());
     CHECK_MESSAGE(static_cast<bool>(bareBuilt), "[or-bare-world] " << Describe(bareBuilt));
 }
