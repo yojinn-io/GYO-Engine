@@ -224,9 +224,11 @@ Registry、Plan、C 三種指紋的版本號都升（6／4／8），export 標�
 
 ---
 
-## 5. 不另做 EventBus：Engine 機制的送法（**整張表交你定，第 11 節第 2 件**）
+## 5. 不另做 EventBus：Engine 機制的送法（**已定：照建議**，使用者 2026-11-19，第 11 節第 2 件）
 
-從別家歸納的原則（`recon-c`；**本卡的歸納，要你定**）：**World 層級的廣播、讀者節奏不同 → 保留式 `Message`；針對某個實體或結構變更、要當下反應 → 推送式 `Event`；連續的狀態（時間前進、暫停、是否重跑中）→ 不發事件，讀 Resource**。在 Bevy 一致：`StateTransitionEvent`、`AppExit`、`AssetEvent` 是 Message；生命週期與 `bevy_scene::Ready` 是 Event；時間前進、暫停、lightyear 的 `Rollback` 是狀態。flecs 只有推送式，節奏不同時建議用 System 輪詢（`ObserversManual.md:104-126`）。
+從別家歸納的原則（`recon-c`；本卡的歸納，**使用者 2026-11-19 定：照建議，之後各批照它定送法、不再逐批問**）：**World 層級的廣播、讀者節奏不同 → 保留式 `Message`；針對某個實體或結構變更、要當下反應 → 推送式 `Event`；連續的狀態（時間前進、暫停、是否重跑中）→ 不發事件，讀 Resource**。在 Bevy 一致：`StateTransitionEvent`、`AppExit`、`AssetEvent` 是 Message；生命週期與 `bevy_scene::Ready` 是 Event；時間前進、暫停、lightyear 的 `Rollback` 是狀態。flecs 只有推送式，節奏不同時建議用 System 輪詢（`ObserversManual.md:104-126`）。
+
+**兩種事件都不指定收件人**（side chat 對使用者的更正，使用者同意轉交）：發送者都不知道誰處理。差別在 (a) 時間：保留式是讀者自己挑時間拉，推送式是發的那一刻推；(b) 保留式留到讀過或碰到上限，推送式當下沒人訂就沒了。推送式可以帶目標實體（Bevy `EntityEvent`），但只限定「關於哪個實體」，不指定處理者。真正「知道誰、一定送到」的是直接呼叫（例：D2 把錯誤交給 runner）。
 
 | 機制 | 你在 `-no-separate-eventbus` 列了嗎 | Bevy（位置） | flecs（位置） | 本卡的建議 | 和你列舉的差別 | 批次 |
 |---|---|---|---|---|---|---|
@@ -458,7 +460,11 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 這會改你列舉的範圍，所以交你定。
 
-### 第 2 件：Engine 機制的送法表（第 5 節）
+### 第 2 件：Engine 機制的送法表（第 5 節）——**已定：照建議**（使用者 2026-11-19，side chat 轉達；代號待主會話定）
+
+**原話**：「嗯，這個照建議，你的歸納邏輯很清晰。」**定下的**：(1) 原則：整個 World 關心、讀的人節奏不同 → 保留式 `Message`；針對某個實體、要當下反應 → 推送式 `Event`；一直存在的狀態（暫停、第幾 tick、重跑中）→ 不發事件，讀 Resource。(2) 第 5 節的表照建議，含「時間 tick 不發事件」（縮小 `-no-separate-eventbus` 的列舉）。之後各批照這條原則定送法，不再逐批問。**比過的選項**：照原則定、時間 tick 不發 ←選／照原列舉每跑一步發一個事件（和固定步裡的 System 重複、每步多一份成本）／只採表、不立原則。**理由**：使用者說歸納邏輯清晰，沒有另外說。附帶：使用者原本以為 `Message` 是指定給某個 System 處理，side chat 更正後使用者說「那是我理解錯誤了，我還以為Message會to OOOOSystem來做的。」更正的內容寫在第 5 節原則下。
+
+以下是交你定時的說明，留作紀錄。
 
 你交代「逐個機制對照 Bevy、flecs，定推送式或保留式，交使用者看」。第 5 節的表是本卡的建議。**和你列舉的差別**：
 - **「時間 tick」不發事件**（縮小你的列舉）：訂閱者就是固定步 schedule 裡的 System；Bevy、flecs 都不通知固定步跑了一步（`fixed.rs:243-258`、`timer.c:12-48`）。比過：每跑一步發一筆 `Event`（observer 每步跑一次，和放進固定步的 System 重複）／發 `Message`（讀者每幀讀到 k 筆，和讀 `Tick` 的差得到同樣的資訊）。
