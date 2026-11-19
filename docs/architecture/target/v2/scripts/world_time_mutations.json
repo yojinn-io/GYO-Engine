@@ -1,0 +1,256 @@
+{
+ "version": 1,
+ "description": "Declared mutants of game time (docs/architecture/target/v2/time-events-declaration.zh-Hant.md, section 6.5; ids wt-). Step 2: the types and the accumulator (T1 judgment 2 and the time-events additions). The Fable/high adversarial check of the batch's new lists is recorded in the dev_log. A mutant is killed only when the named test case fails.",
+ "mutants": [
+  {
+   "id": "wt-add-clears-remainder",
+   "what": "Add drops the remainder",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    overstep_ = total - steps * step_;\n",
+   "replace": "    overstep_ = 0;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the remainder carries across frames"
+  },
+  {
+   "id": "wt-until-next-returns-overstep",
+   "what": "UntilNextStep returns the remainder",
+   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "find": "return step_ - overstep_; }",
+   "replace": "return overstep_; }",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: accumulate 2.3 steps"
+  },
+  {
+   "id": "wt-cut-clamps-total",
+   "what": "the cut clamps the total instead of cutting whole steps",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "            result.discarded = (steps - limit) * step;\n",
+   "replace": "            result.discarded = fixed->Overstep() + delta - limit * step;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: AdvanceVirtual cuts whole steps beyond the cap"
+  },
+  {
+   "id": "wt-cut-ignores-overstep",
+   "what": "the cut ignores the remainder already in the accumulator",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "        const Nanoseconds steps = (fixed->Overstep() + delta) / step;\n",
+   "replace": "        const Nanoseconds steps = delta / step;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: AdvanceVirtual cuts whole steps beyond the cap"
+  },
+  {
+   "id": "wt-cut-not-recorded",
+   "what": "the cut is not added to discarded",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    time.discarded += result.discarded;\n",
+   "replace": "    time.discarded += 0;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: AdvanceVirtual cuts whole steps beyond the cap"
+  },
+  {
+   "id": "wt-discarded-overwritten",
+   "what": "discarded is overwritten each frame instead of summed",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    time.discarded += result.discarded;\n",
+   "replace": "    time.discarded = result.discarded;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: AdvanceVirtual cuts whole steps beyond the cap"
+  },
+  {
+   "id": "wt-elapsed-before-cut",
+   "what": "elapsed adds the amount before the cut",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    time.elapsed += delta;\n    time.discarded += result.discarded;\n",
+   "replace": "    time.elapsed += delta + result.discarded;\n    time.discarded += result.discarded;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the frame's virtual delta is the steps times the step plus the change of the remainder"
+  },
+  {
+   "id": "wt-add-no-limit-assert",
+   "what": "Add does not assert its limit",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    GYO_ASSERT(steps <= static_cast<Nanoseconds>(limit));\n",
+   "replace": "    (void)limit;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: Add asserts beyond its limit"
+  },
+  {
+   "id": "wt-reset-not-cleared",
+   "what": "Reset does not clear the remainder",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    overstep_ = 0;\n    return cleared;",
+   "replace": "    return cleared;",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: no time is lost since the last Reset"
+  },
+  {
+   "id": "wt-pause-advances",
+   "what": "a paused frame still advances",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    if (control.paused != 0) {\n        time.delta = 0;\n        return result;\n    }\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: pause"
+  },
+  {
+   "id": "wt-resume-catches-up",
+   "what": "the paused time is handed back on resume",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "        time.delta = 0;\n        return result;",
+   "replace": "        time.delta = 0;\n        time.fraction += static_cast<double>(realDelta);\n        return result;",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: pause"
+  },
+  {
+   "id": "wt-scale-twice",
+   "what": "the scale is applied twice",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "static_cast<double>(realDelta) * control.scale + time.fraction;",
+   "replace": "static_cast<double>(realDelta) * control.scale * control.scale + time.fraction;",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: scale"
+  },
+  {
+   "id": "wt-fraction-dropped",
+   "what": "the fraction is dropped each frame (floor)",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    time.fraction = scaled - whole;\n",
+   "replace": "    time.fraction = 0.0;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the scale's fraction carries to the next frame"
+  },
+  {
+   "id": "wt-fraction-rounded-up",
+   "what": "the frame rounds up",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    const double whole = std::floor(scaled);\n",
+   "replace": "    const double whole = std::ceil(scaled);\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the scale's fraction carries to the next frame"
+  },
+  {
+   "id": "wt-pause-clears-fraction",
+   "what": "a pause clears the fraction",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "        time.delta = 0;\n        return result;",
+   "replace": "        time.delta = 0;\n        time.fraction = 0.0;\n        return result;",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the scale's fraction carries to the next frame"
+  },
+  {
+   "id": "wt-scale-recorded-wrong",
+   "what": "VirtualTime records another scale than the applied one",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    time.scale = control.scale;\n",
+   "replace": "    time.scale = 1.0;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: scale"
+  },
+  {
+   "id": "wt-no-frame-cap",
+   "what": "without a fixed step the frame is not capped",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    } else if (delta > limits.maxFrameDelta) {",
+   "replace": "    } else if (false) {",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: without a fixed step the frame is capped at 250 ms"
+  },
+  {
+   "id": "wt-frame-cap-default",
+   "what": "the duration cap's default is not 250 ms",
+   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "find": "Nanoseconds maxFrameDelta = 250'000'000;",
+   "replace": "Nanoseconds maxFrameDelta = 500'000'000;",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: without a fixed step the frame is capped at 250 ms"
+  },
+  {
+   "id": "wt-frame-cap-with-fixed",
+   "what": "the duration cap applies with a fixed step too",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    } else if (delta > limits.maxFrameDelta) {",
+   "replace": "    }\n    if (result.cause == DiscardCause::None && delta > limits.maxFrameDelta) {",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: without a fixed step the frame is capped at 250 ms"
+  },
+  {
+   "id": "wt-default-step-not-64hz",
+   "what": "the default step is not 64 Hz",
+   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "find": "Nanoseconds nanoseconds = 15'625'000;",
+   "replace": "Nanoseconds nanoseconds = 16'666'667;",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the step length"
+  },
+  {
+   "id": "wt-hz-truncates",
+   "what": "the rate is truncated instead of rounded",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "static_cast<Nanoseconds>(std::llround(static_cast<double>(kNanosecondsPerSecond) / hz))",
+   "replace": "static_cast<Nanoseconds>(static_cast<double>(kNanosecondsPerSecond) / hz)",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the step length"
+  },
+  {
+   "id": "wt-real-first-delta",
+   "what": "the first real sample gives a non-zero delta",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "        time.sampled = 1;\n        time.delta = 0;\n",
+   "replace": "        time.sampled = 1;\n        time.delta = now;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: RealTime"
+  },
+  {
+   "id": "wt-manual-first-frame-zero",
+   "what": "manual sampling drops the first frame",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    time.sampled = 1;\n    time.delta = delta;\n",
+   "replace": "    time.delta = time.sampled == 0 ? 0 : delta;\n    time.sampled = 1;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: RealTime"
+  },
+  {
+   "id": "wt-hz-zero-allowed",
+   "what": "a zero rate is not asserted",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "    GYO_ASSERT(std::isfinite(hz) && hz > 0.0 && hz <= static_cast<double>(kNanosecondsPerSecond));\n",
+   "replace": "    GYO_ASSERT(std::isfinite(hz) || hz != hz);\n",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: the step length"
+  },
+  {
+   "id": "wt-negative-scale-allowed",
+   "what": "a negative scale is not asserted",
+   "file": "engine/world_time/src/TimeTypes.cpp",
+   "find": "std::isfinite(control.scale) && control.scale >= 0.0 &&",
+   "replace": "std::isfinite(control.scale) &&",
+   "target": "gyo_world_time_tests",
+   "cases": "types:*",
+   "expect": "TEST CASE:\\s+types: preconditions"
+  }
+ ]
+}
