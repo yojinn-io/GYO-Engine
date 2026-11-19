@@ -1,5 +1,6 @@
 add_subdirectory(support)
 add_subdirectory(base)
+add_subdirectory(json)
 add_subdirectory(core)
 add_subdirectory(math)
 add_subdirectory(threads)
