@@ -14,6 +14,8 @@ add_executable(gyo_json_tests
     JsonErrorTests.cpp
     ReadTests.cpp
     NumberTests.cpp
+    WriteTests.cpp
+    WriteAllocationTests.cpp
 )
 find_package(Threads REQUIRED)
 target_link_libraries(gyo_json_tests PRIVATE GYO::Json gyo_test_support doctest::doctest Threads::Threads)

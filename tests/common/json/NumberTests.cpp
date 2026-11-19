@@ -2,6 +2,9 @@
 // strict parsing (J-2); docs/architecture/target/v2/json-module-declaration.zh-Hant.md 5.3.
 #include <doctest/doctest.h>
 
+// MSVC needs <ostream> for doctest to print std::string_view in CHECK.
+#include <ostream>
+
 #include <bit>
 #include <cstdint>
 #include <limits>

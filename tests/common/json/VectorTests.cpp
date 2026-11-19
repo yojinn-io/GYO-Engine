@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "engine/json/Document.hpp"
+#include "engine/json/Writer.hpp"
 
 using GYO::Engine::Json::JsonErrorCode;
 using GYO::Engine::Json::Parse;
@@ -115,6 +116,47 @@ void CheckIntegers(const std::string& dir, const std::size_t expectedCount, Tall
     }
 }
 
+// The significant digits of a number's text: no sign, point, exponent, or
+// leading and trailing zeros ("100000.0" and "1e5" both give "1").
+std::string SignificantDigits(const std::string_view text) {
+    std::string digits;
+    for (const char c : text) {
+        if (c == 'e' || c == 'E') break;
+        if (c >= '0' && c <= '9') digits += c;
+    }
+    const auto first = digits.find_first_not_of('0');
+    if (first == std::string::npos) return "0";
+    digits.erase(0, first);
+    digits.erase(digits.find_last_not_of('0') + 1);
+    return digits;
+}
+
+// The first 50,000 generated numbers are Python repr(): the shortest text that
+// reads back to the double. The Writer must use as many significant digits
+// (declaration 8.3: shortest, not merely round-tripping).
+void CheckShortest(const std::string& dir, Tally& tally, std::size_t& differentDigits) {
+    const auto texts = Lines(dir + "/num_gen.txt");
+    for (std::size_t i = 0; i < 50000 && i < texts.size(); ++i) {
+        ++tally.checked;
+        auto document = Parse(texts[i]);
+        if (!document) {
+            tally.Fail("shortest", texts[i], "parse", ToString(document.error().code));
+            continue;
+        }
+        std::string out;
+        GYO::Engine::Json::Writer writer(out);
+        writer.Double(document->Root().AsDouble().value());
+        if (!writer.Finish()) {
+            tally.Fail("shortest", texts[i], "write", "error");
+            continue;
+        }
+        const std::string expected = SignificantDigits(texts[i]);
+        const std::string got = SignificantDigits(out);
+        if (got.size() != expected.size()) tally.Fail("shortest", texts[i], expected, out);
+        if (got != expected) ++differentDigits;
+    }
+}
+
 } // namespace
 
 int main(const int argc, char** argv) {
@@ -128,6 +170,10 @@ int main(const int argc, char** argv) {
     CheckDoubles(dir, "num_fixed", 40, tally, countsOk);
     CheckDoubles(dir, "num_gen", 200000, tally, countsOk);
     CheckIntegers(dir, 10010, tally, countsOk);
-    std::printf("checked %zu numbers (expected 210050), %zu mismatched\n", tally.checked, tally.mismatched);
-    return countsOk && tally.checked == 210050 && tally.mismatched == 0 ? 0 : 1;
+    std::size_t differentDigits = 0;
+    CheckShortest(dir, tally, differentDigits);
+    std::printf("checked %zu (expected 260050: 210050 reads, 50000 shortest writes), %zu mismatched; "
+                "same length but other digits than repr: %zu\n",
+                tally.checked, tally.mismatched, differentDigits);
+    return countsOk && tally.checked == 260050 && tally.mismatched == 0 ? 0 : 1;
 }

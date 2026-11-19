@@ -3,6 +3,9 @@
 // docs/architecture/target/v2/json-module-declaration.zh-Hant.md).
 #include <doctest/doctest.h>
 
+// MSVC needs <ostream> for doctest to print std::string_view in CHECK.
+#include <ostream>
+
 #include <cstddef>
 #include <string>
 #include <string_view>

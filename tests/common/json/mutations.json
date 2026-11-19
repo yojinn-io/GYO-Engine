@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the JSON Module batch (docs/architecture/target/v2/json-module-declaration.zh-Hant.md, section 8.6; ids js-). Written step by step with the tests; the whole catalog goes to an adversarial check (Fable/high) at step 7. Not added (with the reason): the empty-text check before yyjson (equivalent: yyjson reports empty input as an error at offset 0 too); reading in place (YYJSON_READ_INSITU) and a move that does not empty its source (undefined behaviour without a sanitizer: not a reliable mutant); the std::bad_alloc catch in Parse (no injection point for the adapter's own allocations).",
+ "description": "Declared mutants of the JSON Module batch (docs/architecture/target/v2/json-module-declaration.zh-Hant.md, section 8.6; ids js-). Written step by step with the tests; the whole catalog goes to an adversarial check (Fable/high) at step 7. Not added (with the reason): the empty-text check before yyjson (equivalent: yyjson reports empty input as an error at offset 0 too); reading in place (YYJSON_READ_INSITU) and a move that does not empty its source (undefined behaviour without a sanitizer: not a reliable mutant); the std::bad_alloc catch in Parse (no injection point for the adapter's own allocations); the \"finished\" check in BeforeValue (equivalent under test: after Finish the second-top-level check fails as well).",
  "mutants": [
   {
    "id": "js-raw-flag-dropped",
@@ -190,6 +190,226 @@
    "target": "gyo_json_tests",
    "cases": "Parse: a number nobody reads*",
    "expect": "/list/1"
+  },
+  {
+   "id": "jw-array-comma-dropped",
+   "what": "J-5: no comma between array elements",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    if (!frame.first) out_ += ',';\n    frame.first = false;\n}",
+   "replace": "    frame.first = false;\n}",
+   "target": "gyo_json_tests",
+   "cases": "Writer: compact output in call order",
+   "expect": "moves"
+  },
+  {
+   "id": "jw-member-comma-dropped",
+   "what": "J-5: no comma between object members",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        if (!frame.first) out_ += ',';\n        frame.first = false;\n        if (!AppendString(out_, key)) {",
+   "replace": "        frame.first = false;\n        if (!AppendString(out_, key)) {",
+   "target": "gyo_json_tests",
+   "cases": "Writer: compact output in call order",
+   "expect": "tick"
+  },
+  {
+   "id": "jw-quote-unescaped",
+   "what": "J-5: '\"' in a string is not escaped",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        case '\"': shortEscape = \"\\\\\\\"\"; break;\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer: strings are escaped*",
+   "expect": "StringText\\(\"\\\\\"\\\\\\\\\"\\)"
+  },
+  {
+   "id": "jw-control-unescaped",
+   "what": "J-5: control characters without a short escape are written raw",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "if (shortEscape != nullptr || c < 0x20) {",
+   "replace": "if (shortEscape != nullptr) {",
+   "target": "gyo_json_tests",
+   "cases": "Writer: strings are escaped*",
+   "expect": "x01"
+  },
+  {
+   "id": "jw-utf8-overlong-two-byte",
+   "what": "J-5: the two-byte overlong leads C0 and C1 are accepted",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "if (lead >= 0xC2 && lead <= 0xDF)",
+   "replace": "if (lead >= 0xC0 && lead <= 0xDF)",
+   "target": "gyo_json_tests",
+   "cases": "Writer: UTF-8 is checked*",
+   "expect": "StringError\\(text\\) == JsonErrorCode::NotRepresentable"
+  },
+  {
+   "id": "jw-utf8-surrogate",
+   "what": "J-5: UTF-8 encoded surrogates (ED A0..BF) are accepted",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "if (lead == 0xED) return continuation(i + 1, 0x80, 0x9F)",
+   "replace": "if (lead == 0xED) return continuation(i + 1, 0x80, 0xBF)",
+   "target": "gyo_json_tests",
+   "cases": "Writer: UTF-8 is checked*",
+   "expect": "StringError\\(text\\) == JsonErrorCode::NotRepresentable"
+  },
+  {
+   "id": "jw-utf8-above-max",
+   "what": "J-5: code points above U+10FFFF (F4 90..) are accepted",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        return continuation(i + 1, 0x80, 0x8F) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
+   "replace": "        return continuation(i + 1, 0x80, 0xBF) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
+   "target": "gyo_json_tests",
+   "cases": "Writer: UTF-8 is checked*",
+   "expect": "StringError\\(text\\) == JsonErrorCode::NotRepresentable"
+  },
+  {
+   "id": "jw-key-utf8-unchecked",
+   "what": "J-5: a key's UTF-8 is not checked",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        if (!AppendString(out_, key)) {\n            Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n            return;\n        }",
+   "replace": "        static_cast<void>(AppendString(out_, key));",
+   "target": "gyo_json_tests",
+   "cases": "Writer: UTF-8 is checked*",
+   "expect": "REQUIRE_FALSE\\( keyDone\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "jw-nonfinite-as-null",
+   "what": "Question 3 / J-5: a non-finite number is written as null instead of failing",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "            Fail(JsonErrorCode::NotRepresentable, \"non-finite number\");\n            return;",
+   "replace": "            out_ += \"null\";\n            return;",
+   "target": "gyo_json_tests",
+   "cases": "Writer: a non-finite number*",
+   "expect": "REQUIRE_FALSE\\( done\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "jw-not-cut-back",
+   "what": "J-5: a failed Finish leaves the partial output in the string",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        out_.resize(startLength_);\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer: a non-finite number*",
+   "expect": "out == \\\"earlier line\\\\n\\\""
+  },
+  {
+   "id": "jw-error-not-reported",
+   "what": "J-5: Finish succeeds although an error was recorded",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    if (error_) {\n        out_.resize",
+   "replace": "    if (false && error_) {\n        out_.resize",
+   "target": "gyo_json_tests",
+   "cases": "Writer: a non-finite number*",
+   "expect": "REQUIRE_FALSE\\( done\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "jw-no-inline-levels",
+   "what": "J-5: nesting state always goes to the heap",
+   "file": "engine/json/include/engine/json/Writer.hpp",
+   "find": "static constexpr std::size_t kInlineDepth = 32;",
+   "replace": "static constexpr std::size_t kInlineDepth = 0;",
+   "target": "gyo_json_tests",
+   "cases": "Writer: no allocation*",
+   "expect": "allocations == 0"
+  },
+  {
+   "id": "jw-oom-escapes",
+   "what": "J-5, 5.5: an allocation failure escapes String as std::bad_alloc",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        if (!AppendString(out_, text)) Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n    } catch (const std::bad_alloc&) {\n        Fail(JsonErrorCode::OutOfMemory, \"out of memory\");\n    }",
+   "replace": "        if (!AppendString(out_, text)) Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n    } catch (const std::logic_error&) {\n    }",
+   "target": "gyo_json_tests",
+   "cases": "Writer: an allocation failure*",
+   "expect": "bad_alloc"
+  },
+  {
+   "id": "jw-value-without-key",
+   "what": "J-5: a value in an object without a Key is not a Programmer Error",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        GYO_ASSERT(frame.awaitingValue && \"a value in an object needs a Key first\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: a value in an object without a Key",
+   "expect": "writer\\.Int\\(1\\)"
+  },
+  {
+   "id": "jw-key-in-array",
+   "what": "J-5: a Key inside an array is not a Programmer Error",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    GYO_ASSERT(frame.container == Container::Object && \"a Key outside an object\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: a Key outside an object",
+   "expect": "inArray\\.Key\\(\\\"k\\\"\\)"
+  },
+  {
+   "id": "jw-end-mismatch",
+   "what": "J-5: an end that does not match the open container is not a Programmer Error",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    GYO_ASSERT(frame.container == container && \"the end does not match the open container\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: an end that does not match",
+   "expect": "writer\\.EndArray\\(\\)"
+  },
+  {
+   "id": "jw-end-after-key",
+   "what": "J-5: ending an object right after a Key is not a Programmer Error",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    GYO_ASSERT(!frame.awaitingValue && \"a Key without its value\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: ending an object after a Key",
+   "expect": "writer\\.EndObject\\(\\)"
+  },
+  {
+   "id": "jw-second-top-level",
+   "what": "J-5: a second top-level value is not a Programmer Error",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        GYO_ASSERT(!topWritten_ && \"a second top-level value\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: a second top-level value",
+   "expect": "writer\\.Int\\(2\\)"
+  },
+  {
+   "id": "jw-finish-open",
+   "what": "J-5: Finish with an open container is not a Programmer Error",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    GYO_ASSERT(depth_ == 0 && \"Finish with an open container\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: Finish with an open container",
+   "expect": "expected GYO_ASSERT to fail: writer\\.Finish\\(\\)"
+  },
+  {
+   "id": "jw-finish-empty",
+   "what": "J-5: Finish with nothing written is not a Programmer Error",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    GYO_ASSERT(topWritten_ && \"Finish with nothing written\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: Finish with nothing written",
+   "expect": "expected GYO_ASSERT to fail: writer\\.Finish\\(\\)"
+  },
+  {
+   "id": "jw-finish-twice",
+   "what": "J-5: a second Finish is not a Programmer Error (writing after Finish needs no mutant of its own: the second-top-level check catches it as well)",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "    GYO_ASSERT(!finished_ && \"Finish called twice\");\n",
+   "replace": "",
+   "target": "gyo_json_tests",
+   "cases": "Writer misuse: Finish twice*",
+   "expect": "expected GYO_ASSERT to fail: writer\\.Finish\\(\\)"
+  },
+  {
+   "id": "jw-writevalue-reformats-numbers",
+   "what": "J-5: WriteValue rewrites numbers through Double instead of their text",
+   "file": "engine/json/src/Writer.cpp",
+   "find": "        case Kind::Number: writer.NumberText(item.AsNumberText().value()); break;",
+   "replace": "        case Kind::Number: writer.Double(item.AsDouble().value()); break;",
+   "target": "gyo_json_tests",
+   "cases": "WriteValue: members in document order*",
+   "expect": "out =="
   }
  ]
 }

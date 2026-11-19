@@ -8,6 +8,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
+// MSVC needs <ostream> for doctest to print std::string_view in CHECK.
+#include <ostream>
+
 #include <bit>
 #include <cmath>
 #include <cstdint>
