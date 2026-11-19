@@ -286,7 +286,7 @@ scenario 第一段（S1-1～S1-10，走路計分）涵蓋的是登記與建 Plan
    - 那句斷言仍有別的突變的（3.1 的 3 個、`we-w11-mut-no-mark-j30`、`ks-s5-applies-level-records`、`rs-j12-bundle-dropped`），併進去不加任何證明，直接退。
    - 判定是指令、和接手的指令不同的（`we-k5-entity-store-dropped-selftest`、`rs-sym-elf-bss-unread`），合併不了，直接退；緩的面照 3.2。
    - 合併試跑殺不掉的，原突變留下，不退役，在 dev_log 記下。
-3. ~~3.3 的舊產品別名：K1 的 `PRODUCT_ALIASES` 要不要繼續擋舊產品的名字？~~ **已定（使用者 2026-11-18）：「舊產品別名不用擋了，那 5 個也退」**——退役 4 個別名突變＋`ks-real-product-name`。比過的選項：不擋（退 5 個）／擋（留 4 個、`ks-real-product-name` 改寫成用別名）。別名清單本身還留在守衛裡；把它從 `kernel_guard.py` 拿掉是守衛的改動，不在本批，列為後續。
+3. ~~3.3 的舊產品別名：K1 的 `PRODUCT_ALIASES` 要不要繼續擋舊產品的名字？~~ **已定（使用者 2026-11-18）：「舊產品別名不用擋了，那 5 個也退」**——退役 4 個別名突變＋`ks-real-product-name`。比過的選項：不擋（退 5 個）／擋（留 4 個、`ks-real-product-name` 改寫成用別名）。別名清單本身還留在守衛裡；把它從 `kernel_guard.py` 拿掉是守衛的改動，不在本批，列為後續。**已做（2026-11-19，`v8-arch-gyo2-drop-product-aliases`；使用者：「拿掉 PRODUCT_ALIASES 你直接處理」）**：清單與它的兩個自測一起拿掉，見 [dev_log](../../../dev_logs/2026_11_19_gyo2_mutation_prune.zh-Hant.md)「後續：拿掉 PRODUCT_ALIASES」。
    **補問（敵對式檢查指出當時漏了一個選項）**：`ks-real-product-name` 測的是 K1 的「登記 id」，不是別名。除了退役，也可以改寫成角色詞（例：在 `Plan.hpp` 放 `PlayerState`），留作 K1 唯一的實樹正控制。
    **已定（使用者 2026-11-18）：「其他的照你建議」→ 改寫成角色詞、不退役**（改掉上面「那 5 個也退」裡的這一個；4 個別名突變照舊退）。比過的選項：維持退役／改寫成角色詞。理由：K1 退役後沒有任何實樹的正控制。
 4. 3.4 (e)：第 2 批已改寫 4 個；本批的 3 個是 `ks-real-product-name`（第 3 題），rs-sample 兩個改寫 expect。rs-sample 的改寫有緩める面（「failed without 標記」以前不算殺掉、現在算），1～5 寫在 3.4 表下。`hf-startup-skipped` 留下（3.3 的說明）。**已定（使用者 2026-11-18）：「其他的照你建議」→ rs-sample 兩個照 3.4 改寫 expect；`hf-startup-skipped` 留下。**

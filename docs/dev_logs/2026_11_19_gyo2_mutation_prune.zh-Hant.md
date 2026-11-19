@@ -91,6 +91,23 @@
   5. 證據：`build/evidence/gyo2-mutation-prune/empty_expect_old.json`（舊 expect）、`empty_expect_mutants.log`（7/7 killed，macOS arm64）。
 - 程式與測試沒有改動，所以沒跑 ctest。
 
+## 後續：拿掉 PRODUCT_ALIASES（v8-arch-gyo2-drop-product-aliases）
+
+- 來由：報告第 7 節第 3 題，使用者 2026-11-18 定「舊產品別名不用擋了」，當時只退了突變、清單留在守衛裡，列為後續。2026-11-19 使用者：「拿掉 PRODUCT_ALIASES 你直接處理」。
+- 改動：
+  - `tests/common/kernel/kernel_guard.py`：刪 `PRODUCT_ALIASES`（`RetroFPS`、`fps::pvp`、`\b[Pp]vp`、`Gyo::Tools`）；K1 剩兩組：(i) 登記 id、(ii) 角色詞 `ROLE_WORDS`（原本的 (iii)）。docstring 寫明別名已拿掉與出處。
+  - `tests/common/kernel/test_kernel_guard.py`：刪 `test_k1_product_alias_is_reported`、`test_k1_every_product_alias_is_reported`。
+  - `mutations.json`：`ks-k1-roles-dropped` 的 find／replace 原本寫著 `PRODUCT_ALIASES + ROLE_WORDS`，改成只寫 `ROLE_WORDS`（拿掉角色詞的改法不變）；description 加一段。
+  - `kernel-scaffold-declaration.zh-Hant.md` 第 3.1 節 K1 那一行加註：(ii) 已拿掉。
+- 驗證（macOS arm64）：守衛自測 85 個全過；守衛跑實樹乾淨；檔案是 `kernel_guard.py` 的 48 個突變全部殺掉（48/48）。Kernel 的 C++ 沒有改，沒跑 ctest。
+- 判定變更（AGENTS §14.4；這是 Design Invariants 的守衛，有緩める面，使用者 2026-11-18 的決定與 2026-11-19 的指示即核准）：
+  1. 守的性質：Kernel 的程式與註解不出現舊產品的名字 `RetroFPS`、`fps::pvp`、`Pvp`／`pvp`、`Gyo::Tools`（登記表推不出的那幾個）。
+  2. 緩める面：Kernel 裡出現這四個名字，以前 K1 報、現在不報（除非同時碰到登記 id 或角色詞，例：`PvpMatch` 不會被 `\bMatch\b` 抓到，所以現在通過）。
+  3. 締める面：無。
+  4. 這個性質不再由別的判定守，是使用者的決定：gyo2 沒有這些產品。登記 id 那一組照舊：產品重新登記到 gyo2 時，它的 id（原樣與 CamelCase）自動被禁，但 `RetroFPS`、`fps::pvp` 這類推不出的名字不會。
+  5. 根據：報告第 7 節第 3 題；證據 `build/evidence/gyo2-mutation-prune/drop_aliases_mutants.log`（48/48 killed）。
+- 沒做（範圍外）：`tests/common/entity_store/entity_store_guard.py` 的 W1 也禁同樣的舊名字（`object_fps`、`RetroFPS`、`fps::pvp`、`Pvp`）。它是 Kernel 角色詞的來源，要不要一起拿掉由使用者決定。
+
 ## 判定變更（AGENTS §14.4）
 
 - 退役 41 個的緩的面逐個寫在報告第 3、5 節，使用者 2026-11-18 核准（第 7 節）。
@@ -101,7 +118,8 @@
 
 ## 後續（不在本批）
 
-- 把 `PRODUCT_ALIASES` 從 `kernel_guard.py` 拿掉（守衛的改動）。
+- ~~把 `PRODUCT_ALIASES` 從 `kernel_guard.py` 拿掉（守衛的改動）。~~ 已做，見上「後續：拿掉 PRODUCT_ALIASES」。
+- `entity_store_guard.py` 的 W1 裡的舊產品名要不要一起拿掉（待使用者決定）。
 - `bs-` 開頭的突變搬到 Base 的清單。
 - 第 6 節的增長判準交風紀委員看要不要寫進規則文件；GYO2 線先照做。
 

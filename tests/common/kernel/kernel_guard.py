@@ -21,8 +21,9 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
               product's registered id). The cost of a collision falls on the new product's name, not on the
               common layer (AGENTS 7, 12). Adding a product needs no change here; a removed product's id is no
               longer banned once its registration row is gone.
-        (ii)  PRODUCT_ALIASES: names of registered products that the registry id does not spell.
-        (iii) ROLE_WORDS: connection-role words (entity_store W1).
+        (ii)  ROLE_WORDS: connection-role words (entity_store W1).
+      No alias list for names the registry id does not spell: the four aliases of the old products on master
+      (RetroFPS, fps::pvp, Pvp, Gyo::Tools) were dropped (user 2026-11-18, v8-arch-gyo2-mutation-prune).
       The registry must be readable: a missing file or a missing "name" column is a finding (fail closed).
   K2  an unordered container or a hash: unordered_, std::hash, and hash< (std::hash under using namespace std).
   K3  a clock, random source, thread or atomic: an include of <chrono>, <random>, <thread>, <atomic>, <mutex>,
@@ -84,15 +85,7 @@ REGISTRIES = ("engine/config/projects.csv", "engine/config/tools.csv")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc", ".ixx"}
 # CMakeLists.txt: K1 only. Any other file under engine/kernel/ is K0.
 
-# (ii) Product names the registry id does not spell. One line each: which product, which kind of name, and why
-# the id does not give it.
-PRODUCT_ALIASES = (
-    r"RetroFPS",     # object_fps_pvp: include directory of its sources (apps/object_fps_pvp/src/RetroFPS); not derived from the id
-    r"fps::pvp",     # object_fps_pvp: C++ namespace of its code; the id splits as object/fps/pvp, not fps::pvp
-    r"\b[Pp]vp",     # object_fps_pvp: the short product word used in its type names (PvpMatch); only the id's last part
-    r"Gyo::Tools",   # the four tools (tools.csv): their shared C++ namespace root; not part of any tool id
-)
-# (iii) Connection-role words; source: entity_store guard W1 (tests/common/entity_store/entity_store_guard.py).
+# (ii) Connection-role words; source: entity_store guard W1 (tests/common/entity_store/entity_store_guard.py).
 # "Match" only as a whole capitalized word, so "matches", "Matcher" and "rematch" stay allowed.
 ROLE_WORDS = (r"\bMatch\b", r"[Pp]layer", r"Gateway")
 
@@ -296,7 +289,7 @@ def file_findings(relative, raw, name_patterns):
                 f"{match.group(0)} (registered id {identifier}: either the kernel uses a product's name, so change "
                 f"the kernel, or a newly registered product id is an Engine generic word, so change that "
                 f"product's registered id)")
-    for pattern in [re.compile(p) for p in PRODUCT_ALIASES + ROLE_WORDS]:
+    for pattern in [re.compile(p) for p in ROLE_WORDS]:
         for match in pattern.finditer(raw):
             yield line_of(raw, match.start()), "K1", match.group(0)
     if Path(relative).name == "CMakeLists.txt":

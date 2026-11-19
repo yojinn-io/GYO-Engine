@@ -122,10 +122,6 @@ class GuardTree(unittest.TestCase):
         self.assertIn("change the kernel", line)
         self.assertIn("change that product's registered id", line)
 
-    def test_k1_product_alias_is_reported(self):
-        self.header("// see RetroFPS/Sim")
-        self.assertReported("K1", "RetroFPS")
-
     def test_k1_role_word_is_reported(self):
         self.header("struct MatchClock {}; // per Match")
         self.assertReported("K1", "Match")
@@ -429,13 +425,6 @@ class GuardTree(unittest.TestCase):
     def test_k1_registered_id_ignores_case(self):
         self.header("#define OBJECT_FPS_PVP_ENABLED 1")
         self.assertReported("K1", "OBJECT_FPS_PVP")
-
-    def test_k1_every_product_alias_is_reported(self):
-        for text, needle in (("namespace fps::pvp {}", "fps::pvp"), ("struct PvpState {};", "Pvp"),
-                             ("struct pvpState {};", "pvp"), ("namespace Gyo::Tools {}", "Gyo::Tools")):
-            with self.subTest(text=text):
-                self.header(text)
-                self.assertReported("K1", needle)
 
     def test_k1_every_role_word_is_reported(self):
         for text, needle in (("struct player {};", "player"), ("struct Gateway {};", "Gateway")):
