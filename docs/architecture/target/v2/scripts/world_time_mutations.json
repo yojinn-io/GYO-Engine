@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of game time (docs/architecture/target/v2/time-events-declaration.zh-Hant.md, section 6.5; ids wt-). Step 2: the types and the accumulator (T1 judgment 2 and the time-events additions). The Fable/high adversarial check of the batch's new lists is recorded in the dev_log. A mutant is killed only when the named test case fails. Step 4: the time Module (WorldTimeModule, AdvanceTime, RunFixedSteps, FixedStep.hpp, Sampling.hpp; declaration 3.3 to 3.5, 6.4) and the include order of the world_time headers.",
+ "description": "Declared mutants of game time (docs/architecture/target/v2/time-events-declaration.zh-Hant.md, section 6.5; ids wt-). Step 2: the types and the accumulator (T1 judgment 2 and the time-events additions). The Fable/high adversarial check of the batch's new lists is recorded in the dev_log. A mutant is killed only when the named test case fails. Step 4: the time Module (WorldTimeModule, AdvanceTime, RunFixedSteps, FixedStep.hpp, Sampling.hpp; declaration 3.3 to 3.5, 6.4) and the include order of the world_time headers. Step 6 C: a World without a fixed step (WorldTimeOptions::fixedStep = false: the 250 ms cap, no RunFixedSteps, no WT-E1; ids wt-no-fixed-*, wt-fixed-step-default-off).",
  "mutants": [
   {
    "id": "wt-add-clears-remainder",
@@ -451,6 +451,76 @@
    "target": "gyo_world_time_tests",
    "cases": "fixed:*",
    "expect": "\\[wt\\-not\\-driven\\]\\ pending\\ left"
+  },
+  {
+   "id": "wt-no-fixed-passes-accumulator",
+   "what": "step 6 C: a World without a fixed step still hands AdvanceVirtual the accumulator, so the 250 ms cap never applies (the step cap cuts whole steps instead). Only it catches the accumulator argument of the no-fixed-step path; wt-frame-cap-with-fixed mutates AdvanceVirtual itself",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "hasFixedStep ? &fixed.accumulator : nullptr",
+   "replace": "&fixed.accumulator",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-no\\-fixed\\-frame\\-cap\\]"
+  },
+  {
+   "id": "wt-no-fixed-pending-written",
+   "what": "step 6 C: a World without a fixed step still writes FixedTime.pending (nothing takes it: the next frame records NotDriven). Only it catches the guard on the pending write; wt-pending-not-set breaks the write itself",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    if (hasFixedStep) {\n        fixed.pending = advanced.delta;\n    }\n",
+   "replace": "    fixed.pending = advanced.delta;\n",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-no\\-fixed\\-pending\\]"
+  },
+  {
+   "id": "wt-no-fixed-driver-mounted",
+   "what": "step 6 C: RunFixedSteps is mounted although the World has no fixed step. Only it catches the mount guard (with pending unwritten the driver runs 0 steps, so only the registry shows it)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    if (options.fixedStep) {\n        Kernel::SystemOptions fixedSteps",
+   "replace": "    if (true) {\n        Kernel::SystemOptions fixedSteps",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-no\\-fixed\\-no\\-driver\\]"
+  },
+  {
+   "id": "wt-no-fixed-check-reports",
+   "what": "step 6 C: Check reports WT-E1 for a missing fixed-step schedule although the World has no fixed step. Only it catches the early return; wt-check-silent is the opposite error",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    if (!options.fixedStep) return;\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-no\\-fixed\\-no\\-check\\]"
+  },
+  {
+   "id": "wt-no-fixed-flag-not-set",
+   "what": "step 6 C: the option fixedStep never reaches TimeConfig (AdvanceTime always runs the fixed-step way, the state before step 6 C). Only it catches the setting being dropped between WorldTimeOptions and the System",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    config.fixedStep = options.fixedStep ? 1 : 0;\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-no\\-fixed\\-frame\\-cap\\]"
+  },
+  {
+   "id": "wt-no-fixed-limits-default",
+   "what": "step 6 C: AdvanceTime uses the default caps instead of the World's TimeLimits (maxFrameDelta 100 ms is ignored). Only it catches the caps passed by the time Module (the existing Module cases all use the defaults)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "hasFixedStep ? &fixed.accumulator : nullptr, config.limits);",
+   "replace": "hasFixedStep ? &fixed.accumulator : nullptr, TimeLimits{});",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-no\\-fixed\\-limit\\-setting\\]"
+  },
+  {
+   "id": "wt-fixed-step-default-off",
+   "what": "step 6 C: the default of WorldTimeOptions::fixedStep is off (a World built without settings gets no fixed step). Only it catches the default value",
+   "file": "engine/world_time/include/engine/world_time/WorldTimeModule.hpp",
+   "find": "    bool fixedStep = true;",
+   "replace": "    bool fixedStep = false;",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-fixed\\-step\\-default\\]"
   },
   {
    "id": "wt-run-one-step-no-tick",

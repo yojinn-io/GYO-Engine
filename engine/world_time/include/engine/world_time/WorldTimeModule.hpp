@@ -31,6 +31,12 @@ struct WorldTimeOptions final {
     TimeLimits limits{};
     // false: TimeControl is not registered and nothing can pause or scale time (a Match).
     bool pausable = true;
+    // false: the World has no fixed step (a tool's preview, a World of per-frame Systems only). RunFixedSteps is
+    // not mounted and no fixed-step schedule is needed (Check reports no WT-E1); a frame advances at most
+    // TimeLimits::maxFrameDelta (the excess is discarded, cause FrameLimit); ActiveTime is always the frame's
+    // value. FixedTime and Tick are still registered and stay as they are (Bevy's TimePlugin registers
+    // Time<Fixed> always). The two caps never apply together (v8-arch-gyo2-t1-three-items).
+    bool fixedStep = true;
     // Where the two Systems are mounted and what RunFixedSteps runs: the default skeleton's names. An author who
     // turns the skeleton off names its own; a missing mount target is the kernel's D-E1, a missing fixed-step
     // schedule is reported by Check (WT-E1). The fixed-step schedule name is at most 63 bytes (TimeConfig).

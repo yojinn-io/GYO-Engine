@@ -145,12 +145,15 @@ struct TimeDiscarded final {
     std::uint8_t reserved[7] = {};
 };
 
-// What the time Module's Systems read at run time (they are captureless): the caps of a frame and the name of the
-// fixed-step schedule RunFixedSteps runs (NUL-terminated; plain bytes, so the World summary stays deterministic).
-// Written once when the World is built (WorldTimeModule); not meant to be changed while it runs.
+// What the time Module's Systems read at run time (they are captureless): the caps of a frame, the name of the
+// fixed-step schedule RunFixedSteps runs (NUL-terminated; plain bytes, so the World summary stays deterministic)
+// and whether the World has a fixed step (0: AdvanceTime caps a frame at TimeLimits::maxFrameDelta and hands the
+// fixed step nothing). Written once when the World is built (WorldTimeModule); not meant to be changed while it runs.
 struct TimeConfig final {
     TimeLimits limits;
     char fixedSchedule[64] = {};
+    std::uint8_t fixedStep = 1;
+    std::uint8_t reserved[7] = {};
 };
 
 // What one frame of virtual time came to.
@@ -185,6 +188,6 @@ static_assert(sizeof(Tick) == sizeof(std::uint64_t));
 static_assert(sizeof(Resimulation) == 8);
 static_assert(sizeof(TimeSampling) == sizeof(Nanoseconds) + 8);
 static_assert(sizeof(TimeDiscarded) == 2 * sizeof(Nanoseconds) + 8);
-static_assert(sizeof(TimeConfig) == sizeof(TimeLimits) + 64);
+static_assert(sizeof(TimeConfig) == sizeof(TimeLimits) + 64 + 8);
 
 } // namespace GYO::Engine::WorldTime

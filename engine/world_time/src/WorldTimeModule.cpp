@@ -22,7 +22,8 @@ const WorldTimeOptions& OptionsOf(const WorldTimeOptions* given) {
 
 // AdvanceTime (declaration 3.3): one sample, then real time, the untaken time of the last frame, virtual time,
 // ActiveTime (the frame's value) and the fixed step's time of this frame. The one System that writes
-// VirtualTime::discarded (WT-2).
+// VirtualTime::discarded (WT-2). A World without a fixed step (TimeConfig::fixedStep 0): no accumulator, so
+// AdvanceVirtual caps the frame at maxFrameDelta, and nothing is handed to a fixed step (no NotDriven).
 SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, ActiveTime& active, const TimeSampling& sampling,
                      const TimeControl& control, const TimeConfig& config, Kernel::MessageWriter<TimeDiscarded>& discarded) {
     SampleRealTime(real, sampling);
@@ -32,9 +33,13 @@ SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, Active
         discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven, {}});
         fixed.pending = 0;
     }
-    const VirtualAdvance advanced = AdvanceVirtual(virt, real.delta, control, &fixed.accumulator, config.limits);
+    const bool hasFixedStep = config.fixedStep != 0;
+    const VirtualAdvance advanced =
+        AdvanceVirtual(virt, real.delta, control, hasFixedStep ? &fixed.accumulator : nullptr, config.limits);
     active = ActiveTime{virt.delta, virt.elapsed};
-    fixed.pending = advanced.delta;
+    if (hasFixedStep) {
+        fixed.pending = advanced.delta;
+    }
     if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause, {}});
     return {};
 }
@@ -108,13 +113,16 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
     } else {
         r.AddSystem<&AdvanceTimeUnpausable>(Mounted("AdvanceTime", options.frameSchedule, options.advanceStage));
     }
-    Kernel::SystemOptions fixedSteps = Mounted("RunFixedSteps", options.frameSchedule, options.fixedStepStage);
-    fixedSteps.mounts.front().conditions = options.fixedStepConditions;
-    r.AddSystem<&RunFixedSteps>(std::move(fixedSteps));
+    if (options.fixedStep) {
+        Kernel::SystemOptions fixedSteps = Mounted("RunFixedSteps", options.frameSchedule, options.fixedStepStage);
+        fixedSteps.mounts.front().conditions = options.fixedStepConditions;
+        r.AddSystem<&RunFixedSteps>(std::move(fixedSteps));
+    }
 
     // The initial values, before the first Run, without overwriting a value carried over (O-7).
     TimeConfig config;
     config.limits = options.limits;
+    config.fixedStep = options.fixedStep ? 1 : 0;
     std::memcpy(config.fixedSchedule, options.fixedSchedule.data(), options.fixedSchedule.size());
     const bool pausable = options.pausable;
     const StepLength step = options.step;
@@ -136,6 +144,8 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
 
 void WorldTimeModule::Check(const Kernel::FrozenRegistry& registry, Orchestration::WorldCheck& context) {
     const WorldTimeOptions& options = OptionsOf(context.Options<WorldTimeOptions>());
+    // A World without a fixed step runs no fixed-step schedule and needs none.
+    if (!options.fixedStep) return;
     const auto schedules = registry.Schedules();
     const bool found = std::any_of(schedules.begin(), schedules.end(), [&options](const Kernel::ScheduleInfo& info) {
         return info.options.name == options.fixedSchedule;

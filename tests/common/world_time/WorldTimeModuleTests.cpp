@@ -245,6 +245,54 @@ TEST_CASE("module: a mount target that does not exist is the kernel's D-E1") {
     CHECK_MESSAGE(report->Has(K::StartupCode::DE1), "[wt-mount-missing] " << built.error().detail);
 }
 
+// ---- A World without a fixed step (WorldTimeOptions::fixedStep = false; declaration 3.2, v8-arch-gyo2-t1-three-items)
+
+TEST_CASE("module: fixedStep = false mounts no RunFixedSteps, needs no fixed-step schedule, still registers FixedTime and Tick") {
+    auto on = Make(Game(0));
+    CHECK_MESSAGE(Frozen()->SystemNamed("RunFixedSteps") != nullptr, "[wt-fixed-step-default] RunFixedSteps not mounted by default");
+    W::WorldTimeOptions options;
+    options.fixedStep = false;
+    options.fixedSchedule = "NoSuchSchedule";  // a World without a fixed step needs none
+    auto built = O::Product::Build(Game(0, options), TimeUnits());
+    REQUIRE_MESSAGE(static_cast<bool>(built), "[wt-no-fixed-no-check] " << (built ? std::string() : built.error().detail));
+    const K::FrozenRegistry& registry = *Frozen();
+    CHECK_MESSAGE(registry.SystemNamed("RunFixedSteps") == nullptr, "[wt-no-fixed-no-driver] RunFixedSteps mounted");
+    CHECK_MESSAGE(registry.SystemNamed("AdvanceTime") != nullptr, "[wt-no-fixed-advance] AdvanceTime not mounted");
+    CHECK_MESSAGE((registry.ResourceIdOf<W::FixedTime>().has_value() && registry.ResourceIdOf<W::Tick>().has_value()),
+                  "[wt-no-fixed-registered] FixedTime and Tick");
+}
+
+TEST_CASE("module: fixedStep = false: a frame advances at most 250 ms, the excess is discarded with one TimeDiscarded (FrameLimit)") {
+    Log().clear();
+    W::WorldTimeOptions options;
+    options.fixedStep = false;
+    auto p = Make(Game(0, options));
+    Frame(*p, 400 * kMs);
+    const W::VirtualTime& virt = Get<W::VirtualTime>(*p);
+    CHECK_MESSAGE((virt.delta == 250 * kMs && virt.elapsed == 250 * kMs), "[wt-no-fixed-frame-cap] " << virt.delta << " " << virt.elapsed);
+    CHECK_MESSAGE(virt.discarded == 150 * kMs, "[wt-no-fixed-discarded] " << virt.discarded);
+    CHECK_MESSAGE(Joined() == "frame 0 250000000/250000000 discarded 150000000 cause 2 real 400000000", "[wt-no-fixed-message] " << Joined());
+    CHECK_MESSAGE(Get<W::Tick>(*p).value == 0, "[wt-no-fixed-tick] " << Get<W::Tick>(*p).value);
+    CHECK_MESSAGE((Get<W::ActiveTime>(*p).delta == 250 * kMs && Get<W::ActiveTime>(*p).elapsed == 250 * kMs), "[wt-no-fixed-active]");
+    const W::FixedTime& fixed = Get<W::FixedTime>(*p);
+    CHECK_MESSAGE(fixed.pending == 0, "[wt-no-fixed-pending] " << fixed.pending);
+    CHECK_MESSAGE((fixed.elapsed == 0 && fixed.accumulator.Overstep() == 0), "[wt-no-fixed-untouched]");
+    // The next frame: within the cap, nothing discarded, no NotDriven.
+    Frame(*p, 20 * kMs);
+    CHECK_MESSAGE(Log().back() == "frame 0 20000000/270000000", "[wt-no-fixed-no-not-driven] " << Joined());
+    CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == 150 * kMs, "[wt-no-fixed-no-not-driven] discarded " << Get<W::VirtualTime>(*p).discarded);
+}
+
+TEST_CASE("module: fixedStep = false: the cap is TimeLimits::maxFrameDelta from the settings") {
+    W::WorldTimeOptions options;
+    options.fixedStep = false;
+    options.limits.maxFrameDelta = 100 * kMs;
+    auto p = Make(Game(0, options));
+    Frame(*p, 400 * kMs);
+    CHECK_MESSAGE((Get<W::VirtualTime>(*p).delta == 100 * kMs && Get<W::VirtualTime>(*p).discarded == 300 * kMs),
+                  "[wt-no-fixed-limit-setting] " << Get<W::VirtualTime>(*p).delta << " " << Get<W::VirtualTime>(*p).discarded);
+}
+
 // ---- WT-2: sampling
 
 TEST_CASE("sampling: a manual duration applies every frame, the first included, until changed") {
