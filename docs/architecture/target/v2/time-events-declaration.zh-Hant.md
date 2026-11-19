@@ -533,7 +533,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 ### 卡片照 L17 判的（使用者 2026-11-19 看過下面前 4 條；其餘照別家，未逐條看）
 
-使用者 2026-11-19（side chat）：「等等，我發現你又回去了，很多決議其實開源Engine裡面都有，我們不是可以參考的麼。」所以照別家答得出的各條由本卡照 L17 判、不逐條問；**只把和別家不同的地方列出來**（本節末）。
+使用者 2026-11-19（side chat）：「等等，我發現你又回去了，很多決議其實開源Engine裡面都有，我們不是可以參考的麼。」所以照別家答得出的各條由本卡照 L17 判、不逐條問；只有各家做法不同或有分歧、或 GYO 有特殊 Feature 時才交你（本節末）。
 
 - ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-t1-closed-by-time-events`）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
 - ~~第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）~~——**已確認：照建議**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-fixed-time-accumulates`）。原話：「照建議」。比過：同意（照 Bevy、lightyear、Unity 累加）←選／改回 T1 的沒有累計（作者自己用 tick×步長算）／tick×步長（修訂 0；Client 對時改 tick 時累計會跳）。
@@ -544,10 +544,11 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - 第 6.3 節延後守衛、第 8 節和骨架卡摘要 PR 的先後、第 9.2 節的預算：**卡片照 L17 判**，照第 2 批的先例，沒有新的取捨。
 - 第 3.6 節預設骨架的細節（`FixedUpdate` 的 stage 名、關掉骨架的選項的形）：**卡片照 L17 判**，照 Bevy 的 `Main` 與 FixedMain 的段落（side chat 那則沒有列這條，本卡照同一原則歸進來）。
 
-**和別家不同的地方**（動工前核准時請你看這幾處）：
-1. **步長不隨存檔放回**（第 3.5 節）：Bevy 把整個 `Time<Fixed>` 放回會連步長一起放回；GYO 以這次的設定為準。理由：作者改了頻率後讀舊存檔，不該被舊步長蓋掉。
-2. **`Commands` 觸發的自訂事件放在同步點 F.2 的最後一步**（第 4.2 節）：Bevy 照指令記錄的先後逐筆執行；GYO 的同步點照種類分批，只能選一個位置，放最後讓 observer 看得到這個同步點的全部結構變更。
-3. **`FixedUpdate` 的 stage 名不加 `Fixed` 前綴**（第 3.6 節）：Bevy 的 FixedMain 是 `FixedFirst`…`FixedLast` 五張 schedule；GYO 是一張 schedule 裡的五個 stage，stage 名屬於各自的 schedule。
+**用同類的技術比過**（使用者 2026-11-19 指正比較方式：「？？？？你這個，用同樣的技術比較呀，observer 和 Bevy、flecs的observer比，message和bevy的message比。」交使用者的標準：「我是說，個家的做法不同，或者做法有分歧。或者我們有特殊feature才要我做決策的。」）——沒有要交你的：
+- **Observer** 三家一致：當場觸發當場跑（Bevy `World::trigger`、flecs、GYO）；延後觸發延到套用時（Bevy `Commands::trigger`、flecs 延後模式到同步點、GYO 到同步點）；生命週期 hook 與 observer 的先後一致；同一點內 observer 的先後都不保證；observer 拿到事件內容與目標實體 id。**Message**：Bevy 的 `MessageWriter` 當場寫入緩衝，GYO 同；保留規則照游標（已核准）。剩下的差別只在「延後指令怎麼套用」：Bevy、flecs 照記錄先後，GYO 的同步點照種類分批——這是 DI-KS 9 原有的結構，不是 observer 的設計造成的，也不是本批要定的。`Commands` 觸發的自訂事件放在 F.2 的最後一步，是既有結構下的實作細節（卡片照 L17 判；理由：observer 看得到那個同步點的全部結構變更；被刪實體的元件在 Bevy、flecs 也不保證讀得到，observer 只拿 id，要用的資料放事件內容）。DI-KS 9 加這一步的文字照列在第 10.1 節。
+- **步長不隨存檔放回**：Bevy 整個 `Time<Fixed>` 放回會帶步長；Unity 的固定步長是設定、不在存檔內容；flecs 沒有固定步長。各家差別小，卡片照「步長是設定」判。
+- **取樣**：Bevy、Unity 由時間的 System 自己讀時鐘；flecs 由呼叫者傳 delta（`ecs_progress(world, delta)`）。GYO 先照 Bevy，交換點做出來後回到時間設計的 runner 取樣，Resource 的形狀相容，屬過渡。
+- **`FixedUpdate` 的 stage 名不加 `Fixed` 前綴**：Bevy 的 FixedMain 是五張 schedule，GYO 是一張 schedule 裡的五個 stage，stage 名屬於各自的 schedule；名字的細節，卡片照命名規範判。
 
 **仍要你看的一項（職責清單）**：第 10.2 節 O-4 補句「編排層給 schedule 的預設骨架」**不算編排層職責清單多一項**（O-4 已列「遊戲初始化與每幀的清單」）——職責清單多不多一項是 L17 必須交你的那一類，所以不歸「照別家」。
 
