@@ -359,6 +359,9 @@ TEST_CASE("J-6: a resource not marked threadBound is used on any thread") {
     if (asserted || here || removed) static_cast<void>(rig.release());
 }
 
+// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
+// raw bytes, so every type compared here must have no padding. The full
+// solution, a hash function per type, is batch 4.
 TEST_CASE("J-6: the thread mark is not World data: the same value put in on two threads gives one summary") {
     std::unique_ptr<Rig> here = BoundRig(nullptr);
     std::unique_ptr<Rig> there = BoundRig(nullptr);
@@ -1337,6 +1340,9 @@ std::string SummaryOf(const std::array<int, 5>& order) {
 
 } // namespace
 
+// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
+// raw bytes, so every type compared here must have no padding. The full
+// solution, a hash function per type, is batch 4.
 TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summary") {
     std::array<int, 5> order{0, 1, 2, 3, 4};
     std::vector<std::array<int, 5>> orders;

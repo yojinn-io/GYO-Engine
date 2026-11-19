@@ -968,7 +968,11 @@ constexpr std::uint32_t kSummaryVersion = 1;
 // every resource in ResourceId order but KernelSettings (present flag, object bytes); every event
 // buffer in EventTypeId order (record count, each payload's bytes). No stamp,
 // tick, Plan position or seq is hashed. A value's padding bytes are hashed as
-// they are: the kernel tests use types without padding.
+// they are, so a type in the summary must have no padding: the author's
+// responsibility for the types an author registers; the kernel's own types
+// (RangeAllotter) are checked at compile time. Partly solved
+// (v8-arch-gyo2-summary-padding-a-then-c): the full solution, a hash function
+// per type, is batch 4.
 Fingerprint World::Summary() const {
     GYO_ASSERT(state_ == WorldState::Ready || state_ == WorldState::Interrupted);
     Sync();

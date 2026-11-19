@@ -7563,6 +7563,26 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive*",
       "expect": "\\[ks\\-s5\\-spawn\\-alive\\-err\\]"
+    },
+    {
+      "id": "spa-reserved-short",
+      "what": "D-9: RangeAllotter keeps one byte of padding again (its zero field one byte short): the compile-time check stops the build (v8-arch-gyo2-summary-padding-a-then-c)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "    std::array<std::uint8_t, 7> reserved{};",
+      "replace": "    std::array<std::uint8_t, 6> reserved{};",
+      "target": "gyo_kernel_tests",
+      "expect": "RangeAllotter\\ has\\ padding:\\ World::Summary\\ hashes\\ its\\ raw\\ bytes",
+      "expect_build_failure": true
+    },
+    {
+      "id": "spa-reserved-short-unchecked",
+      "what": "D-9: RangeAllotter keeps one byte of padding and the compile-time check is gone: the test sees the padding (v8-arch-gyo2-summary-padding-a-then-c)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "    std::array<std::uint8_t, 7> reserved{};\n\n    [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {\n        return RangeAllotter{first, last, first, first > last, {}};\n    }\n\n    [[nodiscard]] std::optional<EntityId> Allot() noexcept {\n        if (exhausted) return std::nullopt;\n        const EntityId id = next;\n        if (id == last) {\n            exhausted = true;\n        } else {\n            ++next;\n        }\n        return id;\n    }\n\n    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};\nstatic_assert(std::has_unique_object_representations_v<RangeAllotter>,\n              \"RangeAllotter has padding: World::Summary hashes its raw bytes\");",
+      "replace": "    std::array<std::uint8_t, 6> reserved{};\n\n    [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {\n        return RangeAllotter{first, last, first, first > last, {}};\n    }\n\n    [[nodiscard]] std::optional<EntityId> Allot() noexcept {\n        if (exhausted) return std::nullopt;\n        const EntityId id = next;\n        if (id == last) {\n            exhausted = true;\n        } else {\n            ++next;\n        }\n        return id;\n    }\n\n    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};\n",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9: the kernel's RangeAllotter*",
+      "expect": "\\[summary\\-padding\\-unique\\]"
     }
   ]
 }

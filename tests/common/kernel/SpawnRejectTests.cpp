@@ -409,6 +409,9 @@ TEST_CASE("J-55: one emitter spawns one id twice: the first record is kept") {
 }
 
 namespace {
+// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
+// raw bytes, so every type compared here must have no padding. The full
+// solution, a hash function per type, is batch 4.
 Fingerprint TwoEmitters(bool bodyFirst, bool& nineAlive, std::vector<RejectedSpawn>& rejected, bool& fiveAlive) {
     auto rig = MakeRig([bodyFirst](Registrar& r) {
         Base(r);
@@ -862,6 +865,9 @@ SystemResult ZoneCSpawnsNineSharedAgain(SpawnWithId<Bundle<CSharedPos>> spawn) {
     return Ok();
 }
 
+// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
+// raw bytes, so every type compared here must have no padding. The full
+// solution, a hash function per type, is batch 4.
 Fingerprint ThreeRecords(bool twiceFirst, bool& nineAlive, std::vector<RejectedSpawn>& rejected) {
     auto rig = MakeRig([twiceFirst](Registrar& r) {
         Base(r);
@@ -1007,6 +1013,9 @@ TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and anothe
 
 // Whether the two Systems of "two emitters" really do not conflict: the same shape in zone C,
 // where a conflict without a declared order is a tie listed in TieBreaks.
+// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
+// raw bytes, so every type compared here must have no padding. The full
+// solution, a hash function per type, is batch 4.
 TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with one bundle they do") {
     SUBCASE("disjoint bundles: Finish succeeds in both orders, both spawns of 9 are dropped, the World is the same") {
         Fingerprint summaries[2];

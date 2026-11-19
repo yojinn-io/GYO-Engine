@@ -1244,8 +1244,8 @@
    "id": "sc-lower-bound-not-moved",
    "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets",
    "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
-   "find": "        return RangeAllotter{first, last, first, first > last};",
-   "replace": "        return RangeAllotter{1, last, 1, first > last};",
+   "find": "        return RangeAllotter{first, last, first, first > last, {}};",
+   "replace": "        return RangeAllotter{1, last, 1, first > last, {}};",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-7-put-rejected\\]"

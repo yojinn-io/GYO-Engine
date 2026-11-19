@@ -7,8 +7,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <new>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -309,6 +312,35 @@ SystemResult SpawnEveryTick(Spawn<Bundle<Tag>> spawn) {
 
 } // namespace
 
+namespace {
+
+// RangeAllotter::Of built in memory that held `fill` before (what a stack slot
+// may hold), then copied into the World as an author would.
+EntityId StoredAllotterSummaryCase(unsigned char fill, Fingerprint& summary) {
+    alignas(RangeAllotter) unsigned char raw[sizeof(RangeAllotter)];
+    std::memset(raw, fill, sizeof raw);
+    const RangeAllotter* made = new (raw) RangeAllotter(RangeAllotter::Of(900, 1000000));
+    auto rig = MakeRig([](Registrar& r) { Data(r, true); });
+    rig->world().SetResource(*made);
+    summary = rig->world().Summary();
+    return rig->world().Resource<RangeAllotter>()->next;
+}
+
+} // namespace
+
+// v8-arch-gyo2-summary-padding-a-then-c (partly solved): World::Summary hashes a
+// value's raw bytes, so the kernel's own allotter must have no padding. Types an
+// author registers are the author's to keep padding-free; the full solution, a
+// hash function per type, is batch 4.
+TEST_CASE("D-9: the kernel's RangeAllotter has no padding, so equal allotters give one World summary") {
+    CHECK_MESSAGE(std::has_unique_object_representations_v<RangeAllotter>, "[summary-padding-unique] RangeAllotter has padding");
+    Fingerprint zeros;
+    Fingerprint ones;
+    REQUIRE(StoredAllotterSummaryCase(0x00, zeros) == 900);
+    REQUIRE(StoredAllotterSummaryCase(0xFF, ones) == 900);
+    CHECK_MESSAGE(zeros == ones, "[summary-padding-equal] equal allotters, different summaries: " << zeros.Text() << " vs " << ones.Text());
+}
+
 TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; no allotter, no Spawn") {
     RangeAllotter allotter = RangeAllotter::Of(100, 102);
     CHECK(allotter.Allot() == std::optional<EntityId>(100));
@@ -481,6 +513,9 @@ SystemResult LogAddTag(HookCtx ctx) {
 
 } // namespace
 
+// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
+// raw bytes, so every type compared here must have no padding. The full
+// solution, a hash function per type, is batch 4.
 TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.2's order (golden)") {
     SUBCASE("reordering two Systems that do not conflict keeps the World") {
         CHECK(ReorderSummary(true) == ReorderSummary(false));

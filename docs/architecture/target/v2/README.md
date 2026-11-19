@@ -62,6 +62,7 @@
 - [2026_11_18_gyo2_kernel_subtract_structure.zh-Hant.md](../../../dev_logs/2026_11_18_gyo2_kernel_subtract_structure.zh-Hant.md)：Kernel 減法・結構段（改名 `WorldExecutor`、兩步登記、唯讀登記表、`ExclusiveWorld` 全讀寫與當場改、`KernelSettings` 可寫、拿掉執行期攔截與歧義偵測、執行緒改成綁執行緒的 Resource、指紋升版；S10 停下待定）。
 - [2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md](../../../dev_logs/2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md)：編排層的骨架（四步：編排層本體、Kernel 減法、登記檔、scenario 第一段；進行中）。
 - [2026_11_19_gyo2_mutation_prune.zh-Hant.md](../../../dev_logs/2026_11_19_gyo2_mutation_prune.zh-Hant.md)：Kernel 突變清單的盤點與退役（第 2 步：直接退 41、合併進接手 22、改寫 3；第 3 步：subsumption 檢查後合併 51 個；777 → 663）。
+- [2026_11_19_gyo2_summary_padding.zh-Hant.md](../../../dev_logs/2026_11_19_gyo2_summary_padding.zh-Hant.md)：World 摘要的 padding（Kernel 的 `RangeAllotter` 補 0 欄位與編譯期檢查；未完全解決，正式解法逐型別雜湊在第 4 批）。
 - [2026_11_16_gyo2_module_plugin_definition.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_module_plugin_definition.zh-Hant.md)：Module／Plugin 的定義改成「誰維護、介面是誰的」，AGENTS §6 與 v2 文件對齊。
 - [2026_11_16_gyo2_test_debts.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_test_debts.zh-Hant.md)：Kernel 測試的三筆舊帳（四個對不上的突變、刪除實體時 OnRemove 的先後、還沒搬的 world-exec 突變）。
 
