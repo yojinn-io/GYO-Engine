@@ -38,6 +38,7 @@
 - [rebuild-r0-carry-list.zh-Hant.md](rebuild-r0-carry-list.zh-Hant.md)：R0 帶過去清單（已核准）。
 - [rebuild-r0b-report.zh-Hant.md](rebuild-r0b-report.zh-Hant.md)：R0b 的報告（刪除舊實現；第 3 節是 R0b-3 的判定變更）。
 - [json-module-declaration.zh-Hant.md](json-module-declaration.zh-Hant.md)：`v8-arch-gyo2-json-module` 的事前宣告（JSON Module；修訂 1，使用者 2026-11-20 動工前核准）。
+- [json-module-merge-approval.zh-Hant.md](json-module-merge-approval.zh-Hant.md)：`v8-arch-gyo2-json-module` 的合併前核准頁（判定的結果、判定 3 的更正、突變的數目、和宣告不同的地方）。
 - [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 - [spawn-reject-declaration.zh-Hant.md](spawn-reject-declaration.zh-Hant.md)：`v8-arch-gyo2-spawn-reject` 的事前宣告（同步點丟掉不能生成的那一筆；修訂 2，使用者 2026-11-15 核准）。
 - [kernel-app-boundary-declaration.zh-Hant.md](kernel-app-boundary-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-app-boundary` 的事前宣告（統合）：Kernel 只做 ECS、另立編排層、每層的職責清單、跨份的關聯表、確認清單 13 件；修訂 38，使用者 2026-11-17 核准（c1be70eb）。推導與四家對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
@@ -67,6 +68,7 @@
 - [2026_11_19_gyo2_summary_padding.zh-Hant.md](../../../dev_logs/2026_11_19_gyo2_summary_padding.zh-Hant.md)：World 摘要的 padding（Kernel 的 `RangeAllotter` 補 0 欄位與編譯期檢查；未完全解決，正式解法逐型別雜湊在第 4 批）。
 - [2026_11_16_gyo2_module_plugin_definition.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_module_plugin_definition.zh-Hant.md)：Module／Plugin 的定義改成「誰維護、介面是誰的」，AGENTS §6 與 v2 文件對齊。
 - [2026_11_16_gyo2_test_debts.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_test_debts.zh-Hant.md)：Kernel 測試的三筆舊帳（四個對不上的突變、刪除實體時 OnRemove 的先後、還沒搬的 world-exec 突變）。
+- [2026_11_20_gyo2_json_module.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_json_module.zh-Hant.md)：JSON Module（`v8-arch-gyo2-json-module`）。
 
 ## 沒有搬過來的
 

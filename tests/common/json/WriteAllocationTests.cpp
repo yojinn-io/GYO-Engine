@@ -5,6 +5,9 @@
 // and fail on request, on the calling thread only.
 #include <doctest/doctest.h>
 
+// MSVC needs <ostream> for doctest to print std::string_view in CHECK.
+#include <ostream>
+
 #include <cstddef>
 #include <cstdlib>
 #include <new>
