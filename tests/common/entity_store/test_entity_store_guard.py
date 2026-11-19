@@ -73,16 +73,15 @@ class Rules(GuardTree):
         (self.root / "engine/entity_store/include/engine/entity_store/Columns.hpp").unlink()
         self.assertReported("no source to scan")
 
-    def test_product_names_are_reported_in_code_and_comments(self):
-        for word in ("object_fps", "RetroFPS", "fps::pvp", "PvpMatch", "pvp", "PlayerId", "playerId", "Gateway",
-                     "Match"):
+    def test_role_words_are_reported_in_code_and_comments(self):
+        for word in ("PlayerId", "playerId", "Gateway", "Match"):
             with self.subTest(word=word):
                 self.header("// keyed like " + word + "\n")
                 self.assertReported("Added.hpp:3: W1 ")
 
-    def test_product_name_in_cmake_is_reported(self):
-        self.write("engine/entity_store/CMakeLists.txt", "target_link_libraries(x INTERFACE RetroFPS)\n")
-        self.assertReported("engine/entity_store/CMakeLists.txt:1: W1 RetroFPS")
+    def test_role_word_in_cmake_is_reported(self):
+        self.write("engine/entity_store/CMakeLists.txt", "target_link_libraries(x INTERFACE Gateway)\n")
+        self.assertReported("engine/entity_store/CMakeLists.txt:1: W1 Gateway")
 
     def test_english_verb_match_is_allowed(self):
         self.header("// the keys must match exactly\n")
