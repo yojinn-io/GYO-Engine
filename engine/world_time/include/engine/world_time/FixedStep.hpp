@@ -67,21 +67,44 @@ void RewindFixedSteps(ExclusiveWorldType& world, std::uint64_t k) {
     }));
 }
 
+namespace Detail {
+
+// A saved fixed-step state under this World's step length (declaration 3.5, world-time section 4): the steps run so
+// far, and the saved remainder modulo the step (a remainder saved under a longer step can pass this World's step).
+// Returns the whole steps beyond it, which the caller adds to VirtualTime::discarded (no TimeDiscarded: this runs
+// in no System). A negative remainder is a Programmer Error.
+inline Nanoseconds PutBackFixedTime(FixedTime& time, StepLength step, Nanoseconds elapsed, Nanoseconds overstep) {
+    GYO_ASSERT(overstep >= 0);
+    time.accumulator = TickAccumulator{step};
+    time.elapsed = elapsed;
+    const Nanoseconds kept = overstep % step.nanoseconds;
+    time.accumulator.RestoreOverstep(kept);
+    return overstep - kept;
+}
+
+} // namespace Detail
+
 // Puts a saved fixed-step state back into a new World (a restore, declaration 3.5): the steps run so far and the
-// accumulator's remainder (below one step). The step length is this World's setting, not the saved one's. From a
-// prepare function (the Host, World Ready) or from an exclusive System.
+// accumulator's remainder. The step length is this World's setting, not the saved one's: a remainder of a whole
+// step or more (saved under a longer step) keeps what is left below one step, and the whole steps beyond it go to
+// VirtualTime::discarded. From a prepare function (the Host, World Ready); not between AdvanceTime and
+// RunFixedSteps of one frame (the steps AdvanceTime allowed were counted with the old remainder: WT-3).
 inline void RestoreFixedTime(Kernel::World& world, Nanoseconds elapsed, Nanoseconds overstep) {
     FixedTime* time = world.ResourceMut<FixedTime>();
     GYO_ASSERT(time != nullptr);
-    time->elapsed = elapsed;
-    time->accumulator.RestoreOverstep(overstep);
+    const Nanoseconds excess = Detail::PutBackFixedTime(*time, StepLength{time->accumulator.Step()}, elapsed, overstep);
+    if (excess > 0) {
+        VirtualTime* virt = world.ResourceMut<VirtualTime>();
+        GYO_ASSERT(virt != nullptr);
+        virt->discarded += excess;
+    }
 }
 template <class ExclusiveWorldType>
 void RestoreFixedTime(ExclusiveWorldType& world, Nanoseconds elapsed, Nanoseconds overstep) {
-    Detail::Called(world.template Modify<FixedTime>([elapsed, overstep](FixedTime& time) {
-        time.elapsed = elapsed;
-        time.accumulator.RestoreOverstep(overstep);
+    const Nanoseconds excess = Detail::Present(world.template Modify<FixedTime>([elapsed, overstep](FixedTime& time) {
+        return Detail::PutBackFixedTime(time, StepLength{time.accumulator.Step()}, elapsed, overstep);
     }));
+    if (excess > 0) Detail::Called(world.template Modify<VirtualTime>([excess](VirtualTime& time) { time.discarded += excess; }));
 }
 
 } // namespace GYO::Engine::WorldTime

@@ -7,8 +7,10 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
+#include "AssertTestSupport.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/world_time/FixedStep.hpp"
@@ -189,6 +191,24 @@ TEST_CASE("module: every time Resource is registered and put in; Resimulation is
     CHECK_MESSAGE((world.Resource<W::Tick>() != nullptr && world.Resource<W::Tick>()->value == 0), "[wt-tick-zero]");
     CHECK_MESSAGE((world.Resource<W::FixedTime>() != nullptr && world.Resource<W::FixedTime>()->accumulator.Step() == kStep),
                   "[wt-step-default] 64 Hz");
+    // Every time Resource is zone B (declaration 4.5): a zone C System reads no Tick until batch 4 (G4).
+    for (const K::ResourceInfo& info : registry.Resources()) {
+        if (info.owner != "world_time") continue;
+        CHECK_MESSAGE(info.zone == K::Zone::B, "[wt-time-zone-b] " << info.name);
+    }
+    CHECK_MESSAGE(registry.Resources()[*registry.ResourceIdOf<W::Tick>()].zone == K::Zone::B, "[wt-time-zone-b] Tick");
+}
+
+TEST_CASE("module: by default AdvanceTime is mounted in Main's First and RunFixedSteps in Main's FixedMainLoop") {
+    auto p = Make(Game(0));
+    const K::FrozenRegistry& registry = *Frozen();
+    const K::SystemInfo* advance = registry.SystemNamed("AdvanceTime");
+    const K::SystemInfo* driver = registry.SystemNamed("RunFixedSteps");
+    REQUIRE((advance != nullptr && driver != nullptr && advance->mounts.size() == 1 && driver->mounts.size() == 1));
+    CHECK_MESSAGE((advance->mounts[0].schedule == "Main" && advance->mounts[0].stage == "First"),
+                  "[wt-default-mount-advance] " << advance->mounts[0].schedule << "/" << advance->mounts[0].stage);
+    CHECK_MESSAGE((driver->mounts[0].schedule == "Main" && driver->mounts[0].stage == "FixedMainLoop"),
+                  "[wt-default-mount-fixed] " << driver->mounts[0].schedule << "/" << driver->mounts[0].stage);
 }
 
 TEST_CASE("module: pausable = false registers no TimeControl, and AdvanceTime still runs") {
@@ -243,6 +263,61 @@ TEST_CASE("module: a mount target that does not exist is the kernel's D-E1") {
     const K::StartupReport* report = built.error().KernelReportOf("Main");
     REQUIRE(report != nullptr);
     CHECK_MESSAGE(report->Has(K::StartupCode::DE1), "[wt-mount-missing] " << built.error().detail);
+}
+
+TEST_CASE("module: an author who turns the skeleton off names its own schedules: the Systems mount there, RunFixedSteps runs that one") {
+    Log().clear();
+    O::ProductDescription d;
+    d.name = "game";
+    O::WorldDescription w;
+    w.name = "Main";
+    w.skeleton = O::ScheduleSkeleton::Off;
+    w.frame = {"Frame"};
+    W::WorldTimeOptions options;
+    options.frameSchedule = "Frame";
+    options.advanceStage = "Begin";
+    options.fixedStepStage = "Steps";
+    options.fixedSchedule = "Physics";
+    w.options.Set(std::move(options));
+    w.build = [](O::WorldSetup& s) {
+        K::Registrar& r = s.Registrar();
+        K::ScheduleOptions frame;
+        frame.name = "Frame";
+        frame.stages = {"Begin", "Steps", "Late"};
+        r.Schedule(frame);
+        K::ScheduleOptions physics;
+        physics.name = "Physics";
+        physics.stages = {"S"};
+        r.Schedule(physics);
+        r.AddSystem<&LogStep>(At("LogStep", "Physics", "S"));
+    };
+    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(W::TimeSampling{40 * kMs, W::SamplingMode::ManualDelta, {}});
+        return {};
+    });
+    d.worlds.push_back(std::move(w));
+    auto built = O::Product::Build(std::move(d), TimeUnits());
+    REQUIRE_MESSAGE(static_cast<bool>(built), "[wt-own-names-built] " << (built ? std::string() : built.error().detail));
+    auto ran = (*built)->RunFrame();
+    REQUIRE_MESSAGE(static_cast<bool>(ran), "[wt-own-names-ran] " << (ran ? std::string() : ran.error().detail));
+    // 40 ms: two 15.625 ms steps of Physics.
+    CHECK_MESSAGE(Joined() == "step 1 15625000/15625000 fixed 15625000 | step 2 15625000/31250000 fixed 31250000",
+                  "[wt-own-names-steps] " << Joined());
+}
+
+TEST_CASE("module: maxStepsPerFrame comes from the settings: a frame runs that many steps and discards the rest") {
+    W::WorldTimeOptions options;
+    options.limits.maxStepsPerFrame = 2;
+    auto p = Make(Game(0, options));
+    Frame(*p, 1000 * kMs);  // 64 steps: 2 run, 62 cut
+    CHECK_MESSAGE((Get<W::Tick>(*p).value == 2 && Get<W::VirtualTime>(*p).discarded == 62 * kStep),
+                  "[wt-step-limit-setting] " << Get<W::Tick>(*p).value << " " << Get<W::VirtualTime>(*p).discarded);
+}
+
+TEST_CASE("module: a 64-byte fixed-step schedule name does not fit TimeConfig: a Programmer Error") {
+    W::WorldTimeOptions options;
+    options.fixedSchedule = std::string(64, 'f');
+    GYO_CHECK_ASSERTS(O::Product::Build(Game(0, options), TimeUnits()));
 }
 
 // ---- A World without a fixed step (WorldTimeOptions::fixedStep = false; declaration 3.2, v8-arch-gyo2-t1-three-items)
@@ -350,7 +425,13 @@ TEST_CASE("fixed: k steps a frame, Tick + k, the n-th step reads Tick n; ActiveT
     Log().clear();
     auto p = Make(Game(20 * kMs));
     Frame(*p, 20 * kMs);   // 1 step, remainder 4.375 ms
+    // In the frame that sampled it: Tick + 1, FixedTime::elapsed + one step, pending taken (each value printed:
+    // the mutants of AdvanceTime and RunFixedSteps each give their own line).
+    CHECK_MESSAGE((Get<W::Tick>(*p).value == 1 && Get<W::FixedTime>(*p).pending == 0 && Get<W::FixedTime>(*p).elapsed == kStep),
+                  "[wt-fixed-steps-frame1] tick " << Get<W::Tick>(*p).value << " pending " << Get<W::FixedTime>(*p).pending
+                                                  << " fixed " << Get<W::FixedTime>(*p).elapsed);
     Frame(*p, 40 * kMs);   // 44.375 ms: 2 steps, remainder 13.125 ms
+    CHECK_MESSAGE(Get<W::Tick>(*p).value == 3, "[wt-fixed-steps-k] " << Get<W::Tick>(*p).value);
     // After the steps, the frame's value again (the next AdvanceTime would write it anyway: checked here, before it).
     CHECK_MESSAGE((Get<W::ActiveTime>(*p).delta == 40 * kMs && Get<W::ActiveTime>(*p).elapsed == 60 * kMs), "[wt-active-restored]");
     Frame(*p, 0);          // no step
@@ -387,6 +468,8 @@ TEST_CASE("fixed: a frame whose RunFixedSteps a run condition skips: the next Ad
     CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == 20 * kMs, "[wt-not-driven] discarded " << Get<W::VirtualTime>(*p).discarded);
     CHECK_MESSAGE(Get<W::Tick>(*p).value == 2, "[wt-not-driven] tick " << Get<W::Tick>(*p).value);
     CHECK_MESSAGE(Log().back() == "frame 2 20000000/60000000 discarded 20000000 cause 3 real 20000000", "[wt-not-driven-message] " << Joined());
+    // The untaken time is recorded, not taken back from virtual time (WT-2).
+    CHECK_MESSAGE(Get<W::VirtualTime>(*p).elapsed == 60 * kMs, "[wt-not-driven-elapsed-kept] " << Get<W::VirtualTime>(*p).elapsed);
 }
 
 TEST_CASE("fixed: RewindFixedSteps then RunOneFixedStep k times reads the same Tick and fixed time as the first time") {
@@ -406,6 +489,31 @@ TEST_CASE("fixed: RewindFixedSteps then RunOneFixedStep k times reads the same T
     CHECK_MESSAGE((Get<W::ActiveTime>(*p).delta == 0 && Get<W::ActiveTime>(*p).elapsed == 60 * kMs), "[wt-rewind-active-restored]");
 }
 
+namespace {
+// The two time Resources RewindFixedSteps writes, behind the ExclusiveWorld calls it makes.
+struct RewindWorld {
+    W::Tick tick{3};
+    W::FixedTime fixed{};
+    template <class T, class F>
+    ::Engine::Base::Result<bool, K::KernelError> Modify(F&& f) {
+        if constexpr (std::is_same_v<T, W::Tick>) {
+            f(tick);
+        } else {
+            f(fixed);
+        }
+        return true;
+    }
+};
+} // namespace
+
+TEST_CASE("fixed: RewindFixedSteps may not take more steps back than Tick: a Programmer Error") {
+    RewindWorld past;
+    GYO_CHECK_ASSERTS(W::RewindFixedSteps(past, 4));
+    RewindWorld all;
+    W::RewindFixedSteps(all, 3);
+    CHECK_MESSAGE(all.tick.value == 0, "[wt-rewind-to-zero]");
+}
+
 TEST_CASE("fixed: the j-th of k steps returns Err: no later step runs, the Err goes out, the World is interrupted") {
     Log().clear();
     auto p = Make(Game(0));
@@ -417,6 +525,9 @@ TEST_CASE("fixed: the j-th of k steps returns Err: no later step runs, the Err g
     CHECK_MESSAGE(ran.error().detail.find("the fixed step failed") != std::string::npos, "[wt-step-err-passed] " << ran.error().detail);
     CHECK_MESSAGE(Joined() == "step 1 15625000/15625000 fixed 15625000 | step 2 15625000/31250000 fixed 31250000",
                   "[wt-step-err-stops] " << Joined());
+    // No later step started (the World's interruption alone would not show it: a third step would still count Tick).
+    CHECK_MESSAGE((Get<W::Tick>(*p).value == 2 && Get<W::FixedTime>(*p).elapsed == 2 * kStep),
+                  "[wt-step-err-later-not-run] tick " << Get<W::Tick>(*p).value << " fixed " << Get<W::FixedTime>(*p).elapsed);
     CHECK(p->Failure() != nullptr);
     CHECK(WorldOf(*p).State() == K::WorldState::Interrupted);
     // ActiveTime is not put back: the World broke inside the step.
@@ -452,4 +563,98 @@ TEST_CASE("restore: Tick, VirtualTime and the fixed-step state put back into a n
     Frame(*second, 20 * kMs);  // 13.125 + 20 ms: one 31.25 ms step
     CHECK_MESSAGE(Joined() == "step 4 31250000/78125000 fixed 78125000 | frame 4 20000000/80000000", "[wt-restore-goes-on] " << Joined());
     CHECK_MESSAGE(Get<W::RealTime>(*second).elapsed == 20 * kMs, "[wt-restore-real-fresh]");
+}
+
+namespace {
+// Puts PutBack's values back from an exclusive System (Main/PostUpdate: after this frame's RunFixedSteps).
+struct PutBack {
+    Nanoseconds elapsed = 0;
+    Nanoseconds overstep = 0;
+    std::uint8_t armed = 0;
+    std::uint8_t reserved[7] = {};
+};
+K::SystemResult PutBackNow(K::ExclusiveWorld<> world) {
+    const PutBack put = W::Detail::Present(world.Read<PutBack>([](const PutBack& p) { return p; }));
+    if (put.armed == 0) return {};
+    W::Detail::Called(world.Modify<PutBack>([](PutBack& p) { p.armed = 0; }));
+    W::RestoreFixedTime(world, put.elapsed, put.overstep);
+    return {};
+}
+} // namespace
+
+TEST_CASE("restore: a remainder saved under a longer step keeps what is below this World's step; the whole steps beyond go to discarded") {
+    SUBCASE("from a prepare function") {
+        // Saved at 32 Hz: two steps run, 20 ms left; this World runs at 64 Hz (15.625 ms).
+        O::ProductDescription d = Game(0);
+        d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+            W::RestoreFixedTime(world, 2 * 31'250'000, 20 * kMs);
+            return {};
+        });
+        auto p = Make(std::move(d));
+        const W::FixedTime& fixed = Get<W::FixedTime>(*p);
+        CHECK_MESSAGE((fixed.accumulator.Step() == kStep && fixed.elapsed == 62'500'000 && fixed.accumulator.Overstep() == 4'375'000),
+                      "[wt-restore-longer-step] " << fixed.accumulator.Step() << " " << fixed.elapsed << " " << fixed.accumulator.Overstep());
+        CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == kStep, "[wt-restore-longer-discarded] " << Get<W::VirtualTime>(*p).discarded);
+    }
+    SUBCASE("from an exclusive System") {
+        O::ProductDescription d = Game(0);
+        auto build = d.worlds[0].build;
+        d.worlds[0].build = [build](O::WorldSetup& s) {
+            build(s);
+            s.Registrar().Resource<PutBack>({.name = "PutBack", .zone = K::Zone::B});
+            s.Registrar().AddSystem<&PutBackNow>(At("PutBackNow", "Main", "Last"));
+        };
+        d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+            world.SetResource(PutBack{2 * 31'250'000, 20 * kMs, 1, {}});
+            return {};
+        });
+        auto p = Make(std::move(d));
+        Frame(*p, 0);
+        const W::FixedTime& fixed = Get<W::FixedTime>(*p);
+        CHECK_MESSAGE((fixed.elapsed == 62'500'000 && fixed.accumulator.Overstep() == 4'375'000),
+                      "[wt-restore-exclusive] " << fixed.elapsed << " " << fixed.accumulator.Overstep());
+        CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == kStep, "[wt-restore-exclusive-discarded] " << Get<W::VirtualTime>(*p).discarded);
+    }
+}
+
+namespace {
+bool& FirstBuild() {
+    static bool first = true;
+    return first;
+}
+} // namespace
+
+TEST_CASE("carry-over: carried time values are kept; FixedTime takes this World's step; TimeConfig is this World's settings") {
+    Log().clear();
+    O::ProductDescription d = Game(0);
+    auto build = d.worlds[0].build;
+    d.worlds[0].build = [build](O::WorldSetup& s) {
+        build(s);
+        s.CarryOver<W::Tick>("Tick");
+        s.CarryOver<W::FixedTime>("FixedTime");
+        s.CarryOver<W::TimeConfig>("TimeConfig");
+    };
+    // The old World only: a 32 Hz FixedTime and its own TimeConfig (one step a frame), as if they were put back.
+    FirstBuild() = true;
+    d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        if (!FirstBuild()) return {};
+        world.SetResource(W::FixedTime{W::TickAccumulator{W::StepLength::FromHz(32.0)}, 0, 0});
+        W::TimeConfig config = *world.Resource<W::TimeConfig>();
+        config.limits.maxStepsPerFrame = 1;
+        world.SetResource(config);
+        return {};
+    });
+    auto p = Make(std::move(d));
+    Frame(*p, 40 * kMs);  // one 31.25 ms step, 8.75 ms left
+    Frame(*p, 20 * kMs);  // 28.75 ms left, no step
+    REQUIRE((Get<W::Tick>(*p).value == 1 && Get<W::FixedTime>(*p).accumulator.Overstep() == 28'750'000));
+    FirstBuild() = false;
+    auto replaced = p->ReplaceWorld("Main", O::ReplaceRequest{});
+    REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message + "\n" + replaced.error().detail));
+    CHECK_MESSAGE(Get<W::Tick>(*p).value == 1, "[wt-carried-kept] " << Get<W::Tick>(*p).value);
+    const W::FixedTime& fixed = Get<W::FixedTime>(*p);
+    CHECK_MESSAGE((fixed.accumulator.Step() == kStep && fixed.elapsed == 31'250'000 && fixed.accumulator.Overstep() == 13'125'000),
+                  "[wt-carried-step-setting] " << fixed.accumulator.Step() << " " << fixed.elapsed << " " << fixed.accumulator.Overstep());
+    CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == kStep, "[wt-carried-discarded] " << Get<W::VirtualTime>(*p).discarded);
+    CHECK_MESSAGE(Get<W::TimeConfig>(*p).limits.maxStepsPerFrame == 5, "[wt-carried-config-setting] " << Get<W::TimeConfig>(*p).limits.maxStepsPerFrame);
 }

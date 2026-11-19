@@ -268,6 +268,13 @@ TEST_CASE("types: scale") {
     CHECK(f.steps == 5);
     CHECK(f.discarded == 7 * kStep);
     CHECK(time.scale == 2.0);
+    // A scale of -0.0 is written as +0.0: the World summary hashes VirtualTime's bytes (declaration 2.2).
+    W::TickAccumulator zeroAccumulator = Accumulator();
+    W::VirtualTime zeroTime;
+    W::TimeControl negativeZero;
+    negativeZero.scale = -0.0;
+    RunFrame(zeroTime, zeroAccumulator, 10 * kMs, negativeZero);
+    CHECK_MESSAGE((zeroTime.scale == 0.0 && !std::signbit(zeroTime.scale) && zeroTime.delta == 0), "[wt-scale-negative-zero]");
 }
 
 TEST_CASE("types: the scale's fraction carries to the next frame") {

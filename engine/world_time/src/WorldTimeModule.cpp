@@ -129,13 +129,20 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
     setup.Prepare([config, pausable, step](Kernel::World& world) -> ::Engine::Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent(world, RealTime{});
         PutIfAbsent(world, VirtualTime{});
-        PutIfAbsent(world, FixedTime{TickAccumulator{step}, 0, 0});
+        // Carried over (O-7): its elapsed time and remainder stay, the step length is this World's setting
+        // (the whole steps a longer old step left in the remainder go to VirtualTime::discarded, as a restore's).
+        if (FixedTime* carried = world.ResourceMut<FixedTime>()) {
+            const Nanoseconds excess = Detail::PutBackFixedTime(*carried, step, carried->elapsed, carried->accumulator.Overstep());
+            if (excess > 0) world.ResourceMut<VirtualTime>()->discarded += excess;
+        } else {
+            world.SetResource(FixedTime{TickAccumulator{step}, 0, 0});
+        }
         PutIfAbsent(world, ActiveTime{});
         PutIfAbsent(world, Tick{});
         PutIfAbsent(world, TimeSampling{});
         PutIfAbsent(world, Resimulation{});
-        // The settings of this World, always (the step length too, through FixedTime above: a restore puts back
-        // FixedTime's elapsed time and remainder only, RestoreFixedTime).
+        // The settings of this World, always (the step length too, through FixedTime above: a restore or a
+        // carry-over keeps FixedTime's elapsed time and remainder only, RestoreFixedTime).
         world.SetResource(config);
         if (pausable) PutIfAbsent(world, TimeControl{});
         return {};

@@ -58,7 +58,8 @@ VirtualAdvance AdvanceVirtual(VirtualTime& time, Nanoseconds realDelta, const Ti
     GYO_ASSERT(realDelta >= 0 && std::isfinite(control.scale) && control.scale >= 0.0 &&
                limits.maxStepsPerFrame > 0 && limits.maxFrameDelta > 0);
     VirtualAdvance result;
-    time.scale = control.scale;
+    // -0.0 is written as +0.0: the World summary hashes the bytes (declaration 2.2).
+    time.scale = control.scale == 0.0 ? 0.0 : control.scale;
     time.paused = control.paused;
     if (control.paused != 0) {
         time.delta = 0;
