@@ -37,12 +37,13 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 5. 狀態機（重做成修訂 8） | 只改建立在舊前提上的地方：`RequestSilent` 還要不要、(c) 區改走權威策略、插進遊戲初始化清單、套用 System 的插法、以 D-E2／R-E2 為守衛的 DI；遊戲看得到的行為照舊（回收清單第 1 節）。(b) 區的部分照統合 | 已歸檔的狀態機卡 | 權威 Module 的宣告；實作依賴 2、3（(c) 區依賴 4） |
 | 5. 讀檔的實作 | 照它的宣告 | — | 讀檔的宣告、2 |
 | 5. 存檔版本 Module | 2026-11-18 使用者：「需要提供version module，默認不啟用，啟用之後過時檔會直接拒絕。這個補充不放在編排裡，但是得放計劃中。Engine需要支持。」（`v8-arch-gyo2-save-version-module`）。Engine 提供的 Module，**預設不啟用**（使用者明說的例外，不同於「Module 預設全帶」）；啟用後比對存檔帶的版本標記與作者宣告的最低支援版本，過時就拒絕。主會話的讀法（開宣告時確認）：只比對版本標記、不讀存檔內容（和「Engine 不認得存檔格式」不衝突）；拒絕走讀檔失敗的路（`Result` 回錯誤碼，預設先建新的時舊 World 照跑）。排在讀檔的實作同一條線或緊接其後（主會話照 L17 排） | — | 讀檔的實作、2 |
+| 6. JSON Module（最先） | 封裝的實作，早於日誌與 trace（`v8-arch-gyo2-json-early`）；走 yyjson＋自己的介面，只依賴 Base，可以和第 3 批並行 | master 用 nlohmann（不帶） | Base |
 | 6. 網路 Module | 網路是機制、在搬產品之前做（`v8-arch-gyo2-net-is-mechanism-first`）。照點名的功能逐一推 wire 需求、對照 lightyear、bevy_replicon、Unity Netcode；Gateway 原意（外部多種 Client、內部一套抽象協議、無狀態）；斷線偵測與重連只在 UDP 上 | master 的 `engine/net`、`services/gyo_gateway`（參考） | 3、4；多個 World 與交換點 |
 | 6. 日誌機制 | 兩個入口：平常訂閱事件、致命時從 runner 拿結構化錯誤；最後一道直接呼叫、不經任何機制（`-world-events-not-via-event` 的補充）；trace 一起看 | master 的 `engine/trace`（參考） | 2、3 |
 | 6. SDL（第一個 Plugin 批） | `engine/platform` 不回來，功能拆進各 Module，怎麼拆在這批分析（`v8-arch-gyo2-platform-obsolete-split-into-modules`）；plugins 目錄的建置；input、render、text、ui 依序回來 | master 的 platform、input、render、text、ui（參考） | 2、3 |
-| 6. asset、JSON | asset（資源目錄、載入、生命週期）；JSON 走 yyjson＋自己的介面（Module） | master 的 `engine/asset`（參考） | 2 |
+| 6. asset | 資源目錄、載入、生命週期 | master 的 `engine/asset`（參考） | 2；JSON |
 
-先後：1 → 2 → 3 → 4 → 5（5 的各批可以並行）→ 6 的基礎模組（網路 Module 在 4 之後即可和 5 並行；日誌可以提早）→ 搬產品（`v8-arch-gyo2-infrastructure-before-products`）。2026-11-18 使用者定：第 2 批的宣告卡等第 1 批收尾、併進 `gyo2` 才開，不並行（`v8-arch-gyo2-batch2-after-batch1-merged`：「這個底層設計，還是穩一點好。而且有些決策還不穩，之前的很多批都是這樣廢掉的。」）。（舊版寫「事件游標依賴減法」，後來改成「游標排在減法之前」，現在照統合併進第 3 條線。）
+先後：1 → 2 → 3 → 4 → 5（5 的各批可以並行）→ 6 的基礎模組（JSON 最先、可以現在就和 3 並行；網路 Module 在 4 之後即可和 5 並行；日誌與 trace 在 JSON 之後）→ 搬產品（`v8-arch-gyo2-infrastructure-before-products`）。2026-11-18 使用者定：第 2 批的宣告卡等第 1 批收尾、併進 `gyo2` 才開，不並行（`v8-arch-gyo2-batch2-after-batch1-merged`：「這個底層設計，還是穩一點好。而且有些決策還不穩，之前的很多批都是這樣廢掉的。」）。（舊版寫「事件游標依賴減法」，後來改成「游標排在減法之前」，現在照統合併進第 3 條線。）
 
 ## 不擋路的小事
 
