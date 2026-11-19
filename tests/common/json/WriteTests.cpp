@@ -7,6 +7,7 @@
 #include <ostream>
 
 #include <bit>
+#include <cstdio>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -160,10 +161,11 @@ TEST_CASE("Writer: a non-finite number fails Finish and cuts the string back") {
         writer.Int(1);
         writer.EndObject();
         auto done = writer.Finish();
-        REQUIRE_FALSE(done.has_value());
+        CHECK_FALSE(done.has_value());
+        CHECK(out == "earlier line\n");
+        if (done) continue;
         CHECK(done.error().code == JsonErrorCode::NotRepresentable);
         CHECK(done.error().detail == "value 3");
-        CHECK(out == "earlier line\n");
     }
 }
 
@@ -241,7 +243,7 @@ TEST_CASE("Writer: deeper than the inline levels still works") {
 
 TEST_CASE("WriteValue: members in document order, numbers as written") {
     const std::string_view text =
-        R"({"z":0.10,"big":18446744073709551616,"neg":-0,"exp":1E+2,"s":"a\"é\n","n":null,"a":[[],{},true]})";
+        R"({"z":0.10,"big":18446744073709551616,"neg":-0,"exp":1E+2,"s":"a\"\u00e9\n","n":null,"a":[[],{},true]})";
     auto document = Parse(text);
     REQUIRE(document.has_value());
     std::string out;
@@ -336,4 +338,131 @@ TEST_CASE("Writer: the same number text on every platform (structured golden)") 
     INFO(out);
     CHECK(written == 2198);
     CHECK(Engine::Base::Fnv1a64(out) == 0x0483ADE1A5CA673BULL);
+}
+
+// Added after the adversarial check of the mutation list (Fable/high, 2026-11-20;
+// build/evidence/gyo2-json-module/mutation-check-fable/).
+
+TEST_CASE("Writer misuse: two Keys in a row") {
+    std::string out;
+    Writer writer(out);
+    writer.BeginObject();
+    writer.Key("a");
+    GYO_CHECK_ASSERTS(writer.Key("b"));
+}
+
+TEST_CASE("Writer: Finish returns the first error, not the last") {
+    std::string out;
+    Writer writer(out);
+    writer.BeginArray();
+    writer.String("\xFF");
+    writer.Double(std::numeric_limits<double>::quiet_NaN());
+    writer.EndArray();
+    auto done = writer.Finish();
+    REQUIRE_FALSE(done.has_value());
+    CHECK(done.error().message == "invalid UTF-8");
+    CHECK(done.error().detail == "value 2");
+}
+
+TEST_CASE("Writer: a level past the inline ones is dropped when it ends") {
+    // The innermost array is empty, so its state ("nothing written yet")
+    // differs from its parent's; a sibling written after it needs the comma.
+    const std::size_t depth = Writer::kInlineDepth + 8;
+    std::string out;
+    Writer writer(out);
+    for (std::size_t i = 0; i < depth; ++i) writer.BeginArray();
+    writer.EndArray();
+    writer.Int(2);
+    for (std::size_t i = 1; i < depth; ++i) writer.EndArray();
+    REQUIRE(writer.Finish().has_value());
+    CHECK(out == std::string(depth, '[') + "],2" + std::string(depth - 1, ']'));
+}
+
+namespace {
+
+std::string HexOf(const std::string& bytes) {
+    std::string hex;
+    char buffer[4];
+    for (const char c : bytes) {
+        std::snprintf(buffer, sizeof buffer, "%02x ", static_cast<unsigned>(static_cast<unsigned char>(c)));
+        hex += buffer;
+    }
+    return hex;
+}
+
+} // namespace
+
+TEST_CASE("Writer and Parse accept the same UTF-8: every sequence of 1 to 4 boundary bytes") {
+    static constexpr unsigned char kBytes[] = {0x41, 0x7F, 0x80, 0x8F, 0x90, 0x9F, 0xA0, 0xBF, 0xC0, 0xC1, 0xC2, 0xDF,
+                                               0xE0, 0xE1, 0xEC, 0xED, 0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF4, 0xF5, 0xFF};
+    constexpr std::size_t kCount = sizeof kBytes;
+    std::size_t sequences = 0;
+    std::size_t accepted = 0;
+    std::size_t disagreements = 0;
+    std::string firstWriterOnly;  // the Writer writes it, Parse rejects it
+    std::string firstParseOnly;   // Parse reads it, the Writer refuses it
+    std::string text;
+    std::string out;
+    for (std::size_t length = 1; length <= 4; ++length) {
+        std::size_t total = 1;
+        for (std::size_t i = 0; i < length; ++i) total *= kCount;
+        for (std::size_t n = 0; n < total; ++n) {
+            text.clear();
+            for (std::size_t i = 0, rest = n; i < length; ++i, rest /= kCount) text += static_cast<char>(kBytes[rest % kCount]);
+            ++sequences;
+            out.clear();
+            Writer writer(out);
+            writer.String(text);
+            const bool writes = writer.Finish().has_value();
+            const bool reads = Parse("\"" + text + "\"").has_value();
+            if (writes) ++accepted;
+            if (writes == reads) continue;
+            ++disagreements;
+            if (writes && firstWriterOnly.empty()) firstWriterOnly = HexOf(text);
+            if (reads && firstParseOnly.empty()) firstParseOnly = HexOf(text);
+        }
+    }
+    CHECK(sequences == 24 + 576 + 13824 + 331776);
+    CHECK_MESSAGE(disagreements == 0, "written but not read back: " << firstWriterOnly << "| read but not written: "
+                                                                  << firstParseOnly);
+    CHECK(accepted == 1926);
+}
+
+TEST_CASE("Writer: a space and other printable ASCII are written as they are") {
+    CHECK(StringText(" !~") == R"(" !~")");
+}
+
+TEST_CASE("WriteValue and AsBool: false stays false") {
+    auto document = Parse("[true,false]");
+    REQUIRE(document.has_value());
+    std::vector<bool> read;
+    for (const Value value : document->Root().AsArray().value()) read.push_back(value.AsBool().value());
+    CHECK(read == std::vector<bool>{true, false});
+    std::string out;
+    Writer writer(out);
+    WriteValue(writer, document->Root());
+    REQUIRE(writer.Finish().has_value());
+    CHECK(out == "[true,false]");
+}
+
+TEST_CASE("Writer misuse: an end without its begin") {
+    std::string out;
+    Writer writer(out);
+    GYO_CHECK_ASSERTS(writer.EndArray());
+}
+
+TEST_CASE("Writer: a key written twice is not detected; Parse rejects the result") {
+    std::string out;
+    Writer writer(out);
+    writer.BeginObject();
+    writer.Key("k");
+    writer.Int(1);
+    writer.Key("k");
+    writer.Int(2);
+    writer.EndObject();
+    REQUIRE(writer.Finish().has_value());
+    CHECK(out == R"({"k":1,"k":2})");
+    auto document = Parse(out);
+    REQUIRE_FALSE(document.has_value());
+    CHECK(document.error().code == JsonErrorCode::RepeatedKey);
 }

@@ -103,10 +103,19 @@ Writer::Frame& Writer::Top() {
 }
 
 void Writer::Push(const Frame frame) {
+    if (lost_ > 0) {
+        ++lost_;
+        return;
+    }
     if (depth_ < kInlineDepth) {
         inline_[depth_] = frame;
     } else {
-        deeper_.push_back(frame);  // may throw std::bad_alloc: depth_ is not raised then
+        try {
+            deeper_.push_back(frame);
+        } catch (const std::bad_alloc&) {
+            ++lost_;  // the level exists for the caller; its state is gone
+            throw;
+        }
     }
     ++depth_;
 }
@@ -123,6 +132,7 @@ void Writer::Fail(const JsonErrorCode code, std::string message) {
 void Writer::BeforeValue() {
     GYO_ASSERT(!finished_ && "the Writer is finished");
     ++values_;
+    if (lost_ > 0) return;  // output is discarded at Finish anyway
     if (depth_ == 0) {
         GYO_ASSERT(!topWritten_ && "a second top-level value");
         topWritten_ = true;
@@ -150,6 +160,10 @@ void Writer::BeginContainer(const Container container, const char open) {
 
 void Writer::EndContainer(const Container container, const char close) {
     GYO_ASSERT(!finished_ && "the Writer is finished");
+    if (lost_ > 0) {
+        --lost_;
+        return;
+    }
     GYO_ASSERT(depth_ > 0 && "an end without its begin");
     const Frame& frame = Top();
     GYO_ASSERT(frame.container == container && "the end does not match the open container");
@@ -169,6 +183,10 @@ void Writer::EndArray() { EndContainer(Container::Array, ']'); }
 
 void Writer::Key(const std::string_view key) {
     GYO_ASSERT(!finished_ && "the Writer is finished");
+    if (lost_ > 0) {
+        ++values_;
+        return;
+    }
     GYO_ASSERT(depth_ > 0 && "a Key outside an object");
     Frame& frame = Top();
     GYO_ASSERT(frame.container == Container::Object && "a Key outside an object");
@@ -262,7 +280,7 @@ void Writer::NumberText(const std::string_view text) {
 
 JsonResult<void> Writer::Finish() {
     GYO_ASSERT(!finished_ && "Finish called twice");
-    GYO_ASSERT(depth_ == 0 && "Finish with an open container");
+    GYO_ASSERT(depth_ == 0 && lost_ == 0 && "Finish with an open container");
     GYO_ASSERT(topWritten_ && "Finish with nothing written");
     finished_ = true;
     if (error_) {
@@ -280,50 +298,61 @@ void WriteValue(Writer& writer, const Value value) {
         ArrayView::Iterator element;
         ArrayView::Iterator elementEnd;
     };
-    std::vector<Open> open;
-    const auto emit = [&](const Value item) {
-        switch (item.GetKind()) {
-        case Kind::Null: writer.Null(); break;
-        case Kind::Bool: writer.Bool(item.AsBool().value()); break;
-        case Kind::Number: writer.NumberText(item.AsNumberText().value()); break;
-        case Kind::String: writer.String(item.AsString().value()); break;
-        case Kind::Object: {
-            const ObjectView object = item.AsObject().value();
-            writer.BeginObject();
-            open.push_back({true, object.begin(), object.end(), {}, {}});
-            break;
-        }
-        case Kind::Array: {
-            const ArrayView array = item.AsArray().value();
-            writer.BeginArray();
-            open.push_back({false, {}, {}, array.begin(), array.end()});
-            break;
-        }
-        }
-    };
-    emit(value);
-    while (!open.empty()) {
-        Open& top = open.back();
-        if (top.object) {
-            if (top.member == top.memberEnd) {
-                open.pop_back();
-                writer.EndObject();
-                continue;
+    // An allocation failure inside closes what this call opened, so the
+    // caller's structure is as if the value had been written, and is reported
+    // by Finish (OutOfMemory) like any other.
+    const std::size_t depthBefore = writer.depth_;
+    const std::size_t lostBefore = writer.lost_;
+    try {
+        std::vector<Open> open;
+        const auto emit = [&](const Value item) {
+            switch (item.GetKind()) {
+            case Kind::Null: writer.Null(); break;
+            case Kind::Bool: writer.Bool(item.AsBool().value()); break;
+            case Kind::Number: writer.NumberText(item.AsNumberText().value()); break;
+            case Kind::String: writer.String(item.AsString().value()); break;
+            case Kind::Object: {
+                const ObjectView object = item.AsObject().value();
+                writer.BeginObject();
+                open.push_back({true, object.begin(), object.end(), {}, {}});
+                break;
             }
-            const Member member = *top.member;
-            ++top.member;
-            writer.Key(member.key);
-            emit(member.value);  // may push: top is not used after this
-        } else {
-            if (top.element == top.elementEnd) {
-                open.pop_back();
-                writer.EndArray();
-                continue;
+            case Kind::Array: {
+                const ArrayView array = item.AsArray().value();
+                writer.BeginArray();
+                open.push_back({false, {}, {}, array.begin(), array.end()});
+                break;
             }
-            const Value element = *top.element;
-            ++top.element;
-            emit(element);
+            }
+        };
+        emit(value);
+        while (!open.empty()) {
+            Open& top = open.back();
+            if (top.object) {
+                if (top.member == top.memberEnd) {
+                    open.pop_back();
+                    writer.EndObject();
+                    continue;
+                }
+                const Member member = *top.member;
+                ++top.member;
+                writer.Key(member.key);
+                emit(member.value);  // may push: top is not used after this
+            } else {
+                if (top.element == top.elementEnd) {
+                    open.pop_back();
+                    writer.EndArray();
+                    continue;
+                }
+                const Value element = *top.element;
+                ++top.element;
+                emit(element);
+            }
         }
+    } catch (const std::bad_alloc&) {
+        writer.lost_ = lostBefore;
+        while (writer.depth_ > depthBefore) writer.Pop();
+        writer.Fail(JsonErrorCode::OutOfMemory, "out of memory");
     }
 }
 

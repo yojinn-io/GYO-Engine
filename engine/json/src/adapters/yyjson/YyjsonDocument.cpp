@@ -59,9 +59,23 @@ Kind KindOf(yyjson_val* value) noexcept {
     return Kind::Null;
 }
 
+// An error for a read, or OutOfMemory when building its text cannot allocate:
+// no std::bad_alloc leaves a public function (5.5). "out of memory" fits the
+// small-string buffer of every standard library, so that fallback allocates nothing.
+template <class Make>
+JsonError ReadError(Make make) {
+    try {
+        return make();
+    } catch (const std::bad_alloc&) {
+        return JsonError::Make(JsonErrorCode::OutOfMemory, "out of memory");
+    }
+}
+
 JsonError WrongKindError(const Kind expected, const Kind found) {
-    return JsonError::Make(JsonErrorCode::WrongKind, "wrong kind",
-                           std::string("expected ") + ToString(expected) + ", found " + ToString(found));
+    return ReadError([&] {
+        return JsonError::Make(JsonErrorCode::WrongKind, "wrong kind",
+                               std::string("expected ") + ToString(expected) + ", found " + ToString(found));
+    });
 }
 
 JsonError OutOfMemoryError() { return JsonError::Make(JsonErrorCode::OutOfMemory, "out of memory while parsing"); }
@@ -260,15 +274,19 @@ JsonResult<std::string_view> IntegerText(yyjson_val* value) {
     if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::Number, KindOf(value)));
     const std::string_view text = RawOf(value);
     if (!Detail::IsIntegerLiteral(text)) {
-        return Err(JsonError::Make(JsonErrorCode::WrongKind, "wrong kind",
-                                   "expected an integer literal, found " + std::string(text)));
+        return Err(ReadError([&] {
+            return JsonError::Make(JsonErrorCode::WrongKind, "wrong kind",
+                                   "expected an integer literal, found " + std::string(text));
+        }));
     }
     return text;
 }
 
 JsonError IntegerOutOfRange(const std::string_view text, const char* type) {
-    return JsonError::Make(JsonErrorCode::NumberOutOfRange, "integer out of range",
-                           std::string(text) + " does not fit " + type);
+    return ReadError([&] {
+        return JsonError::Make(JsonErrorCode::NumberOutOfRange, "integer out of range",
+                               std::string(text) + " does not fit " + type);
+    });
 }
 
 } // namespace
@@ -295,7 +313,9 @@ JsonResult<double> Value::AsDouble() const {
     double out = 0.0;
     if (Detail::DecimalToDouble(RawOf(value), out) != Detail::DecimalRead::Ok) {
         // Parse has checked every number already; kept for a Document built otherwise.
-        return Err(JsonError::Make(JsonErrorCode::NumberOutOfRange, "number out of range: " + std::string(RawOf(value))));
+        return Err(ReadError([&] {
+            return JsonError::Make(JsonErrorCode::NumberOutOfRange, "number out of range: " + std::string(RawOf(value)));
+        }));
     }
     return out;
 }

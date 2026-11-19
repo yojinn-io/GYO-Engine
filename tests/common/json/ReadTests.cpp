@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "AssertTestSupport.hpp"
 #include "engine/json/Document.hpp"
 
 using namespace std::string_view_literals;
@@ -53,7 +54,7 @@ TEST_CASE("Parse: accepts RFC 8259 text, top-level scalars included") {
     CHECK(Parse("\"text\""sv).has_value());
     CHECK(Parse("42"sv).has_value());
     CHECK(Parse(" \t\r\n null \n"sv).has_value());
-    CHECK(Parse(R"(["é𝄞/\/"])"sv).has_value());
+    CHECK(Parse(R"(["\u00e9\ud834\udd1e/\/"])"sv).has_value());
 }
 
 TEST_CASE("Parse: what is not JSON is Syntax") {
@@ -70,7 +71,7 @@ TEST_CASE("Parse: what is not JSON is Syntax") {
     CHECK(ParseError("[01]"sv) == JsonErrorCode::Syntax);
     CHECK(ParseError(R"(["\ud800"])"sv) == JsonErrorCode::Syntax);        // lone high surrogate
     CHECK(ParseError(R"(["\udc00"])"sv) == JsonErrorCode::Syntax);        // lone low surrogate
-    CHECK(ParseError(R"(["\ud800A"])"sv) == JsonErrorCode::Syntax);  // high + not low
+    CHECK(ParseError(R"(["\ud800\u0041"])"sv) == JsonErrorCode::Syntax);  // high + not low
     CHECK(ParseError("[\"\xC0\xAF\"]"sv) == JsonErrorCode::Syntax);       // overlong
     CHECK(ParseError("[\"\xED\xA0\x80\"]"sv) == JsonErrorCode::Syntax);   // UTF-8 surrogate
     CHECK(ParseError("[\"\xF4\x90\x80\x80\"]"sv) == JsonErrorCode::Syntax); // above U+10FFFF
@@ -88,7 +89,7 @@ TEST_CASE("Parse: a syntax error names its line and column in bytes") {
 TEST_CASE("Parse: a key repeated in one object is RepeatedKey, at the second occurrence") {
     CHECK(ParseError(R"({"a":1,"a":2})"sv) == JsonErrorCode::RepeatedKey);
     // Keys compare after unescaping.
-    CHECK(ParseError(R"({"a":1,"a":2})"sv) == JsonErrorCode::RepeatedKey);
+    CHECK(ParseError(R"({"a":1,"\u0061":2})"sv) == JsonErrorCode::RepeatedKey);
     CHECK(ParseDetail("{\"x\":[{\"k\":1,\n \"k\":2}]}"sv) == "line 2, column 3; /x/0/k");
     // The same key in different objects is fine.
     CHECK(Parse(R"({"a":{"a":1},"b":{"a":2}})"sv).has_value());
@@ -267,7 +268,7 @@ TEST_CASE("Parse: deep and wide documents are linear and need no recursion") {
     CHECK(allArrays);
     CHECK(levels == depth);
 
-    // A repeated key one million levels down still reports, with its path.
+    // A repeated key 100,000 levels down still reports, with its path.
     std::string deepKey;
     for (std::size_t i = 0; i < 100000; ++i) deepKey += "{\"a\":";
     deepKey += "{\"k\":1,\"k\":2}";
@@ -277,10 +278,51 @@ TEST_CASE("Parse: deep and wide documents are linear and need no recursion") {
     std::string wideArray = "[";
     for (int i = 0; i < 100000; ++i) wideArray += "{\"i\":1},";
     wideArray.back() = ']';
-    CHECK(MustParse(wideArray).Root().AsArray().value().Size() == 100000);
+    const Document wide = MustParse(wideArray);
+    CHECK(wide.Root().AsArray().value().Size() == 100000);
+    std::size_t walked = 0;
+    for (const Value element : wide.Root().AsArray().value()) walked += element.AsObject().value().Size();
+    CHECK(walked == 100000);
 
     std::string wideObject = "{";
     for (int i = 0; i < 10000; ++i) wideObject += "\"k" + std::to_string(i) + "\":" + std::to_string(i) + ",";
     wideObject.back() = '}';
     CHECK(MustParse(wideObject).Root().AsObject().value().Size() == 10000);
+}
+
+// Added after the adversarial check of the mutation list (Fable/high, 2026-11-20;
+// build/evidence/gyo2-json-module/mutation-check-fable/).
+
+TEST_CASE("Value: each read names its own kind as the expected one") {
+    const Document document = MustParse(R"(["s",1])"sv);
+    auto it = document.Root().AsArray().value().begin();
+    const Value s = *it;
+    ++it;
+    const Value n = *it;
+    CHECK(s.AsBool().error().detail == "expected Bool, found String");
+    CHECK(s.AsDouble().error().detail == "expected Number, found String");
+    CHECK(s.AsInt64().error().detail == "expected Number, found String");
+    CHECK(s.AsUint64().error().detail == "expected Number, found String");
+    CHECK(s.AsNumberText().error().detail == "expected Number, found String");
+    CHECK(s.AsObject().error().detail == "expected Object, found String");
+    CHECK(s.AsArray().error().detail == "expected Array, found String");
+    CHECK(n.AsString().error().detail == "expected String, found Number");
+}
+
+TEST_CASE("Iterators: reading or stepping past the end is a Programmer Error") {
+    const Document document = MustParse(R"([[1],{"a":1}])"sv);
+    auto outer = document.Root().AsArray().value();
+    auto it = outer.begin();
+    const ArrayView array = (*it).AsArray().value();
+    ++it;
+    const ObjectView object = (*it).AsObject().value();
+    GYO_CHECK_ASSERTS(*array.end());
+    GYO_CHECK_ASSERTS(*object.end());
+}
+
+
+TEST_CASE("Parse: columns count bytes, not characters") {
+    // "é" is two bytes: the stray x is at byte column 9, character column 8.
+    CHECK(ParseDetail("[\"\xC3\xA9\"]  x"sv) == "line 1, column 9");
+    CHECK(ParseDetail("{\"\xC3\xA9\":1,\"k\":1,\"k\":2}"sv) == "line 1, column 16; /k");
 }

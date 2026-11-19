@@ -66,6 +66,10 @@ TEST_CASE("Parse: a number nobody reads is still checked; the detail points at i
     CHECK(root.error().detail == "line 1, column 1");
 }
 
+TEST_CASE("Parse: numbers inside nested arrays are checked too") {
+    CHECK(ParseError("[[0],[1e400]]"sv) == JsonErrorCode::NumberOutOfRange);
+}
+
 TEST_CASE("Parse: zero text is zero at any exponent, not an underflow") {
     CHECK(DoubleBits("0e999999"sv) == Bits(0.0));
     CHECK(DoubleBits("-0e-999"sv) == Bits(-0.0));
@@ -135,4 +139,12 @@ TEST_CASE("IsIntegerLiteral and AsNumberText") {
     }
     CHECK(pattern == "ii-----");
     CHECK(last == "0.10");
+}
+
+// Added after the adversarial check of the mutation list (Fable/high, 2026-11-20;
+// build/evidence/gyo2-json-module/mutation-check-fable/).
+
+TEST_CASE("Parse: zero text with a capital E is zero too") {
+    CHECK(DoubleBits("0E999999"sv) == Bits(0.0));
+    CHECK(DoubleBits("-0.0E+5"sv) == Bits(-0.0));
 }

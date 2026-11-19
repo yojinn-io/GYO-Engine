@@ -90,6 +90,10 @@ private:
     std::array<Frame, kInlineDepth> inline_{};
     std::vector<Frame> deeper_;
     std::size_t depth_ = 0;
+    // Levels opened after a level's state could not be stored (allocation
+    // failure past kInlineDepth): only counted, so that the caller can still
+    // close them and reach Finish, which then reports OutOfMemory.
+    std::size_t lost_ = 0;
     std::size_t values_ = 0;
     bool topWritten_ = false;
     bool finished_ = false;
