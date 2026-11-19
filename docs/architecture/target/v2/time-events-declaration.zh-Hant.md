@@ -1,6 +1,6 @@
 # 事前宣告：時間 Module＋事件（`v8-arch-gyo2-time-events`）
 
-更新：2026-11-19（修訂 2：收第 11 節第 1 件的使用者決定）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：待使用者的動工前核准。核准之前不改程式、條文、守衛。**
+更新：2026-11-19（修訂 3：收第 11 節第 1～3 件的使用者決定；第 3 件推翻了本卡的建議，範圍擴到編排層的預設骨架）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：待使用者的動工前核准。核准之前不改程式、條文、守衛。**
 
 經過：修訂 0（f7ad16a2）送 Fable 5.2／high 敵對式檢查：必改 8、建議改 14、小問題 12（報告 主 checkout `build/evidence/gyo2-time-events/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，並收主會話轉來的使用者決定 `v8-arch-gyo2-summary-padding-a-then-c`；處理對照在第 15 節。修訂 1 沒有再送檢查。
 
@@ -60,7 +60,8 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 | E5 | 時間 Module（新的 Engine Module，第 3 節） | 批次表第 3 列；統合第 8、16 節；回滾 5.7、7.2；權威 5.4；讀檔 5.5 |
 | E6 | 推送式事件 `Event`＋`Observer`＋`Trigger`＋`On<E>`（含元件 Add／Remove 觸發） | 游標份 3.3、5.2（已核准） |
 | E7 | scenario 第 2 段（時間與事件） | `-scenario-tests`；骨架宣告 8.3 |
-| E8 | 不另做 EventBus：本批碰到的 Engine 機制從 Kernel 的事件發；送法表交使用者（第 5 節、第 11 節第 2 件） | `-no-separate-eventbus` |
+| E8 | 不另做 EventBus：本批碰到的 Engine 機制從 Kernel 的事件發（第 5 節） | `-no-separate-eventbus`、`-event-delivery-rule` |
+| E9 | **編排層的預設骨架**：編排層給每幀一張 `Main` 與固定步一張 `FixedUpdate`，預設帶、作者可換或關（第 3.6 節）。改第 2 批已合併的編排層 | 使用者 2026-11-19（第 11 節第 3 件） |
 
 ### 2.2 舊 T1 逐條對照現況
 
@@ -141,7 +142,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 | `RunOneFixedStep(world, schedule)`（公開的函式樣板，參數是任何一種 `ExclusiveWorld<…>`——`ExclusiveWorld<Writes<…>>` 是不同的 `final` 型別，`Params.hpp:838-839`） | — | `Tick`+1、`FixedTime.elapsed`+步長 → `ActiveTime`＝（步長、`FixedTime.elapsed`）→ 巢狀跑固定步的 schedule → 回 Ok 時把 `ActiveTime` 換回每幀的值；**回 Err 或例外時直接往上傳、不換回**（World 已中斷，`Params.hpp:1006-1024`、`Executor.cpp:139-168`；D2 之後 Product 結束） |
 | `RewindFixedSteps(world, k)`（公開的函式樣板；本卡加的） | — | `Tick`−k、`FixedTime.elapsed`−k×步長；累加器不動。回滾策略重跑前呼叫，之後呼叫 k 次 `RunOneFixedStep`（回滾 7.2 第 2 條，「時間 Module 給推進一步的函式」那一種）。系譜：lightyear 回滾時 `apply_delta(-n)` 並把 `Time<Fixed>` 換成回滾用的值（`rollback.rs:1153-1291`） |
 
-**schedule 與 stage 的名字**：`WorldTimeModule` 的設定給四個名字（每幀那一張、推進時間的 stage、跑固定步的 stage、固定步那一張）。**誰宣告這幾張 schedule 是時間設計第 0 節列的「請你定」，在第 11 節第 3 件交你定**；不論哪個選項：掛載的目標（每幀那一張與兩個 stage）不存在時是 Kernel 既有的 D-E1（`Registry.cpp:1292-1304`；Kernel 有啟動錯誤時 `Finish`、`Check` 不跑，`Product.cpp:244-249`）；固定步那一張（巢狀跑的目標、不是掛載）不存在由 `WorldTimeModule::Check` 回報，否則執行時才是 X-12。
+**schedule 與 stage 的名字**：時間 Module **不宣告任何 schedule**，只往編排層的預設骨架（第 3.6 節）上掛兩格：`AdvanceTime` 在 `Main` 的 `First`、`RunFixedSteps` 在 `Main` 的 `FixedMainLoop`，巢狀跑 `FixedUpdate`（使用者 2026-11-19，第 11 節第 3 件）。作者關掉預設骨架、自己宣告時，`WorldTimeModule` 的設定可以換這四個名字。那時：掛載的目標（每幀那一張與兩個 stage）不存在是 Kernel 既有的 D-E1（`Registry.cpp:1292-1304`；Kernel 有啟動錯誤時 `Finish`、`Check` 不跑，`Product.cpp:244-249`）；固定步那一張（巢狀跑的目標、不是掛載）不存在由 `WorldTimeModule::Check` 回報，否則執行時才是 X-12。
 
 **`Tick` 的先後**：跑之前加 1，第一步執行中讀到 1——和現在 Kernel 推 tick 的語意相同（`Executor.cpp:212-219`，`RunPlan` 開頭 `++ticks_`），也和 lightyear 在 `FixedFirst` 加 1 相同（`timeline.rs:211-278`）。
 
@@ -171,6 +172,14 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 | 時間設計 DI 2 的守法（權威份修訂 4 回報） | 改成約定（WT-5），沒有啟動檢查；理由：Kernel 不疊加限制（`-kernel-is-ecs-no-restrictions`），作者自己寫驅動也做得到（`engine-not-rigid`） |
 | tick 的 Z6 例外（統合 16） | 第 4 批 |
 | 訊息要 tick 的自己在內容帶（游標份 3.2） | 寫的 System 讀 `Res<Tick>` |
+
+### 3.6 編排層的預設骨架（使用者 2026-11-19，第 11 節第 3 件；細節本卡照 L17 判）
+
+- **編排層給**：每個 World 在登記單位 `Build` 之前，由編排層宣告兩張 schedule——每幀一張 `Main`（stage 依序 `First`、`PreUpdate`、`FixedMainLoop`、`Update`、`PostUpdate`、`Last`）與固定步一張 `FixedUpdate`（stage 依序 `First`、`PreUpdate`、`Update`、`PostUpdate`、`Last`；**本卡照 L17 判**，Bevy 的 FixedMain 是 `FixedFirst`…`FixedLast` 五段，GYO 的 stage 名屬於各自的 schedule，不必加前綴）；每幀的清單預設跑 `Main`。
+- **作者可換或關**（`engine-not-rigid`）：`WorldDescription` 加一個骨架的選項（預設＝上面那一套；關掉＝編排層不宣告，作者自己宣告）。作者在預設骨架之外另加 schedule 照舊。
+- **界線**（O-4 補一句；side chat 的措辭，使用者的意思是「不認識時間，但是會執行Module」）：編排層給 schedule 的骨架（名字與段落順序）並經 Kernel 執行它；不認得時間，也不認得任何 Module 掛進去的是什麼。Module 在登記時把 System 掛進去——對上 O-3（runner 不呼叫 System、不排先後）與 RC-O8。**本卡判：不算編排層職責清單多一項**，O-4 已列「遊戲初始化與每幀的清單」，預設骨架是那一項的預設值；核准時請你一併看這個判斷。
+- **既有的測試**：第 2 批的編排層測試與 scenario 第 1 段宣告自己的 schedule，判定照舊；它們的 World 若因預設骨架多了兩張空的 schedule 而改到期待值（Registry 指紋、每幀清單），改成明寫「關掉預設骨架」，判定不變（第 6.2 節）。
+- **系譜**：Bevy 由 `bevy_app` 給 `Main`（`main_schedule.rs:221-235`），`bevy_time` 只往上掛（`bevy_time/src/lib.rs:84-94`）；flecs 由 pipeline addon 給內建 phase；Unity Entities 給初始化／模擬／呈現三組（side chat 憑知識、沒讀本地原始碼）；Unreal Mass 對到引擎的 tick group。四家都是引擎給骨架、作者可換，沒有一家放在時間模組。退掉的：時間 Module 自己宣告（本卡修訂 1 的建議；退的理由見第 11 節第 3 件）。
 
 ---
 
@@ -281,6 +290,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - 改名：`EventReader`→`MessageReader` 等（`SignatureTests`、`RegistryTests:43,68`、`HookFlushTests`、`NestedRunTests` 用事件記錄的案例）；find 含 `EntryKind::Event`（9 個）、`AccessKind::Event`（4 個）的突變同步改 find。`naming_guard.py`、`kernel_symbols.py` 現在沒有列舉事件的名字（`recon-a` 6.1），不用改。
 - golden 重產（第 4.4 節）；寫死版本號的 3 個突變（`sr-plan-version-not-bumped`、`rs-iv-registry-version-1`、`rs-b6-cfp-version-1`）改成新版本號。
 - `ks-diks15-code-added-without-text`（find `FE1,\n};`）改 find 到新的 enum 尾；`hf-startup-skipped`、`hf-rounds-follow-trim`、`hf-trim-before-rounds` 的 replace 用到要拿掉的符號：改寫成仍殺同一個案例，做不到的退役並寫明理由（退役＝緩的面，屆時列進 6.1）。
+- 預設骨架（第 3.6 節）讓既有的編排層測試與 scenario 第 1 段的 World 多兩張空的 schedule 時：改成明寫「關掉預設骨架」，判定不變；做不到同值的改列 6.1。
 - scenario 第 1 段：S1-1～S1-10、S1-7b 的判定不變。第 2 段用**自己的一份產品描述**（帶 `WorldTimeModule`、`Walk` 在固定步裡），第 1 段的登記只拿掉 domain 宣告（S2-9），`RunFrame`×5 走 5 格的前提不變。編排層清單裡 `target: gyo_scenario_tests` 的 22 個突變照跑。
 
 ### 6.3 第 2 批延後的綁實作守衛（`-guards-after-mechanism-stable`；條件＝涵蓋它的 scenario 段通過，第 1 段已通過、已合併）
@@ -341,7 +351,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | `engine/world_time/`（新） | `WorldTimeModule`、`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded`、`AdvanceTime`、`RunFixedSteps`、`RunOneFixedStep`、`RewindFixedSteps`、放回固定步狀態的函式、`TickWriters`；`CMakeLists.txt` 照登記檔 |
 | `engine/config/modules.csv` | `world_time` 一列 |
 | `engine/kernel`（`Declarations.hpp`、`Params.hpp`、`Access.hpp`、`SystemTraits.hpp`、`Plan.hpp`、`detail/Storage.hpp`、`detail/Context.hpp`、`World.*`、`Scheduler.cpp`、`Executor.cpp`、`Registry.*`、`Fingerprint.cpp`、`KernelError.hpp`） | E3、E4、E6 |
-| `engine/orchestration`（`OrchestrationError.*`、`Product.cpp`） | `WorldFailure` 的兩個欄位 |
+| `engine/orchestration`（`OrchestrationError.*`、`Product.cpp`、`Setup.hpp`） | `WorldFailure` 的兩個欄位；預設骨架（第 3.6 節） |
 | `tests/common/{time,world_time,kernel,orchestration,scenario}` | 第 6、7 節 |
 | `tests/common/kernel/kernel_guard.py`、`test_kernel_guard.py`、`naming_guard.py`；編排層的掃描 | 第 6.1 G7、6.3 |
 | `docs/architecture/target/kernel.zh-Hant.md` | DI-KS 1、8、9、10、11、12、14、15（含「轉換中」表那一列，`:77`）、25 的變更（第 10.1 節） |
@@ -380,13 +390,13 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 1. **Feature**：第 3.2 節；游標份第 6 節第 1 項。
 2. **現在的問題**：時鐘與 tick 在 Kernel（使用者判「遊戲需求入侵了 Engine 設計」）；World 裡沒有任何時間的 Resource；事件依 Plan 位置與 tick 讀、修剪是 Plan 裡的一步、跨時鐘是啟動錯誤；沒有推送式。
-3. **變化的邊界**：Kernel 少了時鐘、事件 API 改名加游標、多了推送式；`engine/time` 多了型別與算術；**新的 Engine Module `engine/world_time`**（新 Subsystem）；編排層 `WorldFailure` 少一個欄位、一個換義。
+3. **變化的邊界**：Kernel 少了時鐘、事件 API 改名加游標、多了推送式；`engine/time` 多了型別與算術；**新的 Engine Module `engine/world_time`**（新 Subsystem）；編排層 `WorldFailure` 少一個欄位、一個換義；**編排層多了預設骨架**（改第 2 批已合併的部分，使用者 2026-11-19）。
 4. **影響**：第 8 節。
 5. **依賴方向**：`world_time` → `orchestration`、`kernel`、`time`、`base`；`time` 照舊只連 `base`＋`Threads`；Kernel 與編排層不依賴它（K5、O-4）。權威、回滾將來依賴 `world_time`（登記檔）。
 6. **Ownership**：tick 從 Kernel 移到 `world_time`；「事件留多久」從「時鐘＋Plan 的修剪步」變成 Kernel 的游標與上限；「這一輪跑幾次固定步」是 World 裡的 System；丟棄與診斷紀錄的時間標記變成 Kernel 自己的同步點序號；取樣暫時在 `world_time`（交換點之後移給 runner）。
 7. **為什麼不能更小**：拿掉時鐘而不同時提供時間 Module，scenario 與將來的權威、回滾沒有 tick；只改名不加游標，拿掉 tick 後讀者沒有讀取依據（游標份 6.7）；推送式是使用者定的兩種之一。
 
-**對編排層 RC 的判斷**：時間 Module 是第一個接進編排層的真實 Module。它只用登記單位、`modules.csv`、準備時機，不改編排層的迴圈（`WorldFailure` 的兩個欄位是拿掉 Kernel 時鐘的後果，不是為了接時間 Module）——RC-O1 不成立；scenario 第 2 段不需要編排層認得時間——RC-O8 不成立。實作中若出現其一，照 RC 停下。
+**對編排層 RC 的判斷**：時間 Module 是第一個接進編排層的真實 Module。它只用登記單位、`modules.csv`、準備時機與預設骨架，不改編排層的迴圈（`WorldFailure` 的兩個欄位是拿掉 Kernel 時鐘的後果；預設骨架是使用者定的、四家都由引擎給，不認得時間，也不是為時間 Module 開的特例）——RC-O1 不成立；scenario 第 2 段不需要編排層認得時間——RC-O8 不成立。實作中若出現其一，照 RC 停下。
 
 ### 9.4 系譜、退掉的選項、需要它的 Feature（AGENTS §4）
 
@@ -399,6 +409,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | `RunOneFixedStep`、`RewindFixedSteps` 公開 | lightyear 回滾時手動跑 n 次（`rollback.rs:1186-1291`） | 步的 schedule 自己推 tick | 推 tick 與換 `ActiveTime` 只在一處 | 回滾（① Client） |
 | 取樣用 `TimeSampling` | Bevy `TimeUpdateStrategy` | runner 在交換點寫 | 交換點本批沒有；形狀相容 | 測試與重放（①②③） |
 | 沒被取走的量記成 `discarded` | GYO 新導出（T1 2.2 留下的洞） | 寫成前提、不檢查 | 使用者「丟了多少有記錄」 | 追不上、Loading（①②） |
+| 編排層給預設骨架、時間 Module 只往上掛 | Bevy `bevy_app` 的 `Main`；flecs pipeline；Unity、Mass | 時間 Module 自己宣告；作者宣告；`default=no` | 使用者 2026-11-19（第 11 節第 3 件） | 單機作者只寫遊戲的 System（②）；Match（①） |
 | `Module` 預設帶（`default=yes`） | Bevy `DefaultPlugins`、Unity 內建模組 | `default=no` | 骨架宣告已定「Module 預設全帶、產品可以關」 | 單機不必另外列（②） |
 | hook 與 observer 共用佇列 | flecs、Bevy | 分開 | 同一個 F-12 上限、作者只記一套 | 元件新增時當場反應（②） |
 | `TimeDiscarded` 用保留式 | Bevy 的 World 層級通知用 Message | 推送式 | 讀者（日誌）的節奏和時間 System 不同 | 追不上的記錄（①②） |
@@ -426,6 +437,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 ### 10.2 編排層（`target/v2/orchestration.zh-Hant.md`）
 
 - **O-1**：拿掉「在第 3 條之前，遊戲初始化的 schedule 要屬於一個 domain」。
+- **O-4**：補「編排層給 schedule 的預設骨架（名字與段落順序；作者可換或關）並經 Kernel 執行它；不認得時間，也不認得任何 Module 掛進去的是什麼」（第 3.6 節；本卡判不算職責清單多一項）。
 - **O-11**：`WorldFailure` 帶同步點序號、不帶 domain 與 tick（G6）；加一段（第 11 節第 1 件，使用者 2026-11-19，`v8-arch-gyo2-world-events-not-via-event`，含使用者「補過去」的三點）：「通知只在發出它的 World 健康時經 Kernel 的事件發；致命錯誤與 World 自己的壞掉、建立、替換不經事件，結構化錯誤回給 runner，最後一道把它寫出去的路直接呼叫、不經任何機制。World 健康時的警告（丟棄記錄、`TimeDiscarded` 等）照常經事件。World 的建立與替換由編排層知道；要讓新 World 裡的 System 知道，在它準備好之後往裡面寫 `Message`（讀檔那一批定）。」
 
 ### 10.3 時間的型別（`docs/architecture/time.md`，英文）
@@ -485,7 +497,11 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - 新增 `TimeDiscarded`（本批做）。
 - 原則本身（廣播→保留式、針對實體→推送式、連續的狀態→不發）也請你定；之後的批次照它定送法。
 
-### 第 3 件：每幀的 schedule 骨架由誰宣告（時間設計第 0 節列的「請你定」）
+### 第 3 件：每幀的 schedule 骨架由誰宣告（時間設計第 0 節列的「請你定」）——**已定：編排層給骨架**（使用者 2026-11-19，side chat 轉達；代號待主會話定）。**推翻了本卡的建議（時間 Module 自己宣告）**
+
+**原話**（依序）：(1) 看完時間 Module 自己宣告的說明後：「其他家呢？」(2) side chat 比過四家後：「能否展開下A。我覺得怪怪的為何由時間Module來展開？而不是由編排層給。」(3)「D可以，不認識時間，但是會執行Module，我是這麼看的，你認為呢？」**理由**（使用者的）：由時間 Module 展開很怪，應由編排層給；編排層不認識時間，但是會執行 Module。**退掉本卡建議的理由**（side chat 整理）：骨架不是時間的事；關掉時間 Module 的 World 就沒有骨架；多個 Module 各自宣告會打架、取決於登記順序；四家都不這樣放；本卡建議它的來源其實是「不碰 O-4」，正是 AGENTS §4 提醒的「替舊的形狀找位置」。**定下的**：第 3.6 節。
+
+以下是交你定時的說明，留作紀錄（「編排層給骨架」那一項原本寫「違反 O-4、不建議」，是本卡把 O-4 讀成「不認得時鐘＝不能給骨架」，讀錯了）。
 
 **遊戲的例子**：單機遊戲的作者只想寫「讀手把」「跳躍」「播音效」三個 System。時間 Module 要掛在「每幀那一張的開頭」與「固定步之前的那一段」，還要巢狀跑「固定步那一張」。這幾張 schedule 與 stage 誰宣告？`WorldTimeModule` 預設帶（`default=yes`），而產品不寫 `units` 時每個 World 都帶它——包括只做畫面的 World。
 
@@ -509,6 +525,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - 第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）。
 - 第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放。
 - 第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」。
+- 第 3.6 節預設骨架的細節：`FixedUpdate` 的 stage 名、關掉骨架的選項的形、O-4 補句**不算編排層職責清單多一項**。
 - 第 3.4 節的取樣；第 3.5 節可存與不放回的清單。
 - 第 4.2、4.3 節的實作細節；第 4.5 節區規則的過渡（`MessageOptions::zone` 留到第 4 批）。
 - 第 6.3 節延後守衛的判定；第 8 節和骨架卡那條 PR 的先後；第 9.2 節的預算。
@@ -524,12 +541,12 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | 第 1 步 | E1：`PRODUCT_ALIASES`、延後守衛 1～6 與它們的突變 | 本卡 Opus／high | 3～5 h |
 | 第 2 步 | E2：時間的型別與累加器（測試先行） | 本卡 Opus／high | 3～4 h |
 | 第 3 步 | E3：`Message` 改名、游標、上限、丟棄記錄、拿掉 `EventTrim`（讀者先不靠 tick） | 本卡 Opus／high；**游標×修剪×存取驗證×巢狀跑的交界 xhigh** | 8～12 h |
-| 第 4 步 | E4＋E5：拿掉 Kernel 的時鐘、同步點序號、測試的閘門改寫、時間 Module、`modules.csv`、`WorldFailure` | 本卡 Opus／high；**`RunOneFixedStep`／`RewindFixedSteps` 的換入換出×巢狀跑×錯誤路徑 xhigh** | 12～16 h |
+| 第 4 步 | E4＋E5＋E9：拿掉 Kernel 的時鐘、同步點序號、測試的閘門改寫、編排層的預設骨架（先做）、時間 Module、`modules.csv`、`WorldFailure` | 本卡 Opus／high；**`RunOneFixedStep`／`RewindFixedSteps` 的換入換出×巢狀跑×錯誤路徑 xhigh** | 15～21 h |
 | 第 5 步 | E6：`Event`、`Observer`、`Trigger`、`On<E>`、元件 Add／Remove | 本卡 Opus／high；**觸發點×同步點×巢狀跑×Ready 時觸發 xhigh** | 8～12 h |
 | 第 6 步 | E7：scenario 第 2 段、`TimeDiscarded`、golden、DI 與文件、dev_log、預算量測 | 本卡 Opus／high | 3～5 h |
 | 第 7 步 | 完整突變（兩百多個被改到案例的突變的重跑在各步內）、新突變清單的敵對式檢查、§14.4 檢證、審查 | 見下 | 6～10 h |
 
-合計 43～64 h。第 2 步不依賴 Kernel，可以先做；第 3 步排在第 4 步之前，讀者先改成游標、不靠 tick，拿掉時鐘時事件就沒有牽連；第 4 步一次做完拿掉與時間 Module，中間不留沒有 tick 的狀態；第 3 步開始前 rebase 到骨架卡那條摘要 PR 之後（第 8 節）。
+合計 46～69 h（修訂 3 加預設骨架 3～5 h）。第 2 步不依賴 Kernel，可以先做；第 3 步排在第 4 步之前，讀者先改成游標、不靠 tick，拿掉時鐘時事件就沒有牽連；第 4 步一次做完拿掉與時間 Module，中間不留沒有 tick 的狀態；第 3 步開始前 rebase 到骨架卡那條摘要 PR 之後（第 8 節）。
 
 | 角色 | 模型／檔位 | 理由 |
 |---|---|---|
@@ -540,7 +557,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | §14.4 檢證者（G1～G8） | Fable／high | 第 2 批同一個指定 |
 | 新突變清單的敵對式檢查 | Fable／high | §14.2；和定清單的人不同模型 |
 
-超過估計 1.5 倍（約 96 h）或單一問題累計超過 2 小時就停下回報。
+超過估計 1.5 倍（約 104 h）或單一問題累計超過 2 小時就停下回報。
 
 ---
 
@@ -591,4 +608,5 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | S12 檔位與估計 | 第 3、4 步加 xhigh 段；估計加大 |
 | S13 DI 與文件清單 | 10.1 加 DI-KS 9、15 的表、25；10.2 O-1、O-11；第 8 節加三份文件；9.3 寫 RC-O1、RC-O8 |
 | S14 §4 表 | 9.4 加「需要它的 Feature」欄與五列 |
+| （修訂 2、3）使用者決定 | 第 11 節第 1～3 件；第 3 件推翻本卡建議，加第 3.6 節、E9、第 10.2 節 O-4、估計 |
 | nit 1～12 | 全部照改（`modules.csv` 的欄、路徑、編譯失敗測試的名字、`syncEpoch` 的語意、`Main` 與 `Update`、`Tick` 的定義、World 專用型別放 `world_time`、不 include `MonotonicClock.hpp`、引 `-same-input-same-result`、頻率捨入不寫成照 Bevy、S2-2 用經過時間模式與 250 ms 前提、`SkeletonTests:196` 與名字清單） |
