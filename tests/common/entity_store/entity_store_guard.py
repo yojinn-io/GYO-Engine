@@ -2,10 +2,10 @@
 
 Scans every C/C++ file and CMakeLists.txt under engine/entity_store/ for:
 
-  W1  a product, tool or connection-role name, in code or comments: object_fps, RetroFPS, fps::pvp, Pvp/pvp,
-      Player/player, Gateway, and the capitalized word Match (the lowercase English verb "match" is allowed).
-      The list is the known consumers' names. Removing a product needs no change here: a name that no longer
-      exists anywhere is harmless. Adding a consumer adds its names.
+  W1  a connection-role name, in code or comments: Player/player, Gateway, and the capitalized word Match (the
+      lowercase English verb "match" is allowed). The names of the old products on master (object_fps, RetroFPS,
+      fps::pvp, Pvp/pvp) were dropped (user 2026-11-19, v8-arch-gyo2-drop-product-aliases): gyo2 has none of
+      those products. A product's names are not listed here.
   W2  an unordered container or a hash: unordered_, std::hash.
   W3  a clock, random source, thread or atomic: an include of <chrono>, <random>, <thread>, <atomic>, <mutex>,
       <condition_variable>, <future>, <shared_mutex>, <stop_token>, <semaphore>, <latch>, <barrier>, <ctime>,
@@ -39,7 +39,7 @@ from pathlib import Path
 SCANNED = "engine/entity_store"
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl"}  # CMakeLists.txt: W1 only
 
-W1 = re.compile(r"object_fps|RetroFPS|fps::pvp|\b[Pp]vp|[Pp]layer|Gateway|\bMatch\b")
+W1 = re.compile(r"[Pp]layer|Gateway|\bMatch\b")
 W2 = re.compile(r"\bunordered_\w*|\bstd::hash\b")
 W3_HEADERS = ("chrono", "random", "thread", "atomic", "mutex", "condition_variable", "future", "shared_mutex",
               "stop_token", "semaphore", "latch", "barrier", "ctime", "time.h")

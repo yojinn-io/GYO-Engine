@@ -106,7 +106,22 @@
   3. 締める面：無。
   4. 這個性質不再由別的判定守，是使用者的決定：gyo2 沒有這些產品。登記 id 那一組照舊：產品重新登記到 gyo2 時，它的 id（原樣與 CamelCase）自動被禁，但 `RetroFPS`、`fps::pvp` 這類推不出的名字不會。
   5. 根據：報告第 7 節第 3 題；證據 `build/evidence/gyo2-mutation-prune/drop_aliases_mutants.log`（48/48 killed）。
-- 沒做（範圍外）：`tests/common/entity_store/entity_store_guard.py` 的 W1 也禁同樣的舊名字（`object_fps`、`RetroFPS`、`fps::pvp`、`Pvp`）。它是 Kernel 角色詞的來源，要不要一起拿掉由使用者決定。
+- 沒做（範圍外）：`tests/common/entity_store/entity_store_guard.py` 的 W1 也禁同樣的舊名字（`object_fps`、`RetroFPS`、`fps::pvp`、`Pvp`）。它是 Kernel 角色詞的來源，要不要一起拿掉由使用者決定。→ 使用者 2026-11-19：「W1 的也一起拿掉，你直接處理」，見下一節。
+
+## 後續：拿掉 W1 的舊產品名（v8-arch-gyo2-drop-product-aliases）
+
+- 來由：上一節的範圍外一條。使用者 2026-11-19：「W1 的也一起拿掉，你直接處理」。
+- 改動：
+  - `tests/common/entity_store/entity_store_guard.py`：W1 刪 `object_fps`、`RetroFPS`、`fps::pvp`、`\b[Pp]vp`，剩角色詞 `[Pp]layer`、`Gateway`、`\bMatch\b`（和 Kernel K1 的 `ROLE_WORDS` 相同）。docstring 改寫：W1 是角色詞，不列產品名，寫明拿掉的名字與出處。
+  - `tests/common/entity_store/test_entity_store_guard.py`：`test_product_names_are_reported_in_code_and_comments` 改名 `test_role_words_are_reported_in_code_and_comments`，拿掉 5 個舊名字（`object_fps`、`RetroFPS`、`fps::pvp`、`PvpMatch`、`pvp`），留 `PlayerId`、`playerId`、`Gateway`、`Match`；`test_product_name_in_cmake_is_reported` 改名 `test_role_word_in_cmake_is_reported`，輸入從 `RetroFPS` 換成 `Gateway`（守的「W1 也讀 CMakeLists.txt」不變）。
+  - `docs/architecture/entity-store.md` 的 Design Invariant 9 沒有列名字（只寫「不出現產品、工具、種類名」），不用改。
+- 驗證（macOS arm64）：守衛自測 18 個全過；守衛跑實樹乾淨；entity-store 清單裡判定是守衛的 4 個突變全部殺掉（4/4，`es-guard-product-name` 用的是 `Player`，不受影響）。
+- 判定變更（AGENTS §14.4；Design Invariant 9 的守衛，有緩める面，使用者 2026-11-19 的指示即核准）：
+  1. 守的性質：entity_store 的程式、註解與 CMakeLists.txt 不出現舊產品的名字 `object_fps`、`RetroFPS`、`fps::pvp`、`Pvp`／`pvp`。
+  2. 緩める面：這些名字出現在 entity_store，以前 W1 報、現在不報（例：`PvpMatch` 現在通過）。
+  3. 締める面：無。
+  4. 這個性質不再由別的判定守，是使用者的決定：gyo2 沒有這些產品。「讀 CMakeLists.txt」的性質由改寫後的自測（`Gateway`）照舊守。
+  5. 根據：使用者 2026-11-19 的指示；證據 `build/evidence/gyo2-mutation-prune/drop_w1_mutants.log`（4/4 killed）。
 
 ## 判定變更（AGENTS §14.4）
 
@@ -119,7 +134,7 @@
 ## 後續（不在本批）
 
 - ~~把 `PRODUCT_ALIASES` 從 `kernel_guard.py` 拿掉（守衛的改動）。~~ 已做，見上「後續：拿掉 PRODUCT_ALIASES」。
-- `entity_store_guard.py` 的 W1 裡的舊產品名要不要一起拿掉（待使用者決定）。
+- ~~`entity_store_guard.py` 的 W1 裡的舊產品名要不要一起拿掉（待使用者決定）。~~ 已做，見上「後續：拿掉 W1 的舊產品名」。
 - `bs-` 開頭的突變搬到 Base 的清單。
 - 第 6 節的增長判準交風紀委員看要不要寫進規則文件；GYO2 線先照做。
 
