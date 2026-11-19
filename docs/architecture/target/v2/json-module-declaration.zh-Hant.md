@@ -4,6 +4,8 @@
 
 > **核准**：使用者 2026-11-20 在卡片對第 12 節四題與第 13 節的下載回「1、2、3 照建議，4 同意，可以下載」。即：第 1 題 view；第 2 題結構自寫、數字用 `yyjson_write_number`；第 3 題非有限數由 `Finish` 回 `NotRepresentable`（NaN 的表示法由日誌批定）；第 4 題全程 high、審查 Fable／high；同意下載第 13 節的兩個組件。已照四樣格式轉主會話。
 >
+> **2026-11-20 判定 3 更正（使用者，主會話轉達）**：第 9 節判定 3 的 `y_` 預期改成「93 件收、兩件 `y_object_duplicated_key*` 照 J-2 回 `RepeatedKey`」。原話「這個照建議」。見判定 3 與合併前核准頁。
+>
 > **2026-11-20 追加（使用者，卡片）**：adapter 在 Module 裡有自己的子目錄 `src/adapters/<組件>/`（一個組件一個）。原話：對卡片的建議「`src/backend/yyjson/`」回「我不想要backend這個名字。有其他選擇嗎？這個backend 太含糊了。」；卡片列 `src/adapters/yyjson/`＋`src/adapters/fast_float/`（建議；`adapter` 是 AGENTS §6 的詞）、`src/yyjson/`＋`src/fast_float/`、`src/external/`，使用者回「用第一個 adapters」。J-1、5.1、8.5 照此收緊（只緊不緩）。另：使用者確認外部組件照之前的 CMake 建置用 FetchContent（「FetchContent 可以用，參考之前的camke 建置」）。
 
 經過：修訂 0（d142d8e8）送 Fable／high 敵對式檢查（general-purpose、只讀），必改 9、建議改 12、小問題 9（證據 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，處理對照在第 17 節；修訂 1 沒有再送檢查。
@@ -326,7 +328,7 @@ template <class T> using JsonResult = ::Engine::Base::Result<T, JsonError>;
 
 1. **通過**：全量 `ctest` 本機綠；L1 三平台（linux-x64、windows-x64、macos-arm64）綠。
 2. **數字**：調查的全部向量（雜湊相符後）、固定表、寫出端的最短參考、結構化 golden、往返性質在 L1 三平台 **0 不一致**（規則 8.2）。任一平台不一致→停、回報，不為某平台開分支。
-3. **嚴格解析（本機，JSONTestSuite 1ef36fa0）**：`y_` 95 件全收；`n_` 全拒（含「`123`＋NUL」）；`i_` 35 件：字串、代理、編碼、BOM 類 24 件拒（調查 `yyjson-strict-vs-raw.txt` 的原文旗標欄）、數字類 10 件中溢位 5 件與下溢 2 件因 J-2 拒、超出 64 位元的整數 3 件收、`i_structure_500_nested_arrays` 收——共拒 31、收 4。GYO 補充 24 件與調查記錄的原文旗標結果一致，下溢與溢位類照 J-2 改判拒。
+3. **嚴格解析（本機，JSONTestSuite 1ef36fa0）**：`y_` 95 件中 93 件收，`y_object_duplicated_key`、`y_object_duplicated_key_and_value` 兩件照 J-2 回 `RepeatedKey`（**2026-11-20 更正**：原寫「`y_` 95 件全收」，和 J-2 矛盾——這兩件的內容就是重複鍵；結果出來後判定不成立，停下回報，使用者在主會話回「這個照建議」，HANDOFF `v8-arch-gyo2-json-criterion3-corrected`。方向是收緊（以前要收、現在要拒），實作與測試不改；照 §14.4 寫在合併前核准頁）；`n_` 全拒（含「`123`＋NUL」）；`i_` 35 件：字串、代理、編碼、BOM 類 24 件拒（調查 `yyjson-strict-vs-raw.txt` 的原文旗標欄）、數字類 10 件中溢位 5 件與下溢 2 件因 J-2 拒、超出 64 位元的整數 3 件收、`i_structure_500_nested_arrays` 收——共拒 31、收 4。GYO 補充 24 件與調查記錄的原文旗標結果一致，下溢與溢位類照 J-2 改判拒。
 4. **檢出力**：突變清單（Fable 檢查補過後）全部 killed（預期的那個失敗）；沒殺的停下回報。
 5. **J-1 掃描**：正例命中 1 個以上、其他位置 0；自我測試三件通過；`gyo_expect_links` 綠。
 6. **預算（停止條件，不是受理的閘門）**：本機（macOS x86_64）量並記錄：合成 5.3 MB 與 16 MiB 的 region（數字為主、含寬陣列與寬物件）的 `Parse`（含驗證走訪）時間、yyjson 單獨解析同一份的時間、`Writer` 寫一筆約 420 位元組紀錄的時間。**停止條件**：5.3 MB 超過 150 ms（BigMap 整個載入的預算 450 ms 的三分之一，engine-grid :170）、或比 yyjson 單獨解析慢 10 倍以上、或單筆寫出超過 5 µs（中位數）→ RC-5，停下回報。單筆寫出不配置是 J-5 的測試，不在這裡。

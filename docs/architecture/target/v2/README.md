@@ -8,6 +8,7 @@
 ## 給作者看的
 
 - [orchestration.zh-Hant.md](orchestration.zh-Hant.md)：編排層（`engine/orchestration`）的 Design Invariants O-1～O-10 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-orchestration-skeleton` 合併前的合併前核准定稿）。
+- [json.zh-Hant.md](json.zh-Hant.md)：JSON Module（`engine/json`）的 Design Invariants J-1～J-9 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-json-module` 合併前的合併前核准定稿）。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
 - [diagrams/mechanism-runtime.svg](diagrams/mechanism-runtime.svg)：圖一，一個 Product 的機制全貌（11 月 11 日的圖，只換名字）。
 - [diagrams/control-plane-revised.svg](diagrams/control-plane-revised.svg)：圖二，基礎的 System 契約（11 月 11 日的圖，換名字並調整）。
@@ -36,6 +37,7 @@
 - [rebuild-declaration.zh-Hant.md](rebuild-declaration.zh-Hant.md)：`v8-arch-rebuild` 的事前宣告（階段 R0～R6）。
 - [rebuild-r0-carry-list.zh-Hant.md](rebuild-r0-carry-list.zh-Hant.md)：R0 帶過去清單（已核准）。
 - [rebuild-r0b-report.zh-Hant.md](rebuild-r0b-report.zh-Hant.md)：R0b 的報告（刪除舊實現；第 3 節是 R0b-3 的判定變更）。
+- [json-module-declaration.zh-Hant.md](json-module-declaration.zh-Hant.md)：`v8-arch-gyo2-json-module` 的事前宣告（JSON Module；修訂 1，使用者 2026-11-20 動工前核准）。
 - [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 - [spawn-reject-declaration.zh-Hant.md](spawn-reject-declaration.zh-Hant.md)：`v8-arch-gyo2-spawn-reject` 的事前宣告（同步點丟掉不能生成的那一筆；修訂 2，使用者 2026-11-15 核准）。
 - [kernel-app-boundary-declaration.zh-Hant.md](kernel-app-boundary-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-app-boundary` 的事前宣告（統合）：Kernel 只做 ECS、另立編排層、每層的職責清單、跨份的關聯表、確認清單 13 件；修訂 38，使用者 2026-11-17 核准（c1be70eb）。推導與四家對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
