@@ -71,8 +71,36 @@ foreach(_header IN LISTS _orchestration_headers)
     file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every kernel header.\n#include \"${_header}\"\n${_kernel_includes}" @ONLY)
     list(APPEND _order_sources "${_source}")
 endforeach()
+# The first Engine Module in GYO::Engine that goes into a World, engine/world_time
+# (time-events declaration 3.1): each of its public headers first, then every
+# orchestration and kernel header; and each orchestration header first, then
+# every world_time header (the order gyo_product_units generates). A header that
+# names Engine:: unqualified inside GYO::Engine::WorldTime fails here.
+file(GLOB_RECURSE _world_time_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/world_time/include"
+    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/world_time/include/*.hpp")
+list(SORT _world_time_headers)
+set(_orchestration_includes "")
+foreach(_header IN LISTS _orchestration_headers)
+    string(APPEND _orchestration_includes "#include \"${_header}\"\n")
+endforeach()
+set(_world_time_includes "")
+foreach(_header IN LISTS _world_time_headers)
+    string(APPEND _world_time_includes "#include \"${_header}\"\n")
+endforeach()
+foreach(_header IN LISTS _world_time_headers)
+    string(MAKE_C_IDENTIFIER "${_header}" _id)
+    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}.cpp")
+    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every orchestration and kernel header.\n#include \"${_header}\"\n${_orchestration_includes}${_kernel_includes}" @ONLY)
+    list(APPEND _order_sources "${_source}")
+endforeach()
+foreach(_header IN LISTS _orchestration_headers)
+    string(MAKE_C_IDENTIFIER "${_header}" _id)
+    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}_then_world_time.cpp")
+    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every world_time header.\n#include \"${_header}\"\n${_world_time_includes}" @ONLY)
+    list(APPEND _order_sources "${_source}")
+endforeach()
 add_library(gyo_orchestration_include_order OBJECT ${_order_sources})
-target_link_libraries(gyo_orchestration_include_order PRIVATE GYO::Orchestration)
+target_link_libraries(gyo_orchestration_include_order PRIVATE GYO::Orchestration GYO::WorldTime)
 
 # The scans the skeleton declaration deferred (section 7.4), stood up by
 # v8-arch-gyo2-time-events step 1 once scenario segment 1 had passed:

@@ -4,7 +4,9 @@
 # advances time and the exclusive System that runs the fixed step. engine/time stays the time base only
 # (v8-arch-gyo2-game-time-in-world-time).
 add_library(gyo_world_time STATIC
+    src/Sampling.cpp
     src/TimeTypes.cpp
+    src/WorldTimeModule.cpp
 )
 add_library(GYO::WorldTime ALIAS gyo_world_time)
 

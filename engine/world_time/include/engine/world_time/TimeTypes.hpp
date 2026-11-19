@@ -121,6 +121,38 @@ enum class DiscardCause : std::uint8_t {
     NotDriven,     // the fixed step did not take the frame's time (RunFixedSteps did not run)
 };
 
+// How AdvanceTime takes the frame's sample (Bevy TimeUpdateStrategy; time-events declaration 3.4). Until the
+// runner's exchange point exists, each World samples on its own.
+enum class SamplingMode : std::uint8_t {
+    TimeBase,       // reads ::Engine::Time::MonotonicClock (the default; Sampling.hpp)
+    ManualDelta,    // every frame advances by value, the first included, until changed (Bevy ManualDuration)
+    ManualInstant,  // value is the frame's sample, the next point in time (the first sample gives delta 0)
+};
+
+// The time Module's sampling, written by the product or a test.
+struct TimeSampling final {
+    Nanoseconds value = 0;
+    SamplingMode mode = SamplingMode::TimeBase;
+    std::uint8_t reserved[7] = {};
+};
+
+// A retained message (time-events declaration section 5): time was discarded this frame. amount is what the
+// frame discarded for cause; realDelta is the frame's real time. VirtualTime::discarded keeps the running total.
+struct TimeDiscarded final {
+    Nanoseconds amount = 0;
+    Nanoseconds realDelta = 0;
+    DiscardCause cause = DiscardCause::None;
+    std::uint8_t reserved[7] = {};
+};
+
+// What the time Module's Systems read at run time (they are captureless): the caps of a frame and the name of the
+// fixed-step schedule RunFixedSteps runs (NUL-terminated; plain bytes, so the World summary stays deterministic).
+// Written once when the World is built (WorldTimeModule); not meant to be changed while it runs.
+struct TimeConfig final {
+    TimeLimits limits;
+    char fixedSchedule[64] = {};
+};
+
 // What one frame of virtual time came to.
 struct VirtualAdvance final {
     Nanoseconds delta = 0;
@@ -151,5 +183,8 @@ static_assert(sizeof(ActiveTime) == 2 * sizeof(Nanoseconds));
 static_assert(sizeof(TimeControl) == sizeof(double) + 8);
 static_assert(sizeof(Tick) == sizeof(std::uint64_t));
 static_assert(sizeof(Resimulation) == 8);
+static_assert(sizeof(TimeSampling) == sizeof(Nanoseconds) + 8);
+static_assert(sizeof(TimeDiscarded) == 2 * sizeof(Nanoseconds) + 8);
+static_assert(sizeof(TimeConfig) == sizeof(TimeLimits) + 64);
 
 } // namespace GYO::Engine::WorldTime

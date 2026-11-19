@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of game time (docs/architecture/target/v2/time-events-declaration.zh-Hant.md, section 6.5; ids wt-). Step 2: the types and the accumulator (T1 judgment 2 and the time-events additions). The Fable/high adversarial check of the batch's new lists is recorded in the dev_log. A mutant is killed only when the named test case fails.",
+ "description": "Declared mutants of game time (docs/architecture/target/v2/time-events-declaration.zh-Hant.md, section 6.5; ids wt-). Step 2: the types and the accumulator (T1 judgment 2 and the time-events additions). The Fable/high adversarial check of the batch's new lists is recorded in the dev_log. A mutant is killed only when the named test case fails. Step 4: the time Module (WorldTimeModule, AdvanceTime, RunFixedSteps, FixedStep.hpp, Sampling.hpp; declaration 3.3 to 3.5, 6.4) and the include order of the world_time headers.",
  "mutants": [
   {
    "id": "wt-add-clears-remainder",
@@ -251,6 +251,344 @@
    "target": "gyo_world_time_tests",
    "cases": "types:*",
    "expect": "TEST CASE:\\s+types: preconditions"
+  },
+  {
+   "id": "wt-not-driven-not-discarded",
+   "what": "the untaken time of the last frame is not added to discarded (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        virt.discarded += fixed.pending;\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-not\\-driven\\]\\ discarded"
+  },
+  {
+   "id": "wt-not-driven-dropped",
+   "what": "the untaken time of the last frame is dropped without a record (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    if (fixed.pending > 0) {\n        // The fixed step",
+   "replace": "    if (false) {\n        // The fixed step",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-not\\-driven\\]\\ discarded"
+  },
+  {
+   "id": "wt-not-driven-no-message",
+   "what": "no TimeDiscarded for untaken time (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven, {}});\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-not\\-driven\\-message\\]"
+  },
+  {
+   "id": "wt-not-driven-wrong-cause",
+   "what": "untaken time is sent as a step-limit cut (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "DiscardCause::NotDriven, {}});",
+   "replace": "DiscardCause::StepLimit, {}});",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-not\\-driven\\-message\\]"
+  },
+  {
+   "id": "wt-cut-no-message",
+   "what": "no TimeDiscarded for a cut frame (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause, {}});\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-step\\-limit\\-message\\]"
+  },
+  {
+   "id": "wt-active-real-time",
+   "what": "ActiveTime takes real time instead of virtual time (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    active = ActiveTime{virt.delta, virt.elapsed};",
+   "replace": "    active = ActiveTime{real.delta, real.elapsed};",
+   "target": "gyo_world_time_tests",
+   "cases": "sampling:*",
+   "expect": "\\[wt\\-paused\\-active\\]"
+  },
+  {
+   "id": "wt-pending-not-set",
+   "what": "AdvanceTime hands the fixed step nothing (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    fixed.pending = advanced.delta;",
+   "replace": "    fixed.pending = 0;",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-fixed\\-steps\\]"
+  },
+  {
+   "id": "wt-control-ignored",
+   "what": "AdvanceTime ignores TimeControl (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    return Advance(*real, *virt, *fixed, *active, *sampling, *control, *config, discarded);",
+   "replace": "    return Advance(*real, *virt, *fixed, *active, *sampling, TimeControl{}, *config, discarded);",
+   "target": "gyo_world_time_tests",
+   "cases": "sampling:*",
+   "expect": "\\[wt\\-paused\\]"
+  },
+  {
+   "id": "wt-control-always-registered",
+   "what": "TimeControl is registered although pausable is false (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    if (options.pausable) r.Resource<TimeControl>",
+   "replace": "    r.Resource<TimeControl>",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-unpausable\\]\\ TimeControl\\ registered"
+  },
+  {
+   "id": "wt-unpausable-reads-control",
+   "what": "AdvanceTime reads TimeControl although it is not registered (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        r.AddSystem<&AdvanceTimeUnpausable>(Mounted(\"AdvanceTime\", options.frameSchedule, options.advanceStage));",
+   "replace": "        r.AddSystem<&AdvanceTime>(Mounted(\"AdvanceTime\", options.frameSchedule, options.advanceStage));",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "R\\-E4"
+  },
+  {
+   "id": "wt-pending-not-taken",
+   "what": "RunFixedSteps leaves the frame's time in pending (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        time.pending = 0;\n        return time.accumulator.Add",
+   "replace": "        return time.accumulator.Add",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-fixed\\-steps\\]"
+  },
+  {
+   "id": "wt-one-step-a-frame",
+   "what": "RunFixedSteps runs one step whatever k is (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    for (std::uint32_t step = 0; step < steps; ++step) {",
+   "replace": "    for (std::uint32_t step = 0; step < steps && step < 1; ++step) {",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-fixed\\-steps\\]"
+  },
+  {
+   "id": "wt-run-not-err",
+   "what": "RunFixedSteps goes on after a step returns Err (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        if (auto ran = RunOneFixedStep(world, config.fixedSchedule); !ran) return ran;",
+   "replace": "        static_cast<void>(RunOneFixedStep(world, config.fixedSchedule));",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "wt\\-step\\-err"
+  },
+  {
+   "id": "wt-stages-swapped",
+   "what": "AdvanceTime and RunFixedSteps swap stages (the fixed step runs on the last frame's time) (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        r.AddSystem<&AdvanceTime>(Mounted(\"AdvanceTime\", options.frameSchedule, options.advanceStage));",
+   "replace": "        r.AddSystem<&AdvanceTime>(Mounted(\"AdvanceTime\", options.frameSchedule, \"PostUpdate\"));",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-fixed\\-steps\\]"
+  },
+  {
+   "id": "wt-driver-no-writes-tick",
+   "what": "RunFixedSteps no longer annotates Writes<Tick> (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "SystemResult RunFixedSteps(Kernel::ExclusiveWorld<Kernel::Writes<Tick, FixedTime, ActiveTime>> world) {",
+   "replace": "SystemResult RunFixedSteps(Kernel::ExclusiveWorld<Kernel::Writes<FixedTime, ActiveTime>> world) {",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-driver\\-writes\\-tick\\]"
+  },
+  {
+   "id": "wt-step-setting-ignored",
+   "what": "the step length is the default whatever the settings say (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        PutIfAbsent(world, FixedTime{TickAccumulator{step}, 0, 0});",
+   "replace": "        PutIfAbsent(world, FixedTime{TickAccumulator{StepLength{}}, 0, 0});",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-step\\-setting\\]"
+  },
+  {
+   "id": "wt-check-silent",
+   "what": "Check reports no missing fixed-step schedule (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    if (!found) {\n        context.Report(",
+   "replace": "    if (false) {\n        context.Report(",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-check\\-fixed\\-schedule\\]"
+  },
+  {
+   "id": "wt-tick-writers-empty",
+   "what": "TickWriters names no System (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    return {\"RunFixedSteps\"};",
+   "replace": "    return {};",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-tick\\-writers\\]"
+  },
+  {
+   "id": "wt-resimulation-not-put",
+   "what": "Resimulation is registered but given no value (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "        PutIfAbsent(world, Resimulation{});\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-resimulation\\-false\\]"
+  },
+  {
+   "id": "wt-conditions-dropped",
+   "what": "the author's run conditions of RunFixedSteps are dropped (time Module, step 4)",
+   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "find": "    fixedSteps.mounts.front().conditions = options.fixedStepConditions;\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-not\\-driven\\]\\ pending\\ left"
+  },
+  {
+   "id": "wt-run-one-step-no-tick",
+   "what": "RunOneFixedStep does not advance Tick (G5: the tick advancing k times in nested runs moved here from ns-nested-tick-not-advanced) (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "    Detail::Called(world.template Modify<Tick>([](Tick& tick) { ++tick.value; }));",
+   "replace": "    Detail::Called(world.template Modify<Tick>([](Tick&) {}));",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-fixed\\-steps\\]"
+  },
+  {
+   "id": "wt-fixed-elapsed-kept",
+   "what": "a fixed step does not add the step to FixedTime::elapsed (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "        time.elapsed += time.accumulator.Step();\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-fixed\\-steps\\]"
+  },
+  {
+   "id": "wt-active-not-fixed",
+   "what": "ActiveTime keeps the frame's value inside a fixed step (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "    Detail::Called(world.template Modify<ActiveTime>([fixed](ActiveTime& active) { active = fixed; }));",
+   "replace": "    static_cast<void>(fixed);",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-fixed\\-steps\\]"
+  },
+  {
+   "id": "wt-active-not-restored",
+   "what": "ActiveTime keeps the fixed value after the step (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "    Detail::Called(world.template Modify<ActiveTime>([frame](ActiveTime& active) { active = frame; }));",
+   "replace": "    static_cast<void>(frame);",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-active\\-restored\\]"
+  },
+  {
+   "id": "wt-restored-on-err",
+   "what": "ActiveTime is put back although the step returned Err (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "    if (auto ran = world.RunSchedule(schedule); !ran) return ran;\n    const ActiveTime frame = Detail::Present(\n        world.template Read<VirtualTime>([](const VirtualTime& time) { return ActiveTime{time.delta, time.elapsed}; }));\n    Detail::Called(world.template Modify<ActiveTime>([frame](ActiveTime& active) { active = frame; }));\n    return {};",
+   "replace": "    auto ran = world.RunSchedule(schedule);\n    const ActiveTime frame = Detail::Present(\n        world.template Read<VirtualTime>([](const VirtualTime& time) { return ActiveTime{time.delta, time.elapsed}; }));\n    Detail::Called(world.template Modify<ActiveTime>([frame](ActiveTime& active) { active = frame; }));\n    return ran;",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-step\\-err\\-not\\-restored\\]"
+  },
+  {
+   "id": "wt-rewind-tick-kept",
+   "what": "RewindFixedSteps leaves Tick (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "        tick.value -= k;\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-rewind\\]"
+  },
+  {
+   "id": "wt-rewind-elapsed-kept",
+   "what": "RewindFixedSteps leaves FixedTime::elapsed (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "        time.elapsed -= static_cast<Nanoseconds>(k) * time.accumulator.Step();\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-rewind\\]"
+  },
+  {
+   "id": "wt-rewind-clears-accumulator",
+   "what": "RewindFixedSteps clears the accumulator (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "        time.elapsed -= static_cast<Nanoseconds>(k) * time.accumulator.Step();\n",
+   "replace": "        time.elapsed -= static_cast<Nanoseconds>(k) * time.accumulator.Step();\n        static_cast<void>(time.accumulator.Reset());\n",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-rewind\\-accumulator\\-kept\\]"
+  },
+  {
+   "id": "wt-restore-no-overstep",
+   "what": "RestoreFixedTime puts back the elapsed time but not the remainder (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "    time->accumulator.RestoreOverstep(overstep);\n",
+   "replace": "    static_cast<void>(overstep);\n",
+   "target": "gyo_world_time_tests",
+   "cases": "restore:*",
+   "expect": "\\[wt\\-restore\\-goes\\-on\\]"
+  },
+  {
+   "id": "wt-sample-instant-as-delta",
+   "what": "a manual instant is taken as a duration (time Module, step 4)",
+   "file": "engine/world_time/src/Sampling.cpp",
+   "find": "    case SamplingMode::ManualInstant:\n        AdvanceRealTo(real, sampling.value);",
+   "replace": "    case SamplingMode::ManualInstant:\n        AdvanceRealBy(real, sampling.value);",
+   "target": "gyo_world_time_tests",
+   "cases": "sampling:*",
+   "expect": "\\[wt\\-first\\-sample\\-zero\\]"
+  },
+  {
+   "id": "wt-sample-delta-as-instant",
+   "what": "a manual duration is taken as an instant (time Module, step 4)",
+   "file": "engine/world_time/src/Sampling.cpp",
+   "find": "    case SamplingMode::ManualDelta:\n        AdvanceRealBy(real, sampling.value);",
+   "replace": "    case SamplingMode::ManualDelta:\n        AdvanceRealTo(real, sampling.value);",
+   "target": "gyo_world_time_tests",
+   "cases": "sampling:*",
+   "expect": "\\[wt\\-manual\\-delta\\]"
+  },
+  {
+   "id": "wt-sample-reader-ignored",
+   "what": "the time-base mode does not read the time base it is given (time Module, step 4)",
+   "file": "engine/world_time/src/Sampling.cpp",
+   "find": "        AdvanceRealTo(real, readTimeBase());",
+   "replace": "        AdvanceRealTo(real, ReadTimeBase());",
+   "target": "gyo_world_time_tests",
+   "cases": "sampling:*",
+   "expect": "\\[wt\\-sample\\-reader\\]"
+  },
+  {
+   "id": "wt-include-order-unqualified",
+   "what": "include order: a world_time header names Engine::Base unqualified inside GYO::Engine::WorldTime (the check is the build of the include-order objects; the command after it only completes the run) (time Module, step 4)",
+   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "[[nodiscard]] ::Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
+   "replace": "[[nodiscard]] Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
+   "target": "gyo_orchestration_include_order",
+   "expect_build_failure": true,
+   "expect": "(?s)gyo_orchestration_include_order\\.dir.*no member named 'Base' in namespace 'GYO::Engine'",
+   "platforms": [
+    "darwin"
+   ],
+   "command": [
+    "{python}",
+    "-c",
+    "pass"
+   ]
   }
  ]
 }
