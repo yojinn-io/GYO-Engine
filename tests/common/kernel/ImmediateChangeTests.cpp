@@ -395,11 +395,14 @@ SystemResult SendsPing(MessageWriter<Ping> pings) {
     pings.Send(Ping{1});
     return Ok();
 }
-// OnAdd<Mode>: a hook that writes an event while the immediate change applies.
+// OnAdd<Mode>: a hook that writes a message while the immediate change applies.
 SystemResult ModePings(HookCtx, MessageWriter<Ping> pings) {
     pings.Send(Ping{2});
     return Ok();
 }
+// Runs before the Driver and reads nothing: it holds the hook's Ping past the
+// Run's end trim (v8-arch-gyo2-time-events step 3), so the payload is there to count.
+SystemResult HoldsPings(MessageReader<Ping>) { return Ok(); }
 SystemResult WriteThenChange(ExclusiveWorld<> world) {
     if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return Engine::Base::Err(std::move(r).error());
     if (auto r = world.Insert<Mode>(1, Mode{1}); !r) return Engine::Base::Err(std::move(r).error());
@@ -931,6 +934,7 @@ TEST_CASE("DI-KS 18: verification on: immediate changes and the hooks they run a
         // A hook round too, so the handle is used after the World's sync epoch moved (W-4).
         r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
         r.AddSystem<&WriteThenChange>(B("Driver", "A"));
+        r.AddSystem<&HoldsPings>(B("HoldsPings", "A", {"Driver"}));
     }, true);
     rig->world().Insert(1, Hp{1});
     const auto result = rig->Run();

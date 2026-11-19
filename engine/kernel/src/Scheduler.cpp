@@ -2,8 +2,7 @@
 //
 // Per schedule, at Finish only:
 //   1. nodes: each mount of the schedule (a System step), each declared sync
-//      point, each stage end (a sync point), and the event trim of a clock
-//      schedule;
+//      point and each stage end (a sync point);
 //   2. order edges: stage order (every node of a stage before its stage end,
 //      the stage end before every node of the next stage), before / after of
 //      mounts and sets; a before / after against stage order is D-E5, a target
@@ -19,11 +18,11 @@
 //      order and the reachability is updated after each added edge, so the
 //      result is fixed and acyclic;
 //   5. the Plan: Kahn's algorithm taking, among ready nodes, the System with
-//      the lowest registrationSeq; a sync point or the trim only when no
+//      the lowest registrationSeq; a sync point only when no
 //      System is ready (spec D.2 step 12). The tie key is registrationSeq
 //      alone: no name, no address, no hash (spec D-10);
 //   6. the resolved order (FrozenRegistry::OrderGraph): every order edge,
-//      tie edges included, with sync points, stage ends and the trim expanded
+//      tie edges included, with sync points and stage ends expanded
 //      so each edge is System to System, labelled with its source.
 // Removed Systems (tombstones) are not nodes. Built again at every BuildPlans.
 // No hash containers anywhere (DI-KS 3); maps are ordered.
@@ -149,7 +148,6 @@ public:
         // out one edge and the analysis goes on; only a cycle stops it (no order
         // to analyse). The Plan is built only when this schedule had no error.
         DeclaredEdges();
-        PinEventTrim();
         if (data_.schedulerShuffle != 0) {
             for (auto& list : succ_) {
                 if (!list.empty()) std::rotate(list.begin(), list.begin() + data_.schedulerShuffle % list.size(), list.end());
@@ -198,15 +196,6 @@ private:
             syncNodes_[stageName] = nodes_.size();
             nodes_.push_back(Node{StepKind::SyncPoint, stage, 0, 0, stageName});
         }
-        if (s_.clock && !s_.stages.empty()) {
-            const std::string trimAt = s_.eventTrim.empty() ? s_.stages.back() : s_.eventTrim;
-            const auto at = syncNodes_.find(trimAt);
-            if (at != syncNodes_.end()) {
-                trimAfter_ = at->second;
-                trim_ = nodes_.size();
-                nodes_.push_back(Node{StepKind::EventTrim, nodes_[at->second].stage, 0, 0, "event-trim"});
-            }
-        }
     }
 
     // source: what the edge comes from (OrderGraph); the first one added is kept.
@@ -220,36 +209,12 @@ private:
     void StageEdges() {
         for (std::size_t node = 0; node < nodes_.size(); ++node) {
             const std::size_t stage = nodes_[node].stage;
-            if (node == stageEnd_[stage] || node == trim_) continue;
+            if (node == stageEnd_[stage]) continue;
             AddEdge(node, stageEnd_[stage]);
             if (stage > 0) AddEdge(stageEnd_[stage - 1], node);
         }
         for (std::size_t stage = 1; stage < stageEnd_.size(); ++stage) {
             AddEdge(stageEnd_[stage - 1], stageEnd_[stage]);
-        }
-        if (trim_ != kNone) {
-            AddEdge(trimAfter_, trim_);
-            const std::size_t stage = nodes_[trim_].stage;
-            if (trimAfter_ != stageEnd_[stage]) {
-                AddEdge(trim_, stageEnd_[stage]);
-            } else if (stage + 1 < stageEnd_.size()) {
-                for (std::size_t node = 0; node < nodes_.size(); ++node) {
-                    if (nodes_[node].stage == stage + 1 && node != trim_) AddEdge(trim_, node);
-                }
-            }
-        }
-    }
-
-    // The event trim follows its sync point immediately: everything ordered
-    // after that sync point (declared "after" it, or the stage end) comes after
-    // the trim too, so a named sync point and a stage end mean the same thing
-    // (review B3; architect 2026-11-13). Runs after the declared edges, which
-    // add the sync point's successors.
-    void PinEventTrim() {
-        if (trim_ == kNone) return;
-        const std::vector<std::size_t> after = succ_[trimAfter_];
-        for (std::size_t node : after) {
-            if (node != trim_) AddEdge(trim_, node, edgeSource_.at(std::make_pair(trimAfter_, node)));
         }
     }
 
@@ -257,7 +222,7 @@ private:
     // point, or every member of a set of this schedule.
     std::vector<std::size_t> Resolve(const std::string& name) const {
         if (const auto system = systemByName_.find(name); system != systemByName_.end()) return {system->second};
-        if (const auto sync = syncNodes_.find(name); sync != syncNodes_.end() && sync->second != trim_) {
+        if (const auto sync = syncNodes_.find(name); sync != syncNodes_.end()) {
             // A stage end is not a before / after target by stage name.
             bool stageName = std::find(s_.stages.begin(), s_.stages.end(), name) != s_.stages.end();
             if (!stageName) return {sync->second};
@@ -501,7 +466,7 @@ private:
     void MakePlan() {
         std::vector<std::size_t> indegree(nodes_.size(), 0);
         for (const auto& list : succ_) for (std::size_t to : list) ++indegree[to];
-        // Key: (0, registrationSeq) for a System, (1, node) for a sync point or the trim.
+        // Key: (0, registrationSeq) for a System, (1, node) for a sync point.
         std::set<std::pair<int, std::size_t>> ready;
         const auto key = [&](std::size_t node) {
             return IsSystem(node) ? std::make_pair(0, static_cast<std::size_t>(nodes_[node].system)) : std::make_pair(1, node);
@@ -587,8 +552,6 @@ private:
     std::map<RegistrationSeq, std::size_t> mounted_;
     std::map<std::string, std::size_t> systemByName_;
     std::map<std::string, std::vector<std::size_t>> setMembers_;
-    std::size_t trim_ = kNone;
-    std::size_t trimAfter_ = kNone;
     std::unique_ptr<BitRows> direct_;
     std::unique_ptr<BitRows> reach_;
     std::vector<std::vector<std::size_t>> succ_;

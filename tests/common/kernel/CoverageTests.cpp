@@ -78,7 +78,6 @@ TEST_CASE("J-24: a cycle downstream of an earlier System is reported with its ow
     std::vector<std::string> cycle = error.subjects;
     std::sort(cycle.begin(), cycle.end());
     CHECK(cycle == std::vector<std::string>{"One", "Two"});
-    CHECK(error.message.find("event-trim") == std::string::npos);
 }
 
 // ---- A2: no registration after Finish
@@ -375,18 +374,12 @@ TEST_CASE("J-18: the C fingerprint changes with the zone C part only; the Regist
 
 // ---- J-24 items from the review
 
-TEST_CASE("J-24: a System name twice (R-E2), an unknown eventTrim (D-E1), Extract outside an extract schedule, no mount") {
+TEST_CASE("J-24: a System name twice (R-E2), Extract outside an extract schedule, no mount") {
     Built sameName = FinishOne([](Registrar& r) {
         r.AddSystem<&ReadMarker>(Sys("Same", Zone::B, {At("Update", "First")}));
         r.AddSystem<&Nothing>(Sys("Same", Zone::B, {At("Update", "Second")}));
     });
     CHECK(ErrorCount(sameName, StartupCode::RE2) == 1);
-    Built unknownTrim = Finish({{"test", [](Registrar& r) {
-                                    ScheduleOptions s = FixedSchedule();
-                                    s.eventTrim = "Nowhere";
-                                    r.Schedule(s);
-                                }}});
-    CHECK(ErrorCount(unknownTrim, StartupCode::DE1) == 1);
     Built extractOutside = FinishOne([](Registrar& r) {
         r.AddSystem<&ExtractPos>(Sys("ExtractPos", Zone::B, {At("Update", "First")}));
     });
@@ -418,28 +411,6 @@ TEST_CASE("J-12: a run condition cannot be written by hand (its access comes fro
     const ConditionRef condition = Condition<&ResIsSet>("ResIsSet");
     CHECK(condition.Name() == "ResIsSet");
     CHECK(condition.Resolver() != nullptr);
-}
-
-// ---- B3: the event trim follows a named sync point immediately
-
-TEST_CASE("J-20: an event trim at a named sync point comes right after it, before what is ordered after it") {
-    Built built = Finish({{"test", [](Registrar& r) {
-                              SharedData(r);
-                              ScheduleOptions s = FixedSchedule();
-                              s.syncPoints = {{"Mid", "Simulate"}};
-                              s.eventTrim = "Mid";
-                              r.Schedule(s);
-                              r.AddSystem<&WriteA>(Sys("Before", Zone::C, Sim({"Mid"})));
-                              r.AddSystem<&ReadA>(Sys("After", Zone::C, Sim({}, {"Mid"})));
-                          }}});
-    KERNEL_REQUIRE_OK(built);
-    const Plan& plan = *built.registry->Frozen().PlanOf("FixedUpdate");
-    const std::size_t mid = PositionOf(plan, "Mid");
-    const std::size_t trim = PositionOf(plan, "event-trim");
-    CHECK(PositionOf(plan, "Before") < mid);
-    CHECK(trim == mid + 1);
-    CHECK(trim < PositionOf(plan, "After"));
-    CHECK(trim < PositionOf(plan, "Simulate"));
 }
 
 // ---- B5: the judged ratio uses the plan's definition; the extended one is printed beside it
@@ -515,7 +486,7 @@ Built CVariant(const std::string& change) {
 TEST_CASE("J-18: the C fingerprint sees zone C hooks, the schedule's rollback and sync points between zone C steps") {
     Built base = CVariant("");
     KERNEL_REQUIRE_OK(base);
-    CHECK(base.registry->Frozen().CFingerprint().version == 8U);
+    CHECK(base.registry->Frozen().CFingerprint().version == 9U);
     // The "sync" variant really moves Mid between the zone C steps.
     const Plan& plain = *base.registry->Frozen().PlanOf("FixedUpdate");
     CHECK(PositionOf(plain, "Mid") > PositionOf(plain, "ReadA"));

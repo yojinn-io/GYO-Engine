@@ -25,6 +25,7 @@ set(GYO_KERNEL_TEST_SOURCES
     NestedRunTests.cpp
     RegistrationRoundTests.cpp
     ImmediateChangeTests.cpp
+    MessageCursorTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )
@@ -200,6 +201,7 @@ function(gyo_kernel_compile_fail_samples)
                              RETURN:GYO_KERNEL_REJECT_RETURN SELF_CONFLICT:GYO_KERNEL_REJECT_SELF_CONFLICT
                              CONDITION_WRITE:GYO_KERNEL_REJECT_CONDITION_WRITE
                              MEMBER:GYO_KERNEL_REJECT_MEMBER_FUNCTION HOOK_PARAMETER:GYO_KERNEL_REJECT_PARAMETER
+                             HOOK_MESSAGE_READER:GYO_KERNEL_REJECT_HOOK_MESSAGE_READER
                              HANDLE_COPY:GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE
                              KERNEL_DIAGNOSTICS:GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS)
         string(REPLACE ":" ";" parts "${variant}")

@@ -20,8 +20,10 @@
 //              schedule's hook queue applied round after round until it is
 //              empty, each round with its own stamp and sync epoch, at most
 //              the schedule's hookRoundLimit or else KernelSettings'
-//              (HookRoundLimit Err past it); then W-1 again. Not a Plan step;
-//   EventTrim  the domain's records before the current tick dropped (F.3).
+//              (HookRoundLimit Err past it); then W-1 again. Not a Plan step.
+// When the outermost Run ends (after its hook rounds; not a Plan step), every
+// message record that every reader holding it has read is trimmed (event
+// cursor declaration 3.2); a nested run and a Run that ends in an Err trim nothing.
 // An Err from any source is recorded once (the handler), the World becomes
 // Interrupted, every record not yet applied is discarded, diagnostics are kept,
 // and Run returns the Err (spec E.5). An exception from a System or hook is not
@@ -31,7 +33,7 @@
 // Nested runs (K0, v8-arch-gyo2-nested-schedule): a System holding
 // ExclusiveWorld<...> may run another schedule (ExclusiveWorld::RunSchedule).
 // The inner schedule runs whole, the same way (its own stamps, sync points,
-// hook rounds, tick and event trim); the records the outer level has not
+// hook rounds and tick; no message trim); the records the outer level has not
 // applied stay at its own next sync point (W-3, F.2). An error inside does not
 // call the handler: the World is Interrupted, the error is left for the
 // outermost Run, which reports it once with the outer System's context; the

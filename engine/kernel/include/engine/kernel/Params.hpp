@@ -407,65 +407,65 @@ private:
 template <class T>
 struct ParamTraits<ResMut<T>> : Detail::HandleTraits<ResMut<T>, TypeList<Access::ResourceWrite<T>>, false> {};
 
-template <class E>
+// Reads a retained message type by cursor (event cursor declaration 3.2, 5.1;
+// DI-KS 10). The reader is the running System's mount, or the run condition
+// being evaluated (each has its own cursor); a hook cannot hold one
+// (GYO_KERNEL_REJECT_HOOK_MESSAGE_READER). Fetch reads the reader's cursor,
+// making it on the reader's first run (the same for every MessageReader<M> of
+// the call and in any argument order); no tick and no Plan position is read.
+template <class M>
 class MessageReader final : Detail::Handle {
     GYO_KERNEL_HANDLE(MessageReader)
-        : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
-          tick_(Detail::DomainTick(*call.world, Detail::MessageDomain(*call.world, id_))) {}
+        : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<M>())), reader_(call.reader),
+          from_(Detail::MessageCursorOf(*call.world, call, id_)) {}
 
 public:
-    // Spec F.3, no cursor: the records of tick t-1 written after this reader's
-    // Plan position and of tick t written before it, in (tick, writerPos, seq) order.
-    [[nodiscard]] std::vector<const E*> Read() const {
+    // Every record written after this reader's cursor, in write order. The
+    // cursor moves to the last one returned; every Read of one call returns the
+    // same records (the cursor the call started from).
+    [[nodiscard]] std::vector<const M*> Read() const {
         Check("MessageReader");
-        const auto& buffer = static_cast<const Detail::MessageBuffer<E>&>(Detail::MessagesAt(*world_, id_));
-        std::vector<const typename Detail::MessageBuffer<E>::Record*> picked;
+        const auto& buffer = static_cast<const Detail::MessageBuffer<M>&>(Detail::MessagesAt(*world_, id_));
+        std::vector<const M*> out;
+        std::uint64_t last = from_;
         for (const auto& record : buffer.records) {
-            const bool previous = tick_ > 0 && record.tick == tick_ - 1 && record.writerPos > position_;
-            const bool current = record.tick == tick_ && record.writerPos < position_;
-            if (previous || current) picked.push_back(&record);
+            if (record.seq <= from_) continue;
+            out.push_back(&record.payload);
+            last = record.seq;
         }
-        std::sort(picked.begin(), picked.end(), [](const auto* a, const auto* b) {
-            if (a->tick != b->tick) return a->tick < b->tick;
-            if (a->writerPos != b->writerPos) return a->writerPos < b->writerPos;
-            return a->seq < b->seq;
-        });
-        std::vector<const E*> out;
-        out.reserve(picked.size());
-        for (const auto* record : picked) out.push_back(&record->payload);
+        Detail::AdvanceMessageCursor(*world_, reader_, id_, last);
         return out;
     }
 
 private:
     MessageTypeId id_;
-    std::uint32_t position_;
-    std::uint64_t tick_;
+    Detail::ReaderKey reader_;
+    std::uint64_t from_;
 };
-template <class E>
-struct ParamTraits<MessageReader<E>> : Detail::HandleTraits<MessageReader<E>, TypeList<Access::MessageRead<E>>, true> {};
+template <class M>
+struct ParamTraits<MessageReader<M>> : Detail::HandleTraits<MessageReader<M>, TypeList<Access::MessageRead<M>>, true> {};
 
-template <class E>
+template <class M>
 class MessageWriter final : Detail::Handle {
-    GYO_KERNEL_HANDLE(MessageWriter)
-        : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
-          tick_(Detail::DomainTick(*call.world, Detail::MessageDomain(*call.world, id_))) {}
+    GYO_KERNEL_HANDLE(MessageWriter) : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<M>())) {}
 
 public:
-    // Appends one record: tick = the event domain's tick, writerPos = this
-    // call's Plan position (a hook's: its sync point's), seq = the buffer's count.
-    void Send(E event) {
+    // Appends one record with the type's next write sequence number. A full
+    // buffer drops its oldest record first; the World records it
+    // (DroppedMessages). A hook's write is the same.
+    void Send(M message) {
         Check("MessageWriter");
-        auto& buffer = static_cast<Detail::MessageBuffer<E>&>(Detail::MessagesAt(*world_, id_));
-        buffer.records.push_back(typename Detail::MessageBuffer<E>::Record{tick_, buffer.nextSeq++, position_, std::move(event)});
+        auto& buffer = static_cast<Detail::MessageBuffer<M>&>(Detail::MessagesAt(*world_, id_));
+        if (const std::optional<std::uint64_t> dropped = buffer.Append(std::move(message))) {
+            Detail::RecordDroppedMessage(*world_, id_, *dropped);
+        }
     }
 
 private:
     MessageTypeId id_;
-    std::uint32_t position_;
-    std::uint64_t tick_;
 };
-template <class E>
-struct ParamTraits<MessageWriter<E>> : Detail::HandleTraits<MessageWriter<E>, TypeList<Access::MessageWrite<E>>, false> {};
+template <class M>
+struct ParamTraits<MessageWriter<M>> : Detail::HandleTraits<MessageWriter<M>, TypeList<Access::MessageWrite<M>>, false> {};
 
 // Untyped deferred insert / remove of any column (spec F.1). No access, no
 // conflict edge, not counted as a writer; nothing checks the column at run time
@@ -672,6 +672,8 @@ template <class Record>
 class DiagnosticsWriter final : Detail::Handle {
     static_assert(!std::is_same_v<Record, RejectedSpawn>,
                   "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: RejectedSpawn is the kernel's own diagnostics record (spec F-13)");
+    static_assert(!std::is_same_v<Record, DroppedMessages>,
+                  "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: DroppedMessages is the kernel's own diagnostics record");
     GYO_KERNEL_HANDLE(DiagnosticsWriter) : Handle(call), tick_(call.tick) {}
 
 public:
@@ -823,7 +825,7 @@ template <class R>
 using VisitResult = typename Detail::VisitResultOf<R>::Type;
 
 // Untyped access to the whole World: reads and writes every component and
-// resource value (events are not in it; DI-KS 1) and changes membership and
+// resource value (messages are not in it; DI-KS 1) and changes membership and
 // resources now (DI-KS 18; declaration 3.5). Zone B only (S-13, a zone rule at
 // startup); the only parameter (S-10). Conflicts with every System of its
 // stage. Written ExclusiveWorld<>, or ExclusiveWorld<Writes<R...>> with the

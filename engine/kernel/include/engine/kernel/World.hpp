@@ -3,8 +3,8 @@
 // World (spec A; target/world.zh-Hant.md; target/kernel DI-KS 2, 3, 4, 6, 9,
 // 10, 11, 14).
 //
-// One WorldExecutor's data: columns, resources, event buffers, the deferred queue,
-// change stamps, domain ticks and its state. Made from a Registry that has
+// One WorldExecutor's data: columns, resources, message buffers and their
+// readers' cursors, the deferred queue, change stamps, domain ticks and its state. Made from a Registry that has
 // built its Plans; its lifetime is one generation (spec A.1: a generation
 // change is a new World, made from the same Registry).
 //
@@ -13,9 +13,11 @@
 // uses a table indexed by a registry id (the type lookups of the public
 // functions and handles, Alive, Entities, Despawn, Summary, WorldExecutor::Run)
 // first compares it with the Registry's and, when they differ, attaches:
-// storage for the new components, resources and event buffers and a hook queue
+// storage for the new components, resources and message buffers and a hook queue
 // for each new schedule are added, the verification exclusions grow, the
-// hooks' access descriptions are made again. Entries that use no such table
+// hooks' access descriptions are made again, and the message cursors of a
+// removed System are dropped (event cursor declaration 3.2: what only it held
+// is trimmed when the next outermost Run ends). Entries that use no such table
 // (State, Name, Options, Stamp, Tick, ...) do not compare. The Registry keeps
 // no list of its Worlds, only counters: two this class changes (live Worlds,
 // and those that declare no dynamic insert) and one WorldExecutor::Run changes
@@ -124,6 +126,24 @@ struct RejectedSpawn {
     // IdSpawnedTwice only: the other emitter (the one whose record was kept, or
     // another emitter of the same id when all were dropped).
     std::string otherEmitter;
+};
+
+// One outermost Run's dropped records of one message type (event cursor
+// declaration 3.2: a write to a full buffer drops the oldest record), a
+// diagnostics record of the kernel's own like RejectedSpawn: read with
+// World::Diagnostics<DroppedMessages>() and taken with TakeDiagnostics between
+// two Runs. A product System may not write this type. Dropping is a result,
+// not an error: the Run goes on.
+struct DroppedMessages {
+    // The message type's name.
+    std::string message;
+    std::uint64_t count = 0;
+    // The write sequence numbers of the first and last dropped record.
+    std::uint64_t firstSeq = 0;
+    std::uint64_t lastSeq = 0;
+    // The readers that held a dropped record they had not read, in
+    // (registrationSeq, mount, condition) order.
+    std::vector<MessageReaderInfo> readers;
 };
 
 class World {
@@ -256,14 +276,15 @@ public:
         TypedResource<T>(resource).thread = 0;
     }
 
-    // ---- Events (read-only views for the Host and tests: every record kept)
+    // ---- Messages (a read-only view for the Host and tests: every record kept,
+    // in write order; moves no cursor and is no reader)
 
-    template <class E>
-    [[nodiscard]] std::vector<E> MessagePayloads() const {
-        const MessageTypeId event = Detail::MessageIdOf(*this, KeyOf<E>());
-        Access(Detail::EntryKind::Message, event, Detail::kModeRead, false);
-        std::vector<E> out;
-        for (const auto& record : static_cast<const Detail::MessageBuffer<E>&>(*messages_[event]).records) {
+    template <class M>
+    [[nodiscard]] std::vector<M> MessagePayloads() const {
+        const MessageTypeId message = Detail::MessageIdOf(*this, KeyOf<M>());
+        Access(Detail::EntryKind::Message, message, Detail::kModeRead, false);
+        std::vector<M> out;
+        for (const auto& record : static_cast<const Detail::MessageBuffer<M>&>(*messages_[message]).records) {
             out.push_back(record.payload);
         }
         return out;
@@ -324,8 +345,9 @@ public:
     }
 
     // The World summary of spec D-9: keys and values of every column, resource
-    // values and event payloads, without stamps, tick stamps or Plan positions.
-    // Version 1 (Fingerprint.cpp). Readable in Ready and Interrupted. Values
+    // values, every message record (seq and payload) with each type's next write
+    // sequence number, and the message cursors; without stamps, tick stamps or
+    // Plan positions. Version 2 (World.cpp). Readable in Ready and Interrupted. Values
     // are hashed as raw bytes: a type in the summary must have no padding (the
     // author's responsibility; v8-arch-gyo2-summary-padding-a-then-c).
     [[nodiscard]] Fingerprint Summary() const;
@@ -348,9 +370,10 @@ private:
     friend Detail::ResourceBase& Detail::ResourceAt(World&, ResourceId);
     friend Detail::MessageBufferBase& Detail::MessagesAt(World&, MessageTypeId);
     friend ChangeStamp Detail::CurrentStamp(const World&) noexcept;
-    friend std::uint64_t Detail::DomainTick(const World&, Domain) noexcept;
     friend std::span<const EntityId> Detail::AliveEntities(const World&) noexcept;
-    friend Domain Detail::MessageDomain(const World&, MessageTypeId);
+    friend std::uint64_t Detail::MessageCursorOf(World&, const Detail::SystemContext&, MessageTypeId);
+    friend void Detail::AdvanceMessageCursor(World&, const Detail::ReaderKey&, MessageTypeId, std::uint64_t);
+    friend void Detail::RecordDroppedMessage(World&, MessageTypeId, std::uint64_t);
     friend std::size_t Detail::ComponentCount(const World&) noexcept;
     friend std::size_t Detail::ResourceCount(const World&) noexcept;
     friend std::vector<ComponentId> Detail::SetMembersOf(const World&, TypeKey);
@@ -411,8 +434,14 @@ private:
     void RecordRejectedSpawn(RejectedSpawn rejected);
     // Spec E.5: discards every record not yet applied (hook queue included).
     void DiscardDeferred() noexcept;
-    // F.3 trim of one domain's buffers: drops records before the current tick.
-    void TrimEvents(Domain domain);
+    // Event cursor declaration 3.2: when the outermost Run ends, after the hook
+    // rounds (not after a nested run, not after an Err), drops every record that
+    // every cursor of its type has read (all of them when no reader has run);
+    // a changed buffer's boundary snapshot is taken again, so the next Run's
+    // Ready window does not take the trim for a change outside the World API.
+    void TrimMessages();
+    // The reader's name for DroppedMessages and the Registry's reader list.
+    [[nodiscard]] MessageReaderInfo ReaderInfoOf(const Detail::MessageCursor& cursor) const;
     // Spec W-3: the sum of every column's epoch and the entity list's; the
     // Executor checks that no System call changes it (always on, O(columns)).
     [[nodiscard]] std::uint64_t MembershipEpoch() const noexcept;
@@ -452,6 +481,19 @@ private:
     std::vector<std::unique_ptr<Detail::ColumnBase>> columns_;
     std::vector<std::unique_ptr<Detail::ResourceBase>> resources_;
     std::vector<std::unique_ptr<Detail::MessageBufferBase>> messages_;
+    // Every reader's cursor (event cursor declaration 3.2), sorted by (message,
+    // system, mount, slot); a reader is in it once it has run. Not in the
+    // boundary comparison: moving a cursor is not a write.
+    std::vector<Detail::MessageCursor> cursors_;
+    // This outermost Run's DroppedMessages entry of each message type (an index
+    // into the kernel's diagnostics buffer, or none) and the readers it lists
+    // (their keys, sorted); cleared when an outermost Run starts (the Host takes
+    // diagnostics only between Runs).
+    struct DroppedEntry {
+        std::optional<std::size_t> entry;
+        std::vector<Detail::MessageCursor> readers;
+    };
+    std::vector<DroppedEntry> droppedEntry_;
     std::vector<std::pair<TypeKey, std::unique_ptr<Detail::DiagnosticsBase>>> diagnostics_;
 
     // The current sync window's deferred records. With nested runs (K0) one
@@ -515,7 +557,7 @@ private:
     };
     std::array<std::array<TickStampSlot, kTickStampSlots>, 4> tickStamps_{};
 
-    // Layer 2: one snapshot per column, resource and event buffer; allocated
+    // Layer 2: one snapshot per column, resource and message buffer; allocated
     // only with verification on (target/system-contract 2b condition 4).
     mutable std::vector<Snapshot> columnSnapshots_;
     mutable std::vector<Snapshot> resourceSnapshots_;

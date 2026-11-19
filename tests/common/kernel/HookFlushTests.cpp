@@ -43,7 +43,6 @@ struct Limits {
     std::optional<std::uint32_t> tick;
     std::optional<std::uint32_t> early;
     std::vector<std::string> tickStages = {"A", "B", "C"};
-    std::string eventTrim;
 };
 
 // Early (Frame clock) first, then the shared test data, then Tick (Fixed clock).
@@ -76,7 +75,6 @@ void Base(Registrar& r, const Limits& limits = {}) {
     tick.domain = Domain::Fixed;
     tick.clock = true;
     tick.stages = limits.tickStages;
-    tick.eventTrim = limits.eventTrim;
     tick.hookRoundLimit = limits.tick;
     r.Schedule(tick);
 }
@@ -120,8 +118,12 @@ SystemResult SpawnFan(SpawnWithId<Bundle<Fan>> spawn, CurrentTick tick) {
     if (tick.Tick() == 1) spawn.New(1, Fan{1});
     return Ok();
 }
-SystemResult WritePing(MessageWriter<Ping> pings, CurrentTick tick) {
-    if (tick.Tick() == 1) pings.Send(Ping{11});
+SystemResult WritePingAtTwo(MessageWriter<Ping> pings, CurrentTick tick) {
+    if (tick.Tick() == 2) pings.Send(Ping{11});
+    return Ok();
+}
+SystemResult ReadPings(MessageReader<Ping> pings) {
+    static_cast<void>(pings.Read());
     return Ok();
 }
 SystemResult SpawnBombAtTwo(SpawnWithId<Bundle<Bomb>> spawn, CurrentTick tick) {
@@ -290,10 +292,9 @@ Engine::Base::Result<void, KernelError> RunChain(Rig& rig, std::int32_t depth) {
     return rig.Run();
 }
 
+// Every Plan step takes one stamp (the message trim is not a step: v8-arch-gyo2-time-events step 3).
 std::uint64_t StampsPerRun(const Plan& plan) {
-    std::uint64_t n = 0;
-    for (const Step& step : plan.steps) n += step.kind != StepKind::EventTrim ? 1U : 0U;
-    return n;
+    return plan.steps.size();
 }
 
 std::string JoinLog() {
@@ -543,11 +544,11 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     CHECK(planOf(t5, "Tick") != planOf(t6, "Tick"));
     CHECK(t5.registry->Frozen().CFingerprint() != t6.registry->Frozen().CFingerprint());
     CHECK(planOf(t8, "Tick") != planOf(none, "Tick"));
-    CHECK(planOf(none, "Tick").version == 6U);
-    CHECK(none.registry->Frozen().CFingerprint().version == 8U);
-    CHECK(none.registry->Frozen().RegistryFingerprint().version == 4U);
+    CHECK(planOf(none, "Tick").version == 7U);
+    CHECK(none.registry->Frozen().CFingerprint().version == 9U);
+    CHECK(none.registry->Frozen().RegistryFingerprint().version == 5U);
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK(report.find("gyo.kernel.plans 4") == 0);
+    CHECK(report.find("gyo.kernel.plans 5") == 0);
     CHECK(report.find("  hook-round-limit 5\n") != std::string::npos);
     CHECK(report.find("  hook-round-limit default\n") != std::string::npos);
 }
@@ -588,17 +589,21 @@ TEST_CASE("J-54: at the limit: Err F-12 once, the World interrupted, the rest no
     }
 }
 
+// Rewritten by v8-arch-gyo2-time-events step 3 (G3): the message trim is no
+// Plan step; it runs when the outermost Run ends, after the rounds, and not
+// after an Err. The Ping is written and read in tick 2, so a trim would drop it.
 TEST_CASE("J-54: an Err in a round: the rest of the Run is not done, the applied rounds stay, the handler runs once") {
     auto rig = MakeFlushRig(
         [](Registrar& r) {
-            r.AddSystem<&WritePing>(Put("WritePing", "Tick", "A"));
+            r.AddSystem<&WritePingAtTwo>(Put("WritePingAtTwo", "Tick", "A"));
+            r.AddSystem<&ReadPings>(Put("ReadPings", "Tick", "B"));
             r.AddSystem<&SpawnBombAtTwo>(Put("SpawnBombAtTwo", "Tick", "C"));
             r.Hook<Bomb, &ArmBomb>(HookTrigger::OnAdd, {.name = "ArmBomb", .zone = Zone::B});
             r.Hook<Fuse, &Explode>(HookTrigger::OnAdd, {.name = "Explode", .zone = Zone::B});
         },
         {}, false);
-    KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1 writes a Ping
-    const auto result = rig->Run();     // tick 2: the Fuse's OnAdd in round 1 returns Err
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1: ReadPings runs once, so it holds what comes after
+    const auto result = rig->Run();     // tick 2: a Ping written and read; the Fuse's OnAdd in round 1 returns Err
     CHECK(HasCode(result, KernelErrorCode::SystemFailed));
     REQUIRE_FALSE(static_cast<bool>(result));
     CHECK(result.error().Text().find("hook round 1") != std::string::npos);
@@ -608,13 +613,15 @@ TEST_CASE("J-54: an Err in a round: the rest of the Run is not done, the applied
     CHECK_MESSAGE(result.error().Text().find(hookAt) != std::string::npos, "J-54: the round's hook is not at the last sync point");
     CHECK(rig->recorded.size() == 1);
     CHECK(rig->world().State() == WorldState::Interrupted);
-    CHECK_MESSAGE(rig->world().MessagePayloads<Ping>().size() == 1, "J-54: the event trim ran after an Err in a round");
+    CHECK_MESSAGE(rig->world().MessagePayloads<Ping>().size() == 1, "J-54: the message trim ran after an Err in a round");
     CHECK_MESSAGE(rig->world().Get<Fuse>(7) != nullptr, "J-54: an applied round was undone");
 }
 
-TEST_CASE("J-54: an event trim at an earlier sync point: the rounds still follow the last sync point") {
+// Was "an event trim at an earlier sync point" (the trim step is gone,
+// v8-arch-gyo2-time-events step 3): the rounds follow the last sync point, not
+// the earlier one where a mid-Plan hook recorded.
+TEST_CASE("J-54: a mid-Plan hook record at an earlier sync point: the rounds still follow the last sync point") {
     Limits limits;
-    limits.eventTrim = "A";
     auto rig = MakeFlushRig(
         [](Registrar& r) {
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "A"));
@@ -754,7 +761,7 @@ TEST_CASE("J-54: rounds are separate applications") {
 }
 
 TEST_CASE("J-54: with verification on, the snapshots are taken again after the rounds") {
-    // The one-off schedule has no event trim after its last sync point, so nothing else takes the snapshots.
+    // The one-off schedule has no message: no trim takes the snapshots when the Run ends.
     auto rig = MakeFlushRig([](Registrar& r) {
         ScheduleOptions once;
         once.name = "Startup";
@@ -769,7 +776,7 @@ TEST_CASE("J-54: with verification on, the snapshots are taken again after the r
     CHECK_MESSAGE(static_cast<bool>(result), "J-54: the round's change was blamed on the Ready window: " << Text(result));
 }
 
-TEST_CASE("J-54: an event a hook writes in a round is read once by every reader next tick") {
+TEST_CASE("J-54: a message a hook writes in a round is read once by every reader in the next Run") {
     auto rig = MakeFlushRig([](Registrar& r) {
         r.AddSystem<&EarlyReader>(Put("EarlyReader", "Tick", "A"));
         r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
@@ -934,14 +941,14 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
     const Built t8 = build(tick8);
     CHECK_MESSAGE(t8.registry->Frozen().CFingerprint() != none.registry->Frozen().CFingerprint(),
                   "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
-    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "6:604ad4e568ed28a444509815cb45671f1cbf29414798233ba80f38dc6334a1ad",
+    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "7:62a5a7c013566692cfea7e72b4a2f6da359f13628283008769c2701b16358e35",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "8:74dc5c8b1ea7321ad2ec0e35552ffe57b96ed87905246505f95b59b527f5258d",
+    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "9:46d31779f8a66edf7168255f1cb30ad7e9877c4405cf40c1b0a222a3e02fac23",
                   "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "4:f5130ccce6f336b6aa5c0ab1b6e01b9b95e60657ecc986fe565f3208bdecc024",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "5:a54ef29bfa4053bee2e8747ca11996e7c05a580f7c1f87de7b7d9d945202adb4",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 6:") != std::string::npos,
+    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 7:") != std::string::npos,
                   "J-54: the export's hook-round-limit line is not right before the fingerprint line");
 }
 

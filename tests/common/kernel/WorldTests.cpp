@@ -516,6 +516,10 @@ SystemResult LogAddTag(HookCtx ctx) {
 // Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
 // raw bytes, so every type compared here must have no padding. The full
 // solution, a hash function per type, is batch 4.
+// Not fully solved (v8-arch-gyo2-summary-padding-a-then-c): the golden below is
+// summary format 2, re-taken by v8-arch-gyo2-time-events step 3 (message records
+// with their seq, the write sequence and the message cursors are in the summary;
+// the kernel's own records have no padding, a static_assert); the judgement is unchanged.
 TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.2's order (golden)") {
     SUBCASE("reordering two Systems that do not conflict keeps the World") {
         CHECK(ReorderSummary(true) == ReorderSummary(false));
@@ -536,7 +540,7 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(9)->t == 200);
         const std::string summary = rig->world().Summary().Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "1:9b47697704716f9a716d98380ce62743da6a3b6d2a51368e5cc2bacf4cd2e587");
+        CHECK(summary == "2:3e5d027e2ad82b38441adeb99e00e38d6da41cd0f27f6fcf5ed09b18a4b6e05f");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {
@@ -1028,7 +1032,12 @@ SystemResult HookPing(HookCtx, MessageWriter<Ping> pings) {
 
 } // namespace
 
-TEST_CASE("J-36: an event is read once by every reader: this tick after its writer, next tick before it; then gone") {
+// Rewritten by v8-arch-gyo2-time-events step 3 (G3): a reader reads by its own
+// cursor, not by Plan position and tick. A record is read once by every reader
+// that runs (this Run after its writer, the next Run before it), in write order
+// (the hook's at stage A's sync point first); it stays until every reader that
+// holds it has read it, and is trimmed when that Run ends.
+TEST_CASE("J-36: a message is read once by every reader, in write order; kept until every reader has read it, then trimmed") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.AddSystem<&NoOp>(B("NoOp", "A"));
@@ -1041,9 +1050,16 @@ TEST_CASE("J-36: an event is read once by every reader: this tick after its writ
         r.Hook<Tag, &HookPing>(HookTrigger::OnAdd, {.name = "HookPing", .zone = Zone::B});
     });
     Log().clear();
-    for (int tick = 0; tick < 3; ++tick) KERNEL_REQUIRE_RUN_OK(rig->Run());
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    // EarlyReader ran before any write: it holds all four for its next run.
+    std::vector<std::uint32_t> kept;
+    for (const Ping& ping : rig->world().MessagePayloads<Ping>()) kept.push_back(ping.n);
+    CHECK_MESSAGE(kept == (std::vector<std::uint32_t>{99, 11, 12, 21}), "J-36 kept after Run 1: " << kept.size());
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    // Read by both readers: trimmed when Run 2 ended.
+    CHECK_MESSAGE(rig->world().MessagePayloads<Ping>().empty(), "J-36 trimmed after Run 2");
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK(Join(Log()) == std::string("early@1: late@1: 99 11 12 21 ") +
                              "early@2: 99 11 12 21 late@2: early@3: late@3:");
-    // Kept to the end of the next tick, then trimmed: nothing is left after tick 3.
     CHECK(rig->world().MessagePayloads<Ping>().empty());
 }

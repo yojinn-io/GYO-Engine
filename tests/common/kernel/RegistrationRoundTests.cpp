@@ -122,6 +122,9 @@ SystemResult SendsLater(MessageWriter<LaterEvent> out) {
     out.Send(LaterEvent{7});
     return Ok();
 }
+// A reader that runs before SendsLater and reads nothing: it holds the record past
+// the Run's end trim (v8-arch-gyo2-time-events step 3), so the payload is there to count.
+SystemResult HoldsLater(MessageReader<LaterEvent>) { return Ok(); }
 SystemResult OnLaterAdd(HookCtx, Query<Read<Tag>> tags) {
     Log().push_back("later hook:" + std::to_string(tags.Count()));
     return Ok();
@@ -728,6 +731,7 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
             r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B, .domain = Domain::Fixed});
             r.AddSystem<&SendsLater>(B("SendsLater", "A"));
+            r.AddSystem<&HoldsLater>(B("HoldsLater", "A", {"SendsLater"}));
         })));
         REQUIRE(Done(registry.BuildPlans()));
         std::string ran;

@@ -134,14 +134,16 @@ struct Golden {
 // format 3 and the values re-taken by v8-arch-gyo2-kernel-subtract-structure (no runner or
 // affinity, threadBound and annotatedWrites hashed); Plan format 6 and Registry format 4 and the
 // values re-taken by v8-arch-gyo2-orchestration-skeleton (no startup flag; the kernel runs no
-// Startup): the judgement is unchanged.
+// Startup); Plan format 7 and Registry format 5 and the values re-taken by
+// v8-arch-gyo2-time-events step 3 (no event trim step or trim point; a message type's capacity
+// is hashed): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "6:749f0533d19e426c86d1657da91fe326c99413cdc62b84b9c3cb12dcaf767fa4",
-     "4:37315bda21bf50c82627bc66978d4791082d6aa24c085754c50a8f749cd34dc2"},
-    {"deferred", &DeferredRegistry, "6:8ae234bdbd5e638b2b72461ebd84065ee9868b8510b5b1e08fec185cc1aac672",
-     "4:dd279239c5e74909cc697731149c84f573d93ce6416c42dcff4a1910dbab1b12"},
-    {"events", &EventRegistry, "6:226d0836d1b31101bdd2a93cb4c5faa1848f7900d4eb8709bd9bd765a4e4653d",
-     "4:94626fd4b7be9488feaae97d984e464926bd36f1e9e8eb39ece3d13707ecc8f4"},
+    {"mixed", &MixedRegistry, "7:43d9b10f587e18bb0d5f9827d284509f393763d28aa65eeb3867db318042c79c",
+     "5:e8a36df0242ba9c3995bbf9554eba13c475137c384044766ac93618ad4a17d40"},
+    {"deferred", &DeferredRegistry, "7:372fa3561ab08d4675edd1fea18643f6695e30b54a86d1fff3b5b8de5ac9d713",
+     "5:8ba2b2ce45525e5ae765a12d3a45d3d361f7c2fc962b2c4d47b878210a403b85"},
+    {"events", &EventRegistry, "7:0a280da07c1bd6880e8e90081e05252eb8f9845f7cc2f4c1d78c1787cac964c6",
+     "5:c614c2363d5ffc60b39c21915c6c23906dceb34a99b1a25972a320e3208f8e79"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
@@ -192,8 +194,9 @@ TEST_CASE("J-20: the golden Plans' step order") {
     CHECK(PositionOf(plan, "InsertA2") < PositionOf(plan, "AfterInsert"));
     CHECK(PositionOf(plan, "AfterInsert") < PositionOf(plan, "SeeInserted"));
     CHECK(PositionOf(plan, "SeeInserted") < PositionOf(plan, "Simulate"));
-    // The clock schedule ends with its stage ends and the event trim.
-    CHECK(plan.steps.back().kind == StepKind::EventTrim);
+    // The Plan ends with its last stage end (the message trim is not a Plan step: v8-arch-gyo2-time-events step 3).
+    CHECK(plan.steps.back().kind == StepKind::SyncPoint);
+    CHECK(plan.steps.back().name == "Present");
 }
 
 // ---- J-21 (D-2)
@@ -708,8 +711,8 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E1 -> E4 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E2 -> E3 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
-    CHECK(report.find("gyo.kernel.plans 4") == 0);
-    CHECK(report.find("fingerprint 6:") != std::string::npos);
+    CHECK(report.find("gyo.kernel.plans 5") == 0);
+    CHECK(report.find("fingerprint 7:") != std::string::npos);
     // The whole schedule line of format 3 (no runner since v8-arch-gyo2-kernel-subtract-structure).
     CHECK_MESSAGE(report.find("\nschedule FixedUpdate domain=Fixed clock=1 rollback=0\n") != std::string::npos,
                   "Plan export: the schedule line\n" << report);

@@ -1,6 +1,7 @@
 // World (spec A, F): storage, the checks of every access, the sync point's
-// application of deferred records (spec F.2), hooks, event trim, the boundary
-// comparison (spec A.6 layer 2) and the World summary (spec D-9).
+// application of deferred records (spec F.2), hooks, the message cursors and
+// trim (event cursor declaration 3.2), the boundary comparison (spec A.6 layer
+// 2) and the World summary (spec D-9).
 
 #include "engine/kernel/World.hpp"
 
@@ -83,7 +84,17 @@ void World::AttachVersion() {
         columns_.push_back(data.columnMakers[c]());
     }
     for (std::size_t r = resources_.size(); r < data.resourceMakers.size(); ++r) resources_.push_back(data.resourceMakers[r]());
-    for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) messages_.push_back(data.messageMakers[e]());
+    for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) {
+        messages_.push_back(data.messageMakers[e]());
+        GYO_ASSERT(data.messages[e].capacity >= 1);
+        messages_.back()->capacity = data.messages[e].capacity;
+    }
+    droppedEntry_.resize(messages_.size());
+    // Event cursor declaration 3.2 (L5): a removed System's readers are gone
+    // with the version that removed it.
+    std::erase_if(cursors_, [&](const Detail::MessageCursor& cursor) {
+        return cursor.system >= data.systems.size() || data.systems[cursor.system].removed;
+    });
     excluded_.resize(columns_.size(), false);
     hookAccess_.clear();
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
@@ -329,16 +340,8 @@ ChangeStamp CurrentStamp(const World& world) noexcept {
     return world.stamp_;
 }
 
-std::uint64_t DomainTick(const World& world, Domain domain) noexcept {
-    return world.ticks_[DomainIndex(domain)];
-}
-
 std::span<const EntityId> AliveEntities(const World& world) noexcept {
     return world.entities_;
-}
-
-Domain MessageDomain(const World& world, MessageTypeId id) {
-    return world.data_->messages[id].domain;
 }
 
 std::size_t ComponentCount(const World& world) noexcept {
@@ -354,6 +357,67 @@ std::vector<ComponentId> SetMembersOf(const World& world, TypeKey setTag) {
     const TypeEntry* entry = world.data_->FindType(setTag);
     GYO_ASSERT(entry != nullptr && entry->role == TypeRole::SetTag);
     return world.data_->namedSets[entry->id].members;
+}
+
+namespace {
+
+bool CursorBefore(const MessageCursor& a, const MessageCursor& b) {
+    return std::tie(a.message, a.system, a.mount, a.slot) < std::tie(b.message, b.system, b.mount, b.slot);
+}
+
+} // namespace
+
+std::uint64_t MessageCursorOf(World& world, const SystemContext& call, MessageTypeId id) {
+    RequireRunningCall(world);
+    GYO_ASSERT(call.reader.valid);  // a hook is no reader (Registrar::Hook rejects MessageReader)
+    const MessageCursor key{id, call.reader.system, call.reader.mount, call.reader.slot, 0};
+    const auto at = std::lower_bound(world.cursors_.begin(), world.cursors_.end(), key, CursorBefore);
+    if (at != world.cursors_.end() && !CursorBefore(key, *at)) return at->read;
+    // The reader's first run: from the oldest record kept (every record before
+    // it was trimmed or dropped, so the seq before it is where it stands).
+    const MessageBufferBase& buffer = *world.messages_[id];
+    const std::uint64_t start = buffer.Size() > 0 ? buffer.SeqAt(0) - 1 : buffer.nextSeq - 1;
+    world.cursors_.insert(at, MessageCursor{id, call.reader.system, call.reader.mount, call.reader.slot, start});
+    return start;
+}
+
+void AdvanceMessageCursor(World& world, const ReaderKey& reader, MessageTypeId id, std::uint64_t read) {
+    const MessageCursor key{id, reader.system, reader.mount, reader.slot, 0};
+    const auto at = std::lower_bound(world.cursors_.begin(), world.cursors_.end(), key, CursorBefore);
+    GYO_ASSERT(at != world.cursors_.end() && !CursorBefore(key, *at));  // made by MessageCursorOf
+    if (read > at->read) at->read = read;
+}
+
+void RecordDroppedMessage(World& world, MessageTypeId id, std::uint64_t seq) {
+    DiagnosticsBase* found = FindDiagnostics(world, KeyOf<DroppedMessages>());
+    if (found == nullptr) {
+        auto made = std::make_unique<DiagnosticsBuffer<DroppedMessages>>();
+        found = made.get();
+        AddDiagnostics(world, KeyOf<DroppedMessages>(), std::move(made));
+    }
+    auto& entries = static_cast<DiagnosticsBuffer<DroppedMessages>*>(found)->entries;
+    World::DroppedEntry& dropped = world.droppedEntry_[id];
+    std::optional<std::size_t>& entry = dropped.entry;
+    if (!entry) {
+        DroppedMessages record;
+        record.message = world.data_->messages[id].name;
+        record.firstSeq = seq;
+        // No tick: the entry's tick goes with the clock (v8-arch-gyo2-time-events step 4).
+        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{0, false, std::move(record)});
+        entry = entries.size() - 1;
+    }
+    DroppedMessages& record = entries[*entry].record;
+    ++record.count;
+    record.lastSeq = seq;
+    // The readers that held seq unread, merged with this Run's earlier ones in
+    // cursor order (registrationSeq, mount, slot).
+    for (const MessageCursor& cursor : world.cursors_) {
+        if (cursor.message != id || cursor.read >= seq) continue;
+        const auto at = std::lower_bound(dropped.readers.begin(), dropped.readers.end(), cursor, CursorBefore);
+        if (at == dropped.readers.end() || CursorBefore(cursor, *at)) dropped.readers.insert(at, cursor);
+    }
+    record.readers.clear();
+    for (const MessageCursor& reader : dropped.readers) record.readers.push_back(world.ReaderInfoOf(reader));
 }
 
 void Push(SystemContext& call, Record record) {
@@ -823,10 +887,25 @@ void World::DiscardDeferred() noexcept {
     }
 }
 
-void World::TrimEvents(Domain domain) {
-    for (std::size_t e = 0; e < messages_.size(); ++e) {
-        if (data_->messages[e].domain == domain) messages_[e]->Trim(ticks_[DomainIndex(domain)]);
+MessageReaderInfo World::ReaderInfoOf(const Detail::MessageCursor& cursor) const {
+    const Detail::SystemRecord& system = data_->systems[cursor.system];
+    const Mount& mount = system.options.mounts[cursor.mount];
+    MessageReaderInfo info{system.options.name, mount.schedule, {}};
+    if (cursor.slot == 0) return info;
+    // The Executor's evaluation order: the mount's conditions, then each set's (E.4).
+    std::uint32_t slot = 0;
+    for (const ConditionRef& condition : mount.conditions) {
+        if (++slot == cursor.slot) info.condition = condition.Name();
     }
+    for (const std::string& setName : mount.sets) {
+        for (const Detail::SetRecord& set : data_->sets) {
+            if (set.options.name != setName || set.options.schedule != mount.schedule) continue;
+            for (const ConditionRef& condition : set.conditions) {
+                if (++slot == cursor.slot) info.condition = condition.Name();
+            }
+        }
+    }
+    return info;
 }
 
 std::optional<std::string> World::StructureProblem() const {
@@ -873,6 +952,20 @@ void World::TakeSnapshots() {
     }
     for (std::size_t r = 0; r < resources_.size(); ++r) Take(resourceSnapshots_[r], resources_[r]->StorageBytes());
     for (std::size_t e = 0; e < messages_.size(); ++e) Take(messageSnapshots_[e], messages_[e]->StorageBytes());
+}
+
+void World::TrimMessages() {
+    for (std::size_t e = 0; e < messages_.size(); ++e) {
+        Detail::MessageBufferBase& buffer = *messages_[e];
+        // Nobody holds a record no reader has run for: all are trimmed then.
+        std::uint64_t upTo = buffer.nextSeq - 1;
+        for (const Detail::MessageCursor& cursor : cursors_) {
+            if (cursor.message == e && cursor.read < upTo) upTo = cursor.read;
+        }
+        if (!buffer.TrimThrough(upTo) || !verification_) continue;
+        messageSnapshots_.resize(messages_.size());
+        Take(messageSnapshots_[e], buffer.StorageBytes());
+    }
 }
 
 void World::DropSnapshots() noexcept {
@@ -958,16 +1051,20 @@ public:
     std::vector<std::byte> bytes;
 };
 
-constexpr std::uint32_t kSummaryVersion = 1;
+// 2: message records with their seq, each type's next write sequence number,
+// and the message cursors (v8-arch-gyo2-time-events step 3).
+constexpr std::uint32_t kSummaryVersion = 2;
 
 } // namespace
 
-// Format "gyo.kernel.world-summary" version 1: the format string and version;
+// Format "gyo.kernel.world-summary" version 2: the format string and version;
 // the alive entities (count, each u64); every column in ComponentId order
 // (cell count, then each key as u64 and the value's object bytes as a list);
-// every resource in ResourceId order but KernelSettings (present flag, object bytes); every event
-// buffer in MessageTypeId order (record count, each payload's bytes). No stamp,
-// tick, Plan position or seq is hashed. A value's padding bytes are hashed as
+// every resource in ResourceId order but KernelSettings (present flag, object bytes); every message
+// buffer in MessageTypeId order (next write sequence number as u64, record
+// count, then each record's seq as u64 and payload's bytes); the message
+// cursors in (message, system, mount, slot) order (count, then each field: four
+// u32 and the read seq as u64). No stamp, tick or Plan position is hashed. A value's padding bytes are hashed as
 // they are, so a type in the summary must have no padding: the author's
 // responsibility for the types an author registers; the kernel's own types
 // (RangeAllotter) are checked at compile time. Partly solved
@@ -1000,8 +1097,20 @@ Fingerprint World::Summary() const {
     }
     out.U32(messages_.size());
     for (const auto& buffer : messages_) {
+        out.U64(buffer->nextSeq);
         out.U32(buffer->Size());
-        for (std::size_t i = 0; i < buffer->Size(); ++i) out.Raw(buffer->PayloadBytesAt(i));
+        for (std::size_t i = 0; i < buffer->Size(); ++i) {
+            out.U64(buffer->SeqAt(i));
+            out.Raw(buffer->PayloadBytesAt(i));
+        }
+    }
+    out.U32(cursors_.size());
+    for (const Detail::MessageCursor& cursor : cursors_) {
+        out.U32(cursor.message);
+        out.U32(cursor.system);
+        out.U32(cursor.mount);
+        out.U32(cursor.slot);
+        out.U64(cursor.read);
     }
     return Fingerprint{kSummaryVersion, Engine::Base::Sha256(out.bytes)};
 }

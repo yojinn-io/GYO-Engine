@@ -264,6 +264,9 @@ public:
     template <class T, auto Fn>
     void Hook(HookTrigger trigger, HookOptions options, std::source_location source = std::source_location::current()) {
         Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();
+        static_assert(!Detail::HookHoldsMessageReader<Fn>(),
+                      "GYO_KERNEL_REJECT_HOOK_MESSAGE_READER: a hook is not a message reader; it has no cursor (event "
+                      "cursor declaration 3.2)");
         if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {
             RegisterHook(KeyOf<T>(), trigger, std::move(options), Detail::ResolverOf<typename Detail::Signature<decltype(Fn)>::Pointer>::value,
                          &Detail::InvokerOf<typename Detail::Signature<decltype(Fn)>::Pointer>::template CallFunction<Fn>, source);
@@ -444,11 +447,27 @@ struct ResourceInfo {
     std::string owner;
 };
 
+// One reader of a message type (event cursor declaration 3.2): a System's
+// mount, or one of that mount's run conditions. A hook is never one.
+struct MessageReaderInfo {
+    std::string system;
+    // The mount's schedule.
+    std::string schedule;
+    // The run condition's name; empty for the System itself.
+    std::string condition;
+
+    friend bool operator==(const MessageReaderInfo&, const MessageReaderInfo&) = default;
+};
+
 struct MessageInfo {
     std::string name;
     Domain domain;
     Zone zone;
     std::string owner;
+    std::uint32_t capacity = 1024;
+    // Derived at every BuildPlans: every reader, by (registrationSeq, mount,
+    // condition) order (DI-KS 25).
+    std::vector<MessageReaderInfo> readers;
 };
 
 struct SystemInfo {

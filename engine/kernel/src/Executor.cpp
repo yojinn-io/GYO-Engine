@@ -178,6 +178,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
     ReadSettings();
+    // A new outermost Run: its own DroppedMessages records (event cursor declaration 3.2).
+    for (World::DroppedEntry& dropped : world.droppedEntry_) dropped = World::DroppedEntry{};
     return RunPlan(record->options.name, false);
 }
 
@@ -318,23 +320,30 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             call.queue = &world.window_;
             call.recSeq = &recSeq;
             call.locals = &mountState.locals;
+            // Event cursor declaration 3.2: each condition is a reader of its own
+            // (slot 1, 2, ... in evaluation order), the System is slot 0.
+            call.reader = Detail::ReaderKey{system.seq, static_cast<std::uint32_t>(mountIndex), 0, true};
 
             Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
                 // (1) tlCurrent: the conditions' reads are the System's (spec B-5).
                 Detail::CallScope scope(call);
                 // (2) Run conditions, in order, short-circuit: the mount's, then each set's (E.4).
                 bool runs = true;
-                for (const ConditionRef& condition : mount.conditions) {
-                    if (runs && !condition.Evaluator()(call)) runs = false;
-                }
+                std::uint32_t slot = 0;
+                auto evaluate = [&](const ConditionRef& condition) {
+                    ++slot;
+                    if (!runs) return;
+                    call.reader.slot = slot;
+                    if (!condition.Evaluator()(call)) runs = false;
+                };
+                for (const ConditionRef& condition : mount.conditions) evaluate(condition);
                 for (const std::string& setName : mount.sets) {
                     for (const Detail::SetRecord& set : data.sets) {
                         if (set.options.name != setName || set.options.schedule != scheduleName) continue;
-                        for (const ConditionRef& condition : set.conditions) {
-                            if (runs && !condition.Evaluator()(call)) runs = false;
-                        }
+                        for (const ConditionRef& condition : set.conditions) evaluate(condition);
                     }
                 }
+                call.reader.slot = 0;
                 // (3) The step's stamp, also when skipped (X-5).
                 call.stamp = ++world.stamp_;
                 // (4)
@@ -434,17 +443,19 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             previousStep = StepText(scheduleName, position, step.name);
             break;
         }
-        case StepKind::EventTrim:
-            world.TrimEvents(domain);
-            if (world.verification_) world.TakeSnapshots();
-            previousStep = StepText(scheduleName, position, step.name);
-            break;
         }
     }
     // Spec F-12: the hook rounds left nothing behind (and no System record of this level is pending).
     GYO_ASSERT(world.window_.size() == world.runStack_[level].windowBase && world.HookQueueOf(scheduleName).records.empty());
     // A nested Run returns to its outer System: the World is still running (K0).
-    if (!nested) world.state_ = WorldState::Ready;
+    if (!nested) {
+        // Event cursor declaration 3.2: the trim of what every reader has read,
+        // when the outermost Run ends after its hook rounds; not a Plan step, not
+        // after a nested run (its outer System's Run trims), not after an Err
+        // (Fail returned above).
+        world.TrimMessages();
+        world.state_ = WorldState::Ready;
+    }
     return {};
 }
 

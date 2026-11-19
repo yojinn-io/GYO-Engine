@@ -420,7 +420,10 @@ MessageTypeId Registrar::RegisterMessage(TypeKey key, Shape shape, MessageOption
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.messages.push_back(MessageInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(owner_)});
+    // A buffer that keeps nothing would drop every record it is given: a Programmer Error.
+    GYO_ASSERT(options.capacity >= 1);
+    data.messages.push_back(
+        MessageInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(owner_), options.capacity, {}});
     data.messageMakers.push_back(make);
     return id;
 }
@@ -906,10 +909,6 @@ void CheckSchedules(RegistryData& data) {
                                                        "' is not unique", {s.name, sync.name});
             }
         }
-        if (!s.eventTrim.empty() && syncNames.count(s.eventTrim) == 0 && stages.count(s.eventTrim) == 0) {
-            data.Error(StartupCode::DE1, "D.1", "schedule '" + s.name + "' trims events at '" + s.eventTrim +
-                                                   "', which is neither a stage end nor a sync point", {s.name});
-        }
         if (s.domain == Domain::None) {
             data.Error(StartupCode::DE12, "H-1", "schedule '" + s.name + "' belongs to no clock domain", {s.name});
         } else {
@@ -951,7 +950,22 @@ void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
     into.usesExtract = into.usesExtract || condition.usesExtract;
 }
 
+// Event cursor declaration 3.2 (DI-KS 25): reads of a message by the System
+// itself (condition empty) or by one of the mount's run conditions, each a
+// reader of its own. Two MessageReader<M> of one signature are one reader.
+void AddMessageReaders(RegistryData& data, const std::vector<AccessKey>& reads, const SystemRecord& system,
+                       const Mount& mount, const std::string& condition) {
+    for (const AccessKey& key : reads) {
+        if (key.kind != AccessKind::Message) continue;
+        std::vector<MessageReaderInfo>& readers = data.messages[key.id].readers;
+        MessageReaderInfo reader{system.options.name, mount.schedule, condition};
+        if (std::find(readers.begin(), readers.end(), reader) == readers.end()) readers.push_back(std::move(reader));
+    }
+}
+
 void ResolveSystems(RegistryData& data) {
+    // Derived: cleared, then filled in (registrationSeq, mount, condition) order.
+    for (MessageInfo& info : data.messages) info.readers.clear();
     for (SystemRecord& system : data.systems) {
         // Derived: cleared, so a later BuildPlans does not add to the last one's (declaration 3.2 rule 2).
         system.access = AccessSet{};
@@ -961,12 +975,15 @@ void ResolveSystems(RegistryData& data) {
         const std::string subject = "System '" + system.options.name + "'";
         SystemResolver resolver(data, subject, SourceText(system.source));
         system.resolve(resolver);
+        const std::vector<AccessKey> ownReads = resolver.access.reads;
         for (const Mount& mount : system.options.mounts) {
+            AddMessageReaders(data, ownReads, system, mount, {});
             for (const ConditionRef& condition : mount.conditions) {
                 if (condition.Resolver() == nullptr) continue;
                 SystemResolver conditionResolver(data, subject + " run condition '" + condition.Name() + "'",
                                                  SourceText(system.source));
                 condition.Resolver()(conditionResolver);
+                AddMessageReaders(data, conditionResolver.access.reads, system, mount, condition.Name());
                 MergeCondition(resolver, conditionResolver);
             }
             // Set conditions join every member's reads (spec E.4).
@@ -978,6 +995,7 @@ void ResolveSystems(RegistryData& data) {
                         SystemResolver conditionResolver(data, "set '" + setName + "' run condition '" + condition.Name() + "'",
                                                          SourceText(system.source));
                         condition.Resolver()(conditionResolver);
+                        AddMessageReaders(data, conditionResolver.access.reads, system, mount, condition.Name());
                         MergeCondition(resolver, conditionResolver);
                     }
                 }

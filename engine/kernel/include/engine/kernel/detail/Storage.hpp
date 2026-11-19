@@ -11,7 +11,7 @@
 // an opaque element with a member `id`; it never reads or decides on a stamp
 // (target/world section 6). Every stamp read and write is in engine/kernel.
 //
-// Resources, event buffers and diagnostics buffers are typed slots behind a
+// Resources, message buffers and diagnostics buffers are typed slots behind a
 // small virtual interface, made by factories the Registrar records when a
 // type is registered (Registry.hpp). Nothing here allocates pages or protects
 // memory: columns use the ordinary allocator; the place where an
@@ -171,6 +171,13 @@ public:
     std::optional<T> value;
 };
 
+// A retained message type's records (event cursor declaration 3.2, 5.1;
+// DI-KS 10): {seq, payload} in write order, seq the type's write sequence
+// number (64-bit, from 1, never wraps, never reused). Readers read by cursor
+// (World::cursors_); nothing here knows a reader. The buffer keeps at most
+// capacity records: a write to a full buffer drops the oldest one (the writer
+// tells the World, which records it). Trimmed only by the World when the
+// outermost Run ends.
 class MessageBufferBase {
 public:
     virtual ~MessageBufferBase() = default;
@@ -180,21 +187,25 @@ public:
     [[nodiscard]] virtual std::size_t Size() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> PayloadBytesAt(std::size_t index) const noexcept = 0;
-    // Spec F.3 trim: drops every record whose tick is before keepFrom.
-    virtual void Trim(std::uint64_t keepFrom) = 0;
+    [[nodiscard]] virtual std::uint64_t SeqAt(std::size_t index) const noexcept = 0;
+    // Drops every record whose seq is at or below upTo; true when one was dropped.
+    virtual bool TrimThrough(std::uint64_t upTo) = 0;
+
+    // The seq the next write takes (the last written is nextSeq - 1).
+    std::uint64_t nextSeq = 1;
+    // MessageOptions::capacity (set by the World when it makes the buffer).
+    std::uint32_t capacity = 1;
 
 protected:
     MessageBufferBase() = default;
 };
 
-template <class E>
+template <class M>
 class MessageBuffer final : public MessageBufferBase {
 public:
     struct Record {
-        std::uint64_t tick;
         std::uint64_t seq;
-        std::uint32_t writerPos;
-        E payload;
+        M payload;
     };
 
     [[nodiscard]] std::size_t Size() const noexcept override { return records.size(); }
@@ -202,17 +213,46 @@ public:
         return {reinterpret_cast<const std::byte*>(records.data()), records.size() * sizeof(Record)};
     }
     [[nodiscard]] std::span<const std::byte> PayloadBytesAt(std::size_t index) const noexcept override {
-        return {reinterpret_cast<const std::byte*>(&records[index].payload), sizeof(E)};
+        return {reinterpret_cast<const std::byte*>(&records[index].payload), sizeof(M)};
     }
-    void Trim(std::uint64_t keepFrom) override {
-        records.erase(std::remove_if(records.begin(), records.end(),
-                                     [keepFrom](const Record& r) { return r.tick < keepFrom; }),
-                      records.end());
+    [[nodiscard]] std::uint64_t SeqAt(std::size_t index) const noexcept override { return records[index].seq; }
+    bool TrimThrough(std::uint64_t upTo) override {
+        const auto keep = std::find_if(records.begin(), records.end(), [upTo](const Record& r) { return r.seq > upTo; });
+        if (keep == records.begin()) return false;
+        records.erase(records.begin(), keep);
+        return true;
+    }
+
+    // Appends one record; when the buffer is full, first drops the oldest one
+    // and returns its seq.
+    std::optional<std::uint64_t> Append(M message) {
+        std::optional<std::uint64_t> dropped;
+        if (records.size() >= capacity) {
+            dropped = records.front().seq;
+            records.erase(records.begin());
+        }
+        records.push_back(Record{nextSeq++, std::move(message)});
+        return dropped;
     }
 
     std::vector<Record> records;
-    std::uint64_t nextSeq = 0;
 };
+
+// One reader's cursor in one message type (event cursor declaration 3.2): the
+// highest seq the reader has read. A reader is a System's mount (slot 0) or
+// the mount's run condition number slot (from 1, in evaluation order). Kept in
+// the World, sorted by (message, system, mount, slot), and in the World summary,
+// which hashes it field by field; it has no padding all the same
+// (v8-arch-gyo2-summary-padding-a-then-c: an internal record in the summary has none).
+struct MessageCursor {
+    std::uint32_t message;
+    std::uint32_t system;
+    std::uint32_t mount;
+    std::uint32_t slot;
+    std::uint64_t read;
+};
+static_assert(sizeof(MessageCursor) == 4 * sizeof(std::uint32_t) + sizeof(std::uint64_t),
+              "MessageCursor has padding: the World summary holds it");
 
 // The World end of DiagnosticsWriter<T> (spec B.4 point 4, B-13): kept when
 // the World is Interrupted; the Host takes it at its exchange point.

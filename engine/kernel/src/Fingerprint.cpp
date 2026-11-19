@@ -8,10 +8,11 @@
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version (the
 //     constants below).
-// Registry fingerprint (format 4): registration owner names in the order of
+// Registry fingerprint (format 5): registration owner names in the order of
 // their first Register; components, resources,
-// events in id order (name, size, align, zone, writePolicy, role, rollback;
-// resources add external and threadBound; events have name, domain, zone);
+// messages in id order (name, size, align, zone, writePolicy, role, rollback;
+// resources add external and threadBound; messages have name, domain, zone,
+// capacity; their reader lists are derived from the Systems, hashed below);
 // effects; named sets (name, members, digest); the allotter; schedules (every
 // ScheduleOptions field but hookRoundLimit, which the Plan fingerprint holds);
 // sets; Systems in registrationSeq order, removed ones (tombstones) left out
@@ -23,13 +24,13 @@
 // fingerprint in schedule order. The function of a declaration is not hashed:
 // its address differs per build. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint (format 7): only zone C data, zone C Systems (with mounts and
-// access), zone C hooks and the initial value declarations of zone C
-// components, each section counted; and for every schedule that
-// runs a zone C System, its rollbackEnabled, stages, eventTrim and hook round
-// limit (a flag, then the value when declared), and its Plan reduced to the
-// zone C System steps plus every sync point and the trim (spec H.3; review B6).
-// Plan fingerprint (format 5): schedule name, domain, each step's kind and
+// C fingerprint (format 9): only zone C data (messages with their capacity),
+// zone C Systems (with mounts and access), zone C hooks and the initial value
+// declarations of zone C components, each section counted; and for every
+// schedule that runs a zone C System, its rollbackEnabled, stages and hook
+// round limit (a flag, then the value when declared), and its Plan reduced to
+// the zone C System steps plus every sync point (spec H.3; review B6).
+// Plan fingerprint (format 7): schedule name, domain, each step's kind and
 // name, then the hook round limit (a flag, then the value when declared).
 // The hook rounds after the last sync point (spec F-12) are not a step; the
 // Plan and C formats were raised (1 to 2, 3 to 4) when they were added, so the
@@ -66,14 +67,18 @@ namespace {
 // read when each Run starts (v8-arch-gyo2-kernel-subtract-structure; no Plan
 // step changed: the rule of hook-flush-not-in-plan-bump-versions); 6 since the
 // kernel runs no Startup before the first other schedule (the orchestration
-// layer's game initialization; v8-arch-gyo2-orchestration-skeleton).
-constexpr std::uint32_t kFingerprintVersion = 6;
+// layer's game initialization; v8-arch-gyo2-orchestration-skeleton); 7 since
+// the message trim is no Plan step (it runs when the outermost Run ends: event
+// cursor declaration 3.2, v8-arch-gyo2-time-events step 3).
+constexpr std::uint32_t kFingerprintVersion = 7;
 // The Registry fingerprint's format: 2 since initial value declarations are
 // hashed (v8-arch-gyo2-funnel-check); 3 since the thread roles left (no schedule
 // runner role, no System thread role; a resource's threadBound flag) and ExclusiveWorld's
 // Writes<...> is an annotation (annotatedWrites) (v8-arch-gyo2-kernel-subtract-structure);
-// 4 since a schedule has no startup flag (v8-arch-gyo2-orchestration-skeleton).
-constexpr std::uint32_t kRegistryFingerprintVersion = 4;
+// 4 since a schedule has no startup flag (v8-arch-gyo2-orchestration-skeleton);
+// 5 since a schedule names no trim point and a message type has a capacity
+// (v8-arch-gyo2-time-events step 3).
+constexpr std::uint32_t kRegistryFingerprintVersion = 5;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
 // since the initial value declarations of zone C components; 4 since the hook
@@ -83,8 +88,10 @@ constexpr std::uint32_t kRegistryFingerprintVersion = 4;
 // (v8-arch-gyo2-nested-schedule); 7 since the System and resource bytes it shares
 // with the Registry fingerprint changed and the Plan rules did
 // (v8-arch-gyo2-kernel-subtract-structure); 8 since the schedule bytes it shares
-// have no startup flag and the kernel runs no Startup (v8-arch-gyo2-orchestration-skeleton).
-constexpr std::uint32_t kCFingerprintVersion = 8;
+// have no startup flag and the kernel runs no Startup (v8-arch-gyo2-orchestration-skeleton);
+// 9 since a schedule names no trim point and has no trim step, and a zone C message
+// type has a capacity (v8-arch-gyo2-time-events step 3).
+constexpr std::uint32_t kCFingerprintVersion = 9;
 
 class Bytes {
 public:
@@ -204,7 +211,6 @@ void ScheduleBytes(Bytes& out, const ScheduleOptions& s) {
         out.Str(sync.name);
         out.Str(sync.stage);
     }
-    out.Str(s.eventTrim);
     out.Enum(s.executor);
     out.Str(s.parallelGuardTest);
 }
@@ -295,6 +301,7 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
         out.Str(info.name);
         out.Enum(info.domain);
         out.Enum(info.zone);
+        out.U32(info.capacity);
     }
     out.U32(data.effects.size());
     for (const EffectRecord& effect : data.effects) out.Str(effect.name);
@@ -366,6 +373,7 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
         out.U32(id);
         out.Str(data.messages[id].name);
         out.Enum(data.messages[id].domain);
+        out.U32(data.messages[id].capacity);
     }
     out.U32(count(data.systems, [](const SystemRecord& s) { return !s.removed && s.options.zone == Zone::C; }));
     for (const SystemRecord& system : data.systems) {
@@ -389,9 +397,9 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
         out.U32(rule.requestId);
     }
     // Every schedule that runs a zone C System: its properties that change (c)
-    // results (rollback, stage sequence, event trim) and its Plan reduced to the
-    // zone C steps with the sync points and trim between them, which decide in
-    // which window a deferred write lands.
+    // results (rollback, stage sequence) and its Plan reduced to the zone C
+    // steps with the sync points between them, which decide in which window a
+    // deferred write lands.
     for (const Plan& plan : data.plans) {
         bool holdsC = false;
         for (const Step& step : plan.steps) {
@@ -402,7 +410,6 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
         if (const ScheduleRecord* schedule = data.FindSchedule(plan.schedule)) {
             out.Flag(schedule->options.rollbackEnabled);
             out.Strings(schedule->options.stages);
-            out.Str(schedule->options.eventTrim);
             out.Flag(schedule->options.hookRoundLimit.has_value());
             if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);
         }
@@ -423,7 +430,7 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
 
 std::string FrozenRegistry::ExportPlans() const {
     const Detail::RegistryData& data = *data_;
-    std::string out = "gyo.kernel.plans 4\n";
+    std::string out = "gyo.kernel.plans 5\n";
     out += "registry " + Detail::RegistryFingerprintOf(data).Text() + "\n";
     out += "registry_c " + Detail::CFingerprintOf(data).Text() + "\n";
     for (const Plan& plan : data.plans) {
@@ -444,7 +451,6 @@ std::string FrozenRegistry::ExportPlans() const {
                 out += "system " + step.name + " zone=" + Detail::ZoneName(data.systems[step.system].options.zone);
                 break;
             case StepKind::SyncPoint: out += "sync " + step.name; break;
-            case StepKind::EventTrim: out += "trim"; break;
             }
             out += "\n";
         }

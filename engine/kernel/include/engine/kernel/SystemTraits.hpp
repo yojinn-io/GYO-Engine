@@ -269,6 +269,26 @@ constexpr void RequireAccepted() {
                   "GYO_KERNEL_REJECT_CONDITION_WRITE: a run condition has read-only parameters (spec S-5)");
 }
 
+// A hook holds no MessageReader: a hook is not a reader and has no cursor
+// (event cursor declaration 3.2; the hook gets HookCtx and writes only through
+// deferred records, messages and diagnostics).
+template <class P>
+inline constexpr bool kIsMessageReader = false;
+template <class M>
+inline constexpr bool kIsMessageReader<MessageReader<M>> = true;
+
+template <auto Fn>
+constexpr bool HookHoldsMessageReader() {
+    using Sig = Signature<decltype(Fn)>;
+    if constexpr (!Sig::function) {
+        return false;
+    } else {
+        return []<class... P>(TypeList<P...>) {
+            return (kIsMessageReader<std::remove_cvref_t<P>> || ...);
+        }(typename Sig::Params{});
+    }
+}
+
 using ResolveFn = void (*)(AccessResolver&);
 
 template <class... P>

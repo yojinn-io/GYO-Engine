@@ -24,6 +24,9 @@
 //                                       copied or moved could be kept past its call)
 //   GYO_KERNEL_SAMPLE_KERNEL_DIAGNOSTICS a System writing the kernel's own RejectedSpawn records
 //                                       (spec F-13) -> GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS
+// Added by v8-arch-gyo2-time-events step 3 (event cursor declaration 3.2: a hook is not a reader):
+//   GYO_KERNEL_SAMPLE_HOOK_MESSAGE_READER a hook with a MessageReader parameter
+//                                       -> GYO_KERNEL_REJECT_HOOK_MESSAGE_READER
 #include "engine/kernel/Kernel.hpp"
 
 #include <type_traits>
@@ -42,6 +45,10 @@ SystemResult TakesWorld(World&) { return {}; }
 void ReturnsVoid(Query<Read<SamplePos>>) {}
 SystemResult WritesTwice(Query<Write<SamplePos>>, Query<Write<SamplePos>>) { return {}; }
 bool ConditionWrites(Query<Write<SamplePos>>) { return true; }
+struct SampleMessage {
+    int n;
+};
+SystemResult HookReadsMessages(HookCtx, MessageReader<SampleMessage>) { return {}; }
 struct Holder {
     SystemResult Member(Query<Read<SamplePos>>) { return {}; }
 };
@@ -55,6 +62,7 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     (void)&ReturnsVoid;
     (void)&WritesTwice;
     (void)&ConditionWrites;
+    (void)&HookReadsMessages;
 #if defined(GYO_KERNEL_SAMPLE_ACCEPTED)
     const auto system = [](Query<Read<SamplePos>>) -> SystemResult { return {}; };
     registrar.AddSystem<decltype(system)>({.name = "Lambda"});
@@ -74,6 +82,8 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     registrar.AddSystem<&Holder::Member>({.name = "Member"});
 #elif defined(GYO_KERNEL_SAMPLE_HOOK_PARAMETER)
     registrar.Hook<SamplePos, &TakesWorld>(HookTrigger::OnAdd, {.name = "HookTakesWorld"});
+#elif defined(GYO_KERNEL_SAMPLE_HOOK_MESSAGE_READER)
+    registrar.Hook<SamplePos, &HookReadsMessages>(HookTrigger::OnAdd, {.name = "HookReadsMessages"});
 #elif defined(GYO_KERNEL_SAMPLE_HANDLE_COPY)
     (void)registrar;
     static_assert(std::is_copy_constructible_v<Query<Read<SamplePos>>> || std::is_move_constructible_v<Query<Read<SamplePos>>> ||

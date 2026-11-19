@@ -83,12 +83,18 @@ struct ResourceOptions {
     bool threadBound = false;
 };
 
+// A retained message type (event cursor declaration 3.2, 5.1; DI-KS 10).
 struct MessageOptions {
     std::string name;
     Zone zone = Zone::Unset;
-    // The clock domain the event belongs to; its writers and readers run in
-    // that domain's clock schedule (spec F-9, F-E1).
+    // The clock domain the message belongs to; its writers and readers run in
+    // that domain's clock schedule (spec F-9, F-E1). Goes with the clock
+    // (v8-arch-gyo2-time-events step 4); readers no longer use the tick.
     Domain domain = Domain::None;
+    // How many records of this type the World keeps: a write to a full buffer
+    // drops the oldest one and the World records it (DroppedMessages). A default,
+    // not a measured value; at least 1 (GYO_ASSERT).
+    std::uint32_t capacity = 1024;
 };
 
 // A named group of a schedule's Systems (spec C.1 sets): order edges and run
@@ -127,9 +133,6 @@ struct ScheduleOptions {
     // The stage where ingress Systems run (spec Z3). Empty: no ingress stage.
     std::string ingressStage;
     std::vector<SyncPointOptions> syncPoints;
-    // The sync point after which the domain's events are trimmed (spec D.1
-    // eventTrim). Empty: the end of the last stage. Clock schedules only.
-    std::string eventTrim;
     ExecutorKind executor = ExecutorKind::Serial;
     // Parallel only: the CTest that compares Serial and Parallel (spec X-2).
     std::string parallelGuardTest;
