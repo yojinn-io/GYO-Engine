@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them). kernel-subtract-structure (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md, section 6; ids ks-s<item>-, ks-diks15-): segment 1 retired 48 mutants whose rule left the kernel (ambiguity D-E8, run-time interception F-10 / Z5 / W-6b, ExclusiveWorld write limits S-13 / S-14 / S-15 / S-16 / S-18, D-E18, thread roles D-E10 / D-E13 / X-E2 / X-E3, the untyped ExclusiveWorld::Spawn, and ns-plan-version-not-bumped as a duplicate) and rewrote the ones whose find or expect moved. orchestration-skeleton (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9): step 2 took the Startup schedule and the registration units (Plugin, Registry::Finish, R-E1/R-E3/R-E6) out of the kernel. Retired with their property: rs-j15-startup-counted, ns-startup-nestable, ns-startup-running-allows-nested, ns-st-clock-only, ns-st-tick-first-read, ns-st-tick-first-error, ns-st-tick-stamp, ns-st-running-not-cleared, ns-st-no-retake, ns-two-startups-allowed, ks-s2-re7-startup-schedule, ks-s2-re7-startup-mount, ks-s7-startup-change-same-run, ns-st-settings-after-startup, ks-s2-finish-not-first, rs-j18-plugins-reversed (rs-j18-plugins-reversed: ids are now taken in the Registrar call itself, there is no loop over registration units to reverse). Moved to the orchestration catalog docs/architecture/target/v2/scripts/orchestration_mutations.json (the mutant that guards the property there in brackets): ns-st-not-auto (or-runframe-no-gameinit, or-runschedule-no-gameinit); ns-st-not-marked-auto (or-gi-every-frame); ns-st-not-marked-explicit (or-gi-every-frame, g8-gi-flag-only-on-success); ns-st-explicit-again (g8-gameinit-twice-allowed); ns-st-after (or-runframe-no-gameinit); ns-st-error-ignored (or-gi-error-ignored); ns-st-error-not-reported (or-gi-error-ignored); rs-j19-duplicate-built (or-oe1-silent, g8-oe1-second-used); rs-j19-requires-unchecked (or-oe3-later-unseen, g8-oe3-missing-silent); rs-j24-re6-removed (or-oe4-silent); ks-s2-plugin-finish-again (or-insert-reruns-finish); ks-s3-version-before-finish (or-finish-before-plans). Rewritten for the new code: the fingerprint and export versions (Registry 4, Plan 6, C 8, export 4), rs-sym-* (anchor Registry::~Registry), ks-s7-first-run-only*, ks-diks15-code-without-text (DE5), ks-links-extra (the link now comes from the register). After the full run on cc5fe0e1 (steps 3 and 4 included): hf-startup-skipped (replace keyed on the clock flag), we-j1-insert-append (find now starts at ::Engine::, the kernel headers qualify Engine from the root), ks-s3-version-not-raised and ks-s3-failed-raises-version (cases follow the renamed DI-KS 25 case). mutation-prune (docs/architecture/target/v2/kernel-mutation-prune-report.zh-Hant.md): retired the duplicates ns-rebase-no-retake, we-j4-handle-check-off, ns-c-version-not-bumped, we-w11-mut-no-mark-j30, ks-s5-applies-level-records, rs-j12-bundle-dropped; the command mutants whose change another mutant already catches, we-k5-entity-store-dropped-selftest, rs-sym-elf-bss-unread; the old product aliases ks-k1-aliases-dropped, ks-adv-alias-dropped-fps-pvp, ks-adv-alias-dropped-pvp, ks-adv-alias-dropped-gyo-tools; guard detail mutants that never caught a real miss and are not the only mutant of a sub-rule, ks-k1-camel-dropped, ks-adv-registry-case-sensitive, ks-adv-role-player-case, ks-adv-k3-headers-shrunk, ks-adv-k3-names-shrunk, ks-k4-type-unchecked, rs-b8-k4-inline-const-pointee, ks-adv-standard-header-in-quotes, we-k5-entity-store-prefix-unbounded, we-k5-backslash-parent, ks-adv-log-headers-cstdio, ks-adv-k6-set-log-handler, ks-adv-line-comment-to-eof, ks-adv-block-comment-off, ks-adv-kernel-suffixes-shrunk, ks-adv-string-to-eof, ks-n1-prefix-loose, ks-n1-nested-lost, ks-n1-missing-reverse-root-fails, ks-n1-plugins-dropped, ks-adv-stack-never-pops, ks-adv-reverse-roots-shrunk, ks-adv-naming-suffixes-shrunk, ks-n3-suffix-dropped, ks-adv-n3-keywords-shrunk, ks-adv-n3-attributes-dropped, rs-sym-common-unread, rs-sym-tlv-kept, rs-b8-toolchain-any-format. Merged into the mutant with the same find and replace (cases and expects joined): sr-j8-allots-later into sr-dropped-made-alive, sr-j8-no-record into sr-no-record, sr-j8-no-count into sr-no-count, sr-j8-reason into sr-reason-range-as-alive, sr-j32-alive-applied into sr-alive-applied, sr-j32-no-record into sr-no-record, sr-j32-no-count into sr-no-count, sr-j32-reason into sr-reason-alive-as-twice, sr-range-removed-respawn into sr-range-removed, sr-range-removed-insert into sr-range-removed, we-j5-boundary-off into we-j4-boundary-off, ks-s9-set-order-dropped into rs-adv-set-order-dropped, ks-s7-removed-limit-one into hf-settings-absent-limit-one, ks-s7-first-run-only-limit into ks-s7-first-run-only, ns-nested-end-ready-overwrite into ns-nested-end-ready, ns-absent-resource-present into ns-absent-component-present, ks-s5-j45-spawn-deferred into ks-s5-change-deferred, ks-s5-detour-after-unchecked into ns-epoch-check-skipped-for-exclusive, ks-s6-hook-set-at-record-time into ks-s6-set-at-record-time, hf-c-version-kept into rs-b6-cfp-version-1, sr-c-version-not-bumped into rs-b6-cfp-version-1, hf-plan-version-kept into sr-plan-version-not-bumped. Rewritten: ks-real-product-name (role word), rs-sample-capture-accepted and rs-sample-return-accepted (expect names the marker). mutation-prune step 3 (docs/architecture/target/v2/kernel-mutation-subsumption-report.zh-Hant.md, section 3): every mutant run against all kernel tests; a mutant whose failure set contains a kept mutant's and whose expect fails at the same site in its via was merged into that via (cases joined, every sentence of the expect required): rs-j3-4-z1-removed into rs-j12-condition-reads-dropped, rs-j3-5-changed-allowed into rs-adv-condition-change-filter-dropped, rs-j12-write-term-dropped into rs-j11-self-conflict-off, rs-adv-assert-self-conflict-removed into rs-j11-self-conflict-off, rs-j24-de16-removed into rs-adv-derived-deferred-writer-counts, rs-adv-assert-condition-write-removed into rs-j13-condition-write-allowed, rs-b5-literal-counts-deferred into rs-b5-literal-counts-membership, rs-b3-trim-ignores-declared into rs-b3-trim-not-pinned, rs-iv-ff3-C-section-dropped into rs-iv-fb8-C-request-not-hashed, rs-iv-fn1-funnel-empty into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn7-zone-access-unchanged into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fx15-funnel-zone-B-systems-only into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fd4-resolver-insert-not-recorded into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn2-funnel-not-transitive into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn3-system-zone-without-funnel into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn8-funnel-note-empty into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fd5-commandsfor-inserts-as-writes into rs-iv-fx14-funnel-zone-C-systems-only, hf-no-rounds into hf-verification-only, hf-first-queue into hf-verification-only, hf-limit-off-by-one into hf-default-limit-nine, hf-schedule-limit-ignored into hf-limit-check-before-empty, hf-only-with-trim into hf-startup-skipped, hf-limit-no-names into hf-limit-names-not-unique, we-j30-stamp-after-call into we-adv-tickstamp-never-recorded, we-j1-insert-append into we-j1-erase-swap-pop, we-j2-alive-append into we-j1-erase-swap-pop, we-j7-column-dtor-descending into we-j7-world-dtor-reverse, we-j5-layer1-off into we-j5-id-not-mode, we-j3-16-violations-dropped into we-j5-id-not-mode, hf-round-skips-despawn into hf-round-skips-onremove, sr-dropped-onadd-only into sr-dropped-cells-added, sr-range-removed into sr-dropped-made-alive, sr-emitter-by-planpos into sr-emitter-by-name, sr-tick-cached-for-world into sr-tick-one, sr-discard-clears-records into we-j35-diagnostics-dropped, ns-entry-violation-enters into ns-entry-retake-only, ks-s4-layer2-events-declared into ns-entry-retake-only, ns-left-error-not-listed into we-adv-dropped-err-beside-own-err-lost, ns-handle-epoch-not-renewed into ns-entry-no-compare-no-retake, ns-stamp-not-renewed into ns-modify-no-changed, ks-s10-bind-skipped into ks-s10-handles-unchecked, ks-s10-one-token-for-all-threads into ks-s10-handles-unchecked, ks-s10-check-ge into ks-s10-handles-unchecked, ks-s2-refusal-leaves-pending into ks-s2-empty-build-bumps, ks-s2-own-world-unchecked into ks-s2-register-while-running, ks-s6-set-not-recorded into ks-s6-plan-order-reversed, ks-s5-interrupted-still-changes into ks-s5-closure-refusal-not-interrupting, ks-s7-drop-every-run into we-adv-ready-window-compare-off, bs-thread-serial-not-thread-local into bs-thread-serial-issuer-per-thread, ns-rebase-no-retake-names-ping into ns-rebase-no-retake-on-throw, ks-s5-caller-error-recorded into ks-s5-spawn-alive-ends-run. empty-expect (v8-arch-gyo2-empty-expect, follow-up of kernel-mutation-subsumption-report.zh-Hant.md section 8 item 5): the expects of rs-iv-ff1-registry-section-dropped, rs-iv-fb5-sort-tiebreak-dropped, rs-iv-fb6-C-target-not-hashed, rs-iv-fb7-registry-target-not-hashed, rs-iv-fb8-C-request-not-hashed, rs-iv-fb9-C-filter-by-request-zone, rs-iv-fb11-C-count-dropped named a test case title that is printed every run (an unconditional MESSAGE), so they held whenever anything in their cases failed; each now names the CHECK expression its change breaks. drop-product-aliases (v8-arch-gyo2-drop-product-aliases, follow-up of kernel-mutation-prune-report.zh-Hant.md section 7 item 3): K1's alias list PRODUCT_ALIASES left kernel_guard.py with its two tests; ks-k1-roles-dropped's find and replace now name ROLE_WORDS alone. move-bs-mutants (v8-arch-gyo2-move-bs-mutants, follow-up of kernel-mutation-prune-report.zh-Hant.md): the 10 bs- mutants (Base's IdIssuer and CurrentThreadSerial, target gyo_base_tests) moved unchanged to Base's catalog docs/architecture/target/v2/scripts/base_mutations.json.",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them). kernel-subtract-structure (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md, section 6; ids ks-s<item>-, ks-diks15-): segment 1 retired 48 mutants whose rule left the kernel (ambiguity D-E8, run-time interception F-10 / Z5 / W-6b, ExclusiveWorld write limits S-13 / S-14 / S-15 / S-16 / S-18, D-E18, thread roles D-E10 / D-E13 / X-E2 / X-E3, the untyped ExclusiveWorld::Spawn, and ns-plan-version-not-bumped as a duplicate) and rewrote the ones whose find or expect moved. orchestration-skeleton (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9): step 2 took the Startup schedule and the registration units (Plugin, Registry::Finish, R-E1/R-E3/R-E6) out of the kernel. Retired with their property: rs-j15-startup-counted, ns-startup-nestable, ns-startup-running-allows-nested, ns-st-clock-only, ns-st-tick-first-read, ns-st-tick-first-error, ns-st-tick-stamp, ns-st-running-not-cleared, ns-st-no-retake, ns-two-startups-allowed, ks-s2-re7-startup-schedule, ks-s2-re7-startup-mount, ks-s7-startup-change-same-run, ns-st-settings-after-startup, ks-s2-finish-not-first, rs-j18-plugins-reversed (rs-j18-plugins-reversed: ids are now taken in the Registrar call itself, there is no loop over registration units to reverse). Moved to the orchestration catalog docs/architecture/target/v2/scripts/orchestration_mutations.json (the mutant that guards the property there in brackets): ns-st-not-auto (or-runframe-no-gameinit, or-runschedule-no-gameinit); ns-st-not-marked-auto (or-gi-every-frame); ns-st-not-marked-explicit (or-gi-every-frame, g8-gi-flag-only-on-success); ns-st-explicit-again (g8-gameinit-twice-allowed); ns-st-after (or-runframe-no-gameinit); ns-st-error-ignored (or-gi-error-ignored); ns-st-error-not-reported (or-gi-error-ignored); rs-j19-duplicate-built (or-oe1-silent, g8-oe1-second-used); rs-j19-requires-unchecked (or-oe3-later-unseen, g8-oe3-missing-silent); rs-j24-re6-removed (or-oe4-silent); ks-s2-plugin-finish-again (or-insert-reruns-finish); ks-s3-version-before-finish (or-finish-before-plans). Rewritten for the new code: the fingerprint and export versions (Registry 4, Plan 6, C 8, export 4), rs-sym-* (anchor Registry::~Registry), ks-s7-first-run-only*, ks-diks15-code-without-text (DE5), ks-links-extra (the link now comes from the register). After the full run on cc5fe0e1 (steps 3 and 4 included): hf-startup-skipped (replace keyed on the clock flag), we-j1-insert-append (find now starts at ::Engine::, the kernel headers qualify Engine from the root), ks-s3-version-not-raised and ks-s3-failed-raises-version (cases follow the renamed DI-KS 25 case). mutation-prune (docs/architecture/target/v2/kernel-mutation-prune-report.zh-Hant.md): retired the duplicates ns-rebase-no-retake, we-j4-handle-check-off, ns-c-version-not-bumped, we-w11-mut-no-mark-j30, ks-s5-applies-level-records, rs-j12-bundle-dropped; the command mutants whose change another mutant already catches, we-k5-entity-store-dropped-selftest, rs-sym-elf-bss-unread; the old product aliases ks-k1-aliases-dropped, ks-adv-alias-dropped-fps-pvp, ks-adv-alias-dropped-pvp, ks-adv-alias-dropped-gyo-tools; guard detail mutants that never caught a real miss and are not the only mutant of a sub-rule, ks-k1-camel-dropped, ks-adv-registry-case-sensitive, ks-adv-role-player-case, ks-adv-k3-headers-shrunk, ks-adv-k3-names-shrunk, ks-k4-type-unchecked, rs-b8-k4-inline-const-pointee, ks-adv-standard-header-in-quotes, we-k5-entity-store-prefix-unbounded, we-k5-backslash-parent, ks-adv-log-headers-cstdio, ks-adv-k6-set-log-handler, ks-adv-line-comment-to-eof, ks-adv-block-comment-off, ks-adv-kernel-suffixes-shrunk, ks-adv-string-to-eof, ks-n1-prefix-loose, ks-n1-nested-lost, ks-n1-missing-reverse-root-fails, ks-n1-plugins-dropped, ks-adv-stack-never-pops, ks-adv-reverse-roots-shrunk, ks-adv-naming-suffixes-shrunk, ks-n3-suffix-dropped, ks-adv-n3-keywords-shrunk, ks-adv-n3-attributes-dropped, rs-sym-common-unread, rs-sym-tlv-kept, rs-b8-toolchain-any-format. Merged into the mutant with the same find and replace (cases and expects joined): sr-j8-allots-later into sr-dropped-made-alive, sr-j8-no-record into sr-no-record, sr-j8-no-count into sr-no-count, sr-j8-reason into sr-reason-range-as-alive, sr-j32-alive-applied into sr-alive-applied, sr-j32-no-record into sr-no-record, sr-j32-no-count into sr-no-count, sr-j32-reason into sr-reason-alive-as-twice, sr-range-removed-respawn into sr-range-removed, sr-range-removed-insert into sr-range-removed, we-j5-boundary-off into we-j4-boundary-off, ks-s9-set-order-dropped into rs-adv-set-order-dropped, ks-s7-removed-limit-one into hf-settings-absent-limit-one, ks-s7-first-run-only-limit into ks-s7-first-run-only, ns-nested-end-ready-overwrite into ns-nested-end-ready, ns-absent-resource-present into ns-absent-component-present, ks-s5-j45-spawn-deferred into ks-s5-change-deferred, ks-s5-detour-after-unchecked into ns-epoch-check-skipped-for-exclusive, ks-s6-hook-set-at-record-time into ks-s6-set-at-record-time, hf-c-version-kept into rs-b6-cfp-version-1, sr-c-version-not-bumped into rs-b6-cfp-version-1, hf-plan-version-kept into sr-plan-version-not-bumped. Rewritten: ks-real-product-name (role word), rs-sample-capture-accepted and rs-sample-return-accepted (expect names the marker). mutation-prune step 3 (docs/architecture/target/v2/kernel-mutation-subsumption-report.zh-Hant.md, section 3): every mutant run against all kernel tests; a mutant whose failure set contains a kept mutant's and whose expect fails at the same site in its via was merged into that via (cases joined, every sentence of the expect required): rs-j3-4-z1-removed into rs-j12-condition-reads-dropped, rs-j3-5-changed-allowed into rs-adv-condition-change-filter-dropped, rs-j12-write-term-dropped into rs-j11-self-conflict-off, rs-adv-assert-self-conflict-removed into rs-j11-self-conflict-off, rs-j24-de16-removed into rs-adv-derived-deferred-writer-counts, rs-adv-assert-condition-write-removed into rs-j13-condition-write-allowed, rs-b5-literal-counts-deferred into rs-b5-literal-counts-membership, rs-b3-trim-ignores-declared into rs-b3-trim-not-pinned, rs-iv-ff3-C-section-dropped into rs-iv-fb8-C-request-not-hashed, rs-iv-fn1-funnel-empty into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn7-zone-access-unchanged into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fx15-funnel-zone-B-systems-only into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fd4-resolver-insert-not-recorded into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn2-funnel-not-transitive into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn3-system-zone-without-funnel into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn8-funnel-note-empty into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fd5-commandsfor-inserts-as-writes into rs-iv-fx14-funnel-zone-C-systems-only, hf-no-rounds into hf-verification-only, hf-first-queue into hf-verification-only, hf-limit-off-by-one into hf-default-limit-nine, hf-schedule-limit-ignored into hf-limit-check-before-empty, hf-only-with-trim into hf-startup-skipped, hf-limit-no-names into hf-limit-names-not-unique, we-j30-stamp-after-call into we-adv-tickstamp-never-recorded, we-j1-insert-append into we-j1-erase-swap-pop, we-j2-alive-append into we-j1-erase-swap-pop, we-j7-column-dtor-descending into we-j7-world-dtor-reverse, we-j5-layer1-off into we-j5-id-not-mode, we-j3-16-violations-dropped into we-j5-id-not-mode, hf-round-skips-despawn into hf-round-skips-onremove, sr-dropped-onadd-only into sr-dropped-cells-added, sr-range-removed into sr-dropped-made-alive, sr-emitter-by-planpos into sr-emitter-by-name, sr-tick-cached-for-world into sr-tick-one, sr-discard-clears-records into we-j35-diagnostics-dropped, ns-entry-violation-enters into ns-entry-retake-only, ks-s4-layer2-events-declared into ns-entry-retake-only, ns-left-error-not-listed into we-adv-dropped-err-beside-own-err-lost, ns-handle-epoch-not-renewed into ns-entry-no-compare-no-retake, ns-stamp-not-renewed into ns-modify-no-changed, ks-s10-bind-skipped into ks-s10-handles-unchecked, ks-s10-one-token-for-all-threads into ks-s10-handles-unchecked, ks-s10-check-ge into ks-s10-handles-unchecked, ks-s2-refusal-leaves-pending into ks-s2-empty-build-bumps, ks-s2-own-world-unchecked into ks-s2-register-while-running, ks-s6-set-not-recorded into ks-s6-plan-order-reversed, ks-s5-interrupted-still-changes into ks-s5-closure-refusal-not-interrupting, ks-s7-drop-every-run into we-adv-ready-window-compare-off, bs-thread-serial-not-thread-local into bs-thread-serial-issuer-per-thread, ns-rebase-no-retake-names-ping into ns-rebase-no-retake-on-throw, ks-s5-caller-error-recorded into ks-s5-spawn-alive-ends-run. empty-expect (v8-arch-gyo2-empty-expect, follow-up of kernel-mutation-subsumption-report.zh-Hant.md section 8 item 5): the expects of rs-iv-ff1-registry-section-dropped, rs-iv-fb5-sort-tiebreak-dropped, rs-iv-fb6-C-target-not-hashed, rs-iv-fb7-registry-target-not-hashed, rs-iv-fb8-C-request-not-hashed, rs-iv-fb9-C-filter-by-request-zone, rs-iv-fb11-C-count-dropped named a test case title that is printed every run (an unconditional MESSAGE), so they held whenever anything in their cases failed; each now names the CHECK expression its change breaks. drop-product-aliases (v8-arch-gyo2-drop-product-aliases, follow-up of kernel-mutation-prune-report.zh-Hant.md section 7 item 3): K1's alias list PRODUCT_ALIASES left kernel_guard.py with its two tests; ks-k1-roles-dropped's find and replace now name ROLE_WORDS alone. move-bs-mutants (v8-arch-gyo2-move-bs-mutants, follow-up of kernel-mutation-prune-report.zh-Hant.md): the 10 bs- mutants (Base's IdIssuer and CurrentThreadSerial, target gyo_base_tests) moved unchanged to Base's catalog docs/architecture/target/v2/scripts/base_mutations.json. time-events step 3 (v8-arch-gyo2-time-events, docs/architecture/target/v2/time-events-declaration.zh-Hant.md sections 6.1 G3 and 6.5; event cursor declaration section 8; ids msg-): retired rs-adv-event-trim-unknown (the eventTrim field and its D-E1 check left), rs-b3-trim-not-pinned (the trim is no Plan step), hf-rounds-follow-trim (no trim step follows a sync point; the rounds following the last sync point stay guarded by hf-first-sync-point and hf-rounds-every-sync), we-j36-no-same-tick and we-j36-swap-compare (a reader reads by cursor, not by tick and Plan position; the cursor read is guarded by msg-read-skips-first, msg-cursor-not-advanced and msg-seq-not-advanced); rewrote we-j36-trim-early, we-adv-event-trim-never, ns-nested-events-not-trimmed and hf-trim-before-rounds for the cursor trim at the end of the outermost Run; moved the find of the version mutants, rs-adv-hook-unchecked, we-j29-condition-cached, we-j29-set-once, ns-nested-end-ready, ks-s7-first-run-only and ks-s2-attach-events-first-only; retargeted we-j36-hook-writerpos-zero to J-55 (a hook's records still carry its sync point's position); followed C format 9 in the expect of rs-iv-fb11-C-count-dropped; added the msg- mutants of the retained messages read by cursor.",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -1849,16 +1849,6 @@
       "cases": "J-24:*"
     },
     {
-      "id": "rs-adv-event-trim-unknown",
-      "what": "an eventTrim naming no sync point is accepted (no trim step at all) (Fable adversarial check, 2026-11-13)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (!s.eventTrim.empty() && syncNames.count(s.eventTrim) == 0 && stages.count(s.eventTrim) == 0) {",
-      "replace": "        if (false) {",
-      "expect": "unknownTrim",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*"
-    },
-    {
       "id": "rs-adv-extract-outside-extract-schedule",
       "what": "Extract parameters are accepted outside an extract schedule (H-6) (Fable adversarial check, 2026-11-13)",
       "file": "engine/kernel/src/Registry.cpp",
@@ -1890,10 +1880,10 @@
     },
     {
       "id": "rs-adv-hook-unchecked",
-      "what": "Registrar::Hook no longer checks the hook's signature (Fable adversarial check, 2026-11-13)",
+      "what": "Registrar::Hook no longer checks the hook's signature (Fable adversarial check, 2026-11-13) (find moved: the hook MessageReader static_assert now follows the check (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/include/engine/kernel/Registry.hpp",
-      "find": "        Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();\n        if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {\n            RegisterHook(",
-      "replace": "        if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {\n            RegisterHook(",
+      "find": "        Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();\n        static_assert(!Detail::HookHoldsMessageReader<Fn>(),",
+      "replace": "        static_assert(!Detail::HookHoldsMessageReader<Fn>(),",
       "expect": "variant HOOK_PARAMETER compiled",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true
@@ -2040,16 +2030,6 @@
       "expect": "NonDataflowEdgesExtended\\(\\) == 0"
     },
     {
-      "id": "rs-b3-trim-not-pinned",
-      "what": "B3: the trim is not pinned after its named sync point (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in rs-b3-trim-ignores-declared [B3: eventTrim is ignored (the trim always follows the last stage end; Fable)])",
-      "file": "engine/kernel/src/Scheduler.cpp",
-      "find": "        PinEventTrim();\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-20:*",
-      "expect": "(?=[\\s\\S]*(?:trim < PositionOf\\(plan, \"After\"\\)|trim == mid \\+ 1))[\\s\\S]*(?:trim == mid \\+ 1)"
-    },
-    {
       "id": "rs-c4-ingress-anywhere",
       "what": "C4: the ingress stage may be any stage",
       "file": "engine/kernel/src/Registry.cpp",
@@ -2091,13 +2071,13 @@
     },
     {
       "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in hf-c-version-kept, sr-c-version-not-bumped: the same find and replace, so their cases and assertions now run here; every listed message must appear)",
+      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in hf-c-version-kept, sr-c-version-not-bumped: the same find and replace, so their cases and assertions now run here; every listed message must appear) (find and expect follow C format 9 (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 8;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 9;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*,J-54: the schedule's limit is in*,J-55:*",
-      "expect": "(?=[\\s\\S]*CFingerprint\\(\\)\\.version == 8U)(?=[\\s\\S]*none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 8U)[\\s\\S]*J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 8"
+      "expect": "(?=[\\s\\S]*CFingerprint\\(\\)\\.version == 9U)(?=[\\s\\S]*none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 9U)[\\s\\S]*J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 9"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -2306,13 +2286,13 @@
     },
     {
       "id": "rs-iv-fb11-C-count-dropped",
-      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks)",
+      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks) (expect follows C format 9 (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Fingerprint.cpp",
       "find": "    out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {\n        return data.components[rule.targetId].zone == Zone::C;\n    }));\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "CHECK\\( both\\.registry->Frozen\\(\\)\\.CFingerprint\\(\\)\\.Text\\(\\) == std::string\\(\"8:"
+      "expect": "CHECK\\( both\\.registry->Frozen\\(\\)\\.CFingerprint\\(\\)\\.Text\\(\\) == std::string\\(\"9:"
     },
     {
       "id": "rs-iv-fn4-system-Z6-without-funnel",
@@ -2356,13 +2336,13 @@
     },
     {
       "id": "rs-iv-registry-version-1",
-      "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
+      "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (find and expect follow Registry format 5 (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 4;",
+      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 5;",
       "replace": "constexpr std::uint32_t kRegistryFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "RegistryFingerprint\\(\\)\\.version == 4U"
+      "expect": "RegistryFingerprint\\(\\)\\.version == 5U"
     },
     {
       "id": "rs-iv-fx4-note-for-any-kind",
@@ -2886,13 +2866,13 @@
     },
     {
       "id": "hf-export-version-kept",
-      "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
+      "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (find and expect follow export format 5 (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "    std::string out = \"gyo.kernel.plans 4\\n\";",
+      "find": "    std::string out = \"gyo.kernel.plans 5\\n\";",
       "replace": "    std::string out = \"gyo.kernel.plans 2\\n\";",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 4\"\\)\\ ==\\ 0"
+      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 5\"\\)\\ ==\\ 0"
     },
     {
       "id": "hf-no-snapshot-after-rounds",
@@ -2976,13 +2956,13 @@
     },
     {
       "id": "we-j36-hook-writerpos-zero",
-      "what": "J-36: a hook's events and records carry Plan position 0 (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-36: a hook's events and records carry Plan position 0 (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (retargeted: a reader no longer reads Plan positions, so J-36 cannot see it; a hook's dropped spawn record names its sync point's step in J-55 (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/World.cpp",
       "find": "    call.planPos = planPos;\n    call.zone = record.zone;",
       "replace": "    call.planPos = 0;\n    call.zone = record.zone;",
       "target": "gyo_kernel_tests",
-      "cases": "J-36:*",
-      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
+      "cases": "J-55: a hook's spawn dropped at the next sync point and in a hook round",
+      "expect": "CHECK\\( r\\.step == triggered \\) is NOT correct"
     },
     {
       "id": "we-adv-hook-err-swallowed",
@@ -3246,20 +3226,20 @@
     },
     {
       "id": "we-j29-condition-cached",
-      "what": "J-29: a mount condition is evaluated only until the System first ran (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-29: a mount condition is evaluated only until the System first ran (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find and replace follow the condition loop that numbers each condition as a reader (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (runs && !condition.Evaluator()(call)) runs = false;",
-      "replace": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (runs && mountState.lastRun == 0 && !condition.Evaluator()(call)) runs = false;",
+      "find": "                for (const ConditionRef& condition : mount.conditions) evaluate(condition);",
+      "replace": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (mountState.lastRun == 0) evaluate(condition);\n                }",
       "target": "gyo_kernel_tests",
       "cases": "J-29:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"guarded@1\\ condition\\ condition\\ condition\\ condition\""
     },
     {
       "id": "we-j29-set-once",
-      "what": "J-29: a set condition is evaluated once, not once per member (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-29: a set condition is evaluated once, not once per member (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find and replace follow the condition loop that numbers each condition as a reader (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "                        for (const ConditionRef& condition : set.conditions) {\n                            if (runs && !condition.Evaluator()(call)) runs = false;",
-      "replace": "                        for (const ConditionRef& condition : set.conditions) {\n                            static int evaluated = 0;\n                            if (runs && evaluated++ == 0 && !condition.Evaluator()(call)) runs = false;",
+      "find": "                        for (const ConditionRef& condition : set.conditions) evaluate(condition);",
+      "replace": "                        for (const ConditionRef& condition : set.conditions) {\n                            static int evaluated = 0;\n                            if (evaluated++ == 0) evaluate(condition);\n                        }",
       "target": "gyo_kernel_tests",
       "cases": "J-29:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"guarded@1\\ condition\\ condition\\ condition\\ condition\""
@@ -3425,34 +3405,14 @@
       "expect": "Mirror\\(\\)\\ ==\\ full"
     },
     {
-      "id": "we-j36-no-same-tick",
-      "what": "J-36 (F-7): a reader after its writer reads only the next tick (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "            const bool current = record.tick == tick_ && record.writerPos < position_;",
-      "replace": "            const bool current = false;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-36:*",
-      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
-    },
-    {
       "id": "we-j36-trim-early",
-      "what": "J-36 (F-7): the trim drops the current tick too (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "what": "J-36 (F-7): the trim drops the current tick too (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts) (G3 rewrite: the trim drops one record past the slowest cursor, a record a skipped reader has not read (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/World.cpp",
-      "find": "messages_[e]->Trim(ticks_[DomainIndex(domain)]);",
-      "replace": "messages_[e]->Trim(ticks_[DomainIndex(domain)] + 1);",
+      "find": "            if (cursor.message == e && cursor.read < upTo) upTo = cursor.read;",
+      "replace": "            if (cursor.message == e && cursor.read < upTo) upTo = cursor.read + 1;",
       "target": "gyo_kernel_tests",
       "cases": "J-36:*",
-      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
-    },
-    {
-      "id": "we-j36-swap-compare",
-      "what": "J-36: the previous tick's records compared the wrong way (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "record.tick == tick_ - 1 && record.writerPos > position_;",
-      "replace": "record.tick == tick_ - 1 && record.writerPos < position_;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-36:*",
-      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
+      "expect": "\\[msg\\-skipped\\-keeps\\]"
     },
     {
       "id": "we-j12-fetch-side-effect",
@@ -3597,13 +3557,13 @@
     },
     {
       "id": "we-adv-event-trim-never",
-      "what": "F.3 (Fable): the trim drops nothing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "what": "F.3 (Fable): the trim drops nothing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts) (G3 rewrite: the trim at the end of the outermost Run drops nothing (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/World.cpp",
-      "find": "messages_[e]->Trim(ticks_[DomainIndex(domain)]);",
-      "replace": "messages_[e]->Trim(0);",
+      "find": "        if (!buffer.TrimThrough(upTo) || !verification_) continue;",
+      "replace": "        if (true) continue;",
       "target": "gyo_kernel_tests",
       "cases": "J-36:*",
-      "expect": "rig\\->world\\(\\)\\.MessagePayloads<Ping>\\(\\)\\.empty\\(\\)"
+      "expect": "\\[msg\\-trim\\-read\\]"
     },
     {
       "id": "we-adv-hookctx-in-system-allowed",
@@ -3906,18 +3866,6 @@
       "cases": "J-54: at a schedule's own limit*"
     },
     {
-      "id": "hf-rounds-follow-trim",
-      "file": "engine/kernel/src/Executor.cpp",
-      "target": "gyo_kernel_tests",
-      "find": "        if (plan->steps[position].kind == StepKind::SyncPoint) lastSync = position;",
-      "replace": "        if (plan->steps[position].kind == StepKind::SyncPoint &&\n            (lastSync == plan->steps.size() || plan->steps[lastSync + 1].kind != StepKind::EventTrim)) lastSync = position;",
-      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf",
-      "what": "the rounds follow the sync point before the event trim (declared: 輪跟著清舊事件那一步走) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
-      "cases": "J-54: an event trim at an earlier sync point*",
-      "ran_as": "ck-decl-rounds-follow-trim",
-      "note": "宣告判定 2「輪跟著清舊事件那一步走」"
-    },
-    {
       "id": "hf-limit-not-interrupted",
       "file": "engine/kernel/src/Executor.cpp",
       "target": "gyo_kernel_tests",
@@ -3946,9 +3894,9 @@
       "file": "engine/kernel/src/Executor.cpp",
       "target": "gyo_kernel_tests",
       "find": "            if (position == lastSync) {\n",
-      "replace": "            if (position == lastSync) {\n                if (position + 1 < plan->steps.size() && plan->steps[position + 1].kind == StepKind::EventTrim) world.TrimEvents(domain);\n",
-      "expect": "J\\-54:\\ the\\ event\\ trim\\ ran\\ after\\ an\\ Err\\ in\\ a\\ round",
-      "what": "the event trim runs before the rounds (declared: 清空排到清舊事件之後) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "replace": "            if (position == lastSync) {\n                world.TrimMessages();\n",
+      "expect": "J\\-54:\\ the\\ message\\ trim\\ ran\\ after\\ an\\ Err\\ in\\ a\\ round",
+      "what": "the event trim runs before the rounds (declared: 清空排到清舊事件之後) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (G3 rewrite: the trim runs at the last sync point, before the rounds (v8-arch-gyo2-time-events step 3))",
       "cases": "J-54: an Err in a round*",
       "ran_as": "ck-decl-rounds-after-trim",
       "note": "宣告判定 2「清空排到清舊事件之後」"
@@ -4647,13 +4595,13 @@
     },
     {
       "id": "sr-plan-version-not-bumped",
-      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in hf-plan-version-kept: the same find and replace, so their cases and assertions now run here; every listed message must appear)",
+      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in hf-plan-version-kept: the same find and replace, so their cases and assertions now run here; every listed message must appear) (find, replace and expect follow Plan format 7 (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 6;",
-      "replace": "constexpr std::uint32_t kFingerprintVersion = 5;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 7;",
+      "replace": "constexpr std::uint32_t kFingerprintVersion = 6;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*,J-54: the schedule's limit is in*",
-      "expect": "(?=[\\s\\S]*J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 6)[\\s\\S]*planOf\\(none,\\ \\\"Tick\\\"\\)\\.version\\ ==\\ 6U"
+      "expect": "(?=[\\s\\S]*J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 7)[\\s\\S]*planOf\\(none,\\ \\\"Tick\\\"\\)\\.version\\ ==\\ 7U"
     },
     {
       "id": "sr-static-assert-removed",
@@ -4667,10 +4615,10 @@
     },
     {
       "id": "ns-nested-end-ready",
-      "what": "a nested Run sets the World back to Ready when it ends (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (v8-arch-gyo2-mutation-prune merged in ns-nested-end-ready-overwrite: the same find and replace, so their cases and assertions now run here; every listed message must appear)",
+      "what": "a nested Run sets the World back to Ready when it ends (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (v8-arch-gyo2-mutation-prune merged in ns-nested-end-ready-overwrite: the same find and replace, so their cases and assertions now run here; every listed message must appear) (find and replace follow the outermost-Run block that also trims the messages (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (!nested) world.state_ = WorldState::Ready;",
-      "replace": "    world.state_ = WorldState::Ready;",
+      "find": "        world.TrimMessages();\n        world.state_ = WorldState::Ready;\n    }",
+      "replace": "        world.TrimMessages();\n    }\n    world.state_ = WorldState::Ready;",
       "target": "gyo_kernel_tests",
       "cases": "J-56: back in the outer System the World is still*,J-56: back in the outer System a World API overwrite*",
       "expect": "(?=[\\s\\S]*\\[ns\\-back\\-state\\])[\\s\\S]*\\[ns\\-back\\-overwrite\\]"
@@ -4887,22 +4835,22 @@
     },
     {
       "id": "ns-nested-events-not-trimmed",
-      "what": "F.3: a nested Run does not trim events (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "F.3: a nested Run does not trim events (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (G3 rewrite: a nested run now trims nothing; the mutant trims when a nested run ends (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "            world.TrimEvents(domain);",
-      "replace": "            if (!nested) world.TrimEvents(domain);",
+      "find": "    // A nested Run returns to its outer System: the World is still running (K0).\n    if (!nested) {",
+      "replace": "    // A nested Run returns to its outer System: the World is still running (K0).\n    if (nested) world.TrimMessages();\n    if (!nested) {",
       "target": "gyo_kernel_tests",
-      "cases": "J-56: events written inside*",
+      "cases": "J-56: messages written inside*",
       "expect": "\\[ns\\-events\\]"
     },
     {
       "id": "ns-exclusive-no-boundary-compare",
-      "what": "A.6: no boundary comparison after a call that holds ExclusiveWorld (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1)",
+      "what": "A.6: no boundary comparison after a call that holds ExclusiveWorld (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (cases follow the test case renamed by the rename commit bef95411 (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (world.verification_) changed = world.CompareAfter(state.access);",
       "replace": "            if (world.verification_ && !state.access.wholeWorld) changed = world.CompareAfter(state.access);",
       "target": "gyo_kernel_tests",
-      "cases": "J-56: verification on: a write of an event buffer behind EventWriter after*",
+      "cases": "J-56: verification on: a write of an event buffer behind MessageWriter after*",
       "expect": "\\[ns\\-ver\\-address\\-after\\]"
     },
     {
@@ -5307,10 +5255,10 @@
     },
     {
       "id": "ks-s7-first-run-only",
-      "what": "S7: KernelSettings is read at the first Run only (a System's or the Host's write between Runs is never read) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in ks-s7-first-run-only-limit: the same find and replace, so their cases and assertions now run here; every listed message must appear)",
+      "what": "S7: KernelSettings is read at the first Run only (a System's or the Host's write between Runs is never read) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in ks-s7-first-run-only-limit: the same find and replace, so their cases and assertions now run here; every listed message must appear) (find follows the DroppedMessages reset placed after ReadSettings (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    ReadSettings();\n    return RunPlan(record->options.name, false);",
-      "replace": "    if (!world.hasRun_) ReadSettings();\n    return RunPlan(record->options.name, false);",
+      "find": "    ReadSettings();\n    // A new outermost Run:",
+      "replace": "    if (!world.hasRun_) ReadSettings();\n    // A new outermost Run:",
       "target": "gyo_kernel_tests",
       "expect": "(?=[\\s\\S]*J\\-50 next Run)[\\s\\S]*J\\-54 next Run",
       "cases": "J-50:*,J-54: KernelSettings is read*"
@@ -5737,10 +5685,10 @@
     },
     {
       "id": "ks-s2-attach-events-first-only",
-      "what": "S2 rule 5: a World adds event buffers only at its first attach (review S3) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "what": "S2 rule 5: a World adds event buffers only at its first attach (review S3) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix) (find follows the attach loop that also sets each buffer's capacity (v8-arch-gyo2-time-events step 3))",
       "file": "engine/kernel/src/World.cpp",
-      "find": "    for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) messages_.push_back(data.messageMakers[e]());",
-      "replace": "    if (version_ == 0) for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) messages_.push_back(data.messageMakers[e]());",
+      "find": "    for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) {\n        messages_.push_back(data.messageMakers[e]());",
+      "replace": "    if (version_ == 0) for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) {\n        messages_.push_back(data.messageMakers[e]());",
       "target": "gyo_kernel_tests",
       "expect": "attach \\(message buffers\\)",
       "cases": "DI-KS 26: an existing World attaches*"
@@ -7503,6 +7451,266 @@
         "test_kernel_guard.py",
         "-v"
       ]
+    },
+    {
+      "id": "msg-trim-on-err",
+      "what": "an Err trims the messages (event cursor declaration 3.2: a Run that ends in an Err trims nothing)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    world_.DiscardDeferred();\n    if (nested) {",
+      "replace": "    world_.DiscardDeferred();\n    world_.TrimMessages();\n    if (nested) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: an Err in a round*",
+      "expect": "J\\-54:\\ the\\ message\\ trim\\ ran\\ after\\ an\\ Err\\ in\\ a\\ round"
+    },
+    {
+      "id": "msg-trim-no-snapshot",
+      "what": "the trim does not take the changed buffer's boundary snapshot again (time-events declaration 4.2: the next Run's Ready window would take the trim for a change outside the World API)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        messageSnapshots_.resize(messages_.size());\n        Take(messageSnapshots_[e], buffer.StorageBytes());\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: with verification on*",
+      "expect": "\\[msg\\-trim\\-verification\\-quiet\\]"
+    },
+    {
+      "id": "msg-never-run-holds",
+      "what": "a message type no reader has run for keeps every record (event cursor declaration 3.2: a reader holds records back only once it has run)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        std::uint64_t upTo = buffer.nextSeq - 1;",
+      "replace": "        std::uint64_t upTo = std::none_of(cursors_.begin(), cursors_.end(), [&](const Detail::MessageCursor& c) { return c.message == e; }) ? 0 : buffer.nextSeq - 1;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a reader that has never run*,J-36: the records are trimmed when the outermost Run ends*",
+      "expect": "(?=[\\s\\S]*\\[msg\\-never\\-run\\-holds\\-nothing\\])[\\s\\S]*\\[msg\\-trim\\-after\\-rounds\\]"
+    },
+    {
+      "id": "msg-removed-reader-kept",
+      "what": "a removed System's cursors stay in the World, so what only it held is never trimmed (event cursor declaration 3.2, L5)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        return cursor.system >= data.systems.size() || data.systems[cursor.system].removed;",
+      "replace": "        return false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: removing a reader*",
+      "expect": "\\[msg\\-removed\\-reader\\-releases\\]"
+    },
+    {
+      "id": "msg-new-reader-from-now",
+      "what": "a reader's first run starts after the newest record (Bevy get_cursor_current), not at the oldest record kept (event cursor declaration 3.2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    const std::uint64_t start = buffer.Size() > 0 ? buffer.SeqAt(0) - 1 : buffer.nextSeq - 1;",
+      "replace": "    const std::uint64_t start = buffer.nextSeq - 1;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a reader that has never run*",
+      "expect": "\\[msg\\-new\\-reader\\-oldest\\]"
+    },
+    {
+      "id": "msg-cap-ignored",
+      "what": "a message type's capacity is not given to its buffer: a full buffer drops nothing (event cursor declaration 3.2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        messages_.back()->capacity = data.messages[e].capacity;",
+      "replace": "        messages_.back()->capacity = 1U << 20;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a write to a full buffer*",
+      "expect": "\\[msg\\-cap\\-drops\\-oldest\\]"
+    },
+    {
+      "id": "msg-registry-capacity-default",
+      "what": "the Registry keeps the default capacity, not the declared one (event cursor declaration 5.1: the read-only listing has each type's capacity)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "data.OwnerName(owner_), options.capacity, {}});",
+      "replace": "data.OwnerName(owner_), 1024U, {}});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the Registry lists*",
+      "expect": "\\[msg\\-registry\\-capacity\\]"
+    },
+    {
+      "id": "msg-registry-own-reader-dropped",
+      "what": "the Registry's reader list leaves out the Systems themselves (event cursor declaration 5.1)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            AddMessageReaders(data, ownReads, system, mount, {});\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the Registry lists*",
+      "expect": "\\[msg\\-registry\\-readers\\]"
+    },
+    {
+      "id": "msg-registry-condition-reader-dropped",
+      "what": "the Registry's reader list leaves out a mount's run conditions (event cursor declaration 5.1)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                AddMessageReaders(data, conditionResolver.access.reads, system, mount, condition.Name());\n                MergeCondition(resolver, conditionResolver);\n            }\n            // Set conditions",
+      "replace": "                MergeCondition(resolver, conditionResolver);\n            }\n            // Set conditions",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the Registry lists*",
+      "expect": "\\[msg\\-registry\\-readers\\]"
+    },
+    {
+      "id": "msg-capacity-not-in-registry-fp",
+      "what": "the Registry fingerprint does not hash a message type's capacity",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        out.Enum(info.zone);\n        out.U32(info.capacity);\n",
+      "replace": "        out.Enum(info.zone);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: a message type's capacity*",
+      "expect": "\\[msg\\-capacity\\-registry\\-fp\\]"
+    },
+    {
+      "id": "msg-capacity-not-in-c-fp",
+      "what": "the C fingerprint does not hash a zone C message type's capacity",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        out.U32(data.messages[id].capacity);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: a message type's capacity*",
+      "expect": "\\[msg\\-capacity\\-c\\-fp\\]"
+    },
+    {
+      "id": "msg-dropped-count-kept",
+      "what": "DroppedMessages does not count the dropped records",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    ++record.count;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a write to a full buffer*",
+      "expect": "\\[msg\\-dropped\\-count\\]"
+    },
+    {
+      "id": "msg-dropped-range-first-only",
+      "what": "DroppedMessages keeps the first dropped seq as the last one too",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    record.lastSeq = seq;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a write to a full buffer*",
+      "expect": "\\[msg\\-dropped\\-range\\]"
+    },
+    {
+      "id": "msg-dropped-one-per-drop",
+      "what": "every dropped record makes its own DroppedMessages, not one per message type per Run",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (!entry) {\n        DroppedMessages record;",
+      "replace": "    if (true) {\n        DroppedMessages record;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a write to a full buffer*",
+      "expect": "\\[msg\\-dropped\\-one\\-per\\-run\\]"
+    },
+    {
+      "id": "msg-dropped-runs-merged",
+      "what": "a new outermost Run does not start its own DroppedMessages: a later Run's drops join an earlier Run's record",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    for (World::DroppedEntry& dropped : world.droppedEntry_) dropped = World::DroppedEntry{};\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: drops in one Run make one record*",
+      "expect": "\\[msg\\-dropped\\-one\\-per\\-run\\]"
+    },
+    {
+      "id": "msg-dropped-readers-who-read",
+      "what": "DroppedMessages lists every reader with a cursor, also those that had read the dropped record",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (cursor.message != id || cursor.read >= seq) continue;",
+      "replace": "        if (cursor.message != id) continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: drops in one Run make one record*",
+      "expect": "\\[msg\\-dropped\\-readers\\]"
+    },
+    {
+      "id": "msg-writer-drop-unrecorded",
+      "what": "a write to a full buffer drops the oldest record without telling the World (no DroppedMessages)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            Detail::RecordDroppedMessage(*world_, id_, *dropped);\n",
+      "replace": "            static_cast<void>(*dropped);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a write to a full buffer*",
+      "expect": "\\[msg\\-dropped\\-one\\-per\\-run\\]"
+    },
+    {
+      "id": "msg-seq-not-advanced",
+      "what": "every record of a type takes the same write sequence number",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "        records.push_back(Record{nextSeq++, std::move(message)});",
+      "replace": "        records.push_back(Record{nextSeq, std::move(message)});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a reader skipped*",
+      "expect": "\\[msg\\-skipped\\-catches\\-up\\]"
+    },
+    {
+      "id": "msg-read-skips-first",
+      "what": "Read leaves out the first record after the reader's cursor",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            if (record.seq <= from_) continue;",
+      "replace": "            if (record.seq <= from_ + 1) continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a reader skipped*",
+      "expect": "\\[msg\\-skipped\\-catches\\-up\\]"
+    },
+    {
+      "id": "msg-cursor-not-advanced",
+      "what": "Read does not move the reader's cursor: the reader reads the same records again",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        Detail::AdvanceMessageCursor(*world_, reader_, id_, last);\n",
+      "replace": "        static_cast<void>(last);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a reader skipped*",
+      "expect": "\\[msg\\-skipped\\-catches\\-up\\]"
+    },
+    {
+      "id": "msg-read-twice-moves",
+      "what": "a second Read in one call starts from where the first stopped (event cursor declaration 5.1: every Read of one call returns the same records)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        Detail::AdvanceMessageCursor(*world_, reader_, id_, last);\n",
+      "replace": "        Detail::AdvanceMessageCursor(*world_, reader_, id_, last);\n        const_cast<std::uint64_t&>(from_) = last;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: Read twice in one call*",
+      "expect": "\\[msg\\-same\\-batch\\]"
+    },
+    {
+      "id": "msg-condition-shares-cursor",
+      "what": "a run condition reads with its System's cursor (event cursor declaration 3.2: each condition is a reader of its own)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                    call.reader.slot = slot;\n",
+      "replace": "                    call.reader.slot = 0;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a run condition is a reader*",
+      "expect": "\\[msg\\-condition\\-cursor\\]"
+    },
+    {
+      "id": "msg-summary-no-cursors",
+      "what": "the World summary leaves out the message cursors (event cursor declaration 3.2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    out.U32(cursors_.size());\n    for (const Detail::MessageCursor& cursor : cursors_) {",
+      "replace": "    out.U32(0);\n    if (false) for (const Detail::MessageCursor& cursor : cursors_) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the World summary holds*",
+      "expect": "\\[msg\\-summary\\-cursors\\]"
+    },
+    {
+      "id": "msg-summary-no-next-seq",
+      "what": "the World summary leaves out each type's write sequence number (event cursor declaration 3.2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        out.U64(buffer->nextSeq);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the World summary holds*",
+      "expect": "\\[msg\\-summary\\-seq\\]"
+    },
+    {
+      "id": "msg-hook-reader-accepted",
+      "what": "a hook may hold a MessageReader (event cursor declaration 3.2: a hook is not a reader; time-events declaration 4.2: a compile failure)",
+      "file": "engine/kernel/include/engine/kernel/Registry.hpp",
+      "find": "        static_assert(!Detail::HookHoldsMessageReader<Fn>(),\n                      \"GYO_KERNEL_REJECT_HOOK_MESSAGE_READER: a hook is not a message reader; it has no cursor (event \"\n                      \"cursor declaration 3.2)\");\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "variant HOOK_MESSAGE_READER compiled",
+      "expect_build_failure": true
+    },
+    {
+      "id": "msg-end-trim-dropped",
+      "what": "the outermost Run does not trim when it ends (event cursor declaration 3.2: after the hook rounds, a record no reader holds is trimmed)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.TrimMessages();\n        world.state_ = WorldState::Ready;",
+      "replace": "        world.state_ = WorldState::Ready;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the records are trimmed when the outermost Run ends*",
+      "expect": "\\[msg\\-trim\\-after\\-rounds\\]"
     }
   ]
 }
