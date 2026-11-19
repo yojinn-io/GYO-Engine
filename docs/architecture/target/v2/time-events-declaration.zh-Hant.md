@@ -411,7 +411,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 ### 10.2 編排層（`target/v2/orchestration.zh-Hant.md`）
 
 - **O-1**：拿掉「在第 3 條之前，遊戲初始化的 schedule 要屬於一個 domain」。
-- **O-11**：`WorldFailure` 帶同步點序號、不帶 domain 與 tick（G6）；加一句「World 自己的壞掉、建立、替換不經 Kernel 的事件發，錯誤回給 runner，日誌從 runner 拿」（第 11 節第 1 件，使用者 2026-11-19，`v8-arch-gyo2-world-events-not-via-event`）。
+- **O-11**：`WorldFailure` 帶同步點序號、不帶 domain 與 tick（G6）；加一段（第 11 節第 1 件，使用者 2026-11-19，`v8-arch-gyo2-world-events-not-via-event`，含使用者「補過去」的三點）：「通知只在發出它的 World 健康時經 Kernel 的事件發；致命錯誤與 World 自己的壞掉、建立、替換不經事件，結構化錯誤回給 runner，最後一道把它寫出去的路直接呼叫、不經任何機制。World 健康時的警告（丟棄記錄、`TimeDiscarded` 等）照常經事件。World 的建立與替換由編排層知道；要讓新 World 裡的 System 知道，在它準備好之後往裡面寫 `Message`（讀檔那一批定）。」
 
 ### 10.3 時間的型別（`docs/architecture/time.md`，英文）
 
@@ -439,6 +439,11 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 ### 第 1 件：World 自己的事（壞掉、建立、替換）不能從那個 World 的 `Event` 發——怎麼辦？——**已定：錯誤照 D2 回給 runner，日誌 Module 從 runner 拿**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-world-events-not-via-event`）
 
 **原話**：「選A，為何因為c++沒有try catch。錯誤你不知道會有多廣，到什麼程度，有可能Even機制本身已經壞了。所以你沒有辦法做Event的。如果Event不成功，就會連日誌都丟了。」（「Even」照原文，指 Event。）**理由**（使用者的）：錯誤的範圍與程度不知道，Event 機制本身可能已經壞了；經 Event 發，失敗時連日誌都會丟。side chat 把「c++沒有try catch」讀成「C++ 不能像託管語言那樣保證接住所有錯誤（例如記憶體被寫壞）」，沒有向使用者逐字確認。**定下的**：`-no-separate-eventbus` 的範圍收成「World 裡面的機制」；World 自己的壞掉、建立、替換是例外，走 D2 的結構化錯誤回給 runner；日誌 Module 怎麼接 runner 在日誌那一批定。合併前寫進編排層 O-11 一句（第 10.2 節）。
+
+**補充三點**（side chat 的看法，使用者聽完說「補過去」，同意轉交；**不是使用者的原話**；2026-11-19）：
+1. **例外的界線**：發通知的那個 World 是健康的，才走 `Event`／`Message`；致命錯誤與 World 自己的生滅不走。World 健康時的警告照常走事件（例：訊息的丟棄記錄、`TimeDiscarded`），日誌照常訂閱。所以日誌 Module 有兩個入口：平常訂閱事件，致命時從 runner 拿結構化錯誤。目的：不讓這條例外被讀成「凡是錯誤都不走事件」。
+2. **最後一道直接呼叫**：照使用者的理由（報錯的路不能依賴可能壞掉的東西）往下推，runner 也可能受影響，最後一道（把結構化錯誤寫出去）直接呼叫、不經任何機制；和 D2 第 5 點「錯誤資訊在壞掉當下收集、不依賴壞掉的 World」同一條線。細節在日誌那一批定。
+3. **World 建立、替換本身不是錯誤**：由編排層知道；新 World 裡的 System 想知道（例：讀檔來的），可以在新 World 準備好之後往它裡面寫 `Message`（那時它健康）。留到讀檔那一批定，不影響本件。
 
 以下是交你定時的說明，留作紀錄。
 
