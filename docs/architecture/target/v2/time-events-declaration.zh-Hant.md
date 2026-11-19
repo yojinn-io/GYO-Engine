@@ -1,6 +1,6 @@
 # 事前宣告：時間 Module＋事件（`v8-arch-gyo2-time-events`）
 
-更新：2026-11-19（修訂 3：收第 11 節第 1～3 件的使用者決定；第 3 件推翻了本卡的建議，範圍擴到編排層的預設骨架）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：待使用者的動工前核准。核准之前不改程式、條文、守衛。**
+更新：2026-11-19（修訂 4：收第 11 節五件與「一起確認」第 1～3 條的使用者決定；第 3 件推翻本卡建議、範圍擴到編排層的預設骨架；「一起確認」第 3 條推翻 `time-plan-two` (7)，遊戲時間全部放 `engine/world_time`）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：待使用者的動工前核准。核准之前不改程式、條文、守衛。**
 
 經過：修訂 0（f7ad16a2）送 Fable 5.2／high 敵對式檢查：必改 8、建議改 14、小問題 12（報告 主 checkout `build/evidence/gyo2-time-events/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，並收主會話轉來的使用者決定 `v8-arch-gyo2-summary-padding-a-then-c`；處理對照在第 15 節。修訂 1 沒有再送檢查。
 
@@ -54,7 +54,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 | 代號 | 內容 | 出處 |
 |---|---|---|
 | E1 | 守衛的整理：從 `kernel_guard.py` 拿掉 `PRODUCT_ALIASES`；第 2 批延後的 6 條綁實作守衛逐條判（第 6.3 節） | `-k1-no-legacy-product-aliases`、骨架宣告 7.4 |
-| E2 | 時間的型別與累加器（舊 T1）：`engine/time` 加純資料的型別與純算術 | T1 修訂 2，照第 2.2 節重整 |
+| E2 | 時間的型別與累加器（舊 T1）：`engine/world_time` 的純資料型別與純算術（`engine/time` 不動） | T1 修訂 2，照第 2.2 節重整 |
 | E3 | 保留式事件改名 `Message`＋游標＋上限＋聚合的丟棄記錄；拿掉 `EventTrim` | 游標份 3.2、5.1（已核准） |
 | E4 | 拿掉 Kernel 的時鐘：`Domain`、`ScheduleOptions::domain`／`clock`、Kernel 推 tick、`CurrentTick`、`AccessKind::DomainTick`、tickStamps、`World::Tick`／`TickStamp`、D-E12、F-E1、F-9；診斷與丟棄紀錄改帶同步點序號（L8） | 統合 3.2、L2、L8 |
 | E5 | 時間 Module（新的 Engine Module，第 3 節） | 批次表第 3 列；統合第 8、16 節；回滾 5.7、7.2；權威 5.4；讀檔 5.5 |
@@ -67,7 +67,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 | T1 的內容 | 現況或後來的決定 | 本頁的處理 |
 |---|---|---|
-| 型別放 `engine/time`，命名空間 `Engine::Time` | `time-plan-two` (7) 照舊；DI 10 規定 `gyo_time` 只連 `GYO::Base`＋`Threads`（`time.md:89-90`，守衛 `tests/common/time/CMakeLists.txt:37`） | 照舊：純資料、純算術的型別在 `engine/time`。**只有放進 World 才有意義的**（`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded`）放 `engine/world_time`（第 3.1 節） |
+| 型別放 `engine/time`，命名空間 `Engine::Time` | `time-plan-two` (7)「時間的型別留在 `engine/time`」；DI 10 規定 `gyo_time` 只連 `GYO::Base`＋`Threads`（`time.md:89-90`，守衛 `tests/common/time/CMakeLists.txt:37`） | **改了（使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定，推翻 `time-plan-two` (7)）**：遊戲時間全部放 `engine/world_time`，`engine/time` 照舊只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），DI 10、D29、名字都不動（第 3.1 節） |
 | `FixedTime` 沒有累計、沒有 tick（T1 第 2.1、3 節第 7 條：「固定步裡的累計只能是 tick×步長」） | `-clock-out-of-kernel`：tick 移到時間 Module；回滾策略會退 tick（回滾 7.2） | **本卡照 L17 判，改 T1：`FixedTime` 有累計 `elapsed`**，每跑一步加一個步長（Bevy `Time<Fixed>` 每步 `advance_by`，`fixed.rs:216-227`；lightyear 回滾時從現在的累計減掉 k 步，`prediction/rollback.rs:1153-1183`；Unity Netcode `m_ElapsedTime - m_FixedTimeStep*tickAge`，`NetcodeClientPredictionRateManager.cs:288`——三家都是累計值）。T1 擔心「回滾時 tick 被還原、累計不會」：時間 Module 給「退回 k 步」的函式同時退 `Tick` 與累計（第 3.3 節），一處維持。修訂 0 的「`elapsed`＝`Tick`×步長」退掉：沒有一家這樣做，而且之後 Client 對時改 `Tick` 時累計會跟著跳。**使用者 2026-11-19 確認照建議**（`v8-arch-gyo2-fixed-time-accumulates`） |
 | 「兩個寫者要不要標成可多寫」（T1 第 8 節） | `-authority-no-writer-count`：Kernel 不數寫者 | 不再是問題；時間設計 DI 2「各只有一個寫者」改寫成約定（WT-5） |
 | 放進 World 之後摘要與 padding（T1 第 3 節第 9 條） | 使用者 `-summary-padding-a-then-c`（2026-11-19）：`World::Summary` 照原始位元組雜湊會算進 padding；先由編排層骨架卡補 Kernel 自己的型別、契約補「進摘要的型別不能有 padding」；正式解法（逐型別的雜湊）在第 4 批；比摘要的測試標「未完全解決」 | **第 3 批不改摘要的方式**。時間的型別、`TimeDiscarded`、本批新增進 World 的 Kernel 內部紀錄（游標表、`{seq, payload}`）都照契約沒有 padding，用 `static_assert`（`sizeof` 等於逐欄大小的加總；不用 `has_unique_object_representations_v`，它對浮點一律回 false）守。浮點的 +0／-0 與 NaN 位元組不同（使用者那次列的第三種毛病）：本批不處理，`VirtualTime.scale` 只會被寫成套用的倍率（不會產生 -0），寫進範圍的限界；逐型別雜湊在第 4 批解 |
@@ -79,7 +79,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 | T1 的待決 | 處理 | 依據 |
 |---|---|---|
 | (a) 頻率是整數還是小數 | **本卡照 L17 判：收小數**（`double`），換算一次成整數奈秒、**四捨五入**（本卡自己的規則；Bevy `from_hz` 經 `Duration::from_secs_f64`，它怎麼捨入沒有查），之後只用整數；不是有限的正數是斷言。**這改了主會話在 T1 4b 的建議（整數）**，在第 11 節「一起確認」點明 | 批次表「頻率的型別照 Bevy `Time<Fixed>`／Unity 的做法判」。Bevy `from_hz(f64)`（`fixed.rs:76-109`）；Unity Netcode `SimulationTickRate` 是整數。存進去都是整數奈秒、之後行為相同，差別只在能不能寫 59.94，不改使用者的決定。IEEE 除法正確捨入，三平台換算相同；判定 2 的「步長的設定」案例在 L1 三平台跑。**跨平台的浮點**（使用者問後 side chat 的回答，2026-11-19）：IEEE 754 的加減乘除與開根號正確捨入，同樣輸入在符合標準的 CPU 上得到同一個位元結果；差異來自 FMA 合併、fast-math 重排、x87 的 80 位元、libm（sin、cos、atan2 等）、denormal。GYO 已對 Clang／GCC 加 `-ffp-contract=off`（`build/cmake/GyoBuild.cmake:34-40`；MSVC 的 `/fp:precise` 本來不合併），沒有 fast-math，三平台都是 64 位元。本批的兩處浮點（頻率換算的一次除法、每幀乘倍率的一次乘法與零頭）都是基本運算、不經 libm。PvP 的 Match 與 Client 比對的是換算後的整數奈秒，Match 不用倍率。不採的替代：整數頻率走純整數換算、小數才走浮點（多一條路徑與一組測試）。**使用者 2026-11-19 確認照判定**（`v8-arch-gyo2-t1-closed-by-time-events`） |
-| (b) 主會話對設計的四處調整 | **本卡照 L17 判，四處都留**：(1) 扣整步是 `engine/time` 的純函式 `AdvanceVirtual`（Bevy 的截斷也在 `Time<Virtual>` 自己的函式，`virt.rs:249-266`）；(2) `FixedTime` 裡裝累加器（獨占 System 不能有自己的狀態）；(3) `Add` 多一個上限參數做斷言；(4) `Reset()` 回傳清掉的量。`Reset` 本批**只留在型別裡、不接線**：執行中換步長沒有點名的 Feature（AGENTS §2），步長只在建 World 時由設定給（第 3.3 節） | 時間設計第 547、552 行「扣整步是時間的 System 的事」在合併前改寫成「`AdvanceVirtual` 一處」 |
+| (b) 主會話對設計的四處調整 | **本卡照 L17 判，四處都留**：(1) 扣整步是純函式 `AdvanceVirtual`（在 `engine/world_time`）（Bevy 的截斷也在 `Time<Virtual>` 自己的函式，`virt.rs:249-266`）；(2) `FixedTime` 裡裝累加器（獨占 System 不能有自己的狀態）；(3) `Add` 多一個上限參數做斷言；(4) `Reset()` 回傳清掉的量。`Reset` 本批**只留在型別裡、不接線**：執行中換步長沒有點名的 Feature（AGENTS §2），步長只在建 World 時由設定給（第 3.3 節） | 時間設計第 547、552 行「扣整步是時間的 System 的事」在合併前改寫成「`AdvanceVirtual` 一處」 |
 | (c) 修訂 2 要不要再送檢查 | 被本頁取代：本頁修訂 0 送了換模型檢查 | — |
 | (d) 核准整份 T1 | 被本頁取代：核准本頁即核准併進來的內容；T1 檔案留作紀錄，開頭加一行「由 time-events 宣告取代（`v8-arch-gyo2-t1-closed-by-time-events`）」——在本批的實作 PR 裡改（T1 在 `gyo2` 與文件分支各有一份，改在併進 `gyo2` 的那一份） | `v8-arch-gyo2-t1-closed-by-time-events` |
 
@@ -106,8 +106,8 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 | 事 | 判定 | 理由與系譜 |
 |---|---|---|
-| 純型別 | `engine/time`（`GYO::Time`，命名空間 `Engine::Time`）：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`、`TimeControl`、`TickAccumulator`、`AdvanceVirtual`、步長與兩個上限的設定。`TimeTypes.hpp` **不 include `MonotonicClock.hpp`**（zone_scan 的 ZS1 禁 (c) 的來源 include 它，`tests/common/zone_scan/zone_scan_rules.json:6`） | `time-plan-two` (7)；DI 10 不變 |
-| 登記單位、System、World 專用的型別 | **新的 Engine Module** `engine/world_time`（命名空間 `GYO::Engine::WorldTime`、target `GYO::WorldTime`、登記單位 `WorldTimeModule`，編排層 `Module` 的子類）；`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded` 也在這裡（只有放進 World 才有意義，不放 audio、threads 也連的 `engine/time`）。**本卡加的詞** | `time-plan-two` (7)「兩個 System 放別的 Module」；DI 10 不准 `gyo_time` 連 Kernel。N17 要目錄、命名空間、target 一致；叫 `GYO::Engine::Time` 會遮住現有的 `::Engine::Time`。比過：`Clock`（撞 `MonotonicClock` 與舊稱「時鐘」）、`Timeline`（Unity 的動畫時間軸）、`GameTime`（工具的預覽也用）。系譜：Bevy `bevy_time` 型別與 `TimePlugin` 同一個 crate；GYO 因 DI 10 拆兩個 target |
+| `engine/time` | **不動**：照舊只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），DI 10（只連 Base＋Threads）、D29、名字都不動 | 使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定。三家都把「現在幾點、睡到幾點」放在 OS 介面那一層、把遊戲時間放在另一處並和 World 綁在一起：Bevy 的基本時間是 `Instant`（`bevy_platform`），遊戲時間全在 `bevy_time`；flecs 基本時間在 OS API（`ecs_os_now`、`ecs_os_sleep`），遊戲時間在 World 資訊與 timer addon；Unity 基本時間是 `Stopwatch`、`realtimeSinceStartup`，遊戲時間是 World 的 `TimeData` 與更新它的 System |
+| 遊戲時間（全部） | **新的 Engine Module** `engine/world_time`（命名空間 `GYO::Engine::WorldTime`、target `GYO::WorldTime`、登記單位 `WorldTimeModule`，編排層 `Module` 的子類）：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`、`TimeControl`、`TickAccumulator`、`AdvanceVirtual`、步長與兩個上限的設定、`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded`、兩個 System、跑一步／退回 k 步。純型別與算術的標頭（`TimeTypes.hpp`、`TickAccumulator.hpp`）**不 include `MonotonicClock.hpp`**（zone_scan 的 ZS1，`tests/common/zone_scan/zone_scan_rules.json:6`）；只有 `AdvanceTime` 的實作讀它。**本卡加的詞** | **使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定**。原話：「一個概念不要分為2個實作。看著太噁心了。有這種一個概念開始分裂的情況，就是壞味道的開始。」「不不不，你看看別家的實作，基本時間有什麼，而遊戲時間有什麼。…」「可以。不頭鐵」。比過：遊戲時間全部放 `world_time`、`engine/time` 只留時間基準 ←選／全部放 `engine/time` 並讓它連 Kernel（DI 10 要改，audio、threads 被迫連 Kernel）／維持分兩處（修訂 1～3 的寫法，使用者判為壞味道）。理由（使用者的）：一個概念不要分成兩個實作；看別家的分法、不頭鐵。side chat 的補充（不是使用者的話）：`time-plan-two` (7) 當時把「型別」與「時間基準」當成同一個概念，照別家的分界它們是兩個概念；現在 `engine/time` 裡沒有遊戲時間，分裂是 T1 與本宣告的計畫要讓它發生。名字：N17 要目錄、命名空間、target 一致；叫 `GYO::Engine::Time` 會遮住現有的 `::Engine::Time`。比過：`Clock`、`Timeline`、`GameTime`。系譜：Bevy `bevy_time` |
 | 登記檔 | `engine/config/modules.csv` 加 `world_time,GYO::WorldTime,…,no,yes,base;kernel;orchestration;time,,WorldTimeModule,engine/world_time/WorldTimeModule.hpp`（`library_only=no`、`default=yes`；預設帶、產品可關，O-6） | `-module-deps-in-registers`。**第一個真的進 World 的 Engine Module**（現在十列都是 `library_only=yes`） |
 | include 順序 | `engine/world_time` 的程式一律寫 `::Engine::Base::`、`::Engine::Time::`；`gyo_orchestration_include_order` 的範圍本批就擴到 `world_time` 的公開標頭（含 `RunOneFixedStep` 那個樣板的標頭）。它是「各種順序都編得過」的行為檢查，不是綁實作的掃描，所以不延後 | 第 2 批的問題（dev_log `2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md:45`、a8065853）；時間 Module 在 `GYO::Engine` 底下 |
 
@@ -309,7 +309,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 ### 6.4 新增的行為案例
 
-- **`engine/time`**（`tests/common/time/TimeTypesTests.cpp`）：T1 判定 1 的全部案例（累加、餘數、不丟時間、沒有 tick、扣整步、步數不超過上限、上限的斷言、量與步數、舊測試的期待值、和舊 `double` 版逐點比、暫停、倍率、零頭、沒有固定步的 250 ms、步長的設定〔`FromHz(60.0)`→16,666,667；`FromHz(0)` 與非有限值斷言〕、`RealTime`、前置條件），加 `Reset` 回傳清掉的量、型別沒有 padding 的 `static_assert`。
+- **時間的型別**（`tests/common/world_time/TimeTypesTests.cpp`，連 `GYO::WorldTime`、因而連到 Kernel；測試內容和 T1 判定 1 相同）：T1 判定 1 的全部案例（累加、餘數、不丟時間、沒有 tick、扣整步、步數不超過上限、上限的斷言、量與步數、舊測試的期待值、和舊 `double` 版逐點比、暫停、倍率、零頭、沒有固定步的 250 ms、步長的設定〔`FromHz(60.0)`→16,666,667；`FromHz(0)` 與非有限值斷言〕、`RealTime`、前置條件），加 `Reset` 回傳清掉的量、型別沒有 padding 的 `static_assert`。
 - **時間 Module**（`tests/common/world_time/`）：全部 Resource 已登記；`Resimulation` 恆在、初始 false；`pausable=false` 時沒有 `TimeControl` 而 `AdvanceTime` 照跑；手動取樣兩種模式；建好 World 後第一次取樣 `delta`＝0；固定步跑 k 次、`Tick` 加 k、第 n 步讀到 `Tick`＝n；固定步裡 `ActiveTime`＝（步長、`FixedTime.elapsed`）、跑完換回；追不上時 `discarded` 與 `TimeDiscarded` 一筆（原因＝整步上限）；`RunFixedSteps` 被 run 條件跳過的那一幀，下一幀 `AdvanceTime` 把沒取走的量記進 `discarded`、發 `TimeDiscarded`（原因＝沒被驅動）；`RewindFixedSteps` 後重跑讀到的 `Tick`、`ActiveTime` 和第一次相同；k 步的第 j 步回 Err：之後不跑、Err 傳出、World 中斷；固定步那一張不存在時 `Check` 報錯；掛載目標不存在時 Kernel 報 D-E1；`TickWriters()` 的內容；讀檔放回 `Tick`、`VirtualTime`、`FixedTime` 狀態後接著跑，步長以設定為準。
 - **保留式、推送式**：游標份第 8 節「新：保留式」「新：推送式」兩列全部；加 4.2 定的：`Commands` 觸發在 F.2 最後一步、依記錄先後；新增與移除的逐格先後；`ExclusiveWorld::Trigger` 的延後變更走當場改成員的清空輪；修剪後存取驗證不誤報；hook 帶 `MessageReader` 編譯失敗。
 - **include 順序**：`world_time` 的標頭與 Kernel、編排層的標頭各種順序都編得過。
@@ -347,7 +347,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 | 位置 | 內容 |
 |---|---|
-| `engine/time/include/engine/time/TimeTypes.hpp`、`TickAccumulator.hpp`（新） | 純型別、`AdvanceVirtual`、更新 `RealTime` 的函式、步長與上限的設定 |
+| `engine/world_time/include/engine/world_time/TimeTypes.hpp`、`TickAccumulator.hpp`（新） | 純型別、`AdvanceVirtual`、更新 `RealTime` 的函式、步長與上限的設定（`engine/time` 不動） |
 | `engine/world_time/`（新） | `WorldTimeModule`、`Tick`、`Resimulation`、`TimeSampling`、`TimeDiscarded`、`AdvanceTime`、`RunFixedSteps`、`RunOneFixedStep`、`RewindFixedSteps`、放回固定步狀態的函式、`TickWriters`；`CMakeLists.txt` 照登記檔 |
 | `engine/config/modules.csv` | `world_time` 一列 |
 | `engine/kernel`（`Declarations.hpp`、`Params.hpp`、`Access.hpp`、`SystemTraits.hpp`、`Plan.hpp`、`detail/Storage.hpp`、`detail/Context.hpp`、`World.*`、`Scheduler.cpp`、`Executor.cpp`、`Registry.*`、`Fingerprint.cpp`、`KernelError.hpp`） | E3、E4、E6 |
@@ -357,7 +357,6 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | `docs/architecture/target/kernel.zh-Hant.md` | DI-KS 1、8、9、10、11、12、14、15（含「轉換中」表那一列，`:77`）、25 的變更（第 10.1 節） |
 | `docs/architecture/target/v2/orchestration.zh-Hant.md` | O-1 的過渡句（遊戲初始化的 schedule 要屬於一個 domain）拿掉；O-11 的 `WorldFailure` 欄位 |
 | `docs/architecture/target/determinism.md`、`target/world.zh-Hant.md`（4 處）、`target/v2/system-contract-page.zh-Hant.md`（`:54`、`:61`） | domain tick、clock schedule、`EventReader`、`CurrentTick` 的文字照新形改 |
-| `docs/architecture/time.md`（英文） | 新型別的說明與 Design Invariants |
 | `docs/architecture/target/v2/world-time.zh-Hant.md`（新） | 時間 Module 的 Design Invariants、職責清單、Replacement Criteria |
 | `rebuild-time-design.zh-Hant.md`、`time-types-declaration.zh-Hant.md` | 第 547、552 行改寫；T1 開頭標「由本宣告取代」 |
 | `docs/dev_logs/2026_11_xx_gyo2_time_events.zh-Hant.md` | dev_log，和本批同一變更 |
@@ -390,7 +389,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 1. **Feature**：第 3.2 節；游標份第 6 節第 1 項。
 2. **現在的問題**：時鐘與 tick 在 Kernel（使用者判「遊戲需求入侵了 Engine 設計」）；World 裡沒有任何時間的 Resource；事件依 Plan 位置與 tick 讀、修剪是 Plan 裡的一步、跨時鐘是啟動錯誤；沒有推送式。
-3. **變化的邊界**：Kernel 少了時鐘、事件 API 改名加游標、多了推送式；`engine/time` 多了型別與算術；**新的 Engine Module `engine/world_time`**（新 Subsystem）；編排層 `WorldFailure` 少一個欄位、一個換義；**編排層多了預設骨架**（改第 2 批已合併的部分，使用者 2026-11-19）。
+3. **變化的邊界**：Kernel 少了時鐘、事件 API 改名加游標、多了推送式；`engine/time` 不動；**新的 Engine Module `engine/world_time`**（新 Subsystem）；編排層 `WorldFailure` 少一個欄位、一個換義；**編排層多了預設骨架**（改第 2 批已合併的部分，使用者 2026-11-19）。
 4. **影響**：第 8 節。
 5. **依賴方向**：`world_time` → `orchestration`、`kernel`、`time`、`base`；`time` 照舊只連 `base`＋`Threads`；Kernel 與編排層不依賴它（K5、O-4）。權威、回滾將來依賴 `world_time`（登記檔）。
 6. **Ownership**：tick 從 Kernel 移到 `world_time`；「事件留多久」從「時鐘＋Plan 的修剪步」變成 Kernel 的游標與上限；「這一輪跑幾次固定步」是 World 裡的 System；丟棄與診斷紀錄的時間標記變成 Kernel 自己的同步點序號；取樣暫時在 `world_time`（交換點之後移給 runner）。
@@ -402,7 +401,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 | 決定 | 系譜 | 退掉的 | 決定的理由 | 需要它的 Feature（Product） |
 |---|---|---|---|---|
-| 型別與 System 分兩個 target | Bevy 同一個 crate；GYO 因 DI 10 拆 | 型別也搬進 `world_time` | `time-plan-two` (7)；純算術能不連 Kernel 單獨測 | 固定步、暫停（①②③） |
+| 遊戲時間全部在 `world_time`、`engine/time` 只留時間基準 | Bevy、flecs、Unity 都把基本時間放在 OS 介面層、遊戲時間另成一處 | 型別放 `engine/time`、System 放 `world_time`（修訂 1～3）；全部放 `engine/time` 並連 Kernel | 使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定：一個概念不分成兩個實作 | 固定步、暫停（①②③） |
 | `FixedTime` 帶累計、退回用函式 | Bevy、lightyear、Unity 都是累計值 | `Tick`×步長（修訂 0；GYO 新導出，Client 對時改 `Tick` 時累計會跳） | 照三家一致的做法；退回在 `RewindFixedSteps` 一處 | 回滾（① Client）、作者讀固定步時間（②） |
 | 累加器 `Add` 回傳步數 | 舊 `FixedTickRuntime`；Bevy 一次 `expend` 一步 | 照 Bevy | 結果相同；`Add` 後餘數一定不足一步（T1 第 6 節） | 固定步（①②） |
 | 一幀步數上限（預設 5） | 舊的；Bevy 只靠 250 ms | 只用時間長度上限 | 使用者 `time-plan-two` (4) | 追不上時（①②） |
@@ -440,11 +439,11 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - **O-4**：補「編排層給 schedule 的預設骨架（名字與段落順序；作者可換或關）並經 Kernel 執行它；不認得時間，也不認得任何 Module 掛進去的是什麼」（第 3.6 節，`v8-arch-gyo2-orchestration-gives-schedule-skeleton`；本卡判不算職責清單多一項，**動工前核准時請你一併看**）。
 - **O-11**：`WorldFailure` 帶同步點序號、不帶 domain 與 tick（G6）；加一段（第 11 節第 1 件，使用者 2026-11-19，`v8-arch-gyo2-world-events-not-via-event`，含使用者「補過去」的三點）：「通知只在發出它的 World 健康時經 Kernel 的事件發；致命錯誤與 World 自己的壞掉、建立、替換不經事件，結構化錯誤回給 runner，最後一道把它寫出去的路直接呼叫、不經任何機制。World 健康時的警告（丟棄記錄、`TimeDiscarded` 等）照常經事件。World 的建立與替換由編排層知道；要讓新 World 裡的 System 知道，在它準備好之後往裡面寫 `Message`（讀檔那一批定）。」
 
-### 10.3 時間的型別（`docs/architecture/time.md`，英文）
+### 10.3 時間的型別（併進新頁 `target/v2/world-time.zh-Hant.md`；`time.md` 不加，使用者 2026-11-19，「一起確認」第 3 條，代號待主會話定）
 
 1. 累加器只做整數的算術：不讀時間基準、不記 tick、不丟時間；從上一次 `Reset` 起，加進去的總量恆等於步數×步長＋餘數；`Add` 之後餘數不足一步。
 2. 超過上限的量只在 `AdvanceVirtual` 一處算；有固定步時扣整步。
-3. 這些型別不引用 Kernel、不 include `MonotonicClock.hpp`；沒有 padding。
+3. 純型別與算術的標頭不引用 Kernel、不 include `MonotonicClock.hpp`（同一個 Module 裡的 System 才引用 Kernel）；沒有 padding。
 **Replacement Criteria**：時間 Module 要正確必須知道累加器的內部狀態；或 `ActiveTime` 需要第三種來源。
 
 ### 10.4 時間 Module（新頁 `target/v2/world-time.zh-Hant.md`；WT 是本卡加的代號）
@@ -534,7 +533,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 - ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-t1-closed-by-time-events`）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
 - ~~第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）~~——**已確認：照建議**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-fixed-time-accumulates`）。原話：「照建議」。比過：同意（照 Bevy、lightyear、Unity 累加）←選／改回 T1 的沒有累計（作者自己用 tick×步長算）／tick×步長（修訂 0；Client 對時改 tick 時累計會跳）。
-- 第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放。
+- ~~第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放~~——**已改定**（使用者 2026-11-19，side chat 轉達；代號待主會話定）：遊戲時間全部放 `engine/world_time`，`engine/time` 只留時間基準，**推翻 `time-plan-two` (7)**。原話與比過的選項見第 3.1 節表。名字 `world_time`／`WorldTimeModule` 照用。
 - 第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」。
 - 第 3.6 節預設骨架的細節：`FixedUpdate` 的 stage 名、關掉骨架的選項的形、O-4 補句**不算編排層職責清單多一項**。
 - 第 3.4 節的取樣；第 3.5 節可存與不放回的清單。
@@ -573,7 +572,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 ## 13. 判定（先宣告，結果出來之後不放寬）
 
-- **判定 1：通過**。本機完整 ctest 全過（含 `scenario.segment1`、`segment2`）；L1 三平台（linux-x64、windows-x64、macos-arm64）全過；`gyo_time` 的連結檢查照過；include 順序守衛照過。比摘要的測試照 `-summary-padding-a-then-c` 標「未完全解決」，它們在 L1 的偶發失敗照那個決定處理，不算本批的回歸——但本批新加的摘要內容（游標表、紀錄）不得是新的不穩定來源（`static_assert` 守）。
+- **判定 1：通過**。本機完整 ctest 全過（含 `scenario.segment1`、`segment2`）；L1 三平台（linux-x64、windows-x64、macos-arm64）全過；`gyo_time` 的連結檢查照過（`engine/time` 沒變）；include 順序守衛照過。比摘要的測試照 `-summary-padding-a-then-c` 標「未完全解決」，它們在 L1 的偶發失敗照那個決定處理，不算本批的回歸——但本批新加的摘要內容（游標表、紀錄）不得是新的不穩定來源（`static_assert` 守）。
 - **判定 2：行為**。第 6.4 節的案例全過；第 7 節 S2-1～S2-9 全過。
 - **判定 3：檢出力**。新突變清單經 Fable／high 檢查補齊後全殺；第 6.5 節列的舊突變照 6.1、6.2 處置後，留下的全殺；分母以執行時的實際清單為準；完整跑（Kernel＋編排層＋`world_time`）結果記進 dev_log，活著的逐個說明。
 - **判定 4：一次性的掃描**（git grep，`engine/` 與 `tests/`，文件與 dev_log 除外；每個樣式先在現在的程式命中一次當正例，終了碼區分「沒有」與「失敗」）：`\bDomain::(None|Fixed|Frame|Loading)\b`、`\bCurrentTick\b`、`\bDomainTick\b`、`[eE]ventTrim`、`\bEventReader\b`、`\bEventWriter\b`、`\bEventOptions\b`、`\bEventPayloads\b`、`\bTickStamp\b`、`\.clock\b`（正例：`schedule.clock`）零命中；`tests/common/kernel/kernel_guard.py` 裡 `PRODUCT_ALIASES` 零命中。
