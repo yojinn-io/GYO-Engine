@@ -2236,13 +2236,13 @@
     },
     {
       "id": "rs-iv-fb11-C-count-dropped",
-      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks) (expect follows C format 9 (v8-arch-gyo2-time-events step 3)) (expect follows C format 10 (v8-arch-gyo2-time-events step 4))",
+      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks) (expect follows C format 9 (v8-arch-gyo2-time-events step 3)) (expect follows C format 10 (v8-arch-gyo2-time-events step 4)) (expect follows C format 11 (v8-arch-gyo2-time-events step 5))",
       "file": "engine/kernel/src/Fingerprint.cpp",
       "find": "    out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {\n        return data.components[rule.targetId].zone == Zone::C;\n    }));\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "CHECK\\( both\\.registry->Frozen\\(\\)\\.CFingerprint\\(\\)\\.Text\\(\\) == std::string\\(\"10:"
+      "expect": "CHECK\\( both\\.registry->Frozen\\(\\)\\.CFingerprint\\(\\)\\.Text\\(\\) == std::string\\(\"11:"
     },
     {
       "id": "rs-iv-fn4-system-Z6-without-funnel",
