@@ -1,6 +1,6 @@
 # 事前宣告：時間 Module＋事件（`v8-arch-gyo2-time-events`）
 
-更新：2026-11-19（修訂 4：收第 11 節五件與「一起確認」第 1～3 條的使用者決定；第 3 件推翻本卡建議、範圍擴到編排層的預設骨架；「一起確認」第 3 條推翻 `time-plan-two` (7)，遊戲時間全部放 `engine/world_time`）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-19，本卡：「照建議，全部核准」；代號待主會話定）。照第 12 節實作（第 1 步 → 第 7 步），合併前做合併前核准。**
+更新：2026-11-19（修訂 4：收第 11 節五件與「一起確認」第 1～3 條的使用者決定；第 3 件推翻本卡建議、範圍擴到編排層的預設骨架；「一起確認」第 3 條推翻 `time-plan-two` (7)，遊戲時間全部放 `engine/world_time`）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-19，本卡：「照建議，全部核准」，`v8-arch-gyo2-time-events-declaration-approved`）。照第 12 節實作（第 1 步 → 第 7 步），合併前做合併前核准。**
 
 > **核准的範圍**：第 11 節五件與各條的結果；第 10 節的 DI 文字（最終文字在合併前核准）；第 10.2 節 O-4 補句**不算編排層職責清單多一項**的判斷；第 6.1 節 G1～G8 的方向（逐組的最終核准在合併前帶突變結果與檢證者報告）；第 12 節的模型與檔位。比過的選項：逐項核准或退回某項／全部核准 ←選。
 
@@ -283,7 +283,7 @@ Registry、Plan、C 三種指紋的版本號都升（6／4／8），export 標�
 | G4 | J-39 的 tick 部分（`CoverageTests:302`；DI-KS 8 的兩句）、`rs-adv-domain-tick-is-zone-b`、`rs-j12-tick-one-mount` | tick 只有一個來源、(c) 區讀得到 tick | 刪 | System 可以寫 `Tick`；(c) 區讀不到 `Tick` 直到第 4 批 | 無 | 第 4 批權威的專用檢查（權威 5.4）；空窗是使用者已接受的（`-authority-guard-gap-later`） |
 | G5 | J-12 的 `CurrentTick` 案（`SignatureTests:147`、`:260`）、J-30 的 tickStamps（`ExecutorTests:478`）、`we-adv-tickstamp-never-recorded`、J-56 的 tick 前進（`NestedRunTests:148`、`:889`）、`ns-nested-tick-not-advanced` | `CurrentTick` 的存取推導、tickStamps（每個 tick 的第一個 stamp）、巢狀跑推 tick | tick 前進的性質**搬到**時間 Module 的測試（`RunOneFixedStep` 推 tick、巢狀跑 k 次 tick 加 k）；`CurrentTick` 的推導與 **tickStamps 刪、不搬** | Kernel 不推 tick；「某個 tick 開始時的 stamp」沒有任何地方保證 | 無 | tick 前進：時間 Module。tickStamps 不搬的理由：Kernel 內沒有任何判斷讀它（`recon-a` 1.6），只有 J-30 一個測試；需要「某個 tick 以來改過什麼」的作者用 `Changed<…>` 或自己記 |
 | G6 | 編排層 `[or-ended-failure-tick]`（`tests/common/orchestration/CoverageTests.cpp:209` 判 `f.domain == Frame && f.tick == 1`、`:313` 文字含 `"tick 1"`）——**O-11 的 Design Invariant 守衛**；`or-failure-no-domain`、`or-failure-no-tick`、`or-failure-text-no-tick` | `WorldFailure` 帶壞掉那張 schedule 的 domain 與 tick | `domain` 的判定刪、突變退役；`tick` 改判同步點序號，兩個突變改寫 | 錯誤內容不再帶 domain 與遊戲時間 | 無 | 編排層（同步點序號） |
-| G7 | K1 的舊產品別名（`kernel_guard.py:89-94`、`:299`；`test_kernel_guard.py:125-127`、`:433-435`；`ks-k1-roles-dropped` 的 find） | Engine 不出現 RetroFPS、`fps::pvp`、`Pvp`、`Gyo::Tools` | 拿掉清單與兩個案例；突變改 find | K1 不再擋這四個名字 | 無 | 「Engine 不出現產品名」由角色詞 `ROLE_WORDS` 照舊守。使用者已定方向（`-k1-no-legacy-product-aliases`） |
+| G7 | **由 PR #249 處理**（突變清點卡，使用者 2026-11-19「拿掉 PRODUCT_ALIASES 你直接處理」；主會話建議先併 #249，合併後本批 rebase 時收 #249 的版本；不併時照本列做）。K1 的舊產品別名（`kernel_guard.py:89-94`、`:299`；`test_kernel_guard.py:125-127`、`:433-435`；`ks-k1-roles-dropped` 的 find） | Engine 不出現 RetroFPS、`fps::pvp`、`Pvp`、`Gyo::Tools` | 拿掉清單與兩個案例；突變改 find | K1 不再擋這四個名字 | 無 | 「Engine 不出現產品名」由角色詞 `ROLE_WORDS` 照舊守。使用者已定方向（`-k1-no-legacy-product-aliases`） |
 | G8 | J-55 的 tick（`SpawnRejectTests:591`、`:957`）、`sr-tick-fixed-domain`、`sr-tick-one` | 記錄帶的是丟棄它那張 schedule **所屬 domain** 的 tick | 改成同步點序號 | 「屬於哪個 domain」消失（World 只有一個同步點序號） | 無 | 「記錄來自丟棄它的那次、一筆、不設上限、不取 stamp」照舊（`sr-no-record`、`sr-records-capped`、`sr-drop-takes-stamp` 照舊殺） |
 
 DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
