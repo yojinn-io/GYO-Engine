@@ -1,6 +1,6 @@
 # Kernel 突變清單的盤點與退役（`v8-arch-gyo2-mutation-prune`）
 
-日期：2026-11-18～19。分支 `claude/gyo2-mutation-prune-19c247`（從 `8b912a1e`；第 2 步前合併 `origin/gyo2` `f48af791`，即第 2 批 PR #244 合併後）。**狀態：第 2 步、第 3 步完成（清單 777 → 714 → 663），PR #246 待合併。**
+日期：2026-11-18～19。分支 `claude/gyo2-mutation-prune-19c247`（從 `8b912a1e`；第 2 步前合併 `origin/gyo2` `f48af791`，即第 2 批 PR #244 合併後）。**狀態：第 2 步、第 3 步完成（清單 777 → 714 → 663），PR #246 已合併（27e2404b）；後續「空 expect」另開分支 `claude/gyo2-empty-expect`。**
 
 這一批由任務卡做（GYO2 主會話開出，使用者原話「開一個任務卡處理一下，master都沒到這個級別吧。」）。上段（觸及守衛與突變的判定）：實作者 Opus 5.5／high，敵對式檢查 Fable 5.2／high（使用者事先同意）。盤點與退役表：[kernel-mutation-prune-report.zh-Hant.md](../architecture/target/v2/kernel-mutation-prune-report.zh-Hant.md)。
 
@@ -67,6 +67,30 @@
   - `ns-rebase-no-retake-names-ping` 併進 `ns-rebase-no-retake-on-throw`：它是第 2 步直接退掉的 `ns-rebase-no-retake` 的接手。
 - 驗證：用正式清單跑 39 個接手 39/39（`step3_mutants.log`；09:35 開始，跑到最後一個時機器休眠，14:03 醒來後跑完，原始碼已還原）；`ctest --preset test -L "cpu|shader"` 113 項全過（`step3_ctest.log`，14:06 重跑存完整輸出）。
 
+### 後續：7 個空 expect（`v8-arch-gyo2-empty-expect`）
+
+- 使用者 2026-11-19：「把 7 個空 expect 你直接處理」（候選表第 8 節第 5 題）。分支 `claude/gyo2-empty-expect`（從 `gyo2` 27e2404b）。
+- 問題：`rs-iv-ff1-registry-section-dropped`、`rs-iv-fb5-sort-tiebreak-dropped`、`rs-iv-fb6-C-target-not-hashed`、`rs-iv-fb7-registry-target-not-hashed`、`rs-iv-fb8-C-request-not-hashed`、`rs-iv-fb9-C-filter-by-request-zone`、`rs-iv-fb11-C-count-dropped` 的 expect 是案例標題。那幾個案例每次都無條件印 MESSAGE，標題永遠出現，所以 expect 只剩「`cases` 裡有東西失敗」。
+- 改法：從 subsumption 完整跑的原始輸出，找每個突變在自己的 `cases` 範圍裡實際失敗的 CHECK，expect 改成指名它設計上要打壞的那一句（doctest 印的 `CHECK( 式子 ) is NOT correct`；每個式子在測試原始碼裡只出現一次）：
+
+| 突變 | 打壞的性質 | 新 expect 指名的 CHECK（`InitialValueTests.cpp`） |
+|---|---|---|
+| ff1 | Registry 指紋漏掉宣告 | 708、709（兩句都要）：有宣告時 Registry 指紋要變 |
+| fb5 | 宣告的排序不再比後段 | 893、894（兩句都要）：順序不同，指紋要相同 |
+| fb6 | C 指紋漏掉元件 | 891 |
+| fb7 | Registry 指紋漏掉元件 | 890 |
+| fb8 | C 指紋漏掉 request | 715（第 3 步併進來的 `rs-iv-ff3-C-section-dropped`，那句的位置也是 715） |
+| fb9 | C 指紋照 request 的區挑宣告 | 713：只有 zone B 時 C 指紋不變 |
+| fb11 | C 指紋不計宣告數 | 906：C 的 golden |
+
+- 判定變更（AGENTS §14.4，只有締める面，由我改、事後報告）：
+  1. 守的性質：每個突變證明「指紋的那一句 CHECK 抓得到這個改法」。
+  2. 緩める面：無。新 expect 對上時，那句 CHECK 所在的案例一定跑過也失敗了，標題一定印出，舊 expect 也對得上；所以新判定算殺掉的，舊判定也算。舊判定算殺掉的 7 個突變，新判定也全部殺掉（7/7）。
+  3. 締める面：`cases` 裡別的斷言失敗、但指名的那句沒失敗時，以前算殺掉，現在不算。用 subsumption 的 714 份原始輸出比：舊 expect 對得上 592 份（fb8 是 10 份），新 expect 只對得上 1～11 份，都是真的打壞那一句的突變。
+  4. 不適用（沒有緩める面）。
+  5. 證據：`build/evidence/gyo2-mutation-prune/empty_expect_old.json`（舊 expect）、`empty_expect_mutants.log`（7/7 killed，macOS arm64）。
+- 程式與測試沒有改動，所以沒跑 ctest。
+
 ## 判定變更（AGENTS §14.4）
 
 - 退役 41 個的緩的面逐個寫在報告第 3、5 節，使用者 2026-11-18 核准（第 7 節）。
@@ -77,7 +101,6 @@
 
 ## 後續（不在本批）
 
-- 7 個 expect 實際為空的突變（`rs-iv-ff1`、`rs-iv-fb5`～`fb9`、`rs-iv-fb11`：expect 是案例標題，而那幾個案例無條件印 MESSAGE）改寫 expect（AGENTS §14.2）。
 - 把 `PRODUCT_ALIASES` 從 `kernel_guard.py` 拿掉（守衛的改動）。
 - `bs-` 開頭的突變搬到 Base 的清單。
 - 第 6 節的增長判準交風紀委員看要不要寫進規則文件；GYO2 線先照做。
