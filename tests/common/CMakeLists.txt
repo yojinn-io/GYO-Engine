@@ -1,12 +1,12 @@
 add_subdirectory(support)
 add_subdirectory(base)
-add_subdirectory(json)
 add_subdirectory(core)
 add_subdirectory(math)
 add_subdirectory(threads)
 add_subdirectory(time)
 # After time: its directory defines gyo_expect_links.
 add_subdirectory(entity_store)
+add_subdirectory(json)
 add_subdirectory(kernel)
 add_subdirectory(orchestration)
 add_subdirectory(scenario)
