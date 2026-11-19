@@ -2023,11 +2023,11 @@
       "id": "rs-b6-cfp-version-1",
       "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in hf-c-version-kept, sr-c-version-not-bumped: the same find and replace, so their cases and assertions now run here; every listed message must appear) (find and expect follow C format 9 (v8-arch-gyo2-time-events step 3)) (v8-arch-gyo2-time-events step 4: find and expect follow C format 10)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 10;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 11;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*,J-54: the schedule's limit is in*,J-55:*",
-      "expect": "(?=[\\s\\S]*CFingerprint\\(\\)\\.version == 10U)(?=[\\s\\S]*none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 10U)[\\s\\S]*J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 10"
+      "expect": "(?=[\\s\\S]*CFingerprint\\(\\)\\.version == 11U)(?=[\\s\\S]*none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 11U)[\\s\\S]*J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 11"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -2288,11 +2288,11 @@
       "id": "rs-iv-registry-version-1",
       "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (find and expect follow Registry format 5 (v8-arch-gyo2-time-events step 3)) (v8-arch-gyo2-time-events step 4: find and expect follow Registry format 6)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 6;",
+      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 7;",
       "replace": "constexpr std::uint32_t kRegistryFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "RegistryFingerprint\\(\\)\\.version == 6U"
+      "expect": "RegistryFingerprint\\(\\)\\.version == 7U"
     },
     {
       "id": "rs-iv-fx4-note-for-any-kind",
@@ -2858,7 +2858,7 @@
       "id": "we-j34-f5-off",
       "what": "J-34 (F-5): a record on the System path while Applying is allowed (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook);\n",
+      "find": "    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook || call.observer);\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-34:*",
@@ -5877,8 +5877,8 @@
       "id": "ks-s5-level-spawn-applied",
       "what": "S5: the immediate change also applies this level's records (DI-KS 19), so the earlier spawn of the same id is applied with it (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "    if (immediate != nullptr) return phase(*immediate);",
-      "replace": "    if (immediate != nullptr) {\n        for (std::size_t i = base; i < window_.size(); ++i) immediate->push_back(std::move(window_[i]));\n        window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());\n        return phase(*immediate);\n    }",
+      "find": "    if (immediate != nullptr) {\n        if (Result applied = phase(*immediate); !applied) return applied;",
+      "replace": "    if (immediate != nullptr) {\n        for (std::size_t i = base; i < window_.size(); ++i) immediate->push_back(std::move(window_[i]));\n        window_.erase(window_.begin() + static_cast<std::ptrdiff_t>(base), window_.end());\n        if (Result applied = phase(*immediate); !applied) return applied;",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 19:*",
       "expect": "\\[ks\\-s5\\-level\\-spawn\\-dropped\\]"
