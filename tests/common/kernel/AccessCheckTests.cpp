@@ -109,16 +109,16 @@ SystemResult UseKeptHandle(Query<Read<Tag>>) {
     if (g_keptHandle != nullptr) static_cast<void>(g_keptHandle->Present());
     return Ok();
 }
-SystemResult KeepPosAcrossRuns(Query<Read<Pos>> pos, CurrentTick tick) {
-    if (tick.Tick() == 1) {
+SystemResult KeepPosAcrossRuns(Query<Read<Pos>> pos, Res<TickCount> tick) {
+    if (tick->value == 1) {
         g_keptPos = pos.Get<Pos>(1);
     } else if (g_keptPos != nullptr) {
         const_cast<Pos*>(g_keptPos)->x = 55;  // a reference kept to the next run, written
     }
     return Ok();
 }
-SystemResult ReadKeptAcrossRuns(Query<Read<Vel>>, CurrentTick tick) {
-    if (tick.Tick() == 1) return Ok();
+SystemResult ReadKeptAcrossRuns(Query<Read<Vel>>, Res<TickCount> tick) {
+    if (tick->value == 1) return Ok();
     Log().push_back("kept read " + std::to_string(g_keptPos != nullptr ? g_keptPos->x : -1));
     return Ok();
 }

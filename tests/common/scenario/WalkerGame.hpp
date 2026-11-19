@@ -209,13 +209,11 @@ inline K::SystemResult LoadSave(K::ExclusiveWorld<> world) {
 
 // ---- Registration (the product's own build, section 3.3)
 
-// Until batch 3 every schedule belongs to a domain (D-E12): one-off schedules are
-// Frame without the clock, Play is Frame's clock.
-inline K::ScheduleOptions Schedule(std::string name, bool clock) {
+// A one-stage schedule. The domain declarations batch 2 added for D-E12 left with
+// the kernel's clock in batch 3 (S2-9, v8-arch-gyo2-clock-out-of-kernel).
+inline K::ScheduleOptions Schedule(std::string name) {
     K::ScheduleOptions s;
     s.name = std::move(name);
-    s.domain = K::Domain::Frame;
-    s.clock = clock;
     s.stages = {"S"};
     return s;
 }
@@ -245,10 +243,10 @@ inline void Register(O::WorldSetup& s) {
     r.Resource<WorldLife>({.name = "WorldLife"});
     r.Resource<K::RangeAllotter>({.name = "Allotter"});
     r.Allotter<K::RangeAllotter>();
-    r.Schedule(Schedule("Boot", false));
-    r.Schedule(Schedule("PlacePlayer", false));
-    r.Schedule(Schedule("Load", false));
-    r.Schedule(Schedule("Play", true));
+    r.Schedule(Schedule("Boot"));
+    r.Schedule(Schedule("PlacePlayer"));
+    r.Schedule(Schedule("Load"));
+    r.Schedule(Schedule("Play"));
     r.AddSystem<&Boot>(In("Boot", "Boot"));
     r.AddSystem<&PlacePlayer>(In("PlacePlayer", "PlacePlayer"));
     r.AddSystem<&LoadSave>(In("LoadSave", "Load"));

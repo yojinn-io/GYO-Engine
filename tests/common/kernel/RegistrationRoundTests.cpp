@@ -290,8 +290,6 @@ TEST_CASE("DI-KS 3: a second round that adds one unrelated System leaves ties, e
         r.Effect("Io:file");
         ScheduleOptions other;
         other.name = "Other";
-        other.domain = Domain::Frame;
-        other.clock = true;
         other.stages = {"Only"};
         r.Schedule(other);
         SystemOptions writes = B("WritesFlag", "A");
@@ -729,7 +727,7 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     // Each SUBCASE adds one kind of table, so a table the World misses fails only its own label.
     SUBCASE("message buffers") {
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-            r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B, .domain = Domain::Fixed});
+            r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B});
             r.AddSystem<&SendsLater>(B("SendsLater", "A"));
             r.AddSystem<&HoldsLater>(B("HoldsLater", "A", {"SendsLater"}));
         })));
@@ -775,8 +773,6 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
             ScheduleOptions late;
             late.name = "Late";
-            late.domain = Domain::Frame;
-            late.clock = true;
             late.stages = {"Only"};
             r.Schedule(late);
             r.AddSystem<&NewSystem>(Sys("LateSystem", Zone::B, {At("Late", "Only")}));
@@ -824,8 +820,6 @@ TEST_CASE("DI-KS 13: an extract source registers again, then the Registry that r
     const auto extractSchedule = [](Registrar& r) {
         ScheduleOptions s;
         s.name = "Extract";
-        s.domain = Domain::Frame;
-        s.clock = true;
         s.extract = true;
         s.stages = {"Copy"};
         r.Schedule(s);
@@ -938,7 +932,6 @@ TEST_CASE("DI-KS 25: the order graph lists System-to-System edges with their sou
         Data(r);
         ScheduleOptions tick = TickSchedule();
         tick.name = "Ordered";
-        tick.domain = Domain::Frame;
         tick.syncPoints = {SyncPointOptions{"Mid", "C"}};
         r.Schedule(tick);
         const auto at = [](std::string name, std::string stage, std::vector<std::string> before = {},

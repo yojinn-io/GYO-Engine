@@ -45,12 +45,10 @@ struct Limits {
     std::vector<std::string> tickStages = {"A", "B", "C"};
 };
 
-// Early (Frame clock) first, then the shared test data, then Tick (Fixed clock).
+// Early first, then the shared test data (with TickCount, the Runs the test counted), then Tick.
 void Base(Registrar& r, const Limits& limits = {}) {
     ScheduleOptions early;
     early.name = "Early";
-    early.domain = Domain::Frame;
-    early.clock = true;
     early.stages = {"X"};
     early.hookRoundLimit = limits.early;
     r.Schedule(early);
@@ -69,11 +67,10 @@ void Base(Registrar& r, const Limits& limits = {}) {
     r.Component<Bomb>({.name = "Bomb", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Component<Fuse>({.name = "Fuse", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Resource<Depth>({.name = "Depth", .zone = Zone::B});
-    r.Message<Ping>({.name = "Ping", .zone = Zone::B, .domain = Domain::Fixed});
+    r.Message<Ping>({.name = "Ping", .zone = Zone::B});
+    r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
     ScheduleOptions tick;
     tick.name = "Tick";
-    tick.domain = Domain::Fixed;
-    tick.clock = true;
     tick.stages = limits.tickStages;
     tick.hookRoundLimit = limits.tick;
     r.Schedule(tick);
@@ -85,8 +82,8 @@ SystemOptions Put(std::string name, std::string schedule, std::string stage, Zon
 
 // ---- Systems
 
-SystemResult SpawnBullet(SpawnWithId<Bundle<Bullet>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(1, Bullet{1});
+SystemResult SpawnBullet(SpawnWithId<Bundle<Bullet>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(1, Bullet{1});
     return Ok();
 }
 SystemResult SpawnBulletOnce(SpawnWithId<Bundle<Bullet>> spawn) {
@@ -105,49 +102,49 @@ SystemResult CountTrailsC(Query<Read<Trail>> trails) {
     Log().push_back("C:" + std::to_string(trails.Count()));
     return Ok();
 }
-SystemResult MarkTwo(CommandsFor<Inserts<Marker>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 1) commands.Insert(2, Marker{2});
+SystemResult MarkTwo(CommandsFor<Inserts<Marker>, Removes<>> commands, Res<TickCount> tick) {
+    if (tick->value == 1) commands.Insert(2, Marker{2});
     return Ok();
 }
 // Spawns a chain head whose hook rounds go Depth deep, on every tick (ids never repeat).
-SystemResult SpawnChain(SpawnWithId<Bundle<Chain>> spawn, Res<Depth> depth, CurrentTick tick) {
-    if (depth->d >= 0) spawn.New(static_cast<EntityId>(tick.Tick()) * 1000000U, Chain{depth->d});
+SystemResult SpawnChain(SpawnWithId<Bundle<Chain>> spawn, Res<Depth> depth, Res<TickCount> tick) {
+    if (depth->d >= 0) spawn.New(static_cast<EntityId>(tick->value) * 1000000U, Chain{depth->d});
     return Ok();
 }
-SystemResult SpawnFan(SpawnWithId<Bundle<Fan>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(1, Fan{1});
+SystemResult SpawnFan(SpawnWithId<Bundle<Fan>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(1, Fan{1});
     return Ok();
 }
-SystemResult WritePingAtTwo(MessageWriter<Ping> pings, CurrentTick tick) {
-    if (tick.Tick() == 2) pings.Send(Ping{11});
+SystemResult WritePingAtTwo(MessageWriter<Ping> pings, Res<TickCount> tick) {
+    if (tick->value == 2) pings.Send(Ping{11});
     return Ok();
 }
 SystemResult ReadPings(MessageReader<Ping> pings) {
     static_cast<void>(pings.Read());
     return Ok();
 }
-SystemResult SpawnBombAtTwo(SpawnWithId<Bundle<Bomb>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 2) spawn.New(7, Bomb{7});
+SystemResult SpawnBombAtTwo(SpawnWithId<Bundle<Bomb>> spawn, Res<TickCount> tick) {
+    if (tick->value == 2) spawn.New(7, Bomb{7});
     return Ok();
 }
 SystemResult FailAtB() {
     return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "stage B fails"));
 }
 SystemResult ZoneCReadsPos(Query<Read<Pos>>) { return Ok(); }
-SystemResult EarlyReader(MessageReader<Ping> pings, CurrentTick tick) {
-    std::string line = "early@" + std::to_string(tick.Tick()) + ":";
+SystemResult EarlyReader(MessageReader<Ping> pings, Res<TickCount> tick) {
+    std::string line = "early@" + std::to_string(tick->value) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
     return Ok();
 }
-SystemResult LateReader(MessageReader<Ping> pings, CurrentTick tick) {
-    std::string line = "late@" + std::to_string(tick.Tick()) + ":";
+SystemResult LateReader(MessageReader<Ping> pings, Res<TickCount> tick) {
+    std::string line = "late@" + std::to_string(tick->value) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
     return Ok();
 }
-SystemResult ZoneCSpawnsSeed(SpawnWithId<Bundle<Seed>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(3, Seed{3});
+SystemResult ZoneCSpawnsSeed(SpawnWithId<Bundle<Seed>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(3, Seed{3});
     return Ok();
 }
 
@@ -344,7 +341,6 @@ TEST_CASE("J-54: run once: a one-off schedule's hook records at its last sync po
                 once.name = "Startup";
                 // A one-off schedule (the kernel has no startup since
                 // v8-arch-gyo2-orchestration-skeleton): Frame, no clock (Early is Frame's clock).
-                once.domain = Domain::Frame;
                 once.stages = {"S"};
                 r.Schedule(once);
                 r.AddSystem<&SpawnBulletOnce>(Put("SpawnBulletOnce", "Startup", "S"));
@@ -405,6 +401,7 @@ TEST_CASE("J-54: a schedule's own limit overrides the product's default, larger 
             },
             limits, false, 2U);
         early->world().SetResource(Depth{3});
+        early->world().SetResource(TickCount{1});  // the first Run of Early
         CHECK_MESSAGE(HasCode(early->Run("Early"), KernelErrorCode::HookRoundLimit),
                       "J-54: a schedule with no limit of its own did not use the product's 2");
     }
@@ -426,9 +423,11 @@ TEST_CASE("J-54: the product's default is per World") {
     other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});
     other.GetWorld().SetResource(Depth{0});
+    other.GetWorld().SetResource(TickCount{1});
     KERNEL_REQUIRE_RUN_OK(other.Run("Tick"));  // the other World reads its KernelSettings first
     CHECK(HasCode(RunChain(*two, 3), KernelErrorCode::HookRoundLimit));
     other.GetWorld().SetResource(Depth{3});
+    other.GetWorld().SetResource(TickCount{2});
     const auto result = other.Run("Tick");
     CHECK_MESSAGE(static_cast<bool>(result), "J-54: another World's KernelSettings changed this World's limit: " << Text(result));
 }
@@ -445,6 +444,7 @@ TEST_CASE("J-54: the product's default stays per World when another World runs i
     other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});  // the default limit, 8
     other.GetWorld().SetResource(Depth{0});
+    other.GetWorld().SetResource(TickCount{1});
     g_innerWorld = &other;
     g_innerResult.clear();
     const auto result = RunChain(*two, 3);
@@ -544,11 +544,11 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     CHECK(planOf(t5, "Tick") != planOf(t6, "Tick"));
     CHECK(t5.registry->Frozen().CFingerprint() != t6.registry->Frozen().CFingerprint());
     CHECK(planOf(t8, "Tick") != planOf(none, "Tick"));
-    CHECK(planOf(none, "Tick").version == 7U);
-    CHECK(none.registry->Frozen().CFingerprint().version == 9U);
-    CHECK(none.registry->Frozen().RegistryFingerprint().version == 5U);
+    CHECK(planOf(none, "Tick").version == 8U);
+    CHECK(none.registry->Frozen().CFingerprint().version == 10U);
+    CHECK(none.registry->Frozen().RegistryFingerprint().version == 6U);
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK(report.find("gyo.kernel.plans 5") == 0);
+    CHECK(report.find("gyo.kernel.plans 6") == 0);
     CHECK(report.find("  hook-round-limit 5\n") != std::string::npos);
     CHECK(report.find("  hook-round-limit default\n") != std::string::npos);
 }
@@ -765,7 +765,6 @@ TEST_CASE("J-54: with verification on, the snapshots are taken again after the r
     auto rig = MakeFlushRig([](Registrar& r) {
         ScheduleOptions once;
         once.name = "Startup";
-        once.domain = Domain::Frame;
         once.stages = {"S"};
         r.Schedule(once);
         r.AddSystem<&SpawnBulletOnce>(Put("SpawnBulletOnce", "Startup", "S"));
@@ -941,14 +940,14 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
     const Built t8 = build(tick8);
     CHECK_MESSAGE(t8.registry->Frozen().CFingerprint() != none.registry->Frozen().CFingerprint(),
                   "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
-    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "7:62a5a7c013566692cfea7e72b4a2f6da359f13628283008769c2701b16358e35",
+    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "8:9e9f1eeabb8adadea081c9b457fba880ca1fa9df1b956783177576323485e1c6",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "9:46d31779f8a66edf7168255f1cb30ad7e9877c4405cf40c1b0a222a3e02fac23",
+    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "10:834667fb1d5f84d3cf1cafb3c7b22c4baf5dd98373b3ddba7d11cb81f8f1e2f0",
                   "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "5:a54ef29bfa4053bee2e8747ca11996e7c05a580f7c1f87de7b7d9d945202adb4",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "6:335e6c25fcf7ef66fd919090d1e2e1d3614ef6527057fa8af7849f66fb847bd2",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 7:") != std::string::npos,
+    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 8:") != std::string::npos,
                   "J-54: the export's hook-round-limit line is not right before the fingerprint line");
 }
 

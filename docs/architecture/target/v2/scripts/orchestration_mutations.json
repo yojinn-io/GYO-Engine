@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the orchestration skeleton batch (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9; ids or-). Behaviour tests only: the scans of section 7.4 wait for the scenario segment (v8-arch-gyo2-guards-after-mechanism-stable). G-8 (Fable/high, build/evidence/gyo2-orchestration-skeleton/segment1/g8-check-fable-high.md) added g8- candidates; not added (with the reason): g8-owner-seq-constant: no observable behaviour of the owner sequence (the kernel only compares owners for equality); g8-replace-inside-run-unchecked: equivalent under test: the kernel asserts too (W-3), GYO_CHECK_ASSERTS takes any assertion; g8-old-registry-first: undefined behaviour (use after free) without a sanitizer: not a reliable mutant; g8-carry-box-kept: equivalent for the carried types (one int; move equals copy). v8-arch-gyo2-broken-world-ends-product (user decision, merge approval item 4): one broken World ends the Product. Retired with their property: or-carry-held-dropped (the holding place is gone (an empty place ends the Product; g8s-drop-old-held-dropped guards the values a DropOldFirst replacement takes out)); or-d1-hold-not-old (an interrupted World is not replaced any more); g8-runon-unchecked (RunOn checks nothing now; Ended() at each entry point does (or-ended-*)); g8-runframe-interrupted-unchecked (or-ended-runframe-unchecked); g8-insert-empty-place-code (or-ended-insert-unchecked and or-ended-code-swapped). Rewritten for the new code (find only, or as noted in what): or-gi-last-world, or-gi-error-ignored, g8-gi-flag-only-on-success, or-runschedule-no-gameinit, g8s-runschedule-gameinit-after, or-drop-old-later, g8-frame-list-reversed, g8-frame-error-ignored, g8-replace-gameinit-skipped-on-new, g8-swap-keeps-old-lists, g8-throw-no-giveback, g8s-drop-old-held-dropped, or-d4-empty-first-counted. Added: or-ended-*, or-failure-*, or-drop-fail-*, or-throw-*, or-run-throw-unrecorded. The same day the user took the logging back out (logging is a mechanism of its own, not part of the orchestration layer): the log parameter and its or-log-* mutants never landed; or-failure-logged guards that the layer does not log.",
+ "description": "Declared mutants of the orchestration skeleton batch (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9; ids or-). Behaviour tests only: the scans of section 7.4 wait for the scenario segment (v8-arch-gyo2-guards-after-mechanism-stable). G-8 (Fable/high, build/evidence/gyo2-orchestration-skeleton/segment1/g8-check-fable-high.md) added g8- candidates; not added (with the reason): g8-owner-seq-constant: no observable behaviour of the owner sequence (the kernel only compares owners for equality); g8-replace-inside-run-unchecked: equivalent under test: the kernel asserts too (W-3), GYO_CHECK_ASSERTS takes any assertion; g8-old-registry-first: undefined behaviour (use after free) without a sanitizer: not a reliable mutant; g8-carry-box-kept: equivalent for the carried types (one int; move equals copy). v8-arch-gyo2-broken-world-ends-product (user decision, merge approval item 4): one broken World ends the Product. Retired with their property: or-carry-held-dropped (the holding place is gone (an empty place ends the Product; g8s-drop-old-held-dropped guards the values a DropOldFirst replacement takes out)); or-d1-hold-not-old (an interrupted World is not replaced any more); g8-runon-unchecked (RunOn checks nothing now; Ended() at each entry point does (or-ended-*)); g8-runframe-interrupted-unchecked (or-ended-runframe-unchecked); g8-insert-empty-place-code (or-ended-insert-unchecked and or-ended-code-swapped). Rewritten for the new code (find only, or as noted in what): or-gi-last-world, or-gi-error-ignored, g8-gi-flag-only-on-success, or-runschedule-no-gameinit, g8s-runschedule-gameinit-after, or-drop-old-later, g8-frame-list-reversed, g8-frame-error-ignored, g8-replace-gameinit-skipped-on-new, g8-swap-keeps-old-lists, g8-throw-no-giveback, g8s-drop-old-held-dropped, or-d4-empty-first-counted. Added: or-ended-*, or-failure-*, or-drop-fail-*, or-throw-*, or-run-throw-unrecorded. The same day the user took the logging back out (logging is a mechanism of its own, not part of the orchestration layer): the log parameter and its or-log-* mutants never landed; or-failure-logged guards that the layer does not log. time-events step 4 (v8-arch-gyo2-time-events, declaration 6.1 G2 and G6): retired or-gi-domain-unchecked (G2: a game initialization schedule no longer belongs to a domain, D-E12 left the kernel) and or-failure-no-domain (G6: WorldFailure carries no domain); rewrote or-failure-no-tick and or-failure-text-no-tick for the sync point number.",
  "mutants": [
   {
    "id": "or-configure-skipped",
@@ -1906,23 +1906,13 @@
    "expect": "GYO_ASSERT failed: data_->frozen"
   },
   {
-   "id": "or-gi-domain-unchecked",
-   "what": "G-7 (group A): a game initialization schedule with no domain is accepted (D-E12 until batch 3)",
-   "file": "engine/kernel/src/Registry.cpp",
-   "find": "        if (s.domain == Domain::None) {\n            data.Error(StartupCode::DE12",
-   "replace": "        if (false) {\n            data.Error(StartupCode::DE12",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-1: until batch 3*",
-   "expect": "\\[or-gi-domain\\]"
-  },
-  {
    "id": "or-gi-writer-uncounted",
-   "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4)",
+   "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4) (v8-arch-gyo2-time-events step 4: cases follow the O-1 case renamed when its D-E12 half left, G2)",
    "file": "engine/kernel/src/Registry.cpp",
    "find": "        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;",
    "replace": "        if (true) continue;",
    "target": "gyo_orchestration_tests",
-   "cases": "O-1: until batch 3*",
+   "cases": "O-1: game initialization and the frame both writing one column*",
    "expect": "\\[or-gi-writer-counted\\]"
   },
   {
@@ -2126,20 +2116,10 @@
    "expect": "\\[or\\-ended\\-failure\\-where\\]"
   },
   {
-   "id": "or-failure-no-domain",
-   "what": "the failure does not take the schedule's domain (v8-arch-gyo2-broken-world-ends-product)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (info.options.name == schedule) failure.domain = info.options.domain;",
-   "replace": "        static_cast<void>(info);",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: one interrupted World ends the Product*",
-   "expect": "\\[or\\-ended\\-failure\\-tick\\]"
-  },
-  {
    "id": "or-failure-no-tick",
-   "what": "the failure does not read the tick (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "the failure does not read the tick (v8-arch-gyo2-broken-world-ends-product) (v8-arch-gyo2-time-events step 4: G6: the failure does not read the sync point number (was the tick))",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    failure.tick = slot.executor->GetWorld().Tick(failure.domain);\n",
+   "find": "    failure.syncEpoch = slot.executor->GetWorld().SyncEpoch();\n",
    "replace": "",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: one interrupted World ends the Product*",
@@ -2257,10 +2237,10 @@
   },
   {
    "id": "or-failure-text-no-tick",
-   "what": "Text() leaves the tick out (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "Text() leaves the tick out (v8-arch-gyo2-broken-world-ends-product) (v8-arch-gyo2-time-events step 4: G6: Text() leaves the sync point number out (was the tick))",
    "file": "engine/orchestration/src/OrchestrationError.cpp",
-   "find": "\", tick \" +\n                std::to_string(tick) + \")\"",
-   "replace": "\")\"",
+   "find": "        text += \", schedule '\" + schedule + \"' (sync point \" + std::to_string(syncEpoch) + \")\";",
+   "replace": "        text += \", schedule '\" + schedule + \"'\";",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: the failure is returned*",
    "expect": "\\[or\\-failure\\-text\\]"

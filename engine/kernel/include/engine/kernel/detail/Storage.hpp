@@ -271,7 +271,8 @@ template <class R>
 class DiagnosticsBuffer final : public DiagnosticsBase {
 public:
     struct Entry {
-        std::uint64_t tick;
+        // The World's sync point number when the entry was written (World::SyncEpoch; L8).
+        std::uint64_t syncEpoch;
         // True while a Replay runs (spec H-8); rollback-extract sets it. Always false here.
         bool rollbackActive;
         R record;

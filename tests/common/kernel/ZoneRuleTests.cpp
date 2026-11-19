@@ -56,7 +56,7 @@ TEST_CASE("J-14: with RequireExplicitZones, a System, component, resource or eve
                               r.RequireExplicitZones();
                               r.Component<TestPos>({.name = "TestPos"});
                               r.Resource<TestRes>({.name = "TestRes"});
-                              r.Message<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
+                              r.Message<TestEvent>({.name = "TestEvent"});
                               r.Schedule(FixedSchedule());
                               SystemOptions o;  // no zone given: the default must not stand for one
                               o.name = "ReadPos";
@@ -72,7 +72,7 @@ TEST_CASE("J-14: without RequireExplicitZones, a zone left unset is zone B") {
     Built built = Finish({{"test", [](Registrar& r) {
                               r.Component<TestPos>({.name = "TestPos"});
                               r.Resource<TestRes>({.name = "TestRes"});
-                              r.Message<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
+                              r.Message<TestEvent>({.name = "TestEvent"});
                               r.Schedule(FixedSchedule());
                               SystemOptions o;  // no zone given
                               o.name = "ReadPos";
@@ -218,24 +218,22 @@ TEST_CASE("J-16: a Shared column in the digest set fails; an Exclusive one passe
     KERNEL_REQUIRE_OK(exclusive);
 }
 
-// ---- J-37 (F-9, F-E1)
+// ---- J-37: F-9 and F-E1 left with the clock (G1, v8-arch-gyo2-cross-clock-events-open): a message is
+// read and written in any schedule; the cursor keeps a reader from missing a record (DI-KS 10).
 
-TEST_CASE("J-37: an event used outside its domain's clock schedule fails") {
-    Built crossDomain = FinishOne([](Registrar& r) {
-        r.AddSystem<&ReadEvent>(Sys("ReadEvent", Zone::B, {At("Update", "First")}));  // Fixed event in Frame
+TEST_CASE("J-37: a message is used in any schedule") {
+    Built otherSchedule = FinishOne([](Registrar& r) {
+        r.AddSystem<&ReadEvent>(Sys("ReadEvent", Zone::B, {At("Update", "First")}));
     });
-    CHECK(KernelTest::ErrorCount(crossDomain, StartupCode::FE1) == 1);
-    REQUIRE_FALSE(static_cast<bool>(crossDomain.result));
-    Built nonClock = FinishOne([](Registrar& r) {
+    KERNEL_REQUIRE_OK(otherSchedule);
+    Built oneOff = FinishOne([](Registrar& r) {
         ScheduleOptions s;
         s.name = "FixedLate";
-        s.domain = Domain::Fixed;
         s.stages = {"Late"};
         r.Schedule(s);
         r.AddSystem<&WriteEvent>(Sys("WriteEvent", Zone::C, {At("FixedLate", "Late")}));
     });
-    CHECK(KernelTest::ErrorCount(nonClock, StartupCode::FE1) == 1);
-    REQUIRE_FALSE(static_cast<bool>(nonClock.result));
+    KERNEL_REQUIRE_OK(oneOff);
     Built inClock = FinishOne([](Registrar& r) {
         r.AddSystem<&WriteEvent>(Sys("WriteEvent", Zone::C, Simulate()));
         r.AddSystem<&ReadEvent>(Sys("ReadEvent", Zone::C, {At("FixedUpdate", "Present")}));
@@ -255,7 +253,7 @@ TEST_CASE("J-38: a zone C System filtering by Changed or Added fails; zone B pas
     KERNEL_REQUIRE_OK(b);
 }
 
-// ---- J-39 (G.2 Executor: time only from the domain tick and recorded boundary input)
+// ---- J-39 (G.2 Executor: time only from recorded boundary input; the domain tick left with the clock, G4)
 
 TEST_CASE("J-39: zone C reading FrameTime fails; a non-ingress System writing boundary input fails") {
     Built frameTime = FinishOne([](Registrar& r) {
@@ -273,8 +271,6 @@ TEST_CASE("J-39: zone C reading FrameTime fails; a non-ingress System writing bo
         r.AddSystem<&WriteInput>(Sys("WriteInput", Zone::B, {At("FixedUpdate", "Ingress")}));
     });
     CHECK(HasRule(bWritesInput, StartupCode::DE7, "Z2"));
-    // The domain tick has no writing handle at all: CurrentTick is read-only.
-    CHECK(ParamTraits<CurrentTick>::readOnly);
     Built readsInput = FinishOne([](Registrar& r) {
         ExternalAndInput(r);
         r.AddSystem<&ReadInput>(Sys("ReadInput", Zone::C, Simulate()));
@@ -397,12 +393,8 @@ TEST_CASE("J-47: a zone B member in the set read by a zone C System fails (Z1)")
 
 // ---- J-24 (codes from this file's rules)
 
-TEST_CASE("J-24: D-E7 (S-13 ExclusiveWorld in zone C), F-E1 and D-E2 from minimal Registries") {
+TEST_CASE("J-24: D-E7 (S-13 ExclusiveWorld in zone C) from a minimal Registry") {
     CHECK(HasRule(FinishOne([](Registrar& r) { r.AddSystem<&EditWorld>(Sys("EditWorld", Zone::C, Simulate())); }),
                   StartupCode::DE7, "S-13"));
-    Built eventWithoutDomain = Finish({{"test", [](Registrar& r) {
-                                           r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C});
-                                           r.Schedule(FixedSchedule());
-                                       }}});
-    CHECK(KernelTest::HasError(eventWithoutDomain, StartupCode::FE1));
+    // F-E1 (a message with no clock domain) left with the clock (G1).
 }

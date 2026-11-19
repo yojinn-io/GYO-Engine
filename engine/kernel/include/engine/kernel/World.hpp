@@ -4,7 +4,8 @@
 // 10, 11, 14).
 //
 // One WorldExecutor's data: columns, resources, message buffers and their
-// readers' cursors, the deferred queue, change stamps, domain ticks and its state. Made from a Registry that has
+// readers' cursors, the deferred queue, change stamps, the sync point number and its state (no clock and no tick:
+// v8-arch-gyo2-clock-out-of-kernel). Made from a Registry that has
 // built its Plans; its lifetime is one generation (spec A.1: a generation
 // change is a new World, made from the same Registry).
 //
@@ -18,7 +19,7 @@
 // hooks' access descriptions are made again, and the message cursors of a
 // removed System are dropped (event cursor declaration 3.2: what only it held
 // is trimmed when the next outermost Run ends). Entries that use no such table
-// (State, Name, Options, Stamp, Tick, ...) do not compare. The Registry keeps
+// (State, Name, Options, Stamp, SyncEpoch, ...) do not compare. The Registry keeps
 // no list of its Worlds, only counters: two this class changes (live Worlds,
 // and those that declare no dynamic insert) and one WorldExecutor::Run changes
 // (Worlds inside a Run); so making, destroying and running a World, like
@@ -121,8 +122,10 @@ struct RejectedSpawn {
     // the Plan); for an immediate change of ExclusiveWorld and the hook rounds
     // it runs, the exclusive System's step (no sync point applied it).
     std::uint32_t appliedAt = 0;
-    // The schedule's domain tick (0 without a clock).
-    std::uint64_t tick = 0;
+    // World::SyncEpoch() when it was dropped: the sync points completed before
+    // the one (or the immediate change) that dropped it (L8; the kernel has no
+    // tick, v8-arch-gyo2-clock-out-of-kernel).
+    std::uint64_t syncEpoch = 0;
     // IdSpawnedTwice only: the other emitter (the one whose record was kept, or
     // another emitter of the same id when all were dropped).
     std::string otherEmitter;
@@ -319,16 +322,12 @@ public:
         return out;
     }
 
-    // ---- Stamps, ticks, counters
+    // ---- Stamps, counters
 
     // The last stamp taken (spec A.1).
     [[nodiscard]] ChangeStamp Stamp() const noexcept { return stamp_; }
     // +1 at every sync point, also an empty one (spec F-6).
     [[nodiscard]] std::uint64_t SyncEpoch() const noexcept { return syncEpoch_; }
-    // The domain tick (spec section 0): advanced by the domain's clock schedule's Run.
-    [[nodiscard]] std::uint64_t Tick(Domain domain) const noexcept;
-    // The first stamp of a tick of a domain while it is in the bounded table (spec A.1 tickStamps).
-    [[nodiscard]] std::optional<ChangeStamp> TickStamp(Domain domain, std::uint64_t tick) const noexcept;
     // Spec F.2 step 5: inserts dropped because the entity was gone (a result, not an error).
     [[nodiscard]] std::uint64_t DroppedMissingEntity() const noexcept { return droppedMissingEntity_; }
     // Spec F-13: spawn records dropped at sync points over the World's life (TakeDiagnostics does not reset it).
@@ -346,7 +345,7 @@ public:
 
     // The World summary of spec D-9: keys and values of every column, resource
     // values, every message record (seq and payload) with each type's next write
-    // sequence number, and the message cursors; without stamps, tick stamps or
+    // sequence number, and the message cursors; without stamps or
     // Plan positions. Version 2 (World.cpp). Readable in Ready and Interrupted. Values
     // are hashed as raw bytes: a type in the summary must have no padding (the
     // author's responsibility; v8-arch-gyo2-summary-padding-a-then-c).
@@ -547,15 +546,6 @@ private:
     std::uint64_t entitiesEpoch_ = 0;
     std::uint64_t droppedMissingEntity_ = 0;
     std::uint64_t rejectedSpawns_ = 0;
-    static_assert(static_cast<std::size_t>(Domain::Loading) + 1 == 4, "one tick per Domain value");
-    std::array<std::uint64_t, 4> ticks_{};
-    static constexpr std::size_t kTickStampSlots = 256;
-    struct TickStampSlot {
-        std::uint64_t tick = 0;
-        ChangeStamp stamp = 0;
-        bool used = false;
-    };
-    std::array<std::array<TickStampSlot, kTickStampSlots>, 4> tickStamps_{};
 
     // Layer 2: one snapshot per column, resource and message buffer; allocated
     // only with verification on (target/system-contract 2b condition 4).

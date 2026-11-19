@@ -138,12 +138,12 @@ struct Golden {
 // v8-arch-gyo2-time-events step 3 (no event trim step or trim point; a message type's capacity
 // is hashed): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "7:43d9b10f587e18bb0d5f9827d284509f393763d28aa65eeb3867db318042c79c",
-     "5:e8a36df0242ba9c3995bbf9554eba13c475137c384044766ac93618ad4a17d40"},
-    {"deferred", &DeferredRegistry, "7:372fa3561ab08d4675edd1fea18643f6695e30b54a86d1fff3b5b8de5ac9d713",
-     "5:8ba2b2ce45525e5ae765a12d3a45d3d361f7c2fc962b2c4d47b878210a403b85"},
-    {"events", &EventRegistry, "7:0a280da07c1bd6880e8e90081e05252eb8f9845f7cc2f4c1d78c1787cac964c6",
-     "5:c614c2363d5ffc60b39c21915c6c23906dceb34a99b1a25972a320e3208f8e79"},
+    {"mixed", &MixedRegistry, "8:a7fb49c5c00c39463f55eb4f32eb07e8367512c7856fe5c446a999cd0b6953ed",
+     "6:727831a77f10027d57fa353490523fd32993b31fff021ca3a46c39fc4aeb52f1"},
+    {"deferred", &DeferredRegistry, "8:2f15310ca49ef932db59c66a486bf9330daa0cd971394c0f0948a3ad8d34a564",
+     "6:259b87e782e0934ba17ffe36263995ad976df31f28b160903f43bd91eb7f7f6b"},
+    {"events", &EventRegistry, "8:bc3cd4d3357645f46efcb7670ee3a51e77b4bdb3eabd81e5493b45b32b38ad1d",
+     "6:f828a1d38fefb98bcfa141b899513693987a9ef34789a48aa46f19889f7c83dd"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
@@ -360,8 +360,6 @@ SystemResult CountSecond(ResMut<OrderCounter>) { return Ok(); }
 ScheduleOptions OrderTick() {
     ScheduleOptions s;
     s.name = "Tick";
-    s.domain = Domain::Frame;
-    s.clock = true;
     s.stages = {"Simulate", "Present"};
     return s;
 }
@@ -369,8 +367,6 @@ ScheduleOptions OrderTick() {
 ScheduleOptions OrderStep() {
     ScheduleOptions s;
     s.name = "Step";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     s.stages = {"Simulate"};
     return s;
 }
@@ -481,7 +477,6 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
     Built bOnly = FinishOne([](Registrar& r) {
         ScheduleOptions s;
         s.name = "Ui";
-        s.domain = Domain::Frame;
         s.stages = {"Draw"};
         s.executor = ExecutorKind::Parallel;
         s.parallelGuardTest = "ui.parallel_equivalence";
@@ -494,7 +489,6 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
     Built c = WithShared([](Registrar& r) {
         ScheduleOptions s;
         s.name = "FixedParallel";
-        s.domain = Domain::Fixed;
         s.stages = {"Run"};
         s.executor = ExecutorKind::Parallel;
         r.Schedule(s);
@@ -605,28 +599,11 @@ TEST_CASE("J-24: D-E9 (zone C hooks on one trigger conflict)") {
     }));
 }
 
-TEST_CASE("J-24: D-E12 (clock schedules per domain)") {
-    Built twoClocks = FinishOne([](Registrar& r) {
-        ScheduleOptions s = UpdateSchedule();
-        s.name = "SecondFrame";
-        r.Schedule(s);
-    });
-    CHECK(KernelTest::ErrorCount(twoClocks, StartupCode::DE12) == 1);
-    Built noClock = Finish({{"test", [](Registrar& r) {
-                                ScheduleOptions s = UpdateSchedule();
-                                s.clock = false;
-                                r.Schedule(s);
-                            }}});
-    CHECK(KernelTest::ErrorCount(noClock, StartupCode::DE12) == 1);
-}
-
 TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
     const auto build = [](Registrar& r) {
         r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B});
         ScheduleOptions s;
         s.name = "Extract";
-        s.domain = Domain::Frame;
-        s.clock = true;
         s.extract = true;
         s.stages = {"Copy"};
         r.Schedule(s);
@@ -711,9 +688,10 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E1 -> E4 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E2 -> E3 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
-    CHECK(report.find("gyo.kernel.plans 5") == 0);
-    CHECK(report.find("fingerprint 7:") != std::string::npos);
-    // The whole schedule line of format 3 (no runner since v8-arch-gyo2-kernel-subtract-structure).
-    CHECK_MESSAGE(report.find("\nschedule FixedUpdate domain=Fixed clock=1 rollback=0\n") != std::string::npos,
+    CHECK(report.find("gyo.kernel.plans 6") == 0);
+    CHECK(report.find("fingerprint 8:") != std::string::npos);
+    // The whole schedule line of format 6 (no runner since v8-arch-gyo2-kernel-subtract-structure; no domain or
+    // clock since v8-arch-gyo2-clock-out-of-kernel).
+    CHECK_MESSAGE(report.find("\nschedule FixedUpdate rollback=0\n") != std::string::npos,
                   "Plan export: the schedule line\n" << report);
 }

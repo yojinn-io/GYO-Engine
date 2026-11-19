@@ -39,12 +39,10 @@ std::string Join(const std::vector<std::string>& parts) {
     return out;
 }
 
-// Early (Frame clock) first, then the data, then Tick (Fixed clock, stages A, B, C).
+// Early first, then the data (with TickCount, the Runs of Tick the test counted), then Tick (stages A, B, C).
 void Base(Registrar& r, bool allotter = false) {
     ScheduleOptions early;
     early.name = "Early";
-    early.domain = Domain::Frame;
-    early.clock = true;
     early.stages = {"X"};
     r.Schedule(early);
     r.Component<Body>({.name = "Body", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
@@ -57,10 +55,9 @@ void Base(Registrar& r, bool allotter = false) {
         r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
         r.Allotter<RangeAllotter>();
     }
+    r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
     ScheduleOptions tick;
     tick.name = "Tick";
-    tick.domain = Domain::Fixed;
-    tick.clock = true;
     tick.stages = {"A", "B", "C"};
     r.Schedule(tick);
 }
@@ -124,8 +121,8 @@ SystemResult DespawnThenSpawnSeven(Despawn despawn, SpawnWithId<Bundle<Body>> sp
     spawn.New(7, Body{77});
     return Ok();
 }
-SystemResult FlagTwenty(SpawnWithId<Bundle<Signal>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(20, Signal{20});
+SystemResult FlagTwenty(SpawnWithId<Bundle<Signal>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(20, Signal{20});
     return Ok();
 }
 SystemResult FlagTwentyAndTwentyOne(SpawnWithId<Bundle<Signal>> spawn) {
@@ -137,8 +134,8 @@ SystemResult HookDespawnsSeven(HookCtx, Despawn despawn) {
     despawn.Entity(7);
     return Ok();
 }
-SystemResult SpawnSevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(7, Body{77});
+SystemResult SpawnSevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(7, Body{77});
     return Ok();
 }
 SystemResult SpawnSevenTwice(SpawnWithId<Bundle<Body>> spawn) {
@@ -187,30 +184,30 @@ SystemResult HookSpawnsEleven(HookCtx, SpawnWithId<Bundle<Body>> spawn) {
     spawn.New(11, Body{1100});
     return Ok();
 }
-SystemResult SpawnElevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(11, Body{1111});
+SystemResult SpawnElevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(11, Body{1111});
     return Ok();
 }
-SystemResult DespawnThenSpawnElevenAtTickOne(Despawn despawn, SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult DespawnThenSpawnElevenAtTickOne(Despawn despawn, SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value != 1) return Ok();
     despawn.Entity(11);
     spawn.New(11, Body{1111});
     return Ok();
 }
-SystemResult SpawnTwelveA(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(12, Body{121});
+SystemResult SpawnTwelveA(SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(12, Body{121});
     return Ok();
 }
-SystemResult SpawnTwelveB(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(12, Body{122});
+SystemResult SpawnTwelveB(SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(12, Body{122});
     return Ok();
 }
 SystemResult HookSpawnsSeven(HookCtx, SpawnWithId<Bundle<Body>> spawn) {
     spawn.New(7, Body{700});
     return Ok();
 }
-SystemResult SpawnFortyAndFlag(SpawnWithId<Bundle<Body, Signal>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(40, Body{40}, Signal{40});
+SystemResult SpawnFortyAndFlag(SpawnWithId<Bundle<Body, Signal>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(40, Body{40}, Signal{40});
     return Ok();
 }
 SystemResult HookSpawnsForty(HookCtx, SpawnWithId<Bundle<Body>> spawn) {
@@ -221,8 +218,8 @@ SystemResult ZoneCSpawnsSeven(SpawnWithId<Bundle<CPos>> spawn) {
     spawn.New(7, CPos{7});
     return Ok();
 }
-SystemResult SpawnSevenAtTickTwo(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 2) spawn.New(7, Body{72});
+SystemResult SpawnSevenAtTickTwo(SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value == 2) spawn.New(7, Body{72});
     return Ok();
 }
 SystemResult SpawnHundred(SpawnWithId<Bundle<Body>> spawn) {
@@ -266,11 +263,11 @@ SystemResult SpawnNineThenSeven(SpawnWithId<Bundle<Body>> spawn) {
     spawn.New(7, Body{70});
     return Ok();
 }
-SystemResult SpawnAliveByTick(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) {
+SystemResult SpawnAliveByTick(SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) {
         spawn.New(7, Body{70});
         spawn.New(8, Body{80});
-    } else if (tick.Tick() == 2) {
+    } else if (tick->value == 2) {
         spawn.New(7, Body{71});
     }
     return Ok();
@@ -308,6 +305,7 @@ TEST_CASE("J-55: an alive id: the spawn is dropped, the old entity is untouched,
         const auto bodyBefore = world.Stamps<Body>(7);
         const auto tagBefore = world.Stamps<Tag>(7);
         Log().clear();
+        const std::uint64_t epochBefore = world.SyncEpoch();
         const auto result = rig->Run();
         REQUIRE_MESSAGE(static_cast<bool>(result), "J-55 player-7: Run ok: " << Text(result));
         CHECK(world.State() == WorldState::Ready);
@@ -335,7 +333,8 @@ TEST_CASE("J-55: an alive id: the spawn is dropped, the old entity is untouched,
         const std::uint32_t step = StepOf(*rig, "SpawnSevenEightNine");
         CHECK_MESSAGE(r.step == step, "J-55 player-7: step");
         CHECK_MESSAGE(r.appliedAt == SyncAfter(*rig, step), "J-55 player-7: appliedAt");
-        CHECK_MESSAGE(r.tick == 1, "J-55 player-7: tick");
+        // Dropped at the Run's first sync point: the sync points completed before it (L8).
+        CHECK_MESSAGE(r.syncEpoch == epochBefore, "J-55 player-7: sync point number");
         CHECK_MESSAGE(r.otherEmitter.empty(), "J-55 player-7: no other emitter");
     }
 }
@@ -591,17 +590,21 @@ TEST_CASE("J-55: a zone C spawn blocked by an entity with zone B data only is dr
     CHECK_MESSAGE(rejected[0].emitterZone == Zone::C, "J-55 zone-c: emitter zone C");
 }
 
-TEST_CASE("J-55: the record's tick is the schedule's domain tick") {
+// The record carries the World's sync point number (L8; the domain tick left with the clock, G8).
+TEST_CASE("J-55: the record's sync point number is the World's when it was dropped") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&SpawnSevenAtTickTwo>(In("SpawnSevenAtTickTwo", "A"));
     });
     rig->world().Insert(7, Body{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const std::uint64_t epochBefore = rig->world().SyncEpoch();
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
     REQUIRE_MESSAGE(rejected.size() == 1, "J-55 second-tick: one record");
-    CHECK_MESSAGE(rejected[0].tick == 2, "J-55 second-tick: tick 2");
+    CHECK_MESSAGE(epochBefore == 3, "J-55 second-tick: the first Run applied 3 sync points (stages A, B, C)");
+    CHECK_MESSAGE(rejected[0].syncEpoch == epochBefore,
+                  "J-55 second-tick: sync point number " << rejected[0].syncEpoch << ", not the first one of Run 2 (" << epochBefore << ")");
 }
 
 TEST_CASE("J-55: the allotter's range: in the range comes before alive") {
@@ -805,9 +808,9 @@ TEST_CASE("J-55: the fingerprint versions") {
         r.AddSystem<&SpawnSevenAlways>(In("SpawnSevenAlways", "A"));
     });
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
-    CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 7U, "J-55 versions: Plan fingerprint version 7");
-    CHECK_MESSAGE(frozen.CFingerprint().version == 9U, "J-55 versions: C fingerprint version 9");
-    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 5U, "J-55 versions: Registry fingerprint version 5");
+    CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 8U, "J-55 versions: Plan fingerprint version 8");
+    CHECK_MESSAGE(frozen.CFingerprint().version == 10U, "J-55 versions: C fingerprint version 10");
+    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 6U, "J-55 versions: Registry fingerprint version 6");
 }
 
 // ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)
@@ -816,8 +819,8 @@ namespace {
 
 struct CVel { std::int32_t v; };  // zone C (registered by the X-55 rigs that need it)
 
-SystemResult FlagSignalLabelSignal(SpawnWithId<Bundle<Signal>> signal, SpawnWithId<Bundle<Label>> label, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult FlagSignalLabelSignal(SpawnWithId<Bundle<Signal>> signal, SpawnWithId<Bundle<Label>> label, Res<TickCount> tick) {
+    if (tick->value != 1) return Ok();
     signal.New(20, Signal{20});
     label.New(21, Label{21});
     signal.New(22, Signal{22});
@@ -835,14 +838,14 @@ SystemResult EarlySpawnsSeven(SpawnWithId<Bundle<Body>> spawn) {
     spawn.New(7, Body{70});
     return Ok();
 }
-SystemResult SpawnSevenAndElevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnSevenAndElevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, Res<TickCount> tick) {
+    if (tick->value != 1) return Ok();
     spawn.New(7, Body{77});
     spawn.New(11, Body{1111});
     return Ok();
 }
-SystemResult SpawnElevenTagAtTickOne(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(11, Tag{11});
+SystemResult SpawnElevenTagAtTickOne(SpawnWithId<Bundle<Tag>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(11, Tag{11});
     return Ok();
 }
 SystemResult ZoneCSpawnsNinePos(SpawnWithId<Bundle<CPos>> spawn) {
@@ -960,7 +963,7 @@ TEST_CASE("J-55: an alive id is IdAlive although step 0 spawned a larger id at t
                   "J-55 smaller-alive-id: 11 is IdSpawnedTwice, the hook is the other emitter");
 }
 
-TEST_CASE("J-55: the record's tick and schedule are those of the schedule that dropped it") {
+TEST_CASE("J-55: the record's sync point number and schedule are those of the sync point that dropped it") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&EarlySpawnsSeven>(Sys("EarlySpawnsSeven", Zone::B, {KernelTest::At("Early", "X")}));
@@ -968,10 +971,12 @@ TEST_CASE("J-55: the record's tick and schedule are those of the schedule that d
     rig->world().Insert(7, Body{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const std::uint64_t epochBefore = rig->world().SyncEpoch();
     KERNEL_REQUIRE_RUN_OK(rig->Run("Early"));
     const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
     REQUIRE_MESSAGE(rejected.size() == 1, "J-55 early: one record");
-    CHECK_MESSAGE(rejected[0].tick == 1, "J-55 early: tick 1 (the Frame domain's), not the Fixed domain's 2");
+    CHECK_MESSAGE(rejected[0].syncEpoch == epochBefore,
+                  "J-55 early: sync point " << rejected[0].syncEpoch << ", not Early's (" << epochBefore << ")");
     CHECK_MESSAGE(rejected[0].schedule == "Early", "J-55 early: schedule Early");
 }
 
@@ -1134,8 +1139,8 @@ TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatev
 // Two hooks spawn one id at step 0 (both dropped); a System of the window spawns it too. Each phase of a sync
 // point is judged on its own (user 2026-11-15): the window has one emitter and the id is not alive, so it spawns.
 namespace {
-SystemResult SpawnThirtyAtTickOne(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(30, Tag{30});
+SystemResult SpawnThirtyAtTickOne(SpawnWithId<Bundle<Tag>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(30, Tag{30});
     return Ok();
 }
 } // namespace

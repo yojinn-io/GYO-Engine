@@ -24,10 +24,6 @@ namespace GYO::Kernel {
 
 namespace {
 
-std::size_t DomainIndex(Domain domain) noexcept {
-    return static_cast<std::size_t>(domain);
-}
-
 bool SameError(const KernelError& a, const KernelError& b) {
     return a.code == b.code && a.rule == b.rule && a.message == b.message && a.detail == b.detail;
 }
@@ -176,16 +172,6 @@ std::uint64_t World::MembershipEpoch() const noexcept {
     std::uint64_t sum = entitiesEpoch_;
     for (const auto& column : columns_) sum += column->epoch;
     return sum;
-}
-
-std::uint64_t World::Tick(Domain domain) const noexcept {
-    return ticks_[DomainIndex(domain)];
-}
-
-std::optional<ChangeStamp> World::TickStamp(Domain domain, std::uint64_t tick) const noexcept {
-    const TickStampSlot& slot = tickStamps_[DomainIndex(domain)][tick % kTickStampSlots];
-    if (!slot.used || slot.tick != tick) return std::nullopt;
-    return slot.stamp;
 }
 
 void World::MakeAlive(EntityId id) {
@@ -402,8 +388,8 @@ void RecordDroppedMessage(World& world, MessageTypeId id, std::uint64_t seq) {
         DroppedMessages record;
         record.message = world.data_->messages[id].name;
         record.firstSeq = seq;
-        // No tick: the entry's tick goes with the clock (v8-arch-gyo2-time-events step 4).
-        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{0, false, std::move(record)});
+        // The World's sync point number at the first drop of the Run (L8).
+        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{world.syncEpoch_, false, std::move(record)});
         entry = entries.size() - 1;
     }
     DroppedMessages& record = entries[*entry].record;
@@ -523,7 +509,6 @@ std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result
 Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityId entity, ComponentId component,
                                                        std::uint32_t planPos, std::string_view schedule, ChangeStamp stamp) {
     const Detail::HookRecord& record = data_->hooks[hook];
-    const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
     Detail::SystemContext call;
     call.world = this;
     call.executor = executor_;
@@ -533,8 +518,6 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.planPos = planPos;
     call.zone = record.zone;
     call.hook = true;
-    call.domain = scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None;
-    call.tick = ticks_[DomainIndex(call.domain)];
     call.stamp = stamp;
     call.lastRun = 0;
     call.callSerial = ++callSerial_;
@@ -599,15 +582,6 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
     // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
     std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
-    // The schedule's domain tick for a RejectedSpawn record, looked up only when one is dropped.
-    std::optional<std::uint64_t> rejectTick;
-    auto tickOfSchedule = [&]() {
-        if (!rejectTick) {
-            const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
-            rejectTick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];
-        }
-        return *rejectTick;
-    };
 
     // K0: the running level's records start at its windowBase; the records
     // before it are the outer levels', applied later at their own sync points.
@@ -687,7 +661,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             rejected.schedule = std::string(schedule);
             rejected.step = spawn.planPos;
             rejected.appliedAt = planPos;
-            rejected.tick = tickOfSchedule();
+            rejected.syncEpoch = syncEpoch_;
             rejected.otherEmitter = std::string(other);
             RecordRejectedSpawn(std::move(rejected));
         };
@@ -874,9 +848,9 @@ void World::RecordRejectedSpawn(RejectedSpawn rejected) {
         found = made.get();
         Detail::AddDiagnostics(*this, KeyOf<RejectedSpawn>(), std::move(made));
     }
-    const std::uint64_t tick = rejected.tick;
+    const std::uint64_t epoch = rejected.syncEpoch;
     static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(
-        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});
+        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, false, std::move(rejected)});
 }
 
 void World::DiscardDeferred() noexcept {

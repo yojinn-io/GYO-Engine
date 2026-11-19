@@ -77,7 +77,6 @@ struct SystemRecord {
     // Filled at every BuildPlans (cleared first).
     AccessSet access;
     std::vector<EffectId> effects;
-    bool domainTick = false;
     // Registrar::RemoveSystem: a tombstone. seq stays its index in systems (the
     // Scheduler, the Plans and the Executor index by it); never resolved,
     // checked, planned or hashed.
@@ -215,7 +214,6 @@ struct RegistryData {
 };
 
 [[nodiscard]] std::string SourceText(const std::source_location& source);
-[[nodiscard]] const char* DomainName(Domain domain) noexcept;
 [[nodiscard]] const char* ZoneName(Zone zone) noexcept;
 
 // Scheduler.cpp: builds every schedule's Plan into data.plans and its resolved

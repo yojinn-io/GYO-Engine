@@ -64,7 +64,6 @@ struct DeclaredEdge {
 
 struct Plan {
     std::string schedule;
-    Domain domain = Domain::None;
     std::vector<Step> steps;
     std::vector<DeclaredEdge> declaredEdges;
     // The schedule's ScheduleOptions::hookRoundLimit (spec F-12): the hook rounds

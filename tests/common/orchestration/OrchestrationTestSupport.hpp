@@ -61,19 +61,15 @@ inline K::SystemResult Fail(K::Query<K::Read<Tag>>) {
     return Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "the test System failed"));
 }
 
-// Until batch 3 every schedule belongs to a domain (D-E12): one-off schedules
-// are Frame with no clock; the frame schedule is Frame's clock (declaration 3.6).
+// A one-stage schedule (the kernel keeps no clock since batch 3: a schedule belongs to no domain).
 inline K::ScheduleOptions Once(std::string name) {
     K::ScheduleOptions s;
     s.name = std::move(name);
-    s.domain = K::Domain::Frame;
-    s.clock = false;
     s.stages = {"S"};
     return s;
 }
 inline K::ScheduleOptions FrameClock(std::string name) {
     K::ScheduleOptions s = Once(std::move(name));
-    s.clock = true;
     return s;
 }
 inline K::SystemOptions In(std::string name, std::string schedule, std::vector<std::string> before = {},

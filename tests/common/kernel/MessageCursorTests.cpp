@@ -135,8 +135,6 @@ SystemResult PingOnMode(HookCtx, MessageWriter<Ping> pings) {
 ScheduleOptions SpawnerSchedule() {
     ScheduleOptions s;
     s.name = "Spawner";
-    s.domain = Domain::Frame;
-    s.clock = true;
     s.stages = {"S"};
     return s;
 }
@@ -314,7 +312,7 @@ TEST_CASE("J-36: Read twice in one call gives the same records; the cursor moves
 TEST_CASE("J-36: a write to a full buffer drops the oldest record; one DroppedMessages per message type per Run") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .domain = Domain::Fixed, .capacity = 3});
+        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
         r.AddSystem<&BeepReader>(B("BeepReader", "A"));
         r.AddSystem<&WriteFiveBeepsOnSecondRun>(B("WriteBeeps", "B"));
     });
@@ -339,7 +337,7 @@ TEST_CASE("J-36: a write to a full buffer drops the oldest record; one DroppedMe
 TEST_CASE("J-36: drops in one Run make one record; a reader that has read a dropped record is not listed") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .domain = Domain::Fixed, .capacity = 3});
+        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
         r.AddSystem<&WriteThreeBeeps>(B("WriteThree", "A"));
         r.AddSystem<&BeepReader>(B("BeepReader", "B"));
         r.AddSystem<&WriteOneBeep>(B("WriteOne", "C"));
@@ -363,7 +361,7 @@ TEST_CASE("J-36: drops in one Run make one record; a reader that has read a drop
 TEST_CASE("J-36: the Registry lists each message type's capacity and its readers (DI-KS 25)") {
     const Built built = Finish({{"test", [](Registrar& r) {
                                      Data(r);
-                                     r.Message<Beep>({.name = "Beep", .zone = Zone::B, .domain = Domain::Fixed, .capacity = 3});
+                                     r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
                                      r.AddSystem<&WriteEveryRun>(B("Write", "A"));
                                      SystemOptions reader = B("Reader", "B");
                                      reader.mounts[0].conditions = {Condition<&HasPings>("HasPings")};
@@ -456,7 +454,7 @@ TEST_CASE("J-18: a message type's capacity changes the Registry fingerprint and,
     const auto build = [](Zone zone, std::uint32_t capacity) {
         return Finish({{"test", [zone, capacity](Registrar& r) {
                             Data(r);
-                            r.Message<Beep>({.name = "Beep", .zone = zone, .domain = Domain::Fixed, .capacity = capacity});
+                            r.Message<Beep>({.name = "Beep", .zone = zone, .capacity = capacity});
                         }}});
     };
     const Built b3 = build(Zone::B, 3);

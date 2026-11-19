@@ -209,16 +209,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
     const Plan* plan = registry_->Frozen().PlanOf(scheduleName);
     const Detail::ScheduleRecord* record = data.FindSchedule(scheduleName);
     GYO_ASSERT(plan != nullptr && record != nullptr);
-    const Domain domain = record->options.domain;
-
-    // The domain tick: advanced only by the domain's clock schedule's Run, first
-    // (spec section 0, B5); a nested Run of it too (K0).
-    if (record->options.clock) {
-        const std::size_t d = static_cast<std::size_t>(domain);
-        const std::uint64_t tick = ++world.ticks_[d];
-        auto& slot = world.tickStamps_[d][tick % World::kTickStampSlots];
-        slot = World::TickStampSlot{tick, world.stamp_ + 1, true};
-    }
+    // No tick is advanced here: the kernel keeps no clock (the tick is the time
+    // Module's, which runs a fixed step schedule nested; v8-arch-gyo2-clock-out-of-kernel).
 
     // The Ready window (spec A.6 layer 2, E.2 step 0): a change since the last
     // comparison that did not go through the World API is the Host's or a
@@ -312,8 +304,6 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             call.schedule = scheduleName;
             call.planPos = position;
             call.zone = system.options.zone;
-            call.domain = domain;
-            call.tick = world.ticks_[static_cast<std::size_t>(domain)];
             call.lastRun = mountState.lastRun;
             call.callSerial = ++world.callSerial_;
             call.syncEpoch = world.syncEpoch_;

@@ -651,21 +651,6 @@ private:
 template <class T>
 struct ParamTraits<Local<T>> : Detail::HandleTraits<Local<T>, TypeList<Access::LocalState<T>>, false> {};
 
-// The domain and tick of the running mount's schedule (spec B.4, B-1).
-class CurrentTick final : Detail::Handle {
-    GYO_KERNEL_HANDLE(CurrentTick) : Handle(call), domain_(call.domain), tick_(call.tick) {}
-
-public:
-    [[nodiscard]] Domain Clock() const { Check("CurrentTick"); return domain_; }
-    [[nodiscard]] std::uint64_t Tick() const { Check("CurrentTick"); return tick_; }
-
-private:
-    Domain domain_;
-    std::uint64_t tick_;
-};
-template <>
-struct ParamTraits<CurrentTick> : Detail::HandleTraits<CurrentTick, TypeList<Access::DomainTickRead>, true> {};
-
 // Write-only diagnostics sink (spec S-8's only effect exception): effect
 // Diagnostics, no access entry, no conflict edge.
 template <class Record>
@@ -674,10 +659,11 @@ class DiagnosticsWriter final : Detail::Handle {
                   "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: RejectedSpawn is the kernel's own diagnostics record (spec F-13)");
     static_assert(!std::is_same_v<Record, DroppedMessages>,
                   "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: DroppedMessages is the kernel's own diagnostics record");
-    GYO_KERNEL_HANDLE(DiagnosticsWriter) : Handle(call), tick_(call.tick) {}
+    GYO_KERNEL_HANDLE(DiagnosticsWriter) : Handle(call) {}
 
 public:
-    // Appends to the World-side buffer (B-13), which an Interrupted World keeps.
+    // Appends to the World-side buffer (B-13), which an Interrupted World keeps;
+    // the entry carries the World's sync point number of the call (L8).
     void Write(Record record) {
         Check("DiagnosticsWriter");
         Detail::DiagnosticsBase* found = Detail::FindDiagnostics(*world_, KeyOf<Record>());
@@ -687,11 +673,8 @@ public:
             Detail::AddDiagnostics(*world_, KeyOf<Record>(), std::move(made));
         }
         static_cast<Detail::DiagnosticsBuffer<Record>*>(found)->entries.push_back(
-            typename Detail::DiagnosticsBuffer<Record>::Entry{tick_, false, std::move(record)});
+            typename Detail::DiagnosticsBuffer<Record>::Entry{syncEpoch_, false, std::move(record)});
     }
-
-private:
-    std::uint64_t tick_;
 };
 template <class Record>
 struct ParamTraits<DiagnosticsWriter<Record>>

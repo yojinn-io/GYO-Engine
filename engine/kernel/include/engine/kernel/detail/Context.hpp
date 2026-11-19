@@ -139,8 +139,6 @@ struct SystemContext {
     // A hook an immediate change of ExclusiveWorld runs (S5): planPos is the
     // exclusive System's step, not a sync point's (the error text says so).
     bool immediateChange = false;
-    Domain domain = Domain::None;
-    std::uint64_t tick = 0;
     // The stamp this step took (spec E.2 step 3) and the mount's last-run stamp (B-12).
     ChangeStamp stamp = 0;
     ChangeStamp lastRun = 0;

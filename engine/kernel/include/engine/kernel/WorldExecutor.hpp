@@ -33,7 +33,7 @@
 // Nested runs (K0, v8-arch-gyo2-nested-schedule): a System holding
 // ExclusiveWorld<...> may run another schedule (ExclusiveWorld::RunSchedule).
 // The inner schedule runs whole, the same way (its own stamps, sync points,
-// hook rounds and tick; no message trim); the records the outer level has not
+// hook rounds; no message trim); the records the outer level has not
 // applied stay at its own next sync point (W-3, F.2). An error inside does not
 // call the handler: the World is Interrupted, the error is left for the
 // outermost Run, which reports it once with the outer System's context; the

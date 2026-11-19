@@ -609,7 +609,6 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
             Immediate(r);
             ScheduleOptions loop;
             loop.name = "Loop";
-            loop.domain = Domain::Fixed;
             loop.stages = {"L"};
             loop.hookRoundLimit = 2;
             r.Schedule(loop);
@@ -824,7 +823,6 @@ TEST_CASE("DI-KS 18: an immediate change by an exclusive System of a nested sche
         Immediate(r);
         ScheduleOptions inner;
         inner.name = "Inner";
-        inner.domain = Domain::Fixed;
         inner.stages = {"I1", "I2"};
         r.Schedule(inner);
         r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
@@ -915,7 +913,6 @@ TEST_CASE("DI-KS 18: a nested schedule run after an immediate change sees it") {
         Immediate(r);
         ScheduleOptions outer;
         outer.name = "Outer";
-        outer.domain = Domain::Fixed;
         outer.stages = {"O"};
         r.Schedule(outer);
         r.AddSystem<&SpawnThenRunTick>(Sys("Driver", Zone::B, {At("Outer", "O")}));

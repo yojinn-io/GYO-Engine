@@ -111,7 +111,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE7: return "D-E7";
     case StartupCode::DE9: return "D-E9";
     case StartupCode::DE11: return "D-E11";
-    case StartupCode::DE12: return "D-E12";
     case StartupCode::DE14: return "D-E14";
     case StartupCode::DE15: return "D-E15";
     case StartupCode::DE16: return "D-E16";
@@ -123,7 +122,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::RE5: return "R-E5";
     case StartupCode::RE7: return "R-E7";
     case StartupCode::XE1: return "X-E1";
-    case StartupCode::FE1: return "F-E1";
     }
     return "Unknown";
 }
@@ -202,16 +200,6 @@ std::string SourceText(const std::source_location& source) {
     return std::string(source.file_name()) + ":" + std::to_string(source.line());
 }
 
-const char* DomainName(Domain domain) noexcept {
-    switch (domain) {
-    case Domain::None: return "None";
-    case Domain::Fixed: return "Fixed";
-    case Domain::Frame: return "Frame";
-    case Domain::Loading: return "Loading";
-    }
-    return "?";
-}
-
 const char* ZoneName(Zone zone) noexcept {
     switch (zone) {
     case Zone::Unset: return "unset";
@@ -269,7 +257,6 @@ public:
         : data_(data), subject_(std::move(subject)), source_(std::move(source)) {}
 
     AccessSet access;
-    bool domainTick = false;
 
     void Parameter(std::size_t position) override { position_ = position; }
 
@@ -288,7 +275,6 @@ public:
             (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Message, *id});
         }
     }
-    void DomainTick() override { domainTick = true; }
     void Membership(TypeKey component) override {
         if (const auto id = Lookup(component, TypeRole::Component, "component")) access.membershipReads.push_back(*id);
     }
@@ -423,7 +409,7 @@ MessageTypeId Registrar::RegisterMessage(TypeKey key, Shape shape, MessageOption
     // A buffer that keeps nothing would drop every record it is given: a Programmer Error.
     GYO_ASSERT(options.capacity >= 1);
     data.messages.push_back(
-        MessageInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(owner_), options.capacity, {}});
+        MessageInfo{std::move(options.name), options.zone, data.OwnerName(owner_), options.capacity, {}});
     data.messageMakers.push_back(make);
     return id;
 }
@@ -563,7 +549,7 @@ RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::Resolve
         }
     }
     data.systems.push_back(
-        Detail::SystemRecord{std::move(options), resolve, extractOnly, run, source, owner_, seq, {}, {}, false, false});
+        Detail::SystemRecord{std::move(options), resolve, extractOnly, run, source, owner_, seq, {}, {}, false});
     return seq;
 }
 
@@ -757,10 +743,6 @@ void CheckData(RegistryData& data) {
             data.Error(StartupCode::DE7, "S-6", "message '" + info.name + "' declares no zone (there is no default)",
                        {info.name, info.owner});
         }
-        if (info.domain == Domain::None) {
-            data.Error(StartupCode::FE1, "F-9", "message '" + info.name + "' belongs to no clock domain",
-                       {info.name, info.owner});
-        }
     }
     // Allotter.
     data.allotter.reset();
@@ -872,8 +854,6 @@ void CheckInitialValues(RegistryData& data) {
 }
 
 void CheckSchedules(RegistryData& data) {
-    std::map<Domain, std::vector<std::string>> clocks;
-    std::set<Domain> usedDomains;
     for (const ScheduleRecord& record : data.schedules) {
         const ScheduleOptions& s = record.options;
         std::set<std::string> stages;
@@ -909,31 +889,15 @@ void CheckSchedules(RegistryData& data) {
                                                        "' is not unique", {s.name, sync.name});
             }
         }
-        if (s.domain == Domain::None) {
-            data.Error(StartupCode::DE12, "H-1", "schedule '" + s.name + "' belongs to no clock domain", {s.name});
-        } else {
-            usedDomains.insert(s.domain);
-            if (s.clock) clocks[s.domain].push_back(s.name);
-        }
         if (s.executor == ExecutorKind::Parallel) {
             data.Error(StartupCode::DE17, "X-2", "schedule '" + s.name + "' declares Parallel; v1 has only Serial (LIM-2)",
                        {s.name});
         }
     }
-    for (Domain domain : usedDomains) {
-        const std::vector<std::string>& names = clocks[domain];
-        if (names.size() != 1) {
-            std::vector<std::string> subjects = names;
-            data.Error(StartupCode::DE12, "H-1",
-                       std::string("domain ") + DomainName(domain) + " has " + std::to_string(names.size()) +
-                           " clock schedules; a World has exactly one per domain",
-                       subjects);
-        }
-    }
 }
 
 // A run condition's access joins its System's (spec S-4, E.4): every read,
-// filter, set read, domain tick and the extract flag, so the System's checks
+// filter, set read and the extract flag, so the System's checks
 // (S-9, Z1, D-E14) see it. Conditions are read-only
 // by type (S-5), so nothing is written.
 void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
@@ -946,7 +910,6 @@ void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
                                     condition.access.extractReads.end());
     into.access.changeFilters = into.access.changeFilters || condition.access.changeFilters;
     into.access.local = into.access.local || condition.access.local;
-    into.domainTick = into.domainTick || condition.domainTick;
     into.usesExtract = into.usesExtract || condition.usesExtract;
 }
 
@@ -970,7 +933,6 @@ void ResolveSystems(RegistryData& data) {
         // Derived: cleared, so a later BuildPlans does not add to the last one's (declaration 3.2 rule 2).
         system.access = AccessSet{};
         system.effects.clear();
-        system.domainTick = false;
         if (system.removed) continue;
         const std::string subject = "System '" + system.options.name + "'";
         SystemResolver resolver(data, subject, SourceText(system.source));
@@ -1002,16 +964,6 @@ void ResolveSystems(RegistryData& data) {
             }
         }
         AccessSet& access = resolver.access;
-        // CurrentTick: one domain-tick read per mount's domain (spec S-4).
-        if (resolver.domainTick) {
-            for (const Mount& mount : system.options.mounts) {
-                if (const ScheduleRecord* schedule = data.FindSchedule(mount.schedule)) {
-                    if (schedule->options.domain != Domain::None) {
-                        access.reads.push_back({AccessKind::DomainTick, static_cast<std::uint32_t>(schedule->options.domain)});
-                    }
-                }
-            }
-        }
         // SetRead: the named set's members as component reads (spec S13).
         for (SetId set : access.setReads) {
             for (ComponentId member : data.namedSets[set].members) {
@@ -1046,7 +998,6 @@ void ResolveSystems(RegistryData& data) {
         }
         access.reads = std::move(reads);
         system.access = std::move(access);
-        system.domainTick = resolver.domainTick;
         // Effects.
         for (const std::string& effect : system.options.effects) {
             if (effect == kDiagnosticsEffect) {
@@ -1118,13 +1069,12 @@ void ResolveSystems(RegistryData& data) {
     }
 }
 
-// The zone of the data behind one access key; DomainTick is the kernel's (c) time source.
+// The zone of the data behind one access key.
 Zone ZoneOf(const RegistryData& data, const AccessKey& key) {
     switch (key.kind) {
     case AccessKind::Component: return data.components[key.id].zone;
     case AccessKind::Resource: return data.resources[key.id].zone;
     case AccessKind::Message: return data.messages[key.id].zone;
-    case AccessKind::DomainTick: return Zone::C;
     }
     return Zone::Unset;
 }
@@ -1134,7 +1084,6 @@ std::string NameOf(const RegistryData& data, const AccessKey& key) {
     case AccessKind::Component: return data.components[key.id].name;
     case AccessKind::Resource: return data.resources[key.id].name;
     case AccessKind::Message: return data.messages[key.id].name;
-    case AccessKind::DomainTick: return std::string("domain tick ") + DomainName(static_cast<Domain>(key.id));
     }
     return "?";
 }
@@ -1352,19 +1301,6 @@ void CheckSystems(RegistryData& data) {
                                        NameOf(data, key) + "'" + FunnelNote(data, funnel, key) + ", which does not roll back",
                                    {name, NameOf(data, key), s.name}, {source});
                     }
-                }
-            }
-            // Events: only in the event's domain's clock schedule (F-9).
-            std::vector<AccessKey> eventKeys;
-            for (const AccessKey& key : access.reads) if (key.kind == AccessKind::Message) eventKeys.push_back(key);
-            for (const AccessKey& key : access.writes) if (key.kind == AccessKind::Message) eventKeys.push_back(key);
-            for (const AccessKey& key : eventKeys) {
-                const MessageInfo& event = data.messages[key.id];
-                if (!s.clock || s.domain != event.domain) {
-                    data.Error(StartupCode::FE1, "F-9",
-                               subject + " uses message '" + event.name + "' (domain " + DomainName(event.domain) +
-                                   ") in schedule '" + s.name + "', which is not that domain's clock schedule",
-                               {name, event.name, s.name}, {source});
                 }
             }
             if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty() &&

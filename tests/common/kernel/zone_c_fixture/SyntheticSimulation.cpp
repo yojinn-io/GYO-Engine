@@ -35,8 +35,6 @@ void RegisterSyntheticSimulation(Registrar& registrar) {
     registrar.Component<SyntheticPos>({.name = "SyntheticPos", .zone = Zone::C});
     ScheduleOptions schedule;
     schedule.name = "SyntheticFixed";
-    schedule.domain = Domain::Fixed;
-    schedule.clock = true;
     schedule.stages = {"Simulate"};
     registrar.Schedule(schedule);
     Mount first;

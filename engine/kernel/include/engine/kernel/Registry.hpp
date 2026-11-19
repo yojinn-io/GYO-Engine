@@ -376,8 +376,6 @@ enum class AccessKind : std::uint8_t {
     Component,
     Resource,
     Message,
-    // id = the Domain of a mount's schedule (CurrentTick).
-    DomainTick,
 };
 
 struct AccessKey {
@@ -394,7 +392,7 @@ struct AccessKey {
 // Vectors are sorted and unique.
 struct AccessSet {
     // Immediate reads and writes: components, resources (the allotter included
-    // for Spawn), events, domain ticks. Run-condition reads and SetRead
+    // for Spawn), messages. Run-condition reads and SetRead
     // expansions are in reads.
     std::vector<AccessKey> reads;
     std::vector<AccessKey> writes;
@@ -461,7 +459,6 @@ struct MessageReaderInfo {
 
 struct MessageInfo {
     std::string name;
-    Domain domain;
     Zone zone;
     std::string owner;
     std::uint32_t capacity = 1024;

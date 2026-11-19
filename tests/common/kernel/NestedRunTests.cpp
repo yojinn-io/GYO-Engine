@@ -28,20 +28,17 @@ namespace {
 
 using namespace WorldTest;
 
-// ---- Schedules: Frame (Frame clock, ingress stage In), Tick (Fixed clock, WorldTest's),
-// Step and Deep (Fixed, no clock), Extract (an extract schedule).
+// ---- Schedules: Frame (ingress stage In), Tick (WorldTest's), Step and Deep, Extract (an extract schedule).
 
-ScheduleOptions Schedule(std::string name, Domain domain, bool clock, std::vector<std::string> stages) {
+ScheduleOptions Schedule(std::string name, std::vector<std::string> stages) {
     ScheduleOptions s;
     s.name = std::move(name);
-    s.domain = domain;
-    s.clock = clock;
     s.stages = std::move(stages);
     return s;
 }
 
 ScheduleOptions FrameSchedule() {
-    ScheduleOptions s = Schedule("Frame", Domain::Frame, true, {"In", "Drive", "Out"});
+    ScheduleOptions s = Schedule("Frame", {"In", "Drive", "Out"});
     s.ingressStage = "In";
     return s;
 }
@@ -50,8 +47,8 @@ ScheduleOptions FrameSchedule() {
 void Nest(Registrar& r, bool allotter = false) {
     Data(r, allotter);
     r.Schedule(FrameSchedule());
-    r.Schedule(Schedule("Step", Domain::Fixed, false, {"S"}));
-    r.Schedule(Schedule("Deep", Domain::Fixed, false, {"D"}));
+    r.Schedule(Schedule("Step", {"S"}));
+    r.Schedule(Schedule("Deep", {"D"}));
 }
 
 SystemOptions In(std::string name, std::string schedule, std::string stage, Zone zone = Zone::B,
@@ -104,8 +101,11 @@ std::unique_ptr<Rig> NestRig(std::function<void(Registrar&)> build, bool verific
 
 // ---- Systems
 
-SystemResult LogCall(Query<Read<Tag>>) {
-    Log().push_back(Here() + "#" + std::to_string(Current().tick));
+// "#n": the n-th run of this mount (its own Local; the kernel's domain tick left with the clock,
+// v8-arch-gyo2-clock-out-of-kernel: a nested run cannot be counted from outside the outer Run).
+SystemResult LogCall(Query<Read<Tag>>, Local<std::uint64_t> runs) {
+    ++*runs;
+    Log().push_back(Here() + "#" + std::to_string(*runs));
     return Ok();
 }
 
@@ -145,7 +145,8 @@ SystemResult Throws(Query<Read<Tag>>) {
 
 // ---- J-56: running k times, and back in the outer schedule
 
-TEST_CASE("J-56: an exclusive System runs a clock schedule 3 times: its Systems run 3 times, its tick advances 3") {
+// The tick part ([ns-run-k-tick]) moved to the time Module's tests (G5: RunOneFixedStep advances Tick).
+TEST_CASE("J-56: an exclusive System runs a schedule 3 times: its Systems run 3 times") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
@@ -156,7 +157,6 @@ TEST_CASE("J-56: an exclusive System runs a clock schedule 3 times: its Systems 
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
     CHECK_MESSAGE(Joined() == "drive Driver@Frame | InA@Tick#1 | InA@Tick#2 | InA@Tick#3 | driven Driver@Frame | After@Frame#1",
                   "[ns-run-k] " << Joined());
-    CHECK_MESSAGE(rig->world().Tick(Domain::Fixed) == 3, "[ns-run-k-tick] " << rig->world().Tick(Domain::Fixed));
     CHECK_MESSAGE(rig->world().State() == WorldState::Ready, "[ns-back-ready]");
 }
 
@@ -793,7 +793,7 @@ void SwallowRig(Registrar& r) {
     r.AddSystem<&DriveSwallow>(In("Driver", "Frame", "Drive"));
     r.AddSystem<&Fails>(In("Fails", "Step", "S"));
     r.AddSystem<&LogCall>(In("After", "Frame", "Out"));
-    ScheduleOptions extract = Schedule("Extract", Domain::Frame, false, {"E"});
+    ScheduleOptions extract = Schedule("Extract", {"E"});
     extract.extract = true;
     r.Schedule(extract);
 }
@@ -885,8 +885,10 @@ SystemResult HookLogsHere(HookCtx) {
     Log().push_back("hook " + Here());
     return Ok();
 }
-SystemResult SendPing(MessageWriter<Ping> writer, CurrentTick tick) {
-    writer.Send(Ping{static_cast<std::uint32_t>(tick.Tick())});
+// Sends the number of its own run (Local; in place of the domain tick).
+SystemResult SendPing(MessageWriter<Ping> writer, Local<std::uint64_t> runs) {
+    ++*runs;
+    writer.Send(Ping{static_cast<std::uint32_t>(*runs)});
     return Ok();
 }
 SystemResult ReadPingsInner(MessageReader<Ping> pings) {
@@ -912,7 +914,8 @@ SystemResult DriveTwiceThenFlag(ExclusiveWorld<> world) {
 }
 } // namespace
 
-TEST_CASE("J-56: two levels: A runs B, B's exclusive System runs C; order and ticks") {
+// The ticks of the two levels moved to the time Module's tests (G5: nested fixed steps advance Tick by k).
+TEST_CASE("J-56: two levels: A runs B, B's exclusive System runs C; order") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
@@ -925,8 +928,6 @@ TEST_CASE("J-56: two levels: A runs B, B's exclusive System runs C; order and ti
     CHECK_MESSAGE(Joined() == "drive Driver@Frame | InA@Tick#1 | step driver back Driver2@Step | InA@Tick#2 | step driver back Driver2@Step | "
                               "driven Driver@Frame | After@Frame#1",
                   "[ns-two-levels] " << Joined());
-    CHECK(rig->world().Tick(Domain::Fixed) == 2);
-    CHECK(rig->world().Tick(Domain::Frame) == 1);
 }
 
 TEST_CASE("J-56: the inner schedule's hooks run, and their records are applied when it ends") {

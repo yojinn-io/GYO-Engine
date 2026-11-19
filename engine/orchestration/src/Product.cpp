@@ -386,10 +386,7 @@ std::optional<OrchestrationError> Product::Ended() {
     failure.entry = std::string(entry);
     failure.schedule = std::string(schedule);
     failure.lastSchedule = slot.lastSchedule;
-    for (const Kernel::ScheduleInfo& info : slot.registry->Frozen().Schedules()) {
-        if (info.options.name == schedule) failure.domain = info.options.domain;
-    }
-    failure.tick = slot.executor->GetWorld().Tick(failure.domain);
+    failure.syncEpoch = slot.executor->GetWorld().SyncEpoch();
     auto ran = [&] {
         try {
             return slot.executor->Run(schedule);

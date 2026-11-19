@@ -37,11 +37,11 @@ std::string Join(const std::vector<std::string>& parts) {
 
 // Tick 1 spawns 50 and 30, tick 2 spawns 10 and 20: later keys are smaller,
 // so a column that appended would not be ascending.
-SystemResult SpawnInTwoTicks(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) {
+SystemResult SpawnInTwoTicks(SpawnWithId<Bundle<Tag>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) {
         spawn.New(50, Tag{50});
         spawn.New(30, Tag{30});
-    } else if (tick.Tick() == 2) {
+    } else if (tick->value == 2) {
         spawn.New(10, Tag{10});
         spawn.New(20, Tag{20});
     }
@@ -50,8 +50,8 @@ SystemResult SpawnInTwoTicks(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
 
 // Tick 3 removes the smallest key (a swap-and-pop erase would break the order)
 // and gives entities 10 and 50 a Mode.
-SystemResult RemoveSmallest(CommandsFor<Inserts<Mode>, Removes<Tag>> commands, CurrentTick tick) {
-    if (tick.Tick() == 3) {
+SystemResult RemoveSmallest(CommandsFor<Inserts<Mode>, Removes<Tag>> commands, Res<TickCount> tick) {
+    if (tick->value == 3) {
         commands.Remove<Tag>(10);
         commands.Insert(50, Mode{5});
         commands.Insert(10, Mode{1});
@@ -154,8 +154,8 @@ SystemResult OverwriteThroughKeptWorld(Query<Read<Tag>>) {
     return Ok();
 }
 
-SystemResult SpawnOne(Spawn<Bundle<Tag>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) {
+SystemResult SpawnOne(Spawn<Bundle<Tag>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) {
         auto id = spawn.New(Tag{7});
         if (!id) return Engine::Base::Err(std::move(id).error());
     }
@@ -247,8 +247,8 @@ struct Tracked {
     void Record() const noexcept { DtorLog().push_back(std::to_string(Column) + ":" + std::to_string(id)); }
 };
 
-SystemResult DespawnOne(Despawn despawn, CurrentTick tick) {
-    if (tick.Tick() == 1) {
+SystemResult DespawnOne(Despawn despawn, Res<TickCount> tick) {
+    if (tick->value == 1) {
         despawn.Entity(1);
     }
     return Ok();
@@ -290,13 +290,13 @@ namespace {
 template <class A>
 concept HasReset = requires(A allotter) { allotter.Reset(); };
 
-SystemResult SpawnIntoAllotterRangeOnce(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(150, Tag{150});
+SystemResult SpawnIntoAllotterRangeOnce(SpawnWithId<Bundle<Tag>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(150, Tag{150});
     return Ok();
 }
 
-SystemResult SpawnThriceAtTickTwo(Spawn<Bundle<Tag>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 2) return Ok();
+SystemResult SpawnThriceAtTickTwo(Spawn<Bundle<Tag>> spawn, Res<TickCount> tick) {
+    if (tick->value != 2) return Ok();
     for (int i = 0; i < 3; ++i) {
         auto id = spawn.New(Tag{2});
         if (!id) return Engine::Base::Err(std::move(id).error().Wrap("SpawnThriceAtTickTwo"));
@@ -406,8 +406,8 @@ TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; n
 
 namespace {
 
-SystemResult SpawnTag(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
-    if (tick.Tick() == 1) spawn.New(4, Tag{4});
+SystemResult SpawnTag(SpawnWithId<Bundle<Tag>> spawn, Res<TickCount> tick) {
+    if (tick->value == 1) spawn.New(4, Tag{4});
     return Ok();
 }
 SystemResult SeeSameWindow(Query<Read<Tag>> tags) {
@@ -469,10 +469,10 @@ Fingerprint ReorderSummary(bool tagFirst) {
 
 // Two records of one key by one System (recSeq decides), two hooks with one key each (hook order decides).
 SystemResult TwoRecordsOneKey(CommandsFor<Inserts<Tag>, Removes<>> commands, SpawnWithId<Bundle<Mode>> spawn,
-                              CurrentTick tick) {
+                              Res<TickCount> tick) {
     commands.Insert(3, Tag{1});
     commands.Insert(3, Tag{2});
-    if (tick.Tick() == 1) spawn.New(9, Mode{9});
+    if (tick->value == 1) spawn.New(9, Mode{9});
     return Ok();
 }
 SystemResult HookTag100(HookCtx ctx, CommandsFor<Inserts<Tag>, Removes<>> commands) {
@@ -487,8 +487,8 @@ SystemResult HookTag200(HookCtx ctx, CommandsFor<Inserts<Tag>, Removes<>> comman
 // Same window: despawn 4, spawn 4 again with an id (a rejoin), despawn 9 then 3
 // (recorded out of order), insert into 6 that is despawned.
 SystemResult RejoinAndDrop(Despawn despawn, SpawnWithId<Bundle<Mode>> spawn, CommandsFor<Inserts<Tag>, Removes<>> commands,
-                           CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+                           Res<TickCount> tick) {
+    if (tick->value != 1) return Ok();
     for (EntityId id : {4, 9, 3, 6}) {
         despawn.Entity(id);
     }
@@ -540,7 +540,7 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(9)->t == 200);
         const std::string summary = rig->world().Summary().Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "2:3e5d027e2ad82b38441adeb99e00e38d6da41cd0f27f6fcf5ed09b18a4b6e05f");
+        CHECK(summary == "2:b5a7a165b66fa7df7738f3512c177eb1b18a8380951eda1ad2379e96bb9f17ee");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {
@@ -590,8 +590,8 @@ SystemResult LogRemoveTag(HookCtx ctx, Query<Read<Tag>> tags) {
     Log().push_back("remove-tag:" + std::to_string(ctx.Entity()) + "=" + std::to_string(tag != nullptr ? tag->t : -1));
     return Ok();
 }
-SystemResult DespawnOneAtTickOne(Despawn despawn, CurrentTick tick) {
-    if (tick.Tick() == 1) despawn.Entity(1);
+SystemResult DespawnOneAtTickOne(Despawn despawn, Res<TickCount> tick) {
+    if (tick->value == 1) despawn.Entity(1);
     return Ok();
 }
 // OnRemove of Mode reads Tag (a smaller ComponentId) of the same entity during its despawn.
@@ -724,8 +724,8 @@ SystemResult ModeRemovedFails(HookCtx ctx) {
     return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the OnRemove of Mode fails"));
 }
 // Despawns 1 (three cells), 3 (never alive; 4 is alive and above it) and 6 (alive, no cell).
-SystemResult DespawnOneThreeSix(Despawn despawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult DespawnOneThreeSix(Despawn despawn, Res<TickCount> tick) {
+    if (tick->value != 1) return Ok();
     for (EntityId id : {EntityId{6}, EntityId{3}, EntityId{1}}) {
         despawn.Entity(id);
     }
@@ -814,8 +814,8 @@ SystemResult ModeRemovedSeesOther(HookCtx ctx, Query<Read<Tag>> tags) {
     return Ok();
 }
 // Recorded 2 then 1: the despawn step sorts them.
-SystemResult DespawnTwoThenOne(Despawn despawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult DespawnTwoThenOne(Despawn despawn, Res<TickCount> tick) {
+    if (tick->value != 1) return Ok();
     despawn.Entity(2);
     despawn.Entity(1);
     return Ok();
@@ -886,6 +886,7 @@ SystemResult SeeAfterMid(Query<Read<Tag>> tags) {
 TEST_CASE("J-33: stage ends and declared sync points apply; nowhere else") {
     auto rig = MakeRig([](Registrar& r) {
         r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+        r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
         r.Schedule(MidSchedule());
         r.AddSystem<&SpawnTag>(B("SpawnTag", "A", {"Mid"}));
         r.AddSystem<&SeeBeforeMid>(B("SeeBeforeMid", "A", {"Mid"}, {"SpawnTag"}));
@@ -914,8 +915,8 @@ SystemResult HookSecond(HookCtx ctx) {
     Log().push_back("second:" + std::to_string(ctx.Entity()));
     return Ok();
 }
-SystemResult CountModes(Query<Read<Mode>> modes, CurrentTick tick) {
-    Log().push_back("modes@" + std::to_string(tick.Tick()) + ":" + std::to_string(modes.Count()));
+SystemResult CountModes(Query<Read<Mode>> modes, Res<TickCount> tick) {
+    Log().push_back("modes@" + std::to_string(tick->value) + ":" + std::to_string(modes.Count()));
     return Ok();
 }
 // A record made on the System path while the World is Applying (spec F-5).
@@ -956,8 +957,6 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             Data(r);
             ScheduleOptions other;
             other.name = "Other";
-            other.domain = Domain::Frame;
-            other.clock = true;
             other.stages = {"B"};
             r.Schedule(other);
             r.AddSystem<&SpawnTag>(B("SpawnTag", "C"));
@@ -1002,25 +1001,25 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
 namespace {
 
 SystemResult NoOp() { return Ok(); }
-SystemResult EarlyReader(MessageReader<Ping> pings, CurrentTick tick) {
-    std::string line = "early@" + std::to_string(tick.Tick()) + ":";
+SystemResult EarlyReader(MessageReader<Ping> pings, Res<TickCount> tick) {
+    std::string line = "early@" + std::to_string(tick->value) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
     return Ok();
 }
-SystemResult Writer(MessageWriter<Ping> pings, CurrentTick tick) {
-    if (tick.Tick() == 1) {
+SystemResult Writer(MessageWriter<Ping> pings, Res<TickCount> tick) {
+    if (tick->value == 1) {
         pings.Send(Ping{11});
         pings.Send(Ping{12});
     }
     return Ok();
 }
-SystemResult SecondWriter(MessageWriter<Ping> pings, CurrentTick tick) {
-    if (tick.Tick() == 1) pings.Send(Ping{21});
+SystemResult SecondWriter(MessageWriter<Ping> pings, Res<TickCount> tick) {
+    if (tick->value == 1) pings.Send(Ping{21});
     return Ok();
 }
-SystemResult LateReader(MessageReader<Ping> pings, CurrentTick tick) {
-    std::string line = "late@" + std::to_string(tick.Tick()) + ":";
+SystemResult LateReader(MessageReader<Ping> pings, Res<TickCount> tick) {
+    std::string line = "late@" + std::to_string(tick->value) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
     return Ok();

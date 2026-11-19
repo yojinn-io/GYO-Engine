@@ -37,7 +37,6 @@ SystemResult ReadMarkerC(Query<Read<TestVel>>) { return Ok(); }
 SystemResult WriteRes(ResMut<TestRes>) { return Ok(); }
 SystemResult WriteResAgain(ResMut<TestRes>) { return Ok(); }
 SystemResult WritePos(Query<Write<TestPos>>) { return Ok(); }
-SystemResult ReadTick(CurrentTick, Query<Write<TestHealth>>) { return Ok(); }
 SystemResult InsertDerived(CommandsFor<Inserts<TestDerived>, Removes<>>) { return Ok(); }
 SystemResult ReadDerived(Query<Read<TestDerived>>) { return Ok(); }
 SystemResult WriteDerived(Query<Write<TestDerived>>) { return Ok(); }
@@ -298,11 +297,6 @@ TEST_CASE("J-24: a hook that spawns without an allotter (D-E3)") {
     CHECK(ErrorCount(hookSpawn, StartupCode::DE3) == 1);
 }
 
-TEST_CASE("J-39: a zone C System may read the domain tick (it is the (c) time source)") {
-    Built readsTick = FinishOne([](Registrar& r) { r.AddSystem<&ReadTick>(Sys("ReadTick", Zone::C, Sim())); });
-    KERNEL_REQUIRE_OK(readsTick);
-}
-
 // ---- D-E2 for resources
 
 TEST_CASE("J-15: a second writer of an Exclusive resource fails") {
@@ -393,7 +387,6 @@ TEST_CASE("J-27: a (c) Parallel schedule without a guard is one X-E1, however ma
         SharedData(r);
         ScheduleOptions s;
         s.name = "FixedParallel";
-        s.domain = Domain::Fixed;
         s.stages = {"Run"};
         s.executor = ExecutorKind::Parallel;
         r.Schedule(s);
@@ -486,7 +479,7 @@ Built CVariant(const std::string& change) {
 TEST_CASE("J-18: the C fingerprint sees zone C hooks, the schedule's rollback and sync points between zone C steps") {
     Built base = CVariant("");
     KERNEL_REQUIRE_OK(base);
-    CHECK(base.registry->Frozen().CFingerprint().version == 9U);
+    CHECK(base.registry->Frozen().CFingerprint().version == 10U);
     // The "sync" variant really moves Mid between the zone C steps.
     const Plan& plain = *base.registry->Frozen().PlanOf("FixedUpdate");
     CHECK(PositionOf(plain, "Mid") > PositionOf(plain, "ReadA"));

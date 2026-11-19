@@ -48,8 +48,6 @@ std::vector<std::string>& Deaths() {
 ScheduleOptions GameTick() {
     ScheduleOptions s;
     s.name = "Tick";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     s.stages = {"Input", "Simulate", "Cleanup"};
     return s;
 }
@@ -144,7 +142,7 @@ void GameData(Registrar& r) {
     r.Resource<Stats>({.name = "Stats", .writePolicy = WritePolicy::Shared});
     r.Resource<RangeAllotter>({.name = "Allotter"});
     r.Allotter<RangeAllotter>();
-    r.Message<Hit>({.name = "Hit", .domain = Domain::Fixed});
+    r.Message<Hit>({.name = "Hit"});
     r.Schedule(GameTick());
 }
 
@@ -239,7 +237,8 @@ TEST_CASE("skeleton: eight ticks of the game give the hand-worked result") {
     CHECK(Deaths() == std::vector<std::string>{"dead:100", "dead:101", "dead:102"});
     CHECK(world.Resource<Stats>()->hits == 6);
     CHECK(world.Resource<Stats>()->unpausedTicks == 7);
-    CHECK(world.Tick(Domain::Fixed) == 8);
+    // Eight Runs of Tick (the test's count; the kernel's domain tick left with the clock, time-events 6.2).
+    CHECK(rig->ticks == 8);
     CHECK(rig->recorded.empty());
 }
 

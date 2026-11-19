@@ -52,14 +52,6 @@ enum class Rollback : std::uint8_t {
     Derived,
 };
 
-// A clock domain (spec section 0).
-enum class Domain : std::uint8_t {
-    None,
-    Fixed,
-    Frame,
-    Loading,
-};
-
 struct ComponentOptions {
     std::string name;
     Zone zone = Zone::Unset;
@@ -87,10 +79,6 @@ struct ResourceOptions {
 struct MessageOptions {
     std::string name;
     Zone zone = Zone::Unset;
-    // The clock domain the message belongs to; its writers and readers run in
-    // that domain's clock schedule (spec F-9, F-E1). Goes with the clock
-    // (v8-arch-gyo2-time-events step 4); readers no longer use the tick.
-    Domain domain = Domain::None;
     // How many records of this type the World keeps: a write to a full buffer
     // drops the oldest one and the World records it (DroppedMessages). A default,
     // not a measured value; at least 1 (GYO_ASSERT).
@@ -120,12 +108,11 @@ struct SyncPointOptions {
 };
 
 // Given by the Host (spec D.1); the kernel builds in no schedule or stage name
-// (DI-KS 15).
+// (DI-KS 15) and keeps no clock: a schedule belongs to no time domain and its
+// Run advances no tick (the tick is the time Module's, engine/world_time;
+// v8-arch-gyo2-clock-out-of-kernel).
 struct ScheduleOptions {
     std::string name;
-    Domain domain = Domain::None;
-    // Its Run advances the domain tick; one per domain (H-1, D-E12).
-    bool clock = false;
     // The only schedule kind where Extract parameters are legal (spec H.6).
     bool extract = false;
     bool rollbackEnabled = false;
