@@ -78,10 +78,10 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 | T1 的待決 | 處理 | 依據 |
 |---|---|---|
-| (a) 頻率是整數還是小數 | **本卡照 L17 判：收小數**（`double`），換算一次成整數奈秒、**四捨五入**（本卡自己的規則；Bevy `from_hz` 經 `Duration::from_secs_f64`，它怎麼捨入沒有查），之後只用整數；不是有限的正數是斷言。**這改了主會話在 T1 4b 的建議（整數）**，在第 11 節「一起確認」點明 | 批次表「頻率的型別照 Bevy `Time<Fixed>`／Unity 的做法判」。Bevy `from_hz(f64)`（`fixed.rs:76-109`）；Unity Netcode `SimulationTickRate` 是整數。存進去都是整數奈秒、之後行為相同，差別只在能不能寫 59.94，不改使用者的決定。IEEE 除法正確捨入，三平台換算相同；判定 2 的「步長的設定」案例在 L1 三平台跑。**跨平台的浮點**（使用者問後 side chat 的回答，2026-11-19）：IEEE 754 的加減乘除與開根號正確捨入，同樣輸入在符合標準的 CPU 上得到同一個位元結果；差異來自 FMA 合併、fast-math 重排、x87 的 80 位元、libm（sin、cos、atan2 等）、denormal。GYO 已對 Clang／GCC 加 `-ffp-contract=off`（`build/cmake/GyoBuild.cmake:34-40`；MSVC 的 `/fp:precise` 本來不合併），沒有 fast-math，三平台都是 64 位元。本批的兩處浮點（頻率換算的一次除法、每幀乘倍率的一次乘法與零頭）都是基本運算、不經 libm。PvP 的 Match 與 Client 比對的是換算後的整數奈秒，Match 不用倍率。不採的替代：整數頻率走純整數換算、小數才走浮點（多一條路徑與一組測試）。**使用者 2026-11-19 確認照判定** |
+| (a) 頻率是整數還是小數 | **本卡照 L17 判：收小數**（`double`），換算一次成整數奈秒、**四捨五入**（本卡自己的規則；Bevy `from_hz` 經 `Duration::from_secs_f64`，它怎麼捨入沒有查），之後只用整數；不是有限的正數是斷言。**這改了主會話在 T1 4b 的建議（整數）**，在第 11 節「一起確認」點明 | 批次表「頻率的型別照 Bevy `Time<Fixed>`／Unity 的做法判」。Bevy `from_hz(f64)`（`fixed.rs:76-109`）；Unity Netcode `SimulationTickRate` 是整數。存進去都是整數奈秒、之後行為相同，差別只在能不能寫 59.94，不改使用者的決定。IEEE 除法正確捨入，三平台換算相同；判定 2 的「步長的設定」案例在 L1 三平台跑。**跨平台的浮點**（使用者問後 side chat 的回答，2026-11-19）：IEEE 754 的加減乘除與開根號正確捨入，同樣輸入在符合標準的 CPU 上得到同一個位元結果；差異來自 FMA 合併、fast-math 重排、x87 的 80 位元、libm（sin、cos、atan2 等）、denormal。GYO 已對 Clang／GCC 加 `-ffp-contract=off`（`build/cmake/GyoBuild.cmake:34-40`；MSVC 的 `/fp:precise` 本來不合併），沒有 fast-math，三平台都是 64 位元。本批的兩處浮點（頻率換算的一次除法、每幀乘倍率的一次乘法與零頭）都是基本運算、不經 libm。PvP 的 Match 與 Client 比對的是換算後的整數奈秒，Match 不用倍率。不採的替代：整數頻率走純整數換算、小數才走浮點（多一條路徑與一組測試）。**使用者 2026-11-19 確認照判定**（`v8-arch-gyo2-t1-closed-by-time-events`） |
 | (b) 主會話對設計的四處調整 | **本卡照 L17 判，四處都留**：(1) 扣整步是 `engine/time` 的純函式 `AdvanceVirtual`（Bevy 的截斷也在 `Time<Virtual>` 自己的函式，`virt.rs:249-266`）；(2) `FixedTime` 裡裝累加器（獨占 System 不能有自己的狀態）；(3) `Add` 多一個上限參數做斷言；(4) `Reset()` 回傳清掉的量。`Reset` 本批**只留在型別裡、不接線**：執行中換步長沒有點名的 Feature（AGENTS §2），步長只在建 World 時由設定給（第 3.3 節） | 時間設計第 547、552 行「扣整步是時間的 System 的事」在合併前改寫成「`AdvanceVirtual` 一處」 |
 | (c) 修訂 2 要不要再送檢查 | 被本頁取代：本頁修訂 0 送了換模型檢查 | — |
-| (d) 核准整份 T1 | 被本頁取代：核准本頁即核准併進來的內容；T1 檔案留作紀錄，開頭加一行「由 time-events 宣告取代」 | — |
+| (d) 核准整份 T1 | 被本頁取代：核准本頁即核准併進來的內容；T1 檔案留作紀錄，開頭加一行「由 time-events 宣告取代（`v8-arch-gyo2-t1-closed-by-time-events`）」——在本批的實作 PR 裡改（T1 在 `gyo2` 與文件分支各有一份，改在併進 `gyo2` 的那一份） | `v8-arch-gyo2-t1-closed-by-time-events` |
 
 ### 2.4 不在這一批
 
@@ -532,7 +532,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 ### 一起確認（照 L17 自己判的，不同意請指出）
 
-- ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達；代號待主會話定）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
+- ~~第 2.3 節 T1 的四件~~——**已確認：照判定**（使用者 2026-11-19，side chat 轉達，`v8-arch-gyo2-t1-closed-by-time-events`）。原話：先問「如何處理不同平台，不同cpu的浮點數誤差？」，side chat 回答後「OK這個照你建議就行。」(a) 收小數改了主會話的「整數」建議，使用者知道並同意；(b) 四處都留、`Reset` 不接線；(c)(d) 由本宣告取代。比過：同意／(a) 改回整數／(b) 某一處不要。浮點的回答寫在第 2.3 節 (a) 列。
 - 第 2.2 節 `FixedTime` 帶累計（改 T1 的「沒有累計」）。
 - 第 3.1 節名字 `world_time`／`WorldTimeModule`、型別的分放。
 - 第 3.3 節的 Resource、System、函式、`Tick` 的先後、`pending` 與「沒被取走記成 `discarded`」。
