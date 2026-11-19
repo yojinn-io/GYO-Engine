@@ -39,6 +39,19 @@
 // outermost Run, which reports it once with the outer System's context; the
 // Executor stops after every System that returns to an Interrupted World.
 //
+// Pushed events (event cursor declaration 3.3; time-events declaration 4.2):
+// an observer runs where its event is triggered, never as a Plan step. Add<T>
+// and Remove<T> observers run at the sync point that adds or removes the cell
+// (per entity and component: OnAdd hooks, then Add observers; Remove
+// observers, then OnRemove hooks; a despawned entity is destroyed after all of
+// its cells ran theirs). Commands::Trigger runs its observers at the last step
+// of the sync point that applies it, in record order. ExclusiveWorld::Trigger
+// and Trigger below run them now. What an observer records goes the way of a
+// hook's records (the hook queue, or the queue of the immediate change or
+// trigger that ran it, applied round after round; F-12). The observers of one
+// trigger run in a deterministic order (by name), which authors are not
+// promised.
+//
 // The kernel knows no game initialization or startup schedule: which schedule
 // runs when, and once, is the orchestration layer's (engine/orchestration,
 // v8-arch-gyo2-orchestration-skeleton; DI-KS 15).
@@ -83,6 +96,26 @@ public:
     // schedule exists.
     ::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
+    // The Host's trigger of event E while the World is Ready (event cursor
+    // declaration 3.3, "outside the World, Ready"): its observers run now, each
+    // like one System step (its own stamp), and what they record is applied
+    // before this returns, as a whole sync point applies it (hooks, Add and
+    // Remove observers, triggers), round after round until nothing is left, at
+    // most the World's KernelSettings::hookRoundLimit rounds. KernelSettings
+    // is read when it starts, as when a Run starts. Err (reported once by the
+    // handler, the World interrupted, the rest dropped, the rounds applied
+    // kept): an observer's or a hook's Err (an access violation included),
+    // HookRoundLimit past the limit, or, with verification on, a change outside
+    // the World API since the last comparison (PreCallChange; no observer runs).
+    // A direct write in Ready (World::Insert, Remove, Despawn) runs no hook and
+    // no Add or Remove observer. GYO_ASSERT: the World is Ready and E is a
+    // registered event type.
+    template <class E>
+    ::Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
+        return TriggerFromHost(Detail::EventIdOf(world_, KeyOf<E>()),
+                               std::make_unique<Detail::EventBox<E>>(std::move(event)), target);
+    }
+
     // The Executor's handler: called once per Err (target/error-handling DI 2:
     // the only place a kernel error is logged). Default: the whole chain to stderr.
     void SetErrorHandler(std::function<void(const KernelError&)> handler) { handler_ = std::move(handler); }
@@ -106,6 +139,9 @@ private:
     friend ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
                                                                                             Detail::Record, ChangeStamp,
                                                                                             bool);
+    friend ::Engine::Base::Result<void, KernelError> Detail::TriggerNow(Detail::SystemContext&, EventTypeId,
+                                                                      std::unique_ptr<Detail::ValueBox>,
+                                                                      std::optional<EntityId>, bool);
 
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
@@ -116,6 +152,21 @@ private:
     ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
                                                                               Detail::Record record, ChangeStamp stamp,
                                                                               bool closureOpen);
+    // Detail::TriggerNow: ExclusiveWorld::Trigger of the running exclusive System call.
+    ::Engine::Base::Result<void, KernelError> TriggerFrom(Detail::SystemContext& call, EventTypeId id,
+                                                        std::unique_ptr<Detail::ValueBox> payload,
+                                                        std::optional<EntityId> target, bool closureOpen);
+    ::Engine::Base::Result<void, KernelError> TriggerFromHost(EventTypeId id, std::unique_ptr<Detail::ValueBox> payload,
+                                                            std::optional<EntityId> target);
+    // The two triggers outside a sync point: the observers of event id, each
+    // with a stamp of its own, recording into a queue of their own (hookTarget_),
+    // then that queue applied round after round (each a new stamp and sync
+    // epoch + 1), at most limit rounds (HookRoundLimit past it). The caller
+    // sets and resets the World's state and hookTarget_ and fails the World on Err.
+    ::Engine::Base::Result<void, KernelError> RunTriggered(EventTypeId id, const Detail::ValueBox& payload,
+                                                         std::optional<EntityId> target, std::uint32_t planPos,
+                                                         std::string_view schedule, std::uint32_t limit,
+                                                         const std::string& limitSource, const std::string& where);
     // J-50 (DI-KS 24): reads KernelSettings, once per Run call.
     void ReadSettings();
     // Declaration 3.2 rule 5: attaches the World, then makes every System's

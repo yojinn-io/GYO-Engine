@@ -72,6 +72,11 @@ enum class RecordKind : std::uint8_t {
     Despawn,
     ResourceInsert,
     ResourceRemove,
+    // Commands::Trigger (event cursor declaration 3.3): id is the event type id,
+    // value its payload (EventBox), entity the target when hasTarget. Delivered
+    // at the last step of the sync point, in record order (time-events
+    // declaration 4.2).
+    Trigger,
 };
 
 struct BundleValue {
@@ -91,6 +96,8 @@ struct Record {
     Zone emitterZone = Zone::B;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
+    // Trigger: the event names a target entity (entity).
+    bool hasTarget = false;
     // Who recorded it (spec F-13's RejectedSpawn): the System's or hook's name (the Registry's string).
     std::string_view emitter;
     bool emitterHook = false;
@@ -109,10 +116,16 @@ struct Record {
     }
 };
 
+// The mount of an observer's reader key and cursor (event cursor declaration
+// 3.2: an observer is a reader): system is then the observer's index
+// (Registrar::Observer order), slot 0. No System has that many mounts.
+inline constexpr std::uint32_t kObserverMount = 0xFFFFFFFFU;
+
 // Which reader a call is (event cursor declaration 3.2; MessageCursor): a
-// System's mount (slot 0) or that mount's run condition number slot (from 1).
-// Set by the Executor before a System and before each of its conditions; a
-// hook has none (it cannot hold a MessageReader).
+// System's mount (slot 0) or that mount's run condition number slot (from 1),
+// or an observer (mount kObserverMount). Set by the Executor before a System
+// and before each of its conditions, and before an observer; a hook has none
+// (it cannot hold a MessageReader).
 struct ReaderKey {
     std::uint32_t system = 0;
     std::uint32_t mount = 0;
@@ -139,6 +152,13 @@ struct SystemContext {
     // A hook an immediate change of ExclusiveWorld runs (S5): planPos is the
     // exclusive System's step, not a sync point's (the error text says so).
     bool immediateChange = false;
+    // An observer (event cursor declaration 3.3): records like a hook (F-5) and
+    // is given its event through On<E>: the observer's event type key, the
+    // payload (nullptr for Add<T> and Remove<T>) and the target.
+    bool observer = false;
+    TypeKey eventKey{};
+    const void* eventPayload = nullptr;
+    std::optional<EntityId> eventTarget;
     // The stamp this step took (spec E.2 step 3) and the mount's last-run stamp (B-12).
     ChangeStamp stamp = 0;
     ChangeStamp lastRun = 0;
@@ -195,6 +215,7 @@ private:
 [[nodiscard]] ComponentId ComponentIdOf(const World& world, TypeKey key);
 [[nodiscard]] ResourceId ResourceIdOf(const World& world, TypeKey key);
 [[nodiscard]] MessageTypeId MessageIdOf(const World& world, TypeKey key);
+[[nodiscard]] EventTypeId EventIdOf(const World& world, TypeKey key);
 
 // Spec W-4: with verification on, a handle whose call serial or sync epoch is
 // not the current one records a violation in the current call.
@@ -250,6 +271,22 @@ struct ImmediateOutcome {
 // before (W-3).
 [[nodiscard]] ::Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
                                                                                 ChangeStamp stamp, bool inClosure);
+
+// Event cursor declaration 3.3 (time-events declaration 4.2): ExclusiveWorld::
+// Trigger. Runs the observers of event id now, each like one nested System
+// call (its own stamp; DI-KS 16 to 21); what they record goes the way of an
+// immediate change (S5): into a queue of its own, applied round after round
+// before the call returns, up to the schedule's hook round limit
+// (HookRoundLimit, the World interrupted); this level's records and the
+// schedule's hook queue wait (DI-KS 19). Refused with Err, the World
+// interrupted and the error reported once by the outermost Run: from a hook
+// (HookChangesMembership: the rounds would change membership now), inside a
+// Read or Modify closure (ClosureChangesMembership). An observer's Err
+// interrupts the World and is reported once. An Interrupted World runs no
+// observer and returns the left error.
+[[nodiscard]] ::Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id,
+                                                                 std::unique_ptr<ValueBox> payload,
+                                                                 std::optional<EntityId> target, bool inClosure);
 
 // Event cursor declaration 3.2: the cursor of the call's reader in message id
 // (the highest seq it has read). A reader's first run makes its cursor, at the

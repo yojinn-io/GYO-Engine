@@ -26,6 +26,7 @@ enum class TypeRole : std::uint8_t {
     Resource,
     Message,
     SetTag,
+    Event,
 };
 
 struct TypeEntry {
@@ -97,6 +98,24 @@ struct HookRecord {
     AccessSet access;
 };
 
+// One observer (Registrar::Observer; event cursor declaration 3.3).
+struct ObserverRecord {
+    std::string name;
+    Zone zone;
+    ObserverTrigger trigger;
+    // The observer's E (On<E>'s key) and what it names: the event type, or the
+    // component of Add<T> / Remove<T>.
+    TypeKey event;
+    TypeKey observed;
+    ResolveFn resolve;
+    RunFn run;
+    std::source_location source;
+    std::uint32_t owner;
+    // Filled at finish: the event type id or component id, and the access set.
+    std::optional<std::uint32_t> observedId;
+    AccessSet access;
+};
+
 struct InitialValueRecord {
     TypeKey target;
     TypeKey request;
@@ -118,6 +137,7 @@ struct RoundBase {
     std::size_t schedules = 0;
     std::size_t systems = 0;
     std::size_t hooks = 0;
+    std::size_t observers = 0;
     std::size_t initialValues = 0;
     std::size_t allotterDeclarations = 0;
     std::uint32_t digestMarks = 0;
@@ -138,12 +158,14 @@ struct RegistryData {
     std::vector<ColumnInfo> components;
     std::vector<ResourceInfo> resources;
     std::vector<MessageInfo> messages;
+    std::vector<EventInfo> events;
     std::vector<EffectRecord> effects;
     std::vector<NamedSetRecord> namedSets;
     std::vector<ScheduleRecord> schedules;
     std::vector<SetRecord> sets;
     std::vector<SystemRecord> systems;
     std::vector<HookRecord> hooks;
+    std::vector<ObserverRecord> observers;
     // After finish: (requestId, targetId) ascending, the order the World applies them in.
     std::vector<InitialValueRecord> initialValues;
     // The World's storage factories, one per component, resource and event id
@@ -187,6 +209,11 @@ struct RegistryData {
     std::vector<TieBreak> ties;
     std::vector<SystemInfo> systemInfos;
     std::vector<HookInfo> hookInfos;
+    std::vector<ObserverInfo> observerInfos;
+    // Every observer index in the order the observers of one trigger run: by
+    // name (unique), so the same registrations give the same order and an
+    // order of registration gives none (event cursor declaration 3.3).
+    std::vector<std::uint32_t> observerOrder;
     std::vector<InitialValueInfo> initialValueInfos;
     std::vector<ScheduleInfo> scheduleInfos;
     std::vector<SetInfo> setInfos;

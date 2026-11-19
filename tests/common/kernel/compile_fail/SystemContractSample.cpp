@@ -27,6 +27,12 @@
 // Added by v8-arch-gyo2-time-events step 3 (event cursor declaration 3.2: a hook is not a reader):
 //   GYO_KERNEL_SAMPLE_HOOK_MESSAGE_READER a hook with a MessageReader parameter
 //                                       -> GYO_KERNEL_REJECT_HOOK_MESSAGE_READER
+// Added by v8-arch-gyo2-time-events step 5 (event cursor declaration 3.3; the control also registers an
+// observer with On<E>, a MessageReader and Commands):
+//   GYO_KERNEL_SAMPLE_OBSERVER_EXCLUSIVE_WORLD an observer holding ExclusiveWorld (so it could run a
+//                                       schedule) -> GYO_KERNEL_REJECT_OBSERVER_EXCLUSIVE_WORLD
+//   GYO_KERNEL_SAMPLE_OBSERVER_ON       an observer of one event with On of another
+//                                       -> GYO_KERNEL_REJECT_OBSERVER_ON
 #include "engine/kernel/Kernel.hpp"
 
 #include <type_traits>
@@ -49,6 +55,15 @@ struct SampleMessage {
     int n;
 };
 SystemResult HookReadsMessages(HookCtx, MessageReader<SampleMessage>) { return {}; }
+struct SampleOpened {
+    int door;
+};
+struct SampleClosed {
+    int door;
+};
+SystemResult ObserverReads(On<SampleOpened>, MessageReader<SampleMessage>, Commands) { return {}; }
+SystemResult ObserverExclusive(ExclusiveWorld<>) { return {}; }
+SystemResult ObserverOfOther(On<SampleClosed>) { return {}; }
 struct Holder {
     SystemResult Member(Query<Read<SamplePos>>) { return {}; }
 };
@@ -63,10 +78,14 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     (void)&WritesTwice;
     (void)&ConditionWrites;
     (void)&HookReadsMessages;
+    (void)&ObserverReads;
+    (void)&ObserverExclusive;
+    (void)&ObserverOfOther;
 #if defined(GYO_KERNEL_SAMPLE_ACCEPTED)
     const auto system = [](Query<Read<SamplePos>>) -> SystemResult { return {}; };
     registrar.AddSystem<decltype(system)>({.name = "Lambda"});
     registrar.AddSystem<&ReadSample>({.name = "Function"});
+    registrar.Observer<SampleOpened, &ObserverReads>({.name = "Observer"});
 #elif defined(GYO_KERNEL_SAMPLE_CAPTURE)
     const auto system = [value](Query<Read<SamplePos>>) -> SystemResult { return value > 0 ? SystemResult{} : SystemResult{}; };
     registrar.AddSystem<decltype(system)>({.name = "Capturing"});
@@ -84,6 +103,10 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     registrar.Hook<SamplePos, &TakesWorld>(HookTrigger::OnAdd, {.name = "HookTakesWorld"});
 #elif defined(GYO_KERNEL_SAMPLE_HOOK_MESSAGE_READER)
     registrar.Hook<SamplePos, &HookReadsMessages>(HookTrigger::OnAdd, {.name = "HookReadsMessages"});
+#elif defined(GYO_KERNEL_SAMPLE_OBSERVER_EXCLUSIVE_WORLD)
+    registrar.Observer<SampleOpened, &ObserverExclusive>({.name = "ObserverExclusive"});
+#elif defined(GYO_KERNEL_SAMPLE_OBSERVER_ON)
+    registrar.Observer<SampleOpened, &ObserverOfOther>({.name = "ObserverOfOther"});
 #elif defined(GYO_KERNEL_SAMPLE_HANDLE_COPY)
     (void)registrar;
     static_assert(std::is_copy_constructible_v<Query<Read<SamplePos>>> || std::is_move_constructible_v<Query<Read<SamplePos>>> ||

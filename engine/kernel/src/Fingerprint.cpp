@@ -8,7 +8,7 @@
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version (the
 //     constants below).
-// Registry fingerprint (format 6): registration owner names in the order of
+// Registry fingerprint (format 7): registration owner names in the order of
 // their first Register; components, resources,
 // messages in id order (name, size, align, zone, writePolicy, role, rollback;
 // resources add external and threadBound; messages have name, zone,
@@ -18,14 +18,19 @@
 // sets; Systems in registrationSeq order, removed ones (tombstones) left out
 // (name, zone, ingress, effects, rollbackSafe, mounts with every field, access
 // set with its annotatedWrites);
-// hooks (name, component, trigger, zone, access); initial value
+// hooks (name, component, trigger, zone, access); event types in id order
+// (name, zone); observers in Registrar::Observer order (name, trigger, event
+// type or component id, zone, access, owner name); initial value
 // declarations (Registrar::InitialValue; target and request ComponentId, in the
 // (requestId, targetId) order Finish leaves them in); then every Plan's
 // fingerprint in schedule order. The function of a declaration is not hashed:
 // its address differs per build. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint (format 10): only zone C data (messages with their capacity),
-// zone C Systems (with mounts and access), zone C hooks and the initial value
+// C fingerprint (format 11): only zone C data (messages with their capacity),
+// zone C Systems (with mounts and access), zone C hooks, zone C event types,
+// zone C observers (name, trigger, id, access) in name order, never in
+// registration order (the order of observers is no part of it: event cursor
+// declaration 3.3), and the initial value
 // declarations of zone C components, each section counted; and for every
 // schedule that runs a zone C System, its rollbackEnabled, stages and hook
 // round limit (a flag, then the value when declared), and its Plan reduced to
@@ -81,8 +86,9 @@ constexpr std::uint32_t kFingerprintVersion = 8;
 // 5 since a schedule names no trim point and a message type has a capacity
 // (v8-arch-gyo2-time-events step 3); 6 since a schedule has no clock domain or
 // clock flag and a message type no clock domain (v8-arch-gyo2-clock-out-of-kernel,
-// v8-arch-gyo2-time-events step 4).
-constexpr std::uint32_t kRegistryFingerprintVersion = 6;
+// v8-arch-gyo2-time-events step 4); 7 since event types and observers
+// (v8-arch-gyo2-time-events step 5).
+constexpr std::uint32_t kRegistryFingerprintVersion = 7;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
 // since the initial value declarations of zone C components; 4 since the hook
@@ -96,8 +102,9 @@ constexpr std::uint32_t kRegistryFingerprintVersion = 6;
 // 9 since a schedule names no trim point and has no trim step, and a zone C message
 // type has a capacity (v8-arch-gyo2-time-events step 3); 10 since a zone C message
 // type and the Plans have no clock domain (v8-arch-gyo2-clock-out-of-kernel,
-// v8-arch-gyo2-time-events step 4).
-constexpr std::uint32_t kCFingerprintVersion = 10;
+// v8-arch-gyo2-time-events step 4); 11 since zone C event types and observers
+// (v8-arch-gyo2-time-events step 5).
+constexpr std::uint32_t kCFingerprintVersion = 11;
 
 class Bytes {
 public:
@@ -338,6 +345,20 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
         out.Enum(hook.zone);
         Access(out, hook.access);
     }
+    out.U32(data.events.size());
+    for (const EventInfo& info : data.events) {
+        out.Str(info.name);
+        out.Enum(info.zone);
+    }
+    out.U32(data.observers.size());
+    for (const ObserverRecord& observer : data.observers) {
+        out.Str(observer.name);
+        out.Enum(observer.trigger);
+        out.U32(observer.observedId.value_or(0));
+        out.Enum(observer.zone);
+        Access(out, observer.access);
+        out.Str(data.OwnerName(observer.owner));
+    }
     out.U32(data.initialValues.size());
     for (const InitialValueRecord& rule : data.initialValues) {
         out.U32(rule.targetId);
@@ -387,6 +408,22 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
         out.U32(hook.componentId.value_or(0));
         out.Enum(hook.trigger);
         Access(out, hook.access);
+    }
+    out.U32(count(data.events, [](const EventInfo& e) { return e.zone == Zone::C; }));
+    for (std::size_t id = 0; id < data.events.size(); ++id) {
+        if (data.events[id].zone != Zone::C) continue;
+        out.U32(id);
+        out.Str(data.events[id].name);
+    }
+    // In name order (observerOrder), never in registration order.
+    out.U32(count(data.observers, [](const ObserverRecord& o) { return o.zone == Zone::C; }));
+    for (std::uint32_t index : data.observerOrder) {
+        const ObserverRecord& observer = data.observers[index];
+        if (observer.zone != Zone::C) continue;
+        out.Str(observer.name);
+        out.Enum(observer.trigger);
+        out.U32(observer.observedId.value_or(0));
+        Access(out, observer.access);
     }
     // The kernel writes these components at sync points: a declaration changes (c) results.
     out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {

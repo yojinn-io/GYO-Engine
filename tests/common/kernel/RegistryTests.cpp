@@ -38,7 +38,7 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "6:f11eb61ec4001959d1db9f9f381069f5f4560f5ca9480af823c10b23f122680e";
+    "7:dee92ab698d7816ca80cea62a8a7b51e51530b40de4955dd75edea77ca0da94c";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {
@@ -62,7 +62,7 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
     CHECK(frozen.SystemNamed("WriteHealth")->registrationSeq == 1U);
     MESSAGE("J-18 registry fingerprint: " << frozen.RegistryFingerprint().Text());
     CHECK(frozen.RegistryFingerprint().Text() == kJ18RegistryGolden);
-    CHECK(frozen.RegistryFingerprint().version == 6U);
+    CHECK(frozen.RegistryFingerprint().version == 7U);
 }
 
 TEST_CASE("J-18: swapping two plugins gives ids in the new order") {

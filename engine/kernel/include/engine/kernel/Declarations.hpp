@@ -17,6 +17,7 @@ namespace GYO::Kernel {
 using ComponentId = std::uint32_t;
 using ResourceId = std::uint32_t;
 using MessageTypeId = std::uint32_t;
+using EventTypeId = std::uint32_t;
 using EffectId = std::uint32_t;
 using SetId = std::uint32_t;
 using RegistrationSeq = std::uint32_t;
@@ -83,6 +84,25 @@ struct MessageOptions {
     // drops the oldest one and the World records it (DroppedMessages). A default,
     // not a measured value; at least 1 (GYO_ASSERT).
     std::uint32_t capacity = 1024;
+};
+
+// A pushed event type (event cursor declaration 3.3, 5.2; DI-KS 10): kept
+// nowhere; a Trigger runs its observers (Registrar::Observer). The type's name
+// is in the past tense (naming DI 2). Its zone follows a message type's rule
+// until the zone rules leave (time-events declaration 4.5).
+struct EventOptions {
+    std::string name;
+    Zone zone = Zone::Unset;
+};
+
+// An observer (event cursor declaration 3.3, 5.2): a System that runs where its
+// event is triggered, not a Plan step. Its zone follows a hook's rule
+// (time-events declaration 4.5). Names are unique among observers: the
+// observers of one trigger run in name order (deterministic and independent of
+// registration order; not promised to authors).
+struct ObserverOptions {
+    std::string name;
+    Zone zone = Zone::Unset;
 };
 
 // A named group of a schedule's Systems (spec C.1 sets): order edges and run

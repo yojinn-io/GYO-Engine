@@ -163,6 +163,43 @@ inline constexpr bool OneOf = (std::is_same_v<T, List> || ...);
 
 } // namespace Detail
 
+// ---- Pushed events (event cursor declaration 3.3, 5.2; DI-KS 10)
+
+// The kernel's own events of a component T: a cell of T appeared on an entity
+// at a sync point (after its OnAdd hooks), or is about to leave it (before its
+// OnRemove hooks; a despawn's cells too). Observed with Registrar::Observer<
+// Add<T>, Fn> and read through On<Add<T>>; not registered with Registrar::Event.
+template <class T> struct Add {};
+template <class T> struct Remove {};
+
+// What an observer watches: an event type registered with Registrar::Event, or
+// Add / Remove of a component.
+enum class ObserverTrigger : std::uint8_t {
+    Event,
+    Add,
+    Remove,
+};
+
+namespace Detail {
+
+template <class E>
+struct ObservedOf {
+    static constexpr ObserverTrigger trigger = ObserverTrigger::Event;
+    using Type = E;
+};
+template <class T>
+struct ObservedOf<Add<T>> {
+    static constexpr ObserverTrigger trigger = ObserverTrigger::Add;
+    using Type = T;
+};
+template <class T>
+struct ObservedOf<Remove<T>> {
+    static constexpr ObserverTrigger trigger = ObserverTrigger::Remove;
+    using Type = T;
+};
+
+} // namespace Detail
+
 // ---- Bundles and typed command lists
 
 template <class... Components> struct Bundle;
@@ -509,6 +546,21 @@ public:
         Check("Commands");
         Detail::Push(Detail::RequireCall(*world_),
                      Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));
+    }
+
+    // Deferred trigger of event E (event cursor declaration 3.3): its observers
+    // run at the sync point that applies the record, at its last step (after
+    // the resource step), in record order (time-events declaration 4.2). A
+    // hook's or an observer's goes into the hook queue, like its other records.
+    template <class E>
+    void Trigger(E event, std::optional<EntityId> target = std::nullopt) {
+        Check("Commands");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        Detail::Record record =
+            Detail::Record::Of(Detail::RecordKind::Trigger, target.value_or(0), Detail::EventIdOf(*world_, KeyOf<E>()));
+        record.hasTarget = target.has_value();
+        record.value = std::make_unique<Detail::EventBox<E>>(std::move(event));
+        Detail::Push(call, std::move(record));
     }
 };
 template <>
@@ -988,6 +1040,28 @@ public:
         return done->changed;
     }
 
+    // Triggers event E now (event cursor declaration 3.3; time-events
+    // declaration 4.2): its observers run before the call returns, each like
+    // one nested System call; what they record is applied round after round
+    // before it returns, as for an immediate change (Detail::TriggerNow lists
+    // the refusals and errors). Afterwards the handle takes the World's sync
+    // epoch and a new stamp, like after RunSchedule.
+    template <class E>
+    [[nodiscard]] ::Engine::Base::Result<void, KernelError> Trigger(E event,
+                                                                  std::optional<EntityId> target = std::nullopt) {
+        Check("ExclusiveWorld");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        struct Renewal {
+            ExclusiveWorld& owner;
+            ~Renewal() {
+                owner.syncEpoch_ = Detail::CurrentSyncEpoch(*owner.world_);
+                owner.stamp_ = Detail::NextStamp(*owner.world_);
+            }
+        } renewal{*this};
+        return Detail::TriggerNow(call, Detail::EventIdOf(*world_, KeyOf<E>()),
+                                  std::make_unique<Detail::EventBox<E>>(std::move(event)), target, closures_ > 0);
+    }
+
     // Runs another schedule of this World, whole, now (K0; spec E.2). Err, the
     // World interrupted and the error reported once by the outermost Run, when
     // refused (Detail::RunNested lists why) or when the inner schedule fails;
@@ -1102,6 +1176,35 @@ private:
 };
 template <>
 struct ParamTraits<HookCtx> : Detail::HandleTraits<HookCtx, TypeList<>, true> {};
+
+// The event an observer runs for (event cursor declaration 3.3, 5.2): read-only,
+// no access entry. An observer parameter only, of the observer's own event
+// (Registrar::Observer checks it): fetching it anywhere else is a Programmer
+// Error (GYO_ASSERT).
+template <class E>
+class On final : Detail::Handle {
+    GYO_KERNEL_HANDLE(On) : Handle(call), payload_(call.eventPayload), target_(call.eventTarget) {
+        GYO_ASSERT(call.observer && call.eventKey == KeyOf<E>());
+    }
+
+public:
+    // The triggered value (Add<T> and Remove<T> carry none: Target names the cell's entity).
+    [[nodiscard]] const E& Event() const
+        requires(Detail::ObservedOf<E>::trigger == ObserverTrigger::Event)
+    {
+        GYO_ASSERT(payload_ != nullptr);
+        return *static_cast<const E*>(payload_);
+    }
+    // The entity the event is about: the entity of the cell for Add<T> and
+    // Remove<T>; for an event type, the target given to Trigger, if any.
+    [[nodiscard]] std::optional<EntityId> Target() const noexcept { return target_; }
+
+private:
+    const void* payload_;
+    std::optional<EntityId> target_;
+};
+template <class E>
+struct ParamTraits<On<E>> : Detail::HandleTraits<On<E>, TypeList<>, true> {};
 
 #undef GYO_KERNEL_HANDLE
 

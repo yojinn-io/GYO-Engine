@@ -809,8 +809,8 @@ TEST_CASE("J-55: the fingerprint versions") {
     });
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
     CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 8U, "J-55 versions: Plan fingerprint version 8");
-    CHECK_MESSAGE(frozen.CFingerprint().version == 10U, "J-55 versions: C fingerprint version 10");
-    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 6U, "J-55 versions: Registry fingerprint version 6");
+    CHECK_MESSAGE(frozen.CFingerprint().version == 11U, "J-55 versions: C fingerprint version 11");
+    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 7U, "J-55 versions: Registry fingerprint version 7");
 }
 
 // ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)

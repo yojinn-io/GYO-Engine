@@ -36,10 +36,10 @@ bool ContainsError(const KernelError& error, const KernelError& wanted) {
 }
 
 // A hook names the sync point step that ran it, or the step of the exclusive
-// System whose immediate change ran it.
+// System whose immediate change ran it; an observer is named as one.
 std::string CallText(const Detail::SystemContext& call) {
     const bool syncPoint = call.hook && !call.immediateChange;
-    return std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "' (schedule '" +
+    return std::string(call.hook ? "hook '" : call.observer ? "observer '" : "System '") + std::string(call.name) + "' (schedule '" +
            std::string(call.schedule) + "', " + (syncPoint ? "sync point " : "") + "step " +
            std::to_string(call.planPos) + (call.immediateChange ? ", an immediate change" : "") + ")";
 }
@@ -89,11 +89,18 @@ void World::AttachVersion() {
     // Event cursor declaration 3.2 (L5): a removed System's readers are gone
     // with the version that removed it.
     std::erase_if(cursors_, [&](const Detail::MessageCursor& cursor) {
+        // An observer's cursor stays: observers are not removed.
+        if (cursor.mount == Detail::kObserverMount) return false;
         return cursor.system >= data.systems.size() || data.systems[cursor.system].removed;
     });
     excluded_.resize(columns_.size(), false);
     hookAccess_.clear();
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
+    observerAccess_.clear();
+    for (const Detail::ObserverRecord& observer : data.observers) {
+        observerAccess_.push_back(Detail::MakeAccessDesc(observer.access));
+    }
+    observerState_.resize(data.observers.size());
     for (const Detail::ScheduleRecord& schedule : data.schedules) {
         const bool known = std::any_of(hookQueues_.begin(), hookQueues_.end(),
                                        [&](const HookQueue& queue) { return queue.schedule == schedule.options.name; });
@@ -104,6 +111,7 @@ void World::AttachVersion() {
     GYO_ASSERT(messages_.size() == data.messages.size());
     GYO_ASSERT(excluded_.size() == data.components.size());
     GYO_ASSERT(hookAccess_.size() == data.hooks.size());
+    GYO_ASSERT(observerAccess_.size() == data.observers.size() && observerState_.size() == data.observers.size());
     GYO_ASSERT(hookQueues_.size() == data.schedules.size());
     version_ = data.version;
 }
@@ -280,6 +288,13 @@ MessageTypeId MessageIdOf(const World& world, TypeKey key) {
     return entry->id;
 }
 
+EventTypeId EventIdOf(const World& world, TypeKey key) {
+    world.Sync();
+    const TypeEntry* entry = world.data_->FindType(key);
+    GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Event);  // Registrar::Event
+    return entry->id;
+}
+
 namespace {
 void RequireRunningCall(World& world) {
     if (world.State() == WorldState::Running || world.State() == WorldState::Applying) {
@@ -409,8 +424,8 @@ void RecordDroppedMessage(World& world, MessageTypeId id, std::uint64_t seq) {
 void Push(SystemContext& call, Record record) {
     World& world = *call.world;
     GYO_ASSERT(world.state_ == WorldState::Running || world.state_ == WorldState::Applying);
-    // F-5: while Applying only hooks record (into the next window).
-    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook);
+    // F-5: while Applying only hooks and observers record (into the next window).
+    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook || call.observer);
     record.planPos = call.planPos;
     record.recSeq = (*call.recSeq)++;
     record.emitterZone = call.zone;
@@ -551,14 +566,84 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     return Engine::Base::Err(std::move(*error));
 }
 
+// Per (entity, component), the lifecycle reactions of one cell (time-events
+// declaration 4.2; flecs and Bevy order them so): a new cell's OnAdd hooks,
+// then its Add observers; a leaving cell's Remove observers, then its OnRemove
+// hooks (the cell still readable by both).
 Engine::Base::Result<void, KernelError> World::RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
                                                         std::uint32_t planPos, std::string_view schedule,
                                                         ChangeStamp stamp) {
+    if (trigger == HookTrigger::OnRemove) {
+        auto observed = RunObservers(ObserverTrigger::Remove, component, nullptr, entity, planPos, schedule, stamp, false);
+        if (!observed) return observed;
+    }
     for (std::size_t h = 0; h < data_->hooks.size(); ++h) {
         const Detail::HookRecord& hook = data_->hooks[h];
         if (hook.trigger != trigger || !hook.componentId || *hook.componentId != component) continue;
         auto result = RunHook(h, entity, component, planPos, schedule, stamp);
         if (!result) return result;
+    }
+    if (trigger == HookTrigger::OnAdd) {
+        return RunObservers(ObserverTrigger::Add, component, nullptr, entity, planPos, schedule, stamp, false);
+    }
+    return {};
+}
+
+// ---- Observers (event cursor declaration 3.3)
+
+Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trigger, std::uint32_t id, const void* payload,
+                                                            std::optional<EntityId> target, std::uint32_t planPos,
+                                                            std::string_view schedule, ChangeStamp stamp, bool ownStamp) {
+    for (const std::uint32_t index : data_->observerOrder) {
+        const Detail::ObserverRecord& record = data_->observers[index];
+        if (record.trigger != trigger || !record.observedId || *record.observedId != id) continue;
+        ObserverState& state = observerState_[index];
+        Detail::SystemContext call;
+        call.world = this;
+        call.executor = executor_;
+        call.access = &observerAccess_[index];
+        call.name = record.name;
+        call.schedule = schedule;
+        call.planPos = planPos;
+        call.zone = record.zone;
+        call.observer = true;
+        call.immediateChange = (hookTarget_ != nullptr);
+        call.eventKey = record.event;
+        call.eventPayload = payload;
+        call.eventTarget = target;
+        call.stamp = ownStamp ? ++stamp_ : stamp;
+        call.lastRun = state.lastRun;
+        call.callSerial = ++callSerial_;
+        call.syncEpoch = syncEpoch_;
+        // An observer is a reader of its own (event cursor declaration 3.2).
+        call.reader = Detail::ReaderKey{index, Detail::kObserverMount, 0, true};
+        call.locals = &state.locals;
+        HookQueue& into = call.immediateChange ? *hookTarget_ : HookQueueOf(schedule);
+        call.queue = &into.records;
+        call.recSeq = &into.recSeq;
+        const std::size_t recordsBefore = into.records.size();
+        // Layer 2 around the call (spec A.6), like a hook's.
+        if (verification_) TakeSnapshots();
+        Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
+            Detail::CallScope scope(call);
+            return record.run(call);
+        }();
+        state.lastRun = call.stamp;
+        if (trackRoundRecorders_ && into.records.size() > recordsBefore) roundObserverRecorders_.push_back(index);
+        std::vector<std::string> changed;
+        if (verification_) changed = CompareAfter(observerAccess_[index]);
+        std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);
+        if (!error) continue;
+        const char* what = trigger == ObserverTrigger::Add ? "Add of component '"
+                           : trigger == ObserverTrigger::Remove ? "Remove of component '"
+                                                                : "event '";
+        const std::string& subject =
+            trigger == ObserverTrigger::Event ? data_->events[id].name : data_->components[id].name;
+        error->Wrap("observer '" + record.name + "' of " + what + subject + "' at " +
+                    (call.immediateChange ? "step " + std::to_string(planPos) + " (outside a sync point)"
+                                          : "sync point step " + std::to_string(planPos)) +
+                    " of schedule '" + std::string(schedule) + "'");
+        return Engine::Base::Err(std::move(*error));
     }
     return {};
 }
@@ -582,6 +667,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
     // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
     std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
+    // The trigger records of both phases, in order (delivered by the last step).
+    std::vector<Detail::Record*> triggers;
 
     // K0: the running level's records start at its windowBase; the records
     // before it are the outer levels', applied later at their own sync points.
@@ -592,6 +679,10 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
     // One phase: step 0 applies the hook queue this way, steps 1 to 7 the window's records.
     auto phase = [&](std::vector<Record>& records) -> Result {
+        // The triggers (Commands::Trigger) wait for the last step, in record order.
+        for (Record& r : records) {
+            if (r.kind == RecordKind::Trigger) triggers.push_back(&r);
+        }
         // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.
         std::vector<EntityId> despawns;
         for (const Record& r : records) {
@@ -819,10 +910,27 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         return {};
     };
 
+    // The last step (time-events declaration 4.2): the observers of every
+    // trigger record, step 0's first, each phase's in record order, after the
+    // resource step and before the sync epoch moves, so they see every change
+    // of this sync point. What they record goes to the next window.
+    auto deliver = [&]() -> Result {
+        for (const Record* r : triggers) {
+            auto observed = RunObservers(ObserverTrigger::Event, r->id, r->value->Payload(),
+                                         r->hasTarget ? std::optional<EntityId>(r->entity) : std::nullopt, planPos,
+                                         schedule, stamp, false);
+            if (!observed) return observed;
+        }
+        return {};
+    };
+
     // S5 (declaration 3.5 point 1): an immediate change, or one round of what
     // the hooks it ran recorded; only those records. This level's window and the
     // schedule's hook queue wait for their sync point (DI-KS 19).
-    if (immediate != nullptr) return phase(*immediate);
+    if (immediate != nullptr) {
+        if (Result applied = phase(*immediate); !applied) return applied;
+        return deliver();
+    }
 
     // Step 0: the previous window's hook records first; hooks they trigger record into the next window.
     HookQueue& queue = HookQueueOf(schedule);
@@ -835,6 +943,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     if (Result step0 = phase(hookRecords); !step0) return step0;
     // Steps 1 to 7.
     if (Result rest = phase(windowRecords); !rest) return rest;
+    // The triggers.
+    if (Result delivered = deliver(); !delivered) return delivered;
     // Step 8.
     ++syncEpoch_;
     return {};
@@ -862,6 +972,7 @@ void World::DiscardDeferred() noexcept {
 }
 
 MessageReaderInfo World::ReaderInfoOf(const Detail::MessageCursor& cursor) const {
+    if (cursor.mount == Detail::kObserverMount) return MessageReaderInfo{data_->observers[cursor.system].name, {}, {}, true};
     const Detail::SystemRecord& system = data_->systems[cursor.system];
     const Mount& mount = system.options.mounts[cursor.mount];
     MessageReaderInfo info{system.options.name, mount.schedule, {}};

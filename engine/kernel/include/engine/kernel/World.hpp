@@ -364,6 +364,7 @@ private:
     friend ComponentId Detail::ComponentIdOf(const World&, TypeKey);
     friend ResourceId Detail::ResourceIdOf(const World&, TypeKey);
     friend MessageTypeId Detail::MessageIdOf(const World&, TypeKey);
+    friend EventTypeId Detail::EventIdOf(const World&, TypeKey);
     friend void Detail::CheckHandle(World&, std::uint64_t, std::uint64_t, std::string_view);
     friend Detail::ColumnBase& Detail::ColumnAt(World&, ComponentId);
     friend Detail::ResourceBase& Detail::ResourceAt(World&, ResourceId);
@@ -463,6 +464,16 @@ private:
     // OnAdd / OnRemove hooks of one cell, in registration order.
     ::Engine::Base::Result<void, KernelError> RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
                                                      std::uint32_t planPos, std::string_view schedule, ChangeStamp stamp);
+    // The observers of one trigger (event cursor declaration 3.3): those of
+    // (trigger, id) in name order (RegistryData::observerOrder), each a System
+    // call with tlCurrent set to its access description, its own reader key,
+    // Local<T> and last-run stamp. What they record goes where a hook's goes
+    // (hookTarget_, or the schedule's hook queue). stamp: the call's stamp, or,
+    // when ownStamp, a new stamp for each call (a trigger outside a sync point:
+    // each is like one System step). Err from an observer, wrapped once.
+    ::Engine::Base::Result<void, KernelError> RunObservers(ObserverTrigger trigger, std::uint32_t id, const void* payload,
+                                                         std::optional<EntityId> target, std::uint32_t planPos,
+                                                         std::string_view schedule, ChangeStamp stamp, bool ownStamp);
 
     const Registry* registry_;
     const FrozenRegistry* frozen_;
@@ -555,6 +566,18 @@ private:
     std::vector<bool> excluded_;
 
     std::vector<Detail::AccessDesc> hookAccess_;
+    // Per observer (Registrar::Observer order): its access description, its
+    // last-run stamp (B-12) and Local<T> values; kept across versions (the
+    // observers of a version are those of the last plus the new ones).
+    struct ObserverState {
+        ChangeStamp lastRun = 0;
+        std::vector<std::pair<TypeKey, std::shared_ptr<void>>> locals;
+    };
+    std::vector<Detail::AccessDesc> observerAccess_;
+    std::vector<ObserverState> observerState_;
+    // The observers that recorded during the current hook round (their index;
+    // for the limit's message, beside roundRecorders_).
+    std::vector<std::size_t> roundObserverRecorders_;
     // The WorldExecutor running this World (set by it): a hook's call carries it too,
     // so ExclusiveWorld::RunSchedule in a hook reaches the refusal (X-13).
     WorldExecutor* executor_ = nullptr;

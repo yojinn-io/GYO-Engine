@@ -545,8 +545,8 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     CHECK(t5.registry->Frozen().CFingerprint() != t6.registry->Frozen().CFingerprint());
     CHECK(planOf(t8, "Tick") != planOf(none, "Tick"));
     CHECK(planOf(none, "Tick").version == 8U);
-    CHECK(none.registry->Frozen().CFingerprint().version == 10U);
-    CHECK(none.registry->Frozen().RegistryFingerprint().version == 6U);
+    CHECK(none.registry->Frozen().CFingerprint().version == 11U);
+    CHECK(none.registry->Frozen().RegistryFingerprint().version == 7U);
     const std::string report = t5.registry->Frozen().ExportPlans();
     CHECK(report.find("gyo.kernel.plans 6") == 0);
     CHECK(report.find("  hook-round-limit 5\n") != std::string::npos);
@@ -942,9 +942,9 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
                   "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
     CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "8:9e9f1eeabb8adadea081c9b457fba880ca1fa9df1b956783177576323485e1c6",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "10:834667fb1d5f84d3cf1cafb3c7b22c4baf5dd98373b3ddba7d11cb81f8f1e2f0",
+    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "11:f31f21e186ac7a964238c17093b3f5d492834259eaf4b0af473385d87f869040",
                   "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "6:335e6c25fcf7ef66fd919090d1e2e1d3614ef6527057fa8af7849f66fb847bd2",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "7:cebcb67082271602510f4f4bea36aaea2795e8054b3bcf4c46a846a2fec942a6",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
     CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 8:") != std::string::npos,

@@ -136,14 +136,15 @@ struct Golden {
 // values re-taken by v8-arch-gyo2-orchestration-skeleton (no startup flag; the kernel runs no
 // Startup); Plan format 7 and Registry format 5 and the values re-taken by
 // v8-arch-gyo2-time-events step 3 (no event trim step or trim point; a message type's capacity
-// is hashed): the judgement is unchanged.
+// is hashed); Registry format 7 and the values re-taken by v8-arch-gyo2-time-events step 5
+// (event types and observers hashed, none here): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
     {"mixed", &MixedRegistry, "8:a7fb49c5c00c39463f55eb4f32eb07e8367512c7856fe5c446a999cd0b6953ed",
-     "6:727831a77f10027d57fa353490523fd32993b31fff021ca3a46c39fc4aeb52f1"},
+     "7:995cccd19e4c856c0403c348aa09d7a5f6d31972713f2d38768074b3496122fa"},
     {"deferred", &DeferredRegistry, "8:2f15310ca49ef932db59c66a486bf9330daa0cd971394c0f0948a3ad8d34a564",
-     "6:259b87e782e0934ba17ffe36263995ad976df31f28b160903f43bd91eb7f7f6b"},
+     "7:aab0a03a52c7205fcedeab376ff247a524942027be93d075f9ac0b30c3d95af4"},
     {"events", &EventRegistry, "8:bc3cd4d3357645f46efcb7670ee3a51e77b4bdb3eabd81e5493b45b32b38ad1d",
-     "6:f828a1d38fefb98bcfa141b899513693987a9ef34789a48aa46f19889f7c83dd"},
+     "7:0b46e6e2d152f23e3d3389e3b2306c66d1f06b77def3f8fcb18da779e8ae8da8"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {

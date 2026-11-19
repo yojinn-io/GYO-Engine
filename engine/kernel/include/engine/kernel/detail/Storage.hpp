@@ -291,6 +291,8 @@ public:
     virtual bool PutInto(ColumnBase& column, EntityId id, ChangeStamp stamp) = 0;
     // Moves the value into resource.
     virtual void PutInto(ResourceBase& resource) = 0;
+    // An event's payload (EventBox); nullptr for a component or resource value.
+    [[nodiscard]] virtual const void* Payload() const noexcept { return nullptr; }
 
 protected:
     ValueBox() = default;
@@ -305,6 +307,22 @@ public:
     }
     void PutInto(ResourceBase& resource) override { static_cast<ResourceSlot<T>&>(resource).value = std::move(value); }
     T value;
+};
+
+// The payload of a triggered event (Commands::Trigger, ExclusiveWorld::Trigger,
+// WorldExecutor::Trigger; event cursor declaration 3.3): read by the observers
+// through On<E>, never put into a column or resource.
+template <class E>
+class EventBox final : public ValueBox {
+public:
+    explicit EventBox(E&& v) : value(std::move(v)) {}
+    bool PutInto(ColumnBase&, EntityId, ChangeStamp) override {
+        GYO_ASSERT(false && "an event payload is not a component value");
+        return false;
+    }
+    void PutInto(ResourceBase&) override { GYO_ASSERT(false && "an event payload is not a resource value"); }
+    [[nodiscard]] const void* Payload() const noexcept override { return &value; }
+    E value;
 };
 
 // One storage's bytes at the last boundary comparison (spec A.6 layer 2).
