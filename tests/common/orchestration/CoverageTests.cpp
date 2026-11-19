@@ -194,7 +194,10 @@ TEST_CASE("O-1: a failing frame schedule stops RunFrame with ScheduleFailed") {
 
 TEST_CASE("O-8: one interrupted World ends the Product: RunSchedule on another World, RunGameInit and InsertSystems run nothing; the failure says what broke") {
     Log().clear();
-    auto built = O::Product::Build(Two(), Units().Take());
+    // The default skeleton off (time-events declaration 6.2): the sync point number below counts the frame's Tick only.
+    O::ProductDescription d = Two();
+    for (O::WorldDescription& w : d.worlds) w.skeleton = O::ScheduleSkeleton::Off;
+    auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     REQUIRE(static_cast<bool>(p.RunFrame()));
@@ -297,7 +300,10 @@ TEST_CASE("O-8: a replacement does not mend a broken World: an interrupted one, 
 }
 
 TEST_CASE("O-8: the failure is returned, not logged: later refusals carry the same failure; Text() names every part") {
-    auto built = O::Product::Build(Two(), Units().Take());
+    // The default skeleton off (time-events declaration 6.2): "sync point 1" counts the frame's Tick only.
+    O::ProductDescription d = Two();
+    for (O::WorldDescription& w : d.worlds) w.skeleton = O::ScheduleSkeleton::Off;
+    auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     REQUIRE(static_cast<bool>(p.RunFrame()));
