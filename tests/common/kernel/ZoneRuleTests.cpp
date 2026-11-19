@@ -31,9 +31,9 @@ SystemResult WriteHealthFromB(Query<Write<TestHealth>>) { return Ok(); }
 SystemResult FilterWithB(Query<Write<TestPos>, With<TestMarker>>) { return Ok(); }
 SystemResult FilterWithoutB(Query<Write<TestPos>, Without<TestMarker>>) { return Ok(); }
 SystemResult WriteModeFromC(Query<Write<TestMode>>) { return Ok(); }
-SystemResult WriteEvent(EventWriter<TestEvent>) { return Ok(); }
-SystemResult ReadEvent(EventReader<TestEvent>) { return Ok(); }
-SystemResult ReadFrameEvent(EventReader<TestFrameEvent>) { return Ok(); }
+SystemResult WriteEvent(MessageWriter<TestEvent>) { return Ok(); }
+SystemResult ReadEvent(MessageReader<TestEvent>) { return Ok(); }
+SystemResult ReadFrameEvent(MessageReader<TestFrameEvent>) { return Ok(); }
 SystemResult ReadSet(SetRead<ReplicatedSet>) { return Ok(); }
 SystemResult EditWorld(ExclusiveWorld<>) { return Ok(); }
 bool OtherResIsSet(Res<TestOtherRes>) { return true; }
@@ -56,7 +56,7 @@ TEST_CASE("J-14: with RequireExplicitZones, a System, component, resource or eve
                               r.RequireExplicitZones();
                               r.Component<TestPos>({.name = "TestPos"});
                               r.Resource<TestRes>({.name = "TestRes"});
-                              r.Event<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
+                              r.Message<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
                               r.Schedule(FixedSchedule());
                               SystemOptions o;  // no zone given: the default must not stand for one
                               o.name = "ReadPos";
@@ -72,7 +72,7 @@ TEST_CASE("J-14: without RequireExplicitZones, a zone left unset is zone B") {
     Built built = Finish({{"test", [](Registrar& r) {
                               r.Component<TestPos>({.name = "TestPos"});
                               r.Resource<TestRes>({.name = "TestRes"});
-                              r.Event<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
+                              r.Message<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
                               r.Schedule(FixedSchedule());
                               SystemOptions o;  // no zone given
                               o.name = "ReadPos";
@@ -98,7 +98,7 @@ TEST_CASE("J-14: without RequireExplicitZones, a zone left unset is zone B") {
     }
     CHECK(sawResource);
     bool sawEvent = false;
-    for (const EventInfo& info : frozen.Events()) {
+    for (const MessageInfo& info : frozen.Messages()) {
         if (info.name == "TestEvent") {
             sawEvent = true;
             CHECK(info.zone == Zone::B);
@@ -401,7 +401,7 @@ TEST_CASE("J-24: D-E7 (S-13 ExclusiveWorld in zone C), F-E1 and D-E2 from minima
     CHECK(HasRule(FinishOne([](Registrar& r) { r.AddSystem<&EditWorld>(Sys("EditWorld", Zone::C, Simulate())); }),
                   StartupCode::DE7, "S-13"));
     Built eventWithoutDomain = Finish({{"test", [](Registrar& r) {
-                                           r.Event<TestEvent>({.name = "TestEvent", .zone = Zone::C});
+                                           r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C});
                                            r.Schedule(FixedSchedule());
                                        }}});
     CHECK(KernelTest::HasError(eventWithoutDomain, StartupCode::FE1));

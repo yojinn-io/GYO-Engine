@@ -998,30 +998,30 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
 namespace {
 
 SystemResult NoOp() { return Ok(); }
-SystemResult EarlyReader(EventReader<Ping> pings, CurrentTick tick) {
+SystemResult EarlyReader(MessageReader<Ping> pings, CurrentTick tick) {
     std::string line = "early@" + std::to_string(tick.Tick()) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
     return Ok();
 }
-SystemResult Writer(EventWriter<Ping> pings, CurrentTick tick) {
+SystemResult Writer(MessageWriter<Ping> pings, CurrentTick tick) {
     if (tick.Tick() == 1) {
         pings.Send(Ping{11});
         pings.Send(Ping{12});
     }
     return Ok();
 }
-SystemResult SecondWriter(EventWriter<Ping> pings, CurrentTick tick) {
+SystemResult SecondWriter(MessageWriter<Ping> pings, CurrentTick tick) {
     if (tick.Tick() == 1) pings.Send(Ping{21});
     return Ok();
 }
-SystemResult LateReader(EventReader<Ping> pings, CurrentTick tick) {
+SystemResult LateReader(MessageReader<Ping> pings, CurrentTick tick) {
     std::string line = "late@" + std::to_string(tick.Tick()) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
     return Ok();
 }
-SystemResult HookPing(HookCtx, EventWriter<Ping> pings) {
+SystemResult HookPing(HookCtx, MessageWriter<Ping> pings) {
     pings.Send(Ping{99});
     return Ok();
 }
@@ -1045,5 +1045,5 @@ TEST_CASE("J-36: an event is read once by every reader: this tick after its writ
     CHECK(Join(Log()) == std::string("early@1: late@1: 99 11 12 21 ") +
                              "early@2: 99 11 12 21 late@2: early@3: late@3:");
     // Kept to the end of the next tick, then trimmed: nothing is left after tick 3.
-    CHECK(rig->world().EventPayloads<Ping>().empty());
+    CHECK(rig->world().MessagePayloads<Ping>().empty());
 }

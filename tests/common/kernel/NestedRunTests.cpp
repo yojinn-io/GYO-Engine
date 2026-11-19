@@ -473,12 +473,12 @@ SystemResult TamperModeInside(Query<Read<Tag>>) {
     return Ok();
 }
 // ExclusiveWorld declares every component and resource value (DI-KS 1), but not
-// the event buffers: a write there that does not go through an EventWriter is
+// the event buffers: a write there that does not go through an MessageWriter is
 // what layer 2 still reports for an exclusive System.
-Detail::EventBuffer<Ping>& PingBuffer(World& world) {
-    return static_cast<Detail::EventBuffer<Ping>&>(Detail::EventsAt(world, Detail::EventIdOf(world, KeyOf<Ping>())));
+Detail::MessageBuffer<Ping>& PingBuffer(World& world) {
+    return static_cast<Detail::MessageBuffer<Ping>&>(Detail::MessagesAt(world, Detail::MessageIdOf(world, KeyOf<Ping>())));
 }
-SystemResult SendsPing(EventWriter<Ping> pings) {
+SystemResult SendsPing(MessageWriter<Ping> pings) {
     pings.Send(Ping{1});
     return Ok();
 }
@@ -538,12 +538,12 @@ TEST_CASE("J-56: verification on: a forbidden write before the nested run is the
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-ver-before] the write before the nested run was not reported");
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::BoundaryChange), "[ns-ver-before] " << result.error().Text());
     CHECK_MESSAGE(result.error().Text().find("'Driver'") != std::string::npos, "[ns-ver-before] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find("event Ping") != std::string::npos, "[ns-ver-before] " << result.error().Text());
+    CHECK_MESSAGE(result.error().Text().find("message Ping") != std::string::npos, "[ns-ver-before] " << result.error().Text());
     CHECK_MESSAGE(!Logged("InA@Tick#2"), "[ns-ver-before-not-run] the inner schedule ran: " << Joined());
     CHECK(rig->recorded.size() == 1);
 }
 
-TEST_CASE("J-56: verification on: a write of an event buffer behind EventWriter after a nested run is reported at the boundary") {
+TEST_CASE("J-56: verification on: a write of an event buffer behind MessageWriter after a nested run is reported at the boundary") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&DriveThenTamperPing>(In("Driver", "Frame", "Drive"));
@@ -552,7 +552,7 @@ TEST_CASE("J-56: verification on: a write of an event buffer behind EventWriter 
     });
     const auto result = rig->Run("Frame");
     CHECK_MESSAGE(HasCode(result, KernelErrorCode::BoundaryChange), "[ns-ver-address-after] " << Text(result));
-    CHECK_MESSAGE(Text(result).find("event Ping") != std::string::npos, "[ns-ver-address-after] " << Text(result));
+    CHECK_MESSAGE(Text(result).find("message Ping") != std::string::npos, "[ns-ver-address-after] " << Text(result));
     CHECK(Logged("InA@Tick#1"));
 }
 
@@ -880,7 +880,7 @@ SystemResult HookLogsHere(HookCtx) {
     Log().push_back("hook " + Here());
     return Ok();
 }
-SystemResult SendPing(EventWriter<Ping> writer, CurrentTick tick) {
+SystemResult SendPing(MessageWriter<Ping> writer, CurrentTick tick) {
     writer.Send(Ping{static_cast<std::uint32_t>(tick.Tick())});
     return Ok();
 }
@@ -924,7 +924,7 @@ TEST_CASE("J-56: events written inside are trimmed by the inner clock schedule's
     });
     Runs()["Driver"] = {"Tick", "Tick", "Tick"};
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
-    const std::vector<Ping> pings = rig->world().EventPayloads<Ping>();
+    const std::vector<Ping> pings = rig->world().MessagePayloads<Ping>();
     CHECK_MESSAGE((pings.size() == 1 && pings[0].n == 3), "[ns-events] " << pings.size());
 }
 
@@ -1311,7 +1311,7 @@ SystemResult CatchAndReturnOk(ExclusiveWorld<> world) {
 }
 // Sends a Ping (an event buffer, which the outer exclusive System does not
 // declare: DI-KS 1 leaves events out) and throws before its boundary comparison.
-SystemResult SendsPingThenThrows(EventWriter<Ping> pings) {
+SystemResult SendsPingThenThrows(MessageWriter<Ping> pings) {
     pings.Send(Ping{55});
     throw std::runtime_error("thrown after an event write");
 }

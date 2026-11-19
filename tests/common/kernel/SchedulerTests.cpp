@@ -33,8 +33,8 @@ SystemResult InsertA2(CommandsFor<Inserts<SharedA>, Removes<>>) { return Ok(); }
 SystemResult FilterA(Query<Write<SharedB>, With<SharedA>>) { return Ok(); }
 SystemResult WriteAWithB(Query<Write<SharedA>, With<SharedB>>) { return Ok(); }
 SystemResult WriteAWithoutB(Query<Write<SharedA>, Without<SharedB>>) { return Ok(); }
-SystemResult SendEvent(EventWriter<TestEvent>) { return Ok(); }
-SystemResult SendEvent2(EventWriter<TestEvent>) { return Ok(); }
+SystemResult SendEvent(MessageWriter<TestEvent>) { return Ok(); }
+SystemResult SendEvent2(MessageWriter<TestEvent>) { return Ok(); }
 SystemResult ReadB(Query<Read<SharedB>>) { return Ok(); }
 SystemResult WriteB(Query<Write<SharedB>>) { return Ok(); }
 SystemResult WriteC(Query<Write<SharedC>>) { return Ok(); }
@@ -114,7 +114,7 @@ void EventRegistry(Registrar& r) {
     r.Schedule(FixedSchedule());
     r.AddSystem<&SendEvent>(Sys("SendFirst", Zone::C, Sim({"SendSecond"})));
     r.AddSystem<&SendEvent2>(Sys("SendSecond", Zone::C, Sim()));
-    const auto reader = [](EventReader<TestEvent>) -> SystemResult { return {}; };
+    const auto reader = [](MessageReader<TestEvent>) -> SystemResult { return {}; };
     r.AddSystem<decltype(reader)>(Sys("ReadEvents", Zone::C, {At("FixedUpdate", "Present")}));
 }
 

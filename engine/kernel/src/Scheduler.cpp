@@ -109,7 +109,7 @@ std::string KeyName(const RegistryData& data, const AccessKey& key) {
     switch (key.kind) {
     case AccessKind::Component: return "component '" + data.components[key.id].name + "'";
     case AccessKind::Resource: return "resource '" + data.resources[key.id].name + "'";
-    case AccessKind::Event: return "event '" + data.events[key.id].name + "'";
+    case AccessKind::Message: return "message '" + data.messages[key.id].name + "'";
     case AccessKind::DomainTick: return std::string("domain tick ") + DomainName(static_cast<Domain>(key.id));
     }
     return "?";

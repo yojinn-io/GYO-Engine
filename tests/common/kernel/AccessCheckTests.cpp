@@ -247,7 +247,7 @@ SystemResult ExclusiveWritesThroughWorldApi(ExclusiveWorld<>) {
     return Ok();
 }
 SystemResult ExclusiveReadsEventsThroughWorldApi(ExclusiveWorld<>) {
-    static_cast<void>(KeptWorld()->EventPayloads<Ping>());
+    static_cast<void>(KeptWorld()->MessagePayloads<Ping>());
     return Ok();
 }
 } // namespace
@@ -274,7 +274,7 @@ TEST_CASE("J-5: an exclusive System's World API writes of components and resourc
         const auto result = rig->Run();
         KeptWorld() = nullptr;
         CHECK_MESSAGE(HasCode(result, KernelErrorCode::AccessViolation), "[ks-s4-layer1-events] " << Text(result));
-        CHECK_MESSAGE(Text(result).find("event 'Ping'") != std::string::npos, "[ks-s4-layer1-events] " << Text(result));
+        CHECK_MESSAGE(Text(result).find("message 'Ping'") != std::string::npos, "[ks-s4-layer1-events] " << Text(result));
     }
 }
 

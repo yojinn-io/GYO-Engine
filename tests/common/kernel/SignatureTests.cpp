@@ -20,7 +20,7 @@ SystemResult FilterPos(Query<Read<TestPos>, With<TestMarker>, Without<TestMode>>
 SystemResult WatchVel(Query<Read<TestPos>, Changed<TestVel>>) { return Ok(); }
 SystemResult WatchAdded(Query<Read<TestMode>, Added<TestMarker>>) { return Ok(); }
 SystemResult UseResources(Res<TestRes>, ResMut<TestOtherRes>) { return Ok(); }
-SystemResult UseEvents(EventReader<TestEvent>, EventWriter<TestOtherEvent>) { return Ok(); }
+SystemResult UseEvents(MessageReader<TestEvent>, MessageWriter<TestOtherEvent>) { return Ok(); }
 SystemResult UseCommands(Commands, CommandsFor<Inserts<TestHealth>, Removes<TestMarker>>) { return Ok(); }
 SystemResult SpawnBodies(Spawn<Bundle<TestPos, TestVel>>) { return Ok(); }
 SystemResult SpawnGiven(SpawnWithId<Bundle<TestHealth>>) { return Ok(); }
@@ -51,7 +51,7 @@ SystemResult WritesTwice(Query<Write<TestPos>>, Query<Write<TestPos>>) { return 
 SystemResult ReadsAndWrites(Query<Read<TestPos>, Write<TestPos>>) { return Ok(); }
 SystemResult ReadsAndWritesAcross(Query<Read<TestPos>>, Query<Write<TestPos>>) { return Ok(); }
 SystemResult ResBoth(Res<TestRes>, ResMut<TestRes>) { return Ok(); }
-SystemResult EventBoth(EventReader<TestEvent>, EventWriter<TestEvent>) { return Ok(); }
+SystemResult EventBoth(MessageReader<TestEvent>, MessageWriter<TestEvent>) { return Ok(); }
 SystemResult ReadsTwice(Query<Read<TestPos>>, Query<Read<TestPos>, Read<TestVel>>) { return Ok(); }
 SystemResult WorldAndMore(ExclusiveWorld<>, Res<TestRes>) { return Ok(); }
 using R = Res<TestRes>;
@@ -159,8 +159,8 @@ TEST_CASE("J-12: every parameter type's Contribution equals the hand-written exp
                           TypeList<ComponentRead<TestMode>, ChangeFilter<TestMarker>>>);
     CHECK(SameSet<C<Res<TestRes>>, TypeList<ResourceRead<TestRes>>>);
     CHECK(SameSet<C<ResMut<TestRes>>, TypeList<ResourceWrite<TestRes>>>);
-    CHECK(SameSet<C<EventReader<TestEvent>>, TypeList<EventRead<TestEvent>>>);
-    CHECK(SameSet<C<EventWriter<TestEvent>>, TypeList<EventWrite<TestEvent>>>);
+    CHECK(SameSet<C<MessageReader<TestEvent>>, TypeList<MessageRead<TestEvent>>>);
+    CHECK(SameSet<C<MessageWriter<TestEvent>>, TypeList<MessageWrite<TestEvent>>>);
     CHECK(SameSet<C<Commands>, TypeList<UntypedCommands>>);
     CHECK(SameSet<C<CommandsFor<Inserts<TestHealth>, Removes<TestMarker>>>,
                           TypeList<DeferredInsert<TestHealth>, DeferredWrite<TestMarker>>>);
@@ -227,8 +227,8 @@ void RegisterJ12Data(Registrar& r) {
     r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 2
     r.Resource<TestAllotter>({.name = "TestAllotter", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 3
     r.Allotter<TestAllotter>();
-    r.Event<TestEvent>({.name = "TestEvent", .zone = Zone::B, .domain = Domain::Frame});       // 0
-    r.Event<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::B, .domain = Domain::Frame});  // 1
+    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::B, .domain = Domain::Frame});       // 0
+    r.Message<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::B, .domain = Domain::Frame});  // 1
     r.NamedSet<ReplicatedSet>("Replicated");
     r.AddToSet<ReplicatedSet, TestPos>();
     r.AddToSet<ReplicatedSet, TestHealth>();
@@ -252,7 +252,7 @@ void RegisterJ12Data(Registrar& r) {
 
 AccessKey Comp(std::uint32_t id) { return {AccessKind::Component, id}; }
 AccessKey Resrc(std::uint32_t id) { return {AccessKind::Resource, id}; }
-AccessKey Evt(std::uint32_t id) { return {AccessKind::Event, id}; }
+AccessKey Evt(std::uint32_t id) { return {AccessKind::Message, id}; }
 AccessKey Tick(Domain d) { return {AccessKind::DomainTick, static_cast<std::uint32_t>(d)}; }
 
 } // namespace

@@ -77,13 +77,13 @@ void World::AttachVersion() {
     const Detail::RegistryData& data = *data_;
     GYO_ASSERT(data.columnMakers.size() == data.components.size());
     GYO_ASSERT(data.resourceMakers.size() == data.resources.size());
-    GYO_ASSERT(data.eventMakers.size() == data.events.size());
+    GYO_ASSERT(data.messageMakers.size() == data.messages.size());
     for (std::size_t c = columns_.size(); c < data.columnMakers.size(); ++c) {
         GYO_ASSERT(data.columnMakers[c] != nullptr);
         columns_.push_back(data.columnMakers[c]());
     }
     for (std::size_t r = resources_.size(); r < data.resourceMakers.size(); ++r) resources_.push_back(data.resourceMakers[r]());
-    for (std::size_t e = events_.size(); e < data.eventMakers.size(); ++e) events_.push_back(data.eventMakers[e]());
+    for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) messages_.push_back(data.messageMakers[e]());
     excluded_.resize(columns_.size(), false);
     hookAccess_.clear();
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
@@ -94,7 +94,7 @@ void World::AttachVersion() {
     }
     // Every table indexed by a registry id has the new version's size (a missed
     // one would be read past its end later; RC 17).
-    GYO_ASSERT(events_.size() == data.events.size());
+    GYO_ASSERT(messages_.size() == data.messages.size());
     GYO_ASSERT(excluded_.size() == data.components.size());
     GYO_ASSERT(hookAccess_.size() == data.hooks.size());
     GYO_ASSERT(hookQueues_.size() == data.schedules.size());
@@ -198,7 +198,7 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         const Detail::AccessDesc& access = *call->access;
         bool declared = false;
         // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
-        if (access.wholeWorld && kind != Detail::EntryKind::Event) declared = true;
+        if (access.wholeWorld && kind != Detail::EntryKind::Message) declared = true;
         const auto entry = std::lower_bound(access.entries.begin(), access.entries.end(), std::make_pair(kind, id),
                                             [](const Detail::AccessEntry& e, const std::pair<Detail::EntryKind, std::uint32_t>& k) {
                                                 return e.kind != k.first ? e.kind < k.first : e.id < k.second;
@@ -212,10 +212,10 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         if (declared) return;
         const char* what = kind == Detail::EntryKind::Component ? "component"
                            : kind == Detail::EntryKind::Resource ? "resource"
-                                                                 : "event";
+                                                                 : "message";
         const std::string& name = kind == Detail::EntryKind::Component ? data_->components[id].name
                                   : kind == Detail::EntryKind::Resource ? data_->resources[id].name
-                                                                        : data_->events[id].name;
+                                                                        : data_->messages[id].name;
         KernelError error(KernelErrorCode::AccessViolation,
                           std::string(mode == Detail::kModeWrite ? "write" : "read") + " of " + what + " '" + name +
                               "' through the World API, not declared by " + CallText(*call),
@@ -241,7 +241,7 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
 void World::MarkApiWritten(Detail::EntryKind kind, std::uint32_t id) const {
     std::vector<Snapshot>& snapshots = kind == Detail::EntryKind::Component  ? columnSnapshots_
                                        : kind == Detail::EntryKind::Resource ? resourceSnapshots_
-                                                                             : eventSnapshots_;
+                                                                             : messageSnapshots_;
     if (id < snapshots.size()) snapshots[id].apiWritten = true;
 }
 
@@ -276,10 +276,10 @@ ResourceId ResourceIdOf(const World& world, TypeKey key) {
     return entry->id;
 }
 
-EventTypeId EventIdOf(const World& world, TypeKey key) {
+MessageTypeId MessageIdOf(const World& world, TypeKey key) {
     world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
-    GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Event);
+    GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Message);
     return entry->id;
 }
 
@@ -320,9 +320,9 @@ ResourceBase& ResourceAt(World& world, ResourceId id) {
     return *world.resources_[id];
 }
 
-EventBufferBase& EventsAt(World& world, EventTypeId id) {
+MessageBufferBase& MessagesAt(World& world, MessageTypeId id) {
     RequireRunningCall(world);
-    return *world.events_[id];
+    return *world.messages_[id];
 }
 
 ChangeStamp CurrentStamp(const World& world) noexcept {
@@ -337,8 +337,8 @@ std::span<const EntityId> AliveEntities(const World& world) noexcept {
     return world.entities_;
 }
 
-Domain EventDomain(const World& world, EventTypeId id) {
-    return world.data_->events[id].domain;
+Domain MessageDomain(const World& world, MessageTypeId id) {
+    return world.data_->messages[id].domain;
 }
 
 std::size_t ComponentCount(const World& world) noexcept {
@@ -824,8 +824,8 @@ void World::DiscardDeferred() noexcept {
 }
 
 void World::TrimEvents(Domain domain) {
-    for (std::size_t e = 0; e < events_.size(); ++e) {
-        if (data_->events[e].domain == domain) events_[e]->Trim(ticks_[DomainIndex(domain)]);
+    for (std::size_t e = 0; e < messages_.size(); ++e) {
+        if (data_->messages[e].domain == domain) messages_[e]->Trim(ticks_[DomainIndex(domain)]);
     }
 }
 
@@ -867,25 +867,25 @@ bool Differs(const Detail::Snapshot& snapshot, std::span<const std::byte> bytes)
 void World::TakeSnapshots() {
     columnSnapshots_.resize(columns_.size());
     resourceSnapshots_.resize(resources_.size());
-    eventSnapshots_.resize(events_.size());
+    messageSnapshots_.resize(messages_.size());
     for (std::size_t c = 0; c < columns_.size(); ++c) {
         if (!excluded_[c]) Take(columnSnapshots_[c], columns_[c]->StorageBytes());
     }
     for (std::size_t r = 0; r < resources_.size(); ++r) Take(resourceSnapshots_[r], resources_[r]->StorageBytes());
-    for (std::size_t e = 0; e < events_.size(); ++e) Take(eventSnapshots_[e], events_[e]->StorageBytes());
+    for (std::size_t e = 0; e < messages_.size(); ++e) Take(messageSnapshots_[e], messages_[e]->StorageBytes());
 }
 
 void World::DropSnapshots() noexcept {
     columnSnapshots_.clear();
     resourceSnapshots_.clear();
-    eventSnapshots_.clear();
+    messageSnapshots_.clear();
 }
 
 std::vector<std::string> World::CompareBefore() {
     std::vector<std::string> changed;
     columnSnapshots_.resize(columns_.size());
     resourceSnapshots_.resize(resources_.size());
-    eventSnapshots_.resize(events_.size());
+    messageSnapshots_.resize(messages_.size());
     auto check = [&changed](Snapshot& snapshot, std::span<const std::byte> bytes, const std::string& name) {
         if (snapshot.valid && !snapshot.apiWritten && Differs(snapshot, bytes)) changed.push_back(name);
         Take(snapshot, bytes);
@@ -896,8 +896,8 @@ std::vector<std::string> World::CompareBefore() {
     for (std::size_t r = 0; r < resources_.size(); ++r) {
         check(resourceSnapshots_[r], resources_[r]->StorageBytes(), "resource " + data_->resources[r].name);
     }
-    for (std::size_t e = 0; e < events_.size(); ++e) {
-        check(eventSnapshots_[e], events_[e]->StorageBytes(), "event " + data_->events[e].name);
+    for (std::size_t e = 0; e < messages_.size(); ++e) {
+        check(messageSnapshots_[e], messages_[e]->StorageBytes(), "message " + data_->messages[e].name);
     }
     return changed;
 }
@@ -906,7 +906,7 @@ std::vector<std::string> World::CompareAfter(const Detail::AccessDesc& access) {
     std::vector<std::string> changed;
     auto declaredWrite = [&](Detail::EntryKind kind, std::uint32_t id) {
         // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
-        if (access.wholeWorld && kind != Detail::EntryKind::Event) return true;
+        if (access.wholeWorld && kind != Detail::EntryKind::Message) return true;
         for (const Detail::AccessEntry& entry : access.entries) {
             if (entry.kind == kind && entry.id == id && (entry.modes & Detail::kModeWrite) != 0) return true;
         }
@@ -927,9 +927,9 @@ std::vector<std::string> World::CompareAfter(const Detail::AccessDesc& access) {
         check(resourceSnapshots_[r], resources_[r]->StorageBytes(), Detail::EntryKind::Resource,
               static_cast<std::uint32_t>(r), "resource " + data_->resources[r].name);
     }
-    for (std::size_t e = 0; e < events_.size(); ++e) {
-        check(eventSnapshots_[e], events_[e]->StorageBytes(), Detail::EntryKind::Event, static_cast<std::uint32_t>(e),
-              "event " + data_->events[e].name);
+    for (std::size_t e = 0; e < messages_.size(); ++e) {
+        check(messageSnapshots_[e], messages_[e]->StorageBytes(), Detail::EntryKind::Message, static_cast<std::uint32_t>(e),
+              "message " + data_->messages[e].name);
     }
     return changed;
 }
@@ -966,7 +966,7 @@ constexpr std::uint32_t kSummaryVersion = 1;
 // the alive entities (count, each u64); every column in ComponentId order
 // (cell count, then each key as u64 and the value's object bytes as a list);
 // every resource in ResourceId order but KernelSettings (present flag, object bytes); every event
-// buffer in EventTypeId order (record count, each payload's bytes). No stamp,
+// buffer in MessageTypeId order (record count, each payload's bytes). No stamp,
 // tick, Plan position or seq is hashed. A value's padding bytes are hashed as
 // they are, so a type in the summary must have no padding: the author's
 // responsibility for the types an author registers; the kernel's own types
@@ -998,8 +998,8 @@ Fingerprint World::Summary() const {
         out.U8(resources_[r]->Present() ? 1U : 0U);
         out.Raw(resources_[r]->StorageBytes());
     }
-    out.U32(events_.size());
-    for (const auto& buffer : events_) {
+    out.U32(messages_.size());
+    for (const auto& buffer : messages_) {
         out.U32(buffer->Size());
         for (std::size_t i = 0; i < buffer->Size(); ++i) out.Raw(buffer->PayloadBytesAt(i));
     }

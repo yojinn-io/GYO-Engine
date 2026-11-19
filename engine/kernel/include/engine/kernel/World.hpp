@@ -259,11 +259,11 @@ public:
     // ---- Events (read-only views for the Host and tests: every record kept)
 
     template <class E>
-    [[nodiscard]] std::vector<E> EventPayloads() const {
-        const EventTypeId event = Detail::EventIdOf(*this, KeyOf<E>());
-        Access(Detail::EntryKind::Event, event, Detail::kModeRead, false);
+    [[nodiscard]] std::vector<E> MessagePayloads() const {
+        const MessageTypeId event = Detail::MessageIdOf(*this, KeyOf<E>());
+        Access(Detail::EntryKind::Message, event, Detail::kModeRead, false);
         std::vector<E> out;
-        for (const auto& record : static_cast<const Detail::EventBuffer<E>&>(*events_[event]).records) {
+        for (const auto& record : static_cast<const Detail::MessageBuffer<E>&>(*messages_[event]).records) {
             out.push_back(record.payload);
         }
         return out;
@@ -342,15 +342,15 @@ private:
     friend Detail::SystemContext& Detail::RequireCall(World&);
     friend ComponentId Detail::ComponentIdOf(const World&, TypeKey);
     friend ResourceId Detail::ResourceIdOf(const World&, TypeKey);
-    friend EventTypeId Detail::EventIdOf(const World&, TypeKey);
+    friend MessageTypeId Detail::MessageIdOf(const World&, TypeKey);
     friend void Detail::CheckHandle(World&, std::uint64_t, std::uint64_t, std::string_view);
     friend Detail::ColumnBase& Detail::ColumnAt(World&, ComponentId);
     friend Detail::ResourceBase& Detail::ResourceAt(World&, ResourceId);
-    friend Detail::EventBufferBase& Detail::EventsAt(World&, EventTypeId);
+    friend Detail::MessageBufferBase& Detail::MessagesAt(World&, MessageTypeId);
     friend ChangeStamp Detail::CurrentStamp(const World&) noexcept;
     friend std::uint64_t Detail::DomainTick(const World&, Domain) noexcept;
     friend std::span<const EntityId> Detail::AliveEntities(const World&) noexcept;
-    friend Domain Detail::EventDomain(const World&, EventTypeId);
+    friend Domain Detail::MessageDomain(const World&, MessageTypeId);
     friend std::size_t Detail::ComponentCount(const World&) noexcept;
     friend std::size_t Detail::ResourceCount(const World&) noexcept;
     friend std::vector<ComponentId> Detail::SetMembersOf(const World&, TypeKey);
@@ -451,7 +451,7 @@ private:
     std::vector<EntityId> entities_;
     std::vector<std::unique_ptr<Detail::ColumnBase>> columns_;
     std::vector<std::unique_ptr<Detail::ResourceBase>> resources_;
-    std::vector<std::unique_ptr<Detail::EventBufferBase>> events_;
+    std::vector<std::unique_ptr<Detail::MessageBufferBase>> messages_;
     std::vector<std::pair<TypeKey, std::unique_ptr<Detail::DiagnosticsBase>>> diagnostics_;
 
     // The current sync window's deferred records. With nested runs (K0) one
@@ -519,7 +519,7 @@ private:
     // only with verification on (target/system-contract 2b condition 4).
     mutable std::vector<Snapshot> columnSnapshots_;
     mutable std::vector<Snapshot> resourceSnapshots_;
-    mutable std::vector<Snapshot> eventSnapshots_;
+    mutable std::vector<Snapshot> messageSnapshots_;
     std::vector<bool> excluded_;
 
     std::vector<Detail::AccessDesc> hookAccess_;

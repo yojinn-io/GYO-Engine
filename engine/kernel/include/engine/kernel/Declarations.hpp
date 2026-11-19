@@ -16,7 +16,7 @@ namespace GYO::Kernel {
 // component registered gets ComponentId n. They are in-process only.
 using ComponentId = std::uint32_t;
 using ResourceId = std::uint32_t;
-using EventTypeId = std::uint32_t;
+using MessageTypeId = std::uint32_t;
 using EffectId = std::uint32_t;
 using SetId = std::uint32_t;
 using RegistrationSeq = std::uint32_t;
@@ -83,7 +83,7 @@ struct ResourceOptions {
     bool threadBound = false;
 };
 
-struct EventOptions {
+struct MessageOptions {
     std::string name;
     Zone zone = Zone::Unset;
     // The clock domain the event belongs to; its writers and readers run in

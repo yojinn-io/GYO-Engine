@@ -70,7 +70,7 @@ void Base(Registrar& r, const Limits& limits = {}) {
     r.Component<Bomb>({.name = "Bomb", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Component<Fuse>({.name = "Fuse", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Resource<Depth>({.name = "Depth", .zone = Zone::B});
-    r.Event<Ping>({.name = "Ping", .zone = Zone::B, .domain = Domain::Fixed});
+    r.Message<Ping>({.name = "Ping", .zone = Zone::B, .domain = Domain::Fixed});
     ScheduleOptions tick;
     tick.name = "Tick";
     tick.domain = Domain::Fixed;
@@ -120,7 +120,7 @@ SystemResult SpawnFan(SpawnWithId<Bundle<Fan>> spawn, CurrentTick tick) {
     if (tick.Tick() == 1) spawn.New(1, Fan{1});
     return Ok();
 }
-SystemResult WritePing(EventWriter<Ping> pings, CurrentTick tick) {
+SystemResult WritePing(MessageWriter<Ping> pings, CurrentTick tick) {
     if (tick.Tick() == 1) pings.Send(Ping{11});
     return Ok();
 }
@@ -132,13 +132,13 @@ SystemResult FailAtB() {
     return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "stage B fails"));
 }
 SystemResult ZoneCReadsPos(Query<Read<Pos>>) { return Ok(); }
-SystemResult EarlyReader(EventReader<Ping> pings, CurrentTick tick) {
+SystemResult EarlyReader(MessageReader<Ping> pings, CurrentTick tick) {
     std::string line = "early@" + std::to_string(tick.Tick()) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
     return Ok();
 }
-SystemResult LateReader(EventReader<Ping> pings, CurrentTick tick) {
+SystemResult LateReader(MessageReader<Ping> pings, CurrentTick tick) {
     std::string line = "late@" + std::to_string(tick.Tick()) + ":";
     for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
     Log().push_back(line);
@@ -179,7 +179,7 @@ SystemResult Explode(HookCtx) {
 SystemResult ThrowOnFuse(HookCtx) {
     throw std::runtime_error("the fuse throws");
 }
-SystemResult PingOnTrail(HookCtx, EventWriter<Ping> pings) {
+SystemResult PingOnTrail(HookCtx, MessageWriter<Ping> pings) {
     pings.Send(Ping{99});
     return Ok();
 }
@@ -608,7 +608,7 @@ TEST_CASE("J-54: an Err in a round: the rest of the Run is not done, the applied
     CHECK_MESSAGE(result.error().Text().find(hookAt) != std::string::npos, "J-54: the round's hook is not at the last sync point");
     CHECK(rig->recorded.size() == 1);
     CHECK(rig->world().State() == WorldState::Interrupted);
-    CHECK_MESSAGE(rig->world().EventPayloads<Ping>().size() == 1, "J-54: the event trim ran after an Err in a round");
+    CHECK_MESSAGE(rig->world().MessagePayloads<Ping>().size() == 1, "J-54: the event trim ran after an Err in a round");
     CHECK_MESSAGE(rig->world().Get<Fuse>(7) != nullptr, "J-54: an applied round was undone");
 }
 

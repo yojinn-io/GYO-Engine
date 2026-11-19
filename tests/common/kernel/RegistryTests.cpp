@@ -19,13 +19,13 @@ void Movement(Registrar& r) {
     r.Component<TestPos>({.name = "TestPos", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<TestVel>({.name = "TestVel", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C});
-    r.Event<TestEvent>({.name = "TestEvent", .zone = Zone::C, .domain = Domain::Fixed});
+    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C, .domain = Domain::Fixed});
 }
 
 void Life(Registrar& r) {
     r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
-    r.Event<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::C, .domain = Domain::Fixed});
+    r.Message<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::C, .domain = Domain::Fixed});
 }
 
 void Schedules(Registrar& r) {
@@ -55,8 +55,8 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
     CHECK(frozen.ResourceIdOf<KernelSettings>() == 0U);
     CHECK(frozen.ResourceIdOf<TestRes>() == 1U);
     CHECK(frozen.ResourceIdOf<TestOtherRes>() == 2U);
-    CHECK(frozen.EventIdOf<TestEvent>() == 0U);
-    CHECK(frozen.EventIdOf<TestOtherEvent>() == 1U);
+    CHECK(frozen.MessageIdOf<TestEvent>() == 0U);
+    CHECK(frozen.MessageIdOf<TestOtherEvent>() == 1U);
     REQUIRE(frozen.SystemNamed("ReadPos") != nullptr);
     CHECK(frozen.SystemNamed("ReadPos")->registrationSeq == 0U);
     CHECK(frozen.SystemNamed("WriteHealth")->registrationSeq == 1U);
@@ -74,7 +74,7 @@ TEST_CASE("J-18: swapping two plugins gives ids in the new order") {
     CHECK(frozen.ComponentIdOf<TestVel>() == 2U);
     CHECK(frozen.ResourceIdOf<TestOtherRes>() == 1U);
     CHECK(frozen.ResourceIdOf<TestRes>() == 2U);
-    CHECK(frozen.EventIdOf<TestOtherEvent>() == 0U);
+    CHECK(frozen.MessageIdOf<TestOtherEvent>() == 0U);
     Built original = Finish({{"movement", Movement}, {"life", Life}, {"host", Schedules}});
     KERNEL_REQUIRE_OK(original);
     CHECK(original.registry->Frozen().RegistryFingerprint() != frozen.RegistryFingerprint());

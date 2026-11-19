@@ -60,7 +60,7 @@ inline void Data(Registrar& r, bool allotter = false) {
     r.Resource<Out>({.name = "Out", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Resource<Flag>({.name = "Flag", .zone = Zone::B});
     r.Resource<CRes>({.name = "CRes", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Event<Ping>({.name = "Ping", .zone = Zone::B, .domain = Domain::Fixed});
+    r.Message<Ping>({.name = "Ping", .zone = Zone::B, .domain = Domain::Fixed});
     if (allotter) {
         r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
         r.Allotter<RangeAllotter>();

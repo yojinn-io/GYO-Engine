@@ -118,7 +118,7 @@ SystemResult RunsKeptExecutor(Res<Flag>) {
     return Ok();
 }
 SystemResult Throws(Res<Flag>) { throw std::runtime_error("planned throw"); }
-SystemResult SendsLater(EventWriter<LaterEvent> out) {
+SystemResult SendsLater(MessageWriter<LaterEvent> out) {
     out.Send(LaterEvent{7});
     return Ok();
 }
@@ -724,9 +724,9 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     Log().clear();
     // Each SUBCASE adds one kind of table, so a table the World misses fails only its own label.
-    SUBCASE("event buffers") {
+    SUBCASE("message buffers") {
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-            r.Event<LaterEvent>({.name = "LaterEvent", .zone = Zone::B, .domain = Domain::Fixed});
+            r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B, .domain = Domain::Fixed});
             r.AddSystem<&SendsLater>(B("SendsLater", "A"));
         })));
         REQUIRE(Done(registry.BuildPlans()));
@@ -734,11 +734,11 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
         std::size_t payloads = 0;
         const std::string asserted = AssertionIn([&] {
             ran = Text(executor.Run("Tick"));
-            payloads = world.EventPayloads<LaterEvent>().size();
+            payloads = world.MessagePayloads<LaterEvent>().size();
         });
-        REQUIRE_MESSAGE(asserted.empty(), "attach (event buffers): " << asserted);
-        CHECK_MESSAGE(ran == "ok", "attach (event buffers): " << ran);
-        CHECK_MESSAGE(payloads == 1, "attach (event buffers): payloads " << payloads);
+        REQUIRE_MESSAGE(asserted.empty(), "attach (message buffers): " << asserted);
+        CHECK_MESSAGE(ran == "ok", "attach (message buffers): " << ran);
+        CHECK_MESSAGE(payloads == 1, "attach (message buffers): payloads " << payloads);
     }
     SUBCASE("verification exclusions") {
         // ExcludeFromVerification is for a World that has not run: one made before the round.

@@ -112,8 +112,8 @@ inline void RegisterCommonData(Registrar& r) {
     r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<TestMode>({.name = "TestMode", .zone = Zone::B});
-    r.Event<TestEvent>({.name = "TestEvent", .zone = Zone::C, .domain = Domain::Fixed});
-    r.Event<TestFrameEvent>({.name = "TestFrameEvent", .zone = Zone::B, .domain = Domain::Frame});
+    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C, .domain = Domain::Fixed});
+    r.Message<TestFrameEvent>({.name = "TestFrameEvent", .zone = Zone::B, .domain = Domain::Frame});
     r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
 }

@@ -116,9 +116,9 @@ struct SelfConflictT<TypeList<E...>> {
         : std::bool_constant<(CountOf<List, Access::ResourceWrite<T>>::value > 1) ||
                              Contains<List, Access::ResourceRead<T>>> {};
     template <class T>
-    struct One<Access::EventWrite<T>>
-        : std::bool_constant<(CountOf<List, Access::EventWrite<T>>::value > 1) ||
-                             Contains<List, Access::EventRead<T>>> {};
+    struct One<Access::MessageWrite<T>>
+        : std::bool_constant<(CountOf<List, Access::MessageWrite<T>>::value > 1) ||
+                             Contains<List, Access::MessageRead<T>>> {};
     static constexpr bool value = (One<E>::value || ...);
 };
 

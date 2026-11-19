@@ -33,7 +33,7 @@ AccessDesc MakeAccessDesc(const AccessSet& access) {
         switch (key.kind) {
         case AccessKind::Component: kind = EntryKind::Component; break;
         case AccessKind::Resource: kind = EntryKind::Resource; break;
-        case AccessKind::Event: kind = EntryKind::Event; break;
+        case AccessKind::Message: kind = EntryKind::Message; break;
         case AccessKind::DomainTick: return;
         }
         for (AccessEntry& entry : desc.entries) {

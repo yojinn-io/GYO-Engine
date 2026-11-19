@@ -44,7 +44,7 @@ enum AccessModeBits : std::uint8_t {
 enum class EntryKind : std::uint8_t {
     Component,
     Resource,
-    Event,
+    Message,
 };
 
 struct AccessEntry {
@@ -181,7 +181,7 @@ private:
 
 [[nodiscard]] ComponentId ComponentIdOf(const World& world, TypeKey key);
 [[nodiscard]] ResourceId ResourceIdOf(const World& world, TypeKey key);
-[[nodiscard]] EventTypeId EventIdOf(const World& world, TypeKey key);
+[[nodiscard]] MessageTypeId MessageIdOf(const World& world, TypeKey key);
 
 // Spec W-4: with verification on, a handle whose call serial or sync epoch is
 // not the current one records a violation in the current call.
@@ -189,11 +189,11 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 
 [[nodiscard]] ColumnBase& ColumnAt(World& world, ComponentId id);
 [[nodiscard]] ResourceBase& ResourceAt(World& world, ResourceId id);
-[[nodiscard]] EventBufferBase& EventsAt(World& world, EventTypeId id);
+[[nodiscard]] MessageBufferBase& MessagesAt(World& world, MessageTypeId id);
 [[nodiscard]] ChangeStamp CurrentStamp(const World& world) noexcept;
 [[nodiscard]] std::uint64_t DomainTick(const World& world, Domain domain) noexcept;
 [[nodiscard]] std::span<const EntityId> AliveEntities(const World& world) noexcept;
-[[nodiscard]] Domain EventDomain(const World& world, EventTypeId id);
+[[nodiscard]] Domain MessageDomain(const World& world, MessageTypeId id);
 [[nodiscard]] std::size_t ComponentCount(const World& world) noexcept;
 [[nodiscard]] std::size_t ResourceCount(const World& world) noexcept;
 [[nodiscard]] std::vector<ComponentId> SetMembersOf(const World& world, TypeKey setTag);

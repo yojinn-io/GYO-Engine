@@ -290,8 +290,8 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
     for (const ColumnInfo& info : data.components) ColumnBytes(out, info);
     out.U32(data.resources.size());
     for (const ResourceInfo& info : data.resources) ResourceBytes(out, info);
-    out.U32(data.events.size());
-    for (const EventInfo& info : data.events) {
+    out.U32(data.messages.size());
+    for (const MessageInfo& info : data.messages) {
         out.Str(info.name);
         out.Enum(info.domain);
         out.Enum(info.zone);
@@ -360,12 +360,12 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
         out.U32(id);
         ResourceBytes(out, data.resources[id]);
     }
-    out.U32(count(data.events, [](const EventInfo& e) { return e.zone == Zone::C; }));
-    for (std::size_t id = 0; id < data.events.size(); ++id) {
-        if (data.events[id].zone != Zone::C) continue;
+    out.U32(count(data.messages, [](const MessageInfo& e) { return e.zone == Zone::C; }));
+    for (std::size_t id = 0; id < data.messages.size(); ++id) {
+        if (data.messages[id].zone != Zone::C) continue;
         out.U32(id);
-        out.Str(data.events[id].name);
-        out.Enum(data.events[id].domain);
+        out.Str(data.messages[id].name);
+        out.Enum(data.messages[id].domain);
     }
     out.U32(count(data.systems, [](const SystemRecord& s) { return !s.removed && s.options.zone == Zone::C; }));
     for (const SystemRecord& system : data.systems) {

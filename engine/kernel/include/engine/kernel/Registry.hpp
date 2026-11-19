@@ -180,9 +180,9 @@ public:
     }
 
     template <class E>
-    EventTypeId Event(EventOptions options) {
+    MessageTypeId Message(MessageOptions options) {
         static_assert(std::is_object_v<E> && !std::is_const_v<E>, "an event is a non-const object type");
-        return RegisterEvent(KeyOf<E>(), Shape::Of<E>(), std::move(options), &Detail::MakeEvents<E>);
+        return RegisterMessage(KeyOf<E>(), Shape::Of<E>(), std::move(options), &Detail::MakeMessages<E>);
     }
 
     // An effect id (spec C.1 effects): an opaque side-effect class such as
@@ -322,7 +322,7 @@ private:
 
     ComponentId RegisterComponent(TypeKey key, Shape shape, ComponentOptions options, Detail::MakeColumnFn make);
     ResourceId RegisterResource(TypeKey key, Shape shape, ResourceOptions options, Detail::MakeResourceFn make);
-    EventTypeId RegisterEvent(TypeKey key, Shape shape, EventOptions options, Detail::MakeEventsFn make);
+    MessageTypeId RegisterMessage(TypeKey key, Shape shape, MessageOptions options, Detail::MakeMessagesFn make);
     SetId RegisterNamedSet(TypeKey key, std::string name);
     void AddSetMember(TypeKey set, TypeKey component);
     void MarkDigestSet(TypeKey set);
@@ -372,7 +372,7 @@ struct KernelSettings {
 enum class AccessKind : std::uint8_t {
     Component,
     Resource,
-    Event,
+    Message,
     // id = the Domain of a mount's schedule (CurrentTick).
     DomainTick,
 };
@@ -444,7 +444,7 @@ struct ResourceInfo {
     std::string owner;
 };
 
-struct EventInfo {
+struct MessageInfo {
     std::string name;
     Domain domain;
     Zone zone;
@@ -565,13 +565,13 @@ public:
         return FindResource(KeyOf<T>());
     }
     template <class E>
-    [[nodiscard]] std::optional<EventTypeId> EventIdOf() const {
-        return FindEvent(KeyOf<E>());
+    [[nodiscard]] std::optional<MessageTypeId> MessageIdOf() const {
+        return FindMessage(KeyOf<E>());
     }
 
     [[nodiscard]] std::span<const ColumnInfo> Components() const noexcept;
     [[nodiscard]] std::span<const ResourceInfo> Resources() const noexcept;
-    [[nodiscard]] std::span<const EventInfo> Events() const noexcept;
+    [[nodiscard]] std::span<const MessageInfo> Messages() const noexcept;
     [[nodiscard]] std::span<const SystemInfo> Systems() const noexcept;
     [[nodiscard]] const SystemInfo* SystemNamed(std::string_view name) const noexcept;
     [[nodiscard]] std::span<const Plan> Plans() const noexcept;
@@ -611,7 +611,7 @@ private:
 
     [[nodiscard]] std::optional<ComponentId> FindComponent(TypeKey key) const noexcept;
     [[nodiscard]] std::optional<ResourceId> FindResource(TypeKey key) const noexcept;
-    [[nodiscard]] std::optional<EventTypeId> FindEvent(TypeKey key) const noexcept;
+    [[nodiscard]] std::optional<MessageTypeId> FindMessage(TypeKey key) const noexcept;
 
     const Detail::RegistryData* data_;
 };

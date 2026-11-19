@@ -227,7 +227,7 @@ const char* RoleName(TypeRole role) noexcept {
     switch (role) {
     case TypeRole::Component: return "component";
     case TypeRole::Resource: return "resource";
-    case TypeRole::Event: return "event";
+    case TypeRole::Message: return "message";
     case TypeRole::SetTag: return "named set";
     }
     return "?";
@@ -283,9 +283,9 @@ public:
             (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Resource, *id});
         }
     }
-    void Event(TypeKey type, AccessMode mode) override {
-        if (const auto id = Lookup(type, TypeRole::Event, "event")) {
-            (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Event, *id});
+    void Message(TypeKey type, AccessMode mode) override {
+        if (const auto id = Lookup(type, TypeRole::Message, "message")) {
+            (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Message, *id});
         }
     }
     void DomainTick() override { domainTick = true; }
@@ -412,16 +412,16 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
     return id;
 }
 
-EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions options, Detail::MakeEventsFn make) {
+MessageTypeId Registrar::RegisterMessage(TypeKey key, Shape shape, MessageOptions options, Detail::MakeMessagesFn make) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
-    const auto id = static_cast<EventTypeId>(data.events.size());
-    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Event, id, owner_, options.name)) {
+    const auto id = static_cast<MessageTypeId>(data.messages.size());
+    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Message, id, owner_, options.name)) {
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.events.push_back(EventInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(owner_)});
-    data.eventMakers.push_back(make);
+    data.messages.push_back(MessageInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(owner_)});
+    data.messageMakers.push_back(make);
     return id;
 }
 
@@ -605,7 +605,7 @@ std::span<const OrderEdge> FrozenRegistry::OrderGraph(std::string_view schedule)
 
 std::span<const ColumnInfo> FrozenRegistry::Components() const noexcept { return data_->components; }
 std::span<const ResourceInfo> FrozenRegistry::Resources() const noexcept { return data_->resources; }
-std::span<const EventInfo> FrozenRegistry::Events() const noexcept { return data_->events; }
+std::span<const MessageInfo> FrozenRegistry::Messages() const noexcept { return data_->messages; }
 std::span<const SystemInfo> FrozenRegistry::Systems() const noexcept { return data_->systemInfos; }
 std::span<const Plan> FrozenRegistry::Plans() const noexcept { return data_->plans; }
 std::span<const TieBreak> FrozenRegistry::TieBreaks() const noexcept { return data_->ties; }
@@ -644,9 +644,9 @@ std::optional<ResourceId> FrozenRegistry::FindResource(TypeKey key) const noexce
                                                                           : std::nullopt;
 }
 
-std::optional<EventTypeId> FrozenRegistry::FindEvent(TypeKey key) const noexcept {
+std::optional<MessageTypeId> FrozenRegistry::FindMessage(TypeKey key) const noexcept {
     const Detail::TypeEntry* entry = data_->FindType(key);
-    return entry != nullptr && entry->role == Detail::TypeRole::Event ? std::optional<EventTypeId>(entry->id)
+    return entry != nullptr && entry->role == Detail::TypeRole::Message ? std::optional<MessageTypeId>(entry->id)
                                                                        : std::nullopt;
 }
 
@@ -719,7 +719,7 @@ void ApplyDefaultZones(RegistryData& data) {
     };
     for (ColumnInfo& info : data.components) fill(info.zone);
     for (ResourceInfo& info : data.resources) fill(info.zone);
-    for (EventInfo& info : data.events) fill(info.zone);
+    for (MessageInfo& info : data.messages) fill(info.zone);
     for (SystemRecord& system : data.systems) fill(system.options.zone);
     for (HookRecord& hook : data.hooks) fill(hook.zone);
 }
@@ -749,13 +749,13 @@ void CheckData(RegistryData& data) {
                        {info.name, info.owner});
         }
     }
-    for (const EventInfo& info : data.events) {
+    for (const MessageInfo& info : data.messages) {
         if (info.zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", "event '" + info.name + "' declares no zone (there is no default)",
+            data.Error(StartupCode::DE7, "S-6", "message '" + info.name + "' declares no zone (there is no default)",
                        {info.name, info.owner});
         }
         if (info.domain == Domain::None) {
-            data.Error(StartupCode::FE1, "F-9", "event '" + info.name + "' belongs to no clock domain",
+            data.Error(StartupCode::FE1, "F-9", "message '" + info.name + "' belongs to no clock domain",
                        {info.name, info.owner});
         }
     }
@@ -1105,7 +1105,7 @@ Zone ZoneOf(const RegistryData& data, const AccessKey& key) {
     switch (key.kind) {
     case AccessKind::Component: return data.components[key.id].zone;
     case AccessKind::Resource: return data.resources[key.id].zone;
-    case AccessKind::Event: return data.events[key.id].zone;
+    case AccessKind::Message: return data.messages[key.id].zone;
     case AccessKind::DomainTick: return Zone::C;
     }
     return Zone::Unset;
@@ -1115,7 +1115,7 @@ std::string NameOf(const RegistryData& data, const AccessKey& key) {
     switch (key.kind) {
     case AccessKind::Component: return data.components[key.id].name;
     case AccessKind::Resource: return data.resources[key.id].name;
-    case AccessKind::Event: return data.events[key.id].name;
+    case AccessKind::Message: return data.messages[key.id].name;
     case AccessKind::DomainTick: return std::string("domain tick ") + DomainName(static_cast<Domain>(key.id));
     }
     return "?";
@@ -1326,7 +1326,7 @@ void CheckSystems(RegistryData& data) {
             }
             if (zone == Zone::C && s.rollbackEnabled) {
                 for (const AccessKey& key : WrittenKeys(zoneAccess)) {
-                    if (key.kind == AccessKind::Event) continue;
+                    if (key.kind == AccessKind::Message) continue;
                     const Rollback rollback = RollbackOf(data, key);
                     if (rollback != Rollback::Yes && rollback != Rollback::Derived) {
                         data.Error(StartupCode::DE7, "Z6",
@@ -1338,13 +1338,13 @@ void CheckSystems(RegistryData& data) {
             }
             // Events: only in the event's domain's clock schedule (F-9).
             std::vector<AccessKey> eventKeys;
-            for (const AccessKey& key : access.reads) if (key.kind == AccessKind::Event) eventKeys.push_back(key);
-            for (const AccessKey& key : access.writes) if (key.kind == AccessKind::Event) eventKeys.push_back(key);
+            for (const AccessKey& key : access.reads) if (key.kind == AccessKind::Message) eventKeys.push_back(key);
+            for (const AccessKey& key : access.writes) if (key.kind == AccessKind::Message) eventKeys.push_back(key);
             for (const AccessKey& key : eventKeys) {
-                const EventInfo& event = data.events[key.id];
+                const MessageInfo& event = data.messages[key.id];
                 if (!s.clock || s.domain != event.domain) {
                     data.Error(StartupCode::FE1, "F-9",
-                               subject + " uses event '" + event.name + "' (domain " + DomainName(event.domain) +
+                               subject + " uses message '" + event.name + "' (domain " + DomainName(event.domain) +
                                    ") in schedule '" + s.name + "', which is not that domain's clock schedule",
                                {name, event.name, s.name}, {source});
                 }
@@ -1365,7 +1365,7 @@ void CheckSystems(RegistryData& data) {
         CheckZoneAccess(data, subject, hook.name, hook.zone, false, zoneAccess, funnel, SourceText(hook.source));
         if (hook.zone == Zone::C && anyRollback) {
             for (const AccessKey& key : WrittenKeys(zoneAccess)) {
-                if (key.kind != AccessKind::Event && RollbackOf(data, key) != Rollback::Yes) {
+                if (key.kind != AccessKind::Message && RollbackOf(data, key) != Rollback::Yes) {
                     data.Error(StartupCode::DE7, "Z6",
                                subject + " is zone C and writes '" + NameOf(data, key) + "'" + FunnelNote(data, funnel, key) +
                                    ", which is not rollback=Yes, in a World with a rollback-enabled schedule",

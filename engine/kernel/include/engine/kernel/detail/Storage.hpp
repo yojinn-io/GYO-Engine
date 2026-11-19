@@ -171,11 +171,11 @@ public:
     std::optional<T> value;
 };
 
-class EventBufferBase {
+class MessageBufferBase {
 public:
-    virtual ~EventBufferBase() = default;
-    EventBufferBase(const EventBufferBase&) = delete;
-    EventBufferBase& operator=(const EventBufferBase&) = delete;
+    virtual ~MessageBufferBase() = default;
+    MessageBufferBase(const MessageBufferBase&) = delete;
+    MessageBufferBase& operator=(const MessageBufferBase&) = delete;
 
     [[nodiscard]] virtual std::size_t Size() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
@@ -184,11 +184,11 @@ public:
     virtual void Trim(std::uint64_t keepFrom) = 0;
 
 protected:
-    EventBufferBase() = default;
+    MessageBufferBase() = default;
 };
 
 template <class E>
-class EventBuffer final : public EventBufferBase {
+class MessageBuffer final : public MessageBufferBase {
 public:
     struct Record {
         std::uint64_t tick;
@@ -307,7 +307,7 @@ struct InitialValueRequest<Target, Target (*)(const Request&) noexcept> {
     using Type = Request;
 };
 using MakeResourceFn = std::unique_ptr<ResourceBase> (*)();
-using MakeEventsFn = std::unique_ptr<EventBufferBase> (*)();
+using MakeMessagesFn = std::unique_ptr<MessageBufferBase> (*)();
 
 template <class T>
 std::unique_ptr<ColumnBase> MakeColumn() {
@@ -318,8 +318,8 @@ std::unique_ptr<ResourceBase> MakeResource() {
     return std::make_unique<ResourceSlot<T>>();
 }
 template <class E>
-std::unique_ptr<EventBufferBase> MakeEvents() {
-    return std::make_unique<EventBuffer<E>>();
+std::unique_ptr<MessageBufferBase> MakeMessages() {
+    return std::make_unique<MessageBuffer<E>>();
 }
 
 // The allotter resource's operations (spec A.1: the World does not allot; the

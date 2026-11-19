@@ -24,7 +24,7 @@ inline constexpr const char* kDiagnosticsEffect = "Diagnostics";
 enum class TypeRole : std::uint8_t {
     Component,
     Resource,
-    Event,
+    Message,
     SetTag,
 };
 
@@ -138,7 +138,7 @@ struct RegistryData {
     std::vector<TypeEntry> types;
     std::vector<ColumnInfo> components;
     std::vector<ResourceInfo> resources;
-    std::vector<EventInfo> events;
+    std::vector<MessageInfo> messages;
     std::vector<EffectRecord> effects;
     std::vector<NamedSetRecord> namedSets;
     std::vector<ScheduleRecord> schedules;
@@ -151,7 +151,7 @@ struct RegistryData {
     // (Detail/Storage.hpp); the World is made from them (World.cpp).
     std::vector<MakeColumnFn> columnMakers;
     std::vector<MakeResourceFn> resourceMakers;
-    std::vector<MakeEventsFn> eventMakers;
+    std::vector<MakeMessagesFn> messageMakers;
     std::vector<TypeKey> allotterDeclarations;
     std::vector<AllotterOps> allotterDeclarationOps;
     AllotterOps allotterOps;

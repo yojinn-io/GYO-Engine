@@ -89,14 +89,14 @@ SystemResult Move(Query<Write<Position>, Read<Velocity>> bodies) {
     return Ok();
 }
 
-SystemResult HurtBelowFloor(Query<Read<Position>, With<Health>> bodies, EventWriter<Hit> hits) {
+SystemResult HurtBelowFloor(Query<Read<Position>, With<Health>> bodies, MessageWriter<Hit> hits) {
     bodies.ForEach([&hits](EntityId id, const Position& position) {
         if (position.y < 0) hits.Send(Hit{id, 1});
     });
     return Ok();
 }
 
-SystemResult ApplyHits(EventReader<Hit> hits, Query<Write<Health>> healths, ResMut<Stats> stats) {
+SystemResult ApplyHits(MessageReader<Hit> hits, Query<Write<Health>> healths, ResMut<Stats> stats) {
     for (const Hit* hit : hits.Read()) {
         if (Mut<Health> health = healths.GetMut<Health>(hit->target)) {
             health->hp -= hit->amount;
@@ -144,7 +144,7 @@ void GameData(Registrar& r) {
     r.Resource<Stats>({.name = "Stats", .writePolicy = WritePolicy::Shared});
     r.Resource<RangeAllotter>({.name = "Allotter"});
     r.Allotter<RangeAllotter>();
-    r.Event<Hit>({.name = "Hit", .domain = Domain::Fixed});
+    r.Message<Hit>({.name = "Hit", .domain = Domain::Fixed});
     r.Schedule(GameTick());
 }
 

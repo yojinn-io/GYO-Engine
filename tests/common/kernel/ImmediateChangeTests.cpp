@@ -391,12 +391,12 @@ SystemResult LookFor70(Query<Read<Tag>> tags) {
 
 // ---- Verification
 
-SystemResult SendsPing(EventWriter<Ping> pings) {
+SystemResult SendsPing(MessageWriter<Ping> pings) {
     pings.Send(Ping{1});
     return Ok();
 }
 // OnAdd<Mode>: a hook that writes an event while the immediate change applies.
-SystemResult ModePings(HookCtx, EventWriter<Ping> pings) {
+SystemResult ModePings(HookCtx, MessageWriter<Ping> pings) {
     pings.Send(Ping{2});
     return Ok();
 }
@@ -407,8 +407,8 @@ SystemResult WriteThenChange(ExclusiveWorld<> world) {
     if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-Detail::EventBuffer<Ping>& PingBuffer(World& world) {
-    return static_cast<Detail::EventBuffer<Ping>&>(Detail::EventsAt(world, Detail::EventIdOf(world, KeyOf<Ping>())));
+Detail::MessageBuffer<Ping>& PingBuffer(World& world) {
+    return static_cast<Detail::MessageBuffer<Ping>&>(Detail::MessagesAt(world, Detail::MessageIdOf(world, KeyOf<Ping>())));
 }
 SystemResult TamperPingThenChange(ExclusiveWorld<> world) {
     PingBuffer(*Current().world).records.back().payload.n = 98;
@@ -937,7 +937,7 @@ TEST_CASE("DI-KS 18: verification on: immediate changes and the hooks they run a
     CHECK_MESSAGE(static_cast<bool>(result), "[ks-s5-verification-quiet] " << Text(result));
     CHECK(rig->world().Get<Hp>(1)->v == 3);
     CHECK(rig->world().Get<Mode>(1) != nullptr);
-    CHECK(rig->world().EventPayloads<Ping>().size() == 1);
+    CHECK(rig->world().MessagePayloads<Ping>().size() == 1);
     CHECK(rig->world().Get<Tag>(1) != nullptr);
 }
 
@@ -951,7 +951,7 @@ TEST_CASE("DI-KS 18: verification on: a write the System does not declare, made 
     const auto result = rig->Run();
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ks-s5-verification-before] the write before the change was not reported");
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::BoundaryChange), "[ks-s5-verification-before] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find("event Ping") != std::string::npos, "[ks-s5-verification-before] " << result.error().Text());
+    CHECK_MESSAGE(result.error().Text().find("message Ping") != std::string::npos, "[ks-s5-verification-before] " << result.error().Text());
     CHECK_MESSAGE(result.error().Text().find("'Driver'") != std::string::npos, "[ks-s5-verification-before] " << result.error().Text());
     // Compared before the change, as before a nested run: the change is refused and does not happen.
     CHECK_MESSAGE(Logged("insert BoundaryChange"), "[ks-s5-verification-before-refused] " << Joined());

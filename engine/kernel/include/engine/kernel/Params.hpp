@@ -408,18 +408,18 @@ template <class T>
 struct ParamTraits<ResMut<T>> : Detail::HandleTraits<ResMut<T>, TypeList<Access::ResourceWrite<T>>, false> {};
 
 template <class E>
-class EventReader final : Detail::Handle {
-    GYO_KERNEL_HANDLE(EventReader)
-        : Handle(call), id_(Detail::EventIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
-          tick_(Detail::DomainTick(*call.world, Detail::EventDomain(*call.world, id_))) {}
+class MessageReader final : Detail::Handle {
+    GYO_KERNEL_HANDLE(MessageReader)
+        : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
+          tick_(Detail::DomainTick(*call.world, Detail::MessageDomain(*call.world, id_))) {}
 
 public:
     // Spec F.3, no cursor: the records of tick t-1 written after this reader's
     // Plan position and of tick t written before it, in (tick, writerPos, seq) order.
     [[nodiscard]] std::vector<const E*> Read() const {
-        Check("EventReader");
-        const auto& buffer = static_cast<const Detail::EventBuffer<E>&>(Detail::EventsAt(*world_, id_));
-        std::vector<const typename Detail::EventBuffer<E>::Record*> picked;
+        Check("MessageReader");
+        const auto& buffer = static_cast<const Detail::MessageBuffer<E>&>(Detail::MessagesAt(*world_, id_));
+        std::vector<const typename Detail::MessageBuffer<E>::Record*> picked;
         for (const auto& record : buffer.records) {
             const bool previous = tick_ > 0 && record.tick == tick_ - 1 && record.writerPos > position_;
             const bool current = record.tick == tick_ && record.writerPos < position_;
@@ -437,35 +437,35 @@ public:
     }
 
 private:
-    EventTypeId id_;
+    MessageTypeId id_;
     std::uint32_t position_;
     std::uint64_t tick_;
 };
 template <class E>
-struct ParamTraits<EventReader<E>> : Detail::HandleTraits<EventReader<E>, TypeList<Access::EventRead<E>>, true> {};
+struct ParamTraits<MessageReader<E>> : Detail::HandleTraits<MessageReader<E>, TypeList<Access::MessageRead<E>>, true> {};
 
 template <class E>
-class EventWriter final : Detail::Handle {
-    GYO_KERNEL_HANDLE(EventWriter)
-        : Handle(call), id_(Detail::EventIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
-          tick_(Detail::DomainTick(*call.world, Detail::EventDomain(*call.world, id_))) {}
+class MessageWriter final : Detail::Handle {
+    GYO_KERNEL_HANDLE(MessageWriter)
+        : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
+          tick_(Detail::DomainTick(*call.world, Detail::MessageDomain(*call.world, id_))) {}
 
 public:
     // Appends one record: tick = the event domain's tick, writerPos = this
     // call's Plan position (a hook's: its sync point's), seq = the buffer's count.
     void Send(E event) {
-        Check("EventWriter");
-        auto& buffer = static_cast<Detail::EventBuffer<E>&>(Detail::EventsAt(*world_, id_));
-        buffer.records.push_back(typename Detail::EventBuffer<E>::Record{tick_, buffer.nextSeq++, position_, std::move(event)});
+        Check("MessageWriter");
+        auto& buffer = static_cast<Detail::MessageBuffer<E>&>(Detail::MessagesAt(*world_, id_));
+        buffer.records.push_back(typename Detail::MessageBuffer<E>::Record{tick_, buffer.nextSeq++, position_, std::move(event)});
     }
 
 private:
-    EventTypeId id_;
+    MessageTypeId id_;
     std::uint32_t position_;
     std::uint64_t tick_;
 };
 template <class E>
-struct ParamTraits<EventWriter<E>> : Detail::HandleTraits<EventWriter<E>, TypeList<Access::EventWrite<E>>, false> {};
+struct ParamTraits<MessageWriter<E>> : Detail::HandleTraits<MessageWriter<E>, TypeList<Access::MessageWrite<E>>, false> {};
 
 // Untyped deferred insert / remove of any column (spec F.1). No access, no
 // conflict edge, not counted as a writer; nothing checks the column at run time
