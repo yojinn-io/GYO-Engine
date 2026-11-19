@@ -3,6 +3,8 @@
 更新：2026-11-20（修訂 1）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（2026-11-20）；照第 10 節實作，合併前做合併前核准。**
 
 > **核准**：使用者 2026-11-20 在卡片對第 12 節四題與第 13 節的下載回「1、2、3 照建議，4 同意，可以下載」。即：第 1 題 view；第 2 題結構自寫、數字用 `yyjson_write_number`；第 3 題非有限數由 `Finish` 回 `NotRepresentable`（NaN 的表示法由日誌批定）；第 4 題全程 high、審查 Fable／high；同意下載第 13 節的兩個組件。已照四樣格式轉主會話。
+>
+> **2026-11-20 追加（使用者，卡片）**：adapter 在 Module 裡有自己的子目錄 `src/adapters/<組件>/`（一個組件一個）。原話：對卡片的建議「`src/backend/yyjson/`」回「我不想要backend這個名字。有其他選擇嗎？這個backend 太含糊了。」；卡片列 `src/adapters/yyjson/`＋`src/adapters/fast_float/`（建議；`adapter` 是 AGENTS §6 的詞）、`src/yyjson/`＋`src/fast_float/`、`src/external/`，使用者回「用第一個 adapters」。J-1、5.1、8.5 照此收緊（只緊不緩）。另：使用者確認外部組件照之前的 CMake 建置用 FetchContent（「FetchContent 可以用，參考之前的camke 建置」）。
 
 經過：修訂 0（d142d8e8）送 Fable／high 敵對式檢查（general-purpose、只讀），必改 9、建議改 12、小問題 9（證據 `declaration-r0-adversarial-check.md`）。修訂 1 照它改，處理對照在第 17 節；修訂 1 沒有再送檢查。
 
@@ -37,7 +39,7 @@
 
 - **trace 一行一筆**：下一批的日誌與 trace 要把「第 1207 tick，玩家 3 的移動指令排隊 2 筆」寫成一行 JSON。master 的 PvP 在 producer 執行緒上手寫字串（`master@08566260:apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTraceWriter.hpp:30-42`，每行約 420 位元組、`reserve(420)`）；Kernel 的登記指紋報告也手寫了一個 JSON 字串跳脫（`engine/kernel/src/Fingerprint.cpp:231`）。本批給一個串流寫出器：照呼叫順序往字串後面接，跳脫、數字格式、結構都由它負責。
 - **讀內容檔**：之後的 asset 批讀資源目錄，BigMap 的每個 region（最大 16 MiB）可以在多個執行緒上同時讀，UI 讀 UI 文件，作者若選 JSON 當存檔格式也要讀回來。本批給一個嚴格的讀取器：同一個鍵出現兩次、檔頭有 BOM、數字超出 double 的範圍都是錯誤；同一份檔在 Windows、Linux、macOS 讀出逐位元相同的數值；再深、再寬的文件，時間與記憶體都跟值的個數成正比。
-- **換函式庫只改一處**：yyjson 與 fast_float 只出現在 `engine/json/src/`；之後換函式庫，Engine 裡用它的 Module 都不用改（使用者原話「內化到Engine中未來有變化，也有介面作為緩衝」）。
+- **換函式庫只改一處**：yyjson 只出現在 `engine/json/src/adapters/yyjson/`、fast_float 只出現在 `engine/json/src/adapters/fast_float/`；之後換函式庫，Engine 裡用它的 Module 都不用改（使用者原話「內化到Engine中未來有變化，也有介面作為緩衝」）。
 
 ## 2. 範圍
 
@@ -112,7 +114,7 @@ JSON Module 的介面上會積：日誌與 trace 的紀錄格式、資源目錄�
 
 ### 5.1 位置與名字（卡片照 L17 判，照 N11～N17）
 
-- 目錄 `engine/json/`，標頭 `engine/json/include/engine/json/`，實作 `engine/json/src/`（adapter 的程式都在這裡）。
+- 目錄 `engine/json/`，標頭 `engine/json/include/engine/json/`，實作 `engine/json/src/`。**直接碰外部組件的程式（adapter）放 `src/adapters/<組件>/`，一個組件一個子目錄**：`src/adapters/yyjson/`（`Parse`、`Document`、`Value` 走 yyjson 的 DOM，數字寫出走 `yyjson_write_number`）、`src/adapters/fast_float/`（數字讀取的十進位轉 double）。`src/` 的其他檔不碰外部組件（`Writer` 的結構、跳脫、UTF-8 檢查、錯誤碼）。不另開 CMake target、不加執行時的抽象介面：換函式庫是換 `adapters/` 底下的目錄（使用者 2026-11-20 定，見文首〈核准〉）。
 - target `gyo_json`（STATIC），別名 `GYO::Json`；namespace `GYO::Engine::Json`（N17）。在這個 namespace 裡寫 Base 要寫 `::Engine::Base::`（同 `engine/orchestration/include/engine/orchestration/Product.hpp:82`）。
 - Module 登記檔加一列：`json,GYO::Json,"JSON reading and writing behind the engine's own interface",yes,no,base,,,`——`library_only=yes`、`default=no`、依賴只有 `base`；排在 `base` 之後。
 - 外部組件：`third_party/yyjson/`、`third_party/fast_float/`。照 master 的 ufbx 先例（`FetchContent`、`SOURCE_SUBDIR` 指向不存在的目錄以不跑上游 CMake、GYO 自己建 target），再加三點：`GIT_TAG` 寫 40 位元的 commit SHA（tag 可以移動；第 13 節的表）、`GIT_SUBMODULES ""`、GYO 的 target 以 `SYSTEM` 含入（`gyo_json` 開 `-Wall -Wextra -Wpedantic`／`/W4`）。target 名 `gyo_yyjson`（STATIC，C）、`gyo_fast_float`（INTERFACE）。只有 `engine/json/CMakeLists.txt` 以 PRIVATE 連它們。
@@ -255,7 +257,7 @@ template <class T> using JsonResult = ::Engine::Base::Result<T, JsonError>;
 
 | 條 | 內容 | 守衛 |
 |---|---|---|
-| **J-1 唯一的 adapter** | yyjson 與 fast_float 的標頭、型別、呼叫只在 `engine/json/src/`；`engine/json/include/` 不含它們，也不露出它們的型別；Engine 的其他 Module 經 `GYO::Json` 讀寫 JSON，不直接連 `gyo_yyjson`、`gyo_fast_float`。（AGENTS §6；「一個外部組件」的數法：yyjson 一個、fast_float 一個，兩個都只在這個 adapter。守衛只守 Engine 這一側，`adapter-plugins-plan` 第 15 行） | `gyo_expect_links(gyo_json GYO::Base gyo_yyjson gyo_fast_float)` 與 interface 不露出（`tests/common/time/CMakeLists.txt:16`、`:41-44` 的寫法）；含入掃描（第 6 步，照 `tests/common/kernel/kernel_guard.py` 的 Python 形式；範圍 `engine/` 與 `tests/common/json/`） |
+| **J-1 唯一的 adapter** | yyjson 的標頭、型別、呼叫只在 `engine/json/src/adapters/yyjson/`，fast_float 的只在 `engine/json/src/adapters/fast_float/`；`engine/json/include/` 不含它們，也不露出它們的型別；Engine 的其他 Module 經 `GYO::Json` 讀寫 JSON，不直接連 `gyo_yyjson`、`gyo_fast_float`。（AGENTS §6；「一個外部組件」的數法：yyjson 一個、fast_float 一個，兩個都只在這個 adapter。守衛只守 Engine 這一側，`adapter-plugins-plan` 第 15 行） | `gyo_expect_links(gyo_json GYO::Base gyo_yyjson gyo_fast_float)` 與 interface 不露出（`tests/common/time/CMakeLists.txt:16`、`:41-44` 的寫法）；含入掃描（第 6 步，照 `tests/common/kernel/kernel_guard.py` 的 Python 形式；範圍 `engine/` 與 `tests/common/json/`） |
 | **J-2 嚴格解析** | 只收 RFC 8259 的 JSON 文字：UTF-8、無 BOM、無註解、無尾隨內容（含數字後接 NUL）、無 NaN／Infinity 字面、非空；不成對或不完整的代理跳脫是錯誤。同一物件裡解跳脫後相同的鍵出現兩次是錯誤。每個數字都要轉得成有限的 double，非零的文字不得捨入成 0。違反都是 `Parse` 回的 `Result` 錯誤，不是斷言、不是取最後一個。 | 單元測試（每種各一，位元組字面寫在測試裡）＋本機的 JSONTestSuite 全集（證據） |
 | **J-3 數字走原文路、三平台同值** | 讀出的數值只由本 Module 的轉換得到：小數 fast_float、整數 `std::from_chars`；不用函式庫自帶的數字轉換，也不用平台的 `strtod`。同一份文字在 L1 三平台得到逐位元相同的值（determinism §4.7a）。整數讀取只收整數字面；`-0` 讀成 `-0.0`（小數）與 `0`（整數，含無號）；`AsUint64` 讀負數回 `NumberOutOfRange`。 | 調查的全部向量在 L1 三平台重生並比對（8.2）＋固定表 |
 | **J-4 Engine 的詞** | 公開介面只有 GYO 的型別；不露出函式庫的 DOM 型別、旗標、錯誤碼。換函式庫時 Engine 裡的使用者不用改。 | 測試執行檔只拿得到 `engine/json/include` 的路徑：公開標頭含 `yyjson.h` 就編不過（entity-store DI 9 的先例）；J-1 的掃描 |
@@ -268,7 +270,7 @@ template <class T> using JsonResult = ::Engine::Base::Result<T, JsonError>;
 ### Replacement Criteria（新 Component，寫在積上去之前）
 
 - **RC-1 換函式庫**：要維持 J-2，得在 adapter 裡自己再寫一個語彙分析器（例：yyjson 改版後原文旗標放寬文法）；或 yyjson 12 個月沒有 commit、授權改變。→ 換組件，介面（J-4）不變。
-- **RC-2 數字轉換獨立**：Engine 裡第二個 Module 需要十進位轉 double 時，把 fast_float 移成自己的 adapter，JSON Module 改用它；不讓別的模組經 JSON 拿數字轉換，也不另連一份 fast_float。
+- **RC-2 數字轉換獨立**：Engine 裡第二個 Module 需要十進位轉 double 時，把 fast_float 移成自己的 adapter（把 `src/adapters/fast_float/` 搬出 JSON Module），JSON Module 改用它；不讓別的模組經 JSON 拿數字轉換，也不另連一份 fast_float。
 - **RC-3 型別對應**：三份以上的資料契約重複同樣的「逐欄讀、型別錯誤補 context」程式，提出型別對應（反射或 schema 綁定）的設計交使用者；不在 JSON Module 裡長出設定語言（AGENTS §9）。
 - **RC-4 view 的生命週期**：觀察到 `Value` 或取出的字串活得比 `Document` 久的缺陷，評估改成擁有型的樹。
 - **RC-5 預算**：第 9 節判定 6 的停止條件觸發——停下重看 adapter 的走訪或 `Writer` 的形狀。
@@ -307,7 +309,7 @@ template <class T> using JsonResult = ::Engine::Base::Result<T, JsonError>;
 ### 8.5 守衛（AGENTS §3「ガードを立てる時期」）
 
 - 和測試同時立（現有的守衛形式，不綁新實作方式）：`gyo_expect_links(gyo_json …)` 與 interface 不露出；測試執行檔只拿到公開 include 路徑（J-4）。
-- 情境測試通過之後立（第 6 步）：J-1 的含入掃描（Python，照 `kernel_guard.py`）。範圍：`engine/`（`engine/json/src/` 是唯一准許的位置）與 `tests/common/json/`（adapter 自己的測試准許，同 `adapter-plugins-plan` 第 255 行）。產品側不掃（2.2 節）。自我測試三件：規則全關的突變要被抓到、實際樹上的正例（`engine/json/src` 的含入要被數到 1 個以上）、掃描根不存在時失敗而不是零命中。判定 6 的效能比較程式要直連 yyjson，放在 git 不追蹤的 `build/evidence/gyo2-json-module/bench/`，不在掃描範圍、不進 repo。
+- 情境測試通過之後立（第 6 步）：J-1 的含入掃描（Python，照 `kernel_guard.py`）。範圍：`engine/`（`yyjson.h` 唯一准許的位置是 `engine/json/src/adapters/yyjson/`、`fast_float` 是 `engine/json/src/adapters/fast_float/`；兩條規則分開判）與 `tests/common/json/`（adapter 自己的測試准許，同 `adapter-plugins-plan` 第 255 行）。產品側不掃（2.2 節）。自我測試三件：規則全關的突變要被抓到、實際樹上的正例（`engine/json/src` 的含入要被數到 1 個以上）、掃描根不存在時失敗而不是零命中。判定 6 的效能比較程式要直連 yyjson，放在 git 不追蹤的 `build/evidence/gyo2-json-module/bench/`，不在掃描範圍、不進 repo。
 
 ### 8.6 突變（AGENTS §14.2；§14.5 與 `tests/common/mutation/README.md`）
 

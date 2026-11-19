@@ -1,7 +1,7 @@
 # The JSON Module: reading and writing JSON behind the engine's own interface.
 # It is the engine's only adapter for its two external components, yyjson (the
 # parser and the number writer) and fast_float (decimal to double): their
-# headers, types and calls appear only under src/ (Design Invariant J-1 of
+# headers, types and calls appear only under src/adapters/<component>/ (Design Invariant J-1 of
 # docs/architecture/target/v2/json-module-declaration.zh-Hant.md). Not part of
 # any World (library_only in engine/config/modules.csv).
 add_library(gyo_json STATIC
