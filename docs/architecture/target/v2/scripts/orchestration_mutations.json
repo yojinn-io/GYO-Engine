@@ -2795,6 +2795,20 @@
     "orchestration O-11",
     "error-handling DI 4"
    ]
+  },
+  {
+   "id": "el-p15-old-behaviour",
+   "what": "error levels D10 (P15): game initialization that failed on a BuildNewFirst replacement's new first World stays counted as run, so the old first World never runs it (only this mutant: no other check replaces the first World before game initialization)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                        if (!dropOldFirst) gameInitRan_ = false;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: D10*",
+   "expect": "\\[el\\-p15\\-gameinit\\-not\\-run\\]",
+   "guards": [
+    "orchestration O-1",
+    "error-levels-declaration D10"
+   ]
   }
  ]
 }

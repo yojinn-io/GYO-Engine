@@ -599,6 +599,8 @@ bool Product::HasWorld(std::string_view name) const noexcept {
     }
     for (auto& [entry, box] : moved) entry.put(world, box);
 
+    // Error levels D10: game initialization started here on the new first World.
+    bool initRunHere = false;
     try {
         // Step 3: prepare functions.
         if (auto prepared = Prepare(slot, world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {
@@ -610,11 +612,16 @@ bool Product::HasWorld(std::string_view name) const noexcept {
         if (!gameInitRan_) {
             if (firstWorld) {
                 gameInitRan_ = true;
+                initRunHere = true;
                 for (const std::string& schedule : gameInit_) {
                     failedSchedule = schedule;
                     auto ran = fresh->Run(schedule);
                     if (!ran) {
                         giveBack(moved);
+                        // Error levels D10: under BuildNewFirst the World that broke was never the
+                        // Product's; game initialization is not counted as run and the old first
+                        // World runs it on the next entry point (O-1).
+                        if (!dropOldFirst) gameInitRan_ = false;
                         return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,
                                                "game initialization failed on the new first World " + Quoted(name),
                                                std::move(ran).error()));
@@ -638,6 +645,7 @@ bool Product::HasWorld(std::string_view name) const noexcept {
     } catch (...) {
         giveBack(moved);
         if (!dropOldFirst) {
+            if (initRunHere) gameInitRan_ = false;  // D10, as for an Err
             throw;
         }
         if (!failure_) {

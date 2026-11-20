@@ -205,3 +205,51 @@ TEST_CASE("O-3: no runner runs one frame; an installed runner is called once wit
         CHECK_MESSAGE((calls == 1 && seen == built->get() && exit.reason == "stop"), "[or-runner-installed]");
     }
 }
+
+// ---- Error levels D10 (P15): game initialization failing on a new first World that a
+// BuildNewFirst replacement has not handed over yet
+
+namespace {
+
+bool& InitBreaks() {
+    static bool breaks = false;
+    return breaks;
+}
+
+K::SystemResult BreaksInit(K::Query<K::Read<Tag>>) {
+    if (InitBreaks()) return Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "game initialization breaks"));
+    Log().push_back("init");
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("O-1: D10: game initialization fails on the new first World of a BuildNewFirst replacement: not counted as run, the old World goes on and runs it later") {
+    Log().clear();
+    InitBreaks() = false;
+    O::ProductDescription d;
+    d.name = "game";
+    d.gameInit = {"A"};
+    d.worlds.push_back(World(
+        "Main",
+        [](O::WorldSetup& s) {
+            Basics(s.Registrar(), {Once("A"), FrameClock("Tick")});
+            s.Registrar().AddSystem<&BreaksInit>(In("BreaksInit", "A"));
+            s.Registrar().AddSystem<&Mark<'t'>>(In("MarkTick", "Tick"));
+        },
+        {"Tick"}));
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+        InitBreaks() = true;  // only the new World's game initialization breaks
+        return {};
+    }});
+    REQUIRE_FALSE(static_cast<bool>(replaced));
+    CHECK_MESSAGE(p.Failure() == nullptr, "[el-p15-buildnew-first-gameinit] the Product ended: " << p.Failure()->Text());
+    CHECK_MESSAGE(!p.GameInitRan(), "[el-p15-gameinit-not-run] game initialization is counted as run");
+    InitBreaks() = false;
+    auto frame = p.RunFrame();
+    CHECK_MESSAGE(static_cast<bool>(frame), "[el-p15-old-world-inits] " << (frame ? std::string() : frame.error().message));
+    CHECK_MESSAGE((p.GameInitRan() && Logged("init") && Logged("t")), "[el-p15-old-world-inits] " << Joined());
+}
