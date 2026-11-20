@@ -170,9 +170,11 @@ TEST_CASE("fatal: on a sink's own writer thread the flush is skipped at once; th
 TEST_CASE("fatal: a fatal path started again on the same thread writes only standard error") {
     struct Reentering final : Logging::Sink {
         std::optional<Logging::FatalWriteReport> inner;
+        int depth = 0;
         void Write(const Record&) noexcept override {}
         bool WriteFatal(const Record& record, std::string_view, std::string_view) noexcept override {
-            inner = Logging::WriteFatalRecord(record);
+            // Only once, so that a missing re-entry flag shows as a wrong report, not as endless recursion.
+            if (depth++ == 0) inner = Logging::WriteFatalRecord(record);
             return true;
         }
     };
@@ -191,6 +193,7 @@ TEST_CASE("fatal: a fatal path started again on the same thread writes only stan
     CHECK(reentering->inner->console);
     CHECK(reentering->inner->sinksWritten == 0);
     // The flag is down again once the outer path returned.
+    reentering->depth = 1;
     CHECK_FALSE(Logging::WriteFatalRecord(Broken()).reentered);
 }
 

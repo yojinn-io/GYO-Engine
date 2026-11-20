@@ -96,7 +96,7 @@ TEST_CASE("file: a full queue drops and counts; every Write is counted once (jud
     file.sink->Write(At(0, "taken by the writer"));
     REQUIRE(file.output->WaitForWriteStarted(1, 5s));
     // The writer is held inside its write: the queue fills up to 4, then drops.
-    for (int i = 1; i <= 10; ++i) file.sink->Write(At(i, "queued or dropped"));
+    for (int i = 1; i <= 10; ++i) file.sink->Write(At(i, std::to_string(i)));
     auto counts = file.sink->Counts();
     CHECK(counts.droppedFull == 6);
     file.output->Release();
@@ -109,6 +109,11 @@ TEST_CASE("file: a full queue drops and counts; every Write is counted once (jud
     CHECK(counts.written + counts.droppedFull + counts.droppedClosed == 12);
     const auto lines = file.output->Lines();
     REQUIRE(lines.size() == 6);
+    // The four queued while the writer was held went out as one batch, in Write order (LG-6).
+    CHECK(TextOf(lines[1]) == "1");
+    CHECK(TextOf(lines[2]) == "2");
+    CHECK(TextOf(lines[3]) == "3");
+    CHECK(TextOf(lines[4]) == "4");
     // The end line carries the counts of Close: written and dropped_full are final.
     CHECK(lines.back().find("\"written\":5,\"dropped_full\":6,\"dropped_closed\":0") != std::string::npos);
 }

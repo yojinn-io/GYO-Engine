@@ -5,8 +5,11 @@
 // MSVC needs <ostream> for doctest to print std::string_view in CHECK.
 #include <ostream>
 
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "AssertTestSupport.hpp"
@@ -19,6 +22,15 @@
 
 namespace Logging = GYO::Engine::Logging;
 using Logging::Level;
+
+// Design Invariant LG-11: no function of the Sink interface may throw into the code that wrote a record.
+static_assert(noexcept(std::declval<Logging::Sink&>().Write(std::declval<const Logging::Record&>())),
+              "LG-11: Sink::Write is noexcept");
+static_assert(noexcept(std::declval<Logging::Sink&>().WriteFatal(std::declval<const Logging::Record&>(), std::declval<std::string_view>(), std::declval<std::string_view>())),
+              "LG-11: Sink::WriteFatal is noexcept");
+static_assert(noexcept(std::declval<Logging::Sink&>().Flush(std::declval<std::chrono::steady_clock::time_point>())),
+              "LG-11: Sink::Flush is noexcept");
+static_assert(noexcept(std::declval<Logging::Sink&>().Close()), "LG-11: Sink::Close is noexcept");
 
 namespace {
 
