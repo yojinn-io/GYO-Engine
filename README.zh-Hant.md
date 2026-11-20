@@ -17,6 +17,7 @@ GYO 是 C++20 遊戲引擎，明確區分 Base、Runtime、Asset、Math、Time�
 | `build/cmake`、`build/ci` | 編譯、整合、封裝及驗收支援 |
 | `build/acceptance/` | 從產品外部執行的共通與專案專屬驗收工具 |
 | `build/target/` | Git 忽略的建置樹、可執行產品與報告 |
+| `examples/` | 示範產品怎麼使用引擎的例子程式（不是引擎、也不是測試；`GYO_BUILD_EXAMPLES`，預設跟著 `BUILD_TESTING`） |
 | `docs/`、`third_party/` | 設計文件與固定版本的第三方套件 wrapper |
 
 離線 shader compiler 歸 `engine/render/shaders/pipeline` 所有，根目錄 `tools/` 專供設計工具。請勿刪除整個 `build/`，其中包含需要版本管理的開發支援程式。

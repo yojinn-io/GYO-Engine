@@ -63,3 +63,10 @@
 - 改了什麼：Engine 刪掉 `ExitCode(RunnerExit)` 與 `RunProduct(description, units)`（編排層因此不再引用 `Base::Log`）；刪掉範例 main `MainExample.cpp`、`MainExampleProbe.cmake` 與 `orchestration.O-3-main`；`CoverageTests.cpp` 刪掉三個 RunProduct 案例（`[or-runproduct-*]`、`[or-exit-code]`）。預設 runner 只回原因、不寫，照舊（`[or-runner-default-reason]`、`[or-runner-default-silent]` 留著）。
 - 條文：`target/error-handling.md` 的「How the Engine's own code uses this」與 DI 4、O-3、O-11 的草稿改成「接下來怎麼辦由產品自己的 main 決定，Engine 不給標準 main」；宣告第 19 節加一行撤回紀錄。
 - 突變（§14.5「機能を取り除く変更は、同じ変更でそのミュータントを退ける」）：退掉 `or-runproduct-failure-silent`、`or-runproduct-startup-silent`、`or-main-exit-zero`（3 個，守的函式與探針已刪），目錄 231→228。沒有新增。
+
+## 新增頂層 `examples/`（2026-11-21，使用者）
+
+- 使用者原話（依序）：「我讓你加例子，別人的開源項目是如何加Example的？放在關的實現裡？」；對照之後「加，這tmd是你的職責」。
+- 對照（本機 `~/Code/GitHome`）：Bevy 是頂層 `examples/`，按主題分子資料夾，`Cargo.toml` 的 `[[example]]` 登記，`cargo run --example`；退出相關的是 `examples/app/return_after_run.rs`，引擎只有 `AppExit` 轉 `ExitCode`（`crates/bevy_app/src/app.rs:1598`，註解「We leave logging an error to our users」）。flecs 是 `examples/c`、`examples/cpp/<名字>/`，`examples/cpp/CMakeLists.txt` 是獨立專案、把 flecs 當函式庫連。lightyear 是頂層 `examples/`、一個功能一個。三家都不把例子放進實作或測試。
+- 改了什麼：`examples/CMakeLists.txt`（`gyo_add_example`）、`examples/README.md`（目錄）、`examples/orchestration/product_main.cpp`（產品的 main：建 Product、跑預設 runner、`Failure` 時記一筆原因並回 1，啟動報告也記一筆回 1）；`GyoBuild.cmake` 加 `GYO_BUILD_EXAMPLES`（預設跟 `BUILD_TESTING`）；三份 README 加一列；O-3、error-handling 條文草稿改指向這個例子；宣告第 19 節記 Architecture Delta 七項。
+- 驗證：本機（macOS）建置 `gyo_example_product_main`；不帶參數結束碼 0、無輸出；帶 `bad` 結束碼 1、stderr 一行 `[example] error: the Product ended: …`。只建置、不當測試跑（和 Bevy、flecs 相同）。

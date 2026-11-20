@@ -17,6 +17,7 @@ GYO is a C++20 game engine with explicit base, runtime, asset, math, time, threa
 | `build/cmake`, `build/ci` | Build, integration, packaging and acceptance support |
 | `build/acceptance/` | Common and project-specific acceptance tools run from outside the products |
 | `build/target/` | Ignored build trees, runnable products and reports |
+| `examples/` | Example programs showing how a product uses the engine (neither engine nor tests; `GYO_BUILD_EXAMPLES`, on by default with `BUILD_TESTING`) |
 | `docs/`, `third_party/` | Design documents and pinned dependency wrappers |
 
 `engine/render/shaders/pipeline` owns the offline shader compiler. Root `tools/` is for authoring tools. Do not remove the entire `build/` directory: it contains maintained source support as well as ignored generated output.

@@ -17,6 +17,7 @@ GYO は C++20 のゲームエンジンです。Base、Runtime、Asset、Math、T
 | `build/cmake`、`build/ci` | ビルド、統合、パッケージ、受け入れ検証の支援 |
 | `build/acceptance/` | 製品の外側から実行する共通およびプロジェクト固有の受け入れ検証ツール |
 | `build/target/` | Git 管理外のビルドツリー、実行可能な製品、ログ |
+| `examples/` | 製品がエンジンをどう使うかを示す例のプログラム（エンジンでもテストでもない。`GYO_BUILD_EXAMPLES`、既定は `BUILD_TESTING` に従う） |
 | `docs/`、`third_party/` | 設計文書と固定依存パッケージの wrapper |
 
 Shader compiler は `engine/render/shaders/pipeline` が所有します。ルートの `tools/` は authoring 用です。`build/` 全体を削除しないでください。管理対象の開発支援コードが含まれます。

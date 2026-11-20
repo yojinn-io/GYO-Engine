@@ -1040,4 +1040,13 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 - 使用者原話（節錄）：「你把處理返回回來的異常信息的處理代碼加上。注意，不是讓你改機制。是讓你再runner一類的上層，看到錯誤代碼了，做對應處理。你親自去改。」「照這個流程改。④ 也要在這一批補一個標準的 main 範例或輔助函式」「記日誌和處理異常不在同一層。go也是這樣處理的？」
 - 定下的：預設 runner（`Product::Run`）失敗時只回 `Failure` 與原因（E1 帶 `WorldFailure` 全文），自己不寫；新增 `ExitCode(RunnerExit)` 與標準 main `RunProduct(description, units)`——做決定的那一層：啟動報告或 runner 的 `Failure` 記一筆 Error、回 1，成功回 0。照 Go：下層包上脈絡回傳，最上層的 main 記一筆。
 - 之後撤回（使用者 2026-11-21）：`RunProduct`、`ExitCode` 與範例 main（`MainExample.cpp`、`orchestration.O-3-main`）從 Engine 與測試刪掉。原話：「刪掉這個」「MainExample.cpp 和 RunProduct 都處理掉」「相關的 Example 都處理掉。後面等搬產品時由產品寫」。使用者原以為它只是參考用的範例；Engine 不給標準 main，main 是產品的。預設 runner 只回原因、不寫，照舊。
+- 新增頂層 `examples/`（使用者 2026-11-21：問「別人的開源項目是如何加Example的？放在關的實現裡？」，看過 Bevy、flecs、lightyear 的對照後說「加，這tmd是你的職責」）。Architecture Delta（AGENTS §3、§10）：
+  1. 需要它的：退出流程要給產品看「main 怎麼接 runner 的結果」；之前錯放成 Engine 的公開函式 `RunProduct` 與測試目錄裡的 `MainExample.cpp`。
+  2. 現在的問題：例子沒有自己的位置，只能放進實作（變成 Engine 的介面）或測試（和判定混在一起）。
+  3. 變的邊界：多一個頂層目錄 `examples/`，放示範產品怎麼用 Engine 的程式；不屬於 Engine、不是測試、不是產品。
+  4. 影響：`build/cmake/GyoBuild.cmake`（選項 `GYO_BUILD_EXAMPLES`，預設跟 `BUILD_TESTING`，所以 CI 會建置；記入 Windows 程式碼頁目錄）、三份 README 的目錄表、O-3 與 error-handling 的條文草稿。
+  5. 依賴方向：`examples/` → Engine，和產品相同；Engine 與 `tests/` 都不依賴它。
+  6. 擁有者：Engine 架構的文件與例子（由擁有被示範機制的 Module 維護，現在只有 orchestration 的一個）。
+  7. 為什麼不更小：放 `tests/` 會把例子和判定混在一起；放 Engine 會變成公開介面；放產品要等產品搬上來，現在沒有。照 Bevy（`examples/`＋`[[example]]`）、flecs（`examples/cpp/<名字>/`，獨立 CMake 專案）的做法。
+  只建置、不當測試跑（Bevy、flecs 也一樣）；例子壞了是編譯失敗。
 
