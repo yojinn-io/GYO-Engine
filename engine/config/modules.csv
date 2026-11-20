@@ -1,5 +1,6 @@
 name,target,description,library_only,default,depends,private_depends,unit,header
 base,GYO::Base,"Failure handling: Assert, Result, Error, Log",yes,no,,,,
+json,GYO::Json,"JSON reading and writing behind the engine's own interface",yes,no,base,,,
 math,GYO::Math,"Vectors, matrices and the deterministic scalar functions",yes,no,base,,,
 entity_store,GYO::EntityStore,Generational entity ids and dense component storage,yes,no,base,,,
 kernel,GYO::Kernel,"The ECS mechanism: Registry, System contract, Scheduler, Plan, World",yes,no,base;entity_store,,,
