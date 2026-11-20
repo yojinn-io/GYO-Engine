@@ -1,6 +1,6 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1～4 件與「不參考 master」）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
+更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡與規模的處理）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 沒有再送檢查。
 
@@ -166,7 +166,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 ### 4.3 名字（照命名規範；本卡照 L17 判）
 
-權威份的「C 指紋」是舊 Kernel 的名字（C＝(c) 區），區拿掉之後不再有意思。權威份 4.4 已用 `ConsistencyFingerprint(view)`；本批照它，文件裡叫「一致性指紋」。G-5 的匯出格式 `gyo.zone-c-sources` 改名 `gyo.authority-sources`，`tests/common/zone_scan/zone_scan.py:49-51` 的輸入解析、它的自測與 `mutations.json`（18 個）跟著改；工具目錄的名字在卡 A 照命名規範定（ZS1～ZS7 本身不是區規則，`recon-a` 3）。
+權威份的「C 指紋」是舊 Kernel 的名字（C＝(c) 區），區拿掉之後不再有意思。權威份 4.4 已用 `ConsistencyFingerprint(view)`；本批照它，文件裡叫「一致性指紋」。G-5 的匯出格式 `gyo.zone-c-sources` 改名 `gyo.authority-sources`，`tests/common/zone_scan/zone_scan.py:49-51` 的輸入解析、它的自測與 `mutations.json`（18 個）跟著改；工具目錄的名字在第 5 步照命名規範定（ZS1～ZS7 本身不是區規則，`recon-a` 3）。
 
 ### 4.4 一致性指紋、digest、tick 檢查、交叉檢查
 
@@ -204,7 +204,11 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 最大回滾深度預設 20（照 lightyear，回滾份 5.5 第 1 點）；判斷的模式三種，預設「比對後不同才回滾」；修正預設指數衰減；`rollback.Component<T>` 的比較函式預設 `==`（回滾份 5.4；浮點和雜湊的關係見第 12 節第 2 件）。PvP 移植時另定。
 
-### 5.4 預算（AGENTS §2；回滾份第 11 節要求官方策略那一批寫）——**規模是本卡的假設，第 12 節第 5 件請你看**
+### 5.4 預算（AGENTS §2；回滾份第 11 節要求官方策略那一批寫）——**數字等研究卡的結果，由使用者定**
+
+**處理**（使用者 2026-11-20，side chat）：開一張唯讀研究卡，整理 master 2026-11-01 之後的數據當**基準**（「以前是什麼樣，現在我們要做到什麼」），提出目標候選，數字交使用者定。原話：「預算的規模假設：這個我建議，你專門更具這個問題跑一個研究卡去看看master11/01之後的數據。不是要你參考，而是你需要建立一個基準。以前是什麼樣，現在我們要做到什麼。你覺得如何？」→「但是你要開研究卡，範圍沒錯。GYO很多問題都是到10月底才處理完，11月節點可以。」研究卡：[研究卡] 第 4 批預算基準（`local_3eaf3c3f-2af9-4e8e-947c-a1511cab0350`，Opus 5.5／high，唯讀），報告寫到主 checkout `build/evidence/gyo2-authority-rollback/budget-baseline-research.md`。和「不參考 master 的算法與數據」（第 12 節）的分界：master 11-01 之後的數據只當基準比對「以前到哪、現在要到哪」，不拿它的算法、常數或架構來設計；11-01 之前的數據（含 2026-09-25 的 dev_log）照舊不用。
+
+下面是修訂 1 的假設，**等研究卡與使用者定的數字取代**：
 
 沒有產品給過預算。以 64 Hz 一步（15.625 ms）為基準，規模假設 **1,000 個實體 × 4 種可回滾元件**（舊 PvP 的移植目標沒有寫實體數；1,000 是「一場 PvP 的角色、子彈、道具」的上限估計，沒有出處）：
 - **記錄**：每步 ≤ 156 µs（一步的 1%；每步改了全部格的最壞情形）。
@@ -263,10 +267,10 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 ### 7.2 先後：沒有新家的先拿，有新家的等接手測試（修訂 1，檢查 S3）
 
-統合第 8 節的原則是「不需要新家的先拿，要新家的和新家同一條線」。修訂 0 把全部壓到最後，會讓子卡在還有寫者數量與區規則的 Kernel 上開發（例：DI-A 8「不數寫者」的測試——兩個 System 寫 `Health`——在 Kernel 還有 D-E2 時過不了）。改成：
-- **第 2 步（開子卡之前）**：拿掉沒有新家的——寫者數量、區規則、`DigestSet`、D-E9、X-2（9.1 A1、A2、A3、A10）。
-- **第 6 步（卡 A、卡 R 的接手測試併進本線之後）**：拿掉有新家的——Z6、Z8、D-E15、D-E16、`Rollback`、`Role`、C 指紋、G-5（A4～A7）。這段期間 Z6 等規則在 Kernel 與新 Module 各有一份；Kernel 那份的對象寫法要配合第 2 步拿掉 `Zone`（Z6 現在以「zone C 的 System」為對象，第 2 步改成以 `Rollback::Yes` 為準、照舊擋），在第 6 步整份拿掉。
-- 代價：golden 重產兩次（第 2、6 步）。比過：全部壓到最後（golden 一次，但子卡的測試在舊規則上過不了、三條線最後一起併才發現對不上）。
+統合第 8 節的原則是「不需要新家的先拿，要新家的和新家同一條線」。修訂 0 把全部壓到最後，會讓權威與回滾在還有寫者數量與區規則的 Kernel 上開發（例：DI-A 8「不數寫者」的測試——兩個 System 寫 `Health`——在 Kernel 還有 D-E2 時過不了）。改成：
+- **第 2 步（做兩個 Module 之前）**：拿掉沒有新家的——寫者數量、區規則、`DigestSet`、D-E9、X-2（9.1 A1、A2、A3、A10）。
+- **第 6 步（第 4、5 步的接手測試寫好之後）**：拿掉有新家的——Z6、Z8、D-E15、D-E16、`Rollback`、`Role`、C 指紋、G-5（A4～A7）。這段期間 Z6 等規則在 Kernel 與新 Module 各有一份；Kernel 那份的對象寫法要配合第 2 步拿掉 `Zone`（Z6 現在以「zone C 的 System」為對象，第 2 步改成以 `Rollback::Yes` 為準、照舊擋），在第 6 步整份拿掉。
+- 代價：golden 重產兩次（第 2、6 步）。比過：全部壓到最後（golden 一次，但兩個 Module 的測試在舊規則上過不了、最後才發現對不上）。
 
 ---
 
@@ -359,51 +363,41 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ---
 
-## 10. 拆卡：先立統合，再分頭寫（`v8-arch-gyo2-boundary-split-integrator-first`；本卡判，第 12 節第 5 件請你看）
+## 10. 不拆卡：本卡一張串著做（使用者 2026-11-20 定，第 12 節第 5 件）
 
-**判斷：拆成兩張子卡，本卡當統合。** 理由：
-- 規模：本卡估 87～132 h（第 14 節）。權威與回滾可以部分並行。
-- 兩個 Module 的程式在新的目錄（各自的測試與突變清單），彼此不搶檔案；搶檔案的都是基盤（Kernel、編排層、Kernel 的突變清單、`modules.csv`、`tests/common/CMakeLists.txt`、文件索引），留在統合。
-- 拆開後關聯容易被推給別份（記憶 `split-large-task-integrator-first`），所以先立關聯表（10.2），改基盤介面的全部留在統合。
-- **卡 A 依賴卡 R 的公開登記**（修訂 1，檢查 M9）：權威的代為登記、5.11 的 Z6／Z8／D-E15 都要一個會動的回滾登記與讀取介面；統合第 8 節的線內先後也是「回滾的公開登記 → 權威」。所以**回滾的公開登記與讀取介面（回滾份 `-registrations` 那一批裡不含檢查的部分）由統合在第 3 步做完**，再開卡。
+**決定**：權威與回滾不拆，由本卡一張串著做。原話：「要分開弄嗎？權威和回滾？」（side chat 先建議改成統合＋回滾子卡兩張）→「一起做。」→ side chat 確認「不拆、一張卡做？」→「對的不拆」。比過：拆兩張子卡（修訂 1，本卡當統合）／統合＋回滾子卡（side chat 建議；關鍵路徑和兩張一樣）／不拆（**選這個**）。理由：使用者沒有另外說。
 
-### 10.1 三張卡做什麼
+**順序照依賴**：回滾的公開登記與讀取介面 → 回滾的策略與檢查 → 權威（權威的代為登記、5.11 的 Z6／Z8／D-E15 都讀回滾的公開登記；統合第 8 節的線內先後也是「回滾的公開登記 → 權威」）。拿掉 Kernel 規則照 7.2 分兩段：沒有新家的在第 2 步，有新家的在第 4、5 步的接手測試寫好之後（第 6 步）。
 
-| 卡 | 做什麼 | 檔案 |
-|---|---|---|
-| **本卡（統合）** | 第 1～3 步：基盤（逐型別雜湊、原語、登記表兩樣、第 6 節的接法、拿掉沒有新家的規則、兩個 Module 的骨架、回滾的公開登記與讀取介面、兩個策略 interface 的形狀、關聯表、測試的 Product 組法）；第 6 步：拿掉有新家的規則；第 7、8 步：scenario 第 3 段、文件、驗證 | `engine/kernel`、`engine/orchestration`、`engine/world_time`、`engine/rollback` 的公開登記部分、`modules.csv`、`tests/common/{kernel,orchestration,world_time,scenario}`、`tests/common/CMakeLists.txt`、Kernel 與編排層的突變清單、`target/kernel.zh-Hant.md`、`limits.zh-Hant.md`、文件索引、本頁、dev_log |
-| **卡 R（回滾）** | 回滾的檢查（R-7 Derived、跨 schedule 訊息、巢狀 schedule 的所屬）；官方策略（記錄、判斷、還原、重跑、修正、輸入歷史；R-1、R-2、R-5）；P2P 佔位；預算量測（5.4） | `engine/rollback/` 的策略與檢查、`tests/common/rollback/`、`rollback_mutations.json`、新頁 `target/v2/rollback.zh-Hant.md` |
-| **卡 A（權威）** | 權威份第 10 節步 3、4：登記入口、代為登記、策略、佔位、tick 檢查、一致性指紋、digest、G-5 匯出與 `zone_scan` 的接手（J-17 的搬移）、5.11 交叉檢查 | `engine/authority/`、`tests/common/authority/`、`authority_mutations.json`、`tests/common/zone_scan/`、新頁 `target/v2/authority.zh-Hant.md` |
+### 10.1 步與步之間的交界
 
-### 10.2 關聯表（統合定、子卡引用；改這張表只由統合）
+拆卡時的關聯表留作「先做的步定形狀、後做的步照用」的清單；後面的步碰到要改前面定好的形狀時，照 §14 冒頭停下回報，不順手改。
 
-| # | 交界 | 誰定形狀 | 誰實作 | 誰用 |
-|---|---|---|---|---|
-| I1 | 逐型別雜湊的客製點、`Hasher`、Kernel 附的函式、「照位元組」的寫法 | 統合 | 統合 | Kernel 的摘要；A 的 digest |
-| I2 | 原語 1～4（含一批放回的 hook 時機）、`ExclusiveWorld` 讀目前 stamp | 統合 | 統合 | R |
-| I3 | `Writes<…>` 收元件、`annotatedWrites` 的形狀與指紋編碼 | 統合 | 統合 | A（指紋、Z6、tick 檢查） |
-| I4 | 訊息寫者名單 | 統合 | 統合 | R（跨 schedule 訊息） |
-| I5 | Module 與作者的接法（第 6 節：共用槽與它的四點機制） | 統合 | 統合 | A、R、作者 |
-| I6 | 回滾的公開登記與讀取介面（六種，R-6）、重複登記的規則、凍結後放進 World 的 Resource | 統合 | **統合**（修訂 1） | R（策略、檢查）、A（5.11、代為登記） |
-| I7 | `AuthorityStrategy`、`RollbackStrategy` 的掛點（兩份的契約部分） | 統合（標頭） | A、R | 作者 |
-| I8 | `Tick`、`TickWriters()`、`Resimulation`、`RunOneFixedStep`、`RewindFixedSteps`、`WorldTimeOptions` 的 schedule 名 | 第 3 批（已有） | — | A、R |
-| I9 | 兩個 Module 的 `modules.csv` 列（順序 `world_time` → `rollback` → `authority`）與目錄骨架（含 `tests/common/{authority,rollback}` 與 `tests/common/CMakeLists.txt` 的兩行） | 統合 | 統合 | A、R |
-| I10 | 拿掉 Kernel 規則的先後（7.2） | 統合 | 統合 | — |
-| I11 | 突變清單：Kernel 與編排層的清單只由統合改；搬走的突變由統合退役、A／R 在自己的清單立 | 各自 | 各自 | — |
-| I12 | 文件：統合寫 Kernel 的 DI、限制頁、`target/v2/README.md` 與 `docs/architecture/README.md`〈Design Invariants〉的索引、本頁；A、R 各寫自己的頁、把要加的索引行交統合 | 各自 | 各自 | — |
-| I13 | J-17 的搬移：`tests/common/kernel/ZoneCExportTests.cpp`、`zone_c_fixture/`、`zone_c_export_check.py`、`tests/common/kernel/CMakeLists.txt:88-89`、`:117-123` 的兩個 ctest | 統合（第 6 步從 Kernel 拿掉） | A（在 `tests/common/authority/` 立新的） | — |
-| I14 | G-5 格式改名與 `zone_scan` 的輸入解析、自測、`mutations.json` | A | A | 產品的掃描 |
-| I15 | 測試用的 Product 組法（帶 `world_time`＋`rollback`＋`authority` 的單位表、策略的選項） | 統合（第 3 步給一個共用的測試支援） | 統合 | A、R、scenario 第 3 段 |
-| I16 | dev_log 與 HANDOFF：一條線一份 dev_log，由統合寫；A、R 交「做了什麼、驗證、證據位置」給統合。HANDOFF 由主會話寫 | 統合 | 各自交材料 | — |
-| I17 | 完整跑的指令加兩份新清單 | 統合 | 統合 | — |
+| # | 交界 | 在哪一步定、實作 | 哪一步用 |
+|---|---|---|---|
+| I1 | 逐型別雜湊的客製點、`Hasher`、Kernel 附的函式、「照位元組」的寫法 | 第 1 步 | Kernel 的摘要；第 5 步的 digest |
+| I2 | 原語 1～4（含一批放回的 hook 時機）、`ExclusiveWorld` 讀目前 stamp | 第 2 步 | 第 4 步 |
+| I3 | `Writes<…>` 收元件、`annotatedWrites` 的形狀與指紋編碼 | 第 2 步 | 第 5 步（指紋、Z6、tick 檢查） |
+| I4 | 訊息寫者名單 | 第 2 步 | 第 4 步（跨 schedule 訊息） |
+| I5 | Module 與作者的接法（第 6 節：共用槽與它的四點機制） | 第 3 步 | 第 4、5 步、作者 |
+| I6 | 回滾的公開登記與讀取介面（六種，R-6）、重複登記的規則、凍結後放進 World 的 Resource | 第 3 步 | 第 4 步（策略、檢查）、第 5 步（5.11、代為登記） |
+| I7 | `AuthorityStrategy`、`RollbackStrategy` 的掛點（兩份的契約部分） | 第 3 步（標頭）；第 4、5 步實作 | 作者 |
+| I8 | `Tick`、`TickWriters()`、`Resimulation`、`RunOneFixedStep`、`RewindFixedSteps`、`WorldTimeOptions` 的 schedule 名 | 第 3 批（已有） | 第 4、5 步 |
+| I9 | 兩個 Module 的 `modules.csv` 列（順序 `world_time` → `rollback` → `authority`）與目錄骨架（含 `tests/common/{authority,rollback}` 與 `tests/common/CMakeLists.txt` 的兩行） | 第 3 步 | 第 4、5 步 |
+| I10 | 拿掉 Kernel 規則的先後（7.2） | 第 2、6 步 | — |
+| I11 | 突變清單：Kernel、編排層、權威、回滾各一份；搬走的突變在第 6 步從 Kernel 退役、在新清單立 | 各步 | — |
+| I12 | 文件：Kernel 的 DI、限制頁、`target/v2/README.md` 與 `docs/architecture/README.md`〈Design Invariants〉的索引、本頁、新頁 `target/v2/authority.zh-Hant.md`、`target/v2/rollback.zh-Hant.md` | 第 4、5、7 步 | — |
+| I13 | J-17 的搬移：`tests/common/kernel/ZoneCExportTests.cpp`、`zone_c_fixture/`、`zone_c_export_check.py`、`tests/common/kernel/CMakeLists.txt:88-89`、`:117-123` 的兩個 ctest | 第 5 步在 `tests/common/authority/` 立新的；第 6 步從 Kernel 拿掉 | — |
+| I14 | G-5 格式改名與 `zone_scan` 的輸入解析、自測、`mutations.json` | 第 5 步 | 產品的掃描 |
+| I15 | 測試用的 Product 組法（帶 `world_time`＋`rollback`＋`authority` 的單位表、策略的選項） | 第 3 步 | 第 4、5 步、scenario 第 3 段 |
+| I16 | dev_log 與 HANDOFF：一條線一份 dev_log，本卡寫；HANDOFF 由主會話寫 | 第 7 步 | — |
+| I17 | 完整跑的指令加兩份新清單 | 第 3 步 | 第 8 步 |
 
-子卡碰到要改 I1～I7、I9、I15 的地方：停下、回報統合，不自己改。
+### 10.2 分支與合併
 
-### 10.3 分支與合併
-
-- 統合的分支就是本卡的分支。第 3 步完成、推送之後開兩張子卡，各自從那個提交切工作樹。
-- 子卡完成時各自做審查、新突變清單的敵對式檢查，把分支交回。**子卡分支併進本線，要使用者明確說「合併」**（`v8-arch-gyo2-merge-needs-explicit-word`：「好了」「OK」不算）；不把子卡的分支 push 到別處。
-- 整條線**一個 PR**（開到 `gyo2`，`fewer-prs`），**一次合併前核准**；`gh pr merge` 也只在使用者明確說「合併」之後。
+- 全部在本卡的分支上做，不開子卡、不切別的工作樹。
+- 每步完成時推送本分支；審查在第 4、5 步完成時與整條線完成時各做一次（第 14 節），新突變清單的敵對式檢查在第 8 步。
+- 整條線**一個 PR**（開到 `gyo2`，`fewer-prs`），**一次合併前核准**；`gh pr merge` 只在使用者明確說「合併」之後（`v8-arch-gyo2-merge-needs-explicit-word`：「好了」「OK」不算）。
 
 ---
 
@@ -507,11 +501,12 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 - 判定與 DI：方向在動工前核准；逐組的最終核准在合併前帶突變結果與檢證者（Fable 5.2／high）報告再看一次（和第 2、3 批同一個做法）。A1～A3、A10 是已定決定的直接後果；要特別看 A4～A7（搬過去時判定的對象變了、A7 的緩的面）、A8（作者的函式漏欄位）、A11（反向守衛退役後可能沒有突變的判定，第 2 步開頭列給你）。
 - 規模（1,000 實體 × 4 種）與「一次回滾 ≤ 一步的 20%」是本卡的假設，沒有出處。
-- 拆卡（本卡當統合、兩張子卡、回滾的公開登記由統合先做）影響你要看幾張卡。
+- 拆卡：**已定不拆**（使用者 2026-11-20，第 10 節）。
+- 規模與預算：**另開唯讀研究卡**（使用者 2026-11-20，第 5.4 節），數字等研究卡的結果由使用者定。
 
 ### 本卡照 L17 判的（各家一致或細節；不逐條問）
 
-**不參考 master 的算法與數據**（使用者 2026-11-20 定，side chat）：權威與回滾 Module 從頭照 GYO2 的新架構與開源參考（lightyear、bevy_replicon、Unity Netcode、Bevy、flecs）做；不用 master 的算法、常數與量測數據（含 `LocalPlayerPrediction`、`AuthorityDigest` 的情境、`pvp_baseline` 的數字）。2026-09-25 的 dev_log 是 10/10 事故前的數據，不准引用。side chat 提過的「用 master 數據改 5.4 的規模與預算、修正照 master 的 0.1 秒、digest 情境照 `AuthorityDigest`、估計下修」全部不採。原話：「算了，重做吧，我怕你把master的問題帶到新架構裡來。（特別你還踩空了09_25 的dev_log，那個是10/10事故前的數據。不准）」本頁修訂 1 沒有引用 master（`git grep -i -E "master|09_25|pvp_baseline|LocalPlayerPrediction|AuthorityDigest"` 0 命中，同一指令以 `lightyear` 正例命中 25 行）。5.4 的規模假設仍沒有出處，屬第 12 節第 5 件。
+**不參考 master 的算法與數據**（使用者 2026-11-20 定，side chat）：權威與回滾 Module 從頭照 GYO2 的新架構與開源參考（lightyear、bevy_replicon、Unity Netcode、Bevy、flecs）做；不用 master 的算法、常數與量測數據（含 `LocalPlayerPrediction`、`AuthorityDigest` 的情境、`pvp_baseline` 的數字）。2026-09-25 的 dev_log 是 10/10 事故前的數據，不准引用。side chat 提過的「用 master 數據改 5.4 的規模與預算、修正照 master 的 0.1 秒、digest 情境照 `AuthorityDigest`、估計下修」全部不採。原話：「算了，重做吧，我怕你把master的問題帶到新架構裡來。（特別你還踩空了09_25 的dev_log，那個是10/10事故前的數據。不准）」本頁修訂 1 沒有引用 master（`git grep -i -E "master|09_25|pvp_baseline|LocalPlayerPrediction|AuthorityDigest"` 0 命中，同一指令以 `lightyear` 正例命中 25 行）。5.4 的規模與預算另開唯讀研究卡：master 2026-11-01 之後的數據只當**基準**（以前到哪、現在要到哪），不拿它的算法、常數當設計的根據；數字由使用者定（第 5.4 節，使用者 2026-11-20 補）。
 
 
 - 原語有型別、放在 `ExclusiveWorld`、一批放回後才跑 hook（2.1）；原語 5 只留清單（2.1）；順序圖的閉包由回滾自己算（2.2）；訊息寫者名單、`Writes` 收元件（2.2）。
@@ -544,7 +539,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
   - 本卡加的（修訂 1 補，檢查 S1）：`\bRole::State\b`、`\brollbackActive\b`、`\bFunnelWrites\b`、`\bDE(2|9|11|15|16)\b`、`\bXE1\b`、`\bzone\b`、`\bwritePolicy\b`、`\bCFingerprintOf\b`、`\bkCFingerprintVersion\b`、`\bZoneCSourcesOptions\b`、`\bMarkDigestSet\b`、`\bdigestMarks\b`、`\bZoneName\b`、`\bexternal\b`、`"Z[0-9]"`、`\bRollback::Derived\b`、`enum class (Zone|WritePolicy|Role|Rollback)\b`。
   - 以上全部零命中；`StartupCode` 的列舉值等於統合 3.1 的清單（`RegistryTests.cpp:223`）。
   - **方向**：三個目錄裡沒有 `engine/authority`、`engine/rollback` 的 include，也沒有 `Authority::`、`Rollback::` 的名字（R-3、DI-A 2 的常設守衛延到第 5 批，這段期間由這條守）。
-- **判定 5：預算**（第 5.4 節）：記錄每步 ≤ 156 µs；一次回滾的總開銷 ≤ 3.125 ms（1,000 實體 × 4 種，本機 Release，各 1,000 次取 p99）。`World::Summary` 不設預算（除錯與測試用），dev_log 記改前改後的時間。超過就停下回報。
+- **判定 5：預算**（第 5.4 節）：**數字未定**，等預算基準研究卡的結果由使用者定，定了才算宣告（§14.1：結果出來之前宣告）。修訂 1 的假設是：記錄每步 ≤ 156 µs；一次回滾的總開銷 ≤ 3.125 ms（1,000 實體 × 4 種，本機 Release，各 1,000 次取 p99）。`World::Summary` 不設預算（除錯與測試用），dev_log 記改前改後的時間。超過就停下回報。
 
 ---
 
@@ -552,23 +547,23 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 上段（公開介面、Design Invariants、資料形式）。全部 high、不用 xhigh（`v8-arch-gyo2-batch3-no-xhigh`；碰到 §14 停止或原因不明的失敗，停下回報、提議 xhigh，不自己升檔）。
 
-| 步 | 卡 | 內容 | 實作者（模型／檔位） | 估計（agent 時間） |
-|---|---|---|---|---|
-| 第 1 步 | 統合 | 第 3 批延下來的三條守衛；逐型別雜湊（I1）與摘要格式 3；9 處「未完全解決」解除；比摘要的現有測試的型別補函式（第 12 節第 1 件定 (d)：不比摘要的測試型別不必補） | Opus 5.5／high | 8～12 h |
-| 第 2 步 | 統合 | A11 的清單交你；拿掉沒有新家的規則（A1、A2、A3、A10；9.2 的恆真案掃描）、golden 第一次重產；原語 1～4 與讀 stamp（I2）、`Writes` 收元件（I3）、訊息寫者名單（I4）、`Resimulation` 每次放 false | Opus 5.5／high | 16～22 h |
-| 第 3 步 | 統合 | 第 6 節的接法（I5）；`engine/authority`、`engine/rollback` 骨架、`modules.csv`、I6 回滾的公開登記與讀取介面、I7 的標頭、I15 測試支援、I17；推送後開卡 A、卡 R | Opus 5.5／high | 8～12 h |
-| R-1、R-2 | 卡 R | 回滾的檢查；官方策略、P2P 佔位；新頁；預算量測 | Opus 5.5／high | 6～10 h；16～24 h |
-| A-1、A-2 | 卡 A | 登記入口、代為登記、策略、tick 檢查；一致性指紋、digest、G-5 與 `zone_scan`、交叉檢查；新頁 | Opus 5.5／high | 6～10 h；6～10 h |
-| 第 6 步 | 統合（和 A、R 並行做，等兩卡的接手測試併進才併） | 拿掉有新家的規則（A4～A7）、`Role`、C 指紋、golden 第二次重產；突變的處置（9.4） | Opus 5.5／high | 8～12 h |
-| 第 7 步 | 統合 | 併 A、R；scenario 第 3 段；Kernel 的 DI、限制頁、world-time、編排層、索引；dev_log | Opus 5.5／high | 5～8 h |
-| 第 8 步 | 統合 | 完整突變、三份新清單的敵對式檢查、§14.4 檢證、審查 | 見下 | 8～12 h |
+| 步 | 內容 | 實作者（模型／檔位） | 估計（agent 時間） |
+|---|---|---|---|
+| 第 1 步 | 第 3 批延下來的三條守衛；逐型別雜湊（I1）與摘要格式 3；9 處「未完全解決」解除；比摘要的現有測試的型別補函式（第 12 節第 1 件定 (d)：不比摘要的測試型別不必補） | Opus 5.5／high | 8～12 h |
+| 第 2 步 | A11 的清單交使用者；拿掉沒有新家的規則（A1、A2、A3、A10；9.2 的恆真案掃描）、golden 第一次重產；原語 1～4 與讀 stamp（I2）、`Writes` 收元件（I3）、訊息寫者名單（I4）、`Resimulation` 每次放 false | Opus 5.5／high | 16～22 h |
+| 第 3 步 | 第 6 節的接法（I5）；`engine/authority`、`engine/rollback` 骨架、`modules.csv`、I6 回滾的公開登記與讀取介面、I7 的標頭、I15 測試支援、I17 | Opus 5.5／high | 8～12 h |
+| 第 4 步 | 回滾：檢查（R-7 Derived、跨 schedule 訊息、巢狀 schedule 的所屬）；官方策略（記錄、判斷、還原、重跑、修正、輸入歷史；R-1、R-2、R-5）、P2P 佔位；新頁 `target/v2/rollback.zh-Hant.md`；預算量測（5.4，數字定了才量） | Opus 5.5／high | 22～34 h |
+| 第 5 步 | 權威（權威份第 10 節步 3、4）：登記入口、代為登記、策略、佔位、tick 檢查；一致性指紋、digest、G-5 匯出與 `zone_scan` 的接手（J-17 的搬移）、5.11 交叉檢查；新頁 `target/v2/authority.zh-Hant.md` | Opus 5.5／high | 12～20 h |
+| 第 6 步 | 拿掉有新家的規則（A4～A7）、`Role`、C 指紋、golden 第二次重產；突變的處置（9.4） | Opus 5.5／high | 8～12 h |
+| 第 7 步 | scenario 第 3 段；Kernel 的 DI、限制頁、world-time、編排層、索引；dev_log | Opus 5.5／high | 5～8 h |
+| 第 8 步 | 完整突變、三份新清單的敵對式檢查、§14.4 檢證、審查 | 見下 | 8～12 h |
 
-合計 87～132 h；並行時關鍵路徑約 61～94 h（第 1～3 步 → 卡 R → 第 7、8 步）。步的編號跳過 4、5：子卡的兩步（R、A）佔了那個位置。超過估計 1.5 倍或單一問題累計超過 2 小時就停下回報。
+合計 87～132 h（拆卡時的同一組估計，不拆後串著做，關鍵路徑＝合計；少了交接與併分支的費用沒有另外扣）。超過估計 1.5 倍或單一問題累計超過 2 小時就停下回報。
 
 | 角色 | 模型／檔位 | 理由 |
 |---|---|---|
-| 實作者（三張卡） | Opus 5.5／high | 上段，不用小模型 |
-| 審查者（各卡完成時、整條線） | Fable 5.2／high | 和實作者不同模型 |
+| 實作者 | Opus 5.5／high | 上段，不用小模型 |
+| 審查者（第 4、5 步完成時、整條線） | Fable 5.2／high | 和實作者不同模型 |
 | 新突變清單的敵對式檢查（Kernel 新增、權威、回滾） | Fable 5.2／high | §14.2；和定清單的人不同模型 |
 | §14.4 檢證者（A1～A11） | Fable 5.2／high | 第 2、3 批同一個指定 |
 | 本宣告的敵對式檢查 | Fable 5.2／high | 任務卡的指定 |
@@ -614,7 +609,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 | digest 相加、不含 id | lightyear 的 XOR、不含 id | XOR；含 id（修訂 0） | 相同的兩項不抵銷；id 的對映屬網路 Module | PvP digest |
 | Module 與作者的接法（第 12 節第 3 件） | lightyear App Resource／Bevy `get_added_plugins` | 使用者定 (a) 編排層的共用槽（lightyear App Resource 的形），2026-11-20 | (b) 查依賴的 Module 物件、(c) 產品經選項包接線、(d) static 表 | PvP（權威＋回滾）、單機時間倒流 |
 | 兩個 Module `default=yes` | Bevy `DefaultPlugins`、Unity 內建模組（主會話的判斷） | `default=no`（修訂 0） | 照主會話已定的預設；不選策略就沒有作用 | 單機（不選策略） |
-| 沒有新家的規則先拿 | 統合第 8 節的原則 | 全部壓到最後（修訂 0） | 子卡不在舊規則上開發 | — |
+| 沒有新家的規則先拿 | 統合第 8 節的原則 | 全部壓到最後（修訂 0） | 兩個 Module 不在舊規則上開發 | — |
 
 既有的 Test 與守衛能不能不改，**沒有**當作任何一項的決定理由。
 
@@ -624,8 +619,8 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 - 這是宣告，沒有試做；第 14 節的時間是讀程式量估的。
 - 行號照三份偵察（59fd4da9），卡片與檢查者抽查了一部分（檢查報告末節）；`recon-b` 2.1「第 1 批已補上」只對了條文，逐欄對程式在第 2 步開頭做；Unity 讀的是非官方鏡像；bevy_ggrs、GGPO 本機沒有。
-- 規模假設（5.4）沒有出處；**不從 master 補**（第 12 節「不參考 master 的算法與數據」）。
-- 不參考 master 的算法、常數與量測數據；2026-09-25 的 dev_log（10/10 事故前）不准引用（使用者 2026-11-20）。實作與子卡也照這條：參考只用 GYO2 的新架構與開源參考。
+- 規模與預算（5.4、判定 5）未定：等預算基準研究卡（master 11-01 之後的數據只當基準）與使用者定；不拿 master 的算法、常數當設計的根據。
+- 不參考 master 的算法、常數與量測數據；2026-09-25 的 dev_log（10/10 事故前）不准引用（使用者 2026-11-20）。實作也照這條：參考只用 GYO2 的新架構與開源參考。
 - 網路 Module 的設計不在本批：digest 何時比、含不含實體 id、伺服器值怎麼搬、對時、tick 跳變的通知（`LocalTimelineShift` 那一種）。本批只做到回滾 Module 退 tick 時用 `RewindFixedSteps`；**tick 跳變的推送式事件不做**：以 tick 為索引的歷史只有回滾 Module 自己的，退回時它自己處理；別的讀者出現時（網路 Module 的輸入緩衝）再加（AGENTS §2）。
 - digest 不含實體 id：兩個實體交換判定值時看不出來（4.4）。
 - 具名集合的原始位元組介面留著（7.1），沒有用它做比較的 Feature。
