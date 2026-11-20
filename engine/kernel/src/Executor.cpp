@@ -1,7 +1,6 @@
-// The Serial Executor (spec E.2, E.5; WorldExecutor.hpp). The only kernel file that logs:
-// its default handler writes a kernel error's whole chain to stderr once
-// (target/error-handling DI 2; tests/common/kernel/kernel_guard.py K6 exempts
-// files named Executor*).
+// The Serial Executor (spec E.2, E.5; WorldExecutor.hpp). It logs nothing: an Err is
+// returned once by the outermost Run or Trigger and its handler logs it
+// (target/error-handling DI 1, 2; error levels D1).
 
 #include "engine/kernel/WorldExecutor.hpp"
 
@@ -10,7 +9,6 @@
 #include "engine/base/Assert.hpp"
 
 #include <algorithm>
-#include <cstdio>
 #include <exception>
 #include <optional>
 #include <string>
@@ -33,16 +31,10 @@ std::string ObserverRecorderNames(std::vector<std::size_t> observers, const Deta
     return names;
 }
 
-void DefaultHandler(const KernelError& error) {
-    const std::string text = error.Text();
-    std::fprintf(stderr, "kernel error:\n%s", text.c_str());
-    std::fflush(stderr);
-}
-
 } // namespace
 
 WorldExecutor::WorldExecutor(const Registry& registry, std::string worldName, WorldOptions options)
-    : registry_(&registry), world_(registry, std::move(worldName), options), handler_(&DefaultHandler) {
+    : registry_(&registry), world_(registry, std::move(worldName), options) {
     Attach();
     world_.executor_ = this;
 }
@@ -93,7 +85,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, b
         if (!world_.leftError_) world_.leftError_ = error;
         return Engine::Base::Err(std::move(error));
     }
-    if (handler_) handler_(error);
+    if (!interruption_) interruption_ = error;
     return Engine::Base::Err(std::move(error));
 }
 

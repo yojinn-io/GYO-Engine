@@ -525,7 +525,7 @@ private:
     };
     std::vector<RunLevel> runStack_;
     // K0 (spec E.5): the first error of a nested level, kept for the outermost
-    // Run, which reports once; a later RunSchedule of the Interrupted World returns it.
+    // Run, which returns it once; a later RunSchedule of the Interrupted World returns it.
     std::optional<KernelError> leftError_;
     // One hook queue per schedule: a hook's records are applied at step 0 of the
     // next sync point of the Run that recorded them; those left at the last sync

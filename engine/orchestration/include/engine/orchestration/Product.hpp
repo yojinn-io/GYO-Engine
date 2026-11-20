@@ -111,8 +111,6 @@ public:
     // of that name, or its place is empty.
     [[nodiscard]] Kernel::WorldExecutor& World(std::string_view name);
     [[nodiscard]] bool HasWorld(std::string_view name) const noexcept;
-    // Sets the error handler of the World's executor, kept across replacements.
-    void SetErrorHandler(std::string_view world, std::function<void(const Kernel::KernelError&)> handler);
 
     // Replaces a healthy World (section 3.9): registers it again from the
     // description, carries the marked Resources over, runs the prepare functions
@@ -147,7 +145,6 @@ private:
         std::vector<std::string> frame;
         std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
-        std::function<void(const Kernel::KernelError&)> handler;
         // The last schedule the Product ran with success on this World (WorldFailure::lastSchedule).
         std::string lastSchedule;
         std::uint32_t nextInsertSeq = 0;

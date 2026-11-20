@@ -142,13 +142,11 @@ TEST_CASE("O-1: a failing game initialization schedule: RunFrame returns it, no 
     };
     auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
-    int handled = 0;
-    (*built)->SetErrorHandler("Main", [&](const K::KernelError&) { ++handled; });
     auto ran = (*built)->RunFrame();
     REQUIRE_FALSE(static_cast<bool>(ran));
     CHECK_MESSAGE(ran.error().code == O::OrchestrationErrorCode::ScheduleFailed, "[or-gi-error] " << ran.error().message);
     CHECK_MESSAGE(!Logged("t"), "[or-gi-error-no-frame] " << Joined());
-    CHECK_MESSAGE(handled == 1, "[or-gi-error-once] the handler ran " << handled << " times");
+    CHECK_MESSAGE(ran.error().kernel.size() == 1, "[or-gi-error-once] the kernel error came back " << ran.error().kernel.size() << " times");
     auto again = (*built)->RunFrame();
     REQUIRE_FALSE(static_cast<bool>(again));
     CHECK_MESSAGE(again.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-interrupted] " << again.error().message);

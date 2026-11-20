@@ -85,7 +85,10 @@ inline SystemOptions C(std::string name, std::string stage, std::vector<std::str
     return Sys(std::move(name), Zone::C, {At("Tick", std::move(stage), std::move(before), std::move(after))});
 }
 
-// A finished Registry, a WorldExecutor over it and the errors its handler recorded.
+// A finished Registry, a WorldExecutor over it and the errors its outermost Runs
+// and Triggers returned. The kernel has no error handler (error levels D1): an Err
+// is returned once by the outermost call, so recorded holds one entry per Err
+// returned through Run and Trigger here.
 struct Rig {
     Built built;
     std::unique_ptr<WorldExecutor> executor;
@@ -103,7 +106,16 @@ struct Rig {
                 world().SetResource(TickCount{ticks});
             }
         }
-        return executor->Run(schedule);
+        auto ran = executor->Run(schedule);
+        if (!ran) recorded.push_back(ran.error());
+        return ran;
+    }
+    // A Trigger from outside the World, recorded like Run.
+    template <class E>
+    Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
+        auto triggered = executor->Trigger(std::move(event), target);
+        if (!triggered) recorded.push_back(triggered.error());
+        return triggered;
     }
 };
 
@@ -117,8 +129,6 @@ inline std::unique_ptr<Rig> MakeRig(std::function<void(Registrar&)> build, bool 
         return rig;
     }
     rig->executor = std::make_unique<WorldExecutor>(*rig->built.registry, std::move(worldName));
-    Rig* raw = rig.get();
-    rig->executor->SetErrorHandler([raw](const KernelError& error) { raw->recorded.push_back(error); });
     rig->world().SetResource(KernelSettings{verification, false});
     return rig;
 }

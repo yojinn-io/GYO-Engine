@@ -71,8 +71,9 @@ enum class KernelErrorCode : std::uint8_t {
     NestedRunAborted,
     // DI-KS 26 (v8-arch-gyo2-dynamic-insert-per-world): Registry::Register while a
     // live World made from the Registry declares no dynamic insert
-    // (WorldOptions::dynamicInsert = false). Nothing was registered; the caller
-    // logs the warning (target/error-handling DI 2: the kernel logs in one place).
+    // (WorldOptions::dynamicInsert = false). Nothing was registered; the error goes
+    // back to the caller, whoever handles it decides whether to log it (CCR-3;
+    // error levels D2). The kernel logs nothing.
     DynamicInsertRefused,
     // The codes below come with ExclusiveWorld's immediate structural changes
     // (declaration v8-arch-gyo2-kernel-subtract-structure 3.5; DI-KS 18, 21).
@@ -126,7 +127,7 @@ struct KernelError {
     [[nodiscard]] std::vector<const KernelError*> Leaves() const;
     // Whether any leaf has this code.
     [[nodiscard]] bool Has(KernelErrorCode wanted) const;
-    // The whole chain as text, one line per layer and sibling (what the Executor's handler logs).
+    // The whole chain as text, one line per layer and sibling (what whoever handles it logs).
     [[nodiscard]] std::string Text() const;
 };
 

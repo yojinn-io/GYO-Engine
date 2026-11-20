@@ -323,7 +323,6 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
 std::unique_ptr<Kernel::WorldExecutor> Product::MakeExecutor(WorldSlot& slot, const Kernel::Registry& registry) {
     auto executor = std::make_unique<Kernel::WorldExecutor>(registry, slot.description.name,
                                                             Kernel::WorldOptions{slot.description.dynamicInsert});
-    if (slot.handler) executor->SetErrorHandler(slot.handler);
     return executor;
 }
 
@@ -511,13 +510,6 @@ Kernel::WorldExecutor& Product::World(std::string_view name) {
 bool Product::HasWorld(std::string_view name) const noexcept {
     const WorldSlot* slot = Find(name);
     return slot != nullptr && slot->executor != nullptr;
-}
-
-void Product::SetErrorHandler(std::string_view world, std::function<void(const Kernel::KernelError&)> handler) {
-    WorldSlot* slot = Find(world);
-    GYO_ASSERT(slot != nullptr);
-    slot->handler = std::move(handler);
-    if (slot->executor) slot->executor->SetErrorHandler(slot->handler);
 }
 
 ::Engine::Base::Result<void, OrchestrationError> Product::ReplaceWorld(std::string_view name, ReplaceRequest request) {

@@ -739,7 +739,6 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
         GYO_CHECK_ASSERTS(rig->world().Insert(2, Tag{2}));  // an Interrupted World takes no Host write
         // Restore arrives with rollback-extract; rebuilding the World (a new WorldExecutor) is the other way back.
         WorldExecutor rebuilt(*rig->built.registry, "rebuilt");
-        rebuilt.SetErrorHandler([](const KernelError&) {});
         KERNEL_REQUIRE_RUN_OK(rebuilt.Run("Tick"));
     }
 }

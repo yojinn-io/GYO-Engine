@@ -148,10 +148,6 @@ void FirstRound(Registry& registry, void (*build)(Registrar&) = &Base) {
     REQUIRE_MESSAGE(Done(built), Describe(built));
 }
 
-void Quiet(WorldExecutor& executor, std::vector<KernelError>& recorded) {
-    executor.SetErrorHandler([&recorded](const KernelError& error) { recorded.push_back(error); });
-}
-
 // The expression of the GYO_ASSERT that step fails, or empty. Lets a test
 // report an assertion with its own label (outside GYO_CHECK_ASSERTS the
 // default handler would abort the run).
@@ -408,8 +404,6 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
         r.NamedSet<ReplicatedSet>("Replicated");
     });
     WorldExecutor executor(registry, "rounds");
-    std::vector<KernelError> recorded;
-    Quiet(executor, recorded);
     // kind: what the R-E7 message names first (declaration 3.2 rule 6); each
     // SUBCASE's failure text carries it, so a mutant's expected text is its kind.
     const auto refused = [&](const std::string& kind, auto build) {
@@ -549,8 +543,6 @@ TEST_CASE("DI-KS 26: an Interrupted World does not count as running; one that de
             r.AddSystem<&Fails>(B("Fails", "C"));
         });
         WorldExecutor executor(registry, "interrupted", WorldOptions{false});
-        std::vector<KernelError> recorded;
-        Quiet(executor, recorded);
         executor.GetWorld().SetResource(Flag{0});
         REQUIRE_FALSE(Done(executor.Run("Tick")));
         REQUIRE(executor.GetWorld().State() == WorldState::Interrupted);
@@ -569,8 +561,6 @@ TEST_CASE("DI-KS 26: while a World made from the Registry runs, nothing may regi
     });
     SUBCASE("Register from its own World's System") {
         WorldExecutor registersOwn(registry, "own");
-        std::vector<KernelError> recorded;
-        Quiet(registersOwn, recorded);
         registersOwn.GetWorld().SetResource(Flag{0});
         KeptRegistry() = &registry;
         GYO_CHECK_ASSERTS(registersOwn.Run("Tick"));
@@ -717,8 +707,6 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     Registry registry;
     FirstRound(registry);
     WorldExecutor executor(registry, "attach");
-    std::vector<KernelError> recorded;
-    Quiet(executor, recorded);
     World& world = executor.GetWorld();
     world.SetResource(KernelSettings{true, false});
     world.Insert(1, Tag{1});

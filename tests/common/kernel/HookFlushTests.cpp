@@ -419,8 +419,6 @@ TEST_CASE("J-54: a schedule's own limit overrides the product's default, larger 
 TEST_CASE("J-54: the product's default is per World") {
     auto two = MakeFlushRig(ChainSystems, {}, false, 2U);
     WorldExecutor other(*two->built.registry, "other-world");
-    std::vector<KernelError> otherRecorded;
-    other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});
     other.GetWorld().SetResource(Depth{0});
     other.GetWorld().SetResource(TickCount{1});
@@ -440,8 +438,6 @@ TEST_CASE("J-54: the product's default stays per World when another World runs i
         },
         {}, false, 2U);
     WorldExecutor other(*two->built.registry, "other-world");
-    std::vector<KernelError> otherRecorded;
-    other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});  // the default limit, 8
     other.GetWorld().SetResource(Depth{0});
     other.GetWorld().SetResource(TickCount{1});
