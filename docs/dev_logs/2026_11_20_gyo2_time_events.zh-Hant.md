@@ -61,7 +61,7 @@
 - 退役 14：G1～G6 的緩的面裡的突變（`rs-j37-event-domain-unchecked`、`rs-j37-nonclock-allowed`、`rs-j24-de12-removed`、`or-gi-domain-unchecked`、`rs-adv-domain-tick-is-zone-b`、`rs-j12-tick-one-mount`、`we-adv-tickstamp-never-recorded`、`ns-nested-tick-not-advanced`、`or-failure-no-domain`），以及修剪步與「依 tick 讀」消失的 5 個（`rs-adv-event-trim-unknown`、`rs-b3-trim-not-pinned`、`hf-rounds-follow-trim`、`we-j36-no-same-tick`、`we-j36-swap-compare`）。批內加了又退的 2 個：`msg-end-trim-dropped`（併進 `we-adv-event-trim-never`）、`wt-not-driven-dropped`（等於兩個既有突變之和）。
 - 每個新突變的 `what` 寫了「它抓、別的抓不到的錯」：第 7 步新增的 77 個都有；第 2～6 步的 obs- 31、`world_time` 第 6 步 C 的 7 個也有（`step5/obs-mutants-reasons.txt`）。第 2～6 步其餘的沒有補。
 - scenario 第 2 段：候選都和既有單元突變是同一個改動、只是目標執行檔不同（`cases` 不能合併），照 README 第 1 條不新立；只加 `sc-s2-real-time-carried`（沒有既有突變改時間 Module 的帶過去）。
-- 完整跑（判定 3）：**進行中**，在 44a54a43 的副本上跑（Kernel＋編排層＋`world_time`）。結果出來後補在這裡。52e46f54 那一次跑到 Kernel 469/701、全殺時停掉（第 7 步改了清單，結果不再代表最終狀態；log 保留在 `step7/full-52e46f54-partial/`）。
+- 完整跑（判定 3）：在 44a54a43 的副本上跑（2026-11-20 06:02～09:25 JST），**1056/1056 全殺**，沒有存活、wrong_failure、逾時：Kernel 737/737、編排層 227/227、`world_time` 92/92。52e46f54 那一次跑到 Kernel 469/701、全殺時停掉（第 7 步改了清單，結果不再代表最終狀態；log 保留在 `step7/full-52e46f54-partial/`）。
 
 ## 範圍的限界
 
