@@ -8,7 +8,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <utility>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -170,4 +173,27 @@ TEST_CASE("console: the text form goes to its stream: [category] level: text key
     std::fclose(stream);
     CHECK(std::string_view(buffer, size) ==
           "[net] warning: sent world=Sim bytes=512 peer=\"client 3\" rate=Infinity\n[world] fatal: broken\n");
+}
+
+TEST_CASE("format: every level has its agreed name in the envelope") {
+    const std::pair<Level, std::string_view> names[] = {{Level::Trace, "trace"}, {Level::Debug, "debug"}, {Level::Info, "info"},
+                                                        {Level::Warning, "warning"}, {Level::Error, "error"}, {Level::Fatal, "fatal"}};
+    for (const auto& [level, name] : names) {
+        const Record record{.level = level, .category = "c", .wall = kWall};
+        CHECK_MESSAGE(Line(record).find("\"level\":\"" + std::string(name) + "\"") != std::string::npos, "LG-5: level " << name);
+    }
+}
+
+TEST_CASE("console: a write that fails is counted in Failed") {
+    const auto path = std::filesystem::temp_directory_path() / "gyo-console-readonly.txt";
+    { std::ofstream(path) << "x"; }
+    std::FILE* stream = std::fopen(path.string().c_str(), "r");
+    REQUIRE(stream != nullptr);
+    {
+        Logging::ConsoleSink console(stream);
+        console.Write(Record{.level = Level::Warning, .category = "net", .text = "cannot be written"});
+        CHECK_MESSAGE(console.Failed() == 1, "LG-11: a failed write is counted");
+    }
+    std::fclose(stream);
+    std::filesystem::remove(path);
 }

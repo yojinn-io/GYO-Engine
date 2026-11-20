@@ -12,6 +12,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <exception>
 #include <vector>
 
 #include "AssertTestSupport.hpp"
@@ -139,6 +140,13 @@ TEST_CASE("logger: SetLevel changes a rule from the next record on") {
     REQUIRE(records.size() == 2);
     CHECK(records[0].text == "after");
     CHECK(records[1].text == "default lowered");
+}
+
+TEST_CASE("logger: SetLevel raising a rule refuses from the next record on") {
+    Installed logger({.minimum = Level::Debug});
+    Logging::SetLevel("memory", "", Level::Error);
+    Logging::Write(Level::Debug, "net", "raised away");
+    CHECK_MESSAGE(logger.memory->Records().empty(), "LG-7: the raised level is stored and refuses the next record");
 }
 
 TEST_CASE("logger: SetLevel with an unknown sink or prefix, or with no Logger, is a Programmer Error") {
@@ -349,4 +357,68 @@ TEST_CASE("logger: a record with a repeated key reaches the sinks that would hav
     REQUIRE_MESSAGE(records.size() == 1, "m1: the sink that takes relay. got the replacement, not nothing");
     CHECK(records[0].level == Level::Error);
     CHECK(records[0].category == "logging");
+}
+
+TEST_CASE("logger: a later sink with a lower minimum still gets what the first sink refuses (the floor covers all sinks)") {
+    auto strict = std::make_shared<Logging::MemorySink>();
+    auto loose = std::make_shared<Logging::MemorySink>();
+    Logging::LoggerOptions options;
+    options.sinks.push_back({.name = "strict", .sink = strict, .filter = {.minimum = Level::Error}});
+    options.sinks.push_back({.name = "loose", .sink = loose, .filter = {.minimum = Level::Debug}});
+    options.takeAssertions = false;
+    options.takeTerminate = false;
+    auto handle = Logging::Install(std::move(options));
+    REQUIRE(handle);
+    Logging::Write(Level::Debug, "net", "fine detail");
+    CHECK(strict->Records().empty());
+    CHECK_MESSAGE(loose->Records().size() == 1, "LG-7: the fast refusal looks at every sink's minimum");
+}
+
+TEST_CASE("logger: the Error record that replaces a record with a repeated key keeps its World") {
+    auto memory = std::make_shared<Logging::MemorySink>();
+    Logging::LoggerOptions options;
+    options.sinks.push_back({.name = "memory", .sink = memory, .filter = {}});
+    options.takeAssertions = false;
+    options.takeTerminate = false;
+    auto handle = Logging::Install(std::move(options));
+    REQUIRE(handle);
+    const Logging::Field fields[] = {{"i", 1}, {"i", 2}};
+    Logging::Write(Logging::Entry{.level = Level::Info, .category = "relay", .text = "x", .fields = fields, .world = "Match"});
+    const auto records = memory->Records();
+    REQUIRE(records.size() == 1);
+    CHECK(records[0].category == "logging");
+    CHECK_MESSAGE(records[0].world == "Match", "LG-5: the replacement keeps the World");
+}
+
+TEST_CASE("logger: uninstalling puts the handlers back before closing the sinks, and closes them in the order given") {
+    const std::terminate_handler before = std::get_terminate();
+    std::vector<std::string> order;
+    struct ClosingSink final : Logging::Sink {
+        std::vector<std::string>* order = nullptr;
+        std::string name;
+        std::terminate_handler before = nullptr;
+        bool handlerBack = false;
+        void Write(const Logging::Record&) noexcept override {}
+        void Close() noexcept override {
+            order->push_back(name);
+            handlerBack = std::get_terminate() == before;
+        }
+    };
+    auto first = std::make_shared<ClosingSink>();
+    auto second = std::make_shared<ClosingSink>();
+    first->order = second->order = &order;
+    first->name = "first";
+    second->name = "second";
+    first->before = second->before = before;
+    {
+        Logging::LoggerOptions options;
+        options.sinks.push_back({.name = "first", .sink = first, .filter = {}});
+        options.sinks.push_back({.name = "second", .sink = second, .filter = {}});
+        options.takeAssertions = false;
+        options.takeTerminate = true;
+        auto handle = Logging::Install(std::move(options));
+        REQUIRE(handle);
+    }
+    CHECK_MESSAGE((order == std::vector<std::string>{"first", "second"}), "LG-8: the sinks close in the order given");
+    CHECK_MESSAGE(first->handlerBack, "LG-8: the handlers are put back before the sinks are closed");
 }

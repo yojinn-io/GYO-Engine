@@ -156,14 +156,29 @@ World 外的程式                                          ├──→ Logger 
 
 ## 5. 設計（Contract）
 
+**〔修訂 3〕本節和實作不同的地方**（Fable 5.2 審查 2026-11-21 指出；本節下面的文字保留動工前核准時的樣子，以這張表與 [logging.zh-Hant.md](logging.zh-Hant.md) 為準；合併前核准頁再列一次）：
+
+| 節 | 宣告寫的 | 實作 | 理由 |
+|---|---|---|---|
+| 5.2 | `Record` 的 `kind`（`log`、`span`） | 沒有 `kind` 欄位；封套的 `kind` 紀錄固定是 `log`、結尾行是 `end` | span 歸 trace Module（修訂 3） |
+| 5.2 | 「`Install` 自己起的寫者執行緒在處理器裝好之後才起」 | 每個檔案輸出端在 `Open` 時起寫者，全部開好之後才接手處理器 | 某個輸出端開不了時，只要關掉已開的、不必還原處理器；`SetAssertionHandler` 是原子交換（`Assert.hpp:81`），先後不影響正確性 |
+| 5.2 | 沒裝 `Logger` 時「⑤ 只寫主控台」 | ⑤ 拿掉；`WriteFatalRecord` 沒裝時只寫主控台 | 修訂 3 |
+| 5.3 | 一個 `Res<LogWorldLabel>`，第一次 `Forward` 時登記 | 每個描述器一個 `LogWorldLabel<D>`；描述器另要 `name`（System 名 `Log`＋`name`） | Kernel 沒有「登記了沒」的查詢，第二次登記是 R-E2；同一個描述器 `Forward` 兩次是啟動錯誤（卡片照 L17 判，第 4 步） |
+| 5.4 | 「先 `WriteFailure`，再取診斷」 | 沒有先後的規定；取診斷紀錄失敗時，World 壞掉那一行照寫 | 使用者 2026-11-20（第 18 節） |
+| 5.7 | `Sink::Accepts`、`WriteFatal(json, text)`、`Flush(timeout)` | 篩選在 `Logger`（每個輸出端的 `SinkFilter`），`Sink` 沒有 `Accepts`；`WriteFatal(record, json, text)`；`Flush(deadline)` | 篩選要能在執行中改（`SetLevel`）而且被篩掉的 ④ 不配置（LG-7），放在 `Logger` 的一處；期限用時間點，好讓全部輸出端共用一個（LG-2） |
+| 5.9 | 紀錄帶 `product`、`sync_epoch` | 沒有 `product`；`sync_epoch` 只在 `WorldFailure` 的文字裡 | `product` 鍵拿掉（第 18 節） |
+| 5.12 | `kind=span` 的 `begin_ns`、`duration_ns`；替換的那一筆「同一個 `kind`」 | 沒有這兩個鍵；替換的那一筆帶同一個 `world` | span 歸 trace Module |
+| LG-6 | 寫失敗後取走的行 | 仍算 `written`，失敗由 `Good()` 表示 | 件數守恆（判定 3）；照 master TraceSink |
+
+
 ### 5.1 位置與名字（卡片照 L17 判：照 `time`／`world_time` 的先例與 N11～N17、N20）
 
 - **兩個 Module**，照 `gyo2` 已有的拆法（`engine/config/modules.csv`：`time`＝不進 World 的函式庫、`world_time`＝World 的部分）：
 
 | Module | 目錄、namespace、target | 內容 | 依賴（公開；私有） |
 |---|---|---|---|
-| `logging` | `engine/logging/`、`GYO::Engine::Logging`、`gyo_logging`／`GYO::Logging` | `Record`、`Level`、`Fields`、`Logger`、`Sink` 與三個內建、JSON lines 與文字格式、`Write`、`Span`、`WriteFatalRecord`（致命時寫一行的底層）、斷言與 `std::terminate` 的處理器 | `GYO::Base`；私有 `GYO::Json`、`GYO::Os`、`GYO::Threads`、`GYO::Time` |
-| `world_logging` | `engine/world_logging/`、`GYO::Engine::WorldLogging`、`gyo_world_logging`／`GYO::WorldLogging` | `Forward`、`LogWorldLabel`、`TakeKernelDiagnostics`、`WriteFailure`、`WithFailureLog` | `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration`；私有無 |
+| `logging` | `engine/logging/`、`GYO::Engine::Logging`、`gyo_logging`／`GYO::Logging` | `Record`、`Level`、`Fields`、`Logger`、`Sink` 與三個內建、JSON lines 與文字格式、`Write`、`WriteFatalRecord`（致命時寫一行的底層；〔修訂 3〕`Span` 拿出，歸 trace Module）、斷言與 `std::terminate` 的處理器 | `GYO::Base`；私有 `GYO::Json`、`GYO::Os`、`GYO::Threads`、`GYO::Time` |
+| `world_logging` | `engine/world_logging/`、`GYO::Engine::WorldLogging`、`gyo_world_logging`／`GYO::WorldLogging` | `Forward`、`LogWorldLabel<D>`、`TakeKernelDiagnostics`（〔修訂 3〕`WriteFailure`、`WithFailureLog` 拿掉） | `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration`；私有無 |
 
 - 理由：致命時寫一行、輸出端、格式都不需要 Kernel；不用 World 的程式（工具、之後的伺服器程序）只連 `logging`。名字用 `Logging` 不用 `Log`：`Engine::Base::Log` 已是 Base 的函式名。兩個都 `library_only=yes`、`default=no`、不做登記單位（`Logger` 一個行程一個、由 `main` 裝；`Forward` 是接線的人在自己的 `build` 裡呼叫）。之後要「預設接線」時才可能變成登記單位（RC-L2）。
 - 沒有外部組件，所以本批沒有 `src/adapters/`；之後若接外部日誌庫，照 `-json-adapters-dir`。

@@ -37,6 +37,16 @@ foreach(mode IN ITEMS std other none)
     set_tests_properties(logging.terminate.${mode} PROPERTIES LABELS "cpu" TIMEOUT 30)
 endforeach()
 
+# Design Invariants LG-2 and LG-8 on standard error: what the fatal path and the no-Logger path write there.
+add_executable(gyo_logging_console_probe ConsoleProbe.cpp)
+target_link_libraries(gyo_logging_console_probe PRIVATE GYO::Logging)
+foreach(mode IN ITEMS fatal nologger twice)
+    add_test(NAME logging.console_probe.${mode}
+        COMMAND ${CMAKE_COMMAND} -DMODE=${mode} -P ${CMAKE_CURRENT_SOURCE_DIR}/ConsoleProbe.cmake
+            -- $<TARGET_FILE:gyo_logging_console_probe>)
+    set_tests_properties(logging.console_probe.${mode} PROPERTIES LABELS "cpu" TIMEOUT 30)
+endforeach()
+
 # Design Invariant LG-7 replaces the global operator new for its executable, so it has one of its own.
 add_executable(gyo_logging_allocation_tests TestMain.cpp WriteAllocationTests.cpp)
 target_link_libraries(gyo_logging_allocation_tests PRIVATE GYO::Logging doctest::doctest)

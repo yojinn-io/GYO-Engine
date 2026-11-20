@@ -30,7 +30,7 @@
   },
   {
    "id": "lg-diag-no-world",
-   "what": "LG-1 ② / 5.9: a taken record does not carry the World's name",
+   "what": "LG-1 ② / 5.9: a taken RejectedSpawn record does not carry the World's name",
    "guards": [
     "logging LG-1",
     "logging-declaration 5.9"
@@ -385,7 +385,7 @@
    "replace": "            if (false) {",
    "target": "gyo_logging_tests",
    "cases": "file: a full queue*",
-   "expect": "CHECK\\(\\ counts\\.droppedFull\\ ==\\ 6\\ \\) is NOT correct!"
+   "expect": "CHECK\\( counts\\.written == 5 \\) is NOT correct!"
   },
   {
    "id": "lg-file-full-not-counted",
@@ -436,8 +436,8 @@
     "logging LG-6"
    ],
    "file": "engine/logging/src/JsonLinesFileSink.cpp",
-   "find": "            for (const std::string& line : batch) {\n                pending += line;",
-   "replace": "            for (auto it = batch.rbegin(); it != batch.rend(); ++it) {\n                const std::string& line = *it;\n                pending += line;",
+   "find": "            for (const std::string& line : batch) {\n                try {\n                    pending += line;",
+   "replace": "            for (auto it = batch.rbegin(); it != batch.rend(); ++it) {\n                const std::string& line = *it;\n                try {\n                    pending += line;",
    "target": "gyo_logging_tests",
    "cases": "file: a full queue*",
    "expect": "CHECK\\(\\ TextOf\\(lines\\[1\\]\\)\\ ==\\ \"1\"\\ \\) is NOT correct!"
@@ -558,8 +558,8 @@
    "find": "                entry.levels[i].store(static_cast<std::uint8_t>(minimum), std::memory_order_relaxed);\n                state->RecomputeFloor();",
    "replace": "                state->RecomputeFloor();",
    "target": "gyo_logging_tests",
-   "cases": "logger: SetLevel changes*",
-   "expect": "REQUIRE\\(\\ records\\.size\\(\\)\\ ==\\ 2\\ \\) is NOT correct!"
+   "cases": "logger: SetLevel raising a rule*",
+   "expect": "LG-7: the raised level is stored"
   },
   {
    "id": "lg-setlevel-floor-stale",
@@ -805,7 +805,7 @@
     "--",
     "{exe:gyo_logging_terminate_probe}"
    ],
-   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(std\\)"
+   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(std\\) fatal=0"
   },
   {
    "id": "lg-terminate-category",
@@ -826,7 +826,7 @@
     "--",
     "{exe:gyo_logging_terminate_probe}"
    ],
-   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(std\\)"
+   "expect": "GYO_LOGGING_TERMINATE_CATEGORY: probe \\(std\\)"
   },
   {
    "id": "lg-terminate-no-what",
@@ -847,7 +847,7 @@
     "--",
     "{exe:gyo_logging_terminate_probe}"
    ],
-   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(std\\)"
+   "expect": "GYO_LOGGING_TERMINATE_TEXT: probe \\(std\\)"
   },
   {
    "id": "lg-terminate-other-as-std",
@@ -868,7 +868,7 @@
     "--",
     "{exe:gyo_logging_terminate_probe}"
    ],
-   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(other\\)"
+   "expect": "GYO_LOGGING_TERMINATE_TEXT: probe \\(other\\)"
   },
   {
    "id": "lg-terminate-none-as-other",
@@ -889,7 +889,7 @@
     "--",
     "{exe:gyo_logging_terminate_probe}"
    ],
-   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(none\\)"
+   "expect": "GYO_LOGGING_TERMINATE_TEXT: probe \\(none\\)"
   },
   {
    "id": "lg-setlevel-unlocked",
@@ -945,6 +945,329 @@
    "target": "gyo_logging_allocation_tests",
    "cases": "alloc: the file sink's writer thread*",
    "expect": "alloc: the file sink's writer thread out of memory[\\s\\S]*test case CRASHED"
+  },
+  {
+   "id": "lg-fatal-flush-first",
+   "what": "LG-2 order: the sinks' fatal outputs are written only after the flush waited for the writers (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "    // 3. Every sink that takes the category: its fatal output, at once.\n",
+   "replace": "    for (const Detail::SinkEntry& entry : state->sinks) {\n        static_cast<void>(entry.sink->Flush(std::chrono::steady_clock::now() + state->fatalFlushTimeout));\n    }\n    // 3. Every sink that takes the category: its fatal output, at once.\n",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: every fatal output is written before*",
+   "expect": "LG-2 order: the fatal outputs first"
+  },
+  {
+   "id": "lg-fatal-deadline-per-sink",
+   "what": "LG-2 step 4: every sink gets a deadline of its own instead of one for all (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "        if (!entry.sink->Flush(deadline)) all = false;\n    }\n    report.flushed = all;",
+   "replace": "        static_cast<void>(deadline);\n        if (!entry.sink->Flush(std::chrono::steady_clock::now() + state->fatalFlushTimeout)) all = false;\n    }\n    report.flushed = all;",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: every fatal output is written before*",
+   "expect": "LG-2 step 4: one deadline for all sinks"
+  },
+  {
+   "id": "lg-fatal-flush-only-taking",
+   "what": "LG-2 step 4: only the sinks that take the category are flushed, not all (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "        if (!entry.sink->Flush(deadline)) all = false;\n    }\n    report.flushed = all;",
+   "replace": "        if (!entry.TakesCategory(record.category)) continue;\n        if (!entry.sink->Flush(deadline)) all = false;\n    }\n    report.flushed = all;",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a sink that does not take the category is still flushed*",
+   "expect": "LG-2 step 4: every sink is flushed"
+  },
+  {
+   "id": "lg-fatal-level-consulted",
+   "what": "LG-2 step 3: the sink's minimum level is consulted (a record below it does not reach the fatal output) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "        if (!entry.TakesCategory(record.category)) continue;\n        const bool written",
+   "replace": "        if (!entry.Takes(record.level, record.category)) continue;\n        const bool written",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a sink that does not take the category is still flushed*",
+   "expect": "LG-2 step 3: the level is not consulted"
+  },
+  {
+   "id": "lg-fatal-lines-not-cleared",
+   "what": "LG-2: the reserved lines are not cleared: a second fatal record carries the first one's lines again (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "            text->clear();\n            json->clear();\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a second fatal record*",
+   "expect": "LG-2: the reserved lines are cleared"
+  },
+  {
+   "id": "lg-fatal-reentry-silent",
+   "what": "LG-2: a re-entered fatal path reports console but writes nothing to standard error (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "    const bool all = std::fwrite(buffer, 1, size, stderr) == size;",
+   "replace": "    const bool all = size > 0;",
+   "target": "gyo_logging_console_probe",
+   "expect": "GYO_LOGGING_CONSOLE_REENTERED",
+   "command": [
+    "{cmake}",
+    "-DMODE=fatal",
+    "-P",
+    "tests/common/logging/ConsoleProbe.cmake",
+    "--",
+    "{exe:gyo_logging_console_probe}"
+   ]
+  },
+  {
+   "id": "lg-fatal-console-silent",
+   "what": "LG-2 step 2: the fatal path reports console but writes nothing to standard error (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "    const bool written = std::fwrite(line.data(), 1, line.size(), stderr) == line.size();\n    return std::fflush(stderr) == 0 && written;\n}\n\n// A re-entered",
+   "replace": "    const bool written = !line.empty();\n    return std::fflush(stderr) == 0 && written;\n}\n\n// A re-entered",
+   "target": "gyo_logging_console_probe",
+   "expect": "GYO_LOGGING_CONSOLE_FATAL",
+   "command": [
+    "{cmake}",
+    "-DMODE=fatal",
+    "-P",
+    "tests/common/logging/ConsoleProbe.cmake",
+    "--",
+    "{exe:gyo_logging_console_probe}"
+   ]
+  },
+  {
+   "id": "lg-console-fatal-twice",
+   "what": "LG-2: a ConsoleSink on standard error writes the fatal line again (twice on the console) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/ConsoleSink.cpp",
+   "find": "    if (stream_ == stderr) return true;\n",
+   "replace": "",
+   "target": "gyo_logging_console_probe",
+   "expect": "GYO_LOGGING_CONSOLE_TWICE",
+   "command": [
+    "{cmake}",
+    "-DMODE=twice",
+    "-P",
+    "tests/common/logging/ConsoleProbe.cmake",
+    "--",
+    "{exe:gyo_logging_console_probe}"
+   ]
+  },
+  {
+   "id": "lg-terminate-not-chained",
+   "what": "LG-2: std::terminate does not go on to the handler installed before (aborts by itself) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "    if (const std::terminate_handler previous = previousTerminate.load(std::memory_order_acquire)) previous();\n",
+   "replace": "",
+   "target": "gyo_logging_terminate_probe",
+   "command": [
+    "{cmake}",
+    "-DMODE=std",
+    "-P",
+    "tests/common/logging/TerminateProbe.cmake",
+    "--",
+    "{exe:gyo_logging_terminate_probe}"
+   ],
+   "expect": "GYO_LOGGING_TERMINATE_CHAINED: probe \\(std\\)"
+  },
+  {
+   "id": "lg-close-sinks-before-handlers",
+   "what": "LG-8 order: the sinks are closed before the handlers are put back and the Logger is uninstalled (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-8"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "    if (state->tookBaseLog) ::Engine::Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) ::Engine::Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
+   "replace": "    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n    if (state->tookBaseLog) ::Engine::Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) ::Engine::Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n",
+   "target": "gyo_logging_tests",
+   "cases": "logger: uninstalling puts the handlers back*",
+   "expect": "LG-8: the handlers are put back before the sinks are closed"
+  },
+  {
+   "id": "lg-close-sinks-reversed",
+   "what": "LG-8 order: the sinks are closed last to first instead of in the order given (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-8"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
+   "replace": "    Detail::current.store(nullptr, std::memory_order_release);\n    for (auto it = state->sinks.rbegin(); it != state->sinks.rend(); ++it) it->sink->Close();\n",
+   "target": "gyo_logging_tests",
+   "cases": "logger: uninstalling puts the handlers back*",
+   "expect": "LG-8: the sinks close in the order given"
+  },
+  {
+   "id": "lg-no-logger-silent",
+   "what": "LG-8: with no Logger installed Write prints nothing to standard error (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-8"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "        Detail::WriteWithoutLogger(Record{.level = entry.level,\n                                          .category = entry.category,\n                                          .text = entry.text,\n                                          .world = entry.world,\n                                          .worldInterrupted = entry.worldInterrupted,\n                                          .fields = entry.fields});\n        return;",
+   "replace": "        return;",
+   "target": "gyo_logging_console_probe",
+   "expect": "GYO_LOGGING_CONSOLE_NOLOGGER",
+   "command": [
+    "{cmake}",
+    "-DMODE=nologger",
+    "-P",
+    "tests/common/logging/ConsoleProbe.cmake",
+    "--",
+    "{exe:gyo_logging_console_probe}"
+   ]
+  },
+  {
+   "id": "lg-floor-first-sink-only",
+   "what": "LG-7: the fast refusal floor looks at the first sink only (a later sink with a lower minimum gets nothing) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-7"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "            if (level < lowest) lowest = level;\n        }\n    }",
+   "replace": "            if (level < lowest) lowest = level;\n        }\n        break;\n    }",
+   "target": "gyo_logging_tests",
+   "cases": "logger: a later sink with a lower minimum*",
+   "expect": "LG-7: the fast refusal looks at every sink"
+  },
+  {
+   "id": "lg-dupkey-world-lost",
+   "what": "LG-5: the Error record that replaces a record with one key twice loses the World (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-5"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "            error.fields = {};\n",
+   "replace": "            error.fields = {};\n            error.world = {};\n",
+   "target": "gyo_logging_tests",
+   "cases": "logger: the Error record that replaces a record with a repeated key keeps*",
+   "expect": "LG-5: the replacement keeps the World"
+  },
+  {
+   "id": "lg-file-failed-not-counted",
+   "what": "LG-6: lines the writer took after a failed write are not counted as written (conservation breaks) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-6",
+    "logging-declaration 判定 3"
+   ],
+   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "find": "                written += batch.size();",
+   "replace": "                if (!failed.load(std::memory_order_acquire)) written += batch.size();",
+   "target": "gyo_logging_tests",
+   "cases": "file: lines taken after a failed write*",
+   "expect": "LG-6: taken lines are counted written"
+  },
+  {
+   "id": "lg-file-fatal-failure-counted",
+   "what": "judgement 3: a fatal line the fatal output refused is counted in fatal_direct and reported written (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-6",
+    "logging-declaration 判定 3"
+   ],
+   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "find": "    if (!impl_->fatalOutput->Write(jsonLine)) return false;",
+   "replace": "    static_cast<void>(impl_->fatalOutput->Write(jsonLine));",
+   "target": "gyo_logging_tests",
+   "cases": "file: a fatal line the fatal output refuses*",
+   "expect": "judgement 3: fatal_direct counts lines handed on"
+  },
+  {
+   "id": "lg-file-write-per-line",
+   "what": "LG-6: every line is handed to the OS alone instead of once per batch or 64 KiB (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-6"
+   ],
+   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "find": "                if (pending.size() >= kWriteChunk) WritePending();",
+   "replace": "                WritePending();",
+   "target": "gyo_logging_tests",
+   "cases": "file: one batch is handed on in one write*",
+   "expect": "went in one write"
+  },
+  {
+   "id": "lg-file-no-chunk",
+   "what": "LG-6: a batch is handed to the OS in one write however large (no 64 KiB step) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-6"
+   ],
+   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "find": "                if (pending.size() >= kWriteChunk) WritePending();\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "file: one batch is handed on in one write*",
+   "expect": "a large batch goes in 64 KiB steps"
+  },
+  {
+   "id": "lg-json-level-names",
+   "what": "LG-5: the level string \"trace\" of the envelope changes (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-5"
+   ],
+   "file": "engine/logging/include/engine/logging/Level.hpp",
+   "find": "return \"trace\";",
+   "replace": "return \"TRACE\";",
+   "target": "gyo_logging_tests",
+   "cases": "format: every level has its agreed name*",
+   "expect": "LG-5: level trace"
+  },
+  {
+   "id": "lg-console-failure-not-counted",
+   "what": "LG-11: a ConsoleSink whose write failed does not count it in Failed() (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-11"
+   ],
+   "file": "engine/logging/src/ConsoleSink.cpp",
+   "find": "        if (!WriteLine(stream_, mutex, line)) failed_.fetch_add(1, std::memory_order_relaxed);",
+   "replace": "        static_cast<void>(WriteLine(stream_, mutex, line));",
+   "target": "gyo_logging_tests",
+   "cases": "console: a write that fails*",
+   "expect": "LG-11: a failed write is counted"
+  },
+  {
+   "id": "lg-fatal-reserve-removed",
+   "what": "LG-2: Install reserves no capacity for the fatal lines (the fatal path allocates) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "    state->fatalText.reserve(options.fatalLineCapacity);\n    state->fatalJson.reserve(options.fatalLineCapacity);\n",
+   "replace": "",
+   "target": "gyo_logging_allocation_tests",
+   "cases": "alloc: the fatal path formats*",
+   "expect": "ERROR: CHECK\\( allocations == before \\) is NOT correct!"
+  },
+  {
+   "id": "lg-alloc-refused-allocates",
+   "what": "LG-7: a refused record is composed (allocates) before it is refused (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-7"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);\n    if (taking == 0) return;",
+   "replace": "    const std::vector<Field> composed(entry.fields.begin(), entry.fields.end());\n    static_cast<void>(composed);\n    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);\n    if (taking == 0) return;",
+   "target": "gyo_logging_allocation_tests",
+   "cases": "alloc: a refused record*",
+   "expect": "ERROR: CHECK\\( allocations == before \\) is NOT correct!"
   }
  ]
 }

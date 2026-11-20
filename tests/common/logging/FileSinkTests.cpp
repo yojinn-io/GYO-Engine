@@ -272,3 +272,45 @@ TEST_CASE("file: a file that cannot be opened fails Install with OpenFailed and 
     auto again = Logging::Install({});
     CHECK(again);
 }
+
+TEST_CASE("file: lines taken after a failed write are still counted as written (judgement 3)") {
+    Injected file;
+    file.output->Fail();
+    for (int i = 0; i < 3; ++i) file.sink->Write(At(i, "fails"));
+    file.sink->Close();
+    const auto counts = file.sink->Counts();
+    CHECK_MESSAGE(counts.written == 3, "LG-6: taken lines are counted written, failed or not");
+    CHECK(counts.droppedFull == 0);
+    CHECK(counts.droppedClosed == 0);
+}
+
+TEST_CASE("file: a fatal line the fatal output refuses is reported false and not counted in fatal_direct") {
+    Injected file;
+    file.fatal->Fail();
+    CHECK_FALSE(file.sink->WriteFatal(Record{.level = Level::Fatal}, "{}\n", "x\n"));
+    file.sink->Close();
+    CHECK_MESSAGE(file.sink->Counts().fatalDirect == 0, "judgement 3: fatal_direct counts lines handed on");
+}
+
+TEST_CASE("file: one batch is handed on in one write, and a large one in 64 KiB steps (LG-6)") {
+    Injected file;
+    file.output->Hold();
+    file.sink->Write(At(0, "first"));
+    REQUIRE(file.output->WaitForWriteStarted(1, 5s));
+    for (int i = 1; i <= 50; ++i) file.sink->Write(At(i, "small"));
+    file.output->Release();
+    REQUIRE(file.sink->Flush(std::chrono::steady_clock::now() + 5s));
+    CHECK_MESSAGE(file.output->Writes() == 2, "LG-6: the 50 small lines queued meanwhile went in one write");
+    file.output->Hold();
+    file.sink->Write(At(100, "second"));
+    REQUIRE(file.output->WaitForWriteStarted(3, 5s));
+    const std::string big(4000, 'b');
+    for (int i = 0; i < 50; ++i) file.sink->Write(At(200 + i, big));
+    file.output->Release();
+    REQUIRE(file.sink->Flush(std::chrono::steady_clock::now() + 5s));
+    // About 200 KB in one batch: at least three writes of up to 64 KiB, and far fewer than one per line.
+    const auto writes = file.output->Writes() - 3;
+    CHECK_MESSAGE(writes >= 3, "LG-6: a large batch goes in 64 KiB steps");
+    CHECK(writes <= 6);
+    file.sink->Close();
+}

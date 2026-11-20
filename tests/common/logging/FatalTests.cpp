@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "AssertTestSupport.hpp"
 #include "TestClock.hpp"
@@ -279,4 +280,84 @@ TEST_CASE("fatal: a fatal record with a repeated key still writes a line that re
     const auto root = document.value().Root().AsObject().value();
     CHECK(root.Find("level").value().AsString().value() == "fatal");
     CHECK(root.Find("fields").value().AsObject().value().Find("dropped_fields").value().AsString().value() == "k");
+}
+
+namespace {
+
+// Records, in one shared sequence, when its fatal output was written and when it was flushed.
+struct OrderSink final : Logging::Sink {
+    std::vector<std::string>* order = nullptr;
+    std::string name;
+    std::vector<std::chrono::steady_clock::time_point> deadlines;
+    int fatal = 0;
+    void Write(const Record&) noexcept override {}
+    bool WriteFatal(const Record&, std::string_view, std::string_view) noexcept override {
+        ++fatal;
+        order->push_back(name + ":fatal");
+        return true;
+    }
+    bool Flush(const std::chrono::steady_clock::time_point deadline) noexcept override {
+        order->push_back(name + ":flush");
+        deadlines.push_back(deadline);
+        return true;
+    }
+};
+
+} // namespace
+
+TEST_CASE("fatal: every fatal output is written before any sink is flushed; all sinks share one deadline (LG-2)") {
+    std::vector<std::string> order;
+    auto a = std::make_shared<OrderSink>();
+    auto b = std::make_shared<OrderSink>();
+    a->order = b->order = &order;
+    a->name = "a";
+    b->name = "b";
+    Logging::LoggerOptions options;
+    options.sinks.push_back({.name = "a", .sink = a, .filter = {}});
+    options.sinks.push_back({.name = "b", .sink = b, .filter = {}});
+    options.takeAssertions = false;
+    options.takeTerminate = false;
+    auto handle = Logging::Install(std::move(options));
+    REQUIRE(handle);
+    static_cast<void>(Logging::WriteFatalRecord(Broken()));
+    CHECK_MESSAGE((order == std::vector<std::string>{"a:fatal", "b:fatal", "a:flush", "b:flush"}),
+                  "LG-2 order: the fatal outputs first, then the flush");
+    REQUIRE(a->deadlines.size() == 1);
+    REQUIRE(b->deadlines.size() == 1);
+    CHECK_MESSAGE(a->deadlines[0] == b->deadlines[0], "LG-2 step 4: one deadline for all sinks");
+}
+
+TEST_CASE("fatal: a sink that does not take the category is still flushed; its level is not consulted for the fatal output") {
+    std::vector<std::string> order;
+    auto excluded = std::make_shared<OrderSink>();
+    auto strict = std::make_shared<OrderSink>();
+    excluded->order = strict->order = &order;
+    excluded->name = "excluded";
+    strict->name = "strict";
+    Logging::LoggerOptions options;
+    options.sinks.push_back({.name = "excluded", .sink = excluded, .filter = {.exclude = {"assert"}}});
+    options.sinks.push_back({.name = "strict", .sink = strict, .filter = {.minimum = Level::Error}});
+    options.takeAssertions = false;
+    options.takeTerminate = false;
+    auto handle = Logging::Install(std::move(options));
+    REQUIRE(handle);
+    // An Info record below strict's minimum: the fatal path still hands it to strict's fatal output.
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Info, .category = "assert", .text = "below"}));
+    CHECK_MESSAGE(strict->fatal == 1, "LG-2 step 3: the level is not consulted");
+    CHECK(excluded->fatal == 0);
+    CHECK_MESSAGE(excluded->deadlines.size() == 1, "LG-2 step 4: every sink is flushed, also one not taking the category");
+}
+
+TEST_CASE("fatal: a second fatal record on the same Logger carries nothing of the first") {
+    auto memory = std::make_shared<Logging::MemorySink>();
+    auto handle = Logging::Install(WithMemory(memory));
+    REQUIRE(handle);
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "first"}));
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "second"}));
+    REQUIRE(memory->FatalJsonLines().size() == 2);
+    const std::string line = memory->FatalJsonLines()[1];
+    CHECK_MESSAGE(line.find("first") == std::string::npos, "LG-2: the reserved lines are cleared before each fatal record");
+    CHECK(line.find("second") != std::string::npos);
+    const std::string text = memory->FatalTextLines()[1];
+    CHECK_MESSAGE(text.find("first") == std::string::npos, "LG-2: the reserved text line is cleared too");
 }
