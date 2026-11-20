@@ -8672,8 +8672,8 @@
       "id": "el-kernel-print-back",
       "what": "the kernel writes the interrupting error to standard error again (error levels D1: the kernel has no error handler and writes nothing; the outermost Run returns the Err once). Only this mutant: kernel_guard K6 reads the text, this runs the paths",
       "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (!interruption_) interruption_ = error;\n",
-      "replace": "    if (!interruption_) interruption_ = error;\n    std::fputs(\"kernel error\\n\", stderr);\n",
+      "find": "Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested) {\n    error.world = world_.name_;\n",
+      "replace": "Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested) {\n    error.world = world_.name_;\n    std::fputs(\"kernel error\\n\", stderr);\n",
       "target": "gyo_kernel_tests",
       "command": [
         "{cmake}",

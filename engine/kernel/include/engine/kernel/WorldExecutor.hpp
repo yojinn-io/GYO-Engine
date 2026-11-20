@@ -116,13 +116,6 @@ public:
                                std::make_unique<Detail::EventBox<E>>(std::move(event)), target);
     }
 
-    // The error that interrupted the World, kept as it was when the outermost Run
-    // or Trigger returned it (error levels D8: a broken unit keeps its cause, read
-    // once by its single recorder; not a channel: nothing is delivered). nullptr
-    // while the World is healthy, and when an exception, not an Err, interrupted it.
-    [[nodiscard]] const KernelError* InterruptionError() const noexcept {
-        return interruption_ ? &*interruption_ : nullptr;
-    }
 
     // The fields of a "verification on" report (target/system-contract 2b
     // condition 2): the KernelSettings the last Run started with.
@@ -179,8 +172,7 @@ private:
     // keeps its mounts' lastRun and Local<T>; a removed one's state is dropped.
     void Attach();
     // Spec E.5: interrupts the World and drops every record. The outermost level
-    // keeps it as the interruption error (D8) and returns it; a nested one leaves the
-    // error instead (its first one).
+    // returns it; a nested one leaves the error instead (its first one).
     ::Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
 
     // One level of the run stack (World::runStack_): pushed for the Plan's
@@ -194,8 +186,6 @@ private:
     std::vector<SystemState> systems_;
     // The Registry version systems_ matches (0: none yet).
     std::uint64_t version_ = 0;
-    // InterruptionError(): set once, by the Err that interrupted the World.
-    std::optional<KernelError> interruption_;
 };
 
 } // namespace GYO::Kernel

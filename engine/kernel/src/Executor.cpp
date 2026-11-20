@@ -85,7 +85,6 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, b
         if (!world_.leftError_) world_.leftError_ = error;
         return Engine::Base::Err(std::move(error));
     }
-    if (!interruption_) interruption_ = error;
     return Engine::Base::Err(std::move(error));
 }
 
