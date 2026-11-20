@@ -2,16 +2,21 @@
 # They see only the Module's public include directory and inject their own clock (section 9.1).
 add_executable(gyo_logging_tests
     TestMain.cpp
+    AppendTests.cpp
+    FileSinkTests.cpp
+    FormatTests.cpp
     LoggerTests.cpp
 )
-target_link_libraries(gyo_logging_tests PRIVATE GYO::Logging gyo_test_support doctest::doctest)
+# GYO::Json reads every JSON line back (Design Invariant LG-5).
+find_package(Threads REQUIRED)
+target_link_libraries(gyo_logging_tests PRIVATE GYO::Logging GYO::Json gyo_test_support doctest::doctest Threads::Threads)
 if(MSVC)
     target_compile_options(gyo_logging_tests PRIVATE /W4 /permissive-)
     target_compile_definitions(gyo_logging_tests PRIVATE NOMINMAX)
 else()
     target_compile_options(gyo_logging_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS logger builder)
+foreach(group IN ITEMS logger builder format console file append)
     add_test(NAME logging.${group} COMMAND gyo_logging_tests "--test-case=${group}:*")
     set_tests_properties(logging.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

@@ -27,10 +27,11 @@ public:
     virtual void Write(const Record& record) noexcept = 0;
 
     // The fatal path (WriteFatalRecord, section 5.6): the record already
-    // formatted as one JSON line and one text line, both without the newline.
-    // The line must be handed on without waiting for anything this sink queued
-    // earlier; standard error has already been written by the fatal path
-    // itself. Returns whether the line was handed on. Default: nothing to do.
+    // formatted as one JSON line and one text line, each ending in '\n' so
+    // that it can be handed on in one write. The line must be handed on
+    // without waiting for anything this sink queued earlier; standard error
+    // has already been written by the fatal path itself. Returns whether the
+    // line was handed on. Default: nothing to do.
     virtual bool WriteFatal(const Record& record, std::string_view jsonLine, std::string_view textLine) noexcept;
 
     // Waits until every record handed in before the call has been handed on

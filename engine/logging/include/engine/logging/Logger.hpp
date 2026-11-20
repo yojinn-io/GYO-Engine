@@ -5,8 +5,10 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
+#include "engine/logging/JsonLinesFileSink.hpp"
 #include "engine/logging/Level.hpp"
 #include "engine/logging/LoggingError.hpp"
 #include "engine/logging/Record.hpp"
@@ -42,9 +44,11 @@ struct SinkFilter final {
 };
 
 struct SinkSetup final {
-    // Distinct among the sinks of one Logger; names the sink to SetLevel.
+    // Distinct among the sinks of one Logger; names the sink to SetLevel and FindSink.
     std::string name;
-    std::shared_ptr<Sink> sink;
+    // A sink made by the caller (ConsoleSink, MemorySink, a product's own), or
+    // a JSON lines file that Install opens.
+    std::variant<std::shared_ptr<Sink>, JsonLinesFileOptions> sink;
     SinkFilter filter;
 };
 
@@ -70,9 +74,11 @@ namespace Detail {
 struct LoggerState;
 } // namespace Detail
 
-// Installs the Logger. A second Logger while one is installed is a Programmer
-// Error, as are an empty or repeated sink name, a missing sink and a repeated
-// level prefix.
+// Installs the Logger. A file sink that cannot be opened or started fails
+// the whole Install (OpenFailed, StartFailed), after closing the sinks opened
+// before it. A second Logger while one is installed is a Programmer Error, as
+// are an empty or repeated sink name, a missing sink and a repeated level
+// prefix.
 [[nodiscard]] LoggingResult<LoggerHandle> Install(LoggerOptions options);
 
 // Uninstalls the Logger when destroyed or closed: Close is called on every
@@ -88,6 +94,9 @@ public:
 
     // Idempotent.
     void Close() noexcept;
+
+    // The sink of this name, or nullptr (also after Close).
+    [[nodiscard]] Sink* FindSink(std::string_view name) const noexcept;
 
 private:
     friend LoggingResult<LoggerHandle> Install(LoggerOptions options);

@@ -4,6 +4,9 @@
 # and the fatal path's last write. It knows nothing of ECS: what reads a World lives in
 # engine/world_logging, as engine/time and engine/world_time are split. No external component.
 add_library(gyo_logging STATIC
+    src/ConsoleSink.cpp
+    src/JsonLines.cpp
+    src/JsonLinesFileSink.cpp
     src/Logger.cpp
     src/MemorySink.cpp
     src/RecordBuilder.cpp

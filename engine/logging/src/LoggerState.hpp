@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,8 +55,12 @@ inline constinit std::atomic<State*> current{nullptr};
 // set (Install allows at most 64 sinks).
 [[nodiscard]] std::uint64_t TakingSinks(const State& state, Level level, std::string_view category) noexcept;
 
-// Writes one line to standard error in one call and flushes it: the text form
-// of a record when no Logger is installed.
+// The lock that keeps lines on standard error whole: a ConsoleSink on standard
+// error and the no-Logger line take it; the fatal path only tries it.
+[[nodiscard]] std::mutex& StandardErrorMutex() noexcept;
+
+// Writes one line to standard error in one call and flushes it, under
+// StandardErrorMutex: the text form of a record when no Logger is installed.
 void WriteToStandardError(std::string_view line) noexcept;
 
 } // namespace GYO::Engine::Logging::Detail

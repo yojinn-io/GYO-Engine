@@ -59,7 +59,13 @@ std::uint64_t TakingSinks(const State& state, const Level level, const std::stri
     return taking;
 }
 
+std::mutex& StandardErrorMutex() noexcept {
+    static std::mutex mutex;
+    return mutex;
+}
+
 void WriteToStandardError(const std::string_view line) noexcept {
+    std::scoped_lock lock(StandardErrorMutex());
     std::fwrite(line.data(), 1, line.size(), stderr);
     std::fflush(stderr);
 }
@@ -131,11 +137,24 @@ LoggingResult<LoggerHandle> Install(LoggerOptions options) {
     state->sinks.reserve(options.sinks.size());
     for (SinkSetup& setup : options.sinks) {
         GYO_ASSERT(!setup.name.empty());
-        GYO_ASSERT(setup.sink != nullptr);
+        std::shared_ptr<Sink> sink;
+        if (auto* given = std::get_if<std::shared_ptr<Sink>>(&setup.sink)) {
+            sink = std::move(*given);
+        } else {
+            auto file = std::get<JsonLinesFileOptions>(std::move(setup.sink));
+            if (file.monoNs == nullptr) file.monoNs = options.clock.monoNs;
+            auto opened = JsonLinesFileSink::Open(std::move(file));
+            if (!opened) {
+                for (Detail::SinkEntry& earlier : state->sinks) earlier.sink->Close();
+                return ::Engine::Base::Err(std::move(opened).error());
+            }
+            sink = std::move(opened.value());
+        }
+        GYO_ASSERT(sink != nullptr);
         for (const Detail::SinkEntry& earlier : state->sinks) GYO_ASSERT(earlier.name != setup.name);
         Detail::SinkEntry entry;
         entry.name = std::move(setup.name);
-        entry.sink = std::move(setup.sink);
+        entry.sink = std::move(sink);
         entry.include = std::move(setup.filter.include);
         entry.exclude = std::move(setup.filter.exclude);
         entry.levelPrefixes.push_back({});
@@ -182,6 +201,14 @@ void LoggerHandle::Close() noexcept {
     Detail::current.store(nullptr, std::memory_order_release);
     for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();
     delete state;
+}
+
+Sink* LoggerHandle::FindSink(const std::string_view name) const noexcept {
+    if (state_ == nullptr) return nullptr;
+    for (const Detail::SinkEntry& entry : state_->sinks) {
+        if (entry.name == name) return entry.sink.get();
+    }
+    return nullptr;
 }
 
 void SetLevel(const std::string_view sinkName, const std::string_view prefix, const Level minimum) {
