@@ -1,6 +1,6 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1、2 件）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
+更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1～3 件）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 沒有再送檢查。
 
@@ -93,7 +93,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 | DI-KS 23「列出的算寫者」、開局的寫者豁免 | 第 1、2 批已拿掉 | 不再處理 |
 | Z5、L3、L7 的執行期攔截 | 第 1 批已拿掉（`engine/` 0 命中） | 只剩守它們「不回來」的反向突變（9.1 A11） |
 | `rollbackSafe` | 沒有任何檢查讀它，只進 Registry 指紋（`Fingerprint.cpp:186`） | **拿掉、不搬**（本卡照 L17 判）：沒有對應的公開登記，意思已由「重跑時不跑」涵蓋（第 12 節末「字面不同」） |
-| Module 之間怎麼拿到彼此的公開登記；**作者怎麼拿到 `authority.`、`rollback.` 的入口** | **沒有通道**：`WorldSetup`／`WorldCheck` 不交出別的登記單位，產品自己的 `build` 也拿不到；唯一的例子是 static 的 `TickWriters()`（`recon-b` 5.6） | 第 6 節；**交你定**（第 12 節第 3 件） |
+| Module 之間怎麼拿到彼此的公開登記；**作者怎麼拿到 `authority.`、`rollback.` 的入口** | **沒有通道**：`WorldSetup`／`WorldCheck` 不交出別的登記單位，產品自己的 `build` 也拿不到；唯一的例子是 static 的 `TickWriters()`（`recon-b` 5.6） | 第 6 節；使用者定 (a) 編排層的共用槽（第 12 節第 3 件） |
 
 ### 2.4 第 3 批留下的空窗
 
@@ -211,7 +211,9 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 ---
 
-## 6. Module 與作者的接法——**交你定**（第 12 節第 3 件）
+## 6. Module 與作者的接法——**使用者定 (a)**（2026-11-20，第 12 節第 3 件）
+
+**決定**：編排層給「每次建 World 一份、以型別為鍵」的共用槽；「不算 O-4 職責清單多一項」也經使用者確認。理由（使用者的）：組裝 Module 是編排層的工作（O-4「組裝與流程」、O-2、O-6），buffer 放編排層合理。用詞：使用者覺得它像「Module 的 buffer」（暫時的中轉區：建 World 期間用，內容凍結後交給 World 的 Resource，之後清掉），不像 cache；正式名字實作時照命名規範定，可參考這個說法（下面的暫名 `Shared<T>()` 也在那時重定）。附帶：`Build` 指執行期建 World 時 Module 的登記函式，和 CMake 的建置容易混淆；使用者沒有要求改名。下面保留決定前的比較。
 
 **遊戲的例子**：PvP Client 的作者在**產品自己的 `build`** 寫 `authority.Component<Health>()`；伺服器權威策略要在**這一刻**替作者呼叫回滾 Module 的 `rollback.Component<Health>()`（權威份 4.3、4.4：「重跑時不跑」只能在 `AddSystem` 當下給，代為登記不能等到 Plan 建好）。之後權威的 `Check` 要讀回滾的公開登記（Z6、Z8、D-E15）。單機的時間倒流只用回滾：作者在自己的 `build` 寫 `rollback.Component<Position>()`。
 
@@ -220,12 +222,12 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 **別家**：Bevy 有兩種，都在 App 層。(1) `App::get_added_plugins::<T>()` 回傳已加入的 Plugin 參照，**唯讀**，文件寫「read the settings」（`bevy_app/src/app.rs:578-600`）；(2) lightyear 的登記存在 App 上的 Resource `ComponentRegistry`，預測套件與作者都在 build 時改它（`lightyear/src/protocol.rs:102`、`prediction/src/registry.rs:741-748`）。GYO 在 `Build` 時還沒有 World；(2) 的對應是「每次建 World 一份、以型別為鍵的共用槽」。
 
 **比過的選項**：
-- **(a) 編排層給每次建 World 一份的共用槽**（建議；修訂 1 新增）：`WorldSetup` 加一個以型別為鍵的槽（暫名 `Shared<T>()`：沒有就建一份、有就回同一份；`WorldFinish`、`WorldCheck` 唯讀地讀得到），每次 `Build` 那個 World 時新建，跟著那一次建 World 走。回滾 Module 在自己的 `Build` 開頭建它的登記表放進槽；權威 Module、作者都從槽拿到 `rollback`、`authority` 的入口。系譜：lightyear 的 App Resource。代價：改第 2 批已合併的編排層介面；編排層不認得槽裡的型別（和選項包同形，O-2「只轉交、不解讀」）。本卡判**不算 O-4 職責清單多一項**（屬「登記單位與生命週期」），不碰 RC-O1（不改迴圈）、RC-O4（編排層不 include 任何 Module）。
+- **(a) 編排層給每次建 World 一份的共用槽**（**選這個**；修訂 1 新增）：`WorldSetup` 加一個以型別為鍵的槽（暫名 `Shared<T>()`：沒有就建一份、有就回同一份；`WorldFinish`、`WorldCheck` 唯讀地讀得到），每次 `Build` 那個 World 時新建，跟著那一次建 World 走。回滾 Module 在自己的 `Build` 開頭建它的登記表放進槽；權威 Module、作者都從槽拿到 `rollback`、`authority` 的入口。系譜：lightyear 的 App Resource。代價：改第 2 批已合併的編排層介面；編排層不認得槽裡的型別（和選項包同形，O-2「只轉交、不解讀」）。本卡判**不算 O-4 職責清單多一項**（屬「登記單位與生命週期」），不碰 RC-O1（不改迴圈）、RC-O4（編排層不 include 任何 Module）。
 - **(b) 編排層給「依賴的登記單位」的查詢**：`WorldSetup`、`WorldCheck` 加 `Unit<T>()`，查登記檔寫了依賴、排在前面的單位；產品自己的 `build` 也要能查它帶的單位。代價：比 Bevy 的前例多一步（回傳可改的參照、呼叫會改它狀態的登記）；Module 物件以 World 名為鍵的資料遇上 `BuildNewFirst` 失敗的問題（5.1）要另外處理。系譜：Bevy `get_added_plugins`。
 - **(c) 產品經選項包傳共用物件**：產品建一個登記物件，同時放進兩個 Module 的選項，作者也拿得到。編排層不改；代價：每個用權威或回滾的產品都要自己接線，忘了接就是代為登記失效；回滾的公開登記變成「產品的東西」，和 R-6 不一致。
 - **(d) static、以 World 名為鍵的表**（`TickWriters` 的延伸）：編排層不改；代價：行程內全域的可變狀態，同一行程兩個 Product（測試常見）同名 World 會互相蓋掉。
 
-選 (a) 或 (b) 都改編排層的公開介面，「不算職責清單多一項」是本卡的判斷，所以交你。
+選 (a) 或 (b) 都改編排層的公開介面，「不算職責清單多一項」原是本卡的判斷，所以交使用者；使用者選 (a) 並確認不算多一項。side chat 的補充（不是使用者的話）：網路三家（lightyear、replicon、Unity Netcode）都把登記放在共同容器；(b) 的同類還有 Unity `GetExistingSystemManaged`、Unreal `GetSubsystem`；GYO 在 `Build` 時還沒有 World，所以由編排層在建 World 期間給；建好後凍結的登記放進 World 的 Resource，換 World 失敗時舊 World 不受影響。
 
 ---
 
@@ -425,11 +427,10 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 - WT-1：補「`Resimulation` 每次準備都放成 false，`CarryOver` 不帶它」。
 - WT-5：補「伺服器權威策略檢查 `TickWriters()` 名單外的寫者（權威 5.4）」；第 3 批的 G4 註記刪。
 
-### 11.5 編排層（`target/v2/orchestration.zh-Hant.md`；看第 12 節第 3 件的結果）
+### 11.5 編排層（`target/v2/orchestration.zh-Hant.md`；第 12 節第 3 件定 (a)）
 
-- 選 (a)：**O-2** 補「每次建 World 有一份以型別為鍵的共用槽，登記單位與產品自己的 `build` 在 `Build` 讀寫、在 `Finish`、`Check` 唯讀；編排層不解讀槽裡的型別」。
-- 選 (b)：**O-2** 補「登記單位與產品自己的 `build` 可以查登記檔寫了依賴、在同一個 World 裡排在前面的登記單位（`Unit<T>()`）；查別的是 Programmer Error」。
-- **O-4** 不改（判不算多一項，第 12 節第 3 件一併看）。
+- **O-2** 補「每次建 World 有一份以型別為鍵的共用槽，登記單位與產品自己的 `build` 在 `Build` 讀寫、在 `Finish`、`Check` 唯讀；編排層不解讀槽裡的型別；槽在那一次建 World 結束時清掉，要留下的內容由 Module 凍結進 World 的 Resource」。（(b) 的補句不採。）
+- **O-4** 不改（不算多一項，使用者 2026-11-20 確認）。
 
 ---
 
@@ -470,9 +471,11 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 這件交使用者，因為和同技術的別家是否一致、三種相等要不要對齊，會影響摘要、digest、回滾三處。
 
-### 第 3 件：Module 與作者的接法（第 6 節）
+### 第 3 件：Module 與作者的接法（第 6 節）——**已定 (a)**
 
-(a) 每次建 World 一份的共用槽（建議）／(b) 依賴單位的查詢／(c) 選項包傳共用物件／(d) static 表。選 (a)、(b) 時「不算 O-4 職責清單多一項」是本卡的判斷，請一併看。
+**決定**（使用者，2026-11-20，side chat）：(a)，並確認不算 O-4 多一項。原話（依序）：「這個稍微展開一下。」→「給我一個其他家的交叉比較。」→「Build 時哪個build ？ 遊戲編譯時？」→「類似於Module 的 cache？」→「Module的buff，應該更準確。我問一下，組裝Module是誰的工作？」→「buffer 放編排層很合理。可以選（a）」。詳見第 6 節。下面保留決定前的選項。
+
+(a) 每次建 World 一份的共用槽（選這個）／(b) 依賴單位的查詢／(c) 選項包傳共用物件／(d) static 表。選 (a)、(b) 時「不算 O-4 職責清單多一項」是本卡的判斷，請一併看。
 
 ### 第 4 件：DI-KS 15（Kernel 職責清單）的兩處補句算不算多一項（修訂 1 新增，檢查 S9）
 
@@ -569,7 +572,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 1. **Feature**：第 15.2 節第 1 列。
 2. **現在的問題**：區、寫者、digest、C 指紋、Z6／Z8／D-E15、D-E16、`Rollback` 列舉都還在 Kernel（`recon-a` 1），Kernel 對單機也執行這些檢查；回滾要的原語 1～4 不在；摘要照原始位元組雜湊（LIM-8）；Module 之間、作者與 Module 之間沒有通道。
-3. **變化的邊界**：新 Subsystem `engine/authority`、`engine/rollback`；Kernel 少了區、寫者、digest、回滾的宣告與 C 指紋，多了原語 1～4、讀 stamp、雜湊的客製點、訊息寫者名單，`Writes<…>` 收元件；編排層多了共用槽或依賴單位的查詢（第 12 節第 3 件）。
+3. **變化的邊界**：新 Subsystem `engine/authority`、`engine/rollback`；Kernel 少了區、寫者、digest、回滾的宣告與 C 指紋，多了原語 1～4、讀 stamp、雜湊的客製點、訊息寫者名單，`Writes<…>` 收元件；編排層多了每次建 World 一份的共用槽（第 12 節第 3 件定 (a)）。
 4. **影響**：Kernel（第 7 節的檔案）、編排層（`Setup.hpp`、`Product.cpp`）、`world_time`（區參數、`Resimulation`）、`modules.csv`、`tests/common/{kernel,orchestration,world_time,scenario,zone_scan}`、新 `tests/common/{authority,rollback}`、`tests/common/CMakeLists.txt`、Kernel 與編排層的突變清單、新兩份清單；文件見第 11 節、限制頁與索引。
 5. **依賴方向**：新增 權威→Kernel、編排層、`world_time`、回滾；回滾→Kernel、編排層、`world_time`；產品→權威、回滾。Kernel、編排層、`world_time` 不依賴兩者。沒有反向。
 6. **Ownership**：區、寫者數量、判定資料的讀寫：Kernel → 不由機制守；digest、一致性指紋、G-5、Z6／Z8／D-E15、tick 的單一來源：Kernel → 權威 Module；`Rollback`、D-E16、「重跑時不跑」：Kernel → 回滾 Module；摘要的雜湊：照原始位元組 → 每個型別的函式（型別的作者）。
@@ -588,7 +591,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 | 重跑掛每幀 schedule 的 `PreUpdate` | lightyear `PreUpdate` 的 `run_rollback` | 掛在步的 schedule（X-11 不准） | 巢狀規則 | PvP Client 回滾 |
 | 回滾的登記凍結後放 World 的 Resource | Unity 的 World singleton | Module 物件以 World 名為鍵的表 | `BuildNewFirst` 失敗時舊 World 要照常 | PvP Client 回滾、讀檔 |
 | digest 相加、不含 id | lightyear 的 XOR、不含 id | XOR；含 id（修訂 0） | 相同的兩項不抵銷；id 的對映屬網路 Module | PvP digest |
-| Module 與作者的接法（第 12 節第 3 件） | lightyear App Resource／Bevy `get_added_plugins` | 交你 | — | PvP（權威＋回滾）、單機時間倒流 |
+| Module 與作者的接法（第 12 節第 3 件） | lightyear App Resource／Bevy `get_added_plugins` | 使用者定 (a) 編排層的共用槽（lightyear App Resource 的形），2026-11-20 | (b) 查依賴的 Module 物件、(c) 產品經選項包接線、(d) static 表 | PvP（權威＋回滾）、單機時間倒流 |
 | 兩個 Module `default=yes` | Bevy `DefaultPlugins`、Unity 內建模組（主會話的判斷） | `default=no`（修訂 0） | 照主會話已定的預設；不選策略就沒有作用 | 單機（不選策略） |
 | 沒有新家的規則先拿 | 統合第 8 節的原則 | 全部壓到最後（修訂 0） | 子卡不在舊規則上開發 | — |
 
