@@ -1,6 +1,6 @@
 # 事前宣告：異常分級（`v8-arch-gyo2-error-levels`）
 
-修訂 3（2026-11-20）。Owner：架構（GYO2 任務卡「異常分級」，架構師的子會話）。分支 `claude/gyo2-error-levels-170217`，從 `gyo2` 8ec005f2 開。修訂 0 是 641ec8b9；修訂 1（34cd347a）照 Fable 5.2／high 的敵對式檢查（必改 10、建議改 16、小問題 11）改，處理對照在第 16 節；修訂 2（81b1f1de）照主會話照 L17 的判斷併入兩件（`UnknownWorld` 與 schedule 名不一致、`Product::Build` 的例外），見第 17 節；修訂 3 照使用者要的窄複查（Fable 5.2／high，範圍 D3 (b)、D8～D10、第 17 節；必改 7、建議改 12、小問題 8）改，處理對照在第 18 節。
+修訂 4（2026-11-20）。Owner：架構（GYO2 任務卡「異常分級」，架構師的子會話）。分支 `claude/gyo2-error-levels-170217`，從 `gyo2` 8ec005f2 開。修訂 0 是 641ec8b9；修訂 1（34cd347a）照 Fable 5.2／high 的敵對式檢查（必改 10、建議改 16、小問題 11）改，處理對照在第 16 節；修訂 2（81b1f1de）照主會話照 L17 的判斷併入兩件（`UnknownWorld` 與 schedule 名不一致、`Product::Build` 的例外），見第 17 節；修訂 3（9e18bdd3）照使用者要的窄複查（Fable 5.2／high，範圍 D3 (b)、D8～D10、第 17 節；必改 7、建議改 12、小問題 8）改，處理對照在第 18 節；修訂 4 寫入使用者在 side chat 定的錯誤型別命名規則（D11、第 13 節第 12 題）。
 
 狀態：**等動工前核准**。這一回合只寫宣告，不寫實作。
 
@@ -8,7 +8,7 @@
 
 **兩次原話的關係**（本卡的讀法，第 13 節第 1 題請使用者確認）：去重那一次說「返回沒錯，錯誤沒錯，包裝沒錯……不是機制問題」；同一天稍後開這張卡時說「沒有分級，runner 不知道如何處理」。本卡讀成：回傳結構化錯誤這個機制保留；缺的是級別——每一級的處理者與規則沒有寫下來，型別上也看不出來，所以 runner 寫錯是可預期的。本批因此會動到當時說「不動」的 O-11 與編排層（第 8.2 節逐條列）。
 
-本卡加的詞（不是使用者的話，名字在合併前核准定稿）：**E0～E3** 四個級別的代號；「處理一次」；「升級／降級」；`ProductEnded`（D3 (b) 的暫名）。
+本卡加的詞（不是使用者的話，名字在合併前核准定稿）：**E0～E3** 四個級別的代號；「處理一次」；「升級／降級」。錯誤型別的名字照使用者 2026-11-20 定的規則（`…Error`＝E1、`…Failure`＝E2，D11）；修訂 3 以前的暫名 `ProductEnded` 不用了，本頁改寫成 `WorldError`（E1 的載體叫 `WorldError` 還是 `ProductError` 是第 13 節第 12 題）。
 
 ---
 
@@ -280,7 +280,7 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 
 | | E0 程式錯誤 | E1 致命 | E2 失敗 | E3 警告 |
 |---|---|---|---|---|
-| **產生方回什麼** | 不回：`GYO_ASSERT` → 斷言處理器 → `abort` | Kernel：`Run`／`Trigger` 回 `Err(KernelError)`、World `Interrupted`；編排層：入口回 **E1 的型別**（D3 (b)：`ProductEnded`，帶 `WorldFailure`；選 (a) 時是帶 `failure` 的 `OrchestrationError`） | `Result<T, 模組的錯誤>`；啟動時是一次收齊的報告（`StartupReport`、`ProductStartupReport`） | 不回錯誤：World 記診斷紀錄，或發 `Message` |
+| **產生方回什麼** | 不回：`GYO_ASSERT` → 斷言處理器 → `abort` | Kernel：`Run`／`Trigger` 回 `Err(KernelError)`、World `Interrupted`；編排層：入口回 **E1 的型別**（D3 (b)：`WorldError`，帶 `WorldFailure`；選 (a) 時是帶 `failure` 的 `OrchestrationError`） | `Result<T, 模組的錯誤>`；啟動時是一次收齊的報告（`StartupReport`、`ProductStartupReport`） | 不回錯誤：World 記診斷紀錄，或發 `Message` |
 | **呼叫者必須做** | 無（修程式） | 收到的呼叫點：**不再呼叫這個 Product 的任何入口**，結束 runner（回 `RunnerExit{Failure}`）；之後關程式或另建 Product（回主選單）由 `main` 決定（O-3）。**讀 World 可以**（取診斷紀錄、救未存檔的內容，`-err-is-bug-world-readable`；日誌批「先 `WriteFailure` 再取」）。Kernel 單獨用時：`Run` 的呼叫者不再跑這個 World | 往上傳（包上下文）或在這裡處理（決定、降級、改走別條路、顯示給人），二選一 | 無；日誌照常訂閱或取走 |
 | **能不能忽略** | 不能（處理器回來就 `abort`） | **忽略是錯的**。技術上做得到（O-11：之後每次拒絕都帶同一份，不會跑任何東西），但那是 runner 寫錯；Engine 不用斷言或去重擋（使用者否定過「之後的呼叫斷言」與去重，`-logging-no-failure-dedup`）。D3 (b) 讓 runner 在型別上必須面對它；D5 讓「沒讀回傳值」成為編譯錯誤。**D5 擋不到「讀了、沒退出」**——那一段靠第 5.3 節的表與 `WithFailureLog` | **默默忽略是錯的**。`[[nodiscard]]`；D5 之後沒寫的忽略是編譯錯誤；明寫的忽略（`(void)` 加理由）算一種處理，只在 API 的文件說「可以不理」時用 | 可以不看（它不改流程） |
 | **誰記** | 斷言處理器（日誌接手時走 `WriteFatalRecord`，category `assert`） | **只有一處：runner 結束的地方**——`WithFailureLog`（包住 runner）或 `main`（用預設 runner、或自己寫 runner 而沒包時）讀 `Product::Failure()` 寫一次（`WriteFailure`）。收到 E1 的各個呼叫點只負責退出、不記。Kernel、編排層不記 | **只有**處理它的那一方，而且可以選擇不記（例：讀檔失敗、遊戲顯示對話框就夠了） | 日誌 Module（① `Forward`、② `TakeKernelDiagnostics`）；產生方不另外記 |
@@ -298,7 +298,7 @@ runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`�
 | 拿到 | 判法 | 做什麼 |
 |---|---|---|
 | `Ok` | — | 繼續 |
-| E1（(b)：`ProductEnded`；(a)：`error.failure` 有值） | 型別（或 `failure`）| 不再呼叫入口，回 `RunnerExit{Failure, …}`。**不在這裡記**：`WithFailureLog` 或 `main` 在 runner 結束時讀 `Failure()` 記一次。要告訴人原因（例：讀檔被存檔版本拒絕）時讀 `cause` |
+| E1（(b)：`WorldError`；(a)：`error.failure` 有值） | 型別（或 `failure`）| 不再呼叫入口，回 `RunnerExit{Failure, …}`。**不在這裡記**：`WithFailureLog` 或 `main` 在 runner 結束時讀 `Failure()` 記一次。要告訴人原因（例：讀檔被存檔版本拒絕）時讀 `cause` |
 | E2（`OrchestrationError`，沒有 `failure`） | 型別 | 這是 runner 自己發的請求失敗了（讀檔、動態插入、owner 名被占用）：照 `code` 與 `reporterCode` 決定（顯示、重試、放棄），要記就記一次。World 名不存在不在這一列（修訂 2 起是 E0；名字來自資料時先 `HasWorld`）|
 | 經 `Product::World(name)` 直接 `Run`／`Trigger` 回 `Err(KernelError)` 或丟例外 | 直接用 Kernel＝繞過編排層（O-1） | 同 E1 那一列：不再呼叫入口、結束 runner。runner 結束處讀 `Failure()`：D8 (b) 之下有值，回 `Err` 的路帶 Kernel 的錯誤、例外的路不帶 |
 | 例外離開入口 | D4 (b) 之下只剩不是 `std::exception` 的例外 | 不接（規則 6）；runner 的入口（`WithFailureLog`）照第 5.2 節最後一段 |
@@ -339,7 +339,7 @@ runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`�
 | O2c | E2 | 記 `Warning`（P3） | D2 |
 | O2d | `UnknownWorld`：E0；`OwnerTaken`：E2 | P18 | 修訂 2：`UnknownWorld` 改成斷言、碼拿掉（第 17.1 節）；`OwnerTaken` 照舊（理由在第 17.1 節）|
 | O2e | E2 | 作者能放 `failure`（P16） | D3 (b) 之下 `OrchestrationError` 沒有 `failure` 欄位，型別上做不到；選 (a) 時 `Prepare` 要清掉它 |
-| O3 | E1 載體 | 無 | 成為 `ProductEnded` 的內容（(b)）或照舊（(a)） |
+| O3 | E1 載體 | 無 | 成為 `WorldError` 的內容（(b)）或照舊（(a)） |
 | O4 | — | 預設 runner 不寫（P8） | D6 |
 | O5 | E1／E2 | 例外往外丟（P5）；`try` 前的步驟（P12） | D4（含 P12 的修正） |
 | O6 | E1 | 沒有 `failure`（P13） | D8 |
@@ -413,20 +413,20 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | (c) 錯誤型別加一個級別欄位，或 Base 加級別列舉 | Bevy 的 `Severity` | 違反「no global error enum」；和型別或 `failure` 說同一件事，就是兩處維護同一個事實（AGENTS §9）|
 | (d) 改碼：Product 結束時碼一律是 `WorldInterrupted`／`WorldMissing` | 碼＝級別 | 「哪一步失敗」從碼搬到文字，runner 要分辨讀檔失敗的原因就得讀文字（存檔版本 Module 要靠 `reporterCode` 分辨，O-5）|
 
-**(b) 的內容**（名字是暫名，實作時照命名規範定）：
+**(b) 的內容**（名字照 D11 的規則：E1 的型別以 `…Error` 結尾、E2 以 `…Failure` 結尾；下面先用 D11 對照表的名字，`WorldError`／`ProductError` 待第 13 節第 12 題）：
 
-- **E1 的型別 `ProductEnded`**，三個欄位：
-  - `failure`：`std::shared_ptr<const WorldFailure>`，和 `Product` 持有的是**同一個物件**（`Failure()` 回的就是它）。「之後每次拒絕都帶同一份」（O-11）不複製、不配置，也不多一處存同一個事實（D4 的 `bad_alloc` 段靠這一點）。
-  - `cause`：`std::optional<OrchestrationError>`——**升級成 E1 的那個 E2**（`DropOldFirst` 某一步失敗時的碼、`reporterCode`、`detail`；Go 的 `%w`）。存檔版本 Module 的拒絕照舊靠 `cause->reporterCode` 分辨（O-5「原樣帶出」不變）；`[or-ended-drop-code]`（`CoverageTests.cpp:272`）改讀 `cause->code`。
+- **E1 的型別 `WorldError`**（D11：現在的 `WorldFailure` 改名，內容照舊，再加 `cause`、`kernel` 兩欄）：
+  - **共用**：入口回的 `WorldError` 值和 `Product` 持有的是**同一份內容**（內部以 `std::shared_ptr` 共用；`Failure()` 回的也是它；具體寫法照 `CodedError` 的要求在實作時定）。「之後每次拒絕都帶同一份」（O-11）不複製、不配置，也不多一處存同一個事實（D4 的 `bad_alloc` 段靠這一點）。
+  - `cause`：`std::optional<OrchestrationFailure>`——**升級成 E1 的那個 E2**（`DropOldFirst` 某一步失敗時的碼、`reporterCode`、`detail`；Go 的 `%w`）。存檔版本 Module 的拒絕照舊靠 `cause->reporterCode` 分辨（O-5「原樣帶出」不變）；`[or-ended-drop-code]`（`CoverageTests.cpp:272`）改讀 `cause->code`。
   - `kernel`：`std::optional<Kernel::KernelError>`——中斷那個 World 的 Kernel 錯誤（有的話）。
-- **E2 的型別 `OrchestrationError` 拿掉 `failure` 欄位**；只屬於 E1 的三個碼 `ScheduleFailed`、`WorldInterrupted`、`WorldMissing` 離開 `OrchestrationErrorCode`。它們說的事改由 `WorldFailure::kind`（中斷或空位）與 `entry` 說；讀這三個碼的判定（`[or-ended-no-replace]`、`[or-drop-old-missing]`、`[or-ended-gameinit]` 等）改讀 `kind`（G5）。
-- **入口的簽名照它能回的級**：`RunGameInit`、`RunFrame`、`RunSchedule`（修訂 2 之後 World 名錯是斷言，只剩 E1：`Product.cpp:482-493` 的四個出口）→ `Result<void, ProductEnded>`；`ReplaceWorld`、`InsertSystems` 兩級都可能 → 回一個只有兩個選項的和型別（`std::variant<ProductEnded, OrchestrationError>` 包一層）。
-- `PrepareFn` 照舊回 `OrchestrationError`——沒有 `failure` 欄位，作者造不出 E1（P16）；`DropOldFirst` 時由編排層把它包進 `ProductEnded::cause`。
+- **E2 的型別 `OrchestrationError` 拿掉 `failure` 欄位、改名 `OrchestrationFailure`**（D11）；只屬於 E1 的三個碼 `ScheduleFailed`、`WorldInterrupted`、`WorldMissing` 離開 `OrchestrationErrorCode`。它們說的事改由 `WorldFailure::kind`（中斷或空位）與 `entry` 說；讀這三個碼的判定（`[or-ended-no-replace]`、`[or-drop-old-missing]`、`[or-ended-gameinit]` 等）改讀 `kind`（G5）。
+- **入口的簽名照它能回的級**：`RunGameInit`、`RunFrame`、`RunSchedule`（修訂 2 之後 World 名錯是斷言，只剩 E1：`Product.cpp:482-493` 的四個出口）→ `Result<void, WorldError>`；`ReplaceWorld`、`InsertSystems` 兩級都可能 → 回一個只有兩個選項的和型別（`std::variant<WorldError, OrchestrationError>` 包一層）。
+- `PrepareFn` 照舊回 `OrchestrationError`——沒有 `failure` 欄位，作者造不出 E1（P16）；`DropOldFirst` 時由編排層把它包進 `WorldError::cause`。
 
 **決定的理由**（照 Contract 與 Feature 比）：
 1. **F4 的 runner 要一眼分出 E1／E2**：(b) 由型別與編譯器分（`std::visit` 兩個選項都要寫；`RunFrame`、`RunSchedule` 的簽名直接說「只會是 E1」）；(a) 靠 runner 的作者記得看一個 optional 欄位。
 2. **Contract：E1 只能由編排層發**：(b) 之下作者的準備函式型別上做不到（P16）；(a) 要靠執行期清掉。
-3. **使用者要的是 Java 式的級別**：(b) 之後 E1、E2 在程式裡有名字（`ProductEnded`、`OrchestrationError`）；(a) 之下 E0～E3 只存在文件裡。這一點要讓使用者在知道的情況下選。
+3. **使用者要的是 Java 式的級別**：(b) 之後 E1、E2 在程式裡有名字（`WorldError`、`OrchestrationError`）；(a) 之下 E0～E3 只存在文件裡。這一點要讓使用者在知道的情況下選。
 4. **哪一步失敗、作者的碼不丟**：`cause` 照帶，F2 的「玩家看到讀檔被拒的原因」在 `DropOldFirst` 時也成立。
 5. 使用者在去重那一次說「包裝沒錯」：(b) 不改「結構化錯誤回給 runner」，改的是 E1 與 E2 不再共用一個錯誤型別、E1 改成包住原因——這和那句話是否衝突，交使用者（第 13 節第 3 題）。
 
@@ -461,7 +461,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 **`bad_alloc` 與 P12 的源頭**（修訂 1 的「盡力」不精確，窄複查 M3）：
 
 - 現在 E1 的路在 `catch` 裡配置：`Break` 複製 Product 名（`Product.cpp:380`）、`RunOn` 的 `catch` 指定 32 字的文字（`:430`）、`ReplaceWorld` 的例外路徑在 `catch` 裡組整份 `WorldFailure`（`:661-673`）。那裡再失敗時，`DropOldFirst` 又是「空位而沒有 `failure`」。
-- 做法：**`WorldFailure` 在冒險的那一步之前組好**——`RunOn` 在跑 schedule 之前（`:419-424` 已經做一半）、`DropOldFirst` 在丟掉舊 World 之前——以 `shared_ptr` 持有，Product 名、例外時的預設文字都先放好。`catch` 裡只填列舉（`kind`），`what()` 用一個內層 `try` 盡量附加（失敗就留預設文字）；`Break` 改成指標的指定（不配置）；回傳的 `ProductEnded` 共用同一個物件（D3 (b)）。所以例外之後的 E1 路除了附加 `what()` 以外不配置。
+- 做法：**`WorldFailure` 在冒險的那一步之前組好**——`RunOn` 在跑 schedule 之前（`:419-424` 已經做一半）、`DropOldFirst` 在丟掉舊 World 之前——以 `shared_ptr` 持有，Product 名、例外時的預設文字都先放好。`catch` 裡只填列舉（`kind`），`what()` 用一個內層 `try` 盡量附加（失敗就留預設文字）；`Break` 改成指標的指定（不配置）；回傳的 `WorldError` 共用同一個物件（D3 (b)）。所以例外之後的 E1 路除了附加 `what()` 以外不配置。
 - **P12 的源頭**：`Ended()` 把「空位而沒有 `failure`」讀成「替換進行中」（`:397-402`）。改成由結構分辨：替換進行中在 slot 上有明確的狀態；`Ended()` 碰到「空位、沒有 `failure`、也不在替換中」是內部不變式壞了（`GYO_ASSERT`，E0）。照上一點組好的 `WorldFailure`，這個狀態不會出現。
 
 **決定的理由**：runner 拿到 E1 只剩一條路（回傳值），第 5.3 節的表不需要 `catch (...)`；而且規則 6 本來就要求 Engine API 在公開邊界把例外轉成 `Result`，(b) 是照現行規則補上編排層的缺口；P12 的缺陷在同一處、從源頭修。
@@ -505,7 +505,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 | 選項 | 系譜 | 內容 |
 |---|---|---|
-| **(b) Kernel 在中斷的那一刻把那個錯誤留在 `WorldExecutor` 上，`Product::Failure()` 讀時檢查**（建議） | 壞掉的單位留著自己的死因、由唯一的等待者去讀：Rust `JoinHandle::join` 拿到執行緒的 panic 內容、C++ `std::future` 留著 `exception_ptr`、Go `context.Cause`。引擎裡沒有同形（Bevy、Unity 沒有；flecs 的 `ecs_log_last_error` 是 errno 形的全域碼，不同） | `Fail(…, nested=false)`（`Executor.cpp:87-98`）在回傳之前另存一份「中斷這個 World 的錯誤」，存在 **Executor**（不在 World 的儲存裡），是中斷當下收好的獨立的值。`Product::Failure()` 在讀的時候做現在 `Ended()` 做的檢查，補上 `kernelCode`、`where` 與 `ProductEnded::kernel` |
+| **(b) Kernel 在中斷的那一刻把那個錯誤留在 `WorldExecutor` 上，`Product::Failure()` 讀時檢查**（建議） | 壞掉的單位留著自己的死因、由唯一的等待者去讀：Rust `JoinHandle::join` 拿到執行緒的 panic 內容、C++ `std::future` 留著 `exception_ptr`、Go `context.Cause`。引擎裡沒有同形（Bevy、Unity 沒有；flecs 的 `ecs_log_last_error` 是 errno 形的全域碼，不同） | `Fail(…, nested=false)`（`Executor.cpp:87-98`）在回傳之前另存一份「中斷這個 World 的錯誤」，存在 **Executor**（不在 World 的儲存裡），是中斷當下收好的獨立的值。`Product::Failure()` 在讀的時候做現在 `Ended()` 做的檢查，補上 `kernelCode`、`where` 與 `WorldError::kernel` |
 | (a) `Product` 加 `Trigger` 入口 | 新的公開介面 | 只補 `Trigger`；直接 `Run` 仍是繞過 |
 | (d) 不交出能跑的 `WorldExecutor`：`Product::World(name)` 只給讀的面，加 `Trigger` 入口 | 修源頭 | 「outside the Product」這條路、`Ended()` 的掃描、(b) 的存放與讀時檢查一起消失；`engine/`、`tests/` 裡直接經它跑的只有一處（`CoverageTests.cpp:333`）。但 O-1 明寫容許繞過編排層（作者的自由，`-engine-not-rigid-for-authors`），而且公開介面變得最大、沒有名指しされた Product 的 Feature 要求它 |
 | (c) 只寫文件：繞過的一方自己是處理者 | — | runner 結束處的 `WithFailureLog` 一筆都不寫（P13 照舊） |
@@ -549,6 +549,32 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 **理由**：(i) 照第 4.1 節的判準推得出（相對於 Product，壞掉的不是它持有的 World），不新增結束原因；O-1 的「任何一張回錯誤……記為已跑（Product 就此結束，O-11）」是在講跑在 Product 的第一個 World 上的情形，括號引用 O-11 當理由，這條路 O-11 不成立，所以「記為已跑」也不套用。O-1 加一句寫明這條路。交使用者（第 13 節第 10 題）；照 AGENTS §14.3 先固定失敗的測試。
 
+### D11 錯誤型別的名字帶著處理方式（使用者 2026-11-20 定）
+
+**使用者的決定**（side chat，從本卡 fork，經 side chat 轉來）：
+- **原話**（依序）：對 `ProductEnded` 這個暫名：「ProductEnded？？你就不能統一名字嗎？名字其實自己就帶著要如何處理的屬性的。」side chat 提了字尾的方案後：「…Error 級別都是不能救的， ...Failure 類似於失敗，讓上層決定。」side chat 列出影響之後：「轉回去」。
+- **比過的選項**：side chat 先提「`…Fatal`＝E1、`…Error`＝E2（現有名字照舊）」，使用者改定為「`…Error`＝E1、`…Failure`＝E2」。
+- **理由**（使用者的）：名字本身就要帶著處理方式。side chat 補的（不是使用者的話）：和 Java 的 `Error`（不接）同義；也和使用者在去重那一次說的「把 error 級別的異常當成普通警告」用語一致。
+- **出處**：side chat 2026-11-20；HANDOFF 由主會話記。
+
+**規則**：錯誤**型別**的名字以字尾標級——`…Error`＝E1（不能救：World 壞了、持有它的單位結束，接手的一方記一次然後退出）；`…Failure`＝E2（這次請求失敗，讓上層決定）。E0 沒有型別（`GYO_ASSERT`）；E3 是紀錄，用紀錄自己的名字（`RejectedSpawn`、`DroppedMessages`、`TimeDiscarded`），不用這兩個字尾。這條規則進命名規範頁（`target/v2/rebuild-naming.zh-Hant.md`；位置由主會話與圖書管理員確認），本頁 DI 3 引用它。
+
+**照現有程式的對照**（side chat 列、使用者看過、沒有逐條回；本卡照源碼補了兩列，標「本卡」）：
+
+| 現在 | 級 | 照規則 | 備註 |
+|---|---|---|---|
+| `WorldFailure`（E1 的內容） | E1 | `WorldError` | 名字反了。D3 (b) 的 E1 型別就用它（共用的物件＋`cause`＋`kernel`，D3），`ProductEnded` 不再另立；`WorldFailureKind` → `WorldErrorKind` |
+| `OrchestrationError` | E2 | `OrchestrationFailure` | 名字反了；同時拿掉 `failure` 欄位（D3） |
+| `KernelError` | 一名兩級 | E1 留 `KernelError`（`Run`／`Trigger` 回的、System 回的、Kernel API 回給 System 而 World 已中斷的 K2）；E2 改 `KernelFailure`（`AllottedIdAlive` K3、`DynamicInsertRefused` K8、匯出失敗 K9） | 這也處理掉 P17：Kernel 的 E2 有了自己的型別，target 既有的 Replacement Criteria（「可恢復的路用模組的錯誤型別」）照原文成立，不必改寫（第 13 節第 6 題跟著改）。System 的回傳型別照舊是 `Result<void, KernelError>`——System 回 `Err` 本來就是 E1 |
+| `JsonError`、`OsError`、`IoError`、`AudioError`、`ThreadError`、`TimeError`、`LoggingError`（日誌分支）、`Base::Error<Code>`、`CodedError`、`error-handling.md` 的「Error types」一節 | E2 | `…Failure`（`Base::Failure<Code>`、`CodedFailure`……） | 範圍待第 13 節第 12 題 |
+| `StartupReport`、`ProductStartupReport`（本卡） | E2 | 照舊（不是錯誤型別而是「一次收齊的報告」，字尾 `Report` 已說明處理方式：印出、不建） | 第 13 節第 12 題一併確認 |
+| `Base::AssertionFailure`（本卡） | E0 | 和規則衝突：字尾是 `Failure` 卻是斷言失敗交給處理器的那一包（`Assert.hpp:40-43`；測試的 `GYO_CHECK_ASSERTS` 丟它） | 改名（例：`AssertionViolation`）會動 Base 與測試支援；範圍待第 13 節第 12 題 |
+| `Result::error()`、`Base::Err(...)` | — | 照舊 | `std::expected` 的用語、不分級（side chat 的建議；第 13 節第 12 題確認） |
+
+**對本頁其他各節的影響**：文中寫的型別名照**現在的程式**寫（盤點、P 項、守衛的位置都指現有程式），D3 (b) 與 D11 之後的新型別照上表；實作時照上表改名。改名本身是公開介面的變更，列進第 8.1 節第 3 點；估時見第 11.1 節（範圍定了才算得準，第 13 節第 12 題）。
+
+**系譜**：Java 的 `Error`／`Exception` 分類以型別名表示處理方式；Rust、Go 的錯誤型別名不分級（`io::Error`、`error`）。**舊形狀？** 不是（現有的 `…Error` 全是 E2，名字和級別反著）。**支撐的 Feature**：F4（runner 看型別名就知道怎麼處理）。
+
 ---
 
 ## 7. 基盤 Architecture 的根據（AGENTS §2）
@@ -576,7 +602,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 1. **要它的目的**：使用者明示的分級任務（`v8-arch-gyo2-error-levels`）；Feature F1～F5。
 2. **現在的問題**：第 2.2 節 P1～P18。
-3. **變的邊界**：Kernel 的公開介面（拿掉 `SetErrorHandler`；D8 加「中斷的錯誤」的讀取；D9 `KernelError` 的身分）；編排層的公開介面（D3 (b) 入口的簽名、E1 型別 `ProductEnded`、`OrchestrationError` 拿掉 `failure`、三個只屬於 E1 的碼搬走；拿掉 `Product::SetErrorHandler`；`Failure()` 拿掉 `const noexcept`；入口與 `Product::Build` 不再丟作者的 `std::exception`；新增一個 E2 碼與 O-E8；拿掉 `UnknownWorld`、World 名錯改斷言）；錯誤處理的契約（級別一節）；建置的警告設定（D5）。
+3. **變的邊界**：Kernel 的公開介面（拿掉 `SetErrorHandler`；D8 加「中斷的錯誤」的讀取；D9 `KernelError` 的身分）；編排層的公開介面（D3 (b) 入口的簽名、E1 型別 `WorldError`、`OrchestrationError` 拿掉 `failure`、三個只屬於 E1 的碼搬走；拿掉 `Product::SetErrorHandler`；`Failure()` 拿掉 `const noexcept`；入口與 `Product::Build` 不再丟作者的 `std::exception`；新增一個 E2 碼與 O-E8；拿掉 `UnknownWorld`、World 名錯改斷言；D11 的改名：`WorldFailure` → `WorldError`、`OrchestrationError` → `OrchestrationFailure`、Kernel 的 E2 改 `KernelFailure`，Module 的錯誤型別與 `Base::Error` 照第 13 節第 12 題的範圍）；錯誤處理的契約（級別一節、型別名的規則）；建置的警告設定（D5）。
 4. **影響的 Module／Product／Tool**：`engine/kernel`、`engine/orchestration`、`build/cmake`（D5）、`tests/common/kernel`（共用測試台＋9 個檔）、`tests/common/orchestration`、`plans/kernel/scripts/mutations.json`、`orchestration_mutations.json`、`kernel_guard.py`；`docs/cross-component-rules.md`（CCR-2、CCR-3）；日誌分支（`WriteFailure` 的範例、5.6、LG-1 ③、LG-2，交界）；第 4 批（不改它的決定；照本頁分級）。產品還沒有回到 `gyo2`，不受影響。
 5. **依賴方向**：不變。不加任何依賴邊（編排層照舊不依賴日誌）。
 6. **Ownership**：「記錄 Kernel 錯誤」從 Kernel 的 Executor 移到處理它的一方；「記錄編排層與 Kernel 動態插入的警告」從編排層移到它的呼叫者；E1 的記錄固定在 runner 結束處。這是責任的移動，所以列為 Delta。
@@ -592,6 +618,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | 新 DI 3 | — | **級別**：E0～E3 與非錯誤的定義、相對於單位、判準順序、升降只有第 4.1 節表列的幾條 |
 | 新 DI 4 | — | **處理一次**：產生與往上傳的一方不記；處理的一方至多記一次；一個錯誤只有一條通道；同一個錯誤以身分認 |
 | 新 DI 5 | — | **E1 的記錄處**：runner 結束處（`WithFailureLog` 或 `main`）讀 `Failure()` 記一次；收到 E1 的呼叫點只退出；Kernel、編排層、Module 不記 |
+| 命名規範頁（`target/v2/rebuild-naming.zh-Hant.md`，位置待確認） | — | **錯誤型別的字尾**：`…Error`＝E1、`…Failure`＝E2（D11，使用者 2026-11-20 定）；DI 3 引用 |
 | 新 DI 6 | — | **E3 是紀錄、不是錯誤值**：以診斷紀錄或 `Message` 表示，不改流程；產生方已記診斷的 E2，處理者不再記 |
 | Kernel DI-KS 2（`target/kernel.zh-Hant.md`） | 「Executor 記錄一次並 Interrupted」 | 「最外層 `Run` 回傳一次並 Interrupted，Kernel 不寫日誌」 |
 | Kernel DI-KS 17（`:93`） | 「錯誤處理只由最外層呼叫一次」 | 「錯誤只由最外層 `Run` 回傳一次」 |
@@ -605,7 +632,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | 編排層 O-3 | runner 決定關程式或回主選單 | 補：「收到 E1 時不再呼叫入口、結束；E1 的記錄在 runner 結束處（DI 5）；沒有包 `WithFailureLog` 時 `main` 是記錄者」 |
 | 編排層 O-4 | 職責清單含「編排層自己的警告」 | 拿掉這一項（D2）|
 | 編排層 O-9 | 「記一次 `Warning`、把錯誤回給呼叫的人……`build` 丟例外時先丟掉這一輪再往外傳」 | 「把錯誤回給呼叫的人、World 照跑；`build` 丟 `std::exception` 時丟掉這一輪、回錯誤」（D2、D4）|
-| 編排層 O-11 | 「任何一個 World 中斷（Kernel 回 Err 或例外離開它的 Run）……回 `WorldInterrupted` 或 `WorldMissing`……錯誤回給 runner」 | 改：回 E1 的型別 `ProductEnded`（中斷或空位由 `WorldFailure::kind` 說、升級的原因在 `cause`；`WorldInterrupted`、`WorldMissing`、`ScheduleFailed` 三個碼搬走，D3）；例外（`std::exception`）離開 Run 時也以回傳值交給 runner（D4）；直接跑 Kernel 弄壞時 `Failure()` 帶 Kernel 的錯誤、`Failure()` 讀時檢查（D8）；D10 選 (iii) 時加第三種結束原因 |
+| 編排層 O-11 | 「任何一個 World 中斷（Kernel 回 Err 或例外離開它的 Run）……回 `WorldInterrupted` 或 `WorldMissing`……錯誤回給 runner」 | 改：回 E1 的型別 `WorldError`（中斷或空位由 `WorldFailure::kind` 說、升級的原因在 `cause`；`WorldInterrupted`、`WorldMissing`、`ScheduleFailed` 三個碼搬走，D3）；例外（`std::exception`）離開 Run 時也以回傳值交給 runner（D4）；直接跑 Kernel 弄壞時 `Failure()` 帶 Kernel 的錯誤、`Failure()` 讀時檢查（D8）；D10 選 (iii) 時加第三種結束原因 |
 | 編排層 O-5 | 「準備函式的錯誤（O-E7）在建好的 World 上才會出現，另成一份」 | 補：`Build` 裡丟出的 `std::exception` 是報告的一筆（新的 O-E 碼，第 17.2 節） |
 | 編排層 O-8（`UnknownWorld` 的各案）、`Product.hpp` 的入口說明 | World 名不存在回 `UnknownWorld` | World 名不存在是斷言；名字來自資料時先 `HasWorld`（第 17.1 節）|
 | `docs/architecture/error-handling.md`（Legacy） | Executor 記一次 | 加指向 target 的標記，正文不改（D7） |
@@ -647,7 +674,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 - **`[el-p12-dropold-throw-before-try]`**、**`[el-p15-buildnew-first-gameinit]`**：缺陷的回歸測試，先 Red 再修（§14.3）；後者的期待照 D10 的選項。
 - **`[el-p12-ended-invariant]`**：「空位、沒有 `failure`、不在替換中」是斷言（D4 的源頭修正；用測試專用的掛點造出這個狀態，或省略並寫明靠審查——實作時判）。
 - **`[el-prepare-cannot-end]`**（D3 (b)）：編譯期——`OrchestrationError` 沒有 `failure` 成員（`requires` 檢查）。
-- **`[el-drop-cause-<步驟>]`**（D3 (b)）：`DropOldFirst` 各步失敗時 `ProductEnded::cause` 的碼與 `reporterCode` 對（存檔版本被拒的讀檔案例）。
+- **`[el-drop-cause-<步驟>]`**（D3 (b)）：`DropOldFirst` 各步失敗時 `WorldError::cause` 的碼與 `reporterCode` 對（存檔版本被拒的讀檔案例）。
 - **`[el-silent-<路徑>]`**：探針執行檔跑代表性的路（Kernel 單獨的 `Run` `Err`、巢狀、`Trigger`、hook round 上限；編排層的 `RunFrame` `Err`、`DropOldFirst` 失敗、`BuildNewFirst` 失敗、插入被拒、例外、`Build` 的例外），由 `cmake -P` 的 `execute_process` 收 stderr（照 `tests/common/base/AssertAbortProbe.cmake` 的形，三平台可攜），判定：**stderr 全空**。正例：探針的「故意印一行」模式，判定要看到那一行。`Base::Log` 的預設處理器寫 `std::cerr`，所以一個探針同時量到 `Base::Log`、`fprintf`、`std::cerr` 三種寫法。
 - **`[el-exception-returned-<路徑>]`**（D4 (b)）：`std::runtime_error`、`std::bad_alloc`（人為丟出）離開 System、準備函式、`InsertFn`、`beforeSwap`、帶過去的搬移 → 入口回對應級的錯誤、不丟；`AssertionFailure` 穿過、而且穿過 `DropOldFirst` 時 `Failure()` 有值（收尾照做）。
 - **`[el-d8-direct-<Run|Trigger>]`**、**`[el-d8-direct-throw]`**（D8 (b)）：經 `World(name)` 直接弄壞後，回 `Err` 的路 `Failure()` 帶 `kernelCode` 與 `where`；例外的路有值、不帶。
@@ -715,11 +742,12 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | 3a | **中途關卡**：G1、G2、G6、G8 的逐條 1～5 表交使用者 | 1.5 h |
 | 3b | Kernel：拿掉處理器（D1）、D8 的中斷錯誤；註解、K6 豁免；共用測試台與約 49 處判定改看回傳值；`[el-silent-kernel-*]` 探針 | 6 h |
 | 3c | D9（核准本批做時）：兩處改比身分、`IdIssuer` 配身分、`[el-d9-*]` | 2.5 h |
-| 4 | 編排層：D3 的型別與簽名（`ProductEnded` 三欄、碼的搬家）、D2 拿掉五處、D4（整個 `ReplaceWorld`、先組好的 `WorldFailure`、替換中的狀態）、D8 的 `Failure()`、D10、`Product::SetErrorHandler` 拿掉；P12、P15 先 Red；`[el-e1-*]`、`[el-exception-returned-*]`、`[el-drop-cause-*]`、`[el-silent-*]`；G3～G5、G8 | 9 h |
+| 4 | 編排層：D3 的型別與簽名（`WorldError` 三欄、碼的搬家）、D2 拿掉五處、D4（整個 `ReplaceWorld`、先組好的 `WorldFailure`、替換中的狀態）、D8 的 `Failure()`、D10、`Product::SetErrorHandler` 拿掉；P12、P15 先 Red；`[el-e1-*]`、`[el-exception-returned-*]`、`[el-drop-cause-*]`、`[el-silent-*]`；G3～G5、G8 | 9 h |
 | 4b | 第 17 節兩件：`UnknownWorld` 改斷言（G6，三案改寫、三個突變退役與變體、`or-ended-before-name` 改寫）；`Build` 的逐處接與最外層保底、O-E8（列舉、`ToString`、報告文字）、`notChecked` 的意思擴充；`[el-build-throw-*]`、`[el-unknown-world-*]` | 4.5 h |
 | 5 | 突變：新增、改寫、退役；相關的 Kernel（清單 737 個中受影響的）與編排層（227 個中受影響的）重跑；Fable 檢查 | 5 h |
 | 6 | 三平台 L1、dev_log（盤點表的三欄）、HANDOFF | 2.5 h |
-| | 合計（不含 3c） | 34.5 h |
+| 4c | D11 的改名：本批的型別（`WorldError`、`OrchestrationFailure`、`KernelFailure`）含在第 3b、4 步；範圍第 1 點選「一起改」時，`Base::Failure<Code>`、`CodedFailure` 與各 Module 的機械改名另加（`AssertionFailure` 改名時含在內） | +3 h（選一起改時） |
+| | 合計（不含 3c、4c） | 34.5 h |
 | | 合計（含 3c） | 37 h |
 
 ### 11.2 和日誌批、第 4 批的交界
@@ -762,15 +790,22 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 1. **級別本身與兩次原話的讀法**（第 4 節、文首）：E0～E3＋非錯誤，相對於單位分；升降只有第 4.1 節表列的幾條。請確認本卡的讀法：去重那一次的原話「返回沒錯，錯誤沒錯，包裝沒錯……不是機制問題」（HANDOFF 同一列的摘要另記「O-11、編排層都不動」），被同一天開這張卡的「沒有分級，runner不知道如何處理」擴大了範圍，所以本批會動 O-1／O-2／O-3／O-4／O-5／O-8／O-9／O-11 與編排層的程式。**GYO 特有**。建議：照第 4 節。
 2. **D2 拿掉編排層的五處 `Warning`，警告改由處理的一方記**。**推翻**：使用者 2026-11-17 原話「插入就拒絕，返回信息（不退出，但是System無法插入，日誌報警告）」（`v8-arch-gyo2-dynamic-insert-per-world`）——警告照樣記得到，記的人從編排層移到工具或遊戲；CCR-3、DI-KS 26、O-9、O-4（拿掉「編排層自己的警告」，清單少一項）。比過 (b) 只修致命那三處、(d) 改記診斷紀錄。建議 (a)。
-3. **D3 E1 與 E2 分成不同的型別**：`ProductEnded`（共用 Product 持有的 `WorldFailure`、包住升級成 E1 的那個 E2、帶 Kernel 錯誤）／`OrchestrationError`（拿掉 `failure`；只屬於 E1 的三個碼搬走）；`RunGameInit`、`RunFrame`、`RunSchedule` 只回 E1。**碰到**去重那一次的「包裝沒錯」——(b) 保留「結構化錯誤回給 runner」，改的是 E1 不再和 E2 共用一個型別。**各家分歧**：級別放型別（Java、Rust）或靠一個欄位（Go 的 `errors.As` 用在 optional 上，D3 (a)）。照建議做完，E1、E2 在程式裡有名字；選 (a) 的話級別只存在文件裡。建議 (b)。
+3. **D3 E1 與 E2 分成不同的型別**：`WorldError`（共用 Product 持有的 `WorldFailure`、包住升級成 E1 的那個 E2、帶 Kernel 錯誤）／`OrchestrationError`（拿掉 `failure`；只屬於 E1 的三個碼搬走）；`RunGameInit`、`RunFrame`、`RunSchedule` 只回 E1。**碰到**去重那一次的「包裝沒錯」——(b) 保留「結構化錯誤回給 runner」，改的是 E1 不再和 E2 共用一個型別。**各家分歧**：級別放型別（Java、Rust）或靠一個欄位（Go 的 `errors.As` 用在 optional 上，D3 (a)）。照建議做完，E1、E2 在程式裡有名字；選 (a) 的話級別只存在文件裡。建議 (b)。
 4. **D4 入口在邊界接 `std::exception` 轉成回傳值**（含 P12 從源頭修：先組好 `WorldFailure`、替換中有明確的狀態）。**推翻**：O-9「`build` 丟例外時往外傳」；O-11 的例外守衛（G4）；日誌宣告 5.6 的情形 (2)；也碰到「返回沒錯」。**各家分歧**：例外在工作單位邊界轉成值（Go、Bevy）或一路丟（Java）或接住繼續（Unity）。建議 (b)。
 5. **D1 拿掉 Kernel 的錯誤處理器**。**推翻**：target DI 1、2、DI-KS 2、17、18 的「Executor 記一次」（2026-11-13 核准）；它的來歷是使用者 2026-11-11「這裡其實我想用 Result，原因不是可恢復，而是記日誌」「不靜默處理也是我們的原則之一」。**失去的**：Kernel 不再自己保證留下痕跡；「不靜默」改由「Err 一定回到呼叫者＋沒讀是編譯錯誤（D5）＋處理者記一次」三件保證，所以 D1 (b) 要和 D5 (a) 一起核准。**各家分歧**：Bevy 的處理器是唯一通道、GYO 的 `Err` 往上回。建議 (b)＋D5 (a)。
-6. **D5 不理 `Result` 變成編譯錯誤**（現況命中 0）；以及 target 的 Replacement Criteria 改寫（Kernel 的 E2 路可以用 `KernelError`，P17）。**各家分歧**：Java 強制、Go 靠工具、Rust 可設成錯誤。建議 (a)；RC 照第 8.2 節改。
+6. **D5 不理 `Result` 變成編譯錯誤**（現況命中 0）。target 的 Replacement Criteria：D11 把 Kernel 的 E2 改成 `KernelFailure` 之後照原文成立，**不必改寫**（修訂 3 以前的提案撤回）。**各家分歧**：Java 強制、Go 靠工具、Rust 可設成錯誤。建議 (a)；RC 照第 8.2 節改。
 7. **D8 Kernel 在中斷那一刻把錯誤留在 Executor 上，`Failure()` 讀時看得到**（`Failure()` 拿掉 `const noexcept`；例外的路沒有 Kernel 錯誤）。要確認：(1) O-11／D2 第 5 點「不在事後讀壞掉的 World」指的是「不從壞掉的 World 的資料組錯誤」，所以讀 Executor 上中斷當下收好的值不違反；(2) 要不要改採修源頭的 (d)：不交出能跑的 `WorldExecutor`、加 `Trigger` 入口——它讓這整條路消失，但收回 O-1 容許的繞過、公開介面變得最大。建議 (b)。
 8. **第 4 批「重複登記的裁決」判為非錯誤、不記**（P6、第 5.5 節 A8）。主會話提出它和 O-9 形狀相同；本卡判：蓋過是登記規則的設計結果，不一致已是啟動錯誤。建議：照判、第 4 批不改。
 9. **D9 照內容比對改成比身分**（兩處：`Listed()`、`SameError`），本批做或另開。照源碼造得出兩個內容相同的不同錯誤被當成一個。建議本批做（同檔，+2.5 h）。
 10. **D10 `BuildNewFirst` 換第一個 World、遊戲初始化在新 World 上失敗**：(i) E2、`gameInitRan_` 還原、下一個入口在舊的第一個 World 上跑遊戲初始化（建議；不新增結束原因，O-1 加一句寫明這條路）／(ii) 先在舊 World 上跑遊戲初始化再替換（推翻編排層骨架的做法）／(iii) E1、O-11 加第三種結束原因。修訂 1 寫「照 O-1 判 E1、不是推翻」不對，已撤回。
 11. **World 名不存在改成斷言**（第 17.1 節，主會話併入）。這是 O-8 守衛的判定變更、**有緩的面**（G6），而且「各家沒有分歧」只成立一半：Bevy 在「用」的那一支兩種都給（`run_schedule` panic、`try_run_schedule` 回 `Result`），flecs 的斷言 release 會編掉。本卡只給會中止的那一支、查詢用 `HasWorld` 的理由在第 17.1 節。對使用者的意義：工具把面板上打的 World 名直接傳進來，以前拿到可以顯示的錯誤、之後是行程中止，除非先 `HasWorld`。建議：照第 17.1 節。
+
+12. **錯誤型別的命名規則**（D11；規則本身使用者已定：`…Error`＝E1、`…Failure`＝E2）。side chat 留給本卡問的三點，加本卡照源碼補的兩點：
+    1. **範圍**：只改本批碰到的（Kernel、編排層），還是 E2 的 Module 錯誤型別（`JsonError`、`OsError`、`IoError`、`AudioError`、`ThreadError`、`TimeError`）、日誌分支的 `LoggingError`、`Base::Error<Code>`／`CodedError` 與現行契約的「Error types」一節也一起改？一起改會碰到已合併的 JSON、os、io、audio 與 Legacy 契約、日誌分支；建議：**本批改 Kernel、編排層與 `Base`（`Base::Failure<Code>`、`CodedFailure`），各 Module 的型別名在同一個 PR 裡機械地改**——規則一定下，留著反過來的名字就是兩套說法並存，改得越晚上面積得越多（`-mechanism-not-conservative`）；機械改名估 +3 h，日誌分支的 `LoggingError` 由日誌批照規則改。
+    2. **E1 的載體叫 `WorldError` 還是 `ProductError`**：side chat 傾向 `WorldError`（原因在 World，Product 結束是後果）；本卡同意，而且 `WorldError` 也涵蓋 Kernel 單獨用時（沒有 Product）。
+    3. **`Result::error()` 與 `Base::Err(...)` 照舊**（`std::expected` 的用語、不分級）：side chat 建議、本卡同意。
+    4. **`StartupReport`、`ProductStartupReport` 照舊**（本卡補）：是一次收齊的報告，`Report` 已說明處理方式。
+    5. **`Base::AssertionFailure` 和規則衝突**（本卡補）：E0 的那一包叫 `…Failure`。建議改名（例：`AssertionViolation`），隨範圍第 1 點一起做；不改的話在命名規範寫明它是例外。
 
 **主會話照 L17 判了、不交使用者的**（2026-11-20 主會話轉來）：P18 與 O7 併入本批（第 17 節；第 17.1 節的判定變更與 Bevy 的兩支照上面第 11 題交使用者，因為窄複查指出有緩的面）；D7 條文先照本宣告的提案放，合併前由主會話轉圖書管理員確認，不擋動工；批次先後照第 11.2 節（本批 → 日誌批 → 第 4 批的 Kernel 與編排層步驟）。
 
