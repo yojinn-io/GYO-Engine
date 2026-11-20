@@ -215,6 +215,16 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 **決定**：編排層給「每次建 World 一份、以型別為鍵」的共用槽；「不算 O-4 職責清單多一項」也經使用者確認。理由（使用者的）：組裝 Module 是編排層的工作（O-4「組裝與流程」、O-2、O-6），buffer 放編排層合理。用詞：使用者覺得它像「Module 的 buffer」（暫時的中轉區：建 World 期間用，內容凍結後交給 World 的 Resource，之後清掉），不像 cache；正式名字實作時照命名規範定，可參考這個說法（下面的暫名 `Shared<T>()` 也在那時重定）。附帶：`Build` 指執行期建 World 時 Module 的登記函式，和 CMake 的建置容易混淆；使用者沒有要求改名。下面保留決定前的比較。
 
+**共用槽的機制**（使用者 2026-11-20 補充：「第 3 件，注意，由於是共用的，需要建立一個機制，或者需要保證順序，邊讀邊寫很容易出問題。」下面四點是 side chat 提的，使用者回「可以」）：
+
+1. **分段，型別上擋住**：`Build` 階段（Module 的 `Build` 與產品自己的 `build`）經 `WorldSetup` 拿到 `T&`；`WorldFinish`、`WorldCheck` 只給 `const T&`。`Build` 階段結束時編排層凍結槽，凍結後再寫是 Programmer Error（斷言）。要看全貌的判斷（Z6、Z8、D-E15 的交叉檢查、重複登記的裁決）一律放在凍結後的 `Finish`／`Check`。系譜（side chat 補，不是使用者的話）：Bevy 的 Plugin 分 `build`／`finish`，`finish` 在所有 `build` 之後才讀別人的登記。
+2. **誰建、誰用**：槽裡每種型別只由擁有它的 Module 建（暫名 `Create<T>`）；別人用 `Find<T>`，找不到就回錯誤，不偷偷建空的。先後靠 `modules.csv` 的依賴與既有的 O-E3（依賴排在後面是錯誤）保證；產品自己的 `build` 永遠在最後。
+3. **寫入只記錄、不裁決**：`Build` 階段只追加，每筆帶「作者／代為」的來源；凍結後統一裁決（作者的蓋過代為的；兩筆作者的 options 不同是錯誤），所以結果和呼叫順序無關。本卡照 L17 補的細節：編排層不解讀槽裡的型別（O-2），所以裁決由擁有該型別的 Module 在自己的 `Finish` 做，錯誤在 `Check` 回報（`RB-E…`）。這和回滾份 5.4「不論先後，作者的為準」、權威份 DI-A 11「代為登記在登記當下做」都一致：登記當下做的是「記下一筆」，誰為準到凍結後才定。
+4. **單執行緒、不加鎖**：建 World 是單執行緒依序跑，不加鎖；寫進 DI（11.5），之後要並行建 World 時碰 RC（11.5 的 RC-O10）。
+
+比過的選項：只靠呼叫順序與約定（不建機制）／建上面的機制（**選這個**）。
+
+
 **遊戲的例子**：PvP Client 的作者在**產品自己的 `build`** 寫 `authority.Component<Health>()`；伺服器權威策略要在**這一刻**替作者呼叫回滾 Module 的 `rollback.Component<Health>()`（權威份 4.3、4.4：「重跑時不跑」只能在 `AddSystem` 當下給，代為登記不能等到 Plan 建好）。之後權威的 `Check` 要讀回滾的公開登記（Z6、Z8、D-E15）。單機的時間倒流只用回滾：作者在自己的 `build` 寫 `rollback.Component<Position>()`。
 
 **現在缺兩條**（修訂 1，檢查 M5）：(1) 作者拿不到 `authority`、`rollback` 這兩個入口——產品自己的 `build` 只拿到 `WorldSetup&`（`Product.hpp:42`），用產生的單位表的產品手上沒有單位物件；(2) 權威 Module 拿不到同一個 World 的回滾 Module。`WorldSetup`／`WorldCheck` 都不交出別的登記單位（`Setup.hpp`、`detail/RegistrationUnit.hpp:36-47`）。
@@ -222,7 +232,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 **別家**：Bevy 有兩種，都在 App 層。(1) `App::get_added_plugins::<T>()` 回傳已加入的 Plugin 參照，**唯讀**，文件寫「read the settings」（`bevy_app/src/app.rs:578-600`）；(2) lightyear 的登記存在 App 上的 Resource `ComponentRegistry`，預測套件與作者都在 build 時改它（`lightyear/src/protocol.rs:102`、`prediction/src/registry.rs:741-748`）。GYO 在 `Build` 時還沒有 World；(2) 的對應是「每次建 World 一份、以型別為鍵的共用槽」。
 
 **比過的選項**：
-- **(a) 編排層給每次建 World 一份的共用槽**（**選這個**；修訂 1 新增）：`WorldSetup` 加一個以型別為鍵的槽（暫名 `Shared<T>()`：沒有就建一份、有就回同一份；`WorldFinish`、`WorldCheck` 唯讀地讀得到），每次 `Build` 那個 World 時新建，跟著那一次建 World 走。回滾 Module 在自己的 `Build` 開頭建它的登記表放進槽；權威 Module、作者都從槽拿到 `rollback`、`authority` 的入口。系譜：lightyear 的 App Resource。代價：改第 2 批已合併的編排層介面；編排層不認得槽裡的型別（和選項包同形，O-2「只轉交、不解讀」）。本卡判**不算 O-4 職責清單多一項**（屬「登記單位與生命週期」），不碰 RC-O1（不改迴圈）、RC-O4（編排層不 include 任何 Module）。
+- **(a) 編排層給每次建 World 一份的共用槽**（**選這個**；修訂 1 新增）：`WorldSetup` 加一個以型別為鍵的槽（修訂 0、1 的暫名 `Shared<T>()`「沒有就建一份、有就回同一份」已由上面的機制取代：擁有者 `Create<T>`、別人 `Find<T>`；`WorldFinish`、`WorldCheck` 只拿 `const T&`），每次 `Build` 那個 World 時新建，跟著那一次建 World 走。回滾 Module 在自己的 `Build` 開頭建它的登記表放進槽；權威 Module、作者都從槽拿到 `rollback`、`authority` 的入口。系譜：lightyear 的 App Resource。代價：改第 2 批已合併的編排層介面；編排層不認得槽裡的型別（和選項包同形，O-2「只轉交、不解讀」）。本卡判**不算 O-4 職責清單多一項**（屬「登記單位與生命週期」），不碰 RC-O1（不改迴圈）、RC-O4（編排層不 include 任何 Module）。
 - **(b) 編排層給「依賴的登記單位」的查詢**：`WorldSetup`、`WorldCheck` 加 `Unit<T>()`，查登記檔寫了依賴、排在前面的單位；產品自己的 `build` 也要能查它帶的單位。代價：比 Bevy 的前例多一步（回傳可改的參照、呼叫會改它狀態的登記）；Module 物件以 World 名為鍵的資料遇上 `BuildNewFirst` 失敗的問題（5.1）要另外處理。系譜：Bevy `get_added_plugins`。
 - **(c) 產品經選項包傳共用物件**：產品建一個登記物件，同時放進兩個 Module 的選項，作者也拿得到。編排層不改；代價：每個用權威或回滾的產品都要自己接線，忘了接就是代為登記失效；回滾的公開登記變成「產品的東西」，和 R-6 不一致。
 - **(d) static、以 World 名為鍵的表**（`TickWriters` 的延伸）：編排層不改；代價：行程內全域的可變狀態，同一行程兩個 Product（測試常見）同名 World 會互相蓋掉。
@@ -300,6 +310,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 - **Kernel**：原語 1～4（有型別的整欄走訪給 stamp；一批放回：沒變的格不寫、有變的標同一個 stamp、全部放回後才跑 hook 與 observer、hook 看得到同一個實體已放回的其他欄、復活配發器範圍內的 id；Resource 的 stamp；`ExclusiveWorld` 讀目前 stamp）；`Writes<…>` 收元件；訊息寫者名單（System、hook、observer、`BuildPlans` 重算）；逐型別雜湊（padding 不同摘要相同、`optional` 空著時的殘值不影響、`std::vector` 內容不同摘要不同、內容相同而位址不同時相同、`long` 等寬度隨平台的整數照 64 位元、作者選照位元組的型別、Kernel 附的型別、浮點逐位元（`-0.0f` 與 `+0.0f` 摘要不同、作者在函式裡正規化時相同）、沒有函式的型別在 World 裡時 `Summary` 回錯誤並列出型別、拿掉那個型別的實體後同一個 `Summary` 成功）。
 - **權威**：權威份第 7 節 DI-A 與第 5 節各條；一致性指紋兩方向；digest（同狀態相同、改一格不同、兩個相同的「實體×元件」不抵銷、迭代順序無關）；tick 檢查（名單外寫 `Tick` 報錯、`Writes<Tick>` 標註也算、時間 Module 的驅動者通過）；佔位策略與沒選策略的啟動錯誤；沒選策略時型別照樣進 Kernel；代為登記在登記當下、作者的為準；Build 時的錯誤在 `Check` 報；A4 的漏斗走訪性質。
+- **編排層**（共用槽，第 6 節的機制）：`Build` 拿 `T&`、`Finish`／`Check` 拿 `const T&`（編譯期）；凍結後寫入觸發斷言；`Find<T>` 在沒人 `Create<T>` 時回錯誤、不代建；兩個 Module 對同一型別 `Create` 是錯誤；作者／代為兩筆登記照兩種呼叫順序跑，裁決結果相同；兩筆作者 options 不同報錯；換 World 時新的一次建 World 拿到空槽。
 - **回滾**：回滾份第 9 節 R-1～R-7 的守衛（含 R-2 等價測試與它列的七個突變）；跨 schedule 的訊息兩方向；沒選策略的 World 沒有歷史（R-4）；換 World 歷史不跨世代（R-5）；`BuildNewFirst` 失敗時舊 World 的回滾照常（5.1）；超過深度丟掉並記診斷；Plan 版本變了歷史作廢（回滾份 7.5）。
 - **scenario 第 3 段**（`tests/common/scenario/`，ctest `scenario.segment3`，標籤 `cpu`）：
 
@@ -370,7 +381,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 | I2 | 原語 1～4（含一批放回的 hook 時機）、`ExclusiveWorld` 讀目前 stamp | 統合 | 統合 | R |
 | I3 | `Writes<…>` 收元件、`annotatedWrites` 的形狀與指紋編碼 | 統合 | 統合 | A（指紋、Z6、tick 檢查） |
 | I4 | 訊息寫者名單 | 統合 | 統合 | R（跨 schedule 訊息） |
-| I5 | Module 與作者的接法（第 6 節的結果） | 統合 | 統合 | A、R、作者 |
+| I5 | Module 與作者的接法（第 6 節：共用槽與它的四點機制） | 統合 | 統合 | A、R、作者 |
 | I6 | 回滾的公開登記與讀取介面（六種，R-6）、重複登記的規則、凍結後放進 World 的 Resource | 統合 | **統合**（修訂 1） | R（策略、檢查）、A（5.11、代為登記） |
 | I7 | `AuthorityStrategy`、`RollbackStrategy` 的掛點（兩份的契約部分） | 統合（標頭） | A、R | 作者 |
 | I8 | `Tick`、`TickWriters()`、`Resimulation`、`RunOneFixedStep`、`RewindFixedSteps`、`WorldTimeOptions` 的 schedule 名 | 第 3 批（已有） | — | A、R |
@@ -429,7 +440,8 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ### 11.5 編排層（`target/v2/orchestration.zh-Hant.md`；第 12 節第 3 件定 (a)）
 
-- **O-2** 補「每次建 World 有一份以型別為鍵的共用槽，登記單位與產品自己的 `build` 在 `Build` 讀寫、在 `Finish`、`Check` 唯讀；編排層不解讀槽裡的型別；槽在那一次建 World 結束時清掉，要留下的內容由 Module 凍結進 World 的 Resource」。（(b) 的補句不採。）
+- **O-2** 補「每次建 World 有一份以型別為鍵的共用槽。槽裡每種型別只由擁有它的登記單位建（`Create<T>`），別人用 `Find<T>`，找不到是錯誤、不代建；先後由登記檔的依賴與 O-E3 保證，產品自己的 `build` 在最後。登記單位與產品自己的 `build` 在 `Build` 拿 `T&`，`Build` 階段結束時編排層凍結槽，之後 `Finish`、`Check` 只拿 `const T&`，凍結後寫是 Programmer Error。`Build` 階段的寫入只追加、帶來源，裁決在凍結後由擁有者做，結果和呼叫順序無關。編排層不解讀槽裡的型別。建 World 單執行緒依序跑，槽不加鎖。槽在那一次建 World 結束時清掉，要留下的內容由 Module 凍結進 World 的 Resource」（「Create／Find」「凍結」是暫名，實作時照命名規範定；「結束時清掉」「凍結進 Resource」「裁決由擁有者做」是本卡的文字）。守衛：`Finish`／`Check` 拿到的是 `const`（編譯期，`requires` 檢查寫入不成立）；凍結後寫入的斷言；`Find` 找不到回錯誤、不代建；同一組登記兩種呼叫順序裁決結果相同；兩筆作者 options 不同報錯。（(b) 的補句不採。）
+- **RC-O10**（新）：建 World 要改成並行（多執行緒同時建，或一個 World 的登記單位並行 `Build`），共用槽需要加鎖或改成別的同步方式。
 - **O-4** 不改（不算多一項，使用者 2026-11-20 確認）。
 
 ---
@@ -471,7 +483,9 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 這件交使用者，因為和同技術的別家是否一致、三種相等要不要對齊，會影響摘要、digest、回滾三處。
 
-### 第 3 件：Module 與作者的接法（第 6 節）——**已定 (a)**
+### 第 3 件：Module 與作者的接法（第 6 節）——**已定 (a)，並加共用槽的機制**
+
+**補充決定**（使用者，2026-11-20，side chat）：原話「第 3 件，注意，由於是共用的，需要建立一個機制，或者需要保證順序，邊讀邊寫很容易出問題。」side chat 提出四點機制（分段型別上擋、擁有者建別人找、只記錄凍結後裁決、單執行緒不加鎖），使用者回「可以」。比過：只靠呼叫順序與約定／建機制（選）。細節在第 6 節。
 
 **決定**（使用者，2026-11-20，side chat）：(a)，並確認不算 O-4 多一項。原話（依序）：「這個稍微展開一下。」→「給我一個其他家的交叉比較。」→「Build 時哪個build ？ 遊戲編譯時？」→「類似於Module 的 cache？」→「Module的buff，應該更準確。我問一下，組裝Module是誰的工作？」→「buffer 放編排層很合理。可以選（a）」。詳見第 6 節。下面保留決定前的選項。
 
