@@ -195,18 +195,4 @@ private:
     std::optional<WorldFailure> failure_;
 };
 
-// The runner's exit as a process exit code: 0 for Success, 1 for Failure (O-3).
-[[nodiscard]] constexpr int ExitCode(const RunnerExit& exit) noexcept {
-    return exit.code == RunnerExitCode::Success ? 0 : 1;
-}
-
-// The standard main (O-3): builds the Product, runs it, destroys it, and returns the
-// process exit code. It is the layer that decides what follows, so it writes the line
-// and decides in one place: a startup report becomes one Error line and 1; a runner's
-// Failure becomes one Error line with its reason and 1; Success is 0. The runner below
-// it only returns the reason. A product that wants something else (back to its menu
-// with another Product) writes its own main.
-//     int main() { return GYO::Engine::Orchestration::RunProduct(Describe(), Units()); }
-[[nodiscard]] int RunProduct(ProductDescription description, RegisteredUnits units);
-
 } // namespace GYO::Engine::Orchestration

@@ -1039,4 +1039,5 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 **退出流程與標準 main**（使用者 2026-11-21 的決定，主會話親自改，295d2be6；細節與原話在 dev_log〈退出流程與標準 main〉）：
 - 使用者原話（節錄）：「你把處理返回回來的異常信息的處理代碼加上。注意，不是讓你改機制。是讓你再runner一類的上層，看到錯誤代碼了，做對應處理。你親自去改。」「照這個流程改。④ 也要在這一批補一個標準的 main 範例或輔助函式」「記日誌和處理異常不在同一層。go也是這樣處理的？」
 - 定下的：預設 runner（`Product::Run`）失敗時只回 `Failure` 與原因（E1 帶 `WorldFailure` 全文），自己不寫；新增 `ExitCode(RunnerExit)` 與標準 main `RunProduct(description, units)`——做決定的那一層：啟動報告或 runner 的 `Failure` 記一筆 Error、回 1，成功回 0。照 Go：下層包上脈絡回傳，最上層的 main 記一筆。
+- 之後撤回（使用者 2026-11-21）：`RunProduct`、`ExitCode` 與範例 main（`MainExample.cpp`、`orchestration.O-3-main`）從 Engine 與測試刪掉。原話：「刪掉這個」「MainExample.cpp 和 RunProduct 都處理掉」「相關的 Example 都處理掉。後面等搬產品時由產品寫」。使用者原以為它只是參考用的範例；Engine 不給標準 main，main 是產品的。預設 runner 只回原因、不寫，照舊。
 

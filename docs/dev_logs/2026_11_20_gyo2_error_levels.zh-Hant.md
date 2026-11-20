@@ -56,3 +56,10 @@
 - 測試：`O-3: the default runner returns…`（`[or-runner-default-reason]`、`[or-runner-default-silent]`）、`O-3: RunProduct writes a runner's Failure…`、`…writes nothing and returns 0…`、`…handles a startup report…`（`[or-runproduct-startup-*]`、`[or-exit-code]`）。本機（macOS）ctest 全量 133 過（含 `orchestration.O-3-main`）。
 - 突變：新增 `or-runner-logs-back`、`or-runner-reason-dropped`、`or-runproduct-failure-silent`、`or-runproduct-startup-silent`、`or-main-exit-zero`，5/5 killed；`g8-default-runner-always-success` 的 cases 隨測試改名，`or-runner-not-called` 照跑，2/2 killed。
 
+
+## 撤回標準 main（2026-11-21，使用者）
+
+- 使用者原話：「刪掉這個」（指 `RunProduct`；原以為它只是參考用的範例），接著「MainExample.cpp 和 RunProduct 都處理掉」「相關的 Example 都處理掉。後面等搬產品時由產品寫」。main 由產品搬上 GYO2 時自己寫。
+- 改了什麼：Engine 刪掉 `ExitCode(RunnerExit)` 與 `RunProduct(description, units)`（編排層因此不再引用 `Base::Log`）；刪掉範例 main `MainExample.cpp`、`MainExampleProbe.cmake` 與 `orchestration.O-3-main`；`CoverageTests.cpp` 刪掉三個 RunProduct 案例（`[or-runproduct-*]`、`[or-exit-code]`）。預設 runner 只回原因、不寫，照舊（`[or-runner-default-reason]`、`[or-runner-default-silent]` 留著）。
+- 條文：`target/error-handling.md` 的「How the Engine's own code uses this」與 DI 4、O-3、O-11 的草稿改成「接下來怎麼辦由產品自己的 main 決定，Engine 不給標準 main」；宣告第 19 節加一行撤回紀錄。
+- 突變（§14.5「機能を取り除く変更は、同じ変更でそのミュータントを退ける」）：退掉 `or-runproduct-failure-silent`、`or-runproduct-startup-silent`、`or-main-exit-zero`（3 個，守的函式與探針已刪），目錄 231→228。沒有新增。

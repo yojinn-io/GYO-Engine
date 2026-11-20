@@ -2862,50 +2862,6 @@
    "guards": [
     "orchestration O-3"
    ]
-  },
-  {
-   "id": "or-runproduct-failure-silent",
-   "what": "RunProduct returns 1 for a runner's Failure without writing its reason: the error is dropped at the layer that decides",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", exit.reason);\n",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-3: RunProduct writes a runner's Failure*",
-   "expect": "\\[or\\-runproduct\\-failure\\-logs\\]",
-   "guards": [
-    "orchestration O-3"
-   ]
-  },
-  {
-   "id": "or-runproduct-startup-silent",
-   "what": "RunProduct returns 1 for a startup report without writing it",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "                            \"the Product did not start: \" + report.message + (report.detail.empty() ? \"\" : \"\\n\" + report.detail));\n",
-   "replace": "                            std::string());\n",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-3: RunProduct handles a startup report*",
-   "expect": "\\[or\\-runproduct\\-startup\\-logs\\]",
-   "guards": [
-    "orchestration O-3"
-   ]
-  },
-  {
-   "id": "or-main-exit-zero",
-   "what": "RunProduct returns 0 for a runner's Failure: the process exits as if it succeeded. Run as a process by the main example probe",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "    return ExitCode(exit);\n}\n",
-   "replace": "    return 0;\n}\n",
-   "target": "gyo_orchestration_main_example",
-   "command": [
-    "{cmake}",
-    "-P",
-    "tests/common/orchestration/MainExampleProbe.cmake",
-    "{exe:gyo_orchestration_main_example}"
-   ],
-   "expect": "\\[or\\-main\\-failure\\-exit\\]",
-   "guards": [
-    "orchestration O-3"
-   ]
   }
  ]
 }
