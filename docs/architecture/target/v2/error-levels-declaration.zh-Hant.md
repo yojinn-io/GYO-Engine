@@ -1,6 +1,6 @@
 # 事前宣告：異常分級（`v8-arch-gyo2-error-levels`）
 
-修訂 4（2026-11-20）。Owner：架構（GYO2 任務卡「異常分級」，架構師的子會話）。分支 `claude/gyo2-error-levels-170217`，從 `gyo2` 8ec005f2 開。修訂 0 是 641ec8b9；修訂 1（34cd347a）照 Fable 5.2／high 的敵對式檢查（必改 10、建議改 16、小問題 11）改，處理對照在第 16 節；修訂 2（81b1f1de）照主會話照 L17 的判斷併入兩件（`UnknownWorld` 與 schedule 名不一致、`Product::Build` 的例外），見第 17 節；修訂 3（9e18bdd3）照使用者要的窄複查（Fable 5.2／high，範圍 D3 (b)、D8～D10、第 17 節；必改 7、建議改 12、小問題 8）改，處理對照在第 18 節；修訂 4 寫入使用者在 side chat 定的錯誤型別命名規則（D11、第 13 節第 12 題）。
+修訂 5（2026-11-20）。Owner：架構（GYO2 任務卡「異常分級」，架構師的子會話）。分支 `claude/gyo2-error-levels-170217`，從 `gyo2` 8ec005f2 開。修訂 0 是 641ec8b9；修訂 1（34cd347a）照 Fable 5.2／high 的敵對式檢查（必改 10、建議改 16、小問題 11）改，處理對照在第 16 節；修訂 2（81b1f1de）照主會話照 L17 的判斷併入兩件（`UnknownWorld` 與 schedule 名不一致、`Product::Build` 的例外），見第 17 節；修訂 3（9e18bdd3）照使用者要的窄複查（Fable 5.2／high，範圍 D3 (b)、D8～D10、第 17 節；必改 7、建議改 12、小問題 8）改，處理對照在第 18 節；修訂 4（3e438d9f）寫入使用者在 side chat 定的錯誤型別命名規則（D11、第 13 節第 12 題）；修訂 5 照使用者的要求，以原始出處重查 Java 與 Go 的分級（第 3.1 節重寫、第 5.6 節、D11 的字義對照）。
 
 狀態：**等動工前核准**。這一回合只寫宣告，不寫實作。
 
@@ -166,15 +166,40 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 
 ## 3. 別家怎麼分（同一個問題：級別怎麼分、每一級誰處理、能不能被忽略）
 
-### 3.1 語言
+### 3.1 語言（修訂 5 照原始出處重寫）
 
-| | 級別 | 誰處理 | 能不能忽略 | 記在哪 |
+修訂 0～4 的這一節是憑記憶寫的。修訂 5 由研究子 Agent（Opus 5.5／high）照官方文件查過：JLS SE 21 第 11 章、Javadoc SE 21、Oracle Java Tutorials；Effective Go、Go 語言規格、Go FAQ、go.dev blog、`errors` 套件文件、Go Wiki、`net/http` 文件與 go1.22.0 原始碼。報告存主 checkout `build/evidence/gyo2-error-levels/research-java-go.md`（本機 macOS，git 不追蹤），每條附 URL 與段落。下表的引文是英文原文短引。
+
+| | 級別怎麼分 | 誰處理、處理成什麼樣 | 能不能忽略 | 記在哪 |
 |---|---|---|---|---|
-| **Java** | `Throwable` 下分 `Error`（`OutOfMemoryError`、`StackOverflowError`、`AssertionError`：「合理的程式不該接」）與 `Exception`；`Exception` 再分 checked（編譯器要求接或宣告 `throws`）與 `RuntimeException`（unchecked，多半是程式錯誤） | checked：呼叫者；`RuntimeException`、`Error`：一路往上到執行緒頂端（`UncaughtExceptionHandler`）或框架的最外層 | checked 不能默默忽略（編譯錯誤），但能 `catch {}` 吞掉——公認的壞習慣；`Error` 照規範不接 | 慣例「log or rethrow, not both」；頂端處理器記一次 |
-| **Go** | error 值（呼叫者處理）與 `panic`（程式錯誤、不可恢復；`recover` 只在少數邊界——例如 HTTP server 每個請求的頂端——轉回 error 或結束那個單位）；error 用 `%w` 包上下文，`errors.Is`（比哨兵值）、`errors.As`（取出某型別）判斷 | error：直接呼叫者，「處理一次」：要嘛包一層往上回，要嘛在這裡處理，不兩者都做；panic：最外層 | 語言允許 `_ = f()`，那是明寫的決定；`errcheck` 等工具抓沒寫的 | 處理的那一層記一次；panic 由 runtime 印堆疊 |
-| **Rust** | `Result<T, E>`（可恢復）與 `panic!`（bug；`.unwrap()`／`.expect()` 把 `Err` 明寫升級成 panic）；`catch_unwind` 只給執行緒或 FFI 邊界 | `Result`：呼叫者（`?` 往上傳）；panic：執行緒結束，`JoinHandle::join` 拿到 | `Result` 是 `#[must_use]`：不用就警告，專案常用 `#![deny(unused_must_use)]` 變成錯誤；`let _ =` 是明寫的忽略 | 處理的那一層；panic hook 印一次 |
+| **Java** | 三類（JLS §11.1.1：unchecked＝`Error`＋`RuntimeException`）：`Error`「serious problems that a reasonable application should not try to catch」（`Error` Javadoc）；checked `Exception`：合理的應用可能想接的狀況；`RuntimeException`：Tutorial 說多半是程式 bug | checked：呼叫鏈上能處理的一方接，否則每層 `throws` 宣告；`Error` 不接；`RuntimeException` 修程式。沒人接時**結束的是當前執行緒、不是行程**（JLS §11.3），交 `UncaughtExceptionHandler` → `ThreadGroup` → 預設處理器印 stderr | checked 由編譯器強制「接或宣告」（JLS §11.2.3）；Tutorial 明說不要為了省宣告改丟 `RuntimeException`；空 `catch` 能編譯，官方評價查不到 | 官方**沒有**「記或往上傳二選一」的條文；只有邊界的記錄：預設處理器、`ThreadPoolExecutor.afterExecute` |
+| **Go** | 兩類：`error` 值與 `panic`；執行期錯誤（索引越界等）等同帶 `runtime.Error` 值的 `panic`（規格〈Run-time panics〉）；FAQ：`panic` 只給「truly exceptional」的情形 | `error`：直接呼叫者，Code Review Comments：「Handle the error, return it, or ... panic」；blog 的 appHandler 示範在一處集中處理。**沒有 recover 的 `panic` 結束整個行程**（任何一個 goroutine 都是） | 編譯器不強制；Effective Go 說丟掉 error 是「terrible practice」；Code Review Comments：「Do not discard errors using _」 | 官方**沒有**「只處理一次」的條文；「handle errors once」出自 Dave Cheney（2016）與 Uber Go Style Guide，都是**非官方** |
 
-三家共同的骨架：**(一) 程式本身不可信**（Java `Error`、Go `panic`、Rust `panic`）——不接、最外層記一次、結束；**(二) 這次請求失敗**（checked／error／`Result`）——直接呼叫者處理，往上傳時包上下文、不記，處理的地方記一次；**(三) 明寫的升級**（Java 包成 `RuntimeException`、Go `panic(err)`、Rust `.expect()`）。分歧：Java 用型別階層加編譯器強制，Go 靠慣例與工具，Rust 靠 `#[must_use]`（可設成錯誤）；Go 與 Rust 有「工作單位的邊界」（HTTP 請求、執行緒）把不可恢復的事收成一個值交給上層，Java 靠例外一路往上。
+**邊界（工作單位）**：
+- Go：`recover` 只在 deferred 函式裡直接呼叫才有效（規格〈Handling panics〉）。`net/http` 每個請求在邊界 recover、記 stack trace、關連線，**前提寫在 Handler 的文件裡**：伺服器「assumes that the effect of the panic was isolated to the active request」；`ErrAbortHandler` 是「中止這個 handler、不記錄」的正常中止。Effective Go 對 recover 之後的建議：伺服器記下後結束那個 goroutine（`safelyDo`）；程式庫只把預期型別的 panic 轉回 error、其他照樣 re-panic；對外 API 一律回 error，不把 panic 露給呼叫者。
+- Java：執行緒的邊界是 `UncaughtExceptionHandler`（處理器自己丟出的例外 JVM 直接忽略）；執行緒池用 `submit` 時例外存在 `FutureTask` 裡，`Future.get()` 以 `ExecutionException`（`getCause` 取原因）交給拿結果的人——等於轉成值。
+
+**包裝與分辨**：Java 的 cause（建構子或 `initCause`，只能設一次）；`Throwable` 的說明：讓下層例外直接外傳會把上層 API 綁在實作上，包起來才保有換實作的彈性；try-with-resources 關資源時的例外以 `addSuppressed` 掛在主例外下面。Go 的 `%w` 包裝、`errors.Is`／`errors.As` 沿整棵錯誤樹比對、`errors.Join` 合併多個錯誤；go1.13 那一篇：「wrapping an error makes that error part of your API」，不想承諾就用 `%v`。
+
+**名字**：Java 的級別由**繼承**決定、不由名字決定（`ThreadDeath` 是 `Error` 卻不以 Error 結尾；官方命名規則查不到）；`Error` 的子類是「整個執行環境的前提不成立」：程式錯（`AssertionError`）、VM 失效（`OutOfMemoryError`、`StackOverflowError`）、部署不一致（`LinkageError`）、嚴重的外部故障（`IOError`）。Go Wiki〈Errors〉：「Error types end in "Error" and error variables start with "Err" or "err"」——只分「型別」和「值」、不帶級別（`os.PathError`、`json.SyntaxError` 都是一般可恢復的錯誤）；`runtime.Error` 是程式錯 panic 的型別。
+
+**升級與降級**：Java：checked 包成 unchecked（`UncheckedIOException`）、static 初始化的例外轉成 `Error`（`ExceptionInInitializerError`）、任何例外轉成 checked 的值（`ExecutionException`）。Go：error 轉 panic 的 `Must…`（`regexp.MustCompile`：「safe initialization of global variables」；`template.Must`：「intended for use in variable initializations」）——限於程式寫死的常數、在初始化時；panic 轉回 error（regexp 的 `Compile`、`encoding/json`）；panic 變成「結束這個單位並記錄」（`net/http`）。
+
+**對到 GYO 的四級**（本卡的判斷，不是出處）：
+
+| 兩家的類 | 對到 | 對不上的地方 |
+|---|---|---|
+| Java checked `Exception` | E2 | 幾乎同義 |
+| Java `RuntimeException` | 意圖上是 E0（程式 bug） | Java 不中止行程，沒人接時只結束執行緒 |
+| Java `Error` | **E0**，而且更重（整個執行環境的前提不成立） | 沒有任何子類表示「一個單位壞了、其他照跑」——**不是 E1** |
+| Go `error` | E2；也能載 E1（Go 只看錯誤傳到哪一層，型別不分） | — |
+| Go 沒有 recover 的 `panic` | E0（行程結束，和 GYO 的 `abort` 同） | — |
+| Go 在邊界 recover（`net/http`、`safelyDo`） | **E1 的形**：一個工作單位壞了、記一次、結束那個單位、行程照跑 | 它收住的正是程式錯——和 GYO 的 E1 一致（E1 的主要來源是「執行期才看得出的程式錯」，DI-KS 2 那一列）；GYO 不收 E0（`GYO_ASSERT` 不 recover） |
+| 兩家都沒有 | E3（照設計的上限丟掉、只留紀錄） | GYO 特有 |
+
+所以：**E1 在兩家都不是一個「類」，而是框架在工作單位邊界的處理方式**（Go 的 `net/http`、Java 的 `Future`／`UncaughtExceptionHandler`）。GYO 把這個處理方式做成一級、給它型別（D3 (b)），是 GYO 自己的選擇。
+
+**修正修訂 0～4 寫錯的歸屬**：第 5.1 節的「處理一次」原寫成「照 Go 的 handle errors once 與 Java 的 log or rethrow, not both」——兩家的官方文件都沒有這條；Go 那句出自 Dave Cheney 與 Uber 風格指南（非官方），Java 那句查不到官方出處。官方能找到的是「在邊界集中處理、記一次」的範例（Go 的 appHandler、`safelyDo`、`net/http`；Java 的預設處理器與 `afterExecute`）。修訂 5 把第 5.1 節的歸屬改成「GYO 的原則（社群慣例的形，兩家官方以邊界範例示範）」。現行 `target/error-handling.md` 寫的「Go returns error values and handles them once at the outermost layer」也是同一種歸屬，第 2 步改條文時一併改寫。
 
 ### 3.2 引擎
 
@@ -250,6 +275,10 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 
 **不准的**：同一個 Product 持有的 World 壞了之後，E1 不會變回 E2（不准拿替換救壞掉的 World，O-11）；E3 不升級（它不是錯誤值）。
 
+**E1 成立的前提**（修訂 5，照 Go `net/http` Handler 文件把前提寫明的做法）：**一個 World 的狀態只屬於持有它的 Product**——別的 Product、行程裡其他的東西不讀寫它。所以 World 壞了，結束持有它的 Product 就收得住。這個前提不成立的情形（記憶體已被寫壞、跨 Product 共用可變狀態）不是 E1 收得住的，屬於 E0 或日誌 LG-2 的「不保證」。
+
+**明寫升級成 E0 的判準**（修訂 5，照 Go 的 `Must…` 與 Java 的 `ExceptionInInitializerError`）：失敗的輸入是**作者寫死的東西**（登記、常數、自己登記的 Resource），而且在初始化或登記時失敗——那是程式錯，可以斷言。`FixedStep.hpp:26-33`（時間 Module 自己登記的 Resource 被拿掉）合這個判準。輸入來自外部資料時不准升級成 E0。
+
 ### 4.2 和現行契約的對齊
 
 | 現行（`error-handling.md`、`target/error-handling.md`） | 本卡 |
@@ -268,7 +297,7 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 
 ### 5.1 一條原則：處理一次
 
-照 Go 的「handle errors once」與 Java 的「log or rethrow, not both」：**一個錯誤要嘛往上傳（可以包一層上下文），要嘛在這裡處理（決定接下來怎麼做，必要時記一次），不兩者都做**。由此推出：
+GYO 的原則（社群慣例的形：Dave Cheney、Uber Go Style Guide 的「handle errors once」，**都是非官方**；兩家官方只以「在邊界集中處理、記一次」的範例示範，第 3.1 節）：**一個錯誤要嘛往上傳（可以包一層上下文），要嘛在這裡處理（決定接下來怎麼做，必要時記一次），不兩者都做**。由此推出：
 
 - **產生的一方不記**（Kernel、編排層、Module）。
 - **往上傳的一方不記**，只加上下文（規則 4、5；`KernelError::Wrap`）。
@@ -359,6 +388,15 @@ runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`�
 **A8 的理由**（P6）：「代為」的定義就是「可以被作者蓋過」（回滾份 5.4：「代為不是特權……只代表可以被作者蓋過」）。蓋過是登記規則照設計得到的結果，不是有東西失敗或被丟掉；要報的是真的不一致（兩筆作者、兩筆代為 options 不同），宣告已經讓它成為啟動錯誤。若記成 `Warning`，每個選了伺服器權威又自己登記的產品每次啟動都有一筆不需要處理的警告——這正是「把非錯誤當警告」的同一種偏差。（同一種技術沒有找到完全同形的別家：Bevy 的 `DefaultPlugins.set(...)` 是使用者明寫的覆寫、不報，`bevy_app/src/plugin_group.rs:261`，和「不論先後自動以作者為準」不完全同形。）
 
 ---
+
+### 5.6 從 Java、Go 借來的四條（修訂 5，第 3.1 節查到、本卡判為要補的）
+
+1. **包進去的原因是不是公開的**（Go：「wrapping an error makes that error part of your API」；Java `Throwable`：包起來保有換實作的彈性）：E2 往外傳時帶的下層原因，預設**只給人看**（規則 5：外層選自己的碼、下層的碼與細節進 `detail` 的文字，像 Go 的 `%v`）；呼叫者要靠它分支的，才放成結構化欄位，而且那就成了公開契約、要維持。本批唯一的結構化原因是 E1 的 `cause`（D3 (b)，存檔版本 Module 靠它分辨，O-5 已承諾），其餘照規則 5。
+2. **同時有好幾個失敗時，主的一個、其餘附在下面**（Java 的 suppressed、Go 的 `errors.Join`）：E1 之後的收尾（`giveBack`、`DiscardRegistrations`、放回帶過去的值）又失敗時，**主錯誤是原本讓 World 壞掉的那一個**，收尾的失敗附在它下面（`WorldError` 的附帶清單，或寫進 `where`；實作時照命名規範定），不另成一個錯誤、不另記一筆。Kernel 的並列清單（`siblings`）是同一個形，照舊。
+3. **記錄者自己失敗時**（Java：`UncaughtExceptionHandler` 丟出的例外 JVM 直接忽略）：runner 結束處寫 E1（`WriteFailure`）而寫不成時，失敗只出現在它的回報（`FatalWriteReport`）裡，runner **照樣退出**、不重試、不升級成 E0。理由：記錄失敗不改變「這個 Product 已經結束」；重試或升級會讓記錄的路變成新的失敗來源。寫進 DI 5。
+4. **正常結束不算失敗**（Go 的 `ErrAbortHandler`：中止 handler、不記錄）：runner 正常收掉 Product（`RunnerExit{Success}`、回主選單）不是 E1、不寫致命紀錄；`Failure()` 是空的。只有 `Failure()` 有值才是 E1。
+
+兩家都有、本卡判為**不用另外補**的：只接約定的型別、其他照常傳播（D4、第 17.2 節已是：只接 `std::exception`，`catch (...)` 收尾後原樣丟）；判斷「是不是某種失敗」要沿包裝鏈比（`KernelError::Has` 已沿並列清單的葉子比；E1 的 `cause` 只有一層）；上下文由產生錯誤的一方帶（規則 4、5 已有）；不可忽略要在型別上強制（D3 (b)、D5）。
 
 ## 6. 設計決定與選項（Contract → Architecture）
 
@@ -573,7 +611,13 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 **對本頁其他各節的影響**：文中寫的型別名照**現在的程式**寫（盤點、P 項、守衛的位置都指現有程式），D3 (b) 與 D11 之後的新型別照上表；實作時照上表改名。改名本身是公開介面的變更，列進第 8.1 節第 3 點；估時見第 11.1 節（範圍定了才算得準，第 13 節第 12 題）。
 
-**系譜**：Java 的 `Error`／`Exception` 分類以型別名表示處理方式；Rust、Go 的錯誤型別名不分級（`io::Error`、`error`）。**舊形狀？** 不是（現有的 `…Error` 全是 E2，名字和級別反著）。**支撐的 Feature**：F4（runner 看型別名就知道怎麼處理）。
+**和 Java、Go 的名字對照**（修訂 5，照第 3.1 節的原始出處；交使用者，第 13 節第 12 題第 6 點）：
+- **兩家都不用名字表示級別**：Java 靠繼承（`ThreadDeath` 是 `Error` 卻不以 Error 結尾），Go 靠「回傳 error 還是 panic」。用字尾標級是 GYO 自己的規則。
+- **和 Java 的 `Error` 同在「不能救」，不同在範圍**：Java 的 `Error` 是整個執行環境的前提不成立（OOM、堆疊用盡、`AssertionError`），對到的是 **E0**；而且 Java 說 `Error`「should not try to catch」，GYO 的 E1 一定由 runner 接住、記一次、退出。讀過 Java 的人看到 `…Error`，可能以為「不要接」或「行程要死」。
+- **和 Go 的 `XxxError` 不同義**：Go 的 `XxxError` 只是「錯誤型別」的泛稱，照 GYO 的分法多半是 E2——正好是 GYO 叫 `…Failure` 的那一級（`os.PathError` 在 GYO 會叫 `…Failure`）。Go 的 `runtime.Error`（程式錯的 panic）則是「Error＝不能救」的先例。
+- 本卡的判斷：使用者的規則要的是「名字帶著處理方式」，這一點兩家都沒有、但沒有衝突；會被誤解的是讀者帶進來的 Java、Go 的字義。建議**保留規則**，在契約（`target/error-handling.md` 的級別一節與命名規範頁）寫明「GYO 的 `…Error` 指 E1：一個 World 壞了、持有它的單位結束、由 runner 接住記一次；不是 Java 的 `Error`（那對到 GYO 的 E0），也不是 Go 的 `XxxError`（那多半是 GYO 的 `…Failure`）」，而且級別由型別承載（D3 (b)），名字和型別一致、不是只靠名字。
+
+**系譜**：使用者的規則（名字帶著處理方式）；Java 以型別階層表示處理方式（但不以名字）。**舊形狀？** 不是（現有的 `…Error` 全是 E2，名字和級別反著）。**支撐的 Feature**：F4（runner 看型別名就知道怎麼處理）。
 
 ---
 
@@ -615,9 +659,9 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | `target/error-handling.md` DI 1 | 「returned as `Result<void, KernelError>`, logged once by the Executor, and never silent」 | 「returned once by the outermost `Run` (or `Trigger`); the kernel never logs; not silent because the `Err` always reaches the caller, ignoring it unread is a compile error in GYO code (D5), and its handler logs it once (DI 4, 5)」 |
 | `target/error-handling.md` DI 2 | 「the Executor's handler is the only place a kernel error is logged」 | 「`Base::Result` stays a pure value; the kernel has no error handler and no log call」 |
 | `target/error-handling.md` Replacement Criteria | kernel 的可恢復路徑要改用模組的錯誤型別 | 「kernel E2 paths may use `KernelError` as the type; the API's documentation states the level」（P17）|
-| 新 DI 3 | — | **級別**：E0～E3 與非錯誤的定義、相對於單位、判準順序、升降只有第 4.1 節表列的幾條 |
+| 新 DI 3 | — | **級別**：E0～E3 與非錯誤的定義、相對於單位、判準順序、升降只有第 4.1 節表列的幾條；E1 成立的前提（World 的狀態只屬於持有它的 Product）；明寫升級成 E0 的判準（作者寫死的輸入、初始化或登記時） |
 | 新 DI 4 | — | **處理一次**：產生與往上傳的一方不記；處理的一方至多記一次；一個錯誤只有一條通道；同一個錯誤以身分認 |
-| 新 DI 5 | — | **E1 的記錄處**：runner 結束處（`WithFailureLog` 或 `main`）讀 `Failure()` 記一次；收到 E1 的呼叫點只退出；Kernel、編排層、Module 不記 |
+| 新 DI 5 | — | **E1 的記錄處**：runner 結束處（`WithFailureLog` 或 `main`）讀 `Failure()` 記一次；收到 E1 的呼叫點只退出；Kernel、編排層、Module 不記；記錄失敗時照樣退出、不重試、不升級（第 5.6 節第 3 點）；正常結束不是 E1（第 5.6 節第 4 點） |
 | 命名規範頁（`target/v2/rebuild-naming.zh-Hant.md`，位置待確認） | — | **錯誤型別的字尾**：`…Error`＝E1、`…Failure`＝E2（D11，使用者 2026-11-20 定）；DI 3 引用 |
 | 新 DI 6 | — | **E3 是紀錄、不是錯誤值**：以診斷紀錄或 `Message` 表示，不改流程；產生方已記診斷的 E2，處理者不再記 |
 | Kernel DI-KS 2（`target/kernel.zh-Hant.md`） | 「Executor 記錄一次並 Interrupted」 | 「最外層 `Run` 回傳一次並 Interrupted，Kernel 不寫日誌」 |
@@ -788,7 +832,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 照「各家分歧、GYO 特有、推翻已定決定、DI 守衛的判定變更」四類。每題附建議與理由；名字與照源碼答得出的細節本卡已自己判（標在各節）。
 
-1. **級別本身與兩次原話的讀法**（第 4 節、文首）：E0～E3＋非錯誤，相對於單位分；升降只有第 4.1 節表列的幾條。請確認本卡的讀法：去重那一次的原話「返回沒錯，錯誤沒錯，包裝沒錯……不是機制問題」（HANDOFF 同一列的摘要另記「O-11、編排層都不動」），被同一天開這張卡的「沒有分級，runner不知道如何處理」擴大了範圍，所以本批會動 O-1／O-2／O-3／O-4／O-5／O-8／O-9／O-11 與編排層的程式。**GYO 特有**。建議：照第 4 節。
+1. **級別本身與兩次原話的讀法**（第 4 節、文首）：E0～E3＋非錯誤，相對於單位分；升降只有第 4.1 節表列的幾條。請確認本卡的讀法：去重那一次的原話「返回沒錯，錯誤沒錯，包裝沒錯……不是機制問題」（HANDOFF 同一列的摘要另記「O-11、編排層都不動」），被同一天開這張卡的「沒有分級，runner不知道如何處理」擴大了範圍（修訂 5 查了原始出處：E1 在 Java、Go 都不是一個「類」，是框架在工作單位邊界的處理方式——Go 的 `net/http` 最接近；GYO 把它做成一級，第 3.1 節），所以本批會動 O-1／O-2／O-3／O-4／O-5／O-8／O-9／O-11 與編排層的程式。**GYO 特有**。建議：照第 4 節。
 2. **D2 拿掉編排層的五處 `Warning`，警告改由處理的一方記**。**推翻**：使用者 2026-11-17 原話「插入就拒絕，返回信息（不退出，但是System無法插入，日誌報警告）」（`v8-arch-gyo2-dynamic-insert-per-world`）——警告照樣記得到，記的人從編排層移到工具或遊戲；CCR-3、DI-KS 26、O-9、O-4（拿掉「編排層自己的警告」，清單少一項）。比過 (b) 只修致命那三處、(d) 改記診斷紀錄。建議 (a)。
 3. **D3 E1 與 E2 分成不同的型別**：`WorldError`（共用 Product 持有的 `WorldFailure`、包住升級成 E1 的那個 E2、帶 Kernel 錯誤）／`OrchestrationError`（拿掉 `failure`；只屬於 E1 的三個碼搬走）；`RunGameInit`、`RunFrame`、`RunSchedule` 只回 E1。**碰到**去重那一次的「包裝沒錯」——(b) 保留「結構化錯誤回給 runner」，改的是 E1 不再和 E2 共用一個型別。**各家分歧**：級別放型別（Java、Rust）或靠一個欄位（Go 的 `errors.As` 用在 optional 上，D3 (a)）。照建議做完，E1、E2 在程式裡有名字；選 (a) 的話級別只存在文件裡。建議 (b)。
 4. **D4 入口在邊界接 `std::exception` 轉成回傳值**（含 P12 從源頭修：先組好 `WorldFailure`、替換中有明確的狀態）。**推翻**：O-9「`build` 丟例外時往外傳」；O-11 的例外守衛（G4）；日誌宣告 5.6 的情形 (2)；也碰到「返回沒錯」。**各家分歧**：例外在工作單位邊界轉成值（Go、Bevy）或一路丟（Java）或接住繼續（Unity）。建議 (b)。
@@ -806,6 +850,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
     3. **`Result::error()` 與 `Base::Err(...)` 照舊**（`std::expected` 的用語、不分級）：side chat 建議、本卡同意。
     4. **`StartupReport`、`ProductStartupReport` 照舊**（本卡補）：是一次收齊的報告，`Report` 已說明處理方式。
     5. **`Base::AssertionFailure` 和規則衝突**（本卡補）：E0 的那一包叫 `…Failure`。建議改名（例：`AssertionViolation`），隨範圍第 1 點一起做；不改的話在命名規範寫明它是例外。
+    6. **和 Java、Go 字義的差異**（修訂 5，照原始出處查的）：Java 的 `Error` 對到 GYO 的 E0（整個執行環境不成立、「不要接」），Go 的 `XxxError` 多半是 GYO 的 E2。兩家都不用名字標級。建議保留規則，在契約寫明「GYO 的 `…Error` 不是 Java 的 `Error`、也不是 Go 的 `XxxError`」（D11）。要不要因此換字尾，由使用者定。
 
 **主會話照 L17 判了、不交使用者的**（2026-11-20 主會話轉來）：P18 與 O7 併入本批（第 17 節；第 17.1 節的判定變更與 Bevy 的兩支照上面第 11 題交使用者，因為窄複查指出有緩的面）；D7 條文先照本宣告的提案放，合併前由主會話轉圖書管理員確認，不擋動工；批次先後照第 11.2 節（本批 → 日誌批 → 第 4 批的 Kernel 與編排層步驟）。
 
