@@ -1,6 +1,6 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1～4 件）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
+更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1～4 件與「不參考 master」）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 沒有再送檢查。
 
@@ -511,6 +511,9 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ### 本卡照 L17 判的（各家一致或細節；不逐條問）
 
+**不參考 master 的算法與數據**（使用者 2026-11-20 定，side chat）：權威與回滾 Module 從頭照 GYO2 的新架構與開源參考（lightyear、bevy_replicon、Unity Netcode、Bevy、flecs）做；不用 master 的算法、常數與量測數據（含 `LocalPlayerPrediction`、`AuthorityDigest` 的情境、`pvp_baseline` 的數字）。2026-09-25 的 dev_log 是 10/10 事故前的數據，不准引用。side chat 提過的「用 master 數據改 5.4 的規模與預算、修正照 master 的 0.1 秒、digest 情境照 `AuthorityDigest`、估計下修」全部不採。原話：「算了，重做吧，我怕你把master的問題帶到新架構裡來。（特別你還踩空了09_25 的dev_log，那個是10/10事故前的數據。不准）」本頁修訂 1 沒有引用 master（`git grep -i -E "master|09_25|pvp_baseline|LocalPlayerPrediction|AuthorityDigest"` 0 命中，同一指令以 `lightyear` 正例命中 25 行）。5.4 的規模假設仍沒有出處，屬第 12 節第 5 件。
+
+
 - 原語有型別、放在 `ExclusiveWorld`、一批放回後才跑 hook（2.1）；原語 5 只留清單（2.1）；順序圖的閉包由回滾自己算（2.2）；訊息寫者名單、`Writes` 收元件（2.2）。
 - 「重跑中」歸時間 Module（第 3 批已定）；`Resimulation` 每次準備放 false（2.3）。
 - G4 隨區規則拿掉與權威的 tick 檢查收掉；G5 由回滾 Module 存版本、比版本（照 Unity）（2.4）。
@@ -621,7 +624,8 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 - 這是宣告，沒有試做；第 14 節的時間是讀程式量估的。
 - 行號照三份偵察（59fd4da9），卡片與檢查者抽查了一部分（檢查報告末節）；`recon-b` 2.1「第 1 批已補上」只對了條文，逐欄對程式在第 2 步開頭做；Unity 讀的是非官方鏡像；bevy_ggrs、GGPO 本機沒有。
-- 規模假設（5.4）沒有出處。
+- 規模假設（5.4）沒有出處；**不從 master 補**（第 12 節「不參考 master 的算法與數據」）。
+- 不參考 master 的算法、常數與量測數據；2026-09-25 的 dev_log（10/10 事故前）不准引用（使用者 2026-11-20）。實作與子卡也照這條：參考只用 GYO2 的新架構與開源參考。
 - 網路 Module 的設計不在本批：digest 何時比、含不含實體 id、伺服器值怎麼搬、對時、tick 跳變的通知（`LocalTimelineShift` 那一種）。本批只做到回滾 Module 退 tick 時用 `RewindFixedSteps`；**tick 跳變的推送式事件不做**：以 tick 為索引的歷史只有回滾 Module 自己的，退回時它自己處理；別的讀者出現時（網路 Module 的輸入緩衝）再加（AGENTS §2）。
 - digest 不含實體 id：兩個實體交換判定值時看不出來（4.4）。
 - 具名集合的原始位元組介面留著（7.1），沒有用它做比較的 Feature。
