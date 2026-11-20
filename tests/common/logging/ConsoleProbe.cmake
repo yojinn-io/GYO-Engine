@@ -1,5 +1,8 @@
 # Runs gyo_logging_console_probe in one mode and checks what it wrote on standard error (LG-2, LG-8). Usage:
 #   cmake -DMODE=<fatal|nologger|twice> -P ConsoleProbe.cmake -- <probe>
+# Policies are set explicitly: without them an older default made while(TRUE) a no-op on the Linux runner
+# (L1 run 44779446258), so nothing was ever counted.
+cmake_minimum_required(VERSION 3.20)
 if(CMAKE_ARGC GREATER 0)
     math(EXPR last "${CMAKE_ARGC} - 1")
     set(PROBE "${CMAKE_ARGV${last}}")
@@ -12,19 +15,10 @@ if(NOT result STREQUAL "0")
     message(FATAL_ERROR "probe (${MODE}) failed (exit ${result}); stderr:\n${error}")
 endif()
 
+# How many times needle (letters, digits and '-' only, so it needs no regex escaping) occurs in text.
 function(count_of text needle out)
-    set(count 0)
-    set(rest "${text}")
-    while(TRUE)
-        string(FIND "${rest}" "${needle}" at)
-        if(at EQUAL -1)
-            break()
-        endif()
-        math(EXPR count "${count} + 1")
-        string(LENGTH "${needle}" length)
-        math(EXPR at "${at} + ${length}")
-        string(SUBSTRING "${rest}" ${at} -1 rest)
-    endwhile()
+    string(REGEX MATCHALL "${needle}" found "${text}")
+    list(LENGTH found count)
     set(${out} ${count} PARENT_SCOPE)
 endfunction()
 
