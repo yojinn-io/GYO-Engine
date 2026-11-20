@@ -246,6 +246,8 @@ scenario 第一段（S1-1～S1-10，走路計分）涵蓋的是登記與建 Plan
 
 ## 6. 以後怎麼控制增長（提案，不改 AGENTS 或規則文件）
 
+> 2026-11-19 已寫進規則：中立的原則在 `AGENTS.md` §14.5，具體判準在 `tests/common/mutation/README.md`（使用者 2026-11-19，`v8-arch-gyo2-move-bs-mutants`）。本節保留當時的草案。
+
 ### 6.1 增長從哪來（照 `git log -- mutations.json` 與 `what` 欄）
 
 | 來源 | 例 | 本次盤點裡的量 |

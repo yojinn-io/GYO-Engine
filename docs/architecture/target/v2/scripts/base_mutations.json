@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "description": "Declared mutants of GYO::Base on the gyo2 line (ids bs-). The behaviour of IdIssuer and CurrentThreadSerial (engine/base/include/engine/base/IdIssuer.hpp), checked by gyo_base_tests (tests/common/base). Added by kernel-subtract-structure, S10 fix (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md; user decision 2026-11-18, option (b)) and its adversarial check (Fable/high); kept in the kernel catalog until v8-arch-gyo2-move-bs-mutants (2026-11-19, follow-up of docs/architecture/target/v2/kernel-mutation-prune-report.zh-Hant.md) moved them here unchanged. bs-thread-serial-not-thread-local was merged into bs-thread-serial-issuer-per-thread before the move (kernel-mutation-subsumption-report.zh-Hant.md section 3). bs-id-issuer-not-atomic is probabilistic (8 threads x 10000). A mutant is killed only when its check fails with the expected message (AGENTS 14.2). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/target/v2/scripts/base_mutations.json --build-dir <build dir with tests> --cmake <cmake>.",
+  "mutants": [
+    {
+      "id": "bs-id-issuer-no-advance",
+      "what": "IdIssuer::Next does not advance, so it hands one number out again (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "        const std::uint64_t id = next_.fetch_add(1, std::memory_order_relaxed);",
+      "replace": "        const std::uint64_t id = next_.load(std::memory_order_relaxed);",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: numbers start at 1*",
+      "expect": "\\[id\\-issuer\\-repeat\\]"
+    },
+    {
+      "id": "bs-id-issuer-one-source-for-all",
+      "what": "every IdIssuer shares one counter, so a second issuer continues the first one's numbers (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    std::atomic<std::uint64_t> next_{1};",
+      "replace": "    static inline constinit std::atomic<std::uint64_t> next_{1};",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: two issuers*",
+      "expect": "\\[id\\-issuer\\-shared\\]"
+    },
+    {
+      "id": "bs-id-issuer-not-atomic",
+      "what": "IdIssuer::Next reads and writes the counter in two steps, so two threads can take one number (probabilistic: 8 threads x 10000) (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "        const std::uint64_t id = next_.fetch_add(1, std::memory_order_relaxed);",
+      "replace": "        const std::uint64_t id = next_.load(std::memory_order_relaxed);\n        next_.store(id + 1, std::memory_order_relaxed);",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: Next() from several threads*",
+      "expect": "\\[id\\-issuer\\-race\\]"
+    },
+    {
+      "id": "bs-thread-serial-not-kept",
+      "what": "CurrentThreadSerial takes a new number on every call instead of keeping the thread's first one (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b))",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial;",
+      "replace": "    return Detail::threadSerials.Next();",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: the same number on one thread*",
+      "expect": "\\[thread\\-serial\\-changes\\]"
+    },
+    {
+      "id": "bs-thread-serial-issuer-per-thread",
+      "what": "the thread serials come from an issuer of each thread's own, so every thread gets 1 and a later thread repeats an earlier one's number (v8-arch-gyo2-kernel-subtract-structure, S10 fix: user decision 2026-11-18, option (b)) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in bs-thread-serial-not-thread-local [the serial is one variable for the process, not thread_local: every thread gets the first asker's number (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)])",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "inline constinit IdIssuer threadSerials;",
+      "replace": "inline constinit thread_local IdIssuer threadSerials;",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: a thread started after another ended*",
+      "expect": "\\[thread\\-serial\\-reused\\]"
+    },
+    {
+      "id": "bs-thread-serial-is-tls-address",
+      "what": "CurrentThreadSerial returns the address of the thread_local (the bug S10 fixes: macOS hands a ended thread's storage to a new thread) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial;",
+      "replace": "    return static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(&Detail::threadSerial));",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: a thread started after another ended*",
+      "expect": "\\[thread\\-serial\\-reused\\]"
+    },
+    {
+      "id": "bs-id-issuer-starts-at-zero",
+      "what": "IdIssuer starts at 0 and Next() does not assert: 0 is handed out (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure) (the assertion alone, for the 2^64-th number, is not reachable by a test: no mutant for it)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "        GYO_ASSERT(id != 0);\n        return id;\n    }\n\nprivate:\n    std::atomic<std::uint64_t> next_{1};",
+      "replace": "        return id;\n    }\n\nprivate:\n    std::atomic<std::uint64_t> next_{0};",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: numbers start at 1*",
+      "expect": "\\[id\\-issuer\\-zero\\]"
+    },
+    {
+      "id": "bs-id-issuer-starts-at-two",
+      "what": "IdIssuer starts at 2 (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    std::atomic<std::uint64_t> next_{1};",
+      "replace": "    std::atomic<std::uint64_t> next_{2};",
+      "target": "gyo_base_tests",
+      "cases": "IdIssuer: numbers start at 1*",
+      "expect": "\\[id\\-issuer\\-first\\]"
+    },
+    {
+      "id": "bs-thread-serial-first-zero",
+      "what": "the first thread to ask gets serial 0 (the issuer's number minus 1) (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "Detail::threadSerial = Detail::threadSerials.Next();",
+      "replace": "Detail::threadSerial = Detail::threadSerials.Next() - 1;",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: the same number on one thread*",
+      "expect": "\\[thread\\-serial\\-zero\\]"
+    },
+    {
+      "id": "bs-thread-serial-later-zero",
+      "what": "a thread that is not the first to ask gets 0: only the main thread's serial is checked against 0 (adversarial check of the S10 fix, Fable/high; v8-arch-gyo2-kernel-subtract-structure)",
+      "file": "engine/base/include/engine/base/IdIssuer.hpp",
+      "find": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial;",
+      "replace": "    if (Detail::threadSerial == 0) Detail::threadSerial = Detail::threadSerials.Next();\n    return Detail::threadSerial == 5 ? 0 : Detail::threadSerial;",
+      "target": "gyo_base_tests",
+      "cases": "CurrentThreadSerial: a thread started after another ended*",
+      "expect": "\\[thread\\-serial\\-zero\\] round"
+    }
+  ]
+}
