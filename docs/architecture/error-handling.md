@@ -118,7 +118,7 @@ Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void s
 
 ## Error types
 
-> **Marker** (`v8-arch-gyo2-error-levels`, draft): error type names carry their level (`…Error` = E1, `…Failure` = E2); `Base::Error<Code>` becomes `Base::Failure<Code>` and `CodedError` becomes `CodedFailure`. See [`target/error-handling.md`](target/error-handling.md), "Error levels".
+> **Marker** (`v8-arch-gyo2-error-levels`, draft): new error type names carry their level (`…Error` = E1, `…Failure` = E2); renaming the existing types is a follow-up. See [`target/error-handling.md`](target/error-handling.md), "Error levels".
 
 Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/include/engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
 
