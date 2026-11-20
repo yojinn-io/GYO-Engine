@@ -49,3 +49,12 @@ function(gyo_expect_logging_links)
     endforeach()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_logging_links)
+
+# Design Invariants LG-4 and LG-10: the include scan of both logging Modules, set up after scenario segment 3
+# passed (declaration 9.3; AGENTS §3 on when to set up guards that bind the way of implementing).
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME logging.guard
+    COMMAND Python3::Interpreter -I -B "${CMAKE_CURRENT_SOURCE_DIR}/logging_guard.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME logging.guard_selftest
+    COMMAND Python3::Interpreter -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_logging_guard.py" -v)
+set_tests_properties(logging.guard logging.guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
