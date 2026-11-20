@@ -46,10 +46,8 @@ TEST_CASE("O-9: a refusing World: InsertRefused, nothing logged, the World goes 
         const auto version = p.World("Main").GetWorld().Types().Version();
         auto inserted = p.InsertSystems("Main", "console", AddMark());
         REQUIRE_FALSE(static_cast<bool>(inserted));
-        REQUIRE_MESSAGE(inserted.error().Failure() != nullptr, "[or-insert-refused] not a request failure");
-        CHECK_MESSAGE(inserted.error().Failure()->code == O::OrchestrationFailureCode::InsertRefused, "[or-insert-refused]");
-        CHECK_MESSAGE((inserted.error().Failure()->kernel.size() == 1 &&
-                       inserted.error().Failure()->kernel[0].code == K::KernelErrorCode::DynamicInsertRefused),
+        CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::InsertRefused, "[or-insert-refused]");
+        CHECK_MESSAGE((inserted.error().kernel.size() == 1 && inserted.error().kernel[0].code == K::KernelErrorCode::DynamicInsertRefused),
                       "[or-insert-refused-kernel]");
         CHECK_MESSAGE(warnings.Warnings() == 0, "[or-insert-refused-silent] " << warnings.Warnings());  // error levels D2
         CHECK(p.World("Main").GetWorld().Types().Version() == version);
@@ -65,7 +63,7 @@ TEST_CASE("O-9: BuildPlans fails (R-E7): InsertBuildFailed, nothing logged, the 
     WarningCounter warnings;
     auto inserted = p.InsertSystems("Main", "console", [](K::Registrar& r) { r.Allotter<K::RangeAllotter>(); });
     REQUIRE_FALSE(static_cast<bool>(inserted));
-    CHECK_MESSAGE(FailureCodeOf(inserted.error()) == O::OrchestrationFailureCode::InsertBuildFailed, "[or-insert-build-failed]");
+    CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::InsertBuildFailed, "[or-insert-build-failed]");
     CHECK_MESSAGE(inserted.error().detail.find("R-E7") != std::string::npos, "[or-insert-build-failed] " << inserted.error().detail);
     CHECK_MESSAGE(warnings.Warnings() == 0, "[or-insert-build-silent] " << warnings.Warnings());  // error levels D2
     CHECK(p.World("Main").GetWorld().Types().Version() == 1);
@@ -97,6 +95,6 @@ TEST_CASE("O-9: an owner name that is a unit's or the Product's: OwnerTaken") {
     for (const char* owner : {"audio", "rpg"}) {
         auto inserted = (*built)->InsertSystems("Main", owner, AddMark());
         REQUIRE_FALSE_MESSAGE(static_cast<bool>(inserted), "[or-insert-owner] inserted as " << owner);
-        CHECK_MESSAGE(FailureCodeOf(inserted.error()) == O::OrchestrationFailureCode::OwnerTaken, "[or-insert-owner] " << owner);
+        CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::OwnerTaken, "[or-insert-owner] " << owner);
     }
 }

@@ -8727,7 +8727,7 @@
       "target": "gyo_orchestration_tests",
       "command": [
         "{exe:gyo_orchestration_tests}",
-        "-tc=O-11: D8: Error() sees*"
+        "-tc=O-11: D8: Failure() sees*"
       ],
       "expect": "\\[el\\-d8\\-direct\\-run\\]",
       "guards": [

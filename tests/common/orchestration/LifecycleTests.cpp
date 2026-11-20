@@ -91,7 +91,7 @@ TEST_CASE("O-5: kernel errors of one World, a Check error of another, O-E5 and O
         s.Registrar().AddSystem<&Mark<'a'>>(In("Broken", "Nowhere"));  // a mount on no schedule: a kernel error
     };
     d.worlds[1].frame = {"NoSuchSchedule"};
-    d.worlds[1].prepare.push_back([&](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
+    d.worlds[1].prepare.push_back([&](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
         prepared = true;
         return {};
     });
@@ -180,8 +180,8 @@ TEST_CASE("O-E3: missing, later (not reordered), a Module on a Plugin, a library
 
 TEST_CASE("O-E7: a prepare function that fails at startup comes in its own report") {
     O::ProductDescription d = TwoWorlds();
-    d.worlds[0].prepare.push_back([](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
-        return Engine::Base::Err(O::OrchestrationFailure(O::OrchestrationFailureCode::PrepareFailed, "no config", {}, "config-missing"));
+    d.worlds[0].prepare.push_back([](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no config", {}, "config-missing"));
     });
     auto built = O::Product::Build(std::move(d), Units().Take());
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(built), "[or-oe7] built despite the failing prepare");

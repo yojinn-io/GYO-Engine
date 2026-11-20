@@ -131,7 +131,7 @@ TEST_CASE("O-1: RunGameInit a second time, or after RunFrame: GYO_ASSERT") {
     GYO_CHECK_ASSERTS((*other)->RunGameInit());
 }
 
-TEST_CASE("O-1: a failing game initialization schedule: RunFrame returns it, no frame schedule runs, the kernel error once, then the same WorldError") {
+TEST_CASE("O-1: a failing game initialization schedule: RunFrame returns it, no frame schedule runs, the kernel error once, then WorldInterrupted") {
     Log().clear();
     O::ProductDescription d = Game({"A", "B"});
     d.worlds[0].build = [](O::WorldSetup& s) {
@@ -144,13 +144,12 @@ TEST_CASE("O-1: a failing game initialization schedule: RunFrame returns it, no 
     ORCH_REQUIRE_BUILT(built);
     auto ran = (*built)->RunFrame();
     REQUIRE_FALSE(static_cast<bool>(ran));
-    CHECK_MESSAGE(ran.error().code == O::WorldErrorKind::Interrupted, "[or-gi-error] " << ran.error().message);
+    CHECK_MESSAGE(ran.error().code == O::OrchestrationErrorCode::ScheduleFailed, "[or-gi-error] " << ran.error().message);
     CHECK_MESSAGE(!Logged("t"), "[or-gi-error-no-frame] " << Joined());
-    CHECK_MESSAGE((ran.error().kernel && ran.error().kernel->code == K::KernelErrorCode::SystemFailed),
-                  "[or-gi-error-once] the kernel error did not come back");
+    CHECK_MESSAGE(ran.error().kernel.size() == 1, "[or-gi-error-once] the kernel error came back " << ran.error().kernel.size() << " times");
     auto again = (*built)->RunFrame();
     REQUIRE_FALSE(static_cast<bool>(again));
-    CHECK_MESSAGE(again.error().code == O::WorldErrorKind::Interrupted, "[or-interrupted] " << again.error().message);
+    CHECK_MESSAGE(again.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-interrupted] " << again.error().message);
 }
 
 // That a changed KernelSettings takes effect from the next outermost Run is the
@@ -242,12 +241,12 @@ TEST_CASE("O-1: D10: game initialization fails on the new first World of a Build
     auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
-    auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
+    auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
         InitBreaks() = true;  // only the new World's game initialization breaks
         return {};
     }});
     REQUIRE_FALSE(static_cast<bool>(replaced));
-    CHECK_MESSAGE(p.Error() == nullptr, "[el-p15-buildnew-first-gameinit] the Product ended: " << p.Error()->Text());
+    CHECK_MESSAGE(p.Failure() == nullptr, "[el-p15-buildnew-first-gameinit] the Product ended: " << p.Failure()->Text());
     CHECK_MESSAGE(!p.GameInitRan(), "[el-p15-gameinit-not-run] game initialization is counted as run");
     InitBreaks() = false;
     auto frame = p.RunFrame();

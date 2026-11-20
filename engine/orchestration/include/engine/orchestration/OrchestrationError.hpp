@@ -7,17 +7,16 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
-// Failures of the orchestration layer (error level E2; declaration
+// Errors of the orchestration layer (declaration
 // docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md,
-// sections 3.5, 3.9, 3.10, and the error-levels declaration D3, D11). Two groups
-// that never share a code: the startup codes of Product::Build (O-E1 to O-E7,
-// collected into one ProductStartupReport together with every World's kernel
-// StartupReport and the errors registration units report), and the runtime codes
-// of a request to the Product that failed (OrchestrationFailure). The kernel's
-// StartupCode is not extended (O-5). A broken World (E1) is WorldError.hpp.
+// sections 3.5, 3.9, 3.10). Two groups that never share a code: the startup
+// codes of Product::Build (O-E1 to O-E7, collected into one
+// ProductStartupReport together with every World's kernel StartupReport and the
+// errors registration units report), and the runtime codes of the Product's
+// entry points (OrchestrationError). The kernel's StartupCode is not extended
+// (O-5).
 
 namespace GYO::Engine::Orchestration {
 
@@ -97,18 +96,69 @@ struct ProductStartupReport {
     [[nodiscard]] const Kernel::StartupReport* KernelReportOf(std::string_view world) const noexcept;
 };
 
-// Runtime codes of a request to the Product that failed while the Product stayed
-// healthy (error level E2, error-levels declaration D3 and D11: a type named
-// ...Failure lets the caller decide). A broken World is not a code here: it is
-// WorldError (E1, WorldError.hpp), whose code says interrupted or empty.
-enum class OrchestrationFailureCode : std::uint8_t {
+// How a World broke (v8-arch-gyo2-broken-world-ends-product).
+enum class WorldFailureKind : std::uint8_t {
+    // A schedule the Product ran returned a kernel Err, or an exception left it:
+    // the kernel interrupted the World (spec E.5).
+    Interrupted = 1,
+    // A DropOldFirst replacement failed after the old World was gone: the place is empty.
+    ReplacementFailed,
+    // std::bad_alloc left a Run or a DropOldFirst replacement.
+    ResourceExhausted,
+};
+
+[[nodiscard]] std::string_view ToString(WorldFailureKind kind) noexcept;
+
+// One World breaking ends the Product (v8-arch-gyo2-broken-world-ends-product):
+// what broke, gathered by the orchestration layer and the kernel at the moment
+// it broke, never read back from the broken World afterwards.
+struct WorldFailure {
+    std::string product;
+    std::string world;
+    WorldFailureKind kind = WorldFailureKind::Interrupted;
+    // The Product's entry point that broke it ("RunGameInit", "RunFrame",
+    // "RunSchedule", "ReplaceWorld"); "outside the Product" when the World was
+    // found interrupted without the Product running it (WorldExecutor::Run called directly).
+    std::string entry;
+    // The schedule that failed; empty when no schedule was running (a prepare
+    // function, a registration or a carry-over of a replacement failed).
+    std::string schedule;
+    // The World's sync point number (Kernel::World::SyncEpoch), read before the
+    // schedule ran. The orchestration layer knows no clock and no game time (O-4):
+    // an author who wants the tick in the report puts it in its own error (G6).
+    std::uint64_t syncEpoch = 0;
+    // The kernel error code, when the kernel reported one.
+    std::optional<Kernel::KernelErrorCode> kernelCode;
+    // The kernel error as text (its layers name the System and its step), or
+    // the orchestration layer's report of a failed replacement.
+    std::string where;
+    // What happened before: the last schedule the Product ran with success on
+    // this World; empty when none had.
+    std::string lastSchedule;
+
+    // The whole failure as one line (also the refusal's detail).
+    [[nodiscard]] std::string Text() const;
+};
+
+// Runtime codes of the Product's entry points (sections 3.4, 3.9, 3.10).
+enum class OrchestrationErrorCode : std::uint8_t {
+    // A schedule run by RunGameInit, RunFrame or RunSchedule returned a kernel Err (in kernel).
+    ScheduleFailed = 1,
+    // A World of the Product is interrupted: the Product has ended, nothing runs
+    // and nothing is replaced (v8-arch-gyo2-broken-world-ends-product; in failure).
+    WorldInterrupted,
+    // A World's place is empty (a DropOldFirst replacement failed): the Product
+    // has ended, as for WorldInterrupted (in failure).
+    WorldMissing,
+    // No World of that name.
+    UnknownWorld,
     // Replacement: registering the new World again failed (startup in the report detail).
-    ReplaceRegistrationFailed = 1,
+    ReplaceRegistrationFailed,
     // Replacement: a type marked to carry over is not registered in the new World.
     ReplaceCarryOverFailed,
     // Replacement: a prepare function returned an error (its own code in reporterCode).
     ReplacePrepareFailed,
-    // Replacement: a schedule on the new World returned a kernel Err (in kernel).
+    // Replacement: a beforeSwap schedule returned a kernel Err (in kernel).
     ReplaceScheduleFailed,
     // Dynamic insert refused by the kernel (DynamicInsertRefused, in kernel).
     InsertRefused,
@@ -120,24 +170,25 @@ enum class OrchestrationFailureCode : std::uint8_t {
     PrepareFailed,
 };
 
-[[nodiscard]] std::string_view ToString(OrchestrationFailureCode code) noexcept;
+[[nodiscard]] std::string_view ToString(OrchestrationErrorCode code) noexcept;
 
-// E2: this request failed; the Product and every World are healthy. A prepare
-// function returns it too: it has no way to end the Product (error levels P16).
-struct OrchestrationFailure {
-    OrchestrationFailureCode code;
+struct OrchestrationError {
+    OrchestrationErrorCode code;
     std::string message;
     std::string detail;
     // The reporter's own code (a prepare function's, for example "save-version-unsupported"),
     // carried unchanged through ReplaceWorld (section 3.9).
     std::string reporterCode;
-    // The kernel error behind ReplaceScheduleFailed or InsertRefused (zero or one).
+    // The kernel error behind ScheduleFailed, ReplaceScheduleFailed or InsertRefused (zero or one).
     std::vector<Kernel::KernelError> kernel;
+    // Set when a World of the Product is broken (this call broke it, or an
+    // earlier one did): the Product has ended.
+    std::optional<WorldFailure> failure;
 
-    OrchestrationFailure(OrchestrationFailureCode failureCode, std::string failureMessage, std::string failureDetail = {},
-                         std::string failureReporterCode = {})
-        : code(failureCode), message(std::move(failureMessage)), detail(std::move(failureDetail)),
-          reporterCode(std::move(failureReporterCode)) {}
+    OrchestrationError(OrchestrationErrorCode errorCode, std::string errorMessage, std::string errorDetail = {},
+                       std::string errorReporterCode = {})
+        : code(errorCode), message(std::move(errorMessage)), detail(std::move(errorDetail)),
+          reporterCode(std::move(errorReporterCode)) {}
 };
 
 } // namespace GYO::Engine::Orchestration

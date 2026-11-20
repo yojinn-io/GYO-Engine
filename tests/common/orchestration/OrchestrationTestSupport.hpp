@@ -12,7 +12,6 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 // MSVC: doctest messages stream std::string_view (ToString of the codes); that needs the full ostream.
 #include <ostream>
 #include <string>
@@ -180,17 +179,6 @@ using BuildResult = Engine::Base::Result<std::unique_ptr<O::Product>, O::Product
 
 inline std::string Describe(const BuildResult& built) {
     return built ? std::string("ok") : built.error().detail;
-}
-
-// What ReplaceWorld and InsertSystems returned (error levels D3): the request failure's code
-// (nullopt when a World broke), or the broken World's code (nullopt when only the request failed).
-inline std::optional<O::OrchestrationFailureCode> FailureCodeOf(const O::WorldErrorOrFailure& returned) {
-    if (const O::OrchestrationFailure* failure = returned.Failure()) return failure->code;
-    return std::nullopt;
-}
-inline std::optional<O::WorldErrorKind> ErrorCodeOf(const O::WorldErrorOrFailure& returned) {
-    if (const O::WorldError* error = returned.Error()) return error->code;
-    return std::nullopt;
 }
 
 } // namespace OrchTest

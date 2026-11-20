@@ -11,8 +11,8 @@ using namespace OrchTest::Save;
 namespace {
 
 O::PrepareFn Refuse() {
-    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
-        return Engine::Base::Err(O::OrchestrationFailure(O::OrchestrationFailureCode::PrepareFailed, "no", {}, "save-version-unsupported"));
+    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no", {}, "save-version-unsupported"));
     };
 }
 
@@ -28,7 +28,7 @@ TEST_CASE("O-8: D3: an exception from extra goes on to the caller and nothing is
     WarningCounter warnings;
     bool thrown = false;
     try {
-        static_cast<void>((*built)->ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
+        static_cast<void>((*built)->ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
             throw std::runtime_error("disk gone");
         }, {}, O::ReplaceOrder::BuildNewFirst}));
     } catch (const std::runtime_error&) {
@@ -41,7 +41,7 @@ TEST_CASE("O-8: D3: an exception from extra goes on to the caller and nothing is
 
 // D4 now: the empty place ends the Product, so game initialization never runs
 // (the place is not filled again; v8-arch-gyo2-broken-world-ends-product).
-TEST_CASE("O-1: D4: game initialization with the first World's place empty: the WorldError says empty, not counted as run") {
+TEST_CASE("O-1: D4: game initialization with the first World's place empty: WorldMissing, not counted as run") {
     BootRuns() = 0;
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
@@ -49,14 +49,14 @@ TEST_CASE("O-1: D4: game initialization with the first World's place empty: the 
     REQUIRE_FALSE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{Refuse(), {}, O::ReplaceOrder::DropOldFirst})));
     auto frame = p.RunFrame();
     REQUIRE_FALSE(static_cast<bool>(frame));
-    CHECK(frame.error().code == O::WorldErrorKind::ReplacementFailed);
+    CHECK(frame.error().code == O::OrchestrationErrorCode::WorldMissing);
     CHECK_MESSAGE(!p.GameInitRan(), "[or-d4-not-marked] game initialization counted as run on an empty place");
     CHECK_MESSAGE(BootRuns() == 0, "[or-d4-not-run] " << BootRuns());
 }
 
 // ---- Error levels P12: DropOldFirst, an exception after the old World is gone and before the
 // replacement's own try (the registration step): the place is empty, so the Product has ended and
-// its error is recorded before the exception goes on
+// its failure is recorded before the exception goes on
 
 namespace {
 
@@ -67,7 +67,7 @@ bool& BuildThrows() {
 
 } // namespace
 
-TEST_CASE("O-8: P12: DropOldFirst, the registration throws after the old World is gone: the error is recorded before the exception goes on") {
+TEST_CASE("O-8: P12: DropOldFirst, the registration throws after the old World is gone: the failure is recorded before the exception goes on") {
     BuildThrows() = false;
     O::ProductDescription d;
     d.name = "game";
@@ -91,7 +91,7 @@ TEST_CASE("O-8: P12: DropOldFirst, the registration throws after the old World i
     }
     BuildThrows() = false;
     REQUIRE_MESSAGE(thrown, "[el-p12-throw-goes-on] the exception did not leave ReplaceWorld");
-    REQUIRE_MESSAGE(p.Error() != nullptr, "[el-p12-dropold-throw-before-try] the place is empty and no error was recorded");
+    REQUIRE_MESSAGE(p.Failure() != nullptr, "[el-p12-dropold-throw-before-try] the place is empty and no failure was recorded");
     CHECK_MESSAGE(!p.HasWorld("Main"), "[el-p12-place-empty]");
     auto after = p.RunFrame();
     CHECK_MESSAGE(!static_cast<bool>(after), "[el-p12-ended] the next entry point ran");

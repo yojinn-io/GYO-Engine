@@ -172,7 +172,7 @@ inline void Register(O::WorldSetup& s) {
 }
 
 // Defaults that never overwrite a carried value (section 3.12).
-inline Engine::Base::Result<void, O::OrchestrationFailure> Defaults(K::World& w, K::EntityId first) {
+inline Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w, K::EntityId first) {
     if (w.Resource<KeyBindings>() == nullptr) w.SetResource(KeyBindings{0});
     w.SetResource(Gold{0});
     w.SetResource(Score{0});
@@ -183,7 +183,7 @@ inline Engine::Base::Result<void, O::OrchestrationFailure> Defaults(K::World& w,
 
 // The extra prepare of an in-game load: the save and the allotter's lower bound (restore 5.1).
 inline O::PrepareFn LoadInto(SaveData save, bool moveLowerBound = true) {
-    return [save, moveLowerBound](K::World& w) -> Engine::Base::Result<void, O::OrchestrationFailure> {
+    return [save, moveLowerBound](K::World& w) -> Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(save);
         if (moveLowerBound) w.SetResource(K::RangeAllotter::Of(save.next, kLast));
         return {};
@@ -195,7 +195,7 @@ inline O::ProductDescription Game(Options options = {}) {
     d.name = "rpg";
     d.gameInit = {"Boot"};
     O::WorldDescription main = World("Main", &Register, {"Play"});
-    main.prepare.push_back([options](K::World& w) -> Engine::Base::Result<void, O::OrchestrationFailure> {
+    main.prepare.push_back([options](K::World& w) -> Engine::Base::Result<void, O::OrchestrationError> {
         if (auto done = Defaults(w, options.first); !done) return done;
         if (options.startupSave) w.SetResource(TheSave());
         return {};
@@ -231,7 +231,7 @@ public:
     WarningCounter(const WarningCounter&) = delete;
     WarningCounter& operator=(const WarningCounter&) = delete;
     [[nodiscard]] int Warnings() const { return Counter().load(); }
-    // Error lines of the orchestration layer (a logged WorldError).
+    // Error lines of the orchestration layer (a logged WorldFailure).
     [[nodiscard]] int Errors() const { return ErrorCounter().load(); }
     [[nodiscard]] static std::string& LastError() {
         static std::string last;
