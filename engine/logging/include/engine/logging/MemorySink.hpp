@@ -11,7 +11,7 @@
 
 // A sink that keeps copies of its records in memory, for tests (section 5.7 of
 // docs/architecture/target/v2/logging-declaration.zh-Hant.md, Feature F5).
-// Any thread may write; Records, FatalLines and Clear take the same lock.
+// Any thread may write; Records, FatalJsonLines, FatalTextLines and Clear take the same lock.
 
 namespace GYO::Engine::Logging {
 

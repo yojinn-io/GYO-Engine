@@ -111,7 +111,9 @@ WallTime DefaultWall() noexcept {
 namespace {
 
 // The handlers the Logger replaced, for its own handlers to go on to. Atomic,
-// not in the state: a handler may run while the Logger is being uninstalled.
+// not in the state, so that reading them never touches the state. Uninstalling
+// still requires that no other thread is logging (LG-8): the handlers read the
+// state too, and it is deleted when the Logger is uninstalled.
 constinit std::atomic<::Engine::Base::AssertionHandler> previousAssertion{nullptr};
 constinit std::atomic<std::terminate_handler> previousTerminate{nullptr};
 
@@ -296,6 +298,7 @@ void SetLevel(const std::string_view sinkName, const std::string_view prefix, co
         if (entry.name != sinkName) continue;
         for (std::size_t i = 0; i < entry.levelPrefixes.size(); ++i) {
             if (entry.levelPrefixes[i] == prefix) {
+                std::scoped_lock lock(state->levelMutex);
                 entry.levels[i].store(static_cast<std::uint8_t>(minimum), std::memory_order_relaxed);
                 state->RecomputeFloor();
                 return;
@@ -323,10 +326,7 @@ bool Enabled(const Level level, const std::string_view category) noexcept {
     return Detail::TakingSinks(*state, level, category) != 0;
 }
 
-namespace {
-
-// The key written twice in fields, or empty when every key is distinct.
-std::string_view RepeatedKey(const std::span<const Field> fields) noexcept {
+std::string_view Detail::RepeatedKey(const std::span<const Field> fields) noexcept {
     for (std::size_t i = 1; i < fields.size(); ++i) {
         for (std::size_t j = 0; j < i; ++j) {
             if (fields[i].key == fields[j].key) return fields[i].key;
@@ -334,6 +334,8 @@ std::string_view RepeatedKey(const std::span<const Field> fields) noexcept {
     }
     return {};
 }
+
+namespace {
 
 void Deliver(const Detail::LoggerState& state, const std::uint64_t taking, const Record& record) noexcept {
     for (std::size_t i = 0; i < state.sinks.size(); ++i) {
@@ -357,7 +359,9 @@ void DeliverRecord(const LoggerState& state, const std::uint64_t taking, const R
             error.category = "logging";
             error.text = text;
             error.fields = {};
-            Deliver(state, TakingSinks(state, error.level, error.category), error);
+            // The sinks that would have taken the record get the replacement too:
+            // otherwise a record they asked for would vanish without a trace.
+            Deliver(state, taking | TakingSinks(state, error.level, error.category), error);
         } catch (...) {
         }
         return;

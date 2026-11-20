@@ -388,18 +388,24 @@ TEST_CASE("scenario segment 3: S3-4 one category's records only in their own fil
         for (int i = 0; i < 10; ++i) L::Write(L::Level::Info, "game", "not trace", {{"i", i}});
         handle.value().Close();
         const auto counts = trace->Counts();
-        CHECK_MESSAGE(counts.written == 999, "S3-4: 999 records reached their file (the one with a repeated key went to the console)");
+        CHECK_MESSAGE(counts.written == 1000, "S3-4: 999 records and the Error record that replaced the one with a repeated key reached the file");
         CHECK(counts.droppedFull == 0);
         CHECK(counts.droppedClosed == 0);
     }
     const auto lines = Lines(traceFile);
-    REQUIRE(lines.size() == 1000);
+    REQUIRE(lines.size() == 1001);
     int records = 0;
+    int replaced = 0;
     for (std::size_t n = 0; n + 1 < lines.size(); ++n) {
         auto document = Json::Parse(lines[n]);
         REQUIRE_MESSAGE(static_cast<bool>(document), "S3-4: every line of the file reads back (LG-5)");
         const auto root = document.value().Root().AsObject().value();
         const std::string category(root.Find("category").value().AsString().value());
+        if (category == "logging") {
+            ++replaced;
+            CHECK(root.Find("level").value().AsString().value() == "error");
+            continue;
+        }
         REQUIRE(category == "relay.movement");
         const auto fields = root.Find("fields").value().AsObject().value();
         const int i = static_cast<int>(fields.Find("i").value().AsInt64().value());
@@ -417,12 +423,13 @@ TEST_CASE("scenario segment 3: S3-4 one category's records only in their own fil
         }
     }
     CHECK(records == 999);
+    CHECK_MESSAGE(replaced == 1, "S3-4: the sink that takes relay.movement got the replacement (5.2)");
     // The end line carries the counts (judgement 3).
     auto end = Json::Parse(lines.back());
     REQUIRE(end);
     const auto endRoot = end.value().Root().AsObject().value();
     CHECK(endRoot.Find("kind").value().AsString().value() == "end");
-    CHECK(endRoot.Find("written").value().AsUint64().value() == 999);
+    CHECK(endRoot.Find("written").value().AsUint64().value() == 1000);
 
     std::rewind(console);
     std::string text;

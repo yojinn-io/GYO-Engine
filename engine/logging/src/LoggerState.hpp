@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -41,6 +42,9 @@ struct LoggerState final {
     // The lowest minimum level over every rule of every sink: a record below
     // it is refused without looking at the sinks.
     std::atomic<std::uint8_t> floor{0};
+    // SetLevel stores a level and recomputes floor under this lock, so that two
+    // calls at once cannot leave floor at a value one of them computed earlier.
+    std::mutex levelMutex;
     bool tookBaseLog{false};
     ::Engine::Base::LogHandler previousBaseLog{nullptr};
     bool tookAssertions{false};
@@ -80,8 +84,12 @@ inline constinit std::atomic<State*> current{nullptr};
 // error and the no-Logger line take it; the fatal path only tries it.
 [[nodiscard]] std::mutex& StandardErrorMutex() noexcept;
 
+// The key written twice in fields, or empty when every key is distinct (no allocation).
+[[nodiscard]] std::string_view RepeatedKey(std::span<const Field> fields) noexcept;
+
 // Hands record to the sinks in taking; a record that writes one key twice
-// goes as the Error record that replaces it (category "logging").
+// goes as the Error record that replaces it (category "logging") to those
+// sinks and to every sink that takes Error records of category "logging".
 void DeliverRecord(const LoggerState& state, std::uint64_t taking, const Record& record) noexcept;
 
 // The text line of record on standard error: what a record becomes with no Logger installed.

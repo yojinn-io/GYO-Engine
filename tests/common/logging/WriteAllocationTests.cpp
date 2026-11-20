@@ -1,16 +1,22 @@
 // Design Invariant LG-7: a record that no sink takes is not composed: entrance
 // ④ allocates nothing and reads no clock. This file replaces the global
 // operator new and delete for the whole test executable; they count on the
-// calling thread only.
+// calling thread only. They can also refuse large allocations on every thread
+// but the test's own (review S4: the file sink's writer thread under memory pressure).
 #include <doctest/doctest.h>
 
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
 #include <new>
+#include <atomic>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
 
 #include "TestClock.hpp"
+#include "engine/logging/JsonLinesFileSink.hpp"
 #include "engine/logging/Logger.hpp"
 #include "engine/logging/MemorySink.hpp"
 #include "engine/logging/Write.hpp"
@@ -18,9 +24,16 @@
 namespace {
 
 thread_local std::size_t allocations = 0;
+// When set, an allocation of at least this many bytes on another thread than refuseExcept throws.
+std::atomic<std::size_t> refuseFrom{0};
+std::atomic<std::thread::id> refuseExcept{};
 
 void* Allocate(const std::size_t size) {
     ++allocations;
+    if (const std::size_t from = refuseFrom.load(std::memory_order_relaxed);
+        from != 0 && size >= from && std::this_thread::get_id() != refuseExcept.load(std::memory_order_relaxed)) {
+        throw std::bad_alloc();
+    }
     if (void* memory = std::malloc(size == 0 ? 1 : size)) return memory;
     throw std::bad_alloc();
 }
@@ -85,4 +98,35 @@ TEST_CASE("alloc: the fatal path formats its lines in the capacity Install reser
     CHECK(allocations == before);
     CHECK(report.sinksWritten == 1);
     CHECK(counting->fatal == 1);
+}
+
+TEST_CASE("alloc: the file sink's writer thread out of memory still writes the line and does not end the process") {
+    // An output that keeps no copy (a copy would itself be refused on the writer thread).
+    struct MeasuringOutput final : Logging::LineOutput {
+        std::atomic<std::size_t> bytes{0};
+        std::atomic<bool> sawBig{false};
+        bool Write(const std::string_view line) noexcept override {
+            bytes.fetch_add(line.size());
+            if (line.find(std::string_view("xxxxxxxxxxxxxxxx")) != std::string_view::npos && line.size() >= (2u << 20)) sawBig.store(true);
+            return true;
+        }
+        bool Close() noexcept override { return true; }
+    };
+    auto output = std::make_shared<MeasuringOutput>();
+    auto fatal = std::make_shared<MeasuringOutput>();
+    auto opened = Logging::JsonLinesFileSink::Open(
+        {.monoNs = &Logging::Test::TestMonoNs, .output = output, .fatalOutput = fatal});
+    REQUIRE(opened);
+    auto sink = opened.value();
+    const std::string big(2u << 20, 'x');
+    refuseExcept.store(std::this_thread::get_id());
+    refuseFrom.store(1u << 20);
+    // The line is formatted here (this thread may allocate); the writer must not copy it into its buffer.
+    sink->Write(Logging::Record{.level = Level::Info, .category = "c", .text = big});
+    const bool flushed = sink->Flush(std::chrono::steady_clock::now() + std::chrono::seconds{10});
+    refuseFrom.store(0);
+    CHECK(flushed);
+    sink->Close();
+    CHECK_MESSAGE(output->sawBig.load(), "S4: the whole line reached the output in one write");
+    CHECK(sink->Counts().written == 1);
 }

@@ -119,6 +119,12 @@ struct JsonLinesFileSink::Impl final {
         if (pending.capacity() > 4 * kWriteChunk) std::string().swap(pending);
     }
 
+    // One line handed on by itself, without copying it.
+    void WriteLine(const std::string_view line) noexcept {
+        if (failed.load(std::memory_order_acquire)) return;
+        if (!output->Write(line)) failed.store(true, std::memory_order_release);
+    }
+
     void RunWriter(Threads::RoleContext& context) {
         {
             std::scoped_lock lock(progressMutex);
@@ -137,7 +143,15 @@ struct JsonLinesFileSink::Impl final {
                 through = accepted;
             }
             for (const std::string& line : batch) {
-                pending += line;
+                try {
+                    pending += line;
+                } catch (...) {
+                    // No memory to gather it: what is gathered goes first, then
+                    // this line as it is (a record is never worth ending the process).
+                    WritePending();
+                    WriteLine(line);
+                    continue;
+                }
                 if (pending.size() >= kWriteChunk) WritePending();
             }
             WritePending();

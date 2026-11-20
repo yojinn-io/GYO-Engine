@@ -71,6 +71,11 @@ FatalWriteReport WriteFatalRecord(const Record& given) noexcept {
     Detail::LoggerState* state = Detail::current.load(std::memory_order_acquire);
 
     Record record = given;
+    // A key written twice would give a line that does not read back (LG-5). The
+    // fatal record stays Fatal: its fields give way to one that names the key.
+    const std::string_view repeated = Detail::RepeatedKey(record.fields);
+    const Field droppedFields{"dropped_fields", repeated};
+    if (!repeated.empty()) record.fields = std::span<const Field>(&droppedFields, 1);
     record.monoNs = state != nullptr ? state->MonoNs() : Detail::DefaultMonoNs();
     record.wall = state != nullptr ? state->Wall() : Detail::DefaultWall();
 

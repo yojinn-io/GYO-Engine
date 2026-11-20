@@ -890,6 +890,61 @@
     "{exe:gyo_logging_terminate_probe}"
    ],
    "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(none\\)"
+  },
+  {
+   "id": "lg-setlevel-unlocked",
+   "what": "review S3: SetLevel stores and recomputes the floor without the lock, so two calls at once can leave the floor too high and refuse records silently",
+   "guards": [
+    "logging LG-7"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "                std::scoped_lock lock(state->levelMutex);\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "logger: SetLevel from two threads*",
+   "expect": "S3: Enabled\\(Trace\\) was false right after SetLevel\\(b, Trace\\)"
+  },
+  {
+   "id": "lg-dupkey-replacement-not-to-taker",
+   "what": "review m1: the Error record that replaces a record with a repeated key goes only to sinks taking category logging, so a sink that asked for the record gets nothing",
+   "guards": [
+    "logging LG-5",
+    "logging-declaration 5.2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "Deliver(state, taking | TakingSinks(state, error.level, error.category), error);",
+   "replace": "Deliver(state, TakingSinks(state, error.level, error.category), error);",
+   "target": "gyo_logging_tests",
+   "cases": "logger: a record with a repeated key reaches*",
+   "expect": "m1: the sink that takes relay\\. got the replacement"
+  },
+  {
+   "id": "lg-fatal-dupkey-kept",
+   "what": "review S2: a fatal record with a repeated key is written as given, a line that does not read back",
+   "guards": [
+    "logging LG-5",
+    "logging LG-2"
+   ],
+   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "find": "    if (!repeated.empty()) record.fields = std::span<const Field>(&droppedFields, 1);\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a fatal record with a repeated key*",
+   "expect": "S2: the fatal line reads back \\(LG-5\\)"
+  },
+  {
+   "id": "lg-writer-oom-terminates",
+   "what": "review S4: the writer thread lets bad_alloc out of gathering a line, which ends the process",
+   "guards": [
+    "logging LG-6",
+    "logging LG-11"
+   ],
+   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "find": "                try {\n                    pending += line;\n                } catch (...) {",
+   "replace": "                pending += line;\n                if (false) {",
+   "target": "gyo_logging_allocation_tests",
+   "cases": "alloc: the file sink's writer thread*",
+   "expect": "alloc: the file sink's writer thread out of memory[\\s\\S]*test case CRASHED"
   }
  ]
 }

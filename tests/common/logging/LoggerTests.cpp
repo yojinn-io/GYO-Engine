@@ -5,10 +5,12 @@
 // MSVC needs <ostream> for doctest to print std::string_view in CHECK.
 #include <ostream>
 
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -304,4 +306,47 @@ TEST_CASE("builder: string views stay right after the arena grows") {
     for (int i = 0; i < 64; ++i) {
         CHECK(fields[static_cast<std::size_t>(i)].value.AsString() == std::string(40, static_cast<char>('a' + i % 26)));
     }
+}
+
+TEST_CASE("logger: SetLevel from two threads leaves the floor low enough for every sink (review S3)") {
+    auto a = std::make_shared<Logging::MemorySink>();
+    auto b = std::make_shared<Logging::MemorySink>();
+    Logging::LoggerOptions options;
+    options.sinks.push_back({.name = "a", .sink = a, .filter = {.minimum = Level::Error}});
+    options.sinks.push_back({.name = "b", .sink = b, .filter = {.minimum = Level::Error}});
+    options.takeAssertions = false;
+    options.takeTerminate = false;
+    auto handle = Logging::Install(std::move(options));
+    REQUIRE(handle);
+    std::atomic<bool> stop{false};
+    std::thread toggler([&] {
+        while (!stop.load()) {
+            Logging::SetLevel("a", "", Level::Warning);
+            Logging::SetLevel("a", "", Level::Error);
+        }
+    });
+    int refused = 0;
+    for (int i = 0; i < 200'000; ++i) {
+        Logging::SetLevel("b", "", Level::Trace);
+        if (!Logging::Enabled(Level::Trace, "x")) ++refused;
+        Logging::SetLevel("b", "", Level::Error);
+    }
+    stop.store(true);
+    toggler.join();
+    CHECK_MESSAGE(refused == 0, "S3: Enabled(Trace) was false right after SetLevel(b, Trace)");
+}
+
+TEST_CASE("logger: a record with a repeated key reaches the sinks that would have taken it, as the Error record (review m1)") {
+    auto relay = std::make_shared<Logging::MemorySink>();
+    Logging::LoggerOptions options;
+    options.sinks.push_back({.name = "relay", .sink = relay, .filter = {.include = {"relay."}, .minimum = Level::Info}});
+    options.takeAssertions = false;
+    options.takeTerminate = false;
+    auto handle = Logging::Install(std::move(options));
+    REQUIRE(handle);
+    Logging::Write(Level::Info, "relay.movement", "moved", {{"i", 1}, {"i", 2}});
+    const auto records = relay->Records();
+    REQUIRE_MESSAGE(records.size() == 1, "m1: the sink that takes relay. got the replacement, not nothing");
+    CHECK(records[0].level == Level::Error);
+    CHECK(records[0].category == "logging");
 }

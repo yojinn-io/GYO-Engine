@@ -16,6 +16,7 @@
 #include "AssertTestSupport.hpp"
 #include "TestClock.hpp"
 #include "TestOutputs.hpp"
+#include "engine/json/Document.hpp"
 #include "engine/logging/JsonLines.hpp"
 #include "engine/logging/JsonLinesFileSink.hpp"
 #include "engine/logging/Logger.hpp"
@@ -263,4 +264,19 @@ TEST_CASE("fatal: Install takes std::terminate when asked and puts the earlier h
         REQUIRE(handle);
         CHECK(std::get_terminate() == before);
     }
+}
+
+TEST_CASE("fatal: a fatal record with a repeated key still writes a line that reads back, and stays Fatal (review S2)") {
+    auto memory = std::make_shared<Logging::MemorySink>();
+    auto handle = Logging::Install(WithMemory(memory));
+    REQUIRE(handle);
+    const Logging::Field fields[] = {{"k", 1}, {"k", 2}};
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "x", .fields = fields}));
+    REQUIRE(memory->FatalJsonLines().size() == 1);
+    const std::string line = memory->FatalJsonLines()[0];
+    auto document = GYO::Engine::Json::Parse(line);
+    REQUIRE_MESSAGE(static_cast<bool>(document), "S2: the fatal line reads back (LG-5): " << line);
+    const auto root = document.value().Root().AsObject().value();
+    CHECK(root.Find("level").value().AsString().value() == "fatal");
+    CHECK(root.Find("fields").value().AsObject().value().Find("dropped_fields").value().AsString().value() == "k");
 }
