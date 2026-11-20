@@ -12,7 +12,7 @@ using namespace OrchTest::Save;
 namespace {
 
 O::PrepareFn Note(std::string text) {
-    return [text](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+    return [text](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
         Log().push_back(text);
         return {};
     };
@@ -87,7 +87,7 @@ TEST_CASE("O-8: a Check that fails on the second registration: ReplaceRegistrati
     WarningCounter warnings;
     auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(replaced), "[or-replace-check-fails] replaced despite the Check error");
-    CHECK_MESSAGE(replaced.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-replace-check-fails]");
+    CHECK_MESSAGE(FailureCodeOf(replaced.error()) == O::OrchestrationFailureCode::ReplaceRegistrationFailed, "[or-replace-check-fails]");
     CHECK_MESSAGE(warnings.Warnings() == 0, "[or-replace-check-silent] " << warnings.Warnings());  // error levels D2
     CHECK_MESSAGE(static_cast<bool>(p.RunFrame()), "[or-replace-check-old-goes-on]");
 }
@@ -133,7 +133,7 @@ TEST_CASE("O-10: two types (a unit's and the product's) carry over; prepare sees
     audio.build = [](O::WorldSetup& s) {
         s.Registrar().Resource<Volume>({.name = "Volume"});
         s.CarryOver<Volume>("Volume");
-        s.Prepare([](K::World& w) -> Engine::Base::Result<void, O::OrchestrationError> {
+        s.Prepare([](K::World& w) -> Engine::Base::Result<void, O::OrchestrationFailure> {
             Log().push_back(w.Resource<Volume>() ? "volume present" : "volume absent");
             if (w.Resource<Volume>() == nullptr) w.SetResource(Volume{3});
             return {};
@@ -171,7 +171,7 @@ TEST_CASE("O-10: a marked type the new registration lacks: ReplaceCarryOverFaile
     p.World("Main").GetWorld().SetResource(Volume{6});
     auto failed = p.ReplaceWorld("Main", O::ReplaceRequest{});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(failed), "[or-carry-unregistered] replaced anyway");
-    CHECK_MESSAGE(failed.error().code == O::OrchestrationErrorCode::ReplaceCarryOverFailed, "[or-carry-unregistered]");
+    CHECK_MESSAGE(FailureCodeOf(failed.error()) == O::OrchestrationFailureCode::ReplaceCarryOverFailed, "[or-carry-unregistered]");
     CHECK_MESSAGE(VolumeOf(p) == 6, "[or-carry-unregistered-back]");
 }
 
@@ -187,7 +187,7 @@ TEST_CASE("O-8: an exception from extra leaves the old World as it was") {
     p.World("Main").GetWorld().ResourceMut<KeyBindings>()->jump = 2;
     bool thrown = false;
     try {
-        static_cast<void>(p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+        static_cast<void>(p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
             throw std::runtime_error("disk gone");
         }, {}, O::ReplaceOrder::BuildNewFirst}));
     } catch (const std::runtime_error&) {

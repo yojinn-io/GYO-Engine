@@ -1,7 +1,7 @@
-// Text of the orchestration layer's error codes and the startup report
+// Text of the orchestration layer's failure codes and the startup report
 // (declaration section 3.5).
 
-#include "engine/orchestration/OrchestrationError.hpp"
+#include "engine/orchestration/OrchestrationFailure.hpp"
 
 #include <algorithm>
 
@@ -27,41 +27,16 @@ std::string_view ToString(ProductStartupReportCode code) noexcept {
     return "?";
 }
 
-std::string_view ToString(WorldFailureKind kind) noexcept {
-    switch (kind) {
-    case WorldFailureKind::Interrupted: return "Interrupted";
-    case WorldFailureKind::ReplacementFailed: return "ReplacementFailed";
-    case WorldFailureKind::ResourceExhausted: return "ResourceExhausted";
-    }
-    return "unknown";
-}
-
-std::string WorldFailure::Text() const {
-    std::string text = "Product '" + product + "' ended: World '" + world + "' " + std::string(ToString(kind)) +
-                       " in " + entry;
-    if (!schedule.empty()) {
-        text += ", schedule '" + schedule + "' (sync point " + std::to_string(syncEpoch) + ")";
-    }
-    if (kernelCode) text += ", kernel " + std::string(Kernel::ToString(*kernelCode));
-    text += ", last schedule run: " + (lastSchedule.empty() ? std::string("none") : "'" + lastSchedule + "'");
-    if (!where.empty()) text += "; " + where;
-    return text;
-}
-
-std::string_view ToString(OrchestrationErrorCode code) noexcept {
+std::string_view ToString(OrchestrationFailureCode code) noexcept {
     switch (code) {
-    case OrchestrationErrorCode::ScheduleFailed: return "ScheduleFailed";
-    case OrchestrationErrorCode::WorldInterrupted: return "WorldInterrupted";
-    case OrchestrationErrorCode::WorldMissing: return "WorldMissing";
-    case OrchestrationErrorCode::UnknownWorld: return "UnknownWorld";
-    case OrchestrationErrorCode::ReplaceRegistrationFailed: return "ReplaceRegistrationFailed";
-    case OrchestrationErrorCode::ReplaceCarryOverFailed: return "ReplaceCarryOverFailed";
-    case OrchestrationErrorCode::ReplacePrepareFailed: return "ReplacePrepareFailed";
-    case OrchestrationErrorCode::ReplaceScheduleFailed: return "ReplaceScheduleFailed";
-    case OrchestrationErrorCode::InsertRefused: return "InsertRefused";
-    case OrchestrationErrorCode::InsertBuildFailed: return "InsertBuildFailed";
-    case OrchestrationErrorCode::OwnerTaken: return "OwnerTaken";
-    case OrchestrationErrorCode::PrepareFailed: return "PrepareFailed";
+    case OrchestrationFailureCode::ReplaceRegistrationFailed: return "ReplaceRegistrationFailed";
+    case OrchestrationFailureCode::ReplaceCarryOverFailed: return "ReplaceCarryOverFailed";
+    case OrchestrationFailureCode::ReplacePrepareFailed: return "ReplacePrepareFailed";
+    case OrchestrationFailureCode::ReplaceScheduleFailed: return "ReplaceScheduleFailed";
+    case OrchestrationFailureCode::InsertRefused: return "InsertRefused";
+    case OrchestrationFailureCode::InsertBuildFailed: return "InsertBuildFailed";
+    case OrchestrationFailureCode::OwnerTaken: return "OwnerTaken";
+    case OrchestrationFailureCode::PrepareFailed: return "PrepareFailed";
     }
     return "?";
 }

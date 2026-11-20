@@ -173,7 +173,7 @@ void Register(O::WorldSetup& s) {
 }
 
 // The description's prepare: manual sampling, the player at (0, 0), a coin at x 20, the score 0.
-::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w) {
+::Engine::Base::Result<void, O::OrchestrationFailure> Defaults(K::World& w) {
     w.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta, {}});
     w.SetResource(Score{0});
     w.Insert(kPlayer, Player{});
@@ -255,7 +255,7 @@ TimedSave ReadSave(const SaveBytes& bytes) {
 
 // The extra prepare of a load: after the description's Defaults, puts the save back.
 O::PrepareFn LoadInto(SaveBytes bytes) {
-    return [bytes](K::World& w) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    return [bytes](K::World& w) -> ::Engine::Base::Result<void, O::OrchestrationFailure> {
         const TimedSave s = ReadSave(bytes);
         w.SetResource(s.tick);
         w.SetResource(s.virt);

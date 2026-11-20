@@ -1,5 +1,5 @@
 O-1: a failing game initialization schedule*
-O-8: the failure is returned*
+O-8: the error is returned*
 O-8: a replacement does not mend a broken World*
 O-8: a failing beforeSwap gives the carried value back*
 O-8: D3: an exception from extra*

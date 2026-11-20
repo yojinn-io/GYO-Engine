@@ -5,9 +5,10 @@
 # functions, World replacement and dynamic insertion. Above the kernel; depends
 # only on the kernel and Base (O-4), as its row in engine/config/modules.csv says.
 add_library(gyo_orchestration STATIC
-    src/OrchestrationError.cpp
+    src/OrchestrationFailure.cpp
     src/Product.cpp
     src/Setup.cpp
+    src/WorldError.cpp
 )
 add_library(GYO::Orchestration ALIAS gyo_orchestration)
 

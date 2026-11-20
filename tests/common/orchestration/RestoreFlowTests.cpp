@@ -19,8 +19,8 @@ int GoldOf(O::Product& p) {
 }
 
 O::PrepareFn Unsupported() {
-    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
-        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed,
+    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationFailure> {
+        return Engine::Base::Err(O::OrchestrationFailure(O::OrchestrationFailureCode::PrepareFailed,
                                                        "the save's version is not supported", {}, "save-version-unsupported"));
     };
 }
@@ -107,8 +107,9 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
             WarningCounter warnings;
             auto refused = p.ReplaceWorld("Main", O::ReplaceRequest{Unsupported(), {"Load"}, O::ReplaceOrder::BuildNewFirst});
             REQUIRE_FALSE_MESSAGE(static_cast<bool>(refused), "[or-restore-fail-a] replaced despite the refused save");
-            CHECK_MESSAGE(refused.error().code == O::OrchestrationErrorCode::ReplacePrepareFailed, "[or-restore-fail-a] " << refused.error().message);
-            CHECK_MESSAGE(refused.error().reporterCode == "save-version-unsupported", "[or-restore-reporter-code]");
+            REQUIRE_MESSAGE(refused.error().Failure() != nullptr, "[or-restore-fail-a] not a request failure: " << refused.error().message);
+            CHECK_MESSAGE(refused.error().Failure()->code == O::OrchestrationFailureCode::ReplacePrepareFailed, "[or-restore-fail-a] " << refused.error().message);
+            CHECK_MESSAGE(refused.error().Failure()->reporterCode == "save-version-unsupported", "[or-restore-reporter-code]");
             CHECK_MESSAGE(warnings.Warnings() == 0, "[or-restore-fail-silent] " << warnings.Warnings());  // error levels D2
         }
         CHECK_MESSAGE((GoldOf(p) == 40 && Entities(p) == 4), "[or-restore-keep-old] gold " << GoldOf(p) << " entities " << Entities(p));
@@ -116,11 +117,11 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
         broken.unreadable = true;
         auto unreadable = p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(broken), {"Load"}, O::ReplaceOrder::BuildNewFirst});
         REQUIRE_FALSE_MESSAGE(static_cast<bool>(unreadable), "[or-restore-fail-b] replaced despite the unreadable save");
-        CHECK_MESSAGE(unreadable.error().code == O::OrchestrationErrorCode::ReplaceScheduleFailed, "[or-restore-fail-b]");
+        CHECK_MESSAGE(FailureCodeOf(unreadable.error()) == O::OrchestrationFailureCode::ReplaceScheduleFailed, "[or-restore-fail-b]");
         CHECK_MESSAGE(GoldOf(p) == 40, "[or-restore-keep-old-b] " << GoldOf(p));
         CHECK(static_cast<bool>(p.RunFrame()));
     }
-    SUBCASE("(c) DropOldFirst refused: the place is empty and RunFrame says WorldMissing; (d) a readable save does not fill it") {
+    SUBCASE("(c) DropOldFirst refused: the place is empty, the WorldError's cause is the refusal and RunFrame says empty; (d) a readable save does not fill it") {
         auto built = O::Product::Build(Game(), Units().Take());
         ORCH_REQUIRE_BUILT(built);
         O::Product& p = **built;
@@ -128,12 +129,20 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
         auto refused = p.ReplaceWorld("Main", O::ReplaceRequest{Unsupported(), {"Load"}, O::ReplaceOrder::DropOldFirst});
         REQUIRE_FALSE(static_cast<bool>(refused));
         CHECK_MESSAGE(!p.HasWorld("Main"), "[or-drop-old-empty]");
+        // Error levels D3: the refused step, raised to the WorldError's cause, keeps its code and the
+        // prepare function's own code (O-5), so the runner can tell the player why the load failed.
+        const O::WorldError* ended = refused.error().Error();
+        REQUIRE_MESSAGE(ended != nullptr, "[el-drop-cause-prepare] not a WorldError: " << refused.error().message);
+        REQUIRE_MESSAGE(ended->cause.has_value(), "[el-drop-cause-prepare] no cause: " << ended->Text());
+        CHECK_MESSAGE((ended->cause->code == O::OrchestrationFailureCode::ReplacePrepareFailed &&
+                       ended->cause->reporterCode == "save-version-unsupported"),
+                      "[el-drop-cause-prepare] " << ToString(ended->cause->code) << " " << ended->cause->reporterCode);
         auto frame = p.RunFrame();
         REQUIRE_FALSE(static_cast<bool>(frame));
-        CHECK_MESSAGE(frame.error().code == O::OrchestrationErrorCode::WorldMissing, "[or-drop-old-missing] " << frame.error().message);
+        CHECK_MESSAGE(frame.error().code == O::WorldErrorKind::ReplacementFailed, "[or-drop-old-missing] " << frame.error().message);
         auto filled = p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}, O::ReplaceOrder::DropOldFirst});
         REQUIRE_FALSE_MESSAGE(static_cast<bool>(filled), "[or-drop-old-not-filled] the empty place was filled");
-        CHECK_MESSAGE((filled.error().code == O::OrchestrationErrorCode::WorldMissing && !p.HasWorld("Main")), "[or-drop-old-not-filled]");
+        CHECK_MESSAGE((ErrorCodeOf(filled.error()) == O::WorldErrorKind::ReplacementFailed && !p.HasWorld("Main")), "[or-drop-old-not-filled]");
     }
 }
 

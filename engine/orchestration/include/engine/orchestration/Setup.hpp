@@ -4,7 +4,7 @@
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/TypeKey.hpp"
 #include "engine/kernel/World.hpp"
-#include "engine/orchestration/OrchestrationError.hpp"
+#include "engine/orchestration/OrchestrationFailure.hpp"
 
 #include <functional>
 #include <memory>
@@ -70,9 +70,11 @@ private:
 };
 
 // A prepare function (section 3.8): called after a World is built and before
-// its first Run, on the Ready World. To fail, return an OrchestrationError with
-// code PrepareFailed and the author's own code in reporterCode.
-using PrepareFn = std::function<::Engine::Base::Result<void, OrchestrationError>(Kernel::World&)>;
+// its first Run, on the Ready World. To fail, return an OrchestrationFailure with
+// code PrepareFailed and the author's own code in reporterCode. It returns a
+// request failure (E2) only: a prepare function cannot end the Product (error
+// levels P16); a DropOldFirst replacement raises it to the WorldError's cause.
+using PrepareFn = std::function<::Engine::Base::Result<void, OrchestrationFailure>(Kernel::World&)>;
 
 enum class RunnerExitCode : unsigned char { Success = 1, Failure };
 
