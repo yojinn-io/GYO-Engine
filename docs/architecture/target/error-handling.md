@@ -38,7 +38,7 @@ Where the level of an error changes on its way: a System that returns `Err` decl
 
 **Type names** (user, 2026-11-20): a new error type's name tells its level. `…Error` = E1, `…Failure` = E2. Both are returned to the caller; the suffix only tells how bad it is. Renaming existing types is a follow-up. GYO's `…Error` is not Java's `Error` (that is GYO's E0) and not Go's `XxxError` (a generic error type, mostly GYO's `…Failure`).
 
-**How the Engine's own code uses this** (a description of the Engine, not a requirement on authors): the kernel, the orchestration layer and the Engine's Modules return their errors and write no log line of their own; a log line is written by whoever handles the error. The kernel's `Run` returns an `Err` once and has no error handler (D1); the orchestration layer returns its errors and does not log them (D2); E3 records are read by the logging Module.
+**How the Engine's own code uses this** (a description of the Engine, not a requirement on authors): the kernel, the orchestration layer and the Engine's Modules return their errors and write no log line of their own. The kernel's `Run` returns an `Err` once and has no error handler (D1); the orchestration layer returns its errors and does not log them (D2); E3 records are read by the logging Module.
 
 ## Relation to "no error chains" in the current contract (`v8-arch-a6-revision`; legacy-impact conflict 1)
 
