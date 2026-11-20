@@ -36,26 +36,11 @@ std::string_view ToString(WorldFailureKind kind) noexcept {
     return "unknown";
 }
 
-namespace {
-
-std::string_view DomainText(Kernel::Domain domain) noexcept {
-    switch (domain) {
-    case Kernel::Domain::None: return "none";
-    case Kernel::Domain::Fixed: return "fixed";
-    case Kernel::Domain::Frame: return "frame";
-    case Kernel::Domain::Loading: return "loading";
-    }
-    return "unknown";
-}
-
-} // namespace
-
 std::string WorldFailure::Text() const {
     std::string text = "Product '" + product + "' ended: World '" + world + "' " + std::string(ToString(kind)) +
                        " in " + entry;
     if (!schedule.empty()) {
-        text += ", schedule '" + schedule + "' (domain " + std::string(DomainText(domain)) + ", tick " +
-                std::to_string(tick) + ")";
+        text += ", schedule '" + schedule + "' (sync point " + std::to_string(syncEpoch) + ")";
     }
     if (kernelCode) text += ", kernel " + std::string(Kernel::ToString(*kernelCode));
     text += ", last schedule run: " + (lastSchedule.empty() ? std::string("none") : "'" + lastSchedule + "'");

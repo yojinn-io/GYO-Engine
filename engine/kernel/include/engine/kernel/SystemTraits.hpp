@@ -116,9 +116,9 @@ struct SelfConflictT<TypeList<E...>> {
         : std::bool_constant<(CountOf<List, Access::ResourceWrite<T>>::value > 1) ||
                              Contains<List, Access::ResourceRead<T>>> {};
     template <class T>
-    struct One<Access::EventWrite<T>>
-        : std::bool_constant<(CountOf<List, Access::EventWrite<T>>::value > 1) ||
-                             Contains<List, Access::EventRead<T>>> {};
+    struct One<Access::MessageWrite<T>>
+        : std::bool_constant<(CountOf<List, Access::MessageWrite<T>>::value > 1) ||
+                             Contains<List, Access::MessageRead<T>>> {};
     static constexpr bool value = (One<E>::value || ...);
 };
 
@@ -267,6 +267,67 @@ constexpr void RequireAccepted() {
     static_assert(R != Rejection::ConditionReturn, "GYO_KERNEL_REJECT_CONDITION_RETURN: a run condition returns bool");
     static_assert(R != Rejection::ConditionNotReadOnly,
                   "GYO_KERNEL_REJECT_CONDITION_WRITE: a run condition has read-only parameters (spec S-5)");
+}
+
+// A hook holds no MessageReader: a hook is not a reader and has no cursor
+// (event cursor declaration 3.2; the hook gets HookCtx and writes only through
+// deferred records, messages and diagnostics).
+template <class P>
+inline constexpr bool kIsMessageReader = false;
+template <class M>
+inline constexpr bool kIsMessageReader<MessageReader<M>> = true;
+
+template <auto Fn>
+constexpr bool HookHoldsMessageReader() {
+    using Sig = Signature<decltype(Fn)>;
+    if constexpr (!Sig::function) {
+        return false;
+    } else {
+        return []<class... P>(TypeList<P...>) {
+            return (kIsMessageReader<std::remove_cvref_t<P>> || ...);
+        }(typename Sig::Params{});
+    }
+}
+
+// An observer (event cursor declaration 3.3): no ExclusiveWorld (an observer
+// runs inside another call or a sync point, so it could not change the World
+// whole; Bevy refuses an exclusive System as an observer too), and exactly one
+// On<E> of its own event.
+template <class P>
+inline constexpr bool kIsExclusiveWorld = false;
+template <class D>
+inline constexpr bool kIsExclusiveWorld<ExclusiveWorld<D>> = true;
+
+template <class P>
+inline constexpr bool kIsOn = false;
+template <class E>
+inline constexpr bool kIsOn<On<E>> = true;
+
+template <auto Fn>
+constexpr bool ObserverHoldsExclusiveWorld() {
+    using Sig = Signature<decltype(Fn)>;
+    if constexpr (!Sig::function) {
+        return false;
+    } else {
+        return []<class... P>(TypeList<P...>) {
+            return (kIsExclusiveWorld<std::remove_cvref_t<P>> || ...);
+        }(typename Sig::Params{});
+    }
+}
+
+// True when Fn has exactly one On<...> parameter and it is On<E>.
+template <class E, auto Fn>
+constexpr bool ObserverTakesOwnEvent() {
+    using Sig = Signature<decltype(Fn)>;
+    if constexpr (!Sig::function) {
+        return true;  // rejected as a System already
+    } else {
+        return []<class... P>(TypeList<P...>) {
+            constexpr std::size_t any = (std::size_t{0} + ... + (kIsOn<std::remove_cvref_t<P>> ? 1U : 0U));
+            constexpr std::size_t own = (std::size_t{0} + ... + (std::is_same_v<std::remove_cvref_t<P>, On<E>> ? 1U : 0U));
+            return any == 1 && own == 1;
+        }(typename Sig::Params{});
+    }
 }
 
 using ResolveFn = void (*)(AccessResolver&);

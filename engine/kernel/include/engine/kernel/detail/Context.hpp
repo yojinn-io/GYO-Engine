@@ -29,6 +29,8 @@ class WorldExecutor;
 struct AccessSet;
 // The kernel's own diagnostics record of a dropped spawn (World.hpp; spec F-13).
 struct RejectedSpawn;
+// The kernel's own diagnostics record of dropped messages (World.hpp).
+struct DroppedMessages;
 // Why a spawn was dropped (World.hpp defines the values; spec F-13).
 enum class SpawnRejectReason : std::uint8_t;
 
@@ -44,7 +46,7 @@ enum AccessModeBits : std::uint8_t {
 enum class EntryKind : std::uint8_t {
     Component,
     Resource,
-    Event,
+    Message,
 };
 
 struct AccessEntry {
@@ -70,6 +72,11 @@ enum class RecordKind : std::uint8_t {
     Despawn,
     ResourceInsert,
     ResourceRemove,
+    // Commands::Trigger (event cursor declaration 3.3): id is the event type id,
+    // value its payload (EventBox), entity the target when hasTarget. Delivered
+    // at the last step of the sync point, in record order (time-events
+    // declaration 4.2).
+    Trigger,
 };
 
 struct BundleValue {
@@ -89,6 +96,8 @@ struct Record {
     Zone emitterZone = Zone::B;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
+    // Trigger: the event names a target entity (entity).
+    bool hasTarget = false;
     // Who recorded it (spec F-13's RejectedSpawn): the System's or hook's name (the Registry's string).
     std::string_view emitter;
     bool emitterHook = false;
@@ -105,6 +114,23 @@ struct Record {
         record.id = id;
         return record;
     }
+};
+
+// The mount of an observer's reader key and cursor (event cursor declaration
+// 3.2: an observer is a reader): system is then the observer's index
+// (Registrar::Observer order), slot 0. No System has that many mounts.
+inline constexpr std::uint32_t kObserverMount = 0xFFFFFFFFU;
+
+// Which reader a call is (event cursor declaration 3.2; MessageCursor): a
+// System's mount (slot 0) or that mount's run condition number slot (from 1),
+// or an observer (mount kObserverMount). Set by the Executor before a System
+// and before each of its conditions, and before an observer; a hook has none
+// (it cannot hold a MessageReader).
+struct ReaderKey {
+    std::uint32_t system = 0;
+    std::uint32_t mount = 0;
+    std::uint32_t slot = 0;
+    bool valid = false;
 };
 
 // One System or hook call (spec B.1 runtime "SystemContext"). Lives on the
@@ -126,13 +152,20 @@ struct SystemContext {
     // A hook an immediate change of ExclusiveWorld runs (S5): planPos is the
     // exclusive System's step, not a sync point's (the error text says so).
     bool immediateChange = false;
-    Domain domain = Domain::None;
-    std::uint64_t tick = 0;
+    // An observer (event cursor declaration 3.3): records like a hook (F-5) and
+    // is given its event through On<E>: the observer's event type key, the
+    // payload (nullptr for Add<T> and Remove<T>) and the target.
+    bool observer = false;
+    TypeKey eventKey{};
+    const void* eventPayload = nullptr;
+    std::optional<EntityId> eventTarget;
     // The stamp this step took (spec E.2 step 3) and the mount's last-run stamp (B-12).
     ChangeStamp stamp = 0;
     ChangeStamp lastRun = 0;
     std::uint64_t callSerial = 0;
     std::uint64_t syncEpoch = 0;
+    // The reader this call is for MessageReader (not valid in a hook).
+    ReaderKey reader;
     // Access-verification violations of the call (W-4, W-5): always listed by
     // the Executor as siblings beside the System's own Err (spec B.4 point 7,
     // E.2 step 5); the System never sees them.
@@ -181,6 +214,7 @@ private:
 
 [[nodiscard]] ComponentId ComponentIdOf(const World& world, TypeKey key);
 [[nodiscard]] ResourceId ResourceIdOf(const World& world, TypeKey key);
+[[nodiscard]] MessageTypeId MessageIdOf(const World& world, TypeKey key);
 [[nodiscard]] EventTypeId EventIdOf(const World& world, TypeKey key);
 
 // Spec W-4: with verification on, a handle whose call serial or sync epoch is
@@ -189,11 +223,9 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 
 [[nodiscard]] ColumnBase& ColumnAt(World& world, ComponentId id);
 [[nodiscard]] ResourceBase& ResourceAt(World& world, ResourceId id);
-[[nodiscard]] EventBufferBase& EventsAt(World& world, EventTypeId id);
+[[nodiscard]] MessageBufferBase& MessagesAt(World& world, MessageTypeId id);
 [[nodiscard]] ChangeStamp CurrentStamp(const World& world) noexcept;
-[[nodiscard]] std::uint64_t DomainTick(const World& world, Domain domain) noexcept;
 [[nodiscard]] std::span<const EntityId> AliveEntities(const World& world) noexcept;
-[[nodiscard]] Domain EventDomain(const World& world, EventTypeId id);
 [[nodiscard]] std::size_t ComponentCount(const World& world) noexcept;
 [[nodiscard]] std::size_t ResourceCount(const World& world) noexcept;
 [[nodiscard]] std::vector<ComponentId> SetMembersOf(const World& world, TypeKey setTag);
@@ -239,6 +271,36 @@ struct ImmediateOutcome {
 // before (W-3).
 [[nodiscard]] ::Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
                                                                                 ChangeStamp stamp, bool inClosure);
+
+// Event cursor declaration 3.3 (time-events declaration 4.2): ExclusiveWorld::
+// Trigger. Runs the observers of event id now, each like one nested System
+// call (its own stamp; DI-KS 16 to 21); what they record goes the way of an
+// immediate change (S5): into a queue of its own, applied round after round
+// before the call returns, up to the schedule's hook round limit
+// (HookRoundLimit, the World interrupted); this level's records and the
+// schedule's hook queue wait (DI-KS 19). Refused with Err, the World
+// interrupted and the error reported once by the outermost Run: from a hook
+// (HookChangesMembership: the rounds would change membership now), inside a
+// Read or Modify closure (ClosureChangesMembership). An observer's Err
+// interrupts the World and is reported once. An Interrupted World runs no
+// observer and returns the left error.
+[[nodiscard]] ::Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id,
+                                                                 std::unique_ptr<ValueBox> payload,
+                                                                 std::optional<EntityId> target, bool inClosure);
+
+// Event cursor declaration 3.2: the cursor of the call's reader in message id
+// (the highest seq it has read). A reader's first run makes its cursor, at the
+// seq before the oldest record kept (so it reads every record still kept); from
+// then on it holds back every record past its cursor. GYO_ASSERT: the call is a
+// reader (not a hook).
+[[nodiscard]] std::uint64_t MessageCursorOf(World& world, const SystemContext& call, MessageTypeId id);
+// Moves the reader's cursor in message id up to read (never back). Not a write:
+// the cursor table is not in the boundary comparison (A.6 layer 2).
+void AdvanceMessageCursor(World& world, const ReaderKey& reader, MessageTypeId id, std::uint64_t read);
+// A write to a full buffer dropped the record seq of message id: counted into
+// this outermost Run's DroppedMessages of that type, with the readers that held
+// it unread.
+void RecordDroppedMessage(World& world, MessageTypeId id, std::uint64_t seq);
 
 // The World's sync epoch now (a handle renews its own after a nested run, W-4).
 [[nodiscard]] std::uint64_t CurrentSyncEpoch(const World& world) noexcept;

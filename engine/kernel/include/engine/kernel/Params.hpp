@@ -163,6 +163,43 @@ inline constexpr bool OneOf = (std::is_same_v<T, List> || ...);
 
 } // namespace Detail
 
+// ---- Pushed events (event cursor declaration 3.3, 5.2; DI-KS 10)
+
+// The kernel's own events of a component T: a cell of T appeared on an entity
+// at a sync point (after its OnAdd hooks), or is about to leave it (before its
+// OnRemove hooks; a despawn's cells too). Observed with Registrar::Observer<
+// Add<T>, Fn> and read through On<Add<T>>; not registered with Registrar::Event.
+template <class T> struct Add {};
+template <class T> struct Remove {};
+
+// What an observer watches: an event type registered with Registrar::Event, or
+// Add / Remove of a component.
+enum class ObserverTrigger : std::uint8_t {
+    Event,
+    Add,
+    Remove,
+};
+
+namespace Detail {
+
+template <class E>
+struct ObservedOf {
+    static constexpr ObserverTrigger trigger = ObserverTrigger::Event;
+    using Type = E;
+};
+template <class T>
+struct ObservedOf<Add<T>> {
+    static constexpr ObserverTrigger trigger = ObserverTrigger::Add;
+    using Type = T;
+};
+template <class T>
+struct ObservedOf<Remove<T>> {
+    static constexpr ObserverTrigger trigger = ObserverTrigger::Remove;
+    using Type = T;
+};
+
+} // namespace Detail
+
 // ---- Bundles and typed command lists
 
 template <class... Components> struct Bundle;
@@ -407,65 +444,65 @@ private:
 template <class T>
 struct ParamTraits<ResMut<T>> : Detail::HandleTraits<ResMut<T>, TypeList<Access::ResourceWrite<T>>, false> {};
 
-template <class E>
-class EventReader final : Detail::Handle {
-    GYO_KERNEL_HANDLE(EventReader)
-        : Handle(call), id_(Detail::EventIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
-          tick_(Detail::DomainTick(*call.world, Detail::EventDomain(*call.world, id_))) {}
+// Reads a retained message type by cursor (event cursor declaration 3.2, 5.1;
+// DI-KS 10). The reader is the running System's mount, or the run condition
+// being evaluated (each has its own cursor); a hook cannot hold one
+// (GYO_KERNEL_REJECT_HOOK_MESSAGE_READER). Fetch reads the reader's cursor,
+// making it on the reader's first run (the same for every MessageReader<M> of
+// the call and in any argument order); no tick and no Plan position is read.
+template <class M>
+class MessageReader final : Detail::Handle {
+    GYO_KERNEL_HANDLE(MessageReader)
+        : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<M>())), reader_(call.reader),
+          from_(Detail::MessageCursorOf(*call.world, call, id_)) {}
 
 public:
-    // Spec F.3, no cursor: the records of tick t-1 written after this reader's
-    // Plan position and of tick t written before it, in (tick, writerPos, seq) order.
-    [[nodiscard]] std::vector<const E*> Read() const {
-        Check("EventReader");
-        const auto& buffer = static_cast<const Detail::EventBuffer<E>&>(Detail::EventsAt(*world_, id_));
-        std::vector<const typename Detail::EventBuffer<E>::Record*> picked;
+    // Every record written after this reader's cursor, in write order. The
+    // cursor moves to the last one returned; every Read of one call returns the
+    // same records (the cursor the call started from).
+    [[nodiscard]] std::vector<const M*> Read() const {
+        Check("MessageReader");
+        const auto& buffer = static_cast<const Detail::MessageBuffer<M>&>(Detail::MessagesAt(*world_, id_));
+        std::vector<const M*> out;
+        std::uint64_t last = from_;
         for (const auto& record : buffer.records) {
-            const bool previous = tick_ > 0 && record.tick == tick_ - 1 && record.writerPos > position_;
-            const bool current = record.tick == tick_ && record.writerPos < position_;
-            if (previous || current) picked.push_back(&record);
+            if (record.seq <= from_) continue;
+            out.push_back(&record.payload);
+            last = record.seq;
         }
-        std::sort(picked.begin(), picked.end(), [](const auto* a, const auto* b) {
-            if (a->tick != b->tick) return a->tick < b->tick;
-            if (a->writerPos != b->writerPos) return a->writerPos < b->writerPos;
-            return a->seq < b->seq;
-        });
-        std::vector<const E*> out;
-        out.reserve(picked.size());
-        for (const auto* record : picked) out.push_back(&record->payload);
+        Detail::AdvanceMessageCursor(*world_, reader_, id_, last);
         return out;
     }
 
 private:
-    EventTypeId id_;
-    std::uint32_t position_;
-    std::uint64_t tick_;
+    MessageTypeId id_;
+    Detail::ReaderKey reader_;
+    std::uint64_t from_;
 };
-template <class E>
-struct ParamTraits<EventReader<E>> : Detail::HandleTraits<EventReader<E>, TypeList<Access::EventRead<E>>, true> {};
+template <class M>
+struct ParamTraits<MessageReader<M>> : Detail::HandleTraits<MessageReader<M>, TypeList<Access::MessageRead<M>>, true> {};
 
-template <class E>
-class EventWriter final : Detail::Handle {
-    GYO_KERNEL_HANDLE(EventWriter)
-        : Handle(call), id_(Detail::EventIdOf(*call.world, KeyOf<E>())), position_(call.planPos),
-          tick_(Detail::DomainTick(*call.world, Detail::EventDomain(*call.world, id_))) {}
+template <class M>
+class MessageWriter final : Detail::Handle {
+    GYO_KERNEL_HANDLE(MessageWriter) : Handle(call), id_(Detail::MessageIdOf(*call.world, KeyOf<M>())) {}
 
 public:
-    // Appends one record: tick = the event domain's tick, writerPos = this
-    // call's Plan position (a hook's: its sync point's), seq = the buffer's count.
-    void Send(E event) {
-        Check("EventWriter");
-        auto& buffer = static_cast<Detail::EventBuffer<E>&>(Detail::EventsAt(*world_, id_));
-        buffer.records.push_back(typename Detail::EventBuffer<E>::Record{tick_, buffer.nextSeq++, position_, std::move(event)});
+    // Appends one record with the type's next write sequence number. A full
+    // buffer drops its oldest record first; the World records it
+    // (DroppedMessages). A hook's write is the same.
+    void Send(M message) {
+        Check("MessageWriter");
+        auto& buffer = static_cast<Detail::MessageBuffer<M>&>(Detail::MessagesAt(*world_, id_));
+        if (const std::optional<std::uint64_t> dropped = buffer.Append(std::move(message))) {
+            Detail::RecordDroppedMessage(*world_, id_, *dropped);
+        }
     }
 
 private:
-    EventTypeId id_;
-    std::uint32_t position_;
-    std::uint64_t tick_;
+    MessageTypeId id_;
 };
-template <class E>
-struct ParamTraits<EventWriter<E>> : Detail::HandleTraits<EventWriter<E>, TypeList<Access::EventWrite<E>>, false> {};
+template <class M>
+struct ParamTraits<MessageWriter<M>> : Detail::HandleTraits<MessageWriter<M>, TypeList<Access::MessageWrite<M>>, false> {};
 
 // Untyped deferred insert / remove of any column (spec F.1). No access, no
 // conflict edge, not counted as a writer; nothing checks the column at run time
@@ -509,6 +546,21 @@ public:
         Check("Commands");
         Detail::Push(Detail::RequireCall(*world_),
                      Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));
+    }
+
+    // Deferred trigger of event E (event cursor declaration 3.3): its observers
+    // run at the sync point that applies the record, at its last step (after
+    // the resource step), in record order (time-events declaration 4.2). A
+    // hook's or an observer's goes into the hook queue, like its other records.
+    template <class E>
+    void Trigger(E event, std::optional<EntityId> target = std::nullopt) {
+        Check("Commands");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        Detail::Record record =
+            Detail::Record::Of(Detail::RecordKind::Trigger, target.value_or(0), Detail::EventIdOf(*world_, KeyOf<E>()));
+        record.hasTarget = target.has_value();
+        record.value = std::make_unique<Detail::EventBox<E>>(std::move(event));
+        Detail::Push(call, std::move(record));
     }
 };
 template <>
@@ -651,31 +703,19 @@ private:
 template <class T>
 struct ParamTraits<Local<T>> : Detail::HandleTraits<Local<T>, TypeList<Access::LocalState<T>>, false> {};
 
-// The domain and tick of the running mount's schedule (spec B.4, B-1).
-class CurrentTick final : Detail::Handle {
-    GYO_KERNEL_HANDLE(CurrentTick) : Handle(call), domain_(call.domain), tick_(call.tick) {}
-
-public:
-    [[nodiscard]] Domain Clock() const { Check("CurrentTick"); return domain_; }
-    [[nodiscard]] std::uint64_t Tick() const { Check("CurrentTick"); return tick_; }
-
-private:
-    Domain domain_;
-    std::uint64_t tick_;
-};
-template <>
-struct ParamTraits<CurrentTick> : Detail::HandleTraits<CurrentTick, TypeList<Access::DomainTickRead>, true> {};
-
 // Write-only diagnostics sink (spec S-8's only effect exception): effect
 // Diagnostics, no access entry, no conflict edge.
 template <class Record>
 class DiagnosticsWriter final : Detail::Handle {
     static_assert(!std::is_same_v<Record, RejectedSpawn>,
                   "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: RejectedSpawn is the kernel's own diagnostics record (spec F-13)");
-    GYO_KERNEL_HANDLE(DiagnosticsWriter) : Handle(call), tick_(call.tick) {}
+    static_assert(!std::is_same_v<Record, DroppedMessages>,
+                  "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: DroppedMessages is the kernel's own diagnostics record");
+    GYO_KERNEL_HANDLE(DiagnosticsWriter) : Handle(call) {}
 
 public:
-    // Appends to the World-side buffer (B-13), which an Interrupted World keeps.
+    // Appends to the World-side buffer (B-13), which an Interrupted World keeps;
+    // the entry carries the World's sync point number of the call (L8).
     void Write(Record record) {
         Check("DiagnosticsWriter");
         Detail::DiagnosticsBase* found = Detail::FindDiagnostics(*world_, KeyOf<Record>());
@@ -685,11 +725,8 @@ public:
             Detail::AddDiagnostics(*world_, KeyOf<Record>(), std::move(made));
         }
         static_cast<Detail::DiagnosticsBuffer<Record>*>(found)->entries.push_back(
-            typename Detail::DiagnosticsBuffer<Record>::Entry{tick_, false, std::move(record)});
+            typename Detail::DiagnosticsBuffer<Record>::Entry{syncEpoch_, false, std::move(record)});
     }
-
-private:
-    std::uint64_t tick_;
 };
 template <class Record>
 struct ParamTraits<DiagnosticsWriter<Record>>
@@ -823,7 +860,7 @@ template <class R>
 using VisitResult = typename Detail::VisitResultOf<R>::Type;
 
 // Untyped access to the whole World: reads and writes every component and
-// resource value (events are not in it; DI-KS 1) and changes membership and
+// resource value (messages are not in it; DI-KS 1) and changes membership and
 // resources now (DI-KS 18; declaration 3.5). Zone B only (S-13, a zone rule at
 // startup); the only parameter (S-10). Conflicts with every System of its
 // stage. Written ExclusiveWorld<>, or ExclusiveWorld<Writes<R...>> with the
@@ -1003,6 +1040,28 @@ public:
         return done->changed;
     }
 
+    // Triggers event E now (event cursor declaration 3.3; time-events
+    // declaration 4.2): its observers run before the call returns, each like
+    // one nested System call; what they record is applied round after round
+    // before it returns, as for an immediate change (Detail::TriggerNow lists
+    // the refusals and errors). Afterwards the handle takes the World's sync
+    // epoch and a new stamp, like after RunSchedule.
+    template <class E>
+    [[nodiscard]] ::Engine::Base::Result<void, KernelError> Trigger(E event,
+                                                                  std::optional<EntityId> target = std::nullopt) {
+        Check("ExclusiveWorld");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        struct Renewal {
+            ExclusiveWorld& owner;
+            ~Renewal() {
+                owner.syncEpoch_ = Detail::CurrentSyncEpoch(*owner.world_);
+                owner.stamp_ = Detail::NextStamp(*owner.world_);
+            }
+        } renewal{*this};
+        return Detail::TriggerNow(call, Detail::EventIdOf(*world_, KeyOf<E>()),
+                                  std::make_unique<Detail::EventBox<E>>(std::move(event)), target, closures_ > 0);
+    }
+
     // Runs another schedule of this World, whole, now (K0; spec E.2). Err, the
     // World interrupted and the error reported once by the outermost Run, when
     // refused (Detail::RunNested lists why) or when the inner schedule fails;
@@ -1117,6 +1176,35 @@ private:
 };
 template <>
 struct ParamTraits<HookCtx> : Detail::HandleTraits<HookCtx, TypeList<>, true> {};
+
+// The event an observer runs for (event cursor declaration 3.3, 5.2): read-only,
+// no access entry. An observer parameter only, of the observer's own event
+// (Registrar::Observer checks it): fetching it anywhere else is a Programmer
+// Error (GYO_ASSERT).
+template <class E>
+class On final : Detail::Handle {
+    GYO_KERNEL_HANDLE(On) : Handle(call), payload_(call.eventPayload), target_(call.eventTarget) {
+        GYO_ASSERT(call.observer && call.eventKey == KeyOf<E>());
+    }
+
+public:
+    // The triggered value (Add<T> and Remove<T> carry none: Target names the cell's entity).
+    [[nodiscard]] const E& Event() const
+        requires(Detail::ObservedOf<E>::trigger == ObserverTrigger::Event)
+    {
+        GYO_ASSERT(payload_ != nullptr);
+        return *static_cast<const E*>(payload_);
+    }
+    // The entity the event is about: the entity of the cell for Add<T> and
+    // Remove<T>; for an event type, the target given to Trigger, if any.
+    [[nodiscard]] std::optional<EntityId> Target() const noexcept { return target_; }
+
+private:
+    const void* payload_;
+    std::optional<EntityId> target_;
+};
+template <class E>
+struct ParamTraits<On<E>> : Detail::HandleTraits<On<E>, TypeList<>, true> {};
 
 #undef GYO_KERNEL_HANDLE
 

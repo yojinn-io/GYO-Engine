@@ -38,6 +38,35 @@ void Warn(const std::string& text) {
     ::Engine::Base::Log(::Engine::Base::LogLevel::Warning, "orchestration", text);
 }
 
+// The owner name of the default skeleton's declarations (no unit row is
+// "orchestration": the orchestration layer is library-only in the register).
+constexpr const char* kSkeletonOwner = "orchestration";
+
+// The default skeleton (ScheduleSkeleton.hpp): names and stage order only.
+void DeclareDefaultSkeleton(Kernel::Registrar& registrar) {
+    using S = DefaultSchedules;
+    Kernel::ScheduleOptions frame;
+    frame.name = std::string(S::frame);
+    frame.stages = {std::string(S::first),  std::string(S::preUpdate),  std::string(S::fixedMainLoop),
+                    std::string(S::update), std::string(S::postUpdate), std::string(S::last)};
+    registrar.Schedule(std::move(frame));
+    Kernel::ScheduleOptions fixed;
+    fixed.name = std::string(S::fixed);
+    fixed.stages = {std::string(S::first), std::string(S::preUpdate), std::string(S::update), std::string(S::postUpdate),
+                    std::string(S::last)};
+    registrar.Schedule(std::move(fixed));
+}
+
+// The World's initial frame list: with the default skeleton the frame schedule first, unless the list names it.
+std::vector<std::string> InitialFrame(const WorldDescription& world) {
+    std::vector<std::string> frame = world.frame;
+    const std::string main(DefaultSchedules::frame);
+    if (world.skeleton == ScheduleSkeleton::Default && std::find(frame.begin(), frame.end(), main) == frame.end()) {
+        frame.insert(frame.begin(), main);
+    }
+    return frame;
+}
+
 OrchestrationError FromKernel(OrchestrationErrorCode code, std::string message, Kernel::KernelError error) {
     OrchestrationError result(code, std::move(message), error.Text());
     result.kernel.push_back(std::move(error));
@@ -221,9 +250,15 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     const WorldDescription& world = slot.description;
     Registration registration;
     auto registry = std::make_unique<Kernel::Registry>();
-    ScheduleList frame(world.frame);
+    ScheduleList frame(InitialFrame(world));
     std::vector<PrepareFn> prepares;
     std::vector<Detail::CarryEntry> carries;
+
+    // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).
+    if (world.skeleton == ScheduleSkeleton::Default) {
+        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);
+        GYO_ASSERT(static_cast<bool>(skeleton));
+    }
 
     // Build: every unit of the World in order, then the product's own (always
     // registered, so a World with no unit still freezes; section 3.3).
@@ -386,10 +421,7 @@ std::optional<OrchestrationError> Product::Ended() {
     failure.entry = std::string(entry);
     failure.schedule = std::string(schedule);
     failure.lastSchedule = slot.lastSchedule;
-    for (const Kernel::ScheduleInfo& info : slot.registry->Frozen().Schedules()) {
-        if (info.options.name == schedule) failure.domain = info.options.domain;
-    }
-    failure.tick = slot.executor->GetWorld().Tick(failure.domain);
+    failure.syncEpoch = slot.executor->GetWorld().SyncEpoch();
     auto ran = [&] {
         try {
             return slot.executor->Run(schedule);

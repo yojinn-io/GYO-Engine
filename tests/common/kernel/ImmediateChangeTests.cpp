@@ -391,15 +391,18 @@ SystemResult LookFor70(Query<Read<Tag>> tags) {
 
 // ---- Verification
 
-SystemResult SendsPing(EventWriter<Ping> pings) {
+SystemResult SendsPing(MessageWriter<Ping> pings) {
     pings.Send(Ping{1});
     return Ok();
 }
-// OnAdd<Mode>: a hook that writes an event while the immediate change applies.
-SystemResult ModePings(HookCtx, EventWriter<Ping> pings) {
+// OnAdd<Mode>: a hook that writes a message while the immediate change applies.
+SystemResult ModePings(HookCtx, MessageWriter<Ping> pings) {
     pings.Send(Ping{2});
     return Ok();
 }
+// Runs before the Driver and reads nothing: it holds the hook's Ping past the
+// Run's end trim (v8-arch-gyo2-time-events step 3), so the payload is there to count.
+SystemResult HoldsPings(MessageReader<Ping>) { return Ok(); }
 SystemResult WriteThenChange(ExclusiveWorld<> world) {
     if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return Engine::Base::Err(std::move(r).error());
     if (auto r = world.Insert<Mode>(1, Mode{1}); !r) return Engine::Base::Err(std::move(r).error());
@@ -407,13 +410,26 @@ SystemResult WriteThenChange(ExclusiveWorld<> world) {
     if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-Detail::EventBuffer<Ping>& PingBuffer(World& world) {
-    return static_cast<Detail::EventBuffer<Ping>&>(Detail::EventsAt(world, Detail::EventIdOf(world, KeyOf<Ping>())));
+Detail::MessageBuffer<Ping>& PingBuffer(World& world) {
+    return static_cast<Detail::MessageBuffer<Ping>&>(Detail::MessagesAt(world, Detail::MessageIdOf(world, KeyOf<Ping>())));
 }
 SystemResult TamperPingThenChange(ExclusiveWorld<> world) {
     PingBuffer(*Current().world).records.back().payload.n = 98;
     Log().push_back("insert " + Outcome(world.Insert<Mode>(1, Mode{1})));
     return Ok();
+}
+
+// The same tampering before ExclusiveWorld::Trigger (step 7): compared before the observers run.
+struct Knocked { std::uint32_t n; };  // event, zone B
+SystemResult LogKnock(On<Knocked>) {
+    Log().push_back("knocked");
+    return Ok();
+}
+SystemResult TamperPingThenTrigger(ExclusiveWorld<> world) {
+    PingBuffer(*Current().world).records.back().payload.n = 98;
+    auto done = world.Trigger(Knocked{1});
+    Log().push_back("trigger " + std::string(done ? "ok" : ToString(done.error().code)));
+    return done;
 }
 
 // ---- S6: Commands::SetResource / RemoveResource
@@ -606,7 +622,6 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
             Immediate(r);
             ScheduleOptions loop;
             loop.name = "Loop";
-            loop.domain = Domain::Fixed;
             loop.stages = {"L"};
             loop.hookRoundLimit = 2;
             r.Schedule(loop);
@@ -624,7 +639,7 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
         CHECK_MESSAGE(Joined() == "round hook ball | round hook bat | round hook ball | ball HookRoundLimit",
                       "[ks-s5-round-limit-count] " << Joined());
         CHECK_MESSAGE(Text(result).find("records left after round 2") != std::string::npos, "[ks-s5-round-limit-count] " << Text(result));
-        CHECK_MESSAGE(Text(result).find("recorded by 'BallToBat'") != std::string::npos, "[ks-s5-round-limit-recorders] " << Text(result));
+        CHECK_MESSAGE(Text(result).find("recorded by hook 'BallToBat'") != std::string::npos, "[ks-s5-round-limit-recorders] " << Text(result));
         CHECK(rig->recorded.size() == 1);
         CHECK(rig->world().State() == WorldState::Interrupted);
     }
@@ -821,7 +836,6 @@ TEST_CASE("DI-KS 18: an immediate change by an exclusive System of a nested sche
         Immediate(r);
         ScheduleOptions inner;
         inner.name = "Inner";
-        inner.domain = Domain::Fixed;
         inner.stages = {"I1", "I2"};
         r.Schedule(inner);
         r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
@@ -912,7 +926,6 @@ TEST_CASE("DI-KS 18: a nested schedule run after an immediate change sees it") {
         Immediate(r);
         ScheduleOptions outer;
         outer.name = "Outer";
-        outer.domain = Domain::Fixed;
         outer.stages = {"O"};
         r.Schedule(outer);
         r.AddSystem<&SpawnThenRunTick>(Sys("Driver", Zone::B, {At("Outer", "O")}));
@@ -931,13 +944,14 @@ TEST_CASE("DI-KS 18: verification on: immediate changes and the hooks they run a
         // A hook round too, so the handle is used after the World's sync epoch moved (W-4).
         r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
         r.AddSystem<&WriteThenChange>(B("Driver", "A"));
+        r.AddSystem<&HoldsPings>(B("HoldsPings", "A", {"Driver"}));
     }, true);
     rig->world().Insert(1, Hp{1});
     const auto result = rig->Run();
     CHECK_MESSAGE(static_cast<bool>(result), "[ks-s5-verification-quiet] " << Text(result));
     CHECK(rig->world().Get<Hp>(1)->v == 3);
     CHECK(rig->world().Get<Mode>(1) != nullptr);
-    CHECK(rig->world().EventPayloads<Ping>().size() == 1);
+    CHECK(rig->world().MessagePayloads<Ping>().size() == 1);
     CHECK(rig->world().Get<Tag>(1) != nullptr);
 }
 
@@ -951,7 +965,7 @@ TEST_CASE("DI-KS 18: verification on: a write the System does not declare, made 
     const auto result = rig->Run();
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ks-s5-verification-before] the write before the change was not reported");
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::BoundaryChange), "[ks-s5-verification-before] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find("event Ping") != std::string::npos, "[ks-s5-verification-before] " << result.error().Text());
+    CHECK_MESSAGE(result.error().Text().find("message Ping") != std::string::npos, "[ks-s5-verification-before] " << result.error().Text());
     CHECK_MESSAGE(result.error().Text().find("'Driver'") != std::string::npos, "[ks-s5-verification-before] " << result.error().Text());
     // Compared before the change, as before a nested run: the change is refused and does not happen.
     CHECK_MESSAGE(Logged("insert BoundaryChange"), "[ks-s5-verification-before-refused] " << Joined());
@@ -998,4 +1012,18 @@ TEST_CASE("DI-KS 9: a hook's Commands::SetResource goes into the hook queue: app
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(Joined() == "InB out absent | InC out 80", "[ks-s6-hook-next-window] " << Joined());
+}
+
+TEST_CASE("J-59: verification on: a write the System does not declare, made before ExclusiveWorld::Trigger, is reported first; no observer runs") {
+    auto rig = ImmediateRig([](Registrar& r) {
+        Immediate(r);
+        r.Event<Knocked>({.name = "Knocked", .zone = Zone::B});
+        r.Observer<Knocked, &LogKnock>({.name = "log-knock", .zone = Zone::B});
+        r.AddSystem<&SendsPing>(B("SendsPing", "A"));
+        r.AddSystem<&TamperPingThenTrigger>(B("Driver", "B"));
+    }, true);
+    const auto result = rig->Run();
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[obs-trigger-own-changes] the write before the trigger was not reported: " << Joined());
+    CHECK_MESSAGE((result.error().Has(KernelErrorCode::BoundaryChange) && !Logged("knocked") && Logged("trigger BoundaryChange")),
+                  "[obs-trigger-own-changes] " << result.error().Text() << " / " << Joined());
 }

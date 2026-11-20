@@ -111,7 +111,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE7: return "D-E7";
     case StartupCode::DE9: return "D-E9";
     case StartupCode::DE11: return "D-E11";
-    case StartupCode::DE12: return "D-E12";
     case StartupCode::DE14: return "D-E14";
     case StartupCode::DE15: return "D-E15";
     case StartupCode::DE16: return "D-E16";
@@ -123,7 +122,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::RE5: return "R-E5";
     case StartupCode::RE7: return "R-E7";
     case StartupCode::XE1: return "X-E1";
-    case StartupCode::FE1: return "F-E1";
     }
     return "Unknown";
 }
@@ -202,16 +200,6 @@ std::string SourceText(const std::source_location& source) {
     return std::string(source.file_name()) + ":" + std::to_string(source.line());
 }
 
-const char* DomainName(Domain domain) noexcept {
-    switch (domain) {
-    case Domain::None: return "None";
-    case Domain::Fixed: return "Fixed";
-    case Domain::Frame: return "Frame";
-    case Domain::Loading: return "Loading";
-    }
-    return "?";
-}
-
 const char* ZoneName(Zone zone) noexcept {
     switch (zone) {
     case Zone::Unset: return "unset";
@@ -227,8 +215,9 @@ const char* RoleName(TypeRole role) noexcept {
     switch (role) {
     case TypeRole::Component: return "component";
     case TypeRole::Resource: return "resource";
-    case TypeRole::Event: return "event";
+    case TypeRole::Message: return "message";
     case TypeRole::SetTag: return "named set";
+    case TypeRole::Event: return "event";
     }
     return "?";
 }
@@ -269,7 +258,6 @@ public:
         : data_(data), subject_(std::move(subject)), source_(std::move(source)) {}
 
     AccessSet access;
-    bool domainTick = false;
 
     void Parameter(std::size_t position) override { position_ = position; }
 
@@ -283,12 +271,11 @@ public:
             (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Resource, *id});
         }
     }
-    void Event(TypeKey type, AccessMode mode) override {
-        if (const auto id = Lookup(type, TypeRole::Event, "event")) {
-            (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Event, *id});
+    void Message(TypeKey type, AccessMode mode) override {
+        if (const auto id = Lookup(type, TypeRole::Message, "message")) {
+            (mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Message, *id});
         }
     }
-    void DomainTick() override { domainTick = true; }
     void Membership(TypeKey component) override {
         if (const auto id = Lookup(component, TypeRole::Component, "component")) access.membershipReads.push_back(*id);
     }
@@ -412,7 +399,23 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
     return id;
 }
 
-EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions options, Detail::MakeEventsFn make) {
+MessageTypeId Registrar::RegisterMessage(TypeKey key, Shape shape, MessageOptions options, Detail::MakeMessagesFn make) {
+    GYO_ASSERT(data_->building);
+    Detail::RegistryData& data = *data_;
+    const auto id = static_cast<MessageTypeId>(data.messages.size());
+    if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Message, id, owner_, options.name)) {
+        const Detail::TypeEntry* existing = data.FindType(key);
+        return existing != nullptr ? existing->id : 0;
+    }
+    // A buffer that keeps nothing would drop every record it is given: a Programmer Error.
+    GYO_ASSERT(options.capacity >= 1);
+    data.messages.push_back(
+        MessageInfo{std::move(options.name), options.zone, data.OwnerName(owner_), options.capacity, {}});
+    data.messageMakers.push_back(make);
+    return id;
+}
+
+EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions options) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<EventTypeId>(data.events.size());
@@ -420,9 +423,26 @@ EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions opti
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.events.push_back(EventInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(owner_)});
-    data.eventMakers.push_back(make);
+    data.events.push_back(EventInfo{std::move(options.name), options.zone, data.OwnerName(owner_)});
     return id;
+}
+
+void Registrar::RegisterObserver(TypeKey event, ObserverTrigger trigger, TypeKey observed, ObserverOptions options,
+                                 Detail::ResolveFn resolve, Detail::RunFn run, std::source_location source) {
+    GYO_ASSERT(data_->building);
+    Detail::RegistryData& data = *data_;
+    for (const Detail::ObserverRecord& existing : data.observers) {
+        // The observers of one trigger run in name order: a name names one observer.
+        if (existing.name == options.name) {
+            data.Error(StartupCode::RE2, "B.1",
+                       "observer name '" + options.name + "' registered twice (observers run in name order)",
+                       {data.OwnerName(existing.owner), data.OwnerName(owner_), options.name},
+                       {Detail::SourceText(existing.source), Detail::SourceText(source)});
+            break;
+        }
+    }
+    data.observers.push_back(Detail::ObserverRecord{std::move(options.name), options.zone, trigger, event, observed, resolve,
+                                                    run, source, owner_, std::nullopt, {}});
 }
 
 EffectId Registrar::Effect(std::string name) {
@@ -560,7 +580,7 @@ RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::Resolve
         }
     }
     data.systems.push_back(
-        Detail::SystemRecord{std::move(options), resolve, extractOnly, run, source, owner_, seq, {}, {}, false, false});
+        Detail::SystemRecord{std::move(options), resolve, extractOnly, run, source, owner_, seq, {}, {}, false});
     return seq;
 }
 
@@ -592,6 +612,8 @@ void Registrar::RegisterInitialValue(TypeKey target, TypeKey request, Detail::In
 
 std::uint64_t FrozenRegistry::Version() const noexcept { return data_->version; }
 std::span<const HookInfo> FrozenRegistry::Hooks() const noexcept { return data_->hookInfos; }
+std::span<const EventInfo> FrozenRegistry::Events() const noexcept { return data_->events; }
+std::span<const ObserverInfo> FrozenRegistry::Observers() const noexcept { return data_->observerInfos; }
 std::span<const InitialValueInfo> FrozenRegistry::InitialValues() const noexcept { return data_->initialValueInfos; }
 std::span<const ScheduleInfo> FrozenRegistry::Schedules() const noexcept { return data_->scheduleInfos; }
 std::span<const SetInfo> FrozenRegistry::Sets() const noexcept { return data_->setInfos; }
@@ -605,7 +627,7 @@ std::span<const OrderEdge> FrozenRegistry::OrderGraph(std::string_view schedule)
 
 std::span<const ColumnInfo> FrozenRegistry::Components() const noexcept { return data_->components; }
 std::span<const ResourceInfo> FrozenRegistry::Resources() const noexcept { return data_->resources; }
-std::span<const EventInfo> FrozenRegistry::Events() const noexcept { return data_->events; }
+std::span<const MessageInfo> FrozenRegistry::Messages() const noexcept { return data_->messages; }
 std::span<const SystemInfo> FrozenRegistry::Systems() const noexcept { return data_->systemInfos; }
 std::span<const Plan> FrozenRegistry::Plans() const noexcept { return data_->plans; }
 std::span<const TieBreak> FrozenRegistry::TieBreaks() const noexcept { return data_->ties; }
@@ -644,10 +666,15 @@ std::optional<ResourceId> FrozenRegistry::FindResource(TypeKey key) const noexce
                                                                           : std::nullopt;
 }
 
+std::optional<MessageTypeId> FrozenRegistry::FindMessage(TypeKey key) const noexcept {
+    const Detail::TypeEntry* entry = data_->FindType(key);
+    return entry != nullptr && entry->role == Detail::TypeRole::Message ? std::optional<MessageTypeId>(entry->id)
+                                                                       : std::nullopt;
+}
+
 std::optional<EventTypeId> FrozenRegistry::FindEvent(TypeKey key) const noexcept {
     const Detail::TypeEntry* entry = data_->FindType(key);
-    return entry != nullptr && entry->role == Detail::TypeRole::Event ? std::optional<EventTypeId>(entry->id)
-                                                                       : std::nullopt;
+    return entry != nullptr && entry->role == Detail::TypeRole::Event ? std::optional<EventTypeId>(entry->id) : std::nullopt;
 }
 
 Fingerprint FrozenRegistry::RegistryFingerprint() const {
@@ -719,9 +746,11 @@ void ApplyDefaultZones(RegistryData& data) {
     };
     for (ColumnInfo& info : data.components) fill(info.zone);
     for (ResourceInfo& info : data.resources) fill(info.zone);
+    for (MessageInfo& info : data.messages) fill(info.zone);
     for (EventInfo& info : data.events) fill(info.zone);
     for (SystemRecord& system : data.systems) fill(system.options.zone);
     for (HookRecord& hook : data.hooks) fill(hook.zone);
+    for (ObserverRecord& observer : data.observers) fill(observer.zone);
 }
 
 void CheckData(RegistryData& data) {
@@ -749,13 +778,16 @@ void CheckData(RegistryData& data) {
                        {info.name, info.owner});
         }
     }
+    for (const MessageInfo& info : data.messages) {
+        if (info.zone == Zone::Unset) {
+            data.Error(StartupCode::DE7, "S-6", "message '" + info.name + "' declares no zone (there is no default)",
+                       {info.name, info.owner});
+        }
+    }
+    // An event type's zone follows a message type's rule (time-events declaration 4.5).
     for (const EventInfo& info : data.events) {
         if (info.zone == Zone::Unset) {
             data.Error(StartupCode::DE7, "S-6", "event '" + info.name + "' declares no zone (there is no default)",
-                       {info.name, info.owner});
-        }
-        if (info.domain == Domain::None) {
-            data.Error(StartupCode::FE1, "F-9", "event '" + info.name + "' belongs to no clock domain",
                        {info.name, info.owner});
         }
     }
@@ -869,8 +901,6 @@ void CheckInitialValues(RegistryData& data) {
 }
 
 void CheckSchedules(RegistryData& data) {
-    std::map<Domain, std::vector<std::string>> clocks;
-    std::set<Domain> usedDomains;
     for (const ScheduleRecord& record : data.schedules) {
         const ScheduleOptions& s = record.options;
         std::set<std::string> stages;
@@ -906,35 +936,15 @@ void CheckSchedules(RegistryData& data) {
                                                        "' is not unique", {s.name, sync.name});
             }
         }
-        if (!s.eventTrim.empty() && syncNames.count(s.eventTrim) == 0 && stages.count(s.eventTrim) == 0) {
-            data.Error(StartupCode::DE1, "D.1", "schedule '" + s.name + "' trims events at '" + s.eventTrim +
-                                                   "', which is neither a stage end nor a sync point", {s.name});
-        }
-        if (s.domain == Domain::None) {
-            data.Error(StartupCode::DE12, "H-1", "schedule '" + s.name + "' belongs to no clock domain", {s.name});
-        } else {
-            usedDomains.insert(s.domain);
-            if (s.clock) clocks[s.domain].push_back(s.name);
-        }
         if (s.executor == ExecutorKind::Parallel) {
             data.Error(StartupCode::DE17, "X-2", "schedule '" + s.name + "' declares Parallel; v1 has only Serial (LIM-2)",
                        {s.name});
         }
     }
-    for (Domain domain : usedDomains) {
-        const std::vector<std::string>& names = clocks[domain];
-        if (names.size() != 1) {
-            std::vector<std::string> subjects = names;
-            data.Error(StartupCode::DE12, "H-1",
-                       std::string("domain ") + DomainName(domain) + " has " + std::to_string(names.size()) +
-                           " clock schedules; a World has exactly one per domain",
-                       subjects);
-        }
-    }
 }
 
 // A run condition's access joins its System's (spec S-4, E.4): every read,
-// filter, set read, domain tick and the extract flag, so the System's checks
+// filter, set read and the extract flag, so the System's checks
 // (S-9, Z1, D-E14) see it. Conditions are read-only
 // by type (S-5), so nothing is written.
 void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
@@ -947,26 +957,42 @@ void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
                                     condition.access.extractReads.end());
     into.access.changeFilters = into.access.changeFilters || condition.access.changeFilters;
     into.access.local = into.access.local || condition.access.local;
-    into.domainTick = into.domainTick || condition.domainTick;
     into.usesExtract = into.usesExtract || condition.usesExtract;
 }
 
+// Event cursor declaration 3.2 (DI-KS 25): reads of a message by the System
+// itself (condition empty) or by one of the mount's run conditions, each a
+// reader of its own. Two MessageReader<M> of one signature are one reader.
+void AddMessageReaders(RegistryData& data, const std::vector<AccessKey>& reads, const SystemRecord& system,
+                       const Mount& mount, const std::string& condition) {
+    for (const AccessKey& key : reads) {
+        if (key.kind != AccessKind::Message) continue;
+        std::vector<MessageReaderInfo>& readers = data.messages[key.id].readers;
+        MessageReaderInfo reader{system.options.name, mount.schedule, condition};
+        if (std::find(readers.begin(), readers.end(), reader) == readers.end()) readers.push_back(std::move(reader));
+    }
+}
+
 void ResolveSystems(RegistryData& data) {
+    // Derived: cleared, then filled in (registrationSeq, mount, condition) order.
+    for (MessageInfo& info : data.messages) info.readers.clear();
     for (SystemRecord& system : data.systems) {
         // Derived: cleared, so a later BuildPlans does not add to the last one's (declaration 3.2 rule 2).
         system.access = AccessSet{};
         system.effects.clear();
-        system.domainTick = false;
         if (system.removed) continue;
         const std::string subject = "System '" + system.options.name + "'";
         SystemResolver resolver(data, subject, SourceText(system.source));
         system.resolve(resolver);
+        const std::vector<AccessKey> ownReads = resolver.access.reads;
         for (const Mount& mount : system.options.mounts) {
+            AddMessageReaders(data, ownReads, system, mount, {});
             for (const ConditionRef& condition : mount.conditions) {
                 if (condition.Resolver() == nullptr) continue;
                 SystemResolver conditionResolver(data, subject + " run condition '" + condition.Name() + "'",
                                                  SourceText(system.source));
                 condition.Resolver()(conditionResolver);
+                AddMessageReaders(data, conditionResolver.access.reads, system, mount, condition.Name());
                 MergeCondition(resolver, conditionResolver);
             }
             // Set conditions join every member's reads (spec E.4).
@@ -978,22 +1004,13 @@ void ResolveSystems(RegistryData& data) {
                         SystemResolver conditionResolver(data, "set '" + setName + "' run condition '" + condition.Name() + "'",
                                                          SourceText(system.source));
                         condition.Resolver()(conditionResolver);
+                        AddMessageReaders(data, conditionResolver.access.reads, system, mount, condition.Name());
                         MergeCondition(resolver, conditionResolver);
                     }
                 }
             }
         }
         AccessSet& access = resolver.access;
-        // CurrentTick: one domain-tick read per mount's domain (spec S-4).
-        if (resolver.domainTick) {
-            for (const Mount& mount : system.options.mounts) {
-                if (const ScheduleRecord* schedule = data.FindSchedule(mount.schedule)) {
-                    if (schedule->options.domain != Domain::None) {
-                        access.reads.push_back({AccessKind::DomainTick, static_cast<std::uint32_t>(schedule->options.domain)});
-                    }
-                }
-            }
-        }
         // SetRead: the named set's members as component reads (spec S13).
         for (SetId set : access.setReads) {
             for (ComponentId member : data.namedSets[set].members) {
@@ -1028,7 +1045,6 @@ void ResolveSystems(RegistryData& data) {
         }
         access.reads = std::move(reads);
         system.access = std::move(access);
-        system.domainTick = resolver.domainTick;
         // Effects.
         for (const std::string& effect : system.options.effects) {
             if (effect == kDiagnosticsEffect) {
@@ -1098,15 +1114,71 @@ void ResolveSystems(RegistryData& data) {
                        {SourceText(hook.source)});
         }
     }
+    // Observers (event cursor declaration 3.3): Systems that run where their
+    // event is triggered; their zone follows a hook's rule (time-events
+    // declaration 4.5); each is a message reader of its own (3.2).
+    for (std::size_t o = 0; o < data.observers.size(); ++o) {
+        ObserverRecord& observer = data.observers[o];
+        const std::string subject = "observer '" + observer.name + "'";
+        observer.observedId.reset();
+        const TypeRole wanted = observer.trigger == ObserverTrigger::Event ? TypeRole::Event : TypeRole::Component;
+        const TypeEntry* entry = data.FindType(observer.observed);
+        if (entry == nullptr || entry->role != wanted) {
+            data.Error(StartupCode::RE4, "R-6",
+                       subject + " observes a type that is not a registered " +
+                           (wanted == TypeRole::Event ? "event" : "component"),
+                       {observer.name}, {SourceText(observer.source)});
+        } else {
+            observer.observedId = entry->id;
+        }
+        SystemResolver found(data, subject, SourceText(observer.source));
+        observer.resolve(found);
+        for (SetId set : found.access.setReads) {
+            for (ComponentId member : data.namedSets[set].members) {
+                found.access.reads.push_back({AccessKind::Component, member});
+            }
+        }
+        if (found.access.spawn) {
+            if (data.allotter) {
+                found.access.writes.push_back({AccessKind::Resource, *data.allotter});
+            } else {
+                data.Error(StartupCode::DE3, "A.1", subject + " spawns entities, and the World declares no allotter",
+                           {observer.name}, {SourceText(observer.source)});
+            }
+        }
+        if (found.usesExtract) {
+            data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
+                       {observer.name}, {SourceText(observer.source)});
+        }
+        if (observer.zone == Zone::C) {
+            const auto refuseInC = [&](bool present, const char* rule, const char* what) {
+                if (present) {
+                    data.Error(StartupCode::DE7, rule, subject + " is zone C and " + what, {observer.name},
+                               {SourceText(observer.source)});
+                }
+            };
+            refuseInC(found.access.local, "S-7", "has Local<T> (state outside the World)");
+            refuseInC(found.access.changeFilters, "S-9", "filters by Changed or Added");
+        }
+        Normalize(found.access);
+        for (const AccessKey& key : found.access.reads) {
+            if (key.kind != AccessKind::Message) continue;
+            data.messages[key.id].readers.push_back(MessageReaderInfo{observer.name, {}, {}, true});
+        }
+        observer.access = std::move(found.access);
+        if (observer.zone == Zone::Unset) {
+            data.Error(StartupCode::DE7, "S-6", subject + " declares no zone (there is no default)", {observer.name},
+                       {SourceText(observer.source)});
+        }
+    }
 }
 
-// The zone of the data behind one access key; DomainTick is the kernel's (c) time source.
+// The zone of the data behind one access key.
 Zone ZoneOf(const RegistryData& data, const AccessKey& key) {
     switch (key.kind) {
     case AccessKind::Component: return data.components[key.id].zone;
     case AccessKind::Resource: return data.resources[key.id].zone;
-    case AccessKind::Event: return data.events[key.id].zone;
-    case AccessKind::DomainTick: return Zone::C;
+    case AccessKind::Message: return data.messages[key.id].zone;
     }
     return Zone::Unset;
 }
@@ -1115,8 +1187,7 @@ std::string NameOf(const RegistryData& data, const AccessKey& key) {
     switch (key.kind) {
     case AccessKind::Component: return data.components[key.id].name;
     case AccessKind::Resource: return data.resources[key.id].name;
-    case AccessKind::Event: return data.events[key.id].name;
-    case AccessKind::DomainTick: return std::string("domain tick ") + DomainName(static_cast<Domain>(key.id));
+    case AccessKind::Message: return data.messages[key.id].name;
     }
     return "?";
 }
@@ -1326,7 +1397,7 @@ void CheckSystems(RegistryData& data) {
             }
             if (zone == Zone::C && s.rollbackEnabled) {
                 for (const AccessKey& key : WrittenKeys(zoneAccess)) {
-                    if (key.kind == AccessKind::Event) continue;
+                    if (key.kind == AccessKind::Message) continue;
                     const Rollback rollback = RollbackOf(data, key);
                     if (rollback != Rollback::Yes && rollback != Rollback::Derived) {
                         data.Error(StartupCode::DE7, "Z6",
@@ -1334,19 +1405,6 @@ void CheckSystems(RegistryData& data) {
                                        NameOf(data, key) + "'" + FunnelNote(data, funnel, key) + ", which does not roll back",
                                    {name, NameOf(data, key), s.name}, {source});
                     }
-                }
-            }
-            // Events: only in the event's domain's clock schedule (F-9).
-            std::vector<AccessKey> eventKeys;
-            for (const AccessKey& key : access.reads) if (key.kind == AccessKind::Event) eventKeys.push_back(key);
-            for (const AccessKey& key : access.writes) if (key.kind == AccessKind::Event) eventKeys.push_back(key);
-            for (const AccessKey& key : eventKeys) {
-                const EventInfo& event = data.events[key.id];
-                if (!s.clock || s.domain != event.domain) {
-                    data.Error(StartupCode::FE1, "F-9",
-                               subject + " uses event '" + event.name + "' (domain " + DomainName(event.domain) +
-                                   ") in schedule '" + s.name + "', which is not that domain's clock schedule",
-                               {name, event.name, s.name}, {source});
                 }
             }
             if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty() &&
@@ -1365,11 +1423,28 @@ void CheckSystems(RegistryData& data) {
         CheckZoneAccess(data, subject, hook.name, hook.zone, false, zoneAccess, funnel, SourceText(hook.source));
         if (hook.zone == Zone::C && anyRollback) {
             for (const AccessKey& key : WrittenKeys(zoneAccess)) {
-                if (key.kind != AccessKind::Event && RollbackOf(data, key) != Rollback::Yes) {
+                if (key.kind != AccessKind::Message && RollbackOf(data, key) != Rollback::Yes) {
                     data.Error(StartupCode::DE7, "Z6",
                                subject + " is zone C and writes '" + NameOf(data, key) + "'" + FunnelNote(data, funnel, key) +
                                    ", which is not rollback=Yes, in a World with a rollback-enabled schedule",
                                {hook.name, NameOf(data, key)}, {SourceText(hook.source)});
+                }
+            }
+        }
+    }
+    // An observer's zone rules are a hook's (time-events declaration 4.5).
+    for (const ObserverRecord& observer : data.observers) {
+        const std::string subject = "observer '" + observer.name + "'";
+        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, observer.access);
+        const AccessSet observerZone = ZoneAccess(observer.access, funnel);
+        CheckZoneAccess(data, subject, observer.name, observer.zone, false, observerZone, funnel, SourceText(observer.source));
+        if (observer.zone == Zone::C && anyRollback) {
+            for (const AccessKey& written : WrittenKeys(observerZone)) {
+                if (written.kind != AccessKind::Message && RollbackOf(data, written) != Rollback::Yes) {
+                    data.Error(StartupCode::DE7, "Z6",
+                               subject + " is zone C and writes '" + NameOf(data, written) + "'" + FunnelNote(data, funnel, written) +
+                                   ", which is not rollback=Yes, in a World with a rollback-enabled schedule",
+                               {observer.name, NameOf(data, written)}, {SourceText(observer.source)});
                 }
             }
         }
@@ -1398,6 +1473,14 @@ void CheckExclusiveWriters(RegistryData& data) {
         for (const AccessKey& key : WrittenKeys(hook.access)) {
             if (key.kind == AccessKind::Component || key.kind == AccessKind::Resource) {
                 writers[key].emplace_back("hook " + hook.name, SourceText(hook.source));
+            }
+        }
+    }
+    // An observer is a System: its writes count (DI-KS 6).
+    for (const ObserverRecord& observer : data.observers) {
+        for (const AccessKey& key : WrittenKeys(observer.access)) {
+            if (key.kind == AccessKind::Component || key.kind == AccessKind::Resource) {
+                writers[key].emplace_back("observer " + observer.name, SourceText(observer.source));
             }
         }
     }
@@ -1461,6 +1544,18 @@ void FillSystemInfos(RegistryData& data) {
         data.hookInfos.push_back(HookInfo{hook.name, hook.trigger, hook.componentId.value_or(0), hook.zone, hook.access,
                                           SourceText(hook.source), data.OwnerName(hook.owner)});
     }
+    data.observerInfos.clear();
+    data.observerOrder.clear();
+    for (std::size_t o = 0; o < data.observers.size(); ++o) {
+        const ObserverRecord& observer = data.observers[o];
+        data.observerInfos.push_back(ObserverInfo{observer.name, observer.trigger, observer.observedId.value_or(0),
+                                                  observer.zone, observer.access, SourceText(observer.source),
+                                                  data.OwnerName(observer.owner)});
+        data.observerOrder.push_back(static_cast<std::uint32_t>(o));
+    }
+    std::sort(data.observerOrder.begin(), data.observerOrder.end(), [&data](std::uint32_t a, std::uint32_t b) {
+        return data.observers[a].name < data.observers[b].name;
+    });
     data.initialValueInfos.clear();
     for (const InitialValueRecord& record : data.initialValues) {
         data.initialValueInfos.push_back(InitialValueInfo{record.targetId, record.requestId, data.OwnerName(record.owner),
@@ -1500,6 +1595,15 @@ void CheckLaterRound(RegistryData& data) {
             refuse("hook", data.OwnerName(hook.owner) + " adds hook '" + hook.name + "' to component '" +
                                data.components[*hook.componentId].name + "', which the previous version has",
                    {hook.name, data.components[*hook.componentId].name}, {SourceText(hook.source)});
+        }
+    }
+    for (std::size_t o = base.observers; o < data.observers.size(); ++o) {
+        const ObserverRecord& observer = data.observers[o];
+        if (observer.trigger != ObserverTrigger::Event && observer.observedId && *observer.observedId < base.components) {
+            // Like a hook: the cells that exist ran no Add observer but would run Remove ones.
+            refuse("observer", data.OwnerName(observer.owner) + " adds observer '" + observer.name + "' of component '" +
+                                   data.components[*observer.observedId].name + "', which the previous version has",
+                   {observer.name, data.components[*observer.observedId].name}, {SourceText(observer.source)});
         }
     }
     const auto oldComponent = [&](TypeKey key) -> const TypeEntry* {
@@ -1552,6 +1656,13 @@ void ResolveStage(RegistryData& data, bool laterRound) {
             const TypeEntry* entry = data.FindType(hook.component);
             hook.componentId = entry != nullptr && entry->role == TypeRole::Component ? std::optional<ComponentId>(entry->id)
                                                                                        : std::nullopt;
+        }
+        for (ObserverRecord& observer : data.observers) {
+            const TypeEntry* entry = data.FindType(observer.observed);
+            observer.observedId = entry != nullptr && entry->role == TypeRole::Component &&
+                                          observer.trigger != ObserverTrigger::Event
+                                      ? std::optional<std::uint32_t>(entry->id)
+                                      : std::nullopt;
         }
         CheckLaterRound(data);
     }
@@ -1639,6 +1750,7 @@ Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(Registr
         base.schedules = round.schedules.size();
         base.systems = round.systems.size();
         base.hooks = round.hooks.size();
+        base.observers = round.observers.size();
         base.initialValues = round.initialValues.size();
         base.allotterDeclarations = round.allotterDeclarations.size();
         base.digestMarks = round.digestMarks;

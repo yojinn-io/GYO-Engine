@@ -118,10 +118,13 @@ SystemResult RunsKeptExecutor(Res<Flag>) {
     return Ok();
 }
 SystemResult Throws(Res<Flag>) { throw std::runtime_error("planned throw"); }
-SystemResult SendsLater(EventWriter<LaterEvent> out) {
+SystemResult SendsLater(MessageWriter<LaterEvent> out) {
     out.Send(LaterEvent{7});
     return Ok();
 }
+// A reader that runs before SendsLater and reads nothing: it holds the record past
+// the Run's end trim (v8-arch-gyo2-time-events step 3), so the payload is there to count.
+SystemResult HoldsLater(MessageReader<LaterEvent>) { return Ok(); }
 SystemResult OnLaterAdd(HookCtx, Query<Read<Tag>> tags) {
     Log().push_back("later hook:" + std::to_string(tags.Count()));
     return Ok();
@@ -287,8 +290,6 @@ TEST_CASE("DI-KS 3: a second round that adds one unrelated System leaves ties, e
         r.Effect("Io:file");
         ScheduleOptions other;
         other.name = "Other";
-        other.domain = Domain::Frame;
-        other.clock = true;
         other.stages = {"Only"};
         r.Schedule(other);
         SystemOptions writes = B("WritesFlag", "A");
@@ -724,21 +725,22 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     Log().clear();
     // Each SUBCASE adds one kind of table, so a table the World misses fails only its own label.
-    SUBCASE("event buffers") {
+    SUBCASE("message buffers") {
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-            r.Event<LaterEvent>({.name = "LaterEvent", .zone = Zone::B, .domain = Domain::Fixed});
+            r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B});
             r.AddSystem<&SendsLater>(B("SendsLater", "A"));
+            r.AddSystem<&HoldsLater>(B("HoldsLater", "A", {"SendsLater"}));
         })));
         REQUIRE(Done(registry.BuildPlans()));
         std::string ran;
         std::size_t payloads = 0;
         const std::string asserted = AssertionIn([&] {
             ran = Text(executor.Run("Tick"));
-            payloads = world.EventPayloads<LaterEvent>().size();
+            payloads = world.MessagePayloads<LaterEvent>().size();
         });
-        REQUIRE_MESSAGE(asserted.empty(), "attach (event buffers): " << asserted);
-        CHECK_MESSAGE(ran == "ok", "attach (event buffers): " << ran);
-        CHECK_MESSAGE(payloads == 1, "attach (event buffers): payloads " << payloads);
+        REQUIRE_MESSAGE(asserted.empty(), "attach (message buffers): " << asserted);
+        CHECK_MESSAGE(ran == "ok", "attach (message buffers): " << ran);
+        CHECK_MESSAGE(payloads == 1, "attach (message buffers): payloads " << payloads);
     }
     SUBCASE("verification exclusions") {
         // ExcludeFromVerification is for a World that has not run: one made before the round.
@@ -771,8 +773,6 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
             ScheduleOptions late;
             late.name = "Late";
-            late.domain = Domain::Frame;
-            late.clock = true;
             late.stages = {"Only"};
             r.Schedule(late);
             r.AddSystem<&NewSystem>(Sys("LateSystem", Zone::B, {At("Late", "Only")}));
@@ -820,8 +820,6 @@ TEST_CASE("DI-KS 13: an extract source registers again, then the Registry that r
     const auto extractSchedule = [](Registrar& r) {
         ScheduleOptions s;
         s.name = "Extract";
-        s.domain = Domain::Frame;
-        s.clock = true;
         s.extract = true;
         s.stages = {"Copy"};
         r.Schedule(s);
@@ -934,7 +932,6 @@ TEST_CASE("DI-KS 25: the order graph lists System-to-System edges with their sou
         Data(r);
         ScheduleOptions tick = TickSchedule();
         tick.name = "Ordered";
-        tick.domain = Domain::Frame;
         tick.syncPoints = {SyncPointOptions{"Mid", "C"}};
         r.Schedule(tick);
         const auto at = [](std::string name, std::string stage, std::vector<std::string> before = {},

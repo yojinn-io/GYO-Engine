@@ -68,8 +68,6 @@ void BuildSynthetic(Registrar& r) {
     RegisterColumns(r, std::make_integer_sequence<int, 50>{});
     ScheduleOptions s;
     s.name = "Update";
-    s.domain = Domain::Frame;
-    s.clock = true;
     for (int i = 0; i < kStages; ++i) s.stages.push_back("Stage" + std::to_string(i));
     r.Schedule(s);
     RegisterSystems(r, std::make_integer_sequence<int, kSystems / 100>{});

@@ -48,8 +48,6 @@ std::vector<std::string>& Deaths() {
 ScheduleOptions GameTick() {
     ScheduleOptions s;
     s.name = "Tick";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     s.stages = {"Input", "Simulate", "Cleanup"};
     return s;
 }
@@ -89,14 +87,14 @@ SystemResult Move(Query<Write<Position>, Read<Velocity>> bodies) {
     return Ok();
 }
 
-SystemResult HurtBelowFloor(Query<Read<Position>, With<Health>> bodies, EventWriter<Hit> hits) {
+SystemResult HurtBelowFloor(Query<Read<Position>, With<Health>> bodies, MessageWriter<Hit> hits) {
     bodies.ForEach([&hits](EntityId id, const Position& position) {
         if (position.y < 0) hits.Send(Hit{id, 1});
     });
     return Ok();
 }
 
-SystemResult ApplyHits(EventReader<Hit> hits, Query<Write<Health>> healths, ResMut<Stats> stats) {
+SystemResult ApplyHits(MessageReader<Hit> hits, Query<Write<Health>> healths, ResMut<Stats> stats) {
     for (const Hit* hit : hits.Read()) {
         if (Mut<Health> health = healths.GetMut<Health>(hit->target)) {
             health->hp -= hit->amount;
@@ -144,7 +142,7 @@ void GameData(Registrar& r) {
     r.Resource<Stats>({.name = "Stats", .writePolicy = WritePolicy::Shared});
     r.Resource<RangeAllotter>({.name = "Allotter"});
     r.Allotter<RangeAllotter>();
-    r.Event<Hit>({.name = "Hit", .domain = Domain::Fixed});
+    r.Message<Hit>({.name = "Hit"});
     r.Schedule(GameTick());
 }
 
@@ -239,7 +237,6 @@ TEST_CASE("skeleton: eight ticks of the game give the hand-worked result") {
     CHECK(Deaths() == std::vector<std::string>{"dead:100", "dead:101", "dead:102"});
     CHECK(world.Resource<Stats>()->hits == 6);
     CHECK(world.Resource<Stats>()->unpausedTicks == 7);
-    CHECK(world.Tick(Domain::Fixed) == 8);
     CHECK(rig->recorded.empty());
 }
 

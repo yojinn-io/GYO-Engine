@@ -180,9 +180,45 @@ public:
     }
 
     template <class E>
+    MessageTypeId Message(MessageOptions options) {
+        static_assert(std::is_object_v<E> && !std::is_const_v<E>, "an event is a non-const object type");
+        return RegisterMessage(KeyOf<E>(), Shape::Of<E>(), std::move(options), &Detail::MakeMessages<E>);
+    }
+
+    // A pushed event type (event cursor declaration 3.3, 5.2): Trigger runs its
+    // observers; nothing is kept. Add<T> and Remove<T> are the kernel's own.
+    template <class E>
     EventTypeId Event(EventOptions options) {
         static_assert(std::is_object_v<E> && !std::is_const_v<E>, "an event is a non-const object type");
-        return RegisterEvent(KeyOf<E>(), Shape::Of<E>(), std::move(options), &Detail::MakeEvents<E>);
+        static_assert(Detail::ObservedOf<E>::trigger == ObserverTrigger::Event,
+                      "Add<T> and Remove<T> are the kernel's own events; they are not registered");
+        return RegisterEvent(KeyOf<E>(), Shape::Of<E>(), std::move(options));
+    }
+
+    // An observer of E (event cursor declaration 3.3, 5.2): an event type
+    // (Registrar::Event), or Add<T> / Remove<T> of a component T. Fn is a
+    // System function (its access derived from its signature and verified)
+    // with exactly one On<E>; it may hold MessageReader (it is a reader with a
+    // cursor of its own) and Commands, never ExclusiveWorld (so it runs no
+    // schedule either). Not a Plan step: it runs where E is triggered, and an
+    // Add / Remove observer at the sync point that adds or removes the cell
+    // (after the OnAdd hooks, before the OnRemove hooks). Its deferred records
+    // go the way of a hook's (F-12).
+    template <class E, auto Fn>
+    void Observer(ObserverOptions options, std::source_location source = std::source_location::current()) {
+        Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();
+        static_assert(!Detail::ObserverHoldsExclusiveWorld<Fn>(),
+                      "GYO_KERNEL_REJECT_OBSERVER_EXCLUSIVE_WORLD: an observer holds no ExclusiveWorld and runs no "
+                      "schedule (event cursor declaration 3.3)");
+        static_assert(Detail::ObserverTakesOwnEvent<E, Fn>(),
+                      "GYO_KERNEL_REJECT_OBSERVER_ON: an observer of E has exactly one On<E> parameter");
+        if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None && !Detail::ObserverHoldsExclusiveWorld<Fn>() &&
+                      Detail::ObserverTakesOwnEvent<E, Fn>()) {
+            using Pointer = typename Detail::Signature<decltype(Fn)>::Pointer;
+            RegisterObserver(KeyOf<E>(), Detail::ObservedOf<E>::trigger, KeyOf<typename Detail::ObservedOf<E>::Type>(),
+                             std::move(options), Detail::ResolverOf<Pointer>::value,
+                             &Detail::InvokerOf<Pointer>::template CallFunction<Fn>, source);
+        }
     }
 
     // An effect id (spec C.1 effects): an opaque side-effect class such as
@@ -264,6 +300,9 @@ public:
     template <class T, auto Fn>
     void Hook(HookTrigger trigger, HookOptions options, std::source_location source = std::source_location::current()) {
         Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();
+        static_assert(!Detail::HookHoldsMessageReader<Fn>(),
+                      "GYO_KERNEL_REJECT_HOOK_MESSAGE_READER: a hook is not a message reader; it has no cursor (event "
+                      "cursor declaration 3.2)");
         if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {
             RegisterHook(KeyOf<T>(), trigger, std::move(options), Detail::ResolverOf<typename Detail::Signature<decltype(Fn)>::Pointer>::value,
                          &Detail::InvokerOf<typename Detail::Signature<decltype(Fn)>::Pointer>::template CallFunction<Fn>, source);
@@ -322,7 +361,10 @@ private:
 
     ComponentId RegisterComponent(TypeKey key, Shape shape, ComponentOptions options, Detail::MakeColumnFn make);
     ResourceId RegisterResource(TypeKey key, Shape shape, ResourceOptions options, Detail::MakeResourceFn make);
-    EventTypeId RegisterEvent(TypeKey key, Shape shape, EventOptions options, Detail::MakeEventsFn make);
+    MessageTypeId RegisterMessage(TypeKey key, Shape shape, MessageOptions options, Detail::MakeMessagesFn make);
+    EventTypeId RegisterEvent(TypeKey key, Shape shape, EventOptions options);
+    void RegisterObserver(TypeKey event, ObserverTrigger trigger, TypeKey observed, ObserverOptions options,
+                          Detail::ResolveFn resolve, Detail::RunFn run, std::source_location source);
     SetId RegisterNamedSet(TypeKey key, std::string name);
     void AddSetMember(TypeKey set, TypeKey component);
     void MarkDigestSet(TypeKey set);
@@ -372,9 +414,7 @@ struct KernelSettings {
 enum class AccessKind : std::uint8_t {
     Component,
     Resource,
-    Event,
-    // id = the Domain of a mount's schedule (CurrentTick).
-    DomainTick,
+    Message,
 };
 
 struct AccessKey {
@@ -391,7 +431,7 @@ struct AccessKey {
 // Vectors are sorted and unique.
 struct AccessSet {
     // Immediate reads and writes: components, resources (the allotter included
-    // for Spawn), events, domain ticks. Run-condition reads and SetRead
+    // for Spawn), messages. Run-condition reads and SetRead
     // expansions are in reads.
     std::vector<AccessKey> reads;
     std::vector<AccessKey> writes;
@@ -444,10 +484,47 @@ struct ResourceInfo {
     std::string owner;
 };
 
+// One reader of a message type (event cursor declaration 3.2): a System's
+// mount, one of that mount's run conditions, or an observer. A hook is never one.
+struct MessageReaderInfo {
+    // The System's name, or the observer's.
+    std::string system;
+    // The mount's schedule; empty for an observer.
+    std::string schedule;
+    // The run condition's name; empty for the System itself.
+    std::string condition;
+    bool observer = false;
+
+    friend bool operator==(const MessageReaderInfo&, const MessageReaderInfo&) = default;
+};
+
+struct MessageInfo {
+    std::string name;
+    Zone zone;
+    std::string owner;
+    std::uint32_t capacity = 1024;
+    // Derived at every BuildPlans: every reader, by (registrationSeq, mount,
+    // condition) order, then the observers in Registrar::Observer order (DI-KS 25).
+    std::vector<MessageReaderInfo> readers;
+};
+
+// One pushed event type (Registrar::Event).
 struct EventInfo {
     std::string name;
-    Domain domain;
     Zone zone;
+    std::string owner;
+};
+
+// One observer (Registrar::Observer; event cursor declaration 5.2): what it
+// watches (trigger and the event type id or component id), its access, who
+// registered it.
+struct ObserverInfo {
+    std::string name;
+    ObserverTrigger trigger;
+    std::uint32_t id;
+    Zone zone;
+    AccessSet access;
+    std::string source;
     std::string owner;
 };
 
@@ -565,19 +642,26 @@ public:
         return FindResource(KeyOf<T>());
     }
     template <class E>
+    [[nodiscard]] std::optional<MessageTypeId> MessageIdOf() const {
+        return FindMessage(KeyOf<E>());
+    }
+    template <class E>
     [[nodiscard]] std::optional<EventTypeId> EventIdOf() const {
         return FindEvent(KeyOf<E>());
     }
 
     [[nodiscard]] std::span<const ColumnInfo> Components() const noexcept;
     [[nodiscard]] std::span<const ResourceInfo> Resources() const noexcept;
-    [[nodiscard]] std::span<const EventInfo> Events() const noexcept;
+    [[nodiscard]] std::span<const MessageInfo> Messages() const noexcept;
     [[nodiscard]] std::span<const SystemInfo> Systems() const noexcept;
     [[nodiscard]] const SystemInfo* SystemNamed(std::string_view name) const noexcept;
     [[nodiscard]] std::span<const Plan> Plans() const noexcept;
     [[nodiscard]] const Plan* PlanOf(std::string_view schedule) const noexcept;
     [[nodiscard]] std::span<const TieBreak> TieBreaks() const noexcept;
     [[nodiscard]] std::span<const HookInfo> Hooks() const noexcept;
+    [[nodiscard]] std::span<const EventInfo> Events() const noexcept;
+    // In Registrar::Observer order (not the order they run in).
+    [[nodiscard]] std::span<const ObserverInfo> Observers() const noexcept;
     [[nodiscard]] std::span<const InitialValueInfo> InitialValues() const noexcept;
     [[nodiscard]] std::span<const ScheduleInfo> Schedules() const noexcept;
     [[nodiscard]] std::span<const SetInfo> Sets() const noexcept;
@@ -611,6 +695,7 @@ private:
 
     [[nodiscard]] std::optional<ComponentId> FindComponent(TypeKey key) const noexcept;
     [[nodiscard]] std::optional<ResourceId> FindResource(TypeKey key) const noexcept;
+    [[nodiscard]] std::optional<MessageTypeId> FindMessage(TypeKey key) const noexcept;
     [[nodiscard]] std::optional<EventTypeId> FindEvent(TypeKey key) const noexcept;
 
     const Detail::RegistryData* data_;

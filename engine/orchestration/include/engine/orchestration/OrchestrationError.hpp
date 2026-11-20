@@ -123,9 +123,10 @@ struct WorldFailure {
     // The schedule that failed; empty when no schedule was running (a prepare
     // function, a registration or a carry-over of a replacement failed).
     std::string schedule;
-    // The schedule's domain and that domain's tick, read before the schedule ran.
-    Kernel::Domain domain = Kernel::Domain::None;
-    std::uint64_t tick = 0;
+    // The World's sync point number (Kernel::World::SyncEpoch), read before the
+    // schedule ran. The orchestration layer knows no clock and no game time (O-4):
+    // an author who wants the tick in the report puts it in its own error (G6).
+    std::uint64_t syncEpoch = 0;
     // The kernel error code, when the kernel reported one.
     std::optional<Kernel::KernelErrorCode> kernelCode;
     // The kernel error as text (its layers name the System and its step), or

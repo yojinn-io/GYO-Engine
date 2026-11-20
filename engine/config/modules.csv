@@ -9,3 +9,4 @@ time,GYO::Time,The engine time base,yes,no,base,,,
 threads,GYO::Threads,Role threads,yes,no,time,os,,
 io,GYO::Io,"File systems, paths and streams",yes,no,base,math;os,,
 audio,GYO::Audio,The audio mixer,yes,no,base;time,,,
+world_time,GYO::WorldTime,"Game time in a World: time Resources, the fixed step, the tick",no,yes,base;kernel;orchestration;time,,GYO::Engine::WorldTime::WorldTimeModule,engine/world_time/WorldTimeModule.hpp

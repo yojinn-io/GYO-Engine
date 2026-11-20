@@ -21,6 +21,18 @@ namespace GYO::Kernel {
 
 namespace {
 
+// Spec F-12's message: the observers that recorded during the last round
+// (time-events declaration 4.2), after its hooks; sorted, each once; "" when none.
+std::string ObserverRecorderNames(std::vector<std::size_t> observers, const Detail::RegistryData& data, bool afterHooks) {
+    std::sort(observers.begin(), observers.end());
+    observers.erase(std::unique(observers.begin(), observers.end()), observers.end());
+    std::string names;
+    for (std::size_t observer : observers) {
+        names += (names.empty() ? (afterHooks ? "; observer '" : "observer '") : ", '") + data.observers[observer].name + "'";
+    }
+    return names;
+}
+
 void DefaultHandler(const KernelError& error) {
     const std::string text = error.Text();
     std::fprintf(stderr, "kernel error:\n%s", text.c_str());
@@ -178,6 +190,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
     ReadSettings();
+    // A new outermost Run: its own DroppedMessages records (event cursor declaration 3.2).
+    for (World::DroppedEntry& dropped : world.droppedEntry_) dropped = World::DroppedEntry{};
     return RunPlan(record->options.name, false);
 }
 
@@ -207,16 +221,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
     const Plan* plan = registry_->Frozen().PlanOf(scheduleName);
     const Detail::ScheduleRecord* record = data.FindSchedule(scheduleName);
     GYO_ASSERT(plan != nullptr && record != nullptr);
-    const Domain domain = record->options.domain;
-
-    // The domain tick: advanced only by the domain's clock schedule's Run, first
-    // (spec section 0, B5); a nested Run of it too (K0).
-    if (record->options.clock) {
-        const std::size_t d = static_cast<std::size_t>(domain);
-        const std::uint64_t tick = ++world.ticks_[d];
-        auto& slot = world.tickStamps_[d][tick % World::kTickStampSlots];
-        slot = World::TickStampSlot{tick, world.stamp_ + 1, true};
-    }
+    // No tick is advanced here: the kernel keeps no clock (the tick is the time
+    // Module's, which runs a fixed step schedule nested; v8-arch-gyo2-clock-out-of-kernel).
 
     // The Ready window (spec A.6 layer 2, E.2 step 0): a change since the last
     // comparison that did not go through the World API is the Host's or a
@@ -310,31 +316,36 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             call.schedule = scheduleName;
             call.planPos = position;
             call.zone = system.options.zone;
-            call.domain = domain;
-            call.tick = world.ticks_[static_cast<std::size_t>(domain)];
             call.lastRun = mountState.lastRun;
             call.callSerial = ++world.callSerial_;
             call.syncEpoch = world.syncEpoch_;
             call.queue = &world.window_;
             call.recSeq = &recSeq;
             call.locals = &mountState.locals;
+            // Event cursor declaration 3.2: each condition is a reader of its own
+            // (slot 1, 2, ... in evaluation order), the System is slot 0.
+            call.reader = Detail::ReaderKey{system.seq, static_cast<std::uint32_t>(mountIndex), 0, true};
 
             Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
                 // (1) tlCurrent: the conditions' reads are the System's (spec B-5).
                 Detail::CallScope scope(call);
                 // (2) Run conditions, in order, short-circuit: the mount's, then each set's (E.4).
                 bool runs = true;
-                for (const ConditionRef& condition : mount.conditions) {
-                    if (runs && !condition.Evaluator()(call)) runs = false;
-                }
+                std::uint32_t slot = 0;
+                auto evaluate = [&](const ConditionRef& condition) {
+                    ++slot;
+                    if (!runs) return;
+                    call.reader.slot = slot;
+                    if (!condition.Evaluator()(call)) runs = false;
+                };
+                for (const ConditionRef& condition : mount.conditions) evaluate(condition);
                 for (const std::string& setName : mount.sets) {
                     for (const Detail::SetRecord& set : data.sets) {
                         if (set.options.name != setName || set.options.schedule != scheduleName) continue;
-                        for (const ConditionRef& condition : set.conditions) {
-                            if (runs && !condition.Evaluator()(call)) runs = false;
-                        }
+                        for (const ConditionRef& condition : set.conditions) evaluate(condition);
                     }
                 }
+                call.reader.slot = 0;
                 // (3) The step's stamp, also when skipped (X-5).
                 call.stamp = ++world.stamp_;
                 // (4)
@@ -395,13 +406,14 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
                         std::sort(recorders.begin(), recorders.end());
                         recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());
                         std::string names;
-                        for (std::size_t hook : recorders) names += (names.empty() ? "'" : ", '") + data.hooks[hook].name + "'";
+                        for (std::size_t hook : recorders) names += (names.empty() ? "hook '" : ", '") + data.hooks[hook].name + "'";
+                        names += ObserverRecorderNames(world.roundObserverRecorders_, data, !names.empty());
                         KernelError error(KernelErrorCode::HookRoundLimit,
                                           "the hook rounds of schedule '" + scheduleName + "' did not empty its hook queue within " +
                                               std::to_string(limit) + " rounds (the limit of the " +
                                               (record->options.hookRoundLimit ? "schedule's declaration" : "World's KernelSettings") +
                                               "): " + std::to_string(world.HookQueueOf(scheduleName).records.size()) +
-                                              " records remain, recorded in round " + std::to_string(round) + " by hook " + names);
+                                              " records remain, recorded in round " + std::to_string(round) + " by " + names);
                         error.rule = "F-12";
                         error.world = world.name_;
                         error.Wrap(roundText(round));
@@ -412,6 +424,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
                     // This level's records are all applied (the outer levels' wait: K0).
                     GYO_ASSERT(world.window_.size() == world.runStack_[level].windowBase);
                     world.roundRecorders_.clear();
+                    world.roundObserverRecorders_.clear();
                     world.trackRoundRecorders_ = true;
                     const ChangeStamp roundStamp = ++world.stamp_;
                     world.state_ = WorldState::Applying;
@@ -434,17 +447,19 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             previousStep = StepText(scheduleName, position, step.name);
             break;
         }
-        case StepKind::EventTrim:
-            world.TrimEvents(domain);
-            if (world.verification_) world.TakeSnapshots();
-            previousStep = StepText(scheduleName, position, step.name);
-            break;
         }
     }
     // Spec F-12: the hook rounds left nothing behind (and no System record of this level is pending).
     GYO_ASSERT(world.window_.size() == world.runStack_[level].windowBase && world.HookQueueOf(scheduleName).records.empty());
     // A nested Run returns to its outer System: the World is still running (K0).
-    if (!nested) world.state_ = WorldState::Ready;
+    if (!nested) {
+        // Event cursor declaration 3.2: the trim of what every reader has read,
+        // when the outermost Run ends after its hook rounds; not a Plan step, not
+        // after a nested run (its outer System's Run trims), not after an Err
+        // (Fail returned above).
+        world.TrimMessages();
+        world.state_ = WorldState::Ready;
+    }
     return {};
 }
 
@@ -724,7 +739,8 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
             std::sort(recorders.begin(), recorders.end());
             recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());
             std::string names;
-            for (std::size_t hook : recorders) names += (names.empty() ? "'" : ", '") + data.hooks[hook].name + "'";
+            for (std::size_t hook : recorders) names += (names.empty() ? "hook '" : ", '") + data.hooks[hook].name + "'";
+            names += ObserverRecorderNames(world.roundObserverRecorders_, data, !names.empty());
             KernelError error(KernelErrorCode::HookRoundLimit,
                               "the hook rounds of an immediate change by " + who + " did not empty within " +
                                   std::to_string(limit) + " rounds (the limit of the " +
@@ -742,6 +758,7 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
         own.records.clear();
         own.recSeq = 0;
         world.roundRecorders_.clear();
+        world.roundObserverRecorders_.clear();
         world.trackRoundRecorders_ = true;
         const ChangeStamp roundStamp = ++world.stamp_;
         applied = world.ApplySync(call.planPos, call.schedule, roundStamp, &recorded);
@@ -750,6 +767,246 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
         if (!applied) return failed(std::move(applied), roundText(round));
     }
     return outcome;
+}
+
+// Event cursor declaration 3.3, time-events declaration 4.2: the observers of
+// a trigger outside a sync point, then the rounds of what they recorded.
+Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTypeId id, const Detail::ValueBox& payload,
+                                                                    std::optional<EntityId> target, std::uint32_t planPos,
+                                                                    std::string_view schedule, std::uint32_t limit,
+                                                                    const std::string& limitSource, const std::string& where) {
+    World& world = world_;
+    const Detail::RegistryData& data = *world.data_;
+    const std::string event = "event '" + data.events[id].name + "'";
+    // What the observers and the hooks of the rounds record: applied below,
+    // before the trigger returns; never a schedule's hook queue nor a window.
+    World::HookQueue pending{std::string(schedule), {}, 0};
+    class Target {
+    public:
+        Target(World& world, World::HookQueue& queue) noexcept : owner_(world) { owner_.hookTarget_ = &queue; }
+        ~Target() {
+            owner_.hookTarget_ = nullptr;
+            owner_.trackRoundRecorders_ = false;
+        }
+        Target(const Target&) = delete;
+        Target& operator=(const Target&) = delete;
+
+    private:
+        World& owner_;
+    } targetScope(world, pending);
+    // Spec F-5: while the observers run and the records are applied, only observers and hooks record.
+    world.state_ = WorldState::Applying;
+    Engine::Base::Result<void, KernelError> ran =
+        world.RunObservers(ObserverTrigger::Event, id, payload.Payload(), target, planPos, schedule, 0, true);
+    if (!ran) {
+        KernelError error = std::move(ran).error();
+        error.Wrap("Executor: trigger of " + event + " by " + where);
+        return Engine::Base::Err(std::move(error));
+    }
+    std::uint32_t round = 0;
+    auto roundText = [&](std::uint32_t r) {
+        return "Executor: round " + std::to_string(r) + " of the trigger of " + event + " by " + where;
+    };
+    while (!pending.records.empty()) {
+        if (round == limit) {
+            std::string names;
+            std::vector<std::size_t> hooks = world.roundRecorders_;
+            std::sort(hooks.begin(), hooks.end());
+            hooks.erase(std::unique(hooks.begin(), hooks.end()), hooks.end());
+            for (std::size_t hook : hooks) names += (names.empty() ? "hook '" : ", '") + data.hooks[hook].name + "'";
+            names += ObserverRecorderNames(world.roundObserverRecorders_, data, !names.empty());
+            KernelError error(KernelErrorCode::HookRoundLimit,
+                              "the rounds of the trigger of " + event + " by " + where + " did not empty within " +
+                                  std::to_string(limit) + " rounds (the limit of the " + limitSource + "): " +
+                                  std::to_string(pending.records.size()) + " records left after round " +
+                                  std::to_string(round) + ", recorded by " + names);
+            error.rule = "F-12";
+            error.world = world.name_;
+            error.Wrap(roundText(round));
+            if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+            return Engine::Base::Err(std::move(error));
+        }
+        ++round;
+        std::vector<Detail::Record> recorded = std::move(pending.records);
+        pending.records.clear();
+        pending.recSeq = 0;
+        world.roundRecorders_.clear();
+        world.roundObserverRecorders_.clear();
+        world.trackRoundRecorders_ = true;
+        const ChangeStamp roundStamp = ++world.stamp_;
+        // A whole application of the round's records (spec F.2 steps 2 to 7 and the triggers).
+        Engine::Base::Result<void, KernelError> applied = world.ApplySync(planPos, schedule, roundStamp, &recorded);
+        ++world.syncEpoch_;
+        world.trackRoundRecorders_ = false;
+        if (!applied) {
+            KernelError error = std::move(applied).error();
+            error.Wrap(roundText(round));
+            return Engine::Base::Err(std::move(error));
+        }
+    }
+    return {};
+}
+
+// ExclusiveWorld::Trigger: the checks in the order of ImmediateFrom; the
+// observers' records go the way of an immediate change's hooks (time-events
+// declaration 4.2: hookTarget_ and a round of its own).
+Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::SystemContext& call, EventTypeId id,
+                                                                   std::unique_ptr<Detail::ValueBox> payload,
+                                                                   std::optional<EntityId> target, bool closureOpen) {
+    World& world = world_;
+    const Detail::RegistryData& data = *world.data_;
+    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
+    const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
+    const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
+    auto halt = [&](KernelError error) { return Fail(std::move(error), true); };
+    if (call.hook) {
+        return halt(Detail::CallError(call, KernelErrorCode::HookChangesMembership, "DI-KS 18",
+                                      who + " triggers event '" + data.events[id].name +
+                                          "' now through ExclusiveWorld: a hook runs while records are applied, so it "
+                                          "records the trigger instead (Commands::Trigger)"));
+    }
+    if (closureOpen) {
+        return halt(Detail::CallError(call, KernelErrorCode::ClosureChangesMembership, "DI-KS 21",
+                                      who + " triggers event '" + data.events[id].name +
+                                          "' now inside a Read or Modify closure: the value the closure holds would not "
+                                          "survive what the observers record"));
+    }
+    if (world.state_ == WorldState::Interrupted) {
+        GYO_ASSERT(world.leftError_.has_value());
+        return Engine::Base::Err(*world.leftError_);
+    }
+    // W-3: nothing changed membership behind the handle before the trigger.
+    GYO_ASSERT(world.runStack_.back().structure == world.MembershipEpoch());
+    // Spec A.6 layer 2: the System's own changes so far are compared on its own
+    // account first, so the observers' snapshots do not hide one it does not declare.
+    if (world.verification_) {
+        const std::vector<std::string> ownChanges = world.CompareAfter(*call.access);
+        if (!ownChanges.empty()) {
+            std::vector<KernelError> list;
+            for (const std::string& storage : ownChanges) {
+                KernelError error(KernelErrorCode::BoundaryChange,
+                                  "'" + storage + "' changed during " + where +
+                                      " before a trigger, which it does not declare writing; no observer ran");
+                error.rule = "A.6";
+                error.world = world.name_;
+                if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+                list.push_back(std::move(error));
+            }
+            KernelError error = list.front();
+            if (list.size() > 1) {
+                error = KernelError(KernelErrorCode::Siblings, std::to_string(list.size()) + " errors before a trigger by " + who);
+                error.world = world.name_;
+                error.siblings = std::move(list);
+            }
+            return halt(std::move(error));
+        }
+    }
+    // On every way back: Running again, the step's new membership baseline and
+    // fresh snapshots (the observers' work and its rounds are this call's); an
+    // exception interrupts the World at once and leaves ImmediateChangeAborted
+    // for the outermost Run (like an immediate change, DI-KS 18).
+    class Settle {
+    public:
+        Settle(World& world, const std::string& where) noexcept
+            : owner_(world), where_(where), uncaught_(std::uncaught_exceptions()) {}
+        ~Settle() {
+            if (std::uncaught_exceptions() > uncaught_) {
+                owner_.state_ = WorldState::Interrupted;
+                owner_.DiscardDeferred();
+                if (!owner_.leftError_) owner_.leftError_ = ImmediateAbortError(owner_, where_ + " (a trigger)");
+            } else if (owner_.state_ == WorldState::Applying) {
+                owner_.state_ = WorldState::Running;
+            }
+            owner_.runStack_.back().structure = owner_.MembershipEpoch();
+            if (owner_.verification_) owner_.TakeSnapshots();
+        }
+        Settle(const Settle&) = delete;
+        Settle& operator=(const Settle&) = delete;
+
+    private:
+        World& owner_;
+        const std::string& where_;
+        int uncaught_;
+    } settle(world, where);
+    const Detail::ScheduleRecord* running = data.FindSchedule(std::string(call.schedule));
+    GYO_ASSERT(running != nullptr);
+    const std::uint32_t limit = running->options.hookRoundLimit.value_or(world.hookRoundLimit_);
+    const std::string limitSource = std::string(running->options.hookRoundLimit ? "schedule's declaration" : "World's KernelSettings") +
+                                    " of schedule '" + std::string(call.schedule) + "'";
+    Engine::Base::Result<void, KernelError> ran =
+        RunTriggered(id, *payload, target, call.planPos, call.schedule, limit, limitSource, where);
+    if (!ran) return halt(std::move(ran).error());
+    return {};
+}
+
+// WorldExecutor::Trigger (event cursor declaration 3.3, "outside the World,
+// Ready"): a temporary queue applied to empty before it returns (time-events
+// declaration 4.2), with the World's KernelSettings::hookRoundLimit (Ready has
+// no schedule).
+Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(EventTypeId id,
+                                                                       std::unique_ptr<Detail::ValueBox> payload,
+                                                                       std::optional<EntityId> target) {
+    World& world = world_;
+    GYO_ASSERT(world.State() == WorldState::Ready);
+    RunningScope inRun(world.data_->runningWorlds);
+    Attach();
+    // KernelSettings is read when the trigger starts, as when a Run starts (DI-KS 24): the verification
+    // and break switches (a flip drops the snapshots, like a Run's) and the hook round limit.
+    const auto& settings =
+        static_cast<const Detail::ResourceSlot<KernelSettings>&>(*world.resources_[world.data_->kernelSettings]);
+    const KernelSettings now = settings.value.has_value() ? *settings.value : KernelSettings{};
+    if (now.accessVerification != world.verification_) world.DropSnapshots();
+    world.verification_ = now.accessVerification;
+    world.breakOnKernelError_ = now.breakOnKernelError;
+    const std::uint32_t limit = now.hookRoundLimit;
+    // Spec F-12: a limit of 0 is a Programmer Error.
+    GYO_ASSERT(limit >= 1);
+    // Its own DroppedMessages records, like a Run (the Host takes diagnostics between the two).
+    std::fill(world.droppedEntry_.begin(), world.droppedEntry_.end(), World::DroppedEntry{});
+    // Spec A.6 layer 2: a change since the last comparison that did not go
+    // through the World API is not the observers'; checked before any of them runs.
+    if (world.verification_) {
+        const std::vector<std::string> changed = world.CompareBefore();
+        if (!changed.empty()) {
+            std::string list;
+            for (const std::string& name : changed) list += (list.empty() ? "" : ", ") + name;
+            KernelError error(KernelErrorCode::PreCallChange,
+                              "changed outside the World API before the Host's trigger of event '" +
+                                  world.data_->events[id].name + "': " + list);
+            error.rule = "A.6";
+            error.world = world.name_;
+            error.Wrap("Ready window before the Host's trigger");
+            if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+            return Fail(std::move(error), false);
+        }
+    }
+    // On every way back: Ready again, or, when an exception leaves, interrupted
+    // with every record dropped (spec E.5).
+    class Settle {
+    public:
+        explicit Settle(World& world) noexcept : owner_(world), uncaught_(std::uncaught_exceptions()) {}
+        ~Settle() {
+            if (std::uncaught_exceptions() > uncaught_) {
+                owner_.state_ = WorldState::Interrupted;
+                owner_.DiscardDeferred();
+            } else if (owner_.state_ == WorldState::Applying) {
+                owner_.state_ = WorldState::Ready;
+            }
+        }
+        Settle(const Settle&) = delete;
+        Settle& operator=(const Settle&) = delete;
+
+    private:
+        World& owner_;
+        int uncaught_;
+    } settle(world);
+    Engine::Base::Result<void, KernelError> ran =
+        RunTriggered(id, *payload, target, 0, {}, limit, "World's KernelSettings", "the Host");
+    if (!ran) return Fail(std::move(ran).error(), false);
+    // The observers' declared writes and the rounds' changes are not changes outside the World API.
+    if (world.verification_) world.TakeSnapshots();
+    return {};
 }
 
 namespace Detail {
@@ -763,6 +1020,12 @@ Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext
                                                                    bool inClosure) {
     GYO_ASSERT(call.executor != nullptr);
     return call.executor->ImmediateFrom(call, std::move(record), stamp, inClosure);
+}
+
+Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id, std::unique_ptr<ValueBox> payload,
+                                                  std::optional<EntityId> target, bool inClosure) {
+    GYO_ASSERT(call.executor != nullptr);
+    return call.executor->TriggerFrom(call, id, std::move(payload), target, inClosure);
 }
 
 } // namespace Detail

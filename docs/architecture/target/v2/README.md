@@ -7,7 +7,8 @@
 
 ## 給作者看的
 
-- [orchestration.zh-Hant.md](orchestration.zh-Hant.md)：編排層（`engine/orchestration`）的 Design Invariants O-1～O-10 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-orchestration-skeleton` 合併前的合併前核准定稿）。
+- [orchestration.zh-Hant.md](orchestration.zh-Hant.md)：編排層（`engine/orchestration`）的 Design Invariants O-1～O-11 與 Replacement Criteria（`v8-arch-gyo2-orchestration-skeleton` 合併前核准定稿；`v8-arch-gyo2-time-events` 改 O-1、O-4、O-11）。
+- [world-time.zh-Hant.md](world-time.zh-Hant.md)：時間 Module（`engine/world_time`）——Resource、System、取樣、和讀檔／回滾／權威的交界、Design Invariants（型別 1～3、WT-1～WT-6）與 Replacement Criteria（`v8-arch-gyo2-time-events`，最終文字在合併前核准定稿）。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
 - [diagrams/mechanism-runtime.svg](diagrams/mechanism-runtime.svg)：圖一，一個 Product 的機制全貌（11 月 11 日的圖，只換名字）。
 - [diagrams/control-plane-revised.svg](diagrams/control-plane-revised.svg)：圖二，基礎的 System 契約（11 月 11 日的圖，換名字並調整）。
@@ -26,7 +27,7 @@
 - [rebuild-1111-decisions-status.zh-Hant.md](rebuild-1111-decisions-status.zh-Hant.md)：11 月 11 日那批機制的決定在 gyo2 上的現況。
 - [rebuild-time-design.zh-Hant.md](rebuild-time-design.zh-Hant.md)：時間、固定步、runner、跨時鐘事件的設計 v2（修訂 4）。主要的決定已定（第 0 節，使用者 2026-11-14）；第 2 節以後的選項表是決定之前寫的，留作紀錄。
 - [kernel-nested-schedule-declaration.zh-Hant.md](kernel-nested-schedule-declaration.zh-Hant.md)：事前宣告（K0）：獨占 World 的 System 可以跑一張 schedule。使用者 2026-11-16 核准，#239 已實作。
-- [time-types-declaration.zh-Hant.md](time-types-declaration.zh-Hant.md)：事前宣告（T1）：累加器與時間的型別。修訂 2 草稿，**已過時**：時鐘與 tick 移出 Kernel 後，由主會話併進時間 Module 的宣告重寫（批次表第二段第 3 條）。
+- [time-types-declaration.zh-Hant.md](time-types-declaration.zh-Hant.md)：事前宣告（T1）：累加器與時間的型別。修訂 2 草稿，**由 time-events 宣告取代**（`v8-arch-gyo2-t1-closed-by-time-events`），留作紀錄。
 - [nested-queue-spike-synthesis.zh-Hant.md](nested-queue-spike-synthesis.zh-Hant.md)：巢狀時延後的變更怎麼放——三個探索（兩個試做、一個掃描）的統合。草稿，待對抗檢查與使用者判。
 - [stamp-order-spike-synthesis.zh-Hant.md](stamp-order-spike-synthesis.zh-Hant.md)：外層刪除、裡面用同一個編號生成——「用 stamp 分先後」三個探索的統合。草稿，待對抗檢查與使用者判。
 
@@ -45,6 +46,7 @@
 - [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
 - [orchestration-skeleton-merge-approval.zh-Hant.md](orchestration-skeleton-merge-approval.zh-Hant.md)：同一批的合併前核准資料（判定的結果、照 G-7 改寫的第 7.1、7.2 節、第 10 節的最終文字、和宣告不同的地方、要你判的一件）。
+- [time-events-declaration.zh-Hant.md](time-events-declaration.zh-Hant.md)：`v8-arch-gyo2-time-events` 的事前宣告（第 3 批：時間 Module `engine/world_time`、Kernel 拿掉時鐘、保留式 `Message` 與游標、推送式 `Event`＋`Observer`、編排層的預設骨架、scenario 第 2 段）；修訂 4，使用者 2026-11-19 動工前核准。
 - [kernel-mutation-prune-report.zh-Hant.md](kernel-mutation-prune-report.zh-Hant.md)：`v8-arch-gyo2-mutation-prune` 的盤點與退役表（Kernel 突變清單 777 個的分類、退役候選與緩的面、增長判準草案；使用者 2026-11-18 核定，777 → 714）。
 - [kernel-mutation-subsumption-report.zh-Hant.md](kernel-mutation-subsumption-report.zh-Hant.md)：同一批第 3 步的 subsumption 檢查（714 個逐個跑全部 Kernel 測試、最小集合 469、退 51 個；使用者 2026-11-19 核准，714 → 663）。
 - [scripts/base_mutations.json](scripts/base_mutations.json)：GYO2 線 Base 的突變清單（`bs-`，`IdIssuer`／`CurrentThreadSerial`；2026-11-19 從 Kernel 的清單搬來，`v8-arch-gyo2-move-bs-mutants`）。
@@ -64,6 +66,7 @@
 - [2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md](../../../dev_logs/2026_11_18_gyo2_orchestration_skeleton.zh-Hant.md)：編排層的骨架（四步：編排層本體、Kernel 減法、登記檔、scenario 第一段；進行中）。
 - [2026_11_19_gyo2_mutation_prune.zh-Hant.md](../../../dev_logs/2026_11_19_gyo2_mutation_prune.zh-Hant.md)：Kernel 突變清單的盤點與退役（第 2 步：直接退 41、合併進接手 22、改寫 3；第 3 步：subsumption 檢查後合併 51 個；777 → 663）。
 - [2026_11_19_gyo2_summary_padding.zh-Hant.md](../../../dev_logs/2026_11_19_gyo2_summary_padding.zh-Hant.md)：World 摘要的 padding（Kernel 的 `RangeAllotter` 補 0 欄位與編譯期檢查；未完全解決，正式解法逐型別雜湊在第 4 批）。
+- [2026_11_20_gyo2_time_events.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_time_events.zh-Hant.md)：第 3 批，時間 Module＋事件（`Message` 與游標、拿掉 Kernel 的時鐘、編排層的預設骨架、`engine/world_time`、推送式 `Event`／`Observer`、scenario 第 2 段；等合併前核准）。
 - [2026_11_16_gyo2_module_plugin_definition.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_module_plugin_definition.zh-Hant.md)：Module／Plugin 的定義改成「誰維護、介面是誰的」，AGENTS §6 與 v2 文件對齊。
 - [2026_11_16_gyo2_test_debts.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_test_debts.zh-Hant.md)：Kernel 測試的三筆舊帳（四個對不上的突變、刪除實體時 OnRemove 的先後、還沒搬的 world-exec 突變）。
 

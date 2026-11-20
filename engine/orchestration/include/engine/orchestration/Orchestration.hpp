@@ -8,4 +8,5 @@
 #include "engine/orchestration/Plugin.hpp"
 #include "engine/orchestration/Product.hpp"
 #include "engine/orchestration/RegisteredUnits.hpp"
+#include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"

@@ -5,6 +5,7 @@
 #include "engine/kernel/WorldExecutor.hpp"
 #include "engine/orchestration/OrchestrationError.hpp"
 #include "engine/orchestration/RegisteredUnits.hpp"
+#include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
 
 #include <cstdint>
@@ -37,8 +38,12 @@ struct WorldDescription {
     OptionBag options;
     // The product's own registration (section 3.3), after every unit's Build of this World.
     std::function<void(WorldSetup&)> build;
-    // The initial frame list (schedule names); units insert into it.
+    // The initial frame list (schedule names); units insert into it. With the
+    // default skeleton it starts with DefaultSchedules::frame unless it names it.
     std::vector<std::string> frame;
+    // The schedules the orchestration layer declares before any unit's Build
+    // (ScheduleSkeleton.hpp); Off: none, the author declares its own.
+    ScheduleSkeleton skeleton = ScheduleSkeleton::Default;
     // The product's prepare functions, after the units' ones.
     std::vector<PrepareFn> prepare;
 };

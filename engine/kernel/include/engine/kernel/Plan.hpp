@@ -9,9 +9,10 @@
 #include <vector>
 
 // Plan (spec D.1): one per schedule, built once at Finish, never rebuilt
-// (DI-KS 3, spec D-1, D-6). Serial order of System steps, sync points and the
-// event trim. The hook rounds after the last sync point (spec F-12) are done
-// by the Executor and are not a step; the Plan fingerprint's format version
+// (DI-KS 3, spec D-1, D-6). Serial order of System steps and sync points. The
+// hook rounds after the last sync point (spec F-12) and the message trim when
+// the outermost Run ends (event cursor declaration 3.2) are done by the
+// Executor and are not steps; the Plan fingerprint's format version
 // says the rule is there. It depends only on registration order and declarations: not on
 // hash order, addresses, threads or platform.
 
@@ -33,7 +34,6 @@ struct Fingerprint {
 enum class StepKind : std::uint8_t {
     System,
     SyncPoint,
-    EventTrim,
 };
 
 struct Step {
@@ -64,7 +64,6 @@ struct DeclaredEdge {
 
 struct Plan {
     std::string schedule;
-    Domain domain = Domain::None;
     std::vector<Step> steps;
     std::vector<DeclaredEdge> declaredEdges;
     // The schedule's ScheduleOptions::hookRoundLimit (spec F-12): the hook rounds
