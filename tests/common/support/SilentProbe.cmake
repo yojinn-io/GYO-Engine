@@ -1,7 +1,6 @@
 # Error levels D1, D2 (docs/architecture/target/v2/error-levels-declaration.zh-Hant.md section 9.2,
 # [el-silent-*]): the Engine writes nothing to standard error on its error paths. The kernel has no
-# error handler and the orchestration layer logs nothing; the error goes back to the caller, and
-# whoever handles it logs it. The text guards scan the source; this runs the paths and reads what a
+# error handler and the orchestration layer logs nothing; the error goes back to the caller. The text guards scan the source; this runs the paths and reads what a
 # process wrote.
 #   cmake -DTESTS=<doctest executable> -DPOSITIVE=<gyo_silent_probe_positive> -DCASES=<file> -DNAME=<label>
 #         -P SilentProbe.cmake

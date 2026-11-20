@@ -52,7 +52,7 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
   K6  a log call anywhere in the kernel: Log(, SetLogHandler, an include of engine/base/Log.hpp, <iostream>,
       <cstdio> or <print>, std::cout, std::cerr, std::clog, std::print, std::println, printf, fprintf, vprintf,
       vfprintf, puts, fputs, putchar, perror, fwrite, SDL_Log*. No file is exempt (the Executor's exemption ended
-      with error levels D1: the outermost Run returns the Err and whoever handles it logs it).
+      with error levels D1: the outermost Run returns the Err).
   K7  the identifiers far, near, FAR and NEAR (macros in windef.h; PRs #152 and #163 each broke the MSVC build).
   K8  GYO::Base's issuer of numbers in the kernel: the identifier IdIssuer, or Base's thread serial state
       threadSerials / threadSerial. The kernel asks which thread runs through Engine::Base::CurrentThreadSerial()

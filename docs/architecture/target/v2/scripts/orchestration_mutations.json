@@ -654,7 +654,7 @@
   },
   {
    "id": "el-insert-owner-dropped",
-   "what": "the refusal error no longer names the owner, so whoever handles it cannot say who was refused (rewritten from g8-insert-warning-text by v8-arch-gyo2-error-levels D2: the orchestration layer logs nothing and the error carries what the warning carried)",
+   "what": "the refusal error no longer names the owner, so the error no longer says who was refused (rewritten from g8-insert-warning-text by v8-arch-gyo2-error-levels D2: the orchestration layer logs nothing and the error carries what the warning carried)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "\" declares no dynamic insert (owner \" + Quoted(owner) + \")\",",
    "replace": "\" declares no dynamic insert\",",

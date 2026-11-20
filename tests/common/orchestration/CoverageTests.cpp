@@ -526,7 +526,7 @@ TEST_CASE("O-9: the refusal error names the World and the owner; nothing is logg
     WarningCounter warnings;
     auto refused = (*built)->InsertSystems("Main", "console", [](K::Registrar&) {});
     REQUIRE_FALSE(static_cast<bool>(refused));
-    // Error levels D2: the returned error names the World and the owner, so whoever handles it can say so.
+    // Error levels D2: the returned error names the World and the owner.
     CHECK_MESSAGE((refused.error().message.find("'Main'") != std::string::npos && refused.error().message.find("'console'") != std::string::npos),
                   "[or-insert-error-text] " << refused.error().message);
     CHECK_MESSAGE(warnings.Warnings() == 0, "[or-insert-silent] " << warnings.Warnings());

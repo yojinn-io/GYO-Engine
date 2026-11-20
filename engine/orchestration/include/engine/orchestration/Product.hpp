@@ -120,9 +120,8 @@ public:
 
     // A dynamic insert (section 3.10): the kernel's two steps on the World's
     // Registry; a refusal or a failed BuildPlans returns the error and the World
-    // goes on. The orchestration layer logs nothing (O-9, O-11; error levels D2):
-    // whoever handles the error decides whether to log it. No unit's Finish or
-    // Check runs again.
+    // goes on. The orchestration layer logs nothing (O-9, O-11; error levels D2).
+    // No unit's Finish or Check runs again.
     ::Engine::Base::Result<void, OrchestrationError> InsertSystems(std::string_view world, std::string owner,
                                                                    InsertFn build);
 

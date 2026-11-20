@@ -271,7 +271,7 @@ namespace {
 
 // An inner operation fails; the System adds its own layer of context and
 // returns the error. It does not log, nor does the kernel: the outermost Run
-// returns it once and whoever handles it logs it (error levels D1).
+// returns it once (error levels D1).
 SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
     for (int member = 0; member < 3; ++member) {
         auto made = spawn.New(Arrival{0, 0, 0, 0, 1});

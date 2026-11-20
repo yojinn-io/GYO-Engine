@@ -1,6 +1,6 @@
 // The Serial Executor (spec E.2, E.5; WorldExecutor.hpp). It logs nothing: an Err is
-// returned once by the outermost Run or Trigger and its handler logs it
-// (target/error-handling DI 1, 2; error levels D1).
+// returned once by the outermost Run or Trigger (target/error-handling DI 1, 2;
+// error levels D1).
 
 #include "engine/kernel/WorldExecutor.hpp"
 

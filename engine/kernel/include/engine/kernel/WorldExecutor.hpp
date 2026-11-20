@@ -26,8 +26,8 @@
 // cursor declaration 3.2); a nested run and a Run that ends in an Err trim nothing.
 // An Err from any source makes the World Interrupted, every record not yet
 // applied is discarded, diagnostics are kept, and the outermost Run returns the
-// Err once (spec E.5); the kernel logs nothing and has no error handler: whoever
-// handles the returned Err logs it once (target/error-handling DI 1, 2, 4). An exception from a System or hook is not
+// Err once (spec E.5); the kernel logs nothing and has no error handler
+// (target/error-handling DI 1, 2, 4). An exception from a System or hook is not
 // caught: the World becomes Interrupted the same way and the exception goes on.
 // Running an Interrupted World is a GYO_ASSERT (rebuild it: a new WorldExecutor).
 //
