@@ -11,6 +11,7 @@ add_executable(gyo_orchestration_tests
     RestoreFlowTests.cpp
     DefectTests.cpp
     CoverageTests.cpp
+    SkeletonTests.cpp
 )
 target_include_directories(gyo_orchestration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gyo_orchestration_tests PRIVATE GYO::Orchestration gyo_test_support doctest::doctest)
@@ -23,7 +24,7 @@ endif()
 
 # One ctest per group (the doctest cases are named "<group>: ..."); a run of
 # zero cases fails.
-foreach(group IN ITEMS O-1 O-2 O-3 O-5 O-8 O-9 O-10 O-E1 O-E2 O-E3 O-E6 O-E7 restore)
+foreach(group IN ITEMS O-1 O-2 O-3 O-4 O-5 O-8 O-9 O-10 O-E1 O-E2 O-E3 O-E6 O-E7 restore)
     add_test(NAME orchestration.${group} COMMAND gyo_orchestration_tests "--test-case=${group}:*")
     set_tests_properties(orchestration.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
@@ -70,5 +71,48 @@ foreach(_header IN LISTS _orchestration_headers)
     file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every kernel header.\n#include \"${_header}\"\n${_kernel_includes}" @ONLY)
     list(APPEND _order_sources "${_source}")
 endforeach()
+# The first Engine Module in GYO::Engine that goes into a World, engine/world_time
+# (time-events declaration 3.1): each of its public headers first, then every
+# orchestration and kernel header; and each orchestration header first, then
+# every world_time header (the order gyo_product_units generates). A header that
+# names Engine:: unqualified inside GYO::Engine::WorldTime fails here.
+file(GLOB_RECURSE _world_time_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/world_time/include"
+    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/world_time/include/*.hpp")
+list(SORT _world_time_headers)
+set(_orchestration_includes "")
+foreach(_header IN LISTS _orchestration_headers)
+    string(APPEND _orchestration_includes "#include \"${_header}\"\n")
+endforeach()
+set(_world_time_includes "")
+foreach(_header IN LISTS _world_time_headers)
+    string(APPEND _world_time_includes "#include \"${_header}\"\n")
+endforeach()
+foreach(_header IN LISTS _world_time_headers)
+    string(MAKE_C_IDENTIFIER "${_header}" _id)
+    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}.cpp")
+    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every orchestration and kernel header.\n#include \"${_header}\"\n${_orchestration_includes}${_kernel_includes}" @ONLY)
+    list(APPEND _order_sources "${_source}")
+endforeach()
+foreach(_header IN LISTS _orchestration_headers)
+    string(MAKE_C_IDENTIFIER "${_header}" _id)
+    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}_then_world_time.cpp")
+    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every world_time header.\n#include \"${_header}\"\n${_world_time_includes}" @ONLY)
+    list(APPEND _order_sources "${_source}")
+endforeach()
 add_library(gyo_orchestration_include_order OBJECT ${_order_sources})
-target_link_libraries(gyo_orchestration_include_order PRIVATE GYO::Orchestration)
+target_link_libraries(gyo_orchestration_include_order PRIVATE GYO::Orchestration GYO::WorldTime)
+
+# The scans the skeleton declaration deferred (section 7.4), stood up by
+# v8-arch-gyo2-time-events step 1 once scenario segment 1 had passed:
+#   orchestration.guard  O-3 (no Plan step read, no System called), O-4 (the
+#                        include allowlist), O-6 (no hand-written engine link)
+# and the link set of the layer (O-4: it depends on the kernel and Base only).
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME orchestration.guard
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/orchestration_guard.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME orchestration.guard_selftest
+    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_orchestration_guard.py" -v)
+set_tests_properties(orchestration.guard orchestration.guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
+# Checked once the whole project is configured, so an edge added later from
+# another directory is seen too (as for gyo_time).
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_links gyo_orchestration GYO::Base GYO::Kernel)

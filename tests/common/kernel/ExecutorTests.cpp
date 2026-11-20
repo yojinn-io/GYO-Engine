@@ -428,13 +428,13 @@ TEST_CASE("J-26: the Serial call sequence is the Plan's System steps without tho
 
 namespace {
 
-SystemResult ToggleFlag(ResMut<Flag> flag, CurrentTick tick) {
-    flag->on = tick.Tick() == 1 ? 1 : 0;
+SystemResult ToggleFlag(ResMut<Flag> flag, Res<TickCount> tick) {
+    flag->on = tick->value == 1 ? 1 : 0;
     return Ok();
 }
 bool FlagOn(Res<Flag> flag) { return flag->on != 0; }
-SystemResult Guarded(Query<Read<Tag>>, CurrentTick tick) {
-    Log().push_back("guarded@" + std::to_string(tick.Tick()));
+SystemResult Guarded(Query<Read<Tag>>, Res<TickCount> tick) {
+    Log().push_back("guarded@" + std::to_string(tick->value));
     return Ok();
 }
 bool CountedCondition(Res<Out>) {
@@ -478,7 +478,8 @@ SystemResult SeeAdded(Query<Read<Tag>, Added<Tag>> added) {
 }
 } // namespace
 
-TEST_CASE("J-30: Added sees new cells only; tickStamps keep a tick's first stamp") {
+// tickStamps (a tick's first stamp) left with the clock, not moved (G5: no kernel judgment read them).
+TEST_CASE("J-30: Added sees new cells only") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.AddSystem<&SeeAdded>(B("SeeAdded", "A"));
@@ -489,8 +490,6 @@ TEST_CASE("J-30: Added sees new cells only; tickStamps keep a tick's first stamp
     rig->world().GetMut<Tag>(1)->t = 2;  // changed, not added
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK(Join(Log()) == "added:1 added:0");
-    CHECK(rig->world().TickStamp(Domain::Fixed, 1) == std::optional<ChangeStamp>(1));
-    CHECK(rig->world().TickStamp(Domain::Fixed, 2) == std::optional<ChangeStamp>(5));
 }
 
 namespace {
@@ -1003,8 +1002,8 @@ SystemResult HookDespawns(HookCtx ctx, Despawn despawn) {
     despawn.Entity(ctx.Entity());
     return Ok();
 }
-SystemResult InsertTagOnce(CommandsFor<Inserts<Tag>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 1) commands.Insert(1, Tag{1});
+SystemResult InsertTagOnce(CommandsFor<Inserts<Tag>, Removes<>> commands, Res<TickCount> tick) {
+    if (tick->value == 1) commands.Insert(1, Tag{1});
     return Ok();
 }
 SystemResult DespawnsOne(Despawn despawn) {
@@ -1019,8 +1018,8 @@ SystemResult TagsTwo(CommandsFor<Inserts<Tag>, Removes<>> commands) {
     commands.Insert(2, Tag{2});
     return Ok();
 }
-SystemResult ZoneCInsertsAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 2) commands.Insert(1, Pos{2});
+SystemResult ZoneCInsertsAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, Res<TickCount> tick) {
+    if (tick->value == 2) commands.Insert(1, Pos{2});
     return Ok();
 }
 
@@ -1030,10 +1029,11 @@ SystemResult SeeChangesWhenOn(Query<Read<Tag>, Changed<Tag>> changed) {
     return Ok();
 }
 
-// Two mounts: Tick (A) and Other (B). Changed and Local are per mount.
-SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32_t> runs, CurrentTick tick) {
+// Two mounts: Tick (A) and Other (B). Changed and Local are per mount. Which mount runs: Flag, written by the
+// test before each Run (1: Tick), in place of the kernel's clock domain (v8-arch-gyo2-clock-out-of-kernel).
+SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32_t> runs, Res<Flag> mount) {
     *runs += 1;
-    Log().push_back(std::string(tick.Clock() == Domain::Fixed ? "A" : "B") + " run" + std::to_string(*runs) + " changed:" +
+    Log().push_back(std::string(mount->on == 1 ? "A" : "B") + " run" + std::to_string(*runs) + " changed:" +
                     std::to_string(changed.Count()));
     return Ok();
 }
@@ -1072,13 +1072,12 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
     SUBCASE("one stage: a hook's despawn at the only sync point is applied by the hook rounds of the same Run") {
         ScheduleOptions one;
         one.name = "Tick";
-        one.domain = Domain::Fixed;
-        one.clock = true;
         one.stages = {"A"};
         auto rig = MakeRig([one](Registrar& r) {
             r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
             r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
             r.Component<Mode>({.name = "Mode", .zone = Zone::B});
+            r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
             r.Schedule(one);
             r.AddSystem<&InsertTagOnce>(B("InsertTagOnce", "A"));
             r.AddSystem<&ZoneCInsertsAtTwo>(C("ZoneCInsertsAtTwo", "A"));
@@ -1112,8 +1111,6 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
             Data(r);
             ScheduleOptions other;
             other.name = "Other";
-            other.domain = Domain::Frame;
-            other.clock = true;
             other.stages = {"B"};
             r.Schedule(other);
             SystemOptions options = Sys("SeeChanges", Zone::B, {At("Tick", "A"), At("Other", "B")});
@@ -1122,9 +1119,12 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
         World& world = rig->world();
         world.Insert(1, Tag{0});
         Log().clear();
+        world.SetResource(Flag{1});
         KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));   // A run1: sees the Host's insert
         world.GetMut<Tag>(1)->t = 5;               // after A, before B
+        world.SetResource(Flag{2});
         KERNEL_REQUIRE_RUN_OK(rig->Run("Other"));  // B run1: sees the insert and the write
+        world.SetResource(Flag{1});
         KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));   // A run2: still sees the write
         KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));   // A run3: nothing new
         CHECK(Join(Log()) == "A run1 changed:1 B run1 changed:1 A run2 changed:1 A run3 changed:0");
@@ -1203,10 +1203,10 @@ std::map<EntityId, std::int32_t>& Mirror() {
 }
 
 // Writes a few cells each tick through Mut (the only way to take a value for writing).
-SystemResult MoveSome(Query<Write<Pos>> positions, CurrentTick tick) {
+SystemResult MoveSome(Query<Write<Pos>> positions, Res<TickCount> tick) {
     for (EntityId id : positions.Entities()) {
-        if ((id + tick.Tick()) % 3 == 0) {
-            if (Mut<Pos> pos = positions.GetMut<Pos>(id)) pos->x += static_cast<std::int32_t>(tick.Tick());
+        if ((id + tick->value) % 3 == 0) {
+            if (Mut<Pos> pos = positions.GetMut<Pos>(id)) pos->x += static_cast<std::int32_t>(tick->value);
         }
     }
     return Ok();

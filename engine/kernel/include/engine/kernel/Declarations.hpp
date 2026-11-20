@@ -16,6 +16,7 @@ namespace GYO::Kernel {
 // component registered gets ComponentId n. They are in-process only.
 using ComponentId = std::uint32_t;
 using ResourceId = std::uint32_t;
+using MessageTypeId = std::uint32_t;
 using EventTypeId = std::uint32_t;
 using EffectId = std::uint32_t;
 using SetId = std::uint32_t;
@@ -52,14 +53,6 @@ enum class Rollback : std::uint8_t {
     Derived,
 };
 
-// A clock domain (spec section 0).
-enum class Domain : std::uint8_t {
-    None,
-    Fixed,
-    Frame,
-    Loading,
-};
-
 struct ComponentOptions {
     std::string name;
     Zone zone = Zone::Unset;
@@ -83,12 +76,33 @@ struct ResourceOptions {
     bool threadBound = false;
 };
 
+// A retained message type (event cursor declaration 3.2, 5.1; DI-KS 10).
+struct MessageOptions {
+    std::string name;
+    Zone zone = Zone::Unset;
+    // How many records of this type the World keeps: a write to a full buffer
+    // drops the oldest one and the World records it (DroppedMessages). A default,
+    // not a measured value; at least 1 (GYO_ASSERT).
+    std::uint32_t capacity = 1024;
+};
+
+// A pushed event type (event cursor declaration 3.3, 5.2; DI-KS 10): kept
+// nowhere; a Trigger runs its observers (Registrar::Observer). The type's name
+// is in the past tense (naming DI 2). Its zone follows a message type's rule
+// until the zone rules leave (time-events declaration 4.5).
 struct EventOptions {
     std::string name;
     Zone zone = Zone::Unset;
-    // The clock domain the event belongs to; its writers and readers run in
-    // that domain's clock schedule (spec F-9, F-E1).
-    Domain domain = Domain::None;
+};
+
+// An observer (event cursor declaration 3.3, 5.2): a System that runs where its
+// event is triggered, not a Plan step. Its zone follows a hook's rule
+// (time-events declaration 4.5). Names are unique among observers: the
+// observers of one trigger run in name order (deterministic and independent of
+// registration order; not promised to authors).
+struct ObserverOptions {
+    std::string name;
+    Zone zone = Zone::Unset;
 };
 
 // A named group of a schedule's Systems (spec C.1 sets): order edges and run
@@ -114,12 +128,11 @@ struct SyncPointOptions {
 };
 
 // Given by the Host (spec D.1); the kernel builds in no schedule or stage name
-// (DI-KS 15).
+// (DI-KS 15) and keeps no clock: a schedule belongs to no time domain and its
+// Run advances no tick (the tick is the time Module's, engine/world_time;
+// v8-arch-gyo2-clock-out-of-kernel).
 struct ScheduleOptions {
     std::string name;
-    Domain domain = Domain::None;
-    // Its Run advances the domain tick; one per domain (H-1, D-E12).
-    bool clock = false;
     // The only schedule kind where Extract parameters are legal (spec H.6).
     bool extract = false;
     bool rollbackEnabled = false;
@@ -127,9 +140,6 @@ struct ScheduleOptions {
     // The stage where ingress Systems run (spec Z3). Empty: no ingress stage.
     std::string ingressStage;
     std::vector<SyncPointOptions> syncPoints;
-    // The sync point after which the domain's events are trimmed (spec D.1
-    // eventTrim). Empty: the end of the last stage. Clock schedules only.
-    std::string eventTrim;
     ExecutorKind executor = ExecutorKind::Serial;
     // Parallel only: the CTest that compares Serial and Parallel (spec X-2).
     std::string parallelGuardTest;

@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-16（§3 成員不變的範圍、DI 3 的 stamp：`v8-arch-gyo2-nested-schedule`）；2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
+更新：2026-11-20（§2 的 tickStamps、§3 的寫者例、§5、DI 6、最後一條 RC：Kernel 沒有時鐘、事件分 `Message` 與 `Event`——`v8-arch-gyo2-time-events`，DI 的最終文字在合併前核准時定稿）；2026-11-16（§3 成員不變的範圍、DI 3 的 stamp：`v8-arch-gyo2-nested-schedule`）；2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
 本文件只寫**使用者已裁決**的部分與它們的後果；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 實體的鍵（使用者 2026-11-11 決定，spec K.3 第 1 項）
@@ -19,7 +19,7 @@
 
 - 每格一個 `uint64` 的 `added` 與 `changed`。stamp 是 World **依 Plan 順序推進的全域計數**（跨同一 World 的所有 schedule 單調）：每一個 Plan 步驟（System 或同步點）開始時取下一個值；條件為假被跳過的 System 也消耗它的值。除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號；記號仍然只往前走（spec F-12、E.2）。取值依 Plan 順序而不依完成先後，所以 Parallel 與 Serial 相同；不是 (c) 資料。
 - stamp **單調、不重置、不回滾、跨世代（World 重建）不比較**。溢出無實際可能（u64）。
-- tick 的視角由 `tickStamps[domain]`（有上限的環形表：tick → 該 tick 第一個 stamp）換算；複製層以 `changed > tickStamps[T+1] − 1` 判「比 Ledger 確認的 tick T 新」。
+- ~~tick 的視角由 `tickStamps[domain]` 換算~~ **拿掉**（`v8-arch-gyo2-time-events` G5）：Kernel 沒有 tick，也不記「每個 tick 的第一個 stamp」；tick 在時間 Module（[`v2/world-time.zh-Hant.md`](v2/world-time.zh-Hant.md)）。需要「某個 tick 以來改過什麼」的作者或複製層用 `Changed<…>`（System 讀不到當下的 stamp，所以「自己記下那個 tick 開始時的 stamp」現在做不到；複製那一批需要時再加原語。`v8-arch-gyo2-time-events` 第 7 步依審查更正）。
 - **stamp 不是 (c) 資料**：不進回滾快照、不回滾；(c) 區 System 不得用它做變更過濾（spec G-3：Match 執行一次與 Client 回滾重跑時「上次執行之後的變更」不同，兩端的 stamp 毫無關係）。
 - 理由（為什麼不用遊戲 tick）：只用 tick 時，同一 tick 內排在讀者之後的寫入會被讀者永久漏掉（`T > T` 不成立），用 `>=` 則重複讀到。
 - 連動修改：blueprint DI-K5 與 networking §1 第 7 條原寫「以遊戲 tick 標記」，已各改一句。
@@ -28,7 +28,7 @@
 
 - 每個欄與 Resource 的 `ColumnInfo.writePolicy ∈ {Exclusive, Shared}`，**預設 Exclusive**；登記時標 `Shared` 才允許多寫者。宣告進 authority digest 的欄禁 Shared（spec S-12）。
 - **獨占是啟動時數寫者的檢查**（spec D-E2：同一 World、所有非 Startup schedule 中，寫者**以 System 計**（使用者 2026-11-11 決定，K.3 第 9 項；不以 owner plugin 計，否則檢查的粒度變成程式碼組織而非資料流）、含型別化 Commands、Spawn 的 bundle、hook，至多一個；Startup schedule 的寫者不計）。後果：PvP 今天由三段程式寫的 Body 要依產品自己的欄位分類拆欄（分類表在產品的目標文件 `docs/object_fps_pvp/target/entity-model.zh-Hant.md` §1，不在本文件——產品的欄位不進 Engine 層的設計文件），不併 System、不改 Shared——使用者：不拆的話架構改造就沒有意義。範圍與 golden 影響由 -audit 量，**執行期零成本、不是鎖**；Exclusive 與 Shared 的執行期行為完全相同。Bevy 等於全 Shared、順序隱性；本機制把「最後寫贏」換成「唯一寫者定合併規則」。不採資料庫式的執行期仲裁（鎖、MVCC）：寫入路徑慢 20～100 倍且買不到決定性。
-- **資料路徑**：獨占欄預設由它唯一的寫者直接寫，不需要事件。只有多個來源要影響同一欄時才用漏斗——各來源發事件或寫自己的中間欄，唯一寫者讀取、套用合併規則、寫欄；漏斗可以是事件也可以是中間欄，是可選的路徑（使用者更正：不是標準進料方式）。事件也有寫者，(c) 區多個 `EventWriter<E>` 之間仍要顯式順序。整欄替換（`Restore`）只用於跨 World 接收權威狀態，不是 World 內的寫法。
+- **資料路徑**：獨占欄預設由它唯一的寫者直接寫，不需要事件。只有多個來源要影響同一欄時才用漏斗——各來源發事件或寫自己的中間欄，唯一寫者讀取、套用合併規則、寫欄；漏斗可以是事件也可以是中間欄，是可選的路徑（使用者更正：不是標準進料方式）。事件也有寫者，(c) 區多個 `MessageWriter<M>` 之間仍要顯式順序。整欄替換（`Restore`）只用於跨 World 接收權威狀態，不是 World 內的寫法。
 
 | 資料 | 寫入政策 | 資料怎麼進來 | 為什麼 |
 |---|---|---|---|
@@ -44,11 +44,10 @@
 - **生成那一步丟掉不能生成的那一筆**（spec F-13；kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9)）：往活著的 id 生成、同一個同步點生成同一個 id 兩次、`SpawnWithId` 的 id 落在配發器的範圍——那一筆丟掉並留 `RejectedSpawn` 明細，不是錯誤，`Run` 照常（`v8-arch-gyo2-spawn-reject`，使用者 2026-11-15）。
 - 說明案例（使用者）：同一 tick 玩家 10 中彈死亡又退出。Combat 在 tick 內已寫下玩家 7 的擊殺——結構凍結，玩家 10 仍在；同步點才刪它。所以擊殺成立，而且與 despawn 的排序無關。若產品要「退出者不算被擊殺」，那是 Combat 與 ApplyMembership 兩個 System 的 Plan 順序與規則問題，(c) 區的歧義檢查會強迫把順序寫明，不是 despawn 該管的。
 
-## 5. 事件只在該 domain 的 clock schedule 內讀寫（使用者 2026-11-11 決定，spec K.3 第 15 項）
+## 5. 事件不屬於任何時鐘（2026-11-20 改寫，`v8-arch-gyo2-time-events`）
 
-- 每個事件型別登記時屬於一個 clock domain；寫者與讀者都必須在該 domain 的 **clock schedule** 中（含 hook：所屬同步點在該 schedule 內）。同 domain 的其他 schedule 讀或寫事件＝啟動錯誤 F-E1（spec F-9）。跨 schedule、跨 domain 的傳遞用元件或 Resource，或 Host 的交換點。
-- 理由：「schedule 在 domain 內的序」沒有定義、Host 也沒被約束照它執行，另一個 schedule 若在修剪點之後執行就會靜默漏讀；與其漏讀不如禁止。
-- 讀取規則無游標：位置在寫者之後的讀者本 tick 就讀到，之前的下 tick 讀到；緩衝保留到下一 tick 末；被 run 條件跳過的讀者錯過那個 tick 的事件（寫明）。
+- 原本（使用者 2026-11-11，spec K.3 第 15 項）：事件屬於一個 clock domain、只在它的 clock schedule 內讀寫（F-9、F-E1），讀取無游標。使用者之後定 `-cross-clock-events-open`、`-event-trim-by-cursor`、`-clock-out-of-kernel`，這一節的規則隨 Kernel 的時鐘一起拿掉。
+- 現在：事件分兩種，都在 Kernel、都不看時鐘。保留式 `Message` 每個讀者一個游標、上限內不漏讀，任何 schedule 都能讀寫任何訊息；推送式 `Event` 不保留，觸發時跑 observer。全文與守衛在 kernel [DI-KS 10](kernel.zh-Hant.md#di-ks-10)。
 
 ## 6. 欄的儲存與 `entity_store` 的關係（通用規則；`v8-arch-a6-revision`）
 
@@ -74,7 +73,7 @@
 3. **stamp 是依 Plan 順序推進的全域計數、單調、不進 (c)**：跳過的 System 也消耗；除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號，記號仍然只往前走（spec F-12（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准）；巢狀（`v8-arch-gyo2-nested-schedule`，使用者 2026-11-15 核准））；同一 World 的執行歷史相同時序列相同；Changed／Added 的「上次執行」以掛點為單位；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38、J-52。
 4. **寫入政策預設獨占，獨占是啟動檢查**——受 kernel [DI-KS 6](kernel.zh-Hant.md#di-ks-6) 約束：**全文與守衛見該條，改動前必讀**。
 5. **結構變更只在同步點與最後一個同步點之後的 hook 清空輪、順序寫死、Despawn 不是寫者**——受 kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9) 約束：**全文與守衛見該條，改動前必讀**。
-6. **事件屬於一個 clock domain，只在它的 clock schedule 內讀寫**——受 kernel [DI-KS 10](kernel.zh-Hant.md#di-ks-10)、[DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
+6. **事件不屬於任何時鐘；保留式照游標讀、上限內不漏讀**——受 kernel [DI-KS 10](kernel.zh-Hant.md#di-ks-10) 約束：**全文與守衛見該條，改動前必讀**。（2026-11-20 改寫，`v8-arch-gyo2-time-events`；原文「事件屬於一個 clock domain，只在它的 clock schedule 內讀寫」）
 
 ### Replacement Criteria
 
@@ -82,4 +81,4 @@
 
 - LIM-4：進 digest 的欄不得 Shared；為繞過獨占檢查改 Shared 兩次以上 → 重新劃分元件（詳細在 `limits.zh-Hant.md`）。
 - 某個產品需要 World 解讀 generation（例如由 World 拒絕 stale 鍵），或需要第二個鍵空間的對照表 → 鍵的形狀要重新設計，不在 World 上加分支。
-- 同一 tick 內需要「本 tick 之後的變更」以外的變更過濾語義且無法以 `tickStamps` 區間查詢表達 → stamp 模型重審。
+- 同一 tick 內需要「本 tick 之後的變更」以外的變更過濾語義且無法以 stamp 區間查詢表達 → stamp 模型重審。（tickStamps 隨 `v8-arch-gyo2-time-events` 拿掉，2026-11-20）

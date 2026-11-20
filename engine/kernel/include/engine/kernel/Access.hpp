@@ -11,7 +11,7 @@
 // id at registration, not at compile time; an unregistered type is R-E4).
 //
 // The entry set is the derived half of spec B.1's SystemDescriptor:
-//   reads / writes         ComponentRead/Write, ResourceRead/Write, EventRead/Write, DomainTickRead
+//   reads / writes         ComponentRead/Write, ResourceRead/Write, MessageRead/Write
 //   membershipReads        Membership (With / Without)
 //   changeFilters          ChangeFilter (Changed / Added); also a membership read of its type
 //   deferred               DeferredInsert (insert / bundle: adds cells), DeferredWrite (remove), Despawn,
@@ -41,8 +41,7 @@ public:
     virtual void Parameter(std::size_t position) = 0;
     virtual void Component(TypeKey type, AccessMode mode) = 0;
     virtual void Resource(TypeKey type, AccessMode mode) = 0;
-    virtual void Event(TypeKey type, AccessMode mode) = 0;
-    virtual void DomainTick() = 0;
+    virtual void Message(TypeKey type, AccessMode mode) = 0;
     virtual void Membership(TypeKey component) = 0;
     virtual void ChangeFilter(TypeKey component) = 0;
     virtual void DeferredWrite(TypeKey component) = 0;
@@ -88,16 +87,12 @@ struct ResourceWrite {
     static void Resolve(Detail::AccessResolver& resolver) { resolver.Resource(KeyOf<T>(), AccessMode::Write); }
 };
 template <class T>
-struct EventRead {
-    static void Resolve(Detail::AccessResolver& resolver) { resolver.Event(KeyOf<T>(), AccessMode::Read); }
+struct MessageRead {
+    static void Resolve(Detail::AccessResolver& resolver) { resolver.Message(KeyOf<T>(), AccessMode::Read); }
 };
 template <class T>
-struct EventWrite {
-    static void Resolve(Detail::AccessResolver& resolver) { resolver.Event(KeyOf<T>(), AccessMode::Write); }
-};
-// The domain tick of every mount's schedule (CurrentTick; spec B.4, S-4).
-struct DomainTickRead {
-    static void Resolve(Detail::AccessResolver& resolver) { resolver.DomainTick(); }
+struct MessageWrite {
+    static void Resolve(Detail::AccessResolver& resolver) { resolver.Message(KeyOf<T>(), AccessMode::Write); }
 };
 template <class T>
 struct Membership {

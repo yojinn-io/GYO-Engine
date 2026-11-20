@@ -1,6 +1,7 @@
 // World (spec A, F): storage, the checks of every access, the sync point's
-// application of deferred records (spec F.2), hooks, event trim, the boundary
-// comparison (spec A.6 layer 2) and the World summary (spec D-9).
+// application of deferred records (spec F.2), hooks, the message cursors and
+// trim (event cursor declaration 3.2), the boundary comparison (spec A.6 layer
+// 2) and the World summary (spec D-9).
 
 #include "engine/kernel/World.hpp"
 
@@ -23,10 +24,6 @@ namespace GYO::Kernel {
 
 namespace {
 
-std::size_t DomainIndex(Domain domain) noexcept {
-    return static_cast<std::size_t>(domain);
-}
-
 bool SameError(const KernelError& a, const KernelError& b) {
     return a.code == b.code && a.rule == b.rule && a.message == b.message && a.detail == b.detail;
 }
@@ -39,10 +36,10 @@ bool ContainsError(const KernelError& error, const KernelError& wanted) {
 }
 
 // A hook names the sync point step that ran it, or the step of the exclusive
-// System whose immediate change ran it.
+// System whose immediate change ran it; an observer is named as one.
 std::string CallText(const Detail::SystemContext& call) {
     const bool syncPoint = call.hook && !call.immediateChange;
-    return std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "' (schedule '" +
+    return std::string(call.hook ? "hook '" : call.observer ? "observer '" : "System '") + std::string(call.name) + "' (schedule '" +
            std::string(call.schedule) + "', " + (syncPoint ? "sync point " : "") + "step " +
            std::to_string(call.planPos) + (call.immediateChange ? ", an immediate change" : "") + ")";
 }
@@ -77,16 +74,33 @@ void World::AttachVersion() {
     const Detail::RegistryData& data = *data_;
     GYO_ASSERT(data.columnMakers.size() == data.components.size());
     GYO_ASSERT(data.resourceMakers.size() == data.resources.size());
-    GYO_ASSERT(data.eventMakers.size() == data.events.size());
+    GYO_ASSERT(data.messageMakers.size() == data.messages.size());
     for (std::size_t c = columns_.size(); c < data.columnMakers.size(); ++c) {
         GYO_ASSERT(data.columnMakers[c] != nullptr);
         columns_.push_back(data.columnMakers[c]());
     }
     for (std::size_t r = resources_.size(); r < data.resourceMakers.size(); ++r) resources_.push_back(data.resourceMakers[r]());
-    for (std::size_t e = events_.size(); e < data.eventMakers.size(); ++e) events_.push_back(data.eventMakers[e]());
+    for (std::size_t e = messages_.size(); e < data.messageMakers.size(); ++e) {
+        messages_.push_back(data.messageMakers[e]());
+        GYO_ASSERT(data.messages[e].capacity >= 1);
+        messages_.back()->capacity = data.messages[e].capacity;
+    }
+    droppedEntry_.resize(messages_.size());
+    // Event cursor declaration 3.2 (L5): a removed System's readers are gone
+    // with the version that removed it.
+    std::erase_if(cursors_, [&](const Detail::MessageCursor& cursor) {
+        // An observer's cursor stays: observers are not removed.
+        if (cursor.mount == Detail::kObserverMount) return false;
+        return cursor.system >= data.systems.size() || data.systems[cursor.system].removed;
+    });
     excluded_.resize(columns_.size(), false);
     hookAccess_.clear();
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
+    observerAccess_.clear();
+    for (const Detail::ObserverRecord& observer : data.observers) {
+        observerAccess_.push_back(Detail::MakeAccessDesc(observer.access));
+    }
+    observerState_.resize(data.observers.size());
     for (const Detail::ScheduleRecord& schedule : data.schedules) {
         const bool known = std::any_of(hookQueues_.begin(), hookQueues_.end(),
                                        [&](const HookQueue& queue) { return queue.schedule == schedule.options.name; });
@@ -94,9 +108,10 @@ void World::AttachVersion() {
     }
     // Every table indexed by a registry id has the new version's size (a missed
     // one would be read past its end later; RC 17).
-    GYO_ASSERT(events_.size() == data.events.size());
+    GYO_ASSERT(messages_.size() == data.messages.size());
     GYO_ASSERT(excluded_.size() == data.components.size());
     GYO_ASSERT(hookAccess_.size() == data.hooks.size());
+    GYO_ASSERT(observerAccess_.size() == data.observers.size() && observerState_.size() == data.observers.size());
     GYO_ASSERT(hookQueues_.size() == data.schedules.size());
     version_ = data.version;
 }
@@ -167,16 +182,6 @@ std::uint64_t World::MembershipEpoch() const noexcept {
     return sum;
 }
 
-std::uint64_t World::Tick(Domain domain) const noexcept {
-    return ticks_[DomainIndex(domain)];
-}
-
-std::optional<ChangeStamp> World::TickStamp(Domain domain, std::uint64_t tick) const noexcept {
-    const TickStampSlot& slot = tickStamps_[DomainIndex(domain)][tick % kTickStampSlots];
-    if (!slot.used || slot.tick != tick) return std::nullopt;
-    return slot.stamp;
-}
-
 void World::MakeAlive(EntityId id) {
     const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);
     if (at != entities_.end() && *at == id) return;
@@ -198,7 +203,7 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         const Detail::AccessDesc& access = *call->access;
         bool declared = false;
         // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
-        if (access.wholeWorld && kind != Detail::EntryKind::Event) declared = true;
+        if (access.wholeWorld && kind != Detail::EntryKind::Message) declared = true;
         const auto entry = std::lower_bound(access.entries.begin(), access.entries.end(), std::make_pair(kind, id),
                                             [](const Detail::AccessEntry& e, const std::pair<Detail::EntryKind, std::uint32_t>& k) {
                                                 return e.kind != k.first ? e.kind < k.first : e.id < k.second;
@@ -212,10 +217,10 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
         if (declared) return;
         const char* what = kind == Detail::EntryKind::Component ? "component"
                            : kind == Detail::EntryKind::Resource ? "resource"
-                                                                 : "event";
+                                                                 : "message";
         const std::string& name = kind == Detail::EntryKind::Component ? data_->components[id].name
                                   : kind == Detail::EntryKind::Resource ? data_->resources[id].name
-                                                                        : data_->events[id].name;
+                                                                        : data_->messages[id].name;
         KernelError error(KernelErrorCode::AccessViolation,
                           std::string(mode == Detail::kModeWrite ? "write" : "read") + " of " + what + " '" + name +
                               "' through the World API, not declared by " + CallText(*call),
@@ -241,7 +246,7 @@ void World::Access(Detail::EntryKind kind, std::uint32_t id, std::uint8_t mode, 
 void World::MarkApiWritten(Detail::EntryKind kind, std::uint32_t id) const {
     std::vector<Snapshot>& snapshots = kind == Detail::EntryKind::Component  ? columnSnapshots_
                                        : kind == Detail::EntryKind::Resource ? resourceSnapshots_
-                                                                             : eventSnapshots_;
+                                                                             : messageSnapshots_;
     if (id < snapshots.size()) snapshots[id].apiWritten = true;
 }
 
@@ -276,10 +281,17 @@ ResourceId ResourceIdOf(const World& world, TypeKey key) {
     return entry->id;
 }
 
+MessageTypeId MessageIdOf(const World& world, TypeKey key) {
+    world.Sync();
+    const TypeEntry* entry = world.data_->FindType(key);
+    GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Message);
+    return entry->id;
+}
+
 EventTypeId EventIdOf(const World& world, TypeKey key) {
     world.Sync();
     const TypeEntry* entry = world.data_->FindType(key);
-    GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Event);
+    GYO_ASSERT(entry != nullptr && entry->role == TypeRole::Event);  // Registrar::Event
     return entry->id;
 }
 
@@ -320,25 +332,17 @@ ResourceBase& ResourceAt(World& world, ResourceId id) {
     return *world.resources_[id];
 }
 
-EventBufferBase& EventsAt(World& world, EventTypeId id) {
+MessageBufferBase& MessagesAt(World& world, MessageTypeId id) {
     RequireRunningCall(world);
-    return *world.events_[id];
+    return *world.messages_[id];
 }
 
 ChangeStamp CurrentStamp(const World& world) noexcept {
     return world.stamp_;
 }
 
-std::uint64_t DomainTick(const World& world, Domain domain) noexcept {
-    return world.ticks_[DomainIndex(domain)];
-}
-
 std::span<const EntityId> AliveEntities(const World& world) noexcept {
     return world.entities_;
-}
-
-Domain EventDomain(const World& world, EventTypeId id) {
-    return world.data_->events[id].domain;
 }
 
 std::size_t ComponentCount(const World& world) noexcept {
@@ -356,11 +360,72 @@ std::vector<ComponentId> SetMembersOf(const World& world, TypeKey setTag) {
     return world.data_->namedSets[entry->id].members;
 }
 
+namespace {
+
+bool CursorBefore(const MessageCursor& a, const MessageCursor& b) {
+    return std::tie(a.message, a.system, a.mount, a.slot) < std::tie(b.message, b.system, b.mount, b.slot);
+}
+
+} // namespace
+
+std::uint64_t MessageCursorOf(World& world, const SystemContext& call, MessageTypeId id) {
+    RequireRunningCall(world);
+    GYO_ASSERT(call.reader.valid);  // a hook is no reader (Registrar::Hook rejects MessageReader)
+    const MessageCursor key{id, call.reader.system, call.reader.mount, call.reader.slot, 0};
+    const auto at = std::lower_bound(world.cursors_.begin(), world.cursors_.end(), key, CursorBefore);
+    if (at != world.cursors_.end() && !CursorBefore(key, *at)) return at->read;
+    // The reader's first run: from the oldest record kept (every record before
+    // it was trimmed or dropped, so the seq before it is where it stands).
+    const MessageBufferBase& buffer = *world.messages_[id];
+    const std::uint64_t start = buffer.Size() > 0 ? buffer.SeqAt(0) - 1 : buffer.nextSeq - 1;
+    world.cursors_.insert(at, MessageCursor{id, call.reader.system, call.reader.mount, call.reader.slot, start});
+    return start;
+}
+
+void AdvanceMessageCursor(World& world, const ReaderKey& reader, MessageTypeId id, std::uint64_t read) {
+    const MessageCursor key{id, reader.system, reader.mount, reader.slot, 0};
+    const auto at = std::lower_bound(world.cursors_.begin(), world.cursors_.end(), key, CursorBefore);
+    GYO_ASSERT(at != world.cursors_.end() && !CursorBefore(key, *at));  // made by MessageCursorOf
+    if (read > at->read) at->read = read;
+}
+
+void RecordDroppedMessage(World& world, MessageTypeId id, std::uint64_t seq) {
+    DiagnosticsBase* found = FindDiagnostics(world, KeyOf<DroppedMessages>());
+    if (found == nullptr) {
+        auto made = std::make_unique<DiagnosticsBuffer<DroppedMessages>>();
+        found = made.get();
+        AddDiagnostics(world, KeyOf<DroppedMessages>(), std::move(made));
+    }
+    auto& entries = static_cast<DiagnosticsBuffer<DroppedMessages>*>(found)->entries;
+    World::DroppedEntry& dropped = world.droppedEntry_[id];
+    std::optional<std::size_t>& entry = dropped.entry;
+    if (!entry) {
+        DroppedMessages record;
+        record.message = world.data_->messages[id].name;
+        record.firstSeq = seq;
+        // The World's sync point number at the first drop of the Run (L8).
+        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{world.syncEpoch_, false, std::move(record)});
+        entry = entries.size() - 1;
+    }
+    DroppedMessages& record = entries[*entry].record;
+    ++record.count;
+    record.lastSeq = seq;
+    // The readers that held seq unread, merged with this Run's earlier ones in
+    // cursor order (registrationSeq, mount, slot).
+    for (const MessageCursor& cursor : world.cursors_) {
+        if (cursor.message != id || cursor.read >= seq) continue;
+        const auto at = std::lower_bound(dropped.readers.begin(), dropped.readers.end(), cursor, CursorBefore);
+        if (at == dropped.readers.end() || CursorBefore(cursor, *at)) dropped.readers.insert(at, cursor);
+    }
+    record.readers.clear();
+    for (const MessageCursor& reader : dropped.readers) record.readers.push_back(world.ReaderInfoOf(reader));
+}
+
 void Push(SystemContext& call, Record record) {
     World& world = *call.world;
     GYO_ASSERT(world.state_ == WorldState::Running || world.state_ == WorldState::Applying);
-    // F-5: while Applying only hooks record (into the next window).
-    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook);
+    // F-5: while Applying only hooks and observers record (into the next window).
+    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook || call.observer);
     record.planPos = call.planPos;
     record.recSeq = (*call.recSeq)++;
     record.emitterZone = call.zone;
@@ -459,7 +524,6 @@ std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result
 Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityId entity, ComponentId component,
                                                        std::uint32_t planPos, std::string_view schedule, ChangeStamp stamp) {
     const Detail::HookRecord& record = data_->hooks[hook];
-    const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
     Detail::SystemContext call;
     call.world = this;
     call.executor = executor_;
@@ -469,8 +533,6 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.planPos = planPos;
     call.zone = record.zone;
     call.hook = true;
-    call.domain = scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None;
-    call.tick = ticks_[DomainIndex(call.domain)];
     call.stamp = stamp;
     call.lastRun = 0;
     call.callSerial = ++callSerial_;
@@ -504,14 +566,84 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     return Engine::Base::Err(std::move(*error));
 }
 
+// Per (entity, component), the lifecycle reactions of one cell (time-events
+// declaration 4.2; flecs and Bevy order them so): a new cell's OnAdd hooks,
+// then its Add observers; a leaving cell's Remove observers, then its OnRemove
+// hooks (the cell still readable by both).
 Engine::Base::Result<void, KernelError> World::RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
                                                         std::uint32_t planPos, std::string_view schedule,
                                                         ChangeStamp stamp) {
+    if (trigger == HookTrigger::OnRemove) {
+        auto observed = RunObservers(ObserverTrigger::Remove, component, nullptr, entity, planPos, schedule, stamp, false);
+        if (!observed) return observed;
+    }
     for (std::size_t h = 0; h < data_->hooks.size(); ++h) {
         const Detail::HookRecord& hook = data_->hooks[h];
         if (hook.trigger != trigger || !hook.componentId || *hook.componentId != component) continue;
         auto result = RunHook(h, entity, component, planPos, schedule, stamp);
         if (!result) return result;
+    }
+    if (trigger == HookTrigger::OnAdd) {
+        return RunObservers(ObserverTrigger::Add, component, nullptr, entity, planPos, schedule, stamp, false);
+    }
+    return {};
+}
+
+// ---- Observers (event cursor declaration 3.3)
+
+Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trigger, std::uint32_t id, const void* payload,
+                                                            std::optional<EntityId> target, std::uint32_t planPos,
+                                                            std::string_view schedule, ChangeStamp stamp, bool ownStamp) {
+    for (const std::uint32_t index : data_->observerOrder) {
+        const Detail::ObserverRecord& record = data_->observers[index];
+        if (record.trigger != trigger || !record.observedId || *record.observedId != id) continue;
+        ObserverState& state = observerState_[index];
+        Detail::SystemContext call;
+        call.world = this;
+        call.executor = executor_;
+        call.access = &observerAccess_[index];
+        call.name = record.name;
+        call.schedule = schedule;
+        call.planPos = planPos;
+        call.zone = record.zone;
+        call.observer = true;
+        call.immediateChange = (hookTarget_ != nullptr);
+        call.eventKey = record.event;
+        call.eventPayload = payload;
+        call.eventTarget = target;
+        call.stamp = ownStamp ? ++stamp_ : stamp;
+        call.lastRun = state.lastRun;
+        call.callSerial = ++callSerial_;
+        call.syncEpoch = syncEpoch_;
+        // An observer is a reader of its own (event cursor declaration 3.2).
+        call.reader = Detail::ReaderKey{index, Detail::kObserverMount, 0, true};
+        call.locals = &state.locals;
+        HookQueue& into = call.immediateChange ? *hookTarget_ : HookQueueOf(schedule);
+        call.queue = &into.records;
+        call.recSeq = &into.recSeq;
+        const std::size_t recordsBefore = into.records.size();
+        // Layer 2 around the call (spec A.6), like a hook's.
+        if (verification_) TakeSnapshots();
+        Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
+            Detail::CallScope scope(call);
+            return record.run(call);
+        }();
+        state.lastRun = call.stamp;
+        if (trackRoundRecorders_ && into.records.size() > recordsBefore) roundObserverRecorders_.push_back(index);
+        std::vector<std::string> changed;
+        if (verification_) changed = CompareAfter(observerAccess_[index]);
+        std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);
+        if (!error) continue;
+        const char* what = trigger == ObserverTrigger::Add ? "Add of component '"
+                           : trigger == ObserverTrigger::Remove ? "Remove of component '"
+                                                                : "event '";
+        const std::string& subject =
+            trigger == ObserverTrigger::Event ? data_->events[id].name : data_->components[id].name;
+        error->Wrap("observer '" + record.name + "' of " + what + subject + "' at " +
+                    (call.immediateChange ? "step " + std::to_string(planPos) + " (outside a sync point)"
+                                          : "sync point step " + std::to_string(planPos)) +
+                    " of schedule '" + std::string(schedule) + "'");
+        return Engine::Base::Err(std::move(*error));
     }
     return {};
 }
@@ -535,15 +667,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
     // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
     std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
-    // The schedule's domain tick for a RejectedSpawn record, looked up only when one is dropped.
-    std::optional<std::uint64_t> rejectTick;
-    auto tickOfSchedule = [&]() {
-        if (!rejectTick) {
-            const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
-            rejectTick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];
-        }
-        return *rejectTick;
-    };
+    // The trigger records of both phases, in order (delivered by the last step).
+    std::vector<Detail::Record*> triggers;
 
     // K0: the running level's records start at its windowBase; the records
     // before it are the outer levels', applied later at their own sync points.
@@ -554,6 +679,10 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
     // One phase: step 0 applies the hook queue this way, steps 1 to 7 the window's records.
     auto phase = [&](std::vector<Record>& records) -> Result {
+        // The triggers (Commands::Trigger) wait for the last step, in record order.
+        for (Record& r : records) {
+            if (r.kind == RecordKind::Trigger) triggers.push_back(&r);
+        }
         // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.
         std::vector<EntityId> despawns;
         for (const Record& r : records) {
@@ -623,7 +752,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             rejected.schedule = std::string(schedule);
             rejected.step = spawn.planPos;
             rejected.appliedAt = planPos;
-            rejected.tick = tickOfSchedule();
+            rejected.syncEpoch = syncEpoch_;
             rejected.otherEmitter = std::string(other);
             RecordRejectedSpawn(std::move(rejected));
         };
@@ -781,10 +910,27 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         return {};
     };
 
+    // The last step (time-events declaration 4.2): the observers of every
+    // trigger record, step 0's first, each phase's in record order, after the
+    // resource step and before the sync epoch moves, so they see every change
+    // of this sync point. What they record goes to the next window.
+    auto deliver = [&]() -> Result {
+        for (const Record* r : triggers) {
+            auto observed = RunObservers(ObserverTrigger::Event, r->id, r->value->Payload(),
+                                         r->hasTarget ? std::optional<EntityId>(r->entity) : std::nullopt, planPos,
+                                         schedule, stamp, false);
+            if (!observed) return observed;
+        }
+        return {};
+    };
+
     // S5 (declaration 3.5 point 1): an immediate change, or one round of what
     // the hooks it ran recorded; only those records. This level's window and the
     // schedule's hook queue wait for their sync point (DI-KS 19).
-    if (immediate != nullptr) return phase(*immediate);
+    if (immediate != nullptr) {
+        if (Result applied = phase(*immediate); !applied) return applied;
+        return deliver();
+    }
 
     // Step 0: the previous window's hook records first; hooks they trigger record into the next window.
     HookQueue& queue = HookQueueOf(schedule);
@@ -797,6 +943,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     if (Result step0 = phase(hookRecords); !step0) return step0;
     // Steps 1 to 7.
     if (Result rest = phase(windowRecords); !rest) return rest;
+    // The triggers.
+    if (Result delivered = deliver(); !delivered) return delivered;
     // Step 8.
     ++syncEpoch_;
     return {};
@@ -810,9 +958,9 @@ void World::RecordRejectedSpawn(RejectedSpawn rejected) {
         found = made.get();
         Detail::AddDiagnostics(*this, KeyOf<RejectedSpawn>(), std::move(made));
     }
-    const std::uint64_t tick = rejected.tick;
+    const std::uint64_t epoch = rejected.syncEpoch;
     static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(
-        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});
+        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, false, std::move(rejected)});
 }
 
 void World::DiscardDeferred() noexcept {
@@ -823,10 +971,26 @@ void World::DiscardDeferred() noexcept {
     }
 }
 
-void World::TrimEvents(Domain domain) {
-    for (std::size_t e = 0; e < events_.size(); ++e) {
-        if (data_->events[e].domain == domain) events_[e]->Trim(ticks_[DomainIndex(domain)]);
+MessageReaderInfo World::ReaderInfoOf(const Detail::MessageCursor& cursor) const {
+    if (cursor.mount == Detail::kObserverMount) return MessageReaderInfo{data_->observers[cursor.system].name, {}, {}, true};
+    const Detail::SystemRecord& system = data_->systems[cursor.system];
+    const Mount& mount = system.options.mounts[cursor.mount];
+    MessageReaderInfo info{system.options.name, mount.schedule, {}};
+    if (cursor.slot == 0) return info;
+    // The Executor's evaluation order: the mount's conditions, then each set's (E.4).
+    std::uint32_t slot = 0;
+    for (const ConditionRef& condition : mount.conditions) {
+        if (++slot == cursor.slot) info.condition = condition.Name();
     }
+    for (const std::string& setName : mount.sets) {
+        for (const Detail::SetRecord& set : data_->sets) {
+            if (set.options.name != setName || set.options.schedule != mount.schedule) continue;
+            for (const ConditionRef& condition : set.conditions) {
+                if (++slot == cursor.slot) info.condition = condition.Name();
+            }
+        }
+    }
+    return info;
 }
 
 std::optional<std::string> World::StructureProblem() const {
@@ -867,25 +1031,39 @@ bool Differs(const Detail::Snapshot& snapshot, std::span<const std::byte> bytes)
 void World::TakeSnapshots() {
     columnSnapshots_.resize(columns_.size());
     resourceSnapshots_.resize(resources_.size());
-    eventSnapshots_.resize(events_.size());
+    messageSnapshots_.resize(messages_.size());
     for (std::size_t c = 0; c < columns_.size(); ++c) {
         if (!excluded_[c]) Take(columnSnapshots_[c], columns_[c]->StorageBytes());
     }
     for (std::size_t r = 0; r < resources_.size(); ++r) Take(resourceSnapshots_[r], resources_[r]->StorageBytes());
-    for (std::size_t e = 0; e < events_.size(); ++e) Take(eventSnapshots_[e], events_[e]->StorageBytes());
+    for (std::size_t e = 0; e < messages_.size(); ++e) Take(messageSnapshots_[e], messages_[e]->StorageBytes());
+}
+
+void World::TrimMessages() {
+    for (std::size_t e = 0; e < messages_.size(); ++e) {
+        Detail::MessageBufferBase& buffer = *messages_[e];
+        // Nobody holds a record no reader has run for: all are trimmed then.
+        std::uint64_t upTo = buffer.nextSeq - 1;
+        for (const Detail::MessageCursor& cursor : cursors_) {
+            if (cursor.message == e && cursor.read < upTo) upTo = cursor.read;
+        }
+        if (!buffer.TrimThrough(upTo) || !verification_) continue;
+        messageSnapshots_.resize(messages_.size());
+        Take(messageSnapshots_[e], buffer.StorageBytes());
+    }
 }
 
 void World::DropSnapshots() noexcept {
     columnSnapshots_.clear();
     resourceSnapshots_.clear();
-    eventSnapshots_.clear();
+    messageSnapshots_.clear();
 }
 
 std::vector<std::string> World::CompareBefore() {
     std::vector<std::string> changed;
     columnSnapshots_.resize(columns_.size());
     resourceSnapshots_.resize(resources_.size());
-    eventSnapshots_.resize(events_.size());
+    messageSnapshots_.resize(messages_.size());
     auto check = [&changed](Snapshot& snapshot, std::span<const std::byte> bytes, const std::string& name) {
         if (snapshot.valid && !snapshot.apiWritten && Differs(snapshot, bytes)) changed.push_back(name);
         Take(snapshot, bytes);
@@ -896,8 +1074,8 @@ std::vector<std::string> World::CompareBefore() {
     for (std::size_t r = 0; r < resources_.size(); ++r) {
         check(resourceSnapshots_[r], resources_[r]->StorageBytes(), "resource " + data_->resources[r].name);
     }
-    for (std::size_t e = 0; e < events_.size(); ++e) {
-        check(eventSnapshots_[e], events_[e]->StorageBytes(), "event " + data_->events[e].name);
+    for (std::size_t e = 0; e < messages_.size(); ++e) {
+        check(messageSnapshots_[e], messages_[e]->StorageBytes(), "message " + data_->messages[e].name);
     }
     return changed;
 }
@@ -906,7 +1084,7 @@ std::vector<std::string> World::CompareAfter(const Detail::AccessDesc& access) {
     std::vector<std::string> changed;
     auto declaredWrite = [&](Detail::EntryKind kind, std::uint32_t id) {
         // ExclusiveWorld declares every component and resource value (DI-KS 1); events are not in it.
-        if (access.wholeWorld && kind != Detail::EntryKind::Event) return true;
+        if (access.wholeWorld && kind != Detail::EntryKind::Message) return true;
         for (const Detail::AccessEntry& entry : access.entries) {
             if (entry.kind == kind && entry.id == id && (entry.modes & Detail::kModeWrite) != 0) return true;
         }
@@ -927,9 +1105,9 @@ std::vector<std::string> World::CompareAfter(const Detail::AccessDesc& access) {
         check(resourceSnapshots_[r], resources_[r]->StorageBytes(), Detail::EntryKind::Resource,
               static_cast<std::uint32_t>(r), "resource " + data_->resources[r].name);
     }
-    for (std::size_t e = 0; e < events_.size(); ++e) {
-        check(eventSnapshots_[e], events_[e]->StorageBytes(), Detail::EntryKind::Event, static_cast<std::uint32_t>(e),
-              "event " + data_->events[e].name);
+    for (std::size_t e = 0; e < messages_.size(); ++e) {
+        check(messageSnapshots_[e], messages_[e]->StorageBytes(), Detail::EntryKind::Message, static_cast<std::uint32_t>(e),
+              "message " + data_->messages[e].name);
     }
     return changed;
 }
@@ -958,16 +1136,20 @@ public:
     std::vector<std::byte> bytes;
 };
 
-constexpr std::uint32_t kSummaryVersion = 1;
+// 2: message records with their seq, each type's next write sequence number,
+// and the message cursors (v8-arch-gyo2-time-events step 3).
+constexpr std::uint32_t kSummaryVersion = 2;
 
 } // namespace
 
-// Format "gyo.kernel.world-summary" version 1: the format string and version;
+// Format "gyo.kernel.world-summary" version 2: the format string and version;
 // the alive entities (count, each u64); every column in ComponentId order
 // (cell count, then each key as u64 and the value's object bytes as a list);
-// every resource in ResourceId order but KernelSettings (present flag, object bytes); every event
-// buffer in EventTypeId order (record count, each payload's bytes). No stamp,
-// tick, Plan position or seq is hashed. A value's padding bytes are hashed as
+// every resource in ResourceId order but KernelSettings (present flag, object bytes); every message
+// buffer in MessageTypeId order (next write sequence number as u64, record
+// count, then each record's seq as u64 and payload's bytes); the message
+// cursors in (message, system, mount, slot) order (count, then each field: four
+// u32 and the read seq as u64). No stamp, tick or Plan position is hashed. A value's padding bytes are hashed as
 // they are, so a type in the summary must have no padding: the author's
 // responsibility for the types an author registers; the kernel's own types
 // (RangeAllotter) are checked at compile time. Partly solved
@@ -998,10 +1180,22 @@ Fingerprint World::Summary() const {
         out.U8(resources_[r]->Present() ? 1U : 0U);
         out.Raw(resources_[r]->StorageBytes());
     }
-    out.U32(events_.size());
-    for (const auto& buffer : events_) {
+    out.U32(messages_.size());
+    for (const auto& buffer : messages_) {
+        out.U64(buffer->nextSeq);
         out.U32(buffer->Size());
-        for (std::size_t i = 0; i < buffer->Size(); ++i) out.Raw(buffer->PayloadBytesAt(i));
+        for (std::size_t i = 0; i < buffer->Size(); ++i) {
+            out.U64(buffer->SeqAt(i));
+            out.Raw(buffer->PayloadBytesAt(i));
+        }
+    }
+    out.U32(cursors_.size());
+    for (const Detail::MessageCursor& cursor : cursors_) {
+        out.U32(cursor.message);
+        out.U32(cursor.system);
+        out.U32(cursor.mount);
+        out.U32(cursor.slot);
+        out.U64(cursor.read);
     }
     return Fingerprint{kSummaryVersion, Engine::Base::Sha256(out.bytes)};
 }

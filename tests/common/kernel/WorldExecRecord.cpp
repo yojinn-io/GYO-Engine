@@ -82,8 +82,6 @@ void Columns(Registrar& r) {
 ScheduleOptions Schedule(int stages) {
     ScheduleOptions s;
     s.name = "Tick";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     for (int i = 0; i < stages; ++i) s.stages.push_back("S" + std::to_string(i));
     return s;
 }

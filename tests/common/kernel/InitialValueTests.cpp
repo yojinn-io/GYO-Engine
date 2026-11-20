@@ -39,8 +39,6 @@ std::vector<std::string>& Seen() {
 ScheduleOptions Tick() {
     ScheduleOptions s;
     s.name = "Tick";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     s.stages = {"Request", "Use"};
     return s;
 }
@@ -61,19 +59,21 @@ void Data(Registrar& r) {
     // Every System with a Spawn parameter writes the allotter.
     r.Resource<RangeAllotter>({.name = "Allotter", .writePolicy = WritePolicy::Shared});
     r.Allotter<RangeAllotter>();
+    // The Runs of Tick the test counted (Rig::Run writes it; time-events declaration 6.2).
+    r.Resource<WorldTest::TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
     r.Schedule(Tick());
 }
 
 // Two Systems ask for a body; neither names Body.
-SystemResult RequestOne(Spawn<Bundle<BodyAt>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult RequestOne(Spawn<Bundle<BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
-SystemResult RequestAnother(Spawn<Bundle<BodyAt>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult RequestAnother(Spawn<Bundle<BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{5});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
@@ -179,17 +179,17 @@ TEST_CASE("initial value: spawning the component itself from two Systems is stil
 
 namespace {
 
-SystemResult SpawnsBoth(Spawn<Bundle<BodyAt, Body>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsBoth(Spawn<Bundle<BodyAt, Body>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3}, Body{-1});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
-SystemResult InsertsRequests(CommandsFor<Inserts<BodyAt>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 1) commands.Insert(7, BodyAt{4});   // entity 7 has no request yet
-    if (tick.Tick() == 2) commands.Insert(7, BodyAt{9});   // overwrites the request
-    if (tick.Tick() == 3) commands.Insert(8, BodyAt{6});   // entity 8 already has a Body
+SystemResult InsertsRequests(CommandsFor<Inserts<BodyAt>, Removes<>> commands, Res<WorldTest::TickCount> tick) {
+    if (tick->value == 1) commands.Insert(7, BodyAt{4});   // entity 7 has no request yet
+    if (tick->value == 2) commands.Insert(7, BodyAt{9});   // overwrites the request
+    if (tick->value == 3) commands.Insert(8, BodyAt{6});   // entity 8 already has a Body
     return Ok();
 }
 
@@ -264,8 +264,8 @@ TEST_CASE("initial value: a chain of declarations completes at one sync point") 
 
 namespace {
 
-SystemResult SpawnsTwoRequests(Spawn<Bundle<Crate, BodyAt>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsTwoRequests(Spawn<Bundle<Crate, BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Crate{1}, BodyAt{3});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
@@ -406,8 +406,8 @@ SystemResult LabelAdded(HookCtx ctx) {
 // A Crate appears at the sync point after the Request stage; its OnAdd hook
 // records a BodyAt, which the next sync point (after the Use stage) applies at
 // its step 0, together with this window's own record (a Label insert).
-SystemResult SpawnsCrate(Spawn<Bundle<Crate>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsCrate(Spawn<Bundle<Crate>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Crate{2});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
@@ -416,14 +416,14 @@ SystemResult CrateAsksForBody(HookCtx ctx, CommandsFor<Inserts<BodyAt>, Removes<
     commands.Insert(ctx.Entity(), BodyAt{4});
     return Ok();
 }
-SystemResult LabelsCrates(Query<Read<Crate>> crates, CommandsFor<Inserts<Label>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult LabelsCrates(Query<Read<Crate>> crates, CommandsFor<Inserts<Label>, Removes<>> commands, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     crates.ForEach([&commands](EntityId id, const Crate&) { commands.Insert(id, Label{1}); });
     return Ok();
 }
 
-SystemResult SpawnsMass(Spawn<Bundle<Mass>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsMass(Spawn<Bundle<Mass>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Mass{5});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
@@ -583,19 +583,20 @@ Gate GateFromSpark(const Spark& spark) { return Gate{spark.s}; }
 Gate GateFromSeat(const Seat& seat) { return Gate{seat.s}; }
 Seat SeatFromEmber(const Ember& ember) { return Seat{ember.e}; }
 
-SystemResult IngressAsksForSeat(CommandsFor<Inserts<SeatInput>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 1) commands.Insert(7, SeatInput{3});
+SystemResult IngressAsksForSeat(CommandsFor<Inserts<SeatInput>, Removes<>> commands, Res<WorldTest::TickCount> tick) {
+    if (tick->value == 1) commands.Insert(7, SeatInput{3});
     return Ok();
 }
-SystemResult SimulationSpawnsSpark(Spawn<Bundle<Spark>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SimulationSpawnsSpark(Spawn<Bundle<Spark>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Spark{4});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
-// seatRollback: Seat's rollback; worldRollback: FixedUpdate is rollback-enabled.
-void SeatData(Registrar& r, Rollback seatRollback, bool worldRollback) {
+// seatRollback: Seat's rollback; worldRollback: FixedUpdate is rollback-enabled; count: TickCount (the
+// Runs the test counted, read by the gated Systems) is registered here.
+void SeatData(Registrar& r, Rollback seatRollback, bool worldRollback, bool count = true) {
     r.Component<Seat>({.name = "Seat", .zone = Zone::C, .rollback = seatRollback});
     r.Component<SeatInput>({.name = "SeatInput", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .role = Role::Input});
     r.Component<Spark>({.name = "Spark", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
@@ -604,6 +605,7 @@ void SeatData(Registrar& r, Rollback seatRollback, bool worldRollback) {
     // Zone C, rolling back with the World: zone C Systems spawn.
     r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
     r.Allotter<RangeAllotter>();
+    if (count) r.Resource<WorldTest::TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
     r.Schedule(KernelTest::FixedSchedule(worldRollback));
 }
 
@@ -713,8 +715,8 @@ TEST_CASE("initial value: a declaration changes the Registry fingerprint and, fo
     CHECK(base.CFingerprint() == zoneB.registry->Frozen().CFingerprint());  // zone B only: the C part is the same
     // One zone C declaration each, from different requests: the C part differs.
     CHECK(zoneC.registry->Frozen().CFingerprint() != otherZoneCRequest.registry->Frozen().CFingerprint());
-    CHECK(base.RegistryFingerprint().version == 4U);
-    CHECK(base.CFingerprint().version == 8U);
+    CHECK(base.RegistryFingerprint().version == 7U);
+    CHECK(base.CFingerprint().version == 11U);
 }
 
 namespace {
@@ -731,8 +733,8 @@ SystemResult SparkAsksForSeat(HookCtx ctx, CommandsFor<Inserts<Ember>, Removes<>
     commands.Insert(ctx.Entity(), Ember{1});
     return Ok();
 }
-SystemResult WritesGate(CommandsFor<Inserts<Gate>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 1) commands.Insert(7, Gate{1});
+SystemResult WritesGate(CommandsFor<Inserts<Gate>, Removes<>> commands, Res<WorldTest::TickCount> tick) {
+    if (tick->value == 1) commands.Insert(7, Gate{1});
     return Ok();
 }
 SystemResult WritesGateIn(Query<Write<GateIn>>) { return Ok(); }
@@ -901,9 +903,9 @@ TEST_CASE("initial value: golden fingerprints of a Registry with two declaration
     MESSAGE("two declarations: registry " << both.registry->Frozen().RegistryFingerprint().Text() << " C "
                                           << both.registry->Frozen().CFingerprint().Text());
     CHECK(both.registry->Frozen().RegistryFingerprint().Text() ==
-          std::string("4:108459566b21096d2a35c5d60bb8d48702c3eb21cf819c55e581fbf3e098360b"));
+          std::string("7:57a3752cc3ea129cbbdc81b2be5865afa62119ce0c4de4652c41a326a6bbf4a2"));
     CHECK(both.registry->Frozen().CFingerprint().Text() ==
-          std::string("8:5e0b7583efb6412ff72951a831fd9a4d1a19d066608b71515084c66db3902fdc"));
+          std::string("11:6eb02fef5fddcc5c87877f966f9fc0796550cb338270b5f78a2087d526d96fa2"));
 }
 
 namespace {
@@ -943,25 +945,25 @@ SystemResult FiltersBySpark(Query<Read<Ember>, With<Spark>> embers) {
     embers.ForEach([](EntityId, const Ember&) {});
     return Ok();
 }
-SystemResult IngressInsertsRaw(CommandsFor<Inserts<Raw>, Removes<>> commands, CurrentTick tick) {
-    if (tick.Tick() == 1) commands.Insert(7, Raw{3});
+SystemResult IngressInsertsRaw(CommandsFor<Inserts<Raw>, Removes<>> commands, Res<WorldTest::TickCount> tick) {
+    if (tick->value == 1) commands.Insert(7, Raw{3});
     return Ok();
 }
-SystemResult SpawnsSparkAndEmber(Spawn<Bundle<Spark, Ember>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsSparkAndEmber(Spawn<Bundle<Spark, Ember>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Spark{4}, Ember{5});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
 }
-SystemResult SpawnsSparkAndSeat(Spawn<Bundle<Spark, Seat>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsSparkAndSeat(Spawn<Bundle<Spark, Seat>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Spark{4}, Seat{5});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
 }
-SystemResult SpawnsEmberWritesLedger(Spawn<Bundle<Ember>> spawn, ResMut<Ledger> ledger, CurrentTick tick) {
+SystemResult SpawnsEmberWritesLedger(Spawn<Bundle<Ember>> spawn, ResMut<Ledger> ledger, Res<WorldTest::TickCount> tick) {
     (void)ledger;
-    if (tick.Tick() != 1) return Ok();
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Ember{5});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
@@ -1008,11 +1010,12 @@ TEST_CASE("initial value: a component the System writes itself gets no funnel no
 }
 
 TEST_CASE("initial value: a resource with the id of a filled component gets no funnel note") {
-    // ResourceId: KernelSettings 0, Allotter 1, Ledger 2. ComponentId: Seat 0, SeatInput 1, Spark 2.
+    // ResourceId: KernelSettings 0, Allotter 1, Ledger 2 (TickCount after it). ComponentId: Seat 0, SeatInput 1, Spark 2.
     const auto build = [](Rollback ledger) {
         return KernelTest::Finish({{"test", [ledger](Registrar& r) {
-            SeatData(r, Rollback::No, true);
+            SeatData(r, Rollback::No, true, false);
             r.Resource<Ledger>({.name = "Ledger", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = ledger});
+            r.Resource<WorldTest::TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
             r.InitialValue<Spark, &SparkFromEmber>();
             r.AddSystem<&SpawnsEmberWritesLedger>(Simulation("SpawnsEmberWritesLedger"));
         }}});
@@ -1129,6 +1132,7 @@ TEST_CASE("initial value: an ingress System fills role=Input data from its role=
     const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
         r.Component<SeatInput>({.name = "SeatInput", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .role = Role::Input});
         r.Component<Seat>({.name = "Seat", .zone = Zone::C, .role = Role::Input});
+        r.Resource<WorldTest::TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
         r.Schedule(KernelTest::FixedSchedule(false));
         r.InitialValue<Seat, &SeatFromInput>();
         r.AddSystem<&IngressAsksForSeat>(Ingress("IngressAsksForSeat"));
@@ -1138,8 +1142,8 @@ TEST_CASE("initial value: an ingress System fills role=Input data from its role=
 
 namespace {
 
-SystemResult RemovesSpark(CommandsFor<Inserts<>, Removes<Spark>> commands, CurrentTick tick) {
-    if (tick.Tick() == 2) commands.Remove<Spark>(7);
+SystemResult RemovesSpark(CommandsFor<Inserts<>, Removes<Spark>> commands, Res<WorldTest::TickCount> tick) {
+    if (tick->value == 2) commands.Remove<Spark>(7);
     return Ok();
 }
 // "Use the request, then take it away": a zone C hook on the filled component removes the request.
@@ -1147,9 +1151,9 @@ SystemResult SeatAddedRemovesSpark(HookCtx ctx, CommandsFor<Inserts<>, Removes<S
     commands.Remove<Spark>(ctx.Entity());
     return Ok();
 }
-SystemResult SpawnsSparkWritesSeat(Spawn<Bundle<Spark>> spawn, Query<Write<Seat>> seats, CurrentTick tick) {
+SystemResult SpawnsSparkWritesSeat(Spawn<Bundle<Spark>> spawn, Query<Write<Seat>> seats, Res<WorldTest::TickCount> tick) {
     seats.ForEach([](EntityId, Mut<Seat> seat) { seat->s += 1; });
-    if (tick.Tick() != 1) return Ok();
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Spark{4});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
@@ -1189,8 +1193,8 @@ TEST_CASE("initial value: a chain goes on through a component the System also wr
 
 namespace {
 
-SystemResult SpawnsEmberAndSpark(Spawn<Bundle<Ember, Spark>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsEmberAndSpark(Spawn<Bundle<Ember, Spark>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(Ember{5}, Spark{4});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();
@@ -1230,8 +1234,8 @@ namespace {
 
 Mass MassFromRequest(const BodyAt& request) { return Mass{request.x}; }
 
-SystemResult SpawnsRequestAndCrate(Spawn<Bundle<BodyAt, Crate>> spawn, CurrentTick tick) {
-    if (tick.Tick() != 1) return Ok();
+SystemResult SpawnsRequestAndCrate(Spawn<Bundle<BodyAt, Crate>> spawn, Res<WorldTest::TickCount> tick) {
+    if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3}, Crate{1});
     if (!made) return Engine::Base::Err(std::move(made).error());
     return Ok();

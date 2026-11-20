@@ -109,7 +109,7 @@
 | [DI-KS 7](kernel.zh-Hant.md#di-ks-7) | (c) 預設 Serial；Parallel 要逐位元守衛 | 新 |
 | [DI-KS 8](kernel.zh-Hant.md#di-ks-8) | 區規則 Z1～Z8 是啟動檢查 | 相容：legacy determinism DI 1、DI 4 |
 | [DI-KS 9](kernel.zh-Hant.md#di-ks-9) | 結構變更延後，在同步點（與最後一個同步點之後的 hook 清空輪）依固定順序套用 | 相容（措辭更新）：entity-store DI 4；entity-model E-12 |
-| [DI-KS 10](kernel.zh-Hant.md#di-ks-10) | 事件無游標、不跨 clock domain | 新 |
+| [DI-KS 10](kernel.zh-Hant.md#di-ks-10) | 事件兩種（保留式 `Message` 照游標、推送式 `Event`＋`Observer`），都不看時鐘（2026-11-20 改寫，`v8-arch-gyo2-time-events`） | 新 |
 | [DI-KS 11](kernel.zh-Hant.md#di-ks-11) | hook 只有 OnAdd 與 OnRemove | 新 |
 | [DI-KS 12](kernel.zh-Hant.md#di-ks-12) | 回滾所需的狀態全在 World，固定步可重入 | 新 |
 | [DI-KS 13](kernel.zh-Hant.md#di-ks-13) | 渲染只經 Extract 唯讀來源 World，無反饋 | 新（legacy preview DI 4 的目標條文在 runtime-composition §3b，不是這一條） |
@@ -147,12 +147,12 @@
 - [kernel.zh-Hant.md](kernel.zh-Hant.md)：**先讀**。Kernel（`engine/kernel`）的 Design Invariants（DI-KS 1～15）與 Replacement Criteria（RC 1～13）全文；每條有錨點，部件頁連到單一條款。
 - [system-contract.zh-Hant.md](system-contract.zh-Hant.md)：System 契約（描述從簽名推出、回 `Result<void, KernelError>`、無狀態）。
 - [error-handling.md](error-handling.md)：錯誤處理的擴充列（以執行期資料偵測的 Programmer Error：Result 帶上下文、Executor 記錄一次並 Interrupted、不靜默）。英文，因為最終併入的 `docs/architecture/error-handling.md` 是英文。
-- [determinism.md](determinism.md)：決定性（區是宣告的契約、(c) 的時間只來自 domain tick 與被記錄的 boundary 輸入、亂數是每實體元件、四處契約）。英文，因為最終併入的 `docs/architecture/determinism.md` 是英文。
+- [determinism.md](determinism.md)：決定性（區是宣告的契約、(c) 的時間只來自 tick 與被記錄的 boundary 輸入——tick 在時間 Module、第 4 批之前 (c) 讀不到、亂數是每實體元件、四處契約）。英文，因為最終併入的 `docs/architecture/determinism.md` 是英文。
 - [assets.zh-Hant.md](assets.zh-Hant.md)：資產（不選 World、照 Bevy 拆成請求狀態／`Assets<T>`／GPU 資源；載入是外部服務；內容身分 (c)；命名待辦）。
 - [naming.zh-Hant.md](naming.zh-Hant.md)：命名規範五條（歸屬＝namespace 與目錄、分類＝詞性、World＝前綴、區＝位置、禁止舊角色後綴）。
 - [limits.zh-Hant.md](limits.zh-Hant.md)：**限制與修改條件**（使用者 2026-11-11 要求的集中頁；LIM-1～LIM-6；最終位置 `docs/architecture/limits.zh-Hant.md`，逐條搬）。
 - [runtime-composition.zh-Hant.md](runtime-composition.zh-Hant.md)：Runtime 的組合（Client 的 Frame 與 Render World 分開、Extract 唯讀無反饋、一 World 一執行緒、Match 的 Join／Leave 在 tick 內）。
 - [scheduler.zh-Hant.md](scheduler.zh-Hant.md)：Scheduler（衝突邊與順序邊、歧義處置、(b) 讀 (c) 的顯式順序）。
-- [world.zh-Hant.md](world.zh-Hant.md)：World（鍵格式與配發策略、change stamp、寫入政策預設獨占與資料路徑、結構變更的套用順序與 Despawn、事件只在 clock schedule 內；其餘待規格核准）。
+- [world.zh-Hant.md](world.zh-Hant.md)：World（鍵格式與配發策略、change stamp、寫入政策預設獨占與資料路徑、結構變更的套用順序與 Despawn、事件不屬於任何時鐘；其餘待規格核准）。
 
 規則（使用者 2026-11-11）：spec K.3 的**每一項**決定都要寫進對應的部件文件（Design Invariants 或資料路徑），不只改 spec 的 K.3 與對應節。

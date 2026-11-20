@@ -28,20 +28,17 @@ namespace {
 
 using namespace WorldTest;
 
-// ---- Schedules: Frame (Frame clock, ingress stage In), Tick (Fixed clock, WorldTest's),
-// Step and Deep (Fixed, no clock), Extract (an extract schedule).
+// ---- Schedules: Frame (ingress stage In), Tick (WorldTest's), Step and Deep, Extract (an extract schedule).
 
-ScheduleOptions Schedule(std::string name, Domain domain, bool clock, std::vector<std::string> stages) {
+ScheduleOptions Schedule(std::string name, std::vector<std::string> stages) {
     ScheduleOptions s;
     s.name = std::move(name);
-    s.domain = domain;
-    s.clock = clock;
     s.stages = std::move(stages);
     return s;
 }
 
 ScheduleOptions FrameSchedule() {
-    ScheduleOptions s = Schedule("Frame", Domain::Frame, true, {"In", "Drive", "Out"});
+    ScheduleOptions s = Schedule("Frame", {"In", "Drive", "Out"});
     s.ingressStage = "In";
     return s;
 }
@@ -50,8 +47,8 @@ ScheduleOptions FrameSchedule() {
 void Nest(Registrar& r, bool allotter = false) {
     Data(r, allotter);
     r.Schedule(FrameSchedule());
-    r.Schedule(Schedule("Step", Domain::Fixed, false, {"S"}));
-    r.Schedule(Schedule("Deep", Domain::Fixed, false, {"D"}));
+    r.Schedule(Schedule("Step", {"S"}));
+    r.Schedule(Schedule("Deep", {"D"}));
 }
 
 SystemOptions In(std::string name, std::string schedule, std::string stage, Zone zone = Zone::B,
@@ -104,8 +101,11 @@ std::unique_ptr<Rig> NestRig(std::function<void(Registrar&)> build, bool verific
 
 // ---- Systems
 
-SystemResult LogCall(Query<Read<Tag>>) {
-    Log().push_back(Here() + "#" + std::to_string(Current().tick));
+// "#n": the n-th run of this mount (its own Local; the kernel's domain tick left with the clock,
+// v8-arch-gyo2-clock-out-of-kernel: a nested run cannot be counted from outside the outer Run).
+SystemResult LogCall(Query<Read<Tag>>, Local<std::uint64_t> runs) {
+    ++*runs;
+    Log().push_back(Here() + "#" + std::to_string(*runs));
     return Ok();
 }
 
@@ -145,7 +145,8 @@ SystemResult Throws(Query<Read<Tag>>) {
 
 // ---- J-56: running k times, and back in the outer schedule
 
-TEST_CASE("J-56: an exclusive System runs a clock schedule 3 times: its Systems run 3 times, its tick advances 3") {
+// The tick part ([ns-run-k-tick]) moved to the time Module's tests (G5: RunOneFixedStep advances Tick).
+TEST_CASE("J-56: an exclusive System runs a schedule 3 times: its Systems run 3 times") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
@@ -156,7 +157,6 @@ TEST_CASE("J-56: an exclusive System runs a clock schedule 3 times: its Systems 
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
     CHECK_MESSAGE(Joined() == "drive Driver@Frame | InA@Tick#1 | InA@Tick#2 | InA@Tick#3 | driven Driver@Frame | After@Frame#1",
                   "[ns-run-k] " << Joined());
-    CHECK_MESSAGE(rig->world().Tick(Domain::Fixed) == 3, "[ns-run-k-tick] " << rig->world().Tick(Domain::Fixed));
     CHECK_MESSAGE(rig->world().State() == WorldState::Ready, "[ns-back-ready]");
 }
 
@@ -473,15 +473,18 @@ SystemResult TamperModeInside(Query<Read<Tag>>) {
     return Ok();
 }
 // ExclusiveWorld declares every component and resource value (DI-KS 1), but not
-// the event buffers: a write there that does not go through an EventWriter is
+// the event buffers: a write there that does not go through an MessageWriter is
 // what layer 2 still reports for an exclusive System.
-Detail::EventBuffer<Ping>& PingBuffer(World& world) {
-    return static_cast<Detail::EventBuffer<Ping>&>(Detail::EventsAt(world, Detail::EventIdOf(world, KeyOf<Ping>())));
+Detail::MessageBuffer<Ping>& PingBuffer(World& world) {
+    return static_cast<Detail::MessageBuffer<Ping>&>(Detail::MessagesAt(world, Detail::MessageIdOf(world, KeyOf<Ping>())));
 }
-SystemResult SendsPing(EventWriter<Ping> pings) {
+SystemResult SendsPing(MessageWriter<Ping> pings) {
     pings.Send(Ping{1});
     return Ok();
 }
+// Runs before SendsPing and reads nothing: it holds the Ping past the Run's end
+// trim (v8-arch-gyo2-time-events step 3), so a record is there to tamper with.
+SystemResult HoldsPings(MessageReader<Ping>) { return Ok(); }
 SystemResult TamperPingThenDrive(ExclusiveWorld<> world) {
     PingBuffer(*Current().world).records.back().payload.n = 98;
     if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
@@ -529,21 +532,23 @@ TEST_CASE("J-56: verification on: a forbidden write before the nested run is the
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&TamperPingThenDrive>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&HoldsPings>(In("HoldsPings", "Tick", "A", Zone::B, {"SendsPing"}));
         r.AddSystem<&SendsPing>(In("SendsPing", "Tick", "A"));
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
-    KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));  // one Ping record of tick 1
+    KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));  // one Ping record, held by HoldsPings
+    REQUIRE(rig->world().MessagePayloads<Ping>().size() == 1);
     Log().clear();
     const auto result = rig->Run("Frame");
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "[ns-ver-before] the write before the nested run was not reported");
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::BoundaryChange), "[ns-ver-before] " << result.error().Text());
     CHECK_MESSAGE(result.error().Text().find("'Driver'") != std::string::npos, "[ns-ver-before] " << result.error().Text());
-    CHECK_MESSAGE(result.error().Text().find("event Ping") != std::string::npos, "[ns-ver-before] " << result.error().Text());
+    CHECK_MESSAGE(result.error().Text().find("message Ping") != std::string::npos, "[ns-ver-before] " << result.error().Text());
     CHECK_MESSAGE(!Logged("InA@Tick#2"), "[ns-ver-before-not-run] the inner schedule ran: " << Joined());
     CHECK(rig->recorded.size() == 1);
 }
 
-TEST_CASE("J-56: verification on: a write of an event buffer behind EventWriter after a nested run is reported at the boundary") {
+TEST_CASE("J-56: verification on: a write of an event buffer behind MessageWriter after a nested run is reported at the boundary") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&DriveThenTamperPing>(In("Driver", "Frame", "Drive"));
@@ -552,7 +557,7 @@ TEST_CASE("J-56: verification on: a write of an event buffer behind EventWriter 
     });
     const auto result = rig->Run("Frame");
     CHECK_MESSAGE(HasCode(result, KernelErrorCode::BoundaryChange), "[ns-ver-address-after] " << Text(result));
-    CHECK_MESSAGE(Text(result).find("event Ping") != std::string::npos, "[ns-ver-address-after] " << Text(result));
+    CHECK_MESSAGE(Text(result).find("message Ping") != std::string::npos, "[ns-ver-address-after] " << Text(result));
     CHECK(Logged("InA@Tick#1"));
 }
 
@@ -788,7 +793,7 @@ void SwallowRig(Registrar& r) {
     r.AddSystem<&DriveSwallow>(In("Driver", "Frame", "Drive"));
     r.AddSystem<&Fails>(In("Fails", "Step", "S"));
     r.AddSystem<&LogCall>(In("After", "Frame", "Out"));
-    ScheduleOptions extract = Schedule("Extract", Domain::Frame, false, {"E"});
+    ScheduleOptions extract = Schedule("Extract", {"E"});
     extract.extract = true;
     r.Schedule(extract);
 }
@@ -880,13 +885,37 @@ SystemResult HookLogsHere(HookCtx) {
     Log().push_back("hook " + Here());
     return Ok();
 }
-SystemResult SendPing(EventWriter<Ping> writer, CurrentTick tick) {
-    writer.Send(Ping{static_cast<std::uint32_t>(tick.Tick())});
+// Sends the number of its own run (Local; in place of the domain tick).
+SystemResult SendPing(MessageWriter<Ping> writer, Local<std::uint64_t> runs) {
+    ++*runs;
+    writer.Send(Ping{static_cast<std::uint32_t>(*runs)});
+    return Ok();
+}
+SystemResult ReadPingsInner(MessageReader<Ping> pings) {
+    static_cast<void>(pings.Read());
+    return Ok();
+}
+bool FlagIsOn(Res<Flag> flag) { return flag->on != 0; }
+SystemResult LatePingReader(MessageReader<Ping> pings) {
+    std::string line = "late:";
+    for (const Ping* ping : pings.Read()) line += " " + std::to_string(ping->n);
+    Log().push_back(line);
+    return Ok();
+}
+// Runs Tick twice, sets Flag, runs Tick once more.
+SystemResult DriveTwiceThenFlag(ExclusiveWorld<> world) {
+    for (int run = 0; run < 3; ++run) {
+        if (run == 2) {
+            if (auto set = world.SetResource(Flag{1}); !set) return Engine::Base::Err(std::move(set).error());
+        }
+        if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    }
     return Ok();
 }
 } // namespace
 
-TEST_CASE("J-56: two levels: A runs B, B's exclusive System runs C; order and ticks") {
+// The ticks of the two levels moved to the time Module's tests (G5: nested fixed steps advance Tick by k).
+TEST_CASE("J-56: two levels: A runs B, B's exclusive System runs C; order") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
@@ -899,8 +928,6 @@ TEST_CASE("J-56: two levels: A runs B, B's exclusive System runs C; order and ti
     CHECK_MESSAGE(Joined() == "drive Driver@Frame | InA@Tick#1 | step driver back Driver2@Step | InA@Tick#2 | step driver back Driver2@Step | "
                               "driven Driver@Frame | After@Frame#1",
                   "[ns-two-levels] " << Joined());
-    CHECK(rig->world().Tick(Domain::Fixed) == 2);
-    CHECK(rig->world().Tick(Domain::Frame) == 1);
 }
 
 TEST_CASE("J-56: the inner schedule's hooks run, and their records are applied when it ends") {
@@ -916,16 +943,24 @@ TEST_CASE("J-56: the inner schedule's hooks run, and their records are applied w
     CHECK_MESSAGE(Logged("90 has Tag 90"), "[ns-hook-inner] " << Joined());
 }
 
-TEST_CASE("J-56: events written inside are trimmed by the inner clock schedule's ticks") {
+// Rewritten by v8-arch-gyo2-time-events step 3 (G3): a nested run does not
+// trim; the trim runs when the outermost Run ends. The late reader runs first in
+// the third inner run and reads from the oldest record kept: every Ping the
+// inner runs wrote, though the other inner reader had read them.
+TEST_CASE("J-56: messages written inside are not trimmed when a nested run ends, only when the outermost Run ends") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
-        r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&DriveTwiceThenFlag>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&SendPing>(In("Ping", "Tick", "A"));
+        r.AddSystem<&ReadPingsInner>(In("ReadPingsInner", "Tick", "B"));
+        SystemOptions late = In("LatePingReader", "Tick", "C");
+        late.mounts[0].conditions = {Condition<&FlagIsOn>("FlagIsOn")};
+        r.AddSystem<&LatePingReader>(std::move(late));
     });
-    Runs()["Driver"] = {"Tick", "Tick", "Tick"};
+    rig->world().SetResource(Flag{0});
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
-    const std::vector<Ping> pings = rig->world().EventPayloads<Ping>();
-    CHECK_MESSAGE((pings.size() == 1 && pings[0].n == 3), "[ns-events] " << pings.size());
+    CHECK_MESSAGE(Joined() == "late: 1 2 3", "[ns-events] " << Joined());
+    CHECK_MESSAGE(rig->world().MessagePayloads<Ping>().empty(), "[ns-events-outermost] " << rig->world().MessagePayloads<Ping>().size());
 }
 
 // ---- J-57: closures
@@ -1311,7 +1346,7 @@ SystemResult CatchAndReturnOk(ExclusiveWorld<> world) {
 }
 // Sends a Ping (an event buffer, which the outer exclusive System does not
 // declare: DI-KS 1 leaves events out) and throws before its boundary comparison.
-SystemResult SendsPingThenThrows(EventWriter<Ping> pings) {
+SystemResult SendsPingThenThrows(MessageWriter<Ping> pings) {
     pings.Send(Ping{55});
     throw std::runtime_error("thrown after an event write");
 }

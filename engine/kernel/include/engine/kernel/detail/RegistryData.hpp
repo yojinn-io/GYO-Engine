@@ -24,8 +24,9 @@ inline constexpr const char* kDiagnosticsEffect = "Diagnostics";
 enum class TypeRole : std::uint8_t {
     Component,
     Resource,
-    Event,
+    Message,
     SetTag,
+    Event,
 };
 
 struct TypeEntry {
@@ -77,7 +78,6 @@ struct SystemRecord {
     // Filled at every BuildPlans (cleared first).
     AccessSet access;
     std::vector<EffectId> effects;
-    bool domainTick = false;
     // Registrar::RemoveSystem: a tombstone. seq stays its index in systems (the
     // Scheduler, the Plans and the Executor index by it); never resolved,
     // checked, planned or hashed.
@@ -95,6 +95,24 @@ struct HookRecord {
     std::uint32_t owner;
     // Filled at finish.
     std::optional<ComponentId> componentId;
+    AccessSet access;
+};
+
+// One observer (Registrar::Observer; event cursor declaration 3.3).
+struct ObserverRecord {
+    std::string name;
+    Zone zone;
+    ObserverTrigger trigger;
+    // The observer's E (On<E>'s key) and what it names: the event type, or the
+    // component of Add<T> / Remove<T>.
+    TypeKey event;
+    TypeKey observed;
+    ResolveFn resolve;
+    RunFn run;
+    std::source_location source;
+    std::uint32_t owner;
+    // Filled at finish: the event type id or component id, and the access set.
+    std::optional<std::uint32_t> observedId;
     AccessSet access;
 };
 
@@ -119,6 +137,7 @@ struct RoundBase {
     std::size_t schedules = 0;
     std::size_t systems = 0;
     std::size_t hooks = 0;
+    std::size_t observers = 0;
     std::size_t initialValues = 0;
     std::size_t allotterDeclarations = 0;
     std::uint32_t digestMarks = 0;
@@ -138,6 +157,7 @@ struct RegistryData {
     std::vector<TypeEntry> types;
     std::vector<ColumnInfo> components;
     std::vector<ResourceInfo> resources;
+    std::vector<MessageInfo> messages;
     std::vector<EventInfo> events;
     std::vector<EffectRecord> effects;
     std::vector<NamedSetRecord> namedSets;
@@ -145,13 +165,14 @@ struct RegistryData {
     std::vector<SetRecord> sets;
     std::vector<SystemRecord> systems;
     std::vector<HookRecord> hooks;
+    std::vector<ObserverRecord> observers;
     // After finish: (requestId, targetId) ascending, the order the World applies them in.
     std::vector<InitialValueRecord> initialValues;
     // The World's storage factories, one per component, resource and event id
     // (Detail/Storage.hpp); the World is made from them (World.cpp).
     std::vector<MakeColumnFn> columnMakers;
     std::vector<MakeResourceFn> resourceMakers;
-    std::vector<MakeEventsFn> eventMakers;
+    std::vector<MakeMessagesFn> messageMakers;
     std::vector<TypeKey> allotterDeclarations;
     std::vector<AllotterOps> allotterDeclarationOps;
     AllotterOps allotterOps;
@@ -188,6 +209,11 @@ struct RegistryData {
     std::vector<TieBreak> ties;
     std::vector<SystemInfo> systemInfos;
     std::vector<HookInfo> hookInfos;
+    std::vector<ObserverInfo> observerInfos;
+    // Every observer index in the order the observers of one trigger run: by
+    // name (unique), so the same registrations give the same order and an
+    // order of registration gives none (event cursor declaration 3.3).
+    std::vector<std::uint32_t> observerOrder;
     std::vector<InitialValueInfo> initialValueInfos;
     std::vector<ScheduleInfo> scheduleInfos;
     std::vector<SetInfo> setInfos;
@@ -215,7 +241,6 @@ struct RegistryData {
 };
 
 [[nodiscard]] std::string SourceText(const std::source_location& source);
-[[nodiscard]] const char* DomainName(Domain domain) noexcept;
 [[nodiscard]] const char* ZoneName(Zone zone) noexcept;
 
 // Scheduler.cpp: builds every schedule's Plan into data.plans and its resolved

@@ -29,8 +29,6 @@ void BuildProbe(Registrar& r) {
     r.Resource<Bound>({.name = "Bound", .zone = Zone::B, .threadBound = true});
     ScheduleOptions s;
     s.name = "Tick";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     s.stages = {"A"};
     r.Schedule(s);
 }

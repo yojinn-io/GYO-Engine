@@ -20,7 +20,7 @@ SystemResult FilterPos(Query<Read<TestPos>, With<TestMarker>, Without<TestMode>>
 SystemResult WatchVel(Query<Read<TestPos>, Changed<TestVel>>) { return Ok(); }
 SystemResult WatchAdded(Query<Read<TestMode>, Added<TestMarker>>) { return Ok(); }
 SystemResult UseResources(Res<TestRes>, ResMut<TestOtherRes>) { return Ok(); }
-SystemResult UseEvents(EventReader<TestEvent>, EventWriter<TestOtherEvent>) { return Ok(); }
+SystemResult UseEvents(MessageReader<TestEvent>, MessageWriter<TestOtherEvent>) { return Ok(); }
 SystemResult UseCommands(Commands, CommandsFor<Inserts<TestHealth>, Removes<TestMarker>>) { return Ok(); }
 SystemResult SpawnBodies(Spawn<Bundle<TestPos, TestVel>>) { return Ok(); }
 SystemResult SpawnGiven(SpawnWithId<Bundle<TestHealth>>) { return Ok(); }
@@ -28,7 +28,6 @@ SystemResult RemoveBodies(Despawn) { return Ok(); }
 SystemResult ReadReplicated(SetRead<ReplicatedSet>) { return Ok(); }
 SystemResult KeepCount(Local<std::int32_t>, Query<Read<TestMode>>) { return Ok(); }
 SystemResult EditWorld(ExclusiveWorld<>) { return Ok(); }
-SystemResult StampTick(CurrentTick, Query<Write<TestHealth>>) { return Ok(); }
 SystemResult TraceVel(DiagnosticsWriter<TestRecord>, Query<Read<TestVel>>) { return Ok(); }
 SystemResult ExtractPos(Extract<Read<TestPos>>, ExtractRes<TestRes>, Query<Write<TestMarker>>) { return Ok(); }
 SystemResult NoParameters() noexcept { return Ok(); }
@@ -51,7 +50,7 @@ SystemResult WritesTwice(Query<Write<TestPos>>, Query<Write<TestPos>>) { return 
 SystemResult ReadsAndWrites(Query<Read<TestPos>, Write<TestPos>>) { return Ok(); }
 SystemResult ReadsAndWritesAcross(Query<Read<TestPos>>, Query<Write<TestPos>>) { return Ok(); }
 SystemResult ResBoth(Res<TestRes>, ResMut<TestRes>) { return Ok(); }
-SystemResult EventBoth(EventReader<TestEvent>, EventWriter<TestEvent>) { return Ok(); }
+SystemResult EventBoth(MessageReader<TestEvent>, MessageWriter<TestEvent>) { return Ok(); }
 SystemResult ReadsTwice(Query<Read<TestPos>>, Query<Read<TestPos>, Read<TestVel>>) { return Ok(); }
 SystemResult WorldAndMore(ExclusiveWorld<>, Res<TestRes>) { return Ok(); }
 using R = Res<TestRes>;
@@ -61,7 +60,7 @@ bool ConditionWrites(Query<Write<TestPos>>) { return true; }
 bool ConditionResMut(ResMut<TestRes>) { return true; }
 bool ConditionLocal(Local<int>) { return true; }
 int ConditionInt(Res<TestRes>) { return 0; }
-bool ConditionReads(Res<TestRes>, Query<Read<TestPos>>, CurrentTick) { return true; }
+bool ConditionReads(Res<TestRes>, Query<Read<TestPos>>) { return true; }
 
 template <class P>
 using C = typename ParamTraits<P>::Contribution;
@@ -159,8 +158,8 @@ TEST_CASE("J-12: every parameter type's Contribution equals the hand-written exp
                           TypeList<ComponentRead<TestMode>, ChangeFilter<TestMarker>>>);
     CHECK(SameSet<C<Res<TestRes>>, TypeList<ResourceRead<TestRes>>>);
     CHECK(SameSet<C<ResMut<TestRes>>, TypeList<ResourceWrite<TestRes>>>);
-    CHECK(SameSet<C<EventReader<TestEvent>>, TypeList<EventRead<TestEvent>>>);
-    CHECK(SameSet<C<EventWriter<TestEvent>>, TypeList<EventWrite<TestEvent>>>);
+    CHECK(SameSet<C<MessageReader<TestEvent>>, TypeList<MessageRead<TestEvent>>>);
+    CHECK(SameSet<C<MessageWriter<TestEvent>>, TypeList<MessageWrite<TestEvent>>>);
     CHECK(SameSet<C<Commands>, TypeList<UntypedCommands>>);
     CHECK(SameSet<C<CommandsFor<Inserts<TestHealth>, Removes<TestMarker>>>,
                           TypeList<DeferredInsert<TestHealth>, DeferredWrite<TestMarker>>>);
@@ -171,7 +170,6 @@ TEST_CASE("J-12: every parameter type's Contribution equals the hand-written exp
     CHECK(SameSet<C<SetRead<ReplicatedSet>>, TypeList<SetReadOf<ReplicatedSet>>>);
     CHECK(SameSet<C<Local<std::int32_t>>, TypeList<LocalState<std::int32_t>>>);
     CHECK(SameSet<C<ExclusiveWorld<>>, TypeList<WholeWorld>>);
-    CHECK(SameSet<C<CurrentTick>, TypeList<DomainTickRead>>);
     CHECK(SameSet<C<DiagnosticsWriter<TestRecord>>, TypeList<Access::Diagnostics<TestRecord>>>);
     CHECK(SameSet<C<Extract<Read<TestPos>>>, TypeList<ExtractComponentRead<TestPos>>>);
     CHECK(SameSet<C<ExtractRes<TestRes>>, TypeList<ExtractResourceRead<TestRes>>>);
@@ -209,8 +207,6 @@ Built SourceWorld() {
                         r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C});
                         ScheduleOptions s;
                         s.name = "Main";
-                        s.domain = Domain::Fixed;
-                        s.clock = true;
                         s.stages = {"Run"};
                         r.Schedule(s);
                     }}});
@@ -227,8 +223,8 @@ void RegisterJ12Data(Registrar& r) {
     r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 2
     r.Resource<TestAllotter>({.name = "TestAllotter", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 3
     r.Allotter<TestAllotter>();
-    r.Event<TestEvent>({.name = "TestEvent", .zone = Zone::B, .domain = Domain::Frame});       // 0
-    r.Event<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::B, .domain = Domain::Frame});  // 1
+    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::B});       // 0
+    r.Message<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::B});  // 1
     r.NamedSet<ReplicatedSet>("Replicated");
     r.AddToSet<ReplicatedSet, TestPos>();
     r.AddToSet<ReplicatedSet, TestHealth>();
@@ -236,15 +232,8 @@ void RegisterJ12Data(Registrar& r) {
     update.stages = {"S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13", "S14",
                      "S15", "S16", "S17", "S18", "S19"};
     r.Schedule(update);
-    ScheduleOptions loading;
-    loading.name = "Load";
-    loading.domain = Domain::Loading;
-    loading.clock = true;
-    loading.stages = {"Batch"};
-    r.Schedule(loading);
     ScheduleOptions extract;
     extract.name = "Extract";
-    extract.domain = Domain::Frame;
     extract.extract = true;
     extract.stages = {"Copy"};
     r.Schedule(extract);
@@ -252,8 +241,7 @@ void RegisterJ12Data(Registrar& r) {
 
 AccessKey Comp(std::uint32_t id) { return {AccessKind::Component, id}; }
 AccessKey Resrc(std::uint32_t id) { return {AccessKind::Resource, id}; }
-AccessKey Evt(std::uint32_t id) { return {AccessKind::Event, id}; }
-AccessKey Tick(Domain d) { return {AccessKind::DomainTick, static_cast<std::uint32_t>(d)}; }
+AccessKey Evt(std::uint32_t id) { return {AccessKind::Message, id}; }
 
 } // namespace
 
@@ -278,7 +266,6 @@ TEST_CASE("J-12: every signature's access set in ids equals the hand-written exp
         r.AddSystem<&ReadReplicated>(Sys("ReadReplicated", Zone::B, at()));
         r.AddSystem<&KeepCount>(Sys("KeepCount", Zone::B, at()));
         r.AddSystem<&EditWorld>(Sys("EditWorld", Zone::B, at()));
-        r.AddSystem<&StampTick>(Sys("StampTick", Zone::B, {At("Update", "S" + std::to_string(stage++)), At("Load", "Batch")}));
         r.AddSystem<&TraceVel>(Sys("TraceVel", Zone::B, at()));
         r.AddSystem<&ExtractPos>(Sys("ExtractPos", Zone::B, {At("Extract", "Copy")}));
         r.AddSystem<&NoParameters>(Sys("NoParameters", Zone::B, at()));
@@ -334,8 +321,6 @@ TEST_CASE("J-12: every signature's access set in ids equals the hand-written exp
     CHECK(access("KeepCount").reads == Keys{Comp(3)});
     CHECK(access("EditWorld").exclusive);
     CHECK(access("EditWorld").reads.empty());
-    CHECK(access("StampTick").reads == Keys{Tick(Domain::Frame), Tick(Domain::Loading)});
-    CHECK(access("StampTick").writes == Keys{Comp(4)});
     CHECK(access("TraceVel").diagnostics);
     CHECK(access("TraceVel").reads == Keys{Comp(1)});
     CHECK(access("ExtractPos").extractReads == Keys{Comp(0), Resrc(1)});

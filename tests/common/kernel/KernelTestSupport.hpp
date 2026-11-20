@@ -65,13 +65,11 @@ inline Engine::Base::Result<void, StartupReport> RegisterAll(
     return registry.BuildPlans();
 }
 
-// Schedules most tests use: a Frame clock schedule and a Fixed clock schedule
+// Schedules most tests use: a frame schedule (Update) and a fixed-step schedule (FixedUpdate)
 // with an ingress stage and rollback.
 inline ScheduleOptions UpdateSchedule() {
     ScheduleOptions s;
     s.name = "Update";
-    s.domain = Domain::Frame;
-    s.clock = true;
     s.stages = {"First", "Second"};
     return s;
 }
@@ -79,8 +77,6 @@ inline ScheduleOptions UpdateSchedule() {
 inline ScheduleOptions FixedSchedule(bool rollback = false) {
     ScheduleOptions s;
     s.name = "FixedUpdate";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     s.rollbackEnabled = rollback;
     s.stages = {"Ingress", "Simulate", "Present"};
     s.ingressStage = "Ingress";
@@ -112,8 +108,8 @@ inline void RegisterCommonData(Registrar& r) {
     r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<TestMode>({.name = "TestMode", .zone = Zone::B});
-    r.Event<TestEvent>({.name = "TestEvent", .zone = Zone::C, .domain = Domain::Fixed});
-    r.Event<TestFrameEvent>({.name = "TestFrameEvent", .zone = Zone::B, .domain = Domain::Frame});
+    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C});
+    r.Message<TestFrameEvent>({.name = "TestFrameEvent", .zone = Zone::B});
     r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
 }

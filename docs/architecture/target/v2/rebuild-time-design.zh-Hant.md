@@ -544,12 +544,12 @@ Module `runner`：
 - DI 2：`RealTime`、`VirtualTime`、`FixedTime` 各只有一個寫者，都是 Engine 的 System（既有的獨占寫入檢查就是守衛）；runner 只寫取樣的時間點。
 - DI 3：runner 不排 System 的順序，只呼叫「跑一張 schedule」與交換函式。
 - DI 4：取樣與等待都經可注入的零件。
-- DI 5（只對有固定步的 World）：`VirtualTime` 前進的量等於固定步前進的量加上餘數的變化；超過上限的只在一處扣，而且扣整步。
+- DI 5（只對有固定步的 World）：`VirtualTime` 前進的量等於固定步前進的量加上餘數的變化；超過上限的只在一處扣，而且扣整步。（2026-11-20 改寫，`v8-arch-gyo2-time-events`、`v8-arch-gyo2-t1-closed-by-time-events`：那一處是純函式 `AdvanceVirtual`（`engine/world_time`），不是「時間的 System」自己算；定稿在 [world-time](world-time.zh-Hant.md) 的型別 2。）
 - Replacement Criteria：(a) 某個產品的迴圈用這些零件拼不出來；(b) 交換函式要知道別的交換函式的內部狀態才能正確；(c) 時間的 Resource 需要第二個寫者；(d) 「獨占的 System 跑一張 schedule」讓 Kernel 的同步點、存取驗證或出錯處置出現修不完的特例——那時重新比較決定 1 的 A、C。
 
 Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者恰好一次；保留有上限，超過的處置在登記時指定，丟棄一定有記錄；可回滾的 schedule 不參與跨時鐘、不用游標；游標的序號不回滾。
 
-`TickAccumulator`（加進 `time.md`）：整數；不記 tick；不讀時間基準；不丟時間（扣整步是時間的 System 的事）。
+`TickAccumulator`（~~加進 `time.md`~~ 放 `engine/world_time`，`v8-arch-gyo2-game-time-in-world-time`）：整數；不記 tick；不讀時間基準；不丟時間（~~扣整步是時間的 System 的事~~ 扣整步只在 `AdvanceVirtual` 一處；2026-11-20 改寫，`v8-arch-gyo2-time-events`；定稿在 [world-time](world-time.zh-Hant.md) 的型別 1、2）。
 
 ---
 

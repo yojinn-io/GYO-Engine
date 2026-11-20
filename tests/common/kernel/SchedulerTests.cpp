@@ -33,8 +33,8 @@ SystemResult InsertA2(CommandsFor<Inserts<SharedA>, Removes<>>) { return Ok(); }
 SystemResult FilterA(Query<Write<SharedB>, With<SharedA>>) { return Ok(); }
 SystemResult WriteAWithB(Query<Write<SharedA>, With<SharedB>>) { return Ok(); }
 SystemResult WriteAWithoutB(Query<Write<SharedA>, Without<SharedB>>) { return Ok(); }
-SystemResult SendEvent(EventWriter<TestEvent>) { return Ok(); }
-SystemResult SendEvent2(EventWriter<TestEvent>) { return Ok(); }
+SystemResult SendEvent(MessageWriter<TestEvent>) { return Ok(); }
+SystemResult SendEvent2(MessageWriter<TestEvent>) { return Ok(); }
 SystemResult ReadB(Query<Read<SharedB>>) { return Ok(); }
 SystemResult WriteB(Query<Write<SharedB>>) { return Ok(); }
 SystemResult WriteC(Query<Write<SharedC>>) { return Ok(); }
@@ -114,7 +114,7 @@ void EventRegistry(Registrar& r) {
     r.Schedule(FixedSchedule());
     r.AddSystem<&SendEvent>(Sys("SendFirst", Zone::C, Sim({"SendSecond"})));
     r.AddSystem<&SendEvent2>(Sys("SendSecond", Zone::C, Sim()));
-    const auto reader = [](EventReader<TestEvent>) -> SystemResult { return {}; };
+    const auto reader = [](MessageReader<TestEvent>) -> SystemResult { return {}; };
     r.AddSystem<decltype(reader)>(Sys("ReadEvents", Zone::C, {At("FixedUpdate", "Present")}));
 }
 
@@ -134,14 +134,17 @@ struct Golden {
 // format 3 and the values re-taken by v8-arch-gyo2-kernel-subtract-structure (no runner or
 // affinity, threadBound and annotatedWrites hashed); Plan format 6 and Registry format 4 and the
 // values re-taken by v8-arch-gyo2-orchestration-skeleton (no startup flag; the kernel runs no
-// Startup): the judgement is unchanged.
+// Startup); Plan format 7 and Registry format 5 and the values re-taken by
+// v8-arch-gyo2-time-events step 3 (no event trim step or trim point; a message type's capacity
+// is hashed); Registry format 7 and the values re-taken by v8-arch-gyo2-time-events step 5
+// (event types and observers hashed, none here): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "6:749f0533d19e426c86d1657da91fe326c99413cdc62b84b9c3cb12dcaf767fa4",
-     "4:37315bda21bf50c82627bc66978d4791082d6aa24c085754c50a8f749cd34dc2"},
-    {"deferred", &DeferredRegistry, "6:8ae234bdbd5e638b2b72461ebd84065ee9868b8510b5b1e08fec185cc1aac672",
-     "4:dd279239c5e74909cc697731149c84f573d93ce6416c42dcff4a1910dbab1b12"},
-    {"events", &EventRegistry, "6:226d0836d1b31101bdd2a93cb4c5faa1848f7900d4eb8709bd9bd765a4e4653d",
-     "4:94626fd4b7be9488feaae97d984e464926bd36f1e9e8eb39ece3d13707ecc8f4"},
+    {"mixed", &MixedRegistry, "8:a7fb49c5c00c39463f55eb4f32eb07e8367512c7856fe5c446a999cd0b6953ed",
+     "7:995cccd19e4c856c0403c348aa09d7a5f6d31972713f2d38768074b3496122fa"},
+    {"deferred", &DeferredRegistry, "8:2f15310ca49ef932db59c66a486bf9330daa0cd971394c0f0948a3ad8d34a564",
+     "7:aab0a03a52c7205fcedeab376ff247a524942027be93d075f9ac0b30c3d95af4"},
+    {"events", &EventRegistry, "8:bc3cd4d3357645f46efcb7670ee3a51e77b4bdb3eabd81e5493b45b32b38ad1d",
+     "7:0b46e6e2d152f23e3d3389e3b2306c66d1f06b77def3f8fcb18da779e8ae8da8"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
@@ -192,8 +195,9 @@ TEST_CASE("J-20: the golden Plans' step order") {
     CHECK(PositionOf(plan, "InsertA2") < PositionOf(plan, "AfterInsert"));
     CHECK(PositionOf(plan, "AfterInsert") < PositionOf(plan, "SeeInserted"));
     CHECK(PositionOf(plan, "SeeInserted") < PositionOf(plan, "Simulate"));
-    // The clock schedule ends with its stage ends and the event trim.
-    CHECK(plan.steps.back().kind == StepKind::EventTrim);
+    // The Plan ends with its last stage end (the message trim is not a Plan step: v8-arch-gyo2-time-events step 3).
+    CHECK(plan.steps.back().kind == StepKind::SyncPoint);
+    CHECK(plan.steps.back().name == "Present");
 }
 
 // ---- J-21 (D-2)
@@ -357,8 +361,6 @@ SystemResult CountSecond(ResMut<OrderCounter>) { return Ok(); }
 ScheduleOptions OrderTick() {
     ScheduleOptions s;
     s.name = "Tick";
-    s.domain = Domain::Frame;
-    s.clock = true;
     s.stages = {"Simulate", "Present"};
     return s;
 }
@@ -366,8 +368,6 @@ ScheduleOptions OrderTick() {
 ScheduleOptions OrderStep() {
     ScheduleOptions s;
     s.name = "Step";
-    s.domain = Domain::Fixed;
-    s.clock = true;
     s.stages = {"Simulate"};
     return s;
 }
@@ -478,7 +478,6 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
     Built bOnly = FinishOne([](Registrar& r) {
         ScheduleOptions s;
         s.name = "Ui";
-        s.domain = Domain::Frame;
         s.stages = {"Draw"};
         s.executor = ExecutorKind::Parallel;
         s.parallelGuardTest = "ui.parallel_equivalence";
@@ -491,7 +490,6 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
     Built c = WithShared([](Registrar& r) {
         ScheduleOptions s;
         s.name = "FixedParallel";
-        s.domain = Domain::Fixed;
         s.stages = {"Run"};
         s.executor = ExecutorKind::Parallel;
         r.Schedule(s);
@@ -602,28 +600,11 @@ TEST_CASE("J-24: D-E9 (zone C hooks on one trigger conflict)") {
     }));
 }
 
-TEST_CASE("J-24: D-E12 (clock schedules per domain)") {
-    Built twoClocks = FinishOne([](Registrar& r) {
-        ScheduleOptions s = UpdateSchedule();
-        s.name = "SecondFrame";
-        r.Schedule(s);
-    });
-    CHECK(KernelTest::ErrorCount(twoClocks, StartupCode::DE12) == 1);
-    Built noClock = Finish({{"test", [](Registrar& r) {
-                                ScheduleOptions s = UpdateSchedule();
-                                s.clock = false;
-                                r.Schedule(s);
-                            }}});
-    CHECK(KernelTest::ErrorCount(noClock, StartupCode::DE12) == 1);
-}
-
 TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
     const auto build = [](Registrar& r) {
         r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B});
         ScheduleOptions s;
         s.name = "Extract";
-        s.domain = Domain::Frame;
-        s.clock = true;
         s.extract = true;
         s.stages = {"Copy"};
         r.Schedule(s);
@@ -708,9 +689,10 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
     CHECK(report.find("edge E1 -> E4 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E2 -> E3 non-dataflow") != std::string::npos);
     CHECK(report.find("edge E1 -> E2 dataflow") != std::string::npos);
-    CHECK(report.find("gyo.kernel.plans 4") == 0);
-    CHECK(report.find("fingerprint 6:") != std::string::npos);
-    // The whole schedule line of format 3 (no runner since v8-arch-gyo2-kernel-subtract-structure).
-    CHECK_MESSAGE(report.find("\nschedule FixedUpdate domain=Fixed clock=1 rollback=0\n") != std::string::npos,
+    CHECK(report.find("gyo.kernel.plans 6") == 0);
+    CHECK(report.find("fingerprint 8:") != std::string::npos);
+    // The whole schedule line of format 6 (no runner since v8-arch-gyo2-kernel-subtract-structure; no domain or
+    // clock since v8-arch-gyo2-clock-out-of-kernel).
+    CHECK_MESSAGE(report.find("\nschedule FixedUpdate rollback=0\n") != std::string::npos,
                   "Plan export: the schedule line\n" << report);
 }

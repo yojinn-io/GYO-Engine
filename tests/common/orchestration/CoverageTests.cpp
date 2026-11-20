@@ -126,6 +126,9 @@ TEST_CASE("O-2: the product's own build comes after every unit's; a World with n
     O::ProductDescription bare;
     bare.name = "game";
     bare.worlds.push_back(World("Bare"));
+    // The default skeleton off (time-events declaration 6.2): with it the orchestration layer's own Register would
+    // already make the World's Registry freeze, and the case would no longer test the product's own Register.
+    bare.worlds.back().skeleton = O::ScheduleSkeleton::Off;
     auto bareBuilt = O::Product::Build(std::move(bare), Units().Take());
     CHECK_MESSAGE(static_cast<bool>(bareBuilt), "[or-bare-world] " << Describe(bareBuilt));
 }
@@ -194,11 +197,15 @@ TEST_CASE("O-1: a failing frame schedule stops RunFrame with ScheduleFailed") {
 
 TEST_CASE("O-8: one interrupted World ends the Product: RunSchedule on another World, RunGameInit and InsertSystems run nothing; the failure says what broke") {
     Log().clear();
-    auto built = O::Product::Build(Two(), Units().Take());
+    // The default skeleton off (time-events declaration 6.2): the sync point number below counts the frame's Tick only.
+    O::ProductDescription d = Two();
+    for (O::WorldDescription& w : d.worlds) w.skeleton = O::ScheduleSkeleton::Off;
+    auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     REQUIRE(static_cast<bool>(p.RunFrame()));
     REQUIRE(p.Failure() == nullptr);
+    const std::uint64_t sideEpoch = p.World("Side").GetWorld().SyncEpoch();
     auto broke = p.RunSchedule("Side", "Bad");
     REQUIRE_FALSE(static_cast<bool>(broke));
     CHECK_MESSAGE(broke.error().code == O::OrchestrationErrorCode::ScheduleFailed, "[or-ended-first-error] code");
@@ -206,7 +213,8 @@ TEST_CASE("O-8: one interrupted World ends the Product: RunSchedule on another W
     const O::WorldFailure& f = *p.Failure();
     CHECK_MESSAGE((f.product == "game" && f.world == "Side" && f.kind == O::WorldFailureKind::Interrupted), "[or-ended-failure-who] " << f.Text());
     CHECK_MESSAGE((f.entry == "RunSchedule" && f.schedule == "Bad"), "[or-ended-failure-where] " << f.Text());
-    CHECK_MESSAGE((f.domain == K::Domain::Frame && f.tick == 1), "[or-ended-failure-tick] " << f.Text());
+    // The World's sync point number before the schedule ran (G6: no domain, no tick; the frame's Tick applied one).
+    CHECK_MESSAGE((f.syncEpoch == sideEpoch && sideEpoch == 1), "[or-ended-failure-tick] " << f.Text());
     CHECK_MESSAGE((f.kernelCode == K::KernelErrorCode::SystemFailed && f.where.find("FailBad") != std::string::npos), "[or-ended-failure-kernel] " << f.Text());
     CHECK_MESSAGE(f.lastSchedule == "Tick", "[or-ended-failure-last] " << f.Text());
     Log().clear();
@@ -229,13 +237,13 @@ TEST_CASE("O-8: with a broken World the whole frame does not run: a World before
     O::Product& p = **built;
     REQUIRE(static_cast<bool>(p.RunFrame()));
     REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Side", "Bad")));
-    const std::uint64_t mainTick = p.World("Main").GetWorld().Tick(K::Domain::Frame);
+    const std::uint64_t mainEpoch = p.World("Main").GetWorld().SyncEpoch();
     Log().clear();
     auto frame = p.RunFrame();
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(frame), "[or-ended-no-half-frame] RunFrame succeeded");
     CHECK_MESSAGE(frame.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-ended-no-half-frame] code");
     CHECK_MESSAGE(!Logged("t"), "[or-ended-no-half-frame] the first World ran its frame: " << Joined());
-    CHECK_MESSAGE(p.World("Main").GetWorld().Tick(K::Domain::Frame) == mainTick, "[or-ended-no-half-frame-tick]");
+    CHECK_MESSAGE(p.World("Main").GetWorld().SyncEpoch() == mainEpoch, "[or-ended-no-half-frame-tick]");
 }
 
 TEST_CASE("O-8: a replacement does not mend a broken World: an interrupted one, an empty place; a BuildNewFirst failure ends nothing") {
@@ -295,7 +303,10 @@ TEST_CASE("O-8: a replacement does not mend a broken World: an interrupted one, 
 }
 
 TEST_CASE("O-8: the failure is returned, not logged: later refusals carry the same failure; Text() names every part") {
-    auto built = O::Product::Build(Two(), Units().Take());
+    // The default skeleton off (time-events declaration 6.2): "sync point 1" counts the frame's Tick only.
+    O::ProductDescription d = Two();
+    for (O::WorldDescription& w : d.worlds) w.skeleton = O::ScheduleSkeleton::Off;
+    auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     REQUIRE(static_cast<bool>(p.RunFrame()));
@@ -310,7 +321,7 @@ TEST_CASE("O-8: the failure is returned, not logged: later refusals carry the sa
     CHECK_MESSAGE((frame.error().failure->Text() == text && other.error().failure->Text() == text && p.Failure()->Text() == text),
                   "[or-failure-same] " << frame.error().failure->Text());
     CHECK_MESSAGE(frame.error().detail == text, "[or-failure-detail] " << frame.error().detail);
-    for (const char* part : {"'game'", "'Side'", "Interrupted", "RunSchedule", "'Bad'", "tick 1", "SystemFailed", "'Tick'", "FailBad"}) {
+    for (const char* part : {"'game'", "'Side'", "Interrupted", "RunSchedule", "'Bad'", "sync point 1", "SystemFailed", "'Tick'", "FailBad"}) {
         CHECK_MESSAGE(text.find(part) != std::string::npos, "[or-failure-text] " << part << " missing: " << text);
     }
 }
@@ -522,20 +533,10 @@ TEST_CASE("O-9: the refusal warning names the World and the owner") {
 K::SystemResult WriteTagBoot(K::Query<K::Write<Tag>>) { return {}; }
 K::SystemResult WriteTagFrame(K::Query<K::Write<Tag>>) { return {}; }
 
-TEST_CASE("O-1: until batch 3 a game initialization schedule belongs to a domain (D-E12); game initialization and the frame both writing one column is D-E2") {
+// "A game initialization schedule belongs to a domain" (D-E12, the O-1 transition sentence) left with the clock
+// in batch 3 (G2, v8-arch-gyo2-clock-out-of-kernel).
+TEST_CASE("O-1: game initialization and the frame both writing one column is D-E2") {
     Log().clear();
-    O::ProductDescription noDomain;
-    noDomain.name = "game";
-    noDomain.gameInit = {"Boot"};
-    noDomain.worlds.push_back(World("Main", [](O::WorldSetup& s) {
-        K::ScheduleOptions boot = Once("Boot");
-        boot.domain = K::Domain::None;
-        Basics(s.Registrar(), {boot});
-    }));
-    auto refused = O::Product::Build(std::move(noDomain), Units().Take());
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(refused), "[or-gi-domain] built");
-    CHECK_MESSAGE(refused.error().detail.find("'Boot' belongs to no clock domain") != std::string::npos, "[or-gi-domain] " << refused.error().detail);
-
     O::ProductDescription twoWriters;
     twoWriters.name = "game";
     twoWriters.gameInit = {"Boot"};

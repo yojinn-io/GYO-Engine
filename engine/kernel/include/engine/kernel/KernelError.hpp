@@ -137,13 +137,12 @@ struct KernelError {
 // text form (ToString) is.
 enum class StartupCode : std::uint8_t {
     DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE9,
-    DE11, DE12, DE14, DE15, DE16, DE17, DE19, DE20,
+    DE11, DE14, DE15, DE16, DE17, DE19, DE20,
     RE2, RE4, RE5,
     // A later round of Registry::Register / BuildPlans registered what only the
     // first round may (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6).
     RE7,
     XE1,
-    FE1,
 };
 
 [[nodiscard]] std::string_view ToString(StartupCode code) noexcept;
