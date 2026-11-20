@@ -50,6 +50,7 @@
 | N15 | 型別、函式用大寫開頭的駝峰；成員變數小寫開頭、結尾加底線；常數 `k` 開頭；巨集 `GYO_` 開頭全大寫 | `RoleThread`、`StopRequested()`、`state_`、`kSampleRate`、`GYO_ASSERT` | 事實 |
 | N16 | 檔名等於它主要的型別名 | `RoleThread.hpp`、`RoleThread.cpp` | 事實 |
 | N17 | 歸屬＝namespace 與目錄一一對應。目錄、namespace、target 三者的名字要對得上。根的寫法：通用機制 `GYO::Kernel::`；Engine 的 Module `GYO::Engine::<Module>::`；Plugin `GYO::Plugins::<plugin>::`；產品 `<產品>::` | `engine/kernel`↔`GYO::Kernel` | 你的決定（11 月 11 日命名規範第 1 條，2026-11-14 轉入）。原文寫「能力」的地方，照今天的用詞寫 Module |
+| N25 | **錯誤型別的字尾帶著級別**（草稿，`v8-arch-gyo2-error-levels` D11；使用者 2026-11-20 定，最終文字在合併前核准）：`…Error`＝E1（不能救：一個 World 壞了、持有它的單位結束）；`…Failure`＝E2（這次請求失敗、讓上層決定）。E0 沒有型別（`GYO_ASSERT`），E3 是紀錄、用紀錄自己的名字。GYO 的 `…Error` 不是 Java 的 `Error`（那對到 GYO 的 E0），也不是 Go 的 `XxxError`（那多半是 GYO 的 `…Failure`）。`Result::error()`、`Base::Err`、`…Report` 照舊 | `WorldError`、`KernelError`（E1）；`OrchestrationFailure`、`KernelFailure`、`JsonFailure`（E2） | 使用者（`v8-arch-gyo2-error-type-suffix`）；級別的定義在 `target/error-handling.md`「Error levels」 |
 
 已知的不一致，帶過來的程式不改，先記著：
 - io 的 namespace 是 `Engine::IO`，target 是 `GYO::Io`。新模組的寫法：只有第一個字母大寫，例如 `Io`、`Os`。

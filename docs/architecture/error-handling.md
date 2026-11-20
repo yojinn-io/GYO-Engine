@@ -20,6 +20,8 @@ Result = Runtime Error
 
 ### Programmer Error detected from runtime data (added 2026-11-11, `v8-arch-kernel-result-errors`; target for the kernel line's code, not yet implemented)
 
+> **Marker** (`v8-arch-gyo2-error-levels`, draft): the kernel no longer logs; the outermost `Run` returns the `Err` once and its handler logs it once. Error levels E0 to E3, the handling rules and the type suffixes (`…Error` = E1, `…Failure` = E2) are in [`target/error-handling.md`](target/error-handling.md), section "Error levels". This file's text is not rewritten until the migration batch replaces it.
+
 A third case the two columns do not cover: the program is wrong, but the violation is visible only when an id arrives at runtime (an untyped `Commands` insert into a zone=C or Exclusive column, a `Despawn` of an entity carrying zone=C columns issued by a zone=B System, an `ExclusiveWorld` write outside zone=B Shared data; `plans/kernel/spec.zh-Hant.md` Z5, F-10, S-13).
 
 | | Programmer Error detected from runtime data |
@@ -115,6 +117,8 @@ Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void s
 - Types that cannot be moved are returned as `Result<std::unique_ptr<T>, E>`.
 
 ## Error types
+
+> **Marker** (`v8-arch-gyo2-error-levels`, draft): error type names carry their level (`…Error` = E1, `…Failure` = E2); `Base::Error<Code>` becomes `Base::Failure<Code>` and `CodedError` becomes `CodedFailure`. See [`target/error-handling.md`](target/error-handling.md), "Error levels".
 
 Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/include/engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
 
