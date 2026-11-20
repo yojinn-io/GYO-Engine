@@ -1264,6 +1264,67 @@
    "target": "gyo_world_time_tests",
    "cases": "restore:*",
    "expect": "\\[wt\\-restore\\-put\\-back\\]"
+  },
+  {
+   "id": "wt-guard-naming-root-dropped",
+   "what": "naming guard (authority-rollback step 1): engine/modules/world_time is no longer mapped to GYO::Engine::WorldTime. Only it drops the world_time row of ROOTS (that row's whole rule, README rule 4); wt-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent the shared fail closed",
+   "guards": [
+    "world-time WT-4",
+    "naming DI 1",
+    "time-events-declaration 6.3",
+    "authority-rollback-declaration 9.5"
+   ],
+   "file": "tests/common/kernel/naming_guard.py",
+   "find": ",\n         (\"engine/modules/world_time\", \"GYO::Engine::WorldTime\"))",
+   "replace": ")",
+   "expect": "FAIL: test_n1_world_time_other_namespace_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/kernel",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "wt-guard-real-n1-other-namespace",
+   "what": "naming guard's world_time row on the real tree (authority-rollback step 1, README rule 4: positive control): a world_time source opens GYO::Engine::Orchestration. Only it shows the world_time row firing on the real tree; wt-guard-naming-root-dropped drops the row in the self-tests",
+   "guards": [
+    "world-time WT-4",
+    "naming DI 1",
+    "time-events-declaration 6.3",
+    "authority-rollback-declaration 9.5"
+   ],
+   "file": "engine/modules/world_time/src/Sampling.cpp",
+   "find": "namespace GYO::Engine::WorldTime {",
+   "replace": "namespace GYO::Engine::Orchestration {",
+   "expect": "engine/modules/world_time/src/Sampling\\.cpp:\\d+: N1 namespace GYO::Engine::Orchestration \\(expected GYO::Engine::WorldTime\\)",
+   "command": [
+    "{python}",
+    "-I",
+    "-B",
+    "tests/common/kernel/naming_guard.py"
+   ]
+  },
+  {
+   "id": "wt-links-more",
+   "what": "WT-4 link set (authority-rollback step 1): gyo_world_time links a module its register row does not name (configure-time check). Only it catches gyo_world_time's link set; or-links-more is gyo_orchestration's and ks-links-extra gyo_kernel's",
+   "guards": [
+    "world-time WT-4",
+    "time-events-declaration 6.3",
+    "authority-rollback-declaration 9.5"
+   ],
+   "file": "config/modules.csv",
+   "find": ",no,yes,base;kernel;logging;orchestration;time,,",
+   "replace": ",no,yes,base;kernel;logging;orchestration;time;math,,",
+   "target": "gyo_world_time_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_world_time links[\\s\\S]*expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Logging;GYO::Orchestration;GYO::Time"
   }
  ]
 }

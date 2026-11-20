@@ -7381,6 +7381,31 @@
       ]
     },
     {
+      "id": "ks-k9-clock-dropped",
+      "what": "K9's clock list (authority-rollback step 1, DI-KS 15): the clock names that moved out to the time Module are no longer reported. Only it drops K9_CLOCK; ks-k9-dropped turns the whole of K9 off and ks-real-k9-moved-out-name is K9's positive control on the real tree",
+      "guards": [
+        "kernel DI-KS 15",
+        "time-events-declaration 6.3",
+        "authority-rollback-declaration 9.5"
+      ],
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK)",
+      "replace": "K9 = tuple(re.compile(p) for p in K9_MOVED)",
+      "expect": "FAIL: test_k9_every_clock_name_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
       "id": "msg-trim-on-err",
       "what": "an Err trims the messages (event cursor declaration 3.2: a Run that ends in an Err trims nothing). Only it catches a trim on the Err path itself (an Err before the last sync point, [ns-throw-event-written]); hf-trim-before-rounds trims at the last sync point and is caught by [ns-events] late instead (step-7 adversarial check 2.5: different changes). Merged per README 合わせ方: both J-54 and J-56 must fail",
       "guards": [

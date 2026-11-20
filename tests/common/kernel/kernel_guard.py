@@ -72,6 +72,9 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       rule codes "H-12"/"H-13" are seen). Kept from the one-time scan G-3 of the orchestration-skeleton
       declaration (section 11), made standing by v8-arch-gyo2-time-events step 1 (that declaration's section 7.4).
       StartupCode and StartupReport are the kernel's startup errors and stay allowed.
+      Since v8-arch-gyo2-authority-rollback step 1 also the clock that moved out to the time Module (K9_CLOCK: the
+      old clock domain, CurrentTick, the tick-to-stamp table, the time Module's type names), written as identifiers
+      so the comments saying the kernel keeps no clock stay allowed.
   K0  a file under engine/kernel/ that this guard cannot scan: anything but SUFFIXES and CMakeLists.txt. A file
       type the guard does not read would otherwise pass every rule unseen.
 
@@ -108,12 +111,22 @@ K6 = re.compile(r"\bLog\s*\(|\bSetLogHandler\b|\bstd::(?:c(?:out|err|log)|printl
                 r"|(?<![\w:.])(?:std::)?(?:v?f?printf|f?puts|putchar|perror|fwrite)\s*\(")
 K7 = re.compile(r"\b(?:far|near|FAR|NEAR)\b")
 K8 = re.compile(r"\b(?:IdIssuer|threadSerials?)\b")
-K9 = tuple(re.compile(p) for p in (
+K9_MOVED = (
     r"\bclass\s+Plugin\b", r"\bFinishContext\b", r"\bInstallRunner\b", r"\bRequires\s*\(",
     r"std::vector<Plugin\s*\*>", r"Registry::Finish\b", r"\.startup\b", r"\bstartup(?:_|Ran_|Running_|Schedule)\b",
     r"\bStartupScope\b", r"\bRunStartup\b", r"\bStartupNotNestable\b", r"\bStartupRunning\b", r"\bDE21\b",
     r"\bRE[136]\b", r'"H-1[23]"', r"\bPluginRecord\b", r"\bCheckPluginList\b", r"\bCheckRunners\b",
-    r"\brunnerOwners\b"))
+    r"\brunnerOwners\b")
+# The clock that moved out to the time Module (v8-arch-gyo2-clock-out-of-kernel; added by
+# v8-arch-gyo2-authority-rollback step 1, the guard time-events-declaration 6.3 deferred to batch 4): the kernel's old
+# clock domain, its tick, the tick-to-stamp table and the time Module's type names. Written as identifiers only, so
+# the kernel's comments saying it keeps no clock ("clock", "tick") stay allowed.
+K9_CLOCK = (
+    r"\bDomainTick\w*", r"\bCurrentTick\b", r"\bTickStamp\w*", r"\btickStamps_?\b", r"\bkTickStampSlots\b",
+    r"\bDomainName\b", r"\benum\s+class\s+Domain\b", r"\bDomain::\w+", r"\brejectTick\b", r"\btickOfSchedule\b",
+    r"\boptions\.clock\b", r"\bbool\s+clock\b",
+    r"\b(?:VirtualTime|FixedTime|RealTime|ActiveTime|TimeControl|Resimulation|TickWriters|TickAccumulator)\b")
+K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK)
 DIRECTIVE = re.compile(r"^[ \t]*(?:#|%:)[ \t]*(?:include_next|include|import)\b")
 TARGET = re.compile(r"[ \t]*([<\"])([^>\"]+)[>\"]")
 # engine/entity_store/: Delta-3 of the migration plan (user 2026-11-13, world-exec): the World's columns are kept by

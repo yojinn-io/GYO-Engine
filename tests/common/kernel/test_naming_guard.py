@@ -43,6 +43,8 @@ class GuardTree(unittest.TestCase):
         self.write("engine/core/time/include/engine/time/Clock.hpp", "namespace Engine::Time {\nstruct Clock {};\n}\n")
         self.write("engine/orchestration/include/engine/orchestration/Clean.hpp",
                    "namespace GYO::Engine::Orchestration {\nstruct Unit {};\n}\n")
+        self.write("engine/modules/world_time/include/engine/world_time/Clean.hpp",
+                   "namespace GYO::Engine::WorldTime {\nstruct Tick {};\n}\n")
 
     def tearDown(self):
         self._directory.cleanup()
@@ -80,6 +82,20 @@ class GuardTree(unittest.TestCase):
         import shutil
         shutil.rmtree(self.root / "engine/orchestration")
         self.assertIn("engine/orchestration: no source to scan (moved or renamed? update this guard)",
+                      guard.check(self.root))
+
+    def test_n1_world_time_other_namespace_is_reported(self):
+        self.write("engine/modules/world_time/src/Added.cpp", "namespace GYO::Engine::Orchestration {\n}\n")
+        self.assertReported("N1", "namespace GYO::Engine::Orchestration (expected GYO::Engine::WorldTime)")
+
+    def test_n1_world_time_namespace_opened_outside_is_reported(self):
+        self.write("tests/common/world_time/Added.cpp", "namespace GYO::Engine::WorldTime {\n}\n")
+        self.assertReported("N1", "GYO::Engine::WorldTime")
+
+    def test_n1_missing_world_time_directory_is_reported(self):
+        import shutil
+        shutil.rmtree(self.root / "engine/modules/world_time")
+        self.assertIn("engine/modules/world_time: no source to scan (moved or renamed? update this guard)",
                       guard.check(self.root))
 
     def test_n1_old_engine_namespace_in_kernel_is_reported(self):
