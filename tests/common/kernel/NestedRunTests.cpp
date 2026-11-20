@@ -1670,39 +1670,3 @@ TEST_CASE("J-56: verification on: another call's ExclusiveWorld handle is report
     CHECK_MESSAGE(Logged("reports 1 1 1 ran ok"), "[ns-w4-other-call] " << Joined());
 }
 
-
-// ---- Error levels D9: the same error is decided by identity, not by content
-
-namespace {
-
-// Spawns through the exhausted allotter and drops the Err (it stays in this
-// call's list), then runs Step and swallows its Err.
-SystemResult ExhaustThenDriveSwallow(ExclusiveWorld<> world) {
-    (void)world.Spawn(Tag{1});
-    if (auto ran = world.RunSchedule("Step"); !ran) Log().push_back("swallowed " + std::string(ToString(ran.error().code)));
-    return Ok();
-}
-
-// Spawns through the exhausted allotter and passes the Err on: an error of the
-// same code, rule, message and detail as the outer System's dropped one.
-SystemResult InnerExhausted(Spawn<Bundle<Tag>> spawn) {
-    auto made = spawn.New(Tag{2});
-    if (!made) return Engine::Base::Err(std::move(made).error());
-    return Ok();
-}
-
-} // namespace
-
-TEST_CASE("D9: two errors of the same text, one dropped by the outer System and one left by its nested run, are both listed") {
-    auto rig = NestRig([](Registrar& r) {
-        Nest(r, true);
-        r.AddSystem<&ExhaustThenDriveSwallow>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&InnerExhausted>(In("InnerExhausted", "Step", "S"));
-    });
-    rig->world().SetResource(RangeAllotter::Of(5, 4));  // an empty range: every allot fails
-    const auto result = rig->Run("Frame");
-    REQUIRE_FALSE(static_cast<bool>(result));
-    std::size_t exhausted = 0;
-    for (const KernelError* leaf : result.error().Leaves()) exhausted += leaf->code == KernelErrorCode::AllotterExhausted ? 1 : 0;
-    CHECK_MESSAGE(exhausted == 2, "[el-d9-listed] AllotterExhausted leaves: " << exhausted << "\n" << result.error().Text());
-}

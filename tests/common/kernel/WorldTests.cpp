@@ -1062,32 +1062,3 @@ TEST_CASE("J-36: a message is read once by every reader, in write order; kept un
                              "early@2: 99 11 12 21 late@2: early@3: late@3:");
     CHECK(rig->world().MessagePayloads<Ping>().empty());
 }
-
-// ---- Error levels D9: the same error is decided by identity, not by content
-
-namespace {
-
-// Two exhausted spawns in one call: two errors of the same text. The System
-// returns the first, wrapped; the second is another error.
-SystemResult SpawnTwiceReturnFirst(Spawn<Bundle<Tag>> spawn) {
-    auto first = spawn.New(Tag{1});
-    auto second = spawn.New(Tag{2});
-    (void)second;  // dropped: still in the call's list
-    if (!first) return Engine::Base::Err(std::move(first).error().Wrap("SpawnTwiceReturnFirst: the first spawn"));
-    return Ok();
-}
-
-} // namespace
-
-TEST_CASE("D9: the System returns one of two errors of the same text: the other is still listed") {
-    auto rig = MakeRig([](Registrar& r) {
-        Data(r, true);
-        r.AddSystem<&SpawnTwiceReturnFirst>(B("SpawnTwiceReturnFirst", "A"));
-    });
-    rig->world().SetResource(RangeAllotter::Of(5, 4));  // an empty range: every allot fails
-    const auto result = rig->Run();
-    REQUIRE_FALSE(static_cast<bool>(result));
-    std::size_t exhausted = 0;
-    for (const KernelError* leaf : result.error().Leaves()) exhausted += leaf->code == KernelErrorCode::AllotterExhausted ? 1 : 0;
-    CHECK_MESSAGE(exhausted == 2, "[el-d9-contains] AllotterExhausted leaves: " << exhausted << "\n" << result.error().Text());
-}

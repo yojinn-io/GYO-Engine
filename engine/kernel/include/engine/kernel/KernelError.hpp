@@ -109,14 +109,6 @@ struct KernelError {
     std::string world;
     std::vector<std::string> context;
     std::vector<KernelError> siblings;
-    // Which error this is (error levels D9): given by the World the first time the
-    // kernel handles the error (a kernel API's error, the System's own Err when its
-    // call ends, the Err that interrupts the World); copies and Wrap keep it. Two
-    // errors are the same error only when both have one and it is equal; 0 (none
-    // yet: an Err a System just made) is never the same as anything. Unique within
-    // one World only (errors are compared within one Run). Not part of Text(), any
-    // fingerprint, export or summary.
-    std::uint64_t identity = 0;
 
     KernelError(KernelErrorCode errorCode, std::string errorMessage, std::string errorDetail = {})
         : code(errorCode), message(std::move(errorMessage)), detail(std::move(errorDetail)) {}

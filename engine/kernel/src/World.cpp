@@ -24,10 +24,8 @@ namespace GYO::Kernel {
 
 namespace {
 
-// Error levels D9: the same error by identity, never by content (two errors of the
-// same text are two errors).
 bool SameError(const KernelError& a, const KernelError& b) {
-    return a.identity != 0 && a.identity == b.identity;
+    return a.code == b.code && a.rule == b.rule && a.message == b.message && a.detail == b.detail;
 }
 
 // Whether error, or any of its siblings at any depth, is the same error as wanted.
@@ -444,7 +442,6 @@ KernelError CallError(SystemContext& call, KernelErrorCode code, std::string rul
     error.world = world.name_;
     error.Wrap(CallText(call));
     if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
-    world.IdentifyError(error);
     call.returned.push_back(error);
     return error;
 }
@@ -510,7 +507,6 @@ std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result
         for (KernelError& returned : call.returned) {
             if (!ContainsError(own, returned)) list.push_back(std::move(returned));
         }
-        world.IdentifyError(own);
         list.push_back(std::move(own));
     }
     if (list.empty()) return std::nullopt;

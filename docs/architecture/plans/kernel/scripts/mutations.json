@@ -8669,34 +8669,6 @@
       ]
     },
     {
-      "id": "el-d9-listed-content",
-      "what": "error levels D9: Listed() decides 'the same error' by content (code, rule, message, detail) again, so a nested run's left error of the same text as an error the outer System dropped is lost (only this mutant: no other check counts two same-text errors across a nested run)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "                       [&](const KernelError& e) { return e.identity != 0 && e.identity == error.identity; });",
-      "replace": "                       [&](const KernelError& e) { return e.code == error.code && e.rule == error.rule && e.message == error.message && e.detail == error.detail; });",
-      "target": "gyo_kernel_tests",
-      "cases": "D9: two errors of the same text*",
-      "expect": "\\[el\\-d9\\-listed\\] AllotterExhausted leaves: 1",
-      "guards": [
-        "error-handling DI 4",
-        "error-levels-declaration D9"
-      ]
-    },
-    {
-      "id": "el-d9-contains-content",
-      "what": "error levels D9: SameError (CombineCall's 'the System's Err already holds it') compares content again, so a second error of the same text in one call is taken for the one the System returned (only this mutant: Listed() is another function)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    return a.identity != 0 && a.identity == b.identity;",
-      "replace": "    return a.code == b.code && a.rule == b.rule && a.message == b.message && a.detail == b.detail;",
-      "target": "gyo_kernel_tests",
-      "cases": "D9: the System returns one of two errors*",
-      "expect": "\\[el\\-d9\\-contains\\] AllotterExhausted leaves: 1",
-      "guards": [
-        "error-handling DI 4",
-        "error-levels-declaration D9"
-      ]
-    },
-    {
       "id": "el-kernel-print-back",
       "what": "the kernel writes the interrupting error to standard error again (error levels D1: the kernel has no error handler and writes nothing; the outermost Run returns the Err once). Only this mutant: kernel_guard K6 reads the text, this runs the paths",
       "file": "engine/kernel/src/Executor.cpp",
