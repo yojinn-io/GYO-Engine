@@ -406,8 +406,8 @@ TEST_CASE("O-8: unknown World names: UnknownWorld from RunSchedule, ReplaceWorld
 // ---- Runner and game initialization (O-1, O-3)
 
 TEST_CASE("O-3: the default runner returns a failing frame's reason and writes nothing") {
-    // The runner returns the reason with the error's context (the WorldFailure); the layer
-    // that decides what follows writes it (RunProduct, below). Logging and deciding are one layer.
+    // The runner returns the reason with the error's context (the WorldFailure) and writes
+    // nothing; whoever called Run decides what follows.
     auto built = O::Product::Build(Two({"Bad"}), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     WarningCounter log;
@@ -417,39 +417,6 @@ TEST_CASE("O-3: the default runner returns a failing frame's reason and writes n
     CHECK_MESSAGE(exit.reason.find((*built)->Failure()->Text()) != std::string::npos, "[or-runner-default-reason] " << exit.reason);
     CHECK_MESSAGE((log.Errors() == 0 && log.Warnings() == 0),
                   "[or-runner-default-silent] errors " << log.Errors() << " warnings " << log.Warnings());
-}
-
-TEST_CASE("O-3: RunProduct writes a runner's Failure once and returns exit code 1") {
-    WarningCounter log;
-    const int code = O::RunProduct(Two({"Bad"}), Units().Take());
-    CHECK_MESSAGE(code == 1, "[or-runproduct-failure-exit] " << code);
-    CHECK_MESSAGE(log.Errors() == 1, "[or-runproduct-failure-logs] errors " << log.Errors());
-    for (const char* part : {"the Product ended", "'game'", "'Main'", "'Bad'", "SystemFailed"}) {
-        CHECK_MESSAGE(WarningCounter::LastError().find(part) != std::string::npos,
-                      "[or-runproduct-failure-text] " << part << " missing: " << WarningCounter::LastError());
-    }
-}
-
-TEST_CASE("O-3: RunProduct writes nothing and returns 0 when the frame succeeds") {
-    WarningCounter log;
-    const int code = O::RunProduct(Two(), Units().Take());
-    CHECK_MESSAGE((code == 0 && log.Errors() == 0 && log.Warnings() == 0), "[or-runproduct-ok] code " << code);
-}
-
-TEST_CASE("O-3: RunProduct handles a startup report: one Error line, exit code 1; ExitCode maps the runner's exit") {
-    O::ProductDescription d;
-    d.name = "game";
-    d.worlds.push_back(World("Main", [](O::WorldSetup& s) {
-        Basics(s.Registrar(), {FrameClock("Tick")});
-        s.Registrar().AddSystem<&Mark<'x'>>(In("Broken", "Nowhere"));
-    }));
-    WarningCounter log;
-    const int code = O::RunProduct(std::move(d), Units().Take());
-    CHECK_MESSAGE(code == 1, "[or-runproduct-startup-exit] " << code);
-    CHECK_MESSAGE((log.Errors() == 1 && WarningCounter::LastError().find("the Product did not start") != std::string::npos),
-                  "[or-runproduct-startup-logs] errors " << log.Errors() << ": " << WarningCounter::LastError());
-    CHECK_MESSAGE((O::ExitCode(O::RunnerExit{}) == 0 && O::ExitCode(O::RunnerExit{O::RunnerExitCode::Failure, "x"}) == 1),
-                  "[or-exit-code]");
 }
 
 TEST_CASE("O-1: a failed game initialization counts as run (RunGameInit afterwards asserts)") {
