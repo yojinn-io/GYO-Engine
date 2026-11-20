@@ -2169,13 +2169,25 @@
   },
   {
    "id": "or-failure-logged",
-   "what": "the orchestration layer logs the failure itself (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "the orchestration layer writes the failure out itself (v8-arch-gyo2-broken-world-ends-product; rewritten by v8-arch-gyo2-error-levels D2: Product.cpp no longer includes Base::Log, so the mutant writes to standard error and the orchestration.el-silent probe catches it; [or-failure-not-logged] counts Base::Log lines, which a one-edit mutant cannot add any more)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    failure_ = std::move(failure);\n    return *failure_;",
-   "replace": "    failure_ = std::move(failure);\n    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", failure_->Text());\n    return *failure_;",
+   "replace": "    failure_ = std::move(failure);\n    std::fputs(failure_->Text().c_str(), stderr);\n    return *failure_;",
    "target": "gyo_orchestration_tests",
-   "cases": "O-8: the failure is returned*",
-   "expect": "\\[or\\-failure\\-not\\-logged\\]"
+   "expect": "orchestration\\.el-silent: \\[O-1: a failing game initialization",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "guards": [
+    "orchestration O-11",
+    "error-handling DI 4"
+   ]
   },
   {
    "id": "or-failure-refusal-differs",
