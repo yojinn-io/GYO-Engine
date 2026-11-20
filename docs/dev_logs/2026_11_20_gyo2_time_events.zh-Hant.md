@@ -1,6 +1,6 @@
 # 時間 Module＋事件（`v8-arch-gyo2-time-events`）
 
-日期：2026-11-19～2026-11-20。分支 `claude/gyo2-time-events-8fe1bf`（從 `origin/gyo2`；第 3 步開始前 rebase 到 #249 之後）。**狀態：第 1～7 步完成，等合併前核准。** L1 三平台還沒跑（PR 在合併前核准之後開）。
+日期：2026-11-19～2026-11-20。分支 `claude/gyo2-time-events-8fe1bf`（從 `origin/gyo2`；第 3 步開始前 rebase 到 #249 之後）。**狀態：第 1～7 步完成，合併前核准已過（2026-11-20），等 L1 與「合併」。** L1 三平台還沒跑（PR 在合併前核准之後開）。
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[time-events-declaration.zh-Hant.md](../architecture/target/v2/time-events-declaration.zh-Hant.md) 修訂 4；使用者 2026-11-19「照建議，全部核准」（動工前核准，`v8-arch-gyo2-time-events-declaration-approved`）。修訂 0 送 Fable／high 敵對式檢查（報告 `declaration-r0-adversarial-check.md`）。實作者 Opus／high；審查、§14.4 檢證、新突變清單的敵對式檢查都是 Fable／high（`v8-arch-gyo2-batch3-no-xhigh`：本批不用 xhigh）。
 
@@ -59,7 +59,8 @@
   - `world_time` 是新 Module，型別、取樣三種、固定步、放回與帶過去各自有決定點（92 個，第 7 步補了敵對式檢查的「高」與 DI 寫明的「中低」）。
   - 第 7 步新增 77（kernel 37、world_time 28、orchestration 12）：敵對式檢查的高 14＋13 全部、守衛 9、M1／S1／S4／S7 共 11，其餘是 DI 寫明的中低。
 - 退役 14：G1～G6 的緩的面裡的突變（`rs-j37-event-domain-unchecked`、`rs-j37-nonclock-allowed`、`rs-j24-de12-removed`、`or-gi-domain-unchecked`、`rs-adv-domain-tick-is-zone-b`、`rs-j12-tick-one-mount`、`we-adv-tickstamp-never-recorded`、`ns-nested-tick-not-advanced`、`or-failure-no-domain`），以及修剪步與「依 tick 讀」消失的 5 個（`rs-adv-event-trim-unknown`、`rs-b3-trim-not-pinned`、`hf-rounds-follow-trim`、`we-j36-no-same-tick`、`we-j36-swap-compare`）。批內加了又退的 2 個：`msg-end-trim-dropped`（併進 `we-adv-event-trim-never`）、`wt-not-driven-dropped`（等於兩個既有突變之和）。
-- 每個新突變的 `what` 寫了「它抓、別的抓不到的錯」：第 7 步新增的 77 個都有；第 2～6 步的 obs- 31、`world_time` 第 6 步 C 的 7 個也有（`step5/obs-mutants-reasons.txt`）。第 2～6 步其餘的沒有補。
+- 每個新突變的 `what` 寫了「它抓、別的抓不到的錯」：第 7 步新增的 77 個、第 2～6 步的 obs- 31、`world_time` 第 6 步 C 的 7 個先寫了（`step5/obs-mutants-reasons.txt`）；其餘 96 個在合併前核准後補上（使用者 2026-11-20 定的第 4 項，Opus/high 子 agent 寫、卡片檢查）。補的時候沒有找到可以退的：子 agent 原本退了 `msg-trim-on-err`（理由：`hf-trim-before-rounds` 打到同一個斷言），卡片放回——兩者是不同的改動（第 7 步敵對式檢查 2.5 已判），`msg-trim-on-err` 獨有的錯（Err 的路徑本身修剪）只有 `[ns-throw-event-written]` 抓得到；照 README「合わせ方」把 J-56 那個案例併進它的 `cases` 與 `expect`（兩個都失敗才算），單獨跑 1/1 killed（`step7/merge-approval-msg-trim-on-err.log`）。
+- `guards`（合併前核准新增的欄位，`tests/common/mutation/README.md` 第 9 條）：216 個新突變全部加上，42 種條號，逐一對過文件裡的寫法。勉強對應的 4 處：`sc-s2-real-time-carried` 只掛宣告 3.5 與判定 2（「不帶過去」不在 DI 裡）；`obs-unregistered-silent`、`obs-trigger-no-own-stamp` 掛 kernel DI-KS 10（條文沒明寫）；`wt-rewind-past-tick-allowed`、`wt-schedule-name-length-unchecked`、`wt-add-no-limit-assert` 守的斷言條文在 world-time 第 2 節，掛在 WT-3／WT-1／型別 1。舊的突變碰到時再補（使用者 2026-11-20）。
 - scenario 第 2 段：候選都和既有單元突變是同一個改動、只是目標執行檔不同（`cases` 不能合併），照 README 第 1 條不新立；只加 `sc-s2-real-time-carried`（沒有既有突變改時間 Module 的帶過去）。
 - 完整跑（判定 3）：在 44a54a43 的副本上跑（2026-11-20 06:02～09:25 JST），**1056/1056 全殺**，沒有存活、wrong_failure、逾時：Kernel 737/737、編排層 227/227、`world_time` 92/92。52e46f54 那一次跑到 Kernel 469/701、全殺時停掉（第 7 步改了清單，結果不再代表最終狀態；log 保留在 `step7/full-52e46f54-partial/`）。
 
@@ -71,19 +72,14 @@
 - G4（誰都能寫 `Tick`）在第 4 批權威接手之前沒有守衛；G5 的 tickStamps、G6 的 domain 與 tick 沒有接手者。
 - 沒改的過期文字（不在本批清單內，交圖書管理員）：`target/README` K.3 對照表第 2、11、15 列、`target/runtime-composition.zh-Hant.md:33`、`target/system-contract.zh-Hant.md:57`、`target/README` DI-KS 15 摘要。
 
-## 交合併前核准
+## 合併前核准（使用者 2026-11-20，side chat「btw: 一件件來」轉來；HANDOFF 由主會話記）
 
-1. 判定 4 的 `\bEventOptions\b` 命中 4 處：推送式事件的選項型別取名 `EventOptions`（`Declarations.hpp:93`、`Registry.hpp:191`、`:365`、`Registry.cpp:418`），和判定要掃的舊保留式選項同名、不同東西。改名，或改判定 4 的那一項。
-2. scenario S2-8 的檢查內容換了（AGENTS §14.4）：
-   - 守的性質：讀檔後新 World 的真實時間從頭開始。
-   - 緩的面：手動「每幀經過時間」取樣下，不再檢查「第一幀 `RealTime.delta`＝0」（宣告自己矛盾：S2-2 要第一幀就套用）。
-   - 緊的面：多檢查 `sampled`、`now`、`elapsed` 三欄與 5 幀後的累計。
-   - 其他判定守著：「第一次取樣 delta＝0」由 `[wt-first-sample-zero]`、`[wt-time-base-first]` 與突變 `wt-real-first-delta`、`wt-sample-instant-as-delta`；「不帶過去」由 `[sc-s2-8-real-fresh]` 與 `sc-s2-real-time-carried`。
-   - 證據：`step7/review-and-14-4-fable.md` A.1 M3（Fable 核對過）。宣告第 7 節 S2-8 與第 3.3 節的文字要不要跟著改成和 WT-2 一致，一併定。
-3. 判定 5 的記憶體：`accessVerification` 開著時加上快照約計算值 2.001 倍；判定只算緩衝（1.0012 倍）。
-4. 突變數 216 超過上限 105（理由在上面）。
-5. DI 的最終文字（21 條，含 determinism DI 2、world DI 6）。
-6. 實作和宣告不同、本卡自己判的：observer 依名字排序；`TimeConfig` Resource（System 不能捕獲，名字用 `char[64]`）；拿掉的 System 的游標在新版本 World 接上時清；`NotDriven` 只記進 `discarded`、`VirtualTime.elapsed` 不扣回；手動「每幀經過時間」第一幀就套用（照 Bevy `ManualDuration`）；`WorldTimeOptions::fixedStep`、`fixedStepConditions`；`modules.csv` 的 unit 寫全限定名。
+1. 判定 4 的 `\bEventOptions\b`（推送式事件的選項型別 `EventOptions` 命中 4 處）：「照建議」——拿掉這個樣式，名字讓給推送式事件（照 Bevy 0.17 Message＝緩衝、Event＝推送）；舊 API 清掉這件事由同一行其他樣式守。宣告判定 4 已改（038021f5）。
+2. S2-8：「照建議」——測試照改（AGENTS §14.4 1～5：`step7/review-and-14-4-fable.md` A.1 M3）；宣告第 3.3、3.5 節與第 7 節 S2-8 改成和 WT-2 一致：讀檔後不帶過去的真實時間，第一幀 `delta` 依取樣方式（038021f5；第 3.5 節是卡片一併改的，同一句矛盾）。
+3. 判定 5 的記憶體：「照建議」——只算預設狀態（1.0012 倍，成立）；宣告第 9.2 節補「預算不含 `accessVerification` 的快照；開著時約 2 倍，屬除錯模式的已知代價」（038021f5）。界定判定範圍，不是事後放寬。
+4. 突變 216 > 105：「照建議，而且我想加一個寫這個突變的理由，否則後面退役都退不掉。」「對的。」——合併前補完 `what`；新規則：每個突變加 `guards`（AGENTS §14.5 一行、README 第 7～9 條，23e6da62；舊的碰到時再補）。結果見上面「突變」段。
+5. DI 21 條：「核准」，照現文。G4、G5 照「範圍的限界」交後續批次。
+6. 實作和宣告的差異 8 處：「核准。」照現文（observer 依名字排序、`TimeConfig`、游標清除、手動每幀取樣第一幀就套用、`fixedStep`／`fixedStepConditions`、`modules.csv` 寫全名、`NotDriven` 不扣回 `elapsed`、WT-3）。附帶更正：Bevy 不是沒有上限，是用 `Time<Virtual>::max_delta`＝250 ms 截時間（64 Hz 下間接等於一幀最多 16 步，`bevy_time` `virt.rs:86`、`fixed.rs:243`）；GYO 有固定步時直接限步數（5）。使用者：「有一樣的問題，但是解法不一樣。」
 
 ## 證據
 
