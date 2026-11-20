@@ -5,6 +5,9 @@
   {
    "id": "js-raw-flag-dropped",
    "what": "J-3: numbers are converted by yyjson instead of handed over as raw text",
+   "guards": [
+    "json J-3"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "text.size(), YYJSON_READ_NUMBER_AS_RAW,",
    "replace": "text.size(), YYJSON_READ_NOFLAG,",
@@ -15,6 +18,9 @@
   {
    "id": "js-repeated-small-unchecked",
    "what": "J-2: a repeated key in a small object (pairwise path) is not found",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (seen[j] == name) return RepeatedKey(key);",
    "replace": "if (false) return RepeatedKey(key);",
@@ -25,6 +31,9 @@
   {
    "id": "js-repeated-large-unchecked",
    "what": "J-2: a repeated key in a large object (hash path) is not found",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (!seen.insert(StringOf(key)).second) return RepeatedKey(key);",
    "replace": "seen.insert(StringOf(key));",
@@ -35,6 +44,10 @@
   {
    "id": "js-repeated-nested-unchecked",
    "what": "J-2, J-9: objects inside containers are not walked, so their repeated keys pass",
+   "guards": [
+    "json J-2",
+    "json J-9"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "            stack_.push_back({unsafe_yyjson_get_first(value), yyjson_obj_size(value), 0, true, nullptr, 0});\n",
    "replace": "",
@@ -45,6 +58,9 @@
   {
    "id": "js-pointer-tilde-unescaped",
    "what": "J-2 detail: '~' in a key is not escaped as ~0 in the JSON Pointer",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/TextPosition.cpp",
    "find": "            pointer += \"~0\";",
    "replace": "            pointer += '~';",
@@ -55,6 +71,9 @@
   {
    "id": "js-column-off-by-one",
    "what": "5.5: the column restarts at the newline itself instead of after it",
+   "guards": [
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/TextPosition.cpp",
    "find": "            lineStart = i + 1;",
    "replace": "            lineStart = i;",
@@ -65,6 +84,10 @@
   {
    "id": "js-oom-as-syntax",
    "what": "5.5, J-9: yyjson's allocation failure is reported as Syntax, not OutOfMemory",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-9"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (error.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION) return Err(OutOfMemoryError());",
    "replace": "",
@@ -74,6 +97,9 @@
   {
    "id": "js-wrongkind-detail-swapped",
    "what": "5.2: WrongKind names the found kind as the expected one",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "std::string(\"expected \") + ToString(expected) + \", found \" + ToString(found)",
    "replace": "std::string(\"expected \") + ToString(found) + \", found \" + ToString(expected)",
@@ -84,6 +110,9 @@
   {
    "id": "js-array-step-into-children",
    "what": "J-9: the array walk steps to the next node instead of the next sibling (enters nested containers)",
+   "guards": [
+    "json J-9"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "element_ = remaining_ == 0 ? nullptr : Wrap(unsafe_yyjson_get_next(Raw(element_)));",
    "replace": "element_ = remaining_ == 0 ? nullptr : Wrap(Raw(element_) + 1);",
@@ -94,6 +123,9 @@
   {
    "id": "js-object-step-into-children",
    "what": "J-9: the object walk skips a fixed two nodes instead of the value's whole subtree",
+   "guards": [
+    "json J-9"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "key_ = remaining_ == 0 ? nullptr : Wrap(unsafe_yyjson_get_next(Raw(key_) + 1));",
    "replace": "key_ = remaining_ == 0 ? nullptr : Wrap(Raw(key_) + 2);",
@@ -104,6 +136,9 @@
   {
    "id": "js-number-unchecked-at-parse",
    "what": "J-2: Parse does not check the numbers (a number nobody reads is not range-checked)",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "            if (Detail::DecimalToDouble(RawOf(value), converted) != Detail::DecimalRead::Ok) {",
    "replace": "            if (false && Detail::DecimalToDouble(RawOf(value), converted) != Detail::DecimalRead::Ok) {",
@@ -114,6 +149,9 @@
   {
    "id": "js-overflow-accepted",
    "what": "J-2: an infinite conversion is accepted",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/adapters/fast_float/DecimalToDouble.cpp",
    "find": "    if (std::isinf(value)) return DecimalRead::OutOfRange;\n",
    "replace": "",
@@ -124,6 +162,9 @@
   {
    "id": "js-underflow-accepted",
    "what": "J-2: non-zero text that rounds to zero is accepted",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/adapters/fast_float/DecimalToDouble.cpp",
    "find": "    if (value == 0.0 && HasNonZeroSignificand(text)) return DecimalRead::OutOfRange;\n",
    "replace": "",
@@ -134,6 +175,9 @@
   {
    "id": "js-zero-text-exponent-counted",
    "what": "J-2: digits of the exponent count as significant, so zero text with a large exponent is called an underflow",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/NumberText.cpp",
    "find": "        if (c == 'e' || c == 'E') return false;\n",
    "replace": "",
@@ -144,6 +188,9 @@
   {
    "id": "js-integer-literal-misses-E",
    "what": "J-3: '1E2' (capital E) counts as an integer literal",
+   "guards": [
+    "json J-3"
+   ],
    "file": "engine/json/src/NumberText.cpp",
    "find": "return text.find_first_of(\".eE\") == std::string_view::npos;",
    "replace": "return text.find_first_of(\".e\") == std::string_view::npos;",
@@ -154,6 +201,9 @@
   {
    "id": "js-integer-literal-misses-dot",
    "what": "J-3: '1.0' counts as an integer literal",
+   "guards": [
+    "json J-3"
+   ],
    "file": "engine/json/src/NumberText.cpp",
    "find": "return text.find_first_of(\".eE\") == std::string_view::npos;",
    "replace": "return text.find_first_of(\"eE\") == std::string_view::npos;",
@@ -164,6 +214,9 @@
   {
    "id": "js-uint-minus-zero-rejected",
    "what": "J-3: AsUint64 rejects \"-0\" (the adapter's own case is lost)",
+   "guards": [
+    "json J-3"
+   ],
    "file": "engine/json/src/NumberText.cpp",
    "find": "        if (text == \"-0\") {",
    "replace": "        if (false) {",
@@ -174,6 +227,9 @@
   {
    "id": "js-uint-negative-as-zero",
    "what": "J-3: a negative integer read unsigned is not NumberOutOfRange",
+   "guards": [
+    "json J-3"
+   ],
    "file": "engine/json/src/NumberText.cpp",
    "find": "        return IntegerRead::OutOfRange;\n    }\n    return ReadInteger(text, out);",
    "replace": "        out = 0;\n        return IntegerRead::Ok;\n    }\n    return ReadInteger(text, out);",
@@ -184,6 +240,9 @@
   {
    "id": "js-number-pointer-dropped",
    "what": "5.5: an out-of-range number's detail loses its JSON Pointer",
+   "guards": [
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "                                       Located(yyjson_get_raw(value), PointerToCurrent()));",
    "replace": "                                       Located(yyjson_get_raw(value), std::string()));",
@@ -194,6 +253,9 @@
   {
    "id": "jw-array-comma-dropped",
    "what": "J-5: no comma between array elements",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    if (!frame.first) out_ += ',';\n    frame.first = false;\n}",
    "replace": "    frame.first = false;\n}",
@@ -204,6 +266,9 @@
   {
    "id": "jw-member-comma-dropped",
    "what": "J-5: no comma between object members",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        if (!frame.first) out_ += ',';\n        frame.first = false;\n        if (!AppendString(out_, key)) {",
    "replace": "        frame.first = false;\n        if (!AppendString(out_, key)) {",
@@ -214,6 +279,9 @@
   {
    "id": "jw-quote-unescaped",
    "what": "J-5: '\"' in a string is not escaped",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        case '\"': shortEscape = \"\\\\\\\"\"; break;\n",
    "replace": "",
@@ -224,6 +292,9 @@
   {
    "id": "jw-control-unescaped",
    "what": "J-5: control characters without a short escape are written raw",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if (shortEscape != nullptr || c < 0x20) {",
    "replace": "if (shortEscape != nullptr) {",
@@ -234,6 +305,9 @@
   {
    "id": "jw-utf8-overlong-two-byte",
    "what": "J-5: the two-byte overlong leads C0 and C1 are accepted",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if (lead >= 0xC2 && lead <= 0xDF)",
    "replace": "if (lead >= 0xC0 && lead <= 0xDF)",
@@ -244,6 +318,9 @@
   {
    "id": "jw-utf8-surrogate",
    "what": "J-5: UTF-8 encoded surrogates (ED A0..BF) are accepted",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if (lead == 0xED) return continuation(i + 1, 0x80, 0x9F)",
    "replace": "if (lead == 0xED) return continuation(i + 1, 0x80, 0xBF)",
@@ -254,6 +331,9 @@
   {
    "id": "jw-utf8-above-max",
    "what": "J-5: code points above U+10FFFF (F4 90..) are accepted",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        return continuation(i + 1, 0x80, 0x8F) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "replace": "        return continuation(i + 1, 0x80, 0xBF) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
@@ -264,6 +344,9 @@
   {
    "id": "jw-key-utf8-unchecked",
    "what": "J-5: a key's UTF-8 is not checked",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        if (!AppendString(out_, key)) {\n            Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n            return;\n        }",
    "replace": "        static_cast<void>(AppendString(out_, key));",
@@ -274,6 +357,10 @@
   {
    "id": "jw-nonfinite-as-null",
    "what": "Question 3 / J-5: a non-finite number is written as null instead of failing",
+   "guards": [
+    "json-module-declaration 第 3 題",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "            Fail(JsonErrorCode::NotRepresentable, \"non-finite number\");\n            return;",
    "replace": "            out_ += \"null\";\n            return;",
@@ -284,6 +371,9 @@
   {
    "id": "jw-not-cut-back",
    "what": "J-5: a failed Finish leaves the partial output in the string",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        out_.resize(startLength_);\n",
    "replace": "",
@@ -294,6 +384,9 @@
   {
    "id": "jw-error-not-reported",
    "what": "J-5: Finish succeeds although an error was recorded",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    if (error_) {\n        out_.resize",
    "replace": "    if (false && error_) {\n        out_.resize",
@@ -304,6 +397,9 @@
   {
    "id": "jw-no-inline-levels",
    "what": "J-5: fewer than 32 inline levels (the Contract's number)",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/include/engine/json/Writer.hpp",
    "find": "static constexpr std::size_t kInlineDepth = 32;",
    "replace": "static constexpr std::size_t kInlineDepth = 31;",
@@ -314,6 +410,10 @@
   {
    "id": "jw-oom-escapes",
    "what": "J-5, 5.5: an allocation failure escapes String as std::bad_alloc",
+   "guards": [
+    "json J-5",
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        if (!AppendString(out_, text)) Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n    } catch (const std::bad_alloc&) {\n        Fail(JsonErrorCode::OutOfMemory, \"out of memory\");\n    }",
    "replace": "        if (!AppendString(out_, text)) Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n    } catch (const std::logic_error&) {\n    }",
@@ -324,6 +424,9 @@
   {
    "id": "jw-value-without-key",
    "what": "J-5: a value in an object without a Key is not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        GYO_ASSERT(frame.awaitingValue && \"a value in an object needs a Key first\");\n",
    "replace": "",
@@ -334,6 +437,9 @@
   {
    "id": "jw-key-in-array",
    "what": "J-5: a Key inside an array is not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(frame.container == Container::Object && \"a Key outside an object\");\n",
    "replace": "",
@@ -344,6 +450,9 @@
   {
    "id": "jw-end-mismatch",
    "what": "J-5: an end that does not match the open container is not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(frame.container == container && \"the end does not match the open container\");\n",
    "replace": "",
@@ -354,6 +463,9 @@
   {
    "id": "jw-end-after-key",
    "what": "J-5: ending an object right after a Key is not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(!frame.awaitingValue && \"a Key without its value\");\n",
    "replace": "",
@@ -364,6 +476,9 @@
   {
    "id": "jw-second-top-level",
    "what": "J-5: a second top-level value is not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        GYO_ASSERT(!topWritten_ && \"a second top-level value\");\n",
    "replace": "",
@@ -374,6 +489,9 @@
   {
    "id": "jw-finish-open",
    "what": "J-5: Finish with an open container is not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(depth_ == 0 && lost_ == 0 && \"Finish with an open container\");\n",
    "replace": "",
@@ -384,6 +502,9 @@
   {
    "id": "jw-finish-empty",
    "what": "J-5: Finish with nothing written is not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(topWritten_ && \"Finish with nothing written\");\n",
    "replace": "",
@@ -394,6 +515,9 @@
   {
    "id": "jw-finish-twice",
    "what": "J-5: a second Finish is not a Programmer Error (writing after Finish needs no mutant of its own: the second-top-level check catches it as well)",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(!finished_ && \"Finish called twice\");\n",
    "replace": "",
@@ -404,6 +528,9 @@
   {
    "id": "jw-writevalue-reformats-numbers",
    "what": "J-5: WriteValue rewrites numbers through Double instead of their text",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        case Kind::Number: writer.NumberText(item.AsNumberText().value()); break;",
    "replace": "        case Kind::Number: writer.Double(item.AsDouble().value()); break;",
@@ -414,6 +541,10 @@
   {
    "id": "jg-yyjson-rule-off",
    "what": "J-1 guard: the yyjson include rule matches nothing. Also carries test_include_with_spacing (from jg-include-spacing-missed, retired 2026-11-20: a reading-method mutant added without an observed miss)",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "(?:[^>\\\"\\n]*/)?yyjson\\.h[>\\\"]",
    "replace": "(?:[^>\\\"\\n]*/)?yyjson\\.never[>\\\"]",
@@ -433,6 +564,10 @@
   {
    "id": "jg-fastfloat-rule-off",
    "what": "J-1 guard: the fast_float include rule matches nothing",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "fast_float(?:/[^>\\\"/\\n]*\\.h|\\.h)[>\\\"]",
    "replace": "fast_float_never(?:/[^>\\\"/\\n]*\\.h|\\.h)[>\\\"]",
@@ -452,6 +587,10 @@
   {
    "id": "jg-link-rule-off",
    "what": "J-1 guard: the link rule matches nothing. Also carries test_yyjson_link_outside_the_module (from jg-link-yyjson-half-off: one item of the rule's list, whose items the self-tests check one by one) and test_source_dir_in_build_cmake (from jg-build-cmake-not-scanned: the second item of CMAKE_ROOTS, whose list keeps jg-tests-cmake-not-scanned); both retired 2026-11-20",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "LINK = re.compile(r\"\\bgyo_(?:yyjson|fast_float)\\b|\\b(?:yyjson|fast_float)_SOURCE_DIR\\b\")",
    "replace": "LINK = re.compile(r\"\\bgyo_never\\b\")",
@@ -471,6 +610,10 @@
   {
    "id": "jg-any-place-allowed",
    "what": "J-1 guard: an include counts as allowed wherever it is",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "                        if relative.startswith(home):",
    "replace": "                        if True:",
@@ -490,6 +633,10 @@
   {
    "id": "jg-no-positive-control",
    "what": "J-1 guard: no allowed include in an adapter goes unnoticed",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "        if count == 0:\n",
    "replace": "        if False:\n",
@@ -509,6 +656,10 @@
   {
    "id": "jg-missing-source-root-ignored",
    "what": "J-1 guard: a missing source scan root is skipped silently (fails open)",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "            errors.append(f\"source scan root {top}/ not found under {root}\")\n",
    "replace": "            pass\n",
@@ -528,6 +679,10 @@
   {
    "id": "jg-tests-not-scanned",
    "what": "J-1 guard: tests outside the adapter's own directory are not scanned",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "SOURCE_ROOTS = (\"engine\", \"tests\")",
    "replace": "SOURCE_ROOTS = (\"engine\",)",
@@ -547,6 +702,9 @@
   {
    "id": "jw-two-keys",
    "what": "J-5: two Keys in a row are not a Programmer Error",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(!frame.awaitingValue && \"two Keys in a row\");\n",
    "replace": "",
@@ -557,6 +715,9 @@
   {
    "id": "jw-last-error-wins",
    "what": "J-5: Finish reports the last error instead of the first",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    if (!error_) error_ = JsonError::Make(",
    "replace": "    error_ = JsonError::Make(",
@@ -567,6 +728,9 @@
   {
    "id": "jw-key-not-counted",
    "what": "J-5 detail: a Key is not counted in \"value N\"",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    ++values_;\n    frame.awaitingValue = true;",
    "replace": "    frame.awaitingValue = true;",
@@ -577,6 +741,10 @@
   {
    "id": "jw-nonfinite-wrong-code",
    "what": "Question 3 / J-5: a non-finite number is reported with another code",
+   "guards": [
+    "json-module-declaration 第 3 題",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "            Fail(JsonErrorCode::NotRepresentable, \"non-finite number\");",
    "replace": "            Fail(JsonErrorCode::OutOfMemory, \"non-finite number\");",
@@ -587,6 +755,9 @@
   {
    "id": "jw-deep-pop-dropped",
    "what": "J-5: a level past the inline ones keeps its state after it ends",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    if (depth_ > kInlineDepth) deeper_.pop_back();\n    --depth_;",
    "replace": "    --depth_;",
@@ -597,6 +768,9 @@
   {
    "id": "jw-space-escaped",
    "what": "J-5: a space is escaped (printable ASCII must stay as it is)",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if (shortEscape != nullptr || c < 0x20) {",
    "replace": "if (shortEscape != nullptr || c <= 0x20) {",
@@ -607,6 +781,9 @@
   {
    "id": "jw-writevalue-bool-true",
    "what": "J-5: WriteValue writes every Bool as true",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "case Kind::Bool: writer.Bool(item.AsBool().value()); break;",
    "replace": "case Kind::Bool: writer.Bool(true); break;",
@@ -617,6 +794,9 @@
   {
    "id": "js-asbool-true",
    "what": "5.2: AsBool reads every Bool as true",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    return yyjson_get_bool(value);",
    "replace": "    return true;",
@@ -627,6 +807,9 @@
   {
    "id": "jw-lost-level-not-counted",
    "what": "D2 / J-5: a level whose state could not be stored is not counted, so the caller cannot close it",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "            ++lost_;  // the level exists for the caller; its state is gone\n",
    "replace": "",
@@ -637,6 +820,9 @@
   {
    "id": "jw-writevalue-oom-escapes",
    "what": "D1 / 5.5: an allocation failure escapes WriteValue as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    } catch (const std::bad_alloc&) {\n        writer.lost_ = lostBefore;",
    "replace": "    } catch (const std::logic_error&) {\n        writer.lost_ = lostBefore;",
@@ -647,6 +833,9 @@
   {
    "id": "js-readerror-oom-escapes",
    "what": "D3 / 5.5: building a read error under allocation failure escapes as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    } catch (const std::bad_alloc&) {\n        return JsonError::Make(JsonErrorCode::OutOfMemory, \"out of memory\");",
    "replace": "    } catch (const std::logic_error&) {\n        return JsonError::Make(JsonErrorCode::OutOfMemory, \"out of memory\");",
@@ -657,6 +846,10 @@
   {
    "id": "js-parse-oom-escapes",
    "what": "5.5 / J-9: an allocation failure in the adapter's own walk escapes Parse as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-9"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    } catch (const std::bad_alloc&) {\n        return Err(OutOfMemoryError());",
    "replace": "    } catch (const std::logic_error&) {\n        return Err(OutOfMemoryError());",
@@ -667,6 +860,9 @@
   {
    "id": "js-root-unchecked",
    "what": "5.2: Root on a moved-from Document is not a Programmer Error",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    GYO_ASSERT(tree_ != nullptr);\n",
    "replace": "",
@@ -677,6 +873,9 @@
   {
    "id": "js-move-assign-noop",
    "what": "J-8: move assignment does not take the other Document's tree",
+   "guards": [
+    "json J-8"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    if (this != &other) {",
    "replace": "    if (false) {",
@@ -687,6 +886,9 @@
   {
    "id": "js-in-place-read",
    "what": "J-8: the Document reads in place and keeps referring to the input",
+   "guards": [
+    "json J-8"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "text.size(), YYJSON_READ_NUMBER_AS_RAW,",
    "replace": "text.size(), YYJSON_READ_NUMBER_AS_RAW | YYJSON_READ_INSITU,",
@@ -697,6 +899,9 @@
   {
    "id": "js-trailing-content-accepted",
    "what": "J-2: content after the value is ignored",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "text.size(), YYJSON_READ_NUMBER_AS_RAW,",
    "replace": "text.size(), YYJSON_READ_NUMBER_AS_RAW | YYJSON_READ_STOP_WHEN_DONE,",
@@ -707,6 +912,9 @@
   {
    "id": "js-zero-text-capital-E",
    "what": "J-2: a capital E counts as a significant digit, so 0E5 is called an underflow",
+   "guards": [
+    "json J-2"
+   ],
    "file": "engine/json/src/NumberText.cpp",
    "find": "        if (c == 'e' || c == 'E') return false;",
    "replace": "        if (c == 'e') return false;",
@@ -717,6 +925,9 @@
   {
    "id": "js-column-in-characters",
    "what": "5.5: columns count characters instead of bytes",
+   "guards": [
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/TextPosition.cpp",
    "find": "    for (std::size_t i = 0; i < end; ++i) {\n        if (text[i] == '\\n') {",
    "replace": "    for (std::size_t i = 0; i < end; ++i) {\n        if ((static_cast<unsigned char>(text[i]) & 0xC0) == 0x80) {\n            ++lineStart;\n            continue;\n        }\n        if (text[i] == '\\n') {",
@@ -727,6 +938,9 @@
   {
    "id": "js-asbool-wrong-expected",
    "what": "5.2: AsBool names another kind as the expected one",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (!yyjson_is_bool(value)) return Err(WrongKindError(Kind::Bool, KindOf(value)));",
    "replace": "if (!yyjson_is_bool(value)) return Err(WrongKindError(Kind::Null, KindOf(value)));",
@@ -737,6 +951,9 @@
   {
    "id": "js-asnumbertext-wrong-expected",
    "what": "5.2: AsNumberText names another kind as the expected one",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "JsonResult<std::string_view> Value::AsNumberText() const {\n    yyjson_val* value = Raw(node_);\n    if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::Number,",
    "replace": "JsonResult<std::string_view> Value::AsNumberText() const {\n    yyjson_val* value = Raw(node_);\n    if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::String,",
@@ -747,6 +964,9 @@
   {
    "id": "js-asobject-wrong-expected",
    "what": "5.2: AsObject names another kind as the expected one",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (!yyjson_is_obj(value)) return Err(WrongKindError(Kind::Object, KindOf(value)));",
    "replace": "if (!yyjson_is_obj(value)) return Err(WrongKindError(Kind::Array, KindOf(value)));",
@@ -757,6 +977,9 @@
   {
    "id": "js-array-deref-past-end",
    "what": "5.2: reading an array iterator past the end is not a Programmer Error",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    GYO_ASSERT(remaining_ != 0);\n    return Value(element_);",
    "replace": "    return Value(element_);",
@@ -767,6 +990,9 @@
   {
    "id": "js-object-deref-past-end",
    "what": "5.2: reading an object iterator past the end is not a Programmer Error",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    GYO_ASSERT(remaining_ != 0);\n    yyjson_val* key = Raw(key_);",
    "replace": "    yyjson_val* key = Raw(key_);",
@@ -777,6 +1003,10 @@
   {
    "id": "js-array-not-walked",
    "what": "J-2, J-9: values inside arrays are not checked",
+   "guards": [
+    "json J-2",
+    "json J-9"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "            stack_.push_back({unsafe_yyjson_get_first(value), yyjson_arr_size(value), 0, false, nullptr, 0});\n",
    "replace": "",
@@ -787,6 +1017,9 @@
   {
    "id": "js-pointer-slash-unescaped",
    "what": "5.5: '/' in a key is not escaped as ~1 in the JSON Pointer",
+   "guards": [
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/TextPosition.cpp",
    "find": "            pointer += \"~1\";",
    "replace": "            pointer += '/';",
@@ -797,6 +1030,9 @@
   {
    "id": "js-int-overflow-ignored",
    "what": "J-3: an integer that does not fit is read anyway",
+   "guards": [
+    "json J-3"
+   ],
    "file": "engine/json/src/NumberText.cpp",
    "find": "if (result.ec == std::errc::result_out_of_range) return IntegerRead::OutOfRange;",
    "replace": "if (result.ec == std::errc::result_out_of_range) return IntegerRead::Ok;",
@@ -807,6 +1043,9 @@
   {
    "id": "js-find-missing-found",
    "what": "5.2: Find returns a value for a missing key",
+   "guards": [
+    "json-module-declaration 5.2"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    if (found == nullptr) return std::nullopt;\n",
    "replace": "",
@@ -817,6 +1056,9 @@
   {
    "id": "js-number-position-lost",
    "what": "5.5: an out-of-range number's line and column point at the start of the text",
+   "guards": [
+    "json-module-declaration 5.5"
+   ],
    "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "                                       Located(yyjson_get_raw(value), PointerToCurrent()));",
    "replace": "                                       Located(base_, PointerToCurrent()));",
@@ -827,6 +1069,10 @@
   {
    "id": "jb-components-public",
    "what": "J-1 / J-6: gyo_json hands its external components to its users",
+   "guards": [
+    "json J-1",
+    "json J-6"
+   ],
    "file": "engine/json/CMakeLists.txt",
    "find": "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)",
    "replace": "target_link_libraries(gyo_json PUBLIC gyo_yyjson gyo_fast_float)",
@@ -837,6 +1083,9 @@
   {
    "id": "jb-extra-link",
    "what": "J-6: gyo_json links something besides Base and its two components",
+   "guards": [
+    "json J-6"
+   ],
    "file": "engine/json/CMakeLists.txt",
    "find": "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)",
    "replace": "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float m)",
@@ -847,6 +1096,9 @@
   {
    "id": "jb-public-header-component",
    "what": "J-4: a public header includes a component header",
+   "guards": [
+    "json J-4"
+   ],
    "file": "engine/json/include/engine/json/Document.hpp",
    "find": "#include \"engine/json/JsonError.hpp\"\n\n// Reading JSON",
    "replace": "#include \"engine/json/JsonError.hpp\"\n#include <yyjson.h>\n\n// Reading JSON",
@@ -857,6 +1109,10 @@
   {
    "id": "jg-fastfloat-reading-reverted",
    "what": "J-1 guard: the fast_float include pattern goes back to the reading that missed <fast_float.h> and fast_float headers included with a path (the miss the adversarial check found, fixed in c8ba3a39); kept as the one reading-method mutant because that miss was observed",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "[<\\\"](?:[^>\\\"\\n]*/)?fast_float(?:/[^>\\\"/\\n]*\\.h|\\.h)[>\\\"]",
    "replace": "[<\\\"]fast_float/[^>\\\"]*[>\\\"]",
@@ -876,6 +1132,10 @@
   {
    "id": "jg-suffixes-narrow",
    "what": "J-1 guard: only .cpp and .hpp files are scanned",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "SOURCE_SUFFIXES = {\".c\", \".cc\", \".cpp\", \".cxx\", \".h\", \".hh\", \".hpp\", \".hxx\", \".inl\"}",
    "replace": "SOURCE_SUFFIXES = {\".cpp\", \".hpp\"}",
@@ -895,6 +1155,10 @@
   {
    "id": "jg-tests-cmake-not-scanned",
    "what": "J-1 guard: CMake files under tests/ are not scanned",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "CMAKE_ROOTS = (\"engine\", \"tests\", \"build/cmake\")",
    "replace": "CMAKE_ROOTS = (\"engine\", \"build/cmake\")",
@@ -914,6 +1178,10 @@
   {
    "id": "jg-cmake-modules-not-scanned",
    "what": "J-1 guard: *.cmake files are not scanned",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "if p.is_file() and (p.name == \"CMakeLists.txt\" or p.suffix == \".cmake\")]",
    "replace": "if p.is_file() and p.name == \"CMakeLists.txt\"]",
@@ -933,6 +1201,10 @@
   {
    "id": "jg-root-cmakelists-not-scanned",
    "what": "J-1 guard: the repository's CMakeLists.txt is not scanned",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "CMAKE_FILES = (\"CMakeLists.txt\",)  # at the repository root",
    "replace": "CMAKE_FILES = ()  # at the repository root",
@@ -952,6 +1224,10 @@
   {
    "id": "jg-yyjson-name-off",
    "what": "J-1 guard: yyjson names outside the adapter are not seen",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "(\"J1-YYJSON-NAME\", re.compile(r\"\\byyjson_\\w+\")",
    "replace": "(\"J1-YYJSON-NAME\", re.compile(r\"\\byyjson_never_\\w+\")",
@@ -971,6 +1247,10 @@
   {
    "id": "jg-fastfloat-name-off",
    "what": "J-1 guard: fast_float names outside the adapter are not seen",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "(\"J1-FASTFLOAT-NAME\", re.compile(r\"\\bfast_float::\")",
    "replace": "(\"J1-FASTFLOAT-NAME\", re.compile(r\"\\bfast_float_never::\")",
@@ -990,6 +1270,10 @@
   {
    "id": "jg-missing-cmake-root-ignored",
    "what": "J-1 guard: a missing CMake scan root is skipped silently (fails open)",
+   "guards": [
+    "json J-1",
+    "json-module-declaration 判定 5"
+   ],
    "file": "tests/common/json/json_guard.py",
    "find": "            errors.append(f\"CMake scan root {top}/ not found under {root}\")\n",
    "replace": "            pass\n",
@@ -1009,6 +1293,10 @@
   {
    "id": "jw-oom-escapes-beginarray",
    "what": "5.5 / J-5: an allocation failure escapes BeginArray as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        Push({container, true, false});\n        out_ += open;\n    } catch (const std::bad_alloc&) {",
    "replace": "        Push({container, true, false});\n        out_ += open;\n    } catch (const std::logic_error&) {",
@@ -1019,6 +1307,10 @@
   {
    "id": "jw-oom-escapes-endarray",
    "what": "5.5 / J-5: an allocation failure escapes EndArray as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "    try {\n        out_ += close;\n    } catch (const std::bad_alloc&) {",
    "replace": "    try {\n        out_ += close;\n    } catch (const std::logic_error&) {",
@@ -1029,6 +1321,10 @@
   {
    "id": "jw-oom-escapes-key",
    "what": "5.5 / J-5: an allocation failure escapes Key as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        out_ += ':';\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_ += ':';\n    } catch (const std::logic_error&) {",
@@ -1039,6 +1335,10 @@
   {
    "id": "jw-oom-escapes-int",
    "what": "5.5 / J-5: an allocation failure escapes Int as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "void Writer::Int(const std::int64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::bad_alloc&) {",
    "replace": "void Writer::Int(const std::int64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::logic_error&) {",
@@ -1049,6 +1349,10 @@
   {
    "id": "jw-oom-escapes-uint",
    "what": "5.5 / J-5: an allocation failure escapes Uint as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "void Writer::Uint(const std::uint64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::bad_alloc&) {",
    "replace": "void Writer::Uint(const std::uint64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::logic_error&) {",
@@ -1059,6 +1363,10 @@
   {
    "id": "jw-oom-escapes-double",
    "what": "5.5 / J-5: an allocation failure escapes Double as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        out_.append(buffer, Detail::WriteDouble(value, buffer));\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_.append(buffer, Detail::WriteDouble(value, buffer));\n    } catch (const std::logic_error&) {",
@@ -1069,6 +1377,10 @@
   {
    "id": "jw-oom-escapes-bool",
    "what": "5.5 / J-5: an allocation failure escapes Bool as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        out_ += value ? \"true\" : \"false\";\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_ += value ? \"true\" : \"false\";\n    } catch (const std::logic_error&) {",
@@ -1079,6 +1391,10 @@
   {
    "id": "jw-oom-escapes-null",
    "what": "5.5 / J-5: an allocation failure escapes Null as std::bad_alloc",
+   "guards": [
+    "json-module-declaration 5.5",
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        out_ += \"null\";\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_ += \"null\";\n    } catch (const std::logic_error&) {",
@@ -1089,6 +1405,9 @@
   {
    "id": "jw-utf8-2byte-cont-any",
    "what": "J-5: the second byte of a two-byte sequence is not checked",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "return continuation(i + 1, 0x80, 0xBF) ? 2 : 0;",
    "replace": "return continuation(i + 1, 0x00, 0xFF) ? 2 : 0;",
@@ -1099,6 +1418,9 @@
   {
    "id": "jw-utf8-f1f3-rejected",
    "what": "J-5: leads F1..F3 are rejected (U+40000..U+FFFFF)",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if (lead >= 0xF1 && lead <= 0xF3) {",
    "replace": "if (false) {",
@@ -1109,6 +1431,9 @@
   {
    "id": "jw-utf8-e1ec-rejected",
    "what": "J-5: leads E1..EC are rejected (U+1000..U+CFFF)",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if ((lead >= 0xE1 && lead <= 0xEC) || lead == 0xEE || lead == 0xEF) {",
    "replace": "if (lead == 0xEE || lead == 0xEF) {",
@@ -1119,6 +1444,9 @@
   {
    "id": "jw-utf8-3byte-cont-any",
    "what": "J-5: the continuation bytes after E1..EC, EE, EF are not checked",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        return continuation(i + 1, 0x80, 0xBF) && continuation(i + 2, 0x80, 0xBF) ? 3 : 0;\n    }",
    "replace": "        return continuation(i + 1, 0x00, 0xFF) && continuation(i + 2, 0x00, 0xFF) ? 3 : 0;\n    }",
@@ -1129,6 +1457,9 @@
   {
    "id": "jw-utf8-f0-tail-any",
    "what": "J-5: the third and fourth bytes after F0 are not checked",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "continuation(i + 1, 0x90, 0xBF) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "replace": "continuation(i + 1, 0x90, 0xBF) && continuation(i + 2, 0x00, 0xFF) && continuation(i + 3, 0x00, 0xFF)",
@@ -1139,6 +1470,9 @@
   {
    "id": "jw-utf8-e0-third-any",
    "what": "J-5: the third byte after E0 is not checked",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if (lead == 0xE0) return continuation(i + 1, 0xA0, 0xBF) && continuation(i + 2, 0x80, 0xBF) ? 3 : 0;",
    "replace": "if (lead == 0xE0) return continuation(i + 1, 0xA0, 0xBF) && continuation(i + 2, 0x00, 0xFF) ? 3 : 0;",
@@ -1149,6 +1483,9 @@
   {
    "id": "jw-utf8-ed-low-any",
    "what": "J-5: the second byte after ED has no lower bound",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "if (lead == 0xED) return continuation(i + 1, 0x80, 0x9F)",
    "replace": "if (lead == 0xED) return continuation(i + 1, 0x00, 0x9F)",
@@ -1159,6 +1496,9 @@
   {
    "id": "jw-utf8-f4-low-any",
    "what": "J-5: the second byte after F4 has no lower bound",
+   "guards": [
+    "json J-5"
+   ],
    "file": "engine/json/src/Writer.cpp",
    "find": "        return continuation(i + 1, 0x80, 0x8F) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "replace": "        return continuation(i + 1, 0x00, 0x8F) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
