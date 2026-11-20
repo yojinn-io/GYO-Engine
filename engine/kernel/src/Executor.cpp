@@ -78,6 +78,7 @@ VerificationReport WorldExecutor::Verification() const {
 
 Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested) {
     error.world = world_.name_;
+    world_.IdentifyError(error);
     world_.state_ = WorldState::Interrupted;
     world_.DiscardDeferred();
     if (nested) {
@@ -95,11 +96,11 @@ std::string StepText(const std::string& schedule, std::uint32_t position, const 
     return "step " + std::to_string(position) + " '" + name + "' of schedule '" + schedule + "'";
 }
 
-// Whether list holds error already (one error, wrapped by more levels, is the same error).
+// Whether list holds error already: one error, wrapped by more levels, is the same
+// error by identity (error levels D9); two errors of the same text are two.
 bool Listed(const std::vector<KernelError>& list, const KernelError& error) {
-    return std::any_of(list.begin(), list.end(), [&](const KernelError& e) {
-        return e.code == error.code && e.rule == error.rule && e.message == error.message && e.detail == error.detail;
-    });
+    return std::any_of(list.begin(), list.end(),
+                       [&](const KernelError& e) { return e.identity != 0 && e.identity == error.identity; });
 }
 
 // what: the nested run, as "schedule 'Name'" or "a schedule run by System 'Name'".
@@ -158,6 +159,7 @@ public:
             world_.DiscardDeferred();
             if (nested_ && !world_.leftError_) {
                 world_.leftError_ = NestedAbortError(world_, "schedule '" + std::string(schedule_) + "'");
+                world_.IdentifyError(*world_.leftError_);
             }
         }
     }
@@ -673,7 +675,10 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
             if (std::uncaught_exceptions() > exceptions_) {
                 subject_.state_ = WorldState::Interrupted;
                 subject_.DiscardDeferred();
-                if (!subject_.leftError_) subject_.leftError_ = ImmediateAbortError(subject_, where_);
+                if (!subject_.leftError_) {
+                    subject_.leftError_ = ImmediateAbortError(subject_, where_);
+                    subject_.IdentifyError(*subject_.leftError_);
+                }
             } else if (subject_.state_ == WorldState::Applying) {
                 subject_.state_ = WorldState::Running;
             }
@@ -906,7 +911,10 @@ Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::Syste
             if (std::uncaught_exceptions() > uncaught_) {
                 owner_.state_ = WorldState::Interrupted;
                 owner_.DiscardDeferred();
-                if (!owner_.leftError_) owner_.leftError_ = ImmediateAbortError(owner_, where_ + " (a trigger)");
+                if (!owner_.leftError_) {
+                    owner_.leftError_ = ImmediateAbortError(owner_, where_ + " (a trigger)");
+                    owner_.IdentifyError(*owner_.leftError_);
+                }
             } else if (owner_.state_ == WorldState::Applying) {
                 owner_.state_ = WorldState::Running;
             }

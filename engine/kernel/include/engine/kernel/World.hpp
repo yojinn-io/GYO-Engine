@@ -527,6 +527,13 @@ private:
     // K0 (spec E.5): the first error of a nested level, kept for the outermost
     // Run, which returns it once; a later RunSchedule of the Interrupted World returns it.
     std::optional<KernelError> leftError_;
+    // Error levels D9: the last identity given to a KernelError of this World (plain
+    // counter: a World runs on one thread at a time; kernel_guard K8 keeps IdIssuer out).
+    std::uint64_t errorIdentitySeq_ = 0;
+    // Gives error (and nothing it wraps) an identity when it has none.
+    void IdentifyError(KernelError& error) noexcept {
+        if (error.identity == 0) error.identity = ++errorIdentitySeq_;
+    }
     // One hook queue per schedule: a hook's records are applied at step 0 of the
     // next sync point of the Run that recorded them; those left at the last sync
     // point are applied by the hook rounds right after it (spec F-12), so the
