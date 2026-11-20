@@ -7,6 +7,7 @@ add_executable(gyo_logging_tests
     FileSinkTests.cpp
     FormatTests.cpp
     LoggerTests.cpp
+    SpanTests.cpp
 )
 # GYO::Json reads every JSON line back (Design Invariant LG-5).
 find_package(Threads REQUIRED)
@@ -17,7 +18,7 @@ if(MSVC)
 else()
     target_compile_options(gyo_logging_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS logger builder format console file append fatal)
+foreach(group IN ITEMS logger builder format console file append fatal span)
     add_test(NAME logging.${group} COMMAND gyo_logging_tests "--test-case=${group}:*")
     set_tests_properties(logging.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

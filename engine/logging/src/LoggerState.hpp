@@ -80,6 +80,13 @@ inline constinit std::atomic<State*> current{nullptr};
 // error and the no-Logger line take it; the fatal path only tries it.
 [[nodiscard]] std::mutex& StandardErrorMutex() noexcept;
 
+// Hands record to the sinks in taking; a record that writes one key twice
+// goes as the Error record that replaces it (category "logging").
+void DeliverRecord(const LoggerState& state, std::uint64_t taking, const Record& record) noexcept;
+
+// The text line of record on standard error: what a record becomes with no Logger installed.
+void WriteWithoutLogger(const Record& record) noexcept;
+
 // Writes one line to standard error in one call and flushes it, under
 // StandardErrorMutex: the text form of a record when no Logger is installed.
 void WriteToStandardError(std::string_view line) noexcept;

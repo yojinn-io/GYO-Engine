@@ -321,52 +321,64 @@ void Deliver(const Detail::LoggerState& state, const std::uint64_t taking, const
 
 } // namespace
 
-void Write(const Entry& entry) noexcept {
-    const Detail::LoggerState* state = Detail::current.load(std::memory_order_acquire);
-    if (state == nullptr) {
-        try {
-            std::string line;
-            Detail::AppendTextLine(line, Record{.level = entry.level,
-                                                .category = entry.category,
-                                                .text = entry.text,
-                                                .world = entry.world,
-                                                .worldInterrupted = entry.worldInterrupted,
-                                                .fields = entry.fields});
-            line += '\n';
-            Detail::WriteToStandardError(line);
-        } catch (...) {
-            // A record is never worth a failure.
-        }
-        return;
-    }
-    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);
-    if (taking == 0) return;
-    Record record{.kind = RecordKind::Log,
-                  .level = entry.level,
-                  .category = entry.category,
-                  .text = entry.text,
-                  .wall = state->Wall(),
-                  .monoNs = state->MonoNs(),
-                  .world = entry.world,
-                  .worldInterrupted = entry.worldInterrupted,
-                  .fields = entry.fields};
-    if (const std::string_view repeated = RepeatedKey(entry.fields); !repeated.empty()) {
+namespace Detail {
+
+void DeliverRecord(const LoggerState& state, const std::uint64_t taking, const Record& record) noexcept {
+    if (const std::string_view repeated = RepeatedKey(record.fields); !repeated.empty()) {
         // One line that does not read back would break the file's contract
         // (Design Invariant LG-5): the record becomes an Error record instead.
         try {
             std::string text = "a record was dropped: field key \"";
-            text.append(repeated).append("\" is written twice (category ").append(entry.category).append(")");
+            text.append(repeated).append("\" is written twice (category ").append(record.category).append(")");
             Record error = record;
             error.level = Level::Error;
             error.category = "logging";
             error.text = text;
             error.fields = {};
-            Deliver(*state, Detail::TakingSinks(*state, error.level, error.category), error);
+            Deliver(state, TakingSinks(state, error.level, error.category), error);
         } catch (...) {
         }
         return;
     }
-    Deliver(*state, taking, record);
+    Deliver(state, taking, record);
+}
+
+void WriteWithoutLogger(const Record& record) noexcept {
+    try {
+        std::string line;
+        AppendTextLine(line, record);
+        line += '\n';
+        WriteToStandardError(line);
+    } catch (...) {
+        // A record is never worth a failure.
+    }
+}
+
+} // namespace Detail
+
+void Write(const Entry& entry) noexcept {
+    const Detail::LoggerState* state = Detail::current.load(std::memory_order_acquire);
+    if (state == nullptr) {
+        Detail::WriteWithoutLogger(Record{.level = entry.level,
+                                          .category = entry.category,
+                                          .text = entry.text,
+                                          .world = entry.world,
+                                          .worldInterrupted = entry.worldInterrupted,
+                                          .fields = entry.fields});
+        return;
+    }
+    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);
+    if (taking == 0) return;
+    Detail::DeliverRecord(*state, taking,
+                          Record{.kind = RecordKind::Log,
+                                 .level = entry.level,
+                                 .category = entry.category,
+                                 .text = entry.text,
+                                 .wall = state->Wall(),
+                                 .monoNs = state->MonoNs(),
+                                 .world = entry.world,
+                                 .worldInterrupted = entry.worldInterrupted,
+                                 .fields = entry.fields});
 }
 
 } // namespace GYO::Engine::Logging

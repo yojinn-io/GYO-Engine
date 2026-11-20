@@ -11,6 +11,7 @@ add_library(gyo_logging STATIC
     src/MemorySink.cpp
     src/RecordBuilder.cpp
     src/Sink.cpp
+    src/Span.cpp
     src/TextFormat.cpp
     src/WriteFatalRecord.cpp
 )
