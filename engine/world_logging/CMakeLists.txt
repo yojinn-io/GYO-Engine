@@ -6,6 +6,7 @@
 add_library(gyo_world_logging STATIC
     src/Forward.cpp
     src/TakeKernelDiagnostics.cpp
+    src/WriteFailure.cpp
 )
 add_library(GYO::WorldLogging ALIAS gyo_world_logging)
 
