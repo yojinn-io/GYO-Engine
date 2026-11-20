@@ -1,6 +1,6 @@
 # 事前宣告：日誌機制（含 trace）（`v8-arch-gyo2-logging`）
 
-更新：2026-11-20（修訂 1；同日動工前核准）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前已核准（使用者「照建議，全部核准」，第 13 節八題全部照建議），實作段進行中。**
+更新：2026-11-20（修訂 1；同日動工前核准；修訂 2：實作中使用者定「記日誌後退出、不去重」，改 5.6、9.2、9.4、判定 2，見第 17 節）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前已核准（使用者「照建議，全部核准」，第 13 節八題全部照建議），實作段進行中。**
 
 經過：修訂 0（2d275db9）送 Fable 5.2／high 敵對式檢查（general-purpose、只讀），必改 9、建議改 10、小問題 10（證據 `declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 16 節；修訂 1 沒有再送檢查。修訂 1 的主要變化：致命那一行改成「先寫、不等任何東西」，由預先開好的第二個寫出口寫（第 5.6 節）；`Forward` 改成做得出來的形狀（第 5.3 節）；拆成兩個 Module，照 `time`／`world_time` 的先例（第 5.1 節）；直接寫一筆的 API 列進入口清單（第 3 節）；第 13 節從 6 題改成 8 題，加了「GYO 自己加的、和別家不同的」與回滾的交界。
 
@@ -224,11 +224,17 @@ WorldLogging::Forward<TimeDiscardedLog>(setup, {.schedule = DefaultSchedules::fr
 ```cpp
 // (1) 入口回錯誤：
 auto ran = product.RunFrame();
-if (!ran && ran.error().failure) WorldLogging::WriteFailure(*ran.error().failure);
+if (!ran && ran.error().failure) {
+    WorldLogging::WriteFailure(*ran.error().failure);
+    return {RunnerExitCode::Failure, "a World broke"};  // 記日誌，然後退出（修訂 2）
+}
 // (2) System 丟例外：RunFrame 不回錯誤、例外往外丟。
 try { ran = product.RunFrame(); } catch (...) {
-    if (const auto* f = product.Failure()) WorldLogging::WriteFailure(*f);
-    throw;  // 或結束程式，由 runner 決定
+    if (const auto* f = product.Failure()) {
+        WorldLogging::WriteFailure(*f);
+        return {RunnerExitCode::Failure, "a World broke"};  // 記日誌，然後退出（修訂 2）
+    }
+    throw;  // 不是 World 壞掉
 }
 // (3) 用預設 runner：Product::Run() 只回 RunnerExit，main 再看 Failure()。
 const auto exit = product->Run();
@@ -236,7 +242,7 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 ```
 
 - `world_logging` 另給一個包住 runner 的輔助 `WorldLogging::WithFailureLog(Runner)`：回一個 runner，裡面照 (1)(2) 寫。產品裝 runner 時自己選要不要包（編排層不知道）。每個產品要記得接——這是第 13 節第 2 題 (d)。
-- **不重複**：O-11 結束後每次拒絕都帶同一份 `WorldFailure`。`WriteFailure` 記住寫過的（`product`＋`world`＋`entry`＋`syncEpoch`＋`kind`），同一份第二次回 `AlreadyWritten`、不寫。
+- **記日誌，然後退出**（修訂 2，使用者 2026-11-20 `v8-arch-gyo2-logging-failure-log-then-exit`）：`WorldFailure` 是修不好的錯誤，runner 或 `main` 寫一筆之後就退出、不再呼叫入口；`WriteFailure` 每次呼叫都寫，不去重（修訂 1 的去重鍵是補丁：全行程共用時，先後兩個 Product 在同一入口、同一同步點壞掉，第二筆會被吞掉）。`WithFailureLog` 回 `Failure` 的 exit；沒有壞掉 World 的例外照原樣丟出。
 - **寫什麼**：一筆 `Fatal` 紀錄，category `"world"`，欄位照 `WorldFailure`（`product`、`world`、`kind`、`entry`、`schedule`、`sync_epoch`、`kernel_code`、`where`、`last_schedule`），`text`＝`WorldFailure::Text()`。**只讀傳進來的 `WorldFailure` 的值**，不讀 World、Kernel（情形 (2)(3) 讀的是 `Product::Failure()`：編排層在壞掉當下收好的值）。
 
 **怎麼寫**（`logging` 的 `WriteFatalRecord`；`WriteFailure` 與斷言處理器都走它）：
@@ -406,7 +412,7 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 
 ### 9.2 情境測試（第 5 步；`tests/common/scenario/` 加一段，段號和第 4 批對齊，看哪批先合併）
 
-- **致命路徑**（F1，判定 2）：兩個 World 的 `Product`，第二個 World 的 System 在第 3 幀 (1) 回錯誤、(2) 丟例外、(3) `DropOldFirst` 替換失敗（`WorldMissing`）。runner 用 `WithFailureLog`（(3) 由 `main` 接）。預期：`MemorySink` 和真的 `JsonLinesFileSink`（建置目錄裡的暫存檔）都有那一筆 `Fatal`、欄位等於 `WorldFailure`；檔案在 `Close` 之前就讀得到；之後的 `RunFrame` 被拒（O-11），runner 再呼叫 `WriteFailure` 回 `AlreadyWritten`、日誌沒有多一筆 `Fatal`。(3) 另有編排層經 `Base::Log` 記的那一筆 `Warning`（`Product.cpp:537`），在 `Fatal` 之前。
+- **致命路徑**（F1，判定 2）：兩個 World 的 `Product`，第二個 World 的 System 在第 3 幀 (1) 回錯誤、(2) 丟例外、(3) `DropOldFirst` 替換失敗（`WorldMissing`）。runner 用 `WithFailureLog`（(3) 由 `main` 接）。預期：`MemorySink` 和真的 `JsonLinesFileSink`（建置目錄裡的暫存檔）都有那一筆 `Fatal`、欄位等於 `WorldFailure`；檔案在 `Close` 之前就讀得到；runner 寫一筆之後退出（`Failure` 的 exit），日誌只有一筆 `Fatal`（修訂 2）。(3) 另有編排層經 `Base::Log` 記的那一筆 `Warning`（`Product.cpp:537`），在 `Fatal` 之前。
 - **平常**（F2）：時間 Module 照預設、一幀給 1 秒真實經過時間，`Forward<TimeDiscardedLog>` 收到一筆、`world` 對；訊息上限設 2、寫 5 筆，runner 呼叫 `TakeKernelDiagnostics`，收到一筆 `DroppedMessages`。
 - **決定性**（判定 4）：同一個情境跑兩次（日誌關＝不呼叫 `Forward`、不登記 `LogWorldLabel`；開＝全部 `Debug` 以上、兩個輸出端），比 5.11 列的對象。
 - **trace**（F3、F4）：寫 1,000 筆 trace 紀錄（帶跳脫字串、NaN、±Inf、負零、重複鍵一筆）與 100 個 span，`trace.` 只進 trace 檔、其餘只進主控台；每行 `Parse` 讀回、逐欄比對；重複鍵那一筆變成錯誤紀錄。
@@ -419,7 +425,7 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 ### 9.4 突變（AGENTS §14.2、§14.5；`tests/common/mutation/README.md`）
 
 - 清單 `tests/common/logging/mutations.json`，前綴 `lg-`。每個突變寫 `what` 與 `guards`（README 第 9 條）。
-- 只立測試觀察得到的決定（修訂 0 的「讀 World」「不 flush」觀察不到，拿掉）。估計：LG-1 3（`TakeKernelDiagnostics` 漏一種紀錄、`world` 欄位、`world_interrupted`）、LG-2 6（致命那一行等寫者之後才寫、不寫致命寫出口、不去重、重入時碰鎖、逾時後不回、寫者執行緒上等自己）、LG-3 3（不 `catch`、`static_assert` 拿掉、描述器的例外讓 System 回錯誤）、LG-5 7（NaN、+Inf、−Inf、鍵順序、`schema`、重複鍵、寫出失敗）、LG-6 6（滿了不丟、不計數、結尾行、守恆、順序、`fatal_direct` 進了守恆式）、LG-7 3、LG-8 2、LG-9 2、LG-10 1、LG-11 1；掃描守衛每條規則約 3 個（README 第 4 條）。合計約 40～50。超過「DI 條數 × 5」（11 × 5＝55）時，在合併前核准說明理由（README 第 8 條）。
+- 只立測試觀察得到的決定（修訂 0 的「讀 World」「不 flush」觀察不到，拿掉）。估計：LG-1 3（`TakeKernelDiagnostics` 漏一種紀錄、`world` 欄位、`world_interrupted`）、LG-2 6（致命那一行等寫者之後才寫、不寫致命寫出口、重入時碰鎖、逾時後不回、寫者執行緒上等自己；修訂 2 拿掉「不去重」，加 `WithFailureLog` 記日誌後退出的幾件）、LG-3 3（不 `catch`、`static_assert` 拿掉、描述器的例外讓 System 回錯誤）、LG-5 7（NaN、+Inf、−Inf、鍵順序、`schema`、重複鍵、寫出失敗）、LG-6 6（滿了不丟、不計數、結尾行、守恆、順序、`fatal_direct` 進了守恆式）、LG-7 3、LG-8 2、LG-9 2、LG-10 1、LG-11 1；掃描守衛每條規則約 3 個（README 第 4 條）。合計約 40～50。超過「DI 條數 × 5」（11 × 5＝55）時，在合併前核准說明理由（README 第 8 條）。
 - 每步只跑相關的突變；合併前完整跑一次（`mutation-rerun-scope`）。
 - 新清單在第 6 步後送 Fable 5.2／high 敵對式檢查（AGENTS §14.2）。
 
@@ -428,7 +434,7 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 | # | 判定 | 怎麼算過 |
 |---|---|---|
 | 1 | L1 三平台（linux-x64、windows-x64、macos-arm64）ctest 全綠 | 含 `gyo_logging_tests`、`gyo_world_logging_tests`、情境的新段、守衛、兩個附加 handle 的並行寫測試 |
-| 2 | 致命路徑（第 9.2 節三種情形＋LG-2 的單元案） | `WriteFailure` 回傳時：記憶體輸出端與檔案都有那一筆、欄位等於 `WorldFailure`（逐欄）；注入「永不回來的寫出」時，`WriteFailure` 有回來、致命那一行在致命寫出口、回報標步驟 4 逾時（期限用注入的值 50 ms；**不判真實時間的上限**，靠 ctest 的 TIMEOUT 擋住真的卡死）；同一份第二次回 `AlreadyWritten` |
+| 2 | 致命路徑（第 9.2 節三種情形＋LG-2 的單元案） | `WriteFailure` 回傳時：記憶體輸出端與檔案都有那一筆、欄位等於 `WorldFailure`（逐欄）；注入「永不回來的寫出」時，`WriteFailure` 有回來、致命那一行在致命寫出口、回報標步驟 4 逾時（期限用注入的值 50 ms；**不判真實時間的上限**，靠 ctest 的 TIMEOUT 擋住真的卡死）；runner 寫一筆後退出（`WithFailureLog` 回 `Failure` 的 exit、之後不再呼叫入口）（修訂 2 改，原「同一份第二次回 `AlreadyWritten`」，見第 17 節） |
 | 3 | 件數守恆 | 每個檔案輸出端 `Close` 後：推入＝寫出＋滿了丟＋關了才來；結尾行的件數等於 `Counts()`；`fatal_direct` 等於致命寫出口寫的行數 |
 | 4 | 決定性 | 5.11 列的比較對象相等 |
 | 5 | 紀錄格式 | 每行 `Parse` 讀得回；NaN、±Inf 照第 13 節第 3 題；golden 一筆三平台位元組相同 |
@@ -612,3 +618,9 @@ O-11（已合併 #253）與 `-world-events-not-via-event` 補充 (1) 寫「World
 | 小 8 寫出失敗說不出哪個欄位 | 改：寫明不說是哪個欄位與理由 | 5.12 |
 | 小 9 產品自己的紀錄版本 | 改：封套與內容的版本分開 | 5.12 |
 | 小 10 依賴的公開與私有、行號 | 改 | 5.1、5.3 |
+
+## 17. 修訂 2：記日誌後退出、不去重（實作中）
+
+- **經過**：第 4 步實作 `WriteFailure` 的去重時，測試裡兩個 Product 撞了 5.6 定的鍵（`product`＋`world`＋`entry`＋`syncEpoch`＋`kind`，全行程共用），第二筆致命紀錄被吞掉。卡片停下（AGENTS §14），問 A（以 Product 為單位去重）／B（接受漏洞）／C（`WorldFailure` 加 Product 實例序號）。
+- **使用者的決定**（2026-11-20 side chat，HANDOFF `v8-arch-gyo2-logging-failure-log-then-exit`）：三個都不選。原話摘一句：「返回沒錯，錯誤沒錯，包裝沒錯，錯誤的是對WorldFailure的處理，正常就應該，記日誌，然後退出。」去重是補丁；重複是 runner 拿到失敗沒退出。O-11、編排層不動。
+- **改的地方**：5.6 的三種接法與「不重複」一條；9.2 的致命路徑預期；9.4 的突變估計；判定 2（AGENTS §14.4 的 1～5 在合併前核准頁）；LG-2 的最終文字在 [logging.zh-Hant.md](logging.zh-Hant.md)。實作：commit 8b83c745。
