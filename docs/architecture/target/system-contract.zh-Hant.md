@@ -16,7 +16,7 @@
 - **System 的簽名回 `Result<void, KernelError>`**，不是 `void`；`static_assert` 擋其他回傳型別（spec S-2、J-10）。**這是回傳契約，不是錯誤通道**（使用者 2026-11-12 強調）：Ok 是正常路徑，每個 System 每次執行都回傳它；Err 是帶上下文的 Programmer Error。使用者接受每個 System 多一行回傳的代價。
 - 以**執行期資料**才能偵測的 Programmer Error——untyped `Commands`、`Despawn`、`ExclusiveWorld` 的寫入違反區規則（Z5）或獨占（F-10、S-13），以及**存取驗證**（可關；A.6 兩層與句柄 epoch）抓到的違規——Kernel 的 API 回 `Err(KernelError)`，錯誤帶完整上下文：System 名、Plan 位置、命令種類、EntityId、ComponentId、違反的規則代號。
 - System 收到錯誤後**包一層自己的上下文回傳**（Go 的 `%w` 鏈），不自己記錄、不吞掉。
-- **Executor 是最外層，只處理一次**：記錄完整鏈路一次（日誌開關在 Executor 的 handler，`Base::Result` 仍是純值）、World 標 `Interrupted`、本次 `Run` 結束。release 也如此，**不靜默**。記錯當下不呼叫 AssertionHandler；現場停由 `breakOnKernelError` 掛鉤提供（§2b）。
+- **最外層 `Run` 回傳一次**〔草稿，`v8-arch-gyo2-error-levels` D1：原為「Executor 是最外層，只處理一次：記錄完整鏈路一次（日誌開關在 Executor 的 handler）」；Kernel 不再有錯誤處理器、不寫日誌，見 target/error-handling DI 1、4〕：World 標 `Interrupted`、本次 `Run` 結束、`Err` 回給呼叫者（`Base::Result` 仍是純值）。release 也如此，**不靜默**。記錯當下不呼叫 AssertionHandler；現場停由 `breakOnKernelError` 掛鉤提供（§2b）。
 - 這是 error-handling 契約的擴充（見 `error-handling.md`）：最終處置仍是 Programmer Error；Err 攜帶診斷鏈，不表示可恢復。Result 本身是回傳契約，不是為錯誤另開的通道。原稿的「常開檢查巨集」不採。
 
 ### 2b. 兩種機制，不多（使用者 2026-11-12 決定，`v8-arch-kernel-verification-not-assert`）

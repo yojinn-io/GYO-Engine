@@ -88,11 +88,11 @@ TEST_CASE("O-8: a Check that fails on the second registration: ReplaceRegistrati
     auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(replaced), "[or-replace-check-fails] replaced despite the Check error");
     CHECK_MESSAGE(replaced.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-replace-check-fails]");
-    CHECK_MESSAGE(warnings.Warnings() == 1, "[or-replace-check-warn]");
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-replace-check-silent] " << warnings.Warnings());  // error levels D2
     CHECK_MESSAGE(static_cast<bool>(p.RunFrame()), "[or-replace-check-old-goes-on]");
 }
 
-TEST_CASE("O-8: the error handler is kept across a replacement; ReplaceWorld inside a Run asserts") {
+TEST_CASE("O-8: ReplaceWorld inside a Run asserts") {
     O::ProductDescription d = Game();
     d.worlds[0].build = [](O::WorldSetup& s) {
         Register(s);
@@ -103,12 +103,9 @@ TEST_CASE("O-8: the error handler is kept across a replacement; ReplaceWorld ins
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     gProduct = &p;
-    int handled = 0;
-    p.SetErrorHandler("Main", [&](const K::KernelError&) { ++handled; });
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
     CHECK(static_cast<bool>(p.RunSchedule("Main", "Load")));  // Inside checks the assertion
     REQUIRE_FALSE(static_cast<bool>(p.RunSchedule("Main", "Junk")));
-    CHECK_MESSAGE(handled == 1, "[or-replace-handler-kept] " << handled);
     gProduct = nullptr;
 }
 

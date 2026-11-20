@@ -479,7 +479,7 @@ TEST_CASE("J-59: the Host's Trigger in Ready runs the observers now and applies 
     });
     rig->world().Insert(3, Tag{0});
     const std::uint64_t epoch = rig->world().SyncEpoch();
-    const auto triggered = rig->executor->Trigger(DoorOpened{2}, EntityId{3});
+    const auto triggered = rig->Trigger(DoorOpened{2}, EntityId{3});
     REQUIRE_MESSAGE(static_cast<bool>(triggered), Text(triggered));
     // Round 1: the Mode insert (its OnAdd hook, its Add observer, which triggers Rang); round 2: Rang.
     CHECK_MESSAGE(Joined() == "door:2 | hook+Mode@3 | obs+Mode@3 | rang:1", "[obs-host-applied] " << Joined());
@@ -498,7 +498,7 @@ TEST_CASE("J-59: the Host's Trigger stops at KernelSettings::hookRoundLimit: Hoo
         r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
     });
     rig->world().SetResource(KernelSettings{true, false, 3});
-    const auto triggered = rig->executor->Trigger(Rang{0});
+    const auto triggered = rig->Trigger(Rang{0});
     CHECK_MESSAGE(HasCode(triggered, KernelErrorCode::HookRoundLimit), "[obs-host-limit] " << Text(triggered));
     // The trigger and three rounds ran; a fourth round is the error. (Each check prints its value: the mutants of
     // this case each expect their own, step 7.)
@@ -518,7 +518,7 @@ TEST_CASE("J-59: the Host's Trigger with verification on: an undeclared write is
         });
         rig->world().SetResource(Out{0});
         KeptWorld() = &rig->world();
-        const auto triggered = rig->executor->Trigger(DoorOpened{1});
+        const auto triggered = rig->Trigger(DoorOpened{1});
         KeptWorld() = nullptr;
         CHECK_MESSAGE(HasCode(triggered, KernelErrorCode::AccessViolation), "[obs-host-verification] " << Text(triggered));
         CHECK_MESSAGE(rig->recorded.size() == 1, "[obs-host-verification] reported once");
@@ -535,7 +535,7 @@ TEST_CASE("J-59: the Host's Trigger with verification on: an undeclared write is
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         const Tag* kept = rig->world().Get<Tag>(1);
         const_cast<Tag*>(kept)->t = 42;  // not through the World API
-        const auto triggered = rig->executor->Trigger(DoorOpened{1});
+        const auto triggered = rig->Trigger(DoorOpened{1});
         CHECK_MESSAGE(HasCode(triggered, KernelErrorCode::PreCallChange), "[obs-host-precall] " << Text(triggered));
         CHECK_MESSAGE(Joined().empty(), "[obs-host-precall] no observer ran: " << Joined());
     }
@@ -550,7 +550,7 @@ TEST_CASE("J-59: the Host's Trigger with verification on: an undeclared write is
         rig->world().SetResource(Out{0});
         rig->world().Insert(3, Tag{0});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        const auto triggered = rig->executor->Trigger(DoorOpened{1}, EntityId{3});
+        const auto triggered = rig->Trigger(DoorOpened{1}, EntityId{3});
         REQUIRE_MESSAGE(static_cast<bool>(triggered), Text(triggered));
         CHECK_MESSAGE(rig->world().Resource<Out>()->value == 8, "[obs-host-verification-clean]");
         const auto ran = rig->Run();
@@ -957,7 +957,7 @@ TEST_CASE("J-59: the Host's Trigger records its own DroppedMessages, not into th
         r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door", .zone = Zone::B});
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());  // five into three: 1 and 2 dropped; the reader holds 3 4 5
-    const auto triggered = rig->executor->Trigger(DoorOpened{1});
+    const auto triggered = rig->Trigger(DoorOpened{1});
     REQUIRE_MESSAGE(static_cast<bool>(triggered), Text(triggered));  // 100 and 101: 3 and 4 dropped
     const std::vector<DroppedMessages> dropped = rig->world().TakeDiagnostics<DroppedMessages>();
     REQUIRE_MESSAGE(dropped.size() == 2, "[obs-host-trigger-dropped-record] " << dropped.size() << " records"
@@ -1031,7 +1031,7 @@ TEST_CASE("J-59: each round of the Host's Trigger takes a new stamp: the round's
         r.Observer<DoorOpened, &StampTagThenInsertMode>({.name = "stamp-tag", .zone = Zone::B});
     });
     rig->world().Insert(3, Tag{0});
-    const auto triggered = rig->executor->Trigger(DoorOpened{2}, EntityId{3});
+    const auto triggered = rig->Trigger(DoorOpened{2}, EntityId{3});
     REQUIRE_MESSAGE(static_cast<bool>(triggered), Text(triggered));
     const auto tag = rig->world().Stamps<Tag>(3);
     const auto mode = rig->world().Stamps<Mode>(3);

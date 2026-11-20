@@ -116,3 +116,23 @@ set_tests_properties(orchestration.guard orchestration.guard_selftest PROPERTIES
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too (as for gyo_time).
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_links gyo_orchestration GYO::Base GYO::Kernel)
+
+# Error levels D2 (docs/architecture/target/v2/error-levels-declaration.zh-Hant.md section 9.2,
+# [el-silent-orchestration]): the orchestration layer's error paths leave standard error empty
+# (tests/common/support/SilentProbe.cmake); WarningCounter sees Base::Log only, this sees any write.
+gyo_add_silent_probe(orchestration.el-silent gyo_orchestration_tests "${CMAKE_CURRENT_SOURCE_DIR}/silent_cases.txt")
+
+# O-3, the exit flow (error levels): the standard main example, run as a process
+# (MainExampleProbe.cmake): exit 0 on a good frame; exit 1 and one Error line on a broken one.
+add_executable(gyo_orchestration_main_example MainExample.cpp)
+target_link_libraries(gyo_orchestration_main_example PRIVATE GYO::Orchestration)
+if(MSVC)
+    target_compile_options(gyo_orchestration_main_example PRIVATE /W4 /permissive-)
+    target_compile_definitions(gyo_orchestration_main_example PRIVATE NOMINMAX)
+else()
+    target_compile_options(gyo_orchestration_main_example PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME orchestration.O-3-main
+    COMMAND ${CMAKE_COMMAND} -DEXAMPLE=$<TARGET_FILE:gyo_orchestration_main_example>
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/MainExampleProbe.cmake")
+set_tests_properties(orchestration.O-3-main PROPERTIES LABELS "cpu" TIMEOUT 60)

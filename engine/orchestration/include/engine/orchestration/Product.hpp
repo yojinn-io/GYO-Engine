@@ -111,8 +111,6 @@ public:
     // of that name, or its place is empty.
     [[nodiscard]] Kernel::WorldExecutor& World(std::string_view name);
     [[nodiscard]] bool HasWorld(std::string_view name) const noexcept;
-    // Sets the error handler of the World's executor, kept across replacements.
-    void SetErrorHandler(std::string_view world, std::function<void(const Kernel::KernelError&)> handler);
 
     // Replaces a healthy World (section 3.9): registers it again from the
     // description, carries the marked Resources over, runs the prepare functions
@@ -121,9 +119,9 @@ public:
     ::Engine::Base::Result<void, OrchestrationError> ReplaceWorld(std::string_view name, ReplaceRequest request);
 
     // A dynamic insert (section 3.10): the kernel's two steps on the World's
-    // Registry; a refusal or a failed BuildPlans logs one warning
-    // (Engine::Base::Log) and returns the error, the World goes on. No unit's
-    // Finish or Check runs again.
+    // Registry; a refusal or a failed BuildPlans returns the error and the World
+    // goes on. The orchestration layer logs nothing (O-9, O-11; error levels D2).
+    // No unit's Finish or Check runs again.
     ::Engine::Base::Result<void, OrchestrationError> InsertSystems(std::string_view world, std::string owner,
                                                                    InsertFn build);
 
@@ -147,10 +145,12 @@ private:
         std::vector<std::string> frame;
         std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
-        std::function<void(const Kernel::KernelError&)> handler;
         // The last schedule the Product ran with success on this World (WorldFailure::lastSchedule).
         std::string lastSchedule;
         std::uint32_t nextInsertSeq = 0;
+        // A DropOldFirst replacement dropped the old World and has not swapped yet (error
+        // levels P12: an empty place is told apart from a broken one by this, not by guessing).
+        bool replacing = false;
     };
     // One World's registration, built but not yet a World.
     struct Registration {
@@ -194,5 +194,19 @@ private:
     bool ran_ = false;
     std::optional<WorldFailure> failure_;
 };
+
+// The runner's exit as a process exit code: 0 for Success, 1 for Failure (O-3).
+[[nodiscard]] constexpr int ExitCode(const RunnerExit& exit) noexcept {
+    return exit.code == RunnerExitCode::Success ? 0 : 1;
+}
+
+// The standard main (O-3): builds the Product, runs it, destroys it, and returns the
+// process exit code. It is the layer that decides what follows, so it writes the line
+// and decides in one place: a startup report becomes one Error line and 1; a runner's
+// Failure becomes one Error line with its reason and 1; Success is 0. The runner below
+// it only returns the reason. A product that wants something else (back to its menu
+// with another Product) writes its own main.
+//     int main() { return GYO::Engine::Orchestration::RunProduct(Describe(), Units()); }
+[[nodiscard]] int RunProduct(ProductDescription description, RegisteredUnits units);
 
 } // namespace GYO::Engine::Orchestration

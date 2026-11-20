@@ -73,6 +73,7 @@
 - [2026_11_16_gyo2_module_plugin_definition.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_module_plugin_definition.zh-Hant.md)：Module／Plugin 的定義改成「誰維護、介面是誰的」，AGENTS §6 與 v2 文件對齊。
 - [2026_11_16_gyo2_test_debts.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_test_debts.zh-Hant.md)：Kernel 測試的三筆舊帳（四個對不上的突變、刪除實體時 OnRemove 的先後、還沒搬的 world-exec 突變）。
 - [2026_11_20_gyo2_json_module.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_json_module.zh-Hant.md)：JSON Module（`v8-arch-gyo2-json-module`）。
+- [2026_11_20_gyo2_error_levels.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_error_levels.zh-Hant.md)：異常分級（Kernel 不再印錯誤、編排層不再記警告、P12、P15；級別與命名的條文草稿）。
 
 ## 沒有搬過來的
 

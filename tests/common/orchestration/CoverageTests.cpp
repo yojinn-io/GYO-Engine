@@ -405,11 +405,51 @@ TEST_CASE("O-8: unknown World names: UnknownWorld from RunSchedule, ReplaceWorld
 
 // ---- Runner and game initialization (O-1, O-3)
 
-TEST_CASE("O-3: the default runner reports a failing frame") {
+TEST_CASE("O-3: the default runner returns a failing frame's reason and writes nothing") {
+    // The runner returns the reason with the error's context (the WorldFailure); the layer
+    // that decides what follows writes it (RunProduct, below). Logging and deciding are one layer.
     auto built = O::Product::Build(Two({"Bad"}), Units().Take());
     ORCH_REQUIRE_BUILT(built);
+    WarningCounter log;
     const O::RunnerExit exit = (*built)->Run();
     CHECK_MESSAGE(exit.code == O::RunnerExitCode::Failure, "[or-runner-default-failure] " << exit.reason);
+    REQUIRE((*built)->Failure() != nullptr);
+    CHECK_MESSAGE(exit.reason.find((*built)->Failure()->Text()) != std::string::npos, "[or-runner-default-reason] " << exit.reason);
+    CHECK_MESSAGE((log.Errors() == 0 && log.Warnings() == 0),
+                  "[or-runner-default-silent] errors " << log.Errors() << " warnings " << log.Warnings());
+}
+
+TEST_CASE("O-3: RunProduct writes a runner's Failure once and returns exit code 1") {
+    WarningCounter log;
+    const int code = O::RunProduct(Two({"Bad"}), Units().Take());
+    CHECK_MESSAGE(code == 1, "[or-runproduct-failure-exit] " << code);
+    CHECK_MESSAGE(log.Errors() == 1, "[or-runproduct-failure-logs] errors " << log.Errors());
+    for (const char* part : {"the Product ended", "'game'", "'Main'", "'Bad'", "SystemFailed"}) {
+        CHECK_MESSAGE(WarningCounter::LastError().find(part) != std::string::npos,
+                      "[or-runproduct-failure-text] " << part << " missing: " << WarningCounter::LastError());
+    }
+}
+
+TEST_CASE("O-3: RunProduct writes nothing and returns 0 when the frame succeeds") {
+    WarningCounter log;
+    const int code = O::RunProduct(Two(), Units().Take());
+    CHECK_MESSAGE((code == 0 && log.Errors() == 0 && log.Warnings() == 0), "[or-runproduct-ok] code " << code);
+}
+
+TEST_CASE("O-3: RunProduct handles a startup report: one Error line, exit code 1; ExitCode maps the runner's exit") {
+    O::ProductDescription d;
+    d.name = "game";
+    d.worlds.push_back(World("Main", [](O::WorldSetup& s) {
+        Basics(s.Registrar(), {FrameClock("Tick")});
+        s.Registrar().AddSystem<&Mark<'x'>>(In("Broken", "Nowhere"));
+    }));
+    WarningCounter log;
+    const int code = O::RunProduct(std::move(d), Units().Take());
+    CHECK_MESSAGE(code == 1, "[or-runproduct-startup-exit] " << code);
+    CHECK_MESSAGE((log.Errors() == 1 && WarningCounter::LastError().find("the Product did not start") != std::string::npos),
+                  "[or-runproduct-startup-logs] errors " << log.Errors() << ": " << WarningCounter::LastError());
+    CHECK_MESSAGE((O::ExitCode(O::RunnerExit{}) == 0 && O::ExitCode(O::RunnerExit{O::RunnerExitCode::Failure, "x"}) == 1),
+                  "[or-exit-code]");
 }
 
 TEST_CASE("O-1: a failed game initialization counts as run (RunGameInit afterwards asserts)") {
@@ -459,7 +499,7 @@ TEST_CASE("O-8: replacing before game initialization ran: on the new first World
     }
 }
 
-TEST_CASE("O-8: a failing beforeSwap gives the carried value back and warns once; the report of a failed registration is carried") {
+TEST_CASE("O-8: a failing beforeSwap gives the carried value back and logs nothing; the report of a failed registration is carried") {
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
@@ -473,7 +513,8 @@ TEST_CASE("O-8: a failing beforeSwap gives the carried value back and warns once
     const KeyBindings* kb = p.World("Main").GetWorld().Resource<KeyBindings>();
     REQUIRE_MESSAGE(kb != nullptr, "[or-beforeswap-giveback] KeyBindings is gone");
     CHECK_MESSAGE(kb->jump == 4, "[or-beforeswap-giveback] " << kb->jump);
-    CHECK_MESSAGE(warnings.Warnings() == 1, "[or-beforeswap-warn] " << warnings.Warnings());
+    // Error levels D2: the orchestration layer logs nothing; the error went back to the caller.
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-beforeswap-silent] " << warnings.Warnings());
 
     int checks = 0;
     Calls strategy;
@@ -517,15 +558,18 @@ TEST_CASE("O-8: a registration that differs: the new frame list and prepare are 
     CHECK_MESSAGE(listError.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-replace-list-error] code");
 }
 
-TEST_CASE("O-9: the refusal warning names the World and the owner") {
+TEST_CASE("O-9: the refusal error names the World and the owner; nothing is logged") {
     O::ProductDescription d = Game();
     d.worlds[0].dynamicInsert = false;
     auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     WarningCounter warnings;
-    REQUIRE_FALSE(static_cast<bool>((*built)->InsertSystems("Main", "console", [](K::Registrar&) {})));
-    CHECK_MESSAGE((WarningCounter::Last().find("'Main'") != std::string::npos && WarningCounter::Last().find("'console'") != std::string::npos),
-                  "[or-insert-warning-text] " << WarningCounter::Last());
+    auto refused = (*built)->InsertSystems("Main", "console", [](K::Registrar&) {});
+    REQUIRE_FALSE(static_cast<bool>(refused));
+    // Error levels D2: the returned error names the World and the owner.
+    CHECK_MESSAGE((refused.error().message.find("'Main'") != std::string::npos && refused.error().message.find("'console'") != std::string::npos),
+                  "[or-insert-error-text] " << refused.error().message);
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-insert-silent] " << warnings.Warnings());
 }
 
 // ---- Kernel rules that game initialization schedules are under (G-7, groups A and E)

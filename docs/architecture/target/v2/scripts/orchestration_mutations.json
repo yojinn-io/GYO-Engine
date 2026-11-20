@@ -303,30 +303,20 @@
    "expect": "\\[or\\-replace\\-check\\-fails\\]"
   },
   {
-   "id": "or-handler-not-kept",
-   "what": "O-8: the error handler is not set on the new World",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (slot.handler) executor->SetErrorHandler(slot.handler);",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: the error handler*",
-   "expect": "\\[or\\-replace\\-handler\\-kept\\]"
-  },
-  {
    "id": "or-drop-old-later",
-   "what": "O-8: DropOldFirst destroys the old World only at the swap (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "what": "O-8: DropOldFirst destroys the old World only at the swap (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
-   "replace": "    if (false && dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
+   "find": "    if (dropOldFirst) {\n        try {\n            for (const Detail::CarryEntry& entry : slot.carries) {",
+   "replace": "    if (false && dropOldFirst) {\n        try {\n            for (const Detail::CarryEntry& entry : slot.carries) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: DropOldFirst*",
    "expect": "\\[or\\-drop\\-old\\-first\\-order\\]"
   },
   {
    "id": "or-carry-not-put",
-   "what": "O-10: carried values are not put into the new World",
+   "what": "O-10: carried values are not put into the new World (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);",
+   "find": "        for (auto& [entry, box] : moved) entry.put(*world, box);",
    "replace": "",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: two types*",
@@ -344,33 +334,13 @@
   },
   {
    "id": "or-carry-unregistered-ignored",
-   "what": "O-10: a carried type the new World lacks is not refused",
+   "what": "O-10: a carried type the new World lacks is not refused (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (!entry.registered(world)) {",
-   "replace": "        if (false) {",
+   "find": "            if (!entry.registered(*world)) {",
+   "replace": "            if (false) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: a marked type*",
    "expect": "\\[or\\-carry\\-unregistered\\]"
-  },
-  {
-   "id": "or-insert-no-warning",
-   "what": "O-9: a refused insert logs no warning",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) +\n             \": refused, the World declares no dynamic insert\");",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-9: a refusing World*",
-   "expect": "\\[or\\-insert\\-warn\\-once\\] 0"
-  },
-  {
-   "id": "or-insert-two-warnings",
-   "what": "O-9: a refused insert logs two warnings",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
-   "replace": "        Warn(\"again\");\n        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-9: a refusing World*",
-   "expect": "\\[or\\-insert\\-warn\\-once\\] 2"
   },
   {
    "id": "or-insert-throw-keeps-round",
@@ -569,7 +539,7 @@
    "find": "    if (ran) return RunnerExit{};",
    "replace": "    if (ran || true) return RunnerExit{};",
    "target": "gyo_orchestration_tests",
-   "cases": "O-3: the default runner reports*",
+   "cases": "O-3: the default runner returns*",
    "expect": "\\[or\\-runner\\-default\\-failure\\]"
   },
   {
@@ -633,16 +603,6 @@
    "expect": "\\[or\\-beforeswap\\-giveback\\]"
   },
   {
-   "id": "g8-beforeswap-failure-no-warning",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "                return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
-   "replace": "                return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: a failing beforeSwap*",
-   "expect": "\\[or\\-beforeswap\\-warn\\]"
-  },
-  {
    "id": "g8-replace-report-dropped",
    "what": "G-8 candidate (g8-check-fable-high.md)",
    "file": "engine/orchestration/src/Product.cpp",
@@ -684,23 +644,27 @@
   },
   {
    "id": "g8-replace-prepare-from-old-registration",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "Prepare(slot, world, registration.unitPrepares, request.extra",
-   "replace": "Prepare(slot, world, slot.unitPrepares, request.extra",
+   "find": "Prepare(slot, *world, registration.unitPrepares, request.extra",
+   "replace": "Prepare(slot, *world, slot.unitPrepares, request.extra",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: a registration that differs*",
    "expect": "\\[or\\-swap\\-new\\-prepare\\]"
   },
   {
-   "id": "g8-insert-warning-text",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "id": "el-insert-owner-dropped",
+   "what": "the refusal error no longer names the owner, so the error no longer says who was refused (rewritten from g8-insert-warning-text by v8-arch-gyo2-error-levels D2: the orchestration layer logs nothing and the error carries what the warning carried)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) +\n             \": refused, the World declares no dynamic insert\");",
-   "replace": "        Warn(\"refused\");",
+   "find": "\" declares no dynamic insert (owner \" + Quoted(owner) + \")\",",
+   "replace": "\" declares no dynamic insert\",",
    "target": "gyo_orchestration_tests",
-   "cases": "O-9: the refusal warning names*",
-   "expect": "\\[or\\-insert\\-warning\\-text\\]"
+   "cases": "O-9: the refusal error names*",
+   "expect": "\\[or\\-insert\\-error\\-text\\]",
+   "guards": [
+    "orchestration O-9",
+    "cross-component-rules CCR-3"
+   ]
   },
   {
    "id": "g8-check-report-unit",
@@ -814,30 +778,20 @@
   },
   {
    "id": "g8-carry-after-prepare",
-   "what": "G-8 candidate: O-10: two types* | \\[or\\-carry\\-before\\-prepare\\]",
+   "what": "G-8 candidate: O-10: two types* | \\[or\\-carry\\-before\\-prepare\\] (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);\n\n    try {\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }",
-   "replace": "\n    try {\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }\n        for (auto& [entry, box] : moved) entry.put(world, box);",
+   "find": "        for (auto& [entry, box] : moved) entry.put(*world, box);\n\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, *world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }\n",
+   "replace": "\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, *world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }\n        for (auto& [entry, box] : moved) entry.put(*world, box);\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: two types*",
    "expect": "\\[or\\-carry\\-before\\-prepare\\]"
   },
   {
-   "id": "g8-insert-build-no-warning",
-   "what": "G-8 candidate: O-9: BuildPlans fails* | InsertTests.cpp:67 CHECK(warnings.Warnings() == 1) has no tag",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) + \": BuildPlans failed: \" + report.detail);\n",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-9: BuildPlans fails*",
-   "expect": "\\[or\\-insert\\-build\\-warn\\]"
-  },
-  {
    "id": "g8-carry-unregistered-no-giveback",
-   "what": "G-8 candidate: O-10: a marked type* | null dereference at ReplaceTests.cpp:181",
+   "what": "G-8 candidate: O-10: a marked type* | null dereference at ReplaceTests.cpp:181 (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            giveBack(moved);\n            return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
-   "replace": "            return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
+   "find": "                giveBack(moved);\n                return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
+   "replace": "                return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: a marked type*",
    "expect": "\\[or\\-carry\\-unregistered\\-back\\]"
@@ -863,34 +817,28 @@
    "expect": "expected GYO_ASSERT to fail: \\(\\*built\\)->Run\\(\\)"
   },
   {
-   "id": "g8-handler-set-late",
-   "what": "G-8 candidate: O-1: a failing game initialization* | \\[or\\-gi\\-error\\-once\\]",
+   "id": "or-gi-kernel-twice",
+   "what": "the kernel error behind a failed schedule comes back twice (rewritten from g8-handler-set-late by v8-arch-gyo2-error-levels D1: [or-gi-error-once] counts the returned kernel error, not handler calls)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (slot->executor) slot->executor->SetErrorHandler(slot->handler);\n",
-   "replace": "",
+   "find": "    result.kernel.push_back(std::move(error));\n",
+   "replace": "    result.kernel.push_back(error);\n    result.kernel.push_back(std::move(error));\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: a failing game initialization*",
-   "expect": "\\[or\\-gi\\-error\\-once\\]"
+   "expect": "\\[or\\-gi\\-error\\-once\\] the kernel error came back 2 times",
+   "guards": [
+    "orchestration O-1",
+    "error-handling DI 4"
+   ]
   },
   {
    "id": "g8-throw-no-giveback",
-   "what": "G-8 candidate: an exception from extra does not give the carried value back (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "what": "G-8 candidate: an exception from extra does not give the carried value back (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        giveBack(moved);\n        if (!dropOldFirst) {\n            Warn(",
-   "replace": "        if (!dropOldFirst) {\n            Warn(",
+   "find": "    } catch (...) {\n        giveBack(moved);\n        if (!dropOldFirst) {\n",
+   "replace": "    } catch (...) {\n        if (!dropOldFirst) {\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception from extra*",
    "expect": "\\[or\\-replace\\-throw\\-keeps\\-old\\]"
-  },
-  {
-   "id": "or-d3-throw-no-warn",
-   "what": "D3: an exception from extra logs no warning",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"ReplaceWorld \" + Quoted(name) + \": an exception left the replacement; the old World goes on\");\n",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: D3:*",
-   "expect": "\\[or\\-d3\\-throw\\-warns\\] 0"
   },
   {
    "id": "or-d4-empty-first-counted",
@@ -1282,19 +1230,19 @@
   },
   {
    "id": "sc-replaced-refuses-insert",
-   "what": "step 4 (scenario segment 1): S1-9: the replaced World declares no dynamic insert",
+   "what": "step 4 (scenario segment 1): S1-9: the replaced World declares no dynamic insert (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);",
-   "replace": "    std::unique_ptr<Kernel::WorldExecutor> fresh = std::make_unique<Kernel::WorldExecutor>(*registration.registry, slot.description.name, Kernel::WorldOptions{false});",
+   "find": "        fresh = MakeExecutor(slot, *registration.registry);",
+   "replace": "        fresh = std::make_unique<Kernel::WorldExecutor>(*registration.registry, slot.description.name, Kernel::WorldOptions{false});",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-9-inserted\\]"
   },
   {
    "id": "sc-keys-not-carried",
-   "what": "step 4 (scenario segment 1): S1-10: the marked KeyBindings are not put into the new World",
+   "what": "step 4 (scenario segment 1): S1-10: the marked KeyBindings are not put into the new World (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);\n",
+   "find": "        for (auto& [entry, box] : moved) entry.put(*world, box);\n",
    "replace": "",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
@@ -1951,10 +1899,10 @@
   },
   {
    "id": "g8s-old-registry-reused",
-   "what": "step 4 G-8: S1-8: the new World is built on the old Registry (the inserted System stays)",
+   "what": "step 4 G-8: S1-8: the new World is built on the old Registry (the inserted System stays) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
-   "replace": "    if (slot.registry) std::swap(registration.registry, slot.registry);\n    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
+   "find": "        fresh = MakeExecutor(slot, *registration.registry);\n",
+   "replace": "        if (slot.registry) std::swap(registration.registry, slot.registry);\n        fresh = MakeExecutor(slot, *registration.registry);\n",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-8-registration-new\\]"
@@ -1971,10 +1919,10 @@
   },
   {
    "id": "g8s-drop-old-held-dropped",
-   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World (find rewritten for v8-arch-gyo2-broken-world-ends-product: no holding place, DropOldFirst keeps the values in the replacement itself)",
+   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World (find rewritten for v8-arch-gyo2-broken-world-ends-product: no holding place, DropOldFirst keeps the values in the replacement itself) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));\n        }\n        slot.executor.reset();",
-   "replace": "            static_cast<void>(entry.take(slot.executor->GetWorld()));\n        }\n        slot.executor.reset();",
+   "find": "                if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));\n            }\n        } catch (...) {",
+   "replace": "                static_cast<void>(entry.take(slot.executor->GetWorld()));\n            }\n        } catch (...) {",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-10-carried\\] 0"
@@ -2091,9 +2039,9 @@
   },
   {
    "id": "or-ended-outside-unrecorded",
-   "what": "a World interrupted outside the Product is not seen (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "a World interrupted outside the Product is not seen (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            if (!slot.executor || slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted) continue;",
+   "find": "            if (slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted) continue;",
    "replace": "            continue;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: a World interrupted outside the Product*",
@@ -2191,43 +2139,55 @@
   },
   {
    "id": "or-throw-unrecorded",
-   "what": "an exception leaving a DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "an exception leaving a DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (!failure_) {\n            WorldFailure failure;",
-   "replace": "        if (false) {\n            WorldFailure failure;",
+   "find": "        if (!failure_) {\n            // Recorded before the exception goes on (error levels P12, D4)",
+   "replace": "        if (false) {\n            // Recorded before the exception goes on (error levels P12, D4)",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
    "expect": "\\[or\\-ended\\-throw\\]"
   },
   {
    "id": "or-throw-alloc-kind",
-   "what": "std::bad_alloc leaving a replacement is ReplacementFailed (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "std::bad_alloc leaving a replacement is ReplacementFailed (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "                failure.kind = WorldFailureKind::ResourceExhausted;\n                failure.where = \"std::bad_alloc left the replacement\";",
-   "replace": "                failure.kind = WorldFailureKind::ReplacementFailed;\n                failure.where = \"std::bad_alloc left the replacement\";",
+   "find": "                dropFailure.kind = WorldFailureKind::ResourceExhausted;",
+   "replace": "                dropFailure.kind = WorldFailureKind::ReplacementFailed;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
    "expect": "\\[or\\-ended\\-throw\\-kind\\]"
   },
   {
    "id": "or-run-throw-unrecorded",
-   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            failure.where = \"std::bad_alloc left the schedule\";\n            Break(std::move(failure));\n",
-   "replace": "            failure.where = \"std::bad_alloc left the schedule\";\n",
+   "find": "            }\n            Break(std::move(failure));\n            throw;\n        } catch (...) {\n            failure.kind = WorldFailureKind::Interrupted;",
+   "replace": "            }\n            throw;\n        } catch (...) {\n            failure.kind = WorldFailureKind::Interrupted;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: std::bad_alloc leaving a schedule*",
    "expect": "\\[or\\-run\\-throw\\]"
   },
   {
    "id": "or-failure-logged",
-   "what": "the orchestration layer logs the failure itself (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "the orchestration layer writes the failure out itself (v8-arch-gyo2-broken-world-ends-product; rewritten by v8-arch-gyo2-error-levels D2: Product.cpp no longer includes Base::Log, so the mutant writes to standard error and the orchestration.el-silent probe catches it; [or-failure-not-logged] counts Base::Log lines, which a one-edit mutant cannot add any more)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    failure_ = std::move(failure);\n    return *failure_;",
-   "replace": "    failure_ = std::move(failure);\n    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", failure_->Text());\n    return *failure_;",
+   "replace": "    failure_ = std::move(failure);\n    std::fputs(failure_->Text().c_str(), stderr);\n    return *failure_;",
    "target": "gyo_orchestration_tests",
-   "cases": "O-8: the failure is returned*",
-   "expect": "\\[or\\-failure\\-not\\-logged\\]"
+   "expect": "orchestration\\.el-silent: \\[O-1: a failing game initialization",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "guards": [
+    "orchestration O-11",
+    "error-handling DI 4"
+   ]
   },
   {
    "id": "or-failure-refusal-differs",
@@ -2780,6 +2740,171 @@
     "-I",
     "-B",
     "tests/common/kernel/naming_guard.py"
+   ]
+  },
+  {
+   "id": "el-replace-fail-warn-back",
+   "what": "a failed ReplaceWorld writes a line to standard error again (error levels D2: the orchestration layer writes nothing; the failure goes back to the caller). Only this mutant: WarningCounter sees Base::Log, not a direct write",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto fail = [&](OrchestrationError error) -> ::Engine::Base::Result<void, OrchestrationError> {\n",
+   "replace": "    auto fail = [&](OrchestrationError error) -> ::Engine::Base::Result<void, OrchestrationError> {\n        std::fputs(\"orchestration: ReplaceWorld failed\\n\", stderr);\n",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-8: a replacement does not mend",
+   "guards": [
+    "orchestration O-11",
+    "error-handling DI 4"
+   ]
+  },
+  {
+   "id": "el-insert-warn-back",
+   "what": "a refused dynamic insert writes a line to standard error again (error levels D2, O-9)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "replace": "        std::fputs(\"orchestration: insert refused\\n\", stderr);\n        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-9: a refusing World",
+   "guards": [
+    "orchestration O-9",
+    "error-handling DI 4"
+   ]
+  },
+  {
+   "id": "el-replace-catch-warn-back",
+   "what": "an exception leaving ReplaceWorld writes a line to standard error again (error levels D2)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    } catch (...) {\n        giveBack(moved);\n",
+   "replace": "    } catch (...) {\n        std::fputs(\"orchestration: an exception left ReplaceWorld\\n\", stderr);\n        giveBack(moved);\n",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-8: D3: an exception from extra",
+   "guards": [
+    "orchestration O-11",
+    "error-handling DI 4"
+   ]
+  },
+  {
+   "id": "el-p15-old-behaviour",
+   "what": "error levels D10 (P15): game initialization that failed on a BuildNewFirst replacement's new first World stays counted as run, so the old first World never runs it (only this mutant: no other check replaces the first World before game initialization)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                        if (!dropOldFirst) gameInitRan_ = false;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-1: D10*",
+   "expect": "\\[el\\-p15\\-gameinit\\-not\\-run\\]",
+   "guards": [
+    "orchestration O-1",
+    "error-levels-declaration D10"
+   ]
+  },
+  {
+   "id": "el-p12-unrecorded",
+   "what": "error levels P12: a DropOldFirst replacement records its failure only for an exception after the new executor exists, as before the try covered the registration: an exception from the registration leaves an empty place and no failure (only this mutant: or-throw-unrecorded turns all recording off and is caught by [or-ended-throw])",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!failure_) {\n            // Recorded before the exception goes on (error levels P12, D4)",
+   "replace": "        if (!failure_ && world != nullptr) {\n            // Recorded before the exception goes on (error levels P12, D4)",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: P12*",
+   "expect": "\\[el\\-p12\\-dropold\\-throw\\-before\\-try\\]",
+   "guards": [
+    "orchestration O-11",
+    "error-levels-declaration D4"
+   ]
+  },
+  {
+   "id": "or-runner-logs-back",
+   "what": "the default runner writes the failure itself again before returning (log-and-return: the error would be written twice, once here and once by the layer that decides). Only this mutant: the runner's own silence",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
+   "replace": "        ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", error.failure->Text());\n        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3: the default runner returns*",
+   "expect": "\\[or\\-runner\\-default\\-silent\\]",
+   "guards": [
+    "orchestration O-3",
+    "error-handling DI 4"
+   ]
+  },
+  {
+   "id": "or-runner-reason-dropped",
+   "what": "the default runner returns Failure without the WorldFailure's text, so the deciding layer has nothing to write about what broke",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
+   "replace": "        return RunnerExit{RunnerExitCode::Failure, \"the Product ended\"};\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3: the default runner returns*",
+   "expect": "\\[or\\-runner\\-default\\-reason\\]",
+   "guards": [
+    "orchestration O-3"
+   ]
+  },
+  {
+   "id": "or-runproduct-failure-silent",
+   "what": "RunProduct returns 1 for a runner's Failure without writing its reason: the error is dropped at the layer that decides",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", exit.reason);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3: RunProduct writes a runner's Failure*",
+   "expect": "\\[or\\-runproduct\\-failure\\-logs\\]",
+   "guards": [
+    "orchestration O-3"
+   ]
+  },
+  {
+   "id": "or-runproduct-startup-silent",
+   "what": "RunProduct returns 1 for a startup report without writing it",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                            \"the Product did not start: \" + report.message + (report.detail.empty() ? \"\" : \"\\n\" + report.detail));\n",
+   "replace": "                            std::string());\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-3: RunProduct handles a startup report*",
+   "expect": "\\[or\\-runproduct\\-startup\\-logs\\]",
+   "guards": [
+    "orchestration O-3"
+   ]
+  },
+  {
+   "id": "or-main-exit-zero",
+   "what": "RunProduct returns 0 for a runner's Failure: the process exits as if it succeeded. Run as a process by the main example probe",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    return ExitCode(exit);\n}\n",
+   "replace": "    return 0;\n}\n",
+   "target": "gyo_orchestration_main_example",
+   "command": [
+    "{cmake}",
+    "-P",
+    "tests/common/orchestration/MainExampleProbe.cmake",
+    "{exe:gyo_orchestration_main_example}"
+   ],
+   "expect": "\\[or\\-main\\-failure\\-exit\\]",
+   "guards": [
+    "orchestration O-3"
    ]
   }
  ]

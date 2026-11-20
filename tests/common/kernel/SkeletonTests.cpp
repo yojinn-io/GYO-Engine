@@ -270,7 +270,8 @@ TEST_CASE("skeleton: a System that returns Err stops the Run and interrupts the 
 namespace {
 
 // An inner operation fails; the System adds its own layer of context and
-// returns the error. It does not log: the Executor's handler does, once.
+// returns the error. It does not log, nor does the kernel: the outermost Run
+// returns it once (error levels D1).
 SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
     for (int member = 0; member < 3; ++member) {
         auto made = spawn.New(Arrival{0, 0, 0, 0, 1});
@@ -283,7 +284,7 @@ SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
 
 } // namespace
 
-TEST_CASE("skeleton: an Err reaches the handler once, with the chain of where it happened") {
+TEST_CASE("skeleton: an Err comes back once, with the chain of where it happened") {
     auto rig = WorldTest::MakeRig([](Registrar& r) {
         GameData(r);
         r.AddSystem<&SpawnsWave>(In("SpawnsWave", "Input"));
@@ -301,7 +302,7 @@ TEST_CASE("skeleton: an Err reaches the handler once, with the chain of where it
     CHECK(rig->world().State() == WorldState::Interrupted);
     // What the failed call had queued is dropped, not half applied.
     CHECK(rig->world().Entities().empty());
-    std::printf("\n[skeleton] an Err as the Executor's handler receives it:\n%s\n", text.c_str());
+    std::printf("\n[skeleton] an Err as the outermost Run returns it:\n%s\n", text.c_str());
     std::fflush(stdout);
 }
 

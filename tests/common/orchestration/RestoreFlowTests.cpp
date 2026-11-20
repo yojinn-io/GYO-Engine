@@ -109,7 +109,7 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
             REQUIRE_FALSE_MESSAGE(static_cast<bool>(refused), "[or-restore-fail-a] replaced despite the refused save");
             CHECK_MESSAGE(refused.error().code == O::OrchestrationErrorCode::ReplacePrepareFailed, "[or-restore-fail-a] " << refused.error().message);
             CHECK_MESSAGE(refused.error().reporterCode == "save-version-unsupported", "[or-restore-reporter-code]");
-            CHECK_MESSAGE(warnings.Warnings() == 1, "[or-restore-fail-warn] " << warnings.Warnings());
+            CHECK_MESSAGE(warnings.Warnings() == 0, "[or-restore-fail-silent] " << warnings.Warnings());  // error levels D2
         }
         CHECK_MESSAGE((GoldOf(p) == 40 && Entities(p) == 4), "[or-restore-keep-old] gold " << GoldOf(p) << " entities " << Entities(p));
         SaveData broken = TheSave();

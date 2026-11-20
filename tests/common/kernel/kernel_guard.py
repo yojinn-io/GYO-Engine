@@ -3,7 +3,8 @@
 Sources of the rules: docs/architecture/target/kernel.zh-Hant.md DI-KS 3 (order comes only from ids and the
 Plan) and DI-KS 15 (the kernel is neutral, owns no thread, reads no clock or random source);
 docs/architecture/target/naming.zh-Hant.md DI 4 (Engine names are neutral); docs/architecture/target/
-error-handling.md DI 2 (the Executor's handler is the only place a kernel error is logged). Declared in
+error-handling.md DI 2 (the kernel has no error handler and no log call; error levels D1 removed the
+Executor's exemption). Declared in
 docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md section 3.1.
 
 Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
@@ -48,10 +49,10 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       in it. No capability module, no platform
       header. An include directive (#include, #include_next, #import, %:include) whose target cannot be read
       as <...> or "..." (a macro, for example) is reported too (fail closed).
-  K6  a log call outside the Executor: Log(, SetLogHandler, an include of engine/base/Log.hpp, <iostream>,
+  K6  a log call anywhere in the kernel: Log(, SetLogHandler, an include of engine/base/Log.hpp, <iostream>,
       <cstdio> or <print>, std::cout, std::cerr, std::clog, std::print, std::println, printf, fprintf, vprintf,
-      vfprintf, puts, fputs, putchar, perror, fwrite, SDL_Log*. A file whose name starts with "Executor" is exempt
-      from K6 only; every other rule applies to it.
+      vfprintf, puts, fputs, putchar, perror, fwrite, SDL_Log*. No file is exempt (the Executor's exemption ended
+      with error levels D1: the outermost Run returns the Err).
   K7  the identifiers far, near, FAR and NEAR (macros in windef.h; PRs #152 and #163 each broke the MSVC build).
   K8  GYO::Base's issuer of numbers in the kernel: the identifier IdIssuer, or Base's thread serial state
       threadSerials / threadSerial. The kernel asks which thread runs through Engine::Base::CurrentThreadSerial()
@@ -314,7 +315,6 @@ def file_findings(relative, raw, name_patterns):
     for pattern in K9:
         for match in pattern.finditer(raw):
             yield line_of(raw, match.start()), "K9", match.group(0)
-    executor_file = Path(relative).name.startswith("Executor")
     code = strip_comments_and_strings(raw)
     # Include targets in quotes are string literals, which the stripping blanks. The stripping keeps every line and
     # column, so the target is read from the raw text right after the directive the code shows. split("\n"), not
@@ -330,7 +330,7 @@ def file_findings(relative, raw, name_patterns):
         kind, target = include.groups()
         if kind == "<" and target in K3_HEADERS:
             yield number, "K3", "<" + target + ">"
-        if target in LOG_HEADERS and not executor_file:
+        if target in LOG_HEADERS:
             yield number, "K6", target
         # ".." between "/" or "\\" separators (a backslash path reaches outside the allowlist on Windows too).
         project = target.startswith(ALLOWED_PROJECT_INCLUDES) and ".." not in re.split(r"[/\\]", target)
@@ -353,9 +353,8 @@ def file_findings(relative, raw, name_patterns):
         finding = inline_variable(code, match.start())
         if finding:
             yield line_of(code, match.start()), "K4", "inline " + finding
-    if not executor_file:
-        for match in K6.finditer(code):
-            yield line_of(code, match.start()), "K6", match.group(0).rstrip("( ")
+    for match in K6.finditer(code):
+        yield line_of(code, match.start()), "K6", match.group(0).rstrip("( ")
     for match in K7.finditer(code):
         yield line_of(code, match.start()), "K7", match.group(0)
     code_lines = code.split("\n")

@@ -419,8 +419,6 @@ TEST_CASE("J-54: a schedule's own limit overrides the product's default, larger 
 TEST_CASE("J-54: the product's default is per World") {
     auto two = MakeFlushRig(ChainSystems, {}, false, 2U);
     WorldExecutor other(*two->built.registry, "other-world");
-    std::vector<KernelError> otherRecorded;
-    other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});
     other.GetWorld().SetResource(Depth{0});
     other.GetWorld().SetResource(TickCount{1});
@@ -440,8 +438,6 @@ TEST_CASE("J-54: the product's default stays per World when another World runs i
         },
         {}, false, 2U);
     WorldExecutor other(*two->built.registry, "other-world");
-    std::vector<KernelError> otherRecorded;
-    other.SetErrorHandler([&otherRecorded](const KernelError& error) { otherRecorded.push_back(error); });
     other.GetWorld().SetResource(KernelSettings{false, false});  // the default limit, 8
     other.GetWorld().SetResource(Depth{0});
     other.GetWorld().SetResource(TickCount{1});
@@ -570,7 +566,7 @@ TEST_CASE("J-54: at the limit: Err F-12 once, the World interrupted, the rest no
         CHECK(result.error().code == KernelErrorCode::HookRoundLimit);
         CHECK(result.error().rule == "F-12");
         CHECK(rig->world().State() == WorldState::Interrupted);
-        CHECK_MESSAGE(rig->recorded.size() == 1, "J-54: the handler ran " << rig->recorded.size() << " times");
+        CHECK_MESSAGE(rig->recorded.size() == 1, "J-54: the Err came back " << rig->recorded.size() << " times");
         CHECK_MESSAGE((breaks > 0) == breakOn, "J-54: break hook calls " << breaks);
         const std::string& message = result.error().message;
         CHECK(message.find("schedule 'Tick'") != std::string::npos);
@@ -592,7 +588,7 @@ TEST_CASE("J-54: at the limit: Err F-12 once, the World interrupted, the rest no
 // Rewritten by v8-arch-gyo2-time-events step 3 (G3): the message trim is no
 // Plan step; it runs when the outermost Run ends, after the rounds, and not
 // after an Err. The Ping is written and read in tick 2, so a trim would drop it.
-TEST_CASE("J-54: an Err in a round: the rest of the Run is not done, the applied rounds stay, the handler runs once") {
+TEST_CASE("J-54: an Err in a round: the rest of the Run is not done, the applied rounds stay, the Err comes back once") {
     auto rig = MakeFlushRig(
         [](Registrar& r) {
             r.AddSystem<&WritePingAtTwo>(Put("WritePingAtTwo", "Tick", "A"));

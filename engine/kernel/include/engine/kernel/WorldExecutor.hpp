@@ -24,9 +24,10 @@
 // When the outermost Run ends (after its hook rounds; not a Plan step), every
 // message record that every reader holding it has read is trimmed (event
 // cursor declaration 3.2); a nested run and a Run that ends in an Err trim nothing.
-// An Err from any source is recorded once (the handler), the World becomes
-// Interrupted, every record not yet applied is discarded, diagnostics are kept,
-// and Run returns the Err (spec E.5). An exception from a System or hook is not
+// An Err from any source makes the World Interrupted, every record not yet
+// applied is discarded, diagnostics are kept, and the outermost Run returns the
+// Err once (spec E.5); the kernel logs nothing and has no error handler
+// (target/error-handling DI 1, 2, 4). An exception from a System or hook is not
 // caught: the World becomes Interrupted the same way and the exception goes on.
 // Running an Interrupted World is a GYO_ASSERT (rebuild it: a new WorldExecutor).
 //
@@ -34,9 +35,9 @@
 // ExclusiveWorld<...> may run another schedule (ExclusiveWorld::RunSchedule).
 // The inner schedule runs whole, the same way (its own stamps, sync points,
 // hook rounds; no message trim); the records the outer level has not
-// applied stay at its own next sync point (W-3, F.2). An error inside does not
-// call the handler: the World is Interrupted, the error is left for the
-// outermost Run, which reports it once with the outer System's context; the
+// applied stay at its own next sync point (W-3, F.2). An error inside: the World
+// is Interrupted, the error is left for the outermost Run, which returns it once
+// with the outer System's context; the
 // Executor stops after every System that returns to an Interrupted World.
 //
 // Pushed events (event cursor declaration 3.3; time-events declaration 4.2):
@@ -102,9 +103,8 @@ public:
     // before this returns, as a whole sync point applies it (hooks, Add and
     // Remove observers, triggers), round after round until nothing is left, at
     // most the World's KernelSettings::hookRoundLimit rounds. KernelSettings
-    // is read when it starts, as when a Run starts. Err (reported once by the
-    // handler, the World interrupted, the rest dropped, the rounds applied
-    // kept): an observer's or a hook's Err (an access violation included),
+    // is read when it starts, as when a Run starts. Err (returned once, the World
+    // interrupted, the rest dropped, the rounds applied kept): an observer's or a hook's Err (an access violation included),
     // HookRoundLimit past the limit, or, with verification on, a change outside
     // the World API since the last comparison (PreCallChange; no observer runs).
     // A direct write in Ready (World::Insert, Remove, Despawn) runs no hook and
@@ -116,9 +116,6 @@ public:
                                std::make_unique<Detail::EventBox<E>>(std::move(event)), target);
     }
 
-    // The Executor's handler: called once per Err (target/error-handling DI 2:
-    // the only place a kernel error is logged). Default: the whole chain to stderr.
-    void SetErrorHandler(std::function<void(const KernelError&)> handler) { handler_ = std::move(handler); }
 
     // The fields of a "verification on" report (target/system-contract 2b
     // condition 2): the KernelSettings the last Run started with.
@@ -175,7 +172,7 @@ private:
     // keeps its mounts' lastRun and Local<T>; a removed one's state is dropped.
     void Attach();
     // Spec E.5: interrupts the World and drops every record. The outermost level
-    // calls the handler; a nested one leaves the error instead (its first one).
+    // returns it; a nested one leaves the error instead (its first one).
     ::Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
 
     // One level of the run stack (World::runStack_): pushed for the Plan's
@@ -189,7 +186,6 @@ private:
     std::vector<SystemState> systems_;
     // The Registry version systems_ matches (0: none yet).
     std::uint64_t version_ = 0;
-    std::function<void(const KernelError&)> handler_;
 };
 
 } // namespace GYO::Kernel

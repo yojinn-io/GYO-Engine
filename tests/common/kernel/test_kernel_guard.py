@@ -290,11 +290,13 @@ class GuardTree(unittest.TestCase):
         self.header('inline void Fail() { std::printf("x"); }')
         self.assertReported("K6", "printf")
 
-    def test_k6_executor_file_is_exempt(self):
+    def test_k6_executor_file_is_checked(self):
+        # Error levels D1: the Executor no longer logs, so it has no K6 exemption.
         self.write("engine/kernel/src/Executor.cpp",
                    '#include "engine/base/Log.hpp"\nnamespace GYO::Kernel {\n'
                    'void Report() { Engine::Base::Log(Engine::Base::LogLevel::Error, "kernel", "x"); }\n}\n')
-        self.assertClean()
+        self.assertReported("K6", "engine/base/Log.hpp")
+        self.assertReported("K6", "Log")
 
     # K7 ---------------------------------------------------------------------------------------------------------
 
@@ -438,7 +440,7 @@ class GuardTree(unittest.TestCase):
         self.write("engine/kernel/src/Uses.cpp", "// page\x0cbreak\n#include <thread>\n")
         self.assertReported("K3", "Uses.cpp:2: K3 <thread>")
 
-    # Executor exemption covers K6 only (B2) ---------------------------------------------------------------------
+    # The Executor is checked by every rule (B2; K6 too since error levels D1) ---------------------------------------------------------------------
 
     def test_executor_file_is_checked_by_every_other_rule(self):
         self.write("engine/kernel/src/Executor.cpp",
