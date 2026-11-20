@@ -1268,6 +1268,20 @@
    "target": "gyo_logging_allocation_tests",
    "cases": "alloc: a refused record*",
    "expect": "ERROR: CHECK\\( allocations == before \\) is NOT correct!"
+  },
+  {
+   "id": "lg-baselog-not-written",
+   "what": "entrance 3: an Engine::Base::Log line does not become a record (verifier of judgement 2, 2026-11-21: the scenario's entrance 3 had no mutant)",
+   "guards": [
+    "logging LG-1",
+    "logging-declaration 判定 2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "    Write(Entry{.level = level, .category = message.category, .text = message.text});\n",
+   "replace": "    static_cast<void>(level);\n",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 3: S3-1*",
+   "expect": "S3-1: one Base::Log line became one record"
   }
  ]
 }

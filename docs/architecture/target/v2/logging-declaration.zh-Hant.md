@@ -429,7 +429,7 @@ WorldLogging::Forward<TimeDiscardedLog>(setup, {.schedule = DefaultSchedules::fr
 | # | 判定 | 怎麼算過 |
 |---|---|---|
 | 1 | L1 三平台（linux-x64、windows-x64、macos-arm64）ctest 全綠 | 含 `gyo_logging_tests`、`gyo_world_logging_tests`、情境的新段、守衛、兩個附加 handle 的並行寫測試 |
-| 2 | 致命路徑（LG-2 的單元案、`std::terminate` 的探測、情境 S3-1；〔修訂 3〕改，見第 18 節） | 注入「永不回來的寫出」時，`WriteFatalRecord` 有回來、致命那一行在致命寫出口、回報標步驟 4 逾時（期限用注入的值 50 ms；**不判真實時間的上限**，靠 ctest 的 TIMEOUT 擋住真的卡死）；每次斷言、每次 `std::terminate` 各恰好一筆 `Fatal`（category `assert`／`terminate`，`std::terminate` 三種情形）；③ 收到的一行在兩個輸出端各一筆。作者經 ④ 寫的 `Fatal` 不數（使用者 2026-11-20：不限制）（修訂 2 改過一次，原「同一份第二次回 `AlreadyWritten`」，第 17 節） |
+| 2 | 致命路徑（LG-2 的單元案、`std::terminate` 的探測、情境 S3-1；〔修訂 3〕改，見第 18 節） | 注入「永不回來的寫出」時，`WriteFatalRecord` 有回來、致命那一行在致命寫出口、回報標步驟 4 逾時（期限用注入的值 50 ms；**不判真實時間的上限**，靠 ctest 的 TIMEOUT 擋住真的卡死）；致命寫出口都寫完才 flush、全部輸出端共用一個期限、不收這個 category 的輸出端也 flush；每次斷言、每次 `std::terminate` 各恰好一筆 `Fatal`（category `assert`／`terminate`，`std::terminate` 三種情形，之後交回之前的處理器）；③ 收到的一行在兩個輸出端各一筆。作者經 ④ 寫的 `Fatal` 不數（使用者 2026-11-20：不限制）（修訂 2 改過一次，原「同一份第二次回 `AlreadyWritten`」，第 17 節） |
 | 3 | 件數守恆 | 每個檔案輸出端 `Close` 後：推入＝寫出＋滿了丟＋關了才來；結尾行的件數等於 `Counts()`；`fatal_direct` 等於致命寫出口寫的行數 |
 | 4 | 決定性 | 5.11 列的比較對象相等 |
 | 5 | 紀錄格式 | 每行 `Parse` 讀得回；NaN、±Inf 照第 13 節第 3 題；golden 一筆三平台位元組相同 |
@@ -644,10 +644,24 @@ O-11（已合併 #253）與 `-world-events-not-via-event` 補充 (1) 寫「World
   - `TakeKernelDiagnostics` 不再規定和 World 壞掉那一行的先後；讀的人用 `mono_ns` 排。
   - `LoggingError` 不改名（異常分級：既有型別的改名是後續）。
 - **改到已核准內容的地方**（標「〔修訂 3〕」）：第 2.1 節 L7；第 2.2 節加一列；第 3 節的現況表、入口圖；5.5 ③④；5.6 改寫（E1 不經日誌批、E0 的最後一道、`std::terminate`）；5.12 的 `product`；5.13；第 8 節 LG-1、LG-2、LG-5、LG-9、RC-L5、RC-L7；9.2；9.4 的估計；判定 2；第 11 節第 4、5 步。Design Invariants 的最終文字在 [logging.zh-Hant.md](logging.zh-Hant.md)。
-- **判定 2 的變更**（AGENTS §14.4，受け入れ判定；合併前核准頁再列一次，請使用者核准）：
-  1. 守的性質：斷言、`std::terminate` 時，日誌確實留下一筆而且只有一筆，致命路徑不等寫者；World 壞掉時，產品寫來的那一行確實成為紀錄。
-  2. 緩める面：不再檢查 World 壞掉的那一筆是 `Fatal`、帶 `WorldFailure` 的逐欄欄位、經致命寫出口立刻進檔；不再檢查 runner 包裝（`WithFailureLog`）的行為（拿掉了）；不再檢查 `DropOldFirst` 替換失敗時的那一筆（那是編排層與產品的事）。
-  3. 締める面：`std::terminate` 三種情形各恰好一筆 `Fatal`（以前 0 筆也過）。
-  4. 緩める面守的性質由誰守：「致命路徑不等寫者」照舊由 LG-2 的單元案守（`fatal:` 各案、`lg-fatal-*` 突變）；「World 壞掉時留下一行」由情境 S3-1 守日誌這一側（收到就寫成紀錄），由誰寫、寫不寫歸產品；欄位逐欄不再守——使用者定「日誌只是看」，要追問題用 trace。
-  5. 根據：使用者的原話（上表與本節）；證據：本批的情境 S3-1 與 `logging.terminate.*`，突變第 2 回與修訂 3 之後的結果（主 checkout `build/evidence/gyo2-logging/`）。
+- **判定 2 的變更**（AGENTS §14.4，受け入れ判定；合併前核准頁再列一次，請使用者核准；§14.4 的驗證者 Fable 5.2／high 檢查後照它的更正補齊）：
+  1. **守的性質**：
+     - 舊判定守的：World 壞掉時，`WriteFailure`／`WithFailureLog` 自己寫恰好一筆 `Fatal`，欄位等於 `WorldFailure`，回傳時已經在檔裡，runner 寫完就退出；致命路徑不等寫者。（舊判定沒有守 `std::terminate` 留一筆：當時只 flush。）
+     - 新判定守的：斷言、`std::terminate` 時日誌確實留下一筆而且只有一筆，致命路徑不等寫者；World 壞掉時，產品經 ③ 寫來的那一行確實成為紀錄。
+  2. **緩める面**（以前判失敗、現在判通過的）：
+     - World 壞掉的那一筆不再檢查是 `Fatal`、帶 `WorldFailure` 的逐欄欄位、經致命寫出口立刻進檔。
+     - 不再檢查 runner 包裝（`WithFailureLog`）的行為（拿掉了；退役的突變 `lg-failure-*` 2 個、`lg-withfailurelog-*` 4 個，`FailureTests.cpp` 8 案）。
+     - 不再檢查 `DropOldFirst` 替換失敗時的那一筆，也不再檢查編排層的 `Warning` 成為紀錄、在 `Fatal` 之前（舊 S3-3；異常分級拿掉了那幾處 `Warning`）。
+     - System 丟例外的情形（舊 S3-2、`failure: a System that throws…`）情境不再跑；日誌這一側由 `logging.terminate.std` 守，那一筆不帶 World 名。
+     - World 壞掉那一行不再無條件寫標準錯誤（舊 `CHECK(report.console)`）：改走 ③ 後，只有裝了主控台輸出端才印。
+     - `WriteFailure` 先、`TakeKernelDiagnostics` 後的順序（舊 `failure: WriteFailure first…`）不再判（LG-1 的變更）。
+     - 不算放寬的：作者經 ④ 寫的 `Fatal` 不數（舊檢查數的是致命路徑的 `record.fatal`，對 ④ 本來就沒有限制）。
+  3. **締める面**（以前判通過、現在判失敗的；都由舊檢查通過、新檢查失敗驗過）：
+     - `std::terminate` 三種情形各恰好一筆 `Fatal`（舊實作 0 筆也過，`step7-terminate-red.txt`），並交回之前的處理器（`lg-terminate-not-chained`）。
+     - 致命寫出口都寫完才 flush（`lg-fatal-flush-first`）、全部輸出端共用一個期限（`lg-fatal-deadline-per-sink`）、不收這個 category 的輸出端也 flush（`lg-fatal-flush-only-taking`）。這三項舊的 9 個 `fatal:` 案都通過，只有新加的案失敗（敵對式檢查找到）。
+  4. **緩める面守的性質由誰守**：
+     - 「致命路徑不等寫者」照舊由 `logging.fatal` 與 `lg-fatal-*` 守，對象是 E0（斷言、`std::terminate`）。
+     - 「World 壞掉時留下一行」：日誌這一側（收到就寫成紀錄）由情境 S3-1 守（突變 `lg-baselog-not-written`）；誰寫、寫不寫歸產品。
+     - **不再有任何判定守**：World 壞掉那一行是 `Fatal`、立刻進檔（它走佇列，S3-1 先 `Flush` 才讀檔）、逐欄欄位、無條件寫主控台。理由：使用者定「日誌只是看。trace才是追問題。」，Engine 不給標準 main（PR #255）。
+  5. **根據與證據**：使用者原話記在本節（「④ 不限制」「terminate 先寫一筆」兩件是主會話轉達的「照主會話的看法」，沒有逐字原話）；HANDOFF 代號是主會話轉達時給的，HANDOFF 由主會話記，本卡在 `origin/gyo2` 與各工作樹的 `HANDOFF.md` 沒有讀到落檔（驗證者 2026-11-21 指出），出處以主會話的對話為準。證據：ctest；突變第 4 回（`mutations-run4.txt`：第一輪 85/86，`lg-file-batch-reversed` stale，照審查修正後的程式改寫後補跑 killed；再加 `lg-baselog-not-written` killed，共 87/87）；`step7-terminate-red.txt`、`review-fixes-red.txt`；驗證報告 `judgement2-verification-fable.md`（Fable 5.2／high，提案者 Opus 5.5 以外的模型）。
 - **實作**（同一個變更）：terminate 處理器（`engine/logging/src/Logger.cpp`）；拿掉 `engine/world_logging` 的 `WriteFailure.hpp`／`.cpp` 與 `FailureTests.cpp`；拿掉 logging 的 `Span.hpp`／`.cpp`、`SpanTests.cpp`、`RecordKind`；`Record` 與 `MemorySink` 拿掉 `product`、`beginNs`、`durationNs`；情境第 3 段收窄成四案（S3-1 ③、S3-2 平常、S3-3 決定性、S3-4 一個 category 自己一個檔）；探測程式 `tests/common/logging/TerminateProbe.cpp`＋`.cmake`；突變退役 9（`WriteFailure`／`WithFailureLog` 6、span 3）、新增 5（terminate）、第 1 回沒過的 8 個修正（七個的 `expect` 沒算到 doctest 在 `TEST CASE` 那行之後的空行，其中 NaN 三個另有 `-tc=` 被測試名的逗號切開、改了測試名；writer-timer 原本的案例沒有閒置期，加了一個閒置 50 ms 的案例）。
