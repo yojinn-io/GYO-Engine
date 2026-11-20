@@ -386,11 +386,6 @@ OrchestrationError Product::EndedError() const {
     return error;
 }
 
-const WorldFailure* Product::Failure() {
-    if (!failure_) static_cast<void>(Ended());
-    return failure_ ? &*failure_ : nullptr;
-}
-
 std::optional<OrchestrationError> Product::Ended() {
     if (!failure_) {
         // An interrupted World without a recorded failure was run outside the
@@ -411,12 +406,6 @@ std::optional<OrchestrationError> Product::Ended() {
             failure.kind = WorldFailureKind::Interrupted;
             failure.entry = "outside the Product";
             failure.lastSchedule = slot.lastSchedule;
-            // Error levels D8: the error the kernel kept as it interrupted the World (an Err;
-            // none when an exception interrupted it), gathered then, not read from the World.
-            if (const Kernel::KernelError* cause = slot.executor->InterruptionError()) {
-                failure.kernelCode = cause->code;
-                failure.where = cause->Text();
-            }
             Break(std::move(failure));
             break;
         }

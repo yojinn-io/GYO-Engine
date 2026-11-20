@@ -336,9 +336,8 @@ TEST_CASE("O-8: a World interrupted outside the Product ends it too; RunGameInit
     CHECK_MESSAGE(init.error().code == O::OrchestrationErrorCode::WorldInterrupted, "[or-ended-gameinit] code");
     CHECK_MESSAGE(!p.GameInitRan(), "[or-ended-gameinit] counted as run");
     REQUIRE(p.Failure() != nullptr);
-    // Error levels D8: the kernel kept the Err that interrupted the World; the failure carries it.
     CHECK_MESSAGE((p.Failure()->world == "Side" && p.Failure()->entry == "outside the Product" && p.Failure()->lastSchedule.empty() &&
-                   p.Failure()->kernelCode == K::KernelErrorCode::SystemFailed && p.Failure()->where.find("FailBad") != std::string::npos),
+                   !p.Failure()->kernelCode.has_value()),
                   "[or-ended-outside-fields] " << p.Failure()->Text());
     CHECK_MESSAGE(!p.RunFrame(), "[or-ended-outside] RunFrame succeeded");
 }
@@ -553,34 +552,4 @@ TEST_CASE("O-1: game initialization and the frame both writing one column is D-E
     auto counted = O::Product::Build(std::move(twoWriters), Units().Take());
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(counted), "[or-gi-writer-counted] built");
     CHECK_MESSAGE(counted.error().detail.find("D-E2") != std::string::npos, "[or-gi-writer-counted] " << counted.error().detail);
-}
-
-// ---- Error levels D8: a World broken outside the Product is seen when Failure() is read
-
-TEST_CASE("O-11: D8: Failure() sees a World broken outside the Product without an entry point, with the kernel's Err") {
-    auto built = O::Product::Build(Two(), Units().Take());
-    ORCH_REQUIRE_BUILT(built);
-    O::Product& p = **built;
-    REQUIRE(static_cast<bool>(p.RunFrame()));
-    REQUIRE_FALSE(static_cast<bool>(p.World("Side").Run("Bad")));
-    const O::WorldFailure* failure = p.Failure();  // no entry point called in between
-    REQUIRE_MESSAGE(failure != nullptr, "[el-d8-failure-read] Failure() did not see the World broken outside the Product");
-    CHECK_MESSAGE((failure->entry == "outside the Product" && failure->kernelCode == K::KernelErrorCode::SystemFailed),
-                  "[el-d8-direct-run] " << failure->Text());
-}
-
-TEST_CASE("O-11: D8: a World an exception broke outside the Product: Failure() has it, with no kernel error") {
-    O::ProductDescription d = Two();
-    d.worlds[1].build = [](O::WorldSetup& s) {
-        Basics(s.Registrar(), {FrameClock("Tick"), Once("Boom")});
-        s.Registrar().AddSystem<&ThrowAlloc>(In("ThrowAlloc", "Boom"));
-    };
-    auto built = O::Product::Build(std::move(d), Units().Take());
-    ORCH_REQUIRE_BUILT(built);
-    O::Product& p = **built;
-    REQUIRE(static_cast<bool>(p.RunFrame()));
-    CHECK_THROWS_AS(static_cast<void>(p.World("Side").Run("Boom")), std::bad_alloc);
-    const O::WorldFailure* failure = p.Failure();
-    REQUIRE_MESSAGE(failure != nullptr, "[el-d8-direct-throw] Failure() did not see the World an exception broke");
-    CHECK_MESSAGE((failure->entry == "outside the Product" && !failure->kernelCode.has_value()), "[el-d8-direct-throw] " << failure->Text());
 }
