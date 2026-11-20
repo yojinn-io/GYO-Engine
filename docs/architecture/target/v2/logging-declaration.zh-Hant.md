@@ -1,6 +1,6 @@
 # 事前宣告：日誌機制（含 trace）（`v8-arch-gyo2-logging`）
 
-更新：2026-11-20（修訂 1；同日動工前核准；修訂 2：實作中使用者定「記日誌後退出、不去重」，改 5.6、9.2、9.4、判定 2，見第 17 節）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前已核准（使用者「照建議，全部核准」，第 13 節八題全部照建議），實作段進行中。**
+更新：2026-11-21（修訂 1；2026-11-20 動工前核准；修訂 2：實作中使用者定「記日誌後退出、不去重」，見第 17 節；**修訂 3**：照異常分級（PR #254）與使用者 2026-11-20、11-21 的決定，E1 不再經日誌批的函式、`WriteFailure`／`WithFailureLog` 與 `product` 鍵拿掉、`std::terminate` 先寫一筆 `Fatal`，見第 18 節；改到已核准內容的地方標「〔修訂 3〕」）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前已核准（使用者「照建議，全部核准」，第 13 節八題全部照建議），實作段進行中。**
 
 經過：修訂 0（2d275db9）送 Fable 5.2／high 敵對式檢查（general-purpose、只讀），必改 9、建議改 10、小問題 10（證據 `declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 16 節；修訂 1 沒有再送檢查。修訂 1 的主要變化：致命那一行改成「先寫、不等任何東西」，由預先開好的第二個寫出口寫（第 5.6 節）；`Forward` 改成做得出來的形狀（第 5.3 節）；拆成兩個 Module，照 `time`／`world_time` 的先例（第 5.1 節）；直接寫一筆的 API 列進入口清單（第 3 節）；第 13 節從 6 題改成 8 題，加了「GYO 自己加的、和別家不同的」與回滾的交界。
 
@@ -54,7 +54,7 @@
 | L4 | 紀錄格式：JSON lines 的封套（固定鍵、`schema` 版本、結尾行）、NaN 與無限大的表示法（第 13 節第 3 題）、重複鍵與寫出失敗的處理；文字格式 |
 | L5 | 入口（第 3 節的清單）：`Forward`、`TakeKernelDiagnostics`、`Base::Log` 的處理器、直接寫一筆（`Logging::Write`） |
 | L6 | 致命：`WriteFailure`；斷言處理器與 `std::terminate` |
-| L7 | trace：span；trace 與日誌的分流（category 篩選） |
+| L7 | 〔修訂 3：移出本批的 logging，歸 trace Module（另寫宣告）〕trace：span；trace 與日誌的分流（category 篩選） |
 | L8 | 測試、情境測試（致命路徑、決定性）、連結守衛、突變清單 |
 | L9 | 文件：新頁 `target/v2/logging.zh-Hant.md`（Design Invariants LG-1～LG-11 與 Replacement Criteria）、v2 README 索引、dev_log、合併前核准頁；O-11 的例子更正（第 13 節第 4 題，核准後才改） |
 
@@ -73,6 +73,7 @@
 | World 建立、替換時往新 World 寫 `Message` | 讀檔那一批 | `-world-events-not-via-event` 補充 (3) |
 | 回滾 World 裡固定步發的 `Message` 怎麼記 | 第 4 批對齊（第 12、14 節、第 13 節第 7 題） | 回滾份 7.1 的跨 schedule 規則 |
 | Kernel 指紋報告手寫 JSON 改用 JSON Module | 主會話另議 | 要動 Kernel 的依賴 |
+| 〔修訂 3〕在 span 上標錯誤（壞在哪一步由 trace 追；Go 的 `RecordError` 那一類） | 使用者決定要不要另開 | 使用者 2026-11-21「日誌只是看。trace才是追問題。」；新的 Feature，本批只有 span |
 
 ## 3. 入口（使用者已定兩個入口與最後一道；這裡列實際的全部）
 
@@ -86,9 +87,9 @@
 | 訊息的丟棄記錄 `DroppedMessages` | **不是 `Message`**：Kernel 的診斷紀錄，World 記、兩次 Run 之間 `World::TakeDiagnostics<DroppedMessages>()` 取走（`engine/kernel/include/engine/kernel/World.hpp:135-150`、`:317`；游標宣告第 100 行，已核准）；World 中斷後仍讀得到（`World.hpp:296-298`） | runner 在兩次 Run 之間呼叫 `TakeKernelDiagnostics`（第 5.4 節） |
 | 生成被拒 `RejectedSpawn` | 同上（`World.hpp:101-131`） | 同上 |
 | 作者自己的 `DiagnosticsWriter<R>` 紀錄 | 同上（`Params.hpp:709-733`） | 作者取走後自己用 `Logging::Write` 寫 |
-| 編排層的警告 | `Engine::Base::Log` 五處：O-9 動態插入（`engine/orchestration/src/Product.cpp:720`、`:729`）、替換失敗（`:537`）、替換時的例外（`:656`、`:659`）。`DropOldFirst` 失敗時，編排層先記這一筆 `Warning`，再回 `WorldFailure` | `Base::Log` 的處理器（第 5.5 節） |
-| `WorldFailure` | `RunGameInit`／`RunFrame`／`RunSchedule`／`ReplaceWorld` 回的錯誤上（`OrchestrationError::failure`）；**System 丟例外時不回錯誤，例外往外丟**（`Product.cpp:426-438`、`WorldExecutor.hpp:29-30`），之後 `Product::Failure()` 讀得到（`Product.hpp:132`）；`Product::Run()` 只回 `RunnerExit`（`Product.cpp:495-503`）；結束後每次拒絕都帶同一份（`Product.cpp:385-393`） | runner 或 `main` 直接呼叫 `WriteFailure`（第 5.6 節） |
-| 產品的 trace、span、作者自己的紀錄 | （沒有） | 直接寫一筆：`Logging::Write`、`Logging::Span`（第 5.5 節） |
+| 編排層的警告 | 〔修訂 3〕沒有了：異常分級（PR #254）拿掉編排層的五處 `Base::Log`，編排層只回錯誤（O-11）。動工前核准時是五處（`8ec005f2` 的 `Product.cpp:537`、`:656`、`:659`、`:720`、`:729`） | — |
+| `WorldFailure` | 入口回的錯誤上（`OrchestrationError::failure`，帶它就是 E1）；System 丟例外時例外照常往外，之後 `Product::Failure()` 讀得到；〔修訂 3〕預設 runner 不寫、只回 `Failure` 和原因（`"the Product ended: "` ＋ `WorldFailure::Text()`，`e0806f1f` 的 `Product.cpp:505-522`）；記不記由產品的 main 定（Engine 不給標準 main，PR #255） | 〔修訂 3〕經 ③ 收下那一行（第 5.6 節）；不另設入口 |
+| 產品的 trace、span、作者自己的紀錄 | （沒有） | 直接寫一筆：`Logging::Write`（第 5.5 節）；〔修訂 3〕span 歸 trace Module |
 
 **交界**：O-11 和 `-world-events-not-via-event` 補充 (1) 把「訊息的丟棄記錄」寫成「照常經事件」，和已核准的游標宣告、已合併的實作不一致。第 13 節第 4 題。
 
@@ -99,14 +100,14 @@ World 健康時（平常）
   ① Message ──Forward──→ ┐                              （訂閱：使用者定的入口一）
   ② Kernel 的診斷紀錄 ──runner 在兩次 Run 之間取走──→ ┤   （游標宣告已定的「runner 取走」）
 World 外的程式                                          ├──→ Logger ──→ Sink（主控台／JSON lines 檔／記憶體）
-  ③ Engine::Base::Log ──處理器──→ ┤                    （既有的門面；編排層五處在用）
-  ④ Logging::Write／Span（直接寫一筆）──→ ┘            （trace、span、作者自己的紀錄）
-致命時
-  ⑤ WorldFailure ──runner／main 直接呼叫──→ WriteFailure ──→ 主控台＋致命寫出口（不等任何東西）
-  ⑥ 斷言失敗 ──處理器──→ 同 ⑤ 的寫法；std::terminate ──處理器──→ 只請寫者 flush（有期限）
+  ③ Engine::Base::Log ──處理器──→ ┤                    （既有的門面；〔修訂 3〕產品的 main 記 World 壞掉的那一行通常走這裡）
+  ④ Logging::Write（直接寫一筆）──→ ┘                   （作者自己的紀錄；〔修訂 3〕span 歸 trace Module）
+致命時（E0）
+  ⑤ 〔修訂 3 拿掉〕WorldFailure 的 WriteFailure（E1 記不記由產品的 main 定，要記就經 ③ 或 ④）
+  ⑥ 斷言失敗、std::terminate ──處理器──→ WriteFatalRecord ──→ 主控台＋致命寫出口（不等任何東西），之後 flush（有期限）
 ```
 
-使用者說的「兩個入口」是 ①（平常）與 ⑤（致命）。②是「平常」的第二條路（第 13 節第 4 題）。③④是 World 外、或作者自己要寫一筆時用的。**Engine 的 Module 在 System 裡報警告，不用 ③④，用 `Message`**（`-no-separate-eventbus`）；作者自己的 System 用不用 ④ 是第 13 節第 5 題。
+使用者說的「兩個入口」是 ①（平常）與 ⑤（致命）；〔修訂 3〕⑤ 拿掉之後，「致命時從 runner 拿結構化錯誤」改成：產品的 main 要記，就經 ③ 或 ④ 記一行（使用者 2026-11-21：日誌只是看，trace 才是追問題）。②是「平常」的第二條路（第 13 節第 4 題）。③④是 World 外、或作者自己要寫一筆時用的。**Engine 的 Module 在 System 裡報警告，不用 ③④，用 `Message`**（`-no-separate-eventbus`）；作者自己的 System 用不用 ④ 是第 13 節第 5 題。
 
 ## 4. 別家怎麼做（同一種技術比）
 
@@ -213,39 +214,17 @@ WorldLogging::Forward<TimeDiscardedLog>(setup, {.schedule = DefaultSchedules::fr
 
 ### 5.5 ③ `Base::Log` 與 ④ 直接寫一筆
 
-- ③：`Install` 接手 `Base::SetLogHandler`；`Base::Log(level, category, text)` 變成一筆紀錄。契約不變（不改流程、不丟例外、任何執行緒）。Kernel 照舊不寫日誌（`kernel_guard.py` K6）；編排層照舊（五處）。
-- ④：`Logging::Write(level, category, text, fields)`（或用 `RecordBuilder` 組），任何執行緒；`Logging::Span(...)` 見 5.13。給 trace、span、World 外的程式、作者取走 Kernel 紀錄後自己寫。關著的 category 不組紀錄、不配置、不讀時鐘（LG-7）。
+- ③：`Install` 接手 `Base::SetLogHandler`；`Base::Log(level, category, text)` 變成一筆紀錄。契約不變（不改流程、不丟例外、任何執行緒）。Kernel、編排層不寫日誌（異常分級）；〔修訂 3〕Engine 裡沒有呼叫者（異常分級拿掉編排層的五處；PR #255 拿掉 `RunProduct`）；產品的 main 記 World 壞掉的那一行通常走這裡。③ 與 `Base::Log` 門面都留（使用者 2026-11-20 照主會話的看法：Bevy 核心放 `tracing` 門面、`LogPlugin` 裝訂閱者；flecs 核心放 `ecs_log`、後端走 os_api）。
+- ④：`Logging::Write(level, category, text, fields)`（或用 `RecordBuilder` 組），任何執行緒；給 World 外的程式、作者取走 Kernel 紀錄後自己寫（〔修訂 3〕span 歸 trace Module）。關著的 category 不組紀錄、不配置、不讀時鐘（LG-7）。
 - **誰可以在 System 裡呼叫 ④**：Engine 的 Module 報警告不用它（用 `Message`，`-no-separate-eventbus`）。作者自己的 System 用不用，是第 13 節第 5 題。
 
-### 5.6 ⑤ 致命：`WriteFailure`（最後一道）
+### 5.6 致命：E0 的最後一道 `WriteFatalRecord`（〔修訂 3〕改寫；舊的「⑤ `WriteFailure`」拿掉）
 
-**誰呼叫、怎麼接**（三種情形；`WorldFailure` 由 runner 或 `main` 直接交給日誌，編排層不呼叫）：
+**E1（一個 World 壞了）不經日誌批的函式**（異常分級 PR #254；使用者 2026-11-21 `v8-arch-gyo2-logging-log-is-for-reading`、`v8-arch-gyo2-examples-top-level`，第 18 節）。runner 回 `Failure` 和原因；記不記、記什麼，是決定接下來怎麼辦的那一方（產品的 main）的事，要記就經 ③（`Base::Log`）或 ④（`Logging::Write`）。日誌不規定誰寫、寫幾筆，只把收到的寫成紀錄。這一行是給人看的；每層做了什麼、壞在哪一步，由 trace Module 追。System 丟的例外照常往外，到 `std::terminate` 由 ⑥ 記一筆。
 
-```cpp
-// (1) 入口回錯誤：
-auto ran = product.RunFrame();
-if (!ran && ran.error().failure) {
-    WorldLogging::WriteFailure(*ran.error().failure);
-    return {RunnerExitCode::Failure, "a World broke"};  // 記日誌，然後退出（修訂 2）
-}
-// (2) System 丟例外：RunFrame 不回錯誤、例外往外丟。
-try { ran = product.RunFrame(); } catch (...) {
-    if (const auto* f = product.Failure()) {
-        WorldLogging::WriteFailure(*f);
-        return {RunnerExitCode::Failure, "a World broke"};  // 記日誌，然後退出（修訂 2）
-    }
-    throw;  // 不是 World 壞掉
-}
-// (3) 用預設 runner：Product::Run() 只回 RunnerExit，main 再看 Failure()。
-const auto exit = product->Run();
-if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
-```
+修訂 2 以前這一節的三種接法、`WriteFailure` 寫的欄位、`WithFailureLog`，見 git 歷史（`9df04660` 以前）與第 17、18 節。
 
-- `world_logging` 另給一個包住 runner 的輔助 `WorldLogging::WithFailureLog(Runner)`：回一個 runner，裡面照 (1)(2) 寫。產品裝 runner 時自己選要不要包（編排層不知道）。每個產品要記得接——這是第 13 節第 2 題 (d)。
-- **記日誌，然後退出**（修訂 2，使用者 2026-11-20 `v8-arch-gyo2-logging-failure-log-then-exit`）：`WorldFailure` 是修不好的錯誤，runner 或 `main` 寫一筆之後就退出、不再呼叫入口；`WriteFailure` 每次呼叫都寫，不去重（修訂 1 的去重鍵是補丁：全行程共用時，先後兩個 Product 在同一入口、同一同步點壞掉，第二筆會被吞掉）。`WithFailureLog` 回 `Failure` 的 exit；沒有壞掉 World 的例外照原樣丟出。
-- **寫什麼**：一筆 `Fatal` 紀錄，category `"world"`，欄位照 `WorldFailure`（`product`、`world`、`kind`、`entry`、`schedule`、`sync_epoch`、`kernel_code`、`where`、`last_schedule`），`text`＝`WorldFailure::Text()`。**只讀傳進來的 `WorldFailure` 的值**，不讀 World、Kernel（情形 (2)(3) 讀的是 `Product::Failure()`：編排層在壞掉當下收好的值）。
-
-**怎麼寫**（`logging` 的 `WriteFatalRecord`；`WriteFailure` 與斷言處理器都走它）：
+**怎麼寫**（`logging` 的 `WriteFatalRecord`；斷言處理器與 `std::terminate` 處理器都走它，〔修訂 3〕）：
 
 1. 在呼叫的執行緒上組好那一行（文字一份、JSON 一份），用 `Install` 時預先保留的字串容量（不配置；超過容量才配置）。
 2. **主控台**：同步寫 `stderr`、`fflush`。不等任何東西。
@@ -267,7 +246,7 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 | 致命路徑重入（寫致命那一行時又斷言） | `thread_local` 的重入旗標：第二次只寫主控台、不碰任何鎖，然後回 |
 | 呼叫的執行緒握著主控台的鎖或佇列的鎖時斷言 | 致命路徑對主控台的鎖、佇列的鎖只 try-lock；拿不到就不用鎖直接寫（可能和另一行交錯，寧可交錯也不卡死） |
 
-**斷言處理器**（`LoggerOptions::takeAssertions`，預設開）：斷言失敗時走 `WriteFatalRecord`（category `"assert"`），再把失敗交給前一個處理器（前一個是 `nullptr` 時呼叫 `DefaultAssertionHandler`）；abort 由 `ReportAssertionFailure` 做（`Assert.hpp:96`），不是處理器。測試裝的處理器會丟 `AssertionFailure`，日誌的處理器讓它穿過（不 `catch`）。**`std::terminate`**：步驟 4（只 flush，期限同上），再交回前一個處理器。照 master `LogFile::FlushOnCrash`。
+**斷言處理器**（`LoggerOptions::takeAssertions`，預設開）：斷言失敗時走 `WriteFatalRecord`（category `"assert"`），再把失敗交給前一個處理器（前一個是 `nullptr` 時呼叫 `DefaultAssertionHandler`）；abort 由 `ReportAssertionFailure` 做（`Assert.hpp:96`），不是處理器。測試裝的處理器會丟 `AssertionFailure`，日誌的處理器讓它穿過（不 `catch`）。**`std::terminate`**（〔修訂 3〕，使用者 2026-11-20 照主會話的看法，推翻動工前核准的「只 flush」）：先走 `WriteFatalRecord` 寫一筆 `Fatal`（category `"terminate"`；`text` 是飛行中例外的 `what()`，不是 `std::exception` 時寫「an exception that is not a std::exception」，沒有例外時寫「std::terminate was called with no exception in flight」），步驟 4 的 flush 照舊，再交回前一個處理器。理由：日誌機制自己記「出了什麼事」，不是替別人處理。前一個處理器（C++ runtime 的預設）照舊可能再印一行到 stderr，那是 runtime 的行為。
 
 **不保證的**（LG-2 寫明）：記憶體已被寫壞、堆疊用盡、訊號（`SIGSEGV` 等）、上表「卡在 OS」的時限。C++ 接不住所有錯誤（使用者的理由）；不承諾 async-signal-safe。
 
@@ -315,18 +294,19 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 
 ### 5.12 紀錄格式
 
-- **JSON lines**：一筆一行、每行是 JSON Module `Parse` 讀得回的嚴格 JSON（J-2、J-5）。固定鍵依序：`schema`（封套的版本，本批 `1`）、`kind`、`level`、`category`、`wall`、`mono_ns`、`product`（致命時）、`world`（有時）、`world_interrupted`（有時）、`text`、`fields`（物件，鍵照寫入順序）；`kind=span` 另有 `begin_ns`、`duration_ns`。鍵名小寫加底線（照 master `MovementTraceWriter`）。
+- **JSON lines**：一筆一行、每行是 JSON Module `Parse` 讀得回的嚴格 JSON（J-2、J-5）。固定鍵依序：`schema`（封套的版本，本批 `1`）、`kind`、`level`、`category`、`wall`、`mono_ns`、`world`（有時）、`world_interrupted`（有時）、`text`、`fields`（物件，鍵照寫入順序）；`kind=span` 另有 `begin_ns`、`duration_ns`。鍵名小寫加底線（照 master `MovementTraceWriter`）。
 - `wall` 的寫法照 `strftime` 的 `%z`：`2026-11-20T10:40:11.007+0900`（日期時間是 ISO 8601 擴充式、偏移是基本式；照 master `LogFile`，不是嚴格的 ISO 8601）。本地時間經 `Os::Process::ToLocalTime`（`engine/os/include/engine/os/Process.hpp:36-51`）。
 - **結尾行**：`Close` 寫的最後一行，`kind=end`，鍵 `schema`、`kind`、`mono_ns`、`written`、`dropped_full`、`dropped_closed`、`fatal_direct`。
 - **NaN、無限大**：`Writer` 對它們回錯誤，所以欄位值是非有限數時，日誌在交給 `Writer` 之前換成約定的表示——第 13 節第 3 題。負零照 `Writer` 寫 `-0.0`。
 - **寫出失敗**（字串不是合法 UTF-8 時 `Writer::Finish` 回 `NotRepresentable`；或同一筆重複鍵，5.2）：那一筆改寫成一筆 `Error` 紀錄（category `"logging"`、同一個 `kind`、`world`），`text` 帶 `JsonError` 的碼與訊息，**不說是哪個欄位**（`JsonError` 只有碼與訊息，`JsonError.hpp:32`；要逐欄就得自己再驗一次 UTF-8，是 J-5 之外的第二份檢查，不做），計數加一；不丟、不中斷呼叫的人。
 - **封套和內容的版本分開**：`schema` 是 Engine 的封套（固定鍵）的版本；產品自己的內容（例：`trace.movement` 的欄位）改版時，版本放在自己的 `fields` 裡（例 `fields.schema_version`，照 master）。封套歸 Engine 是 GYO 這次的選擇，master trace DI 6 是「Engine 不知道行的意思」——第 13 節第 2 題 (e)。
-- 加鍵不升版，改既有鍵的意義或型別才升版。
+- 加鍵不升版，改既有鍵的意義或型別才升版。〔修訂 3〕`product` 鍵拿掉：只有 `WriteFailure` 寫它，拿掉之後沒有寫的人；`schema` 還沒發出過，仍是 `1`。
 - **文字格式**（`ConsoleSink`）：`[category] level: text key=value …`，沿用 `Base::Log` 預設處理器的開頭；給人看，不是資料契約。
 - golden：檔案寫出用 `LineEndings::AsWritten`（`Native` 在 Windows 是 `\r\n`，三平台位元組不同）；golden 測試注入時鐘時連 UTC 偏移一起注入（CI 是 UTC，本機不是）。
 
 ### 5.13 trace
 
+- 〔修訂 3〕本節的 span 與 `trace.` 分流歸 trace Module（使用者 2026-11-21「Log 和 trace是2個Module」；另寫宣告）。logging 留一般的 category 篩選（5.8），`kind` 只有 `log` 與結尾行的 `end`。下面兩點是修訂 2 以前的內容，只作紀錄。
 - **三個標記各管一件事**：`kind`（`log`／`span`／`end`）是紀錄的形狀；`level` 是詳細度；category 的 `trace.` 前綴只是分流的慣例（輸出端用前綴清單分到 trace 檔）。`trace.x` 配 `Info`、`Trace` 配別的 category 都合法；「trace」在本頁指「給分析工具看的結構化紀錄」這個用途，不是一個型別。
 - **span**：`auto span = Logging::Span("trace.net", "send");` 結束（解構或 `End()`）時寫**一筆**：`kind=span`、`begin_ns`、`duration_ns`（`Engine::Time::NowNs()`）、欄位。被篩掉的 span 不讀時鐘。不記父子關係。系譜：master 的 `started_ns`＋`time_ns`、Chrome trace 的 complete event `ph:"X"`。
 - trace 和日誌一個 Module 還是兩個、span 本批實作還是只定形狀：第 13 節第 6、8 題。
@@ -381,15 +361,15 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 
 | 條 | 內容 | 守衛 |
 |---|---|---|
-| **LG-1 入口** | 進日誌的路只有第 3 節的 ①～⑥。Engine 的 Module 在 System 裡報警告走 `Message`（①），不走 ③④。致命錯誤與 World 自己的壞掉、建立、替換不經事件；`WorldFailure` 只經 `WriteFailure`。不新增別的入口（回呼登記、全域事件匯流排）。不保證：讀者第一次跑之前被修剪的訊息（5.3）。 | 測試：每條路各一；致命路徑的情境測試；審查 |
-| **LG-2 最後一道直接呼叫** | `WriteFailure` 只讀傳進來的 `WorldFailure`（或 `Product::Failure()` 的值），不讀 World、Kernel；不經 Kernel、編排層、事件、日誌自己的佇列。先寫主控台與每個致命寫出口，**之後**才盡力等寫者（期限一個、全部輸出端共用）。回傳時致命那一行已交給 OS 或在回報標失敗。同一份 `WorldFailure` 只寫一次。不丟例外。重入只寫主控台。不保證：記憶體已壞、堆疊用盡、訊號、寫者卡在 OS 時的時限。 | 情境測試（World 真的中斷，三種情形）；注入「永不回來的寫出」：`WriteFailure` 回來、致命那一行在、回報標步驟 4 逾時；寫者執行緒上的斷言；重入；同一份寫兩次 |
+| **LG-1 入口** | 進日誌的路只有第 3 節的 ①②③④⑥（〔修訂 3〕⑤ 拿掉）。Engine 的 Module 在 System 裡報警告走 `Message`（①），不走 ③④。致命錯誤與 World 自己的壞掉、建立、替換不經事件；〔修訂 3〕World 壞掉時記不記由產品的 main 定，要記就經 ③ 或 ④；日誌不另設入口。不新增別的入口（回呼登記、全域事件匯流排）。不保證：讀者第一次跑之前被修剪的訊息（5.3）。 | 測試：每條路各一；致命路徑的情境測試；審查 |
+| **LG-2 致命路徑只給 E0**（〔修訂 3〕改名改寫，原「最後一道直接呼叫」） | `WriteFatalRecord` 給斷言與 `std::terminate`：不經 Kernel、編排層、事件、日誌自己的佇列。先寫主控台與每個致命寫出口，**之後**才盡力等寫者（期限一個、全部輸出端共用）。回傳時致命那一行已交給 OS 或在回報標失敗。不丟例外。重入只寫主控台。`std::terminate` 先寫一筆 category `terminate` 再 flush。E1 不走這條路（經 ③ 的一筆 `Error`）。不保證：記憶體已壞、堆疊用盡、訊號、寫者卡在 OS 時的時限。 | 注入「永不回來的寫出」：`WriteFatalRecord` 回來、致命那一行在、回報標步驟 4 逾時；寫者執行緒上的斷言；重入；`std::terminate` 的探測程式三種情形（`logging.terminate.*`）；情境 S3-1～S3-3 |
 | **LG-3 不改模擬的值** | 日誌登記的 System 只讀（`MessageReader<M>`、`Res<LogWorldLabel>`），永遠成功（描述器與輸出端的例外在 System 裡接住）；日誌不寫 ECS 元件、`Message`、`Event`、`Commands`，只在登記時放 `LogWorldLabel`。開不開日誌，判定 4 列的遊戲資料逐位元相同。登記、保留、指紋會變（5.11），那是寫明的。 | `static_assert`（編譯失敗樣本）；判定 4 的情境測試；描述器丟例外的測試 |
 | **LG-4 不認得產品與其他 Module** | `engine/logging` 只 include Base、Json、Os、Threads、Time；`engine/world_logging` 另加 Logging、Kernel、Orchestration。都不認得任何訊息型別、產品的詞（N5、N6）。 | `gyo_expect_links`；含入掃描（第 6 步）；審查 |
-| **LG-5 JSON lines 是資料契約** | 每行是嚴格 JSON（`Parse` 讀得回）；封套的固定鍵、順序、`schema` 版本、結尾行照 5.12；非有限數照約定；重複鍵與寫出失敗的那一筆改成錯誤紀錄。加鍵不升版，改鍵的意義或型別升版。文字格式不是契約。例外：5.6 表中「握鎖時斷言」那一格允許交錯。 | 往返測試；NaN／±Inf／負零／不合法 UTF-8／重複鍵各一；golden；兩個附加 handle 的並行寫測試（L1 三平台） |
+| **LG-5 JSON lines 是資料契約** | 每行是嚴格 JSON（`Parse` 讀得回）；封套的固定鍵、順序、`schema` 版本、結尾行照 5.12（〔修訂 3〕沒有 `product` 鍵）；非有限數照約定；重複鍵與寫出失敗的那一筆改成錯誤紀錄。加鍵不升版，改鍵的意義或型別升版。文字格式不是契約。例外：5.6 表中「握鎖時斷言」那一格允許交錯。 | 往返測試；NaN／±Inf／負零／不合法 UTF-8／重複鍵各一；golden；兩個附加 handle 的並行寫測試（L1 三平台） |
 | **LG-6 檔案輸出端的傳輸** | producer 不做檔案 I/O、不等寫者；佇列滿了丟並計數；寫者只被通知喚醒；件數守恆（推入＝寫出＋滿了丟＋關了才來）——致命那一行不經佇列，另計 `fatal_direct`、不進這個式子；結尾行是最後一行；同一個 producer 經佇列的行照推入順序（致命那一行可能在它之前推入的行之前，5.6）。 | 單元測試（照 master `TraceSinkTests` 的案例重寫）；件數守恆 |
 | **LG-7 篩選** | 輸出端與 category 篩選在 `Install` 定、之後不變；層級何時可改照第 13 節第 6 題；④ 被篩掉的紀錄不組、不配置、不讀時鐘（① 要推游標，不承諾不配置）。 | 測試；配置計數測試（④） |
 | **LG-8 一個行程一個 Logger** | 同時只裝一個（第二個是斷言）；`Install` 失敗回 `Result`；卸下時還原接手的處理器；沒裝時照 `Base::Log` 的預設。 | 測試 |
-| **LG-9 span** | 一段時間一筆紀錄（`begin_ns`、`duration_ns`，`Engine::Time`）；被篩掉的 span 不讀時鐘；不記父子關係。 | 測試（注入的時鐘） |
+| **LG-9（〔修訂 3〕退役）** | 原本是 logging 的 span；span 歸 trace Module，條號不重用。 | — |
 | **LG-10 依賴** | `gyo_logging` 公開只連 `GYO::Base`、私有 `GYO::Json`、`GYO::Os`、`GYO::Threads`、`GYO::Time`；`gyo_world_logging` 只連 `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration`；沒有外部組件（之後有的話放 `src/adapters/<組件>/`）。 | `gyo_expect_links`（和測試同時立） |
 | **LG-11 Sink 不丟例外** | `Sink` 的函式都是 `noexcept`；內建的輸出端寫失敗只計數、`Good()` 變 false。 | 編譯期（`noexcept` 檢查）；寫失敗的測試 |
 
@@ -399,9 +379,9 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 - **RC-L2 接線重複**：三個以上的產品重複同樣的 `Forward` 接線——重看第 13 節第 1 題（預設接線、登記單位）。
 - **RC-L3 成本**：判定 7 量到的成本讓某個點名的 Feature 超出它的預算，或量測顯示日誌的格式化或佇列鎖是熱路徑的主要成本——停下重看（含外部庫、編譯期拿掉層級、per-thread 緩衝）。
 - **RC-L4 trace 分家**：trace 需要和日誌不同的丟棄政策、父子關係或 Chrome trace／Tracy 匯出，而同一套輸出端做不到——提出把 trace 分出去。
-- **RC-L5 致命路徑不夠**：L1 的並行附加測試不過、觀察到致命紀錄在 `WriteFailure` 回傳後沒進檔、或寫者卡在 OS 讓致命路徑也卡住——改成另一個致命檔、預先配置的寫出。
+- **RC-L5 致命路徑不夠**：L1 的並行附加測試不過、觀察到致命紀錄在 `WriteFatalRecord` 回傳後沒進檔、或寫者卡在 OS 讓致命路徑也卡住——改成另一個致命檔、預先配置的寫出。
 - **RC-L6 描述器的形狀不夠**：有訊息需要執行期才知道的格式（例：每個 World 不同的 category）而型別做不到——重看 5.3（可能要 Kernel 給 System 帶狀態的方法，交使用者）。
-- **RC-L7 System 的自動 span**：有 Feature 要每個 System 的時間——要 Kernel 的 Executor 給計時的掛點，交使用者。
+- **RC-L7（〔修訂 3〕移到 trace Module 的宣告）**：System 的 span。
 - **RC-L8 入口長出來**：要第七種進日誌的路——停下，LG-1 的變更。
 
 ## 9. 測試、守衛、突變
@@ -412,10 +392,10 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 
 ### 9.2 情境測試（第 5 步；`tests/common/scenario/` 加一段，段號和第 4 批對齊，看哪批先合併）
 
-- **致命路徑**（F1，判定 2）：兩個 World 的 `Product`，第二個 World 的 System 在第 3 幀 (1) 回錯誤、(2) 丟例外、(3) `DropOldFirst` 替換失敗（`WorldMissing`）。runner 用 `WithFailureLog`（(3) 由 `main` 接）。預期：`MemorySink` 和真的 `JsonLinesFileSink`（建置目錄裡的暫存檔）都有那一筆 `Fatal`、欄位等於 `WorldFailure`；檔案在 `Close` 之前就讀得到；runner 寫一筆之後退出（`Failure` 的 exit），日誌只有一筆 `Fatal`（修訂 2）。(3) 另有編排層經 `Base::Log` 記的那一筆 `Warning`（`Product.cpp:537`），在 `Fatal` 之前。
+- **③ 在情境裡**（F1，判定 2；〔修訂 3〕收窄）：兩個 World 的 `Product`，第二個 World 的 System 回錯誤、World 中斷；決定接下來怎麼辦的一方（測試代替產品的 main）把 runner 回的原因經 `Base::Log` 寫一行。預期：`MemorySink` 與真的 `JsonLinesFileSink` 各多一筆、內容與呼叫一致。Engine 回什麼、寫不寫，是異常分級的測試的事，本段不驗。`std::terminate` 由 `logging.terminate.*` 驗。
 - **平常**（F2）：時間 Module 照預設、一幀給 1 秒真實經過時間，`Forward<TimeDiscardedLog>` 收到一筆、`world` 對；訊息上限設 2、寫 5 筆，runner 呼叫 `TakeKernelDiagnostics`，收到一筆 `DroppedMessages`。
 - **決定性**（判定 4）：同一個情境跑兩次（日誌關＝不呼叫 `Forward`、不登記 `LogWorldLabel`；開＝全部 `Debug` 以上、兩個輸出端），比 5.11 列的對象。
-- **trace**（F3、F4）：寫 1,000 筆 trace 紀錄（帶跳脫字串、NaN、±Inf、負零、重複鍵一筆）與 100 個 span，`trace.` 只進 trace 檔、其餘只進主控台；每行 `Parse` 讀回、逐欄比對；重複鍵那一筆變成錯誤紀錄。
+- **一個 category 自己一個檔**（F3；〔修訂 3〕拿掉 span）：寫 1,000 筆 `relay.movement` 紀錄（帶跳脫字串、NaN、±Inf、負零、重複鍵一筆），只進它的檔、其餘只進主控台；每行 `Parse` 讀回、逐欄比對；重複鍵那一筆變成錯誤紀錄。
 
 ### 9.3 守衛
 
@@ -425,7 +405,7 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 ### 9.4 突變（AGENTS §14.2、§14.5；`tests/common/mutation/README.md`）
 
 - 清單 `tests/common/logging/mutations.json`，前綴 `lg-`。每個突變寫 `what` 與 `guards`（README 第 9 條）。
-- 只立測試觀察得到的決定（修訂 0 的「讀 World」「不 flush」觀察不到，拿掉）。估計：LG-1 3（`TakeKernelDiagnostics` 漏一種紀錄、`world` 欄位、`world_interrupted`）、LG-2 6（致命那一行等寫者之後才寫、不寫致命寫出口、重入時碰鎖、逾時後不回、寫者執行緒上等自己；修訂 2 拿掉「不去重」，加 `WithFailureLog` 記日誌後退出的幾件）、LG-3 3（不 `catch`、`static_assert` 拿掉、描述器的例外讓 System 回錯誤）、LG-5 7（NaN、+Inf、−Inf、鍵順序、`schema`、重複鍵、寫出失敗）、LG-6 6（滿了不丟、不計數、結尾行、守恆、順序、`fatal_direct` 進了守恆式）、LG-7 3、LG-8 2、LG-9 2、LG-10 1、LG-11 1；掃描守衛每條規則約 3 個（README 第 4 條）。合計約 40～50。超過「DI 條數 × 5」（11 × 5＝55）時，在合併前核准說明理由（README 第 8 條）。
+- 只立測試觀察得到的決定（修訂 0 的「讀 World」「不 flush」觀察不到，拿掉）。估計：LG-1 3（`TakeKernelDiagnostics` 漏一種紀錄、`world` 欄位、`world_interrupted`）、LG-2 6（致命那一行等寫者之後才寫、不寫致命寫出口、重入時碰鎖、逾時後不回、寫者執行緒上等自己；修訂 2 拿掉「不去重」；〔修訂 3〕`WriteFailure`／`WithFailureLog` 的 6 個退役，加 `std::terminate` 的 5 個）、LG-3 3（不 `catch`、`static_assert` 拿掉、描述器的例外讓 System 回錯誤）、LG-5 7（NaN、+Inf、−Inf、鍵順序、`schema`、重複鍵、寫出失敗）、LG-6 6（滿了不丟、不計數、結尾行、守恆、順序、`fatal_direct` 進了守恆式）、LG-7 3、LG-8 2、LG-9 2、LG-10 1、LG-11 1；掃描守衛每條規則約 3 個（README 第 4 條）。合計約 40～50。超過「DI 條數 × 5」（11 × 5＝55）時，在合併前核准說明理由（README 第 8 條）。
 - 每步只跑相關的突變；合併前完整跑一次（`mutation-rerun-scope`）。
 - 新清單在第 6 步後送 Fable 5.2／high 敵對式檢查（AGENTS §14.2）。
 
@@ -434,7 +414,7 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 | # | 判定 | 怎麼算過 |
 |---|---|---|
 | 1 | L1 三平台（linux-x64、windows-x64、macos-arm64）ctest 全綠 | 含 `gyo_logging_tests`、`gyo_world_logging_tests`、情境的新段、守衛、兩個附加 handle 的並行寫測試 |
-| 2 | 致命路徑（第 9.2 節三種情形＋LG-2 的單元案） | `WriteFailure` 回傳時：記憶體輸出端與檔案都有那一筆、欄位等於 `WorldFailure`（逐欄）；注入「永不回來的寫出」時，`WriteFailure` 有回來、致命那一行在致命寫出口、回報標步驟 4 逾時（期限用注入的值 50 ms；**不判真實時間的上限**，靠 ctest 的 TIMEOUT 擋住真的卡死）；runner 寫一筆後退出（`WithFailureLog` 回 `Failure` 的 exit、之後不再呼叫入口）（修訂 2 改，原「同一份第二次回 `AlreadyWritten`」，見第 17 節） |
+| 2 | 致命路徑（LG-2 的單元案、`std::terminate` 的探測、情境 S3-1；〔修訂 3〕改，見第 18 節） | 注入「永不回來的寫出」時，`WriteFatalRecord` 有回來、致命那一行在致命寫出口、回報標步驟 4 逾時（期限用注入的值 50 ms；**不判真實時間的上限**，靠 ctest 的 TIMEOUT 擋住真的卡死）；每次斷言、每次 `std::terminate` 各恰好一筆 `Fatal`（category `assert`／`terminate`，`std::terminate` 三種情形）；③ 收到的一行在兩個輸出端各一筆。作者經 ④ 寫的 `Fatal` 不數（使用者 2026-11-20：不限制）（修訂 2 改過一次，原「同一份第二次回 `AlreadyWritten`」，第 17 節） |
 | 3 | 件數守恆 | 每個檔案輸出端 `Close` 後：推入＝寫出＋滿了丟＋關了才來；結尾行的件數等於 `Counts()`；`fatal_direct` 等於致命寫出口寫的行數 |
 | 4 | 決定性 | 5.11 列的比較對象相等 |
 | 5 | 紀錄格式 | 每行 `Parse` 讀得回；NaN、±Inf 照第 13 節第 3 題；golden 一筆三平台位元組相同 |
@@ -452,8 +432,8 @@ if (const auto* f = product->Failure()) WorldLogging::WriteFailure(*f);
 | 第 1 步 | 骨架：兩個目錄、target、登記檔兩列、連結守衛；`Record`、`Level`、`Fields`、`Logger` 的安裝（`Result`）與卸下、`MemorySink`、`Base::Log` 處理器、④ `Write` | Opus 5.5／high（本卡） | — | 4～6 h |
 | 第 2 步 | `ConsoleSink`、JSON lines（封套、NaN、重複鍵、寫出失敗、結尾行、golden）、`JsonLinesFileSink`（佇列、寫者、件數、注入的行寫出、致命寫出口）、兩個附加 handle 的並行寫測試（先在 L1 三平台 dispatch 驗，驗不過就停） | Opus 5.5／high | — | 7～10 h |
 | 第 3 步 | `Forward`、描述器、`LogWorldLabel`、`TakeKernelDiagnostics`、LG-3 的編譯失敗樣本；篩選（與第 6 題的結果）；讀者對保留的影響的測試 | Opus 5.5／high | — | 5～7 h |
-| 第 4 步 | 致命：`WriteFatalRecord`、`WriteFailure`、`WithFailureLog`、斷言與 `std::terminate` 處理器、重入、寫者執行緒上 | Opus 5.5／high | — | 5～7 h |
-| 第 5 步 | span（第 6 題的結果）；情境測試（第 9.2 節）；判定 7 的量測 | Opus 5.5／high | — | 4～6 h |
+| 第 4 步 | 致命：`WriteFatalRecord`、`WriteFailure`、`WithFailureLog`（〔修訂 3〕後兩個拿掉）、斷言與 `std::terminate` 處理器、重入、寫者執行緒上 | Opus 5.5／high | — | 5～7 h |
+| 第 5 步 | span（第 6 題的結果；〔修訂 3〕移到 trace Module）；情境測試（第 9.2 節）；判定 7 的量測 | Opus 5.5／high | — | 4～6 h |
 | 第 6 步 | 含入掃描守衛；突變清單；突變清單的敵對式檢查 | Opus 5.5／high | 敵對式檢查 Fable 5.2／high | 4～6 h |
 | 第 7 步 | 審查（全部的變更）；文件（新頁、README 索引、dev_log、合併前核准頁、O-11 更正）；完整跑突變 | Opus 5.5／high | 審查 Fable 5.2／high | 4～6 h |
 
@@ -624,3 +604,35 @@ O-11（已合併 #253）與 `-world-events-not-via-event` 補充 (1) 寫「World
 - **經過**：第 4 步實作 `WriteFailure` 的去重時，測試裡兩個 Product 撞了 5.6 定的鍵（`product`＋`world`＋`entry`＋`syncEpoch`＋`kind`，全行程共用），第二筆致命紀錄被吞掉。卡片停下（AGENTS §14），問 A（以 Product 為單位去重）／B（接受漏洞）／C（`WorldFailure` 加 Product 實例序號）。
 - **使用者的決定**（2026-11-20 side chat，HANDOFF `v8-arch-gyo2-logging-failure-log-then-exit`）：三個都不選。原話摘一句：「返回沒錯，錯誤沒錯，包裝沒錯，錯誤的是對WorldFailure的處理，正常就應該，記日誌，然後退出。」去重是補丁；重複是 runner 拿到失敗沒退出。O-11、編排層不動。
 - **改的地方**：5.6 的三種接法與「不重複」一條；9.2 的致命路徑預期；9.4 的突變估計；判定 2（AGENTS §14.4 的 1～5 在合併前核准頁）；LG-2 的最終文字在 [logging.zh-Hant.md](logging.zh-Hant.md)。實作：commit 8b83c745。
+
+## 18. 修訂 3：E1 經 ③、致命路徑只給 E0（2026-11-21，異常分級合併之後）
+
+- **經過**：2026-11-20 使用者要日誌批停下等異常分級（「你通知一下日誌，等異常分級完成在繼續。」）。異常分級的規範轉來後卡片重判（使用者在異常分級卡說：「把結論和規範通知日誌任務卡。重判」）；之後異常分級撤回了一部分（型別改名、入口接住例外、D5、對作者的「只在 runner 結束處記一次」），PR #254 合併（`e0806f1f`）。重判的過程記在共用筆記資料夾 `gyo2-logging-rejudge-error-levels.md`（主會話的筆記，不是證據的所在；本節寫結論）。
+- **使用者的決定**（主會話與 side chat 轉來；HANDOFF 由主會話記）：
+
+| 件 | 原話 | 比過的選項 | 定的 | 出處 |
+|---|---|---|---|---|
+| 入口 ③ 與 `Base::Log` | （照主會話的看法） | 兩個都拿掉（卡片的建議）／兩個都留／只拿掉 ③（不建議） | 兩個都留（Bevy 的 `tracing` 門面＋`LogPlugin`；flecs 的 `ecs_log`＋os_api） | 主會話 2026-11-20 |
+| `std::terminate` | 同上 | 照舊只 flush／先寫一筆 `Fatal` 再 flush | 先寫一筆 `Fatal`（category `terminate`）再 flush；理由：日誌機制自己記「出了什麼事」，不是替別人處理 | 同上 |
+| LG-1 的「先 `WriteFailure` 再取」 | 同上 | 留順序／拿掉 | 拿掉，補一句「取診斷紀錄失敗時，致命那筆照寫」 | 同上 |
+| ④ 寫 `Fatal` | 同上 | 限制／不限制 | 不限制，判定只數 Engine 的路寫的 | 同上 |
+| 原則 | 「異常分級只是系統告訴外部發生了什麼。而不是，一定要如何如何處理。你擋不住亂寫代碼的人。但是規範就在這裡。（可以用測試或者守衛來擋，是否符合規範，用車時和守衛來做）」 | — | LG-2、5.6 寫 Engine 的程式怎麼做，不寫對作者的要求；Engine 自己的程式用測試檢查 | 主會話 2026-11-20 |
+| E1 那一行 | 「你用序列化也行，用描述也行。日誌只是看。trace才是追問題。」 | 卡片 (b)：讓 `RunProduct` 的記錄可換、日誌批提供保住 `Fatal` 與欄位的函式／主會話 (d)／一行文字 | `RunProduct` 經 `Base::Log` 記一行文字；不開掛點、不擴充 `Base::Log`；`WithWorldErrorLog`（即 `WithFailureLog`）拿掉；壞在哪一步交給 trace | side chat 2026-11-21，HANDOFF `v8-arch-gyo2-logging-log-is-for-reading` |
+
+- **之後的兩件**（2026-11-21，同一天）：
+  - 使用者在異常分級卡定 Engine 不給標準 main：`RunProduct`、`ExitCode` 拿掉，例子放頂層 `examples/`（PR #255，HANDOFF `v8-arch-gyo2-examples-top-level`）。所以 World 壞掉時記不記、記什麼由產品的 main 定；本頁凡寫到「Engine 對 E1 記一行」的地方都改成這個說法。
+  - 使用者在本卡定「Log 和 trace是2個Module」（推翻第 13 節第 8 題的「一個系統」）；查證 Bevy、flecs 原始碼後核准方向（「照這個方向做，開始」；證據 `build/evidence/gyo2-logging/recon-log-vs-trace.md`）：span 從 logging 拿出、歸 trace Module（另寫宣告、另開 PR）；logging 的 LG-9、RC-L4、RC-L7 退役。
+  - 卡片也被指出偏離職責（使用者：「你清楚你的職責嗎？你的核心任務是什麼？」）：情境與判定 2 曾在驗編排層與產品的行為。本修訂把它們收窄到日誌自己的事。
+- **卡片照 L17 判**（主會話同意 `WriteFailure` 一件）：
+  - **`WriteFailure` 拿掉**：它和 `Base::Log` 不同的只有 `Fatal`、結構化欄位、致命路徑三樣，使用者已經不要；留著就有兩種記 E1 的寫法；自己寫 main 的人用一行 `Base::Log`（或 `Logging::Write`）就記得到，category 自己選；沒有點名的使用者（AGENTS §2）。
+  - **`product` 鍵拿掉**（LG-5、5.12）：只有 `WriteFailure` 寫它；`schema` 還沒發出過，仍是 `1`。同理 `begin_ns`、`duration_ns` 隨 span 拿掉，`kind` 只剩 `log` 與 `end`。
+  - `TakeKernelDiagnostics` 不再規定和 World 壞掉那一行的先後；讀的人用 `mono_ns` 排。
+  - `LoggingError` 不改名（異常分級：既有型別的改名是後續）。
+- **改到已核准內容的地方**（標「〔修訂 3〕」）：第 2.1 節 L7；第 2.2 節加一列；第 3 節的現況表、入口圖；5.5 ③④；5.6 改寫（E1 不經日誌批、E0 的最後一道、`std::terminate`）；5.12 的 `product`；5.13；第 8 節 LG-1、LG-2、LG-5、LG-9、RC-L5、RC-L7；9.2；9.4 的估計；判定 2；第 11 節第 4、5 步。Design Invariants 的最終文字在 [logging.zh-Hant.md](logging.zh-Hant.md)。
+- **判定 2 的變更**（AGENTS §14.4，受け入れ判定；合併前核准頁再列一次，請使用者核准）：
+  1. 守的性質：斷言、`std::terminate` 時，日誌確實留下一筆而且只有一筆，致命路徑不等寫者；World 壞掉時，產品寫來的那一行確實成為紀錄。
+  2. 緩める面：不再檢查 World 壞掉的那一筆是 `Fatal`、帶 `WorldFailure` 的逐欄欄位、經致命寫出口立刻進檔；不再檢查 runner 包裝（`WithFailureLog`）的行為（拿掉了）；不再檢查 `DropOldFirst` 替換失敗時的那一筆（那是編排層與產品的事）。
+  3. 締める面：`std::terminate` 三種情形各恰好一筆 `Fatal`（以前 0 筆也過）。
+  4. 緩める面守的性質由誰守：「致命路徑不等寫者」照舊由 LG-2 的單元案守（`fatal:` 各案、`lg-fatal-*` 突變）；「World 壞掉時留下一行」由情境 S3-1 守日誌這一側（收到就寫成紀錄），由誰寫、寫不寫歸產品；欄位逐欄不再守——使用者定「日誌只是看」，要追問題用 trace。
+  5. 根據：使用者的原話（上表與本節）；證據：本批的情境 S3-1 與 `logging.terminate.*`，突變第 2 回與修訂 3 之後的結果（主 checkout `build/evidence/gyo2-logging/`）。
+- **實作**（同一個變更）：terminate 處理器（`engine/logging/src/Logger.cpp`）；拿掉 `engine/world_logging` 的 `WriteFailure.hpp`／`.cpp` 與 `FailureTests.cpp`；拿掉 logging 的 `Span.hpp`／`.cpp`、`SpanTests.cpp`、`RecordKind`；`Record` 與 `MemorySink` 拿掉 `product`、`beginNs`、`durationNs`；情境第 3 段收窄成四案（S3-1 ③、S3-2 平常、S3-3 決定性、S3-4 一個 category 自己一個檔）；探測程式 `tests/common/logging/TerminateProbe.cpp`＋`.cmake`；突變退役 9（`WriteFailure`／`WithFailureLog` 6、span 3）、新增 5（terminate）、第 1 回沒過的 8 個修正（七個的 `expect` 沒算到 doctest 在 `TEST CASE` 那行之後的空行，其中 NaN 三個另有 `-tc=` 被測試名的逗號切開、改了測試名；writer-timer 原本的案例沒有閒置期，加了一個閒置 50 ms 的案例）。
