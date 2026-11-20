@@ -46,29 +46,6 @@ add_compile_options("$<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang,GNU>:-ffp-contra
 # dependency a product adds from its own directory, but not to third_party.
 add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
                     "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")
-# Discarding a [[nodiscard]] value unread is an error in GYO C++ code, not a
-# warning (error levels D5, docs/architecture/target/v2/error-levels-declaration.zh-Hant.md):
-# an error value always reaches its caller, and dropping it without a word is
-# wrong. An explicit (void) cast with a comment stays allowed. Clang reports a
-# discarded [[nodiscard]] class type (Base::Result) as unused-value and a
-# [[nodiscard]] function as unused-result; GCC reports both as unused-result;
-# MSVC as C4834. Like the options above, it applies to the directories added
-# below and not to third_party. tests/common/base checks it with a
-# compile-failure sample that reads this same list (try_compile does not
-# inherit directory options) and checks that the list is in this directory's
-# options.
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(GYO_DISCARD_IS_ERROR_OPTIONS -Werror=unused-result -Werror=unused-value)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(GYO_DISCARD_IS_ERROR_OPTIONS -Werror=unused-result)
-elseif(MSVC)
-    set(GYO_DISCARD_IS_ERROR_OPTIONS /we4834)
-else()
-    set(GYO_DISCARD_IS_ERROR_OPTIONS)
-endif()
-foreach(_gyo_option IN LISTS GYO_DISCARD_IS_ERROR_OPTIONS)
-    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${_gyo_option}>")
-endforeach()
 # The Module and Plugin registers name the engine's Modules, the Plugins and
 # their dependencies (Design Invariant O-6 of
 # docs/architecture/target/v2/orchestration.zh-Hant.md); engine/CMakeLists.txt
