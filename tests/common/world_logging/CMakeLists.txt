@@ -75,3 +75,13 @@ function(gyo_world_logging_compile_fail_samples)
     message(STATUS "world_logging.compile_fail_sample (try_compile): ${summary}")
 endfunction()
 gyo_world_logging_compile_fail_samples()
+
+# Judgement 7 (declaration section 10; measured only, no threshold): run by hand on one host, Release; not a ctest.
+add_executable(gyo_logging_budget LoggingBudget.cpp)
+target_link_libraries(gyo_logging_budget PRIVATE GYO::WorldLogging GYO::Logging GYO::Time)
+if(MSVC)
+    target_compile_options(gyo_logging_budget PRIVATE /W4 /permissive- /bigobj)
+    target_compile_definitions(gyo_logging_budget PRIVATE NOMINMAX)
+else()
+    target_compile_options(gyo_logging_budget PRIVATE -Wall -Wextra -Wpedantic)
+endif()
