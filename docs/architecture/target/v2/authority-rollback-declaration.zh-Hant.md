@@ -1,10 +1,10 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-20（修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推，等使用者重新核准。修訂 1 之後同日記入的：同日記入使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：修訂 2 等使用者重新核准（5.4 的數字、5.5 的形狀，第 12 節「還開著的」）。** 核准與使用者說「開始」之前不實作、不改條文與守衛；第 1 步前半（第 3 批延下來的三條守衛，afd6e7c5）在使用者說「開始」後、停工指示送到前已提交，使用者 2026-11-20 定「留著，先不推」。
+更新：2026-11-20（修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推，等使用者重新核准。修訂 1 之後同日記入的：使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：修訂 2 等使用者重新核准（5.4 的數字、5.5 的形狀，第 12 節「還開著的」）。** 核准與使用者說「開始」之前不實作、不改條文與守衛；第 1 步前半（第 3 批延下來的三條守衛，afd6e7c5）在使用者說「開始」後、停工指示送到前已提交，使用者 2026-11-20 定「留著，先不推」。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 之後的改動與修訂 2 送 Fable 5.2／high 窄複查（結果見第 17 節之後的處理）。
 
-性質：實作段第 4 批的事前宣告（AGENTS §3 的 Architecture Delta、§2 的基盤 Architecture、§14.4 的判定變更、Design Invariants 的變更）。11-17 核准的[權威份](authority-module-declaration.zh-Hant.md)（修訂 5 補，7f9bbb85）與[回滾份](rollback-module-declaration.zh-Hant.md)（修訂 6，9418fcf1）是設計的依據，**本頁不改它們定過的事**；和它們字面不同的地方全部列在第 12 節末。本頁只寫：(1) 兩份寫在第 2、3 批之前，和現在的程式逐條對照；(2) 兩份留給實作批的細節；(3) `World::Summary` 改逐型別雜湊；(4) 拿掉 Kernel 的權威規則；(5) 拆卡、步驟、判定。
+性質：實作段第 4 批的事前宣告（AGENTS §3 的 Architecture Delta、§2 的基盤 Architecture、§14.4 的判定變更、Design Invariants 的變更）。11-17 核准的[權威份](authority-module-declaration.zh-Hant.md)（修訂 5 補，7f9bbb85）與[回滾份](rollback-module-declaration.zh-Hant.md)（修訂 6，9418fcf1）是設計的依據，**除第 12 節末列的之外，本頁不改它們定過的事**。本頁只寫：(1) 兩份寫在第 2、3 批之前，和現在的程式逐條對照；(2) 兩份留給實作批的細節；(3) `World::Summary` 改逐型別雜湊；(4) 拿掉 Kernel 的權威規則；(5) 拆卡、步驟、判定。
 
 用詞：「設計段／實作段」「動工前核准／合併前核准」「第 N 步」照第 3 批。標「**本卡照 L17 判**」的是這張卡的判斷（名字照命名規範、細節照別家原始碼），**不是使用者的話**。本卡新加的詞第一次出現時標「本卡加的詞」。
 
@@ -28,7 +28,7 @@
 | [游標份](event-cursor-declaration.zh-Hant.md)修訂 6、[讀檔份](restore-entry-declaration.zh-Hant.md)修訂 11 | 已核准 | 訊息不回滾、跨 schedule 的訊息檢查；讀檔與回滾的交界 |
 | [第 3 批宣告](time-events-declaration.zh-Hant.md)修訂 4 與 [dev_log](../../../dev_logs/2026_11_20_gyo2_time_events.zh-Hant.md) | 已合併（#253） | `Tick`、`Resimulation`、`RunOneFixedStep`、`RewindFixedSteps`、`TickWriters`、預設骨架、G4、G5 |
 | [編排層骨架的宣告](orchestration-skeleton-declaration.zh-Hant.md)與 [O-1～O-11](orchestration.zh-Hant.md) | 已合併（#244） | 登記單位、選項包、`Check` |
-| HANDOFF 決定表（`origin/claude/gyo2-time-design`，讀到 57c8dc32） | 主會話 | 使用者的決定。動工時再讀一次（`verify-before-premise`） |
+| HANDOFF 決定表（`origin/claude/gyo2-time-design`，修訂 1 讀到 57c8dc32；修訂 2 的窄複查讀到 f944ed53，含 `-baseline-redo` 等） | 主會話 | 使用者的決定。動工時再讀一次（`verify-before-premise`） |
 | [限制頁](../limits.zh-Hant.md) LIM-7、LIM-8 | 架構師 | 第 3.4、8 節 |
 
 **使用者的決定**（原話以 HANDOFF 為準）：`-kernel-is-ecs-no-restrictions`、`-authority-is-game-design`、`-authority-strategy-mechanism`、`-authority-own-registration`、`-authority-no-writer-count`、`-confirm-derived-removals`（含 11～13）、`-rollback-module-strategy`、`-strategy-interface-impl`、`-immediate-change-via-exclusive-world`、`-no-runtime-interception`、`-no-ambiguity-detection`、`-dynamic-insert-per-world`、`-module-deps-in-registers`、`-products-pick-modules`、`-engine-not-rigid`、`-layer-duty-lists`、`-events-two-kinds-like-bevy`、`-event-delivery-rule`、`-authority-guard-gap-later`、`-guards-after-mechanism-stable`、`-scenario-tests`、`-scenario-failure-by-contract`、`-scenario-cross-engine-check`、`-summary-padding-a-then-c`、`-mutation-guards-field`、`-confirm-only-differences`、`-batch3-no-xhigh`、`-net-is-mechanism-first`、`-merge-needs-explicit-word`。
@@ -43,7 +43,7 @@
 
 - **Match 的 World**：建 World 時選「伺服器權威」策略、不選回滾策略。作者寫 `authority.Component<Health>`、`authority.Component<Position>`、`authority.Mark<Tick>()`。啟動時策略檢查：World 宣告了不准動態插入；除了時間 Module 的 `RunFixedSteps`，沒有別的 System 寫 `Tick`。執行中不攔任何寫入。
 - **Client 的模擬 World**：也選伺服器權威，再選官方的回滾策略。它多登記一個畫面用的 `HitFlash`（一般的 `registrar.Component`），所以兩邊的**一致性指紋**（權威份的 C 指紋；名字見 4.3）只算判定資料、照權威登記的順序編號，兩邊相同、連得上。
-- Client 預測第 100～106 個 tick。測試把 Match 第 100 個 tick 的 `Position` 交給回滾 Module 的入口：和 Client 的歷史不同。回滾的獨占 System（掛在 `Main` 的 `PreUpdate`）立起 `Resimulation`、把 `Health`、`Position` 與存活集合**一批**放回第 100 個 tick（全部放回之後才跑 hook 與 observer）、用時間 Module 的 `RewindFixedSteps` 退 tick、再用 `RunOneFixedStep` 重跑 6 步，放下 `Resimulation`。「播腳步聲」掛了「重跑時不跑」，重跑時不出聲。重跑完 Client 和 Match 的 **digest**（判定資料的雜湊）相同。
+- Client 預測第 100～106 個 tick。測試把 Match 第 100 個 tick 的整份判定值（`Health`、`Position`、存活集合）交給回滾 Module 的入口（第 5.5 節選 (a) 時再加「第 100 步以前收齊」的標記）：和 Client 的歷史不同。回滾的獨占 System（掛在 `Main` 的 `PreUpdate`）立起 `Resimulation`、把 `Health`、`Position` 與存活集合**一批**放回第 100 個 tick（全部放回之後才跑 hook 與 observer）、用時間 Module 的 `RewindFixedSteps` 退 tick、再用 `RunOneFixedStep` 重跑 6 步，放下 `Resimulation`。「播腳步聲」掛了「重跑時不跑」，重跑時不出聲。重跑完 Client 和 Match 的 **digest**（判定資料的雜湊）相同。
 - **單機 2D 橫版**：World 不選權威、回滾策略（兩個 Module 預設帶，但不選策略就沒有作用；要更乾淨可以在產品登記檔關掉），沒有歷史、沒有任何檢查。
 - **讀檔測試**：同一份存檔讀兩次，`World::Summary` 相同——這次在 Windows 上也穩，因為摘要不再雜湊原始位元組：每種型別有自己的雜湊函式，padding 不算、`std::vector` 算內容。
 
@@ -142,6 +142,10 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 登記照過；呼叫 `World::Summary` 時，World 裡有沒有雜湊函式的型別，就回錯誤並列出那些型別。缺函式這件事由作者自己用測試守（使用者原話：「選d就好，執行到報錯，這個問題需用作者自己用測試來守」）。權威的 digest 照權威份 4.3，在 `authority.Component<T>` 登記時編譯期檢查。
 
+本卡照 L17 補的細節（修訂 2 依窄複查 S5 標明）：「World 裡有」定成**有值才報**（欄有格、Resource 有值、訊息緩衝有紀錄）；拿掉那個型別的實體後同一個 `Summary` 會成功。使用者的原話是「執行到報錯」，這個界線是本卡定的。
+
+**Engine 的 Module 放進 World 的型別都附雜湊函式**（修訂 2，依窄複查 S5）：兩個 Module 預設帶（`default=yes`），不選策略時公開登記照樣在 World 裡，沒有函式的話單機 World、讀檔測試一比摘要就報錯。雜湊什麼：回滾的公開登記 Resource 只雜湊每筆的型別序號與選項的種類（函式指標不雜湊）；歷史環、修正狀態的函式**什麼都不寫**（摘要描述模擬狀態，歷史是可重建的快取；讀檔兩次的歷史本來就不同）；權威的登記同公開登記；`Resimulation` 與時間 Module 的 Resource 雜湊各欄位（時間的型別在第 1 步補）。
+
 ### 3.4 LIM-8 留不留（本卡判；第 12 節第 1 件定 (d)、第 2 件定 (i)）
 
 **LIM-8 改寫，不解除**：原始位元組不再是預設，但「作者選照位元組」那條路仍然要作者保證位元組＝值（沒有 padding、沒有 `optional`／union 的殘值、沒有指標與句柄、沒有寬度隨平台的型別）——digest 跨行程比，這條限制現在就適用，不是將來（修訂 0 想另立 LIM-9、「跨行程時才有事」是錯的，檢查 M1）。改寫後的 LIM-8：「`World::Summary` 與 digest 對每個值呼叫型別的雜湊函式；作者選『照位元組』的型別，位元組必須等於值」，守衛：Kernel 附的型別的測試；作者的型別無守衛。第 12 節第 1 件定 (d)，不加 (b)、(c) 那種「略過」「退回位元組」的句子；改寫後的 LIM-8 再加一句「沒有雜湊函式的型別在 `World` 裡時，`Summary` 回錯誤；作者的型別有沒有函式，由作者的測試守」。條文的 owner 是架構師會話，合併前核准時給你看。
@@ -160,7 +164,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 ### 4.2 策略的插口與錯誤的回報
 
 - `AuthorityStrategy`（虛函式的抽象基底類別，L21）、`ServerAuthorityStrategy`、佔位 `PeerRollbackStrategy`（名字實作時照命名規範定）。
-- 選法：產品在 `WorldDescription::options` 放一個帶策略物件的選項結構（本卡照 L17 判：時間 Module 已用同一條路）。選項包同一份 `WorldDescription` 在 `ReplaceWorld` 時重用：策略的狀態在 `Build` 時重設。
+- 選法：產品在 `WorldDescription::options` 放一個帶策略物件的選項結構（本卡照 L17 判：時間 Module 已用同一條路）。選項包同一份 `WorldDescription` 在 `ReplaceWorld` 時重用，`WorldSetup::Options<T>()` 回的是 `const`：**策略物件不帶每個 World 的狀態**，狀態放在那個 World 的 Resource（修訂 2，依窄複查 S8；`BuildNewFirst` 失敗時舊 World 照跑，同 5.1 的理由）。
 - **沒選策略時型別照樣進 Kernel**（修訂 1，檢查 S10）：權威的登記入口在沒有策略時，自己用作者的 `Registrar` 登記進 Kernel，只是不代為登記進回滾。否則用到那個型別的 System 是 Kernel 的 R-E4、`Check` 不跑（O-2），作者看不到真正的原因。
 - **Build 時才知道的錯誤**（沒選策略、`rollback.Input<T>` 時 `T` 還沒登記、兩筆作者登記 options 不同）：`WorldSetup` 沒有回報錯誤的入口，所以 Module 先存起來，在 `Check` 用自己的字串碼報（O-5；權威 `AU-E…`、回滾 `RB-E…`）。
 
@@ -202,7 +206,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 ### 5.3 第一版的設定值
 
-最大回滾深度預設 20（照 lightyear，回滾份 5.5 第 1 點；修訂 2 的根據換成區網實測的時鐘同步延遲，5.4.4；產品依自己量到的線上延遲另設）；判斷的模式三種，預設「比對後不同才回滾」；修正預設指數衰減；`rollback.Component<T>` 的比較函式預設 `==`（回滾份 5.4；浮點和雜湊的關係見第 12 節第 2 件）。PvP 移植時另定。
+最大回滾深度預設 20（照 lightyear，回滾份 5.5 第 1 點；修訂 2 的根據換成區網實測的往返延遲，5.4.4；產品依自己量到的線上延遲另設）；判斷的模式三種，預設「比對後不同才回滾」；修正預設指數衰減；`rollback.Component<T>` 的比較函式預設 `==`（回滾份 5.4；浮點和雜湊的關係見第 12 節第 2 件）。PvP 移植時另定。
 
 ### 5.4 預算（AGENTS §2；回滾份第 11 節要求官方策略那一批寫）——**修訂 2：照研究卡 v2 重推，等使用者重新核准**
 
@@ -216,10 +220,10 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 |---|---|---|
 | 回滾、預測重跑、修正的時間 | **沒有任何量測**。master 的「回滾」是 Client 只預測本地玩家：`Reconcile` 把它設成權威值後重跑待確認的輸入（≤ 12 筆），沒有狀態歷史 | 2.2、結論 2 |
 | 規模 | 4 人、60 Hz（原始碼常數，只當對照） | 2.1 |
-| 每個角色的記憶體大小 | `PlayerState` 128＋`CombatState` 112＋`AnimationTrack` 184＝**424 B**（實測；4 人＝1,696 B，和 World 欄的實測相同） | 2.1 M1（`pvp-baseline-report.zh-Hant.md:58`） |
-| 權威一步 p99（broadphase 之後） | 約 0.0067 ms（Intel Mac） | 2.1 M3 |
-| 區網的時鐘同步延遲 | p95 41～99 ms、max 231～354 ms（11-09 場次，探索值）；snapshot age p99 23～29 ms | 2.1 M7、M8 |
-| 量測穩定度 | Intel Mac 的 µs 級 10 次全距比 10～48%；Linux 實機約 1%、能分辨 2～3% | 2.1 M12 |
+| 每個角色的記憶體大小 | `PlayerState` 128＋`CombatState` 112＋`AnimationTrack` 184＝**424 B**（實測；4 人＝1,696 B，和 World 欄的實測相同） | 2.1 M1（`pvp-baseline-report.zh-Hant.md:58`）。這是 `pvp_baseline` 的數字：使用者的 `-no-master-reference` 點名不用，之後 `-budget-baseline-research` 把 11-01 之後的數據開放成基準；本卡把它當「估狀態大小」（同使用者准的看 protobuf），**請使用者確認**（第 12 節 A） |
+| 一個玩家的移動一步 p99（broadphase 之後） | 約 0.0067 ms（Intel Mac、RelWithDebInfo）；4 人一 tick 約 0.032 ms | 2.1 M3（`v8-product-pa-broadphase-declaration.md:56、61`） |
+| 區網的往返延遲（時鐘同步的樣本） | 每 10 秒視窗最小值的中位數約 2.2 ms（不到 1 步）；視窗內最大值的中位數 10～13 ms（約 1 步）、其 p95 41～99 ms（3～7 步）；全場最大 231～354 ms（15～23 步）；逐樣本的 p95 沒有記錄。snapshot age p99 23～29 ms。master 的 Match＋Gateway 跑在 Mac 上的一場（11-09，探索值） | 2.1 M7、M8（修訂 2 依窄複查 M3 更正：修訂 2 初稿把「視窗最大值的 p95」寫成延遲的 p95） |
+| 量測穩定度 | Intel Mac 原生的 µs 級 10 次全距比 4.5～13.8%（Mac 上的 Docker 10～48%）；Linux 實機約 1%、能分辨 2～3% | 2.1 M12 |
 
 排除：11-01 之前的數據（含 2026-09-25 的 dev_log）；master 的算法與常數不當設計根據（`MaxPendingCommands`、`MaxPlayers`、hitbox 的 R＝7 只當「以前」的對照；v2 第 5 節）。
 
@@ -236,7 +240,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 |---|---|---|
 | 每個角色 | 424 B | 實測（master 的元件配置；GYO2 的元件可能不同，量級可用） |
 | 角色上限 | 8 玩家＋AI 30＋Boss 1＝39（文件之間 AI 20／30、玩家 4／8 衝突，取上限，v2 1.2） | 規劃 |
-| 角色全部可回滾 | 39 × 424 ≈ **16.5 KB** | 推算 |
+| 角色全部可回滾 | 39 × 424 ≈ **16.5 KB** | 推算；**AI、Boss 照玩家的 424 B 算是假設**（v2 缺口 G3：非玩家實體的位元組沒有實測） |
 | 事件類實體（作者選了「事件改到的狀態也回滾」時） | 326 個 × 16～32 B ≈ 5～10 KB | 規劃的數量 × 推算的大小（沒有實測） |
 | 私人（背包 40 件） | 約 0.6 KB | 推算 |
 | 合計上限 | 約 **27 KB** | 推算 |
@@ -245,13 +249,13 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 - 角色數是全圖的總數，不隨地圖大小變；interest management 只會讓 Client 收到的更少。修訂 1 的「Client 看得到約 315 個」外推刪除。
 - 通常 AI 在 Client 走內插、不預測；27 KB 是作者全選時的上限，不是預期值。
 - Match 的實體總數：規劃約 400（200 m 問卷）；大地圖沒有規劃值（v2 缺口 G6）。digest 與 `World::Summary` 量測用一個大的合成數（例 5,000），標明不是需求。
-- 旁證：broadphase 之後權威一步 p99 約 0.0067 ms；作者的重跑約 39 角色 × 20 步 × 6.7 µs ≈ 5.2 ms（推算），大於 Module 的總開銷上限，Module 不是瓶頸（修訂 1 用的「一步約 2.2 ms」是 broadphase 之前的數字，撤回）。
+- 旁證：broadphase 之後一個玩家的移動一步 p99 約 0.0067 ms；作者的重跑約 39 角色 × 20 步 × 6.7 µs ≈ 5.2 ms（推算；AI、Boss 和玩家同成本是假設），大於 Module 的總開銷上限，Module 不是瓶頸（修訂 1 用的「一步約 2.2 ms」是 broadphase 之前的數字，撤回）。
 
 #### 5.4.4 深度（v2 3.3）
 
 - 公式：深度 ≥ ceil((RTT＋抖動餘量) ÷ 15.625 ms)。
-- 區網實測（探索值）：時鐘同步延遲 p95 41～99 ms → 3～7 步；max 231～354 ms → 15～23 步。修訂 1 用的「view_lag p99 5 tick＋2 → 16 步」把 view_lag 當成 RTT（它含內插與排隊），撤回。
-- **預設 20**（312 ms）：涵蓋區網 p95 約 3 倍；區網的 max（23 步）會超過，超過深度時照第 5.5 節處理，不靠加深度解決。根據種類：實測（區網）＋參考實作（lightyear `max_rollback_ticks` 預設 20，`manager.rs:46-56`）。
+- 區網實測（探索值，5.4.1）：往返延遲的典型值 2～13 ms（1 步以內）；視窗最大值的 p95 41～99 ms → 3～7 步；全場最大 231～354 ms → 15～23 步。回滾深度是「現在 − 確認點」，確認點會落後最新收到的 tick（第 5.5 節），所以公式的 RTT 要加確認點的落後。修訂 1 用的「view_lag p99 5 tick＋2 → 16 步」把 view_lag 當成 RTT（它含內插與排隊），撤回。
+- **預設 20**（312 ms）：涵蓋區網視窗最大值的 p95 約 3 倍、典型值很多倍；區網的 max（23 步）會超過，超過深度時照第 5.5 節處理，不靠加深度解決。根據種類：實測（區網）＋參考實作（lightyear `max_rollback_ticks` 預設 20，`manager.rs:46-56`）。
 - **WAN 無法判定**（沒有目標 RTT、沒有量測）：產品依自己量到的線上延遲另設；預算按 P2 的 32 步記錄。
 - 對照：master hitbox 回溯的歷史 8 Tick、預算「≤ 64 KB、每發 p99 ≤ 0.2 ms」（master 自己的寫法，只當對照）。
 
@@ -260,20 +264,22 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 | 點 | B | D | 用途 |
 |---|---|---|---|
 | **P1 判定點** | **32 KB** | 20 | 5.4.3 的上限 27 KB 進位到 2 的冪 |
-| P2 壓力點 | **128 KB** | 32 | 只記錄；B＝P1 × 4（讓第 3 條的比值好讀）；32 步：Unity 規定 Client 最多領先 500 ms（`NetworkTimeSystem.cs:220、242-243`），64 Hz 是 32 步（參考實作，只回答「做到哪」） |
+| P2 壓力點 | **128 KB** | 32 | 只用在門檻 3 的比值，其餘只記錄；B＝P1 × 4（讓第 3 條的比值好讀）；32 步：Unity 規定 Client 最多領先 500 ms（`NetworkTimeSystem.cs:220、242-243`），64 Hz 是 32 步（參考實作，只回答「做到哪」） |
 | P3 小點 | **2 KB** | 20 | 只記錄；4 人 PvP 全部可回滾 1.7 KB；看固定開銷 |
 
-以前→現在：master 的回滾狀態是 1 人 × 128 B、重跑最多 12 步；P1 是它的約 256 倍位元組、1.7 倍步數。
+以前→現在：master 的回滾狀態是 1 人 × 128 B、重跑最多 12 步；P1 是它的 256 倍位元組、1.7 倍步數。
+
+**Module 這一側的配置**（修訂 2 依窄複查 M2 寫死；回滾成本主要跟格數走，只給位元組會讓格數差到 16 倍）：一個 archetype、16 種元件、每格 64 B（和機器底的 `colsT16s64` 同形）；P1＝32 個實體（512 格）、P2＝128 個實體（2,048 格）、P3＝2 個實體（32 格）。「每步所有格都改」由量測程式在計時之外把全部格標成改過（直接寫值並推 stamp），不經作者的 System。另列一組只記錄的「實際組成」：39 個 424 B 的角色（3 種元件）＋326 個 32 B 的小實體。
 
 門檻：
 1. 記錄每步（P1，每步所有格都改的最壞情形）≤ **156 µs**（一步的 1%）。規則，照舊。對 32 KB 很寬，只擋得住大退化。
-2. 一次回滾總開銷（P1：退 20 步、全部格都變；還原＋20 次記錄＋`ActiveTime`／`Resimulation` 起落，不含作者的 System）≤ **3.125 ms**（一步的 20%）。規則，照舊。
-3. **線性**（改寫）：同一次量測裡，`(P2 的記錄每步 ÷ P1 的記錄每步)` ≤ **1.5 ×** `(機器底在同樣兩個大小、同一配置的記錄比值)`；配置 `colsT16s64`（16 個元件欄、元素 64 B）。理由：P1 的歷史約 640 KB、P2 約 4 MB，落在不同的快取層（Ryzen 7 6800H 每核 L2 512 KB、L3 16 MB），機器本身的比值就可能超過 4；修訂 1 的「≤ 6」的 6 是猜的。1.5 擋得住「每格多做了 O(n) 的事」，擋不住 O(n log n)（這個規模只多約 1.2 倍），是已知的限界。
-4. 只記錄：P1 的每 KB 記錄 ns 與機器底的比值、P2、P3、冷快取；記憶體（P1 的環約 640 KB、P2 約 4 MB）。下一批可以用它收緊。
+2. 一次回滾總開銷（P1：退 20 步、全部格都變；還原＋20 次記錄＋`ActiveTime`／`Resimulation` 起落，不含作者的 System）≤ **3.125 ms**（一步的 20%）。規則，照舊。量法：重跑時步的 schedule 只放一個「把全部格標成改過」的量測用 System；判定值＝每行程（一次回滾的總時間 − 20 × 同一行程量的那個 System 單獨一步的中位數）的 p99，取 10 個行程的中位數。
+3. **線性**（改寫）：同一次量測裡，`(P2 的記錄每步 ÷ P1 的記錄每步)` ≤ **1.5 ×** `(機器底 hot_record_colsT16s64_B128K_D32 ÷ hot_record_colsT16s64_B32K_D20)`；分子、分母都是「10 個行程各取 p99，再取中位數」之後相除；兩邊都 hot、都不 batch（一次一個樣本），分子分母的大小與深度相同。理由：P1 的歷史約 640 KB、P2 約 4 MB，落在不同的快取層（Ryzen 7 6800H 每核 L2 512 KB、L3 16 MB），機器本身的比值就可能超過 4；修訂 1 的「≤ 6」的 6 是猜的。1.5 擋得住「每格多做了 O(n) 的事」，擋不住 O(n log n)（這個規模只多約 1.2 倍），是已知的限界。分母要的兩個量測點現在的交付包沒有（見下）。
+4. 只記錄：P1 的每 KB 記錄 ns 與機器底的比值、P2、P3、冷快取、「實際組成」；P1 確認點前進一次的全掃比對（第 5.5 節 (a) 每次確認點前進都要掃，機器底有 `hot_cmpelem`）；記憶體（P1 的環約 640 KB、P2 約 4 MB）。下一批可以用它收緊。
 
 量法：判定在使用者的 Linux 實機原生（`taskset`、先暖機並記頻率；10 個行程 × 各 1,000 次，取每行程 p99 的中位數，四分位距比與平均一起記）；**每次判定都在同一次跑機器底**（交付包的 `floor_bench`，第 3 條的分母）。Intel Mac 只當開發參考。超過就停下回報（§14），不放寬、不重量。量的情境：P1 的穩定每步與一次回滾到 20；P2、P3 的記錄每步；P1 加一組「部分元件、部分實體」（第 5.5 節的形狀，只記錄）；digest 與 `World::Summary` 在大的合成實體數時的時間（只記錄）。
 
-**以前的基準還沒量**：v2 備好了 Linux 實機的交付包（主 checkout `build/evidence/gyo2-authority-rollback/baseline-v2/bundle/run-linux.sh`，約 25 分），要使用者在 Linux 實機跑；腳本交出前沒有實跑過（使用者選了不在本機跑）。量到之前，「以前的回滾成本」與機器底兩列是空的；判定點與門檻是規則或同一次量測的比值，不等量測結果就能宣告（§14.1）。
+**量測程式與交付包**（修訂 2 依窄複查 M1、S9）：v2 備好的交付包（主 checkout `build/evidence/gyo2-authority-rollback/baseline-v2/bundle/run-linux.sh`，約 25 分）只量「以前」（master 的 Reconcile）與機器底 1／4／16／64／256 KiB、`hot_record` 只在深度 20、32 KB 一邊會 batch；**判定 5 第 3 條的分母（32 KiB／D20、128 KiB／D32）現在的包量不出來**。另外包沒有實跑過（只做 `bash -n`，C++ 沒編過）、`analyze.py` 沒有彙整平均。所以：(1) 在使用者去跑之前，`floor_bench` 要加 2／32／128 KiB、兩個深度都量、不 batch、冷快取改 32／128，`analyze.py` 加平均；(2) 回滾 Module 的量測程式與離線腳本在第 4 步做（第 14 節），照 `offline-session-scripts`：一台一支腳本、交出前每條命令實際跑過，和機器底在同一次跑。量到之前，「以前的回滾成本」與機器底兩列是空的；判定點與門檻是規則或同一次量測的比值，不等量測結果就能宣告（§14.1）。
 
 ### 5.5 多通道、interest management、分段加載要留的入口形狀——**修訂 2：照源碼重核，等使用者重新核准**
 
@@ -286,7 +292,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 | MC-1 | 可靠事件晚到、指向舊 tick | 第 4 點：超過深度就丟 | lightyear：權威值不論新舊都進確認歷史，在確認點 C 用「C 當時或之前最後的值」比，舊的可靠值會被帶到 C（`registry.rs:553、633-695`）；超過最大深度就放棄這次回滾並 warn（`rollback.rs:404-412`）。replicon：過舊的 mutation 丟掉。Unity：RPC 不綁 tick、不進預測 | **GYO 特有**（「事件不可靜默丟」寫進 Contract），交使用者 |
 | MC-2 | 事件改到可回滾的狀態 | 沒寫 | lightyear 有手動先例：`ConfirmedHistory::insert_explicit`＋`request_forced_rollback` | **成立**：作者選，Module 只給機制（使用者「策略…和產品有關，得看作者如何選」） |
 | MC-3 | interest management：只送看得到的 | 第 5 點：存活集合整份放回 | lightyear 只有 Updated／Removed 兩態，「沒帶」靠全域確認點推成「沒變」；replicon、Unity 把失去相關性當成刪除（Unity 文件要使用者另外區分） | **GYO 特有**（API 上分「確定刪除」與「這份沒帶」），交使用者 |
-| MC-4 | 差分、低頻：只帶部分元件 | 第 4 點：整份比 | lightyear 以（實體、元件、tick）比對，預設 `PartialEq::ne`（`registry.rs:519-613`）；**差分沒解開的 tick P 以後都不能當確認點**（`rollback.rs:358-361`） | **成立**；補差分規則 |
+| MC-4 | 低頻、只帶部分元件 | 第 4 點：整份比 | lightyear 以（實體、元件、tick）比對，預設 `PartialEq::ne`（`registry.rs:519-613`）。另外 lightyear 的值 delta 壓縮（`Diffable`）有「差分沒解開的 tick P 以後都不能當確認點」（`rollback.rs:358-361`、`499-538`） | **成立**：比對與還原以（實體、元件、tick）為單位，留在回滾。「確認點不得晚於還沒解開的差分」是給確認點的一方（網路 Module）的要求，回滾不認得網路、守不了（R-3），列進給網路 Module 的需求，不進回滾的 DI 與 9.3（修訂 2 依窄複查 M8） |
 | MC-5 | 選哪一步當回滾點 | 第 3、4 點：一次一個「第 T 步」 | lightyear：**一個全域的完成確認點**（`rollback.rs:365` `last_confirmed_tick()`），在那一步逐實體逐元件比；註解說舊的實體層級做法會漏掉同實體上沒變但不一致的元件（`:350-357`）。Unity 預設逐 ghost（只回滾收到新 snapshot 的，`GhostUpdateSystem.cs:1038-1043`）；可選 `AlwaysRollbackAllPredictedGhosts`：全部回到各 ghost 新 tick 的最小值（`ClientServerTickRate.cs:655-672`）。replicon 兩種原語都給、都不實作 | **各家分歧**，交使用者。修訂 1 的「入口的鍵各帶 tick、判斷取最早」＝Unity 的可選模式 |
 | MC-6 | 私人資料 | — | 各家都是每個 World 各自跑 | **成立**：不另設計；入口不假設每個 Client 的實體集合相同 |
 | SL-1 | 段卸載 | 刪除與卸載不分 | 沒有一家有一般化的入口 | **GYO 特有**（屬有效期間），和 MC-3 一起交使用者 |
@@ -294,16 +300,22 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 | SL-3 | 載入那一步大量寫入 | — | — | **成立**：等分段加載真的做了再加量測與門檻 |
 | SL-4 | Match | — | — | **成立**：不回滾，不受影響 |
 
-**交使用者的兩件與本卡的建議**（v2 第 6 節第 2、3 件）：
+**交使用者的兩件與本卡的建議**（v2 第 6 節第 2、3 件；修訂 2 依窄複查 M7、S1 改寫）：
 
 1. **MC-5 選哪一步當回滾點**：(a) lightyear：網路那一側告訴回滾「第 C 步以前都收齊了」，在 C 逐實體逐元件比；(b) Unity 可選模式：有不一致就全部回到各實體新權威值裡最早的那一步（修訂 1 的字面）；(c) Unity 預設：只回滾收到新值的實體（Unity 自己說會讓實體之間的時間線不一致）。
-   - 研究卡 v2 的建議：入口的鍵照樣帶各自的 tick，「選哪一步」做成策略、Module 給預設，預設 (a) 或 (b) 由使用者定。
-   - **本卡的建議：Contract 直接定 (a)，不做成可換的策略。** 理由：(a) 在同一步逐元件比，正好接 MC-4，也避開 lightyear 註解說的漏比；現在只有一個官方策略，多開一個可換的插口是沒有根據的一般化（AGENTS §1）；要的話之後由作者自寫策略做 (b)、(c)。代價：入口多一個「第 C 步以前收齊」的標記，由網路 Module 給；權威值仍以（實體、元件、tick）記進確認歷史（MC-4）。
+   - 回滾份 5.3 已核准的策略掛點本來就有「判斷要不要回滾、決定退回哪一步」（作者可只覆寫它），所以不新增掛點。要定的是兩件：(i) **入口帶什麼**；(ii) **官方實作的預設規則**。使用者的原則「這些策略…和產品有關，得看作者如何選」照用：作者覆寫「判斷」就能做別的規則。
+   - **本卡與研究卡 v2 一致的建議**：(i) 入口帶（實體、元件、tick）的權威值，與「第 C 步以前收齊」的標記——兩樣都帶，作者的「判斷」做 (b)、(c) 時資料也夠用；(ii) 官方實作的「判斷」用 (a)。理由：(a) 在同一步逐元件比，接 MC-4，也避開 lightyear 註解說的漏比；Unity 把它做成專案選項是因為 CPU 成本，GYO 由作者覆寫「判斷」達到同樣的選擇。
+   - 入口是**回滾 Module 層、所有策略共用的入口**（不是官方策略自己的入口）：回滾份 5.3 寫「外面送資料進來的入口不在 interface 裡，官方的狀態觸發策略定義它自己的入口」，這裡字面不同，列在第 12 節末。
+   - 選 (a) 時 Contract 要再寫清楚四件（窄複查 S1；本卡照 lightyear 寫成提案）：
+     - **「收齊」只算 snapshot 通道**；可靠事件串流不算進確認點（一條卡住的可靠串流不會讓確認點停住），晚到的可靠值照下面第 2 件 MC-1 的規則帶到確認點。
+     - **tick 大於 C、已經收到的權威值**：留在確認歷史，回滾時不蓋掉，重跑到那一步時照它的值比（lightyear `rollback.rs:27`）。
+     - **「這份沒帶」**：在 C 這一步不參加比對，**不推成「沒變」**（和 lightyear 不同；interest management 下沒帶的可能是離開了視野）；實體離開這個 World 的歷史由明說的「退出」表示（有效期間），兩者分工。
+     - **成本與深度**：每次確認點前進都要把全部可回滾的（實體、元件）掃一遍比對，列為判定 5 只記錄的一項（5.4.5 第 4 條）；深度公式加確認點的落後（5.4.4）。
 2. **GYO 特有的要不要留在 Contract**：
    - **三種權威值（有值／確定刪除／這份沒帶）＋由呼叫者明說的有效期間（MC-3、SL-1、SL-2）**：研究卡 v2 與本卡都建議**留**。interest management 與分段加載是點名的 Feature，會讓「離開」和「刪除」在同一個 World 裡同時出現；別家的做法都要產品另外繞（Unity 文件明說）。起點與終點由呼叫者明說、沒明說的一律當遊戲裡的生成與刪除（Kernel 裡卸載和刪除都是同一個 despawn，回滾 Module 分不出來）。
    - **MC-1「事件不可靜默丟」**：研究卡 v2 建議留；**本卡建議改寫成 lightyear 的規則、拿掉「來源種類」這一格**：晚到的可靠權威值照樣記進確認歷史，在確認點 C 用「C 當時或之前最後的值」比，所以不會丟；選了 (a) 這條規則就涵蓋了。超過最大深度時放棄這次回滾、記診斷（照 lightyear）。
 
-**本批只定形狀、行為做薄**（AGENTS §2，成立）：interface 與 Contract 照核准的形狀寫；行為只做「整份 snapshot、單一確認點、沒明說的一律當遊戲生成與刪除」，其餘入口呼叫時回明確的「還沒實作」錯誤（同 P2P 佔位），不靜默丟掉。多通道、分段加載的行為在網路 Module 與地圖線那一批補。代價（第 4 步多幾小時）等形狀定了再估（v2 判無法判定）。
+**本批只定形狀、行為做薄**（AGENTS §2，成立）：interface 與 Contract 照核准的形狀寫；行為只做「整份 snapshot、一個 tick 的權威值（選 (a) 時加收齊標記）、沒明說的一律當遊戲生成與刪除」。本批回「還沒實作」錯誤（呼叫時回 Result 的錯誤，和 P2P 佔位的啟動錯誤不同形）的入口：部分元件的權威值、「這份沒帶」、明說的進入與退出、事件來源的權威值寫進歷史（MC-2）。多通道、分段加載的行為在網路 Module 與地圖線那一批補。代價（第 4 步多幾小時）等形狀定了再估（v2 判無法判定）。給網路 Module 的需求（不在本批）：確認點不得晚於還沒解開的差分（MC-4）。
 
 ---
 
@@ -313,10 +325,19 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 **共用槽的機制**（使用者 2026-11-20 補充：「第 3 件，注意，由於是共用的，需要建立一個機制，或者需要保證順序，邊讀邊寫很容易出問題。」下面四點是 side chat 提的，使用者回「可以」）：
 
-1. **分段，型別上擋住**：`Build` 階段（Module 的 `Build` 與產品自己的 `build`）經 `WorldSetup` 拿到 `T&`；`WorldFinish`、`WorldCheck` 只給 `const T&`。`Build` 階段結束時編排層凍結槽，凍結後再寫是 Programmer Error（斷言）。要看全貌的判斷（Z6、Z8、D-E15 的交叉檢查、重複登記的裁決）一律放在凍結後的 `Finish`／`Check`。系譜（side chat 補，不是使用者的話）：Bevy 的 Plugin 分 `build`／`finish`，`finish` 在所有 `build` 之後才讀別人的登記。
+1. **分段，型別上擋住**：`Build` 階段（Module 的 `Build` 與產品自己的 `build`）經 `WorldSetup` 拿到 `T&`；`WorldFinish`、`WorldCheck` 只給 `const T&`。`Build` 階段結束時編排層凍結槽，凍結後再寫是 Programmer Error（斷言；實際擋的是凍結後呼叫槽的 `Create<T>` 或可寫的取用，見下面的錯誤形式）。要看全貌的判斷（Z6、Z8、D-E15 的交叉檢查、重複登記的裁決）一律放在凍結後的 `Finish`／`Check`。系譜（side chat 補，不是使用者的話）：Bevy 的 Plugin 分 `build`／`finish`，`finish` 在所有 `build` 之後才讀別人的登記。
 2. **誰建、誰用**：槽裡每種型別只由擁有它的 Module 建（暫名 `Create<T>`）；別人用 `Find<T>`，找不到就回錯誤，不偷偷建空的。先後靠 `modules.csv` 的依賴與既有的 O-E3（依賴排在後面是錯誤）保證；產品自己的 `build` 永遠在最後。
-3. **寫入只記錄、不裁決**：`Build` 階段只追加，每筆帶「作者／代為」的來源；凍結後統一裁決（作者的蓋過代為的；兩筆作者的 options 不同是錯誤），所以結果和呼叫順序無關。本卡照 L17 補的細節：編排層不解讀槽裡的型別（O-2），所以裁決由擁有該型別的 Module 在自己的 `Finish` 做，錯誤在 `Check` 回報（`RB-E…`）。這和回滾份 5.4「不論先後，作者的為準」、權威份 DI-A 11「代為登記在登記當下做」都一致：登記當下做的是「記下一筆」，誰為準到凍結後才定。
-4. **單執行緒、不加鎖**：建 World 是單執行緒依序跑，不加鎖；寫進 DI（11.5），之後要並行建 World 時碰 RC（11.5 的 RC-O10）。
+3. **寫入只記錄、不裁決**：`Build` 階段只追加，每筆帶「作者／代為」的來源；凍結後統一裁決（作者的蓋過代為的；兩筆作者的 options 不同是錯誤），所以結果和呼叫順序無關。本卡照 L17 補的細節（修訂 2 依窄複查 M5、M6 改寫）：
+   - **裁決是對追加紀錄的純函式**：擁有者的公開讀取介面拿 `const` 的紀錄、回裁決後的結果與錯誤清單；誰讀（擁有者自己的 `Finish`、權威的 `Check`）都經這個介面，所以不需要寫回槽（編排層不解讀槽裡的型別，O-2）。擁有者在 `Check` 用自己的字串碼報錯（`RB-E…`）。
+   - **登記當下做的**：進 Kernel 的全部副作用照 DI-A 11 當下做（`AddSystem` 與「重跑時不跑」的執行條件、型別進 Kernel、`rollback.Input<T>` 的歷史 Resource 等），再在槽裡追加一筆帶來源的紀錄。**延後到凍結後的只有**：同一個型別多筆登記時哪一筆的 options 為準、兩筆作者 options 不同的錯誤。進 Kernel 的副作用不得取決於裁決結果：回滾的每型別選項是資料，由回滾的 System 在執行時讀凍結後的登記（5.1），不是每型別一筆 Kernel 登記。「重跑時不跑」不在裁決的範圍（一個 System 只 `AddSystem` 一次）。
+   - 這和回滾份 5.4「不論先後，作者的為準」一致；和權威份 4.3「作者先登記，策略就不代登記」字面不同（現在一律追加、之後裁決，結果相同），列在第 12 節末。
+4. **單執行緒、不加鎖**：照 CCR-5（`docs/cross-component-rules.md`：同一個 Registry 的 `Register`、`BuildPlans` 與 World 的建立在一條執行緒上），槽不加鎖；CCR-5 放寬時碰 RC（11.5 的 RC-O10）。
+
+**生命週期與錯誤的形式**（本卡照 L17 補，修訂 2 依窄複查 S3、S4）：
+- 槽活到那個 World 的登記單位的準備函式跑完（`Product.cpp` 的 `Register` 之後還有 `Prepare`；`PrepareFn` 只拿到 `World&`）；Module 要留到執行時的內容，在準備函式裡凍結進 World 的 Resource（5.1）。槽裡放的物件由槽持有，準備函式跑完後和槽一起釋放。
+- `Find<T>` 找不到：回空（呼叫者自己判）。Module 在 `Build` 找不到依賴的登記是 Programmer Error（依賴由 O-E3 保證，走到這裡是程式錯）；產品自己的 `build` 找不到（例：關掉了回滾 Module 卻用 `rollback.`）也是 Programmer Error（斷言），不新增 O-E 碼。
+- 兩個登記單位 `Create<T>` 同一個型別：Programmer Error（斷言）。
+- 凍結後呼叫 `Create<T>` 或可寫的取用：斷言。經 `Build` 時留下的 `T&` 寫入，編排層看不到（不解讀型別），由擁有者的介面在凍結後拒絕追加（擁有者自己的斷言）。
 
 比過的選項：只靠呼叫順序與約定（不建機制）／建上面的機制（**選這個**）。
 
@@ -343,11 +364,11 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 | 組 | 拿掉的（位置見 `recon-a` 1） | 去處 | 步 |
 |---|---|---|---|
-| 區 | `Zone`、各 Options 的 `zone`、`external`、`RequireExplicitZones`、`ApplyDefaultZones`、`CheckZoneAccess` 與輔助（`ZoneOf`、`ZoneName` 等）、S-6、S-7、S-8 的 (c) 半、S-9、**S-13**（統合沒點名，但它是 D-E7 的區規則，`recon-a` 6 第 5 點）、S-17、Z1、Z2、Z3、Z7、`ingress`、`ingressStage`、X-2／D-E11／X-E1、`parallelGuardTest`、D-E9、`InitialValue` 的 Z1、`emitterZone`、`SystemContext::zone` | 不由機制守（P14、確認清單） | 第 2 步（沒有新家） |
+| 區 | `Zone`、各 Options 的 `zone`、`external`、`RequireExplicitZones`、`ApplyDefaultZones`、`CheckZoneAccess` 與輔助（`ZoneOf`、`ZoneName` 等）、S-6、S-7、S-8 的 (c) 半、S-9、**S-13**（統合沒點名，但它是 D-E7 的區規則，`recon-a` 6 第 5 點）、S-17、Z1、Z2、Z3、Z7、`ingressStage`、X-2／D-E11／X-E1、`parallelGuardTest`、D-E9、`InitialValue` 的 Z1、`emitterZone`、`SystemContext::zone` | 不由機制守（P14、確認清單） | 第 2 步（沒有新家） |
 | 寫者 | `WritePolicy`、`CheckExclusiveWriters`（D-E2 S-11） | 不由機制守（`-authority-no-writer-count`） | 第 2 步 |
 | digest | `DigestSet`、`MarkDigestSet`（R-E4 的 digest 部分）、S-12、`NamedSetRecord::digest`、`digestMarks` | 權威 Module 的 digest | 第 2 步 |
 | 輸入 | `Role`（`State`／`Input`） | 權威的 `.input` 標記 | 第 6 步（Z8 還在用） |
-| 交叉 | Z6（System、hook、observer）、Z8、D-E15、`FunnelWrites` | 權威 Module 的 5.11 交叉檢查 | 第 6 步 |
+| 交叉 | Z6（System、hook、observer）、Z8、D-E15 與它的對象 `ingress` 旗標（修訂 2，依窄複查 M9：第 2 步只拿掉 `ingress` 的區規則 Z3、S-17、D-E7 的部分，旗標留到第 6 步）、`FunnelWrites` | 權威 Module 的 5.11 交叉檢查 | 第 6 步 |
 | 回滾 | `Rollback`（Yes／No／Derived）、`rollbackEnabled`、`notInRollback`、D-E16（`Scheduler.cpp:438-462`）、`rollbackActive`、Replay 的註解；`rollbackSafe` | 回滾 Module 的公開登記與 R-7；`rollbackSafe` 拿掉 | 第 6 步 |
 | 指紋 | `CFingerprintOf`、`kCFingerprintVersion`、`FrozenRegistry::CFingerprint()`、`ExportZoneCSources`、`ZoneCSourcesOptions` | 權威 Module（一致性指紋、G-5 匯出） | 第 6 步 |
 | 錯誤碼 | `StartupCode` 的 `DE2`、`DE9`、`DE11`、`XE1`（第 2 步）；`DE15` → 權威、`DE16` → 回滾（第 6 步，字串碼） | 列舉值等於統合 3.1 的清單 | 第 2、6 步 |
@@ -359,7 +380,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 統合第 8 節的原則是「不需要新家的先拿，要新家的和新家同一條線」。修訂 0 把全部壓到最後，會讓權威與回滾在還有寫者數量與區規則的 Kernel 上開發（例：DI-A 8「不數寫者」的測試——兩個 System 寫 `Health`——在 Kernel 還有 D-E2 時過不了）。改成：
 - **第 2 步（做兩個 Module 之前）**：拿掉沒有新家的——寫者數量、區規則、`DigestSet`、D-E9、X-2（9.1 A1、A2、A3、A10）。
-- **第 6 步（第 4、5 步的接手測試寫好之後）**：拿掉有新家的——Z6、Z8、D-E15、D-E16、`Rollback`、`Role`、C 指紋、G-5（A4～A7）。這段期間 Z6 等規則在 Kernel 與新 Module 各有一份；Kernel 那份的對象寫法要配合第 2 步拿掉 `Zone`（Z6 現在以「zone C 的 System」為對象，第 2 步改成以 `Rollback::Yes` 為準、照舊擋），在第 6 步整份拿掉。
+- **第 6 步（第 4、5 步的接手測試寫好之後）**：拿掉有新家的——Z6、Z8、D-E15、D-E16、`Rollback`、`Role`、C 指紋、G-5（A4～A7）。這段期間 Z6 等規則在 Kernel 與新 Module 各有一份；Kernel 那份的對象寫法要配合第 2 步拿掉 `Zone`（Z6 現在以「zone C 的 System」為對象，第 2 步改成以 `Rollback::Yes` 為準、照舊擋），在第 6 步整份拿掉；D-E15 以 `options.ingress` 為對象（`Registry.cpp:1387-1392`），所以 `ingress` 旗標留到第 6 步和 D-E15 一起拿（修訂 2，依窄複查 M9）。
 - 代價：golden 重產兩次（第 2、6 步）。比過：全部壓到最後（golden 一次，但兩個 Module 的測試在舊規則上過不了、最後才發現對不上）。
 
 ---
@@ -378,7 +399,7 @@ LIM-7 的寫法建立在區上。區拿掉之後，Kernel 的行為是：**生�
 
 ## 9. 守衛、測試、突變
 
-### 9.1 判定的變更（AGENTS §14.4；**方向要你核准**；最終在合併前帶突變結果與檢證者報告再看一次）
+### 9.1 判定的變更（AGENTS §14.4；方向已核准，見下；最終在合併前帶突變結果與檢證者報告再看一次）
 
 **方向的核准**（使用者，2026-11-20，side chat）：A1、A2、A3、A10 照建議刪（原話「照建議就行。」）；含檢查補進 A2 的五案與第 2 步開頭的恆真案掃描（9.2）。A4～A7（交叉檢查、一致性指紋、G-5 清單搬權威；Derived 檢查搬回滾）照建議（原話「可以。」，2026-11-20，side chat）：四組都變成「只在選了那個策略的 World 才查」，緩的面與緊的面照下表。A8（摘要逐型別雜湊；緩的面含「作者的函式漏欄位看不出」）、A9（指紋格式與 golden）、A11（反向守衛突變退役；第 2 步開頭列出失去唯一突變的判定交使用者）照建議（使用者 2026-11-20，side chat，原話「可以」）。A1～A11 的方向到此都已核准；逐組的最終核准在合併前。
 
@@ -411,14 +432,14 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 - **Kernel**：原語 1～4（有型別的整欄走訪給 stamp；一批放回：沒變的格不寫、有變的標同一個 stamp、全部放回後才跑 hook 與 observer、hook 看得到同一個實體已放回的其他欄、復活配發器範圍內的 id；Resource 的 stamp；`ExclusiveWorld` 讀目前 stamp）；`Writes<…>` 收元件；訊息寫者名單（System、hook、observer、`BuildPlans` 重算）；逐型別雜湊（padding 不同摘要相同、`optional` 空著時的殘值不影響、`std::vector` 內容不同摘要不同、內容相同而位址不同時相同、`long` 等寬度隨平台的整數照 64 位元、作者選照位元組的型別、Kernel 附的型別、浮點逐位元（`-0.0f` 與 `+0.0f` 摘要不同、作者在函式裡正規化時相同）、沒有函式的型別在 World 裡時 `Summary` 回錯誤並列出型別、拿掉那個型別的實體後同一個 `Summary` 成功）。
 - **權威**：權威份第 7 節 DI-A 與第 5 節各條；一致性指紋兩方向；digest（同狀態相同、改一格不同、兩個相同的「實體×元件」不抵銷、迭代順序無關）；tick 檢查（名單外寫 `Tick` 報錯、`Writes<Tick>` 標註也算、時間 Module 的驅動者通過）；佔位策略與沒選策略的啟動錯誤；沒選策略時型別照樣進 Kernel；代為登記在登記當下、作者的為準；Build 時的錯誤在 `Check` 報；A4 的漏斗走訪性質。
 - **編排層**（共用槽，第 6 節的機制）：`Build` 拿 `T&`、`Finish`／`Check` 拿 `const T&`（編譯期）；凍結後寫入觸發斷言；`Find<T>` 在沒人 `Create<T>` 時回錯誤、不代建；兩個 Module 對同一型別 `Create` 是錯誤；作者／代為兩筆登記照兩種呼叫順序跑，裁決結果相同；兩筆作者 options 不同報錯；換 World 時新的一次建 World 拿到空槽。
-- **回滾**：回滾份第 9 節 R-1～R-7 的守衛（含 R-2 等價測試與它列的七個突變）；跨 schedule 的訊息兩方向；沒選策略的 World 沒有歷史（R-4）；換 World 歷史不跨世代（R-5）；`BuildNewFirst` 失敗時舊 World 的回滾照常（5.1）；超過深度放棄這次回滾並記診斷；Plan 版本變了歷史作廢（回滾份 7.5）；**入口形狀（5.5，照使用者重新核准的形狀寫案例）**：沒明說進入或退出的生成與刪除照遊戲處理、回滾到生成之前會刪掉預測錯的實體；比對以（實體、元件、tick）為單位，只差一個元件時只寫回那一格；差分沒解開的 tick 以後不當確認點；還沒實作的權威值與入口回「還沒實作」錯誤、不靜默丟掉。
+- **回滾**：回滾份第 9 節 R-1～R-7 的守衛（含 R-2 等價測試與它列的七個突變）；跨 schedule 的訊息兩方向；沒選策略的 World 沒有歷史（R-4）；換 World 歷史不跨世代（R-5）；`BuildNewFirst` 失敗時舊 World 的回滾照常（5.1）；超過深度放棄這次回滾並記診斷；Plan 版本變了歷史作廢（回滾份 7.5）；**入口形狀（5.5，照使用者重新核准的形狀寫案例）**：沒明說進入或退出的生成與刪除照遊戲處理、回滾到生成之前會刪掉預測錯的實體；比對以（實體、元件、tick）為單位，只差一個元件時只寫回那一格；第 5.5 節列的本批「還沒實作」的入口（部分元件的權威值、這份沒帶、明說的進入與退出、事件來源的值）各回「還沒實作」錯誤、不靜默丟掉。
 - **scenario 第 3 段**（`tests/common/scenario/`，ctest `scenario.segment3`，標籤 `cpu`）：
 
 | 步 | 做什麼 | 檢查 |
 |---|---|---|
 | S3-1 | 一個 Product 兩個 World：Match（伺服器權威、不回滾）、Client（伺服器權威＋官方回滾），Client 多登記 `HitFlash` | 兩邊一致性指紋相同；Client 改 `HitFlash` 的登記指紋不變、改判定登記就不同 |
 | S3-2 | Client 先跑 6 步（預測），Match 用不同的輸入跑同樣 6 步 | 兩邊 digest 不同 |
-| S3-3 | 把 Match 第 1 步的判定值交給 Client 的回滾入口 | Client 重跑 5 步；重跑後 digest 等於 Match；「播腳步聲」只在第一次跑時數到 |
+| S3-3 | 把 Match 第 1 步的整份判定值交給 Client 的回滾入口（形狀照第 5.5 節核准的） | Client 重跑 5 步；重跑後 digest 等於 Match；「播腳步聲」只在第一次跑時數到 |
 | S3-4 | 同 S3-3，但交的值和歷史相同 | 不回滾（預設模式） |
 | S3-5 | 第 3 步刪掉一個實體、第 1 步的權威值要它還活著 | 實體復活（配發器範圍內的 id）、OnAdd 與 `Add<T>` observer 在全部放回之後跑 |
 | S3-6 | 選 P2P 佔位策略的 World | 啟動錯誤，訊息寫明還沒實作 |
@@ -449,7 +470,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 - 「搬」＝在新清單立同一個錯誤的突變、在 Kernel 清單退役；新清單每個都要 `what` 與 `guards`。
 - 新突變：Kernel（原語、逐型別雜湊、寫者名單、`Writes` 收元件）、權威、回滾、scenario 第 3 段、`zone_scan` 改格式後的自測。照 README 第 3 條；本批改的 DI 條數 × 5 是上限的參考，超過寫理由。
 - 新的三份清單（Kernel 的新增部分、`authority_mutations.json`、`rollback_mutations.json`）各交 Fable 5.2／high 敵對式檢查一次（§14.2）。
-- 完整跑的指令（`run_mutations` 的清單參數或包裝的腳本）加上兩份新清單，由統合在第 3 步接好（I17）。
+- 完整跑的指令（`run_mutations` 的清單參數或包裝的腳本）加上兩份新清單，在第 3 步接好（I17）。
 - 每步只跑相關突變；合併前背景完整跑一次（Kernel＋編排層＋`world_time`＋權威＋回滾＋`zone_scan`）。只有預期的案例失敗才算殺。
 
 ### 9.5 綁實作的守衛（`-guards-after-mechanism-stable`）
@@ -497,7 +518,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ---
 
-## 11. Design Invariants 的變更（方向要你核准；最終文字在合併前核准）
+## 11. Design Invariants 的變更（方向已核准，見下；最終文字在合併前核准）
 
 **方向已核准**（使用者 2026-11-20，本卡，原話「DI 文字方向照建議」）：11.1～11.5 照下面的方向；最終文字在合併前核准。
 
@@ -525,7 +546,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ### 11.3 回滾 Module（新頁 `target/v2/rollback.zh-Hant.md`）
 
-回滾份第 9 節 R-1～R-7 與 RC 照搬；R-7 的守衛「Kernel 現有的三處 D-E16 案搬來」照 9.1 A7；加一句：公開登記凍結後放進 World 的 Resource（5.1）；加入口形狀（5.5；修訂 2 等使用者重新核准，條文照核准的形狀寫）：比對與還原以（實體、元件、tick）為單位、差分沒解開的 tick 以後不當確認點、事件來源的權威值可寫進歷史（作者選），以及使用者核准的回滾點規則（MC-5）與 GYO 特有的形狀（MC-1、MC-3、SL-1、SL-2）；RC 加「記錄改成一般 System 才能並行時（獨占 System 成為並行的牆）」（15.4）。
+回滾份第 9 節 R-1～R-7 與 RC 照搬；R-7 的守衛「Kernel 現有的三處 D-E16 案搬來」照 9.1 A7；加一句：公開登記凍結後放進 World 的 Resource（5.1）；加入口形狀（5.5；修訂 2 等使用者重新核准，條文照核准的形狀寫）：比對與還原以（實體、元件、tick）為單位、事件來源的權威值可寫進歷史（作者選），以及使用者核准的回滾點規則（MC-5）與 GYO 特有的形狀（MC-1、MC-3、SL-1、SL-2）；RC 加「記錄改成一般 System 才能並行時（獨占 System 成為並行的牆）」（15.4）。
 
 ### 11.4 時間 Module（`target/v2/world-time.zh-Hant.md`）
 
@@ -534,8 +555,8 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ### 11.5 編排層（`target/v2/orchestration.zh-Hant.md`；第 12 節第 3 件定 (a)）
 
-- **O-2** 補「每次建 World 有一份以型別為鍵的共用槽。槽裡每種型別只由擁有它的登記單位建（`Create<T>`），別人用 `Find<T>`，找不到是錯誤、不代建；先後由登記檔的依賴與 O-E3 保證，產品自己的 `build` 在最後。登記單位與產品自己的 `build` 在 `Build` 拿 `T&`，`Build` 階段結束時編排層凍結槽，之後 `Finish`、`Check` 只拿 `const T&`，凍結後寫是 Programmer Error。`Build` 階段的寫入只追加、帶來源，裁決在凍結後由擁有者做，結果和呼叫順序無關。編排層不解讀槽裡的型別。建 World 單執行緒依序跑，槽不加鎖。槽在那一次建 World 結束時清掉，要留下的內容由 Module 凍結進 World 的 Resource」（「Create／Find」「凍結」是暫名，實作時照命名規範定；「結束時清掉」「凍結進 Resource」「裁決由擁有者做」是本卡的文字）。守衛：`Finish`／`Check` 拿到的是 `const`（編譯期，`requires` 檢查寫入不成立）；凍結後寫入的斷言；`Find` 找不到回錯誤、不代建；同一組登記兩種呼叫順序裁決結果相同；兩筆作者 options 不同報錯。（(b) 的補句不採。）
-- **RC-O10**（新）：建 World 要改成並行（多執行緒同時建，或一個 World 的登記單位並行 `Build`），共用槽需要加鎖或改成別的同步方式。
+- **O-2** 補「每次建 World 有一份以型別為鍵的共用槽。槽裡每種型別只由擁有它的登記單位建（`Create<T>`），別人用 `Find<T>`（找不到回空、不代建）；先後由登記檔的依賴與 O-E3 保證，產品自己的 `build` 在最後。登記單位與產品自己的 `build` 在 `Build` 拿 `T&`，`Build` 階段結束時編排層凍結槽，之後 `Finish`、`Check` 只拿 `const T&`。`Build` 階段的寫入只追加、帶來源；進 Kernel 的副作用在登記當下做、不取決於裁決；裁決是擁有者對紀錄的純函式，在凍結後經擁有者的讀取介面取得，結果和呼叫順序無關。編排層不解讀槽裡的型別。照 CCR-5 在一條執行緒上，槽不加鎖。槽活到那個 World 的登記單位的準備函式跑完，要留到執行時的內容由 Module 在準備函式裡凍結進 World 的 Resource」（「Create／Find」「凍結」是暫名，實作時照命名規範定；「準備函式跑完」「凍結進 Resource」「裁決是純函式」是本卡的文字，修訂 2 依窄複查 M5、M6、S3、S6 改寫）。錯誤的形式：Module 的 `Build` 或產品自己的 `build` 找不到依賴的登記、兩個登記單位 `Create` 同一型別、凍結後呼叫 `Create` 或可寫的取用，都是 Programmer Error（斷言）。守衛：`Finish`／`Check` 拿到的是 `const`（編譯期，`requires` 檢查寫入不成立）；凍結後 `Create` 的斷言；`Find` 找不到回空、不代建；同一組登記兩種呼叫順序裁決結果相同；兩筆作者 options 不同報錯；準備函式讀得到槽的內容。（(b) 的補句不採。）
+- **RC-O10**（新）：CCR-5 放寬時（建 World 要並行，或一個 World 的登記單位並行 `Build`），共用槽需要加鎖或改成別的同步方式。
 - **O-4** 不改（不算多一項，使用者 2026-11-20 確認）。
 
 ---
@@ -597,18 +618,19 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ### 第 5 件：第 9.1 節 A1～A11 的方向、第 11 節的 DI 文字、9.4 的退役、LIM-7／LIM-8 的方向、第 5.4 節的規模假設、第 10 節的拆卡
 
-- 判定與 DI：方向在動工前核准；逐組的最終核准在合併前帶突變結果與檢證者（Fable 5.2／high）報告再看一次（和第 2、3 批同一個做法）。A1～A3、A10 是已定決定的直接後果，**方向已核准（照建議刪，2026-11-20）**；A4～A7（搬過去時判定的對象變了、A7 的緩的面）**方向已核准（照建議，2026-11-20）**；要特別看、A8（作者的函式漏欄位）、A11（反向守衛退役後可能沒有突變的判定，第 2 步開頭列給你）**方向已核准（照建議，2026-11-20）**；A9、9.4 的突變處置、LIM-7／LIM-8 的方向也照建議核准。
-- 規模（1,000 實體 × 4 種）與「一次回滾 ≤ 一步的 20%」是本卡的假設，沒有出處。
+- 判定與 DI：方向在動工前核准；逐組的最終核准在合併前帶突變結果與檢證者（Fable 5.2／high）報告再看一次（和第 2、3 批同一個做法）。A1～A3、A10 是已定決定的直接後果，**方向已核准（照建議刪，2026-11-20）**；A4～A7（搬過去時判定的對象變了、A7 的緩的面）**方向已核准（照建議，2026-11-20）**；A8（作者的函式漏欄位）、A11（反向守衛退役後可能沒有突變的判定，第 2 步開頭列給你）**方向已核准（照建議，2026-11-20）**；A9、9.4 的突變處置、LIM-7／LIM-8 的方向也照建議核准。
+- （修訂 1 時寫「規模 1,000 實體 × 4 種是本卡的假設」；修訂 2 由 5.4.5 取代。）
 - 拆卡：**已定不拆**（使用者 2026-11-20，第 10 節）。
-- 規模與預算：**另開唯讀研究卡**（使用者 2026-11-20，第 5.4 節），數字等研究卡的結果由使用者定。
+- 規模與預算：另開唯讀研究卡（使用者 2026-11-20）；修訂 2 照研究卡 v2 重推，重新交使用者（本節開頭 A）。
 
 ### 還開著的（修訂 2，2026-11-20 研究卡 v2 之後；**重新交使用者核准**）
 
 照使用者「如果任務卡那邊用了錯誤的推論，重來」，下面兩件原本已核准（使用者 2026-11-20「預算照研究卡推薦，入口形狀寫進 Contract」），因為出自第一張研究卡的錯誤推論，重新交使用者：
 
-A. **5.4 的數字**（推翻已核准的）：P1 16 KB→**32 KB**（深度 20）、P2 64 KB→**128 KB**（深度 32）、P3 1 KB→**2 KB**；門檻 3「P2÷P1 ≤ 6」→「≤ 1.5 × 同一次量測的機器底比值」，並加「同一次跑機器底」。根據：每人 424 B 的實測取代 168 B 的推估；快取層級。門檻 1、2、量法、深度預設 20 照舊（深度的根據換成區網的時鐘同步延遲）。本卡建議照改。
-B. **5.5 的形狀**：(1) MC-5 選哪一步當回滾點（各家分歧：(a) lightyear 全域確認點／(b) Unity 可選、取最早／(c) Unity 預設、只回滾收到新值的；本卡建議 Contract 直接定 (a)，研究卡 v2 建議做成策略、預設由使用者定）；(2) GYO 特有的要不要留：三種權威值＋由呼叫者明說的有效期間（MC-3、SL-1、SL-2；本卡與研究卡都建議留）、MC-1「事件不可靜默丟」（研究卡建議留；本卡建議改寫成 lightyear 的「帶到確認點」、拿掉來源種類）。
-C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 checkout `build/evidence/gyo2-authority-rollback/baseline-v2/bundle/run-linux.sh`，約 25 分；量到之前「以前的回滾成本」與機器底是空的，判定 5 的量測結果標「未量」。
+A. **5.4 的數字**（推翻已核准的）：P1 16 KB→**32 KB**（深度 20）、P2 64 KB→**128 KB**（深度 32）、P3 1 KB→**2 KB**；門檻 3「P2÷P1 ≤ 6」→「≤ 1.5 × 同一次量測的機器底比值」（分子分母同大小、同深度、同統計量，5.4.5），並加「同一次跑機器底」；Module 側的配置寫死（16 種元件 × 64 B，P1 32 個實體、P2 128 個、P3 2 個）。根據：每人 424 B 的實測取代 168 B 的推估；快取層級。門檻 1、2、量法、深度預設 20 照舊（深度的根據換成區網的往返延遲）。本卡建議照改。
+   - **請確認的一點**（窄複查 M4）：424 B 出自 `pvp_baseline`（使用者的 `-no-master-reference` 點名不用；之後 `-budget-baseline-research` 把 11-01 之後的數據開放成基準）。本卡把它當「估狀態大小」（同使用者准的看 protobuf）。不准用時退回 168 B 的推估：角色 6.6 KB＋事件類 10 KB ≈ 17 KB，進位後 P1 仍是 32 KB。另外 AI、Boss 照玩家的 424 B 算是假設。
+B. **5.5 的形狀**：(1) MC-5：入口帶（實體、元件、tick）的權威值與「第 C 步以前收齊」的標記，官方實作的「判斷」用 (a) lightyear 的全域確認點，作者覆寫「判斷」可以做 (b) Unity 可選（取最早）、(c) Unity 預設（只回滾收到新值的）——不新增掛點（回滾份 5.3 已有）；本卡與研究卡 v2 一致建議這樣定。選 (a) 時再寫清楚四件（收齊只算 snapshot 通道、tick 大於 C 的值留著、「這份沒帶」不推成沒變、全掃比對的成本只記錄）。(2) GYO 特有的要不要留：三種權威值＋由呼叫者明說的有效期間（MC-3、SL-1、SL-2；本卡與研究卡都建議留）、MC-1「事件不可靜默丟」（研究卡建議留；本卡建議改寫成 lightyear 的「帶到確認點」、拿掉來源種類）。
+C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 checkout `build/evidence/gyo2-authority-rollback/baseline-v2/bundle/run-linux.sh`，約 25 分；量到之前「以前的回滾成本」與機器底是空的，判定 5 的量測結果標「未量」。**現在這個包量不出判定 5 第 3 條的分母**（沒有 32／128 KiB、`hot_record` 只在深度 20），去跑之前要先改包（5.4.5 末段）；誰改（研究卡 v2 或本卡）請主會話或使用者指定。
 
 以下是修訂 1 時的狀態，留作經過：
 
@@ -617,9 +639,11 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 2. ~~第 5.4 節的數字~~ **已定：照研究卡推薦**（2026-11-20）。原題：研究卡的推薦（5.4.6：P1 16 KB／20 步判定、P2／P3 只記、三條門檻含新增的線性比值、Linux 實機原生、預設深度 20）要不要採（本卡建議採）。
 3. ~~第 11 節 DI 文字的方向~~ **已定：照建議**（2026-11-20，本卡）。
 
-### 本卡照 L17 判的（各家一致或細節；不逐條問）
+### 使用者的界線：不參考 master 的算法與數據
 
-**不參考 master 的算法與數據**（使用者 2026-11-20 定，side chat）：權威與回滾 Module 從頭照 GYO2 的新架構與開源參考（lightyear、bevy_replicon、Unity Netcode、Bevy、flecs）做；不用 master 的算法、常數與量測數據（含 `LocalPlayerPrediction`、`AuthorityDigest` 的情境、`pvp_baseline` 的數字）。2026-09-25 的 dev_log 是 10/10 事故前的數據，不准引用。side chat 提過的「用 master 數據改 5.4 的規模與預算、修正照 master 的 0.1 秒、digest 情境照 `AuthorityDigest`、估計下修」全部不採。原話：「算了，重做吧，我怕你把master的問題帶到新架構裡來。（特別你還踩空了09_25 的dev_log，那個是10/10事故前的數據。不准）」本頁修訂 1 沒有引用 master（`git grep -i -E "master|09_25|pvp_baseline|LocalPlayerPrediction|AuthorityDigest"` 0 命中，同一指令以 `lightyear` 正例命中 25 行）。5.4 的規模與預算另開唯讀研究卡：master 2026-11-01 之後的數據只當**基準**（以前到哪、現在要到哪），不拿它的算法、常數當設計的根據；數字由使用者定（第 5.4 節，使用者 2026-11-20 補）。
+**不參考 master 的算法與數據**（使用者 2026-11-20 定，side chat）：權威與回滾 Module 從頭照 GYO2 的新架構與開源參考（lightyear、bevy_replicon、Unity Netcode、Bevy、flecs）做；不用 master 的算法、常數與量測數據（含 `LocalPlayerPrediction`、`AuthorityDigest` 的情境、`pvp_baseline` 的數字）。2026-09-25 的 dev_log 是 10/10 事故前的數據，不准引用。side chat 提過的「用 master 數據改 5.4 的規模與預算、修正照 master 的 0.1 秒、digest 情境照 `AuthorityDigest`、估計下修」全部不採。原話：「算了，重做吧，我怕你把master的問題帶到新架構裡來。（特別你還踩空了09_25 的dev_log，那個是10/10事故前的數據。不准）」本頁修訂 1 沒有引用 master（`git grep -i -E "master|09_25|pvp_baseline|LocalPlayerPrediction|AuthorityDigest"` 0 命中，同一指令以 `lightyear` 正例命中 25 行）。5.4 的規模與預算另開唯讀研究卡：master 2026-11-01 之後的數據只當**基準**（以前到哪、現在要到哪），不拿它的算法、常數當設計的根據；數字由使用者定（第 5.4 節，使用者 2026-11-20 補）。（修訂 2 註：上面「本頁修訂 1 沒有引用 master、0 命中」是修訂 1 當時的事；之後 `-budget-baseline-research`、`-baseline-redo` 把 11-01 之後的數據開放成基準，5.4.1 起引用 master 的檔與 `pvp-baseline-report`，界線見 5.4 開頭與第 12 節 A。）
+
+### 本卡照 L17 判的（各家一致或細節；不逐條問）
 
 
 - 原語有型別、放在 `ExclusiveWorld`、一批放回後才跑 hook（2.1）；原語 5 只留清單（2.1）；順序圖的閉包由回滾自己算（2.2）；訊息寫者名單、`Writes` 收元件（2.2）。
@@ -639,6 +663,8 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 4. digest 的合併用相加（權威份 5.6 只寫「和順序無關」，相加符合；輸入不含 id 和權威份的前提一致）。
 5. D-E16 搬過去後是策略自己的檢查，沒選回滾策略就不查（回滾份 5.1 本來就這樣寫；統合 7.2 寫了放寬面）——不是字面不同，是修訂 0 寫錯，這裡列出提醒。
 6. 兩個 Module `default=yes`（兩份沒寫預設；照主會話的判斷）。
+7. （修訂 2，窄複查 S2；**等第 5.5 節重新核准後才生效**）回滾份 5.5 第 3 點「第 T 步的權威值」→（實體、元件、tick）的權威值＋確認點；第 4 點「超過最大深度的請求丟掉」→「放棄這次回滾、記診斷」；第 5 點「存活集合整份放回」→ 有效期間內的放回；5.3 的註「入口不在 interface 裡，官方策略定義自己的入口」→ 回滾 Module 層、所有策略共用的入口。
+8. （修訂 2，窄複查 S2）權威份 4.3「作者先登記，策略就不代登記」→ 一律追加、凍結後裁決（第 6 節第 3 點；結果相同：作者的為準）。
 
 ---
 
@@ -665,13 +691,13 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 | 第 1 步 | 第 3 批延下來的三條守衛；逐型別雜湊（I1）與摘要格式 3；9 處「未完全解決」解除；比摘要的現有測試的型別補函式（第 12 節第 1 件定 (d)：不比摘要的測試型別不必補） | Opus 5.5／high | 8～12 h |
 | 第 2 步 | A11 的清單交使用者；拿掉沒有新家的規則（A1、A2、A3、A10；9.2 的恆真案掃描）、golden 第一次重產；原語 1～4 與讀 stamp（I2）、`Writes` 收元件（I3）、訊息寫者名單（I4）、`Resimulation` 每次放 false | Opus 5.5／high | 16～22 h |
 | 第 3 步 | 第 6 節的接法（I5）；`engine/authority`、`engine/rollback` 骨架、`modules.csv`、I6 回滾的公開登記與讀取介面、I7 的標頭、I15 測試支援、I17 | Opus 5.5／high | 8～12 h |
-| 第 4 步 | 回滾：檢查（R-7 Derived、跨 schedule 訊息、巢狀 schedule 的所屬）；官方策略（記錄、判斷、還原、重跑、修正、輸入歷史；R-1、R-2、R-5）、P2P 佔位；入口形狀（5.5，照重新核准的形狀）；新頁 `target/v2/rollback.zh-Hant.md`；預算量測（5.4.5，Linux 實機） | Opus 5.5／high | 22～34 h＋入口形狀（形狀定了再估） |
+| 第 4 步 | 回滾：檢查（R-7 Derived、跨 schedule 訊息、巢狀 schedule 的所屬）；官方策略（記錄、判斷、還原、重跑、修正、輸入歷史；R-1、R-2、R-5）、P2P 佔位；入口形狀（5.5，照重新核准的形狀）；新頁 `target/v2/rollback.zh-Hant.md`；預算量測（5.4.5）：回滾 Module 的量測程式與離線腳本（一台一支、交出前每條命令實際跑過，和機器底同一次跑；量測要使用者在 Linux 實機跑） | Opus 5.5／high | 22～34 h＋入口形狀（形狀定了再估）＋量測程式與腳本 4～6 h |
 | 第 5 步 | 權威（權威份第 10 節步 3、4）：登記入口、代為登記、策略、佔位、tick 檢查；一致性指紋、digest、G-5 匯出與 `zone_scan` 的接手（J-17 的搬移）、5.11 交叉檢查；新頁 `target/v2/authority.zh-Hant.md` | Opus 5.5／high | 12～20 h |
 | 第 6 步 | 拿掉有新家的規則（A4～A7）、`Role`、C 指紋、golden 第二次重產；突變的處置（9.4） | Opus 5.5／high | 8～12 h |
 | 第 7 步 | scenario 第 3 段；Kernel 的 DI、限制頁、world-time、編排層、索引；dev_log | Opus 5.5／high | 5～8 h |
 | 第 8 步 | 完整突變、三份新清單的敵對式檢查、§14.4 檢證、審查 | 見下 | 8～12 h |
 
-合計 87～132 h＋5.5 入口形狀的時間（修訂 1 估 4～6 h；修訂 2 的形狀定了再估；不拆後串著做，關鍵路徑＝合計；少了交接與併分支的費用沒有另外扣）。超過估計 1.5 倍或單一問題累計超過 2 小時就停下回報。
+合計 91～138 h（含量測程式與腳本 4～6 h）＋5.5 入口形狀的時間（修訂 1 估 4～6 h；修訂 2 的形狀定了再估；不拆後串著做，關鍵路徑＝合計；少了交接與併分支的費用沒有另外扣）。超過估計 1.5 倍或單一問題累計超過 2 小時就停下回報。
 
 | 角色 | 模型／檔位 | 理由 |
 |---|---|---|
@@ -695,7 +721,7 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 |---|---|
 | 名指的 Feature：PvP Match／Client（伺服器權威、預測與回滾）、格鬥遊戲 P2P（佔位）、玩家存檔（讀檔兩次相同）、單機不增加複雜度 | 第 4、5 節；原語 1～4；P2P 用得到的原語在清單裡；逐型別雜湊；不選策略就沒有作用 |
 | 參考實作：lightyear（checksum、預測、`Rollback` Resource、App 上的 `ComponentRegistry`）、bevy_replicon（協議雜湊）、Unity Netcode（`GhostUpdateSystem`、`DidChange`、World 的 singleton）、Bevy（`set_last_changed`、`get_added_plugins`、`Ref<T>`）、flecs（type hooks 的 `cmp`／`equals`、不合法時呼叫才斷言） | 原語的形、雜湊的客製點、重跑的位置、Module 與作者的接法 |
-| 規模：64 Hz；可回滾狀態上限約 27 KB（39 角色 × 424 B 實測＋事件類＋私人，5.4.3）；深度預設 20（區網時鐘同步延遲＋lightyear 預設，5.4.4）；判定點 P1 32 KB／20、P2 128 KB／32、P3 2 KB／20（修訂 2，等使用者重新核准） | 判定 5 |
+| 規模：64 Hz；可回滾狀態上限約 27 KB（39 角色 × 424 B（玩家實測；AI、Boss 同大小是假設）＋事件類＋私人，5.4.3）；深度預設 20（區網的往返延遲＋lightyear 預設，5.4.4）；判定點 P1 32 KB／20、P2 128 KB／32、P3 2 KB／20（修訂 2，等使用者重新核准） | 判定 5 |
 
 ### 15.3 Architecture Delta（七項；和統合第 4 節、兩份第 9 節的差分）
 
@@ -713,14 +739,14 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 |---|---|---|---|---|
 | 雜湊函式跟著型別、摘要與 digest 共用 | lightyear 逐元件登記 | 摘要與 digest 各一套；只補 padding（已做的 A） | 一個概念一個實作；使用者定 C | 存檔（讀兩次相同）、PvP digest |
 | 照位元組不自動、作者明寫才用 | — | `has_unique_object_representations` 為真就自動（修訂 0） | 自動那條有 `optional`、指標、平台寬度三個漏洞（檢查者實測） | 存檔、PvP digest |
-| 沒有函式時（第 12 節第 1 件） | flecs 呼叫時擋／lightyear 略過 | 使用者定 (d)（flecs 的形），2026-11-20 | (a) 登記時編譯失敗、(b) 略過、(c) 退回位元組 | 存檔、單機不增加複雜度 |
-| 浮點（第 12 節第 2 件） | lightyear、flecs、Unity 逐位元 | 使用者定 (i) 逐位元＋作者自己正規化的出口，2026-11-20 | (ii) `±0` 相同、NaN 都相同（Bevy `FloatOrd`） | PvP digest、回滾 |
+| 沒有函式時（第 12 節第 1 件） | flecs 呼叫時擋／lightyear 略過 | (a) 登記時編譯失敗、(b) 略過、(c) 退回位元組 | 使用者定 (d)（flecs 的形），2026-11-20 | 存檔、單機不增加複雜度 |
+| 浮點（第 12 節第 2 件） | lightyear、flecs、Unity 逐位元 | (ii) `±0` 相同、NaN 都相同（Bevy `FloatOrd`） | 使用者定 (i) 逐位元＋作者自己正規化的出口，2026-11-20 | PvP digest、回滾 |
 | 原語有型別、在 `ExclusiveWorld`、一批放回 | Bevy；統合 9.1；同步點的 hook 規則 | 型別擦除的整欄複製（Unity 的原始位元組）；逐欄放回、每欄當場跑 hook | 回滾的登記知道 `T`；hook 不看到半還原的 World | PvP Client 回滾、P2P（佔位） |
 | G5 由回滾存版本、記錄是獨占 System | Unity Netcode `DidChange(版本)` | Kernel 加 tick→stamp 原語；每型別一個 `Changed<T>` System（lightyear）；**照 Bevy `Ref<T>` 把 stamp 開給一般的 query**（Kernel 的參數多一種；v1 只有 Serial，獨占 System 沒有並行的代價；之後要並行時這是一道牆，寫進回滾的 RC） | 三家都沒有 Kernel 層的對照；一個 System 處理全部型別 | PvP Client 回滾 |
 | 重跑掛每幀 schedule 的 `PreUpdate` | lightyear `PreUpdate` 的 `run_rollback` | 掛在步的 schedule（X-11 不准） | 巢狀規則 | PvP Client 回滾 |
 | 回滾的登記凍結後放 World 的 Resource | Unity 的 World singleton | Module 物件以 World 名為鍵的表 | `BuildNewFirst` 失敗時舊 World 要照常 | PvP Client 回滾、讀檔 |
 | digest 相加、不含 id | lightyear 的 XOR、不含 id | XOR；含 id（修訂 0） | 相同的兩項不抵銷；id 的對映屬網路 Module | PvP digest |
-| Module 與作者的接法（第 12 節第 3 件） | lightyear App Resource／Bevy `get_added_plugins` | 使用者定 (a) 編排層的共用槽（lightyear App Resource 的形），2026-11-20 | (b) 查依賴的 Module 物件、(c) 產品經選項包接線、(d) static 表 | PvP（權威＋回滾）、單機時間倒流 |
+| Module 與作者的接法（第 12 節第 3 件） | lightyear App Resource／Bevy `get_added_plugins` | (b) 查依賴的 Module 物件、(c) 產品經選項包接線、(d) static 表 | 使用者定 (a) 編排層的共用槽（lightyear App Resource 的形），2026-11-20 | PvP（權威＋回滾）、單機時間倒流 |
 | 兩個 Module `default=yes` | Bevy `DefaultPlugins`、Unity 內建模組（主會話的判斷） | `default=no`（修訂 0） | 照主會話已定的預設；不選策略就沒有作用 | 單機（不選策略） |
 | 沒有新家的規則先拿 | 統合第 8 節的原則 | 全部壓到最後（修訂 0） | 兩個 Module 不在舊規則上開發 | — |
 
@@ -732,14 +758,14 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 
 - 這是宣告，沒有試做；第 14 節的時間是讀程式量估的。
 - 行號照三份偵察（59fd4da9），卡片與檢查者抽查了一部分（檢查報告末節）；`recon-b` 2.1「第 1 批已補上」只對了條文，逐欄對程式在第 2 步開頭做；Unity 讀的是非官方鏡像；bevy_ggrs、GGPO 本機沒有。
-- 規模與預算（5.4、判定 5）未定：等預算基準研究卡（master 11-01 之後的數據只當基準）與使用者定；不拿 master 的算法、常數當設計的根據。
+- 規模與預算（5.4、判定 5）：修訂 2 照研究卡 v2 重推，等使用者重新核准；量測結果未量（Linux 實機的交付包要先改，5.4.5）；不拿 master 的算法、常數當設計的根據。
 - 不參考 master 的算法、常數與量測數據；2026-09-25 的 dev_log（10/10 事故前）不准引用（使用者 2026-11-20）。實作也照這條：參考只用 GYO2 的新架構與開源參考。
 - 網路 Module 的設計不在本批：digest 何時比、含不含實體 id、伺服器值怎麼搬、對時、tick 跳變的通知（`LocalTimelineShift` 那一種）。本批只做到回滾 Module 退 tick 時用 `RewindFixedSteps`；**tick 跳變的推送式事件不做**：以 tick 為索引的歷史只有回滾 Module 自己的，退回時它自己處理；別的讀者出現時（網路 Module 的輸入緩衝）再加（AGENTS §2）。
 - digest 不含實體 id：兩個實體交換判定值時看不出來（4.4）。
 - 具名集合的原始位元組介面留著（7.1），沒有用它做比較的 Feature。
 - 狀態機的 (c) 區接法（權威份 5.8）只做到 `Writes<…>` 收元件與 `authority.Runs`、`authority.MarkResource`；狀態機本身在第 5 批。
 - 「誰實際寫的」除錯工具（L30）不在本批。
-- 修訂 1 沒有再送檢查。
+- 修訂 1 之後的改動與修訂 2 經 Fable 5.2／high 窄複查一次（第 17 節末）；修訂 2 依指摘改完後沒有再送檢查。
 
 ---
 
@@ -755,7 +781,7 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 | M6 A1～A10 不完整 | A2 補 `ObserverTests:1001`、`ExecutorTests:804`、恆真三案；A4 補漏斗反方向與走訪六案；9.2 改成逐案確認＋關掉規則再掃 |
 | M7 A7 的緩的面 | 改寫；第 12 節末列出 |
 | M8 未完全解決的數目 | 3.1 改為測試 9 處、程式 4 處；判定 1 改成 `git grep` 0 命中 |
-| M9 A 依賴 R | 回滾的公開登記與讀取介面由統合在第 3 步做；I6、估計跟著改 |
+| M9 A 依賴 R | 回滾的公開登記與讀取介面在第 3 步做；I6、估計跟著改 |
 | M10 DI 清單漏列 | 11.1 補 DI-KS 2、5、10、13、14、25、RC 1 |
 | S1 判定 4 的樣式 | 補 17 條、方向掃描、標明哪些照附錄 |
 | S2 `default=no` | 改 `default=yes`，照主會話的判斷 |
@@ -777,3 +803,32 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 | 小 7 | 第 0 節改讀到 57c8dc32、動工時再讀 |
 | 小 8 | 判定 4 標明照附錄與本卡加的 |
 | 小 9 | 第 12 節第 5 件點到 9.4 的退役與 LIM 條文 |
+
+## 18. 修訂 1 之後與修訂 2 的窄複查的處理（`declaration-r2-delta-adversarial-check.md`）
+
+Fable 5.2／high，唯讀；範圍 fcae13f1 之後的全部差分（含修訂 2）與研究卡 v2 的出處、推算。結果：必改 9、建議改 10、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r2-delta-adversarial-check.md`）。查過、成立的：master 的出處與日期、參考引擎的引用行、算術、(a) 不需要 Kernel 新原語、使用者的決定與 HANDOFF 一致、「卡 A／卡 R」0 命中。
+
+| 指摘 | 處理 |
+|---|---|
+| M1 門檻 3 的分母量不出來、定義不唯一 | 5.4.5 第 3 條寫死分子分母（同大小、同深度、hot、不 batch、10 行程 p99 的中位數後相除）；交付包要先改（加 2／32／128 KiB、兩個深度）；第 12 節 C 註明 |
+| M2 Module 側的配置沒定 | 5.4.5 寫死 16 種元件 × 64 B、P1 32 個實體／P2 128／P3 2；「每步所有格都改」在計時外做；門檻 2 的扣除法寫明；另列「實際組成」只記錄 |
+| M3 「時鐘同步延遲 p95」標錯 | 5.4.1、5.4.4、5.3、15.2、第 12 節 A 改成視窗最小值／最大值的寫法 |
+| M4 424 B 是 `pvp_baseline` | 5.4.1 標明；第 12 節 A 加「請確認」與退路（168 B 時 P1 仍 32 KB）；AI、Boss 的大小標成假設 |
+| M5 裁決沒有地方放 | 第 6 節第 3 點：裁決是擁有者對紀錄的純函式，經 `const` 的讀取介面取得；O-2 補句同改 |
+| M6 「登記當下只記下一筆」和 DI-A 11 衝突 | 第 6 節第 3 點：進 Kernel 的副作用當下做、不取決於裁決；延後的只有 options 誰為準；「重跑時不跑」不在裁決範圍 |
+| M7 MC-5 的建議沒對上回滾份 5.3 | 5.5 改成：入口帶（實體、元件、tick）的值與收齊標記；官方「判斷」用 (a)；作者覆寫「判斷」做 (b)、(c)；不新增掛點；入口是 Module 層共用的（列字面不同） |
+| M8 差分規則搬錯、驗不了 | MC-4 分開：比對單位留在回滾；「確認點不得晚於還沒解開的差分」改成給網路 Module 的需求；9.3、11.3 拿掉 |
+| M9 D-E15 第 2～5 步沒有對象 | `ingress` 旗標留到第 6 步和 D-E15 一起拿（7.1、7.2） |
+| S1 選 (a) 還缺四件 | 5.5 第 1 件補四件（收齊只算 snapshot、tick 大於 C 的留著、「這份沒帶」不推成沒變、全掃比對只記錄）；5.4.4 加確認點的落後 |
+| S2 字面不同沒列 | 第 12 節末加第 7、8 項；文首改成「除第 12 節末列的之外不改」 |
+| S3 槽的生命週期 | 第 6 節與 O-2：槽活到準備函式跑完 |
+| S4 錯誤的形式 | 第 6 節與 O-2：找不到回空、`Build` 中找不到依賴與重複 `Create`、凍結後 `Create` 都是斷言 |
+| S5 Module 自己的 Resource 與 (d) | 3.3 加「Engine 的 Module 放進 World 的型別都附雜湊函式」與各雜湊什麼；「有值才報」標成本卡 |
+| S6 引用 CCR-5 | 第 6 節第 4 點、O-2、RC-O10 |
+| S7 0.0067 ms 的標籤 | 改成「一個玩家的移動一步」 |
+| S8 策略的狀態 | 4.2：策略物件不帶每個 World 的狀態，狀態放 World 的 Resource |
+| S9 量測怎麼交到 Linux 實機 | 第 14 節第 4 步加量測程式與離線腳本 4～6 h；5.4.5 末段寫明 |
+| S10 例子預設了 (a) | 第 1 節、S3-3 改成整份判定值；做薄段標「選 (a) 時」 |
+| m1～m8 | 第 12 節第 5 件、第 16 節、9.4／第 17 節的「統合」、9.1／第 11 節的標題、15.4 的欄、L17 段的標題與 0 命中的註、文首與第 0 節、P2 的「只記錄」與「同 P2P 佔位」 |
+| m9（研究卡 v2 的小錯） | 宣告用 256 倍、Mac 原生 4.5～13.8%；`ICommandData.cs:169` 不再寫成歷史環上限（宣告只引 `NetworkTimeSystem.cs`）；交付包的量測點照 M1 改 |
+
