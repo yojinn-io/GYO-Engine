@@ -213,8 +213,9 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 - **深度從目標 RTT 推**（研究報告的 B2）：深度＝ceil(RTT ÷ 15.625 ms)＋餘量。
 - **PvP 目標 4 人**。
 - **協議可以看 master 的 protobuf 設計**：這是「不參考 master」（第 12 節）的例外，只用來估可回滾狀態的大小。研究卡依 master `apps/object_fps_pvp/protocol/client_v9.proto`（`af2c93ad`，2026-11-01）粗估：每人 `PlayerState` 20 欄＋`CombatState` 14 欄＋`PlayerAnimation` 8 欄，每欄算 4 B，約 168 B；4 人約 0.7 KB。協議裡沒有子彈狀態（命中即時判定），所以不另加子彈實體。輸入走輸入歷史，不算進可回滾狀態。協議裡欄位的常數值（例 `maximum_reference_age_ms`）不引用。
+- **規模要看願景計劃**（使用者同日補：「你還得去看願景計劃，master不單單是4人PVP」）：master `docs/object_fps_pvp/plans/v8/entity-requirements.md`（迷你塔科夫，11-01 定，典型值）——玩家 4、之後可能 8；同時約 400 個實體（AI 20、Boss 1、物品 200、門 50…）；地圖 200 m × 200 m、視距 100 m，看不到的不送（interest management 是已點名的需求）。研究卡估每 tick 的狀態（8 玩家＋20 AI＋1 Boss）約 4.9 KB；事件通道的實體（物品、容器、屍體、門、放置物）約 5～10 KB。哪些實體可回滾由作者用 `rollback.Component<T>` 決定（例：AI 在 Client 通常內插、不預測），Module 不必知道。
 
-**還沒定的**：位元組規模（候選 S1 4 KB／S2 16 KB／S3 64 KB；修訂 1 的 1,000 × 4 以每格 32 B 算約 128 KB）、目標 RTT 與餘量（RTT 100／150／200／300 ms → 7／10／13／20 步，各加餘量）、門檻要不要跟著收緊、量法（使用者說過要量可以在 Linux 實機原生量）。出處：研究報告第 7 節（主 checkout `build/evidence/gyo2-authority-rollback/budget-baseline-research.md`）。
+**還沒定的**：位元組規模（研究卡依願景重算的候選：8 KB 只有每 tick 狀態可回滾／16 KB 事件改到的狀態也可回滾／64 KB 壓力上限，選哪個跟多通道的 MC-2 連動；先前的 4 KB 只夠 4 人 PvP，撤回；修訂 1 的 1,000 × 4 以每格 32 B 算約 128 KB）、目標 RTT 與餘量（RTT 100／150／200／300 ms → 7／10／13／20 步，各加餘量）、門檻要不要跟著收緊、量法（使用者說過要量可以在 Linux 實機原生量）。出處：研究報告第 7 節（主 checkout `build/evidence/gyo2-authority-rollback/budget-baseline-research.md`）。
 
 下面是修訂 1 的假設，**等研究卡與使用者定的數字取代**：
 
