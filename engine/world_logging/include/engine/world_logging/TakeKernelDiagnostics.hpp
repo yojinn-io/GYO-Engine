@@ -12,7 +12,8 @@
 //
 // Taking empties them: one World has one taker. A runner that wants to look at them too takes them itself
 // and writes them with Logging::Write. An interrupted World's records are taken too (question 2 (c),
-// approved), marked world_interrupted; call WriteFailure first, then this, so the fatal record comes first.
+// approved), marked world_interrupted. Nothing orders them against the line a product's main may write for
+// the failure; readers order lines by mono_ns (revision 3, user 2026-11-21).
 
 namespace GYO::Engine::WorldLogging {
 

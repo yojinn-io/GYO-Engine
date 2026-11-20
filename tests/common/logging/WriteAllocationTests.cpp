@@ -77,9 +77,9 @@ TEST_CASE("alloc: the fatal path formats its lines in the capacity Install reser
     options.takeTerminate = false;
     auto handle = Logging::Install(std::move(options));
     REQUIRE(handle);
-    const Logging::Field fields[] = {{"kind", "Interrupted"}, {"entry", "RunFrame"}, {"sync_epoch", 3u}, {"x", 0.5}};
-    const Logging::Record record{.level = Level::Fatal, .category = "world", .text = "a World broke",
-                                 .product = "game", .world = "Simulation", .fields = fields};
+    const Logging::Field fields[] = {{"file", "Simulation.cpp"}, {"line", 3u}, {"function", "Step"}, {"x", 0.5}};
+    const Logging::Record record{.level = Level::Fatal, .category = "assert", .text = "a condition failed",
+                                 .world = "Simulation", .fields = fields};
     const std::size_t before = allocations;
     const auto report = Logging::WriteFatalRecord(record);
     CHECK(allocations == before);

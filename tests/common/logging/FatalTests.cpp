@@ -32,11 +32,10 @@ namespace {
 using namespace std::chrono_literals;
 
 Record Broken() {
-    static const Logging::Field fields[] = {{"kind", "Interrupted"}, {"sync_epoch", 3u}};
+    static const Logging::Field fields[] = {{"file", "Simulation.cpp"}, {"line", 3u}};
     return Record{.level = Level::Fatal,
-                  .category = "world",
+                  .category = "assert",
                   .text = "broken",
-                  .product = "game",
                   .world = "Simulation",
                   .fields = fields};
 }
@@ -76,7 +75,7 @@ TEST_CASE("fatal: every sink's WriteFatal gets the record's JSON line and text l
     CHECK(records[0].fatal);
     CHECK(records[0].level == Level::Fatal);
     CHECK(records[0].monoNs == 777);
-    CHECK(records[0].product == "game");
+    CHECK(records[0].world == "Simulation");
     Record expected = Broken();
     expected.monoNs = 777;
     expected.wall = Logging::Test::TestWall();
@@ -84,13 +83,13 @@ TEST_CASE("fatal: every sink's WriteFatal gets the record's JSON line and text l
     Logging::AppendJsonLine(json, expected);
     REQUIRE(memory->FatalJsonLines().size() == 1);
     CHECK(memory->FatalJsonLines()[0] == json);
-    CHECK(memory->FatalTextLines()[0] == "[world] fatal: broken world=Simulation kind=Interrupted sync_epoch=3\n");
+    CHECK(memory->FatalTextLines()[0] == "[assert] fatal: broken world=Simulation file=Simulation.cpp line=3\n");
 }
 
 TEST_CASE("fatal: a sink that does not take the category gets nothing; the level is not consulted") {
     auto memory = std::make_shared<Logging::MemorySink>();
     auto other = std::make_shared<Logging::MemorySink>();
-    auto options = WithMemory(memory, {.exclude = {"world"}});
+    auto options = WithMemory(memory, {.exclude = {"assert"}});
     options.sinks.push_back({.name = "other", .sink = other, .filter = {.minimum = Level::Fatal}});
     auto handle = Logging::Install(std::move(options));
     REQUIRE(handle);

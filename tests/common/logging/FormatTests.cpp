@@ -34,22 +34,11 @@ std::string Line(const Record& record) {
     return out;
 }
 
-std::vector<std::string> Keys(const std::string& line) {
-    auto document = Json::Parse(line);
-    REQUIRE(document);
-    auto object = document.value().Root().AsObject();
-    REQUIRE(object);
-    std::vector<std::string> keys;
-    for (const auto member : object.value()) keys.emplace_back(member.key);
-    return keys;
-}
-
 } // namespace
 
 TEST_CASE("format: golden: one record with every kind of field, a world and +0900") {
     const Field fields[] = {{"tick", 1207u}, {"delta", -3}, {"speed", 2.5}, {"ok", true}, {"peer", "client \"3\""}};
-    const Record record{.kind = Logging::RecordKind::Log,
-                        .level = Level::Warning,
+    const Record record{                        .level = Level::Warning,
                         .category = "world_time",
                         .text = "discarded 59 steps",
                         .wall = kWall,
@@ -63,34 +52,18 @@ TEST_CASE("format: golden: one record with every kind of field, a world and +090
           "\"peer\":\"client \\\"3\\\"\"}}\n");
 }
 
-TEST_CASE("format: golden: a fatal record carries product, world and world_interrupted; empty fields are {}") {
+TEST_CASE("format: golden: a fatal record carries world and world_interrupted; empty fields are {}") {
     const Record record{.level = Level::Fatal,
-                        .category = "world",
+                        .category = "assert",
                         .text = "broken",
                         .wall = {.unixMs = 0, .utcOffsetSeconds = 0},
                         .monoNs = 7,
-                        .product = "Match",
                         .world = "Simulation",
                         .worldInterrupted = true};
     CHECK(Line(record) ==
-          "{\"schema\":1,\"kind\":\"log\",\"level\":\"fatal\",\"category\":\"world\","
-          "\"wall\":\"1970-01-01T00:00:00.000+0000\",\"mono_ns\":7,\"product\":\"Match\",\"world\":\"Simulation\","
+          "{\"schema\":1,\"kind\":\"log\",\"level\":\"fatal\",\"category\":\"assert\","
+          "\"wall\":\"1970-01-01T00:00:00.000+0000\",\"mono_ns\":7,\"world\":\"Simulation\","
           "\"world_interrupted\":true,\"text\":\"broken\",\"fields\":{}}\n");
-}
-
-TEST_CASE("format: a span has begin_ns and duration_ns right after mono_ns") {
-    const Record record{.kind = Logging::RecordKind::Span,
-                        .level = Level::Info,
-                        .category = "trace.net",
-                        .text = "send",
-                        .wall = kWall,
-                        .monoNs = 900,
-                        .beginNs = 400,
-                        .durationNs = 500};
-    CHECK(Keys(Line(record)) == std::vector<std::string>{"schema", "kind", "level", "category", "wall", "mono_ns",
-                                                         "begin_ns", "duration_ns", "text", "fields"});
-    CHECK(Line(record).find("\"kind\":\"span\",") != std::string::npos);
-    CHECK(Line(record).find("\"begin_ns\":400,\"duration_ns\":500,") != std::string::npos);
 }
 
 TEST_CASE("format: the wall offset is written as %z writes it: negative, half hours") {
@@ -102,7 +75,7 @@ TEST_CASE("format: the wall offset is written as %z writes it: negative, half ho
     CHECK(Line(record).find("\"wall\":\"2000-02-29T00:00:00.999+0000\"") != std::string::npos);
 }
 
-TEST_CASE("format: NaN, +Infinity, -Infinity become the agreed strings; -0.0 stays a number") {
+TEST_CASE("format: NaN and both infinities become the agreed strings; -0.0 stays a number") {
     const Field fields[] = {{"nan", std::numeric_limits<double>::quiet_NaN()},
                             {"pos", std::numeric_limits<double>::infinity()},
                             {"neg", -std::numeric_limits<double>::infinity()},
@@ -130,19 +103,16 @@ TEST_CASE("format: control characters and non-ASCII UTF-8 are written so that Pa
     CHECK(root.Find("fields").value().AsObject().value().Find("s").value().AsString().value() == text);
 }
 
-TEST_CASE("format: a record JSON cannot represent becomes an Error record of category logging, same kind and world") {
+TEST_CASE("format: a record JSON cannot represent becomes an Error record of category logging, same world") {
     const std::string bad = "bad \xFF byte";
     const Field fields[] = {{"s", std::string_view(bad)}};
-    const Record record{.kind = Logging::RecordKind::Span,
-                        .level = Level::Info,
-                        .category = "trace.net",
+    const Record record{.level = Level::Info,
+                        .category = "net",
                         .text = "fine",
                         .wall = kWall,
                         .monoNs = 5,
                         .world = "Simulation",
-                        .fields = fields,
-                        .beginNs = 1,
-                        .durationNs = 4};
+                        .fields = fields};
     std::string out = "before\n";
     CHECK_FALSE(Logging::AppendJsonLine(out, record));
     REQUIRE(out.starts_with("before\n"));
@@ -150,7 +120,7 @@ TEST_CASE("format: a record JSON cannot represent becomes an Error record of cat
     auto document = Json::Parse(line);
     REQUIRE(document);
     const auto root = document.value().Root().AsObject().value();
-    CHECK(root.Find("kind").value().AsString().value() == "span");
+    CHECK(root.Find("kind").value().AsString().value() == "log");
     CHECK(root.Find("level").value().AsString().value() == "error");
     CHECK(root.Find("category").value().AsString().value() == "logging");
     CHECK(root.Find("world").value().AsString().value() == "Simulation");

@@ -70,7 +70,7 @@ Json::JsonResult<void> WriteRecord(std::string& out, const Record& record) {
     writer.Key("schema");
     writer.Uint(kJsonLinesSchema);
     writer.Key("kind");
-    writer.String(ToString(record.kind));
+    writer.String("log");
     writer.Key("level");
     writer.String(ToString(record.level));
     writer.Key("category");
@@ -80,16 +80,6 @@ Json::JsonResult<void> WriteRecord(std::string& out, const Record& record) {
     writer.String(FormatWall(record.wall, wall));
     writer.Key("mono_ns");
     writer.Int(record.monoNs);
-    if (record.kind == RecordKind::Span) {
-        writer.Key("begin_ns");
-        writer.Int(record.beginNs);
-        writer.Key("duration_ns");
-        writer.Int(record.durationNs);
-    }
-    if (!record.product.empty()) {
-        writer.Key("product");
-        writer.String(record.product);
-    }
     if (!record.world.empty()) {
         writer.Key("world");
         writer.String(record.world);
@@ -131,20 +121,15 @@ bool AppendJsonLine(std::string& out, const Record& record) {
     text += ToString(written.error().code);
     text += ": ";
     text += written.error().message;
-    Record replacement{.kind = record.kind,
-                       .level = Level::Error,
+    Record replacement{.level = Level::Error,
                        .category = "logging",
                        .text = text,
                        .wall = record.wall,
                        .monoNs = record.monoNs,
-                       .product = record.product,
                        .world = record.world,
-                       .worldInterrupted = record.worldInterrupted,
-                       .beginNs = record.beginNs,
-                       .durationNs = record.durationNs};
+                       .worldInterrupted = record.worldInterrupted};
     if (!WriteRecord(out, replacement)) {
-        // The product or the World name itself is what JSON cannot represent.
-        replacement.product = {};
+        // The World name itself is what JSON cannot represent.
         replacement.world = {};
         static_cast<void>(WriteRecord(out, replacement));
     }

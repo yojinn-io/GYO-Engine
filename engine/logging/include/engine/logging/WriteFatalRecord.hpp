@@ -5,7 +5,8 @@
 #include "engine/logging/Record.hpp"
 
 // The fatal path's last write (section 5.6 of docs/architecture/target/v2/logging-declaration.zh-Hant.md,
-// Design Invariant LG-2). WriteFailure (engine/world_logging) and the assertion handler both end here.
+// Design Invariant LG-2): the path of the Engine's E0 (error levels in docs/architecture/target/error-handling.md);
+// the assertion handler and the std::terminate handler both end here.
 // On the calling thread, through no mechanism of a World, no event and no queue:
 //
 //   1. the record is formatted once as a text line and a JSON line, in the capacity Install reserved
@@ -38,7 +39,7 @@ struct FatalWriteReport final {
     bool reentered{false};
 };
 
-// record.level is written as given (Fatal for WriteFailure and assertions); its time fields are filled
+// record.level is written as given (Fatal for assertions and std::terminate); its time fields are filled
 // with the Logger's clock (the defaults with no Logger installed).
 FatalWriteReport WriteFatalRecord(const Record& record) noexcept;
 

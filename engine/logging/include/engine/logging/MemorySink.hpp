@@ -26,18 +26,14 @@ struct StoredField final {
 };
 
 struct StoredRecord final {
-    RecordKind kind{RecordKind::Log};
     Level level{Level::Info};
     std::string category;
     std::string text;
     WallTime wall;
     std::int64_t monoNs{};
-    std::string product;
     std::string world;
     bool worldInterrupted{false};
     std::vector<StoredField> fields;
-    std::int64_t beginNs{};
-    std::int64_t durationNs{};
     // Reached the sink through WriteFatal rather than Write.
     bool fatal{false};
 

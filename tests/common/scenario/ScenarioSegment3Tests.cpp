@@ -2,17 +2,18 @@
 // section 9.2; judgements 2 to 5): "relay", a game of two Worlds, Lobby and Match, with the time Module.
 // Match moves a racer each frame and sends a Lap message; the game's own reader keeps what it read.
 //
-//   S3-1 to S3-3  the fatal path (F1, judgement 2): Match breaks at frame 3 by (1) a System's Err, (2) a
-//                 System's exception, (3) a DropOldFirst replacement that fails. The runner (WithFailureLog)
-//                 or main writes the failure once and exits (user, 2026-11-20: "log it, then exit"); the
-//                 record is in a MemorySink and in the real JSON lines file before the Logger is closed.
-//   S3-4          the healthy path (F2): Forward<TimeDiscardedLog> gets the time Module's message with the
+//   S3-1          entrance 3 (F1, judgement 2): Match breaks by a System's Err; whoever decides what follows
+//                 (the product's main; here, the test) writes the reason through Base::Log, and the logging
+//                 Module makes it one record in a MemorySink and in the real JSON lines file. What the Engine
+//                 returns and whether it writes is the error levels' business (their tests), not this segment's.
+//   S3-2          the healthy path (F2): Forward<TimeDiscardedLog> gets the time Module's message with the
 //                 World's name; TakeKernelDiagnostics gets the Lap buffer's dropped records.
-//   S3-5          determinism (judgement 4): the same run with logging off (no Forward, no label) and on
+//   S3-3          determinism (judgement 4): the same run with logging off (no Forward, no label) and on
 //                 (Debug and up, two sinks) leaves the game's own Resources and what its reader read equal,
 //                 byte for byte.
-//   S3-6          trace (F3, F4; judgements 3 and 5): 1,000 trace records and 100 spans go only to the trace
-//                 file, everything else only to the console; every line reads back; the counts are conserved.
+//   S3-4          one category in its own file (F3; judgements 3 and 5): 1,000 records of relay.movement go
+//                 only to their file, everything else only to the console; every line reads back; the counts
+//                 are conserved. (Spans belong to the trace Module since revision 3: user, 2026-11-21.)
 //
 // A failure is classified by contract first (orchestration skeleton declaration 8.4): each message names the
 // step and the contract it relies on.
@@ -20,6 +21,7 @@
 #include <doctest/doctest.h>
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -37,18 +39,17 @@
 #include <string>
 #include <vector>
 
+#include "engine/base/Log.hpp"
 #include "engine/json/Document.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/logging/ConsoleSink.hpp"
 #include "engine/logging/JsonLinesFileSink.hpp"
 #include "engine/logging/Logger.hpp"
 #include "engine/logging/MemorySink.hpp"
-#include "engine/logging/Span.hpp"
 #include "engine/logging/Write.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/world_logging/Forward.hpp"
 #include "engine/world_logging/TakeKernelDiagnostics.hpp"
-#include "engine/world_logging/WriteFailure.hpp"
 #include "engine/world_time/Sampling.hpp"
 #include "engine/world_time/TimeDiscardedLog.hpp"
 #include "engine/world_time/WorldTimeModule.hpp"
@@ -214,17 +215,6 @@ std::unique_ptr<O::Product> Make(const RelayOptions& options) {
     return std::move(*built);
 }
 
-// The runner of the scenario: frames until an entry point returns an error, then it returns (and
-// WithFailureLog writes the failure and exits).
-O::Runner FramesUntilBroken(int frames) {
-    return [frames](O::Product& product) -> O::RunnerExit {
-        for (int i = 0; i < frames; ++i) {
-            if (!product.RunFrame()) return {O::RunnerExitCode::Failure, ""};
-        }
-        return {};
-    };
-}
-
 // ---- the logging side
 
 std::filesystem::path FilePath(const std::string& name) {
@@ -260,113 +250,58 @@ struct Logs {
         handle.emplace(std::move(installed.value()));
     }
 
-    [[nodiscard]] std::vector<L::StoredRecord> Fatal() const {
+    // Records at Warning and above: what the Engine (and the product's main) said went wrong.
+    [[nodiscard]] std::vector<L::StoredRecord> Problems() const {
         std::vector<L::StoredRecord> out;
         for (auto& record : memory->Records()) {
-            if (record.fatal) out.push_back(std::move(record));
+            if (record.level >= L::Level::Warning) out.push_back(std::move(record));
         }
         return out;
     }
 };
 
-// The fatal record against the WorldFailure, field by field (judgement 2).
-void CheckFatalRecord(const L::StoredRecord& record, const O::WorldFailure& failure) {
-    CHECK_MESSAGE(record.level == L::Level::Fatal, "S3: the record of a WorldFailure is Fatal (5.6)");
-    CHECK(record.category == "world");
-    CHECK(record.product == failure.product);
-    CHECK(record.world == failure.world);
-    CHECK(record.text == failure.Text());
-    CHECK(record.Find("kind")->text == O::ToString(failure.kind));
-    CHECK(record.Find("entry")->text == failure.entry);
-    CHECK(record.Find("schedule")->text == failure.schedule);
-    CHECK(record.Find("sync_epoch")->uintValue == failure.syncEpoch);
-    CHECK(record.Find("where")->text == failure.where);
-    CHECK(record.Find("last_schedule")->text == failure.lastSchedule);
-}
-
-// The fatal line in the real file, before the Logger is closed (the fatal output writes at once).
-void CheckFatalInFile(const std::filesystem::path& file, const O::WorldFailure& failure) {
-    int fatalLines = 0;
+// The line in the real file once the queue is written: one line at Warning and above, with this text.
+void CheckOneProblemInFile(const std::filesystem::path& file, const std::string& text) {
+    REQUIRE_MESSAGE(L::Flush(std::chrono::seconds{5}), "S3: the file sink wrote what it took (LG-6)");
+    int problems = 0;
     for (const std::string& line : Lines(file)) {
         auto document = Json::Parse(line);
         REQUIRE_MESSAGE(static_cast<bool>(document), "S3: every line of the file reads back (LG-5)");
         const auto root = document.value().Root().AsObject().value();
         const auto level = root.Find("level");
-        if (!level || level->AsString().value() != "fatal") continue;
-        ++fatalLines;
-        CHECK(root.Find("world").value().AsString().value() == failure.world);
-        CHECK(root.Find("product").value().AsString().value() == failure.product);
-        CHECK(root.Find("text").value().AsString().value() == failure.Text());
+        if (!level) continue;
+        const auto name = level->AsString().value();
+        if (name != "warning" && name != "error" && name != "fatal") continue;
+        ++problems;
+        CHECK(root.Find("text").value().AsString().value() == text);
     }
-    CHECK_MESSAGE(fatalLines == 1, "S3: the fatal line is in the file before Close, once (5.6 step 3)");
+    CHECK_MESSAGE(problems == 1, "S3: the file holds the one line, once");
 }
 
 } // namespace
 
-TEST_CASE("scenario segment 3: S3-1 a System's Err at frame 3: the runner logs the failure once and exits") {
+TEST_CASE("scenario segment 3: S3-1 a broken World's reason written through Base::Log becomes one record in both sinks") {
     Logs logs("s3-1.jsonl");
     RelayOptions options;
-    options.breaker = {3, 1};
-    options.runner = WL::WithFailureLog(FramesUntilBroken(10));
+    options.breaker = {1, 1};
     auto product = Make(options);
-    const auto exit = product->Run();
-    CHECK(exit.code == O::RunnerExitCode::Failure);
-    REQUIRE(product->Failure() != nullptr);
-    CHECK(product->Failure()->world == "Match");
-    const auto fatal = logs.Fatal();
-    REQUIRE_MESSAGE(fatal.size() == 1, "S3-1: one fatal record (5.6; log it, then exit)");
-    CheckFatalRecord(fatal[0], *product->Failure());
-    CHECK(fatal[0].Find("kernel_code")->text == "SystemFailed");
-    CheckFatalInFile(logs.file, *product->Failure());
+    const O::RunnerExit exit = product->Run();
+    REQUIRE(exit.code == O::RunnerExitCode::Failure);
+    REQUIRE_FALSE(exit.reason.empty());
+    const std::size_t before = logs.Problems().size();
+    // Whoever decides what follows writes the reason (the category is its choice).
+    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, "relay", exit.reason);
+    const auto problems = logs.Problems();
+    REQUIRE_MESSAGE(problems.size() == before + 1, "S3-1: one Base::Log line became one record (entrance 3)");
+    const L::StoredRecord& line = problems.back();
+    CHECK(line.level == L::Level::Error);
+    CHECK_FALSE(line.fatal);
+    CHECK(line.category == "relay");
+    CHECK(line.text == exit.reason);
+    CheckOneProblemInFile(logs.file, exit.reason);
 }
 
-TEST_CASE("scenario segment 3: S3-2 a System's exception at frame 3: written from Product::Failure(), then exit") {
-    Logs logs("s3-2.jsonl");
-    RelayOptions options;
-    options.breaker = {3, 2};
-    options.runner = WL::WithFailureLog(FramesUntilBroken(10));
-    auto product = Make(options);
-    O::RunnerExit exit;
-    CHECK_NOTHROW(exit = product->Run());
-    CHECK(exit.code == O::RunnerExitCode::Failure);
-    REQUIRE(product->Failure() != nullptr);
-    const auto fatal = logs.Fatal();
-    REQUIRE(fatal.size() == 1);
-    CheckFatalRecord(fatal[0], *product->Failure());
-    CheckFatalInFile(logs.file, *product->Failure());
-}
-
-TEST_CASE("scenario segment 3: S3-3 a DropOldFirst replacement that fails: the orchestration warning, then main logs the failure") {
-    Logs logs("s3-3.jsonl");
-    auto product = Make(RelayOptions{});
-    for (int i = 0; i < 2; ++i) REQUIRE(product->RunFrame());
-    O::ReplaceRequest request;
-    request.order = O::ReplaceOrder::DropOldFirst;
-    request.extra = [](K::World&) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        return ::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the save is broken",
-                                                         {}, "save-broken"));
-    };
-    auto replaced = product->ReplaceWorld("Match", std::move(request));
-    REQUIRE_FALSE(replaced);
-    REQUIRE(replaced.error().failure.has_value());
-    // main: log it, then exit.
-    static_cast<void>(WL::WriteFailure(*replaced.error().failure));
-    const auto records = logs.memory->Records();
-    std::size_t warning = records.size();
-    std::size_t fatal = records.size();
-    for (std::size_t i = 0; i < records.size(); ++i) {
-        if (records[i].category == "orchestration" && records[i].level == L::Level::Warning && warning == records.size()) warning = i;
-        if (records[i].fatal && fatal == records.size()) fatal = i;
-    }
-    REQUIRE_MESSAGE(warning < records.size(), "S3-3: the orchestration layer's Base::Log warning became a record (③)");
-    REQUIRE(fatal < records.size());
-    CHECK_MESSAGE(warning < fatal, "S3-3: the warning comes before the fatal record");
-    CHECK(records[fatal].Find("kind")->text == "ReplacementFailed");
-    CheckFatalRecord(records[fatal], *replaced.error().failure);
-    CheckFatalInFile(logs.file, *replaced.error().failure);
-}
-
-TEST_CASE("scenario segment 3: S3-4 the healthy path: TimeDiscarded through Forward, dropped Laps through TakeKernelDiagnostics") {
+TEST_CASE("scenario segment 3: S3-2 the healthy path: TimeDiscarded through Forward, dropped Laps through TakeKernelDiagnostics") {
     Logs logs("s3-4.jsonl");
     RelayOptions options;
     options.delta = 1'000'000'000; // one real second in one frame: time is discarded
@@ -377,10 +312,10 @@ TEST_CASE("scenario segment 3: S3-4 the healthy path: TimeDiscarded through Forw
     for (const auto& record : logs.memory->Records()) {
         if (record.category != "world_time") continue;
         ++time;
-        CHECK_MESSAGE(record.world == "Match", "S3-4: Forward's records carry the World (5.9)");
+        CHECK_MESSAGE(record.world == "Match", "S3-2: Forward's records carry the World (5.9)");
         CHECK(record.Find("cause")->text == "StepLimit");
     }
-    CHECK_MESSAGE(time == 1, "S3-4: one TimeDiscarded record (①)");
+    CHECK_MESSAGE(time == 1, "S3-2: one TimeDiscarded record (①)");
     CHECK(WL::TakeKernelDiagnostics(product->World("Match").GetWorld()) == 1);
     CHECK(WL::TakeKernelDiagnostics(product->World("Lobby").GetWorld()) == 0);
     std::size_t kernel = 0;
@@ -391,10 +326,10 @@ TEST_CASE("scenario segment 3: S3-4 the healthy path: TimeDiscarded through Forw
         CHECK(record.Find("message")->text == "Lap");
         CHECK(record.Find("count")->uintValue == 3);
     }
-    CHECK_MESSAGE(kernel == 1, "S3-4: one dropped-messages record (②)");
+    CHECK_MESSAGE(kernel == 1, "S3-2: one dropped-messages record (②)");
 }
 
-TEST_CASE("scenario segment 3: S3-5 logging on or off leaves the game's own state and what its reader read the same") {
+TEST_CASE("scenario segment 3: S3-3 logging on or off leaves the game's own state and what its reader read the same") {
     struct Outcome {
         RacerState racer;
         LapsRead read;
@@ -415,26 +350,26 @@ TEST_CASE("scenario segment 3: S3-5 logging on or off leaves the game's own stat
         if (logging) CHECK(logs->memory->Records().size() >= 12);
     }
     CHECK_MESSAGE(std::memcmp(&outcomes[0].racer, &outcomes[1].racer, sizeof(RacerState)) == 0,
-                  "S3-5: the game's Resource is the same with logging on (LG-3, judgement 4)");
+                  "S3-3: the game's Resource is the same with logging on (LG-3, judgement 4)");
     CHECK(std::memcmp(&outcomes[0].read, &outcomes[1].read, sizeof(LapsRead)) == 0);
     CHECK(std::memcmp(&outcomes[0].lobby, &outcomes[1].lobby, sizeof(LobbyFrames)) == 0);
     CHECK(outcomes[0].read.count == 12);
 }
 
-TEST_CASE("scenario segment 3: S3-6 trace records and spans only in the trace file, the rest only on the console") {
-    const auto traceFile = FilePath("s3-6-trace.jsonl");
+TEST_CASE("scenario segment 3: S3-4 one category's records only in their own file, the rest only on the console") {
+    const auto traceFile = FilePath("s3-4-movement.jsonl");
     std::FILE* console = std::tmpfile();
     REQUIRE(console != nullptr);
     {
         L::LoggerOptions options;
         options.sinks.push_back({.name = "console",
                                  .sink = std::make_shared<L::ConsoleSink>(console),
-                                 .filter = {.exclude = {"trace."}, .minimum = L::Level::Info}});
+                                 .filter = {.exclude = {"relay.movement"}, .minimum = L::Level::Info}});
         // Opened here and kept, so that its counts can be read after the Logger is closed.
         auto opened = L::JsonLinesFileSink::Open({.path = traceFile.string()});
         REQUIRE(opened);
         std::shared_ptr<L::JsonLinesFileSink> trace = opened.value();
-        options.sinks.push_back({.name = "trace", .sink = trace, .filter = {.include = {"trace."}, .minimum = L::Level::Info}});
+        options.sinks.push_back({.name = "movement", .sink = trace, .filter = {.include = {"relay.movement"}, .minimum = L::Level::Info}});
         options.takeAssertions = false;
         options.takeTerminate = false;
         auto handle = L::Install(std::move(options));
@@ -444,41 +379,30 @@ TEST_CASE("scenario segment 3: S3-6 trace records and spans only in the trace fi
         for (int i = 0; i < 1000; ++i) {
             const std::string note = "player \"" + std::to_string(i % 8) + "\"\tqueued\n\\";
             if (i == 500) {
-                L::Write(L::Level::Info, "trace.movement", "moved", {{"i", i}, {"i", i}});
+                L::Write(L::Level::Info, "relay.movement", "moved", {{"i", i}, {"i", i}});
             } else {
-                L::Write(L::Level::Info, "trace.movement", "moved",
+                L::Write(L::Level::Info, "relay.movement", "moved",
                          {{"i", i}, {"note", note}, {"value", specials[i % 5]}, {"schema_version", 1u}});
             }
-        }
-        for (int i = 0; i < 100; ++i) {
-            L::Span span("trace.net", "send");
-            span.End({{"i", i}});
         }
         for (int i = 0; i < 10; ++i) L::Write(L::Level::Info, "game", "not trace", {{"i", i}});
         handle.value().Close();
         const auto counts = trace->Counts();
-        CHECK_MESSAGE(counts.written == 1099, "S3-6: 999 trace records and 100 spans reached the trace file");
+        CHECK_MESSAGE(counts.written == 999, "S3-4: 999 records reached their file (the one with a repeated key went to the console)");
         CHECK(counts.droppedFull == 0);
         CHECK(counts.droppedClosed == 0);
     }
     const auto lines = Lines(traceFile);
-    REQUIRE(lines.size() == 1100);
+    REQUIRE(lines.size() == 1000);
     int records = 0;
-    int spans = 0;
     for (std::size_t n = 0; n + 1 < lines.size(); ++n) {
         auto document = Json::Parse(lines[n]);
-        REQUIRE_MESSAGE(static_cast<bool>(document), "S3-6: every trace line reads back (LG-5)");
+        REQUIRE_MESSAGE(static_cast<bool>(document), "S3-4: every line of the file reads back (LG-5)");
         const auto root = document.value().Root().AsObject().value();
         const std::string category(root.Find("category").value().AsString().value());
-        REQUIRE(category.starts_with("trace."));
+        REQUIRE(category == "relay.movement");
         const auto fields = root.Find("fields").value().AsObject().value();
         const int i = static_cast<int>(fields.Find("i").value().AsInt64().value());
-        if (category == "trace.net") {
-            ++spans;
-            CHECK(root.Find("kind").value().AsString().value() == "span");
-            CHECK(root.Find("duration_ns").value().AsInt64().value() >= 0);
-            continue;
-        }
         ++records;
         CHECK(i != 500);
         CHECK(fields.Find("note").value().AsString().value() ==
@@ -493,13 +417,12 @@ TEST_CASE("scenario segment 3: S3-6 trace records and spans only in the trace fi
         }
     }
     CHECK(records == 999);
-    CHECK(spans == 100);
     // The end line carries the counts (judgement 3).
     auto end = Json::Parse(lines.back());
     REQUIRE(end);
     const auto endRoot = end.value().Root().AsObject().value();
     CHECK(endRoot.Find("kind").value().AsString().value() == "end");
-    CHECK(endRoot.Find("written").value().AsUint64().value() == 1099);
+    CHECK(endRoot.Find("written").value().AsUint64().value() == 999);
 
     std::rewind(console);
     std::string text;
@@ -510,10 +433,10 @@ TEST_CASE("scenario segment 3: S3-6 trace records and spans only in the trace fi
     int game = 0;
     int logging = 0;
     for (std::string line; std::getline(in, line);) {
-        CHECK_MESSAGE(line.find("[trace.") == std::string::npos, "S3-6: no trace record on the console (5.13)");
+        CHECK_MESSAGE(line.find("[relay.movement]") == std::string::npos, "S3-4: no relay.movement record on the console (5.8)");
         if (line.starts_with("[game]")) ++game;
         if (line.starts_with("[logging] error:")) ++logging;
     }
     CHECK(game == 10);
-    CHECK_MESSAGE(logging == 1, "S3-6: the record with a repeated key became one Error record of category logging (5.2)");
+    CHECK_MESSAGE(logging == 1, "S3-4: the record with a repeated key became one Error record of category logging (5.2)");
 }

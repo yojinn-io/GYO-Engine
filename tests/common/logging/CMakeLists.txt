@@ -7,7 +7,6 @@ add_executable(gyo_logging_tests
     FileSinkTests.cpp
     FormatTests.cpp
     LoggerTests.cpp
-    SpanTests.cpp
 )
 # GYO::Json reads every JSON line back (Design Invariant LG-5).
 find_package(Threads REQUIRED)
@@ -18,10 +17,24 @@ if(MSVC)
 else()
     target_compile_options(gyo_logging_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS logger builder format console file append fatal span)
+foreach(group IN ITEMS logger builder format console file append fatal)
     add_test(NAME logging.${group} COMMAND gyo_logging_tests "--test-case=${group}:*")
     set_tests_properties(logging.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+endforeach()
+
+# Design Invariant LG-2: std::terminate writes one Fatal record of category "terminate", then flushes. The
+# process aborts, so a probe executable runs under cmake -P and the script reads the file it leaves.
+add_executable(gyo_logging_terminate_probe TerminateProbe.cpp)
+target_link_libraries(gyo_logging_terminate_probe PRIVATE GYO::Logging)
+foreach(mode IN ITEMS std other none)
+    add_test(NAME logging.terminate.${mode}
+        COMMAND ${CMAKE_COMMAND}
+            -DPROBE=$<TARGET_FILE:gyo_logging_terminate_probe>
+            -DMODE=${mode}
+            -DFILE=${CMAKE_CURRENT_BINARY_DIR}/terminate-${mode}.jsonl
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/TerminateProbe.cmake)
+    set_tests_properties(logging.terminate.${mode} PROPERTIES LABELS "cpu" TIMEOUT 30)
 endforeach()
 
 # Design Invariant LG-7 replaces the global operator new for its executable, so it has one of its own.

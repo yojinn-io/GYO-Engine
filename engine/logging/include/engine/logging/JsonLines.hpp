@@ -10,9 +10,7 @@
 // LG-5). One record is one line of strict JSON that GYO::Json's Parse reads
 // back. The envelope's keys, in this order:
 //
-//   schema, kind, level, category, wall, mono_ns,
-//   begin_ns, duration_ns            (kind "span" only)
-//   product                          (when the record has one: fatal records of a World)
+//   schema, kind ("log"), level, category, wall, mono_ns,
 //   world                            (when the record has one)
 //   world_interrupted                (only when true)
 //   text, fields                     (fields: an object, keys in the order written)
@@ -22,7 +20,7 @@
 // written as the string "NaN", "Infinity" or "-Infinity" (question 3,
 // approved); negative zero stays -0.0. A record that JSON cannot represent
 // (text that is not UTF-8) is replaced by an Error record of category
-// "logging" with the same kind and world, whose text names the JSON error
+// "logging" with the same world, whose text names the JSON error
 // (not the field). schema is the envelope's version: adding a key keeps it,
 // changing the meaning or type of a key raises it. What a product writes in
 // fields is versioned inside its own fields.

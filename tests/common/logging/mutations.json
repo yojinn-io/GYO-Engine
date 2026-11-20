@@ -217,89 +217,6 @@
    "expect": "CHECK\\(\\ std::get_terminate\\(\\)\\ ==\\ before\\ \\) is NOT correct!"
   },
   {
-   "id": "lg-failure-wrong-text",
-   "what": "5.6: the fatal record's text is not WorldFailure::Text()",
-   "guards": [
-    "logging LG-2",
-    "logging-declaration 5.6"
-   ],
-   "file": "engine/world_logging/src/WriteFailure.cpp",
-   "find": "        const std::string text = failure.Text();",
-   "replace": "        const std::string text = failure.where;",
-   "target": "gyo_world_logging_tests",
-   "cases": "failure: an entry point's error*",
-   "expect": "CHECK\\(\\ record\\.text\\ ==\\ failure\\.Text\\(\\)\\ \\) is NOT correct!"
-  },
-  {
-   "id": "lg-failure-kernel-code-always",
-   "what": "5.6: kernel_code is written even when the failure has no kernel code",
-   "guards": [
-    "logging LG-2",
-    "logging-declaration 5.6"
-   ],
-   "file": "engine/world_logging/src/WriteFailure.cpp",
-   "find": "const std::size_t count = failure.kernelCode ? 7 : 6;",
-   "replace": "const std::size_t count = 7;",
-   "target": "gyo_world_logging_tests",
-   "cases": "failure: a System that throws*",
-   "expect": "CHECK\\(\\ records\\[0\\]\\.Find\\(\"kernel_code\"\\)\\ ==\\ nullptr\\ \\) is NOT correct!"
-  },
-  {
-   "id": "lg-withfailurelog-no-write",
-   "what": "question 2 (d): WithFailureLog does not write the failure when the runner returns",
-   "guards": [
-    "logging LG-2",
-    "user v8-arch-gyo2-logging-failure-log-then-exit"
-   ],
-   "file": "engine/world_logging/src/WriteFailure.cpp",
-   "find": "        if (const Orchestration::WorldFailure* failure = product.Failure()) {\n            WriteFailure(*failure);\n",
-   "replace": "        if (const Orchestration::WorldFailure* failure = product.Failure()) {\n",
-   "target": "gyo_world_logging_tests",
-   "cases": "failure: WithFailureLog: the wrapped runner returns*",
-   "expect": "CHECK\\(\\ Fatal\\(logged\\)\\.size\\(\\)\\ ==\\ 1\\ \\) is NOT correct!"
-  },
-  {
-   "id": "lg-withfailurelog-success-exit",
-   "what": "log it, then exit: WithFailureLog passes a Success exit through although the Product has a failure",
-   "guards": [
-    "logging LG-2",
-    "user v8-arch-gyo2-logging-failure-log-then-exit"
-   ],
-   "file": "engine/world_logging/src/WriteFailure.cpp",
-   "find": "            return {Orchestration::RunnerExitCode::Failure, exit.reason.empty() ? failure->Text() : exit.reason};",
-   "replace": "            return exit;",
-   "target": "gyo_world_logging_tests",
-   "cases": "failure: WithFailureLog: a runner that ends Success*",
-   "expect": "CHECK\\(\\ exit\\.code\\ ==\\ O::RunnerExitCode::Failure\\ \\) is NOT correct!"
-  },
-  {
-   "id": "lg-withfailurelog-rethrows",
-   "what": "log it, then exit: WithFailureLog throws on an exception that broke the World",
-   "guards": [
-    "logging LG-2",
-    "user v8-arch-gyo2-logging-failure-log-then-exit"
-   ],
-   "file": "engine/world_logging/src/WriteFailure.cpp",
-   "find": "            if (failure == nullptr) throw;\n            WriteFailure(*failure);\n            return {Orchestration::RunnerExitCode::Failure, failure->Text()};",
-   "replace": "            if (failure != nullptr) WriteFailure(*failure);\n            throw;",
-   "target": "gyo_world_logging_tests",
-   "cases": "failure: WithFailureLog: an exception that broke the World*",
-   "expect": "CHECK_NOTHROW\\(\\ exit\\ =\\ product\\->Run\\(\\)\\ \\)"
-  },
-  {
-   "id": "lg-withfailurelog-swallows",
-   "what": "WithFailureLog swallows an exception that broke no World",
-   "guards": [
-    "logging LG-2"
-   ],
-   "file": "engine/world_logging/src/WriteFailure.cpp",
-   "find": "            if (failure == nullptr) throw;",
-   "replace": "            if (failure == nullptr) return {};",
-   "target": "gyo_world_logging_tests",
-   "cases": "failure: WithFailureLog: an exception with no broken World*",
-   "expect": "CHECK_THROWS_AS\\(\\ product\\->Run\\(\\),\\ std::logic_error\\ \\)"
-  },
-  {
    "id": "lg-forward-describe-escapes-loop",
    "what": "LG-3: a descriptor's exception ends the loop (later messages of the frame are lost)",
    "guards": [
@@ -362,8 +279,8 @@
    "find": "writer.String(\"NaN\");",
    "replace": "writer.String(\"nan\");",
    "target": "gyo_logging_tests",
-   "cases": "format: NaN, +Infinity*",
-   "expect": "TEST CASE:  format: NaN, \\+Infinity[^\\n]*\\n[^\\n]*ERROR: CHECK\\( line\\.find"
+   "cases": "format: NaN and both infinities*",
+   "expect": "TEST CASE:  format: NaN and both infinities[^\\n]*\\n\\n[^\\n]*ERROR: CHECK\\( line\\.find"
   },
   {
    "id": "lg-json-pos-inf",
@@ -375,8 +292,8 @@
    "find": "writer.String(value > 0 ? \"Infinity\" : \"-Infinity\");",
    "replace": "writer.String(value > 0 ? \"Inf\" : \"-Infinity\");",
    "target": "gyo_logging_tests",
-   "cases": "format: NaN, +Infinity*",
-   "expect": "TEST CASE:  format: NaN, \\+Infinity[^\\n]*\\n[^\\n]*ERROR: CHECK\\( line\\.find"
+   "cases": "format: NaN and both infinities*",
+   "expect": "TEST CASE:  format: NaN and both infinities[^\\n]*\\n\\n[^\\n]*ERROR: CHECK\\( line\\.find"
   },
   {
    "id": "lg-json-neg-inf",
@@ -388,8 +305,8 @@
    "find": "writer.String(value > 0 ? \"Infinity\" : \"-Infinity\");",
    "replace": "writer.String(\"Infinity\");",
    "target": "gyo_logging_tests",
-   "cases": "format: NaN, +Infinity*",
-   "expect": "TEST CASE:  format: NaN, \\+Infinity[^\\n]*\\n[^\\n]*ERROR: CHECK\\( line\\.find"
+   "cases": "format: NaN and both infinities*",
+   "expect": "TEST CASE:  format: NaN and both infinities[^\\n]*\\n\\n[^\\n]*ERROR: CHECK\\( line\\.find"
   },
   {
    "id": "lg-json-schema",
@@ -402,34 +319,20 @@
    "replace": "inline constexpr std::uint64_t kJsonLinesSchema = 2;",
    "target": "gyo_logging_tests",
    "cases": "format: golden: one record*",
-   "expect": "TEST CASE:  format: golden: one record[^\\n]*\\n[^\\n]*ERROR: CHECK\\( Line\\(record\\) =="
+   "expect": "TEST CASE:  format: golden: one record[^\\n]*\\n\\n[^\\n]*ERROR: CHECK\\( Line\\(record\\) =="
   },
   {
    "id": "lg-json-key-order",
-   "what": "5.12: product and world change places in the envelope",
+   "what": "5.12: world and world_interrupted change places in the envelope",
    "guards": [
     "logging LG-5"
    ],
    "file": "engine/logging/src/JsonLines.cpp",
-   "find": "    if (!record.product.empty()) {\n        writer.Key(\"product\");\n        writer.String(record.product);\n    }\n    if (!record.world.empty()) {\n        writer.Key(\"world\");\n        writer.String(record.world);\n    }",
-   "replace": "    if (!record.world.empty()) {\n        writer.Key(\"world\");\n        writer.String(record.world);\n    }\n    if (!record.product.empty()) {\n        writer.Key(\"product\");\n        writer.String(record.product);\n    }",
+   "find": "    if (!record.world.empty()) {\n        writer.Key(\"world\");\n        writer.String(record.world);\n    }\n    if (record.worldInterrupted) {\n        writer.Key(\"world_interrupted\");\n        writer.Bool(true);\n    }",
+   "replace": "    if (record.worldInterrupted) {\n        writer.Key(\"world_interrupted\");\n        writer.Bool(true);\n    }\n    if (!record.world.empty()) {\n        writer.Key(\"world\");\n        writer.String(record.world);\n    }",
    "target": "gyo_logging_tests",
    "cases": "format: golden: a fatal record*",
-   "expect": "TEST CASE:  format: golden: a fatal record[^\\n]*\\n[^\\n]*ERROR: CHECK\\( Line\\(record\\) =="
-  },
-  {
-   "id": "lg-json-span-keys",
-   "what": "5.12: a span's begin_ns and duration_ns are not written",
-   "guards": [
-    "logging LG-5",
-    "logging LG-9"
-   ],
-   "file": "engine/logging/src/JsonLines.cpp",
-   "find": "    if (record.kind == RecordKind::Span) {\n        writer.Key(\"begin_ns\");",
-   "replace": "    if (false) {\n        writer.Key(\"begin_ns\");",
-   "target": "gyo_logging_tests",
-   "cases": "format: a span has begin_ns*",
-   "expect": "TEST CASE:  format: a span has begin_ns[^\\n]*\\n[^\\n]*ERROR: CHECK\\( Keys\\(Line\\(record\\)\\) =="
+   "expect": "TEST CASE:  format: golden: a fatal record[^\\n]*\\n\\n[^\\n]*ERROR: CHECK\\( Line\\(record\\) =="
   },
   {
    "id": "lg-json-wall-sign",
@@ -442,7 +345,7 @@
    "replace": "const char sign = '+';",
    "target": "gyo_logging_tests",
    "cases": "format: the wall offset*",
-   "expect": "TEST CASE:  format: the wall offset[^\\n]*\\n[^\\n]*ERROR: CHECK\\( Line\\(record\\)\\.find\\(\\\"\\\\\\\"wall\\\\\\\":\\\\\\\"2025-11-19T20"
+   "expect": "TEST CASE:  format: the wall offset[^\\n]*\\n\\n[^\\n]*ERROR: CHECK\\( Line\\(record\\)\\.find\\(\\\"\\\\\\\"wall\\\\\\\":\\\\\\\"2025-11-19T20"
   },
   {
    "id": "lg-json-invalid-not-replaced",
@@ -563,7 +466,7 @@
    "find": "            const auto wake = context.Wait();",
    "replace": "            const auto wake = context.WaitUntil(::Engine::Time::Now() + std::chrono::milliseconds{1});",
    "target": "gyo_logging_tests",
-   "cases": "file: lines are written in Write order*",
+   "cases": "file: an idle writer sleeps until it is notified*",
    "expect": "GYO_ASSERT\\ failed:\\ wake\\.reason\\ ==\\ ::Engine::Time::WakeReason::Notified"
   },
   {
@@ -709,32 +612,6 @@
    "target": "gyo_logging_tests",
    "cases": "logger: Engine::Base::Log lines become records*",
    "expect": "CHECK\\(\\ after\\ ==\\ before\\ \\) is NOT correct!"
-  },
-  {
-   "id": "lg-span-refused-reads-clock",
-   "what": "LG-9: a span no sink takes reads the clock",
-   "guards": [
-    "logging LG-9"
-   ],
-   "file": "engine/logging/src/Span.cpp",
-   "find": "    if (active_) beginNs_ = state->MonoNs();",
-   "replace": "    beginNs_ = state->MonoNs();",
-   "target": "gyo_logging_tests",
-   "cases": "span: a span no sink takes*",
-   "expect": "CHECK\\(\\ Logging::Test::clockReads\\.load\\(\\)\\ ==\\ 0\\ \\) is NOT correct!"
-  },
-  {
-   "id": "lg-span-duration",
-   "what": "LG-9: duration_ns is not the time since the span began",
-   "guards": [
-    "logging LG-9"
-   ],
-   "file": "engine/logging/src/Span.cpp",
-   "find": "                  .durationNs = endNs - beginNs_};",
-   "replace": "                  .durationNs = endNs};",
-   "target": "gyo_logging_tests",
-   "cases": "span: one record of kind span*",
-   "expect": "CHECK\\(\\ records\\[0\\]\\.durationNs\\ ==\\ 250\\ \\) is NOT correct!"
   },
   {
    "id": "lg-link-kernel",
@@ -908,6 +785,111 @@
     "-p",
     "test_logging_guard.py"
    ]
+  },
+  {
+   "id": "lg-terminate-no-record",
+   "what": "revision 3 (user 2026-11-21): std::terminate writes no record and only hands over (the approved form before)",
+   "guards": [
+    "logging LG-2",
+    "logging-declaration 判定 2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "        static_cast<void>(WriteFatalRecord(Record{.level = Level::Fatal, .category = \"terminate\", .text = text}));",
+   "replace": "        static_cast<void>(text);",
+   "target": "gyo_logging_terminate_probe",
+   "command": [
+    "{cmake}",
+    "-DMODE=std",
+    "-P",
+    "tests/common/logging/TerminateProbe.cmake",
+    "--",
+    "{exe:gyo_logging_terminate_probe}"
+   ],
+   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(std\\)"
+  },
+  {
+   "id": "lg-terminate-category",
+   "what": "revision 3: the terminate record is written under another category",
+   "guards": [
+    "logging LG-2",
+    "logging-declaration 判定 2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": ".category = \"terminate\", .text = text}",
+   "replace": ".category = \"assert\", .text = text}",
+   "target": "gyo_logging_terminate_probe",
+   "command": [
+    "{cmake}",
+    "-DMODE=std",
+    "-P",
+    "tests/common/logging/TerminateProbe.cmake",
+    "--",
+    "{exe:gyo_logging_terminate_probe}"
+   ],
+   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(std\\)"
+  },
+  {
+   "id": "lg-terminate-no-what",
+   "what": "revision 3: a std::exception in flight is not named by its what()",
+   "guards": [
+    "logging LG-2",
+    "logging-declaration 判定 2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "            buffer = exception.what();\n            return buffer;",
+   "replace": "            return \"a std::exception\";",
+   "target": "gyo_logging_terminate_probe",
+   "command": [
+    "{cmake}",
+    "-DMODE=std",
+    "-P",
+    "tests/common/logging/TerminateProbe.cmake",
+    "--",
+    "{exe:gyo_logging_terminate_probe}"
+   ],
+   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(std\\)"
+  },
+  {
+   "id": "lg-terminate-other-as-std",
+   "what": "revision 3: an exception that is not a std::exception is not told apart",
+   "guards": [
+    "logging LG-2",
+    "logging-declaration 判定 2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "        return \"an exception that is not a std::exception\";",
+   "replace": "        return \"terminate probe: a std::exception\";",
+   "target": "gyo_logging_terminate_probe",
+   "command": [
+    "{cmake}",
+    "-DMODE=other",
+    "-P",
+    "tests/common/logging/TerminateProbe.cmake",
+    "--",
+    "{exe:gyo_logging_terminate_probe}"
+   ],
+   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(other\\)"
+  },
+  {
+   "id": "lg-terminate-none-as-other",
+   "what": "revision 3: std::terminate with no exception in flight is told as an exception",
+   "guards": [
+    "logging LG-2",
+    "logging-declaration 判定 2"
+   ],
+   "file": "engine/logging/src/Logger.cpp",
+   "find": "    if (!inFlight) return \"std::terminate was called with no exception in flight\";",
+   "replace": "    if (!inFlight) return \"an exception that is not a std::exception\";",
+   "target": "gyo_logging_terminate_probe",
+   "command": [
+    "{cmake}",
+    "-DMODE=none",
+    "-P",
+    "tests/common/logging/TerminateProbe.cmake",
+    "--",
+    "{exe:gyo_logging_terminate_probe}"
+   ],
+   "expect": "GYO_LOGGING_TERMINATE_RECORD: probe \\(none\\)"
   }
  ]
 }

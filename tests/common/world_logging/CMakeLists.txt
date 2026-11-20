@@ -2,7 +2,6 @@
 add_executable(gyo_world_logging_tests
     TestMain.cpp
     DiagnosticsTests.cpp
-    FailureTests.cpp
     ForwardTests.cpp
 )
 target_link_libraries(gyo_world_logging_tests PRIVATE GYO::WorldLogging GYO::WorldTime gyo_test_support doctest::doctest)
@@ -12,7 +11,7 @@ if(MSVC)
 else()
     target_compile_options(gyo_world_logging_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS forward diagnostics failure)
+foreach(group IN ITEMS forward diagnostics)
     add_test(NAME world_logging.${group} COMMAND gyo_world_logging_tests "--test-case=${group}:*")
     set_tests_properties(world_logging.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

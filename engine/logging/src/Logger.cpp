@@ -6,6 +6,7 @@
 #include <exception>
 #include <new>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "LoggerState.hpp"
@@ -130,12 +131,33 @@ void OnAssertion(const ::Engine::Base::AssertionFailure& failure) {
     (previous != nullptr ? previous : &::Engine::Base::DefaultAssertionHandler)(failure);
 }
 
-// std::terminate: what the sinks queued, within the fatal deadline, then the
-// handler installed before (std::abort when there was none).
+// What std::terminate was called for: the exception in flight, if any.
+std::string_view TerminateText(std::string& buffer) noexcept {
+    const std::exception_ptr inFlight = std::current_exception();
+    if (!inFlight) return "std::terminate was called with no exception in flight";
+    try {
+        std::rethrow_exception(inFlight);
+    } catch (const std::exception& exception) {
+        try {
+            buffer = exception.what();
+            return buffer;
+        } catch (...) {
+            return "a std::exception (no memory to copy what())";
+        }
+    } catch (...) {
+        return "an exception that is not a std::exception";
+    }
+}
+
+// std::terminate: one Fatal record of category "terminate" (the fatal path, which
+// then flushes what the sinks queued within the fatal deadline), then the handler
+// installed before (std::abort when there was none). The record says what
+// happened; it handles nothing (user, 2026-11-21).
 [[noreturn]] void OnTerminate() {
-    if (const LoggerState* state = current.load(std::memory_order_acquire); state != nullptr && !InFatalPath()) {
-        const auto deadline = std::chrono::steady_clock::now() + state->fatalFlushTimeout;
-        for (const SinkEntry& entry : state->sinks) static_cast<void>(entry.sink->Flush(deadline));
+    if (current.load(std::memory_order_acquire) != nullptr) {
+        std::string buffer;
+        const std::string_view text = TerminateText(buffer);
+        static_cast<void>(WriteFatalRecord(Record{.level = Level::Fatal, .category = "terminate", .text = text}));
     }
     if (const std::terminate_handler previous = previousTerminate.load(std::memory_order_acquire)) previous();
     std::abort();
@@ -370,8 +392,7 @@ void Write(const Entry& entry) noexcept {
     const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);
     if (taking == 0) return;
     Detail::DeliverRecord(*state, taking,
-                          Record{.kind = RecordKind::Log,
-                                 .level = entry.level,
+                          Record{                                 .level = entry.level,
                                  .category = entry.category,
                                  .text = entry.text,
                                  .wall = state->Wall(),

@@ -90,6 +90,20 @@ TEST_CASE("file: lines are written in Write order; Close writes the end line las
     CHECK(file.sink->Good());
 }
 
+TEST_CASE("file: an idle writer sleeps until it is notified, never on a timer (LG-6)") {
+    Injected file;
+    file.sink->Write(At(0, "first"));
+    REQUIRE(file.sink->Flush(std::chrono::steady_clock::now() + 5s));
+    // Idle long enough that a writer woken by a timer would wake (and assert) before the next push.
+    std::this_thread::sleep_for(50ms);
+    file.sink->Write(At(1, "second"));
+    file.sink->Close();
+    const auto lines = file.output->Lines();
+    REQUIRE(lines.size() == 3);
+    CHECK(TextOf(lines[0]) == "first");
+    CHECK(TextOf(lines[1]) == "second");
+}
+
 TEST_CASE("file: a full queue drops and counts; every Write is counted once (judgement 3)") {
     Injected file(4);
     file.output->Hold();

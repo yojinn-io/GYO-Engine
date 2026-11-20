@@ -80,19 +80,6 @@ struct Field final {
     FieldValue value;
 };
 
-enum class RecordKind : std::uint8_t {
-    Log = 1, // one moment
-    Span,    // a length of time: beginNs and durationNs (section 5.13)
-};
-
-[[nodiscard]] constexpr std::string_view ToString(const RecordKind kind) noexcept {
-    switch (kind) {
-    case RecordKind::Log: return "log";
-    case RecordKind::Span: return "span";
-    }
-    return "unknown";
-}
-
 // The wall clock: milliseconds since the Unix epoch and the C runtime's offset
 // from UTC at that instant (local minus UTC; +09:00 is 32400).
 struct WallTime final {
@@ -101,23 +88,17 @@ struct WallTime final {
 };
 
 struct Record final {
-    RecordKind kind{RecordKind::Log};
     Level level{Level::Info};
     std::string_view category;
     std::string_view text;
     WallTime wall;
     // The engine time base (Engine::Time::NowNs) when the record was written.
     std::int64_t monoNs{};
-    // The Product: only on fatal records of a World (WriteFailure).
-    std::string_view product;
-    // The World, when the record came from one (Forward, TakeKernelDiagnostics, WriteFailure).
+    // The World, when the record came from one (Forward, TakeKernelDiagnostics).
     std::string_view world;
     // The record was taken from a World that had already been interrupted (section 5.4).
     bool worldInterrupted{false};
     std::span<const Field> fields;
-    // Span only: when it began and how long it lasted, on the engine time base.
-    std::int64_t beginNs{};
-    std::int64_t durationNs{};
 };
 
 } // namespace GYO::Engine::Logging

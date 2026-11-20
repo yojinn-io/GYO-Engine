@@ -59,7 +59,6 @@ TEST_CASE("logger: a record reaches the sink with its level, category, text, fie
     const auto records = logger.memory->Records();
     REQUIRE(records.size() == 1);
     const auto& record = records[0];
-    CHECK(record.kind == Logging::RecordKind::Log);
     CHECK(record.level == Level::Info);
     CHECK(record.category == "net");
     CHECK(record.text == "sent");

@@ -1,7 +1,7 @@
 # The logging Module (docs/architecture/target/v2/logging-declaration.zh-Hant.md; Design Invariants
 # LG-1 to LG-11 in docs/architecture/target/v2/logging.zh-Hant.md): records, levels and fields, the one
-# Logger of the process, the sinks, the JSON lines and text formats, writing one record directly, spans
-# and the fatal path's last write. It knows nothing of ECS: what reads a World lives in
+# Logger of the process, the sinks, the JSON lines and text formats, writing one record directly and
+# the fatal path's last write (E0). Spans belong to the trace Module (user, 2026-11-21: two Modules). It knows nothing of ECS: what reads a World lives in
 # engine/world_logging, as engine/time and engine/world_time are split. No external component.
 add_library(gyo_logging STATIC
     src/ConsoleSink.cpp
@@ -11,7 +11,6 @@ add_library(gyo_logging STATIC
     src/MemorySink.cpp
     src/RecordBuilder.cpp
     src/Sink.cpp
-    src/Span.cpp
     src/TextFormat.cpp
     src/WriteFatalRecord.cpp
 )

@@ -78,10 +78,6 @@ void AppendTextLine(std::string& out, const Record& record) {
         }
     }
     if (record.worldInterrupted) out += " world_interrupted=true";
-    if (record.kind == RecordKind::Span) {
-        out += " duration_ns=";
-        AppendNumber(out, record.durationNs);
-    }
     for (const Field& field : record.fields) {
         out += ' ';
         out += field.key;

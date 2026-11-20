@@ -70,8 +70,10 @@ struct LoggerOptions final {
     // WriteFatalRecord, then goes on to the handler installed before (the
     // default one when there was none); the abort stays Base's.
     bool takeAssertions{true};
-    // std::terminate first flushes every sink (within fatalFlushTimeout), then
-    // goes on to the handler installed before.
+    // std::terminate first writes one Fatal record of category "terminate" (the
+    // exception in flight's what(), when it is a std::exception) by
+    // WriteFatalRecord, which then flushes every sink within fatalFlushTimeout;
+    // then it goes on to the handler installed before.
     bool takeTerminate{true};
     // The one deadline of the fatal path's step 4, for all sinks together.
     std::chrono::nanoseconds fatalFlushTimeout{std::chrono::seconds{1}};

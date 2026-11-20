@@ -14,17 +14,13 @@ const StoredField* StoredRecord::Find(const std::string_view key) const noexcept
 
 StoredRecord Store(const Record& record) {
     StoredRecord stored;
-    stored.kind = record.kind;
     stored.level = record.level;
     stored.category.assign(record.category);
     stored.text.assign(record.text);
     stored.wall = record.wall;
     stored.monoNs = record.monoNs;
-    stored.product.assign(record.product);
     stored.world.assign(record.world);
     stored.worldInterrupted = record.worldInterrupted;
-    stored.beginNs = record.beginNs;
-    stored.durationNs = record.durationNs;
     stored.fields.reserve(record.fields.size());
     for (const Field& field : record.fields) {
         StoredField out;
