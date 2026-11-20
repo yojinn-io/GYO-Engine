@@ -304,19 +304,19 @@
   },
   {
    "id": "or-drop-old-later",
-   "what": "O-8: DropOldFirst destroys the old World only at the swap (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "what": "O-8: DropOldFirst destroys the old World only at the swap (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
-   "replace": "    if (false && dropOldFirst) {\n        for (const Detail::CarryEntry& entry : slot.carries) {",
+   "find": "    if (dropOldFirst) {\n        try {\n            for (const Detail::CarryEntry& entry : slot.carries) {",
+   "replace": "    if (false && dropOldFirst) {\n        try {\n            for (const Detail::CarryEntry& entry : slot.carries) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: DropOldFirst*",
    "expect": "\\[or\\-drop\\-old\\-first\\-order\\]"
   },
   {
    "id": "or-carry-not-put",
-   "what": "O-10: carried values are not put into the new World",
+   "what": "O-10: carried values are not put into the new World (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);",
+   "find": "        for (auto& [entry, box] : moved) entry.put(*world, box);",
    "replace": "",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: two types*",
@@ -334,10 +334,10 @@
   },
   {
    "id": "or-carry-unregistered-ignored",
-   "what": "O-10: a carried type the new World lacks is not refused",
+   "what": "O-10: a carried type the new World lacks is not refused (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (!entry.registered(world)) {",
-   "replace": "        if (false) {",
+   "find": "            if (!entry.registered(*world)) {",
+   "replace": "            if (false) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: a marked type*",
    "expect": "\\[or\\-carry\\-unregistered\\]"
@@ -644,10 +644,10 @@
   },
   {
    "id": "g8-replace-prepare-from-old-registration",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "Prepare(slot, world, registration.unitPrepares, request.extra",
-   "replace": "Prepare(slot, world, slot.unitPrepares, request.extra",
+   "find": "Prepare(slot, *world, registration.unitPrepares, request.extra",
+   "replace": "Prepare(slot, *world, slot.unitPrepares, request.extra",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: a registration that differs*",
    "expect": "\\[or\\-swap\\-new\\-prepare\\]"
@@ -778,20 +778,20 @@
   },
   {
    "id": "g8-carry-after-prepare",
-   "what": "G-8 candidate: O-10: two types* | \\[or\\-carry\\-before\\-prepare\\]",
+   "what": "G-8 candidate: O-10: two types* | \\[or\\-carry\\-before\\-prepare\\] (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);\n\n    try {\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }",
-   "replace": "\n    try {\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }\n        for (auto& [entry, box] : moved) entry.put(world, box);",
+   "find": "        for (auto& [entry, box] : moved) entry.put(*world, box);\n\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, *world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }\n",
+   "replace": "\n        // Step 3: prepare functions.\n        if (auto prepared = Prepare(slot, *world, registration.unitPrepares, request.extra ? &request.extra : nullptr); !prepared) {\n            giveBack(moved);\n            return fail(std::move(prepared).error());\n        }\n        for (auto& [entry, box] : moved) entry.put(*world, box);\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: two types*",
    "expect": "\\[or\\-carry\\-before\\-prepare\\]"
   },
   {
    "id": "g8-carry-unregistered-no-giveback",
-   "what": "G-8 candidate: O-10: a marked type* | null dereference at ReplaceTests.cpp:181",
+   "what": "G-8 candidate: O-10: a marked type* | null dereference at ReplaceTests.cpp:181 (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            giveBack(moved);\n            return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
-   "replace": "            return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
+   "find": "                giveBack(moved);\n                return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
+   "replace": "                return fail(OrchestrationError(OrchestrationErrorCode::ReplaceCarryOverFailed,",
    "target": "gyo_orchestration_tests",
    "cases": "O-10: a marked type*",
    "expect": "\\[or\\-carry\\-unregistered\\-back\\]"
@@ -832,10 +832,10 @@
   },
   {
    "id": "g8-throw-no-giveback",
-   "what": "G-8 candidate: an exception from extra does not give the carried value back (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "what": "G-8 candidate: an exception from extra does not give the carried value back (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        giveBack(moved);\n        if (!dropOldFirst) {\n            Warn(",
-   "replace": "        if (!dropOldFirst) {\n            Warn(",
+   "find": "    } catch (...) {\n        giveBack(moved);\n        if (!dropOldFirst) {\n",
+   "replace": "    } catch (...) {\n        if (!dropOldFirst) {\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception from extra*",
    "expect": "\\[or\\-replace\\-throw\\-keeps\\-old\\]"
@@ -1230,19 +1230,19 @@
   },
   {
    "id": "sc-replaced-refuses-insert",
-   "what": "step 4 (scenario segment 1): S1-9: the replaced World declares no dynamic insert",
+   "what": "step 4 (scenario segment 1): S1-9: the replaced World declares no dynamic insert (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);",
-   "replace": "    std::unique_ptr<Kernel::WorldExecutor> fresh = std::make_unique<Kernel::WorldExecutor>(*registration.registry, slot.description.name, Kernel::WorldOptions{false});",
+   "find": "        fresh = MakeExecutor(slot, *registration.registry);",
+   "replace": "        fresh = std::make_unique<Kernel::WorldExecutor>(*registration.registry, slot.description.name, Kernel::WorldOptions{false});",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-9-inserted\\]"
   },
   {
    "id": "sc-keys-not-carried",
-   "what": "step 4 (scenario segment 1): S1-10: the marked KeyBindings are not put into the new World",
+   "what": "step 4 (scenario segment 1): S1-10: the marked KeyBindings are not put into the new World (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (auto& [entry, box] : moved) entry.put(world, box);\n",
+   "find": "        for (auto& [entry, box] : moved) entry.put(*world, box);\n",
    "replace": "",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
@@ -1899,10 +1899,10 @@
   },
   {
    "id": "g8s-old-registry-reused",
-   "what": "step 4 G-8: S1-8: the new World is built on the old Registry (the inserted System stays)",
+   "what": "step 4 G-8: S1-8: the new World is built on the old Registry (the inserted System stays) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
-   "replace": "    if (slot.registry) std::swap(registration.registry, slot.registry);\n    std::unique_ptr<Kernel::WorldExecutor> fresh = MakeExecutor(slot, *registration.registry);\n",
+   "find": "        fresh = MakeExecutor(slot, *registration.registry);\n",
+   "replace": "        if (slot.registry) std::swap(registration.registry, slot.registry);\n        fresh = MakeExecutor(slot, *registration.registry);\n",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-8-registration-new\\]"
@@ -1919,10 +1919,10 @@
   },
   {
    "id": "g8s-drop-old-held-dropped",
-   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World (find rewritten for v8-arch-gyo2-broken-world-ends-product: no holding place, DropOldFirst keeps the values in the replacement itself)",
+   "what": "step 4 G-8: S1-6c: DropOldFirst drops the values it took out of the old World (find rewritten for v8-arch-gyo2-broken-world-ends-product: no holding place, DropOldFirst keeps the values in the replacement itself) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));\n        }\n        slot.executor.reset();",
-   "replace": "            static_cast<void>(entry.take(slot.executor->GetWorld()));\n        }\n        slot.executor.reset();",
+   "find": "                if (std::shared_ptr<void> box = entry.take(slot.executor->GetWorld())) moved.emplace_back(entry, std::move(box));\n            }\n        } catch (...) {",
+   "replace": "                static_cast<void>(entry.take(slot.executor->GetWorld()));\n            }\n        } catch (...) {",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-10-carried\\] 0"
@@ -2039,9 +2039,9 @@
   },
   {
    "id": "or-ended-outside-unrecorded",
-   "what": "a World interrupted outside the Product is not seen (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "a World interrupted outside the Product is not seen (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            if (!slot.executor || slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted) continue;",
+   "find": "            if (slot.executor->GetWorld().State() != Kernel::WorldState::Interrupted) continue;",
    "replace": "            continue;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: a World interrupted outside the Product*",
@@ -2139,30 +2139,30 @@
   },
   {
    "id": "or-throw-unrecorded",
-   "what": "an exception leaving a DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "an exception leaving a DropOldFirst replacement does not end the Product (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (!failure_) {\n            WorldFailure failure;",
-   "replace": "        if (false) {\n            WorldFailure failure;",
+   "find": "        if (!failure_) {\n            // Recorded before the exception goes on (error levels P12, D4)",
+   "replace": "        if (false) {\n            // Recorded before the exception goes on (error levels P12, D4)",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
    "expect": "\\[or\\-ended\\-throw\\]"
   },
   {
    "id": "or-throw-alloc-kind",
-   "what": "std::bad_alloc leaving a replacement is ReplacementFailed (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "std::bad_alloc leaving a replacement is ReplacementFailed (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "                failure.kind = WorldFailureKind::ResourceExhausted;\n                failure.where = \"std::bad_alloc left the replacement\";",
-   "replace": "                failure.kind = WorldFailureKind::ReplacementFailed;\n                failure.where = \"std::bad_alloc left the replacement\";",
+   "find": "                dropFailure.kind = WorldFailureKind::ResourceExhausted;",
+   "replace": "                dropFailure.kind = WorldFailureKind::ReplacementFailed;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception that leaves a DropOldFirst replacement*",
    "expect": "\\[or\\-ended\\-throw\\-kind\\]"
   },
   {
    "id": "or-run-throw-unrecorded",
-   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            failure.where = \"std::bad_alloc left the schedule\";\n            Break(std::move(failure));\n",
-   "replace": "            failure.where = \"std::bad_alloc left the schedule\";\n",
+   "find": "            }\n            Break(std::move(failure));\n            throw;\n        } catch (...) {\n            failure.kind = WorldFailureKind::Interrupted;",
+   "replace": "            }\n            throw;\n        } catch (...) {\n            failure.kind = WorldFailureKind::Interrupted;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: std::bad_alloc leaving a schedule*",
    "expect": "\\[or\\-run\\-throw\\]"
@@ -2808,6 +2808,20 @@
    "guards": [
     "orchestration O-1",
     "error-levels-declaration D10"
+   ]
+  },
+  {
+   "id": "el-p12-unrecorded",
+   "what": "error levels P12: a DropOldFirst replacement records its failure only for an exception after the new executor exists, as before the try covered the registration: an exception from the registration leaves an empty place and no failure (only this mutant: or-throw-unrecorded turns all recording off and is caught by [or-ended-throw])",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!failure_) {\n            // Recorded before the exception goes on (error levels P12, D4)",
+   "replace": "        if (!failure_ && world != nullptr) {\n            // Recorded before the exception goes on (error levels P12, D4)",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-8: P12*",
+   "expect": "\\[el\\-p12\\-dropold\\-throw\\-before\\-try\\]",
+   "guards": [
+    "orchestration O-11",
+    "error-levels-declaration D4"
    ]
   }
  ]

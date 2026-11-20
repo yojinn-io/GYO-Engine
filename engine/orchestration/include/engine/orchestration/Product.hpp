@@ -149,6 +149,9 @@ private:
         // The last schedule the Product ran with success on this World (WorldFailure::lastSchedule).
         std::string lastSchedule;
         std::uint32_t nextInsertSeq = 0;
+        // A DropOldFirst replacement dropped the old World and has not swapped yet (error
+        // levels P12: an empty place is told apart from a broken one by this, not by guessing).
+        bool replacing = false;
     };
     // One World's registration, built but not yet a World.
     struct Registration {

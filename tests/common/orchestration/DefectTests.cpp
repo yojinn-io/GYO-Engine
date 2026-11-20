@@ -53,3 +53,46 @@ TEST_CASE("O-1: D4: game initialization with the first World's place empty: Worl
     CHECK_MESSAGE(!p.GameInitRan(), "[or-d4-not-marked] game initialization counted as run on an empty place");
     CHECK_MESSAGE(BootRuns() == 0, "[or-d4-not-run] " << BootRuns());
 }
+
+// ---- Error levels P12: DropOldFirst, an exception after the old World is gone and before the
+// replacement's own try (the registration step): the place is empty, so the Product has ended and
+// its failure is recorded before the exception goes on
+
+namespace {
+
+bool& BuildThrows() {
+    static bool throws = false;
+    return throws;
+}
+
+} // namespace
+
+TEST_CASE("O-8: P12: DropOldFirst, the registration throws after the old World is gone: the failure is recorded before the exception goes on") {
+    BuildThrows() = false;
+    O::ProductDescription d;
+    d.name = "game";
+    d.worlds.push_back(World(
+        "Main",
+        [](O::WorldSetup& s) {
+            if (BuildThrows()) throw std::runtime_error("the World's build throws");
+            Basics(s.Registrar(), {FrameClock("Tick")});
+        },
+        {"Tick"}));
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    BuildThrows() = true;
+    bool thrown = false;
+    try {
+        static_cast<void>(p.ReplaceWorld("Main", O::ReplaceRequest{{}, {}, O::ReplaceOrder::DropOldFirst}));
+    } catch (const std::runtime_error&) {
+        thrown = true;
+    }
+    BuildThrows() = false;
+    REQUIRE_MESSAGE(thrown, "[el-p12-throw-goes-on] the exception did not leave ReplaceWorld");
+    REQUIRE_MESSAGE(p.Failure() != nullptr, "[el-p12-dropold-throw-before-try] the place is empty and no failure was recorded");
+    CHECK_MESSAGE(!p.HasWorld("Main"), "[el-p12-place-empty]");
+    auto after = p.RunFrame();
+    CHECK_MESSAGE(!static_cast<bool>(after), "[el-p12-ended] the next entry point ran");
+}
