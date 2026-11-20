@@ -582,7 +582,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 | 選項 | 內容 |
 |---|---|
-| **(b) 比身分**（建議） | `KernelError` 加一個身分欄位，**Kernel 第一次經手時配**（`Detail::CallError`，`World.cpp:438-447`；`Fail`；`CombineCall` 新組的 `Siblings`）：用 Base 既有的 `IdIssuer`（Kernel 已經用它，`World.cpp:11`），行程內唯一，不會跨 World 撞號。作者自己 `Err(KernelError(...))` 而 Kernel 還沒經手的值沒有身分，**沒有身分的值和任何值都不相等**。`Wrap`、複製、`leftError_`、並列清單都帶著它（窄複查查過保得住）。不經 World 的 `KernelError`（K8、K9）沒有身分，也不被比。身分不進 `World::Summary`、任何指紋或匯出，回滾不還原它（`KernelError` 現在本來就不進任何指紋或匯出格式） |
+| **(b) 比身分**（建議） | `KernelError` 加一個身分欄位，**Kernel 第一次經手時配**（`Detail::CallError`，`World.cpp:438-447`；`Fail`；`CombineCall` 新組的 `Siblings`）：用**那個 World 自己的序號**（World 的成員、非原子的遞增整數）。〔第 3 步實作時更正：修訂 3～6 寫「用 Base 的 `IdIssuer`」不對——`kernel_guard.py` K8 禁止 Kernel 用 `IdIssuer`（原子計數器是跨執行緒的狀態，使用者 2026-11-18；`World.cpp:11` 含入 `IdIssuer.hpp` 只為了 `CurrentThreadSerial`）。兩處比對都只在同一個 World 的一次 Run（`Listed()`）或一次 System 呼叫（`ContainsError`）之內，World 自己的序號就分得出；不跨 World 比，所以不會撞號。〕作者自己 `Err(KernelError(...))` 而 Kernel 還沒經手的值沒有身分，**沒有身分的值和任何值都不相等**。`Wrap`、複製、`leftError_`、並列清單都帶著它（窄複查查過保得住）。不經 World 的 `KernelError`（K8、K9）沒有身分，也不被比。身分不進 `World::Summary`、任何指紋或匯出，回滾不還原它（`KernelError` 現在本來就不進任何指紋或匯出格式） |
 | (a) 照舊 | 照內容比對留著，和使用者否定的去重鍵同形 |
 | (c) 巢狀錯誤只走一條路（拿掉 `leftError_`） | 外層 System 吞掉 `Err` 時 World 已中斷卻沒有錯誤可報，違反 DI-KS 17「一定報」——退掉 |
 
@@ -795,7 +795,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | 2 | 條文草稿：`target/error-handling.md` 級別一節與 DI 1～6、RC；Legacy 標記；DI-KS 2、17、18、26；CCR-2、CCR-3；O-1（D10）、O-2、O-3、O-4、O-5、O-8、O-9、O-11 | 4 h |
 | 3a | **中途關卡**：G1、G2、G6、G8 的逐條 1～5 表交使用者 | 1.5 h |
 | 3b | Kernel：拿掉處理器（D1）、D8 的中斷錯誤；註解、K6 豁免；共用測試台與約 49 處判定改看回傳值；`[el-silent-kernel-*]` 探針 | 6 h |
-| 3c | D9（核准本批做時）：兩處改比身分、`IdIssuer` 配身分、`[el-d9-*]` | 2.5 h |
+| 3c | D9（核准本批做時）：兩處改比身分、World 自己的序號配身分（K8 禁 `IdIssuer`）、`[el-d9-*]` | 2.5 h |
 | 4 | 編排層：D3 的型別與簽名（`WorldError` 三欄、碼的搬家）、D2 拿掉五處、D4（例外照常往外；`DropOldFirst` 丟掉舊 World 之後的全部步驟拋出前記好 `failure`、先組好的 `WorldFailure`、替換中的狀態）、D8 的 `Failure()`、D10、`Product::SetErrorHandler` 拿掉；P12、P15 先 Red；`[el-e1-*]`、`[el-throw-records-*]`、`[el-drop-cause-*]`、`[el-silent-*]`；G3、G5、G8 | 7.5 h |
 | 4b | 第 17.1 節：`UnknownWorld` 改斷言（G6，三案改寫、三個突變退役與變體、`or-ended-before-name` 改寫）；`[el-unknown-world-*]`。（第 17.2 節修訂 6 撤回） | 2 h |
 | 5 | 突變：新增、改寫、退役；相關的 Kernel（清單 737 個中受影響的）與編排層（227 個中受影響的）重跑；Fable 檢查 | 4.5 h |
@@ -977,7 +977,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | M1 | 修訂 2 之後 `RunSchedule` 只回 E1 | D3 (b) 把它移到只回 E1 的一組；`[el-e1-*]` 的路徑清單拿掉 `UnknownWorld`；第 5.3 節照改 |
 | M2 | `ProductEnded` 帶什麼沒定；哪一步與 `reporterCode` 會丟 | D3 (b) 定三欄：共用的 `failure`、`cause`（升級的那個 E2）、`kernel`；三個只屬於 E1 的碼搬走、改讀 `kind`；G5 列明並以 §14.4 的方法驗「緩的面：無」；O-11 的條文改動進第 8.2 節；`[el-drop-cause-*]` |
 | M3 | D4 的 `bad_alloc` 段自相矛盾；`Break` 會配置；P12 的形還在 | D4 改成「`WorldFailure` 在冒險之前組好、`shared_ptr` 持有、`Break` 是指標指定、回傳共用同一個物件」；P12 從源頭修：替換中有明確的狀態、`Ended()` 碰到不可能的狀態是斷言；判定 6、第 5.3 節照改 |
-| M4 | D9 漏 `SameError`；身分給不到作者造的錯誤；沒寫情境；RC-EL3 自己觸發 | D9 兩處都改；身分在 Kernel 第一次經手時用 `IdIssuer` 配、沒有身分的值不相等；兩個 `AllotterExhausted` 情境寫進 D9 與 `[el-d9-*]`；突變各一；RC-EL3 改字並說明為什麼比身分不是換去重鍵 |
+| M4 | D9 漏 `SameError`；身分給不到作者造的錯誤；沒寫情境；RC-EL3 自己觸發 | D9 兩處都改；身分在 Kernel 第一次經手時用 World 自己的序號配（第 3 步更正：不是 `IdIssuer`，K8 禁止）、沒有身分的值不相等；兩個 `AllotterExhausted` 情境寫進 D9 與 `[el-d9-*]`；突變各一；RC-EL3 改字並說明為什麼比身分不是換去重鍵 |
 | M5 | D10 判 E1 時被記成壞掉的 World 是健康的；要改 O-11 | D10 列三個選項，建議 (i) E2＋`gameInitRan_` 還原（落在降級、不改 O-11）；修訂 1 的「不是推翻」撤回；第 13 節第 10 題 |
 | M6 | G6 有緩的面；「各家沒有分歧」只成立一半 | G6 照實列緩的面與第 4 點；第 17.1 節的別家表與結論照實寫（Bevy 兩支都給、flecs release 編掉）；第 13 節第 11 題交使用者 |
 | M7 | 只逐處接，`Build` 仍會丟；退掉最外層的理由不成立 | 第 17.2 節改成兩層並用（逐處接＋最外層保底，保底回已收齊的全部＋這一筆）；`[el-build-throw-backstop]` 與突變 |
@@ -997,7 +997,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | N2 | 拿 `SetErrorHandler` 當對照會過期 | 第 17.1 節拿掉 |
 | N3 | 第 8.1 節第 3 點沒跟修訂 2 | 照補 |
 | N4 | D4 的範圍漏了丟掉之前的 `take` 與 `BuildNewFirst` 的 `take`／`put` | D4 寫明整個函式都在範圍內、丟掉之前失敗時放回並回 E2 |
-| N5 | 身分跨 World 撞號、進不進指紋 | D9 用 `IdIssuer`（行程內唯一）、寫明不進 `Summary`、指紋、匯出、回滾 |
+| N5 | 身分跨 World 撞號、進不進指紋 | D9 寫明不進 `Summary`、指紋、匯出、回滾（第 3 步更正：身分用 World 自己的序號，不用 `IdIssuer`） |
 | N6 | HANDOFF 的版本 | 第 0 節照寫 4541e71d |
 | N7 | 別家表的結論只靠 Bevy | 第 17.1 節照實寫「可比的只有 Bevy 與 flecs 的 debug 建置」 |
 | N8 | `HasWorld` 與名字檢查的差別 | 第 17.1 節寫明，斷言不寫成 `HasWorld` 的反面 |
