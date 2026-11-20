@@ -1,6 +1,6 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1 件）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
+更新：2026-11-20（修訂 1；同日記入使用者定的第 12 節第 1、2 件）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等動工前核准。** 核准之前不實作、不改條文與守衛。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 沒有再送檢查。
 
@@ -120,13 +120,13 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 `-summary-padding-a-then-c` 的標註：**測試裡 9 處、10 行**（`WorldTests.cpp:331`、`:516-519`（J-32 golden 自己）、`ExecutorTests.cpp:362`、`:1343`、`RegistrationRoundTests.cpp:191`、`SpawnRejectTests.cpp:411`、`:871`、`:1021`、`orchestration/RestoreFlowTests.cpp:140`），**程式裡 4 處**（`World.cpp:1156`、`World.hpp:351`、`detail/Storage.hpp:246`、`world_time/TimeTypes.hpp:6`）。修訂 0 寫「四處」是數錯了。
 
-### 3.2 形狀（本卡照 L17 判，除了第 12 節第 1、2 件）
+### 3.2 形狀（本卡照 L17 判；第 12 節第 1、2 件由使用者定）
 
 - **雜湊函式跟著型別走**：Kernel 定一個客製點（本卡加的詞：作者為自己的型別寫一個函式，Kernel 在需要時找到它），登記元件、Resource、`Message` 時若找得到就存進型別擦除的欄、Resource 槽、訊息緩衝（多一個「雜湊一格」的函式）；找不到時記成「沒有雜湊函式」（呼叫 `Summary` 時才報錯，使用者 2026-11-20 定，第 12 節第 1 件）。名字在實作時照命名規範定（暫名 `HashValue(Hasher&, const T&)`，經 ADL 找）。系譜：lightyear 每個元件型別登記一個 `fn(&C, &mut Hasher)`（`deterministic.rs:10-94`）。
 - **同一個函式給兩個人用**：Kernel 的 `World::Summary` 與權威 Module 的 digest。一個概念一個實作。
 - **Kernel 附的雜湊**（修訂 1，檢查 M1）：
   - 整數一律換成 64 位元、小端序再寫（`long` 在 Windows 是 4 位元組、在 Linux、macOS 是 8，值相同就相同）；列舉照它的底層整數；`bool`；`EntityId`。
-  - 浮點：照第 12 節第 2 件。
+  - 浮點：逐位元（`±0` 不同、NaN 照它的位元；使用者 2026-11-20 定，第 12 節第 2 件）。作者的型別若 `±0` 要算相等，在自己的雜湊函式裡正規化（例 `h(v.x + 0.0f)`），或在寫入時正規化（同第 3 批 `VirtualTime.scale` 的做法）。
   - `std::array`、`std::vector`、`std::string`、`std::optional`（只雜湊「有沒有」與有時的值，不碰空著時的位元組）、`std::pair`：雜湊內容。
   - Kernel 自己的型別（`RangeAllotter`、游標表、訊息紀錄）在 Kernel 裡寫好。
 - **照位元組不自動套用**（修訂 1，檢查 M1）：`std::has_unique_object_representations_v` 只看結構不看值——`struct { std::optional<std::uint8_t> a; std::uint16_t b; }` 是 true，但同值的兩個物件 `memcmp` 不同（檢查者本機 clang 實測）；指標、`std::string_view`、`std::span` 也是 true（雜湊到位址）；`long` 的寬度隨平台。所以只在**作者明寫**時照位元組（暫名：一個 `HashAsBytes` 的現成實作，作者為型別選它），作者保證「位元組就是值」。
@@ -140,7 +140,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 登記照過；呼叫 `World::Summary` 時，World 裡有沒有雜湊函式的型別，就回錯誤並列出那些型別。缺函式這件事由作者自己用測試守（使用者原話：「選d就好，執行到報錯，這個問題需用作者自己用測試來守」）。權威的 digest 照權威份 4.3，在 `authority.Component<T>` 登記時編譯期檢查。
 
-### 3.4 LIM-8 留不留（本卡判；第 12 節第 1 件已定 (d)，第 2 件待定）
+### 3.4 LIM-8 留不留（本卡判；第 12 節第 1 件定 (d)、第 2 件定 (i)）
 
 **LIM-8 改寫，不解除**：原始位元組不再是預設，但「作者選照位元組」那條路仍然要作者保證位元組＝值（沒有 padding、沒有 `optional`／union 的殘值、沒有指標與句柄、沒有寬度隨平台的型別）——digest 跨行程比，這條限制現在就適用，不是將來（修訂 0 想另立 LIM-9、「跨行程時才有事」是錯的，檢查 M1）。改寫後的 LIM-8：「`World::Summary` 與 digest 對每個值呼叫型別的雜湊函式；作者選『照位元組』的型別，位元組必須等於值」，守衛：Kernel 附的型別的測試；作者的型別無守衛。第 12 節第 1 件定 (d)，不加 (b)、(c) 那種「略過」「退回位元組」的句子；改寫後的 LIM-8 再加一句「沒有雜湊函式的型別在 `World` 裡時，`Summary` 回錯誤；作者的型別有沒有函式，由作者的測試守」。條文的 owner 是架構師會話，合併前核准時給你看。
 
@@ -279,7 +279,7 @@ LIM-7 的寫法建立在區上。區拿掉之後，Kernel 的行為是：**生�
 | A5 | 一致性指紋（舊 C 指紋）12 案的 C 半（`recon-a` 2.2） | 兩端判定部分相同 | **搬到權威、判定改**（權威份 5.5 的內容表）：編號改權威登記順序；同步點只記有無；before／after、`rollbackEnabled`、zone 不進；`Runs`、策略名與版本、訊息上限進 | 一般資料的登記改了不再影響指紋；同步點改名不影響 | 策略、`Runs`、observer 存取進指紋；兩方向的守衛 | 權威 Module |
 | A6 | J-17（`ZoneCExportTests` 兩案、`InitialValueTests:1246`、`:1269`）、`zone_c_export_check.py`、`kernel.J-17_zone_scan` | G-5 的來源檔清單 | **搬到權威、判定改**：範圍從「zone C 的 System」改成「寫判定資料的 System、hook、observer、`InitialValue`」；格式改名 | 讀判定資料、不寫的 System 不再列 | observer 列入 | 權威 Module＋產品的掃描 |
 | A7 | D-E16 三處（`CoverageTests:113` 的半、`:312`、`SchedulerTests:626` 的半） | Derived 在讀者之前由立即寫者重算 | **搬到回滾**（R-7）：判定照搬；加巢狀 schedule 也查 | **沒帶回滾 Module、World 沒選回滾策略、或選了不檢查的自寫策略時不查**（回滾份 5.1 第 3 項：策略自己的檢查；統合 7.2 也寫了這個放寬面）。修訂 0 寫「無」是錯的 | 巢狀 schedule 也查 | 回滾 Module（官方策略） |
-| A8 | `World::Summary` 的比較 12 組，含 J-32 golden（`WorldTests:541`）、測試裡 9 處「未完全解決」 | 同一個 World 狀態得到同一個摘要 | **改**：照第 3 節逐型別雜湊；J-32 golden 重產；9 處標註拿掉 | 只差在 padding（與第 12 節第 2 件選正規化時的 `±0`、NaN）的兩個狀態，摘要從「可能不同」變成相同；**作者的函式漏寫欄位時，那個欄位的差異看不出來** | 持有堆積的型別改內容就會不同（以前雜湊位址）；沒有雜湊函式的型別不再能悄悄進摘要（第 12 節第 1 件定 (d)：呼叫時回錯誤） | Kernel |
+| A8 | `World::Summary` 的比較 12 組，含 J-32 golden（`WorldTests:541`）、測試裡 9 處「未完全解決」 | 同一個 World 狀態得到同一個摘要 | **改**：照第 3 節逐型別雜湊；J-32 golden 重產；9 處標註拿掉 | 只差在 padding 的兩個狀態（第 12 節第 2 件定逐位元，`±0`、NaN 的位元差照樣看得出），摘要從「可能不同」變成相同；**作者的函式漏寫欄位時，那個欄位的差異看不出來** | 持有堆積的型別改內容就會不同（以前雜湊位址）；沒有雜湊函式的型別不再能悄悄進摘要（第 12 節第 1 件定 (d)：呼叫時回錯誤） | Kernel |
 | A9 | Registry 指紋 golden 6 處、Plan export 格式（`SchedulerTests:674`、`CoverageTests:411`）、`RegistryTests:223` 的「轉換中」名單 | 格式與錯誤碼清單 | 改：版本升、golden 重產；「轉換中」名單清空 | 無 | 錯誤碼清單只剩保留的 | Kernel |
 | A10 | `WorldTimeModuleTests:176` 的 `[wt-time-zone-b]` 兩個 CHECK | 時間型別是 zone B（第 3 批的過渡） | 刪 | 無區可言 | 無 | —（G4 收掉，2.4） |
 | A11 | 反向守衛的突變（`ks-s4-*` 9、`ks-s8-*` 5、`sr-zone-c-own-cells`、Z5 的 2）與它們殺的行為案（J-52「no Z5」、J-45 的 zone C／Exclusive 寫入、J-57 的 listed zone C resource 等） | 拿掉的限制不回來 | 突變退役：replace 用到拿掉的欄位、編譯不過；「不回來」改由型別保證（欄位不存在）。案例改名留下（成為一般行為）。**第 2 步開頭逐個列出「退役後會失去唯一突變的判定」，照 `tests/common/mutation/README.md` 交你，不等合併前**（修訂 1，檢查 S7） | 那些判定可能暫時沒有突變 | 無 | Kernel |
@@ -296,7 +296,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ### 9.3 新增的行為案例
 
-- **Kernel**：原語 1～4（有型別的整欄走訪給 stamp；一批放回：沒變的格不寫、有變的標同一個 stamp、全部放回後才跑 hook 與 observer、hook 看得到同一個實體已放回的其他欄、復活配發器範圍內的 id；Resource 的 stamp；`ExclusiveWorld` 讀目前 stamp）；`Writes<…>` 收元件；訊息寫者名單（System、hook、observer、`BuildPlans` 重算）；逐型別雜湊（padding 不同摘要相同、`optional` 空著時的殘值不影響、`std::vector` 內容不同摘要不同、內容相同而位址不同時相同、`long` 等寬度隨平台的整數照 64 位元、作者選照位元組的型別、Kernel 附的型別、浮點照第 12 節第 2 件、沒有函式的型別在 World 裡時 `Summary` 回錯誤並列出型別、拿掉那個型別的實體後同一個 `Summary` 成功）。
+- **Kernel**：原語 1～4（有型別的整欄走訪給 stamp；一批放回：沒變的格不寫、有變的標同一個 stamp、全部放回後才跑 hook 與 observer、hook 看得到同一個實體已放回的其他欄、復活配發器範圍內的 id；Resource 的 stamp；`ExclusiveWorld` 讀目前 stamp）；`Writes<…>` 收元件；訊息寫者名單（System、hook、observer、`BuildPlans` 重算）；逐型別雜湊（padding 不同摘要相同、`optional` 空著時的殘值不影響、`std::vector` 內容不同摘要不同、內容相同而位址不同時相同、`long` 等寬度隨平台的整數照 64 位元、作者選照位元組的型別、Kernel 附的型別、浮點逐位元（`-0.0f` 與 `+0.0f` 摘要不同、作者在函式裡正規化時相同）、沒有函式的型別在 World 裡時 `Summary` 回錯誤並列出型別、拿掉那個型別的實體後同一個 `Summary` 成功）。
 - **權威**：權威份第 7 節 DI-A 與第 5 節各條；一致性指紋兩方向；digest（同狀態相同、改一格不同、兩個相同的「實體×元件」不抵銷、迭代順序無關）；tick 檢查（名單外寫 `Tick` 報錯、`Writes<Tick>` 標註也算、時間 Module 的驅動者通過）；佔位策略與沒選策略的啟動錯誤；沒選策略時型別照樣進 Kernel；代為登記在登記當下、作者的為準；Build 時的錯誤在 `Check` 報；A4 的漏斗走訪性質。
 - **回滾**：回滾份第 9 節 R-1～R-7 的守衛（含 R-2 等價測試與它列的七個突變）；跨 schedule 的訊息兩方向；沒選策略的 World 沒有歷史（R-4）；換 World 歷史不跨世代（R-5）；`BuildNewFirst` 失敗時舊 World 的回滾照常（5.1）；超過深度丟掉並記診斷；Plan 版本變了歷史作廢（回滾份 7.5）。
 - **scenario 第 3 段**（`tests/common/scenario/`，ctest `scenario.segment3`，標籤 `cpu`）：
@@ -409,7 +409,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 - **DI-KS 15**：第 (1) 項補「World 摘要逐型別雜湊（型別可以帶雜湊函式）」；第 (13) 項照統合 9.1 的清單，標明本批實作 1～4 與 `ExclusiveWorld` 讀目前 stamp、第 5 項只有清單；「轉換中」表裡權威與回滾那幾列刪。這兩處補句**算不算職責清單多一項**是本卡的判斷（第 12 節第 4 件）。
 - **DI-KS 19**：Z5 那一句若還在，拿掉（統合 9.1）。
 - **DI-KS 25**：唯讀登記表加每種訊息的寫者名單；`Writes<…>` 標註含元件；observer 的「區」欄位拿掉。
-- **新**：**摘要逐型別雜湊**：`World::Summary` 對每個值呼叫該型別的雜湊函式，不雜湊原始位元組；整數照 64 位元、小端序；作者選「照位元組」的型別由作者保證位元組＝值（第 3 節；第 12 節第 1、2 件的結果寫進這條）。
+- **新**：**摘要逐型別雜湊**：`World::Summary` 對每個值呼叫該型別的雜湊函式，不雜湊原始位元組；整數照 64 位元、小端序；作者選「照位元組」的型別由作者保證位元組＝值；浮點逐位元，作者的型別要 `±0` 相等時自己正規化；沒有雜湊函式的型別在 World 裡時 `Summary` 回錯誤（第 3 節；第 12 節第 1、2 件）。
 - **RC**：RC 10（為繞過 DI-KS 6 改 Shared）、RC 12（X-2）拿掉；RC 11（回滾等價破裂）移回滾 Module 的 RC（統合 9.1）；RC 5、RC 9 的 (c) 措辭改寫。**新 RC**（修訂 1，檢查 S9）：逐型別雜湊——作者的函式漏欄位造成的漏報在比摘要或 digest 的測試裡出現兩次以上；或作者為了比摘要而必須為大部分型別寫函式（產品裡要寫函式的型別過半）→ 停下，提「照位元組加檢查」或「反射」的方案。
 
 ### 11.2 權威 Module（新頁 `target/v2/authority.zh-Hant.md`）
@@ -453,7 +453,9 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 這件交使用者，因為 (a) 會推翻 11-19 的取捨，而且同技術的唯一參考（lightyear）是 (b)。
 
-### 第 2 件：浮點怎麼雜湊（修訂 1 新增，檢查 M2）
+### 第 2 件：浮點怎麼雜湊（修訂 1 新增，檢查 M2）——**已定 (i)，加作者正規化的出口**
+
+**決定**（使用者，2026-11-20，side chat）：Kernel 附的 float 雜湊逐位元（NaN 也照位元）；作者的型別若 `±0` 要算相等，在自己的雜湊函式裡正規化（例 `h(v.x + 0.0f)`），或在寫入時正規化（同第 3 批 `VirtualTime.scale` 的做法）。經過：使用者問「這個情況可以避免掉嗎？其實我擔心的是-0.0 和 +0.0在數學上是等價的。依照演算法，不同還真可以能有這種情況。你如何看。」side chat 說明（不是使用者的話）：同一份程式、同樣輸入，IEEE 算出的位元相同，兩端出現 `±0` 之差表示已經分岔；`±0` 只在 `==` 下等價，`1/x`、`atan2`、`signbit` 的結果都不同，會讓後面的計算分岔。使用者回「可以。」理由：使用者同意 side chat 的看法，沒有另外說。下面保留決定前的比較。
 
 **遊戲的例子**：`Velocity{-0.0f, 0}` 與 `Velocity{+0.0f, 0}`。`==` 說相等，位元組不同。
 
@@ -466,7 +468,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 **建議 (i)**：同技術的參考都是逐位元；同一份確定性程式在兩端算出的位元本來就相同，`±0` 不同正是值得抓的分岔；邊角由作者的比較函式處理（要的話用逐位元比）。修訂 0 寫「使用者把 ±0 列為毛病」是錯的：三種毛病是 side chat 列的（第 0 節）。
 
-這件交你，因為和同技術的別家是否一致、三種相等要不要對齊，會影響摘要、digest、回滾三處。
+這件交使用者，因為和同技術的別家是否一致、三種相等要不要對齊，會影響摘要、digest、回滾三處。
 
 ### 第 3 件：Module 與作者的接法（第 6 節）
 
@@ -580,7 +582,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 | 雜湊函式跟著型別、摘要與 digest 共用 | lightyear 逐元件登記 | 摘要與 digest 各一套；只補 padding（已做的 A） | 一個概念一個實作；使用者定 C | 存檔（讀兩次相同）、PvP digest |
 | 照位元組不自動、作者明寫才用 | — | `has_unique_object_representations` 為真就自動（修訂 0） | 自動那條有 `optional`、指標、平台寬度三個漏洞（檢查者實測） | 存檔、PvP digest |
 | 沒有函式時（第 12 節第 1 件） | flecs 呼叫時擋／lightyear 略過 | 使用者定 (d)（flecs 的形），2026-11-20 | (a) 登記時編譯失敗、(b) 略過、(c) 退回位元組 | 存檔、單機不增加複雜度 |
-| 浮點（第 12 節第 2 件） | lightyear、flecs、Unity 逐位元 | 交你 | — | PvP digest、回滾 |
+| 浮點（第 12 節第 2 件） | lightyear、flecs、Unity 逐位元 | 使用者定 (i) 逐位元＋作者自己正規化的出口，2026-11-20 | (ii) `±0` 相同、NaN 都相同（Bevy `FloatOrd`） | PvP digest、回滾 |
 | 原語有型別、在 `ExclusiveWorld`、一批放回 | Bevy；統合 9.1；同步點的 hook 規則 | 型別擦除的整欄複製（Unity 的原始位元組）；逐欄放回、每欄當場跑 hook | 回滾的登記知道 `T`；hook 不看到半還原的 World | PvP Client 回滾、P2P（佔位） |
 | G5 由回滾存版本、記錄是獨占 System | Unity Netcode `DidChange(版本)` | Kernel 加 tick→stamp 原語；每型別一個 `Changed<T>` System（lightyear）；**照 Bevy `Ref<T>` 把 stamp 開給一般的 query**（Kernel 的參數多一種；v1 只有 Serial，獨占 System 沒有並行的代價；之後要並行時這是一道牆，寫進回滾的 RC） | 三家都沒有 Kernel 層的對照；一個 System 處理全部型別 | PvP Client 回滾 |
 | 重跑掛每幀 schedule 的 `PreUpdate` | lightyear `PreUpdate` 的 `run_rollback` | 掛在步的 schedule（X-11 不准） | 巢狀規則 | PvP Client 回滾 |
