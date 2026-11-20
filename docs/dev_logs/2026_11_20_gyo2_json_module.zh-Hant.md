@@ -21,13 +21,15 @@
 ## 驗證與經過
 
 - **全量 ctest**：本機（macOS x86_64）120/120（`ctest-final.log`）。
-- **突變**：本批清單 107/107 killed（`mutants-full-final.log`）。每步只跑相關的（D184），第 7 步跑完整一次。加的數與理由見合併前核准頁第 4 節（超過「條文數 × 5」）。
+- **突變**：本批清單 107/107 killed（`mutants-full-final.log`）；合併前修剪後 103/103 killed（`mutants-full-pruned.log`）。每步只跑相關的（D184），第 7 步與修剪後各跑完整一次。加的數與理由見合併前核准頁第 4 節（超過「條文數 × 5」）。
 - **數字向量**：L1 linux-x64（Python 3.12.3）與 windows-x64（Python 3.15.2）都重生出和調查相同的六個檔（SHA-256 一致），讀取 210,050、最短寫出 50,000，共 260,050，0 不一致（run 44564613610）。本機（Python 3.14.8）同。macos-arm64：第 1 步的 run 44556667124 綠；之後三次被 GitHub 取消（runner 沒拿到，「capacity constraints」，0 個步驟）。最後 **run 44577566411（7314c282）三平台綠**（macOS 以 Python 3.15.2 重生，SHA-256 一致；windows 只有既有的 `os.console_close` skipped）。windows 失敗過兩次，都是 MSVC 的 doctest 印 `string_view` 缺 `<ostream>`（44562576673、44574178460）。
 - **判定 3**（本機 JSONTestSuite 1ef36fa0）：`y_` 93 收＋兩件 `y_object_duplicated_key*` 回 `RepeatedKey`、`n_` 188 全拒、`i_` 拒 31 收 4、GYO 補充 24 件和調查一致。宣告原寫「`y_` 95 件全收」和 J-2 矛盾，結果出來後判定不成立，停下回報；使用者「這個照建議」更正（HANDOFF `v8-arch-gyo2-json-criterion3-corrected`）。
 - **判定 6**（本機，i9-9980HK）：5.3 MB 解析 54.7 ms（上限 150）、16 MiB 168.8 ms；和 yyjson 單獨解析的比 2.4～2.8 倍（上限 10）；一筆 473 位元組紀錄的寫出中位數 1.24 µs（上限 5）。沒有觸發停止條件。
 - **Red 的形式**：第 2 步是斷言失敗（`cmake.UnitRegistry`）；第 3、5 步是「還沒有實作」的連結失敗，不是斷言失敗；第 4 步是斷言失敗（`step4-red.txt`）；D1～D3 是斷言失敗（`d1-d3-red.txt`）。
-- **測試字面被改的事故**：檢查者發現 `ReadTests.cpp` 的兩行「跳脫後相同的鍵」一模一樣。原因是寫檔工具把 `a` 這類合法的 `\uXXXX` 解成了字元（孤立代理與 `\u0000` 沒被解）。共 4 處，第 7 步以 Python 拼出反斜線改回；其他檔沒有非 ASCII 殘留。
+- **測試字面被改的事故**：檢查者發現 `ReadTests.cpp` 的兩行「跳脫後相同的鍵」一模一樣。原因是寫檔工具把 `\u0061` 這類合法的 `\uXXXX` 解成了字元（孤立代理與 `\u0000` 沒被解）。共 4 處，第 7 步以 Python 拼出反斜線改回；其他檔沒有非 ASCII 殘留。
 - **Fable／high 敵對式檢查（突變清單）**：清單 48 個在他的副本全殺，但清單外 38 個實作突變、6 個守衛突變存活，3 處實作原樣不符 Contract（D1 `WriteValue` 的配置失敗漏出、D2 超過 32 層的配置失敗讓 `Finish` 走不到、D3 讀取錯誤組字串時的配置失敗漏出），守衛有 14 種寫法掃不到。處理：D1～D3 照 §14.3 先 Red 後修；存活的各補測試與突變；守衛加名字規則、fast_float 的路徑前綴、`.cmake`／`build/cmake`／根目錄的 CMake 與 `*_SOURCE_DIR`；expect 收窄成只有那個突變會造成的失敗。等價、靠當掉、或只是讀法的突變不加（清單 description 列理由）。報告：`declaration-r0-adversarial-check.md`（宣告的）、`mutation-check-fable/`（清單的）。
+
+- **突變清單的修剪（合併前，2026-11-20）**：使用者在 side chat 看合併前核准頁第 4 節時決定照第 3 批的做法：超過上限的突變合併前補好理由，不留作債。PR #251 已併進 `gyo2`，本分支在 b532b268 併入（用 merge 不用 rebase，因為文件引了既有的 commit），對照 `tests/common/mutation/README.md` 的基準 1～4、6 逐個看 107 個。退 4 個守衛突變：清單的單項 2 個、和 `jg-any-place-allowed` 重複 1 個、沒漏看過的讀法 1 個。另把 `jg-yyjson-path-prefix-missed`（沒漏看過）換成 `jg-fastfloat-reading-reverted`（第 7 步前的 fast_float 式子真的漏看過）。失去突變的自測照「合わせ方」併進 `jg-yyjson-rule-off`／`jg-link-rule-off`；改過的 5 個重跑全部 killed，之後完整跑一次 103/103 killed（`mutants-full-pruned.log`）。實作的 88 個都留（各改一個獨立的決定）。結果是 103 個，表見合併前核准頁第 4 節。`guards` 欄位等第 3 批卡起草的規則文字經使用者核准後再補，補完才合併。
 
 ## 下一步
 
@@ -36,4 +38,4 @@
 
 ## 證據
 
-主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-json-module/`（git 不追蹤，本機 macOS x86_64）：`reference-survey.md`、`declaration-r0-adversarial-check.md`、`download/`（下載 tarball 與 SHA-256，內容和 FetchContent 取得的逐位元組相同）、`l1-step1-44556667124/`、`l1-step4-44562576673/`（windows 的 `<ostream>` 失敗）、`l1-step5-44564613610/`、`l1-final-44574178460/`、`l1-final-44577566411/`、`step4-red.txt`、`d1-d3-red.txt`、`judgement3/`、`bench/`、`mutation-check-fable/`、`mutants-full-run1.log`、`mutants-full-final.log`、`ctest-final.log`。
+主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-json-module/`（git 不追蹤，本機 macOS x86_64）：`reference-survey.md`、`declaration-r0-adversarial-check.md`、`download/`（下載 tarball 與 SHA-256，內容和 FetchContent 取得的逐位元組相同）、`l1-step1-44556667124/`、`l1-step4-44562576673/`（windows 的 `<ostream>` 失敗）、`l1-step5-44564613610/`、`l1-final-44574178460/`、`l1-final-44577566411/`、`step4-red.txt`、`d1-d3-red.txt`、`judgement3/`、`bench/`、`mutation-check-fable/`、`mutants-full-run1.log`、`mutants-full-final.log`、`mutants-full-pruned.log`、`ctest-final.log`。

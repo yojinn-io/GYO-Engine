@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the JSON Module batch (docs/architecture/target/v2/json-module-declaration.zh-Hant.md, section 8.6; ids js- reading and numbers, jw- writing, jb- build-time link and header checks, jg- the J-1 guard script). Written step by step with the tests; the adversarial check of the whole catalog (Fable/high, 2026-11-20; build/evidence/gyo2-json-module/mutation-check-fable/) found 38 implementation changes and 6 guard changes no mutant caught, 3 defects (D1-D3, fixed), and expects that did not single out their mutant: the tests and mutants it asked for are added, the expects narrowed. Not added (with the reason): the depth check in EndContainer (equivalent: Top() asserts the same); the std::bad_alloc catch in NumberText (equivalent: its only caller, WriteValue, catches at its own boundary since D1); the empty-text check before yyjson (equivalent: yyjson reports empty input as an error at offset 0 too); a move constructor that does not empty its source (undefined behaviour, a double free); the \"finished\" checks in BeforeValue, Key and EndContainer (equivalent under test: after Finish the depth and top-level checks fail as well); !isfinite -> isnan in Double (killed only by WriteDouble's assertion aborting); messages no test reads (integer range detail, number message); J-9's linearity in time (no reliable test without timing: guarded by review and the size cases); reading-method mutants of the guard (comment and string blanking: added only after an observed miss, per the criteria).",
+ "description": "Declared mutants of the JSON Module batch (docs/architecture/target/v2/json-module-declaration.zh-Hant.md, section 8.6; ids js- reading and numbers, jw- writing, jb- build-time link and header checks, jg- the J-1 guard script). Written step by step with the tests; the adversarial check of the whole catalog (Fable/high, 2026-11-20; build/evidence/gyo2-json-module/mutation-check-fable/) found 38 implementation changes and 6 guard changes no mutant caught, 3 defects (D1-D3, fixed), and expects that did not single out their mutant: the tests and mutants it asked for are added, the expects narrowed. Not added (with the reason): the depth check in EndContainer (equivalent: Top() asserts the same); the std::bad_alloc catch in NumberText (equivalent: its only caller, WriteValue, catches at its own boundary since D1); the empty-text check before yyjson (equivalent: yyjson reports empty input as an error at offset 0 too); a move constructor that does not empty its source (undefined behaviour, a double free); the \"finished\" checks in BeforeValue, Key and EndContainer (equivalent under test: after Finish the depth and top-level checks fail as well); !isfinite -> isnan in Double (killed only by WriteDouble's assertion aborting); messages no test reads (integer range detail, number message); J-9's linearity in time (no reliable test without timing: guarded by review and the size cases); reading-method mutants of the guard (comment and string blanking: added only after an observed miss, per the criteria). Pruned before merging (2026-11-20) against tests/common/mutation/README.md: jg-link-yyjson-half-off, jg-build-cmake-not-scanned (list items), jg-fastfloat-home-wide (same as jg-any-place-allowed) and jg-include-spacing-missed (reading method, no observed miss) retired, their self-tests carried by jg-yyjson-rule-off and jg-link-rule-off; jg-yyjson-path-prefix-missed replaced by jg-fastfloat-reading-reverted (the fast_float reading that did miss). See json-module-merge-approval.zh-Hant.md section 4.",
  "mutants": [
   {
    "id": "js-raw-flag-dropped",
@@ -413,7 +413,7 @@
   },
   {
    "id": "jg-yyjson-rule-off",
-   "what": "J-1 guard: the yyjson include rule matches nothing",
+   "what": "J-1 guard: the yyjson include rule matches nothing. Also carries test_include_with_spacing (from jg-include-spacing-missed, retired 2026-11-20: a reading-method mutant added without an observed miss)",
    "file": "tests/common/json/json_guard.py",
    "find": "(?:[^>\\\"\\n]*/)?yyjson\\.h[>\\\"]",
    "replace": "(?:[^>\\\"\\n]*/)?yyjson\\.never[>\\\"]",
@@ -428,7 +428,7 @@
     "-p",
     "test_json_guard.py"
    ],
-   "expect": "FAIL: test_yyjson_outside_its_adapter"
+   "expect": "(?=[\\s\\S]*(?:FAIL: test_yyjson_outside_its_adapter\\b))[\\s\\S]*(?:FAIL: test_include_with_spacing\\b)"
   },
   {
    "id": "jg-fastfloat-rule-off",
@@ -451,7 +451,7 @@
   },
   {
    "id": "jg-link-rule-off",
-   "what": "J-1 guard: the link rule matches nothing",
+   "what": "J-1 guard: the link rule matches nothing. Also carries test_yyjson_link_outside_the_module (from jg-link-yyjson-half-off: one item of the rule's list, whose items the self-tests check one by one) and test_source_dir_in_build_cmake (from jg-build-cmake-not-scanned: the second item of CMAKE_ROOTS, whose list keeps jg-tests-cmake-not-scanned); both retired 2026-11-20",
    "file": "tests/common/json/json_guard.py",
    "find": "LINK = re.compile(r\"\\bgyo_(?:yyjson|fast_float)\\b|\\b(?:yyjson|fast_float)_SOURCE_DIR\\b\")",
    "replace": "LINK = re.compile(r\"\\bgyo_never\\b\")",
@@ -466,7 +466,7 @@
     "-p",
     "test_json_guard.py"
    ],
-   "expect": "FAIL: test_link_outside_the_module"
+   "expect": "(?=[\\s\\S]*(?:FAIL: test_link_outside_the_module\\b))(?=[\\s\\S]*(?:FAIL: test_yyjson_link_outside_the_module\\b))[\\s\\S]*(?:FAIL: test_source_dir_in_build_cmake\\b)"
   },
   {
    "id": "jg-any-place-allowed",
@@ -855,11 +855,11 @@
    "expect_build_failure": true
   },
   {
-   "id": "jg-link-yyjson-half-off",
-   "what": "J-1 guard: the link rule sees only fast_float",
+   "id": "jg-fastfloat-reading-reverted",
+   "what": "J-1 guard: the fast_float include pattern goes back to the reading that missed <fast_float.h> and fast_float headers included with a path (the miss the adversarial check found, fixed in c8ba3a39); kept as the one reading-method mutant because that miss was observed",
    "file": "tests/common/json/json_guard.py",
-   "find": "LINK = re.compile(r\"\\bgyo_(?:yyjson|fast_float)\\b|\\b(?:yyjson|fast_float)_SOURCE_DIR\\b\")",
-   "replace": "LINK = re.compile(r\"\\bgyo_fast_float\\b|\\b(?:yyjson|fast_float)_SOURCE_DIR\\b\")",
+   "find": "[<\\\"](?:[^>\\\"\\n]*/)?fast_float(?:/[^>\\\"/\\n]*\\.h|\\.h)[>\\\"]",
+   "replace": "[<\\\"]fast_float/[^>\\\"]*[>\\\"]",
    "command": [
     "{python}",
     "-B",
@@ -871,64 +871,7 @@
     "-p",
     "test_json_guard.py"
    ],
-   "expect": "FAIL: test_yyjson_link_outside_the_module"
-  },
-  {
-   "id": "jg-fastfloat-home-wide",
-   "what": "J-1 guard: fast_float is allowed anywhere under adapters/",
-   "file": "tests/common/json/json_guard.py",
-   "find": "FASTFLOAT_HOME = \"engine/json/src/adapters/fast_float/\"",
-   "replace": "FASTFLOAT_HOME = \"engine/json/src/adapters/\"",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/json",
-    "-p",
-    "test_json_guard.py"
-   ],
-   "expect": "FAIL: test_fast_float_in_the_yyjson_adapter"
-  },
-  {
-   "id": "jg-yyjson-path-prefix-missed",
-   "what": "J-1 guard: yyjson.h included with a path is not seen",
-   "file": "tests/common/json/json_guard.py",
-   "find": "include[ \\t]*[<\\\"](?:[^>\\\"\\n]*/)?yyjson\\.h",
-   "replace": "include[ \\t]*[<\\\"]yyjson\\.h",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/json",
-    "-p",
-    "test_json_guard.py"
-   ],
-   "expect": "FAIL: test_include_with_a_path"
-  },
-  {
-   "id": "jg-include-spacing-missed",
-   "what": "J-1 guard: an indented or spaced #include is not seen",
-   "file": "tests/common/json/json_guard.py",
-   "find": "(\"J1-YYJSON\", re.compile(r\"^[ \\t]*#[ \\t]*include[ \\t]*",
-   "replace": "(\"J1-YYJSON\", re.compile(r\"^#include",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/json",
-    "-p",
-    "test_json_guard.py"
-   ],
-   "expect": "FAIL: test_include_with_spacing"
+   "expect": "FAIL: test_include_with_a_path\\b"
   },
   {
    "id": "jg-suffixes-narrow",
@@ -967,25 +910,6 @@
     "test_json_guard.py"
    ],
    "expect": "FAIL: test_link_in_other_tests"
-  },
-  {
-   "id": "jg-build-cmake-not-scanned",
-   "what": "J-1 guard: build/cmake is not scanned",
-   "file": "tests/common/json/json_guard.py",
-   "find": "CMAKE_ROOTS = (\"engine\", \"tests\", \"build/cmake\")",
-   "replace": "CMAKE_ROOTS = (\"engine\", \"tests\")",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/json",
-    "-p",
-    "test_json_guard.py"
-   ],
-   "expect": "FAIL: test_source_dir_in_build_cmake"
   },
   {
    "id": "jg-cmake-modules-not-scanned",
