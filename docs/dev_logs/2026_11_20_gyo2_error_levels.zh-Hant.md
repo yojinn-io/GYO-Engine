@@ -44,3 +44,15 @@
 - 理由：使用者沒有另外說。主會話給使用者的說明是「三組都是舊機制拿掉後，測試從看舊機制改成看新概念，只檢查 Engine 自己的行為」。
 - 出處：主會話對話 2026-11-20，經主會話轉來。
 - 另記：AGENTS §14.2 要求的「和一覽作者不同模型的敵對式檢查」取消。使用者原話：「我改的是概念和機制，你用對抗1000%會有問題，現在這個機制不欄會寫垃圾代碼的人。」（「不欄」照原文。）讀法：這次是概念的改變（錯誤是資訊、Engine 不強制），敵對式檢查會把「擋不住寫垃圾代碼的人」當成缺口，把方向推回強制。§14.4 的驗證者核對（Opus 5.5／high）照做，三組都成立。
+
+## 退出流程與標準 main（2026-11-21，主會話親自改）
+
+- 使用者原話（依序）：「你把處理返回回來的異常信息的處理代碼加上。注意，不是讓你改機制。是讓你再runner一類的上層，看到錯誤代碼了，做對應處理。你親自去改。」主會話先提「預設 runner 記一筆然後回 Failure」，使用者問「runner 停下，然後呢？」；主會話列出 ①Kernel 回 Err→②編排層收集 WorldFailure、回帶 failure 的錯誤→③runner→④main 轉成結束碼的流程後，使用者：「照這個流程改。④ 也要在這一批補一個標準的 main 範例或輔助函式」。改到一半使用者指出：「我剛發現一個問題。記日誌和處理異常不在同一層。go也是這樣處理的？」——主會話對照 Go（下層 `fmt.Errorf("…: %w", err)` 包上脈絡回傳，最上層 main `log.Fatal(err)`；下層「記一筆再回傳」被當成處理兩次，出自 Dave Cheney、Uber 風格指南，非官方），把記日誌移到做決定的那一層。
+- 改了什麼：
+  - 預設 runner（`Product::Run`）：失敗時看錯誤，E1（帶 `failure`）回 `Failure` 與「the Product ended: ＋WorldFailure 的完整文字」，其他碼回 `Failure` 與碼、訊息、細節；自己不寫。
+  - 新增 `ExitCode(RunnerExit)`（Success→0、Failure→1）與 `RunProduct(description, units)`（標準 main：建、跑、拆，啟動報告→記一筆 Error、回 1；runner 的 Failure→記原因一筆 Error、回 1；成功回 0）。
+  - 範例 main `tests/common/orchestration/MainExample.cpp` 與以行程跑它的 `orchestration.O-3-main`（`MainExampleProbe.cmake`）。
+  - 條文：`target/error-handling.md` 的「How the Engine's own code uses this」與 DI 4、O-3、O-11 的草稿。
+- 測試：`O-3: the default runner returns…`（`[or-runner-default-reason]`、`[or-runner-default-silent]`）、`O-3: RunProduct writes a runner's Failure…`、`…writes nothing and returns 0…`、`…handles a startup report…`（`[or-runproduct-startup-*]`、`[or-exit-code]`）。本機（macOS）ctest 全量 133 過（含 `orchestration.O-3-main`）。
+- 突變：新增 `or-runner-logs-back`、`or-runner-reason-dropped`、`or-runproduct-failure-silent`、`or-runproduct-startup-silent`、`or-main-exit-zero`，5/5 killed；`g8-default-runner-always-success` 的 cases 隨測試改名，`or-runner-not-called` 照跑，2/2 killed。
+

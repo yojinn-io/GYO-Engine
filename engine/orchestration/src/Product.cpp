@@ -5,6 +5,7 @@
 #include "engine/orchestration/Product.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/Log.hpp"
 
 #include <algorithm>
 #include <new>
@@ -505,10 +506,19 @@ RunnerExit Product::Run() {
     GYO_ASSERT(!ran_);
     ran_ = true;
     if (runner_) return runner_(*this);
-    // The default runner: one frame (Bevy run_once).
+    // The default runner: one frame (Bevy run_once). It writes nothing: it returns the
+    // reason with the error's context, and the layer that decides what follows (RunProduct,
+    // a product's main) writes it once and decides (the error is handled in one place).
     auto ran = RunFrame();
     if (ran) return RunnerExit{};
-    return RunnerExit{RunnerExitCode::Failure, ran.error().message + (ran.error().detail.empty() ? "" : "\n" + ran.error().detail)};
+    const OrchestrationError& error = ran.error();
+    if (error.failure) {
+        // E1: a World is broken and the Product cannot run again.
+        return RunnerExit{RunnerExitCode::Failure, "the Product ended: " + error.failure->Text()};
+    }
+    // E2: this request was not done (RunFrame does not return one today).
+    return RunnerExit{RunnerExitCode::Failure,
+                      std::string(ToString(error.code)) + ": " + error.message + (error.detail.empty() ? "" : "\n" + error.detail)};
 }
 
 Kernel::WorldExecutor& Product::World(std::string_view name) {
@@ -763,6 +773,27 @@ bool Product::HasWorld(std::string_view name) const noexcept {
                                                       "BuildPlans of World " + Quoted(worldName) + " failed", report.detail));
     }
     return {};
+}
+
+int RunProduct(ProductDescription description, RegisteredUnits units) {
+    auto built = Product::Build(std::move(description), std::move(units));
+    if (!built) {
+        const ProductStartupReport& report = built.error();
+        ::Engine::Base::Log(::Engine::Base::LogLevel::Error, "orchestration",
+                            "the Product did not start: " + report.message + (report.detail.empty() ? "" : "\n" + report.detail));
+        return 1;
+    }
+    RunnerExit exit;
+    {
+        // The Product and its Worlds go before the caller tears down what it set up first.
+        std::unique_ptr<Product> product = std::move(built).value();
+        exit = product->Run();
+    }
+    // This is the layer that decides what follows, so it writes the runner's reason here.
+    if (exit.code == RunnerExitCode::Failure) {
+        ::Engine::Base::Log(::Engine::Base::LogLevel::Error, "orchestration", exit.reason);
+    }
+    return ExitCode(exit);
 }
 
 } // namespace GYO::Engine::Orchestration
