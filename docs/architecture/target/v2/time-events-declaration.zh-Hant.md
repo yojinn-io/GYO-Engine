@@ -139,7 +139,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 | System 與函式（`WorldTimeModule` 提供） | 種類 | 做什麼 |
 |---|---|---|
-| `AdvanceTime`（推進時間） | 一般 System。`pausable` 時讀 `TimeControl`，否則用不讀它的另一個簽名（沒登記的型別當參數是啟動錯誤 RE4，`Registry.cpp:327-336`） | 依 `TimeSampling` 取一次樣 → 更新 `RealTime`（建好 World 後第一次取樣 `delta`＝0） → 上一輪的 `pending` 若沒被取走，記進 `discarded` 並發 `TimeDiscarded`（原因：固定步沒有被驅動） → `AdvanceVirtual` 算這一輪的量與扣掉的量 → 寫 `VirtualTime`、`ActiveTime`（每幀的值）、`FixedTime.pending`；扣掉的量大於 0 時發 `TimeDiscarded` |
+| `AdvanceTime`（推進時間） | 一般 System。`pausable` 時讀 `TimeControl`，否則用不讀它的另一個簽名（沒登記的型別當參數是啟動錯誤 RE4，`Registry.cpp:327-336`） | 依 `TimeSampling` 取一次樣 → 更新 `RealTime`（建好 World 後第一幀的 `delta` 依取樣方式：讀時間基準與手動「下一個時間點」是 0，手動「每幀經過時間」是設定值；和 WT-2 一致，合併前核准改，使用者 2026-11-20） → 上一輪的 `pending` 若沒被取走，記進 `discarded` 並發 `TimeDiscarded`（原因：固定步沒有被驅動） → `AdvanceVirtual` 算這一輪的量與扣掉的量 → 寫 `VirtualTime`、`ActiveTime`（每幀的值）、`FixedTime.pending`；扣掉的量大於 0 時發 `TimeDiscarded` |
 | `RunFixedSteps`（跑固定步） | `ExclusiveWorld<Writes<Tick, FixedTime, ActiveTime>>`，自己佔一個 stage（`-same-input-same-result`） | 取走 `pending`、`Add` 進累加器得 k 步（`AdvanceVirtual` 已保證 k ≤ 上限）；呼叫 k 次 `RunOneFixedStep` |
 | `RunOneFixedStep(world, schedule)`（公開的函式樣板，參數是任何一種 `ExclusiveWorld<…>`——`ExclusiveWorld<Writes<…>>` 是不同的 `final` 型別，`Params.hpp:838-839`） | — | `Tick`+1、`FixedTime.elapsed`+步長 → `ActiveTime`＝（步長、`FixedTime.elapsed`）→ 巢狀跑固定步的 schedule → 回 Ok 時把 `ActiveTime` 換回每幀的值；**回 Err 或例外時直接往上傳、不換回**（World 已中斷，`Params.hpp:1006-1024`、`Executor.cpp:139-168`；D2 之後 Product 結束） |
 | `RewindFixedSteps(world, k)`（公開的函式樣板；本卡加的） | — | `Tick`−k、`FixedTime.elapsed`−k×步長；累加器不動。回滾策略重跑前呼叫，之後呼叫 k 次 `RunOneFixedStep`（回滾 7.2 第 2 條，「時間 Module 給推進一步的函式」那一種）。系譜：lightyear 回滾時 `apply_delta(-n)` 並把 `Time<Fixed>` 換成回滾用的值（`rollback.rs:1153-1291`） |
@@ -168,7 +168,7 @@ Kernel 不知道「每幀」「固定步」「暫停」「tick」是什麼：它
 
 | 要求（出處） | 本頁的回答 |
 |---|---|
-| 時間的 Resource 能被讀檔放回（讀檔 5.5） | **可以存與放回**：`Tick`、`VirtualTime`（`elapsed`、`discarded`、零頭；`delta` 下一幀會被蓋）、`FixedTime` 的 `elapsed` 與累加器的餘數、`TimeControl`。**不放回**：`RealTime`（時間基準的時間點跨行程沒有意義；新 World 的 `RealTime` 從頭開始，第一次取樣 `delta`＝0）；`FixedTime` 的步長以這次的設定為準（作者只放回 `elapsed` 與餘數，時間 Module 給一個「放回固定步狀態」的函式，不收步長）；`Resimulation`（恆 false）。存檔結構要沒有 padding（`-summary-padding-a-then-c`；`VirtualTime` 有 bool 與浮點，`static_assert` 守）。scenario S2-8 驗 |
+| 時間的 Resource 能被讀檔放回（讀檔 5.5） | **可以存與放回**：`Tick`、`VirtualTime`（`elapsed`、`discarded`、零頭；`delta` 下一幀會被蓋）、`FixedTime` 的 `elapsed` 與累加器的餘數、`TimeControl`。**不放回**：`RealTime`（時間基準的時間點跨行程沒有意義；新 World 的 `RealTime` 從頭開始、不帶過去的真實時間；第一幀 `delta` 依取樣方式：讀時間基準是 0，手動「每幀經過時間」是設定值；和 WT-2 一致，合併前核准改，使用者 2026-11-20）；`FixedTime` 的步長以這次的設定為準（作者只放回 `elapsed` 與餘數，時間 Module 給一個「放回固定步狀態」的函式，不收步長）；`Resimulation`（恆 false）。存檔結構要沒有 padding（`-summary-padding-a-then-c`；`VirtualTime` 有 bool 與浮點，`static_assert` 守）。scenario S2-8 驗 |
 | `Tick` 是回滾策略能寫的 Resource、用 `ExclusiveWorld` 退（回滾 7.2 第 1 條） | 公開型別；不擋任何寫者；`RewindFixedSteps` 是建議的退法 |
 | 重跑時每一步怎麼推、System 讀到的固定步時間等於第一次（7.2 第 2 條） | `RewindFixedSteps`＋`RunOneFixedStep`：退回後重跑第 T+1 步時 `elapsed` 與第一次相同（步長不變，本批不准執行中換步長） |
 | 「重跑中」由時間 Module 登記、恆在（5.7、7.2 第 3 條） | `Resimulation`；沒有時間 Module 的 World 沒有它 |
@@ -340,7 +340,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 | S2-5 | 暫停（`TimeControl`）2 幀 | `Tick` 不動、每幀的 System 照跑 |
 | S2-6 | 卡住：一幀經過 1 秒（餘數 0） | 跑 5 步、`TimeDiscarded` 一筆、`discarded` 增加 59 步的量 |
 | S2-7 | 金幣實體被拿掉 | `Remove<Coin>` 的 observer 在同步點跑一次、在 OnRemove hook 之前 |
-| S2-8 | 存檔（`Tick`、`VirtualTime`、`FixedTime` 的狀態、玩家、分數；結構沒有 padding）→ 換新 World 讀檔 | 新 World 的 `Tick` 接著存檔時的值；再跑 5 步位置接著加；第 1 幀 `RealTime.delta`＝0 |
+| S2-8 | 存檔（`Tick`、`VirtualTime`、`FixedTime` 的狀態、玩家、分數；結構沒有 padding）→ 換新 World 讀檔 | 新 World 的 `Tick` 接著存檔時的值；再跑 5 步位置接著加；讀檔後不帶過去的真實時間；第一幀 `delta` 依取樣方式（時鐘取樣是 0，手動每幀取樣是設定值）（**合併前核准改**，使用者 2026-11-20 side chat「照建議」；原寫「第 1 幀 `RealTime.delta`＝0」和 S2-2 的手動每幀取樣矛盾；測試的換法照 AGENTS §14.4 1～5 核准，`step7/review-and-14-4-fable.md` A.1 M3） |
 | S2-9 | 第 1 段拿掉為 D-E12 加的 domain 宣告 | 第 1 段照樣通過 |
 
 失敗的分類照 `-scenario-failure-by-contract`（骨架宣告 8.4）。
@@ -387,7 +387,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 
 **預算**（判定 5）：
 - **時間**：時間 Module 每幀的額外成本（`AdvanceTime`＋`RunFixedSteps` 的固定開銷，不含固定步裡作者的 System），在本機 Release 版每幀 0／1／5 步各量一次，**不超過 64 Hz 一步（15.625 ms）的 1%（156 µs）**。根據：沒有產品給過預算；1% 是讓時間 Module 不成為固定步預算的一項。超過就停下回報（§14），不放寬。
-- **記憶體**：游標份 7.3 算的（預設 1024 筆、內容 32 位元組約 40 KB／種）與實測比：scenario 第 2 段與一個「100 種訊息全部頂滿」的測試量訊息緩衝的峰值，記進 dev_log；超過計算值 2 倍就停下回報。
+- **記憶體**：游標份 7.3 算的（預設 1024 筆、內容 32 位元組約 40 KB／種）與實測比：scenario 第 2 段與一個「100 種訊息全部頂滿」的測試量訊息緩衝的峰值，記進 dev_log；超過計算值 2 倍就停下回報。預算不含 `accessVerification` 的快照；開著時約 2 倍，屬除錯模式的已知代價（**合併前核准補**，使用者 2026-11-20 side chat「照建議」：快照只在除錯開關打開時才拍，預設不拍、成本是零；這是界定判定的範圍，不是事後放寬。實測：預設 1.0012 倍，開著時 2.001 倍）。
 
 ### 9.3 Architecture Delta（七項）
 
@@ -589,7 +589,7 @@ DI-KS 的文字變更（第 10.1 節）同樣在這次逐條核准。
 - **判定 1：通過**。本機完整 ctest 全過（含 `scenario.segment1`、`segment2`）；L1 三平台（linux-x64、windows-x64、macos-arm64）全過；`gyo_time` 的連結檢查照過（`engine/time` 沒變）；include 順序守衛照過。比摘要的測試照 `-summary-padding-a-then-c` 標「未完全解決」，它們在 L1 的偶發失敗照那個決定處理，不算本批的回歸——但本批新加的摘要內容（游標表、紀錄）不得是新的不穩定來源（`static_assert` 守）。
 - **判定 2：行為**。第 6.4 節的案例全過；第 7 節 S2-1～S2-9 全過。
 - **判定 3：檢出力**。新突變清單經 Fable／high 檢查補齊後全殺；第 6.5 節列的舊突變照 6.1、6.2 處置後，留下的全殺；分母以執行時的實際清單為準；完整跑（Kernel＋編排層＋`world_time`）結果記進 dev_log，活著的逐個說明。
-- **判定 4：一次性的掃描**（git grep，`engine/` 與 `tests/`，文件與 dev_log 除外；每個樣式先在現在的程式命中一次當正例，終了碼區分「沒有」與「失敗」）：`\bDomain::(None|Fixed|Frame|Loading)\b`、`\bCurrentTick\b`、`\bDomainTick\b`、`[eE]ventTrim`、`\bEventReader\b`、`\bEventWriter\b`、`\bEventOptions\b`、`\bEventPayloads\b`、`\bTickStamp\b`、`\.clock\b`（正例：`schedule.clock`）零命中；`tests/common/kernel/kernel_guard.py` 裡 `PRODUCT_ALIASES` 零命中。
+- **判定 4：一次性的掃描**（git grep，`engine/` 與 `tests/`，文件與 dev_log 除外；每個樣式先在現在的程式命中一次當正例，終了碼區分「沒有」與「失敗」）：`\bDomain::(None|Fixed|Frame|Loading)\b`、`\bCurrentTick\b`、`\bDomainTick\b`、`[eE]ventTrim`、`\bEventReader\b`、`\bEventWriter\b`、`\bEventPayloads\b`、`\bTickStamp\b`、`\.clock\b`（正例：`schedule.clock`）零命中；`tests/common/kernel/kernel_guard.py` 裡 `PRODUCT_ALIASES` 零命中。（**合併前核准改**，使用者 2026-11-20 side chat「照建議」：拿掉 `\bEventOptions\b`——名字已讓給推送式事件（`Declarations.hpp:93` 的 `EventOptions`，照 Bevy 0.17 的 Message＝緩衝、Event＝推送）；舊保留式的選項已改名 `MessageOptions`，舊 API 清掉這件事由同一行的 `EventReader`、`EventWriter`、`[eE]ventTrim`、`EventPayloads` 守。AGENTS §14.4 的緩的面：以前命中算失敗的這個名字，現在指另一個概念、放行。）
 - **判定 5：預算**（第 9.2 節）：時間 Module 每幀額外成本 ≤ 156 µs（0／1／5 步各一次，本機 Release）；訊息緩衝峰值 ≤ 游標份 7.3 計算值的 2 倍。超過就停下回報。
 
 ---
