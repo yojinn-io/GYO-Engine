@@ -131,7 +131,7 @@ TEST_CASE("O-1: RunGameInit a second time, or after RunFrame: GYO_ASSERT") {
     GYO_CHECK_ASSERTS((*other)->RunGameInit());
 }
 
-TEST_CASE("O-1: a failing game initialization schedule: RunFrame returns it, no frame schedule runs, the handler once, then WorldInterrupted") {
+TEST_CASE("O-1: a failing game initialization schedule: RunFrame returns it, no frame schedule runs, the kernel error once, then WorldInterrupted") {
     Log().clear();
     O::ProductDescription d = Game({"A", "B"});
     d.worlds[0].build = [](O::WorldSetup& s) {

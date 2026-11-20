@@ -670,7 +670,7 @@ TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive spawns not
     rig->world().Insert(100, Tag{1});
     const auto result = rig->Run();
     CHECK_MESSAGE(static_cast<bool>(result), "[ks-s5-spawn-alive-not-run-error] the Run ended in the System-only Err: " << Text(result));
-    CHECK_MESSAGE(rig->recorded.empty(), "[ks-s5-spawn-alive-not-run-error] the error handler got " << rig->recorded.size());
+    CHECK_MESSAGE(rig->recorded.empty(), "[ks-s5-spawn-alive-not-run-error] the outermost call returned an Err " << rig->recorded.size());
     CHECK_MESSAGE(rig->world().State() != WorldState::Interrupted, "[ks-s5-spawn-alive-not-interrupted] the World was interrupted");
     CHECK_MESSAGE(Joined() == "refused AllottedIdAlive | add Hp 101 | spawned 101", "[ks-s5-spawn-alive-err] " << Joined());
     CHECK_MESSAGE(rig->world().Get<Hp>(100) == nullptr, "[ks-s5-spawn-alive-err] Hp went onto the live entity 100");
@@ -698,7 +698,7 @@ TEST_CASE("DI-KS 18: an exception that leaves an immediate change interrupts the
     // The second change finds the World interrupted: it is not made and returns the error left.
     CHECK_MESSAGE(Joined() == "hook throws | caught | again ImmediateChangeAborted", "[ks-s5-throw-interrupts] " << Joined());
     CHECK_MESSAGE(HasCode(result, KernelErrorCode::ImmediateChangeAborted), "[ks-s5-throw-interrupts] " << Text(result));
-    CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-throw-reported-once] the handler was called " << rig->recorded.size() << " times");
+    CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-throw-reported-once] the Err came back " << rig->recorded.size() << " times");
     CHECK(rig->world().State() == WorldState::Interrupted);
     CHECK_MESSAGE(Text(result).find("System 'Driver'") != std::string::npos, "[ks-s5-throw-interrupts] " << Text(result));
     // What was applied stays (the World is read for diagnosis only); the record the first hook made is dropped.
@@ -752,7 +752,7 @@ TEST_CASE("DI-KS 18: a hook's Err inside an immediate change interrupts the Worl
         const auto result = rig->Run();
         CHECK_MESSAGE(Logged("insert SystemFailed"), "[ks-s5-hook-err-own-phase] " << Joined());
         CHECK_MESSAGE(HasCode(result, KernelErrorCode::SystemFailed), "[ks-s5-hook-err-own-phase] " << Text(result));
-        CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-hook-err-own-phase] handler calls " << rig->recorded.size());
+        CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-hook-err-own-phase] Err returns " << rig->recorded.size());
         CHECK(rig->world().State() == WorldState::Interrupted);
         // The hook ran at the exclusive System's step 0, not at a sync point.
         CHECK_MESSAGE(Text(result).find("at hook 'ModeFails' at step 0 (an immediate change) of schedule 'Tick'") != std::string::npos,
@@ -770,7 +770,7 @@ TEST_CASE("DI-KS 18: a hook's Err inside an immediate change interrupts the Worl
         const auto result = rig->Run();
         CHECK_MESSAGE(Logged("insert SystemFailed"), "[ks-s5-hook-err-round] " << Joined());
         CHECK_MESSAGE(HasCode(result, KernelErrorCode::SystemFailed), "[ks-s5-hook-err-round] " << Text(result));
-        CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-hook-err-round] handler calls " << rig->recorded.size());
+        CHECK_MESSAGE(rig->recorded.size() == 1, "[ks-s5-hook-err-round] Err returns " << rig->recorded.size());
         CHECK(rig->world().State() == WorldState::Interrupted);
         CHECK_MESSAGE(Text(result).find("hook round 1 of an immediate change by System 'Driver'") != std::string::npos,
                       "[ks-s5-hook-err-round] " << Text(result));

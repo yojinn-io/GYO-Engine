@@ -666,7 +666,7 @@ TEST_CASE("J-56: an inner System's Err is reported once, with the inner System, 
     Runs()["Driver"] = {"Step"};
     const auto result = rig->Run("Frame");
     REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-err-once] the handler was called " << rig->recorded.size() << " times");
+    CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-err-once] the Err came back " << rig->recorded.size() << " times");
     const std::string text = result.error().Text();
     CHECK_MESSAGE((text.find("'Fails' of schedule 'Step'") != std::string::npos && text.find("'Driver' of schedule 'Frame'") != std::string::npos),
                   "[ns-err-context] " << text);
@@ -699,10 +699,10 @@ TEST_CASE("J-56: after an interruption RunSchedule runs nothing and returns the 
     REQUIRE_FALSE(static_cast<bool>(result));
     CHECK_MESSAGE(!Logged("InA@Tick#1"), "[ns-again] Tick ran after the interruption: " << Joined());
     CHECK_MESSAGE(Logged("second SystemFailed boom at Executor: step 0 'Fails' of schedule 'Step'"), "[ns-again] " << Joined());
-    CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-again] the handler was called " << rig->recorded.size() << " times");
+    CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-again] the Err came back " << rig->recorded.size() << " times");
 }
 
-TEST_CASE("J-56: an exception from the inner schedule caught by the outer System: the outer schedule stops, the handler gets NestedRunAborted once") {
+TEST_CASE("J-56: an exception from the inner schedule caught by the outer System: the outer schedule stops, NestedRunAborted comes back once") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&CatchThenAfter>(In("Driver", "Frame", "Drive"));
@@ -784,7 +784,7 @@ void CheckSwallowed(Rig& rig, KernelErrorCode code, const char* rule, const std:
         CHECK_MESSAGE(ruled, "[" << tag << "] rule " << std::string(rule) << ": " << result.error().Text());
     }
     CHECK_MESSAGE(rig.world().State() == WorldState::Interrupted, "[" << tag << "]");
-    CHECK_MESSAGE(rig.recorded.size() == 1, "[" << tag << "] the handler was called " << rig.recorded.size() << " times");
+    CHECK_MESSAGE(rig.recorded.size() == 1, "[" << tag << "] the Err came back " << rig.recorded.size() << " times");
     CHECK_MESSAGE(!Logged("After@Frame#1"), "[" << tag << "] the outer schedule went on: " << Joined());
 }
 
@@ -1598,7 +1598,7 @@ TEST_CASE("J-56: a hook of the inner schedule runs a schedule: refused, reported
     REQUIRE_FALSE(static_cast<bool>(result));
     CHECK_MESSAGE(result.error().Has(KernelErrorCode::HookRunsSchedule), "[ns-hook-refused-inner] " << result.error().Text());
     CHECK_MESSAGE(result.error().Leaves().size() == 1, "[ns-hook-refused-inner] " << result.error().Text());
-    CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-hook-refused-inner] the handler was called " << rig->recorded.size() << " times");
+    CHECK_MESSAGE(rig->recorded.size() == 1, "[ns-hook-refused-inner] the Err came back " << rig->recorded.size() << " times");
 }
 
 

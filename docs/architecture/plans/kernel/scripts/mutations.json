@@ -2715,14 +2715,18 @@
       "expect": "\\(breaks\\ >\\ 0\\)\\ ==\\ breakOn"
     },
     {
-      "id": "hf-limit-handler-twice",
-      "what": "the limit's Err reaches the handler twice (v8-arch-gyo2-hook-flush, spec F-12) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "id": "hf-limit-err-not-returned",
+      "what": "the limit's Err interrupts the World but the outermost Run returns Ok, so the caller never sees it (rewritten from hf-limit-handler-twice by v8-arch-gyo2-error-levels D1: the kernel has no error handler; the Err is returned once and that is what the check counts) The case's REQUIRE_FALSE on the returned result stops it first: that is the expected failure.",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
-      "replace": "                        if (handler_) handler_(error);\n                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
+      "replace": "                        (void)Fail(std::move(error), nested);\n                        return {};\n                    }\n                    ++round;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: at the limit*",
-      "expect": "J\\-54:\\ the\\ handler\\ ran\\ 2\\ times"
+      "expect": "REQUIRE_FALSE\\( static_cast<bool>\\(result\\) \\) is NOT correct",
+      "guards": [
+        "kernel DI-KS 2",
+        "error-handling DI 1"
+      ]
     },
     {
       "id": "hf-schedule-zero-allowed",
@@ -3810,9 +3814,9 @@
       "file": "engine/kernel/src/Executor.cpp",
       "target": "gyo_kernel_tests",
       "find": "                        return Fail(std::move(error), nested);\n                    }\n                    ++round;",
-      "replace": "                        world.DiscardDeferred();\n                        if (handler_) handler_(error);\n                        world.state_ = WorldState::Ready;\n                        return Engine::Base::Err(std::move(error));\n                    }\n                    ++round;",
+      "replace": "                        world.DiscardDeferred();\n                        world.state_ = WorldState::Ready;\n                        return Engine::Base::Err(std::move(error));\n                    }\n                    ++round;",
       "expect": "rig\\->world\\(\\)\\.State\\(\\)\\ ==\\ WorldState::Interrupted",
-      "what": "at the limit the World is not interrupted (declared: 不中斷) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
+      "what": "at the limit the World is not interrupted (declared: 不中斷) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (replace without the handler call, v8-arch-gyo2-error-levels D1)",
       "cases": "J-54: at the limit*",
       "ran_as": "ck-decl-limit-not-interrupted",
       "note": "宣告判定 2「不中斷」"
@@ -4692,16 +4696,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-56: after an interruption RunSchedule*",
       "expect": "\\[ns\\-again\\]"
-    },
-    {
-      "id": "ns-nested-calls-handler",
-      "what": "E.5: a nested level calls the handler too (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "    if (nested) {\n        // K0 (spec E.5): reported once",
-      "replace": "    if (false) {\n        // K0 (spec E.5): reported once",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: an inner System's Err is reported once*",
-      "expect": "\\[ns\\-err\\-once\\]"
     },
     {
       "id": "ns-left-error-not-kept",
@@ -7876,7 +7870,7 @@
     },
     {
       "id": "obs-host-err-not-failed",
-      "what": "an error of the Host's trigger is returned without interrupting the World or calling the handler (event cursor declaration 3.3: the World interrupted, F-12). The only mutant of the Host trigger's failure. Step 7: the expect carries what this mutant alone makes the check print (the tag was shared)",
+      "what": "an error of the Host's trigger is returned without interrupting the World or calling the handler (event cursor declaration 3.3: the World interrupted, F-12). The only mutant of the Host trigger's failure. Step 7: the expect carries what this mutant alone makes the check print (the tag was shared) v8-arch-gyo2-error-levels D1: the test rig records the returned Err, so the count check passes and the State check is what this mutant alone fails",
       "guards": [
         "kernel DI-KS 10"
       ],
@@ -7885,7 +7879,7 @@
       "replace": "    if (!ran) return Engine::Base::Err(std::move(ran).error());",
       "target": "gyo_kernel_tests",
       "cases": "J-59: the Host's Trigger stops at KernelSettings*",
-      "expect": "\\[obs\\-host\\-limit\\-once\\] reported 0"
+      "expect": "\\[obs\\-host\\-limit\\] the World is interrupted"
     },
     {
       "id": "obs-exclusive-err-not-left",

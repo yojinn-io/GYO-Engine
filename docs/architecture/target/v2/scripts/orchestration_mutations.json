@@ -303,16 +303,6 @@
    "expect": "\\[or\\-replace\\-check\\-fails\\]"
   },
   {
-   "id": "or-handler-not-kept",
-   "what": "O-8: the error handler is not set on the new World",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (slot.handler) executor->SetErrorHandler(slot.handler);",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: the error handler*",
-   "expect": "\\[or\\-replace\\-handler\\-kept\\]"
-  },
-  {
    "id": "or-drop-old-later",
    "what": "O-8: DropOldFirst destroys the old World only at the swap (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
@@ -863,14 +853,18 @@
    "expect": "expected GYO_ASSERT to fail: \\(\\*built\\)->Run\\(\\)"
   },
   {
-   "id": "g8-handler-set-late",
-   "what": "G-8 candidate: O-1: a failing game initialization* | \\[or\\-gi\\-error\\-once\\]",
+   "id": "or-gi-kernel-twice",
+   "what": "the kernel error behind a failed schedule comes back twice (rewritten from g8-handler-set-late by v8-arch-gyo2-error-levels D1: [or-gi-error-once] counts the returned kernel error, not handler calls)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (slot->executor) slot->executor->SetErrorHandler(slot->handler);\n",
-   "replace": "",
+   "find": "    result.kernel.push_back(std::move(error));\n",
+   "replace": "    result.kernel.push_back(error);\n    result.kernel.push_back(std::move(error));\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: a failing game initialization*",
-   "expect": "\\[or\\-gi\\-error\\-once\\]"
+   "expect": "\\[or\\-gi\\-error\\-once\\] the kernel error came back 2 times",
+   "guards": [
+    "orchestration O-1",
+    "error-handling DI 4"
+   ]
   },
   {
    "id": "g8-throw-no-giveback",
