@@ -615,7 +615,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 - **兩家都不用名字表示級別**：Java 靠繼承（`ThreadDeath` 是 `Error` 卻不以 Error 結尾），Go 靠「回傳 error 還是 panic」。用字尾標級是 GYO 自己的規則。
 - **和 Java 的 `Error` 同在「不能救」，不同在範圍**：Java 的 `Error` 是整個執行環境的前提不成立（OOM、堆疊用盡、`AssertionError`），對到的是 **E0**；而且 Java 說 `Error`「should not try to catch」，GYO 的 E1 一定由 runner 接住、記一次、退出。讀過 Java 的人看到 `…Error`，可能以為「不要接」或「行程要死」。
 - **和 Go 的 `XxxError` 不同義**：Go 的 `XxxError` 只是「錯誤型別」的泛稱，照 GYO 的分法多半是 E2——正好是 GYO 叫 `…Failure` 的那一級（`os.PathError` 在 GYO 會叫 `…Failure`）。Go 的 `runtime.Error`（程式錯的 panic）則是「Error＝不能救」的先例。
-- 本卡的判斷：使用者的規則要的是「名字帶著處理方式」，這一點兩家都沒有、但沒有衝突；會被誤解的是讀者帶進來的 Java、Go 的字義。建議**保留規則**，在契約（`target/error-handling.md` 的級別一節與命名規範頁）寫明「GYO 的 `…Error` 指 E1：一個 World 壞了、持有它的單位結束、由 runner 接住記一次；不是 Java 的 `Error`（那對到 GYO 的 E0），也不是 Go 的 `XxxError`（那多半是 GYO 的 `…Failure`）」，而且級別由型別承載（D3 (b)），名字和型別一致、不是只靠名字。
+- **使用者已定**（2026-11-20，原話「保留命名規則，契約裡寫明不是Java的Error」）：保留規則，契約寫明。本卡原本的判斷：使用者的規則要的是「名字帶著處理方式」，這一點兩家都沒有、但沒有衝突；會被誤解的是讀者帶進來的 Java、Go 的字義。所以**保留規則**，在契約（`target/error-handling.md` 的級別一節與命名規範頁）寫明「GYO 的 `…Error` 指 E1：一個 World 壞了、持有它的單位結束、由 runner 接住記一次；不是 Java 的 `Error`（那對到 GYO 的 E0），也不是 Go 的 `XxxError`（那多半是 GYO 的 `…Failure`）」，而且級別由型別承載（D3 (b)），名字和型別一致、不是只靠名字。
 
 **系譜**：使用者的規則（名字帶著處理方式）；Java 以型別階層表示處理方式（但不以名字）。**舊形狀？** 不是（現有的 `…Error` 全是 E2，名字和級別反著）。**支撐的 Feature**：F4（runner 看型別名就知道怎麼處理）。
 
@@ -850,7 +850,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
     3. **`Result::error()` 與 `Base::Err(...)` 照舊**（`std::expected` 的用語、不分級）：side chat 建議、本卡同意。
     4. **`StartupReport`、`ProductStartupReport` 照舊**（本卡補）：是一次收齊的報告，`Report` 已說明處理方式。
     5. **`Base::AssertionFailure` 和規則衝突**（本卡補）：E0 的那一包叫 `…Failure`。建議改名（例：`AssertionViolation`），隨範圍第 1 點一起做；不改的話在命名規範寫明它是例外。
-    6. **和 Java、Go 字義的差異**（修訂 5，照原始出處查的）：Java 的 `Error` 對到 GYO 的 E0（整個執行環境不成立、「不要接」），Go 的 `XxxError` 多半是 GYO 的 E2。兩家都不用名字標級。建議保留規則，在契約寫明「GYO 的 `…Error` 不是 Java 的 `Error`、也不是 Go 的 `XxxError`」（D11）。要不要因此換字尾，由使用者定。
+    6. **和 Java、Go 字義的差異**——**已定**（使用者 2026-11-20，本卡）：原話「保留命名規則，契約裡寫明不是Java的Error」。比過的選項：保留規則並在契約寫明（本卡建議）／因字義差異換字尾。決定：保留 `…Error`＝E1、`…Failure`＝E2；契約（`target/error-handling.md` 的級別一節與命名規範頁）寫明 GYO 的 `…Error` 不是 Java 的 `Error`（那對到 GYO 的 E0）。本卡建議裡「也不是 Go 的 `XxxError`」那半句，使用者原話沒有提，照本卡的建議一併寫進契約；使用者不要時拿掉。
 
 **主會話照 L17 判了、不交使用者的**（2026-11-20 主會話轉來）：P18 與 O7 併入本批（第 17 節；第 17.1 節的判定變更與 Bevy 的兩支照上面第 11 題交使用者，因為窄複查指出有緩的面）；D7 條文先照本宣告的提案放，合併前由主會話轉圖書管理員確認，不擋動工；批次先後照第 11.2 節（本批 → 日誌批 → 第 4 批的 Kernel 與編排層步驟）。
 
