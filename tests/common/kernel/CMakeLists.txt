@@ -65,15 +65,8 @@ set_tests_properties(kernel.J-6_thread_bound_destroy PROPERTIES LABELS "cpu" TIM
     PASS_REGULAR_EXPRESSION "thread-bound destroy: GYO_ASSERT failed as expected")
 
 # Error levels D1 (docs/architecture/target/v2/error-levels-declaration.zh-Hant.md section 9.2,
-# [el-silent-kernel]): the kernel's Err paths leave standard error empty. Run under cmake -P so the
-# script reads what each process wrote; a positive control shows the capture works.
-add_executable(gyo_kernel_silent_probe_positive SilentProbePositive.cpp)
-add_test(NAME kernel.el-silent
-    COMMAND ${CMAKE_COMMAND}
-        -DTESTS=$<TARGET_FILE:gyo_kernel_tests>
-        -DPOSITIVE=$<TARGET_FILE:gyo_kernel_silent_probe_positive>
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/KernelSilentProbe.cmake)
-set_tests_properties(kernel.el-silent PROPERTIES LABELS "cpu" TIMEOUT 120)
+# [el-silent-kernel]): the kernel's Err paths leave standard error empty (tests/common/support/SilentProbe.cmake).
+gyo_add_silent_probe(kernel.el-silent gyo_kernel_tests "${CMAKE_CURRENT_SOURCE_DIR}/silent_cases.txt")
 
 # One ctest per J entry of the registry-schedule batch (declaration section 2)
 # and of the world-exec batch (world-exec declaration judgement 2), so each

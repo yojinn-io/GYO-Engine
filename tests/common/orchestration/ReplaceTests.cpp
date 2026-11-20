@@ -88,7 +88,7 @@ TEST_CASE("O-8: a Check that fails on the second registration: ReplaceRegistrati
     auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{});
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(replaced), "[or-replace-check-fails] replaced despite the Check error");
     CHECK_MESSAGE(replaced.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-replace-check-fails]");
-    CHECK_MESSAGE(warnings.Warnings() == 1, "[or-replace-check-warn]");
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-replace-check-silent] " << warnings.Warnings());  // error levels D2
     CHECK_MESSAGE(static_cast<bool>(p.RunFrame()), "[or-replace-check-old-goes-on]");
 }
 

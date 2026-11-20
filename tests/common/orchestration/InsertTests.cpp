@@ -35,7 +35,7 @@ TEST_CASE("O-9: an allowing World: the inserted System runs from the next frame;
     CHECK_MESSAGE(Logged("i"), "[or-insert-runs] " << Joined());
 }
 
-TEST_CASE("O-9: a refusing World: InsertRefused, one warning, the World goes on, the version is unchanged; still so after a replacement") {
+TEST_CASE("O-9: a refusing World: InsertRefused, nothing logged, the World goes on, the version is unchanged; still so after a replacement") {
     auto built = O::Product::Build(Refusing(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
@@ -49,14 +49,14 @@ TEST_CASE("O-9: a refusing World: InsertRefused, one warning, the World goes on,
         CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::InsertRefused, "[or-insert-refused]");
         CHECK_MESSAGE((inserted.error().kernel.size() == 1 && inserted.error().kernel[0].code == K::KernelErrorCode::DynamicInsertRefused),
                       "[or-insert-refused-kernel]");
-        CHECK_MESSAGE(warnings.Warnings() == 1, "[or-insert-warn-once] " << warnings.Warnings());
+        CHECK_MESSAGE(warnings.Warnings() == 0, "[or-insert-refused-silent] " << warnings.Warnings());  // error levels D2
         CHECK(p.World("Main").GetWorld().Types().Version() == version);
         CHECK(static_cast<bool>(p.RunFrame()));
         REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
     }
 }
 
-TEST_CASE("O-9: BuildPlans fails (R-E7): InsertBuildFailed, one warning, the World stays on the previous version") {
+TEST_CASE("O-9: BuildPlans fails (R-E7): InsertBuildFailed, nothing logged, the World stays on the previous version") {
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
@@ -65,7 +65,7 @@ TEST_CASE("O-9: BuildPlans fails (R-E7): InsertBuildFailed, one warning, the Wor
     REQUIRE_FALSE(static_cast<bool>(inserted));
     CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::InsertBuildFailed, "[or-insert-build-failed]");
     CHECK_MESSAGE(inserted.error().detail.find("R-E7") != std::string::npos, "[or-insert-build-failed] " << inserted.error().detail);
-    CHECK_MESSAGE(warnings.Warnings() == 1, "[or-insert-build-warn] " << warnings.Warnings());
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-insert-build-silent] " << warnings.Warnings());  // error levels D2
     CHECK(p.World("Main").GetWorld().Types().Version() == 1);
     CHECK(static_cast<bool>(p.RunFrame()));
 }

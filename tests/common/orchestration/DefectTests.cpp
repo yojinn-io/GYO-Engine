@@ -22,7 +22,7 @@ O::PrepareFn Refuse() {
 // guarded: an interrupted World is not replaced any more, the Product has ended
 // (v8-arch-gyo2-broken-world-ends-product; "O-8: a replacement does not mend a broken World").
 
-TEST_CASE("O-8: D3: an exception from extra logs one warning") {
+TEST_CASE("O-8: D3: an exception from extra goes on to the caller and nothing is logged") {
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     WarningCounter warnings;
@@ -35,7 +35,8 @@ TEST_CASE("O-8: D3: an exception from extra logs one warning") {
         thrown = true;
     }
     REQUIRE(thrown);
-    CHECK_MESSAGE(warnings.Warnings() == 1, "[or-d3-throw-warns] " << warnings.Warnings());
+    // Error levels D2: the exception itself tells the caller; the orchestration layer logs nothing.
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-d3-throw-silent] " << warnings.Warnings());
 }
 
 // D4 now: the empty place ends the Product, so game initialization never runs

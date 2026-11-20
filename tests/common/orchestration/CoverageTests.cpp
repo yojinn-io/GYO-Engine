@@ -459,7 +459,7 @@ TEST_CASE("O-8: replacing before game initialization ran: on the new first World
     }
 }
 
-TEST_CASE("O-8: a failing beforeSwap gives the carried value back and warns once; the report of a failed registration is carried") {
+TEST_CASE("O-8: a failing beforeSwap gives the carried value back and logs nothing; the report of a failed registration is carried") {
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
@@ -473,7 +473,8 @@ TEST_CASE("O-8: a failing beforeSwap gives the carried value back and warns once
     const KeyBindings* kb = p.World("Main").GetWorld().Resource<KeyBindings>();
     REQUIRE_MESSAGE(kb != nullptr, "[or-beforeswap-giveback] KeyBindings is gone");
     CHECK_MESSAGE(kb->jump == 4, "[or-beforeswap-giveback] " << kb->jump);
-    CHECK_MESSAGE(warnings.Warnings() == 1, "[or-beforeswap-warn] " << warnings.Warnings());
+    // Error levels D2: the orchestration layer logs nothing; the error went back to the caller.
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-beforeswap-silent] " << warnings.Warnings());
 
     int checks = 0;
     Calls strategy;
@@ -517,15 +518,18 @@ TEST_CASE("O-8: a registration that differs: the new frame list and prepare are 
     CHECK_MESSAGE(listError.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-replace-list-error] code");
 }
 
-TEST_CASE("O-9: the refusal warning names the World and the owner") {
+TEST_CASE("O-9: the refusal error names the World and the owner; nothing is logged") {
     O::ProductDescription d = Game();
     d.worlds[0].dynamicInsert = false;
     auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     WarningCounter warnings;
-    REQUIRE_FALSE(static_cast<bool>((*built)->InsertSystems("Main", "console", [](K::Registrar&) {})));
-    CHECK_MESSAGE((WarningCounter::Last().find("'Main'") != std::string::npos && WarningCounter::Last().find("'console'") != std::string::npos),
-                  "[or-insert-warning-text] " << WarningCounter::Last());
+    auto refused = (*built)->InsertSystems("Main", "console", [](K::Registrar&) {});
+    REQUIRE_FALSE(static_cast<bool>(refused));
+    // Error levels D2: the returned error names the World and the owner, so whoever handles it can say so.
+    CHECK_MESSAGE((refused.error().message.find("'Main'") != std::string::npos && refused.error().message.find("'console'") != std::string::npos),
+                  "[or-insert-error-text] " << refused.error().message);
+    CHECK_MESSAGE(warnings.Warnings() == 0, "[or-insert-silent] " << warnings.Warnings());
 }
 
 // ---- Kernel rules that game initialization schedules are under (G-7, groups A and E)

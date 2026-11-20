@@ -116,3 +116,8 @@ set_tests_properties(orchestration.guard orchestration.guard_selftest PROPERTIES
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too (as for gyo_time).
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_links gyo_orchestration GYO::Base GYO::Kernel)
+
+# Error levels D2 (docs/architecture/target/v2/error-levels-declaration.zh-Hant.md section 9.2,
+# [el-silent-orchestration]): the orchestration layer's error paths leave standard error empty
+# (tests/common/support/SilentProbe.cmake); WarningCounter sees Base::Log only, this sees any write.
+gyo_add_silent_probe(orchestration.el-silent gyo_orchestration_tests "${CMAKE_CURRENT_SOURCE_DIR}/silent_cases.txt")

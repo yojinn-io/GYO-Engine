@@ -343,26 +343,6 @@
    "expect": "\\[or\\-carry\\-unregistered\\]"
   },
   {
-   "id": "or-insert-no-warning",
-   "what": "O-9: a refused insert logs no warning",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) +\n             \": refused, the World declares no dynamic insert\");",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-9: a refusing World*",
-   "expect": "\\[or\\-insert\\-warn\\-once\\] 0"
-  },
-  {
-   "id": "or-insert-two-warnings",
-   "what": "O-9: a refused insert logs two warnings",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
-   "replace": "        Warn(\"again\");\n        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-9: a refusing World*",
-   "expect": "\\[or\\-insert\\-warn\\-once\\] 2"
-  },
-  {
    "id": "or-insert-throw-keeps-round",
    "what": "O-9: a throwing insert keeps its half round",
    "file": "engine/orchestration/src/Product.cpp",
@@ -623,16 +603,6 @@
    "expect": "\\[or\\-beforeswap\\-giveback\\]"
   },
   {
-   "id": "g8-beforeswap-failure-no-warning",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "                return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
-   "replace": "                return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,\n                                       \"schedule \" + Quoted(schedule)",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: a failing beforeSwap*",
-   "expect": "\\[or\\-beforeswap\\-warn\\]"
-  },
-  {
    "id": "g8-replace-report-dropped",
    "what": "G-8 candidate (g8-check-fable-high.md)",
    "file": "engine/orchestration/src/Product.cpp",
@@ -683,14 +653,18 @@
    "expect": "\\[or\\-swap\\-new\\-prepare\\]"
   },
   {
-   "id": "g8-insert-warning-text",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "id": "el-insert-owner-dropped",
+   "what": "the refusal error no longer names the owner, so whoever handles it cannot say who was refused (rewritten from g8-insert-warning-text by v8-arch-gyo2-error-levels D2: the orchestration layer logs nothing and the error carries what the warning carried)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) +\n             \": refused, the World declares no dynamic insert\");",
-   "replace": "        Warn(\"refused\");",
+   "find": "\" declares no dynamic insert (owner \" + Quoted(owner) + \")\",",
+   "replace": "\" declares no dynamic insert\",",
    "target": "gyo_orchestration_tests",
-   "cases": "O-9: the refusal warning names*",
-   "expect": "\\[or\\-insert\\-warning\\-text\\]"
+   "cases": "O-9: the refusal error names*",
+   "expect": "\\[or\\-insert\\-error\\-text\\]",
+   "guards": [
+    "orchestration O-9",
+    "cross-component-rules CCR-3"
+   ]
   },
   {
    "id": "g8-check-report-unit",
@@ -813,16 +787,6 @@
    "expect": "\\[or\\-carry\\-before\\-prepare\\]"
   },
   {
-   "id": "g8-insert-build-no-warning",
-   "what": "G-8 candidate: O-9: BuildPlans fails* | InsertTests.cpp:67 CHECK(warnings.Warnings() == 1) has no tag",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"InsertSystems on World \" + Quoted(worldName) + \" by \" + Quoted(owner) + \": BuildPlans failed: \" + report.detail);\n",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-9: BuildPlans fails*",
-   "expect": "\\[or\\-insert\\-build\\-warn\\]"
-  },
-  {
    "id": "g8-carry-unregistered-no-giveback",
    "what": "G-8 candidate: O-10: a marked type* | null dereference at ReplaceTests.cpp:181",
    "file": "engine/orchestration/src/Product.cpp",
@@ -875,16 +839,6 @@
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception from extra*",
    "expect": "\\[or\\-replace\\-throw\\-keeps\\-old\\]"
-  },
-  {
-   "id": "or-d3-throw-no-warn",
-   "what": "D3: an exception from extra logs no warning",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        Warn(\"ReplaceWorld \" + Quoted(name) + \": an exception left the replacement; the old World goes on\");\n",
-   "replace": "",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: D3:*",
-   "expect": "\\[or\\-d3\\-throw\\-warns\\] 0"
   },
   {
    "id": "or-d4-empty-first-counted",
@@ -2774,6 +2728,72 @@
     "-I",
     "-B",
     "tests/common/kernel/naming_guard.py"
+   ]
+  },
+  {
+   "id": "el-replace-fail-warn-back",
+   "what": "a failed ReplaceWorld writes a line to standard error again (error levels D2: the orchestration layer writes nothing; the failure goes back to the caller). Only this mutant: WarningCounter sees Base::Log, not a direct write",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto fail = [&](OrchestrationError error) -> ::Engine::Base::Result<void, OrchestrationError> {\n",
+   "replace": "    auto fail = [&](OrchestrationError error) -> ::Engine::Base::Result<void, OrchestrationError> {\n        std::fputs(\"orchestration: ReplaceWorld failed\\n\", stderr);\n",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-8: a replacement does not mend",
+   "guards": [
+    "orchestration O-11",
+    "error-handling DI 4"
+   ]
+  },
+  {
+   "id": "el-insert-warn-back",
+   "what": "a refused dynamic insert writes a line to standard error again (error levels D2, O-9)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "replace": "        std::fputs(\"orchestration: insert refused\\n\", stderr);\n        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-9: a refusing World",
+   "guards": [
+    "orchestration O-9",
+    "error-handling DI 4"
+   ]
+  },
+  {
+   "id": "el-replace-catch-warn-back",
+   "what": "an exception leaving ReplaceWorld writes a line to standard error again (error levels D2)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    } catch (...) {\n        giveBack(moved);\n",
+   "replace": "    } catch (...) {\n        std::fputs(\"orchestration: an exception left ReplaceWorld\\n\", stderr);\n        giveBack(moved);\n",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-8: D3: an exception from extra",
+   "guards": [
+    "orchestration O-11",
+    "error-handling DI 4"
    ]
   }
  ]

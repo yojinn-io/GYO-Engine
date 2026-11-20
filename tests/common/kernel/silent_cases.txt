@@ -1,0 +1,6 @@
+J-35: a hook returns Err*
+J-35: a throw*
+J-56: an inner System's Err is reported once*
+J-54: at the limit*
+J-59: the Host's Trigger stops at KernelSettings::hookRoundLimit*
+DI-KS 18: an exception that leaves an immediate change interrupts the World*
