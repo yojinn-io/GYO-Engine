@@ -11,4 +11,5 @@ threads,GYO::Threads,Role threads,yes,no,time,os,,
 io,GYO::Io,"File systems, paths and streams",yes,no,base,math;os,,
 audio,GYO::Audio,The audio mixer,yes,no,base;time,,,
 logging,GYO::Logging,"Records, the Logger, sinks, the JSON lines format, spans and the fatal path's last write",yes,no,base,json;os;threads;time,,
-world_time,GYO::WorldTime,"Game time in a World: time Resources, the fixed step, the tick",no,yes,base;kernel;orchestration;time,,GYO::Engine::WorldTime::WorldTimeModule,engine/world_time/WorldTimeModule.hpp
+world_time,GYO::WorldTime,"Game time in a World: time Resources, the fixed step, the tick",no,yes,base;kernel;logging;orchestration;time,,GYO::Engine::WorldTime::WorldTimeModule,engine/world_time/WorldTimeModule.hpp
+world_logging,GYO::WorldLogging,"The World end of logging: Forward, the Kernel diagnostics a runner takes, the fatal record of a WorldFailure",yes,no,logging;kernel;orchestration,,,

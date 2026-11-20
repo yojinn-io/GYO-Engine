@@ -5,6 +5,7 @@
 # (v8-arch-gyo2-game-time-in-world-time).
 add_library(gyo_world_time STATIC
     src/Sampling.cpp
+    src/TimeDiscardedLog.cpp
     src/TimeTypes.cpp
     src/WorldTimeModule.cpp
 )
