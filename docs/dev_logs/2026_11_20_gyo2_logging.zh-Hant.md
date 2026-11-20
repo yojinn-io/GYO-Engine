@@ -28,7 +28,8 @@
 - **突變**：第 1 回 56/64（8 個沒過，原因都在清單與測試，不在實作，見宣告第 18 節）；第 2 回 63/63；修訂 3 之後第 3 回 60/60；審查與敵對式檢查之後第 4 回 85/86＋1 個 stale（審查修正改了寫者迴圈，照新程式改寫 `lg-file-batch-reversed` 後 killed）＝86/86；§14.4 驗證者建議的 `lg-baselog-not-written` 加入後 87/87。
 - **審查**（Fable 5.2／high，隔離的工作樹，基準 7c9accb5）：必改 2（WT-4 條文、DI 頁守衛欄）、建議改 7、小問題 4；修了必改 2、建議改 S2～S5（S1 寫進「不保證」、S6 寫進宣告第 5 節的表、S7 本頁）、小問題 m1、m4；m2、m3 記在合併前核准頁。報告 `review-fable.md`。
 - **突變清單的敵對式檢查**（Fable 5.2／high）：38 個候選存活（31 處），全部「沒有測試抓得到」；17 處補了、3 處補突變、14 處細節沒補（README：觀察到漏看才加）。報告 `mutation-adversarial-fable.md`。
-- **L1**：審查前的 run 44774463275，windows-x64 的 terminate 探測三件失敗（探測的判讀問題，修了），其餘綠；修正後 run 44779446258。
+- **L1**：審查前的 run 44774463275，windows-x64 的 terminate 探測三件失敗（探測的判讀問題：Windows 的 `abort()` 結束碼 3 和探測的「Install 失敗」3 撞號，改成看標記），其餘綠。
+- **L1 第二次**：run 44779446258 的 linux-x64，`logging.console_probe.*` 三件失敗（「optional modules disabled」那一步是同樣三件）。切分是**測試腳本自身**（AGENTS §14.1）：被測程式的 stderr 有那幾行，但 `ConsoleProbe.cmake` 沒有 `cmake_minimum_required`，runner 的 CMake 3.31.6 用舊政策（CMP0012／CMP0130），`while(TRUE)` 不執行、計數永遠是 0；本機 CMake 4.4.3 沒抓到。修法：改用 `string(REGEX MATCHALL)` 計數並明寫政策（7a7175d5）；本機 3/3 過，對應的突變 4/4 killed。修正後的 L1 見合併前核准頁。
 - **經過的轉折**（都記在宣告第 17、18 節）：
   - 2026-11-20 去重的鍵在兩個 Product 之間撞到；使用者定「記日誌，然後退出」，不去重。
   - 2026-11-20 使用者要日誌停下等異常分級；異常分級的規範轉來後重判，之後異常分級撤回一部分，PR #254 合併。
