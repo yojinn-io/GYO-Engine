@@ -2823,6 +2823,20 @@
     "orchestration O-11",
     "error-levels-declaration D4"
    ]
+  },
+  {
+   "id": "el-d8-failure-not-checked",
+   "what": "error levels D8: Failure() returns what was recorded without checking the Worlds, so a World broken outside the Product stays unseen until an entry point runs (only this mutant: the entry points check through Ended() themselves)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!failure_) static_cast<void>(Ended());\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-11: D8: Failure() sees*",
+   "expect": "\\[el\\-d8\\-failure\\-read\\]",
+   "guards": [
+    "orchestration O-11",
+    "error-levels-declaration D8"
+   ]
   }
  ]
 }

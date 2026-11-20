@@ -8717,6 +8717,22 @@
         "error-handling DI 2",
         "kernel DI-KS 2"
       ]
+    },
+    {
+      "id": "el-d8-no-stored-error",
+      "what": "error levels D8: the kernel does not keep the Err that interrupted the World, so a failure found outside the Product has no kernel code or text (only this mutant: an entry point's own failure carries the returned Err)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (!interruption_) interruption_ = error;\n",
+      "replace": "",
+      "target": "gyo_orchestration_tests",
+      "command": [
+        "{exe:gyo_orchestration_tests}",
+        "-tc=O-11: D8: Failure() sees*"
+      ],
+      "expect": "\\[el\\-d8\\-direct\\-run\\]",
+      "guards": [
+        "error-levels-declaration D8"
+      ]
     }
   ]
 }

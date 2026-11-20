@@ -127,8 +127,12 @@ public:
                                                                    InsertFn build);
 
     [[nodiscard]] bool GameInitRan() const noexcept { return gameInitRan_; }
-    // The World that ended the Product, or nullptr while every World is healthy.
-    [[nodiscard]] const WorldFailure* Failure() const noexcept { return failure_ ? &*failure_ : nullptr; }
+    // The World that ended the Product, or nullptr while every World is healthy. Reading
+    // it checks the Worlds as an entry point does (error levels D8): a World broken outside
+    // the Product (its WorldExecutor run directly) ends the Product here, with the error the
+    // kernel kept when it interrupted the World. So not const, and not noexcept: that first
+    // read makes the failure.
+    [[nodiscard]] const WorldFailure* Failure();
     [[nodiscard]] const std::vector<std::string>& GameInitList() const noexcept { return gameInit_; }
 
 private:
