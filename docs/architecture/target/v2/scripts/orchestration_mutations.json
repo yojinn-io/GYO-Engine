@@ -1313,6 +1313,10 @@
   {
    "id": "sc-s2-real-time-carried",
    "what": "step 6 (scenario segment 2): S2-8: the time Module marks RealTime to be carried over a World replacement (time-events declaration 3.5: RealTime is not put back; a new World's real time starts from nothing). Only segment 2 replaces a World that has the time Module: world_time.restore builds a second Product, so carry-over is never exercised there.",
+   "guards": [
+    "time-events-declaration 3.5",
+    "time-events-declaration 判定 2"
+   ],
    "file": "engine/world_time/src/WorldTimeModule.cpp",
    "find": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\", .zone = Kernel::Zone::B});\n",
    "replace": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\", .zone = Kernel::Zone::B});\n    setup.CarryOver<RealTime>(\"RealTime\");\n",
@@ -2267,7 +2271,11 @@
   },
   {
    "id": "or-guard-naming-root-dropped",
-   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration",
+   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration row of ROOTS (that row's whole rule, README rule 4); or-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent its fail closed",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/kernel/naming_guard.py",
    "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"))",
    "replace": ",)",
@@ -2287,7 +2295,11 @@
   },
   {
    "id": "or-guard-o4-third-party-allowed",
-   "what": "O-4 guard (time-events step 1): an angle-bracket include outside the standard library passes",
+   "what": "O-4 guard (time-events step 1): an angle-bracket include outside the standard library passes. Only it catches the angle-bracket branch of O4; or-guard-o4-any-engine-allowed is the quoted allow list and or-guard-o4-dropped the whole rule",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "        if bracket == \"<\" and name not in STANDARD_HEADERS:\n",
    "replace": "        if False:\n",
@@ -2307,7 +2319,11 @@
   },
   {
    "id": "or-guard-o4-any-engine-allowed",
-   "what": "O-4 guard (time-events step 1): any engine/ header in quotes passes (a Module's internals)",
+   "what": "O-4 guard (time-events step 1): any engine/ header in quotes passes (a Module's internals). Only it catches the quoted allow list (README rule 4: one mutant for the list); or-guard-o4-third-party-allowed is the angle-bracket branch",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "ALLOWED_QUOTED = (\"engine/kernel/\", \"engine/base/\", \"engine/orchestration/\")",
    "replace": "ALLOWED_QUOTED = (\"engine/\",)",
@@ -2327,7 +2343,11 @@
   },
   {
    "id": "or-guard-o3-dropped",
-   "what": "O-3 guard (time-events step 1): reading Plan steps or calling a System is not reported",
+   "what": "O-3 guard (time-events step 1): reading Plan steps or calling a System is not reported (README rule 4: the whole rule off). Only it turns O3 off; or-guard-real-o3-plan-read is its positive control and or-guard-o0-source-silent its fail closed",
+   "guards": [
+    "orchestration O-3",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "    for match in O3.finditer(code):\n",
    "replace": "    for match in ():\n",
@@ -2347,7 +2367,11 @@
   },
   {
    "id": "or-guard-o6-dropped",
-   "what": "O-6 guard (time-events step 1): a hand-written engine link is not reported",
+   "what": "O-6 guard (time-events step 1): a hand-written engine link is not reported (README rule 4: the whole rule off). Only it turns O6 off; or-guard-real-o6-hand-link is its positive control and or-guard-o0-cmake-silent its fail closed",
+   "guards": [
+    "orchestration O-6",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "        for alias in ALIAS.finditer(call.group(1)):\n",
    "replace": "        for alias in ():\n",
@@ -2367,7 +2391,11 @@
   },
   {
    "id": "or-links-more",
-   "what": "O-4 link set (time-events step 1): gyo_orchestration links another module (configure-time check)",
+   "what": "O-4 link set (time-events step 1): gyo_orchestration links another module (configure-time check). Only it catches the link set of gyo_orchestration; ks-links-extra is gyo_kernel's",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "engine/config/modules.csv",
    "find": ",yes,no,kernel;base,,,",
    "replace": ",yes,no,kernel;base;math,,,",
@@ -2377,7 +2405,11 @@
   },
   {
    "id": "or-skeleton-not-declared",
-   "what": "O-4: the default skeleton is not declared (v8-arch-gyo2-time-events step 4, time-events declaration 3.6) [the frame list still starts with Main, so the build refuses it: O-E5]",
+   "what": "O-4: the default skeleton is not declared (v8-arch-gyo2-time-events step 4, time-events declaration 3.6) [the frame list still starts with Main, so the build refuses it: O-E5]. Only it catches the declaration dropped while the frame list still names Main; or-skeleton-default-off turns the option off (no declaration and no Main put first)",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n",
    "replace": "",
@@ -2387,7 +2419,11 @@
   },
   {
    "id": "or-skeleton-fixed-not-declared",
-   "what": "O-4: the fixed-step schedule of the skeleton is not declared (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: the fixed-step schedule of the skeleton is not declared (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches FixedUpdate missing while Main is declared; or-skeleton-not-declared drops both and or-skeleton-third-schedule adds one",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    registrar.Schedule(std::move(fixed));\n",
    "replace": "",
@@ -2397,7 +2433,11 @@
   },
   {
    "id": "or-skeleton-main-stage-dropped",
-   "what": "O-4: Main has no FixedMainLoop stage (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: Main has no FixedMainLoop stage (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches a stage missing from Main; or-skeleton-main-stage-order keeps every stage and swaps two",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "std::string(S::preUpdate),  std::string(S::fixedMainLoop),",
    "replace": "std::string(S::preUpdate),",
@@ -2407,7 +2447,11 @@
   },
   {
    "id": "or-skeleton-main-stage-order",
-   "what": "O-4: Main runs Update after PostUpdate (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: Main runs Update after PostUpdate (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the order of Main's stages; or-skeleton-fixed-stage-order is FixedUpdate's and or-skeleton-main-stage-dropped a missing stage",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "                    std::string(S::update), std::string(S::postUpdate), std::string(S::last)};",
    "replace": "                    std::string(S::postUpdate), std::string(S::update), std::string(S::last)};",
@@ -2417,7 +2461,11 @@
   },
   {
    "id": "or-skeleton-fixed-stage-dropped",
-   "what": "O-4: FixedUpdate has no PreUpdate stage (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: FixedUpdate has no PreUpdate stage (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches a stage missing from FixedUpdate; or-skeleton-fixed-stage-order keeps every stage and swaps two",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    fixed.stages = {std::string(S::first), std::string(S::preUpdate), std::string(S::update),",
    "replace": "    fixed.stages = {std::string(S::first), std::string(S::update),",
@@ -2427,7 +2475,11 @@
   },
   {
    "id": "or-skeleton-frame-not-prepended",
-   "what": "O-4: the frame list does not start with Main (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: the frame list does not start with Main (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches Main left out of the frame list (it never runs); or-skeleton-frame-appended runs it, last",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "        frame.insert(frame.begin(), main);\n",
    "replace": "",
@@ -2437,7 +2489,11 @@
   },
   {
    "id": "or-skeleton-frame-appended",
-   "what": "O-4: Main is appended to the frame list, not put first (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: Main is appended to the frame list, not put first (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches Main's place in the frame list; or-skeleton-frame-not-prepended leaves it out",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "        frame.insert(frame.begin(), main);\n",
    "replace": "        frame.push_back(main);\n",
@@ -2447,7 +2503,11 @@
   },
   {
    "id": "or-skeleton-main-twice",
-   "what": "O-4: Main is put first although the frame list names it (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: Main is put first although the frame list names it (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the 'not named yet' check; or-skeleton-off-frame-prepended drops the skeleton check of the same condition",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "if (world.skeleton == ScheduleSkeleton::Default && std::find(frame.begin(), frame.end(), main) == frame.end()) {",
    "replace": "if (world.skeleton == ScheduleSkeleton::Default) {",
@@ -2457,7 +2517,11 @@
   },
   {
    "id": "or-skeleton-off-frame-prepended",
-   "what": "O-4: with the skeleton off the frame list still starts with Main (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: with the skeleton off the frame list still starts with Main (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the frame list ignoring the skeleton option; or-skeleton-off-ignored still declares the skeleton and or-skeleton-main-twice drops the 'not named yet' check",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "if (world.skeleton == ScheduleSkeleton::Default && std::find(frame.begin(), frame.end(), main) == frame.end()) {",
    "replace": "if (std::find(frame.begin(), frame.end(), main) == frame.end()) {",
@@ -2467,7 +2531,11 @@
   },
   {
    "id": "or-skeleton-off-ignored",
-   "what": "O-4: the skeleton is declared although the World turns it off (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: the skeleton is declared although the World turns it off (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the declaration ignoring the option (the author's own Main is then R-E2); or-skeleton-off-frame-prepended is the frame list's side and or-skeleton-default-off the default",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton",
    "replace": "    if (true) {\n        auto skeleton",
@@ -2477,7 +2545,11 @@
   },
   {
    "id": "or-skeleton-after-units",
-   "what": "O-4: the skeleton is declared after the units' Build (v8-arch-gyo2-time-events step 4, time-events declaration 3.6)",
+   "what": "O-4: the skeleton is declared after the units' Build (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the skeleton coming after the units' Build (a unit's stage inserted into Main); the other or-skeleton-* mutants keep that order",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
    "replace": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
@@ -2488,6 +2560,10 @@
   {
    "id": "or-skeleton-default-off",
    "what": "WorldDescription::skeleton defaults to Off (O-4: the default skeleton is the default). Only it catches the default; or-skeleton-not-declared drops the declaration (adversarial check OR1, step 7)",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/include/engine/orchestration/Product.hpp",
    "find": "    ScheduleSkeleton skeleton = ScheduleSkeleton::Default;",
    "replace": "    ScheduleSkeleton skeleton = ScheduleSkeleton::Off;",
@@ -2498,6 +2574,10 @@
   {
    "id": "or-skeleton-frame-runs-fixed",
    "what": "the default frame list also runs FixedUpdate (O-4: the frame list runs Main only; a schedule runs FixedUpdate nested; a thing not done). [or-skeleton-fixed-not-in-frame] had no mutant; only it catches it (adversarial check OR7, step 7)",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "        frame.insert(frame.begin(), main);\n",
    "replace": "        frame.insert(frame.begin(), main);\n        frame.push_back(std::string(DefaultSchedules::fixed));\n",
@@ -2508,6 +2588,10 @@
   {
    "id": "or-skeleton-third-schedule",
    "what": "the skeleton declares a third schedule (O-4: two schedules; a thing not done). [or-skeleton-only-two] had no mutant; only it catches it (adversarial check OR8, step 7)",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    registrar.Schedule(std::move(fixed));\n",
    "replace": "    registrar.Schedule(std::move(fixed));\n    Kernel::ScheduleOptions extra;\n    extra.name = \"Startup\";\n    extra.stages = {std::string(S::first)};\n    registrar.Schedule(std::move(extra));\n",
@@ -2518,6 +2602,10 @@
   {
    "id": "or-skeleton-fixed-stage-order",
    "what": "FixedUpdate runs Update after PostUpdate (O-4: the order of FixedUpdate's stages). Only it catches FixedUpdate's order; or-skeleton-main-stage-order is Main's (adversarial check OR2, step 7)",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 3.6"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    fixed.stages = {std::string(S::first), std::string(S::preUpdate), std::string(S::update), std::string(S::postUpdate),",
    "replace": "    fixed.stages = {std::string(S::first), std::string(S::preUpdate), std::string(S::postUpdate), std::string(S::update),",
@@ -2528,6 +2616,10 @@
   {
    "id": "or-guard-o4-dropped",
    "what": "O-4 guard (step 7, README rule 4: the whole rule off): no include of engine/orchestration/ is checked. Only it turns the whole O4 off; the two others are its branches",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "        if not DIRECTIVE.match(line):\n            continue\n        target = TARGET.match(",
    "replace": "        if True:\n            continue\n        target = TARGET.match(",
@@ -2548,6 +2640,10 @@
   {
    "id": "or-guard-o4-unreadable-silent",
    "what": "O-4 guard (step 7): an include whose target cannot be read (a macro) passes. Only it catches that branch",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "        if not target:\n            yield number, \"O4\", line.strip()\n            continue\n",
    "replace": "        if not target:\n            continue\n",
@@ -2568,6 +2664,11 @@
   {
    "id": "or-guard-o0-source-silent",
    "what": "O0 (step 7, README rule 4: fail closed): a missing engine/orchestration passes by scanning nothing (O3 and O4 share it). Only it catches the sources' O0",
+   "guards": [
+    "orchestration O-3",
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "    if not files:\n",
    "replace": "    if False:\n",
@@ -2588,6 +2689,10 @@
   {
    "id": "or-guard-o0-cmake-silent",
    "what": "O0 (step 7, README rule 4: fail closed): no engine/<module>/CMakeLists.txt passes by scanning nothing (O6). Only it catches the CMake files' O0 (its self-test is new in step 7)",
+   "guards": [
+    "orchestration O-6",
+    "time-events-declaration 6.3"
+   ],
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "    if not cmake_files:\n",
    "replace": "    if False:\n",
@@ -2607,7 +2712,11 @@
   },
   {
    "id": "or-guard-real-o4-module-include",
-   "what": "O-4 guard on the real tree (step 7, README rule 4: positive control): Product.cpp includes a Module's header",
+   "what": "O-4 guard on the real tree (step 7, README rule 4: positive control): Product.cpp includes a Module's header. Only it shows O4 firing on the real tree; or-guard-o4-dropped turns O4 off in the self-tests",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "#include \"engine/orchestration/Product.hpp\"\n",
    "replace": "#include \"engine/orchestration/Product.hpp\"\n#include \"engine/world_time/TimeTypes.hpp\"\n",
@@ -2621,7 +2730,11 @@
   },
   {
    "id": "or-guard-real-o3-plan-read",
-   "what": "O-3 guard on the real tree (step 7, README rule 4: positive control): Product.cpp reads a Plan",
+   "what": "O-3 guard on the real tree (step 7, README rule 4: positive control): Product.cpp reads a Plan. Only it shows O3 firing on the real tree; or-guard-o3-dropped turns O3 off in the self-tests",
+   "guards": [
+    "orchestration O-3",
+    "time-events-declaration 6.3"
+   ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "#include \"engine/orchestration/Product.hpp\"\n",
    "replace": "#include \"engine/orchestration/Product.hpp\"\nstatic auto Peek(const GYO::Kernel::FrozenRegistry& r) { return r.PlanOf(\"Main\"); }\n",
@@ -2635,7 +2748,11 @@
   },
   {
    "id": "or-guard-real-o6-hand-link",
-   "what": "O-6 guard on the real tree (step 7, README rule 4: positive control): world_time's CMakeLists.txt links GYO::Math by hand",
+   "what": "O-6 guard on the real tree (step 7, README rule 4: positive control): world_time's CMakeLists.txt links GYO::Math by hand. Only it shows O6 firing on the real tree; or-guard-o6-dropped turns O6 off in the self-tests",
+   "guards": [
+    "orchestration O-6",
+    "time-events-declaration 6.3"
+   ],
    "file": "engine/world_time/CMakeLists.txt",
    "find": "gyo_link_registered_dependencies(world_time)",
    "replace": "gyo_link_registered_dependencies(world_time)\ntarget_link_libraries(gyo_world_time PUBLIC GYO::Math)",
@@ -2649,7 +2766,11 @@
   },
   {
    "id": "or-guard-real-n1-other-namespace",
-   "what": "naming guard's orchestration row on the real tree (step 7, README rule 4: positive control): an orchestration source opens GYO::Kernel",
+   "what": "naming guard's orchestration row on the real tree (step 7, README rule 4: positive control): an orchestration source opens GYO::Kernel. Only it shows the orchestration row firing on the real tree; or-guard-naming-root-dropped drops the row in the self-tests and ks-real-old-namespace is the kernel row's",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
    "file": "engine/orchestration/src/OrchestrationError.cpp",
    "find": "namespace GYO::Engine::Orchestration {",
    "replace": "namespace GYO::Kernel {",
