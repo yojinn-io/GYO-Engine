@@ -1,8 +1,8 @@
 # 事前宣告：異常分級（`v8-arch-gyo2-error-levels`）
 
-修訂 5（2026-11-20）。Owner：架構（GYO2 任務卡「異常分級」，架構師的子會話）。分支 `claude/gyo2-error-levels-170217`，從 `gyo2` 8ec005f2 開。修訂 0 是 641ec8b9；修訂 1（34cd347a）照 Fable 5.2／high 的敵對式檢查（必改 10、建議改 16、小問題 11）改，處理對照在第 16 節；修訂 2（81b1f1de）照主會話照 L17 的判斷併入兩件（`UnknownWorld` 與 schedule 名不一致、`Product::Build` 的例外），見第 17 節；修訂 3（9e18bdd3）照使用者要的窄複查（Fable 5.2／high，範圍 D3 (b)、D8～D10、第 17 節；必改 7、建議改 12、小問題 8）改，處理對照在第 18 節；修訂 4（3e438d9f）寫入使用者在 side chat 定的錯誤型別命名規則（D11、第 13 節第 12 題）；修訂 5 照使用者的要求，以原始出處重查 Java 與 Go 的分級（第 3.1 節重寫、第 5.6 節、D11 的字義對照）。
+修訂 6（2026-11-20）。Owner：架構（GYO2 任務卡「異常分級」，架構師的子會話）。分支 `claude/gyo2-error-levels-170217`，從 `gyo2` 8ec005f2 開。修訂 0 是 641ec8b9；修訂 1（34cd347a）照 Fable 5.2／high 的敵對式檢查（必改 10、建議改 16、小問題 11）改，處理對照在第 16 節；修訂 2（81b1f1de）照主會話照 L17 的判斷併入兩件（`UnknownWorld` 與 schedule 名不一致、`Product::Build` 的例外），見第 17 節；修訂 3（9e18bdd3）照使用者要的窄複查（Fable 5.2／high，範圍 D3 (b)、D8～D10、第 17 節；必改 7、建議改 12、小問題 8）改，處理對照在第 18 節；修訂 4（3e438d9f）寫入使用者在 side chat 定的錯誤型別命名規則（D11、第 13 節第 12 題）；修訂 5（dbff7497）照使用者的要求，以原始出處重查 Java 與 Go 的分級（第 3.1 節重寫、第 5.6 節、D11 的字義對照）；**修訂 6 寫入使用者在主會話定的核心原則（第 0.1 節），並照它推翻已核准的 D4、撤回第 17.2 節**——改到已核准內容的地方都標「修訂 6」，合併前核准時一起給使用者看。
 
-狀態：**動工前核准完成**（使用者 2026-11-20，本卡：「照建議，全部核准」——第 13 節第 1～12 題全部照建議，第 12 題第 6 點另有原話，見第 13 節；HANDOFF 由主會話記）。實作照第 11.1 節；第 3a 步是中途關卡。
+狀態：**動工前核准完成**（使用者 2026-11-20，本卡：「照建議，全部核准」——第 13 節第 1～12 題全部照建議，第 12 題第 6 點另有原話，見第 13 節；HANDOFF 由主會話記）。**同日使用者在主會話定核心原則、推翻其中的 D4（第 4 題）**，見第 0.1 節。實作照第 11.1 節；第 1 步已做（050aa5b3）；第 3a 步是中途關卡。
 
 起因：日誌卡發現 `WriteFailure` 的去重鍵會漏寫；使用者否定「以 Product 為單位去重」：「首先去重不是解決問題的方法，是補丁。第二，核心是不應該產生重複。」「我們把error級別的異常，當成了普通警告來處理，就是這個偏差。」「包進一個普通的 Result 回去也沒問題。呼叫的人也可以不理。核心是不理是錯的！！！！」「返回沒錯，錯誤沒錯，包裝沒錯，錯誤的是對WorldFailure的處理，正常就應該，記日誌，然後退出。不是機制問題，是寫代碼的人寫了一坨垃圾。」「runner對不可修復的錯誤，應該就是記日誌，然後退出。」（HANDOFF `v8-arch-gyo2-logging-no-failure-dedup`；同一列在原話之前，記錄者的摘要寫「O-11、編排層都不動」——這是摘要，不是使用者的原話）。開這張卡的原話：「參考Java 的Exception 建立 異常級別……核心不是退出還是重試。而是沒有分級，現在下面的runner不知道如何處理。……1）整合我們已經有的異常。2）分類。3）給異常處理方案。」「或者參考Go的也可以。」（HANDOFF `v8-arch-gyo2-error-levels`）
 
@@ -14,7 +14,7 @@
 
 ## 0. 估時與讀的版本
 
-**估時**（AGENTS §14 冒頭、時間盒）：宣告與盤點 4 h（實際約 4 h）；敵對式檢查與修訂 1 共 3 h；實作 34.5 h，D9 本批做時 37 h（第 11.1 節逐步；修訂 0 的 17 h 偏低，檢查 S14；修訂 2、3 併入與修正的部分照加）。超過 1.5 倍（實作 51.75 h；含 D9 時 55.5 h）或單一問題累計 2 h 就停下回報。實作中另有一個**中途關卡**：第 3 步改 DI 守衛前，把逐條的 §14.4 1～5 交使用者（第 9.1 節 G1、G2、G6、G8）。
+**估時**（AGENTS §14 冒頭、時間盒）：宣告與盤點 4 h（實際約 4 h）；敵對式檢查與修訂 1 共 3 h；實作 35.5 h（修訂 6 重算，含 D9 與改名；修訂 5 以前寫 34.5～40 h）（第 11.1 節逐步；修訂 0 的 17 h 偏低，檢查 S14；修訂 2、3 併入與修正的部分照加）。超過 1.5 倍（實作 53.25 h）或單一問題累計 2 h 就停下回報。實作中另有一個**中途關卡**：第 3 步改 DI 守衛前，把逐條的 §14.4 1～5 交使用者（第 9.1 節 G1、G2、G6、G8）。
 
 | 讀的東西 | 版本 |
 |---|---|
@@ -26,6 +26,24 @@
 | 現行契約 | `docs/architecture/error-handling.md`（Legacy、R0–R6）、`docs/architecture/target/error-handling.md`（DI 1、2 與 Replacement Criteria，2026-11-13 核准）、`target/kernel.zh-Hant.md`（DI-KS 2、17、18、26）、`target/system-contract.zh-Hant.md`、`target/v2/orchestration.zh-Hant.md`（O-1～O-11）|
 | 參考 | Java SE、Go、Rust（語言規格的公開知識）；Bevy、flecs、Unity Entities／Netcode、bevy_replicon、lightyear（本機源碼 `~/Code/GitHome`，第 3.2 節）|
 | CI log | `gyo2` 8ec005f2 的 L1（run 44677942143），存主 checkout `build/evidence/gyo2-error-levels/ci-44677942143.log`（D5 的量測）|
+
+## 0.1 核心原則（使用者 2026-11-20 定；修訂 6）
+
+**原話**（主會話，使用者看日誌卡的四題時）：「注意異常分級只是機制和給作者的產參考。Engine裡我們有標準的用用法但是邏輯不變。異常只需要往外拋如果抓處理不應該是異常該做的事，異常只是告訴別人出了什麼問題。而不是要別人做指定的處理！！！！」主會話用遊戲例子複述（存檔壞了，讀檔 Module 只拋「存檔壞了、哪個檔、壞在哪」；回主選單、提示玩家還是關遊戲由接的遊戲決定；分級讓接的人知道多嚴重）並列出影響後，使用者：「讀法對，D4 改回往外拋，日誌照你的看法。記住核心：異常分級只是系統告訴外部發生了什麼。而不是，一定要如何如何處理。你擋不住亂寫代碼的人。但是規範就在這裡。（可以用測試或者守衛來擋，是否符合規範，用車時和守衛來做）」（「車時」照主會話讀成「測試」。）
+
+**比過的選項**：D4——(原核准) 邊界接住轉回傳值／往外拋、拋出前記好 failure ←選。處理方案——必須照做／Engine 的標準用法、給作者參考 ←選。
+
+**理由**（使用者的）：異常分級只是系統告訴外部發生了什麼，不是規定一定要怎麼處理；擋不住亂寫的人，但規範在這裡，用測試與守衛檢查。
+
+**出處**：主會話對話 2026-11-20（經主會話轉來）。
+
+**定下的**：
+1. **級別 E0～E3 不動**：它是資訊——壞到哪一層、相對於誰（第 4 節）。
+2. **處理方案是「Engine 的標準用法」，給作者參考**（第 5 節）：Engine 自己的程式（預設 runner、`WithFailureLog`、Engine 的 Module）照標準用法寫、邏輯不變；作者可以不照。第 5 節的「必須」「忽略是錯的」都照這一條改寫。
+3. **D4 改回往外拋**：入口與 `Product::Build` 不在邊界接住 `std::exception` 轉成回傳值；例外照常往外傳。既有缺陷 P12 改成「拋出前把 failure 記好」從源頭修（D4）。原 D4 會推翻的 O-9「往外傳」與日誌宣告 5.6 情形 (2) 因此不推翻；第 17.2 節撤回。
+4. **是否符合規範，用測試與守衛檢查 Engine 自己的程式**（第 9 節），不在執行期強制作者的處理方式。
+
+**對照其他已核准項目**（主會話要本卡判：有沒有哪條也是「替別人處理」而和這條原則衝突；有的列出交主會話，不自己改）：D1（Kernel 自己不再多記一筆）、D2（編排層不替呼叫者記警告）、D3（型別是資訊：告訴接的人多嚴重）、D8（`Failure()` 讓接的人讀得到發生了什麼）、D9、D10、D11、改名——本卡判都是「告訴外面發生了什麼」或拿掉 Engine 自己替別人做的處理，不衝突。**D5（不理 `Result` 是編譯錯誤）需要主會話判**：它不規定怎麼處理（明寫 `(void)` 照樣可以），但它在建置上擋住所有 GYO 程式（含 repo 裡的產品與工具）的寫法；可以讀成「用守衛擋，是否符合規範」（使用者的話），也可以讀成「替作者規定一定要讀」。本卡傾向前者（它是規範的守衛，不是執行期的強制），但這是讀法，交主會話／使用者，不自己改。
 
 ---
 
@@ -45,7 +63,7 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 
 1. **整合**：把 `gyo2` 與兩條進行中的線上所有錯誤的表示與回報路徑列成一張表（第 2 節）。
 2. **分類**：照「壞到哪一層」分成四級（第 4 節），對照 Java、Go、Rust、Bevy、flecs、Unity（第 3 節）。
-3. **處理方案**：每一級寫清楚產生方回什麼、呼叫者必須做什麼、能不能忽略、誰記日誌、只記一次記在哪、什麼級別（第 5 節）；runner 拿到任何錯誤都查得到怎麼做（第 5.3 節），而且建議把 E1／E2 分成不同的型別（D3），讓編譯器幫 runner 分。
+3. **處理方案**（修訂 6：是 Engine 的標準用法、給作者參考，第 0.1 節）：每一級寫清楚產生方回什麼、標準用法怎麼接、能不能忽略、誰記日誌、只記一次記在哪、什麼級別（第 5 節）；runner 拿到任何錯誤都查得到怎麼做（第 5.3 節），而且建議把 E1／E2 分成不同的型別（D3），讓編譯器幫 runner 分。
 
 做完之後，上面三個例子：bug → 只有 runner 結束處寫的那一筆 `Fatal`；`DropOldFirst` 讀檔壞掉 → 同樣一筆；`BuildNewFirst` 讀檔失敗 → 編排層不記，錯誤（E2 的型別）回給 runner，遊戲自己決定記不記、記成什麼。
 
@@ -98,7 +116,7 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 | O4 | `RunnerExit`（`Setup.hpp:77-85`） | runner；預設 runner 是 `Product::Run`（`Product.cpp:495-503`） | `Success`／`Failure`＋文字 | `main` | 不記 | `main` 讀；要寫失敗得另外讀 `Failure()` | （runner 的結果，不是錯誤） |
 | O5 | 例外穿過入口 | 作者程式（System、hook、準備函式、`InsertFn`） | 例外物件 | **往外丟**：`RunOn` 先收 `WorldFailure` 再丟（`Product.cpp:426-438`）；`ReplaceWorld` 的 `try`（`:617-678`）裡：`BuildNewFirst` 時 `Warning` 後丟（`:656`）、`DropOldFirst` 時 `Warning`＋收 `WorldFailure` 後丟（`:659-677`）；**`try` 之前**的步驟見 P12；`InsertSystems` 丟掉這一輪再丟（`:709-717`） | 替換時 `Warning` 一次 | runner 用 `catch (...)` 接、再讀 `Failure()`（日誌宣告 5.6 情形 (2)） | 有 `failure` 是 E1，沒有是 E2（P5） |
 | O6 | 經 `Product::World(name)` 直接跑 Kernel（`Product.hpp:110-112` 公開；`Product` 沒有 `Trigger` 入口，World 外觸發事件只有這條路） | runner 或持有 Product 的程式 | `KernelError`（**沒有 `failure`**） | 直接呼叫者 | K1 的 stderr；下一個入口的 `Ended()` 才補一份 `entry = "outside the Product"`、Kernel 碼與文字都空的 `WorldFailure`（`Product.cpp:395-414`；守衛 `[or-ended-outside-fields]`，`CoverageTests.cpp:339-341`） | 沒寫 | E1（P13）|
-| O7 | `Product::Build` 丟例外（`Configure`、`Build`、`Finish`、`Check`、準備函式；`Product.cpp:80-245` 沒有 `catch`） | 作者程式 | 例外物件 | `main` | 不記 | 沒寫 | 沒有 Product 存在，不是 E1；**修訂 2：和 D4 同一套，在 `Build` 的邊界轉成啟動報告（E2）**（第 17.2 節）|
+| O7 | `Product::Build` 丟例外（`Configure`、`Build`、`Finish`、`Check`、準備函式；`Product.cpp:80-245` 沒有 `catch`） | 作者程式 | 例外物件 | `main` | 不記 | 沒寫 | 沒有 Product 存在，不是 E1；照現在不接、到 `main`（修訂 6：第 17.2 節撤回）|
 | O8 | runner 自己丟例外（`Product::Run` 原樣往外，`Product.cpp:498`） | runner | 例外物件 | `main` | 不記 | 沒寫 | Product 有 `Failure()` 時 E1，否則規則 6 |
 
 **Module 與執行緒**
@@ -147,7 +165,7 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 - **P2 Kernel 記一次、runner 又記一次（主會話查到，已確認）**：`Fail` 先呼叫處理器（預設 `fprintf(stderr)`）再回 `Err`（`Executor.cpp:89-97`）——Go 的「log and return」反例。Kernel 單獨用時 Executor 是最外層（2026-11-11 的前提，target DI 1「the Executor is the outermost layer and handles once」），編排層與 runner 疊上去之後它不再是最外層，前提換了、條文沒跟。stderr 那筆不經 `Base::Log`，所以 `[or-failure-not-logged]` 的 `WarningCounter` 數不到它，那個守衛在 K1 的 stderr 照印時照樣通過。`ReplaceWorld` 的新 World 也帶處理器（`Product.cpp:323-328`），`:630`、`:645` 的失敗會多印一段。
 - **P3 記一次又回傳（主會話查到，形狀相同、已核准）**：O-9（動態插入被拒、建 Plan 失敗：`Warning` 一次＋回錯誤，`Product.cpp:720`、`:729`）與 `ReplaceWorld` 的 `BuildNewFirst` 失敗（`:537`）。O-9 的條文來自使用者 2026-11-17 的原話（`v8-arch-gyo2-dynamic-insert-per-world`）：「插入就拒絕，返回信息（不退出，但是System無法插入，日誌報警告）。」並登記成共用規則 CCR-3（`docs/cross-component-rules.md:26`：「the caller logs the warning; the kernel only returns the error」）與 DI-KS 26。編排層是 Kernel 的呼叫者，照 CCR-3 記了警告、又把錯誤往上回——到它自己的呼叫者那裡，同一個錯誤被「處理」第二次。O-9 和 O-11「編排層不寫日誌」互相矛盾。
 - **P4 同一個碼兩種級**：`ReplacePrepareFailed` 等四個碼在 `BuildNewFirst` 是「這次替換失敗、舊 World 照跑」，在 `DropOldFirst` 是「Product 結束」（`Product.cpp:538-556`）。現在分得出來的方法是看 `failure` 有沒有值，但沒有任何條文說「這就是級別」，而且這個分法有反例（P12、P13、P16）。
-- **P5 致命的事從兩條路到 runner**：Kernel 回 `Err` 時以回傳值到；System 丟例外時以例外到（`Product.cpp:426-438` 收好 `WorldFailure` 再丟）。所以 runner 要 `catch (...)`（日誌宣告 5.6 情形 (2)），而 `error-handling.md` 規則 6 除了平台邊界之外不准 `catch (...)`；規則 6 也寫「不要用例外回報 Engine API 的失敗」，編排層的入口把例外往外丟就是用例外回報。
+- **P5 致命的事從兩條路到 runner**：Kernel 回 `Err` 時以回傳值到；System 丟例外時以例外到（`Product.cpp:426-438` 收好 `WorldFailure` 再丟）。所以 runner 要 `catch (...)`（日誌宣告 5.6 情形 (2)），而 `error-handling.md` 規則 6 除了平台邊界之外不准 `catch (...)`；規則 6 也寫「不要用例外回報 Engine API 的失敗」，編排層的入口把例外往外丟就是用例外回報。**修訂 6**：使用者定例外照常往外（第 0.1 節），兩條路保留——例外告訴外面發生了什麼，接的人決定；作者程式的例外穿過編排層不是 Engine 回報自己的失敗（規則 6 的讀法，D4）。標準用法是 runner 在自己的邊界接（第 5.3 節）。
 - **P6 第 4 批「重複登記的裁決」（主會話查到，已確認）**：作者的登記蓋過代為的，不報。宣告裡沒有記警告的地方（`警告|Warning` 在修訂 1、修訂 2 與兩份子宣告都是 0 命中）；形狀的問題是「兩筆不一致時默默選一筆」。本卡判為**設計的優先順序，不是錯誤**（第 5.5 節；第 13 節第 8 題）。
 - **P7 回給呼叫者又記成診斷**：K3 的三個 API。System 若也寫一筆，日誌的 ② 又寫一筆。需要一條規則（第 5.2 節 E2 第 4 點）。
 - **P8 預設 runner 不寫失敗**：`Product::Run` 的預設 runner 回 `RunnerExit{Failure, 文字}`（`Product.cpp:495-503`），`main` 要寫失敗得再讀 `Failure()`；沒讀就沒有任何一筆。這是 O-11 的設計（記不記是日誌的事），但「不理是錯的」沒有地方寫。
@@ -261,7 +279,7 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 
 - **Kernel 單獨用**（沒有編排層：工具、測試）：`Run`／`Trigger` 回的 `Err` 是 E1（`World::State()` 是 `Interrupted`），也可能以例外到（K6）；Kernel 其他函式回的是 E2（K3、K8、K9）。`Run` 的呼叫者就是 E1 的處理者。
 - **編排層**：入口回的錯誤，對 runner 是 E1（這個 Product 有 World 壞了）或 E2（這次請求沒做成，Product 健康）。
-- **`Product::Build`**：還沒有 Product，失敗一律是 E2（報告）；`Build` 裡丟出的 `std::exception` 也轉成報告裡的一筆（修訂 2，第 17.2 節）。
+- **`Product::Build`**：還沒有 Product，失敗一律是 E2（報告）；`Build` 裡丟出的例外照常往外到 `main`（修訂 6，第 17.2 節撤回）。
 - **World 外照名字指一個東西的呼叫**（修訂 2，第 17.1 節；第 13 節第 11 題）：名字不存在是 E0（API 誤用，規則 3）；名字可能來自資料時，呼叫者先用查詢函式（`HasWorld`），查詢的「沒有」是非錯誤（`bool`／`std::optional`，規則 1 第 3 步）。System 裡的同類錯誤（X-12 `UnknownSchedule`）照 DI-KS 2 是 E1，不是這條規則的例外。
 
 **現有的升級與降級**（照源碼列全；DI 3 會寫進「只有這幾條」）：
@@ -287,7 +305,7 @@ Match 伺服器上，某個 System 有 bug，回了 `Err`。現在會發生的�
 | Result＝Runtime Error | E2，不變 |
 | 「Programmer Error detected from runtime data」那一列（Executor 記一次、World `Interrupted`） | E1 的來源之一；**改**：「Executor 記一次」改成「最外層 `Run` 回傳一次，Kernel 不寫日誌，處理的一方記一次」（D1） |
 | These are not errors（optional、診斷、遊戲規則） | 非錯誤；**加** E3：照設計的上限丟掉的事，以紀錄表示（現行「Several problems or warnings ... diagnostics data」的延伸，不是新機制） |
-| 規則 6（不用例外回報 Engine API 的失敗；邊界只接 `std::exception`、不准吞） | 不變；編排層的入口照它做（D4） |
+| 規則 6（不用例外回報 Engine API 的失敗；邊界只接 `std::exception`、不准吞） | 不變；作者程式丟的例外原樣穿過編排層，不是 Engine 回報失敗、也沒被吞（D4，修訂 6） |
 | 「no global error enum」 | 不變：級別不做成 Base 的列舉或錯誤型別的欄位（D3 (c) 退掉）|
 | target RC「kernel error path needs to be recoverable → module error type」 | 現有程式已觸發（P17）。**改**成「Kernel 裡 E2 的路可以用 `KernelError` 當型別，級別由 API 的文件寫明」（第 13 節第 6 題）|
 
@@ -310,19 +328,19 @@ GYO 的原則（社群慣例的形：Dave Cheney、Uber Go Style Guide 的「han
 | | E0 程式錯誤 | E1 致命 | E2 失敗 | E3 警告 |
 |---|---|---|---|---|
 | **產生方回什麼** | 不回：`GYO_ASSERT` → 斷言處理器 → `abort` | Kernel：`Run`／`Trigger` 回 `Err(KernelError)`、World `Interrupted`；編排層：入口回 **E1 的型別**（D3 (b)：`WorldError`，帶 `WorldFailure`；選 (a) 時是帶 `failure` 的 `OrchestrationError`） | `Result<T, 模組的錯誤>`；啟動時是一次收齊的報告（`StartupReport`、`ProductStartupReport`） | 不回錯誤：World 記診斷紀錄，或發 `Message` |
-| **呼叫者必須做** | 無（修程式） | 收到的呼叫點：**不再呼叫這個 Product 的任何入口**，結束 runner（回 `RunnerExit{Failure}`）；之後關程式或另建 Product（回主選單）由 `main` 決定（O-3）。**讀 World 可以**（取診斷紀錄、救未存檔的內容，`-err-is-bug-world-readable`；日誌批「先 `WriteFailure` 再取」）。Kernel 單獨用時：`Run` 的呼叫者不再跑這個 World | 往上傳（包上下文）或在這裡處理（決定、降級、改走別條路、顯示給人），二選一 | 無；日誌照常訂閱或取走 |
-| **能不能忽略** | 不能（處理器回來就 `abort`） | **忽略是錯的**。技術上做得到（O-11：之後每次拒絕都帶同一份，不會跑任何東西），但那是 runner 寫錯；Engine 不用斷言或去重擋（使用者否定過「之後的呼叫斷言」與去重，`-logging-no-failure-dedup`）。D3 (b) 讓 runner 在型別上必須面對它；D5 讓「沒讀回傳值」成為編譯錯誤。**D5 擋不到「讀了、沒退出」**——那一段靠第 5.3 節的表與 `WithFailureLog` | **默默忽略是錯的**。`[[nodiscard]]`；D5 之後沒寫的忽略是編譯錯誤；明寫的忽略（`(void)` 加理由）算一種處理，只在 API 的文件說「可以不理」時用 | 可以不看（它不改流程） |
-| **誰記** | 斷言處理器（日誌接手時走 `WriteFatalRecord`，category `assert`） | **只有一處：runner 結束的地方**——`WithFailureLog`（包住 runner）或 `main`（用預設 runner、或自己寫 runner 而沒包時）讀 `Product::Failure()` 寫一次（`WriteFailure`）。收到 E1 的各個呼叫點只負責退出、不記。Kernel、編排層不記 | **只有**處理它的那一方，而且可以選擇不記（例：讀檔失敗、遊戲顯示對話框就夠了） | 日誌 Module（① `Forward`、② `TakeKernelDiagnostics`）；產生方不另外記 |
+| **標準用法**（修訂 6：給作者參考；Engine 自己的程式照它寫） | 無（修程式） | 收到的呼叫點：**不再呼叫這個 Product 的任何入口**，結束 runner（回 `RunnerExit{Failure}`）；之後關程式或另建 Product（回主選單）由 `main` 決定（O-3）。**讀 World 可以**（取診斷紀錄、救未存檔的內容，`-err-is-bug-world-readable`；日誌批「先 `WriteFailure` 再取」）。Kernel 單獨用時：`Run` 的呼叫者不再跑這個 World | 往上傳（包上下文）或在這裡處理（決定、降級、改走別條路、顯示給人），二選一 | 無；日誌照常訂閱或取走 |
+| **能不能忽略** | 不能（處理器回來就 `abort`） | **照規範，忽略是錯的**；但 Engine 不在執行期強制（第 0.1 節：分級只告訴外面發生了什麼）。技術上做得到（O-11：之後每次拒絕都帶同一份，不會跑任何東西）；Engine 不用斷言或去重擋（使用者否定過「之後的呼叫斷言」與去重，`-logging-no-failure-dedup`）。D3 (b) 讓 runner 在型別上必須面對它；D5 讓「沒讀回傳值」成為編譯錯誤。**D5 擋不到「讀了、沒退出」**——那一段靠第 5.3 節的表與 `WithFailureLog` | **照規範，默默忽略是錯的**。`[[nodiscard]]`；D5 之後沒寫的忽略是編譯錯誤（規範的守衛；D5 的讀法交主會話，第 0.1 節）；明寫的忽略（`(void)` 加理由）算一種處理，只在 API 的文件說「可以不理」時用 | 可以不看（它不改流程） |
+| **誰記**（標準用法） | 斷言處理器（日誌接手時走 `WriteFatalRecord`，category `assert`） | **只有一處：runner 結束的地方**——`WithFailureLog`（包住 runner）或 `main`（用預設 runner、或自己寫 runner 而沒包時）讀 `Product::Failure()` 寫一次（`WriteFailure`）。收到 E1 的各個呼叫點只負責退出、不記。Kernel、編排層不記 | **只有**處理它的那一方，而且可以選擇不記（例：讀檔失敗、遊戲顯示對話框就夠了） | 日誌 Module（① `Forward`、② `TakeKernelDiagnostics`）；產生方不另外記 |
 | **記一次記在哪** | 處理器那一次 | runner 結束處那一次。一個 Product 只結束一次，所以由結構保證只有一筆，不靠各呼叫點守規矩（runner 可能有好幾個呼叫點：迴圈、讀檔、工具的插入） | 處理的那一層 | World 記的那一筆，被日誌取走一次 |
 | **日誌級別** | `Fatal` | `Fatal`（category `world`） | 處理者定：做不成而且影響使用者 → `Error`；有替代路徑 → `Warning` 或不記 | `Warning`（或 `Info`，照描述器） |
 
 **E2 第 4 點（P7）**：產生方已經照設計記了診斷紀錄的 E2（K3 的三個 API），處理的一方**只決定流程、不再記**；API 的文件寫明「這個錯誤已記成某某診斷」。理由：紀錄與計數一處（F-13，已核准）；處理一次的「記」那一半已經由 World 的紀錄做了。這種 E2 不算「同時是兩級」（RC-EL1 的文字照這點寫）。
 
-**不是 `std::exception` 的例外**（測試的 `AssertionFailure`、第三方的型別）：照規則 6 不接、不吞。穿過編排層時，編排層只做收尾（D4）再原樣往外；離開 runner 時，`WithFailureLog` 的 `catch (...)`（日誌批的程式）在 `Failure()` 有值時寫一筆並回 `Failure`、沒有時再丟——那是 runner 的入口，照 Legacy「Exception at the platform boundary」的同一條理由（入口的 `catch (...)` 要記下並轉成明確的結果、不吞）。建議日誌批保留它（交界，第 11.2 節）。
+**不是 `std::exception` 的例外**（測試的 `AssertionFailure`、第三方的型別）：照規則 6 不接、不吞。穿過編排層時，編排層只做收尾與記好 `failure`（D4）再原樣往外；`std::exception` 也一樣（修訂 6）；離開 runner 時，`WithFailureLog` 的 `catch (...)`（日誌批的程式）在 `Failure()` 有值時寫一筆並回 `Failure`、沒有時再丟——那是 runner 的入口，照 Legacy「Exception at the platform boundary」的同一條理由（入口的 `catch (...)` 要記下並轉成明確的結果、不吞）。建議日誌批保留它（交界，第 11.2 節）。
 
 ### 5.3 runner 拿到什麼、怎麼做（查表）
 
-runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`、`InsertSystems`）拿到下面幾種結果。D3 選 (b) 時，E1 與 E2 在型別上就分開（`RunGameInit`、`RunFrame`、`RunSchedule` 只會回 E1 的型別）。
+**這是 Engine 的標準用法、給作者參考**（修訂 6，第 0.1 節）：Engine 自己的預設 runner 與 `WithFailureLog` 照它寫；作者自己的 runner 可以不照。runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`、`InsertSystems`）拿到下面幾種結果。D3 選 (b) 時，E1 與 E2 在型別上就分開（`RunGameInit`、`RunFrame`、`RunSchedule` 只會回 E1 的型別）。
 
 | 拿到 | 判法 | 做什麼 |
 |---|---|---|
@@ -330,12 +348,12 @@ runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`�
 | E1（(b)：`WorldError`；(a)：`error.failure` 有值） | 型別（或 `failure`）| 不再呼叫入口，回 `RunnerExit{Failure, …}`。**不在這裡記**：`WithFailureLog` 或 `main` 在 runner 結束時讀 `Failure()` 記一次。要告訴人原因（例：讀檔被存檔版本拒絕）時讀 `cause` |
 | E2（`OrchestrationError`，沒有 `failure`） | 型別 | 這是 runner 自己發的請求失敗了（讀檔、動態插入、owner 名被占用）：照 `code` 與 `reporterCode` 決定（顯示、重試、放棄），要記就記一次。World 名不存在不在這一列（修訂 2 起是 E0；名字來自資料時先 `HasWorld`）|
 | 經 `Product::World(name)` 直接 `Run`／`Trigger` 回 `Err(KernelError)` 或丟例外 | 直接用 Kernel＝繞過編排層（O-1） | 同 E1 那一列：不再呼叫入口、結束 runner。runner 結束處讀 `Failure()`：D8 (b) 之下有值，回 `Err` 的路帶 Kernel 的錯誤、例外的路不帶 |
-| 例外離開入口 | D4 (b) 之下只剩不是 `std::exception` 的例外 | 不接（規則 6）；runner 的入口（`WithFailureLog`）照第 5.2 節最後一段 |
-| `bad_alloc` 之後 | D4：`WorldFailure` 在冒險的那一步之前組好、`Break` 是指標的指定 | E1 的路不配置（只有附加 `what()` 會試，失敗就留預設文字），照 E1 那一列；`main` 在 `Product::Build` 時仍可能收到 `std::bad_alloc`（第 17.2 節第 6 點） |
+| 例外離開入口（修訂 6：例外照常往外，D4） | 看 `Failure()` | 標準用法：在 runner 的邊界接；`Failure()` 有值就照 E1 那一列（`WithFailureLog` 記一次、退出），沒有就再丟（規則 6；`BuildNewFirst` 的例外、`InsertSystems` 的例外是這種：這次請求的例外，接的人決定） |
+| `bad_alloc` 之後 | D4：`WorldFailure` 在冒險的那一步之前組好、`Break` 是指標的指定 | 拋出前記好 `failure` 不配置（只有附加 `what()` 會試，失敗就留預設文字）；例外照常往外，照上一列 |
 | runner 自己丟例外 | O8 | 同「例外離開入口」 |
 | 斷言 | E0 | 不會回到 runner（`abort`） |
 
-`main` 拿到的：`Product::Build` 的 `ProductStartupReport`（E2：印出、結束或退回；修訂 2 起 `Build` 裡丟出的 `std::exception` 也在這份報告裡，只有不是 `std::exception` 的照規則 6 原樣往外）；日誌 `Install` 的 `LoggingError`（E2：沒有檔案也能跑，或結束）；`Product::Run` 的 `RunnerExit`——沒有包 `WithFailureLog` 時，`main` 是 E1 的記錄者：讀 `Failure()` 寫一次（P8、D6）。
+`main` 拿到的：`Product::Build` 的 `ProductStartupReport`（E2：印出、結束或退回；`Build` 裡丟出的例外照常到 `main`，標準用法是 `main` 在邊界接 `std::exception` 記一次、決定結束或退回，第 17.2 節）；日誌 `Install` 的 `LoggingError`（E2：沒有檔案也能跑，或結束）；`Product::Run` 的 `RunnerExit`——沒有包 `WithFailureLog` 時，`main` 是 E1 的記錄者：讀 `Failure()` 寫一次（P8、D6）。
 
 ### 5.4 作者的 System 怎麼做
 
@@ -356,7 +374,7 @@ runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`�
 | K1、K2、K5 | E1 | Executor 記一次又回傳（P2、P11） | D1：Kernel 不記，最外層 `Run`／`Trigger` 回傳一次 |
 | K3 | E2（＋診斷紀錄） | 兩條通道（P7） | 第 5.2 節 E2 第 4 點寫進三個 API 的文件；行為不變 |
 | K4 | E1 | 內容比對兩處（P14） | D9 |
-| K6 | E1 | — | Kernel 不變；編排層接（D4） |
+| K6 | E1 | — | Kernel 不變；編排層記好 `failure` 再往外（D4） |
 | K7 | E2 | 無 | 不變 |
 | K8 | E2 | 註解與 CCR-3 要呼叫者記警告 | D2：CCR-3 與註解改成「回給呼叫者，處理的一方決定記不記」 |
 | K9 | E2 | 型別是 `KernelError`（P17） | target RC 的文字（第 4.2 節）；行為不變 |
@@ -370,7 +388,7 @@ runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`�
 | O2e | E2 | 作者能放 `failure`（P16） | D3 (b) 之下 `OrchestrationError` 沒有 `failure` 欄位，型別上做不到；選 (a) 時 `Prepare` 要清掉它 |
 | O3 | E1 載體 | 無 | 成為 `WorldError` 的內容（(b)）或照舊（(a)） |
 | O4 | — | 預設 runner 不寫（P8） | D6 |
-| O5 | E1／E2 | 例外往外丟（P5）；`try` 前的步驟（P12） | D4（含 P12 的修正） |
+| O5 | E1／E2 | 例外往外丟（P5）；`try` 前的步驟（P12） | 修訂 6：照常往外（D4）；P12 從源頭修（拋出前記好 `failure`） |
 | O6 | E1 | 沒有 `failure`（P13） | D8 |
 | O7 | E2 | 沒人接 | 修訂 2：`Build` 的邊界接 `std::exception`、轉成報告的一筆（第 17.2 節）|
 | O8 | 規則 6 | 沒寫 | 第 5.3 節寫明；不改行為 |
@@ -396,7 +414,7 @@ runner 從入口（`RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`�
 3. **記錄者自己失敗時**（Java：`UncaughtExceptionHandler` 丟出的例外 JVM 直接忽略）：runner 結束處寫 E1（`WriteFailure`）而寫不成時，失敗只出現在它的回報（`FatalWriteReport`）裡，runner **照樣退出**、不重試、不升級成 E0。理由：記錄失敗不改變「這個 Product 已經結束」；重試或升級會讓記錄的路變成新的失敗來源。寫進 DI 5。
 4. **正常結束不算失敗**（Go 的 `ErrAbortHandler`：中止 handler、不記錄）：runner 正常收掉 Product（`RunnerExit{Success}`、回主選單）不是 E1、不寫致命紀錄；`Failure()` 是空的。只有 `Failure()` 有值才是 E1。
 
-兩家都有、本卡判為**不用另外補**的：只接約定的型別、其他照常傳播（D4、第 17.2 節已是：只接 `std::exception`，`catch (...)` 收尾後原樣丟）；判斷「是不是某種失敗」要沿包裝鏈比（`KernelError::Has` 已沿並列清單的葉子比；E1 的 `cause` 只有一層）；上下文由產生錯誤的一方帶（規則 4、5 已有）；不可忽略要在型別上強制（D3 (b)、D5）。
+兩家都有、本卡判為**不用另外補**的：只接約定的型別、其他照常傳播（修訂 6 之後 Engine 不接作者的例外，`catch (...)` 只收尾、記好 `failure` 後原樣丟；標準用法裡 runner 的邊界只接 `std::exception`）；判斷「是不是某種失敗」要沿包裝鏈比（`KernelError::Has` 已沿並列清單的葉子比；E1 的 `cause` 只有一層）；上下文由產生錯誤的一方帶（規則 4、5 已有）；不可忽略要在型別上強制（D3 (b)、D5）。
 
 ## 6. 設計決定與選項（Contract → Architecture）
 
@@ -474,41 +492,36 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 **支撐的 Feature**：F1、F2、F4。
 
-### D4 例外離開入口
+### D4 例外離開入口（修訂 6：使用者推翻原核准，改回往外拋）
 
-**問題**：P5、P12。
+**使用者的決定**（2026-11-20，主會話；經主會話轉來）：原核准的 (b)「入口與 `Product::Build` 在邊界接 `std::exception` 轉成回傳值」**推翻**，改成「往外拋、拋出前把 failure 記好」。原話與理由在第 0.1 節（核心原則）。比過的選項：(原核准) 邊界接住轉回傳值／往外拋、拋出前記好 failure ←選。
 
 | 選項 | 系譜 | 內容 |
 |---|---|---|
-| **(b) 編排層的入口在邊界接 `std::exception`，轉成回傳值；`catch (...)` 只收尾再原樣丟**（建議） | Go 的 `recover` 在工作單位頂端轉回值；Bevy 在 System 邊界 `catch_unwind`；`error-handling.md` 規則 6（「A module may throw internally ... only if it catches at its public boundary and returns a Result. Boundary catches name `std::exception`」；規則 6 禁的是吞，不是收尾後再丟） | 見下面「範圍與各路回什麼」 |
-| (a) 照舊往外丟、runner 接 | 現在的形 | E1 從兩條路到；runner 要 `catch (...)`；P12 照樣要另修 |
-| (e) Kernel 的 `Run` 在邊界接 | Bevy 的位置 | Kernel 已定不接例外、World 標 `Interrupted` 後往外（`WorldExecutor.hpp:29-31`，spec E.5；DI-KS 17、18 的巢狀與當場變更也照它定）；Kernel 不認得產品的例外政策。編排層是 Engine 對產品程式的邊界（runner 只呼叫它的入口，O-3），在這裡接一次就涵蓋 Kernel 往上的全部路——退掉 (e) |
+| **(f) 往外拋；拋出前把 failure 記好**（使用者定） | Java 一路往上到執行緒頂端；現行的編排層（`RunOn` 收好 `WorldFailure` 再丟，`Product.cpp:426-438`） | 作者程式丟的例外照常穿過編排層往外，編排層**不接住、不轉換、不吞**；但在例外離開之前，把它弄壞的東西記好（`failure`），收尾（`giveBack`、`DiscardRegistrations`）照做，然後原樣再丟。例外告訴外面「出了什麼事」，接的人決定怎麼辦（第 0.1 節） |
+| (b) 邊界接 `std::exception`、轉成回傳值（原核准，推翻） | Go 的 `recover`、Bevy 的 `catch_unwind` | 替 runner 決定「例外要變成值」——是替接的人處理，違反第 0.1 節 |
+| (a) 照現在、不修 P12 | 現在的形 | P12 的缺陷留著 |
 
-**範圍與各路回什麼**：
+**範圍與各路怎麼做**（行為除 P12 外和現在相同）：
+- `RunOn`：照現在——收好 `WorldFailure`（`kind` `Interrupted` 或 `ResourceExhausted`）再原樣丟。
+- `ReplaceWorld`：
+  - `BuildNewFirst`：照現在——收尾（`giveBack`）後原樣丟；舊 World 照跑，`Failure()` 是空的（這次替換的例外，接的人決定）。
+  - `DropOldFirst`：**從丟掉舊 World 那一刻起的全部步驟**（含 P12 的 `Register`、`MakeExecutor`、帶過去）丟例外時，先記好 `failure`（Product 結束），再原樣丟。丟掉之前的 `take` 迴圈丟例外時：把已移出的值放回舊 World、原樣丟；放回也失敗時舊 World 不再完整 → 記好 `failure` 再丟。
+- `InsertSystems`：照現在——丟掉這一輪（`DiscardRegistrations`）再原樣丟。
+- `Product::Build`：照現在——不接，例外到 `main`（第 17.2 節撤回）。
+- 規則 6 的讀法：規則 6 禁的是 **Engine 用例外回報自己的失敗**與**吞掉例外**；作者程式丟的例外原樣穿過編排層，不是 Engine 回報失敗，也沒有被吞。所以 (f) 合規則 6；`catch (...)` 只做收尾與記錄、一定再丟（現行四處的寫法）。
 
-- `RunOn`：接 `std::exception`（含 `std::bad_alloc`），回 E1（`kind` `Interrupted` 或 `ResourceExhausted`，`where` 盡量帶 `what()`）。
-- `ReplaceWorld`：**整個函式**都在接的範圍內（N4：不只現在的 `try`，也含丟掉舊 World 之前的 `take`、`BuildNewFirst` 的 `take`／`put`）。各段回什麼：
-  - `DropOldFirst`、丟掉舊 World **之前**（`take` 迴圈，`Product.cpp:562-564`）失敗：把已移出的值放回舊 World、回 E2（什麼都沒換）；放回也失敗時舊 World 少了值、不再完整 → E1（`kind` 的值照 D10 同一個問題在實作時照命名規範定，現在的三個值都不對）。
-  - `DropOldFirst`、丟掉之後（含 P12 的 `Register`、`MakeExecutor`、帶過去）：E1，`cause` 帶那一步的 E2。
-  - `BuildNewFirst`：E2（舊 World 照跑；P15 見 D10）。
-  - **在 `Register()` 裡丟的例外**（登記單位的 `Build`／`Finish`／`Check`、產品的 `build`）：照第 17.2 節在呼叫點接成 O-E8，所以這種例外以 `ReplaceRegistrationFailed`（報告在 `detail`）回，`BuildNewFirst` 是 E2、`DropOldFirst` 是 E1 的 `cause`（S8）。D4 新增的 E2 碼（暫名「作者程式丟了例外」，`reporterCode` 帶 `what()`）只給 `Register()` 以外的路：準備函式、`beforeSwap` 的 schedule、帶過去的搬移。
-- `InsertSystems`：丟掉這一輪（既有的 `DiscardRegistrations`）、回 E2（同一個新碼）。
-- `Product::Build`：第 17.2 節。
-- 不是 `std::exception` 的：`catch (...)` 照現在做收尾（收 `WorldFailure`、`giveBack`、`DiscardRegistrations`），然後原樣往外丟——測試的 `AssertionFailure` 穿過時也不會留下沒有 `failure` 的空位。
+**P12 從源頭修**（`bad_alloc` 段與替換中的狀態照修訂 3，只是終點從「回傳」改成「再丟」）：
+- **`WorldFailure` 在冒險的那一步之前組好**——`RunOn` 在跑 schedule 之前、`DropOldFirst` 在丟掉舊 World 之前——以 `shared_ptr` 持有，Product 名、例外時的預設文字都先放好。`catch` 裡只填列舉（`kind`），`what()` 用內層 `try` 盡量附加；`Break` 是指標的指定（不配置）。所以「拋出前記好」在 `bad_alloc` 之後也不配置（附加 `what()` 除外）。
+- `Ended()` 把「空位而沒有 `failure`」讀成「替換進行中」（`:397-402`）改成由結構分辨：替換中在 slot 上有明確的狀態；`Ended()` 碰到「空位、沒有 `failure`、也不在替換中」是內部不變式壞了（`GYO_ASSERT`，E0）。
 
-**`bad_alloc` 與 P12 的源頭**（修訂 1 的「盡力」不精確，窄複查 M3）：
+**標準用法**（第 5.3 節）：runner 想照 Engine 的標準處理時，在自己的邊界（runner 的入口）接例外：`Failure()` 有值就照 E1 的標準用法（記一次、退出），沒有就再丟（規則 6）——`WithFailureLog` 就是這樣寫的。這是標準用法、給作者參考；Engine 不在入口替 runner 接。
 
-- 現在 E1 的路在 `catch` 裡配置：`Break` 複製 Product 名（`Product.cpp:380`）、`RunOn` 的 `catch` 指定 32 字的文字（`:430`）、`ReplaceWorld` 的例外路徑在 `catch` 裡組整份 `WorldFailure`（`:661-673`）。那裡再失敗時，`DropOldFirst` 又是「空位而沒有 `failure`」。
-- 做法：**`WorldFailure` 在冒險的那一步之前組好**——`RunOn` 在跑 schedule 之前（`:419-424` 已經做一半）、`DropOldFirst` 在丟掉舊 World 之前——以 `shared_ptr` 持有，Product 名、例外時的預設文字都先放好。`catch` 裡只填列舉（`kind`），`what()` 用一個內層 `try` 盡量附加（失敗就留預設文字）；`Break` 改成指標的指定（不配置）；回傳的 `WorldError` 共用同一個物件（D3 (b)）。所以例外之後的 E1 路除了附加 `what()` 以外不配置。
-- **P12 的源頭**：`Ended()` 把「空位而沒有 `failure`」讀成「替換進行中」（`:397-402`）。改成由結構分辨：替換進行中在 slot 上有明確的狀態；`Ended()` 碰到「空位、沒有 `failure`、也不在替換中」是內部不變式壞了（`GYO_ASSERT`，E0）。照上一點組好的 `WorldFailure`，這個狀態不會出現。
+**不推翻的已定決定**（原 (b) 會推翻、(f) 不推翻）：O-9「`build` 丟例外時先丟掉這一輪再往外傳」；O-11 的例外守衛（G4 不變）；日誌宣告 5.6 的情形 (2)。
 
-**決定的理由**：runner 拿到 E1 只剩一條路（回傳值），第 5.3 節的表不需要 `catch (...)`；而且規則 6 本來就要求 Engine API 在公開邊界把例外轉成 `Result`，(b) 是照現行規則補上編排層的缺口；P12 的缺陷在同一處、從源頭修。
+**舊形狀？** 不是：P12 的修正是新的（先組好、替換中的狀態）；「往外拋」是使用者定的原則，不是為舊形狀找位置。
 
-**推翻的已定決定**：O-9「`build` 丟例外時先丟掉這一輪再往外傳」；O-11 守衛的例外案；日誌宣告 5.6 的情形 (2)；去重那一次「返回沒錯」的原話（例外改成回傳是不是動到「返回」）——交使用者（第 13 節第 4 題）。
-
-**舊形狀？** (a) 是。(b) 不是。
-
-**支撐的 Feature**：F1（例外造成的 World 壞掉也只留一筆、而且一定有 `Failure()`）。
+**支撐的 Feature**：F1（例外造成的 World 壞掉，`Failure()` 一定有值，runner 結束處照標準用法記一次）。
 
 ### D5 不理 `Result` 變成編譯錯誤
 
@@ -646,7 +659,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 1. **要它的目的**：使用者明示的分級任務（`v8-arch-gyo2-error-levels`）；Feature F1～F5。
 2. **現在的問題**：第 2.2 節 P1～P18。
-3. **變的邊界**：Kernel 的公開介面（拿掉 `SetErrorHandler`；D8 加「中斷的錯誤」的讀取；D9 `KernelError` 的身分）；編排層的公開介面（D3 (b) 入口的簽名、E1 型別 `WorldError`、`OrchestrationError` 拿掉 `failure`、三個只屬於 E1 的碼搬走；拿掉 `Product::SetErrorHandler`；`Failure()` 拿掉 `const noexcept`；入口與 `Product::Build` 不再丟作者的 `std::exception`；新增一個 E2 碼與 O-E8；拿掉 `UnknownWorld`、World 名錯改斷言；D11 的改名：`WorldFailure` → `WorldError`、`OrchestrationError` → `OrchestrationFailure`、Kernel 的 E2 改 `KernelFailure`，Module 的錯誤型別與 `Base::Error` 照第 13 節第 12 題的範圍）；錯誤處理的契約（級別一節、型別名的規則）；建置的警告設定（D5）。
+3. **變的邊界**：Kernel 的公開介面（拿掉 `SetErrorHandler`；D8 加「中斷的錯誤」的讀取；D9 `KernelError` 的身分）；編排層的公開介面（D3 (b) 入口的簽名、E1 型別 `WorldError`、`OrchestrationError` 拿掉 `failure`、三個只屬於 E1 的碼搬走；拿掉 `Product::SetErrorHandler`；`Failure()` 拿掉 `const noexcept`；作者的例外照常往外、`DropOldFirst` 拋出前記好 `failure`（修訂 6）；拿掉 `UnknownWorld`、World 名錯改斷言；D11 的改名：`WorldFailure` → `WorldError`、`OrchestrationError` → `OrchestrationFailure`、Kernel 的 E2 改 `KernelFailure`，Module 的錯誤型別與 `Base::Error` 照第 13 節第 12 題的範圍）；錯誤處理的契約（級別一節、型別名的規則）；建置的警告設定（D5）。
 4. **影響的 Module／Product／Tool**：`engine/kernel`、`engine/orchestration`、`build/cmake`（D5）、`tests/common/kernel`（共用測試台＋9 個檔）、`tests/common/orchestration`、`plans/kernel/scripts/mutations.json`、`orchestration_mutations.json`、`kernel_guard.py`；`docs/cross-component-rules.md`（CCR-2、CCR-3）；日誌分支（`WriteFailure` 的範例、5.6、LG-1 ③、LG-2，交界）；第 4 批（不改它的決定；照本頁分級）。產品還沒有回到 `gyo2`，不受影響。
 5. **依賴方向**：不變。不加任何依賴邊（編排層照舊不依賴日誌）。
 6. **Ownership**：「記錄 Kernel 錯誤」從 Kernel 的 Executor 移到處理它的一方；「記錄編排層與 Kernel 動態插入的警告」從編排層移到它的呼叫者；E1 的記錄固定在 runner 結束處。這是責任的移動，所以列為 Delta。
@@ -663,6 +676,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | 新 DI 4 | — | **處理一次**：產生與往上傳的一方不記；處理的一方至多記一次；一個錯誤只有一條通道；同一個錯誤以身分認 |
 | 新 DI 5 | — | **E1 的記錄處**：runner 結束處（`WithFailureLog` 或 `main`）讀 `Failure()` 記一次；收到 E1 的呼叫點只退出；Kernel、編排層、Module 不記；記錄失敗時照樣退出、不重試、不升級（第 5.6 節第 3 點）；正常結束不是 E1（第 5.6 節第 4 點） |
 | 命名規範頁（`target/v2/rebuild-naming.zh-Hant.md`，位置待確認） | — | **錯誤型別的字尾**：`…Error`＝E1、`…Failure`＝E2（D11，使用者 2026-11-20 定）；DI 3 引用 |
+| 新 DI 7（修訂 6） | — | **分級是資訊、處理方案是標準用法**：級別告訴外面發生了什麼、多嚴重；第 5 節的處理方案是 Engine 的標準用法——Engine 自己的程式照它寫，由測試與守衛檢查；不在執行期強制作者的處理方式（第 0.1 節） |
 | 新 DI 6 | — | **E3 是紀錄、不是錯誤值**：以診斷紀錄或 `Message` 表示，不改流程；產生方已記診斷的 E2，處理者不再記 |
 | Kernel DI-KS 2（`target/kernel.zh-Hant.md`） | 「Executor 記錄一次並 Interrupted」 | 「最外層 `Run` 回傳一次並 Interrupted，Kernel 不寫日誌」 |
 | Kernel DI-KS 17（`:93`） | 「錯誤處理只由最外層呼叫一次」 | 「錯誤只由最外層 `Run` 回傳一次」 |
@@ -672,12 +686,10 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | `docs/cross-component-rules.md` CCR-2 | 「reported once」 | 「returned once」 |
 | `docs/cross-component-rules.md` CCR-3 | 「the caller logs the warning; the kernel only returns the error」 | 「the caller handles it once (logs it if it decides to); neither the kernel nor the orchestration layer logs」 |
 | 編排層 O-1 | 「任何一張回錯誤：……記為已跑（Product 就此結束，O-11）」 | D10 (i)：加一句「替換第一個 World 時在新 World 上跑的遊戲初始化失敗，不算跑過、Product 不結束（E2）」；選 (iii) 時改 O-11（見下） |
-| 編排層 O-2 | 「出錯的登記單位不用、其餘照做」 | 補丟過例外之後的規則（第 17.2 節第 3 點）；`notChecked` 的意思擴充 |
 | 編排層 O-3 | runner 決定關程式或回主選單 | 補：「收到 E1 時不再呼叫入口、結束；E1 的記錄在 runner 結束處（DI 5）；沒有包 `WithFailureLog` 時 `main` 是記錄者」 |
 | 編排層 O-4 | 職責清單含「編排層自己的警告」 | 拿掉這一項（D2）|
-| 編排層 O-9 | 「記一次 `Warning`、把錯誤回給呼叫的人……`build` 丟例外時先丟掉這一輪再往外傳」 | 「把錯誤回給呼叫的人、World 照跑；`build` 丟 `std::exception` 時丟掉這一輪、回錯誤」（D2、D4）|
-| 編排層 O-11 | 「任何一個 World 中斷（Kernel 回 Err 或例外離開它的 Run）……回 `WorldInterrupted` 或 `WorldMissing`……錯誤回給 runner」 | 改：回 E1 的型別 `WorldError`（中斷或空位由 `WorldFailure::kind` 說、升級的原因在 `cause`；`WorldInterrupted`、`WorldMissing`、`ScheduleFailed` 三個碼搬走，D3）；例外（`std::exception`）離開 Run 時也以回傳值交給 runner（D4）；直接跑 Kernel 弄壞時 `Failure()` 帶 Kernel 的錯誤、`Failure()` 讀時檢查（D8）；D10 選 (iii) 時加第三種結束原因 |
-| 編排層 O-5 | 「準備函式的錯誤（O-E7）在建好的 World 上才會出現，另成一份」 | 補：`Build` 裡丟出的 `std::exception` 是報告的一筆（新的 O-E 碼，第 17.2 節） |
+| 編排層 O-9 | 「記一次 `Warning`、把錯誤回給呼叫的人……`build` 丟例外時先丟掉這一輪再往外傳」 | 「把錯誤回給呼叫的人、World 照跑；`build` 丟例外時先丟掉這一輪再往外傳」（D2；後半句照舊，修訂 6）|
+| 編排層 O-11 | 「任何一個 World 中斷（Kernel 回 Err 或例外離開它的 Run）……回 `WorldInterrupted` 或 `WorldMissing`……錯誤回給 runner」 | 改：回 E1 的型別 `WorldError`（中斷或空位由 `WorldFailure::kind` 說、升級的原因在 `cause`；`WorldInterrupted`、`WorldMissing`、`ScheduleFailed` 三個碼搬走，D3）；例外離開時照常往外、拋出前記好 `failure`（含 P12，D4，修訂 6）；直接跑 Kernel 弄壞時 `Failure()` 帶 Kernel 的錯誤、`Failure()` 讀時檢查（D8）；D10 選 (iii) 時加第三種結束原因 |
 | 編排層 O-8（`UnknownWorld` 的各案）、`Product.hpp` 的入口說明 | World 名不存在回 `UnknownWorld` | World 名不存在是斷言；名字來自資料時先 `HasWorld`（第 17.1 節）|
 | `docs/architecture/error-handling.md`（Legacy） | Executor 記一次 | 加指向 target 的標記，正文不改（D7） |
 | 註解（P11 列的各處） | Executor 記一次、呼叫者記警告 | 照上面改 |
@@ -704,10 +716,9 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | G1 Kernel 處理器的觀察 | 共用測試台 `WorldTestSupport.hpp:121` 的 `rig->recorded`（約 49 處、9 檔：`ImmediateChangeTests`、`NestedRunTests`、`ExecutorTests`、`ObserverTests`、`HookFlushTests`、`SkeletonTests`、`AccessCheckTests`、`WorldTests`、`RegistrationRoundTests`）；J-54「the handler ran N times」、J-56 `[ns-err-once]`、`[ks-s5-throw-reported-once]`；`HookFlushTests.cpp:423`、`:444`；`RegistrationRoundTests.cpp:152`；`ExecutorTests.cpp:742` | Err 只報一次、報的是對的那個 | 處理器不存在：「處理器被叫 N 次」不再能失敗 | — | 新案：`Run`／`Trigger` 只回一次 `Err`、內容對；外層 System 吞掉內層 `Err` 時 `Run` 仍回 `Err`；並列清單裡同一個錯誤只出現一次（D9 之後以身分）；Kernel 不寫 stderr（`[el-silent-*]`） |
 | G2 編排層處理器 | `[or-gi-error-once]`（`GameInitTests.cpp:151`）、`[or-replace-handler-kept]`（`ReplaceTests.cpp:111`） | 遊戲初始化的錯誤報一次；替換後沿用處理器 | 處理器不存在 | — | 前者改成回傳值只一次；後者守的性質整個拿掉（處理器不存在） |
 | G3 看 `Warning` 次數 | `[or-beforeswap-warn]`（`CoverageTests.cpp:476`）、`[or-d3-throw-warns]`（`DefectTests.cpp:38`）、`[or-insert-warn-once]`（`InsertTests.cpp:52`）、`[or-insert-build-warn]`（`:68`）、`[or-replace-check-warn]`（`ReplaceTests.cpp:91`）、`[or-restore-fail-warn]`（`RestoreFlowTests.cpp:112`）、`[or-insert-warning-text]` | 失敗被告知 | 以前「沒記 `Warning`」是失敗，之後通過 | 以前「記了 `Warning`」通過，之後失敗 | 「錯誤回給呼叫者、型別與碼對、`kernel`／報告對」照舊由同一組案守；`DefectTests.cpp:25-39`「D3: an exception from extra logs one warning」是當時認定的缺陷回歸（檔頭 AGENTS 14.3），D2 把那次修正反過來——理由單獨寫：當時的缺陷是「例外穿過時沒有任何告知」，D4 之後改成「回傳錯誤」告知 |
-| G4 例外往外丟 | `[or-run-throw]`（`CoverageTests.cpp:363`）、`[or-ended-throw]`（`:371-391`）、`InsertTests.cpp:81-83`、`ReplaceTests.cpp:194-196`、`DefectTests.cpp:32-34` | 例外弄壞的 World 結束 Product；替換與插入在例外時收尾 | 以前「例外沒丟出來」是失敗 | 以前「例外丟出來、沒回錯誤」通過，之後失敗 | `failure` 的內容與收尾（`giveBack`、`DiscardRegistrations`）照舊檢查；`AssertionFailure` 照舊穿過 |
+| G4 例外往外丟 | `[or-run-throw]`（`CoverageTests.cpp:363`）、`[or-ended-throw]`（`:371-391`）、`InsertTests.cpp:81-83`、`ReplaceTests.cpp:194-196`、`DefectTests.cpp:32-34` | 例外弄壞的 World 結束 Product；替換與插入在例外時收尾 | **修訂 6：不變**（D4 改回往外拋，這組判定照留） | — | 照舊；P12 的新案另立（`[el-p12-*]`） |
 | G5 E1 的讀法（D3 (b)） | 讀 `error().failure` 的各處；讀 `WorldInterrupted`／`WorldMissing`／`ScheduleFailed` 碼的 `[or-ended-no-replace]`（`CoverageTests.cpp:259`）、`[or-drop-old-missing]`（`RestoreFlowTests.cpp:133`）、`[or-ended-gameinit]`（`CoverageTests.cpp:336`）等；讀「哪一步」碼的 `[or-ended-drop-code]`（`:272`） | E1 帶 `WorldFailure`；中斷與空位分得出；哪一步失敗分得出 | 無：三個碼說的「中斷／空位」由 `kind` 說（同一件事、`EndedError()` 現在就是照 `kind` 選碼，`Product.cpp:384-389`）；「哪一步」由 `cause->code` 說 | 型別上分開 | 同一組案改讀 `kind`、`cause->code`；**「緩的面：無」以「舊判定失敗的入口與突變，新判定全部也失敗」驗證（§14.4），驗不過就改列緩的面交核准** |
 | G6 `UnknownWorld`（修訂 2） | `[or-unknown-world-run]`、`[or-unknown-world-replace]`、`[or-unknown-world-insert]`（`CoverageTests.cpp:394-403`）；突變 `g8-runschedule-unknown-world-code`、`g8-replace-unknown-world-code`、`g8-insert-unknown-world-code`（`orchestration_mutations.json:539`、`:549`、`:559`）與 `or-ended-before-name`（`:2046`） | 名字錯不會跑任何東西、呼叫者被告知 | **有**：「名字錯就斷言」的實作以前讓三條判定失敗、之後通過 | 以前「回 `UnknownWorld`、程式照跑」通過，之後失敗 | 「不會跑任何東西」：新案加「斷言之後 `GameInitRan()` 仍是 false、World 沒有被動到」；「以回傳值告知、程式照跑」這一半**有意拿掉**，之後沒有判定守（§14.4 第 4 點照實寫；對使用者的意義：工具把面板上打的 World 名直接傳進來，以前拿到可以顯示的錯誤、之後是行程中止，除非先 `HasWorld`） |
-| G7 `Build` 的例外（修訂 2） | 現在沒有守衛（O7 沒人接） | — | — | 新案 | `[el-build-throw-*]` |
 | G8 外面弄壞的 World（D8） | `[or-ended-outside-fields]`（`CoverageTests.cpp:339-341`，要求 `!kernelCode.has_value()`） | 「outside the Product」的 `WorldFailure` 的欄位 | 以前「帶了 `kernelCode`」是失敗，之後通過 | 以前「沒帶 `kernelCode`」通過，之後失敗（回 `Err` 的路） | 改寫成：回 `Err` 的路帶 `kernelCode` 與 `where`；例外的路不帶（`[el-d8-direct-throw]`） |
 
 ### 9.2 新的守衛（行為測試，和機制同時寫）
@@ -719,12 +730,11 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 - **`[el-p12-ended-invariant]`**：「空位、沒有 `failure`、不在替換中」是斷言（D4 的源頭修正；用測試專用的掛點造出這個狀態，或省略並寫明靠審查——實作時判）。
 - **`[el-prepare-cannot-end]`**（D3 (b)）：編譯期——`OrchestrationError` 沒有 `failure` 成員（`requires` 檢查）。
 - **`[el-drop-cause-<步驟>]`**（D3 (b)）：`DropOldFirst` 各步失敗時 `WorldError::cause` 的碼與 `reporterCode` 對（存檔版本被拒的讀檔案例）。
-- **`[el-silent-<路徑>]`**：探針執行檔跑代表性的路（Kernel 單獨的 `Run` `Err`、巢狀、`Trigger`、hook round 上限；編排層的 `RunFrame` `Err`、`DropOldFirst` 失敗、`BuildNewFirst` 失敗、插入被拒、例外、`Build` 的例外），由 `cmake -P` 的 `execute_process` 收 stderr（照 `tests/common/base/AssertAbortProbe.cmake` 的形，三平台可攜），判定：**stderr 全空**。正例：探針的「故意印一行」模式，判定要看到那一行。`Base::Log` 的預設處理器寫 `std::cerr`，所以一個探針同時量到 `Base::Log`、`fprintf`、`std::cerr` 三種寫法。
-- **`[el-exception-returned-<路徑>]`**（D4 (b)）：`std::runtime_error`、`std::bad_alloc`（人為丟出）離開 System、準備函式、`InsertFn`、`beforeSwap`、帶過去的搬移 → 入口回對應級的錯誤、不丟；`AssertionFailure` 穿過、而且穿過 `DropOldFirst` 時 `Failure()` 有值（收尾照做）。
+- **`[el-silent-<路徑>]`**：探針執行檔跑代表性的路（Kernel 單獨的 `Run` `Err`、巢狀、`Trigger`、hook round 上限；編排層的 `RunFrame` `Err`、`DropOldFirst` 失敗、`BuildNewFirst` 失敗、插入被拒、例外），由 `cmake -P` 的 `execute_process` 收 stderr（照 `tests/common/base/AssertAbortProbe.cmake` 的形，三平台可攜），判定：**stderr 全空**。正例：探針的「故意印一行」模式，判定要看到那一行。`Base::Log` 的預設處理器寫 `std::cerr`，所以一個探針同時量到 `Base::Log`、`fprintf`、`std::cerr` 三種寫法。
+- **`[el-throw-records-<路徑>]`**（D4，修訂 6）：`std::runtime_error`、`std::bad_alloc`（人為丟出）離開 System、準備函式、`InsertFn`、`beforeSwap`、帶過去的搬移 → 例外**照常往外**（不轉成回傳值）；`DropOldFirst`（含 P12 的 `try` 前步驟）與 `RunOn` 的路，例外離開時 `Failure()` 已有值；`BuildNewFirst`、`InsertSystems` 的路 `Failure()` 是空的、收尾照做；`AssertionFailure` 同樣穿過、同樣記好。
 - **`[el-d8-direct-<Run|Trigger>]`**、**`[el-d8-direct-throw]`**（D8 (b)）：經 `World(name)` 直接弄壞後，回 `Err` 的路 `Failure()` 帶 `kernelCode` 與 `where`；例外的路有值、不帶。
 - **`[el-d9-listed]`**、**`[el-d9-contains]`**（D9）：第 6 節 D9 的兩個情境（`AllotterExhausted`），兩個內容相同的不同錯誤各出現一次。
 - **`[el-unknown-world-<入口>]`**（修訂 2）：`RunSchedule`、`ReplaceWorld`、`InsertSystems` 指不存在的 World → `GYO_CHECK_ASSERTS` 成立，**而且之後 `GameInitRan()` 仍是 false、World 沒有被動到**；Product 已結束時指不存在的 World → 回 E1、不斷言。
-- **`[el-build-throw-<步驟>]`**（修訂 2）：`Configure`、`Build`、`Finish`、`Check`、準備函式各丟一次 `std::runtime_error` → `Product::Build` 回報告、含 O-E8 一筆、`what()` 在訊息裡、其餘照第 17.2 節的規則收齊；**不在作者呼叫點的例外**（測試掛點造一個 `bad_alloc`）由最外層的保底收成一筆；`AssertionFailure` 照舊穿過。
 - **D5 的編譯失敗樣本**（照 `gyo2` 現有的 `tests/common/kernel/compile_fail/` 的形）：不理 `Base::Result` 的一行；預期的診斷：GCC「ignoring return value」、Clang「ignoring return value of function declared with 'nodiscard' attribute」、MSVC 實測得到的警告號（第 1 步定）——不接受「編譯失敗」本身。
 - **不立新的掃描守衛**（AGENTS §3「ガードを立てる時期」）：K6 拿掉 Executor 豁免是收緊既有掃描的範圍，照 §14.4（締的面）事後報告；「編排層不 include `Log.hpp`」是新規則（O4 是允許清單、允許 `engine/base/`，`orchestration_guard.py:6-8`），**不立**，由 `[el-silent-*]` 的行為測試與審查守。
 
@@ -736,24 +746,22 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | `el-insert-warn-back` | `InsertSystems` 被拒時寫回 `Base::Log` | DI 4、O-9 | `[el-silent-insert-refused]` |
 | `el-replace-catch-warn-back` | 例外路徑寫回 `Base::Log` | DI 4 | `[el-silent-replace-throw]` |
 | `el-kernel-print-back` | `Fail` 裡寫回 `fprintf(stderr)` | DI 2 | `[el-silent-kernel-run]` |
-| `el-p12-unwrapped` | `DropOldFirst` 的接法不涵蓋 `Register` 以後的步驟 | O-11、D4 | `[el-p12-dropold-throw-before-try]` |
+| `el-p12-unrecorded` | `DropOldFirst` 在 `Register` 以後的步驟丟例外時沒記好 `failure` 就往外 | O-11、D4 | `[el-p12-dropold-throw-before-try]` |
 | `el-p15-old-behaviour` | 換第一個 World 的遊戲初始化失敗時照舊（`gameInitRan_` 留著、舊 World 不跑遊戲初始化） | O-1、D10 | `[el-p15-buildnew-first-gameinit]` |
 | `el-drop-cause-lost` | `DropOldFirst` 失敗時不帶 `cause` | D3 (b)、O-5 | `[el-drop-cause-prepare]` |
-| `el-rethrow-std` | `RunOn` 接到 `std::exception` 後照舊丟 | O-11（D4） | `[el-exception-returned-runframe]` |
-| `el-catch-all-swallow` | `catch (...)` 收尾後不再丟（吞掉 `AssertionFailure`） | 規則 6 | `[el-exception-returned-assertion-passes]` |
+| `el-convert-std` | 編排層接到 `std::exception` 後轉成回傳值、不再往外（修訂 6 推翻的形） | 第 0.1 節、D4 | `[el-throw-records-runframe]` |
+| `el-catch-all-swallow` | `catch (...)` 收尾後不再丟（吞掉例外） | 規則 6、D4 | `[el-throw-records-assertion-passes]` |
 | `el-d8-no-stored-error` | `Fail` 不另存中斷的錯誤 | D8 | `[el-d8-direct-trigger]` |
 | `el-d9-listed-content` | `Listed()` 改回比內容 | D9 | `[el-d9-listed]` |
 | `el-d9-contains-content` | `SameError` 改回比內容 | D9 | `[el-d9-contains]` |
 | `el-unknown-world-returns` | 某個入口的名字檢查改回回錯誤（三個入口各一個變體） | 規則 3、第 17.1 節 | `[el-unknown-world-<該入口>]` |
 | `el-unknown-world-after-gameinit` | `RunSchedule` 的名字檢查挪到遊戲初始化之後 | 第 17.1 節 | `[el-unknown-world-runschedule]` 的 `GameInitRan` 判定 |
-| `el-build-rethrow` | `Build` 的接法（收成一個小函式，七處呼叫點共用）接到 `std::exception` 後照舊丟 | O-5、第 17.2 節 | `[el-build-throw-configure]` |
-| `el-build-no-backstop` | 拿掉 `Build` 最外層的保底 | 第 17.2 節 | `[el-build-throw-backstop]` |
 
 `el-failure-on-buildnew`、`el-no-failure-on-dropold`（修訂 0）不立：同一個誤由既有的 `or-drop-fail-unrecorded`（find 正是 `} else if (dropOldFirst) {`）與 `[or-build-new-fail-goes-on]` 捕，照 §14.5 在既有突變的預期失敗加上 `[el-e1-*]` 的標籤。
 
 **要退役或改寫的既有突變**（`orchestration_mutations.json`、`plans/kernel/scripts/mutations.json`）：
 - 退役：`g8-runschedule-unknown-world-code`、`g8-replace-unknown-world-code`、`g8-insert-unknown-world-code`（把碼換成 `WorldMissing` 的三個；碼拿掉後由 `el-unknown-world-returns` 取代）；`or-insert-no-warning`、`or-insert-two-warnings`、`g8-insert-build-no-warning`、`g8-insert-warning-text`、`g8-beforeswap-failure-no-warning`、`or-d3-throw-no-warn`、`or-handler-not-kept`、`g8-handler-set-late`；Kernel 的 `hf-limit-handler-twice` 與預期失敗含「the handler」的各個。
-- 改寫：`or-ended-before-name`（預期失敗改成 E1 與斷言的先後）、`or-run-throw-unrecorded`、`or-throw-unrecorded`、`g8-throw-no-giveback`（例外改成回傳後的預期）、`we-adv-dropped-err-beside-own-err-lost`（D9 之後的寫法）。
+- 改寫：`or-ended-before-name`（預期失敗改成 E1 與斷言的先後）、`we-adv-dropped-err-beside-own-err-lost`（D9 之後的寫法）。`or-run-throw-unrecorded`、`or-throw-unrecorded`、`g8-throw-no-giveback` 修訂 6 起照舊（例外照常往外）。
 - 守的對象拿掉的退役（§14.5）；**是某個判定唯一的突變而退役時，先問**。
 
 新突變清單由別的模型做一次敵對式檢查（§14.2；Fable 5.2／high，因為作者是 Opus）。突變只跑相關的（新的、find 在改動範圍、殺它的測試被改的；HANDOFF D184 的規則），PR 線合併前背景完整跑一次。
@@ -768,7 +776,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 1. 第 9.2 節的新守衛全過，三平台 L1。
 2. 第 2.1 節每一項在 dev_log 有「級／處置／守衛」三欄，沒有空格。
-3. **Engine 寫 0 筆**：一次 System 的 `Err`、一次 `std::exception`、一次 `DropOldFirst` 失敗、一次 `BuildNewFirst` 失敗、一次插入被拒：`[el-silent-*]` 的探針 stderr 全空、`Base::Log` 計數 0。**照第 5.3 節寫的測試用 runner**（不用日誌 Module）在 Product 結束時記錄的次數＝1。「行程裡恰好一筆 `Fatal`」要 `WithFailureLog` 才量得到，**列為日誌批的判定**（交界，第 11.2 節）。
+3. **Engine 寫 0 筆**：一次 System 的 `Err`、一次 `std::exception`（照常往外，由測試用 runner 的邊界接）、一次 `DropOldFirst` 失敗、一次 `BuildNewFirst` 失敗、一次插入被拒：`[el-silent-*]` 的探針 stderr 全空、`Base::Log` 計數 0。**照第 5.3 節寫的測試用 runner**（不用日誌 Module）在 Product 結束時記錄的次數＝1。「行程裡恰好一筆 `Fatal`」要 `WithFailureLog` 才量得到，**列為日誌批的判定**（交界，第 11.2 節）。
 4. 第 9.3 節的突變全殺，新突變經 Fable 5.2／high 檢查補齊；退役的逐個寫理由。
 5. D5：三平台 L1 開了 `-Werror` 類設定後全綠，編譯失敗樣本照預期的診斷失敗。
 6. `bad_alloc` 的回傳路徑：人為丟出時回 E1、`Failure()` 有值；E1 的路在 `catch` 之後不配置（附加 `what()` 除外），由審查與 `[el-p12-ended-invariant]` 守，不另做配置失敗的注入測試。
@@ -786,13 +794,13 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 | 3a | **中途關卡**：G1、G2、G6、G8 的逐條 1～5 表交使用者 | 1.5 h |
 | 3b | Kernel：拿掉處理器（D1）、D8 的中斷錯誤；註解、K6 豁免；共用測試台與約 49 處判定改看回傳值；`[el-silent-kernel-*]` 探針 | 6 h |
 | 3c | D9（核准本批做時）：兩處改比身分、`IdIssuer` 配身分、`[el-d9-*]` | 2.5 h |
-| 4 | 編排層：D3 的型別與簽名（`WorldError` 三欄、碼的搬家）、D2 拿掉五處、D4（整個 `ReplaceWorld`、先組好的 `WorldFailure`、替換中的狀態）、D8 的 `Failure()`、D10、`Product::SetErrorHandler` 拿掉；P12、P15 先 Red；`[el-e1-*]`、`[el-exception-returned-*]`、`[el-drop-cause-*]`、`[el-silent-*]`；G3～G5、G8 | 9 h |
-| 4b | 第 17 節兩件：`UnknownWorld` 改斷言（G6，三案改寫、三個突變退役與變體、`or-ended-before-name` 改寫）；`Build` 的逐處接與最外層保底、O-E8（列舉、`ToString`、報告文字）、`notChecked` 的意思擴充；`[el-build-throw-*]`、`[el-unknown-world-*]` | 4.5 h |
-| 5 | 突變：新增、改寫、退役；相關的 Kernel（清單 737 個中受影響的）與編排層（227 個中受影響的）重跑；Fable 檢查 | 5 h |
+| 4 | 編排層：D3 的型別與簽名（`WorldError` 三欄、碼的搬家）、D2 拿掉五處、D4（例外照常往外；`DropOldFirst` 丟掉舊 World 之後的全部步驟拋出前記好 `failure`、先組好的 `WorldFailure`、替換中的狀態）、D8 的 `Failure()`、D10、`Product::SetErrorHandler` 拿掉；P12、P15 先 Red；`[el-e1-*]`、`[el-throw-records-*]`、`[el-drop-cause-*]`、`[el-silent-*]`；G3、G5、G8 | 7.5 h |
+| 4b | 第 17.1 節：`UnknownWorld` 改斷言（G6，三案改寫、三個突變退役與變體、`or-ended-before-name` 改寫）；`[el-unknown-world-*]`。（第 17.2 節修訂 6 撤回） | 2 h |
+| 5 | 突變：新增、改寫、退役；相關的 Kernel（清單 737 個中受影響的）與編排層（227 個中受影響的）重跑；Fable 檢查 | 4.5 h |
 | 6 | 三平台 L1、dev_log（盤點表的三欄）、HANDOFF | 2.5 h |
 | 4c | D11 的改名：本批的型別（`WorldError`、`OrchestrationFailure`、`KernelFailure`）含在第 3b、4 步；範圍第 1 點選「一起改」時，`Base::Failure<Code>`、`CodedFailure` 與各 Module 的機械改名另加（`AssertionFailure` 改名時含在內） | +3 h（選一起改時） |
-| | 合計（不含 3c、4c） | 34.5 h |
-| | 合計（含 3c） | 37 h |
+| | 合計（不含 3c、4c；修訂 6 重算） | 30 h |
+| | 合計（含 3c、4c：使用者已核准兩者都做） | 35.5 h（1.5 倍 53.25 h；修訂 5 以前是 40 h） |
 
 ### 11.2 和日誌批、第 4 批的交界
 
@@ -802,7 +810,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 |---|---|
 | 日誌宣告第 3 節現況表「編排層的警告：`Base::Log` 五處」、LG-1 的 ③ | 日誌批改：本批合併後 `gyo2` 的 Engine 裡沒有任何 `Base::Log` 的使用者，入口 ③ 留不留是日誌批的事 |
 | 日誌 LG-2「同一份只寫一次」 | 日誌批合併前核准時改（HANDOFF 已記）；對齊本頁 DI 5 |
-| 日誌宣告 5.6 的三種接法、`WriteFailure.hpp` 的範例註解 | D3、D4 之後：(1) 入口回 E1 的型別；(2) 例外的情形只剩非 `std::exception`；(3) 預設 runner 由 `main` 讀 `Failure()`。日誌批改；本頁 DI 5 的「記在 runner 結束處」就是 `WithFailureLog` 現在的寫法 |
+| 日誌宣告 5.6 的三種接法、`WriteFailure.hpp` 的範例註解 | D3 之後：(1) 入口回 E1 的型別；(2) 例外照常往外（修訂 6：D4 改回往外拋，情形 (2) 照留）；(3) 預設 runner 由 `main` 讀 `Failure()`。日誌批改；本頁 DI 5 的「記在 runner 結束處」就是 `WithFailureLog` 現在的寫法 |
 | `WithFailureLog` 的 `catch (...)` | 建議日誌批**保留**（第 5.2 節最後一段）|
 | 判定「行程裡恰好一筆 `Fatal`」 | 日誌批的判定（本頁判定 3）|
 | `docs/architecture/target/v2/orchestration.zh-Hant.md` | **同檔**：日誌分支改了 O-11 後面那一段（df9cd068）、本批改 O-3／O-4／O-9／O-11。本批先合時日誌批 rebase；條文以本批為準、日誌批只改它那一段的例子 |
@@ -830,14 +838,14 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 ## 13. 交使用者的
 
-**核准紀錄**（2026-11-20）：使用者問「另外還要什麼要我決定的嗎？」，本卡列出第 1～11 題與第 12 題第 1～5 點、各附建議後，使用者原話：「照建議，全部核准」。所以：1 照第 4 節；2 (a)；3 D3 (b)；4 D4 (b)；5 D1 (b)＋D5 (a)；6 D5 (a)、RC 不改寫；7 D8 (b)；8 A8 照判；9 D9 本批做；10 D10 (i)；11 第 17.1 節；12-1 一起改（Kernel、編排層、`Base`、各 Module 的錯誤型別機械改名；日誌分支的 `LoggingError` 由日誌批改）；12-2 `WorldError`；12-3 照舊；12-4 照舊；12-5 `AssertionFailure` 改名；12-6 已另定（保留規則、契約寫明不是 Java 的 `Error`；「也不是 Go 的 `XxxError`」半句照本卡建議一併寫）。估時：34.5 h＋3c 2.5 h＋4c 3 h＝40 h；1.5 倍是 60 h。
+**核准紀錄**（2026-11-20）：使用者問「另外還要什麼要我決定的嗎？」，本卡列出第 1～11 題與第 12 題第 1～5 點、各附建議後，使用者原話：「照建議，全部核准」。所以：1 照第 4 節；2 (a)；3 D3 (b)；4 D4 (b)——**修訂 6：使用者同日在主會話推翻，改成往外拋、拋出前記好 failure**（第 0.1 節）；5 D1 (b)＋D5 (a)；6 D5 (a)、RC 不改寫；7 D8 (b)；8 A8 照判；9 D9 本批做；10 D10 (i)；11 第 17.1 節；12-1 一起改（Kernel、編排層、`Base`、各 Module 的錯誤型別機械改名；日誌分支的 `LoggingError` 由日誌批改）；12-2 `WorldError`；12-3 照舊；12-4 照舊；12-5 `AssertionFailure` 改名；12-6 已另定（保留規則、契約寫明不是 Java 的 `Error`；「也不是 Go 的 `XxxError`」半句照本卡建議一併寫）。估時：修訂 6 重算為 35.5 h（含 3c、4c）；1.5 倍 53.25 h。
 
 照「各家分歧、GYO 特有、推翻已定決定、DI 守衛的判定變更」四類。每題附建議與理由；名字與照源碼答得出的細節本卡已自己判（標在各節）。
 
 1. **級別本身與兩次原話的讀法**（第 4 節、文首）：E0～E3＋非錯誤，相對於單位分；升降只有第 4.1 節表列的幾條。請確認本卡的讀法：去重那一次的原話「返回沒錯，錯誤沒錯，包裝沒錯……不是機制問題」（HANDOFF 同一列的摘要另記「O-11、編排層都不動」），被同一天開這張卡的「沒有分級，runner不知道如何處理」擴大了範圍（修訂 5 查了原始出處：E1 在 Java、Go 都不是一個「類」，是框架在工作單位邊界的處理方式——Go 的 `net/http` 最接近；GYO 把它做成一級，第 3.1 節），所以本批會動 O-1／O-2／O-3／O-4／O-5／O-8／O-9／O-11 與編排層的程式。**GYO 特有**。建議：照第 4 節。
 2. **D2 拿掉編排層的五處 `Warning`，警告改由處理的一方記**。**推翻**：使用者 2026-11-17 原話「插入就拒絕，返回信息（不退出，但是System無法插入，日誌報警告）」（`v8-arch-gyo2-dynamic-insert-per-world`）——警告照樣記得到，記的人從編排層移到工具或遊戲；CCR-3、DI-KS 26、O-9、O-4（拿掉「編排層自己的警告」，清單少一項）。比過 (b) 只修致命那三處、(d) 改記診斷紀錄。建議 (a)。
 3. **D3 E1 與 E2 分成不同的型別**：`WorldError`（共用 Product 持有的 `WorldFailure`、包住升級成 E1 的那個 E2、帶 Kernel 錯誤）／`OrchestrationError`（拿掉 `failure`；只屬於 E1 的三個碼搬走）；`RunGameInit`、`RunFrame`、`RunSchedule` 只回 E1。**碰到**去重那一次的「包裝沒錯」——(b) 保留「結構化錯誤回給 runner」，改的是 E1 不再和 E2 共用一個型別。**各家分歧**：級別放型別（Java、Rust）或靠一個欄位（Go 的 `errors.As` 用在 optional 上，D3 (a)）。照建議做完，E1、E2 在程式裡有名字；選 (a) 的話級別只存在文件裡。建議 (b)。
-4. **D4 入口在邊界接 `std::exception` 轉成回傳值**（含 P12 從源頭修：先組好 `WorldFailure`、替換中有明確的狀態）。**推翻**：O-9「`build` 丟例外時往外傳」；O-11 的例外守衛（G4）；日誌宣告 5.6 的情形 (2)；也碰到「返回沒錯」。**各家分歧**：例外在工作單位邊界轉成值（Go、Bevy）或一路丟（Java）或接住繼續（Unity）。建議 (b)。
+4. **（修訂 6：使用者推翻，見第 0.1 節與 D4；以下是原題，留作紀錄）D4 入口在邊界接 `std::exception` 轉成回傳值**（含 P12 從源頭修：先組好 `WorldFailure`、替換中有明確的狀態）。**推翻**：O-9「`build` 丟例外時往外傳」；O-11 的例外守衛（G4）；日誌宣告 5.6 的情形 (2)；也碰到「返回沒錯」。**各家分歧**：例外在工作單位邊界轉成值（Go、Bevy）或一路丟（Java）或接住繼續（Unity）。建議 (b)。
 5. **D1 拿掉 Kernel 的錯誤處理器**。**推翻**：target DI 1、2、DI-KS 2、17、18 的「Executor 記一次」（2026-11-13 核准）；它的來歷是使用者 2026-11-11「這裡其實我想用 Result，原因不是可恢復，而是記日誌」「不靜默處理也是我們的原則之一」。**失去的**：Kernel 不再自己保證留下痕跡；「不靜默」改由「Err 一定回到呼叫者＋沒讀是編譯錯誤（D5）＋處理者記一次」三件保證，所以 D1 (b) 要和 D5 (a) 一起核准。**各家分歧**：Bevy 的處理器是唯一通道、GYO 的 `Err` 往上回。建議 (b)＋D5 (a)。
 6. **D5 不理 `Result` 變成編譯錯誤**（現況命中 0）。target 的 Replacement Criteria：D11 把 Kernel 的 E2 改成 `KernelFailure` 之後照原文成立，**不必改寫**（修訂 3 以前的提案撤回）。**各家分歧**：Java 強制、Go 靠工具、Rust 可設成錯誤。建議 (a)；RC 照第 8.2 節改。
 7. **D8 Kernel 在中斷那一刻把錯誤留在 Executor 上，`Failure()` 讀時看得到**（`Failure()` 拿掉 `const noexcept`；例外的路沒有 Kernel 錯誤）。要確認：(1) O-11／D2 第 5 點「不在事後讀壞掉的 World」指的是「不從壞掉的 World 的資料組錯誤」，所以讀 Executor 上中斷當下收好的值不違反；(2) 要不要改採修源頭的 (d)：不交出能跑的 `WorldExecutor`、加 `Trigger` 入口——它讓這整條路消失，但收回 O-1 容許的繞過、公開介面變得最大。建議 (b)。
@@ -920,7 +928,7 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 ---
 
-## 17. 修訂 2：主會話併入的兩件（2026-11-20；修訂 3 照窄複查改）
+## 17. 修訂 2：主會話併入的兩件（2026-11-20；修訂 3 照窄複查改；修訂 6 撤回 17.2）
 
 主會話照 L17 判（原話：「併進本批，照你的分級統一（照別家同類 API 判是 E0 還是 E2），寫進宣告、不另交使用者，除非各家分歧」「和 D4 同一套處理」）。窄複查指出 17.1 是 O-8 守衛的判定變更、有緩的面，而且別家只有一半一致，所以修訂 3 把 17.1 列成第 13 節第 11 題；17.2 照主會話的判斷不交使用者。
 
@@ -948,27 +956,13 @@ Feature（第 7.2 節）：F1 一個 World 壞了留下恰好一筆致命紀錄�
 
 **系譜**：現行規則 3（API misuse is a Programmer Error）與規則 1 第 3 步（沒有值用 `optional`）；Bevy 與 flecs 的「用／查」兩支。**舊形狀？** 不是（`UnknownWorld` 是舊形，拿掉）。**支撐的 Feature**：F4（runner 的 E2 只剩它自己發的請求真的失敗的情形，查表不混入程式錯）。
 
-### 17.2 `Product::Build` 裡丟出的例外
+### 17.2 `Product::Build` 裡丟出的例外（修訂 6：撤回）
 
-**問題**：O7。`Product::Build`（`Product.cpp:80-245`）沒有任何 `catch`；登記單位的 `Configure`、`Build`、`Finish`、`Check` 與產品自己的 `build`、準備函式丟例外時直接到 `main`；不是作者程式的地方也會丟 `bad_alloc`（`:82` `new Product()`、`:98-117`、`:139-178`、`:211`、`:219`／`:243` 組報告、`:230` `MakeExecutor`）。
-
-**決定**（和 D4 同一套；兩層）：
-1. **逐處接**：在呼叫作者程式的每一處（步驟 2 的 `Configure`、步驟 3～4 每個 World 的 `Build`／`Finish`／`Check` 與產品的 `build`、步驟 6 的準備函式）接 `std::exception`，記成報告的一筆：新的 O-E 碼（暫名 O-E8「作者程式丟了例外」，名字照命名規範定），`subjects` 帶登記單位與 World 名，訊息帶 `what()`。接法收成一個小函式、各處共用。級別 E2（還沒有 Product）。
-2. **最外層的保底**：`Build` 的最外層也接 `std::exception`；`errors`、`unitErrors`、`results` 宣告在 `try` 之外，接到時回「到那一刻為止收到的全部＋這一筆」——不丟掉已收齊的錯誤（修訂 2 退掉這一層的理由不成立，窄複查 M7）。這一層收的是不在作者呼叫點的例外（多半是 `bad_alloc`）。
-3. **丟過例外之後各步怎麼走**（O-2「出錯的登記單位不用、其餘照做」原本管的是第 1 步、作者程式還沒跑的錯誤；這裡補成明確的規則）：
-   - 丟過例外的登記單位，**之後不再呼叫**（它的實例跨 World 共用，`Product.cpp:265-270`、`:287-293`，狀態不明）。
-   - 用到它的 World，以及用到「依賴它的登記單位」的 World，**從那一步起不再登記**，標 `notChecked`（不跑 `Finish`、`Check` 與清單檢查）。這也避開第 4 批 A3「Module 在 `Build` 找不到依賴：斷言」——依賴它的單位根本不會被呼叫。
-   - 沒用到它的 World 照做。
-   - `Configure` 丟例外時，共用的遊戲初始化清單可能只插了一半（`:182-187`）：那次 `Build` 不做遊戲初始化清單的 O-E5 檢查，報告寫明「因為 O-E8 而沒檢查」。其餘單位的 `Configure` 照做（各有自己的 `ProductSetup`，`:185`）。
-   - `notChecked` 的意思從「Kernel 失敗了」（`OrchestrationError.hpp:67-69`）擴充成「Kernel 失敗了，或用到的登記單位丟過例外」；`kernel` 是空的而 `notChecked` 是 true 的組合，報告的文字照寫。O-2、O-5 的條文照改（第 8.2 節）。
-   - 半輪的 Registry：`Registrar` 在任何出路都會關上，`~Registry()` 沒有斷言（`Registry.cpp:713`），`Register()` 失敗時 Registry 是區域變數、直接銷毀（`Product.cpp:252`、`:284`）——可行；反正有錯誤就不建任何 World。
-4. **替換時**：`Register()` 是啟動與替換共用（`Product.cpp:211`、`:573`），第 1 點的接法寫在它裡面，所以替換時登記單位丟的例外以 O-E8 進報告、再以 `ReplaceRegistrationFailed` 回（D4 的「範圍與各路回什麼」）。
-5. 不是 `std::exception` 的：不接、原樣往外（規則 6；測試的 `AssertionFailure`）。還沒有 Product、沒有要收尾的狀態（`Build` 回之前什麼都不交出去）。
-6. `bad_alloc`：記那一筆時再失敗就從 `catch` 裡往外（`main` 可能收到 `std::bad_alloc`，第 5.3 節照寫）。
-
-**系譜**：規則 6（公開邊界接 `std::exception` 轉成 `Result`）；D4；O-2、O-5 的收齊。**比過的**：照舊讓例外到 `main`（規則 6 的缺口）／只接最外層一次（丟掉「其餘照做」：一個單位丟例外，其他單位的錯誤就收不到）／只逐處接（不在作者呼叫點的例外照樣到 `main`）——退掉，兩層並用。**舊形狀？** 不是。**支撐的 Feature**：F3（工具載入的外掛在 `Configure` 丟例外時，工具拿到報告、決定怎麼顯示，而不是整個程式被例外帶走）。
-
-**推翻的已定決定**：無；O-2「其餘照做」、O-5「一次收齊」照用，補明確的規則與一個碼，`notChecked` 的意思擴充（第 8.2 節）。
+修訂 2～5 寫的「`Build` 在作者呼叫點與最外層接 `std::exception`、轉成啟動報告的一筆（O-E8）」**撤回**：它是 D4 (b) 的同一套，使用者 2026-11-20 推翻 D4 (b)（第 0.1 節、D4）。所以：
+- `Product::Build` 照現在——不接，作者程式丟的例外與 `bad_alloc` 原樣到 `main`；還沒有 Product、沒有要記的 `failure`。
+- 不新增 O-E8；O-2「出錯的登記單位不用、其餘照做」與 O-5 照現在（管的是作者程式還沒跑時的錯誤）；`notChecked` 的意思不擴充。
+- **標準用法**（給作者參考）：`main` 想把啟動時的例外顯示給人時，在 `main` 的邊界接 `std::exception`，記一次、決定結束或退回；不是 `std::exception` 的照規則 6 不接。
+- 修訂 3 窄複查的 M7、S7、S8（`Build` 的兩層、丟例外之後各步怎麼走、和 `Register()` 的重疊）因此不再適用；第 18 節的處理照留作紀錄。
 
 ---
 
