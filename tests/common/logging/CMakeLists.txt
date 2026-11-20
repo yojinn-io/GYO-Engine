@@ -3,6 +3,7 @@
 add_executable(gyo_logging_tests
     TestMain.cpp
     AppendTests.cpp
+    FatalTests.cpp
     FileSinkTests.cpp
     FormatTests.cpp
     LoggerTests.cpp
@@ -16,7 +17,7 @@ if(MSVC)
 else()
     target_compile_options(gyo_logging_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS logger builder format console file append)
+foreach(group IN ITEMS logger builder format console file append fatal)
     add_test(NAME logging.${group} COMMAND gyo_logging_tests "--test-case=${group}:*")
     set_tests_properties(logging.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

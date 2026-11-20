@@ -2,6 +2,8 @@
 
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <exception>
 #include <new>
 #include <string>
 #include <utility>
@@ -10,6 +12,7 @@
 #include "TextFormat.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/logging/Write.hpp"
+#include "engine/logging/WriteFatalRecord.hpp"
 #include "engine/os/Process.hpp"
 #include "engine/time/MonotonicClock.hpp"
 
@@ -84,6 +87,8 @@ void OnBaseLog(const ::Engine::Base::LogMessage& message) noexcept {
     Write(Entry{.level = level, .category = message.category, .text = message.text});
 }
 
+} // namespace
+
 std::int64_t DefaultMonoNs() noexcept {
     return ::Engine::Time::NowNs();
 }
@@ -100,6 +105,40 @@ WallTime DefaultWall() noexcept {
         // The offset stays 0: a record is never worth a failure.
     }
     return wall;
+}
+
+namespace {
+
+// The handlers the Logger replaced, for its own handlers to go on to. Atomic,
+// not in the state: a handler may run while the Logger is being uninstalled.
+constinit std::atomic<::Engine::Base::AssertionHandler> previousAssertion{nullptr};
+constinit std::atomic<std::terminate_handler> previousTerminate{nullptr};
+
+// A failed GYO_ASSERT: the Fatal record first, then the handler installed
+// before (a test's throws; the default prints). The abort stays Base's.
+void OnAssertion(const ::Engine::Base::AssertionFailure& failure) {
+    if (current.load(std::memory_order_acquire) != nullptr) {
+        const Field fields[] = {{"file", failure.location.file_name()},
+                                {"line", static_cast<std::uint64_t>(failure.location.line())},
+                                {"function", failure.location.function_name()}};
+        static_cast<void>(WriteFatalRecord(Record{.level = Level::Fatal,
+                                                  .category = "assert",
+                                                  .text = failure.expression != nullptr ? failure.expression : "",
+                                                  .fields = fields}));
+    }
+    const ::Engine::Base::AssertionHandler previous = previousAssertion.load(std::memory_order_acquire);
+    (previous != nullptr ? previous : &::Engine::Base::DefaultAssertionHandler)(failure);
+}
+
+// std::terminate: what the sinks queued, within the fatal deadline, then the
+// handler installed before (std::abort when there was none).
+[[noreturn]] void OnTerminate() {
+    if (const LoggerState* state = current.load(std::memory_order_acquire); state != nullptr && !InFatalPath()) {
+        const auto deadline = std::chrono::steady_clock::now() + state->fatalFlushTimeout;
+        for (const SinkEntry& entry : state->sinks) static_cast<void>(entry.sink->Flush(deadline));
+    }
+    if (const std::terminate_handler previous = previousTerminate.load(std::memory_order_acquire)) previous();
+    std::abort();
 }
 
 } // namespace
@@ -171,11 +210,26 @@ LoggingResult<LoggerHandle> Install(LoggerOptions options) {
         state->sinks.push_back(std::move(entry));
     }
     state->RecomputeFloor();
+    state->fatalFlushTimeout = options.fatalFlushTimeout;
+    state->fatalText.reserve(options.fatalLineCapacity);
+    state->fatalJson.reserve(options.fatalLineCapacity);
     Detail::LoggerState* raw = state.release();
     Detail::current.store(raw, std::memory_order_release);
     if (options.takeBaseLog) {
         raw->tookBaseLog = true;
         raw->previousBaseLog = ::Engine::Base::SetLogHandler(&Detail::OnBaseLog);
+    }
+    if (options.takeAssertions) {
+        raw->tookAssertions = true;
+        raw->previousAssertion = ::Engine::Base::SetAssertionHandler(nullptr);
+        Detail::previousAssertion.store(raw->previousAssertion, std::memory_order_release);
+        ::Engine::Base::SetAssertionHandler(&Detail::OnAssertion);
+    }
+    if (options.takeTerminate) {
+        raw->tookTerminate = true;
+        raw->previousTerminate = std::get_terminate();
+        Detail::previousTerminate.store(raw->previousTerminate, std::memory_order_release);
+        std::set_terminate(&Detail::OnTerminate);
     }
     return LoggerHandle(raw);
 }
@@ -198,6 +252,8 @@ void LoggerHandle::Close() noexcept {
     Detail::LoggerState* state = std::exchange(state_, nullptr);
     if (state == nullptr) return;
     if (state->tookBaseLog) ::Engine::Base::SetLogHandler(state->previousBaseLog);
+    if (state->tookAssertions) ::Engine::Base::SetAssertionHandler(state->previousAssertion);
+    if (state->tookTerminate) std::set_terminate(state->previousTerminate);
     Detail::current.store(nullptr, std::memory_order_release);
     for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();
     delete state;

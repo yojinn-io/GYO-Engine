@@ -57,3 +57,32 @@ TEST_CASE("alloc: a refused record allocates nothing and reads no clock; a taken
     CHECK(Logging::Test::clockReads.load() == 2);
     CHECK(memory->Records().size() == 1);
 }
+
+#include "engine/logging/WriteFatalRecord.hpp"
+
+TEST_CASE("alloc: the fatal path formats its lines in the capacity Install reserved: nothing is allocated (LG-2)") {
+    struct CountingSink final : Logging::Sink {
+        int fatal = 0;
+        void Write(const Logging::Record&) noexcept override {}
+        bool WriteFatal(const Logging::Record&, std::string_view, std::string_view) noexcept override {
+            ++fatal;
+            return true;
+        }
+    };
+    auto counting = std::make_shared<CountingSink>();
+    Logging::LoggerOptions options;
+    options.sinks.push_back({.name = "counting", .sink = counting, .filter = {}});
+    options.clock = Logging::Test::TestClock();
+    options.takeAssertions = false;
+    options.takeTerminate = false;
+    auto handle = Logging::Install(std::move(options));
+    REQUIRE(handle);
+    const Logging::Field fields[] = {{"kind", "Interrupted"}, {"entry", "RunFrame"}, {"sync_epoch", 3u}, {"x", 0.5}};
+    const Logging::Record record{.level = Level::Fatal, .category = "world", .text = "a World broke",
+                                 .product = "game", .world = "Simulation", .fields = fields};
+    const std::size_t before = allocations;
+    const auto report = Logging::WriteFatalRecord(record);
+    CHECK(allocations == before);
+    CHECK(report.sinksWritten == 1);
+    CHECK(counting->fatal == 1);
+}

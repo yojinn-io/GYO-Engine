@@ -12,6 +12,7 @@ add_library(gyo_logging STATIC
     src/RecordBuilder.cpp
     src/Sink.cpp
     src/TextFormat.cpp
+    src/WriteFatalRecord.cpp
 )
 add_library(GYO::Logging ALIAS gyo_logging)
 

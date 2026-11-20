@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
+#include <exception>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -8,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "engine/base/Assert.hpp"
 #include "engine/base/Log.hpp"
 #include "engine/logging/Logger.hpp"
 #include "engine/logging/Record.hpp"
@@ -40,6 +43,16 @@ struct LoggerState final {
     std::atomic<std::uint8_t> floor{0};
     bool tookBaseLog{false};
     ::Engine::Base::LogHandler previousBaseLog{nullptr};
+    bool tookAssertions{false};
+    ::Engine::Base::AssertionHandler previousAssertion{nullptr};
+    bool tookTerminate{false};
+    std::terminate_handler previousTerminate{nullptr};
+    std::chrono::nanoseconds fatalFlushTimeout{};
+    // The fatal path's lines, reserved at Install; tried, never waited for (a
+    // second fatal path at the same moment formats into lines of its own).
+    std::mutex fatalLinesMutex;
+    std::string fatalText;
+    std::string fatalJson;
 
     void RecomputeFloor() noexcept;
     [[nodiscard]] std::int64_t MonoNs() const noexcept;
@@ -54,6 +67,14 @@ inline constinit std::atomic<State*> current{nullptr};
 // The sinks of state that take a record of this level and category, as a bit
 // set (Install allows at most 64 sinks).
 [[nodiscard]] std::uint64_t TakingSinks(const State& state, Level level, std::string_view category) noexcept;
+
+// The default clocks: Engine::Time::NowNs, and the system clock with the C
+// runtime's local offset from UTC.
+[[nodiscard]] std::int64_t DefaultMonoNs() noexcept;
+[[nodiscard]] WallTime DefaultWall() noexcept;
+
+// Whether a fatal path (WriteFatalRecord) is running on this thread.
+[[nodiscard]] bool InFatalPath() noexcept;
 
 // The lock that keeps lines on standard error whole: a ConsoleSink on standard
 // error and the no-Logger line take it; the fatal path only tries it.

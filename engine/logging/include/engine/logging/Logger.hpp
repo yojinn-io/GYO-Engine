@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -65,6 +66,18 @@ struct LoggerOptions final {
     // Engine::Base::Log's lines become records (the category and text as
     // given; Debug, Info, Warning and Error as the same levels).
     bool takeBaseLog{true};
+    // A failed GYO_ASSERT writes a Fatal record of category "assert" through
+    // WriteFatalRecord, then goes on to the handler installed before (the
+    // default one when there was none); the abort stays Base's.
+    bool takeAssertions{true};
+    // std::terminate first flushes every sink (within fatalFlushTimeout), then
+    // goes on to the handler installed before.
+    bool takeTerminate{true};
+    // The one deadline of the fatal path's step 4, for all sinks together.
+    std::chrono::nanoseconds fatalFlushTimeout{std::chrono::seconds{1}};
+    // Reserved at Install for the fatal path's text and JSON lines, so that
+    // writing them allocates nothing unless a line is longer.
+    std::size_t fatalLineCapacity{8192};
     LoggerClock clock;
 };
 
@@ -81,9 +94,9 @@ struct LoggerState;
 // prefix.
 [[nodiscard]] LoggingResult<LoggerHandle> Install(LoggerOptions options);
 
-// Uninstalls the Logger when destroyed or closed: Close is called on every
-// sink, in the order they were given, and the handlers the Logger took are
-// put back. Move-only.
+// Uninstalls the Logger when destroyed or closed: the handlers the Logger took
+// (Engine::Base::Log, GYO_ASSERT, std::terminate) are put back, then Close is
+// called on every sink, in the order they were given. Move-only.
 class LoggerHandle final {
 public:
     LoggerHandle(LoggerHandle&& other) noexcept;
