@@ -3,6 +3,9 @@
 // sink takes its record, writes one logging record per span and a path record where an error is produced.
 #include <doctest/doctest.h>
 
+// MSVC: doctest messages stream std::string_view; that needs the full ostream.
+#include <ostream>
+
 #include <atomic>
 #include <cstdint>
 #include <memory>

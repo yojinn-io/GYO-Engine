@@ -4,6 +4,9 @@
 // receiver everything is a no-op.
 #include <doctest/doctest.h>
 
+// MSVC: doctest messages stream std::string_view; that needs the full ostream.
+#include <ostream>
+
 #include <cstddef>
 #include <cstring>
 #include <span>

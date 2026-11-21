@@ -5,6 +5,9 @@
 
 #include "SaveGame.hpp"
 
+// MSVC: doctest messages stream std::string_view; that needs the full ostream.
+#include <ostream>
+
 #include <cstddef>
 #include <span>
 #include <string>

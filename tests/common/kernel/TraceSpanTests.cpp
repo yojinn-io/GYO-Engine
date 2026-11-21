@@ -6,6 +6,9 @@
 
 #include "WorldTestSupport.hpp"
 
+// MSVC: doctest messages stream std::string_view; that needs the full ostream.
+#include <ostream>
+
 #include <cstddef>
 #include <span>
 #include <stdexcept>
