@@ -1,5 +1,6 @@
 #include "engine/rollback/StateRollbackStrategy.hpp"
 
+#include "engine/base/Trace.hpp"
 #include "engine/rollback/History.hpp"
 #include "engine/rollback/Inbox.hpp"
 #include "engine/world_time/FixedStep.hpp"
@@ -241,6 +242,10 @@ Ok StateRollbackStrategy::Resimulate(ResimulateContext& context) {
     if (!kept) return ::Engine::Base::Err(std::move(kept).error());
     WorldTime::RewindFixedSteps(world, steps);
     for (std::uint64_t step = target + 1; step <= context.Tick(); ++step) {
+        // One trace span around each step run again (authority-rollback declaration 10.4): a span with an ancestor
+        // span.rollback is a resimulation; the first run has no such layer. It only tells (TR-2).
+        ::Engine::Base::TraceSpan resimulateSpan;
+        resimulateSpan.Begin("rollback", "resimulate");
         // The inputs of that step, written back (their entries are skipped while resimulating).
         auto written = world.Read<RollbackHistory>([&](const RollbackHistory& history) {
             for (const auto& input : history.inputs) input->WriteBack(world, step);

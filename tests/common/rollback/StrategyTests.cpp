@@ -10,10 +10,12 @@
 
 #include "RollbackTestSupport.hpp"
 
+#include "engine/base/Trace.hpp"
 #include "engine/rollback/Inbox.hpp"
 #include "engine/rollback/Runtime.hpp"
 #include "engine/rollback/StateRollbackStrategy.hpp"
 
+#include <algorithm>
 #include <array>
 #include <map>
 #include <string>
@@ -87,6 +89,32 @@ K::SystemResult Feed(K::ResMut<Command> command, K::Res<W::Tick> tick) {
     command->move = kScript[(tick->value + 1) % kScript.size()];
     return {};
 }
+
+// A receiver of the trace facade (no trace Module): keeps the open spans' categories and counts the runs of the
+// step schedule FixedUpdate with and without a span.rollback around them (authority-rollback declaration 10.4).
+struct SpanLog {
+    std::vector<std::string> open;
+    int firstRuns = 0;
+    int resimulated = 0;
+};
+SpanLog& Spans() {
+    static SpanLog log;
+    return log;
+}
+::Engine::Base::TraceToken SpanBegin(std::string_view category, std::string_view name, std::string_view) noexcept {
+    SpanLog& log = Spans();
+    if (category == "kernel" && name == "FixedUpdate") {
+        const bool under = std::find(log.open.begin(), log.open.end(), "rollback") != log.open.end();
+        ++(under ? log.resimulated : log.firstRuns);
+    }
+    log.open.emplace_back(category);
+    return {log.open.size(), 1, static_cast<std::uint32_t>(log.open.size())};
+}
+void SpanEnd(::Engine::Base::TraceToken, bool) noexcept { Spans().open.pop_back(); }
+void SpanError(::Engine::Base::TraceToken, std::string_view, bool) noexcept {}
+void SpanMark(std::string_view, bool) noexcept {}
+std::size_t SpanPath(std::span<char>) noexcept { return 0; }
+constexpr ::Engine::Base::TraceReceiver kSpanReceiver{&SpanBegin, &SpanEnd, &SpanError, &SpanMark, &SpanPath};
 
 O::OptionBag WithStrategy(R::StateRollbackSettings settings = {}) {
     O::OptionBag options;
@@ -211,6 +239,19 @@ TEST_CASE("rollback strategy: R-2: going back and resimulating gives the World r
                                                 << WorldOf(*straight).Get<Health>(1)->hp);
     CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-r2-equal] the World summaries differ");
     CHECK_MESSAGE(WorldOf(*rolled).Resource<W::Resimulation>()->active == 0, "[rb-resimulation-lowered]");
+}
+
+TEST_CASE("rollback strategy: each step run again has a span.rollback around it; the first run has none") {
+    auto p = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}));
+    Frames(*p, 9);
+    Spans() = {};
+    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kSpanReceiver);
+    Inbox(*p).ConfirmedThrough(4);
+    Frames(*p, 1); // steps 5 to 9 again, then step 10
+    ::Engine::Base::SetTraceReceiver(previous);
+    CHECK_MESSAGE(Spans().resimulated == 5, "[rb-trace-resimulate] runs of FixedUpdate under span.rollback: " << Spans().resimulated);
+    CHECK_MESSAGE(Spans().firstRuns == 1, "[rb-trace-first-run] runs of FixedUpdate without span.rollback: " << Spans().firstRuns);
+    CHECK_MESSAGE(Spans().open.empty(), "[rb-trace-resimulate] spans left open: " << Spans().open.size());
 }
 
 TEST_CASE("rollback strategy: an authoritative value that differs goes back and resimulates from it") {

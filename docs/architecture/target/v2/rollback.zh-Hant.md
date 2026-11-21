@@ -28,8 +28,12 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 | `Derived<T>()` | 每步在讀者之前由立即寫者重算；不記錄、不還原（R-7） |
 | `StepSchedule(name, recordStage)` | 回滾的單位；有策略的 World 在登記當下把記錄 System 掛到那個 stage |
 | `NestedSchedule(name, stepSchedule)` | 從步的 schedule 巢狀跑的 schedule；重跑時會跑到，只進檢查的範圍 |
-| `SkipDuringResimulation(options)` | 在 `AddSystem` 之前給它的每個掛載加執行條件（讀時間 Module 的 `Resimulation`） |
+| `SkipDuringResimulation(options)` | 在 `AddSystem` 之前給它的每個掛載加執行條件（讀時間 Module 的 `Resimulation`）。「重跑時跑不跑」逐個掛載看條件（`RunsWhileResimulating`）：之後才加的掛載會重跑 |
 | `Input<T>(capacity)` | 官方策略替 `T` 保留按 tick 的歷史；不登記 `T` |
+
+同一型別同時登記成可回滾與 `Derived`：作者的蓋過代為的（跨兩種也一樣）；兩筆都是作者的是 RB-E1。
+
+重跑的每一步外面有一段 trace（經 Base 的門面，category `rollback`、name `resimulate`；回滾份 10.4）：祖先裡有 `span.rollback` 的段是重跑，第一次跑沒有這一層。不依賴 trace Module，不讀寫 World 的值。
 
 `RollbackInbox`（所有策略共用、World 的 Resource）：`Value<T>(entity, tick, value)`、`Removed<T>(entity, tick)`、`ConfirmedThrough(tick)`；`PartialValue`、`NotSent`、`Entered`、`Exited`、`FromEvent` 本批回 `RollbackFailure`（NotImplemented）。
 

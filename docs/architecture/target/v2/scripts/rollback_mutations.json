@@ -642,6 +642,19 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback registrations: rollback state and Derived of one type*",
    "expect": "\\[rb\\-cross\\-kind\\-author\\]"
+  },
+  {
+   "id": "rb-trace-resimulate-missing",
+   "what": "no trace span around a step run again: a resimulation's spans cannot be told from the first run's (authority-rollback declaration 10.4). Only it catches the span",
+   "guards": [
+    "authority-rollback-declaration 10.4"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        resimulateSpan.Begin(\"rollback\", \"resimulate\");\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: each step run again has a span.rollback*",
+   "expect": "\\[rb\\-trace\\-resimulate\\] runs of FixedUpdate under"
   }
  ]
 }
