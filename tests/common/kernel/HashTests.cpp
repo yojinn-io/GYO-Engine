@@ -103,7 +103,7 @@ T BuiltOver(unsigned char fill, Args&&... args) {
 
 Fingerprint PaddedSummary(unsigned char fill) {
     auto rig = MakeRig([](Registrar& r) {
-        r.Component<Padded>({.name = "Padded", .zone = Zone::B});
+        r.Component<Padded>({.name = "Padded"});
         r.Schedule(TickSchedule());
     });
     rig->world().Insert(1, BuiltOver<Padded>(fill, std::uint8_t{1}, std::uint32_t{2}));
@@ -112,7 +112,7 @@ Fingerprint PaddedSummary(unsigned char fill) {
 
 Fingerprint PathSummary(std::vector<std::int32_t> points) {
     auto rig = MakeRig([](Registrar& r) {
-        r.Component<Path>({.name = "Path", .zone = Zone::B});
+        r.Component<Path>({.name = "Path"});
         r.Schedule(TickSchedule());
     });
     rig->world().Insert(1, Path{std::move(points), "route"});
@@ -120,9 +120,9 @@ Fingerprint PathSummary(std::vector<std::int32_t> points) {
 }
 
 void UnhashedData(Registrar& r) {
-    r.Component<Unhashed>({.name = "Unhashed", .zone = Zone::B});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
-    r.Resource<UnhashedSetting>({.name = "UnhashedSetting", .zone = Zone::B});
+    r.Component<Unhashed>({.name = "Unhashed"});
+    r.Component<Tag>({.name = "Tag"});
+    r.Resource<UnhashedSetting>({.name = "UnhashedSetting"});
     r.Schedule(TickSchedule());
 }
 

@@ -185,7 +185,7 @@ TEST_CASE("J-12: ExclusiveWorld<Writes<R>> is no write of R: R is in annotatedWr
                   "J-12 annotation: the Contribution of ExclusiveWorld<Writes<TestRes>>");
     Built built = FinishOne([](Registrar& r) {
         const auto lists = [](ExclusiveWorld<Writes<TestOtherRes>>) -> SystemResult { return {}; };
-        r.AddSystem<decltype(lists)>(Sys("Lists", Zone::B, {At("Update", "First")}));
+        r.AddSystem<decltype(lists)>(Sys("Lists", {At("Update", "First")}));
     });
     KERNEL_REQUIRE_OK(built);
     const SystemInfo* info = built.registry->Frozen().SystemNamed("Lists");
@@ -202,7 +202,7 @@ TEST_CASE("J-12: ExclusiveWorld<Writes<R>> is no write of R: R is in annotatedWr
 TEST_CASE("J-12: Writes lists a component and a resource in key order and writes neither") {
     Built built = FinishOne([](Registrar& r) {
         const auto lists = [](ExclusiveWorld<Writes<TestOtherRes, TestMarker>>) -> SystemResult { return {}; };
-        r.AddSystem<decltype(lists)>(Sys("ListsBoth", Zone::B, {At("Update", "First")}));
+        r.AddSystem<decltype(lists)>(Sys("ListsBoth", {At("Update", "First")}));
     });
     KERNEL_REQUIRE_OK(built);
     const SystemInfo* info = built.registry->Frozen().SystemNamed("ListsBoth");
@@ -215,7 +215,7 @@ TEST_CASE("J-12: Writes lists a component and a resource in key order and writes
                   "[ks-annotated-component] annotatedWrites holds the listed component and resource");
     Built unknown = FinishOne([](Registrar& r) {
         const auto lists = [](ExclusiveWorld<Writes<TestRecord>>) -> SystemResult { return {}; };
-        r.AddSystem<decltype(lists)>(Sys("ListsUnknown", Zone::B, {At("Update", "First")}));
+        r.AddSystem<decltype(lists)>(Sys("ListsUnknown", {At("Update", "First")}));
     });
     CHECK_MESSAGE(HasRule(unknown, StartupCode::RE4, "R-6"), "[ks-annotated-unregistered] " << Describe(unknown));
 }
@@ -225,9 +225,9 @@ namespace {
 // The source World of the extract case: its own Registry, frozen first.
 Built SourceWorld() {
     return Finish({{"source", [](Registrar& r) {
-                        r.Component<TestPos>({.name = "TestPos", .zone = Zone::C});
-                        r.Component<TestVel>({.name = "TestVel", .zone = Zone::C});
-                        r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C});
+                        r.Component<TestPos>({.name = "TestPos"});
+                        r.Component<TestVel>({.name = "TestVel"});
+                        r.Resource<TestRes>({.name = "TestRes"});
                         ScheduleOptions s;
                         s.name = "Main";
                         s.stages = {"Run"};
@@ -237,17 +237,17 @@ Built SourceWorld() {
 
 void RegisterJ12Data(Registrar& r) {
     // Every type zone B so no zone rule fires; ids follow this order.
-    r.Component<TestPos>({.name = "TestPos", .zone = Zone::B});      // 0
-    r.Component<TestVel>({.name = "TestVel", .zone = Zone::B});      // 1
-    r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B});  // 2
-    r.Component<TestMode>({.name = "TestMode", .zone = Zone::B});    // 3
-    r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::B});  // 4
-    r.Resource<TestRes>({.name = "TestRes", .zone = Zone::B});       // 1 (0 is KernelSettings)
-    r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});  // 2
-    r.Resource<TestAllotter>({.name = "TestAllotter", .zone = Zone::B});  // 3
+    r.Component<TestPos>({.name = "TestPos"});      // 0
+    r.Component<TestVel>({.name = "TestVel"});      // 1
+    r.Component<TestMarker>({.name = "TestMarker"});  // 2
+    r.Component<TestMode>({.name = "TestMode"});    // 3
+    r.Component<TestHealth>({.name = "TestHealth"});  // 4
+    r.Resource<TestRes>({.name = "TestRes"});       // 1 (0 is KernelSettings)
+    r.Resource<TestOtherRes>({.name = "TestOtherRes"});  // 2
+    r.Resource<TestAllotter>({.name = "TestAllotter"});  // 3
     r.Allotter<TestAllotter>();
-    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::B});       // 0
-    r.Message<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::B});  // 1
+    r.Message<TestEvent>({.name = "TestEvent"});       // 0
+    r.Message<TestOtherEvent>({.name = "TestOtherEvent"});  // 1
     r.NamedSet<ReplicatedSet>("Replicated");
     r.AddToSet<ReplicatedSet, TestPos>();
     r.AddToSet<ReplicatedSet, TestHealth>();
@@ -275,28 +275,28 @@ TEST_CASE("J-12: every signature's access set in ids equals the hand-written exp
         RegisterJ12Data(r);
         int stage = 0;
         const auto at = [&stage]() { return std::vector<Mount>{At("Update", "S" + std::to_string(stage++))}; };
-        r.AddSystem<&ReadPos>(Sys("ReadPos", Zone::B, at()));
-        r.AddSystem<&MovePos>(Sys("MovePos", Zone::B, at()));
-        r.AddSystem<&FilterPos>(Sys("FilterPos", Zone::B, at()));
-        r.AddSystem<&WatchVel>(Sys("WatchVel", Zone::B, at()));
-        r.AddSystem<&WatchAdded>(Sys("WatchAdded", Zone::B, at()));
-        r.AddSystem<&UseResources>(Sys("UseResources", Zone::B, at()));
-        r.AddSystem<&UseEvents>(Sys("UseEvents", Zone::B, at()));
-        r.AddSystem<&UseCommands>(Sys("UseCommands", Zone::B, at()));
-        r.AddSystem<&SpawnBodies>(Sys("SpawnBodies", Zone::B, at()));
-        r.AddSystem<&SpawnGiven>(Sys("SpawnGiven", Zone::B, at()));
-        r.AddSystem<&RemoveBodies>(Sys("RemoveBodies", Zone::B, at()));
-        r.AddSystem<&ReadReplicated>(Sys("ReadReplicated", Zone::B, at()));
-        r.AddSystem<&KeepCount>(Sys("KeepCount", Zone::B, at()));
-        r.AddSystem<&EditWorld>(Sys("EditWorld", Zone::B, at()));
-        r.AddSystem<&TraceVel>(Sys("TraceVel", Zone::B, at()));
-        r.AddSystem<&ExtractPos>(Sys("ExtractPos", Zone::B, {At("Extract", "Copy")}));
-        r.AddSystem<&NoParameters>(Sys("NoParameters", Zone::B, at()));
+        r.AddSystem<&ReadPos>(Sys("ReadPos", at()));
+        r.AddSystem<&MovePos>(Sys("MovePos", at()));
+        r.AddSystem<&FilterPos>(Sys("FilterPos", at()));
+        r.AddSystem<&WatchVel>(Sys("WatchVel", at()));
+        r.AddSystem<&WatchAdded>(Sys("WatchAdded", at()));
+        r.AddSystem<&UseResources>(Sys("UseResources", at()));
+        r.AddSystem<&UseEvents>(Sys("UseEvents", at()));
+        r.AddSystem<&UseCommands>(Sys("UseCommands", at()));
+        r.AddSystem<&SpawnBodies>(Sys("SpawnBodies", at()));
+        r.AddSystem<&SpawnGiven>(Sys("SpawnGiven", at()));
+        r.AddSystem<&RemoveBodies>(Sys("RemoveBodies", at()));
+        r.AddSystem<&ReadReplicated>(Sys("ReadReplicated", at()));
+        r.AddSystem<&KeepCount>(Sys("KeepCount", at()));
+        r.AddSystem<&EditWorld>(Sys("EditWorld", at()));
+        r.AddSystem<&TraceVel>(Sys("TraceVel", at()));
+        r.AddSystem<&ExtractPos>(Sys("ExtractPos", {At("Extract", "Copy")}));
+        r.AddSystem<&NoParameters>(Sys("NoParameters", at()));
         Mount gated = At("Update", "S" + std::to_string(stage++));
         gated.conditions.push_back(Condition<&ResourceIsSet>("ResourceIsSet"));
-        r.AddSystem<&GatedWrite>(Sys("GatedWrite", Zone::B, {gated}));
+        r.AddSystem<&GatedWrite>(Sys("GatedWrite", {gated}));
         const auto lambda = [](Query<Read<TestVel>>, ResMut<TestRes>) -> SystemResult { return {}; };
-        r.AddSystem<decltype(lambda)>(Sys("LambdaSystem", Zone::B, at()));
+        r.AddSystem<decltype(lambda)>(Sys("LambdaSystem", at()));
     };
     Registry registry;
     registry.SetExtractSource(*source.registry);

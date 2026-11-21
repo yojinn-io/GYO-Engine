@@ -64,8 +64,8 @@ K::SystemResult GameReadsPings(K::MessageReader<Ping> pings) {
 
 void PingWorld(O::WorldSetup& s, const bool forward, const std::uint32_t capacity = 1024) {
     K::Registrar& r = s.Registrar();
-    r.Resource<Outbox>({.name = "Outbox", .zone = K::Zone::B});
-    r.Message<Ping>({.name = "Ping", .zone = K::Zone::B, .capacity = capacity});
+    r.Resource<Outbox>({.name = "Outbox"});
+    r.Message<Ping>({.name = "Ping", .capacity = capacity});
     r.AddSystem<&SendPings>(At("SendPings", "Main", "Update"));
     r.AddSystem<&GameReadsPings>(At("GameReadsPings", "Main", "PostUpdate"));
     if (forward) WL::Forward<PingLog>(s, {.schedule = "Main", .stage = "Last"});

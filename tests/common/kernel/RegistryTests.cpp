@@ -16,16 +16,16 @@ SystemResult ReadVel(Query<Read<TestVel>>) { return Ok(); }
 SystemResult WriteHealth(Query<Write<TestHealth>>) { return Ok(); }
 
 void Movement(Registrar& r) {
-    r.Component<TestPos>({.name = "TestPos", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestVel>({.name = "TestVel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C});
-    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C});
+    r.Component<TestPos>({.name = "TestPos"});
+    r.Component<TestVel>({.name = "TestVel"});
+    r.Resource<TestRes>({.name = "TestRes"});
+    r.Message<TestEvent>({.name = "TestEvent"});
 }
 
 void Life(Registrar& r) {
-    r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
-    r.Message<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::C});
+    r.Component<TestHealth>({.name = "TestHealth"});
+    r.Resource<TestOtherRes>({.name = "TestOtherRes"});
+    r.Message<TestOtherEvent>({.name = "TestOtherEvent"});
 }
 
 void Schedules(Registrar& r) {
@@ -38,13 +38,13 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "8:7a30e06bad67d0837136bcd7712cfc22454ed9efa70d91356b1823178a9b431a";
+    "9:69c89c11e062761528543db4408f9d94e0f3e83217feed3828698a7b4c77c5be";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {
                               Schedules(r);
-                              r.AddSystem<&ReadPos>(Sys("ReadPos", Zone::C, {At("FixedUpdate", "Simulate")}));
-                              r.AddSystem<&WriteHealth>(Sys("WriteHealth", Zone::C, {At("FixedUpdate", "Simulate")}));
+                              r.AddSystem<&ReadPos>(Sys("ReadPos", {At("FixedUpdate", "Simulate")}));
+                              r.AddSystem<&WriteHealth>(Sys("WriteHealth", {At("FixedUpdate", "Simulate")}));
                           }}});
     KERNEL_REQUIRE_OK(built);
     const FrozenRegistry& frozen = built.registry->Frozen();
@@ -62,7 +62,7 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
     CHECK(frozen.SystemNamed("WriteHealth")->registrationSeq == 1U);
     MESSAGE("J-18 registry fingerprint: " << frozen.RegistryFingerprint().Text());
     CHECK(frozen.RegistryFingerprint().Text() == kJ18RegistryGolden);
-    CHECK(frozen.RegistryFingerprint().version == 8U);
+    CHECK(frozen.RegistryFingerprint().version == 9U);
 }
 
 TEST_CASE("J-18: swapping two plugins gives ids in the new order") {
@@ -97,7 +97,6 @@ TEST_CASE("J-18: two Finishes of the same plugin list give the same fingerprint"
     KERNEL_REQUIRE_OK(a);
     KERNEL_REQUIRE_OK(b);
     CHECK(a.registry->Frozen().RegistryFingerprint() == b.registry->Frozen().RegistryFingerprint());
-    CHECK(a.registry->Frozen().CFingerprint() == b.registry->Frozen().CFingerprint());
 }
 
 // The two fields v8-arch-gyo2-kernel-subtract-structure added to the Registry
@@ -108,15 +107,15 @@ SystemResult EditsListingOther(ExclusiveWorld<Writes<TestOtherRes>>) { return Ok
 Built BoundOrNot(bool threadBound) {
     return Finish({{"test", [threadBound](Registrar& r) {
                         Schedules(r);
-                        r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B, .threadBound = threadBound});
+                        r.Resource<TestOtherRes>({.name = "TestOtherRes", .threadBound = threadBound});
                     }}});
 }
 template <auto System>
 Built Editing() {
     return Finish({{"test", [](Registrar& r) {
                         r.Schedule(UpdateSchedule());
-                        r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
-                        r.AddSystem<System>(Sys("Edit", Zone::B, {At("Update", "First")}));
+                        r.Resource<TestOtherRes>({.name = "TestOtherRes"});
+                        r.AddSystem<System>(Sys("Edit", {At("Update", "First")}));
                     }}});
 }
 } // namespace
@@ -154,7 +153,7 @@ TEST_CASE("J-19: lookup creates no id; the view after BuildPlans has final ids")
 
 TEST_CASE("J-19: a type registered by two plugins is R-E2") {
     Built built = Finish({{"movement", Movement}, {"again", [](Registrar& r) {
-                              r.Component<TestPos>({.name = "TestPosAgain", .zone = Zone::C});
+                              r.Component<TestPos>({.name = "TestPosAgain"});
                               Schedules(r);
                           }}});
     CHECK(KernelTest::ErrorCount(built, StartupCode::RE2) == 1);
@@ -167,8 +166,8 @@ TEST_CASE("J-19: a type registered by two plugins is R-E2") {
 TEST_CASE("J-19: removing the owner plugin gives R-E4 to every System that uses its types") {
     const auto host = [](Registrar& r) {
         Schedules(r);
-        r.AddSystem<&ReadPos>(Sys("ReadPos", Zone::C, {At("FixedUpdate", "Simulate")}));
-        r.AddSystem<&ReadVel>(Sys("ReadVel", Zone::C, {At("FixedUpdate", "Simulate")}));
+        r.AddSystem<&ReadPos>(Sys("ReadPos", {At("FixedUpdate", "Simulate")}));
+        r.AddSystem<&ReadVel>(Sys("ReadVel", {At("FixedUpdate", "Simulate")}));
     };
     Built with = Finish({{"movement", Movement}, {"host", host}});
     KERNEL_REQUIRE_OK(with);
@@ -194,7 +193,7 @@ TEST_CASE("J-19: a Registrar exists only inside Register") {
 TEST_CASE("J-24: R-E5 (two types share one key) is reported") {
     Built collision = Finish({{"movement", Movement}, {"forged", [](Registrar& r) {
                                   TypeKeyCollisionProbe::RegisterComponent(r, KeyOf<TestPos>(), 64, 8,
-                                                                           {.name = "Forged", .zone = Zone::C});
+                                                                           {.name = "Forged"});
                                   Schedules(r);
                               }}});
     CHECK(KernelTest::ErrorCount(collision, StartupCode::RE5) == 1);
@@ -204,10 +203,10 @@ TEST_CASE("J-24: R-E5 (two types share one key) is reported") {
 
 TEST_CASE("J-24: R-E2 and R-E4 each from a minimal Registry, all in one report") {
     Built built = Finish({{"twice", [](Registrar& r) {
-                               r.Component<TestPos>({.name = "TestPos", .zone = Zone::C});
-                               r.Component<TestPos>({.name = "TestPos2", .zone = Zone::C});
+                               r.Component<TestPos>({.name = "TestPos"});
+                               r.Component<TestPos>({.name = "TestPos2"});
                                Schedules(r);
-                               r.AddSystem<&WriteHealth>(Sys("WriteHealth", Zone::C, {At("FixedUpdate", "Simulate")}));
+                               r.AddSystem<&WriteHealth>(Sys("WriteHealth", {At("FixedUpdate", "Simulate")}));
                            }}});
     REQUIRE_FALSE(static_cast<bool>(built.result));
     const StartupReport& report = built.result.error();
@@ -231,14 +230,11 @@ TEST_CASE("DI-KS 15: the StartupCode values are the kernel's kept codes plus the
     // may; declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6, inside duty (12) "registration").
     std::vector<std::string> expected{"D-E1", "D-E3", "D-E4", "D-E5", "D-E6", "D-E7", "D-E14", "D-E17", "D-E19", "D-E20",
                                       "R-E2", "R-E4", "R-E5", "R-E7"};
-    // In transition, still in the kernel: the rollback declarations and the ingress check (batch 4, authority and
-    // rollback, step 6: D-E15, D-E16). (The writer count and the zone rules, D-E2, D-E9, D-E11 and X-E1, left with
+    // Nothing in transition. (The ingress check and the Derived order, D-E15 and D-E16, went to the authority and the
+    // rollback Modules with batch 4 step 6; the writer count and the zone rules, D-E2, D-E9, D-E11 and X-E1, with
     // batch 4 step 2, v8-arch-gyo2-authority-rollback. Startup and the plugin list, D-E21, R-E1, R-E3,
     // R-E6, left with batch 2, the orchestration layer; the clock and message domains, D-E12 and F-E1, left with
     // batch 3, v8-arch-gyo2-clock-out-of-kernel.)
-    for (const char* code : {"D-E15", "D-E16"}) {
-        expected.emplace_back(code);
-    }
     std::sort(expected.begin(), expected.end());
     std::string listed;
     for (const std::string& code : codes) listed += (listed.empty() ? "" : " ") + code;

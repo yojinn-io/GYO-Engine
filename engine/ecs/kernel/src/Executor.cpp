@@ -474,7 +474,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::Sys
                                                                bool inClosure) {
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
-    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    // Only ExclusiveWorld<...> reaches here: a System or a hook holding it.
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string target = "schedule '" + std::string(schedule) + "'";
@@ -903,7 +903,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::Syste
                                                                    std::optional<EntityId> target, bool closureOpen) {
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
-    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    // Only ExclusiveWorld<...> reaches here: a System or a hook holding it.
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";

@@ -47,8 +47,8 @@ std::string TargetText(const std::optional<EntityId>& target) {
 }
 
 void Events(Registrar& r) {
-    r.Event<DoorOpened>({.name = "DoorOpened", .zone = Zone::B});
-    r.Event<Rang>({.name = "Rang", .zone = Zone::B});
+    r.Event<DoorOpened>({.name = "DoorOpened"});
+    r.Event<Rang>({.name = "Rang"});
 }
 
 // ---- Observers
@@ -343,14 +343,14 @@ SystemResult RingTwiceIgnoringFirst(ExclusiveWorld<> world) {
 }
 
 void LifecycleObservers(Registrar& r) {
-    r.Hook<Tag, &HookTagAdded>(HookTrigger::OnAdd, {.name = "hook+Tag", .zone = Zone::B});
-    r.Hook<Mode, &HookModeAdded>(HookTrigger::OnAdd, {.name = "hook+Mode", .zone = Zone::B});
-    r.Hook<Tag, &HookTagRemoved>(HookTrigger::OnRemove, {.name = "hook-Tag", .zone = Zone::B});
-    r.Hook<Mode, &HookModeRemoved>(HookTrigger::OnRemove, {.name = "hook-Mode", .zone = Zone::B});
-    r.Observer<Add<Tag>, &ObserveTagAdded>({.name = "obs+Tag", .zone = Zone::B});
-    r.Observer<Add<Mode>, &ObserveModeAddedQuiet>({.name = "obs+Mode", .zone = Zone::B});
-    r.Observer<Remove<Tag>, &ObserveTagRemoved>({.name = "obs-Tag", .zone = Zone::B});
-    r.Observer<Remove<Mode>, &ObserveModeRemoved>({.name = "obs-Mode", .zone = Zone::B});
+    r.Hook<Tag, &HookTagAdded>(HookTrigger::OnAdd, {.name = "hook+Tag"});
+    r.Hook<Mode, &HookModeAdded>(HookTrigger::OnAdd, {.name = "hook+Mode"});
+    r.Hook<Tag, &HookTagRemoved>(HookTrigger::OnRemove, {.name = "hook-Tag"});
+    r.Hook<Mode, &HookModeRemoved>(HookTrigger::OnRemove, {.name = "hook-Mode"});
+    r.Observer<Add<Tag>, &ObserveTagAdded>({.name = "obs+Tag"});
+    r.Observer<Add<Mode>, &ObserveModeAddedQuiet>({.name = "obs+Mode"});
+    r.Observer<Remove<Tag>, &ObserveTagRemoved>({.name = "obs-Tag"});
+    r.Observer<Remove<Mode>, &ObserveModeRemoved>({.name = "obs-Mode"});
 }
 
 } // namespace
@@ -362,7 +362,7 @@ TEST_CASE("J-59: ExclusiveWorld::Trigger runs the observers now, before it retur
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &LogDoor>({.name = "log-door", .zone = Zone::B});
+        r.Observer<DoorOpened, &LogDoor>({.name = "log-door"});
         r.AddSystem<&OpenDoorNow>(B("OpenDoorNow", "A"));
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -374,7 +374,7 @@ TEST_CASE("J-59: a Commands::Trigger runs the observers at the sync point's last
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &LogDoorAndWorld>({.name = "log-door", .zone = Zone::B});
+        r.Observer<DoorOpened, &LogDoorAndWorld>({.name = "log-door"});
         r.AddSystem<&TriggerTwoAndSet>(B("TriggerTwoAndSet", "A"));
         r.AddSystem<&TriggerThird>(B("TriggerThird", "A", {}, {"TriggerTwoAndSet"}));
     });
@@ -391,9 +391,9 @@ TEST_CASE("J-59: what an observer records at a sync point goes the way of a hook
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door", .zone = Zone::B});
-        r.Observer<Add<Mode>, &ObserveModeAdded>({.name = "obs+Mode", .zone = Zone::B});
-        r.Observer<Rang, &LogRang>({.name = "log-rang", .zone = Zone::B});
+        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door"});
+        r.Observer<Add<Mode>, &ObserveModeAdded>({.name = "obs+Mode"});
+        r.Observer<Rang, &LogRang>({.name = "log-rang"});
         r.AddSystem<&TriggerDoorOnOne>(B("TriggerDoorOnOne", "A"));
     });
     rig->world().Insert(1, Tag{0});
@@ -469,10 +469,10 @@ TEST_CASE("J-59: the Host's Trigger in Ready runs the observers now and applies 
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door", .zone = Zone::B});
-        r.Hook<Mode, &HookModeAdded>(HookTrigger::OnAdd, {.name = "hook+Mode", .zone = Zone::B});
-        r.Observer<Add<Mode>, &ObserveModeAdded>({.name = "obs+Mode", .zone = Zone::B});
-        r.Observer<Rang, &LogRang>({.name = "log-rang", .zone = Zone::B});
+        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door"});
+        r.Hook<Mode, &HookModeAdded>(HookTrigger::OnAdd, {.name = "hook+Mode"});
+        r.Observer<Add<Mode>, &ObserveModeAdded>({.name = "obs+Mode"});
+        r.Observer<Rang, &LogRang>({.name = "log-rang"});
     });
     rig->world().Insert(3, Tag{0});
     const std::uint64_t epoch = rig->world().SyncEpoch();
@@ -492,7 +492,7 @@ TEST_CASE("J-59: the Host's Trigger stops at KernelSettings::hookRoundLimit: Hoo
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger"});
     });
     rig->world().SetResource(KernelSettings{true, false, 3});
     const auto triggered = rig->Trigger(Rang{0});
@@ -511,7 +511,7 @@ TEST_CASE("J-59: the Host's Trigger with verification on: an undeclared write is
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             Events(r);
-            r.Observer<DoorOpened, &WritesUndeclared>({.name = "undeclared", .zone = Zone::B});
+            r.Observer<DoorOpened, &WritesUndeclared>({.name = "undeclared"});
         });
         rig->world().SetResource(Out{0});
         KeptWorld() = &rig->world();
@@ -526,7 +526,7 @@ TEST_CASE("J-59: the Host's Trigger with verification on: an undeclared write is
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             Events(r);
-            r.Observer<DoorOpened, &LogDoor>({.name = "log-door", .zone = Zone::B});
+            r.Observer<DoorOpened, &LogDoor>({.name = "log-door"});
         });
         rig->world().Insert(1, Tag{1});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -541,8 +541,8 @@ TEST_CASE("J-59: the Host's Trigger with verification on: an undeclared write is
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             Events(r);
-            r.Observer<DoorOpened, &WritesDeclared>({.name = "declared", .zone = Zone::B});
-            r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door", .zone = Zone::B});
+            r.Observer<DoorOpened, &WritesDeclared>({.name = "declared"});
+            r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door"});
         });
         rig->world().SetResource(Out{0});
         rig->world().Insert(3, Tag{0});
@@ -560,8 +560,8 @@ TEST_CASE("J-59: ExclusiveWorld::Trigger applies the observers' records before i
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door", .zone = Zone::B});
-        r.Observer<Add<Mode>, &ObserveModeAddedQuiet>({.name = "obs+Mode", .zone = Zone::B});
+        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door"});
+        r.Observer<Add<Mode>, &ObserveModeAddedQuiet>({.name = "obs+Mode"});
         r.AddSystem<&RecordTagOnEight>(B("RecordTagOnEight", "A"));
         r.AddSystem<&OpenDoorOnEight>(B("OpenDoorOnEight", "A", {}, {"RecordTagOnEight"}));
     });
@@ -579,7 +579,7 @@ TEST_CASE("J-59: ExclusiveWorld::Trigger stops at the hook round limit: HookRoun
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger"});
         r.AddSystem<&RingNow>(B("RingNow", "A"));
     });
     rig->world().SetResource(KernelSettings{true, false, 2});
@@ -600,8 +600,8 @@ TEST_CASE("J-59: the trigger's rounds use the schedule's declared hook round lim
         limited.stages = {"A"};
         limited.hookRoundLimit = 1;
         r.Schedule(limited);
-        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
-        r.AddSystem<&RingNow>(Sys("RingNow", Zone::B, {At("Limited", "A")}));
+        r.Observer<Rang, &Retrigger>({.name = "retrigger"});
+        r.AddSystem<&RingNow>(Sys("RingNow", {At("Limited", "A")}));
     });
     rig->world().SetResource(KernelSettings{true, false, 5});
     const auto ran = rig->Run("Limited");
@@ -614,10 +614,10 @@ TEST_CASE("J-59: the hook rounds of a Run stop at the limit naming the observers
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door", .zone = Zone::B});
-        r.Observer<Add<Mode>, &TagOnMode>({.name = "tag-on-mode", .zone = Zone::B});
-        r.Observer<Add<Tag>, &DoorOnTag>({.name = "door-on-tag", .zone = Zone::B});
-        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.Observer<DoorOpened, &ModeOnDoor>({.name = "mode-on-door"});
+        r.Observer<Add<Mode>, &TagOnMode>({.name = "tag-on-mode"});
+        r.Observer<Add<Tag>, &DoorOnTag>({.name = "door-on-tag"});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger"});
         r.AddSystem<&DoorThenRang>(B("DoorThenRang", "C"));
     });
     rig->world().SetResource(KernelSettings{true, false, 3});
@@ -640,11 +640,11 @@ TEST_CASE("J-59: the hook rounds of an immediate change stop at the limit naming
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &LogDoor>({.name = "log-door", .zone = Zone::B});
-        r.Observer<Add<Mode>, &TagOnMode>({.name = "tag-on-mode", .zone = Zone::B});
-        r.Observer<Add<Tag>, &DoorOnTag>({.name = "door-on-tag", .zone = Zone::B});
-        r.Observer<Remove<Tag>, &RangOnTagRemoved>({.name = "rang-on-untag", .zone = Zone::B});
-        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.Observer<DoorOpened, &LogDoor>({.name = "log-door"});
+        r.Observer<Add<Mode>, &TagOnMode>({.name = "tag-on-mode"});
+        r.Observer<Add<Tag>, &DoorOnTag>({.name = "door-on-tag"});
+        r.Observer<Remove<Tag>, &RangOnTagRemoved>({.name = "rang-on-untag"});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger"});
         r.AddSystem<&InsertThenRemoveNow>(B("InsertThenRemoveNow", "A"));
     });
     rig->world().SetResource(KernelSettings{true, false, 3});
@@ -662,7 +662,7 @@ TEST_CASE("J-59: an ExclusiveWorld::Trigger error the System drops interrupts th
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger"});
         r.AddSystem<&RingNowIgnoring>(B("RingNowIgnoring", "A"));
     });
     rig->world().SetResource(KernelSettings{true, false, 2});
@@ -677,7 +677,7 @@ TEST_CASE("J-59: an observer of a trigger outside a sync point takes a stamp of 
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &TouchModeOnDoor>({.name = "touch-mode", .zone = Zone::B});
+        r.Observer<DoorOpened, &TouchModeOnDoor>({.name = "touch-mode"});
         r.AddSystem<&OpenDoorThenTouch>(B("OpenDoorThenTouch", "A"));
     }, false);
     rig->world().Insert(8, Mode{0});
@@ -699,8 +699,8 @@ TEST_CASE("J-59: a hook's ExclusiveWorld<> triggering now is HookChangesMembersh
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Hook<Tag, &HookTriggersNow>(HookTrigger::OnAdd, {.name = "hook-triggers", .zone = Zone::B});
-        r.Observer<Rang, &LogRang>({.name = "log-rang", .zone = Zone::B});
+        r.Hook<Tag, &HookTriggersNow>(HookTrigger::OnAdd, {.name = "hook-triggers"});
+        r.Observer<Rang, &LogRang>({.name = "log-rang"});
         r.AddSystem<&SpawnSecondTag>(B("SpawnSecondTag", "A"));
     });
     const auto ran = rig->Run();
@@ -714,7 +714,7 @@ TEST_CASE("J-59: ExclusiveWorld::Trigger inside a Read or Modify closure is Clos
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<Rang, &LogRang>({.name = "log-rang", .zone = Zone::B});
+        r.Observer<Rang, &LogRang>({.name = "log-rang"});
         r.AddSystem<&TriggerInClosure>(B("TriggerInClosure", "A"));
     });
     rig->world().SetResource(Flag{1});
@@ -728,7 +728,7 @@ TEST_CASE("J-59: an observer's Err stops the Run, named as the observer of its e
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &FailingObserver>({.name = "failing", .zone = Zone::B});
+        r.Observer<DoorOpened, &FailingObserver>({.name = "failing"});
         r.AddSystem<&TriggerDoor>(B("TriggerDoor", "A"));
     });
     const auto ran = rig->Run();
@@ -748,13 +748,13 @@ TEST_CASE("J-59: the observers of one trigger run in the same order for the same
             Data(r);
             Events(r);
             if (reversed) {
-                r.Observer<DoorOpened, &LogDoorC>({.name = "c", .zone = Zone::B});
-                r.Observer<DoorOpened, &LogDoorB>({.name = "b", .zone = Zone::B});
-                r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = Zone::B});
+                r.Observer<DoorOpened, &LogDoorC>({.name = "c"});
+                r.Observer<DoorOpened, &LogDoorB>({.name = "b"});
+                r.Observer<DoorOpened, &LogDoorA>({.name = "a"});
             } else {
-                r.Observer<DoorOpened, &LogDoorB>({.name = "b", .zone = Zone::B});
-                r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = Zone::B});
-                r.Observer<DoorOpened, &LogDoorC>({.name = "c", .zone = Zone::B});
+                r.Observer<DoorOpened, &LogDoorB>({.name = "b"});
+                r.Observer<DoorOpened, &LogDoorA>({.name = "a"});
+                r.Observer<DoorOpened, &LogDoorC>({.name = "c"});
             }
             r.AddSystem<&TriggerDoor>(B("TriggerDoor", "A"));
         });
@@ -773,7 +773,7 @@ TEST_CASE("J-59: an observer is a message reader with a cursor of its own: it re
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &ReadPingsOnDoor>({.name = "read-pings", .zone = Zone::B});
+        r.Observer<DoorOpened, &ReadPingsOnDoor>({.name = "read-pings"});
         // Registered first: System 0 mount 0 is a reader of Ping too, whose cursor is not the observer's.
         r.AddSystem<&ReadPings>(B("ReadPings", "A", {}, {"WritePing"}));
         r.AddSystem<&WritePing>(B("WritePing", "A"));
@@ -794,8 +794,8 @@ TEST_CASE("J-59: an observer's access is verified: a write it does not declare i
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &WritesDeclared>({.name = "declared", .zone = Zone::B});
-        r.Observer<DoorOpened, &WritesUndeclared>({.name = "undeclared", .zone = Zone::B});
+        r.Observer<DoorOpened, &WritesDeclared>({.name = "declared"});
+        r.Observer<DoorOpened, &WritesUndeclared>({.name = "undeclared"});
         r.AddSystem<&TriggerDoor>(B("TriggerDoor", "A"));
     });
     rig->world().SetResource(Out{0});
@@ -813,8 +813,8 @@ TEST_CASE("J-59: the Registry lists the event types and the observers (trigger, 
     auto built = Finish({{"test", [](Registrar& r) {
                               Data(r);
                               Events(r);
-                              r.Observer<Add<Mode>, &ObserveModeAddedQuiet>({.name = "obs+Mode", .zone = Zone::B});
-                              r.Observer<DoorOpened, &WritesDeclared>({.name = "declared", .zone = Zone::B});
+                              r.Observer<Add<Mode>, &ObserveModeAddedQuiet>({.name = "obs+Mode"});
+                              r.Observer<DoorOpened, &WritesDeclared>({.name = "declared"});
                           }}});
     KERNEL_REQUIRE_OK(built);
     const FrozenRegistry& frozen = built.registry->Frozen();
@@ -824,7 +824,6 @@ TEST_CASE("J-59: the Registry lists the event types and the observers (trigger, 
     const ObserverInfo& added = frozen.Observers()[0];
     CHECK_MESSAGE((added.trigger == ObserverTrigger::Add && added.id == *frozen.ComponentIdOf<Mode>() && added.owner == "test"),
                   "[obs-registry]");
-    CHECK_MESSAGE(added.zone == Zone::B, "[obs-registry-zone]");
     CHECK_MESSAGE(added.source.find("ObserverTests.cpp") != std::string::npos, "[obs-registry-source] " << added.source);
     const ObserverInfo& declared = frozen.Observers()[1];
     CHECK_MESSAGE((declared.trigger == ObserverTrigger::Event && declared.id == *frozen.EventIdOf<DoorOpened>()), "[obs-registry]");
@@ -833,49 +832,35 @@ TEST_CASE("J-59: the Registry lists the event types and the observers (trigger, 
                   "[obs-registry] the observer's write is derived from its signature");
 }
 
-TEST_CASE("J-18: an observer changes the Registry fingerprint; a zone C observer the C fingerprint, which does not hold their order") {
-    auto make = [](bool observer, bool zoneC, bool reversed) {
+TEST_CASE("J-18: an observer changes the Registry fingerprint") {
+    auto make = [](bool observer) {
         return Finish({{"test", [=](Registrar& r) {
                             Data(r);
                             Events(r);
                             if (!observer) return;
-                            const Zone zone = zoneC ? Zone::C : Zone::B;
-                            if (reversed) {
-                                r.Observer<DoorOpened, &LogDoorB>({.name = "b", .zone = zone});
-                                r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = zone});
-                            } else {
-                                r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = zone});
-                                r.Observer<DoorOpened, &LogDoorB>({.name = "b", .zone = zone});
-                            }
+                            r.Observer<DoorOpened, &LogDoorA>({.name = "a"});
+                            r.Observer<DoorOpened, &LogDoorB>({.name = "b"});
                         }}});
     };
-    auto none = make(false, false, false);
-    auto zoneB = make(true, false, false);
-    auto zoneC = make(true, true, false);
-    auto zoneCReversed = make(true, true, true);
+    auto none = make(false);
+    auto with = make(true);
     KERNEL_REQUIRE_OK(none);
-    KERNEL_REQUIRE_OK(zoneB);
-    KERNEL_REQUIRE_OK(zoneC);
-    KERNEL_REQUIRE_OK(zoneCReversed);
+    KERNEL_REQUIRE_OK(with);
     const auto fp = [](const Built& b) { return b.registry->Frozen().RegistryFingerprint().Text(); };
-    const auto cfp = [](const Built& b) { return b.registry->Frozen().CFingerprint().Text(); };
-    CHECK_MESSAGE(fp(none) != fp(zoneB), "[obs-fingerprint] a zone B observer changes the Registry fingerprint");
-    CHECK_MESSAGE(cfp(none) == cfp(zoneB), "[obs-fingerprint] a zone B observer is not in the C fingerprint");
-    CHECK_MESSAGE(cfp(none) != cfp(zoneC), "[obs-fingerprint] a zone C observer is in the C fingerprint");
-    CHECK_MESSAGE(cfp(zoneC) == cfp(zoneCReversed), "[obs-fingerprint] the C fingerprint holds no order of observers");
+    CHECK_MESSAGE(fp(none) != fp(with), "[obs-fingerprint] an observer changes the Registry fingerprint");
 }
 
 TEST_CASE("J-59: observer startup errors: a name twice, an unregistered event") {
     auto twice = Finish({{"test", [](Registrar& r) {
                               Data(r);
                               Events(r);
-                              r.Observer<DoorOpened, &LogDoorA>({.name = "same", .zone = Zone::B});
-                              r.Observer<DoorOpened, &LogDoorB>({.name = "same", .zone = Zone::B});
+                              r.Observer<DoorOpened, &LogDoorA>({.name = "same"});
+                              r.Observer<DoorOpened, &LogDoorB>({.name = "same"});
                           }}});
     CHECK_MESSAGE(HasRule(twice, StartupCode::RE2, "B.1"), "[obs-startup-name] " << Describe(twice));
     auto unregistered = Finish({{"test", [](Registrar& r) {
                                      Data(r);
-                                     r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = Zone::B});
+                                     r.Observer<DoorOpened, &LogDoorA>({.name = "a"});
                                  }}});
     CHECK_MESSAGE(HasRule(unregistered, StartupCode::RE4, "R-6"), "[obs-startup-unregistered] " << Describe(unregistered));
 }
@@ -888,11 +873,11 @@ TEST_CASE("J-59: a later round may not add an Add or Remove observer to a compon
                                           }}});
     REQUIRE(static_cast<bool>(first));
     auto later = RegisterAll(*registry, {{"later", [](Registrar& r) {
-                                              r.Observer<Add<Tag>, &ObserveTagAdded>({.name = "obs+Tag", .zone = Zone::B});
+                                              r.Observer<Add<Tag>, &ObserveTagAdded>({.name = "obs+Tag"});
                                           }}});
     CHECK_MESSAGE(ErrorCount(later, StartupCode::RE7) == 1, "[obs-later-round] " << (later ? "ok" : later.error().detail));
     auto event = RegisterAll(*registry, {{"later", [](Registrar& r) {
-                                              r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = Zone::B});
+                                              r.Observer<DoorOpened, &LogDoorA>({.name = "a"});
                                           }}});
     CHECK_MESSAGE(static_cast<bool>(event), "[obs-later-round] an observer of an event type may come later");
 }
@@ -905,7 +890,7 @@ TEST_CASE("J-59: removing a System (L5) keeps the cursor of the observer with th
         Data(r);
         Events(r);
         r.AddSystem<&Idle>(B("Removable", "A"));  // System 0, removed below
-        r.Observer<DoorOpened, &ReadPingsOnDoor>({.name = "read-pings", .zone = Zone::B});  // observer 0
+        r.Observer<DoorOpened, &ReadPingsOnDoor>({.name = "read-pings"});  // observer 0
         r.AddSystem<&WritePing>(B("WritePing", "A"));
         SystemOptions slow = B("Slow", "B");
         slow.mounts[0].conditions = {Condition<&FlagSet>("FlagSet")};
@@ -929,10 +914,10 @@ TEST_CASE("J-59: the Host's Trigger records its own DroppedMessages, not into th
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Message<Chirp>({.name = "Chirp", .zone = Zone::B, .capacity = 3});
+        r.Message<Chirp>({.name = "Chirp", .capacity = 3});
         r.AddSystem<&ChirpReader>(B("ChirpReader", "A"));
         r.AddSystem<&WriteFiveChirpsOnce>(B("WriteChirps", "B"));
-        r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door", .zone = Zone::B});
+        r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door"});
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());  // five into three: 1 and 2 dropped; the reader holds 3 4 5
     const auto triggered = rig->Trigger(DoorOpened{1});
@@ -944,19 +929,19 @@ TEST_CASE("J-59: the Host's Trigger records its own DroppedMessages, not into th
                   "[obs-host-trigger-dropped-record] " << dropped[1].count << " " << dropped[1].firstSeq << ".." << dropped[1].lastSeq);
 }
 
-TEST_CASE("J-18: the event types, an observer's zone and its access are in the Registry fingerprint; zone C ones in the C fingerprint") {
+TEST_CASE("J-18: the event types and an observer's access are in the Registry fingerprint") {
     auto make = [](int variant) {
         return Finish({{"test", [variant](Registrar& r) {
                             Data(r);
                             Events(r);
                             switch (variant) {
-                            case 1: r.Event<Knock>({.name = "Knock", .zone = Zone::B}); break;
-                            case 2: r.Event<Knock>({.name = "Knock", .zone = Zone::C}); break;
-                            case 3: r.Observer<DoorOpened, &LogDoorA>({.name = "o", .zone = Zone::B}); break;
-                            case 4: r.Observer<DoorOpened, &LogDoorA>({.name = "o", .zone = Zone::C}); break;
-                            case 5: r.Observer<DoorOpened, &WritesDeclared>({.name = "o", .zone = Zone::B}); break;
-                            case 6: r.Observer<DoorOpened, &ReadsCRes>({.name = "o", .zone = Zone::C}); break;
-                            case 7: r.Observer<DoorOpened, &ReadsPos>({.name = "o", .zone = Zone::C}); break;
+                            case 1: r.Event<Knock>({.name = "Knock"}); break;
+                            case 2: r.Event<Knock>({.name = "Knock"}); break;
+                            case 3: r.Observer<DoorOpened, &LogDoorA>({.name = "o"}); break;
+                            case 4: r.Observer<DoorOpened, &LogDoorA>({.name = "o"}); break;
+                            case 5: r.Observer<DoorOpened, &WritesDeclared>({.name = "o"}); break;
+                            case 6: r.Observer<DoorOpened, &ReadsCRes>({.name = "o"}); break;
+                            case 7: r.Observer<DoorOpened, &ReadsPos>({.name = "o"}); break;
                             default: break;
                             }
                         }}});
@@ -967,13 +952,8 @@ TEST_CASE("J-18: the event types, an observer's zone and its access are in the R
         KERNEL_REQUIRE_OK(built.back());
     }
     const auto fp = [&](int v) { return built[v].registry->Frozen().RegistryFingerprint().Text(); };
-    const auto cfp = [&](int v) { return built[v].registry->Frozen().CFingerprint().Text(); };
     CHECK_MESSAGE(fp(0) != fp(1), "[obs-fp-events] an event type is not in the Registry fingerprint");
-    CHECK(cfp(0) == cfp(1));  // a zone B event type is not in the C fingerprint
-    CHECK_MESSAGE(cfp(0) != cfp(2), "[obs-cfp-events] a zone C event type is not in the C fingerprint");
-    CHECK_MESSAGE(fp(3) != fp(4), "[obs-fp-observer-zone] an observer's zone is not in the Registry fingerprint");
     CHECK_MESSAGE(fp(3) != fp(5), "[obs-fp-observer-access] an observer's access is not in the Registry fingerprint");
-    CHECK_MESSAGE(cfp(6) != cfp(7), "[obs-cfp-observer-access] a zone C observer's access is not in the C fingerprint");
 }
 
 TEST_CASE("J-59: an observer's Changed<T> sees what changed since the observer last ran") {
@@ -981,7 +961,7 @@ TEST_CASE("J-59: an observer's Changed<T> sees what changed since the observer l
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &LogChangedModes>({.name = "changed-modes", .zone = Zone::B});
+        r.Observer<DoorOpened, &LogChangedModes>({.name = "changed-modes"});
         r.AddSystem<&TouchModeTwoOnRunTwo>(B("TouchModeTwoOnRunTwo", "A"));
         r.AddSystem<&TriggerDoor>(B("TriggerDoor", "B"));
     });
@@ -996,7 +976,7 @@ TEST_CASE("J-59: each round of the Host's Trigger takes a new stamp: the round's
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<DoorOpened, &StampTagThenInsertMode>({.name = "stamp-tag", .zone = Zone::B});
+        r.Observer<DoorOpened, &StampTagThenInsertMode>({.name = "stamp-tag"});
     });
     rig->world().Insert(3, Tag{0});
     const auto triggered = rig->Trigger(DoorOpened{2}, EntityId{3});
@@ -1012,7 +992,7 @@ TEST_CASE("J-59: a second ExclusiveWorld::Trigger after a dropped Err returns th
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         Events(r);
-        r.Observer<Rang, &Retrigger>({.name = "retrigger", .zone = Zone::B});
+        r.Observer<Rang, &Retrigger>({.name = "retrigger"});
         r.AddSystem<&RingTwiceIgnoringFirst>(B("RingTwiceIgnoringFirst", "A"));
     });
     rig->world().SetResource(KernelSettings{true, false, 2});
@@ -1026,8 +1006,8 @@ TEST_CASE("J-59: the Registry lists an observer that writes a message type among
     const Built built = Finish({{"test", [](Registrar& r) {
                                      Data(r);
                                      Events(r);
-                                     r.Message<Chirp>({.name = "Chirp", .zone = Zone::B, .capacity = 3});
-                                     r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door", .zone = Zone::B});
+                                     r.Message<Chirp>({.name = "Chirp", .capacity = 3});
+                                     r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door"});
                                      r.AddSystem<&WriteFiveChirpsOnce>(B("WriteChirps", "B"));
                                  }}});
     KERNEL_REQUIRE_OK(built);

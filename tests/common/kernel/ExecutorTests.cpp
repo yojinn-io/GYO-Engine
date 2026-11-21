@@ -194,7 +194,7 @@ std::uint64_t BoundThread(World& world) {
 std::unique_ptr<Rig> BoundRig(void (*add)(Registrar&)) {
     return MakeRig([add](Registrar& r) {
         Data(r);
-        r.Resource<Bound>({.name = "Bound", .zone = Zone::B, .threadBound = true});
+        r.Resource<Bound>({.name = "Bound", .threadBound = true});
         if (add != nullptr) add(r);
     }, false);
 }
@@ -341,7 +341,7 @@ TEST_CASE("J-6: the other direction: a thread-bound value asserts on a thread th
 TEST_CASE("J-6: a resource not marked threadBound is used on any thread") {
     std::unique_ptr<Rig> rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Resource<Free>({.name = "Free", .zone = Zone::B});
+        r.Resource<Free>({.name = "Free"});
     }, false);
     Worker worker;
     bool asserted = false;
@@ -669,7 +669,7 @@ TEST_CASE("J-35: a hook returns Err: the World is interrupted and the leaf keeps
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
-            r.Hook<Tag, &HookReturnsErr>(HookTrigger::OnAdd, {.name = "HookReturnsErr", .zone = Zone::B});
+            r.Hook<Tag, &HookReturnsErr>(HookTrigger::OnAdd, {.name = "HookReturnsErr"});
         }, false);
         const auto result = rig->Run();
         CHECK(HasCode(result, KernelErrorCode::SystemFailed));
@@ -682,7 +682,7 @@ TEST_CASE("J-35: a hook returns Err: the World is interrupted and the leaf keeps
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
-            r.Hook<Tag, &HookWritesThroughReadPointer>(HookTrigger::OnAdd, {.name = "HookWritesThroughReadPointer", .zone = Zone::B});
+            r.Hook<Tag, &HookWritesThroughReadPointer>(HookTrigger::OnAdd, {.name = "HookWritesThroughReadPointer"});
         }, true);
         rig->world().Insert(2, Pos{2});
         const auto result = rig->Run();
@@ -818,7 +818,7 @@ TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build") {
     }
     SUBCASE("spawn: the typed Spawn gives an id from the allotter, and the entity is there in the call") {
         auto rig = ExclusiveRig([](Registrar& r) {
-            r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
+            r.Resource<RangeAllotter>({.name = "Allotter"});
             r.Allotter<RangeAllotter>();
             r.AddSystem<&ExclusiveSpawns>(B("X", "A"));
         }, false);
@@ -1047,7 +1047,7 @@ TEST_CASE("J-52: a zone B despawn of an entity with a zone C column is applied (
     SUBCASE("a zone B hook") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
-            r.Hook<Tag, &TagHookDespawnsOne>(HookTrigger::OnAdd, {.name = "TagHookDespawnsOne", .zone = Zone::B});
+            r.Hook<Tag, &TagHookDespawnsOne>(HookTrigger::OnAdd, {.name = "TagHookDespawnsOne"});
             r.AddSystem<&TagsTwo>(B("TagsTwo", "A"));
         }, false);
         rig->world().Insert(1, Pos{1});
@@ -1066,14 +1066,14 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
         one.name = "Tick";
         one.stages = {"A"};
         auto rig = MakeRig([one](Registrar& r) {
-            r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-            r.Component<Tag>({.name = "Tag", .zone = Zone::B});
-            r.Component<Mode>({.name = "Mode", .zone = Zone::B});
-            r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+            r.Component<Pos>({.name = "Pos"});
+            r.Component<Tag>({.name = "Tag"});
+            r.Component<Mode>({.name = "Mode"});
+            r.Resource<TickCount>({.name = "TickCount"});
             r.Schedule(one);
             r.AddSystem<&InsertTagOnce>(B("InsertTagOnce", "A"));
             r.AddSystem<&ZoneCInsertsAtTwo>(C("ZoneCInsertsAtTwo", "A"));
-            r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns", .zone = Zone::B});
+            r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns"});
         }, false);
         rig->world().Insert(1, Mode{0});
         KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1: Tag added; the hook's despawn(1) is applied by the hook rounds
@@ -1105,7 +1105,7 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
             other.name = "Other";
             other.stages = {"B"};
             r.Schedule(other);
-            SystemOptions options = Sys("SeeChanges", Zone::B, {At("Tick", "A"), At("Other", "B")});
+            SystemOptions options = Sys("SeeChanges", {At("Tick", "A"), At("Other", "B")});
             r.AddSystem<&SeeChanges>(std::move(options));
         });
         World& world = rig->world();
@@ -1306,18 +1306,18 @@ std::vector<Mount> Sim(std::vector<std::string> before = {}, std::vector<std::st
     return {At("Tick", "A", std::move(before), std::move(after))};
 }
 constexpr std::array<Registration, 5> kSystems{{
-    [](Registrar& r) { r.AddSystem<&P0>(Sys("P0", Zone::C, Sim({"P1", "P4"}))); },
-    [](Registrar& r) { r.AddSystem<&P1>(Sys("P1", Zone::C, Sim({"P2"}))); },
-    [](Registrar& r) { r.AddSystem<&P2>(Sys("P2", Zone::C, Sim({"P3", "P4"}))); },
-    [](Registrar& r) { r.AddSystem<&P3>(Sys("P3", Zone::C, Sim())); },
-    [](Registrar& r) { r.AddSystem<&P4>(Sys("P4", Zone::C, Sim())); },
+    [](Registrar& r) { r.AddSystem<&P0>(Sys("P0", Sim({"P1", "P4"}))); },
+    [](Registrar& r) { r.AddSystem<&P1>(Sys("P1", Sim({"P2"}))); },
+    [](Registrar& r) { r.AddSystem<&P2>(Sys("P2", Sim({"P3", "P4"}))); },
+    [](Registrar& r) { r.AddSystem<&P3>(Sys("P3", Sim())); },
+    [](Registrar& r) { r.AddSystem<&P4>(Sys("P4", Sim())); },
 }};
 
 std::string OrderSummary(const std::array<int, 5>& order) {
     auto rig = MakeRig([&order](Registrar& r) {
-        r.Component<Ca>({.name = "Ca", .zone = Zone::C, .rollback = Rollback::Yes});
-        r.Component<Cb>({.name = "Cb", .zone = Zone::C, .rollback = Rollback::Yes});
-        r.Component<Cc>({.name = "Cc", .zone = Zone::C, .rollback = Rollback::Yes});
+        r.Component<Ca>({.name = "Ca"});
+        r.Component<Cb>({.name = "Cb"});
+        r.Component<Cc>({.name = "Cc"});
         r.Schedule(TickSchedule());
         for (int index : order) kSystems[static_cast<std::size_t>(index)](r);
     });

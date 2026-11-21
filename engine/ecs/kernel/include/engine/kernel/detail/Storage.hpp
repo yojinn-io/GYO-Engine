@@ -295,8 +295,6 @@ public:
     struct Entry {
         // The World's sync point number when the entry was written (World::SyncEpoch; L8).
         std::uint64_t syncEpoch;
-        // True while a Replay runs (spec H-8); rollback-extract sets it. Always false here.
-        bool rollbackActive;
         R record;
     };
     [[nodiscard]] std::size_t Size() const noexcept override { return entries.size(); }

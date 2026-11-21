@@ -141,7 +141,7 @@ struct KernelError {
 // text form (ToString) is.
 enum class StartupCode : std::uint8_t {
     DE1 = 1, DE3, DE4, DE5, DE6, DE7,
-    DE14, DE15, DE16, DE17, DE19, DE20,
+    DE14, DE17, DE19, DE20,
     RE2, RE4, RE5,
     // A later round of Registry::Register / BuildPlans registered what only the
     // first round may (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6).
@@ -157,7 +157,7 @@ struct StartupError {
     // distinct from code. No code has its own step since X-E1 and D-E11 left
     // (v8-arch-gyo2-authority-rollback step 2): equal to code.
     StartupCode step;
-    // The rule broken, for people: "Z6", "H-1", ...
+    // The rule broken, for people: "H-1", "B.1", ...
     std::string rule;
     std::string message;
     // Every party the error names (System, component, owner, schedule names),

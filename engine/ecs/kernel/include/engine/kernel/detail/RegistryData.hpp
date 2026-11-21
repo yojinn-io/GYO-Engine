@@ -85,7 +85,6 @@ struct SystemRecord {
 
 struct HookRecord {
     std::string name;
-    Zone zone;
     TypeKey component;
     HookTrigger trigger;
     ResolveFn resolve;
@@ -100,7 +99,6 @@ struct HookRecord {
 // One observer (Registrar::Observer; event cursor declaration 3.3).
 struct ObserverRecord {
     std::string name;
-    Zone zone;
     ObserverTrigger trigger;
     // The observer's E (On<E>'s key) and what it names: the event type, or the
     // component of Add<T> / Remove<T>.
@@ -233,16 +231,14 @@ struct RegistryData {
 };
 
 [[nodiscard]] std::string SourceText(const std::source_location& source);
-[[nodiscard]] const char* ZoneName(Zone zone) noexcept;
 
 // Scheduler.cpp: builds every schedule's Plan into data.plans and its resolved
-// order into data.orders, reporting D-E4, D-E5, D-E6, D-E16 into data.errors.
+// order into data.orders, reporting D-E4, D-E5, D-E6 into data.errors.
 // Access sets must be resolved.
 void BuildPlans(RegistryData& data);
 
 // Fingerprint.cpp.
 [[nodiscard]] Fingerprint RegistryFingerprintOf(const RegistryData& data);
-[[nodiscard]] Fingerprint CFingerprintOf(const RegistryData& data);
 [[nodiscard]] Fingerprint PlanFingerprintOf(const Plan& plan);
 
 } // namespace GYO::Kernel::Detail

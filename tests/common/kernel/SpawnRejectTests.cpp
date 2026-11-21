@@ -50,25 +50,25 @@ void Base(Registrar& r, bool allotter = false) {
     early.name = "Early";
     early.stages = {"X"};
     r.Schedule(early);
-    r.Component<Body>({.name = "Body", .zone = Zone::B});
-    r.Component<Seen>({.name = "Seen", .zone = Zone::B});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
-    r.Component<Label>({.name = "Label", .zone = Zone::B});
-    r.Component<Signal>({.name = "Signal", .zone = Zone::B});
-    r.Component<CPos>({.name = "CPos", .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Component<Body>({.name = "Body"});
+    r.Component<Seen>({.name = "Seen"});
+    r.Component<Tag>({.name = "Tag"});
+    r.Component<Label>({.name = "Label"});
+    r.Component<Signal>({.name = "Signal"});
+    r.Component<CPos>({.name = "CPos"});
     if (allotter) {
-        r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
+        r.Resource<RangeAllotter>({.name = "Allotter"});
         r.Allotter<RangeAllotter>();
     }
-    r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+    r.Resource<TickCount>({.name = "TickCount"});
     ScheduleOptions tick;
     tick.name = "Tick";
     tick.stages = {"A", "B", "C"};
     r.Schedule(tick);
 }
 
-SystemOptions In(std::string name, std::string stage, Zone zone = Zone::B, std::vector<std::string> after = {}) {
-    return Sys(std::move(name), zone, {KernelTest::At("Tick", std::move(stage), {}, std::move(after))});
+SystemOptions In(std::string name, std::string stage, std::vector<std::string> after = {}) {
+    return Sys(std::move(name), {KernelTest::At("Tick", std::move(stage), {}, std::move(after))});
 }
 
 std::uint32_t StepOf(Rig& rig, std::string_view name) {
@@ -301,7 +301,7 @@ TEST_CASE("J-55: an alive id: the spawn is dropped, the old entity is untouched,
                 Base(r);
                 r.InitialValue<Seen, &SeenFromBody>();
                 r.AddSystem<&SpawnSevenEightNine>(In("SpawnSevenEightNine", "A"));
-                r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+                r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody"});
             },
             verification);
         World& world = rig->world();
@@ -347,8 +347,8 @@ TEST_CASE("J-55: despawn then spawn of one id in one System is a rejoin, not dro
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&DespawnThenSpawnSeven>(In("DespawnThenSpawnSeven", "A"));
-        r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
-        r.Hook<Body, &LogRemoveBody>(HookTrigger::OnRemove, {.name = "LogRemoveBody", .zone = Zone::B});
+        r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody"});
+        r.Hook<Body, &LogRemoveBody>(HookTrigger::OnRemove, {.name = "LogRemoveBody"});
     });
     rig->world().Insert(7, Body{1});
     Log().clear();
@@ -362,7 +362,7 @@ TEST_CASE("J-55: a despawn recorded by the previous window's hook and a spawn of
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-        r.Hook<Signal, &HookDespawnsSeven>(HookTrigger::OnAdd, {.name = "HookDespawnsSeven", .zone = Zone::B});
+        r.Hook<Signal, &HookDespawnsSeven>(HookTrigger::OnAdd, {.name = "HookDespawnsSeven"});
         r.AddSystem<&SpawnSevenAtTickOne>(In("SpawnSevenAtTickOne", "B"));
     });
     rig->world().Insert(7, Body{1});
@@ -458,8 +458,8 @@ TEST_CASE("J-55: two hooks spawn one id in one phase: both are dropped; one hook
             Base(r);
             r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
             // One name for two hooks (hook names are not unique): the emitter is the hook, not its name.
-            r.Hook<Signal, &HookSpawnThirtyFirst>(HookTrigger::OnAdd, {.name = "HookSpawnThirty", .zone = Zone::B});
-            r.Hook<Signal, &HookSpawnThirtySecond>(HookTrigger::OnAdd, {.name = "HookSpawnThirty", .zone = Zone::B});
+            r.Hook<Signal, &HookSpawnThirtyFirst>(HookTrigger::OnAdd, {.name = "HookSpawnThirty"});
+            r.Hook<Signal, &HookSpawnThirtySecond>(HookTrigger::OnAdd, {.name = "HookSpawnThirty"});
         });
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE(!rig->world().Alive(30), "J-55 two-hooks: 30 is not spawned");
@@ -471,7 +471,7 @@ TEST_CASE("J-55: two hooks spawn one id in one phase: both are dropped; one hook
         auto rig = MakeRig([](Registrar& r) {
             Base(r);
             r.AddSystem<&FlagTwentyAndTwentyOne>(In("FlagTwentyAndTwentyOne", "A"));
-            r.Hook<Signal, &HookSpawnThirtyFromEntity>(HookTrigger::OnAdd, {.name = "HookSpawnThirtyFromEntity", .zone = Zone::B});
+            r.Hook<Signal, &HookSpawnThirtyFromEntity>(HookTrigger::OnAdd, {.name = "HookSpawnThirtyFromEntity"});
         });
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE(BodyIs(rig->world(), 30, 20), "J-55 one-hook-twice: 30 keeps the first call's value");
@@ -503,7 +503,7 @@ TEST_CASE("J-55: across the two phases of one sync point") {
         auto rig = MakeRig([](Registrar& r) {
             Base(r);
             r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-            r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+            r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven"});
             r.AddSystem<&SpawnElevenAtTickOne>(In("SpawnElevenAtTickOne", "B"));
         });
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -518,7 +518,7 @@ TEST_CASE("J-55: across the two phases of one sync point") {
         auto rig = MakeRig([](Registrar& r) {
             Base(r);
             r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-            r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+            r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven"});
             r.AddSystem<&DespawnThenSpawnElevenAtTickOne>(In("DespawnThenSpawnElevenAtTickOne", "B"));
         });
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -545,7 +545,7 @@ TEST_CASE("J-55: a hook's spawn dropped at the next sync point and in a hook rou
         auto rig = MakeRig([](Registrar& r) {
             Base(r);
             r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-            r.Hook<Signal, &HookSpawnsSeven>(HookTrigger::OnAdd, {.name = "HookSpawnsSeven", .zone = Zone::B});
+            r.Hook<Signal, &HookSpawnsSeven>(HookTrigger::OnAdd, {.name = "HookSpawnsSeven"});
         });
         rig->world().Insert(7, Body{1});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -564,7 +564,7 @@ TEST_CASE("J-55: a hook's spawn dropped at the next sync point and in a hook rou
         auto rig = MakeRig([](Registrar& r) {
             Base(r);
             r.AddSystem<&SpawnFortyAndFlag>(In("SpawnFortyAndFlag", "C"));
-            r.Hook<Signal, &HookSpawnsForty>(HookTrigger::OnAdd, {.name = "HookSpawnsForty", .zone = Zone::B});
+            r.Hook<Signal, &HookSpawnsForty>(HookTrigger::OnAdd, {.name = "HookSpawnsForty"});
         });
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(BodyIs(rig->world(), 40, 40));
@@ -581,7 +581,7 @@ TEST_CASE("J-55: a hook's spawn dropped at the next sync point and in a hook rou
 TEST_CASE("J-55: a zone C spawn blocked by an entity with zone B data only is dropped (LIM-7)") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
-        r.AddSystem<&ZoneCSpawnsSeven>(In("ZoneCSpawnsSeven", "A", Zone::C));
+        r.AddSystem<&ZoneCSpawnsSeven>(In("ZoneCSpawnsSeven", "A"));
     });
     rig->world().Insert(7, Tag{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -773,7 +773,7 @@ TEST_CASE("J-55: a zone B despawn and a zone C spawn of one id: the despawn appl
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&ZoneBDespawnsE>(In("ZoneBDespawnsE", "A"));
-        r.AddSystem<&ZoneCSpawnsE>(In("ZoneCSpawnsE", "A", Zone::C));
+        r.AddSystem<&ZoneCSpawnsE>(In("ZoneCSpawnsE", "A"));
     });
     rig->world().Insert(60, Tag{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -809,8 +809,7 @@ TEST_CASE("J-55: the fingerprint versions") {
     });
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
     CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 8U, "J-55 versions: Plan fingerprint version 8");
-    CHECK_MESSAGE(frozen.CFingerprint().version == 12U, "J-55 versions: C fingerprint version 12");
-    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 8U, "J-55 versions: Registry fingerprint version 8");
+    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 9U, "J-55 versions: Registry fingerprint version 9");
 }
 
 // ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)
@@ -892,7 +891,7 @@ TEST_CASE("J-55: a spawn dropped by step 0 as IdAlive does not count as spawned 
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-        r.Hook<Signal, &HookSpawnsSeven>(HookTrigger::OnAdd, {.name = "HookSpawnsSeven", .zone = Zone::B});
+        r.Hook<Signal, &HookSpawnsSeven>(HookTrigger::OnAdd, {.name = "HookSpawnsSeven"});
         r.AddSystem<&SpawnSevenAtTickOne>(In("SpawnSevenAtTickOne", "B"));
     });
     rig->world().Insert(7, Body{1});
@@ -929,8 +928,8 @@ TEST_CASE("J-55: one hook called before and after another hook: all three record
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&FlagSignalLabelSignal>(In("FlagSignalLabelSignal", "A"));
-        r.Hook<Signal, &HookASpawnsThirty>(HookTrigger::OnAdd, {.name = "HookASpawnsThirty", .zone = Zone::B});
-        r.Hook<Label, &HookBSpawnsThirty>(HookTrigger::OnAdd, {.name = "HookBSpawnsThirty", .zone = Zone::B});
+        r.Hook<Signal, &HookASpawnsThirty>(HookTrigger::OnAdd, {.name = "HookASpawnsThirty"});
+        r.Hook<Label, &HookBSpawnsThirty>(HookTrigger::OnAdd, {.name = "HookBSpawnsThirty"});
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(!rig->world().Alive(30), "J-55 hooks-a-b-a: 30 is not spawned");
@@ -945,7 +944,7 @@ TEST_CASE("J-55: an alive id is IdAlive although step 0 spawned a larger id at t
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-        r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+        r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven"});
         r.AddSystem<&SpawnSevenAndElevenAtTickOne>(In("SpawnSevenAndElevenAtTickOne", "B"));
     });
     rig->world().Insert(7, Body{1});
@@ -963,7 +962,7 @@ TEST_CASE("J-55: an alive id is IdAlive although step 0 spawned a larger id at t
 TEST_CASE("J-55: the record's sync point number and schedule are those of the sync point that dropped it") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
-        r.AddSystem<&EarlySpawnsSeven>(Sys("EarlySpawnsSeven", Zone::B, {KernelTest::At("Early", "X")}));
+        r.AddSystem<&EarlySpawnsSeven>(Sys("EarlySpawnsSeven", {KernelTest::At("Early", "X")}));
     });
     rig->world().Insert(7, Body{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -1000,7 +999,7 @@ TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and anothe
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-        r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+        r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven"});
         r.AddSystem<&DespawnThenSpawnElevenAtTickOne>(In("DespawnThenSpawnElevenAtTickOne", "B"));
         r.AddSystem<&SpawnElevenTagAtTickOne>(In("SpawnElevenTagAtTickOne", "B"));
     });
@@ -1021,13 +1020,13 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
         for (int order = 0; order < 2; ++order) {
             auto rig = MakeRig([order](Registrar& r) {
                 Base(r);
-                r.Component<CVel>({.name = "CVel", .zone = Zone::C, .rollback = Rollback::Yes});
+                r.Component<CVel>({.name = "CVel"});
                 if (order == 0) {
-                    r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
-                    r.AddSystem<&ZoneCSpawnsNineVel>(In("ZoneCSpawnsNineVel", "A", Zone::C));
+                    r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A"));
+                    r.AddSystem<&ZoneCSpawnsNineVel>(In("ZoneCSpawnsNineVel", "A"));
                 } else {
-                    r.AddSystem<&ZoneCSpawnsNineVel>(In("ZoneCSpawnsNineVel", "A", Zone::C));
-                    r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
+                    r.AddSystem<&ZoneCSpawnsNineVel>(In("ZoneCSpawnsNineVel", "A"));
+                    r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A"));
                 }
             });
             CHECK_MESSAGE(rig->built.registry->Frozen().TieBreaks().empty(),
@@ -1045,9 +1044,9 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
     SUBCASE("one bundle: the two Systems conflict, tied by registration without a declared order") {
         Built built = Finish({{"test", [](Registrar& r) {
                                    Base(r);
-                                   r.Component<CSharedPos>({.name = "CSharedPos", .zone = Zone::C, .rollback = Rollback::Yes});
-                                   r.AddSystem<&ZoneCSpawnsNineShared>(In("ZoneCSpawnsNineShared", "A", Zone::C));
-                                   r.AddSystem<&ZoneCSpawnsNineSharedAgain>(In("ZoneCSpawnsNineSharedAgain", "A", Zone::C));
+                                   r.Component<CSharedPos>({.name = "CSharedPos"});
+                                   r.AddSystem<&ZoneCSpawnsNineShared>(In("ZoneCSpawnsNineShared", "A"));
+                                   r.AddSystem<&ZoneCSpawnsNineSharedAgain>(In("ZoneCSpawnsNineSharedAgain", "A"));
                                }}});
         REQUIRE_MESSAGE(static_cast<bool>(built.result), Describe(built));
         const auto ties = built.registry->Frozen().TieBreaks();
@@ -1084,7 +1083,7 @@ TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatev
             Base(r);
             r.InitialValue<Seen, &SeenFromBody>();
             r.AddSystem<&SpawnNineTwice>(In("SpawnNineTwice", "A"));
-            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody"});
         });
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -1097,8 +1096,8 @@ TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatev
             Base(r);
             r.AddSystem<&SpawnFiveThenNine>(In("SpawnFiveThenNine", "A"));
             r.AddSystem<&SpawnNineTag>(In("SpawnNineTag", "A"));
-            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
-            r.Hook<Tag, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddTag", .zone = Zone::B});
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody"});
+            r.Hook<Tag, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddTag"});
         });
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -1108,7 +1107,7 @@ TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatev
         auto rig = MakeRig([](Registrar& r) {
             Base(r, true);
             r.AddSystem<&SpawnHundredFifty>(In("SpawnHundredFifty", "A"));
-            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody"});
         });
         rig->world().SetResource(RangeAllotter::Of(100, 199));
         Log().clear();
@@ -1119,9 +1118,9 @@ TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatev
         auto rig = MakeRig([](Registrar& r) {
             Base(r);
             r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-            r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+            r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven"});
             r.AddSystem<&SpawnElevenAtTickOne>(In("SpawnElevenAtTickOne", "B"));
-            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody"});
         });
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -1142,8 +1141,8 @@ TEST_CASE("J-55: two hooks collide at step 0 and a System of the window spawns t
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
-        r.Hook<Signal, &HookSpawnThirtyFirst>(HookTrigger::OnAdd, {.name = "HookSpawnThirtyFirst", .zone = Zone::B});
-        r.Hook<Signal, &HookSpawnThirtySecond>(HookTrigger::OnAdd, {.name = "HookSpawnThirtySecond", .zone = Zone::B});
+        r.Hook<Signal, &HookSpawnThirtyFirst>(HookTrigger::OnAdd, {.name = "HookSpawnThirtyFirst"});
+        r.Hook<Signal, &HookSpawnThirtySecond>(HookTrigger::OnAdd, {.name = "HookSpawnThirtySecond"});
         r.AddSystem<&SpawnThirtyAtTickOne>(In("SpawnThirtyAtTickOne", "B"));
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());

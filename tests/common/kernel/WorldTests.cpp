@@ -262,8 +262,8 @@ TEST_CASE("J-7: destroy order: a despawn in ascending ComponentId, the World in 
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             // Registered in this order: ComponentId of Tracked<1> is smaller than Tracked<0>'s.
-            r.Component<Tracked<1>>({.name = "Tracked1", .zone = Zone::B});
-            r.Component<Tracked<0>>({.name = "Tracked0", .zone = Zone::B});
+            r.Component<Tracked<1>>({.name = "Tracked1"});
+            r.Component<Tracked<0>>({.name = "Tracked0"});
             r.AddSystem<&DespawnOne>(B("DespawnOne", "A"));
         });
         World& world = rig->world();
@@ -522,8 +522,8 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&TwoRecordsOneKey>(B("TwoRecordsOneKey", "A"));
-            r.Hook<Mode, &HookTag100>(HookTrigger::OnAdd, {.name = "HookTag100", .zone = Zone::B});
-            r.Hook<Mode, &HookTag200>(HookTrigger::OnAdd, {.name = "HookTag200", .zone = Zone::B});
+            r.Hook<Mode, &HookTag100>(HookTrigger::OnAdd, {.name = "HookTag100"});
+            r.Hook<Mode, &HookTag200>(HookTrigger::OnAdd, {.name = "HookTag200"});
         });
         rig->world().Insert(3, Pos{3});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -540,9 +540,9 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&RejoinAndDrop>(B("RejoinAndDrop", "A"));
-            r.Hook<Mode, &LogRemoveMode>(HookTrigger::OnRemove, {.name = "LogRemoveMode", .zone = Zone::B});
-            r.Hook<Mode, &LogAddMode>(HookTrigger::OnAdd, {.name = "LogAddMode", .zone = Zone::B});
-            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag", .zone = Zone::B});
+            r.Hook<Mode, &LogRemoveMode>(HookTrigger::OnRemove, {.name = "LogRemoveMode"});
+            r.Hook<Mode, &LogAddMode>(HookTrigger::OnAdd, {.name = "LogAddMode"});
+            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag"});
         });
         World& world = rig->world();
         for (EntityId id : {1, 3, 4, 9}) world.Insert(id, Mode{1});
@@ -616,8 +616,8 @@ TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrit
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&OverwriteAndRemove>(B("OverwriteAndRemove", "A"));
-            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag", .zone = Zone::B});
-            r.Hook<Tag, &LogRemoveTag>(HookTrigger::OnRemove, {.name = "LogRemoveTag", .zone = Zone::B});
+            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag"});
+            r.Hook<Tag, &LogRemoveTag>(HookTrigger::OnRemove, {.name = "LogRemoveTag"});
         });
         rig->world().Insert(1, Tag{1});
         rig->world().Insert(2, Tag{2});
@@ -630,7 +630,7 @@ TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrit
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&DespawnOneAtTickOne>(B("DespawnOneAtTickOne", "A"));
-            r.Hook<Mode, &ModeRemovedSeesTag>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesTag", .zone = Zone::B});
+            r.Hook<Mode, &ModeRemovedSeesTag>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesTag"});
         });
         rig->world().Insert(1, Tag{7});
         rig->world().Insert(1, Mode{1});
@@ -738,8 +738,8 @@ std::string CallOrder(const std::vector<std::string>& log) {
 
 void RegisterDespawnOrderData(Registrar& r) {
     Data(r);
-    r.Component<Spare>({.name = "Spare", .zone = Zone::B});
-    r.Component<Badge>({.name = "Badge", .zone = Zone::B});
+    r.Component<Spare>({.name = "Spare"});
+    r.Component<Badge>({.name = "Badge"});
 }
 
 } // namespace
@@ -750,11 +750,11 @@ TEST_CASE("J-32: a despawn runs every OnRemove in ascending ComponentId before a
         r.AddSystem<&DespawnOneThreeSix>(B("DespawnOneThreeSix", "A"));
         // Hooks registered in descending ComponentId: the call order must follow the
         // ComponentId, not the hook registration order; Tag's two hooks keep theirs.
-        r.Hook<Badge, &BadgeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "BadgeRemovedSeesAll", .zone = Zone::B});
-        r.Hook<Spare, &SpareRemoved>(HookTrigger::OnRemove, {.name = "SpareRemoved", .zone = Zone::B});
-        r.Hook<Mode, &ModeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesAll", .zone = Zone::B});
-        r.Hook<Tag, &TagRemovedSeesAll>(HookTrigger::OnRemove, {.name = "TagRemovedSeesAll", .zone = Zone::B});
-        r.Hook<Tag, &TagRemovedSecond>(HookTrigger::OnRemove, {.name = "TagRemovedSecond", .zone = Zone::B});
+        r.Hook<Badge, &BadgeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "BadgeRemovedSeesAll"});
+        r.Hook<Spare, &SpareRemoved>(HookTrigger::OnRemove, {.name = "SpareRemoved"});
+        r.Hook<Mode, &ModeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesAll"});
+        r.Hook<Tag, &TagRemovedSeesAll>(HookTrigger::OnRemove, {.name = "TagRemovedSeesAll"});
+        r.Hook<Tag, &TagRemovedSecond>(HookTrigger::OnRemove, {.name = "TagRemovedSecond"});
     });
     World& world = rig->world();
     // Inserted in an order unlike the ComponentId order.
@@ -821,8 +821,8 @@ TEST_CASE("J-32: two despawns in one window: one entity is finished before the n
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.AddSystem<&DespawnTwoThenOne>(B("DespawnTwoThenOne", "A"));
-        r.Hook<Tag, &TagRemovedSeesOther>(HookTrigger::OnRemove, {.name = "TagRemovedSeesOther", .zone = Zone::B});
-        r.Hook<Mode, &ModeRemovedSeesOther>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesOther", .zone = Zone::B});
+        r.Hook<Tag, &TagRemovedSeesOther>(HookTrigger::OnRemove, {.name = "TagRemovedSeesOther"});
+        r.Hook<Mode, &ModeRemovedSeesOther>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesOther"});
     });
     World& world = rig->world();
     world.Insert(1, Tag{10});
@@ -844,7 +844,7 @@ TEST_CASE("J-32: an Err from a despawn's OnRemove hook is the Run's Err") {
     auto rig = MakeRig([](Registrar& r) {
         RegisterDespawnOrderData(r);
         r.AddSystem<&DespawnOneAtTickOne>(B("DespawnOneAtTickOne", "A"));
-        r.Hook<Mode, &ModeRemovedFails>(HookTrigger::OnRemove, {.name = "ModeRemovedFails", .zone = Zone::B});
+        r.Hook<Mode, &ModeRemovedFails>(HookTrigger::OnRemove, {.name = "ModeRemovedFails"});
     });
     rig->world().Insert(1, Tag{7});
     rig->world().Insert(1, Mode{1});
@@ -879,8 +879,8 @@ SystemResult SeeAfterMid(Query<Read<Tag>> tags) {
 
 TEST_CASE("J-33: stage ends and declared sync points apply; nowhere else") {
     auto rig = MakeRig([](Registrar& r) {
-        r.Component<Tag>({.name = "Tag", .zone = Zone::B});
-        r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+        r.Component<Tag>({.name = "Tag"});
+        r.Resource<TickCount>({.name = "TickCount"});
         r.Schedule(MidSchedule());
         r.AddSystem<&SpawnTag>(B("SpawnTag", "A", {"Mid"}));
         r.AddSystem<&SeeBeforeMid>(B("SeeBeforeMid", "A", {"Mid"}, {"SpawnTag"}));
@@ -935,8 +935,8 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             Data(r);
             r.AddSystem<&SpawnTag>(B("SpawnTag", "A"));
             r.AddSystem<&CountModes>(B("CountModes", "B"));
-            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst", .zone = Zone::B});
-            r.Hook<Tag, &HookSecond>(HookTrigger::OnAdd, {.name = "HookSecond", .zone = Zone::B});
+            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst"});
+            r.Hook<Tag, &HookSecond>(HookTrigger::OnAdd, {.name = "HookSecond"});
         });
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -952,7 +952,7 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             other.stages = {"B"};
             r.Schedule(other);
             r.AddSystem<&SpawnTag>(B("SpawnTag", "C"));
-            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst", .zone = Zone::B});
+            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst"});
         });
         Log().clear();
         // Tag at the last sync point of Tick; HookFirst records Mode, applied by the hook rounds right after it.
@@ -965,7 +965,7 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnTag>(B("SpawnTag", "A"));
-            r.Hook<Tag, &RecordOnSystemPath>(HookTrigger::OnAdd, {.name = "RecordOnSystemPath", .zone = Zone::B});
+            r.Hook<Tag, &RecordOnSystemPath>(HookTrigger::OnAdd, {.name = "RecordOnSystemPath"});
         });
         KeptWorld() = &rig->world();
         GYO_CHECK_ASSERTS(rig->Run());
@@ -1030,7 +1030,7 @@ TEST_CASE("J-36: a message is read once by every reader, in write order; kept un
         r.AddSystem<&SecondWriter>(B("SecondWriter", "B", {}, {"Writer"}));
         r.AddSystem<&LateReader>(B("LateReader", "C"));
         // Writes at the end of stage A (its sync point's Plan position).
-        r.Hook<Tag, &HookPing>(HookTrigger::OnAdd, {.name = "HookPing", .zone = Zone::B});
+        r.Hook<Tag, &HookPing>(HookTrigger::OnAdd, {.name = "HookPing"});
     });
     Log().clear();
     KERNEL_REQUIRE_RUN_OK(rig->Run());

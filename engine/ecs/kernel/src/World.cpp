@@ -406,7 +406,7 @@ void RecordDroppedMessage(World& world, MessageTypeId id, std::uint64_t seq) {
         record.message = world.data_->messages[id].name;
         record.firstSeq = seq;
         // The World's sync point number at the first drop of the Run (L8).
-        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{world.syncEpoch_, false, std::move(record)});
+        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{world.syncEpoch_, std::move(record)});
         entry = entries.size() - 1;
     }
     DroppedMessages& record = entries[*entry].record;
@@ -959,7 +959,7 @@ void World::RecordRejectedSpawn(RejectedSpawn rejected) {
     }
     const std::uint64_t epoch = rejected.syncEpoch;
     static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(
-        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, false, std::move(rejected)});
+        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});
 }
 
 void World::DiscardDeferred() noexcept {

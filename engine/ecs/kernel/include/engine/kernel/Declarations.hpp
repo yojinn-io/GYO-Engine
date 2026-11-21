@@ -22,42 +22,12 @@ using EffectId = std::uint32_t;
 using SetId = std::uint32_t;
 using RegistrationSeq = std::uint32_t;
 
-// The determinism zone (spec G; target/determinism.md section 2). A zone left
-// Unset is zone B. The zone rules are gone (v8-arch-gyo2-authority-rollback
-// step 2); the zone stays until step 6 only for what moves to the authority
-// Module then: the C fingerprint, the G-5 export and Z6.
-enum class Zone : std::uint8_t {
-    Unset,
-    C,
-    B,
-};
-
-// Spec A.1: Input is boundary data; it must not roll back (Z8; leaves with Z8
-// for the authority Module's .input mark, step 6).
-enum class Role : std::uint8_t {
-    State,
-    Input,
-};
-
-enum class Rollback : std::uint8_t {
-    No,
-    Yes,
-    // Recomputed each tick before every reader (spec A.1, D-E16).
-    Derived,
-};
-
 struct ComponentOptions {
     std::string name;
-    Zone zone = Zone::Unset;
-    Role role = Role::State;
-    Rollback rollback = Rollback::No;
 };
 
 struct ResourceOptions {
     std::string name;
-    Zone zone = Zone::Unset;
-    Role role = Role::State;
-    Rollback rollback = Rollback::No;
     // Bound to the thread that puts the value in (DI-KS 14; Bevy's NonSend): a
     // touch from any other thread is a GYO_ASSERT, destroying the World with a
     // value included; removing the value forgets the thread. Which thread runs
@@ -68,7 +38,6 @@ struct ResourceOptions {
 // A retained message type (event cursor declaration 3.2, 5.1; DI-KS 10).
 struct MessageOptions {
     std::string name;
-    Zone zone = Zone::Unset;
     // How many records of this type the World keeps: a write to a full buffer
     // drops the oldest one and the World records it (DroppedMessages). A default,
     // not a measured value; at least 1 (GYO_ASSERT).
@@ -80,7 +49,6 @@ struct MessageOptions {
 // is in the past tense (naming DI 2).
 struct EventOptions {
     std::string name;
-    Zone zone = Zone::Unset;
 };
 
 // An observer (event cursor declaration 3.3, 5.2): a System that runs where its
@@ -89,7 +57,6 @@ struct EventOptions {
 // registration order; not promised to authors).
 struct ObserverOptions {
     std::string name;
-    Zone zone = Zone::Unset;
 };
 
 // A named group of a schedule's Systems (spec C.1 sets): order edges and run
@@ -122,13 +89,12 @@ struct ScheduleOptions {
     std::string name;
     // The only schedule kind where Extract parameters are legal (spec H.6).
     bool extract = false;
-    bool rollbackEnabled = false;
     std::vector<std::string> stages;
     std::vector<SyncPointOptions> syncPoints;
     ExecutorKind executor = ExecutorKind::Serial;
     // The most hook rounds after the last sync point of a Run (spec F-12). Empty:
     // the World's KernelSettings::hookRoundLimit. 0 is D-E20. In the Plan
-    // fingerprint and, for a schedule that runs a zone C System, the C fingerprint.
+    // fingerprint.
     std::optional<std::uint32_t> hookRoundLimit;
 };
 

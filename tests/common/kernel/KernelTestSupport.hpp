@@ -65,8 +65,7 @@ inline Engine::Base::Result<void, StartupReport> RegisterAll(
     return registry.BuildPlans();
 }
 
-// Schedules most tests use: a frame schedule (Update) and a fixed-step schedule (FixedUpdate)
-// with an ingress stage and rollback.
+// Schedules most tests use: a frame schedule (Update) and a fixed-step schedule (FixedUpdate).
 inline ScheduleOptions UpdateSchedule() {
     ScheduleOptions s;
     s.name = "Update";
@@ -74,10 +73,9 @@ inline ScheduleOptions UpdateSchedule() {
     return s;
 }
 
-inline ScheduleOptions FixedSchedule(bool rollback = false) {
+inline ScheduleOptions FixedSchedule() {
     ScheduleOptions s;
     s.name = "FixedUpdate";
-    s.rollbackEnabled = rollback;
     s.stages = {"Ingress", "Simulate", "Present"};
     return s;
 }
@@ -92,25 +90,24 @@ inline Mount At(std::string schedule, std::string stage, std::vector<std::string
     return m;
 }
 
-inline SystemOptions Sys(std::string name, Zone zone, std::vector<Mount> mounts) {
+inline SystemOptions Sys(std::string name, std::vector<Mount> mounts) {
     SystemOptions o;
     o.name = std::move(name);
-    o.zone = zone;
     o.mounts = std::move(mounts);
     return o;
 }
 
 // Registers the common data types; zone C unless stated.
 inline void RegisterCommonData(Registrar& r) {
-    r.Component<TestPos>({.name = "TestPos", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestVel>({.name = "TestVel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B});
-    r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestMode>({.name = "TestMode", .zone = Zone::B});
-    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C});
-    r.Message<TestFrameEvent>({.name = "TestFrameEvent", .zone = Zone::B});
-    r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
+    r.Component<TestPos>({.name = "TestPos"});
+    r.Component<TestVel>({.name = "TestVel"});
+    r.Component<TestMarker>({.name = "TestMarker"});
+    r.Component<TestHealth>({.name = "TestHealth"});
+    r.Component<TestMode>({.name = "TestMode"});
+    r.Message<TestEvent>({.name = "TestEvent"});
+    r.Message<TestFrameEvent>({.name = "TestFrameEvent"});
+    r.Resource<TestRes>({.name = "TestRes"});
+    r.Resource<TestOtherRes>({.name = "TestOtherRes"});
 }
 
 // Registers functions in list order and builds the Plans (RegisterAll).
@@ -126,11 +123,11 @@ inline Built Finish(std::vector<std::pair<std::string, std::function<void(Regist
 }
 
 // One plugin with the common data, the two schedules and the given extra registrations.
-inline Built FinishOne(std::function<void(Registrar&)> extra, bool rollback = false) {
-    return Finish({{"test", [extra = std::move(extra), rollback](Registrar& r) {
+inline Built FinishOne(std::function<void(Registrar&)> extra) {
+    return Finish({{"test", [extra = std::move(extra)](Registrar& r) {
                         RegisterCommonData(r);
                         r.Schedule(UpdateSchedule());
-                        r.Schedule(FixedSchedule(rollback));
+                        r.Schedule(FixedSchedule());
                         extra(r);
                     }}});
 }

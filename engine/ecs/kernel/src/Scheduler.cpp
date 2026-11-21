@@ -156,7 +156,6 @@ public:
         if (!TopologicalOrder(order)) return;
         Closure(order);
         Conflicts();
-        DerivedOrder();
         if (failed_) return;
         MakePlan();
     }
@@ -430,33 +429,6 @@ private:
                     if (reach_->Test(a, b) || reach_->Test(b, a)) continue;  // data conflict, ordered
                     AddTieEdge(a, b);
                     data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});
-                }
-            }
-        }
-    }
-
-    // D-E16 (spec A.1 Derived, S15): in a rollback-enabled schedule every
-    // reader of a Derived column or resource has an immediate writer before it.
-    void DerivedOrder() {
-        if (!s_.rollbackEnabled) return;
-        for (std::size_t r = 0; r < nodes_.size(); ++r) {
-            if (!IsSystem(r)) continue;
-            for (const AccessKey& key : SystemOf(r).access.reads) {
-                const bool derived =
-                    (key.kind == AccessKind::Component && data_.components[key.id].rollback == Rollback::Derived) ||
-                    (key.kind == AccessKind::Resource && data_.resources[key.id].rollback == Rollback::Derived);
-                if (!derived) continue;
-                bool written = false;
-                for (std::size_t w = 0; w < nodes_.size() && !written; ++w) {
-                    if (!IsSystem(w) || !reach_->Test(w, r)) continue;
-                    const auto& writes = SystemOf(w).access.writes;
-                    written = std::binary_search(writes.begin(), writes.end(), key);
-                }
-                if (!written) {
-                    Error(StartupCode::DE16, "A.1",
-                          "System '" + SystemOf(r).options.name + "' reads Derived " + KeyName(data_, key) +
-                              " in rollback-enabled schedule '" + s_.name + "' with no immediate writer ordered before it",
-                          {SystemOf(r).options.name}, {SourceText(SystemOf(r).source)});
                 }
             }
         }

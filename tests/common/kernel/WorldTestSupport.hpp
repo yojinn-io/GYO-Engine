@@ -70,32 +70,32 @@ inline ScheduleOptions TickSchedule() {
 
 // Registers the data above and the Tick schedule; allotter: optional.
 inline void Data(Registrar& r, bool allotter = false) {
-    r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
-    r.Component<Mode>({.name = "Mode", .zone = Zone::B});
-    r.Component<Boundary>({.name = "Boundary", .zone = Zone::C, .role = Role::Input});
-    r.Component<CShared>({.name = "CShared", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Resource<Out>({.name = "Out", .zone = Zone::B});
-    r.Resource<Flag>({.name = "Flag", .zone = Zone::B});
-    r.Resource<CRes>({.name = "CRes", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Message<Ping>({.name = "Ping", .zone = Zone::B});
+    r.Component<Pos>({.name = "Pos"});
+    r.Component<Vel>({.name = "Vel"});
+    r.Component<Tag>({.name = "Tag"});
+    r.Component<Mode>({.name = "Mode"});
+    r.Component<Boundary>({.name = "Boundary"});
+    r.Component<CShared>({.name = "CShared"});
+    r.Resource<Out>({.name = "Out"});
+    r.Resource<Flag>({.name = "Flag"});
+    r.Resource<CRes>({.name = "CRes"});
+    r.Message<Ping>({.name = "Ping"});
     if (allotter) {
-        r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
+        r.Resource<RangeAllotter>({.name = "Allotter"});
         r.Allotter<RangeAllotter>();
     }
-    r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+    r.Resource<TickCount>({.name = "TickCount"});
     r.Schedule(TickSchedule());
 }
 
 inline SystemOptions B(std::string name, std::string stage, std::vector<std::string> before = {},
                        std::vector<std::string> after = {}) {
-    return Sys(std::move(name), Zone::B, {At("Tick", std::move(stage), std::move(before), std::move(after))});
+    return Sys(std::move(name), {At("Tick", std::move(stage), std::move(before), std::move(after))});
 }
 
 inline SystemOptions C(std::string name, std::string stage, std::vector<std::string> before = {},
                        std::vector<std::string> after = {}) {
-    return Sys(std::move(name), Zone::C, {At("Tick", std::move(stage), std::move(before), std::move(after))});
+    return Sys(std::move(name), {At("Tick", std::move(stage), std::move(before), std::move(after))});
 }
 
 // A finished Registry, a WorldExecutor over it and the errors its outermost Runs

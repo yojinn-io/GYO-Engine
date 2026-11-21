@@ -1,5 +1,7 @@
-// Fingerprints and text exports of a frozen Registry (spec C.2 point 5, H-4,
-// G-5; migration plan section 3.5).
+// Fingerprints and text exports of a frozen Registry (spec C.2 point 5, H-4;
+// migration plan section 3.5). The C fingerprint and the G-5 export moved to the
+// authority Module (its consistency fingerprint and ExportAuthoritySources;
+// v8-arch-gyo2-authority-rollback step 6).
 //
 // Encoding (format version 1), the bytes hashed by SHA-256:
 //   - a string is its byte length as u32 little-endian, then its bytes;
@@ -8,38 +10,28 @@
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version (the
 //     constants below).
-// Registry fingerprint (format 8): registration owner names in the order of
+// Registry fingerprint (format 9): registration owner names in the order of
 // their first Register; components, resources,
-// messages in id order (name, size, align, zone, role, rollback;
-// resources add threadBound; messages have name, zone,
+// messages in id order (name, size, align;
+// resources add threadBound; messages have name and
 // capacity; their reader lists are derived from the Systems, hashed below);
 // effects; named sets (name, members); the allotter; schedules (every
 // ScheduleOptions field but hookRoundLimit, which the Plan fingerprint holds);
 // sets; Systems in registrationSeq order, removed ones (tombstones) left out
-// (name, zone, ingress, effects, rollbackSafe, mounts with every field, access
-// set with its annotatedWrites);
-// hooks (name, component, trigger, zone, access); event types in id order
-// (name, zone); observers in Registrar::Observer order (name, trigger, event
-// type or component id, zone, access, owner name); initial value
+// (name, effects, mounts with every field, access set with its annotatedWrites);
+// hooks (name, component, trigger, access); event types in id order
+// (name); observers in Registrar::Observer order (name, trigger, event
+// type or component id, access, owner name); initial value
 // declarations (Registrar::InitialValue; target and request ComponentId, in the
 // (requestId, targetId) order Finish leaves them in); then every Plan's
 // fingerprint in schedule order. The function of a declaration is not hashed:
 // its address differs per build. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint (format 12): only zone C data (messages with their capacity),
-// zone C Systems (with mounts and access), zone C hooks, zone C event types,
-// zone C observers (name, trigger, id, access) in name order, never in
-// registration order (the order of observers is no part of it: event cursor
-// declaration 3.3), and the initial value
-// declarations of zone C components, each section counted; and for every
-// schedule that runs a zone C System, its rollbackEnabled, stages and hook
-// round limit (a flag, then the value when declared), and its Plan reduced to
-// the zone C System steps plus every sync point (spec H.3; review B6).
 // Plan fingerprint (format 8): schedule name, each step's kind and
 // name, then the hook round limit (a flag, then the value when declared).
 // The hook rounds after the last sync point (spec F-12) are not a step; the
-// Plan and C formats were raised (1 to 2, 3 to 4) when they were added, so the
-// rule shows in both fingerprints (v8-arch-gyo2-hook-flush-not-in-plan-bump-versions).
+// Plan and the former C formats were raised (1 to 2, 3 to 4) when they were added, so the
+// rule shows in the fingerprints (v8-arch-gyo2-hook-flush-not-in-plan-bump-versions).
 // Sizes are hashed as the platform reports them; a type whose size differs
 // between platforms gives different fingerprints there (the kernel tests use
 // fixed-width types).
@@ -91,26 +83,10 @@ constexpr std::uint32_t kFingerprintVersion = 8;
 // external flag, a schedule's ingress stage and Parallel guard test, and a named
 // set's digest mark left with the rules that read them, and annotatedWrites
 // holds components too, each a (kind, id) key (v8-arch-gyo2-authority-rollback step 2).
-constexpr std::uint32_t kRegistryFingerprintVersion = 8;
-// The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
-// schedules that hold zone C steps, and the sync points around those steps; 3
-// since the initial value declarations of zone C components; 4 since the hook
-// rounds after the last sync point and the schedule's hook round limit; 5 since
-// the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject); 6
-// since the kernel runs Startup and a System may run a schedule
-// (v8-arch-gyo2-nested-schedule); 7 since the System and resource bytes it shares
-// with the Registry fingerprint changed and the Plan rules did
-// (v8-arch-gyo2-kernel-subtract-structure); 8 since the schedule bytes it shares
-// have no startup flag and the kernel runs no Startup (v8-arch-gyo2-orchestration-skeleton);
-// 9 since a schedule names no trim point and has no trim step, and a zone C message
-// type has a capacity (v8-arch-gyo2-time-events step 3); 10 since a zone C message
-// type and the Plans have no clock domain (v8-arch-gyo2-clock-out-of-kernel,
-// v8-arch-gyo2-time-events step 4); 11 since zone C event types and observers
-// (v8-arch-gyo2-time-events step 5); 12 since the column, resource and schedule
-// bytes it shares with the Registry fingerprint lost the write policy, the
-// external flag, the ingress stage and the Parallel guard test
-// (v8-arch-gyo2-authority-rollback step 2).
-constexpr std::uint32_t kCFingerprintVersion = 12;
+// 9 since zones, roles, rollback options, rollbackEnabled, notInRollback, the
+// ingress flag and rollbackSafe left for the authority and rollback Modules
+// (v8-arch-gyo2-authority-rollback step 6).
+constexpr std::uint32_t kRegistryFingerprintVersion = 9;
 
 class Bytes {
 public:
@@ -181,15 +157,11 @@ void MountBytes(Bytes& out, const Mount& mount) {
     out.Strings(mount.sets);
     out.U32(mount.conditions.size());
     for (const ConditionRef& condition : mount.conditions) out.Str(condition.Name());
-    out.Flag(mount.notInRollback);
 }
 
 void SystemBytes(Bytes& out, const SystemRecord& system) {
     out.Str(system.options.name);
-    out.Enum(system.options.zone);
-    out.Flag(system.options.ingress);
     out.Ids(system.effects);
-    out.Flag(system.options.rollbackSafe);
     out.U32(system.options.mounts.size());
     for (const Mount& mount : system.options.mounts) MountBytes(out, mount);
     Access(out, system.access);
@@ -199,25 +171,18 @@ void ColumnBytes(Bytes& out, const ColumnInfo& info) {
     out.Str(info.name);
     out.U32(info.size);
     out.U32(info.align);
-    out.Enum(info.zone);
-    out.Enum(info.role);
-    out.Enum(info.rollback);
 }
 
 void ResourceBytes(Bytes& out, const ResourceInfo& info) {
     out.Str(info.name);
     out.U32(info.size);
     out.U32(info.align);
-    out.Enum(info.zone);
-    out.Enum(info.role);
-    out.Enum(info.rollback);
     out.Flag(info.threadBound);
 }
 
 void ScheduleBytes(Bytes& out, const ScheduleOptions& s) {
     out.Str(s.name);
     out.Flag(s.extract);
-    out.Flag(s.rollbackEnabled);
     out.Strings(s.stages);
     out.U32(s.syncPoints.size());
     for (const SyncPointOptions& sync : s.syncPoints) {
@@ -245,50 +210,6 @@ std::string Percent(std::size_t part, std::size_t whole) {
     return std::to_string(rounded) + "%";
 }
 
-std::string JsonString(const std::string& text) {
-    std::string out = "\"";
-    for (char c : text) {
-        if (c == '"' || c == '\\') {
-            out += '\\';
-            out += c;
-        } else if (static_cast<unsigned char>(c) < 0x20) {
-            char buffer[8] = "\\u00";
-            const char* hex = "0123456789abcdef";
-            buffer[4] = hex[(static_cast<unsigned char>(c) >> 4) & 0xF];
-            buffer[5] = hex[static_cast<unsigned char>(c) & 0xF];
-            buffer[6] = '\0';
-            out += buffer;
-        } else {
-            out += c;
-        }
-    }
-    return out + "\"";
-}
-
-std::string Normalize(std::string path) {
-    std::replace(path.begin(), path.end(), '\\', '/');
-    while (path.size() > 1 && path.back() == '/') path.pop_back();
-    return path;
-}
-
-// True when path starts with root. A Windows drive path ("C:/...") compares
-// without case: compilers and CMake may spell the same drive and folders in
-// different case there.
-bool StartsWith(const std::string& path, const std::string& root) {
-    if (path.size() < root.size()) return false;
-    const bool drive = root.size() > 1 && root[1] == ':';
-    for (std::size_t i = 0; i < root.size(); ++i) {
-        char a = path[i];
-        char b = root[i];
-        if (drive) {
-            if (a >= 'A' && a <= 'Z') a = static_cast<char>(a - 'A' + 'a');
-            if (b >= 'A' && b <= 'Z') b = static_cast<char>(b - 'A' + 'a');
-        }
-        if (a != b) return false;
-    }
-    return true;
-}
-
 } // namespace
 
 Fingerprint PlanFingerprintOf(const Plan& plan) {
@@ -310,7 +231,6 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
     out.U32(data.messages.size());
     for (const MessageInfo& info : data.messages) {
         out.Str(info.name);
-        out.Enum(info.zone);
         out.U32(info.capacity);
     }
     out.U32(data.effects.size());
@@ -342,20 +262,17 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
         out.Str(hook.name);
         out.U32(hook.componentId.value_or(0));
         out.Enum(hook.trigger);
-        out.Enum(hook.zone);
         Access(out, hook.access);
     }
     out.U32(data.events.size());
     for (const EventInfo& info : data.events) {
         out.Str(info.name);
-        out.Enum(info.zone);
     }
     out.U32(data.observers.size());
     for (const ObserverRecord& observer : data.observers) {
         out.Str(observer.name);
         out.Enum(observer.trigger);
         out.U32(observer.observedId.value_or(0));
-        out.Enum(observer.zone);
         Access(out, observer.access);
         out.Str(data.OwnerName(observer.owner));
     }
@@ -369,115 +286,14 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
     return out.Finish(kRegistryFingerprintVersion);
 }
 
-Fingerprint CFingerprintOf(const RegistryData& data) {
-    Bytes out;
-    Header(out, "gyo.kernel.registry-c", kCFingerprintVersion);
-    // Each section is counted first, so moving an item between sections changes the bytes.
-    const auto count = [](const auto& items, auto&& pick) {
-        std::uint32_t n = 0;
-        for (const auto& item : items) n += pick(item) ? 1U : 0U;
-        return n;
-    };
-    out.U32(count(data.components, [](const ColumnInfo& c) { return c.zone == Zone::C; }));
-    for (std::size_t id = 0; id < data.components.size(); ++id) {
-        if (data.components[id].zone != Zone::C) continue;
-        out.U32(id);
-        ColumnBytes(out, data.components[id]);
-    }
-    out.U32(count(data.resources, [](const ResourceInfo& r) { return r.zone == Zone::C; }));
-    for (std::size_t id = 0; id < data.resources.size(); ++id) {
-        if (data.resources[id].zone != Zone::C) continue;
-        out.U32(id);
-        ResourceBytes(out, data.resources[id]);
-    }
-    out.U32(count(data.messages, [](const MessageInfo& e) { return e.zone == Zone::C; }));
-    for (std::size_t id = 0; id < data.messages.size(); ++id) {
-        if (data.messages[id].zone != Zone::C) continue;
-        out.U32(id);
-        out.Str(data.messages[id].name);
-        out.U32(data.messages[id].capacity);
-    }
-    out.U32(count(data.systems, [](const SystemRecord& s) { return !s.removed && s.options.zone == Zone::C; }));
-    for (const SystemRecord& system : data.systems) {
-        if (!system.removed && system.options.zone == Zone::C) SystemBytes(out, system);
-    }
-    out.U32(count(data.hooks, [](const HookRecord& h) { return h.zone == Zone::C; }));
-    for (const HookRecord& hook : data.hooks) {
-        if (hook.zone != Zone::C) continue;
-        out.Str(hook.name);
-        out.U32(hook.componentId.value_or(0));
-        out.Enum(hook.trigger);
-        Access(out, hook.access);
-    }
-    out.U32(count(data.events, [](const EventInfo& e) { return e.zone == Zone::C; }));
-    for (std::size_t id = 0; id < data.events.size(); ++id) {
-        if (data.events[id].zone != Zone::C) continue;
-        out.U32(id);
-        out.Str(data.events[id].name);
-    }
-    // In name order (observerOrder), never in registration order.
-    out.U32(count(data.observers, [](const ObserverRecord& o) { return o.zone == Zone::C; }));
-    for (std::uint32_t index : data.observerOrder) {
-        const ObserverRecord& observer = data.observers[index];
-        if (observer.zone != Zone::C) continue;
-        out.Str(observer.name);
-        out.Enum(observer.trigger);
-        out.U32(observer.observedId.value_or(0));
-        Access(out, observer.access);
-    }
-    // The kernel writes these components at sync points: a declaration changes (c) results.
-    out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {
-        return data.components[rule.targetId].zone == Zone::C;
-    }));
-    for (const InitialValueRecord& rule : data.initialValues) {
-        if (data.components[rule.targetId].zone != Zone::C) continue;
-        out.U32(rule.targetId);
-        out.U32(rule.requestId);
-    }
-    // Every schedule that runs a zone C System: its properties that change (c)
-    // results (rollback, stage sequence) and its Plan reduced to the zone C
-    // steps with the sync points between them, which decide in which window a
-    // deferred write lands.
-    for (const Plan& plan : data.plans) {
-        bool holdsC = false;
-        for (const Step& step : plan.steps) {
-            holdsC = holdsC || (step.kind == StepKind::System && data.systems[step.system].options.zone == Zone::C);
-        }
-        if (!holdsC) continue;
-        out.Str(plan.schedule);
-        if (const ScheduleRecord* schedule = data.FindSchedule(plan.schedule)) {
-            out.Flag(schedule->options.rollbackEnabled);
-            out.Strings(schedule->options.stages);
-            out.Flag(schedule->options.hookRoundLimit.has_value());
-            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);
-        }
-        std::vector<const Step*> reduced;
-        for (const Step& step : plan.steps) {
-            if (step.kind != StepKind::System || data.systems[step.system].options.zone == Zone::C) reduced.push_back(&step);
-        }
-        out.U32(reduced.size());
-        for (const Step* step : reduced) {
-            out.Enum(step->kind);
-            out.Str(step->name);
-        }
-    }
-    return out.Finish(kCFingerprintVersion);
-}
-
 } // namespace Detail
 
 std::string FrozenRegistry::ExportPlans() const {
     const Detail::RegistryData& data = *data_;
-    std::string out = "gyo.kernel.plans 6\n";
+    std::string out = "gyo.kernel.plans 7\n";
     out += "registry " + Detail::RegistryFingerprintOf(data).Text() + "\n";
-    out += "registry_c " + Detail::CFingerprintOf(data).Text() + "\n";
     for (const Plan& plan : data.plans) {
-        const Detail::ScheduleRecord* schedule = data.FindSchedule(plan.schedule);
-        out += "schedule " + plan.schedule;
-        if (schedule != nullptr) {
-            out += std::string(" rollback=") + (schedule->options.rollbackEnabled ? "1" : "0");
-        }
-        out += "\n";
+        out += "schedule " + plan.schedule + "\n";
         out += "  hook-round-limit " + (plan.hookRoundLimit ? std::to_string(*plan.hookRoundLimit) : std::string("default")) + "\n";
         out += "  fingerprint " + plan.fingerprint.Text() + "\n";
         for (std::size_t i = 0; i < plan.steps.size(); ++i) {
@@ -485,7 +301,7 @@ std::string FrozenRegistry::ExportPlans() const {
             out += "  step " + std::to_string(i) + " ";
             switch (step.kind) {
             case StepKind::System:
-                out += "system " + step.name + " zone=" + Detail::ZoneName(data.systems[step.system].options.zone);
+                out += "system " + step.name;
                 break;
             case StepKind::SyncPoint: out += "sync " + step.name; break;
             }
@@ -507,63 +323,6 @@ std::string FrozenRegistry::ExportPlans() const {
             if (tie.schedule == plan.schedule) out += "  tie " + tie.first + " -> " + tie.second + " (registration order)\n";
         }
     }
-    return out;
-}
-
-Engine::Base::Result<std::string, KernelError> FrozenRegistry::ExportZoneCSources(const ZoneCSourcesOptions& options) const {
-    const Detail::RegistryData& data = *data_;
-    const std::string root = Detail::Normalize(options.repositoryRoot) + "/";
-    const std::string owner = Detail::Normalize(options.ownerRoot);
-    std::vector<std::string> files;
-    // what: "a zone C System", "the initial value of a zone C component".
-    const auto add = [&](const std::source_location& source, const std::string& what,
-                         const std::string& name) -> Engine::Base::Result<void, KernelError> {
-        const std::string path = Detail::Normalize(source.file_name());
-        if (!Detail::StartsWith(path, root)) {
-            return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed,
-                                                 what + " is registered outside the repository root", name + ": " + path));
-        }
-        const std::string relative = path.substr(root.size());
-        if (relative.rfind(owner + "/", 0) != 0) {
-            return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed,
-                                                 what + " is registered outside the owner root " + owner,
-                                                 name + ": " + relative));
-        }
-        files.push_back(relative);
-        return {};
-    };
-    for (const Detail::SystemRecord& system : data.systems) {
-        if (system.removed || system.options.zone != Zone::C) continue;
-        if (auto added = add(system.source, "a zone C System", system.options.name); !added) {
-            return Engine::Base::Err(std::move(added).error());
-        }
-    }
-    // The function of Registrar::InitialValue computes the component's value:
-    // for a zone C component it is zone C code, declared where it is registered.
-    for (const Detail::InitialValueRecord& record : data.initialValues) {
-        const ColumnInfo& target = data.components[record.targetId];
-        if (target.zone != Zone::C) continue;
-        if (auto added = add(record.source, "the initial value of a zone C component", target.name); !added) {
-            return Engine::Base::Err(std::move(added).error());
-        }
-    }
-    std::sort(files.begin(), files.end());
-    files.erase(std::unique(files.begin(), files.end()), files.end());
-    std::string out = "{\n";
-    out += "  \"format\": \"gyo.zone-c-sources\",\n";
-    out += "  \"version\": 1,\n";
-    out += "  \"generated_by\": \"gyo-kernel-report\",\n";
-    out += "  \"repo_commit\": " + Detail::JsonString(options.repoCommit) + ",\n";
-    out += "  \"owner_root\": " + Detail::JsonString(owner) + ",\n";
-    out += "  \"include_roots\": [";
-    for (std::size_t i = 0; i < options.includeRoots.size(); ++i) {
-        out += (i == 0 ? "" : ", ") + Detail::JsonString(Detail::Normalize(options.includeRoots[i]));
-    }
-    out += "],\n  \"files\": [";
-    for (std::size_t i = 0; i < files.size(); ++i) {
-        out += (i == 0 ? "\n    " : ",\n    ") + Detail::JsonString(files[i]);
-    }
-    out += files.empty() ? "]\n}\n" : "\n  ]\n}\n";
     return out;
 }
 

@@ -112,7 +112,7 @@ std::unique_ptr<Rig> RestoreRig() {
     auto rig = MakeRig([](Registrar& r) {
         Data(r, true);
         r.AddSystem<&Act>(B("Act", "A"));
-        r.Hook<Tag, &TagAddedReadsPos>(HookTrigger::OnAdd, {.name = "TagAddedReadsPos", .zone = Zone::B});
+        r.Hook<Tag, &TagAddedReadsPos>(HookTrigger::OnAdd, {.name = "TagAddedReadsPos"});
     });
     World& world = rig->world();
     world.SetResource(RangeAllotter::Of(100, 199));

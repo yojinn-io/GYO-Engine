@@ -84,7 +84,6 @@ K::SystemResult Rerun(K::ExclusiveWorld<> world) {
 K::SystemOptions At(std::string name, std::string schedule, std::string stage) {
     K::SystemOptions o;
     o.name = std::move(name);
-    o.zone = K::Zone::B;
     K::Mount m;
     m.schedule = std::move(schedule);
     m.stage = std::move(stage);
@@ -120,9 +119,9 @@ O::RegisteredUnits TimeUnits() {
 
 void LoggingSystems(O::WorldSetup& s) {
     K::Registrar& r = s.Registrar();
-    r.Resource<Gate>({.name = "Gate", .zone = K::Zone::B});
-    r.Resource<FailAt>({.name = "FailAt", .zone = K::Zone::B});
-    r.Resource<Rewind>({.name = "Rewind", .zone = K::Zone::B});
+    r.Resource<Gate>({.name = "Gate"});
+    r.Resource<FailAt>({.name = "FailAt"});
+    r.Resource<Rewind>({.name = "Rewind"});
     r.AddSystem<&LogStep>(At("LogStep", "FixedUpdate", "First"));
     r.AddSystem<&FailAtTick>(At("FailAtTick", "FixedUpdate", "Update"));
     r.AddSystem<&LogFrame>(At("LogFrame", "Main", "Update"));
@@ -618,7 +617,7 @@ TEST_CASE("restore: a remainder saved under a longer step keeps what is below th
         auto build = d.worlds[0].build;
         d.worlds[0].build = [build](O::WorldSetup& s) {
             build(s);
-            s.Registrar().Resource<PutBack>({.name = "PutBack", .zone = K::Zone::B});
+            s.Registrar().Resource<PutBack>({.name = "PutBack"});
             s.Registrar().AddSystem<&PutBackNow>(At("PutBackNow", "Main", "Last"));
         };
         d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {

@@ -672,8 +672,7 @@ public:
 template <>
 struct ParamTraits<Despawn> : Detail::HandleTraits<Despawn, TypeList<Access::Despawn>, false> {};
 
-// Per-mount state outside the World (spec B.1 runtime, B-12). Forbidden in
-// zone C (S-7).
+// Per-mount state outside the World (spec B.1 runtime, B-12).
 template <class T>
 class Local final : Detail::Handle {
     GYO_KERNEL_HANDLE(Local) : Handle(call), value_(Find(call)) {}
@@ -725,7 +724,7 @@ public:
             Detail::AddDiagnostics(*world_, KeyOf<Record>(), std::move(made));
         }
         static_cast<Detail::DiagnosticsBuffer<Record>*>(found)->entries.push_back(
-            typename Detail::DiagnosticsBuffer<Record>::Entry{syncEpoch_, false, std::move(record)});
+            typename Detail::DiagnosticsBuffer<Record>::Entry{syncEpoch_, std::move(record)});
     }
 };
 template <class Record>
@@ -940,8 +939,7 @@ private:
 
 // Untyped access to the whole World: reads and writes every component and
 // resource value (messages are not in it; DI-KS 1) and changes membership and
-// resources now (DI-KS 18; declaration 3.5). Zone B only (S-13, a zone rule at
-// startup); the only parameter (S-10). Conflicts with every System of its
+// resources now (DI-KS 18; declaration 3.5). The only parameter (S-10). Conflicts with every System of its
 // stage. Written ExclusiveWorld<>, or ExclusiveWorld<Writes<R...>> with the
 // optional annotation (one name, v8-arch-gyo2-nested-declaration-approved).
 template <class Declared = Writes<>>

@@ -110,8 +110,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE6: return "D-E6";
     case StartupCode::DE7: return "D-E7";
     case StartupCode::DE14: return "D-E14";
-    case StartupCode::DE15: return "D-E15";
-    case StartupCode::DE16: return "D-E16";
     case StartupCode::DE17: return "D-E17";
     case StartupCode::DE19: return "D-E19";
     case StartupCode::DE20: return "D-E20";
@@ -195,15 +193,6 @@ void RegistryData::Error(StartupCode code, StartupCode step, std::string rule, s
 
 std::string SourceText(const std::source_location& source) {
     return std::string(source.file_name()) + ":" + std::to_string(source.line());
-}
-
-const char* ZoneName(Zone zone) noexcept {
-    switch (zone) {
-    case Zone::Unset: return "unset";
-    case Zone::C: return "C";
-    case Zone::B: return "B";
-    }
-    return "?";
 }
 
 namespace {
@@ -375,7 +364,6 @@ ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOpti
         return existing != nullptr ? existing->id : 0;
     }
     data.components.push_back(ColumnInfo{std::move(options.name), shape.size, shape.align, shape.trivialRelocate,
-                                         options.zone, options.role, options.rollback,
                                          data.OwnerName(owner_)});
     data.columnMakers.push_back(make);
     return id;
@@ -394,8 +382,7 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.resources.push_back(ResourceInfo{std::move(options.name), shape.size, shape.align, options.zone,
-                                          options.role, options.rollback, options.threadBound,
+    data.resources.push_back(ResourceInfo{std::move(options.name), shape.size, shape.align, options.threadBound,
                                           data.OwnerName(owner_)});
     data.resourceMakers.push_back(make);
     return id;
@@ -412,7 +399,7 @@ MessageTypeId Registrar::RegisterMessage(TypeKey key, Shape shape, MessageOption
     // A buffer that keeps nothing would drop every record it is given: a Programmer Error.
     GYO_ASSERT(options.capacity >= 1);
     data.messages.push_back(
-        MessageInfo{std::move(options.name), options.zone, data.OwnerName(owner_), options.capacity, {}, {}});
+        MessageInfo{std::move(options.name), data.OwnerName(owner_), options.capacity, {}, {}});
     data.messageMakers.push_back(make);
     return id;
 }
@@ -425,7 +412,7 @@ EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions opti
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.events.push_back(EventInfo{std::move(options.name), options.zone, data.OwnerName(owner_)});
+    data.events.push_back(EventInfo{std::move(options.name), data.OwnerName(owner_)});
     return id;
 }
 
@@ -443,7 +430,7 @@ void Registrar::RegisterObserver(TypeKey event, ObserverTrigger trigger, TypeKey
             break;
         }
     }
-    data.observers.push_back(Detail::ObserverRecord{std::move(options.name), options.zone, trigger, event, observed, resolve,
+    data.observers.push_back(Detail::ObserverRecord{std::move(options.name), trigger, event, observed, resolve,
                                                     run, source, owner_, std::nullopt, {}});
 }
 
@@ -580,7 +567,7 @@ bool Registrar::RemoveSystem(std::string_view name) {
 void Registrar::RegisterHook(TypeKey component, HookTrigger trigger, HookOptions options, Detail::ResolveFn resolve,
                              Detail::RunFn run, std::source_location source) {
     GYO_ASSERT(data_->building);
-    data_->hooks.push_back(Detail::HookRecord{std::move(options.name), options.zone, component, trigger, resolve, run,
+    data_->hooks.push_back(Detail::HookRecord{std::move(options.name), component, trigger, resolve, run,
                                               source, owner_, std::nullopt, {}});
 }
 
@@ -663,9 +650,6 @@ Fingerprint FrozenRegistry::RegistryFingerprint() const {
     return Detail::RegistryFingerprintOf(*data_);
 }
 
-Fingerprint FrozenRegistry::CFingerprint() const {
-    return Detail::CFingerprintOf(*data_);
-}
 
 // ---- Registry
 
@@ -679,7 +663,7 @@ void AddKernelRegistrations(RegistryData& data) {
     data.types.push_back(TypeEntry{KeyOf<KernelSettings>(), sizeof(KernelSettings), alignof(KernelSettings),
                                    TypeRole::Resource, data.kernelSettings, kKernelOwner});
     data.resources.push_back(ResourceInfo{"KernelSettings", sizeof(KernelSettings), alignof(KernelSettings),
-                                          Zone::B, Role::State, Rollback::No, false, kKernelOwnerName});
+                                          false, kKernelOwnerName});
     data.resourceMakers.push_back(&MakeResource<KernelSettings>);
     data.effects.push_back(EffectRecord{kDiagnosticsEffect, kKernelOwner});
 }
@@ -716,37 +700,7 @@ const FrozenRegistry& Registry::Frozen() const {
 namespace Detail {
 namespace {
 
-// A zone left Unset is zone B. Runs once registration is closed and before
-// every check, so the Plans and the fingerprints see the zone the declaration
-// ends up with. The zone rules are gone (v8-arch-gyo2-authority-rollback step 2);
-// the zone itself stays until step 6 for the C fingerprint, the G-5 export and
-// Z6, which move to the authority Module.
-void ApplyDefaultZones(RegistryData& data) {
-    const auto fill = [](Zone& zone) {
-        if (zone == Zone::Unset) zone = Zone::B;
-    };
-    for (ColumnInfo& info : data.components) fill(info.zone);
-    for (ResourceInfo& info : data.resources) fill(info.zone);
-    for (MessageInfo& info : data.messages) fill(info.zone);
-    for (EventInfo& info : data.events) fill(info.zone);
-    for (SystemRecord& system : data.systems) fill(system.options.zone);
-    for (HookRecord& hook : data.hooks) fill(hook.zone);
-    for (ObserverRecord& observer : data.observers) fill(observer.zone);
-}
-
 void CheckData(RegistryData& data) {
-    for (const ColumnInfo& info : data.components) {
-        if (info.role == Role::Input && info.rollback != Rollback::No) {
-            data.Error(StartupCode::DE7, "Z8", "component '" + info.name + "' has role Input and must not roll back",
-                       {info.name, info.owner});
-        }
-    }
-    for (const ResourceInfo& info : data.resources) {
-        if (info.role == Role::Input && info.rollback != Rollback::No) {
-            data.Error(StartupCode::DE7, "Z8", "resource '" + info.name + "' has role Input and must not roll back",
-                       {info.name, info.owner});
-        }
-    }
     // Allotter.
     data.allotter.reset();
     data.allotterOps = AllotterOps{};
@@ -785,9 +739,9 @@ void CheckData(RegistryData& data) {
 }
 
 // Registrar::InitialValue: resolves the two components of every declaration and
-// leaves the valid ones in (requestId, targetId) order. Who writes a request
-// writes, in effect, its component: Z6 checks that in CheckSystems
-// (FunnelWrites), not here.
+// leaves the valid ones in (requestId, targetId) order. (Who writes a request
+// writes, in effect, its component: the authority Module's Z6 reads that from
+// the read-only registry; the kernel has no writer rule.)
 void CheckInitialValues(RegistryData& data) {
     std::vector<InitialValueRecord> valid;
     for (InitialValueRecord& record : data.initialValues) {
@@ -1089,88 +1043,15 @@ void ResolveSystems(RegistryData& data) {
     }
 }
 
-std::string NameOf(const RegistryData& data, const AccessKey& key) {
-    switch (key.kind) {
-    case AccessKind::Component: return data.components[key.id].name;
-    case AccessKind::Resource: return data.resources[key.id].name;
-    case AccessKind::Message: return data.messages[key.id].name;
-    }
-    return "?";
-}
-
-Rollback RollbackOf(const RegistryData& data, const AccessKey& key) {
-    if (key.kind == AccessKind::Component) return data.components[key.id].rollback;
-    if (key.kind == AccessKind::Resource) return data.resources[key.id].rollback;
-    return Rollback::Yes;
-}
-
-// Every key an access set writes: immediate writes and deferred writes.
-std::vector<AccessKey> WrittenKeys(const AccessSet& access) {
-    std::vector<AccessKey> keys = access.writes;
-    for (ComponentId id : access.deferredWrites) keys.push_back({AccessKind::Component, id});
-    SortUnique(keys);
-    return keys;
-}
-
-// Registrar::InitialValue: the kernel fills a component at the sync point for
-// whoever added a cell of its request, so for Z6 a System or hook writes every
-// component the requests it inserts or spawns fill, through chains of
-// declarations. A write in place or a remove of a request adds no cell and
-// fills nothing, so it does not count. Maps each
-// such component to the request it is filled from; components the access set
-// writes itself are not listed.
-std::map<ComponentId, ComponentId> FunnelWrites(const RegistryData& data, const AccessSet& access) {
-    std::map<ComponentId, ComponentId> reached;
-    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());
-    std::set<ComponentId> seen(pending.begin(), pending.end());
-    while (!pending.empty()) {
-        const ComponentId request = pending.back();
-        pending.pop_back();
-        for (const InitialValueRecord& rule : data.initialValues) {
-            if (rule.requestId != request || !seen.insert(rule.targetId).second) continue;
-            reached.emplace(rule.targetId, request);
-            pending.push_back(rule.targetId);
-        }
-    }
-    for (const AccessKey& key : WrittenKeys(access)) {
-        if (key.kind == AccessKind::Component) reached.erase(key.id);
-    }
-    return reached;
-}
-
-// The access set Z6 checks: access plus the components it fills (FunnelWrites).
-AccessSet FunnelAccess(const AccessSet& access, const std::map<ComponentId, ComponentId>& funnel) {
-    AccessSet out = access;
-    for (const auto& entry : funnel) out.deferredWrites.push_back(entry.first);
-    SortUnique(out.deferredWrites);
-    return out;
-}
-
-// " (filled from 'R' by Registrar::InitialValue)" for a component written only through the funnel.
-std::string FunnelNote(const RegistryData& data, const std::map<ComponentId, ComponentId>& funnel, const AccessKey& key) {
-    if (key.kind != AccessKind::Component) return {};
-    const auto found = funnel.find(key.id);
-    if (found == funnel.end()) return {};
-    return " (filled from '" + data.components[found->second].name + "' by Registrar::InitialValue)";
-}
-
 void CheckSystems(RegistryData& data) {
-    bool anyRollback = false;
-    for (const ScheduleRecord& schedule : data.schedules) anyRollback = anyRollback || schedule.options.rollbackEnabled;
-
     for (const SystemRecord& system : data.systems) {
         if (system.removed) continue;
         const std::string& name = system.options.name;
         const std::string subject = "System '" + name + "'";
         const std::string source = SourceText(system.source);
-        const Zone zone = system.options.zone;
-        const AccessSet& access = system.access;
         if (system.options.mounts.empty()) {
             data.Error(StartupCode::DE1, "B.1", subject + " has no mount, so it never runs", {name}, {source});
         }
-        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);
-        const AccessSet zoneAccess = FunnelAccess(access, funnel);
-
         std::set<std::string> mountedSchedules;
         for (const Mount& mount : system.options.mounts) {
             const ScheduleRecord* record = data.FindSchedule(mount.schedule);
@@ -1190,59 +1071,10 @@ void CheckSystems(RegistryData& data) {
                 data.Error(StartupCode::DE19, "B.1", subject + " is mounted twice in schedule '" + s.name + "'",
                            {name, s.name}, {source});
             }
-            if (system.options.ingress && s.rollbackEnabled && !mount.notInRollback) {
-                data.Error(StartupCode::DE15, "H-10",
-                           subject + " is ingress and its mount in rollback-enabled schedule '" + s.name +
-                               "' lacks NotInRollback",
-                           {name, s.name}, {source});
-            }
             if (system.extractOnly && !s.extract) {
                 data.Error(StartupCode::DE7, "H-6",
                            subject + " has Extract parameters but schedule '" + s.name + "' is not an extract schedule",
                            {name, s.name}, {source});
-            }
-            if (zone == Zone::C && s.rollbackEnabled) {
-                for (const AccessKey& key : WrittenKeys(zoneAccess)) {
-                    if (key.kind == AccessKind::Message) continue;
-                    const Rollback rollback = RollbackOf(data, key);
-                    if (rollback != Rollback::Yes && rollback != Rollback::Derived) {
-                        data.Error(StartupCode::DE7, "Z6",
-                                   subject + " is zone C in rollback-enabled schedule '" + s.name + "' and writes '" +
-                                       NameOf(data, key) + "'" + FunnelNote(data, funnel, key) + ", which does not roll back",
-                                   {name, NameOf(data, key), s.name}, {source});
-                    }
-                }
-            }
-        }
-    }
-    for (const HookRecord& hook : data.hooks) {
-        const std::string subject = "hook '" + hook.name + "'";
-        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, hook.access);
-        const AccessSet zoneAccess = FunnelAccess(hook.access, funnel);
-        if (hook.zone == Zone::C && anyRollback) {
-            for (const AccessKey& key : WrittenKeys(zoneAccess)) {
-                if (key.kind != AccessKind::Message && RollbackOf(data, key) != Rollback::Yes) {
-                    data.Error(StartupCode::DE7, "Z6",
-                               subject + " is zone C and writes '" + NameOf(data, key) + "'" + FunnelNote(data, funnel, key) +
-                                   ", which is not rollback=Yes, in a World with a rollback-enabled schedule",
-                               {hook.name, NameOf(data, key)}, {SourceText(hook.source)});
-                }
-            }
-        }
-    }
-    // An observer's Z6 is a hook's (time-events declaration 4.5).
-    for (const ObserverRecord& observer : data.observers) {
-        const std::string subject = "observer '" + observer.name + "'";
-        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, observer.access);
-        const AccessSet observerZone = FunnelAccess(observer.access, funnel);
-        if (observer.zone == Zone::C && anyRollback) {
-            for (const AccessKey& written : WrittenKeys(observerZone)) {
-                if (written.kind != AccessKind::Message && RollbackOf(data, written) != Rollback::Yes) {
-                    data.Error(StartupCode::DE7, "Z6",
-                               subject + " is zone C and writes '" + NameOf(data, written) + "'" + FunnelNote(data, funnel, written) +
-                                   ", which is not rollback=Yes, in a World with a rollback-enabled schedule",
-                               {observer.name, NameOf(data, written)}, {SourceText(observer.source)});
-                }
             }
         }
     }
@@ -1252,13 +1084,13 @@ void CheckSystems(RegistryData& data) {
 void FillSystemInfos(RegistryData& data) {
     data.systemInfos.clear();
     for (const SystemRecord& system : data.systems) {
-        data.systemInfos.push_back(SystemInfo{system.options.name, system.seq, system.options.zone, system.options.ingress,
+        data.systemInfos.push_back(SystemInfo{system.options.name, system.seq,
                                               system.options.mounts, system.access, SourceText(system.source),
                                               data.OwnerName(system.owner), system.effects, system.removed});
     }
     data.hookInfos.clear();
     for (const HookRecord& hook : data.hooks) {
-        data.hookInfos.push_back(HookInfo{hook.name, hook.trigger, hook.componentId.value_or(0), hook.zone, hook.access,
+        data.hookInfos.push_back(HookInfo{hook.name, hook.trigger, hook.componentId.value_or(0), hook.access,
                                           SourceText(hook.source), data.OwnerName(hook.owner)});
     }
     data.observerInfos.clear();
@@ -1266,7 +1098,7 @@ void FillSystemInfos(RegistryData& data) {
     for (std::size_t o = 0; o < data.observers.size(); ++o) {
         const ObserverRecord& observer = data.observers[o];
         data.observerInfos.push_back(ObserverInfo{observer.name, observer.trigger, observer.observedId.value_or(0),
-                                                  observer.zone, observer.access, SourceText(observer.source),
+                                                  observer.access, SourceText(observer.source),
                                                   data.OwnerName(observer.owner)});
         data.observerOrder.push_back(static_cast<std::uint32_t>(o));
     }
@@ -1361,7 +1193,6 @@ void CheckLaterRound(RegistryData& data) {
 // access sets). Derived
 // fields are cleared and made again (declaration 3.2 rule 2).
 void ResolveStage(RegistryData& data, bool laterRound) {
-    ApplyDefaultZones(data);
     CheckData(data);
     if (laterRound) {
         // Needs hooks' component ids: resolved here first, again by ResolveSystems.

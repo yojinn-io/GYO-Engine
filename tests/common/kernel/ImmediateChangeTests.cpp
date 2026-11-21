@@ -109,14 +109,14 @@ SystemResult BatToBall(HookCtx ctx, Commands commands) {
 // The data of this file, the WorldTest data and Tick (stages A, B, C), an allotter on request.
 void Immediate(Registrar& r, bool allotter = false) {
     Data(r, allotter);
-    r.Component<Hp>({.name = "Hp", .zone = Zone::B});
-    r.Component<Shield>({.name = "Shield", .zone = Zone::B});
-    r.Component<Ball>({.name = "Ball", .zone = Zone::B});
-    r.Component<Bat>({.name = "Bat", .zone = Zone::B});
-    r.Resource<Score>({.name = "Score", .zone = Zone::B});
+    r.Component<Hp>({.name = "Hp"});
+    r.Component<Shield>({.name = "Shield"});
+    r.Component<Ball>({.name = "Ball"});
+    r.Component<Bat>({.name = "Bat"});
+    r.Resource<Score>({.name = "Score"});
     r.InitialValue<Shield, &ShieldFromHp>();
-    r.Hook<Hp, &LogHpAdd>(HookTrigger::OnAdd, {.name = "LogHpAdd", .zone = Zone::B});
-    r.Hook<Hp, &LogHpRemove>(HookTrigger::OnRemove, {.name = "LogHpRemove", .zone = Zone::B});
+    r.Hook<Hp, &LogHpAdd>(HookTrigger::OnAdd, {.name = "LogHpAdd"});
+    r.Hook<Hp, &LogHpRemove>(HookTrigger::OnRemove, {.name = "LogHpRemove"});
 }
 
 std::unique_ptr<Rig> ImmediateRig(std::function<void(Registrar&)> build, bool verification = false) {
@@ -590,8 +590,8 @@ TEST_CASE("DI-KS 18: SetResource and RemoveResource now") {
 TEST_CASE("DI-KS 9: what the hooks of an immediate change record is applied before it returns; this level's records and the hook queue wait") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-        r.Hook<Tag, &LogTagAdd>(HookTrigger::OnAdd, {.name = "LogTagAdd", .zone = Zone::B});
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
+        r.Hook<Tag, &LogTagAdd>(HookTrigger::OnAdd, {.name = "LogTagAdd"});
         // Sync point A: Mode on 80, so its hook records Tag 80 into Tick's hook queue (applied at sync point B).
         r.AddSystem<&SeedMode80>(B("Seed", "A"));
         // Stage B: a record of this level before the Driver (applied at sync point B).
@@ -625,9 +625,9 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
             loop.stages = {"L"};
             loop.hookRoundLimit = 2;
             r.Schedule(loop);
-            r.Hook<Ball, &BallToBat>(HookTrigger::OnAdd, {.name = "BallToBat", .zone = Zone::B});
-            r.Hook<Bat, &BatToBall>(HookTrigger::OnAdd, {.name = "BatToBall", .zone = Zone::B});
-            r.AddSystem<&StartsBall>(Sys("Driver", Zone::B, {At("Loop", "L")}));
+            r.Hook<Ball, &BallToBat>(HookTrigger::OnAdd, {.name = "BallToBat"});
+            r.Hook<Bat, &BatToBall>(HookTrigger::OnAdd, {.name = "BatToBall"});
+            r.AddSystem<&StartsBall>(Sys("Driver", {At("Loop", "L")}));
         });
         rig->world().Insert(1, Hp{1});
         const auto result = rig->Run("Loop");
@@ -646,8 +646,8 @@ TEST_CASE("DI-KS 9: the hook rounds of an immediate change stop at the hook roun
     SUBCASE("KernelSettings' limit when the schedule declares none") {
         auto rig = ImmediateRig([](Registrar& r) {
             Immediate(r);
-            r.Hook<Ball, &BallToBat>(HookTrigger::OnAdd, {.name = "BallToBat", .zone = Zone::B});
-            r.Hook<Bat, &BatToBall>(HookTrigger::OnAdd, {.name = "BatToBall", .zone = Zone::B});
+            r.Hook<Ball, &BallToBat>(HookTrigger::OnAdd, {.name = "BallToBat"});
+            r.Hook<Bat, &BatToBall>(HookTrigger::OnAdd, {.name = "BatToBall"});
             r.AddSystem<&StartsBall>(B("Driver", "A"));
         });
         rig->world().Insert(1, Hp{1});
@@ -687,8 +687,8 @@ TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive spawns not
 TEST_CASE("DI-KS 18: an exception that leaves an immediate change interrupts the World; caught by the System, ImmediateChangeAborted is reported once") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-        r.Hook<Mode, &ModeThrows>(HookTrigger::OnAdd, {.name = "ModeThrows", .zone = Zone::B});
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
+        r.Hook<Mode, &ModeThrows>(HookTrigger::OnAdd, {.name = "ModeThrows"});
         r.AddSystem<&CatchesThenChanges>(B("Driver", "A"));
         r.AddSystem<&LogsLater>(B("Later", "B"));
     });
@@ -727,7 +727,7 @@ TEST_CASE("DI-KS 18: an immediate change through a hook's ExclusiveWorld<> is Ho
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
         // OnRemove of a despawn: the hook runs before the entity's cells go, so no membership has changed yet.
-        r.Hook<Tag, &HookInsertsNow>(HookTrigger::OnRemove, {.name = "HookInsertsNow", .zone = Zone::B});
+        r.Hook<Tag, &HookInsertsNow>(HookTrigger::OnRemove, {.name = "HookInsertsNow"});
         r.AddSystem<&DespawnSix>(B("Leave", "A"));
     });
     rig->world().Insert(6, Tag{6});
@@ -745,7 +745,7 @@ TEST_CASE("DI-KS 18: a hook's Err inside an immediate change interrupts the Worl
     SUBCASE("a hook the change itself runs") {
         auto rig = ImmediateRig([](Registrar& r) {
             Immediate(r);
-            r.Hook<Mode, &ModeFails>(HookTrigger::OnAdd, {.name = "ModeFails", .zone = Zone::B});
+            r.Hook<Mode, &ModeFails>(HookTrigger::OnAdd, {.name = "ModeFails"});
             r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A"));
         });
         rig->world().Insert(1, Pos{1});
@@ -762,8 +762,8 @@ TEST_CASE("DI-KS 18: a hook's Err inside an immediate change interrupts the Worl
     SUBCASE("a hook a round runs") {
         auto rig = ImmediateRig([](Registrar& r) {
             Immediate(r);
-            r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-            r.Hook<Tag, &TagFails>(HookTrigger::OnAdd, {.name = "TagFails", .zone = Zone::B});
+            r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
+            r.Hook<Tag, &TagFails>(HookTrigger::OnAdd, {.name = "TagFails"});
             r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A"));
         });
         rig->world().Insert(1, Pos{1});
@@ -807,7 +807,7 @@ TEST_CASE("DI-KS 18: after an immediate change returns, a System of the same sta
 TEST_CASE("DI-KS 18: a hook an immediate change runs sees the World Applying (F-5)") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
-        r.Hook<Mode, &LogsState>(HookTrigger::OnAdd, {.name = "LogsState", .zone = Zone::B});
+        r.Hook<Mode, &LogsState>(HookTrigger::OnAdd, {.name = "LogsState"});
         r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A"));
     });
     rig->world().Insert(1, Pos{1});
@@ -818,7 +818,7 @@ TEST_CASE("DI-KS 18: a hook an immediate change runs sees the World Applying (F-
 TEST_CASE("DI-KS 19: after an immediate change, a hook of a later sync point records into the schedule's hook queue again") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
         r.AddSystem<&InsertsModeDropsErr>(B("Driver", "A", {"Seed"}));
         r.AddSystem<&SeedMode80>(B("Seed", "A"));
         r.AddSystem<&SeesTag80>(B("InB", "B"));
@@ -838,10 +838,10 @@ TEST_CASE("DI-KS 18: an immediate change by an exclusive System of a nested sche
         inner.name = "Inner";
         inner.stages = {"I1", "I2"};
         r.Schedule(inner);
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
         // Stage I1 changes membership at its sync point, so the inner level's baseline is not the outer level's.
-        r.AddSystem<&SeedMode80>(Sys("InnerSeed", Zone::B, {At("Inner", "I1")}));
-        r.AddSystem<&InnerInserts>(Sys("Inner", Zone::B, {At("Inner", "I2")}));
+        r.AddSystem<&SeedMode80>(Sys("InnerSeed", {At("Inner", "I1")}));
+        r.AddSystem<&InnerInserts>(Sys("Inner", {At("Inner", "I2")}));
         r.AddSystem<&OuterRunsInner>(B("Outer", "A"));
     });
     rig->world().Insert(1, Pos{1});
@@ -928,7 +928,7 @@ TEST_CASE("DI-KS 18: a nested schedule run after an immediate change sees it") {
         outer.name = "Outer";
         outer.stages = {"O"};
         r.Schedule(outer);
-        r.AddSystem<&SpawnThenRunTick>(Sys("Driver", Zone::B, {At("Outer", "O")}));
+        r.AddSystem<&SpawnThenRunTick>(Sys("Driver", {At("Outer", "O")}));
         r.AddSystem<&LookFor70>(B("Look", "A"));
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run("Outer"));
@@ -940,9 +940,9 @@ TEST_CASE("DI-KS 18: a nested schedule run after an immediate change sees it") {
 TEST_CASE("DI-KS 18: verification on: immediate changes and the hooks they run are not reported; the System's writes around them neither") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
-        r.Hook<Mode, &ModePings>(HookTrigger::OnAdd, {.name = "ModePings", .zone = Zone::B});
+        r.Hook<Mode, &ModePings>(HookTrigger::OnAdd, {.name = "ModePings"});
         // A hook round too, so the handle is used after the World's sync epoch moved (W-4).
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
         r.AddSystem<&WriteThenChange>(B("Driver", "A"));
         r.AddSystem<&HoldsPings>(B("HoldsPings", "A", {"Driver"}));
     }, true);
@@ -1005,7 +1005,7 @@ TEST_CASE("DI-KS 9: Commands::SetResource and RemoveResource are applied at the 
 TEST_CASE("DI-KS 9: a hook's Commands::SetResource goes into the hook queue: applied at the next sync point") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
-        r.Hook<Mode, &ModeSetsOut>(HookTrigger::OnAdd, {.name = "ModeSetsOut", .zone = Zone::B});
+        r.Hook<Mode, &ModeSetsOut>(HookTrigger::OnAdd, {.name = "ModeSetsOut"});
         r.AddSystem<&SeedMode80>(B("Seed", "A"));
         r.AddSystem<&ReadsOutIn>(B("InB", "B"));
         r.AddSystem<&ReadsOutIn>(B("InC", "C"));
@@ -1017,8 +1017,8 @@ TEST_CASE("DI-KS 9: a hook's Commands::SetResource goes into the hook queue: app
 TEST_CASE("J-59: verification on: a write the System does not declare, made before ExclusiveWorld::Trigger, is reported first; no observer runs") {
     auto rig = ImmediateRig([](Registrar& r) {
         Immediate(r);
-        r.Event<Knocked>({.name = "Knocked", .zone = Zone::B});
-        r.Observer<Knocked, &LogKnock>({.name = "log-knock", .zone = Zone::B});
+        r.Event<Knocked>({.name = "Knocked"});
+        r.Observer<Knocked, &LogKnock>({.name = "log-knock"});
         r.AddSystem<&SendsPing>(B("SendsPing", "A"));
         r.AddSystem<&TamperPingThenTrigger>(B("Driver", "B"));
     }, true);

@@ -191,8 +191,8 @@ TEST_CASE("J-36: a reader whose schedule did not run reads what was written mean
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.Schedule(SpawnerSchedule());
-        r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", Zone::B, {At("Spawner", "S")}));
-        r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag", .zone = Zone::B});
+        r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", {At("Spawner", "S")}));
+        r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag"});
         r.AddSystem<&Reader>(B("Reader", "A"));
     });
     Log().clear();
@@ -210,8 +210,8 @@ TEST_CASE("J-36: a reader that has never run holds nothing back; when it first r
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.Schedule(SpawnerSchedule());
-            r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", Zone::B, {At("Spawner", "S")}));
-            r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag", .zone = Zone::B});
+            r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", {At("Spawner", "S")}));
+            r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag"});
             r.AddSystem<&Reader>(B("Reader", "A"));
         });
         Log().clear();
@@ -317,7 +317,7 @@ TEST_CASE("J-36: Read twice in one call gives the same records; the cursor moves
 TEST_CASE("J-36: a write to a full buffer drops the oldest record; one DroppedMessages per message type per Run") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
+        r.Message<Beep>({.name = "Beep", .capacity = 3});
         r.AddSystem<&BeepReader>(B("BeepReader", "A"));
         r.AddSystem<&WriteFiveBeepsOnSecondRun>(B("WriteBeeps", "B"));
     });
@@ -342,7 +342,7 @@ TEST_CASE("J-36: a write to a full buffer drops the oldest record; one DroppedMe
 TEST_CASE("J-36: drops in one Run make one record; a reader that has read a dropped record is not listed") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
+        r.Message<Beep>({.name = "Beep", .capacity = 3});
         r.AddSystem<&WriteThreeBeeps>(B("WriteThree", "A"));
         r.AddSystem<&BeepReader>(B("BeepReader", "B"));
         r.AddSystem<&WriteOneBeep>(B("WriteOne", "C"));
@@ -366,7 +366,7 @@ TEST_CASE("J-36: drops in one Run make one record; a reader that has read a drop
 TEST_CASE("J-36: the Registry lists each message type's capacity and its readers (DI-KS 25)") {
     const Built built = Finish({{"test", [](Registrar& r) {
                                      Data(r);
-                                     r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
+                                     r.Message<Beep>({.name = "Beep", .capacity = 3});
                                      r.AddSystem<&WriteEveryRun>(B("Write", "A"));
                                      SystemOptions reader = B("Reader", "B");
                                      reader.mounts[0].conditions = {Condition<&HasPings>("HasPings")};
@@ -390,7 +390,7 @@ TEST_CASE("J-36: the Registry lists each message type's capacity and its readers
 TEST_CASE("J-36: the Registry lists each message type's writers: System mounts, then hooks") {
     const Built built = Finish({{"test", [](Registrar& r) {
                                      Data(r);
-                                     r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode", .zone = Zone::B});
+                                     r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode"});
                                      r.AddSystem<&WriteEveryRun>(B("Write", "A"));
                                      r.AddSystem<&Reader>(B("Reader", "B"));
                                  }}});
@@ -410,8 +410,8 @@ TEST_CASE("J-36: the records are trimmed when the outermost Run ends, after the 
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.AddSystem<&SpawnTagEachRun>(B("SpawnTagEachRun", "C"));
-        r.Hook<Tag, &TagAddsMode>(HookTrigger::OnAdd, {.name = "TagAddsMode", .zone = Zone::B});
-        r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode", .zone = Zone::B});
+        r.Hook<Tag, &TagAddsMode>(HookTrigger::OnAdd, {.name = "TagAddsMode"});
+        r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode"});
         SystemOptions reader = B("Reader", "A");
         reader.mounts[0].conditions = {Condition<&FlagOn>("FlagOn")};
         r.AddSystem<&Reader>(std::move(reader));
@@ -474,27 +474,19 @@ TEST_CASE("J-36: the World summary holds the message cursors and the write seque
     CHECK_MESSAGE(summary(writerOnly, 2) != summary(writesTwice, 2), "[msg-summary-seq] the write sequence is not in the summary");
 }
 
-TEST_CASE("J-18: a message type's capacity changes the Registry fingerprint and, for a zone C type, the C fingerprint") {
-    const auto build = [](Zone zone, std::uint32_t capacity) {
-        return Finish({{"test", [zone, capacity](Registrar& r) {
+TEST_CASE("J-18: a message type's capacity changes the Registry fingerprint") {
+    const auto build = [](std::uint32_t capacity) {
+        return Finish({{"test", [capacity](Registrar& r) {
                             Data(r);
-                            r.Message<Beep>({.name = "Beep", .zone = zone, .capacity = capacity});
+                            r.Message<Beep>({.name = "Beep", .capacity = capacity});
                         }}});
     };
-    const Built b3 = build(Zone::B, 3);
-    const Built b4 = build(Zone::B, 4);
-    const Built c3 = build(Zone::C, 3);
-    const Built c4 = build(Zone::C, 4);
+    const Built b3 = build(3);
+    const Built b4 = build(4);
     KERNEL_REQUIRE_OK(b3);
     KERNEL_REQUIRE_OK(b4);
-    KERNEL_REQUIRE_OK(c3);
-    KERNEL_REQUIRE_OK(c4);
     CHECK_MESSAGE(b3.registry->Frozen().RegistryFingerprint() != b4.registry->Frozen().RegistryFingerprint(),
                   "[msg-capacity-registry-fp] the capacity is not in the Registry fingerprint");
-    // A zone B type is not in the C fingerprint at all.
-    CHECK(b3.registry->Frozen().CFingerprint() == b4.registry->Frozen().CFingerprint());
-    CHECK_MESSAGE(c3.registry->Frozen().CFingerprint() != c4.registry->Frozen().CFingerprint(),
-                  "[msg-capacity-c-fp] a zone C type's capacity is not in the C fingerprint");
 }
 
 // ---- Step 7: the cases the adversarial check of the mutant list found missing
@@ -528,7 +520,7 @@ TEST_CASE("J-36: the Registry's readers: a named set's run condition; two Messag
 TEST_CASE("J-36: a message type's capacity is at least 1: 0 is a Programmer Error at registration") {
     GYO_CHECK_ASSERTS(Finish({{"test", [](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 0});
+        r.Message<Beep>({.name = "Beep", .capacity = 0});
     }}}));
 }
 

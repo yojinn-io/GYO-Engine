@@ -5,8 +5,8 @@ docs/architecture/plans/kernel/j17-scanner.zh-Hant.md, the list contract in
 docs/architecture/zone-c-sources.zh-Hant.md, whose format the authority Module now exports under the name
 gyo.authority-sources; v8-arch-gyo2-authority-rollback step 5).
 
-Input: a list file (format "gyo.authority-sources", version 1; the kernel's "gyo.zone-c-sources" is read too
-until step 6) naming the .cpp files of one owner that contain Systems writing decision data. Every listed file is scanned, and so is every header it reaches through
+Input: a list file (format "gyo.authority-sources", version 1; the kernel's former "gyo.zone-c-sources" is
+refused since the kernel's export left, v8-arch-gyo2-authority-rollback step 6) naming the .cpp files of one owner that contain Systems writing decision data. Every listed file is scanned, and so is every header it reaches through
 quoted includes that resolve under the list's owner_root (transitive, each file once). Angle-bracket
 includes are never expanded.
 
@@ -49,9 +49,6 @@ from collections import deque
 from pathlib import Path, PurePosixPath
 
 FORMAT = "gyo.authority-sources"
-# The kernel's export of the same list under its old name (v8-arch-gyo2-authority-rollback step 5); it goes with the
-# kernel's export in step 6.
-FORMATS = (FORMAT, "gyo.zone-c-sources")
 SUPPORTED_VERSIONS = (1,)
 LIST_FIELDS = ("format", "version", "generated_by", "repo_commit", "owner_root", "include_roots", "files")
 SOURCE_SUFFIXES = (".cpp", ".cc", ".cxx")
@@ -523,7 +520,7 @@ def load_list(path, root):
         raise ContractError(f"list: cannot read {path} ({error})")
     if not isinstance(data, dict):
         raise ContractError(f"list: {path} is not a JSON object")
-    if data.get("format") not in FORMATS:
+    if data.get("format") != FORMAT:
         raise ContractError(f"list: unknown format {data.get('format')!r} in {path} (expected {FORMAT!r})")
     version = data.get("version")
     if not isinstance(version, int) or isinstance(version, bool) or version not in SUPPORTED_VERSIONS:

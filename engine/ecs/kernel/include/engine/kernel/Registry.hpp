@@ -107,20 +107,13 @@ struct Mount {
     std::vector<std::string> after;
     std::vector<std::string> sets;
     std::vector<ConditionRef> conditions;
-    // The kernel's NotInRollback condition (spec H-10, D-E15): skipped during
-    // Replay. Its run-time half arrives with rollback-extract.
-    bool notInRollback = false;
 };
 
 struct SystemOptions {
     std::string name;
-    Zone zone = Zone::Unset;
-    // Zone B only: may write role=Input (c) data, in the ingress stage (Z3).
-    bool ingress = false;
     // Effect names registered with Registrar::Effect. "Diagnostics" cannot be
     // written here; it comes only from DiagnosticsWriter<T> (spec S-8).
     std::vector<std::string> effects;
-    bool rollbackSafe = false;
     std::vector<Mount> mounts;
 };
 
@@ -131,7 +124,6 @@ enum class HookTrigger : std::uint8_t {
 
 struct HookOptions {
     std::string name;
-    Zone zone = Zone::Unset;
 };
 
 enum class StagePlace : std::uint8_t {
@@ -313,11 +305,9 @@ public:
     // ComponentId gives the value; a Request that appears through a chain is
     // looked at in the next round, after the direct ones.
     //
-    // Zone rules: a System or hook that inserts or spawns Request writes Target,
-    // through chains of declarations, for Z1, Z2, Z3 and Z6 (not for the writer
-    // count), so the funnel allows what a direct write allows. Writing Request
-    // in place or removing it fills nothing and does not count. A zone C Target takes its
-    // value from a zone C Request only (Z1).
+    // The kernel counts it as nobody's write (no writer rules); a Module that
+    // looks at what writes what (the authority Module's checks) reads the
+    // declarations from the read-only registry (InitialValues).
     template <class Target, auto Fn>
     void InitialValue(std::source_location source = std::source_location::current()) {
         using Signature = Detail::InitialValueRequest<Target, decltype(Fn)>;
@@ -451,9 +441,6 @@ struct ColumnInfo {
     std::size_t size;
     std::size_t align;
     bool trivialRelocate;
-    Zone zone;
-    Role role;
-    Rollback rollback;
     std::string owner;
 };
 
@@ -461,9 +448,6 @@ struct ResourceInfo {
     std::string name;
     std::size_t size;
     std::size_t align;
-    Zone zone;
-    Role role;
-    Rollback rollback;
     bool threadBound;
     std::string owner;
 };
@@ -498,7 +482,6 @@ struct MessageWriterInfo {
 
 struct MessageInfo {
     std::string name;
-    Zone zone;
     std::string owner;
     std::uint32_t capacity = 1024;
     // Derived at every BuildPlans: every reader, by (registrationSeq, mount,
@@ -513,7 +496,6 @@ struct MessageInfo {
 // One pushed event type (Registrar::Event).
 struct EventInfo {
     std::string name;
-    Zone zone;
     std::string owner;
 };
 
@@ -524,7 +506,6 @@ struct ObserverInfo {
     std::string name;
     ObserverTrigger trigger;
     std::uint32_t id;
-    Zone zone;
     AccessSet access;
     std::string source;
     std::string owner;
@@ -533,8 +514,6 @@ struct ObserverInfo {
 struct SystemInfo {
     std::string name;
     RegistrationSeq registrationSeq;
-    Zone zone;
-    bool ingress;
     std::vector<Mount> mounts;
     AccessSet access;
     // "file:line" of the registration (spec B.1 source).
@@ -552,7 +531,6 @@ struct HookInfo {
     std::string name;
     HookTrigger trigger;
     ComponentId component;
-    Zone zone;
     AccessSet access;
     std::string source;
     std::string owner;
@@ -605,7 +583,7 @@ struct OrderEdge {
 };
 
 // One conflicting pair with no order path that the Scheduler ordered by
-// registration (spec D.2 step 10), zone C or not: listed at diagnostic level.
+// registration (spec D.2 step 10): listed at diagnostic level.
 // There is no ambiguity error (v8-arch-gyo2-no-ambiguity-detection): a Serial
 // schedule runs the two in some order anyway, and the kernel does not promise
 // a result that is the same in every registration order (DI-KS 5).
@@ -613,16 +591,6 @@ struct TieBreak {
     std::string schedule;
     std::string first;
     std::string second;
-};
-
-// Spec G-5 export (docs/architecture/zone-c-sources.zh-Hant.md, gyo.zone-c-sources v1).
-struct ZoneCSourcesOptions {
-    // Absolute path of the repository root; registration sites are made
-    // relative to it.
-    std::string repositoryRoot;
-    std::string ownerRoot;
-    std::vector<std::string> includeRoots;
-    std::string repoCommit;
 };
 
 // The read-only, versioned view of a Registry (DI-KS 25). The object itself
@@ -669,8 +637,8 @@ public:
     [[nodiscard]] std::span<const SetInfo> Sets() const noexcept;
     // The resolved order of one schedule, System to System, each edge with its
     // source, in (first, second) registrationSeq order; empty for an unknown
-    // schedule. The order D-E16 reads; a rollback Module reads it instead of
-    // resolving the order rules again.
+    // schedule. A rollback Module reads it (its Derived order check, R-7) instead
+    // of resolving the order rules again.
     [[nodiscard]] std::span<const OrderEdge> OrderGraph(std::string_view schedule) const noexcept;
     // Members of a named set (spec S13), in registration order of the members.
     [[nodiscard]] std::vector<ComponentId> SetMembers(SetId set) const;
@@ -678,18 +646,10 @@ public:
     // Fingerprints (spec C.2 point 5, H-4, J-18, J-20). Each carries its
     // format version; see Fingerprint.cpp for the exact bytes hashed.
     [[nodiscard]] Fingerprint RegistryFingerprint() const;
-    // Only the zone C part (spec H.3: two Products share one FixedUpdate when their
-    // cFingerprints match).
-    [[nodiscard]] Fingerprint CFingerprint() const;
 
     // Text report of every Plan (Plan.hpp ExportPlans).
     [[nodiscard]] std::string ExportPlans() const;
 
-    // Spec G-5: the source files of zone C Systems as gyo.zone-c-sources v1
-    // JSON. Err when a registration site is outside repositoryRoot or
-    // ownerRoot, so the list never names a file the scanner cannot read.
-    [[nodiscard]] ::Engine::Base::Result<std::string, KernelError> ExportZoneCSources(
-        const ZoneCSourcesOptions& options) const;
 
 private:
     friend class Registry;

@@ -22,11 +22,11 @@ std::vector<Mount> Simulate() { return {At("FixedUpdate", "Simulate")}; }
 } // namespace
 
 TEST_CASE("J-14: DiagnosticsWriter passes; hand-written Diagnostics fails") {
-    Built diagnostics = FinishOne([](Registrar& r) { r.AddSystem<&TracePos>(Sys("TracePos", Zone::C, Simulate())); });
+    Built diagnostics = FinishOne([](Registrar& r) { r.AddSystem<&TracePos>(Sys("TracePos", Simulate())); });
     KERNEL_REQUIRE_OK(diagnostics);
     CHECK(diagnostics.registry->Frozen().SystemNamed("TracePos")->access.diagnostics);
     Built handWritten = FinishOne([](Registrar& r) {
-        SystemOptions o = Sys("ReadPos", Zone::C, Simulate());
+        SystemOptions o = Sys("ReadPos", Simulate());
         o.effects = {"Diagnostics"};
         r.AddSystem<&ReadPos>(o);
     });
@@ -35,7 +35,7 @@ TEST_CASE("J-14: DiagnosticsWriter passes; hand-written Diagnostics fails") {
 
 TEST_CASE("J-37: a message is used in any schedule") {
     Built otherSchedule = FinishOne([](Registrar& r) {
-        r.AddSystem<&ReadEvent>(Sys("ReadEvent", Zone::B, {At("Update", "First")}));
+        r.AddSystem<&ReadEvent>(Sys("ReadEvent", {At("Update", "First")}));
     });
     KERNEL_REQUIRE_OK(otherSchedule);
     Built oneOff = FinishOne([](Registrar& r) {
@@ -43,13 +43,13 @@ TEST_CASE("J-37: a message is used in any schedule") {
         s.name = "FixedLate";
         s.stages = {"Late"};
         r.Schedule(s);
-        r.AddSystem<&WriteEvent>(Sys("WriteEvent", Zone::C, {At("FixedLate", "Late")}));
+        r.AddSystem<&WriteEvent>(Sys("WriteEvent", {At("FixedLate", "Late")}));
     });
     KERNEL_REQUIRE_OK(oneOff);
     Built inClock = FinishOne([](Registrar& r) {
-        r.AddSystem<&WriteEvent>(Sys("WriteEvent", Zone::C, Simulate()));
-        r.AddSystem<&ReadEvent>(Sys("ReadEvent", Zone::C, {At("FixedUpdate", "Present")}));
-        r.AddSystem<&ReadFrameEvent>(Sys("ReadFrameEvent", Zone::B, {At("Update", "First")}));
+        r.AddSystem<&WriteEvent>(Sys("WriteEvent", Simulate()));
+        r.AddSystem<&ReadEvent>(Sys("ReadEvent", {At("FixedUpdate", "Present")}));
+        r.AddSystem<&ReadFrameEvent>(Sys("ReadFrameEvent", {At("Update", "First")}));
     });
     KERNEL_REQUIRE_OK(inClock);
 }
@@ -63,10 +63,10 @@ TEST_CASE("J-47: two plugins add to one named set; SetRead reads both; removing 
         r.Schedule(FixedSchedule());
     };
     const auto other = [](Registrar& r) {
-        r.Component<TestDerived>({.name = "TestDerived", .zone = Zone::C, .rollback = Rollback::Yes});
+        r.Component<TestDerived>({.name = "TestDerived"});
         r.AddToSet<ReplicatedSet, TestDerived>();
     };
-    const auto reader = [](Registrar& r) { r.AddSystem<&ReadSet>(Sys("ReadSet", Zone::C, Simulate())); };
+    const auto reader = [](Registrar& r) { r.AddSystem<&ReadSet>(Sys("ReadSet", Simulate())); };
     Built both = Finish({{"owner", owner}, {"other", other}, {"reader", reader}});
     KERNEL_REQUIRE_OK(both);
     const SystemInfo* info = both.registry->Frozen().SystemNamed("ReadSet");

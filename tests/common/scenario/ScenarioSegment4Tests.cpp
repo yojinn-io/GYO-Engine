@@ -71,7 +71,6 @@ K::SystemResult CountLobby(K::ResMut<LobbyFrames> frames) {
 K::SystemOptions Update(std::string name) {
     K::SystemOptions o;
     o.name = std::move(name);
-    o.zone = K::Zone::B;
     K::Mount m;
     m.schedule = "Main";
     m.stage = "Update";
@@ -85,7 +84,7 @@ std::unique_ptr<O::Product> Make(Breaker breaker) {
     O::WorldDescription lobby;
     lobby.name = "Lobby";
     lobby.build = [](O::WorldSetup& s) {
-        s.Registrar().Resource<LobbyFrames>({.name = "LobbyFrames", .zone = K::Zone::B});
+        s.Registrar().Resource<LobbyFrames>({.name = "LobbyFrames"});
         s.Registrar().AddSystem<&CountLobby>(Update("CountLobby"));
     };
     lobby.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
@@ -96,8 +95,8 @@ std::unique_ptr<O::Product> Make(Breaker breaker) {
     O::WorldDescription match;
     match.name = "Match";
     match.build = [](O::WorldSetup& s) {
-        s.Registrar().Resource<RacerState>({.name = "RacerState", .zone = K::Zone::B});
-        s.Registrar().Resource<Breaker>({.name = "Breaker", .zone = K::Zone::B});
+        s.Registrar().Resource<RacerState>({.name = "RacerState"});
+        s.Registrar().Resource<Breaker>({.name = "Breaker"});
         s.Registrar().AddSystem<&MoveRacer>(Update("MoveRacer"));
     };
     match.prepare.push_back([breaker](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {

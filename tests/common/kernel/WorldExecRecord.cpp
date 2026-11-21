@@ -65,7 +65,7 @@ SystemResult ChurnSystem(SpawnWithId<Bundle<Col<0>, Col<1>, Col<2>, Col<3>, Col<
 
 template <int I>
 void RegisterColumn(Registrar& r) {
-    r.Component<Col<I>>({.name = "Col" + std::to_string(I), .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Component<Col<I>>({.name = "Col" + std::to_string(I)});
 }
 
 void Columns(Registrar& r) {
@@ -89,7 +89,6 @@ ScheduleOptions Schedule(int stages) {
 SystemOptions Opt(std::string name, std::string stage) {
     SystemOptions o;
     o.name = std::move(name);
-    o.zone = Zone::C;
     Mount m;
     m.schedule = "Tick";
     m.stage = std::move(stage);
@@ -110,7 +109,7 @@ void AddEmpties(Registrar& r, std::integer_sequence<int, I...>) {
 // mode 0: 20 empty Systems + churn; 1: no System (4 stages); 2: 16 empty stages; 3: churn only.
 void Build(Registrar& r, int mode) {
     Columns(r);
-    r.Resource<Churn>({.name = "Churn", .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Resource<Churn>({.name = "Churn"});
     if (mode == 2) {
         r.Schedule(Schedule(16));
         return;
