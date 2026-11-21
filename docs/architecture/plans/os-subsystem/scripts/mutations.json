@@ -76,15 +76,18 @@
       "id": "os-g6-stale",
       "what": "An allowlist entry stays larger after a site moved",
       "file": "tests/common/os/os_boundary_allowlist.txt",
-      "find": "engine/core/time/src/Waiter.cpp R1 3 ",
-      "replace": "engine/core/time/src/Waiter.cpp R1 4 ",
+      "find": "tests/common/threads/RoleThreadTests.cpp R2 4 ",
+      "replace": "tests/common/threads/RoleThreadTests.cpp R2 5 ",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
         "--root",
         "."
       ],
-      "expect": "Waiter\\.cpp R1 has 3 findings, allowlisted 4; shrink the allowlist"
+      "expect": "RoleThreadTests\\.cpp R2 has 4 findings, allowlisted 5; shrink the allowlist",
+      "guards": [
+        "os 1"
+      ]
     },
     {
       "id": "os-g7-public-header",
@@ -102,13 +105,16 @@
     },
     {
       "id": "os-g8-link",
-      "what": "gyo_os links a module above it (Invariant 3, configure-time check)",
+      "what": "gyo_os gains a hand-written Engine link (GYO::Math), Invariant 3, configure-time link check. Only it shows the check of gyo_os's link set catching an extra Engine link written in os's own CMakeLists.txt; os-g19-links-from-later-directory adds one from a later directory (the deferred check), a Windows system library is os-g18-windows-extra-link (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
+      "guards": [
+        "os 3"
+      ],
       "file": "engine/core/os/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_os PUBLIC GYO::Base)",
-      "replace": "target_link_libraries(gyo_os PUBLIC GYO::Base GYO::Time)",
+      "find": "target_link_libraries(gyo_os PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_os PUBLIC GYO::Base GYO::Math)\n",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
-      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base"
+      "expect": "gyo_os\\s+links\\s+GYO::Base;GYO::Math;(?:Threads::Threads|shell32);\\s+expected\\s+exactly\\s+GYO::Base;(?:Threads::Threads|shell32)"
     },
     {
       "id": "os-g9-macro-list",
@@ -509,23 +515,29 @@
     },
     {
       "id": "os-g13-definition-name",
-      "what": "A non-os target gets an OS-identifying compile definition (Invariant 1, configure-time check)",
-      "file": "engine/CMakeLists.txt",
-      "find": "target_compile_features(engine PUBLIC cxx_std_20)\n",
-      "replace": "target_compile_features(engine PUBLIC cxx_std_20)\ntarget_compile_definitions(engine PRIVATE GYO_ENGINE_POSIX=1)\n",
-      "target": "gyo_os_tests",
+      "what": "A non-os target gets an OS-identifying compile definition (Invariant 1, configure-time check): the name branch of the OS definition guard, on a target. os-g14-definition-platform-id is the $<PLATFORM_ID> branch, on a directory (rewritten by v8-arch-gyo2-stale-mutants: the engine target and its engine/CMakeLists.txt lines it mutated are gone since the gyo2 rebuild; the Modules are under engine/<layer>/ since #257)",
+      "guards": [
+        "os 1"
+      ],
+      "file": "engine/core/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base)\ntarget_compile_definitions(gyo_time PRIVATE GYO_ENGINE_POSIX=1)\n",
+      "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "OS definition guard:\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_ENGINE_POSIX=1'"
+      "expect": "OS\\s+definition\\s+guard:\\s+gyo_time\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_ENGINE_POSIX=1'"
     },
     {
       "id": "os-g14-definition-platform-id",
-      "what": "A directory defines a macro only on one OS through $<PLATFORM_ID> (Invariant 1, configure-time check)",
+      "what": "A directory defines a macro only on one OS through $<PLATFORM_ID> (Invariant 1, configure-time check): the PLATFORM_ID branch of the OS definition guard, on a directory. The platform is SunOS and the name GYO_FAST_PATH, so no part of the entry matches the OS name list and only the PLATFORM_ID branch can catch it (with Windows, ':WINDOWS>' matched the name list and the branch could be deleted unseen; adversarial check of v8-arch-gyo2-stale-mutants) (rewritten by v8-arch-gyo2-stale-mutants: engine/CMakeLists.txt no longer has add_subdirectory(base); it adds the Modules from the register since #257)",
+      "guards": [
+        "os 1"
+      ],
       "file": "engine/CMakeLists.txt",
-      "find": "add_subdirectory(base)\n",
-      "replace": "add_compile_definitions($<$<PLATFORM_ID:Windows>:GYO_FAST_PATH>)\nadd_subdirectory(base)\n",
+      "find": "get_property(_gyo_units GLOBAL PROPERTY GYO_UNITS_ORDER)\n",
+      "replace": "add_compile_definitions($<$<PLATFORM_ID:SunOS>:GYO_FAST_PATH>)\nget_property(_gyo_units GLOBAL PROPERTY GYO_UNITS_ORDER)\n",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
-      "expect": "OS definition guard:\\s+directory\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'\\$<\\$<PLATFORM_ID:Windows>:GYO_FAST_PATH>'"
+      "expect": "OS\\s+definition\\s+guard:\\s+directory\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'\\$<\\$<PLATFORM_ID:SunOS>:GYO_FAST_PATH>'"
     },
     {
       "id": "os-g15-runtime-roots",
@@ -1542,23 +1554,29 @@
     },
     {
       "id": "ti-x1-time-links-more",
-      "what": "gyo_time links another module (time.md Invariant 10, configure-time check)",
+      "what": "gyo_time gains a hand-written Engine link (GYO::Math), time.md Invariant 10, configure-time link check. Only it catches gyo_time's link set changed in time's own CMakeLists.txt; ti-x5-links-from-later-directory changes it from a later directory (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
+      "guards": [
+        "time 10"
+      ],
       "file": "engine/core/time/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base PRIVATE Threads::Threads)",
-      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math PRIVATE Threads::Threads)",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time links .*expected exactly\\s+GYO::Base;Threads::Threads"
+      "expect": "gyo_time\\s+links\\s+GYO::Base;GYO::Math;GYO::Os;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Os"
     },
     {
       "id": "ti-x2-threads-links-more",
-      "what": "gyo_threads links another module (threads.md Invariant 9, configure-time check)",
+      "what": "gyo_threads gains a hand-written Engine link (GYO::Math), threads.md Invariant 9, configure-time link check. Only it catches gyo_threads's link set; th-x1-threads-os-public moves a link without adding one (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
+      "guards": [
+        "threads 9"
+      ],
       "file": "engine/core/threads/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math Threads::Threads PRIVATE GYO::Os)",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::Os)\n",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math PRIVATE GYO::Os)\n",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
-      "expect": "gyo_threads links .*expected\\s+exactly\\s+GYO::Os;GYO::Time;Threads::Threads"
+      "expect": "gyo_threads\\s+links\\s+GYO::Math;GYO::Os;GYO::Time;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Os;GYO::Time;Threads::Threads"
     },
     {
       "id": "ti-x3-backend-name-changed",
@@ -1780,17 +1798,20 @@
     },
     {
       "id": "th-x1-threads-os-public",
-      "what": "gyo_threads links GYO::Os publicly, so its users get engine/os headers (threads.md Invariant 9, configure-time check)",
+      "what": "gyo_threads links GYO::Os publicly instead of privately, so its users get engine/os headers (threads.md Invariant 9, configure-time check). The link set is unchanged, so only the interface check catches it (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
+      "guards": [
+        "threads 9"
+      ],
       "file": "engine/core/threads/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads GYO::Os)",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::Os)\n",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Os)\n",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
-      "expect": "gyo_threads exposes GYO::Os to its users"
+      "expect": "gyo_threads\\s+exposes\\s+GYO::Os\\s+to\\s+its\\s+users"
     },
     {
       "id": "th-x2-os-without-thread-library",
-      "what": "gyo_os drops the thread library it names threads with (os.md Invariant 3, configure-time check)",
+      "what": "gyo_os drops the thread library it names threads with and the wait fallback uses (os.md Invariant 3, configure-time check)",
       "platforms": [
         "darwin",
         "linux"
@@ -1800,7 +1821,10 @@
       "replace": "",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
-      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base;Threads::Threads"
+      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base;Threads::Threads",
+      "guards": [
+        "os 3"
+      ]
     },
     {
       "id": "th-x3-windows-name-byte-widened",
@@ -1876,6 +1900,371 @@
       "target": "gyo_os_tests",
       "cases": "*a role's priority*",
       "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
+    },
+    {
+      "id": "os-g19-links-from-later-directory",
+      "what": "A directory configured after tests/common/os (tests/common/audio) links GYO::Time into gyo_os (Invariant 3): only the DEFER of gyo_expect_os_links sees a link added later from another directory; every other link mutant edits engine/ or config/modules.csv, which configure first, and O6 scans only engine/. It is also the one way left to link a module above gyo_os, since the register refuses time on the os row as coming later. The \\S* allows CMake's directory scope markers that a link from another directory adds (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "os 3"
+      ],
+      "file": "tests/common/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_os PRIVATE GYO::Time)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_os\\s+links\\s+\\S*GYO::Base;GYO::Time;(?:Threads::Threads|shell32);\\s+expected\\s+exactly\\s+GYO::Base;(?:Threads::Threads|shell32)"
+    },
+    {
+      "id": "ti-x5-links-from-later-directory",
+      "what": "A directory configured after tests/common/time (tests/common/audio) links GYO::Math into gyo_time (time.md Invariant 10): only the DEFER of gyo_expect_time_and_thread_links (one call serves gyo_time and gyo_threads) sees a link added later from another directory; ti-x1 and ti-x2 edit config/modules.csv, which configures first (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "time 10",
+        "threads 9"
+      ],
+      "file": "tests/common/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_time PRIVATE GYO::Math)\n",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_time\\s+links\\s+\\S*GYO::Base;GYO::Math;GYO::Os;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Os"
+    },
+    {
+      "id": "os-g20-definition-from-later-directory",
+      "what": "A test target in a directory configured after tests/common/os (gyo_audio_tests) gets an OS-identifying compile definition (Invariant 1): only the DEFER of gyo_expect_no_os_definitions sees a target defined after tests/common/os, and it is the only mutant under the tests root (so it also catches the exemption tests/common/os widened to tests); os-g13 and os-g14 edit engine/, which configures first (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "os 1"
+      ],
+      "file": "tests/common/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_compile_definitions(gyo_audio_tests PRIVATE GYO_TEST_LINUX=1)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "OS\\s+definition\\s+guard:\\s+gyo_audio_tests\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_TEST_LINUX=1'"
+    },
+    {
+      "id": "os-g21-definition-option",
+      "what": "A non-os target gets an OS-identifying macro through a -D compile option, not a compile definition (Invariant 1): only it reaches the COMPILE_OPTIONS branch of the OS definition guard (the -D/ /D parse and the option properties); os-g13 and os-g14 go through COMPILE_DEFINITIONS (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "os 1"
+      ],
+      "file": "engine/core/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base)\ntarget_compile_options(gyo_time PRIVATE -DGYO_LINUX=1)\n",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "OS\\s+definition\\s+guard:\\s+gyo_time\\s+COMPILE_OPTIONS\\s+has\\s+'-DGYO_LINUX=1'"
+    },
+    {
+      "id": "ow-x1-fallback-pending-outside-mutex",
+      "what": "The fallback's Block reads its pending flag before taking its mutex, so a signal between the read and the wait is lost (os.md Invariant 8) (v8-arch-gyo2-os-wait; only it catches: the only check of the fallback's mutex discipline: a signal racing the check is lost (a timing race; the deterministic ow-x11 cannot show it))",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        std::unique_lock lock(mutex);\n        if (!pending) {",
+      "replace": "        const bool signalled = pending;\n        std::unique_lock lock(mutex);\n        if (!signalled) {",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*loses no signal*",
+      "timeout": 300,
+      "expect": "a signal sent while the waiter checked its flag was lost"
+    },
+    {
+      "id": "ow-x2-time-os-public",
+      "what": "gyo_time links GYO::Os publicly, so its users get engine/os headers (time.md Invariant 10, configure-time check) (v8-arch-gyo2-os-wait; only it catches: the only check that gyo_time keeps engine/os out of its interface)",
+      "guards": [
+        "time 10"
+      ],
+      "file": "engine/core/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Os)",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_time exposes GYO::Os to its users"
+    },
+    {
+      "id": "ow-x3-kqueue-signal-dropped",
+      "what": "The kqueue Signal registers the user event without triggering it (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS Signal triggers the user event)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "EV_SET(&change, UserIdent, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);",
+      "replace": "EV_SET(&change, UserIdent, EVFILT_USER, 0, 0, 0, nullptr);",
+      "target": "gyo_os_tests",
+      "cases": "*stays pending*",
+      "expect": "a signal sent before the block did not end it"
+    },
+    {
+      "id": "ow-x4-kqueue-timer-not-armed",
+      "what": "The kqueue Block never arms its one-shot timer, so a timeout does not end it (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS Block arms its timer)",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "            changes = 1;",
+      "replace": "            changes = 0;",
+      "target": "gyo_os_tests",
+      "cases": "*relative timeout*",
+      "expect": "a block with a 20 ms timeout did not end by it"
+    },
+    {
+      "id": "ow-x7-backend-mapping-shifted",
+      "what": "The Waiter reports another backend than the engine/os mechanism (time.md Invariant 7) (v8-arch-gyo2-os-wait; only it catches: the only check of the Waiter's mapping from the os mechanism to its backend names)",
+      "guards": [
+        "time 7"
+      ],
+      "file": "engine/core/time/src/Waiter.cpp",
+      "find": "    return static_cast<WaitBackend>(mechanism);",
+      "replace": "    return static_cast<WaitBackend>((static_cast<int>(mechanism) + 2) % 4);",
+      "target": "gyo_time_tests",
+      "cases": "*reports the os mechanism*",
+      "expect": "CHECK\\( waiter\\.Backend\\(\\) == expected \\) is NOT correct"
+    },
+    {
+      "id": "ow-x8-kqueue-mechanism-misreported",
+      "what": "The kqueue signal reports the condition-variable mechanism (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS source reports its own mechanism)",
+      "guards": [
+        "time 7"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "    return WaitMechanism::Kqueue;",
+      "replace": "    return WaitMechanism::ConditionVariable;",
+      "target": "gyo_os_tests",
+      "cases": "*platform mechanism*",
+      "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::Kqueue \\) is NOT correct"
+    },
+    {
+      "id": "ow-x9-kqueue-timeout-armed-for-nothing",
+      "what": "The kqueue Block arms its timer for 1 ns whatever the timeout, so every block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS timer waits for the timeout (a Waiter would spin))",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "            const auto nanoseconds = std::max<std::int64_t>(1, timeout->count());",
+      "replace": "            const auto nanoseconds = std::int64_t{1};",
+      "target": "gyo_os_tests",
+      "cases": "*relative timeout*",
+      "expect": "no block with a 20 ms timeout waited for it"
+    },
+    {
+      "id": "ow-x11-fallback-signal-not-pending",
+      "what": "The fallback's Signal notifies without setting its pending flag, so a signal sent before the block is lost (os.md Invariant 8) (v8-arch-gyo2-os-wait; only it catches: the only deterministic check that the fallback keeps a signal sent before the block)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "            pending = true;\n",
+      "replace": "",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*stays pending*",
+      "expect": "a signal sent before the block did not end it"
+    },
+    {
+      "id": "ow-x12-fallback-pending-never-consumed",
+      "what": "The fallback's Block leaves its pending flag set, so every later block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the only check that the fallback consumes its pending signal (a Waiter would spin; WaiterTests absorbs it))",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        }\n        pending = false;\n",
+      "replace": "        }\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*consumed signal*",
+      "expect": "a signal already consumed ended the next block"
+    },
+    {
+      "id": "ow-x13-kqueue-user-event-not-cleared",
+      "what": "The kqueue user event is registered without EV_CLEAR, so it stays triggered and every later block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS user event is consumed (a Waiter would spin; WaiterTests absorbs it))",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);",
+      "replace": "EVFILT_USER, EV_ADD, 0, 0, nullptr);",
+      "target": "gyo_os_tests",
+      "cases": "*consumed signal*",
+      "expect": "a signal already consumed ended the next block"
+    },
+    {
+      "id": "ow-x14-apple-selects-fallback",
+      "what": "The build selects the fallback source on Apple instead of the kqueue one (v8-arch-gyo2-os-wait; only it catches: the only check of the build's per-platform source selection)",
+      "guards": [
+        "time 7"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/CMakeLists.txt",
+      "find": "        target_sources(gyo_os PRIVATE src/macos/WakeSignal.cpp)",
+      "replace": "        target_sources(gyo_os PRIVATE src/linux/WakeSignal.cpp)",
+      "target": "gyo_os_tests",
+      "cases": "*platform mechanism*",
+      "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::Kqueue \\) is NOT correct"
+    },
+    {
+      "id": "ow-x15-fallback-mechanism-misreported",
+      "what": "The fallback reports the kqueue mechanism (v8-arch-gyo2-os-wait; only it catches: the only check that the fallback reports its own mechanism)",
+      "guards": [
+        "time 7"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "    return WaitMechanism::ConditionVariable;",
+      "replace": "    return WaitMechanism::Kqueue;",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*platform mechanism*",
+      "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::ConditionVariable \\) is NOT correct"
+    },
+    {
+      "id": "ow-x16-fallback-pending-cleared-on-entry-only",
+      "what": "The fallback's Block clears its pending flag only when it finds it on entry, so a signal that ended a wait also ends the next block (v8-arch-gyo2-os-wait; only it catches: a block ended by a signal leaving that signal pending, which ow-x12 does not reach since the flag is still cleared on entry)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        if (!pending) {\n            if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n            else condition.wait(lock);\n        }\n        pending = false;\n",
+      "replace": "        if (pending) {\n            pending = false;\n            return;\n        }\n        if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n        else condition.wait(lock);\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*ended a block does not end*",
+      "expect": "a signal that ended a block also ended the next one"
+    },
+    {
+      "id": "ow-x17-fallback-untimed-block-returns",
+      "what": "The fallback's Block without a timeout returns at once, so every untimed Waiter::Wait spins (v8-arch-gyo2-os-wait; only it catches: an untimed block that does not wait, which the Waiter's loop absorbs)",
+      "guards": [
+        "os 8",
+        "time 6"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "            else condition.wait(lock);\n",
+      "replace": "",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*without a timeout ends only*",
+      "expect": "a block without a timeout returned without a signal"
+    },
+    {
+      "id": "ow-x18-kqueue-timer-not-oneshot",
+      "what": "The kqueue timer is armed without EV_ONESHOT, so it keeps firing and later untimed blocks wake every period (v8-arch-gyo2-os-wait; only it catches: a periodic timer left behind a timed block)",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "EVFILT_TIMER, EV_ADD | EV_ONESHOT,",
+      "replace": "EVFILT_TIMER, EV_ADD,",
+      "target": "gyo_os_tests",
+      "cases": "*without a timeout ends only*",
+      "expect": "a block without a timeout returned without a signal"
+    },
+    {
+      "id": "ow-x19-fallback-signal-without-mutex",
+      "what": "The fallback's Signal sets its pending flag without the mutex, so a signal between the waiter's check and its wait is lost (v8-arch-gyo2-os-wait; only it catches: the signalling side of the mutex discipline, where ow-x1 breaks the waiting side)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        {\n            const std::lock_guard lock(mutex);\n            pending = true;\n        }\n",
+      "replace": "        pending = true;\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*loses no signal*",
+      "timeout": 300,
+      "expect": "a signal sent while the waiter checked its flag was lost"
+    },
+    {
+      "id": "ow-x20-fallback-signal-not-notified",
+      "what": "The fallback's Signal sets its flag but never notifies, so a block in progress is not woken (v8-arch-gyo2-os-wait; only it catches: a signal that reaches a later block but not the one in progress)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        condition.notify_one();\n",
+      "replace": "",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*ends a block on a signal from another thread*",
+      "timeout": 120,
+      "expect": "the signal from another thread did not end the block"
+    },
+    {
+      "id": "ow-x21-fallback-timeout-ignored",
+      "what": "The fallback's Block ignores its timeout and waits for a signal only (v8-arch-gyo2-os-wait; only it catches: the fallback's timeout, which ow-x4 checks for kqueue only)",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "            if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n            else condition.wait(lock);\n",
+      "replace": "            static_cast<void>(timeout);\n            condition.wait(lock);\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*relative timeout*",
+      "expect": "a block with a 20 ms timeout did not end by it"
+    },
+    {
+      "id": "ow-x22-fallback-timeout-for-nothing",
+      "what": "The fallback's Block waits 1 ns whatever the timeout, so every block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the fallback's timeout length, which ow-x9 checks for kqueue only)",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "condition.wait_for(lock, *timeout)",
+      "replace": "condition.wait_for(lock, std::chrono::nanoseconds(1))",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*relative timeout*",
+      "expect": "no block with a 20 ms timeout waited for it"
     }
   ]
 }
