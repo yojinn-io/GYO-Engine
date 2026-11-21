@@ -1,5 +1,8 @@
+# GYO::Os: the backend test compares the Waiter with the engine/os mechanism.
+# Threads::Threads: the tests start threads of their own.
+find_package(Threads REQUIRED)
 add_executable(gyo_time_tests WaiterTests.cpp)
-target_link_libraries(gyo_time_tests PRIVATE GYO::Time gyo_test_support doctest::doctest)
+target_link_libraries(gyo_time_tests PRIVATE GYO::Time GYO::Os Threads::Threads gyo_test_support doctest::doctest)
 add_test(NAME gyo_time_tests COMMAND gyo_time_tests)
 set_tests_properties(gyo_time_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
@@ -7,11 +10,11 @@ set_tests_properties(gyo_time_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 # engine Waiter against condition_variable and sleep_until, in a process without
 # a window. Deliberately not a CTest.
 add_executable(gyo_time_wake_record WakeRecord.cpp)
-target_link_libraries(gyo_time_wake_record PRIVATE GYO::Time)
+target_link_libraries(gyo_time_wake_record PRIVATE GYO::Time Threads::Threads)
 
 # The time base and role threads stay leaves above GYO::Base: their links,
 # private and interface alike, are exactly these, so no SDL or engine library
-# edge appears. Checked once the whole project is configured, so an edge added
+# edge appears beyond engine/os, which they reach privately. Checked once the whole project is configured, so an edge added
 # later from another directory is seen too.
 function(gyo_expect_links target)
     get_target_property(own ${target} LINK_LIBRARIES)
@@ -34,7 +37,14 @@ function(gyo_expect_links target)
     endif()
 endfunction()
 function(gyo_expect_time_and_thread_links)
-    gyo_expect_links(gyo_time GYO::Base Threads::Threads)
+    # The time base reaches the platform wait mechanism through engine/os
+    # (v8-arch-gyo2-os-wait), privately: what links GYO::Time gets no engine/os
+    # headers from it (time.md Invariant 10).
+    gyo_expect_links(gyo_time GYO::Base GYO::Os)
+    get_target_property(time_interface gyo_time INTERFACE_LINK_LIBRARIES)
+    if("GYO::Os" IN_LIST time_interface)
+        message(FATAL_ERROR "gyo_time exposes GYO::Os to its users; link it PRIVATE")
+    endif()
     # The role threads name and prioritize themselves through engine/os
     # (os-threads-backend, D69), privately: what links GYO::Threads gets no
     # engine/os headers from it.

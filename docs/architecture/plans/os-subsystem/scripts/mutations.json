@@ -76,15 +76,15 @@
       "id": "os-g6-stale",
       "what": "An allowlist entry stays larger after a site moved",
       "file": "tests/common/os/os_boundary_allowlist.txt",
-      "find": "engine/core/time/src/Waiter.cpp R1 3 ",
-      "replace": "engine/core/time/src/Waiter.cpp R1 4 ",
+      "find": "tests/common/threads/RoleThreadTests.cpp R2 4 ",
+      "replace": "tests/common/threads/RoleThreadTests.cpp R2 5 ",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
         "--root",
         "."
       ],
-      "expect": "Waiter\\.cpp R1 has 3 findings, allowlisted 4; shrink the allowlist"
+      "expect": "RoleThreadTests\\.cpp R2 has 4 findings, allowlisted 5; shrink the allowlist"
     },
     {
       "id": "os-g7-public-header",
@@ -1560,7 +1560,7 @@
       "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time\\s+links\\s+GYO::Base;GYO::Math;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Base;Threads::Threads"
+      "expect": "gyo_time\\s+links\\s+GYO::Base;GYO::Math;GYO::Os;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Os"
     },
     {
       "id": "ti-x2-threads-links-more",
@@ -1808,7 +1808,7 @@
     },
     {
       "id": "th-x2-os-without-thread-library",
-      "what": "gyo_os drops the thread library it names threads with (os.md Invariant 3, configure-time check)",
+      "what": "gyo_os drops the thread library it names threads with and the wait fallback uses (os.md Invariant 3, configure-time check)",
       "platforms": [
         "darwin",
         "linux"
@@ -1920,7 +1920,7 @@
       "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_time PRIVATE GYO::Math)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time\\s+links\\s+\\S*GYO::Base;GYO::Math;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Base;Threads::Threads"
+      "expect": "gyo_time\\s+links\\s+\\S*GYO::Base;GYO::Math;GYO::Os;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Os"
     },
     {
       "id": "os-g20-definition-from-later-directory",
@@ -1947,6 +1947,197 @@
       "target": "gyo_time_tests",
       "expect_build_failure": true,
       "expect": "OS\\s+definition\\s+guard:\\s+gyo_time\\s+COMPILE_OPTIONS\\s+has\\s+'-DGYO_LINUX=1'"
+    },
+    {
+      "id": "ow-x1-fallback-pending-outside-mutex",
+      "what": "The fallback's Block reads its pending flag before taking its mutex, so a signal between the read and the wait is lost (os.md Invariant 8) (v8-arch-gyo2-os-wait; only it catches: the only check of the fallback's mutex discipline: a signal racing the check is lost (a timing race; the deterministic ow-x11 cannot show it))",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        std::unique_lock lock(mutex);\n        if (!pending) {",
+      "replace": "        const bool signalled = pending;\n        std::unique_lock lock(mutex);\n        if (!signalled) {",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*loses no signal*",
+      "timeout": 300,
+      "expect": "a signal sent while the waiter checked its flag was lost"
+    },
+    {
+      "id": "ow-x2-time-os-public",
+      "what": "gyo_time links GYO::Os publicly, so its users get engine/os headers (time.md Invariant 10, configure-time check) (v8-arch-gyo2-os-wait; only it catches: the only check that gyo_time keeps engine/os out of its interface)",
+      "guards": [
+        "time 10"
+      ],
+      "file": "engine/core/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Os)",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_time exposes GYO::Os to its users"
+    },
+    {
+      "id": "ow-x3-kqueue-signal-dropped",
+      "what": "The kqueue Signal registers the user event without triggering it (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS Signal triggers the user event)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "EV_SET(&change, UserIdent, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);",
+      "replace": "EV_SET(&change, UserIdent, EVFILT_USER, 0, 0, 0, nullptr);",
+      "target": "gyo_os_tests",
+      "cases": "*stays pending*",
+      "expect": "a signal sent before the block did not end it"
+    },
+    {
+      "id": "ow-x4-kqueue-timer-not-armed",
+      "what": "The kqueue Block never arms its one-shot timer, so a timeout does not end it (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS Block arms its timer)",
+      "guards": [
+        "time 5"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "            changes = 1;",
+      "replace": "            changes = 0;",
+      "target": "gyo_os_tests",
+      "cases": "*relative timeout*",
+      "expect": "a block with a 20 ms timeout did not end by it"
+    },
+    {
+      "id": "ow-x7-backend-mapping-shifted",
+      "what": "The Waiter reports another backend than the engine/os mechanism (time.md Invariant 7) (v8-arch-gyo2-os-wait; only it catches: the only check of the Waiter's mapping from the os mechanism to its backend names)",
+      "guards": [
+        "time 7"
+      ],
+      "file": "engine/core/time/src/Waiter.cpp",
+      "find": "    return static_cast<WaitBackend>(mechanism);",
+      "replace": "    return static_cast<WaitBackend>((static_cast<int>(mechanism) + 2) % 4);",
+      "target": "gyo_time_tests",
+      "cases": "*reports the os mechanism*",
+      "expect": "CHECK\\( waiter\\.Backend\\(\\) == expected \\) is NOT correct"
+    },
+    {
+      "id": "ow-x8-kqueue-mechanism-misreported",
+      "what": "The kqueue signal reports the condition-variable mechanism (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS source reports its own mechanism)",
+      "guards": [
+        "time 7"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "    return WaitMechanism::Kqueue;",
+      "replace": "    return WaitMechanism::ConditionVariable;",
+      "target": "gyo_os_tests",
+      "cases": "*platform mechanism*",
+      "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::Kqueue \\) is NOT correct"
+    },
+    {
+      "id": "ow-x9-kqueue-timeout-armed-for-nothing",
+      "what": "The kqueue Block arms its timer for 1 ns whatever the timeout, so every block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS timer waits for the timeout (a Waiter would spin))",
+      "guards": [
+        "time 5"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "            const auto nanoseconds = std::max<std::int64_t>(1, timeout->count());",
+      "replace": "            const auto nanoseconds = std::int64_t{1};",
+      "target": "gyo_os_tests",
+      "cases": "*relative timeout*",
+      "expect": "no block with a 20 ms timeout waited for it"
+    },
+    {
+      "id": "ow-x11-fallback-signal-not-pending",
+      "what": "The fallback's Signal notifies without setting its pending flag, so a signal sent before the block is lost (os.md Invariant 8) (v8-arch-gyo2-os-wait; only it catches: the only deterministic check that the fallback keeps a signal sent before the block)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "            pending = true;\n",
+      "replace": "",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*stays pending*",
+      "expect": "a signal sent before the block did not end it"
+    },
+    {
+      "id": "ow-x12-fallback-pending-never-consumed",
+      "what": "The fallback's Block leaves its pending flag set, so every later block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the only check that the fallback consumes its pending signal (a Waiter would spin; WaiterTests absorbs it))",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        }\n        pending = false;\n",
+      "replace": "        }\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*consumed signal*",
+      "expect": "a signal already consumed ended the next block"
+    },
+    {
+      "id": "ow-x13-kqueue-user-event-not-cleared",
+      "what": "The kqueue user event is registered without EV_CLEAR, so it stays triggered and every later block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS user event is consumed (a Waiter would spin; WaiterTests absorbs it))",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);",
+      "replace": "EVFILT_USER, EV_ADD, 0, 0, nullptr);",
+      "target": "gyo_os_tests",
+      "cases": "*consumed signal*",
+      "expect": "a signal already consumed ended the next block"
+    },
+    {
+      "id": "ow-x14-apple-selects-fallback",
+      "what": "The build selects the fallback source on Apple instead of the kqueue one (v8-arch-gyo2-os-wait; only it catches: the only check of the build's per-platform source selection)",
+      "guards": [
+        "time 7"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/CMakeLists.txt",
+      "find": "        target_sources(gyo_os PRIVATE src/macos/WakeSignal.cpp)",
+      "replace": "        target_sources(gyo_os PRIVATE src/linux/WakeSignal.cpp)",
+      "target": "gyo_os_tests",
+      "cases": "*platform mechanism*",
+      "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::Kqueue \\) is NOT correct"
+    },
+    {
+      "id": "ow-x15-fallback-mechanism-misreported",
+      "what": "The fallback reports the kqueue mechanism (v8-arch-gyo2-os-wait; only it catches: the only check that the fallback reports its own mechanism)",
+      "guards": [
+        "time 7"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "    return WaitMechanism::ConditionVariable;",
+      "replace": "    return WaitMechanism::Kqueue;",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*platform mechanism*",
+      "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::ConditionVariable \\) is NOT correct"
     }
   ]
 }

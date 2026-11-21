@@ -34,11 +34,11 @@ primitives here.
 | Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
-| Wait | The wake primitive behind `Time::Waiter` | os-wait-backend: frozen (its Windows timing L2 failed; withdrawn, D78). The wait backends stay in engine/time's `Waiter.cpp`, an allowlisted site |
+| Wait | The wake primitive behind `Time::Waiter` (`WakeSignal`: `Create`, `Signal`, `Block`, `Mechanism`) | v8-arch-gyo2-os-wait (landed; the user's owner decision of 2026-11-21 lifted the D78 freeze, and the batch was accepted by CI L1, the guards and mutants instead of the Wait timing L2) |
 | Net (conditional) | Neutral classification of socket error codes | os-net-errors: not started (no observed pressure, D78); the classification stays with the product |
 
 Only the components whose batch has landed exist. A frozen or not-started component comes back only with observed
-pressure or a Feature that needs it (Replacement Criterion 9).
+pressure, a Feature that needs it, or the user's owner decision (Replacement Criterion 9).
 
 ## Contracts
 
@@ -209,6 +209,20 @@ pressure or a Feature that needs it (Replacement Criterion 9).
     as user-interactive), Windows thread priorities (below normal, normal, above normal), Linux only Background as
     nice 10, which fails if the process already runs nicer. Normal on Linux and other platforms makes no call and
     counts as applied; Interactive on Linux needs privileges and is not tried.
+- **Wait.** `WakeSignal` wakes one blocking thread when another signals it or a relative timeout passes; what a
+  wake means (the latch, the single waiter, deadlines, the re-check of the time base) is engine/time's.
+  - `Signal` (any thread, `noexcept`) leaves one pending signal, kept by the primitive itself; several pending
+    signals end one block. `Block` (the single waiting thread) returns when signalled, when the relative timeout
+    has passed (none: only a signal ends it) or spuriously, and consumes the pending signal when it returns. The
+    caller sets its own state before it signals and re-checks it after every block.
+  - macOS: a kqueue with an `EVFILT_USER` event registered with `EV_CLEAR`, and an `EVFILT_TIMER` one-shot timer
+    armed per block with `NOTE_NSECONDS | NOTE_CRITICAL`. Windows: an auto-reset event and a waitable timer created
+    with `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`, else a plain one (`WaitableTimer`); the timeout is set in 100 ns
+    units rounded up, with a millisecond fallback when the timer cannot be set. Other platforms (Linux): a mutex, a
+    condition variable and a pending flag, set and cleared under the mutex. `Mechanism` reports which.
+  - A primitive the OS refuses is `IoFailed` with the native error. `Block` lets the fallback's
+    `std::system_error` pass through (Invariant 6). A moved-from signal ignores `Signal`; `Block` and `Mechanism`
+    on it are Programmer Errors.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
@@ -257,7 +271,8 @@ deletes its allowlist and no common file changes.
 
 Three configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
 links exactly `GYO::Base` and system libraries Invariant 3 allows: on Windows `shell32` for `CommandLineToArgvW`
-(D49, D50), elsewhere `Threads::Threads` for `pthread_setname_np` (D69); and no target or directory under the scanned roots outside engine/os and
+(D49, D50), elsewhere `Threads::Threads` for `pthread_setname_np` (D69) and the wait fallback's mutex and condition
+variable (v8-arch-gyo2-os-wait); and no target or directory under the scanned roots outside engine/os and
 tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
@@ -326,7 +341,7 @@ Known blind spots, left to review:
    controls.
 3. **engine/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`
    and OS system libraries (`shell32` on Windows; `Threads::Threads` elsewhere, since the thread naming moved in,
-   os-threads-backend, D69). engine/os
+   os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/os
    includes only engine/base, the standard library and OS headers. Its API has no type of a module above it: no
    `Uri`, `IFileSystem` or `IStream`.
 4. **Public headers do not leak the OS.** engine/os/include includes only the standard library and engine/base. A
@@ -340,7 +355,9 @@ Known blind spots, left to review:
    in the fixed form of the Contracts section. A request that only reports whether the platform applied it returns
    `bool` instead (the thread name and priority, `Utf8ConsoleOutput::Applied()`): not being applied is a result,
    not a failure (Invariant 10; D70). No exception crosses the public boundary or an OS callback (signal
-   handler, console control handler). The OS callbacks only write a lock-free atomic (and, on a console close,
+   handler, console control handler), with one exception: `WakeSignal::Block` lets the standard library's
+   `std::system_error` from the fallback's mutex and condition variable pass through, as engine/time's `Waiter`
+   did before the move (as D72 approved for the earlier move). The OS callbacks only write a lock-free atomic (and, on a console close,
    wait) and are `noexcept`, so engine/os needs none of error-handling.md's "Exception at the platform boundary"
    rules (no `catch (...)`, no destructor checking global state); that section's scope stays engine/platform/sdl
    (D49).
@@ -349,8 +366,12 @@ Known blind spots, left to review:
    are decided by the caller.
 8. **State authority** (AGENTS.md §3). engine/os owns only its own OS resources and the shutdown-request flag.
    Queries (executable path, CPU time, file status) read the OS every time; nothing is cached to decide on. The
-   Waiter's latch belongs to Time: engine/os reads it through a reference, under the condition variable's mutex in
-   the fallback backend, and keeps no copy.
+   Waiter's latch belongs to Time; engine/os never reads it. A pending signal is the wake primitive's own state on
+   every platform and is consumed when a block returns (kqueue's user event with `EV_CLEAR`, the Windows auto-reset
+   event, the fallback's flag set and cleared under its mutex). Guards: `WakeSignal`'s API takes no latch; the
+   WakeSignalTests cases "a signal sent before the block stays pending", "a consumed signal does not end the next
+   block" and "loses no signal sent while the waiter checks its flag", with mutants ow-x1, ow-x3, ow-x11, ow-x12
+   and ow-x13.
 9. **Moving a site does not change observable behaviour.** File bytes (CRLF on Windows, append semantics),
    `WaitBackend` strings, name truncation, priority mapping, timeout conversion (100 ns rounding and the
    millisecond fallback on Windows, `NOTE_NSECONDS` on kqueue) and exception specifications stay as they are. The
@@ -375,8 +396,9 @@ Known blind spots, left to review:
 1. A consumer needs engine/os to hand out a native handle (socket, `HANDLE`, file descriptor), or must know which
    OS it is on to use a neutral function correctly: stop adding parameters; propose a native-handle layer or a
    redesign of that component.
-2. Changing any component of engine/os makes it necessary to re-run the Wait timing L2: propose splitting Wait into
-   a component of its own with its own guard and criteria.
+2. A change to the Wait backends changes timing behaviour (another mechanism, another timeout conversion), or a
+   Feature needs a sub-millisecond verdict that CI L1 cannot give: propose splitting Wait into a component of its
+   own with its own timing acceptance, guard and criteria.
 3. Implementing a capability needs engine/os to depend on engine/io, Time, Threads, Trace, SDL, asio or
    `GYO::Engine`: the layering is wrong; stop and let the user decide instead of adding the edge.
 4. A consumer needs asynchronous or event-driven file I/O, directory watching or large directory listings, and the
@@ -402,3 +424,6 @@ Known blind spots, left to review:
    (AGENTS.md §14.4) to be accepted, it is not a pure move: stop, keep the move behaviour-preserving, and hand the
    behaviour change to the product version whose Feature needs it. A component or batch that no observed pressure
    and no Feature needs is not started; OS code outside engine/os moves in only when pressure is observed there.
+   The user's owner decision can also bring a frozen component back; such a batch is accepted as its own declaration
+   says, and the declaration names its ★ items and its test verdict changes (AGENTS.md §14.4). Wait came back this
+   way (v8-arch-gyo2-os-wait, 2026-11-21).
