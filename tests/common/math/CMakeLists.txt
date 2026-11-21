@@ -13,3 +13,9 @@ else()
     target_compile_options(gyo_math_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 add_test(NAME gyo_math_tests COMMAND gyo_math_tests)
+
+# Math links Base only (v8-arch-gyo2-core-not-registered: core's links are written by hand and pinned here).
+function(gyo_expect_math_links)
+    gyo_expect_links(gyo_math GYO::Base)
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_math_links)

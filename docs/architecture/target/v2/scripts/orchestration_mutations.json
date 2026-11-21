@@ -2926,6 +2926,72 @@
    ],
    "expect": "modules\\.csv\\ has\\ a\\ row\\ 'kernel'",
    "timeout": 300
+  },
+  {
+   "id": "cr-base-links-more",
+   "what": "core link set (v8-arch-gyo2-core-not-registered): Base links one more target. Only it reaches gyo_base's link set",
+   "guards": [
+    "orchestration O-6"
+   ],
+   "file": "engine/core/base/CMakeLists.txt",
+   "find": "add_library(GYO::Base ALIAS gyo_base)",
+   "replace": "add_library(GYO::Base ALIAS gyo_base)\ntarget_link_libraries(gyo_base INTERFACE GYO::Math)",
+   "target": "gyo_base_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_base links GYO::Math; expected nothing"
+  },
+  {
+   "id": "cr-math-links-more",
+   "what": "core link set (v8-arch-gyo2-core-not-registered): Math links one more target. Only it reaches gyo_math's link set",
+   "guards": [
+    "orchestration O-6"
+   ],
+   "file": "engine/core/math/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_math INTERFACE GYO::Base)",
+   "replace": "target_link_libraries(gyo_math INTERFACE GYO::Base GYO::Os)",
+   "target": "gyo_math_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_math links GYO::Base;GYO::Os; expected exactly"
+  },
+  {
+   "id": "cr-io-links-more",
+   "what": "core link set (v8-arch-gyo2-core-not-registered): io links one more target. Only it reaches gyo_io's link set",
+   "guards": [
+    "orchestration O-6"
+   ],
+   "file": "engine/core/io/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::Os)",
+   "replace": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::Os GYO::Time)",
+   "target": "engine_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_io links GYO::Base;GYO::Math;GYO::Os;GYO::Time; expected exactly"
+  },
+  {
+   "id": "cr-io-math-public",
+   "what": "core link visibility (v8-arch-gyo2-core-not-registered; io.md: Math and the OS layer private): io links Math publicly. Only it reaches the io INTERFACE check",
+   "guards": [
+    "orchestration O-6"
+   ],
+   "file": "engine/core/io/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::Os)",
+   "replace": "target_link_libraries(gyo_io PUBLIC GYO::Base GYO::Math PRIVATE GYO::Os)",
+   "target": "engine_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_io exposes GYO::Math to its users; link it PRIVATE"
+  },
+  {
+   "id": "wt-links-more",
+   "what": "WT-4 link set (v8-arch-gyo2-core-not-registered): world_time links one more target. Only it reaches gyo_world_time's link set",
+   "guards": [
+    "orchestration O-6",
+    "world-time WT-4"
+   ],
+   "file": "engine/modules/world_time/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_world_time PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Time)",
+   "replace": "target_link_libraries(gyo_world_time PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Time GYO::Math)",
+   "target": "gyo_world_time_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_world_time links\\s+GYO::Base;GYO::Kernel;GYO::Logging;GYO::Math;GYO::Orchestration;GYO::Time;\\s+expected exactly"
   }
  ]
 }
