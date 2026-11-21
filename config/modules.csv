@@ -13,4 +13,5 @@ audio,modules/audio,GYO::Audio,The audio mixer,yes,no,base;time,,,
 logging,modules/logging,GYO::Logging,"Records, the Logger, sinks, the JSON lines format and the fatal path's last write",yes,no,base,json;os;threads;time,,
 trace,modules/trace,GYO::Trace,"Spans: the per-thread stack, parents, timing and the path, written as logging records",yes,no,base,logging;time,,
 world_time,modules/world_time,GYO::WorldTime,"Game time in a World: time Resources, the fixed step, the tick",no,yes,base;kernel;logging;orchestration;time,,GYO::Engine::WorldTime::WorldTimeModule,engine/world_time/WorldTimeModule.hpp
+rollback,modules/rollback,GYO::Rollback,"Putting a World back to an earlier step and running it again: the public registrations and the strategy interface",no,yes,base;kernel;orchestration;world_time,,GYO::Engine::Rollback::RollbackModule,engine/rollback/RollbackModule.hpp
 world_logging,modules/world_logging,GYO::WorldLogging,"The World end of logging: Forward and the Kernel diagnostics a runner takes",yes,no,logging;kernel;orchestration,,,
