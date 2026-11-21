@@ -2,10 +2,10 @@
 #include <doctest/doctest.h>
 
 #include "AssertTestSupport.hpp"
+#include "engine/os/WakeSignal.hpp"
 #include "engine/time/LateWakeStats.hpp"
 #include "engine/time/MonotonicClock.hpp"
 #include "engine/time/Waiter.hpp"
-#include "engine/os/WakeSignal.hpp"
 
 #include <atomic>
 #include <chrono>

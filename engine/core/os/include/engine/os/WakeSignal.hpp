@@ -40,13 +40,17 @@ public:
     // in progress stays pending and ends the next block at once; several
     // pending signals end one block. The pending signal is this primitive's own
     // state on every platform (the kqueue user event, the Windows auto-reset
-    // event, the fallback's flag) and is consumed when a block returns. Must
-    // not race the signal's destruction; on a moved-from signal it does nothing.
+    // event, the fallback's flag): one pending signal ends at most one block,
+    // and one that arrives together with a timeout may be taken by that block
+    // or by the next. Must not race the signal's destruction; on a moved-from
+    // signal it does nothing.
     void Signal() noexcept;
 
     // The single waiting thread. Returns when signalled, when the relative
     // timeout has passed (none: only a signal ends it), or spuriously; the
-    // caller re-checks its own state and its time base. Not noexcept: the
+    // caller re-checks its own state and its time base. A timeout of at most
+    // one hour is supported (engine/time's Waiter never asks for more); far
+    // larger values may overflow the platform conversion. Not noexcept: the
     // fallback lets the standard library's std::system_error pass through
     // (Design Invariant 6).
     void Block(std::optional<std::chrono::nanoseconds> timeout);

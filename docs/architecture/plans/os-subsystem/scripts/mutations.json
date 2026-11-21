@@ -84,7 +84,10 @@
         "--root",
         "."
       ],
-      "expect": "RoleThreadTests\\.cpp R2 has 4 findings, allowlisted 5; shrink the allowlist"
+      "expect": "RoleThreadTests\\.cpp R2 has 4 findings, allowlisted 5; shrink the allowlist",
+      "guards": [
+        "os 1"
+      ]
     },
     {
       "id": "os-g7-public-header",
@@ -1818,7 +1821,10 @@
       "replace": "",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
-      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base;Threads::Threads"
+      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base;Threads::Threads",
+      "guards": [
+        "os 3"
+      ]
     },
     {
       "id": "th-x3-windows-name-byte-widened",
@@ -1999,7 +2005,7 @@
       "id": "ow-x4-kqueue-timer-not-armed",
       "what": "The kqueue Block never arms its one-shot timer, so a timeout does not end it (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS Block arms its timer)",
       "guards": [
-        "time 5"
+        "os 9"
       ],
       "platforms": [
         "darwin"
@@ -2044,7 +2050,7 @@
       "id": "ow-x9-kqueue-timeout-armed-for-nothing",
       "what": "The kqueue Block arms its timer for 1 ns whatever the timeout, so every block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the only check that the macOS timer waits for the timeout (a Waiter would spin))",
       "guards": [
-        "time 5"
+        "os 9"
       ],
       "platforms": [
         "darwin"
@@ -2138,6 +2144,127 @@
       "target": "gyo_os_wake_fallback_tests",
       "cases": "*platform mechanism*",
       "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::ConditionVariable \\) is NOT correct"
+    },
+    {
+      "id": "ow-x16-fallback-pending-cleared-on-entry-only",
+      "what": "The fallback's Block clears its pending flag only when it finds it on entry, so a signal that ended a wait also ends the next block (v8-arch-gyo2-os-wait; only it catches: a block ended by a signal leaving that signal pending, which ow-x12 does not reach since the flag is still cleared on entry)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        if (!pending) {\n            if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n            else condition.wait(lock);\n        }\n        pending = false;\n",
+      "replace": "        if (pending) {\n            pending = false;\n            return;\n        }\n        if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n        else condition.wait(lock);\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*ended a block does not end*",
+      "expect": "a signal that ended a block also ended the next one"
+    },
+    {
+      "id": "ow-x17-fallback-untimed-block-returns",
+      "what": "The fallback's Block without a timeout returns at once, so every untimed Waiter::Wait spins (v8-arch-gyo2-os-wait; only it catches: an untimed block that does not wait, which the Waiter's loop absorbs)",
+      "guards": [
+        "os 8",
+        "time 6"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "            else condition.wait(lock);\n",
+      "replace": "",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*without a timeout ends only*",
+      "expect": "a block without a timeout returned without a signal"
+    },
+    {
+      "id": "ow-x18-kqueue-timer-not-oneshot",
+      "what": "The kqueue timer is armed without EV_ONESHOT, so it keeps firing and later untimed blocks wake every period (v8-arch-gyo2-os-wait; only it catches: a periodic timer left behind a timed block)",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "find": "EVFILT_TIMER, EV_ADD | EV_ONESHOT,",
+      "replace": "EVFILT_TIMER, EV_ADD,",
+      "target": "gyo_os_tests",
+      "cases": "*without a timeout ends only*",
+      "expect": "a block without a timeout returned without a signal"
+    },
+    {
+      "id": "ow-x19-fallback-signal-without-mutex",
+      "what": "The fallback's Signal sets its pending flag without the mutex, so a signal between the waiter's check and its wait is lost (v8-arch-gyo2-os-wait; only it catches: the signalling side of the mutex discipline, where ow-x1 breaks the waiting side)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        {\n            const std::lock_guard lock(mutex);\n            pending = true;\n        }\n",
+      "replace": "        pending = true;\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*loses no signal*",
+      "timeout": 300,
+      "expect": "a signal sent while the waiter checked its flag was lost"
+    },
+    {
+      "id": "ow-x20-fallback-signal-not-notified",
+      "what": "The fallback's Signal sets its flag but never notifies, so a block in progress is not woken (v8-arch-gyo2-os-wait; only it catches: a signal that reaches a later block but not the one in progress)",
+      "guards": [
+        "os 8"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "        condition.notify_one();\n",
+      "replace": "",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*ends a block on a signal from another thread*",
+      "timeout": 120,
+      "expect": "the signal from another thread did not end the block"
+    },
+    {
+      "id": "ow-x21-fallback-timeout-ignored",
+      "what": "The fallback's Block ignores its timeout and waits for a signal only (v8-arch-gyo2-os-wait; only it catches: the fallback's timeout, which ow-x4 checks for kqueue only)",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "            if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n            else condition.wait(lock);\n",
+      "replace": "            static_cast<void>(timeout);\n            condition.wait(lock);\n",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*relative timeout*",
+      "expect": "a block with a 20 ms timeout did not end by it"
+    },
+    {
+      "id": "ow-x22-fallback-timeout-for-nothing",
+      "what": "The fallback's Block waits 1 ns whatever the timeout, so every block ends at once (the Waiter would spin) (v8-arch-gyo2-os-wait; only it catches: the fallback's timeout length, which ow-x9 checks for kqueue only)",
+      "guards": [
+        "os 9"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "find": "condition.wait_for(lock, *timeout)",
+      "replace": "condition.wait_for(lock, std::chrono::nanoseconds(1))",
+      "target": "gyo_os_wake_fallback_tests",
+      "cases": "*relative timeout*",
+      "expect": "no block with a 20 ms timeout waited for it"
     }
   ]
 }

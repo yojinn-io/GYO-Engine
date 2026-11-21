@@ -213,8 +213,10 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
   wake means (the latch, the single waiter, deadlines, the re-check of the time base) is engine/time's.
   - `Signal` (any thread, `noexcept`) leaves one pending signal, kept by the primitive itself; several pending
     signals end one block. `Block` (the single waiting thread) returns when signalled, when the relative timeout
-    has passed (none: only a signal ends it) or spuriously, and consumes the pending signal when it returns. The
-    caller sets its own state before it signals and re-checks it after every block.
+    has passed (none: only a signal ends it) or spuriously. One pending signal ends at most one block; one that
+    arrives together with a timeout may be taken by that block or by the next. The caller sets its own state
+    before it signals and re-checks it after every block. Timeouts up to one hour are supported (the Waiter never
+    asks for more).
   - macOS: a kqueue with an `EVFILT_USER` event registered with `EV_CLEAR`, and an `EVFILT_TIMER` one-shot timer
     armed per block with `NOTE_NSECONDS | NOTE_CRITICAL`. Windows: an auto-reset event and a waitable timer created
     with `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`, else a plain one (`WaitableTimer`); the timeout is set in 100 ns
@@ -367,11 +369,12 @@ Known blind spots, left to review:
 8. **State authority** (AGENTS.md §3). engine/os owns only its own OS resources and the shutdown-request flag.
    Queries (executable path, CPU time, file status) read the OS every time; nothing is cached to decide on. The
    Waiter's latch belongs to Time; engine/os never reads it. A pending signal is the wake primitive's own state on
-   every platform and is consumed when a block returns (kqueue's user event with `EV_CLEAR`, the Windows auto-reset
-   event, the fallback's flag set and cleared under its mutex). Guards: `WakeSignal`'s API takes no latch; the
-   WakeSignalTests cases "a signal sent before the block stays pending", "a consumed signal does not end the next
-   block" and "loses no signal sent while the waiter checks its flag", with mutants ow-x1, ow-x3, ow-x11, ow-x12
-   and ow-x13.
+   every platform and ends at most one block (kqueue's user event with `EV_CLEAR`, the Windows auto-reset event, the
+   fallback's flag set and cleared under its mutex). Guards: `WakeSignal`'s API takes no latch; the WakeSignalTests
+   cases "a signal sent before the block stays pending", "a consumed signal does not end the next block", "a signal
+   that ended a block does not end the next one", "a block without a timeout ends only on a signal" and "loses no
+   signal sent while the waiter checks its flag", with mutants ow-x1, ow-x3, ow-x11, ow-x12, ow-x13 and ow-x16 to
+   ow-x22.
 9. **Moving a site does not change observable behaviour.** File bytes (CRLF on Windows, append semantics),
    `WaitBackend` strings, name truncation, priority mapping, timeout conversion (100 ns rounding and the
    millisecond fallback on Windows, `NOTE_NSECONDS` on kqueue) and exception specifications stay as they are. The

@@ -2,7 +2,8 @@
 # Threads::Threads: the tests start threads of their own.
 find_package(Threads REQUIRED)
 add_executable(gyo_time_tests WaiterTests.cpp)
-target_link_libraries(gyo_time_tests PRIVATE GYO::Time GYO::Os Threads::Threads gyo_test_support doctest::doctest)
+target_link_libraries(gyo_time_tests PRIVATE GYO::Time GYO::Os Threads::Threads gyo_test_support
+    doctest::doctest)
 add_test(NAME gyo_time_tests COMMAND gyo_time_tests)
 set_tests_properties(gyo_time_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 

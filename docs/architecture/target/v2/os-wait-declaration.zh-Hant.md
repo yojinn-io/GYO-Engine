@@ -16,7 +16,8 @@
   - §14.4 補上 Invariant 7 的守衛、以 L1 取代 D71 計時驗收這兩份 1～5（5.3、5.4）；
   - 條文清單補齊（5.1），檔案清單補 hygiene 測試（6.1），和 #260 的交集逐條列出（6.3）。
   檢查報告的全文在本卡的對話裡（未另存），逐條的處理見各節。
-- 修訂 3（這一份）：使用者問「W3 你沒有重別家的源碼裡找到答案嗎？」。修訂 2 之前查別家的源碼只用來回答「怎麼做」，沒有拿來解釋 W3。改用「為什麼只有 window 情境不通過」去查，找到一條有出處的機制，核對 A、B 用的 SDL `release-3.4.0` 後補進 2.2 的 H6、2.3 與 §7（使用者：「那先不管W3，核對 3.4.0 然後補進宣告」）。
+- 修訂 3：使用者問「W3 你沒有重別家的源碼裡找到答案嗎？」。修訂 2 之前查別家的源碼只用來回答「怎麼做」，沒有拿來解釋 W3。改用「為什麼只有 window 情境不通過」去查，找到一條有出處的機制，核對 A、B 用的 SDL `release-3.4.0` 後補進 2.2 的 H6、2.3 與 §7（使用者：「那先不管W3，核對 3.4.0 然後補進宣告」）。
+- 實作後的更正（不改範圍，記在 dev_log 的「審查」節）：審查者指出 5.4 第 4 點的「空轉由測試與突變守」原本只對有逾時的 Block 成立，補了兩個案例與突變之後才成立；不早醒的守衛是 time.md Invariant 2，不是 Invariant 5。6.3 的突變清單照審查加了 ow-x16～ow-x22 與 `tt1-notify-without-signal`。
 
 根據：`docs/architecture/os.md`（Components 的 Wait 列、Design Invariants 6、8、9，Replacement Criteria 2、7、9）、`docs/architecture/time.md`（Design Invariants 5、7、8、10，Replacement Criterion 3）、`docs/architecture/plans/os-subsystem/closeout.md`（第 2、3、5 節）、同目錄 `HANDOFF.md` 的 D71、D72、D74、D78，以及 `docs/dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md` 的 W3 節。舊的搬移在 commit `4041cf42`、`756073aa`（只在備份分支 `os-subsystem-75418486` 上）。
 

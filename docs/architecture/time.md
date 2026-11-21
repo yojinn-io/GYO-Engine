@@ -70,8 +70,10 @@ the main checkout.
 3. **Notifications are latched and coalesce.** One sent before the wait is not lost; several before one wake give one
    wake; concurrent notifiers lose none. Guards: "latches a notification sent before the wait", "coalesces several
    notifications into one wake", "loses no notification under concurrent producers", "wakes on a notification from
-   another thread before a far deadline"; mutants `tt1-notify-dropped`, `tt1-latch-cleared-on-entry`,
-   `tt1-latch-never-consumed`.
+   another thread before a far deadline"; mutants `tt1-notify-dropped`, `tt1-notify-without-signal`,
+   `tt1-latch-cleared-on-entry`, `tt1-latch-never-consumed`. `Notify` sets the latch before it signals, and every
+   platform relies on that order not to lose a notification; no guard checks the order (a swap would only show in
+   a nanosecond-wide window, v8-arch-gyo2-os-wait).
 4. **A passed deadline is reported first.** When the deadline has already passed, the wait reports `Deadline` and
    leaves a pending notification latched, so the next wait returns `Notified` at once. Guards: "returns at once for a
    deadline already passed", "reports a passed deadline first and keeps the notification latched"; mutant

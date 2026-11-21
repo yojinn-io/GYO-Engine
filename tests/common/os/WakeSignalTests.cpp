@@ -6,6 +6,10 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <utility>
@@ -15,9 +19,10 @@
 // Waiter. As the Waiter does, a test that waits for a signal sets its own flag
 // before it signals and re-checks the flag after every block, since a block may
 // also end spuriously. The primitive never sees that flag: it keeps its own
-// pending signal. Every block that a broken mechanism could leave waiting has a
-// timeout or a rescue, so the failure is a check that fails with its time, not
-// a hang.
+// pending signal. A block with a timeout that a broken mechanism could leave
+// waiting has a rescue, so the failure is a check that fails with its time; a
+// block without a timeout runs under a watchdog, which reports and ends the
+// process instead of a hang.
 //
 // The same cases also run against the fallback source on macOS
 // (gyo_os_wake_fallback_tests, GYO_WAKE_SIGNAL_FALLBACK): this directory may
@@ -67,14 +72,68 @@ Clock::duration LongestOfThreeTimedBlocks(WakeSignal& wake) {
     return longest;
 }
 
-// Takes a pending signal left by an earlier round, if any: a block that lasts
-// its whole short timeout found nothing pending.
-void DrainPending(WakeSignal& wake) {
-    for (int attempt = 0; attempt < 8; ++attempt) {
-        const auto start = Clock::now();
-        wake.Block(std::chrono::microseconds(200));
-        if (Clock::now() - start >= std::chrono::microseconds(150)) return;
+// Ends the process with a message when a case that blocks without a timeout
+// has not finished in time: a broken signal would otherwise hang the run until
+// CTest kills it, and the message would be lost.
+class Watchdog final {
+public:
+    explicit Watchdog(const char* what) : what_(what), thread_([this] { Watch(); }) {}
+    Watchdog(const Watchdog&) = delete;
+    Watchdog& operator=(const Watchdog&) = delete;
+    ~Watchdog() {
+        {
+            const std::lock_guard lock(mutex_);
+            done_ = true;
+        }
+        condition_.notify_one();
+        thread_.join();
     }
+
+private:
+    void Watch() {
+        std::unique_lock lock(mutex_);
+        if (condition_.wait_for(lock, std::chrono::seconds(10), [this] { return done_; })) return;
+        // _Exit skips the stdio flush, so what the case already reported is
+        // written out first.
+        std::fflush(stdout);
+        std::fprintf(stderr, "watchdog: %s\n", what_);
+        std::fflush(stderr);
+        std::_Exit(1);
+    }
+
+    const char* what_;
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    bool done_{false};
+    std::thread thread_;
+};
+
+// The longest of three blocks with a 20 ms timeout, each right after a block
+// that another thread's signal ended. A rescue as above.
+Clock::duration LongestTimedBlockAfterAWake(WakeSignal& wake) {
+    std::atomic<bool> returned{false};
+    std::thread rescue([&] {
+        const auto from = Clock::now() + std::chrono::seconds(3);
+        while (!returned.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            if (Clock::now() >= from) wake.Signal();
+        }
+    });
+    auto longest = Clock::duration::zero();
+    for (int round = 0; round < 3; ++round) {
+        std::thread other([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            wake.Signal();
+        });
+        wake.Block(std::chrono::seconds(5));
+        other.join();
+        const auto start = Clock::now();
+        wake.Block(std::chrono::milliseconds(20));
+        longest = std::max(longest, Clock::now() - start);
+    }
+    returned.store(true, std::memory_order_release);
+    rescue.join();
+    return longest;
 }
 
 } // namespace
@@ -115,21 +174,43 @@ TEST_CASE("Os wake signal: a consumed signal does not end the next block") {
         wake.Block(std::chrono::seconds(5));
         REQUIRE(Clock::now() - start < std::chrono::seconds(1));
     }
-    SUBCASE("a signal from another thread during the block") {
-        std::thread other([&] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            wake.Signal();
-        });
-        const auto start = Clock::now();
-        wake.Block(std::chrono::seconds(5));
-        other.join();
-        REQUIRE(Clock::now() - start < std::chrono::seconds(1));
-    }
     const auto longest = LongestOfThreeTimedBlocks(wake);
     CHECK_MESSAGE(longest >= std::chrono::milliseconds(10), "a signal already consumed ended the next block");
 }
 
+// The same for a signal that arrives during a block: the block it ends takes
+// it, so the next block waits for its own timeout.
+TEST_CASE("Os wake signal: a signal that ended a block does not end the next one") {
+    auto wake = MakeWakeSignal();
+    const auto longest = LongestTimedBlockAfterAWake(wake);
+    CHECK_MESSAGE(longest >= std::chrono::milliseconds(10), "a signal that ended a block also ended the next one");
+}
+
+// A block without a timeout returns only on a signal (or rarely spuriously); a
+// primitive that returned at once would turn every untimed Waiter::Wait into a
+// busy loop. A timed block first leaves a timer behind, as the Waiter does.
+TEST_CASE("Os wake signal: a block without a timeout ends only on a signal") {
+    const Watchdog watchdog("a block without a timeout did not end on a signal");
+    auto wake = MakeWakeSignal();
+    wake.Block(std::chrono::milliseconds(1));
+    std::atomic<bool> flag{false};
+    std::thread other([&] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        flag.store(true, std::memory_order_release);
+        wake.Signal();
+    });
+    int blocks = 0;
+    while (!flag.exchange(false, std::memory_order_acq_rel)) {
+        wake.Block(std::nullopt);
+        ++blocks;
+    }
+    other.join();
+    CAPTURE(blocks);
+    CHECK_MESSAGE(blocks <= 3, "a block without a timeout returned without a signal");
+}
+
 TEST_CASE("Os wake signal ends a block on a signal from another thread") {
+    const Watchdog watchdog("a block without a timeout did not end on a signal from another thread");
     auto wake = MakeWakeSignal();
     for (const std::optional<std::chrono::nanoseconds> perBlock :
          {std::optional<std::chrono::nanoseconds>(std::chrono::seconds(5)), std::optional<std::chrono::nanoseconds>()}) {
@@ -160,8 +241,9 @@ TEST_CASE("Os wake signal ends a block by its relative timeout") {
 // reads after it starts the round, so the check sweeps across the moment the
 // signal arrives. A signal lost between the check and the block shows as a
 // block that lasts until its 2 s timeout. A round that found its flag already
-// set leaves the signal pending, which would end the next round's first block
-// at once and move it off the sweep, so each round first takes what is left.
+// set, without a block, leaves the signal pending, which would end the next
+// round's first block at once and move it off the sweep, so such a round takes
+// it once the signaller has sent it.
 // This is the lost wakeup the fallback avoids by setting and reading its
 // pending flag under its mutex (Design Invariant 8). The spin falls back to
 // yielding, so one CPU still makes progress.
@@ -172,6 +254,7 @@ TEST_CASE("Os wake signal loses no signal sent while the waiter checks its flag"
     auto wake = MakeWakeSignal();
     std::atomic<bool> flag{false};
     std::atomic<int> started{-1};
+    std::atomic<int> signalled{-1};
     std::atomic<int> consumed{-1};
     std::atomic<bool> stop{false};
     std::thread signaller([&] {
@@ -182,6 +265,7 @@ TEST_CASE("Os wake signal loses no signal sent while the waiter checks its flag"
             }
             flag.store(true, std::memory_order_release);
             wake.Signal();
+            signalled.store(round, std::memory_order_release);
             for (int spins = 0; consumed.load(std::memory_order_acquire) != round; ++spins)
                 if (spins > SpinsBeforeYield) std::this_thread::yield();
         }
@@ -189,10 +273,20 @@ TEST_CASE("Os wake signal loses no signal sent while the waiter checks its flag"
     int lost = 0;
     int rounds = 0;
     for (; rounds < Rounds && lost < StopAfterLost; ++rounds) {
-        DrainPending(wake);
         started.store(rounds, std::memory_order_release);
         for (int read = 0; read < rounds % 64; ++read) static_cast<void>(Clock::now());
-        if (ConsumeFlag(wake, flag, std::chrono::seconds(2)) >= std::chrono::milliseconds(1500)) ++lost;
+        const auto start = Clock::now();
+        bool blocked = false;
+        while (!flag.exchange(false, std::memory_order_acq_rel)) {
+            wake.Block(std::chrono::seconds(2));
+            blocked = true;
+        }
+        if (Clock::now() - start >= std::chrono::milliseconds(1500)) ++lost;
+        if (!blocked) {
+            for (int spins = 0; signalled.load(std::memory_order_acquire) != rounds; ++spins)
+                if (spins > SpinsBeforeYield) std::this_thread::yield();
+            wake.Block(std::chrono::seconds(2));
+        }
         consumed.store(rounds, std::memory_order_release);
     }
     stop.store(true, std::memory_order_release);
