@@ -153,10 +153,6 @@ enum class StartupCode : std::uint8_t {
 struct StartupError {
     // The code of this error.
     StartupCode code;
-    // Spec D.2's step the error was found in, when the step has its own code
-    // distinct from code. No code has its own step since X-E1 and D-E11 left
-    // (v8-arch-gyo2-authority-rollback step 2): equal to code.
-    StartupCode step;
     // The rule broken, for people: "H-1", "B.1", ...
     std::string rule;
     std::string message;
@@ -166,7 +162,7 @@ struct StartupError {
     // Registration sites of the Systems and hooks involved, "file:line".
     std::vector<std::string> sources;
 
-    [[nodiscard]] bool Is(StartupCode wanted) const noexcept { return code == wanted || step == wanted; }
+    [[nodiscard]] bool Is(StartupCode wanted) const noexcept { return code == wanted; }
 };
 
 enum class StartupReportCode : std::uint8_t {

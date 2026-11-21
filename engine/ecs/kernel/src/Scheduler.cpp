@@ -12,8 +12,8 @@
 //      holds ExclusiveWorld, both declare one effect, or both defer a write of
 //      one component (spec D.1 conditions 1 to 4);
 //   4. a conflicting pair with no order path gets an edge from the lower
-//      registrationSeq to the higher and is listed as a tie (spec D.2 step 10),
-//      zone C or not: there is no ambiguity error
+//      registrationSeq to the higher and is listed as a tie (spec D.2 step 10):
+//      there is no ambiguity error
 //      (v8-arch-gyo2-no-ambiguity-detection). Pairs are taken in (seq, seq)
 //      order and the reachability is updated after each added edge, so the
 //      result is fixed and acyclic;

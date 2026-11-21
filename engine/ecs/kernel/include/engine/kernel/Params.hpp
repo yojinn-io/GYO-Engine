@@ -505,9 +505,8 @@ template <class M>
 struct ParamTraits<MessageWriter<M>> : Detail::HandleTraits<MessageWriter<M>, TypeList<Access::MessageWrite<M>>, false> {};
 
 // Untyped deferred insert / remove of any column (spec F.1). No access, no
-// conflict edge, not counted as a writer; nothing checks the column at run time
-// (v8-arch-gyo2-no-runtime-interception: authority data written by mistake is
-// caught by digest comparison and the server's overwrite, not here).
+// conflict edge; nothing checks the column at run time
+// (v8-arch-gyo2-no-runtime-interception).
 class Commands final : Detail::Handle {
     GYO_KERNEL_HANDLE(Commands) : Handle(call) {}
 

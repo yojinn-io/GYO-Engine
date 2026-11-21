@@ -226,8 +226,6 @@ struct RegistryData {
 
     void Error(StartupCode code, std::string rule, std::string message, std::vector<std::string> subjects = {},
                std::vector<std::string> sources = {});
-    void Error(StartupCode code, StartupCode step, std::string rule, std::string message,
-               std::vector<std::string> subjects = {}, std::vector<std::string> sources = {});
 };
 
 [[nodiscard]] std::string SourceText(const std::source_location& source);

@@ -294,9 +294,8 @@ public:
     // has no Target, the kernel puts Fn(request) there at that same sync point,
     // before the OnAdd hooks. Fn is a function `Target Fn(const Request&)`.
     //
-    // This is how a component with one writing System gets its first value
-    // from other Systems: they spawn or insert Request (usually Shared), and
-    // only the writer of Target appears in Target's writer count. A Target the
+    // This is how a component gets its first value from other Systems: they
+    // spawn or insert Request, and the kernel fills Target. A Target the
     // entity already has is left as it is; overwriting an existing Request cell
     // does nothing; the Request cell stays on the entity. A Target that is
     // itself the Request of another declaration is filled at the same sync

@@ -11,7 +11,7 @@
 // RegisterContext (Registrations.hpp), CheckContext and FingerprintContext
 // here. Digest and OnMismatch wait for the network Module's declaration
 // (authority declaration 4.4: their shape is not in this contract); the
-// official digest is a function of the World (Digest.hpp).
+// official digest is a function of the World (Consistency.hpp).
 //
 // A strategy object is chosen per World (AuthorityOptions in the World
 // description's options) and holds no per-World state (authority-rollback

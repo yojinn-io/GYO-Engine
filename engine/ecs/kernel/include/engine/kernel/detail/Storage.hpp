@@ -203,7 +203,6 @@ public:
 
     [[nodiscard]] virtual std::size_t Size() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
-    [[nodiscard]] virtual std::span<const std::byte> PayloadBytesAt(std::size_t index) const noexcept = 0;
     [[nodiscard]] virtual std::uint64_t SeqAt(std::size_t index) const noexcept = 0;
     // As ColumnBase: whether the payload type has a hash function; HashAt
     // hashes the payload of the record at index.
@@ -232,9 +231,6 @@ public:
     [[nodiscard]] std::size_t Size() const noexcept override { return records.size(); }
     [[nodiscard]] std::span<const std::byte> StorageBytes() const noexcept override {
         return {reinterpret_cast<const std::byte*>(records.data()), records.size() * sizeof(Record)};
-    }
-    [[nodiscard]] std::span<const std::byte> PayloadBytesAt(std::size_t index) const noexcept override {
-        return {reinterpret_cast<const std::byte*>(&records[index].payload), sizeof(M)};
     }
     [[nodiscard]] std::uint64_t SeqAt(std::size_t index) const noexcept override { return records[index].seq; }
     [[nodiscard]] bool HasHash() const noexcept override { return Hashable<M>; }

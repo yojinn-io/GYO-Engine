@@ -60,7 +60,7 @@ namespace {
 // the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject); 4
 // since the kernel runs Startup before the first other schedule and a System may
 // run a schedule (v8-arch-gyo2-nested-schedule; neither is a Plan step); 5 since
-// a conflicting pair with no order is a tie in zone C too and KernelSettings is
+// a conflicting pair with no order is a tie in determinism-relevant code too and KernelSettings is
 // read when each Run starts (v8-arch-gyo2-kernel-subtract-structure; no Plan
 // step changed: the rule of hook-flush-not-in-plan-bump-versions); 6 since the
 // kernel runs no Startup before the first other schedule (the orchestration
@@ -79,13 +79,11 @@ constexpr std::uint32_t kFingerprintVersion = 8;
 // (v8-arch-gyo2-time-events step 3); 6 since a schedule has no clock domain or
 // clock flag and a message type no clock domain (v8-arch-gyo2-clock-out-of-kernel,
 // v8-arch-gyo2-time-events step 4); 7 since event types and observers
-// (v8-arch-gyo2-time-events step 5); 8 since the write policy, a resource's
-// external flag, a schedule's ingress stage and Parallel guard test, and a named
-// set's digest mark left with the rules that read them, and annotatedWrites
+// (v8-arch-gyo2-time-events step 5); 8 since the fields of the writer count and
+// of the determinism rules left with the rules that read them, and annotatedWrites
 // holds components too, each a (kind, id) key (v8-arch-gyo2-authority-rollback step 2).
-// 9 since zones, roles, rollback options, rollbackEnabled, notInRollback, the
-// ingress flag and rollbackSafe left for the authority and rollback Modules
-// (v8-arch-gyo2-authority-rollback step 6).
+// 9 since the fields of the authority and rollback rules left for the authority
+// and rollback Modules (v8-arch-gyo2-authority-rollback step 6).
 constexpr std::uint32_t kRegistryFingerprintVersion = 9;
 
 class Bytes {

@@ -133,9 +133,6 @@ StartupReport::StartupReport(std::vector<StartupError> found)
     for (const StartupError& error : errors) {
         if (!detail.empty()) detail += "\n";
         detail += std::string(ToString(error.code));
-        if (error.step != error.code) {
-            detail += " (step " + std::string(ToString(error.step)) + ")";
-        }
         detail += " " + error.rule + ": " + error.message;
     }
 }
@@ -182,13 +179,7 @@ const ScheduleRecord* RegistryData::FindSchedule(const std::string& name) const 
 
 void RegistryData::Error(StartupCode code, std::string rule, std::string message, std::vector<std::string> subjects,
                          std::vector<std::string> sources) {
-    Error(code, code, std::move(rule), std::move(message), std::move(subjects), std::move(sources));
-}
-
-void RegistryData::Error(StartupCode code, StartupCode step, std::string rule, std::string message,
-                         std::vector<std::string> subjects, std::vector<std::string> sources) {
-    errors.push_back(StartupError{code, step, std::move(rule), std::move(message), std::move(subjects),
-                                  std::move(sources)});
+    errors.push_back(StartupError{code, std::move(rule), std::move(message), std::move(subjects), std::move(sources)});
 }
 
 std::string SourceText(const std::source_location& source) {
@@ -739,9 +730,9 @@ void CheckData(RegistryData& data) {
 }
 
 // Registrar::InitialValue: resolves the two components of every declaration and
-// leaves the valid ones in (requestId, targetId) order. (Who writes a request
-// writes, in effect, its component: the authority Module's Z6 reads that from
-// the read-only registry; the kernel has no writer rule.)
+// leaves the valid ones in (requestId, targetId) order. The kernel has no writer
+// rule: a Module that asks who writes what reads the declarations from the
+// read-only registry (InitialValues).
 void CheckInitialValues(RegistryData& data) {
     std::vector<InitialValueRecord> valid;
     for (InitialValueRecord& record : data.initialValues) {
@@ -820,7 +811,7 @@ void CheckSchedules(RegistryData& data) {
             }
         }
         if (s.executor == ExecutorKind::Parallel) {
-            data.Error(StartupCode::DE17, "X-2", "schedule '" + s.name + "' declares Parallel; v1 has only Serial (LIM-2)",
+            data.Error(StartupCode::DE17, "LIM-2", "schedule '" + s.name + "' declares Parallel; v1 has only Serial (LIM-2)",
                        {s.name});
         }
     }
@@ -828,7 +819,7 @@ void CheckSchedules(RegistryData& data) {
 
 // A run condition's access joins its System's (spec S-4, E.4): every read,
 // filter, set read and the extract flag, so the System's checks
-// (S-9, Z1, D-E14) see it. Conditions are read-only
+// (D-E14) and the conflict graph see it. Conditions are read-only
 // by type (S-5), so nothing is written.
 void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
     into.access.reads.insert(into.access.reads.end(), condition.access.reads.begin(), condition.access.reads.end());

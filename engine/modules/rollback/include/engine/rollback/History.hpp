@@ -240,7 +240,6 @@ public:
     // before the rollback or after it.
     virtual void Keep(Exclusive& world) = 0;
     virtual void PutBack(Exclusive& world) = 0;
-    [[nodiscard]] virtual std::uint32_t Capacity() const noexcept = 0;
 
 protected:
     InputHistoryBase() = default;
@@ -279,7 +278,6 @@ public:
         static_cast<void>(world.template Modify<T>([this](T& input) { input = *now_; }));
         now_.reset();
     }
-    [[nodiscard]] std::uint32_t Capacity() const noexcept override { return capacity_; }
 
 private:
     std::uint32_t capacity_;
