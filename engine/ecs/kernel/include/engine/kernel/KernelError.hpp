@@ -96,6 +96,10 @@ enum class KernelErrorCode : std::uint8_t {
     // it ran threw) and the System caught it (like X-16, NestedRunAborted). The
     // World was interrupted when the exception left the change.
     ImmediateChangeAborted,
+    // World::Summary: a type with a value in the World has no hash function
+    // (Hash.hpp; authority-rollback declaration 3.3, the user's decision (d)).
+    // detail names every such type. The World is not interrupted.
+    HashMissing,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;

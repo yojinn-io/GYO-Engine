@@ -40,6 +40,7 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::ClosureChangesMembership: return "ClosureChangesMembership";
     case KernelErrorCode::HookChangesMembership: return "HookChangesMembership";
     case KernelErrorCode::ImmediateChangeAborted: return "ImmediateChangeAborted";
+    case KernelErrorCode::HashMissing: return "HashMissing";
     }
     return "Unknown";
 }

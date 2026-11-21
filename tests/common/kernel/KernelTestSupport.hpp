@@ -187,6 +187,14 @@ inline std::vector<std::string> SystemSteps(const Plan& plan) {
     return names;
 }
 
+// The World summary of a World every value type of which has a hash function:
+// fails the test case with the error when Summary returns one.
+inline Fingerprint SummaryOf(const World& world) {
+    auto summary = world.Summary();
+    REQUIRE_MESSAGE(static_cast<bool>(summary), (summary ? std::string() : summary.error().Text()));
+    return *summary;
+}
+
 inline std::size_t PositionOf(const Plan& plan, std::string_view name) {
     for (std::size_t i = 0; i < plan.steps.size(); ++i) {
         if (plan.steps[i].name == name) return i;

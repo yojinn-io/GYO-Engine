@@ -7337,26 +7337,6 @@
       "expect": "\\[ks\\-s5\\-spawn\\-alive\\-err\\]"
     },
     {
-      "id": "spa-reserved-short",
-      "what": "D-9: RangeAllotter keeps one byte of padding again (its zero field one byte short): the compile-time check stops the build (v8-arch-gyo2-summary-padding-a-then-c)",
-      "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-      "find": "    std::array<std::uint8_t, 7> reserved{};",
-      "replace": "    std::array<std::uint8_t, 6> reserved{};",
-      "target": "gyo_kernel_tests",
-      "expect": "RangeAllotter\\ has\\ padding:\\ World::Summary\\ hashes\\ its\\ raw\\ bytes",
-      "expect_build_failure": true
-    },
-    {
-      "id": "spa-reserved-short-unchecked",
-      "what": "D-9: RangeAllotter keeps one byte of padding and the compile-time check is gone: the test sees the padding (v8-arch-gyo2-summary-padding-a-then-c)",
-      "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-      "find": "    std::array<std::uint8_t, 7> reserved{};\n\n    [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {\n        return RangeAllotter{first, last, first, first > last, {}};\n    }\n\n    [[nodiscard]] std::optional<EntityId> Allot() noexcept {\n        if (exhausted) return std::nullopt;\n        const EntityId id = next;\n        if (id == last) {\n            exhausted = true;\n        } else {\n            ++next;\n        }\n        return id;\n    }\n\n    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};\nstatic_assert(std::has_unique_object_representations_v<RangeAllotter>,\n              \"RangeAllotter has padding: World::Summary hashes its raw bytes\");",
-      "replace": "    std::array<std::uint8_t, 6> reserved{};\n\n    [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {\n        return RangeAllotter{first, last, first, first > last, {}};\n    }\n\n    [[nodiscard]] std::optional<EntityId> Allot() noexcept {\n        if (exhausted) return std::nullopt;\n        const EntityId id = next;\n        if (id == last) {\n            exhausted = true;\n        } else {\n            ++next;\n        }\n        return id;\n    }\n\n    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};\n",
-      "target": "gyo_kernel_tests",
-      "cases": "D-9: the kernel's RangeAllotter*",
-      "expect": "\\[summary\\-padding\\-unique\\]"
-    },
-    {
       "id": "ks-k9-dropped",
       "what": "K9 (time-events step 1, DI-KS 15): the names moved out to the orchestration layer are no longer reported (README rule 4: the whole rule off). Only it turns K9 off in the self-tests; ks-real-k9-moved-out-name is K9's positive control on the real tree and ks-k-root-empty-passes the shared fail closed",
       "guards": [
@@ -8487,17 +8467,18 @@
     },
     {
       "id": "msg-summary-version-not-bumped",
-      "what": "the World summary version stays 1 (README rule 2: one mutant per version constant; DI-KS 10: summary version 2). Only it catches the summary version (adversarial check K23, step 7)",
+      "what": "the World summary version stays 2 (README rule 2: one mutant per version constant; summary version 3 since authority-rollback step 1, declaration 3.2). Only it catches the summary version (adversarial check K23, step 7; rewritten by v8-arch-gyo2-authority-rollback step 1)",
       "guards": [
         "kernel DI-KS 10",
-        "time-events-declaration 4.4"
+        "time-events-declaration 4.4",
+        "authority-rollback-declaration 3.2"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "constexpr std::uint32_t kSummaryVersion = 2;",
-      "replace": "constexpr std::uint32_t kSummaryVersion = 1;",
+      "find": "constexpr std::uint32_t kSummaryVersion = 3;",
+      "replace": "constexpr std::uint32_t kSummaryVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-32: the sync point's result depends only on the records*",
-      "expect": "1:[0-9a-f]{64} == 2:b5a7a165"
+      "expect": "2:[0-9a-f]{64} == 3:3f782d82"
     },
     {
       "id": "obs-host-direct-write-observed",
@@ -8714,6 +8695,189 @@
         "error-handling DI 2",
         "kernel DI-KS 2"
       ]
+    },
+    {
+      "id": "ks-hash-u64-four-bytes",
+      "what": "Hasher::U64 writes 4 bytes, not 8: integers no longer hash as 64 bits (authority-rollback step 1). Only it catches the width of the encoding",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "        for (int shift = 0; shift < 64; shift += 8)\n            bytes_.push_back",
+      "replace": "        for (int shift = 0; shift < 32; shift += 8)\n            bytes_.push_back",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: an integer hashes as 64 bits*",
+      "expect": "\\[ks\\-hash\\-int\\-le64\\]"
+    },
+    {
+      "id": "ks-hash-char-by-signedness",
+      "what": "a char hashes by the platform's signedness (the char branch is gone). Only it catches the char case",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "    if constexpr (std::same_as<I, char>)\n        h.U64(static_cast<unsigned char>(value));\n    else if constexpr (std::is_signed_v<I>)",
+      "replace": "    if constexpr (std::is_signed_v<I>)",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: an integer hashes as 64 bits*",
+      "expect": "\\[ks\\-hash\\-char\\]"
+    },
+    {
+      "id": "ks-hash-float-by-value",
+      "what": "a float hashes by its value, not its bits: -0 and +0 hash the same (the user's decision (i): bit by bit). Only it catches the float encoding",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "inline void HashValue(Hasher& h, float value) { h.U64(std::bit_cast<std::uint32_t>(value)); }",
+      "replace": "inline void HashValue(Hasher& h, float value) { h.U64(static_cast<std::uint64_t>(static_cast<std::int64_t>(value))); }",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: a float hashes bit by bit*",
+      "expect": "\\[ks\\-hash\\-float\\-bits\\]"
+    },
+    {
+      "id": "ks-hash-vector-elements-dropped",
+      "what": "a vector hashes its size only: different contents hash the same. Only it catches the elements of a vector",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "    h.U64(value.size());\n    for (const T& element : value) HashValue(h, element);",
+      "replace": "    h.U64(value.size());",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: containers hash their contents*",
+      "expect": "\\[ks\\-hash\\-vector\\-contents\\]"
+    },
+    {
+      "id": "ks-hash-vector-size-dropped",
+      "what": "a vector hashes its elements with no size: {1} and {1, 0} are told apart only by the size. Only it catches the vector's size",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "void HashValue(Hasher& h, const std::vector<T, A>& value) {\n    h.U64(value.size());",
+      "replace": "void HashValue(Hasher& h, const std::vector<T, A>& value) {",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: containers hash their contents*",
+      "expect": "\\[ks\\-hash\\-vector\\-size\\]"
+    },
+    {
+      "id": "ks-hash-string-size-only",
+      "what": "a string hashes its size only. Only it catches the string's bytes",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "    h.U64(value.size());\n    h.Bytes(std::as_bytes(std::span<const char>(value.data(), value.size())));\n}",
+      "replace": "    h.U64(value.size());\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: containers hash their contents*",
+      "expect": "\\[ks\\-hash\\-string\\]"
+    },
+    {
+      "id": "ks-hash-optional-as-bytes",
+      "what": "an optional hashes its object bytes: an empty one hashes what it held before (declaration 3.2: only whether it holds a value, then the value). Only it catches the empty optional's bytes",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "    h.U64(value.has_value() ? 1U : 0U);\n    if (value) HashValue(h, *value);",
+      "replace": "    HashAsBytes(h, value);",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: containers hash their contents*",
+      "expect": "\\[ks\\-hash\\-optional\\-empty\\]"
+    },
+    {
+      "id": "ks-hash-optional-flag-dropped",
+      "what": "an optional hashes its value with no presence flag: which element of a vector is empty is lost. Only it catches the flag",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "    h.U64(value.has_value() ? 1U : 0U);\n    if (value) HashValue(h, *value);",
+      "replace": "    if (value) HashValue(h, *value);",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: containers hash their contents*",
+      "expect": "\\[ks\\-hash\\-optional\\-present\\]"
+    },
+    {
+      "id": "ks-hash-allotter-as-bytes",
+      "what": "the kernel's RangeAllotter hashes its object bytes, padding included (it replaces spa-reserved-short-unchecked: the allotter is hashed field by field since authority-rollback step 1). Only it catches the kernel's own hash function",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "inline void HashValue(Hasher& h, const RangeAllotter& value) {\n    HashValue(h, value.first);\n    HashValue(h, value.last);\n    HashValue(h, value.next);\n    HashValue(h, value.exhausted);\n}",
+      "replace": "inline void HashValue(Hasher& h, const RangeAllotter& value) { HashAsBytes(h, value); }",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9: equal allotters give one World summary*",
+      "expect": "\\[summary\\-padding\\-equal\\]"
+    },
+    {
+      "id": "ks-hash-summary-column-bytes",
+      "what": "World::Summary hashes a cell's object bytes, not its hash function: padding reaches the summary. Only it catches the column side of Summary",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            h.U64(column->KeyAt(i));\n            column->HashAt(h, i);",
+      "replace": "            h.U64(column->KeyAt(i));\n            h.Bytes(column->ValueBytesAt(i));",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: in the World summary*",
+      "expect": "\\[ks\\-hash\\-summary\\-padding\\]"
+    },
+    {
+      "id": "ks-hash-summary-resource-bytes",
+      "what": "World::Summary hashes a resource's object bytes: the allotter's padding reaches the summary. Only it catches the resource side of Summary",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        if (present) resources_[r]->Hash(h);",
+      "replace": "        if (present) h.Bytes(resources_[r]->StorageBytes());",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9: equal allotters give one World summary*",
+      "expect": "\\[summary\\-padding\\-equal\\]"
+    },
+    {
+      "id": "ks-hash-missing-not-reported",
+      "what": "World::Summary ignores a type with no hash function (the user's decision (d): an Err naming it). Only it catches the report",
+      "guards": [
+        "authority-rollback-declaration 3.2",
+        "authority-rollback-declaration 3.3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "    if (!missing.empty()) {\n        std::string names;",
+      "replace": "    if (false) {\n        std::string names;",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: a type with no hash function*",
+      "expect": "\\[ks\\-hash\\-missing\\-reported\\]"
+    },
+    {
+      "id": "ks-hash-missing-without-value",
+      "what": "a column of a type with no hash function is reported with no cell in it (declaration 3.3: only with a value). Only it catches the column's \"has a value\" condition",
+      "guards": [
+        "authority-rollback-declaration 3.3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        if (columns_[c]->Size() > 0 && !columns_[c]->HasHash())",
+      "replace": "        if (!columns_[c]->HasHash())",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: a type with no hash function*",
+      "expect": "\\[ks\\-hash\\-missing\\-only\\-with\\-value\\]"
+    },
+    {
+      "id": "ks-hash-missing-resource-unnamed",
+      "what": "a resource of a type with no hash function is not named in the Err. Only it catches the resource list of the report",
+      "guards": [
+        "authority-rollback-declaration 3.3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        if (resources_[r]->Present() && !resources_[r]->HasHash()) missing.push_back(\"resource \" + data_->resources[r].name);",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: a type with no hash function*",
+      "expect": "\\[ks\\-hash\\-missing\\-names\\]"
     }
   ]
 }

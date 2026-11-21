@@ -28,6 +28,7 @@ set(GYO_KERNEL_TEST_SOURCES
     MessageCursorTests.cpp
     ObserverTests.cpp
     TraceSpanTests.cpp
+    HashTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )

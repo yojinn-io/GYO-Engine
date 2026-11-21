@@ -184,9 +184,6 @@ TEST_CASE("DI-KS 26: a System registered after the first BuildPlans runs from th
                   "round state: " << Join(Log()));
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses the new types") {
     Registry registry;
     FirstRound(registry);
@@ -203,7 +200,7 @@ TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses t
     // its summary has the new storage, like a World made at the new version.
     World fresh(registry, "fresh");
     fresh.Insert(1, Tag{1});
-    CHECK_MESSAGE(world.Summary() == fresh.Summary(), "attach at the World API entry (summary)");
+    CHECK_MESSAGE(SummaryOf(world) == SummaryOf(fresh), "attach at the World API entry (summary)");
     world.Insert(1, Later{7});
     world.SetResource(LaterRes{9});
     CHECK_MESSAGE(world.Get<Later>(1) != nullptr, "attach at the World API entry");

@@ -432,7 +432,7 @@ TEST_CASE("J-36: the World summary holds the message cursors and the write seque
     auto summary = [](std::function<void(Registrar&)> build, int runs) {
         auto rig = MakeRig(std::move(build), false);
         for (int run = 0; run < runs; ++run) KERNEL_REQUIRE_RUN_OK(rig->Run());
-        return rig->world().Summary();
+        return SummaryOf(rig->world());
     };
     const auto writerOnly = [](Registrar& r) {
         Data(r);
@@ -535,7 +535,7 @@ TEST_CASE("J-36: the World summary holds where each cursor has read to") {
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         rig->world().SetResource(Out{1});
         REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "2 3");
-        return rig->world().Summary();
+        return SummaryOf(rig->world());
     };
     CHECK(summary(true) == summary(true));
     CHECK_MESSAGE(summary(true) != summary(false), "[msg-summary-cursor-position] where a cursor has read to is not in the summary");

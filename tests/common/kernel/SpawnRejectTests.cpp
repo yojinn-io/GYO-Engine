@@ -30,6 +30,11 @@ struct Seen { std::int32_t s; };   // zone B, Shared: the initial value of Body
 struct Label { std::int32_t l; };  // zone B, Shared
 struct Signal { std::int32_t f; };   // zone B, Shared: its OnAdd hooks record spawns
 struct CPos { std::int32_t x; };   // zone C
+void HashValue(Hasher& h, const Body& v) { HashValue(h, v.m); }
+void HashValue(Hasher& h, const Seen& v) { HashValue(h, v.s); }
+void HashValue(Hasher& h, const Label& v) { HashValue(h, v.l); }
+void HashValue(Hasher& h, const Signal& v) { HashValue(h, v.f); }
+void HashValue(Hasher& h, const CPos& v) { HashValue(h, v.x); }
 
 Seen SeenFromBody(const Body& body) { return Seen{body.m + 1}; }
 
@@ -408,9 +413,6 @@ TEST_CASE("J-55: one emitter spawns one id twice: the first record is kept") {
 }
 
 namespace {
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 Fingerprint TwoEmitters(bool bodyFirst, bool& nineAlive, std::vector<RejectedSpawn>& rejected, bool& fiveAlive) {
     auto rig = MakeRig([bodyFirst](Registrar& r) {
         Base(r);
@@ -427,7 +429,7 @@ Fingerprint TwoEmitters(bool bodyFirst, bool& nineAlive, std::vector<RejectedSpa
     nineAlive = rig->world().Alive(9);
     fiveAlive = BodyIs(rig->world(), 5, 50);
     rejected = Rejected(rig->world());
-    return rig->world().Summary();
+    return SummaryOf(rig->world());
 }
 } // namespace
 
@@ -868,9 +870,6 @@ SystemResult ZoneCSpawnsNineSharedAgain(SpawnWithId<Bundle<CSharedPos>> spawn) {
     return Ok();
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 Fingerprint ThreeRecords(bool twiceFirst, bool& nineAlive, std::vector<RejectedSpawn>& rejected) {
     auto rig = MakeRig([twiceFirst](Registrar& r) {
         Base(r);
@@ -886,7 +885,7 @@ Fingerprint ThreeRecords(bool twiceFirst, bool& nineAlive, std::vector<RejectedS
     REQUIRE_MESSAGE(static_cast<bool>(result), Text(result));
     nineAlive = rig->world().Alive(9);
     rejected = Rejected(rig->world());
-    return rig->world().Summary();
+    return SummaryOf(rig->world());
 }
 
 } // namespace
@@ -1018,9 +1017,6 @@ TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and anothe
 
 // Whether the two Systems of "two emitters" really do not conflict: the same shape in zone C,
 // where a conflict without a declared order is a tie listed in TieBreaks.
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with one bundle they do") {
     SUBCASE("disjoint bundles: Finish succeeds in both orders, both spawns of 9 are dropped, the World is the same") {
         Fingerprint summaries[2];
@@ -1044,7 +1040,7 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
             REQUIRE(rejected.size() == 2);
             CHECK_MESSAGE(rejected[0].emitter == (order == 0 ? "ZoneCSpawnsNinePos" : "ZoneCSpawnsNineVel"),
                           "J-55 zone-c-pair: the Plan order follows the registration order");
-            summaries[order] = rig->world().Summary();
+            summaries[order] = SummaryOf(rig->world());
         }
         CHECK_MESSAGE(summaries[0] == summaries[1], "J-55 zone-c-pair: the World is the same in both orders");
     }

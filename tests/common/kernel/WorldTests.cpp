@@ -322,18 +322,16 @@ EntityId StoredAllotterSummaryCase(unsigned char fill, Fingerprint& summary) {
     const RangeAllotter* made = new (raw) RangeAllotter(RangeAllotter::Of(900, 1000000));
     auto rig = MakeRig([](Registrar& r) { Data(r, true); });
     rig->world().SetResource(*made);
-    summary = rig->world().Summary();
+    summary = SummaryOf(rig->world());
     return rig->world().Resource<RangeAllotter>()->next;
 }
 
 } // namespace
 
-// v8-arch-gyo2-summary-padding-a-then-c (partly solved): World::Summary hashes a
-// value's raw bytes, so the kernel's own allotter must have no padding. Types an
-// author registers are the author's to keep padding-free; the full solution, a
-// hash function per type, is batch 4.
-TEST_CASE("D-9: the kernel's RangeAllotter has no padding, so equal allotters give one World summary") {
-    CHECK_MESSAGE(std::has_unique_object_representations_v<RangeAllotter>, "[summary-padding-unique] RangeAllotter has padding");
+// D-9 with a hash function per type (authority-rollback declaration 3.2): the
+// kernel's allotter is hashed field by field, so what its padding holds does
+// not reach the summary.
+TEST_CASE("D-9: equal allotters give one World summary, whatever their padding holds") {
     Fingerprint zeros;
     Fingerprint ones;
     REQUIRE(StoredAllotterSummaryCase(0x00, zeros) == 900);
@@ -464,7 +462,7 @@ Fingerprint ReorderSummary(bool tagFirst) {
     rig->world().Insert(1, Tag{1});
     rig->world().Insert(2, Tag{2});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
-    return rig->world().Summary();
+    return SummaryOf(rig->world());
 }
 
 // Two records of one key by one System (recSeq decides), two hooks with one key each (hook order decides).
@@ -513,13 +511,9 @@ SystemResult LogAddTag(HookCtx ctx) {
 
 } // namespace
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
-// Not fully solved (v8-arch-gyo2-summary-padding-a-then-c): the golden below is
-// summary format 2, re-taken by v8-arch-gyo2-time-events step 3 (message records
-// with their seq, the write sequence and the message cursors are in the summary;
-// the kernel's own records have no padding, a static_assert); the judgement is unchanged.
+// The golden below is summary format 3, re-taken by v8-arch-gyo2-authority-rollback
+// step 1 (each value through its type's hash function, every number as 8 bytes);
+// the judgement is unchanged.
 TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.2's order (golden)") {
     SUBCASE("reordering two Systems that do not conflict keeps the World") {
         CHECK(ReorderSummary(true) == ReorderSummary(false));
@@ -538,9 +532,9 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(3)->t == 2);
         REQUIRE(rig->world().Get<Tag>(9) != nullptr);
         CHECK(rig->world().Get<Tag>(9)->t == 200);
-        const std::string summary = rig->world().Summary().Text();
+        const std::string summary = SummaryOf(rig->world()).Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "2:b5a7a165b66fa7df7738f3512c177eb1b18a8380951eda1ad2379e96bb9f17ee");
+        CHECK(summary == "3:3f782d8237ce0e8f80a0f53d42883688f02f5d75620f9c289d52a472f5fdd0b4");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {

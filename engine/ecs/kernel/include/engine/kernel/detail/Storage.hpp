@@ -21,6 +21,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/entity_store/EntityColumns.hpp"
 #include "engine/entity_store/EntityId.hpp"
+#include "engine/kernel/Hash.hpp"
 
 #include <algorithm>
 #include <array>
@@ -76,6 +77,10 @@ public:
     [[nodiscard]] virtual std::span<const std::byte> ValueBytesAt(std::size_t index) const noexcept = 0;
     // Every cell's object bytes: what the boundary comparison snapshots (spec A.6 layer 2).
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
+    // Whether the type has a hash function (Hash.hpp); HashAt hashes the value
+    // of the cell at index with it, and writes nothing when there is none.
+    [[nodiscard]] virtual bool HasHash() const noexcept = 0;
+    virtual void HashAt(Hasher& h, std::size_t index) const = 0;
     [[nodiscard]] virtual bool Contains(EntityId id) const noexcept = 0;
     // Destroys the cell of id; false when absent.
     virtual bool Erase(EntityId id) = 0;
@@ -107,6 +112,10 @@ public:
     }
     [[nodiscard]] std::span<const std::byte> StorageBytes() const noexcept override {
         return {reinterpret_cast<const std::byte*>(cells.data()), cells.size() * sizeof(Cell<T>)};
+    }
+    [[nodiscard]] bool HasHash() const noexcept override { return Hashable<T>; }
+    void HashAt([[maybe_unused]] Hasher& h, [[maybe_unused]] std::size_t index) const override {
+        if constexpr (Hashable<T>) HashValue(h, cells[index].value);
     }
     [[nodiscard]] bool Contains(EntityId id) const noexcept override {
         return ::Engine::EntityStore::FindEntity(cells, id) != nullptr;
@@ -147,6 +156,10 @@ public:
 
     [[nodiscard]] virtual bool Present() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
+    // As ColumnBase: whether the type has a hash function; Hash hashes the
+    // value, present, and writes nothing when there is none.
+    [[nodiscard]] virtual bool HasHash() const noexcept = 0;
+    virtual void Hash(Hasher& h) const = 0;
     virtual void Reset() noexcept = 0;
 
     ChangeStamp changed = 0;
@@ -165,6 +178,10 @@ public:
     [[nodiscard]] std::span<const std::byte> StorageBytes() const noexcept override {
         return value ? std::span<const std::byte>(reinterpret_cast<const std::byte*>(&*value), sizeof(T))
                      : std::span<const std::byte>();
+    }
+    [[nodiscard]] bool HasHash() const noexcept override { return Hashable<T>; }
+    void Hash([[maybe_unused]] Hasher& h) const override {
+        if constexpr (Hashable<T>) HashValue(h, *value);
     }
     void Reset() noexcept override { value.reset(); }
 
@@ -188,6 +205,10 @@ public:
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> PayloadBytesAt(std::size_t index) const noexcept = 0;
     [[nodiscard]] virtual std::uint64_t SeqAt(std::size_t index) const noexcept = 0;
+    // As ColumnBase: whether the payload type has a hash function; HashAt
+    // hashes the payload of the record at index.
+    [[nodiscard]] virtual bool HasHash() const noexcept = 0;
+    virtual void HashAt(Hasher& h, std::size_t index) const = 0;
     // Drops every record whose seq is at or below upTo; true when one was dropped.
     virtual bool TrimThrough(std::uint64_t upTo) = 0;
 
@@ -216,6 +237,10 @@ public:
         return {reinterpret_cast<const std::byte*>(&records[index].payload), sizeof(M)};
     }
     [[nodiscard]] std::uint64_t SeqAt(std::size_t index) const noexcept override { return records[index].seq; }
+    [[nodiscard]] bool HasHash() const noexcept override { return Hashable<M>; }
+    void HashAt([[maybe_unused]] Hasher& h, [[maybe_unused]] std::size_t index) const override {
+        if constexpr (Hashable<M>) HashValue(h, records[index].payload);
+    }
     bool TrimThrough(std::uint64_t upTo) override {
         const auto keep = std::find_if(records.begin(), records.end(), [upTo](const Record& r) { return r.seq > upTo; });
         if (keep == records.begin()) return false;
@@ -242,8 +267,7 @@ public:
 // highest seq the reader has read. A reader is a System's mount (slot 0) or
 // the mount's run condition number slot (from 1, in evaluation order). Kept in
 // the World, sorted by (message, system, mount, slot), and in the World summary,
-// which hashes it field by field; it has no padding all the same
-// (v8-arch-gyo2-summary-padding-a-then-c: an internal record in the summary has none).
+// which hashes it field by field.
 struct MessageCursor {
     std::uint32_t message;
     std::uint32_t system;
@@ -251,8 +275,6 @@ struct MessageCursor {
     std::uint32_t slot;
     std::uint64_t read;
 };
-static_assert(sizeof(MessageCursor) == 4 * sizeof(std::uint32_t) + sizeof(std::uint64_t),
-              "MessageCursor has padding: the World summary holds it");
 
 // The World end of DiagnosticsWriter<T> (spec B.4 point 4, B-13): kept when
 // the World is Interrupted; the Host takes it at its exchange point.
@@ -409,12 +431,9 @@ struct RangeAllotter {
     EntityId last = 0;
     EntityId next = 0;
     bool exhausted = false;
-    // Zero bytes where padding would be: World::Summary hashes a value's raw
-    // bytes, and padding has no set value (MSVC gave one save two summaries).
-    std::array<std::uint8_t, 7> reserved{};
 
     [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {
-        return RangeAllotter{first, last, first, first > last, {}};
+        return RangeAllotter{first, last, first, first > last};
     }
 
     [[nodiscard]] std::optional<EntityId> Allot() noexcept {
@@ -430,8 +449,13 @@ struct RangeAllotter {
 
     [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }
 };
-static_assert(std::has_unique_object_representations_v<RangeAllotter>,
-              "RangeAllotter has padding: World::Summary hashes its raw bytes");
+// Field by field: the padding after exhausted is not hashed.
+inline void HashValue(Hasher& h, const RangeAllotter& value) {
+    HashValue(h, value.first);
+    HashValue(h, value.last);
+    HashValue(h, value.next);
+    HashValue(h, value.exhausted);
+}
 
 namespace Detail {
 

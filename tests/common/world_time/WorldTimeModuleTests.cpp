@@ -199,6 +199,28 @@ TEST_CASE("module: every time Resource is registered and put in; Resimulation is
     CHECK_MESSAGE(registry.Resources()[*registry.ResourceIdOf<W::Tick>()].zone == K::Zone::B, "[wt-time-zone-b] Tick");
 }
 
+// Authority-rollback declaration 3.3: every type the time Module puts into a World has a hash function, so a
+// World with only the Module (no test Resource) has a summary, before and after a frame that discards time.
+TEST_CASE("module: every time type has a hash function: a World with only the time Module has a summary") {
+    O::ProductDescription d;
+    d.name = "game";
+    O::WorldDescription w;
+    w.name = "Main";
+    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(W::TimeSampling{kStep * 9, W::SamplingMode::ManualDelta, {}});
+        return {};
+    });
+    d.worlds.push_back(std::move(w));
+    auto p = Make(std::move(d));
+    const auto before = WorldOf(*p).Summary();
+    CHECK_MESSAGE(static_cast<bool>(before), "[wt-hash-summary] " << (before ? std::string() : before.error().Text()));
+    auto ran = p->RunFrame();
+    REQUIRE(static_cast<bool>(ran));
+    const auto after = WorldOf(*p).Summary();
+    CHECK_MESSAGE(static_cast<bool>(after), "[wt-hash-summary] " << (after ? std::string() : after.error().Text()));
+    CHECK_MESSAGE((before && after && *before != *after), "[wt-hash-summary] a frame left the summary the same");
+}
+
 TEST_CASE("module: by default AdvanceTime is mounted in Main's First and RunFixedSteps in Main's FixedMainLoop") {
     auto p = Make(Game(0));
     const K::FrozenRegistry& registry = *Frozen();

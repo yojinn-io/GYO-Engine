@@ -96,6 +96,7 @@ TEST_CASE("J-6: a World access while Running with no System current fails a GYO_
 namespace {
 
 struct Bound { std::int64_t value; };  // resource, zone B, thread-bound
+void HashValue(Hasher& h, const Bound& v) { HashValue(h, v.value); }
 
 // One thread kept alive for a whole case, so the thread a value was put in on
 // can still use it, remove it or destroy the World.
@@ -359,19 +360,18 @@ TEST_CASE("J-6: a resource not marked threadBound is used on any thread") {
     if (asserted || here || removed) static_cast<void>(rig.release());
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("J-6: the thread mark is not World data: the same value put in on two threads gives one summary") {
     std::unique_ptr<Rig> here = BoundRig(nullptr);
     std::unique_ptr<Rig> there = BoundRig(nullptr);
     here->world().SetResource(Bound{7});
-    const std::string hereSummary = here->world().Summary().Text();
+    const std::string hereSummary = SummaryOf(here->world()).Text();
     Worker worker;
     std::string thereSummary;
     worker.Do([&] {
         there->world().SetResource(Bound{7});
-        thereSummary = there->world().Summary().Text();
+        // No REQUIRE off the test thread: an error is carried back as text.
+        const auto summary = there->world().Summary();
+        thereSummary = summary ? summary->Text() : "error: " + summary.error().Text();
     });
     CHECK_MESSAGE(hereSummary == thereSummary,
                   "[ks-s10-mark-not-data] J-6: two Worlds with the same value put in on two threads have different summaries");
@@ -1283,6 +1283,9 @@ namespace {
 struct Ca { std::int32_t v; };
 struct Cb { std::int32_t v; };
 struct Cc { std::int32_t v; };
+void HashValue(Hasher& h, const Ca& v) { HashValue(h, v.v); }
+void HashValue(Hasher& h, const Cb& v) { HashValue(h, v.v); }
+void HashValue(Hasher& h, const Cc& v) { HashValue(h, v.v); }
 
 SystemResult P0(Query<Write<Ca>> a) {
     for (EntityId id : a.Entities()) a.GetMut<Ca>(id)->v += 1;
@@ -1317,7 +1320,7 @@ constexpr std::array<Registration, 5> kSystems{{
     [](Registrar& r) { r.AddSystem<&P4>(Sys("P4", Zone::C, Sim())); },
 }};
 
-std::string SummaryOf(const std::array<int, 5>& order) {
+std::string OrderSummary(const std::array<int, 5>& order) {
     auto rig = MakeRig([&order](Registrar& r) {
         r.Component<Ca>({.name = "Ca", .zone = Zone::C, .rollback = Rollback::Yes});
         r.Component<Cb>({.name = "Cb", .zone = Zone::C, .rollback = Rollback::Yes});
@@ -1334,14 +1337,11 @@ std::string SummaryOf(const std::array<int, 5>& order) {
         const auto result = rig->Run();
         REQUIRE_MESSAGE(static_cast<bool>(result), Text(result));
     }
-    return rig->world().Summary().Text();
+    return SummaryOf(rig->world()).Text();
 }
 
 } // namespace
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summary") {
     std::array<int, 5> order{0, 1, 2, 3, 4};
     std::vector<std::array<int, 5>> orders;
@@ -1351,6 +1351,6 @@ TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summa
         ++index;
     } while (std::next_permutation(order.begin(), order.end()));
     REQUIRE(orders.size() == 20);
-    const std::string first = SummaryOf(orders.front());
-    for (const auto& each : orders) CHECK(SummaryOf(each) == first);
+    const std::string first = OrderSummary(orders.front());
+    for (const auto& each : orders) CHECK(OrderSummary(each) == first);
 }
