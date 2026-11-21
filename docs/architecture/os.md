@@ -11,6 +11,14 @@ tiers, and Windows processes fixing their code page to UTF-8 through the manifes
 The only Engine code that knows which operating system it runs on. Every other Engine module, every product and
 every tool reaches the operating system through neutral APIs, so none of them branches on the OS.
 
+Inside, the sources are laid out by platform (v8-arch-gyo2-os-src-platform): `src/common` holds what does not depend
+on the OS; everything that does lives under `src/sys`. `src/sys/<platform>` (`windows`, `macos`, `linux`) holds each
+platform's own sources, and the build selects one (`linux` also for any platform that is neither Windows nor
+Apple). `src/sys/Files.cpp`, `Process.cpp` and `Console.cpp` are the implementation macOS and Linux share; where the
+two differ it calls the abstract `Detail::Platform` (`src/sys/Platform.hpp`), which `src/sys/macos` and
+`src/sys/linux` implement. Windows implements the primitives itself and inherits `Platform` with empty steps. No
+source under `src/sys` branches on the OS with the preprocessor.
+
 ```text
 products / tools ──┬──→ engine/modules/* ──→ engine/core/* (logging: engine/core/os, threads, time)
                    ├──→ engine/core/io ──→ engine/core/os ──→ engine/core/base
@@ -198,9 +206,10 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
       process when it returns (about 5 s after the close); the program's own exit ends the wait sooner. Log off
       and system shutdown keep the default handling. `TerminateProcess` never reaches a handler.
 - **Thread** (os-threads-backend, D69). The calls engine/core/threads' `RoleThread` makes on a new role's thread before its
-  body runs, moved from it line by line; what a role is and its lifetime stay with engine/core/threads. One source with
-  per-OS branches (`engine/core/os/src/thread/Thread.cpp`, os-subsystem open decision 11 (c)). Each answers whether
-  the platform took the request and is never an error (Invariant 10).
+  body runs, moved from it line by line; what a role is and its lifetime stay with engine/core/threads. One source per
+  platform (`src/sys/<platform>/Thread.cpp`; it was one source with per-OS branches until
+  v8-arch-gyo2-os-src-platform). Each answers whether the platform took the request and is never an error
+  (Invariant 10).
   - `SetCurrentName` names the calling thread with a UTF-8 name: `pthread_setname_np` on macOS; on Linux with the
     first 15 bytes (the platform's limit); on Windows `SetThreadDescription` (Windows 10 1607 and later, looked up
     at run time) with the name converted to UTF-16. ★ (D69): Windows used to widen each byte, which garbled a
@@ -339,7 +348,7 @@ Known blind spots, left to review:
    shader tool, engine/core/io included), apps and tools uses no fstream, `fopen` or `_wfopen` and no
    `std::filesystem` operation that touches the file system; only the `path` type and pure path operations. Files
    go through engine/core/io's abstraction, whose native backend calls engine/core/os; process facts come from engine/core/os
-   directly. (master's engine/trace wrote its files through engine/os directly, os-subsystem open decision 2,
+   directly. (master's engine/trace wrote its files through engine/core/os directly, os-subsystem open decision 2,
    D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
 3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`

@@ -1,6 +1,8 @@
-// Process facts on POSIX systems (macOS, Linux).
+// Process facts on macOS and Linux; the steps that differ between them are
+// the platform's (Platform.hpp).
 #include "engine/os/Process.hpp"
 
+#include "Platform.hpp"
 #include "../common/Calendar.hpp"
 #include "../common/Paths.hpp"
 
@@ -16,9 +18,6 @@
 #include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
-#if defined(__APPLE__)
-#include <mach-o/dyld.h>
-#endif
 
 namespace Engine::Os::Process {
 
@@ -43,38 +42,9 @@ Base::Result<std::string, OsError> Utf8Only(std::string path) {
 } // namespace
 
 Base::Result<std::string, OsError> ExecutablePath() {
-#if defined(__linux__)
-    std::vector<char> buffer(1024);
-    for (;;) {
-        const ssize_t length = ::readlink("/proc/self/exe", buffer.data(), buffer.size());
-        if (length < 0) {
-            const int error = errno;
-            return Base::Err(FromErrno(OsErrorCode::IoFailed, error, "cannot locate the executable"));
-        }
-        if (static_cast<std::size_t>(length) < buffer.size()) {
-            return Utf8Only(std::string(buffer.data(), static_cast<std::size_t>(length)));
-        }
-        buffer.resize(buffer.size() * 2);
-    }
-#elif defined(__APPLE__)
-    std::vector<char> buffer(1024);
-    auto size = static_cast<std::uint32_t>(buffer.size());
-    if (::_NSGetExecutablePath(buffer.data(), &size) != 0) {
-        // size now holds the length needed.
-        buffer.resize(size);
-        if (::_NSGetExecutablePath(buffer.data(), &size) != 0) {
-            return Base::Err(OsError::Make(OsErrorCode::IoFailed, "cannot locate the executable"));
-        }
-    }
-    const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(buffer.data(), nullptr), &std::free);
-    if (!resolved) {
-        const int error = errno;
-        return Base::Err(FromErrno(OsErrorCode::IoFailed, error, "cannot resolve the executable path"));
-    }
-    return Utf8Only(std::string(resolved.get()));
-#else
-    return Base::Err(OsError::Make(OsErrorCode::Unsupported, "this platform cannot tell the executable path"));
-#endif
+    auto path = Detail::CurrentPlatform().NativeExecutablePath();
+    if (!path) return Base::Err(std::move(path).error());
+    return Utf8Only(std::move(path).value());
 }
 
 Base::Result<std::chrono::nanoseconds, OsError> ProcessCpuTime() {

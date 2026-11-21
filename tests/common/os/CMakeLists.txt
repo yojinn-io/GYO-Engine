@@ -7,13 +7,13 @@ target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)
 set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
-# The wait fallback (src/linux/WakeSignal.cpp) uses the standard library only,
+# The wait fallback (src/sys/linux/WakeSignal.cpp) uses the standard library only,
 # so it also builds on macOS: the same WakeSignalTests run against it here, and
 # its mutants are killed on a developer's Mac too. It does not link gyo_os, so
 # no executable holds two definitions of WakeSignal::Impl.
 if(NOT WIN32)
     add_executable(gyo_os_wake_fallback_tests WakeSignalTests.cpp
-        "${GYO_REPOSITORY_ROOT}/engine/core/os/src/linux/WakeSignal.cpp")
+        "${GYO_REPOSITORY_ROOT}/engine/core/os/src/sys/linux/WakeSignal.cpp")
     target_include_directories(gyo_os_wake_fallback_tests PRIVATE "${GYO_REPOSITORY_ROOT}/engine/core/os/include")
     target_compile_definitions(gyo_os_wake_fallback_tests PRIVATE
         GYO_WAKE_SIGNAL_FALLBACK=1 DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN)

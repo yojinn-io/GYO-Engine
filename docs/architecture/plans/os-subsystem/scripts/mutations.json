@@ -275,7 +275,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    case ENOENT:\n    case ENOTDIR:\n        return OsErrorCode::NotFound;",
       "replace": "    case ENOTDIR:\n        return OsErrorCode::NotFound;",
       "target": "gyo_os_tests",
@@ -299,7 +299,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    if (!S_ISREG(status.st_mode)) {",
       "replace": "    if (false) {",
       "target": "gyo_os_tests",
@@ -309,10 +309,10 @@
     {
       "id": "os-f4-windows-acp",
       "what": "engine/os converts paths with the ANSI code page instead of UTF-8 (R6; os-utf8-codepage moved this from a Windows test to the guard, D66)",
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "constexpr UINT kPathCodePage = CP_UTF8;",
       "replace": "constexpr UINT kPathCodePage = CP_ACP;",
-      "expect": "engine/core/os/src/windows/Files\\.cpp:\\d+: R6 CP_ACP",
+      "expect": "engine/core/os/src/sys/windows/Files\\.cpp:\\d+: R6 CP_ACP",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
@@ -326,7 +326,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    case ERROR_FILE_NOT_FOUND:\n",
       "replace": "",
       "target": "gyo_os_tests",
@@ -380,7 +380,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n    GYO_ASSERT(impl_ != nullptr);\n",
       "replace": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n",
       "target": "gyo_os_tests",
@@ -394,7 +394,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
       "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
       "target": "gyo_os_tests",
@@ -437,7 +437,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    return std::wstring(L\"\\\\\\\\?\\\\\") + full.value();",
       "replace": "    return wide;",
       "target": "gyo_os_tests",
@@ -450,7 +450,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "constexpr std::size_t kLongPathFrom = MAX_PATH - 12;",
       "replace": "constexpr std::size_t kLongPathFrom = MAX_PATH * 4;",
       "target": "gyo_os_tests",
@@ -585,7 +585,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Process.cpp",
+      "file": "engine/core/os/src/sys/Process.cpp",
       "find": "::clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time)",
       "replace": "::clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time)",
       "target": "gyo_os_tests",
@@ -619,7 +619,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Process.cpp",
+      "file": "engine/core/os/src/sys/Process.cpp",
       "find": "std::chrono::seconds{time.tv_sec} + std::chrono::microseconds{time.tv_usec}",
       "replace": "std::chrono::seconds{time.tv_sec} + std::chrono::nanoseconds{time.tv_usec}",
       "target": "gyo_os_tests",
@@ -632,7 +632,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Process.cpp",
+      "file": "engine/core/os/src/sys/windows/Process.cpp",
       "find": "::GetThreadTimes(::GetCurrentThread(), &creation, &exited, &kernel, &user)",
       "replace": "::GetProcessTimes(::GetCurrentProcess(), &creation, &exited, &kernel, &user)",
       "target": "gyo_os_tests",
@@ -645,9 +645,9 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/posix/Process.cpp",
-      "find": "    const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(buffer.data(), nullptr), &std::free);",
-      "replace": "    const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(\".\", nullptr), &std::free);",
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "        const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(buffer.data(), nullptr), &std::free);",
+      "replace": "        const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(\".\", nullptr), &std::free);",
       "target": "gyo_os_tests",
       "cases": "*executable path*",
       "expect": "stem\\(\\) == \"gyo_os_tests\""
@@ -659,7 +659,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Console.cpp",
+      "file": "engine/core/os/src/sys/Console.cpp",
       "find": "constexpr int signals[] = {SIGINT, SIGTERM};",
       "replace": "constexpr int signals[] = {SIGINT};",
       "target": "gyo_os_console_probe",
@@ -680,7 +680,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Console.cpp",
+      "file": "engine/core/os/src/sys/Console.cpp",
       "find": "action.sa_flags = SA_RESTART;",
       "replace": "action.sa_flags = SA_RESTART | SA_RESETHAND;",
       "target": "gyo_os_console_probe",
@@ -721,7 +721,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Console.cpp",
+      "file": "engine/core/os/src/sys/windows/Console.cpp",
       "find": "    case CTRL_CLOSE_EVENT:\n        Detail::RecordShutdown(ShutdownReason::ConsoleClose);",
       "replace": "    case CTRL_CLOSE_EVENT + 100:\n        Detail::RecordShutdown(ShutdownReason::ConsoleClose);",
       "target": "gyo_os_console_probe",
@@ -741,7 +741,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Console.cpp",
+      "file": "engine/core/os/src/sys/windows/Console.cpp",
       "find": "    case CTRL_C_EVENT:\n    case CTRL_BREAK_EVENT:\n",
       "replace": "    case CTRL_C_EVENT:\n",
       "target": "gyo_os_console_probe",
@@ -758,7 +758,7 @@
     {
       "id": "os-c6-ansi-arguments",
       "what": "Windows converts the command line with the ANSI code page instead of UTF-8 (R6; os-utf8-codepage moved this from the console probe to the guard, D66)",
-      "file": "engine/core/os/src/windows/Wide.cpp",
+      "file": "engine/core/os/src/sys/windows/Wide.cpp",
       "find": "const int bytes = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,",
       "replace": "const int bytes = ::WideCharToMultiByte(CP_ACP, 0,",
       "command": [
@@ -767,7 +767,7 @@
         "--root",
         "."
       ],
-      "expect": "engine/core/os/src/windows/Wide\\.cpp:\\d+: R6 CP_ACP"
+      "expect": "engine/core/os/src/sys/windows/Wide\\.cpp:\\d+: R6 CP_ACP"
     },
     {
       "id": "os-g18-windows-extra-link",
@@ -789,7 +789,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Console.cpp",
+      "file": "engine/core/os/src/sys/Console.cpp",
       "find": "action.sa_flags = SA_RESTART;",
       "replace": "action.sa_flags = 0;",
       "target": "gyo_os_console_probe",
@@ -809,7 +809,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Console.cpp",
+      "file": "engine/core/os/src/sys/windows/Console.cpp",
       "find": "    case CTRL_C_EVENT:\n    case CTRL_BREAK_EVENT:\n",
       "replace": "    case CTRL_BREAK_EVENT:\n",
       "target": "gyo_os_console_probe",
@@ -829,7 +829,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Console.cpp",
+      "file": "engine/core/os/src/sys/windows/Console.cpp",
       "find": "        if (RequestedShutdown()) return FALSE;\n",
       "replace": "",
       "target": "gyo_os_console_probe",
@@ -850,7 +850,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "(mode == WriteMode::Append ? O_APPEND : O_TRUNC)",
       "replace": "(O_TRUNC)",
       "target": "gyo_os_tests",
@@ -863,7 +863,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "const DWORD creation = mode == WriteMode::Append ? OPEN_ALWAYS : CREATE_ALWAYS;",
       "replace": "const DWORD creation = CREATE_ALWAYS;",
       "target": "gyo_os_tests",
@@ -876,7 +876,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    if (impl_->endings == LineEndings::AsWritten) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);",
       "replace": "    if (impl_->endings != LineEndings::Native || true) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);",
       "target": "gyo_os_tests",
@@ -890,7 +890,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "        if (end != path.size() && path[end] != '/') continue;",
       "replace": "        if (end != path.size()) continue;",
       "target": "gyo_os_tests",
@@ -904,7 +904,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "            if (::stat(prefix.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) continue;",
       "replace": "            continue;",
       "target": "gyo_os_tests",
@@ -917,7 +917,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;",
       "replace": "constexpr DWORD kShareWriter = 0;",
       "target": "gyo_os_tests",
@@ -974,7 +974,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "(mode == WriteMode::Append ? O_APPEND : O_TRUNC)",
       "replace": "(mode == WriteMode::Append ? 0 : O_TRUNC)",
       "target": "gyo_os_tests",
@@ -987,7 +987,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "mode == WriteMode::Append ? (FILE_APPEND_DATA | SYNCHRONIZE) : GENERIC_WRITE",
       "replace": "GENERIC_WRITE",
       "target": "gyo_os_tests",
@@ -1000,7 +1000,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;",
       "replace": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;",
       "target": "gyo_os_tests",
@@ -1013,7 +1013,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    for (std::size_t end = RootLength(utf8Path) + 1; end <= utf8Path.size(); ++end) {",
       "replace": "    for (std::size_t end = 1; end <= utf8Path.size(); ++end) {",
       "target": "gyo_os_tests",
@@ -1096,7 +1096,7 @@
       "platforms": [
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
       "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
       "target": "gyo_os_tests",
@@ -1109,7 +1109,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    if (IsUncPath(full.value())) return std::wstring(L\"\\\\\\\\?\\\\UNC\\\\\") + full.value().substr(2);\n",
       "replace": "",
       "target": "gyo_io_unc_probe",
@@ -1125,7 +1125,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    if (wide.value().starts_with(L\"\\\\\\\\\") && !IsUncPath(wide.value())) return wide;",
       "replace": "    if (wide.value().starts_with(L\"\\\\\\\\\")) return wide;",
       "target": "gyo_io_unc_probe",
@@ -1141,7 +1141,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    return !((path[2] == L'?' || path[2] == L'.') && (path.size() == 3 || path[3] == L'\\\\'));",
       "replace": "    return true;",
       "target": "gyo_os_tests",
@@ -1205,7 +1205,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    if (std::rename(from.c_str(), to.c_str()) != 0) {",
       "replace": "    if (false) {",
       "target": "gyo_os_tests",
@@ -1219,7 +1219,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    if (::unlink(path.c_str()) != 0) {",
       "replace": "    if (false) {",
       "target": "gyo_os_tests",
@@ -1233,7 +1233,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    auto absolute = MakeAbsolute(utf8Path);\n    if (!absolute) return absolute;\n    const std::string& path = absolute.value();",
       "replace": "    auto absolute = MakeAbsolute(utf8Path);\n    if (!absolute) return absolute;\n    if (!absolute.value().empty()) return std::filesystem::path(absolute.value()).lexically_normal().generic_string();\n    const std::string& path = absolute.value();",
       "target": "gyo_os_tests",
@@ -1247,7 +1247,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "        if ((error != ENOENT && error != ENOTDIR) || end <= 1) {",
       "replace": "        if (true) {",
       "target": "gyo_os_tests",
@@ -1261,7 +1261,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "    return utf8Left == utf8Right;\n}",
       "replace": "    return true;\n}",
       "target": "gyo_os_tests",
@@ -1274,9 +1274,9 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
-      "find": "    candidates = {\"/System/Library/Fonts\", \"/Library/Fonts\"};",
-      "replace": "    candidates = {\"/Library/Fonts\"};",
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "        candidates = {\"/System/Library/Fonts\", \"/Library/Fonts\"};",
+      "replace": "        candidates = {\"/Library/Fonts\"};",
       "target": "gyo_os_tests",
       "cases": "*font*",
       "expect": "CHECK\\( directories.value\\(\\).front\\(\\) == \"/System/Library/Fonts\" \\) is NOT correct"
@@ -1287,7 +1287,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {",
       "replace": "    if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_WRITE_THROUGH)) {",
       "target": "gyo_os_tests",
@@ -1300,7 +1300,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "            if (path.starts_with(L\"\\\\\\\\?\\\\\")) return path.substr(4);",
       "replace": "            if (false) return path.substr(4);",
       "target": "gyo_os_tests",
@@ -1313,7 +1313,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "right.value().data(), static_cast<int>(right.value().size()), TRUE);",
       "replace": "right.value().data(), static_cast<int>(right.value().size()), FALSE);",
       "target": "gyo_os_tests",
@@ -1326,7 +1326,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "        if (!IsMissingComponent(error)) return Base::Err(FromWin32(error, \"cannot resolve the path\", utf8Path));",
       "replace": "        if (true) return Base::Err(FromWin32(error, \"cannot resolve the path\", utf8Path));",
       "target": "gyo_os_tests",
@@ -1389,7 +1389,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "        if (slash == std::string::npos || slash < root) {",
       "replace": "        if (slash == std::string::npos) {",
       "target": "gyo_os_tests",
@@ -1403,7 +1403,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "        end = slash == 0 || slash == std::string::npos ? 1 : slash;",
       "replace": "        end = slash == std::string::npos ? 1 : slash;",
       "target": "gyo_os_tests",
@@ -1416,7 +1416,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "        if (::stat(prefix.c_str(), &status) == 0) {",
       "replace": "        if (char* probe = ::realpath(prefix.c_str(), nullptr); probe != nullptr && (std::free(probe), true)) {",
       "target": "gyo_os_tests",
@@ -1429,7 +1429,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "        if (::lstat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {",
       "replace": "        if (false) {",
       "target": "gyo_os_tests",
@@ -1594,7 +1594,7 @@
       "platforms": [
         "linux"
       ],
-      "file": "engine/core/os/src/thread/Thread.cpp",
+      "file": "engine/core/os/src/sys/linux/Thread.cpp",
       "find": "    return pthread_setname_np(pthread_self(), name.substr(0, 15).c_str()) == 0;",
       "replace": "    return pthread_setname_np(pthread_self(), name.c_str()) == 0;",
       "target": "gyo_threads_tests",
@@ -1608,7 +1608,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "            out += \"\\xEF\\xBF\\xBD\";",
       "replace": "            out += bytes[i];",
       "target": "gyo_os_tests",
@@ -1622,7 +1622,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Files.cpp",
+      "file": "engine/core/os/src/sys/Files.cpp",
       "find": "lead < 0xF0 ? 3 : 4",
       "replace": "lead < 0xF0 ? 2 : 4",
       "target": "gyo_os_tests",
@@ -1635,7 +1635,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    const int bytes = ::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, nullptr, 0, nullptr, nullptr);",
       "replace": "    const int bytes = ::WideCharToMultiByte(kPathCodePage, WC_ERR_INVALID_CHARS, wide.data(), length, nullptr, 0, nullptr, nullptr);",
       "target": "gyo_os_tests",
@@ -1648,7 +1648,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
       "replace": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes ||\n        (std::replace(utf8.begin(), utf8.end(), '\\\\', '/'), false)) {",
       "target": "gyo_os_tests",
@@ -1658,10 +1658,10 @@
     {
       "id": "pu-x5-windows-message-ansi",
       "what": "PathForMessage writes with the ANSI code page on Windows (R6; os-utf8-codepage moved this from a Windows test to the guard, D66)",
-      "file": "engine/core/os/src/windows/Files.cpp",
+      "file": "engine/core/os/src/sys/windows/Files.cpp",
       "find": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
       "replace": "    if (::WideCharToMultiByte(CP_ACP, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
-      "expect": "engine/core/os/src/windows/Files\\.cpp:\\d+: R6 CP_ACP",
+      "expect": "engine/core/os/src/sys/windows/Files\\.cpp:\\d+: R6 CP_ACP",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
@@ -1729,7 +1729,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/windows/Process.cpp",
+      "file": "engine/core/os/src/sys/windows/Process.cpp",
       "find": "    return static_cast<std::uint32_t>(::GetACP());",
       "replace": "    return 1252u;",
       "target": "gyo_os_tests",
@@ -1743,7 +1743,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/posix/Process.cpp",
+      "file": "engine/core/os/src/sys/Process.cpp",
       "find": "    return Base::Err(OsError::Make(OsErrorCode::Unsupported, \"this platform has no ANSI code page\"));",
       "replace": "    return 65001u;",
       "target": "gyo_os_tests",
@@ -1832,7 +1832,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/thread/Thread.cpp",
+      "file": "engine/core/os/src/sys/windows/Thread.cpp",
       "find": "    return SUCCEEDED(describe(::GetCurrentThread(), wide.value().c_str()));",
       "replace": "    return SUCCEEDED(describe(::GetCurrentThread(), std::wstring(name.begin(), name.end()).c_str()));",
       "target": "gyo_os_tests",
@@ -1845,7 +1845,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/thread/Thread.cpp",
+      "file": "engine/core/os/src/sys/macos/Thread.cpp",
       "find": "        hint == PriorityHint::Background ? QOS_CLASS_UTILITY : QOS_CLASS_DEFAULT;",
       "replace": "        hint == PriorityHint::Background ? QOS_CLASS_BACKGROUND : QOS_CLASS_DEFAULT;",
       "target": "gyo_os_tests",
@@ -1858,7 +1858,7 @@
       "platforms": [
         "win32"
       ],
-      "file": "engine/core/os/src/thread/Thread.cpp",
+      "file": "engine/core/os/src/sys/windows/Thread.cpp",
       "find": "    const int value = hint == PriorityHint::Interactive ? THREAD_PRIORITY_ABOVE_NORMAL :",
       "replace": "    const int value = hint == PriorityHint::Interactive ? THREAD_PRIORITY_HIGHEST :",
       "target": "gyo_os_tests",
@@ -1871,7 +1871,7 @@
       "platforms": [
         "linux"
       ],
-      "file": "engine/core/os/src/thread/Thread.cpp",
+      "file": "engine/core/os/src/sys/linux/Thread.cpp",
       "find": "    return setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10) == 0;",
       "replace": "    return setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 5) == 0;",
       "target": "gyo_os_tests",
@@ -1884,7 +1884,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/thread/Thread.cpp",
+      "file": "engine/core/os/src/sys/macos/Thread.cpp",
       "find": "    return pthread_setname_np(name.c_str()) == 0;",
       "replace": "    return true;",
       "target": "gyo_os_tests",
@@ -1964,7 +1964,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "        std::unique_lock lock(mutex);\n        if (!pending) {",
       "replace": "        const bool signalled = pending;\n        std::unique_lock lock(mutex);\n        if (!signalled) {",
       "target": "gyo_os_wake_fallback_tests",
@@ -1994,7 +1994,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/macos/WakeSignal.cpp",
       "find": "EV_SET(&change, UserIdent, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);",
       "replace": "EV_SET(&change, UserIdent, EVFILT_USER, 0, 0, 0, nullptr);",
       "target": "gyo_os_tests",
@@ -2010,7 +2010,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/macos/WakeSignal.cpp",
       "find": "            changes = 1;",
       "replace": "            changes = 0;",
       "target": "gyo_os_tests",
@@ -2039,7 +2039,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/macos/WakeSignal.cpp",
       "find": "    return WaitMechanism::Kqueue;",
       "replace": "    return WaitMechanism::ConditionVariable;",
       "target": "gyo_os_tests",
@@ -2055,7 +2055,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/macos/WakeSignal.cpp",
       "find": "            const auto nanoseconds = std::max<std::int64_t>(1, timeout->count());",
       "replace": "            const auto nanoseconds = std::int64_t{1};",
       "target": "gyo_os_tests",
@@ -2072,7 +2072,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "            pending = true;\n",
       "replace": "",
       "target": "gyo_os_wake_fallback_tests",
@@ -2089,7 +2089,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "        }\n        pending = false;\n",
       "replace": "        }\n",
       "target": "gyo_os_wake_fallback_tests",
@@ -2105,7 +2105,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/macos/WakeSignal.cpp",
       "find": "EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);",
       "replace": "EVFILT_USER, EV_ADD, 0, 0, nullptr);",
       "target": "gyo_os_tests",
@@ -2122,8 +2122,8 @@
         "darwin"
       ],
       "file": "engine/core/os/CMakeLists.txt",
-      "find": "        target_sources(gyo_os PRIVATE src/macos/WakeSignal.cpp)",
-      "replace": "        target_sources(gyo_os PRIVATE src/linux/WakeSignal.cpp)",
+      "find": "src/sys/macos/Thread.cpp src/sys/macos/WakeSignal.cpp)",
+      "replace": "src/sys/macos/Thread.cpp src/sys/linux/WakeSignal.cpp)",
       "target": "gyo_os_tests",
       "cases": "*platform mechanism*",
       "expect": "CHECK\\( wake\\.Mechanism\\(\\) == WaitMechanism::Kqueue \\) is NOT correct"
@@ -2138,7 +2138,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "    return WaitMechanism::ConditionVariable;",
       "replace": "    return WaitMechanism::Kqueue;",
       "target": "gyo_os_wake_fallback_tests",
@@ -2155,7 +2155,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "        if (!pending) {\n            if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n            else condition.wait(lock);\n        }\n        pending = false;\n",
       "replace": "        if (pending) {\n            pending = false;\n            return;\n        }\n        if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n        else condition.wait(lock);\n",
       "target": "gyo_os_wake_fallback_tests",
@@ -2173,7 +2173,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "            else condition.wait(lock);\n",
       "replace": "",
       "target": "gyo_os_wake_fallback_tests",
@@ -2189,7 +2189,7 @@
       "platforms": [
         "darwin"
       ],
-      "file": "engine/core/os/src/macos/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/macos/WakeSignal.cpp",
       "find": "EVFILT_TIMER, EV_ADD | EV_ONESHOT,",
       "replace": "EVFILT_TIMER, EV_ADD,",
       "target": "gyo_os_tests",
@@ -2206,7 +2206,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "        {\n            const std::lock_guard lock(mutex);\n            pending = true;\n        }\n",
       "replace": "        pending = true;\n",
       "target": "gyo_os_wake_fallback_tests",
@@ -2224,7 +2224,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "        condition.notify_one();\n",
       "replace": "",
       "target": "gyo_os_wake_fallback_tests",
@@ -2242,7 +2242,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "            if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));\n            else condition.wait(lock);\n",
       "replace": "            static_cast<void>(timeout);\n            condition.wait(lock);\n",
       "target": "gyo_os_wake_fallback_tests",
@@ -2259,7 +2259,7 @@
         "darwin",
         "linux"
       ],
-      "file": "engine/core/os/src/linux/WakeSignal.cpp",
+      "file": "engine/core/os/src/sys/linux/WakeSignal.cpp",
       "find": "condition.wait_for(lock, *timeout)",
       "replace": "condition.wait_for(lock, std::chrono::nanoseconds(1))",
       "target": "gyo_os_wake_fallback_tests",
