@@ -10,9 +10,13 @@
 //       hash with the type's authority registration number, summed mod 2^64
 //       (order free; equal cells do not cancel). No entity id (authority-rollback
 //       declaration 4.4). Its shape is not in the contract (authority 4.4).
-//   CollectedSystems          the Systems, hooks and observers the consistency
+//   CollectedOf               the Systems, hooks and observers the consistency
 //       fingerprint takes: those seen at startup to write decision data, less
-//       OneEndOnly (the dataset report's list).
+//       OneEndOnly.
+//   DatasetReport             G-5's decision dataset: the fingerprint in words
+//       (the types in authority registration order, the collected Systems, hooks
+//       and observers, Runs, and every OneEndOnly with its reason), for both ends
+//       to compare when they do not connect (authority declaration 4.3, 5.9).
 //   ExportAuthoritySources    G-5: the source files of what writes decision data
 //       (Systems, hooks, observers, the functions of Registrar::InitialValue for
 //       a decision component), as gyo.authority-sources v1 JSON, for the
@@ -80,6 +84,8 @@ struct DecisionKeys {
 // (Registrar::InitialValue, through chains).
 [[nodiscard]] std::vector<Kernel::AccessKey> WrittenKeys(const Kernel::FrozenRegistry& registry, const Kernel::AccessSet& access);
 [[nodiscard]] Collected CollectedOf(const Kernel::FrozenRegistry& registry, const AuthorityRegistry& registrations);
+
+[[nodiscard]] ::Engine::Base::Result<std::string, AuthorityFailure> DatasetReport(const Kernel::World& world);
 
 struct AuthoritySourcesOptions {
     // Absolute path of the repository root; registration sites are made relative to it.

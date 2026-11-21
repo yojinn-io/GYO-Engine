@@ -18,17 +18,467 @@
   },
   {
    "id": "au-no-strategy-refused",
-   "what": "a World with no strategy is refused (authority-rollback 4.2, authority 4.7: only a World with authority registrations needs one). Only it catches the no-strategy path",
+   "what": "a World with no strategy is refused even without authority registrations (authority-rollback 4.2, authority 4.7: only a World with authority registrations needs one). Only it catches the condition",
    "guards": [
     "authority-rollback-declaration 4.2",
     "authority 4.4"
    ],
    "file": "engine/modules/authority/src/AuthorityModule.cpp",
-   "find": "    if (options == nullptr || !options->strategy) return;",
-   "replace": "    if (options == nullptr || !options->strategy) {\n        context.Report(\"AU-E9\", \"no strategy\");\n        return;\n    }",
+   "find": "        if (table != nullptr && table->Any()) {",
+   "replace": "        if (true) {",
    "target": "gyo_authority_tests",
    "cases": "authority socket:*",
    "expect": "\\[au\\-no\\-strategy\\]"
+  },
+  {
+   "id": "au-no-strategy-silent",
+   "what": "a World with authority registrations and no strategy is not reported (authority 4.7, AU-E2). Only it catches AU-E2",
+   "guards": [
+    "authority DI-A 11",
+    "authority 4.7"
+   ],
+   "file": "engine/modules/authority/src/AuthorityModule.cpp",
+   "find": "            context.Report(\"AU-E2\",",
+   "replace": "            if (false) context.Report(\"AU-E2\",",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: without a strategy*",
+   "expect": "\\[au\\-no\\-strategy\\]"
+  },
+  {
+   "id": "au-no-strategy-not-in-kernel",
+   "what": "without a strategy the decision type is not put into the kernel (authority-rollback 4.2: the kernel R-E4 would hide AU-E2). Only it catches that path",
+   "guards": [
+    "authority DI-A 11",
+    "authority-rollback-declaration 4.2"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "        kept.ops->registerInKernel(setup_->Registrar(), kept.name, kept.capacity);\n        return;",
+   "replace": "        return;",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: without a strategy*",
+   "expect": "\\[au\\-no\\-strategy\\]"
+  },
+  {
+   "id": "au-on-behalf-skipped",
+   "what": "the strategy is not called at a data registration (DI-A 11: on behalf at the call). Only it catches the call",
+   "guards": [
+    "authority DI-A 11"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "    context.data_ = &kept;\n    strategy_->OnRegister(context);",
+   "replace": "    context.data_ = &kept;\n    static_cast<void>(context);",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: a decision type goes into*",
+   "expect": "\\[au\\-in\\-kernel\\]"
+  },
+  {
+   "id": "au-rollback-not-on-behalf",
+   "what": "the server authority does not register a decision type in the rollback Module (authority 4.3). Only it catches the on-behalf rollback registration",
+   "guards": [
+    "authority 4.3",
+    "authority DI-A 11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        context.RegisterInRollback();\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: a decision type goes into*",
+   "expect": "\\[au\\-on\\-behalf\\-rollback\\]"
+  },
+  {
+   "id": "au-input-rolled",
+   "what": "an input is registered as rollback state on behalf (authority 4.3, Z8: inputs are never); the World then fails with AU-E7. Only it catches the input filter of the on-behalf registration",
+   "guards": [
+    "authority 4.3"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "    if (data_->ops->registerInRollback == nullptr || data_->options.input) return;",
+   "replace": "    if (data_->ops->registerInRollback == nullptr) return;",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: the rollback options*",
+   "expect": "AU\\-E7 decision input 'Command'"
+  },
+  {
+   "id": "au-norollback-rolled",
+   "what": "NoRollback still registers the type as one that rolls back (authority 4.3). Only it catches the choice",
+   "guards": [
+    "authority 4.3"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "    if (choice != RollbackChoice::Rollback) return;\n    if constexpr (std::equality_comparable<T> && std::is_copy_constructible_v<T>) {\n        rollback.Component<T>();",
+   "replace": "    if (choice == RollbackChoice::Derived || choice == RollbackChoice::Self) return;\n    if constexpr (std::equality_comparable<T> && std::is_copy_constructible_v<T>) {\n        rollback.Component<T>();",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: the rollback options*",
+   "expect": "\\[au\\-norollback\\]"
+  },
+  {
+   "id": "au-derived-dropped",
+   "what": "Derived registers nothing (authority 4.3). Only it catches the Derived choice",
+   "guards": [
+    "authority 4.3"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "    if (choice == RollbackChoice::Derived) rollback.Derived<T>();\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: the rollback options*",
+   "expect": "\\[au\\-derived\\]"
+  },
+  {
+   "id": "au-ingress-not-skipped",
+   "what": "the server authority adds the entry without the run condition (authority 4.4, D-E15). Only it catches the on-behalf condition",
+   "guards": [
+    "authority 4.4",
+    "authority DI-A 11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        context.Rollback().SkipDuringResimulation(context.IngressOptions());\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: an entry is added*",
+   "expect": "\\[au\\-ingress\\-skipped\\]"
+  },
+  {
+   "id": "au-dynamic-insert-unchecked",
+   "what": "AU-E3 is not reported (authority 5.5: the decision part does not change after startup). Only it catches AU-E3",
+   "guards": [
+    "authority 5.5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    if (context.World().DynamicInsert()) {",
+   "replace": "    if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E3*",
+   "expect": "\\[au\\-dynamic\\-insert\\]"
+  },
+  {
+   "id": "au-names-unchecked",
+   "what": "a Runs System that names nothing is not reported (DI-A 10, AU-E4). Only it catches the Runs half of AU-E4",
+   "guards": [
+    "authority DI-A 10"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (registry.SystemNamed(runs.system) == nullptr) {",
+   "replace": "        if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E4*",
+   "expect": "\\[au\\-names\\]"
+  },
+  {
+   "id": "au-mark-unchecked",
+   "what": "a MarkResource that names nothing is not reported (DI-A 10, AU-E4). Only it catches the marks half of AU-E4",
+   "guards": [
+    "authority DI-A 10"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (!found) {",
+   "replace": "        if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: a mark only records*",
+   "expect": "\\[au\\-mark\\-missing\\]"
+  },
+  {
+   "id": "au-tick-writer-unchecked",
+   "what": "a System that writes Tick and is not on the time Module's list is not reported (authority 5.4, AU-E5). Only it catches AU-E5",
+   "guards": [
+    "authority 5.4"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (std::find(allowed.begin(), allowed.end(), system.name) != allowed.end()) continue;\n            context.Report(\"AU-E5\"",
+   "replace": "            continue;\n            context.Report(\"AU-E5\"",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E5*",
+   "expect": "\\[au\\-tick\\-writer\\]"
+  },
+  {
+   "id": "au-tick-driver-refused",
+   "what": "the time Module's driver is reported as a Tick writer (authority 5.4: the list is read). Only it catches the list",
+   "guards": [
+    "authority 5.4"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (std::find(allowed.begin(), allowed.end(), system.name) != allowed.end()) continue;",
+   "replace": "            static_cast<void>(allowed);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E5*",
+   "expect": "\\[au\\-tick\\-driver\\]"
+  },
+  {
+   "id": "au-z6-unchecked",
+   "what": "a System of a resimulated schedule writing decision data that does not roll back is not reported (Z6, AU-E6). Only it catches the System half of Z6",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (!judged(key) || rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) continue;",
+   "replace": "            continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 (Z6)*",
+   "expect": "\\[au\\-z6\\-system\\]"
+  },
+  {
+   "id": "au-z6-every-schedule",
+   "what": "Z6 looks at every schedule, not only the resimulated ones (authority 5.11). Only it catches the schedule filter",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (system.removed || !MountedIn(system, resimulated) || rollback.Skipped(system.name)) continue;",
+   "replace": "        if (system.removed || rollback.Skipped(system.name)) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 (Z6)*",
+   "expect": "\\[au\\-z6\\-frame\\]"
+  },
+  {
+   "id": "au-z6-hooks-unchecked",
+   "what": "a hook writing decision data that does not roll back is not reported (Z6 for hooks and observers). Only it catches the hook half",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        for (const Kernel::HookInfo& hook : registry.Hooks()) checkWriter(\"hook '\" + hook.name + \"'\", hook.access);",
+   "replace": "        static_cast<void>(checkWriter);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 (Z6)*",
+   "expect": "\\[au\\-z6\\-hook\\]"
+  },
+  {
+   "id": "au-funnel-ignored",
+   "what": "the components a sync point fills through Registrar::InitialValue are not counted as written (authority-rollback 4.4, the funnel, B3). Only it catches the funnel",
+   "guards": [
+    "authority 5.11",
+    "authority-rollback-declaration 4.4"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "            keys.push_back({Kernel::AccessKind::Component, rule.target});\n            pending.push_back(rule.target);",
+   "replace": "            pending.push_back(rule.target);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 (Z6)*",
+   "expect": "\\[au\\-z6\\-funnel\\]"
+  },
+  {
+   "id": "au-z6-tick-not-excepted",
+   "what": "the tick is not the exception of Z6 (authority 5.11: it does not roll back; a resimulation moves it back). Only it catches the exception",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        return key.kind != Kernel::AccessKind::Message && decision.Has(key) && !(tick && key == *tick);",
+   "replace": "        return key.kind != Kernel::AccessKind::Message && decision.Has(key);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 leaves out*",
+   "expect": "\\[au\\-z6\\-exceptions\\]"
+  },
+  {
+   "id": "au-z6-skipped-counted",
+   "what": "a System skipped while resimulating (an entry writing the decision input) counts for Z6. Only it catches the exemption",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (system.removed || !MountedIn(system, resimulated) || rollback.Skipped(system.name)) continue;",
+   "replace": "        if (system.removed || !MountedIn(system, resimulated)) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E8*",
+   "expect": "\\[au\\-ingress\\-not\\-skipped\\] the official strategy"
+  },
+  {
+   "id": "au-z8-unchecked",
+   "what": "a decision input registered as rollback state is not reported (Z8, AU-E7). Only it catches AU-E7",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (!record.options.input) continue;",
+   "replace": "        continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E7*",
+   "expect": "\\[au\\-z8\\]"
+  },
+  {
+   "id": "au-de15-unchecked",
+   "what": "an entry in a resimulated schedule without the condition is not reported (D-E15, AU-E8). Only it catches AU-E8",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (system == nullptr || !MountedIn(*system, resimulated) || rollback.Skipped(entry.system)) continue;",
+   "replace": "        continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E8*",
+   "expect": "\\[au\\-ingress\\-not\\-skipped\\] (?!the official)"
+  },
+  {
+   "id": "au-runs-unchecked",
+   "what": "a Runs System running a schedule not registered as nested is not reported (AU-E9). Only it catches AU-E9",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (resimulated.count(schedule) != 0) continue;",
+   "replace": "            continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E9*",
+   "expect": "\\[au\\-runs\\-nested\\]"
+  },
+  {
+   "id": "au-fp-kernel-ids",
+   "what": "the fingerprint numbers the decision types by kernel id instead of authority order (DI-A 5: a Client registers more ordinary data). Only it catches the numbering",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        types.emplace_back(record.seq, std::to_string(static_cast<int>(record.kind)) + record.name + \"#\" + std::to_string(record.capacity));",
+   "replace": "        types.emplace_back(record.ops->idIn(registry).value_or(0) * 100 + record.seq, std::to_string(static_cast<int>(record.kind)) + record.name + \"#\" + std::to_string(record.ops->idIn(registry).value_or(0)));",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the fingerprint does not change*",
+   "expect": "\\[au\\-fp\\-ordinary\\]"
+  },
+  {
+   "id": "au-fp-every-system",
+   "what": "the fingerprint takes every System, not only those writing decision data (DI-A 5). Only it catches the collection",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        if (WritesDecision(registry, decision, system.access)) out.systems.push_back(system.name);",
+   "replace": "        out.systems.push_back(system.name);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the fingerprint does not change*",
+   "expect": "\\[au\\-fp\\-ordinary\\]"
+  },
+  {
+   "id": "au-fp-one-end-taken",
+   "what": "a OneEndOnly System is taken into the fingerprint (DI-A 5). Only it catches OneEndOnly",
+   "guards": [
+    "authority DI-A 5",
+    "authority 4.3"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        if (system.removed || OneEnd(registrations, system.name)) continue;",
+   "replace": "        if (system.removed) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the fingerprint does not change*",
+   "expect": "\\[au\\-fp\\-one\\-end\\]"
+  },
+  {
+   "id": "au-fp-every-step",
+   "what": "the fingerprint keeps every System step of a Plan, not only the collected ones (DI-A 5: a Client has more Systems, such as the rollback record). Only it catches the reduction of the Plan",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (collectedSet.count(step.name) == 0) continue;",
+   "replace": "            if (collectedSet.count(step.name) == 0) {\n                steps.emplace_back(step.name, false);\n                continue;\n            }",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the fingerprint does not change*",
+   "expect": "\\[au\\-fp\\-two\\-ends\\]"
+  },
+  {
+   "id": "au-fp-order-dropped",
+   "what": "the fingerprint leaves out the Plan order (DI-A 5, P5: the tie order within a schedule). Only it catches the order",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        out.U64(steps.size());\n        for (const auto& [name, sync] : steps) {\n            out.Str(name);",
+   "replace": "        out.U64(steps.size());\n        std::sort(steps.begin(), steps.end());\n        for (const auto& [name, sync] : steps) {\n            out.Str(name);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the fingerprint changes*",
+   "expect": "\\[au\\-fp\\-plan\\-order\\]"
+  },
+  {
+   "id": "au-fp-strategy-dropped",
+   "what": "the strategy's name is not in the fingerprint (authority 5.5). Only it catches the strategy",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    out.Str(std::string(Name()));\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the fingerprint changes*",
+   "expect": "\\[au\\-fp\\-strategy\\]"
+  },
+  {
+   "id": "au-digest-xor",
+   "what": "the digest merges with XOR (DI-A 12: two equal cells cancel). Only it catches the merge",
+   "guards": [
+    "authority DI-A 12"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "        sum += CellDigest(index, h);\n    }\n    return sum;",
+   "replace": "        sum ^= CellDigest(index, h);\n    }\n    return sum;",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the digest*",
+   "expect": "\\[au\\-digest\\-no\\-cancel\\]"
+  },
+  {
+   "id": "au-digest-exclude-ignored",
+   "what": "digestExclude is ignored (authority 5.6). Only it catches the exclusion",
+   "guards": [
+    "authority 5.6"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        if (record.options.digestExclude || record.ops->digest == nullptr) continue;",
+   "replace": "        if (record.ops->digest == nullptr) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the digest*",
+   "expect": "\\[au\\-digest\\-exclude\\]"
+  },
+  {
+   "id": "au-digest-marks-dropped",
+   "what": "the types marked by type (the tick) are left out of the digest (authority 5.4: the tick is decision data). Only it catches the marks in the digest",
+   "guards": [
+    "authority 5.6",
+    "authority 5.4"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        if (mark.ops != nullptr && mark.ops->digest != nullptr) sum += mark.ops->digest(world, mark.seq);",
+   "replace": "        static_cast<void>(mark);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the digest*",
+   "expect": "\\[au\\-digest\\-tick\\]"
+  },
+  {
+   "id": "au-g5-owner-unchecked",
+   "what": "G-5: a writer outside the owner root is left out silently instead of an error (the list never names a file the scanner cannot read). Only it catches the owner check",
+   "guards": [
+    "authority 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        if (relative.rfind(owner + \"/\", 0) != 0) {",
+   "replace": "        if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: G-5*",
+   "expect": "\\[au\\-g5\\-outside\\]"
+  },
+  {
+   "id": "au-g5-initial-value-dropped",
+   "what": "G-5 leaves out the files of Registrar::InitialValue functions for a decision component (authority 5.9). Only it catches them",
+   "guards": [
+    "authority 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "            add(rule.source, \"the initial value of a decision component\", registry.Components()[rule.target].name);",
+   "replace": "            static_cast<void>(rule);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: G-5 lists the file of a Registrar::InitialValue*",
+   "expect": "\\[au\\-g5\\-initial\\-value\\]"
+  },
+  {
+   "id": "au-dataset-one-end-dropped",
+   "what": "the dataset report leaves out OneEndOnly (authority 4.3: the startup report lists every such mark). Only it catches that list",
+   "guards": [
+    "authority 4.3",
+    "authority 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    for (const OneEndRecord& one : registrations.oneEnd) out += \"one-end-only \"",
+   "replace": "    for (const OneEndRecord& one : std::vector<OneEndRecord>{}) out += \"one-end-only \"",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the dataset report*",
+   "expect": "\\[au\\-dataset\\-one\\-end\\]"
   }
  ]
 }

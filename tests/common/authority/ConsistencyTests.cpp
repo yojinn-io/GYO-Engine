@@ -15,6 +15,7 @@ K::SystemResult WriteHealth(K::Query<K::Write<Health>>) { return {}; }
 K::SystemResult SecondHealth(K::Query<K::Write<Health>>) { return {}; }
 K::SystemResult WriteGlow(K::Query<K::Write<Glow>>) { return {}; }
 K::SystemResult Panel(K::Query<K::Write<Health>>) { return {}; }
+Health HealthFromArmor(const Armor& armor) { return Health{armor.value}; }
 
 // The base World: Health decides; WriteHealth then SecondHealth write it (registration order breaks the tie).
 void Base(O::WorldSetup& s) {
@@ -56,6 +57,14 @@ TEST_CASE("authority consistency: the fingerprint changes with the decision part
                       Base(s);
                       s.Registrar().AddSystem<&Panel>(In("Panel", "Main", "Update"));
                   }) != base, "[au-fp-writer]");
+    // The same registrations, the Plan order turned round by a before (before / after themselves are not taken).
+    CHECK_MESSAGE(FingerprintOf([](O::WorldSetup& s) {
+                      A::AuthorityEntry(s).Component<Health>("Health");
+                      s.Registrar().AddSystem<&WriteHealth>(In("WriteHealth", "FixedUpdate", "Update"));
+                      K::SystemOptions second = In("SecondHealth", "FixedUpdate", "Update");
+                      second.mounts[0].before = {"WriteHealth"};
+                      s.Registrar().AddSystem<&SecondHealth>(second);
+                  }) != base, "[au-fp-plan-order]");
     const auto other = std::make_shared<A::ServerAuthorityStrategy>();
     class Renamed final : public A::ServerAuthorityStrategy {
     public:
@@ -145,4 +154,38 @@ TEST_CASE("authority consistency: G-5: the export lists the files of what writes
     const auto outside = A::ExportAuthoritySources(world, {root, "tests/common/somewhere_else", {}, "0000000"});
     REQUIRE_MESSAGE(!outside, "[au-g5-outside] a writer outside the owner root was left out silently");
     CHECK_MESSAGE(outside.error().code == A::AuthorityFailureCode::SourceOutsideRoot, "[au-g5-outside] code");
+}
+
+TEST_CASE("authority consistency: the dataset report lists the types, the collected writers and every OneEndOnly") {
+    auto built = Build([](O::WorldSetup& s) {
+        Base(s);
+        A::AuthorityEntry(s).Mark<W::Tick>();
+        s.Registrar().AddSystem<&Panel>(In("Panel", "Main", "Update"));
+        A::AuthorityEntry(s).OneEndOnly("Panel", "the Client's debug panel");
+    });
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    const auto report = A::DatasetReport((*built)->World("Main").GetWorld());
+    REQUIRE(static_cast<bool>(report));
+    CHECK_MESSAGE(report->find("type 0 component Health\n") != std::string::npos, "[au-dataset] " << *report);
+    CHECK_MESSAGE(report->find("type 1 marked resource Tick\n") != std::string::npos, "[au-dataset] " << *report);
+    CHECK_MESSAGE((report->find("system WriteHealth\n") != std::string::npos && report->find("system Panel\n") == std::string::npos),
+                  "[au-dataset] " << *report);
+    CHECK_MESSAGE(report->find("one-end-only Panel (the Client's debug panel)\n") != std::string::npos, "[au-dataset-one-end] " << *report);
+}
+
+TEST_CASE("authority consistency: G-5 lists the file of a Registrar::InitialValue function for a decision component") {
+    auto built = Build([](O::WorldSetup& s) {
+        s.Registrar().Component<Armor>({.name = "ArmorRequest"});
+        A::AuthorityEntry(s).Component<Health>("Health");
+        s.Registrar().InitialValue<Health, &HealthFromArmor>();
+    });
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    std::string here = __FILE__;
+    for (char& c : here) {
+        if (c == '\\') c = '/';
+    }
+    const std::string root = here.substr(0, here.rfind("/tests/common/authority/"));
+    const auto exported = A::ExportAuthoritySources((*built)->World("Main").GetWorld(), {root, "tests/common/authority", {}, "0"});
+    REQUIRE(static_cast<bool>(exported));
+    CHECK_MESSAGE(exported->find("\"tests/common/authority/ConsistencyTests.cpp\"") != std::string::npos, "[au-g5-initial-value] " << *exported);
 }

@@ -147,6 +147,50 @@ Collected CollectedOf(const Kernel::FrozenRegistry& registry, const AuthorityReg
     return sum;
 }
 
+::Engine::Base::Result<std::string, AuthorityFailure> DatasetReport(const Kernel::World& world) {
+    if (!world.Types().ResourceIdOf<AuthorityRegistry>() || world.Resource<AuthorityRegistry>() == nullptr) {
+        return ::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
+    }
+    const Kernel::FrozenRegistry& registry = world.Types();
+    const AuthorityRegistry& registrations = *world.Resource<AuthorityRegistry>();
+    std::string out = "gyo.authority.dataset 1\n";
+    out += "strategy " + (registrations.strategy ? std::string(registrations.strategy->Name()) + " " +
+                                                       std::to_string(registrations.strategy->Version())
+                                                 : std::string("none")) + "\n";
+    std::vector<std::pair<std::uint32_t, std::string>> types;
+    const char* kinds[] = {"component", "resource", "message"};
+    for (const DataRecord& record : registrations.data) {
+        std::string line = std::string(kinds[static_cast<int>(record.kind)]) + " " + record.name;
+        if (record.kind == DataKind::Message) line += " capacity=" + std::to_string(record.capacity);
+        if (record.options.input) line += " input";
+        if (record.options.digestExclude) line += " digest-exclude";
+        types.emplace_back(record.seq, line);
+    }
+    for (const MarkRecord& mark : registrations.marks) {
+        std::string name = mark.name;
+        if (mark.ops != nullptr) {
+            if (const auto id = mark.ops->idIn(registry)) {
+                name = mark.kind == DataKind::Component ? registry.Components()[*id].name : registry.Resources()[*id].name;
+            }
+        }
+        types.emplace_back(mark.seq, std::string("marked ") + kinds[static_cast<int>(mark.kind)] + " " + name +
+                                         (mark.ops == nullptr ? " (by name)" : ""));
+    }
+    std::sort(types.begin(), types.end());
+    for (const auto& [seq, line] : types) out += "type " + std::to_string(seq) + " " + line + "\n";
+    const Collected collected = CollectedOf(registry, registrations);
+    for (const std::string& name : collected.systems) out += "system " + name + "\n";
+    for (const std::string& name : collected.hooks) out += "hook " + name + "\n";
+    for (const std::string& name : collected.observers) out += "observer " + name + "\n";
+    for (const RunsRecord& runs : registrations.runs) {
+        out += "runs " + runs.system;
+        for (const std::string& schedule : runs.schedules) out += " " + schedule;
+        out += "\n";
+    }
+    for (const OneEndRecord& one : registrations.oneEnd) out += "one-end-only " + one.system + " (" + one.reason + ")\n";
+    return out;
+}
+
 namespace {
 
 std::string Normalize(std::string path) {

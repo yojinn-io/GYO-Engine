@@ -100,11 +100,13 @@ TEST_CASE("authority checks: AU-E6 (Z6): decision data written in a resimulated 
 
 TEST_CASE("authority checks: AU-E6 leaves out the tick and messages") {
     const std::string text = BuildText([](O::WorldSetup& s) {
-        Step(s);
+        // The frame schedule as the step schedule: the time Module's driver (RunFixedSteps, which writes Tick)
+        // and a message writer run in a resimulated schedule.
+        R::RollbackEntry(s).StepSchedule("Main", "Last");
         A::AuthorityEntry authority(s);
         authority.Mark<W::Tick>();
         authority.Message<Hit>("Hit");
-        s.Registrar().AddSystem<&SendHit>(In("SendHit", "FixedUpdate", "Update"));
+        s.Registrar().AddSystem<&SendHit>(In("SendHit", "Main", "Update"));
     }, Client());
     CHECK_MESSAGE(text == "built", "[au-z6-exceptions] " << text);
 }
