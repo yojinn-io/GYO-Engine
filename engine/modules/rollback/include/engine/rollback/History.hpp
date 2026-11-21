@@ -45,11 +45,15 @@ public:
     // inbox has one, else the history's.
     virtual void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId> alive,
                        const InboxColumnBase* authoritative) const = 0;
-    // Whether an authoritative value at or before tick differs from the history at tick (only the entities the
-    // inbox has a value for are compared).
-    [[nodiscard]] virtual bool Differs(std::uint64_t tick, const InboxColumnBase& authoritative) const = 0;
-    // The history at tick takes the authoritative values (it agrees with the authority afterwards).
-    virtual void Adopt(std::uint64_t tick, const InboxColumnBase& authoritative) = 0;
+    // Whether an authoritative value at or before tick differs from the history at tick. Only the entities the
+    // inbox has a value for and that were alive at tick are compared: whether an entity is alive follows the
+    // game's spawns and despawns (declaration 5.5: what is not said is a spawn or a despawn of the game), so a
+    // value for an entity this World does not have cannot be put back and is not a reason to go back.
+    [[nodiscard]] virtual bool Differs(std::uint64_t tick, const InboxColumnBase& authoritative,
+                                       std::span<const Kernel::EntityId> alive) const = 0;
+    // The history at tick takes the authoritative values of the entities alive at tick (it agrees with the
+    // authority afterwards).
+    virtual void Adopt(std::uint64_t tick, const InboxColumnBase& authoritative, std::span<const Kernel::EntityId> alive) = 0;
 
 protected:
     ColumnHistoryBase() = default;
@@ -80,7 +84,7 @@ public:
         for (auto it = entries_.begin(); it != entries_.end();) {
             std::deque<Entry>& list = it->second;
             while (list.size() >= 2 && list[1].tick <= oldest) list.pop_front();
-            if (list.size() == 1 && list.front().tick <= oldest && !list.front().value) {
+            if (list.empty() || (list.size() == 1 && list.front().tick <= oldest && !list.front().value)) {
                 it = entries_.erase(it);
             } else {
                 ++it;
@@ -104,9 +108,11 @@ public:
         set.Column<T>(std::move(cells), [equal = equal_](const T& a, const T& b) { return Same(equal, a, b); });
     }
 
-    [[nodiscard]] bool Differs(std::uint64_t tick, const InboxColumnBase& authoritative) const override {
+    [[nodiscard]] bool Differs(std::uint64_t tick, const InboxColumnBase& authoritative,
+                               std::span<const Kernel::EntityId> alive) const override {
         const auto& inbox = static_cast<const InboxColumn<T>&>(authoritative);
         for (Kernel::EntityId entity : inbox.EntitiesThrough(tick)) {
+            if (!std::binary_search(alive.begin(), alive.end(), entity)) continue;
             const std::optional<T> wanted = *inbox.At(entity, tick);
             const std::optional<T> had = At(entity, tick);
             if (wanted.has_value() != had.has_value()) return true;
@@ -115,9 +121,10 @@ public:
         return false;
     }
 
-    void Adopt(std::uint64_t tick, const InboxColumnBase& authoritative) override {
+    void Adopt(std::uint64_t tick, const InboxColumnBase& authoritative, std::span<const Kernel::EntityId> alive) override {
         const auto& inbox = static_cast<const InboxColumn<T>&>(authoritative);
         for (Kernel::EntityId entity : inbox.EntitiesThrough(tick)) {
+            if (!std::binary_search(alive.begin(), alive.end(), entity)) continue;
             std::deque<Entry>& list = entries_[entity];
             while (!list.empty() && list.back().tick >= tick) list.pop_back();
             list.push_back({tick, *inbox.At(entity, tick)});
@@ -203,8 +210,10 @@ public:
         });
     }
     // Resources take no authoritative values in this batch.
-    [[nodiscard]] bool Differs(std::uint64_t, const InboxColumnBase&) const override { return false; }
-    void Adopt(std::uint64_t, const InboxColumnBase&) override {}
+    [[nodiscard]] bool Differs(std::uint64_t, const InboxColumnBase&, std::span<const Kernel::EntityId>) const override {
+        return false;
+    }
+    void Adopt(std::uint64_t, const InboxColumnBase&, std::span<const Kernel::EntityId>) override {}
 
 private:
     struct Entry {
@@ -223,8 +232,15 @@ public:
     InputHistoryBase& operator=(const InputHistoryBase&) = delete;
     // Copies the input's value now into tick.
     virtual void Record(Exclusive& world, std::uint64_t tick) = 0;
-    // Writes the value of tick back into the input (nothing when tick is not kept).
+    // Writes the value of tick back into the input (nothing when tick is not kept: the official strategy's Check
+    // makes the capacity at least the depth, RB-E9).
     virtual void WriteBack(Exclusive& world, std::uint64_t tick) const = 0;
+    // Keeps the input's value now, and puts it back: a resimulation writes the inputs of the steps it runs again
+    // into the input, and afterwards the input holds what its entry wrote this frame again, whether the entry ran
+    // before the rollback or after it.
+    virtual void Keep(Exclusive& world) = 0;
+    virtual void PutBack(Exclusive& world) = 0;
+    [[nodiscard]] virtual std::uint32_t Capacity() const noexcept = 0;
 
 protected:
     InputHistoryBase() = default;
@@ -254,10 +270,21 @@ public:
             return;
         }
     }
+    void Keep(Exclusive& world) override {
+        auto value = world.template Read<T>([](const T& v) { return v; });
+        now_ = value && *value ? std::optional<T>(**value) : std::nullopt;
+    }
+    void PutBack(Exclusive& world) override {
+        if (!now_) return;
+        static_cast<void>(world.template Modify<T>([this](T& input) { input = *now_; }));
+        now_.reset();
+    }
+    [[nodiscard]] std::uint32_t Capacity() const noexcept override { return capacity_; }
 
 private:
     std::uint32_t capacity_;
     std::deque<std::pair<std::uint64_t, T>> ring_;
+    std::optional<T> now_;
 };
 
 // The World Resource the official strategy keeps its history in.

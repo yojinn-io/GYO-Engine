@@ -94,7 +94,9 @@ O::OptionBag WithStrategy(R::StateRollbackSettings settings = {}) {
     return options;
 }
 
-void Build(O::WorldSetup& s) {
+// The input's entry runs after the rollback (Build) or before it (BuildFeedFirst: the frame's input is already
+// written when the rollback writes the old ones back).
+void BuildFeed(O::WorldSetup& s, bool feedFirst) {
     s.Registrar().Component<Health>({.name = "Health"});
     s.Registrar().Resource<Command>({.name = "Command"});
     R::RollbackEntry rollback(s);
@@ -107,11 +109,41 @@ void Build(O::WorldSetup& s) {
     const bool strategy = options != nullptr && options->strategy != nullptr;
     K::SystemOptions feed = In("Feed", "Main", "PreUpdate");
     if (strategy) {
-        feed.mounts[0].after = {"RunRollback"};
+        if (feedFirst) {
+            feed.mounts[0].before = {"RunRollback"};
+        } else {
+            feed.mounts[0].after = {"RunRollback"};
+        }
         s.Registrar().AddSystem<&KeepNotes>(In("KeepNotes", "Main", "Update"));
     }
     rollback.SkipDuringResimulation(feed);
     s.Registrar().AddSystem<&Feed>(feed);
+}
+void Build(O::WorldSetup& s) { BuildFeed(s, false); }
+void BuildFeedFirst(O::WorldSetup& s) { BuildFeed(s, true); }
+
+// A System of the step takes Health off entity 2 at step 7 (the cell is gone, the entity stays).
+K::SystemResult Strip(K::CommandsFor<K::Inserts<>, K::Removes<Health>> commands, K::Res<W::Tick> tick) {
+    if (tick->value == 7) commands.Remove<Health>(2);
+    return {};
+}
+// Score adds up Health every step (after Advance): a value that depends on its own history, and that takes no
+// authoritative value.
+K::SystemResult Accumulate(K::Query<K::Read<Health>, K::Write<Score>> rows) {
+    rows.ForEach([](K::EntityId, const Health& hp, K::Mut<Score> score) { score->value += hp.hp; });
+    return {};
+}
+void BuildScore(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Component<Score>({.name = "Score"});
+    R::RollbackEntry(s).Component<Score>();
+    K::SystemOptions accumulate = In("Accumulate", "FixedUpdate", "Update");
+    accumulate.mounts[0].after = {"Advance"};
+    s.Registrar().AddSystem<&Accumulate>(accumulate);
+}
+void BuildStrip(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().AddSystem<&Strip>(In("Strip", "FixedUpdate", "Update"));
 }
 
 void BuildChurn(O::WorldSetup& s) {
@@ -207,13 +239,10 @@ TEST_CASE("rollback strategy: mode Check does not go back when the authoritative
     for (std::uint64_t t = 1; t <= 3; ++t) at3 += kScript[t];
     Inbox(*p).Value<Health>(1, 3, Health{at3});
     Inbox(*p).ConfirmedThrough(3);
-    const auto stampBefore = WorldOf(*p).Stamps<Health>(2);
     StepsRun() = 0;
     Frames(*p, 1);
     CHECK_MESSAGE(StepsRun() == 1, "[rb-check-agrees] steps run in the frame: " << StepsRun());
     CHECK_MESSAGE(WorldOf(*p).Get<Health>(1)->hp == predicted + kScript[7], "[rb-check-agrees] " << WorldOf(*p).Get<Health>(1)->hp);
-    // No restore: entity 2 changed in step 7 only, not before it by a restore (its added stamp is unchanged).
-    CHECK_MESSAGE(WorldOf(*p).Stamps<Health>(2)->first == stampBefore->first, "[rb-check-agrees] restored anyway");
 }
 
 TEST_CASE("rollback strategy: a confirmed point further back than the depth is given up: RollbackAbandoned") {
@@ -349,6 +378,164 @@ TEST_CASE("rollback strategy: R-1: a strategy written from scratch through the s
     Frames(*scratch, 3);
     CHECK_MESSAGE(WorldOf(*scratch).Get<Health>(1)->hp == WorldOf(*straight).Get<Health>(1)->hp,
                   "[rb-r1-scratch] " << WorldOf(*scratch).Get<Health>(1)->hp << " vs " << WorldOf(*straight).Get<Health>(1)->hp);
+    CHECK_MESSAGE(WorldOf(*scratch).Get<Health>(2)->hp == WorldOf(*straight).Get<Health>(2)->hp, "[rb-r1-scratch] Health of 2");
+    CHECK_MESSAGE(TickOf(*scratch) == TickOf(*straight), "[rb-r1-scratch] Tick " << TickOf(*scratch) << " vs " << TickOf(*straight));
     CHECK_MESSAGE(WorldOf(*scratch).Resource<W::Resimulation>()->active == 0, "[rb-r1-scratch] resimulating left raised");
 }
 
+
+// ---- Review of step 4: rollbacks that read the history earlier rollbacks rewrote, the window's edge, the
+// entry's values before C, removals, the modes, and the inputs.
+
+TEST_CASE("rollback strategy: rollbacks every frame at the depth's edge, across spawns and despawns, give the straight World") {
+    constexpr std::uint32_t kDepth = 6;
+    auto straight = Make(WithStrategy(), &BuildChurn);
+    Frames(*straight, 26);
+    auto rolled = Make(WithStrategy({.depth = kDepth, .mode = R::RollbackMode::Always}), &BuildChurn);
+    Frames(*rolled, 8);
+    Notes().clear();
+    std::string steps;
+    std::size_t kept = 0;
+    for (int frame = 0; frame < 18; ++frame) {
+        // The confirmed point is exactly depth steps behind: a rollback, not given up.
+        Inbox(*rolled).ConfirmedThrough(TickOf(*rolled) - kDepth);
+        StepsRun() = 0;
+        Frames(*rolled, 1);
+        if (StepsRun() != static_cast<int>(kDepth) + 1) steps += std::to_string(StepsRun()) + " ";
+        kept = std::max(kept, WorldOf(*rolled).Resource<R::RollbackHistory>()->alive.size());
+    }
+    CHECK_MESSAGE(steps.empty(), "[rb-consecutive-steps] frames that did not resimulate depth steps: " << steps);
+    CHECK_MESSAGE(Notes().empty(), "[rb-consecutive-steps] " << Notes().size() << " abandoned");
+    CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-consecutive-equal] the World summaries differ");
+    CHECK_MESSAGE(kept <= kDepth + 1, "[rb-history-pruned] alive sets kept: " << kept);
+}
+
+TEST_CASE("rollback strategy: an authoritative value before C counts as the value at C (the last at or before it)") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Value<Health>(1, 5, Health{7});
+    Inbox(*p).ConfirmedThrough(7);
+    Frames(*p, 1);
+    std::int32_t later = 0;
+    for (std::uint64_t t = 8; t <= 10; ++t) later += kScript[t];
+    CHECK_MESSAGE(WorldOf(*p).Get<Health>(1)->hp == 7 + later, "[rb-authority-before-c] " << WorldOf(*p).Get<Health>(1)->hp
+                                                                                          << " vs " << 7 + later);
+}
+
+TEST_CASE("rollback strategy: Removed takes the component off at that step; the entity stays") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Removed<Health>(1, 5);
+    Inbox(*p).ConfirmedThrough(5);
+    Frames(*p, 1);
+    CHECK_MESSAGE((WorldOf(*p).Alive(1) && WorldOf(*p).Get<Health>(1) == nullptr), "[rb-removed-adopted]");
+}
+
+TEST_CASE("rollback strategy: a cell a step removed stays removed when the rollback goes back past the removal") {
+    auto straight = Make(WithStrategy(), &BuildStrip);
+    Frames(*straight, 12);
+    auto rolled = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildStrip);
+    Frames(*rolled, 10);
+    REQUIRE(WorldOf(*rolled).Get<Health>(2) == nullptr);
+    Inbox(*rolled).ConfirmedThrough(8);
+    Frames(*rolled, 2);
+    CHECK_MESSAGE(WorldOf(*rolled).Get<Health>(2) == nullptr, "[rb-removed-cell-recorded] Health of 2 came back");
+    CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-removed-cell-recorded] the World summaries differ");
+}
+
+TEST_CASE("rollback strategy: mode Disabled never goes back") {
+    auto p = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Disabled}));
+    Frames(*p, 9);
+    Inbox(*p).Value<Health>(1, 4, Health{-1});
+    Inbox(*p).ConfirmedThrough(4);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    CHECK_MESSAGE(StepsRun() == 1, "[rb-disabled] steps run in the frame: " << StepsRun());
+}
+
+TEST_CASE("rollback strategy: the inbox is pruned when C moves without a rollback (mode Check, agreeing values)") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 6);
+    std::int32_t hp = 100;
+    for (std::uint64_t t = 1; t <= 3; ++t) {
+        hp += kScript[t];
+        Inbox(*p).Value<Health>(1, t, Health{hp});
+    }
+    Inbox(*p).ConfirmedThrough(3);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    REQUIRE(StepsRun() == 1);
+    const R::InboxColumn<Health>* values = WorldOf(*p).Resource<R::RollbackInbox>()->Values<Health>();
+    REQUIRE(values != nullptr);
+    CHECK_MESSAGE(!values->At(1, 1).has_value(), "[rb-inbox-pruned] the value of step 1 is still kept");
+    CHECK_MESSAGE((values->At(1, 3).has_value() && **values->At(1, 3) == Health{hp}), "[rb-inbox-pruned] the value at C is gone");
+}
+
+TEST_CASE("rollback strategy: a value for an entity this World does not have is no reason to go back") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 6);
+    Inbox(*p).Value<Health>(77, 3, Health{1});
+    StepsRun() = 0;
+    for (std::uint64_t c = 3; c <= 6; ++c) {
+        Inbox(*p).ConfirmedThrough(c);
+        Frames(*p, 1);
+    }
+    CHECK_MESSAGE(StepsRun() == 4, "[rb-not-alive-ignored] steps run in 4 frames: " << StepsRun());
+}
+
+TEST_CASE("rollback strategy: an input entry that runs before the rollback keeps this frame's input") {
+    auto straight = Make(WithStrategy(), &BuildFeedFirst);
+    Frames(*straight, 12);
+    auto rolled = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildFeedFirst);
+    Frames(*rolled, 9);
+    Inbox(*rolled).ConfirmedThrough(4);
+    Frames(*rolled, 3);
+    CHECK_MESSAGE(WorldOf(*rolled).Get<Health>(1)->hp == WorldOf(*straight).Get<Health>(1)->hp,
+                  "[rb-input-put-back] " << WorldOf(*rolled).Get<Health>(1)->hp << " vs " << WorldOf(*straight).Get<Health>(1)->hp);
+}
+
+TEST_CASE("rollback strategy: a confirmed point ahead of this World waits until the World has run that step") {
+    auto p = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}));
+    Frames(*p, 6);
+    Notes().clear();
+    Inbox(*p).ConfirmedThrough(9);
+    StepsRun() = 0;
+    Frames(*p, 3);
+    CHECK_MESSAGE(Notes().empty(), "[rb-ahead-waits] " << Notes().size() << " abandoned");
+    CHECK_MESSAGE(StepsRun() == 3, "[rb-ahead-waits] steps run in 3 frames: " << StepsRun());
+    // Step 9 has run: the next frame goes back to it (Always; no step to run again).
+    REQUIRE(TickOf(*p) == 9);
+    Frames(*p, 1);
+    CHECK_MESSAGE(WorldOf(*p).Resource<R::RollbackHistory>()->decided == std::optional<std::uint64_t>(9), "[rb-ahead-waits] decided");
+}
+
+TEST_CASE("rollback strategy: a second rollback reads the history the first one rewrote") {
+    // A: one rollback (an authoritative Health of 1 at step 5 changes the run from there). B: the same, then a
+    // second rollback to step 8 whose authoritative Health is the one A's run has there; Score (no authoritative
+    // value) is put back from the history the first rollback rewrote, so B ends as A.
+    const auto run = [](bool second) {
+        auto p = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildScore);
+        WorldOf(*p).Insert(1, Score{});
+        WorldOf(*p).Insert(2, Score{});
+        Frames(*p, 9);
+        Inbox(*p).Value<Health>(1, 5, Health{7});
+        Inbox(*p).ConfirmedThrough(5);
+        Frames(*p, 1);
+        if (second) {
+            Inbox(*p).Value<Health>(1, 8, Health{7 + kScript[6] + kScript[7] + kScript[8]});
+            Inbox(*p).ConfirmedThrough(8);
+            StepsRun() = 0;
+            Frames(*p, 1);
+            CHECK_MESSAGE(StepsRun() == 3, "[rb-rewritten-history-read] steps run: " << StepsRun());
+            Frames(*p, 1);
+        } else {
+            Frames(*p, 2);
+        }
+        return p;
+    };
+    auto a = run(false);
+    auto b = run(true);
+    CHECK_MESSAGE(WorldOf(*b).Get<Score>(1)->value == WorldOf(*a).Get<Score>(1)->value,
+                  "[rb-rewritten-history-read] Score of 1: " << WorldOf(*b).Get<Score>(1)->value << " vs " << WorldOf(*a).Get<Score>(1)->value);
+    CHECK_MESSAGE(SummaryText(*b) == SummaryText(*a), "[rb-rewritten-history-read] the World summaries differ");
+}

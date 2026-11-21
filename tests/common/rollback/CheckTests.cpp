@@ -27,11 +27,16 @@ struct Hit {
     std::int32_t at = 0;
 };
 void HashValue(K::Hasher& h, const Hit& v) { HashValue(h, v.at); }
+struct Aim {
+    std::int32_t dir = 0;
+};
+void HashValue(K::Hasher& h, const Aim& v) { HashValue(h, v.dir); }
 
 K::SystemResult ComputeSpeed(K::Query<K::Write<Speed>>) { return {}; }
 K::SystemResult InsertSpeed(K::CommandsFor<K::Inserts<Speed>, K::Removes<>>) { return {}; }
 K::SystemResult ReadSpeed(K::Query<K::Read<Speed>>) { return {}; }
 K::SystemResult SendHit(K::MessageWriter<Hit>) { return {}; }
+K::SystemResult HitOnAdd(K::HookCtx, K::MessageWriter<Hit>) { return {}; }
 K::SystemResult ReadHit(K::MessageReader<Hit>) { return {}; }
 
 O::OptionBag WithStrategy() {
@@ -53,6 +58,15 @@ std::string BuildWith(Extra extra, bool strategy = true) {
                                    strategy ? WithStrategy() : O::OptionBag{}),
                                    Units());
     return Reported(built);
+}
+
+// A schedule "Nested", run from the step schedule (the rollback treats it as resimulated).
+void AddNested(O::WorldSetup& s) {
+    K::ScheduleOptions nested;
+    nested.name = "Nested";
+    nested.stages = {"S"};
+    s.Registrar().Schedule(std::move(nested));
+    R::RollbackEntry(s).NestedSchedule("Nested", "FixedUpdate");
 }
 
 } // namespace
@@ -119,4 +133,59 @@ TEST_CASE("rollback checks: the four entries this batch does not make return Not
         REQUIRE_MESSAGE(!*result, "[rb-not-implemented] an entry that is not made returned Ok");
         CHECK_MESSAGE(result->error().code == R::RollbackFailureCode::NotImplemented, "[rb-not-implemented] code");
     }
+}
+
+TEST_CASE("rollback checks: R-7 looks at the nested schedules too, and a tie by registration is no order") {
+    const std::string nested = BuildWith([](O::WorldSetup& s) {
+        AddNested(s);
+        s.Registrar().AddSystem<&ReadSpeed>(In("ReadSpeed", "Nested", "S"));
+    });
+    CHECK_MESSAGE(nested.find("RB-E7") != std::string::npos, "[rb-r7-nested] " << nested);
+    const std::string tie = BuildWith([](O::WorldSetup& s) {
+        s.Registrar().AddSystem<&ComputeSpeed>(In("ComputeSpeed", "FixedUpdate", "Update"));
+        s.Registrar().AddSystem<&ReadSpeed>(In("ReadSpeed", "FixedUpdate", "Update"));
+    });
+    CHECK_MESSAGE(tie.find("RB-E7") != std::string::npos, "[rb-r7-tie-not-order] " << tie);
+}
+
+TEST_CASE("rollback checks: messages: the nested schedules are inside, and a hook's writes are not looked at") {
+    const std::string nested = BuildWith([](O::WorldSetup& s) {
+        AddNested(s);
+        s.Registrar().AddSystem<&SendHit>(In("SendHit", "Nested", "S"));
+        s.Registrar().AddSystem<&ReadHit>(In("ReadHit", "FixedUpdate", "Update"));
+    });
+    CHECK_MESSAGE(nested == "built", "[rb-msg-nested-inside] " << nested);
+    const std::string hook = BuildWith([](O::WorldSetup& s) {
+        s.Registrar().Hook<Speed, &HitOnAdd>(K::HookTrigger::OnAdd, {.name = "HitOnAdd"});
+        s.Registrar().AddSystem<&ReadHit>(In("ReadHit", "FixedUpdate", "Update"));
+    });
+    CHECK_MESSAGE(hook == "built", "[rb-msg-hook-unchecked] " << hook);
+}
+
+TEST_CASE("rollback checks: RB-E9: an input history that keeps fewer steps than the depth") {
+    const std::string few = BuildWith([](O::WorldSetup& s) {
+        s.Registrar().Resource<Aim>({.name = "Aim"});
+        R::RollbackEntry(s).Input<Aim>(4);
+    });
+    CHECK_MESSAGE(few.find("RB-E9") != std::string::npos, "[rb-input-capacity] " << few);
+    const std::string enough = BuildWith([](O::WorldSetup& s) {
+        s.Registrar().Resource<Aim>({.name = "Aim"});
+        R::RollbackEntry(s).Input<Aim>(20);
+    });
+    CHECK_MESSAGE(enough == "built", "[rb-input-capacity] " << enough);
+}
+
+TEST_CASE("rollback checks: R-7 follows a path of order edges, not only a direct edge") {
+    const std::string path = BuildWith([](O::WorldSetup& s) {
+        K::SystemOptions compute = In("ComputeSpeed", "FixedUpdate", "Update");
+        s.Registrar().AddSystem<&ComputeSpeed>(compute);
+        K::SystemOptions middle = In("Middle", "FixedUpdate", "Update");
+        middle.mounts[0].after = {"ComputeSpeed"};
+        s.Registrar().AddSystem<&SendHit>(middle);
+        K::SystemOptions read = In("ReadSpeed", "FixedUpdate", "Update");
+        read.mounts[0].after = {"Middle"};
+        s.Registrar().AddSystem<&ReadSpeed>(read);
+        s.Registrar().AddSystem<&ReadHit>(In("ReadHit", "FixedUpdate", "PostUpdate"));
+    });
+    CHECK_MESSAGE(path == "built", "[rb-r7-transitive] " << path);
 }

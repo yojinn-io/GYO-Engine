@@ -48,7 +48,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 6. 步的 schedule 上有生成時，配發器登記成可回滾。
 7. 輸入的入口登記成「重跑時不跑」。
 
-前提是作者的責任，回滾 Module 不加檢查。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；比 World 摘要）；突變：漏退 tick、漏退存活集合、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、只記新出現的格。
+前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
 
 <a id="r-3"></a>
 **R-3 不認得權威、網路、狀態機**：回滾 Module 不 include 它們。守衛：判定 4 的一次性方向掃描；常設的依賴掃描延到第 5 批（宣告 9.5）。
@@ -63,20 +63,23 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 **R-6 公開的登記可讀、穩定**：六種登記經 `RollbackRegistry` 讀得到，啟動檢查之後不變。`Build` 時追加、帶來源（作者或代為）；凍結後由擁有者對紀錄的純函式 `Resolve` 裁決：作者的蓋過代為的、不論先後，同一來源的兩筆 options 不同是 RB-E1。裁決結果在準備函式裡放進那個 World 的 Resource `RollbackRegistry`（實作：宣告 5.1）。守衛：`rollback registrations:` 各案。
 
 <a id="r-7"></a>
-**R-7 Derived 的順序條件**（取代 Kernel 的 D-E16）：步的 schedule 與巢狀 schedule 裡，讀 Derived 元件的每個 System 之前，唯讀登記表的順序圖上有同一張 schedule 的立即寫者（階段、宣告、同步點的邊；登記先後的平手不算）；違反是 RB-E7。hook 與 observer 讀 Derived 不在啟動時看得到的範圍，作者負責。守衛：`rollback checks: R-7…` 兩案；突變：不檢查、把延後寫算成立即寫、不看先後、每張 schedule 都查。
+**R-7 Derived 的順序條件**（取代 Kernel 的 D-E16）：步的 schedule 與巢狀 schedule 裡，讀 Derived 元件的每個 System 之前，唯讀登記表的順序圖上有同一張 schedule 的立即寫者（階段、宣告、同步點的邊；登記先後的平手不算）；違反是 RB-E7。hook 與 observer 讀 Derived、以及獨占 System（`ExclusiveWorld`）的讀寫，不在啟動時看得到的範圍：作者負責（用獨占 System 重算 Derived 的作者，讀者要宣告在它之後的順序，或改用一般 System；實作）。守衛：`rollback checks: R-7…` 四案；突變：不檢查、把延後寫算成立即寫、不看先後、每張 schedule 都查、只看直接邊、登記先後的平手算順序、漏掉巢狀 schedule。
 
 <a id="r-8"></a>
 **R-8 入口形狀**（宣告 5.5；使用者 2026-11-20 重新核准）：
 - 比對與還原以（實體、元件、tick）為單位；入口帶這樣的權威值與「第 C 步以前收齊」的標記。
 - 官方策略的「判斷」用全域的確認點 C（MC-5 的 (a)）：C 前進時在 C 比，不同就回滾到 C；作者覆寫「判斷」可以做別的規則（只回滾收到新值的實體、回到最早的不一致），不另加掛點。
 - 晚到的權威值不靜默丟（MC-1）：照 lightyear，記進確認歷史，在 C 用「C 當時或之前最後的值」比。超過最大深度時放棄這次回滾，發 `RollbackAbandoned`（宣告 10.3：E3 用 World 的訊息告知，形狀照 `TimeDiscarded`）。
+  - 這條的前提（實作，第 4 步審查 1-1）：寫入的一方在說「第 C 步以前收齊」之前，把 C 以前每一次**改變**的值（和 `Removed`）都寫進入口；沒寫的就當成「從上一筆以後沒變」（lightyear 的增量複製也是這個前提）。只送一次、之後不再送的實體，在每個 C 都會拿最後那筆比。
+  - 比對與「權威值蓋在歷史上」只看 C 當時存活的實體（實作，審查 1-2）：實體存不存在跟著遊戲的生成與刪除走，指向這個 World 沒有的實體的值不當回滾的理由。
+  - 入口在 C 前進而不回滾時（一致、放棄、模式 Check 或 Disabled）也修剪，每個實體留「C 當時或之前最後的值」（實作，審查 1-3）。
 - 權威值有三態：有值、確定刪除、這份沒帶；實體的有效期間（進入、退出）由呼叫者明說，沒明說的一律當遊戲的生成與刪除（MC-3、SL-1、SL-2）。本批「這份沒帶」與明說的進入、退出回 NotImplemented。
 - 事件來源的權威值可寫進歷史，由作者選（MC-2）；本批回 NotImplemented。
 - 「確認點不得晚於還沒解開的差分」是給網路 Module 的需求（MC-4），不在本頁。
 
-守衛：`rollback strategy:` 的權威值、一致不回滾、深度各案；`rollback checks: the four entries…`。
+守衛：`rollback strategy:` 的權威值、C 之前的值、`Removed`、一致不回滾、Disabled、入口修剪、不存活的實體、C 超前時等待、深度各案；`rollback checks: the four entries…`。突變：只認同一個 tick、入口不修剪、比對不看存活、超前不等、Disabled 無效。
 
-**跨 schedule 的訊息**（回滾份 7.1，`time-plan-two` (5) 兩個方向）：官方策略在啟動時查——步的 schedule 與巢狀 schedule 裡寫的 `Message` 不能有外面的讀者，讀的不能有外面的寫者（RB-E8）；只看 System 的掛載，hook 與 observer 由作者負責。
+**跨 schedule 的訊息**（回滾份 7.1，`time-plan-two` (5) 兩個方向）：官方策略在啟動時查——步的 schedule 與巢狀 schedule 裡寫的 `Message` 不能有外面的讀者，讀的不能有外面的寫者（RB-E8）；只看 System 的掛載，hook 與 observer 由作者負責。守衛：`rollback checks: a message…`、`messages: the nested schedules…`；突變：兩個方向各一、巢狀 schedule 不算在內、hook 的寫算進來。
 
 ### Replacement Criteria
 
@@ -88,5 +91,11 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 ## 3. 本批的限界
 
 - 修正（`Correct`）的官方實作本批什麼都不做：比較函式以外的修正函式還沒有登記入口，畫面修正等 Client 那一批（實作）。
+- 存活集合整份放回（回滾份 5.5，7.4 說要寫進限制）：步外生成、只帶本機元件的實體，回滾到它出生之前會被刪掉且不會再生；步外刪掉的實體會以沒有元件的空殼回來。步外的生成與刪除要不要回滾，等 Client 那一批的實際需求（審查 1-4）。
+- 權威刪掉整個實體沒有入口：`Removed<T>` 只拿掉元件，Client 多預測出來的實體留著（`Exited` 本批回 NotImplemented；審查 1-2 的反方向）。
+- 只重跑第一張步的 schedule；步的 schedule 和時間 Module 的固定步 schedule 不同也不檢查（實作；目前只有一張）。
+- 記錄 System 掛在 `recordStage`，同一個 stage 裡比它晚跑的寫者、或那個 stage 的延後命令，會記到下一步：`recordStage` 要選步裡最後的 stage（預設 `Last`）。
+- Plan 的版本在一個 World 裡不變，換 Plan 就是換 World（R-5 的新歷史）；回滾份 7.5「Plan 版本變了歷史作廢」由此滿足，不另檢查。
+- C 早於這個 World 的第一筆記錄（剛換 World）時，也當「超過深度」放棄並發 `RollbackAbandoned`。
 - Resource 本批只從歷史還原，不收權威值（`RollbackInbox` 只有元件）。
 - 「這份沒帶」不參加比對（不推成「沒變」）的規則已寫進條文，本批的入口回 NotImplemented。

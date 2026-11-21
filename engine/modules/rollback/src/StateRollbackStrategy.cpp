@@ -131,6 +131,13 @@ void StateRollbackStrategy::Check(CheckContext& context) {
     const std::set<std::string> schedules = Resimulated(context.Registrations());
     CheckDerivedOrder(context, schedules);
     CheckMessages(context, schedules);
+    // A rollback of depth steps writes back the inputs of depth steps: an input history that keeps fewer would
+    // resimulate those steps with whatever the input holds, silently (review of step 4, 1-6).
+    for (const InputRecord& input : context.Registrations().inputs) {
+        if (input.capacity >= settings_.depth) continue;
+        context.Report("RB-E9", "rollback.Input: the input history keeps " + std::to_string(input.capacity) +
+                                    " steps, fewer than the official strategy's depth " + std::to_string(settings_.depth));
+    }
 }
 
 Ok StateRollbackStrategy::Record(RecordContext& context) {
@@ -165,9 +172,11 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
     const std::uint64_t point = ***confirmed;
     if (point > tick) return {};  // the authority is ahead: wait until this World has run that step
     std::optional<bool> rollBack;
+    bool fresh = false;
     auto decided = world.Modify<RollbackHistory>([&](RollbackHistory& history) {
         if (history.decided && point <= *history.decided) return;
         history.decided = point;
+        fresh = true;
         if (settings_.mode == RollbackMode::Disabled) return;
         if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {
             context.Abandon(point, settings_.depth);
@@ -178,16 +187,24 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
             return;
         }
         bool differs = false;
+        const std::vector<Kernel::EntityId>& alive = *history.AliveAt(point);
         static_cast<void>(world.Read<RollbackInbox>([&](const RollbackInbox& inbox) {
             for (const auto& column : history.columns) {
                 if (const InboxColumnBase* values = inbox.ValuesOf(column->Key())) {
-                    differs = differs || column->Differs(point, *values);
+                    differs = differs || column->Differs(point, *values, alive);
                 }
             }
         }));
         rollBack = differs;
     });
     if (!decided) return ::Engine::Base::Err(std::move(decided).error());
+    if (fresh && !(rollBack && *rollBack)) {
+        // The confirmed point moved and no rollback follows (it agrees, it was given up, or the mode is Check
+        // or Disabled): what is older than it is not needed for a later comparison, except per entity the last
+        // value at or before it (review of step 4, 1-3: the inbox was pruned only after a rollback).
+        auto pruned = world.Modify<RollbackInbox>([point](RollbackInbox& inbox) { inbox.Prune(point); });
+        if (!pruned) return ::Engine::Base::Err(std::move(pruned).error());
+    }
     if (rollBack && *rollBack) {
         context.RollBackTo(point);
         // Deciding to go back raises "resimulating" (rollback declaration 5.3; lightyear raises it at the decision):
@@ -211,7 +228,7 @@ Ok StateRollbackStrategy::Restore(RestoreContext& context) {
                 const InboxColumnBase* values = inbox.ValuesOf(column->Key());
                 column->AddTo(set, target, *alive, values);
                 // The history at target agrees with the authority afterwards.
-                if (values != nullptr) column->Adopt(target, *values);
+                if (values != nullptr) column->Adopt(target, *values, *alive);
             }
         }));
         return set;
@@ -225,6 +242,11 @@ Ok StateRollbackStrategy::Resimulate(ResimulateContext& context) {
     Exclusive& world = context.World();
     const std::uint64_t target = context.Target();
     const std::uint64_t steps = context.Tick() - target;
+    // The input holds what its entry wrote this frame; it is put back after the steps run again.
+    auto kept = world.Modify<RollbackHistory>([&](RollbackHistory& history) {
+        for (auto& input : history.inputs) input->Keep(world);
+    });
+    if (!kept) return ::Engine::Base::Err(std::move(kept).error());
     WorldTime::RewindFixedSteps(world, steps);
     for (std::uint64_t step = target + 1; step <= context.Tick(); ++step) {
         // The inputs of that step, written back (their entries are skipped while resimulating).
@@ -234,6 +256,10 @@ Ok StateRollbackStrategy::Resimulate(ResimulateContext& context) {
         if (!written) return ::Engine::Base::Err(std::move(written).error());
         if (auto ran = WorldTime::RunOneFixedStep(world, context.StepSchedule()); !ran) return ran;
     }
+    auto putBack = world.Modify<RollbackHistory>([&](RollbackHistory& history) {
+        for (auto& input : history.inputs) input->PutBack(world);
+    });
+    if (!putBack) return ::Engine::Base::Err(std::move(putBack).error());
     auto lowered = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 0; });
     if (!lowered) return ::Engine::Base::Err(std::move(lowered).error());
     auto pruned = world.Modify<RollbackInbox>([target](RollbackInbox& inbox) { inbox.Prune(target); });
