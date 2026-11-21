@@ -839,7 +839,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 **`Summary`（AS-6、5.9.1）**：兩份項目順序不同的 catalog（store 內部索引不同），同一組 Handle 的 `Summary` 相同；新開局與讀檔進同一關（後者命中），`Summary` 相同。
 
-**catalog（AS-12）**：(A) 組每條規則各一個不合的範例 → 對應的啟動錯誤；刻意不查的各一個範例合法；master 的 `asset_catalog.json` 與 `content.json` 原樣通過；寫出再讀回相等。(B) 組：同一（`type`、`format`）兩個不同 loader、同一 `type` 兩個 C++ 型別、`settings` 解讀不了，各一個登記錯誤。loader 表：先預先登記、請求 → `WaitingForLoader`、就緒查詢列在「在等 loader」；再登記 loader → 等待者在鎖下變 `Queued`、載好。某個 loader 型別預先登記 {`png`, `jpg`}、它登記時只認 `png` → `jpg` 的等待者變成 `NoLoader`；預先登記期間別的 loader 型別登記同一（`type`、`format`）→ 登記回錯誤。沒有預先登記就請求 → `NoLoader`；登記之後**在第一個 Handle 還持有時**再請求（同一個 World 或另一個 World）→ 重載、載好，`AllFinished` 先真後假再真。`settings` 解讀不了 → 那幾個 id 是 `BadSettings`，loader 照樣登記。在 System 裡登記也可以（照 Bevy）。
+**catalog（AS-12）**：(A) 組每條規則各一個不合的範例 → 對應的啟動錯誤；刻意不查的各一個範例合法；master 的 `asset_catalog.json` 與 `content.json` 原樣通過；寫出再讀回相等。(B) 組：同一（`type`、`format`）兩個不同 loader、兩個 C++ 型別宣告同一型別名，各一個登記錯誤。loader 表：先預先登記、請求 → `WaitingForLoader`、就緒查詢列在「在等 loader」；再登記 loader → 等待者在鎖下變 `Queued`、載好。某個 loader 型別預先登記 {`png`, `jpg`}、它登記時只認 `png` → `jpg` 的等待者變成 `NoLoader`；預先登記期間別的 loader 型別登記同一（`type`、`format`）→ 登記回錯誤。沒有預先登記就請求 → `NoLoader`；登記之後**在第一個 Handle 還持有時**再請求（同一個 World 或另一個 World）→ 重載、載好，`AllFinished` 先真後假再真。`settings` 解讀不了 → 那幾個 id 是 `BadSettings`，loader 照樣登記。在 System 裡登記也可以（照 Bevy）。
 
 **型別名**：沒有登記任何 loader 時，`Load<T>` 用錯 `T` → 當場請求級 `TypeMismatch`，不碰 info。
 
