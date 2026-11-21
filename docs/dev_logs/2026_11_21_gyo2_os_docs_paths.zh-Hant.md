@@ -27,3 +27,12 @@ os.md Invariant 2、6 的文字有改（路徑與已不存在的 `engine/trace`�
 ## 驗證
 
 - 本機 macOS arm64：重新 configure（OS 定義守衛在 configure 時跑）、全量建置、ctest 157/157。
+
+## os-subsystem 清單裡 17 個失效突變的退役（同一 PR）
+
+- 使用者（os 卡）：「交給主會話，刪除。」比過的選項：留著不動／刪除，使用者選刪除。理由：檔案在 gyo2 重建時已刪，這些突變跑不起來，也守不到任何東西。
+- 刪掉的 17 個，`file` 都指向 gyo2 不存在的路徑（逐一確認過不存在）：
+  - `engine/asset`：`os-g2-macro`、`os-g10-filesystem-op`、`p2-asset-detail-drops-cause`、`p3-relative-path-not-absolute`、`io-w4-watcher-missing-is-error`、`asset-r1-root-cleaned`、`asset-r2-escape-unchecked`
+  - `engine/trace`（master 的舊 trace）：`os-g1-header`、`tt-x1-trace-links-engine`、`tt-x2-trace-without-os`、`tt-x3-windows-trace-as-written`、`tt-x4-trace-append-truncates`、`tt-x5-linux-trace-write-failure-ignored`、`tt-x6-trace-batch-end-unwritten`、`tt-x7-trace-os-public`、`tt-x8-trace-truncate-appends`、`tt-x9-trace-detail-without-path`
+- README 第 7 點的檢查：17 個都沒有 `guards`；`git grep` 找它們的 id，只出現在 os-subsystem 計畫的 HANDOFF 與 linux-run（當時的紀錄，不改寫）。清單裡沒有其他 `file` 指向不存在路徑的突變。
+- 清單 172 → 155 個，只刪除、其他條目的格式不動。
