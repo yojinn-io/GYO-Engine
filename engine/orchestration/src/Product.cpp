@@ -221,13 +221,12 @@ Product::~Product() = default;
         Registration& registration = registrations[i];
         slot.registry = std::move(registration.registry);
         slot.frame = std::move(registration.frame);
-        slot.unitPrepares = std::move(registration.unitPrepares);
         slot.carries = std::move(registration.carries);
-        slot.buffer = std::move(registration.buffer);
         slot.executor = self.MakeExecutor(slot, *slot.registry);
     }
-    for (WorldSlot& slot : self.worlds_) {
-        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), slot.unitPrepares, nullptr);
+    for (std::size_t i = 0; i < self.worlds_.size(); ++i) {
+        WorldSlot& slot = self.worlds_[i];
+        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), registrations[i].unitPrepares, nullptr);
         if (!prepared) {
             const OrchestrationError& error = prepared.error();
             errors.push_back({OrchestrationCode::OE7,
@@ -786,9 +785,7 @@ bool Product::HasWorld(std::string_view name) const noexcept {
     slot.registry = std::move(registration.registry);
     slot.executor = std::move(fresh);
     slot.frame = std::move(registration.frame);
-    slot.unitPrepares = std::move(registration.unitPrepares);
     slot.carries = std::move(registration.carries);
-    slot.buffer = std::move(registration.buffer);
     slot.lastSchedule.clear();
     slot.nextInsertSeq = 0;
     return {};

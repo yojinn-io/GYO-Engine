@@ -6,6 +6,7 @@
 #include "engine/world_time/TimeTypes.hpp"
 #include "engine/world_time/WorldTimeModule.hpp"
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -36,7 +37,7 @@ void RollbackModule::Build(Orchestration::WorldSetup& setup) {
     // The way in for authoritative values: one for every strategy (authority-rollback declaration 5.5).
     r.Resource<RollbackInbox>({.name = "RollbackInbox"});
     const RollbackOptions* options = setup.Options<RollbackOptions>();
-    RollbackStrategy* strategy = options != nullptr ? options->strategy.get() : nullptr;
+    std::shared_ptr<RollbackStrategy> strategy = options != nullptr ? options->strategy : nullptr;
     if (strategy != nullptr) {
         const WorldTime::WorldTimeOptions* time = setup.Options<WorldTime::WorldTimeOptions>();
         const std::string frame = !options->frameSchedule.empty() ? options->frameSchedule

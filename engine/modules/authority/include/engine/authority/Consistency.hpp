@@ -37,7 +37,9 @@
 namespace GYO::Engine::Authority {
 
 enum class AuthorityFailureCode : std::uint8_t {
-    // The World has no AuthorityRegistry or no strategy (the authority Module was not built into it, or none chosen).
+    // The World has no AuthorityRegistry (the authority Module was not built into it); for the consistency
+    // fingerprint also a World that chose no strategy (the fingerprint is the strategy's). Digest and DatasetReport
+    // need no strategy: they read the registrations.
     NoAuthority = 1,
     // G-5: a registration site is outside the repository root or the owner root.
     SourceOutsideRoot = 2,

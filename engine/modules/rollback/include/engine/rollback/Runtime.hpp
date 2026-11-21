@@ -10,13 +10,16 @@
 #include "engine/rollback/RollbackStrategy.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace GYO::Engine::Rollback {
 
+// The strategy is shared with the World description that chose it (as the authority Module's AuthorityRegistry
+// holds its strategy): the World does not depend on the description outliving it.
 struct RollbackRuntime {
-    RollbackStrategy* strategy = nullptr;
+    std::shared_ptr<RollbackStrategy> strategy;
     std::string stepSchedule;
 };
 // Not simulation state: nothing is hashed.

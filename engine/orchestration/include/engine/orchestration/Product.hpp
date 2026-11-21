@@ -151,10 +151,7 @@ private:
         std::unique_ptr<Kernel::Registry> registry;
         std::unique_ptr<Kernel::WorldExecutor> executor;
         std::vector<std::string> frame;
-        std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
-        // The ModuleBuffer of the build that made this World, kept with its prepare functions.
-        std::shared_ptr<ModuleBuffer> buffer;
         // The last schedule the Product ran with success on this World (WorldFailure::lastSchedule).
         std::string lastSchedule;
         std::uint32_t nextInsertSeq = 0;
@@ -162,7 +159,8 @@ private:
         // levels P12: an empty place is told apart from a broken one by this, not by guessing).
         bool replacing = false;
     };
-    // One World's registration, built but not yet a World.
+    // One World's registration, built but not yet a World. Its prepare functions and ModuleBuffer live until the
+    // prepare functions have run (O-2): the World's slot keeps neither.
     struct Registration {
         std::unique_ptr<Kernel::Registry> registry;
         std::vector<std::string> frame;
