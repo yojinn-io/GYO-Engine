@@ -78,6 +78,22 @@ TEST_CASE("rollback registrations: each kind is in the World's RollbackRegistry 
     CHECK_MESSAGE((!counts->mounts.empty() && R::SkippedWhileResimulating(counts->mounts[0])), "[rb-registry-skip]");
 }
 
+TEST_CASE("rollback registrations: SkipDuringResimulation puts its condition on every mount") {
+    auto built = O::Product::Build(Game([](O::WorldSetup& s) {
+                                       RegisterData(s);
+                                       K::SystemOptions counts = In("CountRuns", "Main", "Update");
+                                       counts.mounts.push_back(K::Mount{"FixedUpdate", "Update"});
+                                       R::RollbackEntry(s).SkipDuringResimulation(counts);
+                                       s.Registrar().AddSystem<&CountRuns>(counts);
+                                   }),
+                                   Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    const K::SystemInfo* counts = (*built)->World("Main").GetWorld().Types().SystemNamed("CountRuns");
+    REQUIRE((counts != nullptr && counts->mounts.size() == 2));
+    CHECK_MESSAGE((R::SkippedWhileResimulating(counts->mounts[0]) && R::SkippedWhileResimulating(counts->mounts[1])),
+                  "[rb-skip-every-mount]");
+}
+
 TEST_CASE("rollback registrations: a System registered as skipped does not run while the World resimulates") {
     Counted() = 0;
     auto built = O::Product::Build(Game([](O::WorldSetup& s) {

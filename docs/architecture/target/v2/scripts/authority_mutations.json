@@ -1026,6 +1026,497 @@
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E7 (Z8)*",
    "expect": "\\[au\\-z8\\-derived\\]"
+  },
+  {
+   "id": "au-z6-nested-not-resimulated",
+   "what": "AU-E6 does not look at the nested schedules (the rollback's ResimulatedSchedules leaves them out). Only it catches the nested half for the authority checks",
+   "guards": [
+    "authority-module-declaration 5.11"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    for (const NestedScheduleRecord& record : registry.nestedSchedules) names.insert(record.name);\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 looks at the nested schedules too*",
+   "expect": "\\[au\\-z6\\-nested\\]"
+  },
+  {
+   "id": "au-z6-hooks-without-step",
+   "what": "hooks are checked in a World with no step schedule (a Match) too. Only it catches the step-schedule condition",
+   "guards": [
+    "authority-module-declaration 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    if (!rollback.stepSchedules.empty()) {",
+   "replace": "    if (true) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 looks at the nested schedules too*",
+   "expect": "\\[au\\-z6\\-hook\\-without\\-step\\]"
+  },
+  {
+   "id": "au-de15-every-schedule",
+   "what": "AU-E8 reports an entry outside the resimulated schedules. Only it catches AU-E8's schedule filter",
+   "guards": [
+    "authority-module-declaration 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (system == nullptr || !Rollback::RunsWhileResimulating(*system, resimulated)) continue;",
+   "replace": "        if (system == nullptr || std::all_of(system->mounts.begin(), system->mounts.end(), &Rollback::SkippedWhileResimulating)) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E8 leaves an entry outside*",
+   "expect": "\\[au\\-ingress\\-frame\\]"
+  },
+  {
+   "id": "au-mark-by-name-not-decision",
+   "what": "a type marked by name is not decision data (AU-E6 and the fingerprint miss it). Only it catches the by-name resolution",
+   "guards": [
+    "authority-module-declaration 5.8",
+    "authority DI-A 10"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    if (const auto id = ResourceNamed(registry, mark.name)) return Kernel::AccessKey{Kernel::AccessKind::Resource, *id};\n",
+   "replace": "    static_cast<void>(&ResourceNamed);\n",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: a type marked by type or by name*",
+   "expect": "\\[au\\-z6\\-mark\\-name\\]"
+  },
+  {
+   "id": "au-marks-not-decision",
+   "what": "marked types are left out of the decision keys (AU-E6, the collection and G-5 miss their writers). Only it catches marks as decision data",
+   "guards": [
+    "authority-module-declaration 4.3",
+    "authority-module-declaration 5.4"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        if (const auto key = KeyOfMark(registry, mark)) out.keys.push_back(*key);",
+   "replace": "        if (const auto key = KeyOfMark(registry, mark)) static_cast<void>(key);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: a type marked by type or by name*",
+   "expect": "\\[au\\-z6\\-mark\\-type\\]"
+  },
+  {
+   "id": "au-mounted-in-all",
+   "what": "MountedIn asks every mount instead of any: a Runs System mounted in two schedules is missed by AU-E9. Only it catches the any",
+   "guards": [
+    "authority-module-declaration 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    return std::any_of(system.mounts.begin(), system.mounts.end(),\n                       [&schedules](const Kernel::Mount& mount) { return schedules.count(mount.schedule) != 0; });",
+   "replace": "    return !system.mounts.empty() && std::all_of(system.mounts.begin(), system.mounts.end(),\n                       [&schedules](const Kernel::Mount& mount) { return schedules.count(mount.schedule) != 0; });",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E8 leaves an entry outside*",
+   "expect": "\\[au\\-runs\\-two\\-mounts\\]"
+  },
+  {
+   "id": "au-z6-observer-derived-accepted",
+   "what": "an observer that writes Derived decision data is not reported (hooks and observers may not take Derived). Only it catches the observer half",
+   "guards": [
+    "authority-module-declaration 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        for (const Kernel::ObserverInfo& observer : registry.Observers()) checkWriter(\"observer '\" + observer.name + \"'\", observer.access);",
+   "replace": "        for (const Kernel::ObserverInfo& observer : registry.Observers()) {\n            Kernel::AccessSet access = observer.access;\n            for (const Kernel::AccessKey& key : rolls.derived) {\n                access.writes.erase(std::remove(access.writes.begin(), access.writes.end(), key), access.writes.end());\n            }\n            checkWriter(\"observer '\" + observer.name + \"'\", access);\n        }",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 looks at the nested schedules too*",
+   "expect": "\\[au\\-z6\\-derived\\-observer\\]"
+  },
+  {
+   "id": "au-fp-plans-without-writers",
+   "what": "a Plan with no collected step goes into the fingerprint: a Client's screen schedule changes it. Only it catches the empty-Plan skip",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (steps.empty()) continue;\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "\\[au\\-fp\\-same\\-other\\-schedule\\]"
+  },
+  {
+   "id": "au-fp-leading-sync",
+   "what": "a sync point before the first collected step counts: a stage in front at one end changes the fingerprint. Only it catches the leading sync point",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "steps.emplace_back(step.name, !steps.empty() && syncSince);",
+   "replace": "steps.emplace_back(step.name, syncSince);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "\\[au\\-fp\\-same\\-leading\\-sync\\]"
+  },
+  {
+   "id": "au-fp-every-hook",
+   "what": "every hook is collected, not only those that write decision data. Only it catches the hook filter",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "if (!OneEnd(registrations, hook.name) && WritesDecision(registry, decision, hook.access)) out.hooks.push_back(hook.name);",
+   "replace": "if (!OneEnd(registrations, hook.name)) out.hooks.push_back(hook.name);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "\\[au\\-fp\\-same\\-ordinary\\-hook\\]"
+  },
+  {
+   "id": "au-fp-every-observer",
+   "what": "every observer is collected, not only those that write decision data. Only it catches the observer filter",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "if (!OneEnd(registrations, observer.name) && WritesDecision(registry, decision, observer.access)) {",
+   "replace": "if (!OneEnd(registrations, observer.name)) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "\\[au\\-fp\\-same\\-ordinary\\-observer\\]"
+  },
+  {
+   "id": "au-fp-every-initial-value",
+   "what": "an InitialValue of ordinary data goes into the fingerprint. Only it catches the target filter",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (decision.Has({Kernel::AccessKind::Component, rule.target})) {\n            initial.push_back(",
+   "replace": "        if (true) {\n            initial.push_back(",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "\\[au\\-fp\\-same\\-ordinary\\-initial\\]"
+  },
+  {
+   "id": "au-fp-observer-order-taken",
+   "what": "the registration order among observers goes into the fingerprint (5.5: it is not taken). Only it catches the sort",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    std::sort(observers.begin(), observers.end());\n    out.U64(observers.size());",
+   "replace": "    out.U64(observers.size());",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "\\[au\\-fp\\-same\\-observer\\-order\\]"
+  },
+  {
+   "id": "au-fp-one-end-observer-taken",
+   "what": "an observer named with OneEndOnly is still collected. Only it catches the observer half of OneEndOnly",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "if (!OneEnd(registrations, observer.name) && WritesDecision(registry, decision, observer.access)) {",
+   "replace": "if (WritesDecision(registry, decision, observer.access)) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "\\[au\\-fp\\-same\\-one\\-end\\-observer\\]"
+  },
+  {
+   "id": "au-fp-hook-round-limit-dropped",
+   "what": "a schedule's hook round limit is not in the fingerprint (takes over the kernel's hf-c-fp-*). Only it catches the limit",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        out.Flag(plan.hookRoundLimit.has_value());\n        if (plan.hookRoundLimit) out.U64(*plan.hookRoundLimit);\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook round limit*",
+   "expect": "\\[au\\-fp\\-c\\-hook\\-round\\-limit\\]"
+  },
+  {
+   "id": "au-fp-runs-schedules-dropped",
+   "what": "the schedules a Runs System runs are not in the fingerprint. Only it catches them",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        out.U64(runs.schedules.size());\n        for (const std::string& schedule : runs.schedules) out.Str(schedule);\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook round limit*",
+   "expect": "\\[au\\-fp\\-c\\-runs\\-schedules\\]"
+  },
+  {
+   "id": "au-fp-writes-dropped",
+   "what": "a collected System's writes are not in the fingerprint. Only it catches the writes",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "{names(reads), names(access.writes), components(access.deferredWrites),",
+   "replace": "{names(reads), components(access.deferredWrites),",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook round limit*",
+   "expect": "\\[au\\-fp\\-c\\-writes\\]"
+  },
+  {
+   "id": "au-fp-hook-order-dropped",
+   "what": "the hooks are taken by name, not in their order (takes over the kernel's order of hooks). Only it catches the hook order",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    for (const Kernel::HookInfo& hook : registry.Hooks()) {\n        if (std::find(collected.hooks.begin(), collected.hooks.end(), hook.name) == collected.hooks.end()) continue;",
+   "replace": "    std::vector<Kernel::HookInfo> sortedHooks(registry.Hooks().begin(), registry.Hooks().end());\n    std::sort(sortedHooks.begin(), sortedHooks.end(), [](const Kernel::HookInfo& a, const Kernel::HookInfo& b) { return a.name < b.name; });\n    for (const Kernel::HookInfo& hook : sortedHooks) {\n        if (std::find(collected.hooks.begin(), collected.hooks.end(), hook.name) == collected.hooks.end()) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook round limit*",
+   "expect": "\\[au\\-fp\\-c\\-hook\\-order\\]"
+  },
+  {
+   "id": "au-fp-observer-access-dropped",
+   "what": "an observer's access is not in the fingerprint (takes over obs-cfp-no-access). Only it catches it",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            AccessByName(out, registry, observer.access);\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook round limit*",
+   "expect": "\\[au\\-fp\\-c\\-observer\\-access\\]"
+  },
+  {
+   "id": "au-fp-initial-request-dropped",
+   "what": "an InitialValue's request is not in the fingerprint (takes over rs-iv-fb8-C-request-not-hashed). Only it catches the request",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "registry.Components()[rule.target].name + \"<-\" + registry.Components()[rule.request].name",
+   "replace": "registry.Components()[rule.target].name",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook round limit*",
+   "expect": "\\[au\\-fp\\-c\\-initial\\-request\\]"
+  },
+  {
+   "id": "au-digest-resource-dropped",
+   "what": "a decision resource's value is not in the digest. Only it catches the resources in the digest",
+   "guards": [
+    "authority DI-A 12",
+    "authority-module-declaration 5.6"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, &ResourceDigest<T>};",
+   "replace": "inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, nullptr};",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a decision resource*",
+   "expect": "\\[au\\-digest\\-resource\\]"
+  },
+  {
+   "id": "au-g5-not-unique",
+   "what": "a file with two writers is listed twice (the list contract: sorted and unique; takes over rs-j17-no-dedup). Only it catches the dedup",
+   "guards": [
+    "authority-module-declaration 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    files.erase(std::unique(files.begin(), files.end()), files.end());\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: G-5 lists each file once*",
+   "expect": "\\[au\\-g5\\-unique\\]"
+  },
+  {
+   "id": "au-g5-hook-sources-dropped",
+   "what": "the file of a hook that writes decision data is not listed. Only it catches hooks in G-5",
+   "guards": [
+    "authority-module-declaration 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "            add(hook.source, \"a hook that writes decision data\", hook.name);",
+   "replace": "            static_cast<void>(hook);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: G-5 lists each file once*",
+   "expect": "\\[au\\-g5\\-hook\\]"
+  },
+  {
+   "id": "au-g5-observer-sources-dropped",
+   "what": "the file of an observer that writes decision data is not listed. Only it catches observers in G-5",
+   "guards": [
+    "authority-module-declaration 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "            add(observer.source, \"an observer that writes decision data\", observer.name);",
+   "replace": "            static_cast<void>(observer);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: G-5 lists each file once*",
+   "expect": "\\[au\\-g5\\-observer\\]"
+  },
+  {
+   "id": "au-g5-every-initial-value",
+   "what": "the file of an InitialValue of ordinary data is listed. Only it catches the target filter in G-5",
+   "guards": [
+    "authority-module-declaration 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        if (decision.Has({Kernel::AccessKind::Component, rule.target})) {\n            add(rule.source",
+   "replace": "        if (true) {\n            add(rule.source",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: G-5 lists each file once*",
+   "expect": "\\[au\\-g5\\-initial\\-ordinary\\]"
+  },
+  {
+   "id": "au-onregister-mark-skipped",
+   "what": "Mark does not hand its registration to the strategy's OnRegister. Only it catches Mark's call",
+   "guards": [
+    "authority DI-A 3",
+    "authority DI-A 11"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "    context.mark_ = &kept;\n    strategy_->OnRegister(context);",
+   "replace": "    context.mark_ = &kept;\n    static_cast<void>(context);",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: every entry hands*",
+   "expect": "\\[au\\-onregister\\-mark\\]"
+  },
+  {
+   "id": "au-onregister-runs-skipped",
+   "what": "Runs does not hand its registration to the strategy's OnRegister. Only it catches Runs's call",
+   "guards": [
+    "authority DI-A 3",
+    "authority DI-A 11"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "    context.runs_ = &table_->Runs().back();\n    strategy_->OnRegister(context);",
+   "replace": "    context.runs_ = &table_->Runs().back();\n    static_cast<void>(context);",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: every entry hands*",
+   "expect": "\\[au\\-onregister\\-runs\\]"
+  },
+  {
+   "id": "au-onregister-one-end-skipped",
+   "what": "OneEndOnly does not hand its registration to the strategy's OnRegister. Only it catches OneEndOnly's call",
+   "guards": [
+    "authority DI-A 3",
+    "authority DI-A 11"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "    context.oneEnd_ = &table_->OneEnd().back();\n    strategy_->OnRegister(context);",
+   "replace": "    context.oneEnd_ = &table_->OneEnd().back();\n    static_cast<void>(context);",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: every entry hands*",
+   "expect": "\\[au\\-onregister\\-one\\-end\\]"
+  },
+  {
+   "id": "au-z6-message-not-excepted",
+   "what": "AU-E6 counts a decision message as data that must roll back (messages are not in a snapshot). Only it catches the message exception",
+   "guards": [
+    "authority-module-declaration 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "return key.kind != Kernel::AccessKind::Message && decision.Has(key) &&",
+   "replace": "return decision.Has(key) &&",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 leaves out the tick and messages*",
+   "expect": "\\[au-z6-exceptions\\][\\s\\S]*SendHit"
+  },
+  {
+   "id": "au-digest-entity-id",
+   "what": "the entity id goes into each cell's digest (DI-A 12: values only). Only it catches the id",
+   "guards": [
+    "authority DI-A 12"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "        HashValue(h, *world.Get<T>(entity));\n        sum += CellDigest(index, h);",
+   "replace": "        HashValue(h, *world.Get<T>(entity));\n        h.U64(entity);\n        sum += CellDigest(index, h);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the digest is order free*",
+   "expect": "\\[au\\-digest\\-order\\]"
+  },
+  {
+   "id": "au-g5-not-sorted",
+   "what": "the export's files are not sorted (the list contract). Only it catches the sort",
+   "guards": [
+    "authority-module-declaration 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    std::sort(files.begin(), files.end());\n    files.erase(",
+   "replace": "    files.erase(",
+   "target": "gyo_authority_tests",
+   "cases": "authority sources: the G-5 export lists*",
+   "expect": "\\[au\\-g5\\-sorted\\]"
+  },
+  {
+   "id": "au-official-ingress-not-added",
+   "what": "the official strategy does not add the entry System. Only it catches the AddIngress call",
+   "guards": [
+    "authority DI-A 6",
+    "authority-module-declaration 4.4"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        context.Rollback().SkipDuringResimulation(context.IngressOptions());\n        context.AddIngress();\n",
+   "replace": "        context.Rollback().SkipDuringResimulation(context.IngressOptions());\n",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E8 (D-E15)*",
+   "expect": "\\[au-ingress-not-skipped\\] the official strategy"
+  },
+  {
+   "id": "au-fp-one-end-hook-taken",
+   "what": "a hook named with OneEndOnly is still collected. Only it catches the hook half of OneEndOnly",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "if (!OneEnd(registrations, hook.name) && WritesDecision(registry, decision, hook.access)) out.hooks.push_back(hook.name);",
+   "replace": "if (WritesDecision(registry, decision, hook.access)) out.hooks.push_back(hook.name);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook that writes decision data at one end only*",
+   "expect": "\\[au\\-fp\\-one\\-end\\-hook\\]"
+  },
+  {
+   "id": "au-funnel-first-declaration-only",
+   "what": "the funnel follows only the first declaration of each request (verifier V-E1; the kernel's old case that every filled component is checked). Only it catches every declaration",
+   "guards": [
+    "authority-module-declaration 5.11",
+    "authority-rollback-declaration 4.4"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "            keys.push_back({Kernel::AccessKind::Component, rule.target});\n            pending.push_back(rule.target);\n        }",
+   "replace": "            keys.push_back({Kernel::AccessKind::Component, rule.target});\n            pending.push_back(rule.target);\n            break;\n        }",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: the funnel*",
+   "expect": "\\[au\\-funnel\\-every\\-declaration\\]"
+  },
+  {
+   "id": "au-funnel-stops-at-written",
+   "what": "the funnel stops at a component the System writes in place (verifier V-E2; the kernel's old case of a chain through it). Only it catches the chain going on",
+   "guards": [
+    "authority-module-declaration 5.11",
+    "authority-rollback-declaration 4.4"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    std::set<Kernel::ComponentId> seen(pending.begin(), pending.end());",
+   "replace": "    std::set<Kernel::ComponentId> seen(pending.begin(), pending.end());\n    for (const Kernel::AccessKey& w : access.writes) if (w.kind == Kernel::AccessKind::Component) seen.insert(w.id);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: the funnel*",
+   "expect": "\\[au\\-funnel\\-through\\-written\\]"
+  },
+  {
+   "id": "au-funnel-reads-start",
+   "what": "a read of a request starts the funnel (verifier V-E3: only an added cell fills). Only it catches the read",
+   "guards": [
+    "authority-module-declaration 5.11",
+    "authority-rollback-declaration 4.4"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    std::vector<Kernel::ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());",
+   "replace": "    std::vector<Kernel::ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n    for (const Kernel::AccessKey& r : access.reads) if (r.kind == Kernel::AccessKind::Component) pending.push_back(r.id);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: the funnel*",
+   "expect": "\\[au\\-funnel\\-read\\-not\\-filled\\]"
+  },
+  {
+   "id": "au-one-end-observer-not-found",
+   "what": "OneEndOnly does not look among the observers: naming an observer is a false AU-E4. Only it catches the observer half of the name lookup",
+   "guards": [
+    "authority DI-A 10"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": " ||\n           std::any_of(observers.begin(), observers.end(), [&name](const Kernel::ObserverInfo& o) { return o.name == name; });",
+   "replace": " ||\n           (static_cast<void>(observers), false);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: what only one end has*",
+   "expect": "AU\\-E4[\\s\\S]*OnStrike"
   }
  ]
 }

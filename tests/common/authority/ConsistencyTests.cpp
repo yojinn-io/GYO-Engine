@@ -23,6 +23,13 @@ K::SystemResult OnBlock(K::On<BlockLanded>, K::Query<K::Write<Health>>) { return
 K::SystemResult RunNested(K::ExclusiveWorld<>) { return {}; }
 bool Yes() { return true; }
 bool No() { return false; }
+K::SystemResult GlowHook(K::HookCtx, K::Query<K::Write<Glow>>) { return {}; }
+K::SystemResult GlowOnHit(K::On<HitLanded>, K::Query<K::Write<Glow>>) { return {}; }
+Glow GlowFromArmor(const Armor& armor) { return Glow{armor.value}; }
+Health HealthFromScore(const Score& score) { return Health{score.value}; }
+K::SystemResult WriteHealthAndGlow(K::Query<K::Write<Health>, K::Write<Glow>>) { return {}; }
+K::SystemResult SecondHook(K::HookCtx, K::Query<K::Write<Health>>) { return {}; }
+K::SystemResult OnHitReadsArmor(K::On<HitLanded>, K::Query<K::Write<Health>, K::Read<Armor>>) { return {}; }
 
 // The base World: Health decides; WriteHealth then SecondHealth write it (registration order breaks the tie).
 void Base(O::WorldSetup& s) {
@@ -374,4 +381,182 @@ TEST_CASE("authority consistency: a hook that writes decision data at one end on
                       s.Registrar().Hook<Health, &HealthHook>(K::HookTrigger::OnAdd, {.name = "PanelHook"});
                       A::AuthorityEntry(s).OneEndOnly("PanelHook", "the Client's debug panel");
                   }) == base, "[au-fp-one-end-hook]");
+}
+
+TEST_CASE("authority consistency: what only one end has does not change the fingerprint") {
+    const std::string base = FingerprintOf(&Base);
+    // A schedule with no decision writer (the Client's screen schedule).
+    CHECK_MESSAGE(FingerprintOf([](O::WorldSetup& s) {
+                      Base(s);
+                      K::ScheduleOptions screen;
+                      screen.name = "Screen";
+                      screen.stages = {"S"};
+                      s.Registrar().Schedule(std::move(screen));
+                      s.Registrar().Component<Glow>({.name = "Glow"});
+                      s.Registrar().AddSystem<&WriteGlow>(In("WriteGlow", "Screen", "S"));
+                  }) == base, "[au-fp-same-other-schedule]");
+    // A hook, an observer and an InitialValue of ordinary data, each on its own.
+    const auto ordinary = [](int which) {
+        return [which](O::WorldSetup& s) {
+            Base(s);
+            s.Registrar().Component<Glow>({.name = "Glow"});
+            s.Registrar().Component<Armor>({.name = "Armor"});
+            s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+            if (which == 0) s.Registrar().Hook<Glow, &GlowHook>(K::HookTrigger::OnAdd, {.name = "GlowHook"});
+            if (which == 1) s.Registrar().Observer<HitLanded, &GlowOnHit>({.name = "GlowOnHit"});
+            if (which == 2) s.Registrar().InitialValue<Glow, &GlowFromArmor>();
+        };
+    };
+    const std::string plain = FingerprintOf(ordinary(-1));
+    CHECK_MESSAGE(FingerprintOf(ordinary(0)) == plain, "[au-fp-same-ordinary-hook]");
+    CHECK_MESSAGE(FingerprintOf(ordinary(1)) == plain, "[au-fp-same-ordinary-observer]");
+    CHECK_MESSAGE(FingerprintOf(ordinary(2)) == plain, "[au-fp-same-ordinary-initial]");
+    // An observer at one end only, named with OneEndOnly.
+    CHECK_MESSAGE(FingerprintOf([](O::WorldSetup& s) {
+                      Base(s);
+                      s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+                      s.Registrar().Observer<HitLanded, &OnHit>({.name = "OnStrike"});
+                      A::AuthorityEntry(s).OneEndOnly("OnStrike", "the Client's hit flash");
+                  }) == base, "[au-fp-same-one-end-observer]");
+    // A stage in front of the first decision writer (one end's screen stage): the sync point at the stage
+    // boundary lies before the first collected step.
+    const auto lead = [](bool front) {
+        return [front](O::WorldSetup& s) {
+            K::ScheduleOptions sim;
+            sim.name = "Sim";
+            sim.stages = front ? std::vector<std::string>{"Pre", "S"} : std::vector<std::string>{"S"};
+            if (front) sim.syncPoints = {{"Lead", "Pre"}};
+            s.Registrar().Schedule(std::move(sim));
+            A::AuthorityEntry(s).Component<Health>("Health");
+            s.Registrar().AddSystem<&WriteHealth>(In("WriteHealth", "Sim", "S"));
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(lead(true)) == FingerprintOf(lead(false)), "[au-fp-same-leading-sync]");
+    // Two observers registered the other way round (the order among observers is not taken).
+    const auto observers = [](bool hitFirst) {
+        return [hitFirst](O::WorldSetup& s) {
+            A::AuthorityEntry(s).Component<Health>("Health");
+            s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+            s.Registrar().Event<BlockLanded>({.name = "BlockLanded"});
+            if (hitFirst) s.Registrar().Observer<HitLanded, &OnHit>({.name = "OnHit"});
+            s.Registrar().Observer<BlockLanded, &OnBlock>({.name = "OnBlock"});
+            if (!hitFirst) s.Registrar().Observer<HitLanded, &OnHit>({.name = "OnHit"});
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(observers(true)) == FingerprintOf(observers(false)), "[au-fp-same-observer-order]");
+}
+
+TEST_CASE("authority consistency: a hook round limit, Runs schedules, writes, hook order, observer access and the InitialValue request are in the fingerprint") {
+    const auto limited = [](std::optional<std::uint32_t> limit) {
+        return [limit](O::WorldSetup& s) {
+            K::ScheduleOptions sim;
+            sim.name = "Sim";
+            sim.stages = {"S"};
+            sim.hookRoundLimit = limit;
+            s.Registrar().Schedule(std::move(sim));
+            A::AuthorityEntry(s).Component<Health>("Health");
+            s.Registrar().AddSystem<&WriteHealth>(In("WriteHealth", "Sim", "S"));
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(limited(5U)) != FingerprintOf(limited(std::nullopt)), "[au-fp-c-hook-round-limit]");
+    const auto runs = [](std::vector<std::string> schedules) {
+        return [schedules](O::WorldSetup& s) {
+            Base(s);
+            s.Registrar().AddSystem<&RunNested>(In("ApplyState", "Main", "Update"));
+            A::AuthorityEntry(s).Runs("ApplyState", schedules);
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(runs({"Main"})) != FingerprintOf(runs({"Main", "FixedUpdate"})), "[au-fp-c-runs-schedules]");
+    CHECK_MESSAGE(FingerprintOf([](O::WorldSetup& s) {
+                      s.Registrar().Component<Glow>({.name = "Glow"});
+                      A::AuthorityEntry(s).Component<Health>("Health");
+                      s.Registrar().AddSystem<&WriteHealthAndGlow>(In("WriteHealth", "FixedUpdate", "Update"));
+                      s.Registrar().AddSystem<&SecondHealth>(In("SecondHealth", "FixedUpdate", "Update"));
+                  }) != FingerprintOf([](O::WorldSetup& s) {
+                      s.Registrar().Component<Glow>({.name = "Glow"});
+                      Base(s);
+                  }), "[au-fp-c-writes]");
+    const auto hooks = [](bool alphaFirst) {
+        return [alphaFirst](O::WorldSetup& s) {
+            Base(s);
+            if (alphaFirst) s.Registrar().Hook<Health, &HealthHook>(K::HookTrigger::OnAdd, {.name = "Alpha"});
+            s.Registrar().Hook<Health, &SecondHook>(K::HookTrigger::OnAdd, {.name = "Beta"});
+            if (!alphaFirst) s.Registrar().Hook<Health, &HealthHook>(K::HookTrigger::OnAdd, {.name = "Alpha"});
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(hooks(true)) != FingerprintOf(hooks(false)), "[au-fp-c-hook-order]");
+    const auto observerAccess = [](bool readsArmor) {
+        return [readsArmor](O::WorldSetup& s) {
+            s.Registrar().Component<Armor>({.name = "Armor"});
+            A::AuthorityEntry(s).Component<Health>("Health");
+            s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+            if (readsArmor) {
+                s.Registrar().Observer<HitLanded, &OnHitReadsArmor>({.name = "OnStrike"});
+            } else {
+                s.Registrar().Observer<HitLanded, &OnHit>({.name = "OnStrike"});
+            }
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(observerAccess(true)) != FingerprintOf(observerAccess(false)), "[au-fp-c-observer-access]");
+    const auto request = [](bool fromArmor) {
+        return [fromArmor](O::WorldSetup& s) {
+            Base(s);
+            s.Registrar().Component<Armor>({.name = "ArmorRequest"});
+            s.Registrar().Component<Score>({.name = "ScoreRequest"});
+            if (fromArmor) {
+                s.Registrar().InitialValue<Health, &HealthFromArmor>();
+            } else {
+                s.Registrar().InitialValue<Health, &HealthFromScore>();
+            }
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(request(true)) != FingerprintOf(request(false)), "[au-fp-c-initial-request]");
+}
+
+TEST_CASE("authority consistency: a decision resource's value is in the digest") {
+    auto built = Build([](O::WorldSetup& s) { A::AuthorityEntry(s).Resource<Score>("Score"); });
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    K::World& world = (*built)->World("Main").GetWorld();
+    world.SetResource(Score{1});
+    const std::uint64_t one = DigestOf(world);
+    world.SetResource(Score{2});
+    CHECK_MESSAGE(DigestOf(world) != one, "[au-digest-resource]");
+}
+
+TEST_CASE("authority consistency: G-5 lists each file once, and the files of hooks and observers, not of ordinary InitialValue") {
+    std::string here = __FILE__;
+    for (char& c : here) {
+        if (c == '\\') c = '/';
+    }
+    const std::string root = here.substr(0, here.rfind("/tests/common/authority/"));
+    const auto exportOf = [&root](std::function<void(O::WorldSetup&)> build) {
+        auto built = Build(std::move(build));
+        REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+        const auto exported = A::ExportAuthoritySources((*built)->World("Main").GetWorld(), {root, "tests/common/authority", {}, "0"});
+        REQUIRE_MESSAGE(static_cast<bool>(exported), (exported ? std::string() : exported.error().message));
+        return *exported;
+    };
+    const auto count = [](const std::string& text, const std::string& what) {
+        std::size_t n = 0;
+        for (std::size_t at = text.find(what); at != std::string::npos; at = text.find(what, at + 1)) ++n;
+        return n;
+    };
+    const std::string file = "\"tests/common/authority/ConsistencyTests.cpp\"";
+    // Base has two writers in this file.
+    CHECK_MESSAGE(count(exportOf(&Base), file) == 1, "[au-g5-unique] " << exportOf(&Base));
+    CHECK_MESSAGE(count(exportOf([](O::WorldSetup& s) {
+                      A::AuthorityEntry(s).Component<Health>("Health");
+                      s.Registrar().Hook<Health, &HealthHook>(K::HookTrigger::OnAdd, {.name = "HealthHook"});
+                  }), file) == 1, "[au-g5-hook]");
+    CHECK_MESSAGE(count(exportOf([](O::WorldSetup& s) {
+                      A::AuthorityEntry(s).Component<Health>("Health");
+                      s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+                      s.Registrar().Observer<HitLanded, &OnHit>({.name = "OnStrike"});
+                  }), file) == 1, "[au-g5-observer]");
+    CHECK_MESSAGE(count(exportOf([](O::WorldSetup& s) {
+                      A::AuthorityEntry(s).Component<Health>("Health");
+                      s.Registrar().Component<Glow>({.name = "Glow"});
+                      s.Registrar().Component<Armor>({.name = "Armor"});
+                      s.Registrar().InitialValue<Glow, &GlowFromArmor>();
+                  }), file) == 0, "[au-g5-initial-ordinary]");
 }

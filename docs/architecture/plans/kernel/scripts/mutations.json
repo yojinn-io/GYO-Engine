@@ -7930,6 +7930,202 @@
       "target": "gyo_kernel_tests",
       "cases": "restore: ReadColumn*",
       "expect": "\\[ks\\-restore\\-entities\\]"
+    },
+    {
+      "id": "ks-hash-pair-second-dropped",
+      "what": "a pair's second is not hashed ([ks-hash-pair] tells {1,2} from {2,1} by the first). Only it catches the second",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "    HashValue(h, value.first);\n    HashValue(h, value.second);\n}",
+      "replace": "    HashValue(h, value.first);\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: containers*",
+      "expect": "\\[ks\\-hash\\-pair\\-second\\]"
+    },
+    {
+      "id": "ks-hash-string-size-dropped",
+      "what": "a string is hashed without its size. Only it catches the size of strings",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "inline void HashValue(Hasher& h, const std::string& value) {\n    h.U64(value.size());\n",
+      "replace": "inline void HashValue(Hasher& h, const std::string& value) {\n",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: containers*",
+      "expect": "\\[ks\\-hash\\-string\\-size\\]"
+    },
+    {
+      "id": "ks-hash-double-as-float",
+      "what": "a double is hashed through float. Only it catches the double's bits",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "inline void HashValue(Hasher& h, double value) { h.U64(std::bit_cast<std::uint64_t>(value)); }",
+      "replace": "inline void HashValue(Hasher& h, double value) { h.U64(std::bit_cast<std::uint32_t>(static_cast<float>(value))); }",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: a float*",
+      "expect": "\\[ks\\-hash\\-double\\-bits\\]"
+    },
+    {
+      "id": "ks-resource-stamp-zero",
+      "what": "ResourceStamp returns the zero stamp (only the rollback's consecutive case caught it). Only it catches the stamp's value",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        if (!slot.Present()) return std::nullopt;\n        return slot.changed;",
+      "replace": "        if (!slot.Present()) return std::nullopt;\n        return ChangeStamp{};",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: a resource*",
+      "expect": "\\[ks\\-restore\\-resource\\-stamp\\-moves\\]"
+    },
+    {
+      "id": "ks-resource-stamp-absent-unchecked",
+      "what": "ResourceStamp of an absent resource is a stamp, not nothing. Only it catches absence",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        if (!slot.Present()) return std::nullopt;\n        return slot.changed;",
+      "replace": "        return slot.changed;",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: a resource*",
+      "expect": "\\[ks\\-restore\\-resource\\-stamp\\-absent\\]"
+    },
+    {
+      "id": "ks-restore-without-alive-despawns",
+      "what": "a RestoreSet without Alive takes an empty alive set: everything is despawned. Only it catches \"no Alive keeps the set\" (the kernel's RestoreSet GYO_ASSERT stops it: a cell of an entity the restore does not keep alive)",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "std::vector<EntityId> after = set.hasAlive_ ? std::move(set.alive_) : before;",
+      "replace": "std::vector<EntityId> after = std::move(set.alive_);",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: without Alive*",
+      "expect": "binary_search\\(after\\.begin\\(\\), after\\.end\\(\\), entity\\)"
+    },
+    {
+      "id": "ks-restore-alive-not-sorted",
+      "what": "the alive set given to Restore is not sorted and deduplicated. Only it catches the alive set in any order (the kernel's RestoreSet GYO_ASSERT stops it: a cell of an entity the restore does not keep alive)",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        std::sort(after.begin(), after.end());\n        after.erase(std::unique(after.begin(), after.end()), after.end());\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: without Alive*",
+      "expect": "binary_search\\(after\\.begin\\(\\), after\\.end\\(\\), entity\\)"
+    },
+    {
+      "id": "ks-restore-equal-resource-written",
+      "what": "an equal resource is written by Restore (the column half has its own mutant). Only it catches the resource half",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "                if (slot.value && eq(static_cast<const T&>(*slot.value), static_cast<const T&>(*value))) return;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: a resource*",
+      "expect": "\\[ks\\-restore\\-resource\\-equal\\-kept\\]"
+    },
+    {
+      "id": "ks-restore-resource-not-removed",
+      "what": "a recorded absence does not remove the resource. Only it catches the removal",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "            } else if (slot.value) {\n                out.push_back(Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, id));\n            }",
+      "replace": "            }",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: a resource*",
+      "expect": "\\[ks\\-restore\\-resource\\-absent\\]"
+    },
+    {
+      "id": "ks-summary-message-unhashed-unreported",
+      "what": "a held record of a message type with no hash function is not reported. Only it catches the message half of HashMissing",
+      "guards": [
+        "kernel DI-KS 27"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        if (messages_[m]->Size() > 0 && !messages_[m]->HasHash()) missing.push_back(\"message \" + data_->messages[m].name);",
+      "replace": "        static_cast<void>(m);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the World summary hashes*",
+      "expect": "\\[ks\\-hash\\-missing\\-message\\]"
+    },
+    {
+      "id": "ks-writers-first-mount-only",
+      "what": "the writer list names only a System's first mount (RB-E8 reads it). Only it catches every mount",
+      "guards": [
+        "authority-rollback-declaration 2.2",
+        "kernel DI-KS 25"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "                data.messages[key.id].writers.push_back(MessageWriterInfo{system.options.name, mount.schedule});\n            }\n        }",
+      "replace": "                data.messages[key.id].writers.push_back(MessageWriterInfo{system.options.name, mount.schedule});\n            }\n            break;\n        }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: a System mounted in two*",
+      "expect": "\\[msg\\-registry\\-writers\\-each\\-mount\\]"
+    },
+    {
+      "id": "ks-restore-record-by-record",
+      "what": "Restore applies record by record: an OnAdd of the first column does not see the later column (only scenario S5-5 caught it). Only it catches the one immediate change for the kernel",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/src/Executor.cpp",
+      "find": "    return ApplyImmediateRecords(call, std::move(records), stamp, who, where);",
+      "replace": "    for (Detail::Record& record : records) {\n        std::vector<Detail::Record> one;\n        one.push_back(std::move(record));\n        auto applied = ApplyImmediateRecords(call, std::move(one), stamp, who, where);\n        if (!applied) return applied;\n    }\n    return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: an OnAdd of the first*",
+      "expect": "\\[ks\\-restore\\-hooks\\-after\\-any\\-column\\]"
+    },
+    {
+      "id": "ks-summary-message-payload-dropped",
+      "what": "a held message's payload is not in the World summary. Only it catches the payload",
+      "guards": [
+        "kernel DI-KS 27"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            h.U64(buffer->SeqAt(i));\n            buffer->HashAt(h, i);",
+      "replace": "            h.U64(buffer->SeqAt(i));",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the World summary hashes*",
+      "expect": "\\[ks\\-summary\\-message\\-payload\\]"
+    },
+    {
+      "id": "ks-hash-signed-not-extended",
+      "what": "a signed integer is not sign-extended to 64 bits. Only it catches the sign extension",
+      "guards": [
+        "authority-rollback-declaration 3.2"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Hash.hpp",
+      "find": "        h.U64(static_cast<std::uint64_t>(static_cast<std::int64_t>(value)));",
+      "replace": "        h.U64(static_cast<std::uint64_t>(static_cast<std::make_unsigned_t<I>>(value)));",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: an integer*",
+      "expect": "\\[ks\\-hash\\-int\\-width\\]"
+    },
+    {
+      "id": "ks-hash-missing-world-dropped",
+      "what": "HashMissing does not name the World. Only it catches error.world",
+      "guards": [
+        "kernel DI-KS 27"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                          \"World::Summary: a type with a value in the World has no HashValue\", names);\n        error.world = name_;",
+      "replace": "                          \"World::Summary: a type with a value in the World has no HashValue\", names);",
+      "target": "gyo_kernel_tests",
+      "cases": "D-9 hash: a type with no hash*",
+      "expect": "\\[ks\\-hash\\-missing\\-world\\]"
     }
   ]
 }

@@ -13,6 +13,36 @@ namespace {
 
 K::SystemResult ReadCommand(K::ResMut<Command>) { return {}; }
 K::SystemResult UseHealth(K::Query<K::Read<Health>>) { return {}; }
+K::SystemResult RunNested(K::ExclusiveWorld<>) { return {}; }
+
+// An author's strategy that counts which registration each OnRegister call carries, then does the official thing.
+struct Calls {
+    int marks = 0;
+    int runs = 0;
+    int oneEnd = 0;
+    int other = 0;
+};
+class Counting final : public A::ServerAuthorityStrategy {
+public:
+    explicit Counting(Calls& calls) : calls_(&calls) {}
+    void OnRegister(A::RegisterContext& context) override {
+        const int set = (context.Data() != nullptr) + (context.Mark() != nullptr) + (context.Ingress() != nullptr) +
+                        (context.Runs() != nullptr) + (context.OneEnd() != nullptr);
+        if (set != 1) {
+            ++calls_->other;
+        } else if (context.Mark() != nullptr) {
+            ++calls_->marks;
+        } else if (context.Runs() != nullptr) {
+            ++calls_->runs;
+        } else if (context.OneEnd() != nullptr) {
+            ++calls_->oneEnd;
+        }
+        ServerAuthorityStrategy::OnRegister(context);
+    }
+
+private:
+    Calls* calls_;
+};
 
 const R::RollbackRegistry& RollbackOf(O::Product& p) { return *p.World("Main").GetWorld().Resource<R::RollbackRegistry>(); }
 const A::AuthorityRegistry& AuthorityOf(O::Product& p) { return *p.World("Main").GetWorld().Resource<A::AuthorityRegistry>(); }
@@ -127,4 +157,24 @@ TEST_CASE("authority registrations: the peer-to-peer placeholder still puts the 
         s.Registrar().AddSystem<&UseHealth>(In("UseHealth", "Main", "Update"));
     }, peer);
     CHECK_MESSAGE((text.find("AU-E1") != std::string::npos && text.find("R-E4") == std::string::npos), "[au-peer-kernel] " << text);
+}
+
+TEST_CASE("authority registrations: every entry hands its one registration to the strategy's OnRegister") {
+    Calls calls;
+    Setting counting;
+    counting.authority = std::make_shared<Counting>(calls);
+    const std::string text = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry authority(s);
+        authority.Mark<W::Tick>();
+        s.Registrar().AddSystem<&RunNested>(In("ApplyState", "Main", "Update"));
+        authority.Runs("ApplyState", {"Main"});
+        s.Registrar().Component<Health>({.name = "Health"});
+        s.Registrar().AddSystem<&UseHealth>(In("Panel", "Main", "Update"));
+        authority.OneEndOnly("Panel", "a debug panel");
+    }, counting);
+    CHECK_MESSAGE(text == "built", text);
+    CHECK_MESSAGE(calls.marks == 1, "[au-onregister-mark] " << calls.marks);
+    CHECK_MESSAGE(calls.runs == 1, "[au-onregister-runs] " << calls.runs);
+    CHECK_MESSAGE(calls.oneEnd == 1, "[au-onregister-one-end] " << calls.oneEnd);
+    CHECK_MESSAGE(calls.other == 0, "[au-onregister-one-each] calls with not exactly one registration: " << calls.other);
 }

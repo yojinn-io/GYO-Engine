@@ -10,6 +10,7 @@
 
 #include "WorldTestSupport.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -97,8 +98,24 @@ SystemResult Act(ExclusiveWorld<> world) {
         if (!moved) return Engine::Base::Err(std::move(moved).error());
         return Ok();
     }
+    case 5: {
+        // Only the Pos column: no Alive (the alive set stays), no Tag, no Out.
+        RestoreSet set;
+        set.Column<Pos>(r.pos, &SamePos);
+        auto restored = world.Restore(std::move(set));
+        if (!restored) return Engine::Base::Err(std::move(restored).error());
+        return Ok();
+    }
     default: return Ok();
     }
+}
+
+// An OnAdd of Pos reads the entity's Tag: put back in the same restore, it is there already (whatever the
+// order of the columns).
+SystemResult PosAddedReadsTag(HookCtx ctx, Query<Read<Tag>> tags) {
+    const Tag* tag = tags.Get<Tag>(ctx.Entity());
+    Log().push_back("pos-added:" + std::to_string(ctx.Entity()) + " tag=" + (tag ? std::to_string(tag->t) : std::string("none")));
+    return Ok();
 }
 
 // An OnAdd of Tag reads the entity's Pos: put back in the same restore, it is there already.
@@ -108,11 +125,15 @@ SystemResult TagAddedReadsPos(HookCtx ctx, Query<Read<Pos>> positions) {
     return Ok();
 }
 
-std::unique_ptr<Rig> RestoreRig() {
-    auto rig = MakeRig([](Registrar& r) {
+std::unique_ptr<Rig> RestoreRig(bool posHook = false) {
+    auto rig = MakeRig([posHook](Registrar& r) {
         Data(r, true);
         r.AddSystem<&Act>(B("Act", "A"));
-        r.Hook<Tag, &TagAddedReadsPos>(HookTrigger::OnAdd, {.name = "TagAddedReadsPos"});
+        if (posHook) {
+            r.Hook<Pos, &PosAddedReadsTag>(HookTrigger::OnAdd, {.name = "PosAddedReadsTag"});
+        } else {
+            r.Hook<Tag, &TagAddedReadsPos>(HookTrigger::OnAdd, {.name = "TagAddedReadsPos"});
+        }
     });
     World& world = rig->world();
     world.SetResource(RangeAllotter::Of(100, 199));
@@ -197,4 +218,73 @@ TEST_CASE("restore: a cell the World has and the recorded state does not is remo
     CHECK_MESSAGE(!world.Alive(4), "[ks-restore-despawn] 4 is alive");
     CHECK_MESSAGE(world.Get<Tag>(2) == nullptr, "[ks-restore-remove] Tag of 2 is still there");
     CHECK_MESSAGE((world.Alive(2) && world.Get<Pos>(2)->x == 20), "[ks-restore-remove] 2 lost more than its Tag");
+}
+
+TEST_CASE("restore: a resource: equal is not written, a recorded absence removes it, ResourceStamp follows") {
+    auto rig = RestoreRig();
+    World& world = rig->world();
+    Phase() = 0;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Phase() = 1;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const std::optional<ChangeStamp> first = Record().outStamp;
+    REQUIRE(first.has_value());
+    Phase() = 3;  // nothing changed: Out is equal
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Phase() = 1;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Record().outStamp == first, "[ks-restore-resource-equal-kept] Out was written");
+    Phase() = 2;  // SetResource(Out{7})
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Phase() = 1;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE((Record().outStamp.has_value() && *Record().outStamp > *first), "[ks-restore-resource-stamp-moves]");
+    Record().out.reset();
+    Phase() = 3;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(world.Resource<Out>() == nullptr, "[ks-restore-resource-absent] Out is still there");
+    Phase() = 1;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(!Record().outStamp.has_value(), "[ks-restore-resource-stamp-absent]");
+}
+
+TEST_CASE("restore: without Alive the alive set stays; Alive and the cells may come in any order and twice") {
+    {
+        auto rig = RestoreRig();
+        World& world = rig->world();
+        Phase() = 1;
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        world.Insert(4, Tag{40});
+        Phase() = 5;
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE((world.Alive(1) && world.Alive(4)), "[ks-restore-no-alive-keeps]");
+    }
+    auto rig = RestoreRig();
+    World& world = rig->world();
+    Phase() = 1;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Phase() = 2;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Recorded& r = Record();
+    std::reverse(r.alive.begin(), r.alive.end());
+    r.alive.push_back(r.alive.front());
+    std::reverse(r.pos.begin(), r.pos.end());
+    std::reverse(r.tag.begin(), r.tag.end());
+    Phase() = 3;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE((world.Alive(101) && world.Alive(1) && world.Alive(2) && world.Alive(3)), "[ks-restore-any-order] alive");
+    CHECK_MESSAGE((world.Get<Pos>(2) != nullptr && world.Get<Pos>(2)->x == 20), "[ks-restore-any-order] Pos of 2");
+    CHECK_MESSAGE((world.Get<Tag>(3) != nullptr && world.Get<Tag>(3)->t == 31), "[ks-restore-any-order] Tag of 3");
+}
+
+TEST_CASE("restore: an OnAdd of the first column sees the entity's later column put back too") {
+    auto rig = RestoreRig(true);
+    Phase() = 1;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Phase() = 2;  // despawns 101
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Log().clear();
+    Phase() = 3;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Join(Log()) == "pos-added:101 tag=50", "[ks-restore-hooks-after-any-column] " << Join(Log()));
 }

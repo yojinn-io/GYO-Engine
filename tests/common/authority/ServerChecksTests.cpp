@@ -25,6 +25,9 @@ K::SystemResult InsertHealth(K::CommandsFor<K::Inserts<Health>, K::Removes<>>) {
 K::SystemResult WriteArmorInPlace(K::Query<K::Write<Armor>>) { return {}; }
 K::SystemResult RemoveArmor(K::CommandsFor<K::Inserts<>, K::Removes<Armor>>) { return {}; }
 K::SystemResult ConsumeCommand(K::ResMut<Command>) { return {}; }
+K::SystemResult WriteScore(K::ResMut<Score>) { return {}; }
+K::SystemResult FillAndWriteScore(K::CommandsFor<K::Inserts<Armor>, K::Removes<>>, K::Query<K::Write<Score>>) { return {}; }
+K::SystemResult ReadArmor(K::Query<K::Read<Armor>>) { return {}; }
 Score ScoreFromArmor(const Armor& armor) { return Score{armor.value}; }
 Health HealthFromScore(const Score& score) { return Health{score.value}; }
 Health HealthFromArmor(const Armor& armor) { return Health{armor.value}; }
@@ -348,4 +351,121 @@ TEST_CASE("authority checks: AU-E9 looks only at a Runs System in a resimulated 
         A::AuthorityEntry(s).Runs("ApplyState", {"FixedUpdate"});
     }, Client());
     CHECK_MESSAGE(Has(step, "AU-E9 System 'ApplyState'"), "[au-runs-step-not-nested] " << step);
+}
+
+TEST_CASE("authority checks: AU-E6 looks at the nested schedules too, and at hooks only in a World with a step schedule") {
+    const std::string nested = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        K::ScheduleOptions inner;
+        inner.name = "Inner";
+        inner.stages = {"S"};
+        s.Registrar().Schedule(std::move(inner));
+        R::RollbackEntry(s).NestedSchedule("Inner", "FixedUpdate");
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::NoRollback});
+        s.Registrar().AddSystem<&WriteHealth>(In("WriteHealth", "Inner", "S"));
+    }, Client());
+    CHECK_MESSAGE(Has(nested, "AU-E6 System 'WriteHealth'"), "[au-z6-nested] " << nested);
+    // A World with no step schedule (a Match): a hook may write decision data that does not roll back.
+    const std::string match = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::NoRollback});
+        s.Registrar().Hook<Health, &HealthHook>(K::HookTrigger::OnAdd, {.name = "HealthHook"});
+    });
+    CHECK_MESSAGE(match == "built", "[au-z6-hook-without-step] " << match);
+    // An observer may not take Derived either (as a hook).
+    const std::string observer = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::Derived});
+        s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+        s.Registrar().Observer<HitLanded, &HealthObserver>({.name = "HealthObserver"});
+    }, Client());
+    CHECK_MESSAGE(Has(observer, "AU-E6 observer 'HealthObserver'"), "[au-z6-derived-observer] " << observer);
+}
+
+TEST_CASE("authority checks: a type marked by type or by name is decision data for AU-E6") {
+    const auto marked = [](bool byName) {
+        return [byName](O::WorldSetup& s) {
+            Step(s);
+            s.Registrar().Resource<Score>({.name = "Score"});
+            if (byName) {
+                A::AuthorityEntry(s).MarkResource("Score");
+            } else {
+                A::AuthorityEntry(s).Mark<Score>();
+            }
+            s.Registrar().AddSystem<&WriteScore>(In("WriteScore", "FixedUpdate", "Update"));
+        };
+    };
+    const std::string byType = BuildText(marked(false), Client());
+    CHECK_MESSAGE(Has(byType, "AU-E6 System 'WriteScore'"), "[au-z6-mark-type] " << byType);
+    const std::string byName = BuildText(marked(true), Client());
+    CHECK_MESSAGE(Has(byName, "AU-E6 System 'WriteScore'"), "[au-z6-mark-name] " << byName);
+}
+
+TEST_CASE("authority checks: AU-E8 leaves an entry outside the resimulated schedules alone; AU-E9 sees a Runs System by any of its mounts") {
+    class Bare final : public A::ServerAuthorityStrategy {
+    public:
+        void OnRegister(A::RegisterContext& context) override {
+            if (context.Ingress() != nullptr) {
+                context.AddIngress();
+                return;
+            }
+            ServerAuthorityStrategy::OnRegister(context);
+        }
+    };
+    Setting bare = Client();
+    bare.authority = std::make_shared<Bare>();
+    const std::string frame = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry authority(s);
+        authority.Resource<Command>("Command", {.input = true});
+        authority.Ingress<&ReadCommand>(In("ReadCommand", "Main", "PreUpdate"));
+    }, bare);
+    CHECK_MESSAGE(frame == "built", "[au-ingress-frame] " << frame);
+    const std::string twice = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        K::ScheduleOptions fog;
+        fog.name = "OnEnter_Fog";
+        fog.stages = {"S"};
+        s.Registrar().Schedule(std::move(fog));
+        K::SystemOptions apply = In("ApplyState", "Main", "Update");
+        apply.mounts.push_back(K::Mount{"FixedUpdate", "Update"});
+        s.Registrar().AddSystem<&RunNested>(apply);
+        A::AuthorityEntry(s).Runs("ApplyState", {"OnEnter_Fog"});
+    }, Client());
+    CHECK_MESSAGE(Has(twice, "AU-E9 System 'ApplyState'"), "[au-runs-two-mounts] " << twice);
+}
+
+TEST_CASE("authority checks: the funnel: every declaration of a request, a chain through a component written in place, and no read") {
+    const auto notRolled = [](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::NoRollback});
+        s.Registrar().Component<Armor>({.name = "ArmorRequest"});
+        s.Registrar().Component<Score>({.name = "ScoreRequest"});
+    };
+    // Armor is the request of two declarations; Score is registered before Health, so the ordinary target comes
+    // first whichever order the read-only registry keeps them in (registration or component id). Both are filled.
+    const std::string both = BuildText([&](O::WorldSetup& s) {
+        Step(s);
+        s.Registrar().Component<Score>({.name = "ScoreRequest"});
+        s.Registrar().Component<Armor>({.name = "ArmorRequest"});
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::NoRollback});
+        s.Registrar().InitialValue<Score, &ScoreFromArmor>();
+        s.Registrar().InitialValue<Health, &HealthFromArmor>();
+        s.Registrar().AddSystem<&FillRequest>(In("FillRequest", "FixedUpdate", "Update"));
+    }, Client());
+    CHECK_MESSAGE(Has(both, "AU-E6 System 'FillRequest'"), "[au-funnel-every-declaration] " << both);
+    // The chain Armor -> Score -> Health goes on through Score, which the System also writes in place.
+    const std::string through = BuildText([&](O::WorldSetup& s) {
+        notRolled(s);
+        s.Registrar().InitialValue<Score, &ScoreFromArmor>();
+        s.Registrar().InitialValue<Health, &HealthFromScore>();
+        s.Registrar().AddSystem<&FillAndWriteScore>(In("FillAndWriteScore", "FixedUpdate", "Update"));
+    }, Client());
+    CHECK_MESSAGE(Has(through, "AU-E6 System 'FillAndWriteScore'"), "[au-funnel-through-written] " << through);
+    // Reading the request adds no cell.
+    const std::string read = BuildText([&](O::WorldSetup& s) {
+        notRolled(s);
+        s.Registrar().InitialValue<Health, &HealthFromArmor>();
+        s.Registrar().AddSystem<&ReadArmor>(In("ReadArmor", "FixedUpdate", "Update"));
+    }, Client());
+    CHECK_MESSAGE(read == "built", "[au-funnel-read-not-filled] " << read);
 }

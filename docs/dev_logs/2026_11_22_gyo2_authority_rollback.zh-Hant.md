@@ -57,7 +57,7 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 
 權威 75 個超過「DI-A 12 條 × 5＝60」的參考：指紋的內容表有 16 項，每項是獨立的誤點（README 第 3 條），加上 AU-E 九碼各自的兩面（漏報與誤報）。合併前核准時說明。
 
-不加的：scenario 第 5 段（它抓的錯已有回滾、權威的突變各自抓）；`Adopt` 不做（入口永遠留 C 以前最後的值、還原先用它，等價）；沒選策略時「仍加入口 System」（World 一定停在 AU-E2，從外面看不到）。
+不加的：scenario 第 5 段（它抓的錯已有回滾、權威的突變各自抓）；`Adopt` 不做（入口永遠留 C 以前最後的值、還原先用它，等價）；沒選策略時「仍加入口 System」（World 一定停在 AU-E2，從外面看不到）。**第 8 步更正**：前兩項的理由有反例——AU-E1 訊息的「is not implemented yet」只有 scenario 的 `[s5-6-placeholder]` 抓（訊息措辭，照分類不加突變）；`Adopt` 不是等價（權威值等於 World 現值時還原不寫格、重跑也不重記，歷史留著舊預測），第 8 步補了案與突變 `rb-history-not-adopted`。
 
 退役（機能拿掉，README「事後報告」；一行一個理由，id 照字母序）：
 
@@ -71,6 +71,7 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
   - A11 的 B 組 4、C1 5、C2 1（案例併進 `ks-s4-layer2-components-only`）；
   - 區專屬的平手規則 3。
   - A11 的 C1 退役後，它們守的判定（J-6、J-45、J-57 的「任何值都寫得進」）暫時沒有突變（19.1 的「不補」）；限制不回來由型別保證（欄位不存在）。
+  - **第 8 步更正**（敵對式檢查 adv-a 第 8 節）：上面寫「接手」的有 7 類其實沒人接——`hf-c-fp-*` 四個（hook 清空輪上限）、`obs-cfp-registration-order`、`obs-cfp-no-access`、`rs-iv-fb8-C-request-not-hashed`、`rs-iv-ff4-C-takes-zone-B`、`rs-j17-no-dedup`、`rs-b6-cfp-version-1`。前六類第 8 步補了案與突變（`au-fp-hook-round-limit-dropped`、`au-fp-observer-order-taken`、`au-fp-observer-access-dropped`、`au-fp-initial-request-dropped`、`au-fp-every-initial-value`、`au-g5-not-unique`）；版本常數（`rs-b6-cfp-version-1`）照分類屬低價值，不補，這裡更正為「退役、不接手」。證據檔 `step6-retired-mutants.txt` 是當時的紀錄，不改寫。
 
 同時修好本分支前幾步就讓 find 對不上的 17 個（第 1～3 步改了程式、當時沒有重跑那些突變）：`sr-*` 五個、`we-j32-spawn-before-despawn`、`msg-registry-*` 兩個、`ks-s4-annotated-settings-refused`、`ks-s11-annotated-writes-not-hashed`、`ks-s5-*` 兩個、編排層 `g8-*` 五個與 `or-skeleton-after-units`、`sc-s2-real-time-carried`、`wt-resimulation-not-put`；以及 expect 還要求 Z1 的 `rs-j12-condition-reads-dropped`。
 
@@ -79,6 +80,40 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 ## scenario 第 5 段「duel」
 
 一個 Product 兩個 World：Match（伺服器權威、不回滾）與 Client（伺服器權威＋官方回滾，多登記畫面用的 `HitFlash`）。S5-1 一致性指紋兩端相同、畫面資料不影響、判定登記影響；S5-2 預測漏了伺服器的一擊、digest 不同；S5-3 第 1 步的權威值進入口、重跑 5 步、digest 相同、腳步聲只數第一次；S5-4 值和歷史相同不回滾；S5-5 預測的死亡被推翻、配發器範圍內的 id 回來、OnAdd 與 `Add<T>` observer 在全部放回後才跑；S5-6 P2P 佔位啟動錯誤；S5-7 單機不選就沒有；S5-8 同一份存檔讀兩次摘要相同。第一次寫時 S5-5 的玩家 id 在配發器範圍外、沒有驗到「範圍內的 id 復活」，改成 1001、1002 後 amend（未推）。
+
+## 第 8 步：審查、敵對式檢查、§14.4 檢證之後的修正
+
+檢查者都是 Fable 5.2／high：整條線的審查、權威突變清單的敵對式檢查（adv-a）、回滾＋Kernel 突變清單的敵對式檢查（adv-b）、§14.4 檢證（A1～A11）。報告：主 checkout `build/evidence/gyo2-authority-rollback/step8-checks/`（`review-line/REPORT.md`、`adv-a/REPORT.md`、`adv-b/REPORT.md`、`verify/REPORT.md`；臨時突變的目錄 `adv-tools/`、`adv-a/batch*.json`）。
+
+改了什麼（審查的代號）：
+
+- A1：判定 4 命中的舊註解改寫（Kernel、`world_time`）。
+- A2：回滾重跑的每一步包一段 trace（`rollback`／`resimulate`，宣告 10.4）。
+- A4：`StepSchedule()` 與 `RollbackOptions::frameSchedule` 的預設跟著時間 Module；選了官方策略卻沒有步的 schedule 是 RB-E10（新碼）。
+- A6：拿掉權威份沒有的 `MarkComponent<T>`。
+- B1～B3：權威不寫 `Kernel::Detail`；「重跑時跑不跑」逐個掛載看條件（回滾公開 `RunsWhileResimulating` 等，名字的 `skipped` 表拿掉）；同一型別的可回滾與 Derived 跨種類裁決。
+- Z8 接手時鬆掉的面補回：判定的輸入登記成 Derived 也是 AU-E7；元件的輸入也查（檢證 A4）。
+- D1～D4：死碼（`PayloadBytesAt`、`InputHistoryBase::Capacity`、`StartupError::step`）、時間型別的 `reserved`、沒用的測試輔助、測試名裡的區與 Shared。
+- E6～E8：回滾的策略改持 `shared_ptr`；`NoAuthority` 註解；`ModuleBuffer` 與準備函式跑完就放掉（O-2）。
+- C1～C8：契約頁改名 [`authority-sources.zh-Hant.md`](../architecture/authority-sources.zh-Hant.md)（條文未改）、DI-A 2 的守衛照實寫、突變的 `guards` 指到存在的節、`determinism.md`、`system-contract.zh-Hant.md`、world-time 的 ctest、本頁的機器標示。
+- 宣告 9.3 漏的案：`BuildNewFirst` 失敗時舊 World 的回滾照常。
+
+補的測試與突變（side chat 的分類：只補會讓功能出錯、寫在契約或 DI 裡的，以及自己紀錄寫了「接手」卻沒人接的）：
+
+| 清單 | 第 7 步末 | 加 | 退 | 現在 | 內容 |
+|---|---|---|---|---|---|
+| `authority_mutations.json` | 75 | 40 | 0 | 115 | 掛載逐個問（1）、Z8 的元件與 Derived（2）；指紋「該不變」7（另一張 schedule、前面的同步點、一般資料的 hook／observer／`InitialValue`、observer 的先後、`OneEndOnly` 的 observer）、「該變」6（hook 清空輪上限、`Runs` 的 schedule、寫的清單、hook 的順序、observer 的存取、`InitialValue` 的請求）；檢查 7（巢狀 schedule、沒有步時的 hook、AU-E8 的範圍、名字與型別的標記、兩個掛載、observer 的 Derived）；digest 的 Resource 1；G-5 4（去重、hook、observer、一般 `InitialValue`）；`OnRegister` 3；測試已有、清單沒有的 5（a10、c05、d10、e10、b29）；漏斗走訪 3（檢證 V-E1～3）；a09 1 |
+| `rollback_mutations.json` | 47 | 28 | 1 | 74 | 退 `rb-skip-not-recorded`（名字的記錄拿掉，B2）；跨種類裁決 1、trace 段 1、預設與 RB-E10 3；R-8 的邊界 13（C 早於第一筆、只告知一次、C 時比較、預測沒有元件、登記的比較函式、權威值寫進歷史、三條修剪路與兩個條件）、R-2 的歷史 5（欄的修剪、沒變的窗口起點、Resource 被取代與不在、輸入容量的邊界）、R-4 2、R-1 的 Correct 1、跨 schedule 訊息的 observer 2、每個掛載都加條件 1、放棄的通知 1、權威的移除 1。`rb-alive-not-restored` 的 expect 收窄成 Kernel 斷言的文字（§14.4：只締，舊 expect 是案名，任何失敗都算） |
+| Kernel `mutations.json` | 656 | 15 | 0 | 671 | 雜湊 5（pair 的 second、string 的長度、double、符號擴展、`error.world`）、摘要的訊息 2（內容、沒有雜湊函式）、寫者名單的每個掛載 1、`Restore` 與 `ResourceStamp` 7（不叫 `Alive`、亂序與重複、Resource 相等不寫、不在時移除、stamp 的值與不在、OnAdd 看得到後面的欄）。B9（細胞不排序）對合法輸入等價，試過後不加；B7、B8 在突變下由 Kernel 的 `RestoreSet` 斷言停下，expect 用斷言的文字 |
+
+這輪新加的突變全部 killed（各自跑：權威 33＋3＋1＋前面幾批的 4、回滾 24＋5、Kernel 15）；紀錄在 `step8-checks/au-contract-mutants.log`、`rb-contract-mutants.log`、`ks-contract-mutants.log`。第一次跑時有 5 個沒按預期，都是測試的寫法（前面的同步點沒造出來、兩個摘要的 `Flag` 本來就不同、登記表的宣告順序依元件）或 expect 的形（B7、B8），改測試或 expect 後再跑。
+
+不補的（一行一個理由）：
+
+- 防誤用（照「誤用不加守衛」）：權威 e07、e13、e14、e17（四個 `GYO_ASSERT`）、e12（空的策略）、e11（只有 `Ingress`／`Runs`／`OneEndOnly` 卻沒選策略的 AU-E2）；回滾 A1～A4（同一來源兩筆 options 不同、種類不同的 RB-E1）、A8、A9（不存在的型別或 schedule 的 RB-E2、RB-E4）、A44（`GYO_ASSERT`）；Kernel B6、B13（closure 裡改 membership、closure 裡 `Restore`）、B22（`GYO_ASSERT`）。
+- 逐欄細項（照「不做逐欄細項」）：指紋的各欄 b03～b05、b07～b13、b18～b20、b22、b33、b41～b48、b47；digest 的 c03；資料集的 d01～d04；G-5 的 d11、d12；登記表雜湊 e05、回滾登記表雜湊 A5；被 `RemoveSystem` 拿掉的 System（a01、a02、b30：建置期的事，結果在啟動時就看得到）；Kernel B12（還原後換 stamp）、B18（hook 被標 observer）。
+- 低價值：版本常數 b01、b02、d05、d14（`rs-b6-cfp-version-1` 同類）；訊息措辭 e16、A47、d16、c04、d15（只換錯誤碼的名字）；預設值 A53、e01；回滾 A6（沒有流程替作者代為登記步的 schedule）；a16（AU-E4 先報）；`rs-j17-generated-by`、`rs-j17-zone-b-listed`（多列一個讀者只是多掃一個檔）。
+- 等價或只影響成本：b42～b45、e09、d06、A13、A30、A32、A51、B16。
 
 ## 經過與教訓
 

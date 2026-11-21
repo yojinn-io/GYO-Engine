@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -457,7 +458,14 @@ public:
         static_cast<void>(world.Modify<W::Resimulation>([](W::Resimulation& r) { r.active = 0; }));
         return {};
     }
-    ::Engine::Base::Result<void, K::KernelError> Correct(R::CorrectContext&) override { return {}; }
+    ::Engine::Base::Result<void, K::KernelError> Correct(R::CorrectContext&) override {
+        ++CorrectCalls();
+        return {};
+    }
+    static int& CorrectCalls() {
+        static int calls = 0;
+        return calls;
+    }
 };
 
 void BuildScratch(O::WorldSetup& s) {
@@ -475,6 +483,7 @@ TEST_CASE("rollback strategy: R-1: a strategy written from scratch through the s
     O::OptionBag options;
     options.Set(R::RollbackOptions{std::make_shared<ScratchStrategy>()});
     auto scratch = Make(std::move(options), &BuildScratch);
+    ScratchStrategy::CorrectCalls() = 0;
     Frames(*scratch, 9);
     Inbox(*scratch).ConfirmedThrough(4);
     Frames(*scratch, 3);
@@ -483,6 +492,7 @@ TEST_CASE("rollback strategy: R-1: a strategy written from scratch through the s
     CHECK_MESSAGE(WorldOf(*scratch).Get<Health>(2)->hp == WorldOf(*straight).Get<Health>(2)->hp, "[rb-r1-scratch] Health of 2");
     CHECK_MESSAGE(TickOf(*scratch) == TickOf(*straight), "[rb-r1-scratch] Tick " << TickOf(*scratch) << " vs " << TickOf(*straight));
     CHECK_MESSAGE(WorldOf(*scratch).Resource<W::Resimulation>()->active == 0, "[rb-r1-scratch] resimulating left raised");
+    CHECK_MESSAGE(ScratchStrategy::CorrectCalls() == 12, "[rb-r1-correct-called] once a frame: " << ScratchStrategy::CorrectCalls());
 }
 
 
@@ -640,4 +650,231 @@ TEST_CASE("rollback strategy: a second rollback reads the history the first one 
     CHECK_MESSAGE(WorldOf(*b).Get<Score>(1)->value == WorldOf(*a).Get<Score>(1)->value,
                   "[rb-rewritten-history-read] Score of 1: " << WorldOf(*b).Get<Score>(1)->value << " vs " << WorldOf(*a).Get<Score>(1)->value);
     CHECK_MESSAGE(SummaryText(*b) == SummaryText(*a), "[rb-rewritten-history-read] the World summaries differ");
+}
+
+// ---- R-8: the inbox's edges, the decision's edges and pruning (review of step 8: the entry boundaries).
+
+namespace {
+bool HealthNearOne(const Health& a, const Health& b) { return a.hp - b.hp <= 1 && b.hp - a.hp <= 1; }
+} // namespace
+
+TEST_CASE("rollback strategy: R-8: C earlier than this World's first record is given up, and told once") {
+    auto p = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}));
+    Frames(*p, 3);
+    // A replacement that starts at tick 9 (as a load would): the new World's first record is step 10.
+    O::ReplaceRequest request;
+    request.extra = [](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(W::Tick{9});
+        world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
+        world.SetResource(Command{});
+        world.Insert(1, Health{100});
+        return {};
+    };
+    auto replaced = p->ReplaceWorld("Main", std::move(request));
+    REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message));
+    Frames(*p, 2);
+    REQUIRE(TickOf(*p) == 11);
+    Notes().clear();
+    Inbox(*p).ConfirmedThrough(5);
+    auto ran = p->RunFrame();
+    CHECK_MESSAGE(static_cast<bool>(ran), "[rb-before-first-record] " << (ran ? std::string() : ran.error().message));
+    CHECK_MESSAGE((Notes().size() == 1 && Notes()[0].requested == 5), "[rb-before-first-record] notes: " << Notes().size());
+    // The next frame does not tell it again.
+    Frames(*p, 1);
+    CHECK_MESSAGE(Notes().size() == 1, "[rb-abandoned-once] notes after one more frame: " << Notes().size());
+}
+
+TEST_CASE("rollback strategy: R-8: Differs compares at C: a later value waits, a value the prediction lacks differs, the registered comparison decides") {
+    R::InboxColumn<Health> inbox;
+    // History: entity 1 had 10 from step 3.
+    R::ComponentHistory<Health> history(nullptr);
+    inbox.Put(1, 3, Health{10});
+    const std::vector<K::EntityId> alive{1, 2};
+    history.Adopt(3, inbox, alive);
+    // A value later than C is not compared yet.
+    inbox.Put(1, 7, Health{99});
+    CHECK_MESSAGE(!history.Differs(5, inbox, alive), "[rb-differs-later-waits]");
+    // The authority has a value where the prediction had no component.
+    R::InboxColumn<Health> lacking;
+    lacking.Put(2, 3, Health{4});
+    CHECK_MESSAGE(history.Differs(5, lacking, alive), "[rb-differs-prediction-lacks]");
+    // The registered comparison: 11 is near 10.
+    R::ComponentHistory<Health> near(&HealthNearOne);
+    near.Adopt(3, inbox, alive);
+    R::InboxColumn<Health> close;
+    close.Put(1, 3, Health{11});
+    CHECK_MESSAGE(!near.Differs(5, close, alive), "[rb-differs-registered-comparison]");
+}
+
+TEST_CASE("rollback strategy: R-8: pruning keeps per entity the newest value at or before C") {
+    R::InboxColumn<Health> values;
+    values.Put(1, 2, Health{2});
+    values.Put(1, 4, Health{4});
+    values.Put(1, 6, Health{6});
+    values.Put(2, 1, Health{1});
+    values.Prune(5);
+    CHECK_MESSAGE(!values.At(1, 3).has_value(), "[rb-inbox-prune-older] the value of step 2 is kept");
+    CHECK_MESSAGE((values.At(1, 5).has_value() && **values.At(1, 5) == Health{4}), "[rb-inbox-prune-keeps-c] the value at C is gone");
+    CHECK_MESSAGE((values.At(1, 6).has_value() && **values.At(1, 6) == Health{6}), "[rb-inbox-prune-later] the later value is gone");
+    // Another entity's entry never counts as "a later value of the same entity".
+    R::InboxColumn<Health> two;
+    two.Put(1, 4, Health{4});
+    two.Put(2, 1, Health{1});
+    two.Prune(5);
+    CHECK_MESSAGE((two.At(1, 5).has_value() && **two.At(1, 5) == Health{4}), "[rb-inbox-prune-per-entity]");
+}
+
+TEST_CASE("rollback strategy: R-8: the inbox is pruned after a rollback and after giving up") {
+    // After a rollback (mode Always).
+    auto rolled = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}));
+    Frames(*rolled, 9);
+    Inbox(*rolled).Value<Health>(1, 2, Health{1});
+    Inbox(*rolled).Value<Health>(1, 4, Health{2});
+    Inbox(*rolled).ConfirmedThrough(4);
+    Frames(*rolled, 1);
+    const R::InboxColumn<Health>* after = WorldOf(*rolled).Resource<R::RollbackInbox>()->Values<Health>();
+    REQUIRE(after != nullptr);
+    CHECK_MESSAGE(!after->At(1, 3).has_value(), "[rb-inbox-pruned-after-rollback]");
+    // After giving up (further back than the depth).
+    auto given = Make(WithStrategy({.depth = 4, .mode = R::RollbackMode::Always}));
+    Frames(*given, 9);
+    Inbox(*given).Value<Health>(1, 1, Health{1});
+    Inbox(*given).Value<Health>(1, 2, Health{2});
+    Inbox(*given).ConfirmedThrough(2);
+    Frames(*given, 1);
+    const R::InboxColumn<Health>* abandoned = WorldOf(*given).Resource<R::RollbackInbox>()->Values<Health>();
+    REQUIRE(abandoned != nullptr);
+    CHECK_MESSAGE(!abandoned->At(1, 1).has_value(), "[rb-inbox-pruned-after-abandon]");
+}
+
+// ---- R-2: the histories' edges (review of step 8).
+
+namespace {
+// An exclusive System that, by phase, records the Score resource and the Command input into histories of its own,
+// restores Score from its history, or writes an input back.
+struct Probe {
+    int phase = 0;  // 1 record, 2 restore Score, 3 write Command back
+    std::uint64_t tick = 0;
+};
+Probe& ProbeState() {
+    static Probe probe;
+    return probe;
+}
+std::unique_ptr<R::ResourceHistory<Score>>& ScoreHistoryBox() {
+    static std::unique_ptr<R::ResourceHistory<Score>> history;
+    return history;
+}
+std::unique_ptr<R::InputHistory<Command>>& CommandHistoryBox() {
+    static std::unique_ptr<R::InputHistory<Command>> history;
+    return history;
+}
+R::ResourceHistory<Score>& ScoreHistory() {
+    if (!ScoreHistoryBox()) ScoreHistoryBox() = std::make_unique<R::ResourceHistory<Score>>(nullptr);
+    return *ScoreHistoryBox();
+}
+R::InputHistory<Command>& CommandHistory() {
+    if (!CommandHistoryBox()) CommandHistoryBox() = std::make_unique<R::InputHistory<Command>>(3);
+    return *CommandHistoryBox();
+}
+K::SystemResult RunProbe(K::ExclusiveWorld<> world) {
+    const Probe& probe = ProbeState();
+    if (probe.phase == 1) {
+        ScoreHistory().Record(world, 0, probe.tick);
+        CommandHistory().Record(world, probe.tick);
+    } else if (probe.phase == 2) {
+        K::RestoreSet set;
+        ScoreHistory().AddTo(set, probe.tick, {}, nullptr);
+        return world.Restore(std::move(set));
+    } else if (probe.phase == 3) {
+        CommandHistory().WriteBack(world, probe.tick);
+    }
+    return {};
+}
+std::unique_ptr<O::Product> ProbeProduct() {
+    auto built = O::Product::Build(Game([](O::WorldSetup& s) {
+                                       s.Registrar().Resource<Score>({.name = "Score"});
+                                       s.Registrar().Resource<Command>({.name = "Command"});
+                                       s.Registrar().AddSystem<&RunProbe>(In("RunProbe", "Main", "Update"));
+                                   }),
+                                   Units(false));
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    (*built)->World("Main").GetWorld().SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
+    return std::move(*built);
+}
+void ProbeAt(O::Product& p, int phase, std::uint64_t tick) {
+    ProbeState() = {phase, tick};
+    Frames(p, 1);
+    ProbeState() = {};
+}
+} // namespace
+
+TEST_CASE("rollback strategy: R-2: a resource's history drops what a resimulation replaces and records an absence") {
+    ScoreHistoryBox().reset();
+    CommandHistoryBox().reset();
+    auto p = ProbeProduct();
+    K::World& world = p->World("Main").GetWorld();
+    for (std::int32_t t = 1; t <= 3; ++t) {
+        world.SetResource(Score{t});
+        ProbeAt(*p, 1, static_cast<std::uint64_t>(t));
+    }
+    // Step 2 run again with another value: the old 2 and 3 go.
+    world.SetResource(Score{20});
+    ProbeAt(*p, 1, 2);
+    ProbeAt(*p, 2, 2);
+    CHECK_MESSAGE((world.Resource<Score>() != nullptr && world.Resource<Score>()->value == 20),
+                  "[rb-resource-history-replaced] " << (world.Resource<Score>() ? world.Resource<Score>()->value : -1));
+    // The resource gone at step 3: restoring step 3 removes it.
+    world.RemoveResource<Score>();
+    ProbeAt(*p, 1, 3);
+    world.SetResource(Score{99});
+    ProbeAt(*p, 2, 3);
+    CHECK_MESSAGE(world.Resource<Score>() == nullptr, "[rb-resource-history-absence] Score came back");
+}
+
+TEST_CASE("rollback strategy: R-2: an input history of capacity n keeps the last n steps") {
+    ScoreHistoryBox().reset();
+    CommandHistoryBox().reset();
+    auto p = ProbeProduct();
+    K::World& world = p->World("Main").GetWorld();
+    world.SetResource(Score{0});
+    for (std::int32_t t = 1; t <= 4; ++t) {
+        world.SetResource(Command{t});
+        ProbeAt(*p, 1, static_cast<std::uint64_t>(t));
+    }
+    world.SetResource(Command{0});
+    ProbeAt(*p, 3, 2);
+    CHECK_MESSAGE(world.Resource<Command>()->move == 2, "[rb-input-capacity-edge] step 2 of the last 3: " << world.Resource<Command>()->move);
+}
+
+TEST_CASE("rollback strategy: R-2: the column history is pruned to the depth, and keeps an unchanged base") {
+    auto p = Make(WithStrategy({.depth = 4}));
+    Frames(*p, 12);
+    const R::RollbackHistory* history = WorldOf(*p).Resource<R::RollbackHistory>();
+    REQUIRE((history != nullptr && !history->columns.empty()));
+    const auto* health = dynamic_cast<const R::ComponentHistory<Health>*>(history->columns.front().get());
+    REQUIRE(health != nullptr);
+    CHECK_MESSAGE(!health->At(1, 2).has_value(), "[rb-columns-pruned] step 2 is kept at depth 4, tick 12");
+    CHECK_MESSAGE(health->At(1, 12).has_value(), "[rb-columns-pruned] the last step is gone");
+    // A cell that has not changed since before the window keeps its one entry (the window's base).
+    R::ComponentHistory<Health> still(nullptr);
+    R::InboxColumn<Health> once;
+    once.Put(1, 2, Health{5});
+    const std::vector<K::EntityId> alive{1};
+    still.Adopt(2, once, alive);
+    still.Prune(10);
+    CHECK_MESSAGE((still.At(1, 12).has_value() && still.At(1, 12)->hp == 5), "[rb-prune-keeps-unchanged-base]");
+}
+
+TEST_CASE("rollback strategy: R-8: the authoritative value is laid over the history at C") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Value<Health>(1, 5, Health{7});
+    Inbox(*p).ConfirmedThrough(5);
+    Frames(*p, 1);
+    const R::RollbackHistory* history = WorldOf(*p).Resource<R::RollbackHistory>();
+    REQUIRE((history != nullptr && !history->columns.empty()));
+    const auto* health = dynamic_cast<const R::ComponentHistory<Health>*>(history->columns.front().get());
+    REQUIRE(health != nullptr);
+    CHECK_MESSAGE((health->At(1, 5).has_value() && health->At(1, 5)->hp == 7),
+                  "[rb-history-adopted] step 5 in the history: " << (health->At(1, 5) ? health->At(1, 5)->hp : -1));
 }

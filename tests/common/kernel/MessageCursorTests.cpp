@@ -43,7 +43,24 @@ std::string Numbers(const std::vector<Ping>& pings) {
     return out;
 }
 
+// A message type with no hash function (Summary reports it while a record of it is held).
+struct Quiet { std::uint32_t n; };
+
 // ---- Systems (captureless; what they see goes to Log())
+
+// Writes Ping{Flag} once a Run (the payload a summary must see).
+SystemResult WriteFlagPing(MessageWriter<Ping> pings, Res<Flag> flag) {
+    pings.Send(Ping{static_cast<std::uint32_t>(flag->on)});
+    return Ok();
+}
+SystemResult WriteQuiet(MessageWriter<Quiet> quiet) {
+    quiet.Send(Quiet{1});
+    return Ok();
+}
+SystemResult ReadQuiet(MessageReader<Quiet> quiet) {
+    static_cast<void>(quiet.Read());
+    return Ok();
+}
 
 // Writes Ping{run number} on every run (its own count, one per mount: B-12).
 SystemResult WriteEveryRun(MessageWriter<Ping> pings, Local<std::uint32_t> runs) {
@@ -550,4 +567,50 @@ TEST_CASE("J-36: the World summary holds where each cursor has read to") {
     };
     CHECK(summary(true) == summary(true));
     CHECK_MESSAGE(summary(true) != summary(false), "[msg-summary-cursor-position] where a cursor has read to is not in the summary");
+}
+
+TEST_CASE("J-36: the World summary hashes a held message's payload, and reports a message type with no hash function") {
+    const auto summary = [](std::int32_t flag) {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            // The reader runs before the writer: its cursor holds the record written after it.
+            r.AddSystem<&Reader>(B("Reader", "A"));
+            r.AddSystem<&WriteFlagPing>(B("Write", "B"));
+        }, false);
+        rig->world().SetResource(Flag{flag});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        REQUIRE(rig->world().MessagePayloads<Ping>().size() == 1);
+        rig->world().SetResource(Flag{0});  // only the payload differs between the two
+        return SummaryOf(rig->world());
+    };
+    CHECK_MESSAGE(summary(1) != summary(2), "[ks-summary-message-payload] two payloads give one summary");
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.Message<Quiet>({.name = "Quiet"});
+        r.AddSystem<&ReadQuiet>(B("ReadQuiet", "A"));
+        r.AddSystem<&WriteQuiet>(B("WriteQuiet", "B"));
+    }, false);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const auto held = rig->world().Summary();
+    REQUIRE_MESSAGE(!held, "[ks-hash-missing-message] a held record of a message with no HashValue went into the summary");
+    CHECK_MESSAGE(held.error().detail.find("message Quiet") != std::string::npos, "[ks-hash-missing-message] " << held.error().Text());
+}
+
+TEST_CASE("J-36: a System mounted in two schedules is listed as a writer for each mount") {
+    const Built built = Finish({{"test", [](Registrar& r) {
+                                     Data(r);
+                                     ScheduleOptions other;
+                                     other.name = "Other";
+                                     other.stages = {"A"};
+                                     r.Schedule(std::move(other));
+                                     SystemOptions write = B("Write", "A");
+                                     write.mounts.push_back(Mount{"Other", "A"});
+                                     r.AddSystem<&WriteEveryRun>(std::move(write));
+                                 }}});
+    KERNEL_REQUIRE_OK(built);
+    const MessageInfo* ping = InfoNamed(built.registry->Frozen(), "Ping");
+    REQUIRE(ping != nullptr);
+    std::string listed;
+    for (const MessageWriterInfo& writer : ping->writers) listed += (listed.empty() ? "" : ", ") + writer.system + "@" + writer.schedule;
+    CHECK_MESSAGE(listed == "Write@Tick, Write@Other", "[msg-registry-writers-each-mount] " << listed);
 }

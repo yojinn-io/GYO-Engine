@@ -142,6 +142,7 @@ TEST_CASE("D-9 hash: a float hashes bit by bit; the author normalizes +0 and -0 
     CHECK_MESSAGE(HashOf(-0.0f) != HashOf(0.0f), "[ks-hash-float-bits] -0.0f and +0.0f hash the same");
     CHECK_MESSAGE(HashOf(-0.0) != HashOf(0.0), "[ks-hash-float-bits] -0.0 and +0.0 hash the same");
     CHECK_MESSAGE(HashOf(1.5f) != HashOf(2.5f), "[ks-hash-float-bits] two floats hash the same");
+    CHECK_MESSAGE(HashOf(1.0) != HashOf(1.0 + 1e-12), "[ks-hash-double-bits] two doubles that one float holds alike hash the same");
     CHECK_MESSAGE(HashOf(Speed{-0.0f}) == HashOf(Speed{0.0f}), "[ks-hash-float-normalized] the author's normalization is lost");
 }
 
@@ -164,6 +165,11 @@ TEST_CASE("D-9 hash: containers hash their contents") {
                   "[ks-hash-optional-present] which element is empty is lost");
     CHECK_MESSAGE(HashOf(std::pair<std::int32_t, std::int32_t>{1, 2}) != HashOf(std::pair<std::int32_t, std::int32_t>{2, 1}),
                   "[ks-hash-pair] a pair's order is lost");
+    CHECK_MESSAGE(HashOf(std::pair<std::int32_t, std::int32_t>{1, 2}) != HashOf(std::pair<std::int32_t, std::int32_t>{1, 3}),
+                  "[ks-hash-pair-second] a pair's second is lost");
+    // Without each string's size, {"ab", ""} and {"a", "b"} are the same characters in a row.
+    CHECK_MESSAGE(HashOf(std::vector<std::string>{"ab", ""}) != HashOf(std::vector<std::string>{"a", "b"}),
+                  "[ks-hash-string-size] where one string ends and the next begins is lost");
     std::vector<std::byte> oneTwo = Le64(1);
     const std::vector<std::byte> two = Le64(2);
     oneTwo.insert(oneTwo.end(), two.begin(), two.end());

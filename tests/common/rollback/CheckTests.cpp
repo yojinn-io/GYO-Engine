@@ -38,6 +38,12 @@ K::SystemResult ReadSpeed(K::Query<K::Read<Speed>>) { return {}; }
 K::SystemResult SendHit(K::MessageWriter<Hit>) { return {}; }
 K::SystemResult HitOnAdd(K::HookCtx, K::MessageWriter<Hit>) { return {}; }
 K::SystemResult ReadHit(K::MessageReader<Hit>) { return {}; }
+struct Bump {
+    std::int32_t at = 0;
+};
+void HashValue(K::Hasher& h, const Bump& v) { HashValue(h, v.at); }
+K::SystemResult HitOnBump(K::On<Bump>, K::MessageWriter<Hit>) { return {}; }
+K::SystemResult ReadHitOnBump(K::On<Bump>, K::MessageReader<Hit>) { return {}; }
 
 O::OptionBag WithStrategy() {
     O::OptionBag options;
@@ -188,4 +194,19 @@ TEST_CASE("rollback checks: R-7 follows a path of order edges, not only a direct
         s.Registrar().AddSystem<&ReadHit>(In("ReadHit", "FixedUpdate", "PostUpdate"));
     });
     CHECK_MESSAGE(path == "built", "[rb-r7-transitive] " << path);
+}
+
+TEST_CASE("rollback checks: messages: an observer's reads and writes are not looked at") {
+    const std::string writer = BuildWith([](O::WorldSetup& s) {
+        s.Registrar().Event<Bump>({.name = "Bump"});
+        s.Registrar().Observer<Bump, &HitOnBump>({.name = "HitOnBump"});
+        s.Registrar().AddSystem<&ReadHit>(In("ReadHit", "FixedUpdate", "Update"));
+    });
+    CHECK_MESSAGE(writer == "built", "[rb-msg-observer-writer-unchecked] " << writer);
+    const std::string reader = BuildWith([](O::WorldSetup& s) {
+        s.Registrar().Event<Bump>({.name = "Bump"});
+        s.Registrar().Observer<Bump, &ReadHitOnBump>({.name = "ReadHitOnBump"});
+        s.Registrar().AddSystem<&SendHit>(In("SendHit", "FixedUpdate", "Update"));
+    });
+    CHECK_MESSAGE(reader == "built", "[rb-msg-observer-reader-unchecked] " << reader);
 }
