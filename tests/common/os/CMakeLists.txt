@@ -116,7 +116,7 @@ function(gyo_os_check_definitions owner property entries)
         string(REGEX REPLACE "=.*$" "" name "${name}")
         string(TOUPPER "${name}" upper)
         if(upper MATCHES "${GYO_OS_IDENTIFYING_NAME}" OR entry MATCHES "PLATFORM_ID")
-            message(FATAL_ERROR "OS definition guard: ${owner} ${property} has '${entry}'; only engine/os may "
+            message(FATAL_ERROR "OS definition guard: ${owner} ${property} has '${entry}'; only engine/core/os sources "
                                 "identify the OS (Design Invariant 1, docs/architecture/os.md)")
         endif()
     endforeach()
@@ -148,7 +148,9 @@ function(gyo_expect_no_os_definitions)
     # Set here, not at file scope: the deferred call runs in the top directory's
     # scope, and the helpers above see their caller's variables.
     set(GYO_OS_DEFINITION_ROOTS engine apps tools build/acceptance tests)
-    set(GYO_OS_DEFINITION_EXEMPT engine/os tests/common/os)
+    # engine/core/os identifies the OS in its sources (the compiler's own macros), never through a build
+    # definition, so it is not exempt here; the entry for its old path engine/os was dead (it exempted nothing).
+    set(GYO_OS_DEFINITION_EXEMPT tests/common/os)
     set(GYO_OS_IDENTIFYING_NAME
         "(^|[^A-Z0-9])(WIN32|WIN64|WINDOWS|WINNT|WINVER|APPLE|DARWIN|MACOS|MACOSX|OSX|IOS|LINUX|POSIX|UNIX|ANDROID|BSD|FREEBSD|OPENBSD|NETBSD|MINGW|MINGW32|MINGW64|CYGWIN|MSYS|EMSCRIPTEN)([^A-Z]|$)")
     gyo_os_walk_definitions("${CMAKE_SOURCE_DIR}")
