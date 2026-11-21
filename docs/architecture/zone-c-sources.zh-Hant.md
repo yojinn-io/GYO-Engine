@@ -2,6 +2,8 @@
 
 更新：2026-11-13。Owner：架構（契約的審核者是架構師會話；掃描器與自測在 `tests/common/zone_scan/`）。**狀態：正式**（使用者 2026-11-13 核定，`v8-arch-zone-c-sources-promote`；草案 2026-11-12，`v8-arch-j17-scanner`，含 `owner_root`／`include_roots` 兩欄、同 owner 多份清單）。消費端（掃描器）已實作並在 CI 執行；生產端今天是產品手寫的清單（PvP 的三份在 `tests/object_fps_pvp/`），Kernel 的 G-5 匯出落地後改由匯出產生——格式不變，裝不下時照文末的 Replacement Criteria。
 
+**修訂（2026-11-21，`v8-arch-gyo2-authority-rollback` 第 5 步；改名已在[第 4 批宣告](target/v2/authority-rollback-declaration.zh-Hant.md) 4.3 核准）**：區拿掉之後，生產端改由權威 Module 匯出（`Authority::ExportAuthoritySources`，收「寫判定資料的 System、hook、observer 與判定元件的 `InitialValue` 函式」的來源檔），格式名改為 **`gyo.authority-sources`** v1（欄位不變），`generated_by` 為 `gyo-authority-report`；掃描器搬到 `tests/common/authority_scan/authority_scan.py`（規則 ZS1～ZS7 不改名）。第 6 步拿掉 Kernel 的匯出之前，掃描器也讀舊名 `gyo.zone-c-sources`。本頁其餘段落仍是舊名的寫法，第 7 步整理（頁名是否跟著改也在那時定）。
+
 這份契約是寫給三種人的：產品遷移批裡新增 (c) System 檔、要把它列進清單的人；改掃描器的人；將來實作 Kernel 匯出的人。三條 Design Invariants 擋的是兩種漂移：清單長出判斷邏輯，掃描器長出產品特例。
 出處：spec G-5（啟動時匯出「(c) 區 System 來源檔清單」）、J-17（讀清單並掃描）、J.4（產品守衛）、B.5（(c) 檔的文字掃描清單）；交接卡 `docs/architecture/plans/kernel/j17-scanner.zh-Hant.md` §2 的 v1 草案。AGENTS §8：契約資料可由手工、Script、別的工具產生；Runtime 不依賴產生它的工具。
 

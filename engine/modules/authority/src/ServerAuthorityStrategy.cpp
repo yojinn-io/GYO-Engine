@@ -34,6 +34,19 @@ bool HasResource(const Kernel::FrozenRegistry& registry, const std::string& name
     return std::any_of(resources.begin(), resources.end(), [&name](const Kernel::ResourceInfo& info) { return info.name == name; });
 }
 
+// A System of that name that runs (a tombstone left by RemoveSystem does not).
+const Kernel::SystemInfo* LiveSystem(const Kernel::FrozenRegistry& registry, const std::string& name) {
+    const Kernel::SystemInfo* system = registry.SystemNamed(name);
+    return system != nullptr && !system->removed ? system : nullptr;
+}
+
+bool HasHookOrObserver(const Kernel::FrozenRegistry& registry, const std::string& name) {
+    const auto hooks = registry.Hooks();
+    const auto observers = registry.Observers();
+    return std::any_of(hooks.begin(), hooks.end(), [&name](const Kernel::HookInfo& h) { return h.name == name; }) ||
+           std::any_of(observers.begin(), observers.end(), [&name](const Kernel::ObserverInfo& o) { return o.name == name; });
+}
+
 bool MountedIn(const Kernel::SystemInfo& system, const std::set<std::string>& schedules) {
     return std::any_of(system.mounts.begin(), system.mounts.end(),
                        [&schedules](const Kernel::Mount& mount) { return schedules.count(mount.schedule) != 0; });
@@ -92,17 +105,19 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     for (const MarkRecord& mark : table.Marks()) {
         const bool found = mark.ops != nullptr ? mark.ops->idIn(registry).has_value() : HasResource(registry, mark.name);
         if (!found) {
-            context.Report("AU-E4", mark.ops != nullptr ? std::string("authority.Mark: the type is not registered in this World")
+            context.Report("AU-E4", mark.ops != nullptr ? std::string("authority.Mark: the marked ") +
+                                                              (mark.kind == DataKind::Component ? "component" : "resource") +
+                                                              " type is not registered in this World"
                                                         : "authority.MarkResource: no resource named '" + mark.name + "' in this World");
         }
     }
     for (const IngressRecord& entry : table.Ingress()) {
-        if (registry.SystemNamed(entry.system) == nullptr) {
+        if (LiveSystem(registry, entry.system) == nullptr) {
             context.Report("AU-E4", "authority.Ingress: System '" + entry.system + "' was not added (OnRegister must add it)");
         }
     }
     for (const RunsRecord& runs : table.Runs()) {
-        if (registry.SystemNamed(runs.system) == nullptr) {
+        if (LiveSystem(registry, runs.system) == nullptr) {
             context.Report("AU-E4", "authority.Runs: no System named '" + runs.system + "' in this World");
         }
         for (const std::string& schedule : runs.schedules) {
@@ -112,8 +127,10 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
         }
     }
     for (const OneEndRecord& one : table.OneEnd()) {
-        if (registry.SystemNamed(one.system) == nullptr) {
-            context.Report("AU-E4", "authority.OneEndOnly: no System named '" + one.system + "' in this World");
+        // A System, a hook or an observer (authority 4.3 names Systems; hooks and observers that write decision data
+        // at one end only are taken the same way; implementation).
+        if (LiveSystem(registry, one.system) == nullptr && !HasHookOrObserver(registry, one.system)) {
+            context.Report("AU-E4", "authority.OneEndOnly: no System, hook or observer named '" + one.system + "' in this World");
         }
     }
 
@@ -151,10 +168,18 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     for (const Rollback::NestedScheduleRecord& record : rollback.nestedSchedules) resimulated.insert(record.name);
     const DecisionKeys decision = DecisionKeysOf(registry, table.Data(), table.Marks());
     const RollbackKeys rolls = RollbackKeysOf(registry, rollback);
+    // A decision input whose history the rollback strategy keeps (rollback.Input<T>): written back before each step
+    // run again, so a step that writes it (consumes it) does not need it to roll back (it may not: Z8).
+    std::set<Kernel::AccessKey> inputsKept;
+    for (const Rollback::InputRecord& record : rollback.inputs) {
+        if (const auto id = record.idIn(registry)) inputsKept.insert({Kernel::AccessKind::Resource, *id});
+    }
     // The decision data a writer's check looks at: not a message (messages are not in a rollback snapshot), not
-    // the tick (a decision datum that does not roll back: a resimulation moves it back itself).
+    // the tick (a decision datum that does not roll back: a resimulation moves it back itself), not an input with
+    // a kept history.
     const auto judged = [&](const Kernel::AccessKey& key) {
-        return key.kind != Kernel::AccessKind::Message && decision.Has(key) && !(tick && key == *tick);
+        return key.kind != Kernel::AccessKind::Message && decision.Has(key) && !(tick && key == *tick) &&
+               inputsKept.count(key) == 0;
     };
     // AU-E6 (Z6): Systems mounted in a resimulated schedule that run again while resimulating (one skipped while
     // resimulating, an entry, does not write during a resimulation).
@@ -189,17 +214,19 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     }
     // AU-E8 (D-E15): an entry in a resimulated schedule is skipped while resimulating.
     for (const IngressRecord& entry : table.Ingress()) {
-        const Kernel::SystemInfo* system = registry.SystemNamed(entry.system);
+        const Kernel::SystemInfo* system = LiveSystem(registry, entry.system);
         if (system == nullptr || !MountedIn(*system, resimulated) || rollback.Skipped(entry.system)) continue;
         context.Report("AU-E8", "entry System '" + entry.system + "' runs in a resimulated schedule and is not skipped "
                                                                   "while resimulating (D-E15)");
     }
-    // AU-E9: a Runs System in a resimulated schedule runs only schedules the rollback Module knows run again.
+    // AU-E9: a Runs System in a resimulated schedule runs only schedules registered as nested (authority 5.11).
+    std::set<std::string> nested;
+    for (const Rollback::NestedScheduleRecord& record : rollback.nestedSchedules) nested.insert(record.name);
     for (const RunsRecord& runs : table.Runs()) {
-        const Kernel::SystemInfo* system = registry.SystemNamed(runs.system);
+        const Kernel::SystemInfo* system = LiveSystem(registry, runs.system);
         if (system == nullptr || !MountedIn(*system, resimulated)) continue;
         for (const std::string& schedule : runs.schedules) {
-            if (resimulated.count(schedule) != 0) continue;
+            if (nested.count(schedule) != 0) continue;
             context.Report("AU-E9", "System '" + runs.system + "' runs in a resimulated schedule and runs schedule '" + schedule +
                                         "', which is not registered as nested (rollback.NestedSchedule)");
         }
@@ -225,7 +252,9 @@ private:
 constexpr std::uint32_t kConsistencyVersion = 1;
 
 // An access set by names (never kernel ids: a Client registers more ordinary data, L10), each list sorted.
-void AccessByName(Bytes& out, const Kernel::FrozenRegistry& registry, const Kernel::AccessSet& access) {
+// leaveOut: a read left out (the rollback's condition's read of Resimulation, at one end only).
+void AccessByName(Bytes& out, const Kernel::FrozenRegistry& registry, const Kernel::AccessSet& access,
+                  std::optional<Kernel::AccessKey> leaveOut = std::nullopt) {
     const auto names = [&registry](const std::vector<Kernel::AccessKey>& keys) {
         std::vector<std::string> out;
         for (const Kernel::AccessKey& key : keys) out.push_back(std::to_string(static_cast<int>(key.kind)) + NameOf(registry, key));
@@ -238,7 +267,9 @@ void AccessByName(Bytes& out, const Kernel::FrozenRegistry& registry, const Kern
         std::sort(out.begin(), out.end());
         return out;
     };
-    for (const auto& list : {names(access.reads), names(access.writes), components(access.deferredWrites),
+    std::vector<Kernel::AccessKey> reads = access.reads;
+    if (leaveOut) reads.erase(std::remove(reads.begin(), reads.end(), *leaveOut), reads.end());
+    for (const auto& list : {names(reads), names(access.writes), components(access.deferredWrites),
                              names(access.annotatedWrites), components(access.membershipReads)}) {
         out.U64(list.size());
         for (const std::string& name : list) out.Str(name);
@@ -260,7 +291,8 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
     // The decision types in authority registration order (data and marks together), by name.
     std::vector<std::pair<std::uint32_t, std::string>> types;
     for (const DataRecord& record : registrations.data) {
-        types.emplace_back(record.seq, std::to_string(static_cast<int>(record.kind)) + record.name + "#" + std::to_string(record.capacity));
+        types.emplace_back(record.seq, std::to_string(static_cast<int>(record.kind)) + record.name + "#" + std::to_string(record.capacity) +
+                                           (record.options.input ? " input" : "") + (record.options.digestExclude ? " digest-exclude" : ""));
     }
     for (const MarkRecord& mark : registrations.marks) {
         std::string name = mark.name;
@@ -269,7 +301,7 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
                 name = mark.kind == DataKind::Component ? registry.Components()[*id].name : registry.Resources()[*id].name;
             }
         }
-        types.emplace_back(mark.seq, "mark" + std::to_string(static_cast<int>(mark.kind)) + name);
+        types.emplace_back(mark.seq, "mark" + std::to_string(static_cast<int>(mark.kind)) + name + (mark.ops == nullptr ? " by-name" : ""));
     }
     std::sort(types.begin(), types.end());
     out.U64(types.size());
@@ -278,17 +310,51 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
     // The Systems seen to write decision data, less OneEndOnly: their access, mounts and run conditions (not
     // before / after: already in the order, and they may name a System of one end only).
     const Collected collected = CollectedOf(registry, registrations);
+    const Kernel::Detail::ConditionFn notResimulating = Kernel::Condition<&Rollback::NotResimulating>("").Evaluator();
     out.U64(collected.systems.size());
     for (const std::string& name : collected.systems) {
         const Kernel::SystemInfo& system = *registry.SystemNamed(name);
         out.Str(system.name);
-        AccessByName(out, registry, system.access);
+        // The rollback's "skipped while resimulating" joins its read of Resimulation to the System's reads: left
+        // out with the condition (a System that reads Resimulation itself and also has the condition is not told
+        // apart; a limit).
+        const bool skipped = std::any_of(system.mounts.begin(), system.mounts.end(), [&](const Kernel::Mount& mount) {
+            return std::any_of(mount.conditions.begin(), mount.conditions.end(),
+                               [&](const Kernel::ConditionRef& c) { return c.Evaluator() == notResimulating; });
+        });
+        std::optional<Kernel::AccessKey> resimulationRead;
+        if (const auto id = registry.ResourceIdOf<WorldTime::Resimulation>(); id && skipped) {
+            resimulationRead = Kernel::AccessKey{Kernel::AccessKind::Resource, *id};
+        }
+        AccessByName(out, registry, system.access, resimulationRead);
         out.U64(system.mounts.size());
         for (const Kernel::Mount& mount : system.mounts) {
             out.Str(mount.schedule);
             out.Str(mount.stage);
-            out.U64(mount.conditions.size());
-            for (const Kernel::ConditionRef& condition : mount.conditions) out.Str(condition.Name());
+            // Its run conditions, less the rollback Module's "skipped while resimulating" (a rollback
+            // registration, at one end only; authority declaration 5.5).
+            std::vector<std::string> conditions;
+            for (const Kernel::ConditionRef& condition : mount.conditions) {
+                if (condition.Evaluator() != notResimulating) conditions.push_back(condition.Name());
+            }
+            out.U64(conditions.size());
+            for (const std::string& condition : conditions) out.Str(condition);
+            // The sets it runs in and their run conditions (a set's condition decides whether it runs too).
+            std::vector<std::string> sets = mount.sets;
+            std::sort(sets.begin(), sets.end());
+            out.U64(sets.size());
+            for (const std::string& set : sets) {
+                out.Str(set);
+                const auto infos = registry.Sets();
+                const auto info = std::find_if(infos.begin(), infos.end(),
+                                               [&set, &mount](const Kernel::SetInfo& s) {
+                                                   return s.options.name == set && s.options.schedule == mount.schedule;
+                                               });
+                out.U64(info != infos.end() ? info->conditions.size() : 0);
+                if (info != infos.end()) {
+                    for (const std::string& condition : info->conditions) out.Str(condition);
+                }
+            }
         }
     }
     // Each Plan holding a collected System: the collected Systems in Plan order, with whether a sync point lies
@@ -334,6 +400,9 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
             if (observer.name != name) continue;
             out.Str(observer.name);
             out.U64(static_cast<std::uint64_t>(observer.trigger));
+            // What it watches: the event type, or the component of an Add / Remove.
+            out.Str(observer.trigger == Kernel::ObserverTrigger::Event ? registry.Events()[observer.id].name
+                                                                      : registry.Components()[observer.id].name);
             AccessByName(out, registry, observer.access);
         }
     }

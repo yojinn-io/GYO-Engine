@@ -76,6 +76,11 @@ DecisionKeys DecisionKeysOf(const Kernel::FrozenRegistry& registry, const std::v
     return out;
 }
 
+DecisionKeys DecisionKeysOf(const Kernel::FrozenRegistry& registry, const std::deque<DataRecord>& data,
+                            const std::deque<MarkRecord>& marks) {
+    return DecisionKeysOf(registry, std::vector<DataRecord>(data.begin(), data.end()), std::vector<MarkRecord>(marks.begin(), marks.end()));
+}
+
 std::vector<Kernel::AccessKey> WrittenKeys(const Kernel::FrozenRegistry& registry, const Kernel::AccessSet& access) {
     std::vector<Kernel::AccessKey> keys = access.writes;
     for (const Kernel::ComponentId id : access.deferredWrites) keys.push_back({Kernel::AccessKind::Component, id});
@@ -199,6 +204,23 @@ std::string Normalize(std::string path) {
     return path;
 }
 
+// True when path starts with root. A Windows drive path ("C:/...") compares without case: compilers and CMake
+// may spell the same drive and folders in different case there (as the kernel's former export did).
+bool StartsWith(const std::string& path, const std::string& root) {
+    if (path.size() < root.size()) return false;
+    const bool drive = root.size() > 1 && root[1] == ':';
+    for (std::size_t i = 0; i < root.size(); ++i) {
+        char a = path[i];
+        char b = root[i];
+        if (drive) {
+            if (a >= 'A' && a <= 'Z') a = static_cast<char>(a - 'A' + 'a');
+            if (b >= 'A' && b <= 'Z') b = static_cast<char>(b - 'A' + 'a');
+        }
+        if (a != b) return false;
+    }
+    return true;
+}
+
 // "file:line" (the registry's source text) to the file.
 std::string FileOf(const std::string& source) {
     const std::size_t colon = source.rfind(':');
@@ -208,8 +230,17 @@ std::string FileOf(const std::string& source) {
 std::string JsonString(const std::string& text) {
     std::string out = "\"";
     for (const char c : text) {
-        if (c == '"' || c == '\\') out += '\\';
-        out += c;
+        if (c == '"' || c == '\\') {
+            out += '\\';
+            out += c;
+        } else if (static_cast<unsigned char>(c) < 0x20) {
+            const char* hex = "0123456789abcdef";
+            out += "\\u00";
+            out += hex[(static_cast<unsigned char>(c) >> 4) & 0xF];
+            out += hex[static_cast<unsigned char>(c) & 0xF];
+        } else {
+            out += c;
+        }
     }
     return out + "\"";
 }
@@ -231,7 +262,7 @@ std::string JsonString(const std::string& text) {
     const auto add = [&](const std::string& source, const std::string& what, const std::string& name) {
         if (failed) return;
         const std::string path = Normalize(FileOf(source));
-        if (path.rfind(root, 0) != 0) {
+        if (!StartsWith(path, root)) {
             failed.emplace(AuthorityFailureCode::SourceOutsideRoot, what + " is registered outside the repository root",
                            name + ": " + path);
             return;

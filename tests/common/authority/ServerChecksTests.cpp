@@ -16,6 +16,17 @@ K::SystemResult HealthHook(K::HookCtx, K::Query<K::Write<Health>>) { return {}; 
 K::SystemResult RunNested(K::ExclusiveWorld<>) { return {}; }
 K::SystemResult FillRequest(K::CommandsFor<K::Inserts<Armor>, K::Removes<>>) { return {}; }
 K::SystemResult SendHit(K::MessageWriter<Hit>) { return {}; }
+K::SystemResult AnnotateTick(K::ExclusiveWorld<K::Writes<W::Tick>>) { return {}; }
+K::SystemResult TickHook(K::HookCtx, K::ResMut<W::Tick>) { return {}; }
+K::SystemResult TickObserver(K::On<HitLanded>, K::ResMut<W::Tick>) { return {}; }
+K::SystemResult HealthObserver(K::On<HitLanded>, K::Query<K::Write<Health>>) { return {}; }
+K::SystemResult AnnotateHealth(K::ExclusiveWorld<K::Writes<Health>>) { return {}; }
+K::SystemResult InsertHealth(K::CommandsFor<K::Inserts<Health>, K::Removes<>>) { return {}; }
+K::SystemResult WriteArmorInPlace(K::Query<K::Write<Armor>>) { return {}; }
+K::SystemResult RemoveArmor(K::CommandsFor<K::Inserts<>, K::Removes<Armor>>) { return {}; }
+K::SystemResult ConsumeCommand(K::ResMut<Command>) { return {}; }
+Score ScoreFromArmor(const Armor& armor) { return Score{armor.value}; }
+Health HealthFromScore(const Score& score) { return Health{score.value}; }
 Health HealthFromArmor(const Armor& armor) { return Health{armor.value}; }
 
 // A World with the official rollback strategy and its step schedule FixedUpdate.
@@ -47,7 +58,7 @@ TEST_CASE("authority checks: AU-E4: Runs and OneEndOnly name Systems and schedul
     });
     CHECK_MESSAGE(Has(text, "AU-E4 authority.Runs: no System named 'NoSuchSystem'"), "[au-names] " << text);
     CHECK_MESSAGE(Has(text, "no schedule named 'NoSuchSchedule'"), "[au-names] " << text);
-    CHECK_MESSAGE(Has(text, "AU-E4 authority.OneEndOnly: no System named 'NoPanel'"), "[au-names] " << text);
+    CHECK_MESSAGE(Has(text, "AU-E4 authority.OneEndOnly: no System, hook or observer named 'NoPanel'"), "[au-names] " << text);
 }
 
 TEST_CASE("authority checks: AU-E5: only the time Module's drivers write the tick") {
@@ -165,4 +176,143 @@ TEST_CASE("authority checks: AU-E9: a Runs System in a resimulated schedule runs
     const std::string missing = BuildText(build(false), Client());
     CHECK_MESSAGE(Has(missing, "AU-E9 System 'ApplyState'"), "[au-runs-nested] " << missing);
     CHECK_MESSAGE(BuildText(build(true), Client()) == "built", "[au-runs-nested] registered");
+}
+
+TEST_CASE("authority checks: AU-E5 sees an ExclusiveWorld<Writes<Tick>> annotation, a hook and an observer") {
+    const std::string annotated = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Mark<W::Tick>();
+        s.Registrar().AddSystem<&AnnotateTick>(In("AnnotateTick", "Main", "Update"));
+    });
+    CHECK_MESSAGE(Has(annotated, "AU-E5 System 'AnnotateTick'"), "[au-tick-annotated] " << annotated);
+    const std::string hook = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Mark<W::Tick>();
+        s.Registrar().Component<Armor>({.name = "Armor"});
+        s.Registrar().Hook<Armor, &TickHook>(K::HookTrigger::OnAdd, {.name = "TickHook"});
+    });
+    CHECK_MESSAGE(Has(hook, "AU-E5 hook 'TickHook'"), "[au-tick-hook] " << hook);
+    const std::string observer = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Mark<W::Tick>();
+        s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+        s.Registrar().Observer<HitLanded, &TickObserver>({.name = "TickObserver"});
+    });
+    CHECK_MESSAGE(Has(observer, "AU-E5 observer 'TickObserver'"), "[au-tick-observer] " << observer);
+}
+
+TEST_CASE("authority checks: AU-E6 sees deferred writes, annotations, observers and the funnel's chains") {
+    const auto notRolled = [](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::NoRollback});
+    };
+    const std::string deferred = BuildText([&](O::WorldSetup& s) {
+        notRolled(s);
+        s.Registrar().AddSystem<&InsertHealth>(In("InsertHealth", "FixedUpdate", "Update"));
+    }, Client());
+    CHECK_MESSAGE(Has(deferred, "AU-E6 System 'InsertHealth'"), "[au-z6-deferred] " << deferred);
+    const std::string annotated = BuildText([&](O::WorldSetup& s) {
+        notRolled(s);
+        s.Registrar().AddSystem<&AnnotateHealth>(In("AnnotateHealth", "FixedUpdate", "Update"));
+    }, Client());
+    CHECK_MESSAGE(Has(annotated, "AU-E6 System 'AnnotateHealth'"), "[au-z6-annotated] " << annotated);
+    const std::string observer = BuildText([&](O::WorldSetup& s) {
+        notRolled(s);
+        s.Registrar().Event<HitLanded>({.name = "HitLanded"});
+        s.Registrar().Observer<HitLanded, &HealthObserver>({.name = "HealthObserver"});
+    }, Client());
+    CHECK_MESSAGE(Has(observer, "AU-E6 observer 'HealthObserver'"), "[au-z6-observer] " << observer);
+    // A chain: inserting Armor fills Score, Score fills Health.
+    const auto chain = [&](O::WorldSetup& s) {
+        notRolled(s);
+        s.Registrar().Component<Armor>({.name = "ArmorRequest"});
+        s.Registrar().Component<Score>({.name = "ScoreRequest"});
+        s.Registrar().InitialValue<Score, &ScoreFromArmor>();
+        s.Registrar().InitialValue<Health, &HealthFromScore>();
+    };
+    const std::string through = BuildText([&](O::WorldSetup& s) {
+        chain(s);
+        s.Registrar().AddSystem<&FillRequest>(In("FillRequest", "FixedUpdate", "Update"));
+    }, Client());
+    CHECK_MESSAGE(Has(through, "AU-E6 System 'FillRequest'"), "[au-z6-funnel-chain] " << through);
+    // A write in place or a remove of the request adds no cell and fills nothing.
+    const std::string inPlace = BuildText([&](O::WorldSetup& s) {
+        chain(s);
+        s.Registrar().AddSystem<&WriteArmorInPlace>(In("WriteArmor", "FixedUpdate", "Update"));
+        s.Registrar().AddSystem<&RemoveArmor>(In("RemoveArmor", "FixedUpdate", "Update"));
+    }, Client());
+    CHECK_MESSAGE(inPlace == "built", "[au-z6-funnel-not-filled] " << inPlace);
+}
+
+TEST_CASE("authority checks: AU-E6 accepts Derived for a System, not for a hook") {
+    const std::string system = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::Derived});
+        s.Registrar().AddSystem<&WriteHealth>(In("WriteHealth", "FixedUpdate", "PreUpdate"));
+    }, Client());
+    CHECK_MESSAGE(system == "built", "[au-z6-derived-system] " << system);
+    const std::string hook = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::Derived});
+        s.Registrar().Hook<Health, &HealthHook>(K::HookTrigger::OnAdd, {.name = "HealthHook"});
+    }, Client());
+    CHECK_MESSAGE(Has(hook, "AU-E6 hook 'HealthHook'"), "[au-z6-derived-hook] " << hook);
+}
+
+TEST_CASE("authority checks: AU-E6 leaves out an input whose history the rollback keeps, not one without") {
+    const auto build = [](bool history) {
+        return [history](O::WorldSetup& s) {
+            Step(s);
+            A::AuthorityEntry(s).Resource<Command>("Command", {.input = true});
+            if (history) R::RollbackEntry(s).Input<Command>(64);
+            s.Registrar().AddSystem<&ConsumeCommand>(In("ConsumeCommand", "FixedUpdate", "Update"));
+        };
+    };
+    const std::string kept = BuildText(build(true), Client());
+    CHECK_MESSAGE(kept == "built", "[au-z6-input-history] " << kept);
+    const std::string bare = BuildText(build(false), Client());
+    CHECK_MESSAGE(Has(bare, "AU-E6 System 'ConsumeCommand'"), "[au-z6-input-no-history] " << bare);
+}
+
+TEST_CASE("authority checks: AU-E4 for an entry the strategy did not add and for a removed System") {
+    class NoAdd final : public A::ServerAuthorityStrategy {
+    public:
+        void OnRegister(A::RegisterContext& context) override {
+            if (context.Ingress() == nullptr) ServerAuthorityStrategy::OnRegister(context);
+        }
+    };
+    Setting noAdd;
+    noAdd.authority = std::make_shared<NoAdd>();
+    const std::string entry = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry authority(s);
+        authority.Resource<Command>("Command", {.input = true});
+        authority.Ingress<&ReadCommand>(In("ReadCommand", "Main", "PreUpdate"));
+    }, noAdd);
+    CHECK_MESSAGE(Has(entry, "AU-E4 authority.Ingress: System 'ReadCommand' was not added"), "[au-names-ingress] " << entry);
+    const std::string removed = BuildText([](O::WorldSetup& s) {
+        s.Registrar().AddSystem<&RunNested>(In("ApplyState", "Main", "Update"));
+        s.Registrar().RemoveSystem("ApplyState");
+        A::AuthorityEntry(s).Runs("ApplyState", {"Main"});
+    });
+    CHECK_MESSAGE(Has(removed, "AU-E4 authority.Runs: no System named 'ApplyState'"), "[au-names-removed] " << removed);
+}
+
+TEST_CASE("authority checks: AU-E9 looks only at a Runs System in a resimulated schedule, and wants the nested registration") {
+    const auto fog = [](O::WorldSetup& s) {
+        K::ScheduleOptions schedule;
+        schedule.name = "OnEnter_Fog";
+        schedule.stages = {"S"};
+        s.Registrar().Schedule(std::move(schedule));
+    };
+    const std::string outside = BuildText([&](O::WorldSetup& s) {
+        Step(s);
+        fog(s);
+        s.Registrar().AddSystem<&RunNested>(In("ApplyState", "Main", "Update"));
+        A::AuthorityEntry(s).Runs("ApplyState", {"OnEnter_Fog"});
+    }, Client());
+    CHECK_MESSAGE(outside == "built", "[au-runs-outside] " << outside);
+    // The step schedule itself is not a nested registration.
+    const std::string step = BuildText([&](O::WorldSetup& s) {
+        Step(s);
+        s.Registrar().AddSystem<&RunNested>(In("ApplyState", "FixedUpdate", "Update"));
+        A::AuthorityEntry(s).Runs("ApplyState", {"FixedUpdate"});
+    }, Client());
+    CHECK_MESSAGE(Has(step, "AU-E9 System 'ApplyState'"), "[au-runs-step-not-nested] " << step);
 }

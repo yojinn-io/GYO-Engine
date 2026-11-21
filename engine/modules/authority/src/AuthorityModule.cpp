@@ -14,7 +14,9 @@ void AuthorityModule::Build(Orchestration::WorldSetup& setup) {
     // When the World is prepared: the registrations go into it (the digest and the fingerprint read them there,
     // so a failed replacement leaves the old World's as they were).
     setup.Prepare([&table, strategy](Kernel::World& world) -> ::Engine::Base::Result<void, Orchestration::OrchestrationError> {
-        world.SetResource(AuthorityRegistry{table.Data(), table.Marks(), table.Ingress(), table.Runs(), table.OneEnd(), strategy});
+        const auto list = [](const auto& kept) { return std::vector(kept.begin(), kept.end()); };
+        world.SetResource(AuthorityRegistry{list(table.Data()), list(table.Marks()), list(table.Ingress()), list(table.Runs()),
+                                            list(table.OneEnd()), strategy});
         return {};
     });
 }
@@ -34,8 +36,9 @@ void AuthorityModule::Check(const Kernel::FrozenRegistry& registry, Orchestratio
     const Rollback::RollbackRegistrations* rollbackTable = context.Buffer().Find<Rollback::RollbackRegistrations>();
     const Rollback::RollbackRegistry rollback = rollbackTable != nullptr ? Rollback::Resolve(*rollbackTable).registry
                                                                          : Rollback::RollbackRegistry{};
-    static const AuthorityRegistrations kNone{context.Buffer()};
-    CheckContext check(registry, context, table != nullptr ? *table : kNone, rollback);
+    // The table is made by Build in every World the Module is built into.
+    GYO_ASSERT(table != nullptr && "AuthorityModule::Check: no registrations table (Build did not run)");
+    CheckContext check(registry, context, *table, rollback);
     options->strategy->Check(check);
 }
 

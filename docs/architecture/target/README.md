@@ -135,7 +135,7 @@
 
 | 文件 | 條 | 一句 | 狀態 |
 |---|---|---|---|
-| [`../zone-c-sources.zh-Hant.md`](../zone-c-sources.zh-Hant.md)（`gyo.zone-c-sources` v1） | DI 1～3 | 清單只說哪些檔、不說怎麼判；版本進格式、不認得就拒絕；清單與掃描器都不含產品名的分支 | **正式**（使用者 2026-11-13 核定，`v8-arch-zone-c-sources-promote`）。生產端＝產品（將來是 Kernel 的啟動匯出），消費端＝共用掃描器 `tests/common/zone_scan/` |
+| [`../zone-c-sources.zh-Hant.md`](../zone-c-sources.zh-Hant.md)（`gyo.zone-c-sources` v1） | DI 1～3 | 清單只說哪些檔、不說怎麼判；版本進格式、不認得就拒絕；清單與掃描器都不含產品名的分支 | **正式**（使用者 2026-11-13 核定，`v8-arch-zone-c-sources-promote`）。生產端＝產品與權威 Module 的匯出（2026-11-21 起格式名 `gyo.authority-sources`），消費端＝共用掃描器 `tests/common/authority_scan/` |
 
 ## 來源與引用
 

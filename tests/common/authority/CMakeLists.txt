@@ -3,7 +3,8 @@
 add_executable(gyo_authority_tests TestMain.cpp StrategySocketTests.cpp RegistrationsTests.cpp ServerChecksTests.cpp
     ConsistencyTests.cpp SourcesExportTests.cpp
     sources_fixture/SyntheticSimulation.cpp
-    sources_fixture/AnotherSimulation.cpp)
+    sources_fixture/AnotherSimulation.cpp
+    sources_fixture/ReaderOnly.cpp)
 target_include_directories(gyo_authority_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(gyo_authority_tests PRIVATE
     GYO_AUTHORITY_TEST_REPOSITORY_ROOT="${GYO_REPOSITORY_ROOT}"

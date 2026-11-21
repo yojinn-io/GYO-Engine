@@ -59,6 +59,14 @@ struct Hit {
 };
 inline void HashValue(K::Hasher& h, const Hit& v) { HashValue(h, v.at); }
 
+// Pushed events (observers watch them).
+struct HitLanded {
+    std::int32_t at = 0;
+};
+struct BlockLanded {
+    std::int32_t at = 0;
+};
+
 // Not decision data: a screen-side value.
 struct Glow {
     std::int32_t level = 0;

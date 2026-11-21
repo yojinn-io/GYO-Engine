@@ -100,3 +100,31 @@ TEST_CASE("authority registrations: a mark only records (no second kernel regist
     CHECK_MESSAGE(missing.find("AU-E4 authority.MarkResource: no resource named 'NoSuchValue'") != std::string::npos,
                   "[au-mark-missing] " << missing);
 }
+
+TEST_CASE("authority registrations: Self registers nothing on behalf, and a resource's NoRollback neither") {
+    auto built = Build([](O::WorldSetup& s) {
+        A::AuthorityEntry authority(s);
+        authority.Component<Health>("Health", {.rollback = A::RollbackChoice::Self});
+        authority.Resource<Score>("Score", {.rollback = A::RollbackChoice::NoRollback});
+    });
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    CHECK_MESSAGE(RollbackOf(**built).Data(K::KeyOf<Health>()) == nullptr, "[au-self] registered on behalf");
+    CHECK_MESSAGE(RollbackOf(**built).Data(K::KeyOf<Score>()) == nullptr, "[au-resource-norollback] registered on behalf");
+}
+
+TEST_CASE("authority registrations: without a strategy any registration needs one") {
+    Setting none;
+    none.authority = nullptr;
+    const std::string mark = BuildText([](O::WorldSetup& s) { A::AuthorityEntry(s).Mark<W::Tick>(); }, none);
+    CHECK_MESSAGE(mark.find("AU-E2") != std::string::npos, "[au-no-strategy-mark] " << mark);
+}
+
+TEST_CASE("authority registrations: the peer-to-peer placeholder still puts the types into the kernel (AU-E1, not R-E4)") {
+    Setting peer;
+    peer.authority = std::make_shared<A::PeerAuthorityStrategy>();
+    const std::string text = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Component<Health>("Health");
+        s.Registrar().AddSystem<&UseHealth>(In("UseHealth", "Main", "Update"));
+    }, peer);
+    CHECK_MESSAGE((text.find("AU-E1") != std::string::npos && text.find("R-E4") == std::string::npos), "[au-peer-kernel] " << text);
+}

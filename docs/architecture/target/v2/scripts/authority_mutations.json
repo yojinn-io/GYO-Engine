@@ -56,7 +56,7 @@
    "replace": "        return;",
    "target": "gyo_authority_tests",
    "cases": "authority registrations: without a strategy*",
-   "expect": "\\[au\\-no\\-strategy\\]"
+   "expect": "\\[au\\-no\\-strategy\\] the kernel refused"
   },
   {
    "id": "au-on-behalf-skipped",
@@ -158,7 +158,7 @@
     "authority DI-A 10"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "        if (registry.SystemNamed(runs.system) == nullptr) {",
+   "find": "        if (LiveSystem(registry, runs.system) == nullptr) {",
    "replace": "        if (false) {",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E4*",
@@ -263,8 +263,8 @@
     "authority 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "        return key.kind != Kernel::AccessKind::Message && decision.Has(key) && !(tick && key == *tick);",
-   "replace": "        return key.kind != Kernel::AccessKind::Message && decision.Has(key);",
+   "find": "        return key.kind != Kernel::AccessKind::Message && decision.Has(key) && !(tick && key == *tick) &&\n               inputsKept.count(key) == 0;",
+   "replace": "        return key.kind != Kernel::AccessKind::Message && decision.Has(key) && inputsKept.count(key) == 0;",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E6 leaves out*",
    "expect": "\\[au\\-z6\\-exceptions\\]"
@@ -315,7 +315,7 @@
     "authority 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "            if (resimulated.count(schedule) != 0) continue;",
+   "find": "            if (nested.count(schedule) != 0) continue;",
    "replace": "            continue;",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E9*",
@@ -328,8 +328,8 @@
     "authority DI-A 5"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "        types.emplace_back(record.seq, std::to_string(static_cast<int>(record.kind)) + record.name + \"#\" + std::to_string(record.capacity));",
-   "replace": "        types.emplace_back(record.ops->idIn(registry).value_or(0) * 100 + record.seq, std::to_string(static_cast<int>(record.kind)) + record.name + \"#\" + std::to_string(record.ops->idIn(registry).value_or(0)));",
+   "find": "                                           (record.options.input ? \" input\" : \"\") + (record.options.digestExclude ? \" digest-exclude\" : \"\"));",
+   "replace": "                                           std::to_string(record.ops->idIn(registry).value_or(0)));",
    "target": "gyo_authority_tests",
    "cases": "authority consistency: the fingerprint does not change*",
    "expect": "\\[au\\-fp\\-ordinary\\]"
@@ -479,6 +479,514 @@
    "target": "gyo_authority_tests",
    "cases": "authority consistency: the dataset report*",
    "expect": "\\[au\\-dataset\\-one\\-end\\]"
+  },
+  {
+   "id": "au-g5-json-unescaped",
+   "what": "G-5: a control character is written as it is (the list is no longer JSON). Only it catches the escape",
+   "guards": [
+    "authority 5.9"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "        } else if (static_cast<unsigned char>(c) < 0x20) {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: G-5: the export*",
+   "expect": "\\[au\\-g5\\-json\\]"
+  },
+  {
+   "id": "au-fp-set-conditions-dropped",
+   "what": "the sets a collected System runs in and their run conditions are not in the fingerprint (5.5: run conditions; a set's condition decides too). Only it catches the sets",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            for (const std::string& set : sets) {",
+   "replace": "            for (const std::string& set : std::vector<std::string>{}) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-set\\-condition\\]"
+  },
+  {
+   "id": "au-fp-observer-target-dropped",
+   "what": "an observer's watched event or component is not in the fingerprint. Only it catches the target",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            out.Str(observer.trigger == Kernel::ObserverTrigger::Event ? registry.Events()[observer.id].name\n                                                                      : registry.Components()[observer.id].name);",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-observer\\-target\\]"
+  },
+  {
+   "id": "au-fp-skip-condition-taken",
+   "what": "the rollback's skipped-while-resimulating condition is taken into the fingerprint (5.5: rollback registrations are at one end only). Only it catches the condition filter",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "                if (condition.Evaluator() != notResimulating) conditions.push_back(condition.Name());",
+   "replace": "                conditions.push_back(condition.Name());",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the rollback's skipped*",
+   "expect": "\\[au\\-fp\\-skip\\-one\\-end\\]"
+  },
+  {
+   "id": "au-fp-skip-read-taken",
+   "what": "the read of Resimulation the rollback's condition joins is taken into the fingerprint. Only it catches the read left out",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        AccessByName(out, registry, system.access, resimulationRead);",
+   "replace": "        AccessByName(out, registry, system.access);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the rollback's skipped*",
+   "expect": "\\[au\\-fp\\-skip\\-one\\-end\\]"
+  },
+  {
+   "id": "au-fp-type-flags-dropped",
+   "what": "digestExclude (and input) are not in the fingerprint (the ends would never agree on the digest). Only it catches the flags",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "                                           (record.options.input ? \" input\" : \"\") + (record.options.digestExclude ? \" digest-exclude\" : \"\"));",
+   "replace": "                                           std::string());",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-digest\\-exclude\\]"
+  },
+  {
+   "id": "au-fp-marks-dropped",
+   "what": "the marked types are not in the fingerprint. Only it catches the marks",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    for (const MarkRecord& mark : registrations.marks) {\n        std::string name = mark.name;",
+   "replace": "    for (const MarkRecord& mark : std::vector<MarkRecord>{}) {\n        std::string name = mark.name;",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-mark\\]"
+  },
+  {
+   "id": "au-fp-capacity-dropped",
+   "what": "a decision message's capacity is not in the fingerprint (5.5: a full buffer drops the oldest). Only it catches the capacity",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "record.name + \"#\" + std::to_string(record.capacity) +",
+   "replace": "record.name + \"#\" +",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-capacity\\]"
+  },
+  {
+   "id": "au-fp-kind-dropped",
+   "what": "a decision type's kind (component, resource, message) is not in the fingerprint. Only it catches the kind",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        types.emplace_back(record.seq, std::to_string(static_cast<int>(record.kind)) + record.name",
+   "replace": "        types.emplace_back(record.seq, record.name",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-kind\\]"
+  },
+  {
+   "id": "au-fp-type-order-dropped",
+   "what": "the decision types are put in name order, not authority registration order (DI-A 5: the numbering). Only it catches the order",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    std::sort(types.begin(), types.end());",
+   "replace": "    std::sort(types.begin(), types.end(), [](const auto& a, const auto& b) { return a.second < b.second; });",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-type\\-order\\]"
+  },
+  {
+   "id": "au-fp-stage-dropped",
+   "what": "a collected System's stage is not in the fingerprint. Only it catches the stage",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            out.Str(mount.stage);\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-stage\\]"
+  },
+  {
+   "id": "au-fp-conditions-dropped",
+   "what": "a collected System's own run conditions are not in the fingerprint (5.5). Only it catches them",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            out.U64(conditions.size());\n            for (const std::string& condition : conditions) out.Str(condition);",
+   "replace": "            static_cast<void>(conditions);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-condition\\]"
+  },
+  {
+   "id": "au-fp-access-dropped",
+   "what": "a collected System's access is not in the fingerprint (5.5). Only it catches the access",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        AccessByName(out, registry, system.access, resimulationRead);",
+   "replace": "        static_cast<void>(resimulationRead);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-access\\]"
+  },
+  {
+   "id": "au-fp-sync-dropped",
+   "what": "whether a sync point lies between two collected steps is not in the fingerprint (5.5: it decides in which window a deferred write lands). Only it catches the flag",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            steps.emplace_back(step.name, !steps.empty() && syncSince);",
+   "replace": "            steps.emplace_back(step.name, false);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-sync\\]"
+  },
+  {
+   "id": "au-fp-hooks-dropped",
+   "what": "the hooks that write decision data are not in the fingerprint (5.5). Only it catches the hook section",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    out.U64(collected.hooks.size());\n    for (const Kernel::HookInfo& hook : registry.Hooks()) {",
+   "replace": "    for (const Kernel::HookInfo& hook : std::span<const Kernel::HookInfo>{}) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-hook\\]"
+  },
+  {
+   "id": "au-fp-initial-dropped",
+   "what": "Registrar::InitialValue for a decision component is not in the fingerprint (5.5). Only it catches it",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    out.U64(initial.size());\n    for (const std::string& rule : initial) out.Str(rule);",
+   "replace": "    static_cast<void>(initial);",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-initial\\-value\\]"
+  },
+  {
+   "id": "au-fp-runs-dropped",
+   "what": "the schedules a Runs System runs are not in the fingerprint (5.5). Only it catches Runs",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    out.U64(registrations.runs.size());\n    for (const RunsRecord& runs : registrations.runs) {",
+   "replace": "    for (const RunsRecord& runs : std::vector<RunsRecord>{}) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-runs\\]"
+  },
+  {
+   "id": "au-fp-version-dropped",
+   "what": "the strategy's version is not in the fingerprint (5.5). Only it catches the version",
+   "guards": [
+    "authority DI-A 5"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    out.U64(Version());\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: each item*",
+   "expect": "\\[au\\-fp\\-c\\-version\\]"
+  },
+  {
+   "id": "au-one-end-hook-unresolved",
+   "what": "OneEndOnly naming a hook is AU-E4 (only Systems are looked up). Only it catches the hook lookup",
+   "guards": [
+    "authority DI-A 10"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (LiveSystem(registry, one.system) == nullptr && !HasHookOrObserver(registry, one.system)) {",
+   "replace": "        if (LiveSystem(registry, one.system) == nullptr) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: a hook that writes decision data*",
+   "expect": "AU\\-E4 authority\\.OneEndOnly"
+  },
+  {
+   "id": "au-annotated-ignored",
+   "what": "ExclusiveWorld<Writes<...>> annotations are not counted as writes (authority 5.4, 5.8). Only it catches the annotation",
+   "guards": [
+    "authority 5.4",
+    "authority 5.8"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    keys.insert(keys.end(), access.annotatedWrites.begin(), access.annotatedWrites.end());\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E5 sees*",
+   "expect": "\\[au\\-tick\\-annotated\\]"
+  },
+  {
+   "id": "au-deferred-ignored",
+   "what": "deferred writes (CommandsFor inserts, Spawn) are not counted as writes. Only it catches them",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    for (const Kernel::ComponentId id : access.deferredWrites) keys.push_back({Kernel::AccessKind::Component, id});\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 sees*",
+   "expect": "\\[au\\-z6\\-deferred\\]"
+  },
+  {
+   "id": "au-funnel-no-chain",
+   "what": "the funnel stops after one InitialValue (no chains; authority-rollback 4.4). Only it catches the chain",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "            keys.push_back({Kernel::AccessKind::Component, rule.target});\n            pending.push_back(rule.target);",
+   "replace": "            keys.push_back({Kernel::AccessKind::Component, rule.target});",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 sees*",
+   "expect": "\\[au\\-z6\\-funnel\\-chain\\]"
+  },
+  {
+   "id": "au-funnel-in-place",
+   "what": "the funnel starts from every deferred write, removes included, not only the requests a System inserts (a remove fills nothing). Only it catches the insert filter",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/Consistency.cpp",
+   "find": "    std::vector<Kernel::ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());",
+   "replace": "    std::vector<Kernel::ComponentId> pending(access.deferredWrites.begin(), access.deferredWrites.end());",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 sees*",
+   "expect": "\\[au\\-z6\\-funnel\\-not\\-filled\\]"
+  },
+  {
+   "id": "au-tick-hook-unchecked",
+   "what": "a hook that writes Tick is not reported (AU-E5). Only it catches the hook half",
+   "guards": [
+    "authority 5.4"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (writesTick(hook.access)) {",
+   "replace": "            if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E5 sees*",
+   "expect": "\\[au\\-tick\\-hook\\]"
+  },
+  {
+   "id": "au-tick-observer-unchecked",
+   "what": "an observer that writes Tick is not reported (AU-E5). Only it catches the observer half",
+   "guards": [
+    "authority 5.4"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (writesTick(observer.access)) {",
+   "replace": "            if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E5 sees*",
+   "expect": "\\[au\\-tick\\-observer\\]"
+  },
+  {
+   "id": "au-z6-observers-unchecked",
+   "what": "an observer writing decision data that does not roll back is not reported (Z6). Only it catches the observer half",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        for (const Kernel::ObserverInfo& observer : registry.Observers()) checkWriter(\"observer '\" + observer.name + \"'\", observer.access);",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 sees*",
+   "expect": "\\[au\\-z6\\-observer\\]"
+  },
+  {
+   "id": "au-z6-system-derived-refused",
+   "what": "Derived is not accepted for a System of a resimulated schedule (5.11). Only it catches the Derived acceptance",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            if (!judged(key) || rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) continue;",
+   "replace": "            if (!judged(key) || rolls.rolls.count(key) != 0) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 accepts Derived*",
+   "expect": "\\[au\\-z6\\-derived\\-system\\]"
+  },
+  {
+   "id": "au-z6-hook-derived-accepted",
+   "what": "Derived is accepted for a hook (5.11: a hook writes what rolls back, not Derived). Only it catches the hook's stricter rule",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "                if (!judged(key) || rolls.rolls.count(key) != 0) continue;\n                context.Report(\"AU-E6\", what",
+   "replace": "                if (!judged(key) || rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) continue;\n                context.Report(\"AU-E6\", what",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 accepts Derived*",
+   "expect": "\\[au\\-z6\\-derived\\-hook\\]"
+  },
+  {
+   "id": "au-z6-input-history-ignored",
+   "what": "an input with a kept history is not left out of Z6 (a step that consumes it would have no way out: it may not roll back, Z8). Only it catches the exemption",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    for (const Rollback::InputRecord& record : rollback.inputs) {\n        if (const auto id = record.idIn(registry)) inputsKept.insert({Kernel::AccessKind::Resource, *id});",
+   "replace": "    for (const Rollback::InputRecord& record : std::vector<Rollback::InputRecord>{}) {\n        if (const auto id = record.idIn(registry)) inputsKept.insert({Kernel::AccessKind::Resource, *id});",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 leaves out an input*",
+   "expect": "\\[au\\-z6\\-input\\-history\\]"
+  },
+  {
+   "id": "au-names-ingress-unchecked",
+   "what": "an entry the strategy did not add is not reported (AU-E4). Only it catches the entry half",
+   "guards": [
+    "authority DI-A 10"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (LiveSystem(registry, entry.system) == nullptr) {",
+   "replace": "        if (false) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E4 for an entry*",
+   "expect": "\\[au\\-names\\-ingress\\]"
+  },
+  {
+   "id": "au-names-tombstone",
+   "what": "a removed System counts as present (a tombstone; AU-E4). Only it catches the tombstone",
+   "guards": [
+    "authority DI-A 10"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    return system != nullptr && !system->removed ? system : nullptr;",
+   "replace": "    return system;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E4 for an entry*",
+   "expect": "\\[au\\-names\\-removed\\]"
+  },
+  {
+   "id": "au-runs-step-accepted",
+   "what": "AU-E9 accepts the step schedule as a nested registration (5.11: the schedules are in the nested registrations). Only it catches the nested-only rule",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "    for (const Rollback::NestedScheduleRecord& record : rollback.nestedSchedules) nested.insert(record.name);",
+   "replace": "    for (const Rollback::NestedScheduleRecord& record : rollback.nestedSchedules) nested.insert(record.name);\n    for (const Rollback::StepScheduleRecord& record : rollback.stepSchedules) nested.insert(record.name);",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E9 looks only*",
+   "expect": "\\[au\\-runs\\-step\\-not\\-nested\\]"
+  },
+  {
+   "id": "au-runs-every-schedule",
+   "what": "AU-E9 looks at a Runs System outside the resimulated schedules too. Only it catches the mount filter",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (system == nullptr || !MountedIn(*system, resimulated)) continue;\n        for (const std::string& schedule : runs.schedules) {",
+   "replace": "        if (system == nullptr) continue;\n        for (const std::string& schedule : runs.schedules) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E9 looks only*",
+   "expect": "\\[au\\-runs\\-outside\\]"
+  },
+  {
+   "id": "au-self-registered",
+   "what": "RollbackChoice::Self still registers on behalf (authority 4.3: the author registers it). Only it catches Self",
+   "guards": [
+    "authority 4.3"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "    if (choice == RollbackChoice::Derived) rollback.Derived<T>();\n    if (choice != RollbackChoice::Rollback) return;",
+   "replace": "    if (choice == RollbackChoice::Derived) rollback.Derived<T>();\n    if (choice == RollbackChoice::NoRollback || choice == RollbackChoice::Derived) return;",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: Self*",
+   "expect": "\\[au\\-self\\]"
+  },
+  {
+   "id": "au-resource-norollback-registered",
+   "what": "a resource's NoRollback still registers it as one that rolls back. Only it catches the resource half",
+   "guards": [
+    "authority 4.3"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "    GYO_ASSERT(choice != RollbackChoice::Derived && \"authority.Resource<T>: Derived is for components only\");\n    if (choice != RollbackChoice::Rollback) return;",
+   "replace": "    GYO_ASSERT(choice != RollbackChoice::Derived && \"authority.Resource<T>: Derived is for components only\");\n    if (choice == RollbackChoice::Self) return;",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: Self*",
+   "expect": "\\[au\\-resource\\-norollback\\]"
+  },
+  {
+   "id": "au-any-data-only",
+   "what": "only data registrations count as \"has authority registrations\" (a World with a mark and no strategy is not AU-E2). Only it catches Any()",
+   "guards": [
+    "authority 4.7"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "        return !data_.empty() || !marks_.empty() || !ingress_.empty() || !runs_.empty() || !oneEnd_.empty();",
+   "replace": "        return !data_.empty();",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: without a strategy any*",
+   "expect": "\\[au\\-no\\-strategy\\-mark\\]"
+  },
+  {
+   "id": "au-peer-not-in-kernel",
+   "what": "the placeholder registers nothing (DI-A 6: the World then stops at the kernel's R-E4, not AU-E1). Only it catches the placeholder's registration",
+   "guards": [
+    "authority DI-A 6"
+   ],
+   "file": "engine/modules/authority/src/AuthorityModule.cpp",
+   "find": "    if (context.Data() != nullptr) context.RegisterInKernel();",
+   "replace": "    static_cast<void>(context);",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: the peer-to-peer placeholder*",
+   "expect": "\\[au\\-peer\\-kernel\\]"
+  },
+  {
+   "id": "au-digest-type-index-dropped",
+   "what": "the digest hashes a value without its type's number (DI-A 12). Only it catches the number",
+   "guards": [
+    "authority DI-A 12"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "    h.U64(index);\n",
+   "replace": "",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the digest hashes each value*",
+   "expect": "\\[au\\-digest\\-type\\-index\\]"
+  },
+  {
+   "id": "au-digest-order-dependent",
+   "what": "the digest merges in a way that depends on the order of the values (DI-A 12: order free). Only it catches order freedom",
+   "guards": [
+    "authority DI-A 12"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "        sum += CellDigest(index, h);\n    }\n    return sum;",
+   "replace": "        sum = sum * 1099511628211ULL + CellDigest(index, h);\n    }\n    return sum;",
+   "target": "gyo_authority_tests",
+   "cases": "authority consistency: the digest is order free*",
+   "expect": "\\[au\\-digest\\-order\\]"
   }
  ]
 }

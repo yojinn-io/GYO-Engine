@@ -28,6 +28,7 @@
 #include "engine/kernel/World.hpp"
 
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -79,6 +80,8 @@ struct DecisionKeys {
 };
 [[nodiscard]] DecisionKeys DecisionKeysOf(const Kernel::FrozenRegistry& registry, const std::vector<DataRecord>& data,
                                           const std::vector<MarkRecord>& marks);
+[[nodiscard]] DecisionKeys DecisionKeysOf(const Kernel::FrozenRegistry& registry, const std::deque<DataRecord>& data,
+                                          const std::deque<MarkRecord>& marks);
 // Every key an access set writes, as the authority's checks see it: immediate writes, deferred writes,
 // ExclusiveWorld<Writes<...>> annotations, and the components a sync point fills from the requests it inserts
 // (Registrar::InitialValue, through chains).

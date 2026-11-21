@@ -35,6 +35,7 @@
 #include "engine/rollback/Registrations.hpp"
 
 #include <concepts>
+#include <deque>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -132,11 +133,13 @@ public:
     void Append(RunsRecord record);
     void Append(OneEndRecord record);
 
-    [[nodiscard]] const std::vector<DataRecord>& Data() const noexcept { return data_; }
-    [[nodiscard]] const std::vector<MarkRecord>& Marks() const noexcept { return marks_; }
-    [[nodiscard]] const std::vector<IngressRecord>& Ingress() const noexcept { return ingress_; }
-    [[nodiscard]] const std::vector<RunsRecord>& Runs() const noexcept { return runs_; }
-    [[nodiscard]] const std::vector<OneEndRecord>& OneEnd() const noexcept { return oneEnd_; }
+    // Kept in deques: a strategy's OnRegister may register again (another type) while it reads the record it was
+    // handed, which must stay where it is.
+    [[nodiscard]] const std::deque<DataRecord>& Data() const noexcept { return data_; }
+    [[nodiscard]] const std::deque<MarkRecord>& Marks() const noexcept { return marks_; }
+    [[nodiscard]] const std::deque<IngressRecord>& Ingress() const noexcept { return ingress_; }
+    [[nodiscard]] const std::deque<RunsRecord>& Runs() const noexcept { return runs_; }
+    [[nodiscard]] const std::deque<OneEndRecord>& OneEnd() const noexcept { return oneEnd_; }
     // Whether any registration entry was called (a World with none needs no strategy, authority declaration 4.7).
     [[nodiscard]] bool Any() const noexcept {
         return !data_.empty() || !marks_.empty() || !ingress_.empty() || !runs_.empty() || !oneEnd_.empty();
@@ -145,11 +148,11 @@ public:
 private:
     void Open() const;
     const Orchestration::ModuleBuffer* buffer_;
-    std::vector<DataRecord> data_;
-    std::vector<MarkRecord> marks_;
-    std::vector<IngressRecord> ingress_;
-    std::vector<RunsRecord> runs_;
-    std::vector<OneEndRecord> oneEnd_;
+    std::deque<DataRecord> data_;
+    std::deque<MarkRecord> marks_;
+    std::deque<IngressRecord> ingress_;
+    std::deque<RunsRecord> runs_;
+    std::deque<OneEndRecord> oneEnd_;
     std::uint32_t next_ = 0;
 };
 

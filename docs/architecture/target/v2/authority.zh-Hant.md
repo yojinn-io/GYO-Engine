@@ -29,7 +29,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 | `Mark<T>()`、`MarkComponent<T>()`、`MarkResource(name)` | 別的 Module 已登記的型別：只記下、不再登記；依型別的進 digest，依名字的本批不進（實作） |
 | `Ingress<&F>(options)` | 外部輸入的入口 System：代為 `AddSystem` |
 | `Runs(system, schedules)` | 會巢狀跑別的 schedule 的獨占 System |
-| `OneEndOnly(system, reason)` | 寫判定資料、只在一端有的 System：不進一致性指紋，判定資料集列出 |
+| `OneEndOnly(name, reason)` | 寫判定資料、只在一端有的 System（hook、observer 也可以，名字三張表都查；實作）：不進一致性指紋與 G-5，判定資料集列出 |
 
 沒有 `==` 的型別不能由策略代為登記成可回滾：斷言，訊息請作者選 `RollbackChoice::Self` 並自己 `rollback.Component<T>({.equal = …})`（實作）。
 
@@ -48,10 +48,10 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 **DI-A 4 只在啟動時檢查**：檢查只在編排層 `Finish` 之後的 `Check`；執行中只計算，不拒絕寫入。
 
 <a id="di-a-5"></a>
-**DI-A 5 一致性指紋**：只看兩端應該相同的判定部分；編號用權威登記的順序、型別與存取都用名字（不用 Kernel 的編號），和一般資料的登記無關。內容照權威份 5.5 的表：策略的名字與版本、判定型別（含訊息上限）、啟動時看得到寫判定資料的 System（扣掉 `OneEndOnly`）的存取、掛載與執行條件、它們在各 Plan 的相對順序與其間有沒有同步點、hook 的順序與存取、observer 的存取（依名字，不收先後）、判定元件的 `InitialValue`、hook 清空輪的上限、`Runs`。守衛證明兩個方向：`authority consistency: the fingerprint changes…`（判定型別、平手順序、多一個寫者、策略名）、`…does not change…`（一般資料與它的寫者、`OneEndOnly` 的面板、只有 Client 有的回滾策略與步的 schedule）。
+**DI-A 5 一致性指紋**：只看兩端應該相同的判定部分；編號用權威登記的順序、型別與存取都用名字（不用 Kernel 的編號），和一般資料的登記無關。內容照權威份 5.5 的表：策略的名字與版本、判定型別（權威登記的順序、種類、名字、訊息上限、`input`、`digestExclude`；標記的型別與標記方式）、啟動時看得到寫判定資料的 System（扣掉 `OneEndOnly`）的存取、掛載（schedule、stage）、執行條件與所屬 set 的執行條件（set 的條件也決定它跑不跑；實作）、它們在各 Plan 的相對順序與其間有沒有同步點、hook 的順序、元件與存取、observer 看的對象與存取（依名字，不收先後）、判定元件的 `InitialValue`、hook 清空輪的上限（schedule 的選項）、`Runs`。回滾的「重跑時不跑」條件與它帶進來的 `Resimulation` 讀取不進（回滾的登記只在一端；實作）。守衛證明兩個方向：`authority consistency: the fingerprint changes…`、`…each item of the fingerprint's content is in it`（上面每一項各一條 CHECK）、`…does not change…`（一般資料與它的寫者、`OneEndOnly` 的面板與 hook、只有 Client 有的回滾策略、步的 schedule 與「重跑時不跑」）。
 
 <a id="di-a-6"></a>
-**DI-A 6 佔位策略**：選了 `PeerAuthorityStrategy` 是啟動錯誤 AU-E1，訊息寫明還沒實作；它仍把型別登記進 Kernel，讓作者看到的是 AU-E1 而不是 Kernel 的 R-E4（實作）。守衛：`authority socket: the peer-to-peer placeholder…`。
+**DI-A 6 佔位策略**：選了 `PeerAuthorityStrategy` 是啟動錯誤 AU-E1，訊息寫明還沒實作；它仍把型別登記進 Kernel，讓作者看到的是 AU-E1 而不是 Kernel 的 R-E4（實作）。守衛：`authority socket: the peer-to-peer placeholder…`、`authority registrations: the peer-to-peer placeholder still puts the types into the kernel…`。
 
 <a id="di-a-7"></a>
 **DI-A 7**：伺服器權威下判定資料以伺服器為準（規定在權威，搬運在網路 Module，重算在回滾 Module）。
@@ -66,10 +66,10 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 **DI-A 10 標記不重複登記**：別的 Module 已登記的型別與 System 只標記、不重複登記；標記、`Ingress`、`Runs`、`OneEndOnly` 對不到唯讀登記表是啟動錯誤 AU-E4。守衛：`authority registrations: a mark only records…`、`authority checks: AU-E4…`。
 
 <a id="di-a-11"></a>
-**DI-A 11 代為登記在登記當下**：代為登記（進 Kernel、進回滾、重跑時不跑）都在作者呼叫權威登記入口的當下做（`OnRegister`），一定在建 Plan 之前；策略在建 World 時選定（`AuthorityOptions`）。沒選策略時入口仍把型別放進 Kernel、把入口 System 加進去，`Check` 報 AU-E2（實作，宣告 4.2）。守衛：`authority registrations:` 各案。
+**DI-A 11 代為登記在登記當下**：代為登記（進 Kernel、進回滾、重跑時不跑）都在作者呼叫權威登記入口的當下做（`OnRegister`），一定在建 Plan 之前；策略在建 World 時選定（`AuthorityOptions`）。沒選策略時入口仍把型別放進 Kernel（讓作者看到 AU-E2 而不是 R-E4）、也把入口 System 加進去，`Check` 報 AU-E2（實作，宣告 4.2；任何一種權威登記都算「有權威登記」）。守衛：`authority registrations:` 各案（加入口 System 這一半從外面看不到：World 一定停在 AU-E2，不立守衛）。
 
 <a id="di-a-12"></a>
-**DI-A 12 digest**（第 4 批宣告 11.2 加）：digest 的每個值用 Kernel 定的同一個雜湊客製點（`HashValue`），以型別的權威登記序號一起雜湊，合併和順序無關（相加 mod 2^64：兩個相同的值不會像 XOR 那樣互相抵銷；實作）。不含實體 id（宣告 4.4：本批不定）。守衛：`authority consistency: the digest is order free…`。
+**DI-A 12 digest**（第 4 批宣告 11.2 加）：digest 的每個值用 Kernel 定的同一個雜湊客製點（`HashValue`），以型別的權威登記序號一起雜湊，合併和順序無關（相加 mod 2^64：兩個相同的值不會像 XOR 那樣互相抵銷；實作）。不含實體 id（宣告 4.4：本批不定）。守衛：`authority consistency: the digest is order free…`（同一組值換到別的實體上 digest 不變；相同的值不抵銷；排除；tick）、`…hashes each value with its type's number`。
 
 ### Replacement Criteria
 
@@ -86,18 +86,23 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 | AU-E1 | P2P 佔位策略 | 4.6 | `authority socket:` |
 | AU-E2 | 有權威登記卻沒選策略（Module 的 `Check`） | 4.7 | `authority registrations: without a strategy…` |
 | AU-E3 | World 准動態插入 | 5.5 | `authority checks: AU-E3…` |
-| AU-E4 | 標記、`Ingress`、`Runs`、`OneEndOnly` 對不到 | DI-A 10 | `…AU-E4…`、`…a mark only records…` |
-| AU-E5 | `Tick` 的寫者不在時間 Module 的 `TickWriters()`（System、hook、observer） | 5.4 | `…AU-E5…` |
-| AU-E6 | Z6：可回滾 schedule（步的與巢狀的）上、重跑時會跑的 System 寫的判定資料，要可回滾或 Derived；World 有步的 schedule 時，hook 與 observer 寫的判定資料要可回滾。`Tick` 例外，訊息不看；經 `InitialValue` 的漏斗算寫 | 5.11 | `…AU-E6…` 兩案 |
+| AU-E4 | 標記、`Ingress`、`Runs`、`OneEndOnly` 對不到（被 `RemoveSystem` 拿掉的 System 算對不到） | DI-A 10 | `…AU-E4…` 兩案、`…a mark only records…` |
+| AU-E5 | `Tick` 的寫者不在時間 Module 的 `TickWriters()`（System、hook、observer；`Writes<Tick>` 標註也算） | 5.4 | `…AU-E5…` 兩案 |
+| AU-E6 | Z6：可回滾 schedule（步的與巢狀的）上、重跑時會跑的 System 寫的判定資料，要可回滾或 Derived；World 有步的 schedule 時，hook 與 observer 寫的判定資料要可回滾（不能是 Derived）。`Tick` 例外、有 `rollback.Input` 歷史的輸入例外（重跑前會寫回；實作），訊息不看；延後寫、`Writes<…>` 標註、經 `InitialValue` 的漏斗（沿鏈；原地寫與移除請求不算）都算寫 | 5.11 | `…AU-E6…` 五案 |
 | AU-E7 | Z8：判定的輸入登記成回滾狀態（`rollback.Input<T>` 不算） | 5.11 | `…AU-E7…` |
 | AU-E8 | D-E15：可回滾 schedule 上的入口不在「重跑時不跑」 | 5.11 | `…AU-E8…` |
-| AU-E9 | 可回滾 schedule 上的 `Runs` System 會跑的 schedule 沒登記成巢狀 | 5.11 | `…AU-E9…` |
+| AU-E9 | 可回滾 schedule 上的 `Runs` System 會跑的 schedule 沒登記成巢狀（步的 schedule 本身不算巢狀登記） | 5.11 | `…AU-E9…` 兩案 |
 
 「啟動時看得到的寫」：有型別的參數（立即與延後）、`ExclusiveWorld<Writes<…>>` 標註、hook 與 observer 的存取、同步點經 `Registrar::InitialValue` 替插入請求的人填的元件（沿鏈）。看不到 untyped 的寫入與沒標註的獨占寫入（L3、L7）。
 
 ## 4. 本批的限界
 
 - Z6 不看「重跑時不跑」的 System（入口寫判定的輸入，重跑時不會再寫；實作）。權威份 5.11 寫「掛在可回滾 schedule 上的 System」，這是它的細化。
+- 有 `rollback.Input` 歷史的輸入不受 Z6 檢查（審查 1-5：輸入不能登記成可回滾（Z8），步上的 System 消耗它時沒有合法出口；回滾在重跑每一步前把它寫回）。沒有歷史的輸入在步上被寫照樣 AU-E6。
+- 一致性指紋不收 `KernelSettings::hookRoundLimit`（World 的設定值，執行時才讀），只收 schedule 的選項。
+- System 自己讀 `Resimulation`、又帶回滾的「重跑時不跑」條件時，指紋看不出前者（條件的讀取和它分不開）。
+- G-5 的根目錄比對：Windows 的磁碟路徑不分大小寫（照 Kernel 原本的匯出）；本機的測試走不到磁碟路徑，靠 windows-x64 的 L1。
+- 「啟動報告列出所有 `OneEndOnly`」（權威份 4.3）：由 `DatasetReport` 給，產品在啟動時呼叫；編排層沒有自動的啟動報告。
 - 依名字標記的型別（`MarkResource`）不進 digest：Kernel 沒有逐 id 的雜湊入口，權威手上只有名字（實作）。狀態機的值要進 digest 時，狀態機的那一批用型別標記或另議。
 - 時間 Module 目前只公開驅動者（`RunFixedSteps`），沒有對時 System；一致性指紋「扣掉對時 System」等時間 Module 分開公開對時名單時再接。
 - 時間 Module 的步長等設定不進一致性指紋（延到網路 Module 的宣告：放指紋或放握手）。
