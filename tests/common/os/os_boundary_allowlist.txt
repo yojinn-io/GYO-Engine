@@ -3,9 +3,9 @@
 # Only shrinks: a batch that moves a site deletes or lowers its entry in the same change.
 
 # Wait primitive backends (os-wait-backend).
-engine/time/src/Waiter.cpp R1 3  # kqueue and Windows headers
-engine/time/src/Waiter.cpp R2 6  # per-OS branches
-engine/time/src/Waiter.cpp R3 10  # kqueue, kevent, GetLastError
+engine/core/time/src/Waiter.cpp R1 3  # kqueue and Windows headers
+engine/core/time/src/Waiter.cpp R2 6  # per-OS branches
+engine/core/time/src/Waiter.cpp R3 10  # kqueue, kevent, GetLastError
 
 # Common tests that expect per-OS results; they move to tests/common/os with the batch that moves the site,
 # or stay as permanent entries with the reason written here.

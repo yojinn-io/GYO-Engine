@@ -1,8 +1,8 @@
-# 時間 Module（`engine/world_time`）
+# 時間 Module（`engine/modules/world_time`）
 
-更新：2026-11-20（新頁，`v8-arch-gyo2-time-events` 第 6 步；同日第 6 步 C 補 `WorldTimeOptions::fixedStep`：沒有固定步的 World 用 250 ms 的上限，宣告第 3.2 節、`v8-arch-gyo2-t1-three-items`；同日第 7 步依換模型審查：放回與帶過去的步長以這次的設定為準（S1、S4）、放回的時點（S5）、倍率 -0 寫成 +0（S7），型別 2、型別 3、WT-1、WT-3 改寫）。Owner：架構。程式：`engine/world_time/`（`GYO::Engine::WorldTime`，target `GYO::WorldTime`，登記單位 `WorldTimeModule`）。行為測試：`tests/common/world_time/`（ctest `world_time.types`、`world_time.module`、`world_time.sampling`、`world_time.fixed`、`world_time.restore`，標籤 `cpu`）；突變清單 [`scripts/world_time_mutations.json`](scripts/world_time_mutations.json)（`wt-`）。
+更新：2026-11-20（新頁，`v8-arch-gyo2-time-events` 第 6 步；同日第 6 步 C 補 `WorldTimeOptions::fixedStep`：沒有固定步的 World 用 250 ms 的上限，宣告第 3.2 節、`v8-arch-gyo2-t1-three-items`；同日第 7 步依換模型審查：放回與帶過去的步長以這次的設定為準（S1、S4）、放回的時點（S5）、倍率 -0 寫成 +0（S7），型別 2、型別 3、WT-1、WT-3 改寫）。Owner：架構。程式：`engine/modules/world_time/`（`GYO::Engine::WorldTime`，target `GYO::WorldTime`，登記單位 `WorldTimeModule`）。行為測試：`tests/common/world_time/`（ctest `world_time.types`、`world_time.module`、`world_time.sampling`、`world_time.fixed`、`world_time.restore`，標籤 `cpu`）；突變清單 [`scripts/world_time_mutations.json`](scripts/world_time_mutations.json)（`wt-`）。
 
-由來：[事前宣告](time-events-declaration.zh-Hant.md)（`v8-arch-gyo2-time-events`，2026-11-19 動工前核准，`v8-arch-gyo2-time-events-declaration-approved`）第 3 節、第 10.3、10.4 節；遊戲時間全部放這裡、`engine/time` 只留時間基準（使用者 2026-11-19，`v8-arch-gyo2-game-time-in-world-time`）。本頁照第 2～5 步的實作寫；**Design Invariants 的最終文字在合併前核准時定稿**。和宣告文字不同的地方在每條末尾標「實作」。
+由來：[事前宣告](time-events-declaration.zh-Hant.md)（`v8-arch-gyo2-time-events`，2026-11-19 動工前核准，`v8-arch-gyo2-time-events-declaration-approved`）第 3 節、第 10.3、10.4 節；遊戲時間全部放這裡、`engine/core/time` 只留時間基準（使用者 2026-11-19，`v8-arch-gyo2-game-time-in-world-time`）。本頁照第 2～5 步的實作寫；**Design Invariants 的最終文字在合併前核准時定稿**。和宣告文字不同的地方在每條末尾標「實作」。
 
 ## 一個例子
 
@@ -14,7 +14,7 @@
 GYO::Base ◄── GYO::Time ◄── GYO::WorldTime ──► GYO::Orchestration ──► GYO::Kernel
 ```
 
-- `engine/time` 不動：只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），只連 Base＋Threads（[`time.md`](../../time.md) DI 10）。三家（Bevy、flecs、Unity）都把「現在幾點、睡到幾點」放在 OS 介面那一層、把遊戲時間另成一處並和 World 綁在一起。
+- `engine/core/time` 不動：只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），只連 Base＋Threads（[`time.md`](../../time.md) DI 10）。三家（Bevy、flecs、Unity）都把「現在幾點、睡到幾點」放在 OS 介面那一層、把遊戲時間另成一處並和 World 綁在一起。
 - 登記檔 `engine/config/modules.csv` 的 `world_time` 列：依賴 `base;kernel;logging;orchestration;time`（`logging` 由 `v8-arch-gyo2-logging` 加，描述器 `TimeDiscardedLog` 放在訊息旁邊，日誌宣告第 13 節第 1 題 D，2026-11-20 動工前核准），`library_only=no`、`default=yes`（每個 World 預設帶、產品可關，O-6）。第一個真的進 World 的 Engine Module。
 - 標頭：`TimeTypes.hpp`（純型別與算術，只 include `<cstdint>`）；`FixedStep.hpp`（跑一步、退回、放回；用 Kernel 的 `ExclusiveWorld`，不讀時間基準）；`Sampling.hpp`（**唯一** include `MonotonicClock.hpp` 的標頭，zone_scan ZS1：判定的 System 要能讀 `Tick` 而不碰時鐘）；`WorldTimeModule.hpp`。實作：宣告的 `TickAccumulator.hpp` 併進 `TimeTypes.hpp`。
 - 程式裡的 `Engine::` 一律全限定（`::Engine::Base::`、`::Engine::Time::`）；`gyo_orchestration_include_order` 涵蓋 `world_time` 的公開標頭與編排層、Kernel 標頭的各種順序。
@@ -74,7 +74,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::WorldTime ──► GYO::Orchestrat
 
 ## Design Invariants
 
-守衛欄：行為測試（`world_time.*` 的 ctest 群組、突變 `wt-`）照常是守衛；scenario 第 2 段（`scenario.segment2`，本批第 6 步）通過之後也是。**綁實作方式的掃描延到第 4 批開頭**（`v8-arch-gyo2-guards-after-mechanism-stable`；宣告第 6.3 節「新」那一列：Kernel 常駐掃描加時鐘的識別字、`naming_guard` 加 `engine/world_time`、`world_time` 的 `gyo_expect_links`），這段期間靠本頁與審查守。「實作」標的是照實作而和宣告第 10.3、10.4 節文字不同的地方。
+守衛欄：行為測試（`world_time.*` 的 ctest 群組、突變 `wt-`）照常是守衛；scenario 第 2 段（`scenario.segment2`，本批第 6 步）通過之後也是。**綁實作方式的掃描延到第 4 批開頭**（`v8-arch-gyo2-guards-after-mechanism-stable`；宣告第 6.3 節「新」那一列：Kernel 常駐掃描加時鐘的識別字、`naming_guard` 加 `engine/modules/world_time`、`world_time` 的 `gyo_expect_links`），這段期間靠本頁與審查守。「實作」標的是照實作而和宣告第 10.3、10.4 節文字不同的地方。
 
 ### 時間的型別（宣告第 10.3 節）
 

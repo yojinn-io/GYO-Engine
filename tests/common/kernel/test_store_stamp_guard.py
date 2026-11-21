@@ -28,7 +28,7 @@ CLEAN = "template <typename T>\nT& InsertEntity(std::vector<T>& column, T value)
 
 class StoreStampGuardTest(unittest.TestCase):
     def test_clean_tree_passes(self):
-        status, out = run({"engine/entity_store/include/engine/entity_store/EntityColumns.hpp": CLEAN})
+        status, out = run({"engine/ecs/entity_store/include/engine/entity_store/EntityColumns.hpp": CLEAN})
         self.assertEqual(status, 0, out)
 
     def test_missing_root_is_a_finding(self):
@@ -37,35 +37,35 @@ class StoreStampGuardTest(unittest.TestCase):
         self.assertIn("S0", out)
 
     def test_stamp_field_is_reported(self):
-        status, out = run({"engine/entity_store/a.hpp": CLEAN + "std::uint64_t changed;\n"})
+        status, out = run({"engine/ecs/entity_store/a.hpp": CLEAN + "std::uint64_t changed;\n"})
         self.assertEqual(status, 1)
         self.assertIn("S1 changed", out)
 
     def test_stamp_word_in_a_comment_is_reported(self):
-        status, out = run({"engine/entity_store/a.hpp": CLEAN + "// skip cells whose stamp is old\n"})
+        status, out = run({"engine/ecs/entity_store/a.hpp": CLEAN + "// skip cells whose stamp is old\n"})
         self.assertEqual(status, 1)
         self.assertIn("S1 stamp", out)
 
     def test_change_stamp_type_is_reported(self):
-        status, out = run({"engine/entity_store/CMakeLists.txt": "# ChangeStamp lives here\n"})
+        status, out = run({"engine/ecs/entity_store/CMakeLists.txt": "# ChangeStamp lives here\n"})
         self.assertEqual(status, 1)
         self.assertIn("S1 ChangeStamp", out)
 
     def test_added_and_tick_are_reported(self):
-        status, out = run({"engine/entity_store/a.hpp": "bool added = false;\nint tickOf(int);\n"})
+        status, out = run({"engine/ecs/entity_store/a.hpp": "bool added = false;\nint tickOf(int);\n"})
         self.assertEqual(status, 1)
         self.assertIn("S1 added", out)
         self.assertIn("S1 tick", out)
 
     def test_camel_case_parts_are_reported(self):
-        status, out = run({"engine/entity_store/a.hpp": "int changeTick; int lastChanged; bool isAdded;\n"})
+        status, out = run({"engine/ecs/entity_store/a.hpp": "int changeTick; int lastChanged; bool isAdded;\n"})
         self.assertEqual(status, 1)
         self.assertIn("S1 changeTick", out)
         self.assertIn("S1 lastChanged", out)
         self.assertIn("S1 isAdded", out)
 
     def test_words_that_only_contain_the_letters_pass(self):
-        status, out = run({"engine/entity_store/a.hpp": CLEAN + "// unchanged order; padded; ticket; stampede-free\n"})
+        status, out = run({"engine/ecs/entity_store/a.hpp": CLEAN + "// unchanged order; padded; ticket; stampede-free\n"})
         self.assertEqual(status, 0, out)
 
 

@@ -1123,7 +1123,7 @@
   {
    "id": "ur-include-order-kernel-unqualified",
    "what": "step 3 (include order): a kernel header names Engine::Base unqualified inside GYO::Kernel (the check is the build of the include-order objects; the command after it only completes the run)",
-   "file": "engine/kernel/include/engine/kernel/WorldExecutor.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/WorldExecutor.hpp",
    "find": "    ::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
    "replace": "    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
    "target": "gyo_orchestration_include_order",
@@ -1151,7 +1151,7 @@
   {
    "id": "sc-commands-resource-never",
    "what": "step 4 (scenario segment 1): S1-3: Commands::SetResource never reaches the World",
-   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
    "find": "        Detail::Record record =\n            Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n",
    "replace": "        static_cast<void>(call);\n        static_cast<void>(value);\n",
    "target": "gyo_scenario_tests",
@@ -1161,7 +1161,7 @@
   {
    "id": "sc-commands-resource-at-once",
    "what": "step 4 (scenario segment 1): S1-3: Commands::SetResource is visible before its sync point",
-   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
    "find": "        Detail::Record record =\n            Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));\n",
    "replace": "        static_cast<void>(call);\n        static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, Detail::ResourceIdOf(*world_, KeyOf<T>()))).value.emplace(std::move(value));\n",
    "target": "gyo_scenario_tests",
@@ -1191,7 +1191,7 @@
   {
    "id": "sc-lower-bound-not-moved",
    "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets",
-   "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
    "find": "        return RangeAllotter{first, last, first, first > last, {}};",
    "replace": "        return RangeAllotter{1, last, 1, first > last, {}};",
    "target": "gyo_scenario_tests",
@@ -1201,7 +1201,7 @@
   {
    "id": "sc-spawn-with-id-deferred",
    "what": "step 4 (scenario segment 1): S1-7: ExclusiveWorld::SpawnWithId is deferred to the sync point (the same System cannot see the entity)",
-   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
    "find": "        auto done = Change(std::move(record));\n        if (!done) return ::Engine::Base::Err(std::move(done).error());\n        return done->rejected;",
    "replace": "        Detail::Push(Detail::RequireCall(*world_), std::move(record));\n        return std::optional<SpawnRejectReason>{};",
    "target": "gyo_scenario_tests",
@@ -1211,7 +1211,7 @@
   {
    "id": "sc-allotted-alive-fails",
    "what": "step 4 (scenario segment 1): S1-7b: a spawn the allotter gives a live id returns an error the game cannot tell from a failure (its load fails, the World is interrupted) (the World is interrupted by the game itself, which fails on a code it does not know; the kernel side, the Err reaching the Run, is g8s-allotted-alive-ends-run)",
-   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
    "find": "KernelErrorCode::AllottedIdAlive, \"F-13\",",
    "replace": "KernelErrorCode::SystemFailed, \"F-13\",",
    "target": "gyo_scenario_tests",
@@ -1265,7 +1265,7 @@
     "time-events-declaration 3.5",
     "time-events-declaration 判定 2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\", .zone = Kernel::Zone::B});\n",
    "replace": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\", .zone = Kernel::Zone::B});\n    setup.CarryOver<RealTime>(\"RealTime\");\n",
    "target": "gyo_scenario_tests",
@@ -1699,7 +1699,7 @@
   },
   {
    "id": "ur-name-charset-unchecked",
-   "what": "step 3 G-8 follow-up: a name that is not a directory name is read",
+   "what": "step 3 G-8 follow-up: a name that is not a unit name is read (since the dir column, the dir check still refuses the row, with another message: the bad_name case no longer reports the name's own message)",
    "file": "build/cmake/GyoUnitRegistry.cmake",
    "find": "        if(NOT name MATCHES \"^[a-z][a-z0-9_]*$\")\n",
    "replace": "        if(FALSE)\n",
@@ -1709,7 +1709,7 @@
     "-P",
     "tests/common/cmake/UnitRegistryTests.cmake"
    ],
-   "expect": "Invalid\\ unit\\ register\\ case\\ 'bad_name'\\ was\\ accepted",
+   "expect": "Unit\\ register\\ case\\ 'bad_name'\\ did\\ not\\ report",
    "timeout": 300
   },
   {
@@ -1870,7 +1870,7 @@
   {
    "id": "or-gi-writer-uncounted",
    "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4) (v8-arch-gyo2-time-events step 4: cases follow the O-1 case renamed when its D-E12 half left, G2)",
-   "file": "engine/kernel/src/Registry.cpp",
+   "file": "engine/ecs/kernel/src/Registry.cpp",
    "find": "        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;",
    "replace": "        if (true) continue;",
    "target": "gyo_orchestration_tests",
@@ -1910,7 +1910,7 @@
   {
    "id": "g8s-allotted-alive-ends-run",
    "what": "step 4 G-8: S1-7b: AllottedIdAlive is recorded as the Run's error (the World is interrupted although the System handled it)",
-   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
    "find": "Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
    "replace": "Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
    "target": "gyo_scenario_tests",
@@ -1940,7 +1940,7 @@
   {
    "id": "g8s-allotter-reject-not-recorded",
    "what": "step 4 G-8: S1-7b: a spawn the allotter gives a live id is dropped without a RejectedSpawn (and the caller gets the live id)",
-   "file": "engine/kernel/src/World.cpp",
+   "file": "engine/ecs/kernel/src/World.cpp",
    "find": "            RecordRejectedSpawn(std::move(rejected));\n",
    "replace": "            if (spawn.withId) RecordRejectedSpawn(std::move(rejected));\n",
    "target": "gyo_scenario_tests",
@@ -1960,7 +1960,7 @@
   {
    "id": "g8s-spawn-returns-other-id",
    "what": "step 4 G-8: S1-7: ExclusiveWorld::Spawn returns an id that is not the entity it spawned",
-   "file": "engine/kernel/include/engine/kernel/Params.hpp",
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
    "find": "        return done->entity;\n",
    "replace": "        return done->entity + 1;\n",
    "target": "gyo_scenario_tests",
@@ -1970,7 +1970,7 @@
   {
    "id": "g8s-rejected-not-from-allotter",
    "what": "step 4 G-8: S1-7b: the RejectedSpawn of an allotter spawn is recorded as not from the allotter",
-   "file": "engine/kernel/src/World.cpp",
+   "file": "engine/ecs/kernel/src/World.cpp",
    "find": "            rejected.fromAllotter = !spawn.withId;\n",
    "replace": "            rejected.fromAllotter = false;\n",
    "target": "gyo_scenario_tests",
@@ -2713,7 +2713,7 @@
     "orchestration O-6",
     "time-events-declaration 6.3"
    ],
-   "file": "engine/world_time/CMakeLists.txt",
+   "file": "engine/modules/world_time/CMakeLists.txt",
    "find": "gyo_link_registered_dependencies(world_time)",
    "replace": "gyo_link_registered_dependencies(world_time)\ntarget_link_libraries(gyo_world_time PUBLIC GYO::Math)",
    "expect": "engine/world_time/CMakeLists\\.txt:\\d+: O6 GYO::Math",

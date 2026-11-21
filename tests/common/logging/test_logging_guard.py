@@ -17,13 +17,13 @@ def write(root, relative, text):
 
 
 def clean_tree(root):
-    write(root, "engine/logging/include/engine/logging/Logger.hpp",
+    write(root, "engine/modules/logging/include/engine/logging/Logger.hpp",
           '#pragma once\n#include <string>\n#include "engine/base/Result.hpp"\n#include "engine/logging/Level.hpp"\n')
-    write(root, "engine/logging/src/Logger.cpp",
+    write(root, "engine/modules/logging/src/Logger.cpp",
           '#include "LoggerState.hpp"\n#include "engine/os/Process.hpp"\n#include "engine/time/MonotonicClock.hpp"\n'
           '#include "engine/json/Writer.hpp"\n#include "engine/threads/RoleThread.hpp"\n'
           '/* #include "engine/kernel/World.hpp" */\n')
-    write(root, "engine/world_logging/include/engine/world_logging/Forward.hpp",
+    write(root, "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
           '#include "engine/kernel/Params.hpp"\n#include "engine/orchestration/Setup.hpp"\n'
           '#include "engine/logging/Write.hpp"\n#include "engine/world_logging/LogWorldLabel.hpp"\n')
 
@@ -49,38 +49,38 @@ class LoggingGuard(unittest.TestCase):
         self.assertEqual(status, 0, output)
 
     def test_logging_including_the_kernel(self):
-        write(self.root, "engine/logging/src/Bad.cpp", '#include "engine/kernel/World.hpp"\n')
+        write(self.root, "engine/modules/logging/src/Bad.cpp", '#include "engine/kernel/World.hpp"\n')
         status, output = run(self.root)
         self.assertEqual(status, 1)
-        self.assertIn("engine/logging/src/Bad.cpp:1: LG4-LOGGING", output)
+        self.assertIn("engine/modules/logging/src/Bad.cpp:1: LG4-LOGGING", output)
 
     def test_logging_including_world_time(self):
-        write(self.root, "engine/logging/src/Bad.cpp", '#include <engine/world_time/TimeTypes.hpp>\n')
+        write(self.root, "engine/modules/logging/src/Bad.cpp", '#include <engine/world_time/TimeTypes.hpp>\n')
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("LG4-LOGGING", output)
 
     def test_public_header_including_a_private_dependency(self):
-        write(self.root, "engine/logging/include/engine/logging/Bad.hpp", '#include "engine/json/Writer.hpp"\n')
+        write(self.root, "engine/modules/logging/include/engine/logging/Bad.hpp", '#include "engine/json/Writer.hpp"\n')
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("Bad.hpp:1: LG4-LOGGING-PUBLIC", output)
 
     def test_each_allowed_module_of_logging(self):
         for module in ("base", "json", "os", "threads", "time", "logging"):
-            write(self.root, "engine/logging/src/Each.cpp", f'#include "engine/{module}/X.hpp"\n')
+            write(self.root, "engine/modules/logging/src/Each.cpp", f'#include "engine/{module}/X.hpp"\n')
             status, output = run(self.root)
             self.assertEqual(status, 0, module + ": " + output)
 
     def test_world_logging_including_world_time(self):
-        write(self.root, "engine/world_logging/src/Bad.cpp", '#include "engine/world_time/TimeTypes.hpp"\n')
+        write(self.root, "engine/modules/world_logging/src/Bad.cpp", '#include "engine/world_time/TimeTypes.hpp"\n')
         status, output = run(self.root)
         self.assertEqual(status, 1)
-        self.assertIn("engine/world_logging/src/Bad.cpp:1: LG4-WORLD", output)
+        self.assertIn("engine/modules/world_logging/src/Bad.cpp:1: LG4-WORLD", output)
 
     def test_each_allowed_module_of_world_logging(self):
         for module in ("base", "logging", "kernel", "orchestration", "world_logging"):
-            write(self.root, "engine/world_logging/src/Each.cpp", f'#include "engine/{module}/X.hpp"\n')
+            write(self.root, "engine/modules/world_logging/src/Each.cpp", f'#include "engine/{module}/X.hpp"\n')
             status, output = run(self.root)
             self.assertEqual(status, 0, module + ": " + output)
 
@@ -91,13 +91,13 @@ class LoggingGuard(unittest.TestCase):
 
     def test_missing_directory_fails(self):
         import shutil
-        shutil.rmtree(self.root / "engine" / "world_logging")
+        shutil.rmtree(self.root / "engine" / "modules" / "world_logging")
         status, output = run(self.root)
         self.assertEqual(status, 1)
-        self.assertIn("LG4-WORLD: engine/world_logging/ not found", output)
+        self.assertIn("LG4-WORLD: engine/modules/world_logging/ not found", output)
 
     def test_nothing_allowed_seen_fails(self):
-        write(self.root, "engine/logging/include/engine/logging/Logger.hpp", "#pragma once\n#include <string>\n")
+        write(self.root, "engine/modules/logging/include/engine/logging/Logger.hpp", "#pragma once\n#include <string>\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("LG4-LOGGING-PUBLIC: no allowed engine include found", output)

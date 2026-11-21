@@ -1,3 +1,3 @@
-name,target,description,library_only,default,depends,private_depends,unit,header
-tool,gyo_orchestration_test_units,An in-World Plugin the product lists,no,no,walk,,OrchUnits::ToolPlugin,orchestration_units/Units.hpp
-spare,gyo_orchestration_test_units,An in-World Plugin the product does not list,no,no,,,OrchUnits::SparePlugin,orchestration_units/Units.hpp
+name,dir,target,description,library_only,default,depends,private_depends,unit,header
+tool,tool,gyo_orchestration_test_units,An in-World Plugin the product lists,no,no,walk,,OrchUnits::ToolPlugin,orchestration_units/Units.hpp
+spare,spare,gyo_orchestration_test_units,An in-World Plugin the product does not list,no,no,,,OrchUnits::SparePlugin,orchestration_units/Units.hpp

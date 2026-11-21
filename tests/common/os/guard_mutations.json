@@ -139,8 +139,8 @@
       "id": "bg-r4-render-excluded",
       "what": "R4 excludes the render shader tool again",
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "R4_EXCLUDED = (\"engine/os/\",)",
-      "replace": "R4_EXCLUDED = (\"engine/os/\", \"engine/render/shaders/pipeline/\")",
+      "find": "R4_EXCLUDED = (\"engine/core/os/\",)",
+      "replace": "R4_EXCLUDED = (\"engine/core/os/\", \"engine/render/shaders/pipeline/\")",
       "command": [
         "{python}",
         "-B",
@@ -158,7 +158,7 @@
       "id": "bg-r4-os-headers",
       "what": "R4 covers engine/os public headers",
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "R4_EXCLUDED = (\"engine/os/\",)",
+      "find": "R4_EXCLUDED = (\"engine/core/os/\",)",
       "replace": "R4_EXCLUDED = ()",
       "command": [
         "{python}",
@@ -460,7 +460,7 @@
     },
     {
       "id": "bg-os-sources-checked",
-      "what": "engine/os/src is checked for OS branches",
+      "what": "engine/core/os/src is checked for OS branches",
       "file": "tests/common/os/os_boundary_guard.py",
       "find": "    if os_source:\n        return\n",
       "replace": "",

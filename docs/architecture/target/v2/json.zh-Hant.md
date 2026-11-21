@@ -1,4 +1,4 @@
-# JSON Module（`engine/json`）
+# JSON Module（`engine/modules/json`）
 
 Owner：架構。來源：事前宣告 [json-module-declaration.zh-Hant.md](json-module-declaration.zh-Hant.md)（修訂 1，2026-11-20 動工前核准；第 7 節）。最終文字在 `v8-arch-gyo2-json-module` 的合併前核准定稿。
 
@@ -11,7 +11,7 @@ Engine 讀寫 JSON 的唯一入口：GYO 自己的介面（`Document`、`Value`�
 守衛欄：行為的測試照常是守衛；綁實作方式的含入掃描在情境測試通過之後才立（AGENTS §3「ガードを立てる時期」）。
 
 <a id="j-1"></a>
-**J-1 唯一的 adapter。** yyjson 的標頭、型別、呼叫只在 `engine/json/src/adapters/yyjson/`，fast_float 的只在 `engine/json/src/adapters/fast_float/`；`engine/json/include/` 不含它們，也不露出它們的型別；Engine 的其他 Module 經 `GYO::Json` 讀寫 JSON，不直接連 `gyo_yyjson`、`gyo_fast_float`。（AGENTS §6；「一個外部組件」的數法：yyjson 一個、fast_float 一個。守衛只守 Engine 這一側：`adapter-plugins-plan` 第 15 行；`tests/common/json/` 是 adapter 自己的測試，准許。）
+**J-1 唯一的 adapter。** yyjson 的標頭、型別、呼叫只在 `engine/modules/json/src/adapters/yyjson/`，fast_float 的只在 `engine/modules/json/src/adapters/fast_float/`；`engine/modules/json/include/` 不含它們，也不露出它們的型別；Engine 的其他 Module 經 `GYO::Json` 讀寫 JSON，不直接連 `gyo_yyjson`、`gyo_fast_float`。（AGENTS §6；「一個外部組件」的數法：yyjson 一個、fast_float 一個。守衛只守 Engine 這一側：`adapter-plugins-plan` 第 15 行；`tests/common/json/` 是 adapter 自己的測試，准許。）
 守衛：`gyo_expect_links(gyo_json GYO::Base gyo_yyjson gyo_fast_float)` 與「不露出給使用者」（`tests/common/json/CMakeLists.txt`）；ctest `json.adapter_guard`（`tests/common/json/json_guard.py`：兩條含入規則、連結規則、正例、根目錄不存在時失敗）與 `json.adapter_guard_selftest`。
 
 <a id="j-2"></a>
@@ -24,7 +24,7 @@ Engine 讀寫 JSON 的唯一入口：GYO 自己的介面（`Document`、`Value`�
 
 <a id="j-4"></a>
 **J-4 Engine 的詞。** 公開介面只有 GYO 的型別；不露出函式庫的 DOM 型別、旗標、錯誤碼。換函式庫時 Engine 裡的使用者不用改。
-守衛：`gyo_json_tests` 只拿得到 `engine/json/include`，公開標頭含組件的標頭就編不過；J-1 的掃描。
+守衛：`gyo_json_tests` 只拿得到 `engine/modules/json/include`，公開標頭含組件的標頭就編不過；J-1 的掃描。
 
 <a id="j-5"></a>
 **J-5 寫出端。** `Writer` 的結構、跳脫、UTF-8 檢查由本 Module 實作，double 的文字只有一份實作（yyjson 的 `yyjson_write_number`：最短往返、整數值保留 `.0`）。輸出是 `Parse` 讀得回的嚴格 JSON，讀回的值與寫入的相同（前提：呼叫者不在同一物件寫重複鍵，`Writer` 不偵測）。不可表示的資料（非有限數、不合法 UTF-8；接受的 UTF-8 和 `Parse` 相同）由 `Finish` 回 `NotRepresentable`，並把字串截回建構時的長度；配置失敗是 `OutOfMemory`。結構誤用是斷言。字串容量足夠且深度不超過 32 時不配置記憶體。同樣的呼叫序列在三平台輸出相同的位元組。`WriteValue` 的數字照原文。

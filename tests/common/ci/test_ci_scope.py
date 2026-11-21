@@ -60,7 +60,7 @@ class ScopePolicyTests(unittest.TestCase):
         for paths, expected in (
             (["docs/releasing.ja.md"], Scope(False, False, "docs-only")),
             (["docs/a.md", "docs/deep/b.png"], Scope(False, False, "docs-only")),
-            (["docs/a.md", "engine/base/src/Sha256.cpp"], Scope(True, False, "pull-request")),
+            (["docs/a.md", "engine/core/base/src/Sha256.cpp"], Scope(True, False, "pull-request")),
             (["README.md"], Scope(True, False, "pull-request")),
             # Neither a file named docs nor a sibling prefix is documentation.
             (["docs"], Scope(True, False, "pull-request")),

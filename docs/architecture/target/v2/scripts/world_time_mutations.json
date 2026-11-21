@@ -8,7 +8,7 @@
    "guards": [
     "world-time 型別 1"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    overstep_ = total - steps * step_;\n",
    "replace": "    overstep_ = 0;\n",
    "target": "gyo_world_time_tests",
@@ -21,7 +21,7 @@
    "guards": [
     "world-time 型別 1"
    ],
-   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/TimeTypes.hpp",
    "find": "return step_ - overstep_; }",
    "replace": "return overstep_; }",
    "target": "gyo_world_time_tests",
@@ -34,7 +34,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "            result.discarded = (steps - limit) * step;\n",
    "replace": "            result.discarded = fixed->Overstep() + delta - limit * step;\n",
    "target": "gyo_world_time_tests",
@@ -47,7 +47,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "        const Nanoseconds steps = (fixed->Overstep() + delta) / step;\n",
    "replace": "        const Nanoseconds steps = delta / step;\n",
    "target": "gyo_world_time_tests",
@@ -61,7 +61,7 @@
     "world-time 型別 2",
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    time.discarded += result.discarded;\n",
    "replace": "    time.discarded += 0;\n",
    "target": "gyo_world_time_tests",
@@ -75,7 +75,7 @@
     "world-time 型別 2",
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    time.discarded += result.discarded;\n",
    "replace": "    time.discarded = result.discarded;\n",
    "target": "gyo_world_time_tests",
@@ -88,7 +88,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    time.elapsed += delta;\n    time.discarded += result.discarded;\n",
    "replace": "    time.elapsed += delta + result.discarded;\n    time.discarded += result.discarded;\n",
    "target": "gyo_world_time_tests",
@@ -101,7 +101,7 @@
    "guards": [
     "world-time 型別 1"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    GYO_ASSERT(steps <= static_cast<Nanoseconds>(limit));\n",
    "replace": "    (void)limit;\n",
    "target": "gyo_world_time_tests",
@@ -114,7 +114,7 @@
    "guards": [
     "world-time 型別 1"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    overstep_ = 0;\n    return cleared;",
    "replace": "    return cleared;",
    "target": "gyo_world_time_tests",
@@ -127,7 +127,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    if (control.paused != 0) {\n        time.delta = 0;\n        return result;\n    }\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -140,7 +140,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "        time.delta = 0;\n        return result;",
    "replace": "        time.delta = 0;\n        time.fraction += static_cast<double>(realDelta);\n        return result;",
    "target": "gyo_world_time_tests",
@@ -153,7 +153,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "static_cast<double>(realDelta) * control.scale + time.fraction;",
    "replace": "static_cast<double>(realDelta) * control.scale * control.scale + time.fraction;",
    "target": "gyo_world_time_tests",
@@ -166,7 +166,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    time.fraction = scaled - whole;\n",
    "replace": "    time.fraction = 0.0;\n",
    "target": "gyo_world_time_tests",
@@ -179,7 +179,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    const double whole = std::floor(scaled);\n",
    "replace": "    const double whole = std::ceil(scaled);\n",
    "target": "gyo_world_time_tests",
@@ -192,7 +192,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "        time.delta = 0;\n        return result;",
    "replace": "        time.delta = 0;\n        time.fraction = 0.0;\n        return result;",
    "target": "gyo_world_time_tests",
@@ -205,7 +205,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    time.scale = control.scale == 0.0 ? 0.0 : control.scale;\n",
    "replace": "    time.scale = 1.0;\n",
    "target": "gyo_world_time_tests",
@@ -218,7 +218,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    } else if (delta > limits.maxFrameDelta) {",
    "replace": "    } else if (false) {",
    "target": "gyo_world_time_tests",
@@ -231,7 +231,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/TimeTypes.hpp",
    "find": "Nanoseconds maxFrameDelta = 250'000'000;",
    "replace": "Nanoseconds maxFrameDelta = 500'000'000;",
    "target": "gyo_world_time_tests",
@@ -244,7 +244,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    } else if (delta > limits.maxFrameDelta) {",
    "replace": "    }\n    if (result.cause == DiscardCause::None && delta > limits.maxFrameDelta) {",
    "target": "gyo_world_time_tests",
@@ -257,7 +257,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/TimeTypes.hpp",
    "find": "Nanoseconds nanoseconds = 15'625'000;",
    "replace": "Nanoseconds nanoseconds = 16'666'667;",
    "target": "gyo_world_time_tests",
@@ -270,7 +270,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "static_cast<Nanoseconds>(std::llround(static_cast<double>(kNanosecondsPerSecond) / hz))",
    "replace": "static_cast<Nanoseconds>(static_cast<double>(kNanosecondsPerSecond) / hz)",
    "target": "gyo_world_time_tests",
@@ -283,7 +283,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "        time.sampled = 1;\n        time.delta = 0;\n",
    "replace": "        time.sampled = 1;\n        time.delta = now;\n",
    "target": "gyo_world_time_tests",
@@ -296,7 +296,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    time.sampled = 1;\n    time.delta = delta;\n",
    "replace": "    time.delta = time.sampled == 0 ? 0 : delta;\n    time.sampled = 1;\n",
    "target": "gyo_world_time_tests",
@@ -309,7 +309,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    GYO_ASSERT(std::isfinite(hz) && hz > 0.0 && hz <= static_cast<double>(kNanosecondsPerSecond));\n",
    "replace": "    GYO_ASSERT(std::isfinite(hz) || hz != hz);\n",
    "target": "gyo_world_time_tests",
@@ -322,7 +322,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "std::isfinite(control.scale) && control.scale >= 0.0 &&",
    "replace": "std::isfinite(control.scale) &&",
    "target": "gyo_world_time_tests",
@@ -335,7 +335,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        virt.discarded += fixed.pending;\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -348,7 +348,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven, {}});\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -361,7 +361,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "DiscardCause::NotDriven, {}});",
    "replace": "DiscardCause::StepLimit, {}});",
    "target": "gyo_world_time_tests",
@@ -374,7 +374,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause, {}});\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -387,7 +387,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    active = ActiveTime{virt.delta, virt.elapsed};",
    "replace": "    active = ActiveTime{real.delta, real.elapsed};",
    "target": "gyo_world_time_tests",
@@ -400,7 +400,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    fixed.pending = advanced.delta;",
    "replace": "    fixed.pending = 0;",
    "target": "gyo_world_time_tests",
@@ -413,7 +413,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    return Advance(*real, *virt, *fixed, *active, *sampling, *control, *config, discarded);",
    "replace": "    return Advance(*real, *virt, *fixed, *active, *sampling, TimeControl{}, *config, discarded);",
    "target": "gyo_world_time_tests",
@@ -427,7 +427,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (options.pausable) r.Resource<TimeControl>",
    "replace": "    r.Resource<TimeControl>",
    "target": "gyo_world_time_tests",
@@ -441,7 +441,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        r.AddSystem<&AdvanceTimeUnpausable>(Mounted(\"AdvanceTime\", options.frameSchedule, options.advanceStage));",
    "replace": "        r.AddSystem<&AdvanceTime>(Mounted(\"AdvanceTime\", options.frameSchedule, options.advanceStage));",
    "target": "gyo_world_time_tests",
@@ -454,7 +454,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        time.pending = 0;\n        return time.accumulator.Add",
    "replace": "        return time.accumulator.Add",
    "target": "gyo_world_time_tests",
@@ -468,7 +468,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    for (std::uint32_t step = 0; step < steps; ++step) {",
    "replace": "    for (std::uint32_t step = 0; step < steps && step < 1; ++step) {",
    "target": "gyo_world_time_tests",
@@ -482,7 +482,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        if (auto ran = RunOneFixedStep(world, config.fixedSchedule); !ran) return ran;",
    "replace": "        static_cast<void>(RunOneFixedStep(world, config.fixedSchedule));",
    "target": "gyo_world_time_tests",
@@ -496,7 +496,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        r.AddSystem<&AdvanceTime>(Mounted(\"AdvanceTime\", options.frameSchedule, options.advanceStage));",
    "replace": "        r.AddSystem<&AdvanceTime>(Mounted(\"AdvanceTime\", options.frameSchedule, \"PostUpdate\"));",
    "target": "gyo_world_time_tests",
@@ -510,7 +510,7 @@
     "world-time WT-5",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "SystemResult RunFixedSteps(Kernel::ExclusiveWorld<Kernel::Writes<Tick, FixedTime, ActiveTime>> world) {",
    "replace": "SystemResult RunFixedSteps(Kernel::ExclusiveWorld<Kernel::Writes<FixedTime, ActiveTime>> world) {",
    "target": "gyo_world_time_tests",
@@ -524,7 +524,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "            world.SetResource(FixedTime{TickAccumulator{step}, 0, 0});",
    "replace": "            world.SetResource(FixedTime{TickAccumulator{StepLength{}}, 0, 0});",
    "target": "gyo_world_time_tests",
@@ -538,7 +538,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (!found) {\n        context.Report(",
    "replace": "    if (false) {\n        context.Report(",
    "target": "gyo_world_time_tests",
@@ -552,7 +552,7 @@
     "world-time WT-5",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    return {\"RunFixedSteps\"};",
    "replace": "    return {};",
    "target": "gyo_world_time_tests",
@@ -566,7 +566,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        PutIfAbsent(world, Resimulation{});\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -579,7 +579,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    fixedSteps.mounts.front().conditions = options.fixedStepConditions;\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -592,7 +592,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "hasFixedStep ? &fixed.accumulator : nullptr",
    "replace": "&fixed.accumulator",
    "target": "gyo_world_time_tests",
@@ -605,7 +605,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (hasFixedStep) {\n        fixed.pending = advanced.delta;\n    }\n",
    "replace": "    fixed.pending = advanced.delta;\n",
    "target": "gyo_world_time_tests",
@@ -619,7 +619,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (options.fixedStep) {\n        Kernel::SystemOptions fixedSteps",
    "replace": "    if (true) {\n        Kernel::SystemOptions fixedSteps",
    "target": "gyo_world_time_tests",
@@ -633,7 +633,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (!options.fixedStep) return;\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -646,7 +646,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    config.fixedStep = options.fixedStep ? 1 : 0;\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -659,7 +659,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "hasFixedStep ? &fixed.accumulator : nullptr, config.limits);",
    "replace": "hasFixedStep ? &fixed.accumulator : nullptr, TimeLimits{});",
    "target": "gyo_world_time_tests",
@@ -673,7 +673,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/WorldTimeModule.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/WorldTimeModule.hpp",
    "find": "    bool fixedStep = true;",
    "replace": "    bool fixedStep = false;",
    "target": "gyo_world_time_tests",
@@ -687,7 +687,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    Detail::Called(world.template Modify<Tick>([](Tick& tick) { ++tick.value; }));",
    "replace": "    Detail::Called(world.template Modify<Tick>([](Tick&) {}));",
    "target": "gyo_world_time_tests",
@@ -701,7 +701,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "        time.elapsed += time.accumulator.Step();\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -715,7 +715,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    Detail::Called(world.template Modify<ActiveTime>([fixed](ActiveTime& active) { active = fixed; }));",
    "replace": "    static_cast<void>(fixed);",
    "target": "gyo_world_time_tests",
@@ -729,7 +729,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    Detail::Called(world.template Modify<ActiveTime>([frame](ActiveTime& active) { active = frame; }));",
    "replace": "    static_cast<void>(frame);",
    "target": "gyo_world_time_tests",
@@ -743,7 +743,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    if (auto ran = world.RunSchedule(schedule); !ran) return ran;\n    const ActiveTime frame = Detail::Present(\n        world.template Read<VirtualTime>([](const VirtualTime& time) { return ActiveTime{time.delta, time.elapsed}; }));\n    Detail::Called(world.template Modify<ActiveTime>([frame](ActiveTime& active) { active = frame; }));\n    return {};",
    "replace": "    auto ran = world.RunSchedule(schedule);\n    const ActiveTime frame = Detail::Present(\n        world.template Read<VirtualTime>([](const VirtualTime& time) { return ActiveTime{time.delta, time.elapsed}; }));\n    Detail::Called(world.template Modify<ActiveTime>([frame](ActiveTime& active) { active = frame; }));\n    return ran;",
    "target": "gyo_world_time_tests",
@@ -757,7 +757,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "        tick.value -= k;\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -771,7 +771,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "        time.elapsed -= static_cast<Nanoseconds>(k) * time.accumulator.Step();\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -785,7 +785,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "        time.elapsed -= static_cast<Nanoseconds>(k) * time.accumulator.Step();\n",
    "replace": "        time.elapsed -= static_cast<Nanoseconds>(k) * time.accumulator.Step();\n        static_cast<void>(time.accumulator.Reset());\n",
    "target": "gyo_world_time_tests",
@@ -799,7 +799,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    time.accumulator.RestoreOverstep(kept);\n",
    "replace": "    static_cast<void>(kept);\n",
    "target": "gyo_world_time_tests",
@@ -813,7 +813,7 @@
     "world-time WT-2",
     "time-events-declaration 3.4"
    ],
-   "file": "engine/world_time/src/Sampling.cpp",
+   "file": "engine/modules/world_time/src/Sampling.cpp",
    "find": "    case SamplingMode::ManualInstant:\n        AdvanceRealTo(real, sampling.value);",
    "replace": "    case SamplingMode::ManualInstant:\n        AdvanceRealBy(real, sampling.value);",
    "target": "gyo_world_time_tests",
@@ -827,7 +827,7 @@
     "world-time WT-2",
     "time-events-declaration 3.4"
    ],
-   "file": "engine/world_time/src/Sampling.cpp",
+   "file": "engine/modules/world_time/src/Sampling.cpp",
    "find": "    case SamplingMode::ManualDelta:\n        AdvanceRealBy(real, sampling.value);",
    "replace": "    case SamplingMode::ManualDelta:\n        AdvanceRealTo(real, sampling.value);",
    "target": "gyo_world_time_tests",
@@ -841,7 +841,7 @@
     "world-time WT-2",
     "time-events-declaration 3.4"
    ],
-   "file": "engine/world_time/src/Sampling.cpp",
+   "file": "engine/modules/world_time/src/Sampling.cpp",
    "find": "        AdvanceRealTo(real, readTimeBase());",
    "replace": "        AdvanceRealTo(real, ReadTimeBase());",
    "target": "gyo_world_time_tests",
@@ -855,7 +855,7 @@
     "world-time WT-4",
     "time-events-declaration 3.1"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "[[nodiscard]] ::Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
    "replace": "[[nodiscard]] Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
    "target": "gyo_orchestration_include_order",
@@ -878,7 +878,7 @@
     "orchestration O-7",
     "orchestration O-10"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    if (world.Resource<T>() == nullptr) world.SetResource(std::move(value));",
    "replace": "    world.SetResource(std::move(value));",
    "target": "gyo_world_time_tests",
@@ -893,7 +893,7 @@
     "determinism DI 2",
     "time-events-declaration 4.5"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "r.Resource<Tick>({.name = \"Tick\", .zone = Kernel::Zone::B});",
    "replace": "r.Resource<Tick>({.name = \"Tick\", .zone = Kernel::Zone::C});",
    "target": "gyo_world_time_tests",
@@ -907,7 +907,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "Mounted(\"RunFixedSteps\", options.frameSchedule, options.fixedStepStage)",
    "replace": "Mounted(\"RunFixedSteps\", options.frameSchedule, \"FixedMainLoop\")",
    "target": "gyo_world_time_tests",
@@ -921,7 +921,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "Mounted(\"AdvanceTime\", options.frameSchedule, options.advanceStage));\n    } else {",
    "replace": "Mounted(\"AdvanceTime\", \"Main\", options.advanceStage));\n    } else {",
    "target": "gyo_world_time_tests",
@@ -935,7 +935,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "std::memcpy(config.fixedSchedule, options.fixedSchedule.data(), options.fixedSchedule.size());",
    "replace": "std::memcpy(config.fixedSchedule, \"FixedUpdate\", 11);",
    "target": "gyo_world_time_tests",
@@ -950,7 +950,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    config.limits = options.limits;\n",
    "replace": "    config.limits.maxFrameDelta = options.limits.maxFrameDelta;\n",
    "target": "gyo_world_time_tests",
@@ -964,7 +964,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/WorldTimeModule.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/WorldTimeModule.hpp",
    "find": "std::string fixedStepStage = std::string(Orchestration::DefaultSchedules::fixedMainLoop);",
    "replace": "std::string fixedStepStage = std::string(Orchestration::DefaultSchedules::update);",
    "target": "gyo_world_time_tests",
@@ -978,7 +978,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/WorldTimeModule.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/WorldTimeModule.hpp",
    "find": "std::string advanceStage = std::string(Orchestration::DefaultSchedules::first);",
    "replace": "std::string advanceStage = std::string(Orchestration::DefaultSchedules::preUpdate);",
    "target": "gyo_world_time_tests",
@@ -992,7 +992,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        world.SetResource(config);\n",
    "replace": "        PutIfAbsent(world, config);\n",
    "target": "gyo_world_time_tests",
@@ -1007,7 +1007,7 @@
     "orchestration O-10",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "            const Nanoseconds excess = Detail::PutBackFixedTime(*carried, step, carried->elapsed, carried->accumulator.Overstep());\n            if (excess > 0) world.ResourceMut<VirtualTime>()->discarded += excess;\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -1022,7 +1022,7 @@
     "orchestration O-10",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "            if (excess > 0) world.ResourceMut<VirtualTime>()->discarded += excess;\n",
    "replace": "            static_cast<void>(excess);\n",
    "target": "gyo_world_time_tests",
@@ -1036,7 +1036,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    const Nanoseconds kept = overstep % step.nanoseconds;\n",
    "replace": "    const Nanoseconds kept = overstep < step.nanoseconds ? overstep : step.nanoseconds - 1;\n",
    "target": "gyo_world_time_tests",
@@ -1050,7 +1050,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "        virt->discarded += excess;\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -1064,7 +1064,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "        return Detail::PutBackFixedTime(time, StepLength{time.accumulator.Step()}, elapsed, overstep);\n",
    "replace": "        static_cast<void>(time);\n        return Nanoseconds{0};\n",
    "target": "gyo_world_time_tests",
@@ -1078,7 +1078,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    if (excess > 0) Detail::Called(world.template Modify<VirtualTime>(",
    "replace": "    if (false) Detail::Called(world.template Modify<VirtualTime>(",
    "target": "gyo_world_time_tests",
@@ -1092,7 +1092,7 @@
     "world-time 型別 2",
     "world-time 型別 3"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "    time.scale = control.scale == 0.0 ? 0.0 : control.scale;\n",
    "replace": "    time.scale = control.scale;\n",
    "target": "gyo_world_time_tests",
@@ -1106,7 +1106,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "        GYO_ASSERT(k <= tick.value);\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -1120,7 +1120,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    GYO_ASSERT(options.fixedSchedule.size() < sizeof(TimeConfig::fixedSchedule));\n",
    "replace": "",
    "target": "gyo_world_time_tests",
@@ -1134,7 +1134,7 @@
     "world-time WT-2",
     "time-events-declaration 3.4"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    SampleRealTime(real, sampling);\n    if (fixed.pending > 0) {",
    "replace": "    if (control.paused == 0) SampleRealTime(real, sampling);\n    if (fixed.pending > 0) {",
    "target": "gyo_world_time_tests",
@@ -1148,7 +1148,7 @@
     "world-time WT-2",
     "time-events-declaration 3.4"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "    SampleRealTime(real, sampling);\n    if (fixed.pending > 0) {",
    "replace": "    SampleRealTime(real, sampling);\n    SampleRealTime(real, sampling);\n    if (fixed.pending > 0) {",
    "target": "gyo_world_time_tests",
@@ -1161,7 +1161,7 @@
    "guards": [
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/WorldTimeModule.cpp",
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
    "find": "        virt.discarded += fixed.pending;\n",
    "replace": "        virt.discarded += fixed.pending;\n        virt.elapsed -= fixed.pending;\n",
    "target": "gyo_world_time_tests",
@@ -1175,7 +1175,7 @@
     "world-time WT-3",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    Detail::Called(world.template Modify<Tick>([](Tick& tick) { ++tick.value; }));\n    const ActiveTime fixed = Detail::Present(world.template Modify<FixedTime>([](FixedTime& time) {\n        time.elapsed += time.accumulator.Step();\n        return ActiveTime{time.accumulator.Step(), time.elapsed};\n    }));\n    Detail::Called(world.template Modify<ActiveTime>([fixed](ActiveTime& active) { active = fixed; }));\n    if (auto ran = world.RunSchedule(schedule); !ran) return ran;\n",
    "replace": "    const ActiveTime fixed = Detail::Present(world.template Modify<FixedTime>([](FixedTime& time) {\n        time.elapsed += time.accumulator.Step();\n        return ActiveTime{time.accumulator.Step(), time.elapsed};\n    }));\n    Detail::Called(world.template Modify<ActiveTime>([fixed](ActiveTime& active) { active = fixed; }));\n    if (auto ran = world.RunSchedule(schedule); !ran) return ran;\n    Detail::Called(world.template Modify<Tick>([](Tick& tick) { ++tick.value; }));\n",
    "target": "gyo_world_time_tests",
@@ -1188,7 +1188,7 @@
    "guards": [
     "world-time 型別 2"
    ],
-   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/TimeTypes.hpp",
    "find": "std::uint32_t maxStepsPerFrame = 5;",
    "replace": "std::uint32_t maxStepsPerFrame = 4;",
    "target": "gyo_world_time_tests",
@@ -1202,7 +1202,7 @@
     "world-time WT-1",
     "time-events-declaration 3.3"
    ],
-   "file": "engine/world_time/include/engine/world_time/WorldTimeModule.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/WorldTimeModule.hpp",
    "find": "    bool pausable = true;",
    "replace": "    bool pausable = false;",
    "target": "gyo_world_time_tests",
@@ -1216,7 +1216,7 @@
     "world-time WT-2",
     "time-events-declaration 3.4"
    ],
-   "file": "engine/world_time/include/engine/world_time/TimeTypes.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/TimeTypes.hpp",
    "find": "SamplingMode mode = SamplingMode::TimeBase;",
    "replace": "SamplingMode mode = SamplingMode::ManualDelta;",
    "target": "gyo_world_time_tests",
@@ -1230,7 +1230,7 @@
     "world-time 型別 2",
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "            result.cause = DiscardCause::StepLimit;\n",
    "replace": "            result.cause = DiscardCause::FrameLimit;\n",
    "target": "gyo_world_time_tests",
@@ -1244,7 +1244,7 @@
     "world-time 型別 2",
     "world-time WT-2"
    ],
-   "file": "engine/world_time/src/TimeTypes.cpp",
+   "file": "engine/modules/world_time/src/TimeTypes.cpp",
    "find": "        result.cause = DiscardCause::FrameLimit;\n",
    "replace": "        result.cause = DiscardCause::StepLimit;\n",
    "target": "gyo_world_time_tests",
@@ -1258,7 +1258,7 @@
     "world-time WT-3",
     "time-events-declaration 3.5"
    ],
-   "file": "engine/world_time/include/engine/world_time/FixedStep.hpp",
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
    "find": "    time.elapsed = elapsed;\n    const Nanoseconds kept",
    "replace": "    const Nanoseconds kept",
    "target": "gyo_world_time_tests",

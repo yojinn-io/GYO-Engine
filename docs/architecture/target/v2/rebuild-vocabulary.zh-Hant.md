@@ -166,7 +166,7 @@ v3 和 v2 的差別：
 | Session | 一段有開始與結束的期間 | 暫留 | 遇到時解釋它指哪一種：AGENTS 的 session、工具的編輯階段、實機場次、一條連線 |
 | Service | **獨立行程的後端服務**：例：`services/` 下的 Go service | 加限定詞 | 在 World 之外替 System 做 IO 的部分寫「World 外的 IO（舊稱外部服務）」 |
 | Link | 一般語意：連結、連結器的 link（例：CMake 的 link） | 加限定詞 | 和 `Product` 外部交換資料的 Resource 寫「external Resource（舊）」（登記時標 `external`，一律在 B 區） |
-| Kernel | **通用機制**：World、Registry、System、schedule、Executor、`Product` 這些各產品共用的 ECS 機制。程式在 `engine/kernel`，命名空間 `GYO::Kernel`（[命名規範](rebuild-naming.zh-Hant.md) N17） | 沿用 | 文件裡解釋它是什麼時寫「通用機制」 |
+| Kernel | **通用機制**：World、Registry、System、schedule、Executor、`Product` 這些各產品共用的 ECS 機制。程式在 `engine/ecs/kernel`，命名空間 `GYO::Kernel`（[命名規範](rebuild-naming.zh-Hant.md) N17） | 沿用 | 文件裡解釋它是什麼時寫「通用機制」 |
 | Engine | **各產品共用的那一層**：`engine/` 目錄，包含通用機制與各 Module。不依賴任何產品 | 沿用 | 同左 |
 | Product、Tool | **產品**：有 owner 的遊戲或工具，分 Game 與 Tool 兩種；Tool 是設計支援工具（例：編輯器） | 沿用 | 寫成 `Product`（程式碼格式）時指 4.1 的型別 |
 | Player、Peer、Match、Gateway；對戰的 Client | 產品的詞（例：PvP 產品），不是通用機制的詞 | 沿用 | 通用機制的文件要舉例時，標明是哪個產品的例子。「client」的一般語意不在此限 |
@@ -198,7 +198,7 @@ v3 和 v2 的差別：
 
 ## 7. 範囲の限界
 
-- 定義裡關於程式的事實，核對的是 `gyo2@051d686c` 的 `engine/kernel/include/engine/kernel/`（`Product.hpp`、`World.hpp`、`Registry.hpp`、`Declarations.hpp`、`Params.hpp`）與 `engine/entity_store`；決定性區的等級核對的是 `docs/architecture/target/determinism.md`。逐字比對的只有這些標頭；其他模組（audio、io、os、threads、time）的型別名只確認存在。
+- 定義裡關於程式的事實，核對的是 `gyo2@051d686c` 的 `engine/ecs/kernel/include/engine/kernel/`（`Product.hpp`、`World.hpp`、`Registry.hpp`、`Declarations.hpp`、`Params.hpp`）與 `engine/ecs/entity_store`；決定性區的等級核對的是 `docs/architecture/target/determinism.md`。逐字比對的只有這些標頭；其他模組（audio、io、os、threads、time）的型別名只確認存在。
 - 詞是從型別名與文件裡找的，可能有漏。之後發現新的相撞，補進這張表並標日期。
 - [概念層重構稿](rebuild-concept.zh-Hant.md)與[命名規範](rebuild-naming.zh-Hant.md)用的是 v1、v2 的詞（「X（舊）」、「App」），還沒照 v3 改。
 
@@ -206,7 +206,7 @@ v3 和 v2 的差別：
 
 ## 附錄 A. 系譜：每個詞以前在哪裡、指什麼
 
-出處的寫法：舊程式與舊文件指 `master@08566260`；帶過來的程式指 gyo2（R0b 時在分支 `claude/gyo2-r0b-delete`）；Bevy 指本機 `~/Code/GitHome/bevy` 的 6a911653f，路徑從 `crates/` 起算。「舊 Kernel 設計」指 2026-11-11～13 的 kernel 規格與 `docs/architecture/target/` 的條文；其中一部分在 2026-11-14 以後成了 gyo2 的 `engine/kernel`。
+出處的寫法：舊程式與舊文件指 `master@08566260`；帶過來的程式指 gyo2（R0b 時在分支 `claude/gyo2-r0b-delete`）；Bevy 指本機 `~/Code/GitHome/bevy` 的 6a911653f，路徑從 `crates/` 起算。「舊 Kernel 設計」指 2026-11-11～13 的 kernel 規格與 `docs/architecture/target/` 的條文；其中一部分在 2026-11-14 以後成了 gyo2 的 `engine/ecs/kernel`。
 
 ### A.1 核心詞
 
@@ -214,7 +214,7 @@ v3 和 v2 的差別：
 |---|---|---|
 | World | (i) PvP 的遊戲世界狀態：`WorldSnapshot`（`PvpMatch.hpp:22`）；(ii) 舊 Kernel 設計：資料容器；Bevy 同詞（`bevy_ecs/src/world/mod.rs:96`）；(iii) 舊文件「世界內容」指關卡資料 | (ii) 成了 gyo2 的 `World`，照程式定義。(i)(iii) 改寫「關卡內容」等 |
 | Entity | (i) 產品的契約 id：`EntityId`、`EntityKey`；(ii) 舊 Kernel 設計：World 的鍵；Bevy 同詞（`bevy_ecs/src/entity/mod.rs:447`） | (ii) 照程式定義。`EntityId` 現在是 `entity_store` 的 64 位元整數 |
-| Component | (i) AGENTS 的 Component＝部件：State Authority、Design Invariants、外部 Component 的條文（AGENTS.md:249、:273-281、:386-393）；(ii) os 的 `SamePathComponent`（`engine/os/include/engine/os/Files.hpp:153`）；(iii) 建置的元件（`GyoComponents.cmake:5`）；(iv) 舊 Kernel 設計：ECS 的元件，中文也寫「欄」；Bevy 同詞（`bevy_ecs/src/component/mod.rs:530`） | 不加限定指 (iv)。「欄」預設了欄式儲存，所以不拿來指元件本身 |
+| Component | (i) AGENTS 的 Component＝部件：State Authority、Design Invariants、外部 Component 的條文（AGENTS.md:249、:273-281、:386-393）；(ii) os 的 `SamePathComponent`（`engine/core/os/include/engine/os/Files.hpp:153`）；(iii) 建置的元件（`GyoComponents.cmake:5`）；(iv) 舊 Kernel 設計：ECS 的元件，中文也寫「欄」；Bevy 同詞（`bevy_ecs/src/component/mod.rs:530`） | 不加限定指 (iv)。「欄」預設了欄式儲存，所以不拿來指元件本身 |
 | Resource | (i) AGENTS 的「資源」：性能與資源的預算、OS 資源；(ii) 舊程式的 `ModelResource`、`TextResource`、`ResourceHandle`（沒帶過來）；(iii) 舊 Kernel 設計：ECS 的 Resource；Bevy 同詞（`bevy_ecs/src/resource.rs:87`） | 不加限定指 (iii)，寫英文 |
 | System | (i) AGENTS 的 Subsystem；(ii) 舊 Kernel 設計：一個 System 函式 | (ii) 照程式定義 |
 | Schedule | 舊 Kernel 設計：一組排好順序的 System；Bevy 同詞（`bevy_ecs/src/schedule/schedule.rs:413`）。audio 的 `Scheduled` 是動詞 | 照程式定義 |
@@ -222,7 +222,7 @@ v3 和 v2 的差別：
 | Product（v2 的 App 列） | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：原本叫 Runtime 的型別，2026-11-13 定名 `App`（`v8-arch-kernel-app-name`），2026-11-14 改叫 `Product`（`v8-arch-gyo2-product-type-name`）。Bevy 的 App 底下有多個 SubApp、每個 SubApp 一個 World，和 gyo2 的 `Product`（一個 World）不同 | 詞條名從 App 改成 Product，見附錄 B |
 | Extract | 舊 Kernel 設計：把資料從主 World 單向取到渲染 World；Bevy 同詞 | 照程式定義 |
 | Asset | (i) `assets/<產品>` 內容根目錄；(ii) 舊程式的 `AssetManager`、`AssetHandle`；(iii) 舊 Kernel 設計的 `Assets<T>`；Bevy 的 `Assets`（`bevy_asset/src/assets.rs:288`） | 寫一般定義 |
-| Handle | (i) 舊程式的 `AssetHandle`：id 加世代的記號，不讓資產保持存活；(ii) audio 的 `SoundHandle`（`Mixer.hpp:50`）；(iii) OS 的 handle；(iv) 舊 Kernel 設計的「句柄」：System 參數的基底，也拿來說實體的鍵（gyo2 的 `engine/kernel` 裡是內部的 `Detail::Handle`）；(v) Bevy 的 `Handle<A>`（`bevy_asset/src/handle.rs:115`）：強參照會讓資產保持存活，和 (i) 不同 | 寫一般定義；(iv) 不叫句柄 |
+| Handle | (i) 舊程式的 `AssetHandle`：id 加世代的記號，不讓資產保持存活；(ii) audio 的 `SoundHandle`（`Mixer.hpp:50`）；(iii) OS 的 handle；(iv) 舊 Kernel 設計的「句柄」：System 參數的基底，也拿來說實體的鍵（gyo2 的 `engine/ecs/kernel` 裡是內部的 `Detail::Handle`）；(v) Bevy 的 `Handle<A>`（`bevy_asset/src/handle.rs:115`）：強參照會讓資產保持存活，和 (i) 不同 | 寫一般定義；(iv) 不叫句柄 |
 
 ### A.2 帶過來的程式已經在用、容易相撞的詞
 
@@ -232,7 +232,7 @@ v3 和 v2 的差別：
 | Tick | (i) 固定步的步數：`TickContext`（master 的 `FixedTickRuntime.hpp:17`，沒帶過來）、PvP 的 tick；(ii) 舊 Kernel 設計：domain tick，也拿來指 Loading 的批次計數；(iii) Bevy 的 `Tick`：變更偵測的計數（`bevy_ecs/src/change_detection/tick.rs:23`） | v2 把 (i) 寫成「PvP 的 tick」，使用者指出 tick 不只網路用（第 0 節）。v3 只改解釋，不加限定仍指 (i) |
 | Clock、Time | (i) time 的 `MonotonicClock`、`TimePoint`（`MonotonicClock.hpp:18-19`）；(ii) 舊 Kernel 設計的 clock domain、`HostClockSample`；(iii) Bevy 的 `Time<T>` Resource | (ii) 寫「clock domain（舊）」 |
 | Domain | (i) os 的 `NativeErrorDomain`（`OsError.hpp:46`）；(ii) PvP 文件的 match_domain；(iii) 舊 Kernel 設計：clock domain，封閉列舉（`Declarations.hpp:54`） | (iii) 寫「clock domain（舊）」 |
-| Mount | (i) io 的 `MountTable`、`MountPoint`（`engine/io/include/engine/io/fs/MountTable.hpp:88`）；(ii) 舊 scheduler 的 `Mount`：System 掛在哪個 schedule | (ii) 寫「掛點（舊）」 |
+| Mount | (i) io 的 `MountTable`、`MountPoint`（`engine/core/io/include/engine/io/fs/MountTable.hpp:88`）；(ii) 舊 scheduler 的 `Mount`：System 掛在哪個 schedule | (ii) 寫「掛點（舊）」 |
 | Command | (i) audio 內部的 `Detail::Command`（`Mixer.hpp:17`）；(ii) 舊 Kernel 設計的 `Commands`；Bevy 的 `Commands` | 同 v2 |
 | Sample | (i) audio 的取樣；(ii) 舊命名條文：boundary 輸入帶 `Sample` 後綴 | (ii) 已由命名規範 N23 定案（2026-11-14），不再「由登記表判」 |
 | Role | (i) threads 的 `RoleThread`（`RoleThread.hpp:67`）；舊 Kernel 的 `Affinity::role` 同義；(ii) 舊 Kernel 設計：欄的角色 State／Input（`Declarations.hpp:41`）；(iii) 建置登記的 ROLE 欄 | (ii) 寫「欄角色（舊）」 |
@@ -263,7 +263,7 @@ v3 和 v2 的差別：
 | Session | (i) AGENTS.md:276 的 session；(ii) 工具的編輯階段；(iii) 實機場次（field-session）；(iv) 連線 | 暫留 |
 | Service | (i) `services/`、Go service；(ii) 舊 Kernel 設計：World 之外做 IO 的「外部服務」 | (ii) 寫「World 外的 IO（舊稱外部服務）」 |
 | Link | (i) CMake 的 link、AGENTS.md:526；(ii) 舊 Kernel 設計：和外部交換資料的 Resource，舊 spec §0 另稱 external Resource | (ii) 寫「external Resource（舊）」 |
-| Kernel | (i) `engine/kernel` 與它的設計；(ii) 「kernel 改造」計畫線；(iii) spike | 2026-11-11 命名規範第 1 條；2026-11-14 轉入並由架構師訂（`v8-arch-gyo2-naming-1-to-4`）。v2 原寫「Kernel 只指舊的」，已改 |
+| Kernel | (i) `engine/ecs/kernel` 與它的設計；(ii) 「kernel 改造」計畫線；(iii) spike | 2026-11-11 命名規範第 1 條；2026-11-14 轉入並由架構師訂（`v8-arch-gyo2-naming-1-to-4`）。v2 原寫「Kernel 只指舊的」，已改 |
 | Engine | (i) 架構層與 `engine/` 目錄；(ii) CMake target `GYO::Engine`（R0b 之後不存在） | 指 (i) |
 | Product、Tool | AGENTS：Product＝有 owner 的遊戲或工具；Tool＝設計支援工具 | 加上使用者 2026-11-14 的 Game／Tool 之分 |
 | Player、Peer、Match、Gateway；PvP 意思的 Client | PvP 產品的概念；舊 Kernel 的條文裡也出現 | 同 v2 |

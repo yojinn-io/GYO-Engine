@@ -41,7 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kernel_guard import SUFFIXES as KERNEL_SUFFIXES, line_of, strip_comments_and_strings  # noqa: E402
 
-ROOTS = (("engine/kernel", "GYO::Kernel"), ("engine/orchestration", "GYO::Engine::Orchestration"))
+ROOTS = (("engine/ecs/kernel", "GYO::Kernel"), ("engine/orchestration", "GYO::Engine::Orchestration"))
 REVERSE_ROOTS = ("engine", "apps", "tools", "framework", "plugins", "tests")
 SUFFIXES = KERNEL_SUFFIXES | {".m", ".mm"}  # the same C/C++ files kernel_guard reads, plus Objective-C++
 ROLE_SUFFIXES = ("Manager", "Renderer", "ViewModel", "Host", "Shell", "Runtime", "Controller")

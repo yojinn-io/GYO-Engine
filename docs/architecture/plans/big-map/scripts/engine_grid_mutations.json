@@ -5,7 +5,7 @@
     {
       "id": "sj-repeated-key-kept",
       "what": "A repeated key is taken silently (the DOM keeps the last): the SAX scan's check is gone",
-      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "file": "engine/core/base/include/engine/base/StrictJson.hpp",
       "find": "        if (open_.back().insert(key).second) return true;",
       "replace": "        open_.back().insert(key);\n        return true;",
       "target": "gyo_voxel_mesh_tests",
@@ -15,7 +15,7 @@
     {
       "id": "sj-scan-skipped",
       "what": "The SAX scan is not run, so repeated keys and its error message are lost",
-      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "file": "engine/core/base/include/engine/base/StrictJson.hpp",
       "find": "    if (!Json::sax_parse(text.begin(), text.end(), &scan)) {",
       "replace": "    if (false) {",
       "target": "gyo_voxel_mesh_tests",
@@ -25,7 +25,7 @@
     {
       "id": "sj-repeat-message-lost",
       "what": "A repeated key is reported as 'not JSON' instead of naming the key",
-      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "file": "engine/core/base/include/engine/base/StrictJson.hpp",
       "find": "        failure_ = \"repeated key '\" + std::string(key) + \"'\";",
       "replace": "        failure_ = \"not JSON\";",
       "target": "gyo_voxel_mesh_tests",

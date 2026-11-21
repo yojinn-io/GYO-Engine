@@ -73,9 +73,11 @@ def check(root):
         relative = path.relative_to(root).as_posix()
         for number, rule, text in orchestration_findings(relative, path.read_text(encoding="utf-8")):
             problems.append(f"{relative}:{number}: {rule} {text}")
-    cmake_files = sorted((root / "engine").glob("*/CMakeLists.txt")) if (root / "engine").is_dir() else []
+    engine = root / "engine"
+    # Every unit's CMakeLists.txt: engine/<layer>/<unit>/ and the orchestration layer engine/orchestration/.
+    cmake_files = sorted(p for p in engine.rglob("CMakeLists.txt") if p.parent != engine) if engine.is_dir() else []
     if not cmake_files:
-        problems.append("engine: O0 no engine/<module>/CMakeLists.txt to scan")
+        problems.append("engine: O0 no unit CMakeLists.txt under engine/ to scan")
     for path in cmake_files:
         relative = path.relative_to(root).as_posix()
         for number, rule, text in cmake_findings(path.read_text(encoding="utf-8")):

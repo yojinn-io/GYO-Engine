@@ -1,6 +1,6 @@
 """Guard for the Design Invariants of engine/os (docs/architecture/os.md).
 
-Outside engine/os/src, C/C++ sources include no OS header (R1), branch on no OS macro in a preprocessor
+Outside engine/core/os/src, C/C++ sources include no OS header (R1), branch on no OS macro in a preprocessor
 condition (R2) and call no listed OS or CRT-split API (R3). Runtime code outside engine/os opens no native file
 directly (R4: fstream, fopen, std::filesystem operations that touch the file system). engine/os itself includes
 no other Engine module, SDL, asio or other library (R5), and converts text with CP_UTF8 through the wide Win32 entry
@@ -33,12 +33,12 @@ RUNTIME_ROOTS = ("engine", "apps", "tools")
 # Roots that always exist and hold C/C++ sources; the others are skipped, and reported as skipped, while they hold none.
 REQUIRED_ROOTS = ("engine", "tests")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
-# Never scanned: the OS layer's own tests (they may assert per OS), vendored code and build output. engine/os/src is
-# scanned for R5 only; engine/os/include for everything, since public headers must not leak the OS either.
+# Never scanned: the OS layer's own tests (they may assert per OS), vendored code and build output. engine/core/os/src is
+# scanned for R5 only; engine/core/os/include for everything, since public headers must not leak the OS either.
 EXCLUDED = ("tests/common/os/", "third_party/", "build/target/")
-OS_SOURCES = "engine/os/src/"
+OS_SOURCES = "engine/core/os/src/"
 # Runtime code that R4 does not cover: the OS layer itself.
-R4_EXCLUDED = ("engine/os/",)
+R4_EXCLUDED = ("engine/core/os/",)
 ENGINE_ALLOWLIST_DIRECTORY = "tests/common/os"
 ENGINE_ALLOWLIST_SCOPE = ("engine/", "tests/common/")
 ALLOWLIST_NAME = "os_boundary_allowlist.txt"
@@ -138,7 +138,7 @@ def strip_comments_and_strings(text):
 
 def file_findings(relative, text):
     """Yields (line, rule, match) for one file whose repository-relative path is relative."""
-    in_os = relative.startswith("engine/os/")
+    in_os = relative.startswith("engine/core/os/")
     os_source = relative.startswith(OS_SOURCES)
     runtime = relative.startswith(tuple(r + "/" for r in RUNTIME_ROOTS)) and not relative.startswith(R4_EXCLUDED)
     raw_lines = text.splitlines()
@@ -153,7 +153,7 @@ def file_findings(relative, text):
             if kind == '"' and header.startswith(("./", "../")):
                 # A relative include is judged by the file it names: it must stay inside engine/os or engine/base.
                 target = posixpath.normpath(posixpath.join(posixpath.dirname(relative), header))
-                forbidden = not target.startswith(("engine/os/", "engine/base/"))
+                forbidden = not target.startswith(("engine/core/os/", "engine/core/base/"))
             else:
                 forbidden = (kind == '"' and "/" in header and not R5_ALLOWED_QUOTED.match(header)) or (
                     R5_FORBIDDEN_ANGLED.match(header) and not R5_ALLOWED_QUOTED.match(header))

@@ -56,8 +56,8 @@ set_tests_properties(orchestration.units PROPERTIES LABELS "cpu" TIMEOUT 60
 # with the tests; a compile error is the failure.
 file(GLOB_RECURSE _orchestration_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/orchestration/include"
     CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/orchestration/include/*.hpp")
-file(GLOB_RECURSE _kernel_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/kernel/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/kernel/include/*.hpp")
+file(GLOB_RECURSE _kernel_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include"
+    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include/*.hpp")
 list(SORT _orchestration_headers)
 list(SORT _kernel_headers)
 set(_kernel_includes "")
@@ -76,8 +76,8 @@ endforeach()
 # orchestration and kernel header; and each orchestration header first, then
 # every world_time header (the order gyo_product_units generates). A header that
 # names Engine:: unqualified inside GYO::Engine::WorldTime fails here.
-file(GLOB_RECURSE _world_time_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/world_time/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/world_time/include/*.hpp")
+file(GLOB_RECURSE _world_time_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include"
+    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include/*.hpp")
 list(SORT _world_time_headers)
 set(_orchestration_includes "")
 foreach(_header IN LISTS _orchestration_headers)

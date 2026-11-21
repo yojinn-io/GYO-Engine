@@ -17,16 +17,16 @@ def write(root, relative, text):
 
 
 def clean_tree(root):
-    write(root, "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+    write(root, "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
           "// the yyjson half\n#include <yyjson.h>\nyyjson_doc* doc = nullptr;\n")
-    write(root, "engine/json/src/adapters/fast_float/DecimalToDouble.cpp",
+    write(root, "engine/modules/json/src/adapters/fast_float/DecimalToDouble.cpp",
           "// the fast_float half\n#include <fast_float/fast_float.h>\n#include \"DecimalToDouble.hpp\"\n"
           "auto r = fast_float::from_chars(a, b, v);\n")
-    write(root, "engine/json/src/adapters/yyjson/Uses.cpp", '#include "../fast_float/DecimalToDouble.hpp"\n')
+    write(root, "engine/modules/json/src/adapters/yyjson/Uses.cpp", '#include "../fast_float/DecimalToDouble.hpp"\n')
     write(root, "build/cmake/GyoBuild.cmake", 'set(GYO_APP_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")\n')
     write(root, "CMakeLists.txt", "project(x)\n")
-    write(root, "engine/json/CMakeLists.txt", "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)\n")
-    write(root, "engine/json/src/Writer.cpp", '// mentions yyjson.h, yyjson_write_number and fast_float:: in a comment\n'
+    write(root, "engine/modules/json/CMakeLists.txt", "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)\n")
+    write(root, "engine/modules/json/src/Writer.cpp", '// mentions yyjson.h, yyjson_write_number and fast_float:: in a comment\n'
                                                'const char* text = "#include <yyjson.h> yyjson_read";\n'
                                                'const char* raw = R"x(yyjson_doc fast_float::x)x";\n'
                                                "/*\n#include <yyjson.h>\nyyjson_val*\n*/\n")
@@ -56,25 +56,25 @@ class JsonGuard(unittest.TestCase):
         self.assertEqual(status, 0, output)
 
     def test_yyjson_outside_its_adapter(self):
-        write(self.root, "engine/kernel/src/Fingerprint.cpp", "#include \"yyjson.h\"\n")
+        write(self.root, "engine/ecs/kernel/src/Fingerprint.cpp", "#include \"yyjson.h\"\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
-        self.assertIn("engine/kernel/src/Fingerprint.cpp:1: J1-YYJSON", output)
+        self.assertIn("engine/ecs/kernel/src/Fingerprint.cpp:1: J1-YYJSON", output)
 
     def test_yyjson_in_the_other_adapter(self):
-        write(self.root, "engine/json/src/adapters/fast_float/Mixed.cpp", "#include <yyjson.h>\n")
+        write(self.root, "engine/modules/json/src/adapters/fast_float/Mixed.cpp", "#include <yyjson.h>\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("adapters/fast_float/Mixed.cpp:1: J1-YYJSON", output)
 
     def test_fast_float_outside_its_adapter(self):
-        write(self.root, "engine/json/src/Writer.cpp", "#include <fast_float/fast_float.h>\n")
+        write(self.root, "engine/modules/json/src/Writer.cpp", "#include <fast_float/fast_float.h>\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
-        self.assertIn("engine/json/src/Writer.cpp:1: J1-FASTFLOAT", output)
+        self.assertIn("engine/modules/json/src/Writer.cpp:1: J1-FASTFLOAT", output)
 
     def test_public_header_including_a_component(self):
-        write(self.root, "engine/json/include/engine/json/Document.hpp", "#pragma once\n#include <yyjson.h>\n")
+        write(self.root, "engine/modules/json/include/engine/json/Document.hpp", "#pragma once\n#include <yyjson.h>\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("Document.hpp:2: J1-YYJSON", output)
@@ -92,13 +92,13 @@ class JsonGuard(unittest.TestCase):
         self.assertIn("engine/other/CMakeLists.txt:1: J1-LINK: gyo_fast_float", output)
 
     def test_positive_control_yyjson(self):
-        (self.root / "engine/json/src/adapters/yyjson/YyjsonDocument.cpp").write_text("// nothing\n")
+        (self.root / "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp").write_text("// nothing\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("J1-YYJSON: nothing allowed found", output)
 
     def test_positive_control_fast_float(self):
-        (self.root / "engine/json/src/adapters/fast_float/DecimalToDouble.cpp").write_text("// nothing\n")
+        (self.root / "engine/modules/json/src/adapters/fast_float/DecimalToDouble.cpp").write_text("// nothing\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("J1-FASTFLOAT: nothing allowed found", output)
@@ -124,10 +124,10 @@ class JsonGuard(unittest.TestCase):
         self.assertIn("tests/common/kernel/CMakeLists.txt:1: J1-LINK", output)
 
     def test_link_in_a_cmake_module(self):
-        write(self.root, "engine/os/cmake/Helper.cmake", "target_link_libraries(x gyo_fast_float)\n")
+        write(self.root, "engine/core/os/cmake/Helper.cmake", "target_link_libraries(x gyo_fast_float)\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
-        self.assertIn("engine/os/cmake/Helper.cmake:1: J1-LINK: gyo_fast_float", output)
+        self.assertIn("engine/core/os/cmake/Helper.cmake:1: J1-LINK: gyo_fast_float", output)
 
     def test_source_dir_in_build_cmake(self):
         write(self.root, "build/cmake/GyoBuild.cmake", "include_directories(${yyjson_SOURCE_DIR}/src)\n")
@@ -142,7 +142,7 @@ class JsonGuard(unittest.TestCase):
         self.assertIn("CMakeLists.txt:1: J1-LINK: gyo_yyjson", output)
 
     def test_fast_float_in_the_yyjson_adapter(self):
-        write(self.root, "engine/json/src/adapters/yyjson/Mixed.cpp", "#include <fast_float/fast_float.h>\n")
+        write(self.root, "engine/modules/json/src/adapters/yyjson/Mixed.cpp", "#include <fast_float/fast_float.h>\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("adapters/yyjson/Mixed.cpp:1: J1-FASTFLOAT", output)
@@ -171,20 +171,20 @@ class JsonGuard(unittest.TestCase):
             self.assertIn(f"engine/s/File{suffix}:1: J1-YYJSON", output)
 
     def test_yyjson_name_outside_its_adapter(self):
-        write(self.root, "engine/json/src/Writer.cpp", '#include "adapters/yyjson/ParseWith.hpp"\n'
+        write(self.root, "engine/modules/json/src/Writer.cpp", '#include "adapters/yyjson/ParseWith.hpp"\n'
                                                    "void F(const yyjson_alc* a);\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
-        self.assertIn("engine/json/src/Writer.cpp:2: J1-YYJSON-NAME: yyjson_alc", output)
+        self.assertIn("engine/modules/json/src/Writer.cpp:2: J1-YYJSON-NAME: yyjson_alc", output)
 
     def test_fast_float_name_outside_its_adapter(self):
-        write(self.root, "engine/json/src/adapters/yyjson/Num.cpp", "double d = fast_float::x;\n")
+        write(self.root, "engine/modules/json/src/adapters/yyjson/Num.cpp", "double d = fast_float::x;\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("adapters/yyjson/Num.cpp:1: J1-FASTFLOAT-NAME", output)
 
     def test_positive_control_names(self):
-        write(self.root, "engine/json/src/adapters/fast_float/DecimalToDouble.cpp", "#include <fast_float/fast_float.h>\n")
+        write(self.root, "engine/modules/json/src/adapters/fast_float/DecimalToDouble.cpp", "#include <fast_float/fast_float.h>\n")
         status, output = run(self.root)
         self.assertEqual(status, 1)
         self.assertIn("J1-FASTFLOAT-NAME: nothing allowed found", output)

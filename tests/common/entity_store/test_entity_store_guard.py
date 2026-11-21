@@ -41,8 +41,8 @@ class GuardTree(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory()
         self.root = Path(self._directory.name)
-        self.write("engine/entity_store/include/engine/entity_store/Columns.hpp", CLEAN_HEADER)
-        self.write("engine/entity_store/CMakeLists.txt", "add_library(gyo_entity_store INTERFACE)\n")
+        self.write("engine/ecs/entity_store/include/engine/entity_store/Columns.hpp", CLEAN_HEADER)
+        self.write("engine/ecs/entity_store/CMakeLists.txt", "add_library(gyo_entity_store INTERFACE)\n")
 
     def tearDown(self):
         self._directory.cleanup()
@@ -53,7 +53,7 @@ class GuardTree(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
 
     def header(self, body):
-        self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+        self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
                    "#pragma once\nnamespace Engine::EntityStore {\n" + body + "\n}\n")
 
     def assertReported(self, needle):
@@ -69,8 +69,8 @@ class Rules(GuardTree):
         self.assertClean()
 
     def test_missing_directory_is_reported(self):
-        (self.root / "engine/entity_store/CMakeLists.txt").unlink()
-        (self.root / "engine/entity_store/include/engine/entity_store/Columns.hpp").unlink()
+        (self.root / "engine/ecs/entity_store/CMakeLists.txt").unlink()
+        (self.root / "engine/ecs/entity_store/include/engine/entity_store/Columns.hpp").unlink()
         self.assertReported("no source to scan")
 
     def test_role_words_are_reported_in_code_and_comments(self):
@@ -80,8 +80,8 @@ class Rules(GuardTree):
                 self.assertReported("Added.hpp:3: W1 ")
 
     def test_role_word_in_cmake_is_reported(self):
-        self.write("engine/entity_store/CMakeLists.txt", "target_link_libraries(x INTERFACE Gateway)\n")
-        self.assertReported("engine/entity_store/CMakeLists.txt:1: W1 Gateway")
+        self.write("engine/ecs/entity_store/CMakeLists.txt", "target_link_libraries(x INTERFACE Gateway)\n")
+        self.assertReported("engine/ecs/entity_store/CMakeLists.txt:1: W1 Gateway")
 
     def test_english_verb_match_is_allowed(self):
         self.header("// the keys must match exactly\n")
@@ -96,7 +96,7 @@ class Rules(GuardTree):
     def test_forbidden_headers_are_reported(self):
         for header in guard.W3_HEADERS:
             with self.subTest(header=header):
-                self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+                self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
                            "#pragma once\n#include <" + header + ">\n")
                 self.assertReported("Added.hpp:2: W3 <" + header + ">")
 
@@ -136,7 +136,7 @@ class Rules(GuardTree):
                 self.assertClean()
 
     def test_other_engine_include_is_reported(self):
-        self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+        self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
                    "#pragma once\n#include \"engine/math/linear/Vec3.hpp\"\n#include <engine/os/Files.hpp>\n")
         self.assertReported("Added.hpp:2: W5 engine/math/linear/Vec3.hpp")
         self.assertReported("Added.hpp:3: W5 engine/os/Files.hpp")
@@ -145,18 +145,18 @@ class Rules(GuardTree):
         for header in ("pthread.h", "windows.h", "unistd.h", "stdatomic.h", "threads.h", "stdint.h",
                        "sys/time.h", "boost/container/flat_map.hpp"):
             with self.subTest(header=header):
-                self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+                self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
                            "#pragma once\n#include <" + header + ">\n")
                 self.assertReported("Added.hpp:2: W5 " + header)
 
     def test_standard_headers_and_store_includes_pass(self):
-        self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+        self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
                    "#pragma once\n#include <cstdint>\n#include <span>\n#include <type_traits>\n"
                    "#include <engine/base/Assert.hpp>\n#include \"engine/entity_store/EntityId.hpp\"\n")
         self.assertClean()
 
     def test_quoted_standard_name_is_reported(self):
-        self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+        self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
                    "#pragma once\n#include \"vector\"\n")
         self.assertReported("Added.hpp:2: W5 vector")
 

@@ -32,14 +32,16 @@ function(gyo_world_logging_compile_fail_samples)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/ForwardSample.cpp")
     set(includes "")
     foreach(module IN ITEMS world_logging logging kernel orchestration base entity_store)
-        list(APPEND includes "${GYO_REPOSITORY_ROOT}/engine/${module}/include")
+        # Each Module's directory comes from its row in engine/config/modules.csv (dir).
+        get_property(module_dir GLOBAL PROPERTY GYO_UNITS_${module}_DIR)
+        list(APPEND includes "${GYO_REPOSITORY_ROOT}/engine/${module_dir}/include")
     endforeach()
     set(flags)
     if(MSVC)
         set(flags /Zc:preprocessor /permissive-)
     endif()
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}"
-        "${GYO_REPOSITORY_ROOT}/engine/world_logging/include/engine/world_logging/Forward.hpp")
+        "${GYO_REPOSITORY_ROOT}/engine/modules/world_logging/include/engine/world_logging/Forward.hpp")
     try_compile(accepted SOURCES "${source}"
         CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${includes}"
         COMPILE_DEFINITIONS -DGYO_WORLD_LOGGING_SAMPLE_ACCEPTED ${flags}

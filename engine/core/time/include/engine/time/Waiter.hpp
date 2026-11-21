@@ -1,28 +1,13 @@
 #pragma once
 
-#include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/time/MonotonicClock.hpp"
+#include "engine/time/TimeError.hpp"
 
 #include <cstdint>
 #include <memory>
 
 namespace Engine::Time {
-
-enum class TimeErrorCode : std::uint16_t {
-    // The operating system refused the wait primitive (kqueue, timer or event).
-    WaitPrimitiveUnavailable = 1,
-};
-
-[[nodiscard]] constexpr const char* ToString(const TimeErrorCode code) noexcept {
-    switch (code) {
-    case TimeErrorCode::WaitPrimitiveUnavailable: return "WaitPrimitiveUnavailable";
-    }
-    return "Unknown";
-}
-
-using TimeError = Base::Error<TimeErrorCode>;
-static_assert(Base::CodedError<TimeError>);
 
 // The platform mechanism behind a Waiter. A plain waitable timer means the
 // high-resolution one was not available on this Windows version.

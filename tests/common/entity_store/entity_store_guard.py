@@ -36,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-SCANNED = "engine/entity_store"
+SCANNED = "engine/ecs/entity_store"
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl"}  # CMakeLists.txt: W1 only
 
 W1 = re.compile(r"[Pp]layer|Gateway|\bMatch\b")

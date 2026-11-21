@@ -88,7 +88,7 @@ import re
 import sys
 from pathlib import Path
 
-SCANNED = "engine/kernel"
+SCANNED = "engine/ecs/kernel"
 REGISTRIES = ("engine/config/projects.csv", "engine/config/tools.csv")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc", ".ixx"}
 # CMakeLists.txt: K1 only. Any other file under engine/kernel/ is K0.
@@ -144,7 +144,7 @@ ALLOWED_STATICS = {
     # Access verification module: a thread_local pointer to the current System's context, read only while
     # verification is on; takes no part in ordering or results.
     "tlCurrent": r"^(?:static\s+|inline\s+)*thread_local\s+(?:const\s+)?[\w:<>]+\s*\*\s*tlCurrent\s*$",
-    # TypeKey<T>'s static inline char (engine/kernel/include/engine/kernel/TypeKey.hpp, Detail::TypeKeyOf<T>):
+    # TypeKey<T>'s static inline char (engine/ecs/kernel/include/engine/kernel/TypeKey.hpp, Detail::TypeKeyOf<T>):
     # only its address is used, as a lookup key (W-10 second sentence). Named by the registry-schedule batch.
     "typeKeyAnchor": r"^static\s+inline\s+char\s+typeKeyAnchor\s*$",
 }

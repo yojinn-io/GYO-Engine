@@ -6,7 +6,7 @@
 # programs that FetchContent adds (protoc, for one) live outside those roots
 # and keep their own manifests. tests/common/os checks the result.
 include_guard(GLOBAL)
-include("${CMAKE_CURRENT_LIST_DIR}/../../engine/os/cmake/GyoProcessCodePage.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../engine/core/os/cmake/GyoProcessCodePage.cmake")
 
 # Records a directory the build layer adds, by its binary directory. A
 # standalone tool wrapper reuses the tool's source directory, so looking the

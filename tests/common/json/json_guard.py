@@ -3,16 +3,16 @@ docs/architecture/target/v2/json-module-declaration.zh-Hant.md and target/v2/jso
 
 The engine's two external JSON components appear only in their own adapter directory:
 
-  J1-YYJSON           an #include of yyjson.h (any path), outside engine/json/src/adapters/yyjson/;
+  J1-YYJSON           an #include of yyjson.h (any path), outside engine/modules/json/src/adapters/yyjson/;
   J1-FASTFLOAT        an #include of a fast_float header (fast_float/<name>.h or fast_float.h, any path;
                       the adapter's own headers are .hpp),
-                      outside engine/json/src/adapters/fast_float/;
-  J1-YYJSON-NAME      a yyjson_ name in code, outside engine/json/src/adapters/yyjson/ (a header of
+                      outside engine/modules/json/src/adapters/fast_float/;
+  J1-YYJSON-NAME      a yyjson_ name in code, outside engine/modules/json/src/adapters/yyjson/ (a header of
                       the adapter included from elsewhere would hand out its types this way);
-  J1-FASTFLOAT-NAME   fast_float:: in code, outside engine/json/src/adapters/fast_float/;
+  J1-FASTFLOAT-NAME   fast_float:: in code, outside engine/modules/json/src/adapters/fast_float/;
   J1-LINK             a component target (gyo_yyjson, gyo_fast_float) or a component's source
                       directory variable (yyjson_SOURCE_DIR, fast_float_SOURCE_DIR) in CMake code,
-                      outside engine/json/CMakeLists.txt.
+                      outside engine/modules/json/CMakeLists.txt.
 
 Scanned: C/C++ files under engine/ and tests/; CMake code (CMakeLists.txt and *.cmake) under
 engine/, tests/ and build/cmake/, and the repository's CMakeLists.txt. tests/common/json/ is the
@@ -39,8 +39,8 @@ SOURCE_ROOTS = ("engine", "tests")
 CMAKE_ROOTS = ("engine", "tests", "build/cmake")
 CMAKE_FILES = ("CMakeLists.txt",)  # at the repository root
 ADAPTER_TESTS = "tests/common/json/"
-YYJSON_HOME = "engine/json/src/adapters/yyjson/"
-FASTFLOAT_HOME = "engine/json/src/adapters/fast_float/"
+YYJSON_HOME = "engine/modules/json/src/adapters/yyjson/"
+FASTFLOAT_HOME = "engine/modules/json/src/adapters/fast_float/"
 INCLUDE_RULES = (
     ("J1-YYJSON", re.compile(r"^[ \t]*#[ \t]*include[ \t]*[<\"](?:[^>\"\n]*/)?yyjson\.h[>\"]", re.MULTILINE),
      YYJSON_HOME),
@@ -54,7 +54,7 @@ NAME_RULES = (
     ("J1-FASTFLOAT-NAME", re.compile(r"\bfast_float::"), FASTFLOAT_HOME),
 )
 LINK = re.compile(r"\bgyo_(?:yyjson|fast_float)\b|\b(?:yyjson|fast_float)_SOURCE_DIR\b")
-LINK_ALLOWED = ("engine/json/CMakeLists.txt",)
+LINK_ALLOWED = ("engine/modules/json/CMakeLists.txt",)
 
 
 def blank(match):

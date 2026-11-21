@@ -38,9 +38,9 @@ class GuardTree(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory()
         self.root = Path(self._directory.name)
-        self.write("engine/kernel/include/engine/kernel/Clean.hpp", CLEAN_HEADER)
-        self.write("engine/kernel/src/Clean.cpp", CLEAN_SOURCE)
-        self.write("engine/time/include/engine/time/Clock.hpp", "namespace Engine::Time {\nstruct Clock {};\n}\n")
+        self.write("engine/ecs/kernel/include/engine/kernel/Clean.hpp", CLEAN_HEADER)
+        self.write("engine/ecs/kernel/src/Clean.cpp", CLEAN_SOURCE)
+        self.write("engine/core/time/include/engine/time/Clock.hpp", "namespace Engine::Time {\nstruct Clock {};\n}\n")
         self.write("engine/orchestration/include/engine/orchestration/Clean.hpp",
                    "namespace GYO::Engine::Orchestration {\nstruct Unit {};\n}\n")
 
@@ -53,7 +53,7 @@ class GuardTree(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
 
     def kernel_header(self, text):
-        self.write("engine/kernel/include/engine/kernel/Added.hpp", text)
+        self.write("engine/ecs/kernel/include/engine/kernel/Added.hpp", text)
 
     def assertReported(self, rule, needle):
         problems = guard.check(self.root)
@@ -105,8 +105,8 @@ class GuardTree(unittest.TestCase):
     # N1 reverse -------------------------------------------------------------------------------------------------
 
     def test_n1_kernel_namespace_outside_kernel_is_reported(self):
-        self.write("engine/time/src/Leak.cpp", "namespace GYO::Kernel {\nint leak = 0;\n}\n")
-        self.assertReported("N1", "engine/time/src/Leak.cpp:1: N1 namespace GYO::Kernel opened outside")
+        self.write("engine/core/time/src/Leak.cpp", "namespace GYO::Kernel {\nint leak = 0;\n}\n")
+        self.assertReported("N1", "engine/core/time/src/Leak.cpp:1: N1 namespace GYO::Kernel opened outside")
 
     def test_n1_nested_kernel_namespace_outside_kernel_is_reported(self):
         self.write("tests/common/time/Leak.cpp", "namespace GYO {\nnamespace Kernel {\n}\n}\n")
@@ -128,19 +128,19 @@ class GuardTree(unittest.TestCase):
         self.assertClean()
 
     def test_missing_mapped_root_is_reported(self):
-        for path in sorted((self.root / "engine/kernel").rglob("*"), reverse=True):
+        for path in sorted((self.root / "engine/ecs/kernel").rglob("*"), reverse=True):
             path.unlink() if path.is_file() else path.rmdir()
-        (self.root / "engine/kernel").rmdir()
+        (self.root / "engine/ecs/kernel").rmdir()
         self.assertEqual(guard.check(self.root),
-                         ["engine/kernel: no source to scan (moved or renamed? update this guard)"])
+                         ["engine/ecs/kernel: no source to scan (moved or renamed? update this guard)"])
 
     def test_n1_second_namespace_in_a_file_is_checked(self):
         self.kernel_header("namespace GYO::Kernel {\n}\nnamespace Engine::Other {\n}\n")
         self.assertReported("N1", "namespace Engine::Other (expected GYO::Kernel)")
 
     def test_n1_second_namespace_outside_kernel_is_checked(self):
-        self.write("engine/time/src/Leak.cpp", "namespace Engine::Time {\n}\nnamespace GYO::Kernel {\n}\n")
-        self.assertReported("N1", "engine/time/src/Leak.cpp:3: N1 namespace GYO::Kernel opened outside")
+        self.write("engine/core/time/src/Leak.cpp", "namespace Engine::Time {\n}\nnamespace GYO::Kernel {\n}\n")
+        self.assertReported("N1", "engine/core/time/src/Leak.cpp:3: N1 namespace GYO::Kernel opened outside")
 
     def test_n1_namespace_inside_a_linkage_block_is_checked(self):
         self.kernel_header('extern "C++" {\nnamespace Evil {\n}\n}\n')
@@ -177,9 +177,9 @@ class GuardTree(unittest.TestCase):
         for suffix in (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc",
                        ".ixx", ".m", ".mm"):
             with self.subTest(suffix=suffix):
-                self.write(f"engine/time/src/Leak{suffix}", "namespace GYO::Kernel {\n}\n")
-                self.assertReported("N1", f"engine/time/src/Leak{suffix}:1: N1 namespace GYO::Kernel opened outside")
-                (self.root / f"engine/time/src/Leak{suffix}").unlink()
+                self.write(f"engine/core/time/src/Leak{suffix}", "namespace GYO::Kernel {\n}\n")
+                self.assertReported("N1", f"engine/core/time/src/Leak{suffix}:1: N1 namespace GYO::Kernel opened outside")
+                (self.root / f"engine/core/time/src/Leak{suffix}").unlink()
 
     # N3 ---------------------------------------------------------------------------------------------------------
     def test_n3_every_declaration_keyword_is_reported(self):

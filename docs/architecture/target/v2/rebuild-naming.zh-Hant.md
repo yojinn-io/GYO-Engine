@@ -43,13 +43,13 @@
 
 | # | 規則 | 例子 | 來源 |
 |---|---|---|---|
-| N11 | 一個模組一個目錄：`engine/<模組>/`，底下 `include/engine/<模組>/` 與 `src/` | `engine/time/include/engine/time/Waiter.hpp` | 事實 |
+| N11 | 一個模組一個目錄：`engine/<模組>/`，底下 `include/engine/<模組>/` 與 `src/` | `engine/core/time/include/engine/time/Waiter.hpp` | 事實 |
 | N12 | 含入路徑從 `engine/` 起算 | `#include "engine/time/Waiter.hpp"` | 事實 |
 | N13 | namespace 是 `Engine::<模組>`；模組內部的東西放 `Detail` | `Engine::Time`、`Engine::Threads` | 事實 |
 | N14 | 一個目錄一個 CMake target：`gyo_<模組>`，別名 `GYO::<模組>` | `gyo_time`、`GYO::Time` | 事實 |
 | N15 | 型別、函式用大寫開頭的駝峰；成員變數小寫開頭、結尾加底線；常數 `k` 開頭；巨集 `GYO_` 開頭全大寫 | `RoleThread`、`StopRequested()`、`state_`、`kSampleRate`、`GYO_ASSERT` | 事實 |
 | N16 | 檔名等於它主要的型別名 | `RoleThread.hpp`、`RoleThread.cpp` | 事實 |
-| N17 | 歸屬＝namespace 與目錄一一對應。目錄、namespace、target 三者的名字要對得上。根的寫法：通用機制 `GYO::Kernel::`；Engine 的 Module `GYO::Engine::<Module>::`；Plugin `GYO::Plugins::<plugin>::`；產品 `<產品>::` | `engine/kernel`↔`GYO::Kernel` | 你的決定（11 月 11 日命名規範第 1 條，2026-11-14 轉入）。原文寫「能力」的地方，照今天的用詞寫 Module |
+| N17 | 歸屬＝namespace 與目錄一一對應。目錄、namespace、target 三者的名字要對得上。根的寫法：通用機制 `GYO::Kernel::`；Engine 的 Module `GYO::Engine::<Module>::`；Plugin `GYO::Plugins::<plugin>::`；產品 `<產品>::` | `engine/ecs/kernel`↔`GYO::Kernel` | 你的決定（11 月 11 日命名規範第 1 條，2026-11-14 轉入）。原文寫「能力」的地方，照今天的用詞寫 Module |
 | N25 | **錯誤型別的字尾帶著級別**（草稿，`v8-arch-gyo2-error-levels` D11；使用者 2026-11-20 定，最終文字在合併前核准）：兩種都回給上層、由上層決定怎麼辦，字尾只說多嚴重：`…Error`＝E1（它來自的 World 壞了，持有它的 Product 不能再跑）；`…Failure`＝E2（這次請求沒做成，其他都健康）。E0 沒有型別（`GYO_ASSERT`），E3 是紀錄、用紀錄自己的名字。GYO 的 `…Error` 不是 Java 的 `Error`（那對到 GYO 的 E0），也不是 Go 的 `XxxError`（那多半是 GYO 的 `…Failure`）。`Result::error()`、`Base::Err`、`…Report` 照舊 | `WorldError`、`KernelError`（E1）；`OrchestrationFailure`、`KernelFailure`、`JsonFailure`（E2） | 使用者（`v8-arch-gyo2-error-type-suffix`）；級別的定義在 `target/error-handling.md`「Error levels」；既有型別的改名是後續 |
 
 已知的不一致，帶過來的程式不改，先記著：
@@ -87,7 +87,7 @@
 
 已訂（使用者 2026-11-14：「原文轉。讓他訂」，由這個會話訂）：
 - **N17～N24 定案**，寫法照第 3、4 節。
-- **通用機制的程式與目錄叫 Kernel**：`engine/kernel`、`GYO::Kernel`，和 N17 與程式的現況一致。文件裡解釋它是什麼時才寫「通用機制」。同詞異義表的 Kernel 列已跟著改。
+- **通用機制的程式與目錄叫 Kernel**：`engine/ecs/kernel`、`GYO::Kernel`，和 N17 與程式的現況一致。文件裡解釋它是什麼時才寫「通用機制」。同詞異義表的 Kernel 列已跟著改。
 - **帶過來的模組的 namespace 根，統一成 N17 的 `GYO::Engine::<Module>`，但不是現在改**：
   - 現在只要求新寫的 Module 照 N17。
   - 帶過來的九個模組（base、math、os、time、threads、io、audio、entity_store，以及 `Engine::IO` 的大小寫）排成一批機械式的改名，在 System 契約確認之後、開始移植任何產品之前做。理由：現在的優先是把機制定下來；等產品搬進來才改，每個產品都要跟著再改一次。

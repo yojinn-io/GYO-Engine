@@ -6,13 +6,13 @@ compiler sees every one of them: each is a symbol in a writable data section of 
 those symbols with nm and allows only:
 
   KERNEL_ALLOWED   the kernel's two (spec A.6, J-9): TypeKey's anchor (Detail::TypeKeyOf<T>::typeKeyAnchor,
-                   engine/kernel/include/engine/kernel/TypeKey.hpp) and tlCurrent (the access verification's
+                   engine/ecs/kernel/include/engine/kernel/TypeKey.hpp) and tlCurrent (the access verification's
                    thread_local, which arrives with world-exec);
   FOREIGN          symbols the kernel's object files carry because they include another module's header that
                    defines an inline variable. They belong to that module, not to the kernel: GYO::Base's
-                   assertion handler and its thread_local reentry flag (engine/base/include/engine/base/Assert.hpp;
+                   assertion handler and its thread_local reentry flag (engine/core/base/include/engine/base/Assert.hpp;
                    spec B.5 names both), and the thread serials' issuer and the thread's serial
-                   (engine/base/include/engine/base/IdIssuer.hpp; DI-KS 14's thread mark, v8-arch-gyo2-kernel-subtract-structure
+                   (engine/core/base/include/engine/base/IdIssuer.hpp; DI-KS 14's thread mark, v8-arch-gyo2-kernel-subtract-structure
                    S10). They are reported on their own line, never silently;
   TOOLCHAIN        names the toolchain emits that are not variables (GCC's DW.ref.__gxx_personality_v0; the arm64
                    assembler's section-start labels ltmpN), reported the same way.

@@ -8,7 +8,7 @@
    "guards": [
     "json J-3"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "text.size(), YYJSON_READ_NUMBER_AS_RAW,",
    "replace": "text.size(), YYJSON_READ_NOFLAG,",
    "target": "gyo_json_tests",
@@ -21,7 +21,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (seen[j] == name) return RepeatedKey(key);",
    "replace": "if (false) return RepeatedKey(key);",
    "target": "gyo_json_tests",
@@ -34,7 +34,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (!seen.insert(StringOf(key)).second) return RepeatedKey(key);",
    "replace": "seen.insert(StringOf(key));",
    "target": "gyo_json_tests",
@@ -48,7 +48,7 @@
     "json J-2",
     "json J-9"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "            stack_.push_back({unsafe_yyjson_get_first(value), yyjson_obj_size(value), 0, true, nullptr, 0});\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -61,7 +61,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/TextPosition.cpp",
+   "file": "engine/modules/json/src/TextPosition.cpp",
    "find": "            pointer += \"~0\";",
    "replace": "            pointer += '~';",
    "target": "gyo_json_tests",
@@ -74,7 +74,7 @@
    "guards": [
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/TextPosition.cpp",
+   "file": "engine/modules/json/src/TextPosition.cpp",
    "find": "            lineStart = i + 1;",
    "replace": "            lineStart = i;",
    "target": "gyo_json_tests",
@@ -88,7 +88,7 @@
     "json-module-declaration 5.5",
     "json J-9"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (error.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION) return Err(OutOfMemoryError());",
    "replace": "",
    "target": "gyo_json_adapter_tests",
@@ -100,7 +100,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "std::string(\"expected \") + ToString(expected) + \", found \" + ToString(found)",
    "replace": "std::string(\"expected \") + ToString(found) + \", found \" + ToString(expected)",
    "target": "gyo_json_tests",
@@ -113,7 +113,7 @@
    "guards": [
     "json J-9"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "element_ = remaining_ == 0 ? nullptr : Wrap(unsafe_yyjson_get_next(Raw(element_)));",
    "replace": "element_ = remaining_ == 0 ? nullptr : Wrap(Raw(element_) + 1);",
    "target": "gyo_json_tests",
@@ -126,7 +126,7 @@
    "guards": [
     "json J-9"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "key_ = remaining_ == 0 ? nullptr : Wrap(unsafe_yyjson_get_next(Raw(key_) + 1));",
    "replace": "key_ = remaining_ == 0 ? nullptr : Wrap(Raw(key_) + 2);",
    "target": "gyo_json_tests",
@@ -139,7 +139,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "            if (Detail::DecimalToDouble(RawOf(value), converted) != Detail::DecimalRead::Ok) {",
    "replace": "            if (false && Detail::DecimalToDouble(RawOf(value), converted) != Detail::DecimalRead::Ok) {",
    "target": "gyo_json_tests",
@@ -152,7 +152,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/adapters/fast_float/DecimalToDouble.cpp",
+   "file": "engine/modules/json/src/adapters/fast_float/DecimalToDouble.cpp",
    "find": "    if (std::isinf(value)) return DecimalRead::OutOfRange;\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -165,7 +165,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/adapters/fast_float/DecimalToDouble.cpp",
+   "file": "engine/modules/json/src/adapters/fast_float/DecimalToDouble.cpp",
    "find": "    if (value == 0.0 && HasNonZeroSignificand(text)) return DecimalRead::OutOfRange;\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -178,7 +178,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/NumberText.cpp",
+   "file": "engine/modules/json/src/NumberText.cpp",
    "find": "        if (c == 'e' || c == 'E') return false;\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -191,7 +191,7 @@
    "guards": [
     "json J-3"
    ],
-   "file": "engine/json/src/NumberText.cpp",
+   "file": "engine/modules/json/src/NumberText.cpp",
    "find": "return text.find_first_of(\".eE\") == std::string_view::npos;",
    "replace": "return text.find_first_of(\".e\") == std::string_view::npos;",
    "target": "gyo_json_tests",
@@ -204,7 +204,7 @@
    "guards": [
     "json J-3"
    ],
-   "file": "engine/json/src/NumberText.cpp",
+   "file": "engine/modules/json/src/NumberText.cpp",
    "find": "return text.find_first_of(\".eE\") == std::string_view::npos;",
    "replace": "return text.find_first_of(\"eE\") == std::string_view::npos;",
    "target": "gyo_json_tests",
@@ -217,7 +217,7 @@
    "guards": [
     "json J-3"
    ],
-   "file": "engine/json/src/NumberText.cpp",
+   "file": "engine/modules/json/src/NumberText.cpp",
    "find": "        if (text == \"-0\") {",
    "replace": "        if (false) {",
    "target": "gyo_json_tests",
@@ -230,7 +230,7 @@
    "guards": [
     "json J-3"
    ],
-   "file": "engine/json/src/NumberText.cpp",
+   "file": "engine/modules/json/src/NumberText.cpp",
    "find": "        return IntegerRead::OutOfRange;\n    }\n    return ReadInteger(text, out);",
    "replace": "        out = 0;\n        return IntegerRead::Ok;\n    }\n    return ReadInteger(text, out);",
    "target": "gyo_json_tests",
@@ -243,7 +243,7 @@
    "guards": [
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "                                       Located(yyjson_get_raw(value), PointerToCurrent()));",
    "replace": "                                       Located(yyjson_get_raw(value), std::string()));",
    "target": "gyo_json_tests",
@@ -256,7 +256,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    if (!frame.first) out_ += ',';\n    frame.first = false;\n}",
    "replace": "    frame.first = false;\n}",
    "target": "gyo_json_tests",
@@ -269,7 +269,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        if (!frame.first) out_ += ',';\n        frame.first = false;\n        if (!AppendString(out_, key)) {",
    "replace": "        frame.first = false;\n        if (!AppendString(out_, key)) {",
    "target": "gyo_json_tests",
@@ -282,7 +282,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        case '\"': shortEscape = \"\\\\\\\"\"; break;\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -295,7 +295,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if (shortEscape != nullptr || c < 0x20) {",
    "replace": "if (shortEscape != nullptr) {",
    "target": "gyo_json_tests",
@@ -308,7 +308,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if (lead >= 0xC2 && lead <= 0xDF)",
    "replace": "if (lead >= 0xC0 && lead <= 0xDF)",
    "target": "gyo_json_tests",
@@ -321,7 +321,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if (lead == 0xED) return continuation(i + 1, 0x80, 0x9F)",
    "replace": "if (lead == 0xED) return continuation(i + 1, 0x80, 0xBF)",
    "target": "gyo_json_tests",
@@ -334,7 +334,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        return continuation(i + 1, 0x80, 0x8F) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "replace": "        return continuation(i + 1, 0x80, 0xBF) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "target": "gyo_json_tests",
@@ -347,7 +347,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        if (!AppendString(out_, key)) {\n            Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n            return;\n        }",
    "replace": "        static_cast<void>(AppendString(out_, key));",
    "target": "gyo_json_tests",
@@ -361,7 +361,7 @@
     "json-module-declaration 第 3 題",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "            Fail(JsonErrorCode::NotRepresentable, \"non-finite number\");\n            return;",
    "replace": "            out_ += \"null\";\n            return;",
    "target": "gyo_json_tests",
@@ -374,7 +374,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        out_.resize(startLength_);\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -387,7 +387,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    if (error_) {\n        out_.resize",
    "replace": "    if (false && error_) {\n        out_.resize",
    "target": "gyo_json_tests",
@@ -400,7 +400,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/include/engine/json/Writer.hpp",
+   "file": "engine/modules/json/include/engine/json/Writer.hpp",
    "find": "static constexpr std::size_t kInlineDepth = 32;",
    "replace": "static constexpr std::size_t kInlineDepth = 31;",
    "target": "gyo_json_tests",
@@ -414,7 +414,7 @@
     "json J-5",
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        if (!AppendString(out_, text)) Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n    } catch (const std::bad_alloc&) {\n        Fail(JsonErrorCode::OutOfMemory, \"out of memory\");\n    }",
    "replace": "        if (!AppendString(out_, text)) Fail(JsonErrorCode::NotRepresentable, \"invalid UTF-8\");\n    } catch (const std::logic_error&) {\n    }",
    "target": "gyo_json_tests",
@@ -427,7 +427,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        GYO_ASSERT(frame.awaitingValue && \"a value in an object needs a Key first\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -440,7 +440,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(frame.container == Container::Object && \"a Key outside an object\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -453,7 +453,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(frame.container == container && \"the end does not match the open container\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -466,7 +466,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(!frame.awaitingValue && \"a Key without its value\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -479,7 +479,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        GYO_ASSERT(!topWritten_ && \"a second top-level value\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -492,7 +492,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(depth_ == 0 && lost_ == 0 && \"Finish with an open container\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -505,7 +505,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(topWritten_ && \"Finish with nothing written\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -518,7 +518,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(!finished_ && \"Finish called twice\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -531,7 +531,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        case Kind::Number: writer.NumberText(item.AsNumberText().value()); break;",
    "replace": "        case Kind::Number: writer.Double(item.AsDouble().value()); break;",
    "target": "gyo_json_tests",
@@ -705,7 +705,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    GYO_ASSERT(!frame.awaitingValue && \"two Keys in a row\");\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -718,7 +718,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    if (!error_) error_ = JsonError::Make(",
    "replace": "    error_ = JsonError::Make(",
    "target": "gyo_json_tests",
@@ -731,7 +731,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    ++values_;\n    frame.awaitingValue = true;",
    "replace": "    frame.awaitingValue = true;",
    "target": "gyo_json_tests",
@@ -745,7 +745,7 @@
     "json-module-declaration 第 3 題",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "            Fail(JsonErrorCode::NotRepresentable, \"non-finite number\");",
    "replace": "            Fail(JsonErrorCode::OutOfMemory, \"non-finite number\");",
    "target": "gyo_json_tests",
@@ -758,7 +758,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    if (depth_ > kInlineDepth) deeper_.pop_back();\n    --depth_;",
    "replace": "    --depth_;",
    "target": "gyo_json_tests",
@@ -771,7 +771,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if (shortEscape != nullptr || c < 0x20) {",
    "replace": "if (shortEscape != nullptr || c <= 0x20) {",
    "target": "gyo_json_tests",
@@ -784,7 +784,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "case Kind::Bool: writer.Bool(item.AsBool().value()); break;",
    "replace": "case Kind::Bool: writer.Bool(true); break;",
    "target": "gyo_json_tests",
@@ -797,7 +797,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    return yyjson_get_bool(value);",
    "replace": "    return true;",
    "target": "gyo_json_tests",
@@ -810,7 +810,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "            ++lost_;  // the level exists for the caller; its state is gone\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -823,7 +823,7 @@
    "guards": [
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    } catch (const std::bad_alloc&) {\n        writer.lost_ = lostBefore;",
    "replace": "    } catch (const std::logic_error&) {\n        writer.lost_ = lostBefore;",
    "target": "gyo_json_tests",
@@ -836,7 +836,7 @@
    "guards": [
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    } catch (const std::bad_alloc&) {\n        return JsonError::Make(JsonErrorCode::OutOfMemory, \"out of memory\");",
    "replace": "    } catch (const std::logic_error&) {\n        return JsonError::Make(JsonErrorCode::OutOfMemory, \"out of memory\");",
    "target": "gyo_json_tests",
@@ -850,7 +850,7 @@
     "json-module-declaration 5.5",
     "json J-9"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    } catch (const std::bad_alloc&) {\n        return Err(OutOfMemoryError());",
    "replace": "    } catch (const std::logic_error&) {\n        return Err(OutOfMemoryError());",
    "target": "gyo_json_tests",
@@ -863,7 +863,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    GYO_ASSERT(tree_ != nullptr);\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -876,7 +876,7 @@
    "guards": [
     "json J-8"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    if (this != &other) {",
    "replace": "    if (false) {",
    "target": "gyo_json_tests",
@@ -889,7 +889,7 @@
    "guards": [
     "json J-8"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "text.size(), YYJSON_READ_NUMBER_AS_RAW,",
    "replace": "text.size(), YYJSON_READ_NUMBER_AS_RAW | YYJSON_READ_INSITU,",
    "target": "gyo_json_tests",
@@ -902,7 +902,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "text.size(), YYJSON_READ_NUMBER_AS_RAW,",
    "replace": "text.size(), YYJSON_READ_NUMBER_AS_RAW | YYJSON_READ_STOP_WHEN_DONE,",
    "target": "gyo_json_tests",
@@ -915,7 +915,7 @@
    "guards": [
     "json J-2"
    ],
-   "file": "engine/json/src/NumberText.cpp",
+   "file": "engine/modules/json/src/NumberText.cpp",
    "find": "        if (c == 'e' || c == 'E') return false;",
    "replace": "        if (c == 'e') return false;",
    "target": "gyo_json_tests",
@@ -928,7 +928,7 @@
    "guards": [
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/TextPosition.cpp",
+   "file": "engine/modules/json/src/TextPosition.cpp",
    "find": "    for (std::size_t i = 0; i < end; ++i) {\n        if (text[i] == '\\n') {",
    "replace": "    for (std::size_t i = 0; i < end; ++i) {\n        if ((static_cast<unsigned char>(text[i]) & 0xC0) == 0x80) {\n            ++lineStart;\n            continue;\n        }\n        if (text[i] == '\\n') {",
    "target": "gyo_json_tests",
@@ -941,7 +941,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (!yyjson_is_bool(value)) return Err(WrongKindError(Kind::Bool, KindOf(value)));",
    "replace": "if (!yyjson_is_bool(value)) return Err(WrongKindError(Kind::Null, KindOf(value)));",
    "target": "gyo_json_tests",
@@ -954,7 +954,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "JsonResult<std::string_view> Value::AsNumberText() const {\n    yyjson_val* value = Raw(node_);\n    if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::Number,",
    "replace": "JsonResult<std::string_view> Value::AsNumberText() const {\n    yyjson_val* value = Raw(node_);\n    if (!yyjson_is_raw(value)) return Err(WrongKindError(Kind::String,",
    "target": "gyo_json_tests",
@@ -967,7 +967,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "if (!yyjson_is_obj(value)) return Err(WrongKindError(Kind::Object, KindOf(value)));",
    "replace": "if (!yyjson_is_obj(value)) return Err(WrongKindError(Kind::Array, KindOf(value)));",
    "target": "gyo_json_tests",
@@ -980,7 +980,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    GYO_ASSERT(remaining_ != 0);\n    return Value(element_);",
    "replace": "    return Value(element_);",
    "target": "gyo_json_tests",
@@ -993,7 +993,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    GYO_ASSERT(remaining_ != 0);\n    yyjson_val* key = Raw(key_);",
    "replace": "    yyjson_val* key = Raw(key_);",
    "target": "gyo_json_tests",
@@ -1007,7 +1007,7 @@
     "json J-2",
     "json J-9"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "            stack_.push_back({unsafe_yyjson_get_first(value), yyjson_arr_size(value), 0, false, nullptr, 0});\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -1020,7 +1020,7 @@
    "guards": [
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/TextPosition.cpp",
+   "file": "engine/modules/json/src/TextPosition.cpp",
    "find": "            pointer += \"~1\";",
    "replace": "            pointer += '/';",
    "target": "gyo_json_tests",
@@ -1033,7 +1033,7 @@
    "guards": [
     "json J-3"
    ],
-   "file": "engine/json/src/NumberText.cpp",
+   "file": "engine/modules/json/src/NumberText.cpp",
    "find": "if (result.ec == std::errc::result_out_of_range) return IntegerRead::OutOfRange;",
    "replace": "if (result.ec == std::errc::result_out_of_range) return IntegerRead::Ok;",
    "target": "gyo_json_tests",
@@ -1046,7 +1046,7 @@
    "guards": [
     "json-module-declaration 5.2"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "    if (found == nullptr) return std::nullopt;\n",
    "replace": "",
    "target": "gyo_json_tests",
@@ -1059,7 +1059,7 @@
    "guards": [
     "json-module-declaration 5.5"
    ],
-   "file": "engine/json/src/adapters/yyjson/YyjsonDocument.cpp",
+   "file": "engine/modules/json/src/adapters/yyjson/YyjsonDocument.cpp",
    "find": "                                       Located(yyjson_get_raw(value), PointerToCurrent()));",
    "replace": "                                       Located(base_, PointerToCurrent()));",
    "target": "gyo_json_tests",
@@ -1073,7 +1073,7 @@
     "json J-1",
     "json J-6"
    ],
-   "file": "engine/json/CMakeLists.txt",
+   "file": "engine/modules/json/CMakeLists.txt",
    "find": "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)",
    "replace": "target_link_libraries(gyo_json PUBLIC gyo_yyjson gyo_fast_float)",
    "target": "gyo_json_tests",
@@ -1086,7 +1086,7 @@
    "guards": [
     "json J-6"
    ],
-   "file": "engine/json/CMakeLists.txt",
+   "file": "engine/modules/json/CMakeLists.txt",
    "find": "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)",
    "replace": "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float m)",
    "target": "gyo_json_tests",
@@ -1099,7 +1099,7 @@
    "guards": [
     "json J-4"
    ],
-   "file": "engine/json/include/engine/json/Document.hpp",
+   "file": "engine/modules/json/include/engine/json/Document.hpp",
    "find": "#include \"engine/json/JsonError.hpp\"\n\n// Reading JSON",
    "replace": "#include \"engine/json/JsonError.hpp\"\n#include <yyjson.h>\n\n// Reading JSON",
    "target": "gyo_json_tests",
@@ -1297,7 +1297,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        Push({container, true, false});\n        out_ += open;\n    } catch (const std::bad_alloc&) {",
    "replace": "        Push({container, true, false});\n        out_ += open;\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1311,7 +1311,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "    try {\n        out_ += close;\n    } catch (const std::bad_alloc&) {",
    "replace": "    try {\n        out_ += close;\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1325,7 +1325,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        out_ += ':';\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_ += ':';\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1339,7 +1339,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "void Writer::Int(const std::int64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::bad_alloc&) {",
    "replace": "void Writer::Int(const std::int64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1353,7 +1353,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "void Writer::Uint(const std::uint64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::bad_alloc&) {",
    "replace": "void Writer::Uint(const std::uint64_t value) {\n    try {\n        BeforeValue();\n        char buffer[24];\n        const auto result = std::to_chars(buffer, buffer + sizeof buffer, value);\n        out_.append(buffer, result.ptr);\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1367,7 +1367,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        out_.append(buffer, Detail::WriteDouble(value, buffer));\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_.append(buffer, Detail::WriteDouble(value, buffer));\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1381,7 +1381,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        out_ += value ? \"true\" : \"false\";\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_ += value ? \"true\" : \"false\";\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1395,7 +1395,7 @@
     "json-module-declaration 5.5",
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        out_ += \"null\";\n    } catch (const std::bad_alloc&) {",
    "replace": "        out_ += \"null\";\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
@@ -1408,7 +1408,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "return continuation(i + 1, 0x80, 0xBF) ? 2 : 0;",
    "replace": "return continuation(i + 1, 0x00, 0xFF) ? 2 : 0;",
    "target": "gyo_json_tests",
@@ -1421,7 +1421,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if (lead >= 0xF1 && lead <= 0xF3) {",
    "replace": "if (false) {",
    "target": "gyo_json_tests",
@@ -1434,7 +1434,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if ((lead >= 0xE1 && lead <= 0xEC) || lead == 0xEE || lead == 0xEF) {",
    "replace": "if (lead == 0xEE || lead == 0xEF) {",
    "target": "gyo_json_tests",
@@ -1447,7 +1447,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        return continuation(i + 1, 0x80, 0xBF) && continuation(i + 2, 0x80, 0xBF) ? 3 : 0;\n    }",
    "replace": "        return continuation(i + 1, 0x00, 0xFF) && continuation(i + 2, 0x00, 0xFF) ? 3 : 0;\n    }",
    "target": "gyo_json_tests",
@@ -1460,7 +1460,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "continuation(i + 1, 0x90, 0xBF) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "replace": "continuation(i + 1, 0x90, 0xBF) && continuation(i + 2, 0x00, 0xFF) && continuation(i + 3, 0x00, 0xFF)",
    "target": "gyo_json_tests",
@@ -1473,7 +1473,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if (lead == 0xE0) return continuation(i + 1, 0xA0, 0xBF) && continuation(i + 2, 0x80, 0xBF) ? 3 : 0;",
    "replace": "if (lead == 0xE0) return continuation(i + 1, 0xA0, 0xBF) && continuation(i + 2, 0x00, 0xFF) ? 3 : 0;",
    "target": "gyo_json_tests",
@@ -1486,7 +1486,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "if (lead == 0xED) return continuation(i + 1, 0x80, 0x9F)",
    "replace": "if (lead == 0xED) return continuation(i + 1, 0x00, 0x9F)",
    "target": "gyo_json_tests",
@@ -1499,7 +1499,7 @@
    "guards": [
     "json J-5"
    ],
-   "file": "engine/json/src/Writer.cpp",
+   "file": "engine/modules/json/src/Writer.cpp",
    "find": "        return continuation(i + 1, 0x80, 0x8F) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "replace": "        return continuation(i + 1, 0x00, 0x8F) && continuation(i + 2, 0x80, 0xBF) && continuation(i + 3, 0x80, 0xBF)",
    "target": "gyo_json_tests",
