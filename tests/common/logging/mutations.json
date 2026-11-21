@@ -1282,6 +1282,77 @@
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 3: S3-1*",
    "expect": "S3-1: one Base::Log line became one record"
+  },
+  {
+   "id": "lg-installed-always",
+   "what": "trace declaration D5: Installed is true with no Logger installed, so a writer that asks it writes to standard error",
+   "guards": [
+    "logging LG-8",
+    "trace-declaration D5"
+   ],
+   "file": "engine/modules/logging/src/Logger.cpp",
+   "find": "    return Detail::current.load(std::memory_order_acquire) != nullptr;\n}\n\nbool Enabled(",
+   "replace": "    return true;\n}\n\nbool Enabled(",
+   "target": "gyo_logging_tests",
+   "cases": "logger: Installed tells*",
+   "expect": "Installed is false again once the Logger is uninstalled"
+  },
+  {
+   "id": "lg-fatal-no-trace-path",
+   "what": "trace declaration D4 (a): the fatal record goes without the current trace path",
+   "guards": [
+    "logging LG-2",
+    "logging LG-5",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "    if (pathSize != 0 && !namesPath && record.fields.size() <= kMaxFatalFields) {",
+   "replace": "    if (false) {",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: with a trace receiver*",
+   "expect": "trace D4 \\(a\\): the fatal record carries trace_path"
+  },
+  {
+   "id": "lg-fatal-fields-lost",
+   "what": "trace declaration D4 (a): with trace_path added the record's own fields are lost (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "        std::copy(record.fields.begin(), record.fields.end(), withPath.begin());\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: trace_path is added after*",
+   "expect": "trace D4 \\(a\\): the record's own fields stay"
+  },
+  {
+   "id": "lg-fatal-limit-off-by-one",
+   "what": "trace declaration D4 (a): a record of exactly 32 fields goes without trace_path (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "    if (pathSize != 0 && !namesPath && record.fields.size() <= kMaxFatalFields) {",
+   "replace": "    if (pathSize != 0 && !namesPath && record.fields.size() < kMaxFatalFields) {",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: trace_path is added after*",
+   "expect": "trace D4 \\(a\\): 32 fields still get trace_path"
+  },
+  {
+   "id": "lg-fatal-path-twice",
+   "what": "LG-5: a fatal record that names trace_path gets a second trace_path key and its JSON line does not read back (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-5",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "!namesPath && ",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a record that already has*",
+   "expect": "LG-5: the fatal line reads back \\(one trace_path key\\)"
   }
  ]
 }

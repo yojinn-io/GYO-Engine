@@ -1,0 +1,873 @@
+{
+ "version": 1,
+ "description": "Mutants of the trace Module and the Base trace facade (docs/architecture/target/v2/trace-declaration.zh-Hant.md; Design Invariants in target/v2/trace.zh-Hant.md). Each mutant replaces one exact text; killed only when the run fails and its output matches expect.",
+ "mutants": [
+  {
+   "id": "tr-facade-exception-ignored",
+   "what": "D2: a span ended by an exception unwinding it is reported as ended normally",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "receiver_->end(token_, std::uncaught_exceptions() > exceptions_);",
+   "replace": "receiver_->end(token_, false);",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a span ended by an exception unwinding it*",
+   "expect": "ERROR: CHECK\\( installed\\.log\\.events == std::vector<std::string>\\{\"begin kernel Main \", \"end 1 exception\"\\} \\)"
+  },
+  {
+   "id": "tr-facade-exception-baseline",
+   "what": "D2: the unwinding count is not taken at Begin, so a span begun during an unwinding is reported as ended by it",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "        exceptions_ = std::uncaught_exceptions();\n",
+   "replace": "",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a span begun and ended inside a destructor*",
+   "expect": "D2: only an unwinding that started after Begin marks the span"
+  },
+  {
+   "id": "tr-facade-end-current-receiver",
+   "what": "D2: a span ends at whatever receiver is installed now instead of the one it began with",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "        if (receiver_ != nullptr) receiver_->end(token_, std::uncaught_exceptions() > exceptions_);",
+   "replace": "        if (receiver_ != nullptr) if (const TraceReceiver* now = Detail::traceReceiver.load()) now->end(token_, std::uncaught_exceptions() > exceptions_);",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a span ends at the receiver it began with*",
+   "expect": "ERROR: CHECK\\( installed\\.log\\.events == std::vector<std::string>\\{\"begin kernel Main \", \"end 1\"\\} \\)"
+  },
+  {
+   "id": "tr-facade-second-begin",
+   "what": "D2: a second Begin starts the span again (two begins, one end)",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "        if (receiver_ != nullptr) return;\n",
+   "replace": "",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a second Begin*",
+   "expect": "D2: one span, one begin and one end"
+  },
+  {
+   "id": "tr-parent-none",
+   "what": "TR-4: a span's parent is not the span below it on this thread",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f.parent = s.depth > 0 ? s.frames[s.depth - 1].id : 0;",
+   "replace": "        f.parent = 0;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: nested spans become one record each*",
+   "expect": "TR-4: the parent is the span below on this thread"
+  },
+  {
+   "id": "tr-duration-wrong",
+   "what": "TR-5: duration_ns is not the time since begin",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "{\"duration_ns\", end - f.beginNs}",
+   "replace": "{\"duration_ns\", end}",
+   "target": "gyo_trace_tests",
+   "cases": "trace: nested spans become one record each*",
+   "expect": "TR-5: duration_ns is the time since begin"
+  },
+  {
+   "id": "tr-origin-never",
+   "what": "D4 (i): an error marked where it is produced writes no path",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (origin) WritePath(s, index, text);",
+   "replace": "    static_cast<void>(origin);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: an error marked where it is produced*",
+   "expect": "D4 \\(i\\): one path record where the error is produced"
+  },
+  {
+   "id": "tr-origin-ignored",
+   "what": "D4 (i): an error that only passes through also writes a path (one path per layer)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (origin) WritePath(s, index, text);",
+   "replace": "    WritePath(s, index, text);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: an error that only passes through*",
+   "expect": "D4 \\(i\\): passing through writes no path"
+  },
+  {
+   "id": "tr-unwound-every-span",
+   "what": "D4 (i): every span an exception unwinds writes a path, not only the first",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        if (!f->childUnwound) {",
+   "replace": "        if (true) {",
+   "target": "gyo_trace_tests",
+   "cases": "trace: spans unwound by an exception*",
+   "expect": "D4 \\(i\\): the first span the exception unwinds is the origin"
+  },
+  {
+   "id": "tr-markcurrent-bottom",
+   "what": "D2: TraceMarkCurrent marks the bottom of the stack instead of its top",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D2"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    Mark(s, s.depth - 1, text, origin);",
+   "replace": "    Mark(s, 0, text, origin);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: TraceMarkCurrent marks*",
+   "expect": "D2: only the top of the stack is marked"
+  },
+  {
+   "id": "tr-timed-always",
+   "what": "TR-6: a span is timed even when no sink takes its record",
+   "guards": [
+    "trace TR-6"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f.timed = Taken(SpanCategory(category, buffer));",
+   "replace": "        f.timed = (static_cast<void>(SpanCategory(category, buffer)), true);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: with only span.path taken*",
+   "expect": "TR-6: a span no sink takes reads no clock"
+  },
+  {
+   "id": "tr-no-logger-taken",
+   "what": "D5: with no Logger installed records count as taken (they would go to standard error)",
+   "guards": [
+    "trace TR-5",
+    "trace-declaration D5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    return Logging::Installed() && Logging::Enabled(Level::Trace, category);",
+   "replace": "    return Logging::Enabled(Level::Trace, category);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: with no Logger installed*",
+   "expect": "D5: with no Logger no span is timed"
+  },
+  {
+   "id": "tr-stale-stack-kept",
+   "what": "TR-4: a stack left by an earlier Install is not emptied (its spans sit under the new ones)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (stack.generation != current) {\n        stack.generation = current;\n        stack.depth = 0;\n    }",
+   "replace": "    stack.generation = current;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span begun under an earlier Install*",
+   "expect": "TR-4: the old span left nothing on the new stack"
+  },
+  {
+   "id": "tr-unbalanced-unmarked",
+   "what": "TR-4: an end not on top is not marked unbalanced",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    const bool unbalanced = index + 1 != StoredCount(*s) || s->depth > kMaxDepth;",
+   "replace": "    const bool unbalanced = false;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span ended while another is on top*",
+   "expect": "TR-4: an end not on top is marked unbalanced"
+  },
+  {
+   "id": "tr-unbalanced-left",
+   "what": "TR-4: a span ended while another is on top stays in the stack",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    for (std::size_t i = index; i + 1 < stored; ++i) {",
+   "replace": "    for (std::size_t i = index; i + 1 < stored && false; ++i) {",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span ended while another is on top*",
+   "expect": "TR-4: the ended span left the stack"
+  },
+  {
+   "id": "tr-path-cut-unmarked",
+   "what": "D2: a cut path does not say it was cut",
+   "guards": [
+    "trace-declaration D2"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (cut && pos >= kCut.size()) put(kCut);",
+   "replace": "    static_cast<void>(cut);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: the path keeps the deepest end*",
+   "expect": "D2: a cut path starts with \\.\\.\\."
+  },
+  {
+   "id": "tr-second-install",
+   "what": "TR-7: a second Install while one is installed is accepted",
+   "guards": [
+    "trace TR-7"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    GYO_ASSERT(!installed.load(std::memory_order_acquire) && \"Trace::Install: one per process\");\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a second Install*",
+   "expect": "expected GYO_ASSERT to fail: Trace::Install"
+  },
+  {
+   "id": "tr-close-keeps-receiver",
+   "what": "TR-7: closing the handle leaves the receiver installed",
+   "guards": [
+    "trace TR-7"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    Base::SetTraceReceiver(previousReceiver);\n    previousReceiver = nullptr;",
+   "replace": "    previousReceiver = nullptr;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: closing the handle puts back the receiver*",
+   "expect": "TR-7: Close restores the earlier receiver"
+  },
+  {
+   "id": "tr-kernel-no-schedule-span",
+   "what": "D6: a Run of a schedule opens no span",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration 判定 2"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    scheduleSpan.Begin(\"kernel\", scheduleName, world.name_);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a Run is one span*",
+   "expect": "\\[ks-trace-spans\\] begin kernel First@Match"
+  },
+  {
+   "id": "tr-kernel-no-system-span",
+   "what": "D6: a System that runs opens no span",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration 判定 2"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "                systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a Run is one span*",
+   "expect": "\\[ks-trace-spans\\] begin kernel Tick@Match \\| end 1"
+  },
+  {
+   "id": "tr-kernel-system-span-skipped",
+   "what": "D6: a System its run condition skips opens a span too (begun before the condition)",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration D2"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "            Engine::Base::TraceSpan systemSpan;\n",
+   "replace": "            Engine::Base::TraceSpan systemSpan;\n            systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a System its run condition skips*",
+   "expect": "\\[ks-trace-skipped\\]"
+  },
+  {
+   "id": "tr-kernel-fail-unmarked",
+   "what": "D4: the kernel's Fail marks no span",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    if (Engine::Base::TraceActive()) Engine::Base::TraceMarkCurrent(error.Text(), origin);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a System's Err is marked*",
+   "expect": "\\[ks-trace-err\\]"
+  },
+  {
+   "id": "tr-kernel-origin-always",
+   "what": "D4 (i): a nested run's error passing through the outer System is marked as produced there",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "                return Fail(std::move(*error), nested, !(interrupted && world.leftError_));",
+   "replace": "                return Fail(std::move(*error), nested, true);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a nested run's error*",
+   "expect": "\\[ks-trace-nested\\]"
+  },
+  {
+   "id": "tr-kernel-no-trigger-span",
+   "what": "D6: a Trigger from the Host opens no span",
+   "guards": [
+    "trace-declaration D6"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    triggerSpan.Begin(\"kernel\", \"Trigger\", world.name_);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a Trigger from the Host*",
+   "expect": "\\[ks-trace-trigger\\]"
+  },
+  {
+   "id": "tr-orch-no-entry-span",
+   "what": "D6: an entry point of the orchestration layer opens no span",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration 判定 2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    span.Begin(\"orchestration\", entry);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: RunFrame is one span*",
+   "expect": "\\[or-trace-frame\\]"
+  },
+  {
+   "id": "tr-orch-all-through",
+   "what": "D4 (i): an error the orchestration layer produces is marked as passing through",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "!PassesThrough(error));",
+   "replace": "false);",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: an error the orchestration layer produces*",
+   "expect": "\\[or-trace-origin\\]"
+  },
+  {
+   "id": "tr-orch-break-origin",
+   "what": "D4 (i): an entry point of an ended Product (WorldInterrupted) is marked as produced by the orchestration layer (a second path)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    case OrchestrationErrorCode::WorldInterrupted:\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: a World that breaks*",
+   "expect": "\\[or-trace-ended-through\\]"
+  },
+  {
+   "id": "tr-guard-rule-off",
+   "what": "TR-1: the include rule is off (any engine include is allowed)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "            if module in ALLOWED:",
+   "replace": "            if True:",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/trace",
+    "-p",
+    "test_trace_guard.py",
+    "-v"
+   ],
+   "expect": "test_trace_including_the_kernel \\([^)]*\\) \\.\\.\\. FAIL"
+  },
+  {
+   "id": "tr-guard-sees-nothing",
+   "what": "TR-1: the positive control is off (a scan that reads nothing passes)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "    if not errors and allowed == 0:",
+   "replace": "    if False:",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/trace",
+    "-p",
+    "test_trace_guard.py",
+    "-v"
+   ],
+   "expect": "test_no_allowed_include_fails \\([^)]*\\) \\.\\.\\. FAIL"
+  },
+  {
+   "id": "tr-guard-missing-dir-passes",
+   "what": "TR-1: a missing directory passes (fail closed is off)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "        return [], 0, [f\"{RULE}: {DIRECTORY} not found under {root}\"]",
+   "replace": "        return [], 1, []",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/trace",
+    "-p",
+    "test_trace_guard.py",
+    "-v"
+   ],
+   "expect": "test_missing_directory_fails \\([^)]*\\) \\.\\.\\. FAIL"
+  },
+  {
+   "id": "tr-guard-list-item",
+   "what": "TR-1: the allowed list misses a module the trace Module uses (logging)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "ALLOWED = {\"base\", \"logging\", \"time\", \"trace\"}",
+   "replace": "ALLOWED = {\"base\", \"time\", \"trace\"}",
+   "command": [
+    "{python}",
+    "-B",
+    "tests/common/trace/trace_guard.py"
+   ],
+   "expect": "TR1-TRACE: includes engine/logging/"
+  },
+  {
+   "id": "tr-stack-shared",
+   "what": "D3: one stack for the whole process instead of one per thread (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D3"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "constinit thread_local Stack stack{};",
+   "replace": "constinit Stack stack{};",
+   "target": "gyo_trace_tests",
+   "cases": "trace: each thread has its own stack*",
+   "expect": "D3: the other thread's stack holds only its own span"
+  },
+  {
+   "id": "tr-slot-exception-stale",
+   "what": "TR-4: a reused stack slot keeps the exception flag of the span before (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f.exception = false;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span begun after an exception*",
+   "expect": "TR-4: the reused slot does not keep the old exception flag"
+  },
+  {
+   "id": "tr-slot-childunwound-stale",
+   "what": "D4 (i): a reused stack slot keeps 'a child was unwound', so its own exception writes no path (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f.childUnwound = false;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span begun after an exception*",
+   "expect": "D4 \\(i\\): the second exception writes its path too"
+  },
+  {
+   "id": "tr-slot-error-stale",
+   "what": "TR-4: a reused stack slot keeps the error of the span before (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f.hasError = false;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span begun after an exception*",
+   "expect": "TR-4: the reused slot does not keep the old error"
+  },
+  {
+   "id": "tr-overflow-depth-stuck",
+   "what": "TR-4: a span past 64 levels does not give its level back when it ends (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        if (s != nullptr && token.depth > kMaxDepth && s->depth == token.depth) --s->depth;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: past 64 levels*",
+   "expect": "TR-4: the stack is empty again"
+  },
+  {
+   "id": "tr-error-long-dropped",
+   "what": "TR-5: an error text longer than 256 bytes is dropped instead of cut (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    f.errorSize = text.size() < kErrorBytes ? text.size() : kErrorBytes;",
+   "replace": "    f.errorSize = text.size() < kErrorBytes ? text.size() : 0;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: an error text longer than 256*",
+   "expect": "TR-5: the error is cut at 256 bytes"
+  },
+  {
+   "id": "tr-closed-span-writes",
+   "what": "TR-4: a span still open at Close writes its record when it ends (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (token.id == 0 || !installed.load(std::memory_order_acquire)) return nullptr;",
+   "replace": "    if (token.id == 0) return nullptr;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span still open when Trace is closed*",
+   "expect": "TR-4: ended after Close, it writes nothing"
+  },
+  {
+   "id": "tr-unwound-overwrites",
+   "what": "D4: the unwinding overwrites an error marked before it (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "            if (!f->hasError) SetError(*f, kUnwoundText);",
+   "replace": "            SetError(*f, kUnwoundText);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: an error marked before an exception*",
+   "expect": "D4: the unwinding does not overwrite an earlier error"
+  },
+  {
+   "id": "tr-unwound-no-error",
+   "what": "D4 (i): the first span an exception unwinds does not say why on itself (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "            if (!f->hasError) SetError(*f, kUnwoundText);\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: the path record is at level Trace*",
+   "expect": "D4 \\(i\\): the first unwound span says why"
+  },
+  {
+   "id": "tr-path-whole-stack",
+   "what": "D4: the path of an error marked on a span below the top runs to the top (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (origin) WritePath(s, index, text);",
+   "replace": "    if (origin) WritePath(s, StoredCount(s) - 1, text);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: an error marked on a span that is not on top*",
+   "expect": "D4: the path ends at the marked span"
+  },
+  {
+   "id": "tr-taken-level",
+   "what": "TR-6: whether a span is taken is asked at a level above Trace (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-6"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    return Logging::Installed() && Logging::Enabled(Level::Trace, category);",
+   "replace": "    return Logging::Installed() && Logging::Enabled(Level::Error, category);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a sink whose minimum is above Trace*",
+   "expect": "TR-6: a span is asked for at level Trace"
+  },
+  {
+   "id": "tr-path-level",
+   "what": "TR-5: the path record is written at level Error (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    Logging::Write(Logging::Entry{.level = Level::Trace, .category = kPathCategory,",
+   "replace": "    Logging::Write(Logging::Entry{.level = Level::Error, .category = kPathCategory,",
+   "target": "gyo_trace_tests",
+   "cases": "trace: the path record is at level Trace*",
+   "expect": "TR-5: the path record is at level Trace"
+  },
+  {
+   "id": "tr-exception-flag-off",
+   "what": "TR-4: a span an exception unwinds is not marked exception in its record (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f->exception = true;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: spans unwound by an exception*",
+   "expect": "ERROR: CHECK\\( Flag\\(spans\\[0\\], \"exception\"\\) \\)"
+  },
+  {
+   "id": "tr-generation-not-bumped",
+   "what": "TR-4: Install does not start a new generation, so a stack from the earlier Install stays (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    generation.fetch_add(1, std::memory_order_acq_rel);\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span begun under an earlier Install*",
+   "expect": "TR-4: the span of the earlier Install wrote nothing"
+  },
+  {
+   "id": "tr-close-restores-null",
+   "what": "TR-7: Close installs no receiver instead of the one before (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-7"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    Base::SetTraceReceiver(previousReceiver);\n    previousReceiver = nullptr;",
+   "replace": "    Base::SetTraceReceiver(nullptr);\n    previousReceiver = nullptr;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: closing the handle puts back the receiver*",
+   "expect": "TR-7: Close restores the earlier receiver"
+  },
+  {
+   "id": "tr-default-clock-zero",
+   "what": "TR-5: with no clock given begin_ns is not on the engine time base (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    return clock != nullptr ? clock() : ::Engine::Time::NowNs();",
+   "replace": "    return clock != nullptr ? clock() : 0;",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 4: S4-1*",
+   "expect": "S4-1: begin_ns is on the engine time base"
+  },
+  {
+   "id": "tr-kernel-sync-origin-always",
+   "what": "D4 (i): a refusal a sync point's hook left is marked as produced again at the sync point (two paths) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "                // error: here it only passes through (trace declaration D4 (i)).\n                return Fail(std::move(error), nested, !world.leftError_.has_value());",
+   "replace": "                // error: here it only passes through (trace declaration D4 (i)).\n                return Fail(std::move(error), nested, true);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a refusal inside a sync point*",
+   "expect": "\\[ks-trace-sync-once\\]"
+  },
+  {
+   "id": "tr-kernel-ready-through",
+   "what": "D4 (i): an error the Ready window finds is marked as passing through (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "            if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n            return Fail(std::move(error), nested);\n        }\n    }\n\n    // Spec F-12: a Run leaves",
+   "replace": "            if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n            return Fail(std::move(error), nested, false);\n        }\n    }\n\n    // Spec F-12: a Run leaves",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a change outside the World API*",
+   "expect": "\\[ks-trace-ready\\]"
+  },
+  {
+   "id": "tr-kernel-trigger-through",
+   "what": "D4 (i): an observer's Err in a Trigger from the Host is marked as passing through (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    if (!ran) return Fail(std::move(ran).error(), false, !world.leftError_.has_value());",
+   "replace": "    if (!ran) return Fail(std::move(ran).error(), false, false);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: an observer's Err*",
+   "expect": "\\[ks-trace-trigger-err\\]"
+  },
+  {
+   "id": "tr-orch-gameinit-untraced",
+   "what": "D6: RunGameInit opens no span (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace-declaration D6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    return Traced(\"RunGameInit\", [&] { return RunGameInitSteps(); });",
+   "replace": "    return RunGameInitSteps();",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: RunGameInit and RunSchedule and ReplaceWorld*",
+   "expect": "\\[or-trace-entries\\]"
+  },
+  {
+   "id": "tr-orch-schedule-untraced",
+   "what": "D6: RunSchedule opens no span (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace-declaration D6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    return Traced(\"RunSchedule\", [&] { return RunScheduleSteps(world, schedule); });",
+   "replace": "    return RunScheduleSteps(world, schedule);",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: RunGameInit and RunSchedule and ReplaceWorld*",
+   "expect": "\\[or-trace-entries\\]"
+  },
+  {
+   "id": "tr-orch-replace-untraced",
+   "what": "D6: ReplaceWorld opens no span (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace-declaration D6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    return Traced(\"ReplaceWorld\", [&] { return ReplaceWorldSteps(name, std::move(request)); });",
+   "replace": "    return ReplaceWorldSteps(name, std::move(request));",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: RunGameInit and RunSchedule and ReplaceWorld*",
+   "expect": "\\[or-trace-entries\\]"
+  },
+  {
+   "id": "tr-orch-replace-schedule-origin",
+   "what": "D4 (i): a beforeSwap schedule's kernel Err is marked as produced by the orchestration layer (a second path) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    case OrchestrationErrorCode::ReplaceScheduleFailed:\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: a beforeSwap schedule that fails*",
+   "expect": "\\[or-trace-before-through\\]"
+  },
+  {
+   "id": "tr-orch-replace-own-through",
+   "what": "D4 (i): a DropOldFirst replacement the orchestration layer fails itself is marked as passing through (no path) (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    case OrchestrationErrorCode::WorldMissing: return true;",
+   "replace": "    case OrchestrationErrorCode::WorldMissing:\n    case OrchestrationErrorCode::ReplacePrepareFailed: return true;",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: a DropOldFirst replacement*",
+   "expect": "\\[or-trace-replace-own-origin\\]"
+  },
+  {
+   "id": "tr-orch-mark-text-empty",
+   "what": "D6: an entry point's error is marked without its text (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace-declaration D6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        span.MarkError(std::string(ToString(error.code)) + \": \" + error.message, !PassesThrough(error));",
+   "replace": "        span.MarkError(\"\", !PassesThrough(error));",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: an error the orchestration layer produces*",
+   "expect": "\\[or-trace-mark-text\\]"
+  },
+  {
+   "id": "tr-kernel-host-trigger-origin",
+   "what": "D4 (i): a hook refused in a Host Trigger's rounds is marked as produced again at the Trigger's exit (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "if (!ran) return Fail(std::move(ran).error(), false, !world.leftError_.has_value());",
+   "replace": "if (!ran) return Fail(std::move(ran).error(), false, true);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a hook refused in a Host Trigger*",
+   "expect": "\\[ks-trace-host-trigger-once\\]"
+  },
+  {
+   "id": "tr-kernel-system-trigger-origin",
+   "what": "D4 (i): a hook refused in a System's Trigger is marked as produced again at the Trigger's exit (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "if (!ran) return Fail(std::move(ran).error(), true, !world.leftError_.has_value());",
+   "replace": "if (!ran) return Fail(std::move(ran).error(), true, true);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a hook refused in a System's Trigger*",
+   "expect": "\\[ks-trace-system-trigger-once\\]"
+  },
+  {
+   "id": "tr-child-flag-kept",
+   "what": "D4 (i): a caught child's exception still marks the parent after a new child began, so the parent's own exception writes no path (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (s.depth > 0 && s.depth <= kMaxDepth) s.frames[s.depth - 1].childUnwound = false;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: after a child's exception is caught*",
+   "expect": "a new child cleared the old mark"
+  },
+  {
+   "id": "tr-mark-keeps-child-flag",
+   "what": "D4 (i): a mark after a caught child's exception leaves the flag, so the parent's own exception writes no path (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    s.frames[index].childUnwound = false;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a parent marked after*",
+   "expect": "a mark clears the caught child's flag"
+  },
+  {
+   "id": "tr-category-asserted",
+   "what": "TR-5: a category longer than 64 bytes stops the program instead of being cut (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    const std::size_t size = category.size() < kMaxCategory ? category.size() : kMaxCategory;\n",
+   "replace": "    GYO_ASSERT(category.size() <= kMaxCategory);\n    const std::size_t size = category.size();\n",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a category longer than 64 bytes*",
+   "expect": "category.size\\(\\) <= kMaxCategory"
+  },
+  {
+   "id": "tr-end-not-rechecked",
+   "what": "TR-5 / D5: a span open when the Logger is uninstalled is still written at its end (to standard error) (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (!Taken(spanCategory)) return;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span still open when the Logger*",
+   "expect": "no clock read at its end"
+  }
+ ]
+}

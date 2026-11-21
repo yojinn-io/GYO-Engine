@@ -5,6 +5,7 @@
 #include "engine/orchestration/Product.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/Trace.hpp"
 
 #include <algorithm>
 #include <new>
@@ -461,7 +462,59 @@ std::optional<OrchestrationError> Product::Ended() {
     return {};
 }
 
+namespace {
+
+// Whether an entry point's error only passes through (trace declaration D4 (i)): a schedule the kernel ran
+// failed (the kernel's Fail marked it where it was produced), or the Product had already ended (the World broke
+// earlier, marked then). Everything else is produced here, including a DropOldFirst replacement that fails at
+// one of the orchestration layer's own steps and ends the Product with it (a failure with this call's code).
+bool PassesThrough(const OrchestrationError& error) noexcept {
+    switch (error.code) {
+    case OrchestrationErrorCode::ScheduleFailed:
+    case OrchestrationErrorCode::ReplaceScheduleFailed:
+    case OrchestrationErrorCode::WorldInterrupted:
+    case OrchestrationErrorCode::WorldMissing: return true;
+    default: return false;
+    }
+}
+
+// One trace span around an entry point's steps (trace declaration D6); marked when they return an error. It
+// only tells.
+template <class Steps>
+::Engine::Base::Result<void, OrchestrationError> Traced(const std::string_view entry, Steps&& steps) {
+    ::Engine::Base::TraceSpan span;
+    span.Begin("orchestration", entry);
+    auto result = steps();
+    if (!result && span.Active()) {
+        const OrchestrationError& error = result.error();
+        span.MarkError(std::string(ToString(error.code)) + ": " + error.message, !PassesThrough(error));
+    }
+    return result;
+}
+
+} // namespace
+
 ::Engine::Base::Result<void, OrchestrationError> Product::RunGameInit() {
+    return Traced("RunGameInit", [&] { return RunGameInitSteps(); });
+}
+
+::Engine::Base::Result<void, OrchestrationError> Product::RunFrame() {
+    return Traced("RunFrame", [&] { return RunFrameSteps(); });
+}
+
+::Engine::Base::Result<void, OrchestrationError> Product::RunSchedule(std::string_view world, std::string_view schedule) {
+    return Traced("RunSchedule", [&] { return RunScheduleSteps(world, schedule); });
+}
+
+::Engine::Base::Result<void, OrchestrationError> Product::ReplaceWorld(std::string_view name, ReplaceRequest request) {
+    return Traced("ReplaceWorld", [&] { return ReplaceWorldSteps(name, std::move(request)); });
+}
+
+::Engine::Base::Result<void, OrchestrationError> Product::InsertSystems(std::string_view world, std::string owner, InsertFn build) {
+    return Traced("InsertSystems", [&] { return InsertSystemsSteps(world, std::move(owner), std::move(build)); });
+}
+
+::Engine::Base::Result<void, OrchestrationError> Product::RunGameInitSteps() {
     RequireNotRunning();
     GYO_ASSERT(!gameInitRan_);
     if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
@@ -473,7 +526,7 @@ std::optional<OrchestrationError> Product::Ended() {
     return {};
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunFrame() {
+::Engine::Base::Result<void, OrchestrationError> Product::RunFrameSteps() {
     RequireNotRunning();
     // Every World is checked before any runs: no half frame over a broken World.
     if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
@@ -488,7 +541,7 @@ std::optional<OrchestrationError> Product::Ended() {
     return {};
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunSchedule(std::string_view world, std::string_view schedule) {
+::Engine::Base::Result<void, OrchestrationError> Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {
     RequireNotRunning();
     if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
     WorldSlot* slot = Find(world);
@@ -531,7 +584,7 @@ bool Product::HasWorld(std::string_view name) const noexcept {
     return slot != nullptr && slot->executor != nullptr;
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::ReplaceWorld(std::string_view name, ReplaceRequest request) {
+::Engine::Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_view name, ReplaceRequest request) {
     RequireNotRunning();
     // A replacement does not mend a broken World (v8-arch-gyo2-broken-world-ends-product).
     if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
@@ -734,8 +787,8 @@ bool Product::HasWorld(std::string_view name) const noexcept {
     return {};
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::InsertSystems(std::string_view worldName, std::string owner,
-                                                                      InsertFn build) {
+::Engine::Base::Result<void, OrchestrationError> Product::InsertSystemsSteps(std::string_view worldName, std::string owner,
+                                                                           InsertFn build) {
     RequireNotRunning();
     if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
     WorldSlot* slot = Find(worldName);

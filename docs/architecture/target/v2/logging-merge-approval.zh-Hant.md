@@ -4,6 +4,8 @@
 
 日期：2026-11-21。分支 `claude/gyo2-logging-10dfcd`（draft PR #256，base `gyo2` e4072b5c）。事前宣告：[logging-declaration.zh-Hant.md](logging-declaration.zh-Hant.md)（修訂 1 動工前核准、修訂 2 第 17 節、修訂 3 第 18 節）。Design Invariants：[logging.zh-Hant.md](logging.zh-Hant.md)。經過與證據：[dev_log](../../../dev_logs/2026_11_20_gyo2_logging.zh-Hant.md)。
 
+**核准紀錄**（2026-11-21，日誌卡；PR #256 合併為 d3371355）：使用者原話依序「OK，合併，讓互毆繼續」（中途被打斷）、「可以合併，然後繼續」。卡片把「可以合併」讀成下面第 2～6 節整頁一起核准（使用者沒有逐節回覆）；主會話已記進 HANDOFF。本紀錄由 trace 批（`v8-arch-gyo2-trace`）補上，因為 logging 的分支已經合併。
+
 **請你核准的**：第 2 節（判定 2 的變更，AGENTS §14.4）、第 3 節（Design Invariants 的最終文字，含 `world_time` 的 WT-4）、第 4 節（突變的數目超過基準）、第 5 節（和宣告不同的地方）、第 6 節（沒修、記下的事）。PR 已改成 ready、L1 三平台綠；你說「合併」才合併。
 
 ## 1. 判定的結果（宣告第 10 節）

@@ -173,7 +173,9 @@ private:
     void Attach();
     // Spec E.5: interrupts the World and drops every record. The outermost level
     // returns it; a nested one leaves the error instead (its first one).
-    ::Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested);
+    // origin: the error is produced at this level; false when it is a nested run's error passing through
+    // (marked on the trace span on top of the thread's stack, trace declaration D4 (i)).
+    ::Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested, bool origin = true);
 
     // One level of the run stack (World::runStack_): pushed for the Plan's
     // duration and popped on every way out; an exception through it interrupts

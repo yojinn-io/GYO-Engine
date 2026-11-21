@@ -218,7 +218,8 @@ std::unique_ptr<O::Product> Make(const RelayOptions& options) {
 // ---- the logging side
 
 std::filesystem::path FilePath(const std::string& name) {
-    const auto dir = std::filesystem::current_path() / "scenario-segment3-files";
+    // In the build directory, never the working directory (a run from the repository root left files there).
+    const auto dir = std::filesystem::path(GYO_SCENARIO_TEST_BINARY_DIR) / "scenario-segment3-files";
     std::filesystem::create_directories(dir);
     const auto path = dir / name;
     std::filesystem::remove(path);
