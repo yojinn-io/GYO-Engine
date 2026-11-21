@@ -456,10 +456,10 @@
     },
     {
       "id": "ks-links-extra",
-      "what": "gyo_kernel links one more target (Delta-1 and Delta-3 dependencies) (find and expect taken from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts: world-exec added GYO::EntityStore) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up))",
+      "what": "gyo_kernel links one more target (Delta-1 and Delta-3 dependencies) (find and expect taken from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts: world-exec added GYO::EntityStore) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (rewritten by v8-arch-gyo2-core-not-registered: the kernel's links are written in its CMakeLists.txt)",
       "file": "engine/ecs/kernel/CMakeLists.txt",
-      "find": "gyo_link_registered_dependencies(kernel)\n",
-      "replace": "gyo_link_registered_dependencies(kernel)\ntarget_link_libraries(gyo_kernel PUBLIC GYO::Math)\n",
+      "find": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore)\n",
+      "replace": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore GYO::Math)\n",
       "expect": "gyo_kernel links GYO::Base;GYO::EntityStore;GYO::Math; expected exactly",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true

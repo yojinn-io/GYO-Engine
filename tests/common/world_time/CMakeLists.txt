@@ -21,3 +21,10 @@ if(MSVC)
 else()
     target_compile_options(gyo_world_time_budget PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Design Invariant WT-4: world_time links the orchestration layer, the kernel, the time base, Base and logging,
+# nothing else (v8-arch-gyo2-core-not-registered: the links to core, ecs and orchestration are written by hand).
+function(gyo_expect_world_time_links)
+    gyo_expect_links(gyo_world_time GYO::Base GYO::Kernel GYO::Logging GYO::Orchestration GYO::Time)
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_world_time_links)

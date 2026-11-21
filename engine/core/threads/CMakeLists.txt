@@ -14,6 +14,7 @@ target_include_directories(gyo_threads PUBLIC
 
 find_package(Threads REQUIRED)
 target_compile_features(gyo_threads PUBLIC cxx_std_20)
-# Engine-internal links come from config/modules.csv (O-6).
-gyo_link_registered_dependencies(threads)
+# Engine-internal links are written here: core, ecs and orchestration are not
+# Modules and are not registered (O-6 covers the Modules and Plugins only).
+target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::Os)
 target_link_libraries(gyo_threads PUBLIC Threads::Threads)

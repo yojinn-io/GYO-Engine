@@ -9,17 +9,20 @@ The scans the orchestration-skeleton declaration (section 7.4) deferred until sc
   O3  engine/orchestration/ reads no Plan step and calls no System itself (O-3: the runner calls only the
       Product's entry points and orders no System): Plans(, PlanOf(, ExportPlans(, .steps, StepKind, and the
       kernel's System invokers InvokerOf, CallFunction, CallLambda. Read on code with comments and literals blanked.
-  O6  an engine-internal link written by hand in an engine CMakeLists.txt: a GYO:: alias among the arguments of
-      target_link_libraries( in engine/<module>/CMakeLists.txt ("#" comments stripped; ALIAS lines are not calls).
-      Dependencies live only in config/modules.csv and plugins.csv and the links are generated from them
-      (O-6, user v8-arch-gyo2-module-deps-in-registers).
-  O0  a directory this guard scans is missing or holds no file (fail closed: the guard never passes by scanning
-      nothing).
+  O6  a link to a registered unit written by hand in an engine CMakeLists.txt: a GYO:: alias that is the target of
+      a row of config/modules.csv or config/plugins.csv, among the arguments of target_link_libraries( in any
+      engine/**/CMakeLists.txt ("#" comments stripped; ALIAS lines are not calls). The dependencies between Modules
+      and Plugins live only in the registers and those links are generated from them (O-6, user
+      v8-arch-gyo2-module-deps-in-registers). core, ecs and orchestration are not Modules and have no row: links to
+      them are written by hand (user v8-arch-gyo2-core-not-registered).
+  O0  a directory this guard scans is missing or holds no file, or the registers name no target (fail closed: the
+      guard never passes by scanning nothing).
 
 Usage: python3 orchestration_guard.py [--root REPOSITORY]
 Exit status 0 when clean; 1 with one line per finding otherwise.
 """
 import argparse
+import csv
 import re
 import sys
 from pathlib import Path
@@ -32,6 +35,7 @@ SCANNED = "engine/orchestration"
 ALLOWED_QUOTED = ("engine/kernel/", "engine/base/", "engine/orchestration/")
 O3 = re.compile(r"\bPlans\s*\(|\bPlanOf\s*\(|\bExportPlans\s*\(|\.\s*steps\b|\bStepKind\b"
                 r"|\bInvokerOf\b|\bCallFunction\b|\bCallLambda\b")
+REGISTERS = ("config/modules.csv", "config/plugins.csv")
 LINK_CALL = re.compile(r"target_link_libraries\s*\((.*?)\)", re.S)
 ALIAS = re.compile(r"GYO::\w+")
 
@@ -55,11 +59,22 @@ def orchestration_findings(relative, raw):
         yield line_of(code, match.start()), "O3", match.group(0)
 
 
-def cmake_findings(raw):
+def registered_targets(root):
+    targets = set()
+    for relative in REGISTERS:
+        path = Path(root) / relative
+        if path.is_file():
+            with path.open(encoding="utf-8", newline="") as handle:
+                targets.update(row["target"].strip() for row in csv.DictReader(handle) if row.get("target"))
+    return targets
+
+
+def cmake_findings(raw, targets):
     body = "\n".join(line.split("#", 1)[0] for line in raw.split("\n"))
     for call in LINK_CALL.finditer(body):
         for alias in ALIAS.finditer(call.group(1)):
-            yield line_of(body, call.start(1) + alias.start()), "O6", alias.group(0)
+            if alias.group(0) in targets:
+                yield line_of(body, call.start(1) + alias.start()), "O6", alias.group(0)
 
 
 def check(root):
@@ -73,6 +88,9 @@ def check(root):
         relative = path.relative_to(root).as_posix()
         for number, rule, text in orchestration_findings(relative, path.read_text(encoding="utf-8")):
             problems.append(f"{relative}:{number}: {rule} {text}")
+    targets = registered_targets(root)
+    if not targets:
+        problems.append("config/modules.csv: O0 the registers name no target (moved or renamed? update this guard)")
     engine = root / "engine"
     # Every unit's CMakeLists.txt: engine/<layer>/<unit>/ and the orchestration layer engine/orchestration/.
     cmake_files = sorted(p for p in engine.rglob("CMakeLists.txt") if p.parent != engine) if engine.is_dir() else []
@@ -80,7 +98,7 @@ def check(root):
         problems.append("engine: O0 no unit CMakeLists.txt under engine/ to scan")
     for path in cmake_files:
         relative = path.relative_to(root).as_posix()
-        for number, rule, text in cmake_findings(path.read_text(encoding="utf-8")):
+        for number, rule, text in cmake_findings(path.read_text(encoding="utf-8"), targets):
             problems.append(f"{relative}:{number}: {rule} {text}")
     return problems
 

@@ -31,8 +31,10 @@ The same §4 also says where an adapter for an external component lives, and dis
 
 ### Directory layers of `engine/` (user, 2026-11-21)
 
-`engine/` is split by layer, one level deep (`engine/<layer>/<unit>/`); a unit's directory is the `dir` column of its row in
-`config/modules.csv`, not guessed from its name:
+`engine/` is split by layer, one level deep (`engine/<layer>/<unit>/`). core, ecs and orchestration are not Modules: every
+product has them, nothing selects them, `engine/CMakeLists.txt` adds them directly and they link each other in their own
+`CMakeLists.txt` (user, 2026-11-21). Only a Module has a row in `config/modules.csv`; its directory is the row's `dir`
+column (`modules/<name>`), not guessed from its name:
 
 | Directory | Layer | Units |
 |---|---|---|
