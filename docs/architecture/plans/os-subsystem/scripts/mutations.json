@@ -102,13 +102,16 @@
     },
     {
       "id": "os-g8-link",
-      "what": "gyo_os links a module above it (Invariant 3, configure-time check)",
-      "file": "engine/core/os/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_os PUBLIC GYO::Base)",
-      "replace": "target_link_libraries(gyo_os PUBLIC GYO::Base GYO::Time)",
+      "what": "gyo_os gains a registered Engine dependency (its config/modules.csv row depends base;math), Invariant 3, configure-time link check. Only it shows the check of gyo_os's link set catching a link the register allows; a hand-written link is caught by O6 as well (or-guard-real-o6-hand-link), a Windows system library by os-g18-windows-extra-link (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "guards": [
+        "os 3"
+      ],
+      "file": "config/modules.csv",
+      "find": "os,core/os,GYO::Os,The operating-system adapter,yes,no,base,,,",
+      "replace": "os,core/os,GYO::Os,The operating-system adapter,yes,no,base;math,,,",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
-      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base"
+      "expect": "gyo_os\\s+links\\s+GYO::Base;GYO::Math;(?:Threads::Threads|shell32);\\s+expected\\s+exactly\\s+GYO::Base;(?:Threads::Threads|shell32)"
     },
     {
       "id": "os-g9-macro-list",
@@ -509,23 +512,29 @@
     },
     {
       "id": "os-g13-definition-name",
-      "what": "A non-os target gets an OS-identifying compile definition (Invariant 1, configure-time check)",
-      "file": "engine/CMakeLists.txt",
-      "find": "target_compile_features(engine PUBLIC cxx_std_20)\n",
-      "replace": "target_compile_features(engine PUBLIC cxx_std_20)\ntarget_compile_definitions(engine PRIVATE GYO_ENGINE_POSIX=1)\n",
-      "target": "gyo_os_tests",
+      "what": "A non-os target gets an OS-identifying compile definition (Invariant 1, configure-time check): the name branch of the OS definition guard, on a target. os-g14-definition-platform-id is the $<PLATFORM_ID> branch, on a directory (rewritten by v8-arch-gyo2-stale-mutants: the engine target and its engine/CMakeLists.txt lines it mutated are gone since the gyo2 rebuild; the Modules are under engine/<layer>/ since #257)",
+      "guards": [
+        "os 1"
+      ],
+      "file": "engine/core/time/CMakeLists.txt",
+      "find": "gyo_link_registered_dependencies(time)\n",
+      "replace": "gyo_link_registered_dependencies(time)\ntarget_compile_definitions(gyo_time PRIVATE GYO_ENGINE_POSIX=1)\n",
+      "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "OS definition guard:\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_ENGINE_POSIX=1'"
+      "expect": "OS\\s+definition\\s+guard:\\s+gyo_time\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_ENGINE_POSIX=1'"
     },
     {
       "id": "os-g14-definition-platform-id",
-      "what": "A directory defines a macro only on one OS through $<PLATFORM_ID> (Invariant 1, configure-time check)",
+      "what": "A directory defines a macro only on one OS through $<PLATFORM_ID> (Invariant 1, configure-time check): the PLATFORM_ID branch of the OS definition guard, on a directory. The platform is SunOS and the name GYO_FAST_PATH, so no part of the entry matches the OS name list and only the PLATFORM_ID branch can catch it (with Windows, ':WINDOWS>' matched the name list and the branch could be deleted unseen; adversarial check of v8-arch-gyo2-stale-mutants) (rewritten by v8-arch-gyo2-stale-mutants: engine/CMakeLists.txt no longer has add_subdirectory(base); it adds the Modules from the register since #257)",
+      "guards": [
+        "os 1"
+      ],
       "file": "engine/CMakeLists.txt",
-      "find": "add_subdirectory(base)\n",
-      "replace": "add_compile_definitions($<$<PLATFORM_ID:Windows>:GYO_FAST_PATH>)\nadd_subdirectory(base)\n",
+      "find": "get_property(_gyo_units GLOBAL PROPERTY GYO_UNITS_ORDER)\n",
+      "replace": "add_compile_definitions($<$<PLATFORM_ID:SunOS>:GYO_FAST_PATH>)\nget_property(_gyo_units GLOBAL PROPERTY GYO_UNITS_ORDER)\n",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
-      "expect": "OS definition guard:\\s+directory\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'\\$<\\$<PLATFORM_ID:Windows>:GYO_FAST_PATH>'"
+      "expect": "OS\\s+definition\\s+guard:\\s+directory\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'\\$<\\$<PLATFORM_ID:SunOS>:GYO_FAST_PATH>'"
     },
     {
       "id": "os-g15-runtime-roots",
@@ -1542,23 +1551,29 @@
     },
     {
       "id": "ti-x1-time-links-more",
-      "what": "gyo_time links another module (time.md Invariant 10, configure-time check)",
-      "file": "engine/core/time/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base PRIVATE Threads::Threads)",
-      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math PRIVATE Threads::Threads)",
+      "what": "gyo_time gains a registered Engine dependency (its config/modules.csv row depends base;math), time.md Invariant 10, configure-time link check. Only it catches gyo_time's link set (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "guards": [
+        "time 10"
+      ],
+      "file": "config/modules.csv",
+      "find": "time,core/time,GYO::Time,The engine time base,yes,no,base,,,",
+      "replace": "time,core/time,GYO::Time,The engine time base,yes,no,base;math,,,",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time links .*expected exactly\\s+GYO::Base;Threads::Threads"
+      "expect": "gyo_time\\s+links\\s+GYO::Base;GYO::Math;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Base;Threads::Threads"
     },
     {
       "id": "ti-x2-threads-links-more",
-      "what": "gyo_threads links another module (threads.md Invariant 9, configure-time check)",
-      "file": "engine/core/threads/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math Threads::Threads PRIVATE GYO::Os)",
+      "what": "gyo_threads gains a registered Engine dependency (its config/modules.csv row depends time;math), threads.md Invariant 9, configure-time link check. Only it catches gyo_threads's link set; th-x1-threads-os-public moves a link without adding one (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "guards": [
+        "threads 9"
+      ],
+      "file": "config/modules.csv",
+      "find": "threads,core/threads,GYO::Threads,Role threads,yes,no,time,os,,",
+      "replace": "threads,core/threads,GYO::Threads,Role threads,yes,no,time;math,os,,",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
-      "expect": "gyo_threads links .*expected\\s+exactly\\s+GYO::Os;GYO::Time;Threads::Threads"
+      "expect": "gyo_threads\\s+links\\s+GYO::Math;GYO::Os;GYO::Time;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Os;GYO::Time;Threads::Threads"
     },
     {
       "id": "ti-x3-backend-name-changed",
@@ -1780,13 +1795,16 @@
     },
     {
       "id": "th-x1-threads-os-public",
-      "what": "gyo_threads links GYO::Os publicly, so its users get engine/os headers (threads.md Invariant 9, configure-time check)",
-      "file": "engine/core/threads/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads GYO::Os)",
+      "what": "gyo_threads's register row moves os from private_depends to depends, so GYO::Os is linked publicly and its users get engine/os headers (threads.md Invariant 9, configure-time check). The link set is unchanged, so only the interface check catches it (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "guards": [
+        "threads 9"
+      ],
+      "file": "config/modules.csv",
+      "find": "threads,core/threads,GYO::Threads,Role threads,yes,no,time,os,,",
+      "replace": "threads,core/threads,GYO::Threads,Role threads,yes,no,time;os,,,",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
-      "expect": "gyo_threads exposes GYO::Os to its users"
+      "expect": "gyo_threads\\s+exposes\\s+GYO::Os\\s+to\\s+its\\s+users"
     },
     {
       "id": "th-x2-os-without-thread-library",
@@ -1876,6 +1894,59 @@
       "target": "gyo_os_tests",
       "cases": "*a role's priority*",
       "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
+    },
+    {
+      "id": "os-g19-links-from-later-directory",
+      "what": "A directory configured after tests/common/os (tests/common/audio) links GYO::Time into gyo_os (Invariant 3): only the DEFER of gyo_expect_os_links sees a link added later from another directory; every other link mutant edits engine/ or config/modules.csv, which configure first, and O6 scans only engine/. It is also the one way left to link a module above gyo_os, since the register refuses time on the os row as coming later. The \\S* allows CMake's directory scope markers that a link from another directory adds (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "os 3"
+      ],
+      "file": "tests/common/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_os PRIVATE GYO::Time)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_os\\s+links\\s+\\S*GYO::Base;GYO::Time;(?:Threads::Threads|shell32);\\s+expected\\s+exactly\\s+GYO::Base;(?:Threads::Threads|shell32)"
+    },
+    {
+      "id": "ti-x5-links-from-later-directory",
+      "what": "A directory configured after tests/common/time (tests/common/audio) links GYO::Math into gyo_time (time.md Invariant 10): only the DEFER of gyo_expect_time_and_thread_links (one call serves gyo_time and gyo_threads) sees a link added later from another directory; ti-x1 and ti-x2 edit config/modules.csv, which configures first (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "time 10",
+        "threads 9"
+      ],
+      "file": "tests/common/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_time PRIVATE GYO::Math)\n",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_time\\s+links\\s+\\S*GYO::Base;GYO::Math;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Base;Threads::Threads"
+    },
+    {
+      "id": "os-g20-definition-from-later-directory",
+      "what": "A test target in a directory configured after tests/common/os (gyo_audio_tests) gets an OS-identifying compile definition (Invariant 1): only the DEFER of gyo_expect_no_os_definitions sees a target defined after tests/common/os, and it is the only mutant under the tests root (so it also catches the exemption tests/common/os widened to tests); os-g13 and os-g14 edit engine/, which configures first (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "os 1"
+      ],
+      "file": "tests/common/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_compile_definitions(gyo_audio_tests PRIVATE GYO_TEST_LINUX=1)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "OS\\s+definition\\s+guard:\\s+gyo_audio_tests\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_TEST_LINUX=1'"
+    },
+    {
+      "id": "os-g21-definition-option",
+      "what": "A non-os target gets an OS-identifying macro through a -D compile option, not a compile definition (Invariant 1): only it reaches the COMPILE_OPTIONS branch of the OS definition guard (the -D/ /D parse and the option properties); os-g13 and os-g14 go through COMPILE_DEFINITIONS (added by v8-arch-gyo2-stale-mutants after the adversarial check)",
+      "guards": [
+        "os 1"
+      ],
+      "file": "engine/core/time/CMakeLists.txt",
+      "find": "gyo_link_registered_dependencies(time)\n",
+      "replace": "gyo_link_registered_dependencies(time)\ntarget_compile_options(gyo_time PRIVATE -DGYO_LINUX=1)\n",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "OS\\s+definition\\s+guard:\\s+gyo_time\\s+COMPILE_OPTIONS\\s+has\\s+'-DGYO_LINUX=1'"
     }
   ]
 }
