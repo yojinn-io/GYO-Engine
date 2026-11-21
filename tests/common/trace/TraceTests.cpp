@@ -323,18 +323,21 @@ TEST_CASE("trace: a span begun after an exception or an error at the same depth 
         throw std::runtime_error("boom");
     } catch (const std::runtime_error&) {
     }
-    {
-        // The first exception left an error on the slot of "first-inner" (depth 1); a span there must not keep it.
-        Base::TraceSpan frame;
-        frame.Begin("game", "second");
-        Base::TraceSpan reused;
-        reused.Begin("game", "reused");
-    }
+    // Right after: "third" reuses the slot of "first" (depth 0) with no child of its own, so a kept "a child was
+    // unwound" would leave its exception without a path (a child beginning would clear it and hide that).
     try {
         Base::TraceSpan frame;
         frame.Begin("game", "third");
         throw std::runtime_error("again");
     } catch (const std::runtime_error&) {
+    }
+    {
+        // The first exception left an error on the slot of "first-inner" (depth 1); a span there must not keep it;
+        // "third" left the exception flag on depth 0.
+        Base::TraceSpan frame;
+        frame.Begin("game", "second");
+        Base::TraceSpan reused;
+        reused.Begin("game", "reused");
     }
     std::optional<Logging::StoredRecord> second;
     std::optional<Logging::StoredRecord> reused;
@@ -459,4 +462,69 @@ TEST_CASE("trace: closing the handle puts back the receiver that was installed b
         auto handle = Trace::Install({});
     }
     CHECK_MESSAGE(Base::SetTraceReceiver(nullptr) == &other, "TR-7: Close restores the earlier receiver, not nullptr");
+}
+
+TEST_CASE("trace: after a child's exception is caught, the parent's own later exception writes its path") {
+    Setup setup;
+    try {
+        Base::TraceSpan parent;
+        parent.Begin("game", "parent");
+        try {
+            Base::TraceSpan child;
+            child.Begin("game", "child");
+            throw std::runtime_error("caught inside");
+        } catch (const std::runtime_error&) {
+        }
+        {
+            Base::TraceSpan later;
+            later.Begin("game", "later");
+        }
+        throw std::runtime_error("the parent's own");
+    } catch (const std::runtime_error&) {
+    }
+    CHECK_MESSAGE(setup.Category("span.path").size() == 2, "D4 (i): the parent's own exception writes a path (a new child cleared the old mark)");
+}
+
+TEST_CASE("trace: a category longer than 64 bytes is cut, not a failed assertion") {
+    Setup setup({.include = {"span."}, .minimum = Level::Trace});
+    const std::string category(80, 'c');
+    {
+        Base::TraceSpan span;
+        span.Begin(category, "long-category");
+    }
+    const auto records = setup.memory->Records();
+    REQUIRE_MESSAGE(records.size() == 1, "TR-5: the span is written under the cut category");
+    CHECK(records[0].category == "span." + std::string(64, 'c'));
+}
+
+TEST_CASE("trace: a span still open when the Logger is uninstalled writes nothing when it ends") {
+    Setup setup;
+    {
+        Base::TraceSpan span;
+        span.Begin("game", "open-over-logger-close");
+        REQUIRE(reads.load() == 1);
+        setup.logger.reset();
+    }
+    // With no Logger a written record would go to standard error, which a test does not read (OS boundary):
+    // the end's clock read shows whether the span was written.
+    CHECK_MESSAGE(reads.load() == 1, "D5: no Logger at the end, the span is not written (no clock read at its end)");
+    CHECK(setup.memory->Records().empty());
+}
+
+TEST_CASE("trace: a parent marked after a child's exception was caught writes the path for its own exception") {
+    Setup setup;
+    try {
+        Base::TraceSpan parent;
+        parent.Begin("game", "parent");
+        try {
+            Base::TraceSpan child;
+            child.Begin("game", "child");
+            throw std::runtime_error("caught inside");
+        } catch (const std::runtime_error&) {
+            parent.MarkError("handled the child", false);
+        }
+        throw std::runtime_error("the parent's own");
+    } catch (const std::runtime_error&) {
+    }
+    CHECK_MESSAGE(setup.Category("span.path").size() == 2, "D4 (i): a mark clears the caught child's flag, so the parent's own exception writes a path");
 }

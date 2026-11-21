@@ -91,12 +91,14 @@ FatalWriteReport WriteFatalRecord(const Record& given) noexcept {
     const Field droppedFields{"dropped_fields", repeated};
     if (!repeated.empty()) record.fields = std::span<const Field>(&droppedFields, 1);
     // The trace path at this moment (trace declaration D4 (a)): where the E0 happened, read from the Base
-    // facade into a fixed buffer (no allocation, no lock). A record with more than kMaxFatalFields fields
-    // keeps its fields and goes without it.
+    // facade into a fixed buffer (no allocation, no lock). A record with more than kMaxFatalFields fields,
+    // or one that names trace_path itself, keeps its fields and goes without it (the key once: LG-5).
     char pathBuffer[kTracePathBytes];
     const std::size_t pathSize = ::Engine::Base::TraceCurrentPath(pathBuffer);
     std::array<Field, kMaxFatalFields + 1> withPath = BlankFields(std::make_index_sequence<kMaxFatalFields + 1>{});
-    if (pathSize != 0 && record.fields.size() <= kMaxFatalFields) {
+    const bool namesPath = std::any_of(record.fields.begin(), record.fields.end(),
+                                       [](const Field& field) { return field.key == "trace_path"; });
+    if (pathSize != 0 && !namesPath && record.fields.size() <= kMaxFatalFields) {
         std::copy(record.fields.begin(), record.fields.end(), withPath.begin());
         withPath[record.fields.size()] = Field{"trace_path", std::string_view(pathBuffer, pathSize)};
         record.fields = std::span<const Field>(withPath.data(), record.fields.size() + 1);

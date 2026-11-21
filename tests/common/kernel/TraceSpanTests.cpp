@@ -93,6 +93,13 @@ struct Bell { std::uint32_t n; };
 SystemResult HearBell(On<Bell>) {
     return Ok();
 }
+SystemResult BellDespawnsSix(On<Bell>, Despawn despawn) {
+    despawn.Entity(6);
+    return Ok();
+}
+SystemResult RingsNow(ExclusiveWorld<> world) {
+    return world.Trigger(Bell{2});
+}
 SystemResult BellFails(On<Bell>) {
     return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the bell cracked"));
 }
@@ -226,4 +233,39 @@ TEST_CASE("kernel trace: an observer's Err in a Trigger from the Host is the ori
     std::size_t origins = 0;
     for (const std::string& e : recording.log) origins += e == "current origin" ? 1U : 0U;
     CHECK_MESSAGE(origins == 1, "[ks-trace-trigger-err] " << recording.Joined());
+}
+
+namespace {
+std::size_t Origins(const Recording& recording) {
+    std::size_t origins = 0;
+    for (const std::string& e : recording.log) origins += e == "current origin" ? 1U : 0U;
+    return origins;
+}
+} // namespace
+
+TEST_CASE("kernel trace: a hook refused in a Host Trigger's rounds is the origin once") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.Event<Bell>({.name = "Bell", .zone = Zone::B});
+        r.Observer<Bell, &BellDespawnsSix>({.name = "bell-despawns", .zone = Zone::B});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+    }, false, "Match");
+    rig->world().Insert(6, Tag{6});
+    Recording recording;
+    REQUIRE_FALSE(rig->Trigger(Bell{1}));
+    CHECK_MESSAGE(Origins(recording) == 1, "[ks-trace-host-trigger-once] " << recording.Joined());
+}
+
+TEST_CASE("kernel trace: a hook refused in a System's Trigger is the origin once") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.Event<Bell>({.name = "Bell", .zone = Zone::B});
+        r.Observer<Bell, &BellDespawnsSix>({.name = "bell-despawns", .zone = Zone::B});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.AddSystem<&RingsNow>(B("Ringer", "A"));
+    }, false, "Match");
+    rig->world().Insert(6, Tag{6});
+    Recording recording;
+    REQUIRE_FALSE(rig->Run());
+    CHECK_MESSAGE(Origins(recording) == 1, "[ks-trace-system-trigger-once] " << recording.Joined());
 }

@@ -428,3 +428,16 @@ TEST_CASE("fatal: trace_path is added after the record's own fields; with more t
     CHECK_MESSAGE(records[2].Find("trace_path") == nullptr, "trace D4 (a): more than 32 fields go without trace_path");
     CHECK(records[2].Find("k32") != nullptr);
 }
+
+TEST_CASE("fatal: a record that already has a trace_path field keeps it and gets no second one") {
+    auto memory = std::make_shared<Logging::MemorySink>();
+    auto handle = Logging::Install(WithMemory(memory));
+    REQUIRE(handle);
+    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kPathReceiver);
+    const Logging::Field mine[] = {{"trace_path", "mine"}};
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "x", .fields = mine}));
+    ::Engine::Base::SetTraceReceiver(previous);
+    REQUIRE(memory->FatalJsonLines().size() == 1);
+    const std::string line = memory->FatalJsonLines()[0];
+    CHECK_MESSAGE(static_cast<bool>(GYO::Engine::Json::Parse(line)), "LG-5: the fatal line reads back (one trace_path key): " << line);
+}

@@ -48,7 +48,7 @@ struct Frame {
     // A span above this one ended by an exception (so this one is not the first the exception unwound).
     bool childUnwound = false;
     std::size_t errorSize = 0;
-    char error[kErrorBytes];
+    char error[kErrorBytes]{};
 };
 
 struct Stack {
@@ -58,7 +58,8 @@ struct Stack {
     Frame frames[kMaxDepth];
 };
 
-thread_local Stack stack;
+// Constant-initialized: no first-use guard on the span path.
+constinit thread_local Stack stack{};
 
 std::atomic<bool> installed{false};
 std::atomic<std::uint32_t> generation{0};
@@ -79,12 +80,13 @@ Stack& CurrentStack(const std::uint32_t current) noexcept {
     return stack;
 }
 
-// "span." + category in buffer (no allocation).
+// "span." + category in buffer (no allocation); a category longer than kMaxCategory is cut, as an error text
+// is (TR-5): the mechanism tells, it does not stop the program over a long name.
 std::string_view SpanCategory(const std::string_view category, char (&buffer)[kSpanPrefix.size() + kMaxCategory]) noexcept {
-    GYO_ASSERT(category.size() <= kMaxCategory);
+    const std::size_t size = category.size() < kMaxCategory ? category.size() : kMaxCategory;
     std::memcpy(buffer, kSpanPrefix.data(), kSpanPrefix.size());
-    std::memcpy(buffer + kSpanPrefix.size(), category.data(), category.size());
-    return std::string_view(buffer, kSpanPrefix.size() + category.size());
+    std::memcpy(buffer + kSpanPrefix.size(), category.data(), size);
+    return std::string_view(buffer, kSpanPrefix.size() + size);
 }
 
 // Whether a record of this category would be written now: only with a Logger installed and a sink taking it.
@@ -158,6 +160,9 @@ void SetError(Frame& f, const std::string_view text) noexcept {
 
 void WriteSpan(const Frame& f, const bool unbalanced) noexcept {
     char category[kSpanPrefix.size() + kMaxCategory];
+    const std::string_view spanCategory = SpanCategory(f.category, category);
+    // Asked again at the end: the Logger may have been uninstalled, or the sink changed, while the span was open.
+    if (!Taken(spanCategory)) return;
     const std::int64_t end = Now();
     Field fields[7] = {{"span_id", f.id}, {"parent_id", f.parent}, {"begin_ns", f.beginNs}, {"duration_ns", end - f.beginNs},
                        {"", 0}, {"", 0}, {"", 0}};
@@ -166,7 +171,7 @@ void WriteSpan(const Frame& f, const bool unbalanced) noexcept {
     if (f.exception) fields[count++] = Field{"exception", true};
     if (unbalanced) fields[count++] = Field{"unbalanced", true};
     Logging::Write(Logging::Entry{.level = Level::Trace,
-                                  .category = SpanCategory(f.category, category),
+                                  .category = spanCategory,
                                   .text = f.name,
                                   .fields = std::span<const Field>(fields, count),
                                   .world = f.world});
@@ -179,6 +184,8 @@ Base::TraceToken OnBegin(const std::string_view category, const std::string_view
     const std::uint32_t current = generation.load(std::memory_order_acquire);
     Stack& s = CurrentStack(current);
     const std::uint64_t id = nextId.fetch_add(1, std::memory_order_relaxed);
+    // A new child: an exception that unwound an earlier child was caught, so the parent's next one is its own.
+    if (s.depth > 0 && s.depth <= kMaxDepth) s.frames[s.depth - 1].childUnwound = false;
     if (s.depth < kMaxDepth) {
         Frame& f = s.frames[s.depth];
         f.id = id;
@@ -252,6 +259,8 @@ void OnEnd(const Base::TraceToken token, const bool endedByException) noexcept {
 
 void Mark(Stack& s, const std::size_t index, const std::string_view text, const bool origin) noexcept {
     SetError(s.frames[index], text);
+    // Marked after a child's exception was caught: an exception from here on is this span's own.
+    s.frames[index].childUnwound = false;
     if (origin) WritePath(s, index, text);
 }
 

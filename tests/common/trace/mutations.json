@@ -463,8 +463,8 @@
     "trace-declaration D3"
    ],
    "file": "engine/modules/trace/src/Trace.cpp",
-   "find": "thread_local Stack stack;",
-   "replace": "Stack stack;",
+   "find": "constinit thread_local Stack stack{};",
+   "replace": "constinit Stack stack{};",
    "target": "gyo_trace_tests",
    "cases": "trace: each thread has its own stack*",
    "expect": "D3: the other thread's stack holds only its own span"
@@ -703,7 +703,7 @@
     "trace-declaration D4"
    ],
    "file": "engine/ecs/kernel/src/Executor.cpp",
-   "find": "    if (!ran) return Fail(std::move(ran).error(), false);",
+   "find": "    if (!ran) return Fail(std::move(ran).error(), false, !world.leftError_.has_value());",
    "replace": "    if (!ran) return Fail(std::move(ran).error(), false, false);",
    "target": "gyo_kernel_tests",
    "cases": "kernel trace: an observer's Err*",
@@ -788,6 +788,86 @@
    "target": "gyo_orchestration_tests",
    "cases": "trace-spans: an error the orchestration layer produces*",
    "expect": "\\[or-trace-mark-text\\]"
+  },
+  {
+   "id": "tr-kernel-host-trigger-origin",
+   "what": "D4 (i): a hook refused in a Host Trigger's rounds is marked as produced again at the Trigger's exit (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "if (!ran) return Fail(std::move(ran).error(), false, !world.leftError_.has_value());",
+   "replace": "if (!ran) return Fail(std::move(ran).error(), false, true);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a hook refused in a Host Trigger*",
+   "expect": "\\[ks-trace-host-trigger-once\\]"
+  },
+  {
+   "id": "tr-kernel-system-trigger-origin",
+   "what": "D4 (i): a hook refused in a System's Trigger is marked as produced again at the Trigger's exit (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "if (!ran) return Fail(std::move(ran).error(), true, !world.leftError_.has_value());",
+   "replace": "if (!ran) return Fail(std::move(ran).error(), true, true);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a hook refused in a System's Trigger*",
+   "expect": "\\[ks-trace-system-trigger-once\\]"
+  },
+  {
+   "id": "tr-child-flag-kept",
+   "what": "D4 (i): a caught child's exception still marks the parent after a new child began, so the parent's own exception writes no path (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (s.depth > 0 && s.depth <= kMaxDepth) s.frames[s.depth - 1].childUnwound = false;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: after a child's exception is caught*",
+   "expect": "a new child cleared the old mark"
+  },
+  {
+   "id": "tr-mark-keeps-child-flag",
+   "what": "D4 (i): a mark after a caught child's exception leaves the flag, so the parent's own exception writes no path (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-3"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    s.frames[index].childUnwound = false;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a parent marked after*",
+   "expect": "a mark clears the caught child's flag"
+  },
+  {
+   "id": "tr-category-asserted",
+   "what": "TR-5: a category longer than 64 bytes stops the program instead of being cut (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    const std::size_t size = category.size() < kMaxCategory ? category.size() : kMaxCategory;\n",
+   "replace": "    GYO_ASSERT(category.size() <= kMaxCategory);\n    const std::size_t size = category.size();\n",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a category longer than 64 bytes*",
+   "expect": "category.size\\(\\) <= kMaxCategory"
+  },
+  {
+   "id": "tr-end-not-rechecked",
+   "what": "TR-5 / D5: a span open when the Logger is uninstalled is still written at its end (to standard error) (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (!Taken(spanCategory)) return;\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span still open when the Logger*",
+   "expect": "no clock read at its end"
   }
  ]
 }

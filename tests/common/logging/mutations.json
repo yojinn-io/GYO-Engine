@@ -1306,7 +1306,7 @@
     "trace-declaration D4"
    ],
    "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
-   "find": "    if (pathSize != 0 && record.fields.size() <= kMaxFatalFields) {",
+   "find": "    if (pathSize != 0 && !namesPath && record.fields.size() <= kMaxFatalFields) {",
    "replace": "    if (false) {",
    "target": "gyo_logging_tests",
    "cases": "fatal: with a trace receiver*",
@@ -1334,11 +1334,25 @@
     "trace-declaration D4"
    ],
    "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
-   "find": "    if (pathSize != 0 && record.fields.size() <= kMaxFatalFields) {",
-   "replace": "    if (pathSize != 0 && record.fields.size() < kMaxFatalFields) {",
+   "find": "    if (pathSize != 0 && !namesPath && record.fields.size() <= kMaxFatalFields) {",
+   "replace": "    if (pathSize != 0 && !namesPath && record.fields.size() < kMaxFatalFields) {",
    "target": "gyo_logging_tests",
    "cases": "fatal: trace_path is added after*",
    "expect": "trace D4 \\(a\\): 32 fields still get trace_path"
+  },
+  {
+   "id": "lg-fatal-path-twice",
+   "what": "LG-5: a fatal record that names trace_path gets a second trace_path key and its JSON line does not read back (review 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-5",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "!namesPath && ",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a record that already has*",
+   "expect": "LG-5: the fatal line reads back \\(one trace_path key\\)"
   }
  ]
 }

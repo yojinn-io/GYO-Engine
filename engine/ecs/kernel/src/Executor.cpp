@@ -944,7 +944,9 @@ Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::Syste
                                     " of schedule '" + std::string(call.schedule) + "'";
     Engine::Base::Result<void, KernelError> ran =
         RunTriggered(id, *payload, target, call.planPos, call.schedule, limit, limitSource, where);
-    if (!ran) return halt(std::move(ran).error());
+    // A hook its rounds ran that was refused went through Fail already and left its error: here it only
+    // passes through (trace declaration D4 (i)).
+    if (!ran) return Fail(std::move(ran).error(), true, !world.leftError_.has_value());
     return {};
 }
 
@@ -1014,7 +1016,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(EventType
     } settle(world);
     Engine::Base::Result<void, KernelError> ran =
         RunTriggered(id, *payload, target, 0, {}, limit, "World's KernelSettings", "the Host");
-    if (!ran) return Fail(std::move(ran).error(), false);
+    // As in a System's Trigger: a refused hook left its error already (D4 (i)).
+    if (!ran) return Fail(std::move(ran).error(), false, !world.leftError_.has_value());
     // The observers' declared writes and the rounds' changes are not changes outside the World API.
     if (world.verification_) world.TakeSnapshots();
     return {};
