@@ -4,13 +4,13 @@
 
 日期：2026-11-21。分支 `claude/gyo2-logging-10dfcd`（draft PR #256，base `gyo2` e4072b5c）。事前宣告：[logging-declaration.zh-Hant.md](logging-declaration.zh-Hant.md)（修訂 1 動工前核准、修訂 2 第 17 節、修訂 3 第 18 節）。Design Invariants：[logging.zh-Hant.md](logging.zh-Hant.md)。經過與證據：[dev_log](../../../dev_logs/2026_11_20_gyo2_logging.zh-Hant.md)。
 
-**請你核准的**：第 2 節（判定 2 的變更，AGENTS §14.4）、第 3 節（Design Invariants 的最終文字，含 `world_time` 的 WT-4）、第 4 節（突變的數目超過基準）、第 5 節（和宣告不同的地方）、第 6 節（沒修、記下的事）。核准後我把 draft 改成 ready，看 L1 三平台；你說「合併」才合併。
+**請你核准的**：第 2 節（判定 2 的變更，AGENTS §14.4）、第 3 節（Design Invariants 的最終文字，含 `world_time` 的 WT-4）、第 4 節（突變的數目超過基準）、第 5 節（和宣告不同的地方）、第 6 節（沒修、記下的事）。PR 已改成 ready、L1 三平台綠；你說「合併」才合併。
 
 ## 1. 判定的結果（宣告第 10 節）
 
 | # | 結果 | 證據 |
 |---|---|---|
-| 1 | 本機 macOS x86_64 全量 ctest 151/151（core preset）。L1：見本節末 | 本機 ctest；L1 run 見下 |
+| 1 | 本機 macOS x86_64 全量 ctest 151/151（core preset）；L1 三平台綠（run 44781745152） | 本機 ctest；L1 run 見本節末 |
 | 2 | 照第 2 節變更後成立：注入「永不回來的寫出」時 `WriteFatalRecord` 回來、致命那一行在、回報標逾時（`logging.fatal`）；致命寫出口都寫完才 flush、全部輸出端共用一個期限；`std::terminate` 三種情形各恰好一筆 `Fatal` 並交回之前的處理器（`logging.terminate.*`）；③ 收到的一行在兩個輸出端各一筆（S3-1） | ctest；`step7-terminate-red.txt`、`review-fixes-red.txt` |
 | 3 | 件數一致（文首） | ctest |
 | 4 | 情境 S3-3：日誌開關，遊戲自己的 Resource 與讀者讀到的逐位元相同 | ctest |
@@ -20,7 +20,7 @@
 
 證據都在主 checkout `build/evidence/gyo2-logging/`（本機 macOS，git 不追蹤）。
 
-**L1**：第 2 步的 run 44704959856 三平台綠（含兩個附加 handle 的並行寫）。審查前的 run 44774463275：linux-x64、macos-arm64 綠；windows-x64 的 `logging.terminate.*` 三件失敗——探測程式用結束碼 3 表示「Install 失敗」，而 Windows 的 `abort()` 結束碼也是 3（terminate 本身成功，stderr 有那一行）。改成提前離開時印標記、腳本看標記（實作缺陷不是，是測試的判讀，AGENTS §14.1 的切分：測試自身）。修正後的 run：〔待補〕。
+**L1**：第 2 步的 run 44704959856 三平台綠（含兩個附加 handle 的並行寫）。審查前的 run 44774463275：linux-x64、macos-arm64 綠；windows-x64 的 `logging.terminate.*` 三件失敗——探測程式用結束碼 3 表示「Install 失敗」，而 Windows 的 `abort()` 結束碼也是 3（terminate 本身成功，stderr 有那一行）。改成提前離開時印標記、腳本看標記（不是實作缺陷，是測試的判讀，AGENTS §14.1 的切分：測試自身）。第二次 run 44779446258：linux-x64 的 `logging.console_probe.*` 三件失敗——`ConsoleProbe.cmake` 沒有 `cmake_minimum_required`，runner 的 CMake 3.31.6 用舊政策讓 `while(TRUE)` 不執行、計數是 0（同樣是測試自身；本機 CMake 4.4.3 沒抓到），改用 `string(REGEX MATCHALL)` 並明寫政策（7a7175d5）。**修正後 run 44781745152（c00c1ac1）：linux-x64、windows-x64、macos-arm64 三平台綠，CI gate success。**
 
 ## 2. 判定 2 的變更（AGENTS §14.4；和宣告第 18 節同一份）
 
