@@ -7,7 +7,7 @@
    "what": "the chosen strategy's startup check is not run (authority 4.4, 4.5). Only it catches the call",
    "guards": [
     "authority-rollback-declaration 4.2",
-    "authority 4.4"
+    "authority-module-declaration 4.4"
    ],
    "file": "engine/modules/authority/src/AuthorityModule.cpp",
    "find": "    options->strategy->Check(check);",
@@ -21,7 +21,7 @@
    "what": "a World with no strategy is refused even without authority registrations (authority-rollback 4.2, authority 4.7: only a World with authority registrations needs one). Only it catches the condition",
    "guards": [
     "authority-rollback-declaration 4.2",
-    "authority 4.4"
+    "authority-module-declaration 4.4"
    ],
    "file": "engine/modules/authority/src/AuthorityModule.cpp",
    "find": "        if (table != nullptr && table->Any()) {",
@@ -35,7 +35,7 @@
    "what": "a World with authority registrations and no strategy is not reported (authority 4.7, AU-E2). Only it catches AU-E2",
    "guards": [
     "authority DI-A 11",
-    "authority 4.7"
+    "authority-module-declaration 4.7"
    ],
    "file": "engine/modules/authority/src/AuthorityModule.cpp",
    "find": "            context.Report(\"AU-E2\",",
@@ -75,7 +75,7 @@
    "id": "au-rollback-not-on-behalf",
    "what": "the server authority does not register a decision type in the rollback Module (authority 4.3). Only it catches the on-behalf rollback registration",
    "guards": [
-    "authority 4.3",
+    "authority-module-declaration 4.3",
     "authority DI-A 11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
@@ -89,7 +89,7 @@
    "id": "au-input-rolled",
    "what": "an input is registered as rollback state on behalf (authority 4.3, Z8: inputs are never); the World then fails with AU-E7. Only it catches the input filter of the on-behalf registration",
    "guards": [
-    "authority 4.3"
+    "authority-module-declaration 4.3"
    ],
    "file": "engine/modules/authority/src/Registrations.cpp",
    "find": "    if (data_->ops->registerInRollback == nullptr || data_->options.input) return;",
@@ -102,7 +102,7 @@
    "id": "au-norollback-rolled",
    "what": "NoRollback still registers the type as one that rolls back (authority 4.3). Only it catches the choice",
    "guards": [
-    "authority 4.3"
+    "authority-module-declaration 4.3"
    ],
    "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
    "find": "    if (choice != RollbackChoice::Rollback) return;\n    if constexpr (std::equality_comparable<T> && std::is_copy_constructible_v<T>) {\n        rollback.Component<T>();",
@@ -115,7 +115,7 @@
    "id": "au-derived-dropped",
    "what": "Derived registers nothing (authority 4.3). Only it catches the Derived choice",
    "guards": [
-    "authority 4.3"
+    "authority-module-declaration 4.3"
    ],
    "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
    "find": "    if (choice == RollbackChoice::Derived) rollback.Derived<T>();\n",
@@ -128,7 +128,7 @@
    "id": "au-ingress-not-skipped",
    "what": "the server authority adds the entry without the run condition (authority 4.4, D-E15). Only it catches the on-behalf condition",
    "guards": [
-    "authority 4.4",
+    "authority-module-declaration 4.4",
     "authority DI-A 11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
@@ -142,7 +142,7 @@
    "id": "au-dynamic-insert-unchecked",
    "what": "AU-E3 is not reported (authority 5.5: the decision part does not change after startup). Only it catches AU-E3",
    "guards": [
-    "authority 5.5"
+    "authority-module-declaration 5.5"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "    if (context.World().DynamicInsert()) {",
@@ -181,7 +181,7 @@
    "id": "au-tick-writer-unchecked",
    "what": "a System that writes Tick and is not on the time Module's list is not reported (authority 5.4, AU-E5). Only it catches AU-E5",
    "guards": [
-    "authority 5.4"
+    "authority-module-declaration 5.4"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "            if (std::find(allowed.begin(), allowed.end(), system.name) != allowed.end()) continue;\n            context.Report(\"AU-E5\"",
@@ -194,7 +194,7 @@
    "id": "au-tick-driver-refused",
    "what": "the time Module's driver is reported as a Tick writer (authority 5.4: the list is read). Only it catches the list",
    "guards": [
-    "authority 5.4"
+    "authority-module-declaration 5.4"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "            if (std::find(allowed.begin(), allowed.end(), system.name) != allowed.end()) continue;",
@@ -207,7 +207,7 @@
    "id": "au-z6-unchecked",
    "what": "a System of a resimulated schedule writing decision data that does not roll back is not reported (Z6, AU-E6). Only it catches the System half of Z6",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "            if (!judged(key) || rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) continue;",
@@ -220,7 +220,7 @@
    "id": "au-z6-every-schedule",
    "what": "Z6 looks at every schedule, not only the resimulated ones (authority 5.11). Only it catches the schedule filter",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;",
@@ -233,7 +233,7 @@
    "id": "au-z6-hooks-unchecked",
    "what": "a hook writing decision data that does not roll back is not reported (Z6 for hooks and observers). Only it catches the hook half",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        for (const Kernel::HookInfo& hook : registry.Hooks()) checkWriter(\"hook '\" + hook.name + \"'\", hook.access);",
@@ -246,7 +246,7 @@
    "id": "au-funnel-ignored",
    "what": "the components a sync point fills through Registrar::InitialValue are not counted as written (authority-rollback 4.4, the funnel, B3). Only it catches the funnel",
    "guards": [
-    "authority 5.11",
+    "authority-module-declaration 5.11",
     "authority-rollback-declaration 4.4"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
@@ -260,7 +260,7 @@
    "id": "au-z6-tick-not-excepted",
    "what": "the tick is not the exception of Z6 (authority 5.11: it does not roll back; a resimulation moves it back). Only it catches the exception",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        return key.kind != Kernel::AccessKind::Message && decision.Has(key) && !(tick && key == *tick) &&\n               inputsKept.count(key) == 0;",
@@ -273,7 +273,7 @@
    "id": "au-z6-skipped-counted",
    "what": "a System skipped while resimulating (an entry writing the decision input) counts for Z6. Only it catches the exemption",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;",
@@ -286,7 +286,7 @@
    "id": "au-z8-unchecked",
    "what": "a decision input registered as rollback state is not reported (Z8, AU-E7). Only it catches AU-E7",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        if (!record.options.input) continue;",
@@ -299,7 +299,7 @@
    "id": "au-de15-unchecked",
    "what": "an entry in a resimulated schedule without the condition is not reported (D-E15, AU-E8). Only it catches AU-E8",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        if (system == nullptr || !Rollback::RunsWhileResimulating(*system, resimulated)) continue;",
@@ -312,7 +312,7 @@
    "id": "au-runs-unchecked",
    "what": "a Runs System running a schedule not registered as nested is not reported (AU-E9). Only it catches AU-E9",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "            if (nested.count(schedule) != 0) continue;",
@@ -352,7 +352,7 @@
    "what": "a OneEndOnly System is taken into the fingerprint (DI-A 5). Only it catches OneEndOnly",
    "guards": [
     "authority DI-A 5",
-    "authority 4.3"
+    "authority-module-declaration 4.3"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "        if (system.removed || OneEnd(registrations, system.name)) continue;",
@@ -417,7 +417,7 @@
    "id": "au-digest-exclude-ignored",
    "what": "digestExclude is ignored (authority 5.6). Only it catches the exclusion",
    "guards": [
-    "authority 5.6"
+    "authority-module-declaration 5.6"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "        if (record.options.digestExclude || record.ops->digest == nullptr) continue;",
@@ -430,8 +430,8 @@
    "id": "au-digest-marks-dropped",
    "what": "the types marked by type (the tick) are left out of the digest (authority 5.4: the tick is decision data). Only it catches the marks in the digest",
    "guards": [
-    "authority 5.6",
-    "authority 5.4"
+    "authority-module-declaration 5.6",
+    "authority-module-declaration 5.4"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "        if (mark.ops != nullptr && mark.ops->digest != nullptr) sum += mark.ops->digest(world, mark.seq);",
@@ -444,7 +444,7 @@
    "id": "au-g5-owner-unchecked",
    "what": "G-5: a writer outside the owner root is left out silently instead of an error (the list never names a file the scanner cannot read). Only it catches the owner check",
    "guards": [
-    "authority 5.9"
+    "authority-module-declaration 5.9"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "        if (relative.rfind(owner + \"/\", 0) != 0) {",
@@ -457,7 +457,7 @@
    "id": "au-g5-initial-value-dropped",
    "what": "G-5 leaves out the files of Registrar::InitialValue functions for a decision component (authority 5.9). Only it catches them",
    "guards": [
-    "authority 5.9"
+    "authority-module-declaration 5.9"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "            add(rule.source, \"the initial value of a decision component\", registry.Components()[rule.target].name);",
@@ -470,8 +470,8 @@
    "id": "au-dataset-one-end-dropped",
    "what": "the dataset report leaves out OneEndOnly (authority 4.3: the startup report lists every such mark). Only it catches that list",
    "guards": [
-    "authority 4.3",
-    "authority 5.9"
+    "authority-module-declaration 4.3",
+    "authority-module-declaration 5.9"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "    for (const OneEndRecord& one : registrations.oneEnd) out += \"one-end-only \"",
@@ -484,7 +484,7 @@
    "id": "au-g5-json-unescaped",
    "what": "G-5: a control character is written as it is (the list is no longer JSON). Only it catches the escape",
    "guards": [
-    "authority 5.9"
+    "authority-module-declaration 5.9"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "        } else if (static_cast<unsigned char>(c) < 0x20) {",
@@ -731,8 +731,8 @@
    "id": "au-annotated-ignored",
    "what": "ExclusiveWorld<Writes<...>> annotations are not counted as writes (authority 5.4, 5.8). Only it catches the annotation",
    "guards": [
-    "authority 5.4",
-    "authority 5.8"
+    "authority-module-declaration 5.4",
+    "authority-module-declaration 5.8"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "    keys.insert(keys.end(), access.annotatedWrites.begin(), access.annotatedWrites.end());\n",
@@ -745,7 +745,7 @@
    "id": "au-deferred-ignored",
    "what": "deferred writes (CommandsFor inserts, Spawn) are not counted as writes. Only it catches them",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "    for (const Kernel::ComponentId id : access.deferredWrites) keys.push_back({Kernel::AccessKind::Component, id});\n",
@@ -758,7 +758,7 @@
    "id": "au-funnel-no-chain",
    "what": "the funnel stops after one InitialValue (no chains; authority-rollback 4.4). Only it catches the chain",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "            keys.push_back({Kernel::AccessKind::Component, rule.target});\n            pending.push_back(rule.target);",
@@ -771,7 +771,7 @@
    "id": "au-funnel-in-place",
    "what": "the funnel starts from every deferred write, removes included, not only the requests a System inserts (a remove fills nothing). Only it catches the insert filter",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/Consistency.cpp",
    "find": "    std::vector<Kernel::ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());",
@@ -784,7 +784,7 @@
    "id": "au-tick-hook-unchecked",
    "what": "a hook that writes Tick is not reported (AU-E5). Only it catches the hook half",
    "guards": [
-    "authority 5.4"
+    "authority-module-declaration 5.4"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "            if (writesTick(hook.access)) {",
@@ -797,7 +797,7 @@
    "id": "au-tick-observer-unchecked",
    "what": "an observer that writes Tick is not reported (AU-E5). Only it catches the observer half",
    "guards": [
-    "authority 5.4"
+    "authority-module-declaration 5.4"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "            if (writesTick(observer.access)) {",
@@ -810,7 +810,7 @@
    "id": "au-z6-observers-unchecked",
    "what": "an observer writing decision data that does not roll back is not reported (Z6). Only it catches the observer half",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        for (const Kernel::ObserverInfo& observer : registry.Observers()) checkWriter(\"observer '\" + observer.name + \"'\", observer.access);",
@@ -823,7 +823,7 @@
    "id": "au-z6-system-derived-refused",
    "what": "Derived is not accepted for a System of a resimulated schedule (5.11). Only it catches the Derived acceptance",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "            if (!judged(key) || rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) continue;",
@@ -836,7 +836,7 @@
    "id": "au-z6-hook-derived-accepted",
    "what": "Derived is accepted for a hook (5.11: a hook writes what rolls back, not Derived). Only it catches the hook's stricter rule",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "                if (!judged(key) || rolls.rolls.count(key) != 0) continue;\n                context.Report(\"AU-E6\", what",
@@ -849,7 +849,7 @@
    "id": "au-z6-input-history-ignored",
    "what": "an input with a kept history is not left out of Z6 (a step that consumes it would have no way out: it may not roll back, Z8). Only it catches the exemption",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "    for (const Rollback::InputRecord& record : rollback.inputs) {\n        if (const auto id = record.idIn(registry)) inputsKept.insert({Kernel::AccessKind::Resource, *id});",
@@ -888,7 +888,7 @@
    "id": "au-runs-step-accepted",
    "what": "AU-E9 accepts the step schedule as a nested registration (5.11: the schedules are in the nested registrations). Only it catches the nested-only rule",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "    for (const Rollback::NestedScheduleRecord& record : rollback.nestedSchedules) nested.insert(record.name);",
@@ -901,7 +901,7 @@
    "id": "au-runs-every-schedule",
    "what": "AU-E9 looks at a Runs System outside the resimulated schedules too. Only it catches the mount filter",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        if (system == nullptr || !MountedIn(*system, resimulated)) continue;\n        for (const std::string& schedule : runs.schedules) {",
@@ -914,7 +914,7 @@
    "id": "au-self-registered",
    "what": "RollbackChoice::Self still registers on behalf (authority 4.3: the author registers it). Only it catches Self",
    "guards": [
-    "authority 4.3"
+    "authority-module-declaration 4.3"
    ],
    "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
    "find": "    if (choice == RollbackChoice::Derived) rollback.Derived<T>();\n    if (choice != RollbackChoice::Rollback) return;",
@@ -927,7 +927,7 @@
    "id": "au-resource-norollback-registered",
    "what": "a resource's NoRollback still registers it as one that rolls back. Only it catches the resource half",
    "guards": [
-    "authority 4.3"
+    "authority-module-declaration 4.3"
    ],
    "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
    "find": "    GYO_ASSERT(choice != RollbackChoice::Derived && \"authority.Resource<T>: Derived is for components only\");\n    if (choice != RollbackChoice::Rollback) return;",
@@ -940,7 +940,7 @@
    "id": "au-any-data-only",
    "what": "only data registrations count as \"has authority registrations\" (a World with a mark and no strategy is not AU-E2). Only it catches Any()",
    "guards": [
-    "authority 4.7"
+    "authority-module-declaration 4.7"
    ],
    "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
    "find": "        return !data_.empty() || !marks_.empty() || !ingress_.empty() || !runs_.empty() || !oneEnd_.empty();",
@@ -992,7 +992,7 @@
    "id": "au-z6-skip-by-system",
    "what": "whether a System runs while resimulating is asked of the System (any mount skipped), not of each mount in a resimulated schedule (review of step 8, B2: a mount added after SkipDuringResimulation runs again). Only it catches the per-mount question",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;",
@@ -1005,7 +1005,7 @@
    "id": "au-z8-component-as-resource",
    "what": "AU-E7 looks a decision input up as a resource whatever its kind: a component input registered as rollback state is not reported (adversarial check a06, verifier V-E14). Only it catches the kind",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        const Kernel::AccessKey key{record.kind == DataKind::Component ? Kernel::AccessKind::Component : Kernel::AccessKind::Resource, *id};",
@@ -1018,7 +1018,7 @@
    "id": "au-z8-derived-allowed",
    "what": "a decision input registered as Derived is not reported (the kernel's old Z8 refused any rollback but No; verifier of step 6). Only it catches Derived",
    "guards": [
-    "authority 5.11"
+    "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
    "find": "        if (rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) {",

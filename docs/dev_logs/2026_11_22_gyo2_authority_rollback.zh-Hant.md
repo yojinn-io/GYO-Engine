@@ -28,7 +28,7 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 ## 驗證
 
 - L1（手動 dispatch，三平台 linux-x64、windows-x64、macos-arm64）：第 1、2、3 步各一次；第 4 步 5da2efc1、15da750d；第 5 步 1855d16a、20279eec；第 6 步 8d41da98——全部 success。
-- 本機 macOS（arm64）`ctest -L 'cpu|shader'`：第 6 步完成時 159/159；第 7 步加 scenario 第 5 段與 `world_time.carry-over`（兩個 carry-over 案原本不在任何 ctest，CI 不跑；第 7 步補）後 161/161。
+- 本機 macOS（x86_64，Intel i9-9980HK；對應 macos-x64，L1 不跑這個平台）`ctest -L 'cpu|shader'`：第 6 步完成時 159/159；第 7 步加 scenario 第 5 段與 `world_time.carry-over`（兩個 carry-over 案原本不在任何 ctest，CI 不跑；第 7 步補）後 161/161。
 - **判定 5（回滾 Module 的預算）**，使用者的 Linux 實機（Ryzen 7 6800H，經 ssh），2026-11-21 20:21～20:37，程式 9d956ed5，條件同 11-20 的基準（governor powersave、EPP balance_performance、CPU 8、預熱 60 s、10 個行程 × 1,000 樣本）。件數的突き合わせ：一致。
   - (1) rb_record_P1 37.871 µs ≤ 156 µs：通過。
   - (2) rb_rollback_P1 708.085 µs ≤ 3,125 µs：通過（扣掉 20 × 標格 System 單獨一步的中位數）。

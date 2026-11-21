@@ -366,7 +366,7 @@
    "id": "rb-msg-read-outside-unchecked",
    "what": "a message written in a resimulated schedule may be read outside them (time-plan-two (5), first direction). Only it catches that direction",
    "guards": [
-    "rollback 7.1"
+    "rollback-module-declaration 7.1"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
    "find": "        if (writtenIn) {",
@@ -379,7 +379,7 @@
    "id": "rb-msg-written-outside-unchecked",
    "what": "a message read in a resimulated schedule may be written outside them (time-plan-two (5), second direction). Only it catches that direction",
    "guards": [
-    "rollback 7.1"
+    "rollback-module-declaration 7.1"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
    "find": "        if (readIn) {",
@@ -434,7 +434,7 @@
    "id": "rb-never-pruned",
    "what": "the history is never pruned (review of step 4; rollback declaration 5.5 point 1: what is older than the depth is dropped). Only it catches the prune running",
    "guards": [
-    "rollback declaration 5.5"
+    "rollback-module-declaration 5.5"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
    "find": "        if (tick > depth) {\n",
@@ -621,7 +621,7 @@
    "id": "rb-msg-hook-counted",
    "what": "a hook that writes a message read in a resimulated schedule counts as a writer outside them (review of step 4; 7.1: hooks and observers are the author's). Only it catches hooks being left out of RB-E8",
    "guards": [
-    "rollback declaration 7.1"
+    "rollback-module-declaration 7.1"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
    "find": "                if (writer.hook || writer.observer || schedules.count(writer.schedule) != 0) continue;",

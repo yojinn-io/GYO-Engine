@@ -39,7 +39,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 **DI-A 1 職責**：權威 Module 的職責是讓作者選的一致性策略有機制可用——作者的權威登記（代為登記進 Kernel）、策略的插口與佔位策略、代為登記（Kernel、回滾、重跑時不跑）、啟動時的檢查、一致性的計算（一致性指紋、digest、G-5 的兩份匯出）。不攔執行期的寫入、不做回滾、不存 tick、不傳輸、不檢查判定資料的讀寫。
 
 <a id="di-a-2"></a>
-**DI-A 2 Kernel 不認得權威**：權威的宣告只存在權威 Module；Kernel 收到的是一般的登記。守衛：Kernel 目錄的掃描（統合附錄的式子；第 6 步拿掉 Kernel 的權威規則後立）。
+**DI-A 2 Kernel 不認得權威**：權威的宣告只存在權威 Module；Kernel 收到的是一般的登記。守衛：本批只有判定 4 的一次掃描（Kernel、編排層、`world_time` 三個目錄對區、寫者、回滾的舊名零命中，`build/evidence/gyo2-authority-rollback/judgement4_scan.py`）與審查；常設的掃描是綁實作的守衛，照宣告 9.5 延到第 5 批開頭立（scenario 第 5 段已通過）。
 
 <a id="di-a-3"></a>
 **DI-A 3 策略是 interface＋實作**：官方實作與作者的走同一個插口、沒有特權。`Name`、`Version`、`OnRegister`、`Check`、`ConsistencyFingerprint` 與它們的時機是契約，每個掛點只收一個自己的情境物件（實作）；`Digest`、`OnMismatch` 的形狀不在這次的契約內（官方 digest 是 World 的函式，`Consistency.hpp`）。守衛：`authority socket: an author's strategy…`、`authority checks: AU-E8…`（作者繼承官方實作改掉一個掛點）。
@@ -106,6 +106,6 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 - 依名字標記的型別（`MarkResource`）不進 digest：Kernel 沒有逐 id 的雜湊入口，權威手上只有名字（實作）。狀態機的值要進 digest 時，狀態機的那一批用型別標記或另議。
 - 時間 Module 目前只公開驅動者（`RunFixedSteps`），沒有對時 System；一致性指紋「扣掉對時 System」等時間 Module 分開公開對時名單時再接。
 - 時間 Module 的步長等設定不進一致性指紋（延到網路 Module 的宣告：放指紋或放握手）。
-- digest 何時比、不一致怎麼辦，延到網路 Module；本批只用在回歸測試（與之後的 scenario 第 3 段）。
-- `authority_scan` 第 6 步之前也讀 Kernel 舊名 `gyo.zone-c-sources` 的清單（Kernel 的 J-17 還在）；第 6 步隨 Kernel 的匯出一起拿掉。
+- digest 何時比、不一致怎麼辦，延到網路 Module；本批只用在回歸測試與 scenario 第 5 段（`duel`）。
+- `authority_scan` 只收 `gyo.authority-sources`；Kernel 舊名 `gyo.zone-c-sources` 的清單第 6 步起拒收（契約頁改名為 [authority-sources](../../authority-sources.zh-Hant.md)）。
 - 新增的錯誤型別 `AuthorityFailure`（E2：`NoAuthority`、`SourceOutsideRoot`），在合併前核准時給使用者看（宣告 10.3：新型別照後綴取名）。

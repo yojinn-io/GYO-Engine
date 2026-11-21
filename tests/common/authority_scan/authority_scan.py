@@ -2,7 +2,7 @@
 product-side half of G-5 (authority declaration 5.9; formerly spec J-17 of
 docs/architecture/plans/kernel/spec.zh-Hant.md, rules and judgement in
 docs/architecture/plans/kernel/j17-scanner.zh-Hant.md, the list contract in
-docs/architecture/zone-c-sources.zh-Hant.md, whose format the authority Module now exports under the name
+docs/architecture/authority-sources.zh-Hant.md, whose format the authority Module now exports under the name
 gyo.authority-sources; v8-arch-gyo2-authority-rollback step 5).
 
 Input: a list file (format "gyo.authority-sources", version 1; the kernel's former "gyo.zone-c-sources" is

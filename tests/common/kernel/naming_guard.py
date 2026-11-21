@@ -29,7 +29,7 @@ The table has three rows: engine/ecs/kernel; engine/orchestration (added by v8-a
 guard the orchestration-skeleton declaration section 7.4 deferred until scenario segment 1 passed); and
 engine/modules/world_time (added by v8-arch-gyo2-authority-rollback step 1, the guard time-events-declaration 6.3 deferred
 until scenario segment 2 passed). Product rows belong to the product owner and are to come from product-side
-data (like the zone-c-sources list), proposed by the first product batch that needs them; they are not added
+data (like the authority-sources list), proposed by the first product batch that needs them; they are not added
 to this common script (declaration LIM-4).
 
 Usage: python3 naming_guard.py [--root REPOSITORY]
