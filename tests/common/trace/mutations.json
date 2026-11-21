@@ -369,6 +369,91 @@
    "target": "gyo_orchestration_tests",
    "cases": "trace-spans: a World that breaks*",
    "expect": "\\[or-trace-ended-through\\]"
+  },
+  {
+   "id": "tr-guard-rule-off",
+   "what": "TR-1: the include rule is off (any engine include is allowed)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "            if module in ALLOWED:",
+   "replace": "            if True:",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/trace",
+    "-p",
+    "test_trace_guard.py",
+    "-v"
+   ],
+   "expect": "test_trace_including_the_kernel \\([^)]*\\) \\.\\.\\. FAIL"
+  },
+  {
+   "id": "tr-guard-sees-nothing",
+   "what": "TR-1: the positive control is off (a scan that reads nothing passes)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "    if not errors and allowed == 0:",
+   "replace": "    if False:",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/trace",
+    "-p",
+    "test_trace_guard.py",
+    "-v"
+   ],
+   "expect": "test_no_allowed_include_fails \\([^)]*\\) \\.\\.\\. FAIL"
+  },
+  {
+   "id": "tr-guard-missing-dir-passes",
+   "what": "TR-1: a missing directory passes (fail closed is off)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "        return [], 0, [f\"{RULE}: {DIRECTORY} not found under {root}\"]",
+   "replace": "        return [], 1, []",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/trace",
+    "-p",
+    "test_trace_guard.py",
+    "-v"
+   ],
+   "expect": "test_missing_directory_fails \\([^)]*\\) \\.\\.\\. FAIL"
+  },
+  {
+   "id": "tr-guard-list-item",
+   "what": "TR-1: the allowed list misses a module the trace Module uses (logging)",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "ALLOWED = {\"base\", \"logging\", \"time\", \"trace\"}",
+   "replace": "ALLOWED = {\"base\", \"time\", \"trace\"}",
+   "command": [
+    "{python}",
+    "-B",
+    "tests/common/trace/trace_guard.py"
+   ],
+   "expect": "TR1-TRACE: includes engine/logging/"
   }
  ]
 }
