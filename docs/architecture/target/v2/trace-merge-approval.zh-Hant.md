@@ -4,6 +4,8 @@
 
 日期：2026-11-21。分支 `claude/gyo2-trace`（draft PR #258，base `gyo2` bb2497b0）。事前宣告：[trace-declaration.zh-Hant.md](trace-declaration.zh-Hant.md)（修訂 1，2026-11-21 動工前核准「照建議，全部核准」）。Design Invariants：[trace.zh-Hant.md](trace.zh-Hant.md)。經過與證據：[dev_log](../../../dev_logs/2026_11_21_gyo2_trace.zh-Hant.md)。
 
+**核准紀錄**（2026-11-21，日誌卡）：使用者原話「照建議，全部核准，合併」。範圍：下面第 2～5 節全部照卡片的建議核准，包括第 5 節「超過 64 層的標記丟掉」先只記在 TR-4、碰到再改；L1 三平台通過（第 1 節）之後合併 PR #258。
+
 **請你核准的**：第 2 節（Design Invariants 的最終文字，含動到的別的 Component 的條文）、第 3 節（突變的數目）、第 4 節（和宣告不同的地方）、第 5 節（沒做、記下的事）。核准後我把 draft 改成 ready，看 L1 三平台；你說「合併」才合併。
 
 ## 1. 判定的結果（宣告第 10 節）

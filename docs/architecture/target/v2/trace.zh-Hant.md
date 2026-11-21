@@ -1,6 +1,6 @@
 # trace（Base 的門面、`engine/modules/trace`）
 
-Owner：架構。來源：事前宣告 [trace-declaration.zh-Hant.md](trace-declaration.zh-Hant.md)（修訂 1，2026-11-21 動工前核准「照建議，全部核准」）。**最終文字在 `v8-arch-gyo2-trace` 的合併前核准定稿。**
+Owner：架構。來源：事前宣告 [trace-declaration.zh-Hant.md](trace-declaration.zh-Hant.md)（修訂 1，2026-11-21 動工前核准「照建議，全部核准」）。最終文字在 `v8-arch-gyo2-trace` 的合併前核准定稿（2026-11-21「照建議，全部核准，合併」，[trace-merge-approval.zh-Hant.md](trace-merge-approval.zh-Hant.md)）。
 
 **核心**：trace 是機制——告訴外面「每一層做了什麼、在哪一步壞了」，不規定別人怎麼處理（使用者 2026-11-21「日誌只是看。trace才是追問題。」）。日誌和 trace 是兩個 Module：職責分開，傳輸共用日誌的那一套（宣告 D5）。
 
