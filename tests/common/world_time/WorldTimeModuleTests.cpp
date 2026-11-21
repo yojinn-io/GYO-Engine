@@ -674,3 +674,20 @@ TEST_CASE("carry-over: carried time values are kept; FixedTime takes this World'
     CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == kStep, "[wt-carried-discarded] " << Get<W::VirtualTime>(*p).discarded);
     CHECK_MESSAGE(Get<W::TimeConfig>(*p).limits.maxStepsPerFrame == 5, "[wt-carried-config-setting] " << Get<W::TimeConfig>(*p).limits.maxStepsPerFrame);
 }
+
+// WT-1 (authority-rollback declaration 2.3): Resimulation is put false whenever a World is prepared, even when
+// it is carried over: a rollback cut short by a replacement leaves no "resimulating" behind.
+TEST_CASE("carry-over: Resimulation is false in the new World, carried over or not") {
+    Log().clear();
+    O::ProductDescription d = Game(0);
+    auto build = d.worlds[0].build;
+    d.worlds[0].build = [build](O::WorldSetup& s) {
+        build(s);
+        s.CarryOver<W::Resimulation>("Resimulation");
+    };
+    auto p = Make(std::move(d));
+    WorldOf(*p).SetResource(W::Resimulation{1});
+    auto replaced = p->ReplaceWorld("Main", O::ReplaceRequest{});
+    REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message + "\n" + replaced.error().detail));
+    CHECK_MESSAGE(Get<W::Resimulation>(*p).active == 0, "[wt-resimulation-reset] " << int(Get<W::Resimulation>(*p).active));
+}

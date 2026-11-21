@@ -140,7 +140,9 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
         PutIfAbsent(world, ActiveTime{});
         PutIfAbsent(world, Tick{});
         PutIfAbsent(world, TimeSampling{});
-        PutIfAbsent(world, Resimulation{});
+        // Always false when a World is prepared, carried over or not (authority-rollback declaration 2.3, WT-1):
+        // a rollback interrupted by a replacement leaves no "resimulating" behind.
+        world.SetResource(Resimulation{});
         // The settings of this World, always (the step length too, through FixedTime above: a restore or a
         // carry-over keeps FixedTime's elapsed time and remainder only, RestoreFixedTime).
         world.SetResource(config);

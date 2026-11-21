@@ -1323,6 +1323,20 @@
    "target": "gyo_world_time_tests",
    "cases": "module: every time type has a hash function*",
    "expect": "\\[wt\\-hash\\-summary\\]"
+  },
+  {
+   "id": "wt-resimulation-carried",
+   "what": "Resimulation is put only when absent, so a carried-over true stays true in the new World (authority-rollback declaration 2.3, WT-1 addition). Only it catches the reset on every prepare",
+   "guards": [
+    "world-time WT-1",
+    "authority-rollback-declaration 2.3"
+   ],
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
+   "find": "        world.SetResource(Resimulation{});\n",
+   "replace": "        PutIfAbsent(world, Resimulation{});\n",
+   "target": "gyo_world_time_tests",
+   "cases": "carry-over:*",
+   "expect": "\\[wt\\-resimulation\\-reset\\]"
   }
  ]
 }
