@@ -8,6 +8,27 @@
 
 範圍：只碰 `docs/architecture/plans/os-subsystem/scripts/mutations.json` 裡這 6 個，以及敵對式檢查補上的。同一份清單裡其他對不上的（master 時代的 `engine/trace`、`engine/asset` 等）與 kernel 清單的 3 個（`ks-k6-*`、`ks-k8-*`，第 4 批正在改）不碰。
 
+## 跟上 #261（core 不再登記）
+
+#261（`v8-arch-gyo2-core-not-registered`，merge commit 2acf9cee）在本 PR 開著時合進 `gyo2`：core、ecs、orchestration 不再是 Module，`config/modules.csv` 拿掉 os、time、threads 等列，它們的 Engine 內連結改回手寫在各自的 `CMakeLists.txt`（O6 只擋手寫 link 到登記的 target）。主會話轉來使用者原話：「合併 #261，再讓 #260 跟上」。
+
+- 本分支以 `git merge origin/gyo2` 跟上（不 rebase）。
+- 下面表格寫的是第一版（打登記檔）的處置；跟上後的最終寫法：
+
+| 突變 | 第一版 | 跟上 #261 後 |
+|---|---|---|
+| `os-g8-link` | os 列 depends `base` → `base;math` | `engine/core/os/CMakeLists.txt` 的 `target_link_libraries(gyo_os PUBLIC GYO::Base)` 加 `GYO::Math` |
+| `ti-x1-time-links-more` | time 列 depends `base;math` | `engine/core/time/CMakeLists.txt` 的 `target_link_libraries(gyo_time PUBLIC GYO::Base)` 加 `GYO::Math` |
+| `ti-x2-threads-links-more` | threads 列 depends `time;math` | `engine/core/threads/CMakeLists.txt` 的 PUBLIC 加 `GYO::Math` |
+| `th-x1-threads-os-public` | os 從 private_depends 移到 depends | 同一行改成 `PUBLIC GYO::Time GYO::Os` |
+| `os-g13-definition-name`、`os-g21-definition-option` | 接在 `gyo_link_registered_dependencies(time)` 之後 | 該行已不存在，改接在 `target_link_libraries(gyo_time PUBLIC GYO::Base)` 之後（插入的內容不變） |
+
+- expect 都沒變（守衛的訊息與期待的連結集合沒變）；4 個連結突變的 `what` 改寫成手寫 link。
+- 「不退役」的理由在 #261 之後更直接：core 的手寫 link 現在 O6 放行，os／time／threads 的連結集合只剩 `gyo_expect_links` 會擋。
+- `os-g8-link` 仍用 `GYO::Math`。登記檔的順序檢查已經不擋 `GYO::Time`，但改用 `GYO::Time` 會和 `os-g19`（從較晚的目錄 link `GYO::Time`）的失敗訊息一樣，留 `GYO::Math` 讓兩個突變的 expect 各自只中自己的訊息。
+- `os-g14`、`os-g19`、`ti-x5`、`os-g20` 的 find 跟上後仍命中，沒改。
+- 跟上後重跑（本機 macOS Intel，全新 configure，preset `test`）：10/10 killed（`run-ten-261.log`）；反向確認 5/5 survived（`reverse-check-261.log`）。#261 沒有改 `tests/common/os`、`tests/common/time`、`tests/common/audio` 與突變執行器。
+
 ## 每個突變的處置
 
 先問：它要證明哪個守衛有檢出力？那個守衛還在不在？
@@ -49,7 +70,7 @@
 - 改寫的 6 個加新增的 4 個：10/10 killed（每次都先確認未改動的樹通過，`run_mutations.py` 用 `-B`、先清 `__pycache__`）。
 - 反向確認（新突變真的釘住那幾行）：把守衛暫時改壞，再跑對應的突變，5 個都變 survived：刪 `PLATFORM_ID` 分支 → `os-g14` survived；三個 DEFER 各改成當場呼叫 → `os-g19`、`ti-x5`、`os-g20` survived；`-D` 解析改成 `if(TRUE)` → `os-g21` survived。改完都還原，工作樹只剩清單的變更。
 - 清單：149 → 153（改 6、加 4、退 0）。
-- 證據：主 checkout 的 `build/evidence/gyo2-stale-mutants/`（`run-six.log`、`run-ten.log`、`reverse-check.log`、`reverse.py`、configure 與建置的 log），git 不追蹤，在使用者的 Intel Mac 上。
+- 證據：主 checkout 的 `build/evidence/gyo2-stale-mutants/`（`run-six.log`、`run-ten.log`、`reverse-check.log`、`reverse.py`、configure 與建置的 log；跟上 #261 後的 `configure-261.log`、`run-ten-261.log`、`reverse-check-261.log`），git 不追蹤，在使用者的 Intel Mac 上。
 
 ## 後續（不在本卡）
 

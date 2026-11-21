@@ -102,13 +102,13 @@
     },
     {
       "id": "os-g8-link",
-      "what": "gyo_os gains a registered Engine dependency (its config/modules.csv row depends base;math), Invariant 3, configure-time link check. Only it shows the check of gyo_os's link set catching a link the register allows; a hand-written link is caught by O6 as well (or-guard-real-o6-hand-link), a Windows system library by os-g18-windows-extra-link (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "what": "gyo_os gains a hand-written Engine link (GYO::Math), Invariant 3, configure-time link check. Only it shows the check of gyo_os's link set catching an extra Engine link written in os's own CMakeLists.txt; os-g19-links-from-later-directory adds one from a later directory (the deferred check), a Windows system library is os-g18-windows-extra-link (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
       "guards": [
         "os 3"
       ],
-      "file": "config/modules.csv",
-      "find": "os,core/os,GYO::Os,The operating-system adapter,yes,no,base,,,",
-      "replace": "os,core/os,GYO::Os,The operating-system adapter,yes,no,base;math,,,",
+      "file": "engine/core/os/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_os PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_os PUBLIC GYO::Base GYO::Math)\n",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
       "expect": "gyo_os\\s+links\\s+GYO::Base;GYO::Math;(?:Threads::Threads|shell32);\\s+expected\\s+exactly\\s+GYO::Base;(?:Threads::Threads|shell32)"
@@ -517,8 +517,8 @@
         "os 1"
       ],
       "file": "engine/core/time/CMakeLists.txt",
-      "find": "gyo_link_registered_dependencies(time)\n",
-      "replace": "gyo_link_registered_dependencies(time)\ntarget_compile_definitions(gyo_time PRIVATE GYO_ENGINE_POSIX=1)\n",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base)\ntarget_compile_definitions(gyo_time PRIVATE GYO_ENGINE_POSIX=1)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
       "expect": "OS\\s+definition\\s+guard:\\s+gyo_time\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_ENGINE_POSIX=1'"
@@ -1551,26 +1551,26 @@
     },
     {
       "id": "ti-x1-time-links-more",
-      "what": "gyo_time gains a registered Engine dependency (its config/modules.csv row depends base;math), time.md Invariant 10, configure-time link check. Only it catches gyo_time's link set (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "what": "gyo_time gains a hand-written Engine link (GYO::Math), time.md Invariant 10, configure-time link check. Only it catches gyo_time's link set changed in time's own CMakeLists.txt; ti-x5-links-from-later-directory changes it from a later directory (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
       "guards": [
         "time 10"
       ],
-      "file": "config/modules.csv",
-      "find": "time,core/time,GYO::Time,The engine time base,yes,no,base,,,",
-      "replace": "time,core/time,GYO::Time,The engine time base,yes,no,base;math,,,",
+      "file": "engine/core/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
       "expect": "gyo_time\\s+links\\s+GYO::Base;GYO::Math;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Base;Threads::Threads"
     },
     {
       "id": "ti-x2-threads-links-more",
-      "what": "gyo_threads gains a registered Engine dependency (its config/modules.csv row depends time;math), threads.md Invariant 9, configure-time link check. Only it catches gyo_threads's link set; th-x1-threads-os-public moves a link without adding one (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "what": "gyo_threads gains a hand-written Engine link (GYO::Math), threads.md Invariant 9, configure-time link check. Only it catches gyo_threads's link set; th-x1-threads-os-public moves a link without adding one (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
       "guards": [
         "threads 9"
       ],
-      "file": "config/modules.csv",
-      "find": "threads,core/threads,GYO::Threads,Role threads,yes,no,time,os,,",
-      "replace": "threads,core/threads,GYO::Threads,Role threads,yes,no,time;math,os,,",
+      "file": "engine/core/threads/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::Os)\n",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math PRIVATE GYO::Os)\n",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
       "expect": "gyo_threads\\s+links\\s+GYO::Math;GYO::Os;GYO::Time;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Os;GYO::Time;Threads::Threads"
@@ -1795,13 +1795,13 @@
     },
     {
       "id": "th-x1-threads-os-public",
-      "what": "gyo_threads's register row moves os from private_depends to depends, so GYO::Os is linked publicly and its users get engine/os headers (threads.md Invariant 9, configure-time check). The link set is unchanged, so only the interface check catches it (rewritten by v8-arch-gyo2-stale-mutants: Engine-internal links come from config/modules.csv since #257, orchestration O-6)",
+      "what": "gyo_threads links GYO::Os publicly instead of privately, so its users get engine/os headers (threads.md Invariant 9, configure-time check). The link set is unchanged, so only the interface check catches it (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
       "guards": [
         "threads 9"
       ],
-      "file": "config/modules.csv",
-      "find": "threads,core/threads,GYO::Threads,Role threads,yes,no,time,os,,",
-      "replace": "threads,core/threads,GYO::Threads,Role threads,yes,no,time;os,,,",
+      "file": "engine/core/threads/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::Os)\n",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Os)\n",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
       "expect": "gyo_threads\\s+exposes\\s+GYO::Os\\s+to\\s+its\\s+users"
@@ -1942,8 +1942,8 @@
         "os 1"
       ],
       "file": "engine/core/time/CMakeLists.txt",
-      "find": "gyo_link_registered_dependencies(time)\n",
-      "replace": "gyo_link_registered_dependencies(time)\ntarget_compile_options(gyo_time PRIVATE -DGYO_LINUX=1)\n",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base)\n",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base)\ntarget_compile_options(gyo_time PRIVATE -DGYO_LINUX=1)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
       "expect": "OS\\s+definition\\s+guard:\\s+gyo_time\\s+COMPILE_OPTIONS\\s+has\\s+'-DGYO_LINUX=1'"
