@@ -10,8 +10,9 @@
 // Not its: rollback (the rollback Module, read through its public
 // registrations), the tick (the time Module), the network.
 //
-// Step 3 of the batch: the unit and the strategy socket. The registrations and
-// the official strategy come in step 5.
+// Its headers: AuthorityStrategy.hpp (the socket and the contexts),
+// Registrations.hpp (AuthorityEntry), ServerAuthorityStrategy.hpp (the official
+// strategy), Consistency.hpp (the fingerprint, the digest, the G-5 export).
 
 #include "engine/authority/AuthorityStrategy.hpp"
 #include "engine/orchestration/Module.hpp"
@@ -23,8 +24,10 @@ class AuthorityModule final : public Orchestration::Module {
 public:
     AuthorityModule() = default;
 
-    // Nothing yet: the registrations come in step 5.
+    // The table of registrations in the ModuleBuffer (AuthorityEntry appends to it) and, when the World is
+    // prepared, the Resource AuthorityRegistry.
     void Build(Orchestration::WorldSetup& setup) override;
+    // AU-E2 when the World has registrations and no strategy; otherwise the strategy's Check.
     void Check(const Kernel::FrozenRegistry& registry, Orchestration::WorldCheck& context) override;
 };
 
