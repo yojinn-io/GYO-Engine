@@ -12,7 +12,9 @@ target_include_directories(gyo_rollback PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Engine-internal links come from config/modules.csv (O-6).
+# Links to core, ecs and orchestration are written here; links to other Modules
+# come from config/modules.csv (O-6).
+target_link_libraries(gyo_rollback PUBLIC GYO::Base GYO::Kernel GYO::Orchestration)
 gyo_link_registered_dependencies(rollback)
 target_compile_features(gyo_rollback PUBLIC cxx_std_20)
 if(MSVC)

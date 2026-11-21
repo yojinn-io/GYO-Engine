@@ -29,3 +29,16 @@ if(WIN32)
         set_tests_properties(io.unc_${host} PROPERTIES LABELS "cpu" TIMEOUT 60 SKIP_RETURN_CODE 77)
     endforeach()
 endif()
+
+# io links Base publicly and Math and the OS layer privately (docs/architecture/io.md;
+# v8-arch-gyo2-core-not-registered: core's links are written by hand and pinned here).
+function(gyo_expect_io_links)
+    gyo_expect_links(gyo_io GYO::Base GYO::Math GYO::Os)
+    get_target_property(interface gyo_io INTERFACE_LINK_LIBRARIES)
+    foreach(private IN ITEMS GYO::Math GYO::Os)
+        if(private IN_LIST interface)
+            message(FATAL_ERROR "gyo_io exposes ${private} to its users; link it PRIVATE")
+        endif()
+    endforeach()
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_io_links)

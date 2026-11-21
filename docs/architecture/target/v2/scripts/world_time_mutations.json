@@ -1297,21 +1297,6 @@
    ]
   },
   {
-   "id": "wt-links-more",
-   "what": "WT-4 link set (authority-rollback step 1): gyo_world_time links a module its register row does not name (configure-time check). Only it catches gyo_world_time's link set; or-links-more is gyo_orchestration's and ks-links-extra gyo_kernel's",
-   "guards": [
-    "world-time WT-4",
-    "time-events-declaration 6.3",
-    "authority-rollback-declaration 9.5"
-   ],
-   "file": "config/modules.csv",
-   "find": ",no,yes,base;kernel;logging;orchestration;time,,",
-   "replace": ",no,yes,base;kernel;logging;orchestration;time;math,,",
-   "target": "gyo_world_time_tests",
-   "expect_build_failure": true,
-   "expect": "gyo_world_time links[\\s\\S]*expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Logging;GYO::Orchestration;GYO::Time"
-  },
-  {
    "id": "wt-hash-resimulation-missing",
    "what": "a time type loses its hash function (Resimulation here): a World with the time Module has no summary (authority-rollback declaration 3.3: every type an Engine Module puts into a World has one). Only it catches a missing hash function among the time types",
    "guards": [

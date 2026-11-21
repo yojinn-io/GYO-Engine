@@ -5,8 +5,9 @@
 # that says which Modules and Plugins exist, whether each goes into a World
 # (has a registration unit), whether a product carries it by default, and
 # what it depends on (v8-arch-gyo2-module-plugin-registers,
-# v8-arch-gyo2-module-deps-in-registers). CMake reads them to add the engine
-# directories, to link each engine Module's dependencies and to generate a
+# v8-arch-gyo2-module-deps-in-registers). CMake reads them to add the Module
+# directories (engine/modules/; core, ecs and orchestration are not Modules and
+# are added directly), to link each engine Module's dependencies on other Modules and to generate a
 # product's table of registration units; the orchestration layer checks the
 # dependencies of the units a Product carries when the Product is built.
 #

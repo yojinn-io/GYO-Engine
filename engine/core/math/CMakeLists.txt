@@ -9,6 +9,7 @@ target_include_directories(gyo_math INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Engine-internal links come from config/modules.csv (O-6).
-gyo_link_registered_dependencies(math)
+# Engine-internal links are written here: core, ecs and orchestration are not
+# Modules and are not registered (O-6 covers the Modules and Plugins only).
+target_link_libraries(gyo_math INTERFACE GYO::Base)
 target_compile_features(gyo_math INTERFACE cxx_std_20)
