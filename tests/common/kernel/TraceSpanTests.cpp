@@ -76,9 +76,22 @@ bool Never(Res<Flag>) {
     return false;
 }
 
+SystemResult DespawnSix(Despawn despawn) {
+    despawn.Entity(6);
+    return Ok();
+}
+// A hook (run while a sync point applies its records) that tries to run a schedule: refused (X-13).
+SystemResult HookRunsSchedule(ExclusiveWorld<> world) {
+    static_cast<void>(world.RunSchedule("Tick"));
+    return Ok();
+}
+
 struct Bell { std::uint32_t n; };
 SystemResult HearBell(On<Bell>) {
     return Ok();
+}
+SystemResult BellFails(On<Bell>) {
+    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the bell cracked"));
 }
 
 ScheduleOptions StepSchedule() {
@@ -170,4 +183,44 @@ TEST_CASE("kernel trace: a Trigger from the Host is one span of its own") {
     Recording recording;
     REQUIRE(rig->Trigger(Bell{1}));
     CHECK_MESSAGE(recording.Joined().rfind("begin kernel Trigger@Match", 0) == 0, "[ks-trace-trigger] " << recording.Joined());
+}
+
+TEST_CASE("kernel trace: a refusal inside a sync point is the origin once; the sync point's Fail only passes it through") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&DespawnSix>(B("Despawner", "A"));
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+    }, false, "Match");
+    rig->world().Insert(6, Tag{6});
+    Recording recording;
+    REQUIRE_FALSE(rig->Run());
+    CHECK_MESSAGE(recording.Joined() == "begin kernel Tick@Match | begin kernel Despawner@Match | end 2 | current origin | current through | end 1",
+                  "[ks-trace-sync-once] " << recording.Joined());
+}
+
+TEST_CASE("kernel trace: a change outside the World API caught by the Ready window is the origin on the schedule's span") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&Quiet>(B("First", "A"));
+    }, true, "Match");
+    rig->world().Insert(1, Tag{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const Tag* kept = rig->world().Get<Tag>(1);
+    const_cast<Tag*>(kept)->t = 42;  // not through the World API
+    Recording recording;
+    REQUIRE_FALSE(rig->Run());
+    CHECK_MESSAGE(recording.Joined() == "begin kernel Tick@Match | current origin | end 1", "[ks-trace-ready] " << recording.Joined());
+}
+
+TEST_CASE("kernel trace: an observer's Err in a Trigger from the Host is the origin once") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.Event<Bell>({.name = "Bell", .zone = Zone::B});
+        r.Observer<Bell, &BellFails>({.name = "bell-fails", .zone = Zone::B});
+    }, false, "Match");
+    Recording recording;
+    REQUIRE_FALSE(rig->Trigger(Bell{1}));
+    std::size_t origins = 0;
+    for (const std::string& e : recording.log) origins += e == "current origin" ? 1U : 0U;
+    CHECK_MESSAGE(origins == 1, "[ks-trace-trigger-err] " << recording.Joined());
 }

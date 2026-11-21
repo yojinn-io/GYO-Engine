@@ -400,3 +400,31 @@ TEST_CASE("fatal: with a trace receiver the fatal record carries trace_path, the
     CHECK(path->text == "kernel:Main@Match > kernel:MoveRacer@Match");
     CHECK_MESSAGE(records[1].Find("trace_path") == nullptr, "trace D4 (a): no receiver, no trace_path");
 }
+
+TEST_CASE("fatal: trace_path is added after the record's own fields; with more than 32 fields it is left out") {
+    auto memory = std::make_shared<Logging::MemorySink>();
+    auto handle = Logging::Install(WithMemory(memory));
+    REQUIRE(handle);
+    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kPathReceiver);
+    const Logging::Field two[] = {{"file", "Simulation.cpp"}, {"line", 3u}};
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "two", .fields = two}));
+    std::vector<std::string> keys(33);
+    std::vector<Logging::Field> many;
+    for (std::size_t i = 0; i < 33; ++i) {
+        keys[i] = "k" + std::to_string(i);
+        many.push_back(Logging::Field{keys[i], static_cast<std::uint64_t>(i)});
+    }
+    static_cast<void>(Logging::WriteFatalRecord(
+        Record{.level = Level::Fatal, .category = "assert", .text = "thirty-two", .fields = std::span<const Logging::Field>(many.data(), 32)}));
+    static_cast<void>(Logging::WriteFatalRecord(
+        Record{.level = Level::Fatal, .category = "assert", .text = "thirty-three", .fields = std::span<const Logging::Field>(many.data(), 33)}));
+    ::Engine::Base::SetTraceReceiver(previous);
+    const auto records = memory->Records();
+    REQUIRE(records.size() == 3);
+    CHECK_MESSAGE((records[0].Find("file") != nullptr && records[0].Find("line") != nullptr), "trace D4 (a): the record's own fields stay");
+    CHECK(records[0].Find("trace_path") != nullptr);
+    CHECK_MESSAGE(records[1].Find("trace_path") != nullptr, "trace D4 (a): 32 fields still get trace_path");
+    CHECK(records[1].Find("k31") != nullptr);
+    CHECK_MESSAGE(records[2].Find("trace_path") == nullptr, "trace D4 (a): more than 32 fields go without trace_path");
+    CHECK(records[2].Find("k32") != nullptr);
+}

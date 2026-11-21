@@ -180,6 +180,8 @@ TEST_CASE("scenario segment 4: S4-1 an Err at frame 3: the path RunFrame > Main@
     CHECK_MESSAGE(Id(*system, "parent_id") == Id(*schedule, "span_id"), "S4-1: MoveRacer's parent is Main (TR-4)");
     CHECK_MESSAGE(Id(*schedule, "parent_id") == Id(*frame, "span_id"), "S4-1: Main's parent is RunFrame (TR-4)");
     CHECK_MESSAGE(Text(*system, "error").find("MoveRacer: the racer fell") != std::string::npos, "S4-1: the error is on MoveRacer (D4)");
+    const auto* begin = system->Find("begin_ns");
+    CHECK_MESSAGE((begin != nullptr && begin->intValue > 0), "S4-1: begin_ns is on the engine time base (TR-5)");
     const auto paths = traced.Category("span.path");
     REQUIRE_MESSAGE(paths.size() == 1, "S4-1: one path record (D4 (i))");
     CHECK(Text(paths[0], "path") == "orchestration:RunFrame > kernel:Main@Match > kernel:MoveRacer@Match");

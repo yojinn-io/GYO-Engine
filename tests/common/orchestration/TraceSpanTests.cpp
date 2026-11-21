@@ -30,8 +30,10 @@ Base::TraceToken Begin(const std::string_view category, const std::string_view n
 void End(const Base::TraceToken token, bool) noexcept {
     events->push_back("end " + std::to_string(token.id));
 }
-void Error(const Base::TraceToken token, const std::string_view, const bool origin) noexcept {
+std::string* lastErrorText = nullptr;
+void Error(const Base::TraceToken token, const std::string_view text, const bool origin) noexcept {
     events->push_back("error " + std::to_string(token.id) + (origin ? " origin" : " through"));
+    if (lastErrorText != nullptr) *lastErrorText = std::string(text);
 }
 void MarkCurrent(std::string_view, const bool origin) noexcept {
     events->push_back(origin ? "current origin" : "current through");
@@ -43,14 +45,17 @@ constexpr Base::TraceReceiver kReceiver{.begin = &Begin, .end = &End, .error = &
 
 struct Recording {
     std::vector<std::string> log;
+    std::string errorText;
     const Base::TraceReceiver* previous;
     Recording() : previous(Base::SetTraceReceiver(&kReceiver)) {
         events = &log;
+        lastErrorText = &errorText;
         nextId = 1;
     }
     ~Recording() {
         Base::SetTraceReceiver(previous);
         events = nullptr;
+        lastErrorText = nullptr;
     }
     [[nodiscard]] std::string Joined() const {
         std::string out;
@@ -88,6 +93,7 @@ TEST_CASE("trace-spans: an error the orchestration layer produces is the origin 
     auto inserted = p.InsertSystems("Main", "console", [](K::Registrar& r) { r.Allotter<K::RangeAllotter>(); });
     REQUIRE_FALSE(static_cast<bool>(inserted));
     CHECK_MESSAGE(recording.Joined() == "begin orchestration InsertSystems | error 1 origin | end 1", "[or-trace-origin] " << recording.Joined());
+    CHECK_MESSAGE(recording.errorText.rfind("InsertBuildFailed: ", 0) == 0, "[or-trace-mark-text] " << recording.errorText);
 }
 
 TEST_CASE("trace-spans: a World that breaks passes through the entry point's span (the kernel marked it)") {
@@ -109,4 +115,57 @@ TEST_CASE("trace-spans: a World that breaks passes through the entry point's spa
     REQUIRE_FALSE(static_cast<bool>(p.RunFrame()));
     CHECK_MESSAGE(recording.Joined() == "begin orchestration RunFrame | error " + std::to_string(nextId - 1) + " through | end " + std::to_string(nextId - 1),
                   "[or-trace-ended-through] " << recording.Joined());
+}
+
+TEST_CASE("trace-spans: a DropOldFirst replacement the orchestration layer fails itself is the origin, though it ends the Product") {
+    auto built = O::Product::Build(Game(), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    O::ReplaceRequest request;
+    request.order = O::ReplaceOrder::DropOldFirst;
+    request.extra = [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the save is broken"));
+    };
+    Recording recording;
+    auto replaced = p.ReplaceWorld("Main", std::move(request));
+    REQUIRE_FALSE(static_cast<bool>(replaced));
+    REQUIRE(replaced.error().failure.has_value());
+    CHECK_MESSAGE(recording.Has("error 1 origin"), "[or-trace-replace-own-origin] " << recording.Joined());
+}
+
+TEST_CASE("trace-spans: RunGameInit and RunSchedule and ReplaceWorld are one span each") {
+    auto built = O::Product::Build(Game(), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    Recording recording;
+    REQUIRE(static_cast<bool>(p.RunGameInit()));
+    REQUIRE(static_cast<bool>(p.RunSchedule("Main", "Play")));
+    REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
+    std::vector<std::string> entries;
+    for (const std::string& e : recording.log) {
+        if (e.rfind("begin orchestration ", 0) == 0) entries.push_back(e.substr(20));
+    }
+    CHECK_MESSAGE((entries == std::vector<std::string>{"RunGameInit", "RunSchedule", "ReplaceWorld"}), "[or-trace-entries] " << recording.Joined());
+}
+
+TEST_CASE("trace-spans: a beforeSwap schedule that fails in a BuildNewFirst replacement passes through (the kernel marked it)") {
+    O::ProductDescription d = Game();
+    d.worlds[0].build = [base = d.worlds[0].build](O::WorldSetup& setup) {
+        if (base) base(setup);
+        setup.Registrar().Schedule(Once("Before"));
+        setup.Registrar().AddSystem<&Fail>(In("BreaksBefore", "Before"));
+    };
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    O::ReplaceRequest request;
+    request.order = O::ReplaceOrder::BuildNewFirst;
+    request.beforeSwap = {"Before"};
+    Recording recording;
+    auto replaced = p.ReplaceWorld("Main", std::move(request));
+    REQUIRE_FALSE(static_cast<bool>(replaced));
+    REQUIRE(replaced.error().code == O::OrchestrationErrorCode::ReplaceScheduleFailed);
+    CHECK_MESSAGE(recording.Has("current origin"), "[or-trace-before-kernel] " << recording.Joined());
+    CHECK_MESSAGE(recording.Has("error 1 through"), "[or-trace-before-through] " << recording.Joined());
 }

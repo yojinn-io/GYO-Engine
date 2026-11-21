@@ -390,7 +390,9 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             if (!applied) {
                 KernelError error = std::move(applied).error();
                 error.Wrap("Executor: " + StepText(scheduleName, position, step.name));
-                return Fail(std::move(error), nested);
+                // A call the sync point ran (a hook) that was refused already went through Fail and left its
+                // error: here it only passes through (trace declaration D4 (i)).
+                return Fail(std::move(error), nested, !world.leftError_.has_value());
             }
             if (std::optional<KernelError> error = checkStructure(StepText(scheduleName, position, step.name))) {
                 return Fail(std::move(*error), nested);
@@ -439,7 +441,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
                     if (!applied) {
                         KernelError error = std::move(applied).error();
                         error.Wrap(roundText(round));
-                        return Fail(std::move(error), nested);
+                        // As at a sync point: a refused hook left its error already (D4 (i)).
+                        return Fail(std::move(error), nested, !world.leftError_.has_value());
                     }
                 }
                 if (round > 0) {

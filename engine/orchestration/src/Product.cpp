@@ -464,12 +464,18 @@ std::optional<OrchestrationError> Product::Ended() {
 
 namespace {
 
-// Whether an entry point's error was produced by a schedule the kernel ran (the kernel's Fail marked it there,
-// trace declaration D4 (i)) or ends the Product (a broken World: marked where it broke, or by the exception's
-// own spans). Everything else (a refusal, a registration or prepare failure, an owner name) is produced here.
+// Whether an entry point's error only passes through (trace declaration D4 (i)): a schedule the kernel ran
+// failed (the kernel's Fail marked it where it was produced), or the Product had already ended (the World broke
+// earlier, marked then). Everything else is produced here, including a DropOldFirst replacement that fails at
+// one of the orchestration layer's own steps and ends the Product with it (a failure with this call's code).
 bool PassesThrough(const OrchestrationError& error) noexcept {
-    return error.failure.has_value() || error.code == OrchestrationErrorCode::ScheduleFailed ||
-           error.code == OrchestrationErrorCode::ReplaceScheduleFailed;
+    switch (error.code) {
+    case OrchestrationErrorCode::ScheduleFailed:
+    case OrchestrationErrorCode::ReplaceScheduleFailed:
+    case OrchestrationErrorCode::WorldInterrupted:
+    case OrchestrationErrorCode::WorldMissing: return true;
+    default: return false;
+    }
 }
 
 // One trace span around an entry point's steps (trace declaration D6); marked when they return an error. It

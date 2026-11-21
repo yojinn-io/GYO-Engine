@@ -1311,6 +1311,34 @@
    "target": "gyo_logging_tests",
    "cases": "fatal: with a trace receiver*",
    "expect": "trace D4 \\(a\\): the fatal record carries trace_path"
+  },
+  {
+   "id": "lg-fatal-fields-lost",
+   "what": "trace declaration D4 (a): with trace_path added the record's own fields are lost (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "        std::copy(record.fields.begin(), record.fields.end(), withPath.begin());\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: trace_path is added after*",
+   "expect": "trace D4 \\(a\\): the record's own fields stay"
+  },
+  {
+   "id": "lg-fatal-limit-off-by-one",
+   "what": "trace declaration D4 (a): a record of exactly 32 fields goes without trace_path (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-2",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "    if (pathSize != 0 && record.fields.size() <= kMaxFatalFields) {",
+   "replace": "    if (pathSize != 0 && record.fields.size() < kMaxFatalFields) {",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: trace_path is added after*",
+   "expect": "trace D4 \\(a\\): 32 fields still get trace_path"
   }
  ]
 }

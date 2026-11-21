@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -242,7 +243,7 @@ TEST_CASE("trace: a span begun under an earlier Install ends without effect afte
         CHECK_MESSAGE(Path() == "kernel:New", "TR-4: the old span left nothing on the new stack");
     }
     const auto spans = setup.Category("span.kernel");
-    REQUIRE(spans.size() == 1);
+    REQUIRE_MESSAGE(spans.size() == 1, "TR-4: the span of the earlier Install wrote nothing");
     CHECK(spans[0].text == "New");
 }
 
@@ -290,4 +291,169 @@ TEST_CASE("trace: closing the handle uninstalls the receiver") {
         Base::SetTraceReceiver(installed);
     }
     CHECK_MESSAGE(Base::SetTraceReceiver(nullptr) == nullptr, "TR-7: closing the handle puts the earlier receiver back");
+}
+
+TEST_CASE("trace: each thread has its own stack; a span on another thread has no parent from this one") {
+    Setup setup;
+    Base::TraceSpan outer;
+    outer.Begin("game", "main-thread");
+    std::string otherPath;
+    std::thread other([&] {
+        Base::TraceSpan span;
+        span.Begin("game", "worker");
+        otherPath = Path();
+    });
+    other.join();
+    CHECK_MESSAGE(otherPath == "game:worker", "D3: the other thread's stack holds only its own span");
+    const auto spans = setup.Category("span.game");
+    REQUIRE(spans.size() == 1);
+    CHECK_MESSAGE(Uint(spans[0], "parent_id") == 0, "D3: no parent across threads");
+}
+
+TEST_CASE("trace: a span begun after an exception or an error at the same depth starts clean") {
+    Setup setup;
+    try {
+        Base::TraceSpan frame;
+        frame.Begin("game", "first");
+        Base::TraceSpan inner;
+        inner.Begin("inner", "first-inner");
+        throw std::runtime_error("boom");
+    } catch (const std::runtime_error&) {
+    }
+    {
+        // The first exception left an error on the slot of "first-inner" (depth 1); a span there must not keep it.
+        Base::TraceSpan frame;
+        frame.Begin("game", "second");
+        Base::TraceSpan reused;
+        reused.Begin("game", "reused");
+    }
+    try {
+        Base::TraceSpan frame;
+        frame.Begin("game", "third");
+        throw std::runtime_error("again");
+    } catch (const std::runtime_error&) {
+    }
+    std::optional<Logging::StoredRecord> second;
+    std::optional<Logging::StoredRecord> reused;
+    for (const auto& record : setup.Category("span.game")) {
+        if (record.text == "second") second = record;
+        if (record.text == "reused") reused = record;
+    }
+    REQUIRE(second.has_value());
+    REQUIRE(reused.has_value());
+    CHECK_MESSAGE(!Flag(*second, "exception"), "TR-4: the reused slot does not keep the old exception flag");
+    CHECK_MESSAGE(Text(*reused, "error") == "<none>", "TR-4: the reused slot does not keep the old error");
+    CHECK_MESSAGE(setup.Category("span.path").size() == 2, "D4 (i): the second exception writes its path too");
+}
+
+TEST_CASE("trace: past 64 levels spans are counted but not stored; the stack comes back") {
+    Setup setup;
+    {
+        std::vector<std::unique_ptr<Base::TraceSpan>> spans;
+        for (int i = 0; i < 70; ++i) {
+            spans.push_back(std::make_unique<Base::TraceSpan>());
+            spans.back()->Begin("deep", "level");
+        }
+        while (!spans.empty()) spans.pop_back();
+    }
+    CHECK_MESSAGE(setup.Category("span.deep").size() == 64, "TR-4: only the 64 stored levels are written");
+    {
+        Base::TraceSpan after;
+        after.Begin("game", "after");
+        CHECK_MESSAGE(Path() == "game:after", "TR-4: the stack is empty again");
+    }
+    const auto after = setup.Category("span.game");
+    REQUIRE(after.size() == 1);
+    CHECK_MESSAGE(Uint(after[0], "parent_id") == 0, "TR-4: no parent left over");
+}
+
+TEST_CASE("trace: an error text longer than 256 bytes is cut, not dropped") {
+    Setup setup;
+    const std::string text(300, 'e');
+    {
+        Base::TraceSpan span;
+        span.Begin("game", "long");
+        span.MarkError(text, false);
+    }
+    const auto spans = setup.Category("span.game");
+    REQUIRE(spans.size() == 1);
+    CHECK_MESSAGE(Text(spans[0], "error") == std::string(256, 'e'), "TR-5: the error is cut at 256 bytes");
+}
+
+TEST_CASE("trace: a span still open when Trace is closed ends without effect") {
+    Setup setup;
+    auto span = std::make_unique<Base::TraceSpan>();
+    span->Begin("game", "open");
+    setup.trace.reset();
+    span.reset();
+    CHECK_MESSAGE(setup.Category("span.game").empty(), "TR-4: ended after Close, it writes nothing");
+}
+
+TEST_CASE("trace: an error marked before an exception unwinds the span keeps its text") {
+    Setup setup;
+    try {
+        Base::TraceSpan span;
+        span.Begin("game", "marked");
+        span.MarkError("the first error", false);
+        throw std::runtime_error("boom");
+    } catch (const std::runtime_error&) {
+    }
+    const auto spans = setup.Category("span.game");
+    REQUIRE(spans.size() == 1);
+    CHECK_MESSAGE(Text(spans[0], "error") == "the first error", "D4: the unwinding does not overwrite an earlier error");
+    CHECK(Flag(spans[0], "exception"));
+}
+
+TEST_CASE("trace: an error marked on a span that is not on top writes the path up to that span") {
+    Setup setup;
+    {
+        Base::TraceSpan outer;
+        outer.Begin("game", "outer");
+        Base::TraceSpan inner;
+        inner.Begin("game", "inner");
+        outer.MarkError("outer failed");
+    }
+    const auto paths = setup.Category("span.path");
+    REQUIRE(paths.size() == 1);
+    CHECK_MESSAGE(Text(paths[0], "path") == "game:outer", "D4: the path ends at the marked span");
+}
+
+TEST_CASE("trace: a sink whose minimum is above Trace takes no span, so none is timed") {
+    Setup setup({.include = {"span."}, .minimum = Level::Debug});
+    {
+        Base::TraceSpan span;
+        span.Begin("game", "untaken");
+    }
+    CHECK_MESSAGE(reads.load() == 0, "TR-6: a span is asked for at level Trace");
+    CHECK(setup.Category("span.game").empty());
+}
+
+TEST_CASE("trace: the path record is at level Trace and the first unwound span carries the unwinding as its error") {
+    Setup setup;
+    {
+        Base::TraceSpan span;
+        span.Begin("game", "marked");
+        span.MarkError("broken");
+    }
+    try {
+        Base::TraceSpan span;
+        span.Begin("game", "unwound");
+        throw std::runtime_error("boom");
+    } catch (const std::runtime_error&) {
+    }
+    const auto paths = setup.Category("span.path");
+    REQUIRE(paths.size() == 2);
+    CHECK_MESSAGE(paths[0].level == Level::Trace, "TR-5: the path record is at level Trace");
+    const auto spans = setup.Category("span.game");
+    REQUIRE(spans.size() == 2);
+    CHECK_MESSAGE(Text(spans[1], "error") == "an exception left the span", "D4 (i): the first unwound span says why");
+}
+
+TEST_CASE("trace: closing the handle puts back the receiver that was installed before") {
+    constexpr Base::TraceReceiver other{.begin = nullptr, .end = nullptr, .error = nullptr, .markCurrent = nullptr, .path = nullptr};
+    REQUIRE(Base::SetTraceReceiver(&other) == nullptr);
+    {
+        auto handle = Trace::Install({});
+    }
+    CHECK_MESSAGE(Base::SetTraceReceiver(nullptr) == &other, "TR-7: Close restores the earlier receiver, not nullptr");
 }
