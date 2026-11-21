@@ -275,7 +275,7 @@ public:
     }
 
     // Hooks (spec F.4): OnAdd / OnRemove of component T, run at sync points in
-    // registration order. Their writes count as writers (DI-KS 6, 11).
+    // registration order (DI-KS 11).
     template <class T, auto Fn>
     void Hook(HookTrigger trigger, HookOptions options, std::source_location source = std::source_location::current()) {
         Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();

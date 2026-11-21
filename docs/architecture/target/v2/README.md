@@ -7,8 +7,10 @@
 
 ## 給作者看的
 
-- [orchestration.zh-Hant.md](orchestration.zh-Hant.md)：編排層（`engine/orchestration`）的 Design Invariants O-1～O-11 與 Replacement Criteria（`v8-arch-gyo2-orchestration-skeleton` 合併前核准定稿；`v8-arch-gyo2-time-events` 改 O-1、O-4、O-11）。
-- [world-time.zh-Hant.md](world-time.zh-Hant.md)：時間 Module（`engine/modules/world_time`）——Resource、System、取樣、和讀檔／回滾／權威的交界、Design Invariants（型別 1～3、WT-1～WT-6）與 Replacement Criteria（`v8-arch-gyo2-time-events`，最終文字在合併前核准定稿）。
+- [orchestration.zh-Hant.md](orchestration.zh-Hant.md)：編排層（`engine/orchestration`）的 Design Invariants O-1～O-11 與 Replacement Criteria（`v8-arch-gyo2-orchestration-skeleton` 合併前核准定稿；`v8-arch-gyo2-time-events` 改 O-1、O-4、O-11；`v8-arch-gyo2-authority-rollback` 在 O-2 補 `ModuleBuffer`（建 World 時 Module 之間、作者與 Module 之間的共用處）、加 RC-O10，最終文字在合併前核准）。
+- [world-time.zh-Hant.md](world-time.zh-Hant.md)：時間 Module（`engine/modules/world_time`）——Resource、System、取樣、和讀檔／回滾／權威的交界、Design Invariants（型別 1～3、WT-1～WT-6）與 Replacement Criteria（`v8-arch-gyo2-time-events`，最終文字在合併前核准定稿；`v8-arch-gyo2-authority-rollback` 補 WT-1 的 `Resimulation` 每次準備放 false、WT-5 的伺服器權威 tick 寫者檢查，型別 3 改成逐型別雜湊，最終文字在合併前核准）。
+- [authority.zh-Hant.md](authority.zh-Hant.md)：權威 Module（`engine/modules/authority`）——權威登記、策略的插口、伺服器權威策略的啟動檢查（AU-E1～AU-E9，含從 Kernel 搬來的 Z6、Z8、D-E15）、一致性指紋、digest、G-5 的匯出；Design Invariants DI-A 1～12 與 Replacement Criteria（`v8-arch-gyo2-authority-rollback`，最終文字在合併前核准定稿）。
+- [rollback.zh-Hant.md](rollback.zh-Hant.md)：回滾 Module（`engine/modules/rollback`）——`RollbackStrategy` 的契約、公開登記、官方策略（記錄、判斷、還原、重跑、輸入的歷史、權威值的入口）；Design Invariants R-1～R-8（R-7 取代 Kernel 的 D-E16）與 Replacement Criteria（含從 Kernel 搬來的「回滾等價破裂」；`v8-arch-gyo2-authority-rollback`，最終文字在合併前核准定稿）。
 - [json.zh-Hant.md](json.zh-Hant.md)：JSON Module（`engine/modules/json`）的 Design Invariants J-1～J-9 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-json-module` 合併前的合併前核准定稿）。
 - [logging.zh-Hant.md](logging.zh-Hant.md)：日誌（`engine/modules/logging`、`engine/modules/world_logging`）——入口 ①②③④⑥、E0 的致命路徑、JSON lines 資料契約、Design Invariants LG-1～LG-11（LG-9 退役）與 Replacement Criteria。trace 是另一個 Module（下一列）。
 - [trace.zh-Hant.md](trace.zh-Hant.md)：trace（Base 的門面 `Trace.hpp`、`engine/modules/trace`）——每執行緒的段堆疊、父子、計時、路徑，經日誌寫出；Kernel 與編排層發的段；Design Invariants TR-1～TR-7 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-trace` 的合併前核准定稿）。
@@ -86,6 +88,7 @@
 - [2026_11_21_gyo2_trace.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_trace.zh-Hant.md)：trace（`v8-arch-gyo2-trace`）。
 - [2026_11_21_gyo2_stale_mutants.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_stale_mutants.zh-Hant.md)：os-subsystem 清單裡 6 個在基準上跑不起來的突變（改寫 6、敵對式檢查後新增 4；`v8-arch-gyo2-stale-mutants`）。
 - [2026_11_21_gyo2_os_wait.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_os_wait.zh-Hant.md)：core/time 的等待改呼叫 core/os（`v8-arch-gyo2-os-wait`）。
+- [2026_11_22_gyo2_authority_rollback.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_authority_rollback.zh-Hant.md)：第 4 批，權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`；Kernel 的區、寫者數量、C 指紋、Z6、Z8、D-E15、D-E16 拿掉，判定 5 在 Linux 實機通過；第 8 步與合併前核准待補）
 
 ## 沒有搬過來的
 

@@ -7,7 +7,7 @@ by section name, so the four section names below do not change.
 
 The docs librarian owns this file, its place and its format. Which authority document and section each entry links to is
 the architect's decision; the batch that moves back or creates an authority document updates the link in the same change.
-Updated 2026-11-13.
+Updated 2026-11-13; 2026-11-22 (Design Invariants: the authority and rollback Module pages).
 
 ## Design Invariants
 
@@ -16,6 +16,12 @@ the sections [分界](target/README.md#分界), [命名](target/README.md#命名
 [目標 DI 與現況 DI 衝突時](target/README.md#目標-di-與現況-di-衝突時架構師決定2026-11-11), and its opening line: read
 [`target/kernel.zh-Hant.md`](target/kernel.zh-Hant.md) before changing any component (the kernel's invariants are written
 only there).
+
+- The GYO2 Modules with Design Invariants of their own are listed in [`target/v2/README.md`](target/v2/README.md)
+  (給作者看的). Among them, the authority Module [`target/v2/authority.zh-Hant.md`](target/v2/authority.zh-Hant.md)
+  (DI-A 1–12) and the rollback Module [`target/v2/rollback.zh-Hant.md`](target/v2/rollback.zh-Hant.md) (R-1–R-8) hold
+  the rules the kernel gave up in `v8-arch-gyo2-authority-rollback` (Z6, Z8, the tick's single writer, the rollback
+  declarations); read them before changing those Modules (draft, approved before that batch merges).
 
 ## Batch declaration checks
 

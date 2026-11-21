@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-20（§2 的 tickStamps、§3 的寫者例、§5、DI 6、最後一條 RC：Kernel 沒有時鐘、事件分 `Message` 與 `Event`——`v8-arch-gyo2-time-events`，DI 的最終文字在合併前核准時定稿）；2026-11-16（§3 成員不變的範圍、DI 3 的 stamp：`v8-arch-gyo2-nested-schedule`）；2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
+更新：2026-11-22（DI 4 隨 kernel DI-KS 6 拿掉，`v8-arch-gyo2-authority-rollback` 第 7 步，合併前核准）；2026-11-20（§2 的 tickStamps、§3 的寫者例、§5、DI 6、最後一條 RC：Kernel 沒有時鐘、事件分 `Message` 與 `Event`——`v8-arch-gyo2-time-events`，DI 的最終文字在合併前核准時定稿）；2026-11-16（§3 成員不變的範圍、DI 3 的 stamp：`v8-arch-gyo2-nested-schedule`）；2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
 本文件只寫**使用者已裁決**的部分與它們的後果；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 實體的鍵（使用者 2026-11-11 決定，spec K.3 第 1 項）
@@ -70,8 +70,8 @@
 
 1. **鍵的疊代順序只來自數值**——受 kernel [DI-KS 3](kernel.zh-Hant.md#di-ks-3) 約束：**全文與守衛見該條，改動前必讀**。
 2. **World 不配發、不重用鍵；世代切換＝重建 World**——受 kernel [DI-KS 4](kernel.zh-Hant.md#di-ks-4)、[DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
-3. **stamp 是依 Plan 順序推進的全域計數、單調、不進 (c)**：跳過的 System 也消耗；除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號，記號仍然只往前走（spec F-12（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准）；巢狀（`v8-arch-gyo2-nested-schedule`，使用者 2026-11-15 核准））；同一 World 的執行歷史相同時序列相同；Changed／Added 的「上次執行」以掛點為單位；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38、J-52。
-4. **寫入政策預設獨占，獨占是啟動檢查**——受 kernel [DI-KS 6](kernel.zh-Hant.md#di-ks-6) 約束：**全文與守衛見該條，改動前必讀**。
+3. **stamp 是依 Plan 順序推進的全域計數、單調、不進摘要與 digest**：跳過的 System 也消耗；除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號，記號仍然只往前走（spec F-12（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准）；巢狀（`v8-arch-gyo2-nested-schedule`，使用者 2026-11-15 核准））；同一 World 的執行歷史相同時序列相同；Changed／Added 的「上次執行」以掛點為單位；stamp 本身不回滾（回滾 Module 用它判斷「上次記錄之後改過的格」，還原時打新的 stamp，`rollback.zh-Hant.md` R-2）；「(c) 區禁變更過濾」隨第 4 批的區規則拿掉（作者的責任，回滾 R-2 前提 1）。守衛：spec J-30、J-52。（草稿，`v8-arch-gyo2-authority-rollback` 合併前核准）
+4. ~~**寫入政策預設獨占，獨占是啟動檢查**~~ **隨第 4 批拿掉**：kernel [DI-KS 6](kernel.zh-Hant.md#di-ks-6) 拿掉，Kernel 不數寫者，元件與 Resource 沒有 Exclusive／Shared 之分；選了伺服器權威策略的 World 也不數寫者（權威 Module [DI-A 8](v2/authority.zh-Hant.md#di-a-8)），寫錯的判定資料由 digest 比對與伺服器覆蓋抓。條號保留。（草稿，`v8-arch-gyo2-authority-rollback` 合併前核准）
 5. **結構變更只在同步點與最後一個同步點之後的 hook 清空輪、順序寫死、Despawn 不是寫者**——受 kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9) 約束：**全文與守衛見該條，改動前必讀**。
 6. **事件不屬於任何時鐘；保留式照游標讀、上限內不漏讀**——受 kernel [DI-KS 10](kernel.zh-Hant.md#di-ks-10) 約束：**全文與守衛見該條，改動前必讀**。（2026-11-20 改寫，`v8-arch-gyo2-time-events`；原文「事件屬於一個 clock domain，只在它的 clock schedule 內讀寫」）
 
