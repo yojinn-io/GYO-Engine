@@ -3,7 +3,7 @@
 # registration units (Module, Plugin) and their lifecycle, the Product (a group
 # of Worlds), the game initialization and frame lists, the runner, prepare
 # functions, World replacement and dynamic insertion. Above the kernel; depends
-# only on the kernel and Base (O-4), as its row in config/modules.csv says.
+# only on the kernel and Base (O-4); not a Module, so the links are written below.
 add_library(gyo_orchestration STATIC
     src/OrchestrationError.cpp
     src/Product.cpp

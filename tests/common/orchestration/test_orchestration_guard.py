@@ -21,8 +21,7 @@ struct Unit {};
 CLEAN_CMAKE = """add_library(gyo_orchestration STATIC src/Product.cpp)
 add_library(GYO::Orchestration ALIAS gyo_orchestration)
 # target_link_libraries(gyo_orchestration PUBLIC GYO::Kernel)  (a comment)
-gyo_link_registered_dependencies(orchestration)
-target_link_libraries(gyo_orchestration PRIVATE Threads::Threads)
+target_link_libraries(gyo_orchestration PUBLIC GYO::Kernel GYO::Base PRIVATE Threads::Threads)
 """
 REGISTER = ("name,dir,target,description,library_only,default,depends,private_depends,unit,header\n"
             "json,modules/json,GYO::Json,JSON,yes,no,,,,\n"
