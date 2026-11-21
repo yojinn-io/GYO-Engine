@@ -38,7 +38,7 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "7:dee92ab698d7816ca80cea62a8a7b51e51530b40de4955dd75edea77ca0da94c";
+    "8:7a30e06bad67d0837136bcd7712cfc22454ed9efa70d91356b1823178a9b431a";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {
@@ -62,7 +62,7 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
     CHECK(frozen.SystemNamed("WriteHealth")->registrationSeq == 1U);
     MESSAGE("J-18 registry fingerprint: " << frozen.RegistryFingerprint().Text());
     CHECK(frozen.RegistryFingerprint().Text() == kJ18RegistryGolden);
-    CHECK(frozen.RegistryFingerprint().version == 7U);
+    CHECK(frozen.RegistryFingerprint().version == 8U);
 }
 
 TEST_CASE("J-18: swapping two plugins gives ids in the new order") {
@@ -231,11 +231,12 @@ TEST_CASE("DI-KS 15: the StartupCode values are the kernel's kept codes plus the
     // may; declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6, inside duty (12) "registration").
     std::vector<std::string> expected{"D-E1", "D-E3", "D-E4", "D-E5", "D-E6", "D-E7", "D-E14", "D-E17", "D-E19", "D-E20",
                                       "R-E2", "R-E4", "R-E5", "R-E7"};
-    // In transition, still in the kernel: zones, the writer count and rollback declarations (batch 4, authority
-    // and rollback: D-E2, D-E9, D-E11, D-E15, D-E16, X-E1). (Startup and the plugin list, D-E21, R-E1, R-E3,
+    // In transition, still in the kernel: the rollback declarations and the ingress check (batch 4, authority and
+    // rollback, step 6: D-E15, D-E16). (The writer count and the zone rules, D-E2, D-E9, D-E11 and X-E1, left with
+    // batch 4 step 2, v8-arch-gyo2-authority-rollback. Startup and the plugin list, D-E21, R-E1, R-E3,
     // R-E6, left with batch 2, the orchestration layer; the clock and message domains, D-E12 and F-E1, left with
     // batch 3, v8-arch-gyo2-clock-out-of-kernel.)
-    for (const char* code : {"D-E2", "D-E9", "D-E11", "D-E15", "D-E16", "X-E1"}) {
+    for (const char* code : {"D-E15", "D-E16"}) {
         expected.emplace_back(code);
     }
     std::sort(expected.begin(), expected.end());

@@ -214,14 +214,14 @@ Built SourceWorld() {
 
 void RegisterJ12Data(Registrar& r) {
     // Every type zone B so no zone rule fires; ids follow this order.
-    r.Component<TestPos>({.name = "TestPos", .zone = Zone::B, .writePolicy = WritePolicy::Shared});      // 0
-    r.Component<TestVel>({.name = "TestVel", .zone = Zone::B, .writePolicy = WritePolicy::Shared});      // 1
-    r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 2
-    r.Component<TestMode>({.name = "TestMode", .zone = Zone::B, .writePolicy = WritePolicy::Shared});    // 3
-    r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 4
-    r.Resource<TestRes>({.name = "TestRes", .zone = Zone::B, .writePolicy = WritePolicy::Shared});       // 1 (0 is KernelSettings)
-    r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 2
-    r.Resource<TestAllotter>({.name = "TestAllotter", .zone = Zone::B, .writePolicy = WritePolicy::Shared});  // 3
+    r.Component<TestPos>({.name = "TestPos", .zone = Zone::B});      // 0
+    r.Component<TestVel>({.name = "TestVel", .zone = Zone::B});      // 1
+    r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B});  // 2
+    r.Component<TestMode>({.name = "TestMode", .zone = Zone::B});    // 3
+    r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::B});  // 4
+    r.Resource<TestRes>({.name = "TestRes", .zone = Zone::B});       // 1 (0 is KernelSettings)
+    r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});  // 2
+    r.Resource<TestAllotter>({.name = "TestAllotter", .zone = Zone::B});  // 3
     r.Allotter<TestAllotter>();
     r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::B});       // 0
     r.Message<TestOtherEvent>({.name = "TestOtherEvent", .zone = Zone::B});  // 1

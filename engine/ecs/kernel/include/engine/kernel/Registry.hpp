@@ -243,13 +243,6 @@ public:
         AddSetMember(KeyOf<SetTag>(), KeyOf<T>());
     }
 
-    // Marks a named set as the authority digest set (spec S-12): every member
-    // must be Exclusive (D-E2).
-    template <class SetTag>
-    void DigestSet() {
-        MarkDigestSet(KeyOf<SetTag>());
-    }
-
     // Declares resource T as the World's entity allotter (spec A.1): Spawn
     // writes it; without one, a Spawn parameter is D-E3.
     template <class T>
@@ -257,12 +250,6 @@ public:
         static_assert(EntityAllotter<T>, "an allotter has std::optional<EntityId> Allot() and bool Owns(EntityId) const");
         DeclareAllotter(KeyOf<T>(), Detail::AllotterOps{&Detail::AllotIn<T>, &Detail::OwnsIn<T>});
     }
-
-    // Makes a zone left Unset a startup error (D-E7, S-6) for the whole
-    // Registry instead of zone B. Called by the owner of the product's
-    // (c) data, so a forgotten zone cannot pass as (b). Any owner may call it;
-    // calling it twice is the same as once.
-    void RequireExplicitZones();
 
     void Schedule(ScheduleOptions options);
     // Inserts a stage before or after an existing stage of a schedule (spec C.2 point 2).
@@ -367,7 +354,6 @@ private:
                           Detail::ResolveFn resolve, Detail::RunFn run, std::source_location source);
     SetId RegisterNamedSet(TypeKey key, std::string name);
     void AddSetMember(TypeKey set, TypeKey component);
-    void MarkDigestSet(TypeKey set);
     void DeclareAllotter(TypeKey resource, Detail::AllotterOps ops);
     RegistrationSeq RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly, Detail::RunFn run,
                                    std::source_location source);
@@ -464,7 +450,6 @@ struct ColumnInfo {
     std::size_t size;
     std::size_t align;
     bool trivialRelocate;
-    WritePolicy writePolicy;
     Zone zone;
     Role role;
     Rollback rollback;
@@ -475,11 +460,9 @@ struct ResourceInfo {
     std::string name;
     std::size_t size;
     std::size_t align;
-    WritePolicy writePolicy;
     Zone zone;
     Role role;
     Rollback rollback;
-    bool external;
     bool threadBound;
     std::string owner;
 };

@@ -1190,10 +1190,10 @@
   },
   {
    "id": "sc-lower-bound-not-moved",
-   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets",
+   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets (find rewritten by v8-arch-gyo2-authority-rollback step 1: the allotter lost its padding field)",
    "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-   "find": "        return RangeAllotter{first, last, first, first > last, {}};",
-   "replace": "        return RangeAllotter{1, last, 1, first > last, {}};",
+   "find": "        return RangeAllotter{first, last, first, first > last};",
+   "replace": "        return RangeAllotter{1, last, 1, first > last};",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-7-put-rejected\\]"
@@ -1868,16 +1868,6 @@
    "expect": "GYO_ASSERT failed: data_->frozen"
   },
   {
-   "id": "or-gi-writer-uncounted",
-   "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4) (v8-arch-gyo2-time-events step 4: cases follow the O-1 case renamed when its D-E12 half left, G2)",
-   "file": "engine/ecs/kernel/src/Registry.cpp",
-   "find": "        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;",
-   "replace": "        if (true) continue;",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-1: game initialization and the frame both writing one column*",
-   "expect": "\\[or-gi-writer-counted\\]"
-  },
-  {
    "id": "g8s-old-world-leaked",
    "what": "step 4 G-8: S1-8: the old World is not destroyed by the replacement (leaked)",
    "file": "engine/orchestration/src/Product.cpp",
@@ -2231,14 +2221,14 @@
   },
   {
    "id": "or-guard-naming-root-dropped",
-   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration row of ROOTS (that row's whole rule, README rule 4); or-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent its fail closed",
+   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration row of ROOTS (that row's whole rule, README rule 4); or-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent its fail closed (find rewritten by v8-arch-gyo2-authority-rollback step 1: ROOTS gained the world_time row)",
    "guards": [
     "orchestration O-4",
     "time-events-declaration 6.3"
    ],
    "file": "tests/common/kernel/naming_guard.py",
-   "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"))",
-   "replace": ",)",
+   "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"),",
+   "replace": ",",
    "expect": "FAIL: test_n1_orchestration_other_namespace_is_reported",
    "command": [
     "{python}",

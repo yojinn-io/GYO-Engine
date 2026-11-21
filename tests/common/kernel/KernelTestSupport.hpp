@@ -79,7 +79,6 @@ inline ScheduleOptions FixedSchedule(bool rollback = false) {
     s.name = "FixedUpdate";
     s.rollbackEnabled = rollback;
     s.stages = {"Ingress", "Simulate", "Present"};
-    s.ingressStage = "Ingress";
     return s;
 }
 
@@ -105,7 +104,7 @@ inline SystemOptions Sys(std::string name, Zone zone, std::vector<Mount> mounts)
 inline void RegisterCommonData(Registrar& r) {
     r.Component<TestPos>({.name = "TestPos", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<TestVel>({.name = "TestVel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B});
     r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<TestMode>({.name = "TestMode", .zone = Zone::B});
     r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C});

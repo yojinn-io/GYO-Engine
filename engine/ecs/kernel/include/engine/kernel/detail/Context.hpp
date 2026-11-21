@@ -92,8 +92,6 @@ struct Record {
     std::uint32_t id = 0;
     std::uint32_t planPos = 0;
     std::uint32_t recSeq = 0;
-    // The emitter's zone (RejectedSpawn::emitterZone; goes with the zones, a later batch).
-    Zone emitterZone = Zone::B;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
     // Trigger: the event names a target entity (entity).
@@ -147,7 +145,6 @@ struct SystemContext {
     std::string_view name;
     std::string_view schedule;
     std::uint32_t planPos = 0;
-    Zone zone = Zone::B;
     bool hook = false;
     // A hook an immediate change of ExclusiveWorld runs (S5): planPos is the
     // exclusive System's step, not a sync point's (the error text says so).

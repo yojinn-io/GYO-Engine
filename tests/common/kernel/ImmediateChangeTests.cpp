@@ -111,8 +111,8 @@ void Immediate(Registrar& r, bool allotter = false) {
     Data(r, allotter);
     r.Component<Hp>({.name = "Hp", .zone = Zone::B});
     r.Component<Shield>({.name = "Shield", .zone = Zone::B});
-    r.Component<Ball>({.name = "Ball", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Bat>({.name = "Bat", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Ball>({.name = "Ball", .zone = Zone::B});
+    r.Component<Bat>({.name = "Bat", .zone = Zone::B});
     r.Resource<Score>({.name = "Score", .zone = Zone::B});
     r.InitialValue<Shield, &ShieldFromHp>();
     r.Hook<Hp, &LogHpAdd>(HookTrigger::OnAdd, {.name = "LogHpAdd", .zone = Zone::B});

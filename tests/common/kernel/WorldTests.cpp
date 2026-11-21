@@ -262,8 +262,8 @@ TEST_CASE("J-7: destroy order: a despawn in ascending ComponentId, the World in 
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             // Registered in this order: ComponentId of Tracked<1> is smaller than Tracked<0>'s.
-            r.Component<Tracked<1>>({.name = "Tracked1", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Component<Tracked<0>>({.name = "Tracked0", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Tracked<1>>({.name = "Tracked1", .zone = Zone::B});
+            r.Component<Tracked<0>>({.name = "Tracked0", .zone = Zone::B});
             r.AddSystem<&DespawnOne>(B("DespawnOne", "A"));
         });
         World& world = rig->world();
@@ -738,8 +738,8 @@ std::string CallOrder(const std::vector<std::string>& log) {
 
 void RegisterDespawnOrderData(Registrar& r) {
     Data(r);
-    r.Component<Spare>({.name = "Spare", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Badge>({.name = "Badge", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Spare>({.name = "Spare", .zone = Zone::B});
+    r.Component<Badge>({.name = "Badge", .zone = Zone::B});
 }
 
 } // namespace
@@ -879,7 +879,7 @@ SystemResult SeeAfterMid(Query<Read<Tag>> tags) {
 
 TEST_CASE("J-33: stage ends and declared sync points apply; nowhere else") {
     auto rig = MakeRig([](Registrar& r) {
-        r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+        r.Component<Tag>({.name = "Tag", .zone = Zone::B});
         r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
         r.Schedule(MidSchedule());
         r.AddSystem<&SpawnTag>(B("SpawnTag", "A", {"Mid"}));
@@ -925,9 +925,7 @@ SystemResult RecordOnSystemPath(HookCtx ctx) {
     Detail::Push(fake, Detail::Record::Of(Detail::RecordKind::Despawn, ctx.Entity()));
     return Ok();
 }
-SystemResult HookWritesPos(Query<Write<Pos>>) { return Ok(); }
 SystemResult SystemTakesHookCtx(HookCtx) { return Ok(); }
-SystemResult HookReadsPos(Query<Read<Pos>>) { return Ok(); }
 
 } // namespace
 
@@ -979,14 +977,6 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             r.AddSystem<&SystemTakesHookCtx>(B("SystemTakesHookCtx", "A"));
         });
         GYO_CHECK_ASSERTS(rig->Run());
-    }
-    SUBCASE("two conflicting hooks on one trigger, one of them zone C: D-E9") {
-        const Built built = Finish({{"test", [](Registrar& r) {
-                                         Data(r);
-                                         r.Hook<Vel, &HookWritesPos>(HookTrigger::OnAdd, {.name = "HookWritesPos", .zone = Zone::C});
-                                         r.Hook<Vel, &HookReadsPos>(HookTrigger::OnAdd, {.name = "HookReadsPos", .zone = Zone::C});
-                                     }}});
-        CHECK(HasError(built, StartupCode::DE9));
     }
 }
 

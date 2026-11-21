@@ -796,17 +796,10 @@ std::unique_ptr<Rig> ExclusiveRig(void (*add)(Registrar&), bool verification) {
 
 // ExclusiveWorld reads and writes any component and resource value
 // (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1) and spawns with a type
-// (v8-arch-gyo2-immediate-change-via-exclusive-world, DI-KS 18); a zone C
-// System still may not hold it (S-13 at startup, a zone rule of a later batch).
-TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build; a zone C System may not hold it") {
+// (v8-arch-gyo2-immediate-change-via-exclusive-world, DI-KS 18). Any System may
+// hold it since S-13 left with the zone rules (v8-arch-gyo2-authority-rollback step 2).
+TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
-    SUBCASE("zone C holding it: Finish fails") {
-        const Built built = Finish({{"test", [](Registrar& r) {
-                                         Data(r);
-                                         r.AddSystem<&ExclusiveAllowed>(C("ExclusiveAllowed", "A"));
-                                     }}});
-        CHECK_FALSE(static_cast<bool>(built.result));
-    }
     SUBCASE("zone C write") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneC>(B("X", "A")); }, false);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -1074,7 +1067,7 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
         one.stages = {"A"};
         auto rig = MakeRig([one](Registrar& r) {
             r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-            r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Tag>({.name = "Tag", .zone = Zone::B});
             r.Component<Mode>({.name = "Mode", .zone = Zone::B});
             r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
             r.Schedule(one);

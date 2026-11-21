@@ -107,7 +107,6 @@ struct RejectedSpawn {
     // The System or hook that recorded the spawn.
     std::string emitter;
     bool emitterIsHook = false;
-    Zone emitterZone = Zone::B;
     // Recorded by Spawn (the allotter's id: Spawn<Bundle<C...>> or
     // ExclusiveWorld::Spawn), not SpawnWithId.
     bool fromAllotter = false;

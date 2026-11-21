@@ -886,21 +886,6 @@
    "expect": "\\[wt\\-carried\\-kept\\]"
   },
   {
-   "id": "wt-tick-zone-c",
-   "what": "Tick is registered in zone C (declaration 4.5, WT-1: every time type is zone B; G4: a zone C System reads no Tick until batch 4). Only it catches the zone of the registration (adversarial check W40, step 7)",
-   "guards": [
-    "world-time WT-1",
-    "determinism DI 2",
-    "time-events-declaration 4.5"
-   ],
-   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
-   "find": "r.Resource<Tick>({.name = \"Tick\", .zone = Kernel::Zone::B});",
-   "replace": "r.Resource<Tick>({.name = \"Tick\", .zone = Kernel::Zone::C});",
-   "target": "gyo_world_time_tests",
-   "cases": "module:*",
-   "expect": "\\[wt\\-time\\-zone\\-b\\] Tick"
-  },
-  {
    "id": "wt-fixed-stage-option-ignored",
    "what": "RunFixedSteps is mounted in FixedMainLoop whatever fixedStepStage says (WT-1, declaration 3.3: an author who turns the skeleton off names its own). Only it catches the setting being dropped (adversarial check W43, step 7)",
    "guards": [

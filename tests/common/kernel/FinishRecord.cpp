@@ -39,8 +39,7 @@ constexpr int kStages = 5;
 
 template <int... C>
 void RegisterColumns(Registrar& r, std::integer_sequence<int, C...>) {
-    (r.Component<Column<C>>({.name = "Column" + std::to_string(C), .zone = Zone::B,
-                             .writePolicy = WritePolicy::Shared}),
+    (r.Component<Column<C>>({.name = "Column" + std::to_string(C), .zone = Zone::B}),
      ...);
 }
 

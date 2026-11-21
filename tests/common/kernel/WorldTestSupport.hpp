@@ -72,11 +72,11 @@ inline ScheduleOptions TickSchedule() {
 inline void Data(Registrar& r, bool allotter = false) {
     r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
     r.Component<Mode>({.name = "Mode", .zone = Zone::B});
     r.Component<Boundary>({.name = "Boundary", .zone = Zone::C, .role = Role::Input});
-    r.Component<CShared>({.name = "CShared", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
-    r.Resource<Out>({.name = "Out", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<CShared>({.name = "CShared", .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Resource<Out>({.name = "Out", .zone = Zone::B});
     r.Resource<Flag>({.name = "Flag", .zone = Zone::B});
     r.Resource<CRes>({.name = "CRes", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Message<Ping>({.name = "Ping", .zone = Zone::B});

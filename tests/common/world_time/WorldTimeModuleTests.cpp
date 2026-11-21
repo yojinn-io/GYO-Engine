@@ -191,12 +191,6 @@ TEST_CASE("module: every time Resource is registered and put in; Resimulation is
     CHECK_MESSAGE((world.Resource<W::Tick>() != nullptr && world.Resource<W::Tick>()->value == 0), "[wt-tick-zero]");
     CHECK_MESSAGE((world.Resource<W::FixedTime>() != nullptr && world.Resource<W::FixedTime>()->accumulator.Step() == kStep),
                   "[wt-step-default] 64 Hz");
-    // Every time Resource is zone B (declaration 4.5): a zone C System reads no Tick until batch 4 (G4).
-    for (const K::ResourceInfo& info : registry.Resources()) {
-        if (info.owner != "world_time") continue;
-        CHECK_MESSAGE(info.zone == K::Zone::B, "[wt-time-zone-b] " << info.name);
-    }
-    CHECK_MESSAGE(registry.Resources()[*registry.ResourceIdOf<W::Tick>()].zone == K::Zone::B, "[wt-time-zone-b] Tick");
 }
 
 // Authority-rollback declaration 3.3: every type the time Module puts into a World has a hash function, so a

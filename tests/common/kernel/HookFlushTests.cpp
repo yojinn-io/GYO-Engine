@@ -55,17 +55,17 @@ void Base(Registrar& r, const Limits& limits = {}) {
     r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<Seed>({.name = "Seed", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Bullet>({.name = "Bullet", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Trail>({.name = "Trail", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Chain>({.name = "Chain", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Fan>({.name = "Fan", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Score>({.name = "Score", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Marker>({.name = "Marker", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Req>({.name = "Req", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Filled>({.name = "Filled", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Bomb>({.name = "Bomb", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Fuse>({.name = "Fuse", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
+    r.Component<Bullet>({.name = "Bullet", .zone = Zone::B});
+    r.Component<Trail>({.name = "Trail", .zone = Zone::B});
+    r.Component<Chain>({.name = "Chain", .zone = Zone::B});
+    r.Component<Fan>({.name = "Fan", .zone = Zone::B});
+    r.Component<Score>({.name = "Score", .zone = Zone::B});
+    r.Component<Marker>({.name = "Marker", .zone = Zone::B});
+    r.Component<Req>({.name = "Req", .zone = Zone::B});
+    r.Component<Filled>({.name = "Filled", .zone = Zone::B});
+    r.Component<Bomb>({.name = "Bomb", .zone = Zone::B});
+    r.Component<Fuse>({.name = "Fuse", .zone = Zone::B});
     r.Resource<Depth>({.name = "Depth", .zone = Zone::B});
     r.Message<Ping>({.name = "Ping", .zone = Zone::B});
     r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
@@ -541,8 +541,8 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     CHECK(t5.registry->Frozen().CFingerprint() != t6.registry->Frozen().CFingerprint());
     CHECK(planOf(t8, "Tick") != planOf(none, "Tick"));
     CHECK(planOf(none, "Tick").version == 8U);
-    CHECK(none.registry->Frozen().CFingerprint().version == 11U);
-    CHECK(none.registry->Frozen().RegistryFingerprint().version == 7U);
+    CHECK(none.registry->Frozen().CFingerprint().version == 12U);
+    CHECK(none.registry->Frozen().RegistryFingerprint().version == 8U);
     const std::string report = t5.registry->Frozen().ExportPlans();
     CHECK(report.find("gyo.kernel.plans 6") == 0);
     CHECK(report.find("  hook-round-limit 5\n") != std::string::npos);
@@ -938,9 +938,9 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
                   "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
     CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "8:9e9f1eeabb8adadea081c9b457fba880ca1fa9df1b956783177576323485e1c6",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "11:f31f21e186ac7a964238c17093b3f5d492834259eaf4b0af473385d87f869040",
+    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "12:c8f421b21b9e744b7d313d006982691085f77afb42bb8ea01103985faad547dd",
                   "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "7:cebcb67082271602510f4f4bea36aaea2795e8054b3bcf4c46a846a2fec942a6",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "8:b4c91be4926666e83f105315782b7b336b703aa80c23c47f458136396bdb9f6d",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
     CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 8:") != std::string::npos,

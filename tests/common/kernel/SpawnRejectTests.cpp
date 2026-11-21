@@ -50,11 +50,11 @@ void Base(Registrar& r, bool allotter = false) {
     early.name = "Early";
     early.stages = {"X"};
     r.Schedule(early);
-    r.Component<Body>({.name = "Body", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Seen>({.name = "Seen", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Label>({.name = "Label", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Signal>({.name = "Signal", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Body>({.name = "Body", .zone = Zone::B});
+    r.Component<Seen>({.name = "Seen", .zone = Zone::B});
+    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
+    r.Component<Label>({.name = "Label", .zone = Zone::B});
+    r.Component<Signal>({.name = "Signal", .zone = Zone::B});
     r.Component<CPos>({.name = "CPos", .zone = Zone::C, .rollback = Rollback::Yes});
     if (allotter) {
         r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
@@ -332,7 +332,6 @@ TEST_CASE("J-55: an alive id: the spawn is dropped, the old entity is untouched,
         CHECK_MESSAGE(r.reason == SpawnRejectReason::IdAlive, "J-55 player-7: reason IdAlive");
         CHECK_MESSAGE(r.emitter == "SpawnSevenEightNine", "J-55 player-7: emitter");
         CHECK_MESSAGE(!r.emitterIsHook, "J-55 player-7: emitter is not a hook");
-        CHECK_MESSAGE(r.emitterZone == Zone::B, "J-55 player-7: emitter zone");
         CHECK_MESSAGE(!r.fromAllotter, "J-55 player-7: not from the allotter");
         CHECK_MESSAGE(r.schedule == "Tick", "J-55 player-7: schedule");
         const std::uint32_t step = StepOf(*rig, "SpawnSevenEightNine");
@@ -588,8 +587,7 @@ TEST_CASE("J-55: a zone C spawn blocked by an entity with zone B data only is dr
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(rig->world().Get<CPos>(7) == nullptr, "J-55 zone-c: 7 gets no zone C data");
     const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
-    REQUIRE_MESSAGE(rejected.size() == 1, "J-55 zone-c: one record");
-    CHECK_MESSAGE(rejected[0].emitterZone == Zone::C, "J-55 zone-c: emitter zone C");
+    CHECK_MESSAGE(rejected.size() == 1, "J-55 zone-c: one record");
 }
 
 // The record carries the World's sync point number (L8; the domain tick left with the clock, G8).
@@ -811,8 +809,8 @@ TEST_CASE("J-55: the fingerprint versions") {
     });
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
     CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 8U, "J-55 versions: Plan fingerprint version 8");
-    CHECK_MESSAGE(frozen.CFingerprint().version == 11U, "J-55 versions: C fingerprint version 11");
-    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 7U, "J-55 versions: Registry fingerprint version 7");
+    CHECK_MESSAGE(frozen.CFingerprint().version == 12U, "J-55 versions: C fingerprint version 12");
+    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 8U, "J-55 versions: Registry fingerprint version 8");
 }
 
 // ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)
@@ -1047,8 +1045,7 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
     SUBCASE("one bundle: the two Systems conflict, tied by registration without a declared order") {
         Built built = Finish({{"test", [](Registrar& r) {
                                    Base(r);
-                                   r.Component<CSharedPos>({.name = "CSharedPos", .zone = Zone::C,
-                                                            .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+                                   r.Component<CSharedPos>({.name = "CSharedPos", .zone = Zone::C, .rollback = Rollback::Yes});
                                    r.AddSystem<&ZoneCSpawnsNineShared>(In("ZoneCSpawnsNineShared", "A", Zone::C));
                                    r.AddSystem<&ZoneCSpawnsNineSharedAgain>(In("ZoneCSpawnsNineSharedAgain", "A", Zone::C));
                                }}});

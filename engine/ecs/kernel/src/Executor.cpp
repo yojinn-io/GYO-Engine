@@ -318,7 +318,6 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             call.name = system.options.name;
             call.schedule = scheduleName;
             call.planPos = position;
-            call.zone = system.options.zone;
             call.lastRun = mountState.lastRun;
             call.callSerial = ++world.callSerial_;
             call.syncEpoch = world.syncEpoch_;
@@ -664,7 +663,6 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
     }
     record.planPos = call.planPos;
     record.recSeq = 0;
-    record.emitterZone = call.zone;
     record.emitter = call.name;
     record.emitterHook = false;
     record.emitterKey = call.access;

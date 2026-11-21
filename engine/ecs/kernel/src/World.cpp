@@ -430,7 +430,6 @@ void Push(SystemContext& call, Record record) {
     GYO_ASSERT(world.state_ != WorldState::Applying || call.hook || call.observer);
     record.planPos = call.planPos;
     record.recSeq = (*call.recSeq)++;
-    record.emitterZone = call.zone;
     record.emitter = call.name;
     record.emitterHook = call.hook;
     record.emitterKey = call.access;
@@ -533,7 +532,6 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.name = record.name;
     call.schedule = schedule;
     call.planPos = planPos;
-    call.zone = record.zone;
     call.hook = true;
     call.stamp = stamp;
     call.lastRun = 0;
@@ -607,7 +605,6 @@ Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trig
         call.name = record.name;
         call.schedule = schedule;
         call.planPos = planPos;
-        call.zone = record.zone;
         call.observer = true;
         call.immediateChange = (hookTarget_ != nullptr);
         call.eventKey = record.event;
@@ -749,7 +746,6 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             rejected.reason = reason;
             rejected.emitter = std::string(spawn.emitter);
             rejected.emitterIsHook = spawn.emitterHook;
-            rejected.emitterZone = spawn.emitterZone;
             rejected.fromAllotter = !spawn.withId;
             rejected.schedule = std::string(schedule);
             rejected.step = spawn.planPos;

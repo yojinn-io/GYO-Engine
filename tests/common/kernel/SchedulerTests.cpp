@@ -21,9 +21,9 @@ struct SharedB { std::int32_t v; };
 struct SharedC { std::int32_t v; };
 
 void SharedData(Registrar& r) {
-    r.Component<SharedA>({.name = "SharedA", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
-    r.Component<SharedB>({.name = "SharedB", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
-    r.Component<SharedC>({.name = "SharedC", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+    r.Component<SharedA>({.name = "SharedA", .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Component<SharedB>({.name = "SharedB", .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Component<SharedC>({.name = "SharedC", .zone = Zone::C, .rollback = Rollback::Yes});
 }
 
 SystemResult WriteA(Query<Write<SharedA>>) { return Ok(); }
@@ -45,8 +45,6 @@ SystemResult ReadMarker(Query<Read<TestMarker>>) { return Ok(); }
 SystemResult Nothing() { return Ok(); }
 SystemResult ReadPos(Query<Read<TestPos>>) { return Ok(); }
 SystemResult SpawnPos(Spawn<Bundle<TestPos>>) { return Ok(); }
-SystemResult HookWritesA(Query<Write<SharedA>>) { return Ok(); }
-SystemResult HookReadsA(Query<Read<SharedA>>) { return Ok(); }
 SystemResult ReadDerived(Query<Read<TestDerived>>) { return Ok(); }
 SystemResult WriteDerived(Query<Write<TestDerived>>) { return Ok(); }
 SystemResult ExtractPos(Extract<Read<TestPos>>) { return Ok(); }
@@ -140,11 +138,11 @@ struct Golden {
 // (event types and observers hashed, none here): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
     {"mixed", &MixedRegistry, "8:a7fb49c5c00c39463f55eb4f32eb07e8367512c7856fe5c446a999cd0b6953ed",
-     "7:995cccd19e4c856c0403c348aa09d7a5f6d31972713f2d38768074b3496122fa"},
+     "8:d8b404c1760d5b0f0d56ca48f32118b0113fa09911e86a4187713dd8ae4f7fcb"},
     {"deferred", &DeferredRegistry, "8:2f15310ca49ef932db59c66a486bf9330daa0cd971394c0f0948a3ad8d34a564",
-     "7:aab0a03a52c7205fcedeab376ff247a524942027be93d075f9ac0b30c3d95af4"},
+     "8:eda119896972c5ca41b3196eacde60d114bbd943bc0286e33b55e6d7c5d62451"},
     {"events", &EventRegistry, "8:bc3cd4d3357645f46efcb7670ee3a51e77b4bdb3eabd81e5493b45b32b38ad1d",
-     "7:0b46e6e2d152f23e3d3389e3b2306c66d1f06b77def3f8fcb18da779e8ae8da8"},
+     "8:1122ed6afeee21b949968c4a6fba861963adf1fa9862f5b0f8d33b4bccee3f16"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
@@ -386,8 +384,8 @@ SystemOptions OrderIn(std::string name, std::string schedule, std::string stage,
 // One plugin "game": Shared data (two writers are allowed), the two schedules, the given Systems.
 Built OrderGame(const std::function<void(Registrar&)>& systems) {
     return KernelTest::Finish({{"game", [systems](Registrar& r) {
-                                    r.Component<OrderPos>({.name = "Pos", .writePolicy = WritePolicy::Shared});
-                                    r.Resource<OrderCounter>({.name = "Counter", .writePolicy = WritePolicy::Shared});
+                                    r.Component<OrderPos>({.name = "Pos"});
+                                    r.Resource<OrderCounter>({.name = "Counter"});
                                     r.Schedule(OrderTick());
                                     r.Schedule(OrderStep());
                                     systems(r);
@@ -474,19 +472,17 @@ TEST_CASE("J-25: With and Without do not remove a conflict") {
 
 // ---- J-27 (D-E17 half; LIM-2)
 
-TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule without a guard also reports X-E1") {
+TEST_CASE("J-27: any Parallel schedule fails in v1, whatever its Systems") {
     Built bOnly = FinishOne([](Registrar& r) {
         ScheduleOptions s;
         s.name = "Ui";
         s.stages = {"Draw"};
         s.executor = ExecutorKind::Parallel;
-        s.parallelGuardTest = "ui.parallel_equivalence";
         r.Schedule(s);
         r.AddSystem<&ReadMarker>(Sys("Draw", Zone::B, {At("Ui", "Draw")}));
     });
     CHECK(KernelTest::ErrorCount(bOnly, StartupCode::DE17) == 1);
     REQUIRE_FALSE(static_cast<bool>(bOnly.result));
-    CHECK_FALSE(KernelTest::HasError(bOnly, StartupCode::XE1));
     Built c = WithShared([](Registrar& r) {
         ScheduleOptions s;
         s.name = "FixedParallel";
@@ -497,8 +493,6 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
     });
     CHECK(KernelTest::HasError(c, StartupCode::DE17));
     REQUIRE_FALSE(static_cast<bool>(c.result));
-    CHECK(KernelTest::ErrorCount(c, StartupCode::XE1) == 1);
-    CHECK(KernelTest::ErrorCount(c, StartupCode::DE11) == 1);
 }
 
 // ---- J-44 (D-9)
@@ -587,19 +581,6 @@ TEST_CASE("J-24: D-E4 (missing target), D-E5 (against stage order), D-E6 (cycle)
     CHECK(cycle.result.error().errors.front().subjects.size() == 3);
 }
 
-TEST_CASE("J-24: D-E9 (zone C hooks on one trigger conflict)") {
-    Built built = WithShared([](Registrar& r) {
-        r.Hook<TestPos, &HookWritesA>(HookTrigger::OnAdd, {.name = "WriteOnAdd", .zone = Zone::C});
-        r.Hook<TestPos, &HookReadsA>(HookTrigger::OnAdd, {.name = "ReadOnAdd", .zone = Zone::C});
-    });
-    REQUIRE(KernelTest::ErrorCount(built, StartupCode::DE9) == 1);
-    CHECK(built.result.error().errors.front().subjects[0] == "WriteOnAdd");
-    KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
-        r.Hook<TestPos, &HookWritesA>(HookTrigger::OnAdd, {.name = "WriteOnAdd", .zone = Zone::C});
-        r.Hook<TestPos, &HookReadsA>(HookTrigger::OnRemove, {.name = "ReadOnRemove", .zone = Zone::C});
-    }));
-}
-
 TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
     const auto build = [](Registrar& r) {
         r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B});
@@ -655,9 +636,11 @@ TEST_CASE("J-24: several errors of different codes come back in one report") {
         r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
         r.AddSystem<&SpawnPos>(Sys("SpawnPos", Zone::C, Sim()));
         r.AddSystem<&ReadMarker>(Sys("Twice", Zone::B, {At("Update", "First"), At("Update", "Second")}));
-        r.RequireExplicitZones();
-        const auto noZone = [](Query<Read<TestMarker>>) -> SystemResult { return {}; };
-        r.AddSystem<decltype(noZone)>(Sys("NoZone", Zone::Unset, {At("Update", "First")}));
+        // D-E7 (S-8): the Diagnostics effect written by hand (the zone rule S-6 used here left in step 2).
+        const auto handDiagnostics = [](Query<Read<TestMarker>>) -> SystemResult { return {}; };
+        SystemOptions o = Sys("HandDiagnostics", Zone::B, {At("Update", "First")});
+        o.effects = {"Diagnostics"};
+        r.AddSystem<decltype(handDiagnostics)>(o);
     });
     REQUIRE_FALSE(static_cast<bool>(built.result));
     const StartupReport& report = built.result.error();

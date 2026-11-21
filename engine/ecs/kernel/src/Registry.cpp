@@ -104,14 +104,11 @@ std::string_view ToString(StartupReportCode code) noexcept {
 std::string_view ToString(StartupCode code) noexcept {
     switch (code) {
     case StartupCode::DE1: return "D-E1";
-    case StartupCode::DE2: return "D-E2";
     case StartupCode::DE3: return "D-E3";
     case StartupCode::DE4: return "D-E4";
     case StartupCode::DE5: return "D-E5";
     case StartupCode::DE6: return "D-E6";
     case StartupCode::DE7: return "D-E7";
-    case StartupCode::DE9: return "D-E9";
-    case StartupCode::DE11: return "D-E11";
     case StartupCode::DE14: return "D-E14";
     case StartupCode::DE15: return "D-E15";
     case StartupCode::DE16: return "D-E16";
@@ -122,7 +119,6 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::RE4: return "R-E4";
     case StartupCode::RE5: return "R-E5";
     case StartupCode::RE7: return "R-E7";
-    case StartupCode::XE1: return "X-E1";
     }
     return "Unknown";
 }
@@ -374,7 +370,7 @@ ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOpti
         return existing != nullptr ? existing->id : 0;
     }
     data.components.push_back(ColumnInfo{std::move(options.name), shape.size, shape.align, shape.trivialRelocate,
-                                         options.writePolicy, options.zone, options.role, options.rollback,
+                                         options.zone, options.role, options.rollback,
                                          data.OwnerName(owner_)});
     data.columnMakers.push_back(make);
     return id;
@@ -393,9 +389,9 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.resources.push_back(ResourceInfo{std::move(options.name), shape.size, shape.align, options.writePolicy,
-                                          options.zone, options.role, options.rollback, options.external,
-                                          options.threadBound, data.OwnerName(owner_)});
+    data.resources.push_back(ResourceInfo{std::move(options.name), shape.size, shape.align, options.zone,
+                                          options.role, options.rollback, options.threadBound,
+                                          data.OwnerName(owner_)});
     data.resourceMakers.push_back(make);
     return id;
 }
@@ -470,7 +466,7 @@ SetId Registrar::RegisterNamedSet(TypeKey key, std::string name) {
         const Detail::TypeEntry* existing = data.FindType(key);
         return existing != nullptr ? existing->id : 0;
     }
-    data.namedSets.push_back(Detail::NamedSetRecord{std::move(name), key, owner_, {}, {}, {}, false});
+    data.namedSets.push_back(Detail::NamedSetRecord{std::move(name), key, owner_, {}, {}, {}});
     return id;
 }
 
@@ -488,31 +484,11 @@ void Registrar::AddSetMember(TypeKey set, TypeKey component) {
                {data.OwnerName(owner_)});
 }
 
-void Registrar::MarkDigestSet(TypeKey set) {
-    GYO_ASSERT(data_->building);
-    Detail::RegistryData& data = *data_;
-    ++data.digestMarks;
-    for (Detail::NamedSetRecord& record : data.namedSets) {
-        if (record.key == set) {
-            record.digest = true;
-            return;
-        }
-    }
-    data.Error(StartupCode::RE4, "R-6", data.OwnerName(owner_) + " marks a named set that is not registered as the digest set",
-               {data.OwnerName(owner_)});
-}
-
 void Registrar::DeclareAllotter(TypeKey resource, Detail::AllotterOps ops) {
     GYO_ASSERT(data_->building);
     data_->allotterDeclarations.push_back(resource);
     data_->allotterDeclarationOps.push_back(ops);
     data_->allotterOwners.push_back(owner_);
-}
-
-void Registrar::RequireExplicitZones() {
-    GYO_ASSERT(data_->building);
-    data_->explicitZones = true;
-    ++data_->explicitZoneCalls;
 }
 
 void Registrar::Schedule(ScheduleOptions options) {
@@ -698,8 +674,7 @@ void AddKernelRegistrations(RegistryData& data) {
     data.types.push_back(TypeEntry{KeyOf<KernelSettings>(), sizeof(KernelSettings), alignof(KernelSettings),
                                    TypeRole::Resource, data.kernelSettings, kKernelOwner});
     data.resources.push_back(ResourceInfo{"KernelSettings", sizeof(KernelSettings), alignof(KernelSettings),
-                                          WritePolicy::Exclusive, Zone::B, Role::State, Rollback::No, true, false,
-                                          kKernelOwnerName});
+                                          Zone::B, Role::State, Rollback::No, false, kKernelOwnerName});
     data.resourceMakers.push_back(&MakeResource<KernelSettings>);
     data.effects.push_back(EffectRecord{kDiagnosticsEffect, kKernelOwner});
 }
@@ -736,12 +711,12 @@ const FrozenRegistry& Registry::Frozen() const {
 namespace Detail {
 namespace {
 
-// A zone left Unset is zone B unless an owner asked for explicit zones
-// (Registrar::RequireExplicitZones). Runs once registration is closed and
-// before every check, so the zone rules, the Plans and the fingerprints all
-// see the zone the declaration ends up with.
+// A zone left Unset is zone B. Runs once registration is closed and before
+// every check, so the Plans and the fingerprints see the zone the declaration
+// ends up with. The zone rules are gone (v8-arch-gyo2-authority-rollback step 2);
+// the zone itself stays until step 6 for the C fingerprint, the G-5 export and
+// Z6, which move to the authority Module.
 void ApplyDefaultZones(RegistryData& data) {
-    if (data.explicitZones) return;
     const auto fill = [](Zone& zone) {
         if (zone == Zone::Unset) zone = Zone::B;
     };
@@ -756,39 +731,14 @@ void ApplyDefaultZones(RegistryData& data) {
 
 void CheckData(RegistryData& data) {
     for (const ColumnInfo& info : data.components) {
-        if (info.zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", "component '" + info.name + "' declares no zone (there is no default)",
-                       {info.name, info.owner});
-        }
         if (info.role == Role::Input && info.rollback != Rollback::No) {
             data.Error(StartupCode::DE7, "Z8", "component '" + info.name + "' has role Input and must not roll back",
                        {info.name, info.owner});
         }
     }
     for (const ResourceInfo& info : data.resources) {
-        if (info.zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", "resource '" + info.name + "' declares no zone (there is no default)",
-                       {info.name, info.owner});
-        }
-        if (info.external && info.zone == Zone::C) {
-            data.Error(StartupCode::DE7, "Z1", "external resource '" + info.name + "' is zone C; external is always zone B",
-                       {info.name, info.owner});
-        }
         if (info.role == Role::Input && info.rollback != Rollback::No) {
             data.Error(StartupCode::DE7, "Z8", "resource '" + info.name + "' has role Input and must not roll back",
-                       {info.name, info.owner});
-        }
-    }
-    for (const MessageInfo& info : data.messages) {
-        if (info.zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", "message '" + info.name + "' declares no zone (there is no default)",
-                       {info.name, info.owner});
-        }
-    }
-    // An event type's zone follows a message type's rule (time-events declaration 4.5).
-    for (const EventInfo& info : data.events) {
-        if (info.zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", "event '" + info.name + "' declares no zone (there is no default)",
                        {info.name, info.owner});
         }
     }
@@ -826,22 +776,12 @@ void CheckData(RegistryData& data) {
             set.members.push_back(entry->id);
         }
         SortUnique(set.members);
-        if (set.digest) {
-            for (ComponentId member : set.members) {
-                if (data.components[member].writePolicy == WritePolicy::Shared) {
-                    data.Error(StartupCode::DE2, "S-12",
-                               "component '" + data.components[member].name + "' is in the digest set '" + set.name +
-                                   "' but is Shared (a digest column must be Exclusive)",
-                               {data.components[member].name, set.name});
-                }
-            }
-        }
     }
 }
 
 // Registrar::InitialValue: resolves the two components of every declaration and
 // leaves the valid ones in (requestId, targetId) order. Who writes a request
-// writes, in effect, its component: the zone rules check that in CheckSystems
+// writes, in effect, its component: Z6 checks that in CheckSystems
 // (FunnelWrites), not here.
 void CheckInitialValues(RegistryData& data) {
     std::vector<InitialValueRecord> valid;
@@ -882,15 +822,6 @@ void CheckInitialValues(RegistryData& data) {
                        {targetInfo.name, requestInfo.name}, {source});
             continue;
         }
-        // The value of a zone C component is computed from zone C data only (Z1):
-        // Fn is (c) computation whatever System writes the request.
-        if (targetInfo.zone == Zone::C && requestInfo.zone != Zone::C) {
-            data.Error(StartupCode::DE7, "Z1",
-                       "the initial value of zone C component '" + targetInfo.name + "' comes from '" + requestInfo.name +
-                           "', which is zone " + ZoneName(requestInfo.zone),
-                       {targetInfo.name, requestInfo.name}, {source});
-            continue;
-        }
         record.targetId = target->id;
         record.requestId = request->id;
         valid.push_back(record);
@@ -916,14 +847,6 @@ void CheckSchedules(RegistryData& data) {
         if (s.hookRoundLimit && *s.hookRoundLimit == 0) {
             data.Error(StartupCode::DE20, "F-12", "schedule '" + s.name + "' declares a hook round limit of 0 (at least 1)",
                        {s.name});
-        }
-        if (!s.ingressStage.empty() && stages.count(s.ingressStage) != 0 && s.stages.front() != s.ingressStage) {
-            data.Error(StartupCode::DE7, "Z3", "schedule '" + s.name + "' names ingress stage '" + s.ingressStage +
-                                                   "', which is not its first stage", {s.name});
-        }
-        if (!s.ingressStage.empty() && stages.count(s.ingressStage) == 0) {
-            data.Error(StartupCode::DE1, "Z3", "schedule '" + s.name + "' names ingress stage '" + s.ingressStage +
-                                                   "', which it does not have", {s.name});
         }
         std::set<std::string> syncNames;
         for (const SyncPointOptions& sync : s.syncPoints) {
@@ -1097,27 +1020,11 @@ void ResolveSystems(RegistryData& data) {
             data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
                        {hook.name}, {SourceText(hook.source)});
         }
-        if (hook.zone == Zone::C) {
-            const auto forbid = [&](bool present, const char* rule, const char* what) {
-                if (present) {
-                    data.Error(StartupCode::DE7, rule, subject + " is zone C and " + what, {hook.name},
-                               {SourceText(hook.source)});
-                }
-            };
-            forbid(resolver.access.local, "S-7", "has Local<T> (state outside the World)");
-            forbid(resolver.access.changeFilters, "S-9", "filters by Changed or Added");
-            forbid(resolver.access.exclusive, "S-13", "takes ExclusiveWorld");
-        }
         Normalize(resolver.access);
         hook.access = std::move(resolver.access);
-        if (hook.zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", subject + " declares no zone (there is no default)", {hook.name},
-                       {SourceText(hook.source)});
-        }
     }
     // Observers (event cursor declaration 3.3): Systems that run where their
-    // event is triggered; their zone follows a hook's rule (time-events
-    // declaration 4.5); each is a message reader of its own (3.2).
+    // event is triggered; each is a message reader of its own (3.2).
     for (std::size_t o = 0; o < data.observers.size(); ++o) {
         ObserverRecord& observer = data.observers[o];
         const std::string subject = "observer '" + observer.name + "'";
@@ -1151,37 +1058,13 @@ void ResolveSystems(RegistryData& data) {
             data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
                        {observer.name}, {SourceText(observer.source)});
         }
-        if (observer.zone == Zone::C) {
-            const auto refuseInC = [&](bool present, const char* rule, const char* what) {
-                if (present) {
-                    data.Error(StartupCode::DE7, rule, subject + " is zone C and " + what, {observer.name},
-                               {SourceText(observer.source)});
-                }
-            };
-            refuseInC(found.access.local, "S-7", "has Local<T> (state outside the World)");
-            refuseInC(found.access.changeFilters, "S-9", "filters by Changed or Added");
-        }
         Normalize(found.access);
         for (const AccessKey& key : found.access.reads) {
             if (key.kind != AccessKind::Message) continue;
             data.messages[key.id].readers.push_back(MessageReaderInfo{observer.name, {}, {}, true});
         }
         observer.access = std::move(found.access);
-        if (observer.zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", subject + " declares no zone (there is no default)", {observer.name},
-                       {SourceText(observer.source)});
-        }
     }
-}
-
-// The zone of the data behind one access key.
-Zone ZoneOf(const RegistryData& data, const AccessKey& key) {
-    switch (key.kind) {
-    case AccessKind::Component: return data.components[key.id].zone;
-    case AccessKind::Resource: return data.resources[key.id].zone;
-    case AccessKind::Message: return data.messages[key.id].zone;
-    }
-    return Zone::Unset;
 }
 
 std::string NameOf(const RegistryData& data, const AccessKey& key) {
@@ -1191,15 +1074,6 @@ std::string NameOf(const RegistryData& data, const AccessKey& key) {
     case AccessKind::Message: return data.messages[key.id].name;
     }
     return "?";
-}
-
-bool IsInput(const RegistryData& data, const AccessKey& key) {
-    return (key.kind == AccessKind::Component && data.components[key.id].role == Role::Input) ||
-           (key.kind == AccessKind::Resource && data.resources[key.id].role == Role::Input);
-}
-
-bool IsExternal(const RegistryData& data, const AccessKey& key) {
-    return key.kind == AccessKind::Resource && data.resources[key.id].external;
 }
 
 Rollback RollbackOf(const RegistryData& data, const AccessKey& key) {
@@ -1216,21 +1090,11 @@ std::vector<AccessKey> WrittenKeys(const AccessSet& access) {
     return keys;
 }
 
-// Every key an access set touches (spec Z1 "全部存取").
-std::vector<AccessKey> TouchedKeys(const AccessSet& access) {
-    std::vector<AccessKey> keys = WrittenKeys(access);
-    keys.insert(keys.end(), access.reads.begin(), access.reads.end());
-    for (ComponentId id : access.membershipReads) keys.push_back({AccessKind::Component, id});
-    SortUnique(keys);
-    return keys;
-}
-
 // Registrar::InitialValue: the kernel fills a component at the sync point for
-// whoever added a cell of its request, so for the zone rules (Z1, Z2, Z3, Z6,
-// Z7) a System or hook writes every component the requests it inserts or
-// spawns fill, through chains of declarations. A write in place or a remove of
-// a request adds no cell and fills nothing, so it does not count. Not for the
-// writer count (D-E2): not counting them is what the funnel is for. Maps each
+// whoever added a cell of its request, so for Z6 a System or hook writes every
+// component the requests it inserts or spawns fill, through chains of
+// declarations. A write in place or a remove of a request adds no cell and
+// fills nothing, so it does not count. Maps each
 // such component to the request it is filled from; components the access set
 // writes itself are not listed.
 std::map<ComponentId, ComponentId> FunnelWrites(const RegistryData& data, const AccessSet& access) {
@@ -1252,8 +1116,8 @@ std::map<ComponentId, ComponentId> FunnelWrites(const RegistryData& data, const 
     return reached;
 }
 
-// The access set the zone rules check: access plus the components it fills (FunnelWrites).
-AccessSet ZoneAccess(const AccessSet& access, const std::map<ComponentId, ComponentId>& funnel) {
+// The access set Z6 checks: access plus the components it fills (FunnelWrites).
+AccessSet FunnelAccess(const AccessSet& access, const std::map<ComponentId, ComponentId>& funnel) {
     AccessSet out = access;
     for (const auto& entry : funnel) out.deferredWrites.push_back(entry.first);
     SortUnique(out.deferredWrites);
@@ -1268,49 +1132,7 @@ std::string FunnelNote(const RegistryData& data, const std::map<ComponentId, Com
     return " (filled from '" + data.components[found->second].name + "' by Registrar::InitialValue)";
 }
 
-// Z1, Z2 (first half), Z7 and the boundary rule for one System or hook. access
-// includes the components the funnel fills for it (ZoneAccess); funnel names them.
-void CheckZoneAccess(RegistryData& data, const std::string& subject, const std::string& name, Zone zone, bool ingress,
-                     const AccessSet& access, const std::map<ComponentId, ComponentId>& funnel,
-                     const std::string& source) {
-    if (zone == Zone::Unset) {
-        return;  // already S-6; zone rules need a zone
-    }
-    if (zone == Zone::C) {
-        const std::vector<AccessKey> written = WrittenKeys(access);
-        for (const AccessKey& key : TouchedKeys(access)) {
-            if (ZoneOf(data, key) == Zone::C) continue;
-            const bool writes = std::binary_search(written.begin(), written.end(), key);
-            const bool external = IsExternal(data, key);
-            data.Error(StartupCode::DE7, writes && external ? "Z7" : "Z1",
-                       subject + " is zone C but " + (writes ? "writes" : "reads") + " '" + NameOf(data, key) + "'" +
-                           FunnelNote(data, funnel, key) + ", which is " +
-                           (external ? "external (always zone B)" : "zone " + std::string(ZoneName(ZoneOf(data, key)))),
-                       {name, NameOf(data, key)}, {source});
-        }
-        for (const AccessKey& key : written) {
-            if (IsInput(data, key)) {
-                data.Error(StartupCode::DE7, "Z3",
-                           subject + " is zone C and writes role=Input data '" + NameOf(data, key) + "'" +
-                               FunnelNote(data, funnel, key) + "; only the Host and ingress Systems write boundary input",
-                           {name, NameOf(data, key)}, {source});
-            }
-        }
-        return;
-    }
-    for (const AccessKey& key : WrittenKeys(access)) {
-        if (ZoneOf(data, key) != Zone::C) continue;
-        if (ingress && IsInput(data, key)) continue;  // Z3
-        data.Error(StartupCode::DE7, "Z2",
-                   subject + " is zone " + ZoneName(zone) + (ingress ? " (ingress)" : "") + " but writes zone C data '" +
-                       NameOf(data, key) + "'" + FunnelNote(data, funnel, key) + (ingress ? " whose role is not Input" : ""),
-                   {name, NameOf(data, key)}, {source});
-    }
-}
-
 void CheckSystems(RegistryData& data) {
-    // One X-E1 per schedule (the first zone C System found names it), not one per System.
-    std::set<std::string> unguardedParallel;
     bool anyRollback = false;
     for (const ScheduleRecord& schedule : data.schedules) anyRollback = anyRollback || schedule.options.rollbackEnabled;
 
@@ -1321,44 +1143,11 @@ void CheckSystems(RegistryData& data) {
         const std::string source = SourceText(system.source);
         const Zone zone = system.options.zone;
         const AccessSet& access = system.access;
-        if (zone == Zone::Unset) {
-            data.Error(StartupCode::DE7, "S-6", subject + " declares no zone (there is no default)", {name}, {source});
-        }
         if (system.options.mounts.empty()) {
             data.Error(StartupCode::DE1, "B.1", subject + " has no mount, so it never runs", {name}, {source});
         }
-        if (zone == Zone::C) {
-            for (EffectId effect : system.effects) {
-                data.Error(StartupCode::DE7, "S-8",
-                           subject + " is zone C and declares effect '" + data.effects[effect].name +
-                               "'; only Diagnostics (from DiagnosticsWriter<T>) is allowed",
-                           {name, data.effects[effect].name}, {source});
-            }
-            if (access.local) {
-                data.Error(StartupCode::DE7, "S-7", subject + " is zone C and has Local<T> (state outside the World)",
-                           {name}, {source});
-            }
-            if (access.changeFilters) {
-                data.Error(StartupCode::DE7, "S-9", subject + " is zone C and filters by Changed or Added", {name}, {source});
-            }
-            if (access.exclusive) {
-                data.Error(StartupCode::DE7, "S-13", subject + " is zone C and takes ExclusiveWorld", {name}, {source});
-            }
-            if (system.options.ingress) {
-                data.Error(StartupCode::DE7, "Z3", subject + " is zone C and ingress; ingress Systems are zone B",
-                           {name}, {source});
-            }
-        }
-        if (access.exclusive && system.options.ingress) {
-            // Spec S-17 (K0): Z2's ingress exception would let it write zone C boundary input.
-            data.Error(StartupCode::DE7, "S-17",
-                       subject + " takes ExclusiveWorld and is ingress; an ingress System declares the boundary input "
-                                 "it writes in its signature",
-                       {name}, {source});
-        }
         const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);
-        const AccessSet zoneAccess = ZoneAccess(access, funnel);
-        CheckZoneAccess(data, subject, name, zone, system.options.ingress, zoneAccess, funnel, source);
+        const AccessSet zoneAccess = FunnelAccess(access, funnel);
 
         std::set<std::string> mountedSchedules;
         for (const Mount& mount : system.options.mounts) {
@@ -1377,12 +1166,6 @@ void CheckSystems(RegistryData& data) {
             }
             if (!mountedSchedules.insert(s.name).second) {
                 data.Error(StartupCode::DE19, "B.1", subject + " is mounted twice in schedule '" + s.name + "'",
-                           {name, s.name}, {source});
-            }
-            if (system.options.ingress && (s.ingressStage.empty() || mount.stage != s.ingressStage)) {
-                data.Error(StartupCode::DE7, "Z3",
-                           subject + " is ingress but its mount in schedule '" + s.name + "' is in stage '" + mount.stage +
-                               "', not the ingress stage" + (s.ingressStage.empty() ? " (the schedule has none)" : " '" + s.ingressStage + "'"),
                            {name, s.name}, {source});
             }
             if (system.options.ingress && s.rollbackEnabled && !mount.notInRollback) {
@@ -1408,20 +1191,12 @@ void CheckSystems(RegistryData& data) {
                     }
                 }
             }
-            if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty() &&
-                unguardedParallel.insert(s.name).second) {
-                data.Error(StartupCode::XE1, StartupCode::DE11, "X-2",
-                           "schedule '" + s.name + "' declares Parallel and holds zone C System '" + name +
-                               "', but names no Serial-versus-Parallel guard test",
-                           {s.name, name}, {source});
-            }
         }
     }
     for (const HookRecord& hook : data.hooks) {
         const std::string subject = "hook '" + hook.name + "'";
         const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, hook.access);
-        const AccessSet zoneAccess = ZoneAccess(hook.access, funnel);
-        CheckZoneAccess(data, subject, hook.name, hook.zone, false, zoneAccess, funnel, SourceText(hook.source));
+        const AccessSet zoneAccess = FunnelAccess(hook.access, funnel);
         if (hook.zone == Zone::C && anyRollback) {
             for (const AccessKey& key : WrittenKeys(zoneAccess)) {
                 if (key.kind != AccessKind::Message && RollbackOf(data, key) != Rollback::Yes) {
@@ -1433,12 +1208,11 @@ void CheckSystems(RegistryData& data) {
             }
         }
     }
-    // An observer's zone rules are a hook's (time-events declaration 4.5).
+    // An observer's Z6 is a hook's (time-events declaration 4.5).
     for (const ObserverRecord& observer : data.observers) {
         const std::string subject = "observer '" + observer.name + "'";
         const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, observer.access);
-        const AccessSet observerZone = ZoneAccess(observer.access, funnel);
-        CheckZoneAccess(data, subject, observer.name, observer.zone, false, observerZone, funnel, SourceText(observer.source));
+        const AccessSet observerZone = FunnelAccess(observer.access, funnel);
         if (observer.zone == Zone::C && anyRollback) {
             for (const AccessKey& written : WrittenKeys(observerZone)) {
                 if (written.kind != AccessKind::Message && RollbackOf(data, written) != Rollback::Yes) {
@@ -1448,86 +1222,6 @@ void CheckSystems(RegistryData& data) {
                                {observer.name, NameOf(data, written)}, {SourceText(observer.source)});
                 }
             }
-        }
-    }
-}
-
-// D-E2: at most one writer of an Exclusive column or resource over every
-// schedule; writers are counted per System, hooks included (DI-KS 6).
-void CheckExclusiveWriters(RegistryData& data) {
-    std::map<AccessKey, std::vector<std::pair<std::string, std::string>>> writers;
-    for (const SystemRecord& system : data.systems) {
-        if (system.removed) continue;
-        bool counted = false;
-        for (const Mount& mount : system.options.mounts) {
-            const ScheduleRecord* schedule = data.FindSchedule(mount.schedule);
-            if (schedule != nullptr) counted = true;
-        }
-        if (!counted) continue;
-        for (const AccessKey& key : WrittenKeys(system.access)) {
-            if (key.kind == AccessKind::Component || key.kind == AccessKind::Resource) {
-                writers[key].emplace_back(system.options.name, SourceText(system.source));
-            }
-        }
-    }
-    for (const HookRecord& hook : data.hooks) {
-        for (const AccessKey& key : WrittenKeys(hook.access)) {
-            if (key.kind == AccessKind::Component || key.kind == AccessKind::Resource) {
-                writers[key].emplace_back("hook " + hook.name, SourceText(hook.source));
-            }
-        }
-    }
-    // An observer is a System: its writes count (DI-KS 6).
-    for (const ObserverRecord& observer : data.observers) {
-        for (const AccessKey& key : WrittenKeys(observer.access)) {
-            if (key.kind == AccessKind::Component || key.kind == AccessKind::Resource) {
-                writers[key].emplace_back("observer " + observer.name, SourceText(observer.source));
-            }
-        }
-    }
-    for (const auto& [key, list] : writers) {
-        const WritePolicy policy =
-            key.kind == AccessKind::Component ? data.components[key.id].writePolicy : data.resources[key.id].writePolicy;
-        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;
-        std::vector<std::string> subjects{NameOf(data, key)};
-        std::vector<std::string> sources;
-        std::string names;
-        for (const auto& [writer, source] : list) {
-            subjects.push_back(writer);
-            sources.push_back(source);
-            names += (names.empty() ? "" : ", ") + writer;
-        }
-        data.Error(StartupCode::DE2, "S-11",
-                   "'" + NameOf(data, key) + "' is Exclusive but has " + std::to_string(list.size()) + " writers: " + names,
-                   std::move(subjects), std::move(sources));
-    }
-}
-
-// D-E9: two hooks on one trigger that conflict, one of them zone C (spec D.2 step 11).
-void CheckHookConflicts(RegistryData& data) {
-    for (std::size_t i = 0; i < data.hooks.size(); ++i) {
-        for (std::size_t j = i + 1; j < data.hooks.size(); ++j) {
-            const HookRecord& a = data.hooks[i];
-            const HookRecord& b = data.hooks[j];
-            if (!a.componentId || a.componentId != b.componentId || a.trigger != b.trigger) continue;
-            if (a.zone != Zone::C && b.zone != Zone::C) continue;
-            const std::vector<AccessKey> writesA = WrittenKeys(a.access);
-            const std::vector<AccessKey> writesB = WrittenKeys(b.access);
-            const std::vector<AccessKey> touchedA = TouchedKeys(a.access);
-            const std::vector<AccessKey> touchedB = TouchedKeys(b.access);
-            std::string shared;
-            for (const AccessKey& key : writesA) {
-                if (std::binary_search(touchedB.begin(), touchedB.end(), key)) shared = NameOf(data, key);
-            }
-            for (const AccessKey& key : writesB) {
-                if (std::binary_search(touchedA.begin(), touchedA.end(), key)) shared = NameOf(data, key);
-            }
-            if (shared.empty()) continue;
-            data.Error(StartupCode::DE9, "F-11",
-                       "hooks '" + a.name + "' and '" + b.name + "' on the same trigger of '" +
-                           data.components[*a.componentId].name + "' conflict on '" + shared +
-                           "' and one is zone C; hooks have no before / after to order them",
-                       {a.name, b.name, shared}, {SourceText(a.source), SourceText(b.source)});
         }
     }
 }
@@ -1639,10 +1333,6 @@ void CheckLaterRound(RegistryData& data) {
         refuse("allotter", data.OwnerName(data.allotterOwners[i]) + " declares an allotter",
                {data.OwnerName(data.allotterOwners[i])});
     }
-    if (data.digestMarks > base.digestMarks) refuse("DigestSet", "a named set is marked as the digest set", {"DigestSet"});
-    if (data.explicitZoneCalls > base.explicitZoneCalls) {
-        refuse("RequireExplicitZones", "explicit zones are required", {"RequireExplicitZones"});
-    }
 }
 
 // What every round resolves first (named set members, the allotter, Systems'
@@ -1680,8 +1370,6 @@ bool PlanStage(RegistryData& data) {
     data.ties.clear();
     data.orders.clear();
     CheckSystems(data);
-    CheckExclusiveWriters(data);
-    CheckHookConflicts(data);
     BuildPlans(data);
     if (!data.errors.empty()) {
         data.plans.clear();
@@ -1754,8 +1442,6 @@ Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(Registr
         base.observers = round.observers.size();
         base.initialValues = round.initialValues.size();
         base.allotterDeclarations = round.allotterDeclarations.size();
-        base.digestMarks = round.digestMarks;
-        base.explicitZoneCalls = round.explicitZoneCalls;
     }
     Detail::RegistryData& target = Target();
     target.registered = true;

@@ -442,12 +442,6 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
             r.Allotter<RangeAllotter>();
         });
     }
-    SUBCASE("the digest set") {
-        refused("DigestSet", [](Registrar& r) { r.DigestSet<ReplicatedSet>(); });
-    }
-    SUBCASE("explicit zones") {
-        refused("RequireExplicitZones", [](Registrar& r) { r.RequireExplicitZones(); });
-    }
     SUBCASE("every kind in one round") {
         REQUIRE(Done(registry.Register(kBase, [](Registrar& r) {
             r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag", .zone = Zone::B});
@@ -458,12 +452,10 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
             r.AddToSet<ReplicatedSet, Tag>();
             r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
             r.Allotter<RangeAllotter>();
-            r.DigestSet<ReplicatedSet>();
-            r.RequireExplicitZones();
         })));
         const auto result = registry.BuildPlans();
         const std::size_t count = ErrorCount(result, StartupCode::RE7);
-        CHECK_MESSAGE(count == 7, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
+        CHECK_MESSAGE(count == 5, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
         CHECK(registry.Frozen().Version() == 1U);
         KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     }
@@ -601,7 +593,7 @@ TEST_CASE("DI-KS 26: while a World made from the Registry runs, nothing may regi
         Registry filled;
         FirstRound(filled, [](Registrar& r) {
             Data(r);
-            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Later>({.name = "Later", .zone = Zone::B});
             r.InitialValue<Mode, &ModeFromLaterRegisters>();
             r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
         });
@@ -742,7 +734,7 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     }
     SUBCASE("hook access") {
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Later>({.name = "Later", .zone = Zone::B});
             r.Hook<Later, &OnLaterAdd>(HookTrigger::OnAdd, {.name = "OnLaterAdd", .zone = Zone::B});
             r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
         })));
