@@ -47,6 +47,7 @@
 - [trace-declaration.zh-Hant.md](trace-declaration.zh-Hant.md)：`v8-arch-gyo2-trace` 的事前宣告（修訂 1，使用者 2026-11-21 動工前核准「照建議，全部核准」）。
 - [trace-merge-approval.zh-Hant.md](trace-merge-approval.zh-Hant.md)：`v8-arch-gyo2-trace` 的合併前核准頁。
 - [os-wait-declaration.zh-Hant.md](os-wait-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的事前宣告（core/time 的等待改呼叫 core/os 的 `WakeSignal`；W3 的分析；修訂 3，使用者 2026-11-21 動工前核准「照建議，全部核准，開始」）。
+- [os-wait-merge-approval.zh-Hant.md](os-wait-merge-approval.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的合併前核准頁。
 - [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 - [spawn-reject-declaration.zh-Hant.md](spawn-reject-declaration.zh-Hant.md)：`v8-arch-gyo2-spawn-reject` 的事前宣告（同步點丟掉不能生成的那一筆；修訂 2，使用者 2026-11-15 核准）。
 - [kernel-app-boundary-declaration.zh-Hant.md](kernel-app-boundary-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-app-boundary` 的事前宣告（統合）：Kernel 只做 ECS、另立編排層、每層的職責清單、跨份的關聯表、確認清單 13 件；修訂 38，使用者 2026-11-17 核准（c1be70eb）。推導與四家對照在[設計稿](kernel-app-boundary-draft.zh-Hant.md)。
