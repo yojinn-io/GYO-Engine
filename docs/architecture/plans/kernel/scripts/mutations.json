@@ -8422,6 +8422,62 @@
       "target": "gyo_kernel_tests",
       "cases": "J-12: Writes lists a component*",
       "expect": "\\[ks\\-annotated\\-component\\]"
+    },
+    {
+      "id": "ks-msg-writers-no-systems",
+      "what": "a System's MessageWriter<M> is not listed among M's writers. Only it catches the System part of the writer list",
+      "guards": [
+        "authority-rollback-declaration 2.2",
+        "kernel DI-KS 25"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "                data.messages[key.id].writers.push_back(MessageWriterInfo{system.options.name, mount.schedule});",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the Registry lists each message type's writers*",
+      "expect": "\\[msg\\-registry\\-writers\\]"
+    },
+    {
+      "id": "ks-msg-writers-no-hooks",
+      "what": "a hook's MessageWriter<M> is not listed among M's writers. Only it catches the hook part",
+      "guards": [
+        "authority-rollback-declaration 2.2",
+        "kernel DI-KS 25"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "            data.messages[key.id].writers.push_back(MessageWriterInfo{hook.name, {}, true, false});",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the Registry lists each message type's writers*",
+      "expect": "\\[msg\\-registry\\-writers\\]"
+    },
+    {
+      "id": "ks-msg-writers-no-observers",
+      "what": "an observer's MessageWriter<M> is not listed among M's writers. Only it catches the observer part",
+      "guards": [
+        "authority-rollback-declaration 2.2",
+        "kernel DI-KS 25"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "            data.messages[key.id].writers.push_back(MessageWriterInfo{observer.name, {}, false, true});",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-59: the Registry lists an observer that writes*",
+      "expect": "\\[obs\\-writer\\]"
+    },
+    {
+      "id": "ks-msg-writers-not-cleared",
+      "what": "the writer list is not cleared at BuildPlans, so a later round lists a writer twice (declaration 2.2: recomputed every BuildPlans). Only it catches the clearing",
+      "guards": [
+        "authority-rollback-declaration 2.2",
+        "kernel DI-KS 25"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "        info.readers.clear();\n        info.writers.clear();",
+      "replace": "        info.readers.clear();",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 26*",
+      "expect": "\\[ks\\-msg\\-writers\\-round\\]"
     }
   ]
 }

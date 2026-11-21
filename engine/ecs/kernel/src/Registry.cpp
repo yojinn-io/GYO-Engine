@@ -412,7 +412,7 @@ MessageTypeId Registrar::RegisterMessage(TypeKey key, Shape shape, MessageOption
     // A buffer that keeps nothing would drop every record it is given: a Programmer Error.
     GYO_ASSERT(options.capacity >= 1);
     data.messages.push_back(
-        MessageInfo{std::move(options.name), options.zone, data.OwnerName(owner_), options.capacity, {}});
+        MessageInfo{std::move(options.name), options.zone, data.OwnerName(owner_), options.capacity, {}, {}});
     data.messageMakers.push_back(make);
     return id;
 }
@@ -904,7 +904,10 @@ void AddMessageReaders(RegistryData& data, const std::vector<AccessKey>& reads, 
 
 void ResolveSystems(RegistryData& data) {
     // Derived: cleared, then filled in (registrationSeq, mount, condition) order.
-    for (MessageInfo& info : data.messages) info.readers.clear();
+    for (MessageInfo& info : data.messages) {
+        info.readers.clear();
+        info.writers.clear();
+    }
     for (SystemRecord& system : data.systems) {
         // Derived: cleared, so a later BuildPlans does not add to the last one's (declaration 3.2 rule 2).
         system.access = AccessSet{};
@@ -974,6 +977,12 @@ void ResolveSystems(RegistryData& data) {
         }
         access.reads = std::move(reads);
         system.access = std::move(access);
+        for (const Mount& mount : system.options.mounts) {
+            for (const AccessKey& key : system.access.writes) {
+                if (key.kind != AccessKind::Message) continue;
+                data.messages[key.id].writers.push_back(MessageWriterInfo{system.options.name, mount.schedule});
+            }
+        }
         // Effects.
         for (const std::string& effect : system.options.effects) {
             if (effect == kDiagnosticsEffect) {
@@ -1027,6 +1036,10 @@ void ResolveSystems(RegistryData& data) {
         }
         Normalize(resolver.access);
         hook.access = std::move(resolver.access);
+        for (const AccessKey& key : hook.access.writes) {
+            if (key.kind != AccessKind::Message) continue;
+            data.messages[key.id].writers.push_back(MessageWriterInfo{hook.name, {}, true, false});
+        }
     }
     // Observers (event cursor declaration 3.3): Systems that run where their
     // event is triggered; each is a message reader of its own (3.2).
@@ -1069,6 +1082,10 @@ void ResolveSystems(RegistryData& data) {
             data.messages[key.id].readers.push_back(MessageReaderInfo{observer.name, {}, {}, true});
         }
         observer.access = std::move(found.access);
+        for (const AccessKey& key : observer.access.writes) {
+            if (key.kind != AccessKind::Message) continue;
+            data.messages[key.id].writers.push_back(MessageWriterInfo{observer.name, {}, false, true});
+        }
     }
 }
 

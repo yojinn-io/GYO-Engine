@@ -184,6 +184,20 @@ TEST_CASE("DI-KS 26: a System registered after the first BuildPlans runs from th
                   "round state: " << Join(Log()));
 }
 
+// The message writer list is derived again at every BuildPlans (authority-rollback declaration 2.2), as the readers.
+TEST_CASE("DI-KS 26: a later BuildPlans lists a message type's writer once") {
+    Registry registry;
+    FirstRound(registry, [](Registrar& r) {
+        Base(r);
+        r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B});
+        r.AddSystem<&SendsLater>(B("SendsLater", "A"));
+    });
+    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.AddSystem<&NewSystem>(B("NewSystem", "B")); })));
+    REQUIRE(Done(registry.BuildPlans()));
+    const auto& writers = registry.Frozen().Messages()[*registry.Frozen().MessageIdOf<LaterEvent>()].writers;
+    CHECK_MESSAGE(writers.size() == 1, "[ks-msg-writers-round] " << writers.size());
+}
+
 TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses the new types") {
     Registry registry;
     FirstRound(registry);

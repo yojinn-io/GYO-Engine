@@ -482,6 +482,20 @@ struct MessageReaderInfo {
     friend bool operator==(const MessageReaderInfo&, const MessageReaderInfo&) = default;
 };
 
+// One writer of a message type (authority-rollback declaration 2.2; the
+// rollback Module's cross-schedule message check reads it): a System's mount,
+// a hook or an observer, each writing through MessageWriter<M>.
+struct MessageWriterInfo {
+    // The System's, hook's or observer's name.
+    std::string system;
+    // The mount's schedule; empty for a hook or an observer.
+    std::string schedule;
+    bool hook = false;
+    bool observer = false;
+
+    friend bool operator==(const MessageWriterInfo&, const MessageWriterInfo&) = default;
+};
+
 struct MessageInfo {
     std::string name;
     Zone zone;
@@ -490,6 +504,10 @@ struct MessageInfo {
     // Derived at every BuildPlans: every reader, by (registrationSeq, mount,
     // condition) order, then the observers in Registrar::Observer order (DI-KS 25).
     std::vector<MessageReaderInfo> readers;
+    // Derived at every BuildPlans, in the same shape: every System mount by
+    // (registrationSeq, mount) order, then the hooks in Registrar::Hook order,
+    // then the observers in Registrar::Observer order.
+    std::vector<MessageWriterInfo> writers;
 };
 
 // One pushed event type (Registrar::Event).

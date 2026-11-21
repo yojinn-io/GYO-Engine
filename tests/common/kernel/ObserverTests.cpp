@@ -1020,3 +1020,22 @@ TEST_CASE("J-59: a second ExclusiveWorld::Trigger after a dropped Err returns th
     CHECK(HasCode(ran, KernelErrorCode::HookRoundLimit));
     CHECK_MESSAGE((LinesStartingWith("rang:100") == 0 && Log().back() == "second HookRoundLimit"), "[obs-trigger-interrupted] " << Joined());
 }
+
+// The writer list's observer part (authority-rollback declaration 2.2): after the System mounts and the hooks.
+TEST_CASE("J-59: the Registry lists an observer that writes a message type among its writers") {
+    const Built built = Finish({{"test", [](Registrar& r) {
+                                     Data(r);
+                                     Events(r);
+                                     r.Message<Chirp>({.name = "Chirp", .zone = Zone::B, .capacity = 3});
+                                     r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door", .zone = Zone::B});
+                                     r.AddSystem<&WriteFiveChirpsOnce>(B("WriteChirps", "B"));
+                                 }}});
+    KERNEL_REQUIRE_OK(built);
+    const FrozenRegistry& frozen = built.registry->Frozen();
+    const auto& writers = frozen.Messages()[*frozen.MessageIdOf<Chirp>()].writers;
+    std::string listed;
+    for (const MessageWriterInfo& writer : writers) {
+        listed += (listed.empty() ? "" : ", ") + writer.system + (writer.observer ? "(observer)" : "@" + writer.schedule);
+    }
+    CHECK_MESSAGE(listed == "WriteChirps@Tick, chirp-on-door(observer)", "[obs-writer] " << listed);
+}
