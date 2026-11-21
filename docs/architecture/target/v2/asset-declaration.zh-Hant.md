@@ -6,7 +6,7 @@
 - 修訂 0（f93edb7e）送 Fable 5.2／high 敵對式檢查，blocker 4、should 15、nit 12，全部採用成修訂 1（b050e13b），對照在第 17 節。
 - 修訂 2（7adbcb77）：使用者要「參考其他家如何做 assets 的管理」。卡片補了管理面對照，經敵對式檢查（blocker 4、should 9、nit 4）改正後寫進第 4 節，對照在第 18 節；使用者選了 (a')。
 - 修訂 2 送 Fable 5.2／high 敵對式檢查，blocker 3、should 12、nit 10（證據 `declaration-r2-adversarial-check.md`），處理在第 19 節。
-- **修訂 3**：使用者在 asset 卡的 side chat 定了八件（12.1 決定 4～11）：時間上限放寬；跨執行緒約束現在寫進契約；**作者只用 id**；**資產管理在 World 之外**；大地圖先照 Bevy；第 4 題（到了就可見＋就緒查詢）；第 2 題（原始位元組雜湊，預設開）；**依賴由 Engine 推出**。本頁的形狀因此重寫：持久鍵改成 catalog 的 id；`Assets<T>` 不再每個 World 一份；CarryOver、時間窗口、失敗搬回、訊息對帳那一套整個拿掉。
+- **修訂 3**：使用者在 asset 卡的 side chat 定了八件（12.1 決定 4～11）：時間上限放寬（已作廢）；跨執行緒約束現在寫進契約；**作者只用 id**；**資產管理在 World 之外**；大地圖先照 Bevy；第 4 題（到了就可見＋就緒查詢）；第 2 題（原始位元組雜湊，預設開）；**依賴由 Engine 推出**。本頁的形狀因此重寫：持久鍵改成 catalog 的 id；`Assets<T>` 不再每個 World 一份；CarryOver、時間窗口、失敗搬回、訊息對帳那一套整個拿掉。
 
 **性質**：實作段第 6 組的 Module 的事前宣告。涉及：
 - AGENTS §2 的基盤 Architecture；
@@ -39,7 +39,7 @@ asset **不決定**以下四件事：
 | `v8-arch-gyo2-asset-three-decisions`（2026-11-21，主會話轉來） | 「asset 三件照建議」：(1) 圖片解碼不走 SDL，先用 stb_image，只在一個 adapter；(2) DI 照新前提重寫；(3) 起步照 Bevy 執行期讀原始檔，接得上日後的事先轉檔 | 5.11、第 7 節、5.10 |
 | `v8-arch-gyo2-asset-immutable-shared`（2026-11-21，本卡） | 「照 (a')，寫修訂 2」：載好的值不可變、共享唯讀 | AS-10（「每 World 各自解碼」的部分由決定 7 取代） |
 | `v8-arch-gyo2-asset-exclude-non-decisions`（2026-11-21，本卡） | 「排除掉不需要我決策的」 | 第 12 節的分法；第 2、4 題依修訂 2 檢查 B3 拉回，使用者已在 side chat 定（決定 9、10） |
-| 時間上限放寬（2026-11-21，side chat 轉來） | 設計段放寬到約 11 h，修訂 3 全部修再送檢 | 0.1 |
+| 時間上限放寬（2026-11-21，side chat 轉來）——**作廢** | 設計段放寬到約 11 h；之後又放寬到 13 h。兩次都作廢：設計段沒有時間上限的規則 | 0.1 |
 | 跨執行緒約束現在寫進契約（同上） | 多執行緒是已定前提，不等 RC 才寫 | AS-10、AS-11 |
 | 作者只用 id（同上） | 持久鍵＝id；id→路徑對照表的機制與格式歸資產管理，執行期可用 | 5.2、5.3、AS-5、AS-6、AS-12 |
 | 資產管理在 World 外（同上） | World 只持 id；換 World、多 World 不是 asset 的事；推翻 11-11 方向 2 | 5.4、AS-1、AS-4 |
@@ -90,14 +90,14 @@ side chat 轉來的八件，卡片已照四樣轉主會話記 HANDOFF（2026-11-
 
 | 段 | 估計 | 內容 |
 |---|---|---|
-| 設計段 | 原估 4～6 h；使用者放寬到約 11 h。到修訂 2 約 8.5 h；修訂 3 的重寫（含決定 9～11 的依賴、雜湊、就緒查詢）＋送檢估 3.5～4.5 h，合計約 12.5 h | 決定 6、7、11 讓修訂 3 從「修 25 條」變成重寫形狀，超過放寬後的約 11 h。到 13 h 還收不了就停下回報 |
+| 設計段 | 原估 4～6 h；到修訂 2 約 8.5 h；修訂 3 的重寫（含決定 9～11）＋送檢約 4 h，合計約 12.5 h | 只是資訊，不是停止條件（2026-11-21 使用者更正：時間盒子只用在查問題，AGENTS §14 只管測試與判定；見 12.1 決定 4 的作廢註記） |
 | 實作段 | 28～42 h（推定；修訂 2 是 22～34 h） | 多了 catalog 的 Data Contract、World 外的 store 與無鎖的請求路徑；交換點與生成世界的形狀還沒定，它們的宣告核准後重估 |
 
 ## 1. 這一批做什麼（先用遊戲講）
 
 FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、音效、規則與地圖的 JSON。
 
-**內容先有 catalog**：一份 catalog 檔（Data Contract）寫「id `rules.movement` 是文字，在 `content://rules/movement_rules.json`」「id `char.hero` 是模型，在 `content://models/hero.fbx`」。catalog 由工具、Script 或手寫產生（AGENTS §8）。作者**只認得 id**，不管檔在哪、怎麼解碼。
+**內容先有 catalog**：內容根目錄的 `content.json` 列出 catalog 檔；catalog（Data Contract）寫「id `rules.movement` 是文字，在 `rules/movement_rules.json`」「id `char.hero` 是模型，在 `models/hero.fbx`」。catalog 由工具、Script 或手寫產生（AGENTS §8）。作者**只認得 id**，不管檔在哪、怎麼解碼。
 
 步驟：
 1. 生成世界階段，作者的 System 對 `AssetRequests` 說：「我要 `rules.movement`。」**當場**拿到 `Handle<Text>`。
@@ -258,22 +258,63 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 
 ### 5.3 catalog（asset 擁有的 Data Contract）
 
-**一個項目**：`id`、`type`（型別名，由擁有型別的 Module 登記，例：`text`、`model`）、`path`（來源名＋相對路徑，例：`content://models/hero.fbx`；來源名是 io 的 scheme，`MountPoint.hpp:15`）、可選的 `format`（沒寫就取副檔名）、可選的 `settings`（給那個 loader 的 JSON 物件）。
+使用者 2026-11-21 要卡片「比對一下之前的設計」再提案（12.1 決定 12）。逐檔出處在 `catalog-prior-designs.md`。
 
-**檔案格式**：JSON（經 JSON Module），頂層 `{"version": 1, "assets": [...]}`。**Version 與 Validation Rule 是契約的一部分**（AGENTS §8 MUST）。
+**比對**：
 
-**Validation Rule**（違反＝啟動錯誤，收進 `ProductStartupReport`，O-5）：
-- `version` 是本版認得的值；
-- id 合規、在所有 catalog 裡唯一（同一 id 的兩個項目內容完全相同才算同一項，否則是衝突）；
-- `type` 有登記的 loader；（`type`、`format`）找得到 loader；
-- `settings` 能被那個 loader 解讀；
-- `path` 的語法合規（檔案存不存在**不在**啟動時查，載入時才是 E2：BigMap 有數百個 region，啟動時逐一查檔太慢）。
+| | master（GYO 舊） | Unity Entities〔源〕 | Bevy〔源〕 | Godot〔文〕 | 本頁 |
+|---|---|---|---|---|---|
+| 放在哪 | 一份或多份 `asset_catalog.json`，由 `content.json` 列出（`ContentManifest.hpp`） | build 產生的 catalog（`RuntimeContentCatalogData.cs:186-206`） | 每個檔旁的 `.meta`（`meta.rs`） | 資源本身或 `.uid` 旁檔 | 照 master：集中的 catalog＋`content.json` 列出 |
+| 鍵 | 字串 id，執行期換成 FNV-1a 64 雜湊、**等值只看雜湊**（`AssetId.hpp`） | GUID | 沒有 id（路徑） | UID | 字串 id，等值看字串 |
+| 一筆的內容 | `id`、`type`、`path`；多的欄位保留 | 物件→檔→archive、事先算好的依賴組 | loader、settings、processor 資訊 | — | `id`、`type`、`path`＋可選 `format`、`settings` |
+| 路徑 | 內容根目錄下的相對路徑，規則 `IsRelativeContentPath`，與工具共用 | archive 內 | 原始檔旁 | `res://` | 照 master |
+| 誰產生 | 手寫＋工具（audio_editor 登記）；build 時組裝與驗證（`build/content_contract.py`） | build | Editor／processor | Editor | 手寫、Script、工具；執行期讀，不需要 build |
+| Version | 整數 `version: 1` | 隨 package | `meta_format_version` "1.0"（`meta.rs:31`） | — | 整數 `version: 1`，和 master 相容 |
+| 驗證 | version、陣列、id／type／path 非空、全內容 id 唯一、路徑規則；C++ 與 Python 共用 valid／invalid 範例（`docs/architecture.md:301`） | build 時 | 解析時 | — | 照 master，加 loader 相關的兩條 |
 
-**誰產生**：工具、Script、手寫都一樣（AGENTS §8）；asset 函式庫提供讀、寫、驗證，工具照它寫（`engine-not-tool-duties`：工具自己持有內容知識，經契約交接）。產品也可以在自己的 `build` 裡用程式加項目（F9 不想手寫時，自己掃資料夾產生）——asset 不掃資料夾。
+**(1) 格式**
+- **採**：JSON，頂層 `{"version": 1, "assets": [{"id", "type", "path", "format"?, "settings"?}]}`。入口是內容根目錄的 `content.json`（`{"version": 1, "catalogs": [...]}`）。
+  - master 現有的內容檔照樣有效。`format`、`settings` 是新加的可選欄位，master 本來就允許多的欄位。
+  - `path` 是內容根目錄下的相對路徑，規則照 master 的 `IsRelativeContentPath`（相對、`/` 分隔、沒有空段或 `.`、`..`、沒有 `\`、`:`、控制字元，不能是 `content.json`），和寫 catalog 的工具共用一個實作。
+  - id：字串，等值看字串（5.2）。字元集 `[a-z0-9._-]`，master 現有的 id（例：`object_fps_pvp.player.character`）都合。
+  - `content.json` 的 `shader_bundles` 屬 render，本批照收、不驗，SDL 那批定。其他頂層鍵是啟動錯誤。
+- **系譜**：master 的 `CatalogFormat.hpp`、`ContentManifest.hpp`、`docs/architecture.md:285-312`；藍圖 `:66`。
+- **退掉的**：
+  - Bevy、Godot 的每檔旁檔：id 散在每個檔旁，改名要連旁檔一起搬，唯一性要掃全部才查得到。
+  - Unity 的 build 產物：使用者三件之 3 要執行期讀原始檔。
+  - master 的「等值只看 64 位元雜湊」：兩個 id 撞雜湊時會被當成同一個，master 沒有處理；改成看字串，雜湊只在內部當索引。
+  - 修訂 3 先前寫的 `content://` 來源名：master 是一個內容根目錄、沒有分享的掛載，照它比較簡單。
+- **決勝理由**：沿用既有的契約，現有的內容與工具不必改；集中一份才查得到全內容 id 唯一；JSON 可以手寫（F9）。
 
-**怎麼給 store**：產品在自己的 `build` 經 world_asset 的入口加 catalog 檔或項目（`ProductSetup` 沒有選項包，所以走 `Build`；同一份在每個 World 的 `Build` 再給一次是冪等的，衝突是啟動錯誤）。
+**(2) 誰產生**（AGENTS §8：手寫、Script、工具都一樣有效）
+- **採**：
+  - asset 函式庫提供 catalog 的讀、寫、驗證（不認得 ECS），工具照它寫，執行期照它讀。
+  - **工具的登記政策歸工具**：master audio_editor 的「id 已屬別的型別就拒絕」「路徑已屬別的 id 就拒絕」（`RegistrationPolicy`）是工具的政策，不是契約的規則。
+  - 產品把**內容根目錄**交給 world_asset（在自己的 `build`；同一個根目錄在每個 World 再給一次是冪等的，給了不同的根目錄是啟動錯誤：照 master「Runtime content has one root」）。
+  - 產品也可以在 `build` 裡用程式加項目（F9 不想手寫時，自己掃資料夾）。asset 不掃資料夾。
+- **系譜**：master 的 audio_editor 登記、`framework-rework` 的 `CatalogPlan`（framework 已退役，政策回到工具）。
+- **退掉的**：build 時才組裝與驗證（master 的 `build/content_contract.py`）。GYO2 還沒有 build 的組裝管線；執行期讀的時候就驗證。日後組裝管線回來，照同一組 valid／invalid 範例對齊。
+- **決勝理由**：使用者決定 6「id→路徑對照表的機制與格式歸資產管理，執行期可用」；工具自己持有內容知識，經契約交接（`engine-not-tool-duties`）。
 
-**系譜**：概念來自藍圖 `:66`「catalog 邏輯 id」、master 的 `AssetCatalog`、Unity 的 content catalog；格式是新寫的，不沿用 master 的檔案格式（master 的 `AssetCatalog` 是工具與遊戲共用但 owner 未定的契約；決定 6 把它歸資產管理，owner 的未決項解消）。
+**(3) Version 與 Validation Rule**
+- **Version**：整數。新加可選欄位不升版；改了既有欄位的意思、或新增必填欄位才升版。讀到不認得的 version 是啟動錯誤。`content.json` 與 catalog 各有自己的 version。
+- **Validation Rule**（違反＝啟動錯誤，收進 `ProductStartupReport`，O-5）：
+  1. `version` 是整數、本版認得（master）；
+  2. `assets` 是陣列，每筆是物件，`id`、`type`、`path` 是非空字串（master）；
+  3. id 合字元集，在**全部 catalog** 裡唯一（master）；
+  4. `path` 合 `IsRelativeContentPath`（master）；
+  5. 有 loader 的型別，（`type`、`format`）找得到 loader，`settings` 解讀得了（新）；
+  6. 同一個（`type`、`format`）兩個不同的 loader（新，藍圖 `:66`「副檔名衝突應為錯誤」）。
+- **刻意不查的**：
+  - **沒有 loader 的型別不是錯誤**（照 master「Custom types remain supported」）。例：Match 沒有 render，catalog 裡的貼圖照樣合法；真的請求它才是 E2 `NoLoader`。
+  - **檔案存不存在**：載入時才是 E2（BigMap 有數百個 region，啟動時逐一查檔太慢）。
+  - **兩個 id 指向同一個檔**：合法（照 master）。依賴經路徑反查時遇到這種情況，那筆引用是 E2 `AmbiguousReference`（5.17）。
+  - 多的欄位：保留、不解讀（照 master）。
+- **範例集**：照 master 的做法，準備一組 valid／invalid 的 catalog 範例當契約的一部分，C++ 的驗證與日後的工具、組裝管線都對同一組（AGENTS §8 的 Validation Rule）。
+- **系譜**：master 的 `CatalogParser.cpp:19-37`、`AssetCatalog.cpp:61-84`、`docs/architecture.md:301`。
+- **決勝理由**：master 現有的規則全留，現有內容照樣通過；只加 loader 相關的兩條，並放寬「沒有 loader 的型別」以支援 Match。
+
+**交使用者的**：無。三件都沿用 master 的既有契約（不是使用者之前的決定），和別家的分歧（集中 vs 旁檔）由使用者決定 6 的「對照表」已經定了。
 
 ### 5.4 資產管理在 World 外（決定 7）
 
@@ -367,7 +408,7 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 
 | 情況 | 級別 | 怎麼出現 |
 |---|---|---|
-| id 不在 catalog、型別不合、檔案不在、讀不到、超過上限、loader 解碼失敗、經路徑引用但 catalog 沒有（`UnlistedReference`）、循環引用（`CyclicReference`） | **E2** | 那筆的狀態是 `Failed`，帶 `AssetLoadFailure{code, message, detail}`（`Engine::Base::Error<Code>` 的形狀，沒有鏈）。loader 自己的碼名與細節放進 `detail`；同時發 `AssetLoadFailed` |
+| id 不在 catalog、型別不合、檔案不在、讀不到、超過上限、loader 解碼失敗、經路徑引用但 catalog 沒有（`UnlistedReference`）或有多個 id（`AmbiguousReference`）、循環引用（`CyclicReference`）、請求的型別沒有 loader（`NoLoader`） | **E2** | 那筆的狀態是 `Failed`，帶 `AssetLoadFailure{code, message, detail}`（`Engine::Base::Error<Code>` 的形狀，沒有鏈）。loader 自己的碼名與細節放進 `detail`；同時發 `AssetLoadFailed` |
 | loader 丟例外（含 `std::bad_alloc`；`catch (...)`） | **E2**（`LoaderThrew`） | 同上。工作在 World 外，例外不能沿 World 的 Run 傳出，也不能讓行程停下；`detail` 寫 `what()` |
 | catalog 不合 Validation Rule；同一個（`type`、`format`）登記兩個 loader；loader 的設定不合法 | 啟動錯誤 | `Finish` 回報，收進 `ProductStartupReport`（O-5） |
 | Product 結束時還在飛的工作 | **E3** | `AssetDiscarded`（筆數），由 world_asset 在結束時記（X-6） |
@@ -425,7 +466,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 ### 5.12 對 io 的要求（交給 threads、io 重審那批）
 
 - 從 World 以外的執行緒讀整個檔，帶位元組上限（今天是 `engine/io/helpers/ReadAllBytes`）。**`IFileSystem`／`Vfs` 在多執行緒同時讀時的契約要確認。**
-- 來源名＝io 的 scheme（`MountPoint.hpp:15`）。
+- 內容根目錄由 world_asset 掛在 io 的一個 scheme 下（`MountPoint.hpp:15`）；catalog 的路徑是根目錄下的相對路徑（5.3）。
 - 疊掛載點（`MountPoint.hpp:16`「overlay 用」、`Vfs.hpp:86-88` 找不到就往下一個）io 已經有；本批不靠它（5.10）。
 - 檔案監看（`IFileWatcher`）留給熱重載，本批不用。
 
@@ -474,7 +515,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 **登記**：擁有型別的 Module 在自己的 `Build` 經 world_asset 的入口登記 loader，登記進 Product 的 store。
 - 每個 World 的 `Build` 都會再登記一次，同一個 loader 是冪等的；同一個（`type`、`format`）兩個不同的 loader 是啟動錯誤，在 `Finish` 回報（O-5）。
 - 為什麼走 `Build`：`ProductSetup` 沒有 Product 層的共用值（5.4）。
-- catalog 的驗證在第一個 World 的 `Finish` 做（這時 loader 都登記好了）。
+- catalog 的驗證在第一個 World 的 `Finish` 做（這時 loader 都登記好了）；後來的 World 新登記的 loader，在它自己的 `Finish` 補驗與它有關的項目。
 
 **上限**（R9）：每個 loader 給預設的位元組上限；產品可以覆寫，放寬或收緊都可以（`engine-not-rigid`）；超過是 E2 `TooLarge`。文字 loader 的預設上限 16 MiB（照 F8 的 region 上限）。
 
@@ -482,7 +523,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 **loader 宣告引用**：`LoadContext` 有兩個入口：
 - `Reference<U>(AssetId) -> Handle<U>`：引用另一個 id；
-- `ReferencePath<U>(相對路徑) -> Handle<U>`：檔案格式裡記的是路徑（例：fbx 裡的貼圖檔名）時，經 catalog 的反查（同一來源、正規化後的路徑 → id）換成 id。catalog 裡沒有這個路徑，那筆依賴是 E2 `UnlistedReference`。
+- `ReferencePath<U>(相對路徑) -> Handle<U>`：檔案格式裡記的是路徑（例：fbx 裡的貼圖檔名）時，相對於父項的檔，正規化成內容根目錄下的路徑，經 catalog 的反查（路徑 → id）換成 id。catalog 裡沒有這個路徑，那筆依賴是 E2 `UnlistedReference`；有兩個以上的 id 指向它，是 E2 `AmbiguousReference`。
 
 在 store 裡，引用會立刻排請求（照 Bevy）；直接呼叫 loader（F4）時只記下引用清單，回不連 store 的 Handle。
 
@@ -570,7 +611,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
   - **(c) loader 的 `T` 要 const 並行安全、解構不綁執行緒**：沒有 `mutable` 成員、沒有惰性快取、沒有非原子的內部計數；解構可以在任何執行緒發生（不綁執行緒、不持執行緒局部狀態）。作者要改就複製一份。字型的 glyph 快取這類可變狀態放在擁有型別的 Module 自己的 Resource。守衛：行為測試（最後一個持有者在別的執行緒放掉，解構正常；測試型別在解構子記執行緒）；其餘**只靠審查**——C++ 擋不住 `mutable`（Unity 是把 blob 限成 unmanaged 型別才做得到）。
 - **AS-11 World 端的操作不上鎖。** 請求、放掉、讀只用原子操作與無鎖佇列；鎖只在 store 的維護裡，不在 World 執行緒上。例外清單在 5.6。守衛：本頁與審查；並行案例只在 TSan 建置有檢出力（CI 沒有 TSan：`git grep -i sanitize -- .github` 0 件），寫明不當判定。
 - **AS-13 依賴由 Engine 推出。** loader 經 `LoadContext` 宣告引用（id 或 catalog 裡的路徑）；store 擁有依賴圖；就緒查詢的「好了」包含遞迴的全部依賴；父項自己的狀態不因依賴失敗而變；關上循環的引用是 E2 `CyclicReference`，不持有。守衛：行為測試（鏈、菱形去重、循環、依賴失敗、父項放掉後依賴跟著歸零；第 10 節）。
-- **AS-12 catalog 是 asset 擁有的 Data Contract。** 格式、Version、Validation Rule 在新頁；工具、Script、手寫產生的 catalog 一樣有效；執行期讀，不需要 build 的產物；asset 函式庫提供讀、寫、驗證，工具照它寫。守衛：行為測試（每條 Validation Rule 各一個不合的 catalog 是啟動錯誤；寫出再讀回相等）。
+- **AS-12 catalog 是 asset 擁有的 Data Contract。** 格式、Version、Validation Rule 在新頁；工具、Script、手寫產生的 catalog 一樣有效；執行期讀，不需要 build 的產物；asset 函式庫提供讀、寫、驗證，工具照它寫。守衛：契約的 valid／invalid 範例集（5.3）：每條 Validation Rule 各一個不合的範例是啟動錯誤；刻意不查的四項各一個範例是合法的；master 的 `asset_catalog.json` 原樣通過；寫出再讀回相等。
 
 ### Replacement Criteria（寫在積上去之前）
 
@@ -595,7 +636,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 |---|---|---|---|---|---|
 | 資產管理放哪 | World 外，Product 一份，由 world_asset 持有 | Unity Entities（行程一份）、Bevy（App 一份）；決定 7 | 每 World 一份＋CarryOver（修訂 2）；行程級靜態物件；改編排層加 Product 層共用值 | 資產的生命週期和 World 無關（使用者）；GYO 沒有行程級靜態先例；登記單位的實例本來就活到 Product 結束，編排層不必改 | F1（Sim＋Present）、F3 |
 | 持久鍵 | catalog 的 id 字串 | 藍圖 :66、master catalog、Unity GUID；決定 6 | 路徑（修訂 2、Bevy）；GUID（不可讀、要工具產生） | 作者只用 id（使用者）；改名與轉檔不影響內容與存檔；字串讓手寫 catalog（F9）可行 | F3、F5、F6 |
-| catalog | asset 擁有的 Data Contract，執行期讀 | master `AssetCatalog`（概念）、Unity content catalog（概念）；格式新寫 | build 時產生（Unity）；owner 未定（修訂 2） | 起步讀原始檔（三件之 3）；工具、Script、手寫一樣有效（AGENTS §8） | F5、F6、F9 |
+| catalog | asset 擁有的 Data Contract：master 的格式（version 1）＋可選 `format`、`settings`；`content.json` 列出；執行期讀 | master `CatalogFormat.hpp`、`ContentManifest.hpp`、`docs/architecture.md:285-312`；藍圖 :66 | Bevy／Godot 的旁檔；Unity 的 build 產物；master 的「等值只看雜湊」；`content://` 來源名（修訂 3 初稿） | 沿用既有契約，現有內容與工具不必改；集中才查得到唯一；執行期讀（三件之 3）；比對見 5.3 | F5、F6、F9 |
 | 單位的拆法 | `asset`（library，含 store）＋`world_asset`（Module） | `logging`／`world_logging` | 一個 Module；store 放 world_asset | 工具不建 World 也要 loader、catalog 與 store | F4、F6 |
 | World 怎麼看到結果 | store 發佈不可變快照；World 在套用點換視圖 | 新推導；Unity 的每幀處理命令、Bevy 的 `PreUpdate` 套用 | 經交換點把值搬進 World（修訂 2）；World 每次讀都看最新的 | 一幀看到同一份；World 不寫值；交換點不必搬值 | F1（Client 的回滾重跑） |
 | 值的可變性 | 不可變、共享唯讀；三條分開寫 | Unity blob（唯讀）；使用者 (a') | Bevy、Godot 的可變值 | 不可變是日後最難改的約束；跨執行緒共用的前提（決定 5） | F1、F2 |
@@ -686,8 +727,8 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 **照命名規範、別家原始碼、已定原則判的**：
 - 兩個單位的拆法；`AssetStore` 在 asset 函式庫；名字 `AssetStore`、`AssetId`（5.1）；
-- id 的字元集與長度（5.2）；catalog 的欄位、JSON、Validation Rule、「檔案存在與否載入時才查」（5.3）；
-- store 放在 world_asset 登記單位的實例、經 `Build` 給 catalog 與登記 loader、冪等（5.3、5.4、5.16）；
+- id 的字元集與長度（5.2）；catalog 的三件（格式、誰產生、Version 與 Validation Rule）照 master 沿用、加兩條、放寬一條（5.3）；
+- store 放在 world_asset 登記單位的實例、經 `Build` 給內容根目錄與登記 loader、冪等（5.3、5.4、5.16）；
 - 救回規則照 Bevy；取消的計法（5.5）；
 - 快照發佈、變更紀錄、套用在 `First`（5.6）；例外清單（5.6）；
 - 錯誤碼與級別的對應，`UnknownId`、`TypeMismatch` 歸 E2（5.8）；
@@ -715,7 +756,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 | 1 | asset 三件 | 「asset 三件照建議」 | 見第 0 節 | 主會話轉來 |
 | 2 | 載好的值不可變、共享唯讀（(a')） | 「照 (a')，寫修訂 2」 | (a) 不立、各 World 各自解碼；(a') 現在立 ←；(c) Product 級共用快取；(d) 單一擁有 World。其中「各 World 各自解碼」的前提由決定 7 取代，不可變照留 | 本卡 |
 | 3 | 排除不需要使用者決策的 | 「排除掉不需要我決策的。」 | 全交使用者；只留真正要定的 ← | 本卡；第 2、4 題依修訂 2 檢查 B3 拉回，之後由使用者定（決定 9、10） |
-| 4 | 時間上限放寬 | 使用者問「Asset 是機制還是功能？」「如果是機制，那麼未來修改成本如何？」，同意 (a) | (a) 放寬、全部修再送檢 ←；(b) 縮小範圍 | side chat |
+| 4 | 時間上限放寬——**作廢** | 使用者問「Asset 是機制還是功能？」「如果是機制，那麼未來修改成本如何？」，同意 (a) | (a) 放寬、全部修再送檢 ←；(b) 縮小範圍 | side chat。**作廢**（2026-11-21）：之後的「放寬到 13 h」一併作廢。使用者更正：「§14 時他媽的 測試。你別那麼扯蛋」「time-box-and-decision-gate 這個是他媽的查問題的時間盒子。」設計段沒有時間上限的規則，卡片和 side chat 拿它們停下、要使用者放寬是誤用 |
 | 5 | 跨執行緒約束現在寫進契約 | 「如果現在以單線程的方向去設計，如果未來需要多線程的時候，影響範圍多大？」 | 延後到 RC；現在寫 ← | side chat |
 | 6 | 作者只用 id；Asset 提供能力 | 「99.9%的情況，作者都不需要關心資產如何導入到Engine中的……」「我們定的是用id，所以在製作遊戲中時，作者也只會call ID」 | 路徑當持久鍵、id 日後接（修訂 2）；作者只用 id，載入、就緒、生命週期由 Engine 提供 ← | side chat |
 | 7 | 資產管理在 World 外 | 「【換 World 時要不要重讀、兩個 World 要不要共用】這個應該和asset 無關」；對「放在 World 外（Product 級或 Engine 級）」回「可以」 | 每 World 一份＋CarryOver（修訂 2）；World 外 ← | side chat |
@@ -723,8 +764,9 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 | 9 | 第 4 題：單筆到了就可見＋一組 id 的就緒查詢；轉場歸作者 | 「a 選項有問題。你見過什麼遊戲是那種先看到地面，才看到樹的？」更正：「是我想叉了……確實 a選項直接展示是有問題的，但是這種loading 轉場是需要作者自己來做的。」複述分工後：「可以。」 | (a) 單筆到了就可見 ←（＋就緒查詢）；(b) 照請求序或整組才可見；(c) 預設 (a)＋作者可設組、Engine 保證同幀；另提過「以組為單位、Engine 推依賴」 | side chat |
 | 10 | 第 2 題：asset 對每個 id 的原始位元組算雜湊，作為能力；預設開、可關；比不比與不同時怎麼辦歸作者或網路 Module | 「同意你的建議。」 | (a) 作者對載好的值算；(b) ←；(c) asset 算且當規則（不同就拒絕開局） | side chat |
 | 11 | 依賴由 Engine 推出 | 「我認為b」 | (a) 作者自己列模型與它的貼圖、材質 id；(b) Engine 推出：loader 宣告引用，就緒查詢包含整串依賴 ←；(c) 本批只留宣告引用的介面，推算日後做 | side chat |
+| 12 | id 對照表先比對既有設計再提案 | 「id 對照表（格式、誰產生、Version）這個。讓任務卡去比對一下之前的設計。」 | （流程指示，不是選項） | side chat；落點 5.3 |
 
-決定 4～11 的理由照 side chat 的轉述記在主會話的 HANDOFF。正文裡的「三件之 N」指決定 1 的第 N 件；「決定 N」指本表的編號。
+決定 4～12 的理由照 side chat 的轉述記在主會話的 HANDOFF。正文裡的「三件之 N」指決定 1 的第 N 件；「決定 N」指本表的編號。
 
 ### 12.2 卡片的判定（使用者看過、沒有拉回）
 
@@ -772,8 +814,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 ## 16. 停止條件
 
-- AGENTS §14 冒頭的三條。
-- 設計段到 13 h 還收不了（0.1）。
+- 實作段的測試、計測、判定卡住時：AGENTS §14 冒頭的三條（只用在測試與判定，不是設計段的時間上限）。
 - 交換點或生成世界的宣告和 5.6、5.13 的需求衝突。
 - 第 4 批合併後，雜湊客製點或 `Summary` 的規則和 5.9.1 的假設不同，而且影響 AS-6。
 - 實作中發現某個 loader 必須碰 World（RC-AS2），或 World 端必須上鎖（RC-AS9）。
@@ -864,7 +905,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 | S5 決定不在 HANDOFF | 已照四樣轉主會話（2026-11-21，兩次）；第 0 節標出處 |
 | S6 持久鍵在改名一軸自相矛盾 | 隨形狀消失：持久鍵是 id（5.2）；雜湊用 id 字串（5.9.1）；讀兩次相同的前提寫進第 14 節 |
 | S7 改名擴張點沒有 DI 與 RC | 隨形狀消失：id 是核心（AS-6、AS-12）；RC-AS6、RC-AS8 |
-| S8「來源」三義、魔數 | 來源名＝io 的 scheme（5.3、5.12）；疊掛載不再需要；loader 由 catalog 的（`type`、`format`）選，不靠魔數 |
+| S8「來源」三義、魔數 | 不再有來源名：catalog 的路徑是內容根目錄下的相對路徑（照 master，5.3、5.12）；疊掛載不再需要；loader 由 catalog 的（`type`、`format`）選，不靠魔數 |
 | S9 來源位元組雜湊無條件卻沒有範圍 | 決定 10：進範圍（R3）、第 2 步與測試（第 10 節）；介面在 5.5 |
 | S10 型別序號 | 拿掉（5.9.1） |
 | S11 `Summary` 測試殺不掉「雜湊索引」 | 改成兩份項目順序不同的 catalog（內部索引不同）比 `Summary`（第 10 節） |
@@ -876,7 +917,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 | N5 來源標記 | Unity blob 改〔源〕（`blob-assets-concept.md:7`）；`RuntimeContentManager` 也管 content scene（`:1042`）；`bevy_image/Cargo.toml:59-79` |
 | N6 F2 不確定 | 「兩個 World 用同一內容」只寫在 F1 |
 | N7 證據檔不一致 | `management-cross-table.md` 的 E1 改 E2；`reference-survey-management.md` 的 Godot 依賴格式加更正註記 |
-| N8 時間 | 使用者放寬（決定 4）；0.1 寫新的估計與 13 h 的停止點 |
+| N8 時間 | 設計段沒有時間上限的規則（使用者 2026-11-21 更正）；0.1 的估計只當資訊 |
 | N9 AS-1 漏 Extract | AS-1 寫明 Extract 是唯一跨 World 讀的路；守衛改成「讀到相等的值」 |
 | N10 範圍代號與 DI 代號混 | 範圍改用 R1～R10 |
 
