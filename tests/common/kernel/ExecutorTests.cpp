@@ -546,8 +546,8 @@ SystemResult UntypedIntoShared(Commands commands) {
     commands.Insert(1, Tag{5});
     return Ok();
 }
-// No run-time interception (S8): untyped Commands of a zone B System into a zone C
-// column and a single-writer column are recorded and applied like any other.
+// No run-time interception (S8): untyped Commands into any column are recorded and
+// applied like any other.
 SystemResult UntypedIntoAnyColumn(Commands commands) {
     commands.Insert(1, Pos{7});
     commands.Insert(1, Mode{8});
@@ -605,7 +605,7 @@ TEST_CASE("J-32b: untyped Commands write any column; a kernel Err the System dro
         CHECK(result.error().Has(KernelErrorCode::AllotterExhausted));
         CHECK(result.error().Has(KernelErrorCode::SystemFailed));
     }
-    SUBCASE("zone B, Shared: allowed") {
+    SUBCASE("untyped Commands into a column: applied") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&UntypedIntoShared>(B("UntypedIntoShared", "A"));
@@ -616,7 +616,7 @@ TEST_CASE("J-32b: untyped Commands write any column; a kernel Err the System dro
         CHECK(rig->world().Get<Tag>(1)->t == 5);
         CHECK(rig->recorded.empty());
     }
-    SUBCASE("any column: zone C and single-writer columns are applied too") {
+    SUBCASE("any column: each column is applied") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&UntypedIntoAnyColumn>(B("UntypedIntoAnyColumn", "A"));
@@ -625,10 +625,10 @@ TEST_CASE("J-32b: untyped Commands write any column; a kernel Err the System dro
         rig->world().Insert(2, Pos{2});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE((rig->world().Get<Pos>(1) != nullptr && rig->world().Get<Pos>(1)->x == 7),
-                      "J-32b any column: the untyped insert was not applied (zone C)");
+                      "J-32b any column: the untyped insert was not applied (Pos)");
         CHECK_MESSAGE((rig->world().Get<Mode>(1) != nullptr && rig->world().Get<Mode>(1)->m == 8),
-                      "J-32b any column: the untyped insert was not applied (single writer)");
-        CHECK_MESSAGE(rig->world().Get<Pos>(2) == nullptr, "J-32b any column: the untyped remove was not applied (zone C)");
+                      "J-32b any column: the untyped insert was not applied (Mode)");
+        CHECK_MESSAGE(rig->world().Get<Pos>(2) == nullptr, "J-32b any column: the untyped remove was not applied (Pos)");
         CHECK(rig->recorded.empty());
     }
 }
@@ -743,21 +743,21 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
     }
 }
 
-// ---- J-45 (S-13: zone C does not hold ExclusiveWorld; it writes any value)
+// ---- J-45 (ExclusiveWorld writes any value)
 
 namespace {
 
-SystemResult ExclusiveWritesZoneC(ExclusiveWorld<> world) {
+SystemResult ExclusiveWritesPos(ExclusiveWorld<> world) {
     auto r = world.Modify<Pos>(1, [](Pos& pos) { pos.x += 1; });
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveWritesExclusive(ExclusiveWorld<> world) {
+SystemResult ExclusiveWritesMode(ExclusiveWorld<> world) {
     auto r = world.Modify<Mode>(1, [](Mode& mode) { mode.m += 1; });
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveWritesZoneCShared(ExclusiveWorld<> world) {
+SystemResult ExclusiveWritesCShared(ExclusiveWorld<> world) {
     auto r = world.Modify<CShared>(1, [](CShared& value) { value.s += 1; });
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
@@ -800,21 +800,21 @@ std::unique_ptr<Rig> ExclusiveRig(void (*add)(Registrar&), bool verification) {
 // hold it since S-13 left with the zone rules (v8-arch-gyo2-authority-rollback step 2).
 TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
-    SUBCASE("zone C write") {
-        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneC>(B("X", "A")); }, false);
+    SUBCASE("a write of Pos") {
+        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesPos>(B("X", "A")); }, false);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(rig->world().Get<Pos>(1)->x == 8, "J-45 written: a zone C value");
+        CHECK_MESSAGE(rig->world().Get<Pos>(1)->x == 8, "J-45 written: Pos");
     }
-    SUBCASE("Exclusive write") {
-        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesExclusive>(B("X", "A")); }, false);
+    SUBCASE("a write of Mode") {
+        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesMode>(B("X", "A")); }, false);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(rig->world().Get<Mode>(1)->m == 2, "J-45 written: an Exclusive value");
+        CHECK_MESSAGE(rig->world().Get<Mode>(1)->m == 2, "J-45 written: Mode");
     }
-    SUBCASE("zone C, Shared write") {
-        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneCShared>(B("X", "A")); }, false);
+    SUBCASE("a write of CShared") {
+        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesCShared>(B("X", "A")); }, false);
         rig->world().Insert(1, CShared{0});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(rig->world().Get<CShared>(1)->s == 1, "J-45 written: a zone C, Shared value");
+        CHECK_MESSAGE(rig->world().Get<CShared>(1)->s == 1, "J-45 written: CShared");
     }
     SUBCASE("spawn: the typed Spawn gives an id from the allotter, and the entity is there in the call") {
         auto rig = ExclusiveRig([](Registrar& r) {
@@ -828,7 +828,7 @@ TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build") {
         CHECK_MESSAGE(Log() == std::vector<std::string>{"spawned 10 tag 3"}, "J-45 spawn: " << (Log().empty() ? std::string("nothing") : Log().front()));
         CHECK(rig->world().Get<Tag>(10)->t == 3);
     }
-    SUBCASE("zone B Shared write and any read pass, also with verification on") {
+    SUBCASE("a write and a read pass, also with verification on") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveAllowed>(B("X", "A")); }, true);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Get<Tag>(1)->t == 8);
@@ -1010,7 +1010,7 @@ SystemResult TagsTwo(CommandsFor<Inserts<Tag>, Removes<>> commands) {
     commands.Insert(2, Tag{2});
     return Ok();
 }
-SystemResult ZoneCInsertsAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, Res<TickCount> tick) {
+SystemResult InsertsPosAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, Res<TickCount> tick) {
     if (tick->value == 2) commands.Insert(1, Pos{2});
     return Ok();
 }
@@ -1032,19 +1032,19 @@ SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32
 
 } // namespace
 
-// Z5 is gone (S8): a zone B System's or hook's despawn of an entity that holds a
-// zone C column is recorded and applied like any other.
+// Z5 is gone (S8): a System's or hook's despawn of an entity is recorded and
+// applied like any other, whatever columns it holds.
 TEST_CASE("J-52: a despawn of an entity with any column is applied (no Z5)") {
-    SUBCASE("a zone B System") {
+    SUBCASE("a System") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&DespawnsOne>(B("DespawnsOne", "A"));
         }, false);
         rig->world().Insert(1, Pos{1});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 zone C entity: the despawn was not applied (System)");
+        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 entity with Pos: the despawn was not applied (System)");
     }
-    SUBCASE("a zone B hook") {
+    SUBCASE("a hook") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.Hook<Tag, &TagHookDespawnsOne>(HookTrigger::OnAdd, {.name = "TagHookDespawnsOne"});
@@ -1053,7 +1053,7 @@ TEST_CASE("J-52: a despawn of an entity with any column is applied (no Z5)") {
         rig->world().Insert(1, Pos{1});
         rig->world().Insert(2, Pos{2});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 zone C entity: the despawn was not applied (hook)");
+        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 entity with Pos: the despawn was not applied (hook)");
     }
 }
 
@@ -1072,7 +1072,7 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
             r.Resource<TickCount>({.name = "TickCount"});
             r.Schedule(one);
             r.AddSystem<&InsertTagOnce>(B("InsertTagOnce", "A"));
-            r.AddSystem<&ZoneCInsertsAtTwo>(C("ZoneCInsertsAtTwo", "A"));
+            r.AddSystem<&InsertsPosAtTwo>(C("InsertsPosAtTwo", "A"));
             r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns"});
         }, false);
         rig->world().Insert(1, Mode{0});

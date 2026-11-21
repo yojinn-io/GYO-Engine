@@ -5722,7 +5722,7 @@
       "replace": "    record.emitterKey = call.access;\n    if (record.kind == RecordKind::Despawn) return;\n    call.queue->push_back(std::move(record));",
       "target": "gyo_kernel_tests",
       "cases": "J-52: a despawn of an entity with any column is applied (no Z5)*",
-      "expect": "J\\-52 zone C entity: the despawn was not applied"
+      "expect": "J\\-52 entity with Pos: the despawn was not applied"
     },
     {
       "id": "ks-s8-zone-b-zone-c-insert-dropped",

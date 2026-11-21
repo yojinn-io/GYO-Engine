@@ -349,7 +349,7 @@
     "world-time WT-2"
    ],
    "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
-   "find": "        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven, {}});\n",
+   "find": "        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven});\n",
    "replace": "",
    "target": "gyo_world_time_tests",
    "cases": "fixed:*",
@@ -362,8 +362,8 @@
     "world-time WT-2"
    ],
    "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
-   "find": "DiscardCause::NotDriven, {}});",
-   "replace": "DiscardCause::StepLimit, {}});",
+   "find": "DiscardCause::NotDriven});",
+   "replace": "DiscardCause::StepLimit});",
    "target": "gyo_world_time_tests",
    "cases": "fixed:*",
    "expect": "\\[wt\\-not\\-driven\\-message\\]"
@@ -375,7 +375,7 @@
     "world-time WT-2"
    ],
    "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
-   "find": "    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause, {}});\n",
+   "find": "    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause});\n",
    "replace": "",
    "target": "gyo_world_time_tests",
    "cases": "fixed:*",

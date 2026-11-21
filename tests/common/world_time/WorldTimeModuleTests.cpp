@@ -137,7 +137,7 @@ O::ProductDescription Game(Nanoseconds delta, W::WorldTimeOptions options = {}) 
     w.options.Set(std::move(options));
     w.build = LoggingSystems;
     w.prepare.push_back([delta](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
         world.SetResource(Gate{});
         world.SetResource(FailAt{});
         world.SetResource(Rewind{});
@@ -163,7 +163,7 @@ const T& Get(O::Product& p) {
 }
 
 void Frame(O::Product& p, Nanoseconds delta) {
-    WorldOf(p).SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta, {}});
+    WorldOf(p).SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
     auto ran = p.RunFrame();
     REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
 }
@@ -200,7 +200,7 @@ TEST_CASE("module: every time type has a hash function: a World with only the ti
     O::WorldDescription w;
     w.name = "Main";
     w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        world.SetResource(W::TimeSampling{kStep * 9, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{kStep * 9, W::SamplingMode::ManualDelta});
         return {};
     });
     d.worlds.push_back(std::move(w));
@@ -308,7 +308,7 @@ TEST_CASE("module: an author who turns the skeleton off names its own schedules:
         r.AddSystem<&LogStep>(At("LogStep", "Physics", "S"));
     };
     w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        world.SetResource(W::TimeSampling{40 * kMs, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{40 * kMs, W::SamplingMode::ManualDelta});
         return {};
     });
     d.worlds.push_back(std::move(w));
@@ -398,10 +398,10 @@ TEST_CASE("sampling: a manual duration applies every frame, the first included, 
 
 TEST_CASE("sampling: a manual next instant: the first sample after the World is built gives delta 0") {
     auto p = Make(Game(0));
-    WorldOf(*p).SetResource(W::TimeSampling{500 * kMs, W::SamplingMode::ManualInstant, {}});
+    WorldOf(*p).SetResource(W::TimeSampling{500 * kMs, W::SamplingMode::ManualInstant});
     REQUIRE(static_cast<bool>(p->RunFrame()));
     CHECK_MESSAGE((Get<W::RealTime>(*p).delta == 0 && Get<W::RealTime>(*p).now == 500 * kMs), "[wt-first-sample-zero]");
-    WorldOf(*p).SetResource(W::TimeSampling{520 * kMs, W::SamplingMode::ManualInstant, {}});
+    WorldOf(*p).SetResource(W::TimeSampling{520 * kMs, W::SamplingMode::ManualInstant});
     REQUIRE(static_cast<bool>(p->RunFrame()));
     CHECK_MESSAGE((Get<W::RealTime>(*p).delta == 20 * kMs && Get<W::VirtualTime>(*p).elapsed == 20 * kMs), "[wt-manual-instant]");
 }
@@ -421,13 +421,13 @@ TEST_CASE("sampling: SampleRealTime reads the given time base in the time-base m
     W::SampleRealTime(real, W::TimeSampling{}, []() noexcept -> Nanoseconds { return 7; });
     W::SampleRealTime(real, W::TimeSampling{}, []() noexcept -> Nanoseconds { return 19; });
     CHECK_MESSAGE((real.now == 19 && real.delta == 12), "[wt-sample-reader] " << real.now << " " << real.delta);
-    W::SampleRealTime(real, W::TimeSampling{5, W::SamplingMode::ManualDelta, {}}, []() noexcept -> Nanoseconds { return 1000; });
+    W::SampleRealTime(real, W::TimeSampling{5, W::SamplingMode::ManualDelta}, []() noexcept -> Nanoseconds { return 1000; });
     CHECK_MESSAGE((real.now == 24 && real.delta == 5), "[wt-sample-manual-no-reader] " << real.now << " " << real.delta);
 }
 
 TEST_CASE("sampling: a paused World advances real time, not virtual time, and runs no fixed step") {
     auto p = Make(Game(20 * kMs));
-    WorldOf(*p).SetResource(W::TimeControl{1.0, 1, {}});
+    WorldOf(*p).SetResource(W::TimeControl{1.0, 1});
     REQUIRE(static_cast<bool>(p->RunFrame()));
     CHECK_MESSAGE((Get<W::RealTime>(*p).elapsed == 20 * kMs && Get<W::VirtualTime>(*p).elapsed == 0 && Get<W::Tick>(*p).value == 0),
                   "[wt-paused]");
@@ -534,7 +534,7 @@ TEST_CASE("fixed: the j-th of k steps returns Err: no later step runs, the Err g
     Log().clear();
     auto p = Make(Game(0));
     WorldOf(*p).SetResource(FailAt{2});
-    WorldOf(*p).SetResource(W::TimeSampling{3 * kStep, W::SamplingMode::ManualDelta, {}});
+    WorldOf(*p).SetResource(W::TimeSampling{3 * kStep, W::SamplingMode::ManualDelta});
     auto ran = p->RunFrame();
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(ran), "[wt-step-err] the frame succeeded");
     CHECK_MESSAGE(ran.error().code == O::OrchestrationErrorCode::ScheduleFailed, "[wt-step-err] code");
@@ -587,7 +587,6 @@ struct PutBack {
     Nanoseconds elapsed = 0;
     Nanoseconds overstep = 0;
     std::uint8_t armed = 0;
-    std::uint8_t reserved[7] = {};
 };
 K::SystemResult PutBackNow(K::ExclusiveWorld<> world) {
     const PutBack put = W::Detail::Present(world.Read<PutBack>([](const PutBack& p) { return p; }));
@@ -621,7 +620,7 @@ TEST_CASE("restore: a remainder saved under a longer step keeps what is below th
             s.Registrar().AddSystem<&PutBackNow>(At("PutBackNow", "Main", "Last"));
         };
         d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-            world.SetResource(PutBack{2 * 31'250'000, 20 * kMs, 1, {}});
+            world.SetResource(PutBack{2 * 31'250'000, 20 * kMs, 1});
             return {};
         });
         auto p = Make(std::move(d));

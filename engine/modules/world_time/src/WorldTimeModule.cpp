@@ -30,7 +30,7 @@ SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, Active
     if (fixed.pending > 0) {
         // The fixed step did not take the last frame's time (RunFixedSteps did not run): discarded, not carried.
         virt.discarded += fixed.pending;
-        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven, {}});
+        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven});
         fixed.pending = 0;
     }
     const bool hasFixedStep = config.fixedStep != 0;
@@ -40,7 +40,7 @@ SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, Active
     if (hasFixedStep) {
         fixed.pending = advanced.delta;
     }
-    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause, {}});
+    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause});
     return {};
 }
 

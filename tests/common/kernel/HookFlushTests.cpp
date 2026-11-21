@@ -143,7 +143,7 @@ SystemResult LateReader(MessageReader<Ping> pings, Res<TickCount> tick) {
     Log().push_back(line);
     return Ok();
 }
-SystemResult ZoneCSpawnsSeed(SpawnWithId<Bundle<Seed>> spawn, Res<TickCount> tick) {
+SystemResult SpawnsSeed(SpawnWithId<Bundle<Seed>> spawn, Res<TickCount> tick) {
     if (tick->value == 1) spawn.New(3, Seed{3});
     return Ok();
 }
@@ -528,10 +528,10 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     const Built t6 = build(tick6);
     const Built t8 = build(tick8);
     const Built e5 = build(early5);
-    // Tick runs a zone C System: its limit is in all three.
+    // A schedule's limit is in its Plan and in the Registry fingerprint.
     CHECK(planOf(t5, "Tick") != planOf(none, "Tick"));
     CHECK(t5.registry->Frozen().RegistryFingerprint() != none.registry->Frozen().RegistryFingerprint());
-    // Early runs only zone B: Plan and Registry, not C.
+    // The same for another schedule.
     CHECK(planOf(e5, "Early") != planOf(none, "Early"));
     CHECK(e5.registry->Frozen().RegistryFingerprint() != none.registry->Frozen().RegistryFingerprint());
     // The value, not only its presence; "not declared" is not the default value.
@@ -732,11 +732,11 @@ TEST_CASE("J-54: rounds are separate applications") {
         REQUIRE(rig->world().Get<Score>(9) != nullptr);
         CHECK(rig->world().Get<Score>(9)->s == 6);
     }
-    SUBCASE("a zone B despawn in round 1 and a zone C insert in round 2: dropped and counted") {
+    SUBCASE("a despawn in round 1 and an insert in round 2: dropped and counted") {
         auto rig = MakeFlushRig(
             [](Registrar& r) {
                 r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-                r.AddSystem<&ZoneCSpawnsSeed>(Put("ZoneCSpawnsSeed", "Tick", "C"));
+                r.AddSystem<&SpawnsSeed>(Put("SpawnsSeed", "Tick", "C"));
                 r.Hook<Bullet, &BulletDespawnsSix>(HookTrigger::OnAdd, {.name = "BulletDespawnsSix"});
                 r.Hook<Seed, &ZoneCSeedInsertsVelIntoTwo>(HookTrigger::OnAdd, {.name = "ZoneCSeedInsertsVelIntoTwo"});
                 r.Hook<Vel, &ZoneCVelInsertsPosIntoSix>(HookTrigger::OnAdd, {.name = "ZoneCVelInsertsPosIntoSix"});

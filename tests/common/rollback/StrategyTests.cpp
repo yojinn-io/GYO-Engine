@@ -191,7 +191,7 @@ std::unique_ptr<O::Product> Make(O::OptionBag options, void (*build)(O::WorldSet
     auto built = O::Product::Build(Game(build, std::move(options)), Units());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
     K::World& world = (*built)->World("Main").GetWorld();
-    world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta, {}});
+    world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
     world.SetResource(Command{});
     world.Insert(1, Health{100});
     world.Insert(2, Health{50});

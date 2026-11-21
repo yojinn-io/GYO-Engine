@@ -198,7 +198,7 @@ O::ProductDescription Relay(const RelayOptions& options) {
         world.SetResource(LapsRead{});
         world.SetResource(breaker);
         world.SetResource(LapBurst{burst, 0});
-        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
         return {};
     });
     d.worlds.push_back(std::move(match));

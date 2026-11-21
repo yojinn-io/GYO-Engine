@@ -209,7 +209,7 @@ TEST_CASE("forward: TimeDiscardedLog: the time Module's message is logged with i
     w.build = [](O::WorldSetup& s) { WL::Forward<W::TimeDiscardedLog>(s, {.schedule = "Main", .stage = "Last"}); };
     // One real second in one frame: more fixed steps than a frame may run, so time is discarded.
     w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        world.SetResource(W::TimeSampling{1'000'000'000, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{1'000'000'000, W::SamplingMode::ManualDelta});
         return {};
     });
     d.worlds.push_back(std::move(w));

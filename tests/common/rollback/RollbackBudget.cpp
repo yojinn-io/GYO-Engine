@@ -208,7 +208,7 @@ bool Measure(const Size& size, std::size_t samples, std::FILE* out) {
     }
     O::Product& product = **built;
     K::World& world = product.World("Main").GetWorld();
-    world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta, {}});
+    world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
     for (int e = 1; e <= size.entities; ++e) InsertCells(world, static_cast<K::EntityId>(e), std::make_integer_sequence<int, 16>{});
     const auto frame = [&product]() {
         auto ran = product.RunFrame();

@@ -22,24 +22,23 @@ namespace WorldTest {
 
 using namespace KernelTest;
 
-struct Pos { std::int32_t x; };    // zone C, Exclusive, rollback Yes
-struct Vel { std::int32_t v; };    // zone C, Exclusive, rollback Yes
-struct Tag { std::int32_t t; };    // zone B, Shared
-struct Mode { std::int32_t m; };   // zone B, Exclusive
-struct Boundary { std::int32_t b; };  // zone C, role Input (a boundary column)
-struct CShared { std::int32_t s; };   // zone C, Shared (the zone half of F-10 and S-13)
-struct Out { std::int64_t value; };   // resource, zone B, Shared
-struct Flag { std::int32_t on; };     // resource, zone B, Exclusive
-struct CRes { std::int64_t value; };  // resource, zone C, rollback Yes
-struct Ping { std::uint32_t n; };     // message, zone B
+struct Pos { std::int32_t x; };
+struct Vel { std::int32_t v; };
+struct Tag { std::int32_t t; };
+struct Mode { std::int32_t m; };
+struct Boundary { std::int32_t b; };  // a column written from outside the Systems
+struct CShared { std::int32_t s; };
+struct Out { std::int64_t value; };   // resource
+struct Flag { std::int32_t on; };     // resource
+struct CRes { std::int64_t value; };  // resource
+struct Ping { std::uint32_t n; };     // message
 struct Note { std::uint32_t code; };  // diagnostics record
 // The Runs of Tick a test counted, written from outside between two Runs (World
 // Ready, SetResource; Rig::Run does it): the "on the N-th Run" gate and log of a
 // test System. It replaces the kernel's domain tick (the tick handle, World::Tick),
 // which left the kernel with the clock (v8-arch-gyo2-clock-out-of-kernel;
-// time-events declaration 6.2). Zone C, role Input (a boundary resource): zone B
-// and zone C Systems both read it. No System writes it, so it adds no Plan step
-// and takes no stamp.
+// time-events declaration 6.2). Systems read it; no System writes it, so it adds
+// no Plan step and takes no stamp.
 struct TickCount { std::uint64_t value; };
 
 // The hash functions of the types above (World::Summary; Hash.hpp).

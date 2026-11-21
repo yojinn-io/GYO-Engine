@@ -28,15 +28,12 @@ struct TestVel { std::int32_t x, y, z; };
 struct TestMarker { std::uint8_t on; };
 struct TestHealth { std::int32_t points; };
 struct TestMode { std::uint32_t mode; };
-struct TestInput { std::uint32_t bits; };
 struct TestDerived { std::int32_t value; };
 struct TestEvent { std::uint32_t id; };
 struct TestOtherEvent { std::uint32_t id; };
 struct TestFrameEvent { std::uint32_t id; };
 struct TestRes { std::int64_t value; };
 struct TestOtherRes { std::int64_t value; };
-struct TestLink { std::uint32_t handle; };
-struct TestFrameTime { std::int64_t ns; };
 // Satisfies EntityAllotter with one 8-byte member, so its registered shape (and
 // the Registry fingerprint goldens of registry-schedule) stays as it was.
 struct TestAllotter {
@@ -97,7 +94,7 @@ inline SystemOptions Sys(std::string name, std::vector<Mount> mounts) {
     return o;
 }
 
-// Registers the common data types; zone C unless stated.
+// Registers the common data types.
 inline void RegisterCommonData(Registrar& r) {
     r.Component<TestPos>({.name = "TestPos"});
     r.Component<TestVel>({.name = "TestVel"});

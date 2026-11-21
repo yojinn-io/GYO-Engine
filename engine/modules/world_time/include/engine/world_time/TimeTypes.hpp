@@ -2,12 +2,11 @@
 
 // Game time in a World (docs/architecture/target/v2/time-events-declaration.zh-Hant.md, sections 2.2, 3.3;
 // Design Invariants in docs/architecture/target/v2/world-time.zh-Hant.md). Plain data and pure arithmetic: no
-// time base (this header does not include MonotonicClock.hpp: zone_scan ZS1). All durations are whole
+// time base (this header does not include MonotonicClock.hpp: authority_scan ZS1). All durations are whole
 // nanoseconds; the scale is the only floating-point value, multiplied once per frame.
 //
 // Each type the Module puts into a World has its hash function here, next to the type, field by field (the World
-// summary hashes each value with it; authority-rollback declaration 3.3). The reserved fields are left from the
-// summary format 2, which hashed raw bytes; they are not hashed.
+// summary hashes each value with it; authority-rollback declaration 3.3).
 
 #include "engine/kernel/Hash.hpp"
 
@@ -33,7 +32,6 @@ struct StepLength final {
 // maxFrameDelta. The two never apply together.
 struct TimeLimits final {
     std::uint32_t maxStepsPerFrame = 5;
-    std::uint32_t reserved = 0;
     Nanoseconds maxFrameDelta = 250'000'000;
 };
 
@@ -69,7 +67,6 @@ struct RealTime final {
     Nanoseconds delta = 0;
     Nanoseconds elapsed = 0;
     std::uint8_t sampled = 0;  // 1 once a first sample was taken
-    std::uint8_t reserved[7] = {};
 };
 
 // Pausable, scalable time. scale and paused are what this frame applied; discarded is the running total cut by
@@ -82,7 +79,6 @@ struct VirtualTime final {
     double scale = 1.0;
     double fraction = 0.0;
     std::uint8_t paused = 0;
-    std::uint8_t reserved[7] = {};
 };
 
 // The fixed step: its accumulator, the total of the steps run so far, and the frame's virtual time handed from
@@ -103,7 +99,6 @@ struct ActiveTime final {
 struct TimeControl final {
     double scale = 1.0;
     std::uint8_t paused = 0;
-    std::uint8_t reserved[7] = {};
 };
 
 // The fixed steps started so far: during the n-th step and after it, n.
@@ -115,7 +110,6 @@ struct Tick final {
 // rollback strategy writes it (rollback declaration 5.7, 7.2).
 struct Resimulation final {
     std::uint8_t active = 0;
-    std::uint8_t reserved[7] = {};
 };
 
 // Why time was discarded.
@@ -138,7 +132,6 @@ enum class SamplingMode : std::uint8_t {
 struct TimeSampling final {
     Nanoseconds value = 0;
     SamplingMode mode = SamplingMode::TimeBase;
-    std::uint8_t reserved[7] = {};
 };
 
 // A retained message (time-events declaration section 5): time was discarded this frame. amount is what the
@@ -147,7 +140,6 @@ struct TimeDiscarded final {
     Nanoseconds amount = 0;
     Nanoseconds realDelta = 0;
     DiscardCause cause = DiscardCause::None;
-    std::uint8_t reserved[7] = {};
 };
 
 // What the time Module's Systems read at run time (they are captureless): the caps of a frame, the name of the
@@ -158,7 +150,6 @@ struct TimeConfig final {
     TimeLimits limits;
     char fixedSchedule[64] = {};
     std::uint8_t fixedStep = 1;
-    std::uint8_t reserved[7] = {};
 };
 
 // What one frame of virtual time came to.

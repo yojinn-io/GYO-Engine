@@ -231,7 +231,7 @@ std::unique_ptr<O::Product> Duel(Variant match, Variant client) {
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
     for (const char* name : {"Match", "Client"}) {
         K::World& world = (*built)->World(name).GetWorld();
-        world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
         world.SetResource(Command{});
         world.SetResource(Script{});
         world.SetResource(Footsteps{});
