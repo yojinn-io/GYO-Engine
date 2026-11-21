@@ -255,7 +255,8 @@ TEST_CASE("module: TickWriters names RunFixedSteps, which annotates Writes<Tick>
     REQUIRE(driver != nullptr);
     const K::ResourceId tick = *registry.ResourceIdOf<W::Tick>();
     const auto& listed = driver->access.annotatedWrites;
-    CHECK_MESSAGE(std::find(listed.begin(), listed.end(), tick) != listed.end(), "[wt-driver-writes-tick]");
+    CHECK_MESSAGE(std::find(listed.begin(), listed.end(), K::AccessKey{K::AccessKind::Resource, tick}) != listed.end(),
+                  "[wt-driver-writes-tick]");
     CHECK(driver->access.exclusive);
 }
 

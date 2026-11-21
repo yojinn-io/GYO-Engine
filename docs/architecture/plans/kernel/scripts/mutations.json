@@ -4803,10 +4803,10 @@
     },
     {
       "id": "ks-s4-annotation-not-recorded",
-      "what": "S4: the listed resources are not recorded in annotatedWrites (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
+      "what": "S4: the listed resources are not recorded in annotatedWrites (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (find rewritten by v8-arch-gyo2-authority-rollback step 2: Writes<...> lists components too)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "        if (const auto id = Lookup(resource, TypeRole::Resource, \"resource\")) access.annotatedWrites.push_back(*id);",
-      "replace": "        static_cast<void>(Lookup(resource, TypeRole::Resource, \"resource\"));",
+      "find": "        } else if (const auto id = Lookup(type, TypeRole::Resource, \"component or resource\")) {\n            access.annotatedWrites.push_back({AccessKind::Resource, *id});\n        }",
+      "replace": "        } else {\n            static_cast<void>(Lookup(type, TypeRole::Resource, \"component or resource\"));\n        }",
       "target": "gyo_kernel_tests",
       "expect": "J\\-12 annotation: annotatedWrites holds the listed resource",
       "cases": "J-12: ExclusiveWorld<Writes<R>> is no write*"
@@ -5953,10 +5953,10 @@
     },
     {
       "id": "ks-s4-annotation-also-a-write",
-      "what": "S4: a listed resource is recorded in annotatedWrites and is also a resource write of the access set (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
+      "what": "S4: a listed resource is recorded in annotatedWrites and is also a resource write of the access set (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2) (find rewritten by v8-arch-gyo2-authority-rollback step 2: Writes<...> lists components too)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "if (const auto id = Lookup(resource, TypeRole::Resource, \"resource\")) access.annotatedWrites.push_back(*id);",
-      "replace": "if (const auto id = Lookup(resource, TypeRole::Resource, \"resource\")) { access.annotatedWrites.push_back(*id); access.writes.push_back({AccessKind::Resource, *id}); }",
+      "find": "            access.annotatedWrites.push_back({AccessKind::Resource, *id});",
+      "replace": "            access.annotatedWrites.push_back({AccessKind::Resource, *id});\n            access.writes.push_back({AccessKind::Resource, *id});",
       "target": "gyo_kernel_tests",
       "cases": "J-12: ExclusiveWorld<Writes<R>> is no write*",
       "expect": "J\\-12 annotation: a listed resource is not a write"
@@ -8408,6 +8408,20 @@
       "target": "gyo_kernel_tests",
       "cases": "D-9 hash: a type with no hash function*",
       "expect": "\\[ks\\-hash\\-missing\\-names\\]"
+    },
+    {
+      "id": "ks-annotated-component-dropped",
+      "what": "ExclusiveWorld<Writes<...>> drops a listed component (only resources are annotated again; authority declaration 5.8 needs components). Only it catches the component branch of the annotation",
+      "guards": [
+        "kernel DI-KS 1",
+        "authority-rollback-declaration 2.2"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "            access.annotatedWrites.push_back({AccessKind::Component, entry->id});",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12: Writes lists a component*",
+      "expect": "\\[ks\\-annotated\\-component\\]"
     }
   ]
 }

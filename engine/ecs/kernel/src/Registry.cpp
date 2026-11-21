@@ -297,8 +297,13 @@ public:
     }
     void Local() override { access.local = true; }
     void WholeWorld() override { access.exclusive = true; }
-    void AnnotatedWrite(TypeKey resource) override {
-        if (const auto id = Lookup(resource, TypeRole::Resource, "resource")) access.annotatedWrites.push_back(*id);
+    void AnnotatedWrite(TypeKey type) override {
+        const TypeEntry* entry = data_.FindType(type);
+        if (entry != nullptr && entry->role == TypeRole::Component) {
+            access.annotatedWrites.push_back({AccessKind::Component, entry->id});
+        } else if (const auto id = Lookup(type, TypeRole::Resource, "component or resource")) {
+            access.annotatedWrites.push_back({AccessKind::Resource, *id});
+        }
     }
     void Diagnostics() override { access.diagnostics = true; }
     void ExtractComponent(TypeKey component) override { Extract(component, TypeRole::Component, AccessKind::Component); }

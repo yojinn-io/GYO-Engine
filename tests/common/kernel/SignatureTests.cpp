@@ -193,8 +193,31 @@ TEST_CASE("J-12: ExclusiveWorld<Writes<R>> is no write of R: R is in annotatedWr
     const ResourceId listed = *built.registry->Frozen().ResourceIdOf<TestOtherRes>();
     CHECK(info->access.exclusive);
     CHECK_MESSAGE(info->access.writes.empty(), "J-12 annotation: a listed resource is not a write");
-    CHECK_MESSAGE(info->access.annotatedWrites == std::vector<ResourceId>{listed},
+    CHECK_MESSAGE((info->access.annotatedWrites == std::vector<AccessKey>{{AccessKind::Resource, listed}}),
                   "J-12 annotation: annotatedWrites holds the listed resource");
+}
+
+// Writes<...> lists components too (v8-arch-gyo2-authority-rollback step 2; authority declaration 5.8): the
+// authority Module reads which decision data an exclusive System writes. Still no write and no conflict.
+TEST_CASE("J-12: Writes lists a component and a resource in key order and writes neither") {
+    Built built = FinishOne([](Registrar& r) {
+        const auto lists = [](ExclusiveWorld<Writes<TestOtherRes, TestMarker>>) -> SystemResult { return {}; };
+        r.AddSystem<decltype(lists)>(Sys("ListsBoth", Zone::B, {At("Update", "First")}));
+    });
+    KERNEL_REQUIRE_OK(built);
+    const SystemInfo* info = built.registry->Frozen().SystemNamed("ListsBoth");
+    REQUIRE(info != nullptr);
+    const ComponentId marker = *built.registry->Frozen().ComponentIdOf<TestMarker>();
+    const ResourceId other = *built.registry->Frozen().ResourceIdOf<TestOtherRes>();
+    CHECK_MESSAGE(info->access.writes.empty(), "[ks-annotated-component] a listed component is not a write");
+    CHECK_MESSAGE((info->access.annotatedWrites ==
+                   std::vector<AccessKey>{{AccessKind::Component, marker}, {AccessKind::Resource, other}}),
+                  "[ks-annotated-component] annotatedWrites holds the listed component and resource");
+    Built unknown = FinishOne([](Registrar& r) {
+        const auto lists = [](ExclusiveWorld<Writes<TestRecord>>) -> SystemResult { return {}; };
+        r.AddSystem<decltype(lists)>(Sys("ListsUnknown", Zone::B, {At("Update", "First")}));
+    });
+    CHECK_MESSAGE(HasRule(unknown, StartupCode::RE4, "R-6"), "[ks-annotated-unregistered] " << Describe(unknown));
 }
 
 namespace {

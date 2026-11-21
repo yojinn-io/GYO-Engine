@@ -771,11 +771,12 @@ struct ParamTraits<SetRead<SetTag>> : Detail::HandleTraits<SetRead<SetTag>, Type
 // ---- ExclusiveWorld (spec S-10, S-13; K0, v8-arch-gyo2-nested-schedule;
 // v8-arch-gyo2-exclusive-writes-optional)
 
-// An optional annotation: ExclusiveWorld<Writes<R...>> names resources the
-// System means to write, for the authority policy to read (AccessSet::
-// annotatedWrites). It is not a write: not counted as a writer (D-E2), no zone
-// rule, no conflict. ExclusiveWorld writes every resource with or without it.
-template <class... Resources>
+// An optional annotation: ExclusiveWorld<Writes<T...>> names the components and
+// resources the System means to write, for the authority Module to read
+// (AccessSet::annotatedWrites; authority declaration 5.8). It is not a write: no
+// conflict, and the kernel reads nothing in it. ExclusiveWorld writes every
+// component and resource with or without it.
+template <class... Types>
 struct Writes {};
 
 namespace Detail {
@@ -868,7 +869,7 @@ using VisitResult = typename Detail::VisitResultOf<R>::Type;
 template <class Declared = Writes<>>
 class ExclusiveWorld {
     static_assert(Detail::kAlwaysFalse<Declared>,
-                  "GYO_KERNEL_REJECT_EXCLUSIVE_DECLARATION: ExclusiveWorld takes Writes<Resources...> or nothing "
+                  "GYO_KERNEL_REJECT_EXCLUSIVE_DECLARATION: ExclusiveWorld takes Writes<Types...> or nothing "
                   "(ExclusiveWorld<>)");
 };
 

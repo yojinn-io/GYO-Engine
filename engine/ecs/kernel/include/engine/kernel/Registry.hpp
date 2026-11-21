@@ -432,10 +432,11 @@ struct AccessSet {
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;
-    // The resources an ExclusiveWorld<Writes<R...>> lists (DI-KS 1): an
-    // annotation for the authority policy to read; not a write, not a writer,
-    // no conflict. In the Registry fingerprint.
-    std::vector<ResourceId> annotatedWrites;
+    // The components and resources an ExclusiveWorld<Writes<T...>> lists
+    // (DI-KS 1; components too since v8-arch-gyo2-authority-rollback step 2,
+    // authority declaration 5.8): an annotation for the authority Module to
+    // read; not a write, no conflict. In the Registry fingerprint.
+    std::vector<AccessKey> annotatedWrites;
     bool changeFilters = false;
     bool local = false;
     bool exclusive = false;

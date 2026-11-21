@@ -89,8 +89,8 @@ constexpr std::uint32_t kFingerprintVersion = 8;
 // v8-arch-gyo2-time-events step 4); 7 since event types and observers
 // (v8-arch-gyo2-time-events step 5); 8 since the write policy, a resource's
 // external flag, a schedule's ingress stage and Parallel guard test, and a named
-// set's digest mark left with the rules that read them
-// (v8-arch-gyo2-authority-rollback step 2).
+// set's digest mark left with the rules that read them, and annotatedWrites
+// holds components too, each a (kind, id) key (v8-arch-gyo2-authority-rollback step 2).
 constexpr std::uint32_t kRegistryFingerprintVersion = 8;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
@@ -163,7 +163,7 @@ void Access(Bytes& out, const AccessSet& access) {
     out.Ids(access.deferredWrites);
     out.Ids(access.setReads);
     out.Keys(access.extractReads);
-    out.Ids(access.annotatedWrites);
+    out.Keys(access.annotatedWrites);
     out.Flag(access.changeFilters);
     out.Flag(access.local);
     out.Flag(access.exclusive);

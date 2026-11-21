@@ -900,7 +900,7 @@ TEST_CASE("DI-KS 25: hooks, initial values, schedules, sets, effects and annotat
     CHECK_MESSAGE(view.SystemNamed("WritesFlag")->effects.size() == 1, "DI-KS 25 System effects");
     CHECK(view.SystemNamed("Plain")->effects.empty());
     CHECK(view.SystemNamed("AnnotatesFlag")->access.annotatedWrites ==
-          std::vector<ResourceId>{*view.ResourceIdOf<Flag>()});
+          (std::vector<AccessKey>{{AccessKind::Resource, *view.ResourceIdOf<Flag>()}}));
 }
 
 TEST_CASE("DI-KS 25: the order graph lists System-to-System edges with their source") {
