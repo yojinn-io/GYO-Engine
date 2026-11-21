@@ -29,6 +29,7 @@ set(GYO_KERNEL_TEST_SOURCES
     ObserverTests.cpp
     TraceSpanTests.cpp
     HashTests.cpp
+    RestoreTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )

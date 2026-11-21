@@ -860,6 +860,84 @@ private:
 template <class R>
 using VisitResult = typename Detail::VisitResultOf<R>::Type;
 
+// What ExclusiveWorld::Restore puts back (primitives 2 to 4 of the
+// authority-rollback declaration 2.1; the rollback Module's restore): the
+// entities alive afterwards and, for each component or resource it names, the
+// whole state afterwards. Built with the types it names, so the kernel needs no
+// untyped copy of a column; a type it does not name is left as it is.
+class RestoreSet {
+public:
+    // The entities alive after the restore, any order (an id twice is one).
+    // Without this call the alive set is left as it is.
+    void Alive(std::vector<EntityId> ids) {
+        alive_ = std::move(ids);
+        hasAlive_ = true;
+    }
+
+    // Every cell of component T after the restore: (entity, value), any order,
+    // one per entity, each entity alive after the restore (GYO_ASSERT). A cell
+    // of an entity alive before and after whose value is equal (eq) to the
+    // World's is not written; a cell the World has and this does not is removed.
+    template <class T, class Eq = std::equal_to<T>>
+    void Column(std::vector<std::pair<EntityId, T>> cells, Eq eq = {}) {
+        diffs_.push_back([cells = std::move(cells), eq](World& world, std::span<const EntityId> before,
+                                                        std::span<const EntityId> after,
+                                                        std::vector<Detail::Record>& out) mutable {
+            const ComponentId id = Detail::ComponentIdOf(world, KeyOf<T>());
+            auto& column = static_cast<Detail::Column<T>&>(Detail::ColumnAt(world, id));
+            std::sort(cells.begin(), cells.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+            for (std::size_t k = 1; k < cells.size(); ++k) GYO_ASSERT(cells[k - 1].first != cells[k].first);
+            for (auto& [entity, value] : cells) {
+                GYO_ASSERT(std::binary_search(after.begin(), after.end(), entity));
+                if (std::binary_search(before.begin(), before.end(), entity)) {
+                    const Detail::Cell<T>* cell = column.Find(entity);
+                    if (cell != nullptr && eq(static_cast<const T&>(cell->value), static_cast<const T&>(value))) continue;
+                }
+                Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, id);
+                record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
+                out.push_back(std::move(record));
+            }
+            for (const Detail::Cell<T>& cell : column.cells) {
+                if (!std::binary_search(after.begin(), after.end(), cell.id)) continue;  // despawned with its entity
+                const auto kept = std::lower_bound(cells.begin(), cells.end(), cell.id,
+                                                   [](const auto& c, EntityId key) { return c.first < key; });
+                if (kept == cells.end() || kept->first != cell.id) {
+                    out.push_back(Detail::Record::Of(Detail::RecordKind::Remove, cell.id, id));
+                }
+            }
+        });
+    }
+
+    // Resource T after the restore; nullopt: absent. A value equal (eq) to the
+    // World's is not written.
+    template <class T, class Eq = std::equal_to<T>>
+    void Resource(std::optional<T> value, Eq eq = {}) {
+        diffs_.push_back([value = std::move(value), eq](World& world, std::span<const EntityId>, std::span<const EntityId>,
+                                                        std::vector<Detail::Record>& out) mutable {
+            const ResourceId id = Detail::ResourceIdOf(world, KeyOf<T>());
+            auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(world, id));
+            if (value) {
+                if (slot.value && eq(static_cast<const T&>(*slot.value), static_cast<const T&>(*value))) return;
+                Detail::Record record = Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, id);
+                record.value = std::make_unique<Detail::TypedBox<T>>(std::move(*value));
+                out.push_back(std::move(record));
+            } else if (slot.value) {
+                out.push_back(Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, id));
+            }
+        });
+    }
+
+private:
+    template <class Declared>
+    friend class ExclusiveWorld;
+    using Diff = std::function<void(World&, std::span<const EntityId>, std::span<const EntityId>,
+                                    std::vector<Detail::Record>&)>;
+
+    std::vector<EntityId> alive_;
+    bool hasAlive_ = false;
+    std::vector<Diff> diffs_;
+};
+
 // Untyped access to the whole World: reads and writes every component and
 // resource value (messages are not in it; DI-KS 1) and changes membership and
 // resources now (DI-KS 18; declaration 3.5). Zone B only (S-13, a zone rule at
@@ -1082,6 +1160,84 @@ public:
             }
         } renew{*this};
         return Detail::RunNested(call, schedule, closures_ > 0);
+    }
+
+    // ---- The rollback primitives (authority-rollback declaration 2.1)
+
+    // Primitive 1: every cell of component T, ascending EntityId, as
+    // f(entity, added stamp, changed stamp, const T&). Like a Read closure:
+    // nothing that changes membership runs inside f (ClosureChangesMembership).
+    template <class T, class F>
+        requires std::invocable<F&, EntityId, ChangeStamp, ChangeStamp, const T&>
+    void ReadColumn(F&& f) {
+        Check("ExclusiveWorld");
+        Detail::ClosureScope scope(closures_);
+        for (const Detail::Cell<T>& cell : Column<T>().cells) {
+            std::invoke(f, cell.id, cell.added, cell.changed, static_cast<const T&>(cell.value));
+        }
+    }
+
+    // Primitive 3, the read: the entities alive now, ascending (a copy: an
+    // immediate change or a restore afterwards does not change it).
+    [[nodiscard]] std::vector<EntityId> Entities() {
+        Check("ExclusiveWorld");
+        const std::span<const EntityId> alive = Detail::AliveEntities(*world_);
+        return {alive.begin(), alive.end()};
+    }
+
+    // The stamp this handle's writes take now; every later step of the World
+    // writes with a larger one (the rollback Module records it to keep only the
+    // cells changed after, declaration 2.4 G5).
+    [[nodiscard]] ChangeStamp Stamp() const noexcept { return stamp_; }
+
+    // Primitive 4: resource T's changed stamp; nothing when absent.
+    template <class T>
+    [[nodiscard]] std::optional<ChangeStamp> ResourceStamp() {
+        Check("ExclusiveWorld");
+        const ResourceId resource = Detail::ResourceIdOf(*world_, KeyOf<T>());
+        const Detail::ResourceBase& slot = Detail::ResourceAt(*world_, resource);
+        if (!slot.Present()) return std::nullopt;
+        return slot.changed;
+    }
+
+    // Primitives 2 to 4: puts back what set names, now, as one immediate change
+    // with this handle's stamp (Detail::ApplyRestore): entities alive now and
+    // not after are despawned, entities alive after and not now are put back
+    // alive with their id (the allotter range is not checked: the id was this
+    // World's), then every cell and resource that differs is written, all with
+    // one stamp; OnRemove before a cell goes, OnAdd once every cell is back (a
+    // hook sees the entity's other cells put back), then the hook rounds.
+    // Refused and failing as an immediate change; afterwards the handle takes
+    // a new stamp.
+    [[nodiscard]] ::Engine::Base::Result<void, KernelError> Restore(RestoreSet set) {
+        Check("ExclusiveWorld");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        struct Restamp {
+            ExclusiveWorld& handle;
+            ~Restamp() {
+                handle.syncEpoch_ = Detail::CurrentSyncEpoch(*handle.world_);
+                handle.stamp_ = Detail::NextStamp(*handle.world_);
+            }
+        } restamp{*this};
+        const std::span<const EntityId> now = Detail::AliveEntities(*world_);
+        const std::vector<EntityId> before(now.begin(), now.end());
+        std::vector<EntityId> after = set.hasAlive_ ? std::move(set.alive_) : before;
+        std::sort(after.begin(), after.end());
+        after.erase(std::unique(after.begin(), after.end()), after.end());
+        std::vector<Detail::Record> records;
+        std::vector<EntityId> changed;
+        std::set_difference(before.begin(), before.end(), after.begin(), after.end(), std::back_inserter(changed));
+        for (EntityId entity : changed) records.push_back(Detail::Record::Of(Detail::RecordKind::Despawn, entity));
+        changed.clear();
+        std::set_difference(after.begin(), after.end(), before.begin(), before.end(), std::back_inserter(changed));
+        for (EntityId entity : changed) {
+            Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, entity);
+            record.withId = true;
+            record.restore = true;
+            records.push_back(std::move(record));
+        }
+        for (RestoreSet::Diff& diff : set.diffs_) diff(*world_, before, after, records);
+        return Detail::ApplyRestore(call, std::move(records), stamp_, closures_ > 0);
     }
 
 private:

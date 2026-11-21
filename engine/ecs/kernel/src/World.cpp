@@ -763,7 +763,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);
             std::vector<std::size_t> candidates;
             for (std::size_t i = first; i < end; ++i) {
-                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {
+                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&
+                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {
                     dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});
                 } else {
                     candidates.push_back(i);

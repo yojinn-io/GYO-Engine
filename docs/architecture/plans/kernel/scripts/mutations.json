@@ -8478,6 +8478,110 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 26*",
       "expect": "\\[ks\\-msg\\-writers\\-round\\]"
+    },
+    {
+      "id": "ks-restore-range-checked",
+      "what": "a restored entity whose id is in the allotter's range is refused as IdInAllotterRange again (primitive 3: the id was this World's). Only it catches the restore exemption",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "spawns[i]->withId && !spawns[i]->restore && data_->allotter &&",
+      "replace": "spawns[i]->withId && data_->allotter &&",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: Restore puts*",
+      "expect": "\\[ks\\-restore\\-revive\\]"
+    },
+    {
+      "id": "ks-restore-unchanged-written",
+      "what": "Restore writes a cell equal to the World's (primitive 2: unchanged cells are not written). Only it catches the equality skip",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "                    if (cell != nullptr && eq(static_cast<const T&>(cell->value), static_cast<const T&>(value))) continue;",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: Restore puts*",
+      "expect": "\\[ks\\-restore\\-unchanged\\-kept\\]"
+    },
+    {
+      "id": "ks-restore-no-remove",
+      "what": "Restore leaves a cell the recorded state does not have. Only it catches the removes",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "                    out.push_back(Detail::Record::Of(Detail::RecordKind::Remove, cell.id, id));",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: a cell the World has*",
+      "expect": "\\[ks\\-restore\\-remove\\]"
+    },
+    {
+      "id": "ks-restore-no-despawn",
+      "what": "Restore leaves alive an entity the recorded state does not have. Only it catches the despawns",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        for (EntityId entity : changed) records.push_back(Detail::Record::Of(Detail::RecordKind::Despawn, entity));",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: a cell the World has*",
+      "expect": "\\[ks\\-restore\\-despawn\\]"
+    },
+    {
+      "id": "ks-restore-new-stamp",
+      "what": "Restore writes with a stamp of its own instead of the handle's (primitive 2: one stamp, the current one). Only it catches the stamp passed",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return Detail::ApplyRestore(call, std::move(records), stamp_, closures_ > 0);",
+      "replace": "        return Detail::ApplyRestore(call, std::move(records), Detail::NextStamp(*world_), closures_ > 0);",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: Restore puts*",
+      "expect": "\\[ks\\-restore\\-one\\-stamp\\]"
+    },
+    {
+      "id": "ks-restore-resource-skipped",
+      "what": "Restore does not put a changed resource back. Only it catches the resource half",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "                record.value = std::make_unique<Detail::TypedBox<T>>(std::move(*value));\n                out.push_back(std::move(record));",
+      "replace": "                record.value = std::make_unique<Detail::TypedBox<T>>(std::move(*value));",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: Restore puts*",
+      "expect": "\\[ks\\-restore\\-value\\]"
+    },
+    {
+      "id": "ks-read-column-stamps-swapped",
+      "what": "ReadColumn gives the changed stamp as added and the added as changed (primitive 1). Only it catches the order of the stamps",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "            std::invoke(f, cell.id, cell.added, cell.changed, static_cast<const T&>(cell.value));",
+      "replace": "            std::invoke(f, cell.id, cell.changed, cell.added, static_cast<const T&>(cell.value));",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: ReadColumn*",
+      "expect": "\\[ks\\-restore\\-read\\-column\\]"
+    },
+    {
+      "id": "ks-entities-empty",
+      "what": "ExclusiveWorld::Entities returns no entity (primitive 3, the read). Only it catches the alive set read",
+      "guards": [
+        "authority-rollback-declaration 2.1"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return {alive.begin(), alive.end()};",
+      "replace": "        return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: ReadColumn*",
+      "expect": "\\[ks\\-restore\\-entities\\]"
     }
   ]
 }

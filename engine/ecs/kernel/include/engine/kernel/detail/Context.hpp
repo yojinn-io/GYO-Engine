@@ -94,6 +94,10 @@ struct Record {
     std::uint32_t recSeq = 0;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
+    // A Spawn of ExclusiveWorld::Restore (primitive 3, authority-rollback
+    // declaration 2.1): an entity put back alive with its old id, which may be
+    // in this World's allotter range; that check is skipped, the others are not.
+    bool restore = false;
     // Trigger: the event names a target entity (entity).
     bool hasTarget = false;
     // Who recorded it (spec F-13's RejectedSpawn): the System's or hook's name (the Registry's string).
@@ -268,6 +272,15 @@ struct ImmediateOutcome {
 // before (W-3).
 [[nodiscard]] ::Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
                                                                                 ChangeStamp stamp, bool inClosure);
+
+// ExclusiveWorld::Restore (primitives 2 and 3, authority-rollback declaration
+// 2.1): applies the records of one restore now, all of them as one phase of a
+// sync point with the handle's one stamp (despawns, removes, spawns, inserts,
+// initial values, then OnAdd: a hook sees every cell put back), then the hook
+// rounds, as ApplyImmediate; refused and failing as ApplyImmediate. Its Spawn
+// records carry restore (no allotter range check) and an empty bundle.
+[[nodiscard]] ::Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records,
+                                                                   ChangeStamp stamp, bool inClosure);
 
 // Event cursor declaration 3.3 (time-events declaration 4.2): ExclusiveWorld::
 // Trigger. Runs the observers of event id now, each like one nested System
