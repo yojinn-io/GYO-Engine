@@ -1,6 +1,6 @@
 #include "Wide.hpp"
 
-#include "../common/Paths.hpp"
+#include "../../common/Paths.hpp"
 
 #include <climits>
 #include <cstdint>

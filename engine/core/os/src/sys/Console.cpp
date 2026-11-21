@@ -1,4 +1,4 @@
-// The console side of a process on POSIX systems (macOS, Linux).
+// The console side of a process on macOS and Linux (the same on both).
 #include "engine/os/Console.hpp"
 
 #include "../common/Paths.hpp"

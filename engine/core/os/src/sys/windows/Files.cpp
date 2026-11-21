@@ -1,7 +1,7 @@
 // The file primitives on Windows: UTF-8 paths become UTF-16 for the wide APIs.
 #include "engine/os/Files.hpp"
 
-#include "../common/Paths.hpp"
+#include "../../common/Paths.hpp"
 
 #include "engine/base/Assert.hpp"
 
