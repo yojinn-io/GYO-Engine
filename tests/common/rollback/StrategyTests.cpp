@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -350,6 +351,28 @@ TEST_CASE("rollback strategy: R-5: a replaced World starts with no history of th
     auto replaced = p->ReplaceWorld("Main", O::ReplaceRequest{});
     REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message));
     CHECK_MESSAGE(!WorldOf(*p).Resource<R::RollbackHistory>()->lastTick.has_value(), "[rb-r5-fresh] the old history came along");
+}
+
+TEST_CASE("rollback strategy: R-5: a BuildNewFirst replacement that fails leaves the old World's rollback as it was") {
+    // The registrations are frozen into each World (authority-rollback declaration 5.1): a failed replacement
+    // touches nothing of the old World's, so its history and rollback go on.
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    O::ReplaceRequest request;
+    request.extra = [](K::World&) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        return ::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the save is broken"));
+    };
+    auto replaced = p->ReplaceWorld("Main", std::move(request));
+    REQUIRE_FALSE(static_cast<bool>(replaced));
+    REQUIRE_MESSAGE(WorldOf(*p).Resource<R::RollbackHistory>()->lastTick == std::optional<std::uint64_t>{9},
+                    "[rb-r5-failed-replace-keeps] the old World's history");
+    std::int32_t later = 0;
+    for (std::uint64_t t = 6; t <= 10; ++t) later += kScript[t];
+    Inbox(*p).Value<Health>(1, 5, Health{7});
+    Inbox(*p).ConfirmedThrough(5);
+    Frames(*p, 1);
+    CHECK_MESSAGE(WorldOf(*p).Get<Health>(1)->hp == 7 + later, "[rb-r5-failed-replace-keeps] the rollback after the failure: "
+                                                                    << WorldOf(*p).Get<Health>(1)->hp << " vs " << 7 + later);
 }
 
 TEST_CASE("rollback strategy: R-2 with spawns, a despawn and a side effect: the allotter, the alive set and the hooks go back") {
