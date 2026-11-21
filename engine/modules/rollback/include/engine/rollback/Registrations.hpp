@@ -23,10 +23,12 @@
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/TypeKey.hpp"
 #include "engine/orchestration/Setup.hpp"
+#include "engine/rollback/History.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
 #include <concepts>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -56,6 +58,8 @@ struct DataOps {
     IdLookup idIn = nullptr;
     // The values are equal: the registered comparison, or ==.
     bool (*equal)(const void* a, const void* b, Comparison comparison) = nullptr;
+    // The official strategy's history of the type, with the registered comparison.
+    std::unique_ptr<ColumnHistoryBase> (*makeHistory)(Comparison comparison) = nullptr;
 };
 
 // The options of Component<T> and Resource<T>. equal: the comparison a restore
@@ -108,6 +112,8 @@ struct SkipRecord {
 struct InputRecord {
     Kernel::TypeKey key;
     IdLookup idIn = nullptr;
+    // The official strategy's history of the input.
+    std::unique_ptr<InputHistoryBase> (*makeHistory)(std::uint32_t capacity) = nullptr;
     std::uint32_t capacity = 0;
     Source source = Source::Author;
 };
@@ -215,9 +221,22 @@ bool EqualAs(const void* a, const void* b, Comparison comparison) {
 }
 
 template <class T>
-inline constexpr DataOps kComponentOps{&ComponentIdIn<T>, &EqualAs<T>};
+std::unique_ptr<ColumnHistoryBase> MakeComponentHistory(Comparison comparison) {
+    return std::make_unique<ComponentHistory<T>>(reinterpret_cast<bool (*)(const T&, const T&)>(comparison));
+}
 template <class T>
-inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &EqualAs<T>};
+std::unique_ptr<ColumnHistoryBase> MakeResourceHistory(Comparison comparison) {
+    return std::make_unique<ResourceHistory<T>>(reinterpret_cast<bool (*)(const T&, const T&)>(comparison));
+}
+template <class T>
+std::unique_ptr<InputHistoryBase> MakeInputHistory(std::uint32_t capacity) {
+    return std::make_unique<InputHistory<T>>(capacity);
+}
+
+template <class T>
+inline constexpr DataOps kComponentOps{&ComponentIdIn<T>, &EqualAs<T>, &MakeComponentHistory<T>};
+template <class T>
+inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &EqualAs<T>, &MakeResourceHistory<T>};
 
 } // namespace Detail
 
@@ -253,7 +272,8 @@ public:
     void Derived() {
         table_->Append(DerivedRecord{Kernel::KeyOf<T>(), &Detail::ComponentIdIn<T>, source_});
     }
-    // The step schedule: the record runs in its recordStage after each step.
+    // The step schedule: the record runs in its recordStage after each step (in a World with a strategy, the
+    // record System is mounted there now, by the first registration of the schedule).
     void StepSchedule(std::string name, std::string recordStage);
     // A schedule run nested from stepSchedule.
     void NestedSchedule(std::string name, std::string stepSchedule);
@@ -265,12 +285,15 @@ public:
     // registered in the kernel elsewhere (Check reports RB-E3 when it is not).
     template <class T>
     void Input(std::uint32_t capacity) {
-        table_->Append(InputRecord{Kernel::KeyOf<T>(), &Detail::ResourceIdIn<T>, capacity, source_});
+        table_->Append(InputRecord{Kernel::KeyOf<T>(), &Detail::ResourceIdIn<T>, &Detail::MakeInputHistory<T>, capacity, source_});
     }
 
 private:
     RollbackRegistrations* table_;
+    Kernel::Registrar* registrar_;
     Source source_;
+    // The World chose a strategy: StepSchedule mounts the record (none without one: R-4).
+    bool strategy_;
 };
 
 } // namespace GYO::Engine::Rollback

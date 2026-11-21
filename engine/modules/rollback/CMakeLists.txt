@@ -4,6 +4,7 @@
 add_library(gyo_rollback STATIC
     src/Registrations.cpp
     src/RollbackModule.cpp
+    src/StateRollbackStrategy.cpp
 )
 add_library(GYO::Rollback ALIAS gyo_rollback)
 

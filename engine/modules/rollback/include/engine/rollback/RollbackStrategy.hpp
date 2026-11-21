@@ -8,8 +8,7 @@
 //
 // Each hook takes one context object of its own: what the hook reads and does
 // goes through it, so a hook can be given more later without its signature
-// changing (authority-rollback declaration 10.1). The run-time contexts are
-// defined with the official strategy (step 4); the startup check's is here.
+// changing (authority-rollback declaration 10.1).
 //
 // A strategy object is chosen per World (RollbackOptions in the World
 // description's options) and holds no per-World state: the description is
@@ -19,10 +18,15 @@
 #include "engine/base/Result.hpp"
 #include "engine/kernel/KernelError.hpp"
 #include "engine/kernel/Registry.hpp"
+#include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
 #include "engine/rollback/Registrations.hpp"
 
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <utility>
+#include <vector>
 #include <string>
 #include <string_view>
 
@@ -48,12 +52,89 @@ private:
     Orchestration::WorldCheck* check_;
 };
 
-// The run-time hooks' contexts (defined with the official strategy, step 4).
-class RecordContext;
-class DecideContext;
-class RestoreContext;
-class ResimulateContext;
-class CorrectContext;
+// The run-time hooks' contexts. Each hook runs inside an exclusive System of the
+// rollback Module (ExclusiveWorld<> without Writes<...>: the authority Module's
+// checks see no decision data written by it; rollback declaration 5.5 point 9);
+// a hook reads and writes the World through World(), its own state in its own
+// World Resources (a Read or Modify closure returns nothing that points into the
+// World, so a context holds no pointer into it).
+
+// After each step of the step schedule: Tick() is the step just run.
+class RecordContext {
+public:
+    RecordContext(Exclusive& world, std::uint64_t tick) : world_(&world), tick_(tick) {}
+    [[nodiscard]] Exclusive& World() noexcept { return *world_; }
+    [[nodiscard]] std::uint64_t Tick() const noexcept { return tick_; }
+
+private:
+    Exclusive* world_;
+    std::uint64_t tick_;
+};
+
+// Before the step schedule each frame: Tick() is the last step run. RollBackTo
+// decides to go back to that step (at most Tick()); Abandon tells the World a
+// requested rollback is given up (beyond the depth: rollback declaration 5.5
+// point 4), which the rollback Module sends as RollbackAbandoned.
+class DecideContext {
+public:
+    DecideContext(Exclusive& world, std::uint64_t tick) : world_(&world), tick_(tick) {}
+    [[nodiscard]] Exclusive& World() noexcept { return *world_; }
+    [[nodiscard]] std::uint64_t Tick() const noexcept { return tick_; }
+    void RollBackTo(std::uint64_t step) {
+        GYO_ASSERT(step <= tick_ && "a rollback goes back, to a step already run");
+        target_ = step;
+    }
+    [[nodiscard]] std::optional<std::uint64_t> Target() const noexcept { return target_; }
+    void Abandon(std::uint64_t requested, std::uint64_t depth) { abandoned_.push_back({requested, depth}); }
+    [[nodiscard]] const std::vector<std::pair<std::uint64_t, std::uint64_t>>& Abandoned() const noexcept { return abandoned_; }
+
+private:
+    Exclusive* world_;
+    std::uint64_t tick_;
+    std::optional<std::uint64_t> target_;
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> abandoned_;
+};
+
+// After deciding: put the World back to step Target(); Tick() is still the last step run.
+class RestoreContext {
+public:
+    RestoreContext(Exclusive& world, std::uint64_t target, std::uint64_t tick) : world_(&world), target_(target), tick_(tick) {}
+    [[nodiscard]] Exclusive& World() noexcept { return *world_; }
+    [[nodiscard]] std::uint64_t Target() const noexcept { return target_; }
+    [[nodiscard]] std::uint64_t Tick() const noexcept { return tick_; }
+
+private:
+    Exclusive* world_;
+    std::uint64_t target_;
+    std::uint64_t tick_;
+};
+
+// After restoring: run StepSchedule() again from Target() up to Tick().
+class ResimulateContext {
+public:
+    ResimulateContext(Exclusive& world, std::uint64_t target, std::uint64_t tick, std::string_view stepSchedule)
+        : world_(&world), target_(target), tick_(tick), stepSchedule_(stepSchedule) {}
+    [[nodiscard]] Exclusive& World() noexcept { return *world_; }
+    [[nodiscard]] std::uint64_t Target() const noexcept { return target_; }
+    [[nodiscard]] std::uint64_t Tick() const noexcept { return tick_; }
+    [[nodiscard]] std::string_view StepSchedule() const noexcept { return stepSchedule_; }
+
+private:
+    Exclusive* world_;
+    std::uint64_t target_;
+    std::uint64_t tick_;
+    std::string_view stepSchedule_;
+};
+
+// Each frame, on the view side.
+class CorrectContext {
+public:
+    explicit CorrectContext(Exclusive& world) : world_(&world) {}
+    [[nodiscard]] Exclusive& World() noexcept { return *world_; }
+
+private:
+    Exclusive* world_;
+};
 
 class RollbackStrategy {
 public:
@@ -84,6 +165,12 @@ protected:
 // registrations are still made and readable (rollback declaration 5.5 point 10).
 struct RollbackOptions {
     std::shared_ptr<RollbackStrategy> strategy;
+    // Where the rollback Module's Systems of each frame are mounted (the default skeleton's names): decide, restore
+    // and resimulate in decideStage, before the fixed step (authority-rollback declaration 5.2: lightyear's
+    // PreUpdate); the correction in correctStage, chosen by the author (rollback declaration 5.5 point 7).
+    std::string frameSchedule = std::string(Orchestration::DefaultSchedules::frame);
+    std::string decideStage = std::string(Orchestration::DefaultSchedules::preUpdate);
+    std::string correctStage = std::string(Orchestration::DefaultSchedules::postUpdate);
 };
 
 // The peer-to-peer rollback strategy (a fighting game; named by the user,

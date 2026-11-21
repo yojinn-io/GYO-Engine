@@ -1,5 +1,7 @@
 #include "engine/rollback/Registrations.hpp"
 
+#include "engine/rollback/Runtime.hpp"
+
 #include <algorithm>
 #include <utility>
 
@@ -174,11 +176,21 @@ Resolved Resolve(const RollbackRegistrations& table) {
 bool NotResimulating(Kernel::Res<WorldTime::Resimulation> resimulation) { return resimulation->active == 0; }
 
 RollbackEntry::RollbackEntry(Orchestration::WorldSetup& setup, Source source)
-    : table_(setup.Buffer().Find<RollbackRegistrations>()), source_(source) {
+    : table_(setup.Buffer().Find<RollbackRegistrations>()), registrar_(&setup.Registrar()), source_(source),
+      strategy_(setup.Options<RollbackOptions>() != nullptr && setup.Options<RollbackOptions>()->strategy != nullptr) {
     GYO_ASSERT(table_ != nullptr && "rollback registrations in a World the rollback Module is not built into");
 }
 
 void RollbackEntry::StepSchedule(std::string name, std::string recordStage) {
+    const bool first = std::none_of(table_->StepSchedules().begin(), table_->StepSchedules().end(),
+                                    [&name](const StepScheduleRecord& r) { return r.name == name; });
+    if (first && strategy_) {
+        // The record after each step (the registration's side effect in the kernel, at the call: declaration 6 point 3).
+        Kernel::SystemOptions record;
+        record.name = "RollbackRecord:" + name;
+        record.mounts.push_back(Kernel::Mount{name, recordStage, {}, {}, {}, {}});
+        registrar_->AddSystem<&RecordStep>(record);
+    }
     table_->Append(StepScheduleRecord{std::move(name), std::move(recordStage), source_});
 }
 
