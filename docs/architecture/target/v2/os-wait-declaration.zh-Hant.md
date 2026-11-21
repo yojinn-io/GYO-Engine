@@ -8,7 +8,7 @@
 - 使用者 2026-11-21 定了 os 的定位與這張卡的順序：「os是底層兼容層，對外也只是提供一個介面（否則就沒有意義了）。需要調用OS能力的時候，就去調用os介面就好了。不需要碰底層OS api」；「開os卡，先查 W3 的原因。再做core/os，完畢之後，讓time直接調用core/os的api」。
 - 第 1 步查 W3（第 2 節）。查的途中使用者說：「這個東西不用自己折騰，去查開源程序，或者github有沒有類似專案」「這個問題不會是我們第一個碰到，特別是這種兼容代碼」。查了成熟專案的寫法（第 2.4 節）後，使用者選驗收的方式：「選 (a)，照純搬移寫宣告」（第 2.5 節）。
 - 修訂 0：第一份草稿。使用者指出 os 是內化的能力、不是 Module（「等等，os 不用登記module。為何會合Module有關？」「這是內化的能力。」），用詞改成「引擎單位」。
-- 修訂 1（這一份）：加上和 #260 的突變協調（6.3）。用 merge 跟上 gyo2 的 #261（2acf9cee，core、ecs、orchestration 不再登記在 `config/modules.csv`）。time 對 os 的連結改成手寫在 `engine/core/time/CMakeLists.txt`，連結期望改 `gyo_expect_links`，不再動登記檔（5.1、5.2、6.3）。
+- 修訂 1：加上和 #260 的突變協調（6.3）。用 merge 跟上 gyo2 的 #261（2acf9cee，core、ecs、orchestration 不再登記在 `config/modules.csv`）。time 對 os 的連結改成手寫在 `engine/core/time/CMakeLists.txt`，連結期望改 `gyo_expect_links`，不再動登記檔（5.1、5.2、6.3）。
 - 修訂 2（這一份）：照 Fable 5.2／high 的敵對式檢查（唯讀，必修 4、建議 8、細節 4）修訂。主要改動：
   - W3 的結論降到證據撐得住的程度，範圍限界照實寫（2.3、§7）；
   - 寫明這一批的根據是使用者 11-21 的 owner 決定，不是 os.md RC9 意義下的純搬移（2.5、§5、§9 的決定 2）；
