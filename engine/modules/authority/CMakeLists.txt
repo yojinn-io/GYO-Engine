@@ -1,0 +1,20 @@
+# The authority Module (docs/architecture/target/v2/authority-module-declaration.zh-Hant.md; batch 4,
+# docs/architecture/target/v2/authority-rollback-declaration.zh-Hant.md section 4): the AuthorityStrategy socket
+# and, from step 5, the registrations of decision data and the official ServerAuthorityStrategy.
+add_library(gyo_authority STATIC
+    src/AuthorityModule.cpp
+)
+add_library(GYO::Authority ALIAS gyo_authority)
+
+target_include_directories(gyo_authority PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# Engine-internal links come from config/modules.csv (O-6).
+gyo_link_registered_dependencies(authority)
+target_compile_features(gyo_authority PUBLIC cxx_std_20)
+if(MSVC)
+    target_compile_options(gyo_authority PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(gyo_authority PRIVATE -Wall -Wextra -Wpedantic)
+endif()
