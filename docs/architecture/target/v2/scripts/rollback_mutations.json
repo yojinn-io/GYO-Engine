@@ -164,8 +164,8 @@
     "authority-rollback-declaration 6"
    ],
    "file": "engine/modules/rollback/src/RollbackModule.cpp",
-   "find": "        world.SetResource(Resolve(table).registry);",
-   "replace": "        static_cast<void>(world);",
+   "find": "        world.SetResource(std::move(registry));",
+   "replace": "        static_cast<void>(registry);",
    "target": "gyo_rollback_tests",
    "cases": "rollback registrations: each kind*",
    "expect": "\\[rb\\-registry\\-resource\\]"

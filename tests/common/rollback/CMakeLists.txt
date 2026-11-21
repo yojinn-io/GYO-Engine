@@ -15,3 +15,12 @@ foreach(group IN ITEMS "rollback registrations" "rollback strategy" "rollback ch
     set_tests_properties(rollback.${name} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 endforeach()
+# The budget measurement of judgement 5 (authority-rollback declaration 5.4.5): run by hand on the user's Linux host
+# next to floor_bench (build/evidence/gyo2-authority-rollback/), not a ctest.
+add_executable(gyo_rollback_budget RollbackBudget.cpp)
+target_link_libraries(gyo_rollback_budget PRIVATE GYO::Rollback)
+if(MSVC)
+    target_compile_options(gyo_rollback_budget PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(gyo_rollback_budget PRIVATE -Wall -Wextra -Wpedantic)
+endif()
