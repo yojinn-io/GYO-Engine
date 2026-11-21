@@ -223,8 +223,8 @@
     "authority 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "        if (system.removed || !MountedIn(system, resimulated) || rollback.Skipped(system.name)) continue;",
-   "replace": "        if (system.removed || rollback.Skipped(system.name)) continue;",
+   "find": "        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;",
+   "replace": "        if (system.removed || std::all_of(system.mounts.begin(), system.mounts.end(), &Rollback::SkippedWhileResimulating)) continue;",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E6 (Z6)*",
    "expect": "\\[au\\-z6\\-frame\\]"
@@ -276,7 +276,7 @@
     "authority 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "        if (system.removed || !MountedIn(system, resimulated) || rollback.Skipped(system.name)) continue;",
+   "find": "        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;",
    "replace": "        if (system.removed || !MountedIn(system, resimulated)) continue;",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E8*",
@@ -302,7 +302,7 @@
     "authority 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "        if (system == nullptr || !MountedIn(*system, resimulated) || rollback.Skipped(entry.system)) continue;",
+   "find": "        if (system == nullptr || !Rollback::RunsWhileResimulating(*system, resimulated)) continue;",
    "replace": "        continue;",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E8*",
@@ -526,7 +526,7 @@
     "authority DI-A 5"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "                if (condition.Evaluator() != notResimulating) conditions.push_back(condition.Name());",
+   "find": "                if (!Rollback::IsSkipCondition(condition)) conditions.push_back(condition.Name());",
    "replace": "                conditions.push_back(condition.Name());",
    "target": "gyo_authority_tests",
    "cases": "authority consistency: the rollback's skipped*",
@@ -987,6 +987,19 @@
    "target": "gyo_authority_tests",
    "cases": "authority consistency: the digest is order free*",
    "expect": "\\[au\\-digest\\-order\\]"
+  },
+  {
+   "id": "au-z6-skip-by-system",
+   "what": "whether a System runs while resimulating is asked of the System (any mount skipped), not of each mount in a resimulated schedule (review of step 8, B2: a mount added after SkipDuringResimulation runs again). Only it catches the per-mount question",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;",
+   "replace": "        if (system.removed || !MountedIn(system, resimulated) || std::any_of(system.mounts.begin(), system.mounts.end(), &Rollback::SkippedWhileResimulating)) continue;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 and AU-E8 ask each mount*",
+   "expect": "\\[au\\-z6\\-mount\\-added\\-after\\-skip\\] (?!every)"
   }
  ]
 }

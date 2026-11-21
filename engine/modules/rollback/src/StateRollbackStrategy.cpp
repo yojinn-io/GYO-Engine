@@ -27,14 +27,6 @@ Kernel::KernelError Failed(std::string message) {
 
 namespace {
 
-// The schedules that run again while resimulating: the step schedules and the schedules nested in them.
-std::set<std::string> Resimulated(const RollbackRegistry& registrations) {
-    std::set<std::string> names;
-    for (const StepScheduleRecord& record : registrations.stepSchedules) names.insert(record.name);
-    for (const NestedScheduleRecord& record : registrations.nestedSchedules) names.insert(record.name);
-    return names;
-}
-
 // R-7 (replaces the kernel's D-E16): in each resimulated schedule, every System that reads a Derived component
 // has a System of the same schedule that writes it immediately ordered before it (a path of stage, declared or
 // sync point edges of the read-only order graph; a tie by registration is no declared order). Hooks and
@@ -128,7 +120,7 @@ void CheckMessages(CheckContext& context, const std::set<std::string>& schedules
 } // namespace
 
 void StateRollbackStrategy::Check(CheckContext& context) {
-    const std::set<std::string> schedules = Resimulated(context.Registrations());
+    const std::set<std::string> schedules = ResimulatedSchedules(context.Registrations());
     CheckDerivedOrder(context, schedules);
     CheckMessages(context, schedules);
     // A rollback of depth steps writes back the inputs of depth steps: an input history that keeps fewer would

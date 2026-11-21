@@ -80,8 +80,8 @@ TEST_CASE("authority registrations: an entry is added on the author's behalf and
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
     const K::SystemInfo* entry = (*built)->World("Main").GetWorld().Types().SystemNamed("ReadCommand");
     REQUIRE_MESSAGE(entry != nullptr, "[au-ingress-added]");
-    CHECK_MESSAGE(RollbackOf(**built).Skipped("ReadCommand"), "[au-ingress-skipped]");
-    CHECK_MESSAGE((!entry->mounts.empty() && !entry->mounts[0].conditions.empty()), "[au-ingress-skipped] no run condition");
+    CHECK_MESSAGE(!R::RunsWhileResimulating(*entry, R::ResimulatedSchedules(RollbackOf(**built))), "[au-ingress-skipped]");
+    CHECK_MESSAGE((!entry->mounts.empty() && R::SkippedWhileResimulating(entry->mounts[0])), "[au-ingress-skipped] no run condition");
 }
 
 TEST_CASE("authority registrations: a mark only records (no second kernel registration) and resolves at Check") {

@@ -73,7 +73,9 @@ TEST_CASE("rollback registrations: each kind is in the World's RollbackRegistry 
                   "[rb-registry-step]");
     CHECK_MESSAGE((registry.nestedSchedules.size() == 1 && registry.nestedSchedules[0].stepSchedule == "FixedUpdate"),
                   "[rb-registry-nested]");
-    CHECK_MESSAGE(registry.Skipped("CountRuns"), "[rb-registry-skip]");
+    const K::SystemInfo* counts = (*built)->World("Main").GetWorld().Types().SystemNamed("CountRuns");
+    REQUIRE(counts != nullptr);
+    CHECK_MESSAGE((!counts->mounts.empty() && R::SkippedWhileResimulating(counts->mounts[0])), "[rb-registry-skip]");
 }
 
 TEST_CASE("rollback registrations: a System registered as skipped does not run while the World resimulates") {
@@ -145,6 +147,38 @@ TEST_CASE("rollback registrations: two made on behalf with different options are
                                    }),
                                    Units());
     CHECK_MESSAGE(Reported(built).find("RB-E1") != std::string::npos, "[rb-e1-on-behalf] " << Reported(built));
+}
+
+TEST_CASE("rollback registrations: rollback state and Derived of one type: the author's counts across the kinds") {
+    // The author's Derived over a Component made on behalf (the authority Module registers one by default).
+    auto derived = O::Product::Build(Game([](O::WorldSetup& s) {
+                                         RegisterData(s);
+                                         R::RollbackEntry(s, R::Source::OnBehalf).Component<Health>();
+                                         R::RollbackEntry(s).Derived<Health>();
+                                     }),
+                                     Units());
+    REQUIRE_MESSAGE(static_cast<bool>(derived), Reported(derived));
+    CHECK_MESSAGE((RegistryOf(**derived).Data(K::KeyOf<Health>()) == nullptr && RegistryOf(**derived).IsDerived(K::KeyOf<Health>())),
+                  "[rb-cross-kind-author] the Component made on behalf still counts beside the author's Derived");
+    // The author's Component over a Derived made on behalf.
+    auto rolled = O::Product::Build(Game([](O::WorldSetup& s) {
+                                        RegisterData(s);
+                                        R::RollbackEntry(s, R::Source::OnBehalf).Derived<Health>();
+                                        R::RollbackEntry(s).Component<Health>();
+                                    }),
+                                    Units());
+    REQUIRE_MESSAGE(static_cast<bool>(rolled), Reported(rolled));
+    CHECK_MESSAGE((RegistryOf(**rolled).Data(K::KeyOf<Health>()) != nullptr && !RegistryOf(**rolled).IsDerived(K::KeyOf<Health>())),
+                  "[rb-cross-kind-author] the Derived made on behalf still counts beside the author's Component");
+    // Both the author's: RB-E1.
+    auto both = O::Product::Build(Game([](O::WorldSetup& s) {
+                                      RegisterData(s);
+                                      R::RollbackEntry rollback(s);
+                                      rollback.Component<Health>();
+                                      rollback.Derived<Health>();
+                                  }),
+                                  Units());
+    CHECK_MESSAGE(Reported(both).find("RB-E1") != std::string::npos, "[rb-cross-kind-e1] " << Reported(both));
 }
 
 TEST_CASE("rollback registrations: what the read-only registry does not have is reported (RB-E2 to RB-E5)") {

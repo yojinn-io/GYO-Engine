@@ -99,10 +99,11 @@ struct DataRecord {
 };
 
 // A type another Module registered, marked as decision data: by type (key and ops set) or by name (byName).
+// A marked resource (by type or by name). Only resources are marked: authority declaration 4.3 names Mark<T> and
+// MarkResource, both resources.
 struct MarkRecord {
     std::optional<Kernel::TypeKey> key;
     std::string name;
-    DataKind kind = DataKind::Resource;
     const DataOps* ops = nullptr;
     std::uint32_t seq = 0;
 };
@@ -256,8 +257,6 @@ inline constexpr DataOps kMessageOps{&MessageIdIn<T>, &RegisterMessage<T>, nullp
 // A marked type by type: found and hashed, never registered (another Module did).
 template <class T>
 inline constexpr DataOps kMarkedResourceOps{&ResourceIdIn<T>, nullptr, nullptr, &ResourceDigest<T>};
-template <class T>
-inline constexpr DataOps kMarkedComponentOps{&ComponentIdIn<T>, nullptr, nullptr, &ComponentDigest<T>};
 
 template <auto Fn>
 Kernel::RegistrationSeq AddSystemOf(Kernel::Registrar& r, Kernel::SystemOptions options, std::source_location source) {
@@ -334,13 +333,7 @@ public:
     template <class T>
     void Mark() {
         static_assert(Kernel::Hashable<T>, "authority.Mark<T>: T needs a hash function (HashValue) for the digest");
-        MarkType(MarkRecord{Kernel::KeyOf<T>(), {}, DataKind::Resource, &Detail::kMarkedResourceOps<T>, 0});
-    }
-    // A component another Module registered.
-    template <class T>
-    void MarkComponent() {
-        static_assert(Kernel::Hashable<T>, "authority.MarkComponent<T>: T needs a hash function (HashValue) for the digest");
-        MarkType(MarkRecord{Kernel::KeyOf<T>(), {}, DataKind::Component, &Detail::kMarkedComponentOps<T>, 0});
+        MarkType(MarkRecord{Kernel::KeyOf<T>(), {}, &Detail::kMarkedResourceOps<T>, 0});
     }
     // A resource another Module registered, by its kernel name (a state machine's value; the authority Module
     // does not depend on that Module). Not in the digest in this batch (no typed hash).

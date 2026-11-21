@@ -26,7 +26,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 |---|---|
 | `Component<T>(name, options)`、`Resource<T>(name, options)` | 作者的判定資料；`T` 要有雜湊函式（編譯期檢查）。`options`：`input`（判定的輸入，Z8）、`digestExclude`、`rollback`（`Rollback` 預設／`NoRollback`／`Derived`／`Self`：作者自己登記） |
 | `Message<M>(name, capacity)` | 判定訊息（不進 digest；上限進一致性指紋） |
-| `Mark<T>()`、`MarkComponent<T>()`、`MarkResource(name)` | 別的 Module 已登記的型別：只記下、不再登記；依型別的進 digest，依名字的本批不進（實作） |
+| `Mark<T>()`、`MarkResource(name)` | 別的 Module 已登記的型別：只記下、不再登記；依型別的進 digest，依名字的本批不進（實作） |
 | `Ingress<&F>(options)` | 外部輸入的入口 System：代為 `AddSystem` |
 | `Runs(system, schedules)` | 會巢狀跑別的 schedule 的獨占 System |
 | `OneEndOnly(name, reason)` | 寫判定資料、只在一端有的 System（hook、observer 也可以，名字三張表都查；實作）：不進一致性指紋與 G-5，判定資料集列出 |

@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -101,11 +102,6 @@ struct NestedScheduleRecord {
     Source source = Source::Author;
 };
 
-struct SkipRecord {
-    std::string system;
-    Source source = Source::Author;
-};
-
 // An input whose history the strategy keeps by tick. The type itself is
 // registered in the kernel by one entry only (the author's Registrar, or the
 // authority Module's input registration); Input<T> does not register it.
@@ -138,13 +134,11 @@ struct RollbackRegistry {
     std::vector<DerivedRecord> derived;
     std::vector<StepScheduleRecord> stepSchedules;
     std::vector<NestedScheduleRecord> nestedSchedules;
-    std::vector<SkipRecord> skipped;
     std::vector<InputRecord> inputs;
 
     [[nodiscard]] const DataRecord* Data(Kernel::TypeKey key) const noexcept;
     [[nodiscard]] bool IsDerived(Kernel::TypeKey key) const noexcept;
     [[nodiscard]] const StepScheduleRecord* StepSchedule(std::string_view name) const noexcept;
-    [[nodiscard]] bool Skipped(std::string_view system) const noexcept;
 };
 
 void HashValue(Kernel::Hasher& h, const RollbackRegistry& registry);
@@ -159,14 +153,12 @@ public:
     void Append(DerivedRecord record);
     void Append(StepScheduleRecord record);
     void Append(NestedScheduleRecord record);
-    void Append(SkipRecord record);
     void Append(InputRecord record);
 
     const std::vector<DataRecord>& Data() const noexcept { return data_; }
     const std::vector<DerivedRecord>& Derived() const noexcept { return derived_; }
     const std::vector<StepScheduleRecord>& StepSchedules() const noexcept { return stepSchedules_; }
     const std::vector<NestedScheduleRecord>& NestedSchedules() const noexcept { return nestedSchedules_; }
-    const std::vector<SkipRecord>& Skipped() const noexcept { return skipped_; }
     const std::vector<InputRecord>& Inputs() const noexcept { return inputs_; }
 
 private:
@@ -176,7 +168,6 @@ private:
     std::vector<DerivedRecord> derived_;
     std::vector<StepScheduleRecord> stepSchedules_;
     std::vector<NestedScheduleRecord> nestedSchedules_;
-    std::vector<SkipRecord> skipped_;
     std::vector<InputRecord> inputs_;
 };
 
@@ -195,6 +186,18 @@ struct Resolved {
 // The kernel run condition SkipDuringResimulation puts on a mount: false while
 // the World resimulates (the time Module's Resimulation).
 bool NotResimulating(Kernel::Res<WorldTime::Resimulation> resimulation);
+
+// The schedules that run again while resimulating: the step schedules and the
+// schedules nested in them.
+[[nodiscard]] std::set<std::string> ResimulatedSchedules(const RollbackRegistry& registry);
+// Whether a run condition is the one SkipDuringResimulation puts on a mount,
+// and whether a mount carries it.
+[[nodiscard]] bool IsSkipCondition(const Kernel::ConditionRef& condition);
+[[nodiscard]] bool SkippedWhileResimulating(const Kernel::Mount& mount);
+// Whether a System runs while the World resimulates: one of its mounts is in a
+// resimulated schedule and does not carry that condition. Asked of each mount
+// (a mount added after SkipDuringResimulation runs again), not of the name.
+[[nodiscard]] bool RunsWhileResimulating(const Kernel::SystemInfo& system, const std::set<std::string>& resimulated);
 
 namespace Detail {
 

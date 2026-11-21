@@ -52,7 +52,6 @@ void HashValue(Kernel::Hasher& h, const AuthorityRegistry& registry) {
     HashValue(h, registry.marks.size());
     for (const MarkRecord& record : registry.marks) {
         HashValue(h, record.name);
-        HashValue(h, record.kind);
         HashValue(h, record.key.has_value());
         HashValue(h, record.seq);
     }
@@ -135,7 +134,7 @@ void AuthorityEntry::MarkType(MarkRecord record) {
 }
 
 void AuthorityEntry::MarkResource(std::string name) {
-    MarkType(MarkRecord{std::nullopt, std::move(name), DataKind::Resource, nullptr, 0});
+    MarkType(MarkRecord{std::nullopt, std::move(name), nullptr, 0});
 }
 
 void AuthorityEntry::IngressOf(Kernel::SystemOptions options,

@@ -129,20 +129,6 @@
    "expect": "\\[rb\\-skip\\-skipped\\]"
   },
   {
-   "id": "rb-skip-not-recorded",
-   "what": "SkipDuringResimulation is not recorded in the registrations (the authority Module reads it). Only it catches the record",
-   "guards": [
-    "rollback R-6",
-    "authority-rollback-declaration 6"
-   ],
-   "file": "engine/modules/rollback/src/Registrations.cpp",
-   "find": "    table_->Append(SkipRecord{options.name, source_});",
-   "replace": "",
-   "target": "gyo_rollback_tests",
-   "cases": "rollback registrations: each kind*",
-   "expect": "\\[rb\\-registry\\-skip\\]"
-  },
-  {
    "id": "rb-not-resimulating-inverted",
    "what": "the run condition is true while resimulating and false otherwise. Only it catches the condition's sense",
    "guards": [
@@ -598,8 +584,8 @@
    "guards": [
     "rollback R-7"
    ],
-   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "    for (const NestedScheduleRecord& record : registrations.nestedSchedules) names.insert(record.name);\n",
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    for (const NestedScheduleRecord& record : registry.nestedSchedules) names.insert(record.name);\n",
    "replace": "",
    "target": "gyo_rollback_tests",
    "cases": "rollback checks: R-7 looks at the nested schedules too*",
@@ -643,6 +629,19 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback checks: messages*",
    "expect": "\\[rb\\-msg\\-hook\\-unchecked\\]"
+  },
+  {
+   "id": "rb-cross-kind-unresolved",
+   "what": "rollback state and Derived of one type are resolved apart, not across the kinds (review of step 8, B3: the author's Derived and a Component made on behalf both count). Only it catches the cross-kind resolution",
+   "guards": [
+    "rollback R-6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    out.registry.data = std::move(kept);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: rollback state and Derived of one type*",
+   "expect": "\\[rb\\-cross\\-kind\\-author\\]"
   }
  ]
 }

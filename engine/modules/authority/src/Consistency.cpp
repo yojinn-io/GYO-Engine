@@ -27,9 +27,8 @@ std::optional<std::uint32_t> ResourceNamed(const Kernel::FrozenRegistry& registr
 }
 
 std::optional<Kernel::AccessKey> KeyOfMark(const Kernel::FrozenRegistry& registry, const MarkRecord& mark) {
-    const Kernel::AccessKind kind = mark.kind == DataKind::Component ? Kernel::AccessKind::Component : Kernel::AccessKind::Resource;
     if (mark.ops != nullptr) {
-        if (const auto id = mark.ops->idIn(registry)) return Kernel::AccessKey{kind, *id};
+        if (const auto id = mark.ops->idIn(registry)) return Kernel::AccessKey{Kernel::AccessKind::Resource, *id};
         return std::nullopt;
     }
     if (const auto id = ResourceNamed(registry, mark.name)) return Kernel::AccessKey{Kernel::AccessKind::Resource, *id};
@@ -175,10 +174,10 @@ Collected CollectedOf(const Kernel::FrozenRegistry& registry, const AuthorityReg
         std::string name = mark.name;
         if (mark.ops != nullptr) {
             if (const auto id = mark.ops->idIn(registry)) {
-                name = mark.kind == DataKind::Component ? registry.Components()[*id].name : registry.Resources()[*id].name;
+                name = registry.Resources()[*id].name;
             }
         }
-        types.emplace_back(mark.seq, std::string("marked ") + kinds[static_cast<int>(mark.kind)] + " " + name +
+        types.emplace_back(mark.seq, std::string("marked resource ") + name +
                                          (mark.ops == nullptr ? " (by name)" : ""));
     }
     std::sort(types.begin(), types.end());

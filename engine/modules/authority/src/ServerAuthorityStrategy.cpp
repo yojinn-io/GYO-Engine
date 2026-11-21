@@ -105,9 +105,7 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     for (const MarkRecord& mark : table.Marks()) {
         const bool found = mark.ops != nullptr ? mark.ops->idIn(registry).has_value() : HasResource(registry, mark.name);
         if (!found) {
-            context.Report("AU-E4", mark.ops != nullptr ? std::string("authority.Mark: the marked ") +
-                                                              (mark.kind == DataKind::Component ? "component" : "resource") +
-                                                              " type is not registered in this World"
+            context.Report("AU-E4", mark.ops != nullptr ? std::string("authority.Mark: the marked resource type is not registered in this World")
                                                         : "authority.MarkResource: no resource named '" + mark.name + "' in this World");
         }
     }
@@ -163,9 +161,7 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     }
 
     // Decision data × rollback (authority declaration 5.11): read through the rollback Module's public registrations.
-    std::set<std::string> resimulated;
-    for (const Rollback::StepScheduleRecord& record : rollback.stepSchedules) resimulated.insert(record.name);
-    for (const Rollback::NestedScheduleRecord& record : rollback.nestedSchedules) resimulated.insert(record.name);
+    const std::set<std::string> resimulated = Rollback::ResimulatedSchedules(rollback);
     const DecisionKeys decision = DecisionKeysOf(registry, table.Data(), table.Marks());
     const RollbackKeys rolls = RollbackKeysOf(registry, rollback);
     // A decision input whose history the rollback strategy keeps (rollback.Input<T>): written back before each step
@@ -184,7 +180,7 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     // AU-E6 (Z6): Systems mounted in a resimulated schedule that run again while resimulating (one skipped while
     // resimulating, an entry, does not write during a resimulation).
     for (const Kernel::SystemInfo& system : registry.Systems()) {
-        if (system.removed || !MountedIn(system, resimulated) || rollback.Skipped(system.name)) continue;
+        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;
         for (const Kernel::AccessKey& key : WrittenKeys(registry, system.access)) {
             if (!judged(key) || rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) continue;
             context.Report("AU-E6", "System '" + system.name + "' runs in a resimulated schedule and writes decision data '" +
@@ -215,7 +211,7 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     // AU-E8 (D-E15): an entry in a resimulated schedule is skipped while resimulating.
     for (const IngressRecord& entry : table.Ingress()) {
         const Kernel::SystemInfo* system = LiveSystem(registry, entry.system);
-        if (system == nullptr || !MountedIn(*system, resimulated) || rollback.Skipped(entry.system)) continue;
+        if (system == nullptr || !Rollback::RunsWhileResimulating(*system, resimulated)) continue;
         context.Report("AU-E8", "entry System '" + entry.system + "' runs in a resimulated schedule and is not skipped "
                                                                   "while resimulating (D-E15)");
     }
@@ -298,10 +294,10 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
         std::string name = mark.name;
         if (mark.ops != nullptr) {
             if (const auto id = mark.ops->idIn(registry)) {
-                name = mark.kind == DataKind::Component ? registry.Components()[*id].name : registry.Resources()[*id].name;
+                name = registry.Resources()[*id].name;
             }
         }
-        types.emplace_back(mark.seq, "mark" + std::to_string(static_cast<int>(mark.kind)) + name + (mark.ops == nullptr ? " by-name" : ""));
+        types.emplace_back(mark.seq, "mark" + name + (mark.ops == nullptr ? " by-name" : ""));
     }
     std::sort(types.begin(), types.end());
     out.U64(types.size());
@@ -310,7 +306,6 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
     // The Systems seen to write decision data, less OneEndOnly: their access, mounts and run conditions (not
     // before / after: already in the order, and they may name a System of one end only).
     const Collected collected = CollectedOf(registry, registrations);
-    const Kernel::Detail::ConditionFn notResimulating = Kernel::Condition<&Rollback::NotResimulating>("").Evaluator();
     out.U64(collected.systems.size());
     for (const std::string& name : collected.systems) {
         const Kernel::SystemInfo& system = *registry.SystemNamed(name);
@@ -318,10 +313,7 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
         // The rollback's "skipped while resimulating" joins its read of Resimulation to the System's reads: left
         // out with the condition (a System that reads Resimulation itself and also has the condition is not told
         // apart; a limit).
-        const bool skipped = std::any_of(system.mounts.begin(), system.mounts.end(), [&](const Kernel::Mount& mount) {
-            return std::any_of(mount.conditions.begin(), mount.conditions.end(),
-                               [&](const Kernel::ConditionRef& c) { return c.Evaluator() == notResimulating; });
-        });
+        const bool skipped = std::any_of(system.mounts.begin(), system.mounts.end(), &Rollback::SkippedWhileResimulating);
         std::optional<Kernel::AccessKey> resimulationRead;
         if (const auto id = registry.ResourceIdOf<WorldTime::Resimulation>(); id && skipped) {
             resimulationRead = Kernel::AccessKey{Kernel::AccessKind::Resource, *id};
@@ -335,7 +327,7 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
             // registration, at one end only; authority declaration 5.5).
             std::vector<std::string> conditions;
             for (const Kernel::ConditionRef& condition : mount.conditions) {
-                if (condition.Evaluator() != notResimulating) conditions.push_back(condition.Name());
+                if (!Rollback::IsSkipCondition(condition)) conditions.push_back(condition.Name());
             }
             out.U64(conditions.size());
             for (const std::string& condition : conditions) out.Str(condition);

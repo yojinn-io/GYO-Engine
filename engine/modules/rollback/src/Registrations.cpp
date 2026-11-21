@@ -66,9 +66,6 @@ const StepScheduleRecord* RollbackRegistry::StepSchedule(std::string_view name) 
     return nullptr;
 }
 
-bool RollbackRegistry::Skipped(std::string_view system) const noexcept {
-    return std::any_of(skipped.begin(), skipped.end(), [system](const SkipRecord& r) { return r.system == system; });
-}
 
 void HashValue(Kernel::Hasher& h, const RollbackRegistry& registry) {
     using Kernel::HashValue;
@@ -90,8 +87,6 @@ void HashValue(Kernel::Hasher& h, const RollbackRegistry& registry) {
         HashValue(h, record.name);
         HashValue(h, record.stepSchedule);
     }
-    h.U64(registry.skipped.size());
-    for (const SkipRecord& record : registry.skipped) HashValue(h, record.system);
     h.U64(registry.inputs.size());
     for (const InputRecord& record : registry.inputs) HashValue(h, record.capacity);
 }
@@ -116,10 +111,6 @@ void RollbackRegistrations::Append(NestedScheduleRecord record) {
     Open();
     nestedSchedules_.push_back(std::move(record));
 }
-void RollbackRegistrations::Append(SkipRecord record) {
-    Open();
-    skipped_.push_back(std::move(record));
-}
 void RollbackRegistrations::Append(InputRecord record) {
     Open();
     inputs_.push_back(std::move(record));
@@ -142,6 +133,26 @@ Resolved Resolve(const RollbackRegistrations& table) {
             return RegistrationError{"RB-E1", "rollback.Derived: " + std::move(what), r.idIn, DataKind::Component};
         },
         errors);
+    // A type both rollback state and Derived: the author's over the one made on behalf, across the two kinds too
+    // (the authority Module registers a decision component on the author's behalf; the author's Derived counts).
+    // Both of one source is RB-E1.
+    std::vector<DataRecord> kept;
+    for (const DataRecord& record : out.registry.data) {
+        const auto derived = std::find_if(out.registry.derived.begin(), out.registry.derived.end(),
+                                          [&record](const DerivedRecord& d) { return d.key.address == record.key.address; });
+        if (derived == out.registry.derived.end()) {
+            kept.push_back(record);
+        } else if (derived->source == record.source) {
+            errors.push_back(RegistrationError{"RB-E1", std::string("rollback.Derived and rollback.Component: two of ") +
+                                                            SourceText(record.source) + " registrations of different kinds",
+                                               record.ops->idIn, record.kind});
+            kept.push_back(record);
+        } else if (record.source == Source::Author) {
+            kept.push_back(record);
+            out.registry.derived.erase(derived);
+        }
+    }
+    out.registry.data = std::move(kept);
     out.registry.stepSchedules = PickOne(
         table.StepSchedules(), [](const StepScheduleRecord& r) { return r.name; },
         [](const StepScheduleRecord& a, const StepScheduleRecord& b) { return a.recordStage == b.recordStage; },
@@ -156,13 +167,6 @@ Resolved Resolve(const RollbackRegistrations& table) {
             return RegistrationError{"RB-E1", "rollback.NestedSchedule '" + r.name + "': " + std::move(what), nullptr, DataKind::Component};
         },
         errors);
-    out.registry.skipped = PickOne(
-        table.Skipped(), [](const SkipRecord& r) { return r.system; },
-        [](const SkipRecord&, const SkipRecord&) { return true; },
-        [](const SkipRecord& r, std::string what) {
-            return RegistrationError{"RB-E1", "rollback.SkipDuringResimulation '" + r.system + "': " + std::move(what), nullptr, DataKind::Component};
-        },
-        errors);
     out.registry.inputs = PickOne(
         table.Inputs(), [](const InputRecord& r) { return r.key.address; },
         [](const InputRecord& a, const InputRecord& b) { return a.capacity == b.capacity; },
@@ -174,6 +178,27 @@ Resolved Resolve(const RollbackRegistrations& table) {
 }
 
 bool NotResimulating(Kernel::Res<WorldTime::Resimulation> resimulation) { return resimulation->active == 0; }
+
+std::set<std::string> ResimulatedSchedules(const RollbackRegistry& registry) {
+    std::set<std::string> names;
+    for (const StepScheduleRecord& record : registry.stepSchedules) names.insert(record.name);
+    for (const NestedScheduleRecord& record : registry.nestedSchedules) names.insert(record.name);
+    return names;
+}
+
+bool IsSkipCondition(const Kernel::ConditionRef& condition) {
+    return condition.Evaluator() == Kernel::Condition<&NotResimulating>("").Evaluator();
+}
+
+bool SkippedWhileResimulating(const Kernel::Mount& mount) {
+    return std::any_of(mount.conditions.begin(), mount.conditions.end(), &IsSkipCondition);
+}
+
+bool RunsWhileResimulating(const Kernel::SystemInfo& system, const std::set<std::string>& resimulated) {
+    return std::any_of(system.mounts.begin(), system.mounts.end(), [&resimulated](const Kernel::Mount& mount) {
+        return resimulated.count(mount.schedule) != 0 && !SkippedWhileResimulating(mount);
+    });
+}
 
 RollbackEntry::RollbackEntry(Orchestration::WorldSetup& setup, Source source)
     : table_(setup.Buffer().Find<RollbackRegistrations>()), registrar_(&setup.Registrar()), source_(source),
@@ -202,7 +227,6 @@ void RollbackEntry::SkipDuringResimulation(Kernel::SystemOptions& options) {
     for (Kernel::Mount& mount : options.mounts) {
         mount.conditions.push_back(Kernel::Condition<&NotResimulating>("NotResimulating"));
     }
-    table_->Append(SkipRecord{options.name, source_});
 }
 
 } // namespace GYO::Engine::Rollback

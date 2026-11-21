@@ -160,6 +160,28 @@ TEST_CASE("authority checks: AU-E8 (D-E15): an entry in a resimulated schedule i
     CHECK_MESSAGE(BuildText(build, Client()) == "built", "[au-ingress-not-skipped] the official strategy");
 }
 
+TEST_CASE("authority checks: AU-E6 and AU-E8 ask each mount whether it runs while resimulating, not the System's name") {
+    // SkipDuringResimulation puts its condition on the mounts it is handed; a mount added after it runs again.
+    const std::string later = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::NoRollback});
+        K::SystemOptions options = In("WriteHealth", "Main", "Update");
+        R::RollbackEntry(s).SkipDuringResimulation(options);
+        options.mounts.push_back(K::Mount{"FixedUpdate", "Update"});
+        s.Registrar().AddSystem<&WriteHealth>(options);
+    }, Client());
+    CHECK_MESSAGE(Has(later, "AU-E6 System 'WriteHealth'"), "[au-z6-mount-added-after-skip] " << later);
+    // Every mount skipped: the System does not write during a resimulation.
+    const std::string all = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry(s).Component<Health>("Health", {.rollback = A::RollbackChoice::NoRollback});
+        K::SystemOptions options = In("WriteHealth", "FixedUpdate", "Update");
+        R::RollbackEntry(s).SkipDuringResimulation(options);
+        s.Registrar().AddSystem<&WriteHealth>(options);
+    }, Client());
+    CHECK_MESSAGE(all == "built", "[au-z6-mount-added-after-skip] every mount skipped: " << all);
+}
+
 TEST_CASE("authority checks: AU-E9: a Runs System in a resimulated schedule runs nested schedules the rollback Module knows") {
     const auto build = [](bool nested) {
         return [nested](O::WorldSetup& s) {
