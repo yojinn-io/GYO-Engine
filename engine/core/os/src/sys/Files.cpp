@@ -1,6 +1,8 @@
-// The file primitives on POSIX systems (macOS, Linux).
+// The file primitives on macOS and Linux; the steps that differ between them
+// are the platform's (Platform.hpp).
 #include "engine/os/Files.hpp"
 
+#include "Platform.hpp"
 #include "../common/Paths.hpp"
 
 #include "engine/base/Assert.hpp"
@@ -58,11 +60,7 @@ OsError FromErrno(const int error, std::string message, const std::string_view p
 }
 
 std::chrono::nanoseconds ModifiedTime(const struct stat& status) noexcept {
-#if defined(__APPLE__)
-    const timespec& time = status.st_mtimespec;
-#else
-    const timespec& time = status.st_mtim;
-#endif
+    const timespec& time = Detail::CurrentPlatform().ModifiedTimespec(status);
     const auto seconds = static_cast<std::int64_t>(time.tv_sec);
     if (seconds > kMaximumSeconds) return (std::chrono::nanoseconds::max)();
     if (seconds < -kMaximumSeconds) return (std::chrono::nanoseconds::min)();
@@ -406,20 +404,7 @@ std::string PathForMessage(const std::filesystem::path& path) {
 }
 
 Base::Result<std::vector<std::string>, OsError> FontDirectories() {
-    std::vector<std::string> candidates;
-#if defined(__APPLE__)
-    candidates = {"/System/Library/Fonts", "/Library/Fonts"};
-    if (const char* home = std::getenv("HOME"); home != nullptr && home[0] == '/') {
-        candidates.push_back(std::string(home) + "/Library/Fonts");
-    }
-#else
-    candidates = {"/usr/share/fonts", "/usr/local/share/fonts"};
-    if (const char* data = std::getenv("XDG_DATA_HOME"); data != nullptr && data[0] == '/') {
-        candidates.push_back(std::string(data) + "/fonts");
-    } else if (const char* home = std::getenv("HOME"); home != nullptr && home[0] == '/') {
-        candidates.push_back(std::string(home) + "/.local/share/fonts");
-    }
-#endif
+    std::vector<std::string> candidates = Detail::CurrentPlatform().FontDirectoryCandidates();
     std::vector<std::string> out;
     for (auto& candidate : candidates) {
         if (!Detail::IsValidUtf8(candidate)) continue;
@@ -429,12 +414,6 @@ Base::Result<std::vector<std::string>, OsError> FontDirectories() {
     return out;
 }
 
-bool DefaultCaseSensitivePaths() noexcept {
-#if defined(__APPLE__)
-    return false;
-#else
-    return true;
-#endif
-}
+bool DefaultCaseSensitivePaths() noexcept { return Detail::CurrentPlatform().CaseSensitivePaths(); }
 
 } // namespace Engine::Os::Files

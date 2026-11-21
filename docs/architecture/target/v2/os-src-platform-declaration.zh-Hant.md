@@ -1,12 +1,20 @@
 # 事前宣告：core/os 的平台實作集中到 `sys/<平台>/`（`v8-arch-gyo2-os-src-platform`）
 
-更新：2026-11-21（修訂 2）。Owner：架構（os-wait 卡接手；使用者：「這個你要處理，你本身就是os的實作者。」）。
-**狀態：草稿，待使用者核准。核准之前不改 `engine/` 與 `tests/`。**
+更新：2026-11-21（修訂 3）。Owner：架構（os-wait 卡接手；使用者：「這個你要處理，你本身就是os的實作者。」）。
+**狀態：修訂 3 照使用者的指示直接實作（「你繼續」）；合併前交使用者核准。修訂 0～2 的寫法都已退掉，以下第 2 節之後若和修訂 3 不同，以修訂 3 為準。**
 
 經過：
 - 修訂 0：照「`src/<平台>/`」拆三個 `#if` 檔。
 - 修訂 1：使用者：「你建一個sys ，把3個平台的代碼放進去/core/os/sys/windows ，這樣的」。所有平台的程式集中到一個 `sys/` 目錄底下，每個平台一個子目錄（第 2 節）。和 Rust 標準庫的 `library/std/src/sys/`（平台層集中在 `sys/` 底下，再按平台分）是同一種分法。
-- 修訂 2（這一份）：使用者：「posix 能不能用一個設計模式放在hpp中。實現代碼依然放在對應的macos、linux中。嚴格來說抽象就是這樣一回事。」「posix 就不在需要了。」「你認為我為何和你提設計模式？」——macOS 與 Linux 共用的程式不再是一個 `posix/` 目錄，而是用 Template Method 寫成 hpp 裡的骨架（寫一次）；macOS、Linux 各自提供不同的步驟，並在自己的 `.cpp` 裡把骨架編進來（2.0、2.1）。
+- 修訂 2：使用者：「posix 能不能用一個設計模式放在hpp中。實現代碼依然放在對應的macos、linux中。嚴格來說抽象就是這樣一回事。」「posix 就不在需要了。」「你認為我為何和你提設計模式？」——macOS 與 Linux 共用的程式不再是一個 `posix/` 目錄，而是用 Template Method 寫成 hpp 裡的骨架（寫一次）；macOS、Linux 各自提供不同的步驟，並在自己的 `.cpp` 裡把骨架編進來（2.0、2.1）。
+- 修訂 3（這一份）：使用者指出修訂 2 的寫法（先定義 `Platform` 再 include 骨架 hpp）沒有技術：「你寫代碼真的是只有感情，沒有技術的呀。」查過參考引擎後，使用者：「我不明白了。c++做抽象這麼難麼？java都有interface 可以做部分實現，變的地方放implement」「Windows 也繼承，做一個空實現就可以了。」「這個一個很簡單，並且沒有難度的設計模式。代碼也不複雜。而且你已經有了現成的實作，你只需要改架構。實現完全不用改。」最後的形狀：
+  - `src/sys/Platform.hpp`：抽象類別 `Detail::Platform`，只放 macOS 與 Linux 不同的步驟（修改時間的欄位、字型目錄的候選、路徑是否分大小寫、執行檔路徑），全是純虛函式。
+  - `src/sys/macos/Platform.cpp`、`src/sys/linux/Platform.cpp`：實作這些步驟，內容是原本 `#if` 的各支，原樣搬來。`src/sys/windows/Platform.cpp`：繼承，空實作。
+  - `src/sys/Files.cpp`、`Process.cpp`、`Console.cpp`：原本 `src/posix/` 的共用程式原樣搬來，只把 `#if` 的地方換成呼叫 `Detail::CurrentPlatform()`。
+  - `src/sys/<platform>/Thread.cpp`：三個平台各一份，從原檔逐行切出。
+  - `src/sys/windows/` 的其餘檔、`WakeSignal` 三份：只搬位置。
+  - 沒有 `posix/`、`Unix*`。`src/sys/` 底下沒有任何 `#if`。
+
 
 ## 1. 做什麼
 
