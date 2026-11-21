@@ -243,13 +243,6 @@ public:
         AddSetMember(KeyOf<SetTag>(), KeyOf<T>());
     }
 
-    // Marks a named set as the authority digest set (spec S-12): every member
-    // must be Exclusive (D-E2).
-    template <class SetTag>
-    void DigestSet() {
-        MarkDigestSet(KeyOf<SetTag>());
-    }
-
     // Declares resource T as the World's entity allotter (spec A.1): Spawn
     // writes it; without one, a Spawn parameter is D-E3.
     template <class T>
@@ -257,12 +250,6 @@ public:
         static_assert(EntityAllotter<T>, "an allotter has std::optional<EntityId> Allot() and bool Owns(EntityId) const");
         DeclareAllotter(KeyOf<T>(), Detail::AllotterOps{&Detail::AllotIn<T>, &Detail::OwnsIn<T>});
     }
-
-    // Makes a zone left Unset a startup error (D-E7, S-6) for the whole
-    // Registry instead of zone B. Called by the owner of the product's
-    // (c) data, so a forgotten zone cannot pass as (b). Any owner may call it;
-    // calling it twice is the same as once.
-    void RequireExplicitZones();
 
     void Schedule(ScheduleOptions options);
     // Inserts a stage before or after an existing stage of a schedule (spec C.2 point 2).
@@ -367,7 +354,6 @@ private:
                           Detail::ResolveFn resolve, Detail::RunFn run, std::source_location source);
     SetId RegisterNamedSet(TypeKey key, std::string name);
     void AddSetMember(TypeKey set, TypeKey component);
-    void MarkDigestSet(TypeKey set);
     void DeclareAllotter(TypeKey resource, Detail::AllotterOps ops);
     RegistrationSeq RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly, Detail::RunFn run,
                                    std::source_location source);
@@ -446,10 +432,11 @@ struct AccessSet {
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;
-    // The resources an ExclusiveWorld<Writes<R...>> lists (DI-KS 1): an
-    // annotation for the authority policy to read; not a write, not a writer,
-    // no conflict. In the Registry fingerprint.
-    std::vector<ResourceId> annotatedWrites;
+    // The components and resources an ExclusiveWorld<Writes<T...>> lists
+    // (DI-KS 1; components too since v8-arch-gyo2-authority-rollback step 2,
+    // authority declaration 5.8): an annotation for the authority Module to
+    // read; not a write, no conflict. In the Registry fingerprint.
+    std::vector<AccessKey> annotatedWrites;
     bool changeFilters = false;
     bool local = false;
     bool exclusive = false;
@@ -464,7 +451,6 @@ struct ColumnInfo {
     std::size_t size;
     std::size_t align;
     bool trivialRelocate;
-    WritePolicy writePolicy;
     Zone zone;
     Role role;
     Rollback rollback;
@@ -475,11 +461,9 @@ struct ResourceInfo {
     std::string name;
     std::size_t size;
     std::size_t align;
-    WritePolicy writePolicy;
     Zone zone;
     Role role;
     Rollback rollback;
-    bool external;
     bool threadBound;
     std::string owner;
 };
@@ -498,6 +482,20 @@ struct MessageReaderInfo {
     friend bool operator==(const MessageReaderInfo&, const MessageReaderInfo&) = default;
 };
 
+// One writer of a message type (authority-rollback declaration 2.2; the
+// rollback Module's cross-schedule message check reads it): a System's mount,
+// a hook or an observer, each writing through MessageWriter<M>.
+struct MessageWriterInfo {
+    // The System's, hook's or observer's name.
+    std::string system;
+    // The mount's schedule; empty for a hook or an observer.
+    std::string schedule;
+    bool hook = false;
+    bool observer = false;
+
+    friend bool operator==(const MessageWriterInfo&, const MessageWriterInfo&) = default;
+};
+
 struct MessageInfo {
     std::string name;
     Zone zone;
@@ -506,6 +504,10 @@ struct MessageInfo {
     // Derived at every BuildPlans: every reader, by (registrationSeq, mount,
     // condition) order, then the observers in Registrar::Observer order (DI-KS 25).
     std::vector<MessageReaderInfo> readers;
+    // Derived at every BuildPlans, in the same shape: every System mount by
+    // (registrationSeq, mount) order, then the hooks in Registrar::Hook order,
+    // then the observers in Registrar::Observer order.
+    std::vector<MessageWriterInfo> writers;
 };
 
 // One pushed event type (Registrar::Event).

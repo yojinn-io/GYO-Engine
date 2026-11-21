@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/base/Assert.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/TypeKey.hpp"
@@ -125,6 +126,61 @@ struct CarryEntry {
 };
 } // namespace Detail
 
+// The Modules' buffer of one World build (authority-rollback declaration
+// section 6; the user's decision (a), 2026-11-20): a place, keyed by type, where
+// one registration unit puts an object the others and the product's own build
+// use while the World is built (a Module's registration table, its author
+// entry). Made anew each time the World is built and kept with that build's
+// prepare functions; never read by the orchestration layer (O-2).
+//   - Build (WorldSetup) writes; Finish and Check (WorldFinish, WorldCheck)
+//     only read: the buffer is frozen when every Build has run.
+//   - One type, one owner: the owner Creates it (a second Create of a type is a
+//     GYO_ASSERT), the others Find it; Find does not make an empty one.
+//   - A Create, or a writable Find, after the freeze is a GYO_ASSERT. A write
+//     through a reference kept from Build is the owner's to refuse.
+//   - One thread (CCR-5): no lock.
+class ModuleBuffer {
+public:
+    ModuleBuffer() = default;
+    ModuleBuffer(const ModuleBuffer&) = delete;
+    ModuleBuffer& operator=(const ModuleBuffer&) = delete;
+
+    // The owner's object of type T, made from args.
+    template <class T, class... Args>
+    T& Create(Args&&... args) {
+        GYO_ASSERT(!frozen_ && "ModuleBuffer::Create after Build: the buffer is frozen");
+        GYO_ASSERT(Raw(Kernel::KeyOf<T>()) == nullptr && "two registration units create one type in the ModuleBuffer");
+        auto box = std::make_shared<T>(std::forward<Args>(args)...);
+        T& made = *box;
+        entries_.emplace_back(Kernel::KeyOf<T>(), std::move(box));
+        return made;
+    }
+    // The object of type T to write (Build only), or nullptr.
+    template <class T>
+    [[nodiscard]] T* Find() {
+        GYO_ASSERT(!frozen_ && "a writable ModuleBuffer::Find after Build: the buffer is frozen");
+        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));
+    }
+    // The object of type T to read, or nullptr.
+    template <class T>
+    [[nodiscard]] const T* Find() const {
+        return static_cast<const T*>(Raw(Kernel::KeyOf<T>()));
+    }
+    [[nodiscard]] bool Frozen() const noexcept { return frozen_; }
+
+private:
+    friend class Product;
+    void Freeze() noexcept { frozen_ = true; }
+    [[nodiscard]] void* Raw(Kernel::TypeKey key) const noexcept {
+        for (const auto& [entry, box] : entries_) {
+            if (entry == key) return box.get();
+        }
+        return nullptr;
+    }
+    std::vector<std::pair<Kernel::TypeKey, std::shared_ptr<void>>> entries_;
+    bool frozen_ = false;
+};
+
 // Once per World a unit (or the product's own build) joins (Build).
 class WorldSetup {
 public:
@@ -140,6 +196,8 @@ public:
     }
     // This World's frame list.
     [[nodiscard]] ScheduleList& Frame() noexcept { return *frame_; }
+    // This World build's ModuleBuffer, to write.
+    [[nodiscard]] ModuleBuffer& Buffer() noexcept { return *buffer_; }
     // A prepare function of this World, after the earlier units' ones.
     void Prepare(PrepareFn fn);
     // Marks Resource T to be carried to the new World when this World is
@@ -180,14 +238,15 @@ public:
 private:
     friend class Product;
     WorldSetup(std::string worldName, Kernel::Registrar& registrar, const OptionBag& options, ScheduleList& frame,
-               std::vector<PrepareFn>& prepares, std::vector<Detail::CarryEntry>& carries)
+               std::vector<PrepareFn>& prepares, std::vector<Detail::CarryEntry>& carries, ModuleBuffer& buffer)
         : worldName_(std::move(worldName)), registrar_(&registrar), options_(&options), frame_(&frame),
-          prepares_(&prepares), carries_(&carries) {}
+          buffer_(&buffer), prepares_(&prepares), carries_(&carries) {}
     void AddCarry(Detail::CarryEntry entry);
     std::string worldName_;
     Kernel::Registrar* registrar_;
     const OptionBag* options_;
     ScheduleList* frame_;
+    ModuleBuffer* buffer_;
     std::vector<PrepareFn>* prepares_;
     std::vector<Detail::CarryEntry>* carries_;
 };
@@ -199,16 +258,19 @@ public:
     WorldFinish& operator=(const WorldFinish&) = delete;
 
     [[nodiscard]] const std::string& WorldName() const noexcept { return worldName_; }
+    // This World build's ModuleBuffer, frozen: to read.
+    [[nodiscard]] const ModuleBuffer& Buffer() const noexcept { return *buffer_; }
     // An error in the unit's own code (collected into the startup report).
     void Report(std::string code, std::string message);
 
 private:
     friend class Product;
-    WorldFinish(std::string worldName, std::string unit, std::vector<UnitReportedError>& sink)
-        : worldName_(std::move(worldName)), unit_(std::move(unit)), sink_(&sink) {}
+    WorldFinish(std::string worldName, std::string unit, std::vector<UnitReportedError>& sink, const ModuleBuffer& buffer)
+        : worldName_(std::move(worldName)), unit_(std::move(unit)), sink_(&sink), buffer_(&buffer) {}
     std::string worldName_;
     std::string unit_;
     std::vector<UnitReportedError>* sink_;
+    const ModuleBuffer* buffer_;
 };
 
 // After every unit's Finish of the World (Check). The World is not built yet:
@@ -225,19 +287,22 @@ public:
     [[nodiscard]] const T* Options() const {
         return options_->Get<T>();
     }
+    // This World build's ModuleBuffer, frozen: to read.
+    [[nodiscard]] const ModuleBuffer& Buffer() const noexcept { return *buffer_; }
     void Report(std::string code, std::string message);
 
 private:
     friend class Product;
     WorldCheck(std::string worldName, std::string unit, bool dynamicInsert, const OptionBag& options,
-               std::vector<UnitReportedError>& sink)
+               std::vector<UnitReportedError>& sink, const ModuleBuffer& buffer)
         : worldName_(std::move(worldName)), unit_(std::move(unit)), dynamicInsert_(dynamicInsert), options_(&options),
-          sink_(&sink) {}
+          sink_(&sink), buffer_(&buffer) {}
     std::string worldName_;
     std::string unit_;
     bool dynamicInsert_;
     const OptionBag* options_;
     std::vector<UnitReportedError>* sink_;
+    const ModuleBuffer* buffer_;
 };
 
 } // namespace GYO::Engine::Orchestration

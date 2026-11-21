@@ -50,7 +50,6 @@ struct NamedSetRecord {
     std::vector<TypeKey> pendingMembers;
     std::vector<std::uint32_t> memberOwners;
     std::vector<ComponentId> members;
-    bool digest = false;
 };
 
 struct ScheduleRecord {
@@ -140,8 +139,6 @@ struct RoundBase {
     std::size_t observers = 0;
     std::size_t initialValues = 0;
     std::size_t allotterDeclarations = 0;
-    std::uint32_t digestMarks = 0;
-    std::uint32_t explicitZoneCalls = 0;
 };
 
 // One schedule's resolved order (FrozenRegistry::OrderGraph), built with its Plan.
@@ -184,11 +181,6 @@ struct RegistryData {
     std::uint32_t schedulerShuffle = 0;
     bool extractSourceSet = false;
 
-    // Registrar::RequireExplicitZones: an Unset zone is an error instead of zone B.
-    bool explicitZones = false;
-    // Calls of Registrar::DigestSet and RequireExplicitZones (R-E7 in a later round).
-    std::uint32_t digestMarks = 0;
-    std::uint32_t explicitZoneCalls = 0;
     std::vector<StartupError> errors;
     // The first BuildPlans has started: SetExtractSource is closed.
     bool finished = false;

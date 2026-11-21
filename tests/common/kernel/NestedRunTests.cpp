@@ -39,7 +39,6 @@ ScheduleOptions Schedule(std::string name, std::vector<std::string> stages) {
 
 ScheduleOptions FrameSchedule() {
     ScheduleOptions s = Schedule("Frame", {"In", "Drive", "Out"});
-    s.ingressStage = "In";
     return s;
 }
 
@@ -1230,7 +1229,7 @@ TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an
 // Writes<...> is an annotation (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1):
 // no resource write, so no zone rule, no D-E18 and no S-18 sees it. S-17 stays
 // (a zone rule, a later batch).
-TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a hook with Writes pass; ingress is S-17") {
+TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a hook with Writes pass") {
     const Built zoneC = Finish({{"test", [](Registrar& r) {
                                     Nest(r);
                                     r.AddSystem<&ListsZoneC>(In("ListsZoneC", "Frame", "Drive"));
@@ -1242,13 +1241,6 @@ TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a ho
                                        r.AddSystem<&ListsSettings>(In("ListsSettings", "Frame", "Drive"));
                                    }}});
     CHECK_MESSAGE(static_cast<bool>(settings.result), "[ns-decl-settings] " << Describe(settings));
-    const Built ingress = Finish({{"test", [](Registrar& r) {
-                                      Nest(r);
-                                      SystemOptions options = In("Ingress", "Frame", "In");
-                                      options.ingress = true;
-                                      r.AddSystem<&Ingress>(options);
-                                  }}});
-    CHECK_MESSAGE(HasRule(ingress, StartupCode::DE7, "S-17"), "[ns-decl-ingress] " << Describe(ingress));
     const Built inStage = Finish({{"test", [](Registrar& r) {
                                       Nest(r);
                                       r.AddSystem<&Ingress>(In("NotIngress", "Frame", "In"));
@@ -1472,7 +1464,6 @@ SystemResult ResourceStampAround(ExclusiveWorld<> world) {
     if (auto r = world.Modify<Out>([](Out& o) { o.value += 1; }); !r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult IngressDeclared(ExclusiveWorld<Writes<Flag>>) { return Ok(); }
 } // namespace
 
 TEST_CASE("J-57: ExclusiveWorld writes and reads any value: the closure is called and the value written") {
@@ -1564,16 +1555,6 @@ TEST_CASE("J-57: a resource Modify between two nested runs takes the new stamp")
     const ChangeStamp changed =
         Detail::ResourceAt(rig->world(), Detail::ResourceIdOf(rig->world(), KeyOf<Out>())).changed;
     CHECK_MESSAGE(changed > innerLast, "[ns-stamp-resource] changed " << changed << ", inner last " << innerLast);
-}
-
-TEST_CASE("J-57: declarations: ExclusiveWorld<Writes<...>> with the ingress flag is S-17 too") {
-    const Built built = Finish({{"test", [](Registrar& r) {
-                                    Nest(r);
-                                    SystemOptions options = In("IngressDeclared", "Frame", "In");
-                                    options.ingress = true;
-                                    r.AddSystem<&IngressDeclared>(options);
-                                }}});
-    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "S-17"), "[ns-decl-ingress] declared: " << Describe(built));
 }
 
 // ---- Added after the line-by-line review (Opus/xhigh, build/evidence/gyo2-nested-schedule/impl-review-opus-xhigh.md)

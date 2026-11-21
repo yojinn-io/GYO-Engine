@@ -191,12 +191,28 @@ TEST_CASE("module: every time Resource is registered and put in; Resimulation is
     CHECK_MESSAGE((world.Resource<W::Tick>() != nullptr && world.Resource<W::Tick>()->value == 0), "[wt-tick-zero]");
     CHECK_MESSAGE((world.Resource<W::FixedTime>() != nullptr && world.Resource<W::FixedTime>()->accumulator.Step() == kStep),
                   "[wt-step-default] 64 Hz");
-    // Every time Resource is zone B (declaration 4.5): a zone C System reads no Tick until batch 4 (G4).
-    for (const K::ResourceInfo& info : registry.Resources()) {
-        if (info.owner != "world_time") continue;
-        CHECK_MESSAGE(info.zone == K::Zone::B, "[wt-time-zone-b] " << info.name);
-    }
-    CHECK_MESSAGE(registry.Resources()[*registry.ResourceIdOf<W::Tick>()].zone == K::Zone::B, "[wt-time-zone-b] Tick");
+}
+
+// Authority-rollback declaration 3.3: every type the time Module puts into a World has a hash function, so a
+// World with only the Module (no test Resource) has a summary, before and after a frame that discards time.
+TEST_CASE("module: every time type has a hash function: a World with only the time Module has a summary") {
+    O::ProductDescription d;
+    d.name = "game";
+    O::WorldDescription w;
+    w.name = "Main";
+    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(W::TimeSampling{kStep * 9, W::SamplingMode::ManualDelta, {}});
+        return {};
+    });
+    d.worlds.push_back(std::move(w));
+    auto p = Make(std::move(d));
+    const auto before = WorldOf(*p).Summary();
+    CHECK_MESSAGE(static_cast<bool>(before), "[wt-hash-summary] " << (before ? std::string() : before.error().Text()));
+    auto ran = p->RunFrame();
+    REQUIRE(static_cast<bool>(ran));
+    const auto after = WorldOf(*p).Summary();
+    CHECK_MESSAGE(static_cast<bool>(after), "[wt-hash-summary] " << (after ? std::string() : after.error().Text()));
+    CHECK_MESSAGE((before && after && *before != *after), "[wt-hash-summary] a frame left the summary the same");
 }
 
 TEST_CASE("module: by default AdvanceTime is mounted in Main's First and RunFixedSteps in Main's FixedMainLoop") {
@@ -239,7 +255,8 @@ TEST_CASE("module: TickWriters names RunFixedSteps, which annotates Writes<Tick>
     REQUIRE(driver != nullptr);
     const K::ResourceId tick = *registry.ResourceIdOf<W::Tick>();
     const auto& listed = driver->access.annotatedWrites;
-    CHECK_MESSAGE(std::find(listed.begin(), listed.end(), tick) != listed.end(), "[wt-driver-writes-tick]");
+    CHECK_MESSAGE(std::find(listed.begin(), listed.end(), K::AccessKey{K::AccessKind::Resource, tick}) != listed.end(),
+                  "[wt-driver-writes-tick]");
     CHECK(driver->access.exclusive);
 }
 
@@ -657,4 +674,21 @@ TEST_CASE("carry-over: carried time values are kept; FixedTime takes this World'
                   "[wt-carried-step-setting] " << fixed.accumulator.Step() << " " << fixed.elapsed << " " << fixed.accumulator.Overstep());
     CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == kStep, "[wt-carried-discarded] " << Get<W::VirtualTime>(*p).discarded);
     CHECK_MESSAGE(Get<W::TimeConfig>(*p).limits.maxStepsPerFrame == 5, "[wt-carried-config-setting] " << Get<W::TimeConfig>(*p).limits.maxStepsPerFrame);
+}
+
+// WT-1 (authority-rollback declaration 2.3): Resimulation is put false whenever a World is prepared, even when
+// it is carried over: a rollback cut short by a replacement leaves no "resimulating" behind.
+TEST_CASE("carry-over: Resimulation is false in the new World, carried over or not") {
+    Log().clear();
+    O::ProductDescription d = Game(0);
+    auto build = d.worlds[0].build;
+    d.worlds[0].build = [build](O::WorldSetup& s) {
+        build(s);
+        s.CarryOver<W::Resimulation>("Resimulation");
+    };
+    auto p = Make(std::move(d));
+    WorldOf(*p).SetResource(W::Resimulation{1});
+    auto replaced = p->ReplaceWorld("Main", O::ReplaceRequest{});
+    REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message + "\n" + replaced.error().detail));
+    CHECK_MESSAGE(Get<W::Resimulation>(*p).active == 0, "[wt-resimulation-reset] " << int(Get<W::Resimulation>(*p).active));
 }

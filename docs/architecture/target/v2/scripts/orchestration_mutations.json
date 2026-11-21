@@ -1190,10 +1190,10 @@
   },
   {
    "id": "sc-lower-bound-not-moved",
-   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets",
+   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets (find rewritten by v8-arch-gyo2-authority-rollback step 1: the allotter lost its padding field)",
    "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-   "find": "        return RangeAllotter{first, last, first, first > last, {}};",
-   "replace": "        return RangeAllotter{1, last, 1, first > last, {}};",
+   "find": "        return RangeAllotter{first, last, first, first > last};",
+   "replace": "        return RangeAllotter{1, last, 1, first > last};",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-7-put-rejected\\]"
@@ -1868,16 +1868,6 @@
    "expect": "GYO_ASSERT failed: data_->frozen"
   },
   {
-   "id": "or-gi-writer-uncounted",
-   "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4) (v8-arch-gyo2-time-events step 4: cases follow the O-1 case renamed when its D-E12 half left, G2)",
-   "file": "engine/ecs/kernel/src/Registry.cpp",
-   "find": "        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;",
-   "replace": "        if (true) continue;",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-1: game initialization and the frame both writing one column*",
-   "expect": "\\[or-gi-writer-counted\\]"
-  },
-  {
    "id": "g8s-old-world-leaked",
    "what": "step 4 G-8: S1-8: the old World is not destroyed by the replacement (leaked)",
    "file": "engine/orchestration/src/Product.cpp",
@@ -2231,14 +2221,14 @@
   },
   {
    "id": "or-guard-naming-root-dropped",
-   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration row of ROOTS (that row's whole rule, README rule 4); or-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent its fail closed",
+   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration row of ROOTS (that row's whole rule, README rule 4); or-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent its fail closed (find rewritten by v8-arch-gyo2-authority-rollback step 1: ROOTS gained the world_time row)",
    "guards": [
     "orchestration O-4",
     "time-events-declaration 6.3"
    ],
    "file": "tests/common/kernel/naming_guard.py",
-   "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"))",
-   "replace": ",)",
+   "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"),",
+   "replace": ",",
    "expect": "FAIL: test_n1_orchestration_other_namespace_is_reported",
    "command": [
     "{python}",
@@ -2862,6 +2852,97 @@
    "guards": [
     "orchestration O-3"
    ]
+  },
+  {
+   "id": "or-buffer-not-frozen",
+   "what": "the ModuleBuffer is not frozen after Build (declaration 6 point 1: Build writes, Finish and Check read). Only it catches the freeze",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    buffer->Freeze();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: the owner creates*",
+   "expect": "\\[or\\-buffer\\-frozen\\]"
+  },
+  {
+   "id": "or-buffer-create-twice",
+   "what": "a second unit's Create of one type is not refused (declaration 6 point 2: one owner per type). Only it catches the one-owner check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "        GYO_ASSERT(Raw(Kernel::KeyOf<T>()) == nullptr && \"two registration units create one type in the ModuleBuffer\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: two units creating one type*",
+   "expect": "expected GYO_ASSERT to fail"
+  },
+  {
+   "id": "or-buffer-create-after-freeze",
+   "what": "Create after Build is not refused (declaration 6 point 1). Only it catches the Create freeze check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "        GYO_ASSERT(!frozen_ && \"ModuleBuffer::Create after Build: the buffer is frozen\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: a Create or a writable Find after Build*",
+   "expect": "expected GYO_ASSERT to fail: O::Product::Build[\\s\\S]*SUBCASE: Create from a prepare|Create from a prepare[\\s\\S]*expected GYO_ASSERT to fail"
+  },
+  {
+   "id": "or-buffer-writable-find-after-freeze",
+   "what": "a writable Find after Build is not refused (declaration 6 point 1). Only it catches the writable Find freeze check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: a Create or a writable Find after Build*",
+   "expect": "writable Find from a prepare[\\s\\S]*expected GYO_ASSERT to fail|expected GYO_ASSERT to fail[\\s\\S]*writable Find from a prepare"
+  },
+  {
+   "id": "or-buffer-finish-other",
+   "what": "Finish reads another buffer than the one Build wrote. Only it catches the buffer handed to Finish",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);",
+   "replace": "        ModuleBuffer other;\n        WorldFinish context(world.name, units_[index].row, unitErrors, other);",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: the owner creates*",
+   "expect": "\\[or\\-buffer\\-finish\\]"
+  },
+  {
+   "id": "or-buffer-check-other",
+   "what": "Check reads another buffer than the one Build wrote. Only it catches the buffer handed to Check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);",
+   "replace": "        ModuleBuffer other;\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, other);",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: the owner creates*",
+   "expect": "\\[or\\-buffer\\-check\\]"
+  },
+  {
+   "id": "or-buffer-find-makes",
+   "what": "Find of an absent type makes an empty object (declaration 6 point 2: Find does not make one). Only it catches Find making nothing",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
+   "replace": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        if (Raw(Kernel::KeyOf<T>()) == nullptr) return &Create<T>();\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: Find of a type nobody created*",
+   "expect": "\\[or\\-buffer\\-absent\\]"
   },
   {
    "id": "or-guard-o6-every-alias",

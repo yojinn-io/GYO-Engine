@@ -262,8 +262,8 @@ TEST_CASE("J-7: destroy order: a despawn in ascending ComponentId, the World in 
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             // Registered in this order: ComponentId of Tracked<1> is smaller than Tracked<0>'s.
-            r.Component<Tracked<1>>({.name = "Tracked1", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Component<Tracked<0>>({.name = "Tracked0", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Tracked<1>>({.name = "Tracked1", .zone = Zone::B});
+            r.Component<Tracked<0>>({.name = "Tracked0", .zone = Zone::B});
             r.AddSystem<&DespawnOne>(B("DespawnOne", "A"));
         });
         World& world = rig->world();
@@ -322,18 +322,16 @@ EntityId StoredAllotterSummaryCase(unsigned char fill, Fingerprint& summary) {
     const RangeAllotter* made = new (raw) RangeAllotter(RangeAllotter::Of(900, 1000000));
     auto rig = MakeRig([](Registrar& r) { Data(r, true); });
     rig->world().SetResource(*made);
-    summary = rig->world().Summary();
+    summary = SummaryOf(rig->world());
     return rig->world().Resource<RangeAllotter>()->next;
 }
 
 } // namespace
 
-// v8-arch-gyo2-summary-padding-a-then-c (partly solved): World::Summary hashes a
-// value's raw bytes, so the kernel's own allotter must have no padding. Types an
-// author registers are the author's to keep padding-free; the full solution, a
-// hash function per type, is batch 4.
-TEST_CASE("D-9: the kernel's RangeAllotter has no padding, so equal allotters give one World summary") {
-    CHECK_MESSAGE(std::has_unique_object_representations_v<RangeAllotter>, "[summary-padding-unique] RangeAllotter has padding");
+// D-9 with a hash function per type (authority-rollback declaration 3.2): the
+// kernel's allotter is hashed field by field, so what its padding holds does
+// not reach the summary.
+TEST_CASE("D-9: equal allotters give one World summary, whatever their padding holds") {
     Fingerprint zeros;
     Fingerprint ones;
     REQUIRE(StoredAllotterSummaryCase(0x00, zeros) == 900);
@@ -464,7 +462,7 @@ Fingerprint ReorderSummary(bool tagFirst) {
     rig->world().Insert(1, Tag{1});
     rig->world().Insert(2, Tag{2});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
-    return rig->world().Summary();
+    return SummaryOf(rig->world());
 }
 
 // Two records of one key by one System (recSeq decides), two hooks with one key each (hook order decides).
@@ -513,13 +511,9 @@ SystemResult LogAddTag(HookCtx ctx) {
 
 } // namespace
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
-// Not fully solved (v8-arch-gyo2-summary-padding-a-then-c): the golden below is
-// summary format 2, re-taken by v8-arch-gyo2-time-events step 3 (message records
-// with their seq, the write sequence and the message cursors are in the summary;
-// the kernel's own records have no padding, a static_assert); the judgement is unchanged.
+// The golden below is summary format 3, re-taken by v8-arch-gyo2-authority-rollback
+// step 1 (each value through its type's hash function, every number as 8 bytes);
+// the judgement is unchanged.
 TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.2's order (golden)") {
     SUBCASE("reordering two Systems that do not conflict keeps the World") {
         CHECK(ReorderSummary(true) == ReorderSummary(false));
@@ -538,9 +532,9 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(3)->t == 2);
         REQUIRE(rig->world().Get<Tag>(9) != nullptr);
         CHECK(rig->world().Get<Tag>(9)->t == 200);
-        const std::string summary = rig->world().Summary().Text();
+        const std::string summary = SummaryOf(rig->world()).Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "2:b5a7a165b66fa7df7738f3512c177eb1b18a8380951eda1ad2379e96bb9f17ee");
+        CHECK(summary == "3:3f782d8237ce0e8f80a0f53d42883688f02f5d75620f9c289d52a472f5fdd0b4");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {
@@ -744,8 +738,8 @@ std::string CallOrder(const std::vector<std::string>& log) {
 
 void RegisterDespawnOrderData(Registrar& r) {
     Data(r);
-    r.Component<Spare>({.name = "Spare", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Badge>({.name = "Badge", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Spare>({.name = "Spare", .zone = Zone::B});
+    r.Component<Badge>({.name = "Badge", .zone = Zone::B});
 }
 
 } // namespace
@@ -885,7 +879,7 @@ SystemResult SeeAfterMid(Query<Read<Tag>> tags) {
 
 TEST_CASE("J-33: stage ends and declared sync points apply; nowhere else") {
     auto rig = MakeRig([](Registrar& r) {
-        r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+        r.Component<Tag>({.name = "Tag", .zone = Zone::B});
         r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
         r.Schedule(MidSchedule());
         r.AddSystem<&SpawnTag>(B("SpawnTag", "A", {"Mid"}));
@@ -931,9 +925,7 @@ SystemResult RecordOnSystemPath(HookCtx ctx) {
     Detail::Push(fake, Detail::Record::Of(Detail::RecordKind::Despawn, ctx.Entity()));
     return Ok();
 }
-SystemResult HookWritesPos(Query<Write<Pos>>) { return Ok(); }
 SystemResult SystemTakesHookCtx(HookCtx) { return Ok(); }
-SystemResult HookReadsPos(Query<Read<Pos>>) { return Ok(); }
 
 } // namespace
 
@@ -985,14 +977,6 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             r.AddSystem<&SystemTakesHookCtx>(B("SystemTakesHookCtx", "A"));
         });
         GYO_CHECK_ASSERTS(rig->Run());
-    }
-    SUBCASE("two conflicting hooks on one trigger, one of them zone C: D-E9") {
-        const Built built = Finish({{"test", [](Registrar& r) {
-                                         Data(r);
-                                         r.Hook<Vel, &HookWritesPos>(HookTrigger::OnAdd, {.name = "HookWritesPos", .zone = Zone::C});
-                                         r.Hook<Vel, &HookReadsPos>(HookTrigger::OnAdd, {.name = "HookReadsPos", .zone = Zone::C});
-                                     }}});
-        CHECK(HasError(built, StartupCode::DE9));
     }
 }
 

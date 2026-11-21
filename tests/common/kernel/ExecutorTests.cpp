@@ -96,6 +96,7 @@ TEST_CASE("J-6: a World access while Running with no System current fails a GYO_
 namespace {
 
 struct Bound { std::int64_t value; };  // resource, zone B, thread-bound
+void HashValue(Hasher& h, const Bound& v) { HashValue(h, v.value); }
 
 // One thread kept alive for a whole case, so the thread a value was put in on
 // can still use it, remove it or destroy the World.
@@ -359,19 +360,18 @@ TEST_CASE("J-6: a resource not marked threadBound is used on any thread") {
     if (asserted || here || removed) static_cast<void>(rig.release());
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("J-6: the thread mark is not World data: the same value put in on two threads gives one summary") {
     std::unique_ptr<Rig> here = BoundRig(nullptr);
     std::unique_ptr<Rig> there = BoundRig(nullptr);
     here->world().SetResource(Bound{7});
-    const std::string hereSummary = here->world().Summary().Text();
+    const std::string hereSummary = SummaryOf(here->world()).Text();
     Worker worker;
     std::string thereSummary;
     worker.Do([&] {
         there->world().SetResource(Bound{7});
-        thereSummary = there->world().Summary().Text();
+        // No REQUIRE off the test thread: an error is carried back as text.
+        const auto summary = there->world().Summary();
+        thereSummary = summary ? summary->Text() : "error: " + summary.error().Text();
     });
     CHECK_MESSAGE(hereSummary == thereSummary,
                   "[ks-s10-mark-not-data] J-6: two Worlds with the same value put in on two threads have different summaries");
@@ -796,17 +796,10 @@ std::unique_ptr<Rig> ExclusiveRig(void (*add)(Registrar&), bool verification) {
 
 // ExclusiveWorld reads and writes any component and resource value
 // (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1) and spawns with a type
-// (v8-arch-gyo2-immediate-change-via-exclusive-world, DI-KS 18); a zone C
-// System still may not hold it (S-13 at startup, a zone rule of a later batch).
-TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build; a zone C System may not hold it") {
+// (v8-arch-gyo2-immediate-change-via-exclusive-world, DI-KS 18). Any System may
+// hold it since S-13 left with the zone rules (v8-arch-gyo2-authority-rollback step 2).
+TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
-    SUBCASE("zone C holding it: Finish fails") {
-        const Built built = Finish({{"test", [](Registrar& r) {
-                                         Data(r);
-                                         r.AddSystem<&ExclusiveAllowed>(C("ExclusiveAllowed", "A"));
-                                     }}});
-        CHECK_FALSE(static_cast<bool>(built.result));
-    }
     SUBCASE("zone C write") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneC>(B("X", "A")); }, false);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -1074,7 +1067,7 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
         one.stages = {"A"};
         auto rig = MakeRig([one](Registrar& r) {
             r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-            r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Tag>({.name = "Tag", .zone = Zone::B});
             r.Component<Mode>({.name = "Mode", .zone = Zone::B});
             r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
             r.Schedule(one);
@@ -1283,6 +1276,9 @@ namespace {
 struct Ca { std::int32_t v; };
 struct Cb { std::int32_t v; };
 struct Cc { std::int32_t v; };
+void HashValue(Hasher& h, const Ca& v) { HashValue(h, v.v); }
+void HashValue(Hasher& h, const Cb& v) { HashValue(h, v.v); }
+void HashValue(Hasher& h, const Cc& v) { HashValue(h, v.v); }
 
 SystemResult P0(Query<Write<Ca>> a) {
     for (EntityId id : a.Entities()) a.GetMut<Ca>(id)->v += 1;
@@ -1317,7 +1313,7 @@ constexpr std::array<Registration, 5> kSystems{{
     [](Registrar& r) { r.AddSystem<&P4>(Sys("P4", Zone::C, Sim())); },
 }};
 
-std::string SummaryOf(const std::array<int, 5>& order) {
+std::string OrderSummary(const std::array<int, 5>& order) {
     auto rig = MakeRig([&order](Registrar& r) {
         r.Component<Ca>({.name = "Ca", .zone = Zone::C, .rollback = Rollback::Yes});
         r.Component<Cb>({.name = "Cb", .zone = Zone::C, .rollback = Rollback::Yes});
@@ -1334,14 +1330,11 @@ std::string SummaryOf(const std::array<int, 5>& order) {
         const auto result = rig->Run();
         REQUIRE_MESSAGE(static_cast<bool>(result), Text(result));
     }
-    return rig->world().Summary().Text();
+    return SummaryOf(rig->world()).Text();
 }
 
 } // namespace
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summary") {
     std::array<int, 5> order{0, 1, 2, 3, 4};
     std::vector<std::array<int, 5>> orders;
@@ -1351,6 +1344,6 @@ TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summa
         ++index;
     } while (std::next_permutation(order.begin(), order.end()));
     REQUIRE(orders.size() == 20);
-    const std::string first = SummaryOf(orders.front());
-    for (const auto& each : orders) CHECK(SummaryOf(each) == first);
+    const std::string first = OrderSummary(orders.front());
+    for (const auto& each : orders) CHECK(OrderSummary(each) == first);
 }

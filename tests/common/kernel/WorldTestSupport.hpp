@@ -42,6 +42,19 @@ struct Note { std::uint32_t code; };  // diagnostics record
 // and takes no stamp.
 struct TickCount { std::uint64_t value; };
 
+// The hash functions of the types above (World::Summary; Hash.hpp).
+inline void HashValue(Hasher& h, const Pos& v) { HashValue(h, v.x); }
+inline void HashValue(Hasher& h, const Vel& v) { HashValue(h, v.v); }
+inline void HashValue(Hasher& h, const Tag& v) { HashValue(h, v.t); }
+inline void HashValue(Hasher& h, const Mode& v) { HashValue(h, v.m); }
+inline void HashValue(Hasher& h, const Boundary& v) { HashValue(h, v.b); }
+inline void HashValue(Hasher& h, const CShared& v) { HashValue(h, v.s); }
+inline void HashValue(Hasher& h, const Out& v) { HashValue(h, v.value); }
+inline void HashValue(Hasher& h, const Flag& v) { HashValue(h, v.on); }
+inline void HashValue(Hasher& h, const CRes& v) { HashValue(h, v.value); }
+inline void HashValue(Hasher& h, const Ping& v) { HashValue(h, v.n); }
+inline void HashValue(Hasher& h, const TickCount& v) { HashValue(h, v.value); }
+
 // The log of every test System, hook and condition that records something.
 inline std::vector<std::string>& Log() {
     static std::vector<std::string> log;
@@ -59,11 +72,11 @@ inline ScheduleOptions TickSchedule() {
 inline void Data(Registrar& r, bool allotter = false) {
     r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
     r.Component<Mode>({.name = "Mode", .zone = Zone::B});
     r.Component<Boundary>({.name = "Boundary", .zone = Zone::C, .role = Role::Input});
-    r.Component<CShared>({.name = "CShared", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
-    r.Resource<Out>({.name = "Out", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<CShared>({.name = "CShared", .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Resource<Out>({.name = "Out", .zone = Zone::B});
     r.Resource<Flag>({.name = "Flag", .zone = Zone::B});
     r.Resource<CRes>({.name = "CRes", .zone = Zone::C, .rollback = Rollback::Yes});
     r.Message<Ping>({.name = "Ping", .zone = Zone::B});

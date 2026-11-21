@@ -184,9 +184,20 @@ TEST_CASE("DI-KS 26: a System registered after the first BuildPlans runs from th
                   "round state: " << Join(Log()));
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
+// The message writer list is derived again at every BuildPlans (authority-rollback declaration 2.2), as the readers.
+TEST_CASE("DI-KS 26: a later BuildPlans lists a message type's writer once") {
+    Registry registry;
+    FirstRound(registry, [](Registrar& r) {
+        Base(r);
+        r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B});
+        r.AddSystem<&SendsLater>(B("SendsLater", "A"));
+    });
+    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.AddSystem<&NewSystem>(B("NewSystem", "B")); })));
+    REQUIRE(Done(registry.BuildPlans()));
+    const auto& writers = registry.Frozen().Messages()[*registry.Frozen().MessageIdOf<LaterEvent>()].writers;
+    CHECK_MESSAGE(writers.size() == 1, "[ks-msg-writers-round] " << writers.size());
+}
+
 TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses the new types") {
     Registry registry;
     FirstRound(registry);
@@ -203,7 +214,7 @@ TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses t
     // its summary has the new storage, like a World made at the new version.
     World fresh(registry, "fresh");
     fresh.Insert(1, Tag{1});
-    CHECK_MESSAGE(world.Summary() == fresh.Summary(), "attach at the World API entry (summary)");
+    CHECK_MESSAGE(SummaryOf(world) == SummaryOf(fresh), "attach at the World API entry (summary)");
     world.Insert(1, Later{7});
     world.SetResource(LaterRes{9});
     CHECK_MESSAGE(world.Get<Later>(1) != nullptr, "attach at the World API entry");
@@ -445,12 +456,6 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
             r.Allotter<RangeAllotter>();
         });
     }
-    SUBCASE("the digest set") {
-        refused("DigestSet", [](Registrar& r) { r.DigestSet<ReplicatedSet>(); });
-    }
-    SUBCASE("explicit zones") {
-        refused("RequireExplicitZones", [](Registrar& r) { r.RequireExplicitZones(); });
-    }
     SUBCASE("every kind in one round") {
         REQUIRE(Done(registry.Register(kBase, [](Registrar& r) {
             r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag", .zone = Zone::B});
@@ -461,12 +466,10 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
             r.AddToSet<ReplicatedSet, Tag>();
             r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
             r.Allotter<RangeAllotter>();
-            r.DigestSet<ReplicatedSet>();
-            r.RequireExplicitZones();
         })));
         const auto result = registry.BuildPlans();
         const std::size_t count = ErrorCount(result, StartupCode::RE7);
-        CHECK_MESSAGE(count == 7, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
+        CHECK_MESSAGE(count == 5, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
         CHECK(registry.Frozen().Version() == 1U);
         KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     }
@@ -604,7 +607,7 @@ TEST_CASE("DI-KS 26: while a World made from the Registry runs, nothing may regi
         Registry filled;
         FirstRound(filled, [](Registrar& r) {
             Data(r);
-            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Later>({.name = "Later", .zone = Zone::B});
             r.InitialValue<Mode, &ModeFromLaterRegisters>();
             r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
         });
@@ -745,7 +748,7 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     }
     SUBCASE("hook access") {
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Later>({.name = "Later", .zone = Zone::B});
             r.Hook<Later, &OnLaterAdd>(HookTrigger::OnAdd, {.name = "OnLaterAdd", .zone = Zone::B});
             r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
         })));
@@ -911,7 +914,7 @@ TEST_CASE("DI-KS 25: hooks, initial values, schedules, sets, effects and annotat
     CHECK_MESSAGE(view.SystemNamed("WritesFlag")->effects.size() == 1, "DI-KS 25 System effects");
     CHECK(view.SystemNamed("Plain")->effects.empty());
     CHECK(view.SystemNamed("AnnotatesFlag")->access.annotatedWrites ==
-          std::vector<ResourceId>{*view.ResourceIdOf<Flag>()});
+          (std::vector<AccessKey>{{AccessKind::Resource, *view.ResourceIdOf<Flag>()}}));
 }
 
 TEST_CASE("DI-KS 25: the order graph lists System-to-System edges with their source") {

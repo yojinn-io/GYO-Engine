@@ -30,6 +30,11 @@ struct Seen { std::int32_t s; };   // zone B, Shared: the initial value of Body
 struct Label { std::int32_t l; };  // zone B, Shared
 struct Signal { std::int32_t f; };   // zone B, Shared: its OnAdd hooks record spawns
 struct CPos { std::int32_t x; };   // zone C
+void HashValue(Hasher& h, const Body& v) { HashValue(h, v.m); }
+void HashValue(Hasher& h, const Seen& v) { HashValue(h, v.s); }
+void HashValue(Hasher& h, const Label& v) { HashValue(h, v.l); }
+void HashValue(Hasher& h, const Signal& v) { HashValue(h, v.f); }
+void HashValue(Hasher& h, const CPos& v) { HashValue(h, v.x); }
 
 Seen SeenFromBody(const Body& body) { return Seen{body.m + 1}; }
 
@@ -45,11 +50,11 @@ void Base(Registrar& r, bool allotter = false) {
     early.name = "Early";
     early.stages = {"X"};
     r.Schedule(early);
-    r.Component<Body>({.name = "Body", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Seen>({.name = "Seen", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Label>({.name = "Label", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Signal>({.name = "Signal", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Body>({.name = "Body", .zone = Zone::B});
+    r.Component<Seen>({.name = "Seen", .zone = Zone::B});
+    r.Component<Tag>({.name = "Tag", .zone = Zone::B});
+    r.Component<Label>({.name = "Label", .zone = Zone::B});
+    r.Component<Signal>({.name = "Signal", .zone = Zone::B});
     r.Component<CPos>({.name = "CPos", .zone = Zone::C, .rollback = Rollback::Yes});
     if (allotter) {
         r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
@@ -327,7 +332,6 @@ TEST_CASE("J-55: an alive id: the spawn is dropped, the old entity is untouched,
         CHECK_MESSAGE(r.reason == SpawnRejectReason::IdAlive, "J-55 player-7: reason IdAlive");
         CHECK_MESSAGE(r.emitter == "SpawnSevenEightNine", "J-55 player-7: emitter");
         CHECK_MESSAGE(!r.emitterIsHook, "J-55 player-7: emitter is not a hook");
-        CHECK_MESSAGE(r.emitterZone == Zone::B, "J-55 player-7: emitter zone");
         CHECK_MESSAGE(!r.fromAllotter, "J-55 player-7: not from the allotter");
         CHECK_MESSAGE(r.schedule == "Tick", "J-55 player-7: schedule");
         const std::uint32_t step = StepOf(*rig, "SpawnSevenEightNine");
@@ -408,9 +412,6 @@ TEST_CASE("J-55: one emitter spawns one id twice: the first record is kept") {
 }
 
 namespace {
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 Fingerprint TwoEmitters(bool bodyFirst, bool& nineAlive, std::vector<RejectedSpawn>& rejected, bool& fiveAlive) {
     auto rig = MakeRig([bodyFirst](Registrar& r) {
         Base(r);
@@ -427,7 +428,7 @@ Fingerprint TwoEmitters(bool bodyFirst, bool& nineAlive, std::vector<RejectedSpa
     nineAlive = rig->world().Alive(9);
     fiveAlive = BodyIs(rig->world(), 5, 50);
     rejected = Rejected(rig->world());
-    return rig->world().Summary();
+    return SummaryOf(rig->world());
 }
 } // namespace
 
@@ -586,8 +587,7 @@ TEST_CASE("J-55: a zone C spawn blocked by an entity with zone B data only is dr
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(rig->world().Get<CPos>(7) == nullptr, "J-55 zone-c: 7 gets no zone C data");
     const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
-    REQUIRE_MESSAGE(rejected.size() == 1, "J-55 zone-c: one record");
-    CHECK_MESSAGE(rejected[0].emitterZone == Zone::C, "J-55 zone-c: emitter zone C");
+    CHECK_MESSAGE(rejected.size() == 1, "J-55 zone-c: one record");
 }
 
 // The record carries the World's sync point number (L8; the domain tick left with the clock, G8).
@@ -809,8 +809,8 @@ TEST_CASE("J-55: the fingerprint versions") {
     });
     const FrozenRegistry& frozen = rig->built.registry->Frozen();
     CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 8U, "J-55 versions: Plan fingerprint version 8");
-    CHECK_MESSAGE(frozen.CFingerprint().version == 11U, "J-55 versions: C fingerprint version 11");
-    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 7U, "J-55 versions: Registry fingerprint version 7");
+    CHECK_MESSAGE(frozen.CFingerprint().version == 12U, "J-55 versions: C fingerprint version 12");
+    CHECK_MESSAGE(frozen.RegistryFingerprint().version == 8U, "J-55 versions: Registry fingerprint version 8");
 }
 
 // ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)
@@ -868,9 +868,6 @@ SystemResult ZoneCSpawnsNineSharedAgain(SpawnWithId<Bundle<CSharedPos>> spawn) {
     return Ok();
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 Fingerprint ThreeRecords(bool twiceFirst, bool& nineAlive, std::vector<RejectedSpawn>& rejected) {
     auto rig = MakeRig([twiceFirst](Registrar& r) {
         Base(r);
@@ -886,7 +883,7 @@ Fingerprint ThreeRecords(bool twiceFirst, bool& nineAlive, std::vector<RejectedS
     REQUIRE_MESSAGE(static_cast<bool>(result), Text(result));
     nineAlive = rig->world().Alive(9);
     rejected = Rejected(rig->world());
-    return rig->world().Summary();
+    return SummaryOf(rig->world());
 }
 
 } // namespace
@@ -1018,9 +1015,6 @@ TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and anothe
 
 // Whether the two Systems of "two emitters" really do not conflict: the same shape in zone C,
 // where a conflict without a declared order is a tie listed in TieBreaks.
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with one bundle they do") {
     SUBCASE("disjoint bundles: Finish succeeds in both orders, both spawns of 9 are dropped, the World is the same") {
         Fingerprint summaries[2];
@@ -1044,15 +1038,14 @@ TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with 
             REQUIRE(rejected.size() == 2);
             CHECK_MESSAGE(rejected[0].emitter == (order == 0 ? "ZoneCSpawnsNinePos" : "ZoneCSpawnsNineVel"),
                           "J-55 zone-c-pair: the Plan order follows the registration order");
-            summaries[order] = rig->world().Summary();
+            summaries[order] = SummaryOf(rig->world());
         }
         CHECK_MESSAGE(summaries[0] == summaries[1], "J-55 zone-c-pair: the World is the same in both orders");
     }
     SUBCASE("one bundle: the two Systems conflict, tied by registration without a declared order") {
         Built built = Finish({{"test", [](Registrar& r) {
                                    Base(r);
-                                   r.Component<CSharedPos>({.name = "CSharedPos", .zone = Zone::C,
-                                                            .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+                                   r.Component<CSharedPos>({.name = "CSharedPos", .zone = Zone::C, .rollback = Rollback::Yes});
                                    r.AddSystem<&ZoneCSpawnsNineShared>(In("ZoneCSpawnsNineShared", "A", Zone::C));
                                    r.AddSystem<&ZoneCSpawnsNineSharedAgain>(In("ZoneCSpawnsNineSharedAgain", "A", Zone::C));
                                }}});

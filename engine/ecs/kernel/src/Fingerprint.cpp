@@ -8,12 +8,12 @@
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version (the
 //     constants below).
-// Registry fingerprint (format 7): registration owner names in the order of
+// Registry fingerprint (format 8): registration owner names in the order of
 // their first Register; components, resources,
-// messages in id order (name, size, align, zone, writePolicy, role, rollback;
-// resources add external and threadBound; messages have name, zone,
+// messages in id order (name, size, align, zone, role, rollback;
+// resources add threadBound; messages have name, zone,
 // capacity; their reader lists are derived from the Systems, hashed below);
-// effects; named sets (name, members, digest); the allotter; schedules (every
+// effects; named sets (name, members); the allotter; schedules (every
 // ScheduleOptions field but hookRoundLimit, which the Plan fingerprint holds);
 // sets; Systems in registrationSeq order, removed ones (tombstones) left out
 // (name, zone, ingress, effects, rollbackSafe, mounts with every field, access
@@ -26,7 +26,7 @@
 // fingerprint in schedule order. The function of a declaration is not hashed:
 // its address differs per build. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint (format 11): only zone C data (messages with their capacity),
+// C fingerprint (format 12): only zone C data (messages with their capacity),
 // zone C Systems (with mounts and access), zone C hooks, zone C event types,
 // zone C observers (name, trigger, id, access) in name order, never in
 // registration order (the order of observers is no part of it: event cursor
@@ -87,8 +87,11 @@ constexpr std::uint32_t kFingerprintVersion = 8;
 // (v8-arch-gyo2-time-events step 3); 6 since a schedule has no clock domain or
 // clock flag and a message type no clock domain (v8-arch-gyo2-clock-out-of-kernel,
 // v8-arch-gyo2-time-events step 4); 7 since event types and observers
-// (v8-arch-gyo2-time-events step 5).
-constexpr std::uint32_t kRegistryFingerprintVersion = 7;
+// (v8-arch-gyo2-time-events step 5); 8 since the write policy, a resource's
+// external flag, a schedule's ingress stage and Parallel guard test, and a named
+// set's digest mark left with the rules that read them, and annotatedWrites
+// holds components too, each a (kind, id) key (v8-arch-gyo2-authority-rollback step 2).
+constexpr std::uint32_t kRegistryFingerprintVersion = 8;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
 // since the initial value declarations of zone C components; 4 since the hook
@@ -103,8 +106,11 @@ constexpr std::uint32_t kRegistryFingerprintVersion = 7;
 // type has a capacity (v8-arch-gyo2-time-events step 3); 10 since a zone C message
 // type and the Plans have no clock domain (v8-arch-gyo2-clock-out-of-kernel,
 // v8-arch-gyo2-time-events step 4); 11 since zone C event types and observers
-// (v8-arch-gyo2-time-events step 5).
-constexpr std::uint32_t kCFingerprintVersion = 11;
+// (v8-arch-gyo2-time-events step 5); 12 since the column, resource and schedule
+// bytes it shares with the Registry fingerprint lost the write policy, the
+// external flag, the ingress stage and the Parallel guard test
+// (v8-arch-gyo2-authority-rollback step 2).
+constexpr std::uint32_t kCFingerprintVersion = 12;
 
 class Bytes {
 public:
@@ -157,7 +163,7 @@ void Access(Bytes& out, const AccessSet& access) {
     out.Ids(access.deferredWrites);
     out.Ids(access.setReads);
     out.Keys(access.extractReads);
-    out.Ids(access.annotatedWrites);
+    out.Keys(access.annotatedWrites);
     out.Flag(access.changeFilters);
     out.Flag(access.local);
     out.Flag(access.exclusive);
@@ -194,7 +200,6 @@ void ColumnBytes(Bytes& out, const ColumnInfo& info) {
     out.U32(info.size);
     out.U32(info.align);
     out.Enum(info.zone);
-    out.Enum(info.writePolicy);
     out.Enum(info.role);
     out.Enum(info.rollback);
 }
@@ -204,10 +209,8 @@ void ResourceBytes(Bytes& out, const ResourceInfo& info) {
     out.U32(info.size);
     out.U32(info.align);
     out.Enum(info.zone);
-    out.Enum(info.writePolicy);
     out.Enum(info.role);
     out.Enum(info.rollback);
-    out.Flag(info.external);
     out.Flag(info.threadBound);
 }
 
@@ -216,14 +219,12 @@ void ScheduleBytes(Bytes& out, const ScheduleOptions& s) {
     out.Flag(s.extract);
     out.Flag(s.rollbackEnabled);
     out.Strings(s.stages);
-    out.Str(s.ingressStage);
     out.U32(s.syncPoints.size());
     for (const SyncPointOptions& sync : s.syncPoints) {
         out.Str(sync.name);
         out.Str(sync.stage);
     }
     out.Enum(s.executor);
-    out.Str(s.parallelGuardTest);
 }
 
 void PlanBytes(Bytes& out, const Plan& plan) {
@@ -318,7 +319,6 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
     for (const NamedSetRecord& set : data.namedSets) {
         out.Str(set.name);
         out.Ids(set.members);
-        out.Flag(set.digest);
     }
     out.Flag(data.allotter.has_value());
     out.U32(data.allotter.value_or(0));

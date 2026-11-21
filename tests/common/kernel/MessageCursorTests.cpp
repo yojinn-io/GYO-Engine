@@ -385,6 +385,25 @@ TEST_CASE("J-36: the Registry lists each message type's capacity and its readers
     CHECK_MESSAGE(beep->readers.empty(), "[msg-registry-readers] " << ReadersText(beep->readers));
 }
 
+// The writer list (authority-rollback declaration 2.2): the rollback Module's cross-schedule message check reads
+// who writes each message type, in the readers' shape.
+TEST_CASE("J-36: the Registry lists each message type's writers: System mounts, then hooks") {
+    const Built built = Finish({{"test", [](Registrar& r) {
+                                     Data(r);
+                                     r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode", .zone = Zone::B});
+                                     r.AddSystem<&WriteEveryRun>(B("Write", "A"));
+                                     r.AddSystem<&Reader>(B("Reader", "B"));
+                                 }}});
+    KERNEL_REQUIRE_OK(built);
+    const MessageInfo* ping = InfoNamed(built.registry->Frozen(), "Ping");
+    REQUIRE(ping != nullptr);
+    std::string listed;
+    for (const MessageWriterInfo& writer : ping->writers) {
+        listed += (listed.empty() ? "" : ", ") + writer.system + (writer.hook ? "(hook)" : "@" + writer.schedule);
+    }
+    CHECK_MESSAGE(listed == "Write@Tick, PingOnMode(hook)", "[msg-registry-writers] " << listed);
+}
+
 TEST_CASE("J-36: the records are trimmed when the outermost Run ends, after the hook rounds") {
     // Each Run spawns a Tag; its OnAdd hook inserts Mode, applied by hook round 2,
     // whose OnAdd hook writes Ping 77: after the last sync point.
@@ -432,7 +451,7 @@ TEST_CASE("J-36: the World summary holds the message cursors and the write seque
     auto summary = [](std::function<void(Registrar&)> build, int runs) {
         auto rig = MakeRig(std::move(build), false);
         for (int run = 0; run < runs; ++run) KERNEL_REQUIRE_RUN_OK(rig->Run());
-        return rig->world().Summary();
+        return SummaryOf(rig->world());
     };
     const auto writerOnly = [](Registrar& r) {
         Data(r);
@@ -535,7 +554,7 @@ TEST_CASE("J-36: the World summary holds where each cursor has read to") {
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         rig->world().SetResource(Out{1});
         REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "2 3");
-        return rig->world().Summary();
+        return SummaryOf(rig->world());
     };
     CHECK(summary(true) == summary(true));
     CHECK_MESSAGE(summary(true) != summary(false), "[msg-summary-cursor-position] where a cursor has read to is not in the summary");

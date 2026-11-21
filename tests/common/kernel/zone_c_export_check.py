@@ -1,6 +1,6 @@
 """Spec J-17, kernel half (registry-schedule declaration judgement 8).
 
-Runs tests/common/zone_scan/zone_scan.py on the list the kernel exported for the synthetic zone C fixture
+Runs tests/common/authority_scan/authority_scan.py on the list the kernel exported for the synthetic zone C fixture
 (tests/common/kernel/zone_c_fixture/SyntheticSimulation.cpp; written by the gyo_kernel_tests case "J-17: the
 G-5 export ...") and checks that the scanner reads it (exit status 1: findings, not 2: contract error) and finds
 exactly the planted findings: ZS1 1, ZS2 1, ZS6 1, nothing else; and that the list header is the kernel's
@@ -48,12 +48,12 @@ def main(argv=None):
     with tempfile.TemporaryDirectory() as scratch:
         report_path = Path(scratch) / "report.json"
         done = subprocess.run(
-            [sys.executable, "-B", str(root / "tests/common/zone_scan/zone_scan.py"), "--root", str(root),
+            [sys.executable, "-B", str(root / "tests/common/authority_scan/authority_scan.py"), "--root", str(root),
              "--list", args.list, "--report", str(report_path)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
         print(done.stdout, end="")
         if done.returncode != 1:
-            problems.append(f"zone_scan.py exited {done.returncode}; expected 1 (findings), not 0 (clean) or 2 "
+            problems.append(f"authority_scan.py exited {done.returncode}; expected 1 (findings), not 0 (clean) or 2 "
                             f"(the list does not meet the contract)")
         if report_path.is_file():
             report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -63,12 +63,12 @@ def main(argv=None):
             if report.get("files_listed") != 2:
                 problems.append(f"files_listed {report.get('files_listed')}, expected 2")
         else:
-            problems.append("zone_scan.py wrote no report")
+            problems.append("authority_scan.py wrote no report")
     for problem in problems:
         print("kernel.J-17: " + problem)
     if problems:
         return 1
-    print("kernel.J-17: the kernel's export is read by zone_scan.py with the planted findings")
+    print("kernel.J-17: the kernel's export is read by authority_scan.py with the planted findings")
     return 0
 
 

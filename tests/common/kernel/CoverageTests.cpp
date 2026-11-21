@@ -20,8 +20,8 @@ struct SharedA { std::int32_t v; };
 struct SharedB { std::int32_t v; };
 
 void SharedData(Registrar& r) {
-    r.Component<SharedA>({.name = "SharedA", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
-    r.Component<SharedB>({.name = "SharedB", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+    r.Component<SharedA>({.name = "SharedA", .zone = Zone::C, .rollback = Rollback::Yes});
+    r.Component<SharedB>({.name = "SharedB", .zone = Zone::C, .rollback = Rollback::Yes});
 }
 
 SystemResult WriteA(Query<Write<SharedA>>) { return Ok(); }
@@ -30,13 +30,9 @@ SystemResult ReadB(Query<Read<SharedB>>) { return Ok(); }
 SystemResult Nothing() { return Ok(); }
 SystemResult InsertA(CommandsFor<Inserts<SharedA>, Removes<>>) { return Ok(); }
 SystemResult FilterWithA(Query<Write<SharedB>, With<SharedA>>) { return Ok(); }
-SystemResult WriteInputRes(ResMut<TestInput>) { return Ok(); }
 SystemResult EditWorld(ExclusiveWorld<>) { return Ok(); }
 SystemResult ReadMarker(Query<Read<TestMarker>>) { return Ok(); }
 SystemResult ReadMarkerC(Query<Read<TestVel>>) { return Ok(); }
-SystemResult WriteRes(ResMut<TestRes>) { return Ok(); }
-SystemResult WriteResAgain(ResMut<TestRes>) { return Ok(); }
-SystemResult WritePos(Query<Write<TestPos>>) { return Ok(); }
 SystemResult InsertDerived(CommandsFor<Inserts<TestDerived>, Removes<>>) { return Ok(); }
 SystemResult ReadDerived(Query<Read<TestDerived>>) { return Ok(); }
 SystemResult WriteDerived(Query<Write<TestDerived>>) { return Ok(); }
@@ -44,13 +40,10 @@ SystemResult ExtractPos(Extract<Read<TestPos>>) { return Ok(); }
 SystemResult HookWritesHealth(Query<Write<TestHealth>>) { return Ok(); }
 SystemResult HookWritesMode(Query<Write<TestMode>>) { return Ok(); }
 SystemResult HookSpawns(Spawn<Bundle<TestPos>>) { return Ok(); }
-SystemResult HookKeepsLocal(Local<int>, Query<Read<TestPos>>) { return Ok(); }
-bool VelChanged(Query<Changed<TestVel>>) { return true; }
 bool SettingsOn(Res<KernelSettings>) { return true; }
 SystemResult HookReadsSettings(Res<KernelSettings>) { return Ok(); }
 SystemResult HookWritesSettings(ResMut<KernelSettings>) { return Ok(); }
 bool ResIsSet(Res<TestRes>) { return true; }
-bool ReplicatedAny(SetRead<ReplicatedSet>) { return true; }
 
 std::vector<Mount> Sim(std::vector<std::string> before = {}, std::vector<std::string> after = {}) {
     return {At("FixedUpdate", "Simulate", std::move(before), std::move(after))};
@@ -170,20 +163,6 @@ TEST_CASE("J-12: a set's run-condition reads join every member's reads") {
           info->access.reads.end());
 }
 
-TEST_CASE("J-38: a Changed filter in a mount's or a set's run condition makes a zone C System fail (S-9)") {
-    Built conditionChanged = FinishOne([](Registrar& r) {
-        Mount m = At("FixedUpdate", "Simulate");
-        m.conditions.push_back(Condition<&VelChanged>("VelChanged"));
-        r.AddSystem<&WritePos>(Sys("GatedPos", Zone::C, {m}));
-    });
-    CHECK(HasRule(conditionChanged, StartupCode::DE7, "S-9"));
-    Built setChanged = FinishOne([](Registrar& r) {
-        r.Set({.name = "Gated", .schedule = "FixedUpdate"}, {Condition<&VelChanged>("VelChanged")});
-        r.AddSystem<&WritePos>(Sys("GatedPos", Zone::C, {InSet(At("FixedUpdate", "Simulate"), "Gated")}));
-    });
-    CHECK(HasRule(setChanged, StartupCode::DE7, "S-9"));
-}
-
 // D-E18 is gone (v8-arch-gyo2-kernel-settings-read-write): KernelSettings is read and written like any resource.
 TEST_CASE("J-24: a mount's or a set's run condition may read KernelSettings") {
     Built conditionSettings = FinishOne([](Registrar& r) {
@@ -209,16 +188,6 @@ TEST_CASE("J-24: a hook may declare KernelSettings, read or write") {
         r.Hook<TestMarker, &HookWritesSettings>(HookTrigger::OnRemove, {.name = "HookWritesSettings", .zone = Zone::B});
     });
     CHECK_MESSAGE(static_cast<bool>(writes.result), "[ks-s7-hook-settings] ResMut<KernelSettings> in a hook: " << Describe(writes));
-}
-
-TEST_CASE("J-47: a set's run condition reading a named set with a zone B member makes a zone C member fail (Z1)") {
-    Built built = FinishOne([](Registrar& r) {
-        r.NamedSet<ReplicatedSet>("Replicated");
-        r.AddToSet<ReplicatedSet, TestMarker>();
-        r.Set({.name = "Gated", .schedule = "FixedUpdate"}, {Condition<&ReplicatedAny>("ReplicatedAny")});
-        r.AddSystem<&WritePos>(Sys("GatedPos", Zone::C, {InSet(At("FixedUpdate", "Simulate"), "Gated")}));
-    });
-    CHECK(HasRule(built, StartupCode::DE7, "Z1"));
 }
 
 // ---- D.1 conditions 2 and 3
@@ -251,43 +220,31 @@ TEST_CASE("J-23: two zone B Systems declaring one effect conflict and are ordere
 
 // ---- Z6, Z8, hooks
 
-TEST_CASE("J-40: Z6 for Systems and hooks, Z2 for a zone B hook, Z8 for a component") {
+TEST_CASE("J-40: Z6 for Systems and hooks, Z8 for a component") {
     Built z6 = FinishOne([](Registrar& r) {
         r.Component<TestDerived>({.name = "TestDerived", .zone = Zone::C});  // rollback No
         r.AddSystem<&WriteDerived>(Sys("WriteDerived", Zone::C, Sim()));
     }, true);
     CHECK(HasRule(z6, StartupCode::DE7, "Z6"));
     Built hookNoRollback = FinishOne([](Registrar& r) {
-        r.Component<TestDerived>({.name = "TestDerived", .zone = Zone::C, .writePolicy = WritePolicy::Shared});
+        r.Component<TestDerived>({.name = "TestDerived", .zone = Zone::C});
         r.Hook<TestPos, &WriteDerived>(HookTrigger::OnAdd, {.name = "OnPos", .zone = Zone::C});
     }, true);
     CHECK(HasRule(hookNoRollback, StartupCode::DE7, "Z6"));
-    Built hookWritesC = FinishOne([](Registrar& r) {
-        r.Hook<TestMarker, &HookWritesHealth>(HookTrigger::OnAdd, {.name = "OnMarker", .zone = Zone::B});
-    });
-    CHECK(HasRule(hookWritesC, StartupCode::DE7, "Z2"));
     Built rollbackInputColumn = Finish({{"test", [](Registrar& r) {
                                             r.Component<TestInput>({.name = "TestInput", .zone = Zone::C,
                                                                     .role = Role::Input, .rollback = Rollback::Yes});
                                             r.Schedule(FixedSchedule());
                                         }}});
     CHECK(HasRule(rollbackInputColumn, StartupCode::DE7, "Z8"));
-}
-
-TEST_CASE("J-14: a hook without a zone fails under RequireExplicitZones and is zone B without it; a zone C hook "
-          "with Local fails") {
-    Built hookNoZone = FinishOne([](Registrar& r) {
-        r.RequireExplicitZones();
-        r.Hook<TestMarker, &HookWritesMode>(HookTrigger::OnAdd, {.name = "OnMarker"});
-    });
-    CHECK(HasRule(hookNoZone, StartupCode::DE7, "S-6"));
-    KERNEL_REQUIRE_OK(FinishOne([](Registrar& r) {
-        r.Hook<TestMarker, &HookWritesMode>(HookTrigger::OnAdd, {.name = "OnMarker"});
-    }));
-    Built hookLocal = FinishOne([](Registrar& r) {
-        r.Hook<TestVel, &HookKeepsLocal>(HookTrigger::OnAdd, {.name = "OnVel", .zone = Zone::C});
-    });
-    CHECK(HasRule(hookLocal, StartupCode::DE7, "S-7"));
+    // The resource half (its case left with the ingress rules in v8-arch-gyo2-authority-rollback step 2; Z8 moves
+    // to the authority Module in step 6).
+    Built rollbackInputResource = Finish({{"test", [](Registrar& r) {
+                                              r.Resource<TestInput>({.name = "TestInput", .zone = Zone::C,
+                                                                     .role = Role::Input, .rollback = Rollback::Yes});
+                                              r.Schedule(FixedSchedule());
+                                          }}});
+    CHECK_MESSAGE(HasRule(rollbackInputResource, StartupCode::DE7, "Z8"), "[ks-z8-resource] " << Describe(rollbackInputResource));
 }
 
 TEST_CASE("J-24: a hook that spawns without an allotter (D-E3)") {
@@ -298,14 +255,6 @@ TEST_CASE("J-24: a hook that spawns without an allotter (D-E3)") {
 }
 
 // ---- D-E2 for resources
-
-TEST_CASE("J-15: a second writer of an Exclusive resource fails") {
-    Built resource = FinishOne([](Registrar& r) {
-        r.AddSystem<&WriteRes>(Sys("WriteRes", Zone::C, Sim()));
-        r.AddSystem<&WriteResAgain>(Sys("WriteResAgain", Zone::C, {At("FixedUpdate", "Present")}));
-    });
-    CHECK(ErrorCount(resource, StartupCode::DE2) == 1);
-}
 
 // ---- D-E16 details
 
@@ -382,22 +331,6 @@ TEST_CASE("J-24: a System name twice (R-E2), Extract outside an extract schedule
     CHECK(ErrorCount(noMount, StartupCode::DE1) == 1);
 }
 
-TEST_CASE("J-27: a (c) Parallel schedule without a guard is one X-E1, however many zone C Systems it holds") {
-    Built built = FinishOne([](Registrar& r) {
-        SharedData(r);
-        ScheduleOptions s;
-        s.name = "FixedParallel";
-        s.stages = {"Run"};
-        s.executor = ExecutorKind::Parallel;
-        r.Schedule(s);
-        r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, {At("FixedParallel", "Run")}));
-        r.AddSystem<&ReadB>(Sys("ReadB", Zone::C, {At("FixedParallel", "Run")}));
-        const auto third = [](Query<Read<SharedA>, Read<SharedB>>) -> SystemResult { return {}; };
-        r.AddSystem<decltype(third)>(Sys("ReadAB", Zone::C, {At("FixedParallel", "Run")}));
-    });
-    CHECK(ErrorCount(built, StartupCode::XE1) == 1);
-}
-
 TEST_CASE("J-12: a run condition cannot be written by hand (its access comes from its signature)") {
     static_assert(!std::is_constructible_v<ConditionRef, std::string, Detail::ResolveFn>);
     static_assert(!std::is_default_constructible_v<ConditionRef>);
@@ -428,21 +361,6 @@ TEST_CASE("Plan export: a deferred write and a With are not dataflow by the plan
 }
 
 // ---- C4: the ingress stage is the schedule's first stage (Z3)
-
-TEST_CASE("J-40: an ingress stage that is not the schedule's first stage fails (Z3)") {
-    Built ingressNotFirst = Finish({{"test", [](Registrar& r) {
-                                        ScheduleOptions s = FixedSchedule();
-                                        s.ingressStage = "Present";
-                                        r.Schedule(s);
-                                    }}});
-    CHECK(HasRule(ingressNotFirst, StartupCode::DE7, "Z3"));
-    Built inserted = Finish({{"test", [](Registrar& r) {
-                                 r.Schedule(FixedSchedule());
-                                 r.InsertStage("FixedUpdate", "Ingress", StagePlace::Before, "Earlier");
-                             }}});
-    CHECK(HasRule(inserted, StartupCode::DE7, "Z3"));
-    (void)&WriteInputRes;
-}
 
 // ---- B6: what the C fingerprint covers (format 2)
 
@@ -479,7 +397,7 @@ Built CVariant(const std::string& change) {
 TEST_CASE("J-18: the C fingerprint sees zone C hooks, the schedule's rollback and sync points between zone C steps") {
     Built base = CVariant("");
     KERNEL_REQUIRE_OK(base);
-    CHECK(base.registry->Frozen().CFingerprint().version == 11U);
+    CHECK(base.registry->Frozen().CFingerprint().version == 12U);
     // The "sync" variant really moves Mid between the zone C steps.
     const Plan& plain = *base.registry->Frozen().PlanOf("FixedUpdate");
     CHECK(PositionOf(plain, "Mid") > PositionOf(plain, "ReadA"));

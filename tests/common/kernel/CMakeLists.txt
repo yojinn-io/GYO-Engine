@@ -12,7 +12,7 @@ set(GYO_KERNEL_TEST_SOURCES
     TestMain.cpp
     SignatureTests.cpp
     RegistryTests.cpp
-    ZoneRuleTests.cpp
+    StartupCheckTests.cpp
     SchedulerTests.cpp
     ZoneCExportTests.cpp
     CoverageTests.cpp
@@ -28,6 +28,8 @@ set(GYO_KERNEL_TEST_SOURCES
     MessageCursorTests.cpp
     ObserverTests.cpp
     TraceSpanTests.cpp
+    HashTests.cpp
+    RestoreTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )
@@ -73,10 +75,13 @@ gyo_add_silent_probe(kernel.el-silent gyo_kernel_tests "${CMAKE_CURRENT_SOURCE_D
 # and of the world-exec batch (world-exec declaration judgement 2), so each
 # appears by name in the L1 tests.xml. The doctest cases of entry J-n are named
 # "J-n: ..." ("J-32:*" does not match "J-32b: ...").
+# J-15, J-16, J-38, J-39 and J-41 have no case in the kernel since the writer
+# count, the digest set and the zone rules left (v8-arch-gyo2-authority-rollback
+# step 2, declaration 9.2).
 set(GYO_KERNEL_J_ENTRIES
     J-1 J-2 J-3 J-4 J-5 J-6 J-7 J-8
-    J-10 J-11 J-12 J-13 J-14 J-15 J-16 J-17 J-18 J-19 J-20 J-21 J-22 J-23 J-24 J-25
-    J-26 J-27 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37 J-38 J-39 J-40 J-41
+    J-10 J-11 J-12 J-13 J-14 J-17 J-18 J-19 J-20 J-21 J-22 J-23 J-24 J-25
+    J-26 J-27 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37 J-40
     J-44 J-45 J-47 J-50 J-52 J-53 J-54 J-55 J-56 J-57 J-59)
 # A filter that matches no case would pass silently, so a run of zero cases fails.
 foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
@@ -102,7 +107,7 @@ set_tests_properties(kernel.J-17 PROPERTIES FIXTURES_SETUP kernel_zone_c_export)
 #   kernel.naming_guard  target/naming DI 1 (namespace and directory) and DI 3
 #                        (no role suffix on type names)
 #   kernel.J-17_zone_scan  the G-5 export of the zone C fixture (written by kernel.J-17), read by
-#                        tests/common/zone_scan/zone_scan.py; the finding
+#                        tests/common/authority_scan/authority_scan.py; the finding
 #                        count must be the fixture's planted count
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME kernel.guard

@@ -139,7 +139,7 @@ void GameData(Registrar& r) {
     r.InitialValue<Health, &HealthOf>();
     r.Resource<Gravity>({.name = "Gravity"});
     r.Resource<Paused>({.name = "Paused"});
-    r.Resource<Stats>({.name = "Stats", .writePolicy = WritePolicy::Shared});
+    r.Resource<Stats>({.name = "Stats"});
     r.Resource<RangeAllotter>({.name = "Allotter"});
     r.Allotter<RangeAllotter>();
     r.Message<Hit>({.name = "Hit"});
@@ -348,7 +348,7 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
 TEST_CASE("skeleton: two writers with no order are tied by registration and listed") {
     // Two Systems may write one component only when it is declared Shared.
     auto rig = WorldTest::MakeRig([](Registrar& r) {
-        r.Component<Position>({.name = "Position", .writePolicy = WritePolicy::Shared});
+        r.Component<Position>({.name = "Position"});
         r.Schedule(GameTick());
         r.AddSystem<&WritePositionA>(In("AddOne", "Simulate"));
         r.AddSystem<&WritePositionB>(In("Double", "Simulate"));
@@ -361,17 +361,6 @@ TEST_CASE("skeleton: two writers with no order are tied by registration and list
     rig->world().Insert(1, Position{3, 0});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK(rig->world().Get<Position>(1)->x == 8);  // (3 + 1) * 2, not 3 * 2 + 1
-}
-
-TEST_CASE("skeleton: a component left Exclusive rejects a second writer at startup") {
-    Built built = KernelTest::Finish({{"test", [](Registrar& r) {
-                                           r.Component<Position>({.name = "Position"});
-                                           r.Schedule(GameTick());
-                                           r.AddSystem<&WritePositionA>(In("AddOne", "Simulate"));
-                                           r.AddSystem<&WritePositionB>(In("Double", "Simulate"));
-                                       }}});
-    REQUIRE_FALSE(static_cast<bool>(built.result));
-    CHECK_MESSAGE(HasError(built, StartupCode::DE2), Describe(built));
 }
 
 // ---- Limits
@@ -420,10 +409,10 @@ SystemResult SpawnHundred(Spawn<Bundle<Position, Velocity, Health, Armor>> spawn
 }
 
 void LimitData(Registrar& r) {
-    r.Component<Position>({.name = "Position", .writePolicy = WritePolicy::Shared});
-    r.Component<Velocity>({.name = "Velocity", .writePolicy = WritePolicy::Shared});
-    r.Component<Health>({.name = "Health", .writePolicy = WritePolicy::Shared});
-    r.Component<Armor>({.name = "Armor", .writePolicy = WritePolicy::Shared});
+    r.Component<Position>({.name = "Position"});
+    r.Component<Velocity>({.name = "Velocity"});
+    r.Component<Health>({.name = "Health"});
+    r.Component<Armor>({.name = "Armor"});
     r.Resource<Stats>({.name = "Stats"});
     r.Resource<RangeAllotter>({.name = "Allotter"});
     r.Allotter<RangeAllotter>();

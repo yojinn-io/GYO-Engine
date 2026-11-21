@@ -62,8 +62,7 @@ struct Sentinel {
         return count;
     }
 };
-// The author's save format (the engine knows nothing of it). Fixed size: the
-// World summary hashes a Resource's bytes, so no heap pointer may be in it.
+// The author's save format (the engine knows nothing of it).
 struct SaveData {
     struct Ent {
         K::EntityId id = 0;
@@ -73,15 +72,33 @@ struct SaveData {
     };
     std::array<Ent, 3> ents{};
     int gold = 0;
-    // Zeroed bytes where padding would be: World::Summary hashes the raw bytes,
-    // and padding is not copied the same on every compiler (MSVC differed, L1).
-    std::int32_t reserved0 = 0;
     K::EntityId next = 0;
     // The entity part cannot be read: Load fails.
     bool unreadable = false;
-    std::array<std::uint8_t, 7> reserved1{};
 };
-static_assert(std::has_unique_object_representations_v<SaveData>, "no padding: World::Summary hashes the raw bytes");
+
+// The hash functions (World::Summary; Hash.hpp), field by field.
+inline void HashValue(K::Hasher& h, const Player& v) { HashValue(h, v.hp); }
+inline void HashValue(K::Hasher& h, const Pos& v) { HashValue(h, v.x); }
+inline void HashValue(K::Hasher& h, const ChaseTarget& v) { HashValue(h, v.target); }
+inline void HashValue(K::Hasher& h, const Junk& v) { HashValue(h, v.v); }
+inline void HashValue(K::Hasher& h, const Gold& v) { HashValue(h, v.v); }
+inline void HashValue(K::Hasher& h, const KeyBindings& v) { HashValue(h, v.jump); }
+inline void HashValue(K::Hasher& h, const Score& v) { HashValue(h, v.v); }
+inline void HashValue(K::Hasher& h, const Volume& v) { HashValue(h, v.level); }
+inline void HashValue(K::Hasher& h, const Sentinel& v) { HashValue(h, v.live); }
+inline void HashValue(K::Hasher& h, const SaveData::Ent& v) {
+    HashValue(h, v.id);
+    HashValue(h, v.hp);
+    HashValue(h, v.x);
+    HashValue(h, v.chase);
+}
+inline void HashValue(K::Hasher& h, const SaveData& v) {
+    HashValue(h, v.ents);
+    HashValue(h, v.gold);
+    HashValue(h, v.next);
+    HashValue(h, v.unreadable);
+}
 
 inline SaveData TheSave() {
     SaveData save;

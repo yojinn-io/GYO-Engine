@@ -886,21 +886,6 @@
    "expect": "\\[wt\\-carried\\-kept\\]"
   },
   {
-   "id": "wt-tick-zone-c",
-   "what": "Tick is registered in zone C (declaration 4.5, WT-1: every time type is zone B; G4: a zone C System reads no Tick until batch 4). Only it catches the zone of the registration (adversarial check W40, step 7)",
-   "guards": [
-    "world-time WT-1",
-    "determinism DI 2",
-    "time-events-declaration 4.5"
-   ],
-   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
-   "find": "r.Resource<Tick>({.name = \"Tick\", .zone = Kernel::Zone::B});",
-   "replace": "r.Resource<Tick>({.name = \"Tick\", .zone = Kernel::Zone::C});",
-   "target": "gyo_world_time_tests",
-   "cases": "module:*",
-   "expect": "\\[wt\\-time\\-zone\\-b\\] Tick"
-  },
-  {
    "id": "wt-fixed-stage-option-ignored",
    "what": "RunFixedSteps is mounted in FixedMainLoop whatever fixedStepStage says (WT-1, declaration 3.3: an author who turns the skeleton off names its own). Only it catches the setting being dropped (adversarial check W43, step 7)",
    "guards": [
@@ -1264,6 +1249,79 @@
    "target": "gyo_world_time_tests",
    "cases": "restore:*",
    "expect": "\\[wt\\-restore\\-put\\-back\\]"
+  },
+  {
+   "id": "wt-guard-naming-root-dropped",
+   "what": "naming guard (authority-rollback step 1): engine/modules/world_time is no longer mapped to GYO::Engine::WorldTime. Only it drops the world_time row of ROOTS (that row's whole rule, README rule 4); wt-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent the shared fail closed",
+   "guards": [
+    "world-time WT-4",
+    "naming DI 1",
+    "time-events-declaration 6.3",
+    "authority-rollback-declaration 9.5"
+   ],
+   "file": "tests/common/kernel/naming_guard.py",
+   "find": ",\n         (\"engine/modules/world_time\", \"GYO::Engine::WorldTime\"))",
+   "replace": ")",
+   "expect": "FAIL: test_n1_world_time_other_namespace_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/kernel",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "wt-guard-real-n1-other-namespace",
+   "what": "naming guard's world_time row on the real tree (authority-rollback step 1, README rule 4: positive control): a world_time source opens GYO::Engine::Orchestration. Only it shows the world_time row firing on the real tree; wt-guard-naming-root-dropped drops the row in the self-tests",
+   "guards": [
+    "world-time WT-4",
+    "naming DI 1",
+    "time-events-declaration 6.3",
+    "authority-rollback-declaration 9.5"
+   ],
+   "file": "engine/modules/world_time/src/Sampling.cpp",
+   "find": "namespace GYO::Engine::WorldTime {",
+   "replace": "namespace GYO::Engine::Orchestration {",
+   "expect": "engine/modules/world_time/src/Sampling\\.cpp:\\d+: N1 namespace GYO::Engine::Orchestration \\(expected GYO::Engine::WorldTime\\)",
+   "command": [
+    "{python}",
+    "-I",
+    "-B",
+    "tests/common/kernel/naming_guard.py"
+   ]
+  },
+  {
+   "id": "wt-hash-resimulation-missing",
+   "what": "a time type loses its hash function (Resimulation here): a World with the time Module has no summary (authority-rollback declaration 3.3: every type an Engine Module puts into a World has one). Only it catches a missing hash function among the time types",
+   "guards": [
+    "authority-rollback-declaration 3.3"
+   ],
+   "file": "engine/modules/world_time/include/engine/world_time/TimeTypes.hpp",
+   "find": "inline void HashValue(::GYO::Kernel::Hasher& h, const Resimulation& v) { HashValue(h, v.active); }\n",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "module: every time type has a hash function*",
+   "expect": "\\[wt\\-hash\\-summary\\]"
+  },
+  {
+   "id": "wt-resimulation-carried",
+   "what": "Resimulation is put only when absent, so a carried-over true stays true in the new World (authority-rollback declaration 2.3, WT-1 addition). Only it catches the reset on every prepare",
+   "guards": [
+    "world-time WT-1",
+    "authority-rollback-declaration 2.3"
+   ],
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
+   "find": "        world.SetResource(Resimulation{});\n",
+   "replace": "        PutIfAbsent(world, Resimulation{});\n",
+   "target": "gyo_world_time_tests",
+   "cases": "carry-over:*",
+   "expect": "\\[wt\\-resimulation\\-reset\\]"
   }
  ]
 }

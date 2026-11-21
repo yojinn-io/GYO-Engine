@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Name data of the zone-C source scan (zone_scan.py). ZS1: include targets, exact or by prefix, either include form. ZS3, ZS4, ZS6, ZS7: Python regular expressions matched against code with comments and literals blanked. ZS2 and ZS5 are structural and live in the script. Extend here, not in the script (docs/architecture/plans/kernel/j17-scanner.zh-Hant.md section 1).",
+  "description": "Name data of the zone-C source scan (authority_scan.py). ZS1: include targets, exact or by prefix, either include form. ZS3, ZS4, ZS6, ZS7: Python regular expressions matched against code with comments and literals blanked. ZS2 and ZS5 are structural and live in the script. Extend here, not in the script (docs/architecture/plans/kernel/j17-scanner.zh-Hant.md section 1).",
   "ZS1": {
     "headers": [
       "engine/time/MonotonicClock.hpp",

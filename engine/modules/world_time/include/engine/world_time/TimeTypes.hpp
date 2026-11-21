@@ -2,9 +2,14 @@
 
 // Game time in a World (docs/architecture/target/v2/time-events-declaration.zh-Hant.md, sections 2.2, 3.3;
 // Design Invariants in docs/architecture/target/v2/world-time.zh-Hant.md). Plain data and pure arithmetic: no
-// kernel type, no time base (this header does not include MonotonicClock.hpp: zone_scan ZS1), no padding (the
-// World summary hashes raw bytes, v8-arch-gyo2-summary-padding-a-then-c). All durations are whole nanoseconds;
-// the scale is the only floating-point value, multiplied once per frame.
+// time base (this header does not include MonotonicClock.hpp: zone_scan ZS1). All durations are whole
+// nanoseconds; the scale is the only floating-point value, multiplied once per frame.
+//
+// Each type the Module puts into a World has its hash function here, next to the type, field by field (the World
+// summary hashes each value with it; authority-rollback declaration 3.3). The reserved fields are left from the
+// summary format 2, which hashed raw bytes; they are not hashed.
+
+#include "engine/kernel/Hash.hpp"
 
 #include <cstdint>
 
@@ -175,19 +180,62 @@ void AdvanceRealTo(RealTime& time, Nanoseconds now);
 // Real time by a given duration (manual sampling: the delta applies on every frame, the first included).
 void AdvanceRealBy(RealTime& time, Nanoseconds delta);
 
-// No padding (the summary hashes raw bytes).
-static_assert(sizeof(StepLength) == sizeof(Nanoseconds));
-static_assert(sizeof(TimeLimits) == 2 * sizeof(std::uint32_t) + sizeof(Nanoseconds));
-static_assert(sizeof(TickAccumulator) == 2 * sizeof(Nanoseconds));
-static_assert(sizeof(RealTime) == 3 * sizeof(Nanoseconds) + 8);
-static_assert(sizeof(VirtualTime) == 3 * sizeof(Nanoseconds) + 2 * sizeof(double) + 8);
-static_assert(sizeof(FixedTime) == sizeof(TickAccumulator) + 2 * sizeof(Nanoseconds));
-static_assert(sizeof(ActiveTime) == 2 * sizeof(Nanoseconds));
-static_assert(sizeof(TimeControl) == sizeof(double) + 8);
-static_assert(sizeof(Tick) == sizeof(std::uint64_t));
-static_assert(sizeof(Resimulation) == 8);
-static_assert(sizeof(TimeSampling) == sizeof(Nanoseconds) + 8);
-static_assert(sizeof(TimeDiscarded) == 2 * sizeof(Nanoseconds) + 8);
-static_assert(sizeof(TimeConfig) == sizeof(TimeLimits) + 64 + 8);
+// The hash functions (Hash.hpp), field by field.
+inline void HashValue(::GYO::Kernel::Hasher& h, const StepLength& v) { HashValue(h, v.nanoseconds); }
+inline void HashValue(::GYO::Kernel::Hasher& h, const TimeLimits& v) {
+    HashValue(h, v.maxStepsPerFrame);
+    HashValue(h, v.maxFrameDelta);
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const TickAccumulator& v) {
+    HashValue(h, v.Step());
+    HashValue(h, v.Overstep());
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const RealTime& v) {
+    HashValue(h, v.now);
+    HashValue(h, v.delta);
+    HashValue(h, v.elapsed);
+    HashValue(h, v.sampled);
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const VirtualTime& v) {
+    HashValue(h, v.delta);
+    HashValue(h, v.elapsed);
+    HashValue(h, v.discarded);
+    HashValue(h, v.scale);
+    HashValue(h, v.fraction);
+    HashValue(h, v.paused);
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const FixedTime& v) {
+    HashValue(h, v.accumulator);
+    HashValue(h, v.elapsed);
+    HashValue(h, v.pending);
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const ActiveTime& v) {
+    HashValue(h, v.delta);
+    HashValue(h, v.elapsed);
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const TimeControl& v) {
+    HashValue(h, v.scale);
+    HashValue(h, v.paused);
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const Tick& v) { HashValue(h, v.value); }
+inline void HashValue(::GYO::Kernel::Hasher& h, const Resimulation& v) { HashValue(h, v.active); }
+inline void HashValue(::GYO::Kernel::Hasher& h, const TimeSampling& v) {
+    HashValue(h, v.value);
+    HashValue(h, v.mode);
+}
+inline void HashValue(::GYO::Kernel::Hasher& h, const TimeDiscarded& v) {
+    HashValue(h, v.amount);
+    HashValue(h, v.realDelta);
+    HashValue(h, v.cause);
+}
+// The schedule name up to its NUL (the bytes after it are not part of the value).
+inline void HashValue(::GYO::Kernel::Hasher& h, const TimeConfig& v) {
+    HashValue(h, v.limits);
+    std::uint64_t length = 0;
+    while (length < sizeof(v.fixedSchedule) && v.fixedSchedule[length] != '\0') ++length;
+    h.U64(length);
+    for (std::uint64_t i = 0; i < length; ++i) HashValue(h, v.fixedSchedule[i]);
+    HashValue(h, v.fixedStep);
+}
 
 } // namespace GYO::Engine::WorldTime

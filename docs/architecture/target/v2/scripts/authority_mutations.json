@@ -1,0 +1,34 @@
+{
+ "version": 1,
+ "description": "Mutants of the authority Module (docs/architecture/target/v2/authority-rollback-declaration.zh-Hant.md section 9.4; tests/common/mutation/README.md). Run with tests/common/mutation/run_mutations.py --catalog.",
+ "mutants": [
+  {
+   "id": "au-strategy-check-skipped",
+   "what": "the chosen strategy's startup check is not run (authority 4.4, 4.5). Only it catches the call",
+   "guards": [
+    "authority-rollback-declaration 4.2",
+    "authority 4.4"
+   ],
+   "file": "engine/modules/authority/src/AuthorityModule.cpp",
+   "find": "    options->strategy->Check(check);",
+   "replace": "    static_cast<void>(check);",
+   "target": "gyo_authority_tests",
+   "cases": "authority socket:*",
+   "expect": "(?=[\\s\\S]*\\[au\\-e1\\-peer\\])[\\s\\S]*\\[au\\-strategy\\-check\\]"
+  },
+  {
+   "id": "au-no-strategy-refused",
+   "what": "a World with no strategy is refused (authority-rollback 4.2, authority 4.7: only a World with authority registrations needs one). Only it catches the no-strategy path",
+   "guards": [
+    "authority-rollback-declaration 4.2",
+    "authority 4.4"
+   ],
+   "file": "engine/modules/authority/src/AuthorityModule.cpp",
+   "find": "    if (options == nullptr || !options->strategy) return;",
+   "replace": "    if (options == nullptr || !options->strategy) {\n        context.Report(\"AU-E9\", \"no strategy\");\n        return;\n    }",
+   "target": "gyo_authority_tests",
+   "cases": "authority socket:*",
+   "expect": "\\[au\\-no\\-strategy\\]"
+  }
+ ]
+}

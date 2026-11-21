@@ -132,8 +132,6 @@ SystemResult WritesDeclared(On<DoorOpened>, ResMut<Out> out) {
 SystemResult FailingObserver(On<DoorOpened>) {
     return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the observer failed"));
 }
-SystemResult ObserverWithLocal(On<DoorOpened>, Local<std::uint32_t>) { return Ok(); }
-SystemResult WritesMode(On<DoorOpened>, Query<Write<Mode>>) { return Ok(); }
 
 // ---- Hooks
 
@@ -238,7 +236,6 @@ SystemResult TriggerDoorOnOne(Commands commands) {
     commands.Trigger(DoorOpened{0}, EntityId{1});
     return Ok();
 }
-SystemResult AlsoWritesMode(Query<Write<Mode>>) { return Ok(); }
 // Triggers DoorOpened on the Runs of Tick 1 and 3 only (TickCount).
 SystemResult TriggerDoorOnOddRuns(Commands commands, Res<TickCount> ticks) {
     if (ticks->value == 1 || ticks->value == 3) commands.Trigger(DoorOpened{0});
@@ -868,7 +865,7 @@ TEST_CASE("J-18: an observer changes the Registry fingerprint; a zone C observer
     CHECK_MESSAGE(cfp(zoneC) == cfp(zoneCReversed), "[obs-fingerprint] the C fingerprint holds no order of observers");
 }
 
-TEST_CASE("J-59: observer startup errors: a name twice, an unregistered event, zone C with Local, an Exclusive column's second writer") {
+TEST_CASE("J-59: observer startup errors: a name twice, an unregistered event") {
     auto twice = Finish({{"test", [](Registrar& r) {
                               Data(r);
                               Events(r);
@@ -881,25 +878,6 @@ TEST_CASE("J-59: observer startup errors: a name twice, an unregistered event, z
                                      r.Observer<DoorOpened, &LogDoorA>({.name = "a", .zone = Zone::B});
                                  }}});
     CHECK_MESSAGE(HasRule(unregistered, StartupCode::RE4, "R-6"), "[obs-startup-unregistered] " << Describe(unregistered));
-    auto local = Finish({{"test", [](Registrar& r) {
-                              Data(r);
-                              Events(r);
-                              r.Observer<DoorOpened, &ObserverWithLocal>({.name = "local", .zone = Zone::C});
-                          }}});
-    CHECK_MESSAGE(HasRule(local, StartupCode::DE7, "S-7"), "[obs-startup-zone] " << Describe(local));
-    auto writers = Finish({{"test", [](Registrar& r) {
-                                Data(r);
-                                Events(r);
-                                r.Observer<DoorOpened, &WritesMode>({.name = "writes-mode", .zone = Zone::B});
-                                r.AddSystem<&AlsoWritesMode>(B("AlsoWritesMode", "A"));
-                            }}});
-    CHECK_MESSAGE(HasError(writers, StartupCode::DE2), "[obs-startup-writers] " << Describe(writers));
-    auto unset = Finish({{"test", [](Registrar& r) {
-                              r.RequireExplicitZones();
-                              r.Event<DoorOpened>({.name = "DoorOpened"});
-                              r.Observer<DoorOpened, &LogDoorA>({.name = "a"});
-                          }}});
-    CHECK_MESSAGE(ErrorCount(unset, StartupCode::DE7) == 2, "[obs-startup-zone-unset] " << Describe(unset));
 }
 
 TEST_CASE("J-59: a later round may not add an Add or Remove observer to a component the previous version has (R-E7)") {
@@ -998,16 +976,6 @@ TEST_CASE("J-18: the event types, an observer's zone and its access are in the R
     CHECK_MESSAGE(cfp(6) != cfp(7), "[obs-cfp-observer-access] a zone C observer's access is not in the C fingerprint");
 }
 
-TEST_CASE("J-59: a zone C observer's access follows the zone rules: a write of zone B data is a startup error (DI-KS 8)") {
-    auto built = Finish({{"test", [](Registrar& r) {
-                              Data(r);
-                              Events(r);
-                              r.Observer<DoorOpened, &WritesDeclared>({.name = "c-writes-b", .zone = Zone::C});
-                          }}});
-    CHECK_MESSAGE(!built.result, "[obs-zone-access] " << Describe(built));
-    CHECK_MESSAGE(Describe(built).find("c-writes-b") != std::string::npos, "[obs-zone-access] " << Describe(built));
-}
-
 TEST_CASE("J-59: an observer's Changed<T> sees what changed since the observer last ran") {
     Log().clear();
     auto rig = MakeRig([](Registrar& r) {
@@ -1051,4 +1019,23 @@ TEST_CASE("J-59: a second ExclusiveWorld::Trigger after a dropped Err returns th
     const auto ran = rig->Run();
     CHECK(HasCode(ran, KernelErrorCode::HookRoundLimit));
     CHECK_MESSAGE((LinesStartingWith("rang:100") == 0 && Log().back() == "second HookRoundLimit"), "[obs-trigger-interrupted] " << Joined());
+}
+
+// The writer list's observer part (authority-rollback declaration 2.2): after the System mounts and the hooks.
+TEST_CASE("J-59: the Registry lists an observer that writes a message type among its writers") {
+    const Built built = Finish({{"test", [](Registrar& r) {
+                                     Data(r);
+                                     Events(r);
+                                     r.Message<Chirp>({.name = "Chirp", .zone = Zone::B, .capacity = 3});
+                                     r.Observer<DoorOpened, &ChirpTwiceOnDoor>({.name = "chirp-on-door", .zone = Zone::B});
+                                     r.AddSystem<&WriteFiveChirpsOnce>(B("WriteChirps", "B"));
+                                 }}});
+    KERNEL_REQUIRE_OK(built);
+    const FrozenRegistry& frozen = built.registry->Frozen();
+    const auto& writers = frozen.Messages()[*frozen.MessageIdOf<Chirp>()].writers;
+    std::string listed;
+    for (const MessageWriterInfo& writer : writers) {
+        listed += (listed.empty() ? "" : ", ") + writer.system + (writer.observer ? "(observer)" : "@" + writer.schedule);
+    }
+    CHECK_MESSAGE(listed == "WriteChirps@Tick, chirp-on-door(observer)", "[obs-writer] " << listed);
 }

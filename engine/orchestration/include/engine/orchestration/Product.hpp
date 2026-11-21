@@ -153,6 +153,8 @@ private:
         std::vector<std::string> frame;
         std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
+        // The ModuleBuffer of the build that made this World, kept with its prepare functions.
+        std::shared_ptr<ModuleBuffer> buffer;
         // The last schedule the Product ran with success on this World (WorldFailure::lastSchedule).
         std::string lastSchedule;
         std::uint32_t nextInsertSeq = 0;
@@ -166,6 +168,7 @@ private:
         std::vector<std::string> frame;
         std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
+        std::shared_ptr<ModuleBuffer> buffer;
     };
 
     Product() = default;
