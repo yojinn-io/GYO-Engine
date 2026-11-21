@@ -881,3 +881,20 @@ Fable 5.2／high，唯讀；範圍 fcae13f1 之後的全部差分（含修訂 2�
 
 不受影響的：判定 1～5 的點與門檻、5.4 的預算與基準值（判定 5 的量測不裝 trace 接收者）、第 12 節定過的各件、DI 的方向。第 14 節的估時不變（10.4 約 1 h，在第 5 步的範圍內吸收）。
 
+### 19.1 A11 的清單與處置（第 2 步開頭的關卡，2026-11-21）
+
+- **原話**：本卡把清單交給使用者後，使用者說「我累了，你自己看著辦。」
+- **比過的選項**：C 組各判定「不補突變／併進現有突變／改寫成不看區的突變」；本卡的建議照下表。
+- **理由**：使用者沒有另外說，交本卡照建議做。
+- **出處**：本卡對話 2026-11-21；轉主會話記 HANDOFF。
+
+A11 實際 16 個（`ks-s4-*` 10、`ks-s8-*` 5、`sr-zone-c-own-cells` 1；宣告寫的「9＋5＋1＋2」分組不同：Z5 的 2 個就是 `ks-s8` 裡的兩個，`ks-s4-annotation-counted-as-writer` 原歸寫者數量）。
+
+| 組 | 突變 | 處置 |
+|---|---|---|
+| A 判定隨規則刪 | `ks-s4-annotation-counted-as-writer`（A1）、`ks-s4-annotation-in-written-keys`（A2）、`sr-zone-c-own-cells`（區 C 生成例外沒了，第 8 節） | 退役 |
+| B 判定留、有別的突變 | `ks-s4-layer1-zone-b-single-writer-components-undeclared`、`ks-s4-layer1-zone-c-resources-undeclared`（留 `ks-s4-layer1-not-declared`）；`ks-s4-layer2-shared-only`（留 `ks-s4-layer2-components-only`、`-resources-only`、`ns-entry-no-compare-no-retake`）；`ks-s4-layer2-zone-b-single-writer-components-undeclared`（留 `ks-s5-handle-epoch-kept`、`ks-s5-compare-before-not-own-account`） | 退役 |
+| C1 斷言加回的形 | `ks-s4-exclusive-single-writer-component-refused`（J-45）、`ks-s4-exclusive-zone-c-resource-refused`、`ks-s4-exclusive-single-writer-resource-refused`（J-57）、`ks-s8-host-zone-c-component-write-asserts`、`ks-s8-host-zone-c-resource-write-asserts`（J-6） | 退役、不補：不看區的版本＝「什麼都不能碰」，說不出獨有抓到的錯（README 第 3 條）；限制不回來由型別保證（欄位不存在）。判定暫時沒有突變，dev_log 記一行 |
+| C2 合併 | `ks-s4-layer2-zone-c-resources-undeclared`（J-57 第 2 層） | 案例併進 `ks-s4-layer2-components-only`（README「合わせ方」），跑一次確認 killed |
+| C3 改寫 | `ks-s8-sync-despawn-vs-zone-c-insert-dropped`（J-55）、`ks-s8-zone-b-despawn-of-zone-c-dropped`（J-52）、`ks-s8-zone-b-zone-c-insert-dropped`（J-32b） | 改成拿掉整個條件、不看區的突變；和現有突變 find／replace 相同就合併 |
+
