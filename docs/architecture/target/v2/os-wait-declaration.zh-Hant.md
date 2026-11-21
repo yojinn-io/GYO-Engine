@@ -1,6 +1,6 @@
 # 事前宣告：core/time 的等待改呼叫 core/os（`v8-arch-gyo2-os-wait`）
 
-更新：2026-11-21（修訂 2）。Owner：架構（GYO2 主會話「[GYO2][不良少年]新架構重構」開出的任務卡）。
+更新：2026-11-21（修訂 3）。Owner：架構（GYO2 主會話「[GYO2][不良少年]新架構重構」開出的任務卡）。
 **狀態：草稿，待使用者核准（兩段式：先核准動工，突變與驗證做完後再定案條文，同 D71／D72）。核准之前不改 `engine/` 與 `tests/`。**
 
 經過：
@@ -9,13 +9,14 @@
 - 第 1 步查 W3（第 2 節）。查的途中使用者說：「這個東西不用自己折騰，去查開源程序，或者github有沒有類似專案」「這個問題不會是我們第一個碰到，特別是這種兼容代碼」。查了成熟專案的寫法（第 2.4 節）後，使用者選驗收的方式：「選 (a)，照純搬移寫宣告」（第 2.5 節）。
 - 修訂 0：第一份草稿。使用者指出 os 是內化的能力、不是 Module（「等等，os 不用登記module。為何會合Module有關？」「這是內化的能力。」），用詞改成「引擎單位」。
 - 修訂 1：加上和 #260 的突變協調（6.3）。用 merge 跟上 gyo2 的 #261（2acf9cee，core、ecs、orchestration 不再登記在 `config/modules.csv`）。time 對 os 的連結改成手寫在 `engine/core/time/CMakeLists.txt`，連結期望改 `gyo_expect_links`，不再動登記檔（5.1、5.2、6.3）。
-- 修訂 2（這一份）：照 Fable 5.2／high 的敵對式檢查（唯讀，必修 4、建議 8、細節 4）修訂。主要改動：
+- 修訂 2：照 Fable 5.2／high 的敵對式檢查（唯讀，必修 4、建議 8、細節 4）修訂。主要改動：
   - W3 的結論降到證據撐得住的程度，範圍限界照實寫（2.3、§7）；
   - 寫明這一批的根據是使用者 11-21 的 owner 決定，不是 os.md RC9 意義下的純搬移（2.5、§5、§9 的決定 2）；
   - cv 後備的 pending 約定寫死，突變改成移植 `756073aa` 的 ow-x 系列再補新的（3.1、6.3）；
   - §14.4 補上 Invariant 7 的守衛、以 L1 取代 D71 計時驗收這兩份 1～5（5.3、5.4）；
   - 條文清單補齊（5.1），檔案清單補 hygiene 測試（6.1），和 #260 的交集逐條列出（6.3）。
   檢查報告的全文在本卡的對話裡（未另存），逐條的處理見各節。
+- 修訂 3（這一份）：使用者問「W3 你沒有重別家的源碼裡找到答案嗎？」。修訂 2 之前查別家的源碼只用來回答「怎麼做」，沒有拿來解釋 W3。改用「為什麼只有 window 情境不通過」去查，找到一條有出處的機制，核對 A、B 用的 SDL `release-3.4.0` 後補進 2.2 的 H6、2.3 與 §7（使用者：「那先不管W3，核對 3.4.0 然後補進宣告」）。
 
 根據：`docs/architecture/os.md`（Components 的 Wait 列、Design Invariants 6、8、9，Replacement Criteria 2、7、9）、`docs/architecture/time.md`（Design Invariants 5、7、8、10，Replacement Criterion 3）、`docs/architecture/plans/os-subsystem/closeout.md`（第 2、3、5 節）、同目錄 `HANDOFF.md` 的 D71、D72、D74、D78，以及 `docs/dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md` 的 W3 節。舊的搬移在 commit `4041cf42`、`756073aa`（只在備份分支 `os-subsystem-75418486` 上）。
 
@@ -74,6 +75,7 @@
 | H3：純粹是量測雜訊 | 用 W3 的 16 次逐次數值，估「同一支程式比自己（A/A）」超出 +0.02 ms 的機率（`build/evidence/gyo2-os-wait/w3_stats.py`，常態近似、200,000 次模擬） | **只成立一半**。window 情境逐次的標準差約 0.012 ms，A/A 超出邊界的機率約 1.6%；4 對裡有 3 對是 B 較高（+0.025、+0.035、+0.027、−0.015 ms）。所以 window 的位移可能是真的，單靠雜訊不容易解釋。 |
 | H4：判定本身不適合 Windows | 同上的模擬；對照 D71 的校準條件 | **成立**。+0.02 ms 只在 macOS Intel 上用 A/A 校準過（那裡 P50 約 0.077 ms，邊界約為 P50 的 26%）。到了 Windows，window 情境只剩 4.3%；cli 情境逐次的標準差約 0.052 ms，A/A 就有約 **31%** 的機率不通過，等於擲硬幣。Windows 上沒有 A/A 的資料。 |
 | H5：位移來自搬移以外的差別 | 讀 W3 的紀錄與腳本 | **無法查證，但有三個具體的候選**：<br>① 只有 window 情境載入 `SDL3.dll`，A、B 是兩個 checkout 各自建置的，兩份 DLL 的雜湊沒有記錄（D74）；<br>② 每一對裡 B 一律排在 A 之後，對內的漂移會一直偏向 B；<br>③ 兩份執行檔的程式碼配置（對齊、位址）不同。<br>要分辨這三個，需要再量（D74 的 (B)）。 |
+| H6：window 情境跑在不同的計時器解析度下，而那個解析度受量測時的視窗狀態影響（修訂 3 加） | 讀 A、B 用的 SDL `release-3.4.0`（tag 指向 commit `a962f40b`；兩邊的 `engine/render/shaders/pipeline/cmake/Dependencies.cmake` 都釘這個 tag）；讀微軟的 `timeBeginPeriod` 文件；查 A、B 自己有沒有改這個設定 | **機制成立，W3 當時是否因此而偏移無法查證。**<br>① SDL 一初始化就把這個程式的計時器解析度提到 1 ms：`SDL_InitMainThread` 呼叫 `SDL_InitTicks`（`src/SDL.c:295`）；`SDL_InitTicks` 登記 `SDL_HINT_TIMER_RESOLUTION` 的回呼（`src/timer/SDL_timer.c:594`）；登記時立刻以目前的值呼叫一次（`src/SDL_hints.c:367`）；沒設這個 hint 時 `period = 1`（`SDL_timer.c:572-576`，註解「Unless the hint says otherwise, let's have good sleep precision」），再呼叫 `timeBeginPeriod(1)`（`SDL_timer.c:562`）。A、B 的 `engine/`、`tests/` 都沒有設這個 hint，也沒有自己呼叫 `timeBeginPeriod`（`git grep` 0 筆；正例：同一個命令命中 `756073aa` 的 `os_boundary_guard.py:62`）。只有 window 情境的程式載入 SDL，所以 cli 跑在系統預設的解析度下，window 跑在 1 ms 下。這和 W3 的數字對得上（window 的 deadline P50 約 0.47 ms，cli 約 0.62 ms），也證實了 Windows dev_log 當時「推測是 SDL 提高了計時器解析度，未確認」那一句。<br>② 微軟文件：從 Windows 10 2004 起，這個設定只影響呼叫它的程式自己；從 Windows 11 起，有視窗的程式被完全遮住、最小化，或使用者看不見、聽不到時，不保證比系統預設更高的解析度。所以 window 情境的晚醒，取決於量測時視窗是否在前景、有沒有被遮住。<br>③ 高解析度 waitable timer 本身也會受 `timeBeginPeriod` 影響：Chromium 的量測（Bruce Dawson，scheduler-dev）四種組合互有出入，只算小樣本。<br>W3 沒有記錄 Windows 的版本、量測時的視窗狀態、實際生效的解析度，所以無法回頭驗證。 |
 
 ### 2.3 推斷與總結
 
@@ -81,6 +83,7 @@
 - window 的位移可能是真的（H3）。H5 的三個候選裡，③ 程式碼配置不同，本身就是搬移帶來的，所以不能說「和搬移無關」。D74 的 (B)（Windows A/A）被 D78 取消，原因一直沒查（`closeout.md` 第 2 節）。
 - H3 的 1.6% 是用每側 4 筆估標準差、再以常態模擬得到的，只當量級看。審查者用同一組數字算：成對差 3 正 1 負，雙樣本 t 約 2.1，單側 p 約 0.04。
 - 當時的判定在 Windows 上校準不足（H4）。
+- **H6 給了一條和搬移無關、又只影響 window 情境的機制**：SDL 把 window 情境的程式提到 1 ms 解析度，而 Windows 11 會依視窗是否被遮住決定給不給。它剛好解釋「只有 window 不通過、cli 沒有」：cli 兩側都沒有載入 SDL，條件相同。但 W3 沒記錄能驗證它的狀態，所以結論仍是「原因未查明」，只是多了一個有出處的候選。
 - 同一個形狀（兩次配置、兩層間接）在 macOS Intel 的 L2 是 12／12 通過（`HANDOFF.md` 的 w6-l2）；在 Windows 是 W3，11／12，window deadline P50 不通過。W3 是這個形狀在 Windows 上唯一的量測，不通過照原樣保留（§7 的範圍限界）。
 - 就算位移是真的：0.023 ms 是 60 Hz 一個 tick（16.7 ms）的 0.14%，是 Windows 晚醒本身（約 0.47 ms）的 5%。
 - **gyo2 上現在量不到 window 情境**：gyo2 還沒有 SDL（`tests/common/time/` 只有沒有視窗的 `gyo_time_wake_record`）。
@@ -419,7 +422,7 @@ condition variable 後備的 pending 旗標（3.1）**不是** ★：`Waiter` �
   - macOS arm64：從來沒有量過（沒有機器）。
   - Windows 的機制選錯、旗標抄錯：L1 抓不到，只靠 5.4 的記號清單；Windows 上沒有跑突變。
   - window 情境在 gyo2 上無法量（沒有 SDL）。
-  - 之後在兩種情況下，由那個 Feature 另行宣告量測：SDL 那批進來時要 window 的基準，或 Client／Match 的節奏有產品壓力時（新的 os.md RC2）。這次的 W3 分析可以當起點：先跑 Windows A/A，再推門檻，並記錄 DLL 的雜湊、交替 A／B 的順序。
+  - 之後在兩種情況下，由那個 Feature 另行宣告量測：SDL 那批進來時要 window 的基準，或 Client／Match 的節奏有產品壓力時（新的 os.md RC2）。這次的 W3 分析可以當起點：先跑 Windows A/A，再推門檻，並記錄 DLL 的雜湊、交替 A／B 的順序；window 情境另外記錄 Windows 的版本、量測時視窗是否在前景或被遮住、實際生效的計時器解析度（H6）。
 - **件數の突き合わせ**：這一批沒有計測，所以不適用。之後若使用者要求加跑「只記錄」的 Windows 晚醒，那一份報告以「件數の突き合わせ：…」那行開頭（§14 冒頭），並列出計畫次數、跑完次數、無效次數。
 - 實機腳本：這一批沒有實機場次，不寫腳本。
 - 停止條件：照 AGENTS §14 開頭。本宣告已列的判定改變（5.2 的 Invariant 10、5.3 的 Invariant 7、6.1 的 `WaiterTests` 改寫）以外，任何既有測試的判定要改時停下回報。
@@ -468,4 +471,5 @@ v8-arch-gyo2-os-wait
 - `docs/architecture/target/v2/world-time.zh-Hant.md` 第 17 行的「只連 Base＋Threads」：交第 4 批（draft #259）。
 - `tests/common/threads/RoleThreadTests.cpp R2 4` 仍是永久條目。
 - SDL 那批進來時，`gyo_time_wake_record_window` 與 Windows 的 window 晚醒基準要不要重建，由那批決定（2.3）。
+- SDL 那批進來時，也要知道：SDL 一初始化就會對整個程式呼叫 `timeBeginPeriod(1)`（H6），連帶改變 Windows 上 `Waiter` 的晚醒；要不要用 `SDL_HINT_TIMER_RESOLUTION` 控制它，由那批決定。
 - os.md 的 Replacement Criterion 7 在 `src/<平台>/` 的規則下要重讀一次，看措辭是否仍合用。這是規則的整理，交給風紀委員。
