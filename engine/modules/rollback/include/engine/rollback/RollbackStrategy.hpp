@@ -168,7 +168,8 @@ struct RollbackOptions {
     // Where the rollback Module's Systems of each frame are mounted (the default skeleton's names): decide, restore
     // and resimulate in decideStage, before the fixed step (authority-rollback declaration 5.2: lightyear's
     // PreUpdate); the correction in correctStage, chosen by the author (rollback declaration 5.5 point 7).
-    std::string frameSchedule = std::string(Orchestration::DefaultSchedules::frame);
+    // Empty: the time Module's frame schedule (WorldTimeOptions::frameSchedule; the default skeleton's without it).
+    std::string frameSchedule;
     std::string decideStage = std::string(Orchestration::DefaultSchedules::preUpdate);
     std::string correctStage = std::string(Orchestration::DefaultSchedules::postUpdate);
 };

@@ -4,6 +4,7 @@
 #include "engine/rollback/Inbox.hpp"
 #include "engine/rollback/Runtime.hpp"
 #include "engine/world_time/TimeTypes.hpp"
+#include "engine/world_time/WorldTimeModule.hpp"
 
 #include <optional>
 #include <string>
@@ -37,6 +38,10 @@ void RollbackModule::Build(Orchestration::WorldSetup& setup) {
     const RollbackOptions* options = setup.Options<RollbackOptions>();
     RollbackStrategy* strategy = options != nullptr ? options->strategy.get() : nullptr;
     if (strategy != nullptr) {
+        const WorldTime::WorldTimeOptions* time = setup.Options<WorldTime::WorldTimeOptions>();
+        const std::string frame = !options->frameSchedule.empty() ? options->frameSchedule
+                                  : time != nullptr                ? time->frameSchedule
+                                                                   : std::string(Orchestration::DefaultSchedules::frame);
         // A World that chose a strategy: the history, the strategy to call and the frame's Systems (R-4: none
         // without one).
         r.Resource<RollbackHistory>({.name = "RollbackHistory"});
@@ -45,15 +50,15 @@ void RollbackModule::Build(Orchestration::WorldSetup& setup) {
         r.Message<RollbackAbandoned>({.name = "RollbackAbandoned"});
         Kernel::SystemOptions decide;
         decide.name = "RunRollback";
-        decide.mounts.push_back(Kernel::Mount{options->frameSchedule, options->decideStage, {}, {}, {}, {}});
+        decide.mounts.push_back(Kernel::Mount{frame, options->decideStage, {}, {}, {}, {}});
         r.AddSystem<&RunRollback>(decide);
         Kernel::SystemOptions send;
         send.name = "SendRollbackNotes";
-        send.mounts.push_back(Kernel::Mount{options->frameSchedule, options->decideStage, {}, {"RunRollback"}, {}, {}});
+        send.mounts.push_back(Kernel::Mount{frame, options->decideStage, {}, {"RunRollback"}, {}, {}});
         r.AddSystem<&SendRollbackNotes>(send);
         Kernel::SystemOptions correct;
         correct.name = "CorrectFrame";
-        correct.mounts.push_back(Kernel::Mount{options->frameSchedule, options->correctStage, {}, {}, {}, {}});
+        correct.mounts.push_back(Kernel::Mount{frame, options->correctStage, {}, {}, {}, {}});
         r.AddSystem<&CorrectFrame>(correct);
     }
     // When the World is prepared: the resolved registrations go into it (read at run time from there, so a failed

@@ -655,6 +655,45 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: each step run again has a span.rollback*",
    "expect": "\\[rb\\-trace\\-resimulate\\] runs of FixedUpdate under"
+  },
+  {
+   "id": "rb-step-default-ignores-time",
+   "what": "StepSchedule() takes the skeleton's fixed-step schedule, not the time Module's (authority-rollback declaration 2.3). Only it catches the default following the time Module",
+   "guards": [
+    "authority-rollback-declaration 2.3"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "void RollbackEntry::StepSchedule() { StepSchedule(fixedSchedule_); }",
+   "replace": "void RollbackEntry::StepSchedule() { StepSchedule(std::string(Orchestration::DefaultSchedules::fixed)); }",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: the step schedule and the frame schedule default*",
+   "expect": "\\[rb\\-step\\-default\\-follows\\]"
+  },
+  {
+   "id": "rb-frame-default-ignores-time",
+   "what": "the rollback's frame Systems are mounted in the skeleton's frame schedule, not the time Module's (authority-rollback declaration 2.3). Only it catches the frame default",
+   "guards": [
+    "authority-rollback-declaration 2.3"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "                                  : time != nullptr                ? time->frameSchedule",
+   "replace": "                                  : false                          ? time->frameSchedule",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: the step schedule and the frame schedule default*",
+   "expect": "\\[rb\\-frame\\-default\\-follows\\]"
+  },
+  {
+   "id": "rb-e10-unchecked",
+   "what": "the official strategy without a step schedule is not reported: it records nothing and never takes an authoritative value, silently (review of step 8, A4). Only it catches RB-E10",
+   "guards": [
+    "rollback R-6"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    if (context.Registrations().stepSchedules.empty()) {",
+   "replace": "    if (false) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: the step schedule and the frame schedule default*",
+   "expect": "\\[rb\\-e10\\]"
   }
  ]
 }

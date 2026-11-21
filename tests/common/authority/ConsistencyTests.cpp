@@ -359,6 +359,7 @@ TEST_CASE("authority consistency: the rollback's skipped-while-resimulating cond
     client.rollback = std::make_shared<R::StateRollbackStrategy>();
     CHECK_MESSAGE(FingerprintOf([](O::WorldSetup& s) {
                       A::AuthorityEntry(s).Component<Health>("Health");
+                      R::RollbackEntry(s).StepSchedule();
                       K::SystemOptions first = In("WriteHealth", "FixedUpdate", "Update");
                       R::RollbackEntry(s).SkipDuringResimulation(first);
                       s.Registrar().AddSystem<&WriteHealth>(first);

@@ -297,6 +297,44 @@ TEST_CASE("rollback strategy: a confirmed point further back than the depth is g
     CHECK_MESSAGE((notes[0].requested == 2 && notes[0].tick == 9 && notes[0].depth == 4), "[rb-abandoned] fields");
 }
 
+TEST_CASE("rollback strategy: the step schedule and the frame schedule default to the time Module's; none is RB-E10") {
+    // StepSchedule() takes the time Module's fixed-step schedule and its Last.
+    auto defaults = O::Product::Build(Game([](O::WorldSetup& s) {
+                                          s.Registrar().Component<Health>({.name = "Health"});
+                                          R::RollbackEntry rollback(s);
+                                          rollback.Component<Health>();
+                                          rollback.StepSchedule();
+                                      }, WithStrategy()),
+                                      Units());
+    REQUIRE_MESSAGE(static_cast<bool>(defaults), Reported(defaults));
+    const R::RollbackRegistry* registry = WorldOf(**defaults).Resource<R::RollbackRegistry>();
+    REQUIRE(registry != nullptr);
+    CHECK_MESSAGE((registry->StepSchedule("FixedUpdate") != nullptr && registry->StepSchedule("FixedUpdate")->recordStage == "Last"),
+                  "[rb-step-default]");
+    // A time Module set to other names: the defaults follow it.
+    O::OptionBag renamed = WithStrategy();
+    renamed.Set(W::WorldTimeOptions{.frameSchedule = "Frame2", .fixedSchedule = "Physics"});
+    auto followed = O::Product::Build(Game([](O::WorldSetup& s) {
+                                          s.Registrar().Component<Health>({.name = "Health"});
+                                          R::RollbackEntry rollback(s);
+                                          rollback.Component<Health>();
+                                          rollback.StepSchedule();
+                                      }, std::move(renamed)),
+                                      Units());
+    const std::string text = Reported(followed);
+    // (Neither schedule exists: the kernel names where each System was mounted.)
+    CHECK_MESSAGE(text.find("'RollbackRecord:Physics' is mounted in schedule 'Physics'") != std::string::npos,
+                  "[rb-step-default-follows] " << text);
+    CHECK_MESSAGE(text.find("'RunRollback' is mounted in schedule 'Frame2'") != std::string::npos, "[rb-frame-default-follows] " << text);
+    // The official strategy with no step schedule: RB-E10 (it would record nothing and take no authoritative value).
+    auto none = O::Product::Build(Game([](O::WorldSetup& s) {
+                                      s.Registrar().Component<Health>({.name = "Health"});
+                                      R::RollbackEntry(s).Component<Health>();
+                                  }, WithStrategy()),
+                                  Units());
+    CHECK_MESSAGE(Reported(none).find("RB-E10") != std::string::npos, "[rb-e10] " << Reported(none));
+}
+
 TEST_CASE("rollback strategy: R-4: a World without a strategy has no history and records nothing") {
     auto built = O::Product::Build(Game(&Build), Units());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));

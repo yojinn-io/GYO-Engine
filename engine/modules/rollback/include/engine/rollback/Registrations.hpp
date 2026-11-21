@@ -22,6 +22,7 @@
 #include "engine/kernel/Hash.hpp"
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/TypeKey.hpp"
+#include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
 #include "engine/rollback/History.hpp"
 #include "engine/world_time/TimeTypes.hpp"
@@ -276,8 +277,11 @@ public:
         table_->Append(DerivedRecord{Kernel::KeyOf<T>(), &Detail::ComponentIdIn<T>, source_});
     }
     // The step schedule: the record runs in its recordStage after each step (in a World with a strategy, the
-    // record System is mounted there now, by the first registration of the schedule).
-    void StepSchedule(std::string name, std::string recordStage);
+    // record System is mounted there now, by the first registration of the schedule). The defaults follow the
+    // time Module (authority-rollback declaration 2.3): its fixed-step schedule (WorldTimeOptions::fixedSchedule)
+    // and that schedule's Last.
+    void StepSchedule();
+    void StepSchedule(std::string name, std::string recordStage = std::string(Orchestration::DefaultSchedules::last));
     // A schedule run nested from stepSchedule.
     void NestedSchedule(std::string name, std::string stepSchedule);
     // The System of options is skipped while the World resimulates: a run
@@ -297,6 +301,8 @@ private:
     Source source_;
     // The World chose a strategy: StepSchedule mounts the record (none without one: R-4).
     bool strategy_;
+    // The time Module's fixed-step schedule in this World: StepSchedule()'s default.
+    std::string fixedSchedule_;
 };
 
 } // namespace GYO::Engine::Rollback

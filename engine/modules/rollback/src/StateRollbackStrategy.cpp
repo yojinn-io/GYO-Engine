@@ -122,6 +122,12 @@ void CheckMessages(CheckContext& context, const std::set<std::string>& schedules
 
 void StateRollbackStrategy::Check(CheckContext& context) {
     const std::set<std::string> schedules = ResimulatedSchedules(context.Registrations());
+    // Without a step schedule nothing is recorded and every rollback is given up: an authoritative value would
+    // never be taken, silently (review of step 8, A4).
+    if (context.Registrations().stepSchedules.empty()) {
+        context.Report("RB-E10", "StateRollbackStrategy: no step schedule (rollback.StepSchedule(); its default is the time "
+                                 "Module's fixed-step schedule): nothing would be recorded and no rollback would run");
+    }
     CheckDerivedOrder(context, schedules);
     CheckMessages(context, schedules);
     // A rollback of depth steps writes back the inputs of depth steps: an input history that keeps fewer would

@@ -1,6 +1,7 @@
 #include "engine/rollback/Registrations.hpp"
 
 #include "engine/rollback/Runtime.hpp"
+#include "engine/world_time/WorldTimeModule.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -202,9 +203,13 @@ bool RunsWhileResimulating(const Kernel::SystemInfo& system, const std::set<std:
 
 RollbackEntry::RollbackEntry(Orchestration::WorldSetup& setup, Source source)
     : table_(setup.Buffer().Find<RollbackRegistrations>()), registrar_(&setup.Registrar()), source_(source),
-      strategy_(setup.Options<RollbackOptions>() != nullptr && setup.Options<RollbackOptions>()->strategy != nullptr) {
+      strategy_(setup.Options<RollbackOptions>() != nullptr && setup.Options<RollbackOptions>()->strategy != nullptr),
+      fixedSchedule_(setup.Options<WorldTime::WorldTimeOptions>() != nullptr ? setup.Options<WorldTime::WorldTimeOptions>()->fixedSchedule
+                                                                            : std::string(Orchestration::DefaultSchedules::fixed)) {
     GYO_ASSERT(table_ != nullptr && "rollback registrations in a World the rollback Module is not built into");
 }
+
+void RollbackEntry::StepSchedule() { StepSchedule(fixedSchedule_); }
 
 void RollbackEntry::StepSchedule(std::string name, std::string recordStage) {
     const bool first = std::none_of(table_->StepSchedules().begin(), table_->StepSchedules().end(),

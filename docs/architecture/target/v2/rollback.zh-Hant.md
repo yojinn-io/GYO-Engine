@@ -26,12 +26,14 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 |---|---|
 | `Component<T>(options)`、`Resource<T>(options)` | 可回滾（比較函式預設 `==`；沒有 `==` 的型別要給比較函式）。型別由別的入口登記進 Kernel |
 | `Derived<T>()` | 每步在讀者之前由立即寫者重算；不記錄、不還原（R-7） |
-| `StepSchedule(name, recordStage)` | 回滾的單位；有策略的 World 在登記當下把記錄 System 掛到那個 stage |
+| `StepSchedule(name, recordStage)`、`StepSchedule()` | 回滾的單位；有策略的 World 在登記當下把記錄 System 掛到那個 stage。預設跟著時間 Module（回滾份 2.3）：不帶參數＝`WorldTimeOptions::fixedSchedule`，`recordStage` 預設 `Last`。選了官方策略卻沒有步的 schedule 是 RB-E10（什麼都不記、權威值永遠不採用） |
 | `NestedSchedule(name, stepSchedule)` | 從步的 schedule 巢狀跑的 schedule；重跑時會跑到，只進檢查的範圍 |
 | `SkipDuringResimulation(options)` | 在 `AddSystem` 之前給它的每個掛載加執行條件（讀時間 Module 的 `Resimulation`）。「重跑時跑不跑」逐個掛載看條件（`RunsWhileResimulating`）：之後才加的掛載會重跑 |
 | `Input<T>(capacity)` | 官方策略替 `T` 保留按 tick 的歷史；不登記 `T` |
 
 同一型別同時登記成可回滾與 `Derived`：作者的蓋過代為的（跨兩種也一樣）；兩筆都是作者的是 RB-E1。
+
+`RollbackOptions::frameSchedule`（決定、還原、重跑與修正掛的 frame schedule）空字串＝時間 Module 的 `WorldTimeOptions::frameSchedule`（沒有時間的選項時是預設骨架的）。
 
 重跑的每一步外面有一段 trace（經 Base 的門面，category `rollback`、name `resimulate`；回滾份 10.4）：祖先裡有 `span.rollback` 的段是重跑，第一次跑沒有這一層。不依賴 trace Module，不讀寫 World 的值。
 
