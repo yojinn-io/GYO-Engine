@@ -1,4 +1,4 @@
-# The engine Modules, in the order of engine/config/modules.csv, each from the
+# The engine Modules, in the order of config/modules.csv, each from the
 # directory its row names (dir: core/, ecs/, orchestration, modules/): the build
 # order, what a Module depends on first (Base lowest). The register is the one
 # place that names the Modules and their dependencies (Design Invariant O-6 of

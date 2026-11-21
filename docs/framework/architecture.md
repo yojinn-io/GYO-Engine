@@ -60,8 +60,8 @@ It has two parts. Only the first exists so far:
 A change against any item below is an Architecture Delta that needs the user's
 agreement, however small (AGENTS.md section 3). So is changing this section.
 
-1. The framework is not a product. It has no row in `engine/config/tools.csv`
-   or `engine/config/projects.csv`, no `project.json`, no executable and no
+1. The framework is not a product. It has no row in `config/tools.csv`
+   or `config/projects.csv`, no `project.json`, no executable and no
    install or package target. It is built only while a selected product uses
    it: while a tool is selected, or while a selected game declares the
    component `FRAMEWORK` in its `project.json` (which links
@@ -105,8 +105,8 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    clip) are validated by calling Engine. Which of the three kinds a format is
    follows the layer table in `docs/architecture.md` ("Layers: admission and
    format ownership", user, 2026-11-04). Guards: the dependency guard fails
-   when framework code names an id registered in `engine/config/tools.csv` or
-   `engine/config/projects.csv`; a composition format has rule tests and
+   when framework code names an id registered in `config/tools.csv` or
+   `config/projects.csv`; a composition format has rule tests and
    mutants like the catalog's (C1–C7), one group per rule.
 4. The framework writes no file of its own. The ImGui binding writes no side
    file (`imgui.ini`, ImGui's log). The catalog mount is read-only and has no

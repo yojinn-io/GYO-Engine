@@ -1,7 +1,7 @@
 # Module and Plugin registers (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md,
 # section 3.2; Design Invariant O-6 of docs/architecture/target/v2/orchestration.zh-Hant.md).
 #
-# engine/config/modules.csv and engine/config/plugins.csv are the one place
+# config/modules.csv and config/plugins.csv are the one place
 # that says which Modules and Plugins exist, whether each goes into a World
 # (has a registration unit), whether a product carries it by default, and
 # what it depends on (v8-arch-gyo2-module-plugin-registers,

@@ -32,7 +32,7 @@ target_include_directories(gyo_io PUBLIC
 )
 
 target_compile_features(gyo_io PUBLIC cxx_std_20)
-# Engine-internal links come from engine/config/modules.csv (O-6): Base public;
+# Engine-internal links come from config/modules.csv (O-6): Base public;
 # Math (stream helpers use its scalars) and the OS layer (the native file
 # system) private.
 gyo_link_registered_dependencies(io)

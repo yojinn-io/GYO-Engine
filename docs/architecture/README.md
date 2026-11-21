@@ -32,7 +32,7 @@ The same §4 also says where an adapter for an external component lives, and dis
 ### Directory layers of `engine/` (user, 2026-11-21)
 
 `engine/` is split by layer, one level deep (`engine/<layer>/<unit>/`); a unit's directory is the `dir` column of its row in
-`engine/config/modules.csv`, not guessed from its name:
+`config/modules.csv`, not guessed from its name:
 
 | Directory | Layer | Units |
 |---|---|---|
@@ -44,6 +44,11 @@ The same §4 also says where an adapter for an external component lives, and dis
 
 Dependencies point down only: a Module may depend on core, ecs and orchestration; core depends on no Module. Include paths
 keep the form `engine/<unit>/<header>` whatever the layer.
+
+The registers that say what the repository is made of (`modules.csv`, `plugins.csv`, `projects.csv`, `tools.csv`) are in
+the top-level `config/`, outside the Engine, the plugins and the products (user, 2026-11-21): they describe the
+composition the build reads, not a capability of the Engine, and the Engine does not know products (like Go's `go.work`
+or a Cargo workspace manifest at the root).
 
 ## Naming
 

@@ -10,7 +10,7 @@ docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md section 3.
 Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
 
   K1  a product or tool name, or a connection-role word, in code or comments (CMakeLists.txt included):
-        (i)   the ids registered in engine/config/projects.csv and engine/config/tools.csv, as words:
+        (i)   the ids registered in config/projects.csv and config/tools.csv, as words:
               - as written (snake form), ignoring case, bounded by the start or end of the text or by a character
                 that is not a letter or digit ("_" is a boundary): id arena matches arena, ARENA_SIZE, k_arena;
               - in CamelCase, case-sensitive, from the start of a word (no uppercase letter before it, so an
@@ -89,7 +89,7 @@ import sys
 from pathlib import Path
 
 SCANNED = "engine/ecs/kernel"
-REGISTRIES = ("engine/config/projects.csv", "engine/config/tools.csv")
+REGISTRIES = ("config/projects.csv", "config/tools.csv")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc", ".ixx"}
 # CMakeLists.txt: K1 only. Any other file under engine/kernel/ is K0.
 

@@ -15,7 +15,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::WorldTime ──► GYO::Orchestrat
 ```
 
 - `engine/core/time` 不動：只有時間基準（`MonotonicClock`、`Waiter`、`LateWakeStats`），只連 Base＋Threads（[`time.md`](../../time.md) DI 10）。三家（Bevy、flecs、Unity）都把「現在幾點、睡到幾點」放在 OS 介面那一層、把遊戲時間另成一處並和 World 綁在一起。
-- 登記檔 `engine/config/modules.csv` 的 `world_time` 列：依賴 `base;kernel;logging;orchestration;time`（`logging` 由 `v8-arch-gyo2-logging` 加，描述器 `TimeDiscardedLog` 放在訊息旁邊，日誌宣告第 13 節第 1 題 D，2026-11-20 動工前核准），`library_only=no`、`default=yes`（每個 World 預設帶、產品可關，O-6）。第一個真的進 World 的 Engine Module。
+- 登記檔 `config/modules.csv` 的 `world_time` 列：依賴 `base;kernel;logging;orchestration;time`（`logging` 由 `v8-arch-gyo2-logging` 加，描述器 `TimeDiscardedLog` 放在訊息旁邊，日誌宣告第 13 節第 1 題 D，2026-11-20 動工前核准），`library_only=no`、`default=yes`（每個 World 預設帶、產品可關，O-6）。第一個真的進 World 的 Engine Module。
 - 標頭：`TimeTypes.hpp`（純型別與算術，只 include `<cstdint>`）；`FixedStep.hpp`（跑一步、退回、放回；用 Kernel 的 `ExclusiveWorld`，不讀時間基準）；`Sampling.hpp`（**唯一** include `MonotonicClock.hpp` 的標頭，zone_scan ZS1：判定的 System 要能讀 `Tick` 而不碰時鐘）；`WorldTimeModule.hpp`。實作：宣告的 `TickAccumulator.hpp` 併進 `TimeTypes.hpp`。
 - 程式裡的 `Engine::` 一律全限定（`::Engine::Base::`、`::Engine::Time::`）；`gyo_orchestration_include_order` 涵蓋 `world_time` 的公開標頭與編排層、Kernel 標頭的各種順序。
 

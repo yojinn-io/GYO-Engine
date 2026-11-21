@@ -261,7 +261,7 @@ link this contract instead of restating it.
 
 <a id="build-project-management"></a>
 
-The repository root is the supported game build entry. `engine/config/projects.csv` determines which games may participate:
+The repository root is the supported game build entry. `config/projects.csv` determines which games may participate:
 
 ```csv
 name,description,version,enabled,windows,linux,macos
@@ -269,7 +269,7 @@ name,description,version,enabled,windows,linux,macos
 
 `GYO_APPS=AUTO` selects enabled games supported by the target OS. An empty value selects none. An explicit semicolon-separated subset must obey the same CSV policy. App directories are never enumerated as a substitute for the registry. A selected missing or broken app fails the integration; an unselected directory has no effect.
 
-Each game has a small `project.json` declaring engine components and an optional display name. Tool descriptors declare a default variant, each variant's components/packageability, and any named app dependencies. `engine/config/tools.csv` owns enabled/default/release/platform selection. `GYO_TOOLS=` selects none, `AUTO` selects the platform's enabled default tools, and an explicit semicolon-separated `id[:variant]` list selects permitted tools. A tool's required app must already be selected by `GYO_APPS`; tools never silently enable games. The root resolves game, tool and common-test requirements before composing the engine, then adds each selected owner once. Game CMake files declare only game targets, sources and links. They do not implement requirement-discovery passes, asset recipes, test registration or release contracts.
+Each game has a small `project.json` declaring engine components and an optional display name. Tool descriptors declare a default variant, each variant's components/packageability, and any named app dependencies. `config/tools.csv` owns enabled/default/release/platform selection. `GYO_TOOLS=` selects none, `AUTO` selects the platform's enabled default tools, and an explicit semicolon-separated `id[:variant]` list selects permitted tools. A tool's required app must already be selected by `GYO_APPS`; tools never silently enable games. The root resolves game, tool and common-test requirements before composing the engine, then adds each selected owner once. Game CMake files declare only game targets, sources and links. They do not implement requirement-discovery passes, asset recipes, test registration or release contracts.
 
 The normal `dev` product configuration disables `BUILD_TESTING`, `GYO_ENABLE_PACKAGING` and design tools. A single selected game can therefore build and run without `tests/`, tool sources or CI files. The `test` configuration selects default tools. The pull request merge gate (L1) builds the `ci-<os>` presets without extra selection arguments, covering every registry-enabled game and the default tools; packaging CI explicitly selects the release tools exported from the same CMake registry parser. `tools/ui_editor` also offers a thin standalone entry that forwards to this same root graph; it does not rebuild an independent copy of the engine composition rules.
 

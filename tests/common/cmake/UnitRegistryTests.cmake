@@ -72,7 +72,7 @@ function(expect_bad_registers name modules_body plugins_body expected)
 endfunction()
 
 # --- The repository's own registers -----------------------------------------
-gyo_load_unit_registers(REPO "${repository}/engine/config/modules.csv" "${repository}/engine/config/plugins.csv")
+gyo_load_unit_registers(REPO "${repository}/config/modules.csv" "${repository}/config/plugins.csv")
 get_property(repo_order GLOBAL PROPERTY REPO_ORDER)
 # Every unit directory under engine/ with a CMakeLists.txt is some Module row's dir,
 # and every Module row's dir has one (engine/CMakeLists.txt adds the directories

@@ -2356,7 +2356,7 @@
     "orchestration O-4",
     "time-events-declaration 6.3"
    ],
-   "file": "engine/config/modules.csv",
+   "file": "config/modules.csv",
    "find": ",yes,no,kernel;base,,,",
    "replace": ",yes,no,kernel;base;math,,,",
    "target": "gyo_orchestration_tests",
@@ -2716,7 +2716,7 @@
    "file": "engine/modules/world_time/CMakeLists.txt",
    "find": "gyo_link_registered_dependencies(world_time)",
    "replace": "gyo_link_registered_dependencies(world_time)\ntarget_link_libraries(gyo_world_time PUBLIC GYO::Math)",
-   "expect": "engine/world_time/CMakeLists\\.txt:\\d+: O6 GYO::Math",
+   "expect": "engine/modules/world_time/CMakeLists\\.txt:\\d+: O6 GYO::Math",
    "command": [
     "{python}",
     "-I",

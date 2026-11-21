@@ -26,7 +26,7 @@ Shader compiler は `engine/render/shaders/pipeline` が所有します。ルー
 
 CMake 3.30 以降、C++20 compiler、Ninja を使用します。Windows は x64 MSVC 開発環境を初期化してください。アセットの組み立てには Python 3、shader にはエンジン管理の native host compiler を使用します。依存ソースは build tree に取得し、既存 source cache は明示的に再利用できます。
 
-`engine/config/projects.csv` でゲームと対象 OS を有効にし、リポジトリのルートから実行します。
+`config/projects.csv` でゲームと対象 OS を有効にし、リポジトリのルートから実行します。
 
 ```sh
 cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=

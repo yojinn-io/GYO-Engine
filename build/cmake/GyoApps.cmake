@@ -28,7 +28,7 @@ endfunction()
 
 function(gyo_configure_apps)
     set(GYO_APPS AUTO CACHE STRING "AUTO selects enabled CSV games; empty selects none; otherwise an enabled subset")
-    set(GYO_REGISTRY_FILE "${GYO_REPOSITORY_ROOT}/engine/config/projects.csv" CACHE FILEPATH "Game build selection registry")
+    set(GYO_REGISTRY_FILE "${GYO_REPOSITORY_ROOT}/config/projects.csv" CACHE FILEPATH "Game build selection registry")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GYO_REGISTRY_FILE}")
     gyo_read_app_registry("${GYO_REGISTRY_FILE}" data)
     gyo_select_apps("${data}" "${CMAKE_SYSTEM_NAME}" "${GYO_APPS}" selected)

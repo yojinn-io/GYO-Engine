@@ -22,7 +22,7 @@ Likewise, the game owns wording, hierarchy, binding values and the consequence
 of changing a display setting. GYO owns font assets, text rasterization/cache,
 layout and render submission.
 
-Ordinary game builds have testing, package acceptance and design tools disabled. The editor is explicitly selected for local authoring; `engine/config/tools.csv` currently selects its GUI variant for every release platform, even when the game registry is empty. Engine libraries are statically linked into the editor; game archives do not include it.
+Ordinary game builds have testing, package acceptance and design tools disabled. The editor is explicitly selected for local authoring; `config/tools.csv` currently selects its GUI variant for every release platform, even when the game registry is empty. Engine libraries are statically linked into the editor; game archives do not include it.
 
 Tests live under `tests/ui_editor` and common engine validation under `tests/common`. The standalone editor entry forwards to the root build graph. See [project management](architecture.md#build-project-management).
 

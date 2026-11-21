@@ -1,6 +1,6 @@
 # Creating and copying games
 
-Games are source projects inside the engine repository. Build them through the repository root; no external SDK or separate engine installation is required. `apps/<name>` owns game code, `assets/<name>` owns its prepared runtime content, and `engine/config/projects.csv` controls integration. Tests and release support live outside both directories.
+Games are source projects inside the engine repository. Build them through the repository root; no external SDK or separate engine installation is required. `apps/<name>` owns game code, `assets/<name>` owns its prepared runtime content, and `config/projects.csv` controls integration. Tests and release support live outside both directories.
 
 ## Minimal game project
 
@@ -52,7 +52,7 @@ Do not add asset copy commands, install recipes, CI callbacks, tests, diagnostic
 
 ## Select and build
 
-Add the game to `engine/config/projects.csv`:
+Add the game to `config/projects.csv`:
 
 ```csv
 name,description,version,enabled,windows,linux,macos
@@ -142,7 +142,7 @@ For shader-enabled content, supply the declared compiled bundles, for example `-
 1. Copy an enabled game, currently `apps/object_fps_pvp`, to `apps/my_variant`. The former disabled games `object_fps` and `object_fps_v2` were removed on 2026-11-12 (`v8-arch-remove-object-fps`).
 2. Copy `assets/object_fps_pvp` to `assets/my_variant` so content changes are independent. If the game has a Go module, review the copied `go.mod` module path (`gyo.local/<game>`) and its imports.
 3. Change `display_name` in the new `project.json` if desired. Review copied component requirements and relative shader sources.
-4. Add and enable `my_variant` in `engine/config/projects.csv` for the intended platforms.
+4. Add and enable `my_variant` in `config/projects.csv` for the intended platforms.
 5. Build with `-DGYO_APPS=my_variant`; the product identity and runtime asset root derive from the new directory name.
 
 Do not globally rename C++ namespaces, AssetIds, shader IDs, clip names or definition references merely to change deployment identity. They can remain the same until the variant's gameplay/content actually needs different values. The copied game does not carry tests, CI, acceptance scripts, source-art archives or editor tools.
@@ -153,4 +153,4 @@ To integrate variant-specific validation later, copy or add an outer adapter und
 
 Engine tests belong to `tests/common`, game unit/component tests to `tests/<game>`, and separate acceptance executables to `build/acceptance/<game>`. Tests may link the game's reusable libraries. They must not inject testing sources or macros into the shipped game executable.
 
-Release includes the tools selected by `engine/config/tools.csv` for each supported platform (currently UI Editor GUI), then adds CSV-selected games. A selected game or tool failing to configure, build or pass required validation fails the complete integration. With no selected games, the engine/toolchain release still succeeds. A new game without dedicated checks receives the common package/content/native checks; every release tool must provide executable acceptance. See [architecture](architecture.md) and [release procedure](releasing.zh-Hant.md).
+Release includes the tools selected by `config/tools.csv` for each supported platform (currently UI Editor GUI), then adds CSV-selected games. A selected game or tool failing to configure, build or pass required validation fails the complete integration. With no selected games, the engine/toolchain release still succeeds. A new game without dedicated checks receives the common package/content/native checks; every release tool must provide executable acceptance. See [architecture](architecture.md) and [release procedure](releasing.zh-Hant.md).

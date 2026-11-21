@@ -10,6 +10,6 @@ target_include_directories(gyo_entity_store INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Engine-internal links come from engine/config/modules.csv (O-6).
+# Engine-internal links come from config/modules.csv (O-6).
 gyo_link_registered_dependencies(entity_store)
 target_compile_features(gyo_entity_store INTERFACE cxx_std_20)

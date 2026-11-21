@@ -3,7 +3,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/GyoToolRegistry.cmake")
 
 function(gyo_configure_tools)
     set(GYO_TOOLS "" CACHE STRING "Empty selects no tools; AUTO selects defaults; otherwise id[:variant] entries")
-    set(GYO_TOOL_REGISTRY_FILE "${GYO_REPOSITORY_ROOT}/engine/config/tools.csv" CACHE FILEPATH "Tool build selection registry")
+    set(GYO_TOOL_REGISTRY_FILE "${GYO_REPOSITORY_ROOT}/config/tools.csv" CACHE FILEPATH "Tool build selection registry")
     set(components "${GYO_REQUESTED_COMPONENTS}")
     set(selected "")
     # A minimal game copy need not carry a tool registry or any tool sources.

@@ -424,11 +424,11 @@ class WorkflowGateTests(unittest.TestCase):
         # back as its own GYO_BUILD_<TOOL> or GYO_<TOOL>_BUILD_GUI switch. The
         # names come from the registration data, so no tool is named here.
         native = job_block(self.shared, "native")
-        with (ROOT / "engine/config/tools.csv").open(encoding="utf-8", newline="") as rows:
+        with (ROOT / "config/tools.csv").open(encoding="utf-8", newline="") as rows:
             tools = [row["name"].upper() for row in csv.DictReader(rows)]
         if not tools:
             # Not a pass: there is nothing to verify. The check resumes as soon as a tool is registered.
-            self.skipTest("no tool is registered in engine/config/tools.csv: no tool build switch to look for")
+            self.skipTest("no tool is registered in config/tools.csv: no tool build switch to look for")
         for tool in tools:
             self.assertNotRegex(native, rf"GYO_BUILD_{tool}\b|GYO_{tool}_BUILD_GUI\b")
 

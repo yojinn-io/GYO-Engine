@@ -164,7 +164,7 @@ Overlay / HUD → Present
 <a id="r07"></a>
 ## 7. 建置選擇
 
-`engine/config/projects.csv` 的 enabled 與平台欄位決定遊戲集合；`GYO_APPS=AUTO` 使用全部選中遊戲，空值不建遊戲，明確清單只能選擇符合 CSV 的子集。各產品 `project.json` 宣告 optional components，根建置先收集需求再建立同一份 engine graph。遊戲 CMake 不再執行 discovery pass 或維護資產規則。
+`config/projects.csv` 的 enabled 與平台欄位決定遊戲集合；`GYO_APPS=AUTO` 使用全部選中遊戲，空值不建遊戲，明確清單只能選擇符合 CSV 的子集。各產品 `project.json` 宣告 optional components，根建置先收集需求再建立同一份 engine graph。遊戲 CMake 不再執行 discovery pass 或維護資產規則。
 
 | 設定 | 值與用途 |
 |---|---|

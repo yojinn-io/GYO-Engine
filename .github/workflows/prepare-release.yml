@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       train:
-        description: Release train, tools or an enabled game id from engine/config/projects.csv
+        description: Release train, tools or an enabled game id from config/projects.csv
         required: true
         type: string
       version:

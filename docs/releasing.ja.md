@@ -2,7 +2,7 @@
 
 [繁體中文](releasing.zh-Hant.md) · [全体構造](architecture.md) · [描画の検証](rendering_architecture.ja.md#r09)
 
-この文書は現在の CI とリリースの流れを説明します。記述の根拠は `.github/workflows/*.yml`、`.github/actions/native-setup`、`build/ci/common/*.py`、`CMakePresets.json`、`build/acceptance/*/checks.json`、`engine/config/projects.csv`、`engine/config/tools.csv` です。食い違いを見つけた場合はコードが正であり、この文書を直します。
+この文書は現在の CI とリリースの流れを説明します。記述の根拠は `.github/workflows/*.yml`、`.github/actions/native-setup`、`build/ci/common/*.py`、`CMakePresets.json`、`build/acceptance/*/checks.json`、`config/projects.csv`、`config/tools.csv` です。食い違いを見つけた場合はコードが正であり、この文書を直します。
 
 - 1〜9 節：仕組みと規則
 - 10 節：実例（そのまま実行できるコマンド付き）
@@ -38,7 +38,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 
 | 製品 | Archive（各 `.sha256` 付き） | Platform | Owner |
 |---|---|---|---|
-| 設計ツール群（toolchain） | `gyo-toolchain-<platform>.tar.gz`（root `gyo-toolchain`） | `windows-x64`、`linux-x64`、`macos-arm64` の 3 つを常に生成 | `engine/config/tools.csv` で `release` が有効なツール（現在は UI Editor の GUI 既定 variant）と必要な runtime libraries |
+| 設計ツール群（toolchain） | `gyo-toolchain-<platform>.tar.gz`（root `gyo-toolchain`） | `windows-x64`、`linux-x64`、`macos-arm64` の 3 つを常に生成 | `config/tools.csv` で `release` が有効なツール（現在は UI Editor の GUI 既定 variant）と必要な runtime libraries |
 | ゲーム | `gyo-<game>-<platform>.tar.gz`（root `gyo-<game>`）。`object_fps_pvp` は client（`main`）と `match` を含む | `projects.csv` でそのゲームの `enabled` と platform 列が有効なもの。`macos` 列は `macos-arm64` と `macos-x64` の両方を有効にしますが、公開するのは `macos-arm64` だけです（`macos-x64` はローカル build 専用。第 5 節） | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` の行 |
 | ゲームの Go service | `gyo-<game>-<role>-<platform>.tar.gz`。`object_fps_pvp` は `gyo-object_fps_pvp-gateway-linux-x64.tar.gz` と `...-windows-x64.tar.gz` | `gyo_app_add_go_service(... PLATFORMS ...)` で宣言した platform だけ（gateway は Linux と Windows） | そのゲーム（`apps/<game>/go.mod`） |
 
@@ -322,7 +322,7 @@ RC として出す場合は `-f version=v2026.10.1-rc.1 -f prerelease=true` と�
 **ゲーム**（例：`my_game`）。変更するのはそのゲームのコンテンツと登録データだけです。
 
 1. `apps/my_game/`（`CMakeLists.txt`、`project.json`、source）と `assets/my_game/` を用意します（[ゲームの作成とコピー](creating_apps.md)）。
-2. `engine/config/projects.csv` に行を追加します。
+2. `config/projects.csv` に行を追加します。
 
    ```csv
    my_game,My game,,1,1,1,1
@@ -355,7 +355,7 @@ RC として出す場合は `-f version=v2026.10.1-rc.1 -f prerelease=true` と�
 **ツール**（例：`level_editor`）：
 
 1. `tools/level_editor/`（`CMakeLists.txt`、`project.json`）を用意します。Release ツールの既定 variant は `packageable: true` で、`requires_apps` は空でなければなりません（[ツールの登録と選択](tool_projects.md)）。
-2. `engine/config/tools.csv` に行を追加します。
+2. `config/tools.csv` に行を追加します。
 
    ```csv
    level_editor,Level editor,1,true,true,true,true,true,true

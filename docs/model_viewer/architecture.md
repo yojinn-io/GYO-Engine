@@ -43,7 +43,7 @@ A change against any item below is an Architecture Delta that needs the user's a
    event sound starts is `EventSoundOffsetSeconds` only. Guard: the pose-equality test of `-preview` and its mutants.
 6. **Neutral.** An event name is an opaque string to the viewer: it does not know what an event means and does not
    branch on a product. Guard: review, and the dependency guard: no file of the viewer names an id registered in
-   `engine/config/tools.csv` or `engine/config/projects.csv` other than its own.
+   `config/tools.csv` or `config/projects.csv` other than its own.
 
 ### Replacement Criteria
 

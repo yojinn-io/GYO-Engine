@@ -21,4 +21,4 @@ class CopyFixtureTests(unittest.TestCase):
             self.assertEqual((root / "apps/sample_game/CMakeLists.txt").read_bytes(),
                              (root / "apps/variant_game/CMakeLists.txt").read_bytes())
             self.assertIn("fixture.marker", (root / "assets/variant_game/asset_catalog.json").read_text())
-            self.assertIn("variant_game,Copy fixture,,1,1,1,1", (root / "engine/config/projects.csv").read_text())
+            self.assertIn("variant_game,Copy fixture,,1,1,1,1", (root / "config/projects.csv").read_text())

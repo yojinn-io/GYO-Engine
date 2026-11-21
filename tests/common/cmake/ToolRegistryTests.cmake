@@ -137,10 +137,10 @@ equal("${count}" 4 "Standalone exporter JSON")
 # Exercise metadata discovery and app dependencies in project mode without
 # compiling or fetching anything. Poisoned unselected sources must stay unread.
 set(fixture "${work}/fixture")
-file(MAKE_DIRECTORY "${fixture}/engine/config" "${fixture}/apps/demo"
+file(MAKE_DIRECTORY "${fixture}/config" "${fixture}/apps/demo"
     "${fixture}/tools/canvas" "${fixture}/tools/audio" "${fixture}/tools/preview")
-file(COPY "${csv}" DESTINATION "${fixture}/engine/config")
-file(WRITE "${fixture}/engine/config/projects.csv"
+file(COPY "${csv}" DESTINATION "${fixture}/config")
+file(WRITE "${fixture}/config/projects.csv"
     "name,description,version,enabled,windows,linux,macos\ndemo,,,true,true,true,true\n")
 file(WRITE "${fixture}/apps/demo/project.json" "{\"version\":1,\"components\":[]}")
 file(WRITE "${fixture}/apps/demo/CMakeLists.txt" "# Source validation only\n")
@@ -181,7 +181,7 @@ endforeach()
 file(WRITE "${CMAKE_BINARY_DIR}/components.txt" "${GYO_REQUESTED_COMPONENTS}")
 ]=])
 set(configure_args "-DMODULE_ROOT=${repository}/build/cmake"
-    "-DGYO_TOOL_REGISTRY_FILE=${fixture}/engine/config/tools.csv")
+    "-DGYO_TOOL_REGISTRY_FILE=${fixture}/config/tools.csv")
 if(DEFINED GENERATOR AND NOT GENERATOR STREQUAL "")
     list(APPEND configure_args -G "${GENERATOR}")
 else()

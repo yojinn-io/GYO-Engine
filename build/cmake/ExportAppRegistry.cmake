@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.30)
 include("${CMAKE_CURRENT_LIST_DIR}/GyoAppRegistry.cmake")
 
 if(NOT DEFINED GYO_REGISTRY_FILE)
-    set(GYO_REGISTRY_FILE "${CMAKE_CURRENT_LIST_DIR}/../../engine/config/projects.csv")
+    set(GYO_REGISTRY_FILE "${CMAKE_CURRENT_LIST_DIR}/../../config/projects.csv")
 endif()
 gyo_read_app_registry("${GYO_REGISTRY_FILE}" registry)
 gyo_export_app_matrix("${registry}" matrix)

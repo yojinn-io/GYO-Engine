@@ -5,7 +5,7 @@
     {
       "id": "ci-broken-release-selection",
       "what": "the repository registers a release tool that has no descriptor (the export fails whatever else is registered)",
-      "file": "engine/config/tools.csv",
+      "file": "config/tools.csv",
       "find": "name,description,version,enabled,default,release,windows,linux,macos\n",
       "replace": "name,description,version,enabled,default,release,windows,linux,macos\nghosttool,,,true,false,true,true,true,true\n",
       "command": [

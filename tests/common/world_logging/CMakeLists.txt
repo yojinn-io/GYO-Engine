@@ -32,7 +32,7 @@ function(gyo_world_logging_compile_fail_samples)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/ForwardSample.cpp")
     set(includes "")
     foreach(module IN ITEMS world_logging logging kernel orchestration base entity_store)
-        # Each Module's directory comes from its row in engine/config/modules.csv (dir).
+        # Each Module's directory comes from its row in config/modules.csv (dir).
         get_property(module_dir GLOBAL PROPERTY GYO_UNITS_${module}_DIR)
         list(APPEND includes "${GYO_REPOSITORY_ROOT}/engine/${module_dir}/include")
     endforeach()

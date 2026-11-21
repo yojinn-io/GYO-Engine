@@ -8,7 +8,7 @@
 #include <vector>
 
 // What a Product is built from on the register side (declaration section 3.2):
-// every row of the two register files (engine/config/modules.csv, plugins.csv)
+// every row of the two register files (config/modules.csv, plugins.csv)
 // and the unit instances the product carries, each paired with its row by name.
 // gyo_product_units (build/cmake/GyoUnitRegistry.cmake) generates
 // MakeRegisteredUnits() for a product target; tests write it by hand.

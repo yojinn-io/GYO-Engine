@@ -48,3 +48,10 @@
 
 - `ur-name-charset-unchecked`：加了 `dir` 欄之後，名字不合格的列也會被 dir 的檢查擋下、訊息不同，`bad_name` 案從「被接受」變成「沒報出名字自己的訊息」；expect 改成後者（只有這個突變會讓 `bad_name` 換訊息），killed。
 - 沒過的 5 個在 `gyo2` 基準上本來就壞了，不是本批造成：`ks-k6-calls-off`、`ks-k6-every-file-exempt`（stale）、`ks-k8-skips-executor-files`（wrong_failure）找的 `executor_file` 已在異常分級 PR #254 拿掉（D1 拿掉 Executor 的豁免）；`os-g13-definition-name`、`os-g14-definition-platform-id`（stale）在基準上 find 就找不到。要退役或改寫，留給後續（不在本批）。
+
+## 登記檔搬到頂層 `config/`（同一 PR）
+
+- 使用者：「為何config 要放到engine層裡？我的產品登記耶放在裡面喔？請給我一個理由。」主會話查到沒有好理由：`projects.csv` 是 2026-09-21 master 大重整（3fc46857）時集中放進 `engine/config/` 的，GYO2 沿用；四份登記檔描述的是 repo 由什麼組成、由建置一起讀，不是 Engine 的能力，Engine 也不該認得產品（AGENTS §6、§7）。提頂層 `config/`（比照 Go 的 `go.work`、Cargo workspace 的根清單）或拆開放，使用者：「好，搬到頂層 config，併進 #257」。新的頂層目錄是 AGENTS §10 的 Architecture Delta，使用者同意。
+- 做了：`git mv engine/config config`；讀它的 CMake（`GyoBuild`、`GyoApps`、`GyoTools`、`ExportAppRegistry`、`ExportToolRegistry`、`GyoUnitRegistry` 的說明）、各單位 CMakeLists 的註解、`kernel_guard` 的 `REGISTRIES`、`orchestration_guard` 的說明、release workflow、`ProjectCompositionTests`／`ToolRegistryTests` 的假樹、README 與現行文件；`docs/architecture/README.md` 加一段說明。
+- 驗證：本機全新 configure＋全量建置＋ctest 151/151；kernel／orchestration 守衛測試、`test_workflow_gates` 過。這一步碰到的突變 134 個重跑：orchestration 67/67（`or-guard-real-o6-hand-link` 的 expect 裡寫死舊路徑，上一步的替換沒抓到跳脫的點，更正後 killed）、kernel 48/51、os-subsystem 1/7（1 個只在 Windows 跑）、r0b3 5/5、json 2/2、logging 1/1；沒過的都是上一節說的基準上就壞的那些，加上 os-subsystem 另外 4 個（`os-g8-link`、`ti-x1`、`ti-x2`、`th-x1`，find 在基準上就不中：連結已改由登記檔產生）。
+

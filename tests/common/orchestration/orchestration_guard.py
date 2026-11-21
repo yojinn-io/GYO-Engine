@@ -11,7 +11,7 @@ The scans the orchestration-skeleton declaration (section 7.4) deferred until sc
       kernel's System invokers InvokerOf, CallFunction, CallLambda. Read on code with comments and literals blanked.
   O6  an engine-internal link written by hand in an engine CMakeLists.txt: a GYO:: alias among the arguments of
       target_link_libraries( in engine/<module>/CMakeLists.txt ("#" comments stripped; ALIAS lines are not calls).
-      Dependencies live only in engine/config/modules.csv and plugins.csv and the links are generated from them
+      Dependencies live only in config/modules.csv and plugins.csv and the links are generated from them
       (O-6, user v8-arch-gyo2-module-deps-in-registers).
   O0  a directory this guard scans is missing or holds no file (fail closed: the guard never passes by scanning
       nothing).
