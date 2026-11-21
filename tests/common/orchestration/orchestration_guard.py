@@ -11,7 +11,7 @@ The scans the orchestration-skeleton declaration (section 7.4) deferred until sc
       kernel's System invokers InvokerOf, CallFunction, CallLambda. Read on code with comments and literals blanked.
   O6  an engine-internal link written by hand in an engine CMakeLists.txt: a GYO:: alias among the arguments of
       target_link_libraries( in engine/<module>/CMakeLists.txt ("#" comments stripped; ALIAS lines are not calls).
-      Dependencies live only in engine/config/modules.csv and plugins.csv and the links are generated from them
+      Dependencies live only in config/modules.csv and plugins.csv and the links are generated from them
       (O-6, user v8-arch-gyo2-module-deps-in-registers).
   O0  a directory this guard scans is missing or holds no file (fail closed: the guard never passes by scanning
       nothing).
@@ -73,9 +73,11 @@ def check(root):
         relative = path.relative_to(root).as_posix()
         for number, rule, text in orchestration_findings(relative, path.read_text(encoding="utf-8")):
             problems.append(f"{relative}:{number}: {rule} {text}")
-    cmake_files = sorted((root / "engine").glob("*/CMakeLists.txt")) if (root / "engine").is_dir() else []
+    engine = root / "engine"
+    # Every unit's CMakeLists.txt: engine/<layer>/<unit>/ and the orchestration layer engine/orchestration/.
+    cmake_files = sorted(p for p in engine.rglob("CMakeLists.txt") if p.parent != engine) if engine.is_dir() else []
     if not cmake_files:
-        problems.append("engine: O0 no engine/<module>/CMakeLists.txt to scan")
+        problems.append("engine: O0 no unit CMakeLists.txt under engine/ to scan")
     for path in cmake_files:
         relative = path.relative_to(root).as_posix()
         for number, rule, text in cmake_findings(path.read_text(encoding="utf-8")):

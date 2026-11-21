@@ -51,10 +51,10 @@ class GuardTree(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory()
         self.root = Path(self._directory.name)
-        self.write("engine/config/projects.csv", PROJECTS)
-        self.write("engine/config/tools.csv", TOOLS)
-        self.write("engine/kernel/include/engine/kernel/Clean.hpp", CLEAN_HEADER)
-        self.write("engine/kernel/CMakeLists.txt", "add_library(gyo_kernel INTERFACE)\n")
+        self.write("config/projects.csv", PROJECTS)
+        self.write("config/tools.csv", TOOLS)
+        self.write("engine/ecs/kernel/include/engine/kernel/Clean.hpp", CLEAN_HEADER)
+        self.write("engine/ecs/kernel/CMakeLists.txt", "add_library(gyo_kernel INTERFACE)\n")
 
     def tearDown(self):
         self._directory.cleanup()
@@ -65,7 +65,7 @@ class GuardTree(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
 
     def header(self, body, name="Added.hpp"):
-        self.write("engine/kernel/include/engine/kernel/" + name,
+        self.write("engine/ecs/kernel/include/engine/kernel/" + name,
                    "#pragma once\nnamespace GYO::Kernel {\n" + body + "\n}\n")
 
     def assertReported(self, rule, needle):
@@ -96,20 +96,20 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K1", "VoxelMapEditor")
 
     def test_k1_a_newly_registered_product_is_reported_without_changing_the_guard(self):
-        self.write("engine/config/projects.csv", PROJECTS + "space_race,new,v1,1,1,1,1\n")
+        self.write("config/projects.csv", PROJECTS + "space_race,new,v1,1,1,1,1\n")
         self.header("struct SpaceRaceState {};")
         self.assertReported("K1", "SpaceRace")
 
     def test_k1_registered_id_matches_as_a_word_not_inside_other_words(self):
         # Architect 2026-11-13 (review A8): an id like arena must not turn every word containing it red.
-        self.write("engine/config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
+        self.write("config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
         for text in ("struct Marenal {};", "constexpr int parenage = 0;"):
             with self.subTest(text=text):
                 self.header(text)
                 self.assertClean()
 
     def test_k1_registered_id_as_a_camel_case_word_is_reported(self):
-        self.write("engine/config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
+        self.write("config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
         for text, needle in (("struct FrameArena {};", "Arena (registered id arena"),
                              ("struct ArenaHost {};", "Arena (registered id arena")):
             with self.subTest(text=text):
@@ -141,11 +141,11 @@ class GuardTree(unittest.TestCase):
                 self.assertReported("K9", needle)
 
     def test_k9_executor_file_is_checked(self):
-        self.write("engine/kernel/src/Executor.cpp", "namespace GYO::Kernel {\nvoid InstallRunner() {}\n}\n")
+        self.write("engine/ecs/kernel/src/Executor.cpp", "namespace GYO::Kernel {\nvoid InstallRunner() {}\n}\n")
         self.assertReported("K9", "InstallRunner")
 
     def test_k9_in_a_source_file_is_reported(self):
-        self.write("engine/kernel/src/World.cpp", "namespace GYO::Kernel {\nvoid RunStartup() {}\n}\n")
+        self.write("engine/ecs/kernel/src/World.cpp", "namespace GYO::Kernel {\nvoid RunStartup() {}\n}\n")
         self.assertReported("K9", "RunStartup")
 
     def test_k9_startup_errors_stay_allowed(self):
@@ -161,15 +161,15 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K1", "Player")
 
     def test_k1_name_in_cmakelists_is_reported(self):
-        self.write("engine/kernel/CMakeLists.txt", "add_library(gyo_kernel INTERFACE) # for Gateway\n")
+        self.write("engine/ecs/kernel/CMakeLists.txt", "add_library(gyo_kernel INTERFACE) # for Gateway\n")
         self.assertReported("K1", "Gateway")
 
     def test_k1_missing_registry_is_reported(self):
-        (self.root / "engine/config/tools.csv").unlink()
+        (self.root / "config/tools.csv").unlink()
         self.assertReported("K1", "registry missing")
 
     def test_k1_registry_without_name_column_is_reported(self):
-        self.write("engine/config/projects.csv", "id,description\nx,y\n")
+        self.write("config/projects.csv", "id,description\nx,y\n")
         self.assertReported("K1", "no name column")
 
     # K2 ---------------------------------------------------------------------------------------------------------
@@ -185,7 +185,7 @@ class GuardTree(unittest.TestCase):
     # K3 ---------------------------------------------------------------------------------------------------------
 
     def test_k3_clock_header_is_reported(self):
-        self.write("engine/kernel/src/Clock.cpp", "#include <chrono>\n")
+        self.write("engine/ecs/kernel/src/Clock.cpp", "#include <chrono>\n")
         self.assertReported("K3", "<chrono>")
 
     def test_k3_random_call_is_reported(self):
@@ -264,11 +264,11 @@ class GuardTree(unittest.TestCase):
     # K5 ---------------------------------------------------------------------------------------------------------
 
     def test_k5_capability_module_include_is_reported(self):
-        self.write("engine/kernel/src/Uses.cpp", '#include "engine/render/RenderDevice.hpp"\n')
+        self.write("engine/ecs/kernel/src/Uses.cpp", '#include "engine/render/RenderDevice.hpp"\n')
         self.assertReported("K5", "engine/render/RenderDevice.hpp")
 
     def test_k5_platform_header_is_reported(self):
-        self.write("engine/kernel/src/Uses.cpp", "#include <windows.h>\n")
+        self.write("engine/ecs/kernel/src/Uses.cpp", "#include <windows.h>\n")
         self.assertReported("K5", "windows.h")
 
     # K6 ---------------------------------------------------------------------------------------------------------
@@ -278,11 +278,11 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K6", "Log")
 
     def test_k6_log_header_is_reported(self):
-        self.write("engine/kernel/src/World.cpp", '#include "engine/base/Log.hpp"\n')
+        self.write("engine/ecs/kernel/src/World.cpp", '#include "engine/base/Log.hpp"\n')
         self.assertReported("K6", "engine/base/Log.hpp")
 
     def test_k6_stream_output_is_reported(self):
-        self.write("engine/kernel/src/World.cpp", "#include <iostream>\nvoid F() { std::cerr << 1; }\n")
+        self.write("engine/ecs/kernel/src/World.cpp", "#include <iostream>\nvoid F() { std::cerr << 1; }\n")
         self.assertReported("K6", "std::cerr")
         self.assertReported("K6", "iostream")
 
@@ -292,7 +292,7 @@ class GuardTree(unittest.TestCase):
 
     def test_k6_executor_file_is_checked(self):
         # Error levels D1: the Executor no longer logs, so it has no K6 exemption.
-        self.write("engine/kernel/src/Executor.cpp",
+        self.write("engine/ecs/kernel/src/Executor.cpp",
                    '#include "engine/base/Log.hpp"\nnamespace GYO::Kernel {\n'
                    'void Report() { Engine::Base::Log(Engine::Base::LogLevel::Error, "kernel", "x"); }\n}\n')
         self.assertReported("K6", "engine/base/Log.hpp")
@@ -346,12 +346,12 @@ class GuardTree(unittest.TestCase):
         self.assertClean()
 
     def test_k8_executor_file_is_checked(self):
-        self.write("engine/kernel/src/Executor.cpp",
+        self.write("engine/ecs/kernel/src/Executor.cpp",
                    "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_in_a_source_file_is_reported(self):
-        self.write("engine/kernel/src/World.cpp",
+        self.write("engine/ecs/kernel/src/World.cpp",
                    "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
         self.assertReported("K8", "IdIssuer")
 
@@ -364,23 +364,23 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_in_cmake_lists_is_reported(self):
-        self.write("engine/kernel/CMakeLists.txt",
+        self.write("engine/ecs/kernel/CMakeLists.txt",
                    "add_library(gyo_kernel STATIC)\n# IdIssuer in a comment is not read\n"
                    "target_compile_definitions(gyo_kernel PRIVATE GYO_COUNTER=Engine::Base::IdIssuer)\n")
         self.assertReported("K8", "CMakeLists.txt:3: K8 IdIssuer")
 
     def test_k8_comment_in_cmake_lists_is_clean(self):
-        self.write("engine/kernel/CMakeLists.txt", "add_library(gyo_kernel STATIC)  # no IdIssuer here\n")
+        self.write("engine/ecs/kernel/CMakeLists.txt", "add_library(gyo_kernel STATIC)  # no IdIssuer here\n")
         self.assertClean()
 
     def test_k8_angle_bracket_include_is_clean(self):
-        self.write("engine/kernel/src/World.cpp",
+        self.write("engine/ecs/kernel/src/World.cpp",
                    "#include <engine/base/IdIssuer.hpp>\nnamespace GYO::Kernel {\n"
                    "unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n")
         self.assertClean()
 
     def test_k8_current_thread_serial_and_the_include_are_clean(self):
-        self.write("engine/kernel/src/World.cpp",
+        self.write("engine/ecs/kernel/src/World.cpp",
                    '#include "engine/base/IdIssuer.hpp"\nnamespace GYO::Kernel {\n'
                    'unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n')
         self.assertClean()
@@ -407,43 +407,43 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K2", "unordered_map")
 
     def test_unscanned_file_type_is_reported(self):
-        self.write("engine/kernel/include/engine/kernel/World.txt", "static int g;\n")
+        self.write("engine/ecs/kernel/include/engine/kernel/World.txt", "static int g;\n")
         self.assertReported("K0", "World.txt")
 
     def test_template_implementation_file_is_scanned(self):
         for suffix in (".ipp", ".tpp", ".inc", ".ixx", ".inl", ".h", ".hh", ".hxx", ".c", ".cc", ".cxx"):
             with self.subTest(suffix=suffix):
-                self.write("engine/kernel/include/engine/kernel/World" + suffix, "#include <thread>\n")
+                self.write("engine/ecs/kernel/include/engine/kernel/World" + suffix, "#include <thread>\n")
                 self.assertReported("K3", "<thread>")
-                (self.root / ("engine/kernel/include/engine/kernel/World" + suffix)).unlink()
+                (self.root / ("engine/ecs/kernel/include/engine/kernel/World" + suffix)).unlink()
 
     def test_include_after_a_comment_on_the_same_line_is_read(self):
-        self.write("engine/kernel/src/Uses.cpp", "/* x */ #include <windows.h>\n")
+        self.write("engine/ecs/kernel/src/Uses.cpp", "/* x */ #include <windows.h>\n")
         self.assertReported("K5", "windows.h")
 
     def test_macro_include_is_reported(self):
-        self.write("engine/kernel/src/Uses.cpp", "#define HEADER <thread>\n#include HEADER\n")
+        self.write("engine/ecs/kernel/src/Uses.cpp", "#define HEADER <thread>\n#include HEADER\n")
         self.assertReported("K5", "unreadable include target")
 
     def test_import_and_digraph_include_are_read(self):
-        self.write("engine/kernel/src/Uses.cpp", "#import <windows.h>\n%:include <unistd.h>\n")
+        self.write("engine/ecs/kernel/src/Uses.cpp", "#import <windows.h>\n%:include <unistd.h>\n")
         self.assertReported("K5", "windows.h")
         self.assertReported("K5", "unistd.h")
 
     def test_include_on_the_first_line_after_a_bom_is_read(self):
-        path = self.root / "engine/kernel/src/Uses.cpp"
+        path = self.root / "engine/ecs/kernel/src/Uses.cpp"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes("\ufeff#include <windows.h>\n".encode("utf-8"))
         self.assertReported("K5", "windows.h")
 
     def test_form_feed_in_a_comment_does_not_shift_lines(self):
-        self.write("engine/kernel/src/Uses.cpp", "// page\x0cbreak\n#include <thread>\n")
+        self.write("engine/ecs/kernel/src/Uses.cpp", "// page\x0cbreak\n#include <thread>\n")
         self.assertReported("K3", "Uses.cpp:2: K3 <thread>")
 
     # The Executor is checked by every rule (B2; K6 too since error levels D1) ---------------------------------------------------------------------
 
     def test_executor_file_is_checked_by_every_other_rule(self):
-        self.write("engine/kernel/src/Executor.cpp",
+        self.write("engine/ecs/kernel/src/Executor.cpp",
                    "#include <thread>\n#include <windows.h>\nnamespace GYO::Kernel {\n"
                    "std::unordered_map<int, int> index;\nint Cached() { static int cache = 0; return cache; }\n"
                    "struct Player {};\nfloat Clip(float far) { return far; }\n}\n")
@@ -475,7 +475,7 @@ class GuardTree(unittest.TestCase):
         for header in ("chrono", "random", "thread", "atomic", "mutex", "condition_variable", "future",
                        "shared_mutex", "stop_token", "semaphore", "latch", "barrier", "ctime", "time.h", "execution"):
             with self.subTest(header=header):
-                self.write("engine/kernel/src/Clock.cpp", f"#include <{header}>\n")
+                self.write("engine/ecs/kernel/src/Clock.cpp", f"#include <{header}>\n")
                 self.assertReported("K3", f"<{header}>")
 
     def test_k3_every_banned_name_is_reported(self):
@@ -531,24 +531,24 @@ struct Shapes {
         self.assertEqual(guard.ALLOWED_PROJECT_INCLUDES, ("engine/base/", "engine/entity_store/", "engine/kernel/"))
 
     def test_k5_entity_store_include_passes(self):
-        self.write("engine/kernel/src/Uses.cpp", '#include "engine/entity_store/EntityColumns.hpp"\n')
+        self.write("engine/ecs/kernel/src/Uses.cpp", '#include "engine/entity_store/EntityColumns.hpp"\n')
         self.assertClean()
 
     def test_k5_other_engine_modules_and_products_are_reported(self):
         for target in ("engine/os/Thread.hpp", "engine/entity_store_extra/Columns.hpp", "engine/math/Vec3.hpp",
                        "engine/render/RenderDevice.hpp", "apps/demo/Demo.hpp"):
             with self.subTest(target=target):
-                self.write("engine/kernel/src/Uses.cpp", f'#include "{target}"\n')
+                self.write("engine/ecs/kernel/src/Uses.cpp", f'#include "{target}"\n')
                 self.assertReported("K5", target)
 
     def test_k5_platform_and_third_party_headers_are_reported(self):
         for target in ("pthread.h", "unistd.h", "SDL3/SDL.h", "stdio.h"):
             with self.subTest(target=target):
-                self.write("engine/kernel/src/Uses.cpp", f"#include <{target}>\n")
+                self.write("engine/ecs/kernel/src/Uses.cpp", f"#include <{target}>\n")
                 self.assertReported("K5", target)
 
     def test_k5_standard_header_in_quotes_is_reported(self):
-        self.write("engine/kernel/src/Uses.cpp", '#include "vector"\n')
+        self.write("engine/ecs/kernel/src/Uses.cpp", '#include "vector"\n')
         self.assertReported("K5", "vector")
 
     def test_k5_parent_directory_in_a_project_include_is_reported(self):
@@ -556,7 +556,7 @@ struct Shapes {
                        "engine/entity_store/../os/Thread.hpp", "engine/entity_store/..\\os\\Thread.hpp",
                        "engine/base/..\\os\\Thread.hpp"):
             with self.subTest(target=target):
-                self.write("engine/kernel/src/Uses.cpp", f'#include "{target}"\n')
+                self.write("engine/ecs/kernel/src/Uses.cpp", f'#include "{target}"\n')
                 self.assertReported("K5", target)
 
     # K6-K7 coverage (A7, B17, B18) ------------------------------------------------------------------------------
@@ -564,7 +564,7 @@ struct Shapes {
     def test_k6_every_log_header_is_reported(self):
         for target in ("<iostream>", "<cstdio>", "<print>", '"engine/base/Log.hpp"'):
             with self.subTest(target=target):
-                self.write("engine/kernel/src/World.cpp", f"#include {target}\n")
+                self.write("engine/ecs/kernel/src/World.cpp", f"#include {target}\n")
                 self.assertReported("K6", target.strip('<>"'))
 
     def test_k6_every_log_call_is_reported(self):
@@ -587,10 +587,10 @@ struct Shapes {
     # Root -------------------------------------------------------------------------------------------------------
 
     def test_missing_scan_root_is_reported(self):
-        for path in sorted((self.root / "engine/kernel").rglob("*"), reverse=True):
+        for path in sorted((self.root / "engine/ecs/kernel").rglob("*"), reverse=True):
             path.unlink() if path.is_file() else path.rmdir()
-        (self.root / "engine/kernel").rmdir()
-        self.assertEqual(guard.check(self.root), ["engine/kernel: no source to scan (moved or renamed? update "
+        (self.root / "engine/ecs/kernel").rmdir()
+        self.assertEqual(guard.check(self.root), ["engine/ecs/kernel: no source to scan (moved or renamed? update "
                                                   "this guard)"])
 
     def test_main_returns_one_on_finding(self):

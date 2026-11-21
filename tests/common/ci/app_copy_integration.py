@@ -32,7 +32,7 @@ def create_copy(source, fixture=FIXTURE, names=("sample_game", "variant_game")):
         shutil.copytree(fixture / "app", source / "apps" / name)
         shutil.copytree(fixture / "assets", source / "assets" / name)
         (source / "assets" / name / "marker.txt").write_text(name + "\n", encoding="utf-8")
-    registry = source / "engine/config/projects.csv"
+    registry = source / "config/projects.csv"
     registry.parent.mkdir(parents=True, exist_ok=True)
     registry.write_text("name,description,version,enabled,windows,linux,macos\n" +
                         "".join(f"{name},Copy fixture,,1,1,1,1\n" for name in names), encoding="utf-8")

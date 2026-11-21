@@ -3,7 +3,7 @@
 # registration units (Module, Plugin) and their lifecycle, the Product (a group
 # of Worlds), the game initialization and frame lists, the runner, prepare
 # functions, World replacement and dynamic insertion. Above the kernel; depends
-# only on the kernel and Base (O-4), as its row in engine/config/modules.csv says.
+# only on the kernel and Base (O-4), as its row in config/modules.csv says.
 add_library(gyo_orchestration STATIC
     src/OrchestrationError.cpp
     src/Product.cpp
@@ -15,7 +15,7 @@ target_include_directories(gyo_orchestration PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Engine-internal links come from engine/config/modules.csv (O-6).
+# Engine-internal links come from config/modules.csv (O-6).
 gyo_link_registered_dependencies(orchestration)
 target_compile_features(gyo_orchestration PUBLIC cxx_std_20)
 if(MSVC)

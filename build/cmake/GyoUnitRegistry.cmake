@@ -1,7 +1,7 @@
 # Module and Plugin registers (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md,
 # section 3.2; Design Invariant O-6 of docs/architecture/target/v2/orchestration.zh-Hant.md).
 #
-# engine/config/modules.csv and engine/config/plugins.csv are the one place
+# config/modules.csv and config/plugins.csv are the one place
 # that says which Modules and Plugins exist, whether each goes into a World
 # (has a registration unit), whether a product carries it by default, and
 # what it depends on (v8-arch-gyo2-module-plugin-registers,
@@ -10,8 +10,11 @@
 # product's table of registration units; the orchestration layer checks the
 # dependencies of the units a Product carries when the Product is built.
 #
-# Columns: name,target,description,library_only,default,depends,private_depends,unit,header
-#   name             the directory name (engine/<name>/ or plugins/<name>/)
+# Columns: name,dir,target,description,library_only,default,depends,private_depends,unit,header
+#   name             the unit's name: lower case letters, digits and _
+#   dir              where the unit lives, relative to engine/ for a Module (its layer, then
+#                    its name: core/<name>, ecs/<name>, modules/<name>; the orchestration layer
+#                    is the one directory orchestration) and to plugins/ for a Plugin
 #   target           the alias that is linked (GYO::<...>; N14's capitals are irregular)
 #   library_only     yes: no registration unit; no: goes into a World
 #   default          yes: products carry this in-World Module unless they disable it;
@@ -21,13 +24,13 @@
 #   unit, header     in-World rows: the registration unit's class and header
 # A message's "row N" counts records: the header is row 0, the first data
 # record row 1 (blank lines and line breaks inside quotes do not count).
-# Names are directory names: lower case letters, digits and _.
+# Names: lower case letters, digits and _. A dir is one or two such names joined by /.
 # Usable with cmake -P (the register tests).
 
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/GyoAppRegistry.cmake")
 
-set(GYO_UNIT_REGISTER_COLUMNS name target description library_only default depends private_depends unit header)
+set(GYO_UNIT_REGISTER_COLUMNS name dir target description library_only default depends private_depends unit header)
 
 function(_gyo_unit_yes_no value file row column output)
     string(TOLOWER "${value}" lowered)
@@ -83,7 +86,14 @@ function(_gyo_read_unit_register prefix csv kind)
             message(FATAL_ERROR "Unit register ${csv} row ${row}: empty name")
         endif()
         if(NOT name MATCHES "^[a-z][a-z0-9_]*$")
-            message(FATAL_ERROR "Unit register ${csv} row ${row}: name '${name}' is not a directory name (lower case letters, digits, _)")
+            message(FATAL_ERROR "Unit register ${csv} row ${row}: name '${name}' is not a unit name (lower case letters, digits, _)")
+        endif()
+        if(NOT value_dir MATCHES "^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)?$")
+            message(FATAL_ERROR "Unit register ${csv} row ${row}: '${name}' dir '${value_dir}' is not one or two names joined by /")
+        endif()
+        get_filename_component(dir_leaf "${value_dir}" NAME)
+        if(NOT dir_leaf STREQUAL name)
+            message(FATAL_ERROR "Unit register ${csv} row ${row}: '${name}' dir '${value_dir}' does not end in its name")
         endif()
         if(name IN_LIST order)
             get_property(first_file GLOBAL PROPERTY ${prefix}_${name}_FILE)
@@ -116,6 +126,7 @@ function(_gyo_read_unit_register prefix csv kind)
         set_property(GLOBAL PROPERTY ${prefix}_${name}_KIND "${kind}")
         set_property(GLOBAL PROPERTY ${prefix}_${name}_FILE "${csv}")
         set_property(GLOBAL PROPERTY ${prefix}_${name}_ROW "${row}")
+        set_property(GLOBAL PROPERTY ${prefix}_${name}_DIR "${value_dir}")
         set_property(GLOBAL PROPERTY ${prefix}_${name}_TARGET "${value_target}")
         set_property(GLOBAL PROPERTY ${prefix}_${name}_LIBRARY_ONLY "${library_only}")
         set_property(GLOBAL PROPERTY ${prefix}_${name}_DEFAULT "${default_on}")

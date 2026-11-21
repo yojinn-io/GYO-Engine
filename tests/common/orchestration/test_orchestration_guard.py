@@ -32,7 +32,7 @@ class GuardTree(unittest.TestCase):
         self.root = Path(self._directory.name)
         self.write("engine/orchestration/include/engine/orchestration/Clean.hpp", CLEAN_HEADER)
         self.write("engine/orchestration/CMakeLists.txt", CLEAN_CMAKE)
-        self.write("engine/kernel/CMakeLists.txt", "gyo_link_registered_dependencies(kernel)\n")
+        self.write("engine/ecs/kernel/CMakeLists.txt", "gyo_link_registered_dependencies(kernel)\n")
 
     def tearDown(self):
         self._directory.cleanup()
@@ -79,7 +79,7 @@ class GuardTree(unittest.TestCase):
                 self.assertReported("O3", needle)
 
     def test_o6_hand_written_engine_link_is_reported(self):
-        self.write("engine/time/CMakeLists.txt",
+        self.write("engine/core/time/CMakeLists.txt",
                    "target_link_libraries(gyo_time\n    PUBLIC GYO::Base  # base\n    PRIVATE Threads::Threads)\n")
         self.assertReported("O6", "GYO::Base")
 
@@ -92,8 +92,8 @@ class GuardTree(unittest.TestCase):
 
     def test_missing_engine_cmake_files_are_reported(self):
         (self.root / "engine/orchestration/CMakeLists.txt").unlink()
-        (self.root / "engine/kernel/CMakeLists.txt").unlink()
-        self.assertIn("engine: O0 no engine/<module>/CMakeLists.txt to scan", guard.check(self.root))
+        (self.root / "engine/ecs/kernel/CMakeLists.txt").unlink()
+        self.assertIn("engine: O0 no unit CMakeLists.txt under engine/ to scan", guard.check(self.root))
 
 
 if __name__ == "__main__":

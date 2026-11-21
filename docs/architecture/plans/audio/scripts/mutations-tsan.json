@@ -5,7 +5,7 @@
     {
       "id": "au-sched-play-head-relaxed",
       "what": "The producer reads head without acquire",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "    const std::uint64_t head = slot_->head.load(std::memory_order_acquire);",
       "replace": "    const std::uint64_t head = slot_->head.load(std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
@@ -15,7 +15,7 @@
     {
       "id": "au-sched-play-tail-relaxed",
       "what": "The producer publishes tail without release",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "    slot_->tail.store(tail + 1, std::memory_order_release);",
       "replace": "    slot_->tail.store(tail + 1, std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
@@ -25,7 +25,7 @@
     {
       "id": "au-sched-render-tail-relaxed",
       "what": "The audio thread reads tail without acquire",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "        const std::uint64_t tail = slot.tail.load(std::memory_order_acquire);",
       "replace": "        const std::uint64_t tail = slot.tail.load(std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
@@ -35,7 +35,7 @@
     {
       "id": "au-sched-render-head-relaxed",
       "what": "The audio thread publishes head without release",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "        slot.head.store(head, std::memory_order_release);",
       "replace": "        slot.head.store(head, std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
@@ -45,7 +45,7 @@
     {
       "id": "au-ctl-clip-handback-relaxed",
       "what": "The audio thread hands a slot back without release",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "    slot.handedBack.store(true, std::memory_order_release);",
       "replace": "    slot.handedBack.store(true, std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
@@ -55,7 +55,7 @@
     {
       "id": "au-ctl-clip-reclaim-relaxed",
       "what": "LoadClip sees a handed-back slot without acquire",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "!entry.handedBack.load(std::memory_order_acquire)) continue;",
       "replace": "!entry.handedBack.load(std::memory_order_relaxed)) continue;",
       "target": "gyo_audio_tests",
@@ -65,7 +65,7 @@
     {
       "id": "au-ctl-stress-reader-reads-audio-state",
       "what": "PlayheadOf reads a field only the audio thread writes (published), outside the board (Fable check, place 5)",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "    if (!state_->board.Read(sound.value, read)) return Playhead{};",
       "replace": "    if (state_->published[0] == ~std::uint64_t{0} || !state_->board.Read(sound.value, read)) return Playhead{};",
       "target": "gyo_audio_tests",

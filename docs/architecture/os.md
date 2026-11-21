@@ -306,7 +306,7 @@ Known blind spots, left to review:
   Invariants; engine/os does not link SDL or call `SDL_Init`.
 - Sockets themselves stay with asio in the products that use them.
 - The build layer: CMake's `WIN32`/`APPLE`/`UNIX`, MSVC flags, CI workflows, Python acceptance scripts and the
-  platform columns of `engine/config`. Exception: Invariant 1's ban on OS-identifying macros also applies to
+  platform columns of `config/`. Exception: Invariant 1's ban on OS-identifying macros also applies to
   compile definitions a non-os target gets from CMake.
 - The Go relay service.
 

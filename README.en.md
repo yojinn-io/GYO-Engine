@@ -26,7 +26,7 @@ GYO is a C++20 game engine with explicit base, runtime, asset, math, time, threa
 
 Use CMake 3.30+, a C++20 compiler and Ninja. Windows builds need an initialized x64 MSVC environment. Asset assembly uses Python 3; shader builds use the engine-owned native host compiler. Dependencies are fetched into the build tree; existing source caches can be reused explicitly.
 
-Enable the intended game and OS columns in `engine/config/projects.csv`, then run from the repository root:
+Enable the intended game and OS columns in `config/projects.csv`, then run from the repository root:
 
 ```sh
 cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=

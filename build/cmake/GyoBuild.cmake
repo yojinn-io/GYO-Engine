@@ -51,8 +51,8 @@ add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
 # their dependencies (Design Invariant O-6 of
 # docs/architecture/target/v2/orchestration.zh-Hant.md); engine/CMakeLists.txt
 # adds the Modules in register order, the Plugins follow from plugins/.
-gyo_load_unit_registers(GYO_UNITS "${GYO_REPOSITORY_ROOT}/engine/config/modules.csv"
-                        "${GYO_REPOSITORY_ROOT}/engine/config/plugins.csv")
+gyo_load_unit_registers(GYO_UNITS "${GYO_REPOSITORY_ROOT}/config/modules.csv"
+                        "${GYO_REPOSITORY_ROOT}/config/plugins.csv")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/engine")
 get_property(_gyo_units GLOBAL PROPERTY GYO_UNITS_ORDER)

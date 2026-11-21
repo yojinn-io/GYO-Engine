@@ -21,7 +21,7 @@ import re
 import sys
 from pathlib import Path
 
-SCANNED = "engine/entity_store"
+SCANNED = "engine/ecs/entity_store"
 # A lowercase word at a word start (stamp, changed, tick, last_run), or a capitalized part anywhere in a camelCase
 # identifier (ChangeStamp, changeTick, lastChanged, isAdded, lastRun).
 S1 = re.compile(r"(?<![A-Za-z0-9])(?:stamps?|added|changed|ticks?|last_run)(?![a-z])"

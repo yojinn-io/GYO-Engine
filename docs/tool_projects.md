@@ -4,7 +4,7 @@ Root `tools/` contains design support. Compiler, integration and release support
 
 ## Select a tool
 
-`engine/config/tools.csv` is independent of the game registry:
+`config/tools.csv` is independent of the game registry:
 
 ```csv
 name,description,version,enabled,default,release,windows,linux,macos

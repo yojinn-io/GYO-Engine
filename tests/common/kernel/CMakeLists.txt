@@ -177,7 +177,7 @@ function(gyo_kernel_compile_fail_samples)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/SystemContractSample.cpp")
     # The include directories GYO::Kernel gives its users (kernel, base and,
     # since world-exec's Delta-3, entity_store).
-    set(includes "${GYO_REPOSITORY_ROOT}/engine/kernel/include;${GYO_REPOSITORY_ROOT}/engine/base/include;${GYO_REPOSITORY_ROOT}/engine/entity_store/include")
+    set(includes "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include;${GYO_REPOSITORY_ROOT}/engine/core/base/include;${GYO_REPOSITORY_ROOT}/engine/ecs/entity_store/include")
     # try_compile does not inherit directory compile options; MSVC needs the
     # standard-conforming preprocessor that engine/base/Assert.hpp requires
     # (build/cmake/GyoBuild.cmake) and the conformance mode the kernel builds with.
@@ -185,7 +185,7 @@ function(gyo_kernel_compile_fail_samples)
     if(MSVC)
         set(flags /Zc:preprocessor /permissive-)
     endif()
-    file(GLOB kernel_headers "${GYO_REPOSITORY_ROOT}/engine/kernel/include/engine/kernel/*.hpp")
+    file(GLOB kernel_headers "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include/engine/kernel/*.hpp")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}" ${kernel_headers})
 
     string(TIMESTAMP start "%s%f")

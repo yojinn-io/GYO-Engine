@@ -1,4 +1,4 @@
-# 日誌（`engine/logging`、`engine/world_logging`）
+# 日誌（`engine/modules/logging`、`engine/modules/world_logging`）
 
 Owner：架構。來源：事前宣告 [logging-declaration.zh-Hant.md](logging-declaration.zh-Hant.md)（修訂 1，2026-11-20 動工前核准；第 8 節）與修訂 3（2026-11-21，宣告第 18 節：World 壞掉時記不記由產品的 main 決定、要記就經 ③ 或 ④，致命路徑只給 E0；日誌和 trace 是兩個 Module，span 歸 trace；使用者「日誌只是看。trace才是追問題。」「Log 和 trace是2個Module」）。**最終文字在 `v8-arch-gyo2-logging` 的合併前核准定稿。**
 
@@ -34,7 +34,7 @@ World 外的程式                                                              
 守衛：`world_logging.forward`、`world_logging.diagnostics`、`logging.logger`（`Base::Log`）、情境測試 `scenario.segment3`（S3-1 的 ③、S3-2 的 ①②）；突變 `lg-diag-*`、`lg-forward-filtered-cursor-kept`。
 
 <a id="lg-2"></a>
-**LG-2 致命路徑只給 E0。** `WriteFatalRecord` 是斷言與 `std::terminate` 的最後一道（E0；級別的定義在 `docs/architecture/target/error-handling.md` 的「Error levels」）。在呼叫的執行緒上：先寫主控台（鎖只 try），再寫每個收這個 category 的輸出端的致命寫出口（不看層級；檔案輸出端用預先開好的第二個附加寫出口、不經佇列），**之後**才盡力請全部輸出端 flush，全部共用一個期限（`fatalFlushTimeout`，預設 1 秒）；在輸出端自己的寫者執行緒上，flush 立刻略過。行用 `Install` 預先保留的容量組，不配置（超過容量才配置）。同一執行緒再入只寫主控台。不丟例外。「寫出」＝交給 OS，不是到磁碟。斷言失敗時（`takeAssertions`）先寫一筆 category `assert` 的 `Fatal` 紀錄，再交給之前的處理器（abort 仍由 Base 做）；`std::terminate` 時（`takeTerminate`）先寫一筆 category `terminate` 的 `Fatal` 紀錄（飛行中例外的 `what()`；不是 `std::exception`、或沒有例外時各寫一句固定的話），再交給之前的處理器（使用者 2026-11-20：日誌機制自己記「出了什麼事」）。World 壞掉（E1）不走這條路：產品的 main 要記，就是經 ③ 或 ④ 的一筆紀錄，給人看；壞在哪一步由 trace 追（使用者 2026-11-21「日誌只是看。trace才是追問題。」）。作者經 ④ 寫的 `Fatal` 不受限制。**不保證**：記憶體已壞、堆疊用盡、訊號、寫者卡在 OS 時的時限（同一個檔的第二個 handle 可能一起卡）；Windows 上 `std::set_terminate` 是每條執行緒各一份（UCRT），`Install` 只裝在呼叫它的執行緒，別的執行緒走到 `std::terminate` 時沒有那一筆（要的話由起執行緒的地方另裝，`engine/threads` 的事）。
+**LG-2 致命路徑只給 E0。** `WriteFatalRecord` 是斷言與 `std::terminate` 的最後一道（E0；級別的定義在 `docs/architecture/target/error-handling.md` 的「Error levels」）。在呼叫的執行緒上：先寫主控台（鎖只 try），再寫每個收這個 category 的輸出端的致命寫出口（不看層級；檔案輸出端用預先開好的第二個附加寫出口、不經佇列），**之後**才盡力請全部輸出端 flush，全部共用一個期限（`fatalFlushTimeout`，預設 1 秒）；在輸出端自己的寫者執行緒上，flush 立刻略過。行用 `Install` 預先保留的容量組，不配置（超過容量才配置）。同一執行緒再入只寫主控台。不丟例外。「寫出」＝交給 OS，不是到磁碟。斷言失敗時（`takeAssertions`）先寫一筆 category `assert` 的 `Fatal` 紀錄，再交給之前的處理器（abort 仍由 Base 做）；`std::terminate` 時（`takeTerminate`）先寫一筆 category `terminate` 的 `Fatal` 紀錄（飛行中例外的 `what()`；不是 `std::exception`、或沒有例外時各寫一句固定的話），再交給之前的處理器（使用者 2026-11-20：日誌機制自己記「出了什麼事」）。World 壞掉（E1）不走這條路：產品的 main 要記，就是經 ③ 或 ④ 的一筆紀錄，給人看；壞在哪一步由 trace 追（使用者 2026-11-21「日誌只是看。trace才是追問題。」）。作者經 ④ 寫的 `Fatal` 不受限制。**不保證**：記憶體已壞、堆疊用盡、訊號、寫者卡在 OS 時的時限（同一個檔的第二個 handle 可能一起卡）；Windows 上 `std::set_terminate` 是每條執行緒各一份（UCRT），`Install` 只裝在呼叫它的執行緒，別的執行緒走到 `std::terminate` 時沒有那一筆（要的話由起執行緒的地方另裝，`engine/core/threads` 的事）。
 守衛：`logging.fatal`（含重複鍵的致命紀錄）、`logging.alloc`（致命路徑不配置）、`logging.file`（寫者被擋住時致命那一行照樣先寫）、`logging.terminate.std`／`.other`／`.none`（行程真的走到 `std::terminate`，檔裡恰好一筆）、`logging.append`（兩個附加寫出口各 10 萬行不交錯，L1 三平台）；突變 `lg-fatal-*`、`lg-assert-*`、`lg-terminate-*`。
 
 <a id="lg-3"></a>
@@ -42,7 +42,7 @@ World 外的程式                                                              
 守衛：`world_logging.forward`（遊戲的讀者讀到的相同、描述器丟例外）、編譯失敗樣本（`tests/common/world_logging/compile_fail/ForwardSample.cpp`，`GYO_WORLD_LOGGING_REJECT_WRITE`／`_DESCRIPTOR`）、`scenario.segment3`（S3-3）；突變 `lg-forward-*`。
 
 <a id="lg-4"></a>
-**LG-4 不認得產品與其他 Module。** `engine/logging` 只含入 Base、Json、Os、Threads、Time 與自己；公開標頭只含入 Base 與自己。`engine/world_logging` 只含入 Base、Logging、Kernel、Orchestration 與自己。兩個都不認得任何訊息型別、產品的詞（描述器在發出訊息的 Module 那邊）。
+**LG-4 不認得產品與其他 Module。** `engine/modules/logging` 只含入 Base、Json、Os、Threads、Time 與自己；公開標頭只含入 Base 與自己。`engine/modules/world_logging` 只含入 Base、Logging、Kernel、Orchestration 與自己。兩個都不認得任何訊息型別、產品的詞（描述器在發出訊息的 Module 那邊）。
 守衛：ctest `logging.guard`（`tests/common/logging/logging_guard.py`：三條含入規則、正例、目錄不存在時失敗）與 `logging.guard_selftest`；突變 `lg-guard-*`。
 
 <a id="lg-5"></a>

@@ -5,7 +5,7 @@
     {
       "id": "io-within-any-name",
       "what": "Containment ignores the names it compares, so a sibling with a longer name counts as inside",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            if (candidatePart == candidate.end() || !SameComponent(*candidatePart, *rootPart)) return false;",
       "replace": "            if (candidatePart == candidate.end()) return false;",
       "target": "engine_tests",
@@ -15,7 +15,7 @@
     {
       "id": "io-within-case",
       "what": "Names are compared byte for byte instead of by the platform rule",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            auto same = Os::Files::SamePathComponent(leftText.value(), rightText.value());\n            return same && same.value();",
       "replace": "            return leftText.value() == rightText.value();",
       "target": "engine_tests",
@@ -28,7 +28,7 @@
     {
       "id": "io-stamp-missing-is-error",
       "what": "A missing file is an error instead of exists == false",
-      "file": "engine/io/src/helpers/UserFiles.cpp",
+      "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "            if (info.error().code == IoErrorCode::NotFound) return FileStamp{};\n",
       "replace": "",
       "target": "engine_tests",
@@ -38,7 +38,7 @@
     {
       "id": "io-stamp-hash",
       "what": "The stamp does not hash the content",
-      "file": "engine/io/src/helpers/UserFiles.cpp",
+      "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "        stamp.contentHash =\n            Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(data.data()), data.size()));",
       "replace": "        stamp.contentHash = 0;",
       "target": "engine_tests",
@@ -48,7 +48,7 @@
     {
       "id": "io-stamp-limit-ignored",
       "what": "The caller's size limit is ignored",
-      "file": "engine/io/src/helpers/UserFiles.cpp",
+      "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "        auto bytes = ReadAllBytes(fs, uri, read);",
       "replace": "        auto bytes = ReadAllBytes(fs, uri);",
       "target": "engine_tests",
@@ -58,7 +58,7 @@
     {
       "id": "io-atomic-no-parents",
       "what": "createParentDirectories is ignored",
-      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "file": "engine/core/io/src/helpers/WriteFileAtomically.cpp",
       "find": "        if (options.createParentDirectories) {",
       "replace": "        if (false) {",
       "target": "engine_tests",
@@ -68,7 +68,7 @@
     {
       "id": "io-within-no-resolve",
       "what": "Paths are never resolved through the OS, so links and the disk spelling are ignored",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        std::filesystem::path Resolved(const std::filesystem::path& absolute) {\n",
       "replace": "        std::filesystem::path Resolved(const std::filesystem::path& absolute) {\n            return absolute.lexically_normal();\n",
       "target": "engine_tests",
@@ -78,7 +78,7 @@
     {
       "id": "io-within-root-last-unresolved",
       "what": "The root's last name is kept as written, so a root that is a link contains nothing",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            return WithoutTrailingSeparator(Resolved(WithoutTrailingSeparator(Absolute(given))));",
       "replace": "            return CandidatePath(given);",
       "target": "engine_tests",
@@ -88,7 +88,7 @@
     {
       "id": "io-within-lexical-dot-dot",
       "what": "'..' is removed as written before links are resolved",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            const std::filesystem::path absolute = WithoutTrailingSeparator(Absolute(given));",
       "replace": "            const std::filesystem::path absolute = WithoutTrailingSeparator(Absolute(given).lexically_normal());",
       "target": "engine_tests",
@@ -102,7 +102,7 @@
     {
       "id": "io-within-trailing-kept",
       "what": "A trailing separator stays as an empty last name, so nothing is inside such a root",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            if (!path.has_filename() && path.has_relative_path()) path = path.parent_path();",
       "replace": "",
       "target": "engine_tests",
@@ -112,7 +112,7 @@
     {
       "id": "io-within-no-absolute",
       "what": "A relative path is not made absolute first",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        std::filesystem::path Absolute(const std::filesystem::path& given) {\n",
       "replace": "        std::filesystem::path Absolute(const std::filesystem::path& given) {\n            return given;\n",
       "target": "engine_tests",
@@ -122,7 +122,7 @@
     {
       "id": "io-within-prefix-accepted",
       "what": "A Win32 namespace prefix is taken as a path",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            return utf8.starts_with(\"//?/\") || utf8.starts_with(\"//./\") || utf8.starts_with(\"\\\\\\\\?\\\\\") ||\n                   utf8.starts_with(\"\\\\\\\\.\\\\\");",
       "replace": "            return false;",
       "target": "engine_tests",
@@ -132,7 +132,7 @@
     {
       "id": "io-within-root-not-utf8",
       "what": "A root that is not UTF-8 is answered false instead of refused",
-      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        if (!rootPath) return Base::Err(FromOs(rootPath.error(), {}, IoErrorCode::InvalidPath));",
       "replace": "        if (!rootPath) return false;",
       "target": "engine_tests",
@@ -142,7 +142,7 @@
     {
       "id": "io-stamp-mtime",
       "what": "The stamp drops the file's time",
-      "file": "engine/io/src/helpers/UserFiles.cpp",
+      "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "        stamp.mtimeNs = info.value().mtimeNs;",
       "replace": "        stamp.mtimeNs = 0;",
       "target": "engine_tests",
@@ -152,7 +152,7 @@
     {
       "id": "io-atomic-root",
       "what": "A file right under a volume's root gets its nameless parent checked, which the file mapping refuses",
-      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "file": "engine/core/io/src/helpers/WriteFileAtomically.cpp",
       "find": "            if (parentText.empty() || (parentText.size() == 2 && parentText[1] == ':')) {",
       "replace": "            if (false) {",
       "target": "engine_tests",

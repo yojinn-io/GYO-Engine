@@ -5,7 +5,7 @@
     {
       "id": "sj-repeated-key-kept-markers",
       "what": "A repeated key is taken silently in gyo.map_markers",
-      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "file": "engine/core/base/include/engine/base/StrictJson.hpp",
       "find": "        if (open_.back().insert(key).second) return true;",
       "replace": "        open_.back().insert(key);\n        return true;",
       "target": "gyo_map_markers_tests",

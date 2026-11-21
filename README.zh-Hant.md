@@ -26,7 +26,7 @@ GYO 是 C++20 遊戲引擎，明確區分 Base、Runtime、Asset、Math、Time�
 
 使用 CMake 3.30 以上、C++20 compiler 與 Ninja。Windows 先初始化 x64 MSVC 開發環境。資產組裝使用 Python 3，shader 使用引擎管理的原生 host compiler。第三方來源下載至建置樹，也可明確重用既有 source cache。
 
-在 `engine/config/projects.csv` 啟用遊戲與目標 OS，再從儲存庫根目錄執行：
+在 `config/projects.csv` 啟用遊戲與目標 OS，再從儲存庫根目錄執行：
 
 ```sh
 cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=

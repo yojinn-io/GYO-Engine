@@ -4,14 +4,14 @@ string(RANDOM LENGTH 8 ALPHABET abcdef0123456789 run_id)
 set(work "${CMAKE_CURRENT_BINARY_DIR}/project-composition-${run_id}")
 set(source "${work}/source")
 set(binary "${work}/binary")
-file(MAKE_DIRECTORY "${source}/engine/config" "${source}/apps/first"
+file(MAKE_DIRECTORY "${source}/config" "${source}/apps/first"
     "${source}/apps/second" "${source}/apps/unregistered" "${source}/build")
 # Assetless games still synchronize an empty content set through shared build
 # support; the copied source root deliberately contains no CI or test code.
 file(COPY "${repository}/build/assemble_runtime.py" "${repository}/build/content_contract.py"
     DESTINATION "${source}/build")
 set(header "name,description,version,enabled,windows,linux,macos\n")
-set(registry "${source}/engine/config/projects.csv")
+set(registry "${source}/config/projects.csv")
 file(WRITE "${registry}" "${header}first,,,1,1,1,1\nsecond,,,1,1,1,1\n")
 file(WRITE "${source}/apps/unregistered/CMakeLists.txt" "message(FATAL_ERROR \"Unregistered app was inspected\")\n")
 file(WRITE "${source}/CMakeLists.txt" [=[
@@ -148,7 +148,7 @@ file(WRITE "${source}/apps/second/project.json" "${project_json}")
 
 # Two unrelated tools compose without app sources or concrete central branches.
 set(tool_header "name,description,version,enabled,default,release,windows,linux,macos\n")
-file(WRITE "${source}/engine/config/tools.csv" "${tool_header}canvas,,,1,1,1,1,1,1\npacker,,,1,1,1,1,1,1\n")
+file(WRITE "${source}/config/tools.csv" "${tool_header}canvas,,,1,1,1,1,1,1\npacker,,,1,1,1,1,1,1\n")
 foreach(tool canvas packer)
     file(MAKE_DIRECTORY "${source}/tools/${tool}" "${source}/build/acceptance/${tool}")
     file(WRITE "${source}/tools/${tool}/project.json" [=[

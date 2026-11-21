@@ -164,7 +164,7 @@ Overlay / HUD → Present
 <a id="r07"></a>
 ## 7. ビルドの選択
 
-`engine/config/projects.csv` の enabled と OS 列がゲーム集合を決めます。`GYO_APPS=AUTO` は全選択ゲーム、空文字はゲームなし、明示リストは CSV に従う部分集合です。各製品の `project.json` から optional components を収集して、一つの engine graph を組み立てます。ゲーム CMake に discovery pass やアセットルールは置きません。
+`config/projects.csv` の enabled と OS 列がゲーム集合を決めます。`GYO_APPS=AUTO` は全選択ゲーム、空文字はゲームなし、明示リストは CSV に従う部分集合です。各製品の `project.json` から optional components を収集して、一つの engine graph を組み立てます。ゲーム CMake に discovery pass やアセットルールは置きません。
 
 | 設定 | 値と用途 |
 |---|---|

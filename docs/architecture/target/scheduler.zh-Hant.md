@@ -18,7 +18,7 @@
 
 ## 3. API 名稱（`v8-arch-kernel-registry-schedule` 定；只對應名字與條文，不改上面的規則）
 
-程式在 `engine/kernel/include/engine/kernel/`（`Registry.hpp`、`Plan.hpp`、`Declarations.hpp`）。
+程式在 `engine/ecs/kernel/include/engine/kernel/`（`Registry.hpp`、`Plan.hpp`、`Declarations.hpp`）。
 
 | 名字 | 是什麼 | 對應條文 |
 |---|---|---|

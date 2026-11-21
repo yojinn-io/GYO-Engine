@@ -13,7 +13,7 @@ set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 add_executable(gyo_os_header_tests OsHeaderHygieneTests.cpp)
 target_link_libraries(gyo_os_header_tests PRIVATE GYO::Os doctest::doctest)
 target_compile_definitions(gyo_os_header_tests PRIVATE
-    GYO_OS_INCLUDE_DIR="${GYO_REPOSITORY_ROOT}/engine/os/include"
+    GYO_OS_INCLUDE_DIR="${GYO_REPOSITORY_ROOT}/engine/core/os/include"
     GYO_OS_HYGIENE_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/OsHeaderHygieneTests.cpp")
 add_test(NAME os.header_hygiene COMMAND gyo_os_header_tests)
 set_tests_properties(os.header_hygiene PROPERTIES LABELS "cpu" TIMEOUT 60)

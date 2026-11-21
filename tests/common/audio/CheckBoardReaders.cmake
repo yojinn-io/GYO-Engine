@@ -1,7 +1,7 @@
 # Design Invariant 4 (docs/architecture/audio.md): the audio thread writes the
 # playhead board and never reads it. The only reader in the mixer's sources is
 # Mixer::PlayheadOf, so a read anywhere else (in particular on the rendering
-# path) fails this check. Run as a CTest with -DSOURCE_DIR=engine/audio/src.
+# path) fails this check. Run as a CTest with -DSOURCE_DIR=engine/modules/audio/src.
 file(GLOB sources "${SOURCE_DIR}/*.cpp" "${SOURCE_DIR}/*.hpp")
 set(found 0)
 foreach(source IN LISTS sources)

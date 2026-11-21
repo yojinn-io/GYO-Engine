@@ -113,7 +113,7 @@ class RegistryMatrixTests(unittest.TestCase):
         # variant) are checked by the export alone, and the workflows export
         # only after the pull request gate; this case exports at the gate.
         # No tool is selected exactly when none is registered.
-        with (ROOT / "engine/config/tools.csv").open(encoding="utf-8-sig", newline="") as rows:
+        with (ROOT / "config/tools.csv").open(encoding="utf-8-sig", newline="") as rows:
             registered = [row["name"] for row in csv.DictReader(rows)]
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
             tools = app_registry.export_tools()

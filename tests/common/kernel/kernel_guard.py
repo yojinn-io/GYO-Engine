@@ -10,7 +10,7 @@ docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md section 3.
 Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
 
   K1  a product or tool name, or a connection-role word, in code or comments (CMakeLists.txt included):
-        (i)   the ids registered in engine/config/projects.csv and engine/config/tools.csv, as words:
+        (i)   the ids registered in config/projects.csv and config/tools.csv, as words:
               - as written (snake form), ignoring case, bounded by the start or end of the text or by a character
                 that is not a letter or digit ("_" is a boundary): id arena matches arena, ARENA_SIZE, k_arena;
               - in CamelCase, case-sensitive, from the start of a word (no uppercase letter before it, so an
@@ -88,8 +88,8 @@ import re
 import sys
 from pathlib import Path
 
-SCANNED = "engine/kernel"
-REGISTRIES = ("engine/config/projects.csv", "engine/config/tools.csv")
+SCANNED = "engine/ecs/kernel"
+REGISTRIES = ("config/projects.csv", "config/tools.csv")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc", ".ixx"}
 # CMakeLists.txt: K1 only. Any other file under engine/kernel/ is K0.
 
@@ -144,7 +144,7 @@ ALLOWED_STATICS = {
     # Access verification module: a thread_local pointer to the current System's context, read only while
     # verification is on; takes no part in ordering or results.
     "tlCurrent": r"^(?:static\s+|inline\s+)*thread_local\s+(?:const\s+)?[\w:<>]+\s*\*\s*tlCurrent\s*$",
-    # TypeKey<T>'s static inline char (engine/kernel/include/engine/kernel/TypeKey.hpp, Detail::TypeKeyOf<T>):
+    # TypeKey<T>'s static inline char (engine/ecs/kernel/include/engine/kernel/TypeKey.hpp, Detail::TypeKeyOf<T>):
     # only its address is used, as a lookup key (W-10 second sentence). Named by the registry-schedule batch.
     "typeKeyAnchor": r"^static\s+inline\s+char\s+typeKeyAnchor\s*$",
 }

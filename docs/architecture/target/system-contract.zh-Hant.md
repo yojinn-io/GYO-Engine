@@ -47,7 +47,7 @@
 
 ## 4. API 名稱（`v8-arch-kernel-registry-schedule` 定；只對應名字與條文，不改上面的規則）
 
-程式在 `engine/kernel/include/engine/kernel/`（`Params.hpp`、`SystemTraits.hpp`、`Registry.hpp`、`KernelError.hpp`）。spec 稱為 Runtime 的那個型別（一個 World、它的 Registry、它的 schedule 集合加每個 schedule 的執行策略）型別名是 **`App`**（`GYO::Kernel::App`；kernel HANDOFF `v8-arch-kernel-app-name`），實體在 world-exec。
+程式在 `engine/ecs/kernel/include/engine/kernel/`（`Params.hpp`、`SystemTraits.hpp`、`Registry.hpp`、`KernelError.hpp`）。spec 稱為 Runtime 的那個型別（一個 World、它的 Registry、它的 schedule 集合加每個 schedule 的執行策略）型別名是 **`App`**（`GYO::Kernel::App`；kernel HANDOFF `v8-arch-kernel-app-name`），實體在 world-exec。
 
 | 名字 | 是什麼 | 對應條文 |
 |---|---|---|

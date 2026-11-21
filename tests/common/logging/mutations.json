@@ -8,7 +8,7 @@
    "guards": [
     "logging LG-1"
    ],
-   "file": "engine/world_logging/src/TakeKernelDiagnostics.cpp",
+   "file": "engine/modules/world_logging/src/TakeKernelDiagnostics.cpp",
    "find": "world.TakeDiagnostics<Kernel::DroppedMessages>()",
    "replace": "std::vector<Kernel::DroppedMessages>{}",
    "target": "gyo_world_logging_tests",
@@ -21,7 +21,7 @@
    "guards": [
     "logging LG-1"
    ],
-   "file": "engine/world_logging/src/TakeKernelDiagnostics.cpp",
+   "file": "engine/modules/world_logging/src/TakeKernelDiagnostics.cpp",
    "find": "world.TakeDiagnostics<Kernel::RejectedSpawn>()",
    "replace": "std::vector<Kernel::RejectedSpawn>{}",
    "target": "gyo_world_logging_tests",
@@ -35,7 +35,7 @@
     "logging LG-1",
     "logging-declaration 5.9"
    ],
-   "file": "engine/world_logging/src/TakeKernelDiagnostics.cpp",
+   "file": "engine/modules/world_logging/src/TakeKernelDiagnostics.cpp",
    "find": "{\"other_emitter\", std::string_view(rejected.otherEmitter)}};\n        Logging::Write(Logging::Entry{.level = Logging::Level::Warning,\n                                      .category = \"kernel\",\n                                      .text = text,\n                                      .fields = fields,\n                                      .world = worldName,",
    "replace": "{\"other_emitter\", std::string_view(rejected.otherEmitter)}};\n        Logging::Write(Logging::Entry{.level = Logging::Level::Warning,\n                                      .category = \"kernel\",\n                                      .text = text,\n                                      .fields = fields,\n                                      .world = {},",
    "target": "gyo_world_logging_tests",
@@ -49,7 +49,7 @@
     "logging LG-1",
     "logging-declaration 5.4"
    ],
-   "file": "engine/world_logging/src/TakeKernelDiagnostics.cpp",
+   "file": "engine/modules/world_logging/src/TakeKernelDiagnostics.cpp",
    "find": "const bool interrupted = world.State() == Kernel::WorldState::Interrupted;",
    "replace": "const bool interrupted = false;",
    "target": "gyo_world_logging_tests",
@@ -62,7 +62,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "report.console = haveText ? WriteStandardErrorTried(*text) : WriteBareLine(record);",
    "replace": "report.console = false;",
    "target": "gyo_logging_tests",
@@ -75,7 +75,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "        if (!entry.TakesCategory(record.category)) continue;\n        const bool written",
    "replace": "        continue;\n        const bool written",
    "target": "gyo_logging_tests",
@@ -89,7 +89,7 @@
     "logging LG-2",
     "logging-declaration 5.6"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "        if (!entry.TakesCategory(record.category)) continue;\n        const bool written",
    "replace": "        const bool written",
    "target": "gyo_logging_tests",
@@ -102,7 +102,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "const auto deadline = std::chrono::steady_clock::now() + state->fatalFlushTimeout;",
    "replace": "const auto deadline = std::chrono::steady_clock::now();",
    "target": "gyo_logging_tests",
@@ -115,7 +115,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "FatalScope() noexcept { inFatalPath = true; }",
    "replace": "FatalScope() noexcept { inFatalPath = false; }",
    "target": "gyo_logging_tests",
@@ -128,7 +128,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "        if (written) {\n            ++report.sinksWritten;",
    "replace": "        if (true) {\n            ++report.sinksWritten;",
    "target": "gyo_logging_tests",
@@ -142,7 +142,7 @@
     "logging LG-2",
     "logging LG-6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "    if (!impl_->fatalOutput->Write(jsonLine)) return false;",
    "replace": "    impl_->Push(std::string(jsonLine));",
    "target": "gyo_logging_tests",
@@ -155,7 +155,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "if (impl_->finished || impl_->OnWriterThread()) return false;",
    "replace": "if (impl_->finished) return false;",
    "target": "gyo_logging_tests",
@@ -169,7 +169,7 @@
     "logging LG-2",
     "logging-declaration 5.6"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (current.load(std::memory_order_acquire) != nullptr) {\n        const Field fields[]",
    "replace": "    if (false) {\n        const Field fields[]",
    "target": "gyo_logging_tests",
@@ -183,7 +183,7 @@
     "logging LG-2",
     "logging-declaration 5.6"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    (previous != nullptr ? previous : &::Engine::Base::DefaultAssertionHandler)(failure);",
    "replace": "    static_cast<void>(previous);",
    "target": "gyo_logging_tests",
@@ -196,7 +196,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (state->tookAssertions) ::Engine::Base::SetAssertionHandler(state->previousAssertion);\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -209,7 +209,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -222,7 +222,7 @@
    "guards": [
     "logging LG-3"
    ],
-   "file": "engine/world_logging/include/engine/world_logging/Forward.hpp",
+   "file": "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
    "find": "            } catch (...) {\n                CountFailedDescription();",
    "replace": "            } catch (const std::logic_error&) {\n                CountFailedDescription();",
    "target": "gyo_world_logging_tests",
@@ -235,7 +235,7 @@
    "guards": [
     "logging LG-3"
    ],
-   "file": "engine/world_logging/include/engine/world_logging/Forward.hpp",
+   "file": "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
    "find": "                CountFailedDescription();\n                WriteDescriptionFailure(D::name, world);\n            }\n        }",
    "replace": "                return ::Engine::Base::Err(Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, \"describe\"));\n            }\n        }",
    "target": "gyo_world_logging_tests",
@@ -248,7 +248,7 @@
    "guards": [
     "logging LG-3"
    ],
-   "file": "engine/world_logging/include/engine/world_logging/Forward.hpp",
+   "file": "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
    "find": "    static_assert((Kernel::ParamTraits<P>::readOnly && ...),",
    "replace": "    static_assert(true,",
    "target": "gyo_world_logging_tests",
@@ -262,7 +262,7 @@
     "logging LG-1",
     "logging-declaration 5.3"
    ],
-   "file": "engine/world_logging/include/engine/world_logging/Forward.hpp",
+   "file": "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
    "find": "            static_cast<void>(reader.Read());\n            return {};",
    "replace": "            return {};",
    "target": "gyo_world_logging_tests",
@@ -275,7 +275,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/src/JsonLines.cpp",
+   "file": "engine/modules/logging/src/JsonLines.cpp",
    "find": "writer.String(\"NaN\");",
    "replace": "writer.String(\"nan\");",
    "target": "gyo_logging_tests",
@@ -288,7 +288,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/src/JsonLines.cpp",
+   "file": "engine/modules/logging/src/JsonLines.cpp",
    "find": "writer.String(value > 0 ? \"Infinity\" : \"-Infinity\");",
    "replace": "writer.String(value > 0 ? \"Inf\" : \"-Infinity\");",
    "target": "gyo_logging_tests",
@@ -301,7 +301,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/src/JsonLines.cpp",
+   "file": "engine/modules/logging/src/JsonLines.cpp",
    "find": "writer.String(value > 0 ? \"Infinity\" : \"-Infinity\");",
    "replace": "writer.String(\"Infinity\");",
    "target": "gyo_logging_tests",
@@ -314,7 +314,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/include/engine/logging/JsonLines.hpp",
+   "file": "engine/modules/logging/include/engine/logging/JsonLines.hpp",
    "find": "inline constexpr std::uint64_t kJsonLinesSchema = 1;",
    "replace": "inline constexpr std::uint64_t kJsonLinesSchema = 2;",
    "target": "gyo_logging_tests",
@@ -327,7 +327,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/src/JsonLines.cpp",
+   "file": "engine/modules/logging/src/JsonLines.cpp",
    "find": "    if (!record.world.empty()) {\n        writer.Key(\"world\");\n        writer.String(record.world);\n    }\n    if (record.worldInterrupted) {\n        writer.Key(\"world_interrupted\");\n        writer.Bool(true);\n    }",
    "replace": "    if (record.worldInterrupted) {\n        writer.Key(\"world_interrupted\");\n        writer.Bool(true);\n    }\n    if (!record.world.empty()) {\n        writer.Key(\"world\");\n        writer.String(record.world);\n    }",
    "target": "gyo_logging_tests",
@@ -340,7 +340,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/src/JsonLines.cpp",
+   "file": "engine/modules/logging/src/JsonLines.cpp",
    "find": "const char sign = offsetMinutes < 0 ? '-' : '+';",
    "replace": "const char sign = '+';",
    "target": "gyo_logging_tests",
@@ -353,7 +353,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/src/JsonLines.cpp",
+   "file": "engine/modules/logging/src/JsonLines.cpp",
    "find": "    if (!WriteRecord(out, replacement)) {",
    "replace": "    if (true) {\n        out += '\\n';\n        return false;\n    }\n    if (!WriteRecord(out, replacement)) {",
    "target": "gyo_logging_tests",
@@ -367,7 +367,7 @@
     "logging LG-5",
     "logging-declaration 5.2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "if (const std::string_view repeated = RepeatedKey(record.fields); !repeated.empty()) {",
    "replace": "if (const std::string_view repeated = RepeatedKey(record.fields); false) {",
    "target": "gyo_logging_tests",
@@ -380,7 +380,7 @@
    "guards": [
     "logging LG-6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "            if (queue.size() >= capacity) {",
    "replace": "            if (false) {",
    "target": "gyo_logging_tests",
@@ -394,7 +394,7 @@
     "logging LG-6",
     "logging-declaration 判定 3"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "            if (queue.size() >= capacity) {\n                ++droppedFull;\n                return;",
    "replace": "            if (queue.size() >= capacity) {\n                return;",
    "target": "gyo_logging_tests",
@@ -408,7 +408,7 @@
     "logging LG-6",
     "logging-declaration 判定 3"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "            if (closed) {\n                ++droppedClosed;\n                return;",
    "replace": "            if (closed) {\n                return;",
    "target": "gyo_logging_tests",
@@ -422,7 +422,7 @@
     "logging LG-6",
     "logging LG-5"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "        AppendJsonEndLine(impl_->pending, impl_->monoNs ? impl_->monoNs() : ::Engine::Time::NowNs(), counts);\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -435,7 +435,7 @@
    "guards": [
     "logging LG-6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "            for (const std::string& line : batch) {\n                try {\n                    pending += line;",
    "replace": "            for (auto it = batch.rbegin(); it != batch.rend(); ++it) {\n                const std::string& line = *it;\n                try {\n                    pending += line;",
    "target": "gyo_logging_tests",
@@ -449,7 +449,7 @@
     "logging LG-6",
     "logging-declaration 判定 3"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "    impl_->fatalDirect.fetch_add(1, std::memory_order_relaxed);\n    return true;",
    "replace": "    {\n        std::scoped_lock progress(impl_->progressMutex);\n        ++impl_->written;\n    }\n    return true;",
    "target": "gyo_logging_tests",
@@ -462,7 +462,7 @@
    "guards": [
     "logging LG-6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "            const auto wake = context.Wait();",
    "replace": "            const auto wake = context.WaitUntil(::Engine::Time::Now() + std::chrono::milliseconds{1});",
    "target": "gyo_logging_tests",
@@ -475,7 +475,7 @@
    "guards": [
     "logging LG-6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "        return impl_->flushedThrough >= target && !impl_->failed.load(std::memory_order_acquire);",
    "replace": "        return impl_->flushedThrough >= target;",
    "target": "gyo_logging_tests",
@@ -489,7 +489,7 @@
     "logging LG-6",
     "logging-declaration 5.6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "        if (options.truncate) {",
    "replace": "        if (false) {",
    "target": "gyo_logging_tests",
@@ -502,7 +502,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "                for (Detail::SinkEntry& earlier : state->sinks) earlier.sink->Close();\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -515,7 +515,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    return !HasPrefix(exclude, category);",
    "replace": "    return true;",
    "target": "gyo_logging_tests",
@@ -528,7 +528,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (!include.empty() && !HasPrefix(include, category)) return false;\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -541,7 +541,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "        if (prefix.size() > bestLength && category.starts_with(prefix)) {",
    "replace": "        if (best == 0 && category.starts_with(prefix)) {",
    "target": "gyo_logging_tests",
@@ -554,7 +554,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "                entry.levels[i].store(static_cast<std::uint8_t>(minimum), std::memory_order_relaxed);\n                state->RecomputeFloor();",
    "replace": "                state->RecomputeFloor();",
    "target": "gyo_logging_tests",
@@ -567,7 +567,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "                entry.levels[i].store(static_cast<std::uint8_t>(minimum), std::memory_order_relaxed);\n                state->RecomputeFloor();",
    "replace": "                entry.levels[i].store(static_cast<std::uint8_t>(minimum), std::memory_order_relaxed);",
    "target": "gyo_logging_tests",
@@ -580,7 +580,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);\n    if (taking == 0) return;",
    "replace": "    static_cast<void>(state->Wall());\n    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);\n    if (taking == 0) return;",
    "target": "gyo_logging_allocation_tests",
@@ -593,7 +593,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    GYO_ASSERT(Detail::current.load(std::memory_order_acquire) == nullptr);\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -606,7 +606,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (state->tookBaseLog) ::Engine::Base::SetLogHandler(state->previousBaseLog);\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -619,7 +619,7 @@
    "guards": [
     "logging LG-10"
    ],
-   "file": "engine/logging/CMakeLists.txt",
+   "file": "engine/modules/logging/CMakeLists.txt",
    "find": "gyo_link_registered_dependencies(logging)\n",
    "replace": "gyo_link_registered_dependencies(logging)\ntarget_link_libraries(gyo_logging PRIVATE GYO::Kernel)\n",
    "target": "gyo_logging_tests",
@@ -632,7 +632,7 @@
    "guards": [
     "logging LG-11"
    ],
-   "file": "engine/logging/include/engine/logging/Sink.hpp",
+   "file": "engine/modules/logging/include/engine/logging/Sink.hpp",
    "find": "    virtual void Write(const Record& record) noexcept = 0;",
    "replace": "    virtual void Write(const Record& record) = 0;",
    "target": "gyo_logging_tests",
@@ -646,8 +646,8 @@
     "logging LG-4"
    ],
    "file": "tests/common/logging/logging_guard.py",
-   "find": "    (\"LG4-LOGGING\", \"engine/logging/\", {\"base\", \"json\", \"os\", \"threads\", \"time\", \"logging\"}),",
-   "replace": "    (\"LG4-LOGGING\", \"engine/logging/\", {\"base\", \"json\", \"os\", \"threads\", \"time\", \"logging\", \"kernel\", \"world_time\"}),",
+   "find": "    (\"LG4-LOGGING\", \"engine/modules/logging/\", {\"base\", \"json\", \"os\", \"threads\", \"time\", \"logging\"}),",
+   "replace": "    (\"LG4-LOGGING\", \"engine/modules/logging/\", {\"base\", \"json\", \"os\", \"threads\", \"time\", \"logging\", \"kernel\", \"world_time\"}),",
    "expect": "FAIL: test_logging_including_the_kernel",
    "command": [
     "{python}",
@@ -669,8 +669,8 @@
     "logging LG-10"
    ],
    "file": "tests/common/logging/logging_guard.py",
-   "find": "    (\"LG4-LOGGING-PUBLIC\", \"engine/logging/include/\", {\"base\", \"logging\"}),",
-   "replace": "    (\"LG4-LOGGING-PUBLIC\", \"engine/logging/include/\", {\"base\", \"logging\", \"json\"}),",
+   "find": "    (\"LG4-LOGGING-PUBLIC\", \"engine/modules/logging/include/\", {\"base\", \"logging\"}),",
+   "replace": "    (\"LG4-LOGGING-PUBLIC\", \"engine/modules/logging/include/\", {\"base\", \"logging\", \"json\"}),",
    "expect": "FAIL: test_public_header_including_a_private_dependency",
    "command": [
     "{python}",
@@ -691,8 +691,8 @@
     "logging LG-4"
    ],
    "file": "tests/common/logging/logging_guard.py",
-   "find": "    (\"LG4-WORLD\", \"engine/world_logging/\", {\"base\", \"logging\", \"kernel\", \"orchestration\", \"world_logging\"}),",
-   "replace": "    (\"LG4-WORLD\", \"engine/world_logging/\", {\"base\", \"logging\", \"kernel\", \"orchestration\", \"world_logging\", \"world_time\"}),",
+   "find": "    (\"LG4-WORLD\", \"engine/modules/world_logging/\", {\"base\", \"logging\", \"kernel\", \"orchestration\", \"world_logging\"}),",
+   "replace": "    (\"LG4-WORLD\", \"engine/modules/world_logging/\", {\"base\", \"logging\", \"kernel\", \"orchestration\", \"world_logging\", \"world_time\"}),",
    "expect": "FAIL: test_world_logging_including_world_time",
    "command": [
     "{python}",
@@ -793,7 +793,7 @@
     "logging LG-2",
     "logging-declaration 判定 2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "        static_cast<void>(WriteFatalRecord(Record{.level = Level::Fatal, .category = \"terminate\", .text = text}));",
    "replace": "        static_cast<void>(text);",
    "target": "gyo_logging_terminate_probe",
@@ -814,7 +814,7 @@
     "logging LG-2",
     "logging-declaration 判定 2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": ".category = \"terminate\", .text = text}",
    "replace": ".category = \"assert\", .text = text}",
    "target": "gyo_logging_terminate_probe",
@@ -835,7 +835,7 @@
     "logging LG-2",
     "logging-declaration 判定 2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "            buffer = exception.what();\n            return buffer;",
    "replace": "            return \"a std::exception\";",
    "target": "gyo_logging_terminate_probe",
@@ -856,7 +856,7 @@
     "logging LG-2",
     "logging-declaration 判定 2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "        return \"an exception that is not a std::exception\";",
    "replace": "        return \"terminate probe: a std::exception\";",
    "target": "gyo_logging_terminate_probe",
@@ -877,7 +877,7 @@
     "logging LG-2",
     "logging-declaration 判定 2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (!inFlight) return \"std::terminate was called with no exception in flight\";",
    "replace": "    if (!inFlight) return \"an exception that is not a std::exception\";",
    "target": "gyo_logging_terminate_probe",
@@ -897,7 +897,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "                std::scoped_lock lock(state->levelMutex);\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -911,7 +911,7 @@
     "logging LG-5",
     "logging-declaration 5.2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "Deliver(state, taking | TakingSinks(state, error.level, error.category), error);",
    "replace": "Deliver(state, TakingSinks(state, error.level, error.category), error);",
    "target": "gyo_logging_tests",
@@ -925,7 +925,7 @@
     "logging LG-5",
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "    if (!repeated.empty()) record.fields = std::span<const Field>(&droppedFields, 1);\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -939,7 +939,7 @@
     "logging LG-6",
     "logging LG-11"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "                try {\n                    pending += line;\n                } catch (...) {",
    "replace": "                pending += line;\n                if (false) {",
    "target": "gyo_logging_allocation_tests",
@@ -952,7 +952,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "    // 3. Every sink that takes the category: its fatal output, at once.\n",
    "replace": "    for (const Detail::SinkEntry& entry : state->sinks) {\n        static_cast<void>(entry.sink->Flush(std::chrono::steady_clock::now() + state->fatalFlushTimeout));\n    }\n    // 3. Every sink that takes the category: its fatal output, at once.\n",
    "target": "gyo_logging_tests",
@@ -965,7 +965,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "        if (!entry.sink->Flush(deadline)) all = false;\n    }\n    report.flushed = all;",
    "replace": "        static_cast<void>(deadline);\n        if (!entry.sink->Flush(std::chrono::steady_clock::now() + state->fatalFlushTimeout)) all = false;\n    }\n    report.flushed = all;",
    "target": "gyo_logging_tests",
@@ -978,7 +978,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "        if (!entry.sink->Flush(deadline)) all = false;\n    }\n    report.flushed = all;",
    "replace": "        if (!entry.TakesCategory(record.category)) continue;\n        if (!entry.sink->Flush(deadline)) all = false;\n    }\n    report.flushed = all;",
    "target": "gyo_logging_tests",
@@ -991,7 +991,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "        if (!entry.TakesCategory(record.category)) continue;\n        const bool written",
    "replace": "        if (!entry.Takes(record.level, record.category)) continue;\n        const bool written",
    "target": "gyo_logging_tests",
@@ -1004,7 +1004,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "            text->clear();\n            json->clear();\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -1017,7 +1017,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "    const bool all = std::fwrite(buffer, 1, size, stderr) == size;",
    "replace": "    const bool all = size > 0;",
    "target": "gyo_logging_console_probe",
@@ -1037,7 +1037,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/WriteFatalRecord.cpp",
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
    "find": "    const bool written = std::fwrite(line.data(), 1, line.size(), stderr) == line.size();\n    return std::fflush(stderr) == 0 && written;\n}\n\n// A re-entered",
    "replace": "    const bool written = !line.empty();\n    return std::fflush(stderr) == 0 && written;\n}\n\n// A re-entered",
    "target": "gyo_logging_console_probe",
@@ -1057,7 +1057,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/ConsoleSink.cpp",
+   "file": "engine/modules/logging/src/ConsoleSink.cpp",
    "find": "    if (stream_ == stderr) return true;\n",
    "replace": "",
    "target": "gyo_logging_console_probe",
@@ -1077,7 +1077,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (const std::terminate_handler previous = previousTerminate.load(std::memory_order_acquire)) previous();\n",
    "replace": "",
    "target": "gyo_logging_terminate_probe",
@@ -1097,7 +1097,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    if (state->tookBaseLog) ::Engine::Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) ::Engine::Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
    "replace": "    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n    if (state->tookBaseLog) ::Engine::Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) ::Engine::Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n",
    "target": "gyo_logging_tests",
@@ -1110,7 +1110,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
    "replace": "    Detail::current.store(nullptr, std::memory_order_release);\n    for (auto it = state->sinks.rbegin(); it != state->sinks.rend(); ++it) it->sink->Close();\n",
    "target": "gyo_logging_tests",
@@ -1123,7 +1123,7 @@
    "guards": [
     "logging LG-8"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "        Detail::WriteWithoutLogger(Record{.level = entry.level,\n                                          .category = entry.category,\n                                          .text = entry.text,\n                                          .world = entry.world,\n                                          .worldInterrupted = entry.worldInterrupted,\n                                          .fields = entry.fields});\n        return;",
    "replace": "        return;",
    "target": "gyo_logging_console_probe",
@@ -1143,7 +1143,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "            if (level < lowest) lowest = level;\n        }\n    }",
    "replace": "            if (level < lowest) lowest = level;\n        }\n        break;\n    }",
    "target": "gyo_logging_tests",
@@ -1156,7 +1156,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "            error.fields = {};\n",
    "replace": "            error.fields = {};\n            error.world = {};\n",
    "target": "gyo_logging_tests",
@@ -1170,7 +1170,7 @@
     "logging LG-6",
     "logging-declaration 判定 3"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "                written += batch.size();",
    "replace": "                if (!failed.load(std::memory_order_acquire)) written += batch.size();",
    "target": "gyo_logging_tests",
@@ -1184,7 +1184,7 @@
     "logging LG-6",
     "logging-declaration 判定 3"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "    if (!impl_->fatalOutput->Write(jsonLine)) return false;",
    "replace": "    static_cast<void>(impl_->fatalOutput->Write(jsonLine));",
    "target": "gyo_logging_tests",
@@ -1197,7 +1197,7 @@
    "guards": [
     "logging LG-6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "                if (pending.size() >= kWriteChunk) WritePending();",
    "replace": "                WritePending();",
    "target": "gyo_logging_tests",
@@ -1210,7 +1210,7 @@
    "guards": [
     "logging LG-6"
    ],
-   "file": "engine/logging/src/JsonLinesFileSink.cpp",
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "                if (pending.size() >= kWriteChunk) WritePending();\n",
    "replace": "",
    "target": "gyo_logging_tests",
@@ -1223,7 +1223,7 @@
    "guards": [
     "logging LG-5"
    ],
-   "file": "engine/logging/include/engine/logging/Level.hpp",
+   "file": "engine/modules/logging/include/engine/logging/Level.hpp",
    "find": "return \"trace\";",
    "replace": "return \"TRACE\";",
    "target": "gyo_logging_tests",
@@ -1236,7 +1236,7 @@
    "guards": [
     "logging LG-11"
    ],
-   "file": "engine/logging/src/ConsoleSink.cpp",
+   "file": "engine/modules/logging/src/ConsoleSink.cpp",
    "find": "        if (!WriteLine(stream_, mutex, line)) failed_.fetch_add(1, std::memory_order_relaxed);",
    "replace": "        static_cast<void>(WriteLine(stream_, mutex, line));",
    "target": "gyo_logging_tests",
@@ -1249,7 +1249,7 @@
    "guards": [
     "logging LG-2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    state->fatalText.reserve(options.fatalLineCapacity);\n    state->fatalJson.reserve(options.fatalLineCapacity);\n",
    "replace": "",
    "target": "gyo_logging_allocation_tests",
@@ -1262,7 +1262,7 @@
    "guards": [
     "logging LG-7"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);\n    if (taking == 0) return;",
    "replace": "    const std::vector<Field> composed(entry.fields.begin(), entry.fields.end());\n    static_cast<void>(composed);\n    const std::uint64_t taking = Detail::TakingSinks(*state, entry.level, entry.category);\n    if (taking == 0) return;",
    "target": "gyo_logging_allocation_tests",
@@ -1276,7 +1276,7 @@
     "logging LG-1",
     "logging-declaration 判定 2"
    ],
-   "file": "engine/logging/src/Logger.cpp",
+   "file": "engine/modules/logging/src/Logger.cpp",
    "find": "    Write(Entry{.level = level, .category = message.category, .text = message.text});\n",
    "replace": "    static_cast<void>(level);\n",
    "target": "gyo_scenario_tests",

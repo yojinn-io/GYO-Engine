@@ -29,6 +29,27 @@ How the layers between the Engine and products or tools are composed, and the de
 The same §4 also says where an adapter for an external component lives, and distinguishes Engine-owned plugins
 (planned, not yet defined) from extensions under `plugins/`.
 
+### Directory layers of `engine/` (user, 2026-11-21)
+
+`engine/` is split by layer, one level deep (`engine/<layer>/<unit>/`); a unit's directory is the `dir` column of its row in
+`config/modules.csv`, not guessed from its name:
+
+| Directory | Layer | Units |
+|---|---|---|
+| `engine/core/` | capabilities internalized into the Engine, long-lived and rarely changed; know nothing of ECS | base, math, os, io, time, threads |
+| `engine/ecs/` | the ECS (Kernel) and its storage | kernel, entity_store |
+| `engine/orchestration/` | the orchestration layer (one unit) | orchestration |
+| `engine/modules/` | Modules: maintained by us, our interface (an external library behind it included), may grow | json, logging, audio, world_time, world_logging |
+| `plugins/` (top level, outside the Engine) | Plugins: third-party, officially maintained (SDL family, ImGui) | none yet |
+
+Dependencies point down only: a Module may depend on core, ecs and orchestration; core depends on no Module. Include paths
+keep the form `engine/<unit>/<header>` whatever the layer.
+
+The registers that say what the repository is made of (`modules.csv`, `plugins.csv`, `projects.csv`, `tools.csv`) are in
+the top-level `config/`, outside the Engine, the plugins and the products (user, 2026-11-21): they describe the
+composition the build reads, not a capability of the Engine, and the Engine does not know products (like Go's `go.work`
+or a Cargo workspace manifest at the root).
+
 ## Naming
 
 What a name in the Engine or a reusable layer may refer to: [`target/naming.zh-Hant.md`](target/naming.zh-Hant.md)

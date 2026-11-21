@@ -2,7 +2,7 @@
 
 [日本語](releasing.ja.md) · [整體架構](architecture.md) · [渲染驗收](rendering_architecture.zh-Hant.md#r09)
 
-本文說明目前的 CI 與發佈流程。內容依據 `.github/workflows/*.yml`、`.github/actions/native-setup`、`build/ci/common/*.py`、`CMakePresets.json`、`build/acceptance/*/checks.json`、`engine/config/projects.csv` 與 `engine/config/tools.csv`。發現不一致時以程式為準，並修正本文。
+本文說明目前的 CI 與發佈流程。內容依據 `.github/workflows/*.yml`、`.github/actions/native-setup`、`build/ci/common/*.py`、`CMakePresets.json`、`build/acceptance/*/checks.json`、`config/projects.csv` 與 `config/tools.csv`。發現不一致時以程式為準，並修正本文。
 
 - 第 1～9 節：機制與規則
 - 第 10 節：實例（附可直接執行的指令）
@@ -38,7 +38,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 
 | 產品 | 壓縮檔（各附 `.sha256`） | 平台 | 擁有者 |
 |---|---|---|---|
-| 設計工具鏈（toolchain） | `gyo-toolchain-<platform>.tar.gz`（根目錄 `gyo-toolchain`） | 固定三個：`windows-x64`、`linux-x64`、`macos-arm64` | `engine/config/tools.csv` 中 `release` 啟用的工具（目前為 UI Editor 的 GUI 預設模式）及必要 runtime libraries |
+| 設計工具鏈（toolchain） | `gyo-toolchain-<platform>.tar.gz`（根目錄 `gyo-toolchain`） | 固定三個：`windows-x64`、`linux-x64`、`macos-arm64` | `config/tools.csv` 中 `release` 啟用的工具（目前為 UI Editor 的 GUI 預設模式）及必要 runtime libraries |
 | 遊戲 | `gyo-<game>-<platform>.tar.gz`（根目錄 `gyo-<game>`）；`object_fps_pvp` 含 client（`main`）與 `match` | `projects.csv` 中該遊戲 `enabled` 與平台欄位都啟用者；`macos` 欄同時啟用 `macos-arm64` 與 `macos-x64`，但只發布 `macos-arm64`（`macos-x64` 只供本機建置，見第 5 節） | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` 的那一列 |
 | 遊戲的 Go 服務 | `gyo-<game>-<role>-<platform>.tar.gz`；`object_fps_pvp` 為 `gyo-object_fps_pvp-gateway-linux-x64.tar.gz` 與 `...-windows-x64.tar.gz` | 只有 `gyo_app_add_go_service(... PLATFORMS ...)` 宣告的平台（gateway 為 Linux 與 Windows） | 該遊戲（`apps/<game>/go.mod`） |
 
@@ -322,7 +322,7 @@ Tag 結尾的 7 個字元是 master commit 的 SHA。說明中的「CI verificat
 **遊戲**（例如 `my_game`），只變更該遊戲的內容與登錄資料：
 
 1. 準備 `apps/my_game/`（`CMakeLists.txt`、`project.json`、原始碼）與 `assets/my_game/`（見[建立／複製遊戲](creating_apps.md)）。
-2. 在 `engine/config/projects.csv` 新增一列：
+2. 在 `config/projects.csv` 新增一列：
 
    ```csv
    my_game,My game,,1,1,1,1
@@ -355,7 +355,7 @@ Tag 結尾的 7 個字元是 master commit 的 SHA。說明中的「CI verificat
 **工具**（例如 `level_editor`）：
 
 1. 準備 `tools/level_editor/`（`CMakeLists.txt`、`project.json`）。發佈工具的預設模式必須 `packageable: true`，且 `requires_apps` 為空（見[工具登錄與選擇](tool_projects.md)）。
-2. 在 `engine/config/tools.csv` 新增一列：
+2. 在 `config/tools.csv` 新增一列：
 
    ```csv
    level_editor,Level editor,1,true,true,true,true,true,true

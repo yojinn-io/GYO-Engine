@@ -51,11 +51,11 @@
 
 ## 6. 欄的儲存與 `entity_store` 的關係（通用規則；`v8-arch-a6-revision`）
 
-- **`engine/entity_store` 不持有、不讀寫 change stamp。** store 的 Design Invariant 6（狀態權威、沒有 change tick）對 store 本身繼續成立；stamp 是 World 的東西，它的儲存與讀寫只在 `engine/kernel`。
+- **`engine/ecs/entity_store` 不持有、不讀寫 change stamp。** store 的 Design Invariant 6（狀態權威、沒有 change tick）對 store 本身繼續成立；stamp 是 World 的東西，它的儲存與讀寫只在 `engine/ecs/kernel`。
 - World 的一個欄有三樣東西：鍵（`keys`）、值、每格的 `added`／`changed` stamp。規格 A.6 留了兩種佈局，哪一種由 `v8-arch-kernel-world-exec` 的事前宣告定，兩種都守上一條：
   1. **分開存（SoA）**：鍵、值、stamp 各一個陣列，World 用 store 的「回傳位置」查找版本同步搬動平行陣列。stamp 陣列是 kernel 的成員。
   2. **格子包法**：元素型別是 kernel 定義的格子（鍵、兩個 stamp、值），直接重用 store 的排序容器。stamp 在元素裡，但元素型別與對 stamp 的每一次讀寫都在 kernel；store 只把它當不透明的元素搬動。
-- 判斷一個改動有沒有違反本節：`engine/entity_store` 的原始碼裡出現 stamp 的欄位名、或依 stamp 做任何判斷，就是違反。守衛：審查加文字掃描（world-exec 新增）；spec J-30。
+- 判斷一個改動有沒有違反本節：`engine/ecs/entity_store` 的原始碼裡出現 stamp 的欄位名、或依 stamp 做任何判斷，就是違反。守衛：審查加文字掃描（world-exec 新增）；spec J-30。
 - 本文件不列任何產品的欄位名。產品欄位怎麼分、哪些進 digest，寫在該產品自己的目標文件。
 
 ## 7. 其餘（照規格 §A，待實作時搬進本文件）

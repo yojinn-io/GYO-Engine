@@ -5,7 +5,7 @@
     {
       "id": "au-ctl-clip-reuse-without-check-asan",
       "what": "LoadClip frees an unloading slot without waiting for the audio thread's hand-back, so the audio thread reads freed samples",
-      "file": "engine/audio/src/Mixer.cpp",
+      "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "        if (entry.state != Detail::SlotState::Unloading || !entry.handedBack.load(std::memory_order_acquire)) continue;",
       "replace": "        if (entry.state != Detail::SlotState::Unloading) continue;",
       "target": "gyo_audio_tests",

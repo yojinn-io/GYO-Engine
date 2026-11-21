@@ -1,6 +1,6 @@
 # The JSON Module's tests (docs/architecture/target/v2/json-module-declaration.zh-Hant.md).
 # gyo_json_component_tests names yyjson and fast_float directly: this is the
-# adapter's own test directory, the one place outside engine/json/src that
+# adapter's own test directory, the one place outside engine/modules/json/src that
 # Design Invariant J-1 allows to.
 add_executable(gyo_json_component_tests ComponentTests.cpp)
 target_link_libraries(gyo_json_component_tests PRIVATE gyo_yyjson gyo_fast_float GYO::Base doctest::doctest)
@@ -43,10 +43,10 @@ function(gyo_expect_json_links)
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_json_links)
 
-# The adapter's internals (engine/json/src) and yyjson's allocator type: only
+# The adapter's internals (engine/modules/json/src) and yyjson's allocator type: only
 # this directory may name them (J-1).
 add_executable(gyo_json_adapter_tests AdapterTests.cpp)
-target_include_directories(gyo_json_adapter_tests PRIVATE ${GYO_REPOSITORY_ROOT}/engine/json/src)
+target_include_directories(gyo_json_adapter_tests PRIVATE ${GYO_REPOSITORY_ROOT}/engine/modules/json/src)
 target_link_libraries(gyo_json_adapter_tests PRIVATE GYO::Json gyo_yyjson doctest::doctest)
 add_test(NAME gyo_json_adapter_tests COMMAND gyo_json_adapter_tests)
 set_tests_properties(gyo_json_adapter_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
@@ -65,7 +65,7 @@ add_test(NAME gyo_json_vector_tests COMMAND gyo_json_vector_tests ${_gyo_json_ve
 set_tests_properties(gyo_json_vector_tests PROPERTIES LABELS "cpu" TIMEOUT 300 FIXTURES_REQUIRED gyo_json_vectors)
 
 # Design Invariant J-1: yyjson and fast_float appear only in their adapter
-# directories (engine/json/src/adapters/<component>/); set up after the
+# directories (engine/modules/json/src/adapters/<component>/); set up after the
 # scenario tests passed (declaration 8.5, AGENTS §3 on when to set up guards).
 add_test(NAME json.adapter_guard
     COMMAND Python3::Interpreter -I "${CMAKE_CURRENT_SOURCE_DIR}/json_guard.py" --root "${GYO_REPOSITORY_ROOT}")

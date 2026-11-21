@@ -1,8 +1,8 @@
 # The mixer's sample-domain core is tested offline, without a device: the test
-# reaches the internal VoiceMixer header (engine/audio/src) on purpose, since
+# reaches the internal VoiceMixer header (engine/modules/audio/src) on purpose, since
 # the public Mixer that wraps it arrives with v8-engine-audio-schedule.
 add_executable(gyo_audio_tests MixerTests.cpp ScheduleTests.cpp CharacterizationTests.cpp StopTests.cpp ClipSlotTests.cpp PlayheadTests.cpp)
-target_include_directories(gyo_audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/engine/audio/src)
+target_include_directories(gyo_audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/engine/modules/audio/src)
 target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)
 # The ThreadSanitizer stress case runs as its own CTest, so its time never eats
 # into the other cases' timeout. Its three runs are bounded inside the case at
@@ -21,7 +21,7 @@ set_tests_properties(gyo_audio_playhead_stress PROPERTIES LABELS "cpu" TIMEOUT $
 
 # Design Invariant 4: only Mixer::PlayheadOf reads the playhead board.
 add_test(NAME gyo_audio_board_readers
-         COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}/engine/audio/src
+         COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}/engine/modules/audio/src
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckBoardReaders.cmake)
 set_tests_properties(gyo_audio_board_readers PROPERTIES LABELS "cpu" TIMEOUT 60)
 

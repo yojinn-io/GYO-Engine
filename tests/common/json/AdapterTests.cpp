@@ -1,4 +1,4 @@
-// The adapter's own tests: they reach inside engine/json/src/adapters, which
+// The adapter's own tests: they reach inside engine/modules/json/src/adapters, which
 // only tests/common/json may do (Design Invariant J-1).
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>

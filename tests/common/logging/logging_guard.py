@@ -6,7 +6,7 @@ messages or the parts of the engine it does not depend on:
 
   LG4-LOGGING         an #include "engine/<module>/..." under engine/logging/ whose module is not base, json,
                       os, threads, time or logging;
-  LG4-LOGGING-PUBLIC  an #include "engine/<module>/..." under engine/logging/include/ whose module is not base
+  LG4-LOGGING-PUBLIC  an #include "engine/<module>/..." under engine/modules/logging/include/ whose module is not base
                       or logging (the public side links GYO::Base only, LG-10);
   LG4-WORLD           an #include "engine/<module>/..." under engine/world_logging/ whose module is not base,
                       logging, kernel, orchestration or world_logging.
@@ -30,9 +30,9 @@ SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".i
 ENGINE_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"]engine/([A-Za-z0-9_]+)/[^>"\n]*[>"]', re.MULTILINE)
 RULES = (
     # (rule, directory, allowed modules); a file is checked against every rule whose directory holds it.
-    ("LG4-LOGGING", "engine/logging/", {"base", "json", "os", "threads", "time", "logging"}),
-    ("LG4-LOGGING-PUBLIC", "engine/logging/include/", {"base", "logging"}),
-    ("LG4-WORLD", "engine/world_logging/", {"base", "logging", "kernel", "orchestration", "world_logging"}),
+    ("LG4-LOGGING", "engine/modules/logging/", {"base", "json", "os", "threads", "time", "logging"}),
+    ("LG4-LOGGING-PUBLIC", "engine/modules/logging/include/", {"base", "logging"}),
+    ("LG4-WORLD", "engine/modules/world_logging/", {"base", "logging", "kernel", "orchestration", "world_logging"}),
 )
 
 
