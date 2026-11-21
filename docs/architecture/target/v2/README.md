@@ -83,6 +83,7 @@
 - [2026_11_20_gyo2_error_levels.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_error_levels.zh-Hant.md)：異常分級（Kernel 不再印錯誤、編排層不再記警告、P12、P15；級別與命名的條文草稿）。
 - [2026_11_20_gyo2_logging.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_logging.zh-Hant.md)：日誌機制（`v8-arch-gyo2-logging`；trace 另一個 Module）。
 - [2026_11_21_gyo2_trace.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_trace.zh-Hant.md)：trace（`v8-arch-gyo2-trace`）。
+- [2026_11_21_gyo2_stale_mutants.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_stale_mutants.zh-Hant.md)：os-subsystem 清單裡 6 個在基準上跑不起來的突變（改寫 6、敵對式檢查後新增 4；`v8-arch-gyo2-stale-mutants`）。
 - [2026_11_21_gyo2_os_wait.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_os_wait.zh-Hant.md)：core/time 的等待改呼叫 core/os（`v8-arch-gyo2-os-wait`）。
 
 ## 沒有搬過來的
