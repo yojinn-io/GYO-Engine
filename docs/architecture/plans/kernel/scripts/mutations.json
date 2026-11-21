@@ -1700,7 +1700,7 @@
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
       "find": "    out += \"  \\\"repo_commit\\\": \" + Detail::JsonString(options.repoCommit) + \",\\n\";",
       "replace": "",
-      "expect": "zone_scan\\.py exited 2",
+      "expect": "authority_scan\\.py exited 2",
       "target": "gyo_kernel_tests",
       "command": [
         "{python}",

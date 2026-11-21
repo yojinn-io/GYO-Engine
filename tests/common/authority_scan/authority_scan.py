@@ -1,17 +1,19 @@
-"""Text scan of zone-C (cross-platform deterministic) source files: spec J-17 of
+"""Text scan of the source files of what writes decision data (cross-platform deterministic code): the
+product-side half of G-5 (authority declaration 5.9; formerly spec J-17 of
 docs/architecture/plans/kernel/spec.zh-Hant.md, rules and judgement in
 docs/architecture/plans/kernel/j17-scanner.zh-Hant.md, the list contract in
-docs/architecture/zone-c-sources.zh-Hant.md.
+docs/architecture/zone-c-sources.zh-Hant.md, whose format the authority Module now exports under the name
+gyo.authority-sources; v8-arch-gyo2-authority-rollback step 5).
 
-Input: a list file (format "gyo.zone-c-sources", version 1) naming the .cpp files of one owner that
-contain zone-C Systems. Every listed file is scanned, and so is every header it reaches through
+Input: a list file (format "gyo.authority-sources", version 1; the kernel's "gyo.zone-c-sources" is read too
+until step 6) naming the .cpp files of one owner that contain Systems writing decision data. Every listed file is scanned, and so is every header it reaches through
 quoted includes that resolve under the list's owner_root (transitive, each file once). Angle-bracket
 includes are never expanded.
 
 Comments, string and character literals are blanked first; no rule reads them. Rules:
 
   ZS1  include of a banned header (clock, random, thread, OS, SDL, file or stream effect): the name
-       data is in zone_scan_rules.json, either include form.
+       data is in authority_scan_rules.json, either include form.
   ZS2  mutable state at namespace scope or declared static / thread_local: anonymous-namespace or
        namespace-scope variables without const (`int counter;`, `inline int x;`, `extern int y;`,
        `Foo f(1);`, `struct S {...} s;`), and every `static` or `thread_local` declaration that is a
@@ -36,7 +38,7 @@ their include chain, unresolved quoted includes). Exit status 0 when clean (cand
 path that is not relative / sorted / unique / under owner_root / present on disk). `--no-fail` turns
 1 into 0 for the baseline report.
 
-Usage: python3 zone_scan.py --list LIST.json [--root REPOSITORY] [--rules RULES.json]
+Usage: python3 authority_scan.py --list LIST.json [--root REPOSITORY] [--rules RULES.json]
                             [--report FILE] [--no-fail]
 """
 import argparse
@@ -46,13 +48,16 @@ import sys
 from collections import deque
 from pathlib import Path, PurePosixPath
 
-FORMAT = "gyo.zone-c-sources"
+FORMAT = "gyo.authority-sources"
+# The kernel's export of the same list under its old name (v8-arch-gyo2-authority-rollback step 5); it goes with the
+# kernel's export in step 6.
+FORMATS = (FORMAT, "gyo.zone-c-sources")
 SUPPORTED_VERSIONS = (1,)
 LIST_FIELDS = ("format", "version", "generated_by", "repo_commit", "owner_root", "include_roots", "files")
 SOURCE_SUFFIXES = (".cpp", ".cc", ".cxx")
 HEADER_SUFFIXES = (".hpp", ".h", ".hh", ".hxx", ".inl", ".ipp")
 RULES = ("ZS1", "ZS2", "ZS3", "ZS4", "ZS5", "ZS6", "ZS7")
-DEFAULT_RULES = Path(__file__).resolve().with_name("zone_scan_rules.json")
+DEFAULT_RULES = Path(__file__).resolve().with_name("authority_scan_rules.json")
 
 INCLUDE = re.compile(r"^[ \t]*#[ \t]*include[ \t]*([<\"])([^>\"]+)[>\"]")
 RAW_STRING_START = re.compile(r'(?:u8|u|U|L)?R"')
@@ -518,12 +523,12 @@ def load_list(path, root):
         raise ContractError(f"list: cannot read {path} ({error})")
     if not isinstance(data, dict):
         raise ContractError(f"list: {path} is not a JSON object")
-    if data.get("format") != FORMAT:
+    if data.get("format") not in FORMATS:
         raise ContractError(f"list: unknown format {data.get('format')!r} in {path} (expected {FORMAT!r})")
     version = data.get("version")
     if not isinstance(version, int) or isinstance(version, bool) or version not in SUPPORTED_VERSIONS:
         supported = ", ".join(str(v) for v in SUPPORTED_VERSIONS)
-        raise ContractError(f"zone_scan: unsupported list version {version!r} in {path} (supported: {supported}); refusing to scan")
+        raise ContractError(f"authority_scan: unsupported list version {version!r} in {path} (supported: {supported}); refusing to scan")
     errors = []
     unknown = sorted(set(data) - set(LIST_FIELDS))
     if unknown:
@@ -664,7 +669,7 @@ def format_lines(report):
     lines = [f"{f['file']}:{f['line']}: {f['rule']} {f['text']}" for f in report["findings"]]
     lines += [f"{c['file']}:{c['line']}: ZS5? {c['text']}" for c in report["candidates"]]
     expanded = report["files_scanned"] - report["files_listed"]
-    lines.append(f"zone_scan: {report['files_listed']} file(s) listed, {report['files_scanned']} scanned "
+    lines.append(f"authority_scan: {report['files_listed']} file(s) listed, {report['files_scanned']} scanned "
                  f"({expanded} expanded headers), {report['lines']} lines, {len(report['findings'])} finding(s), "
                  f"{len(report['candidates'])} candidate(s)")
     return lines
@@ -672,7 +677,7 @@ def format_lines(report):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--list", required=True, help="the gyo.zone-c-sources list file")
+    parser.add_argument("--list", required=True, help="the gyo.authority-sources list file")
     parser.add_argument("--root", default=str(Path(__file__).resolve().parents[3]), help="repository root")
     parser.add_argument("--rules", default=str(DEFAULT_RULES))
     parser.add_argument("--report", help="write the JSON report here")

@@ -1,4 +1,4 @@
-"""Self-test of zone_scan.py on synthetic owner trees (no repository file is read).
+"""Self-test of authority_scan.py on synthetic owner trees (no repository file is read).
 
 The judgement of docs/architecture/plans/kernel/j17-scanner.zh-Hant.md: the nine positive cases are
 each caught by their designated rule at the right line and by no other rule; the seven negative cases
@@ -13,9 +13,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import zone_scan  # noqa: E402
+import authority_scan  # noqa: E402
 
-RULES = zone_scan.load_rules(zone_scan.DEFAULT_RULES)
+RULES = authority_scan.load_rules(authority_scan.DEFAULT_RULES)
 OWNER = "owner"
 HEADER = "#pragma once\n"
 
@@ -39,7 +39,7 @@ class OwnerTree(unittest.TestCase):
         return relative
 
     def listing(self, files, **overrides):
-        data = {"format": zone_scan.FORMAT, "version": 1, "generated_by": "manual", "repo_commit": "2b4618f9",
+        data = {"format": authority_scan.FORMAT, "version": 1, "generated_by": "manual", "repo_commit": "2b4618f9",
                 "owner_root": OWNER, "include_roots": [OWNER + "/include"], "files": files}
         data.update(overrides)
         path = self.root / "list.json"
@@ -47,7 +47,7 @@ class OwnerTree(unittest.TestCase):
         return path
 
     def scan(self, files, **overrides):
-        return zone_scan.scan(self.root, self.listing(files, **overrides), RULES)
+        return authority_scan.scan(self.root, self.listing(files, **overrides), RULES)
 
     def scan_source(self, body):
         """Scans one source file owner/src/Case.cpp holding body; returns the report."""
@@ -362,7 +362,7 @@ class RuleZS5Candidates(OwnerTree):
     def test_zs5_candidates_do_not_fail(self):
         source = self.write(OWNER + "/src/Case.cpp", "namespace Own {\nstruct Holder {\n    Impl* impl_;\n};\n}\n")
         with redirect_stdout(io.StringIO()) as out:
-            status = zone_scan.main(["--root", str(self.root), "--list", str(self.listing([source]))])
+            status = authority_scan.main(["--root", str(self.root), "--list", str(self.listing([source]))])
         self.assertEqual(status, 0)
         self.assertIn("ZS5? raw pointer", out.getvalue())
         self.assertIn("0 finding(s), 1 candidate(s)", out.getvalue())
@@ -446,8 +446,8 @@ class Expansion(OwnerTree):
     def test_resolution_never_leaves_owner_root(self):
         # The list contract already keeps include_roots under owner_root; the resolver guards it again.
         self.write("engine/time/Other.hpp", HEADER)
-        self.assertIsNone(zone_scan.resolve_quoted_include(self.root, OWNER + "/src/A.cpp", "time/Other.hpp", ["engine"], OWNER))
-        self.assertIsNone(zone_scan.resolve_quoted_include(self.root, "engine/time/A.cpp", "Other.hpp", [], OWNER))
+        self.assertIsNone(authority_scan.resolve_quoted_include(self.root, OWNER + "/src/A.cpp", "time/Other.hpp", ["engine"], OWNER))
+        self.assertIsNone(authority_scan.resolve_quoted_include(self.root, "engine/time/A.cpp", "Other.hpp", [], OWNER))
 
     def test_dot_dot_in_include_is_followed_only_inside_the_owner(self):
         # Review item 7 (2026-11-12): `..` is normalised, then containment under owner_root decides.
@@ -465,7 +465,7 @@ class ListContract(OwnerTree):
         self.other = self.write(OWNER + "/src/B.cpp", "namespace Own {\nint G();\n}\n")
 
     def assertRefused(self, part, files=None, **overrides):
-        with self.assertRaises(zone_scan.ContractError) as caught:
+        with self.assertRaises(authority_scan.ContractError) as caught:
             self.scan([self.source] if files is None else files, **overrides)
         self.assertIn(part, str(caught.exception))
 
@@ -483,8 +483,8 @@ class ListContract(OwnerTree):
         data = json.loads(self.listing([self.source]).read_text(encoding="utf-8"))
         del data["repo_commit"]
         (self.root / "list.json").write_text(json.dumps(data), encoding="utf-8")
-        with self.assertRaises(zone_scan.ContractError) as caught:
-            zone_scan.scan(self.root, self.root / "list.json", RULES)
+        with self.assertRaises(authority_scan.ContractError) as caught:
+            authority_scan.scan(self.root, self.root / "list.json", RULES)
         self.assertIn("missing field(s) ['repo_commit']", str(caught.exception))
 
     def test_path_rules_are_enforced(self):
@@ -515,28 +515,28 @@ class ListContract(OwnerTree):
     def test_main_exit_codes(self):
         clean = str(self.listing([self.source]))
         with redirect_stdout(io.StringIO()):
-            self.assertEqual(zone_scan.main(["--root", str(self.root), "--list", clean]), 0)
+            self.assertEqual(authority_scan.main(["--root", str(self.root), "--list", clean]), 0)
         dirty = self.write(OWNER + "/src/C.cpp", "#include <chrono>\n")
         dirty_list = str(self.listing([dirty]))
         report_path = self.root / "out" / "report.json"
         with redirect_stdout(io.StringIO()) as out:
-            self.assertEqual(zone_scan.main(["--root", str(self.root), "--list", dirty_list, "--report", str(report_path)]), 1)
+            self.assertEqual(authority_scan.main(["--root", str(self.root), "--list", dirty_list, "--report", str(report_path)]), 1)
         self.assertEqual(out.getvalue().splitlines()[0], OWNER + "/src/C.cpp:1: ZS1 <chrono>")
         self.assertIn("1 file(s) listed, 1 scanned (0 expanded headers), 1 lines, 1 finding(s), 0 candidate(s)", out.getvalue())
         written = json.loads(report_path.read_text(encoding="utf-8"))
         self.assertEqual(written["per_rule"]["ZS1"], 1)
-        self.assertEqual(sum(written["per_rule"][r] for r in zone_scan.RULES if r != "ZS5"), len(written["findings"]))
+        self.assertEqual(sum(written["per_rule"][r] for r in authority_scan.RULES if r != "ZS5"), len(written["findings"]))
         with redirect_stdout(io.StringIO()):
-            self.assertEqual(zone_scan.main(["--root", str(self.root), "--list", dirty_list, "--no-fail"]), 0)
+            self.assertEqual(authority_scan.main(["--root", str(self.root), "--list", dirty_list, "--no-fail"]), 0)
         with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()) as err:
-            self.assertEqual(zone_scan.main(["--root", str(self.root), "--list", str(self.listing([self.source], version=2))]), 2)
+            self.assertEqual(authority_scan.main(["--root", str(self.root), "--list", str(self.listing([self.source], version=2))]), 2)
         self.assertIn("unsupported list version 2", err.getvalue())
 
     def test_rules_file_version_is_checked(self):
         bad = self.root / "rules.json"
         bad.write_text(json.dumps({"version": 2}), encoding="utf-8")
-        with self.assertRaises(zone_scan.ContractError) as caught:
-            zone_scan.load_rules(bad)
+        with self.assertRaises(authority_scan.ContractError) as caught:
+            authority_scan.load_rules(bad)
         self.assertIn("unsupported rules version 2", str(caught.exception))
 
 

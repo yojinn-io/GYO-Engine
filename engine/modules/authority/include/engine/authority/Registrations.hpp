@@ -197,15 +197,28 @@ void RegisterMessage(Kernel::Registrar& r, const std::string& name, std::uint32_
     r.Message<T>({.name = name, .capacity = capacity});
 }
 
+// A type that rolls back is compared with == on behalf; a type without one is registered by the author.
 template <class T>
 void ComponentInRollback(Rollback::RollbackEntry& rollback, RollbackChoice choice) {
-    if (choice == RollbackChoice::Rollback) rollback.Component<T>();
     if (choice == RollbackChoice::Derived) rollback.Derived<T>();
+    if (choice != RollbackChoice::Rollback) return;
+    if constexpr (std::equality_comparable<T> && std::is_copy_constructible_v<T>) {
+        rollback.Component<T>();
+    } else {
+        GYO_ASSERT(false && "authority.Component<T>: T has no == (or is not copyable), so it cannot roll back on the "
+                            "author's behalf: choose RollbackChoice::Self and register rollback.Component<T>({.equal = ...})");
+    }
 }
 template <class T>
 void ResourceInRollback(Rollback::RollbackEntry& rollback, RollbackChoice choice) {
     GYO_ASSERT(choice != RollbackChoice::Derived && "authority.Resource<T>: Derived is for components only");
-    if (choice == RollbackChoice::Rollback) rollback.Resource<T>();
+    if (choice != RollbackChoice::Rollback) return;
+    if constexpr (std::equality_comparable<T> && std::is_copy_constructible_v<T>) {
+        rollback.Resource<T>();
+    } else {
+        GYO_ASSERT(false && "authority.Resource<T>: T has no == (or is not copyable), so it cannot roll back on the "
+                            "author's behalf: choose RollbackChoice::Self and register rollback.Resource<T>({.equal = ...})");
+    }
 }
 
 // Each value of T: a hash of (index, value), summed (mod 2^64; order free, and two equal cells do not cancel as

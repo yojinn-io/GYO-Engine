@@ -107,7 +107,7 @@ set_tests_properties(kernel.J-17 PROPERTIES FIXTURES_SETUP kernel_zone_c_export)
 #   kernel.naming_guard  target/naming DI 1 (namespace and directory) and DI 3
 #                        (no role suffix on type names)
 #   kernel.J-17_zone_scan  the G-5 export of the zone C fixture (written by kernel.J-17), read by
-#                        tests/common/zone_scan/zone_scan.py; the finding
+#                        tests/common/authority_scan/authority_scan.py; the finding
 #                        count must be the fixture's planted count
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME kernel.guard
