@@ -74,7 +74,7 @@
 |---|---|---|---|
 | K.3-6 模擬的 World 與渲染的 World 分開；渲染的有自己的 Registry，只經 Extract 唯讀拿資料 | 只做了宣告與啟動檢查：`SetExtractSource`、extract 的 schedule、`Extract<Read<T>>`（沒有寫的版本，寫不出來）。**執行還沒做**：Extract 的參數一被取用就斷言 | ①②③ | 帶；執行的那一半是接渲染之前要做的 |
 | Editor 預覽的資料只往前流：文件的 World→Extract→渲染的 World | 沒有（gyo2 上沒有 Editor） | ③ | 帶，當方向；做工具時用 |
-| 資產照 Bevy 的模型：請求狀態是 Resource、每個型別一個 `Assets<T>`、loader 由 plugin 登記、載入完成後依請求順序在同步點套用 | 沒有（gyo2 上沒有資產模組） | ①②③ | 帶，當方向；做資產時用 |
+| 資產照 Bevy 的模型：請求狀態是 Resource、每個型別一個 `Assets<T>`、loader 由 plugin 登記、載入完成後依請求順序在同步點套用 | 沒有（gyo2 上沒有資產模組） | ①②③ | 帶，當方向；做資產時用**2026-11-22 註：已被 asset 宣告取代**——資產管理放在 World 外、World 只持 id（推翻 11-11 方向 2，`v8-arch-gyo2-asset-outside-world`）；載好就可見＋就緒查詢（不照請求順序，`-visible-on-arrival`）；loader 表帶鎖、隨時可登記（`-no-freeze`）；宣告 `asset-declaration.zh-Hant.md`（55a14825，待動工前核准） |
 | Loading：Startup 只放不依內容的登記；另有可分批的 Loading schedule；載入順序是計畫的函數 | 只有 `Domain::Loading` 這個值；分批與驅動還沒有 | ①②③（使用者今天：Loading 是遊戲都有的） | 帶。「地圖→…→玩家」的 stage 序與 wire 的 ready 事件屬 PvP，移植時處理 |
 
 ## 7. 要你定的 5 件
