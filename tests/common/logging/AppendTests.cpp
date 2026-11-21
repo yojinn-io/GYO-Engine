@@ -23,7 +23,8 @@ namespace Json = GYO::Engine::Json;
 
 TEST_CASE("append: the writer thread and the fatal output, 100,000 lines each into one file, never interleave") {
     constexpr int kLines = 100'000;
-    const auto dir = std::filesystem::current_path() / "logging-test-files";
+    // In the build directory, never the working directory (a run from the repository root left files there).
+    const auto dir = std::filesystem::path(GYO_LOGGING_TEST_BINARY_DIR) / "logging-test-files";
     std::filesystem::create_directories(dir);
     const auto path = dir / "append.jsonl";
     std::filesystem::remove(path);

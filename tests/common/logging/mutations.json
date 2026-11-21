@@ -1296,6 +1296,21 @@
    "target": "gyo_logging_tests",
    "cases": "logger: Installed tells*",
    "expect": "Installed is false again once the Logger is uninstalled"
+  },
+  {
+   "id": "lg-fatal-no-trace-path",
+   "what": "trace declaration D4 (a): the fatal record goes without the current trace path",
+   "guards": [
+    "logging LG-2",
+    "logging LG-5",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/logging/src/WriteFatalRecord.cpp",
+   "find": "    if (pathSize != 0 && record.fields.size() <= kMaxFatalFields) {",
+   "replace": "    if (false) {",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: with a trace receiver*",
+   "expect": "trace D4 \\(a\\): the fatal record carries trace_path"
   }
  ]
 }

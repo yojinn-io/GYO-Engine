@@ -61,7 +61,8 @@ std::string TextOf(const std::string& line) {
 }
 
 std::filesystem::path TempPath(const std::string& name) {
-    const auto dir = std::filesystem::current_path() / "logging-test-files";
+    // In the build directory, never the working directory (a run from the repository root left files there).
+    const auto dir = std::filesystem::path(GYO_LOGGING_TEST_BINARY_DIR) / "logging-test-files";
     std::filesystem::create_directories(dir);
     const auto path = dir / name;
     std::filesystem::remove(path);

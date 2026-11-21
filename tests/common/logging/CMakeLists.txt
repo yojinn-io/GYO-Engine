@@ -11,6 +11,8 @@ add_executable(gyo_logging_tests
 # GYO::Json reads every JSON line back (Design Invariant LG-5).
 find_package(Threads REQUIRED)
 target_link_libraries(gyo_logging_tests PRIVATE GYO::Logging GYO::Json gyo_test_support doctest::doctest Threads::Threads)
+# Files a test writes go to the build directory (trace declaration T6).
+target_compile_definitions(gyo_logging_tests PRIVATE GYO_LOGGING_TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
 if(MSVC)
     target_compile_options(gyo_logging_tests PRIVATE /W4 /permissive-)
     target_compile_definitions(gyo_logging_tests PRIVATE NOMINMAX)

@@ -8,15 +8,18 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <exception>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
 #include "AssertTestSupport.hpp"
 #include "TestClock.hpp"
 #include "TestOutputs.hpp"
+#include "engine/base/Trace.hpp"
 #include "engine/json/Document.hpp"
 #include "engine/logging/JsonLines.hpp"
 #include "engine/logging/JsonLinesFileSink.hpp"
@@ -360,4 +363,40 @@ TEST_CASE("fatal: a second fatal record on the same Logger carries nothing of th
     CHECK(line.find("second") != std::string::npos);
     const std::string text = memory->FatalTextLines()[1];
     CHECK_MESSAGE(text.find("first") == std::string::npos, "LG-2: the reserved text line is cleared too");
+}
+
+namespace {
+
+// A trace receiver whose path is fixed (the trace Module is not linked here: the fatal path reads the Base facade).
+std::size_t FixedPath(const std::span<char> buffer) noexcept {
+    constexpr std::string_view path = "kernel:Main@Match > kernel:MoveRacer@Match";
+    const std::size_t size = path.size() < buffer.size() ? path.size() : buffer.size();
+    std::memcpy(buffer.data(), path.data(), size);
+    return size;
+}
+::Engine::Base::TraceToken NoBegin(std::string_view, std::string_view, std::string_view) noexcept {
+    return {};
+}
+void NoEnd(::Engine::Base::TraceToken, bool) noexcept {}
+void NoError(::Engine::Base::TraceToken, std::string_view, bool) noexcept {}
+void NoMark(std::string_view, bool) noexcept {}
+constexpr ::Engine::Base::TraceReceiver kPathReceiver{
+    .begin = &NoBegin, .end = &NoEnd, .error = &NoError, .markCurrent = &NoMark, .path = &FixedPath};
+
+} // namespace
+
+TEST_CASE("fatal: with a trace receiver the fatal record carries trace_path, the current path; still one Fatal") {
+    auto memory = std::make_shared<Logging::MemorySink>();
+    auto handle = Logging::Install(WithMemory(memory));
+    REQUIRE(handle);
+    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kPathReceiver);
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "x"}));
+    ::Engine::Base::SetTraceReceiver(previous);
+    static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "y"}));
+    const auto records = memory->Records();
+    REQUIRE(records.size() == 2);
+    const auto* path = records[0].Find("trace_path");
+    REQUIRE_MESSAGE(path != nullptr, "trace D4 (a): the fatal record carries trace_path");
+    CHECK(path->text == "kernel:Main@Match > kernel:MoveRacer@Match");
+    CHECK_MESSAGE(records[1].Find("trace_path") == nullptr, "trace D4 (a): no receiver, no trace_path");
 }

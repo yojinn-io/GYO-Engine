@@ -6,6 +6,8 @@ add_executable(gyo_scenario_tests TestMain.cpp ScenarioTests.cpp ScenarioSegment
 target_include_directories(gyo_scenario_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gyo_scenario_tests PRIVATE GYO::Orchestration GYO::WorldTime GYO::WorldLogging GYO::Logging GYO::Json
     gyo_test_support doctest::doctest)
+# Files a test writes go to the build directory (trace declaration T6).
+target_compile_definitions(gyo_scenario_tests PRIVATE GYO_SCENARIO_TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
 if(MSVC)
     target_compile_options(gyo_scenario_tests PRIVATE /W4 /permissive- /bigobj)
     target_compile_definitions(gyo_scenario_tests PRIVATE NOMINMAX)

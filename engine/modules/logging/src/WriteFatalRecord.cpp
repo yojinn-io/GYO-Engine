@@ -1,12 +1,16 @@
 #include "engine/logging/WriteFatalRecord.hpp"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <mutex>
 #include <string>
+#include <utility>
 
 #include "LoggerState.hpp"
 #include "TextFormat.hpp"
+#include "engine/base/Trace.hpp"
 #include "engine/logging/JsonLines.hpp"
 
 namespace GYO::Engine::Logging::Detail {
@@ -34,6 +38,16 @@ bool InFatalPath() noexcept {
 namespace GYO::Engine::Logging {
 
 namespace {
+
+// The trace_path field's buffer, and the most fields a fatal record may have for it to be added.
+constexpr std::size_t kTracePathBytes = 1024;
+constexpr std::size_t kMaxFatalFields = 32;
+
+// A Field has no default value; the fatal path's array is filled with blanks it overwrites.
+template <std::size_t... I>
+std::array<Field, sizeof...(I)> BlankFields(std::index_sequence<I...>) noexcept {
+    return {((void)I, Field{"", 0})...};
+}
 
 // Standard error, its lock only tried: a line may interleave with another rather than wait.
 bool WriteStandardErrorTried(const std::string_view line) noexcept {
@@ -76,6 +90,17 @@ FatalWriteReport WriteFatalRecord(const Record& given) noexcept {
     const std::string_view repeated = Detail::RepeatedKey(record.fields);
     const Field droppedFields{"dropped_fields", repeated};
     if (!repeated.empty()) record.fields = std::span<const Field>(&droppedFields, 1);
+    // The trace path at this moment (trace declaration D4 (a)): where the E0 happened, read from the Base
+    // facade into a fixed buffer (no allocation, no lock). A record with more than kMaxFatalFields fields
+    // keeps its fields and goes without it.
+    char pathBuffer[kTracePathBytes];
+    const std::size_t pathSize = ::Engine::Base::TraceCurrentPath(pathBuffer);
+    std::array<Field, kMaxFatalFields + 1> withPath = BlankFields(std::make_index_sequence<kMaxFatalFields + 1>{});
+    if (pathSize != 0 && record.fields.size() <= kMaxFatalFields) {
+        std::copy(record.fields.begin(), record.fields.end(), withPath.begin());
+        withPath[record.fields.size()] = Field{"trace_path", std::string_view(pathBuffer, pathSize)};
+        record.fields = std::span<const Field>(withPath.data(), record.fields.size() + 1);
+    }
     record.monoNs = state != nullptr ? state->MonoNs() : Detail::DefaultMonoNs();
     record.wall = state != nullptr ? state->Wall() : Detail::DefaultWall();
 
