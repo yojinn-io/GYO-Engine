@@ -8,13 +8,18 @@
 //   P2 128 entities (128 KB), depth 32;
 //   P3   2 entities (2 KB), depth 20.
 // For each size, on one World with the time Module and the rollback Module
-// (official strategy, mode Always):
-//   rb_record_<P>    the strategy's Record of one step in which every cell
-//                    changed (16 Systems each write one type of every entity);
-//   rb_rollback_<P>  one rollback of depth steps with every cell changed:
-//                    Restore plus Resimulate (Tick back, depth records, the
-//                    raise and the lowering of Resimulation; the writing Systems
-//                    are skipped while resimulating, so no author System runs).
+// (official strategy, mode Always). The step schedule has one System only, the
+// measuring System MarkAll: it marks every cell of every entity changed, in every
+// step, resimulated steps included (5.4.5: "the step schedule has only a System
+// that marks every cell changed"); no author System runs.
+//   rb_record_<P>        the strategy's Record of one step (every cell changed);
+//                        MarkAll is outside the clock;
+//   rb_mark_<P>          MarkAll alone, one step (recorded, and subtracted below);
+//   rb_rollback_raw_<P>  one rollback of depth steps, from Decide (the raise of
+//                        Resimulation) to the end of Resimulate: Restore, Tick back,
+//                        depth steps each with MarkAll and a record, the lowering;
+//   rb_rollback_<P>      judgement 5 item 2's value per rollback: raw minus depth x
+//                        the median of rb_mark_<P> in this process.
 // Each case gets samples (default 1000) one-at-a-time samples, written as one
 // CSV row in the research card's format (case,unit,n,batch,p50,p95,p99,max,mean;
 // nanoseconds per operation), so analyze.py and judge_budget.py read it.
@@ -68,7 +73,9 @@ double NowNs() {
 struct Timings {
     std::vector<double> record;
     std::vector<double> rollback;
+    std::vector<double> mark;
     bool resimulating = false;
+    double decideStart = 0;
     double rollbackStart = 0;
 };
 Timings& Measured() {
@@ -76,8 +83,9 @@ Timings& Measured() {
     return timings;
 }
 
-// The official strategy with a clock around Record, and around Restore + Resimulate (R-1: inheriting it and
-// overriding some hooks is the same socket).
+// The official strategy with a clock around Record, and from Decide to the end of Resimulate (R-1: inheriting it
+// and overriding some hooks is the same socket). Decide raises Resimulation when it rolls back, so the clock of a
+// rollback starts at the Decide that led to the Restore.
 class TimedStrategy final : public R::StateRollbackStrategy {
 public:
     using R::StateRollbackStrategy::StateRollbackStrategy;
@@ -88,9 +96,13 @@ public:
         Measured().record.push_back(NowNs() - start);
         return done;
     }
+    ::Engine::Base::Result<void, K::KernelError> Decide(R::DecideContext& context) override {
+        Measured().decideStart = NowNs();
+        return R::StateRollbackStrategy::Decide(context);
+    }
     ::Engine::Base::Result<void, K::KernelError> Restore(R::RestoreContext& context) override {
         Measured().resimulating = true;
-        Measured().rollbackStart = NowNs();
+        Measured().rollbackStart = Measured().decideStart;
         return R::StateRollbackStrategy::Restore(context);
     }
     ::Engine::Base::Result<void, K::KernelError> Resimulate(R::ResimulateContext& context) override {
@@ -101,26 +113,32 @@ public:
     }
 };
 
-template <int I>
-K::SystemResult Touch(K::Query<K::Write<Cell64<I>>> cells) {
-    cells.ForEach([](K::EntityId, K::Mut<Cell64<I>> cell) { ++cell->bytes[0]; });
+// The measuring System: every cell of every entity changed, every step (not skipped while resimulating).
+template <int... I>
+K::SystemResult MarkAll(K::Query<K::Write<Cell64<I>>...> cells) {
+    const double start = NowNs();
+    cells.ForEach([](K::EntityId, K::Mut<Cell64<I>>... cell) { (++cell->bytes[0], ...); });
+    Measured().mark.push_back(NowNs() - start);
     return {};
+}
+template <int... I>
+constexpr auto MarkAllOf(std::integer_sequence<int, I...>) {
+    return &MarkAll<I...>;
 }
 
 template <int I>
 void RegisterType(O::WorldSetup& s, R::RollbackEntry& rollback) {
     s.Registrar().Component<Cell64<I>>({.name = "Cell" + std::to_string(I)});
     rollback.Component<Cell64<I>>();
-    K::SystemOptions touch;
-    touch.name = "Touch" + std::to_string(I);
-    touch.mounts.push_back(K::Mount{"FixedUpdate", "Update", {}, {}, {}, {}});
-    rollback.SkipDuringResimulation(touch);
-    s.Registrar().AddSystem<&Touch<I>>(touch);
 }
 
 template <int... I>
 void RegisterTypes(O::WorldSetup& s, R::RollbackEntry& rollback, std::integer_sequence<int, I...>) {
     (RegisterType<I>(s, rollback), ...);
+    K::SystemOptions mark;
+    mark.name = "MarkAll";
+    mark.mounts.push_back(K::Mount{"FixedUpdate", "Update", {}, {}, {}, {}});
+    s.Registrar().AddSystem<MarkAllOf(std::integer_sequence<int, I...>{})>(mark);
 }
 
 template <int I>
@@ -213,7 +231,15 @@ bool Measure(const Size& size, std::size_t samples, std::FILE* out) {
         world.ResourceMut<R::RollbackInbox>()->ConfirmedThrough(tick - size.depth);
         if (!frame()) return false;
     }
-    Row(out, std::string("rb_rollback_") + size.name, Measured().rollback);
+    // Judgement 5 item 2: each rollback minus depth x the median of MarkAll alone in this process.
+    const std::vector<double> marks = Sorted(Measured().mark);
+    const double markMedian = Percentile(marks, 0.50);
+    std::vector<double> net;
+    net.reserve(Measured().rollback.size());
+    for (double raw : Measured().rollback) net.push_back(raw - static_cast<double>(size.depth) * markMedian);
+    Row(out, std::string("rb_mark_") + size.name, Measured().mark);
+    Row(out, std::string("rb_rollback_raw_") + size.name, Measured().rollback);
+    Row(out, std::string("rb_rollback_") + size.name, net);
     return true;
 }
 
