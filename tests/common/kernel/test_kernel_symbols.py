@@ -136,11 +136,23 @@ class Classification(unittest.TestCase):
             "GYO::Kernel::Detail::tlCurrent|0000000000000000|   b  |               TLS|0000000000000008|     |.tbss")))
         self.assertEqual(present, {"TypeKey anchor", "tlCurrent"})
 
-    def test_allowlist_is_exactly_two_kernel_names_and_four_foreign_names(self):
+    def test_allowlist_is_exactly_two_kernel_names_and_five_foreign_names(self):
         self.assertEqual(set(guard.KERNEL_ALLOWED), {"TypeKey anchor", "tlCurrent"})
         self.assertEqual(set(guard.FOREIGN), {"GYO::Base assertion handler", "GYO::Base assertion reentry flag",
-                                              "GYO::Base thread serial issuer", "GYO::Base thread serial"})
+                                              "GYO::Base thread serial issuer", "GYO::Base thread serial",
+                                              "GYO::Base trace receiver"})
         self.assertEqual(set(guard.TOOLCHAIN), {"GCC personality reference", "assembler section label"})
+
+    def test_base_trace_receiver_is_foreign_in_both_formats(self):
+        # Base's Trace.hpp: the facade's receiver pointer (trace declaration D1, approved 2026-11-21). The kernel
+        # reads it through TraceSpan and TraceMarkCurrent; it belongs to Base.
+        _, foreign = self.assert_clean(guard.parse_sysv(sysv_with(
+            "Engine::Base::Detail::traceReceiver|0000000000000000|   u  |            OBJECT|0000000000000008|     |"
+            ".bss._ZN6Engine4Base6Detail13traceReceiverE")), "sysv")
+        self.assertIn("Engine::Base::Detail::traceReceiver", foreign)
+        _, foreign = self.assert_clean(guard.parse_darwin(darwin_with(
+            "0000000000018e60 (__DATA,__common) weak external Engine::Base::Detail::traceReceiver")), "darwin")
+        self.assertIn("Engine::Base::Detail::traceReceiver", foreign)
 
     def test_base_thread_serials_are_foreign_in_both_formats(self):
         # Base's IdIssuer.hpp: the issuer is ordinary data, the serial a thread_local (S10 of

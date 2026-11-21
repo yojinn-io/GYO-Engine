@@ -13,7 +13,9 @@ those symbols with nm and allows only:
                    assertion handler and its thread_local reentry flag (engine/core/base/include/engine/base/Assert.hpp;
                    spec B.5 names both), and the thread serials' issuer and the thread's serial
                    (engine/core/base/include/engine/base/IdIssuer.hpp; DI-KS 14's thread mark, v8-arch-gyo2-kernel-subtract-structure
-                   S10). They are reported on their own line, never silently;
+                   S10), and the trace facade's receiver pointer (engine/core/base/include/engine/base/Trace.hpp; the
+                   kernel reads it and never writes it; trace declaration D1, approved 2026-11-21). They are reported
+                   on their own line, never silently;
   TOOLCHAIN        names the toolchain emits that are not variables (GCC's DW.ref.__gxx_personality_v0; the arm64
                    assembler's section-start labels ltmpN), reported the same way.
 --require NAME makes an allowed name mandatory (a positive control: an empty result cannot pass).
@@ -46,6 +48,7 @@ FOREIGN = {
     "GYO::Base assertion reentry flag": re.compile(r"^Engine::Base::Detail::reportingAssertion$"),
     "GYO::Base thread serial issuer": re.compile(r"^Engine::Base::Detail::threadSerials$"),
     "GYO::Base thread serial": re.compile(r"^Engine::Base::Detail::threadSerial$"),
+    "GYO::Base trace receiver": re.compile(r"^Engine::Base::Detail::traceReceiver$"),
 }
 # Names the toolchain emits that are not a variable of any source: GCC's indirect reference to the C++
 # personality routine (DW.ref.__gxx_personality_v0, in .data.rel.local on ELF) and assembler section labels.

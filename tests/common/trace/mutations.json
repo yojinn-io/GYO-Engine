@@ -1,0 +1,62 @@
+{
+ "version": 1,
+ "description": "Mutants of the trace Module and the Base trace facade (docs/architecture/target/v2/trace-declaration.zh-Hant.md; Design Invariants in target/v2/trace.zh-Hant.md). Each mutant replaces one exact text; killed only when the run fails and its output matches expect.",
+ "mutants": [
+  {
+   "id": "tr-facade-exception-ignored",
+   "what": "D2: a span ended by an exception unwinding it is reported as ended normally",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "receiver_->end(token_, std::uncaught_exceptions() > exceptions_);",
+   "replace": "receiver_->end(token_, false);",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a span ended by an exception unwinding it*",
+   "expect": "ERROR: CHECK\\( installed\\.log\\.events == std::vector<std::string>\\{\"begin kernel Main \", \"end 1 exception\"\\} \\)"
+  },
+  {
+   "id": "tr-facade-exception-baseline",
+   "what": "D2: the unwinding count is not taken at Begin, so a span begun during an unwinding is reported as ended by it",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "        exceptions_ = std::uncaught_exceptions();\n",
+   "replace": "",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a span begun and ended inside a destructor*",
+   "expect": "D2: only an unwinding that started after Begin marks the span"
+  },
+  {
+   "id": "tr-facade-end-current-receiver",
+   "what": "D2: a span ends at whatever receiver is installed now instead of the one it began with",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "        if (receiver_ != nullptr) receiver_->end(token_, std::uncaught_exceptions() > exceptions_);",
+   "replace": "        if (receiver_ != nullptr) if (const TraceReceiver* now = Detail::traceReceiver.load()) now->end(token_, std::uncaught_exceptions() > exceptions_);",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a span ends at the receiver it began with*",
+   "expect": "ERROR: CHECK\\( installed\\.log\\.events == std::vector<std::string>\\{\"begin kernel Main \", \"end 1\"\\} \\)"
+  },
+  {
+   "id": "tr-facade-second-begin",
+   "what": "D2: a second Begin starts the span again (two begins, one end)",
+   "guards": [
+    "trace TR-4",
+    "trace-declaration D2"
+   ],
+   "file": "engine/core/base/include/engine/base/Trace.hpp",
+   "find": "        if (receiver_ != nullptr) return;\n",
+   "replace": "",
+   "target": "gyo_base_tests",
+   "cases": "trace facade: a second Begin*",
+   "expect": "D2: one span, one begin and one end"
+  }
+ ]
+}
