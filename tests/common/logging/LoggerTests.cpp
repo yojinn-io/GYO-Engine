@@ -422,3 +422,12 @@ TEST_CASE("logger: uninstalling puts the handlers back before closing the sinks,
     CHECK_MESSAGE((order == std::vector<std::string>{"first", "second"}), "LG-8: the sinks close in the order given");
     CHECK_MESSAGE(first->handlerBack, "LG-8: the handlers are put back before the sinks are closed");
 }
+
+TEST_CASE("logger: Installed tells whether a Logger is installed (Enabled cannot: it is true with none)") {
+    CHECK_FALSE(Logging::Installed());
+    {
+        Installed logger;
+        CHECK(Logging::Installed());
+    }
+    CHECK_MESSAGE(!Logging::Installed(), "trace declaration D5: Installed is false again once the Logger is uninstalled");
+}

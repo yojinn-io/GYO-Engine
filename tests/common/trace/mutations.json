@@ -57,6 +57,193 @@
    "target": "gyo_base_tests",
    "cases": "trace facade: a second Begin*",
    "expect": "D2: one span, one begin and one end"
+  },
+  {
+   "id": "tr-parent-none",
+   "what": "TR-4: a span's parent is not the span below it on this thread",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f.parent = s.depth > 0 ? s.frames[s.depth - 1].id : 0;",
+   "replace": "        f.parent = 0;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: nested spans become one record each*",
+   "expect": "TR-4: the parent is the span below on this thread"
+  },
+  {
+   "id": "tr-duration-wrong",
+   "what": "TR-5: duration_ns is not the time since begin",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "{\"duration_ns\", end - f.beginNs}",
+   "replace": "{\"duration_ns\", end}",
+   "target": "gyo_trace_tests",
+   "cases": "trace: nested spans become one record each*",
+   "expect": "TR-5: duration_ns is the time since begin"
+  },
+  {
+   "id": "tr-origin-never",
+   "what": "D4 (i): an error marked where it is produced writes no path",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (origin) WritePath(s, index, text);",
+   "replace": "    static_cast<void>(origin);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: an error marked where it is produced*",
+   "expect": "D4 \\(i\\): one path record where the error is produced"
+  },
+  {
+   "id": "tr-origin-ignored",
+   "what": "D4 (i): an error that only passes through also writes a path (one path per layer)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (origin) WritePath(s, index, text);",
+   "replace": "    WritePath(s, index, text);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: an error that only passes through*",
+   "expect": "D4 \\(i\\): passing through writes no path"
+  },
+  {
+   "id": "tr-unwound-every-span",
+   "what": "D4 (i): every span an exception unwinds writes a path, not only the first",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        if (!f->childUnwound) {",
+   "replace": "        if (true) {",
+   "target": "gyo_trace_tests",
+   "cases": "trace: spans unwound by an exception*",
+   "expect": "D4 \\(i\\): the first span the exception unwinds is the origin"
+  },
+  {
+   "id": "tr-markcurrent-bottom",
+   "what": "D2: TraceMarkCurrent marks the bottom of the stack instead of its top",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D2"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    Mark(s, s.depth - 1, text, origin);",
+   "replace": "    Mark(s, 0, text, origin);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: TraceMarkCurrent marks*",
+   "expect": "D2: only the top of the stack is marked"
+  },
+  {
+   "id": "tr-timed-always",
+   "what": "TR-6: a span is timed even when no sink takes its record",
+   "guards": [
+    "trace TR-6"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "        f.timed = Taken(SpanCategory(category, buffer));",
+   "replace": "        f.timed = (static_cast<void>(SpanCategory(category, buffer)), true);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: with only span.path taken*",
+   "expect": "TR-6: a span no sink takes reads no clock"
+  },
+  {
+   "id": "tr-no-logger-taken",
+   "what": "D5: with no Logger installed records count as taken (they would go to standard error)",
+   "guards": [
+    "trace TR-5",
+    "trace-declaration D5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    return Logging::Installed() && Logging::Enabled(Level::Trace, category);",
+   "replace": "    return Logging::Enabled(Level::Trace, category);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: with no Logger installed*",
+   "expect": "D5: with no Logger no span is timed"
+  },
+  {
+   "id": "tr-stale-stack-kept",
+   "what": "TR-4: a stack left by an earlier Install is not emptied (its spans sit under the new ones)",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (stack.generation != current) {\n        stack.generation = current;\n        stack.depth = 0;\n    }",
+   "replace": "    stack.generation = current;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span begun under an earlier Install*",
+   "expect": "TR-4: the old span left nothing on the new stack"
+  },
+  {
+   "id": "tr-unbalanced-unmarked",
+   "what": "TR-4: an end not on top is not marked unbalanced",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    const bool unbalanced = index + 1 != StoredCount(*s) || s->depth > kMaxDepth;",
+   "replace": "    const bool unbalanced = false;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span ended while another is on top*",
+   "expect": "TR-4: an end not on top is marked unbalanced"
+  },
+  {
+   "id": "tr-unbalanced-left",
+   "what": "TR-4: a span ended while another is on top stays in the stack",
+   "guards": [
+    "trace TR-4"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    for (std::size_t i = index; i + 1 < stored; ++i) {",
+   "replace": "    for (std::size_t i = index; i + 1 < stored && false; ++i) {",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a span ended while another is on top*",
+   "expect": "TR-4: the ended span left the stack"
+  },
+  {
+   "id": "tr-path-cut-unmarked",
+   "what": "D2: a cut path does not say it was cut",
+   "guards": [
+    "trace-declaration D2"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    if (cut && pos >= kCut.size()) put(kCut);",
+   "replace": "    static_cast<void>(cut);",
+   "target": "gyo_trace_tests",
+   "cases": "trace: the path keeps the deepest end*",
+   "expect": "D2: a cut path starts with \\.\\.\\."
+  },
+  {
+   "id": "tr-second-install",
+   "what": "TR-7: a second Install while one is installed is accepted",
+   "guards": [
+    "trace TR-7"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    GYO_ASSERT(!installed.load(std::memory_order_acquire) && \"Trace::Install: one per process\");\n",
+   "replace": "",
+   "target": "gyo_trace_tests",
+   "cases": "trace: a second Install*",
+   "expect": "expected GYO_ASSERT to fail: Trace::Install"
+  },
+  {
+   "id": "tr-close-keeps-receiver",
+   "what": "TR-7: closing the handle leaves the receiver installed",
+   "guards": [
+    "trace TR-7"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    Base::SetTraceReceiver(previousReceiver);\n    previousReceiver = nullptr;",
+   "replace": "    previousReceiver = nullptr;",
+   "target": "gyo_trace_tests",
+   "cases": "trace: closing the handle*",
+   "expect": "TR-7: closing the handle puts the earlier receiver back"
   }
  ]
 }

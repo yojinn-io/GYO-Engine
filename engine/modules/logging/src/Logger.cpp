@@ -320,6 +320,10 @@ bool Flush(const std::chrono::nanoseconds timeout) noexcept {
     return all;
 }
 
+bool Installed() noexcept {
+    return Detail::current.load(std::memory_order_acquire) != nullptr;
+}
+
 bool Enabled(const Level level, const std::string_view category) noexcept {
     const Detail::LoggerState* state = Detail::current.load(std::memory_order_acquire);
     if (state == nullptr) return true;

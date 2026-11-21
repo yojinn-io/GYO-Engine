@@ -1282,6 +1282,20 @@
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 3: S3-1*",
    "expect": "S3-1: one Base::Log line became one record"
+  },
+  {
+   "id": "lg-installed-always",
+   "what": "trace declaration D5: Installed is true with no Logger installed, so a writer that asks it writes to standard error",
+   "guards": [
+    "logging LG-8",
+    "trace-declaration D5"
+   ],
+   "file": "engine/modules/logging/src/Logger.cpp",
+   "find": "    return Detail::current.load(std::memory_order_acquire) != nullptr;\n}\n\nbool Enabled(",
+   "replace": "    return true;\n}\n\nbool Enabled(",
+   "target": "gyo_logging_tests",
+   "cases": "logger: Installed tells*",
+   "expect": "Installed is false again once the Logger is uninstalled"
   }
  ]
 }

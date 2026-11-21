@@ -129,4 +129,10 @@ void SetLevel(std::string_view sinkName, std::string_view prefix, Level minimum)
 // on, at most timeout for all sinks together. True with no Logger installed.
 [[nodiscard]] bool Flush(std::chrono::nanoseconds timeout) noexcept;
 
+// Whether a Logger is installed. Enabled is true for every category with no
+// Logger (the records then go to standard error), so a writer that wants to
+// write only when some sink takes the record (the trace Module, trace
+// declaration D5) asks this first.
+[[nodiscard]] bool Installed() noexcept;
+
 } // namespace GYO::Engine::Logging
