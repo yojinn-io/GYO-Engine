@@ -10,7 +10,7 @@
 
 | # | 結果 | 證據 |
 |---|---|---|
-| 1 | 本機 macOS x86_64 全量 ctest 156/156（core preset，審查修正後）。L1：〔待補〕 | 本機 ctest（`trace-review-ctest.txt`） |
+| 1 | 本機 macOS x86_64 全量 ctest 156/156（core preset，審查修正後）。L1：linux-x64、windows-x64、macos-arm64 全部通過（2038602d，手動 dispatch run 44875051388） | 本機 ctest（`trace-review-ctest.txt`）；GitHub Actions |
 | 2 | 情境 S4-1：三段（`RunFrame`、`Main@Match`、`MoveRacer@Match`）父子相連、System 段有 `error`、路徑紀錄一筆；S4-2：例外展開的段帶 `exception`、最深那段寫路徑一筆；S4-3：斷言時日誌那一筆 `Fatal` 帶 `trace_path`、恰好一筆 `Fatal` | `scenario.segment4` |
 | 3 | 單元案：巢狀、例外、提前結束、延後開始、跳過的步不開、重裝（世代）、不平衡、跨執行緒、64 層以上、Close 之後、段開著時 Logger 卸下：每段恰好一筆、`parent_id` 對 | `gyo_base_tests`、`trace.module`、Kernel 與編排層的 trace 案 |
 | 4 | 情境 S4-4：trace 開關，`RacerState`、`LobbyFrames` 逐位元相同 | `scenario.segment4` |
