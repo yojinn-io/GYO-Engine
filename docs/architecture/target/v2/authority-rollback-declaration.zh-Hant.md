@@ -1,6 +1,6 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-21（修訂 5：第 2 步拿掉區的規則、`Zone` 欄位留到第 6 步，A11 的 B、C 組隨欄位在第 6 步處置，差異見第 20 節。修訂 4：照 `gyo2` f25837b0 更新——#257 的分層換掉舊路徑、異常分級（#254、#255）合併後重對第 10.3 節、trace（#258）留下的「回滾重跑的段」寫成第 10.4 節；差異逐條在第 19 節，都在已核准的範圍內。2026-11-20 修訂 3：使用者重新核准修訂 2 的 5.4、判定 5、5.5（`v8-arch-gyo2-authority-rollback-reapproval`、`-ratio-p99`），換上 Linux 實機重量的基準值、加四分位距比 25% 的事前宣告、記入異常分級卡的交界。修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推。修訂 1 之後同日記入的：使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工中（使用者 2026-11-21「可以開始權威卡了。記得讓他更新」，經主會話轉；HANDOFF `v8-arch-gyo2-authority-rollback-start`）。** 本分支已 rebase 到 `gyo2` f25837b0；第 1 步前半（第 3 批延下來的三條守衛，原 afd6e7c5）rebase 後照新路徑改過（第 19 節）。
+更新：2026-11-21（修訂 6：記入「被記錄的 boundary 輸入」歸誰，第 21 節。修訂 5：第 2 步拿掉區的規則、`Zone` 欄位留到第 6 步，A11 的 B、C 組隨欄位在第 6 步處置，差異見第 20 節。修訂 4：照 `gyo2` f25837b0 更新——#257 的分層換掉舊路徑、異常分級（#254、#255）合併後重對第 10.3 節、trace（#258）留下的「回滾重跑的段」寫成第 10.4 節；差異逐條在第 19 節，都在已核准的範圍內。2026-11-20 修訂 3：使用者重新核准修訂 2 的 5.4、判定 5、5.5（`v8-arch-gyo2-authority-rollback-reapproval`、`-ratio-p99`），換上 Linux 實機重量的基準值、加四分位距比 25% 的事前宣告、記入異常分級卡的交界。修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推。修訂 1 之後同日記入的：使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工中（使用者 2026-11-21「可以開始權威卡了。記得讓他更新」，經主會話轉；HANDOFF `v8-arch-gyo2-authority-rollback-start`）。** 本分支已 rebase 到 `gyo2` f25837b0；第 1 步前半（第 3 批延下來的三條守衛，原 afd6e7c5）rebase 後照新路徑改過（第 19 節）。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 之後的改動與修訂 2 送 Fable 5.2／high 窄複查（結果見第 17 節之後的處理）。
 
@@ -914,4 +914,19 @@ A11 實際 16 個（`ks-s4-*` 10、`ks-s8-*` 5、`sr-zone-c-own-cells` 1；宣�
 | A11 的 A 組 | 第 2 步 | 第 2 步（已退：它們守的規則已拿掉） |
 
 不改的：使用者定過的事、判定的點與門檻、Module 的職責。golden 照舊兩次（第 2 步已重產一次：Registry 指紋 8、C 指紋 12）。合併前核准時一起給你看。
+
+## 21. 修訂 6：被記錄的 boundary 輸入歸誰（2026-11-21）
+
+**起因**：主會話轉來使用者同意由本卡寫明（原話「兩件都照建議」，HANDOFF `v8-arch-gyo2-boundary-input-to-authority-card`，1cbd83f2）。11-11 的 K.3-11 規定 (c) 區的時間只來自 tick 和**被記錄的 boundary 輸入**（例：PvP 的 `HostClockSample`、輸入的到達時刻；`spec.zh-Hant.md:1219`、`:789`）；11-17 統合把它歸到伺服器權威策略（L12、`clock-out-of-kernel`；統合第 124 行）。修訂 5 以前本頁沒提。
+
+**本卡照 L17 判：拆成兩半，值歸 (a)、時鐘同步歸 (b)。**
+
+| 東西 | 去處 | 根據 |
+|---|---|---|
+| **輸入的值**（玩家的指令；作者要讓到達時刻影響判定時，把它當成輸入值的一欄，例：到達的 tick） | **(a) 本批收**：回滾份已定的 `rollback.Input<T>(capacity)`——回滾 Module 替 `T` 存按 tick 索引的歷史（存在回滾 Module 的 Resource，和可回滾資料的歷史同一處、不回滾）；入口的 System 標「重跑時不跑」；重跑時每一步之前把那個 tick 的值寫回 `T`（回滾份 5.4、5.5 第 6 點）。權威這一側用 `.input` 標它是判定的輸入（權威份 5.11）。本批不另加新東西，只把「boundary 輸入＝這個機制」寫明 | lightyear：輸入值存在按 tick 索引的 `InputBuffer`，回滾重跑時照 tick 取回（`crates/inputs/inputs/src/input_buffer.rs`）；Unity Netcode：`ICommandData` 的 64 筆環，預測重跑時照 tick 讀（`Runtime/Command/ICommandData.cs`）；bevy_replicon 不做預測與回滾，沒有對應 |
+| **時鐘同步的樣本**（`HostClockSample`：主機時鐘和 tick 的對照、往返時間） | **(b) 延到網路 Module／PvP 產品搬回時** | 兩家都不把它放進模擬的歷史：lightyear 在 `crates/core/sync`（`ping/manager.rs`、`timeline/input.rs`、`timeline/remote.rs`）調整本機的 tick 進度；Unity 在 `NetworkTimeSystem`（`Runtime/PredictionTicking/`）。它決定「本機現在該跑到哪個 tick」，不是判定讀的資料；時間 Module 已經以 tick 為唯一的判定時間（WT 系列、DI-KS 15），樣本只影響 runner 送進來的實時（`TimeSampling` 的 ManualInstant 等）。現在沒有網路 Module，寫進回滾或權威只會是猜的形狀 |
+
+**留給產品的一行**（PvP 產品搬回時）：主機時鐘樣本（`HostClockSample`）由網路 Module 或產品的同步 System 處理，它調整送進時間 Module 的實時或目標 tick，不進回滾的歷史、不是 `.input`；要讓到達時刻影響判定的，把它放進輸入值，走 `rollback.Input<T>`。
+
+不改的：使用者定過的事、判定的點與門檻、Module 的職責（輸入歷史本來就在回滾份第 5.4 節與本頁第 14 節第 4 步的範圍內）。合併前核准時一起給你看。
 
