@@ -32,3 +32,13 @@ foreach(mode IN ITEMS default returning nested)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/AssertAbortProbe.cmake)
     set_tests_properties(gyo_base.assert_abort.${mode} PROPERTIES TIMEOUT 30)
 endforeach()
+
+# Base is the bottom of the engine and links nothing (v8-arch-gyo2-core-not-registered: core has no register
+# row, so its links are written by hand and pinned here). An interface library: its links are its interface.
+function(gyo_expect_base_links)
+    get_target_property(interface gyo_base INTERFACE_LINK_LIBRARIES)
+    if(interface)
+        message(FATAL_ERROR "gyo_base links ${interface}; expected nothing")
+    endif()
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_base_links)

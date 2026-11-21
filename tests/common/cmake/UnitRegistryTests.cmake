@@ -74,10 +74,11 @@ endfunction()
 # --- The repository's own registers -----------------------------------------
 gyo_load_unit_registers(REPO "${repository}/config/modules.csv" "${repository}/config/plugins.csv")
 get_property(repo_order GLOBAL PROPERTY REPO_ORDER)
-# Every unit directory under engine/ with a CMakeLists.txt is some Module row's dir,
-# and every Module row's dir has one (engine/CMakeLists.txt adds the directories
-# the register names).
-file(GLOB_RECURSE engine_lists RELATIVE "${repository}/engine" "${repository}/engine/*/CMakeLists.txt")
+# Every unit directory under engine/modules/ with a CMakeLists.txt is some Module
+# row's dir, and every Module row's dir has one (engine/CMakeLists.txt adds the
+# directories the register names). core/, ecs/ and orchestration/ are not Modules
+# and have no row; engine/CMakeLists.txt adds them directly.
+file(GLOB_RECURSE engine_lists RELATIVE "${repository}/engine" "${repository}/engine/modules/*/CMakeLists.txt")
 set(repo_dirs "")
 foreach(name IN LISTS repo_order)
     get_property(kind GLOBAL PROPERTY REPO_${name}_KIND)
@@ -101,8 +102,13 @@ foreach(entry IN LISTS engine_lists)
         message(FATAL_ERROR "engine/${dir} has a CMakeLists.txt but is in no modules.csv row's dir")
     endif()
 endforeach()
-get_property(value GLOBAL PROPERTY REPO_kernel_DIR)
-expect_equal("${value}" "ecs/kernel" "the kernel's dir")
+get_property(value GLOBAL PROPERTY REPO_world_time_DIR)
+expect_equal("${value}" "modules/world_time" "world_time's dir")
+foreach(name IN ITEMS base math os time threads io entity_store kernel orchestration)
+    if(name IN_LIST repo_order)
+        message(FATAL_ERROR "modules.csv has a row '${name}': core, ecs and orchestration are not Modules")
+    endif()
+endforeach()
 
 # --- A valid pair: reading and the stored row --------------------------------
 # Cells with two names (extra, aux, gadget), an in-World private dependency (aux on
