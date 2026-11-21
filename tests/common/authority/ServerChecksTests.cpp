@@ -133,6 +133,17 @@ TEST_CASE("authority checks: AU-E7 (Z8): a decision input is not rollback state"
         R::RollbackEntry(s).Input<Command>(64);
     });
     CHECK_MESSAGE(history == "built", "[au-z8-input-history] " << history);
+    // A component input too; and Derived is no way out (the kernel's old Z8: any rollback but No).
+    const std::string component = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Component<Health>("Health", {.input = true});
+        R::RollbackEntry(s).Component<Health>();
+    });
+    CHECK_MESSAGE(Has(component, "AU-E7 decision input 'Health'"), "[au-z8-component] " << component);
+    const std::string derived = BuildText([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Component<Health>("Health", {.input = true});
+        R::RollbackEntry(s).Derived<Health>();
+    });
+    CHECK_MESSAGE(Has(derived, "AU-E7 decision input 'Health' is registered in the rollback Module as Derived"), "[au-z8-derived] " << derived);
 }
 
 TEST_CASE("authority checks: AU-E8 (D-E15): an entry in a resimulated schedule is skipped while resimulating") {

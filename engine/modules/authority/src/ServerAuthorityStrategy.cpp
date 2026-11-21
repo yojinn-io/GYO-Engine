@@ -200,12 +200,15 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
         for (const Kernel::HookInfo& hook : registry.Hooks()) checkWriter("hook '" + hook.name + "'", hook.access);
         for (const Kernel::ObserverInfo& observer : registry.Observers()) checkWriter("observer '" + observer.name + "'", observer.access);
     }
-    // AU-E7 (Z8): a decision input is not rollback state (rollback.Input<T> is not a violation).
+    // AU-E7 (Z8): a decision input is neither rollback state nor Derived (rollback.Input<T> is not a violation).
     for (const DataRecord& record : table.Data()) {
         if (!record.options.input) continue;
         const auto id = record.ops->idIn(registry);
-        if (id && rolls.rolls.count({record.kind == DataKind::Component ? Kernel::AccessKind::Component : Kernel::AccessKind::Resource, *id}) != 0) {
-            context.Report("AU-E7", "decision input '" + record.name + "' is registered in the rollback Module as rollback state (Z8)");
+        if (!id) continue;
+        const Kernel::AccessKey key{record.kind == DataKind::Component ? Kernel::AccessKind::Component : Kernel::AccessKind::Resource, *id};
+        if (rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) {
+            context.Report("AU-E7", "decision input '" + record.name + "' is registered in the rollback Module as " +
+                                        (rolls.derived.count(key) != 0 ? "Derived" : "rollback state") + " (Z8)");
         }
     }
     // AU-E8 (D-E15): an entry in a resimulated schedule is skipped while resimulating.

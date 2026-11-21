@@ -1000,6 +1000,32 @@
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E6 and AU-E8 ask each mount*",
    "expect": "\\[au\\-z6\\-mount\\-added\\-after\\-skip\\] (?!every)"
+  },
+  {
+   "id": "au-z8-component-as-resource",
+   "what": "AU-E7 looks a decision input up as a resource whatever its kind: a component input registered as rollback state is not reported (adversarial check a06, verifier V-E14). Only it catches the kind",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        const Kernel::AccessKey key{record.kind == DataKind::Component ? Kernel::AccessKind::Component : Kernel::AccessKind::Resource, *id};",
+   "replace": "        const Kernel::AccessKey key{Kernel::AccessKind::Resource, *id};",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E7 (Z8)*",
+   "expect": "\\[au\\-z8\\-component\\]"
+  },
+  {
+   "id": "au-z8-derived-allowed",
+   "what": "a decision input registered as Derived is not reported (the kernel's old Z8 refused any rollback but No; verifier of step 6). Only it catches Derived",
+   "guards": [
+    "authority 5.11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        if (rolls.rolls.count(key) != 0 || rolls.derived.count(key) != 0) {",
+   "replace": "        if (rolls.rolls.count(key) != 0) {",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E7 (Z8)*",
+   "expect": "\\[au\\-z8\\-derived\\]"
   }
  ]
 }

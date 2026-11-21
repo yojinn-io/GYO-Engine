@@ -89,7 +89,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 | AU-E4 | 標記、`Ingress`、`Runs`、`OneEndOnly` 對不到（被 `RemoveSystem` 拿掉的 System 算對不到） | DI-A 10 | `…AU-E4…` 兩案、`…a mark only records…` |
 | AU-E5 | `Tick` 的寫者不在時間 Module 的 `TickWriters()`（System、hook、observer；`Writes<Tick>` 標註也算） | 5.4 | `…AU-E5…` 兩案 |
 | AU-E6 | Z6：可回滾 schedule（步的與巢狀的）上、重跑時會跑的 System 寫的判定資料，要可回滾或 Derived；World 有步的 schedule 時，hook 與 observer 寫的判定資料要可回滾（不能是 Derived）。`Tick` 例外、有 `rollback.Input` 歷史的輸入例外（重跑前會寫回；實作），訊息不看；延後寫、`Writes<…>` 標註、經 `InitialValue` 的漏斗（沿鏈；原地寫與移除請求不算）都算寫 | 5.11 | `…AU-E6…` 五案 |
-| AU-E7 | Z8：判定的輸入登記成回滾狀態（`rollback.Input<T>` 不算） | 5.11 | `…AU-E7…` |
+| AU-E7 | Z8：判定的輸入登記成回滾狀態或 Derived（`rollback.Input<T>` 不算；元件與 Resource 都查） | 5.11 | `…AU-E7…` |
 | AU-E8 | D-E15：可回滾 schedule 上的入口不在「重跑時不跑」 | 5.11 | `…AU-E8…` |
 | AU-E9 | 可回滾 schedule 上的 `Runs` System 會跑的 schedule 沒登記成巢狀（步的 schedule 本身不算巢狀登記） | 5.11 | `…AU-E9…` 兩案 |
 
