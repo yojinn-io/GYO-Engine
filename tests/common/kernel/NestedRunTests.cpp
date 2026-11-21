@@ -360,7 +360,7 @@ SystemResult DespawnFive(Despawn despawn) {
 }
 } // namespace
 
-TEST_CASE("J-56: an outer zone B insert into E and an inner despawn of E: the outer sync point drops the insert and counts it") {
+TEST_CASE("J-56: an outer insert into E and an inner despawn of E: the outer sync point drops the insert and counts it") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&InsertTagOnFive>(In("Early", "Frame", "Drive", {"Driver"}));
@@ -496,7 +496,7 @@ SystemResult DriveThenTamperPing(ExclusiveWorld<> world) {
 }
 } // namespace
 
-TEST_CASE("J-56: verification on: the exclusive System's writes of Shared data and listed resources around a nested run are not reported") {
+TEST_CASE("J-56: verification on: the exclusive System's writes of components and listed resources around a nested run are not reported") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&WriteSharedAndListed>(In("Driver", "Frame", "Drive"));
@@ -1192,7 +1192,7 @@ TEST_CASE("J-57: resources: any is read; one absent is not") {
     }
 }
 
-TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an unlisted single-writer one are written") {
+TEST_CASE("J-57: resources: a listed resource and unlisted ones are written") {
     {
         auto rig = NestRig([](Registrar& r) {
             ResourceRig(r);
@@ -1229,7 +1229,7 @@ TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an
 // Writes<...> is an annotation (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1):
 // no resource write, so no zone rule, no D-E18 and no S-18 sees it. S-17 stays
 // (a zone rule, a later batch).
-TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a hook with Writes pass") {
+TEST_CASE("J-57: declarations: a listed resource, KernelSettings and a hook with Writes pass") {
     const Built zoneC = Finish({{"test", [](Registrar& r) {
                                     Nest(r);
                                     r.AddSystem<&ListsZoneC>(In("ListsZoneC", "Frame", "Drive"));

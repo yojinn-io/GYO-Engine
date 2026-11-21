@@ -929,7 +929,7 @@ SystemResult SystemTakesHookCtx(HookCtx) { return Ok(); }
 
 } // namespace
 
-TEST_CASE("J-34: hooks run in registration order, their changes belong to the next window; F-5; (c) hook conflicts") {
+TEST_CASE("J-34: hooks run in registration order, their changes belong to the next window; F-5; hook conflicts") {
     SUBCASE("order and the next window") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);

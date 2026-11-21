@@ -584,7 +584,7 @@ void CheckErrOnce(Rig& rig, KernelErrorCode code, const char* rule) {
 // (v8-arch-gyo2-no-runtime-interception). A kernel Err the System drops is still
 // reported (CallError lists it in call.returned): the trigger is now Spawn::New
 // on a used-up allotter (W-9), the only kernel Err a plain System's call returns.
-TEST_CASE("J-32b: untyped Commands write zone B Shared columns; a kernel Err the System drops is still reported") {
+TEST_CASE("J-32b: untyped Commands write any column; a kernel Err the System drops is still reported") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
     SUBCASE("a dropped Err is still reported") {
         auto rig = MakeRig([](Registrar& r) {
@@ -1034,7 +1034,7 @@ SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32
 
 // Z5 is gone (S8): a zone B System's or hook's despawn of an entity that holds a
 // zone C column is recorded and applied like any other.
-TEST_CASE("J-52: a zone B despawn of an entity with a zone C column is applied (no Z5)") {
+TEST_CASE("J-52: a despawn of an entity with any column is applied (no Z5)") {
     SUBCASE("a zone B System") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
@@ -1335,7 +1335,7 @@ std::string OrderSummary(const std::array<int, 5>& order) {
 
 } // namespace
 
-TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summary") {
+TEST_CASE("J-44: 20 registration orders of Systems give the same World summary") {
     std::array<int, 5> order{0, 1, 2, 3, 4};
     std::vector<std::array<int, 5>> orders;
     int index = 0;

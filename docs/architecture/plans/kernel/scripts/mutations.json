@@ -1076,43 +1076,16 @@
     },
     {
       "id": "rs-j12-condition-reads-dropped",
-      "what": "J-12: run condition reads do not join the System's reads (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in rs-j3-4-z1-removed [J.3 #4: the Z1 contamination check is removed (J-40)])",
+      "what": "J-12: run condition reads do not join the System's reads (v8-arch-gyo2-mutation-prune step 3; the merged J-40 Z1 half left with the zone rules, step 2, and J-40 with Z8, step 6)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
       "find": "    into.access.reads.insert(into.access.reads.end(), condition.access.reads.begin(), condition.access.reads.end());\n",
       "replace": "",
       "target": "gyo_kernel_tests",
-      "cases": "J-12:*,J-40:*",
-      "expect": "(?=[\\s\\S]*(?:GatedWrite))[\\s\\S]*(?:\"Z1\")"
-    },
-    {
-      "id": "rs-j17-no-dedup",
-      "what": "J-17: the export lists a file once per System",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    files.erase(std::unique(files.begin(), files.end()), files.end());\n    std::string out",
-      "replace": "    std::string out",
-      "target": "gyo_kernel_tests",
-      "cases": "J-17:*",
-      "expect": "text\\.find\\(file, text\\.find\\(file\\)"
-    },
-    {
-      "id": "rs-j17-generated-by",
-      "what": "J-17: the export claims to be hand-written",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "\"generated_by\\\": \\\"gyo-kernel-report\\\"",
-      "replace": "\"generated_by\\\": \\\"manual\\\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-17:*",
-      "expect": "generated_by"
-    },
-    {
-      "id": "rs-j17-zone-b-listed",
-      "what": "J-17: zone B Systems are listed too (find rewritten by v8-arch-gyo2-test-debts: 4e68b589 moved the path checks into the add lambda shared with the initial values) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        if (system.removed || system.options.zone != Zone::C) continue;\n        if (auto added = add(system.source, \"a zone C System\"",
-      "replace": "        if (system.removed) continue;\n        if (auto added = add(system.source, \"a zone C System\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-17:*",
-      "expect": "static_cast<bool>\\(empty\\)"
+      "cases": "J-12:*",
+      "expect": "GatedWrite",
+      "guards": [
+        "kernel DI-KS 1"
+      ]
     },
     {
       "id": "rs-j19-type-twice-allowed",
@@ -1215,16 +1188,6 @@
       "expect": "ErrorCount\\(.*StartupCode::DE14\\)"
     },
     {
-      "id": "rs-j24-de15-removed",
-      "what": "J-24: ingress without NotInRollback is accepted",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "            if (system.options.ingress && s.rollbackEnabled && !mount.notInRollback) {",
-      "replace": "            if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*",
-      "expect": "ErrorCount\\(.*StartupCode::DE15\\)"
-    },
-    {
       "id": "rs-j24-de19-removed",
       "what": "J-24: two mounts in one schedule are accepted",
       "file": "engine/ecs/kernel/src/Registry.cpp",
@@ -1263,20 +1226,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-24:*",
       "expect": "ErrorCount\\(.*StartupCode::DE4\\)"
-    },
-    {
-      "id": "rs-j40-z8-removed",
-      "what": "J-40: role=Input with rollback is accepted (its killing case left with the ingress rules in v8-arch-gyo2-authority-rollback step 2; the resource half of the J-40 Z8 case now kills it)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "        if (info.role == Role::Input && info.rollback != Rollback::No) {\n            data.Error(StartupCode::DE7, \"Z8\", \"resource '\"",
-      "replace": "        if (false) {\n            data.Error(StartupCode::DE7, \"Z8\", \"resource '\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-40:*",
-      "expect": "\\[ks\\-z8\\-resource\\]",
-      "guards": [
-        "spec Z8",
-        "authority-rollback-declaration 7.1"
-      ]
     },
     {
       "id": "rs-j47-late-members-dropped",
@@ -1483,114 +1432,14 @@
       "cases": "J-12:*"
     },
     {
-      "id": "rs-adv-z6-system-removed",
-      "what": "Z6: a zone C System may write data that does not roll back in a rollback-enabled schedule (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "                    if (rollback != Rollback::Yes && rollback != Rollback::Derived) {",
-      "replace": "                    if (false) {",
-      "expect": "\"Z6\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-40:*"
-    },
-    {
-      "id": "rs-adv-z6-hook-removed",
-      "what": "Z6: a zone C hook may write data that is not rollback=Yes (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "                if (key.kind != AccessKind::Message && RollbackOf(data, key) != Rollback::Yes) {",
-      "replace": "                if (false) {",
-      "expect": "hookNoRollback",
-      "target": "gyo_kernel_tests",
-      "cases": "J-40:*"
-    },
-    {
-      "id": "rs-adv-z8-component-removed",
-      "what": "Z8 is not applied to components (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "        if (info.role == Role::Input && info.rollback != Rollback::No) {\n            data.Error(StartupCode::DE7, \"Z8\", \"component '\"",
-      "replace": "        if (false) {\n            data.Error(StartupCode::DE7, \"Z8\", \"component '\"",
-      "expect": "rollbackInputColumn",
-      "target": "gyo_kernel_tests",
-      "cases": "J-40:*"
-    },
-    {
-      "id": "rs-adv-derived-deferred-writer-counts",
-      "what": "D-E16 accepts a deferred writer as the writer before a Derived read (Fable adversarial check, 2026-11-13) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in rs-j24-de16-removed [J-24: a Derived read with no writer before it is accepted])",
-      "file": "engine/ecs/kernel/src/Scheduler.cpp",
-      "find": "                    const auto& writes = SystemOf(w).access.writes;",
-      "replace": "                    const auto writes = Written(SystemOf(w).access);",
-      "expect": "(?=[\\s\\S]*(?:deferredOnly))[\\s\\S]*(?:ErrorCount\\(.*StartupCode::DE16\\))",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*"
-    },
-    {
-      "id": "rs-adv-derived-any-schedule",
-      "what": "D-E16 is reported in schedules without rollback too (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Scheduler.cpp",
-      "find": "        if (!s_.rollbackEnabled) return;",
-      "replace": "",
-      "expect": "derivedNoRollback",
-      "target": "gyo_kernel_tests",
-      "cases": "J-24:*"
-    },
-    {
-      "id": "rs-adv-cfp-all-zones",
-      "what": "the C fingerprint hashes zone B Systems too (Fable adversarial check, 2026-11-13) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        if (!system.removed && system.options.zone == Zone::C) SystemBytes(out, system);",
-      "replace": "        if (!system.removed) SystemBytes(out, system);",
-      "expect": "withZoneBOnlyChange",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*"
-    },
-    {
-      "id": "rs-adv-cfp-header-only",
-      "what": "the C fingerprint hashes nothing but its header (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    Header(out, \"gyo.kernel.registry-c\", kCFingerprintVersion);",
-      "replace": "    Header(out, \"gyo.kernel.registry-c\", kCFingerprintVersion);\n    return out.Finish(kCFingerprintVersion);",
-      "expect": "withZoneCChange",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*"
-    },
-    {
-      "id": "rs-adv-fp-rollback-enabled-dropped",
-      "what": "the Registry fingerprint ignores a schedule's rollbackEnabled (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    out.Flag(s.rollbackEnabled);",
-      "replace": "    out.Flag(false);",
-      "expect": "field := \"?rollbackEnabled",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*"
-    },
-    {
       "id": "rs-adv-fp-hook-access-dropped",
       "what": "the Registry fingerprint ignores hook access sets (Fable adversarial check, 2026-11-13)",
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        out.Enum(hook.zone);\n        Access(out, hook.access);",
-      "replace": "        out.Enum(hook.zone);",
+      "find": "        Access(out, hook.access);\n",
+      "replace": "",
       "expect": "field := \"?hook access",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*"
-    },
-    {
-      "id": "rs-adv-fp-ingress-dropped",
-      "what": "the Registry fingerprint ignores a System's ingress flag (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    out.Flag(system.options.ingress);",
-      "replace": "    out.Flag(false);",
-      "expect": "field := \"?ingress",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*"
-    },
-    {
-      "id": "rs-adv-export-unsorted",
-      "what": "G-5 export: files are not sorted (contract: byte order) (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    std::sort(files.begin(), files.end());\n    files.erase(",
-      "replace": "    files.erase(",
-      "expect": "secondFile",
-      "target": "gyo_kernel_tests",
-      "cases": "J-17:*"
     },
     {
       "id": "rs-adv-declared-edge-not-deduped",
@@ -1695,25 +1544,6 @@
       ]
     },
     {
-      "id": "rs-adv-export-repo-commit-dropped",
-      "what": "judgement 8: the export drops repo_commit (only zone_scan.py's contract check sees it) (Fable adversarial check, 2026-11-13)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    out += \"  \\\"repo_commit\\\": \" + Detail::JsonString(options.repoCommit) + \",\\n\";",
-      "replace": "",
-      "expect": "authority_scan\\.py exited 2",
-      "target": "gyo_kernel_tests",
-      "command": [
-        "{python}",
-        "-I",
-        "-B",
-        "tests/common/kernel/zone_c_export_check.py",
-        "--root",
-        ".",
-        "--export-with",
-        "{exe:gyo_kernel_tests}"
-      ]
-    },
-    {
       "id": "rs-fix-a1-cycle-walk-successors",
       "what": "A1: the cycle report walks successors again (runs off the cycle)",
       "file": "engine/ecs/kernel/src/Scheduler.cpp",
@@ -1725,13 +1555,16 @@
     },
     {
       "id": "rs-fix-b2-stop-after-declared-edges",
-      "what": "B2: a schedule stops at its first D-E4 / D-E5 (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (killed by the case with errors of two steps: v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
+      "what": "the analysis stops after the declared-order step found an error (D-5: D-E4 leaves out one edge and the analysis goes on). With D-E16 gone the later error is the cycle (D-E6)",
       "file": "engine/ecs/kernel/src/Scheduler.cpp",
       "find": "        DeclaredEdges();\n",
       "replace": "        DeclaredEdges();\n        if (failed_) return;\n",
       "target": "gyo_kernel_tests",
-      "cases": "J-24: a missing target and a Derived read*",
-      "expect": "\\[rs\\-b2\\-after\\-declared\\]"
+      "cases": "J-24: a missing target and an order cycle*",
+      "expect": "\\[rs\\-b2\\-after\\-declared\\]",
+      "guards": [
+        "kernel DI-KS 4"
+      ]
     },
     {
       "id": "rs-fix-b4-finish-before-resolve",
@@ -1772,46 +1605,6 @@
       "target": "gyo_kernel_tests",
       "cases": "Plan export*",
       "expect": "NonDataflowEdgesExtended\\(\\) == 0"
-    },
-    {
-      "id": "rs-b6-cfp-hooks-dropped",
-      "what": "B6: the C fingerprint leaves out zone C hooks",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        if (hook.zone != Zone::C) continue;\n        out.Str(hook.name);",
-      "replace": "        continue;\n        out.Str(hook.name);",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*",
-      "expect": "change := \"?hook"
-    },
-    {
-      "id": "rs-b6-cfp-schedule-dropped",
-      "what": "B6: the C fingerprint leaves out the schedule's rollbackEnabled",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "            out.Flag(schedule->options.rollbackEnabled);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*",
-      "expect": "change := \"?rollback"
-    },
-    {
-      "id": "rs-b6-cfp-sync-dropped",
-      "what": "B6: the C fingerprint leaves out the sync points between zone C steps",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "            if (step.kind != StepKind::System || data.systems[step.system].options.zone == Zone::C) reduced.push_back(&step);",
-      "replace": "            if (step.kind == StepKind::System && data.systems[step.system].options.zone == Zone::C) reduced.push_back(&step);",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*",
-      "expect": "change := \"?sync"
-    },
-    {
-      "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (v8-arch-gyo2-mutation-prune merged in hf-c-version-kept, sr-c-version-not-bumped: the same find and replace, so their cases and assertions now run here; every listed message must appear) (find and expect follow C format 9 (v8-arch-gyo2-time-events step 3)) (v8-arch-gyo2-time-events step 4: find and expect follow C format 10) (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 12;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18:*,J-54: the schedule's limit is in*,J-55:*",
-      "expect": "(?=[\\s\\S]*CFingerprint\\(\\)\\.version == 12U)(?=[\\s\\S]*none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 12U)[\\s\\S]*J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 12"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -1959,16 +1752,6 @@
       "expect": "TEST CASE:\\s+initial value: a declaration changes the Registry fingerprint"
     },
     {
-      "id": "rs-iv-ff4-C-takes-zone-B",
-      "what": "the C fingerprint takes declarations of zone B components too (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "TEST CASE:\\s+initial value: a declaration changes the Registry fingerprint and, for zone C, the C fingerprint"
-    },
-    {
       "id": "rs-iv-fb5-sort-tiebreak-dropped",
       "what": "Finish orders declarations by request only (fingerprints follow declaration order) (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
@@ -1977,16 +1760,6 @@
       "target": "gyo_kernel_tests",
       "cases": "initial value:*,J-18:*,J-20:*",
       "expect": "(?=[\\s\\S]*(?:CHECK\\( seatFirst\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\)\\ ==\\ perchFirst\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\) \\) is NOT correct))[\\s\\S]*(?:CHECK\\( seatFirst\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ ==\\ perchFirst\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\) \\) is NOT correct)"
-    },
-    {
-      "id": "rs-iv-fb6-C-target-not-hashed",
-      "what": "the C fingerprint leaves out the component of a declaration (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n",
-      "replace": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.requestId);\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "CHECK\\( seat\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ !=\\ perch\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\) \\) is NOT correct"
     },
     {
       "id": "rs-iv-fb7-registry-target-not-hashed",
@@ -1999,154 +1772,14 @@
       "expect": "CHECK\\( seat\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\)\\ !=\\ perch\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\) \\) is NOT correct"
     },
     {
-      "id": "rs-iv-fb8-C-request-not-hashed",
-      "what": "the C fingerprint leaves out the request of a declaration (initial value, v8-arch-gyo2-funnel-check) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in rs-iv-ff3-C-section-dropped [the C fingerprint hashes only the number of zone C declarations (initial value, v8-arch-gyo2-funnel-check)]) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n",
-      "replace": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.targetId);\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "CHECK\\( zoneC\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ !=\\ otherZoneCRequest\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "rs-iv-fb9-C-filter-by-request-zone",
-      "what": "the C fingerprint picks declarations by the request's zone (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        return data.components[rule.targetId].zone == Zone::C;\n    }));\n    for (const InitialValueRecord& rule : data.initialValues) {\n        if (data.components[rule.targetId].zone != Zone::C) continue;",
-      "replace": "        return data.components[rule.requestId].zone == Zone::C;\n    }));\n    for (const InitialValueRecord& rule : data.initialValues) {\n        if (data.components[rule.requestId].zone != Zone::C) continue;",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "CHECK\\( base\\.CFingerprint\\(\\)\\ ==\\ zoneB\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "rs-iv-fb11-C-count-dropped",
-      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks) (expect follows C format 9 (v8-arch-gyo2-time-events step 3)) (expect follows C format 10 (v8-arch-gyo2-time-events step 4)) (expect follows C format 11 (v8-arch-gyo2-time-events step 5))",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {\n        return data.components[rule.targetId].zone == Zone::C;\n    }));\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "CHECK\\( both\\.registry->Frozen\\(\\)\\.CFingerprint\\(\\)\\.Text\\(\\) == std::string\\(\"11:"
-    },
-    {
-      "id": "rs-iv-fn4-system-Z6-without-funnel",
-      "what": "Z6 of a System ignores what its requests fill (initial value, v8-arch-gyo2-funnel-check) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in rs-iv-fn1-funnel-empty [a System or hook fills nothing through its requests (zone rules) (initial value, v8-arch-gyo2-funnel-check)]; rs-iv-fn7-zone-access-unchanged [the zone rules' access set does not take the filled components (initial value, v8-arch-gyo2-funnel-check)]; rs-iv-fx15-funnel-zone-B-systems-only [only zone B Systems write through the funnel (initial value, v8-arch-gyo2-funnel-check)]; rs-iv-fd4-resolver-insert-not-recorded [inserts and bundle components are not recorded as deferredInserts (initial value, v8-arch-gyo2-funnel-check)])",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "                for (const AccessKey& key : WrittenKeys(zoneAccess)) {\n                    if (key.kind == AccessKind::Message) continue;",
-      "replace": "                for (const AccessKey& key : WrittenKeys(access)) {\n                    if (key.kind == AccessKind::Message) continue;",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "(?=[\\s\\S]*(?:TEST CASE:\\s+initial value: (in a World with rollback|Z6 is checked per schedule|the error names the System)))(?=[\\s\\S]*(?:TEST CASE:\\s+initial value: (zone C State data does not take its value from a role=Input request|role=Input data does not take its value|in a World with rollback)))[\\s\\S]*(?:TEST CASE:\\s+initial value: (role=Input data does not take its value|in a World with rollback|a zone C System's request does not fill zone B data))"
-    },
-    {
-      "id": "rs-iv-fn6-hook-Z6-without-funnel",
-      "what": "Z6 of a hook ignores what its requests fill (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "            for (const AccessKey& key : WrittenKeys(zoneAccess)) {\n                if (key.kind != AccessKind::Message && RollbackOf(data, key) != Rollback::Yes) {",
-      "replace": "            for (const AccessKey& key : WrittenKeys(hook.access)) {\n                if (key.kind != AccessKind::Message && RollbackOf(data, key) != Rollback::Yes) {",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a zone C hook meets the hook's Z6 through the funnel too"
-    },
-    {
       "id": "rs-iv-registry-version-1",
       "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (find and expect follow Registry format 5 (v8-arch-gyo2-time-events step 3)) (v8-arch-gyo2-time-events step 4: find and expect follow Registry format 6) (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 8;",
+      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 9;",
       "replace": "constexpr std::uint32_t kRegistryFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "RegistryFingerprint\\(\\)\\.version == 8U"
-    },
-    {
-      "id": "rs-iv-fx4-note-for-any-kind",
-      "what": "a resource with the id of a filled component gets a funnel note (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    if (key.kind != AccessKind::Component) return {};\n    const auto found = funnel.find(key.id);",
-      "replace": "    const auto found = funnel.find(key.id);",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a resource with the id of a filled component gets no funnel note"
-    },
-    {
-      "id": "rs-iv-fx8-note-dropped-system-Z6-site",
-      "what": "a System's Z6 error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "NameOf(data, key) + \"'\" + FunnelNote(data, funnel, key) + \", which does not roll back\",",
-      "replace": "NameOf(data, key) + \"'\" + \", which does not roll back\",",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: the error names the System that writes the request"
-    },
-    {
-      "id": "rs-iv-fx9-note-dropped-hook-Z6-site",
-      "what": "a hook's Z6 error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "subject + \" is zone C and writes '\" + NameOf(data, key) + \"'\" + FunnelNote(data, funnel, key) +\n",
-      "replace": "subject + \" is zone C and writes '\" + NameOf(data, key) + \"'\" +\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: every zone error of a filled component says which request fills it"
-    },
-    {
-      "id": "rs-iv-fx11-visit-lowest-first",
-      "what": "the walk takes the lowest request first (the request an error names changes) (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "        const ComponentId request = pending.back();\n        pending.pop_back();",
-      "replace": "        const ComponentId request = pending.front();\n        pending.erase(pending.begin());",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: with two written requests of one component the error names one of them, the same every time"
-    },
-    {
-      "id": "rs-iv-fx16-one-declaration-per-request",
-      "what": "a request fills only the component of its first declaration (zone rules) (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "            reached.emplace(rule.targetId, request);\n            pending.push_back(rule.targetId);\n",
-      "replace": "            reached.emplace(rule.targetId, request);\n            pending.push_back(rule.targetId);\n            break;\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: every component a request fills is checked, not only the first"
-    },
-    {
-      "id": "rs-iv-fx18-system-Z6-derived-not-through-funnel",
-      "what": "a System's Z6 refuses Derived through the funnel (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "                    if (rollback != Rollback::Yes && rollback != Rollback::Derived) {",
-      "replace": "                    if (rollback != Rollback::Yes && (rollback != Rollback::Derived || !FunnelNote(data, funnel, key).empty())) {",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: (in a World with rollback|a zone C hook meets the hook's Z6 through the funnel too)"
-    },
-    {
-      "id": "rs-iv-fd1-seed-all-deferred-writes",
-      "what": "removes of a request count as funnel writes (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n",
-      "replace": "    std::vector<ComponentId> pending(access.deferredWrites.begin(), access.deferredWrites.end());\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a System or hook that only removes a request does not write the component"
-    },
-    {
-      "id": "rs-iv-fd2-seed-writes-in-place",
-      "what": "writes of a request in place count as funnel writes (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n",
-      "replace": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n    for (const AccessKey& key : access.writes) {\n        if (key.kind == AccessKind::Component) pending.push_back(key.id);\n    }\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a System that writes request cells in place does not write the component"
-    },
-    {
-      "id": "rs-iv-fd3-seed-reads",
-      "what": "reads and membership filters of a request count as funnel writes (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n",
-      "replace": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n    for (const AccessKey& key : access.reads) {\n        if (key.kind == AccessKind::Component) pending.push_back(key.id);\n    }\n    for (ComponentId id : access.membershipReads) pending.push_back(id);\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a System that only reads or filters by a request does not write the component it fills"
+      "expect": "RegistryFingerprint\\(\\)\\.version == 9U"
     },
     {
       "id": "rs-iv-fd6-spawn-bundle-as-writes",
@@ -2167,26 +1800,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-12:*",
       "expect": "TEST CASE:\\s+J-12: every parameter type's Contribution"
-    },
-    {
-      "id": "rs-iv-fd8-written-not-excluded",
-      "what": "a component the System writes itself is listed as a funnel write (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    for (const AccessKey& key : WrittenKeys(access)) {\n        if (key.kind == AccessKind::Component) reached.erase(key.id);\n    }\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a component the System writes in place is its own write"
-    },
-    {
-      "id": "rs-iv-fd9-written-block-the-walk",
-      "what": "a component the System writes itself stops the walk of a chain (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    std::set<ComponentId> seen(pending.begin(), pending.end());\n",
-      "replace": "    std::set<ComponentId> seen(pending.begin(), pending.end());\n    for (const AccessKey& key : WrittenKeys(access)) {\n        if (key.kind == AccessKind::Component) seen.insert(key.id);\n    }\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a chain goes on through a component the System also writes in place"
     },
     {
       "id": "rs-iv-fd10-inserts-not-sorted",
@@ -2463,26 +2076,6 @@
       "expect": "planOf\\(t8,\\ \"Tick\"\\)\\ !=\\ planOf\\(none,\\ \"Tick\"\\)"
     },
     {
-      "id": "hf-c-fp-no-limit",
-      "what": "the C fingerprint does not hash the schedule's limit (v8-arch-gyo2-hook-flush, spec F-12)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "            out.Flag(schedule->options.hookRoundLimit.has_value());\n            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-54: the schedule's limit is in*",
-      "expect": "t5\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ !=\\ none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)"
-    },
-    {
-      "id": "hf-c-fp-presence-only",
-      "what": "the C fingerprint hashes only whether a limit is declared (v8-arch-gyo2-hook-flush, spec F-12)",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-54: the schedule's limit is in*",
-      "expect": "t5\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ !=\\ t6\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)"
-    },
-    {
       "id": "hf-registry-schedule-field",
       "what": "the Registry fingerprint's schedule section hashes the limit (its format changes, its version does not) (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
@@ -2506,11 +2099,11 @@
       "id": "hf-export-version-kept",
       "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 1) (rewritten by v8-arch-gyo2-orchestration-skeleton (step 2 follow-up)) (find and expect follow export format 5 (v8-arch-gyo2-time-events step 3)) (v8-arch-gyo2-time-events step 4: find and expect follow export format 6)",
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    std::string out = \"gyo.kernel.plans 6\\n\";",
+      "find": "    std::string out = \"gyo.kernel.plans 7\\n\";",
       "replace": "    std::string out = \"gyo.kernel.plans 2\\n\";",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 6\"\\)\\ ==\\ 0"
+      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 7\"\\)\\ ==\\ 0"
     },
     {
       "id": "hf-no-snapshot-after-rounds",
@@ -3267,8 +2860,8 @@
       "id": "we-j32-spawn-before-despawn",
       "what": "J-32: spawn and remove applied before despawn (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; find rebuilt from the post-K0 ApplySync: step 2 moved after step 4) (v8-arch-gyo2-time-events step 4: find and replace follow the sync point number in place of the tick) (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n",
-      "replace": "        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n",
+      "find": "        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n",
+      "replace": "        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "despawn then spawn with the same id: the new entity lives[^=]*CHECK\\( world\\.Alive\\(4\\) \\) is NOT correct"
@@ -3404,16 +2997,6 @@
       "cases": "J-54: a World whose KernelSettings was removed*,J-54: KernelSettings removed between*"
     },
     {
-      "id": "hf-c-fp-eight-as-unset",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "target": "gyo_kernel_tests",
-      "find": "            out.Flag(schedule->options.hookRoundLimit.has_value());\n            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
-      "replace": "            const bool declared = schedule->options.hookRoundLimit.has_value() && *schedule->options.hookRoundLimit != 8U;\n            out.Flag(declared);\n            if (declared) out.U32(*schedule->options.hookRoundLimit);\n",
-      "expect": "J\\-54: the C fingerprint hashes a declared 8 as 'not declared'",
-      "what": "the C fingerprint hashes a declared 8 as 'not declared' (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
-      "cases": "J-54: a declared limit's fingerprints*"
-    },
-    {
       "id": "hf-plan-fp-value-shifted",
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
       "target": "gyo_kernel_tests",
@@ -3421,16 +3004,6 @@
       "replace": "    if (plan.hookRoundLimit) out.U32(*plan.hookRoundLimit + 1U);\n",
       "expect": "J\\-54: Plan fingerprint of a declared limit of 5",
       "what": "the Plan fingerprint hashes limit + 1 (another encoding of the declared value) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
-      "cases": "J-54: a declared limit's fingerprints*"
-    },
-    {
-      "id": "hf-c-fp-value-shifted",
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "target": "gyo_kernel_tests",
-      "find": "            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
-      "replace": "            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit + 1U);\n",
-      "expect": "J\\-54: C fingerprint of a declared limit of 5",
-      "what": "the C fingerprint hashes limit + 1 (another encoding of the declared value) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
       "cases": "J-54: a declared limit's fingerprints*"
     },
     {
@@ -3615,7 +3188,7 @@
       "id": "sr-no-record",
       "what": "F-13: a dropped spawn appends no RejectedSpawn record (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-mutation-prune merged in sr-j8-no-record, sr-j32-no-record: the same find and replace, so their cases and assertions now run here; every listed message must appear) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, false, std::move(rejected)});\n",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});\n",
       "replace": "    (void)found;\n    (void)epoch;\n",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*,J-8:*,J-32:*",
@@ -3765,7 +3338,7 @@
       "id": "sr-range-after-alive",
       "what": "F-13: the range is checked after alive (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "find": "                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
       "replace": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id) &&\n                    !std::binary_search(entities_.begin(), entities_.end(), id)) {",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
@@ -3775,7 +3348,7 @@
       "id": "sr-range-after-twice",
       "what": "F-13: the range is checked only for an id recorded once (after spawned twice) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "find": "                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
       "replace": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id) && end - first == 1) {",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
@@ -3785,7 +3358,7 @@
       "id": "sr-range-on-spawn",
       "what": "F-13: the range check applies to Spawn (the allotter's own ids) too (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "find": "                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
       "replace": "                if (data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
@@ -4105,8 +3678,8 @@
       "id": "sr-records-capped",
       "what": "3.3: the records stop at 8 (a cap the user did not choose) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, false, std::move(rejected)});\n",
-      "replace": "    if (static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.size() >= 8) return;\n    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, false, std::move(rejected)});\n",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});\n",
+      "replace": "    if (static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.size() >= 8) return;\n    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});\n",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ many:\\ 64\\ records"
@@ -4752,16 +4325,6 @@
       "expect": "\\[ns\\-w4\\-other\\-call\\]"
     },
     {
-      "id": "ks-s9-zone-c-tie-unlisted",
-      "what": "S9: a conflicting pair with a zone C side is ordered but not listed in TieBreaks (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
-      "file": "engine/ecs/kernel/src/Scheduler.cpp",
-      "find": "                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
-      "replace": "                    if (sa.options.zone != Zone::C && sb.options.zone != Zone::C) data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
-      "target": "gyo_kernel_tests",
-      "expect": "J\\-22 tie: an immediate write against a read is one tie",
-      "cases": "J-22:*"
-    },
-    {
       "id": "ks-s9-tie-without-schedule",
       "what": "S9: a tie does not name its schedule (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
       "file": "engine/ecs/kernel/src/Scheduler.cpp",
@@ -4782,16 +4345,6 @@
       "cases": "J-23: every tie of every schedule*"
     },
     {
-      "id": "ks-s9-tie-with-zone-c-error",
-      "what": "S9: a zone C side still makes the pair a startup error (the removed D-E8 back as D-E7) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
-      "file": "engine/ecs/kernel/src/Scheduler.cpp",
-      "find": "                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
-      "replace": "                    if (sa.options.zone == Zone::C || sb.options.zone == Zone::C) { Error(StartupCode::DE7, \"D-3\", \"zone C pair\", {}); continue; }\n                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
-      "target": "gyo_kernel_tests",
-      "expect": "D\\-E7 D\\-3: zone C pair",
-      "cases": "J-55: two zone C Systems*"
-    },
-    {
       "id": "ks-s4-writes-counted",
       "what": "S4: ExclusiveWorld<Writes<R...>> counts R as a resource write again (the inverse of the retired ns-listed-not-counted) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6)",
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
@@ -4810,16 +4363,6 @@
       "target": "gyo_kernel_tests",
       "expect": "J\\-12 annotation: annotatedWrites holds the listed resource",
       "cases": "J-12: ExclusiveWorld<Writes<R>> is no write*"
-    },
-    {
-      "id": "ks-s4-layer2-shared-only",
-      "what": "S4: layer 2 takes an exclusive System's writes as declared only for Shared data (the old S-13 shape) (v8-arch-gyo2-kernel-subtract-structure, segment 1, declaration section 6) (expect names the single-writer resource: v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Message) return true;",
-      "replace": "        if (access.wholeWorld && kind == Detail::EntryKind::Component && data_->components[id].writePolicy == WritePolicy::Shared) return true;\n        if (access.wholeWorld && kind == Detail::EntryKind::Resource && data_->resources[id].writePolicy == WritePolicy::Shared) return true;",
-      "target": "gyo_kernel_tests",
-      "expect": "\\[ns\\-ver\\-quiet\\] .*'resource Flag'",
-      "cases": "J-56: verification on: the exclusive System's writes*"
     },
     {
       "id": "ks-s7-first-run-only",
@@ -5535,8 +5078,8 @@
       "id": "ks-s5-handle-not-restamped",
       "what": "S5: the handle's stamp is not renewed after an immediate change (later writes share the change's stamp) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
-      "find": "                handle.stamp_ = Detail::NextStamp(*handle.world_);",
-      "replace": "                static_cast<void>(Detail::NextStamp(*handle.world_));",
+      "find": "                handle.stamp_ = Detail::NextStamp(*handle.world_);\n            }\n        } restamp{*this};\n        return Detail::ApplyImmediate(",
+      "replace": "                static_cast<void>(Detail::NextStamp(*handle.world_));\n            }\n        } restamp{*this};\n        return Detail::ApplyImmediate(",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: Insert*",
       "expect": "\\[ks\\-s5\\-handle\\-restamped\\]"
@@ -5545,8 +5088,8 @@
       "id": "ks-s5-handle-epoch-kept",
       "what": "S5: the handle's sync epoch is not renewed after the hook rounds of an immediate change (W-4 then reports it stale) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (expect names the W-4 error: v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
-      "find": "                handle.syncEpoch_ = Detail::CurrentSyncEpoch(*handle.world_);",
-      "replace": "                static_cast<void>(Detail::CurrentSyncEpoch(*handle.world_));",
+      "find": "                handle.syncEpoch_ = Detail::CurrentSyncEpoch(*handle.world_);\n                handle.stamp_ = Detail::NextStamp(*handle.world_);\n            }\n        } restamp{*this};\n        return Detail::ApplyImmediate(",
+      "replace": "                static_cast<void>(Detail::CurrentSyncEpoch(*handle.world_));\n                handle.stamp_ = Detail::NextStamp(*handle.world_);\n            }\n        } restamp{*this};\n        return Detail::ApplyImmediate(",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: verification on: immediate changes*",
       "expect": "\\[ks\\-s5\\-verification\\-quiet\\][\\s\\S]*StaleHandle"
@@ -5975,21 +5518,21 @@
       "id": "ks-s4-annotated-settings-refused",
       "what": "S4 / S7: listing KernelSettings in ExclusiveWorld<Writes<...>> is a startup error again (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "if (const auto id = Lookup(resource, TypeRole::Resource, \"resource\")) access.annotatedWrites.push_back(*id);",
-      "replace": "if (const auto id = Lookup(resource, TypeRole::Resource, \"resource\")) { access.annotatedWrites.push_back(*id); if (*id == data_.kernelSettings) data_.Error(StartupCode::DE7, \"A.6\", subject_ + \" lists KernelSettings\", {subject_}, {source_}); }",
+      "find": "            access.annotatedWrites.push_back({AccessKind::Resource, *id});",
+      "replace": "            access.annotatedWrites.push_back({AccessKind::Resource, *id});\n            if (*id == data_.kernelSettings) data_.Error(StartupCode::DE7, \"A.6\", subject_ + \" lists KernelSettings\", {subject_}, {source_});",
       "target": "gyo_kernel_tests",
       "cases": "J-57: declarations*",
       "expect": "\\[ns\\-decl\\-settings\\] D\\-E7 A\\.6"
     },
     {
       "id": "ks-s4-layer2-components-only",
-      "what": "S4: layer 2 takes an exclusive System's writes as declared for components only (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
+      "what": "S4: layer 2 takes an exclusive System's writes as declared for components only (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2); merged ks-s4-layer2-zone-c-resources-undeclared (J-57 layer 2 for resources) (A11 C2, 19.1)",
       "file": "engine/ecs/kernel/src/World.cpp",
       "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Message) return true;",
       "replace": "        if (access.wholeWorld && kind == Detail::EntryKind::Component) return true;",
       "target": "gyo_kernel_tests",
-      "cases": "J-56: verification on: the exclusive System's writes*",
-      "expect": "\\[ns\\-ver\\-quiet\\] .*'resource Flag'"
+      "cases": "J-56: verification on: the exclusive System's writes*,J-57: ExclusiveWorld writes and reads any value*",
+      "expect": "(?=[\\s\\S]*(?:\\[ns\\-ver\\-quiet\\] .*'resource Flag'))[\\s\\S]*(?:\\[ns\\-written\\] the Run reported)"
     },
     {
       "id": "ks-s4-layer2-resources-only",
@@ -6000,46 +5543,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-56: verification on: the exclusive System's writes*",
       "expect": "\\[ns\\-ver\\-quiet\\] .*'component Tag'"
-    },
-    {
-      "id": "ks-s4-layer2-zone-b-single-writer-components-undeclared",
-      "what": "S4: layer 2 takes an exclusive System's write of a zone B single-writer component as undeclared (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Message) return true;",
-      "replace": "        if (access.wholeWorld && kind != Detail::EntryKind::Message && !(kind == Detail::EntryKind::Component && data_->components[id].zone == Zone::B && data_->components[id].writePolicy != WritePolicy::Shared)) return true;",
-      "target": "gyo_kernel_tests",
-      "cases": "DI-KS 18: verification on: immediate changes*",
-      "expect": "\\[ks\\-s5\\-verification\\-quiet\\] .*'component Hp'"
-    },
-    {
-      "id": "ks-s4-exclusive-zone-c-resource-refused",
-      "what": "S4: ExclusiveWorld touching a zone C resource is refused again (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    RequireRunningCall(world);\n    world.CheckThread(id);\n    return *world.resources_[id];",
-      "replace": "    RequireRunningCall(world);\n    world.CheckThread(id);\n    GYO_ASSERT(!(CurrentCall(world) != nullptr && CurrentCall(world)->access->wholeWorld && world.data_->resources[id].zone == Zone::C));\n    return *world.resources_[id];",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: resources: any is read*",
-      "expect": "GYO_ASSERT failed: !\\(CurrentCall\\(world\\) != nullptr && CurrentCall\\(world\\)->access->wholeWorld && world\\.data_->resources\\[id\\]\\.zone == Zone::C\\)"
-    },
-    {
-      "id": "ks-s4-exclusive-single-writer-resource-refused",
-      "what": "S4: ExclusiveWorld touching a zone B single-writer resource is refused again (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    RequireRunningCall(world);\n    world.CheckThread(id);\n    return *world.resources_[id];",
-      "replace": "    RequireRunningCall(world);\n    world.CheckThread(id);\n    GYO_ASSERT(!(CurrentCall(world) != nullptr && CurrentCall(world)->access->wholeWorld && id != world.data_->kernelSettings && world.data_->resources[id].zone == Zone::B && world.data_->resources[id].writePolicy != WritePolicy::Shared));\n    return *world.resources_[id];",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: resources: a listed single-writer*",
-      "expect": "GYO_ASSERT failed: !\\(CurrentCall\\(world\\) != nullptr && CurrentCall\\(world\\)->access->wholeWorld && id != world\\.data_->kernelSettings"
-    },
-    {
-      "id": "ks-s4-exclusive-single-writer-component-refused",
-      "what": "S4: ExclusiveWorld touching a zone B single-writer component is refused again (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "ColumnBase& ColumnAt(World& world, ComponentId id) {\n    RequireRunningCall(world);\n    return *world.columns_[id];",
-      "replace": "ColumnBase& ColumnAt(World& world, ComponentId id) {\n    RequireRunningCall(world);\n    GYO_ASSERT(!(CurrentCall(world) != nullptr && CurrentCall(world)->access->wholeWorld && world.data_->components[id].zone == Zone::B && world.data_->components[id].writePolicy != WritePolicy::Shared));\n    return *world.columns_[id];",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "GYO_ASSERT failed: !\\(CurrentCall\\(world\\) != nullptr && CurrentCall\\(world\\)->access->wholeWorld && world\\.data_->components\\[id\\]\\.zone == Zone::B"
     },
     {
       "id": "ks-s7-zero-limit-first-run-only",
@@ -6073,12 +5576,12 @@
     },
     {
       "id": "ks-s8-sync-despawn-vs-zone-c-insert-dropped",
-      "what": "S8: the sync point's Z5 recheck back in another shape: a zone B despawn is not applied when a zone C call inserts into the entity in the same phase (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
+      "what": "C3 (19.1) rewritten without the zone: a despawn is skipped when the same entity also gets an insert or a spawn with its id at that sync point (J-55: the despawn applies first). Only it catches the despawn order against the same entity's insert",
       "file": "engine/ecs/kernel/src/World.cpp",
       "find": "            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);",
-      "replace": "            if (r.kind != RecordKind::Despawn) continue;\n            bool zoneCInsert = false;\n            for (const Record& other : records) {\n                if (other.emitterZone == Zone::C && other.entity == r.entity && (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId))) zoneCInsert = true;\n            }\n            if (r.emitterZone == Zone::B && zoneCInsert) continue;\n            despawns.push_back(r.entity);",
+      "replace": "            if (r.kind != RecordKind::Despawn) continue;\n            bool insertToo = false;\n            for (const Record& other : records) {\n                if (other.entity == r.entity && (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId))) insertToo = true;\n            }\n            if (insertToo) continue;\n            despawns.push_back(r.entity);",
       "target": "gyo_kernel_tests",
-      "cases": "J-55: a zone B despawn and a zone C spawn of one id*",
+      "cases": "J-55: a despawn and a spawn of one id: the despawn applies first*",
       "expect": "rig->world\\(\\)\\.Get<CPos>\\(60\\) != nullptr"
     },
     {
@@ -6090,16 +5593,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-25:*",
       "expect": "J\\-25: With and Without still conflict"
-    },
-    {
-      "id": "ks-s9-mixed-zone-tie-unlisted",
-      "what": "S9: a tie between a zone B and a zone C System is ordered but not listed (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/Scheduler.cpp",
-      "find": "                    data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
-      "replace": "                    if ((sa.options.zone == Zone::C) == (sb.options.zone == Zone::C)) data_.ties.push_back(TieBreak{s_.name, sa.options.name, sb.options.name});",
-      "target": "gyo_kernel_tests",
-      "cases": "J-22: (c) conflicting pairs*",
-      "expect": "J\\-22 tie: a \\(b\\) read of \\(c\\) data against its \\(c\\) writer is one tie"
     },
     {
       "id": "ks-s9-tie-sides-swapped",
@@ -6172,36 +5665,6 @@
       "expect": "J\\-50 same Run"
     },
     {
-      "id": "ks-s4-layer2-zone-c-resources-undeclared",
-      "what": "S4: layer 2 takes an exclusive System's write of a zone C resource as undeclared (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Message) return true;",
-      "replace": "        if (access.wholeWorld && kind != Detail::EntryKind::Message && !(kind == Detail::EntryKind::Resource && data_->resources[id].zone == Zone::C)) return true;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: ExclusiveWorld writes and reads any value*",
-      "expect": "\\[ns\\-written\\] the Run reported"
-    },
-    {
-      "id": "ks-s4-layer1-zone-c-resources-undeclared",
-      "what": "S4: layer 1 takes an exclusive System's World API access of a zone C resource as undeclared (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Message) declared = true;",
-      "replace": "        if (access.wholeWorld && kind != Detail::EntryKind::Message && !(kind == Detail::EntryKind::Resource && data_->resources[id].zone == Zone::C)) declared = true;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-5: an exclusive System*",
-      "expect": "\\[ks\\-s4\\-layer1\\-declared\\] .*'CRes'"
-    },
-    {
-      "id": "ks-s4-layer1-zone-b-single-writer-components-undeclared",
-      "what": "S4: layer 1 takes an exclusive System's World API access of a zone B single-writer component as undeclared (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        if (access.wholeWorld && kind != Detail::EntryKind::Message) declared = true;",
-      "replace": "        if (access.wholeWorld && kind != Detail::EntryKind::Message && !(kind == Detail::EntryKind::Component && data_->components[id].zone == Zone::B && data_->components[id].writePolicy != WritePolicy::Shared)) declared = true;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-5: an exclusive System*",
-      "expect": "\\[ks\\-s4\\-layer1\\-declared\\] .*'Mode'"
-    },
-    {
       "id": "ks-s7-break-first-run-only",
       "what": "S7: breakOnKernelError is read at the first Run only (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/ecs/kernel/src/Executor.cpp",
@@ -6252,44 +5715,27 @@
       "expect": "J\\-54 same Run"
     },
     {
-      "id": "ks-s8-host-zone-c-component-write-asserts",
-      "what": "S8: W-6b back for components: the Host's write of zone C state after the first Run is a GYO_ASSERT (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        if (mode == Detail::kModeRead) return;\n        MarkApiWritten(kind, id);",
-      "replace": "        if (mode == Detail::kModeRead) return;\n        GYO_ASSERT(!hasRun_ || kind != Detail::EntryKind::Component || data_->components[id].zone != Zone::C || data_->components[id].role == Role::Input);\n        MarkApiWritten(kind, id);",
-      "target": "gyo_kernel_tests",
-      "cases": "J-6: a World access while Running*",
-      "expect": "GYO_ASSERT failed: !hasRun_ \\|\\| kind != Detail::EntryKind::Component"
-    },
-    {
-      "id": "ks-s8-host-zone-c-resource-write-asserts",
-      "what": "S8: W-6b back for resources: the Host's write of a zone C resource after the first Run is a GYO_ASSERT (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        if (mode == Detail::kModeRead) return;\n        MarkApiWritten(kind, id);",
-      "replace": "        if (mode == Detail::kModeRead) return;\n        GYO_ASSERT(!hasRun_ || kind != Detail::EntryKind::Resource || data_->resources[id].zone != Zone::C || data_->resources[id].role == Role::Input || data_->resources[id].external);\n        MarkApiWritten(kind, id);",
-      "target": "gyo_kernel_tests",
-      "cases": "J-6: a World access while Running*",
-      "expect": "GYO_ASSERT failed: !hasRun_ \\|\\| kind != Detail::EntryKind::Resource \\|\\| data_->resources"
-    },
-    {
       "id": "ks-s8-zone-b-despawn-of-zone-c-dropped",
-      "what": "S8: Z5 back in another shape: a zone B call's despawn of an entity with a zone C column is not recorded (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
+      "what": "C3 (19.1) rewritten without the zone: a recorded despawn is dropped (J-52). Only it catches the despawn record reaching the queue",
       "file": "engine/ecs/kernel/src/World.cpp",
       "find": "    record.emitterKey = call.access;\n    call.queue->push_back(std::move(record));",
-      "replace": "    record.emitterKey = call.access;\n    if (record.kind == RecordKind::Despawn && call.zone == Zone::B) {\n        for (std::size_t c = 0; c < world.columns_.size(); ++c) {\n            if (world.data_->components[c].zone == Zone::C && world.columns_[c]->Contains(record.entity)) return;\n        }\n    }\n    call.queue->push_back(std::move(record));",
+      "replace": "    record.emitterKey = call.access;\n    if (record.kind == RecordKind::Despawn) return;\n    call.queue->push_back(std::move(record));",
       "target": "gyo_kernel_tests",
-      "cases": "J-52: a zone B despawn of an entity with a zone C column*",
+      "cases": "J-52: a despawn of an entity with any column is applied (no Z5)*",
       "expect": "J\\-52 zone C entity: the despawn was not applied"
     },
     {
       "id": "ks-s8-zone-b-zone-c-insert-dropped",
-      "what": "S8: F-10's zone half back in another shape: a zone B call's insert or remove of a zone C column is not recorded (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    record.emitterKey = call.access;\n    call.queue->push_back(std::move(record));",
-      "replace": "    record.emitterKey = call.access;\n    if ((record.kind == RecordKind::Insert || record.kind == RecordKind::Remove) && call.zone == Zone::B && world.data_->components[record.id].zone == Zone::C) return;\n    call.queue->push_back(std::move(record));",
+      "what": "C3 (19.1) rewritten without the zone: an untyped Commands insert is never queued (J-32b: it is applied to any column). Only it catches the untyped insert reaching the sync point",
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        Check(\"Commands\");\n        Detail::SystemContext& call = Detail::RequireCall(*world_);\n        Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        Detail::Push(call, std::move(record));",
+      "replace": "        Check(\"Commands\");\n        Detail::SystemContext& call = Detail::RequireCall(*world_);\n        Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));\n        record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));\n        static_cast<void>(call);",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "J\\-32b any column: the untyped insert was not applied"
+      "expect": "J\\-32b[\\s\\S]*REQUIRE\\( rig->world\\(\\)\\.Get<Tag>\\(1\\) != nullptr \\)",
+      "guards": [
+        "kernel DI-KS 1"
+      ]
     },
     {
       "id": "ks-s11-thread-bound-not-hashed",
@@ -6305,7 +5751,7 @@
       "id": "ks-s11-annotated-writes-not-hashed",
       "what": "S11: annotatedWrites is not in the Registry fingerprint (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    out.Ids(access.annotatedWrites);",
+      "find": "    out.Keys(access.annotatedWrites);",
       "replace": "    out.U32(0);",
       "target": "gyo_kernel_tests",
       "cases": "J-18: the Registry fingerprint sees annotatedWrites*",
@@ -6315,8 +5761,8 @@
       "id": "ks-s11-export-runner-back",
       "what": "S11: the Plan export prints a runner again under the header version 3 (G-8 inspection) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2) (v8-arch-gyo2-time-events step 4: find follows the export line without domain and clock)",
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "(schedule->options.rollbackEnabled ? \"1\" : \"0\");",
-      "replace": "(schedule->options.rollbackEnabled ? \"1\" : \"0\") + \" runner=Main\";",
+      "find": "        out += \"schedule \" + plan.schedule + \"\\n\";",
+      "replace": "        out += \"schedule \" + plan.schedule + \" runner=Main\\n\";",
       "target": "gyo_kernel_tests",
       "cases": "Plan export:*",
       "expect": "Plan export: the schedule line"
@@ -7079,8 +6525,8 @@
         "kernel DI-KS 25"
       ],
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "data.OwnerName(owner_), options.capacity, {}});",
-      "replace": "data.OwnerName(owner_), 1024U, {}});",
+      "find": "data.OwnerName(owner_), options.capacity, {}, {}});",
+      "replace": "data.OwnerName(owner_), 1024U, {}, {}});",
       "target": "gyo_kernel_tests",
       "cases": "J-36: the Registry lists*",
       "expect": "\\[msg\\-registry\\-capacity\\]"
@@ -7119,25 +6565,11 @@
         "time-events-declaration 4.4"
       ],
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        out.Enum(info.zone);\n        out.U32(info.capacity);\n",
-      "replace": "        out.Enum(info.zone);\n",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18: a message type's capacity*",
-      "expect": "\\[msg\\-capacity\\-registry\\-fp\\]"
-    },
-    {
-      "id": "msg-capacity-not-in-c-fp",
-      "what": "the C fingerprint does not hash a zone C message type's capacity. Only it catches the capacity in the C fingerprint; msg-capacity-not-in-registry-fp is the Registry fingerprint's",
-      "guards": [
-        "kernel DI-KS 25",
-        "time-events-declaration 4.4"
-      ],
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        out.U32(data.messages[id].capacity);\n",
+      "find": "        out.U32(info.capacity);\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-18: a message type's capacity*",
-      "expect": "\\[msg\\-capacity\\-c\\-fp\\]"
+      "expect": "\\[msg\\-capacity\\-registry\\-fp\\]"
     },
     {
       "id": "msg-dropped-count-kept",
@@ -7588,34 +7020,6 @@
       "expect": "\\[obs\\-fingerprint\\] a zone B observer changes the Registry fingerprint"
     },
     {
-      "id": "obs-cfp-no-observers",
-      "what": "the zone C observers are left out of the C fingerprint. The only mutant of that section. Step 7: the expect carries what this mutant alone makes the check print (the tag was shared)",
-      "guards": [
-        "kernel DI-KS 10",
-        "kernel DI-KS 25",
-        "time-events-declaration 4.4"
-      ],
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    out.U32(count(data.observers, [](const ObserverRecord& o) { return o.zone == Zone::C; }));\n    for (std::uint32_t index : data.observerOrder) {",
-      "replace": "    out.U32(0);\n    for (std::uint32_t index : std::vector<std::uint32_t>{}) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18: an observer changes the Registry fingerprint*",
-      "expect": "\\[obs\\-fingerprint\\] a zone C observer is in the C fingerprint"
-    },
-    {
-      "id": "obs-cfp-registration-order",
-      "what": "the C fingerprint hashes the zone C observers in registration order (event cursor declaration 3.3: the C fingerprint holds no order of observers); the run order is left as it is. The only mutant of the C section's order. Step 7: the expect carries what this mutant alone makes the check print (the tag was shared)",
-      "guards": [
-        "kernel DI-KS 10"
-      ],
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    for (std::uint32_t index : data.observerOrder) {\n        const ObserverRecord& observer = data.observers[index];",
-      "replace": "    for (std::uint32_t index = 0; index < data.observers.size(); ++index) {\n        const ObserverRecord& observer = data.observers[index];",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18: an observer changes the Registry fingerprint*",
-      "expect": "\\[obs\\-fingerprint\\] the C fingerprint holds no order of observers"
-    },
-    {
       "id": "obs-name-twice-allowed",
       "what": "two observers of one name are accepted (their names make the run order). The only mutant of R-E2 for observers",
       "guards": [
@@ -7819,34 +7223,6 @@
       "expect": "\\[obs\\-fp\\-events\\]"
     },
     {
-      "id": "obs-cfp-no-events",
-      "what": "the zone C event types are left out of the C fingerprint (DI-KS 25; C fingerprint version 11). Only it catches that section (adversarial check KF2, step 7)",
-      "guards": [
-        "kernel DI-KS 25",
-        "time-events-declaration 4.4"
-      ],
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "    out.U32(count(data.events, [](const EventInfo& e) { return e.zone == Zone::C; }));\n    for (std::size_t id = 0; id < data.events.size(); ++id) {\n        if (data.events[id].zone != Zone::C) continue;",
-      "replace": "    out.U32(0);\n    for (std::size_t id = 0; id < data.events.size(); ++id) {\n        if (true) continue;",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18: the event types*",
-      "expect": "\\[obs\\-cfp\\-events\\]"
-    },
-    {
-      "id": "obs-registry-fp-no-zone",
-      "what": "an observer's zone is left out of the Registry fingerprint (the format comment of Fingerprint.cpp: name, trigger, id, zone, access, owner). Only it catches the zone (adversarial check KF3, step 7)",
-      "guards": [
-        "kernel DI-KS 25",
-        "time-events-declaration 4.4"
-      ],
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        out.U32(observer.observedId.value_or(0));\n        out.Enum(observer.zone);\n",
-      "replace": "        out.U32(observer.observedId.value_or(0));\n",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18: the event types*",
-      "expect": "\\[obs\\-fp\\-observer\\-zone\\]"
-    },
-    {
       "id": "obs-registry-fp-no-access",
       "what": "an observer's access is left out of the Registry fingerprint (same format comment). Only it catches the access (adversarial check KF4, step 7)",
       "guards": [
@@ -7854,26 +7230,11 @@
         "time-events-declaration 4.4"
       ],
       "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        out.Enum(observer.zone);\n        Access(out, observer.access);\n",
-      "replace": "        out.Enum(observer.zone);\n",
+      "find": "        Access(out, observer.access);\n",
+      "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-18: the event types*",
       "expect": "\\[obs\\-fp\\-observer\\-access\\]"
-    },
-    {
-      "id": "obs-cfp-no-access",
-      "what": "a zone C observer's access is left out of the C fingerprint (DI-KS 10: the authoritative C fingerprint holds the observers' access, not their order). Only it catches the access; obs-cfp-registration-order is the order (adversarial check KF5, step 7)",
-      "guards": [
-        "kernel DI-KS 10",
-        "kernel DI-KS 25",
-        "time-events-declaration 4.4"
-      ],
-      "file": "engine/ecs/kernel/src/Fingerprint.cpp",
-      "find": "        out.U32(observer.observedId.value_or(0));\n        Access(out, observer.access);\n    }",
-      "replace": "        out.U32(observer.observedId.value_or(0));\n    }",
-      "target": "gyo_kernel_tests",
-      "cases": "J-18: the event types*",
-      "expect": "\\[obs\\-cfp\\-observer\\-access\\]"
     },
     {
       "id": "msg-registry-set-condition-reader-dropped",
@@ -7895,7 +7256,7 @@
         "kernel DI-KS 25"
       ],
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    for (MessageInfo& info : data.messages) info.readers.clear();\n",
+      "find": "        info.readers.clear();\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-36: the Registry's readers*",
@@ -7915,27 +7276,14 @@
       "expect": "expected GYO_ASSERT to fail: Finish"
     },
     {
-      "id": "obs-registry-zone-dropped",
-      "what": "the Registry's observer entry has no zone (DI-KS 25: trigger, id, zone, access, source, owner). Only it catches the zone (adversarial check KR15, step 7)",
-      "guards": [
-        "kernel DI-KS 25"
-      ],
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "                                                  observer.zone, observer.access, SourceText(observer.source),",
-      "replace": "                                                  Zone::Unset, observer.access, SourceText(observer.source),",
-      "target": "gyo_kernel_tests",
-      "cases": "J-59: the Registry lists the event types and the observers*",
-      "expect": "\\[obs\\-registry\\-zone\\]"
-    },
-    {
       "id": "obs-registry-source-dropped",
       "what": "the Registry's observer entry has no source (DI-KS 25). Only it catches the source (adversarial check KR16, step 7)",
       "guards": [
         "kernel DI-KS 25"
       ],
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "                                                  observer.zone, observer.access, SourceText(observer.source),",
-      "replace": "                                                  observer.zone, observer.access, std::string(),",
+      "find": "observer.access, SourceText(observer.source),",
+      "replace": "observer.access, std::string(),",
       "target": "gyo_kernel_tests",
       "cases": "J-59: the Registry lists the event types and the observers*",
       "expect": "\\[obs\\-registry\\-source\\]"

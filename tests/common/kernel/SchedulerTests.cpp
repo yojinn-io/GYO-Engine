@@ -219,7 +219,7 @@ TEST_CASE("J-21: every conflict edge has a fixed order in the Plan") {
 // No ambiguity detection (v8-arch-gyo2-no-ambiguity-detection): a conflicting pair
 // with no order is tied by registration order and listed, zone C or not. Which
 // pairs conflict is still guarded: each registry lists exactly its one pair.
-TEST_CASE("J-22: (c) conflicting pairs with no order are tied by registration: immediate writes, deferred-deferred "
+TEST_CASE("J-22: conflicting pairs with no order are tied by registration: immediate writes, deferred-deferred "
           "writes, event writes") {
     Built immediate = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("WriteA", Sim()));
@@ -258,7 +258,7 @@ TEST_CASE("J-22: (c) conflicting pairs with no order are tied by registration: i
                   "J-22 tie: a (b) read of (c) data against its (c) writer is one tie");
 }
 
-TEST_CASE("J-22: adding before or after orders the (c) cases and leaves no tie") {
+TEST_CASE("J-22: adding before or after orders the cases and leaves no tie") {
     // Each declared order is against registration order, so a tie edge in its place would show in the Plan.
     Built immediate = WithShared([](Registrar& r) {
         r.AddSystem<&ReadA>(Sys("ReadA", Sim()));
@@ -315,7 +315,7 @@ TEST_CASE("J-22: pairs that do not conflict give no tie (deferred write against 
 
 // ---- J-23 (D-4, D-10)
 
-TEST_CASE("J-23: (b) ties follow registrationSeq, not names") {
+TEST_CASE("J-23: ties follow registrationSeq, not names") {
     Built built = FinishOne([](Registrar& r) {
         r.AddSystem<&WriteMarker>(Sys("Zeta", {At("Update", "First")}));
         r.AddSystem<&ReadMarker>(Sys("Alpha", {At("Update", "First")}));
@@ -515,7 +515,7 @@ Built Permuted(const std::array<Registration, 5>& systems, const std::array<int,
 
 } // namespace
 
-TEST_CASE("J-44: 20 registration orders of (c) Systems: every conflicting pair keeps its declared order") {
+TEST_CASE("J-44: 20 registration orders of Systems: every conflicting pair keeps its declared order") {
     std::array<int, 5> order{0, 1, 2, 3, 4};
     std::vector<std::array<int, 5>> orders;
     // 20 permutations: every 6th of the 120, in lexicographic order, so first and last positions both vary.

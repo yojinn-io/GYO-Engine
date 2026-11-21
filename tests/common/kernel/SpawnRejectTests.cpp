@@ -578,7 +578,7 @@ TEST_CASE("J-55: a hook's spawn dropped at the next sync point and in a hook rou
     }
 }
 
-TEST_CASE("J-55: a zone C spawn blocked by an entity with zone B data only is dropped (LIM-7)") {
+TEST_CASE("J-55: a spawn blocked by a live entity is dropped (LIM-7)") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&ZoneCSpawnsSeven>(In("ZoneCSpawnsSeven", "A"));
@@ -769,7 +769,7 @@ TEST_CASE("J-55: the records, the count and the World's states") {
 
 // Z5 went with the run-time interception (v8-arch-gyo2-no-runtime-interception):
 // the despawn (step 2) applies before the spawn (step 4), so 60 comes back new.
-TEST_CASE("J-55: a zone B despawn and a zone C spawn of one id: the despawn applies first, then the spawn") {
+TEST_CASE("J-55: a despawn and a spawn of one id: the despawn applies first, then the spawn") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
         r.AddSystem<&ZoneBDespawnsE>(In("ZoneBDespawnsE", "A"));
@@ -1014,7 +1014,7 @@ TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and anothe
 
 // Whether the two Systems of "two emitters" really do not conflict: the same shape in zone C,
 // where a conflict without a declared order is a tie listed in TieBreaks.
-TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with one bundle they do") {
+TEST_CASE("J-55: two Systems with disjoint bundles do not conflict; with one bundle they do") {
     SUBCASE("disjoint bundles: Finish succeeds in both orders, both spawns of 9 are dropped, the World is the same") {
         Fingerprint summaries[2];
         for (int order = 0; order < 2; ++order) {

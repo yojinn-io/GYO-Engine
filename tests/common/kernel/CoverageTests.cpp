@@ -88,6 +88,19 @@ TEST_CASE("J-19: a Registrar cannot be copied or moved out of its call") {
 // step); the second keeps one of that step (D-E4) and one of a later step
 // (D-E16), so only the second shows that the analysis goes on after a step that
 // found an error.
+// rs-fix-b2-stop-after-declared-edges: an error of the declared-order step does not stop the analysis; the cycle
+// is found after it.
+TEST_CASE("J-24: a missing target and an order cycle in one schedule are both reported") {
+    Built built = FinishOne([](Registrar& r) {
+        SharedData(r);
+        r.AddSystem<&WriteA>(Sys("WriteA", Sim({"Gone", "ReadA"})));
+        r.AddSystem<&ReadA>(Sys("ReadA", Sim({"WriteA"})));
+    });
+    CHECK(ErrorCount(built, StartupCode::DE4) == 1);
+    CHECK_MESSAGE(ErrorCount(built, StartupCode::DE6) == 1,
+                  "[rs-b2-after-declared] the analysis stopped after the declared-order step found an error: " << Describe(built));
+}
+
 TEST_CASE("J-24: a missing target and an order against the stage order in one schedule are both reported") {
     Built built = FinishOne([](Registrar& r) {
         SharedData(r);
@@ -175,7 +188,7 @@ TEST_CASE("J-24: a hook may declare KernelSettings, read or write") {
 
 // ---- D.1 conditions 2 and 3
 
-TEST_CASE("J-22: a zone B ExclusiveWorld System conflicts with a zone C System of its stage (a tie without order)") {
+TEST_CASE("J-22: an ExclusiveWorld System conflicts with another System of its stage (a tie without order)") {
     Built exclusive = FinishOne([](Registrar& r) {
         SharedData(r);
         r.AddSystem<&EditWorld>(Sys("EditWorld", Sim()));
@@ -186,7 +199,7 @@ TEST_CASE("J-22: a zone B ExclusiveWorld System conflicts with a zone C System o
                   "J-22 exclusive: ExclusiveWorld conflicts with every System of its stage");
 }
 
-TEST_CASE("J-23: two zone B Systems declaring one effect conflict and are ordered by registration") {
+TEST_CASE("J-23: two Systems declaring one effect conflict and are ordered by registration") {
     Built sameEffect = FinishOne([](Registrar& r) {
         r.Effect("Io:file");
         SystemOptions a = Sys("SaveFirst", {At("Update", "First")});
