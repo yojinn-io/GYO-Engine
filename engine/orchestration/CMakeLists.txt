@@ -15,8 +15,9 @@ target_include_directories(gyo_orchestration PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Engine-internal links come from config/modules.csv (O-6).
-gyo_link_registered_dependencies(orchestration)
+# Engine-internal links are written here: core, ecs and orchestration are not
+# Modules and are not registered (O-6 covers the Modules and Plugins only).
+target_link_libraries(gyo_orchestration PUBLIC GYO::Kernel GYO::Base)
 target_compile_features(gyo_orchestration PUBLIC cxx_std_20)
 if(MSVC)
     target_compile_options(gyo_orchestration PRIVATE /W4 /permissive-)

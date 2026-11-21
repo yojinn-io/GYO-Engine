@@ -21,8 +21,11 @@ target_include_directories(gyo_json PUBLIC
 )
 
 target_compile_features(gyo_json PUBLIC cxx_std_20)
-# Engine-internal links come from config/modules.csv (O-6); the external
-# components are linked here, privately, so no user of GYO::Json sees them.
+# Links to core, ecs and orchestration are written here; links to other Modules
+# come from config/modules.csv (O-6).
+# The external components are linked here, privately, so no user of GYO::Json
+# sees them.
+target_link_libraries(gyo_json PUBLIC GYO::Base)
 gyo_link_registered_dependencies(json)
 target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)
 if(MSVC)

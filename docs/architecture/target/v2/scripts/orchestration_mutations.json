@@ -2335,7 +2335,7 @@
    "file": "tests/common/orchestration/orchestration_guard.py",
    "find": "        for alias in ALIAS.finditer(call.group(1)):\n",
    "replace": "        for alias in ():\n",
-   "expect": "FAIL: test_o6_hand_written_engine_link_is_reported",
+   "expect": "FAIL: test_o6_hand_written_module_link_is_reported",
    "command": [
     "{python}",
     "-B",
@@ -2351,14 +2351,14 @@
   },
   {
    "id": "or-links-more",
-   "what": "O-4 link set (time-events step 1): gyo_orchestration links another module (configure-time check). Only it catches the link set of gyo_orchestration; ks-links-extra is gyo_kernel's",
+   "what": "O-4 link set (time-events step 1): gyo_orchestration links another module (configure-time check). Only it catches the link set of gyo_orchestration; ks-links-extra is gyo_kernel's. Since v8-arch-gyo2-core-not-registered the orchestration layer has no register row and its links are written in its CMakeLists.txt",
    "guards": [
     "orchestration O-4",
     "time-events-declaration 6.3"
    ],
-   "file": "config/modules.csv",
-   "find": ",yes,no,kernel;base,,,",
-   "replace": ",yes,no,kernel;base;math,,,",
+   "file": "engine/orchestration/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_orchestration PUBLIC GYO::Kernel GYO::Base)",
+   "replace": "target_link_libraries(gyo_orchestration PUBLIC GYO::Kernel GYO::Base GYO::Math)",
    "target": "gyo_orchestration_tests",
    "expect_build_failure": true,
    "expect": "gyo_orchestration links .*expected exactly\\s+GYO::Base;GYO::Kernel"
@@ -2708,15 +2708,15 @@
   },
   {
    "id": "or-guard-real-o6-hand-link",
-   "what": "O-6 guard on the real tree (step 7, README rule 4: positive control): world_time's CMakeLists.txt links GYO::Math by hand. Only it shows O6 firing on the real tree; or-guard-o6-dropped turns O6 off in the self-tests",
+   "what": "O-6 guard on the real tree (step 7, README rule 4: positive control): world_time's CMakeLists.txt links the registered Module GYO::Json by hand (since v8-arch-gyo2-core-not-registered a hand link to core, such as GYO::Math, is allowed). Only it shows O6 firing on the real tree; or-guard-o6-dropped turns O6 off in the self-tests",
    "guards": [
     "orchestration O-6",
     "time-events-declaration 6.3"
    ],
    "file": "engine/modules/world_time/CMakeLists.txt",
    "find": "gyo_link_registered_dependencies(world_time)",
-   "replace": "gyo_link_registered_dependencies(world_time)\ntarget_link_libraries(gyo_world_time PUBLIC GYO::Math)",
-   "expect": "engine/modules/world_time/CMakeLists\\.txt:\\d+: O6 GYO::Math",
+   "replace": "gyo_link_registered_dependencies(world_time)\ntarget_link_libraries(gyo_world_time PUBLIC GYO::Json)",
+   "expect": "engine/modules/world_time/CMakeLists\\.txt:\\d+: O6 GYO::Json",
    "command": [
     "{python}",
     "-I",
@@ -2862,6 +2862,70 @@
    "guards": [
     "orchestration O-3"
    ]
+  },
+  {
+   "id": "or-guard-o6-every-alias",
+   "what": "O-6 guard (v8-arch-gyo2-core-not-registered): every GYO:: alias in a link call is reported again, so a hand link to core, ecs or orchestration (which have no register row) fails. Only it turns the registered-target filter off",
+   "guards": [
+    "orchestration O-6"
+   ],
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": "            if alias.group(0) in targets:\n",
+   "replace": "            if True:\n",
+   "expect": "FAIL: test_o6_hand_written_core_link_passes",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-guard-o0-registers-silent",
+   "what": "O-6 guard fail closed (v8-arch-gyo2-core-not-registered): registers that name no target are not reported, so the guard would pass with nothing to compare against. Only it turns that O0 off",
+   "guards": [
+    "orchestration O-6"
+   ],
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": "    if not targets:\n",
+   "replace": "    if False:\n",
+   "expect": "FAIL: test_missing_register_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ur-core-row-allowed",
+   "what": "O-6 register self-check (v8-arch-gyo2-core-not-registered): a row for a core unit in config/modules.csv is not reported. Only it reaches the check that core, ecs and orchestration have no row",
+   "guards": [
+    "orchestration O-6"
+   ],
+   "file": "config/modules.csv",
+   "find": "json,modules/json,",
+   "replace": "kernel,ecs/kernel,GYO::Kernel,The ECS mechanism,yes,no,,,,\njson,modules/json,",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "modules\\.csv\\ has\\ a\\ row\\ 'kernel'",
+   "timeout": 300
   }
  ]
 }
