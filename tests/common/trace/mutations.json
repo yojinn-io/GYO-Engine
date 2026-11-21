@@ -244,6 +244,131 @@
    "target": "gyo_trace_tests",
    "cases": "trace: closing the handle*",
    "expect": "TR-7: closing the handle puts the earlier receiver back"
+  },
+  {
+   "id": "tr-kernel-no-schedule-span",
+   "what": "D6: a Run of a schedule opens no span",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration 判定 2"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    scheduleSpan.Begin(\"kernel\", scheduleName, world.name_);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a Run is one span*",
+   "expect": "\\[ks-trace-spans\\]"
+  },
+  {
+   "id": "tr-kernel-no-system-span",
+   "what": "D6: a System that runs opens no span",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration 判定 2"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "                systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a Run is one span*",
+   "expect": "\\[ks-trace-spans\\]"
+  },
+  {
+   "id": "tr-kernel-system-span-skipped",
+   "what": "D6: a System its run condition skips opens a span too (begun before the condition)",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration D2"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "            Engine::Base::TraceSpan systemSpan;\n",
+   "replace": "            Engine::Base::TraceSpan systemSpan;\n            systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a System its run condition skips*",
+   "expect": "\\[ks-trace-skipped\\]"
+  },
+  {
+   "id": "tr-kernel-fail-unmarked",
+   "what": "D4: the kernel's Fail marks no span",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    if (Engine::Base::TraceActive()) Engine::Base::TraceMarkCurrent(error.Text(), origin);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a System's Err is marked*",
+   "expect": "\\[ks-trace-err\\]"
+  },
+  {
+   "id": "tr-kernel-origin-always",
+   "what": "D4 (i): a nested run's error passing through the outer System is marked as produced there",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "                return Fail(std::move(*error), nested, !(interrupted && world.leftError_));",
+   "replace": "                return Fail(std::move(*error), nested, true);",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a nested run's error*",
+   "expect": "\\[ks-trace-nested\\]"
+  },
+  {
+   "id": "tr-kernel-no-trigger-span",
+   "what": "D6: a Trigger from the Host opens no span",
+   "guards": [
+    "trace-declaration D6"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    triggerSpan.Begin(\"kernel\", \"Trigger\", world.name_);\n",
+   "replace": "",
+   "target": "gyo_kernel_tests",
+   "cases": "kernel trace: a Trigger from the Host*",
+   "expect": "\\[ks-trace-trigger\\]"
+  },
+  {
+   "id": "tr-orch-no-entry-span",
+   "what": "D6: an entry point of the orchestration layer opens no span",
+   "guards": [
+    "trace-declaration D6",
+    "trace-declaration 判定 2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    span.Begin(\"orchestration\", entry);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: RunFrame is one span*",
+   "expect": "\\[or-trace-frame\\]"
+  },
+  {
+   "id": "tr-orch-all-through",
+   "what": "D4 (i): an error the orchestration layer produces is marked as passing through",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "!PassesThrough(error));",
+   "replace": "false);",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: an error the orchestration layer produces*",
+   "expect": "\\[or-trace-origin\\]"
+  },
+  {
+   "id": "tr-orch-break-origin",
+   "what": "D4 (i): an entry point of an ended Product (WorldInterrupted with the failure) is marked as produced by the orchestration layer (a second path)",
+   "guards": [
+    "trace TR-3",
+    "trace-declaration D4"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    return error.failure.has_value() || error.code == OrchestrationErrorCode::ScheduleFailed ||",
+   "replace": "    return false || error.code == OrchestrationErrorCode::ScheduleFailed ||",
+   "target": "gyo_orchestration_tests",
+   "cases": "trace-spans: a World that breaks*",
+   "expect": "\\[or-trace-ended-through\\]"
   }
  ]
 }

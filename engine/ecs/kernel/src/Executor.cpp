@@ -7,6 +7,7 @@
 #include "engine/kernel/detail/RegistryData.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/Trace.hpp"
 
 #include <algorithm>
 #include <exception>
@@ -76,8 +77,11 @@ VerificationReport WorldExecutor::Verification() const {
     return report;
 }
 
-Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested) {
+Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested, bool origin) {
     error.world = world_.name_;
+    // Every error of a Run comes here: it tells the trace span on top of this thread's stack (the System
+    // whose step failed, or the schedule for a sync point, a hook round or the Ready window). It only tells.
+    if (Engine::Base::TraceActive()) Engine::Base::TraceMarkCurrent(error.Text(), origin);
     world_.state_ = WorldState::Interrupted;
     world_.DiscardDeferred();
     if (nested) {
@@ -212,6 +216,10 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
     const Plan* plan = registry_->Frozen().PlanOf(scheduleName);
     const Detail::ScheduleRecord* record = data.FindSchedule(scheduleName);
     GYO_ASSERT(plan != nullptr && record != nullptr);
+    // One trace span per Run of a schedule, nested runs included (trace declaration D6); it covers the Ready
+    // window, every step, sync point and hook round below.
+    Engine::Base::TraceSpan scheduleSpan;
+    scheduleSpan.Begin("kernel", scheduleName, world.name_);
     // No tick is advanced here: the kernel keeps no clock (the tick is the time
     // Module's, which runs a fixed step schedule nested; v8-arch-gyo2-clock-out-of-kernel).
 
@@ -270,6 +278,10 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
         switch (step.kind) {
         case StepKind::System: {
             const Detail::SystemRecord& system = data.systems[step.system];
+            // The System's trace span: declared for the whole step, begun only if the step runs (below), so
+            // it is still open when the step's error reaches Fail (trace declaration D2, D6). Its length
+            // includes the access verification after the call when that is on.
+            Engine::Base::TraceSpan systemSpan;
             SystemState& state = systems_[step.system];
             std::size_t mountIndex = 0;
             while (mountIndex < system.options.mounts.size() && system.options.mounts[mountIndex].schedule != scheduleName) {
@@ -342,6 +354,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
                 // (4)
                 if (!runs) return {};
                 mountState.lastRun = call.stamp;
+                systemSpan.Begin("kernel", system.options.name, world.name_);
                 return system.run(call);
             }();
             // W-3: no System call changes membership; a nested run it made set a
@@ -363,7 +376,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             if (interrupted && !error) error = NestedAbortError(world, "a schedule run by System '" + system.options.name + "'");
             if (error) {
                 error->Wrap("Executor: " + StepText(scheduleName, position, system.options.name));
-                return Fail(std::move(*error), nested);
+                // A nested run's error passing through this System is not produced here (D4 (i)).
+                return Fail(std::move(*error), nested, !(interrupted && world.leftError_));
             }
             previousStep = StepText(scheduleName, position, system.options.name);
             break;
@@ -942,6 +956,9 @@ Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(EventType
     GYO_ASSERT(world.State() == WorldState::Ready);
     RunningScope inRun(world.data_->runningWorlds);
     Attach();
+    // A trigger from the Host is an outermost entry of its own (trace declaration D6).
+    Engine::Base::TraceSpan triggerSpan;
+    triggerSpan.Begin("kernel", "Trigger", world.name_);
     // KernelSettings is read when the trigger starts, as when a Run starts (DI-KS 24): the verification
     // and break switches (a flip drops the snapshots, like a Run's) and the hook round limit.
     const auto& settings =

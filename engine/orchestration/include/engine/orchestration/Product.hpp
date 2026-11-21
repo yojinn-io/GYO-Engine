@@ -131,6 +131,14 @@ public:
     [[nodiscard]] const std::vector<std::string>& GameInitList() const noexcept { return gameInit_; }
 
 private:
+    // The entry points' steps; each public entry point runs its steps inside one trace span (trace
+    // declaration D6) and marks it when they return an error.
+    ::Engine::Base::Result<void, OrchestrationError> RunGameInitSteps();
+    ::Engine::Base::Result<void, OrchestrationError> RunFrameSteps();
+    ::Engine::Base::Result<void, OrchestrationError> RunScheduleSteps(std::string_view world, std::string_view schedule);
+    ::Engine::Base::Result<void, OrchestrationError> ReplaceWorldSteps(std::string_view name, ReplaceRequest request);
+    ::Engine::Base::Result<void, OrchestrationError> InsertSystemsSteps(std::string_view world, std::string owner, InsertFn build);
+
     struct UnitSlot {
         std::string row;
         Detail::RegistrationUnit* unit = nullptr;

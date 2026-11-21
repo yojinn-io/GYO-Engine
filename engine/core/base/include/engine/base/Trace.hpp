@@ -87,6 +87,11 @@ private:
     int exceptions_ = 0;
 };
 
+// Whether a receiver is installed: lets a caller skip composing a mark's text when no one would get it.
+[[nodiscard]] inline bool TraceActive() noexcept {
+    return Detail::traceReceiver.load(std::memory_order_acquire) != nullptr;
+}
+
 // Marks the span on top of the calling thread's stack (the kernel's Fail: one place for every error of a Run).
 inline void TraceMarkCurrent(const std::string_view text, const bool origin) noexcept {
     if (const TraceReceiver* receiver = Detail::traceReceiver.load(std::memory_order_acquire)) receiver->markCurrent(text, origin);
