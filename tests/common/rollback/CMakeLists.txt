@@ -1,6 +1,6 @@
 # Tests of the rollback Module (docs/architecture/target/v2/authority-rollback-declaration.zh-Hant.md, sections 5
 # and 9.3). Synthetic data only; no product.
-add_executable(gyo_rollback_tests TestMain.cpp RegistrationsTests.cpp StrategyTests.cpp)
+add_executable(gyo_rollback_tests TestMain.cpp RegistrationsTests.cpp StrategyTests.cpp CheckTests.cpp)
 target_include_directories(gyo_rollback_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gyo_rollback_tests PRIVATE GYO::Rollback gyo_test_support doctest::doctest)
 if(MSVC)
@@ -9,7 +9,7 @@ if(MSVC)
 else()
     target_compile_options(gyo_rollback_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS "rollback registrations" "rollback strategy")
+foreach(group IN ITEMS "rollback registrations" "rollback strategy" "rollback checks")
     string(REPLACE " " "_" name "${group}")
     add_test(NAME rollback.${name} COMMAND gyo_rollback_tests "--test-case=${group}:*")
     set_tests_properties(rollback.${name} PROPERTIES LABELS "cpu" TIMEOUT 60

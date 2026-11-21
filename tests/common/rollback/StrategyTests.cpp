@@ -15,6 +15,7 @@
 #include "engine/rollback/StateRollbackStrategy.hpp"
 
 #include <array>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -28,11 +29,50 @@ constexpr W::Nanoseconds kStep = 15'625'000;
 constexpr std::array<std::int32_t, 32> kScript{0, 1, 2, 3, 1, 1, 2, 5, 1, 0, 3, 2, 1, 4, 1, 1,
                                                2, 2, 3, 1, 0, 1, 2, 1, 1, 3, 2, 1, 1, 2, 1, 1};
 
+// Every step run, the first time or again while resimulating.
+int& StepsRun() {
+    static int count = 0;
+    return count;
+}
+K::SystemResult CountStep(K::Res<Command>) {
+    ++StepsRun();
+    return {};
+}
 K::SystemResult Advance(K::Query<K::Write<Health>> health, K::Res<Command> command) {
     const std::int32_t move = command->move;
     health.ForEach([move](K::EntityId, K::Mut<Health> hp) { hp->hp += move; });
     return {};
 }
+// ---- Spawns and despawns in the step (R-2 premise 6: the allotter rolls back), a side effect skipped while
+// resimulating, and an OnAdd hook that reads "resimulating".
+K::SystemResult Churn(K::Spawn<K::Bundle<Health>> spawn, K::Despawn despawn, K::Res<W::Tick> tick) {
+    if (tick->value == 6) {
+        auto id = spawn.New(Health{9});
+        if (!id) return ::Engine::Base::Err(std::move(id).error());
+    }
+    if (tick->value == 8) despawn.Entity(2);
+    return {};
+}
+int& SideEffects() {
+    static int count = 0;
+    return count;
+}
+K::SystemResult SideEffect(K::Res<Command>) {
+    ++SideEffects();
+    return {};
+}
+std::vector<int>& AddedFlags() {
+    static std::vector<int> flags;
+    return flags;
+}
+K::SystemResult HealthAdded(K::HookCtx, K::Res<W::Resimulation> resimulation) {
+    AddedFlags().push_back(resimulation->active);
+    return {};
+}
+bool SameAllotter(const K::RangeAllotter& a, const K::RangeAllotter& b) {
+    return a.first == b.first && a.last == b.last && a.next == b.next && a.exhausted == b.exhausted;
+}
+
 std::vector<R::RollbackAbandoned>& Notes() {
     static std::vector<R::RollbackAbandoned> notes;
     return notes;
@@ -62,6 +102,7 @@ void Build(O::WorldSetup& s) {
     rollback.Input<Command>(64);
     rollback.StepSchedule("FixedUpdate", "Last");
     s.Registrar().AddSystem<&Advance>(In("Advance", "FixedUpdate", "Update"));
+    s.Registrar().AddSystem<&CountStep>(In("CountStep", "FixedUpdate", "Update"));
     const R::RollbackOptions* options = s.Options<R::RollbackOptions>();
     const bool strategy = options != nullptr && options->strategy != nullptr;
     K::SystemOptions feed = In("Feed", "Main", "PreUpdate");
@@ -73,14 +114,28 @@ void Build(O::WorldSetup& s) {
     s.Registrar().AddSystem<&Feed>(feed);
 }
 
-std::unique_ptr<O::Product> Make(O::OptionBag options) {
-    auto built = O::Product::Build(Game(&Build, std::move(options)), Units());
+void BuildChurn(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Resource<K::RangeAllotter>({.name = "Allotter"});
+    s.Registrar().Allotter<K::RangeAllotter>();
+    R::RollbackEntry rollback(s);
+    rollback.Resource<K::RangeAllotter>({.equal = &SameAllotter});
+    s.Registrar().AddSystem<&Churn>(In("Churn", "FixedUpdate", "Update"));
+    K::SystemOptions side = In("SideEffect", "FixedUpdate", "PostUpdate");
+    rollback.SkipDuringResimulation(side);
+    s.Registrar().AddSystem<&SideEffect>(side);
+    s.Registrar().Hook<Health, &HealthAdded>(K::HookTrigger::OnAdd, {.name = "HealthAdded"});
+}
+
+std::unique_ptr<O::Product> Make(O::OptionBag options, void (*build)(O::WorldSetup&) = &Build) {
+    auto built = O::Product::Build(Game(build, std::move(options)), Units());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
     K::World& world = (*built)->World("Main").GetWorld();
     world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta, {}});
     world.SetResource(Command{});
     world.Insert(1, Health{100});
     world.Insert(2, Health{50});
+    if (world.Types().ResourceIdOf<K::RangeAllotter>()) world.SetResource(K::RangeAllotter::Of(1000, 1999));
     return std::move(*built);
 }
 
@@ -118,7 +173,7 @@ TEST_CASE("rollback strategy: R-2: going back and resimulating gives the World r
     REQUIRE(hp1 != nullptr);
     Inbox(*rolled).ConfirmedThrough(4);
     Frames(*rolled, 3);
-    REQUIRE(TickOf(*straight) == TickOf(*rolled));
+    CHECK_MESSAGE(TickOf(*straight) == TickOf(*rolled), "[rb-r2-equal] Tick " << TickOf(*rolled) << " vs " << TickOf(*straight));
     CHECK_MESSAGE(WorldOf(*rolled).Get<Health>(1)->hp == WorldOf(*straight).Get<Health>(1)->hp,
                   "[rb-r2-equal] Health of 1: " << WorldOf(*rolled).Get<Health>(1)->hp << " vs "
                                                 << WorldOf(*straight).Get<Health>(1)->hp);
@@ -153,7 +208,9 @@ TEST_CASE("rollback strategy: mode Check does not go back when the authoritative
     Inbox(*p).Value<Health>(1, 3, Health{at3});
     Inbox(*p).ConfirmedThrough(3);
     const auto stampBefore = WorldOf(*p).Stamps<Health>(2);
+    StepsRun() = 0;
     Frames(*p, 1);
+    CHECK_MESSAGE(StepsRun() == 1, "[rb-check-agrees] steps run in the frame: " << StepsRun());
     CHECK_MESSAGE(WorldOf(*p).Get<Health>(1)->hp == predicted + kScript[7], "[rb-check-agrees] " << WorldOf(*p).Get<Health>(1)->hp);
     // No restore: entity 2 changed in step 7 only, not before it by a restore (its added stamp is unchanged).
     CHECK_MESSAGE(WorldOf(*p).Stamps<Health>(2)->first == stampBefore->first, "[rb-check-agrees] restored anyway");
@@ -186,3 +243,112 @@ TEST_CASE("rollback strategy: R-5: a replaced World starts with no history of th
     REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message));
     CHECK_MESSAGE(!WorldOf(*p).Resource<R::RollbackHistory>()->lastTick.has_value(), "[rb-r5-fresh] the old history came along");
 }
+
+TEST_CASE("rollback strategy: R-2 with spawns, a despawn and a side effect: the allotter, the alive set and the hooks go back") {
+    SideEffects() = 0;
+    auto straight = Make(WithStrategy(), &BuildChurn);
+    Frames(*straight, 12);
+    const int straightEffects = SideEffects();
+    SideEffects() = 0;
+    auto rolled = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildChurn);
+    Frames(*rolled, 10);
+    REQUIRE((WorldOf(*rolled).Alive(1000) && !WorldOf(*rolled).Alive(2)));
+    Inbox(*rolled).ConfirmedThrough(4);
+    AddedFlags().clear();
+    Frames(*rolled, 2);
+    CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-r2-churn] the World summaries differ");
+    CHECK_MESSAGE((WorldOf(*rolled).Alive(1000) && !WorldOf(*rolled).Alive(1001) && !WorldOf(*rolled).Alive(2)),
+                  "[rb-r2-churn] the alive set");
+    CHECK_MESSAGE(SideEffects() == straightEffects, "[rb-side-effect-skipped] " << SideEffects() << " vs " << straightEffects);
+    // The restore puts 2 back (OnAdd) and the resimulation spawns 1000 again (OnAdd): both while resimulating.
+    std::string flags;
+    for (int flag : AddedFlags()) flags += std::to_string(flag);
+    CHECK_MESSAGE(flags == "11", "[rb-resimulating-before-restore] OnAdd saw resimulating as " << flags);
+}
+
+// ---- R-1: an interface implemented from scratch (no code of the official strategy) goes through the same socket.
+
+struct ScratchStore {
+    std::map<std::uint64_t, std::vector<std::pair<K::EntityId, Health>>> health;
+    std::map<std::uint64_t, std::vector<K::EntityId>> alive;
+    std::map<std::uint64_t, Command> inputs;
+    std::uint64_t decided = 0;
+};
+void HashValue(K::Hasher&, const ScratchStore&) {}
+
+class ScratchStrategy final : public R::RollbackStrategy {
+public:
+    [[nodiscard]] std::string_view Name() const override { return "ScratchStrategy"; }
+    void Check(R::CheckContext&) override {}
+    ::Engine::Base::Result<void, K::KernelError> Record(R::RecordContext& c) override {
+        R::Exclusive& world = c.World();
+        const std::uint64_t tick = c.Tick();
+        std::vector<std::pair<K::EntityId, Health>> cells;
+        world.ReadColumn<Health>([&cells](K::EntityId e, K::ChangeStamp, K::ChangeStamp, const Health& h) { cells.emplace_back(e, h); });
+        const std::vector<K::EntityId> alive = world.Entities();
+        const Command input = **world.Read<Command>([](const Command& v) { return v; });
+        static_cast<void>(world.Modify<ScratchStore>([&](ScratchStore& store) {
+            store.health[tick] = cells;
+            store.alive[tick] = alive;
+            store.inputs[tick] = input;
+        }));
+        return {};
+    }
+    ::Engine::Base::Result<void, K::KernelError> Decide(R::DecideContext& c) override {
+        R::Exclusive& world = c.World();
+        const auto confirmed = **world.Read<R::RollbackInbox>([](const R::RollbackInbox& i) { return i.Confirmed(); });
+        if (!confirmed || *confirmed > c.Tick()) return {};
+        const std::uint64_t decided = **world.Read<ScratchStore>([](const ScratchStore& s) { return s.decided; });
+        if (*confirmed <= decided) return {};
+        static_cast<void>(world.Modify<ScratchStore>([&](ScratchStore& s) { s.decided = *confirmed; }));
+        c.RollBackTo(*confirmed);
+        static_cast<void>(world.Modify<W::Resimulation>([](W::Resimulation& r) { r.active = 1; }));
+        return {};
+    }
+    ::Engine::Base::Result<void, K::KernelError> Restore(R::RestoreContext& c) override {
+        R::Exclusive& world = c.World();
+        const std::uint64_t target = c.Target();
+        K::RestoreSet set;
+        static_cast<void>(world.Read<ScratchStore>([&](const ScratchStore& s) {
+            set.Alive(s.alive.at(target));
+            set.Column<Health>(s.health.at(target));
+        }));
+        return world.Restore(std::move(set));
+    }
+    ::Engine::Base::Result<void, K::KernelError> Resimulate(R::ResimulateContext& c) override {
+        R::Exclusive& world = c.World();
+        W::RewindFixedSteps(world, c.Tick() - c.Target());
+        for (std::uint64_t step = c.Target() + 1; step <= c.Tick(); ++step) {
+            const Command input = **world.Read<ScratchStore>([step](const ScratchStore& s) { return s.inputs.at(step); });
+            static_cast<void>(world.Modify<Command>([input](Command& v) { v = input; }));
+            if (auto ran = W::RunOneFixedStep(world, c.StepSchedule()); !ran) return ran;
+        }
+        static_cast<void>(world.Modify<W::Resimulation>([](W::Resimulation& r) { r.active = 0; }));
+        return {};
+    }
+    ::Engine::Base::Result<void, K::KernelError> Correct(R::CorrectContext&) override { return {}; }
+};
+
+void BuildScratch(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Resource<ScratchStore>({.name = "ScratchStore"});
+    s.Prepare([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(ScratchStore{});
+        return {};
+    });
+}
+
+TEST_CASE("rollback strategy: R-1: a strategy written from scratch through the same socket passes R-2") {
+    auto straight = Make(WithStrategy());
+    Frames(*straight, 12);
+    O::OptionBag options;
+    options.Set(R::RollbackOptions{std::make_shared<ScratchStrategy>()});
+    auto scratch = Make(std::move(options), &BuildScratch);
+    Frames(*scratch, 9);
+    Inbox(*scratch).ConfirmedThrough(4);
+    Frames(*scratch, 3);
+    CHECK_MESSAGE(WorldOf(*scratch).Get<Health>(1)->hp == WorldOf(*straight).Get<Health>(1)->hp,
+                  "[rb-r1-scratch] " << WorldOf(*scratch).Get<Health>(1)->hp << " vs " << WorldOf(*straight).Get<Health>(1)->hp);
+    CHECK_MESSAGE(WorldOf(*scratch).Resource<W::Resimulation>()->active == 0, "[rb-r1-scratch] resimulating left raised");
+}
+

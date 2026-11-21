@@ -5,7 +5,12 @@
 #include "engine/world_time/FixedStep.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
+#include <algorithm>
+#include <map>
 #include <optional>
+#include <set>
+#include <string>
+#include <vector>
 #include <utility>
 
 namespace GYO::Engine::Rollback {
@@ -20,9 +25,112 @@ Kernel::KernelError Failed(std::string message) {
 
 } // namespace
 
-void StateRollbackStrategy::Check(CheckContext&) {
-    // The startup checks of the official strategy (Derived order, messages across the step schedules): later in
-    // step 4 of the batch.
+namespace {
+
+// The schedules that run again while resimulating: the step schedules and the schedules nested in them.
+std::set<std::string> Resimulated(const RollbackRegistry& registrations) {
+    std::set<std::string> names;
+    for (const StepScheduleRecord& record : registrations.stepSchedules) names.insert(record.name);
+    for (const NestedScheduleRecord& record : registrations.nestedSchedules) names.insert(record.name);
+    return names;
+}
+
+// R-7 (replaces the kernel's D-E16): in each resimulated schedule, every System that reads a Derived component
+// has a System of the same schedule that writes it immediately ordered before it (a path of stage, declared or
+// sync point edges of the read-only order graph; a tie by registration is no declared order). Hooks and
+// observers that read Derived data are not seen at startup (the author's).
+void CheckDerivedOrder(CheckContext& context, const std::set<std::string>& schedules) {
+    const Kernel::FrozenRegistry& registry = context.Registry();
+    std::vector<Kernel::ComponentId> derived;
+    for (const DerivedRecord& record : context.Registrations().derived) {
+        if (const auto id = record.idIn(registry)) derived.push_back(*id);
+    }
+    if (derived.empty()) return;
+    for (const std::string& schedule : schedules) {
+        std::map<std::string, std::set<std::string>> after;  // System -> the Systems ordered after it
+        for (const Kernel::OrderEdge& edge : registry.OrderGraph(schedule)) {
+            if (edge.source == Kernel::OrderSource::TieBreak) continue;
+            after[edge.first].insert(edge.second);
+        }
+        const auto reaches = [&after](const std::string& from, const std::string& to) {
+            std::vector<std::string> pending{from};
+            std::set<std::string> seen{from};
+            while (!pending.empty()) {
+                const std::string at = pending.back();
+                pending.pop_back();
+                for (const std::string& next : after[at]) {
+                    if (next == to) return true;
+                    if (seen.insert(next).second) pending.push_back(next);
+                }
+            }
+            return false;
+        };
+        for (const Kernel::SystemInfo& reader : registry.Systems()) {
+            if (reader.removed) continue;
+            const bool mounted = std::any_of(reader.mounts.begin(), reader.mounts.end(),
+                                             [&schedule](const Kernel::Mount& m) { return m.schedule == schedule; });
+            if (!mounted) continue;
+            for (const Kernel::ComponentId id : derived) {
+                const Kernel::AccessKey key{Kernel::AccessKind::Component, id};
+                if (!std::binary_search(reader.access.reads.begin(), reader.access.reads.end(), key)) continue;
+                bool written = false;
+                for (const Kernel::SystemInfo& writer : registry.Systems()) {
+                    if (writer.removed || writer.name == reader.name) continue;
+                    if (!std::binary_search(writer.access.writes.begin(), writer.access.writes.end(), key)) continue;
+                    if (reaches(writer.name, reader.name)) {
+                        written = true;
+                        break;
+                    }
+                }
+                if (!written) {
+                    context.Report("RB-E7", "System '" + reader.name + "' reads Derived '" + registry.Components()[id].name +
+                                                "' in resimulated schedule '" + schedule +
+                                                "' with no immediate writer ordered before it (R-7)");
+                }
+            }
+        }
+    }
+}
+
+// time-plan-two (5), both directions (rollback declaration 7.1): a message written in a resimulated schedule has
+// no reader outside them, and one read in them has no writer outside them. Only the Systems' mounts are looked
+// at; what hooks and observers read and write is not seen at startup (the author's).
+void CheckMessages(CheckContext& context, const std::set<std::string>& schedules) {
+    const Kernel::FrozenRegistry& registry = context.Registry();
+    for (const Kernel::MessageInfo& message : registry.Messages()) {
+        bool writtenIn = false;
+        bool readIn = false;
+        for (const Kernel::MessageWriterInfo& writer : message.writers) {
+            if (!writer.hook && !writer.observer && schedules.count(writer.schedule) != 0) writtenIn = true;
+        }
+        for (const Kernel::MessageReaderInfo& reader : message.readers) {
+            if (!reader.observer && schedules.count(reader.schedule) != 0) readIn = true;
+        }
+        if (writtenIn) {
+            for (const Kernel::MessageReaderInfo& reader : message.readers) {
+                if (reader.observer || schedules.count(reader.schedule) != 0) continue;
+                context.Report("RB-E8", "message '" + message.name + "' is written in a resimulated schedule and read by '" +
+                                            reader.system + "' in '" + reader.schedule +
+                                            "', outside them (it would read the resimulation's records again)");
+            }
+        }
+        if (readIn) {
+            for (const Kernel::MessageWriterInfo& writer : message.writers) {
+                if (writer.hook || writer.observer || schedules.count(writer.schedule) != 0) continue;
+                context.Report("RB-E8", "message '" + message.name + "' is read in a resimulated schedule and written by '" +
+                                            writer.system + "' in '" + writer.schedule +
+                                            "', outside them (a resimulation would not have it again)");
+            }
+        }
+    }
+}
+
+} // namespace
+
+void StateRollbackStrategy::Check(CheckContext& context) {
+    const std::set<std::string> schedules = Resimulated(context.Registrations());
+    CheckDerivedOrder(context, schedules);
+    CheckMessages(context, schedules);
 }
 
 Ok StateRollbackStrategy::Record(RecordContext& context) {
