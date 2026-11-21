@@ -13,7 +13,9 @@ target_include_directories(gyo_world_logging PUBLIC
 )
 
 target_compile_features(gyo_world_logging PUBLIC cxx_std_20)
-# Engine-internal links come from config/modules.csv (O-6).
+# Links to core, ecs and orchestration are written here; links to other Modules
+# come from config/modules.csv (O-6).
+target_link_libraries(gyo_world_logging PUBLIC GYO::Kernel GYO::Orchestration)
 gyo_link_registered_dependencies(world_logging)
 if(MSVC)
     target_compile_options(gyo_world_logging PRIVATE /W4 /permissive-)

@@ -21,9 +21,11 @@ struct Unit {};
 CLEAN_CMAKE = """add_library(gyo_orchestration STATIC src/Product.cpp)
 add_library(GYO::Orchestration ALIAS gyo_orchestration)
 # target_link_libraries(gyo_orchestration PUBLIC GYO::Kernel)  (a comment)
-gyo_link_registered_dependencies(orchestration)
-target_link_libraries(gyo_orchestration PRIVATE Threads::Threads)
+target_link_libraries(gyo_orchestration PUBLIC GYO::Kernel GYO::Base PRIVATE Threads::Threads)
 """
+REGISTER = ("name,dir,target,description,library_only,default,depends,private_depends,unit,header\n"
+            "json,modules/json,GYO::Json,JSON,yes,no,,,,\n"
+            "world_time,modules/world_time,GYO::WorldTime,Time,no,yes,,,T::Time,t/Time.hpp\n")
 
 
 class GuardTree(unittest.TestCase):
@@ -32,7 +34,8 @@ class GuardTree(unittest.TestCase):
         self.root = Path(self._directory.name)
         self.write("engine/orchestration/include/engine/orchestration/Clean.hpp", CLEAN_HEADER)
         self.write("engine/orchestration/CMakeLists.txt", CLEAN_CMAKE)
-        self.write("engine/ecs/kernel/CMakeLists.txt", "gyo_link_registered_dependencies(kernel)\n")
+        self.write("engine/ecs/kernel/CMakeLists.txt", "target_link_libraries(gyo_kernel PUBLIC GYO::Base)\n")
+        self.write("config/modules.csv", REGISTER)
 
     def tearDown(self):
         self._directory.cleanup()
@@ -78,10 +81,26 @@ class GuardTree(unittest.TestCase):
                 self.source(text + "\n")
                 self.assertReported("O3", needle)
 
-    def test_o6_hand_written_engine_link_is_reported(self):
+    def test_o6_hand_written_module_link_is_reported(self):
+        self.write("engine/modules/world_time/CMakeLists.txt",
+                   "target_link_libraries(gyo_world_time\n    PUBLIC GYO::Base  # base\n    PRIVATE GYO::Json)\n")
+        self.assertReported("O6", "GYO::Json")
+
+    def test_o6_core_writing_a_module_link_is_reported(self):
+        self.write("engine/core/time/CMakeLists.txt", "target_link_libraries(gyo_time PUBLIC GYO::WorldTime)\n")
+        self.assertReported("O6", "GYO::WorldTime")
+
+    def test_o6_hand_written_core_link_passes(self):
         self.write("engine/core/time/CMakeLists.txt",
                    "target_link_libraries(gyo_time\n    PUBLIC GYO::Base  # base\n    PRIVATE Threads::Threads)\n")
-        self.assertReported("O6", "GYO::Base")
+        self.write("engine/modules/world_time/CMakeLists.txt",
+                   "target_link_libraries(gyo_world_time PUBLIC GYO::Kernel GYO::Orchestration)\n")
+        self.assertEqual(guard.check(self.root), [])
+
+    def test_missing_register_is_reported(self):
+        (self.root / "config/modules.csv").unlink()
+        self.assertIn("config/modules.csv: O0 the registers name no target (moved or renamed? update this guard)",
+                      guard.check(self.root))
 
     def test_missing_orchestration_directory_is_reported(self):
         import shutil

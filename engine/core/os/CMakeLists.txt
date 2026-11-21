@@ -34,8 +34,9 @@ target_include_directories(gyo_os PUBLIC
 )
 
 target_compile_features(gyo_os PUBLIC cxx_std_20)
-# Engine-internal links come from config/modules.csv (O-6).
-gyo_link_registered_dependencies(os)
+# Engine-internal links are written here: core, ecs and orchestration are not
+# Modules and are not registered (O-6 covers the Modules and Plugins only).
+target_link_libraries(gyo_os PUBLIC GYO::Base)
 if(NOT WIN32)
     # pthread_setname_np (Thread): the system's thread library, as Design
     # Invariant 3 allows (D69).

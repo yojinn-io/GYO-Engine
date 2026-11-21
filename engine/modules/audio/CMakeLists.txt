@@ -13,5 +13,7 @@ target_include_directories(gyo_audio PUBLIC
 )
 
 target_compile_features(gyo_audio PUBLIC cxx_std_20)
-# Engine-internal links come from config/modules.csv (O-6).
+# Links to core, ecs and orchestration are written here; links to other Modules
+# come from config/modules.csv (O-6).
+target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time)
 gyo_link_registered_dependencies(audio)

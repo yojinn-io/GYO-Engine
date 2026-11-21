@@ -21,8 +21,11 @@ target_include_directories(gyo_logging PUBLIC
 )
 
 target_compile_features(gyo_logging PUBLIC cxx_std_20)
-# Engine-internal links come from config/modules.csv (O-6): GYO::Base publicly; GYO::Json,
-# GYO::Os, GYO::Threads and GYO::Time privately, so no user of GYO::Logging sees their headers.
+# Links to core, ecs and orchestration are written here; links to other Modules
+# come from config/modules.csv (O-6).
+# GYO::Base publicly; GYO::Json (registered), GYO::Os, GYO::Threads and GYO::Time privately,
+# so no user of GYO::Logging sees their headers.
+target_link_libraries(gyo_logging PUBLIC GYO::Base PRIVATE GYO::Os GYO::Threads GYO::Time)
 gyo_link_registered_dependencies(logging)
 if(MSVC)
     target_compile_options(gyo_logging PRIVATE /W4 /permissive-)

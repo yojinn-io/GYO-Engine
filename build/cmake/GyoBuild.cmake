@@ -47,10 +47,11 @@ add_compile_options("$<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang,GNU>:-ffp-contra
 # dependency a product adds from its own directory, but not to third_party.
 add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
                     "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")
-# The Module and Plugin registers name the engine's Modules, the Plugins and
-# their dependencies (Design Invariant O-6 of
+# The Module and Plugin registers name the engine's Modules (engine/modules/),
+# the Plugins and their dependencies (Design Invariant O-6 of
 # docs/architecture/target/v2/orchestration.zh-Hant.md); engine/CMakeLists.txt
-# adds the Modules in register order, the Plugins follow from plugins/.
+# adds core, ecs and orchestration directly and the Modules in register order,
+# the Plugins follow from plugins/.
 gyo_load_unit_registers(GYO_UNITS "${GYO_REPOSITORY_ROOT}/config/modules.csv"
                         "${GYO_REPOSITORY_ROOT}/config/plugins.csv")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
