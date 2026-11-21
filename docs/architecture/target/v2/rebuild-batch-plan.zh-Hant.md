@@ -42,12 +42,26 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 6. 日誌機制 | **2026-11-21 完成**（日誌 PR #256 併入 `gyo2`，d3371355；`v8-arch-gyo2-logging-merged`）。trace 另成 Module、另寫宣告與 PR（`v8-arch-gyo2-logging-trace-two-modules`、`-trace-direction`），使用者「合併完先等等。」後，2026-11-21「通知日誌卡，可以繼續。」，從 bb2497b0 寫 trace 宣告；同日動工前核准（`v8-arch-gyo2-trace-declaration-approved`）；同日合併 PR #258（f25837b0，`v8-arch-gyo2-trace-merged`），**第 6 組完成**。 | master 的 `engine/trace`（參考） | 2、3 |
 | 6. 異常分級 | **2026-11-21 完成**（PR #254 併入 `gyo2`，e0806f1f；`v8-arch-gyo2-error-levels-merged`）。範圍收窄到 D1、D2、P12、P15、退出流程與條文草稿（`v8-arch-gyo2-error-levels-shrink`、`-exit-flow`）。 | `docs/architecture/error-handling.md`（R0–R6 的契約，起點） | 2、3 |
 | 6. Engine 分層 | **2026-11-21 完成**（PR #257 併入 `gyo2`，bb2497b0；`v8-arch-gyo2-engine-layers-merged`）。`engine/` 分成 `core/`、`ecs/`、`orchestration/`、`modules/`，登記檔加 `dir` 欄並搬到頂層 `config/`；主會話親自做 | — | 已合併的各批 |
-| 6. SDL（第一個 Plugin 批） | `engine/platform` 不回來，功能拆進各 Module，怎麼拆在這批分析（`v8-arch-gyo2-platform-obsolete-split-into-modules`）；plugins 目錄的建置；input、render、text、ui 依序回來；碰外部組件的程式一律放各 Module 的 `src/adapters/<組件>/`（SDL 放 `src/adapters/sdl/`），同一批把 `engine/os` 的 `src/posix`、`src/windows` 搬到 `src/adapters/`（`v8-arch-gyo2-json-adapters-dir` 的推廣；搬檔時查守衛 glob 與突變 find 路徑） | master 的 platform、input、render、text、ui（參考） | 2、3 |
+| 6. SDL（第一個 Plugin 批） | `engine/platform` 不回來，功能拆進各 Module，怎麼拆在這批分析（`v8-arch-gyo2-platform-obsolete-split-into-modules`）；plugins 目錄的建置；input、render、text、ui 依序回來；碰外部組件的程式一律放各 Module 的 `src/adapters/<組件>/`（SDL 放 `src/adapters/sdl/`），同一批把 `engine/os` 的 `src/posix`、`src/windows` 搬到 `src/adapters/`（`v8-arch-gyo2-json-adapters-dir` 的推廣；搬檔時查守衛 glob 與突變 find 路徑）；**render 回來時一起做 11-11 的 K.3-6**：模擬的 World 與渲染的 World 分開，渲染的有自己的 Registry，只經 Extract 唯讀拿資料（Kernel 減法時 Extract 已拿掉，gyo2 上沒有；2026-11-21 補列，`v8-arch-gyo2-plan-gaps-2026-11-21`） | master 的 platform、input、render、text、ui（參考） | 2、3；多個 World、交換點 |
+| 6. threads、io 重審 | R0（`v8-arch-rebuild-r0-approved`）和 audio 一起帶過來、標「帶過去並重審」，之後沒排進批次表（2026-11-21 補列，`v8-arch-gyo2-plan-gaps-2026-11-21`）。重審點照 R0 清單附錄：threads 的 `RoleThread` 系譜是 PvP 的 sim 角色（TT-1），②③是 runner 的執行緒、要和編排層的 runner 與交換點對齊；io 的系譜是舊引擎＋os 線的 io-contracts，工具存讀檔、遊戲資料、存檔都用，要和讀檔、存檔版本 Module、asset 的需求對齊。和 audio 重審排在一起 | master 的 `engine/threads`、`engine/io`（參考） | 2；多個 World、交換點；讀檔 |
 | 6. audio 重審 | R0（`v8-arch-rebuild-r0-approved`）帶過來時標「帶過去並重審」，之後一直沒排進批次表（2026-11-21 主會話回報整體進度時漏列，使用者問「還有audio呢？」才補上）。已知的重審點：(1) `PlayRequest::at` 用 Engine 的真實時間（`Mixer.hpp`），World 的暫停、慢動作會碰到——rebuild-concept 第 2 節判「不相合，要處理」；(2) 提交介面歸第一個呼叫它的執行緒所有（Submitter 的執行緒契約），要和交換點模型比過（R0 清單附錄）；(3) Engine 只提供機制、會被替換的規則外移的方向（11-13）是否適用；(4) SDL 的輸出後端 `GYO::AudioBackendSDL` 沒有帶過來，歸 SDL 那批。現況：`engine/modules/audio`（Mixer、ClipBank、VoiceMixer）與測試照 master 帶過來，只隨 #257 搬過目錄。 | master 的 `engine/audio`（參考） | 3（`world_time`）；多個 World、交換點 |
 | 6. asset | 資源目錄、載入、生命週期 | master 的 `engine/asset`（參考） | 2；JSON |
 | 6. 之後的小事（JSON Module 卡交來） | Kernel 指紋報告手寫 JSON 改用 JSON Module（要動 Kernel 的依賴，另議）；master 七份資料契約的驗證規則收緊，在各契約回到 `gyo2` 的批寫明；打包時附第三方授權告示（yyjson、fast_float 起） | JSON Module 宣告第 15 節 | JSON |
 
 先後：1 → 2 → 3 → 4 → 5（5 的各批可以並行）→ 6 的基礎模組（JSON 最先、可以現在就和 3 並行；網路 Module 在 4 之後即可和 5 並行；日誌與 trace 在 JSON 之後）→ 搬產品（`v8-arch-gyo2-infrastructure-before-products`）。2026-11-18 使用者定：第 2 批的宣告卡等第 1 批收尾、併進 `gyo2` 才開，不並行（`v8-arch-gyo2-batch2-after-batch1-merged`：「這個底層設計，還是穩一點好。而且有些決策還不穩，之前的很多批都是這樣廢掉的。」）。（舊版寫「事件游標依賴減法」，後來改成「游標排在減法之前」，現在照統合併進第 3 條線。）
+
+## 後續小事（卡片交來、還沒排）
+
+2026-11-21 補列（`v8-arch-gyo2-plan-gaps-2026-11-21`）。原本只在 HANDOFF 或主會話手上。
+
+| 項目 | 來源 | 什麼時候做 |
+|---|---|---|
+| 9 個本來就壞的突變退役或重寫（`ks-k6-calls-off`、`ks-k6-every-file-exempt`、`ks-k8-skips-executor-files` 找的 `executor_file` 已在 #254 拿掉；`os-g8-link`、`os-g13`、`os-g14`、`ti-x1`、`ti-x2`、`th-x1` 的 find 在基準就已過時） | Engine 分層（#257）的 dev_log | 下一次動到那些清單的批，或單獨一個小 PR |
+| 日誌測試把 `logging-test-files/` 寫進工作目錄，改寫到建置目錄 | Engine 分層時誤 commit 98 MB | 同上 |
+| Windows 上非 Install 的執行緒走到 `std::terminate` 時沒有致命紀錄（日誌 S1） | 日誌批合併前核准頁 | 另開 |
+| Parallel 下 trace 段的父子、段在別的執行緒結束（RC-T1） | trace 批合併前核准頁 | Kernel 解除 LIM-2 時重看 |
+| `bs-` 開頭的突變搬到 Base 的清單 | 突變清點卡（#247） | 下一次動 Base 的批 |
+| 突變數量的增長判準交風紀委員 | 突變清點卡（#247） | 風紀委員待辦 |
 
 ## 不擋路的小事
 
