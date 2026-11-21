@@ -1,6 +1,6 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-21（修訂 4：照 `gyo2` f25837b0 更新——#257 的分層換掉舊路徑、異常分級（#254、#255）合併後重對第 10.3 節、trace（#258）留下的「回滾重跑的段」寫成第 10.4 節；差異逐條在第 19 節，都在已核准的範圍內。2026-11-20 修訂 3：使用者重新核准修訂 2 的 5.4、判定 5、5.5（`v8-arch-gyo2-authority-rollback-reapproval`、`-ratio-p99`），換上 Linux 實機重量的基準值、加四分位距比 25% 的事前宣告、記入異常分級卡的交界。修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推。修訂 1 之後同日記入的：使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工中（使用者 2026-11-21「可以開始權威卡了。記得讓他更新」，經主會話轉；HANDOFF `v8-arch-gyo2-authority-rollback-start`）。** 本分支已 rebase 到 `gyo2` f25837b0；第 1 步前半（第 3 批延下來的三條守衛，原 afd6e7c5）rebase 後照新路徑改過（第 19 節）。
+更新：2026-11-21（修訂 5：第 2 步拿掉區的規則、`Zone` 欄位留到第 6 步，A11 的 B、C 組隨欄位在第 6 步處置，差異見第 20 節。修訂 4：照 `gyo2` f25837b0 更新——#257 的分層換掉舊路徑、異常分級（#254、#255）合併後重對第 10.3 節、trace（#258）留下的「回滾重跑的段」寫成第 10.4 節；差異逐條在第 19 節，都在已核准的範圍內。2026-11-20 修訂 3：使用者重新核准修訂 2 的 5.4、判定 5、5.5（`v8-arch-gyo2-authority-rollback-reapproval`、`-ratio-p99`），換上 Linux 實機重量的基準值、加四分位距比 25% 的事前宣告、記入異常分級卡的交界。修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推。修訂 1 之後同日記入的：使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工中（使用者 2026-11-21「可以開始權威卡了。記得讓他更新」，經主會話轉；HANDOFF `v8-arch-gyo2-authority-rollback-start`）。** 本分支已 rebase 到 `gyo2` f25837b0；第 1 步前半（第 3 批延下來的三條守衛，原 afd6e7c5）rebase 後照新路徑改過（第 19 節）。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 之後的改動與修訂 2 送 Fable 5.2／high 窄複查（結果見第 17 節之後的處理）。
 
@@ -897,4 +897,21 @@ A11 實際 16 個（`ks-s4-*` 10、`ks-s8-*` 5、`sr-zone-c-own-cells` 1；宣�
 | C1 斷言加回的形 | `ks-s4-exclusive-single-writer-component-refused`（J-45）、`ks-s4-exclusive-zone-c-resource-refused`、`ks-s4-exclusive-single-writer-resource-refused`（J-57）、`ks-s8-host-zone-c-component-write-asserts`、`ks-s8-host-zone-c-resource-write-asserts`（J-6） | 退役、不補：不看區的版本＝「什麼都不能碰」，說不出獨有抓到的錯（README 第 3 條）；限制不回來由型別保證（欄位不存在）。判定暫時沒有突變，dev_log 記一行 |
 | C2 合併 | `ks-s4-layer2-zone-c-resources-undeclared`（J-57 第 2 層） | 案例併進 `ks-s4-layer2-components-only`（README「合わせ方」），跑一次確認 killed |
 | C3 改寫 | `ks-s8-sync-despawn-vs-zone-c-insert-dropped`（J-55）、`ks-s8-zone-b-despawn-of-zone-c-dropped`（J-52）、`ks-s8-zone-b-zone-c-insert-dropped`（J-32b） | 改成拿掉整個條件、不看區的突變；和現有突變 find／replace 相同就合併 |
+
+## 20. 修訂 5：第 2 步做時看到的順序缺口（2026-11-21）
+
+**缺口**：7.1 的表把 `Zone` 排在第 2 步拿掉，但 C 指紋、G-5 匯出與 Z6 都以「區 C」為對象，它們有新家、排在第 6 步（7.2）。第 2 步拿掉 `Zone` 就得先替它們換對象（7.2 只寫了 Z6 改成以 `Rollback::Yes` 為準，沒寫 C 指紋與 G-5）。
+
+**本卡照 L17 判**（照 7.2 的原則「沒有新家的先拿、有新家的等接手測試」）：
+
+| 項目 | 修訂 4 | 修訂 5 |
+|---|---|---|
+| 區的**規則**（S-6～S-9 的區半、S-13、S-17、Z1、Z2、Z3、Z7、`InitialValue` 的 Z1、ingress stage） | 第 2 步 | 第 2 步（照舊，已做） |
+| `Zone` 列舉與各 Options、Info 的 `zone` 欄位、`ApplyDefaultZones` | 第 2 步 | **第 6 步**，和 C 指紋、G-5、Z6 一起拿 |
+| Z6 的對象 | 第 2 步改成以 `Rollback::Yes` 為準 | 不改，照舊以區 C 為準，第 6 步整份拿掉（區還在，不必先換） |
+| `external`、`emitterZone`、`SystemContext::zone`、`ingressStage`、`parallelGuardTest`、`WritePolicy`、`DigestSet`、`RequireExplicitZones` | 第 2 步 | 第 2 步（照舊，已做：它們只服務已拿掉的規則） |
+| A11 的 B 組與 C1、C2、C3（19.1） | 第 2 步開頭 | **第 6 步**，隨 `zone` 欄位：這些突變的 replace 用 `zone`，欄位還在時照樣編得過、殺得到，先退會讓它們守的判定空窗 |
+| A11 的 A 組 | 第 2 步 | 第 2 步（已退：它們守的規則已拿掉） |
+
+不改的：使用者定過的事、判定的點與門檻、Module 的職責。golden 照舊兩次（第 2 步已重產一次：Registry 指紋 8、C 指紋 12）。合併前核准時一起給你看。
 
