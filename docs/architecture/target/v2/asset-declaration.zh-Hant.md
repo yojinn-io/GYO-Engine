@@ -1,6 +1,6 @@
 # 事前宣告：asset Module（`v8-arch-gyo2-asset`）
 
-更新：2026-11-21（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：使用者的決定都已寫進；送敵對式檢查，之後交動工前核准。實作要等第 5 批的「多個 World、交換點」與「生成世界（重做）」做完，而且使用者說開始。**
+更新：2026-11-21（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等使用者定 12.3 第 13 題（Product 層的槽，會改編排層）；定了補進 5.4，再送敵對式檢查，之後交動工前核准。實作要等第 5 批的「多個 World、交換點」與「生成世界（重做）」做完，而且使用者說開始。**
 
 **經過**：
 - 修訂 0（f93edb7e）送 Fable 5.2／high 敵對式檢查，blocker 4、should 15、nit 12，全部採用成修訂 1（b050e13b），對照在第 17 節。
@@ -120,15 +120,15 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 
 | 代號 | 內容 |
 |---|---|
-| R1 | 兩個單位（照 `logging`／`world_logging` 的先例；卡片照 L17 判，第 8 節）：**`engine/modules/asset`**（`GYO::Asset`，library-only，不認得 ECS）——id 與 catalog（Data Contract 的讀、寫、驗證）、loader 介面、整檔讀取（經 io）、文字 loader、`AssetStore`（World 外的資產管理）、`Handle<T>`；**`engine/modules/world_asset`**（`GYO::WorldAsset`，編排層 `Module` 的子類）——擁有 Product 的 `AssetStore`、每個 World 的唯讀視圖與請求入口、套用點的 System、訊息、雜湊函式 |
+| R1 | 兩個單位（照 `logging`／`world_logging` 的先例；卡片照 L17 判，第 8 節）：**`engine/modules/asset`**（`GYO::Asset`，library-only，不認得 ECS）——id 與 catalog（Data Contract 的讀、寫、驗證）、loader 介面、整檔讀取（經 io）、文字 loader、`AssetStore`（World 外的資產管理）、`Handle<T>`、`AssetRef<T>`；**`engine/modules/world_asset`**（`GYO::WorldAsset`，編排層 `Module` 的子類）——擁有 Product 的 `AssetStore`、`AssetSetup` 槽、每個 World 的唯讀視圖、請求入口與 `AssetChanges`、套用點的 System 與準備函式、雜湊函式 |
 | R2 | catalog：id→（型別、路徑、settings）的對照表；格式、Version、Validation Rule 是 asset 擁有的 Data Contract；執行期讀（不是 build 的產物） |
 | R3 | `AssetStore`：以 id 請求、引用計數、沒人用就放掉、`Failed` 之後可以再請求；載好的值不可變、共享唯讀；**依賴追蹤**（loader 宣告引用、連同依賴的狀態、循環偵測）；**原始位元組雜湊**（預設開） |
 | R4 | loader 的介面與登記入口：擁有型別的 Module 登記（5.16） |
 | R5 | 讀檔與解碼在 World 執行緒之外；World 端的請求、放掉、讀取不上鎖 |
 | R6 | 每個 World 的 `AssetFrame` 與唯讀視圖、套用點、狀態查詢、一組 id 的**就緒查詢**（連同依賴）、變更清單 `AssetChanges` |
-| R7 | 錯誤：`AssetLoadFailure`（E2）、catalog 與登記的啟動錯誤、丟棄記錄（E3） |
+| R7 | 錯誤：請求級與 id 級的 `AssetLoadFailure`（E2）、依賴失敗、catalog 與登記的啟動錯誤；丟棄件數（E3 的出口不在本批，5.8） |
 | R8 | asset 放進 World 的型別的雜湊函式（5.9.1；第 4 批 3.3） |
-| R9 | 上限與擴張點：每次發佈的上限、在飛上限、loader 的位元組上限可由產品覆寫 |
+| R9 | 上限與擴張點：在飛上限、loader 的位元組上限可由產品覆寫；每個包的變更清單上限（5.6） |
 | R10 | 新頁 `target/v2/asset.zh-Hant.md`：Design Invariants、Replacement Criteria。舊 `target/assets.zh-Hant.md` 頂端標「已由 v2 取代」 |
 
 ### 2.2 不在這一批
@@ -168,7 +168,7 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 | F5 | ui_editor：預覽字型與圖片（`AssetPreviewContext.cpp:92-171`）；UI 文件用 catalog id 參照資產（`UiDocumentBridge.cpp:137-165`） | ttf、png、json | 同一個機制；**UI 文件記 id** | 機制做 |
 | F6 | audio_editor：`convert` 把 wav 轉成引擎格式的 clip、**寫進 catalog**（`tools/audio_editor/src/Main.cpp:29-36`） | wav、json | **事先轉檔現在就有一例**；工具照 catalog 的 Data Contract 寫，執行期不知道誰寫的 | catalog 的格式與讀寫做（R2）；工具不做 |
 | F7 | 地圖編輯器：讀寫自己的地圖檔（`voxel_map_editor/src/FileAccess.cpp:21-27`） | json、voxel mesh json | 編輯器的檔是它自己的；遊戲讀它的輸出時經 catalog 與 loader | 只保證介面（5.10） |
-| F8 | BigMap（使用者點名）：約 1 km²、242 MB、每個 region ≤ 16 MiB | 地圖 region | 一個大內容能拆成許多 id；單一 asset 的上限可設；**同時在飛與每次發佈要有上限**；串流的規則照決定 8 屬日後的地圖 Module | 做上限（R9）與 region 級 id |
+| F8 | BigMap（使用者點名）：約 1 km²、242 MB、每個 region ≤ 16 MiB | 地圖 region | 一個大內容能拆成許多 id；單一 asset 的上限可設；**同時在飛要有上限**（不然全部同時讀進記憶體）；串流的規則照決定 8 屬日後的地圖 Module | 做上限（R9）與 region 級 id |
 | F9 | 2D 橫版遊戲（`-engine-scope-general`） | png、json | 單機、不需要 PvP 的任何東西；catalog 可以手寫或由產品程式產生 | 做 |
 
 **推不出、不放進來的**：熱重載（master 的 `AssetWatcher` 在 `apps/`、`tools/` 0 件呼叫）；子 asset（ufbx loader 一檔一個值）；二進位 loader。
@@ -177,9 +177,9 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 
 **已知的規模**（master 實查）：遊戲內容 36 個檔、36.7 MB；最大 fbx 23.7 MB、ttf 4.5 MB、png 1.34 MB、json 1.45 MB。BigMap 242 MB，region ≤ 16 MiB（region 的個數未查）。
 
-**預算：寫不出數字，延後到第一個產品搬回時**（12.2 第 6 題）。缺：載入時間；同時在飛的請求數或解碼中的記憶體峰值；每次發佈的上限；catalog 的項目數與啟動時讀 catalog 的時間。
+**預算：寫不出數字，延後到第一個產品搬回時**（12.2 第 6 題）。缺：載入時間；同時在飛的請求數或解碼中的記憶體峰值；catalog 的項目數與啟動時讀 catalog 的時間。
 
-**本批先做放數字的位置**：每次發佈上限、在飛上限是產品選項（R9）；預設「不設限」，標明不是判定。
+**本批先做放數字的位置**：在飛上限、loader 的位元組上限是 Product 級設定（R9）；預設「不設限」，標明不是判定。
 
 ## 4. 別家怎麼做（同一種技術比）
 
@@ -213,7 +213,7 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 | 去重的鍵 | 路徑＋型別〔源〕 | GUID〔源〕 | 路徑〔文〕 | 物件路徑〔文〕 | 〔未〕 | catalog id | **id**（settings 在 catalog 裡） |
 | 改名、搬移 | 斷 | GUID，不斷 | UID＋備用路徑〔文〕 | redirector〔文〕 | GUID〔文〕 | catalog id，不斷 | **id，不斷**：只改 catalog 的路徑 |
 | 依賴、分組 | 「連同依賴載完」的狀態（`info.rs:30-31`）〔源〕 | 依賴組〔源〕 | 依賴自動遞迴〔文〕 | Primary／Secondary＋bundle〔文〕 | label 批次〔文〕 | — | **Engine 推出**：loader 宣告引用（5.17） |
-| 上限 | 每幀上傳位元組（`render_asset.rs:509`）〔源〕 | 〔未〕 | 文件沒看到 | 串流池〔檢〕 | bundle 快取上限〔文〕 | 每幀 2 個 | 每次發佈、在飛、loader 位元組（R9） |
+| 上限 | 每幀上傳位元組（`render_asset.rs:509`）〔源〕 | 〔未〕 | 文件沒看到 | 串流池〔檢〕 | bundle 快取上限〔文〕 | 每幀 2 個 | 在飛、loader 位元組（R9）；沒有每次發佈的上限（5.6） |
 | 結果怎麼讓 World 看到 | `PreUpdate` 照完成順序〔源〕 | 每幀處理命令〔源〕 | 作者輪詢〔文〕 | 委派〔文〕 | 完成事件〔文〕 | 主執行緒輪詢 | 完成了、下一次維護就發佈；每個 World 的套用點換視圖（決定 9） |
 | 失敗怎麼告知 | `Failed`＋失敗事件〔源〕 | 狀態 `Error`〔源〕 | FAILED，沒有細節〔文〕 | 缺檔也呼叫完成委派〔文〕 | handle 狀態〔文〕 | — | 狀態＋`AssetChanges`（E2；不用 Kernel 的 `Message`，5.7） |
 | 熱重載 | 監看＋`Modified`〔源〕 | 〔未〕 | 原地刷新〔文〕 | 〔未〕 | 〔未〕 | Engine 有、產品沒用 | 不在本批 |
@@ -307,11 +307,13 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
   3. id 在**全部 catalog** 裡唯一（**照舊**，`AssetCatalog.cpp:61-84`）。
   4. id 合字元集 `[a-z0-9._-]`、1～128 字元（**新增**；master 只要求非空）。
   5. `path` 合 `IsRelativeContentPath`、不是 `content.json`（**照舊**）。
-  6. `path` 沒有副檔名時要寫 `format`（**新增**）。
+  6. `path` 沒有副檔名時要寫 `format`（**新增**）。副檔名＝`path` 最後一段裡最後一個點之後的部分，轉小寫；目錄名裡的點不算（修訂 3 修正版檢查 S-8）。
+  7. `format` 有寫時是 `[a-z0-9]+`；`settings` 有寫時是 JSON 物件（**新增**）。
 - **(B) Product 的啟動檢查**：看這個 Product 登記了哪些 loader，不是資料本身的規則，不放進範例集。
   1. 同一個（`type`、`format`）兩個不同的 loader 是啟動錯誤（**新增**，藍圖 `:66`「副檔名衝突應為錯誤」）。
-  2. loader 登記時，對它的（`type`、`format`）的每個項目解讀 `settings`；解讀不了是那個 World 的 `Finish` 的啟動錯誤（**新增**）。每個 loader 只驗一次，所以結果和 World 的順序無關。
+  2. 凍結點（5.4）對每個有 loader 的項目解讀 `settings`；解讀不了是啟動錯誤（**新增**）。在凍結點一次做完，所以結果和 World 的順序、內容根目錄由哪個 World 給都無關。`settings` 只在這裡驗，載入時不再驗（修訂 3 修正版檢查 S-1）。
   3. 型別有 loader、但（`type`、`format`）沒有：不在啟動時報（後來的 World 可能還會登記），請求時是請求級的 E2 `NoLoader`（5.8）。
+  4. 同一個 `type` 名的 loader 產出的 C++ 型別必須相同（**新增**；修訂 3 修正版檢查 S-3）。
 - **驗證時點**（修訂 3 檢查 S3、N3）：(A) 在第一個收下內容根目錄、跑到 `Finish` 的 World 做（Kernel 有啟動錯誤的 World 不跑 `Finish`，就由下一個做；O-2 有任何錯誤就不建任何 World，所以不會漏）。(B) 在每個帶來 loader 的 World 的 `Finish` 做。
 - **刻意不查的**：
   - **沒有 loader 的型別不是錯誤**（**照舊**，master「Custom types remain supported」）。例：Match 沒有 render，catalog 裡的貼圖照樣合法。
@@ -322,7 +324,7 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 - **範例集**：照 master 的做法（`docs/architecture.md:301`），(A) 組的每條規則各準備合法與不合法的範例，當契約的一部分。C++ 的驗證與日後的工具、組裝管線都對同一組（AGENTS §8 的 Validation Rule）。
 - **`content.json` 的 owner**：asset 擁有它的格式與 Version；`shader_bundles` 的內容歸 render。render 要改它時，由 asset 升 `content.json` 的版（第 6 節第 6 項）。
 - **系譜**：master 的 `CatalogParser.cpp:19-37`、`AssetCatalog.cpp:61-84`、`ContentManifest.cpp:76-87`、`docs/architecture.md:301`。
-- **決勝理由**：master 現有的規則全留（一條移到 SDL 那批），現有內容照樣通過；新增的都為了 loader 與 id 字串；放寬的兩條為了支援 Match 與還沒回來的 render。
+- **決勝理由**：F5（UI 文件以 id＋型別參照，`UiDocumentBridge.cpp:130-170` 的四種診斷正好是 (A) 規則）、F6（audio_editor 要能照同一組規則寫）、F9（手寫的 catalog 要在啟動時就知道錯在哪）；新增的五條（(A)4、6、7，(B)1、2、4）都為了 loader 與 id 字串，放寬的兩條（`shader_bundles` 可省、`shader_bundles` 的項目規則不驗）為了支援還沒回來的 render。現有的 master 內容照樣通過是費用上的好處，不是決勝理由（修訂 3 修正版檢查 S-9、N-3）。
 
 **交使用者的**：無。三件都沿用 master 的既有契約（不是使用者之前的決定），和別家的分歧（集中 vs 旁檔）由使用者決定 6 的「對照表」已經定了。
 
@@ -330,94 +332,127 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 
 **`AssetStore`**：每個 Product 一份。world_asset 在 `Configure`（Product 層一次，O-2）建立它，存在 world_asset 這個登記單位的實例裡，活到 Product 結束。登記單位的實例本來就活到 Product 結束、可以持有自己的資料（`RegistrationUnit.hpp` 註解）。
 
-**別的單位與產品怎麼把東西交給 store**（修訂 3 檢查 B1）：
-- 編排層今天的 `WorldSetup` 不交出別的登記單位（`Setup.hpp:129-150`）。第 4 批第 6 節查出同一個缺口，解法是編排層的**每次建 World 一份的共用槽**（擁有者 `Create<T>`、別人 `Find<T>`，`Build` 結束時凍結；第 4 批 11.5 的 O-2 補句與 RC-O10）。**本頁依賴它**，不另造路。
-- world_asset 在每個 World 的 `Build` 用 `Create<AssetSetup>` 建槽。擁有型別的 Module 在自己的 `Build` 用 `Find<AssetSetup>` 追加 loader 與那個 World 要的 `Assets<T>` 視圖；產品自己的 `build` 追加內容根目錄與 Product 級設定（雜湊開關、在飛上限、發佈上限、loader 上限覆寫）。
-- world_asset 在那個 World 的 `Finish` 讀凍結後的槽（`const`），交給 store：第一次見到的就採用；和已採用的相同就沒事；不同是啟動錯誤（`Finish` 回報，收進 `ProductStartupReport`，O-5）。
-- **凍結點**：Product 建好所有啟動的 World（全部 `Finish` 跑完、第一次 `RunGameInit` 之前），store 的 catalog、loader 表、Product 級設定凍結，工作執行緒從此只讀它們。凍結之後替換 World 重跑 `Build`／`Finish` 時，只准帶和已採用的相同的東西；新的 loader 或不同的設定是那次替換的錯誤（RC-AS10）。
-- 沒有任何 World 給內容根目錄：catalog 是空的，每個請求都是 `UnknownId`。不是啟動錯誤（只直接呼叫 loader 的工具就是這樣）。
+**別的單位與產品怎麼把東西交給 store**（修訂 3 檢查 B1；修訂 3 修正版檢查 S-1、S-2、S-3）。**做法待使用者定（12.3 第 13 題）**，兩個選項：
 
-**World 端**：world_asset 在每個 World 的 `Build` 放進：
+- **(P) Product 層的槽（卡片建議）**：請編排層在 `ProductSetup` 加一個和第 4 批同形的槽（擁有者 `Create<T>`、別人 `Find<T>`），在 `Configure` 用、`Configure` 結束時凍結。
+  - world_asset 在自己的 `Configure` 建 `AssetSetup`；擁有型別的 Module 在自己的 `Configure` 追加 loader；產品自己的 `Configure`（排在最後）追加內容根目錄與 Product 級設定。
+  - 凍結點就是 `Configure` 結束，在任何 World 建立之前；catalog 的驗證與 (B) 組的啟動檢查都在那裡做一次，和 World 的順序無關；替換 World 不重跑 `Configure`，所以沒有「凍結後只准相同」。
+  - 要編排層另給 `Configure` 階段回報啟動錯誤的路（今天只有 `Finish`／`Check` 收進 `ProductStartupReport`）。
+  - 代價：改編排層（O-2 補句），要主會話與第 4 批對齊。
+- **(W) 第 4 批的每 World 槽**（編排層不再改）：world_asset 在每個 World 的 `Build` 建 `AssetSetup`，別的單位在 `Build` 追加、產品在自己的 `build` 追加；world_asset 在那個 World 的 `Finish` 讀凍結後的槽交給 store（相同就沒事、不同是啟動錯誤）。
+  - 凍結點：world_asset 的第一個準備函式（Product 先跑完全部 World 的登記才建 World、跑準備函式，`Product.cpp:203`、`:218-229`）。(B) 組的跨 World 檢查在那裡做，錯誤走準備函式的 O-E7 與回報碼。
+  - 凍結後替換 World 只准帶相同的東西；不同時，`BuildNewFirst` 是那次替換的錯誤，`DropOldFirst` 是 Product 結束（`Product.cpp:686` 之後；修訂 3 修正版檢查 N-5）（RC-AS10）。
+  - Product 級的東西走 World 層的管道，所以有「每個 World 再給一次、冪等判定、凍結後只准相同」這一串。
+  - 代價：第 4 批核准的用法是「建 World 期間用，凍結後交給那個 World 的 Resource」，asset 拿它送到 Product 層，用法超出原意。
+
+兩個選項都一樣的：
+- 「沒設定」算沒意見；Product 級設定只有寫了的才比相同（修訂 3 修正版檢查 S-1）。
+- 沒有任何單位給內容根目錄：catalog 是空的，每個請求都是 `UnknownId`。不是啟動錯誤（只直接呼叫 loader 的工具就是這樣）。
+- **登記 loader 的單位的拆法**（修訂 3 修正版檢查 S-3）：擁有型別的 Module 拆成兩個單位，照 asset／world_asset 的先例。loader 的函式庫只依賴 asset（F4 的工具只連它）；World 端的單位依賴 world_asset，在登記檔寫明，O-E3 保證先後。world_asset 被產品關掉時 `Find` 回空，第 4 批定為斷言。
+- **loader 的判等**：同一個 loader 是同一個 C++ 型別的 loader；同一個 `type` 名的 loader 產出的 C++ 型別必須相同，否則是啟動錯誤（5.3 (B)）。
+
+**World 端**：world_asset 在每個 World 的 `Build` 登記這些 Resource 的型別，值在它的準備函式裡放進去（`Build` 時還沒有 World，5.6）：
 - `AssetRequests`：請求入口、狀態與就緒查詢；
 - `AssetFrame`：這個 World 這一幀的快照（5.6）；
-- 每個型別一份 `Assets<T>`：從 `AssetFrame` 導出的唯讀視圖，由那個型別的 loader 的 owner 在這個 World 登記；
+- 每個型別一份 `Assets<T>`：從 `AssetFrame` 導出的唯讀視圖，由那個型別的 World 端單位在這個 World 登記；
 - `AssetChanges`：這一幀的變更清單（5.7）。
 
-System 經這些 Resource 存取，不持指標；元件裡只放 `Handle<T>`、`AssetRef<T>` 或 `AssetId`（AS-1）。store 端記每個 World 的資料時，用 world_asset 在 `Build` 發的不透明記號，不用 World 名（`BuildNewFirst` 時新舊同名 World 並存）。
+System 經這些 Resource 存取，不持指標；元件裡只放 `Handle<T>`、`AssetRef<T>` 或 `AssetId`（AS-1）。store 端記每個 World 的資料時，用準備函式發的不透明記號，不用 World 名（5.6）。
 
-**loader 在 Product 層**：某個型別只要 Product 裡有任何一個 World 登記了 loader，store 就載得了它。要**讀值**，那個 World 要有 `Assets<T>`；就緒查詢不需要。
+**loader 在 Product 層**：某個型別只要 Product 登記了 loader，store 就載得了它。要**讀值**，那個 World 要有 `Assets<T>`；就緒查詢不需要。
 
 **換 World、多 World 不是 asset 的事**：
 - Handle 的引用計數跨 World 有效；舊 World 銷毀時它的 Handle 才放掉。
 - `BuildNewFirst`：新 World 的準備函式、`beforeSwap` 在舊 World 還在時跑，請求同樣的 id 一定命中，**保證不重讀**。
-- `DropOldFirst`：舊 World 先銷毀（`Product.cpp:646`），之後才準備新 World（`:680` 之後）；中間 store 的維護可能已經把歸零的項目移除，所以是**盡力**，不保證。作者要保證，就把 Handle 放進自己標 `CarryOver` 的 Resource（O-10），計數就不會歸零。
+- `DropOldFirst`：舊 World 先銷毀（`Product.cpp:646`），之後才準備新 World（`:710`）；中間 store 的維護可能已經把歸零的項目移除，所以是**盡力**，不保證。作者要保證，就把 Handle 放進自己標 `CarryOver` 的 Resource（O-10），計數就不會歸零。
 - 回主選單另建 Product（O-3）：舊 Product 的 store 隨它結束；新 Product 重新載入（RC-AS3）。
 
 ### 5.5 請求、Handle 的生命週期
 
 **請求**：`AssetRequests::Load<T>(AssetId)`，在 System 或編排層給的準備函式裡同步執行，**當場**回 `Handle<T>`。
-- **請求級的失敗**（修訂 3 檢查 S6）：id 不在 catalog（`UnknownId`）、`T` 和項目的 `type` 不合（`TypeMismatch`）、這個 Product 沒有那個（`type`、`format`）的 loader（`NoLoader`）。只影響**這一次請求**：回一個帶失敗的 Handle，不建項目、不改那個 id 的狀態；下一個套用點出現在這個 World 的 `AssetChanges`。
-- **id 級**：查得到、型別合、有 loader 的，對那個 id 的項目加一個持有。項目沒有或已死，就建一個新的、排一筆工作；狀態是 `Failed` 的，再請求＝重新載入（照 Bevy；asset 自己不重試）。
+- **請求級的失敗**：id 不在 catalog（`UnknownId`）、`T` 和項目的 `type` 不合（`TypeMismatch`）、這個 Product 沒有那個（`type`、`format`）的 loader（`NoLoader`）。只影響**這一次請求**：回一個帶失敗的 Handle，不碰那個 id 的槽。失敗記在這個 World 本地，由下一個套用 System 直接放進 `AssetChanges`（時序固定，不等維護；修訂 3 修正版檢查 N-1）。
+- **id 級**：查得到、型別合、有 loader 的，照下面的協定持有那個 id 的槽。
 
 **去重**：鍵＝id。settings 跟著 catalog 項目，同一個 id 只有一種 settings（修了 Bevy issue 11111 的根源）。
 
-**持有與放掉（引用計數的協定）**（修訂 3 檢查 S1）：
-- 每個項目一個原子計數，另有一個「死了」的標記值。
-- **持有**（請求命中、複製 Handle）：比較並交換加一；遇到「死了」就不加，改成建新項目、排工作。
-- **放掉**：原子減一；減到 0 時把這個項目推進放掉佇列（無鎖）。
-- **維護處理放掉佇列**：把計數從 0 比較並交換成「死了」。成功就從下一份快照移除值、記 `Removed`；失敗（維護之前又有人持有）就是**救回**，同一份、不重讀。
-- 這樣不必上鎖：World 端的加一和維護的「0→死了」只有一個會成功。Bevy 的救回靠整段持鎖（`assets.rs:571-575`），Unity 的計數全由單一消費者處理（`RuntimeContentManager.cs:516`、`:691-697`）；GYO 照 Bevy 的規則、用比較並交換做到不上鎖（新推導）。
+**每個 id 一個固定的槽**（修訂 3 修正版檢查 B-1）：
+- 凍結時（5.4），store 為 catalog 的每個 id 配一個槽，以 catalog 內部索引編號，**Product 存活期間不釋放**。所以 World 端「找到某個 id 的槽」只是查凍結後不變的表，不建立、不回收任何東西。
+- 槽裡有：原子的引用計數、原子的**世代**、「死了」標記、「放掉待處理」旗標。
+
+**持有與放掉的協定**：
+- **請求**：讀槽。活著就原子加一（命中）。死了（或從沒載過）就以比較並交換把「死了」換成 1、世代加一；**只有換成功的那一方**排一筆工作（帶新世代）。兩個 World 同時對死的 id 請求，只會排一筆。
+- **複製 Handle**：Handle 存在時計數 > 0，槽不會死，所以直接原子加一。
+- **放掉**：原子減一；減到 0 時，以比較並交換把「放掉待處理」從否換成是，換成功才把這個槽推進放掉佇列。佇列的節點就在槽裡（侵入式），所以 World 端不配置；同一個槽不會在佇列裡兩次。
+- **維護處理放掉**：清掉「放掉待處理」，再看計數：仍是 0 就換成「死了」、從下一份快照移除值、記 `Removed`；> 0 就是**救回**（維護之前又有人持有），同一份、不重讀。0→1→0 只會在佇列裡留一筆，判定只看當下的計數，不會把「已經死了」誤當救回。
+- **世代**：工作、Handle、快照裡的項目都帶世代。工作的結果回來時，世代對不上（那段生命已經死了又復活）就算取消、不發佈。快照以（槽、世代）查值，新 Handle 不會對到舊值。
+
+**系譜**：Bevy 的救回規則（`assets.rs:578-580`）與防重複的計數（`server/info.rs:773` 的 `handle_drops_to_skip`）；Bevy 整段持鎖（`assets.rs:571-575`），Unity 的請求與釋放佇列每次推送都拿 SpinLock（`RuntimeContentManagerUtility.cs:147`、`:168`）。**World 端無鎖是新推導**，沒有一家可以直接對照（修訂 3 修正版檢查 S-9）。退掉 Unity 式「計數全在單一消費者」：每次複製 Handle 都要推一筆訊息，World 端的成本與配置比原子加一大。
 
 **Handle 比 store 活得久**：Handle 共有 store 核心的參照計數。store 已銷毀時 Handle **安全失效**：查詢回 `NotRequested`、取值回空。
 
-**取消**：最後一個 Handle 在工作還沒完成時消失，結果回來時丟掉，計入「取消」。
+**取消**：最後一個 Handle 在工作還沒完成時消失、那段生命死了，結果回來時世代對不上，計入「取消」。
 
 **值**：不可變、共享唯讀（AS-10）。`Assets<T>::Get(handle)` 回 `const T*`（沒載好回空），**只在這次 System 執行期間有效**。
 
 **原始位元組雜湊**（決定 10）：store 讀檔時對讀到的位元組算 SHA-256（`engine/base` 的 `Sha256`），每個 id 一個，只算自己的檔、不含依賴。
 - 預設開；Product 級設定可關，關時查詢回「沒算」。`AssetRequests::SourceDigest(handle)` 讀，值在快照裡。
 - 比不比、不同時怎麼辦，歸作者或網路 Module；asset 不拿它做任何判斷。
-- **限界**（修訂 3 檢查 S8）：它只代表檔的位元組。兩端同一個檔、catalog 項目的 `format` 或 `settings` 不同時，雜湊相同、值不同；要比內容身分，作者也要比 catalog 項目（第 14 節）。
+- **限界**：它只代表檔的位元組。兩端同一個檔、catalog 項目的 `format` 或 `settings` 不同時，雜湊相同、值不同；要比內容身分，作者也要比 catalog 項目（第 14 節）。
 - 介面不綁「讀檔時算」：日後 catalog 項目可以帶工具事先算好的雜湊（Unity content catalog、Bevy `processor/mod.rs:86-91`），那是 catalog 的 Version 升級，查詢 API 不變。
 - 全部內容 36.7 MB 的雜湊成本在實作時量測，記進 dev_log。
 
 ### 5.6 執行緒、維護、快照；給交換點的需求
 
-**store 的工作**（World 執行緒之外）：讀檔＋解碼。在交換點或 runner 給的執行器上跑（X-1）。
+**store 的工作**（World 執行緒之外）：讀檔＋解碼。在交換點或 runner 給的執行器上跑（X-1）。同時在飛的工作數有上限（Product 級設定，R9）。
 
-**store 的維護**（單一處理者，修訂 3 檢查 S1 的驅動點）：
-- **由誰跑**：維護本身是一筆工作，送到同一個執行器上；請求、放掉、完成任一個佇列有東西時排一次，同時只跑一份（原子旗標）。測試的控制模式由測試自己叫它（X-5）。
-- **做什麼**：收請求，排工作；收完成的結果；處理放掉佇列（5.5）；更新依賴圖與「連同依賴」的狀態（5.17）；每次最多發佈 N 筆或 M 位元組，其餘留到下一次（R9）；做出下一份快照。
+**store 的維護**（單一處理者）：
+- **喚醒**：請求、放掉、完成任一個佇列推進東西時，以比較並交換把「已排」旗標從否換成是，換成功才排一次維護。維護結束前先清旗標、**再查一次佇列**，有東西就自己再排一次，避免最後一筆卡住（修訂 3 修正版檢查 S-5）。
+- **排在哪**：維護不能排在大檔的解碼後面。X-1 要求執行器給維護專屬或優先的執行機會，且從 World 執行緒「排一次」不上鎖。
+- **做什麼**：收請求，排工作（受在飛上限）；收完成的結果（世代對上才採用）；處理放掉佇列（5.5）；更新依賴圖與「連同依賴」的狀態（5.17）；做出下一份快照，把變更併進每個 World 的包（下面）。
 - 維護在 World 執行緒之外，內部可以上鎖。
+- **沒有「每次發佈上限」**：修訂 3 曾寫，但維護由事件驅動、沒有時間基準，World 一幀看到的是多次發佈的合計，上限限制不了任何東西。World 端只換一個指標，不需要它。記憶體由在飛上限與 loader 的位元組上限管（F8）。
 
-**快照**：一份不可變的物件，帶一個原子的參照計數（不用 `std::atomic<shared_ptr>`：主流實作內部有鎖）。內容：
-- 每個項目的值與狀態、「連同依賴」的狀態、原始位元組雜湊；
-- 每個 World 自己的變更清單（只含那個 World 請求過的，5.7）；
-- 凍結的 catalog 與 loader 表的指標（凍結之後不變）。
+**快照**：一份不可變的物件，帶原子的參照計數（不用 `std::atomic<shared_ptr>`：主流實作內部有鎖）。內容：
+- 每個（槽、世代）的值與狀態、原始位元組雜湊；
+- 依賴邊、每個項目的「連同依賴」狀態、整串 id、失敗與略過的清單（5.17；修訂 3 修正版檢查 S-7 (d)）；
+- 凍結的 catalog 與 loader 表的指標。
 
-**交給 World**：store 為每個 World 留一個交接槽（一寫一讀）。維護把新快照以原子交換放進每個 World 的槽，換下來沒被取走的舊快照由維護放掉。
+快照是所有 World 共用的；**變更清單不放在快照裡**（修訂 3 修正版檢查 B-2）。
 
-**World 看到結果**：world_asset 的套用 System（預設 `Main`/`First`）以原子交換取走槽裡的快照，放進 `AssetFrame`，放掉上一份；同時把它的變更清單換進 `AssetChanges`。
-- **每個 World 每幀只讀一次**：各 `Assets<T>`、就緒查詢、`SourceDigest` 都從同一份 `AssetFrame` 導出，所以就緒查詢說好了，`Get` 一定拿得到值（修訂 3 檢查 S9）。
-- **一幀之內看到同一份**：只在套用點換，同一幀的重跑步與新步看到同一份（回滾的重跑在 `PreUpdate`，第 4 批 5.2）。
+**交給 World：每個 World 一個交接槽，放一個「包」**＝{最新快照、這個 World 自上次取走以來的變更清單}。
+- **維護發佈時**：先把那個 World 的槽原子交換成空，拿回沒被取走的舊包；把舊包的變更併進新的清單，放掉舊包的快照；再把新包換進槽。
+- **World 取包時**（套用點）：把槽原子交換成空。拿到包就換進 `AssetFrame` 與 `AssetChanges`；拿到空（維護正在換，或沒有新東西）就這一幀不換。
+- 這樣維護在兩個套用點之間發佈幾次，變更都會累積到下一個包，一筆不漏。
+- **上限與溢出**：每個包的變更清單有上限。超過時清單換成一筆「溢出」，讀者要用 `State`／`Ready` 重掃。World 長時間不套用就會溢出。
+
+**World 看到結果**：world_asset 的套用 System（預設 `Main`/`First`）取包。
+- **每個 World 每幀只讀一次**：各 `Assets<T>`、就緒查詢、`SourceDigest` 都從同一份 `AssetFrame` 導出，就緒查詢說好了，`Get` 一定拿得到值。
+- **一幀之內看到同一份**：只在套用點與準備函式（下面）換，同一幀的重跑步與新步看到同一份（回滾的重跑在 `PreUpdate`，第 4 批 5.2）。
 - **只有 store 是寫者**：World 不寫值。
-- **新 World 的起點**：world_asset 在這個 World 的 `Build` 先取一份當下的快照；另登記一個準備函式，在其他準備函式之前再取一次。所以準備函式、`beforeSwap`、遊戲初始化裡命中的值當場讀得到（G-3）。
 
-**World 端的操作不上鎖**（AS-11）。例外的完整清單（修訂 3 檢查 S2）：
-1. 項目的引用計數與「死了」標記（原子、比較並交換，5.5）；
-2. 請求佇列與放掉佇列（無鎖，多生產者單消費者，照 Unity `RuntimeContentManager.cs:112`）；
+**World 在 store 的登記**（修訂 3 修正版檢查 S-6）：
+- `Build` 時還沒有 World，Kernel 只登記 Resource 的型別，值要到準備函式才放得進去（`Registry.hpp:176-180`、`Storage.hpp:375-378`）。所以 world_asset 在**準備函式**裡做：發一個不透明記號、在 store 開這個 World 的交接槽、取一份當下的快照放進 `AssetFrame`。這三件在 store 的鎖下做，不在任何一幀之內。
+- world_asset 的準備函式排在依賴它的單位之前（O-7 照登記檔的順序），所以後面的準備函式、`beforeSwap`、遊戲初始化裡命中的值當場讀得到（G-3）。
+- 登記失敗的 World 不跑準備函式，store 裡什麼都沒留。
+- `AssetFrame` 解構時推一筆「註銷」給維護，維護關掉那個 World 的槽、清掉它的「請求過」集合。
+- store 端用記號、不用 World 名（`BuildNewFirst` 時新舊同名 World 並存）。
+- **限界**：World 手上的舊快照會讓已移除的值不釋放，直到它下一次套用（第 14 節）。
+
+**World 端的操作不上鎖**（AS-11）。例外的完整清單：
+1. 槽的引用計數、世代、「死了」標記、「放掉待處理」旗標（原子、比較並交換，5.5）；
+2. 請求佇列與放掉佇列（無鎖、多生產者單消費者；放掉佇列的節點在槽裡）；
 3. 每個 World 的交接槽（原子交換）；
-4. 快照的參照計數（原子）；
+4. 快照與包的參照計數（原子）；
 5. Handle 對 store 核心的參照計數（原子）；
-6. 丟棄計數（原子，5.8）。
+6. 維護的「已排」旗標（原子）。
 
-`Load` 當場查的 catalog 與 loader 表在凍結之後不變，凍結發生在任何 World 跑起來之前，所以不需要同步。
+**不在幀內、用 store 的鎖的**：準備函式裡的 World 登記與第一份快照、`AssetFrame` 解構的註銷推送（推送本身無鎖）。凍結後不變的 catalog、loader 表、槽表，在任何 World 跑起來之前就已發佈，World 端讀它們不需要同步。
 
 **給交換點、threads 那批的需求**：
 
 | # | 需求 | 為什麼 |
 |---|---|---|
-| X-1 | 給 store 一個執行器：工作與維護在 World 執行緒之外跑，不碰 World（M11） | F1、F2：23.7 MB 的 fbx 解碼不能卡住 World |
+| X-1 | 給 store 一個執行器：工作與維護在 World 執行緒之外跑，不碰 World（M11）；從 World 執行緒提交不上鎖；維護有專屬或優先的執行機會 | F1、F2：23.7 MB 的 fbx 解碼不能卡住 World，也不能擋住維護 |
 | X-2 | 交換點不需要認得 asset 的型別或語意；World 靠自己的套用點看到結果，不經交換點搬值（RC-AS5、RC-O8） | 5.6 的交接槽 |
 | X-3 | 若交換點宣告定了「每幀的邊界」，套用 System 掛在它之後 | 同一幀看到同一份 |
 | X-4 | 執行緒的數量與歸屬由交換點或 runner 定 | O-3 |
@@ -426,25 +461,33 @@ System 經這些 Resource 存取，不持指標；元件裡只放 `Handle<T>`、
 
 ### 5.7 狀態、就緒查詢、變更清單
 
-**項目的狀態**：`NotRequested`、`Queued`、`Loading`、`Loaded`、`Failed`（帶 `AssetLoadFailure`）。`AssetRequests::State(handle)` 回這個 Handle 看到的（請求級的失敗也在這裡）；`State(id)` 回這個 World 目前快照裡那個 id 的項目狀態。
+**項目的狀態**：`NotRequested`、`Queued`、`Loading`、`Loaded`、`Failed`（帶 `AssetLoadFailure`）。`AssetRequests::State(handle)` 回這個 Handle 看到的（請求級的失敗也在這裡）；`State(id)` 回這個 World 目前快照裡那個 id 現世代的狀態。
 
-**就緒查詢**（決定 9）：`AssetRequests::Ready(一組 Handle)` 回：全部好了沒（**連同依賴**，5.17）、`Loaded` 筆數、`Failed` 筆數與清單（含依賴的失敗，5.17）、略過的依賴（5.17）、整串的 id 清單。`AssetRequests::Unfinished()` 回這個 World 請求過、還沒結束的筆數。
+**就緒查詢**（決定 9）：`AssetRequests::Ready(一組 Handle)` 回：
+- `AllFinished`：每一筆都結束了（`Loaded` 或失敗）；
+- `Complete`：每一筆都 `Loaded`，而且「連同依賴」也 `Complete`（5.17）；
+- `Loaded` 筆數、`Failed` 筆數與清單（含依賴的失敗）、略過的依賴、整串的 id 清單。
+
+`AssetRequests::Unfinished()` 回這個 World 請求過、還沒結束的筆數，**含本幀剛送出、store 還沒收到的**（修訂 3 修正版檢查 N-1）。
+
 - 讀取畫面、淡出、等哪些才開始 tick，是遊戲設計，**歸作者**（決定 9）。單筆到了就看得到，所以「先看到地面才看到樹」要由作者用就緒查詢擋住。
 
-**變更清單 `AssetChanges`**（修訂 3 檢查 B2、S9）：一個 Resource，每個套用點整份換掉，只在這一幀有效。
-- 內容：這個 World 請求過的每個 Handle，變成看得到（`Added`）或失敗（`Failed`，帶原因）時各一筆；它請求過的項目被移除時一筆 `Removed`；依賴的失敗一筆（帶父項）。請求級的失敗也在下一個套用點出現在這裡。
-- 新 World 從自己建起來那一刻開始；命中已載好的 id，也在它的下一個套用點收到一筆 `Added`。
-- 有不分型別的讀法（給日誌、工具）與 `ForType<T>()` 的讀法。日誌要記失敗，就在自己的 System 讀它。
-- **為什麼不用 Kernel 的保留式 `Message`**：第 4 批的 `Summary` 格式 3 對每個訊息緩衝雜湊下一個序號、筆數與游標的讀取位置（第 4 批分支 `engine/ecs/kernel/src/World.cpp:1188`、`:1191`、`:1201`），和 payload 的雜湊函式無關。載入的告知依完成時序，放進 `Message` 會讓 `Summary` 依時序變（AS-6 的判定就過不了）；放在雜湊什麼都不寫的 Resource 裡就不會。Bevy 用 `AssetEvent`（Message），這是 GYO 的差異（第 11 節）。
+**變更清單 `AssetChanges`**：一個 Resource，每個套用點換成那個包的清單，只在這一幀有效。
+- **單位**（修訂 3 修正版檢查 N-2）：每個（World、id）一筆。這個 World 開始持有某個 id、那個 id 第一次在它的視圖裡看得到（`Added`）或失敗（`Failed`，帶原因）時一筆；這個 World 持有過的 id 被移除時一筆 `Removed`；它請求過的 id 的遞迴依賴失敗時一筆（帶父項，5.17）；請求級的失敗一筆。同一個 id 已經看得到之後再 `Load`，不再發 `Added`。
+- **「請求過」**：這個 World 經 `AssetRequests` 請求過的 id。用 `CarryOver` 帶進來的 Handle 不算這個 World 請求過，收不到它們的告知，也不進 `Unfinished()`；要知道它們的狀態用 `State`／`Ready`。
+- 新 World 從自己在 store 登記那一刻開始；命中已載好的 id，也在它的下一個套用點收到一筆 `Added`。
+- 有不分型別的讀法（給日誌、工具）與 `ForType<T>()` 的讀法；每筆帶一個遞增的序號。
+- **讀者的規則**（修訂 3 修正版檢查 S-4）：清單只在這一幀有效，所以讀它的 System 掛在每幀跑一次的 schedule（預設 `Main`），並標「重跑時不跑」。只在 `FixedUpdate` 跑、帶執行條件、或由 `RunSchedule` 驅動的 System，可能漏讀或重讀；它們要知道狀態，用 `State`／`Ready`，或比對序號。
+- **為什麼不用 Kernel 的保留式 `Message`**：第 4 批的 `Summary` 格式 3 對每個訊息緩衝雜湊下一個序號、筆數與游標的讀取位置（第 4 批分支 `engine/ecs/kernel/src/World.cpp:1188`、`:1191`、`:1201`），和 payload 的雜湊函式無關。載入的告知依完成時序，放進 `Message` 會讓 `Summary` 依時序變；放在雜湊什麼都不寫的 Resource 裡就不會（合第 4 批 3.3：Resource 只雜湊有沒有與值，`World.cpp:1181-1185`）。代價是告知對「不是每幀剛好讀一次」的讀者有損（上一點）。另一個選項是請第 4 批或 Kernel 給訊息型別「不進摘要」的選項，告知就能沿用游標、不漏不重（第 8 節「告知」一列、第 15 節）。
 
 ### 5.8 錯誤（照已合併的〈Error levels〉）
 
 | 情況 | 級別 | 怎麼出現 |
 |---|---|---|
 | **請求級**：id 不在 catalog（`UnknownId`）、型別不合（`TypeMismatch`）、沒有 loader（`NoLoader`） | **E2** | 那個 Handle 帶失敗；下一個套用點出現在 `AssetChanges`。不改那個 id 的項目 |
-| **id 級**：檔案不在、讀不到、超過上限（`TooLarge`）、settings 解讀不了、loader 解碼失敗 | **E2** | 項目的狀態是 `Failed`，帶 `AssetLoadFailure{code, message, detail}`（`Engine::Base::Error<Code>` 的形狀，沒有鏈）；loader 自己的碼名與細節放進 `detail` |
+| **id 級**：檔案不在、讀不到、超過上限（`TooLarge`）、loader 解碼失敗（`settings` 在凍結點已驗，5.3） | **E2** | 項目的狀態是 `Failed`，帶 `AssetLoadFailure{code, message, detail}`（`Engine::Base::Error<Code>` 的形狀，沒有鏈）；loader 自己的碼名與細節放進 `detail` |
 | loader 丟例外（含 `std::bad_alloc`；`catch (...)`） | **E2**（`LoaderThrew`） | 同上。工作在 World 外，例外不能沿 World 的 Run 傳出；`detail` 寫 `what()` |
-| **依賴的失敗**：經路徑引用但 catalog 沒有（`UnlistedReference`）或有多個 id（`AmbiguousReference`）、路徑不合法（`BadReference`）、循環（`CyclicReference`）、依賴本身失敗 | **E2** | 父項自己的狀態不變；「連同依賴」的狀態是 `Failed`，帶 `DependencyFailure{parent, reference, code}`——`reference` 是 id 或檔裡寫的路徑，所以沒有 id 的失敗也記得下來 |
+| **依賴的失敗**：經路徑引用但 catalog 沒有（`UnlistedReference`）或有多個 id（`AmbiguousReference`）、路徑不合法（`BadReference`）、引用的 id 不在 catalog（`UnknownId`）或型別不合（`TypeMismatch`）、循環（`CyclicReference`）、依賴本身失敗（5.17 的先後） | **E2** | 父項自己的狀態不變；「連同依賴」的狀態是 `Failed`，帶 `DependencyFailure{parent, reference, code}`——`reference` 是 id 或檔裡寫的路徑，所以沒有 id 的失敗也記得下來 |
 | catalog 不合資料規則；Product 啟動檢查不過；`AssetSetup` 和已採用的不同 | 啟動錯誤 | 那個 World 的 `Finish` 回報，收進 `ProductStartupReport`（O-5） |
 | 同一個 id 在 `Loaded` 之後又送來一筆結果（AS-10 (b) 不該發生） | 內部計數 | 不改值；計數讓測試讀 |
 | 呼叫寫錯：在編排層給的時機之外、沒有 World 時呼叫 `Load` | **E0** | `GYO_ASSERT` |
@@ -539,7 +582,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 ### 5.16 loader 的介面與登記
 
 **介面**（在 `asset` 函式庫；名字實作時照 N15 定）：
-- **一個 loader 宣告**：產出的型別 `T` 與型別名（catalog 的 `type`）；它認的 `format`；`Settings` 與從 catalog 的 JSON 解讀它的函式；預設的位元組上限；錯誤碼。
+- **一個 loader 宣告**：產出的型別 `T` 與型別名（catalog 的 `type`）；它認的一個或多個 `format`（文字 loader 認 `txt`、`json`，所以 master 的 20 筆 text＋`.json` 載得了；修訂 3 修正版檢查 S-8）；`Settings` 與從 catalog 的 JSON 解讀它的函式；預設的位元組上限；錯誤碼。
 - **載入函式**：`Load(bytes, settings, LoadContext&) -> Result<T, LoaderFailure<Code>>`。
   - `LoadContext` 有：這筆的 id 與路徑（給錯誤訊息）、上限、宣告引用的入口（5.17）。
   - 沒有 World、沒有時鐘、沒有全域可變狀態；同樣的位元組與 settings 得到同樣的值與同樣的引用清單（AS-3）。
@@ -549,7 +592,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 **整檔進記憶體**：解碼前整檔讀進來，帶上限；不做串流的 loader（最大的內容 fbx 23.7 MB、region ≤ 16 MiB 在上限內）。
 
-**登記**：經共用槽 `AssetSetup`（5.4）。同一個 loader 在每個 World 都登記一次是冪等的；同一個（`type`、`format`）兩個不同的 loader 是啟動錯誤。
+**登記**：經槽 `AssetSetup`（5.4；做法待 12.3 第 13 題）。同一個 loader（同一個 C++ 型別）重複登記是冪等的；同一個（`type`、`format`）兩個不同的 loader 是啟動錯誤。
 
 **上限**（R9）：每個 loader 給預設的位元組上限；產品可以覆寫（Product 級設定，5.4），放寬或收緊都可以（`engine-not-rigid`）；超過是 E2 `TooLarge`。文字 loader 的預設上限 16 MiB（照 F8 的 region 上限）。
 
@@ -558,38 +601,49 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 **loader 宣告引用**：`LoadContext` 有兩個入口，回**不持有的** `AssetRef<U>`（只記 id，不加計數）：
 - `Reference<U>(AssetId)`：引用另一個 id；
 - `ReferencePath<U>(相對路徑)`：檔案格式裡記的是路徑（例：fbx 裡的貼圖檔名）時用。
-  - 相對於父項的檔解析，再正規化成內容根目錄下的路徑：絕對路徑、反斜線、超出根目錄的 `..`、不合 `IsRelativeContentPath` 的，是 E2 `BadReference`；比對分大小寫（修訂 3 檢查 N4）。
+  - 相對於父項的檔解析，再正規化成內容根目錄下的路徑：絕對路徑、反斜線、超出根目錄的 `..`、不合 `IsRelativeContentPath` 的，是 E2 `BadReference`；比對分大小寫。
   - 經 catalog 的反查（路徑 → id）換成 id。catalog 裡沒有這個路徑是 E2 `UnlistedReference`；有兩個以上的 id 指向它是 E2 `AmbiguousReference`。
-  - **限界**：經路徑的引用只對「被引用的檔沒有事先轉檔」成立。貼圖轉檔、改了它的 `path` 之後，還記著原檔名的父項會變成 `UnlistedReference`。轉檔工具要連父項一起轉，否則觸發 RC-AS6（修訂 3 檢查 S6）。
+  - **限界**：經路徑的引用只對「被引用的檔沒有事先轉檔」成立。貼圖轉檔、改了它的 `path` 之後，還記著原檔名的父項會變成 `UnlistedReference`。轉檔工具要連父項一起轉，否則觸發 RC-AS6。
 
-在 store 裡，引用會立刻排請求（照 Bevy）；直接呼叫 loader（F4）時只回引用清單。
+**一條引用怎麼判**（先後固定；修訂 3 修正版檢查 S-7 (b)）：
+1. 經路徑的，先解成 id（`BadReference`、`UnlistedReference`、`AmbiguousReference`）；
+2. id 在 catalog 裡（否則 `UnknownId`）；
+3. `U` 和項目的 `type` 相合（否則 `TypeMismatch`）；
+4. 這個 Product 有那個（`type`、`format`）的 loader；沒有就**略過**（不載、不算失敗）。看的是（`type`、`format`），不只 `type`。
 
-**所有權**（修訂 3 檢查 B3）：
-- **持有依賴的是 store 的依賴邊，不是值**。父項的值裡放的是 `AssetRef`，不加計數；所以值可以不可變（AS-10），store 也不必認得 `T` 的內部。
-- 父項還活著時，它的每條依賴邊對依賴加一個持有；父項被移除時，它的邊一起放掉，依賴照一般的引用計數走（5.5）。
+1～3 的失敗是**邊級的依賴失敗**，帶 `DependencyFailure{parent, reference, code}`。
+
+在 store 裡，通過 1～4 的引用立刻持有、需要時排工作；直接呼叫 loader（F4）時只回引用清單。
+
+**所有權**：
+- **持有依賴的是 store 的依賴邊，不是值**。父項的值裡放的是 `AssetRef`，不加計數；值可以不可變（AS-10），store 也不必認得 `T` 的內部。
+- 父項（那段世代）還活著時，它的每條依賴邊對依賴加一個持有；父項被移除時，它的邊一起放掉，依賴照一般的引用計數走（5.5）。
 - 作者要自己持有某個依賴，就用 `AssetRequests::Load(ref)` 拿一個 Handle（一般的請求）。`AssetRef` 本身不持有。
 - 去重照 id：兩個模型引用同一張貼圖，只讀一次。
 
-**連同依賴的狀態**（名字不用 `Pending`，避免和筆數混；修訂 3 檢查 N2）：
+**經 `AssetRef` 讀值的契約**（修訂 3 修正版檢查 S-7 (c)）：`Assets<U>::Get(ref)` 在同一份 `AssetFrame` 裡，父項的「連同依賴」是 `Complete` 時，非循環、非略過的依賴**一定**讀得到。其他時候（還沒完成、循環的邊、略過的、父項已被移除）可能回空。
+
+**連同依賴的狀態**：
 - `Incomplete`：自己或某個遞迴的依賴還沒結束；
 - `Complete`：自己與遞迴的全部依賴都 `Loaded` 或略過；
 - `Failed`：帶 `DependencyFailure` 的清單。
 
 父項自己的狀態不因依賴失敗而變（照 Bevy：自己 `Loaded`、連同依賴 `Failed`，`server/info.rs:661-716`）。作者可以決定沒有某張貼圖也照用。
 
-**依賴的型別在這個 Product 沒有 loader**（修訂 3 檢查 S7）：那條依賴**略過**，不載、不算失敗；就緒查詢把它當結束，並列在「略過」裡。例：無畫面的 Match 沒有貼圖 loader，模型照樣 `Complete`，也不會去載用不到的貼圖。
+**略過的例子**：無畫面的 Match 沒有貼圖 loader，模型照樣 `Complete`，也不會去載用不到的貼圖。
 
 **循環引用**（和完成順序無關）：
 - 維護每加入一個項目的依賴邊，就對已知的邊重算強連通分量。
 - 同一個強連通分量裡的邊（含自我引用 A→A）**全部**標 `CyclicReference`，都不持有；之前持有的一起放掉。分量裡每個成員的「連同依賴」狀態都是 `Failed`。
+- **標記是單調的**（修訂 3 修正版檢查 S-7 (a)）：一條邊被標成循環之後，直到它的父項那段世代被移除，都不會因為重算而重新持有。這樣不會出現「放掉→不成環→重新持有→重讀→又成環」的反覆。
 - 最後的依賴圖只依內容而定，所以結果和 A、B 誰先解完無關（AS-5）。
 - Bevy 沒有處理循環（第 11 節），這是 GYO 的差異。
 
+**告知**（修訂 3 修正版檢查 S-7 (f)）：依賴的失敗告知給所有**遞迴祖先**的請求者。C→A→X、X 失敗時，只請求 C 的 World 也收到一筆（帶父項 A）。不另加「連同依賴載完」的告知；就緒查詢就是它的介面（決定 9）。
+
 **雜湊**：原始位元組雜湊每個 id 各自一個（5.5）。要比整串，作者用就緒查詢給的 id 清單逐一比。
 
-**告知**：不另加「連同依賴載完」的訊息；就緒查詢就是它的介面（決定 9）。依賴的失敗出現在父項請求者的 `AssetChanges`。
-
-**件數**：依賴觸發的工作也計入「開始的工作」（5.8）。
+**件數**（修訂 3 修正版檢查 S-7 (e)）：引用 ＝ 新工作 ＋ 命中 ＋ 略過 ＋ 邊級失敗 ＋ 循環（循環的邊在標記前已觸發的工作，照一般工作計入 5.8 的工作等式）。
 
 ## 6. Architecture Delta（AGENTS §3 的七項）
 
@@ -609,10 +663,10 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
    - 日誌與 `world_logging`：讀 `AssetChanges` 的失敗；丟棄件數的 E3 出口要編排層的結束回呼（第 15 節）。
    - 之後的 render、text、ui、audio、model Module：登記 loader；它們的值要合 AS-10。
    - 產品：載入改經 id 與 catalog。工具：照 catalog 的 Data Contract 寫（audio_editor、ui_editor），或直接呼叫 loader（model_viewer）。
-5. **Dependency Direction**：asset → base、private io、private json；world_asset → asset、base、kernel、orchestration（日後可能加 threads）；日後的 image → asset。全部往下，沒有反向；core 不依賴它們；編排層不認得它們（RC-O4、RC-O8）。
+5. **Dependency Direction**：asset → base、private io、private json；world_asset → asset、base、kernel、orchestration（日後可能加 threads）；日後的 image → asset。擁有型別的 Module 拆兩個單位：loader 函式庫 → asset；World 端單位 → world_asset（登記檔寫明，5.4）。全部往下，沒有反向；core 不依賴它們；編排層不認得它們（RC-O4、RC-O8）。
 6. **Ownership**：
    - catalog 的格式與驗證、id、loader 介面、`AssetStore` → asset。
-   - Product 的 store 實例、World 端的視圖與請求入口、訊息 → world_asset。
+   - Product 的 store 實例、`AssetSetup`、World 端的視圖、請求入口與 `AssetChanges` → world_asset。
    - 格式 → 擁有型別的 Module；第三方解碼 → 該 Module 的 adapter。
    - 「載完才開始」與轉場 → 作者（asset 給就緒查詢）；內容身分的比對 → 作者或網路 Module（asset 給原始位元組雜湊）。
    - 依賴圖 → asset 的 store；引用了什麼 → loader 宣告。
@@ -643,15 +697,15 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 - **AS-1 資產管理在 World 外；System 不持指標。**
   - 每個 Product 一個 `AssetStore`，由 world_asset 持有；值只在 store 裡。
-  - World 端只有 `AssetRequests` 與 `Assets<T>` 兩種 Resource（唯讀視圖＋請求入口），元件裡只有 `Handle<T>` 或 `AssetId`。
-  - GPU 資源是 render 的 Resource；渲染 World 經 Extract 讀（Extract 是唯一跨 World 讀的路，照 K.3-6）。
+  - World 端只有 `AssetRequests`、`AssetFrame`、`Assets<T>`、`AssetChanges` 四種 Resource（請求入口、這一幀的快照、唯讀視圖、變更清單），元件裡只有 `Handle<T>`、`AssetRef<T>` 或 `AssetId`。
+  - GPU 資源是 render 的 Resource；渲染 World 讀別的 World 的資料只經 Extract（K.3-6）。asset 的 store 不是哪個 World 的資料，渲染 World 也和其他 World 一樣經自己的 `AssetFrame` 讀它，不算跨 World 讀（修訂 3 修正版檢查 N-6）。
   - 守衛：行為測試（兩個 World 請求同一個 id，store 只載一次、兩邊讀到相等的值；換 World 後同一 id 不重讀）。掃描延後。
 - **AS-2 核心不認得格式。** asset 與 world_asset 不解析任何內容格式（catalog 的 JSON 是 asset 自己的契約，不算；文字 loader 只驗證 UTF-8）。格式由擁有型別的 Module 登記 loader；第三方只在該 Module 的 `src/adapters/<組件>/`，私有 link。守衛：行為測試（沒有 loader 的型別在 catalog 裡合法、請求時是請求級 E2 `NoLoader`；同一（`type`、`format`）登記兩個不同的 loader 是啟動錯誤）。
 - **AS-3 loader 是不依賴 ECS、可直接呼叫的純函式。** 輸入位元組、settings、id 與上限；輸出值或失敗；不碰 World、不讀時鐘、不持全域可變狀態；只連 `GYO::Asset` 就能呼叫。守衛：只連 `GYO::Asset` 的測試 target；同輸入兩次結果相等；**會宣告引用的測試 loader 直接呼叫兩次，引用清單相同**。CMake 掃描延後。
-- **AS-4 IO 不碰 World；store 是唯一的寫者；World 只在套用點換視圖。** 讀檔與解碼在 World 執行緒之外；值只由 store 的維護放進快照；World 的視圖只在套用 System 換，一幀之內看到同一份。守衛：行為測試（X-5 的控制模式：一幀中途完成的工作，同一幀內看不到、下一個套用點看到）。
+- **AS-4 IO 不碰 World；store 是唯一的寫者；World 只在套用點換視圖。** 讀檔與解碼在 World 執行緒之外；值只由 store 的維護放進快照；World 的視圖只在套用 System 與 world_asset 的準備函式（World 第一次登記時）換，一幀之內看到同一份。守衛：行為測試（X-5 的控制模式：一幀中途完成的工作，同一幀內看不到、下一個套用點看到；維護在兩個套用點之間跑兩次，`AssetChanges` 一筆不漏）。
 - **AS-5 身分在請求時給，而且就是 id。** Handle 在請求時同步給出，指向 id；全部結束之後，任何完成順序、任何發佈切分都得到相同的 store 內容。守衛：等價測試（第 10 節）。
 - **AS-6 持久鍵是 id 字串；store 內部索引只在行程內。** id 可進內容、存檔、權威資料；`Handle<T>`、`AssetId` 的雜湊只用 id 字串。守衛：行為測試（兩份項目順序不同的 catalog，同一組 Handle 的 `Summary` 相同；新開局與讀檔進同一關的 `Summary` 相同）。
-- **AS-7 「何時載完」與內容身分不是 asset 的規則；asset 提供能力。** asset 給狀態、訊息、就緒查詢（連同依賴），保證同位元組同值（AS-3），並給每個 id 的原始位元組雜湊（預設開、可關）。要不要等、轉場、比不比雜湊與不同時怎麼辦，屬作者或網路 Module；到達時刻要影響判定，走 `rollback.Input<T>`。守衛：行為測試（雜湊開：同位元組同雜湊、不同位元組不同雜湊；關：查詢回「沒算」）；「asset 不拿雜湊做判斷」靠本頁與審查。
+- **AS-7 「何時載完」與內容身分不是 asset 的規則；asset 提供能力。** asset 給狀態、`AssetChanges`、就緒查詢（連同依賴），保證同位元組同值（AS-3），並給每個 id 的原始位元組雜湊（預設開、可關）。要不要等、轉場、比不比雜湊與不同時怎麼辦，屬作者或網路 Module；到達時刻要影響判定，走 `rollback.Input<T>`。守衛：行為測試（雜湊開：同位元組同雜湊、不同位元組不同雜湊；關：查詢回「沒算」）；「asset 不拿雜湊做判斷」靠本頁與審查。
 - **AS-8 錯誤只回報。** 請求級與 id 級的失敗是 E2，在狀態與 `AssetChanges` 裡；依賴的失敗帶 `DependencyFailure`；catalog、啟動檢查與 `AssetSetup` 衝突是啟動錯誤；不寫日誌、不自己重試、不讓 World 中斷；工作與請求的件數等式成立（5.8）。守衛：行為測試（各碼、各項）。
 - **AS-9 介面與格式、位置分開。** 作者只用 id；catalog 把 id 對到（`type`、`path`、`format`、`settings`）；選 loader 用（`type`、`format`）；加一種格式（含引擎格式）＝登記一個 loader＋改 catalog 項目，不改請求的 API 與核心。守衛：行為測試（同一 id 從原始格式改指到引擎格式，作者的程式不變、值相同）。
 - **AS-10 載好的值不可變。**（使用者 (a')；跨執行緒的部分照決定 5 現在寫）拆成三條：
@@ -684,13 +738,13 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 | 選擇 | 採用 | 系譜 | 退掉的 | 決勝理由 | 需要它的 Feature |
 |---|---|---|---|---|---|
-| 資產管理放哪 | World 外，Product 一份，由 world_asset 持有 | Unity Entities（行程一份）、Bevy（App 一份）；決定 7 | 每 World 一份＋CarryOver（修訂 2）；行程級靜態物件；改編排層加 Product 層共用值 | 資產的生命週期和 World 無關（使用者）；Product 一份讓 Sim 與 Present 共用同一份值（F1）、換 World 不重讀（F3）；GYO 沒有行程級靜態先例，回主選單另建 Product 時重載可以接受（RC-AS3）。收 loader 與設定的路用第 4 批的共用槽（5.4） | F1（Sim＋Present）、F3 |
+| 資產管理放哪 | World 外，Product 一份，由 world_asset 持有 | Unity Entities（行程一份）、Bevy（App 一份）；決定 7 | 每 World 一份＋CarryOver（修訂 2）；行程級靜態物件；改編排層加 Product 層共用值 | 資產的生命週期和 World 無關（使用者）；Product 一份讓 Sim 與 Present 共用同一份值（F1）、換 World 不重讀（F3）；GYO 沒有行程級靜態先例，回主選單另建 Product 時重載可以接受（RC-AS3）。收 loader 與設定的路待 12.3 第 13 題：(P) Product 層的槽讓凍結點落在 `Configure`、和 World 的順序無關；(W) 不再改編排層，但 Product 級的東西走 World 層的管道 | F1（Sim＋Present）、F3 |
 | 持久鍵 | catalog 的 id 字串 | 藍圖 :66、master catalog、Unity GUID；決定 6 | 路徑（修訂 2、Bevy）；GUID（不可讀、要工具產生） | 作者只用 id（使用者）；改名與轉檔不影響內容與存檔；字串讓手寫 catalog（F9）可行 | F3、F5、F6 |
-| catalog | asset 擁有的 Data Contract：master 的格式（version 1）＋可選 `format`、`settings`；`content.json` 列出；執行期讀 | master `CatalogFormat.hpp`、`ContentManifest.hpp`、`docs/architecture.md:285-312`；藍圖 :66 | Bevy／Godot 的旁檔；Unity 的 build 產物；master 的「等值只看雜湊」；`content://` 來源名（修訂 3 初稿） | 沿用既有契約，現有內容與工具不必改；集中才查得到唯一；執行期讀（三件之 3）；比對見 5.3 | F5、F6、F9 |
+| catalog | asset 擁有的 Data Contract：master 的格式（version 1）＋可選 `format`、`settings`；`content.json` 列出；執行期讀 | master `CatalogFormat.hpp`、`ContentManifest.hpp`、`docs/architecture.md:285-312`；藍圖 :66 | Bevy／Godot 的旁檔；Unity 的 build 產物；master 的「等值只看雜湊」；`content://` 來源名（修訂 3 初稿） | F5、F6 要以 id＋型別參照、照同一組規則寫；F9 要能手寫並在啟動時知道錯在哪；集中才查得到全內容唯一；執行期讀（三件之 3）。沿用 master 讓現有內容照樣有效，只是費用上的好處（比對見 5.3） | F5、F6、F9 |
 | 單位的拆法 | `asset`（library，含 store）＋`world_asset`（Module） | `logging`／`world_logging` | 一個 Module；store 放 world_asset | 工具不建 World 也要 loader、catalog 與 store | F4、F6 |
 | World 怎麼看到結果 | store 發佈不可變快照；World 在套用點換視圖 | 新推導；Unity 的每幀處理命令、Bevy 的 `PreUpdate` 套用 | 經交換點把值搬進 World（修訂 2）；World 每次讀都看最新的 | 一幀看到同一份；World 不寫值；交換點不必搬值 | F1（Client 的回滾重跑） |
 | 值的可變性 | 不可變、共享唯讀；三條分開寫 | Unity blob（唯讀）；使用者 (a') | Bevy、Godot 的可變值 | 不可變是日後最難改的約束；跨執行緒共用的前提（決定 5） | F1、F2 |
-| World 端不上鎖 | 原子＋無鎖佇列，鎖只在 store 的維護 | Unity 的多生產者單消費者佇列（`RuntimeContentManager.cs:112`）；Bevy 的 `RwLock`（`server/mod.rs:65-72`）不採 | World 端直接拿 store 的鎖 | 「World 內不上鎖」（D6b、M11）；多執行緒是已定前提 | F1、F2 |
+| World 端不上鎖 | 原子＋無鎖佇列＋交接槽，鎖只在 store 的維護與準備函式 | **新推導**：Unity 的佇列每次推送拿 SpinLock（`RuntimeContentManagerUtility.cs:147`、`:168`），Bevy 用 `RwLock`（`server/mod.rs:65-72`），沒有一家可直接對照 | World 端直接拿 store 的鎖；照搬 Unity 的佇列 | 「World 內不上鎖」（D6b、M11）；多執行緒是已定前提（決定 5） | F1、F2 |
 | 結果的順序 | 完成了就發佈＋一組 id 的就緒查詢；轉場歸作者 | Bevy（照完成順序） | 舊 DI 2 的連續前綴；整組才可見；作者可設組、Engine 保證同幀 | 使用者決定 9：轉場是遊戲設計；判定用的內容在開始 tick 前載完 | F1、F8 |
 | 內容身分 | asset 提供原始位元組雜湊（預設開、可關）；比對歸作者或網路 Module | Unity content catalog、Bevy processor 的來源雜湊；第 4 批 3.2、4.4 | 只由作者對值算；asset 算且當規則（舊 DI 3） | 使用者決定 10：作者只用 id、asset 本來就讀位元組；繞開第三方解碼的跨平台差異；提供能力、不替外面決定 | F2、F9 |
 | 依賴 | Engine 推出：loader 宣告引用，store 擁有依賴圖 | Bevy `LoadContext::load`（`loader.rs:735`）與失敗傳播（`server/info.rs:661-716`）；Unreal、Addressables、Godot 都由 Engine 推 | 作者自己列；本批只留介面 | 使用者決定 11：作者只關心使用；依賴是機制的核心能力 | F1（模型引用貼圖） |
@@ -699,10 +753,10 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 | 釋放 | 一段；維護前再請求就救回 | Bevy 的引用計數與救回規則（`assets.rs:578-580`） | 兩段（藍圖 A4、Bevy `Unused`）；master 的 N 幀寬限 | 兩段的實際用途是渲染丟 CPU 副本，本批沒有渲染；換 World 靠救回規則，不需要寬限 → RC-AS7 | F3 |
 | 去重的鍵 | id | Bevy 的（路徑、型別）＋修它的缺陷 | Bevy 原樣（settings 被忽略） | settings 隨 catalog 項目，同一 id 只有一種 | F1 |
 | 錯誤 | 請求級與 id 級分開的 E2；依賴失敗帶父項與引用；不記日誌 | 〈Error levels〉；Bevy `UntypedAssetLoadFailedEvent`、`info.rs:661-716` | asset 自己寫 `Warning`（master）；請求級和 id 級不分（修訂 3 初稿） | Engine 的 Module 不自己寫日誌；兩個 World 用不同 `T` 請求同一 id 時，請求級失敗不該改那個 id 的狀態 | F1、F5 |
-| 告知 | `AssetChanges`：每幀整份換掉的 Resource，只含本 World 請求過的 | 新推導 | Kernel 的保留式 `Message`（Bevy `AssetEvent`） | 第 4 批的 `Summary` 雜湊訊息序號與游標，依完成時序發的告知會讓摘要依時序變 | F1、F3 |
-| 引用計數 | 原子計數＋「死了」標記，比較並交換；放掉經無鎖佇列交給維護 | Bevy 的救回規則（`assets.rs:578-580`）；Unity 的佇列（`RuntimeContentManager.cs:112`） | Bevy 整段持鎖（`:571-575`）；Unity 全部計數由單一消費者 | AS-11（World 端不上鎖）；持有與救回只有一方成功 | F1、F3 |
+| 告知 | `AssetChanges`：經交接槽累積、每個套用點換一次的 Resource，只含本 World 請求過的 | 新推導 | Kernel 的保留式 `Message`（Bevy `AssetEvent`）；請第 4 批或 Kernel 給訊息型別「不進摘要」的選項 | `Message` 會讓 `Summary` 依完成時序變；「不進摘要」的選項能保留游標、不漏不重，但要改 Kernel 與第 4 批的格式，報給主會話判斷（第 15 節）。本批先用 Resource，代價是不是每幀剛好讀一次的讀者會漏或重（5.7 的讀者規則） | F1、F3 |
+| 引用計數 | 每個 id 一個固定槽（凍結時配、不釋放）＋世代＋「放掉待處理」旗標，比較並交換 | Bevy 的救回規則（`assets.rs:578-580`）與防重複（`server/info.rs:773`） | Bevy 整段持鎖（`:571-575`）；Unity 式計數全在單一消費者（每次複製 Handle 都要推訊息）；修訂 3 的「建新項目」（兩個 World 會各建一個） | AS-11；只有換成功的一方排工作；世代讓舊結果算取消、新 Handle 不對到舊值 | F1、F3 |
 | loader | 純函式、整檔、直接可呼叫；引用經 `LoadContext` 宣告、回不持有的 `AssetRef` | master `IAssetLoader` 去掉型別抹除；Bevy `LoadContext::load`（`loader.rs:735`） | Bevy 的 `Reader`＋async；Bevy 的回強 Handle（值持有，循環無解）；master `AnyAsset` | F4 要直接呼叫；串流沒有 Feature（決定 8）；依賴由 Engine 推出（決定 11），持有放在 store 的邊才能和不可變的值相容 | F1、F4、F6 |
-| 上限 | 每次發佈、在飛：產品選項；loader 上限：產品可覆寫 | AGENTS §2；master `maxLoadsPerFrame` | 沒有上限 | F8 的 242 MB；`engine-not-rigid` | F8 |
+| 上限 | 在飛：Product 級設定；loader 上限：產品可覆寫；包的變更清單：有上限、溢出時告知 | AGENTS §2；master `maxLoadsPerFrame` | 沒有上限；每次發佈的上限（修訂 3，事件驅動下沒有時間基準） | F8 的 242 MB 要靠在飛上限管記憶體；`engine-not-rigid` | F8 |
 | 大地圖 | 不內建串流；region 級 id＋上限 | Bevy（決定 8） | 現在設計串流（Unreal World Partition、Unity scene section） | 使用者決定 | F8 |
 | 圖片 | stb_image；獨立的 image Module，SDL 那批 | 三件之 1；Bevy `bevy_image`（獨立 crate） | SDL3_image；放 render；本批做 | 使用者決定；原始碼事實＋thin start | F1、F4、F5 |
 
@@ -721,10 +775,10 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 | 步 | 內容 | 模型／檔位 | 上段或下段 |
 |---|---|---|---|
 | 第 1 步 | `asset` 函式庫：`AssetId`、catalog 的讀寫與驗證、loader 介面、整檔讀取、文字 loader；只連它的測試 | Opus／high | 上段（公開介面、Data Contract） |
-| 第 2 步 | `AssetStore`：請求（請求級與 id 級分開）、引用計數與「死了」標記、救回、取消、維護的驅動、快照與交接槽、每 World 的變更清單、依賴圖（邊持有、強連通分量、略過）、原始位元組雜湊；X-5 的控制模式 | Opus／high（無鎖的部分若檢查認為要，先問再升 xhigh） | 上段（執行緒） |
+| 第 2 步 | `AssetStore`：請求（請求級與 id 級分開）、引用計數與「死了」標記、救回、取消、維護的驅動、快照與交接槽、每 World 的變更清單、依賴圖（邊持有、強連通分量、略過）、原始位元組雜湊；X-5 的控制模式 | Opus／high（無鎖的協定合變速箱 xhigh 的定義，但使用者定 xhigh 只用在調查；照 high，審查時若認為要，先問使用者） | 上段（執行緒） |
 | 第 3 步 | `world_asset`：store 的持有、共用槽 `AssetSetup` 與凍結、`AssetRequests`、`AssetFrame`、`Assets<T>` 視圖、`AssetChanges`、套用 System 與準備函式、5.9.1 的雜湊函式 | Opus／high | 上段 |
 | 第 4 步 | 接交換點與生成世界（照它們的宣告）、真執行緒模式、上限；等價測試 | Opus／high | 上段（執行緒、決定性） |
-| 第 5 步 | 換 World 與讀檔案例、丟棄記錄、錯誤各碼 | Opus／high | 上段 |
+| 第 5 步 | 換 World 與讀檔案例、丟棄件數（store 的計數）、錯誤各碼 | Opus／high | 上段 |
 | 第 6 步 | scenario test、負向編譯、突變、新頁、dev_log、審查；AS-10 (c) 與「判定用的內容在進判定前載完」登記到 `docs/cross-component-rules.md`（AGENTS §1；owner asset） | 實作 Opus／high；審查 Fable／high | 上段 |
 
 ## 10. 測試、判定（先宣告；結果出來之後不放寬）
@@ -733,15 +787,15 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 **scenario test（第 6 步，沿遊戲流程）**：
 1. 生成世界分兩批：第一批請求 6 個 id，其中一個檔案不在、一個超過上限、一個 id 不在 catalog。
-2. 跑到就緒查詢「全部好了」：3 筆 `Loaded`；2 筆 id 級 `Failed`（`NotFound`、`TooLarge`）與 1 筆請求級 `UnknownId`；`AssetChanges` 在那幾個套用點合計 3 筆 `Added`、3 筆失敗；就緒查詢的失敗清單是那 3 個。
+2. 跑到就緒查詢 `AllFinished`（`Complete` 不成立，因為有失敗）：3 筆 `Loaded`；2 筆 id 級 `Failed`（`NotFound`、`TooLarge`）與 1 筆請求級 `UnknownId`；`AssetChanges` 在那幾個套用點合計 3 筆 `Added`、3 筆失敗；就緒查詢的失敗清單是那 3 個。
 3. **兩個 World 共用**：第二個 World 請求同樣 3 個 id：讀檔計數不增加，兩邊讀到相等的值。
-4. **讀檔，先驗證**：在現在的 World 請求存檔要的 2 個 id，等到結束，發 `ReplaceRequest`（`BuildNewFirst`）。新 World 在 `beforeSwap` 再請求：命中，讀檔計數不增加。沒再要的 1 個在下一次維護移除，發 `Removed`。
+4. **讀檔，先驗證**：在現在的 World 請求存檔要的 2 個 id，等到結束，發 `ReplaceRequest`（`BuildNewFirst`）。新 World 在 `beforeSwap` 再請求：命中，讀檔計數不增加。沒再要的 1 個在下一次維護移除；用 store 的測試讀法看它的槽變成「死了」（不靠 `AssetChanges`：請求過它的舊 World 已銷毀，新 World 沒請求過它）。
 5. **`DropOldFirst`**：(a) 作者把 Handle 放在自己標 `CarryOver` 的 Resource：讀檔計數不增加（保證）。(b) 不放：控制模式下讓維護在銷毀舊 World 與準備新 World 之間跑一次，結果是重讀，讀檔計數加 1；不讓維護跑，就救回、不增加（盡力，5.4）。
 6. **先驗證失敗**：存檔記一個不在 catalog 的 id。驗證得到請求級失敗（`UnknownId`），不發替換，舊 World 照跑。
 7. **新 World 的起點**：替換來的新 World 在 `beforeSwap` 命中已載好的 id，當場讀得到值；它的下一個套用點在 `AssetChanges` 收到那筆 `Added`；它沒請求過的 id 的變化不在它的 `AssetChanges` 裡。
 8. 件數的突き合わせ：工作與請求兩條等式（5.8），各項數字寫在測試裡。
 
-**等價測試（AS-5）**：同一組 20 個 id，用 X-5 的控制模式比較：(1) 一次全部完成；(2) 反序分 4 次完成；(3) 交錯分 7 次完成，每次維護上限 3 筆；(4) 載入中途丟掉 3 個 Handle、同時再請求 3 個新的；(5) 其中含循環 A→B→A 與自我引用 C→C，A、B 的完成順序兩種都跑。判定：全部結束後各組的 store 內容與依賴狀態相同；件數等式成立。
+**等價測試（AS-5）**：同一組 20 個 id，用 X-5 的控制模式比較：(1) 一次全部完成；(2) 反序分 4 次完成；(3) 交錯分 7 次完成，每次維護上限 3 筆；(4) 載入中途丟掉 3 個 Handle、同時再請求 3 個新的；(5) 其中含循環 A→B→A 與自我引用 C→C，A、B 的完成順序兩種都跑。判定：每一組和**它自己的基準**比——同樣的請求與放掉、一次全部完成的那一次——全部結束後 store 內容與依賴狀態相同；(1)～(3) 彼此也相同；件數等式成立。
 
 **依賴（AS-13）**：用會宣告引用的測試 loader：
 - 鏈 A→B→C：只請求 A，就緒查詢在 C 載好之前回「沒好」，之後回「好了」，id 清單是 A、B、C；
@@ -770,9 +824,15 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 **直接呼叫（AS-3、F4）**：只連 `GYO::Asset` 的測試 target 呼叫文字 loader；同輸入兩次結果相等；兩條執行緒各呼叫 1,000 次，結果全部等於單執行緒（0 件不一致）；會宣告引用的測試 loader 直接呼叫兩次，引用清單相同。
 
-**引用計數（AS-11、5.5）**：控制模式下讓「最後一個 Handle 放掉」與「同一 id 再請求」在維護的「0→死了」前後各發生一次：前者救回、同一份；後者建新項目、重讀；兩種都不會讓值被移除後還被當成 `Loaded`。
+**引用計數（AS-11、5.5）**：控制模式下：
+- 「最後一個 Handle 放掉」與「同一 id 再請求」在維護之前發生：救回、同一份、讀檔計數不增加；在維護之後發生：復活成新世代、重讀；
+- 兩個 World 對同一個死的 id 同時請求：只排一筆工作；
+- 同一個槽連續兩次歸零（0→1→0）才跑維護：放掉佇列裡只有一筆，判定正確；
+- 舊世代的工作在復活之後才完成：算取消、不發佈，新 Handle 讀到的是新世代的值。
 
-**真執行緒模式（AS-4、AS-11）**：同一組 20 個 id、兩個 World 同時請求，跑 50 次。判定：每次的最終 store 內容都等於控制模式；件數等式 50/50 成立。資料競爭的檢出只在 TSan 建置有效，不當判定。
+**交接槽（AS-4、5.6）**：控制模式下讓維護在兩個套用點之間發佈兩次，`AssetChanges` 一筆不漏；讓 World 不套用直到超過包的上限，`AssetChanges` 是一筆「溢出」，`State`／`Ready` 的結果正確。
+
+**真執行緒模式（AS-4、AS-11）**：同一組 20 個 id、兩個 World 同時請求，跑 50 次。判定：每次的最終 store 內容都等於控制模式；每個 World 收到的 `Added`／`Failed` 合計等於控制模式；件數等式 50/50 成立。資料競爭的檢出只在 TSan 建置有效，不當判定。
 
 **突變**：每條 DI 的守衛各至少一個專屬的預期失敗（AGENTS §14.2、§14.5）。AS-7、AS-11、AS-10 (c) 的「只靠審查」部分不立突變，寫明。清單在實作時列，受別的模型做敵對式檢查。
 
@@ -840,7 +900,16 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 ### 12.3 待使用者定的
 
-無。修訂 2 檢查 B3 拉回的第 2、4 題，使用者已定（決定 10、9）；依賴也已定（決定 11）。
+修訂 2 檢查 B3 拉回的第 2、4 題，使用者已定（決定 10、9）；依賴也已定（決定 11）。
+
+**第 13 題：Product 層的東西（loader、內容根目錄、Product 級設定）怎麼交給 World 外的 store**（修訂 3 修正版檢查 S-2；會改編排層，所以交使用者）
+
+| 選項 | 內容 | 代價 |
+|---|---|---|
+| **(P) 請編排層在 `ProductSetup` 加一個 Product 層的槽（卡片建議）** | 和第 4 批的每 World 槽同形（`Create`／`Find`），在 `Configure` 用、結束時凍結。凍結點在任何 World 之前，驗證一次做完，和 World 的順序無關；替換 World 不重跑 `Configure`，沒有「凍結後只准相同」 | 改編排層（O-2 補句、`Configure` 階段回報啟動錯誤的路），要主會話與第 4 批對齊 |
+| (W) 用第 4 批的每 World 槽 | 每個 World 的 `Build` 再給一次、冪等判定、凍結點在 world_asset 的第一個準備函式、凍結後只准相同（RC-AS10）；錯誤走準備函式的 O-E7 | 編排層不再改；但 Product 級的東西走 World 層的管道，超出第 4 批核准的用法（「凍結後交給那個 World 的 Resource」） |
+
+卡片建議 (P)：決定 7 說資產管理是 Product 級，Product 級的登記放在 Product 層的生命週期，凍結點自然在 World 之前；(W) 的那一串冪等與凍結規則，都是為了把 Product 級的東西塞進 World 層的管道。這是基盤，AGENTS §1 不以改動少決勝。
 
 **仍歸使用者的**：本頁的動工前核准；第 6 題的數字（產品搬回時）；stb_image 的下載（image 那批）。
 
@@ -861,6 +930,9 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 - **原始位元組雜湊只代表檔的位元組**：catalog 項目的 `format`、`settings` 不同時，雜湊相同、值不同（5.5）。
 - **`DropOldFirst` 不重讀是盡力**：作者要保證就用自己的 `CarryOver` Resource 持有 Handle（5.4）。
 - **丟棄件數沒有 E3 出口**：等編排層的結束回呼（5.8）。
+- **不套用的 World 留住舊值**：它手上的快照讓已移除的值不釋放，直到下一次套用（5.6）。
+- **`AssetChanges` 對不是每幀剛好讀一次的讀者有損**：讀者規則見 5.7；要不漏不重得等 Kernel 的「不進摘要」選項（第 15 節）。
+- **12.3 第 13 題未定**：5.4 的登記路徑與凍結點兩個選項並列。
 - **loader 的跨平台逐位元**：文字 loader 原樣交出位元組；其他 loader 由各自的 Module 宣告。
 - **io 的多執行緒讀的契約**未確認（5.12）。
 - **無鎖與資料競爭**：CI 沒有 TSan，AS-11 與並行案例的檢出只在本機 TSan 建置。
@@ -1018,4 +1090,33 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 | N4 `ReferencePath` 的壞路徑 | 5.17：`BadReference`，比對分大小寫 |
 | N5 沒給根目錄 | 5.4：catalog 是空的，不是啟動錯誤 |
 
-**修訂 3 的這一版**：再送 Fable 5.2／high 敵對式檢查（第 21 節記結果）。
+**修訂 3 的這一版**：再送 Fable 5.2／high 敵對式檢查，結果與處理在第 21 節。
+
+## 21. 修訂 3 修正版（59a63c16）的敵對式檢查與處理
+
+**檢查者**：Fable 5.2／high，唯讀（作者 Opus 5.5）。**結果**：blocker 2、should 11、nit 7，證據 `declaration-r3fix-adversarial-check.md`。第 20 節的 21 條裡 B4、S8、N1～N5 確實解決，其餘換了機制但留洞；這一輪全部採用。S-2 會改編排層，交使用者（12.3 第 13 題）。
+
+| 條 | 處理 |
+|---|---|
+| B-1 引用計數的找、建、世代 | 5.5：凍結時每個 id 一個固定槽（不釋放）＋世代＋「放掉待處理」旗標；只有換成功的一方排工作；世代不合的結果算取消；快照以（槽、世代）查。第 8 節「引用計數」列寫明退掉 Unity 式的理由；第 10 節加四個案例 |
+| B-2 變更清單在共享快照裡會丟 | 5.6：變更清單不放快照；交接槽放「包」，維護換出、併入、放回；包有上限與溢出告知；第 10 節加兩個案例 |
+| S-1 凍結點、settings 驗證時點、「沒設定」 | 5.4：(W) 的凍結點是 world_asset 的第一個準備函式，(P) 是 `Configure` 結束；5.3 (B)2 改在凍結點一次驗；5.8 拿掉 settings；「沒設定」算沒意見 |
+| S-2 Product 層的資料走 World 層的槽 | 交使用者：12.3 第 13 題 (P)／(W)，卡片建議 (P)；第 8 節第一列寫兩個選項的理由 |
+| S-3 依賴方向、判等、同名兩型別 | 5.4：擁有型別的 Module 拆兩個單位；`Find` 回空是斷言；loader 以 C++ 型別判等；5.3 (B)4 同一 `type` 產出型別相同；第 6 節第 5 項 |
+| S-4 `AssetChanges` 的讀者 | 5.7 的讀者規則與每筆序號；第 8 節「告知」列補「不進摘要」的選項與取捨；第 14 節 |
+| S-5 維護的驅動 | 5.6：清旗標後再查佇列；拿掉每次發佈上限（R9、3.3、第 8 節）；X-1 加「提交不上鎖、維護有專屬或優先的執行機會」 |
+| S-6 World 的登記、第一份快照、回收 | 5.6：在準備函式裡發記號、開槽、取快照（store 的鎖、不在幀內）；`AssetFrame` 解構時註銷；登記失敗的 World 不留東西；刪掉「`Build` 先取」；第 14 節 |
+| S-7 依賴的六處 | 5.17：一條引用的判定先後與邊級失敗；`Get(ref)` 的契約；循環標記單調；告知給所有遞迴祖先；件數；5.6 的快照內容補依賴；5.8 補碼 |
+| S-8 `format` 與 master 的 text＋json | 5.16：loader 可認多個 `format`，文字 loader 認 `txt`、`json`；5.3 (A)6、7 的形狀規則與副檔名定義 |
+| S-9 決勝理由與系譜 | 5.3 與第 8 節 catalog 列改以 F5、F6、F9 決勝，「現有內容照樣有效」降為費用；World 端無鎖標為新推導（Unity 的佇列拿 SpinLock） |
+| S-10 DI 條文與第 5 節衝突 | AS-1（四種 Resource、`AssetRef`）、AS-4（準備函式也換）、AS-7、R1、R7、第 6 節第 6 項、第 9 節第 5 步 |
+| S-11 第 10 節判不了的四處 | `AllFinished` 與 `Complete` 分開；`Removed` 用 store 的讀法觀察；等價測試各組和自己的基準比；補 B-1、B-2 的案例；真執行緒也比 `AssetChanges` 的合計 |
+| N-1 請求級失敗的時序、`Unfinished()` | 5.5：記在 World 本地、由套用 System 直接放進清單；5.7：`Unfinished()` 含本幀剛送出的 |
+| N-2 `Added` 的單位、`CarryOver` 的 Handle | 5.7：每個（World、id）一筆；`CarryOver` 帶來的不算這個 World 請求過 |
+| N-3 5.3 的標記與數目 | 5.3 決勝理由寫明新增五條、放寬兩條 |
+| N-4 引用小處 | `Product.cpp:710`；準備函式的先後照 O-7 寫；例外清單第 6 項改成維護的「已排」旗標。第 4 批的實作名 `ModuleBuffer` 等合併後再對（第 14 節） |
+| N-5 `DropOldFirst` 下替換失敗 | 5.4 (W)：是 Product 結束 |
+| N-6 Extract 與共用 store | AS-1：store 不是哪個 World 的資料，經自己的 `AssetFrame` 讀不算跨 World |
+| N-7 第 2 步的檔位 | 第 9 節：照 high（使用者定 xhigh 只用在調查），審查時若認為要，先問使用者 |
+
+**這一版**：12.3 第 13 題定了，補進 5.4，再送 Fable 5.2／high 敵對式檢查。
