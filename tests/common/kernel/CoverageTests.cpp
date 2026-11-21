@@ -237,6 +237,14 @@ TEST_CASE("J-40: Z6 for Systems and hooks, Z8 for a component") {
                                             r.Schedule(FixedSchedule());
                                         }}});
     CHECK(HasRule(rollbackInputColumn, StartupCode::DE7, "Z8"));
+    // The resource half (its case left with the ingress rules in v8-arch-gyo2-authority-rollback step 2; Z8 moves
+    // to the authority Module in step 6).
+    Built rollbackInputResource = Finish({{"test", [](Registrar& r) {
+                                              r.Resource<TestInput>({.name = "TestInput", .zone = Zone::C,
+                                                                     .role = Role::Input, .rollback = Rollback::Yes});
+                                              r.Schedule(FixedSchedule());
+                                          }}});
+    CHECK_MESSAGE(HasRule(rollbackInputResource, StartupCode::DE7, "Z8"), "[ks-z8-resource] " << Describe(rollbackInputResource));
 }
 
 TEST_CASE("J-24: a hook that spawns without an allotter (D-E3)") {

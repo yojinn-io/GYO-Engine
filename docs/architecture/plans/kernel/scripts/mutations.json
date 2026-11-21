@@ -1266,13 +1266,17 @@
     },
     {
       "id": "rs-j40-z8-removed",
-      "what": "J-40: role=Input with rollback is accepted",
+      "what": "J-40: role=Input with rollback is accepted (its killing case left with the ingress rules in v8-arch-gyo2-authority-rollback step 2; the resource half of the J-40 Z8 case now kills it)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
       "find": "        if (info.role == Role::Input && info.rollback != Rollback::No) {\n            data.Error(StartupCode::DE7, \"Z8\", \"resource '\"",
       "replace": "        if (false) {\n            data.Error(StartupCode::DE7, \"Z8\", \"resource '\"",
       "target": "gyo_kernel_tests",
       "cases": "J-40:*",
-      "expect": "\"Z8\""
+      "expect": "\\[ks\\-z8\\-resource\\]",
+      "guards": [
+        "spec Z8",
+        "authority-rollback-declaration 7.1"
+      ]
     },
     {
       "id": "rs-j47-late-members-dropped",
@@ -2093,16 +2097,6 @@
       "target": "gyo_kernel_tests",
       "cases": "initial value:*",
       "expect": "TEST CASE:\\s+initial value: with two written requests of one component the error names one of them, the same every time"
-    },
-    {
-      "id": "rs-iv-fx14-funnel-zone-C-systems-only",
-      "what": "only zone C Systems write through the funnel (initial value, v8-arch-gyo2-funnel-check) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in rs-iv-fd5-commandsfor-inserts-as-writes [CommandsFor inserts contribute DeferredWrite, not DeferredInsert (initial value, v8-arch-gyo2-funnel-check)])",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);\n",
-      "replace": "        const std::map<ComponentId, ComponentId> funnel = zone == Zone::C ? FunnelWrites(data, access) : std::map<ComponentId, ComponentId>{};\n",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*,J-12:*",
-      "expect": "(?=[\\s\\S]*(?:TEST CASE:\\s+initial value: zone C State data does not take its value from a role=Input request))[\\s\\S]*(?:TEST CASE:\\s+(J-12: every parameter type's Contribution|initial value: zone C State data does not take its value from a role=Input request))"
     },
     {
       "id": "rs-iv-fx16-one-declaration-per-request",
