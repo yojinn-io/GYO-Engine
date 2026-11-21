@@ -1,6 +1,6 @@
 # 事前宣告：權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`）
 
-更新：2026-11-20（修訂 3：使用者重新核准修訂 2 的 5.4、判定 5、5.5（`v8-arch-gyo2-authority-rollback-reapproval`、`-ratio-p99`），換上 Linux 實機重量的基準值、加四分位距比 25% 的事前宣告、記入異常分級卡的交界。修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推。修訂 1 之後同日記入的：使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准的項目都已定（修訂 3，第 12 節「重新核准」）；等使用者說「開始」，動工前先對齊異常分級的結果（第 10.3 節）。** 使用者說「開始」之前不實作、不改條文與守衛；第 1 步前半（第 3 批延下來的三條守衛，afd6e7c5）在使用者說「開始」後、停工指示送到前已提交，使用者 2026-11-20 定「留著，先不推」。
+更新：2026-11-21（修訂 4：照 `gyo2` f25837b0 更新——#257 的分層換掉舊路徑、異常分級（#254、#255）合併後重對第 10.3 節、trace（#258）留下的「回滾重跑的段」寫成第 10.4 節；差異逐條在第 19 節，都在已核准的範圍內。2026-11-20 修訂 3：使用者重新核准修訂 2 的 5.4、判定 5、5.5（`v8-arch-gyo2-authority-rollback-reapproval`、`-ratio-p99`），換上 Linux 實機重量的基準值、加四分位距比 25% 的事前宣告、記入異常分級卡的交界。修訂 2：5.4、判定 5、5.5、15.2 照研究卡 v2 重推。修訂 1 之後同日記入的：使用者定的第 12 節第 1～4 件、「不參考 master」、第 5 件的拆卡、規模的處理、A1～A11 的方向、突變處置、LIM-7／LIM-8 的方向、預算的單位與深度的根據；5.4 依研究卡整理並照研究卡推薦定案、5.5 入口形狀寫進 Contract、第 11 節 DI 文字的方向）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工中（使用者 2026-11-21「可以開始權威卡了。記得讓他更新」，經主會話轉；HANDOFF `v8-arch-gyo2-authority-rollback-start`）。** 本分支已 rebase 到 `gyo2` f25837b0；第 1 步前半（第 3 批延下來的三條守衛，原 afd6e7c5）rebase 後照新路徑改過（第 19 節）。
 
 經過：修訂 0（6e20758a）送 Fable 5.2／high 敵對式檢查：必改 10、建議改 11、小問題 9（報告：主 checkout `build/evidence/gyo2-authority-rollback/declaration-r0-adversarial-check.md`）。修訂 1 全部照改，處理對照在第 17 節。修訂 1 之後的改動與修訂 2 送 Fable 5.2／high 窄複查（結果見第 17 節之後的處理）。
 
@@ -12,7 +12,7 @@
 
 ## 0. 根據與讀的版本
 
-**程式**：`gyo2` 59fd4da9（#253 之後）。講現況的句子來自讀程式的偵察（Opus 5.5／high，主 checkout `build/evidence/gyo2-authority-rollback/`）：
+**程式**：`gyo2` 59fd4da9（#253 之後）；修訂 4 起以 f25837b0 為準（#254、#255 異常分級，日誌批，#257 分層，#258 trace；差異見第 19 節）。講現況的句子來自讀程式的偵察（Opus 5.5／high，主 checkout `build/evidence/gyo2-authority-rollback/`）：
 - `recon-a-kernel-removal.md`：Kernel 要拿掉、搬走的程式、測試、守衛、突變（腳本與分類資料在 `recon-a/`）。
 - `recon-b-primitives-interfaces.md`：回滾要的原語、唯讀登記表、`World::Summary`、`world_time`、編排層的現況。
 - `recon-c-reference-engines.md`：lightyear 736e1695、Bevy 6a911653f、flecs 09790b5f7、bevy_replicon d80c849、Unity Entities 1.5.0（4630ff5）、Unity Netcode 7.2.0（c4cabf4）。
@@ -158,7 +158,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 ### 4.1 位置與登記
 
-- `engine/authority`、`GYO::Engine::Authority`、target `GYO::Authority`、登記單位 `AuthorityModule`（`Orchestration::Module` 的子類）；`modules.csv` 加一列，`depends=base;kernel;orchestration;world_time;rollback`，**`default=yes`**（修訂 1，檢查 S2：照批次表「主會話自己判的」——Module 預設全帶、產品可以關；World 不選策略就沒有作用。修訂 0 寫 `default=no`、引 `-products-pick-modules` 當根據是錯的，那個決定沒有定預設）。代價：用產生的單位表的產品，每個 World 多兩個登記單位，登記單位名單進 Registry 指紋，golden 本來就要在本批重產。
+- `engine/modules/authority`（修訂 4：#257 的分層）、`GYO::Engine::Authority`、target `GYO::Authority`、登記單位 `AuthorityModule`（`Orchestration::Module` 的子類）；頂層 `config/modules.csv` 加一列（`dir=modules/authority`），`depends=base;kernel;orchestration;world_time;rollback`，**`default=yes`**（修訂 1，檢查 S2：照批次表「主會話自己判的」——Module 預設全帶、產品可以關；World 不選策略就沒有作用。修訂 0 寫 `default=no`、引 `-products-pick-modules` 當根據是錯的，那個決定沒有定預設）。代價：用產生的單位表的產品，每個 World 多兩個登記單位，登記單位名單進 Registry 指紋，golden 本來就要在本批重產。
 - 登記檔的順序：`world_time` → `rollback` → `authority`（O-6 不重排）。
 
 ### 4.2 策略的插口與錯誤的回報
@@ -194,7 +194,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 
 ### 5.1 位置與登記
 
-- `engine/rollback`、`GYO::Engine::Rollback`、target `GYO::Rollback`、登記單位 `RollbackModule`；`modules.csv` 一列，`depends=base;kernel;orchestration;world_time`，`default=yes`（理由同 4.1）。
+- `engine/modules/rollback`、`GYO::Engine::Rollback`、target `GYO::Rollback`、登記單位 `RollbackModule`；`config/modules.csv` 一列（`dir=modules/rollback`），`depends=base;kernel;orchestration;world_time`，`default=yes`（理由同 4.1）。
 - 公開登記六種照回滾份 5.4；讀取介面（R-6）給權威讀。
 - 公開登記執行時要用（記錄、還原每步都讀）：**登記凍結之後放進那個 World 的一個 Resource**（本卡照 L17 判：Unity 把回滾的設定放在 World 的 singleton；回滾份 5.5 第 1 點的歷史也在 World 的 Resource）。不放在 Module 物件裡以 World 名為鍵的表：`ReplaceWorld` 的 `BuildNewFirst` 失敗時舊 World 照跑，而 Module 裡那份表已在新的一輪 `Build` 重設（O-2；檢查 M5 第 4 點）。
 
@@ -335,7 +335,7 @@ Kernel 不知道「權威」「回滾」「判定資料」是什麼：它只多�
 **共用槽的機制**（使用者 2026-11-20 補充：「第 3 件，注意，由於是共用的，需要建立一個機制，或者需要保證順序，邊讀邊寫很容易出問題。」下面四點是 side chat 提的，使用者回「可以」）：
 
 1. **分段，型別上擋住**：`Build` 階段（Module 的 `Build` 與產品自己的 `build`）經 `WorldSetup` 拿到 `T&`；`WorldFinish`、`WorldCheck` 只給 `const T&`。`Build` 階段結束時編排層凍結槽，凍結後再寫是 Programmer Error（斷言；實際擋的是凍結後呼叫槽的 `Create<T>` 或可寫的取用，見下面的錯誤形式）。要看全貌的判斷（Z6、Z8、D-E15 的交叉檢查、重複登記的裁決）一律放在凍結後的 `Finish`／`Check`。系譜（side chat 補，不是使用者的話）：Bevy 的 Plugin 分 `build`／`finish`，`finish` 在所有 `build` 之後才讀別人的登記。
-2. **誰建、誰用**：槽裡每種型別只由擁有它的 Module 建（暫名 `Create<T>`）；別人用 `Find<T>`，找不到就回錯誤，不偷偷建空的。先後靠 `modules.csv` 的依賴與既有的 O-E3（依賴排在後面是錯誤）保證；產品自己的 `build` 永遠在最後。
+2. **誰建、誰用**：槽裡每種型別只由擁有它的 Module 建（暫名 `Create<T>`）；別人用 `Find<T>`，找不到就回錯誤，不偷偷建空的。先後靠 `config/modules.csv` 的依賴與既有的 O-E3（依賴排在後面是錯誤）保證；產品自己的 `build` 永遠在最後。
 3. **寫入只記錄、不裁決**：`Build` 階段只追加，每筆帶「作者／代為」的來源；凍結後統一裁決（作者的蓋過代為的；兩筆作者的 options 不同是錯誤），所以結果和呼叫順序無關。本卡照 L17 補的細節（修訂 2 依窄複查 M5、M6 改寫）：
    - **裁決是對追加紀錄的純函式**：擁有者的公開讀取介面拿 `const` 的紀錄、回裁決後的結果與錯誤清單；誰讀（擁有者自己的 `Finish`、權威的 `Check`）都經這個介面，所以不需要寫回槽（編排層不解讀槽裡的型別，O-2）。擁有者在 `Check` 用自己的字串碼報錯（`RB-E…`）。
    - **登記當下做的**：進 Kernel 的全部副作用照 DI-A 11 當下做（`AddSystem` 與「重跑時不跑」的執行條件、型別進 Kernel、`rollback.Input<T>` 的歷史 Resource 等），再在槽裡追加一筆帶來源的紀錄。**延後到凍結後的只有**：同一個型別多筆登記時哪一筆的 options 為準、兩筆作者 options 不同的錯誤。進 Kernel 的副作用不得取決於裁決結果：回滾的每型別選項是資料，由回滾的 System 在執行時讀凍結後的登記（5.1），不是每型別一筆 Kernel 登記。「重跑時不跑」不在裁決的範圍（一個 System 只 `AddSystem` 一次）。
@@ -441,7 +441,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 - **Kernel**：原語 1～4（有型別的整欄走訪給 stamp；一批放回：沒變的格不寫、有變的標同一個 stamp、全部放回後才跑 hook 與 observer、hook 看得到同一個實體已放回的其他欄、復活配發器範圍內的 id；Resource 的 stamp；`ExclusiveWorld` 讀目前 stamp）；`Writes<…>` 收元件；訊息寫者名單（System、hook、observer、`BuildPlans` 重算）；逐型別雜湊（padding 不同摘要相同、`optional` 空著時的殘值不影響、`std::vector` 內容不同摘要不同、內容相同而位址不同時相同、`long` 等寬度隨平台的整數照 64 位元、作者選照位元組的型別、Kernel 附的型別、浮點逐位元（`-0.0f` 與 `+0.0f` 摘要不同、作者在函式裡正規化時相同）、沒有函式的型別在 World 裡時 `Summary` 回錯誤並列出型別、拿掉那個型別的實體後同一個 `Summary` 成功）。
 - **權威**：權威份第 7 節 DI-A 與第 5 節各條；一致性指紋兩方向；digest（同狀態相同、改一格不同、兩個相同的「實體×元件」不抵銷、迭代順序無關）；tick 檢查（名單外寫 `Tick` 報錯、`Writes<Tick>` 標註也算、時間 Module 的驅動者通過）；佔位策略與沒選策略的啟動錯誤；沒選策略時型別照樣進 Kernel；代為登記在登記當下、作者的為準；Build 時的錯誤在 `Check` 報；A4 的漏斗走訪性質。
 - **編排層**（共用槽，第 6 節的機制）：`Build` 拿 `T&`、`Finish`／`Check` 拿 `const T&`（編譯期）；凍結後寫入觸發斷言；`Find<T>` 在沒人 `Create<T>` 時回錯誤、不代建；兩個 Module 對同一型別 `Create` 是錯誤；作者／代為兩筆登記照兩種呼叫順序跑，裁決結果相同；兩筆作者 options 不同報錯；換 World 時新的一次建 World 拿到空槽。
-- **回滾**：回滾份第 9 節 R-1～R-7 的守衛（含 R-2 等價測試與它列的七個突變）；跨 schedule 的訊息兩方向；沒選策略的 World 沒有歷史（R-4）；換 World 歷史不跨世代（R-5）；`BuildNewFirst` 失敗時舊 World 的回滾照常（5.1）；超過深度放棄這次回滾並記診斷；Plan 版本變了歷史作廢（回滾份 7.5）；**入口形狀（5.5，照使用者重新核准的形狀寫案例）**：沒明說進入或退出的生成與刪除照遊戲處理、回滾到生成之前會刪掉預測錯的實體；比對以（實體、元件、tick）為單位，只差一個元件時只寫回那一格；第 5.5 節列的本批「還沒實作」的入口（部分元件的權威值、這份沒帶、明說的進入與退出、事件來源的值）各回「還沒實作」錯誤、不靜默丟掉。
+- **回滾**：回滾份第 9 節 R-1～R-7 的守衛（含 R-2 等價測試與它列的七個突變）；跨 schedule 的訊息兩方向；沒選策略的 World 沒有歷史（R-4）；換 World 歷史不跨世代（R-5）；`BuildNewFirst` 失敗時舊 World 的回滾照常（5.1）；超過深度放棄這次回滾並記診斷；Plan 版本變了歷史作廢（回滾份 7.5）；**入口形狀（5.5，照使用者重新核准的形狀寫案例）**：沒明說進入或退出的生成與刪除照遊戲處理、回滾到生成之前會刪掉預測錯的實體；比對以（實體、元件、tick）為單位，只差一個元件時只寫回那一格；第 5.5 節列的本批「還沒實作」的入口（部分元件的權威值、這份沒帶、明說的進入與退出、事件來源的值）各回「還沒實作」錯誤、不靜默丟掉。（修訂 4 加：超過深度時發 `RollbackAbandoned` 訊息、不寫日誌；重跑的段的父鏈含 `span.rollback`、第一次跑的不含，第 10.4 節）
 - **scenario 第 3 段**（`tests/common/scenario/`，ctest `scenario.segment3`，標籤 `cpu`）：
 
 | 步 | 做什麼 | 檢查 |
@@ -484,8 +484,8 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 
 ### 9.5 綁實作的守衛（`-guards-after-mechanism-stable`）
 
-- 第 3 批延到本批開頭的三條（6 號加時鐘的識別字；`naming_guard` 加 `engine/world_time`；`world_time` 的 `gyo_expect_links`）：條件「scenario 第 2 段通過、合併前核准之後」已成立，**第 1 步立**。時鐘的識別字用限定程式的寫法（`engine/kernel` 還有 11 處「Kernel 不認得時鐘」的說明註解含 `clock`，`recon-a` 5；修訂 1，檢查小 4）。
-- 本批新的（Kernel 的掃描加「拿掉的名字不回來」、`naming_guard` 加 `engine/authority`、`engine/rollback`、兩個 Module 的 `gyo_expect_links`、回滾 R-3 與權威 DI-A 2 的方向掃描）：**延到第 5 批開頭**，條件是 scenario 第 3 段通過、本批合併前核准之後（和第 2、3 批同一個處理）。這段期間靠文件、審查與判定 4 的一次性掃描（含方向的掃描）。
+- 第 3 批延到本批開頭的三條（6 號加時鐘的識別字；`naming_guard` 加 `engine/modules/world_time`；`world_time` 的 `gyo_expect_links`，連結集照 #257 之後的登記列，多 `GYO::Logging`）：條件「scenario 第 2 段通過、合併前核准之後」已成立，**第 1 步立**。時鐘的識別字用限定程式的寫法（`engine/ecs/kernel` 還有 11 處「Kernel 不認得時鐘」的說明註解含 `clock`，`recon-a` 5；修訂 1，檢查小 4）。
+- 本批新的（Kernel 的掃描加「拿掉的名字不回來」、`naming_guard` 加 `engine/modules/authority`、`engine/modules/rollback`、兩個 Module 的 `gyo_expect_links`、回滾 R-3 與權威 DI-A 2 的方向掃描）：**延到第 5 批開頭**，條件是 scenario 第 3 段通過、本批合併前核准之後（和第 2、3 批同一個處理）。這段期間靠文件、審查與判定 4 的一次性掃描（含方向的掃描）。
 
 ---
 
@@ -509,7 +509,7 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 | I6 | 回滾的公開登記與讀取介面（六種，R-6）、重複登記的規則、凍結後放進 World 的 Resource | 第 3 步 | 第 4 步（策略、檢查）、第 5 步（5.11、代為登記） |
 | I7 | `AuthorityStrategy`、`RollbackStrategy` 的掛點（兩份的契約部分） | 第 3 步（標頭）；第 4、5 步實作 | 作者 |
 | I8 | `Tick`、`TickWriters()`、`Resimulation`、`RunOneFixedStep`、`RewindFixedSteps`、`WorldTimeOptions` 的 schedule 名 | 第 3 批（已有） | 第 4、5 步 |
-| I9 | 兩個 Module 的 `modules.csv` 列（順序 `world_time` → `rollback` → `authority`）與目錄骨架（含 `tests/common/{authority,rollback}` 與 `tests/common/CMakeLists.txt` 的兩行） | 第 3 步 | 第 4、5 步 |
+| I9 | 兩個 Module 的 `config/modules.csv` 列（順序 `world_time` → `rollback` → `authority`）與目錄骨架（含 `tests/common/{authority,rollback}` 與 `tests/common/CMakeLists.txt` 的兩行） | 第 3 步 | 第 4、5 步 |
 | I10 | 拿掉 Kernel 規則的先後（7.2） | 第 2、6 步 | — |
 | I11 | 突變清單：Kernel、編排層、權威、回滾各一份；搬走的突變在第 6 步從 Kernel 退役、在新清單立 | 各步 | — |
 | I12 | 文件：Kernel 的 DI、限制頁、`target/v2/README.md` 與 `docs/architecture/README.md`〈Design Invariants〉的索引、本頁、新頁 `target/v2/authority.zh-Hant.md`、`target/v2/rollback.zh-Hant.md` | 第 4、5、7 步 | — |
@@ -525,14 +525,29 @@ DI 的文字變更（第 11 節）、9.4 的退役、LIM-7、LIM-8 的條文同�
 - 每步完成時推送本分支；審查在第 4、5 步完成時與整條線完成時各做一次（第 14 節），新突變清單的敵對式檢查在第 8 步。
 - 整條線**一個 PR**（開到 `gyo2`，`fewer-prs`），**一次合併前核准**；`gh pr merge` 只在使用者明確說「合併」之後（`v8-arch-gyo2-merge-needs-explicit-word`：「好了」「OK」不算）。
 
-### 10.3 和異常分級卡的交界（修訂 3 記入；異常分級卡 `local_5135d18c-…` 2026-11-20 通知）
+### 10.3 和異常分級卡的交界（修訂 3 記入；**修訂 4 照合併後的結果重寫**）
 
-異常分級卡的宣告：`docs/architecture/target/v2/error-levels-declaration.zh-Hant.md`（分支 `claude/gyo2-error-levels-170217`，3714c19c；動工前核准完成）。**合併順序**（HANDOFF `-reapproval` 的後續）：異常分級 → 日誌批 → 本批的 Kernel 與編排層步驟。本批動工前讀它合併後的結果，照下面對齊；對不上已定的事時停下回報。
+異常分級已合併（#254、#255）。合併後以它的宣告第 0.1 節（核心原則）與第 19 節（修訂 7 收窄範圍）為準：錯誤是資訊，告訴外面發生了什麼、不替外面決定怎麼處理；E0～E3 級別與命名規則留下；D3（E1／E2 拆型別與既有型別改名）、D5（沒讀的 `Result` 變編譯錯誤）、D8、D9、17.1、17.2 撤回；D4 改回往外拋。修訂 3 照它當時的動工前版本寫，下面逐條改正。
 
-- **級別**（它的第 2.1 節第 4 批表，照本頁修訂 2 排）：`Check` 時報的 `AU-E…`／`RB-E…`、「還沒實作」的 `Result`、`Summary` 缺雜湊函式（第 3.3 節）、P2P 佔位、`Tick` 寫者檢查＝E2；凍結後寫入、`Create<T>` 重複、`Find<T>` 在 `Build` 找不到依賴（第 6 節）＝E0；回滾超過深度記診斷（5.5）＝E3；重複登記「作者蓋過代為」＝非錯誤、不記（和第 6 節第 3 點一致）。
-- **型別命名**（使用者定，異常分級卡轉）：`…Error`＝E1（不能救），`…Failure`＝E2（讓上層決定）。本批新增的錯誤型別照這條取名；本頁沿用改名後的 Kernel `KernelFailure`、編排層 `OrchestrationFailure`、`Base::Failure<Code>`、`WorldError`（例：第 3.3 節 `Summary` 回的錯誤用 `KernelFailure`）；它的宣告寫「名字在合併前核准定稿」，所以名字以它合併後的為準。本頁的「Programmer Error」是概念詞（E0），不是型別名。
-- **上游丟例外**：`Product::Build` 丟過例外的登記單位之後不再呼叫，依賴它的 World 標 `notChecked`、不再登記；所以第 6 節「Module 在 `Build` 找不到依賴：斷言」不會因上游丟例外被觸發，本頁不改。
-- **同檔**：編排層 `Product.cpp`、`Setup.hpp`（它改 `Warn`、`catch`／`try` 的範圍、入口簽名、拿掉 `SetErrorHandler`、`Build` 接例外）；Kernel `Executor.cpp`、`WorldExecutor.hpp`、`World.cpp`、共用測試台與 9 個測試檔、`plans/kernel/scripts/mutations.json`、`kernel_guard.py`、DI-KS 2／17／18。本卡的本機 afd6e7c5（`kernel_guard.py`、`mutations.json`）在它合併後 rebase。
+- **級別**：照修訂 3 的表不變（它是資訊）——`Check` 時報的 `AU-E…`／`RB-E…`、「還沒實作」的 `Result`、`Summary` 缺雜湊函式（第 3.3 節）、P2P 佔位、`Tick` 寫者檢查＝E2；凍結後寫入、`Create<T>` 重複、`Find<T>` 在 `Build` 找不到依賴（第 6 節）＝E0；回滾超過深度＝E3；重複登記「作者蓋過代為」＝非錯誤、不記。
+- **型別名**（修訂 4 改正）：既有型別**不改名**——Kernel 照舊 `KernelError`、編排層 `OrchestrationError`、`WorldFailure`（修訂 3 寫的 `KernelFailure`、`OrchestrationFailure`、`Base::Failure<Code>`、`WorldError` 是 D3 的名字，已撤回）。命名規則（`…Error`＝E1、`…Failure`＝E2）只用在**本批新增的型別**。本批預計不新增錯誤型別：第 3.3 節 `Summary` 缺雜湊函式回 `KernelError` 的新碼，權威與回滾的 `Check` 報告用編排層既有的報告形狀加 `AU-E…`／`RB-E…` 碼；真的要新型別時照後綴取名，在合併前核准給使用者看。
+- **不在回傳之外再記一筆**（它的 D1、D2）：本批的 Module 回錯誤時不另寫 `Warning`／`Log`，處理由上層決定。
+- **E3 的告知方式**（修訂 4，本卡照 L17 判：照 `world_time` 的 `TimeDiscarded`＋`TimeDiscardedLog`）：回滾超過深度時放棄這次回滾，在 World 裡發一則訊息（暫名 `RollbackAbandoned`，帶請求的 tick、確認點、深度），不直接寫日誌；要寫成日誌的產品用 `WorldLogging::Forward` 自己接。第 12 節末第 7 條的「記診斷」就是這則訊息。
+- **上游丟例外**（修訂 4 改正）：它的 17.2「`Build` 接例外、之後不再呼叫」已撤回，`Product::Build` 裡丟出的例外照常往外到 `main`，沒有 Product。所以第 6 節「Module 在 `Build` 找不到依賴：斷言」仍不會因上游丟例外被觸發，結論不變。
+- **同檔**：它已合併，rebase 時沒有衝突（`naming_guard.py` 的衝突來自 #257，第 19 節）。
+
+### 10.4 和 trace 的交界（修訂 4 新增；trace 合併前核准留給本批）
+
+trace（#258）合併時留下一件給本批：回滾重跑時開出來的段，和第一次跑的分不出來（[trace-merge-approval](trace-merge-approval.zh-Hant.md)第 79 行、trace 宣告第 7 節）。現況：Kernel 的 `RunPlan` 每張 schedule 開一段（含巢狀跑）、每步的 System 一段（TR-4）；回滾的獨占 System 巢狀跑 `RunOneFixedStep` 時，那些段的父是回滾 System 的段，名字和第一次跑的相同。
+
+**本批處理**（本卡照 L17 判；trace 宣告第 7 節舉的例子就是這個做法）：回滾 Module 在每次重跑一步時經 Base 的門面開一段（`TraceSpan`，category `rollback`、name `resimulate`），把那一步的巢狀跑包起來；第一次跑沒有這一層。讀紀錄的人照父鏈分辨：祖先裡有 `span.rollback` 的是重跑。
+
+- 只用 Base 的門面，`rollback` 不依賴 trace Module（TR-1）；不讀不寫 World 的值（TR-2），等價測試（R-2）與判定 4 不受影響。
+- tick 不放進段名（段名是固定字串，放 tick 要在熱路徑上組字串）；要知道哪一步，照段的先後與 `RollbackAbandoned`／歷史對照。之後有 Feature 需要時再看 TR-5 的欄位。
+- 測試：第 9.3 節加一案——重跑的段的父鏈含 `span.rollback`、第一次跑的不含；突變一個（拿掉這一段時那一案失敗）。
+- 段數：每次回滾多 k 段（k＝重跑的步數），在 trace 宣告第 5.2 節的估計（×（1＋k））之內。判定 5 的量測不裝 trace 接收者（沒裝時只讀一個原子指標，TR-6），所以門檻不變。
+
+---
 
 ---
 
@@ -693,11 +708,11 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 - **判定 1：通過**。本機完整 ctest 全過（含 `scenario.segment1`～`segment3`）；L1 三平台（linux-x64、windows-x64、macos-arm64）全過，含 toolchain windows-x64 兩次建置的 `orchestration.restore`（`-summary-padding-a-then-c` 的來源）；`git grep -n -i "summary-padding-a-then-c" -- tests engine` **0 命中**（標註全部拿掉；先在 59fd4da9 命中 14 行當正例，終了碼區分「沒有」與「失敗」）。
 - **判定 2：行為**。第 9.3 節的案例全過；S3-1～S3-8 全過。
 - **判定 3：檢出力**。三份新突變清單經 Fable 5.2／high 檢查補齊後全殺；第 9.4 節的 128 個照處置後，留下與搬走的全殺；完整跑結果記進 dev_log，活著的逐個說明；分母以執行時的實際清單為準。
-- **判定 4：一次性的掃描**（`git grep -n -P`，`engine/kernel`、`engine/orchestration`、`engine/world_time`；每個樣式先在 59fd4da9 命中一次當正例——正例都在 `engine/kernel`，`engine/world_time` 只中第一條——終了碼區分「沒有」與「失敗」）。
+- **判定 4：一次性的掃描**（`git grep -n -P`，`engine/ecs/kernel`、`engine/orchestration`、`engine/modules/world_time`（修訂 4：#257 的路徑；目錄與樣式不變）；每個樣式先在動工時的 `gyo2`（f25837b0）命中一次當正例——正例都在 `engine/ecs/kernel`，`engine/modules/world_time` 只中第一條——終了碼區分「沒有」與「失敗」）。
   - 照統合附錄的：`\b(Zone|WritePolicy|Rollback)::`、`\bRole::Input\b`、`\bRequireExplicitZones\b`、`\bemitterZone\b`、`\brollbackEnabled\b`、`\bnotInRollback\b`、`\brollbackSafe\b`、`\bingress(Stage)?\b`、`\bDigestSet\b`、`\bCFingerprint\b`、`\bExportZoneCSources\b`、`\bparallelGuardTest\b`。
   - 本卡加的（修訂 1 補，檢查 S1）：`\bRole::State\b`、`\brollbackActive\b`、`\bFunnelWrites\b`、`\bDE(2|9|11|15|16)\b`、`\bXE1\b`、`\bzone\b`、`\bwritePolicy\b`、`\bCFingerprintOf\b`、`\bkCFingerprintVersion\b`、`\bZoneCSourcesOptions\b`、`\bMarkDigestSet\b`、`\bdigestMarks\b`、`\bZoneName\b`、`\bexternal\b`、`"Z[0-9]"`、`\bRollback::Derived\b`、`enum class (Zone|WritePolicy|Role|Rollback)\b`。
   - 以上全部零命中；`StartupCode` 的列舉值等於統合 3.1 的清單（`RegistryTests.cpp:223`）。
-  - **方向**：三個目錄裡沒有 `engine/authority`、`engine/rollback` 的 include，也沒有 `Authority::`、`Rollback::` 的名字（R-3、DI-A 2 的常設守衛延到第 5 批，這段期間由這條守）。
+  - **方向**：三個目錄裡沒有 `engine/authority/`、`engine/rollback/` 的 include（含入路徑不隨 #257 改），也沒有 `Authority::`、`Rollback::` 的名字（R-3、DI-A 2 的常設守衛延到第 5 批，這段期間由這條守）。
 - **判定 5：預算**（第 5.4.5 節；使用者 2026-11-20 重新核准；回滾 Module 的量測結果：未量）：在 P1（可回滾狀態 32 KB、深度 20）判 (1) 記錄每步（每步所有格都改）≤ 156 µs；(2) 一次回滾總開銷（退 20 步、全部格都變；還原＋20 次記錄＋`ActiveTime`／`Resimulation` 起落，不含作者的 System）≤ 3.125 ms；(3) 同一次量測裡，(P2（128 KB、深度 32）的記錄每步 ÷ P1 的記錄每步) ≤ 1.5 × (機器底在同樣兩個大小、配置 `colsT16s64` 的記錄比值)（p99；基準值：分母 4.160、上限 6.240；判定用同一次的分母）；分母兩列的四分位距比任一超過 25% 就不判定第 3 條、停下回報。P2、P3（2 KB、深度 20）其餘只記錄。量法：使用者的 Linux 實機原生，條件和基準那次相同（關桌面程式、governor `powersave`），`taskset`、先暖機並記頻率，10 個行程 × 各 1,000 次，取每行程 p99 的中位數判定，四分位距比與平均一起記；每次判定在同一次跑機器底（`floor_bench`）；Intel Mac 只當開發參考。量之前先講影響、取得使用者同意（`warn-before-heavy-local-runs`）。`World::Summary` 不設預算（除錯與測試用），dev_log 記改前改後的時間。超過就停下回報。修訂 1 的數字（P1 16 KB、P2 64 KB、P3 1 KB、比值 ≤ 6）出自第一張研究卡的推估，撤回。
 
 ---
@@ -710,7 +725,7 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 |---|---|---|---|
 | 第 1 步 | 第 3 批延下來的三條守衛；逐型別雜湊（I1）與摘要格式 3；9 處「未完全解決」解除；比摘要的現有測試的型別補函式（第 12 節第 1 件定 (d)：不比摘要的測試型別不必補） | Opus 5.5／high | 8～12 h |
 | 第 2 步 | A11 的清單交使用者；拿掉沒有新家的規則（A1、A2、A3、A10；9.2 的恆真案掃描）、golden 第一次重產；原語 1～4 與讀 stamp（I2）、`Writes` 收元件（I3）、訊息寫者名單（I4）、`Resimulation` 每次放 false | Opus 5.5／high | 16～22 h |
-| 第 3 步 | 第 6 節的接法（I5）；`engine/authority`、`engine/rollback` 骨架、`modules.csv`、I6 回滾的公開登記與讀取介面、I7 的標頭、I15 測試支援、I17 | Opus 5.5／high | 8～12 h |
+| 第 3 步 | 第 6 節的接法（I5）；`engine/modules/authority`、`engine/modules/rollback` 骨架、`config/modules.csv`、I6 回滾的公開登記與讀取介面、I7 的標頭、I15 測試支援、I17 | Opus 5.5／high | 8～12 h |
 | 第 4 步 | 回滾：檢查（R-7 Derived、跨 schedule 訊息、巢狀 schedule 的所屬）；官方策略（記錄、判斷、還原、重跑、修正、輸入歷史；R-1、R-2、R-5）、P2P 佔位；入口形狀（5.5，照 2026-11-20 重新核准的形狀）；新頁 `target/v2/rollback.zh-Hant.md`；預算量測（5.4.5）：回滾 Module 的量測程式與離線腳本（一台一支、交出前每條命令實際跑過，和機器底同一次跑；量測要使用者在 Linux 實機跑） | Opus 5.5／high | 22～34 h＋入口形狀 6～10 h＋量測程式與腳本 4～6 h |
 | 第 5 步 | 權威（權威份第 10 節步 3、4）：登記入口、代為登記、策略、佔位、tick 檢查；一致性指紋、digest、G-5 匯出與 `zone_scan` 的接手（J-17 的搬移）、5.11 交叉檢查；新頁 `target/v2/authority.zh-Hant.md` | Opus 5.5／high | 12～20 h |
 | 第 6 步 | 拿掉有新家的規則（A4～A7）、`Role`、C 指紋、golden 第二次重產；突變的處置（9.4） | Opus 5.5／high | 8～12 h |
@@ -747,8 +762,8 @@ C. **Linux 實機的交付包**（使用者的操作，不是決定）：主 che
 
 1. **Feature**：第 15.2 節第 1 列。
 2. **現在的問題**：區、寫者、digest、C 指紋、Z6／Z8／D-E15、D-E16、`Rollback` 列舉都還在 Kernel（`recon-a` 1），Kernel 對單機也執行這些檢查；回滾要的原語 1～4 不在；摘要照原始位元組雜湊（LIM-8）；Module 之間、作者與 Module 之間沒有通道。
-3. **變化的邊界**：新 Subsystem `engine/authority`、`engine/rollback`；Kernel 少了區、寫者、digest、回滾的宣告與 C 指紋，多了原語 1～4、讀 stamp、雜湊的客製點、訊息寫者名單，`Writes<…>` 收元件；編排層多了每次建 World 一份的共用槽（第 12 節第 3 件定 (a)）。
-4. **影響**：Kernel（第 7 節的檔案）、編排層（`Setup.hpp`、`Product.cpp`）、`world_time`（區參數、`Resimulation`）、`modules.csv`、`tests/common/{kernel,orchestration,world_time,scenario,zone_scan}`、新 `tests/common/{authority,rollback}`、`tests/common/CMakeLists.txt`、Kernel 與編排層的突變清單、新兩份清單；文件見第 11 節、限制頁與索引。
+3. **變化的邊界**：新 Subsystem `engine/modules/authority`、`engine/modules/rollback`；Kernel 少了區、寫者、digest、回滾的宣告與 C 指紋，多了原語 1～4、讀 stamp、雜湊的客製點、訊息寫者名單，`Writes<…>` 收元件；編排層多了每次建 World 一份的共用槽（第 12 節第 3 件定 (a)）。
+4. **影響**：Kernel（第 7 節的檔案）、編排層（`Setup.hpp`、`Product.cpp`）、`world_time`（區參數、`Resimulation`）、`config/modules.csv`、`tests/common/{kernel,orchestration,world_time,scenario,zone_scan}`、新 `tests/common/{authority,rollback}`、`tests/common/CMakeLists.txt`、Kernel 與編排層的突變清單、新兩份清單；文件見第 11 節、限制頁與索引。
 5. **依賴方向**：新增 權威→Kernel、編排層、`world_time`、回滾；回滾→Kernel、編排層、`world_time`；產品→權威、回滾。Kernel、編排層、`world_time` 不依賴兩者。沒有反向。
 6. **Ownership**：區、寫者數量、判定資料的讀寫：Kernel → 不由機制守；digest、一致性指紋、G-5、Z6／Z8／D-E15、tick 的單一來源：Kernel → 權威 Module；`Rollback`、D-E16、「重跑時不跑」：Kernel → 回滾 Module；摘要的雜湊：照原始位元組 → 每個型別的函式（型別的作者）。
 7. **為什麼不能更小**：只拿掉 Kernel 的規則不給新家，伺服器權威與回滾沒有任何機制（統合第 8 節：守衛不留空窗）；只建新家不拿掉，Kernel 對單機也執行權威規則，違反 `-kernel-is-ecs-no-restrictions`；摘要只補 padding 是已做過的 A，使用者定正式解法是 C；沒有接法，作者用不到兩個 Module。
@@ -851,4 +866,18 @@ Fable 5.2／high，唯讀；範圍 fcae13f1 之後的全部差分（含修訂 2�
 | S10 例子預設了 (a) | 第 1 節、S3-3 改成整份判定值；做薄段標「選 (a) 時」 |
 | m1～m8 | 第 12 節第 5 件、第 16 節、9.4／第 17 節的「統合」、9.1／第 11 節的標題、15.4 的欄、L17 段的標題與 0 命中的註、文首與第 0 節、P2 的「只記錄」與「同 P2P 佔位」 |
 | m9（研究卡 v2 的小錯） | 宣告用 256 倍、Mac 原生 4.5～13.8%；`ICommandData.cs:169` 不再寫成歷史環上限（宣告只引 `NetworkTimeSystem.cs`）；交付包的量測點照 M1 改 |
+
+## 19. 修訂 4：照 `gyo2` f25837b0 更新（2026-11-21）
+
+起因：主會話 2026-11-21 轉來使用者的話「可以開始權威卡了。記得讓他更新」，要本卡先 rebase 到 f25837b0，照 #257 改路徑，寫明 trace 留下的件，對齊異常分級。下面每一條都是**路徑或實作做法**的改動，不改使用者定過的事、判定的點與門檻、Module 的職責，所以照已核准的範圍往下做；合併前核准時一起給使用者看。
+
+| # | 哪裡 | 修訂 3 | 修訂 4 | 根據 |
+|---|---|---|---|---|
+| 1 | 4.1、5.1、6、I9、第 14 節第 3 步、15.3 | `engine/authority`、`engine/rollback`、`modules.csv` | `engine/modules/authority`、`engine/modules/rollback`；頂層 `config/modules.csv`（多 `dir` 欄） | #257；主會話「新的 Module 放 `engine/modules/`」 |
+| 2 | 9.5、判定 4 | 掃描與守衛的目錄 `engine/kernel`、`engine/world_time`；正例在 59fd4da9 命中 | `engine/ecs/kernel`、`engine/modules/world_time`；正例在 f25837b0 命中；樣式不變；含入路徑（`engine/kernel/…`）不隨 #257 改 | #257 |
+| 3 | 第 1 步前半（原 afd6e7c5，rebase 後 a8bb6a7e） | `naming_guard` 的第三列 `engine/world_time`；`gyo_expect_links(gyo_world_time GYO::Base GYO::Kernel GYO::Orchestration GYO::Time)`；突變 `wt-links-more` 改 `engine/config/modules.csv` | `engine/modules/world_time`；連結集多 `GYO::Logging`（日誌批讓 `world_time` 依賴 `logging`，登記列已是 `base;kernel;logging;orchestration;time`）；突變改 `config/modules.csv` 的新列；自測與 `wt-guard-*` 的路徑一起改 | #257、日誌批；rebase 時 `naming_guard.py` 一處衝突 |
+| 4 | 10.3 | 照異常分級的動工前版本：用改名後的 `KernelFailure` 等；上游例外「之後不再呼叫」 | 既有型別不改名，後綴規則只用在新型別；`Build` 的例外往外拋；不在回傳之外再記一筆；E3 用 World 的訊息告知 | 異常分級第 0.1、19 節（D3、D4、17.2 撤回） |
+| 5 | 10.4（新） | 沒寫 | 回滾重跑每步開一段 `rollback`／`resimulate`；加一案與一個突變 | trace 合併前核准第 79 行 |
+
+不受影響的：判定 1～5 的點與門檻、5.4 的預算與基準值（判定 5 的量測不裝 trace 接收者）、第 12 節定過的各件、DI 的方向。第 14 節的估時不變（10.4 約 1 h，在第 5 步的範圍內吸收）。
 
