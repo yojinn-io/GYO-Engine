@@ -33,7 +33,7 @@ Owner：架構（os-wait 卡接手）。分支 `claude/gyo2-os-src-platform`，�
 
 - 全量建置＋ctest：157/157。
 - 突變：路徑或 find 有改的 78 個裡，本機能跑的 48 個全部 killed；30 個只在 Linux 或 Windows 跑，本機 skip（CI 不跑突變，見下）。第一次 45/48：`os-f4`、`os-c6`、`pu-x5` 是 wrong_failure，原因是 expect 裡寫死了舊路徑 `engine/core/os/src/windows/`（守衛印出的是新路徑）；改了 expect 的路徑後 3/3 killed（路徑的錯，不是判定放寬）。
-- L1 三平台：（推送後補）。Linux、Windows 的新檔只在 CI 編得到。
+- L1 三平台：ddeca8ad 全部通過（run 44912714512；linux-x64、windows-x64、macos-arm64）。Linux、Windows 的新檔在這裡第一次編過並跑過測試。
 - 證據：主 checkout 的 `build/evidence/gyo2-os-src-platform/`（這台 Mac）：`build.log`、`ctest.log`、`mutations.log`、`mutations_run2.log`。
 
 ## 範圍的限界
