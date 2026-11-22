@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 3）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 4）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 4**：修訂 3（fae7eb38）送 Fable／high 窄複查：blocker 2、should 10、nit 13（`build/evidence/gyo2-sdl-declaration/declaration-r3-narrow-check.md`）。全部採用，對照在第 20 節。最大的改動：KR 在統合只寫需求與邊界，和 GYO 現行 Kernel 契約的九個衝突點（hook 的種類、不可就地改、一致的時點、連帶刪除的輪數、子的順序、回滾、讀檔、複製、內建元件的登記）列成表，要改條文的在 KR 的宣告交使用者；渲染 World 的保留式照 Bevy 實際的做法改寫、列出四個衝突點；第 6.6 節補九項（最大的是 `gyo.ui` 的節點模型）；X 拆成 X1（平的）、X2（階層，等 KR）；Q4 加照 Bevy 的 (d)。
 - **修訂 3**：使用者在主會話更正父子的位置——照 Bevy 放進 Kernel（通用的關係機制、`ChildOf`），`transform` 只放 `Transform`、`GlobalTransform`、傳播；並定「ECS 相關的機制以 Bevy（含生態）為主參考，偏離要寫衝突點與膠水量」（HANDOFF `v8-arch-gyo2-hierarchy-bevy-and-primary-reference`）。改：P25、P26、第 3.3、4.2、4.3、6.4 節；新的第 6.5 節（Kernel 的關係，子批 KR，排在 X 之前）、第 6.6 節（借自別家與偏離 Bevy 的逐項檢查）；渲染 World 的實體改照 Bevy 0.15 起的保留式（第 6.1 節 8、R6）；縮放照 Bevy 用 `Vec3`、不再交使用者。
 - **修訂 2**：修訂 1（95f799c0）送 Fable／high 窄複查：blocker 1、should 11、nit 13（`build/evidence/gyo2-sdl-declaration/declaration-r1-narrow-check.md`）。全部採用，處理對照在第 18 節。最大的改動：**來源側與渲染側的單位拆成不同的列**、後端的單位不放進任何 World（第 3.3、9.3 節，修 blocker：依賴逐 World 檢查）；R1 拆成 R1a／R1b，讓來源替換那一題不擋 KeepTool；`GlobalTransform` 定成畫面用的推導值、不進摘要；Q2 只問 ufbx；Q3、Q4 的比較表修正並補選項。同日使用者在主會話定「Transform、相機、物理全部放Module裡」（HANDOFF `v8-arch-gyo2-transform-camera-physics-modules`），寫進 P25、第 6.4 節、子批 X。
 - 修訂 0（c9eae0a0）送 Fable／high 敵對式檢查：blocker 3、should 12、nit 9（主 checkout `build/evidence/gyo2-sdl-declaration/declaration-r0-adversarial.md`）。全部採用，處理對照在第 17 節。最大的改動：Q1 的規則比較重寫（四個選項各撞 AGENTS §6 的哪一句）；B 的登記形與建置代價寫進統合；「Extract 是唯一同步點」拿掉（和 O-13 (3) 相反）；後端的注入形留在統合（第 9.2 節）；ImGui 的接法改成交使用者（Q3）；R2 拆兩段讓 KeepTool 早一點。
@@ -73,7 +74,7 @@
 | P23 | ImGui 拆兩半：輸入與 widget 邏輯是文件 World 的 System，draw list 的 GPU 繪製是渲染 World 的 System；draw list 經 Extract 進渲染 World；一個函式從 NewFrame 到 Present 消失 | 使用者 2026-11-11（runtime-composition §3b） | 子批 K；Q3 |
 | P24 | GYO 要支援 2D 遊戲（使用者會移植一個 2D 遊戲）；Transform 只有一套、用 3D 的，2D 也用、z 拿來排序；render 照 Bevy：底層（裝置、資源、Extract、合成）共用，上層分 2D、3D 兩條管線，相機用同一套投影機制；物理 2D、3D 分兩個 Module，不在這批 | 使用者 2026-11-23（主會話，`v8-arch-gyo2-2d-and-3d`）：「「要」並且我可以移植一個2D遊戲進來。我的意思是：Transform 照建議一套 3D，render 照 Bevy 分管線，物理 2D、3D 分成兩個 Module。」 | 第 6.4 節；子批 X、R2；Q5 |
 | P25 | Transform、相機、物理全部放 Module（使用者先問能不能和 math 同級放 core，之後「我明白為何會放Module裡了。因為需要world能碰到」）；相機一個 Module，render 經 Extract 讀它；物理 2D、3D 各一個 Module、不在這批；預設帶不帶由本卡照產品推，主會話的傾向是 Transform、相機預設帶、物理預設不帶 | 使用者 2026-11-23（主會話，`v8-arch-gyo2-transform-camera-physics-modules`）：「Transform、相機、物理全部放Module裡」 | 第 3.3 節、第 6.4 節；子批 X |
-| P26 | 父子關係放進 Kernel，照 Bevy 的 `ChildOf` 加通用的關係機制（連帶刪除、從子查父；加上或拿掉關係時用 hook 立即維護另一邊）；Kernel 的職責清單多一項「關係」；`transform` 只放 `Transform`、`GlobalTransform`、傳播 System，傳播讀 Kernel 的父子。判法：ECS 相關的機制以 Bevy（含生態）為主參考；偏離 Bevy 或改用別家，要寫明碰到哪些衝突點、要寫多少膠水；Unity、Godot、flecs 只當對照與查證，不當混搭的來源 | 使用者 2026-11-23（主會話，`v8-arch-gyo2-hierarchy-bevy-and-primary-reference`）：「主要我不想當縫合怪…衝突點太多。會導致膠水代碼爆炸」，對主會話的建議回「照建議」；判法寫進批次表〈每批的設計審查〉第 5 項。**取代 P25 裡主會話的讀法**（父子在 `transform` Module、Kernel 清單不變） | 第 6.5、6.6 節；子批 KR、X |
+| P26 | 父子關係放進 Kernel，照 Bevy 的 `ChildOf` 加通用的關係機制（含連帶刪除、從子查父）；Kernel 的職責清單多一項「關係」；`transform` 只放 `Transform`、`GlobalTransform`、傳播 System，傳播讀 Kernel 的父子。（「加上或拿掉關係時用 hook 立即維護另一邊」是 HANDOFF 經過裡主會話對 Bevy 的描述，不在決定的字裡；Bevy 實際的保證見第 6.5 節。）判法：ECS 相關的機制以 Bevy（含生態）為主參考；偏離 Bevy 或改用別家，要寫明碰到哪些衝突點、要寫多少膠水；Unity、Godot、flecs 只當對照與查證，不當混搭的來源；編排層等 GYO 自己的設計照舊，但寫清楚和 Bevy 的接合點 | 使用者 2026-11-23（主會話，`v8-arch-gyo2-hierarchy-bevy-and-primary-reference`）：「主要我不想當縫合怪…衝突點太多。會導致膠水代碼爆炸」，對主會話的建議回「照建議」；判法寫進批次表〈每批的設計審查〉第 5 項。**取代 P25 裡主會話的讀法**（父子在 `transform` Module、Kernel 清單不變） | 第 6.5、6.6 節；子批 KR、X |
 
 **卡片自加的前提**（不是使用者的話）：
 - C1：SDL 3.4 的視窗、事件泵、swapchain 的取得與送出只能在建立視窗的那條執行緒（master 偵察 2 節末，`SDL_gpu.h:4066-4094`、`:4202-4218`，master D27）。
@@ -183,9 +184,9 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | R2 | Module 的行為測試不靠 SDL | 每個介面有測試用的假實作 | SDL 的實作自己的測試照 master（`SDL_VIDEODRIVER=dummy`、Lavapipe） |
 | R3 | live frame | 介面留「OS modal 迴圈中要一幀」的回呼點（宣告形狀，不實作） | PvP Client 移植 |
 | R5 | 模擬在別的執行緒 | 薄起步單執行緒 | O-13 的入口在 PvP Client 移植那批 |
-| R6 | 渲染 World 的實體與來源對應 | R1a、R2a、K 只抽 Resource 層的資料（draw list），不需要實體對應 | 每個來源實體在渲染 World 有對應的實體（GPU 的狀態掛在上面）：照 Bevy 0.15 起的保留式（`SyncToRenderWorld`、`RenderEntity`／`MainEntity`，偵察 3.6），在 R2b 的宣告設計（第 6.1 節 8） |
+| R6 | 渲染 World 的實體與來源對應 | R1a、R2a、K 只抽 Resource 層的資料（draw list），不需要實體對應 | 照 Bevy 0.15 起分三種（同步的實體、以來源實體為鍵的 Resource、暫時的資料），R2b 逐種判；增刪的讀法 R1a 留形（第 6.1 節 8） |
 | R7 | VFX 要的繪圖能力 | 疊層與 UI 本來就要的半透明混合（排在不透明之後）；pipeline 的狀態帶混合模式 | 3D 的半透明排序相位、billboard（面向相機的四邊形，在 vertex shader 做）、instancing（每個實例一份資料的緩衝）：R2b 的介面不堵死——送出的單位能帶實例數與實例緩衝、shader ABI 留欄位、相位能排序 |
-| R8 | 父子階層 | 子批 KR：Kernel 的關係機制與 `ChildOf`／`Children`（P26）；子批 X：傳播讀它 | 多層階層的效能（深的樹、大量實體）在有 Feature 量到時再改（RC-TF）；別種關係（例：「瞄準誰」）的使用者由產品帶 |
+| R8 | 父子階層 | 子批 KR：Kernel 的關係機制與 `ChildOf`／`Children`（P26）；子批 X2：傳播讀它 | 多層階層的效能（深的樹、大量實體）在有 Feature 量到時再改（RC-TF）；別種關係（例：「瞄準誰」）的使用者由產品帶 |
 
 （修訂 0 的 R4「多個視窗、介面以視窗 id 為鍵」拿掉：沒有點名的 Feature。）
 
@@ -199,7 +200,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | 渲染 World＋Extract | Bevy `SubApp::extract`、`bevy_extract`；使用者 11-11 | master 的「產品每幀填 `RenderQueue`」：沒有唯讀的保證；Bevy 的 `ResMut<MainWorld>` 寫回：使用者 11-11 不採 | PvP Client、工具的預覽、每個 2D／3D 遊戲 |
 | render 底層共用、上層分 2D／3D 管線 | 使用者 11-23（P24）；Bevy `core_2d`、`core_3d` | 一條管線用旗標分 2D／3D：使用者已定照 Bevy | 2D 遊戲、PvP Client |
 | Transform 一套 3D、`transform` Module 只放 `Transform`、`GlobalTransform`、傳播 | 使用者 11-23（P24、P25、P26）；Bevy `bevy_transform`（`TransformPlugin`，`DefaultPlugins` 無條件帶） | 父子也放 `transform`（Unity Entities 的 `Parent.cs`、`ParentSystem.cs` 在核心外）：使用者 11-23 改判，理由是混搭的衝突點與膠水（P26）。放 core：core 不認得 ECS（使用者自己問過、改判） | 2D 遊戲、PvP Client、render 的 Extract |
-| 父子是 Kernel 的關係（`ChildOf`／`Children`＋通用的關係機制） | 使用者 11-23（P26）；Bevy `bevy_ecs/src/hierarchy.rs:105-152`、`relationship/`；flecs 的 `EcsChildOf` 也在核心（`flecs/include/flecs.h:1844`，對照） | 父子放 Module（Unity）：見上一列 | 2D 遊戲、PvP Client、UI 的階層、ImGui 不用 |
+| 父子是 Kernel 的關係（`ChildOf`／`Children`＋通用的關係機制） | 使用者 11-23（P26）；Bevy `bevy_ecs/src/hierarchy.rs:105-152`、`relationship/`；flecs 的 `EcsChildOf` 也在核心（`flecs/include/flecs.h:1844`，對照） | 父子放 Module（Unity）：見上一列 | 2D 遊戲、PvP Client（武器掛在角色上）；UI 若 U 選「節點是實體」也用；ImGui 不用 |
 | 相機一個 Module、render 經 Extract 讀 | 使用者 11-23（P25）；Bevy `bevy_camera`（feature 可關；`Camera2d` 預設正交，`components.rs:13`） | 相機放在 render 裡（master 的 `RenderQueue` 帶相機）：模擬與工具要讀相機（射線、可見範圍）時就得帶 render | 2D 遊戲、PvP Client、工具的預覽 |
 
 既有的測試、守衛、golden、突變能不能不改，沒有當決勝的理由（§4）。
@@ -225,11 +226,11 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 1. **Kernel 的原語**：`WorldExecutor::RunExtract(schedule, const World& source)`（暫名）；Extract 參數綁到來源的 const 資料；屬 DI-KS 15 第 (3)、(4) 項之內。最外層 `Run` 指名 extract schedule 是 Programmer Error（斷言），不加 `StartupCode`。
 2. **編排層的描述欄位**：讀者 World 的描述帶來源 World 名（暫名 `extractFrom`）；來源不存在、排在讀者之後是啟動錯誤（新的 O-E 碼，**條號在本統合分配：O-E9**——O-E8 曾在異常分級宣告被提出又撤回〔`error-levels-declaration.zh-Hant.md:965`〕，不重用以免查到舊意思；子批 R1a 寫文字，主會話通知並行的卡）。編排層在讀者第一次 `BuildPlans` 之前呼叫 `SetExtractSource`。
 3. **清單**：extract schedule 照樣寫在讀者的每幀清單，看到 `extract` 旗標就走 `RunExtract`；讀者的交換函式「進」在它之前。**不放在第一張不算錯**（O-4 會把 `Main` 自動放最前面、單位會往清單插入，加錯誤等於對誤用加守衛）；預設的排法由渲染側的核心單位 `render_world` 在 `Build` 把 extract schedule 插在 `Main` 之前（清單的插入，O-4），作者不必自己排。說明頁寫後果：在 extract 之前跑的 schedule 讀到的是上一輪抽的資料。`Product::RunSchedule` 指名 extract schedule 時怎麼辦，子批 R1a 定（今天會斷言）。
-4. **來源被替換**（**子批 R1b**，不在 KeepTool 的路上——KeepTool 不替換 World）：「讀者一起重建」與「准許換來源」**在 R1b 的宣告比、交使用者**（要改的條文：DI-KS 13 與守衛 D-E14、DI-KS 26「之後一輪的 `BuildPlans`」、RC-O13 的觸發條件；AGENTS §3）。本統合的傾向是准許換來源（理由：GPU 的資源與 pipeline 不該跟著讀檔重建；Bevy 的 RenderApp 活過 main world 的變化）；要注意的事實：`ReplaceWorld` 給的是新的 Registry（O-8），DI-KS 13 那句「來源再登記後……讀到新的內容」講的是**同一份** Registry，不能當根據；`SetExtractSource` 存裸指標，`BuildNewFirst` 換上時舊來源就銷毀，所以重設必須在**換上的同一步**，不能留到下一輪。
+4. **來源被替換**（**子批 R1b**，不在 KeepTool 的路上——KeepTool 不替換 World）：「讀者一起重建」與「准許換來源」**在 R1b 的宣告比、交使用者**（要改的條文：DI-KS 13 與守衛 D-E14、DI-KS 26「之後一輪的 `BuildPlans`」、RC-O13 的觸發條件；AGENTS §3）。本統合的傾向是准許換來源（理由：GPU 的資源與 pipeline 不該跟著讀檔重建；Bevy 的 RenderApp 活過 main world 的變化）；要注意的事實：`ReplaceWorld` 給的是新的 Registry（O-8），DI-KS 13 那句「來源再登記後……讀到新的內容」講的是**同一份** Registry，不能當根據；`SetExtractSource` 存裸指標，`BuildNewFirst` 換上時舊來源就銷毀，所以重設必須在**換上的同一步**，不能留到下一輪。有保留式的對應之後（第 8 點），「准許換來源」還要在同一步把渲染側以舊來源實體為鍵的對照與對應實體**整批作廢**（新 World 的編號可能和舊的相同）——傾向的理由在 R1b 照這個重算。
 5. **銷毀**：讀者先於來源（O-15，已有）。
 6. **來源壞了**：Product 已結束，不跑 Extract（O-11，已有）。
 7. **渲染 World 的時間**：只對時間設計 5.5（二）（模擬與畫面同一條執行緒）定：渲染 World 不帶 world_time，內插要的量（`FixedTime` 的餘數、步長）經 `ExtractRes` 從來源讀（避免兩個 World 各取一次樣、出現兩個「現在」）。內插還要「上一步的姿態」：放在來源 World（作者或 X 給的一個元件，由固定步的最後寫），不放渲染 World（判定與內插的資料留在擁有它的 World；渲染側只讀）——細節在子批 X。這一件和取樣一起在**子批 W** 定（P12：那一批要一起定），R1a 照用。5.5（三）（PvP Client：模擬在別的執行緒）的時間來源不在本線，列第 15 節。
-8. **實體對應**：R1a、R2a、K 只抽 Resource 層的資料（ImGui 的 draw list），不需要實體對應。**每個來源實體在渲染 World 有對應實體**（3D 網格、sprite 的 GPU 狀態掛在上面）照 Bevy 0.15 起的保留式（`SyncToRenderWorld`、`RenderEntity`／`MainEntity`，偵察 3.6），在 R2b 的宣告設計。修訂 2 以前的「每輪重抽」是 Bevy 0.14 以前的形，照 P26 不採：之後再換成保留式，所有 extract 的 System（`ui_render`、可畫元件）都要重寫，Bevy 自己 0.14→0.15 換過一次。對應的實體由渲染側建、刪；來源被刪時怎麼通知渲染側（Extract 唯讀、不能在來源掛 hook 寫渲染 World）是 R2b 要解的衝突點。
+8. **實體對應**：R1a、R2a、K 只抽 Resource 層的資料（ImGui 的 draw list），不需要實體對應。之後照 Bevy 0.15 起的做法分三種、**在 R2b 的宣告逐種判**：標了要同步的種類（Bevy 是相機、光源、sprite、視窗，`SyncToRenderWorld`）在渲染 World 有對應實體；網格一類的每實例狀態放在以來源實體為鍵的 Resource（Bevy 的 `RenderMeshInstances`，`bevy_pbr/src/render/mesh.rs:1214-1230`）；文字一類每幀用暫時的資料。修訂 2 以前的「每輪全部重抽」照 P26 不採。Bevy 的同步把 `RenderEntity` 寫回來源、由讀者清空來源的待同步清單（`bevy_extract/src/sync_world.rs:93-108`、`:221-258`），和 DI-KS 13 不相容：對照表只能放渲染側、增刪的通知誰清、同步這一步要動兩個 World、元件被拿掉的通知——四個衝突點在 R2b 解；R1a 的宣告先留「上次 Extract 之後來源增刪了什麼」的讀法的形（今天的 Extract 參數只有 `Extract<Read<T>>`、`ExtractRes<R>`）。
 
 **執行緒**（修訂 0 的「Extract 是唯一的同步點」錯了，拿掉）：Extract 要兩個 World 都不在 Run 裡（O-12），所以**只在同一條執行緒上的兩個 World 之間**。PvP Client 照使用者 11-11 的組法（runtime-composition §2）：模擬 World S 在自己的執行緒；畫面 World F 與渲染 World R 在主執行緒，R 經 Extract 讀 F；S 與 F 之間照 O-13 (3) 經各自有鎖的物件交換、不等另一條執行緒——在 PvP 移植時定。不開 render 執行緒（master D27）。
 
@@ -265,9 +266,10 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 - **形**：`Transform`（位置 `Vec3`、旋轉 `Quaternion`、縮放）是作者寫的、權威的姿態，意思是「相對父的局部姿態；沒有父時等於全域」；父子用 Kernel 的 `ChildOf`（子上）與 `Children`（父上，由 hook 維護）；`GlobalTransform`（全域矩陣）由傳播的 System 在**來源 World 的 `Main`／`PostUpdate`** 算（Bevy `TransformSystems::Propagate` 在 `PostUpdate`，`bevy_transform/src/plugins.rs:27-46`）。2D 遊戲用同一套，z 拿來排序（Bevy `transform.rs:87`）。
 - **`GlobalTransform` 是給畫面讀的推導值**（修訂 1 的「可以進摘要」不成立，拿掉）：傳播一幀一次、固定步一幀 0 到多次，某個 tick 的 `GlobalTransform` 落後幾步取決於幀率；回滾放回 `Transform` 後它還是舊時間線的值。所以：**雜湊函式什麼都不寫**（同 `AssetView`；沒有雜湊函式又有值時 `Summary` 回 `HashMissing`，DI-KS 27，所以一定要寫一個空的）、**判定的 System 不讀它**（判定要全域姿態時自己從 `Transform` 與 `ChildOf` 算）、不登記回滾、不複製、不進權威的寫者檢查。Bevy 的 `GlobalTransform` 也是傳播出來的推導值（`PostUpdate`）；對照：Unity Netcode 同樣把畫面用的那一份與判定用的那一份分開（`com.unity.netcode/Documentation~/intro-to-prediction.md:192`）。
 - **`Transform` 要不要回滾、複製**：作者的（例：PvP 的模擬是否用自己的位置元件），網路那一側定。`ChildOf` 的回滾、複製、讀檔在第 6.5 節。
-- **子批 X 要處理的洞**：(1) 讀檔或建 World 後第一幀，`PostUpdate` 之前跑的 System 讀到的 `GlobalTransform` 還沒算——Bevy 在 `PostStartup` 也跑一次傳播（`plugins.rs:27-37` 的註解）；GYO 的對應時機（準備函式之後、第一輪之前，或生成世界的最後）在 X 定。(2) 傳播若用變更偵測略過沒變的格，回滾與讀檔的「放回」要被看成變更，否則放回的實體不重算。(3) 骨架關掉的 World 沒有 `PostUpdate`，傳播掛哪裡要能由作者指定（照 world_time 的掛載選項）。(4) 內插要的「上一步的姿態」放在來源 World（第 6.1 節 7）。
+- **子批 X 拆兩步**：X1（`Transform`、`GlobalTransform`＝沒有父時等於本身、相機）不需要 KR，R2b 只等 X1；X2（讀 `ChildOf` 的階層傳播）等 KR。
+- **子批 X 要處理的洞**：(1) 讀檔或建 World 後第一幀，`PostUpdate` 之前跑的 System 讀到的 `GlobalTransform` 還沒算——Bevy 在 `PostStartup` 也跑一次傳播（`plugins.rs:27-37` 的註解）；GYO 的對應時機（準備函式之後、第一輪之前，或生成世界的最後）在 X 定。(2) 傳播若用變更偵測略過沒變的格，回滾與讀檔的「放回」要被看成變更，否則放回的實體不重算。(3) 骨架關掉的 World 沒有 `PostUpdate`，傳播掛哪裡要能由作者指定（照 world_time 的掛載選項）。(4) 內插要的「上一步的姿態」放在來源 World（第 6.1 節 7）。(5)（X2）`ChildOf` 被拿掉或換掉時子樹要重算（Bevy 靠 `RemovedComponents<ChildOf>` 與 `Changed<ChildOf>` 找孤兒與換父，`bevy_transform/src/systems.rs:54`、`:112-113`、`:339`）。
 - **縮放照 Bevy 用 `Vec3`**（修訂 2 列的「Unity 的 `float`＋`PostTransformMatrix`」照 P26 不當選項，不再交使用者）。非等比縮放配上父子會出現剪切，Bevy 的做法是 `GlobalTransform` 存仿射矩陣、照樣相乘；X 的說明頁寫這個後果。
-- **先後**：X 在 KR 之後（傳播讀 `ChildOf`）、R2b 之前（R2b 的 Extract 讀 `GlobalTransform`）。
+- **先後**：X1 在 R2b 之前（R2b 的 Extract 讀 `GlobalTransform`）；X2 在 KR 之後。
 
 **相機**（使用者 P25）：Module `camera`（`engine/modules/camera`），來源側的單位、`default=yes`、依賴 `transform`。相機元件帶投影（正交或透視，同一套機制）、視區、畫到哪個目標（視窗或貼圖，以 render 給的不透明 id 表示，`camera` 不依賴 render）、排序；視點由同一個實體的 `GlobalTransform` 給。投影的數學用 core/math 現有的（`Matrix4`、`Frustum`）。渲染 World 經 Extract 讀它。2D 遊戲與 3D 遊戲用同一個元件（Bevy `Camera2d` 預設正交，`bevy_camera/src/components.rs:13`）。在子批 X 和 Transform 一起做。
 
@@ -282,49 +284,69 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 
 ### 6.5 Kernel 的關係（子批 KR，P26）
 
-**前提**：Engine 的（Kernel 的機制；作者不能自己在 Kernel 外做出「刪父連帶刪子、兩邊同步」而不靠 hook 的時機與同步點）。**為什麼拆成先行的 Kernel 子批**（統合照「改基盤介面的留統合、先做」判）：它改 Kernel 的公開介面與職責清單，`transform`（X）、可畫元件與 UI 的階層（R2b、U）、網路複製、讀檔都會積在上面；放進 X 一起做，X 的審查會混進 Kernel 的契約。
+**例子**：武器掛在角色手上（武器 `ChildOf(角色)`），角色被刪時武器跟著刪；背包裡的道具換到另一個角色身上（換父）；回滾讓預測中被打掉的道具回來。
 
-**範圍**（照 Bevy `bevy_ecs/src/relationship/`、`hierarchy.rs`）：
-1. **通用的關係機制**：關係元件放在來源實體上、存目標實體（`ChildOf(parent)`）；關係目標元件放在目標上、存來源的集合（`Children`）；加上、換掉、拿掉關係元件時，hook **立即**維護另一邊（Bevy `relationship/mod.rs:150` 的 `on_insert`、`on_replace`）。關係目標元件作者不直接寫（Bevy 的 `collection_mut_risky`）。
-2. **`ChildOf`／`Children`**：`Children` 帶「連帶刪除」——父被刪，子跟著刪（Bevy `hierarchy.rs:148` 的 `linked_spawn`、`relationship/mod.rs:332` 的 `on_despawn`）；從子查父讀 `ChildOf`。指向自己的關係照 Bevy 拿掉；回報的形照異常分級（告訴外面發生了什麼、不替外面決定），KR 定。目標不存在時的處理 KR 定（Bevy 用 `try_` 系列靜默略過）。
-3. **和 GYO 的同步點**：一般 System 的 `Spawn`、加元件只經同步點（DI-KS 9、F.2 的套用順序）；hook 在套用時跑（DI-KS 12、18）。關係的維護與連帶刪除要在**同一個同步點**、以決定性的順序完成——Bevy 用 commands 排到之後套用，GYO 的套用順序是寫死的（DI-KS 9），這是 KR 要解的衝突點。
-4. **職責清單**：DI-KS 15 多一項「關係」（使用者已同意，P26）；`StartupCode` 不增；`kernel_guard.py` K9 的「拿掉的名字」不受影響（要確認）。**邊界統合宣告**（`kernel-app-boundary-declaration.zh-Hant.md`）的 Kernel 職責清單同一個變更改。
+**前提**：Engine 的（Kernel 的機制；作者在 Kernel 外做不出「刪父連帶刪子、兩邊一致」而不碰 hook 與同步點的契約）。**為什麼拆成先行的 Kernel 子批**：它改 Kernel 的公開介面與職責清單，`transform` 的階層（X2）、可畫元件、網路複製、讀檔都會積在上面；放進 X 一起做，X 的審查會混進 Kernel 的契約。
 
-**回滾、網路複製、讀檔**（照 AGENTS §2 從 Bevy 與它的生態推導）：
+**統合在這裡定的只有需求與邊界**；Kernel 裡怎麼做，在 KR 的宣告比、要改的條文在那裡交使用者（AGENTS §3）。
 
-| 情境 | Bevy 與生態 | GYO 的推導（KR 定細節） |
-|---|---|---|
-| 真值在哪 | `ChildOf` 是真值，`Children` 由 hook 推導 | 同左。`ChildOf` 帶雜湊函式、可以登記回滾與複製；`Children` 不登記回滾、不複製 |
-| 回滾 | lightyear 回滾的是 `ChildOf` 這類真值元件（`lightyear/crates/integration/avian/src/rollback.rs:1148-1165` 的測試把 `ChildOf` 當一般元件） | 放回 `ChildOf` 走跑 hook 的當場改路（`ExclusiveWorld::Restore`，DI-KS 15 第 (13) 項），`Children` 由 hook 重建。**衝突點**：`Children` 的順序是插入的先後（UI 的子順序有意義），放回後的順序要和原本相同——放回的先後由 KR 定成決定性，並有測試 |
-| 網路複製 | bevy_replicon：只複製 `ChildOf`，`Children` 插入時自動更新（`bevy_replicon/src/lib.rs:255-259`）；lightyear 的測試同（`crates/tests/src/client_server/hierarchy.rs`） | 只複製 `ChildOf`。`ChildOf` 裡的實體編號要映射——Bevy 用 `#[entities]`（`hierarchy.rs:107`）＋`MapEntities`；GYO 的映射是網路 Module 的事（批次表「網路複製的外來編號也要先動配發器的範圍」），KR 只寫明「哪個欄位是實體編號」給映射用 |
-| 讀檔 | 場景序列化時 `ChildOf` 經 `MapEntities` 映射 | 讀檔由生成世界裡的 System 放回實體（讀檔宣告）；`ChildOf` 的目標可能還沒放回 → 先放回所有實體、再加 `ChildOf`（或定義目標不存在時的行為）；`Children` 不存檔 |
-| 摘要 | — | `ChildOf` 進摘要（真值）；`Children` 的順序若決定性就照樣雜湊，否則什麼都不寫——KR 定 |
+**需求**（照 Bevy `bevy_ecs/src/relationship/`、`hierarchy.rs`；P26）：
+1. 通用的關係機制：關係元件放在來源實體上、存目標實體（`ChildOf(parent)`）；關係目標元件放在目標上、存來源的集合（`Children`），由機制維護、作者不直接寫（Bevy 的 `collection_mut_risky`，`relationship/mod.rs:296`）。
+2. `ChildOf`／`Children`：從子查父；父被刪時連帶刪子（Bevy `hierarchy.rs:148` 的 `linked_spawn`、`relationship/mod.rs:332` 的 `on_despawn`）。
+3. DI-KS 15 多一項「關係」（使用者已同意，P26）；邊界統合宣告（`kernel-app-boundary-declaration.zh-Hant.md`）的 Kernel 職責清單同一個變更改。
+4. 薄起步（AGENTS §2）：實作一對多的 `ChildOf`／`Children` 與連帶刪除；Bevy 的一對一關係（`source_to_remove_before_add`）、`allow_self_referential`、自訂集合、連帶複製（linked clone）只定形。
+5. 寫關係的 Replacement Criteria（AGENTS §3：加大責務時、積功能之前）。例：維護需要當場套用的第三個例外（RC 18 的同類）；連帶刪除超過清空輪上限；`Children` 的順序保不住回滾的等價。
 
-**和本線**：X 的傳播讀 `ChildOf`／`Children`；ImGui、KeepTool 不用；`ui` 的節點階層要不要用 Kernel 的關係在 U 判（`gyo.ui` 有自己的文件樹）。
+**Bevy 實際保證到哪裡**（修訂 3 寫的「hook 立即維護另一邊」不準，是主會話對 Bevy 的描述、不在使用者決定的字裡）：`on_insert` 把「加進目標的 `Children`」排成 commands，到那一次結構操作結束才看得到（`relationship/mod.rs:194-204`，註解「Deferring is necessary for batch mode」）；`on_discard` 當場改集合（`:238-241`，本機版本的名字是 `on_discard`、不是 `on_replace`）；目標不存在時 `warn!` 並把關係拿掉（`:206-213`）；指向自己同樣拿掉（`:176`）；關係元件是不可就地改的（`bevy_ecs/macro_logic/src/component.rs:310-312`，只能重新插入）。lightyear 也為「Add hook 與 observer 之間沒有 flush」踩過坑（`crates/replication/replication/src/hierarchy.rs:542-544`）。
+
+**和 GYO 現行 Kernel 契約的衝突點**（KR 的宣告逐一比選項、改條文的交使用者）：
+
+| # | Bevy 靠什麼 | GYO 現在 | KR 要比的路 |
+|---|---|---|---|
+| K1 | `on_insert`、`on_discard`：每次寫入（含覆寫）都跑 | DI-KS 11：hook 只有 OnAdd、OnRemove；覆寫不是 add（`World.cpp:886`）——「換父」沒有 hook | 加 hook 的種類（改 DI-KS 11）／維護內建在 Kernel 的套用步驟（不是 hook） |
+| K2 | 關係元件不可就地改 | Kernel 沒有「不可就地改的元件」 | 加這個概念／`Write<ChildOf>` 是 Programmer Error／維護改成在同步點比對 |
+| K3 | hook 排的 commands 在那一次結構操作結束前套用 | DI-KS 18：hook 當場改成員是 World 中斷；DI-KS 9：hook 記的變更屬**下一窗**——第一個子加上時父還沒有 `Children` 那一格，要到下一個同步點才有 | 一致性保證到哪一刻（同一筆操作／同一個同步點／下一窗）；可能改 DI-KS 9、18 |
+| K4 | `on_despawn` 遞迴到底，沒有層數上限 | hook 記的刪除一層一輪，上限 `hookRoundLimit` 預設 8（`Registry.hpp:386`），超過 World 中斷 | 連帶刪除內建在 despawn 的套用（不走 hook 輪）／放寬上限 |
+| K5 | `Children` 的順序是 commands 的先後 | 同步點的 insert、OnAdd 依 (EntityId, ComponentId) 排（DI-KS 9） | 順序定成插入先後（要另記）／定成正規的順序（偏離 Bevy，UI 若要子順序另給排序鍵） |
+| K6 | 回滾：Bevy 生態沒有現成的例子（本機 lightyear、replicon 都沒有把 `ChildOf` 登記成回滾元件並驗 `Children` 的；修訂 3 引的 lightyear 測試其實沒回滾 `ChildOf`） | `ExclusiveWorld::Restore` 只對新增、拿掉的格跑 hook；覆寫與相等的格不跑（`Params.hpp:913-921`、`:915-917`；`World.cpp:886`；DI-KS 12「相同的格不寫」）。換父的回滾、順序變過的回滾、預測死亡的復活三種情形 `Children` 都會錯；回滾頁 R-2 前提 1 也要定 `Children` 屬哪一類 | (a) `Children` 自己登記回滾、放回時不跑關係的維護（Bevy 讀檔的 `RelationshipHookMode::Skip`）→ 撞 DI-KS 12「Kernel 不知道一次放回是為了什麼；通知照跑」；(b) `Children` 的順序定成正規的 → 和 K5 同一題；(c) `Restore` 之後整份重建 `Children` → Kernel 多一步 |
+| K7 | 讀檔：Bevy 的場景連 `Children` 也存，放回時跳過關係的 hook（`bevy_world_serialization/src/dynamic_world.rs:148-156`、`:192-200`；GYO 的讀檔宣告 5.3 已記過，`restore-entry-declaration.zh-Hant.md:134`） | 讀檔由生成世界的 System 放回；同一個同步點裡目標都已經在（spawn → insert → OnAdd），只有分批放回才會遇到目標還沒在 | (i) 不存 `Children`、放回後的順序照 K5／(ii) 照 Bevy 存、跳過維護 → 碰讀檔宣告第 11 節的 RC（「hook 要分辨讀檔 → 停下來交使用者」，`:231`）與 DI-KS 12 |
+| K8 | 複製：bevy_replicon 只複製 `ChildOf`，`Children` 插入時更新（`bevy_replicon/src/lib.rs:255-259`）；父還沒到時，replicon 先建佔位實體、lightyear 另做 `PendingChildOf`（`lightyear/crates/replication/replication/src/hierarchy.rs:44-56`、`:358-405`） | GYO 的複製照外來編號直接生成（批次表「網路複製的外來編號也要先動配發器的範圍」） | 目標不存在時的行為（K 的選擇直接決定網路 Module 要不要自己做等待）；「`ChildOf` 裡的實體編號要映射」這個前提先和網路 Module 對 |
+| K9 | Kernel 內建的元件怎麼登記 | — | `ChildOf`／`Children` 的 owner、每個 World 都有還是用到才有；動到 ComponentId 的先後（DI-KS 4）、Registry 指紋與 J-32 的 golden；`StartupCode` 要不要加（關係的登記錯誤） |
+
+**K3、K6、K7（以及 K1、K2 選改條文的路時）在 KR 的宣告交使用者**；KR 的驗收句等選定之後才寫。統合的傾向只有一句：照 P26，能照 Bevy 的照 Bevy，偏離時寫衝突點與膠水量。
+
+**和本線**：X2 的傳播讀 `ChildOf`／`Children`；ImGui、KeepTool 不用；`gyo.ui` 的節點模型（文件樹還是實體）在 U 的宣告判（第 6.6 節）。
 
 ### 6.6 借自別家與偏離 Bevy 的逐項檢查（P26 的判法）
 
-ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**偏離 Bevy**、或**引用 Unity、Godot、flecs、master** 的地方逐一列出，寫衝突點與膠水量；只當對照的標「對照」。
+ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**偏離 Bevy**、或**引用 Unity、Godot、flecs、master** 的地方逐一列出，寫衝突點與膠水量；只當對照的標「對照」。GYO 自己的設計（編排層、共用處、登記檔）照舊，寫清楚和 Bevy 的接合點（HANDOFF `-hierarchy-bevy-and-primary-reference` 決定 (2)）。
 
 | 項 | 和 Bevy 的關係 | 別家的角色 | 衝突點 | 膠水量 | 處置 |
 |---|---|---|---|---|---|
 | 視窗與輸入兩個 Module、一個 SDL 的實作產生兩種事件 | 同 Bevy（`bevy_window`／`bevy_input`／`bevy_winit`） | Godot `DisplayServer`：退掉的選項（對照） | — | — | 照 Bevy |
+| 輸入的雙軌資料（狀態＋依序事件） | 同 Bevy（`ButtonInput`＋訊息）；做法來自 master | — | — | — | 照 Bevy |
 | 有視窗的 runner 由 SDL 的實作在 `Configure` 裝 | 同 Bevy（`WinitPlugin::set_runner`） | — | — | — | 照 Bevy |
-| 輸入經服務＋套用點進 World | Bevy 生態有兩種：`bevy_winit` 由 runner 直接寫、`bevy_gilrs` 是服務＋System；取後者 | — | runner 直接寫：runner 要認得輸入的型別、多個 World 各寫一次 | 一個套用 System | 照 Bevy 生態的 `bevy_gilrs` 形 |
-| **輸入放 Resource、不用 `Message`** | **偏離**（Bevy 用 `Messages<KeyboardInput>`） | — | Kernel 的 `Summary` 雜湊訊息的序號與游標，OS 事件讓摘要依時序而變（第 6.3 節） | 一個每幀換掉的 Resource＋作者在固定步之前累積（Bevy 的 `ButtonInput` 在固定步也要累積，官方範例同） | **暫時偏離**：主會話若給 Kernel「訊息型別不進摘要」的選項，`input` 改回 `Message`、照 Bevy |
-| **事件時刻保留、在平台邊界換成時間基準** | **偏離**（Bevy 不保留 OS 的事件時刻，偵察 2.4） | Unity Input System 保留時刻（對照）；做法來自 master | 和 ECS 不衝突（只在 SDL 的實作裡） | 一個配對的純函式＋換算 | 使用者的決定（P11）；不是混搭 |
-| 要後端的 Module `default=no` | **偏離**：Bevy 的 `DefaultPlugins` 帶視窗、輸入、render，沒畫面的程式用 `MinimalPlugins` | Godot 的 headless 選 dummy（對照） | GYO 的登記檔每列一個預設值，沒有「預設組合」（`MinimalPlugins`）；預設帶的話，Match 與每個 headless 測試都要逐列關，而且缺後端在啟動時報錯 | `default=no`：有畫面的產品列 3～5 列；`default=yes`：每個沒畫面的產品與測試關 3～5 列 | 維持 `default=no`；要照 Bevy 得先在登記檔加「預設組合」，那是登記檔的改動，另議 |
-| 混音器由開裝置的單位建 | 同 Bevy（`bevy_audio` 的 `AudioOutput`） | — | — | — | 照 Bevy |
-| Extract 只讀、不寫回 | **偏離**（Bevy 的 `ResMut<MainWorld>` 寫回，偵察 3.4） | — | Bevy 的 GPU 讀回、surface 色彩空間、`Time<Real>` 的回推都靠寫回 | 讀回只給呼叫的人（測試）；渲染 World 讀來源的時間 Resource | 使用者 11-11 的決定（P7）；不是混搭 |
-| 渲染 World 的實體保留式 | 同 Bevy 0.15 起（`SyncToRenderWorld`、`RenderEntity`） | — | 來源被刪時通知渲染側（Bevy 靠 main 的 hook 寫 render world，GYO 唯讀） | R2b 定 | 照 Bevy；衝突點在 R2b 解（修訂 2 以前的「每輪重抽」拿掉） |
-| 渲染 World 的時間讀來源 | 讀 main 的時間資料同 Bevy 的方向；Bevy 經 channel 回推屬寫回，不照 | — | — | 一個 `ExtractRes` | 照 Bevy 的方向，不照寫回 |
-| `transform`、`camera` Module；父子在 Kernel | 同 Bevy（`bevy_transform`、`bevy_camera`、`bevy_ecs` 的 `ChildOf`） | Unity `Unity.Transforms`：退掉（P26）；flecs `EcsChildOf`（對照） | — | — | 照 Bevy |
-| 縮放 `Vec3` | 同 Bevy | Unity 的 `float`＋`PostTransformMatrix`：不當選項（P26） | — | — | 照 Bevy |
-| `GlobalTransform` 不進摘要、判定不讀 | Bevy 的 `GlobalTransform` 也是推導值；Bevy 本身沒有摘要 | Unity Netcode（對照） | GYO 有逐型別摘要（DI-KS 27），Bevy 沒有：要決定推導值寫不寫 | 一個空的雜湊函式 | GYO 特有的機制上的補充，不是混搭 |
+| 輸入經「runner 泵＋服務＋套用 System」進 World | 接合點：泵像 `bevy_winit`（在 runner），進 World 的那一步是 GYO 的 O-12 套用點（`bevy_gilrs` 的 `Gilrs` 是 World 裡的 Resource、由 System 自己取，`gilrs_system.rs:38-48`，不完全同） | — | Bevy 由 runner 直接寫 World；GYO 的 runner 不認得輸入型別、多個 World 各自取 | 一個套用 System | GYO 的 O-12，寫明接合點 |
+| **輸入與視窗事件放 Resource、不用 `Message`** | **偏離**（Bevy 用 `Messages<KeyboardInput>`、`Messages<WindowResized>`） | — | Kernel 的 `Summary` 雜湊訊息的序號與游標（第 6.3 節） | 一個每幀換掉的 Resource＋作者在固定步之前累積；**回頭改回 `Message` 時，每個讀輸入的 System（`world_imgui`、`world_ui`、作者的 System、W 的說明頁）都要改** | **要主會話在 W 開工前回答**「訊息型別不進摘要」的選項；有就照 Bevy 用 `Message`，沒有才偏離（第 16 節） |
+| **事件時刻保留、在平台邊界換成時間基準** | **偏離**（Bevy 不保留 OS 的事件時刻） | Unity Input System 保留時刻（對照）；做法來自 master | 和 ECS 不衝突（只在 SDL 的實作裡） | 一個配對的純函式＋換算 | 使用者的決定（P11）；不是混搭 |
+| **要後端的 Module `default=no`** | **偏離**：Bevy 的 `InputPlugin`、`WindowPlugin` 無條件在 `DefaultPlugins`，沒有後端也照跑（只是資料） | Godot 的 headless 選 dummy（對照） | **使用者 11-13 的「缺後端是明確錯誤」**（P22）與第 9.2 節第 3 點：預設帶又沒有後端就報錯 | `default=no`：有畫面的產品列 3～5 列 | 隨 Q4：選照 Bevy 的 (d) 時 `input`、`window` 改 `default=yes`、缺後端不是錯；`render_world` 照角色只放渲染 World，仍 `default=no` |
+| 混音器由開裝置的單位建 | 只有「開裝置的一方擁有輸出」同 Bevy；Bevy 的混音器是 rodio 的（`bevy_audio/src/audio_output.rs:9-22`），沒有「Module 介面＋後端單位」的分法 | — | — | — | GYO 的 audio Module＋後端，接合點同 Bevy |
+| Extract 只讀、不寫回 | **偏離**（Bevy 的 `ResMut<MainWorld>` 寫回；`extract_render_asset` 把 main 的素材資料搬走，`render_asset.rs:296`；`Time<Real>` 經 channel 回推，`bevy_render/src/lib.rs:522-535`） | — | GPU 讀回、surface 色彩空間、素材上傳後 CPU 那一份 | 讀回只給呼叫的人（測試）；GYO 的素材在 World 外的 `AssetStore`（asset 宣告），渲染側直接讀服務、不必從 World 搬走——上傳後 CPU 那一份留不留在 I、R2b 定 | 使用者 11-11 的決定（P7）；不是混搭 |
+| 渲染 World 的實體保留式 | **方向同 Bevy 0.15 起，做法偏離**：Bevy 只有標了 `SyncToRenderWorld` 的種類（相機、光源、sprite、視窗）有對應實體；網格的每實例狀態在以 `MainEntity` 為鍵的 Resource（`bevy_pbr/src/render/mesh.rs:1214-1230`）；文字每幀用暫時實體 | — | Bevy 的同步把 `RenderEntity` 寫回來源實體、由讀者清空來源的待同步清單（`bevy_extract/src/sync_world.rs:93-108`、`:221-258`）——和 DI-KS 13 不相容。至少四個衝突點：對照表放哪（只能放渲染側）、增刪的通知誰清、同步這一步要同時動兩個 World（R1a 的 `RunExtract(schedule, const World&)` 沒有位置）、元件被拿掉的通知 | 每個 extract System 多查一次對照；增刪的讀法（R1a） | R2b 的宣告逐種判（哪些種類要對應實體）；增刪的讀法在 R1a 的宣告留形 |
+| 渲染 World 的時間讀來源 | 讀 main 的時間同 Bevy 的方向；channel 回推不照 | — | — | 一個 `ExtractRes` | 照 Bevy 的方向，不照寫回 |
+| **不開 render 執行緒**；Extract 只在同一條執行緒的兩個 World 之間 | **偏離**（Bevy 的 `DefaultPlugins` 帶 `PipelinedRenderingPlugin`，`bevy_internal/src/default_plugins.rs:55-57`） | master D27 | C1：SDL_GPU 的 swapchain 只能在建視窗的執行緒；GYO 的 Extract 要兩個 World 都不在 Run（O-12） | — | 平台的限制（C1）＋master 的教訓；不是混搭 |
+| `render` 不依賴 `window`；`camera` 用不透明的目標 id、不依賴 render | **偏離**（`bevy_render` 依賴 `bevy_window`；`bevy_camera` 依賴 `bevy_window`，`RenderTarget::Window(WindowRef)`，`camera.rs:896-901`） | — | GYO 的 `camera` 預設帶、`window` 預設不帶（或沒有後端）：`camera` 依賴 `window` 會讓 Match 帶 `window`；Bevy 的視窗是實體，GYO 的視窗是共用處的服務 | 一個不透明的目標 id 型別 | 隨 Q4：選 (d) 時 `window` 預設帶，`camera` 可以照 Bevy 依賴 `window`（子批 X 照 Q4 的結果定） |
+| 一列只扮一種角色、`world_<x>`／`<x>_render` 分列 | **偏離**（Bevy 一個 Plugin 的 `build` 同時向 main 與 `RenderApp` 登記） | — | GYO 的 O-E3 逐 World 檢查依賴（第 3.3 節） | 每個跨兩邊的 Module 多一兩列 | GYO 已核准的機制的後果；接合點：一個 Bevy Plugin＝GYO 的一組列 |
+| extract schedule 寫在讀者的每幀清單、不放第一張不算錯 | **偏離**（Bevy 的 extract 固定在 sub app 的 update 之前） | — | GYO 的每幀清單（O-4） | `render_world` 預設把它插在 `Main` 之前 | GYO 的 O-4；預設排法和 Bevy 同效果 |
+| `transform`、`camera` Module；父子在 Kernel；縮放 `Vec3` | 同 Bevy | Unity `Unity.Transforms`、`float` 縮放：不當選項（P26）；flecs `EcsChildOf`（對照） | — | — | 照 Bevy |
+| Kernel 的關係的做法（K1～K9） | 同 Bevy 的形；保證的時點、順序、回滾、讀檔有衝突點 | — | 第 6.5 節的表 | KR 定 | KR 的宣告比、交使用者 |
+| `GlobalTransform` 不進摘要、判定不讀 | Bevy 的 `GlobalTransform` 也是推導值；Bevy 本身沒有摘要 | Unity Netcode（對照） | GYO 有逐型別摘要（DI-KS 27） | 一個空的雜湊函式 | GYO 特有的機制上的補充 |
+| **`gyo.ui` 的節點是自己的文件樹、不是實體** | **偏離**（`bevy_ui` 的節點是實體，階層就是 `ChildOf`）——本線最大的一個非 Bevy 的形 | master；使用者 P17 定的是「ui 留 Engine」，不是節點模型 | `gyo.ui` 是 Editor↔Runtime 的資料契約（ui_editor 讀寫）；改成實體要另定文件與實體的對應 | 照舊：`ui_render` 抽文件樹的繪製資料；改照 Bevy：codec 讀出後生成實體、互動與 layout 改走 System | **U 的宣告比、交使用者**（節點模型是基盤） |
+| `Renderer` 的核心、固定 pass、shader ABI | master 的形；Bevy 是 render graph／phase | — | R2b 的 3D 場景與 2D 管線會積在上面 | R2b 定 | R2b 的宣告對照 Bevy 的 render graph／phase，偏離寫衝突點 |
 | ImGui 接在我們的 `input`／`render` 上（Q3 (b)） | 同 Bevy 生態（`bevy_egui`，使用者 11-11 §3b 寫的參考） | ImGui 官方後端：Q3 (a) | — | 兩段接法 | Q3 |
-| 缺後端兩處都查（Q4 (c)） | Bevy 沒有 Plugin 的依賴機制（issue #69，`-module-deps-in-registers`） | — | 不是 ECS 的機制；GYO 的 O-6 本來就和 Bevy 不同（使用者 11-17 定） | 登記檔一欄 | Q4 |
+| 缺後端在哪查（Q4） | Bevy 沒有 Plugin 的依賴機制（issue #69，`-module-deps-in-registers`），也沒有缺後端的錯誤 | — | 使用者 11-13（P22）要明確錯誤 | (c) 登記檔一欄；(d) 沒有 | Q4 |
 | 不帶 `InputActionMap` | 同 Bevy 本體（動作對應在生態的 leafwing） | Godot `InputMap`、Unity Actions（對照） | — | — | 照 Bevy |
-| 後端的注入（持有者型別放共用處） | Bevy 的後端直接是 Plugin 加 Resource；GYO 的共用處（O-15）是已核准的 GYO 機制 | — | Bevy 沒有 Product 一份的共用處；GYO 的 Plugin 不能在 Module 之前 `Configure` | 每個 Module 一個持有者型別 | GYO 已有機制的用法，不是混搭 |
+| 後端的注入（持有者型別放共用處） | Bevy 的後端是 Plugin 加 Resource；GYO 的共用處（O-15）是已核准的 GYO 機制 | — | Bevy 沒有 Product 一份的共用處；GYO 的 Plugin 不能在 Module 之前 `Configure` | 每個 Module 一個持有者型別 | GYO 已有機制，寫明接合點 |
 
 ## 7. audio 的 SDL 輸出後端（要涵蓋的第 5 項）
 
@@ -433,8 +455,9 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fable／high
 ├─ R1a extract｜Kernel 的 RunExtract＋編排層 extractFrom（O-E9）＋RunSchedule 的處理 ── Opus／high
 ├─ R1b extract-replace｜來源被替換時（讀者一起重建／准許換來源，比較後交使用者） ── Opus／high
-├─ KR  kernel-relationship｜Kernel 的關係機制＋ChildOf／Children（連帶刪除、hook 維護另一邊）＋回滾、複製、讀檔的契約＋職責清單多一項 ── Opus／high
-├─ X   transform-camera｜transform（Transform、GlobalTransform、傳播）＋camera ── Opus／high
+├─ KR  kernel-relationship｜Kernel 的關係機制＋ChildOf／Children＋連帶刪除＋K1～K9 的選擇（要改條文的交使用者）＋職責清單多一項 ── Opus／high
+├─ X1  transform-camera｜transform（Transform、GlobalTransform：沒有父時等於本身）＋camera ── Opus／high
+├─ X2  transform-hierarchy｜讀 ChildOf 的階層傳播（等 KR） ── Opus／high
 ├─ I   image｜image Module＋stb_image adapter（asset 宣告 5.11） ── Opus／high
 ├─ P   plugins-base｜plugins/ 的登記形、SDL3 的取得、只建選了的 Plugin、刪 SDL 的建置測試 ── Opus／high
 ├─ W   window-input｜window、input＋SDL 視窗與輸入＋有視窗的 runner＋取樣移給 runner＋渲染 World 的時間＋時間戳 ── Opus／high
@@ -442,30 +465,31 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 ├─ T   text｜text Module＋SDL_ttf 實作 ── Opus／high
 ├─ R2a render-core｜render、render_world、裝置、swapchain、一個 2D pass（貼圖、混合、裁切）、最小的 shader 管線 ── Opus／high
 ├─ K   keep-tool｜ImGui（兩半、draw list 經 Extract）＋KeepTool＋IME 實機一次 ── Opus／high
-├─ R2b render-pipelines｜Renderer、讀相機、合成、3D 場景、疊層、讀 GlobalTransform、VFX 預見 ── Opus／high
+├─ R2b render-pipelines｜Renderer、讀相機、合成、渲染 World 的實體對應（逐種判）、3D 場景、疊層、讀 GlobalTransform、VFX 預見 ── Opus／high
 └─ U   ui｜ui、world_ui、ui_render ── Opus／high
 ```
 
 先後：
-- **馬上可以開**：KR（Kernel）、R1a、R1b（只動 Kernel 與編排層，不依賴 P）、I（不依賴 SDL；I 定的像素格式、原點、列距要和 R2b 對過，master 坑 17）。
-- **KR 之後**：X（傳播讀 `ChildOf`）。KR 與 R1a、R1b 都改 Kernel 頁與 Kernel 的程式，並行時後合併的一方 merge 跟上（DI-KS 的條號在 KR 先保留：DI-KS 29 起）。
+- **馬上可以開**：KR（Kernel）、R1a、R1b（只動 Kernel 與編排層，不依賴 P）、X1、I（不依賴 SDL；I 定的像素格式、原點、列距要和 R2b 對過，master 坑 17）。
+- **KR 之後**：X2（傳播讀 `ChildOf`）。KR 帶著要交使用者的題（第 6.5 節），不擋 X1、R2b、K。
+- **改 Kernel 的三個子批（KR、R1a、R1b）**：會改同一段同步點的套用（`World.cpp`）與執行（`Executor.cpp`），不只是文件的條號。建議 **R1a 先合**（改動淺：加 `RunExtract`），KR 跟上再合（套用步驟的改動深），R1b 在 R1a 之後。條號先分配：DI-KS 29～34 給 KR、35～37 給 R1a、38～40 給 R1b；Kernel 的 RC（目前到 RC 24）25～27 給 KR、28～29 給 R1a、R1b；`KernelErrorCode` 的新值照合併的先後接著編。主會話那一側若同時有 Kernel 卡（例：「訊息型別不進摘要」的選項），從 41、RC 30 起。
 - **P 之後**：W、A、T（`sdl_ttf` 依賴 `sdl`；T 的驗收是點陣圖的形狀與 rowPitch，不需要畫）。
 - **R2a** 等 P、W（畫到視窗）。R2a 自己用一個 World 加「出」的 System 驗，不需要 Extract。
 - **K** 等 R2a、R1a（draw list 經 Extract）、W。Q3 (a) 時 K 不需要 R2a 的 2D pass 與 shader 管線（官方繪製後端自帶 shader〔知〕），只要裝置與 swapchain——那時 R2a 可以拆出前半讓 K 先用。K 是本線唯一使用者點名的 Feature，不等整個 Renderer 與 3D 管線（AGENTS §2：衝突時保 Feature 的方向）。
 - **R1b** 不在 K 的路上；R2b 之前完成即可（讀檔換模擬 World 時畫面不重建，是 PvP 與 2D 遊戲的需求）。
-- **R2b** 等 R2a、R1a、X（`GlobalTransform`、相機）、I（貼圖）；保留式的實體對應在 R2b 設計（第 6.1 節 8）。可畫元件的來源側單位在 R2b 加，所以 `render` 沒有 `transform` 的依賴問題（第 3.3 節）。
+- **R2b** 等 R2a、R1a、X1（`GlobalTransform`、相機）、I（貼圖）；渲染 World 的實體對應在 R2b 逐種判（第 6.1 節 8）。可畫元件的來源側單位在 R2b 加，所以 `render` 沒有 `transform` 的依賴問題（第 3.3 節）。
 - **U** 等 T、R2b。
-- 會碰同一批檔的：P、W、A、T、K 都加 Plugin 登記列（衝突小，後合併的一方 merge 跟上）；W 改 world-time 頁（取樣、渲染 World 的時間），R1a 不碰時間；R1a、R1b 改編排層頁與 Kernel 頁，其他子批不碰。
+- 會碰同一批檔的：P、W、A、T、K 都加 Plugin 登記列（衝突小，後合併的一方 merge 跟上）；W 改 world-time 頁（取樣、渲染 World 的時間），R1a 不碰時間；KR、R1a、R1b 改 Kernel 頁與 Kernel 的程式（先後見上），R1a、R1b 另改編排層頁。
 - **批次先後最終由主會話照 L17 排**（K 等於 `-keeptool` 那一批併進本線，主會話確認）。
 
 ### 10.2 各子批
 
 | 子批 | 範圍 | 上段／下段（navigator） | 實作者／審查者／驗證者 | 驗收的骨幹 | 突變清單的敵對式檢查（§14.2） |
 |---|---|---|---|---|---|
-| R1a | 第 6.1 節 1～3、5、6、8 | 上段：Kernel、編排層的契約 | Opus／high ×3；宣告送 Fable／high | 唯讀（`Extract<Write<…>>` 編譯失敗照舊）、O-E9、清單與 `RunSchedule`；不需要 GPU | 有（DI-KS 13 的守衛） |
-| R1b | 第 6.1 節 4 | 上段：DI-KS 13、26、RC-O13 | Opus／high ×3；宣告送 Fable／high | 來源替換後讀新的、`BuildNewFirst` 的重設時點、`DropOldFirst` | 有 |
-| KR | 第 6.5 節 | 上段：Kernel 的公開介面與職責清單 | Opus／high ×3；宣告送 Fable／high | 加上、換掉、拿掉 `ChildOf` 時 `Children` 立即跟著變；刪父連帶刪子；同一個同步點裡的決定性順序；回滾放回後 `Children` 的順序與原本相同；只複製 `ChildOf` 時 `Children` 重建 | 有（DI-KS 的守衛） |
-| X | 第 6.4 節 Transform、相機 | 上段：基盤（複製、回滾、權威登記會積在上面） | Opus／high ×3；宣告送 Fable／high | 傳播（沒有 `ChildOf`＝`Transform` 本身、有＝相乘）、第一幀與放回後的重算、`GlobalTransform` 不在回滾的登記裡、相機的投影 | 有（TF-、CM- 的守衛） |
+| R1a | 第 6.1 節 1～3、5、6；第 8 點「增刪的讀法」留形 | 上段：Kernel、編排層的契約 | Opus／high ×3；宣告送 Fable／high | 唯讀（`Extract<Write<…>>` 編譯失敗照舊）、O-E9、清單與 `RunSchedule`；不需要 GPU | 有（DI-KS 13 的守衛） |
+| R1b | 第 6.1 節 4 | 上段：DI-KS 13、26、RC-O13 | Opus／high ×3；宣告送 Fable／high | 來源替換後讀新的、`BuildNewFirst` 的重設時點、換來源時對照整批作廢、`DropOldFirst` | 有 |
+| KR | 第 6.5 節（需求 1～5、K1～K9 的選擇、邊界統合宣告的職責清單） | 上段：Kernel 的公開介面與職責清單 | Opus／high ×3；宣告送 Fable／high | 選定之後寫；至少含第 6.5 節的例子（刪父連帶刪子、換父、回滾讓預測刪掉的子回來、深的樹）與 K6 的三種回滾情形 | 有（DI-KS 的守衛） |
+| X1、X2 | 第 6.4 節 Transform、相機（X1）、階層（X2） | 上段：基盤（複製、回滾、權威登記會積在上面） | Opus／high ×3；宣告送 Fable／high | 傳播（沒有 `ChildOf`＝`Transform` 本身、有＝相乘）、第一幀與放回後的重算、`GlobalTransform` 不在回滾的登記裡、相機的投影 | 有（TF-、CM- 的守衛） |
 | I | asset 宣告 5.11、5.4 | 上段：資料契約（`"image"` 型別） | Opus／high ×3 | 照 asset 宣告（PNG 的 golden、`STBI_*` 的設定、拒絕的輸入） | 有（受理判定） |
 | P | 第 9.1 節 | 上段：建置圖 | Opus／high ×3 | 刪 SDL 的建置測試（SDL3 不被抓、不被建）；只建選了的 Plugin；MSVC 上的編譯選項；L1 三平台 | 有（刪除測試是 SDL-2 的守衛） |
 | W | `input`、`window`、SDL 視窗與輸入實作、有視窗的 runner（`sdl_window` 的單位在 `Configure` 裝，O-3；可以不裝）、取樣移給 runner（world-time 第 3 節、WT-2、WT-6 (2) 的文字照交換點宣告 5.5 改；等待零件在哪）、渲染 World 的時間（第 6.1 節 7）、時間戳、文字輸入的操作；Q3 (b) 時加游標形狀、剪貼簿 | 上段：公開介面、時間 | Opus／high ×3；宣告送 Fable／high | 時間戳三條保證的測試（假讀取函式、精確等式）；SDL dummy 驅動下的泵與事件；runner 跑 `examples` 的一個視窗程式 | 有 |
@@ -473,7 +497,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | T | `text`、`sdl_ttf` | 上段：公開介面 | Opus／high ×3 | 點陣圖的形狀與 rowPitch；上下顛倒的坑（master 坑 17：在 UV 轉換的單一邊界修，那半在 R2b） | 有（受理判定） |
 | R2a | `render`、`render_world`、裝置、swapchain、一個 2D pass（貼圖、混合、裁切）、最小的 shader 管線（HLSL、host 工具、ABI、共通管線找編譯器） | 上段：公開介面 | Opus／high ×3 | Linux Lavapipe 上的像素比對（比確切顏色，master 坑 18）；macOS Metallib 離線編譯；幀時間的預算先宣告 | 有 |
 | K | `imgui`、`world_imgui`、`imgui_render`（Q3 (a) 時加 `sdl_imgui`）；draw list 經 Extract；全域 context 的例外（第 6.2 節，查版本寫清範圍）；KeepTool 的登記（`keep_tool`）；組字的畫法（ImGui 不畫組字）；CJK 字型；tools 線打包與授權告示；第 9.1 節延後的實作方式守衛 | 上段：使用者指定的 Feature | Opus／high ×3 | tools 線打包；IME 實機按一次（CI 只驗文字事件的路徑）——「tools 線不需要實機證據」的現行規則要不要改，交 K 的宣告 | 有 |
-| R2b | `Renderer`、讀相機、合成、可畫元件的來源側單位、3D 場景、疊層（sprite、文字的繪製）、讀 `GlobalTransform`、R7 | 上段：公開介面 | Opus／high ×3 | 像素比對；幀時間的預算先宣告 | 有 |
+| R2b | `Renderer`（對照 Bevy 的 render graph／phase）、讀相機、合成、渲染 World 的實體對應（逐種判、四個衝突點）、可畫元件的來源側單位、3D 場景、疊層（sprite、文字的繪製）、讀 `GlobalTransform`、R7 | 上段：公開介面 | Opus／high ×3 | 像素比對；來源實體刪掉後對應的實體被刪、換來源後對照清空；幀時間的預算先宣告 | 有 |
 | U | `ui`、`world_ui`、`ui_render` | 上段：資料契約（Editor↔Runtime） | Opus／high ×3 | `gyo.ui` v1／v2 的資料契約測試；文字框的組字 | 有（受理判定） |
 
 - 敵對式檢查（navigator：作者 Opus → 檢查者用別的、不小的模型 → Fable）：每個子批的宣告、以及表裡標「有」的突變清單，都送 **Fable／high**。Fable 用不到時，照 navigator「同じモデルで行い、報告に書く」。
@@ -483,12 +507,12 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 ## 11. Architecture Delta（AGENTS §3 的七項，整條線寫一次；各子批只寫差分）
 
 1. **Feature**：KeepTool（P14）、2D 遊戲的移植（P24）；之後的工具與 PvP Client；Match 不受影響。
-2. **現在的問題**：gyo2 沒有視窗、輸入、畫面、文字、UI、音訊輸出、Transform、相機；master 的 platform 三種角色混在一起，被 P1 退掉；Extract 的執行在第 4 批拿掉。
-3. **變的邊界**：新的列（第 3.3 節與第 9.1 節：`transform`、`camera`、`input`、`window`、`render`、`render_world`、可畫元件的來源側單位、`image`、`text`、`ui`、`world_ui`、`ui_render`、`sdl*`、`imgui`、`world_imgui`、`imgui_render`）；頂層 `plugins/` 的第一批內容（Q1）；只建選了的 Plugin（`GyoBuild.cmake`）；Kernel 的 `RunExtract`；Kernel 的關係機制與 `ChildOf`／`Children`、DI-KS 15 多一項「關係」（KR，使用者已同意）；編排層的 `extractFrom` 與 O-E9；來源替換（R1b 交使用者，會改 DI-KS 13、DI-KS 26、RC-O13）；world_time 的取樣移給 runner（WT-6 (2)）；audio 頁 5.2 的例子；shader 編譯器的登記（R2a）。
-4. **影響的 Module／Product／Tool**：kernel（KR、R1a、R1b）、邊界統合宣告的職責清單（KR）、orchestration、world_time、audio（只改說明頁的例子，DI 2 不動）、建置層；KeepTool（新 tool）。
+2. **現在的問題**：gyo2 沒有視窗、輸入、畫面、文字、UI、音訊輸出、Transform、相機，Kernel 沒有實體之間的關係；master 的 platform 三種角色混在一起，被 P1 退掉；Extract 的執行在第 4 批拿掉。
+3. **變的邊界**：新的列（第 3.3 節與第 9.1 節：`transform`、`camera`、`input`、`window`、`render`、`render_world`、可畫元件的來源側單位、`image`、`text`、`ui`、`world_ui`、`ui_render`、`sdl*`、`imgui`、`world_imgui`、`imgui_render`）；頂層 `plugins/` 的第一批內容（Q1）；只建選了的 Plugin（`GyoBuild.cmake`）；Kernel 的 `RunExtract`；Kernel 的關係機制與 `ChildOf`／`Children`、DI-KS 15 多一項「關係」（KR，使用者已同意）；**KR 可能改 DI-KS 9、11、12、18（第 6.5 節 K1～K7），每一條在 KR 的宣告交使用者**；Kernel 的 RC 16 已觸發、使用者已答（P26），RC 18 可能觸發；編排層的 `extractFrom` 與 O-E9；來源替換（R1b 交使用者，會改 DI-KS 13、DI-KS 26、RC-O13）；world_time 的取樣移給 runner（WT-6 (2)）；audio 頁 5.2 的例子；shader 編譯器的登記（R2a）。
+4. **影響的 Module／Product／Tool**：kernel（KR、R1a、R1b）、邊界統合宣告的職責清單（KR）、回滾 Module（R-2 前提 1 裡 `Children` 屬哪一類，K6）、讀檔的說明頁（K7）、網路 Module（`ChildOf` 的複製與編號，K8）、orchestration、world_time、audio（只改說明頁的例子，DI 2 不動）、建置層；KeepTool（新 tool）。
 5. **依賴方向**：新 Module 只依賴 core、ecs、orchestration 與登記檔列的 Module；渲染側的單位只依賴函式庫與同一 World 的渲染側單位；SDL 只被 SDL 的實作連（Q1 定在哪）；Engine 不依賴 Plugin。
 6. **Ownership**：新 Module 的 owner 是架構（Engine）；SDL 的實作的 owner 依 Q1；KeepTool 的 owner 在 K 定。
-7. **為什麼沒有更小的改法**：不帶 platform（P1）就必須把它的功能各自找家；KeepTool 需要視窗、輸入、畫面同時存在；Extract 不做執行，render 就只能回到 master 的「產品自己填佇列」（為舊形狀找位置）；2D 與 3D 都要一份姿態與相機（P24、P25）；兩個 World 的產品照現在的依賴檢查，單位必須分角色（第 3.3 節）。
+7. **為什麼沒有更小的改法**：不帶 platform（P1）就必須把它的功能各自找家；KeepTool 需要視窗、輸入、畫面同時存在；Extract 不做執行，render 就只能回到 master 的「產品自己填佇列」（為舊形狀找位置）；2D 與 3D 都要一份姿態與相機（P24、P25）；父子照 Bevy 在 Kernel（P26）；兩個 World 的產品照現在的依賴檢查，單位必須分角色（第 3.3 節）。
 
 ## 12. Design Invariants 的草案（整條線；各 Module 的 DI 在各子批寫）
 
@@ -503,7 +527,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 **Replacement Criteria**（整條線）：
 - RC-SDL 1：要第二個非 SDL 的視窗或 GPU 實作時，某個 Module 的後端介面露出 SDL 才有的概念（換不掉）→ 介面切錯了，重切（master `platform-sdl.md` RC 1、2）。
 - RC-SDL 2：事件泵必須離開主執行緒，而 SDL 的主執行緒規則滿足不了 → 換掉有視窗的 runner 的形（master RC 6）。
-- RC-SDL 3：保留式的實體對應（R6）保不住 DI-KS 13 的唯讀（例：來源被刪的通知非寫回不可）→ 不放寬唯讀，交使用者決定通知的形。
+- RC-SDL 3：保留式的實體對應（R6）保不住 DI-KS 13 的唯讀（例：增刪的通知非由讀者清空來源不可、對應表非寫回來源不可）→ 不放寬唯讀，交使用者決定。
 - RC-SDL 4：保持 SDL-3 需要逐事件取樣或睡眠偵測 → 換掉時間戳的換算（master RC 5）。
 - 各 Module 的 Replacement Criteria 在各子批寫（例：RC-TF：深的父子階層或大量實體讓傳播超過 R2b 宣告的幀時間預算，計測）。
 
@@ -521,10 +545,12 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | L-8 | 有視窗的 runner 由 SDL 視窗的實作在 `Configure` 裝；runner 共用的部分（取樣交給 world_time 的交換函式、等待零件）放 world_time 或另一個中性的單位（W 定），沒畫面的 runner 也用。**不放編排層**：O-4 寫明編排層不認得時間，放那裡是職責清單多一項（RC-O5），要交使用者 | 使用者 11-11「runner 由 plugin 安裝」；時間設計第 9 節 (a) 標「我的套用」 |
 | L-9 | 混音器預設由音訊後端的單位建、產品可經選項覆寫；裝置開不了不經 `ProductSetup::Report` | 第 7 節 |
 | L-10 | 後端的注入通則（第 9.2 節）、測試用假後端的 Plugin 單位、條號的分配 | 只用 O-2、O-15 已有的規則 |
-| L-11 | `GlobalTransform` 的雜湊函式什麼都不寫、判定不讀它；相機帶不透明的目標 id、不依賴 render；Kernel 的關係拆成先行的子批 KR、排在 X 之前 | 第 6.4、6.5 節 |
-| L-14 | 第 6.6 節的處置欄（哪些照 Bevy、哪些是有理由的偏離） | P26 的判法；偏離的都寫了衝突點與膠水量 |
+| L-11 | `GlobalTransform` 的雜湊函式什麼都不寫、判定不讀它；相機帶不透明的目標 id、不依賴 render（Q4 選 (d) 時照 Bevy 依賴 `window`）；Kernel 的關係拆成先行的子批 KR；X 拆 X1／X2 | 第 6.4、6.5 節 |
 | L-12 | B 的登記形傾向「多列」（不是一列多 target） | 第 9.1 節；Q1 一起看 |
-| L-13 | audio 那一側的小批維持另做；子批的先後（建議，主會話排） | 第 7 節、第 10.1 節 |
+| L-13 | audio 那一側的小批維持另做；子批的先後與改 Kernel 的三個子批的合併先後、條號的分配（建議，主會話排） | 第 7 節、第 10.1 節 |
+| L-14 | 第 6.6 節的處置欄（哪些照 Bevy、哪些是有理由的偏離） | P26 的判法；偏離的都寫了衝突點與膠水量 |
+| L-15 | 渲染 World 的實體對應照 Bevy 0.15 起分三種、R2b 逐種判（修訂 2 以前的「每輪全部重抽」拿掉） | 第 6.1 節 8；P26 |
+| L-16 | 縮放照 Bevy 用 `Vec3`，不再交使用者 | 第 6.4 節；P26 |
 
 ## 14. 要使用者定的
 
@@ -604,9 +630,10 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 |---|---|---|
 | (a) 只在建置 configure（11-13 原句，P22） | 登記檔多一欄「這個 Plugin 實作哪個 Module 的後端」，CMake 比對，報出是哪個能力 | 手寫 `RegisteredUnits` 的測試不經 CMake，查不到（但也不會被擋） |
 | (b) 只在啟動 | 第 9.2 節的通則：`Check` 回報 WN-E1 等；兩個是 `Create` 同一型別的斷言 | 推翻 11-13 的「configure 時」；兩個後端時斷言的訊息不指名是哪個能力、哪兩個單位（`Setup.hpp:209`），11-13 原文要「報出是哪個能力」 |
-| **(c) 兩處都查** ← 建議 | 用 `gyo_product_units` 的產品在 configure 時報（保留 11-13）；所有產品（含手寫的測試）在啟動時再由通則查 | 登記檔多一欄；和 O-6「CMake 查一次、編排層再查一次」同形（`GyoUnitRegistry.cmake:186-188` 的註解） |
+| (c) 兩處都查 | 用 `gyo_product_units` 的產品在 configure 時報（保留 11-13）；所有產品（含手寫的測試）在啟動時再由通則查 | 登記檔多一欄；和 O-6「CMake 查一次、編排層再查一次」同形（`GyoUnitRegistry.cmake:186-188` 的註解） |
+| **(d) 照 Bevy：缺後端不是錯** ← 建議 | `input`、`window` 沒有後端時照跑、只是沒有輸入、沒有視窗（Bevy 的 `InputPlugin`、`WindowPlugin` 無條件在 `DefaultPlugins`，沒有後端也照跑）；兩個後端仍是 `Create` 同一型別的斷言 | 推翻 11-13 的「明確錯誤」；忘了選 SDL 時不報錯（第一次執行就看得到：沒有視窗）。連帶：`input`、`window` 可以 `default=yes`（Match 帶著也無害）、`camera` 可以照 Bevy 依賴 `window`（第 6.6 節）；渲染側的單位照角色仍 `default=no` |
 
-**建議 (c)**：不必推翻你的決定，和 O-6 同形；欄位在子批 P 加。選 (c) 時這一題只是確認，不是推翻。
+**建議 (d)**：照 P26（以 Bevy 為主、不當縫合怪），沒有額外的欄位與檢查，第 6.6 節的兩項偏離（`default=no`、`camera` 不依賴 `window`）也跟著消失。**要你推翻 11-13 的一句**；想保留那一句就選 (c)（和 O-6 同形，欄位在子批 P 加）。
 
 ### Q5：要移植的 2D 遊戲是哪一個（或哪一類）
 
@@ -635,8 +662,10 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 ## 16. 和其他卡的協調（經主會話）
 
 - **asset（PR #283，已合併）**：音效 loader 與 clip 來源在 audio 那一側的小批（第 7 節）；圖片 loader 在子批 I（image Module，stb_image）。
-- **網路 Module（PR #275）**：輸入的時刻給網路的預測用；事件時刻對到 tick、`Transform` 要不要複製是網路那一側的事。
-- **主會話（Kernel）**：「訊息型別不進摘要」的選項（第 6.3 節；有了它 `input` 改回 `Message`，第 6.6 節）；KR 與 R1a、R1b 都改 Kernel，DI-KS 29 起由 KR 先保留；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
+- **網路 Module（PR #275）**：輸入的時刻給網路的預測用；事件時刻對到 tick、`Transform` 要不要複製是網路那一側的事；`ChildOf` 的複製、實體編號、父比子晚到（K8）和 KR 對。
+- **回滾 Module**：`Children` 在 R-2 前提 1 裡屬哪一類、回滾的做法（K6），KR 的宣告和回滾頁一起改。
+- **讀檔**：存不存 `Children`、放回時跳不跳維護（K7），KR 的宣告和讀檔的說明頁（`system-contract-page.zh-Hant.md` 的讀檔一節）一起改。
+- **主會話（Kernel）**：「訊息型別不進摘要」的選項——**要在子批 W 開工前回答**（有就照 Bevy 用 `Message`；之後再改回，每個讀輸入的 System 都要改，第 6.6 節）；KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
 - **圖書管理員**：「送進 World 外服務的時刻都是時間基準」登記成 CCR（第 8 節末）。
 - **風紀委員**：Q1、Q2 的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句）；Q3、Q4 若推翻 11-13 的句子，runtime-composition §4 的統一處理時一起改。
 - **KeepTool**：子批 K 等於 `-keeptool` 那一批，主會話確認是否併進本線。
@@ -682,7 +711,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | S-4 B 不是 11-13 的原形 | 採用：Q1 表加「和 11-13 原形的差別」一列；補「一列多 target、改登記檔」的做法與 RC-O6 | 第 9.1 節、第 14 節 Q1 |
 | S-5 shader 編譯的一句沒有著落 | 採用：寫進第 9.1 節與 R2a 的範圍 | 第 9.1、10.2 節 |
 | S-6 `GlobalTransform` 可以進摘要不成立 | 採用：定成畫面用的推導值、雜湊函式什麼都不寫、判定不讀；四個洞列進 X | 第 6.4 節 |
-| S-7 父子不進 Kernel 列成 L17 | 已被使用者 11-23 的決定（P25）取代：寫成使用者的決定，第 4.3 節補 flecs 的對照 | 第 2 節 P25、第 4.3、6.4 節 |
+| S-7 父子不進 Kernel 列成 L17 | 已被使用者 11-23 的決定（P25）取代：寫成使用者的決定，第 4.3 節補 flecs 的對照（**修訂 3 更正**：P25 的那一半是主會話的讀法，使用者改成照 Bevy 放 Kernel，P26、第 19 節） | 第 2 節 P25、第 4.3、6.4 節 |
 | S-8 K 的路上兩件不需要的等待 | 採用：R1 拆 R1a／R1b；R2a 只等 P、W；K 等 R1a；Q3 (a) 時 K 不等 2D pass；可畫元件的單位在 R2b 加 | 第 10 節 |
 | S-9 Q1 表 GPU device 交接只在 Q3 (a) | 採用：改寫，註明屬性表未查證 | 第 2 節 C3、第 14 節 Q1 |
 | S-10 Q2 把 stb_image 又拿出來問 | 採用：Q2 只問 ufbx，stb_image 當既定事實 | 第 14 節 Q2 |
@@ -708,3 +737,33 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | 父子放進 Kernel（照 Bevy 的關係機制與 `ChildOf`），職責清單多一項 | P26；第 4.2 節 R8、第 4.3 節；新的第 6.5 節與子批 KR（先行、排在 X 之前）；第 11 節 |
 | `transform` 只放 `Transform`、`GlobalTransform`、傳播 | 第 3.3、6.4 節；子批 X |
 | ECS 的機制以 Bevy 為主參考，偏離要寫衝突點與膠水量 | 新的第 6.6 節逐項檢查。因此改了兩處：渲染 World 的實體由「每輪重抽」改成照 Bevy 0.15 起的保留式（第 6.1 節 8、R6、RC-SDL 3）；縮放照 Bevy 用 `Vec3`，不再交使用者。維持偏離、寫了理由的：輸入放 Resource（暫時，等 Kernel 的選項）、事件時刻保留（使用者 P11）、要後端的 Module `default=no`（登記檔沒有預設組合）、Extract 不寫回（使用者 P7） |
+
+## 20. 修訂 3 的窄複查：處理對照
+
+| 項 | 處理 | 改在哪 |
+|---|---|---|
+| B-1 回滾放回 `ChildOf` 時 hook 重建不出 `Children` | 採用：寫成 K6（三種情形、`Restore` 只對新增與拿掉的格跑 hook），三條路列出、在 KR 的宣告交使用者；拿掉 lightyear 的誤引；KR 的驗收改成選定後再寫 | 第 6.5 節、第 10.2 節 |
+| B-2 Bevy 的關係 hook 和 GYO 的 hook 契約有五處衝突 | 採用：K1～K5 列表；「立即」標成主會話的描述、寫準 Bevy 實際的保證；第 11 節加「KR 可能改 DI-KS 9、11、12、18，各自交使用者」與 RC 16、18 | 第 2 節 P26、第 6.5、11 節 |
+| S-1 讀檔：Bevy 存 `Children`、跳過 hook | 採用：K7 兩個選項 | 第 6.5、16 節 |
+| S-2 複製：`ChildOf` 比父先到 | 採用：K8（replicon 佔位、lightyear `PendingChildOf`） | 第 6.5、16 節 |
+| S-3 三處 Bevy 事實 | 採用：目標不存在是 `warn!` 並拿掉；`on_discard`；lightyear 有自己的收發 | 第 6.5 節 |
+| S-4 保留式的描述與衝突點 | 採用：照 Bevy 實際寫（三種並存、只有標了要同步的種類有對應實體）；四個衝突點；6.6 該列改成「方向同、做法偏離」 | 第 6.1 節 8、R6、RC-SDL 3、第 6.6 節 |
+| S-5 保留式的連帶 | 採用：R1b 加換來源時對照整批作廢；R1a 的範圍拿掉第 8 點、改成「增刪的讀法留形」；R2b 補範圍與驗收 | 第 6.1 節 4、8；第 10 節 |
+| S-6 第 6.6 節漏九項 | 採用：全部補進表（`gyo.ui` 的節點模型交 U 的宣告；不開 render 執行緒；`render`／`camera` 的依賴；一列一角色；extract 在清單；視窗事件；讀檔的 `Children`；Extract 不寫回的素材搬走；雙軌與 `Renderer`） | 第 6.6 節 |
+| S-7 `default=no` 的衝突點 | 採用：改成 P22 與第 9.2 節第 3 點；Q4 加照 Bevy 的 (d)、建議 (d) | 第 6.6 節、第 14 節 Q4 |
+| S-8 輸入放 Resource 的回頭改 | 採用：寫進膠水量；改成 W 開工前要主會話回答 | 第 6.6、16 節 |
+| S-9 第 11、16 節沒改齊 | 採用 | 第 11、16 節 |
+| S-10 條號、RC、合併先後、X 等 KR | 採用：DI-KS 29～40 與 RC 25～29 分配、R1a 先合、KR 寫關係的 RC、X 拆 X1／X2 | 第 6.5 節需求 5、第 10 節 |
+| N-1 `on_discard` | 採用 | 第 6.5 節 |
+| N-2 gilrs 形只對一半 | 採用：寫成接合點 | 第 6.6 節 |
+| N-3 混音器「同 Bevy」 | 採用：只有「開裝置的一方擁有輸出」相同 | 第 6.6 節 |
+| N-4 `Time<Real>` 的回推 | 採用：統一寫 channel | 第 6.6 節 |
+| N-5 會碰同一批檔的那一句 | 採用 | 第 10.1 節 |
+| N-6 L-14 的位置、兩件改判 | 採用：L-14 移位、加 L-15、L-16 | 第 13 節 |
+| N-7 第 18 節 S-7 列過時 | 採用：加註 | 第 18 節 |
+| N-8 UI 的階層三處對齊 | 採用：統一成「U 判，選『節點是實體』時才用」 | 第 4.3、6.5、6.6 節 |
+| N-9 P26 漏了接合點那半句 | 採用 | 第 2 節 P26、第 6.6 節 |
+| N-10 `StartupCode`、內建元件的登記 | 採用：K9 | 第 6.5 節 |
+| N-11 遊戲的例子 | 採用 | 第 6.5 節開頭 |
+| N-12 薄起步的邊界 | 採用：需求 4 | 第 6.5 節 |
+| N-13 `ChildOf` 被拿掉或換掉時子樹重算 | 採用：X 的洞 (5) | 第 6.4 節 |
