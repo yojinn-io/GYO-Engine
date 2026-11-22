@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "assets": [
+    { "type": "text", "path": "docs/readme.txt" }
+  ]
+}

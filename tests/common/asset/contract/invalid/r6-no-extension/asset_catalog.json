@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "assets": [
+    { "id": "sample.region", "type": "region", "path": "maps/region_0_0" }
+  ]
+}
