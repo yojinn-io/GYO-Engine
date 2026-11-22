@@ -80,3 +80,5 @@ Fable 5.2／high（唯讀），報告：主 checkout `build/evidence/gyo2-kernel
 ## 跟上 #281、#276
 
 #281（狀態機）、#276（讀檔）併入 `gyo2` 之後 merge（不 rebase）。衝突只在 `v2/README.md` 的 dev_log 列表與說明頁（更新行、新節），兩邊都留：說明頁照第 16 節狀態機、第 17 節讀檔、第 18 節本批的順序；第 18 節開頭那句「留給開著的 PR」拿掉（兩個 PR 已併入）。`kernel.zh-Hant.md`、`cross-component-rules.md` 自動合併、沒有衝突。
+
+跟上之後：`ctest -L "cpu|shader"` 171/171（`impl/ctest-after-281-276.log`）。#281、#276 沒有改 `engine/ecs`、`tests/common/kernel`；衝突的兩份文件也沒有任何突變的 find 指到，所以沒有要重跑的突變。全部突變清單的 find 掃過一次，沒有命中 0 次或多次的（指向已不存在之檔的 master 時期舊清單除外）。CCR-8 的已知處改成合併後的現況：狀態機的 `TakeRequest` 先讀再寫，silent 套用還沒進 `gyo2`。
