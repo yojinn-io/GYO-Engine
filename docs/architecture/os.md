@@ -366,7 +366,7 @@ Known blind spots, left to review:
    D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
 3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::OS` links only `GYO::Base`
-   and OS system libraries (`shell32` on Windows; `Threads::Threads` elsewhere, since the thread naming moved in,
+   and OS system libraries (`shell32` and, for `DatagramSocket`, `ws2_32` on Windows (v8-arch-gyo2-net-module step 0); `Threads::Threads` elsewhere, since the thread naming moved in,
    os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/core/os
    includes only engine/core/base, the standard library and OS headers. Its API has no type of a module above it: no
    `Uri`, `IFileSystem` or `IStream`.

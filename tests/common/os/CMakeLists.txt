@@ -65,14 +65,15 @@ endforeach()
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # The OS layer is the lowest layer above GYO::Base: its links, private and
 # interface alike, are exactly GYO::Base and OS system libraries (Design
-# Invariant 3): on Windows shell32 for CommandLineToArgvW (D49), elsewhere the
+# Invariant 3): on Windows shell32 for CommandLineToArgvW (D49) and ws2_32 for
+# DatagramSocket (v8-arch-gyo2-net-module step 0), elsewhere the
 # thread library for pthread_setname_np (D69) and the wait fallback's mutex and
 # condition variable (v8-arch-gyo2-os-wait).
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too.
 function(gyo_expect_os_links)
     if(WIN32)
-        gyo_expect_links(gyo_os GYO::Base shell32)
+        gyo_expect_links(gyo_os GYO::Base shell32 ws2_32)
     else()
         gyo_expect_links(gyo_os GYO::Base Threads::Threads)
     endif()
