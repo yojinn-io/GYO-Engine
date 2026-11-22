@@ -3,14 +3,14 @@
 #include <cstddef>
 #include <span>
 
-#include "engine/base/Result.hpp"   // Engine::Result<T>
-#include "engine/base/Error.hpp"    // Engine::Error（必要なら）
+#include "engine/base/Result.hpp"   // Base::Result<T>
+#include "engine/base/Error.hpp"    // Base::Error（必要なら）
 #include "engine/base/Span.hpp"
 #include "engine/io/IoError.hpp"    // IoErrorCode（ReadFailed/WriteFailed/SeekFailed/NotSupported など）
 #include "engine/io/stream/Seek.hpp"
 
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
     struct StreamCaps final {
         bool readable = false;
@@ -71,4 +71,4 @@ namespace Engine::IO::Stream {
         IStream() = default;
     };
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

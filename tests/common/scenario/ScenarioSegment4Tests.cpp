@@ -57,7 +57,7 @@ K::SystemResult MoveRacer(K::ResMut<RacerState> racer, K::Res<Breaker> breaker) 
     racer->frames += 1;
     const auto frame = static_cast<std::int32_t>(racer->frames);
     if (breaker->frame == frame && breaker->how == 1) {
-        return ::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "MoveRacer: the racer fell"));
+        return ::GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "MoveRacer: the racer fell"));
     }
     if (breaker->frame == frame && breaker->how == 2) throw std::runtime_error("MoveRacer threw");
     if (breaker->frame == frame && breaker->how == 3) GYO_ASSERT(racer->x < 0 && "MoveRacer: the track ended");
@@ -87,7 +87,7 @@ std::unique_ptr<O::Product> Make(Breaker breaker) {
         s.Registrar().Resource<LobbyFrames>({.name = "LobbyFrames"});
         s.Registrar().AddSystem<&CountLobby>(Update("CountLobby"));
     };
-    lobby.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    lobby.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(LobbyFrames{});
         return {};
     });
@@ -99,7 +99,7 @@ std::unique_ptr<O::Product> Make(Breaker breaker) {
         s.Registrar().Resource<Breaker>({.name = "Breaker"});
         s.Registrar().AddSystem<&MoveRacer>(Update("MoveRacer"));
     };
-    match.prepare.push_back([breaker](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    match.prepare.push_back([breaker](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(RacerState{});
         world.SetResource(breaker);
         return {};
@@ -206,13 +206,13 @@ TEST_CASE("scenario segment 4: S4-2 an exception at frame 3: the unwound spans s
 TEST_CASE("scenario segment 4: S4-3 a failed GYO_ASSERT in the System: the one Fatal record carries trace_path") {
     auto product = Make({3, 3});
     // The test's handler throws AssertionFailure; the Logger goes on to it after writing the Fatal record.
-    ::Engine::Test::ScopedAssertionHandler throwing;
+    ::GYO::Test::ScopedAssertionHandler throwing;
     Traced traced(true);
     Frames(*product, 2);
     bool asserted = false;
     try {
         static_cast<void>(product->RunFrame());
-    } catch (const ::Engine::Base::AssertionFailure&) {
+    } catch (const ::GYO::Engine::Base::AssertionFailure&) {
         asserted = true;
     }
     REQUIRE(asserted);

@@ -8,7 +8,7 @@
 // engine/threads. Neither call is an error when the platform does not take it:
 // each answers whether it was applied (Design Invariant 10).
 
-namespace Engine::Os::Thread {
+namespace GYO::Engine::OS::Thread {
 
 // A scheduling hint, not a timing guarantee.
 enum class PriorityHint : unsigned char { Background, Normal, Interactive };
@@ -28,4 +28,4 @@ enum class PriorityHint : unsigned char { Background, Normal, Interactive };
 // counts as applied, as on other platforms.
 [[nodiscard]] bool SetCurrentPriority(PriorityHint hint) noexcept;
 
-} // namespace Engine::Os::Thread
+} // namespace GYO::Engine::OS::Thread

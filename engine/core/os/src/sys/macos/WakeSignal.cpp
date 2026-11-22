@@ -12,7 +12,7 @@
 #include <sys/event.h>
 #include <unistd.h>
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 struct WakeSignal::Impl final {
     static constexpr uintptr_t UserIdent = 1;
@@ -82,4 +82,4 @@ WaitMechanism WakeSignal::Mechanism() const {
     return WaitMechanism::Kqueue;
 }
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

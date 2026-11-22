@@ -166,13 +166,13 @@ TEST_CASE("Writer: an allocation failure when nesting past the inline levels is 
     bool finished = false;
     JsonErrorCode code = JsonErrorCode::Syntax;
     {
-        ::Engine::Test::ScopedAssertionHandler scope;
+        ::GYO::Test::ScopedAssertionHandler scope;
         try {
             for (std::size_t i = 0; i < Writer::kInlineDepth + 1; ++i) writer.EndArray();
             auto done = writer.Finish();
             finished = true;
             if (!done) code = done.error().code;
-        } catch (const ::Engine::Base::AssertionFailure&) {
+        } catch (const ::GYO::Engine::Base::AssertionFailure&) {
             asserted = true;
         }
     }
@@ -218,10 +218,10 @@ TEST_CASE("Document: a moved-from Document is empty (Root is a Programmer Error)
     Document moved = std::move(*source);
     bool asserted = false;
     {
-        ::Engine::Test::ScopedAssertionHandler scope;
+        ::GYO::Test::ScopedAssertionHandler scope;
         try {
             static_cast<void>(source->Root());
-        } catch (const ::Engine::Base::AssertionFailure&) {
+        } catch (const ::GYO::Engine::Base::AssertionFailure&) {
             asserted = true;
         }
     }
@@ -237,10 +237,10 @@ TEST_CASE("Document: a moved-from Document is empty (Root is a Programmer Error)
     CHECK_MESSAGE(moved.Root().GetKind() == GYO::Engine::Json::Kind::Object, "move assignment did not take the tree");
     bool otherAsserted = false;
     {
-        ::Engine::Test::ScopedAssertionHandler scope;
+        ::GYO::Test::ScopedAssertionHandler scope;
         try {
             static_cast<void>(other->Root());
-        } catch (const ::Engine::Base::AssertionFailure&) {
+        } catch (const ::GYO::Engine::Base::AssertionFailure&) {
             otherAsserted = true;
         }
     }

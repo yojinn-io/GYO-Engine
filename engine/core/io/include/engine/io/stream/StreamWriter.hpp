@@ -12,7 +12,7 @@
 #include "engine/io/IoError.hpp"
 #include "engine/io/stream/IStream.hpp"
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
     struct TextWriteOptions final {
@@ -24,7 +24,7 @@ namespace Engine::IO::Stream {
     public:
         explicit StreamWriter(IStream& s);
 
-        IoResult<void> WriteAllBytes(Engine::Base::Span<const std::byte> bytes);
+        IoResult<void> WriteAllBytes(GYO::Engine::Base::Span<const std::byte> bytes);
         IoResult<void> WriteAllText(std::string_view text, const TextWriteOptions& opt = {});
 
         IoResult<void> WriteU8(std::uint8_t v);
@@ -43,4 +43,4 @@ namespace Engine::IO::Stream {
         IStream& s_;
     };
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

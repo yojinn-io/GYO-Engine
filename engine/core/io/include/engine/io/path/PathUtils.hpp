@@ -6,7 +6,7 @@
 #include "engine/base/Result.hpp"
 #include "engine/io/IoError.hpp"
 
-namespace Engine::IO::Path {
+namespace GYO::Engine::IO::Path {
 
     struct NormalizeOptions {
         bool convertBackslash     = true;  // "\" -> "/"
@@ -58,4 +58,4 @@ namespace Engine::IO::Path {
     std::string RemoveDotSegments(std::string_view path, bool& escapedAboveRoot);
 
 
-} // namespace Engine::IO::Path
+} // namespace GYO::Engine::IO::Path

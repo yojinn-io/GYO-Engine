@@ -39,7 +39,7 @@ Owner：架構。程式：`engine/orchestration/`（`GYO::Engine::Orchestration`
 **O-8 替換。** `ReplaceWorld` 照產品描述重新登記那個 World（新的 Registry；之前動態插入的一律重置；使用者 `v8-arch-gyo2-restore-reruns-registration`）；先後由作者選（使用者 `v8-arch-gyo2-replace-order-author-choice`）：預設 `BuildNewFirst`（建新的、準備、在新 World 上跑 `beforeSwap`，全部成功才銷毀舊的，任何一步失敗保留舊的），`DropOldFirst`（先銷毀舊的；失敗時位置是空的，Product 就此結束，O-11）。遊戲初始化不重跑；只在兩次 Run 之間；只換健康的 World——中斷的 World 與空的位置不能拿替換來救（O-11）。**編排層不驗證外部資料的內容**（存檔版本、素材、網路快照）：作者在發出 `ReplaceRequest` 之前驗證，選 `DropOldFirst` 也一樣；驗證失敗就回 `Result`、不發替換（使用者 `v8-arch-gyo2-broken-world-ends-product` 第 3 點；存檔版本 Module 與讀檔案例在批次表第 5 條）。存檔的版本轉換不在 Engine（`save-unaware-means-format-only`）；`BuildNewFirst` 的讀檔失敗是安全的。守衛：`orchestration.O-8` 各案、讀檔案例、scenario 第一段。
 
 <a id="o-9"></a>
-**O-9 動態插入的失敗。**〔草稿，D2〕Kernel 拒絕（`DynamicInsertRefused`）或建 Plan 失敗時，編排層把錯誤（E2，帶 World 名、owner 與 Kernel 的碼或報告）回給呼叫的人、World 照跑；**編排層不記**（原為「經 `Engine::Base::Log` 記一次 `Warning`」）；`build` 丟例外時先丟掉這一輪再往外傳（照舊）。守衛：`orchestration.O-9` 各案。
+**O-9 動態插入的失敗。**〔草稿，D2〕Kernel 拒絕（`DynamicInsertRefused`）或建 Plan 失敗時，編排層把錯誤（E2，帶 World 名、owner 與 Kernel 的碼或報告）回給呼叫的人、World 照跑；**編排層不記**（原為「經 `GYO::Engine::Base::Log` 記一次 `Warning`」）；`build` 丟例外時先丟掉這一輪再往外傳（照舊）。守衛：`orchestration.O-9` 各案。
 
 <a id="o-10"></a>
 **O-10 帶過去。** 任何 Resource 型別都能用 `WorldSetup::CarryOver<T>()` 標記換 World 時帶過去；編排層照標記清單（型別身分＋型別化的搬移函式）泛用地搬，不認得特定型別、不看值的內容（使用者 `v8-arch-gyo2-carry-over-mechanism`）；在所有準備之前；`BuildNewFirst` 失敗時移回舊的 World；`DropOldFirst` 失敗時隨失敗的那次替換丟掉（Product 已結束，O-11；不再有暫存處）。**值裡不能存指向舊 World 的參照（`EntityId`、指標、句柄），這是作者的責任**；不立實作面的守衛，靠本頁與審查。守衛：`orchestration.O-10`、讀檔案例 6、scenario S1-10。

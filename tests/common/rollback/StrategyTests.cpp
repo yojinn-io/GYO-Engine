@@ -52,7 +52,7 @@ K::SystemResult Advance(K::Query<K::Write<Health>> health, K::Res<Command> comma
 K::SystemResult Churn(K::Spawn<K::Bundle<Health>> spawn, K::Despawn despawn, K::Res<W::Tick> tick) {
     if (tick->value == 6) {
         auto id = spawn.New(Health{9});
-        if (!id) return ::Engine::Base::Err(std::move(id).error());
+        if (!id) return ::GYO::Engine::Base::Err(std::move(id).error());
     }
     if (tick->value == 8) despawn.Entity(2);
     return {};
@@ -103,7 +103,7 @@ SpanLog& Spans() {
     static SpanLog log;
     return log;
 }
-::Engine::Base::TraceToken SpanBegin(std::string_view category, std::string_view name, std::string_view) noexcept {
+::GYO::Engine::Base::TraceToken SpanBegin(std::string_view category, std::string_view name, std::string_view) noexcept {
     SpanLog& log = Spans();
     if (category == "kernel" && name == "FixedUpdate") {
         const bool under = std::find(log.open.begin(), log.open.end(), "rollback") != log.open.end();
@@ -112,11 +112,11 @@ SpanLog& Spans() {
     log.open.emplace_back(category);
     return {log.open.size(), 1, static_cast<std::uint32_t>(log.open.size())};
 }
-void SpanEnd(::Engine::Base::TraceToken, bool) noexcept { Spans().open.pop_back(); }
-void SpanError(::Engine::Base::TraceToken, std::string_view, bool) noexcept {}
+void SpanEnd(::GYO::Engine::Base::TraceToken, bool) noexcept { Spans().open.pop_back(); }
+void SpanError(::GYO::Engine::Base::TraceToken, std::string_view, bool) noexcept {}
 void SpanMark(std::string_view, bool) noexcept {}
 std::size_t SpanPath(std::span<char>) noexcept { return 0; }
-constexpr ::Engine::Base::TraceReceiver kSpanReceiver{&SpanBegin, &SpanEnd, &SpanError, &SpanMark, &SpanPath};
+constexpr ::GYO::Engine::Base::TraceReceiver kSpanReceiver{&SpanBegin, &SpanEnd, &SpanError, &SpanMark, &SpanPath};
 
 O::OptionBag WithStrategy(R::StateRollbackSettings settings = {}) {
     O::OptionBag options;
@@ -247,10 +247,10 @@ TEST_CASE("rollback strategy: each step run again has a span.rollback around it;
     auto p = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}));
     Frames(*p, 9);
     Spans() = {};
-    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kSpanReceiver);
+    const ::GYO::Engine::Base::TraceReceiver* previous = ::GYO::Engine::Base::SetTraceReceiver(&kSpanReceiver);
     Inbox(*p).ConfirmedThrough(4);
     Frames(*p, 1); // steps 5 to 9 again, then step 10
-    ::Engine::Base::SetTraceReceiver(previous);
+    ::GYO::Engine::Base::SetTraceReceiver(previous);
     CHECK_MESSAGE(Spans().resimulated == 5, "[rb-trace-resimulate] runs of FixedUpdate under span.rollback: " << Spans().resimulated);
     CHECK_MESSAGE(Spans().firstRuns == 1, "[rb-trace-first-run] runs of FixedUpdate without span.rollback: " << Spans().firstRuns);
     CHECK_MESSAGE(Spans().open.empty(), "[rb-trace-resimulate] spans left open: " << Spans().open.size());
@@ -360,8 +360,8 @@ TEST_CASE("rollback strategy: R-5: a BuildNewFirst replacement that fails leaves
     auto p = Make(WithStrategy());
     Frames(*p, 9);
     O::ReplaceRequest request;
-    request.extra = [](K::World&) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        return ::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the save is broken"));
+    request.extra = [](K::World&) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return ::GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the save is broken"));
     };
     auto replaced = p->ReplaceWorld("Main", std::move(request));
     REQUIRE_FALSE(static_cast<bool>(replaced));
@@ -412,7 +412,7 @@ class ScratchStrategy final : public R::RollbackStrategy {
 public:
     [[nodiscard]] std::string_view Name() const override { return "ScratchStrategy"; }
     void Check(R::CheckContext&) override {}
-    ::Engine::Base::Result<void, K::KernelError> Record(R::RecordContext& c) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Record(R::RecordContext& c) override {
         R::Exclusive& world = c.World();
         const std::uint64_t tick = c.Tick();
         std::vector<std::pair<K::EntityId, Health>> cells;
@@ -426,7 +426,7 @@ public:
         }));
         return {};
     }
-    ::Engine::Base::Result<void, K::KernelError> Decide(R::DecideContext& c) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Decide(R::DecideContext& c) override {
         R::Exclusive& world = c.World();
         const auto confirmed = **world.Read<R::RollbackInbox>([](const R::RollbackInbox& i) { return i.Confirmed(); });
         if (!confirmed || *confirmed > c.Tick()) return {};
@@ -437,7 +437,7 @@ public:
         static_cast<void>(world.Modify<W::Resimulation>([](W::Resimulation& r) { r.active = 1; }));
         return {};
     }
-    ::Engine::Base::Result<void, K::KernelError> Restore(R::RestoreContext& c) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Restore(R::RestoreContext& c) override {
         R::Exclusive& world = c.World();
         const std::uint64_t target = c.Target();
         K::RestoreSet set;
@@ -447,7 +447,7 @@ public:
         }));
         return world.Restore(std::move(set));
     }
-    ::Engine::Base::Result<void, K::KernelError> Resimulate(R::ResimulateContext& c) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Resimulate(R::ResimulateContext& c) override {
         R::Exclusive& world = c.World();
         W::RewindFixedSteps(world, c.Tick() - c.Target());
         for (std::uint64_t step = c.Target() + 1; step <= c.Tick(); ++step) {
@@ -458,7 +458,7 @@ public:
         static_cast<void>(world.Modify<W::Resimulation>([](W::Resimulation& r) { r.active = 0; }));
         return {};
     }
-    ::Engine::Base::Result<void, K::KernelError> Correct(R::CorrectContext&) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Correct(R::CorrectContext&) override {
         ++CorrectCalls();
         return {};
     }
@@ -471,7 +471,7 @@ public:
 void BuildScratch(O::WorldSetup& s) {
     Build(s);
     s.Registrar().Resource<ScratchStore>({.name = "ScratchStore"});
-    s.Prepare([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    s.Prepare([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(ScratchStore{});
         return {};
     });
@@ -663,7 +663,7 @@ TEST_CASE("rollback strategy: R-8: C earlier than this World's first record is g
     Frames(*p, 3);
     // A replacement that starts at tick 9 (as a load would): the new World's first record is step 10.
     O::ReplaceRequest request;
-    request.extra = [](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    request.extra = [](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(W::Tick{9});
         world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
         world.SetResource(Command{});

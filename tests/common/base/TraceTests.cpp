@@ -17,7 +17,7 @@
 
 #include "engine/base/Trace.hpp"
 
-namespace Base = Engine::Base;
+namespace Base = GYO::Engine::Base;
 
 namespace {
 

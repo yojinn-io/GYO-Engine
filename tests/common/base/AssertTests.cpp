@@ -5,9 +5,9 @@
 #include <exception>
 #include <type_traits>
 
-using Engine::Base::AssertionFailure;
-using Engine::Base::AssertionHandler;
-using Engine::Base::SetAssertionHandler;
+using GYO::Engine::Base::AssertionFailure;
+using GYO::Engine::Base::AssertionHandler;
+using GYO::Engine::Base::SetAssertionHandler;
 
 namespace {
 
@@ -50,7 +50,7 @@ TEST_CASE("GYO_ASSERT: conditions may contain commas") {
 }
 
 TEST_CASE("GYO_ASSERT: the failure carries the condition text and location") {
-    Engine::Test::ScopedAssertionHandler scope;
+    GYO::Test::ScopedAssertionHandler scope;
     const int value = 3;
     try {
         GYO_ASSERT(value == 4);
@@ -73,16 +73,16 @@ TEST_CASE("SetAssertionHandler: returns the previous handler and nullptr restore
     const AssertionHandler original = SetAssertionHandler(&RecordingHandler);
     CHECK(SetAssertionHandler(original) == &RecordingHandler);
     {
-        Engine::Test::ScopedAssertionHandler scope;
-        CHECK(SetAssertionHandler(&RecordingHandler) == &Engine::Test::ThrowAssertionFailure);
-        SetAssertionHandler(&Engine::Test::ThrowAssertionFailure);
+        GYO::Test::ScopedAssertionHandler scope;
+        CHECK(SetAssertionHandler(&RecordingHandler) == &GYO::Test::ThrowAssertionFailure);
+        SetAssertionHandler(&GYO::Test::ThrowAssertionFailure);
     }
     // The scope restored whatever was installed before it.
     CHECK(SetAssertionHandler(original) == original);
 }
 
 TEST_CASE("GYO_UNREACHABLE reports like a failed assertion") {
-    Engine::Test::ScopedAssertionHandler scope;
+    GYO::Test::ScopedAssertionHandler scope;
     try {
         GYO_UNREACHABLE();
     } catch (const AssertionFailure& failure) {

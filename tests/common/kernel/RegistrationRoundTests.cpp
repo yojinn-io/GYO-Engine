@@ -59,7 +59,7 @@ SystemResult UsesLater(Query<Read<Later>> later) {
     return Ok();
 }
 SystemResult UsesUnknown(Query<Read<Other>>) { return Ok(); }
-SystemResult Fails(Res<Flag>) { return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "planned failure")); }
+SystemResult Fails(Res<Flag>) { return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "planned failure")); }
 SystemResult WritesFlag(ResMut<Flag>) { return Ok(); }
 SystemResult ReadsFlag(Res<Flag>) { return Ok(); }
 SystemResult Plain(Query<Read<Tag>>) { return Ok(); }
@@ -135,9 +135,9 @@ void Base(Registrar& r) {
     r.AddSystem<&Counting>(B("Counting", "A"));
 }
 
-bool Done(const Engine::Base::Result<void, KernelError>& result) { return static_cast<bool>(result); }
-bool Done(const Engine::Base::Result<void, StartupReport>& result) { return static_cast<bool>(result); }
-std::string Describe(const Engine::Base::Result<void, StartupReport>& result) {
+bool Done(const GYO::Engine::Base::Result<void, KernelError>& result) { return static_cast<bool>(result); }
+bool Done(const GYO::Engine::Base::Result<void, StartupReport>& result) { return static_cast<bool>(result); }
+std::string Describe(const GYO::Engine::Base::Result<void, StartupReport>& result) {
     return result ? std::string("ok") : result.error().detail;
 }
 
@@ -153,10 +153,10 @@ void FirstRound(Registry& registry, void (*build)(Registrar&) = &Base) {
 // default handler would abort the run).
 template <class Step>
 std::string AssertionIn(Step&& step) {
-    ::Engine::Test::ScopedAssertionHandler scope;
+    ::GYO::Test::ScopedAssertionHandler scope;
     try {
         std::forward<Step>(step)();
-    } catch (const ::Engine::Base::AssertionFailure& failure) {
+    } catch (const ::GYO::Engine::Base::AssertionFailure& failure) {
         return std::string(failure.expression);
     }
     return {};

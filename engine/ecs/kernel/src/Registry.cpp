@@ -1258,7 +1258,7 @@ Detail::RegistryData& Registry::Target() noexcept {
     return pending_ ? *pending_ : *data_;
 }
 
-Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(RegistrationOwner owner) {
+GYO::Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(RegistrationOwner owner) {
     GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
     GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)
     RequireNoWorldRunning();
@@ -1269,7 +1269,7 @@ Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(Registr
                               " live World(s) made from this Registry declare no dynamic insert "
                               "(WorldOptions::dynamicInsert = false); nothing was registered");
         error.rule = "DI-KS 26";
-        return Engine::Base::Err(std::move(error));
+        return GYO::Engine::Base::Err(std::move(error));
     }
     if (data_->frozen && !pending_) {
         // Rule 1: a later round writes a copy; its contents replace the tables only when it builds.
@@ -1300,7 +1300,7 @@ void Registry::CloseRegistrar() noexcept {
     Target().building = false;
 }
 
-Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
+GYO::Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
     GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
     GYO_ASSERT(!data_->failed);
     RequireNoWorldRunning();
@@ -1311,7 +1311,7 @@ Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
         if (!Detail::PlanStage(round)) {
             StartupReport report(std::move(round.errors));
             pending_.reset();
-            return Engine::Base::Err(std::move(report));
+            return GYO::Engine::Base::Err(std::move(report));
         }
         round.version = data_->version + 1;
         round.registered = false;
@@ -1326,7 +1326,7 @@ Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
     Detail::ResolveStage(data, false);
     if (!Detail::PlanStage(data)) {
         data.failed = true;
-        return Engine::Base::Err(StartupReport(std::move(data.errors)));
+        return GYO::Engine::Base::Err(StartupReport(std::move(data.errors)));
     }
     data.registered = false;
     data.version = 1;

@@ -24,9 +24,9 @@
 #include <vector>
 
 namespace {
-using Engine::Time::Duration;
-using Engine::Time::Now;
-using Engine::Time::TimePoint;
+using GYO::Engine::Time::Duration;
+using GYO::Engine::Time::Now;
+using GYO::Engine::Time::TimePoint;
 
 double Milliseconds(Duration value) { return std::chrono::duration<double, std::milli>(value).count(); }
 
@@ -82,7 +82,7 @@ std::string MeasureNotify(const char* name, double seconds, const std::function<
                 ++skipped;
                 continue;
             }
-            stamp.store(Engine::Time::NowNs(), std::memory_order_relaxed);
+            stamp.store(GYO::Engine::Time::NowNs(), std::memory_order_relaxed);
             sent.fetch_add(1, std::memory_order_release);
             notify();
         }
@@ -92,7 +92,7 @@ std::string MeasureNotify(const char* name, double seconds, const std::function<
     const auto start = Now();
     while (Now() - start < std::chrono::duration<double>(seconds)) {
         wait();
-        const auto woke = Engine::Time::NowNs();
+        const auto woke = GYO::Engine::Time::NowNs();
         const auto count = sent.load(std::memory_order_acquire);
         if (count == taken.load(std::memory_order_relaxed)) continue;  // a wake with nothing new sent
         late.push_back(double(woke - stamp.load(std::memory_order_relaxed)) / 1e6);
@@ -118,13 +118,13 @@ int main(int argc, char** argv) {
     // record keeps its "mode" field so earlier records stay comparable.
     const std::function<void()> between = [] {};
     const std::string mode = "cli";
-    auto waiter = Engine::Time::Waiter::Create();
+    auto waiter = GYO::Engine::Time::Waiter::Create();
     if (!waiter) { std::cerr << "no wait primitive\n"; return 1; }
     std::mutex mutex;
     std::condition_variable condition;
     std::ostringstream json;
     json << "{\"mode\":\"" << mode << "\",\"seconds_per_primitive\":" << seconds << ",\"period_ns\":16666667"
-         << ",\"waiter_backend\":\"" << Engine::Time::ToString(waiter->Backend()) << "\",\"primitives\":[";
+         << ",\"waiter_backend\":\"" << GYO::Engine::Time::ToString(waiter->Backend()) << "\",\"primitives\":[";
     json << Measure("waiter", seconds, [&](TimePoint deadline) { static_cast<void>(waiter->WaitUntil(deadline)); }, between) << ',';
     json << Measure("condition_variable", seconds, [&](TimePoint deadline) {
         std::unique_lock lock(mutex);

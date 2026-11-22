@@ -14,7 +14,7 @@
 // single waiter, deadlines, the re-check of the time base after each wake and
 // the backend names consumers log. engine/os never reads that latch.
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 // The platform mechanism. engine/time reports it as its WaitBackend, value for
 // value. A plain waitable timer means the high-resolution one was not available
@@ -63,4 +63,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

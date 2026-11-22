@@ -41,7 +41,7 @@
 #include <signal.h>
 #endif
 
-using namespace Engine::Os::Console;
+using namespace GYO::Engine::OS::Console;
 using namespace std::chrono_literals;
 
 namespace {
@@ -65,7 +65,7 @@ int WaitForShutdown(const Trigger trigger, const int count) {
     std::printf("reference_flags=%#x\n", FlagsOf(SIGUSR1));
 #endif
     if (auto installed = InstallShutdownRequests(); !installed) {
-        std::printf("install failed: %s\n", Engine::Base::Describe(installed.error()).c_str());
+        std::printf("install failed: %s\n", GYO::Engine::Base::Describe(installed.error()).c_str());
         return 3;
     }
 #if !defined(_WIN32)
@@ -120,7 +120,7 @@ int WaitForShutdown(const Trigger trigger, const int count) {
 int EchoArguments(const int argc, char** argv) {
     auto arguments = CommandLineUtf8(argc, argv);
     if (!arguments) {
-        std::printf("command line failed: %s\n", Engine::Base::Describe(arguments.error()).c_str());
+        std::printf("command line failed: %s\n", GYO::Engine::Base::Describe(arguments.error()).c_str());
         return 3;
     }
     for (std::size_t index = 2; index < arguments->size(); ++index) {

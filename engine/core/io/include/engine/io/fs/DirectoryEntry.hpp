@@ -6,7 +6,7 @@
 
 #include "engine/io/fs/FileInfo.hpp" // FileType, FileInfo
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
     /// ディレクトリ列挙で返す1件
     /// - VFS を想定して “path は URI 文字列” で持つ（表示/UI用に name も別で持つ）
@@ -34,4 +34,4 @@ namespace Engine::IO::FS {
         bool includeInfo = false;       // 列挙と同時に Stat を取る（重いのでデフォルト false）
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

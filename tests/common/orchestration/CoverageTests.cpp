@@ -36,8 +36,8 @@ O::ProductDescription Two(std::vector<std::string> mainFrame = {"Tick"}, std::ve
 }
 
 O::PrepareFn Refuse() {
-    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
-        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no"));
+    return [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no"));
     };
 }
 
@@ -376,7 +376,7 @@ TEST_CASE("O-8: an exception that leaves a DropOldFirst replacement ends the Pro
         O::Product& p = **built;
         bool thrown = false;
         try {
-            static_cast<void>(p.ReplaceWorld("Side", O::ReplaceRequest{[alloc](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+            static_cast<void>(p.ReplaceWorld("Side", O::ReplaceRequest{[alloc](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 if (alloc) throw std::bad_alloc();
                 throw std::runtime_error("disk gone");
             }, {}, O::ReplaceOrder::DropOldFirst}));
@@ -506,7 +506,7 @@ TEST_CASE("O-8: a registration that differs: the new frame list and prepare are 
             s.Registrar().Schedule(Once("Second"));
             s.Registrar().AddSystem<&Mark<'2'>>(In("MarkSecond", "Second"));
             s.Frame().Append("Second");
-            s.Prepare([](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+            s.Prepare([](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 Log().push_back("prepare 2");
                 return {};
             });

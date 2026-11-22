@@ -20,7 +20,7 @@
 #endif
 #include <windows.h>
 
-namespace Engine::Os::Process {
+namespace GYO::Engine::OS::Process {
 
 namespace {
 
@@ -102,4 +102,4 @@ Base::Result<LocalTime, OsError> ToLocalTime(const std::chrono::system_clock::ti
     return Detail::LocalTimeFromCalendar(local, seconds);
 }
 
-} // namespace Engine::Os::Process
+} // namespace GYO::Engine::OS::Process

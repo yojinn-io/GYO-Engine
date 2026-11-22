@@ -25,7 +25,7 @@ std::string SeenText(const std::vector<bool>& seen) {
     return out;
 }
 
-O::Product& Built(::Engine::Base::Result<std::unique_ptr<O::Product>, O::ProductStartupReport>& built) {
+O::Product& Built(::GYO::Engine::Base::Result<std::unique_ptr<O::Product>, O::ProductStartupReport>& built) {
     REQUIRE_MESSAGE(static_cast<bool>(built), "[sc-s1-1-built] " << (built ? std::string() : built.error().detail));
     return **built;
 }

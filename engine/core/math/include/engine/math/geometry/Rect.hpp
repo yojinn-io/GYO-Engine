@@ -6,7 +6,7 @@
 #include "engine/math/linear/Vec2.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Axis-aligned 2D rectangle: origin (x, y) and size. The queries below assume a
 // non-negative size; callers that can produce negative sizes (for example UI
@@ -49,4 +49,4 @@ static_assert(std::is_aggregate_v<Rect>);
            std::isfinite(rect.width) && std::isfinite(rect.height);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

@@ -9,7 +9,7 @@
 #include "engine/io/fs/Vfs.hpp"
 #include "engine/io/stream/MemoryStream.hpp"
 
-using namespace Engine::IO;
+using namespace GYO::Engine::IO;
 
 namespace {
 
@@ -31,7 +31,7 @@ public:
 
     IoResult<FS::FileInfo> Stat(const Path::Uri&) override {
         ++calls_;
-        if (error_) return Engine::Base::Err(*error_);
+        if (error_) return GYO::Engine::Base::Err(*error_);
         FS::FileInfo info;
         info.type = FS::FileType::Regular;
         info.backend = name_;
@@ -40,40 +40,40 @@ public:
 
     IoResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri&, Stream::FileOpenMode) override {
         ++calls_;
-        if (error_) return Engine::Base::Err(*error_);
+        if (error_) return GYO::Engine::Base::Err(*error_);
         std::vector<std::byte> bytes(name_.size());
         for (std::size_t i = 0; i < name_.size(); ++i) bytes[i] = static_cast<std::byte>(name_[i]);
         return std::make_unique<Stream::MemoryStream>(std::move(bytes), Stream::MemoryStream::Options{});
     }
     IoResult<bool> Exists(const Path::Uri&) override {
         ++calls_;
-        if (error_) return Engine::Base::Err(*error_);
+        if (error_) return GYO::Engine::Base::Err(*error_);
         return true;
     }
     IoResult<void> CreateDirectories(const Path::Uri&) override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
     IoResult<void> Remove(const Path::Uri&, const FS::RemoveOptions&) override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
     IoResult<void> Move(const Path::Uri&, const Path::Uri&) override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
     IoResult<void> Copy(const Path::Uri&, const Path::Uri&) override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
     IoResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri&, const FS::ListOptions&) override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
     IoResult<std::string> ToNativePathString(const Path::Uri&) override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
     FS::FileSystemCapabilities Capabilities() const noexcept override { return {}; }
     IoResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri&, const FS::ListOptions&) override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
     IoResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override {
-        return Engine::Base::Err(Unsupported());
+        return GYO::Engine::Base::Err(Unsupported());
     }
 
 private:

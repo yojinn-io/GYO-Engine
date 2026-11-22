@@ -14,7 +14,7 @@
 #include "engine/io/stream/IStream.hpp" // StreamCaps, IStream
 #include "engine/io/stream/Seek.hpp"    // SeekWhence
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
     class MemoryStream final : public IStream {
@@ -66,4 +66,4 @@ namespace Engine::IO::Stream {
         bool eof_ = false;
     };
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

@@ -19,7 +19,7 @@
 #include "engine/io/helpers/WriteFileAtomically.hpp"
 #include "engine/io/path/Uri.hpp"
 
-using namespace Engine::IO;
+using namespace GYO::Engine::IO;
 
 // engine/io's file:// backend over engine/os. Files are set up with the
 // standard library; the backend is reached through file URIs only.
@@ -360,7 +360,7 @@ TEST_CASE("NativeFileSystem writes a file atomically through a temporary file") 
     const TempTree tree;
     FS::NativeFileSystem fs;
     const auto bytes = [](const std::string& text) {
-        return Engine::Base::ConstSpan<std::byte>(reinterpret_cast<const std::byte*>(text.data()), text.size());
+        return GYO::Engine::Base::ConstSpan<std::byte>(reinterpret_cast<const std::byte*>(text.data()), text.size());
     };
     const std::string first = "first\n";
     const std::string second = "second\r\n";
@@ -402,19 +402,19 @@ public:
     Stream::StreamCaps Caps() const noexcept override { return inner_->Caps(); }
     bool IsOpen() const noexcept override { return inner_->IsOpen(); }
     bool IsEof() const noexcept override { return inner_->IsEof(); }
-    Engine::Base::Result<std::size_t, IoError> Read(void* dst, const std::size_t bytes) override {
+    GYO::Engine::Base::Result<std::size_t, IoError> Read(void* dst, const std::size_t bytes) override {
         return inner_->Read(dst, bytes);
     }
-    Engine::Base::Result<std::size_t, IoError> Write(const void*, std::size_t) override {
-        return Engine::Base::Err(IoError::Make(IoErrorCode::WriteFailed, "injected write failure"));
+    GYO::Engine::Base::Result<std::size_t, IoError> Write(const void*, std::size_t) override {
+        return GYO::Engine::Base::Err(IoError::Make(IoErrorCode::WriteFailed, "injected write failure"));
     }
-    Engine::Base::Result<std::uint64_t, IoError> Tell() const override { return inner_->Tell(); }
-    Engine::Base::Result<std::uint64_t, IoError> Seek(const std::int64_t offset, const Stream::SeekWhence whence) override {
+    GYO::Engine::Base::Result<std::uint64_t, IoError> Tell() const override { return inner_->Tell(); }
+    GYO::Engine::Base::Result<std::uint64_t, IoError> Seek(const std::int64_t offset, const Stream::SeekWhence whence) override {
         return inner_->Seek(offset, whence);
     }
-    Engine::Base::Result<std::uint64_t, IoError> Size() const override { return inner_->Size(); }
-    Engine::Base::Result<void, IoError> Flush() override { return inner_->Flush(); }
-    Engine::Base::Result<void, IoError> Close() override { return inner_->Close(); }
+    GYO::Engine::Base::Result<std::uint64_t, IoError> Size() const override { return inner_->Size(); }
+    GYO::Engine::Base::Result<void, IoError> Flush() override { return inner_->Flush(); }
+    GYO::Engine::Base::Result<void, IoError> Close() override { return inner_->Close(); }
 
 private:
     std::unique_ptr<Stream::IStream> inner_;
@@ -471,7 +471,7 @@ TEST_CASE("NativeFileSystem atomic writes go through a temporary file and a move
     tree.Write("export.json", "old");
     const std::string target = tree.Uri("export.json").path.Str();
     const std::string text = "new";
-    const Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
+    const GYO::Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
 
     RecordingFileSystem recording;
     REQUIRE(Helpers::WriteFileAtomically(recording, tree.Uri("export.json"), bytes));

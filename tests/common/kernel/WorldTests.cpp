@@ -157,7 +157,7 @@ SystemResult OverwriteThroughKeptWorld(Query<Read<Tag>>) {
 SystemResult SpawnOne(Spawn<Bundle<Tag>> spawn, Res<TickCount> tick) {
     if (tick->value == 1) {
         auto id = spawn.New(Tag{7});
-        if (!id) return Engine::Base::Err(std::move(id).error());
+        if (!id) return GYO::Engine::Base::Err(std::move(id).error());
     }
     return Ok();
 }
@@ -299,14 +299,14 @@ SystemResult SpawnThriceAtTickTwo(Spawn<Bundle<Tag>> spawn, Res<TickCount> tick)
     if (tick->value != 2) return Ok();
     for (int i = 0; i < 3; ++i) {
         auto id = spawn.New(Tag{2});
-        if (!id) return Engine::Base::Err(std::move(id).error().Wrap("SpawnThriceAtTickTwo"));
+        if (!id) return GYO::Engine::Base::Err(std::move(id).error().Wrap("SpawnThriceAtTickTwo"));
     }
     return Ok();
 }
 
 SystemResult SpawnEveryTick(Spawn<Bundle<Tag>> spawn) {
     auto id = spawn.New(Tag{1});
-    if (!id) return Engine::Base::Err(std::move(id).error().Wrap("SpawnEveryTick"));
+    if (!id) return GYO::Engine::Base::Err(std::move(id).error().Wrap("SpawnEveryTick"));
     return Ok();
 }
 
@@ -715,7 +715,7 @@ SystemResult SpareRemoved(HookCtx ctx) {
 }
 SystemResult ModeRemovedFails(HookCtx ctx) {
     Log().push_back(Head("mode-removed-fails", ctx));
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the OnRemove of Mode fails"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the OnRemove of Mode fails"));
 }
 // Despawns 1 (three cells), 3 (never alive; 4 is alive and above it) and 6 (alive, no cell).
 SystemResult DespawnOneThreeSix(Despawn despawn, Res<TickCount> tick) {

@@ -53,7 +53,7 @@ K::SystemResult LogStep(K::Res<W::Tick> tick, K::Res<W::ActiveTime> active, K::R
 // FixedUpdate/Update: fails at FailAt.
 K::SystemResult FailAtTick(K::Res<W::Tick> tick, K::Res<FailAt> at) {
     if (at->tick != 0 && tick->value == at->tick) {
-        return ::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "the fixed step failed"));
+        return ::GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "the fixed step failed"));
     }
     return {};
 }
@@ -136,7 +136,7 @@ O::ProductDescription Game(Nanoseconds delta, W::WorldTimeOptions options = {}) 
     w.name = "Main";
     w.options.Set(std::move(options));
     w.build = LoggingSystems;
-    w.prepare.push_back([delta](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([delta](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
         world.SetResource(Gate{});
         world.SetResource(FailAt{});
@@ -199,7 +199,7 @@ TEST_CASE("module: every time type has a hash function: a World with only the ti
     d.name = "game";
     O::WorldDescription w;
     w.name = "Main";
-    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(W::TimeSampling{kStep * 9, W::SamplingMode::ManualDelta});
         return {};
     });
@@ -307,7 +307,7 @@ TEST_CASE("module: an author who turns the skeleton off names its own schedules:
         r.Schedule(physics);
         r.AddSystem<&LogStep>(At("LogStep", "Physics", "S"));
     };
-    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(W::TimeSampling{40 * kMs, W::SamplingMode::ManualDelta});
         return {};
     });
@@ -511,7 +511,7 @@ struct RewindWorld {
     W::Tick tick{3};
     W::FixedTime fixed{};
     template <class T, class F>
-    ::Engine::Base::Result<bool, K::KernelError> Modify(F&& f) {
+    ::GYO::Engine::Base::Result<bool, K::KernelError> Modify(F&& f) {
         if constexpr (std::is_same_v<T, W::Tick>) {
             f(tick);
         } else {
@@ -566,7 +566,7 @@ TEST_CASE("restore: Tick, VirtualTime and the fixed-step state put back into a n
     W::WorldTimeOptions options;
     options.step = W::StepLength::FromHz(32.0);  // 31.25 ms in the new World
     O::ProductDescription d = Game(0, options);
-    d.worlds[0].prepare.push_back([tick, virt, elapsed, overstep](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    d.worlds[0].prepare.push_back([tick, virt, elapsed, overstep](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(tick);
         world.SetResource(virt);
         W::RestoreFixedTime(world, elapsed, overstep);
@@ -601,7 +601,7 @@ TEST_CASE("restore: a remainder saved under a longer step keeps what is below th
     SUBCASE("from a prepare function") {
         // Saved at 32 Hz: two steps run, 20 ms left; this World runs at 64 Hz (15.625 ms).
         O::ProductDescription d = Game(0);
-        d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        d.worlds[0].prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
             W::RestoreFixedTime(world, 2 * 31'250'000, 20 * kMs);
             return {};
         });
@@ -619,7 +619,7 @@ TEST_CASE("restore: a remainder saved under a longer step keeps what is below th
             s.Registrar().Resource<PutBack>({.name = "PutBack"});
             s.Registrar().AddSystem<&PutBackNow>(At("PutBackNow", "Main", "Last"));
         };
-        d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        d.worlds[0].prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
             world.SetResource(PutBack{2 * 31'250'000, 20 * kMs, 1});
             return {};
         });
@@ -651,7 +651,7 @@ TEST_CASE("carry-over: carried time values are kept; FixedTime takes this World'
     };
     // The old World only: a 32 Hz FixedTime and its own TimeConfig (one step a frame), as if they were put back.
     FirstBuild() = true;
-    d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    d.worlds[0].prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         if (!FirstBuild()) return {};
         world.SetResource(W::FixedTime{W::TickAccumulator{W::StepLength::FromHz(32.0)}, 0, 0});
         W::TimeConfig config = *world.Resource<W::TimeConfig>();

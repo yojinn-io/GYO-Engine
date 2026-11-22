@@ -10,7 +10,7 @@
 // Facts of the running process (docs/architecture/os.md). Every query asks the
 // OS again; nothing is cached. How the answers are printed is the caller's.
 
-namespace Engine::Os::Process {
+namespace GYO::Engine::OS::Process {
 
 // The running executable image as an absolute UTF-8 path: the module path on
 // Windows, /proc/self/exe on Linux, the image path with links resolved on
@@ -50,4 +50,4 @@ struct LocalTime final {
 // point the platform cannot convert (on Windows, after the year 3000).
 [[nodiscard]] Base::Result<LocalTime, OsError> ToLocalTime(std::chrono::system_clock::time_point time);
 
-} // namespace Engine::Os::Process
+} // namespace GYO::Engine::OS::Process

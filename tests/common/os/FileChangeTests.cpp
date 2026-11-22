@@ -26,8 +26,8 @@
 // library's weakly_canonical, which the editor called before (Design
 // Invariant 9).
 
-using namespace Engine::Os;
-using namespace Engine::Os::Files;
+using namespace GYO::Engine::OS;
+using namespace GYO::Engine::OS::Files;
 
 namespace {
 
@@ -188,7 +188,7 @@ TEST_CASE("Os files resolve a path as std::filesystem::weakly_canonical does") {
         const std::string text = Utf8(input);
         CAPTURE(text);
         const auto resolved = ResolvedPath(text);
-        REQUIRE_MESSAGE(resolved, (resolved ? std::string{} : Engine::Base::Describe(resolved.error())));
+        REQUIRE_MESSAGE(resolved, (resolved ? std::string{} : GYO::Engine::Base::Describe(resolved.error())));
         CHECK(resolved.value() == Utf8(std::filesystem::weakly_canonical(input)));
         CHECK(resolved.value().find('\\') == std::string::npos);
         CHECK(IsAbsolutePath(resolved.value()));

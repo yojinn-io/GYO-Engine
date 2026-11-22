@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
     struct FileSystemCapabilities final {
         // 基本機能
@@ -40,4 +40,4 @@ namespace Engine::IO::FS {
         std::uint32_t maxNameBytes = 0;
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

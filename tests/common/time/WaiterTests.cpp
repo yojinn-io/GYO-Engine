@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-using namespace Engine::Time;
+using namespace GYO::Engine::Time;
 using namespace std::chrono_literals;
 
 namespace {
@@ -42,12 +42,12 @@ TEST_CASE("Time Waiter backend names stay as consumers log them") {
 // mechanism under its own name (time.md Invariant 7).
 TEST_CASE("Time Waiter reports the os mechanism") {
     const auto waiter = MakeWaiter();
-    auto created = Engine::Os::WakeSignal::Create();
+    auto created = GYO::Engine::OS::WakeSignal::Create();
     REQUIRE(created);
     const auto mechanism = created.value().Mechanism();
-    const auto expected = mechanism == Engine::Os::WaitMechanism::Kqueue ? WaitBackend::Kqueue
-        : mechanism == Engine::Os::WaitMechanism::HighResolutionWaitableTimer ? WaitBackend::HighResolutionWaitableTimer
-        : mechanism == Engine::Os::WaitMechanism::WaitableTimer ? WaitBackend::WaitableTimer
+    const auto expected = mechanism == GYO::Engine::OS::WaitMechanism::Kqueue ? WaitBackend::Kqueue
+        : mechanism == GYO::Engine::OS::WaitMechanism::HighResolutionWaitableTimer ? WaitBackend::HighResolutionWaitableTimer
+        : mechanism == GYO::Engine::OS::WaitMechanism::WaitableTimer ? WaitBackend::WaitableTimer
         : WaitBackend::ConditionVariable;
     CHECK(waiter.Backend() == expected);
 }

@@ -30,7 +30,7 @@
 #include <system_error>
 #include <vector>
 
-using namespace Engine::IO;
+using namespace GYO::Engine::IO;
 
 namespace {
 

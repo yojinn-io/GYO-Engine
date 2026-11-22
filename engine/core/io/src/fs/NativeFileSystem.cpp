@@ -12,26 +12,26 @@
 #include "engine/io/path/Uri.hpp"
 #include "engine/os/Files.hpp"
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
     namespace {
 
         // The IoErrorCode for an engine/os failure; operation-specific codes stand for the rest.
-        IoErrorCode CodeFrom(const Os::OsErrorCode code, const IoErrorCode otherwise) noexcept {
+        IoErrorCode CodeFrom(const OS::OsErrorCode code, const IoErrorCode otherwise) noexcept {
             switch (code) {
-            case Os::OsErrorCode::NotFound:        return IoErrorCode::NotFound;
-            case Os::OsErrorCode::AccessDenied:    return IoErrorCode::PermissionDenied;
-            case Os::OsErrorCode::InvalidPath:     return IoErrorCode::InvalidPath;
-            case Os::OsErrorCode::InvalidEncoding: return IoErrorCode::InvalidPath;
-            case Os::OsErrorCode::Unsupported:     return IoErrorCode::NotSupported;
-            case Os::OsErrorCode::TooLarge:
-            case Os::OsErrorCode::IoFailed:        return otherwise;
+            case OS::OsErrorCode::NotFound:        return IoErrorCode::NotFound;
+            case OS::OsErrorCode::AccessDenied:    return IoErrorCode::PermissionDenied;
+            case OS::OsErrorCode::InvalidPath:     return IoErrorCode::InvalidPath;
+            case OS::OsErrorCode::InvalidEncoding: return IoErrorCode::InvalidPath;
+            case OS::OsErrorCode::Unsupported:     return IoErrorCode::NotSupported;
+            case OS::OsErrorCode::TooLarge:
+            case OS::OsErrorCode::IoFailed:        return otherwise;
             }
             return otherwise;
         }
 
         // Rule 5 of docs/architecture/error-handling.md: the message stays, the cause goes into the detail.
-        IoError FromOs(const Os::OsError& error, const std::string_view nativePath, const IoErrorCode otherwise) {
+        IoError FromOs(const OS::OsError& error, const std::string_view nativePath, const IoErrorCode otherwise) {
             return IoError::Make(CodeFrom(error.code, otherwise), error.message,
                                  Base::CauseDetail(error, nativePath));
         }
@@ -51,19 +51,19 @@ namespace Engine::IO::FS {
         IoResult<std::string> NativePath(const Path::Uri& uri) {
             auto native = Path::NativePathFromFileUri(uri);
             if (!native) return Base::Err(std::move(native.error()));
-            if (!Os::Files::IsAbsolutePath(native.value())) {
+            if (!OS::Files::IsAbsolutePath(native.value())) {
                 return Base::Err(IoError::Make(IoErrorCode::InvalidPath,
                                                "NativeFS: the path is not absolute on this platform", native.value()));
             }
             return native;
         }
 
-        FileType TypeFrom(const Os::Files::FileKind kind) noexcept {
+        FileType TypeFrom(const OS::Files::FileKind kind) noexcept {
             switch (kind) {
-            case Os::Files::FileKind::None:      return FileType::None;
-            case Os::Files::FileKind::Regular:   return FileType::Regular;
-            case Os::Files::FileKind::Directory: return FileType::Directory;
-            case Os::Files::FileKind::Other:     return FileType::Other;
+            case OS::Files::FileKind::None:      return FileType::None;
+            case OS::Files::FileKind::Regular:   return FileType::Regular;
+            case OS::Files::FileKind::Directory: return FileType::Directory;
+            case OS::Files::FileKind::Other:     return FileType::Other;
             }
             return FileType::Other;
         }
@@ -71,7 +71,7 @@ namespace Engine::IO::FS {
         // A read stream over an engine/os file.
         class NativeReadStream final : public Stream::IStream {
         public:
-            NativeReadStream(Os::Files::FileReader file, std::string nativePath)
+            NativeReadStream(OS::Files::FileReader file, std::string nativePath)
                 : file_(std::move(file)), path_(std::move(nativePath)) {}
 
             Stream::StreamCaps Caps() const noexcept override {
@@ -148,7 +148,7 @@ namespace Engine::IO::FS {
                 return IoError::Make(code, "NativeFS: the stream is closed", path_);
             }
 
-            std::optional<Os::Files::FileReader> file_;
+            std::optional<OS::Files::FileReader> file_;
             std::string path_;
             bool eof_ = false;
         };
@@ -157,7 +157,7 @@ namespace Engine::IO::FS {
         // reaches the OS, so Flush has nothing left to do).
         class NativeWriteStream final : public Stream::IStream {
         public:
-            NativeWriteStream(Os::Files::FileWriter file, std::string nativePath)
+            NativeWriteStream(OS::Files::FileWriter file, std::string nativePath)
                 : file_(std::move(file)), path_(std::move(nativePath)) {}
 
             Stream::StreamCaps Caps() const noexcept override {
@@ -203,7 +203,7 @@ namespace Engine::IO::FS {
                 return IoError::Make(IoErrorCode::NotSupported, "NativeFS: a write stream has no position", path_);
             }
 
-            std::optional<Os::Files::FileWriter> file_;
+            std::optional<OS::Files::FileWriter> file_;
             std::string path_;
         };
 
@@ -218,10 +218,10 @@ namespace Engine::IO::FS {
                 return Base::Err(Unsupported("this write mode"));
             }
             // Text asks for the platform's line endings ("\r\n" on Windows), as a text-mode C++ stream writes.
-            const auto endings = Stream::Has(mode, FileOpenMode::Text) ? Os::Files::LineEndings::Native
-                                                                       : Os::Files::LineEndings::AsWritten;
-            auto file = Os::Files::FileWriter::Open(
-                native, append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate, endings);
+            const auto endings = Stream::Has(mode, FileOpenMode::Text) ? OS::Files::LineEndings::Native
+                                                                       : OS::Files::LineEndings::AsWritten;
+            auto file = OS::Files::FileWriter::Open(
+                native, append ? OS::Files::WriteMode::Append : OS::Files::WriteMode::Truncate, endings);
             if (!file) return Base::Err(FromOs(file.error(), native, IoErrorCode::OpenFailed));
             return std::unique_ptr<Stream::IStream>(std::make_unique<NativeWriteStream>(std::move(file.value()), native));
         }
@@ -236,23 +236,23 @@ namespace Engine::IO::FS {
             return path;
         }
 
-        // Absolute as the OS makes it (Os::Files::MakeAbsolute), nothing removed lexically; as given when the
+        // Absolute as the OS makes it (OS::Files::MakeAbsolute), nothing removed lexically; as given when the
         // OS cannot.
         std::filesystem::path Absolute(const std::filesystem::path& given) {
-            if (auto text = Os::Files::PathToUtf8(given); text && !text.value().empty()) {
-                if (auto made = Os::Files::MakeAbsolute(text.value())) {
-                    if (auto path = Os::Files::PathFromUtf8(made.value())) return std::move(path.value());
+            if (auto text = OS::Files::PathToUtf8(given); text && !text.value().empty()) {
+                if (auto made = OS::Files::MakeAbsolute(text.value())) {
+                    if (auto path = OS::Files::PathFromUtf8(made.value())) return std::move(path.value());
                 }
             }
             return given;
         }
 
-        // Links in the existing part followed by the OS before its '..' (Os::Files::ResolvedPath); removed
+        // Links in the existing part followed by the OS before its '..' (OS::Files::ResolvedPath); removed
         // lexically when the OS cannot resolve the path.
         std::filesystem::path Resolved(const std::filesystem::path& absolute) {
-            if (auto text = Os::Files::PathToUtf8(absolute)) {
-                if (auto resolved = Os::Files::ResolvedPath(text.value())) {
-                    if (auto path = Os::Files::PathFromUtf8(resolved.value())) return std::move(path.value());
+            if (auto text = OS::Files::PathToUtf8(absolute)) {
+                if (auto resolved = OS::Files::ResolvedPath(text.value())) {
+                    if (auto path = OS::Files::PathFromUtf8(resolved.value())) return std::move(path.value());
                 }
             }
             return absolute.lexically_normal();
@@ -273,10 +273,10 @@ namespace Engine::IO::FS {
         }
 
         bool SameComponent(const std::filesystem::path& left, const std::filesystem::path& right) {
-            auto leftText = Os::Files::PathToUtf8(left);
-            auto rightText = Os::Files::PathToUtf8(right);
+            auto leftText = OS::Files::PathToUtf8(left);
+            auto rightText = OS::Files::PathToUtf8(right);
             if (!leftText || !rightText) return false;
-            auto same = Os::Files::SamePathComponent(leftText.value(), rightText.value());
+            auto same = OS::Files::SamePathComponent(leftText.value(), rightText.value());
             return same && same.value();
         }
 
@@ -296,9 +296,9 @@ namespace Engine::IO::FS {
                                                std::string(text)));
             }
         }
-        auto candidatePath = Os::Files::PathFromUtf8(utf8Candidate);
+        auto candidatePath = OS::Files::PathFromUtf8(utf8Candidate);
         if (!candidatePath) return Base::Err(FromOs(candidatePath.error(), {}, IoErrorCode::InvalidPath));
-        auto rootPath = Os::Files::PathFromUtf8(utf8Root);
+        auto rootPath = OS::Files::PathFromUtf8(utf8Root);
         if (!rootPath) return Base::Err(FromOs(rootPath.error(), {}, IoErrorCode::InvalidPath));
         const std::filesystem::path candidate = CandidatePath(candidatePath.value());
         const std::filesystem::path root = RootPath(rootPath.value());
@@ -311,8 +311,8 @@ namespace Engine::IO::FS {
 
     IoResult<Path::Uri> NativeFileUri(const std::string_view utf8Path) {
         std::string absolute(utf8Path);
-        if (!Os::Files::IsAbsolutePath(absolute)) {
-            auto made = Os::Files::MakeAbsolute(absolute);
+        if (!OS::Files::IsAbsolutePath(absolute)) {
+            auto made = OS::Files::MakeAbsolute(absolute);
             if (!made) return Base::Err(FromOs(made.error(), absolute, IoErrorCode::InvalidPath));
             absolute = std::move(made.value());
         }
@@ -327,7 +327,7 @@ namespace Engine::IO::FS {
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
         if (WantsWrite(mode)) return OpenForWriting(native.value(), mode);
-        auto file = Os::Files::FileReader::Open(native.value());
+        auto file = OS::Files::FileReader::Open(native.value());
         if (!file) return Base::Err(FromOs(file.error(), native.value(), IoErrorCode::OpenFailed));
         return std::unique_ptr<Stream::IStream>(
             std::make_unique<NativeReadStream>(std::move(file.value()), native.value()));
@@ -336,7 +336,7 @@ namespace Engine::IO::FS {
     IoResult<bool> NativeFileSystem::Exists(const Path::Uri& uri) {
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
-        auto exists = Os::Files::Exists(native.value());
+        auto exists = OS::Files::Exists(native.value());
         if (!exists) return Base::Err(FromOs(exists.error(), native.value(), IoErrorCode::ReadFailed));
         return exists.value();
     }
@@ -344,7 +344,7 @@ namespace Engine::IO::FS {
     IoResult<FileInfo> NativeFileSystem::Stat(const Path::Uri& uri) {
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
-        auto status = Os::Files::Stat(native.value());
+        auto status = OS::Files::Stat(native.value());
         if (!status) return Base::Err(FromOs(status.error(), native.value(), IoErrorCode::ReadFailed));
         FileInfo info;
         info.type = TypeFrom(status.value().kind);
@@ -374,7 +374,7 @@ namespace Engine::IO::FS {
         caps.supportsSymlink = false;
         caps.supportsPermissions = false;
         caps.supportsHiddenFlag = false;
-        caps.caseSensitivePaths = Os::Files::DefaultCaseSensitivePaths();
+        caps.caseSensitivePaths = OS::Files::DefaultCaseSensitivePaths();
         caps.supportsToNativePath = true;
         caps.supportsMtime = true;
         caps.supportsCtime = false;
@@ -387,7 +387,7 @@ namespace Engine::IO::FS {
     IoResult<void> NativeFileSystem::CreateDirectories(const Path::Uri& uri) {
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
-        auto created = Os::Files::CreateDirectories(native.value());
+        auto created = OS::Files::CreateDirectories(native.value());
         if (!created) return Base::Err(FromOs(created.error(), native.value(), IoErrorCode::WriteFailed));
         return {};
     }
@@ -397,7 +397,7 @@ namespace Engine::IO::FS {
         if (opt.recursive) return Base::Err(Unsupported("Remove with recursive"));
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
-        auto removed = Os::Files::RemoveFile(native.value());
+        auto removed = OS::Files::RemoveFile(native.value());
         if (!removed) return Base::Err(FromOs(removed.error(), native.value(), IoErrorCode::WriteFailed));
         return {};
     }
@@ -407,7 +407,7 @@ namespace Engine::IO::FS {
         if (!source) return Base::Err(std::move(source.error()));
         auto target = NativePath(to);
         if (!target) return Base::Err(std::move(target.error()));
-        auto moved = Os::Files::RenameReplacing(source.value(), target.value());
+        auto moved = OS::Files::RenameReplacing(source.value(), target.value());
         if (!moved) return Base::Err(FromOs(moved.error(), target.value(), IoErrorCode::WriteFailed));
         return {};
     }
@@ -428,4 +428,4 @@ namespace Engine::IO::FS {
         return Base::Err(Unsupported("CreateWatcher"));
     }
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

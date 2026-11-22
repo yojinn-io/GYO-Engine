@@ -7,9 +7,9 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/audio/Mixer.hpp"
 
-using namespace Engine::Audio;
-using Engine::Time::Duration;
-using Engine::Time::TimePoint;
+using namespace GYO::Engine::Audio;
+using GYO::Engine::Time::Duration;
+using GYO::Engine::Time::TimePoint;
 
 namespace {
 
@@ -51,9 +51,9 @@ TEST_CASE("Audio Mixer renders a recorded one-shot sequence bit-identically") {
     const auto shortMono = MakeClip(37, 1, 1);
     const auto stereo = MakeClip(500, 2, 2);
     const auto longMono = MakeClip(2000, 1, 3);
-    auto a = bank.Add(Engine::Base::ConstSpan<std::int16_t>(shortMono.data(), shortMono.size()), 1, kSampleRate);
-    auto b = bank.Add(Engine::Base::ConstSpan<std::int16_t>(stereo.data(), stereo.size()), 2, kSampleRate);
-    auto c = bank.Add(Engine::Base::ConstSpan<std::int16_t>(longMono.data(), longMono.size()), 1, kSampleRate);
+    auto a = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(shortMono.data(), shortMono.size()), 1, kSampleRate);
+    auto b = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(stereo.data(), stereo.size()), 2, kSampleRate);
+    auto c = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(longMono.data(), longMono.size()), 1, kSampleRate);
     REQUIRE((a && b && c));
     const ClipId clips[] = {*a, *b, *c};
 
@@ -86,7 +86,7 @@ TEST_CASE("Audio Mixer renders a recorded one-shot sequence bit-identically") {
         if (block == 30) mixer->SetMasterGain(0.9f);
         const std::uint32_t n = blockFrames[block % 6];
         std::vector<std::int16_t> out(std::size_t{n} * kChannels, 0x5555);
-        mixer->Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+        mixer->Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
         for (const std::int16_t sample : out) hash.Add(static_cast<std::uint16_t>(sample));
         frames += n;
         // The device runs 0.03% fast against the Engine clock, with jitter.

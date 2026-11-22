@@ -30,7 +30,7 @@
 namespace Logging = GYO::Engine::Logging;
 using Logging::Level;
 using Logging::Record;
-using Logging::Test::RecordingOutput;
+using GYO::Test::Logging::RecordingOutput;
 
 namespace {
 
@@ -48,7 +48,7 @@ Record Broken() {
 Logging::LoggerOptions WithMemory(std::shared_ptr<Logging::MemorySink> memory, Logging::SinkFilter filter = {}) {
     Logging::LoggerOptions options;
     options.sinks.push_back({.name = "memory", .sink = std::move(memory), .filter = std::move(filter)});
-    options.clock = Logging::Test::TestClock();
+    options.clock = GYO::Test::Logging::TestClock();
     options.takeAssertions = false;
     options.takeTerminate = false;
     return options;
@@ -66,11 +66,11 @@ TEST_CASE("fatal: with no Logger only standard error is written") {
 }
 
 TEST_CASE("fatal: every sink's WriteFatal gets the record's JSON line and text line, stamped with the Logger's clock") {
-    Logging::Test::ResetClock();
+    GYO::Test::Logging::ResetClock();
     auto memory = std::make_shared<Logging::MemorySink>();
     auto handle = Logging::Install(WithMemory(memory));
     REQUIRE(handle);
-    Logging::Test::monoNow = 777;
+    GYO::Test::Logging::monoNow = 777;
     const auto report = Logging::WriteFatalRecord(Broken());
     CHECK(report.console);
     CHECK(report.sinksWritten == 1);
@@ -83,7 +83,7 @@ TEST_CASE("fatal: every sink's WriteFatal gets the record's JSON line and text l
     CHECK(records[0].world == "Simulation");
     Record expected = Broken();
     expected.monoNs = 777;
-    expected.wall = Logging::Test::TestWall();
+    expected.wall = GYO::Test::Logging::TestWall();
     std::string json;
     Logging::AppendJsonLine(json, expected);
     REQUIRE(memory->FatalJsonLines().size() == 1);
@@ -221,22 +221,22 @@ TEST_CASE("fatal: a failed GYO_ASSERT writes a Fatal record of category assert, 
     auto memory = std::make_shared<Logging::MemorySink>();
     bool thrown = false;
     {
-        Engine::Test::ScopedAssertionHandler throwing;
+        GYO::Test::ScopedAssertionHandler throwing;
         auto options = WithMemory(memory);
         options.takeAssertions = true;
         auto handle = Logging::Install(std::move(options));
         REQUIRE(handle);
         try {
             GYO_ASSERT(1 + 1 == 3);
-        } catch (const Engine::Base::AssertionFailure& failure) {
+        } catch (const GYO::Engine::Base::AssertionFailure& failure) {
             thrown = true;
             CHECK(std::string(failure.expression) == "1 + 1 == 3");
         }
         handle.value().Close();
         // The earlier (throwing) handler is back.
-        const auto now = Engine::Base::SetAssertionHandler(nullptr);
-        Engine::Base::SetAssertionHandler(now);
-        CHECK(now == &Engine::Test::ThrowAssertionFailure);
+        const auto now = GYO::Engine::Base::SetAssertionHandler(nullptr);
+        GYO::Engine::Base::SetAssertionHandler(now);
+        CHECK(now == &GYO::Test::ThrowAssertionFailure);
     }
     CHECK(thrown);
     const auto records = memory->Records();
@@ -374,13 +374,13 @@ std::size_t FixedPath(const std::span<char> buffer) noexcept {
     std::memcpy(buffer.data(), path.data(), size);
     return size;
 }
-::Engine::Base::TraceToken NoBegin(std::string_view, std::string_view, std::string_view) noexcept {
+::GYO::Engine::Base::TraceToken NoBegin(std::string_view, std::string_view, std::string_view) noexcept {
     return {};
 }
-void NoEnd(::Engine::Base::TraceToken, bool) noexcept {}
-void NoError(::Engine::Base::TraceToken, std::string_view, bool) noexcept {}
+void NoEnd(::GYO::Engine::Base::TraceToken, bool) noexcept {}
+void NoError(::GYO::Engine::Base::TraceToken, std::string_view, bool) noexcept {}
 void NoMark(std::string_view, bool) noexcept {}
-constexpr ::Engine::Base::TraceReceiver kPathReceiver{
+constexpr ::GYO::Engine::Base::TraceReceiver kPathReceiver{
     .begin = &NoBegin, .end = &NoEnd, .error = &NoError, .markCurrent = &NoMark, .path = &FixedPath};
 
 } // namespace
@@ -389,9 +389,9 @@ TEST_CASE("fatal: with a trace receiver the fatal record carries trace_path, the
     auto memory = std::make_shared<Logging::MemorySink>();
     auto handle = Logging::Install(WithMemory(memory));
     REQUIRE(handle);
-    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kPathReceiver);
+    const ::GYO::Engine::Base::TraceReceiver* previous = ::GYO::Engine::Base::SetTraceReceiver(&kPathReceiver);
     static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "x"}));
-    ::Engine::Base::SetTraceReceiver(previous);
+    ::GYO::Engine::Base::SetTraceReceiver(previous);
     static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "y"}));
     const auto records = memory->Records();
     REQUIRE(records.size() == 2);
@@ -405,7 +405,7 @@ TEST_CASE("fatal: trace_path is added after the record's own fields; with more t
     auto memory = std::make_shared<Logging::MemorySink>();
     auto handle = Logging::Install(WithMemory(memory));
     REQUIRE(handle);
-    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kPathReceiver);
+    const ::GYO::Engine::Base::TraceReceiver* previous = ::GYO::Engine::Base::SetTraceReceiver(&kPathReceiver);
     const Logging::Field two[] = {{"file", "Simulation.cpp"}, {"line", 3u}};
     static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "two", .fields = two}));
     std::vector<std::string> keys(33);
@@ -418,7 +418,7 @@ TEST_CASE("fatal: trace_path is added after the record's own fields; with more t
         Record{.level = Level::Fatal, .category = "assert", .text = "thirty-two", .fields = std::span<const Logging::Field>(many.data(), 32)}));
     static_cast<void>(Logging::WriteFatalRecord(
         Record{.level = Level::Fatal, .category = "assert", .text = "thirty-three", .fields = std::span<const Logging::Field>(many.data(), 33)}));
-    ::Engine::Base::SetTraceReceiver(previous);
+    ::GYO::Engine::Base::SetTraceReceiver(previous);
     const auto records = memory->Records();
     REQUIRE(records.size() == 3);
     CHECK_MESSAGE((records[0].Find("file") != nullptr && records[0].Find("line") != nullptr), "trace D4 (a): the record's own fields stay");
@@ -433,10 +433,10 @@ TEST_CASE("fatal: a record that already has a trace_path field keeps it and gets
     auto memory = std::make_shared<Logging::MemorySink>();
     auto handle = Logging::Install(WithMemory(memory));
     REQUIRE(handle);
-    const ::Engine::Base::TraceReceiver* previous = ::Engine::Base::SetTraceReceiver(&kPathReceiver);
+    const ::GYO::Engine::Base::TraceReceiver* previous = ::GYO::Engine::Base::SetTraceReceiver(&kPathReceiver);
     const Logging::Field mine[] = {{"trace_path", "mine"}};
     static_cast<void>(Logging::WriteFatalRecord(Record{.level = Level::Fatal, .category = "assert", .text = "x", .fields = mine}));
-    ::Engine::Base::SetTraceReceiver(previous);
+    ::GYO::Engine::Base::SetTraceReceiver(previous);
     REQUIRE(memory->FatalJsonLines().size() == 1);
     const std::string line = memory->FatalJsonLines()[0];
     CHECK_MESSAGE(static_cast<bool>(GYO::Engine::Json::Parse(line)), "LG-5: the fatal line reads back (one trace_path key): " << line);

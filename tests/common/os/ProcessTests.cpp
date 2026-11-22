@@ -29,7 +29,7 @@
 #endif
 #endif
 
-using namespace Engine::Os;
+using namespace GYO::Engine::OS;
 using namespace std::chrono_literals;
 
 namespace {
@@ -167,7 +167,7 @@ std::string FormatWall(const Process::LocalTime& local, const char* format) {
 
 TEST_CASE("Os process executable path names this test executable, as the old lookup did") {
     const auto path = Process::ExecutablePath();
-    REQUIRE_MESSAGE(path, (path ? std::string{} : Engine::Base::Describe(path.error())));
+    REQUIRE_MESSAGE(path, (path ? std::string{} : GYO::Engine::Base::Describe(path.error())));
     CHECK(Files::IsAbsolutePath(*path));
     const auto exists = Files::Exists(*path);
     REQUIRE(exists);
@@ -184,7 +184,7 @@ TEST_CASE("Os process reports its ANSI code page where the platform has one") {
     const auto page = Process::AnsiCodePage();
 #if defined(_WIN32)
     // The manifest every executable of the repository embeds (Design Invariant 11).
-    REQUIRE_MESSAGE(page, (page ? std::string{} : Engine::Base::Describe(page.error())));
+    REQUIRE_MESSAGE(page, (page ? std::string{} : GYO::Engine::Base::Describe(page.error())));
     CHECK(*page == 65001u);
     CHECK(*page == ::GetACP());
 #else
@@ -262,7 +262,7 @@ TEST_CASE("Os process local time matches the C runtime's fields and %z under fix
             CAPTURE(seconds);
             const auto point = std::chrono::system_clock::from_time_t(seconds) + 999ms;
             const auto local = Process::ToLocalTime(point);
-            REQUIRE_MESSAGE(local, (local ? std::string{} : Engine::Base::Describe(local.error())));
+            REQUIRE_MESSAGE(local, (local ? std::string{} : GYO::Engine::Base::Describe(local.error())));
             const auto reference = ReferenceLocal(seconds);
             CHECK(local->year == reference.tm_year + 1900);
             CHECK(local->month == reference.tm_mon + 1);

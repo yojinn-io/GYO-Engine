@@ -19,7 +19,7 @@
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
 #endif
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 struct WakeSignal::Impl final {
     WaitMechanism mechanism{WaitMechanism::HighResolutionWaitableTimer};
@@ -92,4 +92,4 @@ WaitMechanism WakeSignal::Mechanism() const {
     return impl_->mechanism;
 }
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

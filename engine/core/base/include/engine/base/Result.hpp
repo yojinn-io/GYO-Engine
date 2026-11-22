@@ -22,7 +22,7 @@
 // so a later migration is mechanical. Unlike std::expected, reading the side
 // that is not held is a Programmer Error rather than an exception.
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 // The failure side of a Result, like std::unexpected: `return Base::Err(e);`.
 template <class E>
@@ -150,4 +150,4 @@ private:
     std::variant<std::monostate, E> data_;
 };
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base

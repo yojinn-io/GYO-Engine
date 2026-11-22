@@ -29,7 +29,7 @@
 #include <cerrno>
 #endif
 
-using namespace Engine::Os;
+using namespace GYO::Engine::OS;
 
 namespace {
 
@@ -183,7 +183,7 @@ TEST_CASE("Os thread applies the priority hints as the platform reads them back"
 // (engine/threads' RoleThread, threads.md Invariant 5): read back on the role's
 // own thread.
 TEST_CASE("Os thread receives a role's priority as the same hint") {
-    using Engine::Threads::ThreadPriority;
+    using GYO::Engine::Threads::ThreadPriority;
     const std::pair<ThreadPriority, Thread::PriorityHint> levels[] = {
         {ThreadPriority::Background, Thread::PriorityHint::Background},
         {ThreadPriority::Normal, Thread::PriorityHint::Normal},
@@ -194,8 +194,8 @@ TEST_CASE("Os thread receives a role's priority as the same hint") {
         long before = 0;
         OnOwnThread([&] { before = NiceNow(); });  // a new thread starts with the process's niceness
         PriorityRead read;
-        auto role = Engine::Threads::RoleThread::Start({"gyo-os-role", priority},
-            [&](Engine::Threads::RoleContext&) { read = ReadPriority(hint, before); });
+        auto role = GYO::Engine::Threads::RoleThread::Start({"gyo-os-role", priority},
+            [&](GYO::Engine::Threads::RoleContext&) { read = ReadPriority(hint, before); });
         REQUIRE(role);
         role->Join();
         CHECK(role->PriorityApplied() == ExpectApplied(hint, before));

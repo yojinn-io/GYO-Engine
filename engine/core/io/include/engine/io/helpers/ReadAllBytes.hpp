@@ -3,12 +3,12 @@
 #include "engine/io/helpers/FileAllCommon.hpp"
 #include "engine/io/stream/IStream.hpp"
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
 
     // IFileSystem 版
     inline IoResult<std::vector<std::byte>>
-    ReadAllBytes(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
+    ReadAllBytes(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
                  const ReadAllOptions& opt = {}) {
         auto orr = OpenRead(fs, uri);
         if (!orr) return Base::Err(orr.error());
@@ -23,7 +23,7 @@ namespace Engine::IO::Helpers {
 
     // Vfs 版（必要なければ削除）
     inline IoResult<std::vector<std::byte>>
-    ReadAllBytes(Engine::IO::FS::Vfs& vfs, const Engine::IO::Path::Uri& uri,
+    ReadAllBytes(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri,
                  const ReadAllOptions& opt = {}) {
         auto orr = OpenRead(vfs, uri);
         if (!orr) return Base::Err(orr.error());
@@ -36,4 +36,4 @@ namespace Engine::IO::Helpers {
         return std::move(br.value());
     }
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

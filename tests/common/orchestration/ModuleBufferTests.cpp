@@ -47,7 +47,7 @@ TEST_CASE("module-buffer: the owner creates, a later unit and the product's buil
                      Table& table = s.Buffer().Create<Table>();
                      table.entries.push_back("owner");
                      // A prepare function reads what the build put in: the buffer is kept with it.
-                     s.Prepare([&prepared, &table](K::World&) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+                     s.Prepare([&prepared, &table](K::World&) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
                          prepared = Joined(table.entries);
                          return {};
                      });
@@ -106,7 +106,7 @@ TEST_CASE("module-buffer: a Create or a writable Find after Build is a Programme
         Units units;
         units.Module("late", {.build = [](O::WorldSetup& s) {
                          O::ModuleBuffer* buffer = &s.Buffer();
-                         s.Prepare([buffer](K::World&) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+                         s.Prepare([buffer](K::World&) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
                              buffer->Create<Table>();
                              return {};
                          });
@@ -118,7 +118,7 @@ TEST_CASE("module-buffer: a Create or a writable Find after Build is a Programme
         units.Module("late", {.build = [](O::WorldSetup& s) {
                          s.Buffer().Create<Table>();
                          O::ModuleBuffer* buffer = &s.Buffer();
-                         s.Prepare([buffer](K::World&) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+                         s.Prepare([buffer](K::World&) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
                              static_cast<void>(buffer->Find<Table>());
                              return {};
                          });

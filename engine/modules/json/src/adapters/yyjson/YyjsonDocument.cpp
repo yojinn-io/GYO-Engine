@@ -36,7 +36,7 @@ struct Tree final {
 
 namespace {
 
-using ::Engine::Base::Err;
+using ::GYO::Engine::Base::Err;
 
 yyjson_val* Raw(const Detail::Node* node) noexcept {
     return reinterpret_cast<yyjson_val*>(const_cast<Detail::Node*>(node));

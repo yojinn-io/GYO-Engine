@@ -18,8 +18,8 @@
 // (the C runtime decides them per platform), a binary one otherwise, which is
 // what the callers wrote with before engine/os had a writer (Design Invariant 9).
 
-using namespace Engine::Os;
-using namespace Engine::Os::Files;
+using namespace GYO::Engine::OS;
+using namespace GYO::Engine::OS::Files;
 
 namespace {
 
@@ -60,7 +60,7 @@ std::span<const std::byte> Bytes(const std::string_view text) {
 void WriteAll(const std::filesystem::path& path, const WriteMode mode, const LineEndings endings,
               const std::string_view text) {
     auto file = FileWriter::Open(Utf8(path), mode, endings);
-    REQUIRE_MESSAGE(file, (file ? std::string{} : Engine::Base::Describe(file.error())));
+    REQUIRE_MESSAGE(file, (file ? std::string{} : GYO::Engine::Base::Describe(file.error())));
     REQUIRE(file->Write(Bytes(text)));
     REQUIRE(file->Close());
 }
@@ -159,12 +159,12 @@ TEST_CASE("Os files let a reader open a file a writer holds") {
     REQUIRE(writer);
     REQUIRE(writer->Write(Bytes("seen")));
     auto reader = FileReader::Open(Utf8(path));
-    REQUIRE_MESSAGE(reader, (reader ? std::string{} : Engine::Base::Describe(reader.error())));
+    REQUIRE_MESSAGE(reader, (reader ? std::string{} : GYO::Engine::Base::Describe(reader.error())));
     auto size = reader->Size();
     REQUIRE(size);
     CHECK(*size == 4);
     auto second = FileWriter::Open(Utf8(path), WriteMode::Append, LineEndings::AsWritten);
-    REQUIRE_MESSAGE(second, (second ? std::string{} : Engine::Base::Describe(second.error())));
+    REQUIRE_MESSAGE(second, (second ? std::string{} : GYO::Engine::Base::Describe(second.error())));
     CHECK(second->Close());
 #if defined(_WIN32)
     std::error_code removing;
@@ -219,9 +219,9 @@ TEST_CASE("Os files write nothing for an empty span and refuse a moved-from writ
     REQUIRE(moved.Write(Bytes("x")));
     REQUIRE(moved.Close());
     CHECK(ReadBytes(path) == "x");
-    Engine::Test::ScopedAssertionHandler throwing;
-    CHECK_THROWS_AS(static_cast<void>(writer->Write(Bytes("y"))), Engine::Base::AssertionFailure);
-    CHECK_THROWS_AS(static_cast<void>(moved.Write(Bytes("y"))), Engine::Base::AssertionFailure);
+    GYO::Test::ScopedAssertionHandler throwing;
+    CHECK_THROWS_AS(static_cast<void>(writer->Write(Bytes("y"))), GYO::Engine::Base::AssertionFailure);
+    CHECK_THROWS_AS(static_cast<void>(moved.Write(Bytes("y"))), GYO::Engine::Base::AssertionFailure);
 }
 
 TEST_CASE("Os files create directories with their missing parents") {
@@ -263,7 +263,7 @@ TEST_CASE("Os files create directories under a UNC share") {
     }
     const std::string nested = share + local.substr(2) + "/a/b";
     const auto created = CreateDirectories(nested);
-    REQUIRE_MESSAGE(created, (created ? std::string{} : Engine::Base::Describe(created.error())));
+    REQUIRE_MESSAGE(created, (created ? std::string{} : GYO::Engine::Base::Describe(created.error())));
     CHECK(std::filesystem::is_directory(dir.Path() / "a" / "b"));
 }
 #endif
@@ -277,7 +277,7 @@ TEST_CASE("Os files write and create directories under a path longer than 300 ch
     const auto path = deep / "match-ingress.jsonl";
     WriteAll(path, WriteMode::Truncate, LineEndings::Native, "{}\n");
     auto reader = FileReader::Open(Utf8(path));
-    REQUIRE_MESSAGE(reader, (reader ? std::string{} : Engine::Base::Describe(reader.error())));
+    REQUIRE_MESSAGE(reader, (reader ? std::string{} : GYO::Engine::Base::Describe(reader.error())));
     auto status = Stat(Utf8(path));
     REQUIRE(status);
     CHECK(status->kind == FileKind::Regular);

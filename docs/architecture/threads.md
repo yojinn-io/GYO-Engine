@@ -9,14 +9,14 @@ calls moved into engine/os in batch os-threads-backend (D69).
 
 ```text
 GYO::Time ◄── GYO::Threads ◄── GYO::Trace, products
-GYO::Os   ◄──┘ (privately: the thread name and priority calls)
+GYO::OS   ◄──┘ (privately: the thread name and priority calls)
 ```
 
 - **`Threads::RoleThread`**: one long-lived, named thread running one role's loop, with its own `Time::Waiter`.
 - **`Threads::RoleContext`**: what the loop sees: its stop request and its Waiter.
 
 Ownership: Engine owns the thread's lifetime, its name and priority hint per platform, and its wake. engine/threads
-owns the role and its lifetime; the OS calls that name and prioritize the thread are engine/os's (`Os::Thread`,
+owns the role and its lifetime; the OS calls that name and prioritize the thread are engine/os's (`OS::Thread`,
 os-threads-backend, D69). The consumer owns the loop, its tick policy and thresholds, and the order in which roles
 stop and join.
 
@@ -71,8 +71,8 @@ stop and join.
    backend. Guard: "a role reports the backend of its own Waiter"; mutant `tt2-role-backend-fixed`.
 8. **The body's obligations are the consumer's.** It returns once a stop is requested and lets no exception escape;
    RoleThread does not catch for it. No guard; a body that breaks this hangs the join or ends the process.
-9. **`GYO::Threads` links exactly `GYO::Time`, `Threads::Threads` and, privately, `GYO::Os`** (checked at configure
-   time by `tests/common/time/CMakeLists.txt`, which also refuses `GYO::Os` in its interface): no SDL, no
+9. **`GYO::Threads` links exactly `GYO::Time`, `Threads::Threads` and, privately, `GYO::OS`** (checked at configure
+   time by `tests/common/time/CMakeLists.txt`, which also refuses `GYO::OS` in its interface): no SDL, no
    `GYO::Engine`, and what links `GYO::Threads` gets no engine/os headers from it (os-threads-backend, D69). Guards:
    mutants `ti-x2-threads-links-more`, `th-x1-threads-os-public`.
 

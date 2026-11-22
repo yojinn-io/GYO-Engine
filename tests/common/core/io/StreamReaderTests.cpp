@@ -3,7 +3,7 @@
 #include "engine/io/stream/MemoryStream.hpp"
 #include "engine/io/stream/StreamReader.hpp"
 
-using namespace Engine::IO::Stream;
+using namespace GYO::Engine::IO::Stream;
 
 TEST_CASE("StreamReader: text and binary methods share unread bytes") {
     MemoryStream stream;

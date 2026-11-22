@@ -7,7 +7,7 @@
 
 #include <string>
 
-using namespace Engine::Os;
+using namespace GYO::Engine::OS;
 
 TEST_CASE("Os error codes start at 1 and have names") {
     CHECK(static_cast<int>(OsErrorCode::NotFound) == 1);
@@ -28,7 +28,7 @@ TEST_CASE("Os error converted at a module boundary keeps its code and native det
     CHECK(error.message == "cannot open file");
     CHECK(error.detail == "errno=2; path_bytes=12");
     // An outer module records the cause with Base::CauseDetail (error-handling.md rule 5).
-    CHECK(Engine::Base::CauseDetail(error, "C:/a/b") == "C:/a/b; NotFound: errno=2; path_bytes=12");
+    CHECK(GYO::Engine::Base::CauseDetail(error, "C:/a/b") == "C:/a/b; NotFound: errno=2; path_bytes=12");
 }
 
 TEST_CASE("Os error has no zero code") {

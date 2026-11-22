@@ -6,7 +6,7 @@
 #include "engine/base/Fnv1a.hpp"
 #include "engine/io/helpers/ReadAllBytes.hpp"
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
     IoResult<FileStamp> ProbeFileStamp(FS::IFileSystem& fs, const Path::Uri& uri, const ReadAllOptions& read) {
         auto info = fs.Stat(uri);
@@ -30,4 +30,4 @@ namespace Engine::IO::Helpers {
         return stamp;
     }
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

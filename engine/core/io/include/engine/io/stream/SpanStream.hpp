@@ -13,7 +13,7 @@
 #include "engine/io/stream/IStream.hpp"
 #include "engine/io/stream/Seek.hpp"
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
 
@@ -61,4 +61,4 @@ namespace Engine::IO::Stream {
         bool eof_ = false;
     };
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

@@ -11,7 +11,7 @@
 #include <string>
 #include <thread>
 
-namespace Engine::Threads {
+namespace GYO::Engine::Threads {
 
 enum class ThreadErrorCode : std::uint16_t {
     // The operating system did not start the thread or its wait primitive.
@@ -100,4 +100,4 @@ private:
     std::thread thread_;
 };
 
-} // namespace Engine::Threads
+} // namespace GYO::Engine::Threads

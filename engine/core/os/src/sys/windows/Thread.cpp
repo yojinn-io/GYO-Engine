@@ -15,7 +15,7 @@
 #endif
 #include <windows.h>
 
-namespace Engine::Os::Thread {
+namespace GYO::Engine::OS::Thread {
 
 bool SetCurrentName(const std::string_view utf8Name) noexcept {
     const std::string name(utf8Name);
@@ -35,4 +35,4 @@ bool SetCurrentPriority(const PriorityHint hint) noexcept {
     return ::SetThreadPriority(::GetCurrentThread(), value) != 0;
 }
 
-} // namespace Engine::Os::Thread
+} // namespace GYO::Engine::OS::Thread

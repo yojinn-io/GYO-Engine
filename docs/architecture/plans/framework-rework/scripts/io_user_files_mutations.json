@@ -16,7 +16,7 @@
       "id": "io-within-case",
       "what": "Names are compared byte for byte instead of by the platform rule",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "            auto same = Os::Files::SamePathComponent(leftText.value(), rightText.value());\n            return same && same.value();",
+      "find": "            auto same = OS::Files::SamePathComponent(leftText.value(), rightText.value());\n            return same && same.value();",
       "replace": "            return leftText.value() == rightText.value();",
       "target": "engine_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically creates*,*IsNativePathWithin*",

@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include <sys/qos.h>
 
-namespace Engine::Os::Thread {
+namespace GYO::Engine::OS::Thread {
 
 bool SetCurrentName(const std::string_view utf8Name) noexcept {
     const std::string name(utf8Name);
@@ -20,4 +20,4 @@ bool SetCurrentPriority(const PriorityHint hint) noexcept {
     return pthread_set_qos_class_self_np(qos, 0) == 0;
 }
 
-} // namespace Engine::Os::Thread
+} // namespace GYO::Engine::OS::Thread

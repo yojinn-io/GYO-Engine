@@ -13,7 +13,7 @@
 #endif
 #include <windows.h>
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 
 Base::Result<std::string, OsError> WideToUtf8(const std::wstring_view wide) {
     if (wide.empty()) return std::string{};
@@ -59,4 +59,4 @@ Base::Result<std::wstring, OsError> Utf8ToWide(const std::string_view utf8) {
     return wide;
 }
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

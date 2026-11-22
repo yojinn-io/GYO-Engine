@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
 StreamReader::StreamReader(IStream& s) : s_(s) {
@@ -32,7 +32,7 @@ IoResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
         const std::size_t n = rr.value();
         if (n == 0) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::EndOfStream,
+                GYO::Engine::IO::IoErrorCode::EndOfStream,
                 "StreamReader: unexpected EOF in ReadExactly"));
         }
         done += n;
@@ -56,7 +56,7 @@ IoResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes
 
         if (maxBytes != 0 && out.size() + n > maxBytes) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::ReadFailed,
+                GYO::Engine::IO::IoErrorCode::ReadFailed,
                 "StreamReader: ReadAllBytes exceeded maxBytes"));
         }
 
@@ -178,7 +178,7 @@ IoResult<bool> StreamReader::ReadLine(std::string& outLine, std::size_t maxLineB
         const std::size_t chunk = i - lpos_;
         if (maxLineBytes != 0 && outLine.size() + chunk > maxLineBytes) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::ReadFailed,
+                GYO::Engine::IO::IoErrorCode::ReadFailed,
                 "StreamReader: line too long"));
         }
 
@@ -202,4 +202,4 @@ IoResult<bool> StreamReader::ReadLine(std::string& outLine, std::size_t maxLineB
     }
 }
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

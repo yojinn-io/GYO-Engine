@@ -19,7 +19,7 @@
 //   inner error's code name and detail;
 // - no default constructor, so an E always describes a failure.
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 template <class E>
 concept CodedError = !std::is_default_constructible_v<E> && requires(const E& error) {
@@ -84,4 +84,4 @@ template <CodedError E>
     return text;
 }
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base

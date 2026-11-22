@@ -233,13 +233,13 @@ SystemResult SpawnHundred(SpawnWithId<Bundle<Body>> spawn) {
 }
 SystemResult AllotOne(Spawn<Bundle<Body>> spawn) {
     auto id = spawn.New(Body{1});
-    if (!id) return Engine::Base::Err(std::move(id).error().Wrap("AllotOne"));
+    if (!id) return GYO::Engine::Base::Err(std::move(id).error().Wrap("AllotOne"));
     return Ok();
 }
 SystemResult AllotTwo(Spawn<Bundle<Body>> spawn) {
     for (int i = 0; i < 2; ++i) {
         auto id = spawn.New(Body{2});
-        if (!id) return Engine::Base::Err(std::move(id).error().Wrap("AllotTwo"));
+        if (!id) return GYO::Engine::Base::Err(std::move(id).error().Wrap("AllotTwo"));
     }
     return Ok();
 }
@@ -281,7 +281,7 @@ SystemResult SpawnSevenAlways(SpawnWithId<Bundle<Body>> spawn) {
     spawn.New(7, Body{70});
     return Ok();
 }
-SystemResult FailsInB() { return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "FailsInB fails")); }
+SystemResult FailsInB() { return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "FailsInB fails")); }
 SystemResult ZoneBDespawnsE(Despawn despawn) {
     despawn.Entity(60);
     return Ok();

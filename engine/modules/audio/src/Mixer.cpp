@@ -16,7 +16,7 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
 
-namespace Engine::Audio {
+namespace GYO::Engine::Audio {
 
 namespace Detail {
 
@@ -500,4 +500,4 @@ Playhead Mixer::PlayheadOf(const SoundHandle sound) const noexcept {
                     static_cast<std::uint32_t>(read & 0xFFFF'FFFFu)};
 }
 
-} // namespace Engine::Audio
+} // namespace GYO::Engine::Audio

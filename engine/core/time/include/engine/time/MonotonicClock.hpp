@@ -3,7 +3,7 @@
 #include <chrono>
 #include <cstdint>
 
-namespace Engine::Time {
+namespace GYO::Engine::Time {
 
 // The engine time base: every engine module measures elapsed time, waits and
 // stamps events on this clock. It is monotonic and never adjusted.
@@ -26,4 +26,4 @@ using Duration = MonotonicClock::duration;
     return std::chrono::duration_cast<std::chrono::nanoseconds>(Now().time_since_epoch()).count();
 }
 
-} // namespace Engine::Time
+} // namespace GYO::Engine::Time

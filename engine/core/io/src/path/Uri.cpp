@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
-namespace Engine::IO::Path {
+namespace GYO::Engine::IO::Path {
 
     static std::string ToLower(std::string_view sv) {
         std::string out(sv);
@@ -211,7 +211,7 @@ namespace Engine::IO::Path {
 
     Base::Result<Uri, IoError> ParseUri(std::string_view s) {
         if (s.empty()) {
-            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IoError::Make(GYO::Engine::IO::IoErrorCode::InvalidPath,
                                         "uri is empty"));
         }
 
@@ -397,4 +397,4 @@ namespace Engine::IO::Path {
         return native;
     }
 
-} // namespace Engine::IO::Path
+} // namespace GYO::Engine::IO::Path

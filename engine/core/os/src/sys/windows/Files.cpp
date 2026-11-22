@@ -21,7 +21,7 @@
 #endif
 #include <windows.h>
 
-namespace Engine::Os::Files {
+namespace GYO::Engine::OS::Files {
 
 namespace {
 
@@ -716,4 +716,4 @@ bool DefaultCaseSensitivePaths() noexcept {
     return false;
 }
 
-} // namespace Engine::Os::Files
+} // namespace GYO::Engine::OS::Files

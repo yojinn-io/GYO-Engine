@@ -9,7 +9,7 @@
 // Internal to engine/os on Windows: text between UTF-16 and UTF-8, unchanged
 // otherwise (no separator rewriting; Files.cpp keeps its own path form).
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 
 // An unpaired surrogate is InvalidEncoding, never a silent U+FFFD.
 [[nodiscard]] Base::Result<std::string, OsError> WideToUtf8(std::wstring_view wide);
@@ -17,4 +17,4 @@ namespace Engine::Os::Detail {
 // Text that is not UTF-8 is InvalidEncoding.
 [[nodiscard]] Base::Result<std::wstring, OsError> Utf8ToWide(std::string_view utf8);
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

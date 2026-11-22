@@ -19,7 +19,7 @@
 // UTF-8, a value out of range) fails before any OS call. engine/io's native
 // file system is built on them.
 
-namespace Engine::Os::Files {
+namespace GYO::Engine::OS::Files {
 
 enum class FileKind : std::uint8_t { None = 0, Regular, Directory, Other };
 
@@ -183,4 +183,4 @@ private:
 // may differ.
 [[nodiscard]] bool DefaultCaseSensitivePaths() noexcept;
 
-} // namespace Engine::Os::Files
+} // namespace GYO::Engine::OS::Files

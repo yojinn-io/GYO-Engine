@@ -19,7 +19,7 @@
 #include <windows.h>
 #include <shellapi.h>
 
-namespace Engine::Os::Console {
+namespace GYO::Engine::OS::Console {
 
 namespace {
 
@@ -108,4 +108,4 @@ Base::Result<void, OsError> InstallShutdownRequests() {
     return {};
 }
 
-} // namespace Engine::Os::Console
+} // namespace GYO::Engine::OS::Console

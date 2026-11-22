@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 namespace Detail {
 
@@ -79,4 +79,4 @@ Base::Result<std::filesystem::path, OsError> PathFromUtf8(const std::string_view
 
 } // namespace Files
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

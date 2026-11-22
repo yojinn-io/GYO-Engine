@@ -68,7 +68,7 @@ Health HealthOf(const Arrival& arrival) { return Health{arrival.hp}; }
 SystemResult Spawner(Spawn<Bundle<Arrival>> spawn, Local<std::int32_t> spawned) {
     if (*spawned >= 3) return Ok();
     auto made = spawn.New(Arrival{0, 10, 1, 0, 2});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     ++*spawned;
     return Ok();
 }
@@ -105,7 +105,7 @@ SystemResult ApplyHits(MessageReader<Hit> hits, Query<Write<Health>> healths, Re
 }
 
 SystemResult Reap(Query<Read<Health>> healths, Despawn despawn) {
-    Engine::Base::Result<void, KernelError> result;
+    GYO::Engine::Base::Result<void, KernelError> result;
     healths.ForEach([&](EntityId id, const Health& health) {
         if (health.hp > 0 || !result) return;
         despawn.Entity(id);
@@ -242,7 +242,7 @@ TEST_CASE("skeleton: eight ticks of the game give the hand-worked result") {
 
 namespace {
 
-SystemResult Fails() { return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom")); }
+SystemResult Fails() { return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom")); }
 
 SystemResult WritePositionA(Query<Write<Position>> q) {
     q.ForEach([](EntityId, Mut<Position> p) { p->x += 1; });
@@ -276,7 +276,7 @@ SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
     for (int member = 0; member < 3; ++member) {
         auto made = spawn.New(Arrival{0, 0, 0, 0, 1});
         if (!made) {
-            return Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
+            return GYO::Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
         }
     }
     return Ok();
@@ -316,7 +316,7 @@ struct Shield { std::int32_t points; };
 SystemResult RecordsBothOrders(Spawn<Bundle<Armor>> spawn, Despawn despawn,
                                CommandsFor<Inserts<Shield>, Removes<Shield>> shields) {
     auto made = spawn.New(Armor{1});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     despawn.Entity(made.value());
     shields.Insert(1, Shield{7});
     shields.Remove<Shield>(1);
@@ -391,7 +391,7 @@ SystemResult CountOnly(Query<Read<Position>> q, ResMut<Stats> stats) {
 // Despawns the hundred lowest ids each tick.
 SystemResult ReapHundred(Query<Read<Health>> healths, Despawn despawn) {
     int left = 100;
-    Engine::Base::Result<void, KernelError> result;
+    GYO::Engine::Base::Result<void, KernelError> result;
     healths.ForEach([&](EntityId id, const Health&) {
         if (left <= 0 || !result) return;
         --left;
@@ -403,7 +403,7 @@ SystemResult ReapHundred(Query<Read<Health>> healths, Despawn despawn) {
 SystemResult SpawnHundred(Spawn<Bundle<Position, Velocity, Health, Armor>> spawn) {
     for (int i = 0; i < 100; ++i) {
         auto made = spawn.New(Position{0, 0}, Velocity{1, 0}, Health{1}, Armor{0});
-        if (!made) return Engine::Base::Err(std::move(made).error());
+        if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     }
     return Ok();
 }

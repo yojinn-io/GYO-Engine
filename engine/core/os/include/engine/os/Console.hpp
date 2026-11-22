@@ -12,7 +12,7 @@
 // UTF-8, UTF-8 output to its console and the requests to shut it down. What a
 // program does on a shutdown request is the program's policy.
 
-namespace Engine::Os::Console {
+namespace GYO::Engine::OS::Console {
 
 // The process's command line as UTF-8 arguments, the program name first.
 // Windows: GetCommandLineW split by CommandLineToArgvW, whatever the ANSI code
@@ -78,4 +78,4 @@ enum class ShutdownReason : std::uint8_t {
 // The first shutdown request since InstallShutdownRequests, if any. Any thread.
 [[nodiscard]] std::optional<ShutdownReason> RequestedShutdown() noexcept;
 
-} // namespace Engine::Os::Console
+} // namespace GYO::Engine::OS::Console

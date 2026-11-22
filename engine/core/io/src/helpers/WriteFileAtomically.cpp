@@ -4,7 +4,7 @@
 #include <random>
 #include <string>
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
     namespace {
 
@@ -61,4 +61,4 @@ namespace Engine::IO::Helpers {
         return WriteFileAtomically(fs, uri, data);
     }
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

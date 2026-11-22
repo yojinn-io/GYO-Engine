@@ -7,7 +7,7 @@
 #include "engine/math/geometry/Segment.hpp"
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Vertices in order a, b, c. The only orientation fact defined here is how the
 // normal follows that order: Normal = Cross(b - a, c - a). Which side counts as
@@ -95,4 +95,4 @@ static_assert(std::is_aggregate_v<Triangle>);
     return point - normal * (Dot(normal, ap) / normalSquared);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

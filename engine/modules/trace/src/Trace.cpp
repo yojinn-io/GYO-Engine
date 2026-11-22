@@ -18,7 +18,6 @@ namespace GYO::Engine::Trace {
 
 namespace {
 
-namespace Base = ::Engine::Base;
 namespace Logging = GYO::Engine::Logging;
 using Logging::Field;
 using Logging::Level;
@@ -68,7 +67,7 @@ std::int64_t (*clock)() noexcept = nullptr;
 const Base::TraceReceiver* previousReceiver = nullptr;
 
 std::int64_t Now() noexcept {
-    return clock != nullptr ? clock() : ::Engine::Time::NowNs();
+    return clock != nullptr ? clock() : ::GYO::Engine::Time::NowNs();
 }
 
 // This thread's stack under the current Install; a stack left by an earlier one is emptied first.

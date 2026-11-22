@@ -9,7 +9,7 @@
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/scalar/Angle.hpp"
 
-using namespace Engine::Math;
+using namespace GYO::Engine::Math;
 
 namespace {
 

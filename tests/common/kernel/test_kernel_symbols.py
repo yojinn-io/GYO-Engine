@@ -13,8 +13,8 @@ Symbols from libgyo_kernel.a[Registry.cpp.o]:
 Name                  Value           Class        Type         Size             Line  Section
 
 GYO::Kernel::Detail::TypeKeyOf<GYO::Kernel::KernelSettings>::typeKeyAnchor|0000000000000000|   u  |            OBJECT|0000000000000001|     |.bss._ZN3GYO6Kernel6Detail9TypeKeyOfINS0_14KernelSettingsEE13typeKeyAnchorE
-Engine::Base::Detail::assertionHandler|0000000000000000|   V  |            OBJECT|0000000000000008|     |.data.rel.local._ZN6Engine4Base6Detail16assertionHandlerE
-Engine::Base::Detail::reportingAssertion|0000000000000000|   u  |               TLS|0000000000000001|     |.tbss._ZN6Engine4Base6Detail18reportingAssertionE
+GYO::Engine::Base::Detail::assertionHandler|0000000000000000|   V  |            OBJECT|0000000000000008|     |.data.rel.local._ZN3GYO6Engine4Base6Detail16assertionHandlerE
+GYO::Engine::Base::Detail::reportingAssertion|0000000000000000|   u  |               TLS|0000000000000001|     |.tbss._ZN3GYO6Engine4Base6Detail18reportingAssertionE
 vtable for GYO::Kernel::Synthetic|0000000000000000|   V  |            OBJECT|0000000000000038|     |.data.rel.ro._ZTVN3GYO6Kernel9SyntheticE
 GYO::Kernel::ToString(GYO::Kernel::StartupCode)|0000000000000000|   T  |              FUNC|0000000000000120|     |.text
 operator new(unsigned long)|                |   U  |            NOTYPE|                |     |*UND*
@@ -22,9 +22,9 @@ operator new(unsigned long)|                |   U  |            NOTYPE|         
 
 DARWIN = """
 000000000002bf28 (__DATA,__data) weak external GYO::Kernel::Detail::TypeKeyOf<GYO::Kernel::KernelSettings>::typeKeyAnchor
-000000000002bf20 (__DATA,__data) weak external Engine::Base::Detail::assertionHandler
-000000000002bf08 (__DATA,__thread_vars) weak external Engine::Base::Detail::reportingAssertion
-000000000031583b (__DATA,__thread_bss) non-external Engine::Base::Detail::reportingAssertion
+000000000002bf20 (__DATA,__data) weak external GYO::Engine::Base::Detail::assertionHandler
+000000000002bf08 (__DATA,__thread_vars) weak external GYO::Engine::Base::Detail::reportingAssertion
+000000000031583b (__DATA,__thread_bss) non-external GYO::Engine::Base::Detail::reportingAssertion
 0000000000001000 (__DATA,__const) weak external vtable for GYO::Kernel::Synthetic
 0000000000000000 (__TEXT,__text) external GYO::Kernel::ToString(GYO::Kernel::StartupCode)
                  (undefined) external operator new(unsigned long)
@@ -52,14 +52,14 @@ class Classification(unittest.TestCase):
     def test_sysv_baseline_is_clean_with_the_anchor_present(self):
         present, foreign = self.assert_clean(guard.parse_sysv(SYSV), "sysv")
         self.assertEqual(present, {"TypeKey anchor"})
-        self.assertEqual(foreign, ["Engine::Base::Detail::assertionHandler",
-                                   "Engine::Base::Detail::reportingAssertion"])
+        self.assertEqual(foreign, ["GYO::Engine::Base::Detail::assertionHandler",
+                                   "GYO::Engine::Base::Detail::reportingAssertion"])
 
     def test_darwin_baseline_is_clean_with_the_anchor_present(self):
         present, foreign = self.assert_clean(guard.parse_darwin(DARWIN), "darwin")
         self.assertEqual(present, {"TypeKey anchor"})
-        self.assertEqual(sorted(foreign), ["Engine::Base::Detail::assertionHandler",
-                                           "Engine::Base::Detail::reportingAssertion"])
+        self.assertEqual(sorted(foreign), ["GYO::Engine::Base::Detail::assertionHandler",
+                                           "GYO::Engine::Base::Detail::reportingAssertion"])
 
     def test_sysv_read_only_and_text_and_undefined_are_not_writable(self):
         symbols = guard.parse_sysv(SYSV)
@@ -67,7 +67,7 @@ class Classification(unittest.TestCase):
         self.assertNotIn("GYO::Kernel::ToString(GYO::Kernel::StartupCode)", symbols)
         self.assertNotIn("operator new(unsigned long)", symbols)
         # .data.rel.local is writable (only .data.rel.ro is read-only after relocation).
-        self.assertIn("Engine::Base::Detail::assertionHandler", symbols)
+        self.assertIn("GYO::Engine::Base::Detail::assertionHandler", symbols)
 
     def test_darwin_const_text_and_undefined_are_not_writable(self):
         symbols = guard.parse_darwin(DARWIN)
@@ -147,45 +147,45 @@ class Classification(unittest.TestCase):
         # Base's Trace.hpp: the facade's receiver pointer (trace declaration D1, approved 2026-11-21). The kernel
         # reads it through TraceSpan and TraceMarkCurrent; it belongs to Base.
         _, foreign = self.assert_clean(guard.parse_sysv(sysv_with(
-            "Engine::Base::Detail::traceReceiver|0000000000000000|   u  |            OBJECT|0000000000000008|     |"
-            ".bss._ZN6Engine4Base6Detail13traceReceiverE")), "sysv")
-        self.assertIn("Engine::Base::Detail::traceReceiver", foreign)
+            "GYO::Engine::Base::Detail::traceReceiver|0000000000000000|   u  |            OBJECT|0000000000000008|     |"
+            ".bss._ZN3GYO6Engine4Base6Detail13traceReceiverE")), "sysv")
+        self.assertIn("GYO::Engine::Base::Detail::traceReceiver", foreign)
         _, foreign = self.assert_clean(guard.parse_darwin(darwin_with(
-            "0000000000018e60 (__DATA,__common) weak external Engine::Base::Detail::traceReceiver")), "darwin")
-        self.assertIn("Engine::Base::Detail::traceReceiver", foreign)
+            "0000000000018e60 (__DATA,__common) weak external GYO::Engine::Base::Detail::traceReceiver")), "darwin")
+        self.assertIn("GYO::Engine::Base::Detail::traceReceiver", foreign)
 
     def test_base_thread_serials_are_foreign_in_both_formats(self):
         # Base's IdIssuer.hpp: the issuer is ordinary data, the serial a thread_local (S10 of
         # v8-arch-gyo2-kernel-subtract-structure). Both names reach the kernel library through
         # CurrentThreadSerial(); here they are seen as foreign on every platform, Windows included.
         _, foreign = self.assert_clean(guard.parse_sysv(sysv_with(
-            "Engine::Base::Detail::threadSerials|0000000000000000|   u  |            OBJECT|0000000000000008|     |"
-            ".data._ZN6Engine4Base6Detail13threadSerialsE",
-            "Engine::Base::Detail::threadSerial|0000000000000000|   u  |               TLS|0000000000000008|     |"
-            ".tbss._ZN6Engine4Base6Detail12threadSerialE")), "sysv")
-        self.assertIn("Engine::Base::Detail::threadSerials", foreign)
-        self.assertIn("Engine::Base::Detail::threadSerial", foreign)
+            "GYO::Engine::Base::Detail::threadSerials|0000000000000000|   u  |            OBJECT|0000000000000008|     |"
+            ".data._ZN3GYO6Engine4Base6Detail13threadSerialsE",
+            "GYO::Engine::Base::Detail::threadSerial|0000000000000000|   u  |               TLS|0000000000000008|     |"
+            ".tbss._ZN3GYO6Engine4Base6Detail12threadSerialE")), "sysv")
+        self.assertIn("GYO::Engine::Base::Detail::threadSerials", foreign)
+        self.assertIn("GYO::Engine::Base::Detail::threadSerial", foreign)
         _, foreign = self.assert_clean(guard.parse_darwin(darwin_with(
-            "0000000000018e58 (__DATA,__data) weak external Engine::Base::Detail::threadSerials",
-            "0000000000018e38 (__DATA,__thread_vars) weak external Engine::Base::Detail::threadSerial",
-            "00000000002c5340 (__DATA,__thread_bss) non-external Engine::Base::Detail::threadSerial$tlv$init")), "darwin")
-        self.assertIn("Engine::Base::Detail::threadSerials", foreign)
-        self.assertIn("Engine::Base::Detail::threadSerial", foreign)
+            "0000000000018e58 (__DATA,__data) weak external GYO::Engine::Base::Detail::threadSerials",
+            "0000000000018e38 (__DATA,__thread_vars) weak external GYO::Engine::Base::Detail::threadSerial",
+            "00000000002c5340 (__DATA,__thread_bss) non-external GYO::Engine::Base::Detail::threadSerial$tlv$init")), "darwin")
+        self.assertIn("GYO::Engine::Base::Detail::threadSerials", foreign)
+        self.assertIn("GYO::Engine::Base::Detail::threadSerial", foreign)
 
     def test_lookalikes_of_allowed_names_are_found(self):
         for name in ("GYO::Kernel::Detail::TypeKeyOf<int>::typeKeyAnchorCopy",
                      "GYO::Kernel::Detail::OtherOf<int>::typeKeyAnchor",
                      "Other::Detail::TypeKeyOf<int>::typeKeyAnchor",
                      "GYO::Kernel::tlCurrentCopy",
-                     "Engine::Base::Detail::assertionHandlerCopy",
-                     "Engine::Base::Detail::logHandler",
+                     "GYO::Engine::Base::Detail::assertionHandlerCopy",
+                     "GYO::Engine::Base::Detail::logHandler",
                      "GYO::Kernel::Detail::threadSerial",
                      "GYO::Kernel::Detail::threadSerials",
-                     "Engine::Base::threadSerial",
-                     "Engine::Base::threadSerials",
-                     "Engine::Base::Detail::threadSerialsCopy",
-                     "Engine::Base::Detail::threadSerialX",
-                     "Engine::Base::Detail::Inner::threadSerial",
+                     "GYO::Engine::Base::threadSerial",
+                     "GYO::Engine::Base::threadSerials",
+                     "GYO::Engine::Base::Detail::threadSerialsCopy",
+                     "GYO::Engine::Base::Detail::threadSerialX",
+                     "GYO::Engine::Base::Detail::Inner::threadSerial",
                      "GYO::Base::Detail::threadSerial"):
             with self.subTest(name=name):
                 self.assert_found({name}, name)

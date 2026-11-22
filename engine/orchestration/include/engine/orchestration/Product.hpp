@@ -84,7 +84,7 @@ public:
     // Builds the Product (section 3.4): checks, every unit's Configure, then
     // for each World Build, BuildPlans, Finish, Check, the list checks; with
     // no error so far, builds the Worlds and runs their prepare functions.
-    static ::Engine::Base::Result<std::unique_ptr<Product>, ProductStartupReport> Build(ProductDescription description,
+    static ::GYO::Engine::Base::Result<std::unique_ptr<Product>, ProductStartupReport> Build(ProductDescription description,
                                                                                        RegisteredUnits units);
     ~Product();
     Product(const Product&) = delete;
@@ -100,12 +100,12 @@ public:
     // returns WorldInterrupted or WorldMissing with the WorldFailure. The runner
     // decides what follows (close the program, or build another Product).
     // Runs the game initialization list on the first World. GYO_ASSERT: it ran already.
-    ::Engine::Base::Result<void, OrchestrationError> RunGameInit();
+    ::GYO::Engine::Base::Result<void, OrchestrationError> RunGameInit();
     // Runs every World's frame list, in World order; game initialization first when it has not run.
     // A schedule failing part way leaves the Worlds before it advanced (the Product has ended then).
-    ::Engine::Base::Result<void, OrchestrationError> RunFrame();
+    ::GYO::Engine::Base::Result<void, OrchestrationError> RunFrame();
     // Runs one schedule on one World; game initialization first when it has not run.
-    ::Engine::Base::Result<void, OrchestrationError> RunSchedule(std::string_view world, std::string_view schedule);
+    ::GYO::Engine::Base::Result<void, OrchestrationError> RunSchedule(std::string_view world, std::string_view schedule);
 
     // The World's executor, valid until this name is next replaced. GYO_ASSERT: no World
     // of that name, or its place is empty.
@@ -116,13 +116,13 @@ public:
     // description, carries the marked Resources over, runs the prepare functions
     // and the beforeSwap schedules. Game initialization does not run again. It
     // does not mend a broken World: with one, it is refused like a Run.
-    ::Engine::Base::Result<void, OrchestrationError> ReplaceWorld(std::string_view name, ReplaceRequest request);
+    ::GYO::Engine::Base::Result<void, OrchestrationError> ReplaceWorld(std::string_view name, ReplaceRequest request);
 
     // A dynamic insert (section 3.10): the kernel's two steps on the World's
     // Registry; a refusal or a failed BuildPlans returns the error and the World
     // goes on. The orchestration layer logs nothing (O-9, O-11; error levels D2).
     // No unit's Finish or Check runs again.
-    ::Engine::Base::Result<void, OrchestrationError> InsertSystems(std::string_view world, std::string owner,
+    ::GYO::Engine::Base::Result<void, OrchestrationError> InsertSystems(std::string_view world, std::string owner,
                                                                    InsertFn build);
 
     [[nodiscard]] bool GameInitRan() const noexcept { return gameInitRan_; }
@@ -133,11 +133,11 @@ public:
 private:
     // The entry points' steps; each public entry point runs its steps inside one trace span (trace
     // declaration D6) and marks it when they return an error.
-    ::Engine::Base::Result<void, OrchestrationError> RunGameInitSteps();
-    ::Engine::Base::Result<void, OrchestrationError> RunFrameSteps();
-    ::Engine::Base::Result<void, OrchestrationError> RunScheduleSteps(std::string_view world, std::string_view schedule);
-    ::Engine::Base::Result<void, OrchestrationError> ReplaceWorldSteps(std::string_view name, ReplaceRequest request);
-    ::Engine::Base::Result<void, OrchestrationError> InsertSystemsSteps(std::string_view world, std::string owner, InsertFn build);
+    ::GYO::Engine::Base::Result<void, OrchestrationError> RunGameInitSteps();
+    ::GYO::Engine::Base::Result<void, OrchestrationError> RunFrameSteps();
+    ::GYO::Engine::Base::Result<void, OrchestrationError> RunScheduleSteps(std::string_view world, std::string_view schedule);
+    ::GYO::Engine::Base::Result<void, OrchestrationError> ReplaceWorldSteps(std::string_view name, ReplaceRequest request);
+    ::GYO::Engine::Base::Result<void, OrchestrationError> InsertSystemsSteps(std::string_view world, std::string owner, InsertFn build);
 
     struct UnitSlot {
         std::string row;
@@ -174,10 +174,10 @@ private:
     // Returns nullopt-equivalent (registry null) when something failed; errors go to the sinks.
     Registration Register(const WorldSlot& slot, bool firstWorld, WorldStartupResult& result,
                           std::vector<OrchestrationStartupError>& errors, std::vector<UnitReportedError>& unitErrors);
-    ::Engine::Base::Result<void, OrchestrationError> Prepare(WorldSlot& slot, Kernel::World& world,
+    ::GYO::Engine::Base::Result<void, OrchestrationError> Prepare(WorldSlot& slot, Kernel::World& world,
                                                              const std::vector<PrepareFn>& unitPrepares,
                                                              const PrepareFn* extra);
-    ::Engine::Base::Result<void, OrchestrationError> RunOn(WorldSlot& slot, std::string_view schedule,
+    ::GYO::Engine::Base::Result<void, OrchestrationError> RunOn(WorldSlot& slot, std::string_view schedule,
                                                            std::string_view entry);
     // The refusal of an entry point while a World is broken (nullopt: every World is healthy).
     // A World found interrupted without a recorded failure (run outside the Product) is recorded here.

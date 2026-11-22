@@ -6,8 +6,8 @@
       "id": "os-g3-api",
       "what": "An Engine module outside engine/os calls localtime_r (R3)",
       "file": "engine/core/time/src/LateWakeStats.cpp",
-      "find": "namespace Engine::Time {\n",
-      "replace": "namespace Engine::Time {\nvoid LocalTimeProbe(const long* t, void* out) { localtime_r(t, out); }\n",
+      "find": "namespace GYO::Engine::Time {\n",
+      "replace": "namespace GYO::Engine::Time {\nvoid LocalTimeProbe(const long* t, void* out) { localtime_r(t, out); }\n",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
@@ -20,8 +20,8 @@
       "id": "os-g4-io-opens",
       "what": "engine/io opens a file itself instead of calling engine/os (R4, D41)",
       "file": "engine/core/io/src/fs/Vfs.cpp",
-      "find": "namespace Engine::IO::FS {\n",
-      "replace": "namespace Engine::IO::FS {\nstatic std::ifstream probe;\n",
+      "find": "namespace GYO::Engine::IO::FS {\n",
+      "replace": "namespace GYO::Engine::IO::FS {\nstatic std::ifstream probe;\n",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
@@ -180,7 +180,7 @@
       "id": "io-m7-mount-escape",
       "what": "A mount request with a '..' segment resolves outside the mount root",
       "file": "engine/core/io/include/engine/io/fs/MountTable.hpp",
-      "find": "            if (Engine::IO::Path::ContainsTraversal(rel)) {",
+      "find": "            if (GYO::Engine::IO::Path::ContainsTraversal(rel)) {",
       "replace": "            if (false) {",
       "target": "engine_tests",
       "cases": "Uri:*",
@@ -325,8 +325,8 @@
       "id": "io-n4-notfound",
       "what": "An engine/os NotFound becomes OpenFailed, so a VFS overlay stops instead of trying the next mount",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "            case Os::OsErrorCode::NotFound:        return IoErrorCode::NotFound;",
-      "replace": "            case Os::OsErrorCode::NotFound:        return otherwise;",
+      "find": "            case OS::OsErrorCode::NotFound:        return IoErrorCode::NotFound;",
+      "replace": "            case OS::OsErrorCode::NotFound:        return otherwise;",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( opened.error\\(\\).code == IoErrorCode::NotFound \\) is NOT correct"
@@ -383,7 +383,7 @@
       "id": "io-n6-platform-absolute",
       "what": "The native backend hands a path that is not absolute on this platform to the OS",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "            if (!Os::Files::IsAbsolutePath(native.value())) {",
+      "find": "            if (!OS::Files::IsAbsolutePath(native.value())) {",
       "replace": "            if (false) {",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
@@ -866,8 +866,8 @@
       "id": "io-w1-create-directories-dropped",
       "what": "NativeFileSystem::CreateDirectories reports success without creating",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "        auto created = Os::Files::CreateDirectories(native.value());",
-      "replace": "        auto created = Base::Result<void, Os::OsError>{};",
+      "find": "        auto created = OS::Files::CreateDirectories(native.value());",
+      "replace": "        auto created = Base::Result<void, OS::OsError>{};",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "creates directories and keeps the engine/os cause"
@@ -889,8 +889,8 @@
         "win32"
       ],
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "const auto endings = Stream::Has(mode, FileOpenMode::Text) ? Os::Files::LineEndings::Native",
-      "replace": "const auto endings = false ? Os::Files::LineEndings::Native",
+      "find": "const auto endings = Stream::Has(mode, FileOpenMode::Text) ? OS::Files::LineEndings::Native",
+      "replace": "const auto endings = false ? OS::Files::LineEndings::Native",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "the platform's line endings"
@@ -1245,8 +1245,8 @@
       "id": "io-x1-move-skipped",
       "what": "NativeFileSystem::Move reports success without renaming",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "        auto moved = Os::Files::RenameReplacing(source.value(), target.value());",
-      "replace": "        auto moved = Base::Result<void, Os::OsError>{};",
+      "find": "        auto moved = OS::Files::RenameReplacing(source.value(), target.value());",
+      "replace": "        auto moved = Base::Result<void, OS::OsError>{};",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( ReadBack\\(tree.Native\\(\"menu.json\"\\)\\) == \"new\" \\) is NOT correct"
@@ -1255,8 +1255,8 @@
       "id": "io-x2-remove-skipped",
       "what": "NativeFileSystem::Remove reports success without removing",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "        auto removed = Os::Files::RemoveFile(native.value());",
-      "replace": "        auto removed = Base::Result<void, Os::OsError>{};",
+      "find": "        auto removed = OS::Files::RemoveFile(native.value());",
+      "replace": "        auto removed = Base::Result<void, OS::OsError>{};",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK_FALSE\\( fs.Exists\\(tree.Uri\\(\"menu.json\"\\)\\).value\\(\\) \\) is NOT correct"
@@ -1375,7 +1375,7 @@
       "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time\\s+links\\s+GYO::Base;GYO::Math;GYO::Os;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Os"
+      "expect": "gyo_time\\s+links\\s+GYO::Base;GYO::Math;GYO::OS;\\s+expected\\s+exactly\\s+GYO::Base;GYO::OS"
     },
     {
       "id": "ti-x2-threads-links-more",
@@ -1384,11 +1384,11 @@
         "threads 9"
       ],
       "file": "engine/core/threads/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::Os)\n",
-      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math PRIVATE GYO::Os)\n",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::OS)\n",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math PRIVATE GYO::OS)\n",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
-      "expect": "gyo_threads\\s+links\\s+GYO::Math;GYO::Os;GYO::Time;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::Os;GYO::Time;Threads::Threads"
+      "expect": "gyo_threads\\s+links\\s+GYO::Math;GYO::OS;GYO::Time;Threads::Threads;\\s+expected\\s+exactly\\s+GYO::OS;GYO::Time;Threads::Threads"
     },
     {
       "id": "ti-x3-backend-name-changed",
@@ -1511,8 +1511,8 @@
         "win32"
       ],
       "file": "tests/common/os/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support doctest::doctest)\n",
-      "replace": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support doctest::doctest)\nset_property(TARGET gyo_os_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT \"mutant\")\n",
+      "find": "target_link_libraries(gyo_os_tests PRIVATE GYO::OS GYO::Threads gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_os_tests PRIVATE GYO::OS GYO::Threads gyo_test_support doctest::doctest)\nset_property(TARGET gyo_os_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT \"mutant\")\n",
       "target": "gyo_os_tests",
       "cases": "*process ANSI code page*",
       "expect": "regex_search\\(manifest|no manifest resource"
@@ -1610,16 +1610,16 @@
     },
     {
       "id": "th-x1-threads-os-public",
-      "what": "gyo_threads links GYO::Os publicly instead of privately, so its users get engine/os headers (threads.md Invariant 9, configure-time check). The link set is unchanged, so only the interface check catches it (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
+      "what": "gyo_threads links GYO::OS publicly instead of privately, so its users get engine/os headers (threads.md Invariant 9, configure-time check). The link set is unchanged, so only the interface check catches it (rewritten by v8-arch-gyo2-stale-mutants: core is not registered since #261, so its Engine-internal links are hand-written in engine/core/<unit>/CMakeLists.txt and O6 does not cover them)",
       "guards": [
         "threads 9"
       ],
       "file": "engine/core/threads/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::Os)\n",
-      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Os)\n",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time PRIVATE GYO::OS)\n",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::OS)\n",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
-      "expect": "gyo_threads\\s+exposes\\s+GYO::Os\\s+to\\s+its\\s+users"
+      "expect": "gyo_threads\\s+exposes\\s+GYO::OS\\s+to\\s+its\\s+users"
     },
     {
       "id": "th-x2-os-without-thread-library",
@@ -1707,8 +1707,8 @@
       "id": "th-x8-role-priority-lost",
       "what": "RoleThread hands every role's priority to engine/os as Background (threads.md Invariant 5)",
       "file": "engine/core/threads/src/RoleThread.cpp",
-      "find": "    return static_cast<Os::Thread::PriorityHint>(priority);",
-      "replace": "    return priority == ThreadPriority::Normal ? Os::Thread::PriorityHint::Normal : Os::Thread::PriorityHint::Background;",
+      "find": "    return static_cast<OS::Thread::PriorityHint>(priority);",
+      "replace": "    return priority == ThreadPriority::Normal ? OS::Thread::PriorityHint::Normal : OS::Thread::PriorityHint::Background;",
       "target": "gyo_os_tests",
       "cases": "*a role's priority*",
       "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
@@ -1738,7 +1738,7 @@
       "replace": "target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_time PRIVATE GYO::Math)\n",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time\\s+links\\s+\\S*GYO::Base;GYO::Math;GYO::Os;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Os"
+      "expect": "gyo_time\\s+links\\s+\\S*GYO::Base;GYO::Math;GYO::OS;\\s+expected\\s+exactly\\s+GYO::Base;GYO::OS"
     },
     {
       "id": "os-g20-definition-from-later-directory",
@@ -1786,16 +1786,16 @@
     },
     {
       "id": "ow-x2-time-os-public",
-      "what": "gyo_time links GYO::Os publicly, so its users get engine/os headers (time.md Invariant 10, configure-time check) (v8-arch-gyo2-os-wait; only it catches: the only check that gyo_time keeps engine/os out of its interface)",
+      "what": "gyo_time links GYO::OS publicly, so its users get engine/os headers (time.md Invariant 10, configure-time check) (v8-arch-gyo2-os-wait; only it catches: the only check that gyo_time keeps engine/os out of its interface)",
       "guards": [
         "time 10"
       ],
       "file": "engine/core/time/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_time PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Os)",
+      "find": "target_link_libraries(gyo_time PRIVATE GYO::OS)",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::OS)",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time exposes GYO::Os to its users"
+      "expect": "gyo_time exposes GYO::OS to its users"
     },
     {
       "id": "ow-x3-kqueue-signal-dropped",

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 // 64-bit FNV-1a of a byte string: a stable, platform-independent,
 // non-cryptographic identity hash (asset and input ids, change detection).
@@ -20,4 +20,4 @@ namespace Engine::Base {
     return hash;
 }
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base

@@ -6,12 +6,12 @@
 /**
  * UTF-8 前提
  */
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
 
 
     inline IoResult<std::string>
-    ReadAllTextUtf8(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
+    ReadAllTextUtf8(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
                     const ReadAllOptions& opt = {}) {
         auto br = ReadAllBytes(fs, uri, opt);
         if (!br) return Base::Err(br.error());
@@ -27,7 +27,7 @@ namespace Engine::IO::Helpers {
     }
 
     inline IoResult<std::string>
-    ReadAllTextUtf8(Engine::IO::FS::Vfs& vfs, const Engine::IO::Path::Uri& uri,
+    ReadAllTextUtf8(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri,
                     const ReadAllOptions& opt = {}) {
         auto br = ReadAllBytes(vfs, uri, opt);
         if (!br) return Base::Err(br.error());
@@ -42,4 +42,4 @@ namespace Engine::IO::Helpers {
         return std::move(s);
     }
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

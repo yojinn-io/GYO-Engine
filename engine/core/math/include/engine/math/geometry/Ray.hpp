@@ -4,7 +4,7 @@
 
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // direction need not be normalized. Ray parameters t are measured in units of
 // |direction|; the distance travelled is t * Length(direction).
@@ -19,4 +19,4 @@ static_assert(std::is_aggregate_v<Ray>);
 
 [[nodiscard]] inline Vec3 PointAt(const Ray& ray, const float t) noexcept { return ray.origin + ray.direction * t; }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

@@ -1,6 +1,6 @@
 # GYO OS layer
 
-Owner: Engine (`engine/core/os` → `GYO::Os`).
+Owner: Engine (`engine/core/os` → `GYO::OS`).
 Plan and record: [os-subsystem](plans/os-subsystem/README.md), batch os-skeleton onwards (D40–D46).
 Proposed direction (not yet in this contract): [build-baseline](plans/build-baseline/README.md) — platform and toolchain
 tiers, and Windows processes fixing their code page to UTF-8 through the manifest's `activeCodePage` (decided
@@ -27,7 +27,7 @@ products / tools ──┬──→ engine/modules/* ──→ engine/core/* (lo
                    └──→ engine/core/os (process facts, console)
 ```
 
-`GYO::Os` is a leaf directly above `GYO::Base`. Modules keep their own abstractions and call it: engine/core/io keeps
+`GYO::OS` is a leaf directly above `GYO::Base`. Modules keep their own abstractions and call it: engine/core/io keeps
 `IFileSystem`, `Vfs`, `Uri` and streams, and its native file-system backend calls the file primitives here;
 engine/core/time's `Waiter` and engine/core/threads' `RoleThread` keep their public APIs and use the wait and thread
 primitives here.
@@ -51,7 +51,7 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
 ## Contracts
 
 - **Errors.** `Base::Result<T, OsError>`; `OsErrorCode` starts at 1. The detail is `errno=<n>` or `win32=<n>`,
-  followed by `; path_bytes=<n>` when the failure concerns a path (`Os::NativeErrorDetail`). An argument the layer
+  followed by `; path_bytes=<n>` when the failure concerns a path (`OS::NativeErrorDetail`). An argument the layer
   refuses itself, before or instead of an OS call (an empty path, a NUL, invalid UTF-8, an offset or length out of
   range, a file that is not a regular file), has no native error: its detail is `path_bytes=<n>` alone; no native
   code is made up. An outer module keeps the detail with `Base::CauseDetail` (error-handling.md rule 5).
@@ -313,7 +313,7 @@ Known blind spots, left to review:
   `if(WIN32)`): it configures a header and is not identification, so it is allowed. `-D` flags in
   `CMAKE_<LANG>_FLAGS` or inside a generator expression in `COMPILE_OPTIONS`, and third_party's interface
   definitions (asio's `_WIN32_WINNT` and `WIN32_LEAN_AND_MEAN`), are not checked.
-- Paths taken from narrow `argv` strings in programs that do not use `Os::Console::CommandLineUtf8` (today the
+- Paths taken from narrow `argv` strings in programs that do not use `OS::Console::CommandLineUtf8` (today the
   acceptance programs and the host shader tool): on Windows 10 1903 and later they are UTF-8 through the manifest
   (Invariant 11); on earlier Windows they are in the system's ANSI code page.
 - R6 reads names, not values: a code page given as a number (`MultiByteToWideChar(0, ...)`, 0 being `CP_ACP`), a
@@ -351,7 +351,7 @@ Known blind spots, left to review:
    directly. (master's engine/trace wrote its files through engine/core/os directly, os-subsystem open decision 2,
    D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
-3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`
+3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::OS` links only `GYO::Base`
    and OS system libraries (`shell32` on Windows; `Threads::Threads` elsewhere, since the thread naming moved in,
    os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/core/os
    includes only engine/core/base, the standard library and OS headers. Its API has no type of a module above it: no

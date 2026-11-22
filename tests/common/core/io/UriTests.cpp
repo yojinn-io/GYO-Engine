@@ -6,7 +6,7 @@
 #include "engine/io/fs/MountTable.hpp"
 #include "engine/io/path/Uri.hpp"
 
-using namespace Engine::IO;
+using namespace GYO::Engine::IO;
 
 // The file:// rule of docs/architecture/io.md: one mapping between a file URI
 // and a native absolute path, as pure strings, so every case below gives the

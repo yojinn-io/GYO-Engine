@@ -27,8 +27,8 @@
 #include <sys/stat.h>
 #endif
 
-using namespace Engine::Os;
-using namespace Engine::Os::Files;
+using namespace GYO::Engine::OS;
+using namespace GYO::Engine::OS::Files;
 
 namespace {
 
@@ -314,8 +314,8 @@ TEST_CASE("Os files refuse to make a path absolute under a current directory wit
         std::filesystem::path previous = std::filesystem::current_path();
         ~RestoreCurrentPath() { std::filesystem::current_path(previous); }
     };
-    std::optional<Engine::Base::Result<std::string, OsError>> relative;
-    std::optional<Engine::Base::Result<std::string, OsError>> absolute;
+    std::optional<GYO::Engine::Base::Result<std::string, OsError>> relative;
+    std::optional<GYO::Engine::Base::Result<std::string, OsError>> absolute;
     {
         const RestoreCurrentPath restore;
         std::filesystem::current_path(odd);

@@ -294,7 +294,7 @@ class GuardTree(unittest.TestCase):
     # K6 ---------------------------------------------------------------------------------------------------------
 
     def test_k6_log_call_is_reported(self):
-        self.header('inline void Fail() { Engine::Base::Log(Engine::Base::LogLevel::Error, "kernel", "x"); }')
+        self.header('inline void Fail() { GYO::Engine::Base::Log(GYO::Engine::Base::LogLevel::Error, "kernel", "x"); }')
         self.assertReported("K6", "Log")
 
     def test_k6_log_header_is_reported(self):
@@ -314,7 +314,7 @@ class GuardTree(unittest.TestCase):
         # Error levels D1: the Executor no longer logs, so it has no K6 exemption.
         self.write("engine/ecs/kernel/src/Executor.cpp",
                    '#include "engine/base/Log.hpp"\nnamespace GYO::Kernel {\n'
-                   'void Report() { Engine::Base::Log(Engine::Base::LogLevel::Error, "kernel", "x"); }\n}\n')
+                   'void Report() { GYO::Engine::Base::Log(GYO::Engine::Base::LogLevel::Error, "kernel", "x"); }\n}\n')
         self.assertReported("K6", "engine/base/Log.hpp")
         self.assertReported("K6", "Log")
 
@@ -331,19 +331,19 @@ class GuardTree(unittest.TestCase):
     # K8 ---------------------------------------------------------------------------------------------------------
 
     def test_k8_id_issuer_is_reported(self):
-        self.header("struct Ids { Engine::Base::IdIssuer issuer; };")
+        self.header("struct Ids { GYO::Engine::Base::IdIssuer issuer; };")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_id_issuer_after_using_is_reported(self):
         # using namespace, so the use line itself does not spell Base::IdIssuer.
-        self.header("using namespace Engine::Base;\ninline IdIssuer& Issuer();")
+        self.header("using namespace GYO::Engine::Base;\ninline IdIssuer& Issuer();")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_base_thread_serial_state_is_reported(self):
         # One name per tree, matched at the end of the finding: "K8 threadSerials" contains "threadSerial".
-        for body, needle in (("inline auto Next() { return Engine::Base::Detail::threadSerials.Next(); }",
+        for body, needle in (("inline auto Next() { return GYO::Engine::Base::Detail::threadSerials.Next(); }",
                               "K8 threadSerials"),
-                             ("inline auto Mine() { return Engine::Base::Detail::threadSerial; }",
+                             ("inline auto Mine() { return GYO::Engine::Base::Detail::threadSerial; }",
                               "K8 threadSerial")):
             with self.subTest(needle=needle):
                 self.header(body)
@@ -351,9 +351,9 @@ class GuardTree(unittest.TestCase):
                 self.assertTrue(any(p.endswith(needle) for p in problems), problems)
 
     def test_k8_serial_state_after_using_namespace_is_reported(self):
-        for body, needle in (("using namespace Engine::Base::Detail;\ninline auto Next() { return threadSerials.Next(); }",
+        for body, needle in (("using namespace GYO::Engine::Base::Detail;\ninline auto Next() { return threadSerials.Next(); }",
                               "K8 threadSerials"),
-                             ("using namespace Engine::Base::Detail;\ninline auto Mine() { return threadSerial; }",
+                             ("using namespace GYO::Engine::Base::Detail;\ninline auto Mine() { return threadSerial; }",
                               "K8 threadSerial")):
             with self.subTest(needle=needle):
                 self.header(body)
@@ -367,26 +367,26 @@ class GuardTree(unittest.TestCase):
 
     def test_k8_executor_file_is_checked(self):
         self.write("engine/ecs/kernel/src/Executor.cpp",
-                   "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
+                   "namespace GYO::Kernel {\nunsigned long long Next() { GYO::Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_in_a_source_file_is_reported(self):
         self.write("engine/ecs/kernel/src/World.cpp",
-                   "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
+                   "namespace GYO::Kernel {\nunsigned long long Next() { GYO::Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_finding_names_its_line(self):
-        self.header("struct Empty {};\nstruct Ids { Engine::Base::IdIssuer issuer; };")
+        self.header("struct Empty {};\nstruct Ids { GYO::Engine::Base::IdIssuer issuer; };")
         self.assertReported("K8", "Added.hpp:4: K8 IdIssuer")
 
     def test_k8_in_a_macro_definition_is_reported(self):
-        self.header("#define GYO_KERNEL_ISSUER Engine::Base::IdIssuer\nGYO_KERNEL_ISSUER& Issuer();")
+        self.header("#define GYO_KERNEL_ISSUER GYO::Engine::Base::IdIssuer\nGYO_KERNEL_ISSUER& Issuer();")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_in_cmake_lists_is_reported(self):
         self.write("engine/ecs/kernel/CMakeLists.txt",
                    "add_library(gyo_kernel STATIC)\n# IdIssuer in a comment is not read\n"
-                   "target_compile_definitions(gyo_kernel PRIVATE GYO_COUNTER=Engine::Base::IdIssuer)\n")
+                   "target_compile_definitions(gyo_kernel PRIVATE GYO_COUNTER=GYO::Engine::Base::IdIssuer)\n")
         self.assertReported("K8", "CMakeLists.txt:3: K8 IdIssuer")
 
     def test_k8_comment_in_cmake_lists_is_clean(self):
@@ -396,13 +396,13 @@ class GuardTree(unittest.TestCase):
     def test_k8_angle_bracket_include_is_clean(self):
         self.write("engine/ecs/kernel/src/World.cpp",
                    "#include <engine/base/IdIssuer.hpp>\nnamespace GYO::Kernel {\n"
-                   "unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n")
+                   "unsigned long long Mark() { return GYO::Engine::Base::CurrentThreadSerial(); }\n}\n")
         self.assertClean()
 
     def test_k8_current_thread_serial_and_the_include_are_clean(self):
         self.write("engine/ecs/kernel/src/World.cpp",
                    '#include "engine/base/IdIssuer.hpp"\nnamespace GYO::Kernel {\n'
-                   'unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n')
+                   'unsigned long long Mark() { return GYO::Engine::Base::CurrentThreadSerial(); }\n}\n')
         self.assertClean()
 
     def test_k8_in_a_comment_or_literal_is_clean(self):
@@ -588,7 +588,7 @@ struct Shapes {
                 self.assertReported("K6", target.strip('<>"'))
 
     def test_k6_every_log_call_is_reported(self):
-        for call, needle in (("Engine::Base::SetLogHandler(nullptr)", "SetLogHandler"),
+        for call, needle in (("GYO::Engine::Base::SetLogHandler(nullptr)", "SetLogHandler"),
                              ("std::cout << 1", "std::cout"), ("std::clog << 1", "std::clog"),
                              ('std::print("x")', "std::print"), ('std::println("x")', "std::println"),
                              ('SDL_Log("x")', "SDL_Log"), ('fprintf(nullptr, "x")', "fprintf"),

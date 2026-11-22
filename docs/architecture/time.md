@@ -11,7 +11,7 @@ keeps what a wake means and calls no OS API itself.
 ```text
 GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
                   │
-                  └──(private)──→ GYO::Os (WakeSignal)
+                  └──(private)──→ GYO::OS (WakeSignal)
 ```
 
 - **The time base** (`Time::MonotonicClock`, `Now`, `NowNs`): every Engine module measures elapsed time, waits and
@@ -78,14 +78,14 @@ the main checkout.
    leaves a pending notification latched, so the next wait returns `Notified` at once. Guards: "returns at once for a
    deadline already passed", "reports a passed deadline first and keeps the notification latched"; mutant
    `tt1-latch-before-deadline`.
-5. **Relative arming, then a re-check.** The Waiter hands `Os::WakeSignal::Block` a relative timeout every time and
+5. **Relative arming, then a re-check.** The Waiter hands `OS::WakeSignal::Block` a relative timeout every time and
    re-reads the time base after each wake; a spurious or early platform wake only waits again. No absolute time
    converted from the base is handed to the OS. Guard: mutant `tt1-no-recheck`.
 6. **`Wait()` has no timer**: it returns only when notified, so a caller that must never poll (trace.md Invariant 2)
    can rely on it. Guard: "waits without a deadline until notified".
 7. **The backend is reported, and its names stay.** `Backend()` answers which mechanism this Waiter uses, on every
    platform (the Windows fallback included); the `ToString` names do not change, since consumer logs carry them
-   (os.md Invariant 9). The names are Time's `WaitBackend`; `Os::WaitMechanism` maps to it value for value
+   (os.md Invariant 9). The names are Time's `WaitBackend`; `OS::WaitMechanism` maps to it value for value
    (`static_assert` in `Waiter.cpp`). Guards: `tests/common/os/WakeSignalTests.cpp` "Os wake signal uses the platform
    mechanism" for the selection (mutants ow-x8, ow-x14, ow-x15), "Time Waiter reports the os mechanism" for the
    mapping (mutant ow-x7), "Time Waiter backend names stay as consumers log them" for the names; mutant
@@ -96,8 +96,8 @@ the main checkout.
    the link check).
 9. **Use after move is refused**: waiting on a moved-from Waiter is a Programmer Error, and `Notify` on it does
    nothing. Guard: "rejects use after move and ignores notifications on a moved-from waiter".
-10. **`GYO::Time` links exactly `GYO::Base` and, privately, `GYO::Os`** (checked at configure time by
-    `tests/common/time/CMakeLists.txt`, which also refuses `GYO::Os` in its interface): no SDL, no `GYO::Engine`, no
+10. **`GYO::Time` links exactly `GYO::Base` and, privately, `GYO::OS`** (checked at configure time by
+    `tests/common/time/CMakeLists.txt`, which also refuses `GYO::OS` in its interface): no SDL, no `GYO::Engine`, no
     other engine unit. The thread library comes through engine/core/os where the fallback needs it. Guards: mutants
     `ti-x1-time-links-more`, `ow-x2-time-os-public`.
 11. **`LateWakeStats` has fixed bins, allocates nothing and runs no thread.** Guard: "Time LateWakeStats bins late

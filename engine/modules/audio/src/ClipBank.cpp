@@ -8,7 +8,7 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
 
-namespace Engine::Audio {
+namespace GYO::Engine::Audio {
 
 Base::Result<void, AudioError> Detail::ValidateClip(const Base::ConstSpan<std::int16_t> interleaved,
                                                    const std::uint16_t channels, const std::uint32_t sampleRate) {
@@ -46,4 +46,4 @@ ClipView ClipBank::View(const ClipId id) const {
                     static_cast<std::uint32_t>(clip.samples.size() / clip.channels)};
 }
 
-} // namespace Engine::Audio
+} // namespace GYO::Engine::Audio

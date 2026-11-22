@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
     StreamWriter::StreamWriter(IStream& s) : s_(s) {}
@@ -18,7 +18,7 @@ namespace Engine::IO::Stream {
             const std::size_t n = wr.value();
             if (n == 0) {
                 return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::WriteFailed,
+                    GYO::Engine::IO::IoErrorCode::WriteFailed,
                     "StreamWriter: inner write returned 0 (stalled)"));
             }
             done += n;
@@ -26,7 +26,7 @@ namespace Engine::IO::Stream {
         return {};
     }
 
-    IoResult<void> StreamWriter::WriteAllBytes(Engine::Base::Span<const std::byte> bytes) {
+    IoResult<void> StreamWriter::WriteAllBytes(GYO::Engine::Base::Span<const std::byte> bytes) {
         if (bytes.empty()) return {};
         return WriteExactly(bytes.data(), bytes.size());
     }
@@ -100,4 +100,4 @@ namespace Engine::IO::Stream {
         return s_.Flush();
     }
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

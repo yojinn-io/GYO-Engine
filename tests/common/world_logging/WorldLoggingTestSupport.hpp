@@ -14,7 +14,7 @@
 
 // Shared by the World logging tests: a Logger with one MemorySink, and Product helpers.
 
-namespace GYO::Engine::WorldLogging::Test {
+namespace GYO::Test::WorldLogging {
 
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
@@ -62,4 +62,4 @@ inline void Frame(O::Product& p) {
     REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
 }
 
-} // namespace GYO::Engine::WorldLogging::Test
+} // namespace GYO::Test::WorldLogging

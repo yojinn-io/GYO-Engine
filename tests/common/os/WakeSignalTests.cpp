@@ -28,7 +28,7 @@
 // (gyo_os_wake_fallback_tests, GYO_WAKE_SIGNAL_FALLBACK): this directory may
 // branch on the OS.
 
-using namespace Engine::Os;
+using namespace GYO::Engine::OS;
 using Clock = std::chrono::steady_clock;
 
 namespace {

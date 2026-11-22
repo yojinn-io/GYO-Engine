@@ -72,7 +72,7 @@ O::ProductDescription TimedGame(std::uint32_t steps, bool withTime) {
     w.build = &FrameSystems;
     if (withTime) w.options.Set(W::WorldTimeOptions{});
     const W::Nanoseconds delta = static_cast<W::Nanoseconds>(steps) * kStep;
-    w.prepare.push_back([delta, withTime](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([delta, withTime](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(FrameCount{});
         if (withTime) world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
         return {};

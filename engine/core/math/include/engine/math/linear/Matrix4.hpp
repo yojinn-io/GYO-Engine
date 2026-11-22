@@ -11,7 +11,7 @@
 #include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Column-major storage (values[column * 4 + row]) and column vectors:
 // p' = M * p, translation in values[12..14], Multiply(parent, local) applies
@@ -269,4 +269,4 @@ static_assert(std::is_aggregate_v<Matrix4>);
     return std::all_of(matrix.values.begin(), matrix.values.end(), [](float v) { return std::isfinite(v); });
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

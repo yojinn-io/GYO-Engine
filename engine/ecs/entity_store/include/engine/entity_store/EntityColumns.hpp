@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace Engine::EntityStore {
+namespace GYO::Engine::EntityStore {
 
 // A column is a std::vector of one element type, owned by the caller and kept
 // in strictly ascending key order with no duplicates (docs/architecture/
@@ -90,4 +90,4 @@ bool EraseEntity(std::vector<T>& column, EntityId id) {
     return true;
 }
 
-} // namespace Engine::EntityStore
+} // namespace GYO::Engine::EntityStore

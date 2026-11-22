@@ -4,12 +4,12 @@
 #include <memory>
 #include <string>
 
-#include "engine/io/IoFwd.hpp"          // Engine::IO::Path::Uri fwd
+#include "engine/io/IoFwd.hpp"          // GYO::Engine::IO::Path::Uri fwd
 #include "engine/io/fs/IFileSystem.hpp" // FS::IFileSystem
 #include "engine/io/path/Uri.hpp"
 #include "engine/io/stream/FileOpenMode.hpp"
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
     /// VFS のマウント単位
     /// - scheme（例: assets://）単位でルーティングする
@@ -21,13 +21,13 @@ namespace Engine::IO::FS {
         bool readOnly = false;
 
         // 例: "assets://" / "user://" のような論理スキーム
-        Engine::IO::Path::Uri mountUri;
+        GYO::Engine::IO::Path::Uri mountUri;
 
         // 下位 FS の root（例: file:///.../assets , pak://base.pak#assets）
-        Engine::IO::Path::Uri rootUri;
+        GYO::Engine::IO::Path::Uri rootUri;
 
         // 実体
-        std::shared_ptr<Engine::IO::FS::IFileSystem> fs;
+        std::shared_ptr<GYO::Engine::IO::FS::IFileSystem> fs;
 
         // オプション: 書き込み先として優先したい場合
         bool preferWrite = false;
@@ -35,4 +35,4 @@ namespace Engine::IO::FS {
         MountPoint() = default;
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

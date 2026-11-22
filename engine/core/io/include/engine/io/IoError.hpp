@@ -5,7 +5,7 @@
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
 
-namespace Engine::IO {
+namespace GYO::Engine::IO {
 
     // Failure classes of IO. Zero is not a valid code; the numeric values are
     // not a data contract.
@@ -56,4 +56,4 @@ namespace Engine::IO {
     template <class T>
     using IoResult = Base::Result<T, IoError>;
 
-} // namespace Engine::IO
+} // namespace GYO::Engine::IO

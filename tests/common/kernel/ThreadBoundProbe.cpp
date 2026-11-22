@@ -33,7 +33,7 @@ void BuildProbe(Registrar& r) {
     r.Schedule(s);
 }
 
-void AssertedOnDestroy(const Engine::Base::AssertionFailure& failure) {
+void AssertedOnDestroy(const GYO::Engine::Base::AssertionFailure& failure) {
     std::printf("thread-bound destroy: GYO_ASSERT failed as expected: %s\n", failure.expression);
     std::fflush(stdout);
     std::_Exit(0);
@@ -50,7 +50,7 @@ int main() {
     }
     auto executor = std::make_unique<WorldExecutor>(registry, "probe");
     std::thread([&] { executor->GetWorld().SetResource(Bound{1}); }).join();
-    Engine::Base::SetAssertionHandler(&AssertedOnDestroy);
+    GYO::Engine::Base::SetAssertionHandler(&AssertedOnDestroy);
     executor.reset();
     std::printf("thread-bound destroy: no GYO_ASSERT when the World was destroyed on another thread\n");
     return 1;

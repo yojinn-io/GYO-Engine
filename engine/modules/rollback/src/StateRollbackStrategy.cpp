@@ -18,7 +18,7 @@ namespace GYO::Engine::Rollback {
 
 namespace {
 
-using Ok = ::Engine::Base::Result<void, Kernel::KernelError>;
+using Ok = ::GYO::Engine::Base::Result<void, Kernel::KernelError>;
 
 Kernel::KernelError Failed(std::string message) {
     return Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, std::move(message));
@@ -157,8 +157,8 @@ Ok StateRollbackStrategy::Record(RecordContext& context) {
             while (history.alive.size() >= 2 && history.alive[1].first <= oldest) history.alive.pop_front();
         }
     });
-    if (!done) return ::Engine::Base::Err(std::move(done).error());
-    if (!*done) return ::Engine::Base::Err(Failed("StateRollbackStrategy::Record: the World has no RollbackHistory"));
+    if (!done) return ::GYO::Engine::Base::Err(std::move(done).error());
+    if (!*done) return ::GYO::Engine::Base::Err(Failed("StateRollbackStrategy::Record: the World has no RollbackHistory"));
     return {};
 }
 
@@ -166,7 +166,7 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
     Exclusive& world = context.World();
     const std::uint64_t tick = context.Tick();
     const auto confirmed = world.Read<RollbackInbox>([](const RollbackInbox& inbox) { return inbox.Confirmed(); });
-    if (!confirmed) return ::Engine::Base::Err(std::move(confirmed).error());
+    if (!confirmed) return ::GYO::Engine::Base::Err(std::move(confirmed).error());
     if (!*confirmed || !**confirmed) return {};
     const std::uint64_t point = ***confirmed;
     if (point > tick) return {};  // the authority is ahead: wait until this World has run that step
@@ -196,20 +196,20 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
         }));
         rollBack = differs;
     });
-    if (!decided) return ::Engine::Base::Err(std::move(decided).error());
+    if (!decided) return ::GYO::Engine::Base::Err(std::move(decided).error());
     if (fresh && !(rollBack && *rollBack)) {
         // The confirmed point moved and no rollback follows (it agrees, it was given up, or the mode is Check
         // or Disabled): what is older than it is not needed for a later comparison, except per entity the last
         // value at or before it (review of step 4, 1-3: the inbox was pruned only after a rollback).
         auto pruned = world.Modify<RollbackInbox>([point](RollbackInbox& inbox) { inbox.Prune(point); });
-        if (!pruned) return ::Engine::Base::Err(std::move(pruned).error());
+        if (!pruned) return ::GYO::Engine::Base::Err(std::move(pruned).error());
     }
     if (rollBack && *rollBack) {
         context.RollBackTo(point);
         // Deciding to go back raises "resimulating" (rollback declaration 5.3; lightyear raises it at the decision):
         // the hooks the restore runs, and the observers they trigger, see it raised.
         auto raised = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 1; });
-        if (!raised) return ::Engine::Base::Err(std::move(raised).error());
+        if (!raised) return ::GYO::Engine::Base::Err(std::move(raised).error());
     }
     return {};
 }
@@ -232,8 +232,8 @@ Ok StateRollbackStrategy::Restore(RestoreContext& context) {
         }));
         return set;
     });
-    if (!built) return ::Engine::Base::Err(std::move(built).error());
-    if (!*built || !**built) return ::Engine::Base::Err(Failed("StateRollbackStrategy::Restore: step " + std::to_string(target) + " is not in the history"));
+    if (!built) return ::GYO::Engine::Base::Err(std::move(built).error());
+    if (!*built || !**built) return ::GYO::Engine::Base::Err(Failed("StateRollbackStrategy::Restore: step " + std::to_string(target) + " is not in the history"));
     return world.Restore(std::move(***built));
 }
 
@@ -245,28 +245,28 @@ Ok StateRollbackStrategy::Resimulate(ResimulateContext& context) {
     auto kept = world.Modify<RollbackHistory>([&](RollbackHistory& history) {
         for (auto& input : history.inputs) input->Keep(world);
     });
-    if (!kept) return ::Engine::Base::Err(std::move(kept).error());
+    if (!kept) return ::GYO::Engine::Base::Err(std::move(kept).error());
     WorldTime::RewindFixedSteps(world, steps);
     for (std::uint64_t step = target + 1; step <= context.Tick(); ++step) {
         // One trace span around each step run again (authority-rollback declaration 10.4): a span with an ancestor
         // span.rollback is a resimulation; the first run has no such layer. It only tells (TR-2).
-        ::Engine::Base::TraceSpan resimulateSpan;
+        ::GYO::Engine::Base::TraceSpan resimulateSpan;
         resimulateSpan.Begin("rollback", "resimulate");
         // The inputs of that step, written back (their entries are skipped while resimulating).
         auto written = world.Read<RollbackHistory>([&](const RollbackHistory& history) {
             for (const auto& input : history.inputs) input->WriteBack(world, step);
         });
-        if (!written) return ::Engine::Base::Err(std::move(written).error());
+        if (!written) return ::GYO::Engine::Base::Err(std::move(written).error());
         if (auto ran = WorldTime::RunOneFixedStep(world, context.StepSchedule()); !ran) return ran;
     }
     auto putBack = world.Modify<RollbackHistory>([&](RollbackHistory& history) {
         for (auto& input : history.inputs) input->PutBack(world);
     });
-    if (!putBack) return ::Engine::Base::Err(std::move(putBack).error());
+    if (!putBack) return ::GYO::Engine::Base::Err(std::move(putBack).error());
     auto lowered = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 0; });
-    if (!lowered) return ::Engine::Base::Err(std::move(lowered).error());
+    if (!lowered) return ::GYO::Engine::Base::Err(std::move(lowered).error());
     auto pruned = world.Modify<RollbackInbox>([target](RollbackInbox& inbox) { inbox.Prune(target); });
-    if (!pruned) return ::Engine::Base::Err(std::move(pruned).error());
+    if (!pruned) return ::GYO::Engine::Base::Err(std::move(pruned).error());
     return {};
 }
 

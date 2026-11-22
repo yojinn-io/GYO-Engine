@@ -4,7 +4,7 @@
 
 #include "engine/io/helpers/FileAllCommon.hpp"
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
     /// What a file looked like when probed, to tell whether it changed since (docs/architecture/io.md,
     /// "User files").
@@ -24,4 +24,4 @@ namespace Engine::IO::Helpers {
     /// fails as ReadAllBytes does, so a caller that means "any size" says so.
     IoResult<FileStamp> ProbeFileStamp(FS::IFileSystem& fs, const Path::Uri& uri, const ReadAllOptions& read);
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

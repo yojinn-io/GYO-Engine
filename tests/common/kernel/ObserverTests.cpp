@@ -130,7 +130,7 @@ SystemResult WritesDeclared(On<DoorOpened>, ResMut<Out> out) {
     return Ok();
 }
 SystemResult FailingObserver(On<DoorOpened>) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the observer failed"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the observer failed"));
 }
 
 // ---- Hooks
@@ -172,8 +172,8 @@ SystemResult OpenDoorOnEight(ExclusiveWorld<> world) {
     if (!done) return done;
     const auto mode = world.Read<Mode>(8, [](const Mode&) {});
     const auto tag = world.Read<Tag>(8, [](const Tag&) {});
-    if (!mode) return Engine::Base::Err(mode.error());
-    if (!tag) return Engine::Base::Err(tag.error());
+    if (!mode) return GYO::Engine::Base::Err(mode.error());
+    if (!tag) return GYO::Engine::Base::Err(tag.error());
     Log().push_back(std::string("after mode:") + (*mode ? "1" : "0") + " tag:" + (*tag ? "1" : "0"));
     return Ok();
 }
@@ -194,7 +194,7 @@ SystemResult OpenDoorThenTouch(ExclusiveWorld<> world) {
     auto done = world.Trigger(DoorOpened{1}, EntityId{8});
     if (!done) return done;
     auto touched = world.Modify<Mode>(8, [](Mode& mode) { mode.m = 2; });
-    if (!touched) return Engine::Base::Err(touched.error());
+    if (!touched) return GYO::Engine::Base::Err(touched.error());
     Log().push_back("after-stamp:" + std::to_string(KeptWorld()->Stamps<Mode>(8)->second));
     return Ok();
 }
@@ -206,9 +206,9 @@ SystemResult ReadPings(MessageReader<Ping> pings) {
 }
 // Triggers inside a Read closure (refused).
 SystemResult TriggerInClosure(ExclusiveWorld<> world) {
-    Engine::Base::Result<void, KernelError> inner = Engine::Base::Result<void, KernelError>{};
+    GYO::Engine::Base::Result<void, KernelError> inner = GYO::Engine::Base::Result<void, KernelError>{};
     auto read = world.Read<Flag>([&](const Flag&) { inner = world.Trigger(Rang{1}); });
-    if (!read) return Engine::Base::Err(std::move(read).error());
+    if (!read) return GYO::Engine::Base::Err(std::move(read).error());
     return inner;
 }
 SystemResult RecordTagOnEight(Commands commands) {
@@ -285,9 +285,9 @@ SystemResult DoorThenRang(Commands commands, Res<TickCount> ticks) {
 // Two immediate changes: the first one's chain converges in its rounds, the second one's never does.
 SystemResult InsertThenRemoveNow(ExclusiveWorld<> world) {
     auto inserted = world.Insert(1, Mode{1});
-    if (!inserted) return Engine::Base::Err(std::move(inserted).error());
+    if (!inserted) return GYO::Engine::Base::Err(std::move(inserted).error());
     auto removed = world.Remove<Tag>(1);
-    if (!removed) return Engine::Base::Err(std::move(removed).error());
+    if (!removed) return GYO::Engine::Base::Err(std::move(removed).error());
     return Ok();
 }
 

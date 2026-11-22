@@ -14,8 +14,8 @@
 #include <windows.h>
 #endif
 
-using namespace Engine::Os;
-using namespace Engine::Os::Console;
+using namespace GYO::Engine::OS;
+using namespace GYO::Engine::OS::Console;
 
 // Shutdown requests and the command line of a real process are checked through
 // a child process (console_check.py); these cases need none.

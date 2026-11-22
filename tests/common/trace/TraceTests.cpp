@@ -23,7 +23,7 @@
 #include "engine/logging/MemorySink.hpp"
 #include "engine/trace/Trace.hpp"
 
-namespace Base = Engine::Base;
+namespace Base = GYO::Engine::Base;
 namespace Logging = GYO::Engine::Logging;
 namespace Trace = GYO::Engine::Trace;
 using Logging::Level;

@@ -9,7 +9,9 @@
 // the real clocks). Counts its reads, so a test can show a refused record read
 // no clock (Design Invariant LG-7).
 
-namespace GYO::Engine::Logging::Test {
+namespace GYO::Test::Logging {
+
+using namespace GYO::Engine::Logging;
 
 inline std::atomic<std::int64_t> monoNow{1'000};
 inline std::atomic<std::int64_t> wallMsNow{1'763'600'411'007}; // 2025-11-20T01:00:11.007Z
@@ -38,4 +40,4 @@ inline void ResetClock() noexcept {
     clockReads = 0;
 }
 
-} // namespace GYO::Engine::Logging::Test
+} // namespace GYO::Test::Logging

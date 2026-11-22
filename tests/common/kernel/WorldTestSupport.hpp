@@ -111,7 +111,7 @@ struct Rig {
 
     World& world() { return executor->GetWorld(); }
     // A Run of Tick first writes TickCount (when the World has it and is Ready).
-    Engine::Base::Result<void, KernelError> Run(std::string_view schedule = "Tick") {
+    GYO::Engine::Base::Result<void, KernelError> Run(std::string_view schedule = "Tick") {
         if (schedule == "Tick") {
             ++ticks;
             if (world().State() == WorldState::Ready && built.registry->Frozen().ResourceIdOf<TickCount>()) {
@@ -124,7 +124,7 @@ struct Rig {
     }
     // A Trigger from outside the World, recorded like Run.
     template <class E>
-    Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
+    GYO::Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
         auto triggered = executor->Trigger(std::move(event), target);
         if (!triggered) recorded.push_back(triggered.error());
         return triggered;
@@ -145,11 +145,11 @@ inline std::unique_ptr<Rig> MakeRig(std::function<void(Registrar&)> build, bool 
     return rig;
 }
 
-inline std::string Text(const Engine::Base::Result<void, KernelError>& result) {
+inline std::string Text(const GYO::Engine::Base::Result<void, KernelError>& result) {
     return result ? std::string("ok") : result.error().Text();
 }
 
-inline bool HasCode(const Engine::Base::Result<void, KernelError>& result, KernelErrorCode code) {
+inline bool HasCode(const GYO::Engine::Base::Result<void, KernelError>& result, KernelErrorCode code) {
     return !result && result.error().Has(code);
 }
 

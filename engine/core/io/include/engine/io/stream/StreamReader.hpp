@@ -10,7 +10,7 @@
 #include "engine/io/IoError.hpp"
 #include "engine/io/stream/IStream.hpp"
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
 
@@ -49,4 +49,4 @@ namespace Engine::IO::Stream {
         std::size_t llen_ = 0;
     };
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

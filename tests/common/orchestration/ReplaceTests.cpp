@@ -12,7 +12,7 @@ using namespace OrchTest::Save;
 namespace {
 
 O::PrepareFn Note(std::string text) {
-    return [text](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+    return [text](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         Log().push_back(text);
         return {};
     };
@@ -133,7 +133,7 @@ TEST_CASE("O-10: two types (a unit's and the product's) carry over; prepare sees
     audio.build = [](O::WorldSetup& s) {
         s.Registrar().Resource<Volume>({.name = "Volume"});
         s.CarryOver<Volume>("Volume");
-        s.Prepare([](K::World& w) -> Engine::Base::Result<void, O::OrchestrationError> {
+        s.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
             Log().push_back(w.Resource<Volume>() ? "volume present" : "volume absent");
             if (w.Resource<Volume>() == nullptr) w.SetResource(Volume{3});
             return {};
@@ -187,7 +187,7 @@ TEST_CASE("O-8: an exception from extra leaves the old World as it was") {
     p.World("Main").GetWorld().ResourceMut<KeyBindings>()->jump = 2;
     bool thrown = false;
     try {
-        static_cast<void>(p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+        static_cast<void>(p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
             throw std::runtime_error("disk gone");
         }, {}, O::ReplaceOrder::BuildNewFirst}));
     } catch (const std::runtime_error&) {

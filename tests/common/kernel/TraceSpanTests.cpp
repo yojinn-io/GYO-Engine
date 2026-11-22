@@ -21,7 +21,7 @@
 namespace {
 
 using namespace WorldTest;
-namespace Base = ::Engine::Base;
+namespace Base = ::GYO::Engine::Base;
 
 std::vector<std::string>* events = nullptr;
 std::uint64_t nextId = 1;
@@ -66,13 +66,13 @@ SystemResult Quiet(Query<Read<Tag>>) {
     return Ok();
 }
 SystemResult Fails(Query<Read<Tag>>) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
 }
 SystemResult Throws(Query<Read<Tag>>) {
     throw std::runtime_error("thrown inside");
 }
 SystemResult RunsStep(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Step"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Step"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 bool Never(Res<Flag>) {
@@ -101,7 +101,7 @@ SystemResult RingsNow(ExclusiveWorld<> world) {
     return world.Trigger(Bell{2});
 }
 SystemResult BellFails(On<Bell>) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the bell cracked"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the bell cracked"));
 }
 
 ScheduleOptions StepSchedule() {

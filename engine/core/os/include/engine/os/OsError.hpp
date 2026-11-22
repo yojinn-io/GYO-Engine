@@ -12,7 +12,7 @@
 // converts it with Base::CauseDetail and a log that prints it carry the same
 // text on every platform.
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 enum class OsErrorCode : std::uint16_t {
     NotFound = 1,
@@ -57,4 +57,4 @@ struct NativeError final {
 [[nodiscard]] OsError MakeOsError(OsErrorCode code, std::string message, NativeError native,
                                   std::optional<std::size_t> pathBytes = std::nullopt);
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

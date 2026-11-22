@@ -11,7 +11,7 @@
 #include "engine/io/IoError.hpp"
 #include "engine/io/fs/DirectoryEntry.hpp"
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
 
     /// ストリーミング列挙インターフェース（任意）
@@ -31,7 +31,7 @@ namespace Engine::IO::FS {
         /// 先頭に戻す（対応しない backend は NotSupported を返してOK）
         virtual IoResult<void> Reset() {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported,
+                GYO::Engine::IO::IoErrorCode::NotSupported,
                 "DirectoryIterator: reset not supported"));
         }
 
@@ -59,7 +59,7 @@ namespace Engine::IO::FS {
         IoResult<bool> Next(DirectoryEntry& out) override {
             if (!open_) {
                 return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::ReadFailed,
+                    GYO::Engine::IO::IoErrorCode::ReadFailed,
                     "VectorDirectoryIterator: next on closed iterator"));
             }
             if (index_ >= entries_.size()) return false;
@@ -70,7 +70,7 @@ namespace Engine::IO::FS {
         IoResult<void> Reset() override {
             if (!open_) {
                 return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::NotSupported,
+                    GYO::Engine::IO::IoErrorCode::NotSupported,
                     "VectorDirectoryIterator: reset on closed iterator"));
             }
             index_ = 0;
@@ -89,4 +89,4 @@ namespace Engine::IO::FS {
         bool open_ = true;
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

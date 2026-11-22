@@ -82,7 +82,7 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
   and writing an existing file only are `NotSupported`. `Exists`, `Stat`, `CreateDirectories`, `Move`, `Remove`
   and `ToNativePathString` work; every other operation is `NotSupported`, and `Capabilities()` sets every field to
   say exactly that (the defaults of `FileSystemCapabilities` are mostly true). `Move` is one rename on one volume
-  that replaces a file already at the target (`Os::Files::RenameReplacing`); `Remove` removes a file (a directory
+  that replaces a file already at the target (`OS::Files::RenameReplacing`); `Remove` removes a file (a directory
   is `InvalidPath` on every platform), and a recursive request is `NotSupported` (D56).
   - `Helpers::WriteFileAtomically` is the one atomic write (D56; the editor's save, and IP-5's settings later): the
     bytes go to `<name>.tmp.<time>.<random>` beside the target, which is closed and then moved over it, so a reader
@@ -90,12 +90,12 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
     its old file. It works on any `IFileSystem` whose `Move` replaces in one step; the parent directory must exist
     unless the caller asks for it to be created (User files, below).
   - `FS::NativeFileUri` gives the file URI of a native UTF-8 path for this backend, making a relative path
-    absolute against the current directory first, as the OS would (`Os::Files::MakeAbsolute`). So a relative path
+    absolute against the current directory first, as the OS would (`OS::Files::MakeAbsolute`). So a relative path
     keeps its dot segments on POSIX, while on Windows `GetFullPathNameW` has already removed them. A current
     directory with no UTF-8 form is `InvalidPath` with the engine/os cause `InvalidEncoding` in the detail (D43). A
     missing file is `NotFound`, so a VFS read overlay falls through to
   the next mount. `caseSensitivePaths` is the platform default from engine/os; a volume may differ.
-  - The path must also be absolute on the platform the backend runs on (`Os::Files::IsAbsolutePath`): `/x` names
+  - The path must also be absolute on the platform the backend runs on (`OS::Files::IsAbsolutePath`): `/x` names
     the root of the current drive on Windows and `C:/x` is relative on POSIX, so the backend refuses them
     (`InvalidPath`) instead of letting the OS reinterpret them.
   - Its read stream seeks like the other read-only streams (`MemoryStream`, `SpanStream`): a target outside
@@ -109,10 +109,10 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
   and reads the file whole for its hash, up to the caller's `ReadAllOptions::maxBytes`.
   `Helpers::WriteFileAtomically` with `createParentDirectories` creates the missing directories above the file
   first; a file right under a volume's root needs none. `FS::IsNativePathWithin` decides whether a file written at
-  a native path lands in a root: the candidate's parent is resolved by the OS (`Os::Files::MakeAbsolute`, then
-  `Os::Files::ResolvedPath`, links before '..') and its last name kept as written, since an atomic save renames
+  a native path lands in a root: the candidate's parent is resolved by the OS (`OS::Files::MakeAbsolute`, then
+  `OS::Files::ResolvedPath`, links before '..') and its last name kept as written, since an atomic save renames
   over that name; the root is resolved whole; a trailing separator names the directory before it; names are
-  compared with `Os::Files::SamePathComponent`; a path the OS cannot resolve is compared with '.' and '..' removed
+  compared with `OS::Files::SamePathComponent`; a path the OS cannot resolve is compared with '.' and '..' removed
   as written. It changes no path and is not a sandbox: a link named inside the root counts as inside. A namespace
   prefix is InvalidPath, as in the file mapping.
 

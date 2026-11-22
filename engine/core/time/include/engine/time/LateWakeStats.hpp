@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace Engine::Time {
+namespace GYO::Engine::Time {
 
 // How late deadline wakes were: a fixed-bin histogram with count and maximum.
 // No allocation and no thread of its own; the owner decides when to read and
@@ -38,4 +38,4 @@ private:
     Duration max_{};
 };
 
-} // namespace Engine::Time
+} // namespace GYO::Engine::Time

@@ -5,9 +5,9 @@
 #include <cstring>
 #include <limits>
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
-    // static inline IoError IoError::Make(Engine::IO::IoErrorCode code, const char* msg, std::string detail = {}) {
+    // static inline IoError IoError::Make(GYO::Engine::IO::IoErrorCode code, const char* msg, std::string detail = {}) {
     //     return IoError::Make(code, msg, std::move(detail));
     // }
 
@@ -58,7 +58,7 @@ namespace Engine::IO::Stream {
             const auto caps = inner_->Caps();
             if (!caps.seekable) {
                 return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::NotSupported,
+                    GYO::Engine::IO::IoErrorCode::NotSupported,
                     "BufferedStream: switching read->write requires seekable inner stream"));
             }
 
@@ -66,7 +66,7 @@ namespace Engine::IO::Stream {
             auto sr = inner_->Seek(-unread, SeekWhence::Current);
             if (!sr) {
                 return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::SeekFailed,
+                    GYO::Engine::IO::IoErrorCode::SeekFailed,
                     "BufferedStream: failed to rewind unread read-buffer bytes"));
             }
         }
@@ -104,7 +104,7 @@ namespace Engine::IO::Stream {
             const std::size_t n = wr.value();
             if (n == 0) {
                 return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::WriteFailed,
+                    GYO::Engine::IO::IoErrorCode::WriteFailed,
                     "BufferedStream: inner write returned 0 (stalled)"));
             }
             writtenTotal += n;
@@ -117,7 +117,7 @@ namespace Engine::IO::Stream {
     IoResult<std::size_t> BufferedStream::Read(void* dst, std::size_t bytes) {
         if (!inner_ || !inner_->IsOpen()) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::ReadFailed, "BufferedStream: read on closed stream"));
+                GYO::Engine::IO::IoErrorCode::ReadFailed, "BufferedStream: read on closed stream"));
         }
         if (bytes == 0) return 0;
 
@@ -163,7 +163,7 @@ namespace Engine::IO::Stream {
     IoResult<std::size_t> BufferedStream::Write(const void* src, std::size_t bytes) {
         if (!inner_ || !inner_->IsOpen()) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::WriteFailed, "BufferedStream: write on closed stream"));
+                GYO::Engine::IO::IoErrorCode::WriteFailed, "BufferedStream: write on closed stream"));
         }
         if (bytes == 0) return 0;
 
@@ -190,7 +190,7 @@ namespace Engine::IO::Stream {
                 const std::size_t n = wr.value();
                 if (n == 0) {
                     return Base::Err(IoError::Make(
-                        Engine::IO::IoErrorCode::WriteFailed,
+                        GYO::Engine::IO::IoErrorCode::WriteFailed,
                         "BufferedStream: inner write returned 0 (stalled)"));
                 }
                 inOff += n;
@@ -216,13 +216,13 @@ namespace Engine::IO::Stream {
     IoResult<std::uint64_t> BufferedStream::Tell() const {
         if (!inner_ || !inner_->IsOpen()) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::SeekFailed, "BufferedStream: tell on closed stream"));
+                GYO::Engine::IO::IoErrorCode::SeekFailed, "BufferedStream: tell on closed stream"));
         }
 
         const auto caps = inner_->Caps();
         if (!caps.seekable) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported, "BufferedStream: tell requires seekable inner stream"));
+                GYO::Engine::IO::IoErrorCode::NotSupported, "BufferedStream: tell requires seekable inner stream"));
         }
 
         auto tr = inner_->Tell();
@@ -246,13 +246,13 @@ namespace Engine::IO::Stream {
     IoResult<std::uint64_t> BufferedStream::Seek(std::int64_t offset, SeekWhence whence) {
         if (!inner_ || !inner_->IsOpen()) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::SeekFailed, "BufferedStream: seek on closed stream"));
+                GYO::Engine::IO::IoErrorCode::SeekFailed, "BufferedStream: seek on closed stream"));
         }
 
         const auto caps = inner_->Caps();
         if (!caps.seekable) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported, "BufferedStream: seek requires seekable inner stream"));
+                GYO::Engine::IO::IoErrorCode::NotSupported, "BufferedStream: seek requires seekable inner stream"));
         }
 
         // 書き込みは確定してから seek
@@ -267,7 +267,7 @@ namespace Engine::IO::Stream {
             if (unread > static_cast<std::uint64_t>(maximum) ||
                 offset < minimum + static_cast<std::int64_t>(unread)) {
                 return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::SeekFailed,
+                    GYO::Engine::IO::IoErrorCode::SeekFailed,
                     "BufferedStream: relative seek offset overflow"));
             }
             offset -= static_cast<std::int64_t>(unread);
@@ -283,7 +283,7 @@ namespace Engine::IO::Stream {
     IoResult<std::uint64_t> BufferedStream::Size() const {
         if (!inner_ || !inner_->IsOpen()) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported, "BufferedStream: size on closed stream"));
+                GYO::Engine::IO::IoErrorCode::NotSupported, "BufferedStream: size on closed stream"));
         }
 
         auto sr = inner_->Size();
@@ -305,7 +305,7 @@ namespace Engine::IO::Stream {
     IoResult<void> BufferedStream::Flush() {
         if (!inner_ || !inner_->IsOpen()) {
             return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported, "BufferedStream: flush on closed stream"));
+                GYO::Engine::IO::IoErrorCode::NotSupported, "BufferedStream: flush on closed stream"));
         }
 
         auto fr = FlushWriteBuffer();
@@ -329,4 +329,4 @@ namespace Engine::IO::Stream {
         return inner_->Close();
     }
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

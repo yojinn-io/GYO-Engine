@@ -7,7 +7,7 @@
 // The text form of a record, for people (section 5.12 of
 // docs/architecture/target/v2/logging-declaration.zh-Hant.md): not a data
 // contract. "[category] level: text key=value ...", the start of
-// Engine::Base::Log's default line.
+// GYO::Engine::Base::Log's default line.
 
 namespace GYO::Engine::Logging::Detail {
 

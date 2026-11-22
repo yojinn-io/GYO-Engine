@@ -10,7 +10,7 @@
 
 #include <mach-o/dyld.h>
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 namespace {
 
 class MacOsPlatform final : public Platform {
@@ -55,4 +55,4 @@ const Platform& CurrentPlatform() noexcept {
     return platform;
 }
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

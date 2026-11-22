@@ -55,7 +55,7 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       with error levels D1: the outermost Run returns the Err).
   K7  the identifiers far, near, FAR and NEAR (macros in windef.h; PRs #152 and #163 each broke the MSVC build).
   K8  GYO::Base's issuer of numbers in the kernel: the identifier IdIssuer, or Base's thread serial state
-      threadSerials / threadSerial. The kernel asks which thread runs through Engine::Base::CurrentThreadSerial()
+      threadSerials / threadSerial. The kernel asks which thread runs through GYO::Engine::Base::CurrentThreadSerial()
       only (DI-KS 14; user 2026-11-18, v8-arch-gyo2-kernel-subtract-structure): an IdIssuer is an atomic counter,
       cross-thread state that K3 keeps out of the kernel but does not name. Read in every scanned file, the
       Executor's included, and in CMakeLists.txt outside "#" comments (a target_compile_definitions alias). An

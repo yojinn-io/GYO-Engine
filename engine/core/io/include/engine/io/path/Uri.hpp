@@ -6,7 +6,7 @@
 #include "engine/io/IoError.hpp"
 #include "engine/io/path/Path.hpp"
 
-namespace Engine::IO::Path {
+namespace GYO::Engine::IO::Path {
 
     enum class UriScheme {
         None,
@@ -32,7 +32,7 @@ namespace Engine::IO::Path {
         std::string ToString() const;
     };
 
-    // 失敗時は Engine::Error（IoErrorCode::InvalidPath / NotSupported 等）
+    // 失敗時は Base::Error（IoErrorCode::InvalidPath / NotSupported 等）
     // file:// follows the one mapping of docs/architecture/io.md: the path is
     // the native absolute path in '/' form ("/Users/x", "C:/x", "//server/x"),
     // kept as written; an empty or localhost authority is the local machine,
@@ -55,4 +55,4 @@ namespace Engine::IO::Path {
     // The native absolute path of a file URI in '/' form, UTF-8.
     Base::Result<std::string, IoError> NativePathFromFileUri(const Uri& uri);
 
-} // namespace Engine::IO::Path
+} // namespace GYO::Engine::IO::Path

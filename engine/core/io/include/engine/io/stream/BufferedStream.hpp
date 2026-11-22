@@ -12,7 +12,7 @@
 #include "engine/io/stream/IStream.hpp"
 #include "engine/io/stream/Seek.hpp"
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
     struct BufferingOptions final {
@@ -68,4 +68,4 @@ namespace Engine::IO::Stream {
         std::size_t wlen_ = 0; // バッファ済みデータ長
     };
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

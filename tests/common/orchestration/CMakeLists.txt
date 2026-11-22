@@ -53,7 +53,7 @@ set_tests_properties(orchestration.units PROPERTIES LABELS "cpu" TIMEOUT 60
 
 # Include order (defect found in segment 3): each public orchestration header
 # first, then every public kernel header. The orchestration layer is the first
-# GYO::Engine namespace; a kernel header that names Engine::Base unqualified
+# GYO::Engine namespace; a kernel header that names GYO::Engine::Base unqualified
 # inside GYO::Kernel would then look in GYO::Engine and fail to compile. Built
 # with the tests; a compile error is the failure.
 file(GLOB_RECURSE _orchestration_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/orchestration/include"

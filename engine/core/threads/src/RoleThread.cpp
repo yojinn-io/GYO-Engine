@@ -9,7 +9,7 @@
 #include <system_error>
 #include <utility>
 
-namespace Engine::Threads {
+namespace GYO::Engine::Threads {
 
 struct RoleContext::State final {
     State(RoleThreadOptions roleOptions, Time::Waiter roleWaiter)
@@ -25,11 +25,11 @@ namespace {
 
 // The role's priority as engine/os's hint: the same three levels, value for
 // value, so a cast carries any value through as the old per-OS code read it.
-static_assert(static_cast<int>(ThreadPriority::Background) == static_cast<int>(Os::Thread::PriorityHint::Background));
-static_assert(static_cast<int>(ThreadPriority::Normal) == static_cast<int>(Os::Thread::PriorityHint::Normal));
-static_assert(static_cast<int>(ThreadPriority::Interactive) == static_cast<int>(Os::Thread::PriorityHint::Interactive));
-Os::Thread::PriorityHint Hint(const ThreadPriority priority) noexcept {
-    return static_cast<Os::Thread::PriorityHint>(priority);
+static_assert(static_cast<int>(ThreadPriority::Background) == static_cast<int>(OS::Thread::PriorityHint::Background));
+static_assert(static_cast<int>(ThreadPriority::Normal) == static_cast<int>(OS::Thread::PriorityHint::Normal));
+static_assert(static_cast<int>(ThreadPriority::Interactive) == static_cast<int>(OS::Thread::PriorityHint::Interactive));
+OS::Thread::PriorityHint Hint(const ThreadPriority priority) noexcept {
+    return static_cast<OS::Thread::PriorityHint>(priority);
 }
 
 } // namespace
@@ -51,8 +51,8 @@ Base::Result<RoleThread, ThreadError> RoleThread::Start(RoleThreadOptions option
     std::thread thread;
     try {
         thread = std::thread([state = state.get(), body = std::move(body), started = std::move(started)]() mutable {
-            state->nameApplied = Os::Thread::SetCurrentName(state->options.name);
-            state->priorityApplied = Os::Thread::SetCurrentPriority(Hint(state->options.priority));
+            state->nameApplied = OS::Thread::SetCurrentName(state->options.name);
+            state->priorityApplied = OS::Thread::SetCurrentPriority(Hint(state->options.priority));
             started.set_value();
             RoleContext context(*state);
             body(context);
@@ -115,4 +115,4 @@ Time::WaitBackend RoleThread::WaitBackend() const {
     return state_->waiter.Backend();
 }
 
-} // namespace Engine::Threads
+} // namespace GYO::Engine::Threads

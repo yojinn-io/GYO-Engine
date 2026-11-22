@@ -12,10 +12,10 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/audio/Mixer.hpp"
 
-using namespace Engine::Audio;
+using namespace GYO::Engine::Audio;
 using namespace std::chrono_literals;
-using Engine::Time::Duration;
-using Engine::Time::TimePoint;
+using GYO::Engine::Time::Duration;
+using GYO::Engine::Time::TimePoint;
 
 namespace {
 
@@ -33,7 +33,7 @@ struct Rig final {
 Rig MakeRig(const std::uint32_t voices = 4) {
     ClipBank bank;
     const std::vector<std::int16_t> samples(1000, 100);
-    auto clip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
+    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
     REQUIRE(clip.has_value());
     MixerConfig config;
     config.scheduleDelay = Duration::zero();
@@ -47,7 +47,7 @@ Rig MakeRig(const std::uint32_t voices = 4) {
 
 std::vector<std::int16_t> RenderBlock(Mixer& mixer, const std::uint32_t frames, const TimePoint anchor = kAnchor) {
     std::vector<std::int16_t> out(std::size_t{frames} * kChannels, 0);
-    mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+    mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
     return out;
 }
 
@@ -293,7 +293,7 @@ ReuseRig MakeReuseRig() {
     std::vector<ClipId> clips;
     for (const std::uint32_t frames : kReuseLengths) {
         const std::vector<std::int16_t> samples(frames, 100);
-        clips.push_back(*bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate));
+        clips.push_back(*bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate));
     }
     MixerConfig config;
     config.scheduleDelay = Duration::zero();
@@ -368,7 +368,7 @@ TEST_CASE("Audio Mixer playheads stay consistent while voices are reused, block 
             firstBlock.push_back(block);
             if ((s + 1) % 4 == 0) REQUIRE(submitter->Stop(sound, anchor + Ms(1)));
         }
-        rig.mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+        rig.mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
         anchor += Ns(1'333'333);
         for (std::size_t s = 0; s < sounds.size(); ++s) {
             const Playhead now = rig.mixer.PlayheadOf(sounds[s]);
@@ -516,7 +516,7 @@ TEST_CASE("Audio Mixer playheads stay consistent under a polling thread (ThreadS
                 issued.store(next);
                 if (next % 4 == 0) static_cast<void>(submitter->Stop(sound, anchor + Ms(1)));
             }
-            rig.mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+            rig.mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
             anchor += Ns(1'333'333);
         }
         active.store(false, std::memory_order_release);

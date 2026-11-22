@@ -4,7 +4,7 @@
 
 #include "engine/base/Assert.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Function bodies are the single GYO implementation of each operation. Any
 // change to an expression's shape (operand order, association) can change
@@ -48,4 +48,4 @@ template <Arithmetic T>
     return a + (b - a) * t;
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

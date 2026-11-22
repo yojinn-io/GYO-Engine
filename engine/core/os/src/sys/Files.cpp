@@ -23,7 +23,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-namespace Engine::Os::Files {
+namespace GYO::Engine::OS::Files {
 
 namespace {
 
@@ -416,4 +416,4 @@ Base::Result<std::vector<std::string>, OsError> FontDirectories() {
 
 bool DefaultCaseSensitivePaths() noexcept { return Detail::CurrentPlatform().CaseSensitivePaths(); }
 
-} // namespace Engine::Os::Files
+} // namespace GYO::Engine::OS::Files

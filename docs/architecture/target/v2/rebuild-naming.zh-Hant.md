@@ -1,6 +1,6 @@
 # 命名規範（`v8-arch-rebuild`）
 
-更新：2026-11-14。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**
+更新：2026-11-14；2026-11-22（N13、N14、N17、第 3、5、6、7 節：`v8-arch-gyo2-namespace-root`，namespace 的根統一並立守衛）。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**
 
 使用者（2026-11-14）：「你後面做好表之後，也做一個命名規範。」
 
@@ -45,16 +45,29 @@
 |---|---|---|---|
 | N11 | 一個模組一個目錄：`engine/<模組>/`，底下 `include/engine/<模組>/` 與 `src/` | `engine/core/time/include/engine/time/Waiter.hpp` | 事實 |
 | N12 | 含入路徑從 `engine/` 起算 | `#include "engine/time/Waiter.hpp"` | 事實 |
-| N13 | namespace 是 `Engine::<模組>`；模組內部的東西放 `Detail` | `Engine::Time`、`Engine::Threads` | 事實 |
-| N14 | 一個目錄一個 CMake target：`gyo_<模組>`，別名 `GYO::<模組>` | `gyo_time`、`GYO::Time` | 事實 |
+| N13 | namespace 照 N17 的根：Engine 的單位是 `GYO::Engine::<單位>`，Kernel 是 `GYO::Kernel`；單位內部的東西放 `Detail` | `GYO::Engine::Time`、`GYO::Engine::Threads` | 事實；2026-11-22 根從 `Engine::` 改成 `GYO::Engine::`（`v8-arch-gyo2-namespace-root`，第 6 節） |
+| N14 | 一個目錄一個 CMake target：`gyo_<目錄名>`，別名 `GYO::<名>`（`<名>` 照 N17 從目錄名推） | `gyo_time`、`GYO::Time`；`gyo_world_time`、`GYO::WorldTime`；`gyo_io`、`GYO::IO` | 事實；縮寫的寫法見 N17 |
 | N15 | 型別、函式用大寫開頭的駝峰；成員變數小寫開頭、結尾加底線；常數 `k` 開頭；巨集 `GYO_` 開頭全大寫 | `RoleThread`、`StopRequested()`、`state_`、`kSampleRate`、`GYO_ASSERT` | 事實 |
 | N16 | 檔名等於它主要的型別名 | `RoleThread.hpp`、`RoleThread.cpp` | 事實 |
-| N17 | 歸屬＝namespace 與目錄一一對應。目錄、namespace、target 三者的名字要對得上。根的寫法：通用機制 `GYO::Kernel::`；Engine 的 Module `GYO::Engine::<Module>::`；Plugin `GYO::Plugins::<plugin>::`；產品 `<產品>::` | `engine/ecs/kernel`↔`GYO::Kernel` | 你的決定（11 月 11 日命名規範第 1 條，2026-11-14 轉入）。原文寫「能力」的地方，照今天的用詞寫 Module |
+| N17 | 歸屬＝namespace 與目錄一一對應。目錄、namespace、target 三者的名字要對得上。`GYO::` 底下第二層的根是一張封閉的表（本表下方「N17 的根」），不在表裡的 `GYO::<X>` 不能用；要加新的根，先改這張表與守衛。產品用自己的根 `<產品>::`，不打開 `GYO::` 底下的任何 namespace | `engine/ecs/kernel`↔`GYO::Kernel`；`engine/core/io`↔`GYO::Engine::IO`↔`GYO::IO` | 你的決定（11 月 11 日命名規範第 1 條，2026-11-14 轉入）。原文寫「能力」的地方，照今天的用詞寫 Module；2026-11-22 把「Engine 的 Module」改寫成「Engine 的單位」並把根寫成表（`v8-arch-gyo2-namespace-root`，理由見表下） |
 | N25 | **錯誤型別的字尾帶著級別**（草稿，`v8-arch-gyo2-error-levels` D11；使用者 2026-11-20 定，最終文字在合併前核准）：兩種都回給上層、由上層決定怎麼辦，字尾只說多嚴重：`…Error`＝E1（它來自的 World 壞了，持有它的 Product 不能再跑）；`…Failure`＝E2（這次請求沒做成，其他都健康）。E0 沒有型別（`GYO_ASSERT`），E3 是紀錄、用紀錄自己的名字。GYO 的 `…Error` 不是 Java 的 `Error`（那對到 GYO 的 E0），也不是 Go 的 `XxxError`（那多半是 GYO 的 `…Failure`）。`Result::error()`、`Base::Err`、`…Report` 照舊 | `WorldError`、`KernelError`（E1）；`OrchestrationFailure`、`KernelFailure`、`JsonFailure`（E2） | 使用者（`v8-arch-gyo2-error-type-suffix`）；級別的定義在 `target/error-handling.md`「Error levels」；既有型別的改名是後續 |
 
-已知的不一致，帶過來的程式不改，先記著：
-- io 的 namespace 是 `Engine::IO`，target 是 `GYO::Io`。新模組的寫法：只有第一個字母大寫，例如 `Io`、`Os`。
-- **namespace 的根，程式的現況和 N17 不一致**：通用機制的程式用 `GYO::Kernel`，合 N17；帶過來的模組（base、math、os、time、threads、io、audio）與 entity_store 用 `Engine::<模組>`，N17 寫的是 `GYO::Engine::<Module>`。新寫的 Module 照 N17；帶過來的要不要改，見第 6 節。
+### N17 的根
+
+| 根 | 目錄 | 名字怎麼來 |
+|---|---|---|
+| `GYO::Kernel` | `engine/ecs/kernel` | 固定（通用機制，第 6 節） |
+| `GYO::Engine::<單位>` | Engine 的單位：`engine/core/<單位>`、`engine/ecs/<單位>`（kernel 除外）、`engine/modules/<單位>`，以及 `engine/orchestration` 本身 | 從目錄名推：以 `_` 分段、每段首字母大寫；縮寫段照下面的縮寫表。例：`world_time`→`WorldTime`、`entity_store`→`EntityStore` |
+| `GYO::Plugins::<plugin>` | `plugins/<plugin>`（目錄還沒有；出現時就套用） | 同上 |
+| `GYO::Test` | `tests/`（測試自己的東西；共用的放 `tests/common/support`，各單位的測試輔助放 `GYO::Test::<單位>`，例 `GYO::Test::Logging`） | 固定 |
+
+- **「Engine 的單位」**：#261（`v8-arch-gyo2-core-not-registered`）之後 core、ecs、orchestration 不再登記成 Module，但它們和 modules 一樣是 `engine/` 裡的一個單位，根都是 `GYO::Engine::<單位>`（2026-11-14 的改名決定就列了 core 的單位）。所以 N17 寫「單位」，不寫「Module」。
+- **縮寫表**：`io`→`IO`、`os`→`OS`，namespace 與 target 都全大寫；`json` 照舊寫 `Json`。新的縮寫要寫進這張表，守衛的 `ACRONYMS` 同步改。
+  - 使用者 2026-11-22：「IO、OS 這些就不要一個大一個小了。看著很難受。」比過的選項：縮寫全大寫（`Json` 也改 `JSON`）／縮寫全大寫、`Json` 不動／都只首字母大寫（`Io`、`Os`，原本的寫法）。使用者選第二個。理由：看著很難受；`Json` 不動的理由使用者沒有說。出處：`v8-arch-gyo2-namespace-root` 卡片的對話。
+  - 取代第 3 節原本的「只有第一個字母大寫，例如 `Io`、`Os`」。
+- **根寫成封閉的表**：使用者 2026-11-22：「另外GYO::Engine 既然有，那麼就會有其他的 例如非Engine 層的。」所以規則管的是 `GYO::` 底下全部的根，不只 `GYO::Engine`。出處同上。
+- **打開別人的 namespace**：一個 namespace 只在它的目錄裡打開。要特化別的單位的樣板（例：`EntityKey`），寫全限定的特化 `template <> struct GYO::Engine::EntityStore::EntityKey<T> { … };`，不打開 `namespace GYO::Engine::EntityStore {`。用 `using namespace`、別名（寫在自己的 namespace 裡）不算打開。
+- **守衛**：`tests/common/kernel/naming_guard.py`（ctest `kernel.naming_guard`、自測 `kernel.naming_guard_selftest`；突變在 `docs/architecture/target/v2/scripts/naming_mutations.json`）。它查：每個單位的 namespace 是表裡推出的根；舊根 `Engine` 沒有人打開；`GYO` 單獨打開、不在表裡的 `GYO::<X>`、在別的目錄打開某個單位的根，都報錯；每個 Engine 單位的 target 是 `gyo_<目錄名>`、別名 `GYO::<名>`。`engine/` 底下不在層表裡的目錄、層裡不屬於任何單位的原始檔也報錯（fail closed）。新加的單位不用改守衛就會被查；拿掉一個 Module 也不用改守衛。
 
 ## 4. ECS 相關的命名（提案）
 
@@ -76,7 +89,6 @@
 | 項目 | 為什麼不定 |
 |---|---|
 | 型別不用 `Manager`、`Host`、`Shell`、`Runtime`、`Controller`、`Renderer`、`ViewModel` 這類後綴（舊命名條文第 5 條） | 你 2026-11-14 說只轉 1～4，這一條不轉 |
-| `Engine::IO` 要不要改成 `Io` | 要改帶過來的程式；和第 6 節第 5 點一起定 |
 | World 的事件緩衝叫 Event 還是照 Bevy 叫 Message | 和事件的設計一起定 |
 
 ## 6. 要你確認的事
@@ -88,7 +100,7 @@
 已訂（使用者 2026-11-14：「原文轉。讓他訂」，由這個會話訂）：
 - **N17～N24 定案**，寫法照第 3、4 節。
 - **通用機制的程式與目錄叫 Kernel**：`engine/ecs/kernel`、`GYO::Kernel`，和 N17 與程式的現況一致。文件裡解釋它是什麼時才寫「通用機制」。同詞異義表的 Kernel 列已跟著改。
-- **帶過來的模組的 namespace 根，統一成 N17 的 `GYO::Engine::<Module>`，但不是現在改**：
+- **帶過來的模組的 namespace 根，統一成 N17 的 `GYO::Engine::<Module>`，但不是現在改**（**已做**：2026-11-22，`v8-arch-gyo2-namespace-root`；使用者當天要先做：「先開這個，其他先不動。另外這類改名卡最好排前面，否則後面影響範圍會越來越大。不光是改名，還要建立規則，讓後面任務都遵守」；`Engine::IO` 照縮寫表寫 `IO`，`Engine::Os` 改成 `OS`；測試輔助的 `Engine::Test` 改成 `GYO::Test`）：
   - 現在只要求新寫的 Module 照 N17。
   - 帶過來的九個模組（base、math、os、time、threads、io、audio、entity_store，以及 `Engine::IO` 的大小寫）排成一批機械式的改名，在 System 契約確認之後、開始移植任何產品之前做。理由：現在的優先是把機制定下來；等產品搬進來才改，每個產品都要跟著再改一次。
   - 那一批只改名字，不改行為；改完以全部測試通過為準。
@@ -97,4 +109,5 @@
 
 - 第 3 節是從七個模組的標頭抽樣歸納的，沒有逐檔核對；之後發現例外，補記在這裡。
 - 批次代號、分支、PR 標題、dev_log 檔名的規則是既有的流程規則，這份不重述。
-- 這份規範還沒有守衛。哪些條要用掃描守、怎麼守，等有新程式時再提。
+- N17 有守衛（第 3 節「N17 的根」末）。其他條還沒有守衛；哪些要用掃描守、怎麼守，等有新程式時再提。
+- 守衛的 N3（`ROLE_SUFFIXES`，舊命名條文第 5 條）仍在 kernel、orchestration、world_time 三個目錄上查；第 5 條 2026-11-14 沒有轉入（第 5 節），這個不一致留給後續判斷，`v8-arch-gyo2-namespace-root` 沒有擴大也沒有拿掉它。

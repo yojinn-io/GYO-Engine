@@ -3,7 +3,7 @@
 // (sys/Platform.hpp). Nothing on Windows calls them.
 #include "../Platform.hpp"
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 namespace {
 
 class WindowsPlatform final : public Platform {
@@ -26,4 +26,4 @@ const Platform& CurrentPlatform() noexcept {
     return platform;
 }
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

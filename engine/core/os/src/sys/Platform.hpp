@@ -14,7 +14,7 @@
 // only these; each platform implements them in sys/<platform>/Platform.cpp, and
 // the build links the one platform it targets. Windows implements the file,
 // process and console primitives itself (sys/windows) and leaves these empty.
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 
 class Platform {
 public:
@@ -36,4 +36,4 @@ public:
 // The platform this build targets.
 [[nodiscard]] const Platform& CurrentPlatform() noexcept;
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

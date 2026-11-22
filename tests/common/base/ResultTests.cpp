@@ -9,8 +9,8 @@
 #include <type_traits>
 #include <utility>
 
-using Engine::Base::Err;
-using Engine::Base::Result;
+using GYO::Engine::Base::Err;
+using GYO::Engine::Base::Result;
 
 namespace {
 
@@ -20,7 +20,7 @@ enum class SampleErrorCode { Failed = 1 };
     return code == SampleErrorCode::Failed ? "Failed" : "Unknown";
 }
 
-using SampleError = Engine::Base::Error<SampleErrorCode>;
+using SampleError = GYO::Engine::Base::Error<SampleErrorCode>;
 using IntResult = Result<int, SampleError>;
 using VoidResult = Result<void, SampleError>;
 
@@ -82,7 +82,7 @@ TEST_CASE("Result: success and failure through return statements") {
 
     CHECK(Forward(true).value() == 8);
     CHECK(Forward(false).error().detail == "sample");
-    CHECK(Engine::Base::Describe(Parse(false).error()) == "Failed: failed (sample)");
+    CHECK(GYO::Engine::Base::Describe(Parse(false).error()) == "Failed: failed (sample)");
 
     CHECK(Check(true));
     CHECK(Check(false).error().code == SampleErrorCode::Failed);

@@ -120,25 +120,25 @@ Collected CollectedOf(const Kernel::FrozenRegistry& registry, const AuthorityReg
     return out;
 }
 
-::Engine::Base::Result<Kernel::Fingerprint, AuthorityFailure> ConsistencyFingerprintOf(const Kernel::World& world) {
+::GYO::Engine::Base::Result<Kernel::Fingerprint, AuthorityFailure> ConsistencyFingerprintOf(const Kernel::World& world) {
     if (!world.Types().ResourceIdOf<AuthorityRegistry>()) {
-        return ::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
+        return ::GYO::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
     }
     const AuthorityRegistry* registrations = world.Resource<AuthorityRegistry>();
     if (registrations == nullptr || !registrations->strategy) {
-        return ::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World chose no authority strategy"});
+        return ::GYO::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World chose no authority strategy"});
     }
     FingerprintContext context(world.Types(), *registrations);
     return registrations->strategy->ConsistencyFingerprint(context);
 }
 
-::Engine::Base::Result<std::uint64_t, AuthorityFailure> Digest(const Kernel::World& world) {
+::GYO::Engine::Base::Result<std::uint64_t, AuthorityFailure> Digest(const Kernel::World& world) {
     if (!world.Types().ResourceIdOf<AuthorityRegistry>()) {
-        return ::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
+        return ::GYO::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
     }
     const AuthorityRegistry* registrations = world.Resource<AuthorityRegistry>();
     if (registrations == nullptr) {
-        return ::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no AuthorityRegistry"});
+        return ::GYO::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no AuthorityRegistry"});
     }
     std::uint64_t sum = 0;
     for (const DataRecord& record : registrations->data) {
@@ -151,9 +151,9 @@ Collected CollectedOf(const Kernel::FrozenRegistry& registry, const AuthorityReg
     return sum;
 }
 
-::Engine::Base::Result<std::string, AuthorityFailure> DatasetReport(const Kernel::World& world) {
+::GYO::Engine::Base::Result<std::string, AuthorityFailure> DatasetReport(const Kernel::World& world) {
     if (!world.Types().ResourceIdOf<AuthorityRegistry>() || world.Resource<AuthorityRegistry>() == nullptr) {
-        return ::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
+        return ::GYO::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
     }
     const Kernel::FrozenRegistry& registry = world.Types();
     const AuthorityRegistry& registrations = *world.Resource<AuthorityRegistry>();
@@ -246,10 +246,10 @@ std::string JsonString(const std::string& text) {
 
 } // namespace
 
-::Engine::Base::Result<std::string, AuthorityFailure> ExportAuthoritySources(const Kernel::World& world,
+::GYO::Engine::Base::Result<std::string, AuthorityFailure> ExportAuthoritySources(const Kernel::World& world,
                                                                              const AuthoritySourcesOptions& options) {
     if (!world.Types().ResourceIdOf<AuthorityRegistry>() || world.Resource<AuthorityRegistry>() == nullptr) {
-        return ::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
+        return ::GYO::Engine::Base::Err(AuthorityFailure{AuthorityFailureCode::NoAuthority, "the World has no authority Module"});
     }
     const Kernel::FrozenRegistry& registry = world.Types();
     const AuthorityRegistry& registrations = *world.Resource<AuthorityRegistry>();
@@ -297,7 +297,7 @@ std::string JsonString(const std::string& text) {
             add(rule.source, "the initial value of a decision component", registry.Components()[rule.target].name);
         }
     }
-    if (failed) return ::Engine::Base::Err(std::move(*failed));
+    if (failed) return ::GYO::Engine::Base::Err(std::move(*failed));
     std::sort(files.begin(), files.end());
     files.erase(std::unique(files.begin(), files.end()), files.end());
     std::string out = "{\n";
