@@ -23,7 +23,7 @@
 
 namespace GYO::Kernel {
 
-using SystemResult = ::GYO::Engine::Base::Result<void, KernelError>;
+using SystemResult = Engine::Base::Result<void, KernelError>;
 
 // Spec B.4 point 5, B.6 risk 3.
 inline constexpr std::size_t kMaxParameters = 16;

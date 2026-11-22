@@ -23,7 +23,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 struct DoorOpened { std::uint32_t door; };  // event, zone B
 struct Rang { std::uint32_t n; };           // event, zone B

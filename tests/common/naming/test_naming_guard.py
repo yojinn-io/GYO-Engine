@@ -79,14 +79,14 @@ class GuardTree(unittest.TestCase):
     # Units ------------------------------------------------------------------------------------------------------
 
     def test_unit_name_is_derived_from_the_directory(self):
-        self.assertEqual(guard.unit_name("world_time"), "WorldTime")
-        self.assertEqual(guard.unit_name("entity_store"), "EntityStore")
-        self.assertEqual(guard.unit_name("base"), "Base")
+        self.assertEqual(guard.camel_case("world_time", guard.ACRONYMS), "WorldTime")
+        self.assertEqual(guard.camel_case("entity_store", guard.ACRONYMS), "EntityStore")
+        self.assertEqual(guard.camel_case("base", guard.ACRONYMS), "Base")
 
     def test_acronyms_are_io_and_os(self):
         self.assertEqual(guard.ACRONYMS, {"io": "IO", "os": "OS"})
-        self.assertEqual(guard.unit_name("io"), "IO")
-        self.assertEqual(guard.unit_name("os"), "OS")
+        self.assertEqual(guard.camel_case("io", guard.ACRONYMS), "IO")
+        self.assertEqual(guard.camel_case("os", guard.ACRONYMS), "OS")
 
     def test_engine_layers_are_pinned(self):
         self.assertEqual(guard.ENGINE_LAYERS, {"core": "units", "ecs": "units", "modules": "units",
@@ -129,8 +129,8 @@ class GuardTree(unittest.TestCase):
         self.assertEqual(guard.UNIT_OVERRIDES, {"engine/ecs/kernel": "GYO::Kernel"})
 
     def test_unit_name_applies_acronyms_per_part(self):
-        self.assertEqual(guard.unit_name("file_io"), "FileIO")
-        self.assertEqual(guard.unit_name("json"), "Json")
+        self.assertEqual(guard.camel_case("file_io", guard.ACRONYMS), "FileIO")
+        self.assertEqual(guard.camel_case("json", guard.ACRONYMS), "Json")
 
     def test_n1_layer_of_units_missing_or_empty_is_reported(self):
         shutil.rmtree(self.root / "engine/modules")
@@ -302,7 +302,7 @@ class GuardTree(unittest.TestCase):
                 shutil.rmtree(self.root / f"{root}/sample")
 
     def test_n1_scan_roots_are_pinned(self):
-        self.assertEqual(guard.SCAN_ROOTS, ("engine", "apps", "tools", "framework", "plugins", "tests", "examples"))
+        self.assertEqual(guard.SCAN_ROOTS, ("engine", "apps", "tools", "plugins", "tests", "examples"))
 
     def test_n1_every_source_type_is_scanned(self):
         # A fixed list, not guard.SUFFIXES: shrinking the guard's set must fail here.

@@ -145,16 +145,16 @@ public:
     // Startup: reads the read-only registry and the rollback registrations; reports what cannot hold.
     virtual void Check(CheckContext& context) = 0;
     // After each step of a step schedule: keeps what the step left.
-    virtual ::GYO::Engine::Base::Result<void, Kernel::KernelError> Record(RecordContext& context) = 0;
+    virtual Base::Result<void, Kernel::KernelError> Record(RecordContext& context) = 0;
     // Before the step schedule each frame: reads what came from outside and decides whether, and to which step,
     // to go back; deciding to, it raises "resimulating".
-    virtual ::GYO::Engine::Base::Result<void, Kernel::KernelError> Decide(DecideContext& context) = 0;
+    virtual Base::Result<void, Kernel::KernelError> Decide(DecideContext& context) = 0;
     // After deciding: puts the World back to that step (keeping first what a correction needs).
-    virtual ::GYO::Engine::Base::Result<void, Kernel::KernelError> Restore(RestoreContext& context) = 0;
+    virtual Base::Result<void, Kernel::KernelError> Restore(RestoreContext& context) = 0;
     // After restoring: runs the step schedule again up to now, then lowers "resimulating".
-    virtual ::GYO::Engine::Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) = 0;
+    virtual Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) = 0;
     // Each frame, on the view side: what the frame adds to hide the difference a resimulation made.
-    virtual ::GYO::Engine::Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) = 0;
+    virtual Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) = 0;
     // The steps of a recorded input kept when its length is InputHistoryLength::StrategyDepth (a resimulation
     // writes back at most this many). The official strategy: its depth. An author's strategy that keeps its own
     // inputs may leave it at 0 (the official history then keeps none).
@@ -185,11 +185,11 @@ class PeerRollbackStrategy final : public RollbackStrategy {
 public:
     [[nodiscard]] std::string_view Name() const override { return "PeerRollbackStrategy"; }
     void Check(CheckContext& context) override;
-    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Record(RecordContext& context) override;
-    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Decide(DecideContext& context) override;
-    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Restore(RestoreContext& context) override;
-    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) override;
-    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) override;
+    Base::Result<void, Kernel::KernelError> Record(RecordContext& context) override;
+    Base::Result<void, Kernel::KernelError> Decide(DecideContext& context) override;
+    Base::Result<void, Kernel::KernelError> Restore(RestoreContext& context) override;
+    Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) override;
+    Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) override;
 };
 
 } // namespace GYO::Engine::Rollback

@@ -23,7 +23,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 struct Body { std::int32_t m; };   // zone B, Shared
 struct Seen { std::int32_t s; };   // zone B, Shared: the initial value of Body
@@ -68,7 +68,7 @@ void Base(Registrar& r, bool allotter = false) {
 }
 
 SystemOptions In(std::string name, std::string stage, std::vector<std::string> after = {}) {
-    return Sys(std::move(name), {KernelTest::At("Tick", std::move(stage), {}, std::move(after))});
+    return Sys(std::move(name), {GYO::Test::Kernel::At("Tick", std::move(stage), {}, std::move(after))});
 }
 
 std::uint32_t StepOf(Rig& rig, std::string_view name) {
@@ -962,7 +962,7 @@ TEST_CASE("J-55: an alive id is IdAlive although step 0 spawned a larger id at t
 TEST_CASE("J-55: the record's sync point number and schedule are those of the sync point that dropped it") {
     auto rig = MakeRig([](Registrar& r) {
         Base(r);
-        r.AddSystem<&EarlySpawnsSeven>(Sys("EarlySpawnsSeven", {KernelTest::At("Early", "X")}));
+        r.AddSystem<&EarlySpawnsSeven>(Sys("EarlySpawnsSeven", {GYO::Test::Kernel::At("Early", "X")}));
     });
     rig->world().Insert(7, Body{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());

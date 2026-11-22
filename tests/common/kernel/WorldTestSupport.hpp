@@ -18,9 +18,7 @@
 #include <utility>
 #include <vector>
 
-namespace WorldTest {
-
-using namespace KernelTest;
+namespace GYO::Test::Kernel {
 
 struct Pos { std::int32_t x; };
 struct Vel { std::int32_t v; };
@@ -159,10 +157,10 @@ inline World*& KeptWorld() {
     return world;
 }
 
-} // namespace WorldTest
+} // namespace GYO::Test::Kernel
 
 #define KERNEL_REQUIRE_RUN_OK(expr)                                  \
     do {                                                             \
         const auto kernelRunResult = (expr);                         \
-        REQUIRE_MESSAGE(static_cast<bool>(kernelRunResult), WorldTest::Text(kernelRunResult)); \
+        REQUIRE_MESSAGE(static_cast<bool>(kernelRunResult), ::GYO::Test::Kernel::Text(kernelRunResult)); \
     } while (false)

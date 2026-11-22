@@ -17,11 +17,11 @@
 #include <vector>
 
 using namespace GYO::Kernel;
-using KernelTest::At;
-using KernelTest::Built;
-using KernelTest::Describe;
-using KernelTest::HasError;
-using KernelTest::Ok;
+using GYO::Test::Kernel::At;
+using GYO::Test::Kernel::Built;
+using GYO::Test::Kernel::Describe;
+using GYO::Test::Kernel::HasError;
+using GYO::Test::Kernel::Ok;
 
 namespace {
 
@@ -161,9 +161,9 @@ void Game(Registrar& r) {
     r.Hook<Health, &LogDeath>(HookTrigger::OnRemove, {.name = "LogDeath"});
 }
 
-std::unique_ptr<WorldTest::Rig> StartGame() {
+std::unique_ptr<GYO::Test::Kernel::Rig> StartGame() {
     Deaths().clear();
-    auto rig = WorldTest::MakeRig(Game);
+    auto rig = GYO::Test::Kernel::MakeRig(Game);
     if (!rig->executor) return rig;
     rig->world().SetResource(Gravity{1});
     rig->world().SetResource(Paused{0});
@@ -256,7 +256,7 @@ SystemResult WritePositionB(Query<Write<Position>> q) {
 } // namespace
 
 TEST_CASE("skeleton: a System that returns Err stops the Run and interrupts the World") {
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
         GameData(r);
         r.AddSystem<&Fails>(In("Fails", "Simulate"));
     });
@@ -285,7 +285,7 @@ SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
 } // namespace
 
 TEST_CASE("skeleton: an Err comes back once, with the chain of where it happened") {
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
         GameData(r);
         r.AddSystem<&SpawnsWave>(In("SpawnsWave", "Input"));
     });
@@ -326,7 +326,7 @@ SystemResult RecordsBothOrders(Spawn<Bundle<Armor>> spawn, Despawn despawn,
 } // namespace
 
 TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and insert, whatever the recorded order") {
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
         GameData(r);
         r.Component<Armor>({.name = "Armor"});
         r.Component<Shield>({.name = "Shield"});
@@ -347,7 +347,7 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
 
 TEST_CASE("skeleton: two writers with no order are tied by registration and listed") {
     // Two Systems may write one component only when it is declared Shared.
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
         r.Component<Position>({.name = "Position"});
         r.Schedule(GameTick());
         r.AddSystem<&WritePositionA>(In("AddOne", "Simulate"));
@@ -431,7 +431,7 @@ struct TickCost {
 // One WorldExecutor per measured System, so a tick's time is that System's.
 template <auto Fn>
 double TimeTicks(std::size_t entities, const char* name, int ticks, double* fillMs = nullptr) {
-    auto rig = WorldTest::MakeRig(
+    auto rig = GYO::Test::Kernel::MakeRig(
         [name](Registrar& r) {
             LimitData(r);
             r.AddSystem<Fn>(In(name, "Simulate"));
@@ -479,7 +479,7 @@ TEST_CASE("limits: startup analysis against the number of Systems") {
                 }
             });
             const auto start = Clock::now();
-            Built built = KernelTest::Finish(std::move(builds));
+            Built built = GYO::Test::Kernel::Finish(std::move(builds));
             const double ms = Milliseconds(Clock::now() - start);
             REQUIRE_MESSAGE(static_cast<bool>(built.result), Describe(built));
             const Plan* plan = built.registry->Frozen().PlanOf("Tick");

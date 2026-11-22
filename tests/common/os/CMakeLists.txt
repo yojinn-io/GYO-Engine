@@ -62,12 +62,12 @@ foreach(check IN LISTS gyo_os_console_checks)
     set_tests_properties(os.console_${name} PROPERTIES LABELS "cpu" TIMEOUT 90 SKIP_RETURN_CODE 77)
 endforeach()
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # The OS layer is the lowest layer above GYO::Base: its links, private and
 # interface alike, are exactly GYO::Base and OS system libraries (Design
 # Invariant 3): on Windows shell32 for CommandLineToArgvW (D49), elsewhere the
 # thread library for pthread_setname_np (D69) and the wait fallback's mutex and
 # condition variable (v8-arch-gyo2-os-wait).
-# gyo_expect_links is defined with the time tests, which configure first.
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too.
 function(gyo_expect_os_links)

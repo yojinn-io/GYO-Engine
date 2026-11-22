@@ -30,6 +30,7 @@ if(WIN32)
     endforeach()
 endif()
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # io links Base publicly and Math and the OS layer privately (docs/architecture/io.md;
 # v8-arch-gyo2-core-not-registered: core's links are written by hand and pinned here).
 function(gyo_expect_io_links)

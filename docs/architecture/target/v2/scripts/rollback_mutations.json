@@ -199,18 +199,18 @@
    "expect": "binary_search\\(after\\.begin\\(\\), after\\.end\\(\\), entity\\)"
   },
   {
-   "id": "rb-resimulating-not-raised",
-   "what": "deciding to go back does not raise \"resimulating\" (R-2 mutant: 重跑中沒立). Only it catches the raise",
-   "guards": [
-    "rollback R-2",
-    "authority-rollback-declaration 5.5"
-   ],
-   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "        auto raised = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 1; });\n        if (!raised) return ::GYO::Engine::Base::Err(std::move(raised).error());\n",
-   "replace": "",
-   "target": "gyo_rollback_tests",
-   "cases": "rollback strategy: R-2 with spawns*",
-   "expect": "\\[rb\\-side\\-effect\\-skipped\\]"
+    "id": "rb-resimulating-not-raised",
+    "what": "deciding to go back does not raise \"resimulating\" (R-2 mutant: 重跑中沒立). Only it catches the raise",
+    "guards": [
+      "rollback R-2",
+      "authority-rollback-declaration 5.5"
+    ],
+    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+    "find": "        auto raised = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 1; });\n        if (!raised) return Base::Err(std::move(raised).error());\n",
+    "replace": "",
+    "target": "gyo_rollback_tests",
+    "cases": "rollback strategy: R-2 with spawns*",
+    "expect": "\\[rb\\-side\\-effect\\-skipped\\]"
   },
   {
    "id": "rb-resimulating-raised-late",
@@ -227,18 +227,18 @@
    "expect": "\\[rb\\-resimulating\\-before\\-restore\\]"
   },
   {
-   "id": "rb-resimulating-not-lowered",
-   "what": "\"resimulating\" is not lowered after the resimulation (R-2 mutant: 重跑完沒放下). Only it catches the lowering",
-   "guards": [
-    "rollback R-2",
-    "authority-rollback-declaration 5.5"
-   ],
-   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "    auto lowered = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 0; });\n    if (!lowered) return ::GYO::Engine::Base::Err(std::move(lowered).error());\n",
-   "replace": "",
-   "target": "gyo_rollback_tests",
-   "cases": "rollback strategy: R-2: going back*",
-   "expect": "\\[rb\\-resimulation\\-lowered\\]"
+    "id": "rb-resimulating-not-lowered",
+    "what": "\"resimulating\" is not lowered after the resimulation (R-2 mutant: 重跑完沒放下). Only it catches the lowering",
+    "guards": [
+      "rollback R-2",
+      "authority-rollback-declaration 5.5"
+    ],
+    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+    "find": "    auto lowered = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 0; });\n    if (!lowered) return Base::Err(std::move(lowered).error());\n",
+    "replace": "",
+    "target": "gyo_rollback_tests",
+    "cases": "rollback strategy: R-2: going back*",
+    "expect": "\\[rb\\-resimulation\\-lowered\\]"
   },
   {
    "id": "rb-inputs-not-written-back",
@@ -801,17 +801,17 @@
    "expect": "\\[rb\\-history\\-adopted\\]"
   },
   {
-   "id": "rb-inbox-not-pruned-after-rollback",
-   "what": "the inbox is not pruned after a rollback (the existing mutant guards the agreeing path). Only it catches the prune after resimulating",
-   "guards": [
-    "rollback R-8"
-   ],
-   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "    auto pruned = world.Modify<RollbackInbox>([target](RollbackInbox& inbox) { inbox.Prune(target); });\n    if (!pruned) return ::GYO::Engine::Base::Err(std::move(pruned).error());\n",
-   "replace": "    static_cast<void>(target);\n",
-   "target": "gyo_rollback_tests",
-   "cases": "rollback strategy: R-8: the inbox is pruned after*",
-   "expect": "\\[rb\\-inbox\\-pruned\\-after\\-rollback\\]"
+    "id": "rb-inbox-not-pruned-after-rollback",
+    "what": "the inbox is not pruned after a rollback (the existing mutant guards the agreeing path). Only it catches the prune after resimulating",
+    "guards": [
+      "rollback R-8"
+    ],
+    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+    "find": "    auto pruned = world.Modify<RollbackInbox>([target](RollbackInbox& inbox) { inbox.Prune(target); });\n    if (!pruned) return Base::Err(std::move(pruned).error());\n",
+    "replace": "    static_cast<void>(target);\n",
+    "target": "gyo_rollback_tests",
+    "cases": "rollback strategy: R-8: the inbox is pruned after*",
+    "expect": "\\[rb\\-inbox\\-pruned\\-after\\-rollback\\]"
   },
   {
    "id": "rb-inbox-prune-drops-base",

@@ -95,7 +95,7 @@ public:
     // the Systems' state to a new Registry version (declaration 3.2 rule 5).
     // GYO_ASSERT: the World is Ready (so not from inside a System) and the
     // schedule exists.
-    ::GYO::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
+    Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
     // The Host's trigger of event E while the World is Ready (event cursor
     // declaration 3.3, "outside the World, Ready"): its observers run now, each
@@ -111,7 +111,7 @@ public:
     // no Add or Remove observer. GYO_ASSERT: the World is Ready and E is a
     // registered event type.
     template <class E>
-    ::GYO::Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
+    Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
         return TriggerFromHost(Detail::EventIdOf(world_, KeyOf<E>()),
                                std::make_unique<Detail::EventBox<E>>(std::move(event)), target);
     }
@@ -132,48 +132,48 @@ private:
         std::vector<MountState> mounts;
     };
 
-    friend ::GYO::Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
-    friend ::GYO::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
+    friend Engine::Base::Result<void, KernelError> Detail::RunNested(Detail::SystemContext&, std::string_view, bool);
+    friend Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Detail::ApplyImmediate(Detail::SystemContext&,
                                                                                             Detail::Record, ChangeStamp,
                                                                                             bool);
-    friend ::GYO::Engine::Base::Result<void, KernelError> Detail::TriggerNow(Detail::SystemContext&, EventTypeId,
+    friend Engine::Base::Result<void, KernelError> Detail::TriggerNow(Detail::SystemContext&, EventTypeId,
                                                                       std::unique_ptr<Detail::ValueBox>,
                                                                       std::optional<EntityId>, bool);
-    friend ::GYO::Engine::Base::Result<void, KernelError> Detail::ApplyRestore(Detail::SystemContext&,
+    friend Engine::Base::Result<void, KernelError> Detail::ApplyRestore(Detail::SystemContext&,
                                                                         std::vector<Detail::Record>, ChangeStamp, bool);
 
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
-    ::GYO::Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
-    ::GYO::Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+    Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
+    Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                           bool inClosure);
     // S5 (Detail::ApplyImmediate): an immediate structural change of the running exclusive System call.
-    ::GYO::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
+    Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
                                                                               Detail::Record record, ChangeStamp stamp,
                                                                               bool closureOpen);
     // Detail::ApplyRestore: the records of ExclusiveWorld::Restore, as one immediate change.
-    ::GYO::Engine::Base::Result<void, KernelError> RestoreFrom(Detail::SystemContext& call, std::vector<Detail::Record> records,
+    Engine::Base::Result<void, KernelError> RestoreFrom(Detail::SystemContext& call, std::vector<Detail::Record> records,
                                                         ChangeStamp stamp, bool closureOpen);
     // The checks an immediate change and a restore share, in the order of
     // RunNestedFrom (hook, closure, Interrupted, W-3, A.6 layer 2). Err: refused.
-    ::GYO::Engine::Base::Result<void, KernelError> RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
+    Engine::Base::Result<void, KernelError> RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
                                                             const std::string& who, const std::string& where);
     // The change itself and its hook rounds, as one immediate change with stamp.
-    ::GYO::Engine::Base::Result<void, KernelError> ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
+    Engine::Base::Result<void, KernelError> ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
                                                                   std::vector<Detail::Record> change, ChangeStamp stamp,
                                                                   const std::string& who, const std::string& where);
     // Detail::TriggerNow: ExclusiveWorld::Trigger of the running exclusive System call.
-    ::GYO::Engine::Base::Result<void, KernelError> TriggerFrom(Detail::SystemContext& call, EventTypeId id,
+    Engine::Base::Result<void, KernelError> TriggerFrom(Detail::SystemContext& call, EventTypeId id,
                                                         std::unique_ptr<Detail::ValueBox> payload,
                                                         std::optional<EntityId> target, bool closureOpen);
-    ::GYO::Engine::Base::Result<void, KernelError> TriggerFromHost(EventTypeId id, std::unique_ptr<Detail::ValueBox> payload,
+    Engine::Base::Result<void, KernelError> TriggerFromHost(EventTypeId id, std::unique_ptr<Detail::ValueBox> payload,
                                                             std::optional<EntityId> target);
     // The two triggers outside a sync point: the observers of event id, each
     // with a stamp of its own, recording into a queue of their own (hookTarget_),
     // then that queue applied round after round (each a new stamp and sync
     // epoch + 1), at most limit rounds (HookRoundLimit past it). The caller
     // sets and resets the World's state and hookTarget_ and fails the World on Err.
-    ::GYO::Engine::Base::Result<void, KernelError> RunTriggered(EventTypeId id, const Detail::ValueBox& payload,
+    Engine::Base::Result<void, KernelError> RunTriggered(EventTypeId id, const Detail::ValueBox& payload,
                                                          std::optional<EntityId> target, std::uint32_t planPos,
                                                          std::string_view schedule, std::uint32_t limit,
                                                          const std::string& limitSource, const std::string& where);
@@ -188,7 +188,7 @@ private:
     // returns it; a nested one leaves the error instead (its first one).
     // origin: the error is produced at this level; false when it is a nested run's error passing through
     // (marked on the trace span on top of the thread's stack, trace declaration D4 (i)).
-    ::GYO::Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested, bool origin = true);
+    Engine::Base::Result<void, KernelError> Fail(KernelError error, bool nested, bool origin = true);
 
     // One level of the run stack (World::runStack_): pushed for the Plan's
     // duration and popped on every way out; an exception through it interrupts

@@ -15,7 +15,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace OrchTest::Save {
+namespace GYO::Test::Orchestration::Save {
 
 struct Player {
     int hp = 0;
@@ -288,4 +288,4 @@ private:
     GYO::Engine::Base::LogHandler previous_;
 };
 
-} // namespace OrchTest::Save
+} // namespace GYO::Test::Orchestration::Save

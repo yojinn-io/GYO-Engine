@@ -20,7 +20,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 namespace Base = ::GYO::Engine::Base;
 
 std::vector<std::string>* events = nullptr;

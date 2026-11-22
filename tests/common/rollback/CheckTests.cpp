@@ -15,7 +15,7 @@
 #include <functional>
 #include <string>
 
-using namespace RollbackTest;
+using namespace GYO::Test::Rollback;
 
 namespace {
 

@@ -67,8 +67,9 @@
   - 同日第二次（side chat，經卡片照四樣轉達）：使用者被問到縮寫表要不要也管型別名與檔名，原話：「b，看的是真的難受。要不然全小寫io也好，要不然全大寫IO也行，一小一大很噁心」。比過的選項：(a) 只管 namespace 與 target／(b) 型別名、檔名也改，這一批一起做／(c) 先立規則、改名另開一批。選 (b)。理由：`GYO::Engine::IO::IoError` 這種一大一小的組合看著難受；改名越晚影響越大。
   - 取代第 3 節原本的「只有第一個字母大寫，例如 `Io`、`Os`」。
 - **根寫成封閉的表**：使用者 2026-11-22：「另外GYO::Engine 既然有，那麼就會有其他的 例如非Engine 層的。」所以規則管的是 `GYO::` 底下全部的根，不只 `GYO::Engine`。出處同上。
+- **測試輔助只有一套根**：各單位的測試輔助都在 `GYO::Test::<單位>`（例 `GYO::Test::Kernel`、`GYO::Test::Orchestration`、`GYO::Test::Rollback`、`GYO::Test::Logging`），不另開頂層的 `KernelTest`、`WorldTest`、`OrchTest`、`RollbackTest` 這類 namespace（2026-11-22 收斂，`v8-arch-gyo2-naming-cleanup`；Kernel 的兩份輔助標頭 `KernelTestSupport.hpp`、`WorldTestSupport.hpp` 同在 `GYO::Test::Kernel`）。守衛不查頂層的根（產品的根和它分不出來），由審查看。
 - **打開別人的 namespace**：一個 namespace 只在它的目錄裡打開。要特化別的單位的樣板（例：`EntityKey`），寫全限定的特化 `template <> struct GYO::Engine::EntityStore::EntityKey<T> { … };`，不打開 `namespace GYO::Engine::EntityStore {`。用 `using namespace`、別名（寫在自己的 namespace 裡）不算打開。
-- **守衛**：`tests/common/kernel/naming_guard.py`（ctest `kernel.naming_guard`、自測 `kernel.naming_guard_selftest`；突變在 `docs/architecture/target/v2/scripts/naming_mutations.json`）。它只守歸屬：每個 Engine 單位的 namespace 是表裡推出的根；一個單位的根只在它的目錄打開；`GYO` 單獨、不在表裡的 `GYO::<X>`、`GYO::Plugins` 在 `plugins/` 以外、`GYO::Test` 在 `tests/` 以外，都報；`engine/` 底下不在層表裡的目錄報（fail closed）。新加的單位不用改守衛就會被查；拿掉一個 Module 也不用改守衛。不守的（審查看）：target 名（N14，由建置與登記檔負責）、namespace 別名（別名不是打開）、產品自己的根。
+- **守衛**：`tests/common/naming/naming_guard.py`（ctest `naming.guard`、自測 `naming.guard_selftest`；讀 C/C++ 文字的共用函式在 `tests/common/support/source_text.py`；2026-11-22 從 `tests/common/kernel/`、ctest `kernel.naming_guard` 搬來，`v8-arch-gyo2-naming-cleanup`；突變在 `docs/architecture/target/v2/scripts/naming_mutations.json`）。它只守歸屬：每個 Engine 單位的 namespace 是表裡推出的根；一個單位的根只在它的目錄打開；`GYO` 單獨、不在表裡的 `GYO::<X>`、`GYO::Plugins` 在 `plugins/` 以外、`GYO::Test` 在 `tests/` 以外，都報；`engine/` 底下不在層表裡的目錄報（fail closed）。新加的單位不用改守衛就會被查；拿掉一個 Module 也不用改守衛。不守的（審查看）：target 名（N14，由建置與登記檔負責）、namespace 別名（別名不是打開）、產品自己的根。
 - **舊根 `Engine` 的檢查是過渡規則**：沒有人打開 `namespace Engine`，讓帶過來的程式不會回到舊根。拿掉的條件：不再從 master 帶程式過來（產品都移植完）。
 
 ## 4. ECS 相關的命名（提案）

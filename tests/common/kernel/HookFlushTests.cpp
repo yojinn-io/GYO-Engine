@@ -22,7 +22,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 struct Bullet { std::int32_t b; };
 struct Trail { std::int32_t t; };
@@ -77,7 +77,7 @@ void Base(Registrar& r, const Limits& limits = {}) {
 }
 
 SystemOptions Put(std::string name, std::string schedule, std::string stage) {
-    return Sys(std::move(name), {KernelTest::At(std::move(schedule), std::move(stage))});
+    return Sys(std::move(name), {GYO::Test::Kernel::At(std::move(schedule), std::move(stage))});
 }
 
 // ---- Systems
