@@ -410,7 +410,7 @@
     "net-module-declaration 判定 G-5"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "            if (currentCount > 0 || parts.empty()) close();",
+   "find": "            if (currentCount > 0 || partCountSoFar == 0) close();",
    "replace": "            if (currentCount > 0) close();",
    "target": "gyo_net_tests",
    "cases": "replication: a tick without changes*",

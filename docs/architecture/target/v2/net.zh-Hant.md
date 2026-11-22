@@ -240,6 +240,7 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 - **結構更新**：Peer 的帳本記著這個 Client 有哪些實體、每個實體有哪些複製元件（遮罩）。和 World 現在的比：多出來的 → 生成，少了的 → 刪除，遮罩不同 → 加減元件。一則、Ordered Reliable、整則一起套用。結構有變的實體，它的全部複製元件的值併進這一則。沒有變化就不送。
 - **伺服器訊息**：這一幀收集到的（`CollectServerMessages`，用自己的游標讀 World 的 `Message<M>`），在結構更新之後、同一條 Ordered Reliable 送；帶它要的結構 tick；可以只送給一個 Peer（`recipient`）。
 - **值**：帳本裡每個實體記著 Client 上次確認的快照的 World 戳記；元件的變更戳記（Kernel 的 `ReadColumn`）比它新的，送最新的值。Unreliable，分成數則，每則帶 tick、「這個 tick 共幾則」、要的結構 tick；一個實體的資料不拆開（一則約 1100 bytes，放得進一個不分片的封包）。沒有變化也送一則空的（C-RP4）。
+- **一個 tick 編碼一次**（3c）：快照（實體依 id 排序、每個元件一格的變更戳記）每 tick 取一次；一個值第一次有 Peer 要送時編碼，同一個 tick 的其他 Peer 用同樣的位元組（`ReplicateOut` 執行中 World 不變，wire 上的位元組和各自編碼相同）。費用與量法見 dev_log 2026-11-23 step3c（判定 G-12）。
 - **確認**（應用層）：Client 處理完一則值訊息才回確認（Ordered Reliable）；伺服器收到才把那則帶的實體的戳記前推。封包層的 ack 不前推帳本。帳本只決定送什麼，不是遊戲狀態的副本。
 
 **收**（Client 的 `ApplyReplication`，K1、K2）：

@@ -1,8 +1,11 @@
 #include "engine/net/Replication.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
-#include <set>
+#include <map>
+#include <span>
+#include <vector>
 #include <string>
 #include <utility>
 
@@ -61,40 +64,100 @@ void Head(NetWriter& writer, const Kind kind, const std::uint32_t generation, co
     writer.Value(epoch);
 }
 
-// One entity's components as (wire u16, length u32, bytes) after a count u8.
-void Components(ReplicaWorld& world, const NetRegistry& registry, const Kernel::EntityId entity, const std::uint64_t mask,
-                NetWriter& writer) {
-    std::vector<std::byte> body;
-    NetWriter inner(body);
-    std::uint8_t count = 0;
-    for (const auto& entry : registry.components) {
-        if (((mask >> entry->wire) & 1u) == 0) continue;
-        std::vector<std::byte> value;
-        NetWriter valueWriter(value);
-        if (!entry->encode(world, entity, valueWriter)) continue;
-        inner.Value(entry->wire);
-        inner.Value(static_cast<std::uint32_t>(value.size()));
-        inner.Bytes(value);
-        ++count;
-    }
-    writer.Value(count);
-    writer.Bytes(body);
-}
-
+// The replicated components of the World this frame (taken once, read for every Peer): the entities by id, each with
+// its mask and the change stamp of each of its components, in contiguous arrays. A component's value is encoded the
+// first time a Peer needs it and the bytes are shared by every Peer of the frame (the World does not change while
+// ReplicateOut runs), so what goes on the wire is what encoding it for each Peer would give.
 struct Snapshot {
-    std::map<Kernel::EntityId, std::uint64_t> masks;
-    std::map<std::pair<Kernel::EntityId, std::uint16_t>, Kernel::ChangeStamp> changed;
+    struct Entity {
+        Kernel::EntityId id = 0;
+        std::uint64_t mask = 0;
+        // The index of its first slot: one slot per component it has, in wire order.
+        std::uint32_t first = 0;
+    };
+    enum class Encoding : std::uint8_t { NotYet, Absent, Done };
+    std::vector<Entity> entities;
+    std::vector<Kernel::ChangeStamp> stamps;
+    std::vector<Encoding> encoding;
+    std::vector<std::uint32_t> offsets;
+    std::vector<std::uint32_t> lengths;
+    std::vector<std::byte> bytes;
+
+    [[nodiscard]] const Entity* Find(const Kernel::EntityId id) const {
+        const auto it = std::lower_bound(entities.begin(), entities.end(), id,
+                                         [](const Entity& entity, const Kernel::EntityId key) { return entity.id < key; });
+        return it != entities.end() && it->id == id ? &*it : nullptr;
+    }
+    [[nodiscard]] static std::uint32_t Slot(const Entity& entity, const std::uint16_t wire) {
+        const std::uint64_t below = wire == 0 ? 0 : (entity.mask & (~std::uint64_t{0} >> (64 - wire)));
+        return entity.first + static_cast<std::uint32_t>(std::popcount(below));
+    }
+    // The encoded value of one component of one entity; false when the entity does not have it (nothing is sent).
+    bool Encode(ReplicaWorld& world, const ComponentEntry& entry, const Entity& entity) {
+        if (((entity.mask >> entry.wire) & 1u) == 0) return false;
+        const std::uint32_t slot = Slot(entity, entry.wire);
+        if (encoding[slot] == Encoding::NotYet) {
+            const std::size_t start = bytes.size();
+            NetWriter writer(bytes);
+            if (entry.encode(world, entity.id, writer)) {
+                encoding[slot] = Encoding::Done;
+                offsets[slot] = static_cast<std::uint32_t>(start);
+                lengths[slot] = static_cast<std::uint32_t>(bytes.size() - start);
+            } else {
+                encoding[slot] = Encoding::Absent;
+                bytes.resize(start);
+            }
+        }
+        return encoding[slot] == Encoding::Done;
+    }
 };
 
 Snapshot Take(ReplicaWorld& world, const NetRegistry& registry) {
-    Snapshot snapshot;
+    struct Visited {
+        Kernel::EntityId id;
+        std::uint16_t wire;
+        Kernel::ChangeStamp stamp;
+    };
+    std::vector<Visited> visited;
     for (const auto& entry : registry.components) {
         entry->visit(world, [&](const Kernel::EntityId id, const Kernel::ChangeStamp stamp) {
-            snapshot.masks[id] |= std::uint64_t{1} << entry->wire;
-            snapshot.changed[{id, entry->wire}] = stamp;
+            visited.push_back(Visited{id, entry->wire, stamp});
         });
     }
+    std::sort(visited.begin(), visited.end(),
+              [](const Visited& a, const Visited& b) { return a.id != b.id ? a.id < b.id : a.wire < b.wire; });
+    Snapshot snapshot;
+    snapshot.stamps.reserve(visited.size());
+    for (const Visited& one : visited) {
+        if (snapshot.entities.empty() || snapshot.entities.back().id != one.id) {
+            snapshot.entities.push_back(Snapshot::Entity{one.id, 0, static_cast<std::uint32_t>(snapshot.stamps.size())});
+        }
+        snapshot.entities.back().mask |= std::uint64_t{1} << one.wire;
+        snapshot.stamps.push_back(one.stamp);
+    }
+    snapshot.encoding.assign(snapshot.stamps.size(), Snapshot::Encoding::NotYet);
+    snapshot.offsets.assign(snapshot.stamps.size(), 0);
+    snapshot.lengths.assign(snapshot.stamps.size(), 0);
     return snapshot;
+}
+
+// One entity's components as (wire u16, length u32, bytes) after a count u8.
+void Components(ReplicaWorld& world, const NetRegistry& registry, Snapshot& snapshot, const Snapshot::Entity& entity,
+                const std::uint64_t mask, NetWriter& writer) {
+    std::uint8_t count = 0;
+    for (const auto& entry : registry.components) {
+        if (((mask >> entry->wire) & 1u) == 0) continue;
+        if (snapshot.Encode(world, *entry, entity)) ++count;
+    }
+    writer.Value(count);
+    for (const auto& entry : registry.components) {
+        if (((mask >> entry->wire) & 1u) == 0 || ((entity.mask >> entry->wire) & 1u) == 0) continue;
+        const std::uint32_t slot = Snapshot::Slot(entity, entry->wire);
+        if (snapshot.encoding[slot] != Snapshot::Encoding::Done) continue;
+        writer.Value(entry->wire);
+        writer.Value(snapshot.lengths[slot]);
+        writer.Bytes(std::span<const std::byte>(snapshot.bytes.data() + snapshot.offsets[slot], snapshot.lengths[slot]));
+    }
 }
 
 // The client's messages on the reliable channel: confirmations and resyncs, read by the server before it sends.
@@ -155,8 +218,13 @@ SystemResult ReplicateOut(ReplicaWorld world) {
         world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0));
     const std::uint32_t generation = service->Generation();
 
-    const Snapshot snapshot = Take(world, *registry);
+    Snapshot snapshot = Take(world, *registry);
     const Kernel::ChangeStamp now = world.Stamp();
+    // Buffers kept across the Peers of this frame (their capacity is reused, their content is not).
+    std::vector<std::byte> structure, ops, current, one, body;
+    std::vector<Kernel::EntityId> restructured, currentEntities;
+    std::vector<std::vector<std::byte>> parts;
+    std::vector<std::vector<Kernel::EntityId>> partEntities;
 
     for (const auto& [connectionId, peerEntity] : peers) {
         Connection* connection = server->Find(connectionId);
@@ -172,16 +240,17 @@ SystemResult ReplicateOut(ReplicaWorld world) {
 
         if (ledger.lastSentTick != tick) {
             // The structure update: what this client has against what the World has.
-            std::vector<std::byte> structure;
+            structure.clear();
             NetWriter writer(structure);
             Head(writer, Kind::Structure, generation, ledger.epoch);
             writer.Value(tick);
-            std::vector<std::byte> ops;
+            ops.clear();
             NetWriter opWriter(ops);
             std::uint32_t opCount = 0;
-            std::set<Kernel::EntityId> restructured;
+            // Ascending: the snapshot is walked by id.
+            restructured.clear();
             for (auto it = ledger.entities.begin(); it != ledger.entities.end();) {
-                if (snapshot.masks.count(it->first) != 0) {
+                if (snapshot.Find(it->first) != nullptr) {
                     ++it;
                     continue;
                 }
@@ -192,7 +261,9 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 ++opCount;
                 it = ledger.entities.erase(it);
             }
-            for (const auto& [entity, mask] : snapshot.masks) {
+            for (const Snapshot::Entity& taken : snapshot.entities) {
+                const Kernel::EntityId entity = taken.id;
+                const std::uint64_t mask = taken.mask;
                 auto known = ledger.entities.find(entity);
                 const bool spawn = known == ledger.entities.end();
                 if (!spawn && known->second.mask == mask) continue;
@@ -206,9 +277,9 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                     if ((removed >> wire) & 1u) opWriter.Value(wire);
                 }
                 // The values of an entity whose structure changed go with the structure (all of its components).
-                Components(world, *registry, entity, mask, opWriter);
+                Components(world, *registry, snapshot, taken, mask, opWriter);
                 ledger.entities[entity] = LedgerEntity{mask, now};
-                restructured.insert(entity);
+                restructured.push_back(entity);
                 ++opCount;
             }
             if (opCount > 0) {
@@ -234,37 +305,39 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             }
 
             // The values changed since the client last confirmed them, in parts of whole entities.
-            std::vector<std::vector<std::byte>> parts;
-            std::vector<std::vector<Kernel::EntityId>> partEntities;
-            std::vector<std::byte> current;
-            std::vector<Kernel::EntityId> currentEntities;
+            std::size_t partCountSoFar = 0;
+            current.clear();
+            currentEntities.clear();
+            partEntities.clear();
             std::uint32_t currentCount = 0;
             auto close = [&] {
-                std::vector<std::byte> part;
+                if (parts.size() == partCountSoFar) parts.emplace_back();
+                std::vector<std::byte>& part = parts[partCountSoFar++];
+                part.clear();
                 NetWriter partWriter(part);
                 partWriter.Value(currentCount);
                 partWriter.Bytes(current);
-                parts.push_back(std::move(part));
                 partEntities.push_back(std::move(currentEntities));
+                currentEntities = {};
                 current.clear();
-                currentEntities.clear();
                 currentCount = 0;
             };
             for (const auto& [entity, known] : ledger.entities) {
-                if (restructured.count(entity) != 0) continue;
+                if (std::binary_search(restructured.begin(), restructured.end(), entity)) continue;
+                const Snapshot::Entity* taken = snapshot.Find(entity);
+                if (taken == nullptr) continue;
                 std::uint64_t changedMask = 0;
                 for (const auto& entry : registry->components) {
-                    if (((known.mask >> entry->wire) & 1u) == 0) continue;
-                    const auto stamp = snapshot.changed.find({entity, entry->wire});
-                    if (stamp != snapshot.changed.end() && stamp->second > known.confirmedStamp) {
+                    if (((known.mask >> entry->wire) & 1u) == 0 || ((taken->mask >> entry->wire) & 1u) == 0) continue;
+                    if (snapshot.stamps[Snapshot::Slot(*taken, entry->wire)] > known.confirmedStamp) {
                         changedMask |= std::uint64_t{1} << entry->wire;
                     }
                 }
                 if (changedMask == 0) continue;
-                std::vector<std::byte> one;
+                one.clear();
                 NetWriter oneWriter(one);
                 oneWriter.Value(entity);
-                Components(world, *registry, entity, changedMask, oneWriter);
+                Components(world, *registry, snapshot, *taken, changedMask, oneWriter);
                 // An entity's data is never split: a part closes before an entity that would not fit.
                 if (currentCount > 0 && current.size() + one.size() > kValuePartBudget) close();
                 current.insert(current.end(), one.begin(), one.end());
@@ -272,10 +345,10 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 ++currentCount;
             }
             // A tick with nothing changed still sends one empty part (C-RP4).
-            if (currentCount > 0 || parts.empty()) close();
-            const auto partCount = static_cast<std::uint16_t>(parts.size());
+            if (currentCount > 0 || partCountSoFar == 0) close();
+            const auto partCount = static_cast<std::uint16_t>(partCountSoFar);
             for (std::uint16_t index = 0; index < partCount; ++index) {
-                std::vector<std::byte> body;
+                body.clear();
                 NetWriter valueWriter(body);
                 Head(valueWriter, Kind::Values, generation, ledger.epoch);
                 valueWriter.Value(tick);
