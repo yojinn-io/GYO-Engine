@@ -1,6 +1,6 @@
 # 事前宣告：多個 World、交換點、Product 層 Resource（`v8-arch-gyo2-exchange`）
 
-狀態：修訂 2（修訂 0 的敵對式檢查與修訂 1 的窄複查都已處理，第 16、17 節）。動工前核准之前不實作。
+狀態：修訂 2（修訂 0 的敵對式檢查與修訂 1 的窄複查都已處理，第 16、17 節）。**2026-11-24 使用者動工前核准**（第 12 節的決定紀錄；`v8-arch-gyo2-exchange-declaration-approved`）。實作等使用者說開始。
 
 性質：實作段第 5 批「多個 World、交換點」的事前宣告（AGENTS §2 基盤 Architecture、§3 Architecture Delta、§4 系譜）。連同編排層缺的「Product 層 Resource」一起推（`v8-arch-gyo2-product-level-resource-open`、`v8-arch-gyo2-batch5-start`）。
 
@@ -179,6 +179,33 @@
 
 
 ---
+
+### 4.5 匯總：每個決定 × 每一家（2026-11-24 補）
+
+格子的寫法：「同」＝別家也這樣做；「不同」＝別家做法不同（寫怎麼做）；「無」＝別家沒有這一層；「未查」＝偵察沒有看到。根據都在 4.1～4.4 與兩份偵察報告；Unreal 除 MassSample 外是〔知〕。
+
+| GYO 的決定 | Bevy | Unity Entities／Netcode | flecs | lightyear／replicon | Unreal（Mass） |
+|---|---|---|---|---|---|
+| 外部服務的結果在幀頭由 System 套用（形 (1)） | 同（asset、gilrs 在 `PreUpdate`） | 同（Netcode 的 receive group 在 Simulation 最前） | 同（`OnLoad`／`OnStore` 的慣例） | 同（`PreUpdate` 收、`PostUpdate` 送） | 同（`SyncWorldToMass`／`UpdateWorldFromMass`） |
+| 套用掛 `First`（因回滾的決定在 `PreUpdate`） | 不同：套用在 `PreUpdate`，`First` 放時間 | 不同：以 system group 排 | 不同：phase 排 | 不同：收件與回滾都在 `PreUpdate`，以 set 排先後 | 未查 |
+| 交換函式的登記（形 (2)） | 無 | 無 | 無（最近的是一次性的 `ecs_run_post_frame`） | 無（replicon 測試在兩次 update 之間手動搬） | 無 |
+| runner 在兩次入口之間寫 World（形 (3)） | 同（winit runner 寫視窗事件） | 未查 | 同（`ecs_progress` 前後由呼叫者做） | 同（測試的 stepper） | 未查 |
+| Extract 唯讀、**不寫回** | 不同：`Extract<P>` 唯讀，但 render 經 `ResMut<MainWorld>` 寫回（readback） | 無（模擬與呈現在同一個 World） | 無 | 無 | 不同〔知〕：render proxy，資料單向送到 render thread |
+| 別的執行緒跑 World＝整個交出 | 同（pipelined：render SubApp 當值送走，同步點在 extract） | 同但較弱（`ExclusiveEntityTransaction` 交出 staging World，不在那條執行緒跑 System） | 不同：同一個 world 用多個 stage 並行，合併在獨占時 | 無 | 不同〔知〕：同一個 World，工作切成 task |
+| 模擬的 World 之間不直接共享資料 | 同（只有 extract 一點） | 同（Netcode 的兩個 World 只經 IPC 驅動） | 未查 | 同（host 用單一 World 模擬兩端；replicon 明寫一個 World 當兩端會繞圈） | 未查 |
+| Product 一份的共用處（獨立於 World） | 不同：沒有，App 在 World 外無 Resource，共用物件放 main World 或各 World 一份 `Arc` | 不同：singleton 每個 World 一份；行程一份只有 `SharedStatic` 這類內部機制 | 不同：每個 world 一個 ctx 槽 | 不同：放 App（main World）的 Resource | 最接近〔知〕：GameInstance subsystem（以類別為鍵、有依賴的先後） |
+| 設定經描述給（Product 層的選項） | 近似：Plugin 的欄位（`AssetPlugin { file_path }`） | 未查 | 未查 | 近似：Plugin 的欄位 | 未查 |
+| `OnDestroy`：World 之後、共用處之前 | 不同：沒有這個回呼，靠 `AppExit` 與 Drop | 未查 | 時點同（`ecs_atfini` 在實體刪完、儲存銷毀之前），先後不同（登記順序；GYO 反序） | 未查 | 未查 |
+| 明確的銷毀順序 | 未查 | 未查 | 同（`ecs_fini` 有固定步驟，ctx 最後） | 未查 | 未查 |
+| 時間在 World 裡取樣（維持過渡） | 同（`time_system`；有渲染時取樣點來自 present） | 同（`UpdateWorldTimeSystem`） | 不同：呼叫者給 delta（可選自己量） | 同（測試用 `ManualInstant` 由外面發） | 未查 |
+
+**GYO 和所有查到的別家都不同的四處**（設計審查要特別看的地方）：
+1. **交換函式的登記**：沒有一家有。GYO 留著，是因為自己的兩個決定——Kernel 的診斷紀錄要在 Run 之外取（日誌宣告 5.4）、Client 的郵箱只在 schedule 之間存取（使用者 11-11）。RC-O11 寫了何時拿掉。
+2. **Product 一份的共用處**：沒有一家獨立於 World；最接近的 Unreal subsystem 是〔知〕、沒有原始碼可對。GYO 的理由是 `Configure` 時沒有 World、World 彼此平等（第 4.3 節）；使用者 2026-11-24 選了這個（第 12 節）。
+3. **Extract 不寫回**：Bevy 會寫回（readback）。這是使用者 11-11 的決定，不是本頁的選擇。
+4. **套用掛 `First`**：別家在 `PreUpdate`。理由是 GYO 的回滾決定掛在 `PreUpdate`（`RollbackStrategy.hpp:177`）。
+
+**這次沒有對比到的**：Godot、O3DE；Unreal 引擎本體（本機沒有原始碼）；各家的銷毀順序（只查了 flecs）。
 
 ## 5. 設計（Contract）
 
@@ -499,6 +526,14 @@
 - 三個選項都配 `ProductDescription::options`（O-A1）、`ProductSetup::Report`（O-A3）、`OnDestroy` 與明確的銷毀順序（O-A4）。
 - **職責清單**（檢查 S6）：第 4 批每 World 那一份「不算 O-4 多一項」是使用者 2026-11-20 確認的。這一次多了執行期也能讀寫的 `Product::Buffer()`（runner 用）與銷毀回呼，超出「登記單位與生命週期」的字面。本卡的判斷是仍屬「登記單位與生命週期」「啟動錯誤的彙整」、不算多一項；請一起確認。
 - **根據**：第 4.3 節、第 5.2 節。
+
+**使用者的決定**（2026-11-24，本卡的對話）：
+- **原話**：「照建議，選共用處，核准」。
+- **比過的選項**：「Product 一份的共用處」（Product 一份的 `ModuleBuffer`＋描述的選項，建議）←選／「單位互相找」／「放在某個 World」。
+- **理由**：使用者沒有另外說；照本題的建議——共用的是服務物件、單位的類別不必公開；產品、runner、測試也要放；Bevy 的 main World 做法在 GYO 搬不過來（`Configure` 時沒有 World、World 彼此平等）。
+- **出處**：本卡（`gyo2-exchange`）對話；本頁修訂 2（17d640ed）第 12 節。
+- **職責清單**：本題的建議包含「仍屬『登記單位與生命週期』『啟動錯誤的彙整』，不算 O-4 多一項」，「照建議」照這樣讀。
+- **同一句的「核准」**：本頁的動工前核准（第 0 步的 PR #268 的合併前核准另算，不含在內）。
 
 ---
 
