@@ -179,6 +179,19 @@ private:
 // form is left out. Which font to use is the caller's choice.
 [[nodiscard]] Base::Result<std::vector<std::string>, OSError> FontDirectories();
 
+// This user's data directory for one application, created when missing:
+// <base>/<organization>/<application>, or <base>/<application> when
+// organization is empty. base is $HOME/Library/Application Support on macOS,
+// the Roaming AppData known folder (%APPDATA%) on Windows, and $XDG_DATA_HOME
+// (ignored unless absolute) or $HOME/.local/share elsewhere. Directories it
+// makes are 0700 on POSIX. Answers an absolute UTF-8 path in '/' form without a
+// trailing separator, read from the OS on every call. Each name is one path
+// component: an empty application, ".", ".." or a name with '/' or '\' is
+// InvalidPath; IOFailed when the platform names no base (POSIX: no absolute
+// HOME). What goes in the directory is the caller's.
+[[nodiscard]] Base::Result<std::string, OSError> UserDataDirectory(std::string_view organization,
+                                                                   std::string_view application);
+
 // The platform default (false on Windows and macOS, true elsewhere); a volume
 // may differ.
 [[nodiscard]] bool DefaultCaseSensitivePaths() noexcept;

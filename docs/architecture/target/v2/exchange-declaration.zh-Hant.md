@@ -107,7 +107,7 @@
 | E-13 | PvP Client：模擬 World 在自己的執行緒，主執行緒停 250 ms 時模擬照跑（1） | 時間設計 5.5「固定步在自己的執行緒」；runtime-composition 第 2 節 | 一個 Product 的 World 可以在不同執行緒跑；World 之間的交換不等另一條執行緒 | 5.3、5.1 |
 | E-14 | Editor：文件 World＋渲染 World（1） | runtime-composition 第 3b 節 | 同 E-11 | 5.4 |
 | E-15 | threads 重審：`RoleThread` 的②③是 runner 的執行緒（1） | 批次表 threads 列、R0 附錄 | 執行緒由 runner 建、由 runner 收；World 不綁執行緒 | 5.3 |
-| E-16 | audio 重審：`Submitter` 歸第一個呼叫它的執行緒；混音器有自己的迴圈（1） | 批次表 audio 列 | 混音器放共用處；綁執行緒的物件自己記執行緒（`v8-arch-gyo2-thread-binding-by-runner`） | 5.2、5.3 |
+| E-16 | audio 重審：`Submitter` 歸第一個呼叫它的執行緒；混音器有自己的迴圈（1） | 批次表 audio 列 | 混音器放共用處；綁執行緒的物件自己記執行緒（`v8-arch-gyo2-thread-binding-by-runner`）〔更正，2026-11-22：被 `v8-arch-gyo2-audio-review-approved` 第 2 題推翻：`Submitter` 不綁執行緒，同一時間一方使用，換手要 happens-before（[audio 頁](audio.zh-Hant.md) 第 3 節）〕 | 5.2、5.3 |
 | E-17 | io 重審：多執行緒同時讀檔的契約（1） | asset 5.12 | 不在本頁定；本頁只要求「World 外的服務自己負責自己的同步」 | 5.1 |
 | E-18 | 時間：「一次醒來只取樣一次」、取樣歸 runner（時間設計決定 1：runner 每輪取樣寫進 World、時間的 System 從它算時間；WT-6 第 (2) 項的過渡）（1） | 時間設計 5.2、5.4；world-time 第 3 節 | 維持過渡，到 SDL 那批定（第 5.5 節）；交換函式的登記讓那時有地方接 | 5.5 |
 | E-19 | 日誌：Kernel 的診斷紀錄在每個 World 跑完之後取走；World 不在 Run 裡、做不成 System（1） | 日誌宣告 5.4、第 228 行 | 編排層在每個 World 的一輪之後依序呼叫單位登記的函式（交換函式「出」） | 5.1 |
@@ -369,7 +369,7 @@
 | PvP Client：畫面與模擬之間的資料 | runtime-composition 第 2 節（規格 H.4.2 的細節） | PvP 的 Module 放進共用處、有自己的鎖的物件；兩個 World 各在自己的套用點或交換函式裡碰，PvP 移植時定 | 共用處與交換函式的登記實作；那個物件在 PvP 移植 |
 | threads：runner 的執行緒 | R0 附錄 | runner 建、runner 收；World 整個交出（第 5.3 節） | 不變量；threads 重審照它重寫 `RoleThread` 的用途 |
 | io：多執行緒同時讀檔 | asset 5.12 | io 自己的契約；本頁只要求 World 外的服務自己同步 | 不在本頁 |
-| audio：混音器、`Submitter` | 批次表 audio 列 | 混音器是 Product 一份的物件；`Submitter` 綁執行緒、自己記；World 交出到別的執行緒時要在那條執行緒上另拿一個——audio 重審要對的點 | 不變量；audio 重審照它 |
+| audio：混音器、`Submitter` | 批次表 audio 列 | 混音器是 Product 一份的物件；`Submitter` 綁執行緒、自己記；World 交出到別的執行緒時要在那條執行緒上另拿一個——audio 重審要對的點〔更正，2026-11-22：被 `v8-arch-gyo2-audio-review-approved` 第 2 題推翻：`Submitter` 不綁執行緒，同一時間一方使用，換手要 happens-before（[audio 頁](audio.zh-Hant.md) 第 3 節）〕 | 不變量；audio 重審照它 |
 | 日誌：Kernel 診斷紀錄 | 日誌宣告 5.4 | 交換函式 的「出」：由日誌那一側給一個接 `WorldSetup` 的函式（登記一個呼叫 `WorldLogging::TakeKernelDiagnostics` 的「出」），產品在每個 World 的 `build` 呼叫它，或之後把 world_logging 做成登記單位，免得每個產品各寫一份；World 壞掉之後照日誌宣告的順序走runner 直接讀寫。`TakeKernelDiagnostics` 的介面不變 | 交換函式的登記實作；接線在日誌那一側 |
 | 時間：取樣 | world-time 第 3 節、WT-6 | 第 5.5 節 | 維持過渡 |
 

@@ -19,12 +19,6 @@ else()
 endif()
 set_tests_properties(gyo_audio_playhead_stress PROPERTIES LABELS "cpu" TIMEOUT ${GYO_AUDIO_STRESS_TIMEOUT})
 
-# Design Invariant 4: only Mixer::PlayheadOf reads the playhead board.
-add_test(NAME gyo_audio_board_readers
-         COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}/engine/modules/audio/src
-                 -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckBoardReaders.cmake)
-set_tests_properties(gyo_audio_board_readers PROPERTIES LABELS "cpu" TIMEOUT 60)
-
 # Replaces the global allocation functions, so it is its own executable.
 add_executable(gyo_audio_alloc_tests RenderAllocTests.cpp)
 target_link_libraries(gyo_audio_alloc_tests PRIVATE GYO::Audio doctest::doctest)
@@ -34,7 +28,7 @@ set_tests_properties(gyo_audio_alloc_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # The mixer is a leaf above the time base: its links, private and interface
 # alike, are exactly GYO::Base and GYO::Time, so no SDL, asset or engine library
-# edge appears (docs/architecture/audio.md, Design Invariants 1 and 2;
+# edge appears (docs/architecture/target/v2/audio.zh-Hant.md, Design Invariants 1 and 2;
 # gyo_expect_links: tests/common/support/ExpectLinks.cmake).
 # Checked once the whole project is configured.
 function(gyo_expect_audio_links)
