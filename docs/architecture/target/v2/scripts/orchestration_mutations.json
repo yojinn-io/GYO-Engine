@@ -3733,6 +3733,20 @@
    "target": "gyo_orchestration_tests",
    "cases": "restore:*",
    "expect": "\\[or\\-gen\\-resmut\\-gold\\]"
+  },
+  {
+   "id": "re-spawn-new-wrong-id",
+   "what": "Spawn<Bundle>::New returns another id than the one it allotted and recorded (restore-entry declaration 18.2 item 1's cost: the renumbering case uses the returned id for the author's table). No mutant in the kernel's list changes what Spawn::New returns",
+   "guards": [
+    "restore-entry-declaration 18.3",
+    "restore-entry-declaration 5.1"
+   ],
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+   "find": "        Detail::Push(call, std::move(record));\n        return *id;\n    }\n};",
+   "replace": "        Detail::Push(call, std::move(record));\n        return *id + 1;\n    }\n};",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore:*",
+   "expect": "\\[or\\-renumber\\-ref\\]"
   }
  ]
 }
