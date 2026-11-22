@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 7）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 8）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 8**：使用者在 side chat 定了 Q3——ImGui 走 (b)，接在 Engine 的 `input`／`window`／`render` 上、不碰 SDL（第 14 節 Q3 記成已定）；`sdl_imgui` 那一列與 (a) 的分支拿掉；剪貼簿、游標形狀的請求資料進 W。交使用者的只剩 Q5。
 - **修訂 7**：使用者在 side chat 定了 Q2——ufbx、stb_image 都走 Module 這一側（第 14 節 Q2 記成已定）。交使用者的只剩 Q3、Q5。
 - **修訂 6**：使用者在本卡 fork 出的 side chat 定了 Q1＝**B'**（Module 只放資料，SDL 的呼叫全在 Plugin；P27）。照它重寫第 3.3 節（Module 只有資料、`render` 產出 `RenderCommands`）、第 9 節（`plugins/sdl` 拆成角色各一列——留給本卡的選擇，建議理由：一列放不進兩個 World）；第 9.2 節的「後端注入通則」拿掉；Q1 記成已定、Q4 撤回；`input`、`window` 改 `default=yes`、`camera` 照 Bevy 依賴 `window`；第 6.6 節加 `RenderCommands` 這一層的偏離。
 - **修訂 5**：主會話知會兩張新卡——audio 那一側的小批另開 `gyo2-audio-clip-loader`（第 7 節改成只做輸出後端）、Kernel 的 `Summary` 與訊息另開 `gyo2-kernel-summary-msg`（第 6.3、6.6 節改成引用它、W 開工前要有結論）；跟上 gyo2 02a22176（HANDOFF 與批次表已在 gyo2 上）。
@@ -83,7 +84,7 @@
 **卡片自加的前提**（不是使用者的話）：
 - C1：SDL 3.4 的視窗、事件泵、swapchain 的取得與送出只能在建立視窗的那條執行緒（master 偵察 2 節末，`SDL_gpu.h:4066-4094`、`:4202-4218`，master D27）。
 - C2：一個視窗只能被 SDL_GPU 或 SDL_Renderer 其中之一使用（master 偵察 4 節）。
-- C3：ImGui 官方的 SDL3 平台後端吃 `SDL_Window*`／`SDL_Event`、SDL_GPU 繪製後端吃 `SDL_GPUDevice*`；SDL 沒有從視窗查回 GPU device 的 API，但 SDL3 的視窗有屬性表可以掛指標〔知，都未查證〕。從外面拿 `SDL_GPUDevice*` 的需求只在 Q3 (a) 出現。
+- C3：ImGui 官方的 SDL3 平台後端吃 `SDL_Window*`／`SDL_Event`、SDL_GPU 繪製後端吃 `SDL_GPUDevice*`；SDL 沒有從視窗查回 GPU device 的 API，但 SDL3 的視窗有屬性表可以掛指標〔知，都未查證〕。從外面拿 `SDL_GPUDevice*` 的需求只在 Q3 (a) 出現（Q3 已定 (b)，這個需求不存在）。
 
 ## 3. platform 的每一項功能拆到哪裡（要涵蓋的第 1 項）
 
@@ -94,10 +95,10 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | master 的功能 | 去處 | 前提 | 理由 |
 |---|---|---|---|
 | 視窗建立、查詢（視窗、螢幕）、操作、視窗事件 | **新 Module `window`**（只有資料：大小、要求關閉、改視窗的請求）＋`sdl_window`（建視窗、寫資料、讀請求） | Engine：平台差異 | Bevy `bevy_window`／`bevy_winit`；Godot `DisplayServer` |
-| 事件泵（主執行緒、一輪處理完才丟例外） | 有視窗的 runner 呼叫、SDL 的實作裡做；事件轉成 `window`、`input` 的資料（Q3 選 (b) 時 ImGui 也從 `input` 拿，不另拿 `SDL_Event`） | Engine：SDL 的主執行緒規則（C1） | Bevy `WinitPlugin::set_runner`；master 坑 4（提早跳出會截斷下一次泵） |
+| 事件泵（主執行緒、一輪處理完才丟例外） | 有視窗的 runner 呼叫、SDL 的實作裡做；事件轉成 `window`、`input` 的資料（ImGui 也從 `input` 拿，不另拿 `SDL_Event`；Q3，使用者已定） | Engine：SDL 的主執行緒規則（C1） | Bevy `WinitPlugin::set_runner`；master 坑 4（提早跳出會截斷下一次泵） |
 | 像素大小與密度（DPI） | `window` 的查詢一開始就分「邏輯大小」與「像素大小」 | Engine | master 從沒做（坑 22）；macOS Retina、Windows 縮放上 KeepTool 就會碰到（ImGui 的 framebuffer scale）。只做查詢，不做全螢幕模式 |
 | live frame（OS 的 modal 迴圈中畫圖） | **不在薄起步**；介面留一個回呼點（R3），PvP Client 移植時做 | Engine，沒有本線的 Feature | master 坑 1～3 |
-| 剪貼簿 | **不帶**；`gyo.ui` 的文字框或 ImGui（Q3 (b)）要用時加到 `window` | 有 Feature 時是 Engine 的 | Bevy 是獨立 crate（arboard），Godot 在 DisplayServer |
+| 剪貼簿 | `window` 的資料與請求資料（ImGui 的文字框複製貼上，Q3＝(b)；`sdl_window` 讀寫 SDL 的剪貼簿），子批 W | Engine 的（KeepTool 要） | Bevy 是獨立 crate（arboard），Godot 在 DisplayServer |
 | 檔案對話框 | **不帶**；工具回來時在工具那一批加 | Engine 的（平台差異），現在沒有 Feature | master 只有三個工具用；SDL 的回呼在任何執行緒、可能回兩次——那時照 master 的 process 級登錄表做 |
 | log 轉接 `SdlLogBridge` | **不帶**；有點名需要時在 SDL 的實作裡接 logging，一個地方 | 那時是 Engine 的 | master 只有 PvP 用；兩個坑（解構順序的遞迴卡死、測試握手） |
 | 程式入口 `GyoMain`／`SDL_main` | **不帶** | — | P18；桌面三平台不需要；Windows 的 UTF-8 命令列由 os 的 manifest 處理；Windows GUI 子系統用連結選項保留 `main`（子批 K 驗）；行動平台列範圍的限界 |
@@ -111,7 +112,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | master | 去處 | 前提 | 說明 |
 |---|---|---|---|
 | `GYO::Input`（「狀態＋依序事件」雙軌、文字與組字、失焦清鍵） | **新 Module `input`**（不含 SDL） | Engine：中性資料模型 | 雙軌的理由（同幀按下又放開、事件先後）照 master；`text` 與 `events` 不保證順序照 master。用 `Message` 還是 Resource 照 Kernel 卡 `gyo2-kernel-summary-msg`（第 6.3 節） |
-| 文字輸入的開關與輸入法候選窗的位置 | `input` 的請求資料 `TextInputRequest`（ui／ImGui 寫，`sdl_window` 每幀讀、在主執行緒呼叫 `SDL_StartTextInput`／`SDL_SetTextInputArea`，晚一幀生效） | Engine | `gyo.ui` 的文字框與 ImGui（Q3 (b)）都要；master 每次從 SDL 讀「開沒開」（坑：ImGui 也會開關） |
+| 文字輸入的開關與輸入法候選窗的位置 | `input` 的請求資料 `TextInputRequest`（ui／ImGui 寫，`sdl_window` 每幀讀、在主執行緒呼叫 `SDL_StartTextInput`／`SDL_SetTextInputArea`，晚一幀生效） | Engine | `gyo.ui` 的文字框與 ImGui（Q3＝(b)）都要；master 每次從 SDL 讀「開沒開」（坑：ImGui 也會開關） |
 | `InputActionMap`（按鍵→動作） | **不在薄起步** | 作者（遊戲規則）；有共用需求時再看 | 別家分歧：Bevy 本體沒有、Godot 有 `InputMap`、Unity 有 Actions。PvP 移植時用它的需求再判 |
 | 手把 | 不帶 | — | master 沒有程式；沒有點名的 Feature |
 | `GYO::Render`（中性 device 介面、`Renderer`、固定 pass、shader ABI `gyo.raster.v1`、讀回） | **新 Module `render`**＋SDL_GPU 的實作＋渲染的 World 與 Extract＋2D／3D 分管線（第 6 節） | Engine | master 沒有 extract、產品每幀自己填 `RenderQueue`——這是本線要換的形 |
@@ -204,7 +205,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 
 | 形 | 系譜 | 退掉的選項與理由 | 需要它的 Feature／Product |
 |---|---|---|---|
-| 視窗與輸入分兩個 Module、輸入不認得視窗 | Bevy（bevy_window／bevy_input，一個 adapter 產生兩種事件） | (i) 合成一個（Godot `DisplayServer`）：介面數百個方法、只能整組換、輸入測試要帶視窗〔Godot 的理由是推論〕；(ii) 照 master（input 後端掛在 platform 的視窗上、讀原生 `SDL_Event`）：`native/` 的形，為舊形狀找位置 | KeepTool（Q3 (b)）、PvP Client；input 單獨給測試與網路的輸入注入 |
+| 視窗與輸入分兩個 Module、輸入不認得視窗 | Bevy（bevy_window／bevy_input，一個 adapter 產生兩種事件） | (i) 合成一個（Godot `DisplayServer`）：介面數百個方法、只能整組換、輸入測試要帶視窗〔Godot 的理由是推論〕；(ii) 照 master（input 後端掛在 platform 的視窗上、讀原生 `SDL_Event`）：`native/` 的形，為舊形狀找位置 | KeepTool（Q3＝(b)）、PvP Client；input 單獨給測試與網路的輸入注入 |
 | 事件泵在有視窗的 runner、由 `sdl_window` 做 | Bevy `WinitPlugin::set_runner`；runtime-composition §4「runner plugin」（使用者 11-11） | (i) 泵放在 `window` 的 System：System 在哪條執行緒跑是 runner 定的（P19），等於讓 Kernel 的排程替 SDL 守執行緒；(ii) 泵放在產品的 `main`：每個產品抄一份 | 所有有視窗的產品 |
 | 輸入經「輸入服務＋套用點」進 World | O-12 套用點；Bevy `bevy_gilrs`（服務＋System） | runner 直接寫進 World（Bevy winit）：runner 要認得輸入的型別、每個讀輸入的 World 都要 runner 寫一次；交換點宣告 5.6 留給本批選，**卡片照 L17 判** | KeepTool、PvP Client（UI 的與模擬的 World 都要輸入） |
 | 渲染 World＋Extract | Bevy `SubApp::extract`、`bevy_extract`；使用者 11-11 | master 的「產品每幀填 `RenderQueue`」：沒有唯讀的保證；Bevy 的 `ResMut<MainWorld>` 寫回：使用者 11-11 不採 | PvP Client、工具的預覽、每個 2D／3D 遊戲 |
@@ -219,7 +220,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 
 | Feature | Contract | Architecture |
 |---|---|---|
-| KeepTool：開窗、ImGui 文字框（含複製貼上）、日文輸入法組字與確定 | Q3 選 (b)：ImGui 從 `input` 拿鍵盤、滑鼠、文字與組字，文字輸入的開關、候選窗位置、游標形狀、剪貼簿是 `input`／`window` 的請求資料；draw list 經 Extract 進渲染 World（P23）。Q3 選 (a)：鍵盤、滑鼠、文字經官方 SDL3 後端，不經 `input`（那時 `input` 的雙軌幀只由測試驗） | `window`、`input`、`render`／`render_world`（R2a）、`sdl_window`、`sdl_gpu`、ImGui 的 Plugin |
+| KeepTool：開窗、ImGui 文字框（含複製貼上）、日文輸入法組字與確定 | ImGui 從 `input` 拿鍵盤、滑鼠、文字與組字，文字輸入的開關、候選窗位置、游標形狀、剪貼簿是 `input`／`window` 的請求資料；draw list 經 Extract 進渲染 World、轉成 `RenderCommands`（P23；Q3＝(b)，使用者已定） | `window`、`input`、`render`／`render_world`（R2a）、`sdl_window`、`sdl_gpu`、ImGui 的 Plugin |
 | 任何遊戲：按鍵、滑鼠 | `input` 的幀（雙軌）；只在套用點進 World；`Message` 或 Resource 照 `gyo2-kernel-summary-msg` | `input`、套用 System |
 | PvP Client：輸入時刻、開槍的聲音準時 | 事件時刻是 `Time::TimePoint`（第 8 節的三條保證） | SDL 輸入實作裡的時鐘配對 |
 | 任何 2D／3D 遊戲：畫面 | 渲染 World 只讀來源（DI-KS 13）；畫面送出是 `render` 的服務；`GlobalTransform` 與相機是渲染讀的姿態與視點 | Kernel 的 `RunExtract`、編排層的 `extractFrom`、`render`、`render_world`、`transform`、`camera`、SDL_GPU 實作 |
@@ -356,7 +357,7 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 | `GlobalTransform` 不進摘要、判定不讀 | Bevy 的 `GlobalTransform` 也是推導值；Bevy 本身沒有摘要 | Unity Netcode（對照） | GYO 有逐型別摘要（DI-KS 27） | 一個空的雜湊函式 | GYO 特有的機制上的補充 |
 | **`gyo.ui` 的節點是自己的文件樹、不是實體** | **偏離**（`bevy_ui` 的節點是實體，階層就是 `ChildOf`）——本線最大的一個非 Bevy 的形 | master；使用者 P17 定的是「ui 留 Engine」，不是節點模型 | `gyo.ui` 是 Editor↔Runtime 的資料契約（ui_editor 讀寫）；改成實體要另定文件與實體的對應 | 照舊：`ui_render` 抽文件樹的繪製資料；改照 Bevy：codec 讀出後生成實體、互動與 layout 改走 System | **U 的宣告比、交使用者**（節點模型是基盤） |
 | `Renderer` 的核心、固定 pass、shader ABI | master 的形；Bevy 是 render graph／phase | — | R2b 的 3D 場景與 2D 管線會積在上面 | R2b 定 | R2b 的宣告對照 Bevy 的 render graph／phase，偏離寫衝突點 |
-| ImGui 接在我們的 `input`／`render` 上（Q3 (b)） | 同 Bevy 生態（`bevy_egui`，使用者 11-11 §3b 寫的參考） | ImGui 官方後端：Q3 (a) | — | 兩段接法 | Q3 |
+| ImGui 接在我們的 `input`／`window`／`render` 上 | 同 Bevy 生態（`bevy_egui`，使用者 11-11 §3b 寫的參考） | ImGui 官方後端：退掉（Q3） | — | 兩段接法 | 使用者的決定（Q3＝(b)） |
 | 不帶 `InputActionMap` | 同 Bevy 本體（動作對應在生態的 leafwing） | Godot `InputMap`、Unity Actions（對照） | — | — | 照 Bevy |
 | Plugin 之間的共用（視窗登錄表）放共用處 | Bevy 的 `bevy_winit` 與 `bevy_render` 經 raw-window-handle 元件交接；GYO 的共用處（O-15）是已核准的 GYO 機制 | — | GYO 的視窗不是實體；`sdl_window` 與 `sdl_gpu` 在不同的 World | 一個登錄表型別（在 `sdl` 函式庫） | GYO 已有機制，寫明接合點 |
 
@@ -423,13 +424,12 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 | `sdl_gpu` | 渲染側 | **Gpu**（持有真的 GPU 物件、以 id 對照、上傳、pipeline；shader 的編譯工具）、**GpuSubmit**（渲染 World 最後一個 System：讀 `RenderCommands` → SDL_GPU 畫、送出） | sdl、render、render_world |
 | `sdl_audio` | 只做 `Configure` | **AudioOutput**（第 7 節：建混音器或用產品給的、開裝置、回呼 `Mixer::Render`、`OnDestroy` 停） | sdl、audio |
 | `sdl_ttf` | 只做 `Configure` | SDL_ttf（vendored FreeType）的點陣化，結果是 `text` 的點陣圖形狀 | sdl、text |
-| `imgui` | 函式庫（Plugin、`library_only`） | ImGui 本體＋Q3 (b) 時我們寫的接法（讀 `input`、寫 `TextInputRequest`、產出 `RenderCommands`） | input、window、render |
+| `imgui` | 函式庫（Plugin、`library_only`） | ImGui 本體＋我們寫的接法（讀 `input`、寫 `TextInputRequest` 與游標、剪貼簿的請求、產出 `RenderCommands`；Q3＝(b)） | input、window、render |
 | `world_imgui` | 來源側（文件 World） | widget 那半（P23） | imgui、input、window |
 | `imgui_render` | 渲染側 | 繪製那半（P23）：把經 Extract 拿到的 draw list 轉成 `RenderCommands` | imgui、render、render_world |
-| `sdl_imgui`（只在 Q3 (a)） | 只做 `Configure`＋另議 | 官方的 SDL3 平台後端與 SDL_GPU 繪製後端 | sdl、sdl_window、sdl_gpu、imgui |
 
 - **`SDL_Window*` 的交接**：`sdl_window` 在 `Configure` 建視窗、把「視窗 id ↔ `SDL_Window*`」放進共用處（O-15；型別定在 `sdl` 函式庫）；`sdl_gpu` 在渲染 World 的 `Build` `Find` 它、claim 視窗。兩者都在 Plugin 這一側，`engine/` 看不到 SDL 型別（使用者 11-13 (iii)：Plugin 之間可以露第三方型別）。`sdl_gpu` 不寫 `sdl_window` 的登記檔依賴（它們在不同的 World，寫了就是 O-E3）；產品沒帶 `sdl_window` 時 `sdl_gpu` 在 `Check` 回報自己的錯誤碼。
-- **KeepTool 的兩個 World 各帶什麼**（Q3 (b)）：
+- **KeepTool 的兩個 World 各帶什麼**：
 
 | World | `units` | 說明 |
 |---|---|---|
@@ -484,7 +484,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 - **改 Kernel 的三個子批（KR、R1a、R1b）**：會改同一段同步點的套用（`World.cpp`）與執行（`Executor.cpp`），不只是文件的條號。建議 **R1a 先合**（改動淺：加 `RunExtract`），KR 跟上再合（套用步驟的改動深），R1b 在 R1a 之後。條號先分配：DI-KS 29～34 給 KR、35～37 給 R1a、38～40 給 R1b；Kernel 的 RC（目前到 RC 24）25～27 給 KR、28～29 給 R1a、R1b；`KernelErrorCode` 的新值照合併的先後接著編。主會話那一側的 Kernel 卡（`gyo2-kernel-summary-msg`）若要新條號，從 DI-KS 41、RC 30 起；誰後合併誰跟上 gyo2。
 - **P 之後**：W、A、T（`sdl_ttf` 依賴 `sdl`；T 的驗收是點陣圖的形狀與 rowPitch，不需要畫）。
 - **R2a** 等 P、W（畫到視窗）。R2a 自己用一個 World 加「出」的 System 驗，不需要 Extract。
-- **K** 等 R2a、R1a（draw list 經 Extract）、W。Q3 (a) 時 K 不需要 R2a 的 2D pass 與 shader 管線（官方繪製後端自帶 shader〔知〕），只要裝置與 swapchain——那時 R2a 可以拆出前半讓 K 先用。K 是本線唯一使用者點名的 Feature，不等整個 Renderer 與 3D 管線（AGENTS §2：衝突時保 Feature 的方向）。
+- **K** 等 R2a、R1a（draw list 經 Extract）、W。K 接在 R2a 的 2D 那一段（貼圖、混合、裁切）之後（Q3＝(b) 的連帶）。K 是本線唯一使用者點名的 Feature，不等整個 Renderer 與 3D 管線（AGENTS §2：衝突時保 Feature 的方向）。
 - **R1b** 不在 K 的路上；R2b 之前完成即可（讀檔換模擬 World 時畫面不重建，是 PvP 與 2D 遊戲的需求）。
 - **R2b** 等 R2a、R1a、X1（`GlobalTransform`、相機）、I（貼圖）；渲染 World 的實體對應在 R2b 逐種判（第 6.1 節 8）。可畫元件的來源側單位在 R2b 加，所以 `render` 沒有 `transform` 的依賴問題（第 3.3 節）。
 - **U** 等 T、R2b。
@@ -501,11 +501,11 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | X1、X2 | 第 6.4 節 Transform、相機（X1）、階層（X2） | 上段：基盤（複製、回滾、權威登記會積在上面） | Opus／high ×3；宣告送 Fable／high | 傳播（沒有 `ChildOf`＝`Transform` 本身、有＝相乘）、第一幀與放回後的重算、`GlobalTransform` 不在回滾的登記裡、相機的投影 | 有（TF-、CM- 的守衛） |
 | I | asset 宣告 5.11、5.4 | 上段：資料契約（`"image"` 型別） | Opus／high ×3 | 照 asset 宣告（PNG 的 golden、`STBI_*` 的設定、拒絕的輸入） | 有（受理判定） |
 | P | 第 9.1 節 | 上段：建置圖 | Opus／high ×3 | 刪 SDL 的建置測試（SDL3 不被抓、不被建）；只建選了的 Plugin；MSVC 上的編譯選項；L1 三平台 | 有（刪除測試是 SDL-2 的守衛） |
-| W | `input`、`window`（只有資料，P27）、`sdl_window`（Runner 在 `Configure` 裝，O-3、可以不裝；Window；InputEvents 的套用 System；Ime 讀 `TextInputRequest`）、取樣移給 runner（world-time 第 3 節、WT-2、WT-6 (2) 的文字照交換點宣告 5.5 改；等待零件在哪）、渲染 World 的時間（第 6.1 節 7）、時間戳、請求資料（文字輸入、候選窗、改視窗）；Q3 (b) 時加游標形狀、剪貼簿的請求資料 | 上段：公開介面、時間 | Opus／high ×3；宣告送 Fable／high | 時間戳三條保證的測試（假讀取函式、精確等式）；SDL dummy 驅動下的泵與事件；runner 跑 `examples` 的一個視窗程式 | 有 |
+| W | `input`、`window`（只有資料，P27）、`sdl_window`（Runner 在 `Configure` 裝，O-3、可以不裝；Window；InputEvents 的套用 System；Ime 讀 `TextInputRequest`）、取樣移給 runner（world-time 第 3 節、WT-2、WT-6 (2) 的文字照交換點宣告 5.5 改；等待零件在哪）、渲染 World 的時間（第 6.1 節 7）、時間戳、請求資料（文字輸入、候選窗、改視窗、游標形狀、剪貼簿；後兩者是 Q3＝(b) 的連帶） | 上段：公開介面、時間 | Opus／high ×3；宣告送 Fable／high | 時間戳三條保證的測試（假讀取函式、精確等式）；SDL dummy 驅動下的泵與事件；runner 跑 `examples` 的一個視窗程式 | 有 |
 | A | 第 7 節（`sdl_audio`） | 上段：audio DI 7 | Opus／high ×3 | `OnDestroy` 的先後（裝置先停）；產品給的混音器（覆寫）；SDL `disk`／`dummy` 驅動；`scheduleDelay` 的量測（判定先宣告） | 有（DI 7 的守衛） |
 | T | `text`、`sdl_ttf` | 上段：公開介面 | Opus／high ×3 | 點陣圖的形狀與 rowPitch；上下顛倒的坑（master 坑 17：在 UV 轉換的單一邊界修，那半在 R2b） | 有（受理判定） |
 | R2a | `render` 的 `RenderCommands` 格式（P27：貼圖 id、shader id、頂點、裁切框、混合模式、實例數等）與一個 2D pass（貼圖、混合、裁切）、`render_world`、`sdl_gpu`（Gpu：裝置、swapchain、id 對照、上傳、pipeline；GpuSubmit）、視窗登錄表的交接、最小的 shader 管線（HLSL 在 `render`、host 工具在 `sdl_gpu`、ABI、共通管線找編譯器） | 上段：公開介面 | Opus／high ×3 | Linux Lavapipe 上的像素比對（比確切顏色，master 坑 18）；macOS Metallib 離線編譯；幀時間的預算先宣告 | 有 |
-| K | `imgui`、`world_imgui`、`imgui_render`（Q3 (a) 時加 `sdl_imgui`）；draw list 經 Extract；全域 context 的例外（第 6.2 節，查版本寫清範圍）；KeepTool 的登記（`keep_tool`）；組字的畫法（ImGui 不畫組字）；CJK 字型；tools 線打包與授權告示；第 9.1 節延後的實作方式守衛 | 上段：使用者指定的 Feature | Opus／high ×3 | tools 線打包；IME 實機按一次（CI 只驗文字事件的路徑）——「tools 線不需要實機證據」的現行規則要不要改，交 K 的宣告 | 有 |
+| K | `imgui`、`world_imgui`、`imgui_render`（兩段接法：平台＝讀 `input`、鍵碼對應、寫請求資料；繪製＝draw list → `RenderCommands`）；draw list 經 Extract；全域 context 的例外（第 6.2 節，查版本寫清範圍）；KeepTool 的登記（`keep_tool`）；組字的畫法（ImGui 不畫組字）；CJK 字型；tools 線打包與授權告示；第 9.1 節延後的實作方式守衛 | 上段：使用者指定的 Feature | Opus／high ×3 | tools 線打包；IME 實機按一次（CI 只驗文字事件的路徑）——「tools 線不需要實機證據」的現行規則要不要改，交 K 的宣告 | 有 |
 | R2b | `Renderer`（對照 Bevy 的 render graph／phase）、讀相機、合成、渲染 World 的實體對應（逐種判、四個衝突點）、可畫元件的來源側單位、3D 場景、疊層（sprite、文字的繪製）、讀 `GlobalTransform`、R7 | 上段：公開介面 | Opus／high ×3 | 像素比對；來源實體刪掉後對應的實體被刪、換來源後對照清空；幀時間的預算先宣告 | 有 |
 | U | `ui`、`world_ui`、`ui_render` | 上段：資料契約（Editor↔Runtime） | Opus／high ×3 | `gyo.ui` v1／v2 的資料契約測試；文字框的組字 | 有（受理判定） |
 
@@ -548,7 +548,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | L-2 | 列的四種角色、只做 `Configure` 的單位不放進任何 World、多 World 的產品明列 `units` | 第 3.3 節（修訂 1 的 blocker） |
 | L-3 | `transform`、`camera`、`input`、`window` `default=yes`；渲染側、UI、物理 `default=no`；`camera` 依賴 `window` | 第 3.3 節；主會話的傾向；B' 之後照 Bevy |
 | L-4 | `window` 依賴 `input`；`render` 不依賴 `window` | 第 3.3 節 |
-| L-5 | 不帶剪貼簿（Q3 (b) 時在 W 加）、檔案對話框、log 轉接、`PlatformName`、`InputActionMap`、手把 | 第 3 節各列。（不帶 SDL_image 是使用者 11-21 定的，P20；不帶 `native/` 來自 P21、P22；不帶 `SDL_main` 來自 P18；不帶 SDL_Renderer 來自 P22、P23——都不是卡片的判斷） |
+| L-5 | 不帶檔案對話框、log 轉接、`PlatformName`、`InputActionMap`、手把 | 第 3 節各列。（不帶 SDL_image 是使用者 11-21 定的，P20；不帶 `native/` 來自 P21、P22；不帶 `SDL_main` 來自 P18；不帶 SDL_Renderer 來自 P22、P23——都不是卡片的判斷） |
 | L-6 | 輸入經「輸入服務＋套用點」進 World（用 `Message` 還是 Resource 照 `gyo2-kernel-summary-msg`） | 第 4.3 節、第 6.3 節 |
 | L-7 | Extract：不放第一張不算錯、`render_world` 預設把它插在 `Main` 之前；渲染 World 不帶 world_time（只對 5.5（二））；來源替換傾向「准許換來源」（R1b 交使用者） | 第 6.1 節 |
 | L-8 | 有視窗的 runner 由 SDL 視窗的實作在 `Configure` 裝；runner 共用的部分（取樣交給 world_time 的交換函式、等待零件）放 world_time 或另一個中性的單位（W 定），沒畫面的 runner 也用。**不放編排層**：O-4 寫明編排層不認得時間，放那裡是職責清單多一項（RC-O5），要交使用者 | 使用者 11-11「runner 由 plugin 安裝」；時間設計第 9 節 (a) 標「我的套用」 |
@@ -589,25 +589,19 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **出處**：使用者在本卡 fork 出的 side chat，2026-11-23。
 
-### Q3：ImGui 的接法（推翻 11-13 的一部分）
+### Q3：ImGui 的接法 —— **已定：(b) 接在 Engine 的 `input`／`window`／`render` 上，不碰 SDL**（使用者 2026-11-23，side chat）
 
-**前提**：Engine 的（ImGui 是 Plugin，但它碰輸入與畫面的方式決定 O-12 的形與 §3b 守不守得住，作者碰不到）。
+**原話**：「b，這個判斷沒多少變化。」
 
-**例子**：KeepTool 的文字框。ImGui 每一幀要「這一幀的鍵盤、滑鼠、文字與組字」，畫完交出 draw list（三角形、貼圖、裁切框）。
+**定下的**：ImGui Plugin 只依賴 Engine 的 `input`、`window`、`render`（B' 下的資料型 Module）。輸入只讀 `input` 的資料；開關輸入法、候選窗走 `TextInputRequest`；組字中的字自己畫；draw list 經 Extract 進渲染 World，轉成 `RenderCommands` 由 `sdl_gpu` 畫（§3b）。**推翻 11-13 的**「ImGui 官方的 SDL3 平台與 SDL_GPU 繪製後端放在 `sdl` plugin 內的獨立 target」；「ImGui 的全域 context 明列例外」照留（第 6.2 節）。`sdl_imgui` 那一列不需要（第 9.1 節已拿掉）。
 
-| | **(a) 官方的 SDL3 平台後端＋SDL_GPU 繪製後端**（11-13，P22） | **(b) 接在我們的 `input`、`window`、`render` 上** ← 建議 |
-|---|---|---|
-| 系譜 | ImGui 的 `imgui_impl_sdl3`、`imgui_impl_sdlgpu3`〔知〕；master 用 SDL_Renderer 版 | 你 11-11 §3b 的原文就寫「參考：Bevy 的 bevy_egui」（第三方 UI 函式庫吃 `bevy_input`、經 `bevy_render` 畫） |
-| 登記 | `imgui`（函式庫，不連 SDL）＋`sdl_imgui`（放官方的兩個後端；第 9.1 節） | `imgui`、`world_imgui`、`imgui_render`；不連 SDL |
-| OS 事件 | 官方平台後端直接吃 `SDL_Event`，寫進 ImGui 的全域 context——11-13 的「全域 context 明列例外」原本就是為這條路；O-12（11-22）的「同一件事不要兩種形」比它晚，兩者怎麼並存請你定 | 只經 `input`（套用點）一條路 |
-| 繪製 | 繪製後端要 `SDL_GPUDevice*`，在 `sdl*` 這一組裡交接；繞過 `RenderCommands`，和 P27「render 產指令、Plugin 執行」是兩條路 | `imgui_render` 把 draw list 轉成 `RenderCommands`（R2a 本來就要：貼圖、混合、裁切），`sdl_gpu` 照常執行——就是 §3b 的「draw list 的 GPU 繪製是渲染 World 的 System」 |
-| 組字 | 官方後端不處理 `TEXT_EDITING`，master 綁定自己畫 | 一樣要自己畫；候選窗的位置經 `input` 的操作 |
-| 時程 | K 只要裝置與 swapchain（官方繪製後端自帶 shader〔知〕），不必等 R2a 的 2D pass 與 shader 管線 | K 要等整個 R2a（含 shader 管線：HLSL、DXC、SDL_shadercross、SPIRV-Cross） |
-| 對其他子批的範圍 | W 的 `sdl_window` 要給 `sdl_imgui` 一個收原始 `SDL_Event` 的口 | W 要多做游標形狀與剪貼簿（文字框的複製貼上屬於「基礎的 ImGui」） |
-| KeepTool 驗到什麼 | 視窗、GPU；`input` 沒被驗 | 視窗、`input`（含組字）、`render` 的 2D pass、Extract——整條線的基盤 |
-| 代價 | 少寫程式；畫面有兩條路（`RenderCommands` 與官方後端） | 要寫 ImGui 的平台與繪製兩段接法（官方後端各約數百行〔知〕）；鍵碼對應、游標形狀、剪貼簿要經 `window`／`input` |
+**比過的選項**：(a) 官方的 SDL3 平台後端＋SDL_GPU 繪製後端（B' 下是 ImGui Plugin 依賴 `plugins/sdl`、直接用 SDL 型別；OS 事件多一條路；快、少寫程式；KeepTool 驗不到 `input`、`render`；換 SDL 時 ImGui 也要改）／**(b)** ←選（要寫兩段接法；鍵碼對應、游標形狀、剪貼簿也要經 `input`／`window` 的資料；K 要等 render 的 2D 那一段：貼圖、混合、裁切）。
 
-**建議 (b)**：它照 §3b 的參考（bevy_egui）、守住 O-12 的「一條路」、讓 KeepTool 真的驗到 `input` 與 `render`，也合 P27「render 產指令、Plugin 執行」（畫面只有一條路）。代價是 KeepTool 晚一點（等 shader 管線）與多寫兩段接法。**推翻的是 11-13 的一句**（「ImGui 官方的 SDL3 平台與 SDL_GPU 繪製後端放在 `sdl` plugin 內的獨立 target」）；「全域 context 明列例外」保留（第 6.2 節）。
+**理由**（side chat 的建議；使用者回「這個判斷沒多少變化」，即修訂 1 起的建議在 B' 下照樣成立）：B' 的形是所有 SDL 呼叫只在 SDL 的 Plugin，(a) 會讓 ImGui 成為第二個碰 SDL 的地方；守住 O-12 的一條路與使用者 11-11 §3b（參考 bevy_egui）；KeepTool 真的驗到 `input`、`render`、Extract。
+
+**連帶**：W 的範圍含游標形狀、剪貼簿的資料；K 接在 R2a 的 2D 那一段之後（第 10 節）。
+
+**出處**：使用者在本卡 fork 出的 side chat，2026-11-23。
 
 ### Q4：「沒選後端、或選了兩個」—— **撤回**（B' 之後不需要）
 
@@ -647,7 +641,7 @@ B'（P27）的 Module 只有資料、沒有後端與缺後端的檢查：沒有 
 - **`gyo2-kernel-summary-msg`**（Kernel 的 `Summary` 與訊息）：輸入用 `Message` 還是 Resource 照它的結論，**W 開工前要有**（第 6.3 節）；它和 KR 都改 Kernel，誰後合併誰跟上 gyo2。
 - **主會話（Kernel）**：KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
 - **圖書管理員**：「送進 World 外服務的時刻都是時間基準」登記成 CCR（第 8 節末）。
-- **風紀委員**：Q1（B'，已定）的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句：`plugins/sdl*` 裡是我們寫的程式、讀寫 Engine 的資料）；Q2 不必改規則文字（判斷句字面成立），只在同詞異義表第 0 節「還沒確認」那一行補「ufbx：Module 側（model 的 `src/adapters/ufbx/`），使用者 2026-11-23」——這一行由主會話（文件 owner）改，或併進子批 P；Q3 若推翻 11-13 的句子、Q4 撤回後 P22 那一句沒有對象，runtime-composition §4 的統一處理時一起改。
+- **風紀委員**：Q1（B'，已定）的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句：`plugins/sdl*` 裡是我們寫的程式、讀寫 Engine 的資料）；Q2 不必改規則文字（判斷句字面成立），只在同詞異義表第 0 節「還沒確認」那一行補「ufbx：Module 側（model 的 `src/adapters/ufbx/`），使用者 2026-11-23」——這一行由主會話（文件 owner）改，或併進子批 P；Q3 推翻 11-13 的「ImGui 官方的 SDL3 平台與 SDL_GPU 繪製後端放在 `sdl` plugin 內的獨立 target」（使用者已定）、Q4 撤回後 P22 那一句沒有對象，runtime-composition §4 的統一處理時一起改。
 - **KeepTool**：子批 K 等於 `-keeptool` 那一批，主會話確認是否併進本線。
 - **物理 2D、3D**：`physics_2d`、`physics_3d` 兩個 Module，依賴 `transform`，跟著點名的產品回來，不在本線（P24、P25）。
 
@@ -766,3 +760,11 @@ B'（P27）的 Module 只有資料、沒有後端與缺後端的檢查：沒有 
 |---|---|
 | ufbx、stb_image 都走 Module 這一側；Q2 記成已定 | 第 14 節 Q2、P2、第 3.2 節 |
 | 同詞異義表第 0 節的「還沒確認」補 ufbx 的結論（不改規則文字） | 第 16 節 |
+
+## 23. 修訂 8：使用者定 Q3（side chat 轉來）
+
+| 改了什麼 | 改在哪 |
+|---|---|
+| ImGui 走 (b)；Q3 記成已定；推翻 11-13 的一句、「全域 context 明列例外」照留 | 第 14 節 Q3、第 16 節 |
+| `sdl_imgui` 那一列與 (a) 的分支拿掉 | 第 9.1 節、第 10 節 |
+| 剪貼簿、游標形狀的請求資料進 W；剪貼簿從「不帶」改成 `window` 的資料 | 第 3.1 節、第 10.2 節、L-5 |
