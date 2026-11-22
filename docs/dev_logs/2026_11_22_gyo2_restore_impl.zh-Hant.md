@@ -62,6 +62,22 @@
 - 宣告 18.2 第 1 件的代價寫「案例 2 用到的 Engine 部分由 Kernel 既有的突變守」：查了沒有守「`Spawn::New` 回傳配到的編號」的既有突變，補 `re-spawn-new-wrong-id`（只收緊）。
 - SV-2 後半「啟用也不登記任何 World 的東西」不立守衛：它綁實作的方式（AGENTS §3「ガードを立てる時期」），由合併前的設計審查看。
 
+## 設計審查（Fable 5.2／high，唯讀，HEAD db5178eb）
+
+報告：主 checkout `build/evidence/gyo2-restore-impl/design-review-fable.md`。must-fix 0、should 9、note 10。程式與宣告相符、依賴方向正確、Engine 沒有碰存檔格式。
+
+| # | 指出 | 處理 |
+|---|---|---|
+| S1 | `save_version` 的形狀比內容重（設定→`Configure` 抄成 `Policy`→放共用處→作者再 `Find`；`Build` 空、`Policy` 建構式公開）；選項 (A) 維持、(B) 改 `library_only=yes`、只留 `Policy`＋`Check`＋兩個碼 | **交使用者**（改已核准的宣告 19.1） |
+| S2 | `Check` 回 `OrchestrationError{PrepareFailed}`，runner 在替換前判時沒有準備函式 | 這批不改型別；說明頁寫明判斷看 `reporterCode` |
+| S3 | `std::as_const(...).Find` 不需要（Product 的共用處不凍結） | 等 S1 |
+| S4 | 啟動時讀檔：描述的準備每次替換都重跑；三條路的表沒有啟動時的那一條 | 說明頁補「從 World 外的待讀處拿、拿了就清」與啟動時 `RunSchedule` 一列 |
+| S5 | 說明頁寫了還沒合併的 `SetInitial` | 標明「狀態機那一批合併之後」、出處改成分支上的宣告 |
+| S6 | 新 DI 頁沒進 `target/v2/README.md` 的「給作者看的」（`entity-ids` 也漏） | 兩頁都加 |
+| S7 | 啟用方式 `gyo_product_units(... MODULES save_version)` 沒有 target 走過 | 等 S1（選 (B) 時不適用） |
+| S8 | DI 頁「會進 World 的單位」和 SV-2 矛盾 | 等 S1 |
+| S9 | 設定回報碼的寫法和鄰居（`AU-E1` 等）不同 | 等 S1 |
+
 ## 未結
 
 - 合併前的設計審查（Fable／high，唯讀）、L1 三平台、合併前核准。

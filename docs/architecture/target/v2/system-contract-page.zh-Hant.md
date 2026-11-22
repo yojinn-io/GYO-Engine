@@ -498,7 +498,7 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 **一個例子。** RPG 玩家在第 3 關存檔：身上有 3 瓶藥水、金幣 120，任務做到第 2 步，正在「關卡中＋暫停」。隔天讀檔（或遊戲中讀另一個存檔）：一個新的 World 建好，從「生成中」開始；作者的程式照第 3 關的資產生成地圖、怪物，讀檔 System 放回物品、金幣、任務進度；生成結束，遊戲回到「關卡中＋暫停」。Engine 不認得任何一種存檔格式：存什麼、怎麼寫、怎麼讀，都是作者的。
 
 **一律在新的 World。**
-- **啟動時讀檔**：沒有 `ReplaceWorld`。描述的準備函式放存檔資料（暫存的 Resource）與配發器的下界。
+- **啟動時讀檔**：沒有 `ReplaceWorld`。描述的準備函式放存檔資料（暫存的 Resource）與配發器的下界。**描述的準備每次建 World 都會跑，包括之後每一次替換**：存檔要從 World 外一個「待讀」的地方拿、拿了就清掉；直接寫死在描述的準備裡，之後不帶 `extra` 的替換（例：回主選單）會把那份存檔再放一次。
 - **遊戲中讀檔**：`ReplaceWorld(name, {extra, beforeSwap, order})`。新 World 照描述重新登記（之前動態插入的 System 不在）；`extra` 準備函式放存檔資料與配發器的下界；遊戲初始化不重跑；`CarryOver` 標記的 Resource 帶過去（值裡不能有指向舊 World 的參照）。
 - **發替換之前先驗**：版本（下面的存檔版本 Module）、資產 id 載好了沒有、能不能解析。驗不過就不發替換。選 `DropOldFirst`（先銷毀舊的）時只能在發替換之前驗：它一失敗位置就空了，`Product` 結束。
 
@@ -508,6 +508,7 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 |---|---|---|---|
 | `beforeSwap` 裡的 schedule（例：獨占 System 當場 `SpawnWithId`） | 一次放得完 | `BuildNewFirst` 時舊 World 照跑 | 換上之前同步跑；這段期間沒有交換點（拿不到這一幀的外部資料） |
 | 生成期間（讀檔 System 放在 `WhileGenerating()` 的 set） | 存檔大、要分幾幀、要讀取畫面會動 | **`Product` 結束**（所以驗證要在換上之前） | 每幀照常跑；沒做完就 `Hold()` |
+| 啟動時：第一幀之前用 `RunSchedule` 跑讀檔的 schedule | 一次放得完、啟動時讀檔 | **`Product` 結束**（沒有舊 World 可留） | 和 `beforeSwap` 同樣是同步跑完一張 schedule；啟動時的準備函式失敗則是 `Product::Build` 失敗（O-E7） |
 | 準備函式裡用 `World::Insert` 直接放 | 只放資料、不需要 hook 的東西 | 同準備函式失敗（`BuildNewFirst` 保留舊 World） | **不跑 hook、不補初始值、不看配發器的範圍**（`World.hpp:215-216` 的設計；DI-KS 18）。碰撞體要靠 OnAdd 進空間索引的、要靠初始值補衍生元件的，不要走這條；走這條也要移下界，否則之後的 `Spawn` 回 `AllottedIdAlive` |
 
 **編號的兩種寫法（作者選）。**
@@ -526,9 +527,9 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **資產。** 存檔記資產的 id，不存資產本身；id 能不能用在發替換之前驗。
 
-**存檔放在哪裡。** Engine 不讀寫存檔；讀寫用 io 的整檔讀（`ReadAllBytes`）與整檔原子寫入（`WriteFileAtomically`，避免寫到一半的壞檔），在 World 外先讀好、驗好版本再發替換。存檔目錄（這個使用者的資料目錄）由 os 層的另一批提供；那一批合併前，路徑由作者自己決定。
+**存檔放在哪裡。** Engine 不讀寫存檔；讀寫用 io 的整檔讀（`ReadAllBytes`）與整檔原子寫入（`WriteFileAtomically`，避免寫到一半的壞檔），在 World 外先讀好、驗好版本再發替換。存檔目錄（這個使用者的資料目錄）由 os 層的另一批提供（`OS::Files::UserDataDirectory(organization, application)`）；那一批合併前，路徑由作者自己決定。
 
-**狀態機。** 讀檔 System 在生成中對狀態呼叫 `SetInitial` 填存檔的值；套用 System 帶 `AfterGenerating()`，第一次套用就直接進存檔的狀態，不先跑初始狀態的 `OnEnter`（子狀態也一樣）。例：存檔停在「關卡中＋暫停」，讀檔後直接回到「關卡中＋暫停」，不經過標題畫面。詳見狀態機的頁（狀態機宣告修訂 8 第 6 節）。
+**狀態機。**（狀態機修訂 8 那一批合併之後；寫這一段時還沒合併。）讀檔 System 在生成中對狀態呼叫 `SetInitial` 填存檔的值；套用 System 帶 `AfterGenerating()`，第一次套用就直接進存檔的狀態，不先跑初始狀態的 `OnEnter`（子狀態也一樣）。例：存檔停在「關卡中＋暫停」，讀檔後直接回到「關卡中＋暫停」，不經過標題畫面。詳見狀態機宣告修訂 8 第 6 節（分支 `claude/gyo2-state-machine-r8-2afaeb`）。
 
 **讀檔完成。** Engine 不發「讀檔完成」的通知：Engine 不認得讀檔，「放回完了」就是生成結束——讀 `WorldGeneration` 的 `Generating()`，或把遊戲邏輯掛 `AfterGenerating()`。`AfterGenerating()` 之後一直為真；要「讀檔完成時只做一次」，自己記一個旗標。要通知別的 System，讀檔 System 自己發 `Message`（沒有讀者拉住時那次 Run 結束就被修剪，第 14 節）。（Bevy 的讀檔由 Engine 自己的生成器做，所以發得出 `WorldInstanceReady`；GYO 的讀檔是作者的 System。）
 
@@ -544,4 +545,4 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 - **存的時候**：`Policy::Current()` 寫進你的存檔格式的任何位置。Module 不碰檔案、不定格式。
 - **讀的時候**：用你的格式讀出版本數字，交給 `Policy::Check(版本)`。收 `oldestSupported ≤ 版本 ≤ current`；太舊回 `reporterCode == "save-version-too-old"`、太新回 `"save-version-too-new"`。中間的舊版由你的讀檔程式補轉換。
 - **在哪裡呼叫**（都在換上之前）：(1) 發 `ReplaceWorld` 之前，從 `std::as_const(product.Buffer()).Find<SaveVersion::Policy>()` 拿（選 `DropOldFirst` 時只能這裡）；(2) `extra` 準備函式裡呼叫、把錯誤原樣回傳 → `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode` 照帶、舊 World 照跑；(3) 啟動時讀檔：在描述的 `build` 回呼裡用 `std::as_const(setup.ProductBuffer()).Find<SaveVersion::Policy>()` 取出，再 `setup.Prepare(...)` 登記一個呼叫它的準備函式 → 被拒時 `Product::Build` 失敗（O-E7，碼在訊息文字裡）。**不要在生成期間呼叫**（那裡失敗是 `Product` 結束）。
-- **啟用本身不擋任何東西**：不呼叫 `Check` 的讀檔照收。被拒不是事件，是 `Result`。
+- **啟用本身不擋任何東西**：不呼叫 `Check` 的讀檔照收。被拒不是事件，是 `Result`。錯誤的型別是 `OrchestrationError`（碼 `PrepareFailed`，為了能直接從準備函式回傳）；在發替換之前判的時候也一樣，**分辨被拒的原因看 `reporterCode`**。
