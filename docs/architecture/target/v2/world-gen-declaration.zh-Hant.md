@@ -3,10 +3,10 @@
 更新：2026-11-24（修訂 2）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-world-gen`）。**狀態：等動工前核准。實作要等使用者核准、說開始。**
 
 **經過**：
-- 修訂 0（c8b5faf4）建議「生成中跑另一份清單」（本頁第 8 節的 A）。送 Fable 5.2／high 敵對式檢查：blocker 4、should 12、nit 9（主 checkout `build/evidence/gyo2-world-gen/declaration-r0-adversarial-check.md`），全部採用，處理在第 17 節。
-- **修訂 1 改了建議**：檢查指出 A 的代價少算（單一 World 的讀取畫面要讓輸入、畫面、日誌都在生成那張再掛一次；生成那張結束後永不再跑，掛在上面的訊息讀者會永久拉住保留）、B 的代價多算（時間 Module 現有的暫停就做得到「不 tick、不丟時間」）。重算之後建議 **B：生成期間主迴圈照跑，編排層只立「生成中」的狀態，作者用 run 條件擋**——和 Bevy、Unity、Unreal 相同。第 14 節第 1 件交你定。
+- 修訂 0（c8b5faf4）建議「生成中跑另一份清單」（本頁第 8 節的「另跑生成清單」）。送 Fable 5.2／high 敵對式檢查：blocker 4、should 12、nit 9（主 checkout `build/evidence/gyo2-world-gen/declaration-r0-adversarial-check.md`），全部採用，處理在第 17 節。
+- **修訂 1 改了建議**：檢查指出「另跑生成清單」的代價少算（單一 World 的讀取畫面要讓輸入、畫面、日誌都在生成那張再掛一次；生成那張結束後永不再跑，掛在上面的訊息讀者會永久拉住保留）、「生成期間每幀照跑」的代價多算（時間 Module 現有的暫停就做得到「不 tick、不丟時間」）。重算之後建議 **「生成期間每幀照跑」：生成期間主迴圈照跑，編排層只立「生成中」的狀態，作者用 run 條件擋**——和 Bevy、Unity、Unreal 相同。第 14 節第 1 件交你定。
 - 交換點卡的交界已對齊（5.12）。
-- 修訂 1（b75c1058）送 Fable 5.2／high 窄複查（範圍：B 的形狀、修訂 0 檢查的處理、第 14 節）：blocker 1、should 10、nit 8（`declaration-r1-narrow-check.md`），全部採用成**修訂 2**，處理在第 18 節。最大的兩處：第 14 節第 1 件的表把 B 的代價補齊（作者擋不到 Module 的 System、B 也有永不再跑的 set、條件進一致性指紋）；生成的狀態建好當下就是「生成中」、只放在 Resource 一處。建議仍是 B（檢查者也判不必翻回 A）。
+- 修訂 1（b75c1058）送 Fable 5.2／high 窄複查（範圍：「生成期間每幀照跑」的形狀、修訂 0 檢查的處理、第 14 節）：blocker 1、should 10、nit 8（`declaration-r1-narrow-check.md`），全部採用成**修訂 2**，處理在第 18 節。最大的兩處：第 14 節第 1 件的表把「生成期間每幀照跑」的代價補齊（作者擋不到 Module 的 System、「生成期間每幀照跑」也有永不再跑的 set、條件進一致性指紋）；生成的狀態建好當下就是「生成中」、只放在 Resource 一處。建議仍是「生成期間每幀照跑」（檢查者也判不必翻回「另跑生成清單」）。
 
 **性質**：實作段第 5 批的事前宣告。涉及 AGENTS §2 的基盤 Architecture（編排層的流程、Kernel 的公開型別）、§3 的 Architecture Delta（新 Module、Kernel 公開型別搬家、編排層 Design Invariants 的增改）、§4 的系譜與決勝理由、§14.4 的守衛搬家。
 
@@ -58,7 +58,7 @@
 ### 2.2 不在這一批
 
 - **在已經跑起來的 World 裡重新進生成**（`Regenerate`）：只定形狀（5.11），不實作。
-- **新 World 生成期間舊 World 照跑、生成完才換上**（無縫轉場）：不做（第 8 節選項 C；RC-O14）。
+- **新 World 生成期間舊 World 照跑、生成完才換上**（無縫轉場）：不做（第 8 節「旁邊生成再換上」；RC-O14）。
 - 讀取畫面的畫法、轉場、淡出；生成期間要不要 tick（作者；asset 決定 9）。
 - 讀檔的實作、存檔版本 Module、狀態機重做（各自那一批；本頁只寫交界，5.6～5.9）。
 - 交換點、World 之間的資料、Product 層 Resource、把 World 交給別的執行緒（交換點卡；交界 5.12）。
@@ -102,9 +102,9 @@
 
 **共通**：(1) 「開始前」的階段在 ECS 之上那一層；(2) 跨多幀的載入**主迴圈照跑、每幀輪詢、由作者的程式判斷好了沒有**；(3) 配發器三家都在核心內、都不能換策略。
 
-**本頁的位置**（建議 B）：兩層照 Bevy（使用者已定）；生成期間主迴圈照跑，照三家；和三家不同的只有兩處——(a) 「生成中」由編排層擁有、每次建 World 都從它開始（三家由作者自己用狀態做）；(b) 「好了」用「沒人 `Hold()` 就結束」而不是「有人明說好了」，這是新導出的（第 14 節第 2 件）。配發器：GYO 已由使用者定「策略是產品的 Resource」（K.3-1，2026-11-11），和三家不同；本頁不改這一點，只把預設的那一份放進預設帶的 Module。
+**本頁的位置**（建議「生成期間每幀照跑」）：兩層照 Bevy（使用者已定）；生成期間主迴圈照跑，照三家；和三家不同的只有兩處——一是「生成中」由編排層擁有、每次建 World 都從它開始（三家由作者自己用狀態做）；二是「好了」用「沒人 `Hold()` 就結束」而不是「有人明說好了」，這是新導出的（第 14 節第 2 件）。配發器：GYO 已由使用者定「策略是產品的 Resource」（K.3-1，2026-11-11），和三家不同；本頁不改這一點，只把預設的那一份放進預設帶的 Module。
 
-## 5. 設計（Contract；照建議 B 寫，選 A 時改的地方見 8.1 末段）
+## 5. 設計（Contract；照建議「生成期間每幀照跑」寫，選「另跑生成清單」時改的地方見 8.1 末段）
 
 ### 5.1 「生成中」（W1）
 
@@ -116,10 +116,10 @@
   4. **判定**：整份每幀清單成功跑完之後讀 `WorldGeneration`——有人 `Hold()`：仍是生成中；沒有人：生成結束，寫成 `{false, false}`。World 中斷時不判定（中斷的 World 寫入是斷言，`World.cpp:239`；Product 已結束，O-11）。
   5. **出**：交換函式的「出」。生成結束那一幀的「出」已讀到 `generating = false`；「出」失敗（E2）不影響已經做完的判定。
 - **單一來源**：生成的狀態**只在 World 的 Resource `WorldGeneration`**；`Product::Generating(world)` 讀那個 World 的 Resource，`Product` 的 World 槽不另存（窄複查 S2）。理由：World 交給別的執行緒時狀態自然跟著走（交換點卡 W-5、W-7），`Regenerate`（5.11）也只寫 Resource。
-- **每個 World 各自**：每個 World 看自己的狀態——A 在生成、B 早已結束，互不等待（`-game-init-list`）。
+- **每個 World 各自**：每個 World 看自己的狀態——World `Map` 在生成、World `Menu` 早已結束，互不等待（`-game-init-list`）。
 - **作者決定一切內容**：生成用的 System 放在作者自己的 set、掛 `WhileGenerating()`；遊戲邏輯要等生成完才跑的，set 掛 `AfterGenerating()`。set 屬於一張 schedule（`Declarations.hpp:64-69`），每張有這類 System 的 schedule 各宣告一個。跨多幀的先後（「地圖做完才放敵人」）由作者用自己的游標或條件排；Engine 不提供「逐項做完才下一項」（三家都沒有；RC-O17）。
-- **Module 的 System 不受作者的條件管**（窄複查 B1(a)）：Kernel 的 set 只能宣告一次、條件在宣告時給（`Registry.cpp:512-523`），System 進哪個 set 由登記它的一方在 `AddSystem` 時決定。所以作者的兩個 set 只管得到作者自己的 System；Module 掛在每幀清單上的 System（例：回滾的 `RunRollback`、`CorrectFrame`）生成期間照跑。現在沒有一個 Module 需要在生成期間停：時間用暫停或 `fixedStepConditions`（5.6）；asset 與網路的套用點本來就要每幀跑；回滾的 System 生成期間照跑，Client 等伺服器初始狀態時要不要停回滾，屬網路 Module 那一批（第 16 節）。之後有 Module 需要時由那個 Module 開條件選項（照 `fixedStepConditions` 的先例）；兩個以上需要時，或作者要擋 Module 的 System 而擋不到時，停下來看要不要讓 Kernel 能給既有的 set 加條件（Bevy 的 `configure_sets(...run_if)`；RC-O18）。這是改 Engine 的事，第 14 節第 1 件一起問。
-- **「一輪」**：和交換點卡共用的定義是「一個 World 在一次 `RunFrame` 裡跑的全部」；在 B 之下就是那個 World 的每幀清單，生成中也一樣。
+- **Module 的 System 不受作者的條件管**（窄複查 B1 前半）：Kernel 的 set 只能宣告一次、條件在宣告時給（`Registry.cpp:512-523`），System 進哪個 set 由登記它的一方在 `AddSystem` 時決定。所以作者的兩個 set 只管得到作者自己的 System；Module 掛在每幀清單上的 System（例：回滾的 `RunRollback`、`CorrectFrame`）生成期間照跑。現在沒有一個 Module 需要在生成期間停：時間用暫停或 `fixedStepConditions`（5.6）；asset 與網路的套用點本來就要每幀跑；回滾的 System 生成期間照跑，Client 等伺服器初始狀態時要不要停回滾，屬網路 Module 那一批（第 16 節）。之後有 Module 需要時由那個 Module 開條件選項（照 `fixedStepConditions` 的先例）；兩個以上需要時，或作者要擋 Module 的 System 而擋不到時，停下來看要不要讓 Kernel 能給既有的 set 加條件（Bevy 的 `configure_sets(...run_if)`；RC-O18）。這是改 Engine 的事，第 14 節第 1 件一起問。
+- **「一輪」**：和交換點卡共用的定義是「一個 World 在一次 `RunFrame` 裡跑的全部」；在「生成期間每幀照跑」之下就是那個 World 的每幀清單，生成中也一樣。
 - **編排層不認得**生成用的 System 是什麼，也不認得 Loading、讀檔、資產這些名字。
 
 ### 5.2 `WorldGeneration` 與條件（W2、W3）
@@ -162,7 +162,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 - **遊戲初始化在第一個 World 的生成第一幀之前**跑完（O-1 本來就在「所有 World 的第一幀之前」；生成的第一幀就是第一幀，條文不改，只補說明）。理由：遊戲初始化是整個遊戲的設定，生成是這個 World 的內容（`-game-init-list` 原話「整個遊戲初始化，還是進入遊戲後生成世界」）。
 - **替換**：`ReplaceWorld` 的步驟照 O-8 不變（帶過去 → 準備 → 必要時遊戲初始化 → `beforeSwap` → 換上）；**換上之後新 World 從生成中開始**，下一個 `RunFrame` 是它的生成第一幀。生成中的 World 再被替換：新 World 重新從生成中開始；`BuildNewFirst` 失敗時舊 World 的生成狀態不變。
 - **`beforeSwap` 留著**（卡片照 L17 判）：它是「換上之前、在新 World 上同步跑、失敗就保留舊 World」的關（O-8、存檔版本 Module「拒絕走讀檔失敗的路」）；生成是換上之後、跨多幀的內容建造。兩者做不同的事。
-- **讀檔失敗的安全範圍收窄（要你確認，第 14 節第 3 件）**：使用者定 `-replace-order-author-choice` 時說「壞檔是最嚴重的 Bug」。讀檔的放回移到換上之後的生成，**生成期間任何 Err（作者回 Err、`AllotterExhausted`）都是 Product 結束**（O-11）；`BuildNewFirst` 保護的只剩登記、準備、`beforeSwap`。所以 O-8 那句改成「**在 `beforeSwap` 與之前失敗是安全的；生成期間失敗 Product 結束**」；要驗證的外部資料（版本、能不能解析、資產 id 在不在）放在發替換之前或 `beforeSwap`，生成裡只放已經驗證過的資料的放回。保住「放回途中失敗也安全」的做法是選項 C（新 World 在旁邊生成完才換上），本頁退掉（8.1）。
+- **讀檔失敗的安全範圍收窄（要你確認，第 14 節第 3 件）**：使用者定 `-replace-order-author-choice` 時說「壞檔是最嚴重的 Bug」。讀檔的放回移到換上之後的生成，**生成期間任何 Err（作者回 Err、`AllotterExhausted`）都是 Product 結束**（O-11）；`BuildNewFirst` 保護的只剩登記、準備、`beforeSwap`。所以 O-8 那句改成「**在 `beforeSwap` 與之前失敗是安全的；生成期間失敗 Product 結束**」；要驗證的外部資料（版本、能不能解析、資產 id 在不在）放在發替換之前或 `beforeSwap`，生成裡只放已經驗證過的資料的放回。保住「放回途中失敗也安全」的做法是「旁邊生成再換上」（新 World 在旁邊生成完才換上），本頁退掉（8.1）。
 
 ### 5.5 錯誤
 
@@ -186,7 +186,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
   - 這個條件掛在 `RunFixedSteps` 上，`RunFixedSteps` 寫 `Tick`，權威登記了 `Tick` 時它進一致性指紋：兩端都要用同一種寫法（5.8）。
   - 噪音在有名字的產品上成為問題時（RC-O19），再看要不要讓時間 Module 認得生成，或另給一種擋法。
 - 兩種寫法寫進說明頁的「生成世界」一節。
-- 讀檔放回時間的狀態（`RestoreFixedTime`、放回 `Tick`）照 WT-3 在準備時機做（`extra`）；不放在生成期間的 System 裡——B 之下每幀清單照跑，`AdvanceTime` 與 `RunFixedSteps` 之間有 WT-3 禁止的窗（窄複查 N2）。
+- 讀檔放回時間的狀態（`RestoreFixedTime`、放回 `Tick`）照 WT-3 在準備時機做（`extra`）；不放在生成期間的 System 裡——「生成期間每幀照跑」之下每幀清單照跑，`AdvanceTime` 與 `RunFixedSteps` 之間有 WT-3 禁止的窗（窄複查 N2）。
 
 ### 5.7 讀檔掛在生成世界（讀檔宣告的要求）
 
@@ -197,7 +197,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 | 判定要有讀檔的案例 | 判定 1 的 C1～C3、C8 |
 | 重新配號的寫法 | 照讀檔宣告 5.1：`Spawn`＋作者自己的對照表；三家讀檔都這樣做（`other-engines.md` B11、B13） |
 | 用 `ExclusiveWorld::Restore` 放回 | Kernel 不知道放回的用途（DI-KS 12），讀檔也可以用。差別：不補 `InitialValue`、全部放回後才跑 hook；範圍內的 id 會被復活，所以配發器也要一起放回或移下界，否則之後的 `Spawn` 會撞到（`AllottedIdAlive`）。寫進說明頁的讀檔一節，由讀檔的實作那一批決定要不要用 |
-| 讀檔宣告判定 2 的四個 `RangeAllotter` 突變（`restore-entry-declaration.zh-Hant.md:270-274`；讀檔還沒實作） | 讀檔的編號兩種寫法 | (甲) 改 Kernel 測試的替身：無（判定與案例不動）；(乙) 改 `entity_ids`：Kernel 的案例 1～3 失去這四個突變，要另寫一組連 `entity_ids` 的案例 | **改已核准判定的突變位置**：第 14 節第 4 件（建議 (甲)） |
+| 讀檔宣告判定 2 的四個 `RangeAllotter` 突變（`restore-entry-declaration.zh-Hant.md:270-274`；讀檔還沒實作） | 讀檔的編號兩種寫法 | 「改替身」：無（判定與案例不動）；「改 `entity_ids`」：Kernel 的案例 1～3 失去這四個突變，要另寫一組連 `entity_ids` 的案例 | **改已核准判定的突變位置**：第 14 節第 4 件（建議「改替身」） |
 
 ### 5.8 權威與回滾（第 4 批）
 
@@ -235,21 +235,21 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
   2. 批次表「Kernel 不內建預設策略」；[全局審計](global-audit.zh-Hant.md)第 55 行已記「`RangeAllotter`、`Owns`：與『策略由產品定』矛盾」。
   3. 搬了之後 Kernel 不附任何策略型別，DI-KS 4「配發策略由產品宣告」的字面與實際一致。
 - **測試怎麼改**（不是決勝理由，§4；逐筆在第 10 節）：Kernel 的測試不 link Module，用 `tests/common/kernel/WorldTestSupport.hpp` 裡的測試用配發器（合成資料，AGENTS §7）——語意同 `RangeAllotter` 的副本，守的不是它的性質，只是讓 Kernel 的機制有東西可配。守 `RangeAllotter` 性質的測試與突變搬到 `tests/common/entity_ids/`。
-- **讀檔宣告判定 2 的四個突變**（`restore-entry-declaration.zh-Hant.md:250`、`:270-274`：`Owns` 恆真／恆假、`Of` 忽略 `first`、`Allot` 不前進；讀檔還沒實作）：它們改的是 `RangeAllotter`，原定由 Kernel 的讀檔案例 1～3 抓。搬家後 Kernel 測試用替身。建議 (甲) 突變改 Kernel 測試的替身，判定的位置與案例不動；另一條路 (乙) 是突變改 `entity_ids`、另寫一組連 `entity_ids` 的案例 1～3。第 14 節第 4 件請你確認。
+- **讀檔宣告判定 2 的四個突變**（`restore-entry-declaration.zh-Hant.md:250`、`:270-274`：`Owns` 恆真／恆假、`Of` 忽略 `first`、`Allot` 不前進；讀檔還沒實作）：它們改的是 `RangeAllotter`，原定由 Kernel 的讀檔案例 1～3 抓。搬家後 Kernel 測試用替身。建議「改替身」：突變改 Kernel 測試的替身，判定的位置與案例不動；另一條路「改 `entity_ids`」是突變改 `entity_ids`、另寫一組連 `entity_ids` 的案例 1～3。第 14 節第 4 件請你確認。
 
 ### 5.11 只定形狀、不實作：`Regenerate`
 
-`Product::Regenerate(world)`：兩次 Run 之間，把一個健康、生成已結束的 World 放回生成中（`WorldGeneration` 寫回生成中）。實體與 Resource 不動，清掉舊內容是作者的事。用途：在同一個 World 裡換關卡（Bevy 用狀態、Unity 把場景載進同一個 World、Unreal 的 level streaming，`other-engines.md` A2、A7）。在 B 之下實作只是寫一個旗標，但沒有直近的 Feature：讀檔一律在新的 World；「從主選單進關卡」用新 World 還是 World 內，是舊卡問過你、沒答的第 (3) 題，交狀態機重做那一批問。在那之前，「可以多次」照「每次建 World 都生成」讀（卡片照 L17 判，第 15 節）。
+`Product::Regenerate(world)`：兩次 Run 之間，把一個健康、生成已結束的 World 放回生成中（`WorldGeneration` 寫回生成中）。實體與 Resource 不動，清掉舊內容是作者的事。用途：在同一個 World 裡換關卡（Bevy 用狀態、Unity 把場景載進同一個 World、Unreal 的 level streaming，`other-engines.md` A2、A7）。在「生成期間每幀照跑」之下實作只是寫一個旗標，但沒有直近的 Feature：讀檔一律在新的 World；「從主選單進關卡」用新 World 還是 World 內，是舊卡問過你、沒答的第 (3) 題，交狀態機重做那一批問。在那之前，「可以多次」照「每次建 World 都生成」讀（卡片照 L17 判，第 15 節）。
 
 ### 5.12 和交換點卡的交界（`gyo2-exchange`，`local_7876c9c8`）
 
-**已對齊**（2026-11-22，兩張卡以 SendMessage 往返；修訂 1 改建議 B 之後的差異見表末）。交換點卡的宣告：`exchange-declaration.zh-Hant.md`（分支 `claude/gyo2-exchange-81ea9f`，修訂 2 d315f839）——交換點第 5.1 節、執行緒第 5.3 節、Extract 第 5.4 節、交界第 13 節 W-1～W-10（引用本頁修訂 1 的 5.1～5.5、5.12；W-1 並列 A／B、W-3「B 掛一處、選 A 才掛兩處」、W-10「RunSchedule 不讀寫生成狀態、交出入口與 RunFrame 共用同一段處理」）。
+**已對齊**（2026-11-22，兩張卡以 SendMessage 往返；修訂 1 改建議「生成期間每幀照跑」之後的差異見表末）。交換點卡的宣告：`exchange-declaration.zh-Hant.md`（分支 `claude/gyo2-exchange-81ea9f`，修訂 2 d315f839）——交換點第 5.1 節、執行緒第 5.3 節、Extract 第 5.4 節、交界第 13 節 W-1～W-10（引用本頁修訂 1 的 5.1～5.5、5.12；W-1 並列「另跑生成清單」／「生成期間每幀照跑」、W-3「B 掛一處、選「另跑生成清單」才掛兩處」、W-10「RunSchedule 不讀寫生成狀態、交出入口與 RunFrame 共用同一段處理」）。
 
 **「一輪」**（兩卡共用的定義）：一個 World 在一次 `RunFrame` 裡跑的全部。
 
 | 交界 | 本卡負責 | 交換點卡負責 |
 |---|---|---|
-| 資料進出 World 的四種形（交換點卡修訂 2 的編號） | 形 (1) 套用點（World 裡的 System：asset 的套用、網路的收件送件）：生成中照常跑（B 之下掛 `Main` 一處即可，使用者選 A 才同時掛 `Generate/First`） | 形 (2) 交換函式（照已核准的時間設計 5.3 登記；World 之間的郵箱屬這一形，照 11-11「只在 schedule 之間存取」）：只由 `RunFrame` 呼叫，`RunGameInit`、`RunSchedule` 不呼叫，有 World 壞了不呼叫；形 (3) runner 在兩次入口之間直接讀寫 World：和生成無關；形 (4) Extract：在讀者的「一輪」之前跑。本卡不需要提供「這一輪是不是生成」：B 之下它在 World 的 `WorldGeneration`，交換函式從 `World&` 讀得到 |
+| 資料進出 World 的四種形（交換點卡修訂 2 的編號） | 形 (1) 套用點（World 裡的 System：asset 的套用、網路的收件送件）：生成中照常跑（「生成期間每幀照跑」之下掛 `Main` 一處即可，使用者選「另跑生成清單」才同時掛 `Generate/First`） | 形 (2) 交換函式（照已核准的時間設計 5.3 登記；World 之間的郵箱屬這一形，照 11-11「只在 schedule 之間存取」）：只由 `RunFrame` 呼叫，`RunGameInit`、`RunSchedule` 不呼叫，有 World 壞了不呼叫；形 (3) runner 在兩次入口之間直接讀寫 World：和生成無關；形 (4) Extract：在讀者的「一輪」之前跑。本卡不需要提供「這一輪是不是生成」：「生成期間每幀照跑」之下它在 World 的 `WorldGeneration`，交換函式從 `World&` 讀得到 |
 | 別的 World 要知道某個 World 在生成 | 提供 `Product::Generating(world)` 與 World 內的 `WorldGeneration` | 不加新機制：runner 在兩次入口之間讀 `Generating` 寫進別的 World（形 (3)），或那個 World 的「出」＋有鎖的服務（形 (2)）。交出到別的執行緒的 World，別的 World 只能經它自己的「出」＋有鎖的服務知道它在生成，不能跨執行緒讀 `Product::Generating`（交換點卡 W-5） |
 | 一個 World 的一輪的入口（分頻率、分執行緒的 runner） | 生成的處理是一個私有步驟，`RunFrame` 與交換點卡的入口共用（5.3） | 入口的形狀（暫名 `Product::Lend`→`WorldLease`，本批不實作）；交出期間由持有的執行緒推它的一輪，生成的狀態跟著交出（交換點卡 5.3） |
 | 一次 `RunFrame` 裡一個 World 的先後（交換點卡 W-2） | 生成的前處理（寫 `WorldGeneration` 成生成中、清 `held`）與「判斷生成是否結束」兩步 | 「進」在前處理之後、「出」在判斷之後：前處理 → 進 → 一輪 → 判斷生成是否結束 → 出。所以生成結束那一輪的「出」已讀到 `generating=false` |
@@ -258,7 +258,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 | 兩批合起來的案例（交換函式的進出包住生成中的一輪） | — | 後合併的那一批補測試（交換點卡第 10 節末） |
 | 網路的初始同步 | 作者的 System 等到了才停止 `Hold()` | 屬網路 Module（之後）；lightyear 的 `CatchUpSnapshotReady`／`HasCaughtUp`（`other-engines.md` A9）是參考 |
 
-修訂 1 改建議 B 之後：「一輪」的定義不變（B 之下一輪就是每幀清單）；修訂 0 要求「套用點掛 `Main/First` 與 `Generate/First` 兩處」的規則在 B 之下不需要。已通知交換點卡；你選 A 的話恢復修訂 0 的規則。
+修訂 1 改建議「生成期間每幀照跑」之後：「一輪」的定義不變（「生成期間每幀照跑」之下一輪就是每幀清單）；修訂 0 要求「套用點掛 `Main/First` 與 `Generate/First` 兩處」的規則在「生成期間每幀照跑」之下不需要。已通知交換點卡；你選「另跑生成清單」的話恢復修訂 0 的規則。
 
 ---
 
@@ -284,7 +284,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 - **O-4（改）**：職責清單「生成世界的流程（第 5 條）」去掉「（第 5 條）」。骨架不變；「`Off`（編排層不宣告）」補「schedule」兩字（`WorldGeneration` 照登記，檢查 N7）。不算職責清單多一項。
 - **O-8（改）**：「換上之後，新 World 從生成中開始（O-14）；`beforeSwap` 照舊在換上之前、同步」；「`BuildNewFirst` 的讀檔失敗是安全的」改成「**在 `beforeSwap` 與之前失敗是安全的；生成期間失敗 Product 結束**；要驗證的外部資料放在發替換之前或 `beforeSwap`；一次放得完的讀檔可以整個放在 `beforeSwap`」（第 14 節第 3 件）。
 - **Replacement Criteria（新）**：
-  - **RC-O14**：有點名的 Feature 需要「新 World 生成期間舊 World 照跑、生成完才換上」（無縫轉場），或需要「跨幀的讀檔放回途中失敗也保留舊 World」（第 8 節選項 C）。
+  - **RC-O14**：有點名的 Feature 需要「新 World 生成期間舊 World 照跑、生成完才換上」（無縫轉場），或需要「跨幀的讀檔放回途中失敗也保留舊 World」（第 8 節「旁邊生成再換上」）。
   - **RC-O15**：兩個以上的產品為了「生成中」另寫自己的旗標或狀態，因為 `WorldGeneration` 與兩個條件不夠用。
   - **RC-O16**：生成要做得出來，必須讓 Kernel 認得生成（任何階段的欄位、分支）。
   - **RC-O17**：兩個以上的產品各自寫「逐項做完才下一項」的游標，考慮由編排層提供。
@@ -309,23 +309,23 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 | 選項 | 系譜 | 支撐的 Feature | 結論 |
 |---|---|---|---|
-| **B：生成期間主迴圈照跑；編排層擁有「生成中」、每次建 World 都從它開始；作者用條件擋（本頁）** | 參考實作：Bevy 讀取畫面例子與 `States`＋`run_if`（`loading_screen.rs:26-29`、`multi_asset_sync.rs:30-35`）、Unity（主迴圈照跑、場景非同步）、Unreal（`WaitingToStart` 期間世界 tick）；「生成中歸編排層」是新導出（三家由作者自己做） | 分批與讀取畫面、讀檔、資產等完才 tick | **建議**（第 14 節第 1 件交你定 A 或 B） |
-| A：生成中跑另一份清單（`Generate`），不跑每幀清單（修訂 0 的建議） | 新導出：Bevy `startup_labels` 延伸成可多批 | 同上 | 退：(1) 每批都要跑的東西（asset 套用、網路收件、輸入、畫面、日誌的 Forward）都要在 `Generate` 再掛一次——單一 World 的讀取畫面一出現就是好幾個單位，掛載散在每個實現（設計審查第 1 條）；(2) `Generate` 結束後永不再跑，掛在上面的**所有**訊息讀者（含 Module 的套用點）永久拉住保留；送給只在 `Main` 的讀者的訊息在那次 Run 結束被修剪（`World.cpp:1042-1049`）；(3) 作者把 `Main` 放進生成清單時最後一幀會跑兩次 `Main`；(4) 生成期間 `RealTime` 不前進；(5) O-4 的骨架要改，`SkeletonTests.cpp:83` 的 DI 守衛要改。好處：生成期間不 tick 是結構的結果、作者不用寫條件、Module 的 System 預設不跑 |
-| A'：A 加共用外框（兩份清單共用一張每批都跑的 schedule，例 `First`／`Last` 拆成獨立 schedule） | 新導出（檢查 B2 建議並列） | 同上 | 退：解掉 A 的 (1)，但 O-4 的骨架與已核准的時間 Module 掛點（`Main/First`）都要拆；(2) 照舊；比 B 多一套東西 |
-| C：替換時新 World 在旁邊生成、舊 World 照跑，生成完才換上（無縫） | 參考實作：Unity streaming World（`SceneSectionStreamingSystem.cs:227`、`:343`）；Unreal seamless travel（一般知識） | 好處：跨幀的讀檔放回途中失敗也能保留舊 World、轉場無縫 | 退：沒有點名的 Feature 要無縫（BigMap 用 `DropOldFirst`，兩張放不下）；一次放得完的讀檔已經可以放 `beforeSwap`、失敗保留舊 World；一個 World 槽同時有兩個 World，`World()`、`InsertSystems`、失敗時的收拾都要重定；RC-O14 |
-| D：Engine 提供「逐項做完才下一項」的階段序列 | 新導出（三家都沒有） | 使用者 11-11 的順序 | 退：作者用條件與自己的游標排得出；RC-O17 |
-| E：把 `beforeSwap` 擴成生成（拿掉 `beforeSwap`） | 舊的形狀 | — | 退：`beforeSwap` 是「失敗就保留舊 World」的關，生成在換上之後（5.4）；啟動時的 World 沒有 `beforeSwap` |
+| **「生成期間每幀照跑」：生成期間主迴圈照跑；編排層擁有「生成中」、每次建 World 都從它開始；作者用條件擋（本頁）** | 參考實作：Bevy 讀取畫面例子與 `States`＋`run_if`（`loading_screen.rs:26-29`、`multi_asset_sync.rs:30-35`）、Unity（主迴圈照跑、場景非同步）、Unreal（`WaitingToStart` 期間世界 tick）；「生成中歸編排層」是新導出（三家由作者自己做） | 分批與讀取畫面、讀檔、資產等完才 tick | **建議**（第 14 節第 1 件交你定「另跑生成清單」或「生成期間每幀照跑」） |
+| 「另跑生成清單」：生成中跑另一份清單（`Generate`），不跑每幀清單（修訂 0 的建議） | 新導出：Bevy `startup_labels` 延伸成可多批 | 同上 | 退：(1) 每批都要跑的東西（asset 套用、網路收件、輸入、畫面、日誌的 Forward）都要在 `Generate` 再掛一次——單一 World 的讀取畫面一出現就是好幾個單位，掛載散在每個實現（設計審查第 1 條）；(2) `Generate` 結束後永不再跑，掛在上面的**所有**訊息讀者（含 Module 的套用點）永久拉住保留；送給只在 `Main` 的讀者的訊息在那次 Run 結束被修剪（`World.cpp:1042-1049`）；(3) 作者把 `Main` 放進生成清單時最後一幀會跑兩次 `Main`；(4) 生成期間 `RealTime` 不前進；(5) O-4 的骨架要改，`SkeletonTests.cpp:83` 的 DI 守衛要改。好處：生成期間不 tick 是結構的結果、作者不用寫條件、Module 的 System 預設不跑 |
+| 「另跑生成清單」＋共用外框：「另跑生成清單」加共用外框（兩份清單共用一張每批都跑的 schedule，例 `First`／`Last` 拆成獨立 schedule） | 新導出（檢查 B2 建議並列） | 同上 | 退：解掉「另跑生成清單」的 (1)，但 O-4 的骨架與已核准的時間 Module 掛點（`Main/First`）都要拆；(2) 照舊；比「生成期間每幀照跑」多一套東西 |
+| 「旁邊生成再換上」：替換時新 World 在旁邊生成、舊 World 照跑，生成完才換上（無縫） | 參考實作：Unity streaming World（`SceneSectionStreamingSystem.cs:227`、`:343`）；Unreal seamless travel（一般知識） | 好處：跨幀的讀檔放回途中失敗也能保留舊 World、轉場無縫 | 退：沒有點名的 Feature 要無縫（BigMap 用 `DropOldFirst`，兩張放不下）；一次放得完的讀檔已經可以放 `beforeSwap`、失敗保留舊 World；一個 World 槽同時有兩個 World，`World()`、`InsertSystems`、失敗時的收拾都要重定；RC-O14 |
+| 「逐項序列」：Engine 提供「逐項做完才下一項」的階段序列 | 新導出（三家都沒有） | 使用者 11-11 的順序 | 退：作者用條件與自己的游標排得出；RC-O17 |
+| 「beforeSwap 擴成生成」：把 `beforeSwap` 擴成生成（拿掉 `beforeSwap`） | 舊的形狀 | — | 退：`beforeSwap` 是「失敗就保留舊 World」的關，生成在換上之後（5.4）；啟動時的 World 沒有 `beforeSwap` |
 
-**決勝理由（B）**：每批都跑的東西一律掛一處、照三家；生成用的 System 與遊戲邏輯各放一個帶條件的 set（Kernel 已有，`Registry.hpp:249`），條件集中在作者的 set 上；時間 Module、asset、交換點都不用改。**代價**（窄複查 B1 補齊）：
+**決勝理由（「生成期間每幀照跑」）**：每批都跑的東西一律掛一處、照三家；生成用的 System 與遊戲邏輯各放一個帶條件的 set（Kernel 已有，`Registry.hpp:249`），條件集中在作者的 set 上；時間 Module、asset、交換點都不用改。**代價**（窄複查 B1 補齊）：
 - 作者每張有這類 System 的 schedule 要宣告帶條件的 set，並選一種「生成期間不 tick」的寫法（5.6）。
-- 作者的條件管不到 Module 的 System，Module 要停得各自開條件選項（5.1；RC-O18）——這是 A「掛載散在每個實現」的鏡像，只是方向相反（A：預設不跑、要跑的各自再掛；B：預設照跑、不該跑的各自開選項）。現在沒有 Module 需要停，所以 B 的這一項是 0 個，A 的那一項現在就是好幾個。
-- 有一個**永不再跑的 set**（`WhileGenerating()`）：裡面讀 `Message` 的作者 System 會永久拉住保留；生成用的 System 送給 `AfterGenerating()` 讀者的訊息在那次 Run 結束被修剪。和 A 同型，範圍只到作者自己的生成用 System（A 是 `Generate` 上的全部，含 Module）。
+- 作者的條件管不到 Module 的 System，Module 要停得各自開條件選項（5.1；RC-O18）——這是「另跑生成清單」「掛載散在每個實現」的鏡像，只是方向相反（「另跑生成清單」：預設不跑、要跑的各自再掛；「生成期間每幀照跑」：預設照跑、不該跑的各自開選項）。現在沒有 Module 需要停，所以「生成期間每幀照跑」的這一項是 0 個，「另跑生成清單」的那一項現在就是好幾個。
+- 有一個**永不再跑的 set**（`WhileGenerating()`）：裡面讀 `Message` 的作者 System 會永久拉住保留；生成用的 System 送給 `AfterGenerating()` 讀者的訊息在那次 Run 結束被修剪。和「另跑生成清單」同型，範圍只到作者自己的生成用 System（「另跑生成清單」是 `Generate` 上的全部，含 Module）。
 - 擋遊戲邏輯與固定步的條件進一致性指紋，是兩端契約的一部分（5.8）。
 - 「生成中」是一個兩個值的狀態，和之後的狀態機分工要寫清楚（5.9）。
 
-**選 A 時本頁要改的**：5.1～5.3 換成修訂 0 的「生成清單＋`Generate` 骨架」；5.9、5.12 恢復「套用點掛兩處」；5.6 改成「結構上不 tick」並補修訂 0 檢查 S2、S3 的例外；第 10 節加 O-4 骨架守衛（`SkeletonTests.cpp:83`）的 §14.4 核准；第 13 節的訊息限界改成「`Generate` 上的全部讀者」。
+**選「另跑生成清單」時本頁要改的**：5.1～5.3 換成修訂 0 的「生成清單＋`Generate` 骨架」；5.9、5.12 恢復「套用點掛兩處」；5.6 改成「結構上不 tick」並補修訂 0 檢查 S2、S3 的例外；第 10 節加 O-4 骨架守衛（`SkeletonTests.cpp:83`）的 §14.4 核准；第 13 節的訊息限界改成「`Generate` 上的全部讀者」。
 
-**旧い形に置き場所を探していないか**（〈Batch declaration checks〉）：B 不是把舊的 `Domain::Loading`、runtime-composition 3a 的 stage 序或 K0 的「Startup 由 Kernel 跑一次」搬到編排層——Kernel 那邊已拿掉；B 的形狀從三家「主迴圈照跑、作者擋」導出，編排層只多「每次建 World 都從生成開始」這一個狀態。
+**旧い形に置き場所を探していないか**（〈Batch declaration checks〉）：「生成期間每幀照跑」不是把舊的 `Domain::Loading`、runtime-composition 3a 的 stage 序或 K0 的「Startup 由 Kernel 跑一次」搬到編排層——Kernel 那邊已拿掉；「生成期間每幀照跑」的形狀從三家「主迴圈照跑、作者擋」導出，編排層只多「每次建 World 都從生成開始」這一個狀態。
 
 ### 8.2 「好了」的信號
 
@@ -381,7 +381,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 | 編排層、回滾、scenario 的測試遊戲（`SaveGame.hpp`、`InsertTests`、`TraceSpanTests`、`rollback/StrategyTests`、`WalkerGame.hpp`、`ScenarioSegment5Tests`）改用 `entity_ids` 或替身；`gyo_orchestration_tests` 不 link Module（用替身），用 Module 的案例放 `tests/common/entity_ids/` 或 scenario | — | 無 | 事後報告；每個測試 target 新增的 link 寫在 dev_log |
 | 每個 World 多一個 Resource（`WorldGeneration`）：寫死 Registry 指紋、Resource 數的測試（掃描結果：orchestration、scenario、world_time、rollback、authority 沒有寫死 Registry 指紋；權威的一致性指紋只收判定資料，不受影響） | — | 無（期待值隨定義變，若實作時找到） | 事後報告，逐案寫 dev_log |
 
-修訂 0 列的 `SkeletonTests.cpp:83`［or-skeleton-only-two］在 B 之下不動（骨架不變）。既有的判定不放寬。
+修訂 0 列的 `SkeletonTests.cpp:83`［or-skeleton-only-two］在「生成期間每幀照跑」之下不動（骨架不變）。既有的判定不放寬。
 
 ## 11. 判定（先宣告，結果出來之後不放寬）
 
@@ -396,12 +396,12 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 | C1 | **啟動時讀檔、一幀**：描述的準備放存檔、移下界；讀檔 System 在 `WhileGenerating()` 的 set | 第一個 `RunFrame` 之後：編號 12、57、58 在、值相同、`ChaseTarget` 仍是 12、生成已結束、之後的 `Spawn` ≥ 存檔的下一號、沒有被丟的生成；`AfterGenerating()` 的 System 第一幀沒跑、第二幀跑 |
 | C2 | **遊戲中讀檔、分三幀**：`ReplaceWorld`（`extra` 放存檔、移下界）；讀檔 System 每幀放一個、沒放完就 `Hold()` | 換上之後前兩個 `RunFrame` 後 `Generating` 為 true、`AfterGenerating()` 的 System 沒跑；第三個後生成結束；第四個起遊戲邏輯跑；遊戲初始化的計數仍是 1 |
 | C3 | **分批數不同、結果相同**：同一份存檔分 1、2、3 幀放回 | 生成結束時三者的 `World::Summary()` 相同 |
-| C4 | **等外部結果、不 tick**（`world_time` 測試；取樣 `ManualDelta`、d＝步長）：作者的 System 在一個由 World 外設定的旗標（模擬資產到了）為 false 時 `Hold()`；旗標在第 k 幀之前設 true。(a) 暫停：描述的準備設 `paused=true`，`AfterGenerating()` 的 System 設回；(b) 條件：`pausable=false`、`fixedStepConditions = {AfterGenerating()}` | (a) 第 1～k+1 幀 `Tick` 0、沒有 `TimeDiscarded`、`RealTime.elapsed` 每幀加 d；第 k+2 幀起 `Tick` 前進。(b) 第 1～k 幀 `Tick` 0；`TimeDiscarded`（`NotDriven`）共 k 筆、落在第 2～k+1 幀；第 k+1 幀起 `Tick` 前進 |
+| C4 | **等外部結果、不 tick**（`world_time` 測試；取樣 `ManualDelta`、d＝步長）：作者的 System 在一個由 World 外設定的旗標（模擬資產到了）為 false 時 `Hold()`；旗標在第 k 幀之前設 true。暫停的寫法：描述的準備設 `paused=true`，`AfterGenerating()` 的 System 設回；條件的寫法：`pausable=false`、`fixedStepConditions = {AfterGenerating()}` | 暫停的寫法：第 1～k+1 幀 `Tick` 0、沒有 `TimeDiscarded`、`RealTime.elapsed` 每幀加 d；第 k+2 幀起 `Tick` 前進。條件的寫法：第 1～k 幀 `Tick` 0；`TimeDiscarded`（`NotDriven`）共 k 筆、落在第 2～k+1 幀；第 k+1 幀起 `Tick` 前進 |
 | C5 | **遊戲初始化在生成之前**：兩個 World | 遊戲初始化在第一個 World 的生成第一幀之前跑一次；替換後再生成，遊戲初始化不再跑 |
-| C6 | **每個 World 各自**：A `Hold()` 兩幀、B 不 `Hold()` | 前兩個 `RunFrame` 後 A 仍在生成、B 已結束 |
+| C6 | **每個 World 各自**：World `Map` `Hold()` 兩幀、World `Menu` 不 `Hold()` | 前兩個 `RunFrame` 後 `Map` 仍在生成、`Menu` 已結束 |
 | C7 | **生成中出錯**：`WhileGenerating()` 的 System 回 Err | Product 結束（O-11）、`WorldFailure.schedule` 是那一張、`entry` 是 `RunFrame` |
 | C8 | **`DropOldFirst` 的讀檔、分兩幀** | 舊 World 先銷毀、新 World 生成兩幀；結果同 C2 |
-| C9 | **生成中再替換**：A 在生成第 2 幀時 `ReplaceWorld` | 成功：新 World 從生成中開始；`BuildNewFirst` 失敗（`extra` 回 Err）：舊 World 仍在生成中、`Hold()` 的行為照舊 |
+| C9 | **生成中再替換**：World `Map` 在生成第 2 幀時 `ReplaceWorld` | 成功：新 World 從生成中開始；`BuildNewFirst` 失敗（`extra` 回 Err）：舊 World 仍在生成中、`Hold()` 的行為照舊 |
 | C10 | **`RunSchedule` 不碰生成的狀態**：生成中呼叫 `RunSchedule`，裡面的 System `Hold()` 與不 `Hold()` 各一 | `Generating` 不變；之後的 `RunFrame` 照 5.1 判 |
 | C11 | **骨架關掉時 `WorldGeneration` 仍登記**；不 `Hold()` 的 World 第一幀結束就結束生成 | 照寫 |
 | C12 | **預設 runner**：`Hold()` 的 World，`Product::Run()` | 回 Success、`Generating` 仍為 true |
@@ -472,13 +472,13 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 ## 14. 要你定與確認的
 
-### 第 1 件（別家分歧、真有取捨）：生成期間主迴圈照跑（B），還是跑另一份清單（A）？
+### 第 1 件（別家分歧、真有取捨）：生成期間主迴圈照跑（「生成期間每幀照跑」），還是跑另一份清單（「另跑生成清單」）？
 
 **用遊戲講**：RPG 開新遊戲要花 5 秒生成地圖，期間要有讀取畫面。
-- **B（建議；Bevy、Unity、Unreal 的做法）**：這 5 秒裡 `Main` 照跑——輸入、畫面、日誌、資產的套用都照常；生成用的 System 放進「生成中才跑」的 set，遊戲邏輯放進「生成完才跑」的 set；作者在準備函式讓時間暫停（或用條件擋固定步），`Tick` 停在 0。
-- **A（修訂 0 的建議）**：這 5 秒裡 World 只跑生成清單（`Generate`）；`Main` 完全不跑，生成完的那一幀才第一次跑 `Main`。
+- **「生成期間每幀照跑」（建議；Bevy、Unity、Unreal 的做法）**：這 5 秒裡 `Main` 照跑——輸入、畫面、日誌、資產的套用都照常；生成用的 System 放進「生成中才跑」的 set，遊戲邏輯放進「生成完才跑」的 set；作者在準備函式讓時間暫停（或用條件擋固定步），`Tick` 停在 0。
+- **「另跑生成清單」（修訂 0 的建議）**：這 5 秒裡 World 只跑生成清單（`Generate`）；`Main` 完全不跑，生成完的那一幀才第一次跑 `Main`。
 
-| | B | A |
+| | 「生成期間每幀照跑」 | 「另跑生成清單」 |
 |---|---|---|
 | 生成期間不 tick | 作者選一種寫法：暫停（在準備函式設；`RealTime` 照走、不丟時間）或條件（不能暫停的 World；每幀一筆 `TimeDiscarded`、5 秒約 300 筆）；時間 Module 不用改 | 結構保證，作者不用寫 |
 | 作者要寫的 | 每張有這類 System 的 schedule 宣告帶條件的 set | 生成的 System 掛 `Generate` |
@@ -491,11 +491,11 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 | 和別家 | 相同（只差 Bevy 能對 plugin 的 set 加條件，GYO 不能；見下） | 載入期間的做法和三家不同 |
 | 和之後的狀態機 | 「生成中」是一個兩個值的狀態，要寫清楚分工（5.9） | 不重疊 |
 
-**建議 B**。理由：每批都要跑的東西只掛一處，時間 Module 與 asset 都不用改；B 的代價（作者的 set、Module 擋不到、永不再跑的 set）現在都是作者自己範圍內的事，A 的代價現在就落在好幾個 Module 上。窄複查（Fable）也判「不認為要翻回 A，但表要補齊」——這張表是補齊後的版本。
+**建議「生成期間每幀照跑」**。理由：每批都要跑的東西只掛一處，時間 Module 與 asset 都不用改；「生成期間每幀照跑」的代價（作者的 set、Module 擋不到、永不再跑的 set）現在都是作者自己範圍內的事，「另跑生成清單」的代價現在就落在好幾個 Module 上。窄複查（Fable）也判「不認為要翻回「另跑生成清單」，但表要補齊」——這張表是補齊後的版本。
 
-**一起問（改 Engine）**：Bevy 的作者能對 plugin 公開的 set 加條件（`configure_sets(...run_if)`），GYO 的 Kernel 不能（set 只能宣告一次，`Registry.cpp:512-523`）。選 B 之後，要不要讓 Kernel 能給既有的 set 加條件？**建議現在不做**：現在沒有 Module 需要在生成期間停；兩個以上的 Module 需要、或作者擋不到時再停下來問（RC-O18）。
+**一起問（改 Engine）**：Bevy 的作者能對 plugin 公開的 set 加條件（`configure_sets(...run_if)`），GYO 的 Kernel 不能（set 只能宣告一次，`Registry.cpp:512-523`）。選「生成期間每幀照跑」之後，要不要讓 Kernel 能給既有的 set 加條件？**建議現在不做**：現在沒有 Module 需要在生成期間停；兩個以上的 Module 需要、或作者擋不到時再停下來問（RC-O18）。
 
-**你 11-16 說過「Startup 才是機制，正常這些邏輯都應該寫在 Startup 裡的」**：修訂 0 拿它當選 A 的理由，那是卡片的讀法——那句指字面的 Startup（只跑一次）還是「建世界的階段」，舊卡問過你、沒答（`inventory-and-premises.md` 末段第 (2) 題）。B 也是「建世界的階段由 Engine 認得」，只是階段期間主迴圈照跑。如果你那句的意思是「階段期間只跑階段自己的東西」，請選 A。
+**你 11-16 說過「Startup 才是機制，正常這些邏輯都應該寫在 Startup 裡的」**：修訂 0 拿它當選「另跑生成清單」的理由，那是卡片的讀法——那句指字面的 Startup（只跑一次）還是「建世界的階段」，舊卡問過你、沒答（`inventory-and-premises.md` 末段第 (2) 題）。「生成期間每幀照跑」也是「建世界的階段由 Engine 認得」，只是階段期間主迴圈照跑。如果你那句的意思是「階段期間只跑階段自己的東西」，請選「另跑生成清單」。
 
 證據：`build/evidence/gyo2-world-gen/other-engines.md` A1～A3、A7、A10；檢查報告 `declaration-r0-adversarial-check.md` B1、B2、S1；窄複查 `declaration-r1-narrow-check.md` B1、S3、S10。
 
@@ -516,18 +516,18 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 |---|---|---|---|
 | **`beforeSwap`**（換上之前、同步） | 不能（一次放完） | 保留舊 World（`BuildNewFirst`） | 小存檔；現有的讀檔案例就是這樣（`RestoreFlowTests.cpp:117-121`） |
 | **生成中**（換上之後、跨幀） | 能 | Product 結束 | 大存檔、要讀取畫面 |
-| 選項 C（新 World 在旁邊生成完才換上） | 能 | 保留舊 World | 本頁退掉（8.1） |
+| 「旁邊生成再換上」（新 World 在旁邊生成完才換上） | 能 | 保留舊 World | 本頁退掉（8.1） |
 
-所以「失敗保留舊 World」只在作者選**跨幀**放回時沒有；O-8 那句改成「在 `beforeSwap` 與之前失敗是安全的；生成期間失敗 Product 結束；一次放得完的讀檔可以整個放在 `beforeSwap`」。請確認這樣，或要求做 C。
+所以「失敗保留舊 World」只在作者選**跨幀**放回時沒有；O-8 那句改成「在 `beforeSwap` 與之前失敗是安全的；生成期間失敗 Product 結束；一次放得完的讀檔可以整個放在 `beforeSwap`」。請確認這樣，或要求做「旁邊生成再換上」。
 
 ### 第 4 件（確認）：讀檔宣告判定 2 的四個 `RangeAllotter` 突變放哪
 
 讀檔宣告（修訂 11，你 11-17 核准）判定 2 有四個突變改 `RangeAllotter`（`Owns` 恆真／恆假、`Of` 忽略 `first`、`Allot` 不前進），預期由 Kernel 的讀檔案例 1～3 抓（`restore-entry-declaration.zh-Hant.md:250`、`:270-274`）。`RangeAllotter` 搬出 Kernel 之後，Kernel 的測試改用替身，有兩條路（窄複查 S7）：
 
-- **(甲，建議) 突變改 Kernel 測試的替身**（`tests/common/kernel/WorldTestSupport.hpp`）：判定的位置與案例都不動；突變守的是「讀檔的案例有沒有看配發器的行為」，替身和 `RangeAllotter` 語意相同。先例：`sc-keys-overwritten-by-prepare` 改的是測試支援檔 `WalkerGame.hpp`。
-- (乙) 突變改 `entity_ids` 的 `RangeAllotter.hpp`：Kernel 的案例 1～3 抓不到，要另寫一組連 `entity_ids` 的案例 1～3（放 `tests/common/entity_ids/` 或 scenario）；判定的位置改。
+- **「改替身」（建議）：突變改 Kernel 測試的替身**（`tests/common/kernel/WorldTestSupport.hpp`）：判定的位置與案例都不動；突變守的是「讀檔的案例有沒有看配發器的行為」，替身和 `RangeAllotter` 語意相同。先例：`sc-keys-overwritten-by-prepare` 改的是測試支援檔 `WalkerGame.hpp`。
+- 「改 `entity_ids`」：突變改 `entity_ids` 的 `RangeAllotter.hpp`：Kernel 的案例 1～3 抓不到，要另寫一組連 `entity_ids` 的案例 1～3（放 `tests/common/entity_ids/` 或 scenario）；判定的位置改。
 
-確認 (甲)，或選 (乙)。
+確認「改替身」，或選「改 `entity_ids`」。
 
 ## 15. 卡片照 L17 判的（不是使用者的話；你可以直接更正）
 
@@ -559,23 +559,23 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 | 項 | 處理 |
 |---|---|
-| B1 B 的時間代價寫錯 | 改：5.6 兩種寫法、第 14 節表、8.1 |
-| B2 A 的「掛兩處」少算、沒並列共用外框 | 改：建議改 B；8.1 加 A'；修訂 1 的 RC-O12 改寫（修訂 2 重編為 RC-O15） |
-| B3 守衛分類與突變盤點 | 改：第 10 節逐筆列（含 `ks-hash-allotter-as-bytes`、D-9、`sc-lower-bound-not-moved`）；`SkeletonTests:83` 在 B 之下不動 |
+| B1「生成期間每幀照跑」的時間代價寫錯 | 改：5.6 兩種寫法、第 14 節表、8.1 |
+| B2「另跑生成清單」的「掛兩處」少算、沒並列共用外框 | 改：建議改「生成期間每幀照跑」；8.1 加「另跑生成清單」＋共用外框；修訂 1 的 RC-O12 改寫（修訂 2 重編為 RC-O15） |
+| B3 守衛分類與突變盤點 | 改：第 10 節逐筆列（含 `ks-hash-allotter-as-bytes`、D-9、`sc-lower-bound-not-moved`）；`SkeletonTests:83` 在「生成期間每幀照跑」之下不動 |
 | B4 讀檔宣告判定 2 的四個突變 | 改：5.10 末、第 10 節、第 14 節第 4 件、第 16 節 |
-| S1 訊息游標 | 改：B 之下沒有永不再跑的 schedule；5.5 的例子改用 Resource；第 13 節加讀者的限界；A 的代價列進 8.1、第 14 節 |
-| S2 `Main` 放進生成清單跑兩次 | B 之下不適用；列進「選 A 時本頁要改的」 |
+| S1 訊息游標 | 改：「生成期間每幀照跑」之下沒有永不再跑的 schedule；5.5 的例子改用 Resource；第 13 節加讀者的限界；「另跑生成清單」的代價列進 8.1、第 14 節 |
+| S2 `Main` 放進生成清單跑兩次 | 「生成期間每幀照跑」之下不適用；列進「選「另跑生成清單」時本頁要改的」 |
 | S3 第一次取樣的例外 | 修訂 1 寫「B 之下不依賴第一次取樣」不對（窄複查 S4：暫停若由 System 設，第一幀已推進）；修訂 2 改成暫停在準備函式設、C4 固定 `ManualDelta` |
 | S4 `Hold()` 的系譜 | 改：標「新導出」、寫失敗時放行；交第 14 節第 2 件 |
-| S5 讀檔失敗的安全範圍 | 改：5.4、O-8 條文、選項 C 補好處；第 14 節第 3 件 |
+| S5 讀檔失敗的安全範圍 | 改：5.4、O-8 條文、「旁邊生成再換上」 補好處；第 14 節第 3 件 |
 | S6 World 內看不出、多 World 推不動、交界未對齊 | 改：`WorldGeneration` 加 `generating`；5.3 與交換點卡分工（入口歸交換點卡、處理共用；**延後**：入口兩卡本批都不實作）；交界已對齊（5.12） |
 | S7 C13 抓不到的一半 | 改：拿掉 `extra` 那一半 |
-| S8 缺的案例 | 改：加 C9～C12、C16（RunSchedule、生成中替換、骨架關掉、預設 runner、經真登記檔的預設帶）；生成清單名字的 O-E5 在 B 之下沒有生成清單、不適用 |
+| S8 缺的案例 | 改：加 C9～C12、C16（RunSchedule、生成中替換、骨架關掉、預設 runner、經真登記檔的預設帶）；生成清單名字的 O-E5 在「生成期間每幀照跑」之下沒有生成清單、不適用 |
 | S9 `gyo_expect_links` 太早 | 改：第 4 步、scenario 第 6 段之後 |
 | S10 `GenerationPasses` 多餘、突變重複 | 改：拿掉；scenario 不另立同一個誤り的突變 |
 | S11 拿沒確認的讀法當使用者的話 | 改：第 14 節第 1 件標明是卡片的讀法；第 15 節第 11 條列五題 |
 | S12 測試 target 的 link | 改：第 10、11 節寫明各案例的位置與 link |
-| N1～N9 | N1 編號重排；N2 改引 `SaveGame.hpp:71`；N3 文件分支改 c65548d9、第 16 節轉舊清單整理卡；N4 B 之下套用 System 一幀一次、不適用；N5 Module 改名 `entity_ids`、Resource 名 `RangeAllotter`；N6 拿掉；N7 O-4 補字；N8 §6 加架構 README、DI-KS 15 (7) 改字；N9 5.10 寫明 |
+| N1～N9 | N1 編號重排；N2 改引 `SaveGame.hpp:71`；N3 文件分支改 c65548d9、第 16 節轉舊清單整理卡；N4「生成期間每幀照跑」之下套用 System 一幀一次、不適用；N5 Module 改名 `entity_ids`、Resource 名 `RangeAllotter`；N6 拿掉；N7 O-4 補字；N8 §6 加架構 README、DI-KS 15 (7) 改字；N9 5.10 寫明 |
 
 ## 18. 修訂 1 窄複查的處理（`declaration-r1-narrow-check.md`）
 
@@ -583,15 +583,15 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 | 項 | 處理 |
 |---|---|
-| B1 (a) 作者擋不到 Module 的 System | 改：5.1 新段；8.1 決勝理由的代價；第 14 節第 1 件表加列與「一起問」；RC-O18；第 13 節 |
-| B1 (b) B 也有訊息的問題 | 改：8.1 改成「永不再跑的 set」、和 A 同型；第 14 節表；第 13 節照實寫兩半 |
+| B1 前半 作者擋不到 Module 的 System | 改：5.1 新段；8.1 決勝理由的代價；第 14 節第 1 件表加列與「一起問」；RC-O18；第 13 節 |
+| B1 後半「生成期間每幀照跑」也有訊息的問題 | 改：8.1 改成「永不再跑的 set」、和「另跑生成清單」同型；第 14 節表；第 13 節照實寫兩半 |
 | S1 `Hold()` 無條件寫 | 改：`held = generating`（5.2）；C18、突變 `wg-hold-unconditional` |
 | S2 初始值與單一來源 | 改：建好當下（準備之前）放 `{true,false}`（5.1）；單一來源是 Resource、`Product::Generating` 讀它（5.1、5.3）；C17；突變 `wg-not-generating-when-built`（併替換的那一個）；通知交換點卡改 W-7 |
 | S3 條件名進指紋 | 改：編排層給名字固定的 `ConditionRef`（5.2）；5.8 寫成兩端契約；第 14 節表加列；扣不扣交網路 Module（第 16 節） |
 | S4 暫停的時點、C4 的筆數 | 改：5.6 暫停在準備函式設、設回的時點；C4 固定 `ManualDelta`、寫確定的幀數與筆數；帶 `RealTime` 寫進第 13 節；第 17 節 S3 列改（見下） |
 | S5 幀內先後放行 | 改：8.2 第 3 型與對策；第 14 節第 2 件 |
 | S6 第 3 件的歸因與選項 | 改：更正歸因；三種位置並列；O-8 補「一次放得完的讀檔可以整個放在 `beforeSwap`」 |
-| S7 第 4 件的兩條路 | 改：第 14 節第 4 件並列 (甲)(乙)、建議 (甲)；5.10 末、第 10 節照改 |
+| S7 第 4 件的兩條路 | 改：第 14 節第 4 件並列「改替身」與「改 `entity_ids`」、建議「改替身」；5.10 末、第 10 節照改 |
 | S8 編號相撞與交換點卡的舊文字 | 改：本卡用 O-14、RC-O14～RC-O19（7.1）；通知交換點卡 |
 | S9 寫入、判定與進、出的先後 | 改：5.1 五步、O-14 |
 | S10 條件寫法的代價 | 改：5.6、第 14 節表；RC-O19 |
@@ -602,4 +602,4 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 | N5 兩批合起來的案例 | 改：C19（本批後合併時由本批補） |
 | N6 啟動時的突變 | 改：`wg-not-generating-when-built` |
 | N7 `ConditionRef` | 改：5.2、5.6 |
-| N8 第 17 節 S6(b) | 改：標「延後」 |
+| N8 第 17 節 S6 第二點 | 改：標「延後」 |
