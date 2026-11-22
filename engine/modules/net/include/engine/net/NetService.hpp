@@ -80,6 +80,12 @@ public:
     [[nodiscard]] const std::optional<NetFailure>& LastLinkFailure() const noexcept { return lastLinkFailure_; }
     [[nodiscard]] const std::array<std::uint64_t, kDropReasonCount>& Drops() const noexcept { return drops_; }
 
+    // A server World was built (startup or replacement): the World generation goes up (D-5). The current one.
+    std::uint32_t BeginServerWorld() noexcept { return ++generation_; }
+    [[nodiscard]] std::uint32_t Generation() const noexcept { return generation_; }
+    // A client World was built: how many so far (a second one asks the server for everything again).
+    std::uint32_t BeginClientWorld() noexcept { return ++clientWorlds_; }
+
     // The one World of the Product with a net role (declaration D-3). false when another World holds it.
     [[nodiscard]] bool Bind(const std::string& world);
 
@@ -94,6 +100,8 @@ private:
     std::optional<ServerHost> server_;
     std::optional<ClientSession> client_;
     std::optional<std::string> boundWorld_;
+    std::uint32_t generation_ = 0;
+    std::uint32_t clientWorlds_ = 0;
     std::uint64_t linkFailures_ = 0;
     std::optional<NetFailure> lastLinkFailure_;
     std::array<std::uint64_t, kDropReasonCount> drops_{};

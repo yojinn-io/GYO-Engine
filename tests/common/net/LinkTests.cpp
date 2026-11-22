@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "NetTestSupport.hpp"
-#include "ModuleTestSupport.hpp"
+#include "GameTestSupport.hpp"
 #include "engine/net/UdpLink.hpp"
 
 namespace N = GYO::Engine::Net;
@@ -107,4 +107,33 @@ TEST_CASE("link: two Products shake hands over UDP loopback, and a step length t
     REQUIRE(ended.size() == 1);
     CHECK(ended[0].reason == N::DisconnectReason::StepLengthMismatch);
     CHECK(GYO::Test::Net::PeersOf(server->World("Net").GetWorld()).size() == 1);
+}
+
+TEST_CASE("link: a small G-5 over UDP loopback: the client ends equal to the server (G-7)") {
+    using namespace GYO::Test::Net;
+    const GameRules rules{90, true};
+    End server = GameEnd(N::NetRole::Server, rules);
+    server.net.bind = OS::DatagramAddress::Loopback(0);
+    auto builtServer = O::Product::Build(Describe(server), Units(true));
+    REQUIRE_MESSAGE(static_cast<bool>(builtServer), Reported(builtServer));
+    const auto address = (*builtServer)->Buffer().Find<N::NetService>()->UdpAddress();
+    REQUIRE(address.has_value());
+    End client = GameEnd(N::NetRole::Client, rules);
+    client.net.bind = OS::DatagramAddress::Loopback(0);
+    client.net.server = OS::DatagramAddress::Loopback(address->port);
+    client.net.userId = 9;
+    auto builtClient = O::Product::Build(Describe(client), Units(true));
+    REQUIRE_MESSAGE(static_cast<bool>(builtClient), Reported(builtClient));
+    auto& serverWorld = (*builtServer)->World("Net").GetWorld();
+    auto& clientWorld = (*builtClient)->World("Net").GetWorld();
+    bool equal = false;
+    for (int frame = 0; frame < 3000 && !equal; ++frame) {
+        REQUIRE(static_cast<bool>((*builtServer)->RunFrame()));
+        REQUIRE(static_cast<bool>((*builtClient)->RunFrame()));
+        equal = serverWorld.Resource<W::Tick>()->value > rules.lastTick + 5 && StateOf(clientWorld) == StateOf(serverWorld);
+        if (!equal) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK_MESSAGE(equal, "over UDP loopback the client ends equal to the server");
+    CHECK(StateOf(serverWorld).entities.size() > 5);
+    CHECK(clientWorld.Resource<ClientLog>()->messagesBeforeEntity == 0);
 }

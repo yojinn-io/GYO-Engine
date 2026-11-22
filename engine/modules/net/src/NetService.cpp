@@ -70,7 +70,8 @@ void NetService::Pump(const NetTime now) {
     if (client_) client_->Update(now);
 }
 
-void NetService::Flush(const NetTime now, const Stamp stamp) {
+void NetService::Flush(const NetTime now, Stamp stamp) {
+    stamp.worldGeneration = generation_;
     if (server_) {
         for (auto& [to, datagram] : server_->Collect(now, stamp)) {
             if (auto sent = link_->Send(to, datagram); !sent) Failed(std::move(sent).error());

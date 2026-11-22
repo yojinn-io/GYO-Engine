@@ -72,7 +72,7 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
     const std::uint32_t id = NewConnectionId();
     ConnectionSettings transport = settings_.transport;
     transport.connectionId = id;
-    peers_.emplace(id, Peer{from, request->userId, Connection(std::move(transport)), now, now, false});
+    peers_.emplace(id, Peer{from, request->userId, Connection(std::move(transport)), now, now, false, 0});
     byEndpoint_[from.value] = id;
     events_.push_back(HostEvent{HostEventKind::Connected, id, request->userId, from, DisconnectReason::Closed});
     replies_.push_back(Reply{from, PacketKind::Accepted, id, {}});
@@ -161,7 +161,10 @@ std::vector<std::pair<Endpoint, std::vector<std::byte>>> ServerHost::Collect(con
             if (!keepalive.empty()) datagrams.push_back(std::move(keepalive));
         }
         if (!datagrams.empty()) peer.lastSent = now;
-        for (auto& datagram : datagrams) out.emplace_back(peer.endpoint, std::move(datagram));
+        for (auto& datagram : datagrams) {
+            peer.bytesSent += datagram.size();
+            out.emplace_back(peer.endpoint, std::move(datagram));
+        }
         if (peer.closing) End(it, DisconnectReason::Closed);
         it = next;
     }
@@ -185,6 +188,16 @@ std::vector<std::uint32_t> ServerHost::ConnectionIds() const {
     std::vector<std::uint32_t> ids;
     for (const auto& [id, peer] : peers_) ids.push_back(id);
     return ids;
+}
+
+std::uint64_t ServerHost::UserIdOf(const std::uint32_t connectionId) const {
+    const auto peer = peers_.find(connectionId);
+    return peer == peers_.end() ? 0 : peer->second.userId;
+}
+
+std::uint64_t ServerHost::BytesSentTo(const std::uint32_t connectionId) const {
+    const auto peer = peers_.find(connectionId);
+    return peer == peers_.end() ? 0 : peer->second.bytesSent;
 }
 
 Connection* ServerHost::Find(const std::uint32_t connectionId) noexcept {

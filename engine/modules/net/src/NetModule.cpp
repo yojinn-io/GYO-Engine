@@ -7,18 +7,18 @@
 #include "engine/authority/AuthorityStrategy.hpp"
 #include "engine/authority/Consistency.hpp"
 #include "engine/authority/Registrations.hpp"
-#include "engine/base/Fnv1a.hpp"
 #include "engine/entity_ids/RangeAllotter.hpp"
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/World.hpp"
 #include "engine/net/UdpLink.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
+#include "engine/rollback/RollbackStrategy.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
 namespace GYO::Engine::Net {
 namespace {
 
-using SystemResult = Base::Result<void, Kernel::KernelError>;
+using Detail::SystemResult;
 
 std::uint64_t RandomSeed() {
     std::random_device device;
@@ -29,29 +29,32 @@ Stamp StampOf(const WorldTime::Tick& tick) { return Stamp{static_cast<std::uint3
 
 HandshakeFacts Facts(const NetWorldLink& link, const WorldTime::FixedTime& fixed, const IdRange& range) {
     HandshakeFacts facts;
-    facts.protocolHash = NetProtocolHash();
+    facts.protocolHash = link.registry ? link.registry->Hash() : NetRegistry{}.Hash();
     facts.stepNanoseconds = fixed.accumulator.Step();
     facts.idRange = link.idRange.value_or(range);
     facts.fingerprint = link.fingerprint;
     return facts;
 }
 
-// Main/First (the apply point "in", O-12): every waiting datagram into the connection layer; a connection made
-// spawns its Peer and sends PeerConnected, one ended despawns it and sends PeerDisconnected.
-SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Spawn<Kernel::Bundle<Peer>> spawn, Kernel::Despawn despawn,
-                        Kernel::MessageWriter<PeerConnected> connected, Kernel::MessageWriter<PeerDisconnected> disconnected) {
+// Main/First (the apply point "in", O-12): every waiting datagram into the connection layer; every connection has
+// its Peer entity (spawned with PeerConnected; after the server's World was replaced, the open connections get new
+// ones and an empty ledger), and one that ended is despawned with PeerDisconnected. A Link failure since the last
+// frame is told with NetLinkFailed.
+SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Spawn<Kernel::Bundle<Peer, PeerLedger>> spawn,
+                        Kernel::Despawn despawn, Kernel::MessageWriter<PeerConnected> connected,
+                        Kernel::MessageWriter<PeerDisconnected> disconnected, Kernel::MessageWriter<NetLinkFailed> failed) {
     NetWorldLink& world = *link;
     NetService& service = *world.service;
     service.Pump(service.Now());
+    if (service.LinkFailures() > world.reportedLinkFailures) {
+        world.reportedLinkFailures = service.LinkFailures();
+        const auto& last = service.LastLinkFailure();
+        failed.Send(NetLinkFailed{service.LinkFailures(), last ? last->code : NetFailureCode::LinkFailed,
+                                  last ? Base::Describe(*last) : std::string{}});
+    }
     if (ServerHost* server = service.Server()) {
         for (const HostEvent& event : server->TakeEvents()) {
-            if (event.kind == HostEventKind::Connected) {
-                auto peer = spawn.New(Peer{event.connectionId, event.userId, {}});
-                if (!peer) return Base::Err(std::move(peer).error());
-                world.peers[event.connectionId] = *peer;
-                connected.Send(PeerConnected{*peer, event.userId});
-                continue;
-            }
+            if (event.kind != HostEventKind::Disconnected) continue;
             const auto found = world.peers.find(event.connectionId);
             Kernel::EntityId entity = 0;
             if (found != world.peers.end()) {
@@ -61,13 +64,21 @@ SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Spawn<Kernel:
             }
             disconnected.Send(PeerDisconnected{entity, event.userId, event.reason, {}});
         }
+        for (const std::uint32_t id : server->ConnectionIds()) {
+            if (world.peers.count(id) != 0) continue;
+            const std::uint64_t userId = server->UserIdOf(id);
+            auto peer = spawn.New(Peer{id, userId, {}}, PeerLedger{});
+            if (!peer) return Base::Err(std::move(peer).error());
+            world.peers[id] = *peer;
+            connected.Send(PeerConnected{*peer, userId});
+        }
         return {};
     }
     const ClientSession* client = service.Client();
     if (client == nullptr) return {};
     const ClientState state = client->State();
     if ((state == ClientState::Connected || state == ClientState::Interrupted) && world.clientPeer == 0) {
-        auto peer = spawn.New(Peer{client->Accepted()->connectionId, client->Request().userId, {}});
+        auto peer = spawn.New(Peer{client->Accepted()->connectionId, client->Request().userId, {}}, PeerLedger{});
         if (!peer) return Base::Err(std::move(peer).error());
         world.clientPeer = *peer;
         world.clientEndReported = false;
@@ -115,24 +126,14 @@ SystemResult SendNetGivenRange(Kernel::ResMut<NetWorldLink> link, Kernel::Res<Wo
     return {};
 }
 
-Kernel::SystemOptions At(std::string name, std::string_view stage) {
-    Kernel::SystemOptions options;
-    options.name = std::move(name);
-    Kernel::Mount mount;
-    mount.schedule = std::string(Orchestration::DefaultSchedules::frame);
-    mount.stage = std::string(stage);
-    options.mounts.push_back(std::move(mount));
-    return options;
-}
-
 } // namespace
-
-std::uint64_t NetProtocolHash() { return Base::Fnv1a64("gyo.net.registrations/1;"); }
 
 void NetModule::Configure(Orchestration::ProductSetup& setup) {
     const NetProductOptions* given = setup.Options<NetProductOptions>();
     if (given == nullptr) return; // G-1: no settings, nothing made, no socket opened
     NetProductOptions options = *given;
+    // The transport's channels are the net Module's own: replication's reliable messages, then its values.
+    options.session.transport.channels = {{ChannelKind::OrderedReliable, 1}, {ChannelKind::Unreliable, 0}};
     std::shared_ptr<Link> link = options.link;
     Endpoint serverEndpoint = options.serverEndpoint;
     if (!link) {
@@ -150,48 +151,78 @@ void NetModule::Configure(Orchestration::ProductSetup& setup) {
 }
 
 void NetModule::Build(Orchestration::WorldSetup& setup) {
+    // The table NetEntry appends to, in every World the Module is built into (it registers nothing in the kernel).
+    NetRegistrations& table = setup.Buffer().Create<NetRegistrations>();
     const NetWorldOptions* role = setup.Options<NetWorldOptions>();
     if (role == nullptr) return; // G-1: a World without a role registers nothing
     Kernel::Registrar& r = setup.Registrar();
     r.Component<Peer>({.name = "Peer"});
+    r.Component<PeerLedger>({.name = "PeerLedger"});
+    table.role = role->role;
     r.Resource<NetWorldLink>({.name = "NetWorldLink"});
+    r.Resource<NetWorldRole>({.name = "NetWorldRole"});
     r.Message<PeerConnected>({.name = "PeerConnected"});
     r.Message<PeerDisconnected>({.name = "PeerDisconnected"});
-    r.AddSystem<&ReceiveNet>(At("ReceiveNet", Orchestration::DefaultSchedules::first));
+    r.Message<NetLinkFailed>({.name = "NetLinkFailed"});
+    r.AddSystem<&ReceiveNet>(Detail::MountedAt("ReceiveNet", Orchestration::DefaultSchedules::first));
+    Kernel::SystemOptions send = Detail::MountedAt("SendNet", Orchestration::DefaultSchedules::last);
     if (role->idRange) {
-        r.AddSystem<&SendNetGivenRange>(At("SendNet", Orchestration::DefaultSchedules::last));
+        r.AddSystem<&SendNetGivenRange>(std::move(send));
     } else {
-        r.AddSystem<&SendNet>(At("SendNet", Orchestration::DefaultSchedules::last));
+        r.AddSystem<&SendNet>(std::move(send));
     }
-
-    // With an authority strategy the two Systems are marked as one end's; without one (K1) the authority Module
-    // is not touched, since a World with registrations and no strategy is AU-E2.
-    const Authority::AuthorityOptions* authority = setup.Options<Authority::AuthorityOptions>();
-    const bool strategy = authority != nullptr && authority->strategy != nullptr;
-    if (strategy && setup.Buffer().Find<Authority::AuthorityRegistrations>() != nullptr) {
-        Authority::AuthorityEntry entry(setup);
-        entry.OneEndOnly("ReceiveNet", "the net Module's apply point in: each end runs its own connection layer");
-        entry.OneEndOnly("SendNet", "the net Module's apply point out: each end runs its own connection layer");
+    const std::string reason = "the net Module's apply point: each end runs its own connection layer";
+    Detail::MarkOneEnd(setup, "ReceiveNet", reason);
+    Detail::MarkOneEnd(setup, "SendNet", reason);
+    if (role->role == NetRole::Server) {
+        r.Resource<NetOutbox>({.name = "NetOutbox"});
+        Kernel::SystemOptions out = Detail::MountedAt("ReplicateOut", Orchestration::DefaultSchedules::last);
+        out.mounts.front().before.push_back("SendNet");
+        r.AddSystem<&Detail::ReplicateOut>(std::move(out));
+        Detail::MarkOneEnd(setup, "ReplicateOut", "the net Module reads the server's World for its clients");
+    } else {
+        r.Resource<NetReplicaState>({.name = "NetReplicaState"});
+        r.Message<ServerWorldReplaced>({.name = "ServerWorldReplaced"});
+        Kernel::SystemOptions apply = Detail::MountedAt("ApplyReplication", Orchestration::DefaultSchedules::first);
+        apply.mounts.front().after.push_back("ReceiveNet");
+        r.AddSystem<&Detail::ApplyReplication>(std::move(apply));
+        r.AddSystem<&Detail::NotifyReplica>(Detail::MountedAt("NotifyReplica", Orchestration::DefaultSchedules::preUpdate));
+        // It writes the replicated components (decision data at K2) at the client only.
+        Detail::MarkOneEnd(setup, "ApplyReplication", "the net Module writes the server's values at the client");
     }
 
     NetService* service = setup.ProductBuffer().Find<NetService>();
     const NetRole worldRole = role->role;
     const std::optional<IdRange> givenRange = role->idRange;
-    setup.Prepare([service, worldRole, givenRange, strategy](Kernel::World& world)
+    const auto* authority = setup.Options<Authority::AuthorityOptions>();
+    const bool strategy = authority != nullptr && authority->strategy != nullptr;
+    setup.Prepare([service, worldRole, givenRange, strategy, &table](Kernel::World& world)
                       -> Base::Result<void, Orchestration::OrchestrationError> {
         // Check reported a World with a role and no NetService (NT-E1): no World is built then.
         NetWorldLink link;
         link.service = service;
         link.role = worldRole;
         link.idRange = givenRange;
+        link.registry = std::make_shared<const NetRegistry>(table.registry);
         if (strategy) {
             auto fingerprint = Authority::ConsistencyFingerprintOf(world);
             if (fingerprint) link.fingerprint = fingerprint->Text();
         }
-        const auto* fixed = world.Resource<WorldTime::FixedTime>();
-        const auto* allotter = world.Resource<EntityIds::RangeAllotter>();
-        const IdRange range = allotter != nullptr ? IdRange{allotter->first, allotter->last} : IdRange{};
-        if (service != nullptr && fixed != nullptr) service->SetFacts(Facts(link, *fixed, range), service->Now(), true);
+        world.SetResource(NetWorldRole{worldRole});
+        if (service != nullptr) {
+            if (worldRole == NetRole::Server) {
+                service->BeginServerWorld();
+                world.SetResource(NetOutbox{});
+            } else {
+                NetReplicaState state;
+                state.resyncNeeded = service->BeginClientWorld() > 1;
+                world.SetResource(std::move(state));
+            }
+            const auto* fixed = world.Resource<WorldTime::FixedTime>();
+            const auto* allotter = world.Resource<EntityIds::RangeAllotter>();
+            const IdRange range = allotter != nullptr ? IdRange{allotter->first, allotter->last} : IdRange{};
+            if (fixed != nullptr) service->SetFacts(Facts(link, *fixed, range), service->Now(), true);
+        }
         world.SetResource(std::move(link));
         return {};
     });
@@ -208,6 +239,13 @@ void NetModule::Check(const Kernel::FrozenRegistry&, Orchestration::WorldCheck& 
     }
     if (service->Role() != role->role) {
         context.Report("NT-E2", "World '" + context.WorldName() + "' has another net role than the Product's NetProductOptions");
+        return;
+    }
+    const auto* rollback = context.Options<Rollback::RollbackOptions>();
+    if (role->role == NetRole::Client && rollback != nullptr && rollback->strategy != nullptr) {
+        context.Report("NT-E5", "World '" + context.WorldName() +
+                                    "' is a client with a rollback strategy (K3): writing the server's values into the "
+                                    "rollback inbox comes with step 4 of the net Module; it is not treated as K2");
         return;
     }
     if (!service->Bind(context.WorldName())) {

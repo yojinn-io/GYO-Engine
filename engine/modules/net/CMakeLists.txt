@@ -13,6 +13,7 @@ add_library(gyo_net STATIC
     src/NetModule.cpp
     src/NetService.cpp
     src/PacketHeader.cpp
+    src/Replication.cpp
     src/ServerHost.cpp
     src/UdpLink.cpp
 )

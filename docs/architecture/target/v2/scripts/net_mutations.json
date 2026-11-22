@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the net Module, steps 1a and 1b (docs/architecture/target/v2/net-module-declaration.zh-Hant.md, D-2, D-3, D-4, D-6, D-8, D-10, D-12 and judgements G-1 to G-4; Design Invariants draft in docs/architecture/target/v2/net.zh-Hant.md; ids nt-). A mutant is killed only when the named test case fails with the expected message.",
+ "description": "Declared mutants of the net Module, steps 1a, 1b and 2 (docs/architecture/target/v2/net-module-declaration.zh-Hant.md, D-2, D-3, D-4, D-6, D-8, D-10, D-12, D-13, C-MS1 and judgements G-1 to G-5; Design Invariants draft in docs/architecture/target/v2/net.zh-Hant.md; ids nt-). A mutant is killed only when the named test case fails with the expected message.",
  "mutants": [
   {
    "id": "nt-ackbits-31",
@@ -372,6 +372,142 @@
    "target": "gyo_net_tests",
    "cases": "module: a client connects*",
    "expect": "the\\ server's\\ Peer\\ entity\\ is\\ despawned\\ when\\ its\\ connection\\ ends"
+  },
+  {
+   "id": "nt-value-before-structure",
+   "what": "a value part is written before the structure update it needs is applied. Only it catches the wait for the structure tick",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration D-7",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (!result || part.requiredStructure > state.appliedStructureTick) {",
+   "replace": "        if (!result) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(1\\):\\ at\\ each\\ observed\\ tick\\ T\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-ledger-at-send",
+   "what": "the ledger moves on when a value part is sent, not when the client confirms it (as if the send or the packet ack confirmed it), so a lost value is never sent again. Only it catches the application-level confirmation",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                ledger.pending[(std::uint64_t{tick} << 16) | index] = PendingPart{now, std::move(partEntities[index])};",
+   "replace": "                for (const Kernel::EntityId sent : partEntities[index]) ledger.entities[sent].confirmedStamp = now;",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(2\\):\\ after\\ the\\ drain\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-empty-tick-not-sent",
+   "what": "a tick with no changed value sends no part. Only it catches C-RP4 (every tick, every Peer, a value message)",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (currentCount > 0 || parts.empty()) close();",
+   "replace": "            if (currentCount > 0) close();",
+   "target": "gyo_net_tests",
+   "cases": "replication: a tick without changes*",
+   "expect": "every\\ tick\\ sends\\ at\\ least\\ one\\ value\\ part"
+  },
+  {
+   "id": "nt-ledger-not-advanced",
+   "what": "a confirmation does not move the ledger on, so every value is sent every tick. Only it catches the ledger's advance",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    known->second.confirmedStamp = std::max(known->second.confirmedStamp, pending->second.stamp);",
+   "replace": "                    (void)known;",
+   "target": "gyo_net_tests",
+   "cases": "replication: a tick without changes*",
+   "expect": "a\\ confirmed\\ value\\ is\\ not\\ sent\\ again"
+  },
+  {
+   "id": "nt-generation-unchecked",
+   "what": "the client never notices a newer server World generation. Only it catches the generation comparison",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    if (!state.generation || generation > *state.generation) {",
+   "replace": "    if (!state.generation) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: a replaced server World*",
+   "expect": "the\\ client\\ is\\ told\\ that\\ the\\ server's\\ World\\ was\\ replaced"
+  },
+  {
+   "id": "nt-removed-not-encoded",
+   "what": "a structure update leaves out the wire ids of the removed components but keeps their count, so the client misreads the rest of it. Only it catches a field left out of the structure encoding",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                for (std::uint16_t wire = 0; wire < 64; ++wire) {\n                    if ((removed >> wire) & 1u) opWriter.Value(wire);\n                }\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(1\\):\\ at\\ each\\ observed\\ tick\\ T\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-stale-value-applied",
+   "what": "a value older than one already written for that entity and component overwrites it. Only it catches 'the newer wins' (D-4's key)",
+   "guards": [
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (written != state.written.end() && written->second > part.tick) {",
+   "replace": "            if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(1\\):\\ at\\ each\\ observed\\ tick\\ T\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-resync-ignored",
+   "what": "the server ignores a client's resync, so a replaced client World gets nothing. Only it catches the resync",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (kind == static_cast<std::uint8_t>(Kind::Resync)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: a replaced server World*",
+   "expect": "a\\ replaced\\ client\\ World\\ gets\\ the\\ server's\\ World\\ again"
+  },
+  {
+   "id": "nt-onserver-everywhere",
+   "what": "OnServer() is true at a client too, so the server's logic also runs there. Only it catches the condition of D-13",
+   "guards": [
+    "net-module-declaration D-13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "bool IsServer(Kernel::Res<NetWorldRole> role) { return role->role == NetRole::Server; }",
+   "replace": "bool IsServer(Kernel::Res<NetWorldRole>) { return true; }",
+   "target": "gyo_net_tests",
+   "cases": "replication: OnServer() is false*",
+   "expect": "OnServer\\(\\)\\ logic\\ does\\ not\\ run\\ at\\ the\\ client"
+  },
+  {
+   "id": "nt-k3-as-k2",
+   "what": "a client with a rollback strategy (K3) is built and treated as K2. Only it catches the refusal until step 4",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "    if (role->role == NetRole::Client && rollback != nullptr && rollback->strategy != nullptr) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: a client with a rollback strategy*",
+   "expect": "a\\ client\\ with\\ a\\ rollback\\ strategy\\ is\\ refused\\ until\\ step\\ 4\\ \\(NT\\-E5\\)"
   }
  ]
 }

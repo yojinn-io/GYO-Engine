@@ -20,6 +20,7 @@
 #include "engine/kernel/Registry.hpp"
 #include "engine/net/Handshake.hpp"
 #include "engine/net/NetService.hpp"
+#include "engine/net/Replication.hpp"
 #include "engine/orchestration/Module.hpp"
 #include "engine/orchestration/Setup.hpp"
 
@@ -69,24 +70,10 @@ inline void HashValue(Kernel::Hasher& h, const PeerDisconnected& v) {
     HashValue(h, v.detail);
 }
 
-// The World's way to the Product's NetService (O-15: a System reaches a Product-level object through a Resource
-// the owning Module puts in the prepare function), and the World side of the connections.
-struct NetWorldLink final {
-    NetService* service = nullptr;
-    NetRole role = NetRole::Server;
-    std::optional<std::string> fingerprint;
-    std::optional<IdRange> idRange;
-    // Server: connection id -> Peer entity. Client: its one Peer entity (0: none yet) and whether its end was
-    // reported.
-    std::map<std::uint32_t, Kernel::EntityId> peers;
-    Kernel::EntityId clientPeer = 0;
-    bool clientEndReported = false;
-};
-inline void HashValue(Kernel::Hasher&, const NetWorldLink&) {}
 
-// The hash of the net Module's registrations (declaration D-5's protocol hash): step 1b has none, so it is the
-// hash of the empty list.
-[[nodiscard]] std::uint64_t NetProtocolHash();
+// The transport channels of the net Module (both ends): replication's reliable messages and its values.
+inline constexpr std::size_t kReliableChannel = 0;
+inline constexpr std::size_t kValuesChannel = 1;
 
 class NetModule final : public Orchestration::Module {
 public:

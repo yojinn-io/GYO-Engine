@@ -60,6 +60,9 @@ public:
 
     [[nodiscard]] std::size_t ConnectionCount() const noexcept { return peers_.size(); }
     [[nodiscard]] std::vector<std::uint32_t> ConnectionIds() const;
+    [[nodiscard]] std::uint64_t UserIdOf(std::uint32_t connectionId) const;
+    // The bytes of every datagram sent on one connection so far (G-8).
+    [[nodiscard]] std::uint64_t BytesSentTo(std::uint32_t connectionId) const;
     [[nodiscard]] Connection* Find(std::uint32_t connectionId) noexcept;
     [[nodiscard]] const std::array<std::uint64_t, kDropReasonCount>& Drops() const noexcept { return drops_; }
 
@@ -71,6 +74,7 @@ private:
         NetTime lastReceived{0};
         NetTime lastSent{0};
         bool closing = false;
+        std::uint64_t bytesSent = 0;
     };
     struct Reply final {
         Endpoint to;
