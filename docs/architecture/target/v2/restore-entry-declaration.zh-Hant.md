@@ -498,4 +498,4 @@ Engine 的兩點保證分在兩層：
 
 ### 19.6 對 io 的需求（給 threads／io 重審卡，經主會話）
 
-讀檔與存檔版本 Module 對 io **沒有新需求**：Engine 不做存檔的讀寫。作者用 io 讀寫存檔時用到的是既有的：存檔目錄（`engine/io/helpers/UserFiles.hpp`）、整檔原子寫入（`WriteFileAtomically.hpp`，防寫到一半的壞檔——使用者說壞檔是最嚴重的 Bug）、整檔讀（`ReadAllBytes.hpp`）；讀檔在 World 執行緒外先讀好、驗好版本再發替換（不在 World 裡做 io）。重審若要拿掉或改這三個，請先和本卡對齊。
+讀檔與存檔版本 Module 對 io **沒有新需求**：Engine 不做存檔的讀寫。作者用 io 讀寫存檔時用到的是既有的：整檔原子寫入（`engine/io/helpers/WriteFileAtomically.hpp`，防寫到一半的壞檔——使用者說壞檔是最嚴重的 Bug）、整檔讀（`ReadAllBytes.hpp`）；讀檔在 World 執行緒外先讀好、驗好版本再發替換（不在 World 裡做 io）。重審卡回覆兩個都留下（重審宣告 I6）。**存檔目錄**：目前 Engine（io、os）不提供每個使用者的資料目錄（macOS Application Support、Windows `%APPDATA%`、Linux `$XDG_DATA_HOME`），存檔路徑由作者自己決定（`UserFiles.hpp` 只有 `ProbeFileStamp`，讀整檔算戳記判斷有沒有被改過，不是目錄）。要不要補、補在哪一批由重審卡問使用者，本卡不依賴它。
