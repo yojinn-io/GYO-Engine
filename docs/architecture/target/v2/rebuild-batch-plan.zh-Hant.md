@@ -81,7 +81,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 突變數量的增長判準交風紀委員 | 突變清點卡（#247） | 風紀委員待辦 |
 | 每步除了相關突變，再跑一次只數 find 次數的靜態掃描（第 4 批漏 8 個 stale） | 第 4 批後續卡（#265） | 風紀委員待辦 |
 | 第 5 批開頭的守衛：Kernel「拿掉的名字不回來」、權威 Module 的 `gyo_expect_links`（不必再加 DEFER 突變） | 第 4 批宣告 9.5、#265 | 第 5 批開頭 |
-| entity_store、trace、logging 三個 include 守衛的 `..` 路徑：照 O4 先例補，或交審查 | #265 設計審查 | 待使用者定 |
+| entity_store、trace、logging 三個 include 守衛的 `..` 路徑：照 O4 先例補 | #265 設計審查 | 2026-11-22 開卡（`v8-arch-gyo2-stale-cleanup-start`） |
 | kernel_guard K6 的標頭分支（守的是寫法）值不值得留 | #265 設計審查 | 下一次設計審查一起看 |
 
 ## 不擋路的小事
