@@ -90,4 +90,6 @@ Fable 5.2／high，唯讀，對象 cdfc304b；報告在主 checkout `build/evide
 
 ## 5. CI
 
-（PR #272 的 L1 三平台；回來後寫結果。）
+- 7fad36c6（設計審查的修正之後）：L1 三平台 linux-x64、windows-x64、macos-arm64 通過，CI gate 通過（run 45012890881）。
+- 91d471df（§14.4 檢證的修正：補一個 `entity_ids` 案例、文件）：L1 執行中，結果出來後補在這裡。
+- 本機 macOS Intel：`ctest --preset test -L "cpu|shader"` 167/167（91d471df）。
