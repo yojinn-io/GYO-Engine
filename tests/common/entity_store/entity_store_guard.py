@@ -22,7 +22,8 @@ Scans every C/C++ file and CMakeLists.txt under engine/entity_store/ for:
   W5  an include outside an allowlist: an angle-bracket include of a C++ standard library header named in
       STANDARD_HEADERS (the C++ headers and the <cxxx> C wrappers; no .h C header, no platform header such as
       <pthread.h>, <windows.h>, <unistd.h>, <stdatomic.h> or <threads.h>), or an include (either form) under
-      engine/base/ or engine/entity_store/. The banned standard headers of W3 are in the allowlist so they are
+      engine/base/ or engine/entity_store/ with no ".." segment ("/" and "\\" both separate; an allowed prefix
+      followed by ".." reaches any header, as kernel_guard K5). The banned standard headers of W3 are in the allowlist so they are
       reported once, as W3.
 
 Literals and comments are blanked before W2-W5 (W1 also reads comments: a product name in a comment is product
@@ -134,7 +135,8 @@ def file_findings(relative, raw):
         kind, target = include.groups()
         if kind == "<" and target in W3_HEADERS:
             yield number, "W3", "<" + target + ">"
-        if not (target.startswith(ALLOWED_PROJECT_INCLUDES) or (kind == "<" and target in STANDARD_HEADERS)):
+        project = target.startswith(ALLOWED_PROJECT_INCLUDES) and ".." not in re.split(r"[/\\]", target)
+        if not (project or (kind == "<" and target in STANDARD_HEADERS)):
             yield number, "W5", target
     for match in W2.finditer(code):
         yield line_of(code, match.start()), "W2", match.group(0)

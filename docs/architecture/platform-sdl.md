@@ -12,7 +12,7 @@ text input and the clipboard, ip3e the entry point, base directory and log bridg
 complete. IP-4 is complete: ip4a (queries, operations, test injection), ip4b (event watches, capture), ip4c (PRIVATE
 linking) and ip4d (full mutation run, L3). Each contract and invariant below names the milestone that
 makes it true and the guard that keeps it true; until that milestone lands, the current code is the reference.
-The input frame the backend fills is specified in [input.md](input.md).
+The input frame the backend fills was specified in `docs/architecture/input.md` (master; not carried to gyo2).
 
 ## What it is
 

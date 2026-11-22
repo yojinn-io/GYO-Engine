@@ -69,7 +69,7 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [ツール登録・選択と旧 CMake 設定の移行](docs/tool_projects.md)
 - [数学基盤の契約](docs/architecture/math.md)
 - [エラー処理の契約（Result／Error／Assert）](docs/architecture/error-handling.md)
-- [トレース転送とログの契約](docs/architecture/trace.md)
+- [トレース（GYO2：Base の門面と trace Module）](docs/architecture/target/v2/trace.zh-Hant.md)
 - [Engine アーキテクチャ文書の入口](docs/architecture/README.md)
 - [目標アーキテクチャ（kernel 改造、未実装）](docs/architecture/target/README.md)
 - [kernel 改造の計画](docs/architecture/plans/kernel/README.md)
