@@ -1,6 +1,8 @@
 # 重審報告與事前宣告：audio（`v8-arch-gyo2-audio-review`）
 
-更新：2026-11-22（修訂 2）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-audio-review`）。**狀態：待使用者動工前核准。使用者說「開始」之前不改程式。**
+更新：2026-11-22（修訂 2；動工前核准）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-audio-review`）。**狀態：動工前核准（使用者 2026-11-22）。使用者說「開始」之前不改程式。**
+
+> **核准**（使用者，2026-11-22，本卡的對話）：原話「照建議，全部核准」。核准的是修訂 2（38ce73f0）第 12 節五題照建議：第 1 題 (A) 修（本批拿掉綁定，提交口數量交 `world_audio` 那批）；第 2 題 (A) `Submitter` 不綁執行緒；第 3 題 (A) 拿掉 `gyo_audio_board_readers` 的方向（合併前照 §14.4 正式核准）；第 4 題照第 7 節草案的方向（最終文字在合併前核准）；第 5 題 (A) 同意縮小，請主會話在批次表加 `world_audio` 一批，三件開著的事交它。
 
 **經過**：
 - 修訂 0（5c098265）送 Fable 5.2／high 敵對式檢查：blocker 2、should 17、nit 9（主 checkout `build/evidence/gyo2-audio-review/declaration-r0-adversarial.md`）。全部採用或照第 15 節處理成**修訂 1**。
