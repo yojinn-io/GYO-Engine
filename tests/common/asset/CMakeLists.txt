@@ -5,12 +5,17 @@
 # breaks one (A) rule each, contract/valid/<name> is content the rules deliberately accept, and
 # contract/valid/master-object-fps-pvp is master's assets/object_fps_pvp content.json and asset_catalog.json
 # (3b411e21) as they were.
+# Step 2 (the store, no World): StoreTests (store.*), DependencyTests (depend.*) and EquivalenceTests
+# (equiv.*, threads.*), with the executors and test loaders of StoreSupport.hpp.
 add_executable(gyo_asset_tests
     TestMain.cpp
     CatalogTests.cpp
     ContentPathTests.cpp
     LoaderTests.cpp
     ReadWholeFileTests.cpp
+    StoreTests.cpp
+    DependencyTests.cpp
+    EquivalenceTests.cpp
 )
 find_package(Threads REQUIRED)
 target_link_libraries(gyo_asset_tests PRIVATE GYO::Asset doctest::doctest Threads::Threads)
@@ -23,7 +28,7 @@ if(MSVC)
 else()
     target_compile_options(gyo_asset_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS catalog path read loader)
+foreach(group IN ITEMS catalog path read loader store depend equiv threads)
     add_test(NAME asset.${group} COMMAND gyo_asset_tests "--test-case=${group}:*")
     set_tests_properties(asset.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

@@ -281,3 +281,42 @@ TEST_CASE("loader: ReferencePath refuses what cannot name a content file") {
     CHECK(context.Path() == "models/hero/hero.fbx");
     CHECK(context.MaxBytes() == 1024);
 }
+
+namespace {
+
+// A catalog's path index as the store gives one.
+class FixedPaths final : public Asset::ContentPathIndex {
+public:
+    std::span<const Asset::AssetId> IdsAt(std::string_view path) const override {
+        if (path == "models/tex/skin.png") return {one_.data(), 1};
+        if (path == "shared/dup.png") return {two_.data(), 2};
+        return {};
+    }
+
+private:
+    std::array<Asset::AssetId, 1> one_{Asset::AssetId("skin")};
+    std::array<Asset::AssetId, 2> two_{Asset::AssetId("dup.one"), Asset::AssetId("dup.two")};
+};
+
+} // namespace
+
+TEST_CASE("loader: with a path index, ReferencePath maps a path to an id or names why not") {
+    const FixedPaths paths;
+    Asset::LoadContext context(Asset::AssetId("hero.model"), "models/hero.fbx", 1024, &paths);
+    const auto listed = context.ReferencePath<Asset::Text>("tex/skin.png");
+    const auto unlisted = context.ReferencePath<Asset::Text>("tex/none.png");
+    const auto ambiguous = context.ReferencePath<Asset::Text>("../shared/dup.png");
+    const auto bad = context.ReferencePath<Asset::Text>("../../x.png");
+    CHECK(listed.Id() == Asset::AssetId("skin"));
+    REQUIRE(context.References().size() == 4);
+    CHECK(context.References()[0].id == Asset::AssetId("skin"));
+    CHECK_FALSE(context.References()[0].failure.has_value());
+    CHECK(unlisted.Id().Empty());
+    CHECK_MESSAGE(context.References()[1].failure == std::optional(Asset::ReferenceFailureCode::UnlistedReference),
+                  "a path no entry has is not UnlistedReference");
+    CHECK(ambiguous.Id().Empty());
+    CHECK_MESSAGE(context.References()[2].failure == std::optional(Asset::ReferenceFailureCode::AmbiguousReference),
+                  "a path two entries have is not AmbiguousReference");
+    CHECK(bad.Id().Empty());
+    CHECK(context.References()[3].failure == std::optional(Asset::ReferenceFailureCode::BadReference));
+}
