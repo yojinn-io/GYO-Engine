@@ -15,6 +15,7 @@
 - [json.zh-Hant.md](json.zh-Hant.md)：JSON Module（`engine/modules/json`）的 Design Invariants J-1～J-9 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-json-module` 合併前的合併前核准定稿）。
 - [logging.zh-Hant.md](logging.zh-Hant.md)：日誌（`engine/modules/logging`、`engine/modules/world_logging`）——入口 ①②③④⑥、E0 的致命路徑、JSON lines 資料契約、Design Invariants LG-1～LG-11（LG-9 退役）與 Replacement Criteria。trace 是另一個 Module（下一列）。
 - [trace.zh-Hant.md](trace.zh-Hant.md)：trace（Base 的門面 `Trace.hpp`、`engine/modules/trace`）——每執行緒的段堆疊、父子、計時、路徑，經日誌寫出；Kernel 與編排層發的段；Design Invariants TR-1～TR-7 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-trace` 的合併前核准定稿）。
+- [state-machine.zh-Hant.md](state-machine.zh-Hant.md)：狀態機 Module（`engine/modules/state_machine`）——名字表、封閉的型別、要求、套用的 System、子狀態、條件的 Design Invariants 與寫法。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
 - [diagrams/mechanism-runtime.svg](diagrams/mechanism-runtime.svg)：圖一，一個 Product 的機制全貌（11 月 11 日的圖，只換名字）。
 - [diagrams/control-plane-revised.svg](diagrams/control-plane-revised.svg)：圖二，基礎的 System 契約（11 月 11 日的圖，換名字並調整）。
@@ -39,6 +40,7 @@
 
 ## 計畫與批次的紀錄
 
+- [state-machine-declaration.zh-Hant.md](state-machine-declaration.zh-Hant.md)：`v8-arch-gyo2-state-machine` 的事前宣告（修訂 8，2026-11-22 核准）。
 - [global-audit.zh-Hant.md](global-audit.zh-Hant.md)：全局計畫審計（2026-11-14）——這條線的起點。
 - [rebuild-declaration.zh-Hant.md](rebuild-declaration.zh-Hant.md)：`v8-arch-rebuild` 的事前宣告（階段 R0～R6）。
 - [rebuild-r0-carry-list.zh-Hant.md](rebuild-r0-carry-list.zh-Hant.md)：R0 帶過去清單（已核准）。
@@ -111,6 +113,7 @@
 - [2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md)：事件游標的重評——帶條件或不常跑的讀者交給作者、System 契約說明頁第 15 節、Kernel RC 24、CCR-7（`v8-arch-gyo2-event-cursor-reeval`）。
 - [2026_11_22_gyo2_threads_io_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_threads_io_review.zh-Hant.md)：threads、io 重審（`v8-arch-gyo2-threads-io-review`；`WorkerPool`、io 縮減、`TooLarge`、io DI 5 刪除與 DI 6）。
 - [2026_11_22_gyo2_os_user_data.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_os_user_data.zh-Hant.md)：core/os 加 `OS::Files::UserDataDirectory`（`v8-arch-gyo2-os-user-data`；三個平台經 `Detail::Platform::UserDataBase()` 注入 base、組合只寫一次；名字一層、新建的層 0700）。
+- [2026_11_22_gyo2_state_machine.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_state_machine.zh-Hant.md)：狀態機 Module（第 5 批，宣告修訂 8）。
 
 ## 沒有搬過來的
 

@@ -537,3 +537,13 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **為什麼 Engine 不替你處理。** 被狀態擋住的讀者回來該不該補讀，是遊戲的判斷：成就計數可能要補，按鈕處理不該補。各家引擎都把它交給作者（Bevy 的核心要讀者每幀讀；lightyear 的範例把接收器寫成不帶狀態條件；flecs、Unity 看狀態的現在值）。作者若開始反覆寫這類補償，Kernel 會照 [RC 24](../kernel.zh-Hant.md#rc-24) 重評。
 
+## 16. 狀態機：主選單、關卡中、暫停
+
+（`v8-arch-gyo2-state-machine`；規則全文與寫法在 [state-machine](state-machine.zh-Hant.md)。）
+
+**一個例子。** 啟動後是主選單，按「開始」進關卡，關卡中可以暫停。作者寫一個列舉 `Flow { MainMenu, InLevel }`、特化一次 `StateMachineTraits<Flow>`，在產品的 `build` 呼叫 `RegisterStateMachine<Flow>(setup)`。進主選單時生成按鈕：System 掛在 `Flow.Enter.MainMenu`（stage `Update`）。只在關卡中、沒暫停時移動角色：條件 `InState<Pause, Pause::Running>()`。按「開始」：寫 `StateMachineRequest<Flow>` 的 `Request(Flow::InLevel)`。
+
+- 套用的 System 預設在 `Main` 的 `PreUpdate` 之後：排在 `PreUpdate` 的 System 同一幀讀到換之前的值，排在 `Update` 的讀到換之後的。
+- 進入之後只能經要求換值（型別封閉）；一次套用每種狀態最多換一次，離開或進入裡提的要求留到下一次。
+- 讀檔、生成中、(c) 區的接法：見 [state-machine](state-machine.zh-Hant.md) 第 3 節。
+- 帶 `InState`／`NotInState` 的讀者、進入／離開那兩張裡的讀者：照[第 15 節](#15-帶條件或不常跑的讀者)的寫法（要帶進「進入」的資料放 Resource）。
