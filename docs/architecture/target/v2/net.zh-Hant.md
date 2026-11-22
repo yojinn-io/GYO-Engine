@@ -1,8 +1,8 @@
 # 網路 Module（`engine/modules/net`）
 
-更新：2026-11-22（新頁，`v8-arch-gyo2-net-module` 第 1 步前半 1a：傳輸層）。由來：[事前宣告](net-module-declaration.zh-Hant.md)（修訂 2，2026-11-22 動工前核准「照建議，全部核准」）D-2、D-3、D-12、第 8 節 G-2、第 12 節。**Design Invariants 與 Replacement Criteria 是草稿，最終文字在合併前核准定稿。**本頁照 1a 的實作寫；1b（登記單位 `NetModule`、Peer 實體、套用點、握手、存活）之後補。
+更新：2026-11-22（新頁，`v8-arch-gyo2-net-module` 第 1 步前半 1a：傳輸層）；2026-11-22（第 1 步後半 1b：握手、存活、登記單位、Peer 實體、套用點；第 1、2 節改寫，第 3 節補握手的種類與 payload，新增第 6、7 節，NT-1、NT-6、NT-7、NT-8、NT-10 補 1b）。由來：[事前宣告](net-module-declaration.zh-Hant.md)（修訂 2，2026-11-22 動工前核准「照建議，全部核准」）D-2、D-3、D-12、第 8 節 G-2、第 12 節。**Design Invariants 與 Replacement Criteria 是草稿，最終文字在合併前核准定稿。**本頁照 1a、1b 的實作寫。
 
-Owner：架構。程式：`engine/modules/net/`（`GYO::Engine::Net`，target `GYO::Net`；1a 沒有登記單位）。行為測試：`tests/common/net/`（ctest `net.header`、`net.connection`、`net.transport`、`net.link`，標籤 `cpu`）；突變清單 [`scripts/net_mutations.json`](scripts/net_mutations.json)（`nt-`）。
+Owner：架構。程式：`engine/modules/net/`（`GYO::Engine::Net`，target `GYO::Net`，登記單位 `NetModule`）。行為測試：`tests/common/net/`（ctest `net.header`、`net.connection`、`net.transport`、`net.link`、`net.handshake`、`net.liveness`、`net.module`，標籤 `cpu`）；突變清單 [`scripts/net_mutations.json`](scripts/net_mutations.json)（`nt-`）。
 
 ## 一個例子
 
@@ -14,22 +14,29 @@ PvP 射擊的 Client 在第 100 步要把「開槍」可靠地送到 Match，同
 - Match 的 `Connection::Receive(bytes, now)` 讀標頭、比連線識別、去重，把訊息放進各通道的收件佇列，`Pop(0)` 拿到「開槍」，恰好一次。每個丟掉的封包或片都記在一個理由下（重複、太舊、分片逾時……）。
 - 測試把 `UdpLink` 換成 `MemoryLink`：同一個種子每次掉同樣的包、重複同樣的包、延後同樣的包，上層一行不改。
 
-單機的 2D 橫版不選網路：沒有 socket、沒有 `Connection`（1b 之後：World 沒有角色就不登記任何東西，G-1）。
+連線本身：Client 送「請求」，Match 回「挑戰」（一個它算得出來的雜湊，自己不留任何東西），Client 帶著請求與挑戰回「回應」，Match 比協議版本、協議雜湊、步長、配發器範圍、（有權威策略時）一致性指紋，問產品要不要收，然後回「接受」或「拒絕」（寫明哪一項）。接受之後 Match 的 World 多一個 Peer 實體，並發 `PeerConnected`；Client 關掉或 10 秒沒消息，Peer 實體刪掉並發 `PeerDisconnected`（理由 `ClosedByRemote`、`Timeout`……）。
+
+單機的 2D 橫版不選網路：Product 沒有 `NetProductOptions` 就不建 socket、不建傳輸物件；World 沒有 `NetWorldOptions` 就不登記任何東西（G-1）。
 
 ## 1. 位置與依賴
 
 ```text
-GYO::Base ◄── GYO::OS ◄── GYO::Net
+GYO::Base、GYO::OS、GYO::Time、GYO::Kernel、GYO::Orchestration
+GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO::Net
 ```
 
-- 登記檔 `config/modules.csv` 的 `net` 列（1a）：`library_only=yes`、`default=no`、`depends` 空。1b 加登記單位後改成宣告 D-10 的 `library_only=no`、`default=yes`、`depends=world_time;rollback;authority;entity_ids`。
-- link 寫在 `engine/modules/net/CMakeLists.txt`：`GYO::Base`、`GYO::OS`。socket 只經 `core/os` 的 `DatagramSocket`（宣告 D-1；AGENTS §6：一個外部組件一個 adapter，OS 的 socket 的 adapter 是 `core/os`，`UdpLink` 只是轉接）。網路 Module 不 include 平台標頭。
+- 登記檔 `config/modules.csv` 的 `net` 列（1b 起，宣告 D-10）：`library_only=no`、`default=yes`、`depends=world_time;rollback;authority;entity_ids`、登記單位 `GYO::Engine::Net::NetModule`（`engine/net/NetModule.hpp`）。1a 時是 `library_only=yes`、`default=no`。
+- link 寫在 `engine/modules/net/CMakeLists.txt`：`GYO::Base`、`GYO::OS`、`GYO::Time`（IO 層的單調時鐘，D-9）、`GYO::Kernel`、`GYO::Orchestration`；其他 Module 從登記檔來（`gyo_link_registered_dependencies`）。反方向沒有。socket 只經 `core/os` 的 `DatagramSocket`（宣告 D-1；AGENTS §6：一個外部組件一個 adapter，OS 的 socket 的 adapter 是 `core/os`，`UdpLink` 只是轉接）。網路 Module 不 include 平台標頭。
 - 標頭：
   - `NetFailure.hpp`：錯誤 `NetFailure`（E2，`…Failure` 照命名規範 N25）。
   - `Link.hpp`：`Endpoint`、`ReceivedDatagram`、`Link`（interface）。
   - `UdpLink.hpp`、`MemoryLink.hpp`：兩個 Link。
   - `PacketHeader.hpp`：標頭、封包種類、`SequenceNewer`。
   - `Connection.hpp`：通道、設定、丟棄理由、計數、`Connection`。
+  - `Handshake.hpp`：斷線理由、`IdRange`、比對的事實 `HandshakeFacts`、請求與接受的內容、`SessionSettings`、`CompareFacts`。
+  - `ClientSession.hpp`、`ServerHost.hpp`：連線層（握手、存活、keepalive），仍是純的狀態機。
+  - `NetService.hpp`：Product 一份的傳輸物件與 `NetProductOptions`。
+  - `NetModule.hpp`：登記單位、`NetWorldOptions`、`Peer`、`PeerConnected`、`PeerDisconnected`、`NetWorldLink`。
 - 內部：`src/ByteCursor.hpp`（小端序的 span 讀寫，不依賴 `core/io` 的 stream；宣告第 7 節第 4 項）。
 
 ## 2. 組成
@@ -40,7 +47,10 @@ GYO::Base ◄── GYO::OS ◄── GYO::Net
 | `Endpoint` | 不透明的 `u64`，意思屬於做出它的 Link；上層只比較、複製 | — |
 | `UdpLink` | 包 `OS::DatagramSocket`；`ToEndpoint` 把 IPv4 四個 octet 與 port 放進低 48 位元；決定 OS 錯誤對網路的意思：送件 `WouldBlock`→`LinkBusy`、`Unreachable`→`Unreachable`、收件 `TooLarge`→`DatagramTooLarge`、其他→`LinkFailed`（os.md DI 7 把這個判斷交給呼叫者） | 不重試、不計數 |
 | `MemoryLink` | 同一行程的一對端點；每個方向可設掉包率、重複率、延後（延後幾步）；splitmix64 固定種子，跨平台結果相同；計數注入的掉包、重複、延後；可觀察每個注入的 datagram | 不讀時鐘：時間是 `Advance()` 的步數 |
-| `Connection` | 一條連線的純狀態機：`Send` 排訊息、`Receive(bytes, now)` 收、`Collect(now, stamp)` 給要送的 datagram、`Pop` 交出訊息、`Close` 送斷線 | 不碰 socket、不讀時鐘、不認得 World |
+| `Connection` | 一條連線的純狀態機：`Send` 排訊息、`Receive(bytes, now)` 收、`Collect(now, stamp)` 給要送的 datagram、`Pop` 交出訊息、`KeepAlive` 給一個 AckOnly、`Close` 送斷線 | 不碰 socket、不讀時鐘、不認得 World |
+| `ClientSession` | Client 端的連線層：請求、回應的重送，接受或拒絕，存活（連線→中斷→斷線），閒置時的 keepalive；接受後持有一條 `Connection` | 同上 |
+| `ServerHost` | 伺服器端的連線層：無狀態的挑戰、比對、問產品、配連線識別；每個連線一條 `Connection`、存活、keepalive；事件 `Connected`／`Disconnected` | 同上 |
+| `NetService` | Product 一份：Link 與連線層；`Pump` 收、`Flush` 送、`Close` 給產品關 | 不認得 World 的型別（World 那一半在 `NetModule` 的 System） |
 
 **設定**（`ConnectionSettings`；預設值與系譜）：
 
@@ -58,6 +68,17 @@ GYO::Base ◄── GYO::OS ◄── GYO::Net
 | `maxPendingFragmented` | 64 | 本卡定（設定值） |
 
 封包層記住的歷史（送出 1024 個、收到 1024 個）是內部常數，遠大於一個標頭確認的 33 個。
+
+**連線層的設定**（`SessionSettings`；都是設定值）：
+
+| 欄位 | 預設 | 系譜 |
+|---|---|---|
+| `keepaliveInterval` | 100 ms：距上次送出超過它才送 keepalive；握手的請求、回應也照這個間隔重送 | lightyear netcode `crates/connection/netcode/src/lib.rs:116` `PACKET_SEND_RATE_SEC = 1/10`；送 keepalive 的判斷照 `server.rs:893`（`last_send + rate < now`） |
+| `interruptAfter` | 1 s：Client 超過它沒收到就進「中斷」 | 主會話定（10 個 keepalive 間隔） |
+| `timeoutAfter` | 10 s：超過它沒收到就斷線（`Timeout`），兩端都是 | lightyear netcode `server.rs:34` `CLIENT_TIMEOUT_SECS`；判斷照 `server.rs:856`（`last_receive + timeout < now`） |
+| `handshakeTimeout` | 15 s：握手超過它沒完成就 `HandshakeTimeout` | lightyear netcode `lib.rs:115` `CONNECTION_TIMEOUT_SEC` |
+
+門檻一律是「超過」：剛好等於門檻還不算。
 
 ## 3. wire 格式
 
@@ -84,9 +105,30 @@ GYO::Base ◄── GYO::OS ◄── GYO::Net
 | 1 | `Data` | 帶訊息（可以沒有），要求對方確認 |
 | 2 | `AckOnly` | 只有標頭；不要求確認，兩端閒置時不會互相回 ack 不停（lightyear `packet_type.rs:27-37`） |
 | 3 | `Disconnect` | 送端關閉連線；冗餘送 `disconnectPackets` 個 |
-| 16～19 | 保留 | 1b 的握手（請求、挑戰、回應、接受）；1a 讀到是 `UnknownPacketKind` |
+| 16 | `ConnectRequest` | Client 的請求（下表）；連線識別 0 |
+| 17 | `Challenge` | 伺服器的挑戰：u64 |
+| 18 | `ConnectResponse` | 請求的內容原樣＋挑戰 u64 |
+| 19 | `Accepted` | 接受（下表）；標頭的連線識別＝新的連線識別 |
+| 20 | `Rejected` | 拒絕：理由 u8（`DisconnectReason`）＋u16 長度前綴的說明文字 |
 
-其他值是 `UnknownPacketKind`。0 不是種類。
+其他值是 `UnknownPacketKind`。0 不是種類。握手的封包 packet id 與 ack 欄都是 0，不經 `Connection`（`Connection` 讀到握手的種類是 `DecodeFailed`）。
+
+**請求的內容**（`ConnectRequest`，種類 16 與 18）：
+
+| 欄位 | 大小 | 說明 |
+|---|---|---|
+| 網路協議版本 | u32 | `kNetProtocolVersion`（1）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
+| 協議雜湊 | u64 | 網路的登記的雜湊；1b 還沒有複製的登記，是空登記的雜湊（`NetProtocolHash`） |
+| 步長 | u64 | 奈秒（時間 Module 的 `FixedTime` 的步長） |
+| 配發器範圍 | u64＋u64 | [first, last] |
+| 使用者 id | u64 | 不透明；產品對到自己的 Player |
+| 有沒有指紋 | u8 | 0 或 1（World 有權威策略時 1） |
+| 指紋 | u16＋bytes | `Fingerprint::Text()`；沒有時長度 0 |
+| token | u16＋bytes | 只帶、不驗證（Q7） |
+
+請求的 datagram 不得小於挑戰（32 bytes），不夠就補零：伺服器回的永遠不比收到的大（防放大）；伺服器不回小於挑戰的請求（`Unexpected`）。
+
+**接受的內容**（種類 19）：連線識別 u32（隨機、非 0）、Match 的當前 tick u32、步長 u64（奈秒）、World 世代 u32、Match 的配發器範圍 u64＋u64。
 
 **Data 的 payload**：標頭之後一連串的 entry，直到 datagram 結束。
 
@@ -129,6 +171,8 @@ GYO::Base ◄── GYO::OS ◄── GYO::Net
 | `FragmentTimeout` | 片 | Unreliable 的分片訊息逾時沒到齊 |
 | `BufferFull` | 片 | Unreliable 的收件佇列滿，或分片重組的位置滿 |
 | `SendRejected` | 訊息 | `Send` 拒收（送件佇列滿，或大於 `maxMessageBytes`） |
+| `UnknownSource` | datagram | 連線層：沒有連線的來源送來的資料封包（含斷線之後才到的） |
+| `Unexpected` | datagram | 連線層：不合狀態的握手封包（送到伺服器的挑戰、連上後才到的 `Accepted`、小於挑戰的請求） |
 
 「片」：不分片的訊息是一片，分片的訊息每個分片一片；重送也算送出的片。
 
@@ -136,12 +180,44 @@ GYO::Base ◄── GYO::OS ◄── GYO::Net
 - datagram（每個方向）：送出＋注入的重複＝收下＋各封包層理由的丟棄＋注入的掉包；
 - 片（每個方向、每條通道）：送出的片＋注入的重複裡的片＝交出的片＋各理由丟的片＋注入的掉包裡的片。
 
+## 6. 握手與存活（宣告 D-6、D-8）
+
+- **握手**：Client「請求」→ Match「挑戰」→ Client「回應」→ Match「接受」或「拒絕」。
+  - **挑戰無狀態**：挑戰＝伺服器的隨機 secret、來源 endpoint、請求的位元組做 SHA-256 取前 64 位元（`Detail::ChallengeOf`）。Match 收到回應時重算，對了才比對、才配連線；在那之前不為握手留任何東西。系譜：netcode.io 的 challenge token（lightyear 的 netcode crate）。
+  - **比對的順序**（`CompareFacts`，第一個不同的回拒絕）：網路協議版本、協議雜湊（都是 `ProtocolMismatch`，說明寫哪一項）→ 步長（`StepLengthMismatch`）→ 配發器範圍重疊（`IdRangeOverlap`，說明寫兩個範圍）→ 指紋（`FingerprintMismatch`）。
+  - **K1 不比指紋**：Client 沒送指紋（它的 World 沒有權威策略）時不比；送了時，Match 也要有、而且相同。
+  - **產品決定收不收**：`NetProductOptions::admission` 在「接受」之前呼叫，回 `Err` 就是 `Refused`，說明是錯誤的訊息。
+  - 挑戰回錯：`ChallengeFailed`。同一個 Client 重送回應（它的「接受」掉了）時，Match 回同一個連線識別。
+- **斷線理由**（`DisconnectReason`）：`Closed`、`Timeout`、`ClosedByRemote`、`ProtocolMismatch`、`StepLengthMismatch`、`IdRangeOverlap`、`FingerprintMismatch`、`ChallengeFailed`、`HandshakeTimeout`、`Refused`。關閉時冗餘送 10 個 Disconnect（第 2 節）。
+- **存活**：
+  - 這條連線的任何 datagram（連線識別相符，重複的也算）都刷新「最後收到」。別的連線的不算。
+  - 距上次送出超過 `keepaliveInterval`、這一幀又沒有別的要送時，送一個 AckOnly 當 keepalive（不另設種類：AckOnly 本來就不引發回 ack）。有資料要送的那一幀不送 keepalive。
+  - Client：超過 `interruptAfter` 沒收到 →「中斷」（連線保留，收到任何東西就回到「連線」）；超過 `timeoutAfter` →「斷線（`Timeout`）」。伺服器：超過 `timeoutAfter` 就斷線。
+  - 斷線之後不自己重連：重連是新的 Client World（產品的 `ReplaceWorld`），新 World 準備時才開新的握手（D-8）。
+
+## 7. 接線（宣告 D-3、D-10；編排層 O-12、O-15）
+
+- **Product 一份**：`ProductDescription::options` 有 `NetProductOptions` 時，`NetModule::Configure` 建 `NetService` 放進 Product 一份的共用處：
+  - Link：給了 `link`（例：`MemoryLink` 的一端）就用它；沒給就照 `bind` 開 UDP（`UdpLink`；開不了回報 `NT-E4`），Client 連 `server`。
+  - 角色、使用者 id、token、`SessionSettings`、`admission`；`clock`（沒給就讀 `core/time` 的單調時鐘）；`seed`（伺服器的挑戰 secret 與連線識別的種子，沒給就用 `std::random_device`）。
+  - 沒有 `NetProductOptions`：什麼都不建、不開 socket（G-1）。
+- **World 的角色**：`WorldDescription::options` 的 `NetWorldOptions{role, idRange}`。沒有就**什麼都不登記**（G-1）。有角色時登記：
+  - ECS 元件 `Peer`（連線識別、使用者 id、丟棄計數）、Resource `NetWorldLink`、訊息 `PeerConnected`、`PeerDisconnected`；
+  - 收件 System `ReceiveNet` 在 `Main`／`First`、送件 System `SendNet` 在 `Main`／`Last`（套用點）；
+  - 有權威策略的 World：兩個 System 經 `authority.OneEndOnly` 標記；沒有權威策略的（K1）不碰權威 Module（否則 AU-E2）。
+  - `Check`：有角色但 Product 沒有 `NetProductOptions` 是 `NT-E1`；角色和 Product 的不同是 `NT-E2`；一個 Product 第二個有角色的 World 是 `NT-E3`。
+- **System 怎麼拿到傳輸物件**：準備函式在 World 放 `NetWorldLink`（指向 `NetService`，O-15）。準備時也把這個 World 的事實交給 `NetService`：步長讀 `FixedTime`，範圍讀 `RangeAllotter`（`NetWorldOptions::idRange` 給了就用它，`SendNet` 也就不讀 `RangeAllotter`），指紋用 `Authority::ConsistencyFingerprintOf`（有權威策略時）。
+- **每一幀**：`ReceiveNet` 讀時鐘、`Pump`（收每個等著的 datagram、算存活），把連線層的事件寫進 World：連上 → spawn 一個 `Peer` 實體、發 `PeerConnected{peer, userId}`；斷了 → despawn、發 `PeerDisconnected{peer, userId, reason, detail}`（Client 的握手失敗沒有 Peer 實體，`peer` 是 0）。`SendNet` 更新事實、`Flush`（送）、把每條連線的丟棄計數寫回 `Peer`。tick 讀時間 Module 的 `Tick`，寫進標頭。
+- **時間**：時鐘只在 IO 層（存活、RTT），不寫進判定資料（D-9）。
+- **不是判定資料**：`Peer`、`NetWorldLink` 不進權威登記、不進 digest；它們的雜湊函式什麼都不雜湊（連線識別是隨機的，不是兩次執行要一致的 World 狀態）。
+- **Link 的錯誤**（E2）：`NetService` 記下並計數（`LinkFailures`、`LastLinkFailure`），World 照跑。
+
 ## Design Invariants
 
 **草稿**（宣告第 12 節）。最終文字在合併前核准定稿。守衛欄寫 1a 已有的；綁實作方式的守衛（`gyo_expect_links` 等）在 scenario「伺服器＋兩個 Client」通過之後立（AGENTS §3「ガードを立てる時期」；宣告第 8 節）。
 
 <a id="nt-1"></a>
-**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7) 與 (1) 的斷線封包。
+**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）。守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
 
 <a id="nt-2"></a>
 **NT-2 一套內部協議。** Link 之上只有一種協議；Link 只有 bytes 與連線狀態。1a：`Link` 只有 `Send`、`Receive`；`UdpLink`、`MemoryLink` 換了上層不改（`net.transport` 用 `MemoryLink`、`net.link` 用 `UdpLink`，`Connection` 同一份）。
@@ -156,19 +232,19 @@ GYO::Base ◄── GYO::OS ◄── GYO::Net
 **NT-5 確認點。** 只在宣告 D-7 的兩個條件成立後寫 `ConfirmedThrough`。（第 4 步）
 
 <a id="nt-6"></a>
-**NT-6 不選就沒有**（G-1）。（1b）
+**NT-6 不選就沒有**（G-1）。Product 沒有 `NetProductOptions` 就不建 `NetService`、不開 socket；World 沒有 `NetWorldOptions` 就不登記任何東西（System、Resource、元件、訊息都和不選網路 Module 時逐項相同）。守衛：`net.module`「without a role or settings the net Module adds nothing (G-1)」；突變 `nt-registers-without-role`。
 
 <a id="nt-7"></a>
-**NT-7 依賴。** 網路依賴權威、回滾、時間、entity_ids；它們都不依賴網路；外部組件只經 `core/os`。1a：只連 `GYO::Base`、`GYO::OS`。
+**NT-7 依賴。** 網路依賴權威、回滾、時間、entity_ids；它們都不依賴網路；外部組件只經 `core/os`。1b：登記檔 `depends=world_time;rollback;authority;entity_ids`，另連 `GYO::Base`、`GYO::OS`、`GYO::Time`、`GYO::Kernel`、`GYO::Orchestration`。
 
 <a id="nt-8"></a>
-**NT-8 丟棄有理由、有計數。** 1a：第 5 節的九個理由；`Connection` 沒有不計數的丟棄出口。守衛：G-2 的件數突き合わせ（`net.transport`）、`net.connection` 的各案；突變 `nt-timeout-uncounted`、`nt-connid-unchecked`。
+**NT-8 丟棄有理由、有計數。** 第 5 節的十一個理由（1a 九個，1b 加連線層的 `UnknownSource`、`Unexpected`）；`Connection`、`ClientSession`、`ServerHost`、`NetService` 沒有不計數的丟棄出口。守衛：G-2 的件數突き合わせ（`net.transport`）、`net.connection` 的各案；突變 `nt-timeout-uncounted`、`nt-connid-unchecked`。
 
 <a id="nt-9"></a>
 **NT-9 編號。** 伺服器配的實體在 Client 上用同一個編號；範圍由產品分開，握手時檢查不重疊（Q1 核准：兩端同號，照 LIM-7）。（第 2 步）
 
 <a id="nt-10"></a>
-**NT-10 每收件者的狀態在 Peer 實體。** 帳本、可見性、輸入緩衝；不進判定、可重建。（1b 起）
+**NT-10 每收件者的狀態在 Peer 實體。** 帳本、可見性、輸入緩衝；不進判定、可重建。1b：每條連線一個 `Peer` 實體（伺服器每個 Client 一個、Client 一個），連上時 spawn、斷了 despawn，帶連線識別、使用者 id、丟棄計數；帳本、可見性、輸入緩衝在第 2、3、5 步加。守衛：`net.module`「a client connects, both Worlds get a Peer, and closing ends the server's with ClosedByRemote」；突變 `nt-peer-not-despawned`。
 
 ### Replacement Criteria
 
