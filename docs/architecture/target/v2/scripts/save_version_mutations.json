@@ -1,0 +1,104 @@
+{
+ "version": 1,
+ "description": "Declared mutants of save versions (docs/architecture/target/v2/restore-entry-declaration.zh-Hant.md, section 19.5; Design Invariants SV-1 to SV-3 in docs/architecture/target/v2/save-version.zh-Hant.md). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "sv-too-old-taken",
+   "what": "Policy::Check takes a save older than oldestSupported",
+   "guards": [
+    "save-version SV-1",
+    "restore-entry-declaration 19.5"
+   ],
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
+   "find": "    if (saved < oldestSupported_) return refuse(SaveVersionCodes::tooOld, \"older than the oldest supported\");\n",
+   "replace": "",
+   "target": "gyo_save_version_tests",
+   "cases": "check:*",
+   "expect": "\\[sv\\-too\\-old\\-refused\\]"
+  },
+  {
+   "id": "sv-oldest-refused",
+   "what": "Policy::Check refuses oldestSupported itself (< became <=)",
+   "guards": [
+    "restore-entry-declaration 19.4",
+    "restore-entry-declaration 19.5"
+   ],
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
+   "find": "if (saved < oldestSupported_)",
+   "replace": "if (saved <= oldestSupported_)",
+   "target": "gyo_save_version_tests",
+   "cases": "check:*",
+   "expect": "\\[sv\\-accept\\-oldest\\]"
+  },
+  {
+   "id": "sv-too-new-taken",
+   "what": "Policy::Check takes a save newer than current",
+   "guards": [
+    "restore-entry-declaration 19.3",
+    "restore-entry-declaration 19.5"
+   ],
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
+   "find": "    if (saved > current_) return refuse(SaveVersionCodes::tooNew, \"newer than the current version\");\n",
+   "replace": "",
+   "target": "gyo_save_version_tests",
+   "cases": "check:*",
+   "expect": "\\[sv\\-too\\-new\\-refused\\]"
+  },
+  {
+   "id": "sv-current-refused",
+   "what": "Policy::Check refuses current itself (> became >=)",
+   "guards": [
+    "restore-entry-declaration 19.4",
+    "restore-entry-declaration 19.5"
+   ],
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
+   "find": "if (saved > current_)",
+   "replace": "if (saved >= current_)",
+   "target": "gyo_save_version_tests",
+   "cases": "check:*",
+   "expect": "\\[sv\\-accept\\-current\\]"
+  },
+  {
+   "id": "sv-too-old-code",
+   "what": "a too-old save is refused with the too-new code",
+   "guards": [
+    "save-version SV-3",
+    "restore-entry-declaration 19.5"
+   ],
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
+   "find": "refuse(SaveVersionCodes::tooOld,",
+   "replace": "refuse(SaveVersionCodes::tooNew,",
+   "target": "gyo_save_version_tests",
+   "cases": "check:*",
+   "expect": "\\[sv\\-too\\-old\\].*save-version-too-new"
+  },
+  {
+   "id": "sv-current-is-oldest",
+   "what": "Policy::Current gives oldestSupported",
+   "guards": [
+    "restore-entry-declaration 19.1",
+    "restore-entry-declaration 19.5"
+   ],
+   "file": "engine/modules/save_version/include/engine/save_version/SaveVersion.hpp",
+   "find": "    [[nodiscard]] constexpr std::uint32_t Current() const noexcept { return current_; }",
+   "replace": "    [[nodiscard]] constexpr std::uint32_t Current() const noexcept { return oldestSupported_; }",
+   "target": "gyo_save_version_tests",
+   "cases": "check:*",
+   "expect": "\\[sv\\-current\\]"
+  },
+  {
+   "id": "sv-codes-equal",
+   "what": "the too-new code has the too-old code's text (SV-3: two fixed codes a runner tells apart)",
+   "guards": [
+    "save-version SV-3",
+    "restore-entry-declaration 19.5"
+   ],
+   "file": "engine/modules/save_version/include/engine/save_version/SaveVersion.hpp",
+   "find": "    static constexpr std::string_view tooNew = \"save-version-too-new\";",
+   "replace": "    static constexpr std::string_view tooNew = \"save-version-too-old\";",
+   "target": "gyo_save_version_tests",
+   "cases": "check:*",
+   "expect": "\\[sv\\-too\\-new\\] save-version-too-old"
+  }
+ ]
+}

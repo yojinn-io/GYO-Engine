@@ -85,6 +85,48 @@
    "target": "gyo_entity_ids_tests",
    "expect_build_failure": true,
    "expect": "gyo_entity_ids links\\s+GYO::Base;GYO::Kernel;GYO::Math;GYO::Orchestration;\\s+expected exactly"
+  },
+  {
+   "id": "re-owns-always",
+   "what": "RangeAllotter::Owns is always true: an id outside the range (the save's, below the moved lower bound) is dropped as IdInAllotterRange (restore-entry declaration revision 12, 18.2 item 1, real type). No other mutant changes Owns",
+   "guards": [
+    "restore-entry-declaration 18.2",
+    "kernel DI-KS 15 (7)"
+   ],
+   "file": "engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp",
+   "find": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }",
+   "replace": "    [[nodiscard]] bool Owns(EntityId) const noexcept { return true; }",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 1:*",
+   "expect": "\\[sc\\-s1\\-7\\-put\\-rejected\\]"
+  },
+  {
+   "id": "re-owns-never",
+   "what": "RangeAllotter::Owns is always false: a SpawnWithId inside the range is not dropped (restore-entry declaration revision 12, 18.2 item 1, real type). No other mutant changes Owns",
+   "guards": [
+    "restore-entry-declaration 18.2",
+    "entity-ids EI-1"
+   ],
+   "file": "engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp",
+   "find": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }",
+   "replace": "    [[nodiscard]] bool Owns(EntityId) const noexcept { return false; }",
+   "target": "gyo_entity_ids_tests",
+   "cases": "module:*",
+   "expect": "\\[ei\\-real\\-in\\-range\\-dropped\\]"
+  },
+  {
+   "id": "re-allot-stays",
+   "what": "RangeAllotter::Allot does not advance: every Spawn gets the same id (restore-entry declaration revision 12, 18.2 item 1, real type). we-j8-allotter-wraps changes only the used-up branch",
+   "guards": [
+    "restore-entry-declaration 18.2",
+    "entity-ids EI-2"
+   ],
+   "file": "engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp",
+   "find": "        } else {\n            ++next;\n        }",
+   "replace": "        } else {\n        }",
+   "target": "gyo_entity_ids_tests",
+   "cases": "allotter:*",
+   "expect": "allotter\\.Allot\\(\\)\\ ==\\ std::optional<EntityId>\\(101\\)"
   }
  ]
 }
