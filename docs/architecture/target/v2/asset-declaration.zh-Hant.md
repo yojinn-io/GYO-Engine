@@ -137,7 +137,7 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 
 - **事先轉檔的工具與它的資料契約**（三件之 3）。本批只保證接得上（5.10）。
 - **image Module 與 stb_image**：隨 SDL 那批的第一個使用者做（12.2 第 5 題）。本頁先定位置、授權與 adapter（5.11）。
-- **其他 loader**：模型（ufbx，進 model Module；SDL adapter 與 ufbx 歸哪一類，HANDOFF 未定）、音效（audio 重審那批）、字型（text Module，SDL 那批）、二進位（沒有點名的 Feature）。
+- **其他 loader**：模型（ufbx，進 model Module；SDL adapter 與 ufbx 歸哪一類，HANDOFF 未定）、音效（world_audio 那批；clip 的來源與預設起播時刻也在那批，使用者 2026-11-22 核准 audio 重審 `v8-arch-gyo2-audio-review-approved`）、字型（text Module，SDL 那批）、二進位（沒有點名的 Feature）。
 - **GPU 資源**（Bevy `RenderAssets<T>`）：歸 render，隨 SDL 那批。
 - **大地圖的串流**（決定 8）：照 Bevy 不內建。asset 只給上限與 region 級的 id；串流的規則與「進判定」屬日後的地圖 Module（RC-AS1）。
 - **沒有點名 Feature 的，本批不做，也不在介面上先留形狀**：熱重載與 `Modified`（model_viewer 的 `RefreshContent` 是手動重讀，工具可以直接呼叫 loader）、一個檔分出多個子 asset、作者在執行期自己加值（Bevy `Assets::add`）、資料夾自動產生 catalog（產品可以在程式裡加 catalog 項目，5.3）。
@@ -334,6 +334,8 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 ### 5.4 資產管理在 World 外（決定 7）
 
 **`AssetStore`**：每個 Product 一份。world_asset 在 `Configure`（Product 層一次，O-2）建立它，存在 world_asset 這個登記單位的實例裡，活到 Product 結束。登記單位的實例本來就活到 Product 結束、可以持有自己的資料（`RegistrationUnit.hpp` 註解）。
+
+**執行器**（實作時，2026-11-22，threads／io 重審核准後）：產品自己建 threads 的 `WorkerPool`，經產品描述的選項交給 world_asset；world_asset 把它接上 asset 自己定的 `AssetExecutor`（只有 `Submit`），不自己建池、不在 World 執行緒上當場跑。**沒有給執行器時**，需要排工作的請求是 id 級的 `Failed(NoExecutor)`（E2），不是啟動錯誤：world_asset 是 default=yes，不載資產的產品也帶著它（卡片照 L17 判）。
 
 **設定在建立時帶**（決定 13）：內容根目錄、原始位元組雜湊的開關、在飛上限、loader 上限的覆寫，是 world_asset 的建立參數 `AssetOptions`，照 Bevy 的 `AssetPlugin { file_path, ... }`（`bevy_asset/src/lib.rs:237-248`）。
 
@@ -566,9 +568,9 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 
 ### 5.12 對 io 的要求（交給 threads、io 重審那批）
 
-- 從 World 以外的執行緒讀整個檔，帶位元組上限（今天是 `engine/io/helpers/ReadAllBytes`）。**`IFileSystem`／`Vfs` 在多執行緒同時讀時的契約要確認。**
-- 內容根目錄由 world_asset 掛在 io 的一個 scheme 下（`MountPoint.hpp:15`）；catalog 的路徑是根目錄下的相對路徑（5.3）。
-- 疊掛載點（`MountPoint.hpp:16`「overlay 用」、`Vfs.hpp:86-88` 找不到就往下一個）io 已經有；本批不靠它（5.10）。
+- 從 World 以外的執行緒讀整個檔，帶位元組上限：asset 的 `ReadWholeFile`（走 `NativeFileUri`、`NativeFileSystem::Open`、`IStream`）。threads／io 重審（使用者 2026-11-22 核准）在 io 的錯誤碼加 `TooLarge` 之後，可改用 `ReadAllBytes`，那批合併後再評估。
+- 內容根目錄是原生檔案系統上的一個目錄，由 `AssetOptions` 給；catalog 的路徑是根目錄下的相對路徑（5.3）。
+- io 的 `Vfs`、`MountTable`、`MountPoint` 已由 threads／io 重審拿掉（使用者 2026-11-22 核准）；asset 本來就不靠它們（事先轉檔改 catalog 項目，5.10）。
 - 檔案監看（`IFileWatcher`）留給熱重載，本批不用。
 
 ### 5.13 給生成世界（重做）那一批的需求
