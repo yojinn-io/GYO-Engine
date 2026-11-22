@@ -35,7 +35,7 @@
 | [回滾](rollback.zh-Hant.md)（`RollbackInbox`、R-3）、[權威](authority.zh-Hant.md)（DI-A 7） | 已合併（#259） | 網路寫進 World 的位置 |
 | [日誌宣告](logging-declaration.zh-Hant.md) 5.4 | 已合併（#256） | Kernel 診斷紀錄「runner 在兩次 Run 之間取走」，「交換點在第 5 條才由編排層排；那時這個呼叫可以移到交換點，介面不變」（第 228 行） |
 | asset 宣告（分支 `claude/gyo2-asset-585196`，55a14825 動工前核准，1b120a86 紀錄） | **已核准、未合併** | X-1～X-6（5.6）、O-A1～O-A4（5.4）、G-1～G-3（5.13）、第 22 節 |
-| 生成世界的宣告（分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2） | 寫作中（建議「生成期間每幀照跑」；它和「另跑生成清單」之間交使用者） | 交界（第 13 節） |
+| 生成世界的宣告（分支 `claude/gyo2-world-gen-77331d`，修訂 2 56536721） | 寫作中（建議「生成期間每幀照跑」；它和「另跑生成清單」之間交使用者） | 交界（第 13 節） |
 
 任務卡寫「asset 5.5 的 X-1～X-8」「G-1～G-4」：核准版（55a14825）的交換點需求是 5.6 的 **X-1～X-6**（X-7、X-8 是修訂 0、1 的編號，已併入），生成世界的是 5.13 的 **G-1～G-3**。本頁照核准版。
 
@@ -374,6 +374,8 @@
 - **O-13 新增「多個 World 的執行緒」**：第 5.3 節的五條不變量（標「入口的形在第一個點名的使用者那批」）。
 - **O-11 不改**（O-13 第 4 條寫明它照舊成立）；**O-4 不改**（交換點、extract 的時機、執行緒的安排已在清單；Product 層 Resource 那幾項交使用者確認，第 12 節）。
 
+**編號**：和生成世界的宣告同時在編排層頁新增條目，2026-11-24 兩卡協調：本頁用 O-12、O-13、RC-O11～RC-O13；生成世界用 O-14 與 RC-O14～RC-O19（它的 7.1）。本頁若再加，先通知那張卡。
+
 **Kernel `kernel.zh-Hant.md`**：
 - **DI-KS 13 補一句**：Extract 的執行原語拿來源當 `const`；來源與時機由編排層給（O-12）。
 
@@ -502,7 +504,7 @@
 
 ## 13. 和生成世界（重做）的交界
 
-生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2；交界表在它的 5.12）。2026-11-22～24 兩張卡用 SendMessage 對齊（生成世界的 5.12 已照本頁修訂 2 的四種形與郵箱＝形 (2) 改好），結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議**「生成期間每幀照跑」**，它和**「另跑生成清單」**（生成中跑另一份生成清單）之間交使用者定；下表對兩者都成立，分開寫的地方標明是哪一種。
+生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 2 56536721；交界表在它的 5.12）。2026-11-22～24 兩張卡用 SendMessage 對齊（生成世界的 5.12 已照本頁修訂 2 的四種形與郵箱＝形 (2) 改好），結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議**「生成期間每幀照跑」**，它和**「另跑生成清單」**（生成中跑另一份生成清單）之間交使用者定；下表對兩者都成立，分開寫的地方標明是哪一種。
 
 | # | 事項 | 誰負責 | 對齊的內容 |
 |---|---|---|---|
@@ -510,9 +512,9 @@
 | W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部。「生成期間每幀照跑」時就是每幀清單（生成中也一樣）；「另跑生成清單」時生成中是那一批生成清單、結束的那一批是生成清單＋每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 屬於讀者的一輪（第 5.4 節）。**先後**（檢查 B4）：生成的前處理（寫 `WorldGeneration`）→ 進 → 一輪 → 判斷生成是否結束 → 出（所以生成結束那一輪的「出」已讀到「不在生成」）。「生成期間每幀照跑」時「是不是生成」在 World 的 Resource，交換函式從 `World&` 讀得到；「另跑生成清單」時才要另外提供（RC-O11） |
 | W-3 | 套用點（形 (1)） | 擁有服務的 Module；生成世界 5.12 | 「生成期間每幀照跑」：掛 `Main`／`First` 一處即可。「另跑生成清單」（使用者選它時）：預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`，骨架關掉時作者自己掛（同 O-4）。asset G-1 兩者都成立 |
 | W-4 | `beforeSwap` | 生成世界（5.4）；本頁寫明 | `beforeSwap` 是換上之前同步跑一次的關卡，不是生成；期間沒有套用點、沒有交換點（asset G-3），不加機制 |
-| W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（形 (3)），或交換函式、Module 的服務＋套用點。**交出到別的執行緒的 World 只能經它自己的「出」＋有鎖的服務**（跨執行緒讀 `Generating` 違反 O-13 第 2 條；檢查 B4）。生成世界提供 `Product::Generating`、`GenerationPasses` 與 World 內的 `WorldGeneration`（5.2、5.3） |
-| W-6 | 產品給 Module 的設定 | 本頁（Product 層）；生成世界（配發器） | 預設實體配發器的範圍每個 World 可能不同，用 `WorldDescription::options`（`EntityAllotterOptions`），不用 Product 層 Resource；Product 層 Resource 的形狀歸本頁 |
-| W-7 | 執行緒 | 本頁 | 生成的狀態（「生成期間每幀照跑」時在 World 的 Resource `WorldGeneration`，「另跑生成清單」時另有 Product 的 World 槽）照 CCR-5 在呼叫的執行緒上讀寫；World 交出到別的執行緒時，生成的狀態跟著交出（第 5.3 節） |
+| W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（形 (3)），或交換函式、Module 的服務＋套用點。**交出到別的執行緒的 World 只能經它自己的「出」＋有鎖的服務**（跨執行緒讀 `Generating` 違反 O-13 第 2 條；檢查 B4）。生成世界提供 `Product::Generating(world)`（讀 World 的 Resource）與 World 內的 `WorldGeneration`（5.2、5.3；`GenerationPasses` 已拿掉，沒有 Feature 用） |
+| W-6 | 產品給 Module 的設定 | 本頁（Product 層）；生成世界（配發器） | 預設實體配發器的範圍每個 World 可能不同，用 `WorldDescription::options`（`EntityIdsOptions`，Module `entity_ids`），不用 Product 層 Resource；Product 層 Resource 的形狀歸本頁 |
+| W-7 | 執行緒 | 本頁 | 生成的狀態**只在 World 的 Resource `WorldGeneration`**（`Product` 的 World 槽不另存；World 建好的當下、準備函式之前就放成「生成中」），照 CCR-5 在呼叫的執行緒上讀寫；World 交出到別的執行緒時，狀態跟著 World 走，不會一份在槽、一份在 Resource（第 5.3 節） |
 | W-8 | 結束條件 | 生成世界 | 由作者的 System 給（asset G-2），不經本頁 |
 | W-9 | 遊戲初始化 | 生成世界（5.4） | 照舊先跑，跑在第一個 World 的生成之前 |
 | W-10 | `RunSchedule` 與一輪的入口 | 生成世界（5.3）；本頁（交出的入口） | `RunSchedule` 不讀寫生成的狀態，只用它推的 World 推不動生成。之後的「一個 World 的一輪」入口（第 5.3 節的交出，暫名 `WorldLease`）和 `RunFrame` 共用編排層內同一段生成的處理（私有步驟）與同一段交換函式的呼叫；只定契約，本批不實作 |
