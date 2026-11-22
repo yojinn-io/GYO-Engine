@@ -20,7 +20,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 std::string Join(const std::vector<std::string>& lines) {
     std::string out;

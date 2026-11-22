@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-using namespace RollbackTest;
+using namespace GYO::Test::Rollback;
 
 namespace {
 

@@ -25,6 +25,7 @@ else()
     target_compile_options(gyo_rollback_budget PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Design Invariant R-3 (docs/architecture/target/v2/rollback.zh-Hant.md): the rollback Module knows no authority,
 # network or state machine. Its links, private and interface alike, are exactly these, so a link to any other Module,
 # one registered later included, stops the configure. Checked once the whole project is configured, so an edge added

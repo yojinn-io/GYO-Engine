@@ -20,7 +20,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 // Types of this file only.
 struct Hp { std::int32_t v; };       // component, zone B, Exclusive; OnAdd and OnRemove log
@@ -106,7 +106,7 @@ SystemResult BatToBall(HookCtx ctx, Commands commands) {
     return Ok();
 }
 
-// The data of this file, the WorldTest data and Tick (stages A, B, C), an allotter on request.
+// The data of this file, the WorldTestSupport.hpp data and Tick (stages A, B, C), an allotter on request.
 void Immediate(Registrar& r, bool allotter = false) {
     Data(r, allotter);
     r.Component<Hp>({.name = "Hp"});

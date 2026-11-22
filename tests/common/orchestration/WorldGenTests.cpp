@@ -19,8 +19,8 @@
 #include <utility>
 #include <vector>
 
-using namespace OrchTest;
-namespace S = OrchTest::Save;
+using namespace GYO::Test::Orchestration;
+namespace S = GYO::Test::Orchestration::Save;
 
 namespace {
 

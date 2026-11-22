@@ -21,7 +21,7 @@
 namespace GYO::Engine::IO::FS {
 
 
-namespace detail {
+namespace Detail {
 
     // ---- Uri adapter（ここだけ合わせればOK）----
     inline std::string UriText(const GYO::Engine::IO::Path::Uri& u) {
@@ -74,7 +74,7 @@ namespace detail {
             || GYO::Engine::IO::Stream::Has(m, FileOpenMode::CreateIfMissing);
     }
 
-    } // namespace detail
+    } // namespace Detail
 
     /// Mount の解決結果
     struct ResolvedMount final {
@@ -117,15 +117,15 @@ namespace detail {
 
         /// scheme に一致する mount を priority 降順で返す
         std::vector<const MountPoint*> Candidates(const GYO::Engine::IO::Path::Uri& vfsUri) const {
-            const std::string u = detail::UriText(vfsUri);
-            const std::string_view scheme = detail::ExtractScheme(u);
+            const std::string u = Detail::UriText(vfsUri);
+            const std::string_view scheme = Detail::ExtractScheme(u);
 
             std::vector<const MountPoint*> out;
             out.reserve(mounts_.size());
 
             for (const auto& m : mounts_) {
-                const std::string mu = detail::UriText(m.mountUri);
-                const std::string_view ms = detail::ExtractScheme(mu);
+                const std::string mu = Detail::UriText(m.mountUri);
+                const std::string_view ms = Detail::ExtractScheme(mu);
                 if (!scheme.empty() && ms == scheme) {
                     out.push_back(&m);
                 }
@@ -136,8 +136,8 @@ namespace detail {
 
         /// 読み取り向け解決：存在する（または open/stat できる） mount を上から探すのは Vfs 側で行う
         IOResult<ResolvedMount> Resolve(const MountPoint& mp, const GYO::Engine::IO::Path::Uri& vfsUri) const {
-            const std::string u = detail::UriText(vfsUri);
-            const std::string_view rel = detail::ExtractAfterScheme(u);
+            const std::string u = Detail::UriText(vfsUri);
+            const std::string_view rel = Detail::ExtractAfterScheme(u);
             // A mount never reaches outside its root (docs/architecture/io.md).
             if (GYO::Engine::IO::Path::ContainsTraversal(rel)) {
                 return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::PathEscapesRoot,
@@ -145,7 +145,7 @@ namespace detail {
             }
             ResolvedMount r;
             r.mp = &mp;
-            r.nativeUri = detail::JoinRootAndRel(mp.rootUri, rel);
+            r.nativeUri = Detail::JoinRootAndRel(mp.rootUri, rel);
             return std::move(r);
         }
 

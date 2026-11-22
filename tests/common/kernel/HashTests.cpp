@@ -16,7 +16,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 template <class T>
 std::vector<std::byte> HashOf(const T& value) {

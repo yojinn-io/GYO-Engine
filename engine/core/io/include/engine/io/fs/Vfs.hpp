@@ -45,7 +45,7 @@ namespace GYO::Engine::IO::FS {
                                   "Vfs: invalid FileOpenMode"));
             }
 
-            const bool writeReq = detail::WantsWrite(mode);
+            const bool writeReq = Detail::WantsWrite(mode);
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
                 return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
@@ -65,7 +65,7 @@ namespace GYO::Engine::IO::FS {
 
                     // NotFound でも “書き込み” は次候補へ（overlay write の想定）
                     // ただし PermissionDenied 等は即返す
-                    if (!detail::IsNotFound(openr.error())) {
+                    if (!Detail::IsNotFound(openr.error())) {
                         return Base::Err(openr.error());
                     }
                 }
@@ -83,7 +83,7 @@ namespace GYO::Engine::IO::FS {
                     auto openr = mp->fs->Open(rr.value().nativeUri, mode);
                     if (openr) return openr;
 
-                    if (detail::IsNotFound(openr.error())) {
+                    if (Detail::IsNotFound(openr.error())) {
                         lastNotFound = openr.error();
                         continue;
                     }
@@ -107,7 +107,7 @@ namespace GYO::Engine::IO::FS {
                     if (er.value()) return true;
                     continue;
                 }
-                if (detail::IsNotFound(er.error())) continue;
+                if (Detail::IsNotFound(er.error())) continue;
                 return Base::Err(er.error());
             }
             return false;
@@ -129,7 +129,7 @@ namespace GYO::Engine::IO::FS {
                 auto sr = mp->fs->Stat(rr.value().nativeUri);
                 if (sr) return sr;
 
-                if (detail::IsNotFound(sr.error())) {
+                if (Detail::IsNotFound(sr.error())) {
                     lastNotFound = sr.error();
                     continue;
                 }
@@ -156,7 +156,7 @@ namespace GYO::Engine::IO::FS {
                 auto cr = mp->fs->CreateDirectories(rr.value().nativeUri);
                 if (cr) return cr;
 
-                if (detail::IsNotFound(cr.error())) continue;
+                if (Detail::IsNotFound(cr.error())) continue;
                 return Base::Err(cr.error());
             }
 
@@ -184,7 +184,7 @@ namespace GYO::Engine::IO::FS {
                 if (sr) {
                     return mp->fs->Remove(rr.value().nativeUri, opt);
                 }
-                if (detail::IsNotFound(sr.error())) {
+                if (Detail::IsNotFound(sr.error())) {
                     lastNotFound = sr.error();
                     continue;
                 }
@@ -212,7 +212,7 @@ namespace GYO::Engine::IO::FS {
 
                 auto sr = mp->fs->Stat(rfrom.value().nativeUri);
                 if (!sr) {
-                    if (detail::IsNotFound(sr.error())) continue;
+                    if (Detail::IsNotFound(sr.error())) continue;
                     return Base::Err(sr.error());
                 }
 
@@ -241,7 +241,7 @@ namespace GYO::Engine::IO::FS {
 
                 auto sr = mp->fs->Stat(rfrom.value().nativeUri);
                 if (!sr) {
-                    if (detail::IsNotFound(sr.error())) continue;
+                    if (Detail::IsNotFound(sr.error())) continue;
                     return Base::Err(sr.error());
                 }
 
@@ -277,7 +277,7 @@ namespace GYO::Engine::IO::FS {
                 if (!lr) {
                     lastErr = lr.error();
                     // NotFound は overlay 的に次を見る
-                    if (detail::IsNotFound(lr.error())) continue;
+                    if (Detail::IsNotFound(lr.error())) continue;
                     // その他は即返す（壊れた mount を無視するとデバッグ地獄）
                     return Base::Err(lr.error());
                 }
@@ -331,7 +331,7 @@ namespace GYO::Engine::IO::FS {
                 auto pr = mp->fs->ToNativePathString(rr.value().nativeUri);
                 if (pr) return pr;
 
-                if (detail::IsNotFound(pr.error())) {
+                if (Detail::IsNotFound(pr.error())) {
                     lastNotFound = pr.error();
                     continue;
                 }

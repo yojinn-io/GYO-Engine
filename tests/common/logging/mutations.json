@@ -184,7 +184,7 @@
     "logging-declaration 5.6"
    ],
    "file": "engine/modules/logging/src/Logger.cpp",
-   "find": "    (previous != nullptr ? previous : &::GYO::Engine::Base::DefaultAssertionHandler)(failure);",
+   "find": "    (previous != nullptr ? previous : &Base::DefaultAssertionHandler)(failure);",
    "replace": "    static_cast<void>(previous);",
    "target": "gyo_logging_tests",
    "cases": "fatal: a failed GYO_ASSERT*",
@@ -197,7 +197,7 @@
     "logging LG-8"
    ],
    "file": "engine/modules/logging/src/Logger.cpp",
-   "find": "    if (state->tookAssertions) ::GYO::Engine::Base::SetAssertionHandler(state->previousAssertion);\n",
+   "find": "    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n",
    "replace": "",
    "target": "gyo_logging_tests",
    "cases": "fatal: a failed GYO_ASSERT*",
@@ -237,7 +237,7 @@
    ],
    "file": "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
    "find": "                CountFailedDescription();\n                WriteDescriptionFailure(D::name, world);\n            }\n        }",
-   "replace": "                return ::GYO::Engine::Base::Err(Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, \"describe\"));\n            }\n        }",
+   "replace": "                return Base::Err(Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, \"describe\"));\n            }\n        }",
    "target": "gyo_world_logging_tests",
    "cases": "forward: a descriptor that throws*",
    "expect": "REQUIRE\\(\\ static_cast<bool>\\(ran\\)\\ \\)\\ is\\ NOT\\ correct!"
@@ -423,7 +423,7 @@
     "logging LG-5"
    ],
    "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
-   "find": "        AppendJsonEndLine(impl_->pending, impl_->monoNs ? impl_->monoNs() : ::GYO::Engine::Time::NowNs(), counts);\n",
+   "find": "        AppendJsonEndLine(impl_->pending, impl_->monoNs ? impl_->monoNs() : Time::NowNs(), counts);\n",
    "replace": "",
    "target": "gyo_logging_tests",
    "cases": "file: lines are written in Write order*",
@@ -464,10 +464,10 @@
    ],
    "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
    "find": "            const auto wake = context.Wait();",
-   "replace": "            const auto wake = context.WaitUntil(::GYO::Engine::Time::Now() + std::chrono::milliseconds{1});",
+   "replace": "            const auto wake = context.WaitUntil(Time::Now() + std::chrono::milliseconds{1});",
    "target": "gyo_logging_tests",
    "cases": "file: an idle writer sleeps until it is notified*",
-   "expect": "GYO_ASSERT\\ failed:\\ wake\\.reason\\ ==\\ ::GYO::Engine::Time::WakeReason::Notified"
+   "expect": "GYO_ASSERT\\ failed:\\ wake\\.reason\\ ==\\ Time::WakeReason::Notified"
   },
   {
    "id": "lg-file-flush-ignores-failure",
@@ -607,7 +607,7 @@
     "logging LG-8"
    ],
    "file": "engine/modules/logging/src/Logger.cpp",
-   "find": "    if (state->tookBaseLog) ::GYO::Engine::Base::SetLogHandler(state->previousBaseLog);\n",
+   "find": "    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n",
    "replace": "",
    "target": "gyo_logging_tests",
    "cases": "logger: GYO::Engine::Base::Log lines become records*",
@@ -1098,8 +1098,8 @@
     "logging LG-8"
    ],
    "file": "engine/modules/logging/src/Logger.cpp",
-   "find": "    if (state->tookBaseLog) ::GYO::Engine::Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) ::GYO::Engine::Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
-   "replace": "    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n    if (state->tookBaseLog) ::GYO::Engine::Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) ::GYO::Engine::Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n",
+   "find": "    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
+   "replace": "    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n",
    "target": "gyo_logging_tests",
    "cases": "logger: uninstalling puts the handlers back*",
    "expect": "LG-8: the handlers are put back before the sinks are closed"

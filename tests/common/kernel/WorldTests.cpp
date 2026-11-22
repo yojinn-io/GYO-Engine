@@ -14,7 +14,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 bool Ascending(const std::vector<EntityId>& keys) {
     return std::adjacent_find(keys.begin(), keys.end(), [](EntityId a, EntityId b) { return a >= b; }) == keys.end();

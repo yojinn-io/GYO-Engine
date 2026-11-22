@@ -28,10 +28,11 @@ endif()
 add_test(NAME gyo_json_tests COMMAND gyo_json_tests)
 set_tests_properties(gyo_json_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Design Invariants J-1 and J-6: the Module links Base and its two external
 # components and nothing else, and hands neither component to its users.
 # Checked once the whole project is configured, so an edge added later from
-# another directory is seen too (gyo_expect_links comes from tests/common/time).
+# another directory is seen too.
 function(gyo_expect_json_links)
     gyo_expect_links(gyo_json GYO::Base gyo_yyjson gyo_fast_float)
     get_target_property(interface gyo_json INTERFACE_LINK_LIBRARIES)

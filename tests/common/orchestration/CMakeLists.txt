@@ -63,6 +63,7 @@ add_test(NAME orchestration.guard
 add_test(NAME orchestration.guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_orchestration_guard.py" -v)
 set_tests_properties(orchestration.guard orchestration.guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too (as for gyo_time).
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_links gyo_orchestration GYO::Base GYO::Kernel)

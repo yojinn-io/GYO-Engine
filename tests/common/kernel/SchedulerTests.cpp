@@ -12,7 +12,7 @@
 
 namespace {
 
-using namespace KernelTest;
+using namespace GYO::Test::Kernel;
 
 // Zone C columns that allow several writers, so ambiguity cases do not also
 // trip D-E2.
@@ -380,7 +380,7 @@ SystemOptions OrderIn(std::string name, std::string schedule, std::string stage,
 
 // One plugin "game": Shared data (two writers are allowed), the two schedules, the given Systems.
 Built OrderGame(const std::function<void(Registrar&)>& systems) {
-    return KernelTest::Finish({{"game", [systems](Registrar& r) {
+    return GYO::Test::Kernel::Finish({{"game", [systems](Registrar& r) {
                                     r.Component<OrderPos>({.name = "Pos"});
                                     r.Resource<OrderCounter>({.name = "Counter"});
                                     r.Schedule(OrderTick());
@@ -478,7 +478,7 @@ TEST_CASE("J-27: any Parallel schedule fails in v1, whatever its Systems") {
         r.Schedule(s);
         r.AddSystem<&ReadMarker>(Sys("Draw", {At("Ui", "Draw")}));
     });
-    CHECK(KernelTest::ErrorCount(bOnly, StartupCode::DE17) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(bOnly, StartupCode::DE17) == 1);
     REQUIRE_FALSE(static_cast<bool>(bOnly.result));
     Built c = WithShared([](Registrar& r) {
         ScheduleOptions s;
@@ -488,7 +488,7 @@ TEST_CASE("J-27: any Parallel schedule fails in v1, whatever its Systems") {
         r.Schedule(s);
         r.AddSystem<&WriteA>(Sys("WriteA", {At("FixedParallel", "Run")}));
     });
-    CHECK(KernelTest::HasError(c, StartupCode::DE17));
+    CHECK(GYO::Test::Kernel::HasError(c, StartupCode::DE17));
     REQUIRE_FALSE(static_cast<bool>(c.result));
 }
 
@@ -548,33 +548,33 @@ TEST_CASE("J-24: D-E1 (missing schedule or stage), D-E19 (two mounts in one sche
         r.AddSystem<&ReadPos>(Sys("NoSchedule", {At("Nowhere", "Run")}));
         r.AddSystem<&ReadMarker>(Sys("NoStage", {At("Update", "Nowhere")}));
     });
-    CHECK(KernelTest::ErrorCount(missing, StartupCode::DE1) == 2);
+    CHECK(GYO::Test::Kernel::ErrorCount(missing, StartupCode::DE1) == 2);
     Built twice = FinishOne([](Registrar& r) {
         r.AddSystem<&ReadMarker>(Sys("Twice", {At("Update", "First"), At("Update", "Second")}));
     });
-    CHECK(KernelTest::ErrorCount(twice, StartupCode::DE19) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(twice, StartupCode::DE19) == 1);
 }
 
 TEST_CASE("J-24: D-E3 (Spawn without an allotter)") {
     Built spawn = FinishOne([](Registrar& r) { r.AddSystem<&SpawnPos>(Sys("SpawnPos", Sim())); });
-    CHECK(KernelTest::ErrorCount(spawn, StartupCode::DE3) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(spawn, StartupCode::DE3) == 1);
 }
 
 TEST_CASE("J-24: D-E4 (missing target), D-E5 (against stage order), D-E6 (cycle)") {
     Built target = WithShared([](Registrar& r) { r.AddSystem<&WriteA>(Sys("WriteA", Sim({"Gone"}))); });
-    REQUIRE(KernelTest::ErrorCount(target, StartupCode::DE4) == 1);
+    REQUIRE(GYO::Test::Kernel::ErrorCount(target, StartupCode::DE4) == 1);
     CHECK(target.result.error().errors.front().subjects == std::vector<std::string>{"WriteA", "Gone"});
     Built stage = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("Early", Sim()));
         r.AddSystem<&ReadA>(Sys("Late", {At("FixedUpdate", "Present", {"Early"})}));
     });
-    CHECK(KernelTest::ErrorCount(stage, StartupCode::DE5) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(stage, StartupCode::DE5) == 1);
     Built cycle = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("One", Sim({"Two"})));
         r.AddSystem<&ReadA>(Sys("Two", Sim({"Three"})));
         r.AddSystem<&ReadB>(Sys("Three", Sim({"One"})));
     });
-    REQUIRE(KernelTest::ErrorCount(cycle, StartupCode::DE6) == 1);
+    REQUIRE(GYO::Test::Kernel::ErrorCount(cycle, StartupCode::DE6) == 1);
     CHECK(cycle.result.error().errors.front().subjects.size() == 3);
 }
 
@@ -589,7 +589,7 @@ TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
         r.AddSystem<&ExtractPos>(Sys("ExtractPos", {At("Extract", "Copy")}));
     };
     Built unset = Finish({{"render", build}});
-    CHECK(KernelTest::ErrorCount(unset, StartupCode::DE14) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(unset, StartupCode::DE14) == 1);
     Registry source;
     static_cast<void>(source.Register(RegistrationOwner{"source", 0}, [](Registrar& r) {
         r.Component<TestPos>({.name = "TestPos"});
@@ -598,7 +598,7 @@ TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
     Registry render;
     render.SetExtractSource(source);  // source has not built its Plans
     const auto result = RegisterAll(render, {{"render", build}});
-    CHECK(KernelTest::ErrorCount(result, StartupCode::DE14) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(result, StartupCode::DE14) == 1);
 }
 
 TEST_CASE("J-24: several errors of different codes come back in one report") {

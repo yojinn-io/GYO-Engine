@@ -33,18 +33,18 @@ namespace GYO::Engine::IO::Path {
         bool Empty() const noexcept { return normalized_.empty(); }
 
         // 判定（論理パス観点）
-        bool IsAbsoluteLike() const noexcept { return ::GYO::Engine::IO::Path::IsAbsoluteLike(normalized_); }
-        bool HasTraversal() const noexcept { return ::GYO::Engine::IO::Path::ContainsTraversal(normalized_); }
-        bool HasNullByte() const noexcept { return ::GYO::Engine::IO::Path::ContainsNullByte(normalized_); }
+        bool IsAbsoluteLike() const noexcept { return IO::Path::IsAbsoluteLike(normalized_); }
+        bool HasTraversal() const noexcept { return IO::Path::ContainsTraversal(normalized_); }
+        bool HasNullByte() const noexcept { return IO::Path::ContainsNullByte(normalized_); }
 
-        std::string_view Filename() const noexcept { return ::GYO::Engine::IO::Path::Filename(normalized_); }
-        std::string_view Extension() const noexcept { return ::GYO::Engine::IO::Path::Extension(normalized_); }
+        std::string_view Filename() const noexcept { return IO::Path::Filename(normalized_); }
+        std::string_view Extension() const noexcept { return IO::Path::Extension(normalized_); }
 
-        Path Parent() const { return Path::FromNormalized(::GYO::Engine::IO::Path::Parent(normalized_)); }
+        Path Parent() const { return Path::FromNormalized(IO::Path::Parent(normalized_)); }
 
         // すでに正規化済み同士を結合（relative は相対であることを期待）
         Path Join(const Path& relative) const {
-            return Path::FromNormalized(::GYO::Engine::IO::Path::Join(normalized_, relative.normalized_));
+            return Path::FromNormalized(IO::Path::Join(normalized_, relative.normalized_));
         }
 
         friend Path operator/(const Path& a, const Path& b) { return a.Join(b); }

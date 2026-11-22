@@ -40,7 +40,7 @@ namespace GYO::Kernel {
 // The key of an entity (target/world section 1): a uint64 in Bevy's layout,
 // low 32 bits index, high 32 bits generation. The kernel compares only the
 // whole 64-bit value and never reads the two halves.
-using EntityId = ::GYO::Engine::EntityStore::EntityId;
+using EntityId = Engine::EntityStore::EntityId;
 
 // Spec A.1: a World-wide counter advanced at every Plan step, in Plan order.
 using ChangeStamp = std::uint64_t;
@@ -118,19 +118,19 @@ public:
         if constexpr (Hashable<T>) HashValue(h, cells[index].value);
     }
     [[nodiscard]] bool Contains(EntityId id) const noexcept override {
-        return ::GYO::Engine::EntityStore::FindEntity(cells, id) != nullptr;
+        return Engine::EntityStore::FindEntity(cells, id) != nullptr;
     }
     bool Erase(EntityId id) override {
-        if (!::GYO::Engine::EntityStore::EraseEntity(cells, id)) return false;
+        if (!Engine::EntityStore::EraseEntity(cells, id)) return false;
         ++epoch;
         return true;
     }
     [[nodiscard]] bool StrictlyAscending() const noexcept override {
-        return ::GYO::Engine::EntityStore::StrictlyAscending(std::span<const Cell<T>>(cells));
+        return Engine::EntityStore::StrictlyAscending(std::span<const Cell<T>>(cells));
     }
 
-    [[nodiscard]] Cell<T>* Find(EntityId id) noexcept { return ::GYO::Engine::EntityStore::FindEntity(cells, id); }
-    [[nodiscard]] const Cell<T>* Find(EntityId id) const noexcept { return ::GYO::Engine::EntityStore::FindEntity(cells, id); }
+    [[nodiscard]] Cell<T>* Find(EntityId id) noexcept { return Engine::EntityStore::FindEntity(cells, id); }
+    [[nodiscard]] const Cell<T>* Find(EntityId id) const noexcept { return Engine::EntityStore::FindEntity(cells, id); }
 
     // Inserts a new cell (added = changed = stamp) or overwrites an existing one
     // (changed = stamp). Returns true when the cell is new.
@@ -140,7 +140,7 @@ public:
             cell->changed = stamp;
             return false;
         }
-        ::GYO::Engine::EntityStore::InsertEntity(cells, Cell<T>{id, stamp, stamp, std::move(value)});
+        Engine::EntityStore::InsertEntity(cells, Cell<T>{id, stamp, stamp, std::move(value)});
         ++epoch;
         return true;
     }

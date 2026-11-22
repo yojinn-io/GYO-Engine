@@ -22,6 +22,7 @@ else()
     target_compile_options(gyo_world_time_budget PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Design Invariant WT-4: world_time links the orchestration layer, the kernel, the time base, Base and logging,
 # nothing else (v8-arch-gyo2-core-not-registered: the links to core, ecs and orchestration are written by hand).
 function(gyo_expect_world_time_links)

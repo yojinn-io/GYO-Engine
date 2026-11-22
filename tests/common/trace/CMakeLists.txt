@@ -13,8 +13,9 @@ endif()
 add_test(NAME trace.module COMMAND gyo_trace_tests "--test-case=trace:*")
 set_tests_properties(trace.module PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Design Invariant TR-1 (link side): GYO::Base publicly; GYO::Logging and GYO::Time privately
-# (gyo_expect_links comes from tests/common/time).
+#.
 function(gyo_expect_trace_links)
     gyo_expect_links(gyo_trace GYO::Base GYO::Logging GYO::Time)
 endfunction()

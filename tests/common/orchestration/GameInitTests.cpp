@@ -5,7 +5,7 @@
 
 #include "AssertTestSupport.hpp"
 
-using namespace OrchTest;
+using namespace GYO::Test::Orchestration;
 
 namespace {
 

@@ -7,7 +7,7 @@
 
 #include "AuthorityTestSupport.hpp"
 
-using namespace AuthorityTest;
+using namespace GYO::Test::Authority;
 
 namespace {
 

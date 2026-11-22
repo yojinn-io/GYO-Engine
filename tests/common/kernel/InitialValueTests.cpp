@@ -9,12 +9,12 @@
 #include <vector>
 
 using namespace GYO::Kernel;
-using KernelTest::At;
-using KernelTest::Built;
-using KernelTest::Describe;
-using KernelTest::HasRule;
-using KernelTest::Ok;
-using KernelTest::TestRangeAllotter;
+using GYO::Test::TestRangeAllotter;
+using GYO::Test::Kernel::At;
+using GYO::Test::Kernel::Built;
+using GYO::Test::Kernel::Describe;
+using GYO::Test::Kernel::HasRule;
+using GYO::Test::Kernel::Ok;
 
 namespace {
 
@@ -61,19 +61,19 @@ void Data(Registrar& r) {
     r.Resource<TestRangeAllotter>({.name = "Allotter"});
     r.Allotter<TestRangeAllotter>();
     // The Runs of Tick the test counted (Rig::Run writes it; time-events declaration 6.2).
-    r.Resource<WorldTest::TickCount>({.name = "TickCount"});
+    r.Resource<GYO::Test::Kernel::TickCount>({.name = "TickCount"});
     r.Schedule(Tick());
 }
 
 // Two Systems ask for a body; neither names Body.
-SystemResult RequestOne(Spawn<Bundle<BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult RequestOne(Spawn<Bundle<BodyAt>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
-SystemResult RequestAnother(Spawn<Bundle<BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult RequestAnother(Spawn<Bundle<BodyAt>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{5});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());
@@ -101,9 +101,10 @@ SystemResult BodyAdded(HookCtx ctx) {
 }
 
 
-std::unique_ptr<WorldTest::Rig> Start(std::function<void(Registrar&)> build) {
+std::unique_ptr<GYO::Test::Kernel::Rig> Start(std::function<void(Registrar&)> build) {
     Seen().clear();
-    auto rig = WorldTest::MakeRig(std::move(build));
+using GYO::Test::TestRangeAllotter;
+    auto rig = GYO::Test::Kernel::MakeRig(std::move(build));
     if (rig->executor) rig->world().SetResource(TestRangeAllotter::Of(100, 199));
     return rig;
 }
@@ -168,14 +169,14 @@ TEST_CASE("initial value: two Systems request, one System writes, and the compon
 
 namespace {
 
-SystemResult SpawnsBoth(Spawn<Bundle<BodyAt, Body>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult SpawnsBoth(Spawn<Bundle<BodyAt, Body>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3}, Body{-1});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
-SystemResult InsertsRequests(CommandsFor<Inserts<BodyAt>, Removes<>> commands, Res<WorldTest::TickCount> tick) {
+SystemResult InsertsRequests(CommandsFor<Inserts<BodyAt>, Removes<>> commands, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value == 1) commands.Insert(7, BodyAt{4});   // entity 7 has no request yet
     if (tick->value == 2) commands.Insert(7, BodyAt{9});   // overwrites the request
     if (tick->value == 3) commands.Insert(8, BodyAt{6});   // entity 8 already has a Body
@@ -253,7 +254,7 @@ TEST_CASE("initial value: a chain of declarations completes at one sync point") 
 
 namespace {
 
-SystemResult SpawnsTwoRequests(Spawn<Bundle<Crate, BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult SpawnsTwoRequests(Spawn<Bundle<Crate, BodyAt>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Crate{1}, BodyAt{3});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());
@@ -297,7 +298,7 @@ TEST_CASE("initial value: the Host API does not fill (like hooks, sync points on
 
 TEST_CASE("initial value: declarations the Registry refuses") {
     SUBCASE("the request is not a registered component") {
-        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        const Built built = GYO::Test::Kernel::Finish({{"test", [](Registrar& r) {
             r.Component<Body>({.name = "Body"});
             r.Schedule(Tick());
             r.InitialValue<Body, &BodyFromRequest>();
@@ -305,7 +306,7 @@ TEST_CASE("initial value: declarations the Registry refuses") {
         CHECK_MESSAGE(HasRule(built, StartupCode::RE4, "InitialValue"), Describe(built));
     }
     SUBCASE("the component is not registered") {
-        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        const Built built = GYO::Test::Kernel::Finish({{"test", [](Registrar& r) {
             r.Component<BodyAt>({.name = "BodyAt"});
             r.Schedule(Tick());
             r.InitialValue<Body, &BodyFromRequest>();
@@ -313,7 +314,7 @@ TEST_CASE("initial value: declarations the Registry refuses") {
         CHECK_MESSAGE(HasRule(built, StartupCode::RE4, "InitialValue"), Describe(built));
     }
     SUBCASE("only the owner of a component declares its initial value") {
-        const Built built = KernelTest::Finish({
+        const Built built = GYO::Test::Kernel::Finish({
             {"owner", [](Registrar& r) {
                  r.Component<Foreign>({.name = "Foreign"});
                  r.Schedule(Tick());
@@ -328,7 +329,7 @@ TEST_CASE("initial value: declarations the Registry refuses") {
         CHECK_MESSAGE(Describe(built).find("only the owner") != std::string::npos, Describe(built));
     }
     SUBCASE("the owner may take its value from another plugin's request") {
-        const Built built = KernelTest::Finish({
+        const Built built = GYO::Test::Kernel::Finish({
             {"owner", [](Registrar& r) {
                  r.Component<Foreign>({.name = "Foreign"});
                  r.Schedule(Tick());
@@ -341,7 +342,7 @@ TEST_CASE("initial value: declarations the Registry refuses") {
         CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
     }
     SUBCASE("the same declaration twice") {
-        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        const Built built = GYO::Test::Kernel::Finish({{"test", [](Registrar& r) {
             Data(r);
             r.InitialValue<Body, &BodyFromRequest>();
             r.InitialValue<Body, &BodyFromRequest>();
@@ -377,7 +378,7 @@ SystemResult LabelAdded(HookCtx ctx) {
 // A Crate appears at the sync point after the Request stage; its OnAdd hook
 // records a BodyAt, which the next sync point (after the Use stage) applies at
 // its step 0, together with this window's own record (a Label insert).
-SystemResult SpawnsCrate(Spawn<Bundle<Crate>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult SpawnsCrate(Spawn<Bundle<Crate>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Crate{2});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());
@@ -387,13 +388,13 @@ SystemResult CrateAsksForBody(HookCtx ctx, CommandsFor<Inserts<BodyAt>, Removes<
     commands.Insert(ctx.Entity(), BodyAt{4});
     return Ok();
 }
-SystemResult LabelsCrates(Query<Read<Crate>> crates, CommandsFor<Inserts<Label>, Removes<>> commands, Res<WorldTest::TickCount> tick) {
+SystemResult LabelsCrates(Query<Read<Crate>> crates, CommandsFor<Inserts<Label>, Removes<>> commands, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     crates.ForEach([&commands](EntityId id, const Crate&) { commands.Insert(id, Label{1}); });
     return Ok();
 }
 
-SystemResult SpawnsMass(Spawn<Bundle<Mass>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult SpawnsMass(Spawn<Bundle<Mass>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Mass{5});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());
@@ -498,7 +499,7 @@ TEST_CASE("initial value: a resource is neither a request nor a component with a
     // Data registers five components, so a resource id is also a valid
     // component index: a check that looks at the id alone would pass.
     SUBCASE("the request is a resource") {
-        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        const Built built = GYO::Test::Kernel::Finish({{"test", [](Registrar& r) {
             Data(r);
             r.Resource<Ballast>({.name = "Ballast"});
             r.InitialValue<Body, &BodyFromBallast>();
@@ -506,7 +507,7 @@ TEST_CASE("initial value: a resource is neither a request nor a component with a
         CHECK_MESSAGE(HasRule(built, StartupCode::RE4, "InitialValue"), Describe(built));
     }
     SUBCASE("the component is a resource") {
-        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        const Built built = GYO::Test::Kernel::Finish({{"test", [](Registrar& r) {
             Data(r);
             r.Resource<Ballast>({.name = "Ballast"});
             r.InitialValue<Ballast, &BallastFromRequest>();
@@ -552,7 +553,7 @@ Gate GateFromSpark(const Spark& spark) { return Gate{spark.s}; }
 Gate GateFromSeat(const Seat& seat) { return Gate{seat.s}; }
 Seat SeatFromEmber(const Ember& ember) { return Seat{ember.e}; }
 
-SystemResult SimulationSpawnsSpark(Spawn<Bundle<Spark>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult SimulationSpawnsSpark(Spawn<Bundle<Spark>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Spark{4});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());
@@ -566,14 +567,15 @@ void SeatData(Registrar& r, bool count = true) {
     r.Component<Spark>({.name = "Spark"});
     r.Component<Gate>({.name = "Gate"});
     r.Component<Ember>({.name = "Ember"});
+using GYO::Test::TestRangeAllotter;
     r.Resource<TestRangeAllotter>({.name = "Allotter"});
     r.Allotter<TestRangeAllotter>();
-    if (count) r.Resource<WorldTest::TickCount>({.name = "TickCount"});
-    r.Schedule(KernelTest::FixedSchedule());
+    if (count) r.Resource<GYO::Test::Kernel::TickCount>({.name = "TickCount"});
+    r.Schedule(GYO::Test::Kernel::FixedSchedule());
 }
 
 SystemOptions Simulation(std::string name) {
-    return KernelTest::Sys(std::move(name), {At("FixedUpdate", "Simulate")});
+    return GYO::Test::Kernel::Sys(std::move(name), {At("FixedUpdate", "Simulate")});
 }
 
 } // namespace
@@ -581,7 +583,7 @@ SystemOptions Simulation(std::string name) {
 TEST_CASE("initial value: a declaration changes the Registry fingerprint") {
     // which: 0 none, 1 Seat from Spark, 2 Gate from Spark, 3 Gate from another request, 4 Seat from another request.
     const auto build = [](int which) {
-        return KernelTest::Finish({{"test", [which](Registrar& r) {
+        return GYO::Test::Kernel::Finish({{"test", [which](Registrar& r) {
             SeatData(r);
             if (which == 1) r.InitialValue<Seat, &SeatFromSpark>();
             if (which == 2) r.InitialValue<Gate, &GateFromSpark>();
@@ -617,7 +619,7 @@ struct GateIn { std::int32_t g; };     // zone B, role Input
 struct Perch { std::int32_t p; };  // zone C, State: a second component filled from Spark
 Perch PerchFromSpark(const Spark& spark) { return Perch{spark.s}; }
 Built PerchVariant(int which) {
-    return KernelTest::Finish({{"test", [which](Registrar& r) {
+    return GYO::Test::Kernel::Finish({{"test", [which](Registrar& r) {
         SeatData(r);
         r.Component<Perch>({.name = "Perch"});
         if (which == 1 || which == 3) r.InitialValue<Seat, &SeatFromSpark>();
@@ -680,7 +682,7 @@ namespace {
 
 Mass MassFromRequest(const BodyAt& request) { return Mass{request.x}; }
 
-SystemResult SpawnsRequestAndCrate(Spawn<Bundle<BodyAt, Crate>> spawn, Res<WorldTest::TickCount> tick) {
+SystemResult SpawnsRequestAndCrate(Spawn<Bundle<BodyAt, Crate>> spawn, Res<GYO::Test::Kernel::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3}, Crate{1});
     if (!made) return GYO::Engine::Base::Err(std::move(made).error());

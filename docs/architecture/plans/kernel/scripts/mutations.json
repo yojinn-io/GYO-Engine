@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them). kernel-subtract-structure (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md, section 6; ids ks-s<item>-, ks-diks15-): segment 1 retired 48 mutants whose rule left the kernel (ambiguity D-E8, run-time interception F-10 / Z5 / W-6b, ExclusiveWorld write limits S-13 / S-14 / S-15 / S-16 / S-18, D-E18, thread roles D-E10 / D-E13 / X-E2 / X-E3, the untyped ExclusiveWorld::Spawn, and ns-plan-version-not-bumped as a duplicate) and rewrote the ones whose find or expect moved. orchestration-skeleton (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9): step 2 took the Startup schedule and the registration units (Plugin, Registry::Finish, R-E1/R-E3/R-E6) out of the kernel. Retired with their property: rs-j15-startup-counted, ns-startup-nestable, ns-startup-running-allows-nested, ns-st-clock-only, ns-st-tick-first-read, ns-st-tick-first-error, ns-st-tick-stamp, ns-st-running-not-cleared, ns-st-no-retake, ns-two-startups-allowed, ks-s2-re7-startup-schedule, ks-s2-re7-startup-mount, ks-s7-startup-change-same-run, ns-st-settings-after-startup, ks-s2-finish-not-first, rs-j18-plugins-reversed (rs-j18-plugins-reversed: ids are now taken in the Registrar call itself, there is no loop over registration units to reverse). Moved to the orchestration catalog docs/architecture/target/v2/scripts/orchestration_mutations.json (the mutant that guards the property there in brackets): ns-st-not-auto (or-runframe-no-gameinit, or-runschedule-no-gameinit); ns-st-not-marked-auto (or-gi-every-frame); ns-st-not-marked-explicit (or-gi-every-frame, g8-gi-flag-only-on-success); ns-st-explicit-again (g8-gameinit-twice-allowed); ns-st-after (or-runframe-no-gameinit); ns-st-error-ignored (or-gi-error-ignored); ns-st-error-not-reported (or-gi-error-ignored); rs-j19-duplicate-built (or-oe1-silent, g8-oe1-second-used); rs-j19-requires-unchecked (or-oe3-later-unseen, g8-oe3-missing-silent); rs-j24-re6-removed (or-oe4-silent); ks-s2-plugin-finish-again (or-insert-reruns-finish); ks-s3-version-before-finish (or-finish-before-plans). Rewritten for the new code: the fingerprint and export versions (Registry 4, Plan 6, C 8, export 4), rs-sym-* (anchor Registry::~Registry), ks-s7-first-run-only*, ks-diks15-code-without-text (DE5), ks-links-extra (the link now comes from the register). After the full run on cc5fe0e1 (steps 3 and 4 included): hf-startup-skipped (replace keyed on the clock flag), we-j1-insert-append (find now starts at ::Engine::, the kernel headers qualify Engine from the root), ks-s3-version-not-raised and ks-s3-failed-raises-version (cases follow the renamed DI-KS 25 case). mutation-prune (docs/architecture/target/v2/kernel-mutation-prune-report.zh-Hant.md): retired the duplicates ns-rebase-no-retake, we-j4-handle-check-off, ns-c-version-not-bumped, we-w11-mut-no-mark-j30, ks-s5-applies-level-records, rs-j12-bundle-dropped; the command mutants whose change another mutant already catches, we-k5-entity-store-dropped-selftest, rs-sym-elf-bss-unread; the old product aliases ks-k1-aliases-dropped, ks-adv-alias-dropped-fps-pvp, ks-adv-alias-dropped-pvp, ks-adv-alias-dropped-gyo-tools; guard detail mutants that never caught a real miss and are not the only mutant of a sub-rule, ks-k1-camel-dropped, ks-adv-registry-case-sensitive, ks-adv-role-player-case, ks-adv-k3-headers-shrunk, ks-adv-k3-names-shrunk, ks-k4-type-unchecked, rs-b8-k4-inline-const-pointee, ks-adv-standard-header-in-quotes, we-k5-entity-store-prefix-unbounded, we-k5-backslash-parent, ks-adv-log-headers-cstdio, ks-adv-k6-set-log-handler, ks-adv-line-comment-to-eof, ks-adv-block-comment-off, ks-adv-kernel-suffixes-shrunk, ks-adv-string-to-eof, ks-n1-prefix-loose, ks-n1-nested-lost, ks-n1-missing-reverse-root-fails, ks-n1-plugins-dropped, ks-adv-stack-never-pops, ks-adv-reverse-roots-shrunk, ks-adv-naming-suffixes-shrunk, ks-n3-suffix-dropped, ks-adv-n3-keywords-shrunk, ks-adv-n3-attributes-dropped, rs-sym-common-unread, rs-sym-tlv-kept, rs-b8-toolchain-any-format. Merged into the mutant with the same find and replace (cases and expects joined): sr-j8-allots-later into sr-dropped-made-alive, sr-j8-no-record into sr-no-record, sr-j8-no-count into sr-no-count, sr-j8-reason into sr-reason-range-as-alive, sr-j32-alive-applied into sr-alive-applied, sr-j32-no-record into sr-no-record, sr-j32-no-count into sr-no-count, sr-j32-reason into sr-reason-alive-as-twice, sr-range-removed-respawn into sr-range-removed, sr-range-removed-insert into sr-range-removed, we-j5-boundary-off into we-j4-boundary-off, ks-s9-set-order-dropped into rs-adv-set-order-dropped, ks-s7-removed-limit-one into hf-settings-absent-limit-one, ks-s7-first-run-only-limit into ks-s7-first-run-only, ns-nested-end-ready-overwrite into ns-nested-end-ready, ns-absent-resource-present into ns-absent-component-present, ks-s5-j45-spawn-deferred into ks-s5-change-deferred, ks-s5-detour-after-unchecked into ns-epoch-check-skipped-for-exclusive, ks-s6-hook-set-at-record-time into ks-s6-set-at-record-time, hf-c-version-kept into rs-b6-cfp-version-1, sr-c-version-not-bumped into rs-b6-cfp-version-1, hf-plan-version-kept into sr-plan-version-not-bumped. Rewritten: ks-real-product-name (role word), rs-sample-capture-accepted and rs-sample-return-accepted (expect names the marker). mutation-prune step 3 (docs/architecture/target/v2/kernel-mutation-subsumption-report.zh-Hant.md, section 3): every mutant run against all kernel tests; a mutant whose failure set contains a kept mutant's and whose expect fails at the same site in its via was merged into that via (cases joined, every sentence of the expect required): rs-j3-4-z1-removed into rs-j12-condition-reads-dropped, rs-j3-5-changed-allowed into rs-adv-condition-change-filter-dropped, rs-j12-write-term-dropped into rs-j11-self-conflict-off, rs-adv-assert-self-conflict-removed into rs-j11-self-conflict-off, rs-j24-de16-removed into rs-adv-derived-deferred-writer-counts, rs-adv-assert-condition-write-removed into rs-j13-condition-write-allowed, rs-b5-literal-counts-deferred into rs-b5-literal-counts-membership, rs-b3-trim-ignores-declared into rs-b3-trim-not-pinned, rs-iv-ff3-C-section-dropped into rs-iv-fb8-C-request-not-hashed, rs-iv-fn1-funnel-empty into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn7-zone-access-unchanged into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fx15-funnel-zone-B-systems-only into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fd4-resolver-insert-not-recorded into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn2-funnel-not-transitive into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn3-system-zone-without-funnel into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn8-funnel-note-empty into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fd5-commandsfor-inserts-as-writes into rs-iv-fx14-funnel-zone-C-systems-only, hf-no-rounds into hf-verification-only, hf-first-queue into hf-verification-only, hf-limit-off-by-one into hf-default-limit-nine, hf-schedule-limit-ignored into hf-limit-check-before-empty, hf-only-with-trim into hf-startup-skipped, hf-limit-no-names into hf-limit-names-not-unique, we-j30-stamp-after-call into we-adv-tickstamp-never-recorded, we-j1-insert-append into we-j1-erase-swap-pop, we-j2-alive-append into we-j1-erase-swap-pop, we-j7-column-dtor-descending into we-j7-world-dtor-reverse, we-j5-layer1-off into we-j5-id-not-mode, we-j3-16-violations-dropped into we-j5-id-not-mode, hf-round-skips-despawn into hf-round-skips-onremove, sr-dropped-onadd-only into sr-dropped-cells-added, sr-range-removed into sr-dropped-made-alive, sr-emitter-by-planpos into sr-emitter-by-name, sr-tick-cached-for-world into sr-tick-one, sr-discard-clears-records into we-j35-diagnostics-dropped, ns-entry-violation-enters into ns-entry-retake-only, ks-s4-layer2-events-declared into ns-entry-retake-only, ns-left-error-not-listed into we-adv-dropped-err-beside-own-err-lost, ns-handle-epoch-not-renewed into ns-entry-no-compare-no-retake, ns-stamp-not-renewed into ns-modify-no-changed, ks-s10-bind-skipped into ks-s10-handles-unchecked, ks-s10-one-token-for-all-threads into ks-s10-handles-unchecked, ks-s10-check-ge into ks-s10-handles-unchecked, ks-s2-refusal-leaves-pending into ks-s2-empty-build-bumps, ks-s2-own-world-unchecked into ks-s2-register-while-running, ks-s6-set-not-recorded into ks-s6-plan-order-reversed, ks-s5-interrupted-still-changes into ks-s5-closure-refusal-not-interrupting, ks-s7-drop-every-run into we-adv-ready-window-compare-off, bs-thread-serial-not-thread-local into bs-thread-serial-issuer-per-thread, ns-rebase-no-retake-names-ping into ns-rebase-no-retake-on-throw, ks-s5-caller-error-recorded into ks-s5-spawn-alive-ends-run. empty-expect (v8-arch-gyo2-empty-expect, follow-up of kernel-mutation-subsumption-report.zh-Hant.md section 8 item 5): the expects of rs-iv-ff1-registry-section-dropped, rs-iv-fb5-sort-tiebreak-dropped, rs-iv-fb6-C-target-not-hashed, rs-iv-fb7-registry-target-not-hashed, rs-iv-fb8-C-request-not-hashed, rs-iv-fb9-C-filter-by-request-zone, rs-iv-fb11-C-count-dropped named a test case title that is printed every run (an unconditional MESSAGE), so they held whenever anything in their cases failed; each now names the CHECK expression its change breaks. drop-product-aliases (v8-arch-gyo2-drop-product-aliases, follow-up of kernel-mutation-prune-report.zh-Hant.md section 7 item 3): K1's alias list PRODUCT_ALIASES left kernel_guard.py with its two tests; ks-k1-roles-dropped's find and replace now name ROLE_WORDS alone. move-bs-mutants (v8-arch-gyo2-move-bs-mutants, follow-up of kernel-mutation-prune-report.zh-Hant.md): the 10 bs- mutants (Base's IdIssuer and CurrentThreadSerial, target gyo_base_tests) moved unchanged to Base's catalog docs/architecture/target/v2/scripts/base_mutations.json. time-events step 3 (v8-arch-gyo2-time-events, docs/architecture/target/v2/time-events-declaration.zh-Hant.md sections 6.1 G3 and 6.5; event cursor declaration section 8; ids msg-): retired rs-adv-event-trim-unknown (the eventTrim field and its D-E1 check left), rs-b3-trim-not-pinned (the trim is no Plan step), hf-rounds-follow-trim (no trim step follows a sync point; the rounds following the last sync point stay guarded by hf-first-sync-point and hf-rounds-every-sync), we-j36-no-same-tick and we-j36-swap-compare (a reader reads by cursor, not by tick and Plan position; the cursor read is guarded by msg-read-skips-first, msg-cursor-not-advanced and msg-seq-not-advanced); rewrote we-j36-trim-early, we-adv-event-trim-never, ns-nested-events-not-trimmed and hf-trim-before-rounds for the cursor trim at the end of the outermost Run; moved the find of the version mutants, rs-adv-hook-unchecked, we-j29-condition-cached, we-j29-set-once, ns-nested-end-ready, ks-s7-first-run-only and ks-s2-attach-events-first-only; retargeted we-j36-hook-writerpos-zero to J-55 (a hook's records still carry its sync point's position); followed C format 9 in the expect of rs-iv-fb11-C-count-dropped; added the msg- mutants of the retained messages read by cursor. time-events step 4 (v8-arch-gyo2-time-events, time-events-declaration sections 6.1 G1, G2, G4, G5, G8 and 6.2; the kernel keeps no clock, v8-arch-gyo2-clock-out-of-kernel): retired rs-j37-event-domain-unchecked and rs-j37-nonclock-allowed (G1: F-9/F-E1 left, a message is used in any schedule; J-37 now checks that), rs-j24-de12-removed (G2: D-E12 left; a missing mount target stays D-E1, a missing fixed-step schedule is WorldTimeModule::Check), rs-adv-domain-tick-is-zone-b (G4: no domain tick key; \"the tick only from one source\" is batch 4 authority), rs-j12-tick-one-mount (G4/G5: no CurrentTick access derivation), we-adv-tickstamp-never-recorded (G5: tickStamps left, not moved; no kernel judgement read them), ns-nested-tick-not-advanced (G5: the tick advancing in nested runs moved to the time Module, wt-run-one-step-no-tick in world_time_mutations.json); rewrote sr-tick-one and sr-tick-fixed-domain for the sync point number (G8), hf-startup-skipped (its replace keyed on the clock flag), and moved the find of the version mutants (Plan 8, Registry 6, C 10, export 6), we-j32-spawn-before-despawn, sr-no-record, sr-records-capped, sr-drop-takes-stamp, ks-s11-export-runner-back and ks-diks15-code-added-without-text.",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard (the naming guard's mutants moved to docs/architecture/target/v2/scripts/naming_mutations.json with v8-arch-gyo2-naming-cleanup), Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them). kernel-subtract-structure (docs/architecture/target/v2/kernel-subtract-structure-declaration.zh-Hant.md, section 6; ids ks-s<item>-, ks-diks15-): segment 1 retired 48 mutants whose rule left the kernel (ambiguity D-E8, run-time interception F-10 / Z5 / W-6b, ExclusiveWorld write limits S-13 / S-14 / S-15 / S-16 / S-18, D-E18, thread roles D-E10 / D-E13 / X-E2 / X-E3, the untyped ExclusiveWorld::Spawn, and ns-plan-version-not-bumped as a duplicate) and rewrote the ones whose find or expect moved. orchestration-skeleton (docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md, section 9): step 2 took the Startup schedule and the registration units (Plugin, Registry::Finish, R-E1/R-E3/R-E6) out of the kernel. Retired with their property: rs-j15-startup-counted, ns-startup-nestable, ns-startup-running-allows-nested, ns-st-clock-only, ns-st-tick-first-read, ns-st-tick-first-error, ns-st-tick-stamp, ns-st-running-not-cleared, ns-st-no-retake, ns-two-startups-allowed, ks-s2-re7-startup-schedule, ks-s2-re7-startup-mount, ks-s7-startup-change-same-run, ns-st-settings-after-startup, ks-s2-finish-not-first, rs-j18-plugins-reversed (rs-j18-plugins-reversed: ids are now taken in the Registrar call itself, there is no loop over registration units to reverse). Moved to the orchestration catalog docs/architecture/target/v2/scripts/orchestration_mutations.json (the mutant that guards the property there in brackets): ns-st-not-auto (or-runframe-no-gameinit, or-runschedule-no-gameinit); ns-st-not-marked-auto (or-gi-every-frame); ns-st-not-marked-explicit (or-gi-every-frame, g8-gi-flag-only-on-success); ns-st-explicit-again (g8-gameinit-twice-allowed); ns-st-after (or-runframe-no-gameinit); ns-st-error-ignored (or-gi-error-ignored); ns-st-error-not-reported (or-gi-error-ignored); rs-j19-duplicate-built (or-oe1-silent, g8-oe1-second-used); rs-j19-requires-unchecked (or-oe3-later-unseen, g8-oe3-missing-silent); rs-j24-re6-removed (or-oe4-silent); ks-s2-plugin-finish-again (or-insert-reruns-finish); ks-s3-version-before-finish (or-finish-before-plans). Rewritten for the new code: the fingerprint and export versions (Registry 4, Plan 6, C 8, export 4), rs-sym-* (anchor Registry::~Registry), ks-s7-first-run-only*, ks-diks15-code-without-text (DE5), ks-links-extra (the link now comes from the register). After the full run on cc5fe0e1 (steps 3 and 4 included): hf-startup-skipped (replace keyed on the clock flag), we-j1-insert-append (find now starts at ::Engine::, the kernel headers qualify Engine from the root), ks-s3-version-not-raised and ks-s3-failed-raises-version (cases follow the renamed DI-KS 25 case). mutation-prune (docs/architecture/target/v2/kernel-mutation-prune-report.zh-Hant.md): retired the duplicates ns-rebase-no-retake, we-j4-handle-check-off, ns-c-version-not-bumped, we-w11-mut-no-mark-j30, ks-s5-applies-level-records, rs-j12-bundle-dropped; the command mutants whose change another mutant already catches, we-k5-entity-store-dropped-selftest, rs-sym-elf-bss-unread; the old product aliases ks-k1-aliases-dropped, ks-adv-alias-dropped-fps-pvp, ks-adv-alias-dropped-pvp, ks-adv-alias-dropped-gyo-tools; guard detail mutants that never caught a real miss and are not the only mutant of a sub-rule, ks-k1-camel-dropped, ks-adv-registry-case-sensitive, ks-adv-role-player-case, ks-adv-k3-headers-shrunk, ks-adv-k3-names-shrunk, ks-k4-type-unchecked, rs-b8-k4-inline-const-pointee, ks-adv-standard-header-in-quotes, we-k5-entity-store-prefix-unbounded, we-k5-backslash-parent, ks-adv-log-headers-cstdio, ks-adv-k6-set-log-handler, ks-adv-line-comment-to-eof, ks-adv-block-comment-off, ks-adv-kernel-suffixes-shrunk, ks-adv-string-to-eof, ks-n1-prefix-loose, ks-n1-nested-lost, ks-n1-missing-reverse-root-fails, ks-n1-plugins-dropped, ks-adv-stack-never-pops, ks-adv-reverse-roots-shrunk, ks-adv-naming-suffixes-shrunk, ks-n3-suffix-dropped, ks-adv-n3-keywords-shrunk, ks-adv-n3-attributes-dropped, rs-sym-common-unread, rs-sym-tlv-kept, rs-b8-toolchain-any-format. Merged into the mutant with the same find and replace (cases and expects joined): sr-j8-allots-later into sr-dropped-made-alive, sr-j8-no-record into sr-no-record, sr-j8-no-count into sr-no-count, sr-j8-reason into sr-reason-range-as-alive, sr-j32-alive-applied into sr-alive-applied, sr-j32-no-record into sr-no-record, sr-j32-no-count into sr-no-count, sr-j32-reason into sr-reason-alive-as-twice, sr-range-removed-respawn into sr-range-removed, sr-range-removed-insert into sr-range-removed, we-j5-boundary-off into we-j4-boundary-off, ks-s9-set-order-dropped into rs-adv-set-order-dropped, ks-s7-removed-limit-one into hf-settings-absent-limit-one, ks-s7-first-run-only-limit into ks-s7-first-run-only, ns-nested-end-ready-overwrite into ns-nested-end-ready, ns-absent-resource-present into ns-absent-component-present, ks-s5-j45-spawn-deferred into ks-s5-change-deferred, ks-s5-detour-after-unchecked into ns-epoch-check-skipped-for-exclusive, ks-s6-hook-set-at-record-time into ks-s6-set-at-record-time, hf-c-version-kept into rs-b6-cfp-version-1, sr-c-version-not-bumped into rs-b6-cfp-version-1, hf-plan-version-kept into sr-plan-version-not-bumped. Rewritten: ks-real-product-name (role word), rs-sample-capture-accepted and rs-sample-return-accepted (expect names the marker). mutation-prune step 3 (docs/architecture/target/v2/kernel-mutation-subsumption-report.zh-Hant.md, section 3): every mutant run against all kernel tests; a mutant whose failure set contains a kept mutant's and whose expect fails at the same site in its via was merged into that via (cases joined, every sentence of the expect required): rs-j3-4-z1-removed into rs-j12-condition-reads-dropped, rs-j3-5-changed-allowed into rs-adv-condition-change-filter-dropped, rs-j12-write-term-dropped into rs-j11-self-conflict-off, rs-adv-assert-self-conflict-removed into rs-j11-self-conflict-off, rs-j24-de16-removed into rs-adv-derived-deferred-writer-counts, rs-adv-assert-condition-write-removed into rs-j13-condition-write-allowed, rs-b5-literal-counts-deferred into rs-b5-literal-counts-membership, rs-b3-trim-ignores-declared into rs-b3-trim-not-pinned, rs-iv-ff3-C-section-dropped into rs-iv-fb8-C-request-not-hashed, rs-iv-fn1-funnel-empty into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn7-zone-access-unchanged into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fx15-funnel-zone-B-systems-only into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fd4-resolver-insert-not-recorded into rs-iv-fn4-system-Z6-without-funnel, rs-iv-fn2-funnel-not-transitive into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn3-system-zone-without-funnel into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fn8-funnel-note-empty into rs-iv-fx6-note-dropped-Z3-site, rs-iv-fd5-commandsfor-inserts-as-writes into rs-iv-fx14-funnel-zone-C-systems-only, hf-no-rounds into hf-verification-only, hf-first-queue into hf-verification-only, hf-limit-off-by-one into hf-default-limit-nine, hf-schedule-limit-ignored into hf-limit-check-before-empty, hf-only-with-trim into hf-startup-skipped, hf-limit-no-names into hf-limit-names-not-unique, we-j30-stamp-after-call into we-adv-tickstamp-never-recorded, we-j1-insert-append into we-j1-erase-swap-pop, we-j2-alive-append into we-j1-erase-swap-pop, we-j7-column-dtor-descending into we-j7-world-dtor-reverse, we-j5-layer1-off into we-j5-id-not-mode, we-j3-16-violations-dropped into we-j5-id-not-mode, hf-round-skips-despawn into hf-round-skips-onremove, sr-dropped-onadd-only into sr-dropped-cells-added, sr-range-removed into sr-dropped-made-alive, sr-emitter-by-planpos into sr-emitter-by-name, sr-tick-cached-for-world into sr-tick-one, sr-discard-clears-records into we-j35-diagnostics-dropped, ns-entry-violation-enters into ns-entry-retake-only, ks-s4-layer2-events-declared into ns-entry-retake-only, ns-left-error-not-listed into we-adv-dropped-err-beside-own-err-lost, ns-handle-epoch-not-renewed into ns-entry-no-compare-no-retake, ns-stamp-not-renewed into ns-modify-no-changed, ks-s10-bind-skipped into ks-s10-handles-unchecked, ks-s10-one-token-for-all-threads into ks-s10-handles-unchecked, ks-s10-check-ge into ks-s10-handles-unchecked, ks-s2-refusal-leaves-pending into ks-s2-empty-build-bumps, ks-s2-own-world-unchecked into ks-s2-register-while-running, ks-s6-set-not-recorded into ks-s6-plan-order-reversed, ks-s5-interrupted-still-changes into ks-s5-closure-refusal-not-interrupting, ks-s7-drop-every-run into we-adv-ready-window-compare-off, bs-thread-serial-not-thread-local into bs-thread-serial-issuer-per-thread, ns-rebase-no-retake-names-ping into ns-rebase-no-retake-on-throw, ks-s5-caller-error-recorded into ks-s5-spawn-alive-ends-run. empty-expect (v8-arch-gyo2-empty-expect, follow-up of kernel-mutation-subsumption-report.zh-Hant.md section 8 item 5): the expects of rs-iv-ff1-registry-section-dropped, rs-iv-fb5-sort-tiebreak-dropped, rs-iv-fb6-C-target-not-hashed, rs-iv-fb7-registry-target-not-hashed, rs-iv-fb8-C-request-not-hashed, rs-iv-fb9-C-filter-by-request-zone, rs-iv-fb11-C-count-dropped named a test case title that is printed every run (an unconditional MESSAGE), so they held whenever anything in their cases failed; each now names the CHECK expression its change breaks. drop-product-aliases (v8-arch-gyo2-drop-product-aliases, follow-up of kernel-mutation-prune-report.zh-Hant.md section 7 item 3): K1's alias list PRODUCT_ALIASES left kernel_guard.py with its two tests; ks-k1-roles-dropped's find and replace now name ROLE_WORDS alone. move-bs-mutants (v8-arch-gyo2-move-bs-mutants, follow-up of kernel-mutation-prune-report.zh-Hant.md): the 10 bs- mutants (Base's IdIssuer and CurrentThreadSerial, target gyo_base_tests) moved unchanged to Base's catalog docs/architecture/target/v2/scripts/base_mutations.json. time-events step 3 (v8-arch-gyo2-time-events, docs/architecture/target/v2/time-events-declaration.zh-Hant.md sections 6.1 G3 and 6.5; event cursor declaration section 8; ids msg-): retired rs-adv-event-trim-unknown (the eventTrim field and its D-E1 check left), rs-b3-trim-not-pinned (the trim is no Plan step), hf-rounds-follow-trim (no trim step follows a sync point; the rounds following the last sync point stay guarded by hf-first-sync-point and hf-rounds-every-sync), we-j36-no-same-tick and we-j36-swap-compare (a reader reads by cursor, not by tick and Plan position; the cursor read is guarded by msg-read-skips-first, msg-cursor-not-advanced and msg-seq-not-advanced); rewrote we-j36-trim-early, we-adv-event-trim-never, ns-nested-events-not-trimmed and hf-trim-before-rounds for the cursor trim at the end of the outermost Run; moved the find of the version mutants, rs-adv-hook-unchecked, we-j29-condition-cached, we-j29-set-once, ns-nested-end-ready, ks-s7-first-run-only and ks-s2-attach-events-first-only; retargeted we-j36-hook-writerpos-zero to J-55 (a hook's records still carry its sync point's position); followed C format 9 in the expect of rs-iv-fb11-C-count-dropped; added the msg- mutants of the retained messages read by cursor. time-events step 4 (v8-arch-gyo2-time-events, time-events-declaration sections 6.1 G1, G2, G4, G5, G8 and 6.2; the kernel keeps no clock, v8-arch-gyo2-clock-out-of-kernel): retired rs-j37-event-domain-unchecked and rs-j37-nonclock-allowed (G1: F-9/F-E1 left, a message is used in any schedule; J-37 now checks that), rs-j24-de12-removed (G2: D-E12 left; a missing mount target stays D-E1, a missing fixed-step schedule is WorldTimeModule::Check), rs-adv-domain-tick-is-zone-b (G4: no domain tick key; \"the tick only from one source\" is batch 4 authority), rs-j12-tick-one-mount (G4/G5: no CurrentTick access derivation), we-adv-tickstamp-never-recorded (G5: tickStamps left, not moved; no kernel judgement read them), ns-nested-tick-not-advanced (G5: the tick advancing in nested runs moved to the time Module, wt-run-one-step-no-tick in world_time_mutations.json); rewrote sr-tick-one and sr-tick-fixed-domain for the sync point number (G8), hf-startup-skipped (its replace keyed on the clock flag), and moved the find of the version mutants (Plan 8, Registry 6, C 10, export 6), we-j32-spawn-before-despawn, sr-no-record, sr-records-capped, sr-drop-takes-stamp, ks-s11-export-runner-back and ks-diks15-code-added-without-text.",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -289,90 +289,6 @@
       ]
     },
     {
-      "id": "ks-n1-forward-off",
-      "what": "N1 forward reports no namespace",
-      "guards": ["naming DI 1", "rebuild-naming N17"],
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "            elif full and not within(full, mapped):",
-      "replace": "            elif False:",
-      "expect": "FAIL: test_n1_old_engine_namespace_in_kernel_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n1-alias-off",
-      "what": "N1 no longer reports a namespace alias",
-      "guards": ["naming DI 1", "rebuild-naming N17"],
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "            elif full.startswith(\"=\"):",
-      "replace": "            elif False:",
-      "expect": "FAIL: test_n1_namespace_alias_at_file_scope_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n1-reverse-off",
-      "what": "N1 roots: a unit's namespace opened in a file outside every unit is not reported (rewritten by v8-arch-gyo2-namespace-root: the reverse check became the units branch of check_roots; nm-real-unit-namespace-in-tests is its real-tree positive control)",
-      "guards": ["naming DI 1", "rebuild-naming N17"],
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "                    problems.append(f\"{where}: N1 namespace {full} opened outside its unit\")",
-      "replace": "                    pass",
-      "expect": "FAIL: test_n1_nested_kernel_namespace_outside_kernel_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n1-mapped-root-silent",
-      "what": "naming guard passes when engine/ecs/kernel (the UNIT_OVERRIDES directory) is missing. Rewritten by v8-arch-gyo2-namespace-root: the guard derives the units, so the old mapped-root line split in two; the layer half (engine/orchestration missing, test_n1_missing_orchestration_directory_is_reported, merged here before) is nm-layer-gone-silent in naming_mutations.json",
-      "guards": ["naming DI 1", "rebuild-naming N17"],
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "    for directory in UNIT_OVERRIDES:\n        if not (root / directory).is_dir():\n            problems.append(f\"{directory}: no source to scan (moved or renamed? update this guard)\")",
-      "replace": "    for directory in UNIT_OVERRIDES:\n        if not (root / directory).is_dir():\n            pass",
-      "expect": "FAIL: test_missing_mapped_root_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
       "id": "ks-real-product-name",
       "what": "K1 reports a connection-role word in engine/kernel: the real-tree positive control of K1 (rewritten by v8-arch-gyo2-mutation-prune: gyo2 registers no product, so a product name is no longer found in the real tree; the role word PlayerState stands in)",
       "file": "engine/ecs/kernel/include/engine/kernel/Plan.hpp",
@@ -396,19 +312,6 @@
         "{python}",
         "-B",
         "tests/common/kernel/kernel_guard.py"
-      ]
-    },
-    {
-      "id": "ks-real-old-namespace",
-      "what": "engine/kernel uses the old Engine:: namespace",
-      "file": "engine/ecs/kernel/include/engine/kernel/Plan.hpp",
-      "find": "namespace GYO::Kernel {\n\n// A SHA-256",
-      "replace": "namespace Engine::Kernel {\n\n// A SHA-256",
-      "expect": "N1 namespace Engine::Kernel",
-      "command": [
-        "{python}",
-        "-B",
-        "tests/common/kernel/naming_guard.py"
       ]
     },
     {
@@ -463,8 +366,8 @@
     },
     {
       "id": "ks-adv-standard-headers-widened",
-      "what": "platform headers enter the standard header list (review B5)",
-      "file": "tests/common/kernel/kernel_guard.py",
+      "what": "platform headers enter the standard header list (review B5) (the line moved to tests/common/support/source_text.py, shared by the text guards, with v8-arch-gyo2-naming-cleanup)",
+      "file": "tests/common/support/source_text.py",
       "find": "    cstdio cstdlib cstring ctime cuchar cwchar cwctype\n",
       "replace": "    cstdio cstdlib cstring ctime cuchar cwchar cwctype pthread.h unistd.h\n",
       "expect": "FAIL: test_k5_platform_and_third_party_headers_are_reported",
@@ -603,8 +506,8 @@
     },
     {
       "id": "ks-k5-directive-include-only",
-      "what": "only #include is read as a directive (review A3)",
-      "file": "tests/common/kernel/kernel_guard.py",
+      "what": "only #include is read as a directive (review A3) (the line moved to tests/common/support/source_text.py, shared by the text guards, with v8-arch-gyo2-naming-cleanup)",
+      "file": "tests/common/support/source_text.py",
       "find": "(?:#|%:)[ \\t]*(?:include_next|include|import)\\b",
       "replace": "#[ \\t]*include\\b",
       "expect": "FAIL: test_import_and_digraph_include_are_read",
@@ -738,87 +641,6 @@
         "tests/common/kernel",
         "-p",
         "test_kernel_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n1-linkage-block-named",
-      "what": "a linkage block counts as a named namespace (review A9)",
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "stack.append(pending if pending is not None else None)",
-      "replace": "stack.append(pending if pending is not None else \"linkage\")",
-      "expect": "FAIL: test_n1_namespace_inside_a_linkage_block_is_checked",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n1-attribute-unread",
-      "what": "an attributed namespace is not read (review A9)",
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "NAMESPACE = re.compile(r\"namespace\\s*(?:\\[\\[[^\\]]*\\]\\]\\s*)?(",
-      "replace": "NAMESPACE = re.compile(r\"namespace\\s*(",
-      "expect": "FAIL: test_n1_attributed_namespace_is_read",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n1-unreadable-silent",
-      "what": "an unreadable namespace declaration is not reported as such (review A9)",
-      "guards": ["naming DI 1", "rebuild-naming N17"],
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "\n            if full.startswith(\"?\"):",
-      "replace": "\n            if False:",
-      "expect": "FAIL: test_n1_unreadable_namespace_declaration_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n1-inline-substring",
-      "what": "inline is removed as a substring (review A9: Mainline)",
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "r\"\\s+|\\binline\\b\"",
-      "replace": "r\"\\s+|inline\"",
-      "expect": "FAIL: test_n1_inline_nested_namespace_keeps_its_name",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
         "-v"
       ]
     },
@@ -2480,8 +2302,8 @@
       "id": "we-j1-erase-swap-pop",
       "what": "J-1: a column erase swaps with the last cell and pops (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in we-j1-insert-append [J-1: a column insert appends instead of keeping key order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)]; we-j2-alive-append [J-2 (J.3 #7): the alive-entity list keeps insertion order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)])",
       "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-      "find": "        if (!::GYO::Engine::EntityStore::EraseEntity(cells, id)) return false;",
-      "replace": "        Cell<T>* found = ::GYO::Engine::EntityStore::FindEntity(cells, id);\n        if (found == nullptr) return false;\n        std::swap(*found, cells.back());\n        cells.pop_back();",
+      "find": "        if (!Engine::EntityStore::EraseEntity(cells, id)) return false;",
+      "replace": "        Cell<T>* found = Engine::EntityStore::FindEntity(cells, id);\n        if (found == nullptr) return false;\n        std::swap(*found, cells.back());\n        cells.pop_back();",
       "target": "gyo_kernel_tests",
       "cases": "J-1:*,J-2:*",
       "expect": "(?=[\\s\\S]*(?:static_cast<bool>\\(kernelRunResult\\)))[\\s\\S]*(?:static_cast<bool>\\(result\\))"
@@ -5381,7 +5203,7 @@
       "id": "ks-s5-spawn-alive-id-returned",
       "what": "S5 (S1): ExclusiveWorld::Spawn returns the allotter's id when the spawn was dropped (the id is another entity's) (v8-arch-gyo2-kernel-subtract-structure, fix pass 2) (user decision 2026-11-18: Err, not an empty id; v8-arch-gyo2-kernel-subtract-structure)",
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
-      "find": "        if (done->rejected) {\n            return ::GYO::Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",\n                                                         \"the allotter gave id \" + std::to_string(done->entity) +\n                                                             \", which is alive: nothing spawned, recorded as a RejectedSpawn\"));\n        }\n",
+      "find": "        if (done->rejected) {\n            return Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",\n                                                         \"the allotter gave id \" + std::to_string(done->entity) +\n                                                             \", which is alive: nothing spawned, recorded as a RejectedSpawn\"));\n        }\n",
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive*",
@@ -6252,8 +6074,8 @@
       "id": "ks-s5-spawn-alive-ends-run",
       "what": "the AllottedIdAlive Err is recorded as the call's error, so the Run ends in it (user decision 2026-11-18: Err, not an empty id; v8-arch-gyo2-kernel-subtract-structure) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in ks-s5-caller-error-recorded [CallerError records its error in call.returned like CallError (user decision 2026-11-18: Err, not an empty id; v8-arch-gyo2-kernel-subtract-structure)])",
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
-      "find": "            return ::GYO::Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
-      "replace": "            return ::GYO::Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+      "find": "            return Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
+      "replace": "            return Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, \"F-13\",",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive*",
       "expect": "\\[ks\\-s5\\-spawn\\-alive\\-not\\-run\\-error\\]"

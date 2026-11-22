@@ -21,7 +21,7 @@
 #include <utility>
 #include <vector>
 
-namespace KernelTest {
+namespace GYO::Test::Kernel {
 
 using namespace GYO::Kernel;
 using GYO::Test::TestRangeAllotter;
@@ -198,6 +198,6 @@ inline std::size_t PositionOf(const Plan& plan, std::string_view name) {
     return plan.steps.size();
 }
 
-} // namespace KernelTest
+} // namespace GYO::Test::Kernel
 
-#define KERNEL_REQUIRE_OK(built) REQUIRE_MESSAGE(static_cast<bool>((built).result), KernelTest::Describe(built))
+#define KERNEL_REQUIRE_OK(built) REQUIRE_MESSAGE(static_cast<bool>((built).result), ::GYO::Test::Kernel::Describe(built))
