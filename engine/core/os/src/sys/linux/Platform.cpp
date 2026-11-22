@@ -1,5 +1,6 @@
 // The Linux steps of engine/os's shared implementation (sys/Platform.hpp).
 #include "../Platform.hpp"
+#include "../../common/Paths.hpp"
 
 #include <cerrno>
 #include <cstdlib>
@@ -11,6 +12,19 @@
 namespace GYO::Engine::OS::Detail {
 namespace {
 
+// The XDG data home is $XDG_DATA_HOME when it is an absolute path (the
+// specification ignores a relative one), else .local/share in $HOME when HOME
+// is absolute. DataHome gives the first and Home the second's HOME; each is
+// null when its variable is not set to an absolute path.
+const char* DataHome() noexcept {
+    const char* data = std::getenv("XDG_DATA_HOME");
+    return data != nullptr && data[0] == '/' ? data : nullptr;
+}
+const char* Home() noexcept {
+    const char* home = std::getenv("HOME");
+    return home != nullptr && home[0] == '/' ? home : nullptr;
+}
+
 class LinuxPlatform final : public Platform {
 public:
     const timespec& ModifiedTimespec(const struct stat& status) const noexcept override { return status.st_mtim; }
@@ -18,9 +32,9 @@ public:
     std::vector<std::string> FontDirectoryCandidates() const override {
         std::vector<std::string> candidates;
         candidates = {"/usr/share/fonts", "/usr/local/share/fonts"};
-        if (const char* data = std::getenv("XDG_DATA_HOME"); data != nullptr && data[0] == '/') {
+        if (const char* data = DataHome()) {
             candidates.push_back(std::string(data) + "/fonts");
-        } else if (const char* home = std::getenv("HOME"); home != nullptr && home[0] == '/') {
+        } else if (const char* home = Home()) {
             candidates.push_back(std::string(home) + "/.local/share/fonts");
         }
         return candidates;
@@ -42,6 +56,13 @@ public:
             }
             buffer.resize(buffer.size() * 2);
         }
+    }
+
+    Base::Result<std::string, OSError> UserDataBase() const override {
+        if (const char* data = DataHome()) return std::string(data);
+        if (const char* home = Home()) return std::string(WithoutTrailingSlashes(home)) + "/.local/share";
+        return Base::Err(OSError::Make(OSErrorCode::IOFailed,
+            "cannot name the user data directory: neither XDG_DATA_HOME nor HOME is an absolute path"));
     }
 };
 

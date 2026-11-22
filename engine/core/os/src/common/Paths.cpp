@@ -62,6 +62,11 @@ Base::Result<void, OSError> CheckPath(const std::string_view utf8Path) {
     return {};
 }
 
+std::string_view WithoutTrailingSlashes(std::string_view path) noexcept {
+    while (!path.empty() && path.back() == '/') path.remove_suffix(1);
+    return path;
+}
+
 } // namespace Detail
 
 namespace Files {
