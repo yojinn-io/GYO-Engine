@@ -54,3 +54,14 @@
 - **§14.5 的確認**：7 個都寫了「只有它捕到的」。非阻塞（`O_NONBLOCK` 拿掉）的突變沒有加：它的失敗是逾時，不是可識別的訊息（§14.2）。
 - **CI（G-7 三平台）**：PR-1 開了之後跑 L1，結果補在這裡。
 - **證據**：主 checkout `build/evidence/gyo2-net-module/step0/ctest-os-last.log`。突變的輸出未保存，結果在上面。
+
+## 判定的變更（§14.4）：`gyo_os` 的連結集加 `ws2_32`
+
+- **起因**：PR #275 的第一次 L1（run 45029380557）windows-x64 在 configure 失敗，訊息是「gyo_os links GYO::Base;shell32;ws2_32; expected exactly GYO::Base;shell32」。守衛 `gyo_expect_os_links`（`tests/common/os/CMakeLists.txt`）守 os.md DI 3。
+- **1～5**（交使用者）：
+  1. **守的性質**：DI 3「只連 `GYO::Base` 與 OS 的系統庫」。
+  2. **緩的面**：Windows 上連 `ws2_32` 以前失敗、之後通過。
+  3. **締的面**：Windows 上少連 `ws2_32` 以前通過、之後失敗。
+  4. **性質還在嗎**：`ws2_32` 是系統庫，DI 3 允許；其他多連照樣擋。DI 3 條文同步寫上 `ws2_32`。
+  5. **根據**：Q5 的核准與上面那個 run。
+- **使用者 2026-11-22 核准**：原話「核准」。
