@@ -9,7 +9,7 @@ add_executable(gyo_world_asset_tests
     SummaryTests.cpp
 )
 find_package(Threads REQUIRED)
-target_link_libraries(gyo_world_asset_tests PRIVATE GYO::WorldAsset GYO::Threads gyo_test_support doctest::doctest Threads::Threads)
+target_link_libraries(gyo_world_asset_tests PRIVATE GYO::WorldAsset gyo_test_support doctest::doctest Threads::Threads)
 target_include_directories(gyo_world_asset_tests PRIVATE "${GYO_REPOSITORY_ROOT}/tests/common/asset")
 target_compile_definitions(gyo_world_asset_tests PRIVATE GYO_ASSET_TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
 if(MSVC)

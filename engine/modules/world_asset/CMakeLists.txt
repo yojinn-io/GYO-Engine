@@ -4,6 +4,7 @@
 # library that knows nothing of ECS (tools use it without a World), as engine/time and engine/world_time are split.
 add_library(gyo_world_asset STATIC
     src/AssetView.cpp
+    src/WorkerPoolExecutor.cpp
     src/WorldAssetModule.cpp
 )
 add_library(GYO::WorldAsset ALIAS gyo_world_asset)
@@ -13,9 +14,10 @@ target_include_directories(gyo_world_asset PUBLIC
 )
 
 # Links to core, ecs and orchestration are written here; links to other Modules
-# come from config/modules.csv (O-6). No link to engine/threads: the executor is
-# the product's, given through AssetOptions (5.4).
-target_link_libraries(gyo_world_asset PUBLIC GYO::Base GYO::Kernel GYO::Orchestration)
+# come from config/modules.csv (O-6). GYO::Threads (core) is for WorkerPoolExecutor
+# only, the adapter a product may put behind AssetOptions::executor; world_asset
+# starts no thread, and the asset library itself does not link threads.
+target_link_libraries(gyo_world_asset PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Threads)
 gyo_link_registered_dependencies(world_asset)
 target_compile_features(gyo_world_asset PUBLIC cxx_std_20)
 if(MSVC)

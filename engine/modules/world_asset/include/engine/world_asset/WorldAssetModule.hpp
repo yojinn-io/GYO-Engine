@@ -48,7 +48,7 @@ struct AssetOptions final {
     // Overrides of loaders' default byte limits, by (type, format).
     std::vector<Asset::AssetByteLimit> byteLimits;
     // Where jobs run; not owned, and it must outlive the Product. world_asset makes no threads: the product puts
-    // threads' WorkerPool behind an AssetExecutor. Null: no executor, and every request that needs a job is
+    // threads' WorkerPool behind WorkerPoolExecutor (WorkerPoolExecutor.hpp), or gives any other AssetExecutor. Null: no executor, and every request that needs a job is
     // Failed(NoExecutor) (E2, not a startup error: world_asset is carried by default).
     Asset::AssetExecutor* executor = nullptr;
 };

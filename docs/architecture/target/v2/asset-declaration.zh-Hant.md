@@ -1,6 +1,6 @@
 # 事前宣告：asset Module（`v8-arch-gyo2-asset`）
 
-更新：2026-11-22（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-22，原話「核准」；核准的版本 55a14825）；實作完成；合併前核准（使用者 2026-11-23：「Probe 留著，adapter 交主會話」、「AS-1、AS-11 和突變數都核准」——DI 的最終文字與突變 108 個）。** 實作和本頁不同、或本頁沒寫清楚而在實作時判的地方，列在第 30 節；正式頁是 [asset.zh-Hant.md](asset.zh-Hant.md)。
+更新：2026-11-22（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-22，原話「核准」；核准的版本 55a14825）；實作完成；合併前核准（使用者 2026-11-23：「Probe 留著，adapter 交主會話」、「AS-1、AS-11 和突變數都核准」——DI 的最終文字與突變 108 個）。**核准後加入 adapter**：使用者 2026-11-23 在主會話「adapter 照建議放 world_asset」，world_asset 加 `WorkerPoolExecutor` 與對 `GYO::Threads` 的連結（第 15 節第 13 項、30.3 的 S3 列）；這部分等使用者確認。** 實作和本頁不同、或本頁沒寫清楚而在實作時判的地方，列在第 30 節；正式頁是 [asset.zh-Hant.md](asset.zh-Hant.md)。
 
 **經過**：
 - 修訂 0（f93edb7e）送 Fable 5.2／high 敵對式檢查，blocker 4、should 15、nit 12，全部採用成修訂 1（b050e13b），對照在第 17 節。
@@ -686,7 +686,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
    - 日誌與 `world_logging`：輪詢 `AssetView::Failures()`；丟棄件數的 E3 出口要編排層的結束回呼（第 15 節）。
    - 之後的 render、text、ui、audio、model Module：登記 loader；它們的值要合 AS-10。
    - 產品：載入改經 id 與 catalog。工具：照 catalog 的 Data Contract 寫（audio_editor、ui_editor），或直接呼叫 loader（model_viewer）。
-5. **Dependency Direction**：asset → base、private io、private json；world_asset → asset、base、kernel、orchestration（日後可能加 threads）；日後的 image → asset。擁有型別的 Module 拆兩個單位：loader 函式庫 → asset；World 端單位 → world_asset（登記檔寫明，5.4）。全部往下，沒有反向；core 不依賴它們；編排層不認得它們（RC-O4、RC-O8）。
+5. **Dependency Direction**：asset → base、private io、private json；world_asset → asset、base、kernel、orchestration、threads（實作時加，只為 `WorkerPoolExecutor`；第 15 節第 13 項）；日後的 image → asset。擁有型別的 Module 拆兩個單位：loader 函式庫 → asset；World 端單位 → world_asset（登記檔寫明，5.4）。全部往下，沒有反向；core 不依賴它們；編排層不認得它們（RC-O4、RC-O8）。
 6. **Ownership**：
    - catalog 的格式與驗證、id、loader 介面、`AssetStore` → asset。
    - Product 的 store 實例、`AssetOptions`、World 端的 `AssetRequests` 與 `AssetView` → world_asset。
@@ -1000,7 +1000,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 10. **cross-component-rules**：AS-10 (c)（loader 的值 const 並行安全、解構不綁執行緒）與「判定用的內容在進判定前載完」、「判定用內容的 Handle 要一直持有，放在沒有用 `rollback.` 登記的 Resource」在實作第 6 步登記，owner asset。
 11. **D6b、M11 的加註**（決定 14）：asset 把「World 內不上鎖」讀成「World 的資料不上鎖；System 呼叫外部服務時，那個服務可以拿它自己的鎖」，結果只在套用點批次進 World。同步呼叫外部服務可以帶回的，只有不進雜湊、不進相等的身分資訊（asset 是 Handle 的生命序號，效果只有 `State` 回 `Queued`）。請主會話在 `rebuild-concept.zh-Hant.md` 的 D6b、M11 加註這個讀法，免得日後網路等 Module 各自解讀。 登記與預先登記的回傳值是設定錯誤的回報（正確設定下一律成功），System 不得拿它分支判定。通則是：同步呼叫外部服務帶回的值，不得讓判定依時序而變。
 12. **負向編譯先例的判法**：`tests/common/kernel/CMakeLists.txt:231` 只在輸出裡找標記，同一行有無關的硬錯誤（例：型別名打錯）時，編譯器會把那一行原始碼印出來、裡面就有標記，樣本永遠空過。asset 改用「靜態斷言失敗＋標記在同一行」；kernel 的先例不在本批，交主會話。
-13. **`WorkerPool` 的 adapter 定在哪裡**：#277 已把 threads 的 `WorkerPool` 帶進 gyo2，本批只在測試裡寫三行 adapter（`tests/common/world_asset/ScenarioTests.cpp`），產品各自寫。要不要定在 Engine 的一個單位（會加一條依賴 threads 的邊）交主會話；使用者 2026-11-23「adapter 交主會話」。
+13. **`WorkerPool` 的 adapter 定在哪裡**：~~交主會話~~ 已決定（使用者 2026-11-23 在主會話「adapter 照建議放 world_asset」）：world_asset 提供 `WorkerPoolExecutor(WorkerPool&)`，只轉接、不開執行緒；用哪個池、開幾條執行緒仍由產品選，也可以給別的執行器。world_asset 連 `GYO::Threads`（core，手寫在 CMake，不走 O-6）；asset 函式庫照舊不依賴 threads。
 
 ## 16. 停止條件
 
@@ -1411,7 +1411,7 @@ Fable 的合併前設計審查（blocker 2、should 8、nit 7；摘要與探針�
 | B2 | `Shutdown(Discard)` 返回時工作還在 loader 裡；world_asset 的 `OnDestroy` 返回時工作沒停，違反 O-15 | 兩種模式都等「已開工、未完成」的工作歸零（開工時在鎖下加一，`Complete` 之後減一，條件變數等）；`Discard` 仍不開新工作；值在返回前解構。30.2 的「不等已在跑的工作」因此改掉 | `store: Shutdown waits for a job that is already in its loader, in both modes`（另一條執行緒 100 ms 後放閂，閂本身 10 s 有界）；`as-store-shutdown-waits-running` |
 | S1 | 已 `Failed` 的依賴被之後完成的每個父項重載 | 保留（核准的 5.5，同 Bevy）；正式頁第 4 節寫明，AS-13 加守衛 | `depend: a failed dependency is read again by each parent that finishes after it (5.5, as Bevy)`；`as-store-edge-reloads-failed` |
 | S2 | `Handle::Body()`、`Life()` 公開；store 在 Product 的共用處，作者的 Module 可 `Find` 它呼叫 `Request`／`Read`／`Pump`／`Shutdown` | `Body()`、`Life()` 改 private，store、world_asset、測試經 `Detail::HandleAccess`；store 由 `WorldAssetModule` 持有（`unique_ptr`），共用處只 `Create` `AssetLoaderRegistry` 與唯讀的 `AssetStoreDiagnostics`（`Counts()`、`Probe(id)`；`Probe` 是實作者為了測試讀單一 id 而加，使用者 2026-11-23 核定「Probe 留著」）。測試的 `Find<AssetStore>` 改成 `Find<AssetStoreDiagnostics>`；`SummaryTests.cpp` 與突變 `aw-hash-index` 改經 `Detail::HandleAccess` | 樣本 `GYO_ASSET_SAMPLE_HANDLE_BODY_IS_PRIVATE`、`GYO_ASSET_SAMPLE_HANDLE_LIFE_IS_PRIVATE`；`aw-sample-handle-body`、`aw-sample-handle-life` |
-| S3 | `AssetExecutor.hpp` 說 threads 的 `WorkerPool`「照原樣接得上」，但 gyo2 上沒有它 | 註解改成事實；正式頁第 4、9 節與 dev_log 加限界：今天沒有正式的執行器，產品自己寫 adapter；`WorkerPool` 合進來時把 adapter 定在一處並加真 pool 的案例。之後合併 gyo2 時 #277 已帶進 `WorkerPool`：加了真 pool 的 scenario 案例（測試裡的 adapter）；adapter 定在 Engine 哪個單位會加一條依賴邊，交主會話 | `AssetExecutor.hpp`；正式頁；`tests/common/world_asset/ScenarioTests.cpp` |
+| S3 | `AssetExecutor.hpp` 說 threads 的 `WorkerPool`「照原樣接得上」，但 gyo2 上沒有它 | 註解改成事實；正式頁第 4、9 節與 dev_log 加限界：今天沒有正式的執行器，產品自己寫 adapter；`WorkerPool` 合進來時把 adapter 定在一處並加真 pool 的案例。之後合併 gyo2 時 #277 已帶進 `WorkerPool`：加了真 pool 的 scenario 案例（測試裡的 adapter）；adapter 定在 world_asset（使用者 2026-11-23「adapter 照建議放 world_asset」，核准後加入）：`WorkerPoolExecutor`，測試改用它 | `AssetExecutor.hpp`；`world_asset/WorkerPoolExecutor.hpp`；正式頁；`tests/common/world_asset/ScenarioTests.cpp` |
 | S4 | 已登記的 loader 再預先登記它不認的 `format` 會被記下，那個 `format` 的請求永遠等 | 最小修法：這時回 `FormatNotTaken`（新碼，什麼都不記）；同一 loader 再登記時清掉它的預先登記（`InstallLoader` 的「同一 loader 再登記」不再提前返回）。不改成「直接用 `kFormats`」（會改核准的 5.4） | `store: preregistering a format its registered loader does not take is refused`；`as-store-preregister-not-taken` |
 | S5 | 探針存活的決定與「測試已在、清單沒有突變」的機制 | 存活的 8 個：r1、r4、r5、r9、r10、r16、r20 加案例或斷言與突變；r19 見下。已有測試的 7 個掛成突變。AS-1 加專屬案例與突變（每個 World 各建一個 store） | r1 `as-store-noloader-then-waits`；r4 `aw-waiting-finished`；r5 `aw-request-failure-complete`；r9 `aw-get-ignores-cpp-type`；r10 `aw-unseen-dependencies-finished`；r16 `as-snapshot-root-failed`；r20 `aw-world-options-ignored`；7 個 `aw-prepare-no-maintenance`、`aw-apply-no-maintenance`、`aw-no-on-destroy-shutdown`、`aw-prepare-no-view`、`as-store-edge-holds-nothing`、`as-store-pump-one-round`、`aw-view-rebuilt-empty`；AS-1 `aw-one-store-per-world` |
 | S6 | 骨架關掉、沒給 `WorldAssetOptions` 時的錯誤看不出是 asset | 照 world_time 的先例加案例：給了選項正常 `Loaded`；沒給時是 Kernel 的 D-E1，啟動報告寫「System 'ApplyAssets' is mounted in schedule 'Main', which this Product does not have」，已經看得出是 world_asset 的 System，**不另加回報碼**（卡片判） | `view: a World with the skeleton off names where ApplyAssets goes (WorldAssetOptions)`；`aw-world-options-ignored` |

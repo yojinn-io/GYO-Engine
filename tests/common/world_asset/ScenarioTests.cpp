@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "engine/threads/WorkerPool.hpp"
+#include "engine/world_asset/WorkerPoolExecutor.hpp"
 
 namespace WorldAssetTest {
 namespace {
@@ -303,19 +304,8 @@ TEST_CASE("scenario: two Worlds of a Product share one store: one read, one valu
     CHECK(StoreOf(p).Counts().fileReads == 1);
 }
 
-// threads' WorkerPool behind an AssetExecutor: the adapter a product writes (AssetOptions::executor; merge review
-// S3). WorkerPool::Submit queues a job submitted from inside a job, so a finished job submitting its dependencies
-// does not recurse; after Stop it takes nothing, which the executor contract allows. The store's jobs hold the
-// store's state, so a job the pool runs after the Product is gone returns at once.
-class WorkerPoolExecutor final : public Asset::AssetExecutor {
-public:
-    explicit WorkerPoolExecutor(GYO::Engine::Threads::WorkerPool& pool) : pool_(pool) {}
-    void Submit(Job job) override { (void)pool_.Submit(std::move(job)); }
-
-private:
-    GYO::Engine::Threads::WorkerPool& pool_;
-};
-
+// WorldAsset::WorkerPoolExecutor with a real pool: two Worlds, two threads. The store's jobs hold the store's state,
+// so a job the pool runs after the Product is gone returns at once.
 TEST_CASE("scenario: threads' WorkerPool behind an AssetExecutor loads what two Worlds request") {
     Fresh fresh;
     Content content("worker-pool");
@@ -326,7 +316,7 @@ TEST_CASE("scenario: threads' WorkerPool behind an AssetExecutor loads what two 
     auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "asset-test", .threadCount = 2});
     REQUIRE(started.has_value());
     GYO::Engine::Threads::WorkerPool pool = std::move(started).value();
-    WorkerPoolExecutor executor(pool);
+    WA::WorkerPoolExecutor executor(pool);
     {
         O::ProductDescription description;
         description.name = "worker-pool";
