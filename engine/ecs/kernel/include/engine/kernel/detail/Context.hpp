@@ -243,7 +243,7 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 // Run: from a hook (X-13), inside a Read or Modify closure (X-14), an unknown
 // name (X-12), an extract schedule (X-15), a schedule running already at any level (X-11). An Interrupted World
 // runs nothing: the error a nested level left is returned.
-[[nodiscard]] ::GYO::Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
+[[nodiscard]] Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
                                                                 bool inClosure);
 // What an immediate structural change of ExclusiveWorld did (declaration
 // v8-arch-gyo2-kernel-subtract-structure 3.5): entity, the id a Spawn took
@@ -276,7 +276,7 @@ struct ImmediateOutcome {
 // returns, DI-KS 2): no allotter (NoAllotter), the allotter used up
 // (AllotterExhausted). GYO_ASSERT: the membership changed behind the handle
 // before (W-3).
-[[nodiscard]] ::GYO::Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
+[[nodiscard]] Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
                                                                                 ChangeStamp stamp, bool inClosure);
 
 // ExclusiveWorld::Restore (primitives 2 and 3, authority-rollback declaration
@@ -285,7 +285,7 @@ struct ImmediateOutcome {
 // initial values, then OnAdd: a hook sees every cell put back), then the hook
 // rounds, as ApplyImmediate; refused and failing as ApplyImmediate. Its Spawn
 // records carry restore (no allotter range check) and an empty bundle.
-[[nodiscard]] ::GYO::Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records,
+[[nodiscard]] Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records,
                                                                    ChangeStamp stamp, bool inClosure);
 
 // Event cursor declaration 3.3 (time-events declaration 4.2): ExclusiveWorld::
@@ -300,7 +300,7 @@ struct ImmediateOutcome {
 // Read or Modify closure (ClosureChangesMembership). An observer's Err
 // interrupts the World and is reported once. An Interrupted World runs no
 // observer and returns the left error.
-[[nodiscard]] ::GYO::Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id,
+[[nodiscard]] Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id,
                                                                  std::unique_ptr<ValueBox> payload,
                                                                  std::optional<EntityId> target, bool inClosure);
 
@@ -347,7 +347,7 @@ void Push(SystemContext& call, Record record);
 // violations, boundary differences (storage names), kernel errors the System
 // dropped, and the System's own Err, as one sibling list; nothing when the call
 // is clean. One error alone is returned as is.
-[[nodiscard]] std::optional<KernelError> CombineCall(SystemContext& call, ::GYO::Engine::Base::Result<void, KernelError> result,
+[[nodiscard]] std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result<void, KernelError> result,
                                                      const std::vector<std::string>& changed);
 
 // DiagnosticsWriter<T>'s World-side buffer (B-13).

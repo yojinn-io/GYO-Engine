@@ -6,7 +6,7 @@ The scans the orchestration-skeleton declaration (section 7.4) deferred until sc
   O4  an include in engine/orchestration/ outside the allowlist: in quotes only engine/kernel/, engine/base/ and
       engine/orchestration/, with no ".." in the path (an allowed prefix followed by ".." reaches any header;
       v8-arch-gyo2-batch4-followups, as kernel_guard K5); in angle brackets only a C++ standard library header
-      (kernel_guard's STANDARD_HEADERS). The layer carries no third-party ability and no Module's internals (O-4).
+      (STANDARD_HEADERS of tests/common/support/source_text.py). The layer carries no third-party ability and no Module's internals (O-4).
   O3  engine/orchestration/ reads no Plan step and calls no System itself (O-3: the runner calls only the
       Product's entry points and orders no System): Plans(, PlanOf(, ExportPlans(, .steps, StepKind, and the
       kernel's System invokers InvokerOf, CallFunction, CallLambda. Read on code with comments and literals blanked.
@@ -28,8 +28,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "kernel"))
-from kernel_guard import (  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
+from source_text import (  # noqa: E402
     DIRECTIVE, STANDARD_HEADERS, SUFFIXES, TARGET, line_of, strip_comments_and_strings)
 
 SCANNED = "engine/orchestration"

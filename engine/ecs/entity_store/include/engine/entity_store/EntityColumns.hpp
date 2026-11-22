@@ -27,7 +27,7 @@ namespace GYO::Engine::EntityStore {
 // Keys are read only through EntityKey (EntityKey.hpp); every call below is
 // qualified, so no function of the element's namespace takes part.
 
-namespace detail {
+namespace Detail {
 // On the container's own iterators: a std::span iterator is a different type
 // from std::vector's on libstdc++ and MSVC, so it cannot meet vector::end().
 template <typename Iterator>
@@ -39,10 +39,10 @@ template <typename Iterator>
 // The element with this key, or last.
 template <typename Iterator>
 [[nodiscard]] Iterator EntityPosition(Iterator first, Iterator last, EntityId id) noexcept {
-    const auto position = detail::EntityLowerBound(first, last, id);
+    const auto position = Detail::EntityLowerBound(first, last, id);
     return position != last && EntityStore::EntityOf(*position) == id ? position : last;
 }
-} // namespace detail
+} // namespace Detail
 
 // True when every key is greater than the one before it.
 template <HasEntityKey T>
@@ -55,7 +55,7 @@ template <HasEntityKey T>
 // The element with this key, or nullptr. No side effect.
 template <HasEntityKey T>
 [[nodiscard]] const T* FindEntity(std::span<const T> column, EntityId id) noexcept {
-    const auto position = detail::EntityPosition(column.begin(), column.end(), id);
+    const auto position = Detail::EntityPosition(column.begin(), column.end(), id);
     return position != column.end() ? &*position : nullptr;
 }
 template <HasEntityKey T>
@@ -64,7 +64,7 @@ template <HasEntityKey T>
 }
 template <HasEntityKey T>
 [[nodiscard]] T* FindEntity(std::vector<T>& column, EntityId id) noexcept {
-    const auto position = detail::EntityPosition(column.begin(), column.end(), id);
+    const auto position = Detail::EntityPosition(column.begin(), column.end(), id);
     return position != column.end() ? &*position : nullptr;
 }
 
@@ -74,7 +74,7 @@ template <HasEntityKey T>
 template <HasEntityKey T>
 T& InsertEntity(std::vector<T>& column, T value) {
     const auto id = EntityStore::EntityOf(value);
-    const auto position = detail::EntityLowerBound(column.begin(), column.end(), id);
+    const auto position = Detail::EntityLowerBound(column.begin(), column.end(), id);
     GYO_ASSERT(position == column.end() || EntityStore::EntityOf(*position) != id);
     return *column.insert(position, std::move(value));
 }
@@ -84,7 +84,7 @@ T& InsertEntity(std::vector<T>& column, T value) {
 // is a result, not an error.
 template <HasEntityKey T>
 bool EraseEntity(std::vector<T>& column, EntityId id) {
-    const auto position = detail::EntityPosition(column.begin(), column.end(), id);
+    const auto position = Detail::EntityPosition(column.begin(), column.end(), id);
     if (position == column.end()) return false;
     column.erase(position);
     return true;

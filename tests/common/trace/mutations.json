@@ -661,7 +661,7 @@
     "trace TR-5"
    ],
    "file": "engine/modules/trace/src/Trace.cpp",
-   "find": "    return clock != nullptr ? clock() : ::GYO::Engine::Time::NowNs();",
+   "find": "    return clock != nullptr ? clock() : Time::NowNs();",
    "replace": "    return clock != nullptr ? clock() : 0;",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 4: S4-1*",

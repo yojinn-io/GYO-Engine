@@ -26,11 +26,11 @@ add_test(NAME entity_store.word_guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_*.py" -v)
 set_tests_properties(entity_store.word_guard entity_store.word_guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Design Invariant 9: the store is a leaf directly above GYO::Base; its links,
-# private and interface alike, are exactly GYO::Base. gyo_expect_links is
-# defined with the time tests, which configure first. Checked once the whole
-# project is configured, so an edge added later from another directory is
-# seen too.
+# private and interface alike, are exactly GYO::Base. Checked once the whole
+# project is configured, so an edge added later from another directory is seen
+# too.
 function(gyo_expect_entity_store_links)
     gyo_expect_links(gyo_entity_store GYO::Base)
 endfunction()

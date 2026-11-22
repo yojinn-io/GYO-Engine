@@ -33,6 +33,7 @@ add_test(NAME authority.sources_scan
         --root "${GYO_REPOSITORY_ROOT}" --list "${CMAKE_CURRENT_BINARY_DIR}/authority_sources.json")
 set_tests_properties(authority.sources_scan PROPERTIES FIXTURES_REQUIRED authority_sources_export LABELS "cpu" TIMEOUT 60)
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Design Invariant DI-A 9 (docs/architecture/target/v2/authority.zh-Hant.md): the authority Module reads only the
 # public registrations of rollback and time and depends on no state machine. Its links, private and interface
 # alike, are exactly these (stricter than DI-A 9: no network Module either, DI-A 1 "does not transmit"), so a link to any

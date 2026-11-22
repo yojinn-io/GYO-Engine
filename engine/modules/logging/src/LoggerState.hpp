@@ -46,9 +46,9 @@ struct LoggerState final {
     // calls at once cannot leave floor at a value one of them computed earlier.
     std::mutex levelMutex;
     bool tookBaseLog{false};
-    ::GYO::Engine::Base::LogHandler previousBaseLog{nullptr};
+    Base::LogHandler previousBaseLog{nullptr};
     bool tookAssertions{false};
-    ::GYO::Engine::Base::AssertionHandler previousAssertion{nullptr};
+    Base::AssertionHandler previousAssertion{nullptr};
     bool tookTerminate{false};
     std::terminate_handler previousTerminate{nullptr};
     std::chrono::nanoseconds fatalFlushTimeout{};

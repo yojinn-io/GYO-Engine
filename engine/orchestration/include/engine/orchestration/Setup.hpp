@@ -73,7 +73,7 @@ private:
 // A prepare function (section 3.8): called after a World is built and before
 // its first Run, on the Ready World. To fail, return an OrchestrationError with
 // code PrepareFailed and the author's own code in reporterCode.
-using PrepareFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationError>(Kernel::World&)>;
+using PrepareFn = std::function<Base::Result<void, OrchestrationError>(Kernel::World&)>;
 
 enum class RunnerExitCode : unsigned char { Success = 1, Failure };
 

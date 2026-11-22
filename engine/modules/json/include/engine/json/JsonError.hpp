@@ -29,10 +29,10 @@ enum class JsonErrorCode : std::uint16_t {
 
 [[nodiscard]] const char* ToString(JsonErrorCode code) noexcept;
 
-using JsonError = ::GYO::Engine::Base::Error<JsonErrorCode>;
-static_assert(::GYO::Engine::Base::CodedError<JsonError>);
+using JsonError = Base::Error<JsonErrorCode>;
+static_assert(Base::CodedError<JsonError>);
 
 template <class T>
-using JsonResult = ::GYO::Engine::Base::Result<T, JsonError>;
+using JsonResult = Base::Result<T, JsonError>;
 
 } // namespace GYO::Engine::Json

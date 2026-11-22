@@ -123,7 +123,7 @@ enum class DiscardCause : std::uint8_t {
 // How AdvanceTime takes the frame's sample (Bevy TimeUpdateStrategy; time-events declaration 3.4). Until the
 // runner's exchange point exists, each World samples on its own.
 enum class SamplingMode : std::uint8_t {
-    TimeBase,       // reads ::GYO::Engine::Time::MonotonicClock (the default; Sampling.hpp)
+    TimeBase,       // reads Time::MonotonicClock (the default; Sampling.hpp)
     ManualDelta,    // every frame advances by value, the first included, until changed (Bevy ManualDuration)
     ManualInstant,  // value is the frame's sample, the next point in time (the first sample gives delta 0)
 };

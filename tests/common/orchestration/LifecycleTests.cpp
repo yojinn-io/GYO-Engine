@@ -7,7 +7,7 @@
 
 #include <type_traits>
 
-using namespace OrchTest;
+using namespace GYO::Test::Orchestration;
 
 namespace {
 

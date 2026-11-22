@@ -20,7 +20,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 // A message with a capacity of 3 (the cap and the dropped-records record).
 struct Beep { std::uint32_t n; };

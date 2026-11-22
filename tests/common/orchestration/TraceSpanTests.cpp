@@ -16,8 +16,8 @@
 
 #include "engine/base/Trace.hpp"
 
-using namespace OrchTest;
-using namespace OrchTest::Save;
+using namespace GYO::Test::Orchestration;
+using namespace GYO::Test::Orchestration::Save;
 
 namespace {
 

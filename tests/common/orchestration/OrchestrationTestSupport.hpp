@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-namespace OrchTest {
+namespace GYO::Test::Orchestration {
 
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
@@ -181,6 +181,6 @@ inline std::string Describe(const BuildResult& built) {
     return built ? std::string("ok") : built.error().detail;
 }
 
-} // namespace OrchTest
+} // namespace GYO::Test::Orchestration
 
-#define ORCH_REQUIRE_BUILT(built) REQUIRE_MESSAGE(static_cast<bool>(built), OrchTest::Describe(built))
+#define ORCH_REQUIRE_BUILT(built) REQUIRE_MESSAGE(static_cast<bool>(built), ::GYO::Test::Orchestration::Describe(built))

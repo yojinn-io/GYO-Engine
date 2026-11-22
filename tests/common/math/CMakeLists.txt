@@ -14,6 +14,7 @@ else()
 endif()
 add_test(NAME gyo_math_tests COMMAND gyo_math_tests)
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Math links Base only (v8-arch-gyo2-core-not-registered: core's links are written by hand and pinned here).
 function(gyo_expect_math_links)
     gyo_expect_links(gyo_math GYO::Base)

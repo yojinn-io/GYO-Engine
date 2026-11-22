@@ -241,7 +241,7 @@ public:
     void U64(std::uint64_t v) { h_.U64(v); }
     void Flag(bool b) { h_.U64(b ? 1 : 0); }
     [[nodiscard]] Kernel::Fingerprint Finish(std::uint32_t version) const {
-        return Kernel::Fingerprint{version, ::GYO::Engine::Base::Sha256(h_.Data())};
+        return Kernel::Fingerprint{version, Base::Sha256(h_.Data())};
     }
 
 private:

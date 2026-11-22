@@ -13,7 +13,7 @@ void RegisterSyntheticSimulation(GYO::Engine::Orchestration::WorldSetup& setup);
 void RegisterAnotherSimulation(GYO::Engine::Orchestration::WorldSetup& setup);
 void RegisterReaderOnly(GYO::Engine::Orchestration::WorldSetup& setup);
 
-using namespace AuthorityTest;
+using namespace GYO::Test::Authority;
 
 namespace {
 constexpr const char* kFixtureRoot = "tests/common/authority/sources_fixture";

@@ -17,26 +17,7 @@ target_link_libraries(gyo_time_wake_record PRIVATE GYO::Time Threads::Threads)
 # private and interface alike, are exactly these, so no SDL or engine library
 # edge appears beyond engine/os, which they reach privately. Checked once the whole project is configured, so an edge added
 # later from another directory is seen too.
-function(gyo_expect_links target)
-    get_target_property(own ${target} LINK_LIBRARIES)
-    get_target_property(interface ${target} INTERFACE_LINK_LIBRARIES)
-    set(actual)
-    foreach(entry IN LISTS own interface)
-        if(entry MATCHES "^\\$<LINK_ONLY:(.+)>$")
-            set(entry "${CMAKE_MATCH_1}")
-        endif()
-        if(entry AND NOT entry MATCHES "-NOTFOUND$")
-            list(APPEND actual "${entry}")
-        endif()
-    endforeach()
-    list(REMOVE_DUPLICATES actual)
-    list(SORT actual)
-    set(expected ${ARGN})
-    list(SORT expected)
-    if(NOT actual STREQUAL expected)
-        message(FATAL_ERROR "${target} links ${actual}; expected exactly ${expected}")
-    endif()
-endfunction()
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 function(gyo_expect_time_and_thread_links)
     # The time base reaches the platform wait mechanism through engine/os
     # (v8-arch-gyo2-os-wait), privately: what links GYO::Time gets no engine/os

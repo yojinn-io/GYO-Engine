@@ -13,7 +13,7 @@ void AuthorityModule::Build(Orchestration::WorldSetup& setup) {
     std::shared_ptr<AuthorityStrategy> strategy = options != nullptr ? options->strategy : nullptr;
     // When the World is prepared: the registrations go into it (the digest and the fingerprint read them there,
     // so a failed replacement leaves the old World's as they were).
-    setup.Prepare([&table, strategy](Kernel::World& world) -> ::GYO::Engine::Base::Result<void, Orchestration::OrchestrationError> {
+    setup.Prepare([&table, strategy](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         const auto list = [](const auto& kept) { return std::vector(kept.begin(), kept.end()); };
         world.SetResource(AuthorityRegistry{list(table.Data()), list(table.Marks()), list(table.Ingress()), list(table.Runs()),
                                             list(table.OneEnd()), strategy});
