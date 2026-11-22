@@ -56,7 +56,15 @@
 - 檢查後加的 9 個與復原、改寫、改過 `find` 的：45 個裡 43/45 → 兩個是我之後改程式沒對齊（`or-exch-out-side-label` 的 `replace` 還寫舊參數、建置失敗；`or-exch-replace-out-kept` 的 `expect` 照拿掉 `clear()` 之後的訊息改），改後 45/45 killed（`run-impl-mutants-2.log` 與之後的單獨重跑）。
 - 本批加 34 個（宣告 25＋檢查後 9），基準是改的條文 9 條 × 5＝45。各自只捕自己的錯，寫在 `what`，都有 `guards`。
 - 靜態掃描（不建置，數每個突變的 `find` 出現幾次）：所有清單都恰好一次。
-- 合併前的完整跑（宣告判定 3）：見下方補記。
+- 合併前的完整跑（宣告判定 3）：第一次從 0ae8a8fa 開始後，`gyo2` 合進了 #269（命名收尾），PR 有衝突，所以停掉、merge 之後從 0bca189d 重跑（臨時的 detached 工作樹 `.claude/worktrees/gyo2-exchange-fullmut`，腳本 `fullmut.sh`）。結果見下方補記。
+
+## 跟上 `gyo2`（#269）
+
+- `Product.hpp` 一處衝突（#269 把私有入口的回傳改成 `Base::Result`，我加了 `Exchange`）：照 #269 的寫法合起來。
+- 我新寫的 engine 程式照 N13 改成短名（`Base::Result`、`Base::Err`）；兩個突變（`or-exch-failure-ignored`、`or-exch-next-called`）的 `find` 跟著改。
+- #269 把測試支援的 namespace 改成 `GYO::Test::Orchestration`：新的兩個測試檔跟上（第一次建置失敗，ctest 跑到的是舊執行檔，不算數；重建後 163/163，`merge-ctest.log`）。
+- 和命名收尾卡約好的兩處（`kernel_guard.py` 的 K9 那一行用本批的、`tests/common/authority/CMakeLists.txt` 的 `include(ExpectLinks.cmake)`），#269 合併時已照約定處理。
+- 全部清單的靜態 find 掃描：0 問題。
 
 ## 設計審查（每批固定的一步）
 
