@@ -225,15 +225,18 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 ### 5.14 和交換點卡的交界（`gyo2-exchange`，`local_7876c9c8`）
 
-2026-11-22 已用 SendMessage 送交界草案；**對方回覆前，「負責」欄是本卡的提案**。
+**已對齊**（2026-11-22，兩張卡以 SendMessage 往返兩次）。交換點卡的宣告：`exchange-declaration.zh-Hant.md`（分支 `claude/gyo2-exchange-81ea9f`，修訂 0）——交換點第 5.1 節、執行緒第 5.3 節、Extract 第 5.4 節、交界第 13 節。
 
-| 交界 | 本卡 | 交換點卡 |
+**「一輪」**（兩卡共用的定義）：一個 World 在一次 `RunFrame` 裡跑的全部——生成中且這批有人 `Hold()`：這一批生成清單；生成結束的那一批：這一批生成清單＋接著的每幀清單；平常：每幀清單。
+
+| 交界 | 本卡負責 | 交換點卡負責 |
 |---|---|---|
-| World 外的結果在生成期間進 World | 規則：帶外部結果進 World 的登記單位，套用 System 同時掛 `Main/First` 與 `Generate/First`（預設骨架） | 交換點／extract 若在 World 外由編排層在兩次 Run 之間做，生成中的 World 照樣參與；若以 System 的形式掛進 World，照本卡的規則掛兩處——**由交換點卡定是哪一種** |
-| 別的 World 要知道某個 World 在生成（Client 的畫面 World 畫讀取畫面、模擬 World 在生成） | 提供 `Product::Generating(world)` 與 World 內的 `WorldGeneration` | 要不要、怎麼經交換點交給別的 World |
-| 產品把設定交給 Module | `entity_allotter` 用每個 World 的 `OptionBag`，不用 Product 層 Resource | Product 層 Resource 的形狀 |
-| 執行緒 | 生成的狀態歸 `Product` 的那個 World 槽，照 CCR-5 在呼叫的執行緒上讀寫 | runner 怎麼分執行緒、World 在自己的執行緒時生成的批由誰推 |
-| 網路的初始同步（Client 等伺服器的初始狀態） | 照 G-1 的規則；等不等由作者的 System `Hold()` | 屬網路 Module（之後）；lightyear 的 `CatchUpSnapshotReady`／`HasCaughtUp`（`other-engines.md` A9）是參考 |
+| 資料進出 World 的三種形 | 形 (1) 套用點（World 裡的 System：asset、網路的收件送件、World 之間的郵箱）的規則：預設骨架下同時掛 `Main/First` 與 `Generate/First`，骨架關掉時作者自己掛 | 形 (2) runner 在兩次入口之間直接讀寫 World（OS 事件、取走 Kernel 診斷）：和生成無關、生成中照樣；形 (3) Extract：在讀者的「一輪」之前跑。交換函式要不要登記交使用者定（交換點卡第 12 節第 2 題）；若登記，進、出包住「一輪」，結束那一批也只各一次 |
+| 別的 World 要知道某個 World 在生成（Client 的畫面 World 畫讀取畫面、模擬 World 在生成） | 提供 `Product::Generating(world)`、`GenerationPasses(world)`、World 內的 `WorldGeneration` | 不加新機制：runner 在兩次入口之間讀 `Generating` 寫進別的 World（形 (2)），或 Module 的服務＋套用 System（形 (1)） |
+| 產品把設定交給 Module | `entity_allotter` 用每個 World 的 `WorldDescription::options`（`OptionBag`） | Product 一份的設定走 `ProductDescription::options`（Product 層 Resource）及其形狀 |
+| 執行緒 | 生成的狀態歸 `Product` 的那個 World 槽，照 CCR-5 在呼叫的執行緒上讀寫 | World 整個交出給別的執行緒的契約（暫名 `Product::Lend`→`WorldLease`，本批不實作）：交出期間由持有的執行緒經 lease 的入口推動它的「一輪」（含生成的批），生成的狀態跟著交出（交換點卡 5.3 補這一句） |
+| `beforeSwap` 期間 | 不改（5.5） | 寫明沒有套用點、沒有交換點（照 asset G-3） |
+| 網路的初始同步（Client 等伺服器的初始狀態） | 照形 (1) 的規則；等不等由作者的 System `Hold()` | 屬網路 Module（之後）；lightyear 的 `CatchUpSnapshotReady`／`HasCaughtUp`（`other-engines.md` A9）是參考 |
 
 ---
 
@@ -409,7 +412,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 - 生成清單上寫判定資料的 System 進一致性指紋；只在一端生成的要作者標 `OneEndOnly`（5.10）。
 - 生成期間出錯 Product 就結束；要「失敗就留舊的」的驗證放在 `beforeSwap` 或發替換之前（5.5、5.6）。
 - 「分批數不同、結果相同」是作者寫法的性質，Engine 不保證；C3 只示範一種寫法下成立。
-- 交換點卡的回覆還沒到：5.14 的「交換點卡」欄是提案。
+- 交換點卡的宣告還在檢查中（修訂 0）；5.14 照兩卡對齊的內容寫，它的節號若改，合併前對一次。
 - 同一個 World 裡重新生成（`Regenerate`）沒有實作。
 
 ## 14. 要你定的（一件：別家分歧、真有取捨）
