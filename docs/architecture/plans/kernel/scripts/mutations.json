@@ -6321,9 +6321,33 @@
         "authority-rollback-declaration 9.5"
       ],
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK)",
-      "replace": "K9 = tuple(re.compile(p) for p in K9_MOVED)",
+      "find": "K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK + K9_REMOVED)",
+      "replace": "K9 = tuple(re.compile(p) for p in K9_MOVED + K9_REMOVED)",
       "expect": "FAIL: test_k9_every_clock_name_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k9-removed-dropped",
+      "what": "K9's list of removed names (v8-arch-gyo2-exchange step 0, DI-KS 15): the names of what the kernel no longer has (zones, the write policy and the exclusive-writer check, the rollback flags and roles, the digest marks, the C fingerprint, the old rule codes) are no longer reported. Only it drops K9_REMOVED; ks-k9-dropped turns the whole of K9 off and ks-real-k9-moved-out-name is K9's positive control on the real tree",
+      "guards": [
+        "kernel DI-KS 15",
+        "authority-rollback-declaration 9.5"
+      ],
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK + K9_REMOVED)",
+      "replace": "K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK)",
+      "expect": "FAIL: test_k9_every_removed_name_is_reported",
       "command": [
         "{python}",
         "-B",

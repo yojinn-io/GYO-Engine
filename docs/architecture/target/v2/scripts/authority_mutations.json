@@ -1544,6 +1544,19 @@
    "target": "gyo_authority_tests",
    "cases": "authority registrations: a decision input brings*",
    "expect": "\\[au\\-input\\-self\\]"
+  },
+  {
+   "id": "au-links-more",
+   "what": "authority link set on the real tree (v8-arch-gyo2-exchange step 0, README rule 4: positive control): the authority Module's registered row depends on one more Module (json, a row before authority, so the register's order check lets it through). Only gyo_expect_links on gyo_authority stops it; no other check pins the authority Module's links. The DEFER at this call (a link added later from another directory) is the same writing as the calls of os-g19, ti-x5 and rb-r3-authority-from-later-directory; no mutant is added for it until a miss is observed (README rule 4, third point; v8-arch-gyo2-batch4-followups)",
+   "guards": [
+    "authority DI-A 9"
+   ],
+   "file": "config/modules.csv",
+   "find": "the consistency fingerprint and the digest\",no,yes,world_time;rollback,,",
+   "replace": "the consistency fingerprint and the digest\",no,yes,world_time;rollback;json,,",
+   "target": "gyo_authority_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_authority\\s+links\\s+\\S*GYO::Json\\S*\\s+expected\\s+exactly"
   }
  ]
 }

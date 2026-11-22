@@ -21,12 +21,12 @@ CLEAN_HEADER = """#pragma once
 #include <vector>
 
 namespace GYO::Kernel {
-// Spawn and Despawn queue structural changes; ExtractRes reads a resource; zone is C or B.
+// Spawn and Despawn queue structural changes; ExtractRes reads a resource; a phase is C or B.
 // The timezone of a host is not read here; a matcher matches ids; rematch is a word too.
 // A comment may say static int x; and std::unordered_map without being code.
 struct Despawn {};
 struct ExtractRes {};
-enum class Zone { C, B };
+enum class Phase { C, B };
 struct Matcher {
     [[nodiscard]] bool matches(int nearest, int farther) const noexcept { return nearest < farther; }
 };
@@ -158,6 +158,32 @@ class GuardTree(unittest.TestCase):
 
     def test_k9_clock_comments_stay_allowed(self):
         self.header("// the kernel keeps no clock: the tick is the time Module's\nint ticks = 0; // a tick count")
+        self.assertFalse([p for p in guard.check(self.root) if ": K9 " in p])
+
+    def test_k9_every_removed_name_is_reported(self):
+        for text, needle in (("enum class Zone {};", "Zone"), ("bool RequireExplicitZones;", "RequireExplicitZones"),
+                             ("int emitterZone;", "emitterZone"), ("int zoneAccess;", "zoneAccess"),
+                             ("bool c = info.zone;", ".zone"), ("struct WritePolicy;", "WritePolicy"),
+                             ("int writePolicy;", "writePolicy"), ("void CheckExclusiveWriters();", "CheckExclusiveWriters"),
+                             ("struct FunnelNote;", "FunnelNote"), ("auto d = Rollback::Derived;", "Rollback::"),
+                             ("enum class Role {};", "enum class Role"), ("enum class Rollback {};", "enum class Rollback"),
+                             ("auto r = Role::Input;", "Role::Input"), ("auto r = Role::State;", "Role::State"),
+                             ("bool rollbackEnabled;", "rollbackEnabled"), ("bool rollbackSafe;", "rollbackSafe"),
+                             ("bool rollbackActive;", "rollbackActive"), ("bool notInRollback;", "notInRollback"),
+                             ("int ingressStage;", "ingressStage"), ("bool ingress = false;", "ingress"),
+                             ("bool i = options.ingress;", "ingress"), ("struct S { bool external; };", "bool external"),
+                             ("bool e = info.external;", ".external"), ("struct DigestSet;", "DigestSet"),
+                             ("void MarkDigestSet();", "MarkDigestSet"), ("int digestMarks;", "digestMarks"),
+                             ("struct CFingerprint;", "CFingerprint"), ("int kCFingerprintVersion;", "kCFingerprintVersion"),
+                             ("bool parallelGuardTest;", "parallelGuardTest"), ('const char* rule = "Z1";', '"Z1"')):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertReported("K9", needle)
+
+    def test_k9_removed_comments_stay_allowed(self):
+        self.header("// the kernel keeps no zone and no digest: those are the authority Module's\n"
+                    "enum class TypeRole { Component }; auto r = TypeRole::Component; struct PlanFingerprint {};\n"
+                    "struct MessageWriterInfo {}; // the external caller writes; DE7 stays")
         self.assertFalse([p for p in guard.check(self.root) if ": K9 " in p])
 
     def test_k9_executor_file_is_checked(self):
