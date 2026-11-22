@@ -1,8 +1,8 @@
 # 事前宣告：生成世界（重做）＋預設的實體配發器（`v8-arch-gyo2-world-gen`）
 
-更新：2026-11-24（修訂 2；核准後對齊用詞）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-world-gen`）。**狀態：動工前核准（使用者 2026-11-24，原話「照建議，全部核准」）。實作要等使用者說開始。**
+更新：2026-11-22（修訂 2；核准後對齊用詞）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-world-gen`）。**狀態：動工前核准（使用者 2026-11-22，原話「照建議，全部核准」）。實作要等使用者說開始。**
 
-> **核准**（使用者，2026-11-24，本卡的對話）：原話「照建議，全部核准」，接著「你先對齊一下你的規格和用詞。」核准的是修訂 2（270b7226）第 14 節四件照建議：第 1 件選「生成期間每幀照跑」，一起問的「讓 Kernel 能給既有的 set 加條件」現在不做（RC-O18 監看）；第 2 件「沒人反對就結束」（`Hold()`）；第 3 件確認讀檔放回的三個位置與 O-8 的收窄，不做「旁邊生成再換上」；第 4 件「改替身」。核准之後照使用者的話只對齊用詞與引用（第 19 節），設計沒有改。
+> **核准**（使用者，2026-11-22，本卡的對話）：原話「照建議，全部核准」，接著「你先對齊一下你的規格和用詞。」核准的是修訂 2（270b7226）第 14 節四件照建議：第 1 件選「生成期間每幀照跑」，一起問的「讓 Kernel 能給既有的 set 加條件」現在不做（RC-O18 監看）；第 2 件「沒人反對就結束」（`Hold()`）；第 3 件確認讀檔放回的三個位置與 O-8 的收窄，不做「旁邊生成再換上」；第 4 件「改替身」。核准之後照使用者的話只對齊用詞與引用（第 19 節），設計沒有改。
 
 **經過**：
 - 修訂 0（c8b5faf4）建議「生成中跑另一份清單」（本頁第 8 節的「另跑生成清單」）。送 Fable 5.2／high 敵對式檢查：blocker 4、should 12、nit 9（主 checkout `build/evidence/gyo2-world-gen/declaration-r0-adversarial-check.md`），全部採用，處理在第 17 節。
@@ -278,7 +278,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 ### 7.1 編排層（[orchestration.zh-Hant.md](orchestration.zh-Hant.md)）
 
-**編號**：交換點卡（修訂 2）在同一頁新增 O-12、O-13、RC-O11～RC-O13；本卡用 **O-14** 與 **RC-O14～RC-O19**（兩卡 2026-11-24 以 SendMessage 分號，交換點卡 e2e6f1cd 第 7 節已寫；窄複查 S8）。
+**編號**：交換點卡在同一頁新增 O-12、O-13、O-15（設計審查後把「Product 一份的共用處」拆成獨立一條）與 RC-O11～RC-O13；本卡用 **O-14** 與 **RC-O14～RC-O19**；之後再加從 O-16、RC-O20 起（兩卡 2026-11-22 以 SendMessage 分號，交換點卡 e2e6f1cd 第 7 節已寫；窄複查 S8）。
 
 - **O-14（新）生成世界。** World 建好的當下（準備函式之前）`WorldGeneration` 是 `{true, false}`。`RunFrame` 對生成中的 World：前處理（寫 `{true, false}`）→ 進 → 每幀清單 → 判定（整份成功後；沒人 `Hold()` 就寫 `{false, false}`）→ 出。每幀清單在生成中照常跑。生成的狀態只在 `WorldGeneration`，`Product::Generating` 讀它。每個 World 各自；`RunSchedule` 不做前處理、不判定；一個 World 的一輪的入口（交換點卡）與 `RunFrame` 共用同一段處理。批數不進 World、`Product` 不記。生成期間的錯誤同平常（O-11）。編排層給名字固定的 run 條件 `WhileGenerating()`、`AfterGenerating()`；`Hold()` 在生成結束後沒有作用。編排層不認得生成用的 System 是什麼，也不認得 Loading、讀檔、資產這些名字。守衛：`orchestration.O-14` 各案（第 11 節 C1～C12、C17～C19）、scenario 第 6 段。
 - **O-2（改）**：「每個 World 在任何登記單位的 `Build` 之前，編排層登記 `WorldGeneration`（骨架開關都一樣）」。
@@ -606,7 +606,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 | N7 `ConditionRef` | 改：5.2、5.6 |
 | N8 第 17 節 S6 第二點 | 改：標「延後」 |
 
-## 19. 核准後的對齊（2026-11-24，使用者「你先對齊一下你的規格和用詞。」）
+## 19. 核准後的對齊（2026-11-22，使用者「你先對齊一下你的規格和用詞。」）
 
 只改用詞與引用，設計不變：
 - **set 與 run 條件**：照 [scheduler 頁](../scheduler.zh-Hant.md)與 Kernel 條文，set 是 `Registrar::Set`（`SetOptions`）的「具名的 System 群組」，和元件的「具名集合」不同；作者用的條件一律寫「run 條件」（5.1、5.2）。
@@ -615,3 +615,4 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 - **已合併與待合併的 PR**：PR #267（舊清單整理）已併入 `gyo2`，Kernel 的突變清單保留，第 16 節那一條改成已處理；本分支已 merge `origin/gyo2`（05afdc7a）。PR #269（命名收尾，未合併）把 `gyo_expect_links` 移到 `tests/common/support/ExpectLinks.cmake`、測試補助的 namespace 改成 `GYO::Test::<單位>`，EI-3 與判定 1 照它寫。
 - **交換點卡的版本**：引用改成 e2e6f1cd。
 - 用程式掃過選項標號（`[甲乙丙丁]`、`\([a-dA-D]\)`、單獨的 A～E），只剩測試代號 D-9。
+- **日期更正**：核准與本節原本寫成 2026-11-24，是把 Fable 額度訊息裡的重置日誤當成今天；本機時鐘與 commit 都是 2026-11-22，全部改正（主會話已同步改 HANDOFF）。

@@ -1,6 +1,6 @@
 # 預設的實體配發器（`engine/modules/entity_ids`）
 
-更新：2026-11-24（新頁，`v8-arch-gyo2-world-gen` 第 1 步）。由來：[事前宣告](world-gen-declaration.zh-Hant.md)（`v8-arch-gyo2-world-gen`，2026-11-24 動工前核准）第 5.10 節、第 7.3 節。**Design Invariants 的最終文字在合併前核准時定稿**。
+更新：2026-11-22（新頁，`v8-arch-gyo2-world-gen` 第 1 步）。由來：[事前宣告](world-gen-declaration.zh-Hant.md)（`v8-arch-gyo2-world-gen`，2026-11-22 動工前核准）第 5.10 節、第 7.3 節。**Design Invariants 的最終文字在合併前核准時定稿**。
 
 Owner：架構。程式：`engine/modules/entity_ids/`（`GYO::Engine::EntityIds`，target `GYO::EntityIds`，登記單位 `EntityIdsModule`）。行為測試：`tests/common/entity_ids/`。
 
@@ -16,7 +16,7 @@ GYO::Base ◄── GYO::Kernel ◄── GYO::Orchestration ◄── GYO::Enti
 
 - 登記檔一列：`library_only=no`、`default=yes`、`depends` 空（core、ecs、orchestration 不登記，link 寫在 `engine/modules/entity_ids/CMakeLists.txt`）。
 - 標頭：`RangeAllotter.hpp`（型別與逐欄雜湊）、`EntityIdsModule.hpp`（登記單位與 `EntityIdsOptions`）。
-- `RangeAllotter` 原本在 Kernel（`engine/kernel/detail/Storage.hpp`），2026-11-24 搬到這裡：Kernel 只留 `EntityAllotter` concept 與配發的機制，不附任何策略型別（Kernel DI-KS 4；宣告 5.10 的三個理由）。
+- `RangeAllotter` 原本在 Kernel（`engine/kernel/detail/Storage.hpp`），2026-11-22 搬到這裡：Kernel 只留 `EntityAllotter` concept 與配發的機制，不附任何策略型別（Kernel DI-KS 4；宣告 5.10 的三個理由）。
 
 ## 2. 設定
 
