@@ -4,6 +4,9 @@
 > **這個核准不等於 AGENTS §14.4 的判定變更核准**：第 13 節的判定在實作批照 §14.1、§14.2 宣告；既有守衛的退役或搬遷，在各實作批逐案核准。
 > **核准後的註記**（不改核准的內容）：同時核准的統合修訂 38 把「配發器含範圍的下界」與「Resource 的增刪」補成 Kernel 的機制（HANDOFF 同一列）。前者就是 5.1 的寫法；後者讓 5.8 說的「System 放不進不存在的 Resource」到實作時可能不再成立——5.8 的預設寫法（編排層先放、`ResMut` 覆寫）照樣可用，實作批若 Kernel 已有放進 Resource 的參數，可以在案例 5 加一案，照 §14 在實作批的判定宣告。
 
+> **修訂 12 的動工前核准**（使用者，2026-11-22，讀檔實作卡 `gyo2-restore-impl` 的對話）：原話「照建議，全部核准」。核准的版本是修訂 12（fb6328e7）第 18、19 節，交使用者的五件都照建議：(1) 四個配發器突變改出貨的 `RangeAllotter`（`entity_ids`），取代生成世界第 14 節第 4 件「改替身」的落點；(2) 判定 1 不新開 Kernel 的讀檔測試檔，六個沿用、四個新寫，突變照 18.3 先宣告預期失敗；(3) Engine 不發「讀檔完成」；(4) 存檔版本用最舊支援線；(5) 「直接拒絕」走 (a) 作者呼叫。比過的選項：各件表裡的另一（幾）個選項。理由：使用者沒有另外說（照卡片的建議）。19.4 第 2 件附帶的「『不放在編排裡』是架構限制還是排程的話」沒有另外回答；選 (a) 時兩種讀法結果相同，留著不判（選 (c) 才需要）。
+> **這個核准不等於 AGENTS §14.4 的判定變更核准**：既有測試的判定不改；`[or-restore-gold]` 拆成兩個標記只改字樣。實作要等使用者說「開始」。
+
 **修訂紀錄**
 - 修訂 0（3dc9b464）起草；修訂 1（ea62f0c4）照第一次換模型檢查（Fable／high，blocker 3、should 17、nit 7）重寫。
 - 修訂 2～8（2026-11-16～17，e6466c2d～ed742598）：使用者在本卡與邊界卡陸續定了新 World、編號、「不認得存檔只指格式」、Kernel 是 ECS、初始值在建立當下給、權威不數寫者、回滾是獨立 Module；每次照著縮小與改寫。
@@ -11,7 +14,7 @@
 - **修訂 10（2026-11-17）**：照第二次換模型檢查（Fable／high，blocker 3、should 11、nit 8，全部採用；報告 `build/evidence/gyo2-restore-entry/declaration-check-fable-r9.md`）整份重寫。最大的三處：判定改寫成「實作時的 Engine」（批次表第五段，Kernel 減法、編排層、時間 Module、權威與回滾都已做完）；讀檔放在**編排層的「生成世界」**（使用者 `two-layers-like-bevy`），修訂 6～9 的「建世界的階段整件拿掉」是錯的（拿掉的只有 Kernel 那一層）；5.5 照 `clock-out-of-kernel` 重判。逐條對照在第 16 節。
 
 - **修訂 11（2026-11-17）**：照窄檢查（Fable／high；報告 `declaration-check-fable-r10-narrow.md`；舊 blocker：5.5 與 `two-layers-like-bevy` 已改好、判定剩一處；新的 blocker 2、should 5、nit 6，全部採用）改。最大的兩處：Resource 放回改成「編排層先放、讀檔的 System 用 `ResMut` 覆寫」（System 沒有參數能放進不存在的 Resource）；補上使用者的 `game-init-list`（遊戲初始化只在行程啟動時跑一次、跑在第一個 World），修正 1.1、第 2、4、15 節。5.1 改成移配發器範圍的下界。對照在第 17 節。
-- **修訂 12（2026-11-22，草案，等動工前核准）**：實作卡 `gyo2-restore-impl` 開工前照現在的 `origin/gyo2`（eacab4d7，第 4 批、生成世界 #272、交換點 #270 已合併）逐條對照。大部分已被骨架、生成世界兩批做掉；剩下的範圍縮小，判定改成「已有帶標記的案例就沿用，沒有的才寫」，並併入存檔版本 Module（使用者 2026-11-22「合併進去。」）。全文在第 18、19 節；第 2、4、5.3、5.7、5.8、13 節被第 18 節取代或補充的地方以第 18 節為準，原文保留不改（核准的是修訂 11）。
+- **修訂 12（2026-11-22，使用者動工前核准，見開頭）**：實作卡 `gyo2-restore-impl` 開工前照現在的 `origin/gyo2`（eacab4d7，第 4 批、生成世界 #272、交換點 #270 已合併）逐條對照。大部分已被骨架、生成世界兩批做掉；剩下的範圍縮小，判定改成「已有帶標記的案例就沿用，沒有的才寫」，並併入存檔版本 Module（使用者 2026-11-22「合併進去。」）。全文在第 18、19 節；第 2、4、5.3、5.7、5.8、13 節被第 18 節取代或補充的地方以第 18 節為準，原文保留不改（核准的是修訂 11）。
 - Owner：架構（GYO2 主會話開的任務卡）。這一批只做到宣告核准為止，**不實作**。實作是批次表第五段「讀檔的實作」（`rebuild-batch-plan.zh-Hant.md`）。
 - 讀的版本：程式 `origin/gyo2` 15ba81ef（K0、測試舊帳已合併）；批次表與 HANDOFF 在 `claude/gyo2-time-design` f530a1a4；統合修訂 33（1b3f6886，DI-KS 15 第 (7) 項收了「Ready 時設配發器」）；回滾份 `claude/gyo2-rollback-module-8bac02` 9418fcf1（第 7.4 節）。
 - 證據：開發機（Intel Mac，使用者的本機）主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-restore-entry/`（git 不追蹤）：`scout-old-design.md`、`scout-mature-practice.md`、`premises-and-scope.md`、`declaration-check-fable-r0.md`、`declaration-check-fable-r9.md`。
@@ -347,7 +350,7 @@ Engine 的兩點保證分在兩層：
 
 ---
 
-## 18. 修訂 12：實作前對照現況（草案，等動工前核准）
+## 18. 修訂 12：實作前對照現況（2026-11-22 動工前核准）
 
 讀的版本：`origin/gyo2` eacab4d7（第 4 批 #259、#265，生成世界 #272，N13 #271，交換點 #270 都已合併；本分支在 f25256c4 併入）；asset 宣告（`claude/gyo2-asset-585196`，**未合併**）；狀態機修訂 8 的卡（`gyo2-state-machine-r8`）還沒有 commit。換模型檢查：Fable 5.2／high 唯讀，兩輪。第一輪檢查 a5e31b9c：blocker 2、should 7、nit 8（`revision12-adversarial-check-fable.md`）；第二輪檢查 479e75ac（第 18 節窄複查＋第 19 節、C-9）：blocker 2、should 7、nit 9（`revision12-r2-check-fable.md`）。全部採用，報告在主 checkout `build/evidence/gyo2-restore-impl/`，處理在 18.6、18.7。
 
@@ -507,7 +510,7 @@ Engine 的兩點保證分在兩層：
 
 ---
 
-## 19. 存檔版本 Module（`v8-arch-gyo2-save-version-into-restore`；修訂 12 草案）
+## 19. 存檔版本 Module（`v8-arch-gyo2-save-version-into-restore`；修訂 12，2026-11-22 動工前核准）
 
 **來由**：使用者 2026-11-18（`v8-arch-gyo2-save-version-module`）：「需要提供version module，默認不啟用，啟用之後過時檔會直接拒絕。這個補充不放在編排裡，但是得放計劃中。Engine需要支持。」前一句（`-replace-order-author-choice`）：「壞檔問題是最嚴重的Bug，通常是來自於系統更新……通常製作的時候直接上version 管理。太老的檔案不支持。讓玩家自己開新檔。」2026-11-22 併進本卡、同一份宣告、同一個 PR（原話「合併進去。」）。
 
