@@ -194,7 +194,7 @@
 | 別的執行緒跑 World＝整個交出 | 同（pipelined：render SubApp 當值送走，同步點在 extract） | 同但較弱（`ExclusiveEntityTransaction` 交出 staging World，不在那條執行緒跑 System） | 不同：同一個 world 用多個 stage 並行，合併在獨占時 | 無 | 不同〔知〕：同一個 World，工作切成 task |
 | 模擬的 World 之間不直接共享資料 | 同（只有 extract 一點） | 同（Netcode 的兩個 World 只經 IPC 驅動） | 未查 | 同（host 用單一 World 模擬兩端；replicon 明寫一個 World 當兩端會繞圈） | 未查 |
 | Product 一份的共用處（獨立於 World） | 不同：沒有，App 在 World 外無 Resource，共用物件放 main World 或各 World 一份 `Arc` | 不同：singleton 每個 World 一份；行程一份只有 `SharedStatic` 這類內部機制 | 不同：每個 world 一個 ctx 槽 | 不同：放 App（main World）的 Resource | 最接近〔知〕：GameInstance subsystem（以類別為鍵、有依賴的先後） |
-| 設定經描述給（Product 層的選項） | 近似：Plugin 的欄位（`AssetPlugin { file_path }`） | 未查 | 未查 | 近似：Plugin 的欄位 | 未查 |
+| 設定經描述給（Product 層的選項） | 近似：Plugin 的欄位（`AssetPlugin { file_path }`） | 未查 | 未查 | 未查 | 未查 |
 | `OnDestroy`：World 之後、共用處之前 | 不同：沒有這個回呼，靠 `AppExit` 與 Drop | 未查 | 時點同（`ecs_atfini` 在實體刪完、儲存銷毀之前），先後不同（登記順序；GYO 反序） | 未查 | 未查 |
 | 明確的銷毀順序 | 未查 | 未查 | 同（`ecs_fini` 有固定步驟，ctx 最後） | 未查 | 未查 |
 | 時間在 World 裡取樣（維持過渡） | 同（`time_system`；有渲染時取樣點來自 present） | 同（`UpdateWorldTimeSystem`） | 不同：呼叫者給 delta（可選自己量） | 同（測試用 `ManualInstant` 由外面發） | 未查 |
