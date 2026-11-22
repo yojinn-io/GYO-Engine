@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-22（DI 3 的「(c) 區無 `Local`」改指回滾 Module R-2，`v8-arch-gyo2-authority-rollback` 第 7 步，合併前核准）；2026-11-13（`v8-arch-kernel-registry-schedule`：§4 API 名稱）。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §B（System 契約）、§E.5（例外與錯誤）。
+更新：2026-11-22（DI 3 的「(c) 區無 `Local`」改指回滾 Module R-2，`v8-arch-gyo2-authority-rollback` 第 7 步，使用者 2026-11-22 核准）；2026-11-13（`v8-arch-kernel-registry-schedule`：§4 API 名稱）。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §B（System 契約）、§E.5（例外與錯誤）。
 本文件只寫**使用者已裁決**的部分；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 描述從簽名推出，一份（mechanism §3.1 審查修正 4）
@@ -72,7 +72,7 @@
 
 1. **描述從簽名推出，一份**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1) 約束：**全文與守衛見該條，改動前必讀**。
 2. **System 回 `Result<void, KernelError>`，不靜默**——受 kernel [DI-KS 2](kernel.zh-Hant.md#di-ks-2) 約束：**全文與守衛見該條，改動前必讀**。
-3. **System 無狀態**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1) 約束：**全文與守衛見該條，改動前必讀**。「(c) 區無 `Local`」隨第 4 批拿掉（區拿掉，kernel [DI-KS 12](kernel.zh-Hant.md#di-ks-12) 改成只給回滾用的原語）：現在是回滾等價的前提之一——步的 schedule 與巢狀 schedule 上的 System 不用 `Local`（回滾 Module [R-2](v2/rollback.zh-Hant.md#r-2) 前提 2），作者的責任，回滾 Module 不檢查。（草稿，`v8-arch-gyo2-authority-rollback` 合併前核准）
+3. **System 無狀態**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1) 約束：**全文與守衛見該條，改動前必讀**。「(c) 區無 `Local`」隨第 4 批拿掉（區拿掉，kernel [DI-KS 12](kernel.zh-Hant.md#di-ks-12) 改成只給回滾用的原語）：現在是回滾等價的前提之一——步的 schedule 與巢狀 schedule 上的 System 不用 `Local`（回滾 Module [R-2](v2/rollback.zh-Hant.md#r-2) 前提 2），作者的責任，回滾 Module 不檢查。（使用者 2026-11-22 核准，`v8-arch-gyo2-authority-rollback`）
 
 ### Replacement Criteria
 

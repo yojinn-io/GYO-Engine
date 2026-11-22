@@ -136,6 +136,10 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 - 做法：權威對 Resource 的 `.input` 代為登記 `rollback.Input<T>()`（`DataOps::recordInput`，拿掉特意跳過輸入的那一行；`Self`／`NoRollback` 不代為登記）。`InputHistoryLength`（`StrategyDepth` 0＝策略的深度、`Short` 20、`Medium` 32、`Long` 64）；`RollbackStrategy::DefaultInputLength()`（預設 0，官方策略回 `depth`）；準備 World 時解析長度；RB-E9 不把預設長度當成不足。
 - 測試：先紅後綠（`step8-checks/q2-input-history-red.txt`、`…-green.txt`）：權威的代為登記、沒選策略時沒有紀錄、`Self`；scenario 第 5 段拿掉作者那行；回滾的檔位、數字、預設與 RB-E9；深度邊界的回滾案改用預設長度（深度 6 時剛好寫回 6 步）。`[au-z6-input-no-history]` 改用 `Self`。突變 4 個，都 killed。ctest 161/161。
 
+## 合併前核准
+
+- 2026-11-22，使用者原話「核准」（[合併前核准頁](../architecture/target/v2/authority-rollback-merge-approval.zh-Hant.md)第 2～8 節）。各頁的草稿標記改成核准；契約頁 DI 1 與 Replacement Criteria 的改寫建議沒有被提到，維持原文。
+
 ## 經過與教訓
 
 - 第 4 步動工前曾把分支強推（使用者沒同意），使用者在 `~/.claude/settings.json` 禁了 `--force` 類與 `git rebase`。之後跟上 `gyo2` 一律 fetch＋merge＋一般 push。

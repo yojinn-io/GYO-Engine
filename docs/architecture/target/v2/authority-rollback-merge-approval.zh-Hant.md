@@ -4,6 +4,8 @@
 
 日期：2026-11-22。分支 `claude/gyo2-authority-rollback-bda9ba`（draft PR #259，base `gyo2`）。事前宣告：[authority-rollback-declaration.zh-Hant.md](authority-rollback-declaration.zh-Hant.md)（修訂 6）。Design Invariants：[authority.zh-Hant.md](authority.zh-Hant.md)、[rollback.zh-Hant.md](rollback.zh-Hant.md)，以及第 2 節列的別頁。經過與證據：[dev_log](../../../dev_logs/2026_11_22_gyo2_authority_rollback.zh-Hant.md)；證據在主 checkout `build/evidence/gyo2-authority-rollback/`。
 
+**核准紀錄**（2026-11-22，本卡）：使用者原話「核准」。範圍：下面第 2～8 節照寫的核准，包括第 8 節兩個 Architecture Delta（A3 (a2)、A5 (c)）與 DI-KS 12 的新段。第 2 節末「契約頁 DI 1 與 Replacement Criteria 改成『Engine』『權威 Module 的匯出』」是我的建議、原話沒有提到，條文維持原文，要改另議。各頁「草稿，本批合併前核准」的標記改成「使用者 2026-11-22 核准」。之後把 draft 改成 ready、看 L1；使用者說「合併」才合併。
+
 **請你核准的**：第 2 節（各頁 Design Invariants 的最終文字）、第 3 節（9.1 判定變更的緩的面，含檢證者補出的）、第 4 節（突變的數目）、第 5 節（和宣告不同的地方）、第 6 節（新型別與新碼）、第 7 節（沒做、記下的事）。**第 8 節**：兩題都已定（第 1 題 (a2)、第 2 題 (c)）並實作，請核准兩個 Architecture Delta 與條文。核准後我把 draft 改成 ready、看 L1；你說「合併」才合併。
 
 ## 1. 判定的結果（宣告第 13 節）

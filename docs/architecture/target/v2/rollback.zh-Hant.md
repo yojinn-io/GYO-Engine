@@ -2,7 +2,7 @@
 
 更新：2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 4 步）。Owner：架構。程式：`engine/modules/rollback/`（`GYO::Engine::Rollback`，target `GYO::Rollback`，登記單位 `RollbackModule`）。行為測試：`tests/common/rollback/`（ctest `rollback.rollback_registrations`、`rollback.rollback_strategy`、`rollback.rollback_checks`，標籤 `cpu`）；突變清單 [`scripts/rollback_mutations.json`](scripts/rollback_mutations.json)（`rb-`）。
 
-由來：[回滾份](rollback-module-declaration.zh-Hant.md)（修訂 6，已核准）第 5、9 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 5、6 節與第 11.3 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。**Design Invariants 的最終文字在合併前核准時定稿**；和回滾份字面不同的地方在條末標「實作」。
+由來：[回滾份](rollback-module-declaration.zh-Hant.md)（修訂 6，已核准）第 5、9 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 5、6 節與第 11.3 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。Design Invariants 的最終文字使用者 2026-11-22 核准（[合併前核准](authority-rollback-merge-approval.zh-Hant.md)）；和回滾份字面不同的地方在條末標「實作」。
 
 ## 一個例子
 
@@ -42,7 +42,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 ## Design Invariants
 
 <a id="r-1"></a>
-**R-1 契約不變**：`RollbackStrategy` 的掛點與語意是契約——`Name`、`Check`（啟動）與執行時的 `Record`、`Decide`、`Restore`、`Resimulate`、`Correct`，每個掛點只收一個自己的情境物件（之後要給更多東西時加在情境物件上、不改簽名；實作）；另有一個有預設實作的唯讀掛點 `DefaultInputLength()`（輸入紀錄的預設長度：官方策略回它的深度，預設 0；第 8 步隨使用者選 (c) 加，草稿）；官方實作的內部不保證不變。守衛：測試裡一個不用官方實作、從頭實作介面的策略，通過同一個等價案（`rollback strategy: R-1`）。
+**R-1 契約不變**：`RollbackStrategy` 的掛點與語意是契約——`Name`、`Check`（啟動）與執行時的 `Record`、`Decide`、`Restore`、`Resimulate`、`Correct`，每個掛點只收一個自己的情境物件（之後要給更多東西時加在情境物件上、不改簽名；實作）；另有一個有預設實作的唯讀掛點 `DefaultInputLength()`（輸入紀錄的預設長度：官方策略回它的深度，預設 0；第 8 步隨使用者選 (c) 加）；官方實作的內部不保證不變。守衛：測試裡一個不用官方實作、從頭實作介面的策略，通過同一個等價案（`rollback strategy: R-1`）。
 
 <a id="r-2"></a>
 **R-2 回滾等價**：從狀態 s 直接跑 k 步，與「跑到現在、退回第 T 步、重跑回現在」，可回滾的欄、Resource、實體存活集合逐位元相同（stamp 除外），前提：

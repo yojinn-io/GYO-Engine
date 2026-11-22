@@ -92,7 +92,7 @@
 
 **已核准**：使用者 2026-11-13 一次核准（遷移計畫 §7 U13；kernel HANDOFF `v8-arch-target-di-approved`）。各頁的 `Design Invariants` 與 Replacement Criteria 都是正式條文（Replacement Criteria 由使用者同日另一句「照建議」核准），變更要使用者同意。
 
-全文條數 **41**＝kernel 頁 22（DI-KS 1～27，拿掉的 6、7、8、22、23 不計；下面第一層的表只列 DI-KS 1～15，16～27 看 kernel 頁）＋各部件頁特有 13＋資料契約 3＋產品的 target 檔 3（`docs/object_fps_pvp/target/entity-model.zh-Hant.md`）。2026-11-22 照 `v8-arch-gyo2-authority-rollback` 之後的 kernel 頁重算（原為 34＝kernel 頁 15＋13＋3＋3）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
+全文條數 **41**＝kernel 頁 22（DI-KS 1～27，拿掉的 6、7、8、22、23 不計；下面第一層的表只列 DI-KS 1～15，16～27 看 kernel 頁）＋各部件頁特有 13＋資料契約 3＋產品的 target 檔 3（`docs/object_fps_pvp/target/entity-model.zh-Hant.md`）。2026-11-22 照 `v8-arch-gyo2-authority-rollback` 之後的 kernel 頁重算（原為 34＝kernel 頁 15＋13＋3＋3）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
 
 ### 第一層：跨部件，先讀——[kernel.zh-Hant.md](kernel.zh-Hant.md)
 
@@ -101,20 +101,20 @@
 | 條 | 一句 | 對 legacy |
 |---|---|---|
 | [DI-KS 1](kernel.zh-Hant.md#di-ks-1) | System 的存取集合從簽名推出、只有一份；System 無狀態 | 新 |
-| [DI-KS 2](kernel.zh-Hant.md#di-ks-2) | System 回 `Result<void, KernelError>`；繞路由存取驗證（可關）攔；Err 由最外層 Run 回傳一次並 Interrupted，Kernel 不寫日誌、不靜默（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准） | 新；legacy error-handling「no error chains」一句對 Kernel 收窄（`error-handling.md`） |
+| [DI-KS 2](kernel.zh-Hant.md#di-ks-2) | System 回 `Result<void, KernelError>`；繞路由存取驗證（可關）攔；Err 由最外層 Run 回傳一次並 Interrupted，Kernel 不寫日誌、不靜默（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准） | 新；legacy error-handling「no error chains」一句對 Kernel 收窄（`error-handling.md`） |
 | [DI-KS 3](kernel.zh-Hant.md#di-ks-3) | 順序只來自 id 與 Plan | 相容：entity-store DI 2、8；entity-model E-5、E-6 |
 | [DI-KS 4](kernel.zh-Hant.md#di-ks-4) | id 由登記順序或配發器決定；World 不配發；鍵格式含 generation、策略歸產品 | 相容：entity-model E-1、E-2。相容（措辭更新）：entity-store DI 1、RC 2；entity-model E-3。取代 entity-store RC 1 |
-| [DI-KS 5](kernel.zh-Hant.md#di-ks-5) | 衝突與順序分開；沒有先後的衝突照登記順序平手（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准） | 新 |
-| [DI-KS 6](kernel.zh-Hant.md#di-ks-6) | ~~獨占寫入是啟動檢查~~ 拿掉：Kernel 不數寫者，伺服器權威策略也不數（[DI-A 8](v2/authority.zh-Hant.md#di-a-8)）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准） | 新（AGENTS §3 狀態權威在 Kernel 的落點） |
-| [DI-KS 7](kernel.zh-Hant.md#di-ks-7) | ~~(c) 預設 Serial；Parallel 要逐位元守衛~~ 拿掉；v1 的 Parallel 照 LIM-2 是 D-E17（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准） | 新 |
-| [DI-KS 8](kernel.zh-Hant.md#di-ks-8) | ~~區規則 Z1～Z8 是啟動檢查~~ 拿掉：Z6、Z8 與「`Tick` 只有一個來源」搬到權威 Module 伺服器權威策略的 AU-E5～AU-E7（[權威頁](v2/authority.zh-Hant.md)第 3 節），其餘不搬（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准） | 相容：legacy determinism DI 1、DI 4 |
+| [DI-KS 5](kernel.zh-Hant.md#di-ks-5) | 衝突與順序分開；沒有先後的衝突照登記順序平手（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准） | 新 |
+| [DI-KS 6](kernel.zh-Hant.md#di-ks-6) | ~~獨占寫入是啟動檢查~~ 拿掉：Kernel 不數寫者，伺服器權威策略也不數（[DI-A 8](v2/authority.zh-Hant.md#di-a-8)）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准） | 新（AGENTS §3 狀態權威在 Kernel 的落點） |
+| [DI-KS 7](kernel.zh-Hant.md#di-ks-7) | ~~(c) 預設 Serial；Parallel 要逐位元守衛~~ 拿掉；v1 的 Parallel 照 LIM-2 是 D-E17（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准） | 新 |
+| [DI-KS 8](kernel.zh-Hant.md#di-ks-8) | ~~區規則 Z1～Z8 是啟動檢查~~ 拿掉：Z6、Z8 與「`Tick` 只有一個來源」搬到權威 Module 伺服器權威策略的 AU-E5～AU-E7（[權威頁](v2/authority.zh-Hant.md)第 3 節），其餘不搬（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准） | 相容：legacy determinism DI 1、DI 4 |
 | [DI-KS 9](kernel.zh-Hant.md#di-ks-9) | 結構變更延後，在同步點（與最後一個同步點之後的 hook 清空輪）依固定順序套用 | 相容（措辭更新）：entity-store DI 4；entity-model E-12 |
 | [DI-KS 10](kernel.zh-Hant.md#di-ks-10) | 事件兩種（保留式 `Message` 照游標、推送式 `Event`＋`Observer`），都不看時鐘（2026-11-20 改寫，`v8-arch-gyo2-time-events`） | 新 |
 | [DI-KS 11](kernel.zh-Hant.md#di-ks-11) | hook 只有 OnAdd 與 OnRemove | 新 |
-| [DI-KS 12](kernel.zh-Hant.md#di-ks-12) | Kernel 只給回滾用的原語，不做回滾；回滾在回滾 Module（[R-1～R-8](v2/rollback.zh-Hant.md#r-1)）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准） | 新 |
+| [DI-KS 12](kernel.zh-Hant.md#di-ks-12) | Kernel 只給回滾用的原語，不做回滾；回滾在回滾 Module（[R-1～R-8](v2/rollback.zh-Hant.md#r-1)）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准） | 新 |
 | [DI-KS 13](kernel.zh-Hant.md#di-ks-13) | 渲染只經 Extract 唯讀來源 World，無反饋 | 新（legacy preview DI 4 的目標條文在 runtime-composition §3b，不是這一條） |
 | [DI-KS 14](kernel.zh-Hant.md#di-ks-14) | 一個 World 一條執行緒；外部系統只在交換點交換 | 新；與 threads DI 4 相容 |
-| [DI-KS 15](kernel.zh-Hant.md#di-ks-15) | Kernel 的職責是 ECS（職責清單 13 項）；不認得開局、登記單位、runner、時鐘、區、權威、回滾策略與產品（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，草稿、合併前核准） | 取代 legacy `docs/architecture.md` 的「Engine 無 system／scheduler／world」禁令（已核准，K.3 第 7 項）與 `RuntimeLoop` 三段 |
+| [DI-KS 15](kernel.zh-Hant.md#di-ks-15) | Kernel 的職責是 ECS（職責清單 13 項）；不認得開局、登記單位、runner、時鐘、區、權威、回滾策略與產品（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准） | 取代 legacy `docs/architecture.md` 的「Engine 無 system／scheduler／world」禁令（已核准，K.3 第 7 項）與 `RuntimeLoop` 三段 |
 
 ### 第二層：各部件特有的條文
 

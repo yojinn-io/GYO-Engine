@@ -2,7 +2,7 @@
 
 更新：2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 5 步）。Owner：架構。程式：`engine/modules/authority/`（`GYO::Engine::Authority`，target `GYO::Authority`，登記單位 `AuthorityModule`）。行為測試：`tests/common/authority/`（ctest `authority.authority_socket`、`authority.authority_registrations`、`authority.authority_checks`、`authority.authority_consistency`、`authority.authority_sources`、`authority.sources_scan`，標籤 `cpu`）；突變清單 [`scripts/authority_mutations.json`](scripts/authority_mutations.json)（`au-`）。產品那一側的來源掃描：`tests/common/authority_scan/`（原 `zone_scan`，第 5 步照命名規範改名；規則 ZS1～ZS7 不改名）。
 
-由來：[權威份](authority-module-declaration.zh-Hant.md)（修訂 5，已核准）第 4、5、7 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 4、6 節與第 11.2 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。**Design Invariants 的最終文字在合併前核准時定稿**；和權威份字面不同的地方在條末標「實作」。
+由來：[權威份](authority-module-declaration.zh-Hant.md)（修訂 5，已核准）第 4、5、7 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 4、6 節與第 11.2 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。Design Invariants 的最終文字使用者 2026-11-22 核准（[合併前核准](authority-rollback-merge-approval.zh-Hant.md)）；和權威份字面不同的地方在條末標「實作」。
 
 ## 一個例子
 
