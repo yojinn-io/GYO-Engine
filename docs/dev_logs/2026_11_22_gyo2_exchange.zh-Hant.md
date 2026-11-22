@@ -25,7 +25,7 @@
 - `WorldSetup::ExchangeIn`／`ExchangeOut`（`ExchangeFn`＝`Result<void, OrchestrationError>(Kernel::World&)`），在 `Build` 登記、存在 World 槽，替換時隨新的 `Build` 換上（`BuildNewFirst` 失敗時舊的照舊；`DropOldFirst` 丟掉舊 World 時一起放掉）。
 - `RunFrame`：每個 World「進 → 一輪 → 出」；遊戲初始化在第一個 World 的「進」之前；`RunGameInit`、`RunSchedule` 不呼叫。一輪中途壞掉時「出」與之後的 World 都不呼叫。
 - 失敗：`OrchestrationErrorCode::ExchangeFailed`（E2；訊息帶進或出、單位名、World 名，函式的碼在 `reporterCode`），World 不算壞、Product 不結束；同一個 World 的下一個函式不呼叫。例外原樣往外傳。預設 runner 收到它回 `Failure`。
-- 生成世界（另一張卡）合併後，一輪的定義（生成的那一批）由後合併的那一批補測試（宣告第 10 節末、生成世界宣告的 C19）。
+- 生成世界（另一張卡）合併後，一輪的定義（生成的那一批）由後合併的那一批補測試（宣告第 10 節末、生成世界宣告的 C19）。先後是「前處理 → 進 → 一輪 → 判定 → 出」，不能寫成「進；`RunRound`；出」（前處理會清掉「進」裡的 `Hold()`）；兩種接法見合併前核准頁第 7 節。
 
 ### 第 3 步：條文
 
