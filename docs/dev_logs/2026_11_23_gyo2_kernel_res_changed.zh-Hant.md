@@ -70,3 +70,10 @@ Fable 5.2／high（唯讀），報告：主 checkout `build/evidence/gyo2-kernel
 | N7 | 合併前核准時拿掉三處「草稿」 |
 
 突變檢查（§14.2）：檢查者用官方執行器獨立重跑列表上的六個，6/6 killed；另外找到四處，補了兩處（S2、S3）。改完後重跑受影響的突變：`rc-changed-at-last-run`、`rc-host-resourcemut-unstamped` 2/2 killed（`impl/mutants-review.log`）。`DI-KS 28:` 十二案 12/12、67 個 assertion 通過。merge #277 之後 `ctest -L "cpu|shader"` 169/169（`impl/ctest-after-review.log`）。再 merge #279、#280 之後 168/168（`impl/ctest-after-279-280.log`；少一個是 #279 拿掉了 `gyo_audio_board_readers`）。
+
+## 合併前核准
+
+使用者 2026-11-23：「DI-KS 28 照草稿定稿，兩個寫者先不算 CCR-8」。
+- DI-KS 28：照草稿定稿。kernel 頁的三處「草稿」換成核准的出處，`target/README.md` 的條數那一行同樣處理。
+- CCR-8：`Product::RunRound` 每幀寫的 `WorldGeneration`、回滾的 `InputHistory::WriteBack`／`PutBack`，現在都不算在規則內，已知處那一欄照這樣寫。程式不改。
+

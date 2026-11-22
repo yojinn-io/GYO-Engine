@@ -92,7 +92,7 @@
 
 **已核准**：使用者 2026-11-13 一次核准（遷移計畫 §7 U13；kernel HANDOFF `v8-arch-target-di-approved`）。各頁的 `Design Invariants` 與 Replacement Criteria 都是正式條文（Replacement Criteria 由使用者同日另一句「照建議」核准），變更要使用者同意。
 
-全文條數 **42**＝kernel 頁 23（DI-KS 1～28，拿掉的 6、7、8、22、23 不計；下面第一層的表只列 DI-KS 1～15，16～28 看 kernel 頁）＋各部件頁特有 13＋資料契約 3＋產品的 target 檔 3（`docs/object_fps_pvp/target/entity-model.zh-Hant.md`）。2026-11-22 照 `v8-arch-gyo2-authority-rollback` 之後的 kernel 頁重算（原為 34＝kernel 頁 15＋13＋3＋3）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准）。2026-11-23 加 DI-KS 28（`v8-arch-gyo2-kernel-res-changed`，草稿）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
+全文條數 **42**＝kernel 頁 23（DI-KS 1～28，拿掉的 6、7、8、22、23 不計；下面第一層的表只列 DI-KS 1～15，16～28 看 kernel 頁）＋各部件頁特有 13＋資料契約 3＋產品的 target 檔 3（`docs/object_fps_pvp/target/entity-model.zh-Hant.md`）。2026-11-22 照 `v8-arch-gyo2-authority-rollback` 之後的 kernel 頁重算（原為 34＝kernel 頁 15＋13＋3＋3）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准）。2026-11-23 加 DI-KS 28（`v8-arch-gyo2-kernel-res-changed`，使用者 2026-11-23 合併前核准）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
 
 ### 第一層：跨部件，先讀——[kernel.zh-Hant.md](kernel.zh-Hant.md)
 
