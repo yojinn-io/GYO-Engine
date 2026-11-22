@@ -22,4 +22,7 @@ namespace GYO::Engine::OS::Detail {
 // Not empty, no NUL, valid UTF-8.
 [[nodiscard]] Base::Result<void, OSError> CheckPath(std::string_view utf8Path);
 
+// path without the '/' it ends with: "/home/a/" is "/home/a", "/" is "".
+[[nodiscard]] std::string_view WithoutTrailingSlashes(std::string_view path) noexcept;
+
 } // namespace GYO::Engine::OS::Detail

@@ -382,12 +382,20 @@ TEST_CASE("Audio Mixer balances and plays every request from concurrent producer
     CHECK(outputSum == expectedSum.load());
 }
 
-TEST_CASE("Audio Submitter belongs to the first thread that plays through it") {
+TEST_CASE("Audio Submitter plays on another thread after a hand-over") {
+    // One user at a time; the join orders the first thread's calls before the second's.
     Rig rig = MakeRig();
-    std::thread other([&] { CHECK(rig.submitter.Play({rig.impulse, kAnchor})); });
+    SoundHandle first;
+    std::thread other([&] { first = rig.submitter.Play({rig.impulse, kAnchor}); });
     other.join();
-    GYO_CHECK_ASSERTS(rig.submitter.Play({rig.impulse, kAnchor}));
-    CHECK(rig.mixer.Stats().submitted == 1);
+    const SoundHandle second = rig.submitter.Play({rig.impulse, kAnchor}); // the handle sequence carries over
+    CHECK(first);
+    CHECK(second);
+    CHECK(second.value == first.value + 1);
+    static_cast<void>(RenderBlock(rig.mixer, 4, kAnchor));
+    const auto stats = rig.mixer.Stats();
+    CHECK(stats.submitted == 2);
+    CHECK(stats.submitted == stats.playedOnTime + stats.playedLate + stats.droppedQueueFull + stats.droppedNoVoice);
 }
 
 TEST_CASE("Audio Submitter treats a foreign clip, a bad gain and a moved-from handle as Programmer Errors") {
@@ -399,6 +407,22 @@ TEST_CASE("Audio Submitter treats a foreign clip, a bad gain and a moved-from ha
     GYO_CHECK_ASSERTS(rig.submitter.Play({rig.impulse, kAnchor}));
     CHECK(moved.Play({rig.impulse, kAnchor}));
     CHECK(rig.mixer.Stats().submitted == 1);
+}
+
+TEST_CASE("Audio Mixer starts a play left without a time at once and counts it an hour late") {
+    // PlayRequest::at left at its default (the clock's epoch) is the documented pitfall (Mixer.hpp): the
+    // play starts at the block's first frame, without the delay, and shows in the counters as late.
+    Rig rig = MakeRig(std::chrono::duration_cast<Duration>(60ms));
+    const TimePoint anchor = TimePoint{} + std::chrono::duration_cast<Duration>(2h);
+    PlayRequest forgotten;
+    forgotten.clip = rig.impulse;
+    REQUIRE(rig.submitter.Play(forgotten));
+    const auto out = RenderBlock(rig.mixer, 8, anchor);
+    CHECK(Onsets(out) == std::vector<std::int64_t>{0});
+    const auto stats = rig.mixer.Stats();
+    CHECK(stats.playedLate == 1);
+    // Clamped to an hour before the anchor, the delay added back: 1 h - 60 ms late.
+    CHECK(stats.maxLateness == std::chrono::duration_cast<Duration>(1h - 60ms));
 }
 
 TEST_CASE("Audio Submitter may outlive its Mixer") {

@@ -26,7 +26,7 @@
   - 遷移期間，現有程式受其 legacy 文件的 Design Invariants 約束；新程式（`engine/ecs/kernel` 起）受 target 約束。判斷依據是程式是舊是新，不是文件日期。一個部件遷移完成時，legacy 檔刪、target 檔搬回 `docs/architecture/`，檔名照本節的對照。framework 三份隨 `framework/` 程式被 plugins 遷移批刪除時一起刪。
 
 - **沒有 target 對應的頂層文件**（`v8-arch-docs-scope-of-target`，架構師 2026-11-13）：頂層文件分三種——有 `> **Legacy**` 行的是現況紀錄；沒有 Legacy 行的是正式文件（沒有 target 對應的部件，或已搬回）；target/ 是目標。一個部件的新設計決定寫在哪裡，看它**會不會因改造而改變**：
-  - 改造會改變它（成為 plugin、改成 Resource 或 Host 零件、介面要重定）：在 target/ 開對應檔寫，同一批在頂層原檔加 Legacy 行（開 target 檔的那一批就標，不等遷移完成）。今天屬這一類而還沒有 target 檔的：audio、input、platform-sdl、trace、io（依 `v8-arch-external-components-as-adapters` 與 `v8-arch-engine-or-plugin-criteria`，由規劃批 `v8-arch-adapter-plugins-plan` 逐個定）。
+  - 改造會改變它（成為 plugin、改成 Resource 或 Host 零件、介面要重定）：在 target/ 開對應檔寫，同一批在頂層原檔加 Legacy 行（開 target 檔的那一批就標，不等遷移完成）。今天屬這一類而還沒有 target 檔的：input、platform-sdl、trace、io（audio 已有 target 檔 [`target/v2/audio.zh-Hant.md`](v2/audio.zh-Hant.md)，頂層 `audio.md` 已加 Legacy 行，`v8-arch-gyo2-audio-review`；依 `v8-arch-external-components-as-adapters` 與 `v8-arch-engine-or-plugin-criteria`，由規劃批 `v8-arch-adapter-plugins-plan` 逐個定）。
   - 改造不改變它（留 Engine 且形狀不變，例 collision、math、os、threads、time）：頂層原檔就是權威，新決定直接寫在那裡，不開 target 檔。
   - 一個部件改歸哪一類由架構師在規劃批定、記進 kernel HANDOFF；在定之前，碰到它的新設計決定先問架構師。
 - 文件層級的 Legacy 行與條文層級的「已被取代／相容（措辭更新）」標註是兩件事：前者標整份文件（開 target 檔時），後者標單一條文（`v8-arch-legacy-marks-by-migration-batch`：由各部件的遷移批在動到它時標）。

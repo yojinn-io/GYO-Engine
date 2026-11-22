@@ -28,12 +28,12 @@ namespace GYO::Engine::IO::Helpers {
         auto closed = opened.value()->Close();
         opened.value().reset();
         if (!written || !closed) {
-            (void)fs.Remove(temporary, {});
+            (void)fs.Remove(temporary);
             return Base::Err(!written ? std::move(written.error()) : std::move(closed.error()));
         }
         auto moved = fs.Move(temporary, uri);
         if (!moved) {
-            (void)fs.Remove(temporary, {});
+            (void)fs.Remove(temporary);
             return Base::Err(std::move(moved.error()));
         }
         return {};

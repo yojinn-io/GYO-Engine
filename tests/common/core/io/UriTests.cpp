@@ -3,7 +3,6 @@
 #include <memory>
 #include <string>
 
-#include "engine/io/fs/MountTable.hpp"
 #include "engine/io/path/Uri.hpp"
 
 using namespace GYO::Engine::IO;
@@ -180,30 +179,17 @@ TEST_CASE("Uri: a file URI prints its canonical form, which parses to the same p
     }
 }
 
-TEST_CASE("Uri: the loose parser applies the file rule and keeps other schemes as they were") {
-    CHECK(Path::ParseUriLoose("file:///Users/x").path.Str() == "/Users/x");
-    CHECK(Path::ParseUriLoose("file:///C:/x").path.Str() == "C:/x");
-    // The scheme name is case-insensitive for file, as in ParseUri.
-    CHECK(Path::ParseUriLoose("FILE:///Users/x").scheme == Path::UriScheme::File);
-    CHECK(Path::ParseUriLoose("File:///C:/x").path.Str() == "C:/x");
-    // Other schemes keep the loose meaning: leading slashes are dropped, the rest is relative.
-    CHECK(Path::ParseUriLoose("res:///a/b").path.Str() == "a/b");
-    CHECK(Path::ParseUriLoose("asset://textures/x.png").path.Str() == "textures/x.png");
-    CHECK(Path::ParseUriLoose("textures/x.png").path.Str() == "textures/x.png");
-}
-
-TEST_CASE("Uri: a file URI that ParseUri rejects is no file URI for the loose parser either") {
-    for (const char* text : {"file://C:/x", "file://", "file://localhost", "file:////?/C:/x"}) {
-        const auto uri = Path::ParseUriLoose(text);
-        CHECK_MESSAGE(uri.scheme != Path::UriScheme::File, text);
-        CHECK_MESSAGE(!Path::NativePathFromFileUri(uri), text);
-    }
+TEST_CASE("Uri: the file scheme name is case-insensitive") {
+    CHECK(FilePath("FILE:///Users/x") == "/Users/x");
+    CHECK(FilePath("File:///C:/x") == "C:/x");
 }
 
 TEST_CASE("Uri: schemes other than file keep their parse") {
     const auto asset = Path::ParseUri("asset://textures/x.png?v=1#f");
     REQUIRE(asset);
-    CHECK(asset.value().scheme == Path::UriScheme::Asset);
+    // Only file has rules of its own; any other scheme is Unknown and keeps its name.
+    CHECK(asset.value().scheme == Path::UriScheme::Unknown);
+    CHECK(asset.value().schemeText == "asset");
     CHECK(asset.value().path.Str() == "x.png");
     CHECK(asset.value().authority == "textures");
     CHECK(asset.value().query == "v=1");
@@ -255,51 +241,6 @@ TEST_CASE("Uri: generated spellings keep the round trip and the fixed point") {
     MESSAGE(natives << " native spellings and " << uris << " URI spellings mapped");
     CHECK(natives > 100);
     CHECK(uris > 100);
-}
-
-TEST_CASE("Uri: a mount on a file root resolves to an absolute native path") {
-    FS::MountTable table;
-    FS::MountPoint posix;
-    posix.mountUri = Path::ParseUriLoose("asset://");
-    posix.rootUri = Path::ParseUriLoose("file:///Users/x/assets");
-    const auto request = Path::ParseUriLoose("asset://textures/a.png");
-    const auto resolved = table.Resolve(posix, request);
-    REQUIRE(resolved);
-    CHECK(resolved.value().nativeUri.scheme == Path::UriScheme::File);
-    CHECK(resolved.value().nativeUri.path.Str() == "/Users/x/assets/textures/a.png");
-
-    FS::MountPoint drive = posix;
-    drive.rootUri = Path::ParseUriLoose("file:///C:/game/assets");
-    const auto onDrive = table.Resolve(drive, request);
-    REQUIRE(onDrive);
-    CHECK(onDrive.value().nativeUri.path.Str() == "C:/game/assets/textures/a.png");
-
-    // A root that is not a file URI keeps its loose meaning.
-    FS::MountPoint logical = posix;
-    logical.rootUri = Path::ParseUriLoose("asset://root");
-    const auto onLogical = table.Resolve(logical, request);
-    REQUIRE(onLogical);
-    CHECK(onLogical.value().nativeUri.path.Str() == "root/textures/a.png");
-}
-
-TEST_CASE("Uri: a mount never reaches outside its root") {
-    FS::MountTable table;
-    FS::MountPoint mount;
-    mount.mountUri = Path::ParseUriLoose("asset://");
-    mount.rootUri = Path::ParseUriLoose("file:///Users/x/assets");
-    for (const char* request : {"asset://../secret", "asset://a/../../secret", "asset://..\\..\\x"}) {
-        const auto resolved = table.Resolve(mount, Path::ParseUriLoose(request));
-        REQUIRE_FALSE_MESSAGE(resolved, request);
-        CHECK(resolved.error().code == IOErrorCode::PathEscapesRoot);
-    }
-    // A UNC root works as any other file root, and still keeps its requests inside.
-    mount.rootUri = Path::ParseUriLoose("file://server/share/assets");
-    const auto unc = table.Resolve(mount, Path::ParseUriLoose("asset://a.png"));
-    REQUIRE(unc);
-    const auto native = Path::NativePathFromFileUri(unc.value().nativeUri);
-    REQUIRE(native);
-    CHECK(native.value() == "//server/share/assets/a.png");
-    CHECK(table.Resolve(mount, Path::ParseUriLoose("asset://../secret")).error().code == IOErrorCode::PathEscapesRoot);
 }
 
 TEST_CASE("Uri: a native absolute path becomes a file URI and comes back unchanged") {
@@ -363,7 +304,7 @@ TEST_CASE("Uri: only native absolute paths become file URIs") {
 }
 
 TEST_CASE("Uri: only an absolute file URI has a native path") {
-    CHECK(NoNativePath(Path::ParseUriLoose("asset://x.png")) == IOErrorCode::InvalidPath);
+    CHECK(NoNativePath(Path::ParseUri("asset://x.png").value()) == IOErrorCode::InvalidPath);
     Path::Uri relative;
     relative.scheme = Path::UriScheme::File;
     relative.path = Path::Path::FromNormalized("Users/x");
