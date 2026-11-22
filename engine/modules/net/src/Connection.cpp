@@ -89,7 +89,9 @@ bool IsPacketLevel(const DropReason reason) noexcept {
     case DropReason::ConnectionMismatch:
     case DropReason::DuplicatePacket:
     case DropReason::TooOld:
-    case DropReason::ReliableWindowFull: return true;
+    case DropReason::ReliableWindowFull:
+    case DropReason::UnknownSource:
+    case DropReason::Unexpected: return true;
     default: return false;
     }
 }
@@ -107,6 +109,8 @@ const char* ToString(const DropReason reason) noexcept {
     case DropReason::FragmentTimeout: return "FragmentTimeout";
     case DropReason::BufferFull: return "BufferFull";
     case DropReason::SendRejected: return "SendRejected";
+    case DropReason::UnknownSource: return "UnknownSource";
+    case DropReason::Unexpected: return "Unexpected";
     }
     return "Unknown";
 }
@@ -260,6 +264,9 @@ NetResult<void> Connection::Receive(const std::span<const std::byte> datagram, c
     const EntryLimits limits{channels_.size(), maxWholePayload_, fragmentPayload_,
                              (settings_.maxMessageBytes + fragmentPayload_ - 1) / fragmentPayload_};
     auto parsed = ParseEntries(datagram.subspan(kPacketHeaderSize), limits, entries);
+    if (parsed && IsHandshake(header.kind)) {
+        parsed = Base::Err(Malformed("a handshake packet is not the transport's", "kind=" + std::to_string(static_cast<int>(header.kind))));
+    }
     if (parsed && header.kind != PacketKind::Data && !entries.empty()) {
         parsed = Base::Err(Malformed("only a Data packet carries entries", "entries=" + std::to_string(entries.size())));
     }
@@ -493,6 +500,11 @@ std::vector<std::vector<std::byte>> Connection::Collect(const NetTime now, const
     flush();
     if (datagrams.empty() && ackOwed_) datagrams.push_back(StartPacket(PacketKind::AckOnly, stamp, now, false));
     return datagrams;
+}
+
+std::vector<std::byte> Connection::KeepAlive(const NetTime now, const Stamp stamp) {
+    if (closing_ || closed_) return {};
+    return StartPacket(PacketKind::AckOnly, stamp, now, false);
 }
 
 std::optional<std::vector<std::byte>> Connection::Pop(const std::size_t channelIndex) {

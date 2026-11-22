@@ -19,7 +19,7 @@ enum class NetFailureCode : std::uint16_t {
     NotOurProtocol,
     // A datagram of another protocol version.
     ProtocolVersionMismatch,
-    // A packet kind this version does not know (the handshake kinds are reserved, not known yet).
+    // A packet kind this version does not know.
     UnknownPacketKind,
     // The payload after the header cannot be read: an unknown channel, a fragment index past its count, a
     // message larger than the limit, or bytes left over.

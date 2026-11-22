@@ -44,6 +44,11 @@ NetResult<PacketHeader> DecodePacketHeader(const std::span<const std::byte> data
     case PacketKind::Data:
     case PacketKind::AckOnly:
     case PacketKind::Disconnect:
+    case PacketKind::ConnectRequest:
+    case PacketKind::Challenge:
+    case PacketKind::ConnectResponse:
+    case PacketKind::Accepted:
+    case PacketKind::Rejected:
         header.kind = static_cast<PacketKind>(kind);
         break;
     default:

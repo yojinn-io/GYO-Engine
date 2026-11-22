@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the net Module, step 1a (docs/architecture/target/v2/net-module-declaration.zh-Hant.md, D-2, D-4, D-12 and judgement G-2; Design Invariants draft in docs/architecture/target/v2/net.zh-Hant.md; ids nt-). A mutant is killed only when the named test case fails with the expected message.",
+ "description": "Declared mutants of the net Module, steps 1a and 1b (docs/architecture/target/v2/net-module-declaration.zh-Hant.md, D-2, D-3, D-4, D-6, D-8, D-10, D-12 and judgements G-1 to G-4; Design Invariants draft in docs/architecture/target/v2/net.zh-Hant.md; ids nt-). A mutant is killed only when the named test case fails with the expected message.",
  "mutants": [
   {
    "id": "nt-ackbits-31",
@@ -153,7 +153,7 @@
   },
   {
    "id": "nt-unknown-kind",
-   "what": "a packet kind outside the table (a reserved handshake kind included) is read as Data. Only it catches the closed kind table of the decoder",
+   "what": "a packet kind outside the table is read as Data. Only it catches the closed kind table of the decoder (expect rewritten for step 1b: the handshake kinds 16 to 20 are in the table now)",
    "guards": [
     "net-module-declaration D-2"
    ],
@@ -162,7 +162,216 @@
    "replace": "    default:\n        header.kind = PacketKind::Data;\n        break;\n        return Base::Err(NetFailure::Make(NetFailureCode::UnknownPacketKind,",
    "target": "gyo_net_tests",
    "cases": "header: a datagram that is not a header*",
-   "expect": "a\\ kind\\ outside\\ the\\ table\\ \\(a\\ reserved\\ handshake\\ kind\\ included\\)\\ is\\ UnknownPacketKind"
+   "expect": "a\\ kind\\ outside\\ the\\ table\\ is\\ UnknownPacketKind"
+  },
+  {
+   "id": "nt-compare-version",
+   "what": "the handshake does not compare the net protocol version. Only it catches that item of the comparison",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.protocolVersion != server.protocolVersion) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ protocol\\ version\\ that\\ differs\\ is\\ ProtocolMismatch"
+  },
+  {
+   "id": "nt-compare-hash",
+   "what": "the handshake does not compare the protocol hash. Only it catches that item of the comparison",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.protocolHash != server.protocolHash) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ protocol\\ hash\\ that\\ differs\\ is\\ ProtocolMismatch"
+  },
+  {
+   "id": "nt-compare-step",
+   "what": "the handshake does not compare the step length. Only it catches that item of the comparison",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.stepNanoseconds != server.stepNanoseconds) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ step\\ length\\ that\\ differs\\ is\\ StepLengthMismatch"
+  },
+  {
+   "id": "nt-compare-range",
+   "what": "the handshake does not check that the allotter ranges are apart. Only it catches that item of the comparison (D-4)",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.idRange.Overlaps(server.idRange)) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "overlapping\\ allotter\\ ranges\\ are\\ IdRangeOverlap"
+  },
+  {
+   "id": "nt-compare-fingerprint",
+   "what": "two different fingerprints pass. Only it catches the comparison of the fingerprints' values",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "        if (*client.fingerprint != *server.fingerprint) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ fingerprint\\ that\\ differs\\ is\\ FingerprintMismatch"
+  },
+  {
+   "id": "nt-k1-compared",
+   "what": "a client without a fingerprint (K1) is compared on it and rejected by a server with one. Only it catches \"K1 is not compared\"",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.fingerprint) {\n        if (!server.fingerprint) {",
+   "replace": "    if (client.fingerprint != server.fingerprint) {\n        if (!client.fingerprint || !server.fingerprint) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a client without an authority strategy*",
+   "expect": "a\\ client\\ without\\ a\\ fingerprint\\ \\(K1\\)\\ connects\\ to\\ a\\ server\\ with\\ one"
+  },
+  {
+   "id": "nt-challenge-unchecked",
+   "what": "the server accepts a response whatever challenge it carries. Only it catches the check of the challenge",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "    if (challenge != Detail::ChallengeOf(secret_, from, body.first(used))) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a response with another*",
+   "expect": "a\\ wrong\\ challenge\\ is\\ ChallengeFailed"
+  },
+  {
+   "id": "nt-admission-ignored",
+   "what": "the server does not ask the product before it accepts. Only it catches Refused",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "    if (admission_) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: the product's refusal*",
+   "expect": "the\\ product's\\ refusal\\ is\\ Refused"
+  },
+  {
+   "id": "nt-request-min-size",
+   "what": "the server answers a request smaller than its challenge. Only it catches the anti-amplification check",
+   "guards": [
+    "net-module-declaration D-6"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "        if (datagram.size() < Detail::kMinRequestDatagram) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a request smaller*",
+   "expect": "a\\ request\\ smaller\\ than\\ a\\ challenge\\ gets\\ no\\ answer"
+  },
+  {
+   "id": "nt-liveness-not-refreshed",
+   "what": "a datagram of the connection does not refresh \"last received\" at the client. Only it catches the refresh by data (D-8: the data flow is the heartbeat)",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "        lastReceived_ = now;\n        if (state_ == ClientState::Interrupted) state_ = ClientState::Connected;",
+   "replace": "        if (state_ == ClientState::Interrupted) state_ = ClientState::Connected;",
+   "target": "gyo_net_tests",
+   "cases": "liveness: any datagram*",
+   "expect": "a\\ datagram\\ of\\ the\\ connection\\ refreshes\\ its\\ last\\ received\\ time"
+  },
+  {
+   "id": "nt-keepalive-with-data",
+   "what": "the client sends a keepalive even when it has data to send. Only it catches \"no keepalive while data flows\"",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "    if (out.empty() && state_ != ClientState::Disconnected && now - lastSent_ > settings_.keepaliveInterval) {",
+   "replace": "    if (state_ != ClientState::Disconnected && now - lastSent_ > settings_.keepaliveInterval) {",
+   "target": "gyo_net_tests",
+   "cases": "liveness: no keepalive*",
+   "expect": "a\\ frame\\ with\\ data\\ carries\\ no\\ keepalive"
+  },
+  {
+   "id": "nt-interrupt-at-threshold",
+   "what": "the client is interrupted at the first threshold, not past it. Only it catches the boundary of Interrupted",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "    } else if (silent > settings_.interruptAfter) {",
+   "replace": "    } else if (silent >= settings_.interruptAfter) {",
+   "target": "gyo_net_tests",
+   "cases": "liveness: silence past*",
+   "expect": "at\\ the\\ first\\ threshold\\ the\\ client\\ is\\ still\\ connected"
+  },
+  {
+   "id": "nt-timeout-at-threshold",
+   "what": "the client ends with Timeout at the second threshold, not past it. Only it catches the boundary of Timeout",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "    if (silent > settings_.timeoutAfter) {",
+   "replace": "    if (silent >= settings_.timeoutAfter) {",
+   "target": "gyo_net_tests",
+   "cases": "liveness: silence past*",
+   "expect": "at\\ the\\ second\\ threshold\\ the\\ client\\ is\\ still\\ interrupted"
+  },
+  {
+   "id": "nt-registers-without-role",
+   "what": "the Peer component is registered in a World without a net role. Only it catches \"a World without a role registers nothing\"",
+   "guards": [
+    "net-module-declaration D-10",
+    "net-module-declaration 判定 G-1"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "    if (role == nullptr) return; // G-1: a World without a role registers nothing\n    Kernel::Registrar& r = setup.Registrar();\n    r.Component<Peer>({.name = \"Peer\"});",
+   "replace": "    Kernel::Registrar& r = setup.Registrar();\n    r.Component<Peer>({.name = \"Peer\"});\n    if (role == nullptr) return;",
+   "target": "gyo_net_tests",
+   "cases": "module: without a role*",
+   "expect": "a\\ World\\ without\\ a\\ role\\ has\\ the\\ same\\ components\\ as\\ one\\ without\\ the\\ net\\ Module"
+  },
+  {
+   "id": "nt-peer-not-despawned",
+   "what": "the server keeps the Peer entity of a connection that ended. Only it catches the despawn",
+   "guards": [
+    "net-module-declaration D-3"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "                entity = found->second;\n                despawn.Entity(entity);",
+   "replace": "                entity = found->second;",
+   "target": "gyo_net_tests",
+   "cases": "module: a client connects*",
+   "expect": "the\\ server's\\ Peer\\ entity\\ is\\ despawned\\ when\\ its\\ connection\\ ends"
   }
  ]
 }

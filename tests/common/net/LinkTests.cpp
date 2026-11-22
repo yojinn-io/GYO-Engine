@@ -6,10 +6,12 @@
 #include <vector>
 
 #include "NetTestSupport.hpp"
+#include "ModuleTestSupport.hpp"
 #include "engine/net/UdpLink.hpp"
 
 namespace N = GYO::Engine::Net;
 namespace OS = GYO::Engine::OS;
+namespace O = GYO::Engine::Orchestration;
 using GYO::Test::Net::Bytes;
 
 TEST_CASE("link: an Endpoint packs an IPv4 address and a port and gives them back") {
@@ -46,4 +48,63 @@ TEST_CASE("link: a datagram goes over UDP loopback with its sender") {
     REQUIRE(got.has_value());
     CHECK(std::vector<std::byte>(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(got->size)) == payload);
     CHECK(got->from == N::UdpLink::ToEndpoint(*aAddress));
+}
+
+namespace {
+
+// Runs both Products until the client's World has a Peer or a PeerDisconnected, at most about 4 s.
+void Shake(O::Product& server, O::Product& client) {
+    for (int i = 0; i < 2000; ++i) {
+        REQUIRE(static_cast<bool>(server.RunFrame()));
+        REQUIRE(static_cast<bool>(client.RunFrame()));
+        auto& world = client.World("Net").GetWorld();
+        if (!GYO::Test::Net::PeersOf(world).empty() || !GYO::Test::Net::SeenIn(world).disconnected.empty()) return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+}
+
+std::unique_ptr<O::Product> UdpServer() {
+    GYO::Test::Net::End server;
+    server.net.role = N::NetRole::Server;
+    server.net.bind = OS::DatagramAddress::Loopback(0);
+    server.role = N::NetWorldOptions{N::NetRole::Server, std::nullopt};
+    server.range = {1, 1000};
+    auto built = O::Product::Build(GYO::Test::Net::Describe(server), GYO::Test::Net::Units(true));
+    REQUIRE_MESSAGE(static_cast<bool>(built), GYO::Test::Net::Reported(built));
+    return std::move(*built);
+}
+
+std::unique_ptr<O::Product> UdpClient(const OS::DatagramAddress& server, const GYO::Engine::WorldTime::StepLength step) {
+    GYO::Test::Net::End client;
+    client.net.role = N::NetRole::Client;
+    client.net.bind = OS::DatagramAddress::Loopback(0);
+    client.net.server = server;
+    client.net.userId = 7;
+    client.role = N::NetWorldOptions{N::NetRole::Client, std::nullopt};
+    client.range = {1001, 2000};
+    client.time.step = step;
+    auto built = O::Product::Build(GYO::Test::Net::Describe(client), GYO::Test::Net::Units(true));
+    REQUIRE_MESSAGE(static_cast<bool>(built), GYO::Test::Net::Reported(built));
+    return std::move(*built);
+}
+
+} // namespace
+
+TEST_CASE("link: two Products shake hands over UDP loopback, and a step length that differs is rejected (G-7)") {
+    auto server = UdpServer();
+    const auto address = server->Buffer().Find<N::NetService>()->UdpAddress();
+    REQUIRE(address.has_value());
+    auto client = UdpClient(OS::DatagramAddress::Loopback(address->port), {});
+    Shake(*server, *client);
+    const auto peers = GYO::Test::Net::PeersOf(server->World("Net").GetWorld());
+    REQUIRE_MESSAGE(peers.size() == 1, "the client connects over UDP loopback");
+    CHECK(peers[0].userId == 7);
+    CHECK(GYO::Test::Net::PeersOf(client->World("Net").GetWorld()).size() == 1);
+
+    auto other = UdpClient(OS::DatagramAddress::Loopback(address->port), GYO::Engine::WorldTime::StepLength::FromHz(60.0));
+    Shake(*server, *other);
+    const auto ended = GYO::Test::Net::SeenIn(other->World("Net").GetWorld()).disconnected;
+    REQUIRE(ended.size() == 1);
+    CHECK(ended[0].reason == N::DisconnectReason::StepLengthMismatch);
+    CHECK(GYO::Test::Net::PeersOf(server->World("Net").GetWorld()).size() == 1);
 }

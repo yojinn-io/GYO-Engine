@@ -61,12 +61,12 @@ TEST_CASE("header: a datagram that is not a header of this version is a failure,
     version[2] = std::byte{2};
     CHECK(failure(version) == N::NetFailureCode::ProtocolVersionMismatch);
 
-    for (const int kind : {0, 4, 16, 19, 255}) {
+    for (const int kind : {0, 4, 15, 21, 255}) {
         CAPTURE(kind);
         auto unknown = good;
         unknown[3] = static_cast<std::byte>(kind);
         CHECK_MESSAGE(failure(unknown) == N::NetFailureCode::UnknownPacketKind,
-                      "a kind outside the table (a reserved handshake kind included) is UnknownPacketKind");
+                      "a kind outside the table is UnknownPacketKind");
     }
 }
 

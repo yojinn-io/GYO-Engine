@@ -20,17 +20,27 @@ inline constexpr std::uint16_t kPacketMagic = 0x4E47;
 inline constexpr std::uint8_t kProtocolVersion = 1;
 inline constexpr std::size_t kPacketHeaderSize = 24;
 
-// The packet kinds of this version. Zero is not a kind. 16 to 19 are reserved for the handshake of step 1b
-// (request, challenge, response, accepted) and are UnknownPacketKind until then.
+// The packet kinds of this version. Zero is not a kind; any other value is UnknownPacketKind.
 enum class PacketKind : std::uint8_t {
     // Carries messages (possibly none) and asks the remote end to acknowledge it.
     Data = 1,
     // Carries only the ack fields; it does not ask for an acknowledgement, so two idle ends do not trade
-    // acknowledgements forever (lightyear packet_type.rs:27-37).
+    // acknowledgements forever (lightyear packet_type.rs:27-37). Also the keepalive of an idle connection.
     AckOnly = 2,
     // The sending end closes the connection; sent several times since it may be lost.
     Disconnect = 3,
+    // The handshake (declaration D-6; payloads in Handshake.hpp): a client asks, the server challenges, the
+    // client answers with the request and the challenge, the server accepts or rejects.
+    ConnectRequest = 16,
+    Challenge = 17,
+    ConnectResponse = 18,
+    Accepted = 19,
+    Rejected = 20,
 };
+
+[[nodiscard]] constexpr bool IsHandshake(const PacketKind kind) noexcept {
+    return static_cast<std::uint8_t>(kind) >= 16;
+}
 
 struct PacketHeader final {
     PacketKind kind = PacketKind::Data;

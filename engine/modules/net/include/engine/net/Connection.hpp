@@ -101,8 +101,13 @@ enum class DropReason : std::uint8_t {
     BufferFull,
     // message: Send refused it (send queue full, or larger than maxMessageBytes).
     SendRejected,
+    // datagram (the connection layer): a data packet from an endpoint with no connection.
+    UnknownSource,
+    // datagram (the connection layer): a handshake packet that does not fit the state (a challenge to a
+    // server, an Accepted after the connection was made, a request smaller than a challenge).
+    Unexpected,
 };
-inline constexpr std::size_t kDropReasonCount = 9;
+inline constexpr std::size_t kDropReasonCount = 11;
 
 [[nodiscard]] const char* ToString(DropReason reason) noexcept;
 
@@ -160,6 +165,10 @@ public:
 
     // The next message handed out on channel, or nullopt.
     [[nodiscard]] std::optional<std::vector<std::byte>> Pop(std::size_t channel);
+
+    // One AckOnly packet now, stamped with stamp: the keepalive of an idle connection (the connection layer
+    // decides when). Empty after Close.
+    [[nodiscard]] std::vector<std::byte> KeepAlive(NetTime now, Stamp stamp);
 
     // Sends the Disconnect packets on the next Collect; nothing is sent after them.
     void Close() noexcept;
