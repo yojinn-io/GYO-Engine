@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <new>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -307,6 +309,33 @@ SystemResult SpawnEveryTick(Spawn<Bundle<Tag>> spawn) {
 }
 
 } // namespace
+
+namespace {
+
+// An allotter (the test one: the kernel ships none) built in memory that held `fill` before (what a stack slot may
+// hold), then copied into the World as an author would.
+EntityId StoredAllotterSummaryCase(unsigned char fill, Fingerprint& summary) {
+    alignas(TestRangeAllotter) unsigned char raw[sizeof(TestRangeAllotter)];
+    std::memset(raw, fill, sizeof raw);
+    const TestRangeAllotter* made = new (raw) TestRangeAllotter(TestRangeAllotter::Of(900, 1000000));
+    auto rig = MakeRig([](Registrar& r) { Data(r, true); });
+    rig->world().SetResource(*made);
+    summary = SummaryOf(rig->world());
+    return rig->world().Resource<TestRangeAllotter>()->next;
+}
+
+} // namespace
+
+// D-9 with a hash function per type (authority-rollback declaration 3.2): the World summary hashes a resource
+// through its type's hash function, so what the padding of an equal value holds does not reach it (the kernel's
+// side, DI-KS 27; the default allotter's own hash function is tested in tests/common/entity_ids/).
+TEST_CASE("D-9: equal allotters give one World summary, whatever their padding holds") {
+    Fingerprint zeros;
+    Fingerprint ones;
+    REQUIRE(StoredAllotterSummaryCase(0x00, zeros) == 900);
+    REQUIRE(StoredAllotterSummaryCase(0xFF, ones) == 900);
+    CHECK_MESSAGE(zeros == ones, "[summary-padding-equal] equal allotters, different summaries: " << zeros.Text() << " vs " << ones.Text());
+}
 
 // The allotter type's own properties (monotonic, no wrap, no Reset) are the entity_ids Module's (EI-2,
 // tests/common/entity_ids/); here the kernel's machinery with a test allotter.

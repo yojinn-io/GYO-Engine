@@ -445,9 +445,48 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 - **遊戲初始化**：`ProductDescription::gameInit`（schedule 名的清單；登記單位可以 `Append`／`InsertBefore`／`InsertAfter`），整個行程一次、在第一個 World、在任何一幀與任何 `RunSchedule` 之前。`RunFrame`、`RunSchedule` 在它還沒跑時先跑它；直接呼叫 `WorldExecutor::Run` 是繞過編排層，不會先跑。某一張回錯誤就停下回傳、記為已跑。
 - **每一幀**：`RunFrame()` 照 World 的順序跑各 World 的每幀清單；某一張回錯誤就停下回傳（排在後面的 World 那一次不跑）。**一個 World 壞了（中斷，或替換失敗後位置是空的），`Product` 就結束**：之後每個入口都先檢查、什麼都不跑，回 `WorldInterrupted`／`WorldMissing`，錯誤上掛著 `WorldFailure`（哪個 World、怎麼壞的、壞在哪裡、之前最後跑的 schedule）；runner 決定關掉程式或另建一個 `Product`（回主選單）。編排層不寫日誌，要記就由你（或之後的日誌機制）拿 `WorldFailure` 去記（O-11）。runner（預設只跑一次 `RunFrame`）擁有迴圈；runner 與持有 `Product` 的人只呼叫 `RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`、`InsertSystems`。只跑某一張（例：放玩家、讀檔）用 `RunSchedule(world, schedule)`。
 - **準備**：每個 World 建好之後、第一次 Run 之前（啟動與每次替換），照「帶過去 → 登記單位的準備 → 描述的準備 → 替換帶的 `extra`」呼叫。準備放預設值時**不要蓋掉已經在的值**（帶過去的值先放進來了）。失敗時這個 World 不用。
-- **替換 World（讀檔）**：`ReplaceWorld(name, {extra, beforeSwap, order})` 照描述重新登記那個 World（新的 Registry；之前動態插入的一律不在），帶過去、準備、在新 World 上跑 `beforeSwap`（例：讀檔的 schedule），全部成功才換上；遊戲初始化不重跑。`order` 預設 `BuildNewFirst`（失敗時保留舊的）；兩個 World 放不下時用 `DropOldFirst`（先銷毀舊的，失敗時位置是空的、`Product` 結束，不能再填）。壞掉的 World 不能拿替換來救。存檔的格式與版本是作者的，Engine 不認得：**發替換之前自己驗證存檔版本、素材、網路快照**，驗不過就不發（選 `DropOldFirst` 時尤其要先驗）。
+- **替換 World（讀檔）**：`ReplaceWorld(name, {extra, beforeSwap, order})` 照描述重新登記那個 World（新的 Registry；之前動態插入的一律不在），帶過去、準備、在新 World 上跑 `beforeSwap`（例：讀檔的 schedule），全部成功才換上；遊戲初始化不重跑。`order` 預設 `BuildNewFirst`（失敗時保留舊的）；兩個 World 放不下時用 `DropOldFirst`（先銷毀舊的，失敗時位置是空的、`Product` 結束，不能再填）。壞掉的 World 不能拿替換來救。存檔的格式與版本是作者的，Engine 不認得：**發替換之前自己驗證存檔版本、素材、網路快照**，驗不過就不發（選 `DropOldFirst` 時尤其要先驗）。換上之後新 World 從「生成中」開始（第 14 節）：跨幾幀放回存檔放在生成期間；生成期間失敗 `Product` 就結束，所以驗證要在換上之前；一次放得完的讀檔也可以整個放在 `beforeSwap`，失敗時保留舊 World。
 - **帶過去**：`WorldSetup::CarryOver<T>()` 標記某個 Resource 換 World 時帶到新的（例：選項選單改過的按鍵）。**值裡不能存指向舊 World 的參照（`EntityId`、指標、句柄）**，這是作者的責任。
 - **動態插入**：`InsertSystems(world, owner, [](Registrar& r) { … })` 走 Kernel 的兩步（第 12 節）；`owner` 不能是登記單位或產品自己的名字（`OwnerTaken`）。World 不准（`dynamicInsert = false`）或建 Plan 失敗時，編排層記**一次**警告、把錯誤回給你、World 照跑（CCR-3）。登記單位的 `Finish`、`Check` 不重跑。
 - **`World(name)` 的參照**：`Product::World(name)` 給的 `WorldExecutor&` 在那個名字下一次被替換之前有效；替換之後要重新拿。
 - **執行緒**：建、跑、替換、插入、銷毀 `Product` 都在呼叫的那條執行緒上（CCR-5）。
 - **標頭的順序**：Engine 的單位都在 `GYO::Engine` 底下（2026-11-22 起，`v8-arch-gyo2-namespace-root`），舊根 `Engine::` 和 `GYO::Engine` 互相遮蔽的問題不再存在；當時守它的 include-order 編譯檢查同日拿掉（使用者決定）。
+
+## 14. 生成世界：建好之後、開始玩之前
+
+（`v8-arch-gyo2-world-gen`；規則全文在 [orchestration](orchestration.zh-Hant.md) 的 O-14。）
+
+**一個例子。** RPG 開新遊戲要花 5 秒生成地圖。World 一建好就是「生成中」：每一幀照常跑 `Main`（輸入、畫面、日誌、資產的套用都照跑），作者把生成用的 System 放進帶 run 條件 `WhileGenerating()` 的 set，遊戲邏輯放進帶 `AfterGenerating()` 的 set。這一幀生成地圖的前 2000 格、下一幀場景物件、再下一幀敵人、最後放玩家；還沒做完的 System 呼叫 `Hold()`。哪一幀跑完沒有人呼叫 `Hold()`，生成就結束，下一幀起遊戲邏輯開始跑。讀取畫面的 System 不掛條件或掛 `WhileGenerating()`，生成期間畫面會動。
+
+**寫法。**
+
+```cpp
+const std::string main(O::DefaultSchedules::frame);
+r.Set(K::SetOptions{.name = "Gen", .schedule = main}, {O::WhileGenerating()});
+r.Set(K::SetOptions{.name = "Game", .schedule = main}, {O::AfterGenerating()});
+// 生成用的 System：掛載點的 sets = {"Gen"}；沒做完就 Hold()。
+K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor> cursor,
+                            K::ResMut<O::WorldGeneration> generation) {
+    /* 放這一幀的那一批 */
+    if (cursor->placed < cursor->total) generation->Hold();
+    return {};
+}
+```
+
+- set 是 `Registrar::Set` 的具名 System 群組，屬於一張 schedule；每張有生成用 System 的 schedule 各宣告一個。
+- run 條件用編排層給的 `WhileGenerating()`／`AfterGenerating()`，名字固定（條件名會進權威的一致性指紋，兩端要一樣）。
+- 什麼都不寫的作者不受影響：第一幀照樣是生成中，沒人 `Hold()`，第一幀結束就結束。
+- `Hold()` 只在生成中有效；生成結束後呼叫沒有作用。
+
+**生成期間要不要 tick（作者選）。**
+- 能暫停的 World：在**準備函式**把 `TimeControl.paused` 設成 1（不要在 System 裡設：`AdvanceTime` 在 `Main/First`，比 `Update` 早，第一幀會先推進）；`AfterGenerating()` 的 set 裡一個 System 設回 0。真實時間照走，讀取畫面的動畫有時間用；`Tick` 在生成期間是 0。`paused` 和遊戲自己的暫停是同一個旗標，自己分清楚誰設的。
+- 不能暫停的 World（例 PvP 的 Match）：`WorldTimeOptions::fixedStepConditions = {O::AfterGenerating()}`。生成期間每幀一筆 `TimeDiscarded`（`NotDriven`，晚一幀記），`Tick` 是 0。
+- 兩端都有權威時，擋遊戲邏輯與固定步的寫法兩端要一樣（條件進一致性指紋）；只在一端生成判定實體的 System 標 `OneEndOnly`。
+
+**放行的三種情形（要小心）。** 「沒人 `Hold()` 就結束」在下面三種情形會讓 World 半成品開跑，沒有任何訊號：(1) 生成用的 System 被別的條件跳過；(2) 提早回 Ok、忘了 `Hold()`；(3) **幀內先後**——工作在這一幀中途才產生（例：地圖做完那一幀才發資產請求），而等它的 System 排在前面、還沒看到。對 (3)：產生工作的 System 那一幀自己也 `Hold()`，或把等的 System 排在產生的之後。
+
+**讀檔。** 讀檔一律在新的 World（`ReplaceWorld`）。存檔資料與配發器的下界在 `extra` 準備函式裡放（`SetResource(EntityIds::RangeAllotter::Of(存檔的下一號, 上限))`；預設的配發器 Module 只在沒有值時放預設範圍，`extra` 在它之後跑，會蓋掉）；讀檔 System 放在 `WhileGenerating()` 的 set，存檔大就分幾幀、`Hold()`。時間的放回（`RestoreFixedTime`、`Tick`）也在 `extra`，不要放在生成期間的 System 裡（WT-3）。發現存檔壞了不要回 `Err`（那會結束 `Product`）：把錯寫進自己的 Resource，runner 在兩次入口之間讀它、改發替換回主選單；不要用 `Message`，沒有讀者拉住時那次 Run 結束就被修剪。
+
+**生成用的 System 不讀 `Message`。** 生成結束後 `WhileGenerating()` 的 set 不再跑，裡面讀 `Message` 的 System 的游標會一直拉住保留；要交給遊戲邏輯的結果放 Resource。
+
+**Module 的 System 不受你的條件管。** 你的 set 只管得到你自己的 System；Module 掛的 System 生成期間照跑。Module 需要停時由它開條件選項（例：`fixedStepConditions`）。

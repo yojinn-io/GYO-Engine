@@ -27,3 +27,11 @@ endif()
 add_test(NAME entity_ids.default COMMAND gyo_entity_ids_default_units_tests "--test-case=default:*")
 set_tests_properties(entity_ids.default PROPERTIES LABELS "cpu" TIMEOUT 60
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
+# Design Invariant EI-3: entity_ids links the orchestration layer, the kernel and Base, nothing else (no rollback,
+# authority or time). Stood up after scenario segment 6 passed (AGENTS §3; world-gen declaration section 9, step 4).
+function(gyo_expect_entity_ids_links)
+    gyo_expect_links(gyo_entity_ids GYO::Base GYO::Kernel GYO::Orchestration)
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_entity_ids_links)

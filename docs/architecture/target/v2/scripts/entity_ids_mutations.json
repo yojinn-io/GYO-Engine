@@ -71,6 +71,20 @@
    "target": "gyo_entity_ids_default_units_tests",
    "cases": "default:*",
    "expect": "\\[ei\\-default\\]"
+  },
+  {
+   "id": "ei-links-more",
+   "what": "EI-3 link set: entity_ids links one more target (a Module or core library). Only it reaches gyo_entity_ids's link set",
+   "guards": [
+    "entity-ids EI-3",
+    "orchestration O-6"
+   ],
+   "file": "engine/modules/entity_ids/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_entity_ids PUBLIC GYO::Base GYO::Kernel GYO::Orchestration)",
+   "replace": "target_link_libraries(gyo_entity_ids PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math)",
+   "target": "gyo_entity_ids_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_entity_ids links\\s+GYO::Base;GYO::Kernel;GYO::Math;GYO::Orchestration;\\s+expected exactly"
   }
  ]
 }

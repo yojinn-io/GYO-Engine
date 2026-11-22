@@ -474,20 +474,20 @@
   },
   {
    "id": "g8-frame-list-reversed",
-   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n        }",
-   "replace": "        for (std::size_t at = slot.frame.size(); at-- > 0;) {\n            if (auto ran = RunOn(slot, slot.frame[at], \"RunFrame\"); !ran) return ran;\n        }",
+   "find": "    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }",
+   "replace": "    for (std::size_t at = slot.frame.size(); at-- > 0;) {\n        if (auto ran = RunOn(slot, slot.frame[at], \"RunFrame\"); !ran) return ran;\n    }",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: units insert*",
    "expect": "\\[or\\-frame\\-order\\]"
   },
   {
    "id": "g8-frame-error-ignored",
-   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;",
-   "replace": "            static_cast<void>(RunOn(slot, schedule, \"RunFrame\"));",
+   "find": "        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;",
+   "replace": "        static_cast<void>(RunOn(slot, schedule, \"RunFrame\"));",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: a failing frame*",
    "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
@@ -2306,13 +2306,13 @@
   },
   {
    "id": "or-skeleton-not-declared",
-   "what": "O-4: the default skeleton is not declared (v8-arch-gyo2-time-events step 4, time-events declaration 3.6) [the frame list still starts with Main, so the build refuses it: O-E5]. Only it catches the declaration dropped while the frame list still names Main; or-skeleton-default-off turns the option off (no declaration and no Main put first)",
+   "what": "O-4: the default skeleton is not declared (v8-arch-gyo2-time-events step 4, time-events declaration 3.6) [the frame list still starts with Main, so the build refuses it: O-E5]. Only it catches the declaration dropped while the frame list still names Main; or-skeleton-default-off turns the option off (no declaration and no Main put first) (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration)",
    "guards": [
     "orchestration O-4",
     "time-events-declaration 3.6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n",
+   "find": "        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n",
    "replace": "",
    "target": "gyo_orchestration_tests",
    "cases": "O-4: by default every World has Main*",
@@ -2432,28 +2432,28 @@
   },
   {
    "id": "or-skeleton-off-ignored",
-   "what": "O-4: the skeleton is declared although the World turns it off (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the declaration ignoring the option (the author's own Main is then R-E2); or-skeleton-off-frame-prepended is the frame list's side and or-skeleton-default-off the default",
+   "what": "O-4: the skeleton is declared although the World turns it off (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the declaration ignoring the option (the author's own Main is then R-E2); or-skeleton-off-frame-prepended is the frame list's side and or-skeleton-default-off the default (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration)",
    "guards": [
     "orchestration O-4",
     "time-events-declaration 3.6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton",
-   "replace": "    if (true) {\n        auto skeleton",
+   "find": "        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);",
+   "replace": "        if (true) DeclareDefaultSkeleton(registrar);",
    "target": "gyo_orchestration_tests",
    "cases": "O-4: with the skeleton off*",
    "expect": "schedule 'Main' registered twice \\(first by orchestration"
   },
   {
    "id": "or-skeleton-after-units",
-   "what": "O-4: the skeleton is declared after the units' Build (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the skeleton coming after the units' Build (a unit's stage inserted into Main); the other or-skeleton-* mutants keep that order",
+   "what": "O-4: the skeleton is declared after the units' Build (v8-arch-gyo2-time-events step 4, time-events declaration 3.6). Only it catches the skeleton coming after the units' Build (a unit's stage inserted into Main); the other or-skeleton-* mutants keep that order (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration)",
    "guards": [
     "orchestration O-4",
     "time-events-declaration 3.6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
-   "replace": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
+   "find": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
+   "replace": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-4: a unit inserts a stage into Main*",
    "expect": "\\[or\\-skeleton\\-before\\-build\\]"
