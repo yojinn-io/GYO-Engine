@@ -72,7 +72,7 @@
 | 範圍 | 已有的守衛 | 判斷 |
 |---|---|---|
 | `engine/ecs/kernel`（DI-A 2） | `kernel_guard.py` K5 的准許清單（`engine/base/`、`engine/entity_store/`、`engine/kernel/` 與標準庫，不准 `..`）；連結集 `{Base, EntityStore}` | 守住 |
-| `engine/orchestration`（DI-A 2） | O4 的准許清單；連結集 `{Base, Kernel}` | 連結守住。O4 不查 `..`，`"engine/kernel/../../../../../modules/rollback/include/…"` 過得了（檢查 F5），屬於不經連結的 include，交設計審查（下） |
+| `engine/orchestration`（DI-A 2） | O4 的准許清單；連結集 `{Base, Kernel}` | 連結守住。O4 原本不查 `..`，`"engine/kernel/../../../../../modules/rollback/include/…"` 過得了（檢查 F5）：既有准許清單自己的洞，照 K5 補上（下） |
 | `engine/modules/world_time`（DI-A 2） | 連結集（WT-4） | 連結守住。相對路徑或另加標頭目錄可以不經連結 include（檢查 F6），交設計審查 |
 | `engine/modules/rollback`（R-3） | 沒有連結集檢查；權威這一側只有登記檔的順序（authority 排在 rollback 之後）與 O6 | **缺**：從較晚 configure 的目錄連進去、之後才登記的網路、狀態機 Module 都沒人擋。補連結集。相對路徑同上（檢查 F4） |
 
@@ -82,12 +82,13 @@
 - **比過的選項**：(a) 給 `engine/modules/rollback`、`engine/modules/world_time` 立 include 准許清單（新規則）／(b) 再釘 `INCLUDE_DIRECTORIES`（擋不住相對路徑與 `-I`）／(c) 不加守衛、交 review ← 選。
 - **理由**：刻意繞過連結的寫法屬於「誤用不加守衛、交 review」；include 准許清單擋得住寫法、擋不住「認得權威」這個概念（例如自己複製一份型別）。review 就是同日定的每批設計審查（`v8-arch-gyo2-design-review-stage`）。
 - **出處**：主會話 HANDOFF `v8-arch-gyo2-include-bypass-to-review`；本批敵對式檢查 F4、F6。
-- 照這個決定，第一版給 O4 補的 `..` 條件（檢查 F5）也拿掉了（設計審查第 4 項，見下）。
+- 這個決定的對象是「不給 `world_time`、回滾新立准許清單」，不包括 O4（O4 的 `..` 見下）。
 
 ### 補了什麼
 
 - **R-3**：`tests/common/rollback/CMakeLists.txt` 加一行 `cmake_language(DEFER … CALL gyo_expect_links gyo_rollback GYO::Base GYO::Kernel GYO::Orchestration GYO::WorldTime)`，用既有的 `gyo_expect_links`。釘死整個連結集而不是只列「不准連權威」，是因為網路、狀態機 Module 還不存在、叫不出名字（`world_time` WT-4 同一個做法）。它比 R-3 嚴：加的依賴不屬權威、網路、狀態機時，改登記列與那一行，R-3 不變（條文的守衛欄照這樣寫）。檢查者在小型 CMake 專案裡試過 PRIVATE／PUBLIC、裸名 `gyo_authority`、`$<LINK_ONLY:>`、`$<BUILD_INTERFACE:>`、`$<COMPILE_ONLY:>`、從較晚的目錄 `set_property(INTERFACE_LINK_LIBRARIES)`，全部擋下。
-- **DI-A 2**：沒有新的守衛，條文的「守衛」欄照現況改寫：機械守衛是什麼、不經連結的 include 與名字交設計審查。
+- **O4 的 `..`（檢查 F5）**：`orchestration_guard.py` O4 的引號 include 加上「路徑不准有 `..`」（`/`、`\` 都當分隔，和 K5 同一個條件），自測 `test_o4_parent_directory_include_is_reported`，突變 `or-guard-o4-parent-directory`。設計審查後一度拿掉，使用者定留著（見「使用者的決定：O4 的 `..` 留著」）。
+- **DI-A 2**：條文的「守衛」欄照現況改寫：機械守衛是什麼、`world_time` 不經連結的 include 與名字交設計審查。
 
 ### 突變（README 第 4 點）與反向確認
 
@@ -96,15 +97,16 @@
 | `rb-r3-links-more` | 真實樹上的陽性對照：登記檔 rollback 列 depends 加 `json`（排在 rollback 之前，登記檔的順序檢查放行），只有新守衛擋 | killed |
 | `rb-r3-authority-from-later-directory` | 從較晚 configure 的 `tests/common/authority` 把 `GYO::Authority` 連進 `gyo_rollback`：登記檔與 O6 都管不到的那條路，只有 DEFER 的檢查看得到；也是唯一「權威真的連進回滾」的突變 | killed |
 | `ks-k6-log-header-off` | K6 的標頭分支關掉（F1） | killed |
+| `or-guard-o4-parent-directory` | O4 的 `..` 條件拿掉 | killed |
 
 - 兩個 R-3 突變的 expect 只認多出來的那個名字加 `expected exactly`，不重抄期待清單（設計審查第 2 項：回滾正當地多一個依賴時，不必連突變一起改）。
 - 規則整條關掉、fail closed：守衛本體是既有的 `gyo_expect_links`（比對整串連結，沒有連結時實際為空、照樣失敗；target 不存在時 CMake 報錯），這次只多一個呼叫。呼叫本身用反向確認示範（`reverse.py`）：拿掉呼叫 → 兩個 R-3 突變都存活（0/2）；DEFER 改成當場呼叫 → 只有 `rb-r3-authority-from-later-directory` 存活（1/2）。和 `wt-links-more`、`os-g19`、`ti-x5` 的前例一樣。
-- 本批新增 3 個、退役 2 個（改的 DI 條文的守衛 2 × 5 以內）；新增的各自只捕自己的錯（寫在 `what`），都有 `guards`。改寫的 16 個裡原本沒有 `guards` 的 7 個補上（`ks-s2-interrupted-stops-refusing` DI-KS 26、`ks-k6-calls-off` error-handling DI 2、`or-failure-no-product` O-8、F7 的 `rs-iv-fc3-step0-skipped`、`hf-round-skips-initial-values` DI-KS 9、`ks-s5-change-deferred`、`ks-s5-change-stamp` DI-KS 18）。
+- 本批新增 4 個、退役 2 個（改的 DI 條文的守衛 R-3、DI-A 2、O-4 3 × 5 以內）；新增的各自只捕自己的錯（寫在 `what`），都有 `guards`。改寫的 16 個裡原本沒有 `guards` 的 7 個補上（`ks-s2-interrupted-stops-refusing` DI-KS 26、`ks-k6-calls-off` error-handling DI 2、`or-failure-no-product` O-8、F7 的 `rs-iv-fc3-step0-skipped`、`hf-round-skips-initial-values` DI-KS 9、`ks-s5-change-deferred`、`ks-s5-change-stamp` DI-KS 18）。
 
 ## 敵對式檢查（守衛與突變清單）
 
 - 檢查者：Fable 5.2／high，唯讀（作者 Opus 5.5）。探測放在暫存區（`adv/`），未保存。
-- 找到 6 處要處理：F1、F2、F7 修；F4、F6 使用者定 (c)；F5 先修、設計審查後照 (c) 拿掉。F7 中 `au-input-rolled` 的退役建議不採（理由見上）。
+- 找到 6 處要處理：F1、F2、F5、F7 修（F5 設計審查後一度拿掉、使用者定留著）；F4、F6 使用者定 (c)。F7 中 `au-input-rolled` 的退役建議不採（理由見上）。
 - 判定不是缺口的：五個 find 跟上的突變、`ks-k6-calls-off` 的寫法、收緊的測試、`or-failure-no-product` 打 `Break`、`or-runner-logs-back` 的探針路線、R-3 守衛的各種連結寫法、從較晚目錄 DEFER 連結（刻意規避，所有 DEFER 守衛共通，不加）、把檔案放進別的 Module 的 `include/engine/kernel/`（刻意誤用，審查）。
 
 ## 設計審查（每批固定的一步，`v8-arch-gyo2-design-review-stage`）
@@ -117,7 +119,7 @@
 | 1 | `gyo_rollback` 的連結集 | 守本質（依賴以連結為單位，O-6；使用者的決定也把連結當邊界）。比 R-3 嚴，真正釘的是「多一條依賴邊要有人看見」。和別家：方向同 bevy_replicon、比 lightyear（prediction 依賴 replication、connection）嚴；三家都不釘「恰好這幾個」 | 保留；條文照實寫比 R-3 嚴 |
 | 2 | 同一個集合寫了五處 | 正當加依賴要改五處，三處不是事實的來源 | 改：R-3 守衛欄不列名字；突變的 expect 只認多出來的名字 |
 | 3 | `rb-r3-authority-from-later-directory` | 情境是刻意的寫法，但不加守衛程式、有前例，且是唯一「權威真的連進回滾」的突變 | 保留 |
-| 4 | O4 的 `..` | 擋的是誤用，和 (c) 原則上不一致（HANDOFF 那條明寫 review 要涵蓋相對路徑 `..`）；「和 K5 一致」站不住：五個 include 准許清單只有 K5 查 `..` | **拿掉**（條件、自測、突變）。審查列為要使用者決定，但 (c) 已經涵蓋相對路徑 `..`，這是同一原則的直接套用，我自己判；PR 未合併，不算放寬 |
+| 4 | O4 的 `..` | 擋的是誤用，和 (c) 原則上不一致（HANDOFF 那條明寫 review 要涵蓋相對路徑 `..`）；「和 K5 一致」站不住：五個 include 准許清單只有 K5 查 `..` | 我先自己判拿掉（以為 (c) 涵蓋相對路徑 `..`），**使用者定留著**、已恢復（見下） |
 | 5 | `test_k6_executor_file_is_checked` 的收緊 | 把空的斷言變成真的；守「Kernel 不寫」的本質 | 保留 |
 | 6 | `ks-k8-skips-executor-files` 的改寫 | 自己造了一個 Executor 豁免；退役 `ks-k6-every-file-exempt` 的理由對它一樣成立 | 改：退役，測試合進 `ks-adv-executor-exempt-all` |
 | 7 | `[or-ended-outside-product]`、silent_cases 的 O-3 | 行為的契約；`Break` 是補名字的唯一出口（看點 1） | 保留 |
@@ -125,6 +127,14 @@
 | 9 | R-3 本文「回滾 Module 不 include 它們」 | 標題是「不認得」（概念），本文停在「不 include」（寫法）；使用者的決定正是「准許清單擋得住寫法、擋不住認得」 | **交使用者**（DI 本文是核准過的文字）：(a) 改成本質，例如「回滾 Module 不依賴它們：不連結，也不用它們的型別與名字」，守衛＝連結集＋設計審查（審查者建議）；(b) 不動 |
 | 10 | 契約頁的用詞 | 和合併前核准頁的建議一致 | 保留；「落地後」已是過去式、頁末註與頁首重複，下次動這頁時處理 |
 | 11 | 其餘改寫、退役與 `ks-k6-log-header-off` | 守的性質沒變；同意 `au-input-rolled` 不退役。K6 的標頭分支本身守的是寫法（不 include 也寫得出 `std::fputs`），真正守「Kernel 不寫」的是探針與呼叫掃描 | 保留；標頭分支值不值得留，建立 review 機制時一併看 |
+
+### 使用者的決定：O4 的 `..` 留著
+
+- **原話**（2026-11-22，side chat「來展開那3件事」轉主會話）：「我先說第二題，這個是簡單的可以留著。但是我在想真的會這麼幹嗎？人類工程師要這麼幹，第二天就可以回家休息了。」「你先把第二題轉回去。」
+- **比過的選項**：(甲) 拿掉（我照設計審查第 4 項的做法）／(乙) 留著 ← 選。
+- **理由**：O4 本來就是編排層的 include 准許清單，用 `..` 能繞過是這條既有守衛自己的洞，K5 早有同樣的條件；補洞是維持既有守衛，不是替誤用另外加一道。(c) 的對象是「不給 `world_time`、回滾新立准許清單」，不包括 O4。
+- **出處**：主會話轉來（主會話記進 HANDOFF）。
+- 處置：條件、自測、突變照 60f82794 的內容恢復；orchestration_guard 的 14 個突變重跑 14/14 killed（`run-o4-restored.log`）。
 
 - 本批以外、交主會話：`gyo_expect_links` 定義在 `tests/common/time/CMakeLists.txt`，十幾個目錄靠 configure 的先後拿到它（出口一個，家在某一個實作底下）；`..` 的洞在 entity_store、trace、logging 三個 include 守衛也有，照 (c) 交設計審查、不逐個補。
 
@@ -134,9 +144,10 @@
 
 - 卡片 10 個（第一輪）：9/10 killed，`ks-k6-every-file-exempt` 存活 → 補測試後 3/3；之後照 F2 退役。
 - 新增的 R-3 兩個：2/2 killed；反向確認如上。
-- 敵對式檢查後：14/14 killed（`run-after-check.log`）；當時 O4 的改動之後，orchestration_guard 的 14 個 14/14 killed（`run-orchestration-guard.log`；O4 的改動後來拿掉）。
-- 設計審查後：`ks-adv-executor-exempt-all`（合併 K8 的測試）、兩個 R-3（expect 改短）3/3 killed（`run-after-design-review.log`）；`orchestration_guard.py` 與自測回到 bb5d010d 的內容。
-- 全量 ctest：3bf4e45d 161/161；敵對式檢查後的修正之後 161/161；設計審查後 161/161（`ctest-full-3.log`）。清單：Kernel 671→670、編排層 241、回滾 77→79、權威 117。
+- 敵對式檢查後：14/14 killed（`run-after-check.log`）；當時 O4 的改動之後，orchestration_guard 的 14 個 14/14 killed（`run-orchestration-guard.log`）。
+- 設計審查後：`ks-adv-executor-exempt-all`（合併 K8 的測試）、兩個 R-3（expect 改短）3/3 killed（`run-after-design-review.log`）；當時把 O4 的 `..` 拿掉（`orchestration_guard.py` 與自測回到 bb5d010d 的內容）。
+- 使用者定 O4 的 `..` 留著，恢復後：自測 13/13、實樹 clean、orchestration_guard 的 14 個 14/14 killed（`run-o4-restored.log`）；全量 ctest 161/161（`ctest-full-4.log`）。
+- 全量 ctest：3bf4e45d 161/161；敵對式檢查後的修正之後 161/161；設計審查後 161/161（`ctest-full-3.log`）。清單：Kernel 671→670、編排層 241→242、回滾 77→79、權威 117。
 - L1：PR 上跑。
 
 ## §14.4：改了 Design Invariants 的守衛判定
@@ -146,13 +157,14 @@
 | | 1 守的性質 | 2 緩める面 | 3 締める面 | 4 | 5 根據與證據 |
 |---|---|---|---|---|---|
 | `gyo_rollback` 的連結集（新） | R-3：回滾 Module 不認得權威、網路、狀態機 | 無（新判定） | `gyo_rollback` 多連任何 target 就 configure 失敗（以前通過）。正當地加依賴時，要同時改這一行 | — | `rollback.zh-Hant.md` R-3；`run-rb2.log`、`run-after-check.log`、`run-after-design-review.log`、`reverse-check.log` |
+| O4 的 `..` | O-4、DI-A 2：編排層只 include kernel、base、orchestration | 無：條件只用 `or` 加上去，舊判定失敗的輸入仍失敗；O4 舊的突變與實樹陽性對照仍 killed | 准許前綴後面帶 `..` 的引號 include 失敗（以前通過） | — | `orchestration.zh-Hant.md` O-4；`run-o4-restored.log` |
 | `test_k6_executor_file_is_checked` | error-handling DI 2：Kernel（含 Executor）不呼叫記錄 | 無：新斷言要求以 `: K6 Log` 結尾的一條，它成立時舊斷言（含 `Log` 的任一條）一定成立 | Executor 只有標頭、記錄呼叫被豁免時失敗（以前通過） | — | `run-kernel8.log`（舊斷言下存活）、`run-k6-after-test-fix.log` |
 | `[or-ended-outside-product]`（新斷言） | O-8：失敗說出是哪個 Product | 無 | Product 外中斷的失敗沒有 Product 名字時失敗 | — | `run-orch2.log` |
 | `orchestration.el-silent` 加 O-3 那一案 | O-3、error-handling DI 4：預設 runner 不寫 | 無 | 預設 runner 往 stderr 寫時失敗 | — | `run-orch2.log` |
 
 ## 證據
 
-主 checkout 的 `build/evidence/gyo2-batch4-followups/`（使用者的 Intel Mac，git 不追蹤）：`configure.log`、`build.log`、`configure2.log`、`run-kernel8.log`、`run-k6-after-test-fix.log`、`run-orch2.log`、`run-rb2.log`、`reverse.py`、`reverse-check.log`、`run-after-check.log`、`run-orchestration-guard.log`、`run-after-design-review.log`、`ctest-full.log`、`ctest-full-2.log`、`ctest-full-3.log`、`design-review/REPORT.md`。敵對式檢查的探測未保存。
+主 checkout 的 `build/evidence/gyo2-batch4-followups/`（使用者的 Intel Mac，git 不追蹤）：`configure.log`、`build.log`、`configure2.log`、`run-kernel8.log`、`run-k6-after-test-fix.log`、`run-orch2.log`、`run-rb2.log`、`reverse.py`、`reverse-check.log`、`run-after-check.log`、`run-orchestration-guard.log`、`run-after-design-review.log`、`run-o4-restored.log`、`ctest-full.log`、`ctest-full-2.log`、`ctest-full-3.log`、`ctest-full-4.log`、`design-review/REPORT.md`。敵對式檢查的探測未保存。
 
 ## 後續（不在本卡）
 

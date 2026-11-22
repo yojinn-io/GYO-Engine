@@ -2605,6 +2605,30 @@
    ]
   },
   {
+   "id": "or-guard-o4-parent-directory",
+   "what": "O4 accepts a quoted include with .. after an allowed prefix (v8-arch-gyo2-batch4-followups, adversarial check F5: engine/kernel/../../../../../modules/rollback/include/... reached the rollback Module's headers from the orchestration layer). Only it reaches O4's .. condition",
+   "guards": [
+    "orchestration O-4",
+    "authority DI-A 2"
+   ],
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": " or \"..\" in re.split(r\"[/\\\\]\", name)",
+   "replace": "",
+   "expect": "FAIL: test_o4_parent_directory_include_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
    "id": "or-guard-o0-source-silent",
    "what": "O0 (step 7, README rule 4: fail closed): a missing engine/orchestration passes by scanning nothing (O3 and O4 share it). Only it catches the sources' O0",
    "guards": [

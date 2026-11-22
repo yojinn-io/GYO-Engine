@@ -4,8 +4,9 @@ The scans the orchestration-skeleton declaration (section 7.4) deferred until sc
 (v8-arch-gyo2-guards-after-mechanism-stable); stood up by v8-arch-gyo2-time-events step 1.
 
   O4  an include in engine/orchestration/ outside the allowlist: in quotes only engine/kernel/, engine/base/ and
-      engine/orchestration/; in angle brackets only a C++ standard library header (kernel_guard's
-      STANDARD_HEADERS). The layer carries no third-party ability and no Module's internals (O-4).
+      engine/orchestration/, with no ".." in the path (an allowed prefix followed by ".." reaches any header;
+      v8-arch-gyo2-batch4-followups, as kernel_guard K5); in angle brackets only a C++ standard library header
+      (kernel_guard's STANDARD_HEADERS). The layer carries no third-party ability and no Module's internals (O-4).
   O3  engine/orchestration/ reads no Plan step and calls no System itself (O-3: the runner calls only the
       Product's entry points and orders no System): Plans(, PlanOf(, ExportPlans(, .steps, StepKind, and the
       kernel's System invokers InvokerOf, CallFunction, CallLambda. Read on code with comments and literals blanked.
@@ -52,7 +53,8 @@ def orchestration_findings(relative, raw):
         bracket, name = target.groups()
         if bracket == "<" and name not in STANDARD_HEADERS:
             yield number, "O4", f"<{name}>"
-        if bracket == '"' and not name.startswith(ALLOWED_QUOTED):
+        # ".." between "/" or "\\" separators reaches outside the allowlist from an allowed prefix (as kernel_guard K5).
+        if bracket == '"' and (not name.startswith(ALLOWED_QUOTED) or ".." in re.split(r"[/\\]", name)):
             yield number, "O4", f'"{name}"'
     code = strip_comments_and_strings(raw)
     for match in O3.finditer(code):
