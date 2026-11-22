@@ -12,7 +12,7 @@
 |---|---|---|
 | 1 | 本機 macOS x86_64（Intel i9-9980HK）`ctest -L 'cpu\|shader'` 161/161（ecae9977）。L1 三平台（linux-x64、windows-x64、macos-arm64）在 ecae9977 全部通過（手動 dispatch，run 44932280155）。`git grep -n -i "summary-padding-a-then-c" -- tests engine` 0 命中（終了碼 1；正例 59fd4da9 命中 14 行） | 本機 ctest；GitHub Actions |
 | 2 | 第 9.3 節的案全過；scenario 第 5 段 S5-1～S5-8 全過（宣告寫第 3 段，見第 5 節）。9.3 漏的 `BuildNewFirst` 失敗案第 8 步補上 | `rollback.*`、`authority.*`、`kernel.*`、`scenario.segment5` |
-| 3 | 三份新清單經 Fable 5.2／high 敵對式檢查補齊；完整跑：（待填） | `full-mutation-ecae9977/` |
+| 3 | 三份新清單經 Fable 5.2／high 敵對式檢查補齊。從頭完整跑（ecae9977）：回滾 74/74、權威 115/115、時間 95/95、`authority_scan` 18/18；編排層 237/242、Kernel 659/671——本分支造成的 7 個已修或退役（再跑都 killed，dev_log 逐個寫），其餘 10 個是 `gyo2` 上本來就壞的（Kernel 的 7 個 stale 與 `ks-k8-skips-executor-files`、編排層 2 個），列為後續。之後 A3、A5 的修正與突變另外跑過，都 killed | `full-mutation-ecae9977/`、`step8-checks/` |
 | 4 | 31 個樣式在 HEAD 零命中，每個樣式在 f25837b0 先命中（正例）；方向兩條（`engine/(authority\|rollback)/` 的 include、`Authority::`／`Rollback::`）零命中 | `judgement4_scan.py`、`judgement4-ecae9977.txt` |
 | 5 | 使用者的 Linux 實機（Ryzen 7 6800H），程式 9d956ed5：(1) 記錄每步 P1 37.871 µs ≤ 156 µs；(2) 一次回滾 708 µs ≤ 3,125 µs；(3) P2÷P1 5.347 ≤ 6.027，分母的四分位距比 1.7%、4.6%。件數の突き合わせ一致。中止一次（量法不符，結果沒看，改程式後重量） | `budget-v1/RESULT.zh-Hant.md` |
 
@@ -46,8 +46,8 @@
 |---|---|---|---|
 | `authority_mutations.json`（新） | 117 | 0 | 117 |
 | `rollback_mutations.json`（新） | 78 | 1 | 77 |
-| Kernel `mutations.json` | 44 | 109 | 672 |
-| `orchestration_mutations.json` | 7 | 1 | 242 |
+| Kernel `mutations.json` | 44 | 110 | 671 |
+| `orchestration_mutations.json` | 7 | 2 | 241 |
 | `world_time_mutations.json` | 4 | 1 | 95 |
 
 - 基準：權威 DI-A 12 條 × 5＝60、回滾 R-1～R-8 共 8 條 × 5＝40。兩份都超過。
@@ -84,7 +84,7 @@
 | 項 | 內容 | 為什麼沒做 |
 |---|---|---|
 | 常設守衛 | DI-A 2、R-3（Kernel 不認得權威與回滾）的常設掃描 | 綁實作的守衛，宣告 9.5 延到第 5 批開頭 |
-| Kernel 清單的 7 個 stale | `gyo2` 上本來就 stale（`el-kernel-print-back` 等） | 不是本分支的，列為後續 |
+| `gyo2` 上本來就壞的突變 10 個 | Kernel 的 7 個 stale（`el-kernel-print-back` 等）與 `ks-k8-skips-executor-files`；編排層 `or-failure-no-product`（等價）、`or-runner-logs-back`（缺含入） | 不是本分支的，列為後續 |
 | 測試的註解 | Kernel 測試裡還有約 100 處註解提到區（不影響判定、不在判定 4 的目錄） | 低價值；碰到再改 |
 | 回滾 Resource 不收權威值 | `RollbackInbox` 只有元件 | 宣告的範圍（Client 那一批） |
 | digest 何時比 | 只在回歸測試與 scenario 用 | 延到網路 Module |

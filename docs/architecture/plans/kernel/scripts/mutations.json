@@ -1753,13 +1753,13 @@
     },
     {
       "id": "rs-iv-fb5-sort-tiebreak-dropped",
-      "what": "Finish orders declarations by request only (fingerprints follow declaration order) (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks)",
+      "what": "Finish orders declarations by request only (fingerprints follow declaration order) (initial value, v8-arch-gyo2-funnel-check) (expect rewritten by v8-arch-gyo2-empty-expect: the old expect named a test case title, and that case prints a MESSAGE every run, so it matched whenever anything in the cases failed; it now names the CHECK this mutant breaks) (expect narrowed by v8-arch-gyo2-authority-rollback step 8: the C fingerprint half left with step 6)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
       "find": "return a.requestId != b.requestId ? a.requestId < b.requestId : a.targetId < b.targetId;",
       "replace": "return a.requestId < b.requestId;",
       "target": "gyo_kernel_tests",
       "cases": "initial value:*,J-18:*,J-20:*",
-      "expect": "(?=[\\s\\S]*(?:CHECK\\( seatFirst\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\)\\ ==\\ perchFirst\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\) \\) is NOT correct))[\\s\\S]*(?:CHECK\\( seatFirst\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ ==\\ perchFirst\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\) \\) is NOT correct)"
+      "expect": "CHECK\\( seatFirst\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\)\\ ==\\ perchFirst\\.registry\\->Frozen\\(\\)\\.RegistryFingerprint\\(\\) \\) is NOT correct"
     },
     {
       "id": "rs-iv-fb7-registry-target-not-hashed",
@@ -1800,16 +1800,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-12:*",
       "expect": "TEST CASE:\\s+J-12: every parameter type's Contribution"
-    },
-    {
-      "id": "rs-iv-fd10-inserts-not-sorted",
-      "what": "deferredInserts are not sorted (the request an error names follows the bundle order) (initial value, v8-arch-gyo2-funnel-check)",
-      "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    SortUnique(access.deferredInserts);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: the request an error names does not depend on the order of the bundle"
     },
     {
       "id": "hf-one-round",
@@ -5426,10 +5416,10 @@
     },
     {
       "id": "ks-s5-no-allotter-interrupts",
-      "what": "S5: NoAllotter interrupts the World at once instead of letting the call go on (v8-arch-gyo2-kernel-subtract-structure, fix pass 2)",
+      "what": "S5: NoAllotter interrupts the World at once instead of letting the call go on (v8-arch-gyo2-kernel-subtract-structure, fix pass 2) (find and replace rewritten by v8-arch-gyo2-authority-rollback step 8: step 2 moved the refusals into RefuseImmediate, so the change interrupts through Fail directly)",
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::NoAllotter, \"A.1\",",
-      "replace": "            return stop(Detail::CallError(call, KernelErrorCode::NoAllotter, \"A.1\",",
+      "find": "            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::NoAllotter, \"A.1\",\n                                                       who + \" spawns through ExclusiveWorld, and the World declares \"\n                                                             \"no allotter (Registrar::Allotter)\"));",
+      "replace": "            return Engine::Base::Err(Fail(Detail::CallError(call, KernelErrorCode::NoAllotter, \"A.1\",\n                                                            who + \" spawns through ExclusiveWorld, and the World declares \"\n                                                                  \"no allotter (Registrar::Allotter)\"),\n                                          true)\n                                         .error());",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: NoAllotter: the change is not made*",
       "expect": "\\[ks\\-s5\\-no\\-allotter\\-goes\\-on\\]"
@@ -7017,7 +7007,7 @@
       "replace": "    out.U32(0);\n    for (const ObserverRecord& observer : std::vector<ObserverRecord>{}) {\n        out.Str(observer.name);",
       "target": "gyo_kernel_tests",
       "cases": "J-18: an observer changes the Registry fingerprint*",
-      "expect": "\\[obs\\-fingerprint\\] a zone B observer changes the Registry fingerprint"
+      "expect": "\\[obs\\-fingerprint\\] an observer changes the Registry fingerprint"
     },
     {
       "id": "obs-name-twice-allowed",

@@ -119,7 +119,8 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 
 - 回滾 74/74、權威 115/115、時間 95/95 killed。
 - 編排層 237/242。本分支造成的 3 個已處理：`g8-replace-prepare-from-old-registration` 退役（E8 之後 World 的 slot 沒有準備函式，這個誤點寫不出來，README 第 7 條）；`or-insert-reruns-finish`、`or-finish-before-plans` 的 replace 跟上第 3 步給 `WorldFinish` 加的 buffer 參數（再跑 2/2 killed）。`gyo2` 上本來就這樣的 2 個列為後續：`or-failure-no-product`（被前面的補值蓋掉、等價）、`or-runner-logs-back`（`Product.cpp` 沒有含入 `Log.hpp`，建置失敗）。
-- Kernel：（待填）。
+- Kernel 659/671。`gyo2` 上本來就 stale 的 7 個照舊（列為後續）；`ks-k8-skips-executor-files` 的 replace 用到 `gyo2` 上已不存在的 `executor_file`（同一族，列為後續）。本分支造成的 4 個已處理：`ks-s5-no-allotter-interrupts`（第 2 步把拒絕搬進 `RefuseImmediate`，replace 改經 `Fail`）、`rs-iv-fb5-sort-tiebreak-dropped`（expect 的 C 指紋那半隨第 6 步拿掉）、`obs-fingerprint-no-observers`（第 6 步改了訊息、去掉「zone B」）——再跑 3/3 killed；`rs-iv-fd10-inserts-not-sorted` 退役（它守的「錯誤點名的請求」隨區規則拿掉，`deferredInserts` 的順序只餵權威的漏斗走訪，那裡和順序無關）。
+- `authority_scan` 18/18 killed。
 
 ## 第 8 步：審查 A3 的處置（使用者選 (a2)）
 
