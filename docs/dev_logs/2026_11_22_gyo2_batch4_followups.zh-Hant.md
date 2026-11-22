@@ -165,9 +165,11 @@
 
 都只收緊，沒有緩める面；照 §14.4，DI 的守衛測試仍要使用者核准。
 
+**核准紀錄**（2026-11-22）：使用者在 side chat「來展開那3件事」說「核准」，經主會話轉來。範圍：下表 5 處（`gyo_rollback` 連結集、O4 的 `..`、`test_k6_executor_file_is_checked` 的精確比對、`[or-ended-outside-product]`、`orchestration.el-silent` 的 O-3 案），都只收緊。
+
 | | 1 守的性質 | 2 緩める面 | 3 締める面 | 4 | 5 根據與證據 |
 |---|---|---|---|---|---|
-| `gyo_rollback` 的連結集（新） | R-3：回滾 Module 不認得權威、網路、狀態機 | 無（新判定） | `gyo_rollback` 多連任何 target 就 configure 失敗（以前通過）。正當地加依賴時，要同時改這一行 | — | `rollback.zh-Hant.md` R-3；`run-rb2.log`、`run-after-check.log`、`run-after-design-review.log`、`reverse-check.log` |
+| `gyo_rollback` 的連結集（新） | R-3：回滾 Module 不依賴權威、網路、狀態機（這個判定守「不連結」那一半） | 無（新判定） | `gyo_rollback` 多連任何 target 就 configure 失敗（以前通過）。正當地加依賴時，要同時改這一行 | — | `rollback.zh-Hant.md` R-3；`run-rb2.log`、`run-after-check.log`、`run-after-design-review.log`、`reverse-check.log` |
 | O4 的 `..` | O-4、DI-A 2：編排層只 include kernel、base、orchestration | 無：條件只用 `or` 加上去，舊判定失敗的輸入仍失敗；O4 舊的突變與實樹陽性對照仍 killed | 准許前綴後面帶 `..` 的引號 include 失敗（以前通過） | — | `orchestration.zh-Hant.md` O-4；`run-o4-restored.log` |
 | `test_k6_executor_file_is_checked` | error-handling DI 2：Kernel（含 Executor）不呼叫記錄 | 無：新斷言要求以 `: K6 Log` 結尾的一條，它成立時舊斷言（含 `Log` 的任一條）一定成立 | Executor 只有標頭、記錄呼叫被豁免時失敗（以前通過） | — | `run-kernel8.log`（舊斷言下存活）、`run-k6-after-test-fix.log` |
 | `[or-ended-outside-product]`（新斷言） | O-8：失敗說出是哪個 Product | 無 | Product 外中斷的失敗沒有 Product 名字時失敗 | — | `run-orch2.log` |
