@@ -79,6 +79,8 @@
 - `CreateSubmitter`、`ClipBank`、`clipSlotsPerSubmitter` 的註解。
 - 宣告的「留給 `world_audio`」各處加更正註；`rebuild-concept` 的註改寫。
 
+範圍擴大的設計審查（Fable 5.2／high，唯讀，`design-review-expansion.md`）：blocker 1、should 8、nit 10。blocker 是第 5.1 節「固定步寫 `Message`、`Main` 讀」在用官方回滾策略的 World 是啟動錯誤 RB-E8（`StateRollbackStrategy.cpp` 的 `CheckMessages`）；改成分有沒有回滾兩種寫法。其餘：(b) 的式子補累加器的餘數、clip 格不跟著沿用、建混音器的是誰交 SDL 那一批、依時序變的值一起列、標頭註解改回中性、測試改成恰好 1 h − 60 ms。處理對照在合併前核准頁第 4.2 節。全量 `ctest -L "cpu|shader"`：範圍擴大後 169/169（`full-ctest-expansion.log`），審查改完 169/169（`full-ctest-expansion-r2.log`）。
+
 ## 留給之後的
 
 - audio 那一側的小批（asset 實作合併之後，或併進 SDL 那一批）：clip 的來源（宣告第 5 節的四個選項與寫判定要照的事）、音效 loader。預設起播時刻、提交口的數量是作者的寫法（新頁第 5 節）。（原寫「`world_audio` 那一批」，該批已撤掉。）

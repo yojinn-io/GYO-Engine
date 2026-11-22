@@ -421,7 +421,8 @@ TEST_CASE("Audio Mixer starts a play left without a time at once and counts it a
     CHECK(Onsets(out) == std::vector<std::int64_t>{0});
     const auto stats = rig.mixer.Stats();
     CHECK(stats.playedLate == 1);
-    CHECK(stats.maxLateness >= std::chrono::duration_cast<Duration>(59min));
+    // Clamped to an hour before the anchor, the delay added back: 1 h - 60 ms late.
+    CHECK(stats.maxLateness == std::chrono::duration_cast<Duration>(1h - 60ms));
 }
 
 TEST_CASE("Audio Submitter may outlive its Mixer") {

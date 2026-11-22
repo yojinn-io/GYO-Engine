@@ -154,7 +154,7 @@
 
 **留給 `world_audio` 那批的**（卡片列出、不在本批判）：
 
-〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。下面四件都是這件是作者的寫法，見 [audio 頁](audio.zh-Hant.md) 第 5 節。〕
+〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。下面四件都是作者的寫法，見 [audio 頁](audio.zh-Hant.md) 第 5 節。〕
 - 提交口照 World 名字沿用，還是讓提交口可以還（RC 6 列的重新驗證）。照名字沿用的已知問題：`BuildNewFirst` 的 `beforeSwap` 在新 World 上跑（`Product.hpp:79-82`），新 World 若對共用的提交口 `StopAll`／`UnloadClip` 而替換失敗，舊 World 的聲音已停、clip 已卸，舊的 `ClipId` 再 `Play` 會斷言（`Mixer.cpp:257`）；和 O-2「以 World 名為鍵的資料在 `Build` 時重設」的字面不合；交出中的 World 能不能替換未定（交換點宣告 5.3）。
 - 帶回的值：`SoundHandle`、`Stop` 的 `false`、`NoClipSlot` 取決於音訊執行緒的進度；CCR-6 要求帶回的值不讓判定依時序而變。handle 怎麼回到作者手上、不進判定資料，要在那批寫。
 - 請求還在緩衝裡時 clip 被卸載，交出時會斷言：先後要定。

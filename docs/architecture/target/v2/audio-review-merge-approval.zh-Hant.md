@@ -36,7 +36,7 @@
    - 讀看板不影響即時安全：`noexcept`、只做 acquire load、預先配置、`static_assert` lock-free（`PlayheadBoard.hpp:10`、`:64-76`）。
    - 和 AGENTS §3 的連結：那一段管「何時立」（含這個機構的 scenario test 通過之前不立）。gyo2 上還沒有含混音器的 scenario test（沒有產品接混音器），照 §3 這個守衛現在不該立著。它是 2026-10-31 照當時核准的計畫立的（master 的 dev_log `2026_10_31_engine_audio_control_playhead.zh-Hant.md:48`），所以拿掉要你核准。
 
-**核准後一起做**（同一個 PR）：刪 `tests/common/audio/CheckBoardReaders.cmake` 與 `CMakeLists.txt:22-26` 的 `add_test`；退役突變 `au-ctl-board-read-in-render`（唯一依賴它的突變；其他含看板的突變由 `gyo_audio_tests` 的案殺）；新頁 DI 4 刪那一項守衛與〔〕註；`audio.md` 的 Legacy 行把 DI 4 的「pending its approval」改成已拿掉。`docs/architecture/plans/kernel/guards-inventory.zh-Hant.md:161` 仍寫「留」、路徑是舊的 `engine/audio/src`——那是 kernel 研究線的盤點表，不是本卡的檔，轉主會話。
+**核准後一起做**（同一個 PR）：刪 `tests/common/audio/CheckBoardReaders.cmake` 與 `CMakeLists.txt:22-26` 的 `add_test`；退役突變 `au-ctl-board-read-in-render`（唯一依賴它的突變；其他含看板的突變由 `gyo_audio_tests` 的案殺）；新頁 DI 4 刪那一項守衛與〔〕註；`audio.md` 的 Legacy 行把 DI 4 的「pending its approval」改成已拿掉。`docs/architecture/plans/kernel/guards-inventory.zh-Hant.md:161`（kernel 研究線的盤點表）的路徑已在本批更新（主會話要求，0a92dcbb）；核准後把那一列改成「已拿掉（`v8-arch-gyo2-audio-review-approved` 第 3 題；改由設計審查）」，不核准就維持「留」。
 
 ## 2. DI 11 的守衛測試加了一個判定（只有緊的面；事後報告）
 
@@ -85,7 +85,22 @@
 | E-5 | 宣告裡「留給 `world_audio`」的幾處加更正註（原文不刪）：作者的寫法指向新頁第 5 節；clip 的來源與音效 loader 歸 audio 那一側的小批（asset 實作合併之後，或併進 SDL 那一批） | 宣告開頭、4.1、4.2、第 5 節、第 7 節 RC 5、第 12 節第 5 題 |
 | E-6 | `rebuild-concept` 的 audio 列的註改成「預設起播時刻是作者的事，寫法見 audio 頁」；`target/README.md:29`、kernel 盤點表的路徑（主會話要求併進本批） | 各檔 |
 
-E-2 的取捨（卡片判，設計審查看過）：改預設有兩種——讓 `at` 沒有預設（C++ 的聚合初始化仍會把漏填的成員值初始化成紀元，擋不住），或加「立刻」的模式（Kira 的 `StartTime::Immediate`、miniaudio 的 0；沒有點名的需要，而且「立刻」的意思和換算的延遲要另外定）。所以留預設、寫明行為、用測試釘住症狀。
+E-2 的取捨（卡片判；範圍擴大的設計審查看過，補了下面的第三個選項與代價）：改預設有三種——(1) 讓 `at` 沒有預設（C++ 的聚合初始化仍會把漏填的成員值初始化成紀元，擋不住）；(2) 加「立刻」的模式（Kira 的 `StartTime::Immediate`、miniaudio 的 0；沒有點名的需要，「立刻」和換算的延遲的關係要另外定）；(3) 讓 `at` 成為 `Play` 的必填參數（`Stop`／`StopAll` 已經是），介面改動較大，不建議在本批做，列出來讓你看得到。代價：漏填一次，`maxLateness`（最大值）會被拉到接近一小時，之後真正的晚到量被它蓋住。所以留預設、寫明行為、用測試釘住症狀（恰好晚 1 h − 60 ms）。
+
+## 4.2 範圍擴大的設計審查（Fable 5.2／high，唯讀；`design-review-expansion.md`）
+
+blocker 1、should 8、nit 10。要你看的（其餘照改，細節在報告檔）：
+
+| # | 內容 | 處理 |
+|---|---|---|
+| X-1（blocker） | 第 5.1 節原本寫「固定步寫 `Message`、`Main` 讀」：在用官方回滾策略的 World 是啟動錯誤 RB-E8 | 照改：分「沒有回滾／有回滾」兩種寫法；有回滾時用不回滾的 Resource＋`SkipDuringResimulation`。限界：沒有實際建一個照 5.1 寫的 World 試跑（只有讀程式與 `CheckTests.cpp:124-129` 的同形案例） |
+| S-1 | (b) 的式子少了累加器的餘數；推回過去會吃 `scheduleDelay` 的預算 | 照改 |
+| S-2 | 照名字沿用之後，耗盡的地方從提交口移到 clip 格（舊 World 的 `ClipId` 隨它消失、卸不掉）；準備函式也在換上之前跑 | 照改（第 5.2 節加「clip 格不跟著沿用」與準備函式） |
+| S-3 | 片段把混音器建在產品自己的 `configure`，後端找不到它，等於先定了 SDL 那一批的事 | 照改：改成「建混音器的單位」，由誰建交 SDL 那一批 |
+| S-5 | RC 5「已成立」是用作者的慣例收掉的（混音器沒改）；O-2「以 World 名為鍵的資料在 `Build` 時重設」的讀法要編排層那一側確認 | RC 5 的註改寫；O-2 的讀法轉主會話確認 |
+| S-6 | E-2 少一個選項（`at` 必填）與一個代價（`maxLateness` 被蓋住） | 照補（第 4.1 節） |
+| S-7 | 標頭的新註解寫回了上層概念（World 名、共用處、asset store），和本 PR 採用過的 A-9 相反 | 照改：標頭改成中性的話，例子留在頁上 |
+| 跨卡 | asset 宣告 `asset-declaration.zh-Hant.md:140` 仍寫「音效（audio 重審那批）」 | 轉主會話告知 asset 卡（loader 改歸 audio 那一側的小批） |
 
 ## 5. 設計審查與檢證
 
@@ -102,7 +117,7 @@ E-2 的取捨（卡片判，設計審查看過）：改預設有兩種——讓 
   | A-7 | 採用：RC 5 的「已成立」只寫 O-8 |
   | A-8 | 採用：新頁補 `stopsLate`（matched）、DI 3 的後端那一半、DI 4 壓力守衛的條件與限界、DI 8 的條件與由來、例子的前提 |
   | A-9 | 採用：`Mixer.hpp` 的 `at`、`Render` 的 anchor 註解帶 DI 3 的邊界；類別註解拿掉 runner／World |
-  | A-10 | 轉主會話（`target/README.md:29` 的 audio 歸類、`rebuild-concept` 2.1 的 audio 列、HANDOFF 代號） |
+  | A-10 | 主會話要求併進本批（0a92dcbb、e23d8a75）：`target/README.md:29` 的 audio 歸類、`rebuild-concept` 的 audio 列加註、kernel 盤點表的路徑；HANDOFF 代號在主會話的文件分支，本分支查不到是預期的 |
   | B-1 | 採用：D-1、D-2 |
   | B-2 | 採用：D-6 |
   | B-3 | 採用：第 2 節的新突變 |
@@ -120,5 +135,5 @@ E-2 的取捨（卡片判，設計審查看過）：改預設有兩種——讓 
 - 判定 3（TSan，`-fsanitize=thread -g`、`TSAN_OPTIONS=halt_on_error=1:ignore_interceptors_accesses=0`，本機 Intel Mac，乾淨的 checkout）：未改的程式 4/4（`tsan2-base-ctest.log`）、改過的 9d1e0d19 4/4（`tsan2-after-ctest.log`），都沒有報告；`mutations-tsan.json` 7/7 killed（`mut-tsan-after.log`），證明這個組態對環的記憶體順序有檢出力。先前只用 `halt_on_error=1` 的兩次（`tsan-baseline-ctest.log`、`tsan-after-ctest.log`）也通過，但對環的寫入沒有檢出力（D-3）。
 - 判定 4（連結）：`au-link-engine` killed。
 - 突變：改之前 3/3（`mut-baseline.log`）；改過之後相關 4/4（`mut-after-r2.log`：`au-review-handoff-rebound`、`au-review-unload-counts-before-assert`、`au-ctl-stop-sequence-zero`、`au-ctl-board-read-in-render`）；完整清單（489aadcb，78 條）77/78，存活的 `au-ctl-stress-reassign-every-block` 是時序偶發：同一個 commit 上單獨跑 3/3 killed、未改的程式上 2/2 killed（`stress-reassign-on-change.log`、`stress-reassign-on-base.log`），它標明「只在並行時抓得到」，當時機器同時跑審查 Agent。
-- 全量 `ctest -L "cpu|shader"`（9d1e0d19＋未提交的 dev_log 與本頁，本機 Intel Mac，preset `test`）：169/169（`full-ctest.log`）。
+- 全量 `ctest -L "cpu|shader"`（本機 Intel Mac，preset `test`）：9d1e0d19 169/169（`full-ctest.log`）；三處文件併入後 169/169（`full-ctest-docs3.log`）；範圍擴大後 169/169（`full-ctest-expansion.log`）；範圍擴大的審查改完之後 169/169（`full-ctest-expansion-r2.log`；新測試的判定改成恰好 1 h − 60 ms 後通過）。
 - L1：PR 上的三平台結果，開 PR 後補。
