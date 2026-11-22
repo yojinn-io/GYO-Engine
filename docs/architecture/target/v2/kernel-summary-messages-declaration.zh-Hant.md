@@ -1,6 +1,6 @@
 # 事前宣告：World 摘要與訊息（`v8-arch-gyo2-kernel-summary-messages`）
 
-更新：2026-11-23（修訂 2）。Owner：Kernel（GYO2 主會話開的任務卡 `local_b3d28b59`）。**狀態：等使用者定（第 6 節）。實作等使用者說「開始」。**
+更新：2026-11-23（修訂 2）。Owner：Kernel（GYO2 主會話開的任務卡 `local_b3d28b59`）。**狀態：使用者 2026-11-23 選 (b)（原話「選 (b)」）。實作等使用者說「開始」。**
 
 根據：
 - asset 宣告 [`asset-declaration.zh-Hant.md`](asset-declaration.zh-Hant.md) 第 15 節第 8 項；批次表〈後續小事〉同一列。
@@ -258,7 +258,7 @@ GYO 其他地方對訊息的處理：
 
 - 修訂 0 的換模型敵對式檢查：Fable／high，blocker 2、should 5、nit 4（`declaration-check-r0-fable.md`）。處理見頂端「經過」與下表。
 - 修訂 1 的窄複查：Fable／high，blocker 0、should 4、nit 6（`declaration-check-r1-narrow-fable.md`）。處理見下面第二張表。
-- 使用者的決定：〔待定〕
+- 使用者的決定（2026-11-23，本卡）：原話「選 (b)」。第 6 節第 1 項選 (b)，連帶接受第 6 節第 1 項 (b) 那一行（回滾後若有讀者還拉著重跑寫的紀錄，摘要和直跑不同）。第 2～4 項是告知。實作等「開始」。
 
 | 項 | 處理 |
 |---|---|
