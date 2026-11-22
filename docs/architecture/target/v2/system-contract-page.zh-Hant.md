@@ -498,9 +498,9 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 `Message` 的保證是「讀者在上限內不漏讀」：讀者沒跑的期間，訊息替它留著，它下次跑時補讀。這讓「每幀寫、固定步讀」在固定步這幀跑 0 次時也不漏。代價是：**一個被條件長期擋住、或很少跑的讀者，會一直拉住保留，回來時一次讀到它不在的期間的全部（上限內）。**這和 Bevy 不同——Bevy 的訊息兩次 update 就過期，所以把狀態條件掛在讀者上在 Bevy 大致沒事，在 GYO 會出錯。
 
 **三個看得到的後果。**
-1. **拉住保留、一直記丟棄**：主選單的「處理按鈕」帶 `InState<MainMenu>`，讀 `ButtonPressed`。進了關卡它不跑，但它跑過，所以拉住；關卡裡寫滿上限（預設 1024）之後，每次 Run 都記一筆 `DroppedMessages`（「讀者：處理主選單按鈕」），記錄失去警報的作用。
-2. **回來補讀舊的**：回到主選單那一幀，它把關卡期間的 `ButtonPressed` 一次當成主選單的按鈕處理。網路對戰裡暫停選單不停模擬時，帶 `InState<Playing>` 的「播命中特效」關掉選單時，一次播出暫停期間的全部命中。
-3. **第一次讀不到、之後讀到上次以來的全部**：「進入關卡中」那張裡讀 `LevelSelected` 的 System，第一次進關卡時從沒跑過、不拉住，選關那一幀結束 `LevelSelected` 就被修剪，它讀到空的；之後每次進入，讀到上次進入以來的全部。
+1. **拉住保留、一直記丟棄**：主選單的「處理按鈕」帶 `InState<Flow, MainMenu>`，讀 `ButtonPressed`。進了關卡它不跑，但它跑過，所以拉住；關卡裡寫滿上限（預設 1024）之後，每次有人寫的那次 Run 都記一筆 `DroppedMessages`（「讀者：處理主選單按鈕」），記錄失去警報的作用。
+2. **回來補讀舊的**：回到主選單那一幀，它把關卡期間的 `ButtonPressed` 一次當成主選單的按鈕處理。網路對戰裡暫停選單不停模擬時，帶 `InState<Flow, Playing>` 的「播命中特效」關掉選單時，一次播出暫停期間的全部命中。
+3. **第一次讀不到、之後讀到上次以來的全部**：「進入關卡中」那張裡讀 `LevelSelected` 的 System，第一次進關卡時從沒跑過、不拉住；寫 `LevelSelected` 的那次最外層 Run 結束時它就被修剪（每幀清單的每張 schedule 各是一次最外層 Run），進入若在之後的 Run 才套用，它讀到空的；之後每次進入，讀到上次進入以來的全部。
 
 **一個讀者會不會拉住、補讀。**
 
@@ -509,8 +509,9 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 | 跑了、呼叫了 `Read()` | 讀到的放開 | — | 一般情形 |
 | 跑了、沒呼叫 `Read()` | 是 | 是 | System 裡提早 return |
 | 被 run 條件跳過（自己的或 set 的） | 是（跑過一次之後） | 是 | 帶 `InState` 的主選單處理；帶 `WhileGenerating()` 的生成用 System |
-| 所在 schedule 沒跑 | 是（跑過一次之後） | 是 | 固定步這幀跑 0 次；時間暫停；`fixedStepConditions` 擋住驅動固定步的 System；進入／離開狀態的那兩張；少觸發的 observer |
-| 從沒跑過 | 否 | 第一次從還留著的最舊一筆讀起（讀到什麼取決於別的讀者有沒有拉住，不要依賴） | 第一次進入的那張；帶 `AfterGenerating()` 的讀者在生成期間 |
+| 所在 schedule 沒跑 | 是（跑過一次之後） | 是 | 固定步這幀跑 0 次；時間暫停；`fixedStepConditions` 擋住驅動固定步的 System；進入／離開狀態的那兩張 |
+| observer 這次沒被觸發 | 是（跑過一次之後） | 是 | 少觸發的 observer 帶 `MessageReader` |
+| 從沒跑過 | 否 | 第一次從還留著的最舊一筆讀起：同一次最外層 Run 裡較早寫的一定還在；更早的取決於別的讀者有沒有拉住，不要依賴 | 第一次進入的那張；帶 `AfterGenerating()` 的讀者在生成期間 |
 
 **寫法。**
 - **讀者不帶狀態條件，在 System 裡判斷。** 每幀都 `Read()`，不在那個狀態就丟掉：
@@ -519,18 +520,20 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
   // 不要：r.AddSystem<&HandleMenuButtons>(… conditions = {InState<Flow, MainMenu>()} …)
   K::SystemResult HandleMenuButtons(K::MessageReader<ButtonPressed> pressed, K::Res<StateMachine<Flow>> flow) {
       const auto all = pressed.Read();           // 每幀讀，游標跟上，不拉住
-      if (!flow->Is(Flow::MainMenu)) return {};  // 不在主選單：讀了就丟
+      if (flow->Current() != Flow::MainMenu) return {};  // 不在主選單：讀了就丟
       for (const ButtonPressed* p : all) { /* 處理 */ }
       return {};
   }
   ```
 
   帶狀態條件、但不讀 `Message` 的 System（只讀元件與 Resource）照常用條件。（`StateMachine<Flow>` 的介面以狀態機那一批為準，這裡只示意。）
+
+  **轉換那一幀還有一個洞**：這個寫法照「讀的當下」的狀態判斷。讀者在 Plan 裡排在寫者之前（這一幀的按鈕下一幀才讀到），或讀者在固定步裡（晚一幀讀），關卡裡按的「回主選單」可能在狀態已經換成主選單之後才被讀到，被當成主選單的按鈕。要避免：讀者排在寫者之後、同一幀讀；或訊息自己帶「在哪個狀態按的」，讀者比對。
 - **要帶進「進入」或交給之後的資料，放 Resource。** 選了哪一關、生成的結果、讀檔的內容，寫進 Resource，讓「進入關卡中」或遊戲邏輯讀它，不靠訊息跨過狀態轉換。
-- **暫停時擋住寫者。** 時間暫停時固定步不跑，固定步裡的讀者會拉住、恢復時補讀暫停期間寫的。暫停期間不該生效的輸入，在寫的那一側用狀態條件擋（例：讀手把轉成「開火」的 System 帶 `InState<Playing>`）。
+- **暫停時擋住寫者。** 時間暫停時固定步不跑，固定步裡的讀者會拉住、恢復時補讀暫停期間寫的。暫停期間不該生效的輸入，在寫的那一側用狀態條件擋（例：讀手把轉成「開火」的 System 帶 `InState<Flow, Playing>`）。那個寫者若自己也讀 `Message`（例：讀原始的按鍵訊息），它就成了帶狀態條件的讀者，問題搬到上一層——它照第一點的寫法：不帶條件、讀了再判斷要不要寫。
 - **進入／離開的那兩張、observer 裡不讀和這次無關的訊息。** 它們兩次執行之間照樣拉住，下次讀到上次以來的全部。
 
-**同一個「暫停」意圖的三種寫法，讀者看到的不同**：讀者上帶狀態條件（拉住、回來補讀，後果 1、2）；`fixedStepConditions` 或 `TimeControl.paused`（固定步裡的讀者拉住、恢復時補讀）；讀者不帶條件、在 System 裡判斷（每幀讀、不拉住，暫停期間的丟掉）。要「暫停期間的不算」就用第三種。
+**同一個「暫停」意圖的三種寫法，讀者看到的不同**：讀者上帶狀態條件（拉住、回來補讀，後果 1、2）；`fixedStepConditions` 或 `TimeControl.paused`（固定步裡的讀者拉住、恢復時補讀）；讀者不帶條件、在 System 裡判斷（每幀讀、不拉住，暫停期間的丟掉）。要「暫停期間的不算」就用第三種——只對每幀都跑的 schedule 裡的讀者成立；固定步裡的讀者在時間暫停時根本不跑，要擋就擋寫者。
 
 **為什麼 Engine 不替你處理。** 被狀態擋住的讀者回來該不該補讀，是遊戲的判斷：成就計數可能要補，按鈕處理不該補。各家引擎都把它交給作者（Bevy 的核心要讀者每幀讀；lightyear 的範例把接收器寫成不帶狀態條件；flecs、Unity 看狀態的現在值）。作者若開始反覆寫這類補償，Kernel 會照 [RC 24](../kernel.zh-Hant.md#rc-24) 重評。
 

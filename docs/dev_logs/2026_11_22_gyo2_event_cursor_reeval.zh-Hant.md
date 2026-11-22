@@ -22,7 +22,7 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/elastic-jones
 
 - `docs/architecture/target/v2/system-contract-page.zh-Hant.md`：新第 15 節「帶條件或不常跑的讀者」（三個後果、「會不會拉住、補讀」表、寫法、三種暫停寫法的差別、為什麼 Engine 不替作者處理）；第 5 節「訊息」與第 14 節連過去。
 - `docs/architecture/target/kernel.zh-Hant.md`：RC 24（草案）「帶條件的讀者要補償」。DI-KS 10 不變。
-- `docs/architecture/target/v2/event-cursor-declaration.zh-Hant.md`：頂端註記（重評、維持不改）與兩處事實更正（lightyear 行號漂移；Bevy 在固定步暫停時無上限累積）。內文不改寫。
+- `docs/architecture/target/v2/event-cursor-declaration.zh-Hant.md`：頂端註記（重評、維持不改）與兩處事實更正（lightyear 的出處補正，同一個提交；Bevy 在固定步暫停時無上限累積）。內文不改寫。
 - `docs/cross-component-rules.md`：CCR-7（owner：Kernel 的 DI-KS 10，作者的寫法在 System 契約說明頁第 15 節）。
 - `docs/architecture/target/v2/README.md`：宣告與本 dev_log 列入。
 
@@ -36,7 +36,13 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/elastic-jones
 
 ## 合併前的設計審查
 
-（審查後補）
+Fable 5.2／high（唯讀），報告 `merge-review-fable.md`（第一次因 API 錯誤中斷、沒有寫出，重跑一次）：must 1、should 6、nit 5。結論「改了再合併」，對 Kernel 行為的描述與程式相符、沒有越出範圍。處理：
+
+- M1 RC 24 多了「或所在 schedule 很少跑的」卻標核准：改回核准的文字，少跑的 schedule 指向 RC 20。
+- S1 丟棄記錄的時機、S2 轉換那一幀的洞與「第三種」只對每幀跑的讀者成立、S6 寫者自己讀 `Message` 時問題搬到上一層、N1 修剪在每次最外層 Run 結束、N2 同一次 Run 裡較早寫的一定還在、N3 observer 另列一列、N4 `InState<Flow, …>` 統一與示意改用 `Current()`：說明頁照改。
+- S4 lightyear 不是行號漂移，是同一個提交的出處補正：游標宣告註記與本 dev_log 改寫。
+- S5 CCR-7 的規則句拆成三句。
+- S3 RC 24 不好判定（補償清單第一種就是第 15 節教的寫法；狀態機說明頁一出，第二個條件就可能成立）：要改的是使用者核准的文字，不自己改，交使用者決定。
 
 ## 證據
 

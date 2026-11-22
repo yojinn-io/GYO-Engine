@@ -189,4 +189,4 @@
 **RC 23.** **逐型別雜湊不夠**（草案）：作者的雜湊函式漏寫欄位造成的漏報，在比摘要或 digest 的測試裡出現兩次以上；或作者為了比摘要，產品裡要寫雜湊函式的型別過半 → 停下，提「照位元組加檢查」或「反射」的方案。（第 4 批宣告 11.1；DI-KS 27）（使用者 2026-11-22 核准，`v8-arch-gyo2-authority-rollback`）
 
 <a id="rc-24"></a>
-**RC 24.** **帶條件的讀者要補償**（草案）：作者或 Module 為「被 run 條件長期跳過、或所在 schedule 很少跑的 `Message` 讀者」寫的補償（每幀讀了就丟只為了不拉住、在狀態轉換時清掉、自己記上次讀到哪裡）在產品或 Module 裡反覆出現，或 Engine 的 Module 必須教作者這樣寫才能用 → 停下，重評 Kernel 要不要提供（候選：[重評宣告](v2/event-cursor-reeval-declaration.zh-Hant.md)修訂 2 的 (C)「run 條件宣告判否時放開讀者」、(E)「讀者自己的選項」，全文在 f957143b）。現在的寫法在 [System 契約說明頁](v2/system-contract-page.zh-Hant.md)第 15 節。（`v8-arch-gyo2-event-cursor-reeval`；DI-KS 10）（使用者 2026-11-22 核准）
+**RC 24.** **帶條件的讀者要補償**（草案）：作者或 Module 為「被 run 條件長期跳過的讀者」寫補償（每幀讀了就丟只為了不拉住、在轉換時清掉、自己記上次讀到哪裡），在產品或 Module 裡反覆出現，或 Engine 的 Module 必須教作者這樣寫才能用——重評 Kernel 是否要提供（候選：[重評宣告](v2/event-cursor-reeval-declaration.zh-Hant.md)修訂 2 的 (C)、(E)，全文在 f957143b）。所在 schedule 很少跑的讀者不在這一條，見 RC 20。現在的寫法在 [System 契約說明頁](v2/system-contract-page.zh-Hant.md)第 15 節。（`v8-arch-gyo2-event-cursor-reeval`；DI-KS 10）（使用者 2026-11-22 核准）
