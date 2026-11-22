@@ -172,22 +172,22 @@ void AdvanceRealTo(RealTime& time, Nanoseconds now);
 void AdvanceRealBy(RealTime& time, Nanoseconds delta);
 
 // The hash functions (Hash.hpp), field by field.
-inline void HashValue(::GYO::Kernel::Hasher& h, const StepLength& v) { HashValue(h, v.nanoseconds); }
-inline void HashValue(::GYO::Kernel::Hasher& h, const TimeLimits& v) {
+inline void HashValue(Kernel::Hasher& h, const StepLength& v) { HashValue(h, v.nanoseconds); }
+inline void HashValue(Kernel::Hasher& h, const TimeLimits& v) {
     HashValue(h, v.maxStepsPerFrame);
     HashValue(h, v.maxFrameDelta);
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const TickAccumulator& v) {
+inline void HashValue(Kernel::Hasher& h, const TickAccumulator& v) {
     HashValue(h, v.Step());
     HashValue(h, v.Overstep());
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const RealTime& v) {
+inline void HashValue(Kernel::Hasher& h, const RealTime& v) {
     HashValue(h, v.now);
     HashValue(h, v.delta);
     HashValue(h, v.elapsed);
     HashValue(h, v.sampled);
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const VirtualTime& v) {
+inline void HashValue(Kernel::Hasher& h, const VirtualTime& v) {
     HashValue(h, v.delta);
     HashValue(h, v.elapsed);
     HashValue(h, v.discarded);
@@ -195,32 +195,32 @@ inline void HashValue(::GYO::Kernel::Hasher& h, const VirtualTime& v) {
     HashValue(h, v.fraction);
     HashValue(h, v.paused);
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const FixedTime& v) {
+inline void HashValue(Kernel::Hasher& h, const FixedTime& v) {
     HashValue(h, v.accumulator);
     HashValue(h, v.elapsed);
     HashValue(h, v.pending);
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const ActiveTime& v) {
+inline void HashValue(Kernel::Hasher& h, const ActiveTime& v) {
     HashValue(h, v.delta);
     HashValue(h, v.elapsed);
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const TimeControl& v) {
+inline void HashValue(Kernel::Hasher& h, const TimeControl& v) {
     HashValue(h, v.scale);
     HashValue(h, v.paused);
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const Tick& v) { HashValue(h, v.value); }
-inline void HashValue(::GYO::Kernel::Hasher& h, const Resimulation& v) { HashValue(h, v.active); }
-inline void HashValue(::GYO::Kernel::Hasher& h, const TimeSampling& v) {
+inline void HashValue(Kernel::Hasher& h, const Tick& v) { HashValue(h, v.value); }
+inline void HashValue(Kernel::Hasher& h, const Resimulation& v) { HashValue(h, v.active); }
+inline void HashValue(Kernel::Hasher& h, const TimeSampling& v) {
     HashValue(h, v.value);
     HashValue(h, v.mode);
 }
-inline void HashValue(::GYO::Kernel::Hasher& h, const TimeDiscarded& v) {
+inline void HashValue(Kernel::Hasher& h, const TimeDiscarded& v) {
     HashValue(h, v.amount);
     HashValue(h, v.realDelta);
     HashValue(h, v.cause);
 }
 // The schedule name up to its NUL (the bytes after it are not part of the value).
-inline void HashValue(::GYO::Kernel::Hasher& h, const TimeConfig& v) {
+inline void HashValue(Kernel::Hasher& h, const TimeConfig& v) {
     HashValue(h, v.limits);
     std::uint64_t length = 0;
     while (length < sizeof(v.fixedSchedule) && v.fixedSchedule[length] != '\0') ++length;

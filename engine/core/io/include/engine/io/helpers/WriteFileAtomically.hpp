@@ -9,8 +9,8 @@ namespace GYO::Engine::IO::Helpers {
     /// which is closed and then moved over uri. The file system's Move must replace an existing target in one
     /// step, as the native backend's does (OS::Files::RenameReplacing). When a step fails the temporary file is
     /// removed and that step's error returned; uri keeps its old file. The parent directory must exist.
-    IOResult<void> WriteFileAtomically(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
-                                       GYO::Engine::Base::ConstSpan<std::byte> data);
+    IOResult<void> WriteFileAtomically(FS::IFileSystem& fs, const Path::Uri& uri,
+                                       Base::ConstSpan<std::byte> data);
 
     struct WriteAtomicallyOptions final {
         /// Creates the missing directories above uri first (fs.CreateDirectories); a failure there is returned
@@ -19,7 +19,7 @@ namespace GYO::Engine::IO::Helpers {
     };
 
     /// WriteFileAtomically with options.
-    IOResult<void> WriteFileAtomically(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
-                                       GYO::Engine::Base::ConstSpan<std::byte> data, const WriteAtomicallyOptions& options);
+    IOResult<void> WriteFileAtomically(FS::IFileSystem& fs, const Path::Uri& uri,
+                                       Base::ConstSpan<std::byte> data, const WriteAtomicallyOptions& options);
 
 } // namespace GYO::Engine::IO::Helpers

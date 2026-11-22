@@ -77,19 +77,19 @@ VerificationReport WorldExecutor::Verification() const {
     return report;
 }
 
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested, bool origin) {
+Engine::Base::Result<void, KernelError> WorldExecutor::Fail(KernelError error, bool nested, bool origin) {
     error.world = world_.name_;
     // Every error of a Run comes here: it tells the trace span on top of this thread's stack (the System
     // whose step failed, or the schedule for a sync point, a hook round or the Ready window). It only tells.
-    if (GYO::Engine::Base::TraceActive()) GYO::Engine::Base::TraceMarkCurrent(error.Text(), origin);
+    if (Engine::Base::TraceActive()) Engine::Base::TraceMarkCurrent(error.Text(), origin);
     world_.state_ = WorldState::Interrupted;
     world_.DiscardDeferred();
     if (nested) {
         // K0 (spec E.5): reported once, by the outermost Run; the first error stays.
         if (!world_.leftError_) world_.leftError_ = error;
-        return GYO::Engine::Base::Err(std::move(error));
+        return Engine::Base::Err(std::move(error));
     }
-    return GYO::Engine::Base::Err(std::move(error));
+    return Engine::Base::Err(std::move(error));
 }
 
 namespace {
@@ -174,7 +174,7 @@ private:
     int exceptions_;
 };
 
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view schedule) {
+Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view schedule) {
     World& world = world_;
     // E.5: an Interrupted World runs no more (X-9). A System reaching this
     // through a kept pointer finds the World Running: also a GYO_ASSERT (only
@@ -209,7 +209,7 @@ void WorldExecutor::ReadSettings() {
     world.hasRun_ = true;
 }
 
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view schedule, bool nested) {
+Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view schedule, bool nested) {
     World& world = world_;
     const Detail::RegistryData& data = *world_.data_;
     const std::string scheduleName(schedule);
@@ -218,7 +218,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_
     GYO_ASSERT(plan != nullptr && record != nullptr);
     // One trace span per Run of a schedule, nested runs included (trace declaration D6); it covers the Ready
     // window, every step, sync point and hook round below.
-    GYO::Engine::Base::TraceSpan scheduleSpan;
+    Engine::Base::TraceSpan scheduleSpan;
     scheduleSpan.Begin("kernel", scheduleName, world.name_);
     // No tick is advanced here: the kernel keeps no clock (the tick is the time
     // Module's, which runs a fixed step schedule nested; v8-arch-gyo2-clock-out-of-kernel).
@@ -281,7 +281,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_
             // The System's trace span: declared for the whole step, begun only if the step runs (below), so
             // it is still open when the step's error reaches Fail (trace declaration D2, D6). Its length
             // includes the access verification after the call when that is on.
-            GYO::Engine::Base::TraceSpan systemSpan;
+            Engine::Base::TraceSpan systemSpan;
             SystemState& state = systems_[step.system];
             std::size_t mountIndex = 0;
             while (mountIndex < system.options.mounts.size() && system.options.mounts[mountIndex].schedule != scheduleName) {
@@ -328,7 +328,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_
             // (slot 1, 2, ... in evaluation order), the System is slot 0.
             call.reader = Detail::ReaderKey{system.seq, static_cast<std::uint32_t>(mountIndex), 0, true};
 
-            GYO::Engine::Base::Result<void, KernelError> result = [&]() -> GYO::Engine::Base::Result<void, KernelError> {
+            Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
                 // (1) tlCurrent: the conditions' reads are the System's (spec B-5).
                 Detail::CallScope scope(call);
                 // (2) Run conditions, in order, short-circuit: the mount's, then each set's (E.4).
@@ -384,7 +384,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_
         case StepKind::SyncPoint: {
             const ChangeStamp stamp = ++world.stamp_;
             world.state_ = WorldState::Applying;
-            GYO::Engine::Base::Result<void, KernelError> applied = world.ApplySync(position, scheduleName, stamp);
+            Engine::Base::Result<void, KernelError> applied = world.ApplySync(position, scheduleName, stamp);
             world.state_ = WorldState::Running;
             if (!applied) {
                 KernelError error = std::move(applied).error();
@@ -434,7 +434,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_
                     world.trackRoundRecorders_ = true;
                     const ChangeStamp roundStamp = ++world.stamp_;
                     world.state_ = WorldState::Applying;
-                    GYO::Engine::Base::Result<void, KernelError> applied = world.ApplySync(position, scheduleName, roundStamp);
+                    Engine::Base::Result<void, KernelError> applied = world.ApplySync(position, scheduleName, roundStamp);
                     world.state_ = WorldState::Running;
                     world.trackRoundRecorders_ = false;
                     if (!applied) {
@@ -470,7 +470,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_
     return {};
 }
 
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                                bool inClosure) {
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
@@ -509,7 +509,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail
     if (world.state_ == WorldState::Interrupted) {
         // Spec E.5 (K0): an Interrupted World runs nothing; the error a nested
         // level left is returned (the Executor lists it once, at the boundary).
-        return GYO::Engine::Base::Err(world.leftError_ ? *world.leftError_
+        return Engine::Base::Err(world.leftError_ ? *world.leftError_
                                                   : NestedAbortError(world, "schedule '" + std::string(schedule) + "'"));
     }
     // W-3: up to here the System changed no membership behind the World API; a
@@ -559,7 +559,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail
     private:
         World& world_;
     };
-    GYO::Engine::Base::Result<void, KernelError> ran = [&] {
+    Engine::Base::Result<void, KernelError> ran = [&] {
         Rebase rebase(world);
         return RunPlan(record->options.name, true);
     }();
@@ -571,7 +571,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail
 // S5 (declaration v8-arch-gyo2-kernel-subtract-structure 3.5; DI-KS 9, 18, 19,
 // 21): the checks in the order of RunNestedFrom, then the change applied as a
 // sync point applies its record, then the hook rounds of what its hooks recorded.
-GYO::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::ImmediateFrom(Detail::SystemContext& call,
+Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::ImmediateFrom(Detail::SystemContext& call,
                                                                                          Detail::Record record,
                                                                                          ChangeStamp stamp, bool closureOpen) {
     World& world = world_;
@@ -579,20 +579,20 @@ GYO::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
-    GYO::Engine::Base::Result<void, KernelError> refused = RefuseImmediate(call, closureOpen, who, where);
-    if (!refused) return GYO::Engine::Base::Err(std::move(refused).error());
+    Engine::Base::Result<void, KernelError> refused = RefuseImmediate(call, closureOpen, who, where);
+    if (!refused) return Engine::Base::Err(std::move(refused).error());
 
     Detail::ImmediateOutcome outcome;
     if (record.kind == Detail::RecordKind::Spawn && !record.withId) {
         // Like Spawn<Bundle<C...>>::New (W-9); D-E3 does not see at startup that an exclusive System spawns.
         if (Detail::AllotterSlot(world) == nullptr) {
-            return GYO::Engine::Base::Err(Detail::CallError(call, KernelErrorCode::NoAllotter, "A.1",
+            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::NoAllotter, "A.1",
                                                        who + " spawns through ExclusiveWorld, and the World declares "
                                                              "no allotter (Registrar::Allotter)"));
         }
         const std::optional<EntityId> id = Detail::Allot(world);
         if (!id) {
-            return GYO::Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
+            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
                                                        "the entity allotter's range is used up"));
         }
         record.entity = *id;
@@ -616,9 +616,9 @@ GYO::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::
     const std::uint64_t rejectedBefore = world.rejectedSpawns_;
     std::vector<Detail::Record> change;
     change.push_back(std::move(record));
-    GYO::Engine::Base::Result<void, KernelError> applied =
+    Engine::Base::Result<void, KernelError> applied =
         ApplyImmediateRecords(Detail::Derive::InitialValues, call, std::move(change), stamp, who, where);
-    if (!applied) return GYO::Engine::Base::Err(std::move(applied).error());
+    if (!applied) return Engine::Base::Err(std::move(applied).error());
     if (world.rejectedSpawns_ > rejectedBefore) {
         // Spec F-13: recorded in one place (World::RecordRejectedSpawn); read back from there.
         const auto* buffer = static_cast<const Detail::DiagnosticsBuffer<RejectedSpawn>*>(
@@ -633,13 +633,13 @@ GYO::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::
 // 2.1): the same checks, then every record of the restore as one immediate change
 // that puts back what it is given: it notifies (OnAdd, OnRemove, observers) and
 // derives nothing (no InitialValue; DI-KS 12). What its hooks record is a change.
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RestoreFrom(Detail::SystemContext& call,
+Engine::Base::Result<void, KernelError> WorldExecutor::RestoreFrom(Detail::SystemContext& call,
                                                                    std::vector<Detail::Record> records, ChangeStamp stamp,
                                                                    bool closureOpen) {
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
-    GYO::Engine::Base::Result<void, KernelError> refused = RefuseImmediate(call, closureOpen, who, where);
+    Engine::Base::Result<void, KernelError> refused = RefuseImmediate(call, closureOpen, who, where);
     if (!refused) return refused;
     std::uint32_t recSeq = 0;
     for (Detail::Record& record : records) {
@@ -652,13 +652,13 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RestoreFrom(Detail::
     return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);
 }
 
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
+Engine::Base::Result<void, KernelError> WorldExecutor::RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
                                                                        const std::string& who, const std::string& where) {
-    using Outcome = GYO::Engine::Base::Result<void, KernelError>;
+    using Outcome = Engine::Base::Result<void, KernelError>;
     World& world = world_;
     auto stop = [&](KernelError error) -> Outcome {
-        GYO::Engine::Base::Result<void, KernelError> failed = Fail(std::move(error), true);
-        return GYO::Engine::Base::Err(std::move(failed).error());
+        Engine::Base::Result<void, KernelError> failed = Fail(std::move(error), true);
+        return Engine::Base::Err(std::move(failed).error());
     };
     if (call.hook) {
         return stop(Detail::CallError(call, KernelErrorCode::HookChangesMembership, "DI-KS 18",
@@ -674,7 +674,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RefuseImmediate(Deta
         // Spec E.5: an Interrupted World changes no more; inside a call it was
         // interrupted by a refusal or a nested level, which left its error.
         GYO_ASSERT(world.leftError_.has_value());
-        return GYO::Engine::Base::Err(*world.leftError_);
+        return Engine::Base::Err(*world.leftError_);
     }
     // W-3 (declaration section 12 item 1, (a)): up to here nothing changed
     // membership behind the handle; such a change would be hidden by the new
@@ -712,16 +712,16 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RefuseImmediate(Deta
     return {};
 }
 
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
+Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
                                                                              std::vector<Detail::Record> change,
                                                                              ChangeStamp stamp, const std::string& who,
                                                                              const std::string& where) {
-    using Outcome = GYO::Engine::Base::Result<void, KernelError>;
+    using Outcome = Engine::Base::Result<void, KernelError>;
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
     auto stop = [&](KernelError error) -> Outcome {
-        GYO::Engine::Base::Result<void, KernelError> failed = Fail(std::move(error), true);
-        return GYO::Engine::Base::Err(std::move(failed).error());
+        Engine::Base::Result<void, KernelError> failed = Fail(std::move(error), true);
+        return Engine::Base::Err(std::move(failed).error());
     };
     // From here, on every way back: the change's own queue is let go, the
     // World is Running again, and the step's new membership baseline and fresh
@@ -765,14 +765,14 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecord
     world.hookTarget_ = &own;
     // Spec F-5: while records are applied only hooks record (the System is waiting).
     world.state_ = WorldState::Applying;
-    auto failed = [&](GYO::Engine::Base::Result<void, KernelError> applied, const std::string& text) -> Outcome {
+    auto failed = [&](Engine::Base::Result<void, KernelError> applied, const std::string& text) -> Outcome {
         KernelError error = std::move(applied).error();
         error.Wrap(text);
         return stop(std::move(error));
     };
 
     // The records themselves; the hook rounds below are changes (they derive).
-    GYO::Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);
+    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);
     if (!applied) return failed(std::move(applied), "Executor: immediate change by " + where);
 
     // Spec F-12 for this change only (declaration section 12 item 2, (a)): round
@@ -823,7 +823,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecord
 
 // Event cursor declaration 3.3, time-events declaration 4.2: the observers of
 // a trigger outside a sync point, then the rounds of what they recorded.
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTypeId id, const Detail::ValueBox& payload,
+Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTypeId id, const Detail::ValueBox& payload,
                                                                     std::optional<EntityId> target, std::uint32_t planPos,
                                                                     std::string_view schedule, std::uint32_t limit,
                                                                     const std::string& limitSource, const std::string& where) {
@@ -848,12 +848,12 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTy
     } targetScope(world, pending);
     // Spec F-5: while the observers run and the records are applied, only observers and hooks record.
     world.state_ = WorldState::Applying;
-    GYO::Engine::Base::Result<void, KernelError> ran =
+    Engine::Base::Result<void, KernelError> ran =
         world.RunObservers(ObserverTrigger::Event, id, payload.Payload(), target, planPos, schedule, 0, true);
     if (!ran) {
         KernelError error = std::move(ran).error();
         error.Wrap("Executor: trigger of " + event + " by " + where);
-        return GYO::Engine::Base::Err(std::move(error));
+        return Engine::Base::Err(std::move(error));
     }
     std::uint32_t round = 0;
     auto roundText = [&](std::uint32_t r) {
@@ -876,7 +876,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTy
             error.world = world.name_;
             error.Wrap(roundText(round));
             if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
-            return GYO::Engine::Base::Err(std::move(error));
+            return Engine::Base::Err(std::move(error));
         }
         ++round;
         std::vector<Detail::Record> recorded = std::move(pending.records);
@@ -887,13 +887,13 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTy
         world.trackRoundRecorders_ = true;
         const ChangeStamp roundStamp = ++world.stamp_;
         // A whole application of the round's records (spec F.2 steps 2 to 7 and the triggers).
-        GYO::Engine::Base::Result<void, KernelError> applied = world.ApplySync(planPos, schedule, roundStamp, &recorded);
+        Engine::Base::Result<void, KernelError> applied = world.ApplySync(planPos, schedule, roundStamp, &recorded);
         ++world.syncEpoch_;
         world.trackRoundRecorders_ = false;
         if (!applied) {
             KernelError error = std::move(applied).error();
             error.Wrap(roundText(round));
-            return GYO::Engine::Base::Err(std::move(error));
+            return Engine::Base::Err(std::move(error));
         }
     }
     return {};
@@ -902,7 +902,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::RunTriggered(EventTy
 // ExclusiveWorld::Trigger: the checks in the order of ImmediateFrom; the
 // observers' records go the way of an immediate change's hooks (time-events
 // declaration 4.2: hookTarget_ and a round of its own).
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::SystemContext& call, EventTypeId id,
+Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::SystemContext& call, EventTypeId id,
                                                                    std::unique_ptr<Detail::ValueBox> payload,
                                                                    std::optional<EntityId> target, bool closureOpen) {
     World& world = world_;
@@ -926,7 +926,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::
     }
     if (world.state_ == WorldState::Interrupted) {
         GYO_ASSERT(world.leftError_.has_value());
-        return GYO::Engine::Base::Err(*world.leftError_);
+        return Engine::Base::Err(*world.leftError_);
     }
     // W-3: nothing changed membership behind the handle before the trigger.
     GYO_ASSERT(world.runStack_.back().structure == world.MembershipEpoch());
@@ -986,7 +986,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::
     const std::uint32_t limit = running->options.hookRoundLimit.value_or(world.hookRoundLimit_);
     const std::string limitSource = std::string(running->options.hookRoundLimit ? "schedule's declaration" : "World's KernelSettings") +
                                     " of schedule '" + std::string(call.schedule) + "'";
-    GYO::Engine::Base::Result<void, KernelError> ran =
+    Engine::Base::Result<void, KernelError> ran =
         RunTriggered(id, *payload, target, call.planPos, call.schedule, limit, limitSource, where);
     // A hook its rounds ran that was refused went through Fail already and left its error: here it only
     // passes through (trace declaration D4 (i)).
@@ -998,7 +998,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::
 // Ready"): a temporary queue applied to empty before it returns (time-events
 // declaration 4.2), with the World's KernelSettings::hookRoundLimit (Ready has
 // no schedule).
-GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(EventTypeId id,
+Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(EventTypeId id,
                                                                        std::unique_ptr<Detail::ValueBox> payload,
                                                                        std::optional<EntityId> target) {
     World& world = world_;
@@ -1006,7 +1006,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(Even
     RunningScope inRun(world.data_->runningWorlds);
     Attach();
     // A trigger from the Host is an outermost entry of its own (trace declaration D6).
-    GYO::Engine::Base::TraceSpan triggerSpan;
+    Engine::Base::TraceSpan triggerSpan;
     triggerSpan.Begin("kernel", "Trigger", world.name_);
     // KernelSettings is read when the trigger starts, as when a Run starts (DI-KS 24): the verification
     // and break switches (a flip drops the snapshots, like a Run's) and the hook round limit.
@@ -1058,7 +1058,7 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(Even
         World& owner_;
         int uncaught_;
     } settle(world);
-    GYO::Engine::Base::Result<void, KernelError> ran =
+    Engine::Base::Result<void, KernelError> ran =
         RunTriggered(id, *payload, target, 0, {}, limit, "World's KernelSettings", "the Host");
     // As in a System's Trigger: a refused hook left its error already (D4 (i)).
     if (!ran) return Fail(std::move(ran).error(), false, !world.leftError_.has_value());
@@ -1069,24 +1069,24 @@ GYO::Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFromHost(Even
 
 namespace Detail {
 
-GYO::Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule, bool inClosure) {
+Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule, bool inClosure) {
     GYO_ASSERT(call.executor != nullptr);
     return call.executor->RunNestedFrom(call, schedule, inClosure);
 }
 
-GYO::Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record, ChangeStamp stamp,
+Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record, ChangeStamp stamp,
                                                                    bool inClosure) {
     GYO_ASSERT(call.executor != nullptr);
     return call.executor->ImmediateFrom(call, std::move(record), stamp, inClosure);
 }
 
-GYO::Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records, ChangeStamp stamp,
+Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records, ChangeStamp stamp,
                                                     bool inClosure) {
     GYO_ASSERT(call.executor != nullptr);
     return call.executor->RestoreFrom(call, std::move(records), stamp, inClosure);
 }
 
-GYO::Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id, std::unique_ptr<ValueBox> payload,
+Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id, std::unique_ptr<ValueBox> payload,
                                                   std::optional<EntityId> target, bool inClosure) {
     GYO_ASSERT(call.executor != nullptr);
     return call.executor->TriggerFrom(call, id, std::move(payload), target, inClosure);

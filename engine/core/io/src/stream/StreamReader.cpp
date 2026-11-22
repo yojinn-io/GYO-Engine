@@ -32,7 +32,7 @@ IOResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
         const std::size_t n = rr.value();
         if (n == 0) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::EndOfStream,
+                IOErrorCode::EndOfStream,
                 "StreamReader: unexpected EOF in ReadExactly"));
         }
         done += n;
@@ -56,7 +56,7 @@ IOResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes
 
         if (maxBytes != 0 && out.size() + n > maxBytes) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::ReadFailed,
+                IOErrorCode::ReadFailed,
                 "StreamReader: ReadAllBytes exceeded maxBytes"));
         }
 
@@ -178,7 +178,7 @@ IOResult<bool> StreamReader::ReadLine(std::string& outLine, std::size_t maxLineB
         const std::size_t chunk = i - lpos_;
         if (maxLineBytes != 0 && outLine.size() + chunk > maxLineBytes) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::ReadFailed,
+                IOErrorCode::ReadFailed,
                 "StreamReader: line too long"));
         }
 

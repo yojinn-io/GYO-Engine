@@ -38,17 +38,17 @@ namespace GYO::Engine::IO::FS {
 
         // ---- IFileSystem 互換の操作群（VFS ルーティング付き） ----
 
-        IOResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
-        Open(const GYO::Engine::IO::Path::Uri& uri, GYO::Engine::IO::Stream::FileOpenMode mode) {
-            if (!GYO::Engine::IO::Stream::IsValid(mode)) {
-                return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::InvalidPath,
+        IOResult<std::unique_ptr<Stream::IStream>>
+        Open(const Path::Uri& uri, Stream::FileOpenMode mode) {
+            if (!Stream::IsValid(mode)) {
+                return Base::Err(IOError::Make(IOErrorCode::InvalidPath,
                                   "Vfs: invalid FileOpenMode"));
             }
 
             const bool writeReq = Detail::WantsWrite(mode);
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                return Base::Err(IOError::Make(IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             if (writeReq) {
@@ -69,11 +69,11 @@ namespace GYO::Engine::IO::FS {
                         return Base::Err(openr.error());
                     }
                 }
-                return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::PermissionDenied,
+                return Base::Err(IOError::Make(IOErrorCode::PermissionDenied,
                                   "Vfs: no writable mount found"));
             } else {
                 // 読みは overlay：上から open を試す
-                IOError lastNotFound = IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: not found");
+                IOError lastNotFound = IOError::Make(IOErrorCode::NotFound, "Vfs: not found");
                 for (const auto* mp : cands) {
                     if (!mp || !mp->fs) continue;
 
@@ -93,7 +93,7 @@ namespace GYO::Engine::IO::FS {
             }
         }
 
-        IOResult<bool> Exists(const GYO::Engine::IO::Path::Uri& uri) {
+        IOResult<bool> Exists(const Path::Uri& uri) {
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) return false;
 
@@ -113,13 +113,13 @@ namespace GYO::Engine::IO::FS {
             return false;
         }
 
-        IOResult<GYO::Engine::IO::FS::FileInfo> Stat(const GYO::Engine::IO::Path::Uri& uri) {
+        IOResult<FS::FileInfo> Stat(const Path::Uri& uri) {
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                return Base::Err(IOError::Make(IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
-            IOError lastNotFound = IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: not found");
+            IOError lastNotFound = IOError::Make(IOErrorCode::NotFound, "Vfs: not found");
             for (const auto* mp : cands) {
                 if (!mp || !mp->fs) continue;
 
@@ -138,12 +138,12 @@ namespace GYO::Engine::IO::FS {
             return Base::Err(lastNotFound);
         }
 
-        IOResult<void> CreateDirectories(const GYO::Engine::IO::Path::Uri& uri) {
+        IOResult<void> CreateDirectories(const Path::Uri& uri) {
             // 書き込み先 mount を選ぶ（preferWrite / priority 順）
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                    IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             for (const auto* mp : cands) {
@@ -161,18 +161,18 @@ namespace GYO::Engine::IO::FS {
             }
 
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::PermissionDenied, "Vfs: no writable mount found"));
+                IOErrorCode::PermissionDenied, "Vfs: no writable mount found"));
         }
 
-        IOResult<void> Remove(const GYO::Engine::IO::Path::Uri& uri, const GYO::Engine::IO::FS::RemoveOptions& opt = {}) {
+        IOResult<void> Remove(const Path::Uri& uri, const FS::RemoveOptions& opt = {}) {
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                    IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             // 削除は “見つかった場所” を消すのが自然。上から stat して見つかった mount で remove。
-            IOError lastNotFound = IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: not found");
+            IOError lastNotFound = IOError::Make(IOErrorCode::NotFound, "Vfs: not found");
             for (const auto* mp : cands) {
                 if (!mp || !mp->fs) continue;
                 if (mp->readOnly) continue;
@@ -193,13 +193,13 @@ namespace GYO::Engine::IO::FS {
             return Base::Err(lastNotFound);
         }
 
-        IOResult<void> Move(const GYO::Engine::IO::Path::Uri& from, const GYO::Engine::IO::Path::Uri& to) {
+        IOResult<void> Move(const Path::Uri& from, const Path::Uri& to) {
             // 原則：同じ mount（同じ下位 FS）内での Move を想定
             // まず “from が存在する mount” を決め、to も同じ mount に解決して実行する
             const auto cands = mounts_.Candidates(from);
             if (cands.empty()) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                    IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             for (const auto* mp : cands) {
@@ -220,15 +220,15 @@ namespace GYO::Engine::IO::FS {
             }
 
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: source not found or no writable mount"));
+                IOErrorCode::NotFound, "Vfs: source not found or no writable mount"));
         }
 
-        IOResult<void> Copy(const GYO::Engine::IO::Path::Uri& from, const GYO::Engine::IO::Path::Uri& to) {
+        IOResult<void> Copy(const Path::Uri& from, const Path::Uri& to) {
             // Copy も Move と同様に “from の存在 mount” を決める
             const auto cands = mounts_.Candidates(from);
             if (cands.empty()) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                    IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
             for (const auto* mp : cands) {
@@ -249,23 +249,23 @@ namespace GYO::Engine::IO::FS {
             }
 
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: source not found or no writable mount"));
+                IOErrorCode::NotFound, "Vfs: source not found or no writable mount"));
         }
 
         /// List：複数 mount を **マージ**（同名は priority 高い方が勝つ）
-        IOResult<std::vector<GYO::Engine::IO::FS::DirectoryEntry>>
-        List(const GYO::Engine::IO::Path::Uri& uri, const GYO::Engine::IO::FS::ListOptions& opt = {}) {
+        IOResult<std::vector<FS::DirectoryEntry>>
+        List(const Path::Uri& uri, const FS::ListOptions& opt = {}) {
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
-                return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                return Base::Err(IOError::Make(IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
-            std::vector<GYO::Engine::IO::FS::DirectoryEntry> out;
+            std::vector<FS::DirectoryEntry> out;
             std::unordered_set<std::string> seenNames;
             out.reserve(64);
 
             bool anyOk = false;
-            IOError lastErr = IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: list failed");
+            IOError lastErr = IOError::Make(IOErrorCode::NotFound, "Vfs: list failed");
 
             for (const auto* mp : cands) {
                 if (!mp || !mp->fs) continue;
@@ -303,25 +303,25 @@ namespace GYO::Engine::IO::FS {
         }
 
         /// Iterate：簡易に List を VectorDirectoryIterator に変換（巨大ディレクトリでは platform 実装が欲しい）
-        IOResult<std::unique_ptr<GYO::Engine::IO::FS::DirectoryIterator>>
-        Iterate(const GYO::Engine::IO::Path::Uri& uri, const GYO::Engine::IO::FS::ListOptions& opt = {}) {
+        IOResult<std::unique_ptr<FS::DirectoryIterator>>
+        Iterate(const Path::Uri& uri, const FS::ListOptions& opt = {}) {
             auto lr = List(uri, opt);
             if (!lr) {
                 return Base::Err(lr.error());
             }
-            auto it = std::make_unique<GYO::Engine::IO::FS::VectorDirectoryIterator>(std::move(lr.value()), "VfsIterator");
+            auto it = std::make_unique<FS::VectorDirectoryIterator>(std::move(lr.value()), "VfsIterator");
             return std::move(it);
         }
 
-        IOResult<std::string> ToNativePathString(const GYO::Engine::IO::Path::Uri& uri) {
+        IOResult<std::string> ToNativePathString(const Path::Uri& uri) {
             // “存在する mount” のものを返す（read overlay）
             const auto cands = mounts_.Candidates(uri);
             if (cands.empty()) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: no mount for scheme"));
+                    IOErrorCode::NotFound, "Vfs: no mount for scheme"));
             }
 
-            IOError lastNotFound = IOError::Make(GYO::Engine::IO::IOErrorCode::NotFound, "Vfs: not found");
+            IOError lastNotFound = IOError::Make(IOErrorCode::NotFound, "Vfs: not found");
             for (const auto* mp : cands) {
                 if (!mp || !mp->fs) continue;
 

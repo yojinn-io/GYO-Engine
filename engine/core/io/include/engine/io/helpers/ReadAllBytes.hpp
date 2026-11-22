@@ -8,7 +8,7 @@ namespace GYO::Engine::IO::Helpers {
 
     // IFileSystem 版
     inline IOResult<std::vector<std::byte>>
-    ReadAllBytes(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
+    ReadAllBytes(FS::IFileSystem& fs, const Path::Uri& uri,
                  const ReadAllOptions& opt = {}) {
         auto orr = OpenRead(fs, uri);
         if (!orr) return Base::Err(orr.error());
@@ -23,7 +23,7 @@ namespace GYO::Engine::IO::Helpers {
 
     // Vfs 版（必要なければ削除）
     inline IOResult<std::vector<std::byte>>
-    ReadAllBytes(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri,
+    ReadAllBytes(FS::Vfs& vfs, const Path::Uri& uri,
                  const ReadAllOptions& opt = {}) {
         auto orr = OpenRead(vfs, uri);
         if (!orr) return Base::Err(orr.error());

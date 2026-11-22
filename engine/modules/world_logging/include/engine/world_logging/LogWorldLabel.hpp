@@ -37,7 +37,7 @@ struct LogWorldLabel final {
 };
 
 template <class D>
-void HashValue(::GYO::Kernel::Hasher& h, const LogWorldLabel<D>& label) {
+void HashValue(Kernel::Hasher& h, const LogWorldLabel<D>& label) {
     const std::string_view name = label.Name();
     h.U64(name.size());
     h.Bytes(std::as_bytes(std::span<const char>(name.data(), name.size())));
