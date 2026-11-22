@@ -116,7 +116,7 @@
 
 ### 第 2 題（已定 (c)）：判定的輸入和它的紀錄綁在一起
 
-**決定**：使用者 2026-11-22，經主會話轉。side chat 原話：「我有一個問題，按鍵屬於玩家操作，為何要rollback ？」「交叉比對個家方案。」「我的意思是，我把2個綁在一起，作者就不得不預測了」→「嗯，加過去吧。」主會話原話：「【rollback.Input<T>(n)】不需要讓作者直接填數字（作者可能不知道這些概念），可以預設一個Enum，分幾個檔位（檔位裡面是數字，讓作者直接調用這個Enum）。當然作者像直接寫數字，也不攔著。」比過的選項：(a) 新碼 AU-E10；(b) 寫進限界；(c) 綁在一起（採用，因此不需要 AU-E10）。對照：lightyear 的輸入 crate 自帶 InputBuffer；Unity Netcode 的 `IInputComponentData` 自動配 command buffer——兩家都是「宣告一次輸入，紀錄自動就有」。主會話另外撤回了「改名」那一點（不是使用者的決定）：入口維持 `rollback.Input`。
+**決定**：使用者 2026-11-22，經主會話轉。side chat 原話：「我有一個問題，按鍵屬於玩家操作，為何要rollback ？」「交叉比對個家方案。」「我的意思是，我把2個綁在一起，作者就不得不預測了」→「嗯，加過去吧。」主會話原話：「【rollback.Input<T>(n)】不需要讓作者直接填數字（作者可能不知道這些概念），可以預設一個Enum，分幾個檔位（檔位裡面是數字，讓作者直接調用這個Enum）。當然作者像直接寫數字，也不攔著。」比過的選項：(a) 新碼 AU-E10；(b) 寫進限界；(c) 綁在一起（採用，因此不需要 AU-E10）。對照：lightyear 的輸入 crate 自帶 InputBuffer；Unity Netcode 的 `IInputComponentData` 自動配 command buffer——兩家都是「宣告一次輸入，紀錄自動就有」。
 
 **現象**（審查 A5）：作者宣告 `authority.Resource<Command>({.input = true})`、忘了 `rollback.Input<Command>(n)` 時，AU-E6、AU-E7、RB-E9 都不報，重跑的每一步都用最新的輸入。先紅：scenario 第 5 段拿掉作者那行後，S5-3、S5-5 的 digest 不同、生命值錯（`step8-checks/q2-input-history-red.txt`）；後綠（`…-green.txt`）。
 
