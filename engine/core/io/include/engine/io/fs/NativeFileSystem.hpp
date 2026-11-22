@@ -23,26 +23,26 @@ namespace GYO::Engine::IO::FS {
 
         const char* Name() const noexcept override { return "NativeFS"; }
 
-        IOResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
-        Open(const GYO::Engine::IO::Path::Uri& uri, GYO::Engine::IO::Stream::FileOpenMode mode) override;
-        IOResult<bool> Exists(const GYO::Engine::IO::Path::Uri& uri) override;
-        IOResult<FileInfo> Stat(const GYO::Engine::IO::Path::Uri& uri) override;
-        IOResult<std::string> ToNativePathString(const GYO::Engine::IO::Path::Uri& uri) override;
+        IOResult<std::unique_ptr<Stream::IStream>>
+        Open(const Path::Uri& uri, Stream::FileOpenMode mode) override;
+        IOResult<bool> Exists(const Path::Uri& uri) override;
+        IOResult<FileInfo> Stat(const Path::Uri& uri) override;
+        IOResult<std::string> ToNativePathString(const Path::Uri& uri) override;
         FileSystemCapabilities Capabilities() const noexcept override;
 
-        IOResult<void> CreateDirectories(const GYO::Engine::IO::Path::Uri& uri) override;
-        IOResult<void> Remove(const GYO::Engine::IO::Path::Uri& uri, const RemoveOptions& opt) override;
-        IOResult<void> Move(const GYO::Engine::IO::Path::Uri& from, const GYO::Engine::IO::Path::Uri& to) override;
-        IOResult<void> Copy(const GYO::Engine::IO::Path::Uri& from, const GYO::Engine::IO::Path::Uri& to) override;
-        IOResult<std::vector<DirectoryEntry>> List(const GYO::Engine::IO::Path::Uri& uri, const ListOptions& opt) override;
-        IOResult<std::unique_ptr<DirectoryIterator>> Iterate(const GYO::Engine::IO::Path::Uri& uri,
+        IOResult<void> CreateDirectories(const Path::Uri& uri) override;
+        IOResult<void> Remove(const Path::Uri& uri, const RemoveOptions& opt) override;
+        IOResult<void> Move(const Path::Uri& from, const Path::Uri& to) override;
+        IOResult<void> Copy(const Path::Uri& from, const Path::Uri& to) override;
+        IOResult<std::vector<DirectoryEntry>> List(const Path::Uri& uri, const ListOptions& opt) override;
+        IOResult<std::unique_ptr<DirectoryIterator>> Iterate(const Path::Uri& uri,
                                                              const ListOptions& opt) override;
         IOResult<std::unique_ptr<IFileWatcher>> CreateWatcher() override;
     };
 
     /// The file URI of a native path in UTF-8, for this backend. A relative path is made absolute against the
     /// current directory first (OS::Files::MakeAbsolute), as the OS would resolve it.
-    IOResult<GYO::Engine::IO::Path::Uri> NativeFileUri(std::string_view utf8Path);
+    IOResult<Path::Uri> NativeFileUri(std::string_view utf8Path);
 
     /// Whether a file written at the native path a person named lands in root, or is root (docs/architecture/
     /// io.md, "User files"). The candidate's parent is resolved by the OS (OS::Files::MakeAbsolute, then
