@@ -1,5 +1,6 @@
 #include "engine/asset/ContentPath.hpp"
 
+#include <cstddef>
 #include <vector>
 
 namespace GYO::Engine::Asset {

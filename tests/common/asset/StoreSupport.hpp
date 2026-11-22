@@ -21,6 +21,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <ostream>
 #include <set>
 #include <span>
 #include <stdexcept>

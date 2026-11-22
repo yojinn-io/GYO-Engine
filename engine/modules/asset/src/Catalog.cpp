@@ -250,9 +250,9 @@ CatalogResult<ContentManifest> ParseContentManifest(const std::string_view text,
         ++index;
     }
     if (const std::optional<Json::Value> bundles = root->Find("shader_bundles")) {
-        auto text = Compact(*bundles, At(sourceName, "shader_bundles"));
-        if (!text) return Base::Err(std::move(text).error());
-        manifest.shaderBundles = std::move(*text);
+        auto bundleText = Compact(*bundles, At(sourceName, "shader_bundles"));
+        if (!bundleText) return Base::Err(std::move(bundleText).error());
+        manifest.shaderBundles = std::move(*bundleText);
     }
     auto extra = Preserve(*root, kManifestKeys, sourceName);
     if (!extra) return Base::Err(std::move(extra).error());

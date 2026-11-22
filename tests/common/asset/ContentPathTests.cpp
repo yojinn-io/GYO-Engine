@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include <string>
+#include <ostream>
 #include <unordered_set>
 
 #include "engine/asset/AssetId.hpp"

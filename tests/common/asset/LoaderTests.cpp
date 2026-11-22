@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstddef>
 #include <optional>
+#include <ostream>
 #include <span>
 #include <string>
 #include <string_view>
