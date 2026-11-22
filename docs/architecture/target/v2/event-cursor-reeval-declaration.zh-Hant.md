@@ -1,18 +1,18 @@
-# 事件游標的重評：事前宣告（修訂 1）
+# 事件游標的重評：事前宣告（修訂 2）
 
 > 性質：事前宣告（AGENTS §3 的 Architecture Delta；§2 的基盤 Architecture）。**使用者核准、說「開始」之前不改程式、不改條文與守衛。** 核准本宣告不等於 AGENTS §14.4 的判定變更核准；第 7 節列的守衛處置，有判定變更的照 1～5 逐條請使用者核准。
 > 批次代號：`v8-arch-gyo2-event-cursor-reeval`。Owner：架構（GYO2 主會話開的任務卡）。更新：2026-11-22。
 > 起因：使用者 2026-11-22 在狀態機卡選 (A＋)——狀態機這一批照 (A) 做，另外現在就開這張卡（HANDOFF `v8-arch-gyo2-state-machine-r8-crosscheck`，記在 `claude/gyo2-time-design` 1e4fd1ab）。理由（使用者的原則）：建機制這一輪，保守的選項會被上層蓋住，不等觀測。
 > 碰到的已核准決定：「照游標修剪」（`v8-arch-gyo2-event-trim-by-cursor`）、`time-plan-two` (5)、游標宣告（`v8-arch-gyo2-event-cursor-declaration-approved`、`-five-declarations-approved`）。本頁的建議**不改「照游標修剪」，也不改預設的「被跳過下次補讀」**；只加一種由條件自己宣告的例外（第 3 節）。
 
-**修訂紀錄**：修訂 0（338e40a0）建議 (R1)「被條件跳過一律算讀過」＋(R2)「讀者出生就拉住」。敵對式檢查（Fable 5.2／high，`declaration-check-r0-fable.md`）blocker 3、should 7、nit 7：(R1) 推翻的是你選過的方案明寫的賣點（B1）、它自己多加了「條件＝把讀者關掉」的前提（B2）；(R2) 讓讀取畫面期間的輸入在第一個固定步一次讀到（B3）。**修訂 1（這一份）**：建議改成 (C)「條件宣告判否時放不放開讀者」、題目二維持現狀；改法對照在第 11 節。改完沒有再送檢查。
+**修訂紀錄**：修訂 0（338e40a0）建議 (R1)「被條件跳過一律算讀過」＋(R2)「讀者出生就拉住」。敵對式檢查（Fable 5.2／high，`declaration-check-r0-fable.md`）blocker 3、should 7、nit 7：(R1) 推翻的是你選過的方案明寫的賣點（B1）、它自己多加了「條件＝把讀者關掉」的前提（B2）；(R2) 讓讀取畫面期間的輸入在第一個固定步一次讀到（B3）。**修訂 1**（d87698a8）：建議改成 (C)「條件宣告判否時放不放開讀者」、題目二維持現狀；改法對照在第 11 節。窄複查（Fable 5.2／high，`declaration-check-r1-fable.md`）blocker 1、should 4、nit 6。**修訂 2（這一份）**：照窄複查補 (C) 的四條附屬規則，一次寫定——任何一個 release 條件判否就放開（B1）、沒有游標就建在當時最新（S1）、宣告進兩種指紋（S2）、不傳進被驅動的 schedule（S4）；回滾的 `NotResimulating` 改成列事實交回滾 owner（S3）。對照在第 12 節。改完沒有再送檢查。
 
 **寫法**：每件事標出處——【你定的】（附 HANDOFF 代號）、【設計稿】（主會話的建議、你選了那個方案，但這一句不是你的原話）、【統合推出的】、【程式】、【別家】、【我判的】。
 
 **證據**（這台 Mac 的主 checkout，git 不追蹤）：
 - `build/evidence/gyo2-state-machine-r8/crosscheck-message-retention.md`：五家對照（狀態機卡的唯讀子代理，Opus）。
 - `build/evidence/gyo2-event-cursor-reeval/source-verification.md`：本卡自己重讀的行。
-- `build/evidence/gyo2-event-cursor-reeval/declaration-check-r0-fable.md`：修訂 0 的敵對式檢查。
+- `build/evidence/gyo2-event-cursor-reeval/declaration-check-r0-fable.md`、`declaration-check-r1-fable.md`：修訂 0 的敵對式檢查、修訂 1 的窄複查。
 - 別家原始碼：`~/Code/GitHome`（bevy 6a911653f、lightyear 736e1695、bevy_replicon d80c849；其餘版本見對照報告開頭）。
 - 讀的程式：`origin/gyo2` 7fcfac27。
 
@@ -114,7 +114,7 @@
 
 | | (A) 不改，說明頁寫明 | **(C) 條件宣告「判否時放開讀者」（建議）** | (R1) 條件判否一律放開（修訂 0） | (E) 讀者的選項「被跳過時放開」 | (F) 訊息種類的選項「固定保留 N 次 Run」 | (B／G) 狀態轉換時清除 |
 |---|---|---|---|---|---|---|
-| 做法 | 照舊 | 定義條件時宣告；System 因**宣告了的條件**判否而跳過時，它的所有游標（System 與每個條件 slot、每種訊息）推到當時最新；因沒宣告的條件判否，照舊不動 | 任何條件判否都推到最新 | 作者對每個讀者選 | 作者對每種訊息選；那種訊息不看讀者 | 狀態機、生成世界等在轉換時呼叫 Kernel 的清除入口 |
+| 做法 | 照舊 | 定義條件時宣告；System 被跳過、而且它的條件裡**有任何一個宣告了的條件判否**時，它的所有游標（System 與每個條件 slot、每種訊息）推到當時最新（沒有的建在當時最新）；只有沒宣告的條件判否時，照舊不動（第 3.4 節） | 任何條件判否都推到最新 | 作者對每個讀者選 | 作者對每種訊息選；那種訊息不看讀者 | 狀態機、生成世界等在轉換時呼叫 Kernel 的清除入口 |
 | 系譜 | 設計稿 X | 新導（2.3 末：別家不必分，GYO 要分） | 狀態機宣告 2.3 的 (C) 同型 | 新導 | Bevy 雙緩衝 | Bevy `clear_messages_on_exit`／`on_enter`、replicon |
 | 帶狀態條件的讀者：後果 1、2 | 不解 | 解（殘留最多一幀，D5） | 解 | 選了才解；作者每個讀者都要記得選 | 解（但那種訊息沒有丟棄記錄） | 不解（GYO 的讀者會再拉住之後的） |
 | 暫緩的讀者（`on_timer`、`OnMessage`） | 不漏 | 不漏 | **靜默漏讀**（舊坑回來） | 不漏 | 那種訊息會漏 | 不漏 |
@@ -124,7 +124,7 @@
 
 **建議 (C)**：唯一能讓暫緩不漏、關閉不拉住同時成立的選項；機制一份在 Kernel，宣告跟著條件走（定義 `InState` 的狀態機、定義生成條件的編排層各宣告一次），作者用 `InState` 不必記任何事。代價：Kernel 介面多一個選項；第 D5 節的三個情形照舊。
 
-**(C) 與 (E) 的差別**：(E) 把宣告放在每個讀者上，用 `InState` 的作者每次都要記得；(C) 放在條件上，條件的定義者寫一次。
+**(C) 與 (E) 的差別**：(E) 把宣告放在每個讀者上，用 `InState` 的作者每次都要記得；(C) 放在條件上，條件的定義者寫一次。(E) 的優點是不必回答「哪個條件判否」、不碰條件的指紋；(C) 用第 3.4 節的四條規則一次回答。作者若要某個讀者在 `InState` 擋住時照樣補讀，寫法是讀者不帶 `InState`、在 System 裡判斷狀態（或累積進 Resource）。
 
 ### 3.2 題目二：讀者從什麼時候開始拉住
 
@@ -139,7 +139,14 @@
 
 ### 3.3 (C) 之後，一句話的契約
 
-> 讀者讀到的，是它上一次 `Read()` 之後寫的全部（上限內）——**除非它上一次被跳過是因為一個宣告了「判否時放開讀者」的條件，那它從那次跳過之後讀起**。沒跑過的讀者不拉住，第一次從還留著的最舊一筆讀起（照舊）。
+> 讀者讀到的，是它上一次 `Read()` 之後寫的全部（上限內）——**除非它上一次被跳過是因為一個宣告了「判否時放開讀者」的條件，那它從那次跳過之後讀起**。沒跑過的讀者不拉住，第一次從還留著的最舊一筆讀起（照舊）——除非它被 release 條件跳過過，那它從最後一次跳過讀起。放開掉的訊息不記 `DroppedMessages`：對宣告了的條件，`time-plan-two` (5) 的「丟了有記錄」不適用（它不是被上限擠掉，是讀者被關閉）。
+
+### 3.4 (C) 的四條附屬規則（一次寫定）
+
+1. **任何一個 release 條件判否就放開**（窄複查 B1）。現在的求值是先掛載點自己的條件、再 set 的條件，第一個判否就停（`Executor.cpp:341-348`）。`InState` 放在 set 上、System 自己再帶暫緩條件（例：`Gen` set 裡帶 `OnMessage<AssetArrived>` 的 System）時，暫緩的先判否，set 的 release 條件輪不到。所以：**沒宣告的條件判否之後，仍求值剩下的 release 條件**（只求值那些；沒宣告的照舊不求值），其中任何一個判否就放開。條件是唯讀的，多求值一次唯一的影響是那個條件自己的游標，而它馬上一起被推到最新。不改求值順序與 slot 編號。
+2. **沒有游標的建在當時最新**（窄複查 S1）。被 release 條件跳過、這個掛載點某個 slot 還沒有游標時，建一個在當時最新。否則第一次打開「設定」的 `InState<Settings>` 讀者，會一次讀到別的讀者（例：時間暫停中的固定步讀者）拉住的全部按鈕——讀到什麼又取決於別的讀者。這不會放回讀取畫面的坑：固定步裡的讀者是「schedule 沒跑」，照舊沒有游標。建出來的游標拉住到下一次求值：還是判否就再推到最新，所以不會長期拉住。
+3. **宣告進兩種指紋**（窄複查 S2）。Registry 指紋（J-18）與權威 Module 的一致性指紋（它收寫判定資料的 System 的條件名，`ServerAuthorityStrategy.cpp:329-350`）都收「條件名＋是否 release」。兩端同名條件宣告不同，指紋不同、連線時就看得出來。同一個 Registry 裡同名、宣告不同的條件：不另加守衛（不為防誤用加守衛）；實作批查現在對同名條件有沒有既有的檢查，有就沿用。
+4. **不傳進被驅動的 schedule**（窄複查 S4）。release 條件掛在驅動別張 schedule 的 System 上（例：`fixedStepConditions={AfterGenerating()}` 掛在 `RunFixedSteps`，`WorldTimeModule.cpp:114-117`），被放開的只有那個驅動 System 自己的游標；那張 schedule 裡的讀者是「schedule 沒跑」，照舊拉住、補讀。時間 Module 的說明頁加一句。
 
 ---
 
@@ -150,11 +157,12 @@
 | 處 | 現在 | 改成 |
 |---|---|---|
 | `Condition<>`（`Registry.hpp:54-90`）與 `ConditionRef` | 名字、解析、求值 | 多一個宣告「判否時放開讀者」（名字照命名規範在實作批定，暫稱 release）；預設不放開 |
-| `Executor.cpp:334-357` 條件求值 | 判否就 short-circuit、`!runs` 直接 return | 判否的那個條件若宣告了 release：這個掛載點**已有的**游標（slot 0 與每個條件 slot、每種訊息）推到該種訊息當時最新的序號；沒有游標的不建（沒跑過的讀者照舊不拉住） |
+| `Executor.cpp:334-357` 條件求值 | 判否就 short-circuit、`!runs` 直接 return | 照 3.4 第 1 條：沒宣告的判否後仍求值剩下的 release 條件；有 release 條件判否時，這個掛載點的游標（slot 0 與每個條件 slot、每種訊息）推到該種訊息當時最新，沒有的建在當時最新（3.4 第 2 條） |
 | `WorldGeneration.cpp:17-23` | `WhileGenerating`、`AfterGenerating` | 宣告 release |
 | 狀態機的 `InState`／`NotInState`（狀態機卡，未合併） | — | 宣告 release（第 9 節，經主會話協調） |
-| 唯讀登記表、Registry 指紋（J-18） | 條件的名字 | 條件的宣告也收（它改變行為）；golden 若有條件就重產 |
-| `NotResimulating`（回滾 Module，`rollback/src/Registrations.cpp:233`） | — | 不宣告。理由：它擋的是重跑時的 System；可回滾那一側不讀寫 `Message`（游標宣告第 3.4 節），宣告與否沒有可觀察的差別。由回滾 Module 的 owner 確認 |
+| 唯讀登記表、Registry 指紋（J-18） | 條件的名字 | 條件的宣告也收（3.4 第 3 條）；雜湊在條件名之後加一個位元組（0／1） |
+| 權威 Module 的一致性指紋（`engine/modules/authority`，`ServerAuthorityStrategy.cpp:329-350`） | 條件名 | 條件名＋宣告（3.4 第 3 條） |
+| `NotResimulating`（回滾 Module，`rollback/src/Registrations.cpp:231-235`） | — | **本批不宣告，交回滾 Module 的 owner 判**。事實（窄複查 S3）：回滾的規則只禁止訊息跨過可回滾的邊界，步的 schedule 裡面寫、裡面讀是允許的（`rollback-module-declaration.zh-Hant.md:256-260`）。不宣告：重跑時重寫的 `Hit` 之後被重讀、特效重播；宣告：重跑才新出現的命中不播。兩種都不完美 |
 
 World 摘要的格式不變（游標表本來就在，值會因放開而不同）；版本不升。
 
@@ -174,7 +182,7 @@ World 摘要的格式不變（游標表本來就在，值會因放開而不同�
 1. **Feature**：狀態機的段落（主選單、關卡中、暫停）裡帶狀態條件讀訊息的 System 不出現後果 1、2；生成世界的 `WhileGenerating()` 讀者生成完不拉住；暫緩型條件（節奏、`OnMessage`）照舊不漏讀。
 2. **現在的問題**：第 1 節後果 1、2；條件判否只有一種意思（2.4 D1）。
 3. **變化的邊界**：Kernel 的 run 條件多一個宣告；保留式訊息的讀者契約多一個例外（DI-KS 10）。
-4. **影響**：`engine/ecs/kernel`（`Registry.hpp`、`Executor.cpp`、`World.cpp`／`World.hpp` 的推游標函式、`Fingerprint.cpp`、登記表）；`engine/orchestration`（`WorldGeneration.cpp`）；狀態機（`InState`／`NotInState`）；測試見第 7 節；文件見 4.2。
+4. **影響**：`engine/ecs/kernel`（`Registry.hpp`、`Executor.cpp`、`World.cpp`／`World.hpp` 的推游標函式、`Fingerprint.cpp`、登記表）；`engine/orchestration`（`WorldGeneration.cpp`）；`engine/modules/authority`（一致性指紋）；時間 Module 的說明頁（3.4 第 4 條）；狀態機（`InState`／`NotInState`）；測試見第 7 節；文件見 4.2。
 5. **Dependency Direction**：不變（Module 用 Kernel 的條件選項）。
 6. **Ownership**：「條件判否是什麼意思」由定義條件的 owner 宣告；Kernel 只照宣告推游標。訊息留多久仍是 Kernel 照游標與上限。
 7. **為什麼不能更小**：(A) 留著後果 2（玩家看得到）與失效的警報，作者的補償會積在上層；(R1) 不加介面但讓暫緩的讀者靜默漏讀；(E) 要每個用 `InState` 的作者記得選。
@@ -187,27 +195,28 @@ World 摘要的格式不變（游標表本來就在，值會因放開而不同�
 - **予見的根據**：(1) 名指的 Feature——狀態機宣告 2.3 寫明四個點名 Feature「都不需要」在帶狀態條件的 System 讀訊息，所以這裡的根據**不是**「Feature 需要」，而是「Feature 會讓作者這樣寫、寫了就踩到看得見的錯而且沒有任何東西擋」——使用者照「保守的選項會被上層蓋住」選了現在就處理（A＋）；生成世界的 `WhileGenerating()` 是已實作的情形。(3) 規模——上限 1024 筆，每幀一筆的 UI 或命中訊息在 60 fps 下約 17 秒填滿。(2) 參考實作——2.3。
 
 **Design Invariants（DI-KS 10 保留式那一段加一句；核准後在實作批寫進 `target/kernel.zh-Hant.md`）**：
-- run 條件可以在定義時宣告「判否時放開讀者」。System 因這樣的條件判否而被跳過時，它已有的游標全部推到當時最新（不拉住、回來不補讀）；因沒宣告的條件判否、或所在 schedule 沒跑，游標不動、下次補讀（照舊）。預設不宣告。
+- run 條件可以在定義時宣告「判否時放開讀者」，預設不宣告。System 被跳過時，若它的條件裡有任何一個宣告了的條件判否（沒宣告的條件判否之後，仍求值剩下宣告了的條件），它的游標全部推到當時最新、沒有的建在當時最新（不拉住、回來不補讀，放開的不記 `DroppedMessages`）；只有沒宣告的條件判否、或所在 schedule 沒跑，游標不動、下次補讀（照舊）。放開只作用在被跳過的那個 System 自己的游標，不傳進它驅動的 schedule。條件的宣告進 Registry 指紋與權威 Module 的一致性指紋。
 - 其餘照現行 DI-KS 10。
 
 **Replacement Criteria（加進 Kernel 的 RC）**：
-- 作者或 Module 開始為「schedule 沒跑的讀者」寫補償（暫停後清掉、進入時推到最新），出現在兩個以上的 Module 或產品——表示要讓 schedule 的登記者也能宣告（題目一的 schedule 版本，見第 11 節 S6），停下來問。
+- 作者或 Module 開始為「schedule 沒跑的讀者」寫補償（暫停後清掉、進入時推到最新）——表示要讓 schedule 的登記者也能宣告（題目一的 schedule 版本，見第 11 節 S6），停下來問。
 - 條件的宣告需要第三種意思（例：「判否時只放開某些訊息種類」）——宣告在長成設定語言，停下來問（AGENTS §9）。
 
 ---
 
 ## 7. 守衛與測試（AGENTS §14.4）
 
-(C) 的預設照舊，**現有判定都不變**；只有新增。
+(C) 的預設照舊，**訊息的現有判定都不變**；指紋的期望值可能變（下表 J-18），其餘只有新增。
 
 | 判定 | 處置 |
 |---|---|
 | J-36 全部（`MessageCursorTests.cpp`，含 `msg-skipped-*`、`msg-not-run-*`、`msg-never-run-holds-nothing`、`msg-new-reader-oldest`、`msg-trim-after-rounds`、`msg-summary-cursor-position`）、J-56 `[ns-events]`（`NestedRunTests.cpp:943-963`）、`HookFlushTests.cpp`、`ImmediateChangeTests.cpp`、`ObserverTests.cpp`、`WorldTests.cpp`、`RegistrationRoundTests.cpp` | 不變：它們用的條件（`FlagOn`、`OutSet` 等）沒宣告 release。實作批用 `git grep` 確認沒有測試用 `WhileGenerating`／`AfterGenerating` 擋讀者（修訂 1 時掃過：`tests/common/world_time/WorldGenTimeTests.cpp` 的讀者 `RecordFrame` 不帶這兩個條件） |
-| J-18 golden | 若 golden 裡有條件：指紋多收宣告，重產。判定（「同樣的登記同樣的指紋」）不變 |
-| 新（Kernel） | 宣告了 release 的條件判否：System slot 與每個條件 slot 的游標推到最新、不拉住、回來只讀之後的；沒宣告的條件判否照舊補讀；short-circuit 時判否的是哪一個決定；set 的條件同樣；判否前同一 Run 已寫的不讀、判否後才寫的下次讀到（D5 的殘留）；沒跑過的讀者被 release 條件跳過不建游標；Registry 指紋含宣告 |
+| J-18 golden、權威 Module 一致性指紋的期望值 | 若 golden 或期望值裡有條件：雜湊多收宣告，期望值改。這是守衛期望值的變更：實作批查有沒有受影響的，有就照 §14.4 列 1～5 請你核准（預計是收緊：同名而宣告不同的條件以前看不出來、之後指紋不同；沒有放寬的面） |
+| 新（Kernel） | release 條件判否：System slot 與每個條件 slot 的游標推到最新、不拉住、回來只讀之後的、不記 `DroppedMessages`；沒宣告的條件判否照舊補讀；掛載點的暫緩條件先判否、set 上的 release 條件判否時仍放開（3.4 第 1 條），暫緩條件判否而 release 條件判真時不放開；判否前同一 Run 已寫的不讀、判否後才寫的下次讀到（D5 的殘留）；沒跑過的讀者被 release 條件跳過時建在最新，之後第一次跑不讀到別的讀者拉住的舊紀錄（3.4 第 2 條）；release 條件掛在驅動巢狀 schedule 的 System 上，裡面的讀者照舊補讀（3.4 第 4 條）；Registry 指紋含宣告 |
+| 新（權威 Module） | 兩端同名條件宣告不同時一致性指紋不同 |
 | 新（編排層） | 生成結束後，帶 `WhileGenerating()` 的讀者不再出現在 `DroppedMessages` 的讀者裡、不拉住 |
 
-**突變**：新性質各一個只有它能抓的（例：「release 只推 slot 0、不推條件 slot」「release 條件判否卻照舊不推」「沒宣告的條件也推」「指紋不收宣告」），照 AGENTS §14.5 寫明守的條文；只跑相關的突變（`mutation-rerun-scope`）。
+**突變**：新性質各一個只有它能抓的（例：「release 只推 slot 0、不推條件 slot」「release 條件判否卻照舊不推」「沒宣告的條件也推」「暫緩條件判否後不再求值 release 條件」「沒有游標時不建」「指紋不收宣告」），照 AGENTS §14.5 寫明守的條文；只跑相關的突變（`mutation-rerun-scope`）。
 **§14.2 的敵對式檢查**：新案例與突變清單，請作者以外的模型（Fable／high）檢查一次。
 
 ---
@@ -223,7 +232,7 @@ World 摘要的格式不變（游標表本來就在，值會因放開而不同�
 | 新案例與突變清單的敵對式檢查 | Fable／high | 和實作者不同模型 |
 | 合併前的設計審查 | Fable／high（唯讀） | 卡片指定 |
 
-**估計**（讀程式量估的）：條件的宣告與指紋 1～2 h；Executor 推游標 1～2 h；`WhileGenerating`／`AfterGenerating` 宣告與編排層案例 1 h；Kernel 新案例 2～3 h；突變與檢查 1～2 h；文件（DI-KS 10、4.2）與 dev_log 1～2 h。合計 7～12 h。狀態機的 `InState` 宣告不在本批（第 9 節）。
+**估計**（讀程式量估的）：條件的宣告與兩種指紋 2～3 h；Executor（續求值、推與建游標）2～3 h；`WhileGenerating`／`AfterGenerating` 宣告與編排層案例 1 h；Kernel 新案例 2～3 h；突變與檢查 1～2 h；文件（DI-KS 10、4.2）與 dev_log 1～2 h。合計 9～15 h。狀態機的 `InState` 宣告不在本批（第 9 節）。
 
 ---
 
@@ -242,7 +251,8 @@ World 摘要的格式不變（游標表本來就在，值會因放開而不同�
 - 別家的行為從原始碼讀出，沒有執行；Bevy issue #15072 的原文不在本機。flecs、Unity、replicon 的行多數照對照報告與檢查報告引用（`source-verification.md` 末段）；`on_timer`、replicon `server/message.rs:186-188` 是檢查者讀的，本卡沒有重讀。
 - 「你當時有沒有讀到設計稿決定 4 那一列」查不到；本頁不再把 X 說成統合多加的。
 - 條件宣告的名字、放在 `Condition<>` 的哪個參數，照命名規範在實作批定。
-- 修訂 1 沒有再送敵對式檢查。
+- 修訂 2 沒有再送檢查（修訂 0 全面檢查、修訂 1 窄複查各一次）。
+- 窄複查沒讀：狀態機的 `InState` 實作（未合併）、kernel golden 裡有沒有條件、權威 Module 的測試與 Design Invariants 全文、突變清單——實作批補。
 
 ---
 
@@ -267,3 +277,22 @@ World 摘要的格式不變（游標表本來就在，值會因放開而不同�
 | nit：第 6 節與狀態機 2.3 矛盾 | 第 6 節改寫，明說根據不是「Feature 需要」 |
 | nit：估計 | 重估（判定不變，測試只新增） |
 | nit：L5 之後 slot 位置會不會動 | 實作批查；(C) 只在判否當下推「這個掛載點已有的」游標，不依賴跨版本的 slot 對應 |
+
+---
+
+## 12. 窄複查的處理（`declaration-check-r1-fable.md`）
+
+| 項 | 處理 |
+|---|---|
+| B1 先判否的條件決定，set 上的 release 條件輪不到 | 接受。3.4 第 1 條：沒宣告的判否後仍求值剩下的 release 條件；DI、4.1、第 7 節、突變同步 |
+| S1 沒有游標的不建，第一次打開時讀到別人拉住的 | 接受。3.4 第 2 條：建在當時最新；第 11 節 S7 的處理由這條取代 |
+| S2 漏了權威的一致性指紋 | 接受。3.4 第 3 條；影響加 `engine/modules/authority` |
+| S3 `NotResimulating` 不宣告的理由不成立 | 接受。4.1 改成列事實、交回滾 owner；本批不宣告 |
+| S4 不傳進被驅動的 schedule | 接受。3.4 第 4 條、DI、第 7 節新案例、時間 Module 說明頁 |
+| N1 golden 重產是期望值變更 | 接受。第 7 節改寫、照 §14.4 列 1～5 |
+| N2 同名不同宣告 | 3.4 第 3 條：不另加守衛，指紋看得出跨端的；同一 Registry 沿用既有檢查（實作批查） |
+| N3 放開的沒有記錄 | 接受。3.3、DI 寫明 |
+| N4 用條件的作者不能逐次改 Module 的宣告 | 3.1 末寫別的寫法（不帶 `InState`、在 System 裡判斷） |
+| N5 RC 數次數 | 拿掉「兩個以上」 |
+| N6 S6 的理由只對再次進入成立 | 不改結論；記在這裡 |
+
