@@ -1,6 +1,6 @@
 # 事前宣告：asset Module（`v8-arch-gyo2-asset`）
 
-更新：2026-11-22（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-22，原話「核准」；核准的版本 55a14825）。實作要等第 5 批的「多個 World、交換點」與「生成世界（重做）」、第 4 批合併、編排層的 Product 層 Resource，而且使用者說開始。**
+更新：2026-11-22（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-22，原話「核准」；核准的版本 55a14825）；實作完成，等合併前核准。** 實作和本頁不同、或本頁沒寫清楚而在實作時判的地方，列在第 30 節；正式頁是 [asset.zh-Hant.md](asset.zh-Hant.md)。
 
 **經過**：
 - 修訂 0（f93edb7e）送 Fable 5.2／high 敵對式檢查，blocker 4、should 15、nit 12，全部採用成修訂 1（b050e13b），對照在第 17 節。
@@ -137,7 +137,7 @@ FPS 的 Client 進對局之前，要載角色模型、武器貼圖、字型、�
 
 - **事先轉檔的工具與它的資料契約**（三件之 3）。本批只保證接得上（5.10）。
 - **image Module 與 stb_image**：隨 SDL 那批的第一個使用者做（12.2 第 5 題）。本頁先定位置、授權與 adapter（5.11）。
-- **其他 loader**：模型（ufbx，進 model Module；SDL adapter 與 ufbx 歸哪一類，HANDOFF 未定）、音效（world_audio 那批；clip 的來源與預設起播時刻也在那批，使用者 2026-11-22 核准 audio 重審 `v8-arch-gyo2-audio-review-approved`）、字型（text Module，SDL 那批）、二進位（沒有點名的 Feature）。
+- **其他 loader**：模型（ufbx，進 model Module；SDL adapter 與 ufbx 歸哪一類，HANDOFF 未定）、音效（audio 那一側的小批〔實作時改：原寫「world_audio 那批」，world_audio 已撤（使用者 `v8-arch-gyo2-world-audio-withdrawn`），第 30 節第 1 項〕；clip 的來源與預設起播時刻也在那批，使用者 2026-11-22 核准 audio 重審 `v8-arch-gyo2-audio-review-approved`）、字型（text Module，SDL 那批）、二進位（沒有點名的 Feature）。
 - **GPU 資源**（Bevy `RenderAssets<T>`）：歸 render，隨 SDL 那批。
 - **大地圖的串流**（決定 8）：照 Bevy 不內建。asset 只給上限與 region 級的 id；串流的規則與「進判定」屬日後的地圖 Module（RC-AS1）。
 - **沒有點名 Feature 的，本批不做，也不在介面上先留形狀**：熱重載與 `Modified`（model_viewer 的 `RefreshContent` 是手動重讀，工具可以直接呼叫 loader）、一個檔分出多個子 asset、作者在執行期自己加值（Bevy `Assets::add`）、資料夾自動產生 catalog（產品可以在程式裡加 catalog 項目，5.3）。
@@ -1358,3 +1358,44 @@ dd31fff8 檢查的 B-1～B-3、S-1、S-6、S-7、S-9 隨形狀消失；B-4 照�
 | N-1～N-5 | `AssetLoaderRegistry` 的殘留；件數加 `BadSettings`；(B)5 的整筆不記、冪等、登記失敗後的等待者；master fixture 從 origin/master 3b411e21 複製；執行器的介面由 asset 自己定 |
 
 **狀態**：可以交動工前核准。
+
+## 30. 實作時的調整
+
+第 1～5 步實作（a5d6bdf7、ed2e70b8、26a77b38、318f6699、6ab6d72e、8d3ca694）之後，和本頁不同、或本頁沒寫清楚而在實作時判的地方。標「卡片照 L17 判」的照命名規範、別家原始碼與已定原則判，不是使用者的話。都沒有放寬第 7 節的 Design Invariants、第 10 節的判定；放寬或收緊的地方逐項寫明。正式頁 [asset.zh-Hant.md](asset.zh-Hant.md) 照實作的事實寫。
+
+### 30.1 和本頁不同的
+
+| # | 本頁原寫 | 實作 | 理由 | 落點 |
+|---|---|---|---|---|
+| 1 | 音效 loader 在「world_audio 那批」（2.2；9e45eaff 改的字） | 「audio 那一側的小批」 | world_audio 已撤（使用者 `v8-arch-gyo2-world-audio-withdrawn`）；2.2 已改字並加註 | 2.2 |
+| 2 | 雜湊函式在 world_asset（R1、5.1、5.9.1） | `AssetId`、`Handle<T>`、`AssetRef<T>` 的雜湊函式在 asset 函式庫，寫成受約束的泛型 `template <class Sink> requires Detail::HashesText<Sink> void HashValue(Sink&, const X&)`；`AssetRequests`、`AssetView` 的（什麼都不寫）在 world_asset | Kernel 的客製點經 ADL 找 `HashValue`，必須和型別同一個 namespace（`GYO::Engine::Asset`）；world_asset 若在自己的原始碼裡開 `Asset` namespace，會違反 naming 守衛（namespace 要對得上單位）。寫成泛型、以「Sink 能用自己的雜湊函式寫字串」約束，asset 就不必依賴 Kernel（Kernel 的 `Hasher` 符合） | `AssetId.hpp`、`Handle.hpp`、`AssetRef.hpp`；正式頁第 8 節 |
+| 3 | catalog 的錯誤記著，到 world_asset 第一個跑到的 `Finish` 回報（5.3 驗證時點、5.4、5.8） | 在 `Configure` 用 `ProductSetup::Report` 回報（`WA-E1`；文字 loader 登記失敗是 `WA-E2`）；store 照樣以空 catalog 建好 | #270（`v8-arch-gyo2-exchange`）給了 `Configure` 的回報入口，就是 O-A3；有它就不建任何 World，不必繞到 `Finish` | `WorldAssetModule.cpp`；測試 `view: content that breaks the catalog's rules is a startup error reported from Configure` |
+| 4 | Module 拿到 `AssetLoaderRegistry`、`AssetOptions` 的路交編排層（O-A1、O-A2、O-A4，12.3 第 13 題） | #270 的 Product 共用處與選項：`ProductSetup::Options<AssetOptions>()`（O-A1）、`setup.Buffer().Create<AssetStore>`／`Create<AssetLoaderRegistry>`，擁有型別的單位 `Find` 它（O-A2）、`setup.OnDestroy` 裡 `Shutdown(Discard)`（O-A4） | 編排層的形狀定了，照它接；E3 的丟棄件數仍沒有可寫的 World（見 dev_log 的未做） | `WorldAssetModule.cpp` |
+| 5 | `AssetView::State(handle)` 回「`Failed`（帶 `AssetLoadFailure`）」（5.7） | `State` 回 `AssetState`；失敗另由 `Failure(handle)` 取（請求級或 id 級，沒有就空） | 狀態是列舉、失敗是帶訊息的值，`State` 只回列舉，`Ready`、`Unfinished` 的比較也只看列舉；失敗要細節時另讀（卡片照 L17 判） | `AssetView.hpp` |
+| 6 | 套用點的 System 經交換點接上（第 9 節第 4 步「接交換點」） | 套用點是 world_asset 自己的 System `ApplyAssets`，不用交換函式 | 交換點宣告 E-6：交換點不認得 asset，World 靠自己的套用點看到結果（X-2）；asset 的套用 System 是交換點宣告「套用點」一形的實例 | `WorldAssetModule.cpp` |
+| 7 | 執行器由交換點或 runner 給（X-1、X-4） | 產品自己建 threads 的 `WorkerPool`，經 `AssetOptions::executor` 交給 world_asset；沒給時需要排工作的請求是 id 級 `Failed(NoExecutor)`，不是啟動錯誤（9e45eaff 已寫進 5.4） | world_asset 是 default=yes，不載資產的產品也帶著它；store 不在呼叫者的執行緒上代跑（卡片照 L17 判） | `AssetExecutor.hpp`、`AssetStore.hpp`、`WorldAssetModule.hpp` |
+
+### 30.2 本頁沒寫清楚、實作時判的（卡片照 L17 判）
+
+**World 端（第 3 步）**
+- **`UntypedHandle`**：`Ready`、`Unfinished` 收一組不同型別的 Handle，用 `UntypedHandle`（從任何 `Handle<T>` 隱式轉來，持有同一個核心）。
+- **`Load` 是 `const`**：`AssetRequests::Load` 是 const，System 以 `Res<AssetRequests>` 呼叫。store 有自己的鎖，`AssetRequests` 本身沒有要改的狀態；用 `ResMut` 會讓所有請求的 System 互相排先後。
+- **`WorldAssetOptions`**：套用點掛在哪由每個 World 的 `WorldDescription::options` 給（`applySchedule`、`applyStage`，預設 `Main`/`First`）。預設骨架關掉的 World 用它指定（5.6「產品自己掛」的落點）。
+- **`AssetRequests` 被移除時不重建**：`ApplyAssets` 看到 `AssetRequests` 不在就什麼都不做；`AssetView` 不在則重建（5.4 的自癒）。`ApplyAssets` 經 `AssetRequests` 拿到 store（程式的註解：「With no AssetRequests there is no store to reach」），它不在就沒有 store 可拉；`AssetView` 是讀的結果，可以從 store 重建，`AssetRequests` 不是。
+- **`ReferencePath` 的 id 由 store 注入**：`LoadContext` 收一個可選的 `ContentPathIndex`（catalog 的路徑 → id），store 建 `LoadContext` 時給 catalog 的索引，`ReferencePath` 當場回帶 id 的 `AssetRef`，或記下 `UnlistedReference`／`AmbiguousReference`。直接呼叫 loader（沒有索引）時只記路徑、id 空。這樣 loader 的介面在兩種用法下相同（AS-3）。
+- **`ParseSettings` 收 JSON 文字**：loader 的 `ParseSettings(std::optional<std::string_view>)` 收 `settings` 的緊湊 JSON 文字（沒寫時是空），不收 JSON Module 的值。asset 對 json 是私有依賴，loader 的公開介面不帶 JSON Module 的型別；loader 要用 JSON Module 解讀就自己連。
+
+**store（第 2 步實作者的自判）**
+- **「連同依賴」的優先序**：自己或任何遞迴依賴還沒結束 → `Incomplete`（即使已有失敗）；全部結束、有失敗 → `Failed`；其餘 `Complete`。5.17 只列三種狀態，沒寫同時成立時誰優先。照「`Failed` 是結束後的結論」判，和 `DependenciesFinished` 一致。
+- **`maxInFlight` 預設 0＝不設限**：3.3「預設不設限，標明不是判定」的落點。
+- **建 store 時 catalog 有重複 id 是 `GYO_ASSERT`**：`AssetStore` 的建構收「已照 (A) 驗過」的項目；重複 id 是呼叫者的程式錯誤（E0），不是內容錯誤。內容的重複由 (A) 3 在讀 catalog 時回 `DuplicateId`。
+- **`Shutdown(Drain)` 的語意**：先等到沒有排隊與在飛的工作（含完成的工作排進來的依賴），要求執行器還在跑；之後和 `Discard` 一樣停。只有第一次呼叫有作用；不能從工作裡呼叫；不等已在跑的工作（它們發現 store 已關，什麼都不留）。X-6「能停下或等完」的落點。
+- **強連通分量把已標循環的邊也算進圖**：已標 `CyclicReference` 的邊不持有，但重算時仍是圖的邊。不算的話，經已標循環的邊閉合的新環會依完成順序有時被標、有時不被標（AS-5）。守衛：`depend: a cycle closed through an edge already marked is marked too`，突變 `as-store-cycle-skips-marked-edges`。
+- **等價測試的批次**：(2) 反序改成每批 5 筆、直到做完（依賴會排出更多工作，所以多於宣告的 4 批）；(3) 交錯照 3、3、3、3、3、3、2 筆之後再跑完其餘。判定（和自己的基準比、不比生命序號與嘗試序號）不變。
+- **件數多了幾項**：`newLivesNoExecutor`、`referenceNewLivesNoExecutor`、`jobsWaiting`、`jobsInFlight`、`fileReads` 與維護的 `dropsTaken == dropsStale + dropsSkipped + removals`。5.8 的等式在沒有排隊與在飛時成立，這是同一條等式加上進行中的兩項，沒有放寬。
+
+**catalog（第 1 步實作者的自判）**
+- **讀到第一個錯就停**：回那一條規則的碼，不收集全部錯誤。範例集每份只違反一條，判定不受影響；手寫 catalog 的作者一次只看到一個錯。
+- **catalog 檔沒有大小上限**：`ReadContent` 以 `std::numeric_limits<std::size_t>::max()` 讀；catalog 是產品寫的內容，沒有自己的上限（RC-AS8 的成本另量）。
+- **由副檔名推出的 `format` 不驗**：(A) 7 只驗「有寫的 `format`」是 `[a-z0-9]+`；推出來的不驗（副檔名轉小寫後照用；沒有 loader 認它時，請求是 `NoLoader`）。
+- **寫入多驗保留欄位**：`WriteContentManifest`、`WriteCatalog` 除了 (A) 規則，還驗保留欄位不和已知鍵或彼此重複、本身是 JSON（`WriteFailed`），保證寫出的讀得回來且相等。
