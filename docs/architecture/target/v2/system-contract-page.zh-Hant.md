@@ -50,7 +50,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 | 參數 | 用來做什麼 | 算什麼存取 |
 |---|---|---|
 | `Query<Read<T>, Write<U>, With<V>, Without<W>, Changed<X>, Added<Y>>` | 依 id 由小到大走過符合的實體；`Read` 拿到 `const T&`，`Write` 拿到 `Mut<U>` | 讀 T、寫 U；其餘是篩選 |
-| `Res<T>`、`ResMut<T>` | 讀、寫一個 Resource | 讀、寫 T |
+| `Res<T>`、`ResMut<T>` | 讀、寫一個 Resource；`Changed()`：這個掛載上次跑之後被寫過（第 16 節） | 讀、寫 T |
 | `MessageReader<M>`、`MessageWriter<M>` | 讀（照這個讀者自己的游標，上次之後寫的全部）、送保留式訊息 | 讀、寫 M |
 | `Spawn<Bundle<A, B…>>` | 生成實體，當場拿到 id；下一個同步點才看得到 | 寫配發器；延後寫 A、B… |
 | `SpawnWithId<Bundle<…>>` | 用指定的 id 生成（讀檔、連線） | 延後寫 |
@@ -526,7 +526,7 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
   }
   ```
 
-  帶狀態條件、但不讀 `Message` 的 System（只讀元件與 Resource）照常用條件。（`StateMachine<Flow>` 的介面以狀態機那一批為準，這裡只示意。）
+  帶狀態條件、但不讀 `Message` 的 System（只讀元件與 Resource）照常用條件。被條件擋住的期間，`Changed<T>` 與 `Res::Changed()` 會累積：回來那一次是 true，和訊息的「回來補讀」是同一類後果，只是只有一個 bool（第 16 節）。（`StateMachine<Flow>` 的介面以狀態機那一批為準，這裡只示意。）
 
   **轉換那一幀還有一個洞**：這個寫法照「讀的當下」的狀態判斷。讀者在 Plan 裡排在寫者之前（這一幀的按鈕下一幀才讀到），或讀者在固定步裡（晚一幀讀），關卡裡按的「回主選單」可能在狀態已經換成主選單之後才被讀到，被當成主選單的按鈕。要避免：讀者排在寫者之後、同一幀讀；或訊息自己帶「在哪個狀態按的」，讀者比對。
 - **要帶進「進入」或交給之後的資料，放 Resource。** 選了哪一關、生成的結果、讀檔的內容，寫進 Resource，讓「進入關卡中」或遊戲邏輯讀它，不靠訊息跨過狀態轉換。
@@ -537,3 +537,29 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **為什麼 Engine 不替你處理。** 被狀態擋住的讀者回來該不該補讀，是遊戲的判斷：成就計數可能要補，按鈕處理不該補。各家引擎都把它交給作者（Bevy 的核心要讀者每幀讀；lightyear 的範例把接收器寫成不帶狀態條件；flecs、Unity 看狀態的現在值）。作者若開始反覆寫這類補償，Kernel 會照 [RC 24](../kernel.zh-Hant.md#rc-24) 重評。
 
+## 16. Resource 被寫過了沒（`Changed()`）
+
+（`v8-arch-gyo2-kernel-res-changed`，使用者 2026-11-23 核准；規則全文在 kernel [DI-KS 28](../kernel.zh-Hant.md#di-ks-28)，本節只講寫法。跨部件規則 [CCR-8](../../../cross-component-rules.md)。）
+
+設定畫面改了 `GameSettings`，另一個 System 只在設定改了的那一幀重建混音與畫質：
+
+```cpp
+K::SystemResult RebuildMixer(K::Res<GameSettings> settings, K::ResMut<Mixer> mixer) {
+    if (!settings.Changed()) return {};   // 上次跑之後沒人寫過：不重建
+    mixer->Rebuild(*settings);
+    return {};
+}
+```
+
+- **是「被寫過」，不是「值變了」。** 拿 `ResMut` 取值寫入（`Get()`、`*`、`->`）就算，寫回同一個值也算；只讀用 `ResMut::Read()`，不算。和元件的 `Changed<T>`、Bevy、flecs、Unity 一樣。
+- **反覆同步同一個值的寫者，值相同就不寫**（CCR-8）。不然讀者每次都拿到 true，又得自己存上一次的值來比：
+
+  ```cpp
+  if (current.Read() != incoming) *current = incoming;   // 值不同才寫
+  ```
+
+- **比的是這個掛載上次跑。** 第一次跑看到全部有值且寫過的；自己上次寫的下一次不算；同一個 Run 裡排在後面的 System 寫的，下一次才看到；被 run 條件擋下的期間寫入會累積（第 15 節）。run 條件裡讀 `Changed()` 比的也是這個掛載上次跑——被別的條件擋下時，變更留到它真的跑那次（Bevy 的條件有自己的上次檢查，會錯過）；set 的條件逐成員求值，成員不保證同進同出。
+- **沒有值是 false**，拿掉的那次也是。要知道「被拿掉了」，自己記上次有沒有值（Bevy 的 `resource_removed` 也是這樣做的）；在步的 schedule 上不能用 `Local`（R-2 前提 2）。
+- **hook 與 observer 裡不要靠它。** hook 沒有上次跑（等於「有值、寫過」）；同步點裡的 observer 看不到同一個同步點後面才寫的（DI-KS 10）。
+- **重跑時反映實際執行的歷史。** stamp 不退回：步的 schedule 上，判定結果取決於 `Changed()` 的 System 不在回滾等價之內（R-2「stamp 除外」）。
+- **Engine 自己每幀或每步都寫、`Changed()` 幾乎恆為 true 的 Resource**：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`（每幀，`AdvanceTime`）、`Tick`（每個固定步）、生成中的 `WorldGeneration`、配發器（每配一個編號）。要抓「暫停了沒」讀作者自己寫的 `TimeControl`（作者也要值不同才寫），不要讀 `VirtualTime` 的 `Changed()`。

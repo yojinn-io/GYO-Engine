@@ -1,12 +1,13 @@
 # 事前宣告：System 讀得到 Resource 被寫過（`v8-arch-gyo2-kernel-res-changed`）
 
-更新：2026-11-23（修訂 1）。Owner：Kernel（GYO2 主會話開出的任務卡）。**狀態：草稿，待使用者核准。**
+更新：2026-11-23（修訂 1）。Owner：Kernel（GYO2 主會話開出的任務卡）。**狀態：使用者 2026-11-23 核准（原話「3.1 選 (a)，其他照建議，開始」）。**
 
 根據：使用者 2026-11-22 決定補（原話「開」）；網路卡（`gyo2-net-module`，PR #275，未合併）第 2 步查狀態機卡交叉比對 F3 時發現。
 
 經過：
 - 修訂 0：照卡片寫。送換模型的敵對式檢查（Fable／high，唯讀）：blocker 1、should 5、nit 8。報告：主 checkout `build/evidence/gyo2-kernel-res-changed/declaration-check-r1-fable.md`。檢查者沒有建置、沒有跑測試；observer 那一項（S2）是照程式推的。
-- **修訂 1（這一份）**：照報告改。最大的一項（B1）：點名的 Feature「階段一變就換 UI」光靠「被寫過」做不到，因為計畫中的寫者（網路的預設套用、狀態機的套用）同值也寫；寫成第 3.1 節的決定點。其他：observer 不在承諾內（S2）、換掉錯的單機例子（S1）、跟上 `origin/gyo2`（#278、#282，S3）、補列 set 條件與拿掉時的 stamp（S4）、登記跨部件規則（S5）、nit 全收。
+- 修訂 1：照報告改。最大的一項（B1）：點名的 Feature「階段一變就換 UI」光靠「被寫過」做不到，因為計畫中的寫者（網路的預設套用、狀態機的套用）同值也寫；寫成第 3.1 節的決定點。其他：observer 不在承諾內（S2）、換掉錯的單機例子（S1）、跟上 `origin/gyo2`（#278、#282，S3）、補列 set 條件與拿掉時的 stamp（S4）、登記跨部件規則（S5）、nit 全收。
+- **核准（2026-11-23）**：使用者在本卡選 3.1 (a)（Kernel 照三家「被寫過」，同值不寫的規則登記 CCR-8、經主會話轉給網路卡與狀態機卡），3.2、3.3 照建議（run 條件比掛載的上次跑、照現狀寫明；`is_added`、`set_if_neq`、`last_changed`、`resource_removed` 不做）。
 
 ---
 
@@ -89,7 +90,7 @@ template <class T> class ResMut {
 - `docs/cross-component-rules.md`：登記 **CCR-8**（內容依 3.1 的決定；owner Kernel DI-KS 28）。
 - 行為測試（`tests/common/kernel/`，案名帶「DI-KS 28」）：第一次跑；寫在前／讀在後、下一次 false；寫在後、讀在前、下一次才看到；Host 在兩次 Run 之間寫（引 J-30）；`Read()` 不算、`Get()` 同值也算；自己寫的下一次 false、同一次 `Get()` 後 true；`Commands::SetResource`、`ExclusiveWorld::Modify`／`SetResource`；跳過的掛載累積；兩個掛載各自；巢狀；沒值、拿掉、拿掉再放；`KernelSettings` 第一次跑；`Restore` 不同值 true、相同值 false；run 條件比掛載的 `lastRun`。
 - 突變：只加每一個抓得到別的抓不到的誤判的（§14.5），預計：比較寫成 `>=`、不看 `Present()`、`ResMut` 拿 `stamp_` 當基準、`KernelSettings` 建構子不打 stamp。新加的程式文字不讓既有突變的 `find` 變成多處命中（例：`mutations.json` 裡含 `slot.changed = stamp_;` 的兩筆）。合併前交換模型的檢查（§14.2）；只跑相關突變（`mutation-rerun-scope`）。
-- dev_log、`v2/README.md` 的列表、`v2/HANDOFF.md`。
+- dev_log、`v2/README.md` 的列表。`v2/HANDOFF.md` 由主會話記（使用者的決定照四樣轉給主會話；同 #278 的卡片前例）。
 
 ## 3. 要你決定的，與和別家不同的地方
 
