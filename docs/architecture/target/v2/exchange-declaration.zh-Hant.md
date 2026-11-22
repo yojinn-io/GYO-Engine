@@ -113,8 +113,8 @@
 | E-19 | 日誌：Kernel 的診斷紀錄在每個 World 跑完之後取走；World 不在 Run 裡、做不成 System（1） | 日誌宣告 5.4、第 228 行 | 編排層在每個 World 的一輪之後依序呼叫單位登記的函式（形 (2)「出」） | 5.1 |
 | E-20 | 生成世界：分批之間 asset 的套用 System 會跑（1） | asset G-1～G-3 | 套用點是 World 裡的 System，跟著 World 的每一輪走 | 5.1、13 |
 | E-21 | 規模：PvP 64 Hz、Client 三個 World；Match 一個 World；工具一到兩個 World（3） | 時間設計、runtime-composition | World 數是個位數；Product 層的查找不必比線性快（照 `OptionBag`、`ModuleBuffer` 的線性表） | 5.2 |
-| E-22 | PvP Client：畫面 World 與模擬 World 互交指令與位置（1；Client 三個 World 是使用者 11-11 定的。「經 Host 擁有的 Mailbox、只在 schedule 之間存取」是規格 H.4.2 的細節，不是使用者定的） | runtime-composition 第 2 節；規格 H.4.2 | 兩邊不等另一條執行緒；用形 (1)（有鎖的服務＋套用 System）或形 (2)，PvP 移植時定 | 5.1、5.3 |
-| E-23 | 時間設計 5.3 點名的七個使用者：時間的投影、`HostClockSample`（PvP）、網路的收發緩衝、平台事件、資產 IO 的完成通知、World 之間的資料、診斷的輸出（1） | 時間設計 5.3（第 328 行） | 逐一落到四種形（第 5.1 節的表） | 5.1 |
+| E-22 | PvP Client：畫面 World 與模擬 World 互交指令與位置（1；Client 三個 World 是使用者 11-11 定的。「經 Host 擁有的 Mailbox、只在 schedule 之間存取」（規格原文；Host 是用詞表 v3 已換掉的角色詞，現在是組裝與 runner）是規格 H.4.2 的細節，不是使用者定的） | runtime-composition 第 2 節；規格 H.4.2 | 兩邊不等另一條執行緒；用形 (1)（有鎖的服務＋套用 System）或形 (2)，PvP 移植時定 | 5.1、5.3 |
+| E-23 | 時間設計 5.3 點名的七個使用者：時間的投影、`HostClockSample`（PvP；時間設計原文的型別名）、網路的收發緩衝、平台事件、資產 IO 的完成通知、World 之間的資料、診斷的輸出（1） | 時間設計 5.3（第 328 行） | 逐一落到四種形（第 5.1 節的表） | 5.1 |
 
 修訂 0 的 E-9（同一個行程裡的伺服器 World 與 Client World）只有根據 2（Unity Netcode、lightyear 有 host 模式），批次表網路列沒有點名，修訂 1 拿掉（檢查 S4）；網路 Module 若點名，照第 5.6 節的對照接。
 
@@ -234,7 +234,7 @@
 **選哪一種的規則**（寫進 O-12）：
 - **(1) 是 Module 擁有的外部服務在幀裡進出 World 的預設**：結果要和 World 裡的 System 排先後（例：網路的收件要在回滾的決定之前）、要跟著生成的每一批走、或由很多 System 讀的，用 (1)。
 - **(2) 給「必須在 schedule 之間」或「要整個 World、在 Run 之外」的事**：Run 裡看不到全部結果的（診斷紀錄要在最後一個同步點之後取）；骨架關掉時也要自動接上、不靠作者掛的。
-- **(3) 只給 runner 自己擁有的東西**；Module 的資料不要求 runner 認得（RC-O1「Host 長回來」）。runner 也可以呼叫 Module 給的函式（例：`WorldLogging::TakeKernelDiagnostics`），接線歸 runner／產品。
+- **(3) 只給 runner 自己擁有的東西**；Module 的資料不要求 runner 認得（RC-O1：協調的邏輯散到編排層外、在各產品重複）。runner 也可以呼叫 Module 給的函式（例：`WorldLogging::TakeKernelDiagnostics`），接線歸 runner／產品。
 - 同一件事不要兩種形都做：網路 Module、SDL 那批選定一種，寫在自己的宣告。
 
 **每一種的規則**：
