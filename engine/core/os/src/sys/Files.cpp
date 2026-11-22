@@ -229,7 +229,16 @@ Base::Result<void, OSError> FileWriter::Close() {
 }
 
 Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path) {
-    if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    return Detail::CreateDirectories(utf8Path, Detail::NewDirectoryAccess::Default);
+}
+
+} // namespace GYO::Engine::OS::Files
+
+namespace GYO::Engine::OS::Detail {
+
+Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path, const NewDirectoryAccess access) {
+    if (auto checked = CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    const mode_t mode = access == NewDirectoryAccess::OwnerOnly ? 0700 : 0777;
     const std::string path(utf8Path);
     // Every prefix that ends at a '/' or at the end, from the outermost: each
     // either is a directory already or is made one.
@@ -237,7 +246,7 @@ Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path) {
         if (end != path.size() && path[end] != '/') continue;
         const std::string prefix = path.substr(0, end);
         if (prefix.back() == '/') continue;
-        if (::mkdir(prefix.c_str(), 0777) == 0) continue;
+        if (::mkdir(prefix.c_str(), mode) == 0) continue;
         const int error = errno;
         if (error == EEXIST) {
             struct stat status {};
@@ -245,10 +254,14 @@ Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path) {
             return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "exists and is not a directory",
                                          {NativeErrorDomain::Errno, error}, utf8Path.size()));
         }
-        return Base::Err(FromErrno(error, "cannot create directory", utf8Path));
+        return Base::Err(Files::FromErrno(error, "cannot create directory", utf8Path));
     }
     return {};
 }
+
+} // namespace GYO::Engine::OS::Detail
+
+namespace GYO::Engine::OS::Files {
 
 Base::Result<void, OSError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
     if (auto checked = Detail::CheckPath(utf8From); !checked) return Base::Err(std::move(checked.error()));

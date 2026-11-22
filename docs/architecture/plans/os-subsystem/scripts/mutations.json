@@ -2077,6 +2077,235 @@
       "target": "gyo_os_wake_fallback_tests",
       "cases": "*relative timeout*",
       "expect": "no block with a 20 ms timeout waited for it"
+    },
+    {
+      "id": "ou-x1-not-created",
+      "what": "UserDataDirectory answers the path without making the directory (v8-arch-gyo2-os-user-data; only it catches: the directory not being made)",
+      "guards": [
+        "os-user-data-declaration C6"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (auto made = Detail::CreateDirectories(path, Detail::NewDirectoryAccess::OwnerOnly); !made) {",
+      "replace": "if (auto made = Base::Result<void, OSError>{}; !made) {",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "REQUIRE\\( status \\)"
+    },
+    {
+      "id": "ou-x2-dot-segment-accepted",
+      "what": "A name that is . or .. is accepted, so the directory is another application's (v8-arch-gyo2-os-user-data; only it catches: the dot-segment branch of the name check)",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (name == \".\" || name == \"..\") {",
+      "replace": "if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( asApplication \\)[\\s\\S]*logged: name := \\."
+    },
+    {
+      "id": "ou-x3-separator-accepted",
+      "what": "A name with / or \\ is accepted and makes more than one level (v8-arch-gyo2-os-user-data; only it catches: the separator branch of the name check, the user's Q1 (b))",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (name.find_first_of(\"/\\\\\") != std::string_view::npos) {",
+      "replace": "if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( asApplication \\)[\\s\\S]*logged: name := a/b"
+    },
+    {
+      "id": "ou-x4-empty-application-accepted",
+      "what": "An empty application name is accepted, so the answer is the organization's directory (v8-arch-gyo2-os-user-data; only it catches: the empty-application branch)",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "CheckName(application, false)",
+      "replace": "CheckName(application, true)",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( emptyApplication \\)"
+    },
+    {
+      "id": "ou-x5-empty-organization-joined",
+      "what": "An empty organization still adds a separator (base//application) (v8-arch-gyo2-os-user-data; only it catches: the form without an organization)",
+      "guards": [
+        "os-user-data-declaration C1",
+        "os-user-data-declaration C7"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (!organization.empty()) path.append(\"/\").append(organization);",
+      "replace": "path.append(\"/\").append(organization);",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "CHECK\\( bare\\.value\\(\\) == base \\+ \"/Bare App\" \\)"
+    },
+    {
+      "id": "ou-x6-base-trailing-slash-kept",
+      "what": "The trailing / of the base is kept (XDG_DATA_HOME ending in /) (v8-arch-gyo2-os-user-data; only it catches: the shared trimming in sys/UserData.cpp; only XDG_DATA_HOME reaches it untrimmed)",
+      "guards": [
+        "os-user-data-declaration C7"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "std::string path(Detail::WithoutTrailingSlashes(base.value()));",
+      "replace": "std::string path(base.value());",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)"
+    },
+    {
+      "id": "ou-x7-macos-home-slash-kept",
+      "what": "macOS joins a HOME that ends in / as it is (home//Library/...) (v8-arch-gyo2-os-user-data; only it catches: the macOS base's trimming of HOME)",
+      "guards": [
+        "os-user-data-declaration C7"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "return std::string(WithoutTrailingSlashes(home)) + \"/Library/Application Support\";",
+      "replace": "return std::string(home) + \"/Library/Application Support\";",
+      "target": "gyo_os_tests",
+      "cases": "*trailing separator of the user data base*",
+      "expect": "CHECK\\( made\\.value\\(\\)\\.find\\(\"//\"\\) == std::string::npos \\)"
+    },
+    {
+      "id": "ou-x8-linux-home-slash-kept",
+      "what": "Linux joins a HOME that ends in / as it is (home//.local/share/...) (v8-arch-gyo2-os-user-data; only it catches: the Linux base's trimming of HOME)",
+      "guards": [
+        "os-user-data-declaration C7"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return std::string(WithoutTrailingSlashes(home)) + \"/.local/share\";",
+      "replace": "return std::string(home) + \"/.local/share\";",
+      "target": "gyo_os_tests",
+      "cases": "*trailing separator of the user data base*",
+      "expect": "CHECK\\( made\\.value\\(\\)\\.find\\(\"//\"\\) == std::string::npos \\)"
+    },
+    {
+      "id": "ou-x9-no-home-falls-back-to-cwd",
+      "what": "macOS without an absolute HOME answers a directory relative to the current one, as Godot falls back to \".\" (v8-arch-gyo2-os-user-data; only it catches: the missing-HOME failure)",
+      "guards": [
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "        const char* home = Home();\n        if (home == nullptr) {",
+      "replace": "        const char* home = Home();\n        if (home == nullptr) return std::string(\".\");\n        if (home == nullptr) {",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "REQUIRE_FALSE\\( made \\)"
+    },
+    {
+      "id": "ou-x10-linux-base-cached",
+      "what": "Linux keeps the first XDG_DATA_HOME it read for later calls (v8-arch-gyo2-os-user-data; only it catches: caching, Design Invariant 8)",
+      "guards": [
+        "os-user-data-declaration C9"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "if (const char* data = XdgDataHome()) return std::string(data);",
+      "replace": "static const std::string cached = XdgDataHome() ? XdgDataHome() : \"\";\n        if (!cached.empty()) return cached;",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "logged: ignored := relative-data"
+    },
+    {
+      "id": "ou-x11-macos-base-wrong",
+      "what": "The macOS base drops Library/ (~/Application Support) (v8-arch-gyo2-os-user-data; only it catches: the macOS base directory)",
+      "guards": [
+        "os-user-data-declaration C2"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "\"/Library/Application Support\"",
+      "replace": "\"/Application Support\"",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "CHECK\\( made\\.value\\(\\) == base \\+ \"/\" \\+ org \\+ \"/Test App\" \\)"
+    },
+    {
+      "id": "ou-x12-linux-relative-xdg-accepted",
+      "what": "Linux accepts a relative XDG_DATA_HOME (v8-arch-gyo2-os-user-data; only it catches: the absolute check the specification asks for)",
+      "guards": [
+        "os-user-data-declaration C4"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return data != nullptr && data[0] == '/' ? data : nullptr;",
+      "replace": "return data != nullptr && data[0] != '\\0' ? data : nullptr;",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "logged: ignored := relative-data"
+    },
+    {
+      "id": "ou-x13-linux-home-first",
+      "what": "Linux takes HOME even when XDG_DATA_HOME is absolute (v8-arch-gyo2-os-user-data; only it catches: the order of the two)",
+      "guards": [
+        "os-user-data-declaration C4"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "if (const char* data = XdgDataHome()) return std::string(data);",
+      "replace": "if (const char* data = XdgDataHome(); data != nullptr && Home() == nullptr) return std::string(data);",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)"
+    },
+    {
+      "id": "ou-x14-default-access",
+      "what": "The directories UserDataDirectory makes get the default access, readable by others (v8-arch-gyo2-os-user-data; only it catches: the 0700 the user chose, Q2 (a))",
+      "guards": [
+        "os-user-data-declaration C6"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/Files.cpp",
+      "find": "const mode_t mode = access == NewDirectoryAccess::OwnerOnly ? 0700 : 0777;",
+      "replace": "const mode_t mode = 0777;",
+      "target": "gyo_os_tests",
+      "cases": "*new user data directories for the owner only*",
+      "expect": "CHECK\\( fs::status\\(level\\)\\.permissions\\(\\) == fs::perms::owner_all \\)"
+    },
+    {
+      "id": "ou-x15-owner-only-everywhere",
+      "what": "The public CreateDirectories makes every directory 0700 too (v8-arch-gyo2-os-user-data; only it catches: a change of the public CreateDirectories, Design Invariant 9)",
+      "guards": [
+        "os-user-data-declaration C6",
+        "os-user-data-declaration os 9"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/Files.cpp",
+      "find": "const mode_t mode = access == NewDirectoryAccess::OwnerOnly ? 0700 : 0777;",
+      "replace": "const mode_t mode = 0700;",
+      "target": "gyo_os_tests",
+      "cases": "*new user data directories for the owner only*",
+      "expect": "CHECK\\( static_cast<mode_t>\\(fs::status\\(shared\\)\\.permissions\\(\\)\\) == \\(0777 & ~mask\\) \\)"
     }
   ]
 }
