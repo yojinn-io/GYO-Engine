@@ -409,6 +409,21 @@ TEST_CASE("Audio Submitter treats a foreign clip, a bad gain and a moved-from ha
     CHECK(rig.mixer.Stats().submitted == 1);
 }
 
+TEST_CASE("Audio Mixer starts a play left without a time at once and counts it an hour late") {
+    // PlayRequest::at left at its default (the clock's epoch) is the documented pitfall (Mixer.hpp): the
+    // play starts at the block's first frame, without the delay, and shows in the counters as late.
+    Rig rig = MakeRig(std::chrono::duration_cast<Duration>(60ms));
+    const TimePoint anchor = TimePoint{} + std::chrono::duration_cast<Duration>(2h);
+    PlayRequest forgotten;
+    forgotten.clip = rig.impulse;
+    REQUIRE(rig.submitter.Play(forgotten));
+    const auto out = RenderBlock(rig.mixer, 8, anchor);
+    CHECK(Onsets(out) == std::vector<std::int64_t>{0});
+    const auto stats = rig.mixer.Stats();
+    CHECK(stats.playedLate == 1);
+    CHECK(stats.maxLateness >= std::chrono::duration_cast<Duration>(59min));
+}
+
 TEST_CASE("Audio Submitter may outlive its Mixer") {
     Rig rig = MakeRig();
     Submitter submitter = std::move(rig.submitter);

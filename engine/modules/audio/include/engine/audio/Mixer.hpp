@@ -24,7 +24,10 @@ struct MixerConfig final {
     std::uint32_t maxSubmitters = 4;   // 1 to 64, all allocated at creation
     std::uint32_t queueCapacity = 256; // per submitter, 1 to 65536: plays, stops and unloads
     // Clips each submitter may load while output runs, 0 to 256; 0 allocates
-    // nothing. A slot is reused once its clip is unloaded and no voice reads it.
+    // nothing, so LoadClip then always returns NoClipSlot: a product whose sounds
+    // arrive after the mixer exists (for example loaded in the background by the
+    // asset store) sets it. A slot is reused once its clip is unloaded and no
+    // voice reads it.
     std::uint32_t clipSlotsPerSubmitter = 0;
     // Added to every mapped start, so a request sent a little after its time still
     // starts on time; it is also the least latency of a sound played "now". 0 to
@@ -39,7 +42,10 @@ struct MixerConfig final {
 struct PlayRequest final {
     ClipId clip;
     // The moment the sound belongs to, on the Engine time base (Time::MonotonicClock),
-    // never a scalable game time (Design Invariant 3).
+    // never a scalable game time (Design Invariant 3). Always set it: left at its
+    // default (the clock's epoch) the play is hours before any anchor, so it
+    // starts at once, without the schedule delay, and is counted late with a
+    // lateness of up to an hour (visible in Stats().playedLate and maxLateness).
     Time::TimePoint at{};
     float gainLeft = 1.0f;   // 0 to kMaxGain
     float gainRight = 1.0f;
@@ -181,7 +187,9 @@ public:
 
     // Any thread, at any time. TooManySubmitters once maxSubmitters have been
     // created over the mixer's life: a destroyed Submitter does not give its
-    // queue back, so create one per producer and keep it.
+    // queue back. Create one per producer (for example one per World name) and
+    // keep it where it outlives the producer's rebuilds (for example the
+    // Product's shared buffer, not a World that is replaced).
     [[nodiscard]] Base::Result<Submitter, AudioError> CreateSubmitter();
     // Any thread. A gain outside [0, kMaxGain] is a Programmer Error.
     void SetMasterGain(float gain);

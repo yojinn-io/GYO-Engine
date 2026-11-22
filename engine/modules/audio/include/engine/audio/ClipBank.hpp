@@ -25,9 +25,12 @@ struct ClipView final {
     std::uint32_t frames = 0;
 };
 
-// Immutable PCM16 clips, registered before output starts and owned by the mixer
-// afterwards. Add copies the samples, so the caller's buffer (for example a
-// loaded sound asset) need not outlive the bank.
+// Immutable PCM16 clips, registered before the mixer is created and owned by it
+// afterwards: for clips known up front (a test, a tool, a product that has its
+// sounds before it makes the mixer). Clips that arrive later, such as sounds the
+// asset store loads in the background, go through Submitter::LoadClip instead
+// (with MixerConfig::clipSlotsPerSubmitter above 0). Add copies the samples, so
+// the caller's buffer need not outlive the bank.
 class ClipBank final {
 public:
     // Fails with InvalidClip for an empty clip, channels other than 1 or 2, a

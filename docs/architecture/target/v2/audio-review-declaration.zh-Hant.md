@@ -4,6 +4,8 @@
 
 > **核准**（使用者，2026-11-22，本卡的對話）：原話「照建議，全部核准」。核准的是修訂 2（38ce73f0）第 12 節五題照建議：第 1 題 (A) 修（本批拿掉綁定，提交口數量交 `world_audio` 那批）；第 2 題 (A) `Submitter` 不綁執行緒；第 3 題 (A) 拿掉 `gyo_audio_board_readers` 的方向（合併前照 §14.4 正式核准）；第 4 題照第 7 節草案的方向（最終文字在合併前核准）；第 5 題 (A) 同意縮小，請主會話在批次表加 `world_audio` 一批，三件開著的事交它。
 
+> **範圍的更正**（2026-11-22，HANDOFF `v8-arch-gyo2-world-audio-withdrawn`，使用者在主會話說「照建議」）：主會話重查前提後，第 12 節第 5 題 (A) 裡「批次表加 `world_audio` 一批」那一半撤掉，「本批縮小」不變。預設起播時刻、提交口的數量與壽命、套用 System、帶回的值、緩衝裡還有請求時卸載，是作者的寫法，寫在 [audio 頁](audio.zh-Hant.md) 第 5 節（併進本批）；clip 的來源（`ClipBank`）與音效 loader 歸 audio 那一側的小批；輸入事件的到達時刻歸 SDL 那批；不做 Bevy 式的便利層。下面標「留給 `world_audio`」的地方都照此讀，原文不刪。
+
 **經過**：
 - 修訂 0（5c098265）送 Fable 5.2／high 敵對式檢查：blocker 2、should 17、nit 9（主 checkout `build/evidence/gyo2-audio-review/declaration-r0-adversarial.md`）。全部採用或照第 15 節處理成**修訂 1**。
 - 修訂 1（d92b08f9）送 Fable 5.2／high 窄複查：blocker 0、should 10、nit 10（同目錄 `declaration-r1-narrow-check.md`）。全部採用成**修訂 2**（第 16 節）。
@@ -115,12 +117,16 @@
 
 **留給 `world_audio` 那批的時間設計**（不進 audio 的 DI；那批照 determinism 第 11 節定）：World 那一側從哪裡拿時刻（`RealTime::now`、記錄下來的到達時刻、由它們算出的值）；判定資料的 System 不讀 `RealTime`（determinism 第 11 節只准 tick 與記錄下來的邊界輸入），所以讀 `RealTime` 的只能是表現層的 System；時鐘型別不進 World（請求帶整數奈秒，由套用 System 換成 `PlayRequest`）；請求緩衝不是判定資料、不進 World 摘要。這條「凡是送進 World 外服務的時刻都是時間基準」若要成為跨 Component 的規則，經主會話請圖書管理員對照 `cross-component-rules.md`（AGENTS §1）。
 
+〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。World 那一側從哪裡拿時刻、讀 `RealTime` 的是誰、時鐘型別不進判定資料，這件是作者的寫法，見 [audio 頁](audio.zh-Hant.md) 第 5 節。〕
+
 **理由**：
 1. 混音器在 World 外（共用處），一個混音器對多個 World；可縮放的時間屬於某一個 World，暫停時不前進，拿它當起播時刻會排到永遠不到的未來。
 2. 有根據的別家：Bevy 的 audio 完全不引用時間 crate；Kira 起播用音訊那一側的時鐘，遊戲要聲音跟著遊戲時間走就自己暫停那個時鐘；Unity 的 `PlayScheduled` 用 dspTime（音訊系統的時間）。FMOD、Wwise〔知〕不當根據。
 3. 判定程式不讀時鐘（determinism 第 11 節）；`TimeTypes.hpp:3-6` 刻意不帶時鐘型別。所以時鐘型別留在 World 外。
 
 **未解的缺口**（owner：`world_audio` 那批，和 world_time 對齊；卡片照 L17 判 owner）：
+
+〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。預設起播時刻是遊戲規則、作者選，寫法與取捨見 [audio 頁](audio.zh-Hant.md) 第 5.1 節；輸入事件的到達時刻歸 SDL 那批。〕
 - **預設的時刻**：只用 `RealTime::now`，同一幀的聲音擠在同一刻、起播落在幀格上，A-1 做不到。參考：SoLoud 的 `playClocked`（第 0 節）用「block 內第一個請求當錨、其餘照時間差往後延」解這件事。
 - **固定步第 i 步對應時間基準的哪一刻**：一幀跑多步（快轉、補幀）時要分得開；慢動作下這個對應怎麼定，world_time 今天沒有答案。
 - **到達時刻**：輸入事件帶時間基準的到達時刻時，直接用它（SDL 那批的平台事件換算，`MonotonicClock.hpp` 的註解）。
@@ -137,6 +143,8 @@
 3. **`Submitter` 不綁執行緒**（第 12 節第 2 題）：新契約——同一時間只有一方呼叫；換到別的執行緒時，前一方最後一次呼叫要 *happens-before* 後一方第一次呼叫（例：`std::thread::join`、同一把 mutex 的 unlock／lock、World 交出時 runner 的同步）；只是「時間上錯開」、沒有同步，不算。
 4. **提交口的數量**（RC 5 已成立，第 12 節第 1 題）：不在本批處理，選項交 `world_audio` 那批。
 
+〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。提交口照 World 名字建一次、放共用處、替換時沿用，這件是作者的寫法，見 [audio 頁](audio.zh-Hant.md) 第 5 節。〕
+
 **為什麼拿掉綁定**：
 - 程式上：SPSC 要的是「一個生產者、前後兩次呼叫有先後關係」。`Enqueue` 用 relaxed 讀自己的 `tail`（`Mixer.cpp:245`），換手有 happens-before 就看得到；`lastSequence`、`ClipSlot` 的擁有者欄位同理。`ClaimOwner` 的 CAS 是 relaxed（`Mixer.cpp:239`），本來就不提供同步，只是檢查。
 - 和已定的事衝突：World 不綁執行緒（11-16）；World 整個交出、交出期間只有那條執行緒碰它（O-13 (2)），提交口是 World 裡的東西，跟著走。交換點宣告寫的「交出時在那條執行緒上另拿一個」：提交口第一次被呼叫就認領那條執行緒，而 clip 格子與 handle 是提交口私有的——交出後另拿的提交口播不了原本載的 clip、停不了原本送出的聲音（`Mixer.cpp:257`、`287-296`、Stop 的前綴檢查）。
@@ -145,6 +153,8 @@
 - Kira 先例只能搬一半：Rust 的 `&mut self` 由編譯器擋同時使用，C++ 沒有。拿掉綁定後，兩條執行緒同時用是資料競爭；只有手動的 ThreadSanitizer 建置抓得到（gyo2 的 CI 與 preset 沒有它），執行時不斷言。
 
 **留給 `world_audio` 那批的**（卡片列出、不在本批判）：
+
+〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。下面四件都是這件是作者的寫法，見 [audio 頁](audio.zh-Hant.md) 第 5 節。〕
 - 提交口照 World 名字沿用，還是讓提交口可以還（RC 6 列的重新驗證）。照名字沿用的已知問題：`BuildNewFirst` 的 `beforeSwap` 在新 World 上跑（`Product.hpp:79-82`），新 World 若對共用的提交口 `StopAll`／`UnloadClip` 而替換失敗，舊 World 的聲音已停、clip 已卸，舊的 `ClipId` 再 `Play` 會斷言（`Mixer.cpp:257`）；和 O-2「以 World 名為鍵的資料在 `Build` 時重設」的字面不合；交出中的 World 能不能替換未定（交換點宣告 5.3）。
 - 帶回的值：`SoundHandle`、`Stop` 的 `false`、`NoClipSlot` 取決於音訊執行緒的進度；CCR-6 要求帶回的值不讓判定依時序而變。handle 怎麼回到作者手上、不進判定資料，要在那批寫。
 - 請求還在緩衝裡時 clip 被卸載，交出時會斷言：先後要定。
@@ -184,6 +194,8 @@
 `CheckBoardReaders.cmake` 掃原始碼文字：`Mixer.cpp` 以外、或 `Mixer::PlayheadOf` 以外出現 `board.Read(`，或整個目錄裡的讀不是恰好 1 個（含 0 個），就失敗。它綁的是函式名、檔名與寫法（AGENTS §3「実装の方式に縛るガード」），守的是「音訊執行緒不讀看板」。讀看板不影響即時安全（都是原子操作）；違反的後果是 DI 4 說的「拿顯示用的值做決定」，這是設計審查看得出的事。判定見第 12 節第 3 題。
 
 ## 5. 留給 `world_audio` 那批：clip 的來源（`ClipBank` 該不該存在）
+
+〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。clip 的來源與音效 loader 改歸 audio 那一側的小批（asset 實作合併之後，或併進 SDL 那一批）。〕
 
 **重審的判定**：`ClipBank`「該不該存在」**存疑**，但答案取決於 `world_audio` 怎麼接 asset，本批不改。
 
@@ -234,6 +246,8 @@
 - **RC 1**：「clips must be loaded, unloaded or played from a thread or submitter other than the one that owns them」拿掉「thread」，留「另一個提交口」。
 - **RC 2**：補「含聲音跟著遊戲的暫停或時間倍率走」（修訂 1 的 RC 10 併進來：RC 2 已有 pause、pitch）。
 - **RC 5**：改成「生產者的**數量**在建立時定不下來（例：每次替換 World 都要新的提交口），或要多個生產者同時用一個提交口」，並記「2026-11-22 判定已成立（O-8 的替換），使用者選修或重建（第 12 節第 1 題），處理在 `world_audio` 那批」。
+
+  〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。RC 5 的「處理在 `world_audio` 那一批」改成「作者的寫法（audio 頁第 5.2 節）」。〕
 - **新增 RC 9**：點名的 Feature 需要搶占（優先度、音量、距離或最舊）或虛擬 voice。
 
 ## 8. 系譜、退掉的選項、決勝理由（AGENTS §4）
@@ -350,6 +364,8 @@
 ### 第 5 題：本批縮小，三件事收尾時仍開著
 
 - **三件**（都寫「`world_audio` 那批」，但**批次表還沒有這一批**，`git grep world_audio -- docs` 只命中本頁）：
+
+  〔2026-11-22 更正：`v8-arch-gyo2-world-audio-withdrawn`（使用者「照建議」）撤掉 `world_audio` 這一批。第 1、2 件是作者的寫法（audio 頁第 5.1、5.2 節），第 3 件歸 audio 那一側的小批。〕
   1. **預設的起播時刻**：只拿這一幀的取樣時刻，起播落在幀格上；在它定之前，A-1（槍聲在事件的時刻響）做不到。概念層 2.1 的「不相合」只解了一半。
   2. **提交口的數量**（RC 5，第 1 題）。
   3. **clip 的來源**（第 5 節：`ClipBank` 該不該存在、共用還是複製、asset 的 Handle）。

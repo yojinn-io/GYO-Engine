@@ -6,7 +6,7 @@
 
 - 混音器在 World 外、Product 一份、只提供機制；時間線留在時間基準，遊戲的暫停與倍率不作用在混音器上（Bevy、Kira、Unity、miniaudio 都在音訊那一側排程；SoLoud 的 `playClocked` 是之後「預設起播時刻」的參考）。
 - `Submitter` 的執行緒綁定拿掉：SPSC 只需要「一個生產者、前後有先後關係」，綁定和 World 不綁執行緒、World 整個交出衝突。
-- RC 1、RC 5 判定已成立，使用者選修；提交口的數量、預設起播時刻、clip 的來源（`ClipBank` 該不該存在）交新的 `world_audio` 一批（主會話已加進批次表）。
+- RC 1、RC 5 判定已成立，使用者選修；提交口的數量、預設起播時刻、clip 的來源（`ClipBank` 該不該存在）交新的 `world_audio` 一批（主會話已加進批次表）。〔2026-11-22 更正：`world_audio` 這一批撤掉（`v8-arch-gyo2-world-audio-withdrawn`），見下面「範圍擴大」。〕
 - 「規則外移」適用，audio 今天只剩機制（11-13 的判準照 `v8-arch-adapter-plugins-review`：audio core 留 Engine）。
 - 經過：宣告修訂 0 → Fable 5.2／high 敵對式檢查（blocker 2、should 17、nit 9）→ 修訂 1（範圍縮小）→ 窄複查（blocker 0、should 10、nit 10）→ 修訂 2 → 核准。使用者 clone 了 Kira、SoLoud、miniaudio，核對結果補進宣告第 0 節。
 
@@ -71,9 +71,17 @@
 - 新增 2 條：`au-review-handoff-rebound`（判定 2 是新的判定項目，第 3 條的下限；它抓的「實作退回綁定」沒有別的突變抓得到，退役的 4 條抓的是相反的誤）；`au-review-unload-counts-before-assert`（搬過去的計數判定原本沒有突變指到，設計審查 B-3）。數目在上限內（改的 DI 條文 6 × 5）。
 - 退役 18 條：機能拿掉（第 7 條）與 gyo2 跑不起來；`au-sdl-late-stop-uncounted` 的 find／replace 和留下的 `au-ctl-late-stop-uncounted` 完全相同（第 1 條）。
 
+## 範圍擴大（`v8-arch-gyo2-world-audio-withdrawn`）
+
+主會話重查 `world_audio` 的前提（subagent），使用者在主會話說「照建議」：不另做 `world_audio`；作者的寫法、三處註解與預設值的坑併進本批（使用者同意擴大範圍）。做的：
+- 新頁 [audio.zh-Hant.md](../architecture/target/v2/audio.zh-Hant.md) 第 5 節「把 World 接到混音器：作者的寫法」（5.1 tick 換成時刻的三種做法、5.2 提交口照 World 名字、5.3 一個 System 在 `Main`／`Last` 交、5.4 帶回的值不進判定、5.5 先送出再卸載）。片段用真的 API 名（`ProductSetup::Buffer`、`WorldSetup::ProductBuffer`／`Prepare`、`MessageWriter`／`MessageReader`、`ReplaceRequest::beforeSwap`），標明是示意。
+- `PlayRequest::at` 的預設（紀元）：不改、不加守衛；註解寫明症狀，新測試「starts a play left without a time at once and counts it an hour late」釘住（block 的第一個 frame 起播、`playedLate == 1`、`maxLateness >= 59 min`）。
+- `CreateSubmitter`、`ClipBank`、`clipSlotsPerSubmitter` 的註解。
+- 宣告的「留給 `world_audio`」各處加更正註；`rebuild-concept` 的註改寫。
+
 ## 留給之後的
 
-- `world_audio` 那一批（主會話已加進批次表）：預設起播時刻（參考 SoLoud `playClocked`）、提交口的數量（照 World 名字沿用 vs 可還）、clip 的來源（宣告第 5 節的四個選項與寫判定要照的事）、音效 loader。
+- audio 那一側的小批（asset 實作合併之後，或併進 SDL 那一批）：clip 的來源（宣告第 5 節的四個選項與寫判定要照的事）、音效 loader。預設起播時刻、提交口的數量是作者的寫法（新頁第 5 節）。（原寫「`world_audio` 那一批」，該批已撤掉。）
 - 第 3 題的正式核准後：拿掉 `gyo_audio_board_readers` 與 `au-ctl-board-read-in-render`，DI 4 的守衛清單刪那一項。
 - 「送進 World 外服務的時刻都是時間基準」要不要成為跨 Component 規則：主會話已排給圖書管理員。
 - SDL 那一批：後端照新頁第 4 節接；`scheduleDelay` 的預設值重新推導；後端的突變照自己的測試重立。

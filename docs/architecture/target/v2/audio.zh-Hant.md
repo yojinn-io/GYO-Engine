@@ -6,9 +6,9 @@
 
 ## 一個例子
 
-FPS 的 Client 開槍：畫面 World 的 System 判定開了一槍，（之後經 `world_audio`）把「播哪個 clip、左右增益、時間點」交給混音器；音訊執行緒每個 block 把時間點換成第幾個取樣開始響。畫面卡了一下，聲音照原本的時刻響（`scheduleDelay` 吃掉這段延遲）。遊戲暫停時，模擬不跑就沒有新聲音，已在響的照響完——暫停不作用在混音器上（DI 3）。
+FPS 的 Client 開槍：畫面 World 的 System 判定開了一槍，把「播哪個 clip、左右增益、時間點」交給混音器；音訊執行緒每個 block 把時間點換成第幾個取樣開始響。畫面卡了一下，聲音照原本的時刻響（`scheduleDelay` 吃掉這段延遲）。遊戲暫停時，模擬不跑就沒有新聲音，已在響的照響完——暫停不作用在混音器上（DI 3）。
 
-World 那一側怎麼交（請求緩衝、套用點、時刻從哪裡來、提交口怎麼配給每個 World）是之後 `world_audio` 那一批的事，不在這一頁（宣告第 4.1、4.2、5 節）。
+World 那一側怎麼交（請求緩衝、套用點、時刻從哪裡來、提交口怎麼配給每個 World）是作者的寫法，見第 5 節。
 
 ## 1. 位置與依賴
 
@@ -22,7 +22,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio
 ## 2. 它是什麼
 
 - **輸出格式**：只有一種——48 kHz 立體聲交錯 PCM16（`AudioFormat.hpp`）。轉成裝置的格式是後端的事。
-- **clip 庫**：`ClipBank::Add` 複製 1 或 2 聲道、48 kHz 的 PCM16，回 `ClipId`（不為 0）。其他都是 `InvalidClip`（Runtime Error）：空的、聲道數不對、樣本數不是整數個 frame、取樣率不同（不重新取樣）。clip 不可變，在出聲前登記，之後歸混音器所有。（`ClipBank` 該不該存在，交 `world_audio` 那批，宣告第 5 節。）
+- **clip 庫**：`ClipBank::Add` 複製 1 或 2 聲道、48 kHz 的 PCM16，回 `ClipId`（不為 0）。其他都是 `InvalidClip`（Runtime Error）：空的、聲道數不對、樣本數不是整數個 frame、取樣率不同（不重新取樣）。clip 不可變，在出聲前登記，之後歸混音器所有。（`ClipBank` 該不該存在，交 audio 那一側的小批，宣告第 5 節。）
 - **voice（`VoiceMixer`，內部）**：固定數量（1～1024，否則 `InvalidConfig`），每個 voice 從一個起始 frame 播一個 clip 一次，左右增益在 [0, `kMaxGain`]。排好但還沒開始的 voice 佔著位子。全部佔滿時新的請求丟掉並記數（`noVoice`）。播完的 voice 空出來。
 - **混音**：增益換成 Q16 定點；voice 用 int64 相加，乘主增益（Q16），四捨五入（一半往上）、飽和到 int16，每個飽和的輸出樣本記數（`clippedSamples`）。整數算術讓每個平台的輸出逐位元相同。
 - **晚到**：起始 frame 在下一個要算的 frame 之前的請求，從那個 frame 開始（clip 從頭播），記成晚到並記晚了幾個 frame（`maxLateFrames`）。
@@ -54,6 +54,65 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio
 2. **要求**：每個 block 用時間基準取一次 anchor（DI 3）；只有一條執行緒呼叫 `Render`；後端只持不擁有的參照（若它和別人共用所有權、而音訊執行緒的回呼握著最後一份，混音器的狀態會在音訊執行緒上解構，破 DI 7）；混音器放在 Product 的共用處，持有者在後端停之前不搬、不銷毀它；後端在自己登記的 `OnDestroy` 回呼裡停（編排層 O-15：回呼照登記的反序、在所有 World 之後、共用處之前），後端的登記排在建混音器的單位之後，它的 `OnDestroy` 才會先跑。
 3. 後端的錯誤（例：裝置開不了）是後端自己的錯誤碼；`AudioErrorCode` 的 4（舊的 `DeviceUnavailable`）不再用、不重編。
 
+## 5. 把 World 接到混音器：作者的寫法
+
+〔`v8-arch-gyo2-world-audio-withdrawn`，使用者 2026-11-22「照建議」：不另做 `world_audio` 這一層；下面五件用現有的 audio、編排層（O-12、O-15）與 world_time 的 Resource 就做得到，是作者的寫法，不是 Engine 的規則。Kira、SoLoud、miniaudio 也都讓作者自己給起播的時間。〕片段是示意，名字是真的 API，但不是測試過的程式。
+
+**例子**：FPS 的 Client。模擬是 64 Hz 的固定步；第 312 幀補了兩步（第 1001、1002 tick），兩步各開一槍。玩家之後讀第 2 個存檔，畫面 World 被替換。
+
+### 5.1 tick 換成時刻
+
+判定的 System 不讀時鐘（determinism 第 11 節），所以它只發「第幾 tick 開了一槍」：
+
+```cpp
+struct ShotFired { std::uint64_t tick; GYO::Kernel::EntityId shooter; };   // 保留式訊息，進判定資料
+// 固定步裡的判定 System：MessageWriter<ShotFired> 寫 {tick.value, shooter}
+```
+
+`Main`／`Last` 的表現層 System 讀 `MessageReader<ShotFired>`，配 world_time 的 `RealTime`、`Tick`、`FixedTime` 換成時間基準的時刻，再放進要交給混音器的請求（第 5.3 節）。取捨（作者選）：
+
+| 做法 | 第 1001、1002 tick 的兩槍 | 代價 |
+|---|---|---|
+| (a) 全用這一幀的 `RealTime::now` | 同一刻響（落在幀格上） | 最簡單；快轉、補幀時聲音擠在一起 |
+| (b) 照 tick 差往回推：`now − (目前的 Tick − tick) × 步長 ÷ 倍率` | 隔一個步長（倍率 1 時 15.6 ms） | 要讀倍率；暫停時沒有新的 tick，不用算；慢動作下「一步對應多長的真實時間」是作者的定義 |
+| (c) 只保留同一幀裡的相對間隔（SoLoud `playClocked` 的做法） | 隔一個步長，整批從 `now` 起算 | 不必推回過去；第一槍晚一點點 |
+
+回滾重跑時，判定的 System 會再發一次同一個 tick 的 `ShotFired`。要不要再出聲是作者的規則：用 `(tick, shooter)` 去重，或在 `Resimulation.active` 時不發（Unity Netcode 的 `IsFirstTimeFullyPredictingTick` 同一個想法）。時鐘型別（`Time::TimePoint`）只出現在表現層 System 換成 `PlayRequest` 的那一步，不進判定資料。
+
+### 5.2 提交口：照 World 名字建一次，放在 Product 一份的共用處
+
+混音器與提交口都放在 Product 的共用處（O-15），不放進 World：
+
+```cpp
+struct GameAudio {                       // 產品自己的型別
+    GYO::Engine::Audio::Mixer mixer;
+    std::map<std::string, GYO::Engine::Audio::Submitter> submitters;   // 鍵：World 名
+};
+// configure：setup.Buffer().Create<GameAudio>(...)
+// 每個 World 的 build：auto* audio = world.ProductBuffer().Find<GameAudio>();
+//   同名的提交口沒有才 CreateSubmitter()；有就沿用
+// world.Prepare(...)：在 World 裡放一個指向那個提交口的 Resource（例：AudioOut）
+```
+
+- **為什麼照名字**：提交口用掉不還（RC 5）。每次建 World 都拿新的，讀檔換 World 幾次就 `TooManySubmitters`。同一個名字沿用同一個，替換多少次都一樣。
+- **替換時的注意**：預設的 `BuildNewFirst` 在新 World 上跑 `beforeSwap`，這時舊 World 還在、而且和新 World 共用同一個提交口。在 `beforeSwap` 裡 `StopAll` 或 `UnloadClip`，影響的是舊 World 送出的聲音與載的 clip；替換若之後失敗、留下舊 World，它的聲音已停、clip 已卸（舊的 `ClipId` 再 `Play` 是 Programmer Error）。要停舊聲音，在替換成功之後停，或確定替換不會失敗再停。
+- **World 交給別的執行緒時**：指標跟著 World 走；換手由 runner 的交出同步（第 3 節的執行緒契約），不必另拿提交口。
+
+### 5.3 一個 System 在 `Main`／`Last` 交給提交口
+
+表現層的 System 把這一幀要播、要停、要卸的請求放進 World 裡的緩衝；`Main`／`Last` 只有**一個** System 把緩衝交給提交口（O-12 的套用點「出」）。理由：提交口是單一生產者；集中到一個 System，Kernel 怎麼排其他 System 都只有一方在用。混音器在 World 外、自己同步（CCR-6），World 的資料不上鎖。
+
+### 5.4 帶回的值不進判定
+
+`Play` 回的 `SoundHandle`、`Stop` 回的 `false`、`LoadClip` 回的 `NoClipSlot` 都取決於音訊執行緒跑到哪裡（環滿不滿、格子交還了沒）。所以：
+
+- 放進 World 的 handle 用一個 Resource 包起來，它的雜湊函式**什麼都不寫**（照 asset 宣告 5.9.1 的 `AssetView`：依完成時序變的值不進 World 摘要）。
+- 不拿 `false`、handle 有沒有效、`PlayheadOf` 的回報去分支判定（DI 4、CCR-6）。它們只給表現層用（例：環滿就這一幀不再送）。
+
+### 5.5 先送出緩衝，再卸載 clip
+
+`UnloadClip` 之後再 `Play` 同一個 `ClipId` 是 Programmer Error。緩衝裡還有那個 clip 的播放時，先讓 `Main`／`Last` 的 System 把緩衝送出（`UnloadClip` 排在同一個環、在已送出的播放之後，那些聲音照響完），再卸載；或者卸載之前把緩衝裡指向它的請求拿掉。
+
 ## Design Invariants
 
 1. **中立。** `GYO::Audio` 只認得 clip、時間、增益與樣本：沒有事件種類、武器、角色、產品名，也沒有以產品意義命名的 API。守衛：審查（沒有自動守衛）。
@@ -76,7 +135,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio
 2. 需要每個 voice 的增益與硬停止以外的訊號處理（bus、effect、HRTF、淡入淡出），或聲音送出後除了停止以外的改變（增益或音高、seek、暫停、loop、音樂）〔`v8-arch-gyo2-audio-review` 補：含聲音跟著遊戲的暫停或時間倍率走〕。
 3. 需要第二個、非 SDL 的後端，而且換算要對每個後端重新驗證。
 4. L2 量到的 anchor 抖動讓間隔誤差（超出 DI 5）對使用者不可接受，換算需要濾波，而濾波需要後端專屬的資訊。
-5. 〔`v8-arch-gyo2-audio-review` 改〕生產者的**數量**在建立時定不下來（例：每次替換 World 都要新的提交口），或要多個生產者同時用一個提交口。**2026-11-22 判定已成立**（O-8 的替換：每次建 World 拿新的提交口會用光），使用者選修（宣告第 12 節第 1 題），數量的處理在 `world_audio` 那一批。
+5. 〔`v8-arch-gyo2-audio-review` 改〕生產者的**數量**在建立時定不下來（例：每次替換 World 都要新的提交口），或要多個生產者同時用一個提交口。**2026-11-22 判定已成立**（O-8 的替換：每次建 World 拿新的提交口會用光），使用者選修（宣告第 12 節第 1 題），數量的處理是作者的寫法（第 5.2 節：照 World 名字建一次、替換時沿用）。
 6. 每個新的播放功能（含每種新的命令）都要重新驗證換算、晚到的規則、環的順序、clip 的回收或即時安全。
 7. 使用者需要精確的播放位置（取樣精確或聽得到的、校正過裝置延遲的）、需要拿它做決定，或需要聲音結束時被通知。
 8. 停止必須是立即的（不換算）或跨提交口，或需要混音器全體的停止。

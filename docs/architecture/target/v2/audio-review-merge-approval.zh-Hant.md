@@ -2,11 +2,12 @@
 
 更新：2026-11-22。**狀態：待使用者合併前核准。合併要使用者另外說「合併」。**宣告：[audio-review-declaration.zh-Hant.md](audio-review-declaration.zh-Hant.md)（修訂 2，動工前核准）。dev_log：[2026_11_22_gyo2_audio_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_audio_review.zh-Hant.md)。
 
-**這一頁請你核准四件**：
+**這一頁請你核准五件**：
 1. 第 1 節：拿掉 DI 4 的原始碼掃描守衛 `gyo_audio_board_readers`（宣告第 12 節第 3 題的正式核准；AGENTS §14.4：DI 的守衛不論有沒有緩的面都要你核准）。
 2. 第 2 節：DI 11 的守衛測試加了一個判定（只有緊的面；事後報告，你看過就好）。
 3. 第 3 節：和宣告的偏差。
 4. 第 4 節：Design Invariants 與 Replacement Criteria 的最終文字（新頁 [audio.zh-Hant.md](audio.zh-Hant.md)）。
+5. 第 4.1 節：範圍擴大（`world_audio` 撤掉後併進本批的部分）。
 
 設計審查與檢證的結論在第 5 節，判定的結果在第 6 節。
 
@@ -33,7 +34,7 @@
 5. **根據**：
    - 分類：它是綁實作方式的守衛（AGENTS §3「実装の方式に縛るガード」）——綁檔名 `Mixer.cpp`、`PlayheadBoard.hpp`，綁簽名字串，綁成員名 `board` 與方法名 `Read`，綁 `\n}\n` 的格式；搬到子目錄時它不失敗，只是靜默地不掃。
    - 讀看板不影響即時安全：`noexcept`、只做 acquire load、預先配置、`static_assert` lock-free（`PlayheadBoard.hpp:10`、`:64-76`）。
-   - 和 AGENTS §3 的連結：那一段管「何時立」（含這個機構的 scenario test 通過之前不立）。gyo2 上還沒有含混音器的 scenario test（`world_audio` 不在本批），照 §3 這個守衛現在不該立著。它是 2026-10-31 照當時核准的計畫立的（master 的 dev_log `2026_10_31_engine_audio_control_playhead.zh-Hant.md:48`），所以拿掉要你核准。
+   - 和 AGENTS §3 的連結：那一段管「何時立」（含這個機構的 scenario test 通過之前不立）。gyo2 上還沒有含混音器的 scenario test（沒有產品接混音器），照 §3 這個守衛現在不該立著。它是 2026-10-31 照當時核准的計畫立的（master 的 dev_log `2026_10_31_engine_audio_control_playhead.zh-Hant.md:48`），所以拿掉要你核准。
 
 **核准後一起做**（同一個 PR）：刪 `tests/common/audio/CheckBoardReaders.cmake` 與 `CMakeLists.txt:22-26` 的 `add_test`；退役突變 `au-ctl-board-read-in-render`（唯一依賴它的突變；其他含看板的突變由 `gyo_audio_tests` 的案殺）；新頁 DI 4 刪那一項守衛與〔〕註；`audio.md` 的 Legacy 行把 DI 4 的「pending its approval」改成已拿掉。`docs/architecture/plans/kernel/guards-inventory.zh-Hant.md:161` 仍寫「留」、路徑是舊的 `engine/audio/src`——那是 kernel 研究線的盤點表，不是本卡的檔，轉主會話。
 
@@ -69,7 +70,22 @@
 - **DI 7**：經提交口載入的 clip「只由使用那個提交口的一方配置與釋放，那一方永遠不是音訊執行緒」。
 - **DI 10**：拿掉經 SDL 後端的守衛。
 - **Contract**：`Submitter` 不綁執行緒（同時一方、換手要 happens-before）；時間點的限界；搬動與銷毀 `Mixer` 的責任在持有者；第 4 節後端要求的介面。
-- **RC 1**：拿掉「執行緒」；**RC 2**：補「含跟著遊戲的暫停或時間倍率走」；**RC 5**：改寫並記「2026-11-22 判定已成立、選修、數量交 `world_audio`」；**RC 9**：新增搶占。
+- **RC 1**：拿掉「執行緒」；**RC 2**：補「含跟著遊戲的暫停或時間倍率走」；**RC 5**：改寫並記「2026-11-22 判定已成立、選修、數量是作者的寫法（第 5.2 節）」；**RC 9**：新增搶占。
+
+## 4.1 範圍擴大（請你核准）
+
+主會話重查 `world_audio` 的前提後，你在主會話說「照建議」（HANDOFF `v8-arch-gyo2-world-audio-withdrawn`）：不另做 `world_audio` 這一批，宣告第 12 節第 5 題 (A) 的「加一批」撤掉，「本批縮小」不變；下面這些併進本批（你同意擴大範圍）。
+
+| # | 加的 | 位置 |
+|---|---|---|
+| E-1 | 新頁第 5 節「把 World 接到混音器：作者的寫法」：tick 換成時刻的三種做法與取捨（判定 System 發帶 tick 的訊息、`Main`／`Last` 的表現層換成時刻；重跑時的去重）；提交口照 World 名字建一次、放共用處、替換時沿用，`beforeSwap` 裡 `StopAll`／`UnloadClip` 會影響舊 World；一個 System 在 `Main`／`Last` 交；帶回的值包一層、雜湊時什麼都不寫，不拿來分支判定；先送出緩衝再卸載 | [audio.zh-Hant.md](audio.zh-Hant.md) 第 5 節 |
+| E-2 | `PlayRequest::at` 的預設值（時鐘的紀元）：**不改預設、不加守衛**（卡片判：照「不為防誤用加守衛」）；註解寫明忘了填時「立刻起播、不加延遲、記成晚到、晚了最多一小時」，在 `Stats().playedLate` 與 `maxLateness` 看得到；新測試「starts a play left without a time at once and counts it an hour late」釘住這個行為 | `Mixer.hpp`、`ScheduleTests.cpp` |
+| E-3 | `CreateSubmitter` 的註解：每個生產者一個（例：每個 World 名），放在活過重建的地方（例：Product 的共用處），銷毀不還 | `Mixer.hpp` |
+| E-4 | `ClipBank` 的註解不再舉「載好的音效資產」：它給事先就有的 clip（測試、工具、在建混音器前就有聲音的產品）；之後才到的（asset 在背景載的）走 `LoadClip`；`clipSlotsPerSubmitter` 預設 0 時 `LoadClip` 一律回 `NoClipSlot`，要的產品自己設 | `ClipBank.hpp`、`Mixer.hpp` |
+| E-5 | 宣告裡「留給 `world_audio`」的幾處加更正註（原文不刪）：作者的寫法指向新頁第 5 節；clip 的來源與音效 loader 歸 audio 那一側的小批（asset 實作合併之後，或併進 SDL 那一批） | 宣告開頭、4.1、4.2、第 5 節、第 7 節 RC 5、第 12 節第 5 題 |
+| E-6 | `rebuild-concept` 的 audio 列的註改成「預設起播時刻是作者的事，寫法見 audio 頁」；`target/README.md:29`、kernel 盤點表的路徑（主會話要求併進本批） | 各檔 |
+
+E-2 的取捨（卡片判，設計審查看過）：改預設有兩種——讓 `at` 沒有預設（C++ 的聚合初始化仍會把漏填的成員值初始化成紀元，擋不住），或加「立刻」的模式（Kira 的 `StartTime::Immediate`、miniaudio 的 0；沒有點名的需要，而且「立刻」的意思和換算的延遲要另外定）。所以留預設、寫明行為、用測試釘住症狀。
 
 ## 5. 設計審查與檢證
 
