@@ -26,6 +26,8 @@ namespace GYO::Engine::IO {
         WriteFailed,
         SeekFailed,
         EndOfStream,
+        // A whole-file read met more bytes than its caller's limit.
+        TooLarge,
 
         // internal
         InternalError
@@ -44,6 +46,7 @@ namespace GYO::Engine::IO {
         case IOErrorCode::WriteFailed:      return "WriteFailed";
         case IOErrorCode::SeekFailed:       return "SeekFailed";
         case IOErrorCode::EndOfStream:      return "EndOfStream";
+        case IOErrorCode::TooLarge:         return "TooLarge";
         case IOErrorCode::InternalError:    return "InternalError";
         }
         return "Unknown";

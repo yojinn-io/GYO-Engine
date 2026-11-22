@@ -8,7 +8,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            if (candidatePart == candidate.end() || !SameComponent(*candidatePart, *rootPart)) return false;",
       "replace": "            if (candidatePart == candidate.end()) return false;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically creates*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -18,7 +18,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            auto same = OS::Files::SamePathComponent(leftText.value(), rightText.value());\n            return same && same.value();",
       "replace": "            return leftText.value() == rightText.value();",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically creates*,*IsNativePathWithin*",
       "expect": "is NOT correct",
       "platforms": [
@@ -31,7 +31,7 @@
       "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "            if (info.error().code == IOErrorCode::NotFound) return FileStamp{};\n",
       "replace": "",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically creates*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -41,7 +41,7 @@
       "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "        stamp.contentHash =\n            Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(data.data()), data.size()));",
       "replace": "        stamp.contentHash = 0;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically creates*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -51,7 +51,7 @@
       "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "        auto bytes = ReadAllBytes(fs, uri, read);",
       "replace": "        auto bytes = ReadAllBytes(fs, uri);",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically creates*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -61,7 +61,7 @@
       "file": "engine/core/io/src/helpers/WriteFileAtomically.cpp",
       "find": "        if (options.createParentDirectories) {",
       "replace": "        if (false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically creates*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -71,7 +71,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        std::filesystem::path Resolved(const std::filesystem::path& absolute) {\n",
       "replace": "        std::filesystem::path Resolved(const std::filesystem::path& absolute) {\n            return absolute.lexically_normal();\n",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -81,7 +81,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            return WithoutTrailingSeparator(Resolved(WithoutTrailingSeparator(Absolute(given))));",
       "replace": "            return CandidatePath(given);",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -91,7 +91,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            const std::filesystem::path absolute = WithoutTrailingSeparator(Absolute(given));",
       "replace": "            const std::filesystem::path absolute = WithoutTrailingSeparator(Absolute(given).lexically_normal());",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct",
       "platforms": [
@@ -105,7 +105,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            if (!path.has_filename() && path.has_relative_path()) path = path.parent_path();",
       "replace": "",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -115,7 +115,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        std::filesystem::path Absolute(const std::filesystem::path& given) {\n",
       "replace": "        std::filesystem::path Absolute(const std::filesystem::path& given) {\n            return given;\n",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -125,7 +125,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            return utf8.starts_with(\"//?/\") || utf8.starts_with(\"//./\") || utf8.starts_with(\"\\\\\\\\?\\\\\") ||\n                   utf8.starts_with(\"\\\\\\\\.\\\\\");",
       "replace": "            return false;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -135,7 +135,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        if (!rootPath) return Base::Err(FromOS(rootPath.error(), {}, IOErrorCode::InvalidPath));",
       "replace": "        if (!rootPath) return false;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -145,7 +145,7 @@
       "file": "engine/core/io/src/helpers/UserFiles.cpp",
       "find": "        stamp.mtimeNs = info.value().mtimeNs;",
       "replace": "        stamp.mtimeNs = 0;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     },
@@ -155,7 +155,7 @@
       "file": "engine/core/io/src/helpers/WriteFileAtomically.cpp",
       "find": "            if (parentText.empty() || (parentText.size() == 2 && parentText[1] == ':')) {",
       "replace": "            if (false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "*ProbeFileStamp*,*WriteFileAtomically*,*IsNativePathWithin*",
       "expect": "is NOT correct"
     }
