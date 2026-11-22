@@ -173,6 +173,9 @@ struct NetOutbox final {
     // Kept until a frame whose tick ReplicateOut has not sent yet takes them (B2: a frame without a fixed step sends
     // nothing, and its messages wait for the next tick).
     std::vector<OutgoingServerMessage> messages;
+    // The tick the messages last went out with, one for the whole World (R1: a Peer that connects in a frame
+    // without a step sends its own structure and values that frame, but no messages).
+    std::optional<std::uint32_t> sentTick;
 };
 inline void HashValue(Kernel::Hasher&, const NetOutbox&) {}
 

@@ -61,6 +61,9 @@ public:
     [[nodiscard]] std::size_t ConnectionCount() const noexcept { return peers_.size(); }
     [[nodiscard]] std::vector<std::uint32_t> ConnectionIds() const;
     [[nodiscard]] std::uint64_t UserIdOf(std::uint32_t connectionId) const;
+    // The client World's epoch on one connection (R2): from its request, changed by its resyncs.
+    [[nodiscard]] std::uint32_t EpochOf(std::uint32_t connectionId) const;
+    void SetEpoch(std::uint32_t connectionId, std::uint32_t epoch);
     // The bytes of every datagram sent on one connection so far (G-8).
     [[nodiscard]] std::uint64_t BytesSentTo(std::uint32_t connectionId) const;
     [[nodiscard]] Connection* Find(std::uint32_t connectionId) noexcept;
@@ -71,6 +74,7 @@ private:
         Endpoint endpoint;
         std::uint64_t userId = 0;
         std::uint64_t salt = 0;
+        std::uint32_t epoch = 0;
         Connection connection;
         NetTime lastReceived{0};
         NetTime lastSent{0};

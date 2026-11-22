@@ -270,3 +270,23 @@ TEST_CASE("module: a lasting Link failure stops the frame's receiving; a datagra
     CHECK_MESSAGE(large->calls == 2, "small thing 3: after a datagram too large the frame keeps receiving");
     CHECK(once.LinkFailures() == 1);
 }
+
+TEST_CASE("module: each new handshake of a client carries a larger salt (S2's premise, recheck small thing b)") {
+    N::NetProductOptions options;
+    options.role = N::NetRole::Client;
+    auto links = N::MemoryLink::Pair({});
+    N::NetService service(options, std::make_shared<N::MemoryLink>(links.second), N::MemoryLink::EndpointA(), 1, 2);
+    N::HandshakeFacts facts;
+    std::uint64_t previous = 0;
+    for (int i = 0; i < 4; ++i) {
+        // The clock moves on for some handshakes and stands still for others.
+        const N::NetTime now = Ms(i < 2 ? 5 : 5 + i);
+        service.SetFacts(facts, now, true);
+        REQUIRE(service.Client() != nullptr);
+        const std::uint64_t salt = service.Client()->Request().salt;
+        CHECK_MESSAGE(salt > previous, "recheck small thing b: a new handshake's salt is larger than the one before");
+        previous = salt;
+        service.Close();
+        REQUIRE(service.Client()->State() == N::ClientState::Disconnected);
+    }
+}

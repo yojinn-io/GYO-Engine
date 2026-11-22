@@ -996,11 +996,25 @@
     "cross-component-rules CCR-8"
    ],
    "file": "engine/modules/state_machine/include/engine/state_machine/AdoptValue.hpp",
-   "find": "        return **current == value || (r.Pending() && *r.Pending() == value && r.PendingKind() == kind);\n",
-   "replace": "        return r.Pending() ? (*r.Pending() == value && r.PendingKind() == kind) : (**current == value);\n",
+   "find": "        if (r.Pending()) return (*r.Pending() == value && r.PendingKind() == kind) || (kind == RequestKind::Normal && **current == value);\n",
+   "replace": "        if (r.Pending()) return *r.Pending() == value && r.PendingKind() == kind;\n",
    "target": "gyo_state_machine_tests",
    "cases": "behaviour:*",
    "expect": "small thing 5: the current value adopted writes no request"
+  },
+  {
+   "id": "sm-adopt-silent-current-kept",
+   "what": "Adopting the current value silently keeps a local request pending (it is skipped like a Request's). Only it catches small thing d of the narrow recheck",
+   "guards": [
+    "state-machine DI 6",
+    "cross-component-rules CCR-8"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/AdoptValue.hpp",
+   "find": "(kind == RequestKind::Normal && **current == value);\n",
+   "replace": "(**current == value);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "recheck small thing d: the silent request of the current value replaced the local one"
   }
  ]
 }

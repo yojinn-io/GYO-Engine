@@ -178,7 +178,8 @@ bool StructureApplied(const std::optional<std::uint32_t> needed, const std::opti
 
 // The client's messages on the reliable channel: confirmations and resyncs, read by the server before it sends.
 // What cannot be read, is of another kind, generation or epoch is dropped and counted on the Peer (D-12).
-void ReadClient(PeerLedger& ledger, Connection& connection, const std::uint32_t serverGeneration) {
+void ReadClient(PeerLedger& ledger, Connection& connection, const std::uint32_t serverGeneration, ServerHost& server,
+                const std::uint32_t connectionId) {
     while (auto message = connection.Pop(kReliableChannel)) {
         NetReader reader(*message);
         std::uint8_t kind = 0;
@@ -194,6 +195,7 @@ void ReadClient(PeerLedger& ledger, Connection& connection, const std::uint32_t 
             ledger.resources.clear();
             ledger.lastStructureTick.reset();
             ledger.epoch = epoch;
+            server.SetEpoch(connectionId, epoch); // a later server World's ledger starts with it (R2)
             continue;
         }
         if (kind != static_cast<std::uint8_t>(Kind::Confirm)) {
@@ -255,20 +257,18 @@ SystemResult ReplicateOut(ReplicaWorld world) {
     const auto tick = static_cast<std::uint32_t>(
         world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0));
     const std::uint32_t generation = service->Generation();
-    // The server messages go out with a tick not sent yet (B2): in a frame without a fixed step the Peers send
-    // nothing, and the messages stay in the outbox for the next tick.
-    bool newTick = peers.empty();
-    for (const auto& [connectionId, peerEntity] : peers) {
-        auto sent = world.Read<PeerLedger>(peerEntity, [&](const PeerLedger& kept) { return kept.lastSentTick != tick; });
-        if (sent && sent->has_value() && **sent) newTick = true;
-    }
+    // The server messages go out with a tick the World has not sent them with yet (B2, R1): in a frame without a
+    // fixed step they stay in the outbox for the next tick, also when a Peer connects in that frame (it sends its own
+    // structure and values now; the messages reach it with the others at the next tick).
     std::vector<OutgoingServerMessage> outgoing;
-    if (newTick) {
-        (void)world.Modify<NetOutbox>([&](NetOutbox& box) {
-            outgoing = std::move(box.messages);
-            box.messages.clear();
-        });
-    }
+    bool newTick = false;
+    (void)world.Modify<NetOutbox>([&](NetOutbox& box) {
+        newTick = box.sentTick != tick;
+        if (!newTick) return;
+        outgoing = std::move(box.messages);
+        box.messages.clear();
+        box.sentTick = tick;
+    });
 
     Snapshot snapshot = Take(world, *registry);
     const Kernel::ChangeStamp now = world.Stamp();
@@ -305,7 +305,7 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             hasLedger = true;
         });
         if (!hasLedger) continue;
-        ReadClient(ledger, *connection, generation);
+        ReadClient(ledger, *connection, generation, *server, connectionId);
 
         if (ledger.lastSentTick != tick) {
             // The structure update: what this client has against what the World has.
@@ -629,12 +629,9 @@ bool Current(NetReplicaState& state, NetReader& reader) {
         return false;
     }
     if (!state.generation || generation > *state.generation) {
-        // B1: a new client World knows no generation yet and keeps its own epoch (the NetService's count); only a
-        // replaced server World (a newer generation than one already seen) brings its Peers' epoch, a new ledger.
-        if (state.generation) {
-            state.replacedGenerations.push_back(generation);
-            state.epoch = epoch;
-        }
+        // B1, R2: the epoch is never taken from a message; a replaced server World's ledgers start with the
+        // connection's epoch, the one this World has.
+        if (state.generation) state.replacedGenerations.push_back(generation);
         state.generation = generation;
         state.appliedStructureTick.reset();
         state.pendingValues.clear();

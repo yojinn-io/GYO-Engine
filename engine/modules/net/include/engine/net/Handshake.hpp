@@ -22,7 +22,7 @@ namespace GYO::Engine::Net {
 
 // The net Module's own protocol version (what the messages above the header mean), compared in the handshake.
 // The header's kProtocolVersion is the framing; a datagram of another framing cannot be read at all.
-// 2: the accept carries the handshake's salt (S2).
+// 2: the accept carries the handshake's salt (S2), the request the client World's epoch (R2); not released between.
 inline constexpr std::uint32_t kNetProtocolVersion = 2;
 
 // Why a connection ended or was never made. Zero is not a reason.
@@ -84,6 +84,9 @@ struct ConnectRequest final {
     // (its Accepted was lost) carries the same salt, a newer handshake from the same endpoint (a reconnect) a larger
     // one, a late copy of an older handshake a smaller one (dropped, it does not end the newer connection) (D-8).
     std::uint64_t salt = 0;
+    // The client World's epoch (R2): the server's ledgers for this connection start with it, also after the server
+    // replaces its World; a client World made later on the same connection changes it with a resync.
+    std::uint32_t epoch = 0;
 
     friend bool operator==(const ConnectRequest&, const ConnectRequest&) = default;
 };

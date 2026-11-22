@@ -85,9 +85,57 @@
 ## 7. 驗證
 
 - 本機（macOS x86_64，Intel i9-9980HK，`core` preset）：全部 ctest 185 個全過；`gyo_net_tests` 77 案、`gyo_state_machine_tests` 38 案全過。
-- **證據**（主 checkout `build/evidence/gyo2-net-module/review-fixes/`，git 不追蹤）：`red-net.log`、`red-state-machine.log`、`ctest-all.log`、`net-messages.txt`、`mutations-net.log`、`mutations-state-machine.log`。
+- **證據**（主 checkout `build/evidence/gyo2-net-module/review-fixes/`，git 不追蹤）：`red-net.log`、`red-state-machine.log`、`ctest-all.log`、`net-messages.txt`、`mutations-net.log`、`mutations-state-machine.log`；窄複查之後的 `red2-*.log`、`ctest-all-recheck.log`、`net-messages-recheck.txt`、`mutations-*-recheck.log`。
 
 ## 之後要接的
 
 - U2～U5 由主會話交使用者。
 - 審查的小事 8：合併前看 L1 的結論。
+
+## 窄複查之後（2026-11-23）
+
+窄複查（Fable／high，唯讀；原文在主 checkout `build/evidence/gyo2-net-module/design-recheck-pr1-fable.md`）：仍擋合併 1（R1）、應改 1（R2）、小事 4（a～d）。S1～S4、小事 1～4、6、7、U1 確認成立。照 §14.3 修。
+
+### Red 的紀錄
+
+修之前（bb2201ad 之上加了新測試）：`gyo_net_tests` 81 案中 3 案失敗（R1、R2 a、R2 b），`gyo_state_machine_tests` 39 案中 1 案失敗（小事 d）。證據 `red2-net.log`、`red2-state-machine.log`。小事 b 的 salt 測試與小事 c 的拆分沒有缺陷要 Red（前者是補上前提的檢查，檢出力以突變 `nt-salt-not-increasing` 證明；後者只拆檢查）。
+
+- **R2 a 的測試改過一次**：第一版在固定延遲 3 步的 Link 上「跑 50 幀後狀態相等」，修好後確認已經會被收下，但 Client 和伺服器差了一個延遲的 tick（遊戲每 tick 都在變），不相等是比較的時間點不對。改成規則停在 tick 60、Link 排空之後才比。確認那一條（Red 的那一條）沒有變。
+
+### 逐條
+
+| 條 | 處理 | 測試 |
+|---|---|---|
+| **R1** B2 的殘留 | 取不取出 `NetOutbox` 改看整個 World 一份的 `NetOutbox::sentTick`；新 Peer 在沒跑步的幀照樣送自己的結構與值、不帶訊息，訊息在下一個 tick 和其他 Peer 一起到 | `scenario: a client connecting in a frame without a fixed step…`：伺服器一幀半步、兩個 Client 先連上，第三個在第 30 或 31 幀建（兩種奇偶都跑，至少一次落在無步的幀）；伺服器在 `Update` 對每個 `PeerConnected` 發一則；每個 Peer 收到「自己加入之後的每一則」 |
+| **R2** epoch 跟連線走 | 握手的請求帶 Client World 的 epoch；伺服器的連線記著（`ServerHost::EpochOf`／`SetEpoch`，resync 時更新）；伺服器換 World 時新帳本從它開始；Client 永不採用訊息的 epoch（`Current()` 的那個分支拿掉）。新連線為現在的 World 而開時不送 resync | (a) `replication: client and server replace their Worlds within one latency…`：兩端在同一幀換 World（固定延遲 3 步），確認照樣被收下；之後伺服器再換一次 World，新帳本用連線記著的 epoch，確認照樣被收下。(b) `replication: after a reconnect…`：重連後 `StaleEpoch` 0 |
+| **小事 a** | `NetService.cpp` 的註解與網路頁的 salt 列改寫成限界：單調時鐘只在同一個行程內可比，假設不成立時新握手被當成舊的丟掉，要等舊連線逾時（10 秒，小於握手逾時 15 秒） | — |
+| **小事 b** | 連續的握手 salt 嚴格遞增的檢查（時鐘有動、沒動各兩次） | `module: each new handshake of a client carries a larger salt`；突變 `nt-salt-not-increasing` |
+| **小事 c** | 兩個世代的檢查拆開：先送確認、看計數，再送輸入、看增加的量；兩個突變的 expect 各指向自己的訊息 | S4 的第一個測試 |
+| **小事 d** | `AdoptByRequest` 照小事 5（等於現值就不寫）；`AdoptByRequestSilent` 照修改前的規則：有本機待處理的要求時，同值的 `RequestSilent` 蓋掉它、什麼都不跑 | `behaviour: adopting the current value silently takes the place of a local request…`（silent）；小事 5 的測試（Request） |
+| **突變的退役** | 退掉 `nt-window-not-power-of-two`（守的是設定值的斷言＝誤用，網路的其他斷言都沒有突變）與它專用的測試 `connection: the reliable window is a power of two`；斷言本身留著；`gyo_net_tests` 不再連 `gyo_test_support`。退掉 `nt-link-failure-retried`（守的是收件迴圈的次數，不是條文）；小事 3 的測試留著當回歸 | — |
+| **S3 的限界** | 網路頁第 8 節：超過 `maxMessageBytes` 的結構更新每 tick 被拒、只計數；RC 加 RC-NT8「點名的產品的結構更新超過 `maxMessageBytes`」 | — |
+
+### 自己判的
+
+- **網路協議版本維持 2**：S2（接受帶 salt）與 R2（請求帶 epoch）之間沒有發行過。
+- **resync 的條件**：連線的請求帶的 epoch 和 World 的不同才送（連線是為更早的 World 開的）。這個條件沒有另立突變：重連時多送一次 resync 只會多送一次整份，現有的測試看不出來（細節，等觀測到再加，§14.5）。
+- **R2 a 的第二段**（之後伺服器再換一次 World）是我加的：沒有它，`nt-new-ledger-epoch-zero` 與 `nt-resync-epoch-not-kept` 沒有測試捕得到。
+
+### 數字
+
+- 全部 ctest 185 個通過；`gyo_net_tests` 80 案（小事 4 的專用測試退掉）、`gyo_state_machine_tests` 39 案全過。
+- G-5：觀測 164、不一致 0；值訊息 送 565＝收到 451＋遺失 114；確認 451＝451；結構 250＝250。
+- G-6：和之前相同。
+- G-8：44 078 bytes，和之前相同（請求多 4 bytes 是握手，不算在連線的位元組裡）。
+- G-9：觀測 42、不一致 0；連線識別不符 5、連上之前 0（重連不再送 resync，第一份整份就被收下，所以觀測的時間點和之前不同）。
+
+### 突變
+
+- **新加 6 個**：網路 5（`nt-outbox-taken-per-peer`＝R1、`nt-request-epoch-missing`、`nt-new-ledger-epoch-zero`、`nt-resync-epoch-not-kept`＝R2、`nt-salt-not-increasing`＝小事 b），狀態機 1（`sm-adopt-silent-current-kept`＝小事 d）。
+- **退役 2 個**：`nt-window-not-power-of-two`、`nt-link-failure-retried`（理由在上面的表）。
+- **find／expect 跟著改**：
+  - `nt-outbox-cleared-without-tick`：find 改成 `if (!newTick) return;`（R1 之後的形狀），拿掉它就是每幀取出、無步的幀遺失，性質不變。
+  - `nt-epoch-taken-from-message`：分支拿掉之後，find 改成那一行之後插入 `state.epoch = epoch;`，性質不變（不從訊息拿 epoch）。
+  - `sm-adopt-current-with-pending`：find 改成新的那一行，replace 拿掉 Normal 的現值條件。
+  - `nt-confirm-generation-unchecked`、`nt-input-generation-unchecked`：expect 各指向自己的訊息（小事 c）。
+- **結果**：網路全清單 74／74、狀態機 `sm-adopt-*` 3／3，第一次就全部 killed。證據 `mutations-net-recheck.log`、`mutations-state-machine-recheck.log`。

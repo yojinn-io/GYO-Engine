@@ -117,12 +117,13 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
 
 | 欄位 | 大小 | 說明 |
 |---|---|---|
-| 網路協議版本 | u32 | `kNetProtocolVersion`（2；2 起接受帶 salt，審查 S2）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
+| 網路協議版本 | u32 | `kNetProtocolVersion`（2；2 起接受帶 salt、請求帶 epoch，審查 S2、窄複查 R2；兩者之間沒有發行，所以同一個 2）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
 | 協議雜湊 | u64 | 網路的登記的雜湊；1b 還沒有複製的登記，是空登記的雜湊（`NetProtocolHash`） |
 | 步長 | u64 | 奈秒（時間 Module 的 `FixedTime` 的步長） |
 | 配發器範圍 | u64＋u64 | [first, last] |
 | 使用者 id | u64 | 不透明；產品對到自己的 Player |
-| salt | u64 | 3a：每次握手一個；同一次握手重送的回應帶同一個，重連（新的握手）帶更大的（D-8）。審查 S2 起是遞增的：IO 層單調時鐘的奈秒，時鐘沒動時取上一個加一，所以同一台機器上重開的 Client 也往上走。接受（Accepted）帶回同一個 salt |
+| salt | u64 | 3a：每次握手一個；同一次握手重送的回應帶同一個，重連（新的握手）帶更大的（D-8）。審查 S2 起是遞增的：IO 層單調時鐘的奈秒，時鐘沒動時取上一個加一。限界：單調時鐘只在同一個行程內可比，重開的 Client 抽到的 salt 可能比上一個行程的小，這時新握手被當成舊的丟掉，要等舊連線逾時（10 秒，小於握手逾時 15 秒）。接受（Accepted）帶回同一個 salt |
+| epoch | u32 | 窄複查 R2：Client World 的 epoch，伺服器的帳本從它開始 |
 | 有沒有指紋 | u8 | 0 或 1（World 有權威策略時 1） |
 | 指紋 | u16＋bytes | `Fingerprint::Text()`；沒有時長度 0 |
 | token | u16＋bytes | 只帶、不驗證（Q7） |
@@ -238,7 +239,7 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 **送**（伺服器的 `ReplicateOut`，每個 tick、每個 Peer；同一個 tick 不送第二次）：
 
 - **結構更新**：Peer 的帳本記著這個 Client 有哪些實體、每個實體有哪些複製元件（遮罩）。和 World 現在的比：多出來的 → 生成，少了的 → 刪除，遮罩不同 → 加減元件。一則、Ordered Reliable、整則一起套用。結構有變的實體，它的全部複製元件的值併進這一則。沒有變化就不送。連線收下了才改帳本：可靠的送件被拒（佇列滿、太大）時帳本不動、下一個 tick 再做一次，計 `PeerLedger::reliableRejected`（審查 S3）。
-- **伺服器訊息**：收集到的（`CollectServerMessages`，用自己的游標讀 World 的 `Message<M>`），在結構更新之後、同一條 Ordered Reliable 送；帶它要的結構 tick；可以只送給一個 Peer（`recipient`）。沒有跑固定步的那一幀不送（tick 沒變），訊息留在 `NetOutbox` 等下一個 tick（審查 B2）。被連線拒絕的計 `reliableRejected`（那一則不重送）。
+- **伺服器訊息**：收集到的（`CollectServerMessages`，用自己的游標讀 World 的 `Message<M>`），在結構更新之後、同一條 Ordered Reliable 送；帶它要的結構 tick；可以只送給一個 Peer（`recipient`）。取不取出 `NetOutbox` 看整個 World 一份的「上次送出訊息的 tick」（`NetOutbox::sentTick`）：沒有跑固定步的那一幀不取，訊息留到下一個 tick（審查 B2）；那一幀新連上的 Peer 照樣送自己的結構與值，但不帶訊息，訊息在下一個 tick 和其他 Peer 一起到（窄複查 R1）。被連線拒絕的計 `reliableRejected`（那一則不重送）。
 - **要的結構 tick 的寫法**：wire 上是「結構 tick＋1」，0＝還沒有結構更新；tick 0 的結構和其他 tick 一樣（審查 S1）。
 - **值**：帳本裡每個實體記著 Client 上次確認的快照的 World 戳記；元件的變更戳記（Kernel 的 `ReadColumn`）比它新的，送最新的值。Unreliable，分成數則，每則帶 tick、「這個 tick 共幾則」、要的結構 tick；一個實體的資料不拆開（一則約 1100 bytes，放得進一個不分片的封包）。沒有變化也送一則空的（C-RP4）。
 - **一個 tick 編碼一次**（3c）：快照（實體依 id 排序、每個元件一格的變更戳記）每 tick 取一次；一個值第一次有 Peer 要送時編碼，同一個 tick 的其他 Peer 用同樣的位元組（`ReplicateOut` 執行中 World 不變，wire 上的位元組和各自編碼相同）。費用與量法見 dev_log 2026-11-23 step3c（判定 G-12）。
@@ -258,7 +259,7 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 
 - 伺服器每次建 World 時世代加一，寫進標頭與複製的每則訊息。換 World 後，`ReceiveNet` 替已連上的連線重建 Peer 實體，帳本從空開始（整份重送）。
 - Client 收到新世代：丟掉舊的進度，發 `ServerWorldReplaced{generation}`；換不換自己的 World 由產品決定。舊世代的訊息丟掉並計數。
-- Client 的 World 被換掉（第二個以上的 Client World）：新 World 送 resync，伺服器把那個 Peer 的帳本清空、整份重送；舊 epoch 的訊息在 Client 丟掉並計數。epoch＝`NetService` 數到的第幾個 Client World 減一，每個 Client World 遞增、不從訊息拿（審查 B1）；只有伺服器換了 World（比已知更新的世代）時，Client 採用訊息帶的 epoch（新的 Peer、新的帳本）。
+- Client 的 World 被換掉（第二個以上的 Client World）：新 World 送 resync，伺服器把那個 Peer 的帳本清空、整份重送；舊 epoch 的訊息在 Client 丟掉並計數。epoch＝`NetService` 數到的第幾個 Client World 減一，每個 Client World 遞增，Client 永不從訊息拿（審查 B1、窄複查 R2）。epoch 跟連線走：握手的請求帶當時的 epoch，伺服器的連線記著它（resync 時更新），伺服器換 World 時新帳本從它開始。新連線為現在的 World 而開時不送 resync（重連不會送兩次整份）；連線是為更早的 World 開的才送。
 
 **只在一端跑的邏輯**（D-13）：`OnServer()`、`OnClient()` 是讀 `NetWorldRole` 的執行條件。兩端登記同一個 System 加條件，一致性指紋相同，另一端不跑。只能用在有角色的 World。
 
@@ -269,6 +270,7 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 - 最多 64 種複製元件（遮罩是 64 位元）。
 - 換 World 之間 Client 仍套用新世代的訊息到舊 World；產品沒換 World 時，同號的實體會被 `SpawnWithId` 拒絕（計數）。
 - tick 在 wire 上截成 u32，各處直接比大小、不處理回繞：64 Hz 約 2.1 年回繞一次，一個 World 連續跑這麼久不在範圍內（審查小事 7）。
+- 超過 `maxMessageBytes`（16 MiB）的結構更新每個 tick 被拒、只計 `reliableRejected`，不拆分、不斷線（審查 S3）。點名的規模（約 400 個實體）是幾十 KB；超過時見 RC-NT8。
 
 ## 9. 輸入與重連（宣告 D-11、C-IN1～3、D-8；3a）
 
@@ -395,3 +397,4 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 - **RC-NT5**：同一個回避策（對映、去重、狀態的副本）要放進兩個以上的地方，或 Link、中繼開始需要遊戲的狀態才能正確。
 - **RC-NT6**：G-8 的數字超過使用者選的頻寬預算，而且相關性與優先度都已用上。
 - **RC-NT7**：每加一種要複製的元件，就要改網路 Module 的程式（不只是登記）。
+- **RC-NT8**：點名的產品的結構更新超過 `maxMessageBytes`（現在每 tick 被拒、只計數，見第 8 節的限界）。

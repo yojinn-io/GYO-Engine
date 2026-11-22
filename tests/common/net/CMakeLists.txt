@@ -8,7 +8,7 @@ add_executable(gyo_net_tests TestMain.cpp HeaderTests.cpp ConnectionTests.cpp Tr
     ResourceTests.cpp)
 # GYO::StateMachine: the "statesync:" cases join the state machine and the net Module as a product does (neither
 # Module depends on the other).
-target_link_libraries(gyo_net_tests PRIVATE GYO::Net GYO::StateMachine gyo_test_support doctest::doctest)
+target_link_libraries(gyo_net_tests PRIVATE GYO::Net GYO::StateMachine doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_net_tests PRIVATE /W4 /permissive-)
     target_compile_definitions(gyo_net_tests PRIVATE NOMINMAX)

@@ -601,20 +601,24 @@ TEST_CASE("replication: what the server drops from a client is counted on its Pe
     N::Connection* up = game.ClientService().Client()->Transport();
     REQUIRE(up != nullptr);
     const std::uint32_t generation = game.ServerService().Generation();
-    // Cut short; an unknown kind; a confirmation of another epoch; a confirmation of another generation.
+    // Cut short; an unknown kind; a confirmation of another epoch; an input message cut short.
     REQUIRE(up->Send(N::kReliableChannel, std::vector<std::byte>{std::byte{2}}).has_value());
     REQUIRE(up->Send(N::kReliableChannel, ClientMessage(99, generation, 0)).has_value());
     REQUIRE(up->Send(N::kReliableChannel, ClientMessage(2, generation, 7, {0})).has_value());
-    REQUIRE(up->Send(N::kReliableChannel, ClientMessage(2, generation + 5, 0, {0})).has_value());
-    // An input message cut short; one of another generation.
     REQUIRE(up->Send(N::kValuesChannel, std::vector<std::byte>{std::byte{6}}).has_value());
-    REQUIRE(up->Send(N::kValuesChannel, ClientMessage(6, generation + 5, 0)).has_value());
     Frames(game, 5);
     const auto ledger = game.LedgerOfFirstPeer();
     CHECK_MESSAGE(DropOf(ledger.drops, N::ReplicaDrop::Malformed) == 3, "S4: unreadable messages and unknown kinds are counted");
     CHECK_MESSAGE(DropOf(ledger.drops, N::ReplicaDrop::StaleEpoch) == 1, "S4: a confirmation of another epoch is counted");
-    CHECK_MESSAGE(DropOf(ledger.drops, N::ReplicaDrop::StaleGeneration) == 2,
-                  "small thing 2: confirmations and inputs of another generation are dropped and counted");
+    // A confirmation of another generation, then an input message of another generation (each checked on its own).
+    REQUIRE(up->Send(N::kReliableChannel, ClientMessage(2, generation + 5, 0, {0})).has_value());
+    Frames(game, 5);
+    const std::uint64_t afterConfirm = DropOf(game.LedgerOfFirstPeer().drops, N::ReplicaDrop::StaleGeneration);
+    CHECK_MESSAGE(afterConfirm == 1, "small thing 2: a confirmation of another generation is dropped and counted");
+    REQUIRE(up->Send(N::kValuesChannel, ClientMessage(6, generation + 5, 0)).has_value());
+    Frames(game, 5);
+    CHECK_MESSAGE(DropOf(game.LedgerOfFirstPeer().drops, N::ReplicaDrop::StaleGeneration) - afterConfirm == 1,
+                  "small thing 2: an input message of another generation is dropped and counted");
 }
 
 TEST_CASE("replication: a structure update for an entity the client does not have is counted (S4)") {
@@ -644,4 +648,47 @@ TEST_CASE("replication: a structure update for an entity the client does not hav
     Frames(game, 3);
     CHECK_MESSAGE(DropOf(game.Replica().drops, N::ReplicaDrop::MissingTarget) == before + 1,
                   "S4: a structure update's component for a missing entity is counted");
+}
+
+// ---- The narrow recheck (R2): the epoch goes with the connection.
+
+TEST_CASE("replication: client and server replace their Worlds within one latency: the confirmations still count (R2 a)") {
+    N::MemoryLinkSettings slow;
+    slow.aToB.fixedDelaySteps = 3;
+    slow.bToA.fixedDelaySteps = 3;
+    // The rules stop at tick 60 of each server World, so the client can be compared once the link has drained.
+    Game game(slow, GameRules{60, true});
+    game.Build();
+    Frames(game, 30);
+    REQUIRE(static_cast<bool>(game.serverProduct->ReplaceWorld("Net", {})));
+    game.ServerFrame();
+    REQUIRE(static_cast<bool>(game.clientProduct->ReplaceWorld("Net", {})));
+    game.ClientFrame();
+    Frames(game, 40);
+    const auto before = game.LedgerOfFirstPeer().confirmationsReceived;
+    Frames(game, 10);
+    CHECK_MESSAGE(game.LedgerOfFirstPeer().confirmationsReceived > before,
+                  "R2 a: the server takes the confirmations after both Worlds were replaced close together");
+    while (game.ServerTick() < 60) Frames(game, 1);
+    Frames(game, 20);
+    CHECK(StateOf(game.ClientWorld()) == StateOf(game.ServerWorld()));
+    // A later server World: its ledger starts with the epoch the client World set on this connection with its resync.
+    REQUIRE(static_cast<bool>(game.serverProduct->ReplaceWorld("Net", {})));
+    Frames(game, 30);
+    const auto later = game.LedgerOfFirstPeer().confirmationsReceived;
+    Frames(game, 10);
+    CHECK_MESSAGE(game.LedgerOfFirstPeer().confirmationsReceived > later,
+                  "R2 a: a later server World starts with the connection's epoch, so the confirmations count");
+}
+
+TEST_CASE("replication: after a reconnect the server's first whole World is taken, not dropped as another epoch (R2 b)") {
+    Game game;
+    game.Build();
+    Frames(game, 20);
+    game.ClientService().Close();
+    REQUIRE(static_cast<bool>(game.clientProduct->ReplaceWorld("Net", {})));
+    Frames(game, 40);
+    CHECK_MESSAGE(DropOf(game.Replica().drops, N::ReplicaDrop::StaleEpoch) == 0,
+                  "R2 b: the new connection's messages carry the new World's epoch from the start");
+    CHECK(StateOf(game.ClientWorld()) == StateOf(game.ServerWorld()));
 }

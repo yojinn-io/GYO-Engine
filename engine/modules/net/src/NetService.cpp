@@ -43,10 +43,13 @@ void NetService::SetFacts(const HandshakeFacts& facts, const NetTime now, const 
             }
         }
         // A salt per handshake, larger than the one before (D-8, S2): the IO layer's monotonic time in nanoseconds,
-        // or one more than the last when the clock has not moved; so a client that starts again (a new process on the
-        // same machine) keeps going up as well.
+        // or one more than the last when the clock has not moved. Limit: the monotonic clock is comparable only within
+        // one process, so a client started again may draw a smaller salt than its previous process; its handshake is
+        // then taken as an old one and dropped until the old connection times out (timeoutAfter, 10 s, shorter than
+        // the handshake timeout of 15 s).
         lastSalt_ = std::max(lastSalt_ + 1, static_cast<std::uint64_t>(std::max<NetTime::rep>(now.count(), 0)));
-        ConnectRequest request{facts, options_.userId, options_.token, lastSalt_};
+        // The client World's epoch goes with the connection (R2).
+        ConnectRequest request{facts, options_.userId, options_.token, lastSalt_, clientWorlds_ > 0 ? clientWorlds_ - 1 : 0};
         client_.emplace(options_.session, std::move(request), now);
     }
 }

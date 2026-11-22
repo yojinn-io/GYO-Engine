@@ -759,13 +759,13 @@
   },
   {
    "id": "nt-epoch-taken-from-message",
-   "what": "A new client World takes the epoch of the first message it reads (the server's old one) instead of keeping its own. Only it catches B1's \"the epoch is not taken from a message\"",
+   "what": "A client World takes the epoch of the messages it reads instead of keeping its own. Only it catches B1 and R2's \"the epoch is never taken from a message\"",
    "guards": [
     "net-module-declaration D-5",
     "net 8"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "        if (state.generation) {\n            state.replacedGenerations.push_back(generation);\n            state.epoch = epoch;\n        }\n",
+   "find": "        if (state.generation) state.replacedGenerations.push_back(generation);\n",
    "replace": "        if (state.generation) state.replacedGenerations.push_back(generation);\n        state.epoch = epoch;\n",
    "target": "gyo_net_tests",
    "cases": "replication:*",
@@ -808,8 +808,8 @@
     "net 8"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "    if (newTick) {\n",
-   "replace": "    if (true) {\n",
+   "find": "        if (!newTick) return;\n",
+   "replace": "",
    "target": "gyo_net_tests",
    "cases": "replication:*",
    "expect": "B2:\\ every\\ server\\ message\\ written\\ goes\\ out"
@@ -910,7 +910,7 @@
    "replace": "        if (false) {\n",
    "target": "gyo_net_tests",
    "cases": "replication:*",
-   "expect": "small\\ thing\\ 2:\\ confirmations\\ and\\ inputs\\ of\\ another\\ generation"
+   "expect": "small\\ thing\\ 2:\\ a\\ confirmation\\ of\\ another\\ generation\\ is\\ dropped\\ and\\ counted"
   },
   {
    "id": "nt-input-generation-unchecked",
@@ -924,7 +924,7 @@
    "replace": "            if (false) {\n",
    "target": "gyo_net_tests",
    "cases": "replication:*",
-   "expect": "small\\ thing\\ 2:\\ confirmations\\ and\\ inputs\\ of\\ another\\ generation"
+   "expect": "small\\ thing\\ 2:\\ an\\ input\\ message\\ of\\ another\\ generation\\ is\\ dropped\\ and\\ counted"
   },
   {
    "id": "nt-input-not-expired",
@@ -941,33 +941,6 @@
    "expect": "small\\ thing\\ 1:\\ the\\ server\\ keeps\\ no\\ slot\\ behind\\ its\\ tick"
   },
   {
-   "id": "nt-link-failure-retried",
-   "what": "A lasting Link failure is tried again in the same frame. Only it catches small thing 3",
-   "guards": [
-    "net-module-declaration D-12",
-    "net 7"
-   ],
-   "file": "engine/modules/net/src/NetService.cpp",
-   "find": "            if (tooLarge) continue;\n            break;\n",
-   "replace": "            continue;\n",
-   "target": "gyo_net_tests",
-   "cases": "module:*",
-   "expect": "small\\ thing\\ 3:\\ a\\ lasting\\ failure\\ stops"
-  },
-  {
-   "id": "nt-window-not-power-of-two",
-   "what": "A reliable window that is not a power of two is taken. Only it catches small thing 4's assertion",
-   "guards": [
-    "net 4"
-   ],
-   "file": "engine/modules/net/src/Connection.cpp",
-   "find": " &&\n               (settings_.reliableWindow & (settings_.reliableWindow - 1)) == 0);",
-   "replace": ");",
-   "target": "gyo_net_tests",
-   "cases": "connection:*",
-   "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ N::Connection\\(settings\\)"
-  },
-  {
    "id": "nt-links-more",
    "what": "NT-7 link set: the net Module links one more target (the state machine). Only it reaches gyo_net's link set",
    "guards": [
@@ -979,6 +952,77 @@
    "target": "gyo_net_tests",
    "expect_build_failure": true,
    "expect": "gyo_net links\\s+GYO::Authority;GYO::Base;GYO::EntityIds;GYO::Kernel;GYO::OS;GYO::Orchestration;GYO::Rollback;GYO::StateMachine;GYO::Time;GYO::WorldTime;\\s+expected exactly"
+  },
+  {
+   "id": "nt-outbox-taken-per-peer",
+   "what": "The outbox is taken when any Peer has not sent this tick (B2's first fix): a Peer connecting in a frame without a step takes the frame's messages from the others. Only it catches R1",
+   "guards": [
+    "net-module-declaration D-12",
+    "net-module-declaration C-MS1",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    (void)world.Modify<NetOutbox>([&](NetOutbox& box) {\n        newTick = box.sentTick != tick;\n        if (!newTick) return;\n        outgoing = std::move(box.messages);\n        box.messages.clear();\n        box.sentTick = tick;\n    });\n",
+   "replace": "    for (const auto& [connectionId, peerEntity] : peers) {\n        auto sent = world.Read<PeerLedger>(peerEntity, [&](const PeerLedger& kept) { return kept.lastSentTick != tick; });\n        if (sent && sent->has_value() && **sent) newTick = true;\n    }\n    if (newTick) {\n        (void)world.Modify<NetOutbox>([&](NetOutbox& box) {\n            outgoing = std::move(box.messages);\n            box.messages.clear();\n        });\n    }\n",
+   "target": "gyo_net_tests",
+   "cases": "scenario:*",
+   "expect": "R1:\\ each\\ Peer\\ is\\ sent\\ every\\ server\\ message\\ written\\ since\\ it\\ joined"
+  },
+  {
+   "id": "nt-request-epoch-missing",
+   "what": "The handshake request carries epoch 0 whatever the client World's: a reconnected World drops the new connection's first whole World as another epoch. Only it catches R2's epoch in the request",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "lastSalt_, clientWorlds_ > 0 ? clientWorlds_ - 1 : 0};",
+   "replace": "lastSalt_, 0};",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "R2\\ b:\\ the\\ new\\ connection's\\ messages\\ carry\\ the\\ new\\ World's\\ epoch"
+  },
+  {
+   "id": "nt-new-ledger-epoch-zero",
+   "what": "A server World's new ledger starts with epoch 0, not the connection's. Only it catches R2's ledger start",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "            ledger.epoch = server->EpochOf(id);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "R2\\ a:\\ a\\ later\\ server\\ World\\ starts\\ with\\ the\\ connection's\\ epoch"
+  },
+  {
+   "id": "nt-resync-epoch-not-kept",
+   "what": "A resync changes the ledger's epoch but not the connection's, so a later server World starts with the old one. Only it catches R2's resync kept on the connection",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            server.SetEpoch(connectionId, epoch); // a later server World's ledger starts with it (R2)\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "R2\\ a:\\ a\\ later\\ server\\ World\\ starts\\ with\\ the\\ connection's\\ epoch"
+  },
+  {
+   "id": "nt-salt-not-increasing",
+   "what": "The salt is drawn at random again (3a's way), not larger than the one before. Only it catches S2's premise at the side that draws it",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "        lastSalt_ = std::max(lastSalt_ + 1, static_cast<std::uint64_t>(std::max<NetTime::rep>(now.count(), 0)));\n",
+   "replace": "        lastSalt_ = (lastSalt_ + 0x9E3779B97F4A7C15ull) * 0xBF58476D1CE4E5B9ull;\n",
+   "target": "gyo_net_tests",
+   "cases": "module:*",
+   "expect": "recheck\\ small\\ thing\\ b:\\ a\\ new\\ handshake's\\ salt\\ is\\ larger"
   }
  ]
 }

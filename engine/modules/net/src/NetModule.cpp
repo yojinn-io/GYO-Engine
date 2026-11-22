@@ -68,7 +68,11 @@ SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Spawn<Kernel:
         for (const std::uint32_t id : server->ConnectionIds()) {
             if (world.peers.count(id) != 0) continue;
             const std::uint64_t userId = server->UserIdOf(id);
-            auto peer = spawn.New(Peer{id, userId, {}}, PeerLedger{});
+            // The connection's epoch (R2): a new connection's, or the one a client World set with its resync before
+            // this server World was made.
+            PeerLedger ledger;
+            ledger.epoch = server->EpochOf(id);
+            auto peer = spawn.New(Peer{id, userId, {}}, std::move(ledger));
             if (!peer) return Base::Err(std::move(peer).error());
             world.peers[id] = *peer;
             connected.Send(PeerConnected{*peer, userId});
@@ -232,10 +236,10 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
                 world.SetResource(NetOutbox{});
             } else {
                 NetReplicaState state;
-                // B1: the epoch grows with every client World of the Product; a World after the first asks for a resync.
+                // B1, R2: the epoch grows with every client World of the Product. A new connection carries it in its
+                // request; a World on a connection made for an earlier World asks for a resync (below).
                 const std::uint32_t clientWorlds = service->BeginClientWorld();
                 state.epoch = clientWorlds - 1;
-                state.resyncNeeded = clientWorlds > 1;
                 world.SetResource(std::move(state));
                 world.SetResource(ClockSync{});
             }
@@ -243,6 +247,11 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
             const auto* allotter = world.Resource<EntityIds::RangeAllotter>();
             const IdRange range = allotter != nullptr ? IdRange{allotter->first, allotter->last} : IdRange{};
             if (fixed != nullptr) service->SetFacts(Facts(link, *fixed, range), service->Now(), true);
+            if (worldRole == NetRole::Client) {
+                const ClientSession* client = service->Client();
+                auto* state = world.ResourceMut<NetReplicaState>();
+                state->resyncNeeded = client != nullptr && client->Request().epoch != state->epoch;
+            }
         }
         world.SetResource(std::move(link));
         return {};

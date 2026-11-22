@@ -22,16 +22,20 @@ namespace GYO::Engine::StateMachine {
 
 namespace Detail {
 
-// CCR-8: nothing is written when the value is already the state's (the current value), or already asked for (the
-// pending request's value and kind), so a value sent again on every snapshot does not mark the request Resource, nor
-// make the apply run anything. With another request pending locally, the current value is still not asked for again
-// (a Request of the current value would run its exit and enter: small thing 5 of the design review).
+// CCR-8: nothing is written when the value is already asked for (the pending request's value and kind), or, with no
+// request pending, when it is the current value; so a value sent again on every snapshot does not mark the request
+// Resource, nor make the apply run anything. With another request pending locally:
+//   - Request: the current value is not asked for again (a Request of the current value would run its exit and enter;
+//     small thing 5 of the design review);
+//   - RequestSilent: the current value is asked for, silently: it takes the local request's place and runs nothing
+//     (small thing d of the narrow recheck).
 template <State S>
 Kernel::SystemResult Adopt(Kernel::ExclusiveWorld<>& world, const S value, const RequestKind kind) {
     auto current = world.template Read<StateMachine<S>>([](const StateMachine<S>& m) { return m.Current(); });
     GYO_ASSERT(current && current->has_value() && "AdoptByRequest: the state machine is not registered in this World");
     auto same = world.template Read<StateMachineRequest<S>>([&](const StateMachineRequest<S>& r) {
-        return **current == value || (r.Pending() && *r.Pending() == value && r.PendingKind() == kind);
+        if (r.Pending()) return (*r.Pending() == value && r.PendingKind() == kind) || (kind == RequestKind::Normal && **current == value);
+        return **current == value;
     });
     GYO_ASSERT(same && same->has_value());
     if (**same) return {};

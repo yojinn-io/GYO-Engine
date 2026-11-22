@@ -839,3 +839,27 @@ TEST_CASE("behaviour: adopting the current value writes nothing even with anothe
     CHECK_MESSAGE(events == expected,
                   "small thing 5: the local request is applied; no exit and enter of InLevel again");
 }
+
+namespace {
+K::SystemResult AdoptInLevelSilentOnce(K::ExclusiveWorld<> world) { return SM::AdoptByRequestSilent<Flow>(world, Flow::InLevel); }
+} // namespace
+
+TEST_CASE("behaviour: adopting the current value silently takes the place of a local request and runs nothing (recheck small thing d)") {
+    auto q = Make([] {
+        Setup s;
+        s.extra = [](O::WorldSetup& w) {
+            w.Registrar().AddSystem<&AdoptInLevelSilentOnce>(At("AdoptInLevelSilentOnce", std::string(O::DefaultSchedules::frame),
+                                                                std::string(O::DefaultSchedules::first)));
+        };
+        return s;
+    }());
+    REQUIRE(q);
+    Frame(*q);
+    Frame(*q);
+    REQUIRE(Mach<Flow>(*q).Current() == Flow::InLevel);
+    // A local request is pending; the value from elsewhere is the current one, adopted silently.
+    Req<Flow>(*q).Request(Flow::MainMenu);
+    const List events = Frame(*q);
+    CHECK_MESSAGE(events.empty(), "recheck small thing d: the silent request of the current value replaced the local one and ran nothing");
+    CHECK(Mach<Flow>(*q).Current() == Flow::InLevel);
+}

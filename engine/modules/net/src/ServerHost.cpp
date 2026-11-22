@@ -77,7 +77,7 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
     const std::uint32_t id = NewConnectionId();
     ConnectionSettings transport = settings_.transport;
     transport.connectionId = id;
-    peers_.emplace(id, Peer{from, request->userId, request->salt, Connection(std::move(transport)), now, now, false, 0});
+    peers_.emplace(id, Peer{from, request->userId, request->salt, request->epoch, Connection(std::move(transport)), now, now, false, 0});
     byEndpoint_[from.value] = id;
     events_.push_back(HostEvent{HostEventKind::Connected, id, request->userId, from, DisconnectReason::Closed});
     replies_.push_back(Reply{from, PacketKind::Accepted, id, {}});
@@ -198,6 +198,16 @@ std::vector<std::uint32_t> ServerHost::ConnectionIds() const {
 std::uint64_t ServerHost::UserIdOf(const std::uint32_t connectionId) const {
     const auto peer = peers_.find(connectionId);
     return peer == peers_.end() ? 0 : peer->second.userId;
+}
+
+std::uint32_t ServerHost::EpochOf(const std::uint32_t connectionId) const {
+    const auto peer = peers_.find(connectionId);
+    return peer == peers_.end() ? 0 : peer->second.epoch;
+}
+
+void ServerHost::SetEpoch(const std::uint32_t connectionId, const std::uint32_t epoch) {
+    const auto peer = peers_.find(connectionId);
+    if (peer != peers_.end()) peer->second.epoch = epoch;
 }
 
 std::uint64_t ServerHost::BytesSentTo(const std::uint32_t connectionId) const {
