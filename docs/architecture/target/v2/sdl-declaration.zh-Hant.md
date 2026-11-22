@@ -594,7 +594,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **出處**：使用者在本卡 fork 出的 side chat，2026-11-23。
 
-### Q3：ImGui 的接法 —— **已定：(b) 接在 Engine 的 `input`／`window`／`render` 上，不碰 SDL**（使用者 2026-11-23，side chat）
+### Q3：ImGui 的接法 —— **已定：(b) 接在 Engine 的 `input`／`window`／`render` 上，不碰 SDL**（使用者 2026-11-23，side chat；HANDOFF `v8-arch-gyo2-sdl-q3-imgui-on-our-input-render`）
 
 **原話**：「b，這個判斷沒多少變化。」
 
@@ -608,7 +608,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **出處**：使用者在本卡 fork 出的 side chat，2026-11-23。
 
-### Q4：沒選 SDL 的 Plugin（缺後端）算不算錯 —— **已定：(b) 照 Bevy，不算錯**（使用者 2026-11-23，side chat）
+### Q4：沒選 SDL 的 Plugin（缺後端）算不算錯 —— **已定：(b) 照 Bevy，不算錯**（使用者 2026-11-23，side chat；HANDOFF `v8-arch-gyo2-sdl-q4-missing-backend-ok`）
 
 **原話**：「（b）不算錯誤，master的match就是沒有視窗的。」
 
@@ -620,7 +620,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **出處**：使用者在本卡 fork 出的 side chat，2026-11-23。（修訂 6 已照 B' 撤回這一題，結果相同；修訂 9 改記成使用者的決定。修訂 6 寫的「`camera` 照 Bevy 依賴 `window`」不是這一題的連帶結論，修訂 9 依窄複查拿掉，第 3.3 節。）
 
-### Q5：要移植的 2D 遊戲 —— **已定：Object_Connect，需求併進 R2b、不另開 R2d**（使用者 2026-11-23，side chat）
+### Q5：要移植的 2D 遊戲 —— **已定：Object_Connect，需求併進 R2b、不另開 R2d**（使用者 2026-11-23，side chat；HANDOFF `v8-arch-gyo2-sdl-q5-object-connect`）
 
 **原話**：「GitHome下有一個Object_Connect」→（看完需求表與結論後）「可以轉過去」
 
@@ -634,7 +634,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **移植的位置**（移植本身不在本線）：`games/object_connect/`＋`assets/object_connect/`（asset catalog 也在裡面），目錄等移植那一批再建（HANDOFF `v8-arch-gyo2-top-dirs-games-assets-tools`）。
 
-### Q6：字型的量字、排版、點陣化放哪 —— **已定：FreeType＋HarfBuzz，放在 `text` Module，不用 SDL_ttf**（使用者 2026-11-23，side chat）
+### Q6：字型的量字、排版、點陣化放哪 —— **已定：FreeType＋HarfBuzz，放在 `text` Module，不用 SDL_ttf**（使用者 2026-11-23，side chat；HANDOFF `v8-arch-gyo2-sdl-q6-freetype-harfbuzz-module`）
 
 **原話**（依序）：「這個是字體文件？」→「我在想如果用freetype，要整合sdl會如何？」→「stb_truetype和stb_image 是一個套件的？」→「我先問下，對日文的支持如何？」→「主要這個和stb_image 不同，不單單是載入。 如果我用sdl_tff呢？」→「FreeType + HarfBuzz 放Module？」→「還是Plugin？」→「SDL_ttf 放Module 可以嗎？」→「OK，那用FreeType + HarfBuzz 放Module」
 
@@ -669,7 +669,6 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 - **讀檔**：存不存 `Children`、放回時跳不跳維護（K7），KR 的宣告和讀檔的說明頁（`system-contract-page.zh-Hant.md` 的讀檔一節）一起改。
 - **`gyo2-kernel-summary-msg`**（Kernel 的 `Summary` 與訊息）：輸入用 `Message` 還是 Resource 照它的結論，**W 開工前要有**（第 6.3 節）；它和 KR 都改 Kernel，誰後合併誰跟上 gyo2。
 - **主會話（Kernel）**：KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
-- **主會話（HANDOFF）**：Q3（`(b)`）與 Q4（`(b)`）的四樣在第 14 節，尚未有 HANDOFF 代號（Q1、Q2 已記）；Q3 推翻 11-13 的一句，side chat 封存前要記進 HANDOFF。
 - **`TextInputRequest` 有兩個寫者**（`world_ui` 的文字框、ImGui）：同一個 World 兩者都在時聽誰的，W 的宣告定。
 - **圖書管理員**：asset 宣告的行 140、994 還寫「SDL 的 adapter、ufbx 歸哪一類未定」，下次整理時改（Q1、Q2 已定）；「送進 World 外服務的時刻都是時間基準」登記成 CCR（第 8 節末）。
 - **風紀委員**：Q1（B'，已定）的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句：`plugins/sdl*` 裡是我們寫的程式、讀寫 Engine 的資料）；Q2 不必改規則文字（判斷句字面成立），同詞異義表第 0 節「還沒確認」那一行與第 6 節 ufbx 那一列，主會話已在 gyo2 補上結論（4ece17b4；HANDOFF `v8-arch-gyo2-sdl-q2-ufbx-stb-module`），子批 P 不再改；Q3 推翻 11-13 的「ImGui 官方的 SDL3 平台與 SDL_GPU 繪製後端放在 `sdl` plugin 內的獨立 target」（使用者已定）、Q4 撤回後 P22 那一句沒有對象，runtime-composition §4 的統一處理時一起改。
