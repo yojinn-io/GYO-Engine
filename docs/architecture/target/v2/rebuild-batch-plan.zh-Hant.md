@@ -118,6 +118,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `orchestration_mutations.json` 約第 3521～3532 行留著 `or-exch-round-after-failed-in` 的舊副本（find 是 C19 之前的寫法，少了收尾 `},` 而和 `wg-held-not-cleared` 黏成一個物件，鍵重複被後面那組蓋掉）。同 id 的現行版（find 對 `RunRound`）在後面另一個物件，已執行並 killed（`build/evidence/gyo2-exchange/c19-mutants.log`）。刪掉舊副本後解析結果完全相同（282 條、無重複鍵、find 各命中一次），不必重跑。threads／io 卡發現（它判成「從沒執行過」，實際只是殘留文字） | 7b4cf2e9（交換點補回突變時）；threads／io 卡 2026-11-22 | 下一個改這份清單的批順手刪（第 1 批先例，不單開 PR） |
 | 游標宣告第 3.2 節引的 lightyear 行號漂移（現在 `receive.rs:54、:105-110、:153-160、:447-456`） | 狀態機卡交叉比對 | 圖書管理員 |
 | 「送進 World 外服務的時刻都是時間基準」要不要成跨 Component 規則（對照 `docs/cross-component-rules.md`） | audio 重審宣告 DI 3 | 圖書管理員 |
+| asset 宣告第 140、994 行仍寫 SDL adapter／ufbx「未定」，已由 `v8-arch-gyo2-sdl-q1-b-prime`、`-sdl-q2-ufbx-stb-module` 定 | SDL 宣告卡 | 圖書管理員 |
 | 回滾頁 R-2 前提 1 要不要明寫「`Changed<T>`／`Res::Changed()` 讀的是 stamp，不在前提內」 | Kernel IsChanged 卡 | 下一次動回滾 Module 的批 |
 | time-events 宣告 5.1 第 3 項「VirtualTime 用 `Changed<…>` 抓暫停」不成立（每幀被 AdvanceTime 寫）；宣告不改，Kernel 說明頁列出 Engine 每幀寫的 Resource | Kernel IsChanged 卡 | 由 Kernel 卡的說明頁收掉；宣告是當時紀錄不改 |
 | 事件游標重評（停跑的讀者拉住保留、恢復時補讀；Kernel 的事件游標契約） | 狀態機修訂 8 交叉比對，使用者選 (A＋)（`v8-arch-gyo2-state-machine-r8-crosscheck`） | 2026-11-22 開卡；同日使用者定 (A)＋說明頁、不改 Kernel（`v8-arch-gyo2-event-cursor-reeval-author-side`）；**PR #278 合併**（6ee8d8b1） |
