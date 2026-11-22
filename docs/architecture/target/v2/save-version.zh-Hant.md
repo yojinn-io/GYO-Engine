@@ -1,6 +1,6 @@
 # 存檔版本（`engine/modules/save_version`）
 
-更新：2026-11-22（新頁，`v8-arch-gyo2-restore-impl`；同日照合併前的設計審查 S1，使用者「選(B)，照建議改」改成純程式庫）。由來：[讀檔宣告](restore-entry-declaration.zh-Hant.md)修訂 12 第 19 節（使用者 2026-11-22 動工前核准）；使用者 2026-11-18 `v8-arch-gyo2-save-version-module`：「需要提供version module，默認不啟用，啟用之後過時檔會直接拒絕。這個補充不放在編排裡，但是得放計劃中。Engine需要支持。」。**Design Invariants 的最終文字要等合併前核准。**
+更新：2026-11-22（新頁，`v8-arch-gyo2-restore-impl`；同日照合併前的設計審查 S1，使用者「選(B)，照建議改」改成純程式庫）。由來：[讀檔宣告](restore-entry-declaration.zh-Hant.md)修訂 12 第 19 節（使用者 2026-11-22 動工前核准）；使用者 2026-11-18 `v8-arch-gyo2-save-version-module`：「需要提供version module，默認不啟用，啟用之後過時檔會直接拒絕。這個補充不放在編排裡，但是得放計劃中。Engine需要支持。」。**Design Invariants 的最終文字：使用者 2026-11-22 合併前核准**（[合併前核准頁](restore-impl-merge-approval.zh-Hant.md)，原話「照建議，全部核准」）。
 
 Owner：架構。程式：`engine/modules/save_version/`（`GYO::Engine::SaveVersion`，target `GYO::SaveVersion`；沒有登記單位）。行為測試：`tests/common/save_version/`。作者的寫法：[說明頁](system-contract-page.zh-Hant.md)第 15.1 節。
 
