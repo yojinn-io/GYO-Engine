@@ -28,4 +28,11 @@ private:
     AssetId id_;
 };
 
+// The hash function of a reference (declaration 5.9.1): its id string, as a Handle's.
+template <class Sink, class U>
+    requires Detail::HashesText<Sink>
+void HashValue(Sink& sink, const AssetRef<U>& reference) {
+    HashValue(sink, reference.Id());
+}
+
 } // namespace GYO::Engine::Asset

@@ -94,6 +94,14 @@ private:
     std::shared_ptr<const Detail::HandleBody> body_;
 };
 
+// The hash function of a Handle (declaration 5.9.1): its id string only, so a Handle hashes the same in every
+// process and whatever order the catalog lists its entries in (Design Invariant AS-6).
+template <class Sink, class T>
+    requires Detail::HashesText<Sink>
+void HashValue(Sink& sink, const Handle<T>& handle) {
+    HashValue(sink, handle.Id());
+}
+
 } // namespace GYO::Engine::Asset
 
 template <class T>

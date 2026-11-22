@@ -42,6 +42,25 @@ private:
     std::string text_;
 };
 
+namespace Detail {
+
+// Whether Sink hashes a string by a hash function of its own (the Kernel's Hasher does). Declared before the
+// hash functions below, so it finds only the sink's (argument-dependent lookup), never them.
+template <class Sink>
+concept HashesText = requires(Sink& sink, const std::string& text) { HashValue(sink, text); };
+
+} // namespace Detail
+
+// The hash function of an id (declaration 5.9.1; Design Invariant AS-6): the id string, written by the sink's
+// own hash function for a string. It is the Kernel's customization point (HashValue, found by argument-dependent
+// lookup) without asset depending on the Kernel: Sink is the Kernel's Hasher. Handle and AssetRef hash through
+// this one (one concept, one implementation); no store index, no type.
+template <class Sink>
+    requires Detail::HashesText<Sink>
+void HashValue(Sink& sink, const AssetId& id) {
+    HashValue(sink, id.Text());
+}
+
 } // namespace GYO::Engine::Asset
 
 template <>
