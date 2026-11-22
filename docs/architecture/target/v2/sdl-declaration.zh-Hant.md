@@ -107,7 +107,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 
 | master | 去處 | 前提 | 說明 |
 |---|---|---|---|
-| `GYO::Input`（「狀態＋依序事件」雙軌、文字與組字、失焦清鍵） | **新 Module `input`**（不含 SDL） | Engine：中性資料模型 | 雙軌的理由（同幀按下又放開、事件先後）照 master；`text` 與 `events` 不保證順序照 master。**放 Resource、不用 `Message`**（第 6.3 節） |
+| `GYO::Input`（「狀態＋依序事件」雙軌、文字與組字、失焦清鍵） | **新 Module `input`**（不含 SDL） | Engine：中性資料模型 | 雙軌的理由（同幀按下又放開、事件先後）照 master；`text` 與 `events` 不保證順序照 master。用 `Message` 還是 Resource 照 Kernel 卡 `gyo2-kernel-summary-msg`（第 6.3 節） |
 | 文字輸入的開關與輸入法候選窗的位置 | `input` 的操作（由 SDL 的實作在主執行緒做） | Engine | `gyo.ui` 的文字框與 ImGui（Q3 (b)）都要；master 每次從 SDL 讀「開沒開」（坑：ImGui 也會開關） |
 | `InputActionMap`（按鍵→動作） | **不在薄起步** | 作者（遊戲規則）；有共用需求時再看 | 別家分歧：Bevy 本體沒有、Godot 有 `InputMap`、Unity 有 Actions。PvP 移植時用它的需求再判 |
 | 手把 | 不帶 | — | master 沒有程式；沒有點名的 Feature |
@@ -211,7 +211,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | Feature | Contract | Architecture |
 |---|---|---|
 | KeepTool：開窗、ImGui 文字框（含複製貼上）、日文輸入法組字與確定 | Q3 選 (b)：ImGui 從 `input` 拿鍵盤、滑鼠、文字與組字，文字輸入的開關、候選窗位置、游標形狀、剪貼簿是 `input`／`window` 的操作；draw list 經 Extract 進渲染 World（P23）。Q3 選 (a)：鍵盤、滑鼠、文字經官方 SDL3 後端，不經 `input`（那時 `input` 的雙軌幀只由測試驗） | `window`、`input`、`render`／`render_world`（R2a）、SDL 的視窗、輸入、GPU 實作、有視窗的 runner、ImGui 的 Plugin |
-| 任何遊戲：按鍵、滑鼠 | `input` 的幀（雙軌）；只在套用點進 World；放 Resource | `input`、套用 System |
+| 任何遊戲：按鍵、滑鼠 | `input` 的幀（雙軌）；只在套用點進 World；`Message` 或 Resource 照 `gyo2-kernel-summary-msg` | `input`、套用 System |
 | PvP Client：輸入時刻、開槍的聲音準時 | 事件時刻是 `Time::TimePoint`（第 8 節的三條保證） | SDL 輸入實作裡的時鐘配對 |
 | 任何 2D／3D 遊戲：畫面 | 渲染 World 只讀來源（DI-KS 13）；畫面送出是 `render` 的服務；`GlobalTransform` 與相機是渲染讀的姿態與視點 | Kernel 的 `RunExtract`、編排層的 `extractFrom`、`render`、`render_world`、`transform`、`camera`、SDL_GPU 實作 |
 | HUD 與選單 | `text` 的點陣圖形狀；`gyo.ui` 的資料契約（JSON v1／v2） | `text`、`ui`、`world_ui`、`ui_render`。**本線沒有使用它們的 Feature**（KeepTool 不用），只能靠測試驗收（第 15 節） |
@@ -542,7 +542,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | L-3 | `transform`、`camera` `default=yes`；要後端的與 UI、物理 `default=no` | 第 3.3 節；主會話的傾向 |
 | L-4 | `window` 依賴 `input`；`render` 不依賴 `window` | 第 3.3 節 |
 | L-5 | 不帶剪貼簿（Q3 (b) 時在 W 加）、檔案對話框、log 轉接、`PlatformName`、`InputActionMap`、手把 | 第 3 節各列。（不帶 SDL_image 是使用者 11-21 定的，P20；不帶 `native/` 來自 P21、P22；不帶 `SDL_main` 來自 P18；不帶 SDL_Renderer 來自 P22、P23——都不是卡片的判斷） |
-| L-6 | 輸入經「輸入服務＋套用點」進 World；放 Resource 不用 `Message` | 第 4.3 節、第 6.3 節 |
+| L-6 | 輸入經「輸入服務＋套用點」進 World（用 `Message` 還是 Resource 照 `gyo2-kernel-summary-msg`） | 第 4.3 節、第 6.3 節 |
 | L-7 | Extract：不放第一張不算錯、`render_world` 預設把它插在 `Main` 之前；渲染 World 不帶 world_time（只對 5.5（二））；來源替換傾向「准許換來源」（R1b 交使用者） | 第 6.1 節 |
 | L-8 | 有視窗的 runner 由 SDL 視窗的實作在 `Configure` 裝；runner 共用的部分（取樣交給 world_time 的交換函式、等待零件）放 world_time 或另一個中性的單位（W 定），沒畫面的 runner 也用。**不放編排層**：O-4 寫明編排層不認得時間，放那裡是職責清單多一項（RC-O5），要交使用者 | 使用者 11-11「runner 由 plugin 安裝」；時間設計第 9 節 (a) 標「我的套用」 |
 | L-9 | 混音器預設由音訊後端的單位建、產品可經選項覆寫；裝置開不了不經 `ProductSetup::Report` | 第 7 節 |
