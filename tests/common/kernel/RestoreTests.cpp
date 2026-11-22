@@ -144,7 +144,7 @@ std::unique_ptr<Rig> RestoreRig(bool posHook = false, bool initialTag = false) {
         }
     });
     World& world = rig->world();
-    world.SetResource(RangeAllotter::Of(100, 199));
+    world.SetResource(TestRangeAllotter::Of(100, 199));
     world.SetResource(Out{1});
     // 101 is in the allotter's range (the Host may put it in); 1 to 3 are not.
     world.Insert(101, Pos{5});

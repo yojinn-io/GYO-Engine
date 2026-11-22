@@ -192,7 +192,7 @@ TEST_CASE("J-3: a structural change while Running fails a GYO_ASSERT; a Spawn is
             Data(r, true);
             r.AddSystem<&SpawnOne>(B("SpawnOne", "A"));
         });
-        rig->world().SetResource(RangeAllotter::Of(1000, 1999));
+        rig->world().SetResource(TestRangeAllotter::Of(1000, 1999));
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Keys<Tag>() == std::vector<EntityId>{1000});
     }
@@ -287,8 +287,6 @@ TEST_CASE("J-7: destroy order: a despawn in ascending ComponentId, the World in 
 
 namespace {
 
-template <class A>
-concept HasReset = requires(A allotter) { allotter.Reset(); };
 
 SystemResult SpawnIntoAllotterRangeOnce(SpawnWithId<Bundle<Tag>> spawn, Res<TickCount> tick) {
     if (tick->value == 1) spawn.New(150, Tag{150});
@@ -314,23 +312,23 @@ SystemResult SpawnEveryTick(Spawn<Bundle<Tag>> spawn) {
 
 namespace {
 
-// RangeAllotter::Of built in memory that held `fill` before (what a stack slot
-// may hold), then copied into the World as an author would.
+// An allotter (the test one: the kernel ships none) built in memory that held `fill` before (what a stack slot may
+// hold), then copied into the World as an author would.
 EntityId StoredAllotterSummaryCase(unsigned char fill, Fingerprint& summary) {
-    alignas(RangeAllotter) unsigned char raw[sizeof(RangeAllotter)];
+    alignas(TestRangeAllotter) unsigned char raw[sizeof(TestRangeAllotter)];
     std::memset(raw, fill, sizeof raw);
-    const RangeAllotter* made = new (raw) RangeAllotter(RangeAllotter::Of(900, 1000000));
+    const TestRangeAllotter* made = new (raw) TestRangeAllotter(TestRangeAllotter::Of(900, 1000000));
     auto rig = MakeRig([](Registrar& r) { Data(r, true); });
     rig->world().SetResource(*made);
     summary = SummaryOf(rig->world());
-    return rig->world().Resource<RangeAllotter>()->next;
+    return rig->world().Resource<TestRangeAllotter>()->next;
 }
 
 } // namespace
 
-// D-9 with a hash function per type (authority-rollback declaration 3.2): the
-// kernel's allotter is hashed field by field, so what its padding holds does
-// not reach the summary.
+// D-9 with a hash function per type (authority-rollback declaration 3.2): the World summary hashes a resource
+// through its type's hash function, so what the padding of an equal value holds does not reach it (the kernel's
+// side, DI-KS 27; the default allotter's own hash function is tested in tests/common/entity_ids/).
 TEST_CASE("D-9: equal allotters give one World summary, whatever their padding holds") {
     Fingerprint zeros;
     Fingerprint ones;
@@ -339,30 +337,14 @@ TEST_CASE("D-9: equal allotters give one World summary, whatever their padding h
     CHECK_MESSAGE(zeros == ones, "[summary-padding-equal] equal allotters, different summaries: " << zeros.Text() << " vs " << ones.Text());
 }
 
-TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; no allotter, no Spawn") {
-    RangeAllotter allotter = RangeAllotter::Of(100, 102);
-    CHECK(allotter.Allot() == std::optional<EntityId>(100));
-    CHECK(allotter.Allot() == std::optional<EntityId>(101));
-    CHECK(allotter.Allot() == std::optional<EntityId>(102));
-    CHECK(allotter.Allot() == std::nullopt);
-    CHECK(allotter.Allot() == std::nullopt);
-    CHECK(allotter.Owns(100));
-    CHECK(allotter.Owns(102));
-    CHECK_FALSE(allotter.Owns(103));
-    CHECK_FALSE(allotter.Owns(99));
-    CHECK(RangeAllotter::Of(5, 4).Allot() == std::nullopt);
-    RangeAllotter top = RangeAllotter::Of(~EntityId{0} - 1, ~EntityId{0});
-    CHECK(top.Allot() == std::optional<EntityId>(~EntityId{0} - 1));
-    CHECK(top.Allot() == std::optional<EntityId>(~EntityId{0}));
-    CHECK(top.Allot() == std::nullopt);
-    // The World has no way to reset the allotter (W-9: a new generation is a new World).
-    CHECK_MESSAGE(!HasReset<RangeAllotter>, "RangeAllotter must not have a Reset");
-
+// The allotter type's own properties (monotonic, no wrap, no Reset) are the entity_ids Module's (EI-2,
+// tests/common/entity_ids/); here the kernel's machinery with a test allotter.
+TEST_CASE("J-8: an exhausted allotter is reported, a SpawnWithId in its range is dropped; no allotter, no Spawn") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r, true);
         r.AddSystem<&SpawnEveryTick>(B("SpawnEveryTick", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 101));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     const auto third = rig->Run();
@@ -379,7 +361,7 @@ TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; n
             r.AddSystem<&SpawnIntoAllotterRangeOnce>(B("SpawnIntoAllotterRangeOnce", "A"));
             r.AddSystem<&SpawnThriceAtTickTwo>(B("SpawnThriceAtTickTwo", "B"));
         });
-        ranged->world().SetResource(RangeAllotter::Of(149, 151));
+        ranged->world().SetResource(TestRangeAllotter::Of(149, 151));
         KERNEL_REQUIRE_RUN_OK(ranged->Run());
         CHECK_MESSAGE(!ranged->world().Alive(150), "J-8: a SpawnWithId into the allotter range does not spawn");
         CHECK_MESSAGE(ranged->world().RejectedSpawns() == 1, "J-8: the dropped spawn is counted");

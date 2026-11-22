@@ -2329,26 +2329,6 @@
       "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:3\",\\ \"1:5\",\\ \"0:3\",\\ \"0:5\"\\}"
     },
     {
-      "id": "we-j8-allotter-wraps",
-      "what": "J-8 (J.3 #9): the allotter wraps to its first id when used up (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-      "find": "        if (id == last) {\n            exhausted = true;\n        } else {",
-      "replace": "        if (id == last) {\n            next = first;\n        } else {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-8:*",
-      "expect": "allotter\\.Allot\\(\\)\\ ==\\ std::nullopt"
-    },
-    {
-      "id": "we-j8-allotter-reset",
-      "what": "J-8: the allotter gains a Reset (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
-      "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-      "find": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};",
-      "replace": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n    void Reset() noexcept { next = first; exhausted = false; }\n};",
-      "target": "gyo_kernel_tests",
-      "cases": "J-8:*",
-      "expect": "RangeAllotter must not have a Reset"
-    },
-    {
       "id": "we-w11-mut-no-mark",
       "what": "J-11 (W-11): Mut gives the value for writing without marking the changed stamp (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
@@ -7425,19 +7405,6 @@
       "target": "gyo_kernel_tests",
       "cases": "D-9 hash: containers hash their contents*",
       "expect": "\\[ks\\-hash\\-optional\\-present\\]"
-    },
-    {
-      "id": "ks-hash-allotter-as-bytes",
-      "what": "the kernel's RangeAllotter hashes its object bytes, padding included (it replaces spa-reserved-short-unchecked: the allotter is hashed field by field since authority-rollback step 1). Only it catches the kernel's own hash function",
-      "guards": [
-        "authority-rollback-declaration 3.2"
-      ],
-      "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-      "find": "inline void HashValue(Hasher& h, const RangeAllotter& value) {\n    HashValue(h, value.first);\n    HashValue(h, value.last);\n    HashValue(h, value.next);\n    HashValue(h, value.exhausted);\n}",
-      "replace": "inline void HashValue(Hasher& h, const RangeAllotter& value) { HashAsBytes(h, value); }",
-      "target": "gyo_kernel_tests",
-      "cases": "D-9: equal allotters give one World summary*",
-      "expect": "\\[summary\\-padding\\-equal\\]"
     },
     {
       "id": "ks-hash-summary-column-bytes",

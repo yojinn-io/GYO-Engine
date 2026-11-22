@@ -482,7 +482,7 @@ TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn takes an id from the allotter; the en
         r.AddSystem<&SpawnNow>(B("Driver", "A"));
         r.AddSystem<&SeeAddedHp>(B("SeeAdded", "B"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 199));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(Logged("spawned 100 hp 5 shield 50"), "[ks-s5-spawn] " << Joined());
     CHECK_MESSAGE(Index("add Hp 100") < Index("spawned 100 hp 5 shield 50"), "[ks-s5-spawn-onadd-now] " << Joined());
@@ -509,7 +509,7 @@ TEST_CASE("DI-KS 18: ExclusiveWorld::SpawnWithId spawns now; an id in the allott
         Immediate(r, true);
         r.AddSystem<&SpawnWithIds>(B("Driver", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 199));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(Joined() == "add Hp 7 | spawn 7 spawned | spawn 120 IdInAllotterRange | spawn 7 IdAlive",
                   "[ks-s5-spawn-with-id] " << Joined());
@@ -666,7 +666,7 @@ TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn whose allotter id is alive spawns not
         Immediate(r, true);
         r.AddSystem<&SpawnsOverAlive>(B("Driver", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 199));
     rig->world().Insert(100, Tag{1});
     const auto result = rig->Run();
     CHECK_MESSAGE(static_cast<bool>(result), "[ks-s5-spawn-alive-not-run-error] the Run ended in the System-only Err: " << Text(result));
@@ -856,7 +856,7 @@ TEST_CASE("DI-KS 18: ExclusiveWorld::Spawn with the allotter used up is Allotter
         Immediate(r, true);
         r.AddSystem<&SpawnWithoutAllotter>(B("Driver", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(5, 4));  // used up
+    rig->world().SetResource(TestRangeAllotter::Of(5, 4));  // used up
     const auto result = rig->Run();
     CHECK_MESSAGE(Logged("spawn AllotterExhausted"), "[ks-s5-allotter-exhausted] " << Joined());
     CHECK_MESSAGE(HasCode(result, KernelErrorCode::AllotterExhausted), "[ks-s5-allotter-exhausted] " << Text(result));

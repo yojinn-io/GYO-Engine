@@ -57,8 +57,8 @@ void Base(Registrar& r, bool allotter = false) {
     r.Component<Signal>({.name = "Signal"});
     r.Component<CPos>({.name = "CPos"});
     if (allotter) {
-        r.Resource<RangeAllotter>({.name = "Allotter"});
-        r.Allotter<RangeAllotter>();
+        r.Resource<TestRangeAllotter>({.name = "Allotter"});
+        r.Allotter<TestRangeAllotter>();
     }
     r.Resource<TickCount>({.name = "TickCount"});
     ScheduleOptions tick;
@@ -612,7 +612,7 @@ TEST_CASE("J-55: the allotter's range: in the range comes before alive") {
         Base(r, true);
         r.AddSystem<&SpawnHundred>(In("SpawnHundred", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 101));
     rig->world().Insert(100, Tag{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
@@ -626,7 +626,7 @@ TEST_CASE("J-55: the allotter's range: in the range comes before spawned twice")
         r.AddSystem<&AllotOne>(In("AllotOne", "A"));
         r.AddSystem<&SpawnHundredTag>(In("SpawnHundredTag", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 101));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(BodyIs(rig->world(), 100, 1), "J-55 range-before-twice: 100 has the allotter's spawn");
     CHECK(rig->world().Get<Tag>(100) == nullptr);
@@ -650,7 +650,7 @@ TEST_CASE("J-55: the allotter's range: despawn then spawn in the range: the desp
         Base(r, true);
         r.AddSystem<&DespawnThenSpawnHundredFifty>(In("DespawnThenSpawnHundredFifty", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 199));
     rig->world().Insert(150, Tag{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(!rig->world().Alive(150), "J-55 range-respawn: 150 is gone");
@@ -664,7 +664,7 @@ TEST_CASE("J-55: the allotter's range: an insert into a dropped id that is not a
         Base(r, true);
         r.AddSystem<&SpawnHundredFiftyAndInsert>(In("SpawnHundredFiftyAndInsert", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 199));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK(!rig->world().Alive(150));
     CHECK_MESSAGE(rig->world().DroppedMissingEntity() == 1, "J-55 range-insert: the insert is dropped and counted");
@@ -676,7 +676,7 @@ TEST_CASE("J-55: only SpawnWithId is checked against the allotter's range") {
         Base(r, true);
         r.AddSystem<&AllotTwo>(In("AllotTwo", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 101));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE((BodyIs(rig->world(), 100, 2) && BodyIs(rig->world(), 101, 2)), "J-55 range-spawn: 100 and 101 spawn");
     CHECK(rig->world().RejectedSpawns() == 0);
@@ -687,7 +687,7 @@ TEST_CASE("J-55: an allotter id that collides with an alive entity is dropped wi
         Base(r, true);
         r.AddSystem<&AllotOne>(In("AllotOne", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 101));
     rig->world().Insert(100, Tag{1});
     const auto result = rig->Run();
     REQUIRE_MESSAGE(static_cast<bool>(result), "J-55 allotter-collision: Run ok: " << Text(result));
@@ -983,7 +983,7 @@ TEST_CASE("J-55: records of one id are in (planPos, recSeq) order when one is in
         r.AddSystem<&AllotOne>(In("AllotOne", "A"));
         r.AddSystem<&SpawnHundredTag>(In("SpawnHundredTag", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 101));
     rig->world().Insert(100, Label{1});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
@@ -1109,7 +1109,7 @@ TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatev
             r.AddSystem<&SpawnHundredFifty>(In("SpawnHundredFifty", "A"));
             r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody"});
         });
-        rig->world().SetResource(RangeAllotter::Of(100, 199));
+        rig->world().SetResource(TestRangeAllotter::Of(100, 199));
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE(Join(Log()).empty(), "J-55 no-onadd range: no OnAdd");

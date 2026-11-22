@@ -2,7 +2,7 @@
 # and 9.3). Synthetic data only; no product.
 add_executable(gyo_rollback_tests TestMain.cpp RegistrationsTests.cpp StrategyTests.cpp CheckTests.cpp)
 target_include_directories(gyo_rollback_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(gyo_rollback_tests PRIVATE GYO::Rollback gyo_test_support doctest::doctest)
+target_link_libraries(gyo_rollback_tests PRIVATE GYO::Rollback GYO::EntityIds gyo_test_support doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_rollback_tests PRIVATE /W4 /permissive-)
     target_compile_definitions(gyo_rollback_tests PRIVATE NOMINMAX)

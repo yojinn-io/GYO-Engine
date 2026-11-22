@@ -71,6 +71,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::WorldTime ──► GYO::Orchestrat
 | 時間設計 DI 2「各只有一個寫者」 | 改成約定（WT-5），Kernel 沒有啟動檢查（Kernel 不數寫者、作者自己寫驅動也做得到）；選了伺服器權威策略的 World 由 AU-E5 檢查 `Tick` 的寫者 |
 | tick 的 Z6 例外、「tick 只有一個來源」（統合 16、權威 5.4） | 第 4 批已做，都在伺服器權威策略（[權威頁](authority.zh-Hant.md)第 3 節）：`Tick` 寫在可回滾 schedule 上不算違反 Z6（AU-E6 的 `Tick` 例外）；`TickWriters()` 名單外的寫者是 AU-E5 |
 | 訊息要 tick 的自己在內容帶（游標宣告 3.2） | 寫的 System 讀 `Res<Tick>` |
+| 生成期間不 tick（[生成世界宣告](world-gen-declaration.zh-Hant.md) 5.6；asset 決定 9） | 時間 Module 不改：能暫停的 World 在準備函式設 `TimeControl.paused`（`RealTime` 照走、不扣），不能暫停的給 `fixedStepConditions = {Orchestration::AfterGenerating()}`（每幀一筆 `NotDriven`）。守衛：`world_time.generation` 兩案 |
 
 ## Design Invariants
 

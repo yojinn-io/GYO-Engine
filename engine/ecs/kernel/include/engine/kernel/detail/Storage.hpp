@@ -406,50 +406,18 @@ struct AllotterOps {
 
 } // namespace Detail
 
-// What Registrar::Allotter<T> requires of an allotter resource (spec A.1, W-9):
-// Allot gives the next id or nothing when the range is used up (an error is
-// reported, never a wrap); Owns says whether an id is in this World's range
-// (a SpawnWithId with one is dropped at the sync point: spec F-13).
+// What Registrar::Allotter<T> requires of an allotter resource (spec A.1):
+// Allot gives the next id, or nothing when it has none to give (the kernel
+// reports AllotterExhausted); Owns says whether an id is one this allotter gives
+// (a SpawnWithId with one is dropped at the sync point: spec F-13). The
+// strategy (a range, recycling, ...) is the declared type's.
 template <class A>
 concept EntityAllotter = requires(A allotter, const A& constant, EntityId id) {
     { allotter.Allot() } -> std::same_as<std::optional<EntityId>>;
     { constant.Owns(id) } -> std::same_as<bool>;
 };
 
-// The kernel's range allotter (spec A.1, W-9): one range [first, last],
-// monotonic, never reuses an id, reports exhaustion and never wraps; no reset.
-// The policy "monotonic, generation 0" of target/world section 1 is this
-// allotter with a product's range. A product may declare its own type instead.
-struct RangeAllotter {
-    EntityId first = 0;
-    EntityId last = 0;
-    EntityId next = 0;
-    bool exhausted = false;
-
-    [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {
-        return RangeAllotter{first, last, first, first > last};
-    }
-
-    [[nodiscard]] std::optional<EntityId> Allot() noexcept {
-        if (exhausted) return std::nullopt;
-        const EntityId id = next;
-        if (id == last) {
-            exhausted = true;
-        } else {
-            ++next;
-        }
-        return id;
-    }
-
-    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }
-};
-// Field by field: the padding after exhausted is not hashed.
-inline void HashValue(Hasher& h, const RangeAllotter& value) {
-    HashValue(h, value.first);
-    HashValue(h, value.last);
-    HashValue(h, value.next);
-    HashValue(h, value.exhausted);
-}
+// The kernel ships no allotter type (DI-KS 4): a Module or a product declares one.
 
 namespace Detail {
 

@@ -8,6 +8,7 @@ add_library(gyo_orchestration STATIC
     src/OrchestrationError.cpp
     src/Product.cpp
     src/Setup.cpp
+    src/WorldGeneration.cpp
 )
 add_library(GYO::Orchestration ALIAS gyo_orchestration)
 

@@ -452,8 +452,8 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
     }
     SUBCASE("an allotter") {
         refused("allotter", [](Registrar& r) {
-            r.Resource<RangeAllotter>({.name = "Allotter"});
-            r.Allotter<RangeAllotter>();
+            r.Resource<TestRangeAllotter>({.name = "Allotter"});
+            r.Allotter<TestRangeAllotter>();
         });
     }
     SUBCASE("every kind in one round") {
@@ -464,8 +464,8 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
             r.InitialValue<Mode, &ModeFromLater>();
             r.InitialValue<Other, &OtherFromTag>();
             r.AddToSet<ReplicatedSet, Tag>();
-            r.Resource<RangeAllotter>({.name = "Allotter"});
-            r.Allotter<RangeAllotter>();
+            r.Resource<TestRangeAllotter>({.name = "Allotter"});
+            r.Allotter<TestRangeAllotter>();
         })));
         const auto result = registry.BuildPlans();
         const std::size_t count = ErrorCount(result, StartupCode::RE7);

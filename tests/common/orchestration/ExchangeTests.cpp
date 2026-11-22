@@ -268,3 +268,37 @@ TEST_CASE("exchange: X-8 game initialization before the first in; a failing func
     CHECK_MESSAGE(LogSince(0).rfind("i in game@A", 0) == 0, "[or-exch-init-first] " << LogSince(0));
     CHECK_MESSAGE(laterCalled == 0, "[or-exch-stop-later] the function after the failing one ran");
 }
+
+TEST_CASE("exchange: X-9 in and out wrap a generating round; the frame generation ends in calls each once (C19)") {
+    // The "in" holds generation for the first two frames (an exchange function reading an outside result, as a
+    // network snapshot would). Order (exchange declaration W-2): generation's pre-step, in, round, judgement, out.
+    // An "in" placed before the pre-step would have its Hold() cleared and generation would end in frame 1.
+    Log().clear();
+    int frame = 0;
+    O::ProductDescription d;
+    d.name = "game";
+    d.worlds.push_back(World("Map", [&frame](O::WorldSetup& s) {
+        Basics(s.Registrar(), {FrameClock("Tick")});
+        s.Registrar().AddSystem<&Mark<'r'>>(In("Round", "Tick"));
+        s.ExchangeIn([&frame](K::World& w) -> PResult {
+            ++frame;
+            O::WorldGeneration* generation = w.ResourceMut<O::WorldGeneration>();
+            Log().push_back("in" + std::string(generation->Generating() ? " generating" : ""));
+            if (frame <= 2) generation->Hold();
+            return {};
+        });
+        s.ExchangeOut([](K::World& w) -> PResult {
+            Log().push_back("out" + std::string(w.Resource<O::WorldGeneration>()->Generating() ? " generating" : ""));
+            return {};
+        });
+    }, {"Tick"}));
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    for (int i = 0; i < 4; ++i) REQUIRE(static_cast<bool>(p.RunFrame()));
+    CHECK_MESSAGE(Joined() ==
+                      "in generating | r | out generating | in generating | r | out generating | "
+                      "in generating | r | out | in | r | out",
+                  "[or-exch-generation] " << Joined());
+    CHECK_MESSAGE(!p.Generating("Map"), "[or-exch-generation] the World is still generating");
+}

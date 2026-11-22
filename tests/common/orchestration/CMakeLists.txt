@@ -16,6 +16,7 @@ add_executable(gyo_orchestration_tests
     ModuleBufferTests.cpp
     ProductBufferTests.cpp
     ExchangeTests.cpp
+    WorldGenTests.cpp
 )
 target_include_directories(gyo_orchestration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gyo_orchestration_tests PRIVATE GYO::Orchestration gyo_test_support doctest::doctest)
@@ -28,7 +29,7 @@ endif()
 
 # One ctest per group (the doctest cases are named "<group>: ..."); a run of
 # zero cases fails.
-foreach(group IN ITEMS O-1 O-2 O-3 O-4 O-5 O-8 O-9 O-10 O-E1 O-E2 O-E3 O-E6 O-E7 restore trace-spans module-buffer product-buffer exchange)
+foreach(group IN ITEMS O-1 O-2 O-3 O-4 O-5 O-8 O-9 O-10 O-E1 O-E2 O-E3 O-E6 O-E7 restore trace-spans module-buffer product-buffer exchange O-14)
     add_test(NAME orchestration.${group} COMMAND gyo_orchestration_tests "--test-case=${group}:*")
     set_tests_properties(orchestration.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

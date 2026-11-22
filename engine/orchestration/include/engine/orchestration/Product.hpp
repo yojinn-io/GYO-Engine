@@ -120,6 +120,9 @@ public:
     // The Product's buffer (exchange declaration 5.2), between two entry points: what the units put
     // there for the Product's whole life. It outlives every World.
     [[nodiscard]] ModuleBuffer& Buffer() noexcept { return *buffer_; }
+    // Whether that World is generating (world-gen declaration 5.1, O-14): read from its WorldGeneration, the one
+    // place the state lives. GYO_ASSERT: no World of that name, or its place is empty.
+    [[nodiscard]] bool Generating(std::string_view name) const;
 
     // Replaces a healthy World (section 3.9): registers it again from the
     // description, carries the marked Resources over, runs the prepare functions
@@ -196,6 +199,10 @@ private:
                                                              const PrepareFn* extra);
     Base::Result<void, OrchestrationError> RunOn(WorldSlot& slot, std::string_view schedule,
                                                            std::string_view entry);
+    // One World's round of a RunFrame (world-gen declaration 5.1): the generation's step before (a generating World
+    // is written {true, false}), the frame list, the generation's judgement after (nobody held: {false, false}).
+    // The entry point that will run one World's round on its own (the exchange declaration's lent World) shares it.
+    Base::Result<void, OrchestrationError> RunRound(WorldSlot& slot);
     // The refusal of an entry point while a World is broken (nullopt: every World is healthy).
     // A World found interrupted without a recorded failure (run outside the Product) is recorded here.
     std::optional<OrchestrationError> Ended();

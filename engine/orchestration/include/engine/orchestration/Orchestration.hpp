@@ -10,3 +10,4 @@
 #include "engine/orchestration/RegisteredUnits.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
+#include "engine/orchestration/WorldGeneration.hpp"
