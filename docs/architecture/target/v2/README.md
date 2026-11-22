@@ -92,6 +92,7 @@
 - [2026_11_21_gyo2_os_src_platform.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_os_src_platform.zh-Hant.md)：core/os 的平台程式集中到 `src/sys/`（`v8-arch-gyo2-os-src-platform`）。
 - [2026_11_22_gyo2_authority_rollback.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_authority_rollback.zh-Hant.md)：第 4 批，權威 Module＋回滾 Module（`v8-arch-gyo2-authority-rollback`；Kernel 的區、寫者數量、C 指紋、Z6、Z8、D-E15、D-E16 拿掉，判定 5 在 Linux 實機通過；第 8 步的審查與完整突變後，使用者 2026-11-22 核准）
 - [2026_11_22_gyo2_namespace_root.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_namespace_root.zh-Hant.md)：namespace 的根統一成 `GYO::`，`naming_guard` 守 N17 的根（`v8-arch-gyo2-namespace-root`）。
+- [2026_11_22_gyo2_stale_cleanup.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_stale_cleanup.zh-Hant.md)：三個 include 守衛補 `..`、刪 15 份 master 時代的突變清單、文件路徑補層名（`v8-arch-gyo2-stale-cleanup`）。
 
 ## 沒有搬過來的
 
