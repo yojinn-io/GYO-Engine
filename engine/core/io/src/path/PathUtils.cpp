@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace Engine::IO::Path {
+namespace GYO::Engine::IO::Path {
 
     static inline bool IsAlpha(char c) noexcept {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
@@ -52,15 +52,15 @@ namespace Engine::IO::Path {
         return false;
     }
 
-    Base::Result<std::string, IoError> Normalize(std::string_view raw, const NormalizeOptions& opt) {
+    Base::Result<std::string, IOError> Normalize(std::string_view raw, const NormalizeOptions& opt) {
         if (opt.rejectNullByte && ContainsNullByte(raw)) {
-            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,
                                         "path contains null byte",
                                         std::string(raw)));
         }
 
         if (opt.rejectAbsoluteLike && IsAbsoluteLike(raw)) {
-            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,
                                         "absolute-like path is not allowed",
                                         std::string(raw)));
         }
@@ -119,11 +119,11 @@ namespace Engine::IO::Path {
                         continue;
                     }
                     // root越え（相対パスで上に出る）
-                    return Base::Err(IoError::Make(Engine::IO::IoErrorCode::PathEscapesRoot,
+                    return Base::Err(IOError::Make(IOErrorCode::PathEscapesRoot,
                                                 "path escapes root by '..'",
                                                 std::string(raw)));
                 } else if (opt.rejectTraversal) {
-                    return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+                    return Base::Err(IOError::Make(IOErrorCode::InvalidPath,
                                                 "path traversal '..' is not allowed",
                                                 std::string(raw)));
                 }
@@ -152,7 +152,7 @@ namespace Engine::IO::Path {
 
         // 追加の traversal 判定（resolveDotDot=false時の保険）
         if (opt.rejectTraversal && ContainsTraversal(out)) {
-            return Base::Err(IoError::Make(Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,
                                         "path traversal '..' is not allowed",
                                         out));
         }
@@ -399,4 +399,4 @@ namespace Engine::IO::Path {
         return out;
     }
 
-} // namespace Engine::IO::Path
+} // namespace GYO::Engine::IO::Path

@@ -17,7 +17,7 @@
 #include "engine/io/path/Uri.hpp"
 #include "engine/os/Files.hpp"
 
-using namespace Engine::IO;
+using namespace GYO::Engine::IO;
 
 // engine/io's helpers for files a person names (docs/architecture/io.md, "User files"). Files are set up with
 // the standard library; the helpers are reached through file URIs and UTF-8 native paths.
@@ -86,7 +86,7 @@ TEST_CASE("ProbeFileStamp reports a missing file, a file and what is not a file"
     REQUIRE(stamp);
     CHECK(stamp.value().exists);
     CHECK(stamp.value().sizeBytes == 7);
-    CHECK(stamp.value().contentHash == Engine::Base::Fnv1a64("{\"a\":1}"));
+    CHECK(stamp.value().contentHash == GYO::Engine::Base::Fnv1a64("{\"a\":1}"));
     CHECK(stamp.value().mtimeNs != 0);
 
     tree.Write("名前/doc.json", "{\"a\":2}");
@@ -96,7 +96,7 @@ TEST_CASE("ProbeFileStamp reports a missing file, a file and what is not a file"
 
     auto directory = Helpers::ProbeFileStamp(files, tree.Uri("名前"), AnySize());
     REQUIRE_FALSE(directory);
-    CHECK(directory.error().code == IoErrorCode::InvalidPath);
+    CHECK(directory.error().code == IOErrorCode::InvalidPath);
     // Refused from its status, before anything is opened.
     CHECK(std::string_view(directory.error().message).find("not a regular file") != std::string_view::npos);
 }
@@ -115,7 +115,7 @@ TEST_CASE("WriteFileAtomically creates missing parents only when asked") {
     const UserTree tree;
     FS::NativeFileSystem files;
     const std::string text = "saved";
-    const Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
+    const GYO::Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
     CHECK_FALSE(Helpers::WriteFileAtomically(files, tree.Uri("a/b/out.txt"), bytes));
     CHECK_FALSE(std::filesystem::exists(tree.Path("a")));
 
@@ -143,13 +143,13 @@ TEST_CASE("WriteFileAtomically with createParentDirectories writes a file at a v
     Helpers::WriteAtomicallyOptions options;
     options.createParentDirectories = true;
     auto written = Helpers::WriteFileAtomically(
-        files, uri.value(), Engine::Base::ConstSpan<std::byte>(reinterpret_cast<const std::byte*>(data.data()), data.size()),
+        files, uri.value(), GYO::Engine::Base::ConstSpan<std::byte>(reinterpret_cast<const std::byte*>(data.data()), data.size()),
         options);
     if (written) {
         std::error_code ignored;
         std::filesystem::remove(file, ignored);
     } else {
-        CHECK(written.error().code != IoErrorCode::InvalidPath);
+        CHECK(written.error().code != IOErrorCode::InvalidPath);
     }
 }
 
@@ -265,7 +265,7 @@ TEST_CASE("IsNativePathWithin reads a root that ends in a separator as the direc
 }
 
 TEST_CASE("IsNativePathWithin reads a trailing separator the same way when the OS cannot resolve the root") {
-    // A directory nobody may read makes Os::Files::ResolvedPath fail (not a missing component), so both paths
+    // A directory nobody may read makes OS::Files::ResolvedPath fail (not a missing component), so both paths
     // are compared as written. Where permissions do not stop this process (Windows, a superuser) the paths
     // resolve and the answer is the same.
     const UserTree tree;
@@ -281,7 +281,7 @@ TEST_CASE("IsNativePathWithin refuses a namespace prefix as the file mapping doe
     for (const char* prefixed : {"//?/C:/x/doc.json", "//./C:/x/doc.json", "\\\\?\\C:\\x\\doc.json"}) {
         auto within = FS::IsNativePathWithin(prefixed, "//?/C:/x");
         REQUIRE_FALSE(within);
-        CHECK(within.error().code == IoErrorCode::InvalidPath);
+        CHECK(within.error().code == IOErrorCode::InvalidPath);
     }
 }
 
@@ -290,6 +290,6 @@ TEST_CASE("IsNativePathWithin refuses a path that is not UTF-8") {
     for (const auto& [candidate, root] : {std::pair<std::string, std::string>{invalid, "/"}, {"/", invalid}}) {
         auto within = FS::IsNativePathWithin(candidate, root);
         REQUIRE_FALSE(within);
-        CHECK(within.error().code == IoErrorCode::InvalidPath);
+        CHECK(within.error().code == IOErrorCode::InvalidPath);
     }
 }

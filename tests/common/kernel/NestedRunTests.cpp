@@ -26,9 +26,9 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
-// ---- Schedules: Frame (ingress stage In), Tick (WorldTest's), Step and Deep, Extract (an extract schedule).
+// ---- Schedules: Frame (ingress stage In), Tick (WorldTestSupport.hpp's), Step and Deep, Extract (an extract schedule).
 
 ScheduleOptions Schedule(std::string name, std::vector<std::string> stages) {
     ScheduleOptions s;
@@ -39,11 +39,10 @@ ScheduleOptions Schedule(std::string name, std::vector<std::string> stages) {
 
 ScheduleOptions FrameSchedule() {
     ScheduleOptions s = Schedule("Frame", {"In", "Drive", "Out"});
-    s.ingressStage = "In";
     return s;
 }
 
-// WorldTest's data and Tick, plus Frame, Step and Deep.
+// WorldTestSupport.hpp's data and Tick, plus Frame, Step and Deep.
 void Nest(Registrar& r, bool allotter = false) {
     Data(r, allotter);
     r.Schedule(FrameSchedule());
@@ -51,9 +50,9 @@ void Nest(Registrar& r, bool allotter = false) {
     r.Schedule(Schedule("Deep", {"D"}));
 }
 
-SystemOptions In(std::string name, std::string schedule, std::string stage, Zone zone = Zone::B,
+SystemOptions In(std::string name, std::string schedule, std::string stage,
                  std::vector<std::string> before = {}, std::vector<std::string> after = {}) {
-    return Sys(std::move(name), zone, {At(std::move(schedule), std::move(stage), std::move(before), std::move(after))});
+    return Sys(std::move(name), {At(std::move(schedule), std::move(stage), std::move(before), std::move(after))});
 }
 
 std::string Joined() {
@@ -115,7 +114,7 @@ SystemResult Drive(ExclusiveWorld<> world) {
     Log().push_back("drive " + Here());
     for (const std::string& schedule : Runs()[name]) {
         if (--RunBudget() < 0) return Ok();
-        if (auto ran = world.RunSchedule(schedule); !ran) return Engine::Base::Err(std::move(ran).error());
+        if (auto ran = world.RunSchedule(schedule); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     }
     Log().push_back("driven " + Here());
     return Ok();
@@ -133,7 +132,7 @@ SystemResult DriveSwallow(ExclusiveWorld<> world) {
 
 SystemResult Fails(Query<Read<Tag>>) {
     Log().push_back("fails " + Here());
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
 }
 
 SystemResult Throws(Query<Read<Tag>>) {
@@ -162,13 +161,13 @@ TEST_CASE("J-56: an exclusive System runs a schedule 3 times: its Systems run 3 
 
 namespace {
 SystemResult DriveThenLookAround(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     Log().push_back(KeptWorld()->State() == WorldState::Running ? "state Running" : "state not Running");
     Log().push_back("current " + std::string(Current().name));
     return Ok();
 }
 SystemResult DriveThenInsert(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     KeptWorld()->Insert(50, Tag{50});  // a structural World API write while Running
     return Ok();
 }
@@ -218,11 +217,11 @@ void EraseTagOfOne() {
 }
 SystemResult EraseThenDrive(ExclusiveWorld<> world) {
     EraseTagOfOne();
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 SystemResult DriveThenErase(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     EraseTagOfOne();
     return Ok();
 }
@@ -242,7 +241,7 @@ TEST_CASE("J-56: the inner schedule spawns and despawns: no assert, and the oute
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&SpawnSeventy>(In("Spawn70", "Tick", "A"));
         r.AddSystem<&DespawnOne>(In("Despawn1", "Tick", "A"));
-        r.AddSystem<&LookForMembers>(In("Look", "Frame", "Drive", Zone::B, {}, {"Driver"}));
+        r.AddSystem<&LookForMembers>(In("Look", "Frame", "Drive", {}, {"Driver"}));
     });
     rig->world().Insert(1, Tag{1});
     Runs()["Driver"] = {"Tick"};
@@ -317,13 +316,13 @@ SystemResult LogTagAdd(HookCtx ctx) {
 }
 void OuterRecords(Registrar& r, bool nest) {
     Nest(r);
-    r.AddSystem<&InsertTagOnOne>(In("Early", "Frame", "Drive", Zone::B, {"Driver"}));
+    r.AddSystem<&InsertTagOnOne>(In("Early", "Frame", "Drive", {"Driver"}));
     r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-    r.AddSystem<&InsertTagOnOneLate>(In("Late", "Frame", "Drive", Zone::B, {}, {"Driver"}));
+    r.AddSystem<&InsertTagOnOneLate>(In("Late", "Frame", "Drive", {}, {"Driver"}));
     r.AddSystem<&ProbeTagOfOne>(In("Probe", "Tick", "B"));
     if (nest) r.AddSystem<&SeedMode>(In("Seed", "Tick", "C"));
-    r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-    r.Hook<Tag, &LogTagAdd>(HookTrigger::OnAdd, {.name = "LogTagAdd", .zone = Zone::B});
+    r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
+    r.Hook<Tag, &LogTagAdd>(HookTrigger::OnAdd, {.name = "LogTagAdd"});
 }
 } // namespace
 
@@ -361,10 +360,10 @@ SystemResult DespawnFive(Despawn despawn) {
 }
 } // namespace
 
-TEST_CASE("J-56: an outer zone B insert into E and an inner despawn of E: the outer sync point drops the insert and counts it") {
+TEST_CASE("J-56: an outer insert into E and an inner despawn of E: the outer sync point drops the insert and counts it") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
-        r.AddSystem<&InsertTagOnFive>(In("Early", "Frame", "Drive", Zone::B, {"Driver"}));
+        r.AddSystem<&InsertTagOnFive>(In("Early", "Frame", "Drive", {"Driver"}));
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
     });
@@ -401,8 +400,8 @@ TEST_CASE("J-56: the outer schedule's hook queue is neither applied nor dropped 
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&InsertTagOnSix>(In("Seed", "Frame", "In"));
-        r.Hook<Tag, &TagToMode>(HookTrigger::OnAdd, {.name = "TagToMode", .zone = Zone::B});
-        r.Hook<Mode, &LogModeAdd>(HookTrigger::OnAdd, {.name = "LogModeAdd", .zone = Zone::B});
+        r.Hook<Tag, &TagToMode>(HookTrigger::OnAdd, {.name = "TagToMode"});
+        r.Hook<Mode, &LogModeAdd>(HookTrigger::OnAdd, {.name = "LogModeAdd"});
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&ProbeModeOfSix>(In("Probe", "Tick", "C"));
     });
@@ -427,7 +426,7 @@ SystemResult SpawnSeven(SpawnWithId<Bundle<Tag>> spawn) {
 }
 void SameId(Registrar& r) {
     Nest(r);
-    r.AddSystem<&DespawnSeven>(In("Leave", "Frame", "Drive", Zone::B, {"Driver"}));
+    r.AddSystem<&DespawnSeven>(In("Leave", "Frame", "Drive", {"Driver"}));
     r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
     r.AddSystem<&SpawnSeven>(In("Join", "Tick", "A"));
 }
@@ -460,10 +459,10 @@ namespace {
 Mode* g_mode = nullptr;
 SystemResult WriteSharedAndListed(ExclusiveWorld<Writes<Flag>> world) {
     for (int round = 0; round < 2; ++round) {
-        if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return Engine::Base::Err(std::move(r).error());
-        if (auto r = world.Modify<Flag>([](Flag& f) { f.on += 1; }); !r) return Engine::Base::Err(std::move(r).error());
+        if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
+        if (auto r = world.Modify<Flag>([](Flag& f) { f.on += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
         if (round == 0) {
-            if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+            if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
         }
     }
     return Ok();
@@ -487,17 +486,17 @@ SystemResult SendsPing(MessageWriter<Ping> pings) {
 SystemResult HoldsPings(MessageReader<Ping>) { return Ok(); }
 SystemResult TamperPingThenDrive(ExclusiveWorld<> world) {
     PingBuffer(*Current().world).records.back().payload.n = 98;
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 SystemResult DriveThenTamperPing(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     PingBuffer(*Current().world).records.back().payload.n = 7;
     return Ok();
 }
 } // namespace
 
-TEST_CASE("J-56: verification on: the exclusive System's writes of Shared data and listed resources around a nested run are not reported") {
+TEST_CASE("J-56: verification on: the exclusive System's writes of components and listed resources around a nested run are not reported") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&WriteSharedAndListed>(In("Driver", "Frame", "Drive"));
@@ -532,7 +531,7 @@ TEST_CASE("J-56: verification on: a forbidden write before the nested run is the
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&TamperPingThenDrive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&HoldsPings>(In("HoldsPings", "Tick", "A", Zone::B, {"SendsPing"}));
+        r.AddSystem<&HoldsPings>(In("HoldsPings", "Tick", "A", {"SendsPing"}));
         r.AddSystem<&SendsPing>(In("SendsPing", "Tick", "A"));
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
@@ -573,14 +572,14 @@ SystemResult LogStamp(Query<Read<Tag>>) {
     return Ok();
 }
 SystemResult DriveWriteDrive(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
-    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return Engine::Base::Err(std::move(r).error());
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
+    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 SystemResult FailThenWrite(ExclusiveWorld<> world) {
     auto ran = world.RunSchedule("Tick");
-    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t = 41; }); !r) return Engine::Base::Err(std::move(r).error());
+    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t = 41; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
     return ran;
 }
 } // namespace
@@ -628,7 +627,7 @@ TEST_CASE("J-56: after the inner schedule fails the handle still writes, with no
 namespace {
 SystemResult DriveReturnsOther(ExclusiveWorld<> world) {
     static_cast<void>(world.RunSchedule("Step"));
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "other"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "other"));
 }
 SystemResult RunAgainAfterFailure(ExclusiveWorld<> world) {
     auto first = world.RunSchedule("Step");
@@ -814,7 +813,7 @@ TEST_CASE("J-56: refused and swallowed: the running schedule itself") {
 TEST_CASE("J-56: refused and swallowed: an outer level's schedule (A runs B, B runs A)") {
     auto rig = NestRig([](Registrar& r) {
         SwallowRig(r);
-        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", Zone::B, {"Fails"}));
+        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", {"Fails"}));
     });
     Runs()["Driver"] = {"Step"};
     Runs()["Driver2"] = {"Frame"};
@@ -841,7 +840,7 @@ TEST_CASE("J-56: refused and swallowed: an extract schedule") {
 TEST_CASE("J-56: refused and swallowed: RunSchedule inside a Read closure") {
     auto rig = NestRig([](Registrar& r) {
         SwallowRig(r);
-        r.AddSystem<&RunInsideClosure>(In("Closure", "Frame", "Drive", Zone::B, {}, {"Driver"}));
+        r.AddSystem<&RunInsideClosure>(In("Closure", "Frame", "Drive", {}, {"Driver"}));
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
     rig->world().Insert(1, Tag{1});
@@ -854,7 +853,7 @@ TEST_CASE("J-56: refused and swallowed: RunSchedule in a hook") {
         SwallowRig(r);
         // OnRemove of a despawn: the hook runs before the entity's cells go, so no membership has changed yet.
         r.AddSystem<&DespawnSix>(In("Leave", "Frame", "In"));
-        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns"});
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
     rig->world().Insert(6, Tag{6});
@@ -866,7 +865,7 @@ TEST_CASE("J-56: refused and swallowed: RunSchedule in a hook") {
 
 namespace {
 SystemResult LogAfterDrive(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     Log().push_back("step driver back " + Here());
     return Ok();
 }
@@ -875,9 +874,9 @@ SystemResult SeedNinety(SpawnWithId<Bundle<Mode>> spawn) {
     return Ok();
 }
 SystemResult ReadTagOfNinety(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     auto tag = world.Read<Tag>(90, [](const Tag& t) { return t.t; });
-    if (!tag) return Engine::Base::Err(std::move(tag).error());
+    if (!tag) return GYO::Engine::Base::Err(std::move(tag).error());
     Log().push_back(*tag ? "90 has Tag " + std::to_string(**tag) : std::string("90 has no Tag"));
     return Ok();
 }
@@ -906,9 +905,9 @@ SystemResult LatePingReader(MessageReader<Ping> pings) {
 SystemResult DriveTwiceThenFlag(ExclusiveWorld<> world) {
     for (int run = 0; run < 3; ++run) {
         if (run == 2) {
-            if (auto set = world.SetResource(Flag{1}); !set) return Engine::Base::Err(std::move(set).error());
+            if (auto set = world.SetResource(Flag{1}); !set) return GYO::Engine::Base::Err(std::move(set).error());
         }
-        if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+        if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     }
     return Ok();
 }
@@ -935,8 +934,8 @@ TEST_CASE("J-56: the inner schedule's hooks run, and their records are applied w
         Nest(r);
         r.AddSystem<&ReadTagOfNinety>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&SeedNinety>(In("Seed", "Tick", "A"));
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-        r.Hook<Mode, &HookLogsHere>(HookTrigger::OnAdd, {.name = "HookLogs", .zone = Zone::B});
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
+        r.Hook<Mode, &HookLogsHere>(HookTrigger::OnAdd, {.name = "HookLogs"});
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
     CHECK_MESSAGE(Logged("hook HookLogs@Tick"), "[ns-hook-inner] " << Joined());
@@ -995,7 +994,7 @@ SystemResult ReadsCopies(ExclusiveWorld<> world) {
     auto pair = world.Read<Tag>(1, [](const Tag& t) { return std::pair<std::int32_t, std::string>(t.t, "x"); });
     bool called = false;
     auto done = world.Read<Tag>(1, [&called](const Tag&) { called = true; });
-    if (!value || !text || !list || !maybe || !whole || !pair || !done) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
+    if (!value || !text || !list || !maybe || !whole || !pair || !done) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
     Log().push_back("value " + std::to_string(**value) + " text " + **text + " list " + std::to_string((*list)->size()) +
                     " maybe " + std::to_string(***maybe) + " whole " + std::to_string((*whole)->t) + " pair " +
                     std::to_string((*pair)->first) + " done " + (*done && called ? "yes" : "no"));
@@ -1011,7 +1010,7 @@ SystemResult ReadsAbsent(ExclusiveWorld<> world) {
         called = true;
         t.t = 1;
     });
-    if (!value || !written) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "absent"));
+    if (!value || !written) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "absent"));
     Log().push_back(std::string("absent ") + (*value ? "value" : "nothing") + (*written ? " written" : " not written") +
                     (called ? " called" : " not called"));
     return Ok();
@@ -1021,7 +1020,7 @@ SystemResult ClosureInClosure(ExclusiveWorld<> world) {
         auto tag = world.Read<Tag>(1, [](const Tag& t) { return t.t; });
         return mode.m + (tag && *tag ? **tag : 1000);
     });
-    if (!sum || !*sum) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "nested"));
+    if (!sum || !*sum) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "nested"));
     Log().push_back("sum " + std::to_string(**sum));
     return Ok();
 }
@@ -1108,7 +1107,7 @@ SystemResult ReadsResources(ExclusiveWorld<> world) {
     auto out = world.Read<Out>([](const Out& o) { return o.value; });
     auto flag = world.Read<Flag>([](const Flag& f) { return f.on; });
     auto c = world.Read<CRes>([](const CRes& v) { return v.value; });
-    if (!out || !flag || !c) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
+    if (!out || !flag || !c) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
     Log().push_back("out " + (*out ? std::to_string(**out) : std::string("absent")) + " flag " +
                     (*flag ? std::to_string(**flag) : std::string("absent")) + " c " +
                     (*c ? std::to_string(**c) : std::string("absent")));
@@ -1120,19 +1119,19 @@ SystemResult ReadsAbsentResource(ExclusiveWorld<> world) {
         called = true;
         return o.value;
     });
-    if (!out) return Engine::Base::Err(std::move(out).error());
+    if (!out) return GYO::Engine::Base::Err(std::move(out).error());
     Log().push_back(std::string("absent out ") + (*out ? "value" : "nothing") + (called ? " called" : " not called"));
     return Ok();
 }
 SystemResult ReadsSettings(ExclusiveWorld<> world) {
     auto settings = world.Read<KernelSettings>([](const KernelSettings& s) { return s.hookRoundLimit; });
-    if (!settings) return Engine::Base::Err(std::move(settings).error());
+    if (!settings) return GYO::Engine::Base::Err(std::move(settings).error());
     Log().push_back("settings limit " + (*settings ? std::to_string(**settings) : std::string("absent")));
     return Ok();
 }
 SystemResult ModifiesSettings(ExclusiveWorld<> world) {
     auto settings = world.Modify<KernelSettings>([](KernelSettings& s) { s.accessVerification = true; });
-    if (!settings) return Engine::Base::Err(std::move(settings).error());
+    if (!settings) return GYO::Engine::Base::Err(std::move(settings).error());
     return Ok();
 }
 SystemResult ReadsPosUndeclared(Query<Read<Tag>>) {
@@ -1146,17 +1145,17 @@ SystemResult TurnsVerificationOn(ResMut<KernelSettings> settings) {
 SystemResult WritesListedFlag(ExclusiveWorld<Writes<Flag>> world) {
     auto flag = world.Modify<Flag>([](Flag& f) { f.on = 11; });
     auto out = world.Modify<Out>([](Out& o) { o.value = 12; });
-    if (!flag || !out) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "listed"));
+    if (!flag || !out) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "listed"));
     return Ok();
 }
 SystemResult WritesSharedOut(ExclusiveWorld<> world) {
     auto out = world.Modify<Out>([](Out& o) { o.value = 13; });
-    if (!out) return Engine::Base::Err(std::move(out).error());
+    if (!out) return GYO::Engine::Base::Err(std::move(out).error());
     return Ok();
 }
 SystemResult WritesUnlistedFlag(ExclusiveWorld<> world) {
     auto flag = world.Modify<Flag>([](Flag& f) { f.on = 14; });
-    if (!flag) return Engine::Base::Err(std::move(flag).error());
+    if (!flag) return GYO::Engine::Base::Err(std::move(flag).error());
     return Ok();
 }
 SystemResult ListsZoneC(ExclusiveWorld<Writes<CRes>>) { return Ok(); }
@@ -1167,7 +1166,7 @@ SystemResult Ingress(ExclusiveWorld<>) { return Ok(); }
 
 void ResourceRig(Registrar& r) {
     Nest(r);
-    r.Resource<Pinned>({.name = "Pinned", .zone = Zone::B, .threadBound = true});
+    r.Resource<Pinned>({.name = "Pinned", .threadBound = true});
 }
 } // namespace
 
@@ -1193,7 +1192,7 @@ TEST_CASE("J-57: resources: any is read; one absent is not") {
     }
 }
 
-TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an unlisted single-writer one are written") {
+TEST_CASE("J-57: resources: a listed resource and unlisted ones are written") {
     {
         auto rig = NestRig([](Registrar& r) {
             ResourceRig(r);
@@ -1230,7 +1229,7 @@ TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an
 // Writes<...> is an annotation (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1):
 // no resource write, so no zone rule, no D-E18 and no S-18 sees it. S-17 stays
 // (a zone rule, a later batch).
-TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a hook with Writes pass; ingress is S-17") {
+TEST_CASE("J-57: declarations: a listed resource, KernelSettings and a hook with Writes pass") {
     const Built zoneC = Finish({{"test", [](Registrar& r) {
                                     Nest(r);
                                     r.AddSystem<&ListsZoneC>(In("ListsZoneC", "Frame", "Drive"));
@@ -1242,13 +1241,6 @@ TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a ho
                                        r.AddSystem<&ListsSettings>(In("ListsSettings", "Frame", "Drive"));
                                    }}});
     CHECK_MESSAGE(static_cast<bool>(settings.result), "[ns-decl-settings] " << Describe(settings));
-    const Built ingress = Finish({{"test", [](Registrar& r) {
-                                      Nest(r);
-                                      SystemOptions options = In("Ingress", "Frame", "In");
-                                      options.ingress = true;
-                                      r.AddSystem<&Ingress>(options);
-                                  }}});
-    CHECK_MESSAGE(HasRule(ingress, StartupCode::DE7, "S-17"), "[ns-decl-ingress] " << Describe(ingress));
     const Built inStage = Finish({{"test", [](Registrar& r) {
                                       Nest(r);
                                       r.AddSystem<&Ingress>(In("NotIngress", "Frame", "In"));
@@ -1256,7 +1248,7 @@ TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a ho
     CHECK_MESSAGE(static_cast<bool>(inStage.result), "[ns-decl-ingress-stage] " << Describe(inStage));
     const Built hook = Finish({{"test", [](Registrar& r) {
                                    Nest(r);
-                                   r.Hook<Tag, &HookWithWrites>(HookTrigger::OnAdd, {.name = "HookWithWrites", .zone = Zone::B});
+                                   r.Hook<Tag, &HookWithWrites>(HookTrigger::OnAdd, {.name = "HookWithWrites"});
                                }}});
     CHECK_MESSAGE(static_cast<bool>(hook.result), "[ns-decl-hook] " << Describe(hook));
 }
@@ -1302,7 +1294,7 @@ TEST_CASE("J-50: KernelSettings read and written through ExclusiveWorld: the rea
 TEST_CASE("J-50: a nested RunSchedule does not read KernelSettings again; the next outermost Run does") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
-        r.AddSystem<&TurnsVerificationOn>(In("TurnsOn", "Frame", "Drive", Zone::B, {"Driver"}));
+        r.AddSystem<&TurnsVerificationOn>(In("TurnsOn", "Frame", "Drive", {"Driver"}));
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&ReadsPosUndeclared>(In("ReadsPosUndeclared", "Tick", "A"));
     }, false);
@@ -1417,7 +1409,7 @@ TEST_CASE("J-56: refused, swallowed, then a valid schedule in the same System: i
 TEST_CASE("J-56: B runs B (a level that is not the outermost runs itself): refused") {
     auto rig = NestRig([](Registrar& r) {
         SwallowRig(r);
-        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", Zone::B, {"Fails"}));
+        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", {"Fails"}));
     });
     Runs()["Driver"] = {"Step"};
     Runs()["Driver2"] = {"Step"};
@@ -1453,7 +1445,7 @@ struct WhichOverload {
 SystemResult ReadsThroughConst(ExclusiveWorld<> world) {
     auto component = world.Read<Tag>(1, WhichOverload{});
     auto resource = world.Read<Out>(WhichOverload{});
-    if (!component || !resource || !*component || !*resource) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
+    if (!component || !resource || !*component || !*resource) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
     Log().push_back("overloads " + std::to_string(**component) + std::to_string(**resource));
     return Ok();
 }
@@ -1468,11 +1460,10 @@ SystemResult ClosureAfterClosure(ExclusiveWorld<> world) {
     return Ok();
 }
 SystemResult ResourceStampAround(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
-    if (auto r = world.Modify<Out>([](Out& o) { o.value += 1; }); !r) return Engine::Base::Err(std::move(r).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
+    if (auto r = world.Modify<Out>([](Out& o) { o.value += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult IngressDeclared(ExclusiveWorld<Writes<Flag>>) { return Ok(); }
 } // namespace
 
 TEST_CASE("J-57: ExclusiveWorld writes and reads any value: the closure is called and the value written") {
@@ -1566,16 +1557,6 @@ TEST_CASE("J-57: a resource Modify between two nested runs takes the new stamp")
     CHECK_MESSAGE(changed > innerLast, "[ns-stamp-resource] changed " << changed << ", inner last " << innerLast);
 }
 
-TEST_CASE("J-57: declarations: ExclusiveWorld<Writes<...>> with the ingress flag is S-17 too") {
-    const Built built = Finish({{"test", [](Registrar& r) {
-                                    Nest(r);
-                                    SystemOptions options = In("IngressDeclared", "Frame", "In");
-                                    options.ingress = true;
-                                    r.AddSystem<&IngressDeclared>(options);
-                                }}});
-    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "S-17"), "[ns-decl-ingress] declared: " << Describe(built));
-}
-
 // ---- Added after the line-by-line review (Opus/xhigh, build/evidence/gyo2-nested-schedule/impl-review-opus-xhigh.md)
 
 namespace {
@@ -1590,7 +1571,7 @@ TEST_CASE("J-56: a hook of the inner schedule runs a schedule: refused, reported
         Nest(r);
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&DespawnSixInside>(In("Leave", "Tick", "A"));
-        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns"});
     });
     rig->world().Insert(6, Tag{6});
     Runs()["Driver"] = {"Tick"};
@@ -1607,7 +1588,7 @@ TEST_CASE("J-56: a hook of the inner schedule runs a schedule: refused, reported
 
 namespace {
 SystemResult DriveThenOverwrite(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     KeptWorld()->Insert(1, Tag{5});  // an existing cell: a structural World API call, but no membership change
     Log().push_back("overwrite went through");
     return Ok();

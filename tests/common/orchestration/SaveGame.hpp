@@ -5,6 +5,7 @@
 // product's own build. Not a product: only what the orchestration tests need.
 
 #include "OrchestrationTestSupport.hpp"
+#include "TestRangeAllotter.hpp"
 
 #include "engine/base/Log.hpp"
 
@@ -15,7 +16,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace OrchTest::Save {
+namespace GYO::Test::Orchestration::Save {
 
 struct Player {
     int hp = 0;
@@ -62,8 +63,7 @@ struct Sentinel {
         return count;
     }
 };
-// The author's save format (the engine knows nothing of it). Fixed size: the
-// World summary hashes a Resource's bytes, so no heap pointer may be in it.
+// The author's save format (the engine knows nothing of it).
 struct SaveData {
     struct Ent {
         K::EntityId id = 0;
@@ -73,15 +73,33 @@ struct SaveData {
     };
     std::array<Ent, 3> ents{};
     int gold = 0;
-    // Zeroed bytes where padding would be: World::Summary hashes the raw bytes,
-    // and padding is not copied the same on every compiler (MSVC differed, L1).
-    std::int32_t reserved0 = 0;
     K::EntityId next = 0;
     // The entity part cannot be read: Load fails.
     bool unreadable = false;
-    std::array<std::uint8_t, 7> reserved1{};
 };
-static_assert(std::has_unique_object_representations_v<SaveData>, "no padding: World::Summary hashes the raw bytes");
+
+// The hash functions (World::Summary; Hash.hpp), field by field.
+inline void HashValue(K::Hasher& h, const Player& v) { HashValue(h, v.hp); }
+inline void HashValue(K::Hasher& h, const Pos& v) { HashValue(h, v.x); }
+inline void HashValue(K::Hasher& h, const ChaseTarget& v) { HashValue(h, v.target); }
+inline void HashValue(K::Hasher& h, const Junk& v) { HashValue(h, v.v); }
+inline void HashValue(K::Hasher& h, const Gold& v) { HashValue(h, v.v); }
+inline void HashValue(K::Hasher& h, const KeyBindings& v) { HashValue(h, v.jump); }
+inline void HashValue(K::Hasher& h, const Score& v) { HashValue(h, v.v); }
+inline void HashValue(K::Hasher& h, const Volume& v) { HashValue(h, v.level); }
+inline void HashValue(K::Hasher& h, const Sentinel& v) { HashValue(h, v.live); }
+inline void HashValue(K::Hasher& h, const SaveData::Ent& v) {
+    HashValue(h, v.id);
+    HashValue(h, v.hp);
+    HashValue(h, v.x);
+    HashValue(h, v.chase);
+}
+inline void HashValue(K::Hasher& h, const SaveData& v) {
+    HashValue(h, v.ents);
+    HashValue(h, v.gold);
+    HashValue(h, v.next);
+    HashValue(h, v.unreadable);
+}
 
 inline SaveData TheSave() {
     SaveData save;
@@ -100,8 +118,8 @@ inline int& BootRuns() {
 
 inline K::SystemResult Boot(K::ExclusiveWorld<> world) {
     ++BootRuns();
-    if (auto set = world.SetResource(KeyBindings{1}); !set) return Engine::Base::Err(std::move(set).error());
-    if (auto set = world.SetResource(Score{5}); !set) return Engine::Base::Err(std::move(set).error());
+    if (auto set = world.SetResource(KeyBindings{1}); !set) return GYO::Engine::Base::Err(std::move(set).error());
+    if (auto set = world.SetResource(Score{5}); !set) return GYO::Engine::Base::Err(std::move(set).error());
     return {};
 }
 
@@ -109,17 +127,17 @@ inline K::SystemResult Boot(K::ExclusiveWorld<> world) {
 // writers, so Gold has one counted writer, GoldUp; DI-KS 6 until batch 4).
 inline K::SystemResult LoadSave(K::ExclusiveWorld<> world) {
     auto read = world.Read<SaveData>([](const SaveData& s) { return s; });
-    if (!read) return Engine::Base::Err(std::move(read).error());
+    if (!read) return GYO::Engine::Base::Err(std::move(read).error());
     if (!*read) return {};
     const SaveData& data = **read;
-    if (data.unreadable) return Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "save entities unreadable"));
+    if (data.unreadable) return GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "save entities unreadable"));
     for (const SaveData::Ent& e : data.ents) {
         auto spawned = world.SpawnWithId(e.id, Player{e.hp}, Pos{e.x}, ChaseTarget{e.chase});
-        if (!spawned) return Engine::Base::Err(std::move(spawned).error());
+        if (!spawned) return GYO::Engine::Base::Err(std::move(spawned).error());
         if (*spawned) Log().push_back("dropped " + std::to_string(e.id));
     }
     auto gold = world.Modify<Gold>([&](Gold& g) { g.v = data.gold; });
-    if (!gold) return Engine::Base::Err(std::move(gold).error());
+    if (!gold) return GYO::Engine::Base::Err(std::move(gold).error());
     return {};
 }
 
@@ -157,8 +175,8 @@ inline void Register(O::WorldSetup& s) {
     r.Resource<Score>({.name = "Score"});
     r.Resource<SaveData>({.name = "SaveData"});
     r.Resource<Sentinel>({.name = "Sentinel"});
-    r.Resource<K::RangeAllotter>({.name = "Allotter"});
-    r.Allotter<K::RangeAllotter>();
+    r.Resource<GYO::Test::TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<GYO::Test::TestRangeAllotter>();
     r.Schedule(Once("Boot"));
     r.Schedule(Once("Load"));
     r.Schedule(Once("Junk"));
@@ -172,20 +190,20 @@ inline void Register(O::WorldSetup& s) {
 }
 
 // Defaults that never overwrite a carried value (section 3.12).
-inline Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w, K::EntityId first) {
+inline GYO::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w, K::EntityId first) {
     if (w.Resource<KeyBindings>() == nullptr) w.SetResource(KeyBindings{0});
     w.SetResource(Gold{0});
     w.SetResource(Score{0});
     w.SetResource(Sentinel{});
-    w.SetResource(K::RangeAllotter::Of(first, kLast));
+    w.SetResource(GYO::Test::TestRangeAllotter::Of(first, kLast));
     return {};
 }
 
 // The extra prepare of an in-game load: the save and the allotter's lower bound (restore 5.1).
 inline O::PrepareFn LoadInto(SaveData save, bool moveLowerBound = true) {
-    return [save, moveLowerBound](K::World& w) -> Engine::Base::Result<void, O::OrchestrationError> {
+    return [save, moveLowerBound](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(save);
-        if (moveLowerBound) w.SetResource(K::RangeAllotter::Of(save.next, kLast));
+        if (moveLowerBound) w.SetResource(GYO::Test::TestRangeAllotter::Of(save.next, kLast));
         return {};
     };
 }
@@ -195,7 +213,7 @@ inline O::ProductDescription Game(Options options = {}) {
     d.name = "rpg";
     d.gameInit = {"Boot"};
     O::WorldDescription main = World("Main", &Register, {"Play"});
-    main.prepare.push_back([options](K::World& w) -> Engine::Base::Result<void, O::OrchestrationError> {
+    main.prepare.push_back([options](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         if (auto done = Defaults(w, options.first); !done) return done;
         if (options.startupSave) w.SetResource(TheSave());
         return {};
@@ -218,16 +236,16 @@ inline int ScoreOf(O::Product& p, std::string_view world = "Main") {
     return v == nullptr ? -1 : v->v;
 }
 
-// Counts orchestration warnings (Engine::Base::Log) while alive.
+// Counts orchestration warnings (GYO::Engine::Base::Log) while alive.
 class WarningCounter {
 public:
-    WarningCounter() : previous_(Engine::Base::SetLogHandler(&Count)) {
+    WarningCounter() : previous_(GYO::Engine::Base::SetLogHandler(&Count)) {
         Counter().store(0);
         Last().clear();
         ErrorCounter().store(0);
         LastError().clear();
     }
-    ~WarningCounter() { Engine::Base::SetLogHandler(previous_); }
+    ~WarningCounter() { GYO::Engine::Base::SetLogHandler(previous_); }
     WarningCounter(const WarningCounter&) = delete;
     WarningCounter& operator=(const WarningCounter&) = delete;
     [[nodiscard]] int Warnings() const { return Counter().load(); }
@@ -252,15 +270,15 @@ private:
         static std::atomic<int> counter{0};
         return counter;
     }
-    static void Count(const Engine::Base::LogMessage& message) noexcept {
-        if (message.level == Engine::Base::LogLevel::Error && message.category == "orchestration") {
+    static void Count(const GYO::Engine::Base::LogMessage& message) noexcept {
+        if (message.level == GYO::Engine::Base::LogLevel::Error && message.category == "orchestration") {
             ++ErrorCounter();
             try {
                 LastError() = std::string(message.text);
             } catch (...) {
             }
         }
-        if (message.level == Engine::Base::LogLevel::Warning && message.category == "orchestration") {
+        if (message.level == GYO::Engine::Base::LogLevel::Warning && message.category == "orchestration") {
             ++Counter();
             try {
                 Last() = std::string(message.text);
@@ -268,7 +286,7 @@ private:
             }
         }
     }
-    Engine::Base::LogHandler previous_;
+    GYO::Engine::Base::LogHandler previous_;
 };
 
-} // namespace OrchTest::Save
+} // namespace GYO::Test::Orchestration::Save

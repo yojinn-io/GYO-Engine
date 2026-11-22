@@ -18,29 +18,39 @@
 #include <utility>
 #include <vector>
 
-namespace WorldTest {
+namespace GYO::Test::Kernel {
 
-using namespace KernelTest;
-
-struct Pos { std::int32_t x; };    // zone C, Exclusive, rollback Yes
-struct Vel { std::int32_t v; };    // zone C, Exclusive, rollback Yes
-struct Tag { std::int32_t t; };    // zone B, Shared
-struct Mode { std::int32_t m; };   // zone B, Exclusive
-struct Boundary { std::int32_t b; };  // zone C, role Input (a boundary column)
-struct CShared { std::int32_t s; };   // zone C, Shared (the zone half of F-10 and S-13)
-struct Out { std::int64_t value; };   // resource, zone B, Shared
-struct Flag { std::int32_t on; };     // resource, zone B, Exclusive
-struct CRes { std::int64_t value; };  // resource, zone C, rollback Yes
-struct Ping { std::uint32_t n; };     // message, zone B
+struct Pos { std::int32_t x; };
+struct Vel { std::int32_t v; };
+struct Tag { std::int32_t t; };
+struct Mode { std::int32_t m; };
+struct Boundary { std::int32_t b; };  // a column written from outside the Systems
+struct CShared { std::int32_t s; };
+struct Out { std::int64_t value; };   // resource
+struct Flag { std::int32_t on; };     // resource
+struct CRes { std::int64_t value; };  // resource
+struct Ping { std::uint32_t n; };     // message
 struct Note { std::uint32_t code; };  // diagnostics record
 // The Runs of Tick a test counted, written from outside between two Runs (World
 // Ready, SetResource; Rig::Run does it): the "on the N-th Run" gate and log of a
 // test System. It replaces the kernel's domain tick (the tick handle, World::Tick),
 // which left the kernel with the clock (v8-arch-gyo2-clock-out-of-kernel;
-// time-events declaration 6.2). Zone C, role Input (a boundary resource): zone B
-// and zone C Systems both read it. No System writes it, so it adds no Plan step
-// and takes no stamp.
+// time-events declaration 6.2). Systems read it; no System writes it, so it adds
+// no Plan step and takes no stamp.
 struct TickCount { std::uint64_t value; };
+
+// The hash functions of the types above (World::Summary; Hash.hpp).
+inline void HashValue(Hasher& h, const Pos& v) { HashValue(h, v.x); }
+inline void HashValue(Hasher& h, const Vel& v) { HashValue(h, v.v); }
+inline void HashValue(Hasher& h, const Tag& v) { HashValue(h, v.t); }
+inline void HashValue(Hasher& h, const Mode& v) { HashValue(h, v.m); }
+inline void HashValue(Hasher& h, const Boundary& v) { HashValue(h, v.b); }
+inline void HashValue(Hasher& h, const CShared& v) { HashValue(h, v.s); }
+inline void HashValue(Hasher& h, const Out& v) { HashValue(h, v.value); }
+inline void HashValue(Hasher& h, const Flag& v) { HashValue(h, v.on); }
+inline void HashValue(Hasher& h, const CRes& v) { HashValue(h, v.value); }
+inline void HashValue(Hasher& h, const Ping& v) { HashValue(h, v.n); }
+inline void HashValue(Hasher& h, const TickCount& v) { HashValue(h, v.value); }
 
 // The log of every test System, hook and condition that records something.
 inline std::vector<std::string>& Log() {
@@ -57,32 +67,32 @@ inline ScheduleOptions TickSchedule() {
 
 // Registers the data above and the Tick schedule; allotter: optional.
 inline void Data(Registrar& r, bool allotter = false) {
-    r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Mode>({.name = "Mode", .zone = Zone::B});
-    r.Component<Boundary>({.name = "Boundary", .zone = Zone::C, .role = Role::Input});
-    r.Component<CShared>({.name = "CShared", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
-    r.Resource<Out>({.name = "Out", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Resource<Flag>({.name = "Flag", .zone = Zone::B});
-    r.Resource<CRes>({.name = "CRes", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Message<Ping>({.name = "Ping", .zone = Zone::B});
+    r.Component<Pos>({.name = "Pos"});
+    r.Component<Vel>({.name = "Vel"});
+    r.Component<Tag>({.name = "Tag"});
+    r.Component<Mode>({.name = "Mode"});
+    r.Component<Boundary>({.name = "Boundary"});
+    r.Component<CShared>({.name = "CShared"});
+    r.Resource<Out>({.name = "Out"});
+    r.Resource<Flag>({.name = "Flag"});
+    r.Resource<CRes>({.name = "CRes"});
+    r.Message<Ping>({.name = "Ping"});
     if (allotter) {
-        r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
-        r.Allotter<RangeAllotter>();
+        r.Resource<TestRangeAllotter>({.name = "Allotter"});
+        r.Allotter<TestRangeAllotter>();
     }
-    r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+    r.Resource<TickCount>({.name = "TickCount"});
     r.Schedule(TickSchedule());
 }
 
 inline SystemOptions B(std::string name, std::string stage, std::vector<std::string> before = {},
                        std::vector<std::string> after = {}) {
-    return Sys(std::move(name), Zone::B, {At("Tick", std::move(stage), std::move(before), std::move(after))});
+    return Sys(std::move(name), {At("Tick", std::move(stage), std::move(before), std::move(after))});
 }
 
 inline SystemOptions C(std::string name, std::string stage, std::vector<std::string> before = {},
                        std::vector<std::string> after = {}) {
-    return Sys(std::move(name), Zone::C, {At("Tick", std::move(stage), std::move(before), std::move(after))});
+    return Sys(std::move(name), {At("Tick", std::move(stage), std::move(before), std::move(after))});
 }
 
 // A finished Registry, a WorldExecutor over it and the errors its outermost Runs
@@ -99,7 +109,7 @@ struct Rig {
 
     World& world() { return executor->GetWorld(); }
     // A Run of Tick first writes TickCount (when the World has it and is Ready).
-    Engine::Base::Result<void, KernelError> Run(std::string_view schedule = "Tick") {
+    GYO::Engine::Base::Result<void, KernelError> Run(std::string_view schedule = "Tick") {
         if (schedule == "Tick") {
             ++ticks;
             if (world().State() == WorldState::Ready && built.registry->Frozen().ResourceIdOf<TickCount>()) {
@@ -112,7 +122,7 @@ struct Rig {
     }
     // A Trigger from outside the World, recorded like Run.
     template <class E>
-    Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
+    GYO::Engine::Base::Result<void, KernelError> Trigger(E event, std::optional<EntityId> target = std::nullopt) {
         auto triggered = executor->Trigger(std::move(event), target);
         if (!triggered) recorded.push_back(triggered.error());
         return triggered;
@@ -133,11 +143,11 @@ inline std::unique_ptr<Rig> MakeRig(std::function<void(Registrar&)> build, bool 
     return rig;
 }
 
-inline std::string Text(const Engine::Base::Result<void, KernelError>& result) {
+inline std::string Text(const GYO::Engine::Base::Result<void, KernelError>& result) {
     return result ? std::string("ok") : result.error().Text();
 }
 
-inline bool HasCode(const Engine::Base::Result<void, KernelError>& result, KernelErrorCode code) {
+inline bool HasCode(const GYO::Engine::Base::Result<void, KernelError>& result, KernelErrorCode code) {
     return !result && result.error().Has(code);
 }
 
@@ -147,10 +157,10 @@ inline World*& KeptWorld() {
     return world;
 }
 
-} // namespace WorldTest
+} // namespace GYO::Test::Kernel
 
 #define KERNEL_REQUIRE_RUN_OK(expr)                                  \
     do {                                                             \
         const auto kernelRunResult = (expr);                         \
-        REQUIRE_MESSAGE(static_cast<bool>(kernelRunResult), WorldTest::Text(kernelRunResult)); \
+        REQUIRE_MESSAGE(static_cast<bool>(kernelRunResult), ::GYO::Test::Kernel::Text(kernelRunResult)); \
     } while (false)

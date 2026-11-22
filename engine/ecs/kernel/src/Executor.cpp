@@ -318,7 +318,6 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             call.name = system.options.name;
             call.schedule = scheduleName;
             call.planPos = position;
-            call.zone = system.options.zone;
             call.lastRun = mountState.lastRun;
             call.callSerial = ++world.callSerial_;
             call.syncEpoch = world.syncEpoch_;
@@ -475,7 +474,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::Sys
                                                                bool inClosure) {
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
-    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    // Only ExclusiveWorld<...> reaches here: a System or a hook holding it.
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string target = "schedule '" + std::string(schedule) + "'";
@@ -575,16 +574,88 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::Sys
 Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::ImmediateFrom(Detail::SystemContext& call,
                                                                                          Detail::Record record,
                                                                                          ChangeStamp stamp, bool closureOpen) {
-    using Outcome = Engine::Base::Result<Detail::ImmediateOutcome, KernelError>;
     World& world = world_;
-    const Detail::RegistryData& data = *world.data_;
-    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    // Only ExclusiveWorld<...> reaches here: a System or a hook holding it.
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
-    // A refused or failed change: the World interrupted, the error left for the
-    // outermost Run (the Executor lists it as this call's error, whatever the
-    // System does with it).
+    Engine::Base::Result<void, KernelError> refused = RefuseImmediate(call, closureOpen, who, where);
+    if (!refused) return Engine::Base::Err(std::move(refused).error());
+
+    Detail::ImmediateOutcome outcome;
+    if (record.kind == Detail::RecordKind::Spawn && !record.withId) {
+        // Like Spawn<Bundle<C...>>::New (W-9); D-E3 does not see at startup that an exclusive System spawns.
+        if (Detail::AllotterSlot(world) == nullptr) {
+            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::NoAllotter, "A.1",
+                                                       who + " spawns through ExclusiveWorld, and the World declares "
+                                                             "no allotter (Registrar::Allotter)"));
+        }
+        const std::optional<EntityId> id = Detail::Allot(world);
+        if (!id) {
+            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
+                                                       "the entity allotter's range is used up"));
+        }
+        record.entity = *id;
+        outcome.entity = *id;
+    }
+    const bool alive = std::binary_search(world.entities_.begin(), world.entities_.end(), record.entity);
+    switch (record.kind) {
+    case Detail::RecordKind::Insert:
+    case Detail::RecordKind::Despawn: outcome.changed = alive; break;
+    case Detail::RecordKind::Remove: outcome.changed = world.columns_[record.id]->Contains(record.entity); break;
+    case Detail::RecordKind::ResourceRemove: outcome.changed = world.resources_[record.id]->Present(); break;
+    default: break;
+    }
+    record.planPos = call.planPos;
+    record.recSeq = 0;
+    record.emitter = call.name;
+    record.emitterHook = false;
+    record.emitterKey = call.access;
+
+    // The change itself, with the handle's stamp: one phase of the sync point's steps 2 to 7.
+    const std::uint64_t rejectedBefore = world.rejectedSpawns_;
+    std::vector<Detail::Record> change;
+    change.push_back(std::move(record));
+    Engine::Base::Result<void, KernelError> applied =
+        ApplyImmediateRecords(Detail::Derive::InitialValues, call, std::move(change), stamp, who, where);
+    if (!applied) return Engine::Base::Err(std::move(applied).error());
+    if (world.rejectedSpawns_ > rejectedBefore) {
+        // Spec F-13: recorded in one place (World::RecordRejectedSpawn); read back from there.
+        const auto* buffer = static_cast<const Detail::DiagnosticsBuffer<RejectedSpawn>*>(
+            Detail::FindDiagnostics(world, KeyOf<RejectedSpawn>()));
+        GYO_ASSERT(buffer != nullptr && !buffer->entries.empty());
+        outcome.rejected = buffer->entries.back().record.reason;
+    }
+    return outcome;
+}
+
+// ExclusiveWorld::Restore (primitives 2 and 3, authority-rollback declaration
+// 2.1): the same checks, then every record of the restore as one immediate change
+// that puts back what it is given: it notifies (OnAdd, OnRemove, observers) and
+// derives nothing (no InitialValue; DI-KS 12). What its hooks record is a change.
+Engine::Base::Result<void, KernelError> WorldExecutor::RestoreFrom(Detail::SystemContext& call,
+                                                                   std::vector<Detail::Record> records, ChangeStamp stamp,
+                                                                   bool closureOpen) {
+    GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
+    const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
+    const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
+    Engine::Base::Result<void, KernelError> refused = RefuseImmediate(call, closureOpen, who, where);
+    if (!refused) return refused;
+    std::uint32_t recSeq = 0;
+    for (Detail::Record& record : records) {
+        record.planPos = call.planPos;
+        record.recSeq = recSeq++;
+        record.emitter = call.name;
+        record.emitterHook = false;
+        record.emitterKey = call.access;
+    }
+    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);
+}
+
+Engine::Base::Result<void, KernelError> WorldExecutor::RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
+                                                                       const std::string& who, const std::string& where) {
+    using Outcome = Engine::Base::Result<void, KernelError>;
+    World& world = world_;
     auto stop = [&](KernelError error) -> Outcome {
         Engine::Base::Result<void, KernelError> failed = Fail(std::move(error), true);
         return Engine::Base::Err(std::move(failed).error());
@@ -638,37 +709,20 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
         }
     }
 
-    Detail::ImmediateOutcome outcome;
-    if (record.kind == Detail::RecordKind::Spawn && !record.withId) {
-        // Like Spawn<Bundle<C...>>::New (W-9); D-E3 does not see at startup that an exclusive System spawns.
-        if (Detail::AllotterSlot(world) == nullptr) {
-            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::NoAllotter, "A.1",
-                                                       who + " spawns through ExclusiveWorld, and the World declares "
-                                                             "no allotter (Registrar::Allotter)"));
-        }
-        const std::optional<EntityId> id = Detail::Allot(world);
-        if (!id) {
-            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
-                                                       "the entity allotter's range is used up"));
-        }
-        record.entity = *id;
-        outcome.entity = *id;
-    }
-    const bool alive = std::binary_search(world.entities_.begin(), world.entities_.end(), record.entity);
-    switch (record.kind) {
-    case Detail::RecordKind::Insert:
-    case Detail::RecordKind::Despawn: outcome.changed = alive; break;
-    case Detail::RecordKind::Remove: outcome.changed = world.columns_[record.id]->Contains(record.entity); break;
-    case Detail::RecordKind::ResourceRemove: outcome.changed = world.resources_[record.id]->Present(); break;
-    default: break;
-    }
-    record.planPos = call.planPos;
-    record.recSeq = 0;
-    record.emitterZone = call.zone;
-    record.emitter = call.name;
-    record.emitterHook = false;
-    record.emitterKey = call.access;
+    return {};
+}
 
+Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
+                                                                             std::vector<Detail::Record> change,
+                                                                             ChangeStamp stamp, const std::string& who,
+                                                                             const std::string& where) {
+    using Outcome = Engine::Base::Result<void, KernelError>;
+    World& world = world_;
+    const Detail::RegistryData& data = *world.data_;
+    auto stop = [&](KernelError error) -> Outcome {
+        Engine::Base::Result<void, KernelError> failed = Fail(std::move(error), true);
+        return Engine::Base::Err(std::move(failed).error());
+    };
     // From here, on every way back: the change's own queue is let go, the
     // World is Running again, and the step's new membership baseline and fresh
     // snapshots are taken, since this change and its hooks' are the System's
@@ -717,19 +771,9 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
         return stop(std::move(error));
     };
 
-    // The change itself, with the handle's stamp: one phase of the sync point's steps 2 to 7.
-    const std::uint64_t rejectedBefore = world.rejectedSpawns_;
-    std::vector<Detail::Record> change;
-    change.push_back(std::move(record));
-    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);
+    // The records themselves; the hook rounds below are changes (they derive).
+    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);
     if (!applied) return failed(std::move(applied), "Executor: immediate change by " + where);
-    if (world.rejectedSpawns_ > rejectedBefore) {
-        // Spec F-13: recorded in one place (World::RecordRejectedSpawn); read back from there.
-        const auto* buffer = static_cast<const Detail::DiagnosticsBuffer<RejectedSpawn>*>(
-            Detail::FindDiagnostics(world, KeyOf<RejectedSpawn>()));
-        GYO_ASSERT(buffer != nullptr && !buffer->entries.empty());
-        outcome.rejected = buffer->entries.back().record.reason;
-    }
 
     // Spec F-12 for this change only (declaration section 12 item 2, (a)): round
     // after round, each a whole application with its own stamp and sync epoch
@@ -774,7 +818,7 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
         ++world.syncEpoch_;
         if (!applied) return failed(std::move(applied), roundText(round));
     }
-    return outcome;
+    return {};
 }
 
 // Event cursor declaration 3.3, time-events declaration 4.2: the observers of
@@ -863,7 +907,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::TriggerFrom(Detail::Syste
                                                                    std::optional<EntityId> target, bool closureOpen) {
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
-    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    // Only ExclusiveWorld<...> reaches here: a System or a hook holding it.
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
@@ -1034,6 +1078,12 @@ Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext
                                                                    bool inClosure) {
     GYO_ASSERT(call.executor != nullptr);
     return call.executor->ImmediateFrom(call, std::move(record), stamp, inClosure);
+}
+
+Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records, ChangeStamp stamp,
+                                                    bool inClosure) {
+    GYO_ASSERT(call.executor != nullptr);
+    return call.executor->RestoreFrom(call, std::move(records), stamp, inClosure);
 }
 
 Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id, std::unique_ptr<ValueBox> payload,

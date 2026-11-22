@@ -1,0 +1,644 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the naming guard (rebuild-naming N17, naming DI 1). The guard is tests/common/naming/naming_guard.py (ctest naming.guard, naming.guard_selftest); its text reading is tests/common/support/source_text.py. ids nm- were added by v8-arch-gyo2-namespace-root; ks-n1-*, ks-real-old-namespace, or-guard-* and wt-guard-real-* were moved here from the kernel, orchestration and world_time lists by v8-arch-gyo2-naming-cleanup, ids kept (the guard used to sit with the kernel tests). A self-test mutant is killed only when the named test case fails; a real-tree mutant when the guard prints the named finding. The adversarial check and the design review (another model, read-only) are recorded in the dev_logs.",
+ "mutants": [
+  {
+   "id": "nm-acronyms-off",
+   "what": "the acronym table is empty, so io and os are expected as Io and Os. Only it catches the acronym list (each item is pinned by test_acronyms_are_io_and_os)",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\"}",
+   "replace": "ACRONYMS = {}",
+   "expect": "FAIL: test_n1_acronym_unit_spelled_otherwise_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-real-acronym",
+   "what": "real tree, positive control of the derived namespace on a core unit: an os source opens GYO::Engine::Os (the spelling the user turned down). Only it shows a core unit checked on the real tree; ks-real-old-namespace is the kernel's, or-/wt-guard-real-n1-other-namespace orchestration's and world_time's",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "engine/core/os/src/common/OSError.cpp",
+   "find": "namespace GYO::Engine::OS {",
+   "replace": "namespace GYO::Engine::Os {",
+   "expect": "engine/core/os/src/common/OSError\\.cpp:\\d+: N1 namespace GYO::Engine::Os \\(expected GYO::Engine::OS\\)",
+   "command": [
+    "{python}",
+    "-I",
+    "-B",
+    "tests/common/naming/naming_guard.py"
+   ]
+  },
+  {
+   "id": "nm-unit-name-underscore",
+   "what": "camel_case no longer splits at '_', so world_time is expected as World_time. Only it catches the split (replaces wt-guard-naming-root-dropped, whose ROOTS row is gone; v8-arch-gyo2-naming-cleanup: unit_name and kernel_guard.camel_case became the one camel_case of tests/common/support/source_text.py)",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1",
+    "world-time WT-4"
+   ],
+   "file": "tests/common/support/source_text.py",
+   "find": "for part in identifier.split(\"_\") if part)",
+   "replace": "for part in [identifier] if part)",
+   "expect": "FAIL: test_n1_world_time_other_namespace_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-override-dropped",
+   "what": "UNIT_OVERRIDES is not applied, so engine/ecs/kernel is expected as GYO::Engine::Kernel. Only it catches the override",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "UNIT_OVERRIDES.get(relative, f\"GYO::Engine::{camel_case(base.name, ACRONYMS)}\")",
+   "replace": "f\"GYO::Engine::{camel_case(base.name, ACRONYMS)}\"",
+   "expect": "FAIL: test_n1_kernel_override_is_applied",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-unknown-layer-silent",
+   "what": "a directory under engine/ that is not a listed layer passes unseen (fail closed of the units). Only it catches the unknown-layer branch",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "            problems.append(f\"engine/{layer.name}: not a layer of the naming table (ENGINE_LAYERS); add it with \"",
+   "replace": "            (f\"engine/{layer.name}: not a layer of the naming table (ENGINE_LAYERS); add it with \"",
+   "expect": "FAIL: test_n1_unknown_layer_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-units-layer-empty",
+   "what": "an empty layer of units (engine/modules with no unit left) passes. Only it catches the empty half of the layer check (adversarial check 4); nm-layer-gone-silent silences the whole line",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "        if not layer.is_dir() or (kind == \"units\" and not any(p.is_dir() for p in layer.iterdir())):",
+   "replace": "        if not layer.is_dir():",
+   "expect": "FAIL: test_n1_layer_of_units_missing_or_empty_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-layer-gone-silent",
+   "what": "a listed layer that is gone (engine/orchestration) passes. Only it catches the layer half of the old mapped-root fail closed; ks-n1-mapped-root-silent keeps the override half",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "            problems.append(f\"engine/{name}: no source to scan (moved or renamed? update this guard)\")",
+   "replace": "            (f\"engine/{name}: no source to scan (moved or renamed? update this guard)\")",
+   "expect": "FAIL: test_n1_missing_orchestration_directory_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-unit-empty-silent",
+   "what": "a unit directory with no source passes. Only it catches the empty-unit branch",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "        problems.append(f\"{directory}: no source to scan (moved or renamed? update this guard)\")\n    for path in files:",
+   "replace": "        (f\"{directory}: no source to scan (moved or renamed? update this guard)\")\n    for path in files:",
+   "expect": "FAIL: test_n1_unit_without_source_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-old-root-off",
+   "what": "the old root Engine is no longer reported outside the units (the rule switched off)",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "                if parts[0] == OLD_ROOT:",
+   "replace": "                if False:",
+   "expect": "FAIL: test_n1_old_root_outside_engine_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-real-old-root",
+   "what": "real tree, positive control of the old-root rule: the shared test support goes back to namespace Engine::Test. Only it shows the rule firing on the real tree",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/support/AssertTestSupport.hpp",
+   "find": "namespace GYO::Test {",
+   "replace": "namespace Engine::Test {",
+   "expect": "tests/common/support/AssertTestSupport\\.hpp:\\d+: N1 namespace Engine::Test uses the old root Engine",
+   "command": [
+    "{python}",
+    "-I",
+    "-B",
+    "tests/common/naming/naming_guard.py"
+   ]
+  },
+  {
+   "id": "nm-real-unit-namespace-in-tests",
+   "what": "real tree, positive control of the roots rule: a test helper opens the logging unit's namespace again (GYO::Engine::Logging::Test, the shape fixed by this batch). Only it shows the ownership half firing on the real tree; ks-n1-reverse-off switches that half off in the self-tests",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/logging/TestClock.hpp",
+   "find": "namespace GYO::Test::Logging {",
+   "replace": "namespace GYO::Engine::Logging::Test {",
+   "expect": "tests/common/logging/TestClock\\.hpp:\\d+: N1 namespace GYO::Engine::Logging::Test opened outside its unit",
+   "command": [
+    "{python}",
+    "-I",
+    "-B",
+    "tests/common/naming/naming_guard.py"
+   ]
+  },
+  {
+   "id": "nm-gyo-alone-silent",
+   "what": "GYO opened alone outside a unit passes. Only it catches that branch",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "                    problems.append(f\"{where}: N1 namespace GYO opened alone (write the qualified root)\")",
+   "replace": "                    (f\"{where}: N1 namespace GYO opened alone (write the qualified root)\")",
+   "expect": "FAIL: test_n1_gyo_alone_outside_engine_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-unknown-root-silent",
+   "what": "a GYO::<X> not in GYO_ROOTS passes (fail closed of the roots table). Only it catches that branch; the table's items are pinned by test_gyo_roots_are_pinned",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "                    problems.append(f\"{where}: N1 namespace {full}: GYO::{parts[1]} is not a root of the naming \"",
+   "replace": "                    (f\"{where}: N1 namespace {full}: GYO::{parts[1]} is not a root of the naming \"",
+   "expect": "FAIL: test_n1_unknown_gyo_root_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-test-root-anywhere",
+   "what": "GYO::Test may be opened outside tests/ and GYO::Plugins outside plugins/. Only it catches the place of a root that is not a unit",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "                elif not path.is_relative_to(root / GYO_ROOTS[parts[1]]):",
+   "replace": "                elif False:",
+   "expect": "(?=[\\s\\S]*(?:FAIL: test_n1_test_root_outside_tests_is_reported))[\\s\\S]*(?:FAIL: test_n1_plugin_root_belongs_to_plugins)",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-roots-unreadable-silent",
+   "what": "an unreadable namespace declaration outside the units passes (fail closed of the roots and old-root rules). Only it catches it; ks-n1-unreadable-silent is the units'",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "                    problems.append(f\"{where}: N1 unreadable namespace declaration {full[1:].strip()!r}\")",
+   "replace": "                    (f\"{where}: N1 unreadable namespace declaration {full[1:].strip()!r}\")",
+   "expect": "FAIL: test_n1_unreadable_namespace_declaration_outside_a_unit_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-scan-roots-examples",
+   "what": "examples/ is not scanned (the list, one mutant; each item pinned by test_n1_scan_roots_are_pinned)",
+   "guards": [
+    "rebuild-naming N17",
+    "naming DI 1"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "SCAN_ROOTS = (\"engine\", \"apps\", \"tools\", \"plugins\", \"tests\", \"examples\")",
+   "replace": "SCAN_ROOTS = (\"engine\", \"apps\", \"tools\", \"plugins\", \"tests\")",
+   "expect": "FAIL: test_n1_test_root_outside_tests_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-n1-forward-off",
+   "what": "N1 forward reports no namespace",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "            elif full and not within(full, mapped):",
+   "replace": "            elif False:",
+   "expect": "FAIL: test_n1_old_engine_namespace_in_kernel_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-n1-alias-off",
+   "what": "N1 no longer reports a namespace alias",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "            elif full.startswith(\"=\"):",
+   "replace": "            elif False:",
+   "expect": "FAIL: test_n1_namespace_alias_at_file_scope_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-n1-reverse-off",
+   "what": "N1 roots: a unit's namespace opened in a file outside every unit is not reported (rewritten by v8-arch-gyo2-namespace-root: the reverse check became the units branch of check_roots; nm-real-unit-namespace-in-tests is its real-tree positive control)",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "                    problems.append(f\"{where}: N1 namespace {full} opened outside its unit\")",
+   "replace": "                    pass",
+   "expect": "FAIL: test_n1_nested_kernel_namespace_outside_kernel_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-n1-mapped-root-silent",
+   "what": "naming guard passes when engine/ecs/kernel (the UNIT_OVERRIDES directory) is missing. Rewritten by v8-arch-gyo2-namespace-root: the guard derives the units, so the old mapped-root line split in two; the layer half (engine/orchestration missing, test_n1_missing_orchestration_directory_is_reported, merged here before) is nm-layer-gone-silent in naming_mutations.json",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "    for directory in UNIT_OVERRIDES:\n        if not (root / directory).is_dir():\n            problems.append(f\"{directory}: no source to scan (moved or renamed? update this guard)\")",
+   "replace": "    for directory in UNIT_OVERRIDES:\n        if not (root / directory).is_dir():\n            pass",
+   "expect": "FAIL: test_missing_mapped_root_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-real-old-namespace",
+   "what": "engine/kernel uses the old Engine:: namespace",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "engine/ecs/kernel/include/engine/kernel/Plan.hpp",
+   "find": "namespace GYO::Kernel {\n\n// A SHA-256",
+   "replace": "namespace Engine::Kernel {\n\n// A SHA-256",
+   "expect": "N1 namespace Engine::Kernel",
+   "command": [
+    "{python}",
+    "-B",
+    "tests/common/naming/naming_guard.py"
+   ]
+  },
+  {
+   "id": "ks-n1-linkage-block-named",
+   "what": "a linkage block counts as a named namespace (review A9)",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "stack.append(pending if pending is not None else None)",
+   "replace": "stack.append(pending if pending is not None else \"linkage\")",
+   "expect": "FAIL: test_n1_namespace_inside_a_linkage_block_is_checked",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-n1-attribute-unread",
+   "what": "an attributed namespace is not read (review A9)",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "NAMESPACE = re.compile(r\"namespace\\s*(?:\\[\\[[^\\]]*\\]\\]\\s*)?(",
+   "replace": "NAMESPACE = re.compile(r\"namespace\\s*(",
+   "expect": "FAIL: test_n1_attributed_namespace_is_read",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-n1-unreadable-silent",
+   "what": "an unreadable namespace declaration is not reported as such (review A9)",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "\n            if full.startswith(\"?\"):",
+   "replace": "\n            if False:",
+   "expect": "FAIL: test_n1_unreadable_namespace_declaration_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "ks-n1-inline-substring",
+   "what": "inline is removed as a substring (review A9: Mainline)",
+   "guards": [
+    "naming DI 1",
+    "rebuild-naming N17"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "r\"\\s+|\\binline\\b\"",
+   "replace": "r\"\\s+|inline\"",
+   "expect": "FAIL: test_n1_inline_nested_namespace_keeps_its_name",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-guard-naming-root-dropped",
+   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration entry of ENGINE_LAYERS (rewritten by v8-arch-gyo2-namespace-root: the ROOTS rows became the layer table, from which every unit's namespace is derived; the layer list's one mutant, README rule 4, items pinned by test_engine_layers_are_pinned); or-guard-real-n1-other-namespace is the positive control and nm-layer-gone-silent the fail closed",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": ", \"orchestration\": \"unit\"}",
+   "replace": "}",
+   "expect": "FAIL: test_n1_orchestration_other_namespace_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "or-guard-real-n1-other-namespace",
+   "what": "naming guard's orchestration row on the real tree (step 7, README rule 4: positive control): an orchestration source opens GYO::Kernel. Only it shows the orchestration row firing on the real tree; or-guard-naming-root-dropped drops the row in the self-tests and ks-real-old-namespace is the kernel row's",
+   "guards": [
+    "orchestration O-4",
+    "time-events-declaration 6.3"
+   ],
+   "file": "engine/orchestration/src/OrchestrationError.cpp",
+   "find": "namespace GYO::Engine::Orchestration {",
+   "replace": "namespace GYO::Kernel {",
+   "expect": "engine/orchestration/src/OrchestrationError\\.cpp:\\d+: N1 namespace GYO::Kernel \\(expected GYO::Engine::Orchestration\\)",
+   "command": [
+    "{python}",
+    "-I",
+    "-B",
+    "tests/common/naming/naming_guard.py"
+   ]
+  },
+  {
+   "id": "wt-guard-real-n1-other-namespace",
+   "what": "naming guard's world_time row on the real tree (authority-rollback step 1, README rule 4: positive control): a world_time source opens GYO::Engine::Orchestration. Only it shows the world_time row firing on the real tree; nm-unit-name-underscore (naming_mutations.json) breaks the derivation of world_time's name in the self-tests; wt-guard-naming-root-dropped was retired by v8-arch-gyo2-namespace-root with the ROOTS row",
+   "guards": [
+    "world-time WT-4",
+    "naming DI 1",
+    "time-events-declaration 6.3",
+    "authority-rollback-declaration 9.5"
+   ],
+   "file": "engine/modules/world_time/src/Sampling.cpp",
+   "find": "namespace GYO::Engine::WorldTime {",
+   "replace": "namespace GYO::Engine::Orchestration {",
+   "expect": "engine/modules/world_time/src/Sampling\\.cpp:\\d+: N1 namespace GYO::Engine::Orchestration \\(expected GYO::Engine::WorldTime\\)",
+   "command": [
+    "{python}",
+    "-I",
+    "-B",
+    "tests/common/naming/naming_guard.py"
+   ]
+  }
+ ]
+}

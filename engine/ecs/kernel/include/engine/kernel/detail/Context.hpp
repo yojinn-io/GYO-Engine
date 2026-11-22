@@ -65,6 +65,12 @@ struct AccessDesc {
 };
 
 // The record kinds of the deferred queue (spec F.1).
+// Whether an application of records derives data from the cells it adds (World::ApplySync).
+enum class Derive : std::uint8_t {
+    InitialValues,  // a change: step 5a fills each Registrar::InitialValue target of a new request cell
+    Nothing,        // a restore: the records are put back as given (DI-KS 12)
+};
+
 enum class RecordKind : std::uint8_t {
     Spawn,
     Insert,
@@ -92,10 +98,12 @@ struct Record {
     std::uint32_t id = 0;
     std::uint32_t planPos = 0;
     std::uint32_t recSeq = 0;
-    // The emitter's zone (RejectedSpawn::emitterZone; goes with the zones, a later batch).
-    Zone emitterZone = Zone::B;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
+    // A Spawn of ExclusiveWorld::Restore (primitive 3, authority-rollback
+    // declaration 2.1): an entity put back alive with its old id, which may be
+    // in this World's allotter range; that check is skipped, the others are not.
+    bool restore = false;
     // Trigger: the event names a target entity (entity).
     bool hasTarget = false;
     // Who recorded it (spec F-13's RejectedSpawn): the System's or hook's name (the Registry's string).
@@ -147,7 +155,6 @@ struct SystemContext {
     std::string_view name;
     std::string_view schedule;
     std::uint32_t planPos = 0;
-    Zone zone = Zone::B;
     bool hook = false;
     // A hook an immediate change of ExclusiveWorld runs (S5): planPos is the
     // exclusive System's step, not a sync point's (the error text says so).
@@ -236,7 +243,7 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 // Run: from a hook (X-13), inside a Read or Modify closure (X-14), an unknown
 // name (X-12), an extract schedule (X-15), a schedule running already at any level (X-11). An Interrupted World
 // runs nothing: the error a nested level left is returned.
-[[nodiscard]] ::Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
+[[nodiscard]] Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule,
                                                                 bool inClosure);
 // What an immediate structural change of ExclusiveWorld did (declaration
 // v8-arch-gyo2-kernel-subtract-structure 3.5): entity, the id a Spawn took
@@ -269,8 +276,17 @@ struct ImmediateOutcome {
 // returns, DI-KS 2): no allotter (NoAllotter), the allotter used up
 // (AllotterExhausted). GYO_ASSERT: the membership changed behind the handle
 // before (W-3).
-[[nodiscard]] ::Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
+[[nodiscard]] Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext& call, Record record,
                                                                                 ChangeStamp stamp, bool inClosure);
+
+// ExclusiveWorld::Restore (primitives 2 and 3, authority-rollback declaration
+// 2.1): applies the records of one restore now, all of them as one phase of a
+// sync point with the handle's one stamp (despawns, removes, spawns, inserts,
+// initial values, then OnAdd: a hook sees every cell put back), then the hook
+// rounds, as ApplyImmediate; refused and failing as ApplyImmediate. Its Spawn
+// records carry restore (no allotter range check) and an empty bundle.
+[[nodiscard]] Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records,
+                                                                   ChangeStamp stamp, bool inClosure);
 
 // Event cursor declaration 3.3 (time-events declaration 4.2): ExclusiveWorld::
 // Trigger. Runs the observers of event id now, each like one nested System
@@ -284,7 +300,7 @@ struct ImmediateOutcome {
 // Read or Modify closure (ClosureChangesMembership). An observer's Err
 // interrupts the World and is reported once. An Interrupted World runs no
 // observer and returns the left error.
-[[nodiscard]] ::Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id,
+[[nodiscard]] Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id,
                                                                  std::unique_ptr<ValueBox> payload,
                                                                  std::optional<EntityId> target, bool inClosure);
 
@@ -331,7 +347,7 @@ void Push(SystemContext& call, Record record);
 // violations, boundary differences (storage names), kernel errors the System
 // dropped, and the System's own Err, as one sibling list; nothing when the call
 // is clean. One error alone is returned as is.
-[[nodiscard]] std::optional<KernelError> CombineCall(SystemContext& call, ::Engine::Base::Result<void, KernelError> result,
+[[nodiscard]] std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result<void, KernelError> result,
                                                      const std::vector<std::string>& changed);
 
 // DiagnosticsWriter<T>'s World-side buffer (B-13).

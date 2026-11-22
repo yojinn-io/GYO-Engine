@@ -13,6 +13,8 @@ add_executable(gyo_orchestration_tests
     CoverageTests.cpp
     SkeletonTests.cpp
     TraceSpanTests.cpp
+    ModuleBufferTests.cpp
+    WorldGenTests.cpp
 )
 target_include_directories(gyo_orchestration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gyo_orchestration_tests PRIVATE GYO::Orchestration gyo_test_support doctest::doctest)
@@ -25,7 +27,7 @@ endif()
 
 # One ctest per group (the doctest cases are named "<group>: ..."); a run of
 # zero cases fails.
-foreach(group IN ITEMS O-1 O-2 O-3 O-4 O-5 O-8 O-9 O-10 O-E1 O-E2 O-E3 O-E6 O-E7 restore trace-spans)
+foreach(group IN ITEMS O-1 O-2 O-3 O-4 O-5 O-8 O-9 O-10 O-E1 O-E2 O-E3 O-E6 O-E7 restore trace-spans module-buffer O-14)
     add_test(NAME orchestration.${group} COMMAND gyo_orchestration_tests "--test-case=${group}:*")
     set_tests_properties(orchestration.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
@@ -50,59 +52,6 @@ add_test(NAME orchestration.units COMMAND gyo_orchestration_units_tests "--test-
 set_tests_properties(orchestration.units PROPERTIES LABELS "cpu" TIMEOUT 60
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
-# Include order (defect found in segment 3): each public orchestration header
-# first, then every public kernel header. The orchestration layer is the first
-# GYO::Engine namespace; a kernel header that names Engine::Base unqualified
-# inside GYO::Kernel would then look in GYO::Engine and fail to compile. Built
-# with the tests; a compile error is the failure.
-file(GLOB_RECURSE _orchestration_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/orchestration/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/orchestration/include/*.hpp")
-file(GLOB_RECURSE _kernel_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include/*.hpp")
-list(SORT _orchestration_headers)
-list(SORT _kernel_headers)
-set(_kernel_includes "")
-foreach(_header IN LISTS _kernel_headers)
-    string(APPEND _kernel_includes "#include \"${_header}\"\n")
-endforeach()
-set(_order_sources "")
-foreach(_header IN LISTS _orchestration_headers)
-    string(MAKE_C_IDENTIFIER "${_header}" _id)
-    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}.cpp")
-    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every kernel header.\n#include \"${_header}\"\n${_kernel_includes}" @ONLY)
-    list(APPEND _order_sources "${_source}")
-endforeach()
-# The first Engine Module in GYO::Engine that goes into a World, engine/world_time
-# (time-events declaration 3.1): each of its public headers first, then every
-# orchestration and kernel header; and each orchestration header first, then
-# every world_time header (the order gyo_product_units generates). A header that
-# names Engine:: unqualified inside GYO::Engine::WorldTime fails here.
-file(GLOB_RECURSE _world_time_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include/*.hpp")
-list(SORT _world_time_headers)
-set(_orchestration_includes "")
-foreach(_header IN LISTS _orchestration_headers)
-    string(APPEND _orchestration_includes "#include \"${_header}\"\n")
-endforeach()
-set(_world_time_includes "")
-foreach(_header IN LISTS _world_time_headers)
-    string(APPEND _world_time_includes "#include \"${_header}\"\n")
-endforeach()
-foreach(_header IN LISTS _world_time_headers)
-    string(MAKE_C_IDENTIFIER "${_header}" _id)
-    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}.cpp")
-    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every orchestration and kernel header.\n#include \"${_header}\"\n${_orchestration_includes}${_kernel_includes}" @ONLY)
-    list(APPEND _order_sources "${_source}")
-endforeach()
-foreach(_header IN LISTS _orchestration_headers)
-    string(MAKE_C_IDENTIFIER "${_header}" _id)
-    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}_then_world_time.cpp")
-    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every world_time header.\n#include \"${_header}\"\n${_world_time_includes}" @ONLY)
-    list(APPEND _order_sources "${_source}")
-endforeach()
-add_library(gyo_orchestration_include_order OBJECT ${_order_sources})
-target_link_libraries(gyo_orchestration_include_order PRIVATE GYO::Orchestration GYO::WorldTime)
-
 # The scans the skeleton declaration deferred (section 7.4), stood up by
 # v8-arch-gyo2-time-events step 1 once scenario segment 1 had passed:
 #   orchestration.guard  O-3 (no Plan step read, no System called), O-4 (the
@@ -114,6 +63,7 @@ add_test(NAME orchestration.guard
 add_test(NAME orchestration.guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_orchestration_guard.py" -v)
 set_tests_properties(orchestration.guard orchestration.guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too (as for gyo_time).
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_links gyo_orchestration GYO::Base GYO::Kernel)

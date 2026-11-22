@@ -7,7 +7,7 @@
 
 #include <cstdint>
 
-namespace Engine::Time {
+namespace GYO::Engine::Time {
 
 enum class TimeErrorCode : std::uint16_t {
     // The operating system refused the wait primitive (kqueue, timer or event).
@@ -24,4 +24,4 @@ enum class TimeErrorCode : std::uint16_t {
 using TimeError = Base::Error<TimeErrorCode>;
 static_assert(Base::CodedError<TimeError>);
 
-} // namespace Engine::Time
+} // namespace GYO::Engine::Time

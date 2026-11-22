@@ -42,11 +42,11 @@ struct Installed {
     std::optional<Logging::LoggerHandle> handle;
 
     explicit Installed(Logging::SinkFilter filter = {.minimum = Level::Trace}, bool takeBaseLog = true) {
-        Logging::Test::ResetClock();
+        GYO::Test::Logging::ResetClock();
         Logging::LoggerOptions options;
         options.sinks.push_back({.name = "memory", .sink = memory, .filter = std::move(filter)});
         options.takeBaseLog = takeBaseLog;
-        options.clock = Logging::Test::TestClock();
+        options.clock = GYO::Test::Logging::TestClock();
         auto installed = Logging::Install(std::move(options));
         REQUIRE(installed);
         handle.emplace(std::move(installed.value()));
@@ -57,7 +57,7 @@ struct Installed {
 
 TEST_CASE("logger: a record reaches the sink with its level, category, text, fields and both clocks") {
     Installed logger;
-    Logging::Test::monoNow = 42;
+    GYO::Test::Logging::monoNow = 42;
     Logging::Write(Level::Info, "net", "sent", {{"bytes", 512}, {"peer", "client-3"}, {"late", false}});
     const auto records = logger.memory->Records();
     REQUIRE(records.size() == 1);
@@ -170,29 +170,29 @@ TEST_CASE("logger: a record that writes one key twice becomes one Error record o
     CHECK(records[0].text.find("net") != std::string::npos);
 }
 
-TEST_CASE("logger: Engine::Base::Log lines become records once installed, and the old handler is put back") {
-    const auto before = Engine::Base::SetLogHandler(nullptr);
-    Engine::Base::SetLogHandler(before);
+TEST_CASE("logger: GYO::Engine::Base::Log lines become records once installed, and the old handler is put back") {
+    const auto before = GYO::Engine::Base::SetLogHandler(nullptr);
+    GYO::Engine::Base::SetLogHandler(before);
     {
         Installed logger;
-        Engine::Base::Log(Engine::Base::LogLevel::Warning, "orchestration", "replacement failed");
+        GYO::Engine::Base::Log(GYO::Engine::Base::LogLevel::Warning, "orchestration", "replacement failed");
         const auto records = logger.memory->Records();
         REQUIRE(records.size() == 1);
         CHECK(records[0].level == Level::Warning);
         CHECK(records[0].category == "orchestration");
         CHECK(records[0].text == "replacement failed");
     }
-    const auto after = Engine::Base::SetLogHandler(nullptr);
-    Engine::Base::SetLogHandler(after);
+    const auto after = GYO::Engine::Base::SetLogHandler(nullptr);
+    GYO::Engine::Base::SetLogHandler(after);
     CHECK(after == before);
 }
 
-TEST_CASE("logger: takeBaseLog = false leaves Engine::Base::Log alone") {
-    const auto before = Engine::Base::SetLogHandler(nullptr);
-    Engine::Base::SetLogHandler(before);
+TEST_CASE("logger: takeBaseLog = false leaves GYO::Engine::Base::Log alone") {
+    const auto before = GYO::Engine::Base::SetLogHandler(nullptr);
+    GYO::Engine::Base::SetLogHandler(before);
     Installed logger({.minimum = Level::Trace}, false);
-    const auto during = Engine::Base::SetLogHandler(nullptr);
-    Engine::Base::SetLogHandler(during);
+    const auto during = GYO::Engine::Base::SetLogHandler(nullptr);
+    GYO::Engine::Base::SetLogHandler(during);
     CHECK(during == before);
 }
 

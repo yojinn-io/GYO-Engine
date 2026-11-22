@@ -6,7 +6,7 @@
 #include "engine/base/Result.hpp"
 #include "engine/io/path/PathUtils.hpp"
 
-namespace Engine::IO::Path {
+namespace GYO::Engine::IO::Path {
 
     class Path final {
     public:
@@ -20,7 +20,7 @@ namespace Engine::IO::Path {
         }
 
         // 生入力から安全に生成
-        static Base::Result<Path, IoError> Parse(std::string_view raw,
+        static Base::Result<Path, IOError> Parse(std::string_view raw,
                                          const NormalizeOptions& opt = {}) {
             auto n = Normalize(raw, opt);
             if (!n) {
@@ -33,18 +33,18 @@ namespace Engine::IO::Path {
         bool Empty() const noexcept { return normalized_.empty(); }
 
         // 判定（論理パス観点）
-        bool IsAbsoluteLike() const noexcept { return ::Engine::IO::Path::IsAbsoluteLike(normalized_); }
-        bool HasTraversal() const noexcept { return ::Engine::IO::Path::ContainsTraversal(normalized_); }
-        bool HasNullByte() const noexcept { return ::Engine::IO::Path::ContainsNullByte(normalized_); }
+        bool IsAbsoluteLike() const noexcept { return IO::Path::IsAbsoluteLike(normalized_); }
+        bool HasTraversal() const noexcept { return IO::Path::ContainsTraversal(normalized_); }
+        bool HasNullByte() const noexcept { return IO::Path::ContainsNullByte(normalized_); }
 
-        std::string_view Filename() const noexcept { return ::Engine::IO::Path::Filename(normalized_); }
-        std::string_view Extension() const noexcept { return ::Engine::IO::Path::Extension(normalized_); }
+        std::string_view Filename() const noexcept { return IO::Path::Filename(normalized_); }
+        std::string_view Extension() const noexcept { return IO::Path::Extension(normalized_); }
 
-        Path Parent() const { return Path::FromNormalized(::Engine::IO::Path::Parent(normalized_)); }
+        Path Parent() const { return Path::FromNormalized(IO::Path::Parent(normalized_)); }
 
         // すでに正規化済み同士を結合（relative は相対であることを期待）
         Path Join(const Path& relative) const {
-            return Path::FromNormalized(::Engine::IO::Path::Join(normalized_, relative.normalized_));
+            return Path::FromNormalized(IO::Path::Join(normalized_, relative.normalized_));
         }
 
         friend Path operator/(const Path& a, const Path& b) { return a.Join(b); }
@@ -54,4 +54,4 @@ namespace Engine::IO::Path {
         std::string normalized_; // 常に "/" 区切りの論理パス
     };
 
-} // namespace Engine::IO::Path
+} // namespace GYO::Engine::IO::Path

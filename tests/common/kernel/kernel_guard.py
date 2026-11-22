@@ -55,7 +55,7 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       with error levels D1: the outermost Run returns the Err).
   K7  the identifiers far, near, FAR and NEAR (macros in windef.h; PRs #152 and #163 each broke the MSVC build).
   K8  GYO::Base's issuer of numbers in the kernel: the identifier IdIssuer, or Base's thread serial state
-      threadSerials / threadSerial. The kernel asks which thread runs through Engine::Base::CurrentThreadSerial()
+      threadSerials / threadSerial. The kernel asks which thread runs through GYO::Engine::Base::CurrentThreadSerial()
       only (DI-KS 14; user 2026-11-18, v8-arch-gyo2-kernel-subtract-structure): an IdIssuer is an atomic counter,
       cross-thread state that K3 keeps out of the kernel but does not name. Read in every scanned file, the
       Executor's included, and in CMakeLists.txt outside "#" comments (a target_compile_definitions alias). An
@@ -72,6 +72,15 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       rule codes "H-12"/"H-13" are seen). Kept from the one-time scan G-3 of the orchestration-skeleton
       declaration (section 11), made standing by v8-arch-gyo2-time-events step 1 (that declaration's section 7.4).
       StartupCode and StartupReport are the kernel's startup errors and stay allowed.
+      Since v8-arch-gyo2-authority-rollback step 1 also the clock that moved out to the time Module (K9_CLOCK: the
+      old clock domain, CurrentTick, the tick-to-stamp table, the time Module's type names), written as identifiers
+      so the comments saying the kernel keeps no clock stay allowed.
+      Since v8-arch-gyo2-exchange step 0 also the names of what the kernel no longer has (K9_REMOVED: the zones,
+      the write policy and the exclusive-writer check, the rollback flags and roles, the ingress flag, the digest
+      marks, the C fingerprint and the zone rule codes; DI-KS 15: the kernel knows no zone, authority or rollback
+      strategy), the one-time scan of authority-rollback-declaration section 13 (judgment 4) made standing as its
+      section 9.5 deferred. Written as identifiers, so lower-case prose in comments saying the kernel keeps no zone
+      or digest stays allowed; a capitalized identifier (Zone..., Rollback::, "Z1") counts in a comment too.
   K0  a file under engine/kernel/ that this guard cannot scan: anything but SUFFIXES and CMakeLists.txt. A file
       type the guard does not read would otherwise pass every rule unseen.
 
@@ -88,9 +97,12 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
+from source_text import (  # noqa: E402  (the C/C++ text reading shared by the guards)
+    DIRECTIVE, STANDARD_HEADERS, SUFFIXES, TARGET, camel_case, line_of, strip_comments_and_strings)
+
 SCANNED = "engine/ecs/kernel"
 REGISTRIES = ("config/projects.csv", "config/tools.csv")
-SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc", ".ixx"}
 # CMakeLists.txt: K1 only. Any other file under engine/kernel/ is K0.
 
 # (ii) Connection-role words; source: entity_store guard W1 (tests/common/entity_store/entity_store_guard.py).
@@ -108,29 +120,39 @@ K6 = re.compile(r"\bLog\s*\(|\bSetLogHandler\b|\bstd::(?:c(?:out|err|log)|printl
                 r"|(?<![\w:.])(?:std::)?(?:v?f?printf|f?puts|putchar|perror|fwrite)\s*\(")
 K7 = re.compile(r"\b(?:far|near|FAR|NEAR)\b")
 K8 = re.compile(r"\b(?:IdIssuer|threadSerials?)\b")
-K9 = tuple(re.compile(p) for p in (
+K9_MOVED = (
     r"\bclass\s+Plugin\b", r"\bFinishContext\b", r"\bInstallRunner\b", r"\bRequires\s*\(",
     r"std::vector<Plugin\s*\*>", r"Registry::Finish\b", r"\.startup\b", r"\bstartup(?:_|Ran_|Running_|Schedule)\b",
     r"\bStartupScope\b", r"\bRunStartup\b", r"\bStartupNotNestable\b", r"\bStartupRunning\b", r"\bDE21\b",
     r"\bRE[136]\b", r'"H-1[23]"', r"\bPluginRecord\b", r"\bCheckPluginList\b", r"\bCheckRunners\b",
-    r"\brunnerOwners\b"))
-DIRECTIVE = re.compile(r"^[ \t]*(?:#|%:)[ \t]*(?:include_next|include|import)\b")
-TARGET = re.compile(r"[ \t]*([<\"])([^>\"]+)[>\"]")
+    r"\brunnerOwners\b")
+# The clock that moved out to the time Module (v8-arch-gyo2-clock-out-of-kernel; added by
+# v8-arch-gyo2-authority-rollback step 1, the guard time-events-declaration 6.3 deferred to batch 4): the kernel's old
+# clock domain, its tick, the tick-to-stamp table and the time Module's type names. Written as identifiers only, so
+# the kernel's comments saying it keeps no clock ("clock", "tick") stay allowed.
+K9_CLOCK = (
+    r"\bDomainTick\w*", r"\bCurrentTick\b", r"\bTickStamp\w*", r"\btickStamps_?\b", r"\bkTickStampSlots\b",
+    r"\bDomainName\b", r"\benum\s+class\s+Domain\b", r"\bDomain::\w+", r"\brejectTick\b", r"\btickOfSchedule\b",
+    r"\boptions\.clock\b", r"\bbool\s+clock\b",
+    r"\b(?:VirtualTime|FixedTime|RealTime|ActiveTime|TimeControl|Resimulation|TickWriters|TickAccumulator)\b")
+# What the kernel no longer has (v8-arch-gyo2-authority-rollback took it out; made standing by
+# v8-arch-gyo2-exchange step 0, the guard authority-rollback-declaration 9.5 deferred). Source: the patterns of
+# that declaration's judgment 4, written as identifiers (an identifier holding Zone, zoneX, .zone, .external,
+# ingress...) so lower-case prose in comments ("the kernel keeps no zone or digest") stays allowed; a capitalized
+# identifier (Zone..., Rollback::, "Z1") counts in a comment too. The digest itself is the authority Module's
+# (DI-A 12): only the kernel's old digest marks are named here. The old startup codes (DE2, DE9, XE1, ...) are not
+# listed: the StartupCode set is pinned by "DI-KS 15: the StartupCode values" (RegistryTests.cpp).
+K9_REMOVED = (
+    r"\b\w*Zone\w*", r"\bzone[A-Z]\w*", r"\.zone\b", r"\b[Ww]ritePolicy\b", r"\bCheckExclusiveWriters\b",
+    r"\bFunnel\w*", r"\bRollback::", r"\benum\s+class\s+(?:Role|Rollback)\b", r"\bRole::(?:Input|State)\b",
+    r"\brollback(?:Enabled|Safe|Active)\b", r"\bnotInRollback\b", r"\bingress\w*", r"\bbool\s+external\b",
+    r"\.external\b", r"\b\w*DigestSet\b", r"\bdigestMarks\b", r"\bk?CFingerprint\w*", r"\bparallelGuardTest\b",
+    r'"Z[0-9]"')
+K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK + K9_REMOVED)
 # engine/entity_store/: Delta-3 of the migration plan (user 2026-11-13, world-exec): the World's columns are kept by
 # entity_store's algorithms (target/world section 6, layout 2). The link side is pinned by
 # gyo_expect_links(gyo_kernel GYO::Base GYO::EntityStore) in tests/common/kernel/CMakeLists.txt.
 ALLOWED_PROJECT_INCLUDES = ("engine/base/", "engine/entity_store/", "engine/kernel/")
-STANDARD_HEADERS = frozenset("""
-    algorithm any array atomic barrier bit bitset charconv chrono compare complex concepts condition_variable
-    coroutine deque exception execution expected filesystem flat_map flat_set format forward_list fstream
-    functional future generator initializer_list iomanip ios iosfwd iostream istream iterator latch limits list
-    locale map mdspan memory memory_resource mutex new numbers numeric optional ostream print queue random ranges
-    ratio regex scoped_allocator semaphore set shared_mutex source_location span spanstream sstream stack
-    stacktrace stdexcept stop_token streambuf string string_view syncstream system_error thread tuple type_traits
-    typeindex typeinfo unordered_map unordered_set utility valarray variant vector version
-    cassert cctype cerrno cfenv cfloat cinttypes climits clocale cmath csetjmp csignal cstdarg cstddef cstdint
-    cstdio cstdlib cstring ctime cuchar cwchar cwctype
-""".split())
 STATIC = re.compile(r"\b(?:static|thread_local)\b")
 INLINE = re.compile(r"\binline\b")
 TYPE_KEYWORDS = frozenset("void bool char wchar_t char8_t char16_t char32_t short int long float double signed "
@@ -148,45 +170,6 @@ ALLOWED_STATICS = {
     # only its address is used, as a lookup key (W-10 second sentence). Named by the registry-schedule batch.
     "typeKeyAnchor": r"^static\s+inline\s+char\s+typeKeyAnchor\s*$",
 }
-
-
-def strip_comments_and_strings(text):
-    """Replaces comments, string and character literals with spaces, keeping line breaks."""
-    out, i, n = [], 0, len(text)
-    while i < n:
-        c = text[i]
-        if text.startswith("//", i):
-            end = text.find("\n", i)
-            end = n if end < 0 else end
-            out.append(" " * (end - i)); i = end
-        elif text.startswith("/*", i):
-            end = text.find("*/", i + 2)
-            end = n if end < 0 else end + 2
-            out.append(re.sub(r"[^\n]", " ", text[i:end])); i = end
-        elif c == "R" and text.startswith('R"', i) and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")):
-            delimiter_end = text.find("(", i + 2)
-            closing = ")" + text[i + 2:delimiter_end] + '"'
-            end = text.find(closing, delimiter_end)
-            end = n if end < 0 else end + len(closing)
-            out.append(re.sub(r"[^\n]", " ", text[i:end])); i = end
-        elif c in "\"'" and not (c == "'" and i > 0 and text[i - 1].isalnum()):
-            # A ' after a digit or letter is a digit separator (1'000), not a character literal.
-            j = i + 1
-            while j < n and text[j] != c and text[j] != "\n":
-                j += 2 if text[j] == "\\" else 1
-            end = min(j + 1, n)
-            out.append(re.sub(r"[^\n]", " ", text[i:end])); i = end
-        else:
-            out.append(c); i += 1
-    return "".join(out)
-
-
-def line_of(text, offset):
-    return text.count("\n", 0, offset) + 1
-
-
-def camel_case(identifier):
-    return "".join(part[:1].upper() + part[1:] for part in identifier.split("_") if part)
 
 
 def registered_patterns(identifier):

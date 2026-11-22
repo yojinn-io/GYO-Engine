@@ -1,6 +1,6 @@
 # 時間 Module＋事件（`v8-arch-gyo2-time-events`）
 
-日期：2026-11-19～2026-11-20。分支 `claude/gyo2-time-events-8fe1bf`（從 `origin/gyo2`；第 3 步開始前 rebase 到 #249 之後）。**狀態：第 1～7 步完成，合併前核准已過（2026-11-20），等 L1 與「合併」。** L1 三平台還沒跑（PR 在合併前核准之後開）。
+日期：2026-11-19～2026-11-20。分支 `claude/gyo2-time-events-8fe1bf`（從 `origin/gyo2`；第 3 步開始前 rebase 到 #249 之後）。**狀態：已合併（#253，merge 59fd4da9，2026-11-20），L1 三平台通過。**（第 1～7 步完成，合併前核准 2026-11-20；本行由第 4 批 `v8-arch-gyo2-authority-rollback` 的第一個提交更正。）
 
 這一批由任務卡做（GYO2 主會話開出）。事前宣告：[time-events-declaration.zh-Hant.md](../architecture/target/v2/time-events-declaration.zh-Hant.md) 修訂 4；使用者 2026-11-19「照建議，全部核准」（動工前核准，`v8-arch-gyo2-time-events-declaration-approved`）。修訂 0 送 Fable／high 敵對式檢查（報告 `declaration-r0-adversarial-check.md`）。實作者 Opus／high；審查、§14.4 檢證、新突變清單的敵對式檢查都是 Fable／high（`v8-arch-gyo2-batch3-no-xhigh`：本批不用 xhigh）。
 
@@ -66,7 +66,7 @@
 
 ## 範圍的限界
 
-- L1 三平台沒跑；golden 與預算只在本機 macOS x86_64 驗過。`gyo_world_time_budget` 在 MSVC 只在 L1 編譯時驗證。
+- 合併前核准時 L1 三平台還沒跑（之後在 PR #253 上通過）；golden 與預算只在本機 macOS x86_64 量過。`gyo_world_time_budget` 在 MSVC 只在 L1 編譯時驗證。
 - 訊息緩衝頂滿後，每寫一筆用 `erase(begin)` 搬整個緩衝；每丟一筆掃全部游標、重組讀者名單。`DroppedMessages` 每次 Run 多一筆，交換點做出來之前沒人取走；判定 5 的記憶體量測不含這些紀錄。改法等量到成本再做。
 - observer 的區規則只有 `CheckZoneAccess`（突變 `obs-zone-access-unchecked`）與 S-7 有守衛；S-9 與 Z6 沒有，區規則在第 4 批拿掉。
 - G4（誰都能寫 `Tick`）在第 4 批權威接手之前沒有守衛；G5 的 tickStamps、G6 的 domain 與 tick 沒有接手者。

@@ -11,10 +11,10 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/audio/Mixer.hpp"
 
-using namespace Engine::Audio;
+using namespace GYO::Engine::Audio;
 using namespace std::chrono_literals;
-using Engine::Time::Duration;
-using Engine::Time::TimePoint;
+using GYO::Engine::Time::Duration;
+using GYO::Engine::Time::TimePoint;
 
 namespace {
 
@@ -26,7 +26,7 @@ Duration Ms(const std::int64_t ms) { return Ns(ms * 1'000'000); }
 
 ClipId AddConstant(ClipBank& bank, const std::uint32_t frames, const std::int16_t level = kLevel) {
     const std::vector<std::int16_t> samples(frames, level);
-    auto clip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
+    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
     REQUIRE(clip.has_value());
     return *clip;
 }
@@ -56,7 +56,7 @@ Rig MakeRig(const Duration delay = Duration::zero(), const std::uint32_t voices 
 
 std::vector<std::int16_t> RenderBlock(Mixer& mixer, const std::uint32_t frames, const TimePoint anchor) {
     std::vector<std::int16_t> out(std::size_t{frames} * kChannels, 0x5555);
-    mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+    mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
     return out;
 }
 

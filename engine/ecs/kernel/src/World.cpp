@@ -15,7 +15,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -404,7 +406,7 @@ void RecordDroppedMessage(World& world, MessageTypeId id, std::uint64_t seq) {
         record.message = world.data_->messages[id].name;
         record.firstSeq = seq;
         // The World's sync point number at the first drop of the Run (L8).
-        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{world.syncEpoch_, false, std::move(record)});
+        entries.push_back(DiagnosticsBuffer<DroppedMessages>::Entry{world.syncEpoch_, std::move(record)});
         entry = entries.size() - 1;
     }
     DroppedMessages& record = entries[*entry].record;
@@ -428,7 +430,6 @@ void Push(SystemContext& call, Record record) {
     GYO_ASSERT(world.state_ != WorldState::Applying || call.hook || call.observer);
     record.planPos = call.planPos;
     record.recSeq = (*call.recSeq)++;
-    record.emitterZone = call.zone;
     record.emitter = call.name;
     record.emitterHook = call.hook;
     record.emitterKey = call.access;
@@ -531,7 +532,6 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.name = record.name;
     call.schedule = schedule;
     call.planPos = planPos;
-    call.zone = record.zone;
     call.hook = true;
     call.stamp = stamp;
     call.lastRun = 0;
@@ -605,7 +605,6 @@ Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trig
         call.name = record.name;
         call.schedule = schedule;
         call.planPos = planPos;
-        call.zone = record.zone;
         call.observer = true;
         call.immediateChange = (hookTarget_ != nullptr);
         call.eventKey = record.event;
@@ -660,7 +659,8 @@ struct NewCell {
 } // namespace
 
 Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                         ChangeStamp stamp, std::vector<Detail::Record>* immediate) {
+                                                         ChangeStamp stamp, std::vector<Detail::Record>* immediate,
+                                                         Detail::Derive derive) {
     using Detail::Record;
     using Detail::RecordKind;
     using Result = Engine::Base::Result<void, KernelError>;
@@ -747,7 +747,6 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             rejected.reason = reason;
             rejected.emitter = std::string(spawn.emitter);
             rejected.emitterIsHook = spawn.emitterHook;
-            rejected.emitterZone = spawn.emitterZone;
             rejected.fromAllotter = !spawn.withId;
             rejected.schedule = std::string(schedule);
             rejected.step = spawn.planPos;
@@ -765,7 +764,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);
             std::vector<std::size_t> candidates;
             for (std::size_t i = first; i < end; ++i) {
-                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {
+                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&
+                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {
                     dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});
                 } else {
                     candidates.push_back(i);
@@ -857,8 +857,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         // cell this step adds is looked at in the next round, so a chain of
         // declarations completes at this sync point. A Target the entity
         // already has is left as it is, so a round adds each cell at most once
-        // and the rounds end.
-        if (!data_->initialValues.empty()) {
+        // and the rounds end. Only an application that derives (a change, not a restore: DI-KS 12).
+        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {
             const auto& rules = data_->initialValues;
             std::vector<NewCell> round = added;
             while (!round.empty()) {
@@ -960,7 +960,7 @@ void World::RecordRejectedSpawn(RejectedSpawn rejected) {
     }
     const std::uint64_t epoch = rejected.syncEpoch;
     static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(
-        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, false, std::move(rejected)});
+        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});
 }
 
 void World::DiscardDeferred() noexcept {
@@ -1116,88 +1116,92 @@ std::vector<std::string> World::CompareAfter(const Detail::AccessDesc& access) {
 
 namespace {
 
-class SummaryBytes {
-public:
-    void U8(std::uint8_t value) { bytes.push_back(static_cast<std::byte>(value)); }
-    void U32(std::uint64_t value) {
-        for (int shift = 0; shift < 32; shift += 8) U8(static_cast<std::uint8_t>((value >> shift) & 0xFFU));
-    }
-    void U64(std::uint64_t value) {
-        for (int shift = 0; shift < 64; shift += 8) U8(static_cast<std::uint8_t>((value >> shift) & 0xFFU));
-    }
-    void Str(const std::string& text) {
-        U32(text.size());
-        for (char c : text) U8(static_cast<std::uint8_t>(c));
-    }
-    void Raw(std::span<const std::byte> raw) {
-        U32(raw.size());
-        bytes.insert(bytes.end(), raw.begin(), raw.end());
-    }
-    std::vector<std::byte> bytes;
-};
+void SummaryText(Hasher& h, std::string_view text) {
+    h.U64(text.size());
+    h.Bytes(std::as_bytes(std::span<const char>(text.data(), text.size())));
+}
 
 // 2: message records with their seq, each type's next write sequence number,
 // and the message cursors (v8-arch-gyo2-time-events step 3).
-constexpr std::uint32_t kSummaryVersion = 2;
+// 3: each value through its type's hash function (Hash.hpp), no longer its
+// object bytes (v8-arch-gyo2-authority-rollback step 1, declaration section 3).
+constexpr std::uint32_t kSummaryVersion = 3;
 
 } // namespace
 
-// Format "gyo.kernel.world-summary" version 2: the format string and version;
-// the alive entities (count, each u64); every column in ComponentId order
-// (cell count, then each key as u64 and the value's object bytes as a list);
-// every resource in ResourceId order but KernelSettings (present flag, object bytes); every message
-// buffer in MessageTypeId order (next write sequence number as u64, record
-// count, then each record's seq as u64 and payload's bytes); the message
-// cursors in (message, system, mount, slot) order (count, then each field: four
-// u32 and the read seq as u64). No stamp, tick or Plan position is hashed. A value's padding bytes are hashed as
-// they are, so a type in the summary must have no padding: the author's
-// responsibility for the types an author registers; the kernel's own types
-// (RangeAllotter) are checked at compile time. Partly solved
-// (v8-arch-gyo2-summary-padding-a-then-c): the full solution, a hash function
-// per type, is batch 4.
-Fingerprint World::Summary() const {
+// Format "gyo.kernel.world-summary" version 3, every number as 8 bytes
+// little-endian (Hasher::U64): the format string (length, bytes) and version;
+// the alive entities (count, each id); every column in ComponentId order (cell
+// count, then each key and the value through HashValue); every resource in
+// ResourceId order but KernelSettings (present flag, then the value through
+// HashValue when present); every message buffer in MessageTypeId order (next
+// write sequence number, record count, then each record's seq and payload
+// through HashValue); the message cursors in (message, system, mount, slot)
+// order (count, then each field). No stamp, tick or Plan position is hashed.
+// A type with no HashValue that has a value in the World (a cell, a present
+// resource, a message record) makes the call an Err naming every such type;
+// with no value it is not hashed and not reported (declaration 3.3).
+Engine::Base::Result<Fingerprint, KernelError> World::Summary() const {
     GYO_ASSERT(state_ == WorldState::Ready || state_ == WorldState::Interrupted);
     Sync();
-    SummaryBytes out;
-    out.Str("gyo.kernel.world-summary");
-    out.U32(kSummaryVersion);
-    out.U32(entities_.size());
-    for (EntityId id : entities_) out.U64(id);
-    out.U32(columns_.size());
+    std::vector<std::string> missing;
+    for (std::size_t c = 0; c < columns_.size(); ++c)
+        if (columns_[c]->Size() > 0 && !columns_[c]->HasHash()) missing.push_back("component " + data_->components[c].name);
+    for (std::size_t r = 0; r < resources_.size(); ++r) {
+        if (r == data_->kernelSettings) continue;
+        CheckThread(static_cast<ResourceId>(r));
+        if (resources_[r]->Present() && !resources_[r]->HasHash()) missing.push_back("resource " + data_->resources[r].name);
+    }
+    for (std::size_t m = 0; m < messages_.size(); ++m)
+        if (messages_[m]->Size() > 0 && !messages_[m]->HasHash()) missing.push_back("message " + data_->messages[m].name);
+    if (!missing.empty()) {
+        std::string names;
+        for (const std::string& name : missing) names += (names.empty() ? "" : ", ") + name;
+        KernelError error(KernelErrorCode::HashMissing,
+                          "World::Summary: a type with a value in the World has no HashValue", names);
+        error.world = name_;
+        return Engine::Base::Err(std::move(error));
+    }
+    Hasher h;
+    SummaryText(h, "gyo.kernel.world-summary");
+    h.U64(kSummaryVersion);
+    h.U64(entities_.size());
+    for (EntityId id : entities_) h.U64(id);
+    h.U64(columns_.size());
     for (const auto& column : columns_) {
-        out.U32(column->Size());
+        h.U64(column->Size());
         for (std::size_t i = 0; i < column->Size(); ++i) {
-            out.U64(column->KeyAt(i));
-            out.Raw(column->ValueBytesAt(i));
+            h.U64(column->KeyAt(i));
+            column->HashAt(h, i);
         }
     }
     // KernelSettings is not simulation data (LIM-6: not in a digest): left out, so the
     // summary does not depend on the verification switch.
-    out.U32(resources_.size() - 1);
+    h.U64(resources_.size() - 1);
     for (std::size_t r = 0; r < resources_.size(); ++r) {
         if (r == data_->kernelSettings) continue;
-        CheckThread(static_cast<ResourceId>(r));
-        out.U8(resources_[r]->Present() ? 1U : 0U);
-        out.Raw(resources_[r]->StorageBytes());
+        const bool present = resources_[r]->Present();
+        h.U64(present ? 1U : 0U);
+        if (present) resources_[r]->Hash(h);
     }
-    out.U32(messages_.size());
+    h.U64(messages_.size());
     for (const auto& buffer : messages_) {
-        out.U64(buffer->nextSeq);
-        out.U32(buffer->Size());
+        h.U64(buffer->nextSeq);
+        h.U64(buffer->Size());
         for (std::size_t i = 0; i < buffer->Size(); ++i) {
-            out.U64(buffer->SeqAt(i));
-            out.Raw(buffer->PayloadBytesAt(i));
+            h.U64(buffer->SeqAt(i));
+            buffer->HashAt(h, i);
         }
     }
-    out.U32(cursors_.size());
+    h.U64(cursors_.size());
     for (const Detail::MessageCursor& cursor : cursors_) {
-        out.U32(cursor.message);
-        out.U32(cursor.system);
-        out.U32(cursor.mount);
-        out.U32(cursor.slot);
-        out.U64(cursor.read);
+        h.U64(cursor.message);
+        h.U64(cursor.system);
+        h.U64(cursor.mount);
+        h.U64(cursor.slot);
+        h.U64(cursor.read);
     }
-    return Fingerprint{kSummaryVersion, Engine::Base::Sha256(out.bytes)};
+    return Fingerprint{kSummaryVersion, Engine::Base::Sha256(h.Data())};
 }
 
 } // namespace GYO::Kernel

@@ -3,6 +3,7 @@
 // sections 3.4 to 3.12).
 
 #include "engine/orchestration/Product.hpp"
+#include "engine/orchestration/WorldGeneration.hpp"
 
 #include "engine/base/Assert.hpp"
 #include "engine/base/Trace.hpp"
@@ -34,8 +35,8 @@ std::string Quoted(std::string_view text) {
     return "'" + std::string(text) + "'";
 }
 
-// The owner name of the default skeleton's declarations (no unit row is
-// "orchestration": the orchestration layer is library-only in the register).
+// The owner name of the orchestration layer's own declarations, the default skeleton and WorldGeneration (no unit
+// row is "orchestration": the orchestration layer is library-only in the register).
 constexpr const char* kSkeletonOwner = "orchestration";
 
 // The default skeleton (ScheduleSkeleton.hpp): names and stage order only.
@@ -73,7 +74,7 @@ OrchestrationError FromKernel(OrchestrationErrorCode code, std::string message, 
 
 Product::~Product() = default;
 
-::Engine::Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(ProductDescription description,
+Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(ProductDescription description,
                                                                                     RegisteredUnits units) {
     std::unique_ptr<Product> product(new Product());
     Product& self = *product;
@@ -212,7 +213,7 @@ Product::~Product() = default;
     const bool kernelFailed =
         std::any_of(results.begin(), results.end(), [](const WorldStartupResult& r) { return r.kernel.has_value(); });
     if (!errors.empty() || !unitErrors.empty() || kernelFailed) {
-        return ::Engine::Base::Err(ProductStartupReport(std::move(results), std::move(errors), std::move(unitErrors)));
+        return Base::Err(ProductStartupReport(std::move(results), std::move(errors), std::move(unitErrors)));
     }
 
     // Step 6: build the Worlds and run their prepare functions (O-E7 alone).
@@ -221,12 +222,12 @@ Product::~Product() = default;
         Registration& registration = registrations[i];
         slot.registry = std::move(registration.registry);
         slot.frame = std::move(registration.frame);
-        slot.unitPrepares = std::move(registration.unitPrepares);
         slot.carries = std::move(registration.carries);
         slot.executor = self.MakeExecutor(slot, *slot.registry);
     }
-    for (WorldSlot& slot : self.worlds_) {
-        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), slot.unitPrepares, nullptr);
+    for (std::size_t i = 0; i < self.worlds_.size(); ++i) {
+        WorldSlot& slot = self.worlds_[i];
+        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), registrations[i].unitPrepares, nullptr);
         if (!prepared) {
             const OrchestrationError& error = prepared.error();
             errors.push_back({OrchestrationCode::OE7,
@@ -236,7 +237,7 @@ Product::~Product() = default;
                               {slot.description.name}});
         }
     }
-    if (!errors.empty()) return ::Engine::Base::Err(ProductStartupReport({}, std::move(errors), {}));
+    if (!errors.empty()) return Base::Err(ProductStartupReport({}, std::move(errors), {}));
     return product;
 }
 
@@ -249,29 +250,35 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     ScheduleList frame(InitialFrame(world));
     std::vector<PrepareFn> prepares;
     std::vector<Detail::CarryEntry> carries;
+    // The Modules' buffer of this build (authority-rollback declaration section 6): written during Build, frozen
+    // before BuildPlans, read by Finish, Check and the prepare functions, let go once those have run (O-2).
+    auto buffer = std::make_shared<ModuleBuffer>();
 
-    // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).
-    if (world.skeleton == ScheduleSkeleton::Default) {
-        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);
-        GYO_ASSERT(static_cast<bool>(skeleton));
-    }
+    // The orchestration layer's own declarations first, before any unit's Build: WorldGeneration in every World
+    // (O-2, O-14; world-gen declaration 5.2), the default skeleton when it is on (O-4; time-events declaration 3.6).
+    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {
+        registrar.Resource<WorldGeneration>({.name = "WorldGeneration"});
+        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);
+    });
+    GYO_ASSERT(static_cast<bool>(own0));
 
     // Build: every unit of the World in order, then the product's own (always
     // registered, so a World with no unit still freezes; section 3.3).
     for (std::size_t index : slot.units) {
         UnitSlot& unit = units_[index];
         auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {
-            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);
+            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);
             unit.unit->Build(setup);
         });
         GYO_ASSERT(static_cast<bool>(registered));
     }
     auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},
                                   [&](Kernel::Registrar& registrar) {
-                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);
+                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);
                                       if (world.build) world.build(setup);
                                   });
     GYO_ASSERT(static_cast<bool>(own));
+    buffer->Freeze();
 
     auto built = registry->BuildPlans();
     if (!built) {
@@ -281,11 +288,11 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     }
     const Kernel::FrozenRegistry& frozen = registry->Frozen();
     for (std::size_t index : slot.units) {
-        WorldFinish context(world.name, units_[index].row, unitErrors);
+        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);
         units_[index].unit->Finish(frozen, context);
     }
     for (std::size_t index : slot.units) {
-        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);
+        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);
         units_[index].unit->Check(frozen, context);
     }
     for (const std::string& anchor : frame.missingAnchors_) {
@@ -313,25 +320,28 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     registration.frame = std::move(frame.names_);
     registration.unitPrepares = std::move(prepares);
     registration.carries = std::move(carries);
+    registration.buffer = std::move(buffer);
     return registration;
 }
 
 std::unique_ptr<Kernel::WorldExecutor> Product::MakeExecutor(WorldSlot& slot, const Kernel::Registry& registry) {
     auto executor = std::make_unique<Kernel::WorldExecutor>(registry, slot.description.name,
                                                             Kernel::WorldOptions{slot.description.dynamicInsert});
+    // Generating from the moment it is built, before its prepare functions (world-gen declaration 5.1, O-14).
+    executor->GetWorld().SetResource(WorldGeneration{true, false});
     return executor;
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::Prepare(WorldSlot& slot, Kernel::World& world,
+Base::Result<void, OrchestrationError> Product::Prepare(WorldSlot& slot, Kernel::World& world,
                                                                 const std::vector<PrepareFn>& unitPrepares,
                                                                 const PrepareFn* extra) {
-    auto call = [&](const PrepareFn& fn) -> ::Engine::Base::Result<void, OrchestrationError> {
+    auto call = [&](const PrepareFn& fn) -> Base::Result<void, OrchestrationError> {
         if (!fn) return {};
         auto done = fn(world);
         if (!done) {
             OrchestrationError error = std::move(done).error();
             error.code = OrchestrationErrorCode::ReplacePrepareFailed;
-            return ::Engine::Base::Err(std::move(error));
+            return Base::Err(std::move(error));
         }
         return {};
     };
@@ -415,7 +425,7 @@ std::optional<OrchestrationError> Product::Ended() {
     return EndedError();
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::string_view schedule,
+Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::string_view schedule,
                                                               std::string_view entry) {
     // Read before the schedule runs, from the World while it is healthy.
     WorldFailure failure;
@@ -456,7 +466,7 @@ std::optional<OrchestrationError> Product::Ended() {
                                               "schedule " + Quoted(schedule) + " on World " + Quoted(slot.description.name) + " failed",
                                               std::move(kernelError));
         error.failure = Break(std::move(failure));
-        return ::Engine::Base::Err(std::move(error));
+        return Base::Err(std::move(error));
     }
     slot.lastSchedule = std::string(schedule);
     return {};
@@ -481,8 +491,8 @@ bool PassesThrough(const OrchestrationError& error) noexcept {
 // One trace span around an entry point's steps (trace declaration D6); marked when they return an error. It
 // only tells.
 template <class Steps>
-::Engine::Base::Result<void, OrchestrationError> Traced(const std::string_view entry, Steps&& steps) {
-    ::Engine::Base::TraceSpan span;
+Base::Result<void, OrchestrationError> Traced(const std::string_view entry, Steps&& steps) {
+    Base::TraceSpan span;
     span.Begin("orchestration", entry);
     auto result = steps();
     if (!result && span.Active()) {
@@ -494,30 +504,30 @@ template <class Steps>
 
 } // namespace
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunGameInit() {
+Base::Result<void, OrchestrationError> Product::RunGameInit() {
     return Traced("RunGameInit", [&] { return RunGameInitSteps(); });
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunFrame() {
+Base::Result<void, OrchestrationError> Product::RunFrame() {
     return Traced("RunFrame", [&] { return RunFrameSteps(); });
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunSchedule(std::string_view world, std::string_view schedule) {
+Base::Result<void, OrchestrationError> Product::RunSchedule(std::string_view world, std::string_view schedule) {
     return Traced("RunSchedule", [&] { return RunScheduleSteps(world, schedule); });
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::ReplaceWorld(std::string_view name, ReplaceRequest request) {
+Base::Result<void, OrchestrationError> Product::ReplaceWorld(std::string_view name, ReplaceRequest request) {
     return Traced("ReplaceWorld", [&] { return ReplaceWorldSteps(name, std::move(request)); });
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::InsertSystems(std::string_view world, std::string owner, InsertFn build) {
+Base::Result<void, OrchestrationError> Product::InsertSystems(std::string_view world, std::string owner, InsertFn build) {
     return Traced("InsertSystems", [&] { return InsertSystemsSteps(world, std::move(owner), std::move(build)); });
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunGameInitSteps() {
+Base::Result<void, OrchestrationError> Product::RunGameInitSteps() {
     RequireNotRunning();
     GYO_ASSERT(!gameInitRan_);
-    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
+    if (auto ended = Ended()) return Base::Err(std::move(*ended));
     gameInitRan_ = true;
     if (worlds_.empty()) return {};
     for (const std::string& schedule : gameInit_) {
@@ -526,27 +536,44 @@ template <class Steps>
     return {};
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunFrameSteps() {
+Base::Result<void, OrchestrationError> Product::RunFrameSteps() {
     RequireNotRunning();
     // Every World is checked before any runs: no half frame over a broken World.
-    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
+    if (auto ended = Ended()) return Base::Err(std::move(*ended));
     if (!gameInitRan_) {
         if (auto ran = RunGameInit(); !ran) return ran;
     }
     for (WorldSlot& slot : worlds_) {
-        for (const std::string& schedule : slot.frame) {
-            if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
-        }
+        if (auto ran = RunRound(slot); !ran) return ran;
     }
     return {};
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {
+Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot) {
+    Kernel::World& world = slot.executor->GetWorld();
+    const WorldGeneration* before = world.Resource<WorldGeneration>();
+    const bool generating = before != nullptr && before->generating;
+    // A generating frame starts with nobody holding.
+    if (generating) world.SetResource(WorldGeneration{.generating = true, .held = false});
+    // The exchange functions' "in" goes here, after the step above (world-gen declaration 5.1; exchange W-2).
+    for (const std::string& schedule : slot.frame) {
+        if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
+    }
+    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.
+    if (generating) {
+        const WorldGeneration* after = world.Resource<WorldGeneration>();
+        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});
+    }
+    // The exchange functions' "out" goes here, after the judgement.
+    return {};
+}
+
+Base::Result<void, OrchestrationError> Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {
     RequireNotRunning();
-    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
+    if (auto ended = Ended()) return Base::Err(std::move(*ended));
     WorldSlot* slot = Find(world);
     if (slot == nullptr) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(world)));
+        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(world)));
     }
     if (!gameInitRan_) {
         if (auto ran = RunGameInit(); !ran) return ran;
@@ -579,25 +606,32 @@ Kernel::WorldExecutor& Product::World(std::string_view name) {
     return *slot->executor;
 }
 
+bool Product::Generating(std::string_view name) const {
+    const WorldSlot* slot = Find(name);
+    GYO_ASSERT(slot != nullptr && slot->executor != nullptr && "Product::Generating: no World of that name, or its place is empty");
+    const WorldGeneration* generation = slot->executor->GetWorld().Resource<WorldGeneration>();
+    return generation != nullptr && generation->generating;
+}
+
 bool Product::HasWorld(std::string_view name) const noexcept {
     const WorldSlot* slot = Find(name);
     return slot != nullptr && slot->executor != nullptr;
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_view name, ReplaceRequest request) {
+Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_view name, ReplaceRequest request) {
     RequireNotRunning();
     // A replacement does not mend a broken World (v8-arch-gyo2-broken-world-ends-product).
-    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
+    if (auto ended = Ended()) return Base::Err(std::move(*ended));
     WorldSlot* found = Find(name);
     if (found == nullptr) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(name)));
+        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(name)));
     }
     WorldSlot& slot = *found;
     const bool firstWorld = &slot == &worlds_.front();
     const bool dropOldFirst = request.order == ReplaceOrder::DropOldFirst;
     // The schedule running when a step failed (WorldFailure::schedule of a DropOldFirst failure).
     std::string failedSchedule;
-    auto fail = [&](OrchestrationError error) -> ::Engine::Base::Result<void, OrchestrationError> {
+    auto fail = [&](OrchestrationError error) -> Base::Result<void, OrchestrationError> {
         if (failure_) {
             // Game initialization run from here broke the first World.
             error.failure = *failure_;
@@ -615,7 +649,7 @@ bool Product::HasWorld(std::string_view name) const noexcept {
             failure.lastSchedule = slot.lastSchedule;
             error.failure = Break(std::move(failure));
         }
-        return ::Engine::Base::Err(std::move(error));
+        return Base::Err(std::move(error));
     };
 
     // The failure a DropOldFirst replacement records if the new World does not come: made
@@ -780,25 +814,24 @@ bool Product::HasWorld(std::string_view name) const noexcept {
     slot.registry = std::move(registration.registry);
     slot.executor = std::move(fresh);
     slot.frame = std::move(registration.frame);
-    slot.unitPrepares = std::move(registration.unitPrepares);
     slot.carries = std::move(registration.carries);
     slot.lastSchedule.clear();
     slot.nextInsertSeq = 0;
     return {};
 }
 
-::Engine::Base::Result<void, OrchestrationError> Product::InsertSystemsSteps(std::string_view worldName, std::string owner,
+Base::Result<void, OrchestrationError> Product::InsertSystemsSteps(std::string_view worldName, std::string owner,
                                                                            InsertFn build) {
     RequireNotRunning();
-    if (auto ended = Ended()) return ::Engine::Base::Err(std::move(*ended));
+    if (auto ended = Ended()) return Base::Err(std::move(*ended));
     WorldSlot* slot = Find(worldName);
     if (slot == nullptr) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(worldName)));
+        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(worldName)));
     }
     const bool taken = owner == name_ ||
                        std::any_of(units_.begin(), units_.end(), [&](const UnitSlot& unit) { return unit.row == owner; });
     if (taken) {
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::OwnerTaken,
+        return Base::Err(OrchestrationError(OrchestrationErrorCode::OwnerTaken,
                                                       "owner " + Quoted(owner) + " is a registration unit's or the Product's own name"));
     }
     const std::uint32_t seq = static_cast<std::uint32_t>(units_.size()) + 1 + slot->nextInsertSeq++;
@@ -814,14 +847,14 @@ bool Product::HasWorld(std::string_view name) const noexcept {
         }
     }();
     if (!registered) {
-        return ::Engine::Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,
+        return Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,
                                               "World " + Quoted(worldName) + " declares no dynamic insert (owner " + Quoted(owner) + ")",
                                               std::move(registered).error()));
     }
     auto built = slot->registry->BuildPlans();
     if (!built) {
         const Kernel::StartupReport& report = built.error();
-        return ::Engine::Base::Err(OrchestrationError(OrchestrationErrorCode::InsertBuildFailed,
+        return Base::Err(OrchestrationError(OrchestrationErrorCode::InsertBuildFailed,
                                                       "BuildPlans of World " + Quoted(worldName) + " failed", report.detail));
     }
     return {};

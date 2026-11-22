@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
     /// ファイル種別（OS差は platform 側で吸収）
     enum class FileType : std::uint8_t {
@@ -59,4 +59,4 @@ namespace Engine::IO::FS {
         bool recursive = false; // ディレクトリ削除を許可するか
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

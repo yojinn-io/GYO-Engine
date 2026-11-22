@@ -173,8 +173,8 @@ void Register(O::WorldSetup& s) {
 }
 
 // The description's prepare: manual sampling, the player at (0, 0), a coin at x 20, the score 0.
-::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w) {
-    w.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta, {}});
+::GYO::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w) {
+    w.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
     w.SetResource(Score{0});
     w.Insert(kPlayer, Player{});
     w.Insert(kPlayer, Position{0, 0});
@@ -255,7 +255,7 @@ TimedSave ReadSave(const SaveBytes& bytes) {
 
 // The extra prepare of a load: after the description's Defaults, puts the save back.
 O::PrepareFn LoadInto(SaveBytes bytes) {
-    return [bytes](K::World& w) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    return [bytes](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         const TimedSave s = ReadSave(bytes);
         w.SetResource(s.tick);
         w.SetResource(s.virt);
@@ -286,7 +286,7 @@ int XOf(O::Product& p) {
 
 // One frame whose real time advances by delta (manual sampling, declaration 3.4).
 void Frame(O::Product& p, Nanoseconds delta, const char* step) {
-    WorldOf(p).SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta, {}});
+    WorldOf(p).SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
     auto ran = p.RunFrame();
     REQUIRE_MESSAGE(static_cast<bool>(ran), step << ": " << (ran ? std::string() : ran.error().message + " " + ran.error().detail));
 }
@@ -370,7 +370,7 @@ TEST_CASE("scenario segment 2: walk in the fixed step, score by Message, pause, 
     CHECK_MESSAGE(Get<Score>(p).v == 13, "[sc-s2-4-score] (DI-KS 10) " << Get<Score>(p).v);
 
     // S2-5: paused two frames (TimeControl): Tick does not move, the frame's Systems still run.
-    WorldOf(p).SetResource(W::TimeControl{1.0, 1, {}});
+    WorldOf(p).SetResource(W::TimeControl{1.0, 1});
     const std::size_t framesBefore = Seen().frameTick.size();
     Frames(p, 2, kStep, "S2-5");
     CHECK_MESSAGE(Seen().frameTick.size() == framesBefore + 2, "[sc-s2-5-frame-runs] (time-events 3.2: UI runs while paused) "
@@ -378,7 +378,7 @@ TEST_CASE("scenario segment 2: walk in the fixed step, score by Message, pause, 
     CHECK_MESSAGE((Get<W::Tick>(p).value == 13 && XOf(p) == 13), "[sc-s2-5-tick-still] (time-events 3.2) tick " << Get<W::Tick>(p).value);
     CHECK_MESSAGE(Get<W::RealTime>(p).delta == kStep, "[sc-s2-5-real-runs] (time-events 3.2: RealTime not affected) "
                                                           << Get<W::RealTime>(p).delta);
-    WorldOf(p).SetResource(W::TimeControl{1.0, 0, {}});
+    WorldOf(p).SetResource(W::TimeControl{1.0, 0});
 
     // S2-6: stuck: one frame of 1 s (remainder 0 before): 5 steps, one TimeDiscarded, discarded + 59 steps.
     // With a fixed step the 250 ms cap does not apply (-t1-three-items 2).

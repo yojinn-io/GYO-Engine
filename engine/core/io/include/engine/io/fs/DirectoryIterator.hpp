@@ -8,10 +8,10 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
-#include "engine/io/IoError.hpp"
+#include "engine/io/IOError.hpp"
 #include "engine/io/fs/DirectoryEntry.hpp"
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
 
     /// ストリーミング列挙インターフェース（任意）
@@ -26,17 +26,17 @@ namespace Engine::IO::FS {
         /// - Ok(true)  : out が埋まった（1件取得）
         /// - Ok(false) : 列挙終了
         /// - Err(...)  : エラー
-        virtual IoResult<bool> Next(DirectoryEntry& out) = 0;
+        virtual IOResult<bool> Next(DirectoryEntry& out) = 0;
 
         /// 先頭に戻す（対応しない backend は NotSupported を返してOK）
-        virtual IoResult<void> Reset() {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported,
+        virtual IOResult<void> Reset() {
+            return Base::Err(IOError::Make(
+                IOErrorCode::NotSupported,
                 "DirectoryIterator: reset not supported"));
         }
 
         /// 明示クローズ（OSハンドル解放）
-        virtual IoResult<void> Close() = 0;
+        virtual IOResult<void> Close() = 0;
 
         DirectoryIterator(const DirectoryIterator&) = delete;
         DirectoryIterator& operator=(const DirectoryIterator&) = delete;
@@ -56,10 +56,10 @@ namespace Engine::IO::FS {
         const char* BackendName() const noexcept override { return backend_; }
         bool IsOpen() const noexcept override { return open_; }
 
-        IoResult<bool> Next(DirectoryEntry& out) override {
+        IOResult<bool> Next(DirectoryEntry& out) override {
             if (!open_) {
-                return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::ReadFailed,
+                return Base::Err(IOError::Make(
+                    IOErrorCode::ReadFailed,
                     "VectorDirectoryIterator: next on closed iterator"));
             }
             if (index_ >= entries_.size()) return false;
@@ -67,17 +67,17 @@ namespace Engine::IO::FS {
             return true;
         }
 
-        IoResult<void> Reset() override {
+        IOResult<void> Reset() override {
             if (!open_) {
-                return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::NotSupported,
+                return Base::Err(IOError::Make(
+                    IOErrorCode::NotSupported,
                     "VectorDirectoryIterator: reset on closed iterator"));
             }
             index_ = 0;
             return {};
         }
 
-        IoResult<void> Close() override {
+        IOResult<void> Close() override {
             open_ = false;
             return {};
         }
@@ -89,4 +89,4 @@ namespace Engine::IO::FS {
         bool open_ = true;
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

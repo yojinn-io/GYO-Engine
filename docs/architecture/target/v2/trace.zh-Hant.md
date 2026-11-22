@@ -6,7 +6,7 @@ Owner：架構。來源：事前宣告 [trace-declaration.zh-Hant.md](trace-decl
 
 | 部分 | 內容 | 依賴（公開；私有） |
 |---|---|---|
-| 門面 `engine/core/base/include/engine/base/Trace.hpp`（`Engine::Base`） | `TraceSpan`（可延後開始的 RAII、例外展開時告訴接收者）、`TraceMarkCurrent`、`TraceCurrentPath`、`TraceActive`、`SetTraceReceiver`、`TraceReceiver`、`TraceToken`；一個原子指標指向接收者 | 只有 C++ 標準庫（Base 是 header-only） |
+| 門面 `engine/core/base/include/engine/base/Trace.hpp`（`GYO::Engine::Base`） | `TraceSpan`（可延後開始的 RAII、例外展開時告訴接收者）、`TraceMarkCurrent`、`TraceCurrentPath`、`TraceActive`、`SetTraceReceiver`、`TraceReceiver`、`TraceToken`；一個原子指標指向接收者 | 只有 C++ 標準庫（Base 是 header-only） |
 | `trace`（`GYO::Engine::Trace`，`engine/modules/trace`） | 接收者：每執行緒固定容量的段堆疊（世代）、行程內唯一的 id、父、計時、寫成日誌紀錄、路徑紀錄；`Install` 回 `TraceHandle` | `GYO::Base`；私有 `GYO::Logging`、`GYO::Time` |
 
 `trace` 是 `library_only=yes`、`default=no`：產品的 `main` 裝。
@@ -29,7 +29,7 @@ E0 時      日誌的那一筆 Fatal 帶 trace_path（當下的路徑）
 
 <a id="tr-1"></a>
 **TR-1 入口。** 發段的路只有 Base 的門面；Kernel、編排層、Module 不依賴 trace Module。trace Module 只含入 Base、Logging、Time 與自己。
-守衛：`trace.guard`（`tests/common/trace/trace_guard.py`：一條含入規則、正例、目錄不存在時失敗）與 `trace.guard_selftest`；Kernel 一側由 `kernel_guard` K5、編排層由 `orchestration_guard` O4（都不准 `engine/trace/`）；`gyo_expect_links(gyo_trace GYO::Base GYO::Logging GYO::Time)`；`kernel_symbols` 的准許清單只多門面的接收者指標（`Engine::Base::Detail::traceReceiver`）。突變 `tr-guard-*`。
+守衛：`trace.guard`（`tests/common/trace/trace_guard.py`：一條含入規則、正例、目錄不存在時失敗）與 `trace.guard_selftest`；Kernel 一側由 `kernel_guard` K5、編排層由 `orchestration_guard` O4（都不准 `engine/trace/`）；`gyo_expect_links(gyo_trace GYO::Base GYO::Logging GYO::Time)`；`kernel_symbols` 的准許清單只多門面的接收者指標（`GYO::Engine::Base::Detail::traceReceiver`）。突變 `tr-guard-*`。
 
 <a id="tr-2"></a>
 **TR-2 不改模擬的值。** trace 不讀、不寫 World 的值，不改 Kernel 的步驟；開不開 trace，模擬的值逐位元相同。Kernel 不讀時鐘（計時在 trace Module 的接收者裡）。
@@ -44,7 +44,7 @@ E0 時      日誌的那一筆 Fatal 帶 trace_path（當下的路徑）
 守衛：`gyo_base_tests` 的「trace facade:」各案；`trace.module`；Kernel 的 `[ks-trace-spans]`、`[ks-trace-skipped]`；情境 S4-1 的父子。突變 `tr-facade-*`、`tr-parent-none`、`tr-stale-stack-kept`、`tr-unbalanced-*`、`tr-kernel-*-span*`。
 
 <a id="tr-5"></a>
-**TR-5 紀錄。** 一段一筆：category `span.<category>`、level `Trace`、text＝name、`world`、欄位 `span_id`、`parent_id`、`begin_ns`、`duration_ns`（`Engine::Time`，和日誌的 `mono_ns` 同一個時間基準）、有時 `error`（最多 256 位元組）、`exception`、`unbalanced`；路徑紀錄 category `span.path`、欄位 `path`、`span_id`。category 最多 64 位元組，超過截斷（和 `error` 一樣；機制不因名字太長而停下行程）。只在 Logger 裝了（`Logging::Installed()`）且有輸出端收這個 category 時寫；段結束時再問一次（段開著時 Logger 卸下就不寫）。紀錄經日誌的傳輸，所以和日誌共用有上限的佇列（LG-6），滿了會丟。
+**TR-5 紀錄。** 一段一筆：category `span.<category>`、level `Trace`、text＝name、`world`、欄位 `span_id`、`parent_id`、`begin_ns`、`duration_ns`（`GYO::Engine::Time`，和日誌的 `mono_ns` 同一個時間基準）、有時 `error`（最多 256 位元組）、`exception`、`unbalanced`；路徑紀錄 category `span.path`、欄位 `path`、`span_id`。category 最多 64 位元組，超過截斷（和 `error` 一樣；機制不因名字太長而停下行程）。只在 Logger 裝了（`Logging::Installed()`）且有輸出端收這個 category 時寫；段結束時再問一次（段開著時 Logger 卸下就不寫）。紀錄經日誌的傳輸，所以和日誌共用有上限的佇列（LG-6），滿了會丟。
 守衛：`trace.module`（巢狀、錯誤、路徑、只收路徑、沒有 Logger）；情境 S4-1。突變 `tr-duration-wrong`、`tr-no-logger-taken`、`tr-path-cut-unmarked`、`tr-category-asserted`、`tr-end-not-rechecked`、`lg-installed-always`。
 
 <a id="tr-6"></a>

@@ -8,8 +8,8 @@
 #include <thread>
 #include <vector>
 
-using Engine::Base::CurrentThreadSerial;
-using Engine::Base::IdIssuer;
+using GYO::Engine::Base::CurrentThreadSerial;
+using GYO::Engine::Base::IdIssuer;
 
 TEST_CASE("IdIssuer: numbers start at 1, never repeat and never are 0") {
     IdIssuer issuer;

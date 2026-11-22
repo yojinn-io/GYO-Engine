@@ -96,6 +96,10 @@ enum class KernelErrorCode : std::uint8_t {
     // it ran threw) and the System caught it (like X-16, NestedRunAborted). The
     // World was interrupted when the exception left the change.
     ImmediateChangeAborted,
+    // World::Summary: a type with a value in the World has no hash function
+    // (Hash.hpp; authority-rollback declaration 3.3, the user's decision (d)).
+    // detail names every such type. The World is not interrupted.
+    HashMissing,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;
@@ -136,13 +140,12 @@ struct KernelError {
 // holds both lists). The enum value is not part of any fingerprint or file: the
 // text form (ToString) is.
 enum class StartupCode : std::uint8_t {
-    DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE9,
-    DE11, DE14, DE15, DE16, DE17, DE19, DE20,
+    DE1 = 1, DE3, DE4, DE5, DE6, DE7,
+    DE14, DE17, DE19, DE20,
     RE2, RE4, RE5,
     // A later round of Registry::Register / BuildPlans registered what only the
     // first round may (declaration v8-arch-gyo2-kernel-subtract-structure 3.2 rule 6).
     RE7,
-    XE1,
 };
 
 [[nodiscard]] std::string_view ToString(StartupCode code) noexcept;
@@ -150,11 +153,7 @@ enum class StartupCode : std::uint8_t {
 struct StartupError {
     // The code of this error.
     StartupCode code;
-    // Spec D.2's step the error was found in, when the step has its own code
-    // distinct from code (a (c) Parallel schedule without a guard: code X-E1,
-    // step D-E11). Otherwise equal to code.
-    StartupCode step;
-    // The rule broken, for people: "Z1", "S-12", "H-1", ...
+    // The rule broken, for people: "H-1", "B.1", ...
     std::string rule;
     std::string message;
     // Every party the error names (System, component, owner, schedule names),
@@ -163,7 +162,7 @@ struct StartupError {
     // Registration sites of the Systems and hooks involved, "file:line".
     std::vector<std::string> sources;
 
-    [[nodiscard]] bool Is(StartupCode wanted) const noexcept { return code == wanted || step == wanted; }
+    [[nodiscard]] bool Is(StartupCode wanted) const noexcept { return code == wanted; }
 };
 
 enum class StartupReportCode : std::uint8_t {

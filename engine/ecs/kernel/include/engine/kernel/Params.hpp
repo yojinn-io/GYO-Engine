@@ -505,9 +505,8 @@ template <class M>
 struct ParamTraits<MessageWriter<M>> : Detail::HandleTraits<MessageWriter<M>, TypeList<Access::MessageWrite<M>>, false> {};
 
 // Untyped deferred insert / remove of any column (spec F.1). No access, no
-// conflict edge, not counted as a writer; nothing checks the column at run time
-// (v8-arch-gyo2-no-runtime-interception: authority data written by mistake is
-// caught by digest comparison and the server's overwrite, not here).
+// conflict edge; nothing checks the column at run time
+// (v8-arch-gyo2-no-runtime-interception).
 class Commands final : Detail::Handle {
     GYO_KERNEL_HANDLE(Commands) : Handle(call) {}
 
@@ -609,12 +608,12 @@ public:
     // Allots the id now (spec A.1: at record time, so the sync point can order
     // by id) and records the spawn; the entity appears after the sync point (F-1).
     // An exhausted allotter is Err, never a wrapped id (W-9).
-    [[nodiscard]] ::Engine::Base::Result<EntityId, KernelError> New(C... values) {
+    [[nodiscard]] Engine::Base::Result<EntityId, KernelError> New(C... values) {
         Check("Spawn");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         const std::optional<EntityId> id = Detail::Allot(*world_);
         if (!id) {
-            return ::Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
+            return Engine::Base::Err(Detail::CallError(call, KernelErrorCode::AllotterExhausted, "W-9",
                                                        "the entity allotter's range is used up"));
         }
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, *id);
@@ -672,8 +671,7 @@ public:
 template <>
 struct ParamTraits<Despawn> : Detail::HandleTraits<Despawn, TypeList<Access::Despawn>, false> {};
 
-// Per-mount state outside the World (spec B.1 runtime, B-12). Forbidden in
-// zone C (S-7).
+// Per-mount state outside the World (spec B.1 runtime, B-12).
 template <class T>
 class Local final : Detail::Handle {
     GYO_KERNEL_HANDLE(Local) : Handle(call), value_(Find(call)) {}
@@ -725,7 +723,7 @@ public:
             Detail::AddDiagnostics(*world_, KeyOf<Record>(), std::move(made));
         }
         static_cast<Detail::DiagnosticsBuffer<Record>*>(found)->entries.push_back(
-            typename Detail::DiagnosticsBuffer<Record>::Entry{syncEpoch_, false, std::move(record)});
+            typename Detail::DiagnosticsBuffer<Record>::Entry{syncEpoch_, std::move(record)});
     }
 };
 template <class Record>
@@ -771,11 +769,12 @@ struct ParamTraits<SetRead<SetTag>> : Detail::HandleTraits<SetRead<SetTag>, Type
 // ---- ExclusiveWorld (spec S-10, S-13; K0, v8-arch-gyo2-nested-schedule;
 // v8-arch-gyo2-exclusive-writes-optional)
 
-// An optional annotation: ExclusiveWorld<Writes<R...>> names resources the
-// System means to write, for the authority policy to read (AccessSet::
-// annotatedWrites). It is not a write: not counted as a writer (D-E2), no zone
-// rule, no conflict. ExclusiveWorld writes every resource with or without it.
-template <class... Resources>
+// An optional annotation: ExclusiveWorld<Writes<T...>> names the components and
+// resources the System means to write, for the authority Module to read
+// (AccessSet::annotatedWrites; authority declaration 5.8). It is not a write: no
+// conflict, and the kernel reads nothing in it. ExclusiveWorld writes every
+// component and resource with or without it.
+template <class... Types>
 struct Writes {};
 
 namespace Detail {
@@ -835,11 +834,11 @@ concept ExclusiveClosure = std::invocable<F&, Arg> && !kPointsIntoWorld<std::inv
 // handle's other calls (its immediate structural changes return Err).
 template <class R>
 struct VisitResultOf {
-    using Type = ::Engine::Base::Result<std::optional<R>, KernelError>;
+    using Type = Engine::Base::Result<std::optional<R>, KernelError>;
 };
 template <>
 struct VisitResultOf<void> {
-    using Type = ::Engine::Base::Result<bool, KernelError>;
+    using Type = Engine::Base::Result<bool, KernelError>;
 };
 
 // Counts the closures running on one handle (RunSchedule is refused inside one: X-14).
@@ -859,16 +858,93 @@ private:
 template <class R>
 using VisitResult = typename Detail::VisitResultOf<R>::Type;
 
+// What ExclusiveWorld::Restore puts back (primitives 2 to 4 of the
+// authority-rollback declaration 2.1; the rollback Module's restore): the
+// entities alive afterwards and, for each component or resource it names, the
+// whole state afterwards. Built with the types it names, so the kernel needs no
+// untyped copy of a column; a type it does not name is left as it is.
+class RestoreSet {
+public:
+    // The entities alive after the restore, any order (an id twice is one).
+    // Without this call the alive set is left as it is.
+    void Alive(std::vector<EntityId> ids) {
+        alive_ = std::move(ids);
+        hasAlive_ = true;
+    }
+
+    // Every cell of component T after the restore: (entity, value), any order,
+    // one per entity, each entity alive after the restore (GYO_ASSERT). A cell
+    // of an entity alive before and after whose value is equal (eq) to the
+    // World's is not written; a cell the World has and this does not is removed.
+    template <class T, class Eq = std::equal_to<T>>
+    void Column(std::vector<std::pair<EntityId, T>> cells, Eq eq = {}) {
+        diffs_.push_back([cells = std::move(cells), eq](World& world, std::span<const EntityId> before,
+                                                        std::span<const EntityId> after,
+                                                        std::vector<Detail::Record>& out) mutable {
+            const ComponentId id = Detail::ComponentIdOf(world, KeyOf<T>());
+            auto& column = static_cast<Detail::Column<T>&>(Detail::ColumnAt(world, id));
+            std::sort(cells.begin(), cells.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+            for (std::size_t k = 1; k < cells.size(); ++k) GYO_ASSERT(cells[k - 1].first != cells[k].first);
+            for (auto& [entity, value] : cells) {
+                GYO_ASSERT(std::binary_search(after.begin(), after.end(), entity));
+                if (std::binary_search(before.begin(), before.end(), entity)) {
+                    const Detail::Cell<T>* cell = column.Find(entity);
+                    if (cell != nullptr && eq(static_cast<const T&>(cell->value), static_cast<const T&>(value))) continue;
+                }
+                Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, id);
+                record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
+                out.push_back(std::move(record));
+            }
+            for (const Detail::Cell<T>& cell : column.cells) {
+                if (!std::binary_search(after.begin(), after.end(), cell.id)) continue;  // despawned with its entity
+                const auto kept = std::lower_bound(cells.begin(), cells.end(), cell.id,
+                                                   [](const auto& c, EntityId key) { return c.first < key; });
+                if (kept == cells.end() || kept->first != cell.id) {
+                    out.push_back(Detail::Record::Of(Detail::RecordKind::Remove, cell.id, id));
+                }
+            }
+        });
+    }
+
+    // Resource T after the restore; nullopt: absent. A value equal (eq) to the
+    // World's is not written.
+    template <class T, class Eq = std::equal_to<T>>
+    void Resource(std::optional<T> value, Eq eq = {}) {
+        diffs_.push_back([value = std::move(value), eq](World& world, std::span<const EntityId>, std::span<const EntityId>,
+                                                        std::vector<Detail::Record>& out) mutable {
+            const ResourceId id = Detail::ResourceIdOf(world, KeyOf<T>());
+            auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(world, id));
+            if (value) {
+                if (slot.value && eq(static_cast<const T&>(*slot.value), static_cast<const T&>(*value))) return;
+                Detail::Record record = Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, id);
+                record.value = std::make_unique<Detail::TypedBox<T>>(std::move(*value));
+                out.push_back(std::move(record));
+            } else if (slot.value) {
+                out.push_back(Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, id));
+            }
+        });
+    }
+
+private:
+    template <class Declared>
+    friend class ExclusiveWorld;
+    using Diff = std::function<void(World&, std::span<const EntityId>, std::span<const EntityId>,
+                                    std::vector<Detail::Record>&)>;
+
+    std::vector<EntityId> alive_;
+    bool hasAlive_ = false;
+    std::vector<Diff> diffs_;
+};
+
 // Untyped access to the whole World: reads and writes every component and
 // resource value (messages are not in it; DI-KS 1) and changes membership and
-// resources now (DI-KS 18; declaration 3.5). Zone B only (S-13, a zone rule at
-// startup); the only parameter (S-10). Conflicts with every System of its
+// resources now (DI-KS 18; declaration 3.5). The only parameter (S-10). Conflicts with every System of its
 // stage. Written ExclusiveWorld<>, or ExclusiveWorld<Writes<R...>> with the
 // optional annotation (one name, v8-arch-gyo2-nested-declaration-approved).
 template <class Declared = Writes<>>
 class ExclusiveWorld {
     static_assert(Detail::kAlwaysFalse<Declared>,
-                  "GYO_KERNEL_REJECT_EXCLUSIVE_DECLARATION: ExclusiveWorld takes Writes<Resources...> or nothing "
+                  "GYO_KERNEL_REJECT_EXCLUSIVE_DECLARATION: ExclusiveWorld takes Writes<Types...> or nothing "
                   "(ExclusiveWorld<>)");
 };
 
@@ -954,7 +1030,7 @@ public:
     // call goes on, and the Run ends in that Err when the System returns
     // (DI-KS 2, as for Spawn<Bundle<C...>>::New).
     template <class... C>
-    [[nodiscard]] ::Engine::Base::Result<EntityId, KernelError> Spawn(C... values) {
+    [[nodiscard]] Engine::Base::Result<EntityId, KernelError> Spawn(C... values) {
         static_assert(sizeof...(C) > 0, "ExclusiveWorld::Spawn names at least one component");
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, 0);
@@ -962,9 +1038,9 @@ public:
                                                      std::make_unique<Detail::TypedBox<C>>(std::move(values))}),
          ...);
         auto done = Change(std::move(record));
-        if (!done) return ::Engine::Base::Err(std::move(done).error());
+        if (!done) return Engine::Base::Err(std::move(done).error());
         if (done->rejected) {
-            return ::Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, "F-13",
+            return Engine::Base::Err(Detail::CallerError(Detail::RequireCall(*world_), KernelErrorCode::AllottedIdAlive, "F-13",
                                                          "the allotter gave id " + std::to_string(done->entity) +
                                                              ", which is alive: nothing spawned, recorded as a RejectedSpawn"));
         }
@@ -975,7 +1051,7 @@ public:
     // (its id is in this World's allotter range, or alive), the spawn recorded
     // as a RejectedSpawn (spec F-13, one place for the record and the count).
     template <class... C>
-    [[nodiscard]] ::Engine::Base::Result<std::optional<SpawnRejectReason>, KernelError> SpawnWithId(EntityId id,
+    [[nodiscard]] Engine::Base::Result<std::optional<SpawnRejectReason>, KernelError> SpawnWithId(EntityId id,
                                                                                                   C... values) {
         static_assert(sizeof...(C) > 0, "ExclusiveWorld::SpawnWithId names at least one component");
         Check("ExclusiveWorld");
@@ -985,58 +1061,58 @@ public:
                                                      std::make_unique<Detail::TypedBox<C>>(std::move(values))}),
          ...);
         auto done = Change(std::move(record));
-        if (!done) return ::Engine::Base::Err(std::move(done).error());
+        if (!done) return Engine::Base::Err(std::move(done).error());
         return done->rejected;
     }
 
     // Inserts or overwrites entity's T. false, nothing inserted, when the
     // entity is not alive (counted in DroppedMissingEntity, spec F.2 step 5).
     template <class T>
-    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> Insert(EntityId entity, T value) {
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> Insert(EntityId entity, T value) {
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));
         record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
         auto done = Change(std::move(record));
-        if (!done) return ::Engine::Base::Err(std::move(done).error());
+        if (!done) return Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
     // Removes entity's T after its OnRemove hooks; false when it had none.
     template <class T>
-    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> Remove(EntityId entity) {
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> Remove(EntityId entity) {
         Check("ExclusiveWorld");
         auto done = Change(Detail::Record::Of(Detail::RecordKind::Remove, entity, Detail::ComponentIdOf(*world_, KeyOf<T>())));
-        if (!done) return ::Engine::Base::Err(std::move(done).error());
+        if (!done) return Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
     // Despawns entity: every component's OnRemove first, then each component in
     // ascending ComponentId (v8-arch-gyo2-despawn-notify-all-then-destroy).
     // false when it is not alive.
-    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> Despawn(EntityId entity) {
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> Despawn(EntityId entity) {
         Check("ExclusiveWorld");
         auto done = Change(Detail::Record::Of(Detail::RecordKind::Despawn, entity));
-        if (!done) return ::Engine::Base::Err(std::move(done).error());
+        if (!done) return Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
     // Puts resource T in (or overwrites it); a thread-bound one takes this thread.
     template <class T>
-    [[nodiscard]] ::Engine::Base::Result<void, KernelError> SetResource(T value) {
+    [[nodiscard]] Engine::Base::Result<void, KernelError> SetResource(T value) {
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::ResourceInsert, 0, Detail::ResourceIdOf(*world_, KeyOf<T>()));
         record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
         auto done = Change(std::move(record));
-        if (!done) return ::Engine::Base::Err(std::move(done).error());
+        if (!done) return Engine::Base::Err(std::move(done).error());
         return {};
     }
 
     // Takes resource T out; false when it was absent.
     template <class T>
-    [[nodiscard]] ::Engine::Base::Result<bool, KernelError> RemoveResource() {
+    [[nodiscard]] Engine::Base::Result<bool, KernelError> RemoveResource() {
         Check("ExclusiveWorld");
         auto done = Change(Detail::Record::Of(Detail::RecordKind::ResourceRemove, 0, Detail::ResourceIdOf(*world_, KeyOf<T>())));
-        if (!done) return ::Engine::Base::Err(std::move(done).error());
+        if (!done) return Engine::Base::Err(std::move(done).error());
         return done->changed;
     }
 
@@ -1047,7 +1123,7 @@ public:
     // the refusals and errors). Afterwards the handle takes the World's sync
     // epoch and a new stamp, like after RunSchedule.
     template <class E>
-    [[nodiscard]] ::Engine::Base::Result<void, KernelError> Trigger(E event,
+    [[nodiscard]] Engine::Base::Result<void, KernelError> Trigger(E event,
                                                                   std::optional<EntityId> target = std::nullopt) {
         Check("ExclusiveWorld");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
@@ -1069,7 +1145,7 @@ public:
     // World's again (W-4) and its writes take a new stamp, after every stamp of
     // the inner schedule, whether the run succeeded, failed, was refused or was
     // left by an exception the System catches.
-    [[nodiscard]] ::Engine::Base::Result<void, KernelError> RunSchedule(std::string_view schedule) {
+    [[nodiscard]] Engine::Base::Result<void, KernelError> RunSchedule(std::string_view schedule) {
         Check("ExclusiveWorld");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         // On every way back, an exception included.
@@ -1083,11 +1159,89 @@ public:
         return Detail::RunNested(call, schedule, closures_ > 0);
     }
 
+    // ---- The rollback primitives (authority-rollback declaration 2.1)
+
+    // Primitive 1: every cell of component T, ascending EntityId, as
+    // f(entity, added stamp, changed stamp, const T&). Like a Read closure:
+    // nothing that changes membership runs inside f (ClosureChangesMembership).
+    template <class T, class F>
+        requires std::invocable<F&, EntityId, ChangeStamp, ChangeStamp, const T&>
+    void ReadColumn(F&& f) {
+        Check("ExclusiveWorld");
+        Detail::ClosureScope scope(closures_);
+        for (const Detail::Cell<T>& cell : Column<T>().cells) {
+            std::invoke(f, cell.id, cell.added, cell.changed, static_cast<const T&>(cell.value));
+        }
+    }
+
+    // Primitive 3, the read: the entities alive now, ascending (a copy: an
+    // immediate change or a restore afterwards does not change it).
+    [[nodiscard]] std::vector<EntityId> Entities() {
+        Check("ExclusiveWorld");
+        const std::span<const EntityId> alive = Detail::AliveEntities(*world_);
+        return {alive.begin(), alive.end()};
+    }
+
+    // The stamp this handle's writes take now; every later step of the World
+    // writes with a larger one (the rollback Module records it to keep only the
+    // cells changed after, declaration 2.4 G5).
+    [[nodiscard]] ChangeStamp Stamp() const noexcept { return stamp_; }
+
+    // Primitive 4: resource T's changed stamp; nothing when absent.
+    template <class T>
+    [[nodiscard]] std::optional<ChangeStamp> ResourceStamp() {
+        Check("ExclusiveWorld");
+        const ResourceId resource = Detail::ResourceIdOf(*world_, KeyOf<T>());
+        const Detail::ResourceBase& slot = Detail::ResourceAt(*world_, resource);
+        if (!slot.Present()) return std::nullopt;
+        return slot.changed;
+    }
+
+    // Primitives 2 to 4: puts back what set names, now, as one immediate change
+    // with this handle's stamp (Detail::ApplyRestore): entities alive now and
+    // not after are despawned, entities alive after and not now are put back
+    // alive with their id (the allotter range is not checked: the id was this
+    // World's), then every cell and resource that differs is written, all with
+    // one stamp; OnRemove before a cell goes, OnAdd once every cell is back (a
+    // hook sees the entity's other cells put back), then the hook rounds.
+    // Refused and failing as an immediate change; afterwards the handle takes
+    // a new stamp.
+    [[nodiscard]] Engine::Base::Result<void, KernelError> Restore(RestoreSet set) {
+        Check("ExclusiveWorld");
+        Detail::SystemContext& call = Detail::RequireCall(*world_);
+        struct Restamp {
+            ExclusiveWorld& handle;
+            ~Restamp() {
+                handle.syncEpoch_ = Detail::CurrentSyncEpoch(*handle.world_);
+                handle.stamp_ = Detail::NextStamp(*handle.world_);
+            }
+        } restamp{*this};
+        const std::span<const EntityId> now = Detail::AliveEntities(*world_);
+        const std::vector<EntityId> before(now.begin(), now.end());
+        std::vector<EntityId> after = set.hasAlive_ ? std::move(set.alive_) : before;
+        std::sort(after.begin(), after.end());
+        after.erase(std::unique(after.begin(), after.end()), after.end());
+        std::vector<Detail::Record> records;
+        std::vector<EntityId> changed;
+        std::set_difference(before.begin(), before.end(), after.begin(), after.end(), std::back_inserter(changed));
+        for (EntityId entity : changed) records.push_back(Detail::Record::Of(Detail::RecordKind::Despawn, entity));
+        changed.clear();
+        std::set_difference(after.begin(), after.end(), before.begin(), before.end(), std::back_inserter(changed));
+        for (EntityId entity : changed) {
+            Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, entity);
+            record.withId = true;
+            record.restore = true;
+            records.push_back(std::move(record));
+        }
+        for (RestoreSet::Diff& diff : set.diffs_) diff(*world_, before, after, records);
+        return Detail::ApplyRestore(call, std::move(records), stamp_, closures_ > 0);
+    }
+
 private:
     // One immediate change (Detail::ApplyImmediate). On every way back, an
     // exception included, the handle takes the World's sync epoch and a new
     // stamp, after every stamp the change and its hook rounds took.
-    [[nodiscard]] ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Change(Detail::Record record) {
+    [[nodiscard]] Engine::Base::Result<Detail::ImmediateOutcome, KernelError> Change(Detail::Record record) {
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         struct Restamp {
             ExclusiveWorld& handle;

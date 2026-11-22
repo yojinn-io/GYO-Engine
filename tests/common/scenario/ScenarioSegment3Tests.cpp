@@ -112,7 +112,7 @@ K::SystemResult MoveRacer(K::ResMut<RacerState> racer, K::Res<Breaker> breaker, 
     const auto frame = static_cast<std::int32_t>(racer->frames);
     for (std::int32_t i = 0; i < burst->count; ++i) laps.Send(Lap{i, frame});
     if (breaker->frame == frame && breaker->how == 1) {
-        return ::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "MoveRacer: the racer fell"));
+        return ::GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "MoveRacer: the racer fell"));
     }
     if (breaker->frame == frame && breaker->how == 2) throw std::runtime_error("MoveRacer threw");
     return {};
@@ -131,7 +131,6 @@ K::SystemResult CountLobby(K::ResMut<LobbyFrames> frames) {
 K::SystemOptions At(std::string name, std::string stage) {
     K::SystemOptions o;
     o.name = std::move(name);
-    o.zone = K::Zone::B;
     K::Mount m;
     m.schedule = "Main";
     m.stage = std::move(stage);
@@ -165,10 +164,10 @@ O::ProductDescription Relay(const RelayOptions& options) {
     O::WorldDescription lobby;
     lobby.name = "Lobby";
     lobby.build = [](O::WorldSetup& s) {
-        s.Registrar().Resource<LobbyFrames>({.name = "LobbyFrames", .zone = K::Zone::B});
+        s.Registrar().Resource<LobbyFrames>({.name = "LobbyFrames"});
         s.Registrar().AddSystem<&CountLobby>(At("CountLobby", "Update"));
     };
-    lobby.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    lobby.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(LobbyFrames{});
         return {};
     });
@@ -179,11 +178,11 @@ O::ProductDescription Relay(const RelayOptions& options) {
     const bool logging = options.logging;
     match.build = [logging](O::WorldSetup& s) {
         K::Registrar& r = s.Registrar();
-        r.Resource<RacerState>({.name = "RacerState", .zone = K::Zone::B});
-        r.Resource<LapsRead>({.name = "LapsRead", .zone = K::Zone::B});
-        r.Resource<Breaker>({.name = "Breaker", .zone = K::Zone::B});
-        r.Resource<LapBurst>({.name = "LapBurst", .zone = K::Zone::B});
-        r.Message<Lap>({.name = "Lap", .zone = K::Zone::B, .capacity = 2});
+        r.Resource<RacerState>({.name = "RacerState"});
+        r.Resource<LapsRead>({.name = "LapsRead"});
+        r.Resource<Breaker>({.name = "Breaker"});
+        r.Resource<LapBurst>({.name = "LapBurst"});
+        r.Message<Lap>({.name = "Lap", .capacity = 2});
         r.AddSystem<&MoveRacer>(At("MoveRacer", "Update"));
         r.AddSystem<&ReadLaps>(At("ReadLaps", "PostUpdate"));
         if (logging) {
@@ -194,12 +193,12 @@ O::ProductDescription Relay(const RelayOptions& options) {
     const Breaker breaker = options.breaker;
     const std::int32_t burst = options.burst;
     const W::Nanoseconds delta = options.delta;
-    match.prepare.push_back([breaker, burst, delta](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    match.prepare.push_back([breaker, burst, delta](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(RacerState{});
         world.SetResource(LapsRead{});
         world.SetResource(breaker);
         world.SetResource(LapBurst{burst, 0});
-        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
         return {};
     });
     d.worlds.push_back(std::move(match));
@@ -291,7 +290,7 @@ TEST_CASE("scenario segment 3: S3-1 a broken World's reason written through Base
     REQUIRE_FALSE(exit.reason.empty());
     const std::size_t before = logs.Problems().size();
     // Whoever decides what follows writes the reason (the category is its choice).
-    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, "relay", exit.reason);
+    ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Error, "relay", exit.reason);
     const auto problems = logs.Problems();
     REQUIRE_MESSAGE(problems.size() == before + 1, "S3-1: one Base::Log line became one record (entrance 3)");
     const L::StoredRecord& line = problems.back();

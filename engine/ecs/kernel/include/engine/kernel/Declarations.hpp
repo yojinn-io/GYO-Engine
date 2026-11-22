@@ -22,53 +22,12 @@ using EffectId = std::uint32_t;
 using SetId = std::uint32_t;
 using RegistrationSeq = std::uint32_t;
 
-// The determinism zone (spec G; target/determinism.md section 2). A zone left
-// Unset is zone B: a product that has no (c) data never writes a zone. A
-// product that needs every zone written out calls
-// Registrar::RequireExplicitZones; Unset is then reported at finish (D-E7,
-// spec S-6), so a forgotten zone never silently becomes (b).
-enum class Zone : std::uint8_t {
-    Unset,
-    C,
-    B,
-};
-
-// Spec A.1 ColumnInfo. Exclusive by default (target/world.zh-Hant.md section 3).
-enum class WritePolicy : std::uint8_t {
-    Exclusive,
-    Shared,
-};
-
-// Spec A.1: Input is (c) data that an ingress System may write (Z3); it must
-// not roll back (Z8).
-enum class Role : std::uint8_t {
-    State,
-    Input,
-};
-
-enum class Rollback : std::uint8_t {
-    No,
-    Yes,
-    // Recomputed each tick before every reader (spec A.1, D-E16).
-    Derived,
-};
-
 struct ComponentOptions {
     std::string name;
-    Zone zone = Zone::Unset;
-    WritePolicy writePolicy = WritePolicy::Exclusive;
-    Role role = Role::State;
-    Rollback rollback = Rollback::No;
 };
 
 struct ResourceOptions {
     std::string name;
-    Zone zone = Zone::Unset;
-    WritePolicy writePolicy = WritePolicy::Exclusive;
-    Role role = Role::State;
-    Rollback rollback = Rollback::No;
-    // Exchanged with the outside of the Product (spec I.2); always zone B (Z1, Z7).
-    bool external = false;
     // Bound to the thread that puts the value in (DI-KS 14; Bevy's NonSend): a
     // touch from any other thread is a GYO_ASSERT, destroying the World with a
     // value included; removing the value forgets the thread. Which thread runs
@@ -79,7 +38,6 @@ struct ResourceOptions {
 // A retained message type (event cursor declaration 3.2, 5.1; DI-KS 10).
 struct MessageOptions {
     std::string name;
-    Zone zone = Zone::Unset;
     // How many records of this type the World keeps: a write to a full buffer
     // drops the oldest one and the World records it (DroppedMessages). A default,
     // not a measured value; at least 1 (GYO_ASSERT).
@@ -88,21 +46,17 @@ struct MessageOptions {
 
 // A pushed event type (event cursor declaration 3.3, 5.2; DI-KS 10): kept
 // nowhere; a Trigger runs its observers (Registrar::Observer). The type's name
-// is in the past tense (naming DI 2). Its zone follows a message type's rule
-// until the zone rules leave (time-events declaration 4.5).
+// is in the past tense (naming DI 2).
 struct EventOptions {
     std::string name;
-    Zone zone = Zone::Unset;
 };
 
 // An observer (event cursor declaration 3.3, 5.2): a System that runs where its
-// event is triggered, not a Plan step. Its zone follows a hook's rule
-// (time-events declaration 4.5). Names are unique among observers: the
+// event is triggered, not a Plan step. Names are unique among observers: the
 // observers of one trigger run in name order (deterministic and independent of
 // registration order; not promised to authors).
 struct ObserverOptions {
     std::string name;
-    Zone zone = Zone::Unset;
 };
 
 // A named group of a schedule's Systems (spec C.1 sets): order edges and run
@@ -135,17 +89,12 @@ struct ScheduleOptions {
     std::string name;
     // The only schedule kind where Extract parameters are legal (spec H.6).
     bool extract = false;
-    bool rollbackEnabled = false;
     std::vector<std::string> stages;
-    // The stage where ingress Systems run (spec Z3). Empty: no ingress stage.
-    std::string ingressStage;
     std::vector<SyncPointOptions> syncPoints;
     ExecutorKind executor = ExecutorKind::Serial;
-    // Parallel only: the CTest that compares Serial and Parallel (spec X-2).
-    std::string parallelGuardTest;
     // The most hook rounds after the last sync point of a Run (spec F-12). Empty:
     // the World's KernelSettings::hookRoundLimit. 0 is D-E20. In the Plan
-    // fingerprint and, for a schedule that runs a zone C System, the C fingerprint.
+    // fingerprint.
     std::optional<std::uint32_t> hookRoundLimit;
 };
 

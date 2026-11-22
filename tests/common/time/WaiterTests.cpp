@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include "AssertTestSupport.hpp"
+#include "engine/os/WakeSignal.hpp"
 #include "engine/time/LateWakeStats.hpp"
 #include "engine/time/MonotonicClock.hpp"
 #include "engine/time/Waiter.hpp"
@@ -13,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-using namespace Engine::Time;
+using namespace GYO::Engine::Time;
 using namespace std::chrono_literals;
 
 namespace {
@@ -36,15 +37,19 @@ TEST_CASE("Time Waiter backend names stay as consumers log them") {
     CHECK(std::string_view(ToString(WaitBackend::ConditionVariable)) == "ConditionVariable");
 }
 
-TEST_CASE("Time Waiter uses the platform backend") {
+// Which mechanism each platform uses is engine/os's, tested with its wake
+// signal (tests/common/os/WakeSignalTests.cpp); the Waiter reports that
+// mechanism under its own name (time.md Invariant 7).
+TEST_CASE("Time Waiter reports the os mechanism") {
     const auto waiter = MakeWaiter();
-#if defined(__APPLE__)
-    CHECK(waiter.Backend() == WaitBackend::Kqueue);
-#elif defined(_WIN32)
-    CHECK((waiter.Backend() == WaitBackend::HighResolutionWaitableTimer || waiter.Backend() == WaitBackend::WaitableTimer));
-#else
-    CHECK(waiter.Backend() == WaitBackend::ConditionVariable);
-#endif
+    auto created = GYO::Engine::OS::WakeSignal::Create();
+    REQUIRE(created);
+    const auto mechanism = created.value().Mechanism();
+    const auto expected = mechanism == GYO::Engine::OS::WaitMechanism::Kqueue ? WaitBackend::Kqueue
+        : mechanism == GYO::Engine::OS::WaitMechanism::HighResolutionWaitableTimer ? WaitBackend::HighResolutionWaitableTimer
+        : mechanism == GYO::Engine::OS::WaitMechanism::WaitableTimer ? WaitBackend::WaitableTimer
+        : WaitBackend::ConditionVariable;
+    CHECK(waiter.Backend() == expected);
 }
 
 TEST_CASE("Time Waiter never wakes before a deadline and reports how late it woke") {
@@ -84,7 +89,8 @@ TEST_CASE("Time Waiter coalesces several notifications into one wake") {
     waiter.Notify();
     CHECK(waiter.WaitUntil(Now() + 30s).reason == WakeReason::Notified);
     // The platform signal left by the extra notifications wakes the next wait
-    // spuriously (kqueue user event, Windows auto-reset event): it must wait again.
+    // spuriously (the engine/os wake signal keeps it pending on every
+    // platform): it must wait again.
     const auto deadline = Now() + 20ms;
     const auto second = waiter.WaitUntil(deadline);
     CHECK(second.reason == WakeReason::Deadline);

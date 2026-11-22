@@ -94,7 +94,7 @@ FatalWriteReport WriteFatalRecord(const Record& given) noexcept {
     // facade into a fixed buffer (no allocation, no lock). A record with more than kMaxFatalFields fields,
     // or one that names trace_path itself, keeps its fields and goes without it (the key once: LG-5).
     char pathBuffer[kTracePathBytes];
-    const std::size_t pathSize = ::Engine::Base::TraceCurrentPath(pathBuffer);
+    const std::size_t pathSize = Base::TraceCurrentPath(pathBuffer);
     std::array<Field, kMaxFatalFields + 1> withPath = BlankFields(std::make_index_sequence<kMaxFatalFields + 1>{});
     const bool namesPath = std::any_of(record.fields.begin(), record.fields.end(),
                                        [](const Field& field) { return field.key == "trace_path"; });

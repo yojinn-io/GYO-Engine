@@ -69,7 +69,7 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 - [Tool registration, selection and CMake migration](docs/tool_projects.md)
 - [Math foundation contract](docs/architecture/math.md)
 - [Error handling contract (Result/Error/Assert)](docs/architecture/error-handling.md)
-- [Trace transport and log facade contract](docs/architecture/trace.md)
+- [Trace (GYO2: the Base facade and the trace Module)](docs/architecture/target/v2/trace.zh-Hant.md)
 - [Engine architecture documents: entry](docs/architecture/README.md)
 - [Target architecture (kernel rework, not implemented)](docs/architecture/target/README.md)
 - [Kernel rework plan](docs/architecture/plans/kernel/README.md)

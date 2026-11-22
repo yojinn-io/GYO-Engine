@@ -6,7 +6,7 @@
 #include "engine/io/fs/MountTable.hpp"
 #include "engine/io/path/Uri.hpp"
 
-using namespace Engine::IO;
+using namespace GYO::Engine::IO;
 
 // The file:// rule of docs/architecture/io.md: one mapping between a file URI
 // and a native absolute path, as pure strings, so every case below gives the
@@ -23,19 +23,19 @@ std::string FilePath(std::string_view text) {
     return uri.value().path.Str();
 }
 
-IoErrorCode FileError(std::string_view text) {
+IOErrorCode FileError(std::string_view text) {
     const auto uri = Path::ParseUri(text);
     REQUIRE_MESSAGE(!uri, "ParseUri accepted " << std::string(text));
     return uri.error().code;
 }
 
-IoErrorCode NativeError(std::string_view native) {
+IOErrorCode NativeError(std::string_view native) {
     const auto uri = Path::FileUriFromNativePath(native);
     REQUIRE_MESSAGE(!uri, "FileUriFromNativePath accepted " << std::string(native));
     return uri.error().code;
 }
 
-IoErrorCode NoNativePath(const Path::Uri& uri) {
+IOErrorCode NoNativePath(const Path::Uri& uri) {
     const auto native = Path::NativePathFromFileUri(uri);
     REQUIRE_MESSAGE(!native, "NativePathFromFileUri accepted " << uri.path.Str());
     return native.error().code;
@@ -78,8 +78,8 @@ TEST_CASE("Uri: a localhost authority is the local machine") {
 }
 
 TEST_CASE("Uri: a drive letter in the authority is rejected") {
-    CHECK(FileError("file://C:/x") == IoErrorCode::InvalidPath);
-    CHECK(FileError("file://c:") == IoErrorCode::InvalidPath);
+    CHECK(FileError("file://C:/x") == IOErrorCode::InvalidPath);
+    CHECK(FileError("file://c:") == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("Uri: a UNC file URI names the native path //host/share") {
@@ -98,21 +98,21 @@ TEST_CASE("Uri: a UNC file URI names the native path //host/share") {
     for (const char* text : {"file:////C:/x", "file://///C:/x", "file:////C:", "file:////C:foo/x", "file://\?\?/C:/x",
                              "file:////\?\?/C:/x", "file://///\?\?/C:/x", "file://server:8080/x", "file:////server:8080/x"}) {
         CAPTURE(text);
-        CHECK(FileError(text) == IoErrorCode::InvalidPath);
+        CHECK(FileError(text) == IOErrorCode::InvalidPath);
     }
-    CHECK(FileError("file://server\\share\\x") == IoErrorCode::InvalidPath);
+    CHECK(FileError("file://server\\share\\x") == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("Uri: long-path and device prefixes are not file paths") {
-    CHECK(FileError("file:////?/C:/x") == IoErrorCode::InvalidPath);
-    CHECK(FileError("file:///\\\\?\\C:\\x") == IoErrorCode::InvalidPath);
-    CHECK(FileError("file:///\\\\.\\C:") == IoErrorCode::InvalidPath);
-    CHECK(FileError("file:///\\??\\C:\\x") == IoErrorCode::InvalidPath);
+    CHECK(FileError("file:////?/C:/x") == IOErrorCode::InvalidPath);
+    CHECK(FileError("file:///\\\\?\\C:\\x") == IOErrorCode::InvalidPath);
+    CHECK(FileError("file:///\\\\.\\C:") == IOErrorCode::InvalidPath);
+    CHECK(FileError("file:///\\??\\C:\\x") == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("Uri: a file URI needs a path") {
-    CHECK(FileError("file://") == IoErrorCode::InvalidPath);
-    CHECK(FileError("file://localhost") == IoErrorCode::InvalidPath);
+    CHECK(FileError("file://") == IOErrorCode::InvalidPath);
+    CHECK(FileError("file://localhost") == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("Uri: backslashes in a file URI path are separators") {
@@ -123,8 +123,8 @@ TEST_CASE("Uri: backslashes in a file URI path are separators") {
 TEST_CASE("Uri: a POSIX path whose first segment looks like a drive has no file URI") {
     // Its URI would name the drive path instead. The check is lexical, so it also sees through dot segments
     // and extra leading slashes; it only refuses, the path stays as written.
-    CHECK(FileError("file:///./C:/x") == IoErrorCode::InvalidPath);
-    CHECK(FileError("file:///a/../C:/x") == IoErrorCode::InvalidPath);
+    CHECK(FileError("file:///./C:/x") == IOErrorCode::InvalidPath);
+    CHECK(FileError("file:///a/../C:/x") == IOErrorCode::InvalidPath);
     CHECK(FilePath("file:///C:x") == "/C:x");
 }
 
@@ -290,7 +290,7 @@ TEST_CASE("Uri: a mount never reaches outside its root") {
     for (const char* request : {"asset://../secret", "asset://a/../../secret", "asset://..\\..\\x"}) {
         const auto resolved = table.Resolve(mount, Path::ParseUriLoose(request));
         REQUIRE_FALSE_MESSAGE(resolved, request);
-        CHECK(resolved.error().code == IoErrorCode::PathEscapesRoot);
+        CHECK(resolved.error().code == IOErrorCode::PathEscapesRoot);
     }
     // A UNC root works as any other file root, and still keeps its requests inside.
     mount.rootUri = Path::ParseUriLoose("file://server/share/assets");
@@ -299,7 +299,7 @@ TEST_CASE("Uri: a mount never reaches outside its root") {
     const auto native = Path::NativePathFromFileUri(unc.value().nativeUri);
     REQUIRE(native);
     CHECK(native.value() == "//server/share/assets/a.png");
-    CHECK(table.Resolve(mount, Path::ParseUriLoose("asset://../secret")).error().code == IoErrorCode::PathEscapesRoot);
+    CHECK(table.Resolve(mount, Path::ParseUriLoose("asset://../secret")).error().code == IOErrorCode::PathEscapesRoot);
 }
 
 TEST_CASE("Uri: a native absolute path becomes a file URI and comes back unchanged") {
@@ -330,44 +330,44 @@ TEST_CASE("Uri: a native path keeps its segments and takes the '/' form") {
 }
 
 TEST_CASE("Uri: only native absolute paths become file URIs") {
-    CHECK(NativeError("") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("a/b") == IoErrorCode::InvalidPath);
+    CHECK(NativeError("") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("a/b") == IOErrorCode::InvalidPath);
     // Drive-relative paths name the current directory of a drive, or the root of the current drive.
-    CHECK(NativeError("C:x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("C:") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError(std::string("/a\0b", 4)) == IoErrorCode::InvalidPath);
+    CHECK(NativeError("C:x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("C:") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError(std::string("/a\0b", 4)) == IOErrorCode::InvalidPath);
     // A POSIX path whose first segment looks like a drive: its URI would name the drive path.
-    CHECK(NativeError("/C:/x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("/C:") == IoErrorCode::InvalidPath);
+    CHECK(NativeError("/C:/x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("/C:") == IOErrorCode::InvalidPath);
     // Long-path, device and NT prefixes are made inside engine/os only.
-    CHECK(NativeError("///C:/x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\\\\\C:\\x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("///C:") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("/./C:/x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("/a/../C:/x") == IoErrorCode::InvalidPath);
+    CHECK(NativeError("///C:/x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\\\\\C:\\x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("///C:") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("/./C:/x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("/a/../C:/x") == IOErrorCode::InvalidPath);
     // A UNC host with a '?' or ':' (a drive, the NT prefix written with two slashes, a port).
-    CHECK(NativeError("//C:/x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\\\C:\\x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("//\?\?/C:/x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\\\??\\C:\\x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("//server:8080/x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\\\?\\C:\\x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("//?/C:/x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\\\?\\UNC\\server\\share") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\\\.\\C:") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("\\??\\C:\\x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("//./NUL") == IoErrorCode::InvalidPath);
+    CHECK(NativeError("//C:/x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\\\C:\\x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("//\?\?/C:/x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\\\??\\C:\\x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("//server:8080/x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\\\?\\C:\\x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("//?/C:/x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\\\?\\UNC\\server\\share") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\\\.\\C:") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("\\??\\C:\\x") == IOErrorCode::InvalidPath);
+    CHECK(NativeError("//./NUL") == IOErrorCode::InvalidPath);
     // A UNC path with no host is no path.
-    CHECK(NativeError("//") == IoErrorCode::InvalidPath);
+    CHECK(NativeError("//") == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("Uri: only an absolute file URI has a native path") {
-    CHECK(NoNativePath(Path::ParseUriLoose("asset://x.png")) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(Path::ParseUriLoose("asset://x.png")) == IOErrorCode::InvalidPath);
     Path::Uri relative;
     relative.scheme = Path::UriScheme::File;
     relative.path = Path::Path::FromNormalized("Users/x");
-    CHECK(NoNativePath(relative) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(relative) == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("Uri: a file Uri built by hand names a path only in the mapping's canonical form") {
@@ -382,12 +382,12 @@ TEST_CASE("Uri: a file Uri built by hand names a path only in the mapping's cano
     CHECK(plain.value() == "/a/b");
     // Dot segments are kept, so a path with them is canonical; a backslash is not.
     CHECK(HandNative(make("/a/../b")) == "/a/../b");
-    CHECK(NoNativePath(make("C:/x\\..\\y")) == IoErrorCode::InvalidPath);
-    CHECK(NoNativePath(make("/C:/x")) == IoErrorCode::InvalidPath);
-    CHECK(NoNativePath(make(std::string("/a\0b", 4))) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(make("C:/x\\..\\y")) == IOErrorCode::InvalidPath);
+    CHECK(NoNativePath(make("/C:/x")) == IOErrorCode::InvalidPath);
+    CHECK(NoNativePath(make(std::string("/a\0b", 4))) == IOErrorCode::InvalidPath);
     // Not the mapping's form either: three slashes are the root ("/a"), a bare drive is "C:/".
-    CHECK(NoNativePath(make("///a")) == IoErrorCode::InvalidPath);
-    CHECK(NoNativePath(make("C:")) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(make("///a")) == IOErrorCode::InvalidPath);
+    CHECK(NoNativePath(make("C:")) == IOErrorCode::InvalidPath);
     // A host in the authority names the UNC path //host + path.
     auto unc = make("/share/x");
     unc.authority = "server";
@@ -396,16 +396,16 @@ TEST_CASE("Uri: a file Uri built by hand names a path only in the mapping's cano
     CHECK(HandNative(make("//server/share/x")) == "//server/share/x");
     auto prefixed = make("/C:/x");
     prefixed.authority = "?";
-    CHECK(NoNativePath(prefixed) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(prefixed) == IOErrorCode::InvalidPath);
     // A host with a relative path, a drive for a host, a drive-shaped UNC host: no UNC path.
     auto relativeHost = make("share");
     relativeHost.authority = "server";
-    CHECK(NoNativePath(relativeHost) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(relativeHost) == IOErrorCode::InvalidPath);
     CHECK(relativeHost.ToString() == "file://server/share");
     auto driveHost = make("/x");
     driveHost.authority = "C:";
-    CHECK(NoNativePath(driveHost) == IoErrorCode::InvalidPath);
-    CHECK(NoNativePath(make("//C:/x")) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(driveHost) == IOErrorCode::InvalidPath);
+    CHECK(NoNativePath(make("//C:/x")) == IOErrorCode::InvalidPath);
     auto local = make("/x");
     local.authority = "localhost";
     const auto localPath = Path::NativePathFromFileUri(local);
@@ -413,5 +413,5 @@ TEST_CASE("Uri: a file Uri built by hand names a path only in the mapping's cano
     CHECK(localPath.value() == "/x");
     auto withFragment = make("/x");
     withFragment.fragment = "f";
-    CHECK(NoNativePath(withFragment) == IoErrorCode::InvalidPath);
+    CHECK(NoNativePath(withFragment) == IOErrorCode::InvalidPath);
 }

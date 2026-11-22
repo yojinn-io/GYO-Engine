@@ -6,7 +6,7 @@
 #include "engine/math/linear/Vec3d.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 struct Segment final {
     Vec3 start{};
@@ -46,4 +46,4 @@ static_assert(std::is_aggregate_v<Segmentd>);
         ? Clamp(Dot(point - segment.start, edge) / squared, 0.0, 1.0) : 0.0);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

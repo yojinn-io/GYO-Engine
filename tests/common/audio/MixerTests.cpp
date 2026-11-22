@@ -11,15 +11,15 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/audio/ClipBank.hpp"
 
-using namespace Engine::Audio;
-using Engine::Audio::Detail::ScheduledPlay;
-using Engine::Audio::Detail::StartOutcome;
-using Engine::Audio::Detail::VoiceMixer;
+using namespace GYO::Engine::Audio;
+using GYO::Engine::Audio::Detail::ScheduledPlay;
+using GYO::Engine::Audio::Detail::StartOutcome;
+using GYO::Engine::Audio::Detail::VoiceMixer;
 
 namespace {
 
 ClipId AddClip(ClipBank& bank, const std::vector<std::int16_t>& samples, const std::uint16_t channels) {
-    auto id = bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), channels, kSampleRate);
+    auto id = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), channels, kSampleRate);
     REQUIRE(id.has_value());
     return *id;
 }
@@ -37,7 +37,7 @@ std::vector<std::int16_t> RenderInBlocks(VoiceMixer& mixer, const std::uint64_t 
     std::uint64_t done = 0;
     for (std::size_t i = 0; done < frames; ++i) {
         const std::uint64_t n = std::min<std::uint64_t>(blocks[i % blocks.size()], frames - done);
-        mixer.Render(Engine::Base::Span<std::int16_t>(out.data() + done * kChannels, n * kChannels));
+        mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data() + done * kChannels, n * kChannels));
         done += n;
     }
     return out;
@@ -51,15 +51,15 @@ std::int16_t Right(const std::vector<std::int16_t>& out, const std::size_t frame
 TEST_CASE("Audio ClipBank rejects clips the mixer cannot play") {
     ClipBank bank;
     const std::vector<std::int16_t> three{1, 2, 3};
-    const Engine::Base::ConstSpan<std::int16_t> span(three.data(), three.size());
-    const auto expectInvalid = [](const Engine::Base::Result<ClipId, AudioError>& result) {
+    const GYO::Engine::Base::ConstSpan<std::int16_t> span(three.data(), three.size());
+    const auto expectInvalid = [](const GYO::Engine::Base::Result<ClipId, AudioError>& result) {
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == AudioErrorCode::InvalidClip);
     };
     expectInvalid(bank.Add(span, 0, kSampleRate));
     expectInvalid(bank.Add(span, 3, kSampleRate));
     expectInvalid(bank.Add(span, 1, 44100));
-    expectInvalid(bank.Add(Engine::Base::ConstSpan<std::int16_t>(), 1, kSampleRate));
+    expectInvalid(bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(), 1, kSampleRate));
     expectInvalid(bank.Add(span, 2, kSampleRate)); // 3 samples are not whole stereo frames
     CHECK(bank.Count() == 0);
 }

@@ -12,10 +12,10 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/audio/Mixer.hpp"
 
-using namespace Engine::Audio;
+using namespace GYO::Engine::Audio;
 using namespace std::chrono_literals;
-using Engine::Time::Duration;
-using Engine::Time::TimePoint;
+using GYO::Engine::Time::Duration;
+using GYO::Engine::Time::TimePoint;
 
 namespace {
 
@@ -32,7 +32,7 @@ struct Rig final {
 Rig MakeRig(const std::uint32_t slots, const std::uint32_t voices = 8, const std::uint32_t capacity = 64) {
     ClipBank bank;
     const std::vector<std::int16_t> samples(4800, 7);
-    auto clip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
+    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
     REQUIRE(clip.has_value());
     MixerConfig config;
     config.scheduleDelay = Duration::zero();
@@ -46,16 +46,16 @@ Rig MakeRig(const std::uint32_t slots, const std::uint32_t voices = 8, const std
     return Rig{std::move(mixer).value(), std::move(submitter).value(), *clip};
 }
 
-Engine::Base::Result<ClipId, AudioError> Load(Submitter& submitter, const std::uint32_t frames, const std::int16_t level,
+GYO::Engine::Base::Result<ClipId, AudioError> Load(Submitter& submitter, const std::uint32_t frames, const std::int16_t level,
                                                const std::uint16_t channels = 1) {
     const std::vector<std::int16_t> samples(std::size_t{frames} * channels, level);
-    return submitter.LoadClip(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), channels,
+    return submitter.LoadClip(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), channels,
                               kSampleRate);
 }
 
 std::vector<std::int16_t> RenderBlock(Mixer& mixer, const std::uint32_t frames, const TimePoint anchor = kAnchor) {
     std::vector<std::int16_t> out(std::size_t{frames} * kChannels, 0x5555);
-    mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+    mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
     return out;
 }
 
@@ -78,7 +78,7 @@ TEST_CASE("Audio Mixer plays a clip loaded while output runs") {
     auto mono = Load(rig.submitter, 100, 300);
     REQUIRE(mono.has_value());
     const std::vector<std::int16_t> stereo{11, -22, 11, -22, 11, -22};
-    auto both = rig.submitter.LoadClip(Engine::Base::ConstSpan<std::int16_t>(stereo.data(), stereo.size()), 2,
+    auto both = rig.submitter.LoadClip(GYO::Engine::Base::ConstSpan<std::int16_t>(stereo.data(), stereo.size()), 2,
                                        kSampleRate);
     REQUIRE(both.has_value());
     CHECK(*mono != *both);
@@ -133,15 +133,15 @@ TEST_CASE("Audio Mixer releases the lease of every voice a block frees") {
 TEST_CASE("Audio Submitter LoadClip rejects what ClipBank rejects and reports a missing slot") {
     Rig rig = MakeRig(1);
     const std::vector<std::int16_t> three{1, 2, 3};
-    const auto span = Engine::Base::ConstSpan<std::int16_t>(three.data(), three.size());
-    const auto expect = [](const Engine::Base::Result<ClipId, AudioError>& result, const AudioErrorCode code) {
+    const auto span = GYO::Engine::Base::ConstSpan<std::int16_t>(three.data(), three.size());
+    const auto expect = [](const GYO::Engine::Base::Result<ClipId, AudioError>& result, const AudioErrorCode code) {
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == code);
     };
     expect(rig.submitter.LoadClip(span, 3, kSampleRate), AudioErrorCode::InvalidClip);
     expect(rig.submitter.LoadClip(span, 2, kSampleRate), AudioErrorCode::InvalidClip);
     expect(rig.submitter.LoadClip(span, 1, 44100), AudioErrorCode::InvalidClip);
-    expect(rig.submitter.LoadClip(Engine::Base::ConstSpan<std::int16_t>(), 1, kSampleRate),
+    expect(rig.submitter.LoadClip(GYO::Engine::Base::ConstSpan<std::int16_t>(), 1, kSampleRate),
            AudioErrorCode::InvalidClip);
     REQUIRE(rig.submitter.LoadClip(span, 1, kSampleRate).has_value());
     expect(rig.submitter.LoadClip(span, 1, kSampleRate), AudioErrorCode::NoClipSlot);
@@ -289,7 +289,7 @@ TEST_CASE("Audio Mixer gives a reloaded slot a new ClipId") {
 TEST_CASE("Audio Submitter treats misused runtime clips as Programmer Errors") {
     ClipBank bank;
     const std::vector<std::int16_t> one{1};
-    auto bankClip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
+    auto bankClip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
     REQUIRE(bankClip.has_value());
     MixerConfig config;
     config.clipSlotsPerSubmitter = 2;
@@ -348,7 +348,7 @@ TEST_CASE("Audio Mixer loads, plays, stops and unloads while another thread rend
         std::int16_t highest = 0;
         std::vector<std::int16_t> out(std::size_t{64} * kChannels);
         while (!done.load(std::memory_order_acquire)) {
-            rig.mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), kAnchor);
+            rig.mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), kAnchor);
             for (std::size_t i = 0; i < out.size(); ++i) {
                 const std::int16_t v = out[i];
                 if (v == 0) continue;

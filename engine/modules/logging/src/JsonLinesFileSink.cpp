@@ -23,9 +23,6 @@ bool LineOutput::Close() noexcept {
 
 namespace {
 
-namespace Os = ::Engine::Os;
-namespace Threads = ::Engine::Threads;
-
 // The writer hands its bytes to the output at the end of a batch, or once this
 // many are waiting, always at the end of a line (master TraceSink).
 constexpr std::size_t kWriteChunk = std::size_t{64} * 1024;
@@ -34,7 +31,7 @@ constexpr std::size_t kWriteChunk = std::size_t{64} * 1024;
 // platform (golden lines are the same bytes everywhere, declaration 5.12).
 class FileOutput final : public LineOutput {
 public:
-    explicit FileOutput(Os::Files::FileWriter writer) noexcept : writer_(std::move(writer)) {}
+    explicit FileOutput(OS::Files::FileWriter writer) noexcept : writer_(std::move(writer)) {}
     bool Write(const std::string_view bytes) noexcept override {
         if (closed_) return false;
         try {
@@ -54,15 +51,15 @@ public:
     }
 
 private:
-    Os::Files::FileWriter writer_;
+    OS::Files::FileWriter writer_;
     bool closed_ = false;
 };
 
 LoggingResult<std::shared_ptr<LineOutput>> OpenAppend(const std::string& path) {
-    auto writer = Os::Files::FileWriter::Open(path, Os::Files::WriteMode::Append, Os::Files::LineEndings::AsWritten);
+    auto writer = OS::Files::FileWriter::Open(path, OS::Files::WriteMode::Append, OS::Files::LineEndings::AsWritten);
     if (!writer) {
-        return ::Engine::Base::Err(LoggingError::Make(LoggingErrorCode::OpenFailed, "Cannot open the log file",
-                                                      ::Engine::Base::CauseDetail(writer.error(), path)));
+        return Base::Err(LoggingError::Make(LoggingErrorCode::OpenFailed, "Cannot open the log file",
+                                                      Base::CauseDetail(writer.error(), path)));
     }
     return std::shared_ptr<LineOutput>(std::make_shared<FileOutput>(std::move(writer.value())));
 }
@@ -168,7 +165,7 @@ struct JsonLinesFileSink::Impl final {
             // Only a push into an empty queue, Flush or the stop wakes it; a
             // notify latched while writing makes this return at once. Never a timer.
             const auto wake = context.Wait();
-            GYO_ASSERT(wake.reason == ::Engine::Time::WakeReason::Notified);
+            GYO_ASSERT(wake.reason == Time::WakeReason::Notified);
         }
         {
             std::scoped_lock lock(progressMutex);
@@ -231,20 +228,20 @@ LoggingResult<std::shared_ptr<JsonLinesFileSink>> JsonLinesFileSink::Open(JsonLi
         impl->fatalOutput = std::move(options.fatalOutput);
     } else {
         if (options.truncate) {
-            auto truncated = Os::Files::FileWriter::Open(options.path, Os::Files::WriteMode::Truncate,
-                                                         Os::Files::LineEndings::AsWritten);
+            auto truncated = OS::Files::FileWriter::Open(options.path, OS::Files::WriteMode::Truncate,
+                                                         OS::Files::LineEndings::AsWritten);
             if (!truncated || !truncated.value().Close()) {
-                return ::Engine::Base::Err(LoggingError::Make(
+                return Base::Err(LoggingError::Make(
                     LoggingErrorCode::OpenFailed, "Cannot open the log file",
-                    truncated ? options.path : ::Engine::Base::CauseDetail(truncated.error(), options.path)));
+                    truncated ? options.path : Base::CauseDetail(truncated.error(), options.path)));
             }
         }
         auto output = OpenAppend(options.path);
-        if (!output) return ::Engine::Base::Err(std::move(output).error());
+        if (!output) return Base::Err(std::move(output).error());
         auto fatalOutput = OpenAppend(options.path);
         if (!fatalOutput) {
             output.value()->Close();
-            return ::Engine::Base::Err(std::move(fatalOutput).error());
+            return Base::Err(std::move(fatalOutput).error());
         }
         impl->output = std::move(output.value());
         impl->fatalOutput = std::move(fatalOutput.value());
@@ -255,8 +252,8 @@ LoggingResult<std::shared_ptr<JsonLinesFileSink>> JsonLinesFileSink::Open(JsonLi
     if (!writer) {
         impl->output->Close();
         impl->fatalOutput->Close();
-        return ::Engine::Base::Err(LoggingError::Make(LoggingErrorCode::StartFailed, "Cannot start the log writer",
-                                                      ::Engine::Base::CauseDetail(writer.error(), options.path)));
+        return Base::Err(LoggingError::Make(LoggingErrorCode::StartFailed, "Cannot start the log writer",
+                                                      Base::CauseDetail(writer.error(), options.path)));
     }
     impl->writer.emplace(std::move(writer.value()));
     return std::shared_ptr<JsonLinesFileSink>(new JsonLinesFileSink(std::move(impl)));
@@ -328,7 +325,7 @@ void JsonLinesFileSink::Close() noexcept {
         impl_->writer->Join();
         // The writer has returned: the output is the owner's alone from here.
         const JsonLinesCounts counts = impl_->CurrentCounts();
-        AppendJsonEndLine(impl_->pending, impl_->monoNs ? impl_->monoNs() : ::Engine::Time::NowNs(), counts);
+        AppendJsonEndLine(impl_->pending, impl_->monoNs ? impl_->monoNs() : Time::NowNs(), counts);
         impl_->WritePending();
         if (!impl_->output->Close()) impl_->failed.store(true, std::memory_order_release);
         {

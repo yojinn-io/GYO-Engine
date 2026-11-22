@@ -4,7 +4,7 @@
 
 #include <string_view>
 
-using Engine::Base::Fnv1a64;
+using GYO::Engine::Base::Fnv1a64;
 
 // Published FNV-1a 64-bit vectors plus single bytes at both ends of the range
 // and a non-ASCII (UTF-8) string, so signed char platforms are covered.

@@ -1,5 +1,5 @@
 #include "engine/io/helpers/WriteAllText.hpp"
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
 }

@@ -10,25 +10,25 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
-#include "engine/io/IoError.hpp"
+#include "engine/io/IOError.hpp"
 
-#include "engine/io/IoFwd.hpp" // Path::Uri
+#include "engine/io/IOFwd.hpp" // Path::Uri
 #include "engine/io/fs/IFileSystem.hpp"
 #include "engine/io/stream/FileOpenMode.hpp"
 #include "engine/io/fs/MountPoint.hpp"
 #include "engine/io/path/PathUtils.hpp"
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
 
-namespace detail {
+namespace Detail {
 
     // ---- Uri adapter（ここだけ合わせればOK）----
-    inline std::string UriText(const Engine::IO::Path::Uri& u) {
+    inline std::string UriText(const Path::Uri& u) {
         return u.ToString();
     }
-    inline Engine::IO::Path::Uri UriParse(std::string_view s) {
-        return Engine::IO::Path::ParseUriLoose(s);
+    inline Path::Uri UriParse(std::string_view s) {
+        return Path::ParseUriLoose(s);
     }
 
     // "scheme://rest" の scheme を抽出（見つからなければ空）
@@ -52,7 +52,7 @@ namespace detail {
     }
 
     // rootUri + "/" + rel を string で合成（スキーム等は root 側に従う）
-    inline Engine::IO::Path::Uri JoinRootAndRel(const Engine::IO::Path::Uri& root, std::string_view rel) {
+    inline Path::Uri JoinRootAndRel(const Path::Uri& root, std::string_view rel) {
         std::string r = UriText(root);
         if (!r.empty() && r.back() != '/') r.push_back('/');
         // rel 先頭スラッシュを除去
@@ -61,25 +61,25 @@ namespace detail {
         return UriParse(r);
     }
 
-    inline bool IsNotFound(const IoError& e) noexcept {
-        return e.code == Engine::IO::IoErrorCode::NotFound;
+    inline bool IsNotFound(const IOError& e) noexcept {
+        return e.code == IOErrorCode::NotFound;
     }
 
-    inline bool WantsWrite(Engine::IO::Stream::FileOpenMode m) noexcept {
-        using Engine::IO::Stream::FileOpenMode;
+    inline bool WantsWrite(Stream::FileOpenMode m) noexcept {
+        using Stream::FileOpenMode;
         // Write/Append/Truncate/Create のどれかが立っていれば “書き込み系” とみなす
-        return Engine::IO::Stream::Has(m, FileOpenMode::Write)
-            || Engine::IO::Stream::Has(m, FileOpenMode::Append)
-            || Engine::IO::Stream::Has(m, FileOpenMode::Truncate)
-            || Engine::IO::Stream::Has(m, FileOpenMode::CreateIfMissing);
+        return Stream::Has(m, FileOpenMode::Write)
+            || Stream::Has(m, FileOpenMode::Append)
+            || Stream::Has(m, FileOpenMode::Truncate)
+            || Stream::Has(m, FileOpenMode::CreateIfMissing);
     }
 
-    } // namespace detail
+    } // namespace Detail
 
     /// Mount の解決結果
     struct ResolvedMount final {
         const MountPoint* mp = nullptr;
-        Engine::IO::Path::Uri nativeUri; // 下位 FS に渡す URI（root + rel）
+        Path::Uri nativeUri; // 下位 FS に渡す URI（root + rel）
     };
 
     /// mount 管理
@@ -87,15 +87,15 @@ namespace detail {
     /// - scheme で候補を取り出し、priority 降順で並べる
     class MountTable final {
     public:
-        IoResult<void> Mount(MountPoint mp) {
+        IOResult<void> Mount(MountPoint mp) {
             if (!mp.fs) {
-                return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::InvalidPath,
+                return Base::Err(IOError::Make(
+                    IOErrorCode::InvalidPath,
                     "MountTable: fs is null"));
             }
             if (mp.name.empty()) {
-                return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::InvalidPath,
+                return Base::Err(IOError::Make(
+                    IOErrorCode::InvalidPath,
                     "MountTable: mount name is empty"));
             }
             mounts_.push_back(std::move(mp));
@@ -116,16 +116,16 @@ namespace detail {
         const std::vector<MountPoint>& All() const noexcept { return mounts_; }
 
         /// scheme に一致する mount を priority 降順で返す
-        std::vector<const MountPoint*> Candidates(const Engine::IO::Path::Uri& vfsUri) const {
-            const std::string u = detail::UriText(vfsUri);
-            const std::string_view scheme = detail::ExtractScheme(u);
+        std::vector<const MountPoint*> Candidates(const Path::Uri& vfsUri) const {
+            const std::string u = Detail::UriText(vfsUri);
+            const std::string_view scheme = Detail::ExtractScheme(u);
 
             std::vector<const MountPoint*> out;
             out.reserve(mounts_.size());
 
             for (const auto& m : mounts_) {
-                const std::string mu = detail::UriText(m.mountUri);
-                const std::string_view ms = detail::ExtractScheme(mu);
+                const std::string mu = Detail::UriText(m.mountUri);
+                const std::string_view ms = Detail::ExtractScheme(mu);
                 if (!scheme.empty() && ms == scheme) {
                     out.push_back(&m);
                 }
@@ -135,17 +135,17 @@ namespace detail {
         }
 
         /// 読み取り向け解決：存在する（または open/stat できる） mount を上から探すのは Vfs 側で行う
-        IoResult<ResolvedMount> Resolve(const MountPoint& mp, const Engine::IO::Path::Uri& vfsUri) const {
-            const std::string u = detail::UriText(vfsUri);
-            const std::string_view rel = detail::ExtractAfterScheme(u);
+        IOResult<ResolvedMount> Resolve(const MountPoint& mp, const Path::Uri& vfsUri) const {
+            const std::string u = Detail::UriText(vfsUri);
+            const std::string_view rel = Detail::ExtractAfterScheme(u);
             // A mount never reaches outside its root (docs/architecture/io.md).
-            if (Engine::IO::Path::ContainsTraversal(rel)) {
-                return Base::Err(IoError::Make(Engine::IO::IoErrorCode::PathEscapesRoot,
+            if (Path::ContainsTraversal(rel)) {
+                return Base::Err(IOError::Make(IOErrorCode::PathEscapesRoot,
                                                "MountTable: the request has a '..' segment", std::string(rel)));
             }
             ResolvedMount r;
             r.mp = &mp;
-            r.nativeUri = detail::JoinRootAndRel(mp.rootUri, rel);
+            r.nativeUri = Detail::JoinRootAndRel(mp.rootUri, rel);
             return std::move(r);
         }
 
@@ -164,4 +164,4 @@ namespace detail {
         std::vector<MountPoint> mounts_;
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

@@ -6,7 +6,7 @@
 #include <chrono>
 #include <cmath>
 
-namespace Engine::Time {
+namespace GYO::Engine::Time {
 
 void LateWakeStats::Record(const Duration late) {
     GYO_ASSERT(late >= Duration::zero());
@@ -43,4 +43,4 @@ Duration LateWakeStats::QuantileUpperBound(const double q) const {
     return max_;
 }
 
-} // namespace Engine::Time
+} // namespace GYO::Engine::Time

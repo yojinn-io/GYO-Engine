@@ -7,7 +7,7 @@
 #include <span>
 #include <string>
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 // Portable content fingerprint shared by offline tools and asset consumers.
 [[nodiscard]] inline std::string Sha256(std::span<const std::byte> bytes) {
@@ -62,4 +62,4 @@ namespace Engine::Base {
     return result;
 }
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base

@@ -50,7 +50,6 @@ struct NamedSetRecord {
     std::vector<TypeKey> pendingMembers;
     std::vector<std::uint32_t> memberOwners;
     std::vector<ComponentId> members;
-    bool digest = false;
 };
 
 struct ScheduleRecord {
@@ -86,7 +85,6 @@ struct SystemRecord {
 
 struct HookRecord {
     std::string name;
-    Zone zone;
     TypeKey component;
     HookTrigger trigger;
     ResolveFn resolve;
@@ -101,7 +99,6 @@ struct HookRecord {
 // One observer (Registrar::Observer; event cursor declaration 3.3).
 struct ObserverRecord {
     std::string name;
-    Zone zone;
     ObserverTrigger trigger;
     // The observer's E (On<E>'s key) and what it names: the event type, or the
     // component of Add<T> / Remove<T>.
@@ -140,8 +137,6 @@ struct RoundBase {
     std::size_t observers = 0;
     std::size_t initialValues = 0;
     std::size_t allotterDeclarations = 0;
-    std::uint32_t digestMarks = 0;
-    std::uint32_t explicitZoneCalls = 0;
 };
 
 // One schedule's resolved order (FrozenRegistry::OrderGraph), built with its Plan.
@@ -184,11 +179,6 @@ struct RegistryData {
     std::uint32_t schedulerShuffle = 0;
     bool extractSourceSet = false;
 
-    // Registrar::RequireExplicitZones: an Unset zone is an error instead of zone B.
-    bool explicitZones = false;
-    // Calls of Registrar::DigestSet and RequireExplicitZones (R-E7 in a later round).
-    std::uint32_t digestMarks = 0;
-    std::uint32_t explicitZoneCalls = 0;
     std::vector<StartupError> errors;
     // The first BuildPlans has started: SetExtractSource is closed.
     bool finished = false;
@@ -236,21 +226,17 @@ struct RegistryData {
 
     void Error(StartupCode code, std::string rule, std::string message, std::vector<std::string> subjects = {},
                std::vector<std::string> sources = {});
-    void Error(StartupCode code, StartupCode step, std::string rule, std::string message,
-               std::vector<std::string> subjects = {}, std::vector<std::string> sources = {});
 };
 
 [[nodiscard]] std::string SourceText(const std::source_location& source);
-[[nodiscard]] const char* ZoneName(Zone zone) noexcept;
 
 // Scheduler.cpp: builds every schedule's Plan into data.plans and its resolved
-// order into data.orders, reporting D-E4, D-E5, D-E6, D-E16 into data.errors.
+// order into data.orders, reporting D-E4, D-E5, D-E6 into data.errors.
 // Access sets must be resolved.
 void BuildPlans(RegistryData& data);
 
 // Fingerprint.cpp.
 [[nodiscard]] Fingerprint RegistryFingerprintOf(const RegistryData& data);
-[[nodiscard]] Fingerprint CFingerprintOf(const RegistryData& data);
 [[nodiscard]] Fingerprint PlanFingerprintOf(const Plan& plan);
 
 } // namespace GYO::Kernel::Detail

@@ -5,16 +5,14 @@
 
 # The kernel test executable links only GYO::Kernel and gyo_test_support
 # (GYO::Base and doctest), so a kernel header that needs anything else does not
-# compile here. The zone C fixture is a synthetic (c) System file for the G-5
-# export (spec J-17 kernel half); it is in the executable so its registration
-# site is a real source path.
+# compile here. (The G-5 export and its fixture moved to the authority Module,
+# tests/common/authority; v8-arch-gyo2-authority-rollback step 6.)
 set(GYO_KERNEL_TEST_SOURCES
     TestMain.cpp
     SignatureTests.cpp
     RegistryTests.cpp
-    ZoneRuleTests.cpp
+    StartupCheckTests.cpp
     SchedulerTests.cpp
-    ZoneCExportTests.cpp
     CoverageTests.cpp
     WorldTests.cpp
     ExecutorTests.cpp
@@ -28,16 +26,13 @@ set(GYO_KERNEL_TEST_SOURCES
     MessageCursorTests.cpp
     ObserverTests.cpp
     TraceSpanTests.cpp
-    zone_c_fixture/SyntheticSimulation.cpp
-    zone_c_fixture/AnotherSimulation.cpp
+    HashTests.cpp
+    RestoreTests.cpp
 )
 function(gyo_kernel_test_executable name)
     add_executable(${name} ${ARGN})
     target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(${name} PRIVATE GYO::Kernel gyo_test_support doctest::doctest)
-    target_compile_definitions(${name} PRIVATE
-        GYO_KERNEL_TEST_REPOSITORY_ROOT="${GYO_REPOSITORY_ROOT}"
-        GYO_KERNEL_TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
     # Same warning level as the math and entity store tests, so header code
     # that would warn in a consumer fails here first. doctest includes
     # <windows.h> on MSVC, so its min and max macros are turned off.
@@ -73,10 +68,14 @@ gyo_add_silent_probe(kernel.el-silent gyo_kernel_tests "${CMAKE_CURRENT_SOURCE_D
 # and of the world-exec batch (world-exec declaration judgement 2), so each
 # appears by name in the L1 tests.xml. The doctest cases of entry J-n are named
 # "J-n: ..." ("J-32:*" does not match "J-32b: ...").
+# J-15, J-16, J-38, J-39 and J-41 have no case in the kernel since the writer
+# count, the digest set and the zone rules left (v8-arch-gyo2-authority-rollback
+# step 2, declaration 9.2); J-17 and J-40 since the G-5 export, Z6 and Z8 moved
+# to the authority Module (step 6).
 set(GYO_KERNEL_J_ENTRIES
     J-1 J-2 J-3 J-4 J-5 J-6 J-7 J-8
-    J-10 J-11 J-12 J-13 J-14 J-15 J-16 J-17 J-18 J-19 J-20 J-21 J-22 J-23 J-24 J-25
-    J-26 J-27 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37 J-38 J-39 J-40 J-41
+    J-10 J-11 J-12 J-13 J-14 J-18 J-19 J-20 J-21 J-22 J-23 J-24 J-25
+    J-26 J-27 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37
     J-44 J-45 J-47 J-50 J-52 J-53 J-54 J-55 J-56 J-57 J-59)
 # A filter that matches no case would pass silently, so a run of zero cases fails.
 foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
@@ -90,8 +89,6 @@ foreach(test IN LISTS GYO_KERNEL_J_ENTRIES ITEMS others J-18_link_order)
     set_tests_properties(kernel.${test} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 endforeach()
-# kernel.J-17 writes the G-5 export of the zone C fixture; kernel.J-17_zone_scan reads it.
-set_tests_properties(kernel.J-17 PROPERTIES FIXTURES_SETUP kernel_zone_c_export)
 
 # Text guards, run on the repository as text so they give the same result on
 # every platform; their self-tests run them on synthetic trees. -B: no
@@ -99,32 +96,19 @@ set_tests_properties(kernel.J-17 PROPERTIES FIXTURES_SETUP kernel_zone_c_export)
 # from a stale cache.
 #   kernel.guard         spec J-9 (target/kernel DI-KS 3 and 15, target/naming
 #                        DI 4, target/error-handling DI 2)
-#   kernel.naming_guard  target/naming DI 1 (namespace and directory) and DI 3
-#                        (no role suffix on type names)
-#   kernel.J-17_zone_scan  the G-5 export of the zone C fixture (written by kernel.J-17), read by
-#                        tests/common/zone_scan/zone_scan.py; the finding
-#                        count must be the fixture's planted count
+# The naming guard (every Engine unit, not the kernel's) is tests/common/naming.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME kernel.guard
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/kernel_guard.py" --root "${GYO_REPOSITORY_ROOT}")
 add_test(NAME kernel.guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_kernel_guard.py" -v)
-add_test(NAME kernel.naming_guard
-    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/naming_guard.py" --root "${GYO_REPOSITORY_ROOT}")
-add_test(NAME kernel.naming_guard_selftest
-    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_naming_guard.py" -v)
 # kernel.store_stamp_guard: engine/entity_store holds no change stamp (target/world section 6; world-exec).
 add_test(NAME kernel.store_stamp_guard
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/store_stamp_guard.py" --root "${GYO_REPOSITORY_ROOT}")
 add_test(NAME kernel.store_stamp_guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_store_stamp_guard.py" -v)
 set_tests_properties(kernel.store_stamp_guard kernel.store_stamp_guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
-add_test(NAME kernel.J-17_zone_scan
-    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/zone_c_export_check.py"
-        --root "${GYO_REPOSITORY_ROOT}" --list "${CMAKE_CURRENT_BINARY_DIR}/kernel_zone_c_sources.json")
-set_tests_properties(kernel.J-17_zone_scan PROPERTIES FIXTURES_REQUIRED kernel_zone_c_export)
-set_tests_properties(kernel.guard kernel.guard_selftest kernel.naming_guard kernel.naming_guard_selftest
-    kernel.J-17_zone_scan PROPERTIES LABELS "cpu" TIMEOUT 60)
+set_tests_properties(kernel.guard kernel.guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
 
 # Writable data symbols of the kernel library (registry-schedule declaration
 # section 3 item 1, judgement 9; world-exec makes both allowed names required,
@@ -239,10 +223,10 @@ function(gyo_kernel_compile_fail_samples)
 endfunction()
 gyo_kernel_compile_fail_samples()
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Delta-1 of the migration plan: the kernel is a leaf directly above GYO::Base;
 # Delta-3 (world-exec) adds GYO::EntityStore, whose algorithms keep the World's
 # columns. Its links, private and interface alike, are exactly these two.
-# gyo_expect_links is defined with the time tests, which configure first.
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too.
 function(gyo_expect_kernel_links)

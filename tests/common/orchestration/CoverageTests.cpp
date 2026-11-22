@@ -8,8 +8,8 @@
 #include <new>
 #include <stdexcept>
 
-using namespace OrchTest;
-using namespace OrchTest::Save;
+using namespace GYO::Test::Orchestration;
+using namespace GYO::Test::Orchestration::Save;
 
 namespace {
 
@@ -36,8 +36,8 @@ O::ProductDescription Two(std::vector<std::string> mainFrame = {"Tick"}, std::ve
 }
 
 O::PrepareFn Refuse() {
-    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
-        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no"));
+    return [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no"));
     };
 }
 
@@ -339,6 +339,8 @@ TEST_CASE("O-8: a World interrupted outside the Product ends it too; RunGameInit
     CHECK_MESSAGE((p.Failure()->world == "Side" && p.Failure()->entry == "outside the Product" && p.Failure()->lastSchedule.empty() &&
                    !p.Failure()->kernelCode.has_value()),
                   "[or-ended-outside-fields] " << p.Failure()->Text());
+    // No entry point made this failure: Break names the Product (O-8: the failure says what broke).
+    CHECK_MESSAGE(p.Failure()->product == "game", "[or-ended-outside-product] " << p.Failure()->Text());
     CHECK_MESSAGE(!p.RunFrame(), "[or-ended-outside] RunFrame succeeded");
 }
 
@@ -376,7 +378,7 @@ TEST_CASE("O-8: an exception that leaves a DropOldFirst replacement ends the Pro
         O::Product& p = **built;
         bool thrown = false;
         try {
-            static_cast<void>(p.ReplaceWorld("Side", O::ReplaceRequest{[alloc](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+            static_cast<void>(p.ReplaceWorld("Side", O::ReplaceRequest{[alloc](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 if (alloc) throw std::bad_alloc();
                 throw std::runtime_error("disk gone");
             }, {}, O::ReplaceOrder::DropOldFirst}));
@@ -506,7 +508,7 @@ TEST_CASE("O-8: a registration that differs: the new frame list and prepare are 
             s.Registrar().Schedule(Once("Second"));
             s.Registrar().AddSystem<&Mark<'2'>>(In("MarkSecond", "Second"));
             s.Frame().Append("Second");
-            s.Prepare([](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+            s.Prepare([](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 Log().push_back("prepare 2");
                 return {};
             });
@@ -544,19 +546,3 @@ TEST_CASE("O-9: the refusal error names the World and the owner; nothing is logg
 K::SystemResult WriteTagBoot(K::Query<K::Write<Tag>>) { return {}; }
 K::SystemResult WriteTagFrame(K::Query<K::Write<Tag>>) { return {}; }
 
-// "A game initialization schedule belongs to a domain" (D-E12, the O-1 transition sentence) left with the clock
-// in batch 3 (G2, v8-arch-gyo2-clock-out-of-kernel).
-TEST_CASE("O-1: game initialization and the frame both writing one column is D-E2") {
-    Log().clear();
-    O::ProductDescription twoWriters;
-    twoWriters.name = "game";
-    twoWriters.gameInit = {"Boot"};
-    twoWriters.worlds.push_back(World("Main", [](O::WorldSetup& s) {
-        Basics(s.Registrar(), {Once("Boot"), FrameClock("Tick")});
-        s.Registrar().AddSystem<&WriteTagBoot>(In("WriteBoot", "Boot"));
-        s.Registrar().AddSystem<&WriteTagFrame>(In("WriteFrame", "Tick"));
-    }, {"Tick"}));
-    auto counted = O::Product::Build(std::move(twoWriters), Units().Take());
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(counted), "[or-gi-writer-counted] built");
-    CHECK_MESSAGE(counted.error().detail.find("D-E2") != std::string::npos, "[or-gi-writer-counted] " << counted.error().detail);
-}

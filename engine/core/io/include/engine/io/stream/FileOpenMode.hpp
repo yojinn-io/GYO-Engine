@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
     /// ファイル/ストリームの Open フラグ
     /// - OS 依存の詳細は platform 側で吸収する
@@ -92,4 +92,4 @@ namespace Engine::IO::Stream {
         return true;
     }
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

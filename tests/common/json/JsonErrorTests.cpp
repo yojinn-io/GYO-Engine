@@ -23,5 +23,5 @@ TEST_CASE("JsonErrorCode: every code has its own name") {
 
 TEST_CASE("JsonError: formatted through the one formatter") {
     const JsonError error = JsonError::Make(JsonErrorCode::Syntax, "not JSON", "line 1, column 3");
-    CHECK(::Engine::Base::Describe(error) == "Syntax: not JSON (line 1, column 3)");
+    CHECK(::GYO::Engine::Base::Describe(error) == "Syntax: not JSON (line 1, column 3)");
 }

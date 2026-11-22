@@ -1,0 +1,90 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the default entity allotter (docs/architecture/target/v2/world-gen-declaration.zh-Hant.md, sections 10 and 11; Design Invariants EI-1, EI-2 in docs/architecture/target/v2/entity-ids.zh-Hant.md; ids ei- and the three moved from the kernel's list with RangeAllotter, which keep their ids). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "we-j8-allotter-wraps",
+   "what": "the allotter wraps to its first id when used up (moved from the kernel's list by v8-arch-gyo2-world-gen with RangeAllotter; carried before from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts). Only it catches the no-wrap branch",
+   "guards": [
+    "entity-ids EI-2",
+    "kernel DI-KS 4"
+   ],
+   "file": "engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp",
+   "find": "        if (id == last) {\n            exhausted = true;\n        } else {",
+   "replace": "        if (id == last) {\n            next = first;\n        } else {",
+   "target": "gyo_entity_ids_tests",
+   "cases": "allotter:*",
+   "expect": "allotter\\.Allot\\(\\)\\ ==\\ std::nullopt"
+  },
+  {
+   "id": "we-j8-allotter-reset",
+   "what": "the allotter gains a Reset (moved from the kernel's list by v8-arch-gyo2-world-gen). Only it catches the absence of a reset",
+   "guards": [
+    "entity-ids EI-2",
+    "kernel DI-KS 4"
+   ],
+   "file": "engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp",
+   "find": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};",
+   "replace": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n    void Reset() noexcept { next = first; exhausted = false; }\n};",
+   "target": "gyo_entity_ids_tests",
+   "cases": "allotter:*",
+   "expect": "RangeAllotter must not have a Reset"
+  },
+  {
+   "id": "ks-hash-allotter-as-bytes",
+   "what": "RangeAllotter hashes its object bytes, padding included (moved from the kernel's list by v8-arch-gyo2-world-gen with the type; it replaced spa-reserved-short-unchecked). Only it catches the allotter's own hash function",
+   "guards": [
+    "entity-ids EI-2",
+    "authority-rollback-declaration 3.2"
+   ],
+   "file": "engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp",
+   "find": "inline void HashValue(Kernel::Hasher& h, const RangeAllotter& value) {\n    HashValue(h, value.first);\n    HashValue(h, value.last);\n    HashValue(h, value.next);\n    HashValue(h, value.exhausted);\n}",
+   "replace": "inline void HashValue(Kernel::Hasher& h, const RangeAllotter& value) { Kernel::HashAsBytes(h, value); }",
+   "target": "gyo_entity_ids_tests",
+   "cases": "allotter:*",
+   "expect": "\\[summary\\-padding\\-equal\\]"
+  },
+  {
+   "id": "ei-prepare-overwrites",
+   "what": "the Module's prepare function puts the default range even when a value is already there (a carried-over allotter is replaced). Only it catches the 'not over a value already there' half of EI-1",
+   "guards": [
+    "entity-ids EI-1",
+    "orchestration O-7"
+   ],
+   "file": "engine/modules/entity_ids/src/EntityIdsModule.cpp",
+   "find": "        if (world.Resource<RangeAllotter>() == nullptr) world.SetResource(RangeAllotter::Of(options.first, options.last));",
+   "replace": "        world.SetResource(RangeAllotter::Of(options.first, options.last));",
+   "target": "gyo_entity_ids_tests",
+   "cases": "module:*",
+   "expect": "\\[ei\\-carry\\-kept\\]"
+  },
+  {
+   "id": "ei-not-default",
+   "what": "the register row of entity_ids says default=no: a product that lists no unit carries no allotter. Only it catches the Module being carried by default",
+   "guards": [
+    "entity-ids EI-1",
+    "world-gen-declaration 判定 1"
+   ],
+   "file": "config/modules.csv",
+   "find": "\"The default entity allotter: RangeAllotter registered in every World with a default range\",no,yes,",
+   "replace": "\"The default entity allotter: RangeAllotter registered in every World with a default range\",no,no,",
+   "target": "gyo_entity_ids_default_units_tests",
+   "cases": "default:*",
+   "expect": "\\[ei\\-default\\]"
+  },
+  {
+   "id": "ei-links-more",
+   "what": "EI-3 link set: entity_ids links one more target (a Module or core library). Only it reaches gyo_entity_ids's link set",
+   "guards": [
+    "entity-ids EI-3",
+    "orchestration O-6"
+   ],
+   "file": "engine/modules/entity_ids/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_entity_ids PUBLIC GYO::Base GYO::Kernel GYO::Orchestration)",
+   "replace": "target_link_libraries(gyo_entity_ids PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math)",
+   "target": "gyo_entity_ids_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_entity_ids links\\s+GYO::Base;GYO::Kernel;GYO::Math;GYO::Orchestration;\\s+expected exactly"
+  }
+ ]
+}

@@ -2,11 +2,11 @@
 
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::IO::Stream {
-    IoResult<std::size_t> SpanStream::Read(void* dst, std::size_t bytes)  {
+namespace GYO::Engine::IO::Stream {
+    IOResult<std::size_t> SpanStream::Read(void* dst, std::size_t bytes)  {
         if (!open_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::ReadFailed,
+            return Base::Err(IOError::Make(
+                IOErrorCode::ReadFailed,
                 "SpanStream: read on closed stream"));
         }
         if (bytes == 0) return 0;
@@ -27,23 +27,23 @@ namespace Engine::IO::Stream {
         return n;
     }
 
-    IoResult<std::size_t> SpanStream::Write(const void* src, std::size_t bytes)  {
+    IOResult<std::size_t> SpanStream::Write(const void* src, std::size_t bytes)  {
         if (!open_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::WriteFailed,
+            return Base::Err(IOError::Make(
+                IOErrorCode::WriteFailed,
                 "SpanStream: write on closed stream"));
         }
         if (!writable_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported,
+            return Base::Err(IOError::Make(
+                IOErrorCode::NotSupported,
                 "SpanStream: write not supported (read-only)"));
         }
         if (bytes == 0) return 0;
 
         const std::uint64_t need = pos_ + static_cast<std::uint64_t>(bytes);
         if (need > size_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::WriteFailed,
+            return Base::Err(IOError::Make(
+                IOErrorCode::WriteFailed,
                 "SpanStream: write beyond end",
                 "need=" + std::to_string(need) + " size=" + std::to_string(size_)));
         }
@@ -54,19 +54,19 @@ namespace Engine::IO::Stream {
         return bytes;
     }
 
-    IoResult<std::uint64_t> SpanStream::Tell() const  {
+    IOResult<std::uint64_t> SpanStream::Tell() const  {
         if (!open_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::SeekFailed,
+            return Base::Err(IOError::Make(
+                IOErrorCode::SeekFailed,
                 "SpanStream: tell on closed stream"));
         }
         return pos_;
     }
 
-    IoResult<std::uint64_t> SpanStream::Seek(std::int64_t offset, SeekWhence whence)  {
+    IOResult<std::uint64_t> SpanStream::Seek(std::int64_t offset, SeekWhence whence)  {
         if (!open_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::SeekFailed,
+            return Base::Err(IOError::Make(
+                IOErrorCode::SeekFailed,
                 "SpanStream: seek on closed stream"));
         }
 
@@ -82,8 +82,8 @@ namespace Engine::IO::Stream {
         }
 
         if (target < 0 || target > end) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::SeekFailed,
+            return Base::Err(IOError::Make(
+                IOErrorCode::SeekFailed,
                 "SpanStream: seek out of range",
                 "target=" + std::to_string(target) + " size=" + std::to_string(end)));
         }
@@ -93,25 +93,25 @@ namespace Engine::IO::Stream {
         return pos_;
     }
 
-    IoResult<std::uint64_t> SpanStream::Size() const  {
+    IOResult<std::uint64_t> SpanStream::Size() const  {
         if (!open_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported,
+            return Base::Err(IOError::Make(
+                IOErrorCode::NotSupported,
                 "SpanStream: size on closed stream"));
         }
         return size_;
     }
 
-    IoResult<void> SpanStream::Flush()  {
+    IOResult<void> SpanStream::Flush()  {
         if (!open_) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::NotSupported,
+            return Base::Err(IOError::Make(
+                IOErrorCode::NotSupported,
                 "SpanStream: flush on closed stream"));
         }
         return {}; // no-op
     }
 
-    IoResult<void> SpanStream::Close()  {
+    IOResult<void> SpanStream::Close()  {
         open_ = false;
         eof_ = false;
         return {};

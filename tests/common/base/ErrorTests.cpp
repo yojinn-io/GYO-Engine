@@ -17,7 +17,7 @@ enum class SampleCode { First = 1, Second };
     return "Unknown";
 }
 
-using SampleError = Engine::Base::Error<SampleCode>;
+using SampleError = GYO::Engine::Base::Error<SampleCode>;
 
 enum class UnnamedCode { First = 1 }; // no ToString
 
@@ -29,11 +29,11 @@ struct DefaultConstructible final {
 
 } // namespace Sample
 
-using Engine::Base::CodedError;
+using GYO::Engine::Base::CodedError;
 
 static_assert(CodedError<Sample::SampleError>);
 static_assert(!std::is_default_constructible_v<Sample::SampleError>, "an Error always describes a failure");
-static_assert(!CodedError<Engine::Base::Error<Sample::UnnamedCode>>, "codes need a ToString for Describe");
+static_assert(!CodedError<GYO::Engine::Base::Error<Sample::UnnamedCode>>, "codes need a ToString for Describe");
 static_assert(!CodedError<Sample::DefaultConstructible>, "a default-constructible type could mean no error");
 
 TEST_CASE("Error: Make carries code, message and detail") {
@@ -48,15 +48,15 @@ TEST_CASE("Error: the zero code is a Programmer Error") {
 }
 
 TEST_CASE("Describe: code name and message, then the detail when present") {
-    CHECK(Engine::Base::Describe(Sample::SampleError::Make(Sample::SampleCode::First, "missing"))
+    CHECK(GYO::Engine::Base::Describe(Sample::SampleError::Make(Sample::SampleCode::First, "missing"))
           == "First: missing");
-    CHECK(Engine::Base::Describe(Sample::SampleError::Make(Sample::SampleCode::Second, "unreadable", "a/b.txt"))
+    CHECK(GYO::Engine::Base::Describe(Sample::SampleError::Make(Sample::SampleCode::Second, "unreadable", "a/b.txt"))
           == "Second: unreadable (a/b.txt)");
 }
 
 TEST_CASE("CauseDetail: inner code name and detail, after the outer detail") {
     const auto inner = Sample::SampleError::Make(Sample::SampleCode::Second, "unreadable", "a/b.txt");
-    CHECK(Engine::Base::CauseDetail(inner) == "Second: a/b.txt");
-    CHECK(Engine::Base::CauseDetail(inner, "manifest.json") == "manifest.json; Second: a/b.txt");
-    CHECK(Engine::Base::CauseDetail(Sample::SampleError::Make(Sample::SampleCode::First, "missing")) == "First");
+    CHECK(GYO::Engine::Base::CauseDetail(inner) == "Second: a/b.txt");
+    CHECK(GYO::Engine::Base::CauseDetail(inner, "manifest.json") == "manifest.json; Second: a/b.txt");
+    CHECK(GYO::Engine::Base::CauseDetail(Sample::SampleError::Make(Sample::SampleCode::First, "missing")) == "First");
 }

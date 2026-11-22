@@ -57,9 +57,9 @@ void operator delete[](void* p) noexcept { Free(p); }
 void operator delete(void* p, std::size_t) noexcept { Free(p); }
 void operator delete[](void* p, std::size_t) noexcept { Free(p); }
 
-using namespace Engine::Audio;
-using Engine::Time::Duration;
-using Engine::Time::TimePoint;
+using namespace GYO::Engine::Audio;
+using GYO::Engine::Time::Duration;
+using GYO::Engine::Time::TimePoint;
 
 TEST_CASE("Audio allocation guard counts what the thread allocates and frees") {
     const Counted counted = Count([] {
@@ -73,7 +73,7 @@ TEST_CASE("Audio allocation guard counts what the thread allocates and frees") {
 TEST_CASE("Audio Mixer Render allocates and frees nothing") {
     ClipBank bank;
     const std::vector<std::int16_t> samples(48000, 20000); // 24000 stereo frames, longer than the test
-    auto clip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 2, kSampleRate);
+    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 2, kSampleRate);
     REQUIRE(clip.has_value());
     MixerConfig config;
     config.maxVoices = 3;
@@ -86,7 +86,7 @@ TEST_CASE("Audio Mixer Render allocates and frees nothing") {
     const TimePoint anchor = TimePoint{} + std::chrono::duration_cast<Duration>(std::chrono::seconds(5));
     std::vector<std::int16_t> out(std::size_t{1024} * kChannels);
     const auto render = [&] {
-        mixer->Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+        mixer->Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
     };
     // Plays on time, late, beyond the free voices, with saturation; then the
     // voices are stopped or end. Every Render path runs while counting is on.
@@ -133,8 +133,8 @@ TEST_CASE("Audio Mixer Render allocates and frees nothing for clips loaded while
     REQUIRE(submitter.has_value());
     const std::vector<std::int16_t> longClip(24000, 300);
     const std::vector<std::int16_t> shortClip(100, 500);
-    auto a = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(longClip.data(), longClip.size()), 1, kSampleRate);
-    auto b = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
+    auto a = submitter->LoadClip(GYO::Engine::Base::ConstSpan<std::int16_t>(longClip.data(), longClip.size()), 1, kSampleRate);
+    auto b = submitter->LoadClip(GYO::Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
                                  kSampleRate);
     REQUIRE((a && b));
 
@@ -148,7 +148,7 @@ TEST_CASE("Audio Mixer Render allocates and frees nothing for clips loaded while
     bool queued = false;
     const Counted counted = Count([&] {
         for (int block = 0; block < 6; ++block) {
-            mixer->Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+            mixer->Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
             if (block == 1) {
                 queued = submitter->Stop(sound, anchor) && submitter->UnloadClip(*a) && submitter->UnloadClip(*b);
             }
@@ -159,9 +159,9 @@ TEST_CASE("Audio Mixer Render allocates and frees nothing for clips loaded while
     CHECK(counted.allocations == 0);
     CHECK(counted.frees == 0);
     // Both slots were handed back: loading frees and allocates on this thread.
-    auto again = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
+    auto again = submitter->LoadClip(GYO::Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
                                      kSampleRate);
-    auto twice = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
+    auto twice = submitter->LoadClip(GYO::Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
                                      kSampleRate);
     CHECK((again && twice));
 }

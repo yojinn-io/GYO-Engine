@@ -2,11 +2,11 @@
 
 #include "engine/io/helpers/FileAllCommon.hpp"
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
-    inline IoResult<void>
-    WriteAllBytes(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
-                  Engine::Base::ConstSpan<std::byte> data,
+    inline IOResult<void>
+    WriteAllBytes(FS::IFileSystem& fs, const Path::Uri& uri,
+                  Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {
         auto orw = OpenWriteTruncate(fs, uri);
         if (!orw) return Base::Err(orw.error());
@@ -24,9 +24,9 @@ namespace Engine::IO::Helpers {
         return {};
     }
 
-    inline IoResult<void>
-    WriteAllBytes(Engine::IO::FS::Vfs& vfs, const Engine::IO::Path::Uri& uri,
-                  Engine::Base::ConstSpan<std::byte> data,
+    inline IOResult<void>
+    WriteAllBytes(FS::Vfs& vfs, const Path::Uri& uri,
+                  Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {
         auto orw = OpenWriteTruncate(vfs, uri);
         if (!orw) return Base::Err(orw.error());
@@ -44,4 +44,4 @@ namespace Engine::IO::Helpers {
         return {};
     }
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

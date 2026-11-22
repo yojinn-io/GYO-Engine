@@ -5,7 +5,7 @@
 
 #include <limits>
 
-using namespace Engine::IO::Stream;
+using namespace GYO::Engine::IO::Stream;
 
 TEST_CASE("BufferedStream: seeks use the logical position after read ahead") {
     auto inner = std::make_unique<MemoryStream>();

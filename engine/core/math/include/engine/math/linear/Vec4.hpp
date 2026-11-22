@@ -6,7 +6,7 @@
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 struct Vec4 final {
     float x{};
@@ -74,4 +74,4 @@ static_assert(std::is_aggregate_v<Vec4>);
 [[nodiscard]] inline Vec4 MakeDirection4(const Vec3 d) noexcept { return {d.x, d.y, d.z, 0.0F}; }
 [[nodiscard]] inline Vec3 XYZ(const Vec4 a) noexcept { return {a.x, a.y, a.z}; }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

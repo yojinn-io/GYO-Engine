@@ -12,12 +12,12 @@
 // end of main is a failure the script detects by its marker.
 namespace {
 
-void ReturningHandler(const Engine::Base::AssertionFailure& failure) {
+void ReturningHandler(const GYO::Engine::Base::AssertionFailure& failure) {
     std::fprintf(stderr, "probe handler saw: %s\n", failure.expression);
     std::fflush(stderr);
 }
 
-void NestedHandler(const Engine::Base::AssertionFailure&) {
+void NestedHandler(const GYO::Engine::Base::AssertionFailure&) {
     const volatile int inner = 0;
     GYO_ASSERT(inner == 1);
 }
@@ -30,9 +30,9 @@ int main(int argc, char** argv) {
 #endif
     const char* mode = argc > 1 ? argv[1] : "default";
     if (std::strcmp(mode, "returning") == 0) {
-        Engine::Base::SetAssertionHandler(&ReturningHandler);
+        GYO::Engine::Base::SetAssertionHandler(&ReturningHandler);
     } else if (std::strcmp(mode, "nested") == 0) {
-        Engine::Base::SetAssertionHandler(&NestedHandler);
+        GYO::Engine::Base::SetAssertionHandler(&NestedHandler);
     }
 
     const volatile int probeValue = 1;

@@ -16,7 +16,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 bool Ascending(const std::vector<EntityId>& keys) {
     return std::adjacent_find(keys.begin(), keys.end(), [](EntityId a, EntityId b) { return a >= b; }) == keys.end();
@@ -157,7 +157,7 @@ SystemResult OverwriteThroughKeptWorld(Query<Read<Tag>>) {
 SystemResult SpawnOne(Spawn<Bundle<Tag>> spawn, Res<TickCount> tick) {
     if (tick->value == 1) {
         auto id = spawn.New(Tag{7});
-        if (!id) return Engine::Base::Err(std::move(id).error());
+        if (!id) return GYO::Engine::Base::Err(std::move(id).error());
     }
     return Ok();
 }
@@ -192,7 +192,7 @@ TEST_CASE("J-3: a structural change while Running fails a GYO_ASSERT; a Spawn is
             Data(r, true);
             r.AddSystem<&SpawnOne>(B("SpawnOne", "A"));
         });
-        rig->world().SetResource(RangeAllotter::Of(1000, 1999));
+        rig->world().SetResource(TestRangeAllotter::Of(1000, 1999));
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Keys<Tag>() == std::vector<EntityId>{1000});
     }
@@ -262,8 +262,8 @@ TEST_CASE("J-7: destroy order: a despawn in ascending ComponentId, the World in 
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             // Registered in this order: ComponentId of Tracked<1> is smaller than Tracked<0>'s.
-            r.Component<Tracked<1>>({.name = "Tracked1", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Component<Tracked<0>>({.name = "Tracked0", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Tracked<1>>({.name = "Tracked1"});
+            r.Component<Tracked<0>>({.name = "Tracked0"});
             r.AddSystem<&DespawnOne>(B("DespawnOne", "A"));
         });
         World& world = rig->world();
@@ -287,8 +287,6 @@ TEST_CASE("J-7: destroy order: a despawn in ascending ComponentId, the World in 
 
 namespace {
 
-template <class A>
-concept HasReset = requires(A allotter) { allotter.Reset(); };
 
 SystemResult SpawnIntoAllotterRangeOnce(SpawnWithId<Bundle<Tag>> spawn, Res<TickCount> tick) {
     if (tick->value == 1) spawn.New(150, Tag{150});
@@ -299,14 +297,14 @@ SystemResult SpawnThriceAtTickTwo(Spawn<Bundle<Tag>> spawn, Res<TickCount> tick)
     if (tick->value != 2) return Ok();
     for (int i = 0; i < 3; ++i) {
         auto id = spawn.New(Tag{2});
-        if (!id) return Engine::Base::Err(std::move(id).error().Wrap("SpawnThriceAtTickTwo"));
+        if (!id) return GYO::Engine::Base::Err(std::move(id).error().Wrap("SpawnThriceAtTickTwo"));
     }
     return Ok();
 }
 
 SystemResult SpawnEveryTick(Spawn<Bundle<Tag>> spawn) {
     auto id = spawn.New(Tag{1});
-    if (!id) return Engine::Base::Err(std::move(id).error().Wrap("SpawnEveryTick"));
+    if (!id) return GYO::Engine::Base::Err(std::move(id).error().Wrap("SpawnEveryTick"));
     return Ok();
 }
 
@@ -314,26 +312,24 @@ SystemResult SpawnEveryTick(Spawn<Bundle<Tag>> spawn) {
 
 namespace {
 
-// RangeAllotter::Of built in memory that held `fill` before (what a stack slot
-// may hold), then copied into the World as an author would.
+// An allotter (the test one: the kernel ships none) built in memory that held `fill` before (what a stack slot may
+// hold), then copied into the World as an author would.
 EntityId StoredAllotterSummaryCase(unsigned char fill, Fingerprint& summary) {
-    alignas(RangeAllotter) unsigned char raw[sizeof(RangeAllotter)];
+    alignas(TestRangeAllotter) unsigned char raw[sizeof(TestRangeAllotter)];
     std::memset(raw, fill, sizeof raw);
-    const RangeAllotter* made = new (raw) RangeAllotter(RangeAllotter::Of(900, 1000000));
+    const TestRangeAllotter* made = new (raw) TestRangeAllotter(TestRangeAllotter::Of(900, 1000000));
     auto rig = MakeRig([](Registrar& r) { Data(r, true); });
     rig->world().SetResource(*made);
-    summary = rig->world().Summary();
-    return rig->world().Resource<RangeAllotter>()->next;
+    summary = SummaryOf(rig->world());
+    return rig->world().Resource<TestRangeAllotter>()->next;
 }
 
 } // namespace
 
-// v8-arch-gyo2-summary-padding-a-then-c (partly solved): World::Summary hashes a
-// value's raw bytes, so the kernel's own allotter must have no padding. Types an
-// author registers are the author's to keep padding-free; the full solution, a
-// hash function per type, is batch 4.
-TEST_CASE("D-9: the kernel's RangeAllotter has no padding, so equal allotters give one World summary") {
-    CHECK_MESSAGE(std::has_unique_object_representations_v<RangeAllotter>, "[summary-padding-unique] RangeAllotter has padding");
+// D-9 with a hash function per type (authority-rollback declaration 3.2): the World summary hashes a resource
+// through its type's hash function, so what the padding of an equal value holds does not reach it (the kernel's
+// side, DI-KS 27; the default allotter's own hash function is tested in tests/common/entity_ids/).
+TEST_CASE("D-9: equal allotters give one World summary, whatever their padding holds") {
     Fingerprint zeros;
     Fingerprint ones;
     REQUIRE(StoredAllotterSummaryCase(0x00, zeros) == 900);
@@ -341,30 +337,14 @@ TEST_CASE("D-9: the kernel's RangeAllotter has no padding, so equal allotters gi
     CHECK_MESSAGE(zeros == ones, "[summary-padding-equal] equal allotters, different summaries: " << zeros.Text() << " vs " << ones.Text());
 }
 
-TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; no allotter, no Spawn") {
-    RangeAllotter allotter = RangeAllotter::Of(100, 102);
-    CHECK(allotter.Allot() == std::optional<EntityId>(100));
-    CHECK(allotter.Allot() == std::optional<EntityId>(101));
-    CHECK(allotter.Allot() == std::optional<EntityId>(102));
-    CHECK(allotter.Allot() == std::nullopt);
-    CHECK(allotter.Allot() == std::nullopt);
-    CHECK(allotter.Owns(100));
-    CHECK(allotter.Owns(102));
-    CHECK_FALSE(allotter.Owns(103));
-    CHECK_FALSE(allotter.Owns(99));
-    CHECK(RangeAllotter::Of(5, 4).Allot() == std::nullopt);
-    RangeAllotter top = RangeAllotter::Of(~EntityId{0} - 1, ~EntityId{0});
-    CHECK(top.Allot() == std::optional<EntityId>(~EntityId{0} - 1));
-    CHECK(top.Allot() == std::optional<EntityId>(~EntityId{0}));
-    CHECK(top.Allot() == std::nullopt);
-    // The World has no way to reset the allotter (W-9: a new generation is a new World).
-    CHECK_MESSAGE(!HasReset<RangeAllotter>, "RangeAllotter must not have a Reset");
-
+// The allotter type's own properties (monotonic, no wrap, no Reset) are the entity_ids Module's (EI-2,
+// tests/common/entity_ids/); here the kernel's machinery with a test allotter.
+TEST_CASE("J-8: an exhausted allotter is reported, a SpawnWithId in its range is dropped; no allotter, no Spawn") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r, true);
         r.AddSystem<&SpawnEveryTick>(B("SpawnEveryTick", "A"));
     });
-    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 101));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     const auto third = rig->Run();
@@ -381,7 +361,7 @@ TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; n
             r.AddSystem<&SpawnIntoAllotterRangeOnce>(B("SpawnIntoAllotterRangeOnce", "A"));
             r.AddSystem<&SpawnThriceAtTickTwo>(B("SpawnThriceAtTickTwo", "B"));
         });
-        ranged->world().SetResource(RangeAllotter::Of(149, 151));
+        ranged->world().SetResource(TestRangeAllotter::Of(149, 151));
         KERNEL_REQUIRE_RUN_OK(ranged->Run());
         CHECK_MESSAGE(!ranged->world().Alive(150), "J-8: a SpawnWithId into the allotter range does not spawn");
         CHECK_MESSAGE(ranged->world().RejectedSpawns() == 1, "J-8: the dropped spawn is counted");
@@ -464,7 +444,7 @@ Fingerprint ReorderSummary(bool tagFirst) {
     rig->world().Insert(1, Tag{1});
     rig->world().Insert(2, Tag{2});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
-    return rig->world().Summary();
+    return SummaryOf(rig->world());
 }
 
 // Two records of one key by one System (recSeq decides), two hooks with one key each (hook order decides).
@@ -513,13 +493,9 @@ SystemResult LogAddTag(HookCtx ctx) {
 
 } // namespace
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
-// Not fully solved (v8-arch-gyo2-summary-padding-a-then-c): the golden below is
-// summary format 2, re-taken by v8-arch-gyo2-time-events step 3 (message records
-// with their seq, the write sequence and the message cursors are in the summary;
-// the kernel's own records have no padding, a static_assert); the judgement is unchanged.
+// The golden below is summary format 3, re-taken by v8-arch-gyo2-authority-rollback
+// step 1 (each value through its type's hash function, every number as 8 bytes);
+// the judgement is unchanged.
 TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.2's order (golden)") {
     SUBCASE("reordering two Systems that do not conflict keeps the World") {
         CHECK(ReorderSummary(true) == ReorderSummary(false));
@@ -528,8 +504,8 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&TwoRecordsOneKey>(B("TwoRecordsOneKey", "A"));
-            r.Hook<Mode, &HookTag100>(HookTrigger::OnAdd, {.name = "HookTag100", .zone = Zone::B});
-            r.Hook<Mode, &HookTag200>(HookTrigger::OnAdd, {.name = "HookTag200", .zone = Zone::B});
+            r.Hook<Mode, &HookTag100>(HookTrigger::OnAdd, {.name = "HookTag100"});
+            r.Hook<Mode, &HookTag200>(HookTrigger::OnAdd, {.name = "HookTag200"});
         });
         rig->world().Insert(3, Pos{3});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -538,17 +514,17 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(3)->t == 2);
         REQUIRE(rig->world().Get<Tag>(9) != nullptr);
         CHECK(rig->world().Get<Tag>(9)->t == 200);
-        const std::string summary = rig->world().Summary().Text();
+        const std::string summary = SummaryOf(rig->world()).Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "2:b5a7a165b66fa7df7738f3512c177eb1b18a8380951eda1ad2379e96bb9f17ee");
+        CHECK(summary == "3:3f782d8237ce0e8f80a0f53d42883688f02f5d75620f9c289d52a472f5fdd0b4");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&RejoinAndDrop>(B("RejoinAndDrop", "A"));
-            r.Hook<Mode, &LogRemoveMode>(HookTrigger::OnRemove, {.name = "LogRemoveMode", .zone = Zone::B});
-            r.Hook<Mode, &LogAddMode>(HookTrigger::OnAdd, {.name = "LogAddMode", .zone = Zone::B});
-            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag", .zone = Zone::B});
+            r.Hook<Mode, &LogRemoveMode>(HookTrigger::OnRemove, {.name = "LogRemoveMode"});
+            r.Hook<Mode, &LogAddMode>(HookTrigger::OnAdd, {.name = "LogAddMode"});
+            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag"});
         });
         World& world = rig->world();
         for (EntityId id : {1, 3, 4, 9}) world.Insert(id, Mode{1});
@@ -622,8 +598,8 @@ TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrit
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&OverwriteAndRemove>(B("OverwriteAndRemove", "A"));
-            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag", .zone = Zone::B});
-            r.Hook<Tag, &LogRemoveTag>(HookTrigger::OnRemove, {.name = "LogRemoveTag", .zone = Zone::B});
+            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag"});
+            r.Hook<Tag, &LogRemoveTag>(HookTrigger::OnRemove, {.name = "LogRemoveTag"});
         });
         rig->world().Insert(1, Tag{1});
         rig->world().Insert(2, Tag{2});
@@ -636,7 +612,7 @@ TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrit
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&DespawnOneAtTickOne>(B("DespawnOneAtTickOne", "A"));
-            r.Hook<Mode, &ModeRemovedSeesTag>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesTag", .zone = Zone::B});
+            r.Hook<Mode, &ModeRemovedSeesTag>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesTag"});
         });
         rig->world().Insert(1, Tag{7});
         rig->world().Insert(1, Mode{1});
@@ -721,7 +697,7 @@ SystemResult SpareRemoved(HookCtx ctx) {
 }
 SystemResult ModeRemovedFails(HookCtx ctx) {
     Log().push_back(Head("mode-removed-fails", ctx));
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the OnRemove of Mode fails"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the OnRemove of Mode fails"));
 }
 // Despawns 1 (three cells), 3 (never alive; 4 is alive and above it) and 6 (alive, no cell).
 SystemResult DespawnOneThreeSix(Despawn despawn, Res<TickCount> tick) {
@@ -744,8 +720,8 @@ std::string CallOrder(const std::vector<std::string>& log) {
 
 void RegisterDespawnOrderData(Registrar& r) {
     Data(r);
-    r.Component<Spare>({.name = "Spare", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Badge>({.name = "Badge", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Spare>({.name = "Spare"});
+    r.Component<Badge>({.name = "Badge"});
 }
 
 } // namespace
@@ -756,11 +732,11 @@ TEST_CASE("J-32: a despawn runs every OnRemove in ascending ComponentId before a
         r.AddSystem<&DespawnOneThreeSix>(B("DespawnOneThreeSix", "A"));
         // Hooks registered in descending ComponentId: the call order must follow the
         // ComponentId, not the hook registration order; Tag's two hooks keep theirs.
-        r.Hook<Badge, &BadgeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "BadgeRemovedSeesAll", .zone = Zone::B});
-        r.Hook<Spare, &SpareRemoved>(HookTrigger::OnRemove, {.name = "SpareRemoved", .zone = Zone::B});
-        r.Hook<Mode, &ModeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesAll", .zone = Zone::B});
-        r.Hook<Tag, &TagRemovedSeesAll>(HookTrigger::OnRemove, {.name = "TagRemovedSeesAll", .zone = Zone::B});
-        r.Hook<Tag, &TagRemovedSecond>(HookTrigger::OnRemove, {.name = "TagRemovedSecond", .zone = Zone::B});
+        r.Hook<Badge, &BadgeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "BadgeRemovedSeesAll"});
+        r.Hook<Spare, &SpareRemoved>(HookTrigger::OnRemove, {.name = "SpareRemoved"});
+        r.Hook<Mode, &ModeRemovedSeesAll>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesAll"});
+        r.Hook<Tag, &TagRemovedSeesAll>(HookTrigger::OnRemove, {.name = "TagRemovedSeesAll"});
+        r.Hook<Tag, &TagRemovedSecond>(HookTrigger::OnRemove, {.name = "TagRemovedSecond"});
     });
     World& world = rig->world();
     // Inserted in an order unlike the ComponentId order.
@@ -827,8 +803,8 @@ TEST_CASE("J-32: two despawns in one window: one entity is finished before the n
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.AddSystem<&DespawnTwoThenOne>(B("DespawnTwoThenOne", "A"));
-        r.Hook<Tag, &TagRemovedSeesOther>(HookTrigger::OnRemove, {.name = "TagRemovedSeesOther", .zone = Zone::B});
-        r.Hook<Mode, &ModeRemovedSeesOther>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesOther", .zone = Zone::B});
+        r.Hook<Tag, &TagRemovedSeesOther>(HookTrigger::OnRemove, {.name = "TagRemovedSeesOther"});
+        r.Hook<Mode, &ModeRemovedSeesOther>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesOther"});
     });
     World& world = rig->world();
     world.Insert(1, Tag{10});
@@ -850,7 +826,7 @@ TEST_CASE("J-32: an Err from a despawn's OnRemove hook is the Run's Err") {
     auto rig = MakeRig([](Registrar& r) {
         RegisterDespawnOrderData(r);
         r.AddSystem<&DespawnOneAtTickOne>(B("DespawnOneAtTickOne", "A"));
-        r.Hook<Mode, &ModeRemovedFails>(HookTrigger::OnRemove, {.name = "ModeRemovedFails", .zone = Zone::B});
+        r.Hook<Mode, &ModeRemovedFails>(HookTrigger::OnRemove, {.name = "ModeRemovedFails"});
     });
     rig->world().Insert(1, Tag{7});
     rig->world().Insert(1, Mode{1});
@@ -885,8 +861,8 @@ SystemResult SeeAfterMid(Query<Read<Tag>> tags) {
 
 TEST_CASE("J-33: stage ends and declared sync points apply; nowhere else") {
     auto rig = MakeRig([](Registrar& r) {
-        r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-        r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+        r.Component<Tag>({.name = "Tag"});
+        r.Resource<TickCount>({.name = "TickCount"});
         r.Schedule(MidSchedule());
         r.AddSystem<&SpawnTag>(B("SpawnTag", "A", {"Mid"}));
         r.AddSystem<&SeeBeforeMid>(B("SeeBeforeMid", "A", {"Mid"}, {"SpawnTag"}));
@@ -931,20 +907,18 @@ SystemResult RecordOnSystemPath(HookCtx ctx) {
     Detail::Push(fake, Detail::Record::Of(Detail::RecordKind::Despawn, ctx.Entity()));
     return Ok();
 }
-SystemResult HookWritesPos(Query<Write<Pos>>) { return Ok(); }
 SystemResult SystemTakesHookCtx(HookCtx) { return Ok(); }
-SystemResult HookReadsPos(Query<Read<Pos>>) { return Ok(); }
 
 } // namespace
 
-TEST_CASE("J-34: hooks run in registration order, their changes belong to the next window; F-5; (c) hook conflicts") {
+TEST_CASE("J-34: hooks run in registration order, their changes belong to the next window; F-5") {
     SUBCASE("order and the next window") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnTag>(B("SpawnTag", "A"));
             r.AddSystem<&CountModes>(B("CountModes", "B"));
-            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst", .zone = Zone::B});
-            r.Hook<Tag, &HookSecond>(HookTrigger::OnAdd, {.name = "HookSecond", .zone = Zone::B});
+            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst"});
+            r.Hook<Tag, &HookSecond>(HookTrigger::OnAdd, {.name = "HookSecond"});
         });
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -960,7 +934,7 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             other.stages = {"B"};
             r.Schedule(other);
             r.AddSystem<&SpawnTag>(B("SpawnTag", "C"));
-            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst", .zone = Zone::B});
+            r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst"});
         });
         Log().clear();
         // Tag at the last sync point of Tick; HookFirst records Mode, applied by the hook rounds right after it.
@@ -973,7 +947,7 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnTag>(B("SpawnTag", "A"));
-            r.Hook<Tag, &RecordOnSystemPath>(HookTrigger::OnAdd, {.name = "RecordOnSystemPath", .zone = Zone::B});
+            r.Hook<Tag, &RecordOnSystemPath>(HookTrigger::OnAdd, {.name = "RecordOnSystemPath"});
         });
         KeptWorld() = &rig->world();
         GYO_CHECK_ASSERTS(rig->Run());
@@ -985,14 +959,6 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             r.AddSystem<&SystemTakesHookCtx>(B("SystemTakesHookCtx", "A"));
         });
         GYO_CHECK_ASSERTS(rig->Run());
-    }
-    SUBCASE("two conflicting hooks on one trigger, one of them zone C: D-E9") {
-        const Built built = Finish({{"test", [](Registrar& r) {
-                                         Data(r);
-                                         r.Hook<Vel, &HookWritesPos>(HookTrigger::OnAdd, {.name = "HookWritesPos", .zone = Zone::C});
-                                         r.Hook<Vel, &HookReadsPos>(HookTrigger::OnAdd, {.name = "HookReadsPos", .zone = Zone::C});
-                                     }}});
-        CHECK(HasError(built, StartupCode::DE9));
     }
 }
 
@@ -1046,7 +1012,7 @@ TEST_CASE("J-36: a message is read once by every reader, in write order; kept un
         r.AddSystem<&SecondWriter>(B("SecondWriter", "B", {}, {"Writer"}));
         r.AddSystem<&LateReader>(B("LateReader", "C"));
         // Writes at the end of stage A (its sync point's Plan position).
-        r.Hook<Tag, &HookPing>(HookTrigger::OnAdd, {.name = "HookPing", .zone = Zone::B});
+        r.Hook<Tag, &HookPing>(HookTrigger::OnAdd, {.name = "HookPing"});
     });
     Log().clear();
     KERNEL_REQUIRE_RUN_OK(rig->Run());

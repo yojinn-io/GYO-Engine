@@ -4,9 +4,9 @@
 #include <string_view>
 
 #include "engine/base/Result.hpp"
-#include "engine/io/IoError.hpp"
+#include "engine/io/IOError.hpp"
 
-namespace Engine::IO::Path {
+namespace GYO::Engine::IO::Path {
 
     struct NormalizeOptions {
         bool convertBackslash     = true;  // "\" -> "/"
@@ -23,7 +23,7 @@ namespace Engine::IO::Path {
     bool ContainsNullByte(std::string_view s) noexcept;
     bool ContainsTraversal(std::string_view s) noexcept;  // ".." セグメント
 
-    Base::Result<std::string, IoError> Normalize(std::string_view raw,
+    Base::Result<std::string, IOError> Normalize(std::string_view raw,
                                           const NormalizeOptions& opt = {});
 
     // 文字列ユーティリティ（OS非依存）
@@ -58,4 +58,4 @@ namespace Engine::IO::Path {
     std::string RemoveDotSegments(std::string_view path, bool& escapedAboveRoot);
 
 
-} // namespace Engine::IO::Path
+} // namespace GYO::Engine::IO::Path

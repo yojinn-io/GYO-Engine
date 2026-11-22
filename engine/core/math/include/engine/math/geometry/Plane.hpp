@@ -4,7 +4,7 @@
 
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Points p with Dot(normal, p) == distance. normal must be unit length; the
 // Make* constructors normalize. The positive side is the one normal points to.
@@ -38,4 +38,4 @@ static_assert(std::is_aggregate_v<Plane>);
     return point - plane.normal * SignedDistance(plane, point);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

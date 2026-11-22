@@ -12,7 +12,7 @@
 #include <thread>
 #include <utility>
 
-using namespace Engine::Threads;
+using namespace GYO::Engine::Threads;
 using namespace std::chrono_literals;
 
 namespace {
@@ -68,7 +68,7 @@ TEST_CASE("Threads Notify wakes a role without stopping it") {
     std::atomic<int> wakes{0};
     auto role = StartRole({"gyo-test-notify"}, [&wakes](RoleContext& context) {
         while (!context.StopRequested()) {
-            if (context.WaitUntil(Engine::Time::Now() + 30s).reason == Engine::Time::WakeReason::Notified)
+            if (context.WaitUntil(GYO::Engine::Time::Now() + 30s).reason == GYO::Engine::Time::WakeReason::Notified)
                 wakes.fetch_add(1);
         }
     });
@@ -134,11 +134,11 @@ TEST_CASE("Threads a role reports the backend of its own Waiter") {
     auto role = StartRole({"gyo-test-backend"}, [](RoleContext& context) {
         while (!context.StopRequested()) static_cast<void>(context.Wait());
     });
-    auto waiter = Engine::Time::Waiter::Create();
+    auto waiter = GYO::Engine::Time::Waiter::Create();
     REQUIRE(waiter.has_value());
     // The same platform selection as any Waiter created here.
     CHECK(role.WaitBackend() == waiter->Backend());
-    CHECK(std::string(Engine::Time::ToString(role.WaitBackend())) != "Unknown");
+    CHECK(std::string(GYO::Engine::Time::ToString(role.WaitBackend())) != "Unknown");
     role.RequestStop();
     role.Join();
 }

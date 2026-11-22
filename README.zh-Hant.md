@@ -69,7 +69,7 @@ GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 
 - [工具登錄、選取與舊 CMake 設定遷移](docs/tool_projects.md)
 - [數學基礎契約](docs/architecture/math.md)
 - [錯誤處理契約（Result／Error／Assert）](docs/architecture/error-handling.md)
-- [Trace 傳輸與日誌契約](docs/architecture/trace.md)
+- [Trace（GYO2：Base 的門面與 trace Module）](docs/architecture/target/v2/trace.zh-Hant.md)
 - [Engine 架構文件入口](docs/architecture/README.md)
 - [目標架構（kernel 改造，尚未實作）](docs/architecture/target/README.md)
 - [kernel 改造計畫](docs/architecture/plans/kernel/README.md)

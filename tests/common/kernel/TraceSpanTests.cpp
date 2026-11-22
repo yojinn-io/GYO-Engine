@@ -20,8 +20,8 @@
 
 namespace {
 
-using namespace WorldTest;
-namespace Base = ::Engine::Base;
+using namespace GYO::Test::Kernel;
+namespace Base = ::GYO::Engine::Base;
 
 std::vector<std::string>* events = nullptr;
 std::uint64_t nextId = 1;
@@ -66,13 +66,13 @@ SystemResult Quiet(Query<Read<Tag>>) {
     return Ok();
 }
 SystemResult Fails(Query<Read<Tag>>) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
 }
 SystemResult Throws(Query<Read<Tag>>) {
     throw std::runtime_error("thrown inside");
 }
 SystemResult RunsStep(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Step"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Step"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 bool Never(Res<Flag>) {
@@ -101,7 +101,7 @@ SystemResult RingsNow(ExclusiveWorld<> world) {
     return world.Trigger(Bell{2});
 }
 SystemResult BellFails(On<Bell>) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the bell cracked"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the bell cracked"));
 }
 
 ScheduleOptions StepSchedule() {
@@ -141,7 +141,7 @@ TEST_CASE("kernel trace: a nested run's error is the origin inside and passes th
         Data(r);
         r.Schedule(StepSchedule());
         r.AddSystem<&RunsStep>(B("Driver", "A"));
-        r.AddSystem<&Fails>(Sys("Inner", Zone::B, {At("Step", "S")}));
+        r.AddSystem<&Fails>(Sys("Inner", {At("Step", "S")}));
     }, false, "Match");
     Recording recording;
     REQUIRE_FALSE(rig->Run());
@@ -167,7 +167,7 @@ TEST_CASE("kernel trace: a System its run condition skips opens no span") {
         Data(r);
         Mount m = At("Tick", "A");
         m.conditions.push_back(Condition<&Never>("Never"));
-        r.AddSystem<&Quiet>(Sys("Skipped", Zone::B, {m}));
+        r.AddSystem<&Quiet>(Sys("Skipped", {m}));
     }, false, "Match");
     Recording recording;
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -187,8 +187,8 @@ TEST_CASE("kernel trace: with no receiver a Run, an Err and a nested run behave 
 TEST_CASE("kernel trace: a Trigger from the Host is one span of its own") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Event<Bell>({.name = "Bell", .zone = Zone::B});
-        r.Observer<Bell, &HearBell>({.name = "hear-bell", .zone = Zone::B});
+        r.Event<Bell>({.name = "Bell"});
+        r.Observer<Bell, &HearBell>({.name = "hear-bell"});
     }, false, "Match");
     Recording recording;
     REQUIRE(rig->Trigger(Bell{1}));
@@ -199,7 +199,7 @@ TEST_CASE("kernel trace: a refusal inside a sync point is the origin once; the s
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.AddSystem<&DespawnSix>(B("Despawner", "A"));
-        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns"});
     }, false, "Match");
     rig->world().Insert(6, Tag{6});
     Recording recording;
@@ -225,8 +225,8 @@ TEST_CASE("kernel trace: a change outside the World API caught by the Ready wind
 TEST_CASE("kernel trace: an observer's Err in a Trigger from the Host is the origin once") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Event<Bell>({.name = "Bell", .zone = Zone::B});
-        r.Observer<Bell, &BellFails>({.name = "bell-fails", .zone = Zone::B});
+        r.Event<Bell>({.name = "Bell"});
+        r.Observer<Bell, &BellFails>({.name = "bell-fails"});
     }, false, "Match");
     Recording recording;
     REQUIRE_FALSE(rig->Trigger(Bell{1}));
@@ -246,9 +246,9 @@ std::size_t Origins(const Recording& recording) {
 TEST_CASE("kernel trace: a hook refused in a Host Trigger's rounds is the origin once") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Event<Bell>({.name = "Bell", .zone = Zone::B});
-        r.Observer<Bell, &BellDespawnsSix>({.name = "bell-despawns", .zone = Zone::B});
-        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.Event<Bell>({.name = "Bell"});
+        r.Observer<Bell, &BellDespawnsSix>({.name = "bell-despawns"});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns"});
     }, false, "Match");
     rig->world().Insert(6, Tag{6});
     Recording recording;
@@ -259,9 +259,9 @@ TEST_CASE("kernel trace: a hook refused in a Host Trigger's rounds is the origin
 TEST_CASE("kernel trace: a hook refused in a System's Trigger is the origin once") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Event<Bell>({.name = "Bell", .zone = Zone::B});
-        r.Observer<Bell, &BellDespawnsSix>({.name = "bell-despawns", .zone = Zone::B});
-        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.Event<Bell>({.name = "Bell"});
+        r.Observer<Bell, &BellDespawnsSix>({.name = "bell-despawns"});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns"});
         r.AddSystem<&RingsNow>(B("Ringer", "A"));
     }, false, "Match");
     rig->world().Insert(6, Tag{6});

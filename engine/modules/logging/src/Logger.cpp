@@ -76,14 +76,14 @@ void WriteToStandardError(const std::string_view line) noexcept {
 
 namespace {
 
-// Engine::Base::Log's lines, once the Logger took the handler.
-void OnBaseLog(const ::Engine::Base::LogMessage& message) noexcept {
+// GYO::Engine::Base::Log's lines, once the Logger took the handler.
+void OnBaseLog(const Base::LogMessage& message) noexcept {
     Level level = Level::Info;
     switch (message.level) {
-    case ::Engine::Base::LogLevel::Debug: level = Level::Debug; break;
-    case ::Engine::Base::LogLevel::Info: level = Level::Info; break;
-    case ::Engine::Base::LogLevel::Warning: level = Level::Warning; break;
-    case ::Engine::Base::LogLevel::Error: level = Level::Error; break;
+    case Base::LogLevel::Debug: level = Level::Debug; break;
+    case Base::LogLevel::Info: level = Level::Info; break;
+    case Base::LogLevel::Warning: level = Level::Warning; break;
+    case Base::LogLevel::Error: level = Level::Error; break;
     }
     Write(Entry{.level = level, .category = message.category, .text = message.text});
 }
@@ -91,7 +91,7 @@ void OnBaseLog(const ::Engine::Base::LogMessage& message) noexcept {
 } // namespace
 
 std::int64_t DefaultMonoNs() noexcept {
-    return ::Engine::Time::NowNs();
+    return Time::NowNs();
 }
 
 WallTime DefaultWall() noexcept {
@@ -99,7 +99,7 @@ WallTime DefaultWall() noexcept {
     WallTime wall;
     wall.unixMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
     try {
-        if (const auto local = ::Engine::Os::Process::ToLocalTime(now)) {
+        if (const auto local = OS::Process::ToLocalTime(now)) {
             wall.utcOffsetSeconds = static_cast<std::int32_t>(local.value().utcOffset.count());
         }
     } catch (...) {
@@ -114,12 +114,12 @@ namespace {
 // not in the state, so that reading them never touches the state. Uninstalling
 // still requires that no other thread is logging (LG-8): the handlers read the
 // state too, and it is deleted when the Logger is uninstalled.
-constinit std::atomic<::Engine::Base::AssertionHandler> previousAssertion{nullptr};
+constinit std::atomic<Base::AssertionHandler> previousAssertion{nullptr};
 constinit std::atomic<std::terminate_handler> previousTerminate{nullptr};
 
 // A failed GYO_ASSERT: the Fatal record first, then the handler installed
 // before (a test's throws; the default prints). The abort stays Base's.
-void OnAssertion(const ::Engine::Base::AssertionFailure& failure) {
+void OnAssertion(const Base::AssertionFailure& failure) {
     if (current.load(std::memory_order_acquire) != nullptr) {
         const Field fields[] = {{"file", failure.location.file_name()},
                                 {"line", static_cast<std::uint64_t>(failure.location.line())},
@@ -129,8 +129,8 @@ void OnAssertion(const ::Engine::Base::AssertionFailure& failure) {
                                                   .text = failure.expression != nullptr ? failure.expression : "",
                                                   .fields = fields}));
     }
-    const ::Engine::Base::AssertionHandler previous = previousAssertion.load(std::memory_order_acquire);
-    (previous != nullptr ? previous : &::Engine::Base::DefaultAssertionHandler)(failure);
+    const Base::AssertionHandler previous = previousAssertion.load(std::memory_order_acquire);
+    (previous != nullptr ? previous : &Base::DefaultAssertionHandler)(failure);
 }
 
 // What std::terminate was called for: the exception in flight, if any.
@@ -209,7 +209,7 @@ LoggingResult<LoggerHandle> Install(LoggerOptions options) {
             auto opened = JsonLinesFileSink::Open(std::move(file));
             if (!opened) {
                 for (Detail::SinkEntry& earlier : state->sinks) earlier.sink->Close();
-                return ::Engine::Base::Err(std::move(opened).error());
+                return Base::Err(std::move(opened).error());
             }
             sink = std::move(opened.value());
         }
@@ -241,13 +241,13 @@ LoggingResult<LoggerHandle> Install(LoggerOptions options) {
     Detail::current.store(raw, std::memory_order_release);
     if (options.takeBaseLog) {
         raw->tookBaseLog = true;
-        raw->previousBaseLog = ::Engine::Base::SetLogHandler(&Detail::OnBaseLog);
+        raw->previousBaseLog = Base::SetLogHandler(&Detail::OnBaseLog);
     }
     if (options.takeAssertions) {
         raw->tookAssertions = true;
-        raw->previousAssertion = ::Engine::Base::SetAssertionHandler(nullptr);
+        raw->previousAssertion = Base::SetAssertionHandler(nullptr);
         Detail::previousAssertion.store(raw->previousAssertion, std::memory_order_release);
-        ::Engine::Base::SetAssertionHandler(&Detail::OnAssertion);
+        Base::SetAssertionHandler(&Detail::OnAssertion);
     }
     if (options.takeTerminate) {
         raw->tookTerminate = true;
@@ -275,8 +275,8 @@ LoggerHandle::~LoggerHandle() {
 void LoggerHandle::Close() noexcept {
     Detail::LoggerState* state = std::exchange(state_, nullptr);
     if (state == nullptr) return;
-    if (state->tookBaseLog) ::Engine::Base::SetLogHandler(state->previousBaseLog);
-    if (state->tookAssertions) ::Engine::Base::SetAssertionHandler(state->previousAssertion);
+    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);
+    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);
     if (state->tookTerminate) std::set_terminate(state->previousTerminate);
     Detail::current.store(nullptr, std::memory_order_release);
     for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();

@@ -15,7 +15,7 @@ CLEAN_HEADER = """#pragma once
 #include <algorithm>
 #include <vector>
 
-namespace Engine::EntityStore {
+namespace GYO::Engine::EntityStore {
 // Static analysis is not a static variable; this comment says static int x;
 template <typename T>
 struct EntityKey {
@@ -33,7 +33,7 @@ bool Check(const T& value) {
     const char* text = "std::unordered_map static int cache;";
     return narrow < limit && text != nullptr;
 }
-} // namespace Engine::EntityStore
+} // namespace GYO::Engine::EntityStore
 """
 
 
@@ -54,7 +54,7 @@ class GuardTree(unittest.TestCase):
 
     def header(self, body):
         self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
-                   "#pragma once\nnamespace Engine::EntityStore {\n" + body + "\n}\n")
+                   "#pragma once\nnamespace GYO::Engine::EntityStore {\n" + body + "\n}\n")
 
     def assertReported(self, needle):
         problems = guard.check(self.root)
@@ -140,6 +140,18 @@ class Rules(GuardTree):
                    "#pragma once\n#include \"engine/math/linear/Vec3.hpp\"\n#include <engine/os/Files.hpp>\n")
         self.assertReported("Added.hpp:2: W5 engine/math/linear/Vec3.hpp")
         self.assertReported("Added.hpp:3: W5 engine/os/Files.hpp")
+
+    def test_parent_directory_after_an_allowed_prefix_is_reported(self):
+        # An allowed prefix followed by ".." reaches any header (as kernel_guard K5; v8-arch-gyo2-stale-cleanup).
+        # The backslash example keeps the "/" after the prefix so it reaches the ".." condition (as kernel_guard's
+        # self-test); the third has one ".." after a subdirectory.
+        for name in ("engine/base/../../../modules/rollback/include/engine/rollback/Inbox.hpp",
+                     "engine/entity_store/..\\..\\..\\core\\math\\include\\engine\\math\\Vec3.hpp",
+                     "engine/base/detail/../../../../modules/rollback/include/engine/rollback/Inbox.hpp"):
+            with self.subTest(name=name):
+                self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
+                           "#pragma once\n#include \"" + name + "\"\n")
+                self.assertReported("Added.hpp:2: W5 " + name)
 
     def test_platform_and_c_headers_are_reported(self):
         for header in ("pthread.h", "windows.h", "unistd.h", "stdatomic.h", "threads.h", "stdint.h",

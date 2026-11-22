@@ -14,13 +14,13 @@
 #include <windows.h>
 #endif
 
-using namespace Engine::Os;
-using namespace Engine::Os::Console;
+using namespace GYO::Engine::OS;
+using namespace GYO::Engine::OS::Console;
 
 // Shutdown requests and the command line of a real process are checked through
 // a child process (console_check.py); these cases need none.
 
-TEST_CASE("Os console command line is UTF-8, program name first") {
+TEST_CASE("OS console command line is UTF-8, program name first") {
     const char* argv[] = {"program", "--open", "\xE6\x97\xA5\xE6\x9C\xAC.json", nullptr};
     const auto arguments = CommandLineUtf8(3, argv);
     REQUIRE(arguments);
@@ -33,22 +33,22 @@ TEST_CASE("Os console command line is UTF-8, program name first") {
 }
 
 #if !defined(_WIN32)
-TEST_CASE("Os console command line refuses an argument that is not UTF-8") {
+TEST_CASE("OS console command line refuses an argument that is not UTF-8") {
     const char* argv[] = {"program", "\xFF\xFE", nullptr};
     const auto arguments = CommandLineUtf8(2, argv);
     REQUIRE_FALSE(arguments);
-    CHECK(arguments.error().code == OsErrorCode::InvalidEncoding);
+    CHECK(arguments.error().code == OSErrorCode::InvalidEncoding);
     CHECK(arguments.error().detail == "path_bytes=2");
 }
 
-TEST_CASE("Os console command line of no argv is empty") {
+TEST_CASE("OS console command line of no argv is empty") {
     const auto arguments = CommandLineUtf8(0, nullptr);
     REQUIRE(arguments);
     CHECK(arguments->empty());
 }
 #endif
 
-TEST_CASE("Os console UTF-8 output is applied and restored") {
+TEST_CASE("OS console UTF-8 output is applied and restored") {
 #if defined(_WIN32)
     const UINT before = ::GetConsoleOutputCP();
     {
@@ -68,12 +68,12 @@ TEST_CASE("Os console UTF-8 output is applied and restored") {
 #endif
 }
 
-TEST_CASE("Os console has no shutdown request until a handler records one") {
+TEST_CASE("OS console has no shutdown request until a handler records one") {
     // This test process installs no handler and receives no request.
     CHECK_FALSE(RequestedShutdown());
 }
 
-TEST_CASE("Os console shutdown reasons have stable names") {
+TEST_CASE("OS console shutdown reasons have stable names") {
     CHECK(std::string(ToString(ShutdownReason::Interrupt)) == "interrupt");
     CHECK(std::string(ToString(ShutdownReason::Terminate)) == "terminate");
     CHECK(std::string(ToString(ShutdownReason::Break)) == "break");

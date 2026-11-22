@@ -20,7 +20,7 @@
 // Invariants LG-7 and LG-8). main installs it before the first Product and
 // before starting other threads, and uninstalls it after the last Product and
 // after every other thread that could still write has stopped. While none is
-// installed, Write prints one line to standard error, as Engine::Base::Log's
+// installed, Write prints one line to standard error, as GYO::Engine::Base::Log's
 // default handler does.
 
 namespace GYO::Engine::Logging {
@@ -55,7 +55,7 @@ struct SinkSetup final {
 
 // The clocks a record is stamped with; tests inject their own (section 9.1).
 struct LoggerClock final {
-    // nullptr: Engine::Time::NowNs.
+    // nullptr: GYO::Engine::Time::NowNs.
     std::int64_t (*monoNs)() noexcept = nullptr;
     // nullptr: the system clock, with the C runtime's local offset from UTC.
     WallTime (*wall)() noexcept = nullptr;
@@ -63,7 +63,7 @@ struct LoggerClock final {
 
 struct LoggerOptions final {
     std::vector<SinkSetup> sinks;
-    // Engine::Base::Log's lines become records (the category and text as
+    // GYO::Engine::Base::Log's lines become records (the category and text as
     // given; Debug, Info, Warning and Error as the same levels).
     bool takeBaseLog{true};
     // A failed GYO_ASSERT writes a Fatal record of category "assert" through
@@ -97,7 +97,7 @@ struct LoggerState;
 [[nodiscard]] LoggingResult<LoggerHandle> Install(LoggerOptions options);
 
 // Uninstalls the Logger when destroyed or closed: the handlers the Logger took
-// (Engine::Base::Log, GYO_ASSERT, std::terminate) are put back, then Close is
+// (GYO::Engine::Base::Log, GYO_ASSERT, std::terminate) are put back, then Close is
 // called on every sink, in the order they were given. Move-only.
 class LoggerHandle final {
 public:

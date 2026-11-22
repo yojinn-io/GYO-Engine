@@ -661,7 +661,7 @@
     "trace TR-5"
    ],
    "file": "engine/modules/trace/src/Trace.cpp",
-   "find": "    return clock != nullptr ? clock() : ::Engine::Time::NowNs();",
+   "find": "    return clock != nullptr ? clock() : Time::NowNs();",
    "replace": "    return clock != nullptr ? clock() : 0;",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 4: S4-1*",
@@ -868,6 +868,29 @@
    "target": "gyo_trace_tests",
    "cases": "trace: a span still open when the Logger*",
    "expect": "no clock read at its end"
+  },
+  {
+   "id": "tr-guard-parent-directory",
+   "what": "TR-1 guard: an include with a \"..\" segment after an allowed module passes (engine/base/../../../ecs/kernel/... reaches the kernel's headers from the trace Module; v8-arch-gyo2-stale-cleanup, as kernel_guard K5 and orchestration_guard O4). Only it reaches the \"..\" condition",
+   "guards": [
+    "trace TR-1"
+   ],
+   "file": "tests/common/trace/trace_guard.py",
+   "find": "            if \"..\" in re.split(r\"[/\\\\]\", match.group(2)):",
+   "replace": "            if False:",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/trace",
+    "-p",
+    "test_trace_guard.py",
+    "-v"
+   ],
+   "expect": "FAIL: test_parent_directory_after_an_allowed_module_is_reported"
   }
  ]
 }

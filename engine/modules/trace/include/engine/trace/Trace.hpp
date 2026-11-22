@@ -18,7 +18,7 @@
 namespace GYO::Engine::Trace {
 
 struct TraceOptions final {
-    // The time base of begin_ns and duration_ns; nullptr is Engine::Time::NowNs (the logging Module's mono_ns).
+    // The time base of begin_ns and duration_ns; nullptr is GYO::Engine::Time::NowNs (the logging Module's mono_ns).
     std::int64_t (*monoNs)() noexcept = nullptr;
 };
 

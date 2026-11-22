@@ -5,3 +5,4 @@ O-8: a failing beforeSwap gives the carried value back*
 O-8: D3: an exception from extra*
 O-9: a refusing World*
 O-9: BuildPlans fails*
+O-3: the default runner returns*

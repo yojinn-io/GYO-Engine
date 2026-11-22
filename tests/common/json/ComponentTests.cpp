@@ -170,5 +170,5 @@ TEST_CASE("yyjson_write_number: the same text on every platform (small golden)")
         joined += '\n';
     }
     INFO(joined); // shown only when the golden fails
-    CHECK(Engine::Base::Fnv1a64(joined) == 0x8100A3C1F6B4B980ULL);
+    CHECK(GYO::Engine::Base::Fnv1a64(joined) == 0x8100A3C1F6B4B980ULL);
 }

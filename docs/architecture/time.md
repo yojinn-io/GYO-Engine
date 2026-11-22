@@ -1,15 +1,17 @@
 # GYO time base and wait primitive
 
-Owner: Engine (`engine/time` → `GYO::Time`).
+Owner: Engine (`engine/core/time` → `GYO::Time`).
 Plan and record: [time-threads-trace](plans/time-threads-trace/README.md), batch TT-1 (D29); this document was written
-in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants. The batch that would have moved the
-wait backends into engine/os (os-wait-backend) is frozen: its Windows timing L2 failed and it was withdrawn (D78), so
-the backends stay in `Waiter.cpp`.
+in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants. The platform wait mechanism is
+engine/core/os's `WakeSignal` (v8-arch-gyo2-os-wait, [declaration](target/v2/os-wait-declaration.zh-Hant.md)); the Waiter
+keeps what a wake means and calls no OS API itself.
 
 ## What it is
 
 ```text
 GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
+                  │
+                  └──(private)──→ GYO::OS (WakeSignal)
 ```
 
 - **The time base** (`Time::MonotonicClock`, `Now`, `NowNs`): every Engine module measures elapsed time, waits and
@@ -30,11 +32,13 @@ GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
 - One thread waits; any thread may `Notify`. A notification is latched: one sent before the wait starts is not lost,
   and several before one wake coalesce into that wake.
 - `Wait()` has no deadline and returns only when notified.
-- `Backend()` names the platform mechanism: `Kqueue` on macOS (an `EVFILT_TIMER` with `NOTE_CRITICAL`, which avoids
+- `Backend()` names the platform mechanism engine/core/os uses (os.md, Wait): `Kqueue` on macOS (an `EVFILT_TIMER` with `NOTE_CRITICAL`, which avoids
   the timer-coalescing leeway std and SDL sleeps get, and `EVFILT_USER` for notifications);
   `HighResolutionWaitableTimer` on Windows, or `WaitableTimer` when the high-resolution timer is not available;
   `ConditionVariable` elsewhere. The names are part of the consumer's log lines (`wait_backend=`).
-- `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive. A moved-from Waiter ignores
+- `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive; the message is engine/core/os's and
+  the detail carries engine/core/os's error (`Base::CauseDetail`, for example `IOFailed: errno=24`; ★ in
+  v8-arch-gyo2-os-wait, where it replaced `strerror` text and `GetLastError=<n>`). A moved-from Waiter ignores
   `Notify` (it is `noexcept` and cannot assert); waiting on it is a Programmer Error (`GYO_ASSERT`).
 
 ## Baselines
@@ -51,7 +55,7 @@ the main checkout.
 |---|---|---|---|
 | macOS Intel x86_64 (Kqueue) | 2026-10-27, `f6997194` | 0.077 / 0.145 ms; 0.077 / 0.134 ms | `os-wake-baseline-20261027-macos-intel` |
 | macOS Intel x86_64 (Kqueue), TT-1 L2 | 2026-10-09, `a8f9535` | 0.025 / 0.10 ms; 0.077 / 0.133 ms (idle host) | `tt1-l2-20261009-idle` |
-| Windows x64 (HighResolutionWaitableTimer), os-windows-run W4 | 2026-10-28, programs built from `4ffc7c65` (this Waiter) | 0.617 / 1.000 ms; 0.450 / 0.928 ms | `wake-baseline/` on the Windows machine ([record](../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)) |
+| Windows x64 (HighResolutionWaitableTimer), os-windows-run W4 | 2026-10-28, programs built from `4ffc7c65` (the Waiter before v8-arch-gyo2-os-wait) | 0.617 / 1.000 ms; 0.450 / 0.928 ms | `wake-baseline/` on the Windows machine ([record](../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)) |
 | Linux x64 | cancelled (os-subsystem D78) | | |
 | macOS arm64 | not run: no machine (CI runs L1 only) | | |
 
@@ -66,28 +70,36 @@ the main checkout.
 3. **Notifications are latched and coalesce.** One sent before the wait is not lost; several before one wake give one
    wake; concurrent notifiers lose none. Guards: "latches a notification sent before the wait", "coalesces several
    notifications into one wake", "loses no notification under concurrent producers", "wakes on a notification from
-   another thread before a far deadline"; mutants `tt1-notify-dropped`, `tt1-latch-cleared-on-entry`,
-   `tt1-latch-never-consumed`.
+   another thread before a far deadline"; mutants `tt1-notify-dropped`, `tt1-notify-without-signal`,
+   `tt1-latch-cleared-on-entry`, `tt1-latch-never-consumed`. `Notify` sets the latch before it signals, and every
+   platform relies on that order not to lose a notification; no guard checks the order (a swap would only show in
+   a nanosecond-wide window, v8-arch-gyo2-os-wait).
 4. **A passed deadline is reported first.** When the deadline has already passed, the wait reports `Deadline` and
    leaves a pending notification latched, so the next wait returns `Notified` at once. Guards: "returns at once for a
    deadline already passed", "reports a passed deadline first and keeps the notification latched"; mutant
    `tt1-latch-before-deadline`.
-5. **Relative arming, then a re-check.** Every backend arms a relative timeout and re-reads the time base after each
-   wake; a spurious or early platform wake only waits again. No absolute time converted from the base is handed to
-   the OS. Guard: mutant `tt1-no-recheck`.
-6. **`Wait()` has no timer**: it returns only when notified, so a caller that must never poll (trace.md Invariant 2)
+5. **Relative arming, then a re-check.** The Waiter hands `OS::WakeSignal::Block` a relative timeout every time and
+   re-reads the time base after each wake; a spurious or early platform wake only waits again. No absolute time
+   converted from the base is handed to the OS. Guard: mutant `tt1-no-recheck`.
+6. **`Wait()` has no timer**: it returns only when notified, so a caller that must never poll (the logging file sink's writer, [logging LG-6](target/v2/logging.zh-Hant.md#lg-6))
    can rely on it. Guard: "waits without a deadline until notified".
 7. **The backend is reported, and its names stay.** `Backend()` answers which mechanism this Waiter uses, on every
    platform (the Windows fallback included); the `ToString` names do not change, since consumer logs carry them
-   (os.md Invariant 9). Guards: "Time Waiter uses the platform backend" for the selection, "Time Waiter backend
-   names stay as consumers log them" for the names; mutant `ti-x3-backend-name-changed`.
+   (os.md Invariant 9). The names are Time's `WaitBackend`; `OS::WaitMechanism` maps to it value for value
+   (`static_assert` in `Waiter.cpp`). Guards: `tests/common/os/WakeSignalTests.cpp` "OS wake signal uses the platform
+   mechanism" for the selection (mutants ow-x8, ow-x14, ow-x15), "Time Waiter reports the os mechanism" for the
+   mapping (mutant ow-x7), "Time Waiter backend names stay as consumers log them" for the names; mutant
+   `ti-x3-backend-name-changed`.
 8. **The latch is Time's state** (AGENTS.md §3, State Authority): no other component keeps a copy of it or decides on
-   it. When the backends move into engine/os, engine/os reads the latch through a reference and keeps no copy (os.md
-   Invariant 8). No guard; it is checked in review.
+   it. engine/core/os never reads the latch; the wake primitive keeps its own pending signal (os.md Invariant 8). Guard:
+   structural: `WakeSignal`'s API takes no latch, and engine/core/os cannot reach engine/core/time (os.md Invariant 3, R5 and
+   the link check).
 9. **Use after move is refused**: waiting on a moved-from Waiter is a Programmer Error, and `Notify` on it does
    nothing. Guard: "rejects use after move and ignores notifications on a moved-from waiter".
-10. **`GYO::Time` links exactly `GYO::Base` and `Threads::Threads`** (checked at configure time by
-    `tests/common/time/CMakeLists.txt`): no SDL, no `GYO::Engine`. Guard: mutant `ti-x1-time-links-more`.
+10. **`GYO::Time` links exactly `GYO::Base` and, privately, `GYO::OS`** (checked at configure time by
+    `tests/common/time/CMakeLists.txt`, which also refuses `GYO::OS` in its interface): no SDL, no `GYO::Engine`, no
+    other engine unit. The thread library comes through engine/core/os where the fallback needs it. Guards: mutants
+    `ti-x1-time-links-more`, `ow-x2-time-os-public`.
 11. **`LateWakeStats` has fixed bins, allocates nothing and runs no thread.** Guard: "Time LateWakeStats bins late
     wakes and bounds quantiles" for the bins and quantiles. No guard for the allocation.
 
@@ -99,7 +111,9 @@ Stop adding features and propose redesigning instead of patching when any of the
    own flag: the single-waiter latch would have to become something else.
 2. A backend cannot keep Invariants 2 and 5 with a relative timeout and a re-check (a platform without relative
    timers, or a wake source that cannot be re-checked).
-3. Moving the backends into engine/os (os-wait-backend) changes a wake measurably in the Wait timing L2: report and
-   decide before patching (os.md Replacement Criterion 2).
+3. (Removed in v8-arch-gyo2-os-wait.) It said: moving the backends into engine/core/os changes a wake measurably in the
+   Wait timing L2. It fired at W3 (the Windows window-mode deadline P50, os-windows-run) and ended in the D78
+   freeze without the cause found; the move was then accepted by CI L1, the guards and mutants instead of a timing
+   L2, by the user's decision (declaration 5.4). Timing changes of the backends are os.md Replacement Criterion 2.
 4. Engine needs a second time base for scheduling (for example wall-clock deadlines): decide it explicitly instead
    of adding a clock.

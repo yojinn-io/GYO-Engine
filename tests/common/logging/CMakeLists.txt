@@ -60,14 +60,14 @@ endif()
 add_test(NAME logging.alloc COMMAND gyo_logging_allocation_tests)
 set_tests_properties(logging.alloc PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
-# Design Invariant LG-10: GYO::Base publicly, and GYO::Json, GYO::Os, GYO::Threads, GYO::Time
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
+# Design Invariant LG-10: GYO::Base publicly, and GYO::Json, GYO::OS, GYO::Threads, GYO::Time
 # privately; nothing else, and none of the private four handed to the Module's users. Checked once the
-# whole project is configured, so an edge added later from another directory is seen too
-# (gyo_expect_links comes from tests/common/time).
+# whole project is configured, so an edge added later from another directory is seen too.
 function(gyo_expect_logging_links)
-    gyo_expect_links(gyo_logging GYO::Base GYO::Json GYO::Os GYO::Threads GYO::Time)
+    gyo_expect_links(gyo_logging GYO::Base GYO::Json GYO::OS GYO::Threads GYO::Time)
     get_target_property(interface gyo_logging INTERFACE_LINK_LIBRARIES)
-    foreach(private IN ITEMS GYO::Json GYO::Os GYO::Threads GYO::Time)
+    foreach(private IN ITEMS GYO::Json GYO::OS GYO::Threads GYO::Time)
         if(private IN_LIST interface)
             message(FATAL_ERROR "gyo_logging exposes ${private} to its users; link it PRIVATE")
         endif()

@@ -21,12 +21,12 @@ CLEAN_HEADER = """#pragma once
 #include <vector>
 
 namespace GYO::Kernel {
-// Spawn and Despawn queue structural changes; ExtractRes reads a resource; zone is C or B.
+// Spawn and Despawn queue structural changes; ExtractRes reads a resource; a phase is C or B.
 // The timezone of a host is not read here; a matcher matches ids; rematch is a word too.
 // A comment may say static int x; and std::unordered_map without being code.
 struct Despawn {};
 struct ExtractRes {};
-enum class Zone { C, B };
+enum class Phase { C, B };
 struct Matcher {
     [[nodiscard]] bool matches(int nearest, int farther) const noexcept { return nearest < farther; }
 };
@@ -139,6 +139,52 @@ class GuardTree(unittest.TestCase):
             with self.subTest(text=text):
                 self.header(text)
                 self.assertReported("K9", needle)
+
+    def test_k9_every_clock_name_is_reported(self):
+        for text, needle in (("void DomainTick();", "DomainTick"), ("struct DomainTickRead;", "DomainTickRead"),
+                             ("class CurrentTick;", "CurrentTick"), ("int TickStampSlot;", "TickStampSlot"),
+                             ("int tickStamps_;", "tickStamps_"), ("int kTickStampSlots;", "kTickStampSlots"),
+                             ("const char* DomainName();", "DomainName"), ("enum class Domain {};", "enum class Domain"),
+                             ("auto d = Domain::None;", "Domain::None"), ("int rejectTick;", "rejectTick"),
+                             ("int tickOfSchedule;", "tickOfSchedule"), ("bool c = options.clock;", "options.clock"),
+                             ("struct S { bool clock; };", "bool clock"), ("struct VirtualTime;", "VirtualTime"),
+                             ("struct FixedTime;", "FixedTime"), ("struct RealTime;", "RealTime"),
+                             ("struct ActiveTime;", "ActiveTime"), ("struct TimeControl;", "TimeControl"),
+                             ("struct Resimulation;", "Resimulation"), ("void TickWriters();", "TickWriters"),
+                             ("class TickAccumulator;", "TickAccumulator")):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertReported("K9", needle)
+
+    def test_k9_clock_comments_stay_allowed(self):
+        self.header("// the kernel keeps no clock: the tick is the time Module's\nint ticks = 0; // a tick count")
+        self.assertFalse([p for p in guard.check(self.root) if ": K9 " in p])
+
+    def test_k9_every_removed_name_is_reported(self):
+        for text, needle in (("enum class Zone {};", "Zone"), ("bool RequireExplicitZones;", "RequireExplicitZones"),
+                             ("int emitterZone;", "emitterZone"), ("int zoneAccess;", "zoneAccess"),
+                             ("bool c = info.zone;", ".zone"), ("struct WritePolicy;", "WritePolicy"),
+                             ("int writePolicy;", "writePolicy"), ("void CheckExclusiveWriters();", "CheckExclusiveWriters"),
+                             ("struct FunnelNote;", "FunnelNote"), ("auto d = Rollback::Derived;", "Rollback::"),
+                             ("enum class Role {};", "enum class Role"), ("enum class Rollback {};", "enum class Rollback"),
+                             ("auto r = Role::Input;", "Role::Input"), ("auto r = Role::State;", "Role::State"),
+                             ("bool rollbackEnabled;", "rollbackEnabled"), ("bool rollbackSafe;", "rollbackSafe"),
+                             ("bool rollbackActive;", "rollbackActive"), ("bool notInRollback;", "notInRollback"),
+                             ("int ingressStage;", "ingressStage"), ("bool ingress = false;", "ingress"),
+                             ("bool i = options.ingress;", "ingress"), ("struct S { bool external; };", "bool external"),
+                             ("bool e = info.external;", ".external"), ("struct DigestSet;", "DigestSet"),
+                             ("void MarkDigestSet();", "MarkDigestSet"), ("int digestMarks;", "digestMarks"),
+                             ("struct CFingerprint;", "CFingerprint"), ("int kCFingerprintVersion;", "kCFingerprintVersion"),
+                             ("bool parallelGuardTest;", "parallelGuardTest"), ('const char* rule = "Z1";', '"Z1"')):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertReported("K9", needle)
+
+    def test_k9_removed_comments_stay_allowed(self):
+        self.header("// the kernel keeps no zone and no digest: those are the authority Module's\n"
+                    "enum class TypeRole { Component }; auto r = TypeRole::Component; struct PlanFingerprint {};\n"
+                    "struct MessageWriterInfo {}; // the external caller writes; DE7 stays")
+        self.assertFalse([p for p in guard.check(self.root) if ": K9 " in p])
 
     def test_k9_executor_file_is_checked(self):
         self.write("engine/ecs/kernel/src/Executor.cpp", "namespace GYO::Kernel {\nvoid InstallRunner() {}\n}\n")
@@ -274,7 +320,7 @@ class GuardTree(unittest.TestCase):
     # K6 ---------------------------------------------------------------------------------------------------------
 
     def test_k6_log_call_is_reported(self):
-        self.header('inline void Fail() { Engine::Base::Log(Engine::Base::LogLevel::Error, "kernel", "x"); }')
+        self.header('inline void Fail() { GYO::Engine::Base::Log(GYO::Engine::Base::LogLevel::Error, "kernel", "x"); }')
         self.assertReported("K6", "Log")
 
     def test_k6_log_header_is_reported(self):
@@ -294,9 +340,11 @@ class GuardTree(unittest.TestCase):
         # Error levels D1: the Executor no longer logs, so it has no K6 exemption.
         self.write("engine/ecs/kernel/src/Executor.cpp",
                    '#include "engine/base/Log.hpp"\nnamespace GYO::Kernel {\n'
-                   'void Report() { Engine::Base::Log(Engine::Base::LogLevel::Error, "kernel", "x"); }\n}\n')
+                   'void Report() { GYO::Engine::Base::Log(GYO::Engine::Base::LogLevel::Error, "kernel", "x"); }\n}\n')
         self.assertReported("K6", "engine/base/Log.hpp")
-        self.assertReported("K6", "Log")
+        # The call on its own: the needle "Log" alone also matches the header's finding above.
+        problems = guard.check(self.root)
+        self.assertTrue(any(p.endswith(": K6 Log") for p in problems), problems)
 
     # K7 ---------------------------------------------------------------------------------------------------------
 
@@ -311,19 +359,19 @@ class GuardTree(unittest.TestCase):
     # K8 ---------------------------------------------------------------------------------------------------------
 
     def test_k8_id_issuer_is_reported(self):
-        self.header("struct Ids { Engine::Base::IdIssuer issuer; };")
+        self.header("struct Ids { GYO::Engine::Base::IdIssuer issuer; };")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_id_issuer_after_using_is_reported(self):
         # using namespace, so the use line itself does not spell Base::IdIssuer.
-        self.header("using namespace Engine::Base;\ninline IdIssuer& Issuer();")
+        self.header("using namespace GYO::Engine::Base;\ninline IdIssuer& Issuer();")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_base_thread_serial_state_is_reported(self):
         # One name per tree, matched at the end of the finding: "K8 threadSerials" contains "threadSerial".
-        for body, needle in (("inline auto Next() { return Engine::Base::Detail::threadSerials.Next(); }",
+        for body, needle in (("inline auto Next() { return GYO::Engine::Base::Detail::threadSerials.Next(); }",
                               "K8 threadSerials"),
-                             ("inline auto Mine() { return Engine::Base::Detail::threadSerial; }",
+                             ("inline auto Mine() { return GYO::Engine::Base::Detail::threadSerial; }",
                               "K8 threadSerial")):
             with self.subTest(needle=needle):
                 self.header(body)
@@ -331,9 +379,9 @@ class GuardTree(unittest.TestCase):
                 self.assertTrue(any(p.endswith(needle) for p in problems), problems)
 
     def test_k8_serial_state_after_using_namespace_is_reported(self):
-        for body, needle in (("using namespace Engine::Base::Detail;\ninline auto Next() { return threadSerials.Next(); }",
+        for body, needle in (("using namespace GYO::Engine::Base::Detail;\ninline auto Next() { return threadSerials.Next(); }",
                               "K8 threadSerials"),
-                             ("using namespace Engine::Base::Detail;\ninline auto Mine() { return threadSerial; }",
+                             ("using namespace GYO::Engine::Base::Detail;\ninline auto Mine() { return threadSerial; }",
                               "K8 threadSerial")):
             with self.subTest(needle=needle):
                 self.header(body)
@@ -347,26 +395,26 @@ class GuardTree(unittest.TestCase):
 
     def test_k8_executor_file_is_checked(self):
         self.write("engine/ecs/kernel/src/Executor.cpp",
-                   "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
+                   "namespace GYO::Kernel {\nunsigned long long Next() { GYO::Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_in_a_source_file_is_reported(self):
         self.write("engine/ecs/kernel/src/World.cpp",
-                   "namespace GYO::Kernel {\nunsigned long long Next() { Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
+                   "namespace GYO::Kernel {\nunsigned long long Next() { GYO::Engine::Base::IdIssuer numbers; return numbers.Next(); }\n}\n")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_finding_names_its_line(self):
-        self.header("struct Empty {};\nstruct Ids { Engine::Base::IdIssuer issuer; };")
+        self.header("struct Empty {};\nstruct Ids { GYO::Engine::Base::IdIssuer issuer; };")
         self.assertReported("K8", "Added.hpp:4: K8 IdIssuer")
 
     def test_k8_in_a_macro_definition_is_reported(self):
-        self.header("#define GYO_KERNEL_ISSUER Engine::Base::IdIssuer\nGYO_KERNEL_ISSUER& Issuer();")
+        self.header("#define GYO_KERNEL_ISSUER GYO::Engine::Base::IdIssuer\nGYO_KERNEL_ISSUER& Issuer();")
         self.assertReported("K8", "IdIssuer")
 
     def test_k8_in_cmake_lists_is_reported(self):
         self.write("engine/ecs/kernel/CMakeLists.txt",
                    "add_library(gyo_kernel STATIC)\n# IdIssuer in a comment is not read\n"
-                   "target_compile_definitions(gyo_kernel PRIVATE GYO_COUNTER=Engine::Base::IdIssuer)\n")
+                   "target_compile_definitions(gyo_kernel PRIVATE GYO_COUNTER=GYO::Engine::Base::IdIssuer)\n")
         self.assertReported("K8", "CMakeLists.txt:3: K8 IdIssuer")
 
     def test_k8_comment_in_cmake_lists_is_clean(self):
@@ -376,13 +424,13 @@ class GuardTree(unittest.TestCase):
     def test_k8_angle_bracket_include_is_clean(self):
         self.write("engine/ecs/kernel/src/World.cpp",
                    "#include <engine/base/IdIssuer.hpp>\nnamespace GYO::Kernel {\n"
-                   "unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n")
+                   "unsigned long long Mark() { return GYO::Engine::Base::CurrentThreadSerial(); }\n}\n")
         self.assertClean()
 
     def test_k8_current_thread_serial_and_the_include_are_clean(self):
         self.write("engine/ecs/kernel/src/World.cpp",
                    '#include "engine/base/IdIssuer.hpp"\nnamespace GYO::Kernel {\n'
-                   'unsigned long long Mark() { return Engine::Base::CurrentThreadSerial(); }\n}\n')
+                   'unsigned long long Mark() { return GYO::Engine::Base::CurrentThreadSerial(); }\n}\n')
         self.assertClean()
 
     def test_k8_in_a_comment_or_literal_is_clean(self):
@@ -568,7 +616,7 @@ struct Shapes {
                 self.assertReported("K6", target.strip('<>"'))
 
     def test_k6_every_log_call_is_reported(self):
-        for call, needle in (("Engine::Base::SetLogHandler(nullptr)", "SetLogHandler"),
+        for call, needle in (("GYO::Engine::Base::SetLogHandler(nullptr)", "SetLogHandler"),
                              ("std::cout << 1", "std::cout"), ("std::clog << 1", "std::clog"),
                              ('std::print("x")', "std::print"), ('std::println("x")', "std::println"),
                              ('SDL_Log("x")', "SDL_Log"), ('fprintf(nullptr, "x")', "fprintf"),

@@ -17,11 +17,12 @@
 #include <vector>
 
 using namespace GYO::Kernel;
-using KernelTest::At;
-using KernelTest::Built;
-using KernelTest::Describe;
-using KernelTest::HasError;
-using KernelTest::Ok;
+using GYO::Test::TestRangeAllotter;
+using GYO::Test::Kernel::At;
+using GYO::Test::Kernel::Built;
+using GYO::Test::Kernel::Describe;
+using GYO::Test::Kernel::HasError;
+using GYO::Test::Kernel::Ok;
 
 namespace {
 
@@ -68,7 +69,7 @@ Health HealthOf(const Arrival& arrival) { return Health{arrival.hp}; }
 SystemResult Spawner(Spawn<Bundle<Arrival>> spawn, Local<std::int32_t> spawned) {
     if (*spawned >= 3) return Ok();
     auto made = spawn.New(Arrival{0, 10, 1, 0, 2});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     ++*spawned;
     return Ok();
 }
@@ -105,7 +106,7 @@ SystemResult ApplyHits(MessageReader<Hit> hits, Query<Write<Health>> healths, Re
 }
 
 SystemResult Reap(Query<Read<Health>> healths, Despawn despawn) {
-    Engine::Base::Result<void, KernelError> result;
+    GYO::Engine::Base::Result<void, KernelError> result;
     healths.ForEach([&](EntityId id, const Health& health) {
         if (health.hp > 0 || !result) return;
         despawn.Entity(id);
@@ -139,9 +140,9 @@ void GameData(Registrar& r) {
     r.InitialValue<Health, &HealthOf>();
     r.Resource<Gravity>({.name = "Gravity"});
     r.Resource<Paused>({.name = "Paused"});
-    r.Resource<Stats>({.name = "Stats", .writePolicy = WritePolicy::Shared});
-    r.Resource<RangeAllotter>({.name = "Allotter"});
-    r.Allotter<RangeAllotter>();
+    r.Resource<Stats>({.name = "Stats"});
+    r.Resource<TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<TestRangeAllotter>();
     r.Message<Hit>({.name = "Hit"});
     r.Schedule(GameTick());
 }
@@ -161,14 +162,14 @@ void Game(Registrar& r) {
     r.Hook<Health, &LogDeath>(HookTrigger::OnRemove, {.name = "LogDeath"});
 }
 
-std::unique_ptr<WorldTest::Rig> StartGame() {
+std::unique_ptr<GYO::Test::Kernel::Rig> StartGame() {
     Deaths().clear();
-    auto rig = WorldTest::MakeRig(Game);
+    auto rig = GYO::Test::Kernel::MakeRig(Game);
     if (!rig->executor) return rig;
     rig->world().SetResource(Gravity{1});
     rig->world().SetResource(Paused{0});
     rig->world().SetResource(Stats{0, 0});
-    rig->world().SetResource(RangeAllotter::Of(100, 999));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 999));
     return rig;
 }
 
@@ -242,7 +243,7 @@ TEST_CASE("skeleton: eight ticks of the game give the hand-worked result") {
 
 namespace {
 
-SystemResult Fails() { return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom")); }
+SystemResult Fails() { return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom")); }
 
 SystemResult WritePositionA(Query<Write<Position>> q) {
     q.ForEach([](EntityId, Mut<Position> p) { p->x += 1; });
@@ -256,7 +257,7 @@ SystemResult WritePositionB(Query<Write<Position>> q) {
 } // namespace
 
 TEST_CASE("skeleton: a System that returns Err stops the Run and interrupts the World") {
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
         GameData(r);
         r.AddSystem<&Fails>(In("Fails", "Simulate"));
     });
@@ -276,7 +277,7 @@ SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
     for (int member = 0; member < 3; ++member) {
         auto made = spawn.New(Arrival{0, 0, 0, 0, 1});
         if (!made) {
-            return Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
+            return GYO::Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
         }
     }
     return Ok();
@@ -285,12 +286,12 @@ SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
 } // namespace
 
 TEST_CASE("skeleton: an Err comes back once, with the chain of where it happened") {
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
         GameData(r);
         r.AddSystem<&SpawnsWave>(In("SpawnsWave", "Input"));
     });
     REQUIRE(rig->executor);
-    rig->world().SetResource(RangeAllotter::Of(1, 2));  // room for two of the three
+    rig->world().SetResource(TestRangeAllotter::Of(1, 2));  // room for two of the three
     const auto result = rig->Run();
     REQUIRE_FALSE(static_cast<bool>(result));
     CHECK(result.error().Has(KernelErrorCode::AllotterExhausted));
@@ -316,7 +317,7 @@ struct Shield { std::int32_t points; };
 SystemResult RecordsBothOrders(Spawn<Bundle<Armor>> spawn, Despawn despawn,
                                CommandsFor<Inserts<Shield>, Removes<Shield>> shields) {
     auto made = spawn.New(Armor{1});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     despawn.Entity(made.value());
     shields.Insert(1, Shield{7});
     shields.Remove<Shield>(1);
@@ -326,7 +327,7 @@ SystemResult RecordsBothOrders(Spawn<Bundle<Armor>> spawn, Despawn despawn,
 } // namespace
 
 TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and insert, whatever the recorded order") {
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
         GameData(r);
         r.Component<Armor>({.name = "Armor"});
         r.Component<Shield>({.name = "Shield"});
@@ -334,7 +335,7 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
     });
     REQUIRE(rig->executor);
     World& world = rig->world();
-    world.SetResource(RangeAllotter::Of(500, 599));
+    world.SetResource(TestRangeAllotter::Of(500, 599));
     world.Insert(1, Position{0, 0});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     // Spawned, then despawned in the same call: the despawn finds nothing yet, the spawn stays.
@@ -347,8 +348,8 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
 
 TEST_CASE("skeleton: two writers with no order are tied by registration and listed") {
     // Two Systems may write one component only when it is declared Shared.
-    auto rig = WorldTest::MakeRig([](Registrar& r) {
-        r.Component<Position>({.name = "Position", .writePolicy = WritePolicy::Shared});
+    auto rig = GYO::Test::Kernel::MakeRig([](Registrar& r) {
+        r.Component<Position>({.name = "Position"});
         r.Schedule(GameTick());
         r.AddSystem<&WritePositionA>(In("AddOne", "Simulate"));
         r.AddSystem<&WritePositionB>(In("Double", "Simulate"));
@@ -361,17 +362,6 @@ TEST_CASE("skeleton: two writers with no order are tied by registration and list
     rig->world().Insert(1, Position{3, 0});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK(rig->world().Get<Position>(1)->x == 8);  // (3 + 1) * 2, not 3 * 2 + 1
-}
-
-TEST_CASE("skeleton: a component left Exclusive rejects a second writer at startup") {
-    Built built = KernelTest::Finish({{"test", [](Registrar& r) {
-                                           r.Component<Position>({.name = "Position"});
-                                           r.Schedule(GameTick());
-                                           r.AddSystem<&WritePositionA>(In("AddOne", "Simulate"));
-                                           r.AddSystem<&WritePositionB>(In("Double", "Simulate"));
-                                       }}});
-    REQUIRE_FALSE(static_cast<bool>(built.result));
-    CHECK_MESSAGE(HasError(built, StartupCode::DE2), Describe(built));
 }
 
 // ---- Limits
@@ -402,7 +392,7 @@ SystemResult CountOnly(Query<Read<Position>> q, ResMut<Stats> stats) {
 // Despawns the hundred lowest ids each tick.
 SystemResult ReapHundred(Query<Read<Health>> healths, Despawn despawn) {
     int left = 100;
-    Engine::Base::Result<void, KernelError> result;
+    GYO::Engine::Base::Result<void, KernelError> result;
     healths.ForEach([&](EntityId id, const Health&) {
         if (left <= 0 || !result) return;
         --left;
@@ -414,19 +404,19 @@ SystemResult ReapHundred(Query<Read<Health>> healths, Despawn despawn) {
 SystemResult SpawnHundred(Spawn<Bundle<Position, Velocity, Health, Armor>> spawn) {
     for (int i = 0; i < 100; ++i) {
         auto made = spawn.New(Position{0, 0}, Velocity{1, 0}, Health{1}, Armor{0});
-        if (!made) return Engine::Base::Err(std::move(made).error());
+        if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     }
     return Ok();
 }
 
 void LimitData(Registrar& r) {
-    r.Component<Position>({.name = "Position", .writePolicy = WritePolicy::Shared});
-    r.Component<Velocity>({.name = "Velocity", .writePolicy = WritePolicy::Shared});
-    r.Component<Health>({.name = "Health", .writePolicy = WritePolicy::Shared});
-    r.Component<Armor>({.name = "Armor", .writePolicy = WritePolicy::Shared});
+    r.Component<Position>({.name = "Position"});
+    r.Component<Velocity>({.name = "Velocity"});
+    r.Component<Health>({.name = "Health"});
+    r.Component<Armor>({.name = "Armor"});
     r.Resource<Stats>({.name = "Stats"});
-    r.Resource<RangeAllotter>({.name = "Allotter"});
-    r.Allotter<RangeAllotter>();
+    r.Resource<TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<TestRangeAllotter>();
     r.Schedule(GameTick());
 }
 
@@ -442,7 +432,7 @@ struct TickCost {
 // One WorldExecutor per measured System, so a tick's time is that System's.
 template <auto Fn>
 double TimeTicks(std::size_t entities, const char* name, int ticks, double* fillMs = nullptr) {
-    auto rig = WorldTest::MakeRig(
+    auto rig = GYO::Test::Kernel::MakeRig(
         [name](Registrar& r) {
             LimitData(r);
             r.AddSystem<Fn>(In(name, "Simulate"));
@@ -451,7 +441,7 @@ double TimeTicks(std::size_t entities, const char* name, int ticks, double* fill
     REQUIRE(rig->executor);
     World& world = rig->world();
     world.SetResource(Stats{0, 0});
-    world.SetResource(RangeAllotter::Of(10'000'000, 20'000'000));
+    world.SetResource(TestRangeAllotter::Of(10'000'000, 20'000'000));
     const auto fillStart = Clock::now();
     for (std::size_t i = 0; i < entities; ++i) {
         const EntityId id = static_cast<EntityId>(i + 1);
@@ -490,7 +480,7 @@ TEST_CASE("limits: startup analysis against the number of Systems") {
                 }
             });
             const auto start = Clock::now();
-            Built built = KernelTest::Finish(std::move(builds));
+            Built built = GYO::Test::Kernel::Finish(std::move(builds));
             const double ms = Milliseconds(Clock::now() - start);
             REQUIRE_MESSAGE(static_cast<bool>(built.result), Describe(built));
             const Plan* plan = built.registry->Frozen().PlanOf("Tick");

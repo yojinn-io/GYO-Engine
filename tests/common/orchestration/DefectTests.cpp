@@ -5,14 +5,14 @@
 
 #include <stdexcept>
 
-using namespace OrchTest;
-using namespace OrchTest::Save;
+using namespace GYO::Test::Orchestration;
+using namespace GYO::Test::Orchestration::Save;
 
 namespace {
 
 O::PrepareFn Refuse() {
-    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
-        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no", {}, "save-version-unsupported"));
+    return [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no", {}, "save-version-unsupported"));
     };
 }
 
@@ -28,7 +28,7 @@ TEST_CASE("O-8: D3: an exception from extra goes on to the caller and nothing is
     WarningCounter warnings;
     bool thrown = false;
     try {
-        static_cast<void>((*built)->ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+        static_cast<void>((*built)->ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
             throw std::runtime_error("disk gone");
         }, {}, O::ReplaceOrder::BuildNewFirst}));
     } catch (const std::runtime_error&) {

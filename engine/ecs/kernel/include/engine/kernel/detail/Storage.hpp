@@ -21,6 +21,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/entity_store/EntityColumns.hpp"
 #include "engine/entity_store/EntityId.hpp"
+#include "engine/kernel/Hash.hpp"
 
 #include <algorithm>
 #include <array>
@@ -39,7 +40,7 @@ namespace GYO::Kernel {
 // The key of an entity (target/world section 1): a uint64 in Bevy's layout,
 // low 32 bits index, high 32 bits generation. The kernel compares only the
 // whole 64-bit value and never reads the two halves.
-using EntityId = ::Engine::EntityStore::EntityId;
+using EntityId = Engine::EntityStore::EntityId;
 
 // Spec A.1: a World-wide counter advanced at every Plan step, in Plan order.
 using ChangeStamp = std::uint64_t;
@@ -76,6 +77,10 @@ public:
     [[nodiscard]] virtual std::span<const std::byte> ValueBytesAt(std::size_t index) const noexcept = 0;
     // Every cell's object bytes: what the boundary comparison snapshots (spec A.6 layer 2).
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
+    // Whether the type has a hash function (Hash.hpp); HashAt hashes the value
+    // of the cell at index with it, and writes nothing when there is none.
+    [[nodiscard]] virtual bool HasHash() const noexcept = 0;
+    virtual void HashAt(Hasher& h, std::size_t index) const = 0;
     [[nodiscard]] virtual bool Contains(EntityId id) const noexcept = 0;
     // Destroys the cell of id; false when absent.
     virtual bool Erase(EntityId id) = 0;
@@ -108,20 +113,24 @@ public:
     [[nodiscard]] std::span<const std::byte> StorageBytes() const noexcept override {
         return {reinterpret_cast<const std::byte*>(cells.data()), cells.size() * sizeof(Cell<T>)};
     }
+    [[nodiscard]] bool HasHash() const noexcept override { return Hashable<T>; }
+    void HashAt([[maybe_unused]] Hasher& h, [[maybe_unused]] std::size_t index) const override {
+        if constexpr (Hashable<T>) HashValue(h, cells[index].value);
+    }
     [[nodiscard]] bool Contains(EntityId id) const noexcept override {
-        return ::Engine::EntityStore::FindEntity(cells, id) != nullptr;
+        return Engine::EntityStore::FindEntity(cells, id) != nullptr;
     }
     bool Erase(EntityId id) override {
-        if (!::Engine::EntityStore::EraseEntity(cells, id)) return false;
+        if (!Engine::EntityStore::EraseEntity(cells, id)) return false;
         ++epoch;
         return true;
     }
     [[nodiscard]] bool StrictlyAscending() const noexcept override {
-        return ::Engine::EntityStore::StrictlyAscending(std::span<const Cell<T>>(cells));
+        return Engine::EntityStore::StrictlyAscending(std::span<const Cell<T>>(cells));
     }
 
-    [[nodiscard]] Cell<T>* Find(EntityId id) noexcept { return ::Engine::EntityStore::FindEntity(cells, id); }
-    [[nodiscard]] const Cell<T>* Find(EntityId id) const noexcept { return ::Engine::EntityStore::FindEntity(cells, id); }
+    [[nodiscard]] Cell<T>* Find(EntityId id) noexcept { return Engine::EntityStore::FindEntity(cells, id); }
+    [[nodiscard]] const Cell<T>* Find(EntityId id) const noexcept { return Engine::EntityStore::FindEntity(cells, id); }
 
     // Inserts a new cell (added = changed = stamp) or overwrites an existing one
     // (changed = stamp). Returns true when the cell is new.
@@ -131,7 +140,7 @@ public:
             cell->changed = stamp;
             return false;
         }
-        ::Engine::EntityStore::InsertEntity(cells, Cell<T>{id, stamp, stamp, std::move(value)});
+        Engine::EntityStore::InsertEntity(cells, Cell<T>{id, stamp, stamp, std::move(value)});
         ++epoch;
         return true;
     }
@@ -147,11 +156,15 @@ public:
 
     [[nodiscard]] virtual bool Present() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
+    // As ColumnBase: whether the type has a hash function; Hash hashes the
+    // value, present, and writes nothing when there is none.
+    [[nodiscard]] virtual bool HasHash() const noexcept = 0;
+    virtual void Hash(Hasher& h) const = 0;
     virtual void Reset() noexcept = 0;
 
     ChangeStamp changed = 0;
     // A thread-bound resource (ResourceOptions::threadBound): the thread its
-    // value was put in on (Engine::Base::CurrentThreadSerial), or 0 with no value.
+    // value was put in on (GYO::Engine::Base::CurrentThreadSerial), or 0 with no value.
     std::uint64_t thread = 0;
 
 protected:
@@ -165,6 +178,10 @@ public:
     [[nodiscard]] std::span<const std::byte> StorageBytes() const noexcept override {
         return value ? std::span<const std::byte>(reinterpret_cast<const std::byte*>(&*value), sizeof(T))
                      : std::span<const std::byte>();
+    }
+    [[nodiscard]] bool HasHash() const noexcept override { return Hashable<T>; }
+    void Hash([[maybe_unused]] Hasher& h) const override {
+        if constexpr (Hashable<T>) HashValue(h, *value);
     }
     void Reset() noexcept override { value.reset(); }
 
@@ -186,8 +203,11 @@ public:
 
     [[nodiscard]] virtual std::size_t Size() const noexcept = 0;
     [[nodiscard]] virtual std::span<const std::byte> StorageBytes() const noexcept = 0;
-    [[nodiscard]] virtual std::span<const std::byte> PayloadBytesAt(std::size_t index) const noexcept = 0;
     [[nodiscard]] virtual std::uint64_t SeqAt(std::size_t index) const noexcept = 0;
+    // As ColumnBase: whether the payload type has a hash function; HashAt
+    // hashes the payload of the record at index.
+    [[nodiscard]] virtual bool HasHash() const noexcept = 0;
+    virtual void HashAt(Hasher& h, std::size_t index) const = 0;
     // Drops every record whose seq is at or below upTo; true when one was dropped.
     virtual bool TrimThrough(std::uint64_t upTo) = 0;
 
@@ -212,10 +232,11 @@ public:
     [[nodiscard]] std::span<const std::byte> StorageBytes() const noexcept override {
         return {reinterpret_cast<const std::byte*>(records.data()), records.size() * sizeof(Record)};
     }
-    [[nodiscard]] std::span<const std::byte> PayloadBytesAt(std::size_t index) const noexcept override {
-        return {reinterpret_cast<const std::byte*>(&records[index].payload), sizeof(M)};
-    }
     [[nodiscard]] std::uint64_t SeqAt(std::size_t index) const noexcept override { return records[index].seq; }
+    [[nodiscard]] bool HasHash() const noexcept override { return Hashable<M>; }
+    void HashAt([[maybe_unused]] Hasher& h, [[maybe_unused]] std::size_t index) const override {
+        if constexpr (Hashable<M>) HashValue(h, records[index].payload);
+    }
     bool TrimThrough(std::uint64_t upTo) override {
         const auto keep = std::find_if(records.begin(), records.end(), [upTo](const Record& r) { return r.seq > upTo; });
         if (keep == records.begin()) return false;
@@ -242,8 +263,7 @@ public:
 // highest seq the reader has read. A reader is a System's mount (slot 0) or
 // the mount's run condition number slot (from 1, in evaluation order). Kept in
 // the World, sorted by (message, system, mount, slot), and in the World summary,
-// which hashes it field by field; it has no padding all the same
-// (v8-arch-gyo2-summary-padding-a-then-c: an internal record in the summary has none).
+// which hashes it field by field.
 struct MessageCursor {
     std::uint32_t message;
     std::uint32_t system;
@@ -251,8 +271,6 @@ struct MessageCursor {
     std::uint32_t slot;
     std::uint64_t read;
 };
-static_assert(sizeof(MessageCursor) == 4 * sizeof(std::uint32_t) + sizeof(std::uint64_t),
-              "MessageCursor has padding: the World summary holds it");
 
 // The World end of DiagnosticsWriter<T> (spec B.4 point 4, B-13): kept when
 // the World is Interrupted; the Host takes it at its exchange point.
@@ -273,8 +291,6 @@ public:
     struct Entry {
         // The World's sync point number when the entry was written (World::SyncEpoch; L8).
         std::uint64_t syncEpoch;
-        // True while a Replay runs (spec H-8); rollback-extract sets it. Always false here.
-        bool rollbackActive;
         R record;
     };
     [[nodiscard]] std::size_t Size() const noexcept override { return entries.size(); }
@@ -390,48 +406,18 @@ struct AllotterOps {
 
 } // namespace Detail
 
-// What Registrar::Allotter<T> requires of an allotter resource (spec A.1, W-9):
-// Allot gives the next id or nothing when the range is used up (an error is
-// reported, never a wrap); Owns says whether an id is in this World's range
-// (a SpawnWithId with one is dropped at the sync point: spec F-13).
+// What Registrar::Allotter<T> requires of an allotter resource (spec A.1):
+// Allot gives the next id, or nothing when it has none to give (the kernel
+// reports AllotterExhausted); Owns says whether an id is one this allotter gives
+// (a SpawnWithId with one is dropped at the sync point: spec F-13). The
+// strategy (a range, recycling, ...) is the declared type's.
 template <class A>
 concept EntityAllotter = requires(A allotter, const A& constant, EntityId id) {
     { allotter.Allot() } -> std::same_as<std::optional<EntityId>>;
     { constant.Owns(id) } -> std::same_as<bool>;
 };
 
-// The kernel's range allotter (spec A.1, W-9): one range [first, last],
-// monotonic, never reuses an id, reports exhaustion and never wraps; no reset.
-// The policy "monotonic, generation 0" of target/world section 1 is this
-// allotter with a product's range. A product may declare its own type instead.
-struct RangeAllotter {
-    EntityId first = 0;
-    EntityId last = 0;
-    EntityId next = 0;
-    bool exhausted = false;
-    // Zero bytes where padding would be: World::Summary hashes a value's raw
-    // bytes, and padding has no set value (MSVC gave one save two summaries).
-    std::array<std::uint8_t, 7> reserved{};
-
-    [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {
-        return RangeAllotter{first, last, first, first > last, {}};
-    }
-
-    [[nodiscard]] std::optional<EntityId> Allot() noexcept {
-        if (exhausted) return std::nullopt;
-        const EntityId id = next;
-        if (id == last) {
-            exhausted = true;
-        } else {
-            ++next;
-        }
-        return id;
-    }
-
-    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }
-};
-static_assert(std::has_unique_object_representations_v<RangeAllotter>,
-              "RangeAllotter has padding: World::Summary hashes its raw bytes");
+// The kernel ships no allotter type (DI-KS 4): a Module or a product declares one.
 
 namespace Detail {
 

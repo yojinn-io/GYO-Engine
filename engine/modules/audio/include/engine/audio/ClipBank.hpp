@@ -7,7 +7,7 @@
 #include "engine/base/Result.hpp"
 #include "engine/base/Span.hpp"
 
-namespace Engine::Audio {
+namespace GYO::Engine::Audio {
 
 // Names a clip: a clip of the mixer's ClipBank (1 to its count), or a clip a
 // submitter loaded while output runs (a value above 2^32 that encodes the
@@ -48,4 +48,4 @@ private:
     std::vector<Clip> clips_;
 };
 
-} // namespace Engine::Audio
+} // namespace GYO::Engine::Audio

@@ -107,7 +107,6 @@ struct RejectedSpawn {
     // The System or hook that recorded the spawn.
     std::string emitter;
     bool emitterIsHook = false;
-    Zone emitterZone = Zone::B;
     // Recorded by Spawn (the allotter's id: Spawn<Bundle<C...>> or
     // ExclusiveWorld::Spawn), not SpawnWithId.
     bool fromAllotter = false;
@@ -346,10 +345,11 @@ public:
     // The World summary of spec D-9: keys and values of every column, resource
     // values, every message record (seq and payload) with each type's next write
     // sequence number, and the message cursors; without stamps or
-    // Plan positions. Version 2 (World.cpp). Readable in Ready and Interrupted. Values
-    // are hashed as raw bytes: a type in the summary must have no padding (the
-    // author's responsibility; v8-arch-gyo2-summary-padding-a-then-c).
-    [[nodiscard]] Fingerprint Summary() const;
+    // Plan positions. Version 3 (World.cpp). Readable in Ready and Interrupted.
+    // Each value goes through its type's hash function (Hash.hpp). Err
+    // (HashMissing, naming the types) when a type with no hash function has a
+    // value in the World.
+    [[nodiscard]] Engine::Base::Result<Fingerprint, KernelError> Summary() const;
 
     // The break hook called where a KernelError is made when
     // KernelSettings::breakOnKernelError is on (target/system-contract 2b). It
@@ -386,7 +386,7 @@ private:
     friend std::optional<EntityId> Detail::Allot(World&);
     friend Detail::DiagnosticsBase* Detail::FindDiagnostics(World&, TypeKey) noexcept;
     friend void Detail::AddDiagnostics(World&, TypeKey, std::unique_ptr<Detail::DiagnosticsBase>);
-    friend std::optional<KernelError> Detail::CombineCall(Detail::SystemContext&, ::Engine::Base::Result<void, KernelError>,
+    friend std::optional<KernelError> Detail::CombineCall(Detail::SystemContext&, Engine::Base::Result<void, KernelError>,
                                                           const std::vector<std::string>&);
 
     // Attaches to the Registry's version when it is not the one attached
@@ -428,8 +428,13 @@ private:
     // stamp: the sync point's stamp. immediate (S5, WorldExecutor::ImmediateFrom):
     // applies only these records, as one phase of steps 2 to 7; the window, the
     // hook queue and the sync epoch are left alone.
-    ::Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr);
+    // derive: whether the application derives data from the cells it adds (step 5a, Registrar::InitialValue).
+    // Applying records and notifying (OnAdd, OnRemove, observers) is one thing; deriving new data from a new
+    // cell is another, and belongs to a change. A restore puts back what it is given and derives nothing
+    // (DI-KS 12; user 2026-11-22, (a2)); every other application derives.
+    Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
+                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr,
+                                                      Detail::Derive derive = Detail::Derive::InitialValues);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
     void RecordRejectedSpawn(RejectedSpawn rejected);
     // Spec E.5: discards every record not yet applied (hook queue included).
@@ -459,10 +464,10 @@ private:
     // Names of storages access does not declare as written that changed during the call.
     [[nodiscard]] std::vector<std::string> CompareAfter(const Detail::AccessDesc& access);
     // Runs one hook (spec F.4) with tlCurrent set to its access description.
-    ::Engine::Base::Result<void, KernelError> RunHook(std::size_t hook, EntityId entity, ComponentId component,
+    Engine::Base::Result<void, KernelError> RunHook(std::size_t hook, EntityId entity, ComponentId component,
                                                     std::uint32_t planPos, std::string_view schedule, ChangeStamp stamp);
     // OnAdd / OnRemove hooks of one cell, in registration order.
-    ::Engine::Base::Result<void, KernelError> RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
+    Engine::Base::Result<void, KernelError> RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
                                                      std::uint32_t planPos, std::string_view schedule, ChangeStamp stamp);
     // The observers of one trigger (event cursor declaration 3.3): those of
     // (trigger, id) in name order (RegistryData::observerOrder), each a System
@@ -471,7 +476,7 @@ private:
     // (hookTarget_, or the schedule's hook queue). stamp: the call's stamp, or,
     // when ownStamp, a new stamp for each call (a trigger outside a sync point:
     // each is like one System step). Err from an observer, wrapped once.
-    ::Engine::Base::Result<void, KernelError> RunObservers(ObserverTrigger trigger, std::uint32_t id, const void* payload,
+    Engine::Base::Result<void, KernelError> RunObservers(ObserverTrigger trigger, std::uint32_t id, const void* payload,
                                                          std::optional<EntityId> target, std::uint32_t planPos,
                                                          std::string_view schedule, ChangeStamp stamp, bool ownStamp);
 

@@ -5,7 +5,8 @@ The trace Module includes only what its links allow, so that it comes to know ne
 the orchestration layer:
 
   TR1-TRACE  an #include "engine/<module>/..." under engine/modules/trace/ whose module is not base, logging, time
-             or trace.
+             or trace, or whose path has a ".." segment ("/" and "\\" both separate; an allowed module followed by
+             ".." reaches any header, as kernel_guard K5 and orchestration_guard O4).
 
 The other half of TR-1 (the kernel and the orchestration layer never include the trace Module, only the Base
 facade engine/base/Trace.hpp) is kept by their own include scans: kernel_guard.py K5 and orchestration_guard.py O4
@@ -26,7 +27,7 @@ import sys
 from pathlib import Path
 
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl"}
-ENGINE_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"]engine/([A-Za-z0-9_]+)/[^>"\n]*[>"]', re.MULTILINE)
+ENGINE_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"]engine/([A-Za-z0-9_]+)/([^>"\n]*)[>"]', re.MULTILINE)
 RULE = "TR1-TRACE"
 DIRECTORY = "engine/modules/trace/"
 ALLOWED = {"base", "logging", "time", "trace"}
@@ -54,6 +55,10 @@ def scan(root):
         text = strip_block_comments(path.read_text(encoding="utf-8", errors="replace"))
         for match in ENGINE_INCLUDE.finditer(text):
             module = match.group(1)
+            if ".." in re.split(r"[/\\]", match.group(2)):
+                line = text.count("\n", 0, match.start()) + 1
+                findings.append(f"{relative}:{line}: {RULE}: includes engine/{module}/{match.group(2)} (\"..\" in the path)")
+                continue
             if module in ALLOWED:
                 allowed += 1
             else:

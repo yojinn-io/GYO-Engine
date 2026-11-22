@@ -84,7 +84,7 @@ public:
     // Builds the Product (section 3.4): checks, every unit's Configure, then
     // for each World Build, BuildPlans, Finish, Check, the list checks; with
     // no error so far, builds the Worlds and runs their prepare functions.
-    static ::Engine::Base::Result<std::unique_ptr<Product>, ProductStartupReport> Build(ProductDescription description,
+    static Base::Result<std::unique_ptr<Product>, ProductStartupReport> Build(ProductDescription description,
                                                                                        RegisteredUnits units);
     ~Product();
     Product(const Product&) = delete;
@@ -100,29 +100,32 @@ public:
     // returns WorldInterrupted or WorldMissing with the WorldFailure. The runner
     // decides what follows (close the program, or build another Product).
     // Runs the game initialization list on the first World. GYO_ASSERT: it ran already.
-    ::Engine::Base::Result<void, OrchestrationError> RunGameInit();
+    Base::Result<void, OrchestrationError> RunGameInit();
     // Runs every World's frame list, in World order; game initialization first when it has not run.
     // A schedule failing part way leaves the Worlds before it advanced (the Product has ended then).
-    ::Engine::Base::Result<void, OrchestrationError> RunFrame();
+    Base::Result<void, OrchestrationError> RunFrame();
     // Runs one schedule on one World; game initialization first when it has not run.
-    ::Engine::Base::Result<void, OrchestrationError> RunSchedule(std::string_view world, std::string_view schedule);
+    Base::Result<void, OrchestrationError> RunSchedule(std::string_view world, std::string_view schedule);
 
     // The World's executor, valid until this name is next replaced. GYO_ASSERT: no World
     // of that name, or its place is empty.
     [[nodiscard]] Kernel::WorldExecutor& World(std::string_view name);
     [[nodiscard]] bool HasWorld(std::string_view name) const noexcept;
+    // Whether that World is generating (world-gen declaration 5.1, O-14): read from its WorldGeneration, the one
+    // place the state lives. GYO_ASSERT: no World of that name, or its place is empty.
+    [[nodiscard]] bool Generating(std::string_view name) const;
 
     // Replaces a healthy World (section 3.9): registers it again from the
     // description, carries the marked Resources over, runs the prepare functions
     // and the beforeSwap schedules. Game initialization does not run again. It
     // does not mend a broken World: with one, it is refused like a Run.
-    ::Engine::Base::Result<void, OrchestrationError> ReplaceWorld(std::string_view name, ReplaceRequest request);
+    Base::Result<void, OrchestrationError> ReplaceWorld(std::string_view name, ReplaceRequest request);
 
     // A dynamic insert (section 3.10): the kernel's two steps on the World's
     // Registry; a refusal or a failed BuildPlans returns the error and the World
     // goes on. The orchestration layer logs nothing (O-9, O-11; error levels D2).
     // No unit's Finish or Check runs again.
-    ::Engine::Base::Result<void, OrchestrationError> InsertSystems(std::string_view world, std::string owner,
+    Base::Result<void, OrchestrationError> InsertSystems(std::string_view world, std::string owner,
                                                                    InsertFn build);
 
     [[nodiscard]] bool GameInitRan() const noexcept { return gameInitRan_; }
@@ -133,11 +136,11 @@ public:
 private:
     // The entry points' steps; each public entry point runs its steps inside one trace span (trace
     // declaration D6) and marks it when they return an error.
-    ::Engine::Base::Result<void, OrchestrationError> RunGameInitSteps();
-    ::Engine::Base::Result<void, OrchestrationError> RunFrameSteps();
-    ::Engine::Base::Result<void, OrchestrationError> RunScheduleSteps(std::string_view world, std::string_view schedule);
-    ::Engine::Base::Result<void, OrchestrationError> ReplaceWorldSteps(std::string_view name, ReplaceRequest request);
-    ::Engine::Base::Result<void, OrchestrationError> InsertSystemsSteps(std::string_view world, std::string owner, InsertFn build);
+    Base::Result<void, OrchestrationError> RunGameInitSteps();
+    Base::Result<void, OrchestrationError> RunFrameSteps();
+    Base::Result<void, OrchestrationError> RunScheduleSteps(std::string_view world, std::string_view schedule);
+    Base::Result<void, OrchestrationError> ReplaceWorldSteps(std::string_view name, ReplaceRequest request);
+    Base::Result<void, OrchestrationError> InsertSystemsSteps(std::string_view world, std::string owner, InsertFn build);
 
     struct UnitSlot {
         std::string row;
@@ -151,7 +154,6 @@ private:
         std::unique_ptr<Kernel::Registry> registry;
         std::unique_ptr<Kernel::WorldExecutor> executor;
         std::vector<std::string> frame;
-        std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
         // The last schedule the Product ran with success on this World (WorldFailure::lastSchedule).
         std::string lastSchedule;
@@ -160,12 +162,14 @@ private:
         // levels P12: an empty place is told apart from a broken one by this, not by guessing).
         bool replacing = false;
     };
-    // One World's registration, built but not yet a World.
+    // One World's registration, built but not yet a World. Its prepare functions and ModuleBuffer live until the
+    // prepare functions have run (O-2): the World's slot keeps neither.
     struct Registration {
         std::unique_ptr<Kernel::Registry> registry;
         std::vector<std::string> frame;
         std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
+        std::shared_ptr<ModuleBuffer> buffer;
     };
 
     Product() = default;
@@ -173,11 +177,15 @@ private:
     // Returns nullopt-equivalent (registry null) when something failed; errors go to the sinks.
     Registration Register(const WorldSlot& slot, bool firstWorld, WorldStartupResult& result,
                           std::vector<OrchestrationStartupError>& errors, std::vector<UnitReportedError>& unitErrors);
-    ::Engine::Base::Result<void, OrchestrationError> Prepare(WorldSlot& slot, Kernel::World& world,
+    Base::Result<void, OrchestrationError> Prepare(WorldSlot& slot, Kernel::World& world,
                                                              const std::vector<PrepareFn>& unitPrepares,
                                                              const PrepareFn* extra);
-    ::Engine::Base::Result<void, OrchestrationError> RunOn(WorldSlot& slot, std::string_view schedule,
+    Base::Result<void, OrchestrationError> RunOn(WorldSlot& slot, std::string_view schedule,
                                                            std::string_view entry);
+    // One World's round of a RunFrame (world-gen declaration 5.1): the generation's step before (a generating World
+    // is written {true, false}), the frame list, the generation's judgement after (nobody held: {false, false}).
+    // The entry point that will run one World's round on its own (the exchange declaration's lent World) shares it.
+    Base::Result<void, OrchestrationError> RunRound(WorldSlot& slot);
     // The refusal of an entry point while a World is broken (nullopt: every World is healthy).
     // A World found interrupted without a recorded failure (run outside the Product) is recorded here.
     std::optional<OrchestrationError> Ended();

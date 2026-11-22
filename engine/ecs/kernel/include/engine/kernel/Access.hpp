@@ -53,8 +53,8 @@ public:
     virtual void SetRead(TypeKey setTag) = 0;
     virtual void Local() = 0;
     virtual void WholeWorld() = 0;
-    // A resource an ExclusiveWorld<Writes<R...>> lists: recorded, not a write.
-    virtual void AnnotatedWrite(TypeKey resource) = 0;
+    // A component or resource an ExclusiveWorld<Writes<T...>> lists: recorded, not a write.
+    virtual void AnnotatedWrite(TypeKey type) = 0;
     virtual void Diagnostics() = 0;
     virtual void ExtractComponent(TypeKey component) = 0;
     virtual void ExtractResource(TypeKey resource) = 0;

@@ -24,7 +24,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 std::string Join(const std::vector<std::string>& parts) {
     std::string out;
@@ -96,6 +96,7 @@ TEST_CASE("J-6: a World access while Running with no System current fails a GYO_
 namespace {
 
 struct Bound { std::int64_t value; };  // resource, zone B, thread-bound
+void HashValue(Hasher& h, const Bound& v) { HashValue(h, v.value); }
 
 // One thread kept alive for a whole case, so the thread a value was put in on
 // can still use it, remove it or destroy the World.
@@ -146,10 +147,10 @@ private:
 
 // Whether f fails a GYO_ASSERT on this thread.
 bool Asserts(const std::function<void()>& f) {
-    ::Engine::Test::ScopedAssertionHandler scope;
+    ::GYO::Test::ScopedAssertionHandler scope;
     try {
         f();
-    } catch (const ::Engine::Base::AssertionFailure&) {
+    } catch (const ::GYO::Engine::Base::AssertionFailure&) {
         return true;
     }
     return false;
@@ -165,7 +166,7 @@ SystemResult WritesBound(ResMut<Bound> bound) {
 }
 SystemResult ExclusiveReadsBound(ExclusiveWorld<> world) {
     auto value = world.Read<Bound>([](const Bound& b) { return b.value; });
-    if (!value) return Engine::Base::Err(std::move(value).error());
+    if (!value) return GYO::Engine::Base::Err(std::move(value).error());
     return Ok();
 }
 SystemResult CommandsSetsBound(Commands commands) {
@@ -173,7 +174,7 @@ SystemResult CommandsSetsBound(Commands commands) {
     return Ok();
 }
 SystemResult ExclusiveSetsBound(ExclusiveWorld<> world) {
-    if (auto set = world.SetResource(Bound{5}); !set) return Engine::Base::Err(std::move(set).error());
+    if (auto set = world.SetResource(Bound{5}); !set) return GYO::Engine::Base::Err(std::move(set).error());
     return Ok();
 }
 SystemResult CommandsRemovesBound(Commands commands) {
@@ -181,7 +182,7 @@ SystemResult CommandsRemovesBound(Commands commands) {
     return Ok();
 }
 SystemResult ExclusiveRemovesBound(ExclusiveWorld<> world) {
-    if (auto removed = world.RemoveResource<Bound>(); !removed) return Engine::Base::Err(std::move(removed).error());
+    if (auto removed = world.RemoveResource<Bound>(); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
     return Ok();
 }
 struct Free { std::int64_t value; };  // resource, zone B, not thread-bound
@@ -193,7 +194,7 @@ std::uint64_t BoundThread(World& world) {
 std::unique_ptr<Rig> BoundRig(void (*add)(Registrar&)) {
     return MakeRig([add](Registrar& r) {
         Data(r);
-        r.Resource<Bound>({.name = "Bound", .zone = Zone::B, .threadBound = true});
+        r.Resource<Bound>({.name = "Bound", .threadBound = true});
         if (add != nullptr) add(r);
     }, false);
 }
@@ -233,7 +234,7 @@ TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetRe
         Log().clear();
         CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
         CHECK(Log() == std::vector<std::string>{"bound 4"});
-        CHECK_MESSAGE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial(), "[ks-s6-thread-bound] the sync point did not record its thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial(), "[ks-s6-thread-bound] the sync point did not record its thread");
     }
     SUBCASE("ExclusiveWorld::SetResource, now") {
         auto rig = BoundRig([](Registrar& r) {
@@ -243,7 +244,7 @@ TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetRe
         Log().clear();
         CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
         CHECK(Log() == std::vector<std::string>{"bound 5"});
-        CHECK_MESSAGE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial(), "[ks-s5-thread-bound] the immediate change did not record its thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial(), "[ks-s5-thread-bound] the immediate change did not record its thread");
     }
 }
 
@@ -252,7 +253,7 @@ TEST_CASE("J-6: a thread-bound resource taken out by a sync point's Commands::Re
     SUBCASE("Commands::RemoveResource, applied at the sync point") {
         auto rig = BoundRig([](Registrar& r) { r.AddSystem<&CommandsRemovesBound>(B("CommandsRemovesBound", "A")); });
         rig->world().SetResource(Bound{1});
-        REQUIRE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial());
+        REQUIRE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial());
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Resource<Bound>() == nullptr);
         CHECK_MESSAGE(BoundThread(rig->world()) == 0, "[ks-s6-thread-forgotten] the sync point's removal kept the thread");
@@ -260,7 +261,7 @@ TEST_CASE("J-6: a thread-bound resource taken out by a sync point's Commands::Re
     SUBCASE("ExclusiveWorld::RemoveResource, now") {
         auto rig = BoundRig([](Registrar& r) { r.AddSystem<&ExclusiveRemovesBound>(B("ExclusiveRemovesBound", "A")); });
         rig->world().SetResource(Bound{1});
-        REQUIRE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial());
+        REQUIRE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial());
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Resource<Bound>() == nullptr);
         CHECK_MESSAGE(BoundThread(rig->world()) == 0, "[ks-s6-thread-forgotten] the immediate removal kept the thread");
@@ -340,7 +341,7 @@ TEST_CASE("J-6: the other direction: a thread-bound value asserts on a thread th
 TEST_CASE("J-6: a resource not marked threadBound is used on any thread") {
     std::unique_ptr<Rig> rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Resource<Free>({.name = "Free", .zone = Zone::B});
+        r.Resource<Free>({.name = "Free"});
     }, false);
     Worker worker;
     bool asserted = false;
@@ -359,19 +360,18 @@ TEST_CASE("J-6: a resource not marked threadBound is used on any thread") {
     if (asserted || here || removed) static_cast<void>(rig.release());
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("J-6: the thread mark is not World data: the same value put in on two threads gives one summary") {
     std::unique_ptr<Rig> here = BoundRig(nullptr);
     std::unique_ptr<Rig> there = BoundRig(nullptr);
     here->world().SetResource(Bound{7});
-    const std::string hereSummary = here->world().Summary().Text();
+    const std::string hereSummary = SummaryOf(here->world()).Text();
     Worker worker;
     std::string thereSummary;
     worker.Do([&] {
         there->world().SetResource(Bound{7});
-        thereSummary = there->world().Summary().Text();
+        // No REQUIRE off the test thread: an error is carried back as text.
+        const auto summary = there->world().Summary();
+        thereSummary = summary ? summary->Text() : "error: " + summary.error().Text();
     });
     CHECK_MESSAGE(hereSummary == thereSummary,
                   "[ks-s10-mark-not-data] J-6: two Worlds with the same value put in on two threads have different summaries");
@@ -546,8 +546,8 @@ SystemResult UntypedIntoShared(Commands commands) {
     commands.Insert(1, Tag{5});
     return Ok();
 }
-// No run-time interception (S8): untyped Commands of a zone B System into a zone C
-// column and a single-writer column are recorded and applied like any other.
+// No run-time interception (S8): untyped Commands into any column are recorded and
+// applied like any other.
 SystemResult UntypedIntoAnyColumn(Commands commands) {
     commands.Insert(1, Pos{7});
     commands.Insert(1, Mode{8});
@@ -558,7 +558,7 @@ SystemResult UntypedIntoAnyColumn(Commands commands) {
 // another one: both are reported.
 SystemResult DroppedBesideOwn(Spawn<Bundle<Tag>> spawn) {
     static_cast<void>(spawn.New(Tag{1}));
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "own"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "own"));
 }
 // Drops the Err it got: the Executor reports it all the same.
 SystemResult SpawnDropped(Spawn<Bundle<Tag>> spawn) {
@@ -584,14 +584,14 @@ void CheckErrOnce(Rig& rig, KernelErrorCode code, const char* rule) {
 // (v8-arch-gyo2-no-runtime-interception). A kernel Err the System drops is still
 // reported (CallError lists it in call.returned): the trigger is now Spawn::New
 // on a used-up allotter (W-9), the only kernel Err a plain System's call returns.
-TEST_CASE("J-32b: untyped Commands write zone B Shared columns; a kernel Err the System drops is still reported") {
+TEST_CASE("J-32b: untyped Commands write any column; a kernel Err the System drops is still reported") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
     SUBCASE("a dropped Err is still reported") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r, true);
             r.AddSystem<&SpawnDropped>(B("SpawnDropped", "A"));
         }, false);
-        rig->world().SetResource(RangeAllotter::Of(1, 0));  // used up
+        rig->world().SetResource(TestRangeAllotter::Of(1, 0));  // used up
         CheckErrOnce(*rig, KernelErrorCode::AllotterExhausted, "W-9");
     }
     SUBCASE("a dropped Err beside the System's own Err") {
@@ -599,13 +599,13 @@ TEST_CASE("J-32b: untyped Commands write zone B Shared columns; a kernel Err the
             Data(r, true);
             r.AddSystem<&DroppedBesideOwn>(B("DroppedBesideOwn", "A"));
         }, false);
-        rig->world().SetResource(RangeAllotter::Of(1, 0));  // used up
+        rig->world().SetResource(TestRangeAllotter::Of(1, 0));  // used up
         const auto result = rig->Run();
         REQUIRE_FALSE(static_cast<bool>(result));
         CHECK(result.error().Has(KernelErrorCode::AllotterExhausted));
         CHECK(result.error().Has(KernelErrorCode::SystemFailed));
     }
-    SUBCASE("zone B, Shared: allowed") {
+    SUBCASE("untyped Commands into a column: applied") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&UntypedIntoShared>(B("UntypedIntoShared", "A"));
@@ -616,7 +616,7 @@ TEST_CASE("J-32b: untyped Commands write zone B Shared columns; a kernel Err the
         CHECK(rig->world().Get<Tag>(1)->t == 5);
         CHECK(rig->recorded.empty());
     }
-    SUBCASE("any column: zone C and single-writer columns are applied too") {
+    SUBCASE("any column: each column is applied") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&UntypedIntoAnyColumn>(B("UntypedIntoAnyColumn", "A"));
@@ -625,10 +625,10 @@ TEST_CASE("J-32b: untyped Commands write zone B Shared columns; a kernel Err the
         rig->world().Insert(2, Pos{2});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE((rig->world().Get<Pos>(1) != nullptr && rig->world().Get<Pos>(1)->x == 7),
-                      "J-32b any column: the untyped insert was not applied (zone C)");
+                      "J-32b any column: the untyped insert was not applied (Pos)");
         CHECK_MESSAGE((rig->world().Get<Mode>(1) != nullptr && rig->world().Get<Mode>(1)->m == 8),
-                      "J-32b any column: the untyped insert was not applied (single writer)");
-        CHECK_MESSAGE(rig->world().Get<Pos>(2) == nullptr, "J-32b any column: the untyped remove was not applied (zone C)");
+                      "J-32b any column: the untyped insert was not applied (Mode)");
+        CHECK_MESSAGE(rig->world().Get<Pos>(2) == nullptr, "J-32b any column: the untyped remove was not applied (Pos)");
         CHECK(rig->recorded.empty());
     }
 }
@@ -645,7 +645,7 @@ SystemResult SpawnThenThrow(SpawnWithId<Bundle<Tag>> spawn, DiagnosticsWriter<No
 SystemResult SpawnThenErr(SpawnWithId<Bundle<Tag>> spawn, DiagnosticsWriter<Note> notes) {
     spawn.New(5, Tag{5});
     notes.Write(Note{2});
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the System's own Err"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the System's own Err"));
 }
 
 } // namespace
@@ -656,7 +656,7 @@ SystemResult SpawnTagOne(SpawnWithId<Bundle<Tag>> spawn) {
     return Ok();
 }
 SystemResult HookReturnsErr(HookCtx) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
 }
 SystemResult HookWritesThroughReadPointer(HookCtx, Query<Read<Pos>> pos) {
     if (const Pos* p = pos.Get<Pos>(2)) const_cast<Pos*>(p)->x = 64;
@@ -669,7 +669,7 @@ TEST_CASE("J-35: a hook returns Err: the World is interrupted and the leaf keeps
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
-            r.Hook<Tag, &HookReturnsErr>(HookTrigger::OnAdd, {.name = "HookReturnsErr", .zone = Zone::B});
+            r.Hook<Tag, &HookReturnsErr>(HookTrigger::OnAdd, {.name = "HookReturnsErr"});
         }, false);
         const auto result = rig->Run();
         CHECK(HasCode(result, KernelErrorCode::SystemFailed));
@@ -682,7 +682,7 @@ TEST_CASE("J-35: a hook returns Err: the World is interrupted and the leaf keeps
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
-            r.Hook<Tag, &HookWritesThroughReadPointer>(HookTrigger::OnAdd, {.name = "HookWritesThroughReadPointer", .zone = Zone::B});
+            r.Hook<Tag, &HookWritesThroughReadPointer>(HookTrigger::OnAdd, {.name = "HookWritesThroughReadPointer"});
         }, true);
         rig->world().Insert(2, Pos{2});
         const auto result = rig->Run();
@@ -743,40 +743,40 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
     }
 }
 
-// ---- J-45 (S-13: zone C does not hold ExclusiveWorld; it writes any value)
+// ---- J-45 (ExclusiveWorld writes any value)
 
 namespace {
 
-SystemResult ExclusiveWritesZoneC(ExclusiveWorld<> world) {
+SystemResult ExclusiveWritesPos(ExclusiveWorld<> world) {
     auto r = world.Modify<Pos>(1, [](Pos& pos) { pos.x += 1; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
+    if (!r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveWritesExclusive(ExclusiveWorld<> world) {
+SystemResult ExclusiveWritesMode(ExclusiveWorld<> world) {
     auto r = world.Modify<Mode>(1, [](Mode& mode) { mode.m += 1; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
+    if (!r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult ExclusiveWritesZoneCShared(ExclusiveWorld<> world) {
+SystemResult ExclusiveWritesCShared(ExclusiveWorld<> world) {
     auto r = world.Modify<CShared>(1, [](CShared& value) { value.s += 1; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
+    if (!r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 SystemResult ExclusiveAllowed(ExclusiveWorld<> world) {
     auto pos = world.Read<Pos>(1, [](const Pos& p) { return p.x; });
-    if (!pos) return Engine::Base::Err(std::move(pos).error());
+    if (!pos) return GYO::Engine::Base::Err(std::move(pos).error());
     if (!*pos) return Ok();
     const std::int32_t x = **pos;
     auto tag = world.Modify<Tag>(1, [x](Tag& t) { t.t = x + 1; });
-    if (!tag) return Engine::Base::Err(std::move(tag).error());
+    if (!tag) return GYO::Engine::Base::Err(std::move(tag).error());
     return Ok();
 }
 
 SystemResult ExclusiveSpawns(ExclusiveWorld<> world) {
     auto id = world.Spawn(Tag{3});
-    if (!id) return Engine::Base::Err(std::move(id).error());
+    if (!id) return GYO::Engine::Base::Err(std::move(id).error());
     auto tag = world.Read<Tag>(*id, [](const Tag& t) { return t.t; });
-    if (!tag) return Engine::Base::Err(std::move(tag).error());
+    if (!tag) return GYO::Engine::Base::Err(std::move(tag).error());
     Log().push_back("spawned " + std::to_string(*id) + " tag " + std::to_string(tag->value_or(-1)));
     return Ok();
 }
@@ -796,46 +796,39 @@ std::unique_ptr<Rig> ExclusiveRig(void (*add)(Registrar&), bool verification) {
 
 // ExclusiveWorld reads and writes any component and resource value
 // (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1) and spawns with a type
-// (v8-arch-gyo2-immediate-change-via-exclusive-world, DI-KS 18); a zone C
-// System still may not hold it (S-13 at startup, a zone rule of a later batch).
-TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build; a zone C System may not hold it") {
+// (v8-arch-gyo2-immediate-change-via-exclusive-world, DI-KS 18). Any System may
+// hold it since S-13 left with the zone rules (v8-arch-gyo2-authority-rollback step 2).
+TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build") {
     MESSAGE("NDEBUG (release-like target): " << std::string(kNdebug ? "defined" : "not defined"));
-    SUBCASE("zone C holding it: Finish fails") {
-        const Built built = Finish({{"test", [](Registrar& r) {
-                                         Data(r);
-                                         r.AddSystem<&ExclusiveAllowed>(C("ExclusiveAllowed", "A"));
-                                     }}});
-        CHECK_FALSE(static_cast<bool>(built.result));
-    }
-    SUBCASE("zone C write") {
-        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneC>(B("X", "A")); }, false);
+    SUBCASE("a write of Pos") {
+        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesPos>(B("X", "A")); }, false);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(rig->world().Get<Pos>(1)->x == 8, "J-45 written: a zone C value");
+        CHECK_MESSAGE(rig->world().Get<Pos>(1)->x == 8, "J-45 written: Pos");
     }
-    SUBCASE("Exclusive write") {
-        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesExclusive>(B("X", "A")); }, false);
+    SUBCASE("a write of Mode") {
+        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesMode>(B("X", "A")); }, false);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(rig->world().Get<Mode>(1)->m == 2, "J-45 written: an Exclusive value");
+        CHECK_MESSAGE(rig->world().Get<Mode>(1)->m == 2, "J-45 written: Mode");
     }
-    SUBCASE("zone C, Shared write") {
-        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneCShared>(B("X", "A")); }, false);
+    SUBCASE("a write of CShared") {
+        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesCShared>(B("X", "A")); }, false);
         rig->world().Insert(1, CShared{0});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(rig->world().Get<CShared>(1)->s == 1, "J-45 written: a zone C, Shared value");
+        CHECK_MESSAGE(rig->world().Get<CShared>(1)->s == 1, "J-45 written: CShared");
     }
     SUBCASE("spawn: the typed Spawn gives an id from the allotter, and the entity is there in the call") {
         auto rig = ExclusiveRig([](Registrar& r) {
-            r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
-            r.Allotter<RangeAllotter>();
+            r.Resource<TestRangeAllotter>({.name = "Allotter"});
+            r.Allotter<TestRangeAllotter>();
             r.AddSystem<&ExclusiveSpawns>(B("X", "A"));
         }, false);
-        rig->world().SetResource(RangeAllotter::Of(10, 19));
+        rig->world().SetResource(TestRangeAllotter::Of(10, 19));
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE(Log() == std::vector<std::string>{"spawned 10 tag 3"}, "J-45 spawn: " << (Log().empty() ? std::string("nothing") : Log().front()));
         CHECK(rig->world().Get<Tag>(10)->t == 3);
     }
-    SUBCASE("zone B Shared write and any read pass, also with verification on") {
+    SUBCASE("a write and a read pass, also with verification on") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveAllowed>(B("X", "A")); }, true);
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Get<Tag>(1)->t == 8);
@@ -1017,7 +1010,7 @@ SystemResult TagsTwo(CommandsFor<Inserts<Tag>, Removes<>> commands) {
     commands.Insert(2, Tag{2});
     return Ok();
 }
-SystemResult ZoneCInsertsAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, Res<TickCount> tick) {
+SystemResult InsertsPosAtTwo(CommandsFor<Inserts<Pos>, Removes<>> commands, Res<TickCount> tick) {
     if (tick->value == 2) commands.Insert(1, Pos{2});
     return Ok();
 }
@@ -1039,28 +1032,28 @@ SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32
 
 } // namespace
 
-// Z5 is gone (S8): a zone B System's or hook's despawn of an entity that holds a
-// zone C column is recorded and applied like any other.
-TEST_CASE("J-52: a zone B despawn of an entity with a zone C column is applied (no Z5)") {
-    SUBCASE("a zone B System") {
+// Z5 is gone (S8): a System's or hook's despawn of an entity is recorded and
+// applied like any other, whatever columns it holds.
+TEST_CASE("J-52: a despawn of an entity with any column is applied (no Z5)") {
+    SUBCASE("a System") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&DespawnsOne>(B("DespawnsOne", "A"));
         }, false);
         rig->world().Insert(1, Pos{1});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 zone C entity: the despawn was not applied (System)");
+        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 entity with Pos: the despawn was not applied (System)");
     }
-    SUBCASE("a zone B hook") {
+    SUBCASE("a hook") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
-            r.Hook<Tag, &TagHookDespawnsOne>(HookTrigger::OnAdd, {.name = "TagHookDespawnsOne", .zone = Zone::B});
+            r.Hook<Tag, &TagHookDespawnsOne>(HookTrigger::OnAdd, {.name = "TagHookDespawnsOne"});
             r.AddSystem<&TagsTwo>(B("TagsTwo", "A"));
         }, false);
         rig->world().Insert(1, Pos{1});
         rig->world().Insert(2, Pos{2});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 zone C entity: the despawn was not applied (hook)");
+        CHECK_MESSAGE(!rig->world().Alive(1), "J-52 entity with Pos: the despawn was not applied (hook)");
     }
 }
 
@@ -1073,14 +1066,14 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
         one.name = "Tick";
         one.stages = {"A"};
         auto rig = MakeRig([one](Registrar& r) {
-            r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-            r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Component<Mode>({.name = "Mode", .zone = Zone::B});
-            r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+            r.Component<Pos>({.name = "Pos"});
+            r.Component<Tag>({.name = "Tag"});
+            r.Component<Mode>({.name = "Mode"});
+            r.Resource<TickCount>({.name = "TickCount"});
             r.Schedule(one);
             r.AddSystem<&InsertTagOnce>(B("InsertTagOnce", "A"));
-            r.AddSystem<&ZoneCInsertsAtTwo>(C("ZoneCInsertsAtTwo", "A"));
-            r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns", .zone = Zone::B});
+            r.AddSystem<&InsertsPosAtTwo>(C("InsertsPosAtTwo", "A"));
+            r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns"});
         }, false);
         rig->world().Insert(1, Mode{0});
         KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1: Tag added; the hook's despawn(1) is applied by the hook rounds
@@ -1112,7 +1105,7 @@ TEST_CASE("J-52: a hook's despawn and a later insert into it; Changed and Local 
             other.name = "Other";
             other.stages = {"B"};
             r.Schedule(other);
-            SystemOptions options = Sys("SeeChanges", Zone::B, {At("Tick", "A"), At("Other", "B")});
+            SystemOptions options = Sys("SeeChanges", {At("Tick", "A"), At("Other", "B")});
             r.AddSystem<&SeeChanges>(std::move(options));
         });
         World& world = rig->world();
@@ -1283,6 +1276,9 @@ namespace {
 struct Ca { std::int32_t v; };
 struct Cb { std::int32_t v; };
 struct Cc { std::int32_t v; };
+void HashValue(Hasher& h, const Ca& v) { HashValue(h, v.v); }
+void HashValue(Hasher& h, const Cb& v) { HashValue(h, v.v); }
+void HashValue(Hasher& h, const Cc& v) { HashValue(h, v.v); }
 
 SystemResult P0(Query<Write<Ca>> a) {
     for (EntityId id : a.Entities()) a.GetMut<Ca>(id)->v += 1;
@@ -1310,18 +1306,18 @@ std::vector<Mount> Sim(std::vector<std::string> before = {}, std::vector<std::st
     return {At("Tick", "A", std::move(before), std::move(after))};
 }
 constexpr std::array<Registration, 5> kSystems{{
-    [](Registrar& r) { r.AddSystem<&P0>(Sys("P0", Zone::C, Sim({"P1", "P4"}))); },
-    [](Registrar& r) { r.AddSystem<&P1>(Sys("P1", Zone::C, Sim({"P2"}))); },
-    [](Registrar& r) { r.AddSystem<&P2>(Sys("P2", Zone::C, Sim({"P3", "P4"}))); },
-    [](Registrar& r) { r.AddSystem<&P3>(Sys("P3", Zone::C, Sim())); },
-    [](Registrar& r) { r.AddSystem<&P4>(Sys("P4", Zone::C, Sim())); },
+    [](Registrar& r) { r.AddSystem<&P0>(Sys("P0", Sim({"P1", "P4"}))); },
+    [](Registrar& r) { r.AddSystem<&P1>(Sys("P1", Sim({"P2"}))); },
+    [](Registrar& r) { r.AddSystem<&P2>(Sys("P2", Sim({"P3", "P4"}))); },
+    [](Registrar& r) { r.AddSystem<&P3>(Sys("P3", Sim())); },
+    [](Registrar& r) { r.AddSystem<&P4>(Sys("P4", Sim())); },
 }};
 
-std::string SummaryOf(const std::array<int, 5>& order) {
+std::string OrderSummary(const std::array<int, 5>& order) {
     auto rig = MakeRig([&order](Registrar& r) {
-        r.Component<Ca>({.name = "Ca", .zone = Zone::C, .rollback = Rollback::Yes});
-        r.Component<Cb>({.name = "Cb", .zone = Zone::C, .rollback = Rollback::Yes});
-        r.Component<Cc>({.name = "Cc", .zone = Zone::C, .rollback = Rollback::Yes});
+        r.Component<Ca>({.name = "Ca"});
+        r.Component<Cb>({.name = "Cb"});
+        r.Component<Cc>({.name = "Cc"});
         r.Schedule(TickSchedule());
         for (int index : order) kSystems[static_cast<std::size_t>(index)](r);
     });
@@ -1334,15 +1330,12 @@ std::string SummaryOf(const std::array<int, 5>& order) {
         const auto result = rig->Run();
         REQUIRE_MESSAGE(static_cast<bool>(result), Text(result));
     }
-    return rig->world().Summary().Text();
+    return SummaryOf(rig->world()).Text();
 }
 
 } // namespace
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
-TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summary") {
+TEST_CASE("J-44: 20 registration orders of Systems give the same World summary") {
     std::array<int, 5> order{0, 1, 2, 3, 4};
     std::vector<std::array<int, 5>> orders;
     int index = 0;
@@ -1351,6 +1344,6 @@ TEST_CASE("J-44: 20 registration orders of (c) Systems give the same World summa
         ++index;
     } while (std::next_permutation(order.begin(), order.end()));
     REQUIRE(orders.size() == 20);
-    const std::string first = SummaryOf(orders.front());
-    for (const auto& each : orders) CHECK(SummaryOf(each) == first);
+    const std::string first = OrderSummary(orders.front());
+    for (const auto& each : orders) CHECK(OrderSummary(each) == first);
 }

@@ -12,9 +12,9 @@
 // stays installed, so an unexpected Programmer Error still aborts the test
 // executable loudly instead of being reported as an ordinary failure.
 
-namespace Engine::Test {
+namespace GYO::Test {
 
-[[noreturn]] inline void ThrowAssertionFailure(const Base::AssertionFailure& failure) {
+[[noreturn]] inline void ThrowAssertionFailure(const GYO::Engine::Base::AssertionFailure& failure) {
     throw failure;
 }
 
@@ -24,13 +24,13 @@ namespace Engine::Test {
 class ScopedAssertionHandler final {
 public:
     ScopedAssertionHandler() noexcept
-        : previous_(Base::SetAssertionHandler(&ThrowAssertionFailure)) {}
-    ~ScopedAssertionHandler() { Base::SetAssertionHandler(previous_); }
+        : previous_(GYO::Engine::Base::SetAssertionHandler(&ThrowAssertionFailure)) {}
+    ~ScopedAssertionHandler() { GYO::Engine::Base::SetAssertionHandler(previous_); }
     ScopedAssertionHandler(const ScopedAssertionHandler&) = delete;
     ScopedAssertionHandler& operator=(const ScopedAssertionHandler&) = delete;
 
 private:
-    Base::AssertionHandler previous_;
+    GYO::Engine::Base::AssertionHandler previous_;
 };
 
 #if defined(_MSC_VER)
@@ -41,7 +41,7 @@ inline const bool abortReportingDisabled = [] {
 }();
 #endif
 
-} // namespace Engine::Test
+} // namespace GYO::Test
 
 // Checks that evaluating the expression fails a GYO_ASSERT. Variadic so the
 // expression may contain commas; like GYO_ASSERT it relies on the
@@ -50,10 +50,10 @@ inline const bool abortReportingDisabled = [] {
     do {                                                                       \
         bool gyoAsserted = false;                                              \
         {                                                                      \
-            ::Engine::Test::ScopedAssertionHandler gyoAssertScope;             \
+            ::GYO::Test::ScopedAssertionHandler gyoAssertScope;             \
             try {                                                              \
                 static_cast<void>(__VA_ARGS__);                                \
-            } catch (const ::Engine::Base::AssertionFailure&) {                \
+            } catch (const ::GYO::Engine::Base::AssertionFailure&) {                \
                 gyoAsserted = true;                                            \
             }                                                                  \
         }                                                                      \

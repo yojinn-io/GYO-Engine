@@ -3,7 +3,7 @@
 #include <atomic>
 #include <cstdint>
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 namespace {
 
@@ -25,4 +25,4 @@ std::optional<Console::ShutdownReason> Console::RequestedShutdown() noexcept {
     return static_cast<ShutdownReason>(value);
 }
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS
