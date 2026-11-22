@@ -12,7 +12,7 @@ namespace {
 
 O::PrepareFn Refuse() {
     return [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no", {}, "save-version-unsupported"));
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "no", {}, "save-version-too-old"));
     };
 }
 

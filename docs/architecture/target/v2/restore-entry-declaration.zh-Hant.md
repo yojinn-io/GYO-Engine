@@ -4,6 +4,11 @@
 > **這個核准不等於 AGENTS §14.4 的判定變更核准**：第 13 節的判定在實作批照 §14.1、§14.2 宣告；既有守衛的退役或搬遷，在各實作批逐案核准。
 > **核准後的註記**（不改核准的內容）：同時核准的統合修訂 38 把「配發器含範圍的下界」與「Resource 的增刪」補成 Kernel 的機制（HANDOFF 同一列）。前者就是 5.1 的寫法；後者讓 5.8 說的「System 放不進不存在的 Resource」到實作時可能不再成立——5.8 的預設寫法（編排層先放、`ResMut` 覆寫）照樣可用，實作批若 Kernel 已有放進 Resource 的參數，可以在案例 5 加一案，照 §14 在實作批的判定宣告。
 
+> **修訂 12 的動工前核准**（使用者，2026-11-22，讀檔實作卡 `gyo2-restore-impl` 的對話）：原話「照建議，全部核准」。核准的版本是修訂 12（fb6328e7）第 18、19 節，交使用者的五件都照建議：(1) 四個配發器突變改出貨的 `RangeAllotter`（`entity_ids`），取代生成世界第 14 節第 4 件「改替身」的落點；(2) 判定 1 不新開 Kernel 的讀檔測試檔，六個沿用、四個新寫，突變照 18.3 先宣告預期失敗；(3) Engine 不發「讀檔完成」；(4) 存檔版本用最舊支援線；(5) 「直接拒絕」走 (a) 作者呼叫。比過的選項：各件表裡的另一（幾）個選項。理由：使用者沒有另外說（照卡片的建議）。19.4 第 2 件附帶的「『不放在編排裡』是架構限制還是排程的話」沒有另外回答；選 (a) 時兩種讀法結果相同，留著不判（選 (c) 才需要）。
+> **第 3、4 件的再確認**（使用者，2026-11-22，同一個對話）：卡片事後補報兩處比對不足——第 3 件漏了 Bevy 的 `WorldInstanceReady`（`crates/bevy_world_serialization/src/world_asset_spawner.rs:33`、`:526`：Engine 自己的生成器做完時發事件）；第 4 件的最舊支援線沒有別家實作撐著。使用者原話「第3件選(a)，第4件不用補查，開始」。比過的選項：第 3 件 (a) 維持 Engine 不發／(b) 照 Bevy 在生成結束時發「生成完成」；第 4 件 補查 bevy_save 等社群實作／不補查。理由：使用者沒有另外說（卡片給的理由：Bevy 發得出來是因為讀檔是 Engine 自己的生成器，GYO 的讀檔是作者的 System，Engine 只知道生成結束）。同一句「開始」是實作的開工。
+> **19 節的形狀改成純程式庫**（使用者，2026-11-22，同一個對話，合併前的設計審查之後）：Fable 5.2／high 的設計審查 S1 指出「設定→`Configure` 抄成 `Policy`→放進 Product 的共用處→作者再取出」這一圈沒有行為，卻帶出取用寫法、啟動時讀檔的三步、兩個設定回報碼、5 個突變與兩個測試執行檔；查到的別家（Unity `BlobAssetReference.TryRead` 是靜態函式、期望版本由呼叫者傳）沒有一家做成登記單位。原話「選(B)，照建議改」。比過的選項：(A) 維持 19.1 的登記單位／(B) 改成 `library_only=yes`、只留 `Policy`、`Check` 與兩個拒絕碼，作者自己持有 `constexpr Policy`。理由：卡片與審查者的建議（形狀比內容重；「預設不啟用、啟用後過時檔直接拒絕、Engine 支援」照樣成立）。19.1、19.5、19.7、19.8 被這一則取代的地方以 [save-version.zh-Hant.md](save-version.zh-Hant.md) 為準：沒有 `SaveVersionModule`、`SaveVersionOptions`、`Configure` 的回報；判定 V4、V6、V7 拿掉，加「相等只收現在的版本」一案；突變剩 7 個。
+> **這個核准不等於 AGENTS §14.4 的判定變更核准**：既有測試的判定不改；`[or-restore-gold]` 拆成兩個標記只改字樣。實作要等使用者說「開始」。
+
 **修訂紀錄**
 - 修訂 0（3dc9b464）起草；修訂 1（ea62f0c4）照第一次換模型檢查（Fable／high，blocker 3、should 17、nit 7）重寫。
 - 修訂 2～8（2026-11-16～17，e6466c2d～ed742598）：使用者在本卡與邊界卡陸續定了新 World、編號、「不認得存檔只指格式」、Kernel 是 ECS、初始值在建立當下給、權威不數寫者、回滾是獨立 Module；每次照著縮小與改寫。
@@ -11,6 +16,7 @@
 - **修訂 10（2026-11-17）**：照第二次換模型檢查（Fable／high，blocker 3、should 11、nit 8，全部採用；報告 `build/evidence/gyo2-restore-entry/declaration-check-fable-r9.md`）整份重寫。最大的三處：判定改寫成「實作時的 Engine」（批次表第五段，Kernel 減法、編排層、時間 Module、權威與回滾都已做完）；讀檔放在**編排層的「生成世界」**（使用者 `two-layers-like-bevy`），修訂 6～9 的「建世界的階段整件拿掉」是錯的（拿掉的只有 Kernel 那一層）；5.5 照 `clock-out-of-kernel` 重判。逐條對照在第 16 節。
 
 - **修訂 11（2026-11-17）**：照窄檢查（Fable／high；報告 `declaration-check-fable-r10-narrow.md`；舊 blocker：5.5 與 `two-layers-like-bevy` 已改好、判定剩一處；新的 blocker 2、should 5、nit 6，全部採用）改。最大的兩處：Resource 放回改成「編排層先放、讀檔的 System 用 `ResMut` 覆寫」（System 沒有參數能放進不存在的 Resource）；補上使用者的 `game-init-list`（遊戲初始化只在行程啟動時跑一次、跑在第一個 World），修正 1.1、第 2、4、15 節。5.1 改成移配發器範圍的下界。對照在第 17 節。
+- **修訂 12（2026-11-22，使用者動工前核准，見開頭）**：實作卡 `gyo2-restore-impl` 開工前照現在的 `origin/gyo2`（eacab4d7，第 4 批、生成世界 #272、交換點 #270 已合併）逐條對照。大部分已被骨架、生成世界兩批做掉；剩下的範圍縮小，判定改成「已有帶標記的案例就沿用，沒有的才寫」，並併入存檔版本 Module（使用者 2026-11-22「合併進去。」）。全文在第 18、19 節；第 2、4、5.3、5.7、5.8、13 節被第 18 節取代或補充的地方以第 18 節為準，原文保留不改（核准的是修訂 11）。
 - Owner：架構（GYO2 主會話開的任務卡）。這一批只做到宣告核准為止，**不實作**。實作是批次表第五段「讀檔的實作」（`rebuild-batch-plan.zh-Hant.md`）。
 - 讀的版本：程式 `origin/gyo2` 15ba81ef（K0、測試舊帳已合併）；批次表與 HANDOFF 在 `claude/gyo2-time-design` f530a1a4；統合修訂 33（1b3f6886，DI-KS 15 第 (7) 項收了「Ready 時設配發器」）；回滾份 `claude/gyo2-rollback-module-8bac02` 9418fcf1（第 7.4 節）。
 - 證據：開發機（Intel Mac，使用者的本機）主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-restore-entry/`（git 不追蹤）：`scout-old-design.md`、`scout-mature-practice.md`、`premises-and-scope.md`、`declaration-check-fable-r0.md`、`declaration-check-fable-r9.md`。
@@ -343,3 +349,282 @@ Engine 的兩點保證分在兩層：
 | should：5.1 要移下界 | 5.1 寫明；DI-KS 15 第 (7) 項的字面請主會話改 |
 | should：「執行中丟掉 World、建新的」沒有寄 | 5.7、第 8 節給骨架那一批 |
 | nit：代號、Bevy 出處、5.5 措辭、OnAdd 的突變範圍、「字面」、過時字樣 | 第 0 節改代號；第 4 節出處改 `bevy_world_serialization`；5.5 改寫；判定 1 加註；第 4、15 節改「卡片的讀法」；讀的版本與第 14 節更新。批次表的兩處（第一段還寫「等使用者回 5.3」、骨架那一列寫「放回存檔的實體」）轉主會話 |
+
+---
+
+## 18. 修訂 12：實作前對照現況（2026-11-22 動工前核准）
+
+讀的版本：`origin/gyo2` eacab4d7（第 4 批 #259、#265，生成世界 #272，N13 #271，交換點 #270 都已合併；本分支在 f25256c4 併入）；asset 宣告（`claude/gyo2-asset-585196`，**未合併**）；狀態機修訂 8 的卡（`gyo2-state-machine-r8`）還沒有 commit。換模型檢查：Fable 5.2／high 唯讀，兩輪。第一輪檢查 a5e31b9c：blocker 2、should 7、nit 8（`revision12-adversarial-check-fable.md`）；第二輪檢查 479e75ac（第 18 節窄複查＋第 19 節、C-9）：blocker 2、should 7、nit 9（`revision12-r2-check-fable.md`）。全部採用，報告在主 checkout `build/evidence/gyo2-restore-impl/`，處理在 18.6、18.7。
+
+**一句話**：這份宣告要的東西，骨架與生成世界兩批已經做掉大半（讀檔放在新 World、移下界的時機、遊戲中讀檔、讀兩次相同、新 World 的紀錄從空開始，都有案例）。剩下的是：一個沒有任何案例的寫法（重新配號）、三個「讀檔形狀」的組合案（hook、stamp、先生成再插入，補在生成期間的那條路上）、說明頁的讀檔一節、存檔版本 Module（第 19 節）。
+
+### 18.1 逐條對照
+
+**A. 仍成立（照做，不改）**
+
+| 節 | 內容 | 現況的根據 |
+|---|---|---|
+| 4 | 一律新 World；讀檔是生成世界裡作者的 System | O-8、O-14（`orchestration.zh-Hant.md`）；第 15 節已核准。生成世界把它補成三個位置，見 C-11 |
+| 5.1 | 編號兩種寫法；Kernel 的兩點（範圍外的 `SpawnWithId` 照常、範圍內的被丟並留紀錄） | DI-KS 15 (7)（生成世界改字）；`World.cpp` 的 `IdInAllotterRange`。只對 `Spawn`／`SpawnWithId` 成立，準備函式裡直接放的不在此限（C-10） |
+| 5.2 | 讀檔不受寫者規則管 | 第 4 批拿掉寫者的數量 |
+| 5.3 | hook 照常觸發（Bevy、flecs） | 讀檔走一般的 `Spawn`／`SpawnWithId`，Kernel 不認得讀檔（直接放的不跑 hook，C-10） |
+| 5.4 | 放回的格子取套用那個同步點的 stamp | 同上 |
+| 5.6 | 新 World 的紀錄從空開始 | `RestoreFlowTests` case 3 `[or-restore-new-records]` |
+| 6 | 讀檔不帶回滾的歷史 | 回滾的狀態在 World 的 Resource 與**每次建 World 一份**的 `ModuleBuffer`（`Setup.hpp:195`、`RollbackModule.cpp:34`；#270 之後另有 Product 一份，回滾不用它），替換時隨新的登記重建 |
+| 10、11 | Delta、Replacement Criteria | 不變 |
+
+**B. 已被別批做掉（這一批不再做，只在說明頁引用）**
+
+| 節 | 宣告要的 | 誰做的、在哪裡 |
+|---|---|---|
+| 5.1 編排層半 | 建 World 後、第一次 Run 前設配發器的時機 | 骨架：O-7 準備時機（帶過去 → 登記單位的準備 → 描述的準備 → `extra`）；生成世界：`entity_ids` 只在沒有值時放預設範圍，`extra` 蓋得掉（EI-1～EI-3） |
+| 5.7、第 8 節 | 執行中丟掉 World、建新的；遊戲初始化只跑一次；帶過去 | 骨架：`ReplaceWorld`（O-8）、O-1、O-10；`RestoreFlowTests` case 3、6 |
+| 5.7、第 8 節 | 讀檔 System 掛在生成世界；分批時第一批前設好配發器 | 生成世界：`WhileGenerating()`、`Hold()`；`WorldGenTests` C1～C3、C8；情境第 6 段 S6-4 |
+| 5.5 | 時間 Module 的 Resource 能被讀檔放回 | 時間＋事件：`RestoreFixedTime`（`FixedStep.hpp:92`、WT-3：在準備時機放回）；情境第 2 段 `[sc-s2-8-fixed-put-back]` |
+| 第 9 節 | 主會話持有的兩句 | 兩句現在是對的（`kernel-nested-schedule-declaration.zh-Hant.md:380`、`rebuild-entity-order.zh-Hant.md:68`）；c47769b1 是修訂 11 指出寫過頭的那一版，之後由主會話改正 |
+| DI-KS 15 (7) 的字面 | 「範圍（含下界）」 | 生成世界合併前核准的最終文字（「設定配發器的值」；「範圍的下界」是搬出去的型別的概念） |
+
+**C. 前提變了，要改**
+
+| # | 宣告寫的 | 現在 | 修訂（卡片照 L17 判；標「交使用者」的除外） |
+|---|---|---|---|
+| C-1 | 5.8：System 放不進不存在的 Resource，預設寫法是「準備函式先放預設值、讀檔 System 用 `ResMut` 覆寫」 | 已經有 `Commands::SetResource`（同步點第 7 步套用，DI-KS 9）與 `ExclusiveWorld::SetResource`（當場，DI-KS 18）；說明頁 11.6 已寫 | 5.8 改成三種都可以：準備函式放預設值＋`ResMut` 覆寫、讀檔 System 用 `Commands::SetResource`、獨占的讀檔 System 用 `ExclusiveWorld::SetResource`。和 Bevy `Commands::insert_resource` 相同。提醒：`Commands::SetResource` 在同步點第 7 步才套用、晚於同一個同步點的 OnAdd（`World.cpp:890-902`），之前對不存在的 Resource 用 `Res`／`ResMut` 是斷言。三種都有既有守衛（`[sc-s1-7-scores]`、`[sc-s1-3-best-at-sync]`、`ImmediateChangeTests`「Commands::SetResource and RemoveResource are applied at the sync point's resource step」），不加案 |
+| C-2 | 第 2 節：配發器、F-13 留在 Kernel | `RangeAllotter` 搬到 `entity_ids` Module（預設帶）；Kernel 只留 `EntityAllotter` 的概念與丟棄規則；Kernel 與編排層的測試用替身 `tests/common/support/TestRangeAllotter.hpp` | 說明頁寫 `EntityIds::RangeAllotter`。判定 2 的四個配發器突變落在哪裡：**交使用者**（18.2 第 1 件，因為「改替身」核准時的條件是案例不動） |
+| C-3 | 第 3 節、第 14 節：判定在現在的程式上會被 D-E2、D-E12 擋住 | D-E12 第 3 批（時間＋事件）拿掉、D-E2 第 4 批拿掉 | 這兩句失效（歷史保留） |
+| C-4 | 生成世界 5.7 留給本批：讀檔要不要用 `ExclusiveWorld::Restore` | `Restore` 是回滾的原語，整份狀態的語意：`Alive(ids)` 之外的實體全部 despawn、`Column<T>` 沒列到的格移除（`Params.hpp:868-878`）；不補 `InitialValue`；不看配發器的範圍 | **不寫成讀檔的寫法**。理由：照預設流程「先照資產生成關卡、再放回存檔」用它，剛生成的關卡會被整個刪掉；沒有點名的 Feature 需要它；別家讀檔沒有用回滾原語的。說明頁只留一句（照 DI-KS 12 的中立寫法）：「`Restore` 是回滾用的原語，Kernel 不認得放回的用途；它整份換掉 World 的狀態（名單外的實體與格都拿掉），不是預設的讀檔寫法，只適合存了整個 World 的作者」 |
+| C-5 | 5.3 只寫 hook | 第 4 批後 `InitialValue` 只在一般的生成與插入補（bundle 已有的元件不蓋，`InitialValueTests`「a component the entity already has is left as it is」） | 說明頁補：照一般寫法讀檔時，存檔沒存的衍生元件由初始值的宣告補；存了的照存檔的值（直接放的不補，C-10） |
+| C-6 | 沒寫 asset | asset 宣告 5.14（`claude/gyo2-asset-585196`，**未合併**）：`AssetId` 是 catalog 的字串、持久鍵，存檔裡記 id；資產在 World 外 | 說明頁補一句「存檔記資產 id、不存資產本身；id 能不能用在發替換之前驗（生成世界 5.4、5.9）」，不寫還沒合併的 API 名 |
+| C-7 | 第 13 節判定 1：新開 `tests/common/kernel/RestoreEntryTests.cpp`、十個案例 | 六個案例已有同一件事、帶標記的案例（18.3） | **交使用者**：18.2 第 2 件 |
+| C-8 | 狀態機 | 狀態機修訂 8 的卡在做；舊宣告 3.8「第一次套用一律先進初始值」。照做的話讀檔時新 World 先進初始狀態（初始狀態的 OnEnter 跑一次）再轉到存檔的狀態 | 不在本批定。狀態機卡已回答（狀態機宣告修訂 8 第 6 節，f19c3c2d，分支 `claude/gyo2-state-machine-r8-2afaeb`，使用者已核准）：讀檔 System 在生成中呼叫 `SetInitial` 填存檔的值；套用 System 帶 `AfterGenerating()`，第一次套用直接進存檔的值、不先跑初始狀態的 `OnEnter`；子狀態也能 `SetInitial`，第一次套用優先、只用一次。例：存檔停在「關卡中＋暫停」，讀檔後直接回到「關卡中＋暫停」。本批說明頁照這個寫法指路；狀態機那一批不改 `engine/orchestration`、`Product.cpp` |
+| C-9 | 沒寫讀檔完成的通知 | 送法原則（`v8-arch-gyo2-event-delivery-rule`，使用者 11-19）的表寫「讀檔完成由新 World 準備後發 `Message`（讀檔批定案）」；同一則 (1)「一直存在的狀態 → 讀 Resource」、(3)「之後各批照原則定送法，不再逐批問」 | 卡片照原則 (1) 判：**Engine 不發「讀檔完成」**。Engine 不認得讀檔（第 4 節），「放回完了」就是生成結束，讀 `WorldGeneration`（`Generating()`）或掛 `AfterGenerating()`；作者要通知別的 System，讀檔 System 自己發 `Message`（生成世界 5.5：沒有讀者拉住時跑完就被修剪）。另一條使用者的決定也撐它：`-world-events-not-via-event`（World 的建立與替換不發事件）。說明頁給「讀檔完成時只做一次」的寫法：`AfterGenerating()` 之後一直為真，作者自己記旗標。和表的字面不同，**交使用者確認**（18.2 第 3 件） |
+| C-10 | 沒寫（DI-KS 18 的使用者決定在修訂 11 核准之後：`v8-arch-gyo2-direct-insert-no-allotter-range`，11-18） | 準備函式裡用 `World::Insert` 直接放實體（`World.hpp:215-223`：Host、Ready 才能用）：**不跑 hook、不補 `InitialValue`、不檢查也不移動配發器的範圍**。情境第 1 段 S1-7b 守（忘了移下界時不是被丟，而是之後的 `Spawn` 回 `AllottedIdAlive`） | 說明頁列成第三條放回的路與它的三個差別：「碰撞體要靠 OnAdd 進空間索引的、要靠初始值補衍生元件的，不要走這條；走這條也要移下界」。配發器那一半有守衛（S1-7b）；「不跑 hook、不補初始值」目前是 `World.hpp:215-216` 的註解與設計，說明頁照這樣寫明出處。不加案 |
+| C-11 | 第 4 節「讀檔是生成世界裡作者的 System」 | 生成世界第 14 節第 3 件（使用者 11-22 確認）：放回的位置有三個、失敗的後果不同——`beforeSwap`（一次放完，失敗保留舊 World）、生成期間（跨幀，失敗 Product 結束）、準備函式直接放（C-10）；O-8 的安全範圍收窄；`beforeSwap` 期間沒有交換點（拿不到這一幀的外部資料） | 判定與說明頁分開寫三條路各由誰守（18.3）；說明頁照 18.4 的清單搬 |
+
+### 18.2 交使用者的三件
+
+**第 1 件：判定 2 的四個配發器突變落在哪裡（改使用者 11-22 核准的「改替身」的條件）**
+
+使用者核准「改替身」時的原文（`world-gen-declaration.zh-Hant.md:529`）是「突變改 Kernel 測試的替身，**判定的位置與案例都不動**」——前提是讀檔案例 1～3 寫在 Kernel 的測試裡、Kernel 不能 link `entity_ids`，所以只能改替身。第 2 件若照建議不開 Kernel 的讀檔測試檔，這個前提就沒了。
+
+| 選項 | 突變改哪裡 | 預期失敗（先宣告） |
+|---|---|---|
+| **改真型別（建議）** | `engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp`（出貨的程式） | `Owns` 恆真：`[sc-s1-7-put-rejected]`（情境第 1 段 S1-7，遊戲自己登記真的 `RangeAllotter`、移下界後照存檔編號放回；英雄被丟。第 6 段 S6-4 會先在 `ScenarioSegment6Tests.cpp:219` 的 `REQUIRE` 中止、走不到 `[sc-s6-4-same-id]`，不用它）；`Owns` 恆假：`[ei-real-in-range-dropped]`；`Of` 忽略 `first`：**不另立**，就是既有的 `sc-lower-bound-not-moved`（同一個改法，expect `[sc-s1-7-put-rejected]`）；`Allot` 不前進：`EntityIdsTests`「allotter: monotonic」的 `allotter.Allot() == std::optional<EntityId>(101)` |
+| 照核准改替身 | `tests/common/support/TestRangeAllotter.hpp`（測試的程式；Kernel 與編排層共用） | `Owns` 恆真：`[or-restore-ids]`；恆假：`[or-restore-control]`；`Of` 忽略 `first`、`Allot` 不前進：新增的重新配號案的標記。代價：Kernel 的 J-8、J-55 會先紅一片（算存活與否只看宣告的標記）；守到的是測試的替身，不是出貨的程式 |
+
+理由：守的對象應該是出貨的 `RangeAllotter`；真型別上已有三個案例抓得到，其中一個突變已存在（§14.5 不另立）。代價照實寫：選這一項時，編排層用替身的讀檔案例（`[or-restore-ids]`、`-ref`、`-nothing-dropped`、`-control` 與新的重新配號案）沒有配發器的突變；它們用到的 Engine 部分（`SpawnWithId` 的範圍判定、`Spawn::New` 回傳配到的編號）由 Kernel 既有的突變守（實作第一步查出 id 寫進 dev_log），這些案例是讀檔寫法的示範，不是受け入れ判定的唯一根據。
+
+**第 2 件：判定 1 改成「已有帶標記的案例就沿用，沒有的才寫」**
+
+**遊戲例子**：「讀檔時同一個編號出現兩次，留第一筆」——Kernel 的 J-55 已經守著（`sr-keep-last`），讀檔只是用同一個 `SpawnWithId`。原判定要在 `RestoreEntryTests.cpp` 再寫一次，只是換成讀檔的名字。
+
+| 選項 | 內容 |
+|---|---|
+| **沿用＋補（建議）** | 不新開 Kernel 的讀檔測試檔。案例 1、3、4、5、9、10 沿用既有、帶標記的案例（18.3）；案例 2（重新配號）新寫；案例 6、7、8 照「讀檔形狀」新寫在**生成期間**那條路上（`RestoreFlowTests.cpp`，讀檔 System 在 `WhileGenerating()` 的 set、延後的 `SpawnWithId`——這條路現有的 `WorldGenTests` C1～C3 沒有標記）。突變照 18.3 的表先宣告預期失敗 |
+| 照原判定 | 新開 `RestoreEntryTests.cpp`，十個案例照寫；六個和既有重複，突變被兩處抓到，不增加檢出力（§14.5） |
+
+**緩的面**（照實列，不是「沒有放寬」）：(1) Kernel 這一半不再有不依賴編排層的讀檔測試檔——Kernel 的機制由 J-8、J-30、J-55、`HookFlushTests`、`ImmediateChangeTests` 守，讀檔的組合由編排層的案例守；(2) 案例 9、10 改由編排層的 `RestoreFlowTests` case 3、5 與 `WorldGenTests` C3 守。舊判定從沒實作、沒有結果；宣告 `:4` 已寫明判定在實作批照 §14.1、§14.2 宣告，所以這是動工前重新宣告，不是 §14.4 的改既有測試。
+
+**第 3 件：讀檔完成不發 `Message`（C-9）**
+
+送法原則的表寫「讀檔完成由新 World 準備後發 `Message`（讀檔批定案）」。卡片照同一則的原則 (1) 判成「Engine 不發；讀 `WorldGeneration` 或掛 `AfterGenerating()`；作者要的話自己發」。理由：Engine 不認得讀檔；「放回完了」是一直存在的狀態。和表的字面不同，請確認；若要 Engine 發，請說由誰發（編排層不認得讀檔，只能是「生成結束」的通知）。
+
+### 18.3 判定 1、2（照 18.2 建議；結果出來前宣告，之後不放寬）
+
+**判定 1：案例**
+
+| 案例 | 路 | 由誰守（標記） |
+|---|---|---|
+| 1 照存檔編號放回 | `beforeSwap`／啟動時讀檔 | `RestoreFlowTests` case 1 `[or-restore-ids]`、`[or-restore-ref]`、`[or-restore-nothing-dropped]`；情境 S1-7 |
+| 1' 同上 | 生成期間＋真 `entity_ids` | 情境第 6 段 S6-4 `[sc-s6-4-same-id]`、`[sc-s6-4-above-bound]` |
+| 2 重新配號 | 生成期間 | **新增** `RestoreFlowTests`「restore: renumbering while generating」：**不移下界**（重新配號不需要；說明頁寫清楚只有照存檔編號放回才要移），讀檔 System 在 `WhileGenerating()` 的 set，存檔三個實體依編號由小到大用 `Spawn` 放回；**逐個實體**判：新編號是配發器配出的（`[or-renumber-fresh]`）、大小順序和存檔相同（`[or-renumber-order]`）、`ChaseTarget` 改寫後指向玩家的新編號（`[or-renumber-ref]`）；同一個讀檔 System 用 `ResMut<Gold>` 把金幣改成存檔的 120（`[or-gen-resmut-gold]`）、沒有被丟的生成 |
+| 3 範圍沒設好 | `beforeSwap` | `RestoreFlowTests` case 2 `[or-restore-control]`；真型別 `[ei-real-in-range-dropped]` |
+| 4 同一編號兩筆 | Kernel | J-55 三案（`sr-keep-last` expect `J-55 one-call-twice: 9 keeps the first value`；`sr-two-emitters-keep-first`；`sr-reason-alive-as-twice`） |
+| 5 Resource | `beforeSwap`、生成期間 | `RestoreFlowTests` case 1、3 的金幣（那裡是 `ExclusiveWorld::Modify` 寫的）。**兩處同一個標記、期待值不同**（130、120），實作時改名成 `[or-restore-gold-startup]`、`[or-restore-gold-in-game]`（只改標記字樣，判定不變）；`ResMut` 覆寫由案例 2 的 `[or-gen-resmut-gold]` 守 |
+| 6 hook | 生成期間 | **新增**「restore: hooks while generating」：每個放回的格子 OnAdd 各一次（`[or-restore-onadd-once]`）；`Monster` 的 OnAdd 生成血條實體，生成結束時每隻怪物各一個血條、沒有錯誤（`[or-restore-hook-spawn]`；Bevy #14300 的同型） |
+| 7 stamp | 生成期間 | **新增**「restore: Added after a load」：讀 `Added<Pos>` 的讀者在讀檔那一幀之前先跑過一次（沒有實體）；讀檔之後那一次成立（`[or-restore-added-seen]`）；再下一次不成立（`[or-restore-added-once]`） |
+| 8 先生成再插入 | 生成期間 | **新增**「restore: spawn then insert in one System」：讀檔 System 先生成只帶標記的實體、同一個 System 再 `Insert` `Pos`；生成結束時 `Pos` 在、值正確（`[or-restore-spawn-insert]`） |
+| 9 新 World 隔離 | 替換 | `RestoreFlowTests` case 3 `[or-restore-new-world]`、`[or-restore-new-records]` |
+| 10 讀兩次相同 | 替換、生成期間 | `RestoreFlowTests` case 5（實作時加標記 `[or-restore-twice-same]`）；`WorldGenTests` C3 |
+
+**判定 2：突變→預期失敗（先宣告；「存活」＝宣告的標記沒紅，別的測試紅了也算存活；建置失敗不算抓到）**
+
+| 突變 | 改法 | 預期失敗 |
+|---|---|---|
+| 配發器四個 | 18.2 第 1 件的表 | 同表 |
+| spawn 階段拿掉「落在範圍」的檢查 | — | **不另立**：既有 `sr-range-removed` 已併入 `sr-dropped-made-alive` |
+| 同一記錄者留最後一筆 | — | **不另立**：`sr-keep-last` |
+| 不同記錄者留其中一筆 | — | **不另立**：`sr-two-emitters-keep-first` |
+| spawn 階段 bundle 帶來的格子不跑 OnAdd | `World.cpp` 套用生成時不把 bundle 的格放進 OnAdd 名單 | `[or-restore-onadd-once]` |
+| hook 記的生成被丟掉 | hook 佇列裡的生成紀錄在套用時一律丟掉：讀檔 System 在 `Main/Update` 時，hook 的紀錄在下一個同步點第 0 步套用（`World.cpp:935` 一帶），最後一個同步點的才進清空輪；改的是兩條路共用的那一處（實作時找出那一行；只改到清空輪的不算這個突變） | `[or-restore-hook-spawn]` |
+| 放回的格子 `added` 記成 1 | 生成的格的 `added` 寫 1 | `[or-restore-added-seen]` |
+| 插入排在生成之前套用 | 同步點的套用先做插入、再做生成 | `[or-restore-spawn-insert]` |
+| `ResMut` 的寫入不落到 World | `ResMut` 的 `operator->` 改成指向一份每次呼叫都重建的副本（寫到副本後丟掉；編得過） | `[or-gen-resmut-gold]` |
+| 重新配號：讀檔 System 的對照表 | 不是 Engine 的程式，不立突變。案例 2 用到的 Engine 部分（單調配發、`Spawn::New` 回傳編號）由既有突變守（選「改真型別」時替身沒有突變，見 18.2 第 1 件的代價） | — |
+
+實作第一步：每一列先對既有清單（Kernel 654 個、v2 的六份）查有沒有同一個 find／replace，**也查已退掉、已併掉的 id**（例：`sr-range-removed` 被併進 `sr-dropped-made-alive`，`what` 欄有寫）；有就照 §14.5 加進既有的、不另立。突變清單在跑之前送 Fable／high 對抗檢查（§14.2）。
+
+**判定 3：沒有回歸**：`core` preset 的 kernel、orchestration、entity_ids、scenario 測試全過；L1 三平台全過。
+
+### 18.4 說明頁
+
+`system-contract-page.zh-Hant.md` 新增第 15 節「讀檔」（實作時 gyo2 的第 15 節已是事件游標的「帶條件或不常跑的讀者」、第 16 節排給狀態機，改成**第 17 節**；合併時以 gyo2 當時的節號為準），一處寫完；第 13 節替換那一條（`:448`）與第 14 節的讀檔一段（`:488`）改成指過去。要有（搬的時候最容易掉的標 ★）：遊戲例子；新 World；★ 啟動時讀檔走描述的準備（沒有 `ReplaceWorld`）、遊戲中讀檔走 `ReplaceWorld`；★ 三條放回的路與失敗後果（`beforeSwap`、生成期間、準備函式直接放，C-10、C-11）；★ `BuildNewFirst`／`DropOldFirst`、替換會重新登記（動態插入的不在）、★ 發替換之前先驗（版本、資產 id）；編號兩種寫法（含重新配號的對照表寫法）；Resource 的三種放法（C-1）；hook 與 hook 衍生實體（若也存進存檔，讀檔後兩份）；初始值（C-5）；stamp；時間（WT-3，在 `extra`）；資產 id（C-6）；`Restore` 不是讀檔的寫法（C-4）；狀態機指路（C-8）；讀檔完成（C-9，照第 3 件的結果）；存檔版本 Module（第 19 節）。
+
+### 18.5 時間、角色
+
+實作約 3.5 小時（突變 0.5、四個新案例 1、說明頁 0.5、存檔版本 Module 1.5）。角色照第 12 節：實作 Opus／high；突變清單與宣告的對抗檢查 Fable／high；合併前設計審查 Fable／high（唯讀）。
+
+### 18.7 對第二輪檢查（479e75ac）的處理
+
+| 發現 | 處理 |
+|---|---|
+| B1 兩個預期失敗紅不了 | `Owns` 恆真改成 `[sc-s1-7-put-rejected]`；`ResMut` 不落地改由案例 2 的生成期間讀檔用 `ResMut` 放回金幣、新標記 `[or-gen-resmut-gold]` |
+| B2 19.4 第 2 件的選項不完整 | 19.4 第 2 件改成三個選項並列、各寫代價與啟用後的效果；「不放在編排裡」的讀法列為要確認 |
+| S1 改真型別後替身案例沒有突變 | 18.2 第 1 件寫明代價 |
+| S2 也要查退掉、併掉的 id | 判定 2 的實作第一步 |
+| S3 hook 生成的突變改法 | 寫成兩條路共用的那一處 |
+| S4 新 Module 缺 §3 三樣 | 19.7、19.8 |
+| S5 19.5 的判定 | 19.5 重寫：突變→標記表、存活的定義、加「拿掉太舊的拒絕」、V4 不自證、拿掉沒有突變的標記 |
+| S6 第 (3) 個位置做不到 | 19.1 改成在 `build` 回呼用 `WorldSetup::ProductBuffer()` 取 `Policy` 再 `Prepare(fn)` |
+| S7 Unity 那一列 | 19.2 改：`TryRead` 收的是 `SceneMetaDataSerializeUtility` 的版本；加 `DeserializeWorld` 逐型別比 `StableTypeHash`、對不上丟例外 |
+| nit 1～9 | 新案例是四個、時間對齊；C-4 措辭照 DI-KS 12；C-9 加 `-world-events-not-via-event` 與「只做一次」的寫法；V5 比對文字；舊範例字串改名；第一個 `library_only=no`、`default=no` 的單位、啟用寫法；「高於現在也拒」列事後報告；重新配號不移下界；C-10 守衛的範圍 |
+
+### 18.6 對 Fable 檢查（a5e31b9c）的處理
+
+| 發現 | 處理 |
+|---|---|
+| B1 預期失敗是跑完才寫的 | 18.3 判定 2 改成先宣告的「突變→預期失敗」表；存活的定義寫明；`[or-restore-gold]` 拆成兩個標記 |
+| B2 「改替身」的條件被改掉 | 18.2 第 1 件交使用者，列兩個選項 |
+| S1 「八個」「不是放寬」說過頭 | 18.2 第 2 件改成六個沿用、一個新增、三個補成讀檔形狀的組合案；緩的面照實列兩項（第三項因為 6、7、8 照寫而消失） |
+| S2 四個突變已在清單 | 判定 2 標「不另立」；`sr-range-*` 的錯誤引用改成 `sr-dropped-made-alive` |
+| S3 漏 DI-KS 18 直接放 | C-10 |
+| S4 漏三個位置 | C-11；18.3 每列寫哪一條路；6、7、8 補在生成期間；18.4 的 ★ |
+| S5 `Restore` 少最大的差別、沒有 Feature | C-4 改成不寫成讀檔的寫法 |
+| S6 讀的版本過時 | 18 節開頭改 eacab4d7；A 類第 6 列寫明每次建 World 的 `ModuleBuffer`；C-11 寫 `beforeSwap` 沒有交換點 |
+| S7 三列引錯守衛 | 案例 6、7、8 改成新寫的組合案，不引 J-30、J-54 |
+| nit 1 flecs 是混合型 | 第 19 節之前的系譜改寫（C-4 不再談系譜）；生成世界宣告 `:200`「三家都重新配號」與 flecs「能沿用就沿用、否則重配」（`deserialize.c:129-168`）不一致，轉主會話 |
+| nit 2 C-3 的批次 | 改 |
+| nit 3 `ResMut::Get` 編不過 | 判定 2 寫成編得過的改法 |
+| nit 4 案例 1 引 S6-4 | 18.3 加 1' |
+| nit 5 C-1 的提醒 | 加 |
+| nit 6 C-6 未合併 | 寫明，不寫 API 名 |
+| nit 7 第 9 節出處 | B 類改寫 |
+| nit 8 `[or-restore-range]` 偏弱 | 新的重新配號案逐個實體判 |
+
+---
+
+## 19. 存檔版本 Module（`v8-arch-gyo2-save-version-into-restore`；修訂 12，2026-11-22 動工前核准）
+
+**來由**：使用者 2026-11-18（`v8-arch-gyo2-save-version-module`）：「需要提供version module，默認不啟用，啟用之後過時檔會直接拒絕。這個補充不放在編排裡，但是得放計劃中。Engine需要支持。」前一句（`-replace-order-author-choice`）：「壞檔問題是最嚴重的Bug，通常是來自於系統更新……通常製作的時候直接上version 管理。太老的檔案不支持。讓玩家自己開新檔。」2026-11-22 併進本卡、同一份宣告、同一個 PR（原話「合併進去。」）。
+
+**用遊戲講**：RPG 1.0 的存檔格式是第 3 版。一年後的 1.5 改了背包，作者把現在的版本訂成 5、最舊支援訂成 4。玩家拿 1.0 的存檔（第 3 版）按「讀取」：選單上直接顯示「這個存檔太舊，請開新遊戲」，現在的 World 照跑，沒有半個讀進來的 World。存檔時寫上 5。
+
+**核心一句**：Engine 只比對一個數字。數字寫在存檔的哪裡、怎麼讀出來，是作者的格式；Module 給的是「現在幾版、最舊收幾版」的一處設定和「收不收」的判斷，拒絕走讀檔失敗的路。
+
+### 19.1 四件
+
+| 件 | 判（卡片照 L17 判，標「使用者」的除外） |
+|---|---|
+| **存的時候** | 作者從 Module 拿「現在的版本」（`SaveVersion::Policy::Current()`），寫進自己的存檔格式的任何位置。Module 不寫檔頭、不定位置、不碰 io（「不認得存檔只指格式」，使用者 `-save-unaware-means-format-only`） |
+| **讀的時候** | 作者先用自己的格式讀出版本數字，交給 `Policy::Check(版本)`；回 `Result`：收、或拒絕（`OrchestrationError`，`reporterCode` 是 `"save-version-too-old"` 或 `"save-version-too-new"`）。**檢查的位置**三處擇一，都在換上之前：(1) 發 `ReplaceWorld` 之前（runner 從 `Product::Buffer()` 拿 `Policy`；選 `DropOldFirst` 時只能這裡，否則被拒＝位置空了、Product 結束）；(2) `ReplaceRequest::extra` 準備函式裡呼叫、把錯誤原樣回傳 → `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode` 照帶（O-8、O-5；`BuildNewFirst` 時舊 World 照跑）；(3) 啟動時讀檔：描述的準備函式在 `Product::Build` 之前就寫好、只拿得到 `World&`（`Product.hpp:50`、`Setup.hpp:80`），碰不到 `Policy`；做法是在描述的 `build` 回呼裡用 `WorldSetup::ProductBuffer()` 取出 `Policy`，再 `Prepare(fn)` 登記一個呼叫它的準備函式（`Setup.hpp:259-261`）→ 被拒時 `Product::Build` 失敗、O-E7（O-E7 沒有 `reporterCode` 欄位，碼接在訊息文字裡，`Product.cpp:274-278`）。**不放在生成期間**（生成期間的錯誤是 Product 結束，生成世界 5.4、5.9） |
+| **預設不啟用** | 使用者明說。`config/modules.csv` 一列 `library_only=no`、`default=no`（第一個這樣的單位；現有的進 World 的單位都是 `default=yes`）；產品用 `gyo_product_units(... MODULES save_version)` 啟用（`GyoUnitRegistry.cmake:298`）；產品沒列就不 link、不登記，零成本。啟用時也只在 `Configure` 放一個 `Policy` 進 Product 一份的共用處（交換點 #270 的 `ModuleBuffer`），**不登記任何 World 的元件、Resource、System**：每幀零成本 |
+| **作者的關係** | 版本欄位是作者格式的一部分（作者的資料契約，AGENTS §8）。Module 只要一個整數；作者用別的版本表示（字串、語意版本）時自己換成整數。設定由 `ProductDescription::options` 給 `SaveVersionOptions{ std::uint32_t current; std::uint32_t oldestSupported; }`；`oldestSupported > current` 或沒給設定是 `Configure` 的回報（啟動錯誤，O-5） |
+
+### 19.2 和別家對照
+
+| 誰 | 版本怎麼處理 | 出處 |
+|---|---|---|
+| Unity Entities | 兩層。(1) 檔頭：`BlobAssetReference<T>.TryRead(reader, version, out)` 讀檔頭的一個 int，和呼叫者給的期望值**不等就回 false**（不丟例外、不轉換）；場景的標頭由 `ResolveSceneSectionUtility` 用 `SceneMetaDataSerializeUtility.CurrentFileFormatVersion` 呼叫，失敗記「old version」的錯誤。(2) 自動：`SerializeUtility.DeserializeWorld` 逐型別比對 `StableTypeHash`，找不到型別就丟例外（型別改了舊檔就讀不了） | `Unity.Entities/Blobs.cs:558-580`；`Unity.Scenes/ResolveSceneSectionUtility.cs:133`；`Unity.Entities/Serialization/SerializeUtility.cs:676-690` |
+| Bevy | 世界序列化沒有版本欄位；靠 reflect 的型別路徑，型別沒登記就是反序列化錯誤。版本管理交作者 | `crates/bevy_world_serialization/src` 沒有 version（本機 `git grep` 只命中無關的字） |
+| flecs | JSON 的 `"version"` 是實體的世代，不是檔案版本；沒有檔案版本 | `src/addons/json/deserialize.c:445` |
+| Unreal | 一般知識（沒讀原始碼）：`FArchive` 帶引擎版本與各子系統的 custom version，載入舊版走程式碼轉換 | — |
+
+**和別家不同的地方**（交使用者確認，19.4 第 1 件）：
+- Unity 是「不等就拒」，本頁是「低於最舊或高於現在才拒」——中間的版本收，舊檔要轉換的部分由作者的讀檔程式處理（使用者「太老的檔案不支持」讀成「有一條最舊線」）。查到的三家沒有一家用「最舊支援線」（19.4 第 1 件）。
+- Unity 的版本寫在檔頭、由 Engine 讀；本頁建議由作者讀出交給 Module（GYO 不認得格式）（19.4 第 2 件列了三條路）。
+- Unity 另有自動的一層（型別雜湊對不上就丟例外）；GYO 的讀檔是作者的程式，Engine 沒有存檔裡的型別資訊可比，沒有這一層。
+- Bevy、flecs 沒有這個 Module；本頁照使用者的決定提供（不是推翻）。
+
+### 19.3 卡片照 L17 判、不交使用者的
+
+- **高於現在也拒**（玩家降版或拿到別人新版的檔）：碼分兩個，選單可以顯示不同的話。Unity 的「不等就拒」也拒新版。使用者說的只有「過時」，列進合併前的事後報告。
+- **碼的名字**：`"save-version-too-old"`、`"save-version-too-new"`。既有的範例字串 `"save-version-unsupported"`（`OrchestrationError.hpp:183` 的註解、`RestoreFlowTests.cpp:24`）是骨架那一批的合成例子，實作時改成新的名字。
+- **不轉換**：使用者「或者提供存檔轉換功能」是可能的另一條路，沒有要 Engine 做；轉換是作者讀檔程式的事。
+- **不加編排層的步驟**（使用者「不放在編排裡」）：檢查由作者呼叫，走已有的準備函式與 `reporterCode`（骨架 3.9 已確認接得住）。
+- **不是事件**：被拒是 `Result`（送法原則的表；時間＋事件宣告第 268 行）。
+- **位置與名字**：`engine/modules/save_version`、namespace `GYO::Engine::SaveVersion`、target `GYO::SaveVersion`、登記單位 `SaveVersionModule`（N11～N17、N20；`entity_ids` 的先例）。
+
+### 19.4 交使用者的
+
+1. **「過時」的界線**：(a) **最舊支援線（建議）**——`oldestSupported ≤ 版本 ≤ current` 收，中間舊版由作者的讀檔程式補；(b) **只收現在的版本**（Unity `TryRead` 的做法）——任何不等都拒，作者每改一次格式就讓所有舊檔失效。理由：使用者說的是「太老的檔案不支持」，不是「舊的都不支持」；(b) 可以用 `oldestSupported = current` 做到，所以 (a) 包含 (b)。
+2. **「直接拒絕」怎麼做到**（三條路；19.2 的 Unity 檔頭也在裡面）：
+
+| 選項 | 怎麼做 | 啟用之後的效果 | 代價 |
+|---|---|---|---|
+| **(a) 作者呼叫（建議）** | 作者用自己的格式讀出版本數字，在讀檔入口呼叫 `Policy::Check` 一次（19.1 的三個位置） | **啟用本身不擋任何東西**：作者忘了呼叫就照收。Module 的全部行為是一處設定＋兩個整數比較＋固定的碼 | 最小；Engine 完全不碰格式。「直接」只讀成「不轉換、直接回錯誤」 |
+| (b) 作者自選的檔頭小工具 | Module 另給 `WriteHeader(bytes, 版本)`／`ReadHeader(bytes)`：在作者的位元組開頭放一個固定的小檔頭（標記＋版本）；用了它，讀檔入口可以只交位元組給 `Check`（Unity `TryRead` 的做法） | 用了檔頭的作者，版本由 Module 讀出、比對，作者不必自己解析 | Engine 定了作者格式的一小段（作者選用的）；和 `-save-unaware-means-format-only` 是否相容要你判 |
+| (c) 自動攔 | 編排層在替換前（`beforeSwap` 之前）問各登記單位「收不收」，這個 Module 回答 | 啟用就擋，作者不會忘 | 要編排層多一個步驟，而且仍需要有人先讀出版本數字（(a) 或 (b)）；和「不放在編排裡」衝突——**這句若只是排程的話**（HANDOFF 的說明是「不放在編排層（第 2 批），列進批次表」，可能指「不排在骨架那一批」），這條路就沒有被排除 |
+
+卡片建議 (a)：Engine 不認得格式，數字一定要作者讀出；(b)、(c) 都多一份 Engine 要守的契約，沒有點名的 Feature 需要。請你判：(1) 「不放在編排裡」是架構的限制還是排程的話；(2) 選哪一條。
+
+### 19.5 判定（照 19.4 建議 (a)；結果出來前宣告，之後不放寬）
+
+`tests/common/save_version/`（link `GYO::Orchestration`＋`GYO::SaveVersion`，合成的單機遊戲沿用 `SaveGame.hpp`）。設定 `{current 5, oldestSupported 4}`。
+
+| # | 案例 | 檢查（標記） |
+|---|---|---|
+| V1 | 邊界收：版本 4、5 | `Check` 成功（`[sv-accept-oldest]` 對 4、`[sv-accept-current]` 對 5） |
+| V2 | 太舊：版本 3，`BuildNewFirst`，`extra` 裡呼叫並回傳錯誤 | `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode == "save-version-too-old"`（`[sv-too-old]`）。舊 World 照跑由骨架既有的 `or-prepare-failure-swaps` 守，不另立標記 |
+| V3 | 太新：版本 6 | `reporterCode == "save-version-too-new"`（`[sv-too-new]`） |
+| V4 | runner 從 `Product::Buffer()` 拿得到 `Policy`（`DropOldFirst` 前先驗的那條路） | `Product::Buffer()` 裡有 `Policy`、它的 `Check(3)` 回太舊（`[sv-buffer-policy]`） |
+| V5 | 啟動時讀檔被拒：`build` 回呼取 `Policy`、`Prepare(fn)` 呼叫 | `Product::Build` 失敗、O-E7、訊息文字含 `save-version-too-old`（`[sv-startup]`） |
+| V6 | 設定錯：`oldestSupported 6 > current 5` | `Product::Build` 失敗、單位回報（`[sv-config-order]`）；沒給設定（`[sv-config-missing]`） |
+| V7 | 不啟用：產品的單位表由真的 `config/modules.csv` 產生、沒有列 `save_version` | `Product::Buffer()` 裡沒有 `Policy`（`[sv-default-off]`） |
+| V8 | 存的時候：`Current()` | 回 5（`[sv-current]`） |
+
+**突變→預期失敗**（「存活」＝宣告的標記沒紅；建置失敗不算抓到）：
+
+| 突變 | 預期失敗 |
+|---|---|
+| 拿掉「太舊」的拒絕 | `[sv-too-old]` |
+| 「太舊」的比較 `<` 改 `<=`（最舊那一版也拒） | `[sv-accept-oldest]` |
+| 拿掉「太新」的拒絕 | `[sv-too-new]` |
+| 「太新」的比較 `>` 改 `>=`（現在的版本也拒） | `[sv-accept-current]` |
+| 兩個碼對調 | `[sv-too-old]` |
+| `Configure` 不把 `Policy` 放進 Product 的共用處 | `[sv-buffer-policy]` |
+| `Configure` 不檢查 `oldest > current` | `[sv-config-order]` |
+| `Configure` 沒給設定時用預設值、不回報 | `[sv-config-missing]` |
+| `config/modules.csv` 的 `default=no` 改 `yes` | `[sv-default-off]` |
+| `Current()` 回 `oldestSupported` | `[sv-current]` |
+
+`[sv-startup]` 守的是編排層 O-E7 的既有路（`or-` 的既有突變），不另立。突變清單在跑之前送 Fable／high 對抗檢查（§14.2）。時間：約 1.5 小時。說明頁第 17 節「讀檔」加一小節（17.1）。
+
+### 19.6 對 io 的需求（給 threads／io 重審卡，經主會話）
+
+讀檔與存檔版本 Module 對 io **沒有新需求**：Engine 不做存檔的讀寫。作者用 io 讀寫存檔時用到的是既有的：整檔原子寫入（`engine/io/helpers/WriteFileAtomically.hpp`，防寫到一半的壞檔——使用者說壞檔是最嚴重的 Bug）、整檔讀（`ReadAllBytes.hpp`）；讀檔在 World 執行緒外先讀好、驗好版本再發替換（不在 World 裡做 io）。重審卡回覆兩個都留下（重審宣告 I6）。**存檔目錄**：目前 Engine（io、os）不提供每個使用者的資料目錄（macOS Application Support、Windows `%APPDATA%`、Linux `$XDG_DATA_HOME`），存檔路徑由作者自己決定（`UserFiles.hpp` 只有 `ProbeFileStamp`，讀整檔算戳記判斷有沒有被改過，不是目錄）。使用者在 threads／io 重審卡答 Q3 選 (a)（2026-11-22，經主會話轉）：存檔目錄要補、放在 os 層（os 卡已核准的介面：`OS::Files::UserDataDirectory(organization, application)`，回傳「base／公司／遊戲」、不存在就建、POSIX 用 0700），另開一個小批做，不在讀檔卡、也不在重審卡。那一批合併前，作者自己決定路徑；讀檔的實作不等它。（之後 #280 先合併，說明頁改成指向 `OS::Files::UserDataDirectory`。）
+
+### 19.7 Derivation Order 與 Architecture Delta（AGENTS §2、§3）
+
+| 層 | 內容 |
+|---|---|
+| Feature | 玩家存檔：遊戲更新後讀舊存檔，太舊的直接拒絕、讓玩家開新遊戲（使用者 11-18）。Product：單機遊戲 |
+| Contract | `Policy::Current()`、`Policy::Check(版本) → Result`、兩個碼、`SaveVersionOptions`；存檔裡的版本欄位是作者的資料契約 |
+| Architecture | 新 Module `engine/modules/save_version`（預設不帶）；不改 Kernel、不改編排層 |
+
+1. Feature：同上。
+2. 問題：沒有一處放「現在幾版、最舊收幾版」，每個產品各寫各的比較與錯誤碼。
+3. 邊界：新增一個 Module；Kernel、編排層的公開介面不變。
+4. 影響：`config/modules.csv`、新 Module、新測試、說明頁。
+5. 依賴方向：`save_version` → `GYO::Orchestration`（登記單位的介面、`OrchestrationError`）；沒有反向。
+6. Ownership：版本的策略（兩個數字、比較、碼）歸這個 Module；版本欄位在存檔的位置與格式歸作者；拒絕之後怎麼辦（選單、開新遊戲）歸作者。
+7. 為什麼不能更小：使用者要「Engine 需要支持」；一個不登記任何 World 內容的 Module 已是最小的形狀。
+
+### 19.8 Design Invariants（寫進新頁 `docs/architecture/target/v2/save-version.zh-Hant.md`）
+
+- **SV-1 只比數字。** Module 不讀、不寫存檔，不定格式；只收作者交來的整數。
+- **SV-2 預設不帶、啟用也零每幀成本。** `default=no`；啟用時只在 `Configure` 放一個 `Policy` 進 Product 的共用處，不登記任何 World 的元件、Resource、System。
+- **SV-3 拒絕是 `Result`。** 不發事件、不寫日誌、不中斷 World；碼固定兩個。
+- **Replacement Criteria**：
+  - RC-SV1：有點名的 Feature 需要 Engine 讀出版本（19.4 第 2 件的 (b)）或自動攔（(c)）。
+  - RC-SV2：有點名的 Feature 需要轉換舊存檔（使用者提過「或者提供存檔轉換功能」）。
+  - RC-SV3：職責要多一項（例：記住每個存檔的版本）→ 停下來交使用者。
+

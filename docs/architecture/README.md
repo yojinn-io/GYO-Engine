@@ -47,7 +47,7 @@ column (`modules/<name>`), not guessed from its name:
 | `engine/core/` | capabilities internalized into the Engine, long-lived and rarely changed; know nothing of ECS | base, math, os, io, time, threads |
 | `engine/ecs/` | the ECS (Kernel) and its storage | kernel, entity_store |
 | `engine/orchestration/` | the orchestration layer (one unit) | orchestration |
-| `engine/modules/` | Modules: maintained by us, our interface (an external library behind it included), may grow | json, logging, audio, world_time, world_logging, entity_ids |
+| `engine/modules/` | Modules: maintained by us, our interface (an external library behind it included), may grow | json, logging, audio, world_time, world_logging, entity_ids, save_version |
 | `plugins/` (top level, outside the Engine) | Plugins: third-party, officially maintained (SDL family, ImGui) | none yet |
 
 Dependencies point down only: a Module may depend on core, ecs and orchestration; core depends on no Module. Include paths
