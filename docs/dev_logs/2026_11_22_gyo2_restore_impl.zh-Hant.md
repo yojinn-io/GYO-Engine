@@ -78,6 +78,13 @@
 | S8 | DI 頁「會進 World 的單位」和 SV-2 矛盾 | (B) 之後不存在 |
 | S9 | 設定回報碼的寫法和鄰居（`AU-E1` 等）不同 | (B) 之後不存在 |
 
+## L1 的失敗（windows-x64）與修法
+
+- run 45032473713（4b7a0acb）：linux-x64、macos-arm64 通過，windows-x64 編譯失敗，CI gate 失敗。記錄存在主 checkout `build/evidence/gyo2-restore-impl/l1-45032473713-failed.log`。
+- 原因（§14.3，從記錄確認）：`tests/common/save_version/SaveVersionTests.cpp:57` 把 `O::ToString(...)`（`std::string_view`）串進 doctest 的訊息；MSVC 14.52 的 `__msvc_string_view.hpp` 的 `operator<<` 需要完整的 `std::basic_ostream`，這個檔沒有 include `<ostream>`（libstdc++、libc++ 間接帶進來，MSVC 不會）。46 個錯誤全在這一次具現化，沒有別的。改成登記單位之前的版本也有同一行，當時的 L1 都被下一次推送取消，沒有跑到 Windows。
+- 這台 macOS 重現不了（MSVC 才有），Red 就是這次 L1 的失敗；修完以重跑 L1 為 Green 的根據。
+- 修法：照既有的寫法（`OrchestrationTestSupport.hpp:15-16`、`ScenarioTests.cpp:12-13`）加 `#include <ostream>` 與同一句註解。
+
 ## 合併前核准
 
 使用者 2026-11-22 在本卡：「照建議，全部核准」——核准 [合併前核准頁](../architecture/target/v2/restore-impl-merge-approval.zh-Hant.md) 的四件（SV-1～SV-3 的最終文字、太新也拒、突變 16 個超過門檻、和宣告的三處出入）。

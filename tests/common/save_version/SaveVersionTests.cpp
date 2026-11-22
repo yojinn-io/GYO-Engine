@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+// MSVC: doctest messages stream std::string_view (ToString of the codes); that needs the full ostream.
+#include <ostream>
 #include <string>
 #include <utility>
 
