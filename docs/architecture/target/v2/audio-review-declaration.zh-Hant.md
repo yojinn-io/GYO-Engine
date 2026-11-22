@@ -38,6 +38,7 @@
     - **暫停在音訊那一側**：`setPauseAll` 暫停全部 voice（`soloud_core_setters.cpp:94`），不連遊戲時間。
     - **上鎖**：API 和音訊執行緒的混音共用一把 mutex（`soloud_core_setters.cpp:96`、`soloud.cpp:2126`）——GYO 的音訊執行緒不上鎖（DI 7），這一點不採。
     - **`playClocked(aSoundTime, …)`**（`soloud_core_basicops.cpp:112-131`）：遊戲傳自己的時間；每個輸出 block 裡第一個請求當錨點，之後的請求照和它的時間差往後延（上限 2048 個取樣）。不需要和音訊共用絕對時間線，就能讓同一幀裡不同時刻的聲音分開。這是第 12 節第 5 題第 1 件（預設起播時刻）的直接參考，交 `world_audio` 那批比較。
+  - miniaudio（本機 `~/Code/GitHome/miniaudio`，877ea4a7，2026-11-22 使用者 clone）：`ma_sound_set_start_time_in_pcm_frames`／`ma_sound_set_stop_time_in_pcm_frames` 用引擎的「global time」——混音前進的取樣數，是音訊那一側的時鐘（`miniaudio.h:389-402`、`:1464-1474`、`:78223-78236`）；遊戲要排程就先讀 `ma_engine_get_time_in_pcm_frames` 再加偏移。和 Unity 的 dspTime 同類：起播的時間線在音訊那一側。輸出後端的部分給 SDL 那批參考。
   - FMOD〔知〕：`setDelay` 用 DSP 時鐘；虛擬 voice。Wwise〔知〕：`PostEvent` 進佇列、`RenderAudio` 每幀送；播放上限。Unreal、Godot：這次沒查（檢查者憑記憶：兩者遊戲暫停時預設帶到聲音）。
 
 ## 1. 先用遊戲講
