@@ -13,7 +13,9 @@
 // Injected outputs for the file sink (declaration 5.7: the writer's output is
 // injectable; judgement 2 uses one that never returns).
 
-namespace GYO::Engine::Logging::Test {
+namespace GYO::Test::Logging {
+
+using namespace GYO::Engine::Logging;
 
 // Keeps every byte; can be held (Write waits until Release) and can fail.
 class RecordingOutput final : public LineOutput {
@@ -94,4 +96,4 @@ private:
     bool closed_ = false;
 };
 
-} // namespace GYO::Engine::Logging::Test
+} // namespace GYO::Test::Logging

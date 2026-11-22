@@ -19,8 +19,8 @@ int GoldOf(O::Product& p) {
 }
 
 O::PrepareFn Unsupported() {
-    return [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
-        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed,
+    return [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed,
                                                        "the save's version is not supported", {}, "save-version-unsupported"));
     };
 }

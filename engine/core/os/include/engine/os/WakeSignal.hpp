@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/base/Result.hpp"
-#include "engine/os/OsError.hpp"
+#include "engine/os/OSError.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -14,7 +14,7 @@
 // single waiter, deadlines, the re-check of the time base after each wake and
 // the backend names consumers log. engine/os never reads that latch.
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 // The platform mechanism. engine/time reports it as its WaitBackend, value for
 // value. A plain waitable timer means the high-resolution one was not available
@@ -27,8 +27,8 @@ public:
     // with NOTE_CRITICAL (no timer-coalescing leeway). Windows: an auto-reset
     // event and a high-resolution waitable timer, else a plain one. Other
     // platforms: a mutex, a condition variable and a pending flag, which cannot
-    // fail. A primitive the OS refuses is IoFailed with the native error.
-    [[nodiscard]] static Base::Result<WakeSignal, OsError> Create();
+    // fail. A primitive the OS refuses is IOFailed with the native error.
+    [[nodiscard]] static Base::Result<WakeSignal, OSError> Create();
 
     WakeSignal(WakeSignal&& other) noexcept;
     WakeSignal& operator=(WakeSignal&& other) noexcept;
@@ -63,4 +63,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

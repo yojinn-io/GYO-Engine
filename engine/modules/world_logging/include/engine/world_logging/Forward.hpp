@@ -144,7 +144,7 @@ void Forward(Orchestration::WorldSetup& setup, ForwardOptions mount) {
         at.stage = std::move(mount.stage);
         options.mounts.push_back(std::move(at));
         registrar.AddSystem<&Detail::ForwardMessages<D>>(std::move(options));
-        setup.Prepare([](Kernel::World& world) -> ::Engine::Base::Result<void, Orchestration::OrchestrationError> {
+        setup.Prepare([](Kernel::World& world) -> ::GYO::Engine::Base::Result<void, Orchestration::OrchestrationError> {
             if (world.Resource<LogWorldLabel<D>>() == nullptr) {
                 LogWorldLabel<D> label;
                 const std::string& worldName = world.Name();

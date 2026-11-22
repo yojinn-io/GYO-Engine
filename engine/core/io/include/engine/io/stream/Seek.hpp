@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
     /// Seek の基準位置
     enum class SeekWhence : std::uint8_t {
@@ -26,4 +26,4 @@ namespace Engine::IO::Stream {
         }
     };
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

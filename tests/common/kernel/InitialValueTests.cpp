@@ -68,14 +68,14 @@ void Data(Registrar& r) {
 SystemResult RequestOne(Spawn<Bundle<BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
 SystemResult RequestAnother(Spawn<Bundle<BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{5});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
@@ -170,7 +170,7 @@ namespace {
 SystemResult SpawnsBoth(Spawn<Bundle<BodyAt, Body>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3}, Body{-1});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
@@ -255,7 +255,7 @@ namespace {
 SystemResult SpawnsTwoRequests(Spawn<Bundle<Crate, BodyAt>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Crate{1}, BodyAt{3});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
@@ -379,7 +379,7 @@ SystemResult LabelAdded(HookCtx ctx) {
 SystemResult SpawnsCrate(Spawn<Bundle<Crate>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Crate{2});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 SystemResult CrateAsksForBody(HookCtx ctx, CommandsFor<Inserts<BodyAt>, Removes<>> commands) {
@@ -395,7 +395,7 @@ SystemResult LabelsCrates(Query<Read<Crate>> crates, CommandsFor<Inserts<Label>,
 SystemResult SpawnsMass(Spawn<Bundle<Mass>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Mass{5});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
@@ -554,7 +554,7 @@ Seat SeatFromEmber(const Ember& ember) { return Seat{ember.e}; }
 SystemResult SimulationSpawnsSpark(Spawn<Bundle<Spark>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(Spark{4});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 
@@ -682,7 +682,7 @@ Mass MassFromRequest(const BodyAt& request) { return Mass{request.x}; }
 SystemResult SpawnsRequestAndCrate(Spawn<Bundle<BodyAt, Crate>> spawn, Res<WorldTest::TickCount> tick) {
     if (tick->value != 1) return Ok();
     auto made = spawn.New(BodyAt{3}, Crate{1});
-    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (!made) return GYO::Engine::Base::Err(std::move(made).error());
     return Ok();
 }
 

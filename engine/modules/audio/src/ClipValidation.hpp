@@ -6,7 +6,7 @@
 #include "engine/base/Result.hpp"
 #include "engine/base/Span.hpp"
 
-namespace Engine::Audio::Detail {
+namespace GYO::Engine::Audio::Detail {
 
 // The clip rules shared by ClipBank::Add and Submitter::LoadClip: InvalidClip
 // for an empty clip, channels other than 1 or 2, a sample count that is not a
@@ -14,4 +14,4 @@ namespace Engine::Audio::Detail {
 [[nodiscard]] Base::Result<void, AudioError> ValidateClip(Base::ConstSpan<std::int16_t> interleaved,
                                                           std::uint16_t channels, std::uint32_t sampleRate);
 
-} // namespace Engine::Audio::Detail
+} // namespace GYO::Engine::Audio::Detail

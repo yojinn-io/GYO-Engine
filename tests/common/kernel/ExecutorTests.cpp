@@ -147,10 +147,10 @@ private:
 
 // Whether f fails a GYO_ASSERT on this thread.
 bool Asserts(const std::function<void()>& f) {
-    ::Engine::Test::ScopedAssertionHandler scope;
+    ::GYO::Test::ScopedAssertionHandler scope;
     try {
         f();
-    } catch (const ::Engine::Base::AssertionFailure&) {
+    } catch (const ::GYO::Engine::Base::AssertionFailure&) {
         return true;
     }
     return false;
@@ -166,7 +166,7 @@ SystemResult WritesBound(ResMut<Bound> bound) {
 }
 SystemResult ExclusiveReadsBound(ExclusiveWorld<> world) {
     auto value = world.Read<Bound>([](const Bound& b) { return b.value; });
-    if (!value) return Engine::Base::Err(std::move(value).error());
+    if (!value) return GYO::Engine::Base::Err(std::move(value).error());
     return Ok();
 }
 SystemResult CommandsSetsBound(Commands commands) {
@@ -174,7 +174,7 @@ SystemResult CommandsSetsBound(Commands commands) {
     return Ok();
 }
 SystemResult ExclusiveSetsBound(ExclusiveWorld<> world) {
-    if (auto set = world.SetResource(Bound{5}); !set) return Engine::Base::Err(std::move(set).error());
+    if (auto set = world.SetResource(Bound{5}); !set) return GYO::Engine::Base::Err(std::move(set).error());
     return Ok();
 }
 SystemResult CommandsRemovesBound(Commands commands) {
@@ -182,7 +182,7 @@ SystemResult CommandsRemovesBound(Commands commands) {
     return Ok();
 }
 SystemResult ExclusiveRemovesBound(ExclusiveWorld<> world) {
-    if (auto removed = world.RemoveResource<Bound>(); !removed) return Engine::Base::Err(std::move(removed).error());
+    if (auto removed = world.RemoveResource<Bound>(); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
     return Ok();
 }
 struct Free { std::int64_t value; };  // resource, zone B, not thread-bound
@@ -234,7 +234,7 @@ TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetRe
         Log().clear();
         CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
         CHECK(Log() == std::vector<std::string>{"bound 4"});
-        CHECK_MESSAGE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial(), "[ks-s6-thread-bound] the sync point did not record its thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial(), "[ks-s6-thread-bound] the sync point did not record its thread");
     }
     SUBCASE("ExclusiveWorld::SetResource, now") {
         auto rig = BoundRig([](Registrar& r) {
@@ -244,7 +244,7 @@ TEST_CASE("J-6: a thread-bound resource put in by a sync point's Commands::SetRe
         Log().clear();
         CHECK_MESSAGE(!Asserts([&] { KERNEL_REQUIRE_RUN_OK(rig->Run()); }), "J-6 thread-bound: the applying thread reads it");
         CHECK(Log() == std::vector<std::string>{"bound 5"});
-        CHECK_MESSAGE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial(), "[ks-s5-thread-bound] the immediate change did not record its thread");
+        CHECK_MESSAGE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial(), "[ks-s5-thread-bound] the immediate change did not record its thread");
     }
 }
 
@@ -253,7 +253,7 @@ TEST_CASE("J-6: a thread-bound resource taken out by a sync point's Commands::Re
     SUBCASE("Commands::RemoveResource, applied at the sync point") {
         auto rig = BoundRig([](Registrar& r) { r.AddSystem<&CommandsRemovesBound>(B("CommandsRemovesBound", "A")); });
         rig->world().SetResource(Bound{1});
-        REQUIRE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial());
+        REQUIRE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial());
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Resource<Bound>() == nullptr);
         CHECK_MESSAGE(BoundThread(rig->world()) == 0, "[ks-s6-thread-forgotten] the sync point's removal kept the thread");
@@ -261,7 +261,7 @@ TEST_CASE("J-6: a thread-bound resource taken out by a sync point's Commands::Re
     SUBCASE("ExclusiveWorld::RemoveResource, now") {
         auto rig = BoundRig([](Registrar& r) { r.AddSystem<&ExclusiveRemovesBound>(B("ExclusiveRemovesBound", "A")); });
         rig->world().SetResource(Bound{1});
-        REQUIRE(BoundThread(rig->world()) == Engine::Base::CurrentThreadSerial());
+        REQUIRE(BoundThread(rig->world()) == GYO::Engine::Base::CurrentThreadSerial());
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(rig->world().Resource<Bound>() == nullptr);
         CHECK_MESSAGE(BoundThread(rig->world()) == 0, "[ks-s6-thread-forgotten] the immediate removal kept the thread");
@@ -558,7 +558,7 @@ SystemResult UntypedIntoAnyColumn(Commands commands) {
 // another one: both are reported.
 SystemResult DroppedBesideOwn(Spawn<Bundle<Tag>> spawn) {
     static_cast<void>(spawn.New(Tag{1}));
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "own"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "own"));
 }
 // Drops the Err it got: the Executor reports it all the same.
 SystemResult SpawnDropped(Spawn<Bundle<Tag>> spawn) {
@@ -645,7 +645,7 @@ SystemResult SpawnThenThrow(SpawnWithId<Bundle<Tag>> spawn, DiagnosticsWriter<No
 SystemResult SpawnThenErr(SpawnWithId<Bundle<Tag>> spawn, DiagnosticsWriter<Note> notes) {
     spawn.New(5, Tag{5});
     notes.Write(Note{2});
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the System's own Err"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the System's own Err"));
 }
 
 } // namespace
@@ -656,7 +656,7 @@ SystemResult SpawnTagOne(SpawnWithId<Bundle<Tag>> spawn) {
     return Ok();
 }
 SystemResult HookReturnsErr(HookCtx) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
 }
 SystemResult HookWritesThroughReadPointer(HookCtx, Query<Read<Pos>> pos) {
     if (const Pos* p = pos.Get<Pos>(2)) const_cast<Pos*>(p)->x = 64;
@@ -749,34 +749,34 @@ namespace {
 
 SystemResult ExclusiveWritesPos(ExclusiveWorld<> world) {
     auto r = world.Modify<Pos>(1, [](Pos& pos) { pos.x += 1; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
+    if (!r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 SystemResult ExclusiveWritesMode(ExclusiveWorld<> world) {
     auto r = world.Modify<Mode>(1, [](Mode& mode) { mode.m += 1; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
+    if (!r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 SystemResult ExclusiveWritesCShared(ExclusiveWorld<> world) {
     auto r = world.Modify<CShared>(1, [](CShared& value) { value.s += 1; });
-    if (!r) return Engine::Base::Err(std::move(r).error());
+    if (!r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 SystemResult ExclusiveAllowed(ExclusiveWorld<> world) {
     auto pos = world.Read<Pos>(1, [](const Pos& p) { return p.x; });
-    if (!pos) return Engine::Base::Err(std::move(pos).error());
+    if (!pos) return GYO::Engine::Base::Err(std::move(pos).error());
     if (!*pos) return Ok();
     const std::int32_t x = **pos;
     auto tag = world.Modify<Tag>(1, [x](Tag& t) { t.t = x + 1; });
-    if (!tag) return Engine::Base::Err(std::move(tag).error());
+    if (!tag) return GYO::Engine::Base::Err(std::move(tag).error());
     return Ok();
 }
 
 SystemResult ExclusiveSpawns(ExclusiveWorld<> world) {
     auto id = world.Spawn(Tag{3});
-    if (!id) return Engine::Base::Err(std::move(id).error());
+    if (!id) return GYO::Engine::Base::Err(std::move(id).error());
     auto tag = world.Read<Tag>(*id, [](const Tag& t) { return t.t; });
-    if (!tag) return Engine::Base::Err(std::move(tag).error());
+    if (!tag) return GYO::Engine::Base::Err(std::move(tag).error());
     Log().push_back("spawned " + std::to_string(*id) + " tag " + std::to_string(tag->value_or(-1)));
     return Ok();
 }

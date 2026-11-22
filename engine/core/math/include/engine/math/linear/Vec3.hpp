@@ -5,7 +5,7 @@
 
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Left-handed: +X right, +Y up, +Z forward. Model and world space use metres.
 struct Vec3 final {
@@ -67,4 +67,4 @@ static_assert(std::is_aggregate_v<Vec3>);
     return std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

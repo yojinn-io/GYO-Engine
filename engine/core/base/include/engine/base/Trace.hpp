@@ -15,14 +15,14 @@
 // pointer and returns. The facade holds no state of its own: the span stack, ids, timing and the path belong
 // to the receiver.
 //
-//     Engine::Base::TraceSpan span;            // declared where the step's scope starts
+//     GYO::Engine::Base::TraceSpan span;            // declared where the step's scope starts
 //     if (runs) span.Begin("kernel", name, world);   // started only when the step runs
 //     ...                                       // ended by the destructor, also on an exception
 //
 // The string views given to Begin must outlive the span (the kernel's schedule, System and World names live
 // in its registry and World while it runs).
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 // What a receiver hands back for a begun span; id 0 is "no span".
 struct TraceToken {
@@ -103,4 +103,4 @@ inline std::size_t TraceCurrentPath(const std::span<char> buffer) noexcept {
     return receiver != nullptr ? receiver->path(buffer) : 0;
 }
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base

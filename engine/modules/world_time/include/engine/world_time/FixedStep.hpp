@@ -23,12 +23,12 @@ namespace Detail {
 // The value of a Read or Modify of a time Resource the time Module registered and put in (absent: a Programmer
 // Error, the product removed it).
 template <class R>
-R Present(::Engine::Base::Result<std::optional<R>, Kernel::KernelError> visited) {
+R Present(::GYO::Engine::Base::Result<std::optional<R>, Kernel::KernelError> visited) {
     GYO_ASSERT(static_cast<bool>(visited) && visited->has_value());
     return **visited;
 }
 // The same for a closure that returns nothing (the result says whether it was called).
-inline void Called(::Engine::Base::Result<bool, Kernel::KernelError> visited) {
+inline void Called(::GYO::Engine::Base::Result<bool, Kernel::KernelError> visited) {
     GYO_ASSERT(static_cast<bool>(visited) && *visited);
 }
 
@@ -38,7 +38,7 @@ inline void Called(::Engine::Base::Result<bool, Kernel::KernelError> visited) {
 // fixed-step schedule runs nested. Ok: ActiveTime is the frame's value again (VirtualTime's delta and elapsed).
 // Err or an exception: passed on as it is, ActiveTime not put back (the World is interrupted; D2 ends the Product).
 template <class ExclusiveWorldType>
-[[nodiscard]] ::Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,
+[[nodiscard]] ::GYO::Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,
                                                                                std::string_view schedule) {
     Detail::Called(world.template Modify<Tick>([](Tick& tick) { ++tick.value; }));
     const ActiveTime fixed = Detail::Present(world.template Modify<FixedTime>([](FixedTime& time) {

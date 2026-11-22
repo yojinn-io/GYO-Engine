@@ -4,7 +4,7 @@
 
 #include <concepts>
 
-namespace Engine::EntityStore {
+namespace GYO::Engine::EntityStore {
 
 // How the store reads an element's key (Design Invariant 10): only through
 // EntityKey<T>, never by naming another field or by name lookup in the
@@ -46,4 +46,4 @@ template <HasEntityKey T>
     return EntityKey<T>::Of(value);
 }
 
-} // namespace Engine::EntityStore
+} // namespace GYO::Engine::EntityStore

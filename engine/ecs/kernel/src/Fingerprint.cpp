@@ -118,7 +118,7 @@ public:
         }
     }
     [[nodiscard]] Fingerprint Finish(std::uint32_t version = kFingerprintVersion) const {
-        return Fingerprint{version, Engine::Base::Sha256(bytes_)};
+        return Fingerprint{version, GYO::Engine::Base::Sha256(bytes_)};
     }
 
 private:

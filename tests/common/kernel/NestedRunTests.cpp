@@ -114,7 +114,7 @@ SystemResult Drive(ExclusiveWorld<> world) {
     Log().push_back("drive " + Here());
     for (const std::string& schedule : Runs()[name]) {
         if (--RunBudget() < 0) return Ok();
-        if (auto ran = world.RunSchedule(schedule); !ran) return Engine::Base::Err(std::move(ran).error());
+        if (auto ran = world.RunSchedule(schedule); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     }
     Log().push_back("driven " + Here());
     return Ok();
@@ -132,7 +132,7 @@ SystemResult DriveSwallow(ExclusiveWorld<> world) {
 
 SystemResult Fails(Query<Read<Tag>>) {
     Log().push_back("fails " + Here());
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "boom"));
 }
 
 SystemResult Throws(Query<Read<Tag>>) {
@@ -161,13 +161,13 @@ TEST_CASE("J-56: an exclusive System runs a schedule 3 times: its Systems run 3 
 
 namespace {
 SystemResult DriveThenLookAround(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     Log().push_back(KeptWorld()->State() == WorldState::Running ? "state Running" : "state not Running");
     Log().push_back("current " + std::string(Current().name));
     return Ok();
 }
 SystemResult DriveThenInsert(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     KeptWorld()->Insert(50, Tag{50});  // a structural World API write while Running
     return Ok();
 }
@@ -217,11 +217,11 @@ void EraseTagOfOne() {
 }
 SystemResult EraseThenDrive(ExclusiveWorld<> world) {
     EraseTagOfOne();
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 SystemResult DriveThenErase(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     EraseTagOfOne();
     return Ok();
 }
@@ -459,10 +459,10 @@ namespace {
 Mode* g_mode = nullptr;
 SystemResult WriteSharedAndListed(ExclusiveWorld<Writes<Flag>> world) {
     for (int round = 0; round < 2; ++round) {
-        if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return Engine::Base::Err(std::move(r).error());
-        if (auto r = world.Modify<Flag>([](Flag& f) { f.on += 1; }); !r) return Engine::Base::Err(std::move(r).error());
+        if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
+        if (auto r = world.Modify<Flag>([](Flag& f) { f.on += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
         if (round == 0) {
-            if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+            if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
         }
     }
     return Ok();
@@ -486,11 +486,11 @@ SystemResult SendsPing(MessageWriter<Ping> pings) {
 SystemResult HoldsPings(MessageReader<Ping>) { return Ok(); }
 SystemResult TamperPingThenDrive(ExclusiveWorld<> world) {
     PingBuffer(*Current().world).records.back().payload.n = 98;
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 SystemResult DriveThenTamperPing(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     PingBuffer(*Current().world).records.back().payload.n = 7;
     return Ok();
 }
@@ -572,14 +572,14 @@ SystemResult LogStamp(Query<Read<Tag>>) {
     return Ok();
 }
 SystemResult DriveWriteDrive(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
-    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return Engine::Base::Err(std::move(r).error());
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
+    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 SystemResult FailThenWrite(ExclusiveWorld<> world) {
     auto ran = world.RunSchedule("Tick");
-    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t = 41; }); !r) return Engine::Base::Err(std::move(r).error());
+    if (auto r = world.Modify<Tag>(1, [](Tag& t) { t.t = 41; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
     return ran;
 }
 } // namespace
@@ -627,7 +627,7 @@ TEST_CASE("J-56: after the inner schedule fails the handle still writes, with no
 namespace {
 SystemResult DriveReturnsOther(ExclusiveWorld<> world) {
     static_cast<void>(world.RunSchedule("Step"));
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "other"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "other"));
 }
 SystemResult RunAgainAfterFailure(ExclusiveWorld<> world) {
     auto first = world.RunSchedule("Step");
@@ -865,7 +865,7 @@ TEST_CASE("J-56: refused and swallowed: RunSchedule in a hook") {
 
 namespace {
 SystemResult LogAfterDrive(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     Log().push_back("step driver back " + Here());
     return Ok();
 }
@@ -874,9 +874,9 @@ SystemResult SeedNinety(SpawnWithId<Bundle<Mode>> spawn) {
     return Ok();
 }
 SystemResult ReadTagOfNinety(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     auto tag = world.Read<Tag>(90, [](const Tag& t) { return t.t; });
-    if (!tag) return Engine::Base::Err(std::move(tag).error());
+    if (!tag) return GYO::Engine::Base::Err(std::move(tag).error());
     Log().push_back(*tag ? "90 has Tag " + std::to_string(**tag) : std::string("90 has no Tag"));
     return Ok();
 }
@@ -905,9 +905,9 @@ SystemResult LatePingReader(MessageReader<Ping> pings) {
 SystemResult DriveTwiceThenFlag(ExclusiveWorld<> world) {
     for (int run = 0; run < 3; ++run) {
         if (run == 2) {
-            if (auto set = world.SetResource(Flag{1}); !set) return Engine::Base::Err(std::move(set).error());
+            if (auto set = world.SetResource(Flag{1}); !set) return GYO::Engine::Base::Err(std::move(set).error());
         }
-        if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+        if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     }
     return Ok();
 }
@@ -994,7 +994,7 @@ SystemResult ReadsCopies(ExclusiveWorld<> world) {
     auto pair = world.Read<Tag>(1, [](const Tag& t) { return std::pair<std::int32_t, std::string>(t.t, "x"); });
     bool called = false;
     auto done = world.Read<Tag>(1, [&called](const Tag&) { called = true; });
-    if (!value || !text || !list || !maybe || !whole || !pair || !done) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
+    if (!value || !text || !list || !maybe || !whole || !pair || !done) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
     Log().push_back("value " + std::to_string(**value) + " text " + **text + " list " + std::to_string((*list)->size()) +
                     " maybe " + std::to_string(***maybe) + " whole " + std::to_string((*whole)->t) + " pair " +
                     std::to_string((*pair)->first) + " done " + (*done && called ? "yes" : "no"));
@@ -1010,7 +1010,7 @@ SystemResult ReadsAbsent(ExclusiveWorld<> world) {
         called = true;
         t.t = 1;
     });
-    if (!value || !written) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "absent"));
+    if (!value || !written) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "absent"));
     Log().push_back(std::string("absent ") + (*value ? "value" : "nothing") + (*written ? " written" : " not written") +
                     (called ? " called" : " not called"));
     return Ok();
@@ -1020,7 +1020,7 @@ SystemResult ClosureInClosure(ExclusiveWorld<> world) {
         auto tag = world.Read<Tag>(1, [](const Tag& t) { return t.t; });
         return mode.m + (tag && *tag ? **tag : 1000);
     });
-    if (!sum || !*sum) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "nested"));
+    if (!sum || !*sum) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "nested"));
     Log().push_back("sum " + std::to_string(**sum));
     return Ok();
 }
@@ -1107,7 +1107,7 @@ SystemResult ReadsResources(ExclusiveWorld<> world) {
     auto out = world.Read<Out>([](const Out& o) { return o.value; });
     auto flag = world.Read<Flag>([](const Flag& f) { return f.on; });
     auto c = world.Read<CRes>([](const CRes& v) { return v.value; });
-    if (!out || !flag || !c) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
+    if (!out || !flag || !c) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
     Log().push_back("out " + (*out ? std::to_string(**out) : std::string("absent")) + " flag " +
                     (*flag ? std::to_string(**flag) : std::string("absent")) + " c " +
                     (*c ? std::to_string(**c) : std::string("absent")));
@@ -1119,19 +1119,19 @@ SystemResult ReadsAbsentResource(ExclusiveWorld<> world) {
         called = true;
         return o.value;
     });
-    if (!out) return Engine::Base::Err(std::move(out).error());
+    if (!out) return GYO::Engine::Base::Err(std::move(out).error());
     Log().push_back(std::string("absent out ") + (*out ? "value" : "nothing") + (called ? " called" : " not called"));
     return Ok();
 }
 SystemResult ReadsSettings(ExclusiveWorld<> world) {
     auto settings = world.Read<KernelSettings>([](const KernelSettings& s) { return s.hookRoundLimit; });
-    if (!settings) return Engine::Base::Err(std::move(settings).error());
+    if (!settings) return GYO::Engine::Base::Err(std::move(settings).error());
     Log().push_back("settings limit " + (*settings ? std::to_string(**settings) : std::string("absent")));
     return Ok();
 }
 SystemResult ModifiesSettings(ExclusiveWorld<> world) {
     auto settings = world.Modify<KernelSettings>([](KernelSettings& s) { s.accessVerification = true; });
-    if (!settings) return Engine::Base::Err(std::move(settings).error());
+    if (!settings) return GYO::Engine::Base::Err(std::move(settings).error());
     return Ok();
 }
 SystemResult ReadsPosUndeclared(Query<Read<Tag>>) {
@@ -1145,17 +1145,17 @@ SystemResult TurnsVerificationOn(ResMut<KernelSettings> settings) {
 SystemResult WritesListedFlag(ExclusiveWorld<Writes<Flag>> world) {
     auto flag = world.Modify<Flag>([](Flag& f) { f.on = 11; });
     auto out = world.Modify<Out>([](Out& o) { o.value = 12; });
-    if (!flag || !out) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "listed"));
+    if (!flag || !out) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "listed"));
     return Ok();
 }
 SystemResult WritesSharedOut(ExclusiveWorld<> world) {
     auto out = world.Modify<Out>([](Out& o) { o.value = 13; });
-    if (!out) return Engine::Base::Err(std::move(out).error());
+    if (!out) return GYO::Engine::Base::Err(std::move(out).error());
     return Ok();
 }
 SystemResult WritesUnlistedFlag(ExclusiveWorld<> world) {
     auto flag = world.Modify<Flag>([](Flag& f) { f.on = 14; });
-    if (!flag) return Engine::Base::Err(std::move(flag).error());
+    if (!flag) return GYO::Engine::Base::Err(std::move(flag).error());
     return Ok();
 }
 SystemResult ListsZoneC(ExclusiveWorld<Writes<CRes>>) { return Ok(); }
@@ -1445,7 +1445,7 @@ struct WhichOverload {
 SystemResult ReadsThroughConst(ExclusiveWorld<> world) {
     auto component = world.Read<Tag>(1, WhichOverload{});
     auto resource = world.Read<Out>(WhichOverload{});
-    if (!component || !resource || !*component || !*resource) return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
+    if (!component || !resource || !*component || !*resource) return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "read"));
     Log().push_back("overloads " + std::to_string(**component) + std::to_string(**resource));
     return Ok();
 }
@@ -1460,8 +1460,8 @@ SystemResult ClosureAfterClosure(ExclusiveWorld<> world) {
     return Ok();
 }
 SystemResult ResourceStampAround(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
-    if (auto r = world.Modify<Out>([](Out& o) { o.value += 1; }); !r) return Engine::Base::Err(std::move(r).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
+    if (auto r = world.Modify<Out>([](Out& o) { o.value += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 } // namespace
@@ -1588,7 +1588,7 @@ TEST_CASE("J-56: a hook of the inner schedule runs a schedule: refused, reported
 
 namespace {
 SystemResult DriveThenOverwrite(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     KeptWorld()->Insert(1, Tag{5});  // an existing cell: a structural World API call, but no membership change
     Log().push_back("overwrite went through");
     return Ok();

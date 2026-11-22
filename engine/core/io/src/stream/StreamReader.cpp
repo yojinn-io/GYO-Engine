@@ -4,14 +4,14 @@
 
 #include <cstring>
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
 StreamReader::StreamReader(IStream& s) : s_(s) {
     lbuf_.resize(4096);
 }
 
-IoResult<std::size_t> StreamReader::ReadSome(void* dst, std::size_t bytes) {
+IOResult<std::size_t> StreamReader::ReadSome(void* dst, std::size_t bytes) {
     if (lpos_ < llen_) {
         const auto count = Math::Min(bytes, llen_ - lpos_);
         if (count != 0) std::memcpy(dst, lbuf_.data() + lpos_, count);
@@ -21,7 +21,7 @@ IoResult<std::size_t> StreamReader::ReadSome(void* dst, std::size_t bytes) {
     return s_.Read(dst, bytes);
 }
 
-IoResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
+IOResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
     std::size_t done = 0;
     auto* out = static_cast<std::byte*>(dst);
 
@@ -31,8 +31,8 @@ IoResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
 
         const std::size_t n = rr.value();
         if (n == 0) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::EndOfStream,
+            return Base::Err(IOError::Make(
+                GYO::Engine::IO::IOErrorCode::EndOfStream,
                 "StreamReader: unexpected EOF in ReadExactly"));
         }
         done += n;
@@ -40,7 +40,7 @@ IoResult<std::size_t> StreamReader::ReadExactly(void* dst, std::size_t bytes) {
     return done;
 }
 
-IoResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes) {
+IOResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes) {
     std::vector<std::byte> out;
     out.reserve(64 * 1024);
 
@@ -55,8 +55,8 @@ IoResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes
         if (n == 0) break;
 
         if (maxBytes != 0 && out.size() + n > maxBytes) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::ReadFailed,
+            return Base::Err(IOError::Make(
+                GYO::Engine::IO::IOErrorCode::ReadFailed,
                 "StreamReader: ReadAllBytes exceeded maxBytes"));
         }
 
@@ -66,14 +66,14 @@ IoResult<std::vector<std::byte>> StreamReader::ReadAllBytes(std::size_t maxBytes
     return std::move(out);
 }
 
-IoResult<std::uint8_t> StreamReader::ReadU8() {
+IOResult<std::uint8_t> StreamReader::ReadU8() {
     std::uint8_t v = 0;
     auto r = ReadExactly(&v, 1);
     if (!r) return Base::Err(r.error());
     return v;
 }
 
-IoResult<std::uint16_t> StreamReader::ReadU16LE() {
+IOResult<std::uint16_t> StreamReader::ReadU16LE() {
     std::uint8_t b[2]{};
     auto r = ReadExactly(b, 2);
     if (!r) return Base::Err(r.error());
@@ -82,7 +82,7 @@ IoResult<std::uint16_t> StreamReader::ReadU16LE() {
     return v;
 }
 
-IoResult<std::uint32_t> StreamReader::ReadU32LE() {
+IOResult<std::uint32_t> StreamReader::ReadU32LE() {
     std::uint8_t b[4]{};
     auto r = ReadExactly(b, 4);
     if (!r) return Base::Err(r.error());
@@ -93,7 +93,7 @@ IoResult<std::uint32_t> StreamReader::ReadU32LE() {
     return v;
 }
 
-IoResult<std::uint64_t> StreamReader::ReadU64LE() {
+IOResult<std::uint64_t> StreamReader::ReadU64LE() {
     std::uint8_t b[8]{};
     auto r = ReadExactly(b, 8);
     if (!r) return Base::Err(r.error());
@@ -104,7 +104,7 @@ IoResult<std::uint64_t> StreamReader::ReadU64LE() {
     return v;
 }
 
-IoResult<std::string> StreamReader::ReadAllText(const TextReadOptions& opt) {
+IOResult<std::string> StreamReader::ReadAllText(const TextReadOptions& opt) {
     const std::size_t limit = opt.maxBytes; // 0=無制限
     auto br = ReadAllBytes(limit);
     if (!br) return Base::Err(br.error());
@@ -146,7 +146,7 @@ IoResult<std::string> StreamReader::ReadAllText(const TextReadOptions& opt) {
     return std::move(out);
 }
 
-IoResult<std::size_t> StreamReader::FillLineBuffer() {
+IOResult<std::size_t> StreamReader::FillLineBuffer() {
     lpos_ = 0;
     llen_ = 0;
     auto rr = s_.Read(lbuf_.data(), lbuf_.size());
@@ -155,7 +155,7 @@ IoResult<std::size_t> StreamReader::FillLineBuffer() {
     return llen_;
 }
 
-IoResult<bool> StreamReader::ReadLine(std::string& outLine, std::size_t maxLineBytes) {
+IOResult<bool> StreamReader::ReadLine(std::string& outLine, std::size_t maxLineBytes) {
     outLine.clear();
 
     for (;;) {
@@ -177,8 +177,8 @@ IoResult<bool> StreamReader::ReadLine(std::string& outLine, std::size_t maxLineB
 
         const std::size_t chunk = i - lpos_;
         if (maxLineBytes != 0 && outLine.size() + chunk > maxLineBytes) {
-            return Base::Err(IoError::Make(
-                Engine::IO::IoErrorCode::ReadFailed,
+            return Base::Err(IOError::Make(
+                GYO::Engine::IO::IOErrorCode::ReadFailed,
                 "StreamReader: line too long"));
         }
 
@@ -202,4 +202,4 @@ IoResult<bool> StreamReader::ReadLine(std::string& outLine, std::size_t maxLineB
     }
 }
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

@@ -8,10 +8,10 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
-#include "engine/io/IoError.hpp"
+#include "engine/io/IOError.hpp"
 #include "engine/io/path/Uri.hpp"
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
 
     using WatchId = std::uint64_t;
@@ -28,10 +28,10 @@ namespace Engine::IO::FS {
         FileChangeKind kind = FileChangeKind::Unknown;
 
         // 監視対象の path
-        Engine::IO::Path::Uri path;
+        GYO::Engine::IO::Path::Uri path;
 
         // Renamed のときのみ oldPath が有効
-        Engine::IO::Path::Uri oldPath;
+        GYO::Engine::IO::Path::Uri oldPath;
         bool hasOldPath = false;
 
         // backend 名（デバッグ用）
@@ -57,24 +57,24 @@ namespace Engine::IO::FS {
         virtual bool IsOpen() const noexcept = 0;
 
         /// 監視を追加
-        virtual IoResult<WatchId> AddWatch(const Engine::IO::Path::Uri& uri,
+        virtual IOResult<WatchId> AddWatch(const GYO::Engine::IO::Path::Uri& uri,
                                           const WatchOptions& opt = {}) = 0;
 
         /// 監視を削除
-        virtual IoResult<void> RemoveWatch(WatchId id) = 0;
+        virtual IOResult<void> RemoveWatch(WatchId id) = 0;
 
         /// イベントを回収（非ブロッキング想定）
         /// - outEvents に追記する（呼び出し側で clear してもOK）
         /// - maxEvents は安全のための上限
-        virtual IoResult<std::size_t> Poll(std::vector<FileChangeEvent>& outEvents,
+        virtual IOResult<std::size_t> Poll(std::vector<FileChangeEvent>& outEvents,
                                           std::size_t maxEvents = 256) = 0;
 
         /// OS バッファ等をフラッシュ（任意）
-        virtual IoResult<void> Flush() {
+        virtual IOResult<void> Flush() {
             return {};
         }
 
-        virtual IoResult<void> Close() = 0;
+        virtual IOResult<void> Close() = 0;
 
         IFileWatcher(const IFileWatcher&) = delete;
         IFileWatcher& operator=(const IFileWatcher&) = delete;
@@ -83,4 +83,4 @@ namespace Engine::IO::FS {
         IFileWatcher() = default;
     };
 
-} // namespace Engine::IO::FS
+} // namespace GYO::Engine::IO::FS

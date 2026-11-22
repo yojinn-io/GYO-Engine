@@ -129,7 +129,7 @@ std::unique_ptr<Rig> ImmediateRig(std::function<void(Registrar&)> build, bool ve
 SystemResult SpawnNow(ExclusiveWorld<> world) {
     Log().push_back("stamp " + std::to_string(Current().stamp));
     auto id = world.Spawn(Hp{5});
-    if (!id) return Engine::Base::Err(std::move(id).error());
+    if (!id) return GYO::Engine::Base::Err(std::move(id).error());
     auto hp = world.Read<Hp>(*id, [](const Hp& h) { return h.v; });
     auto shield = world.Read<Shield>(*id, [](const Shield& s) { return s.v; });
     if (!hp || !shield) return Ok();
@@ -144,13 +144,13 @@ SystemResult SeeAddedHp(Query<Read<Hp>, Added<Hp>> added) {
 SystemResult SpawnWithoutAllotter(ExclusiveWorld<> world) {
     auto id = world.Spawn(Hp{5});
     Log().push_back("spawn " + Outcome(id));
-    if (!id) return Engine::Base::Err(std::move(id).error());
+    if (!id) return GYO::Engine::Base::Err(std::move(id).error());
     return Ok();
 }
 SystemResult SpawnWithIds(ExclusiveWorld<> world) {
     for (const auto& [id, v] : std::vector<std::pair<EntityId, std::int32_t>>{{7, 7}, {120, 1}, {7, 8}}) {
         auto done = world.SpawnWithId(id, Hp{v});
-        if (!done) return Engine::Base::Err(std::move(done).error());
+        if (!done) return GYO::Engine::Base::Err(std::move(done).error());
         Log().push_back("spawn " + std::to_string(id) + " " + Reason(*done));
     }
     return Ok();
@@ -161,7 +161,7 @@ SystemResult EarlySpawns90(SpawnWithId<Bundle<Tag>> spawn) {
 }
 SystemResult SpawnNinety(ExclusiveWorld<> world) {
     auto done = world.SpawnWithId(90, Hp{9});
-    if (!done) return Engine::Base::Err(std::move(done).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
     Log().push_back("spawn 90 " + Reason(*done));
     return Ok();
 }
@@ -189,14 +189,14 @@ SystemResult ChangeResources(ExclusiveWorld<> world) {
         return score && *score ? std::to_string(**score) : std::string("absent");
     };
     Log().push_back("before " + read());
-    if (auto set = world.SetResource(Score{5}); !set) return Engine::Base::Err(std::move(set).error());
+    if (auto set = world.SetResource(Score{5}); !set) return GYO::Engine::Base::Err(std::move(set).error());
     Log().push_back("after set " + read());
     auto removed = world.RemoveResource<Score>();
     auto again = world.RemoveResource<Score>();
     if (!removed || !again) return Ok();
     Log().push_back(std::string("removed ") + (*removed ? "true" : "false") + " again " + (*again ? "true" : "false") +
                     " now " + read());
-    if (auto set = world.SetResource(Score{6}); !set) return Engine::Base::Err(std::move(set).error());
+    if (auto set = world.SetResource(Score{6}); !set) return GYO::Engine::Base::Err(std::move(set).error());
     return Ok();
 }
 
@@ -213,7 +213,7 @@ SystemResult EarlyTagsOne(CommandsFor<Inserts<Tag>, Removes<>> commands) {
 SystemResult InsertModeNow(ExclusiveWorld<> world) {
     const std::uint64_t epoch = Current().world->SyncEpoch();
     auto done = world.Insert<Mode>(5, Mode{5});
-    if (!done) return Engine::Base::Err(std::move(done).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
     Log().push_back("epoch +" + std::to_string(Current().world->SyncEpoch() - epoch));
     auto has = [&](EntityId id) {
         auto tag = world.Read<Tag>(id, [](const Tag&) {});
@@ -225,7 +225,7 @@ SystemResult InsertModeNow(ExclusiveWorld<> world) {
 SystemResult StartsBall(ExclusiveWorld<> world) {
     auto done = world.Insert<Ball>(1, Ball{0});
     Log().push_back("ball " + Outcome(done));
-    if (!done) return Engine::Base::Err(std::move(done).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
     return Ok();
 }
 
@@ -269,7 +269,7 @@ SystemResult InsertInsideClosure(ExclusiveWorld<> world) {
     std::string inner = "not called";
     auto r = world.Modify<Hp>(1, [&world, &inner](Hp&) { inner = Outcome(world.Insert<Mode>(1, Mode{1})); });
     Log().push_back("inside " + inner);
-    if (!r) return Engine::Base::Err(std::move(r).error());
+    if (!r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 // ExclusiveWorld is the only parameter of a hook too (S-10).
@@ -286,20 +286,20 @@ SystemResult DespawnSix(Despawn despawn) {
 
 // Whether f fails a GYO_ASSERT on this thread.
 bool Asserts(const std::function<void()>& f) {
-    ::Engine::Test::ScopedAssertionHandler scope;
+    ::GYO::Test::ScopedAssertionHandler scope;
     try {
         f();
-    } catch (const ::Engine::Base::AssertionFailure&) {
+    } catch (const ::GYO::Engine::Base::AssertionFailure&) {
         return true;
     }
     return false;
 }
 // OnAdd<Mode> / OnAdd<Tag>: a hook's own Err.
 SystemResult ModeFails(HookCtx) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
 }
 SystemResult TagFails(HookCtx) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the round hook's own Err"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the round hook's own Err"));
 }
 // OnAdd<Mode>: the World's state while the immediate change runs the hook.
 SystemResult LogsState(HookCtx) {
@@ -333,16 +333,16 @@ SystemResult SeesTag80(Query<Read<Tag>> tags) {
 SystemResult InnerInserts(ExclusiveWorld<> world) {
     auto done = world.Insert<Mode>(1, Mode{1});
     Log().push_back("inner insert " + Outcome(done));
-    if (!done) return Engine::Base::Err(std::move(done).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
     auto has = world.Read<Tag>(1, [](const Tag&) {});
     Log().push_back(std::string("inner sees tag ") + (has && *has ? "yes" : "no"));
     return Ok();
 }
 SystemResult OuterRunsInner(ExclusiveWorld<> world) {
-    if (auto ran = world.RunSchedule("Inner"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (auto ran = world.RunSchedule("Inner"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     auto done = world.Insert<Hp>(1, Hp{3});
     Log().push_back("outer insert " + Outcome(done));
-    if (!done) return Engine::Base::Err(std::move(done).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
     return Ok();
 }
 SystemResult SpawnsThenGoesOn(ExclusiveWorld<> world) {
@@ -354,7 +354,7 @@ SystemResult FirstStep(Query<Read<Pos>>) { return Ok(); }
 SystemResult SpawnsOverLiveId(ExclusiveWorld<> world) {
     Log().push_back("planPos " + std::to_string(Current().planPos));
     auto done = world.SpawnWithId(1, Hp{1});
-    if (!done) return Engine::Base::Err(std::move(done).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
     return Ok();
 }
 
@@ -370,7 +370,7 @@ SystemResult EraseThenInsert(ExclusiveWorld<> world) {
 }
 SystemResult InsertThenErase(ExclusiveWorld<> world) {
     auto done = world.Insert<Hp>(1, Hp{1});
-    if (!done) return Engine::Base::Err(std::move(done).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
     Log().push_back("insert ok");
     EraseTagOfOne();
     return Ok();
@@ -380,8 +380,8 @@ SystemResult InsertThenErase(ExclusiveWorld<> world) {
 
 SystemResult SpawnThenRunTick(ExclusiveWorld<> world) {
     auto done = world.SpawnWithId(70, Tag{70});
-    if (!done) return Engine::Base::Err(std::move(done).error());
-    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    if (!done) return GYO::Engine::Base::Err(std::move(done).error());
+    if (auto ran = world.RunSchedule("Tick"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     return Ok();
 }
 SystemResult LookFor70(Query<Read<Tag>> tags) {
@@ -404,10 +404,10 @@ SystemResult ModePings(HookCtx, MessageWriter<Ping> pings) {
 // Run's end trim (v8-arch-gyo2-time-events step 3), so the payload is there to count.
 SystemResult HoldsPings(MessageReader<Ping>) { return Ok(); }
 SystemResult WriteThenChange(ExclusiveWorld<> world) {
-    if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return Engine::Base::Err(std::move(r).error());
-    if (auto r = world.Insert<Mode>(1, Mode{1}); !r) return Engine::Base::Err(std::move(r).error());
-    if (auto r = world.SetResource(Score{3}); !r) return Engine::Base::Err(std::move(r).error());
-    if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return Engine::Base::Err(std::move(r).error());
+    if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
+    if (auto r = world.Insert<Mode>(1, Mode{1}); !r) return GYO::Engine::Base::Err(std::move(r).error());
+    if (auto r = world.SetResource(Score{3}); !r) return GYO::Engine::Base::Err(std::move(r).error());
+    if (auto r = world.Modify<Hp>(1, [](Hp& h) { h.v += 1; }); !r) return GYO::Engine::Base::Err(std::move(r).error());
     return Ok();
 }
 Detail::MessageBuffer<Ping>& PingBuffer(World& world) {

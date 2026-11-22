@@ -5,7 +5,7 @@
 #include "engine/math/geometry/Segment.hpp"
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // The set of points within radius of the segment. The endpoints are the
 // centres of the two hemispheres; coincident endpoints form a sphere.
@@ -29,4 +29,4 @@ static_assert(std::is_aggregate_v<Capsule>);
     return Dot(offset, offset) <= capsule.radius * capsule.radius;
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

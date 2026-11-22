@@ -1,8 +1,8 @@
-# GYO::Os: the backend test compares the Waiter with the engine/os mechanism.
+# GYO::OS: the backend test compares the Waiter with the engine/os mechanism.
 # Threads::Threads: the tests start threads of their own.
 find_package(Threads REQUIRED)
 add_executable(gyo_time_tests WaiterTests.cpp)
-target_link_libraries(gyo_time_tests PRIVATE GYO::Time GYO::Os Threads::Threads gyo_test_support
+target_link_libraries(gyo_time_tests PRIVATE GYO::Time GYO::OS Threads::Threads gyo_test_support
     doctest::doctest)
 add_test(NAME gyo_time_tests COMMAND gyo_time_tests)
 set_tests_properties(gyo_time_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
@@ -41,18 +41,18 @@ function(gyo_expect_time_and_thread_links)
     # The time base reaches the platform wait mechanism through engine/os
     # (v8-arch-gyo2-os-wait), privately: what links GYO::Time gets no engine/os
     # headers from it (time.md Invariant 10).
-    gyo_expect_links(gyo_time GYO::Base GYO::Os)
+    gyo_expect_links(gyo_time GYO::Base GYO::OS)
     get_target_property(time_interface gyo_time INTERFACE_LINK_LIBRARIES)
-    if("GYO::Os" IN_LIST time_interface)
-        message(FATAL_ERROR "gyo_time exposes GYO::Os to its users; link it PRIVATE")
+    if("GYO::OS" IN_LIST time_interface)
+        message(FATAL_ERROR "gyo_time exposes GYO::OS to its users; link it PRIVATE")
     endif()
     # The role threads name and prioritize themselves through engine/os
     # (os-threads-backend, D69), privately: what links GYO::Threads gets no
     # engine/os headers from it.
-    gyo_expect_links(gyo_threads GYO::Time Threads::Threads GYO::Os)
+    gyo_expect_links(gyo_threads GYO::Time Threads::Threads GYO::OS)
     get_target_property(interface gyo_threads INTERFACE_LINK_LIBRARIES)
-    if("GYO::Os" IN_LIST interface)
-        message(FATAL_ERROR "gyo_threads exposes GYO::Os to its users; link it PRIVATE")
+    if("GYO::OS" IN_LIST interface)
+        message(FATAL_ERROR "gyo_threads exposes GYO::OS to its users; link it PRIVATE")
     endif()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_time_and_thread_links)

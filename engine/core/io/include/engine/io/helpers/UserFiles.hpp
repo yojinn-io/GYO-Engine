@@ -4,7 +4,7 @@
 
 #include "engine/io/helpers/FileAllCommon.hpp"
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
     /// What a file looked like when probed, to tell whether it changed since (docs/architecture/io.md,
     /// "User files").
@@ -22,6 +22,6 @@ namespace Engine::IO::Helpers {
     /// The stamp of the file at uri, reading it whole for the hash. A missing file is a success with
     /// exists == false; anything that is not a regular file is InvalidPath; a file larger than read.maxBytes
     /// fails as ReadAllBytes does, so a caller that means "any size" says so.
-    IoResult<FileStamp> ProbeFileStamp(FS::IFileSystem& fs, const Path::Uri& uri, const ReadAllOptions& read);
+    IOResult<FileStamp> ProbeFileStamp(FS::IFileSystem& fs, const Path::Uri& uri, const ReadAllOptions& read);
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

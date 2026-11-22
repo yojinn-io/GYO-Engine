@@ -9,7 +9,7 @@
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // The volume a clip matrix keeps: six planes whose normals point inward, in
 // the order left, right, bottom, top, near, far. A point is inside when its
@@ -70,4 +70,4 @@ namespace FrustumDetail {
     return true;
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

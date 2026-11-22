@@ -10,7 +10,7 @@
 // from <string> or <filesystem>, so a macro check would fail without a violation.
 #include "engine/os/Console.hpp"
 #include "engine/os/Files.hpp"
-#include "engine/os/OsError.hpp"
+#include "engine/os/OSError.hpp"
 #include "engine/os/Process.hpp"
 #include "engine/os/Thread.hpp"
 #include "engine/os/WakeSignal.hpp"
@@ -81,6 +81,6 @@ TEST_CASE("every engine/os public header is included by this test") {
         if (!included.contains(relative)) missing += relative + "\n";
     }
     CHECK(headers > 0);
-    CHECK_MESSAGE(missing.empty(), "engine/os public headers not included by OsHeaderHygieneTests.cpp:\n"
+    CHECK_MESSAGE(missing.empty(), "engine/os public headers not included by OSHeaderHygieneTests.cpp:\n"
                                        << missing);
 }

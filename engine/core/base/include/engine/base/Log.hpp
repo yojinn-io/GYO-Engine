@@ -15,7 +15,7 @@
 // Not for Programmer Errors (GYO_ASSERT) or Runtime Errors (Result); a log
 // line never changes control flow.
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 enum class LogLevel : std::uint8_t { Debug, Info, Warning, Error };
 
@@ -69,4 +69,4 @@ inline void Log(const LogLevel level, const std::string_view category, const std
     (handler ? handler : &DefaultLogHandler)(LogMessage{level, category, text});
 }
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base

@@ -4,7 +4,7 @@
 #include <random>
 #include <string>
 
-namespace Engine::IO::Helpers {
+namespace GYO::Engine::IO::Helpers {
 
     namespace {
 
@@ -19,7 +19,7 @@ namespace Engine::IO::Helpers {
 
     } // namespace
 
-    IoResult<void> WriteFileAtomically(FS::IFileSystem& fs, const Path::Uri& uri, Base::ConstSpan<std::byte> data) {
+    IOResult<void> WriteFileAtomically(FS::IFileSystem& fs, const Path::Uri& uri, Base::ConstSpan<std::byte> data) {
         Path::Uri temporary = uri;
         temporary.path = Path::Path::FromNormalized(uri.path.Str() + TemporarySuffix());
         auto opened = OpenWriteTruncate(fs, temporary);
@@ -39,7 +39,7 @@ namespace Engine::IO::Helpers {
         return {};
     }
 
-    IoResult<void> WriteFileAtomically(FS::IFileSystem& fs, const Path::Uri& uri, Base::ConstSpan<std::byte> data,
+    IOResult<void> WriteFileAtomically(FS::IFileSystem& fs, const Path::Uri& uri, Base::ConstSpan<std::byte> data,
                                        const WriteAtomicallyOptions& options) {
         if (options.createParentDirectories) {
             Path::Uri parent = uri;
@@ -61,4 +61,4 @@ namespace Engine::IO::Helpers {
         return WriteFileAtomically(fs, uri, data);
     }
 
-} // namespace Engine::IO::Helpers
+} // namespace GYO::Engine::IO::Helpers

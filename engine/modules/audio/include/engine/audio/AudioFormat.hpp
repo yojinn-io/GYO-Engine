@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace Engine::Audio {
+namespace GYO::Engine::Audio {
 
 // The one output format of the mixer: interleaved stereo PCM16 at 48 kHz.
 // Converting to the device's format belongs to the output backend.
@@ -17,4 +17,4 @@ inline constexpr float kMaxGain = 8.0f;
     return std::isfinite(gain) && gain >= 0.0f && gain <= kMaxGain;
 }
 
-} // namespace Engine::Audio
+} // namespace GYO::Engine::Audio

@@ -30,7 +30,7 @@ K::SystemResult Step(K::Query<K::Read<Tag>>) {
 }
 
 K::SystemResult Break(K::Query<K::Read<Tag>>) {
-    return Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "the example System failed"));
+    return GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "the example System failed"));
 }
 
 K::ScheduleOptions Schedule(std::string name) {
@@ -70,7 +70,7 @@ O::ProductDescription Describe(bool breakFrame) {
 }
 
 void LogError(const std::string& text) {
-    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, "example", text);
+    ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Error, "example", text);
 }
 
 } // namespace

@@ -19,7 +19,7 @@
 #include "engine/io/helpers/WriteFileAtomically.hpp"
 #include "engine/io/path/Uri.hpp"
 
-using namespace Engine::IO;
+using namespace GYO::Engine::IO;
 
 // engine/io's file:// backend over engine/os. Files are set up with the
 // standard library; the backend is reached through file URIs only.
@@ -63,7 +63,7 @@ private:
     std::filesystem::path root_;
 };
 
-IoErrorCode OpenError(FS::NativeFileSystem& fs, const Path::Uri& uri, const Stream::FileOpenMode mode) {
+IOErrorCode OpenError(FS::NativeFileSystem& fs, const Path::Uri& uri, const Stream::FileOpenMode mode) {
     auto opened = fs.Open(uri, mode);
     REQUIRE_MESSAGE(!opened, "NativeFileSystem opened mode " << static_cast<unsigned>(mode));
     return opened.error().code;
@@ -147,12 +147,12 @@ TEST_CASE("NativeFileSystem streams are readable and seekable, not writable") {
     CHECK(stream.Tell().value() == 3);
     CHECK_FALSE(stream.IsEof());
     // Like the other read-only streams, a target outside [0, Size()] fails, INT64_MIN included.
-    CHECK(stream.Seek(-4, Stream::SeekWhence::Current).error().code == IoErrorCode::SeekFailed);
-    CHECK(stream.Seek(11, Stream::SeekWhence::Begin).error().code == IoErrorCode::SeekFailed);
-    CHECK(stream.Seek(1, Stream::SeekWhence::End).error().code == IoErrorCode::SeekFailed);
+    CHECK(stream.Seek(-4, Stream::SeekWhence::Current).error().code == IOErrorCode::SeekFailed);
+    CHECK(stream.Seek(11, Stream::SeekWhence::Begin).error().code == IOErrorCode::SeekFailed);
+    CHECK(stream.Seek(1, Stream::SeekWhence::End).error().code == IOErrorCode::SeekFailed);
     for (const auto whence : {Stream::SeekWhence::Begin, Stream::SeekWhence::Current, Stream::SeekWhence::End}) {
         CHECK(stream.Seek((std::numeric_limits<std::int64_t>::min)(), whence).error().code ==
-              IoErrorCode::SeekFailed);
+              IOErrorCode::SeekFailed);
     }
     CHECK(stream.Tell().value() == 3);
     CHECK(stream.Seek(0, Stream::SeekWhence::End).value() == 10);
@@ -160,12 +160,12 @@ TEST_CASE("NativeFileSystem streams are readable and seekable, not writable") {
     CHECK(stream.Seek(0, Stream::SeekWhence::Begin).value() == 0);
     CHECK(stream.Read(tail, 0).value() == 0);
     CHECK_FALSE(stream.IsEof());
-    CHECK(stream.Write("x", 1).error().code == IoErrorCode::NotSupported);
+    CHECK(stream.Write("x", 1).error().code == IOErrorCode::NotSupported);
     REQUIRE(stream.Close());
     CHECK_FALSE(stream.IsOpen());
-    CHECK(stream.Read(tail, 1).error().code == IoErrorCode::ReadFailed);
-    CHECK(stream.Tell().error().code == IoErrorCode::SeekFailed);
-    CHECK(stream.Seek(0, Stream::SeekWhence::Begin).error().code == IoErrorCode::SeekFailed);
+    CHECK(stream.Read(tail, 1).error().code == IOErrorCode::ReadFailed);
+    CHECK(stream.Tell().error().code == IOErrorCode::SeekFailed);
+    CHECK(stream.Seek(0, Stream::SeekWhence::Begin).error().code == IOErrorCode::SeekFailed);
 }
 
 TEST_CASE("NativeFileSystem answers Exists and Stat") {
@@ -189,13 +189,13 @@ TEST_CASE("NativeFileSystem keeps the engine/os cause of a failure") {
     const std::string missing = tree.Native("missing.bin");
     auto opened = fs.Open(tree.Uri("missing.bin"), Stream::OpenReadBinary());
     REQUIRE_FALSE(opened);
-    CHECK(opened.error().code == IoErrorCode::NotFound);
+    CHECK(opened.error().code == IOErrorCode::NotFound);
     CHECK(opened.error().message == "cannot open file");
     // "<native path>; NotFound: errno=<n>; path_bytes=<n>" (win32= on Windows).
     const std::string expectedStart = missing + "; NotFound: ";
     CHECK(opened.error().detail.starts_with(expectedStart));
     CHECK(opened.error().detail.ends_with("; path_bytes=" + std::to_string(missing.size())));
-    CHECK(fs.Stat(tree.Uri("missing.bin")).error().code == IoErrorCode::NotFound);
+    CHECK(fs.Stat(tree.Uri("missing.bin")).error().code == IOErrorCode::NotFound);
 }
 
 TEST_CASE("NativeFileSystem maps the other engine/os failures") {
@@ -203,14 +203,14 @@ TEST_CASE("NativeFileSystem maps the other engine/os failures") {
     tree.Write("dir/h.bin", "x");
     FS::NativeFileSystem fs;
     // A directory is not a file (engine/os InvalidPath).
-    CHECK(OpenError(fs, tree.Uri("dir"), Stream::OpenReadBinary()) == IoErrorCode::InvalidPath);
+    CHECK(OpenError(fs, tree.Uri("dir"), Stream::OpenReadBinary()) == IOErrorCode::InvalidPath);
     // A path that is not UTF-8 never reaches the OS (engine/os InvalidEncoding).
     auto invalid = Path::FileUriFromNativePath(tree.Native() + "/\xC0\xAF");
     REQUIRE(invalid);
-    CHECK(OpenError(fs, invalid.value(), Stream::OpenReadBinary()) == IoErrorCode::InvalidPath);
-    CHECK(fs.Stat(invalid.value()).error().code == IoErrorCode::InvalidPath);
+    CHECK(OpenError(fs, invalid.value(), Stream::OpenReadBinary()) == IOErrorCode::InvalidPath);
+    CHECK(fs.Stat(invalid.value()).error().code == IOErrorCode::InvalidPath);
     // A mode that contradicts itself.
-    CHECK(OpenError(fs, tree.Uri("dir/h.bin"), Stream::FileOpenMode::None) == IoErrorCode::InvalidPath);
+    CHECK(OpenError(fs, tree.Uri("dir/h.bin"), Stream::FileOpenMode::None) == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("NativeFileSystem takes only paths absolute on this platform") {
@@ -221,8 +221,8 @@ TEST_CASE("NativeFileSystem takes only paths absolute on this platform") {
     const auto drive = fs.Stat(Path::ParseUri("file:///C:/gyo-no-such-directory/x.bin").value());
     REQUIRE_FALSE(posix);
     REQUIRE_FALSE(drive);
-    CHECK((posix.error().code == IoErrorCode::InvalidPath) != (drive.error().code == IoErrorCode::InvalidPath));
-    CHECK((posix.error().code == IoErrorCode::NotFound) != (drive.error().code == IoErrorCode::NotFound));
+    CHECK((posix.error().code == IOErrorCode::InvalidPath) != (drive.error().code == IOErrorCode::InvalidPath));
+    CHECK((posix.error().code == IOErrorCode::NotFound) != (drive.error().code == IOErrorCode::NotFound));
 }
 
 // os-files-write opened writing (a file it creates, emptied or appended to) and
@@ -234,19 +234,19 @@ TEST_CASE("NativeFileSystem says what it supports") {
     FS::NativeFileSystem fs;
     const auto uri = tree.Uri("e.bin");
     using Stream::FileOpenMode;
-    CHECK(OpenError(fs, uri, FileOpenMode::Read | FileOpenMode::CreateIfMissing) == IoErrorCode::NotSupported);
+    CHECK(OpenError(fs, uri, FileOpenMode::Read | FileOpenMode::CreateIfMissing) == IOErrorCode::NotSupported);
     CHECK(OpenError(fs, uri, FileOpenMode::Read | FileOpenMode::Write | FileOpenMode::Truncate |
-                                 FileOpenMode::CreateIfMissing) == IoErrorCode::NotSupported);
+                                 FileOpenMode::CreateIfMissing) == IOErrorCode::NotSupported);
     // Overwriting in place, or writing an existing file only, is not offered.
-    CHECK(OpenError(fs, uri, FileOpenMode::Write | FileOpenMode::CreateIfMissing) == IoErrorCode::NotSupported);
-    CHECK(OpenError(fs, uri, Stream::OpenWriteBinaryTruncate(false)) == IoErrorCode::NotSupported);
+    CHECK(OpenError(fs, uri, FileOpenMode::Write | FileOpenMode::CreateIfMissing) == IOErrorCode::NotSupported);
+    CHECK(OpenError(fs, uri, Stream::OpenWriteBinaryTruncate(false)) == IOErrorCode::NotSupported);
     FS::RemoveOptions recursive;
     recursive.recursive = true;
-    CHECK(fs.Remove(tree.Uri(), recursive).error().code == IoErrorCode::NotSupported);
-    CHECK(fs.Copy(uri, uri).error().code == IoErrorCode::NotSupported);
-    CHECK(fs.List(tree.Uri(), {}).error().code == IoErrorCode::NotSupported);
-    CHECK(fs.Iterate(tree.Uri(), {}).error().code == IoErrorCode::NotSupported);
-    CHECK(fs.CreateWatcher().error().code == IoErrorCode::NotSupported);
+    CHECK(fs.Remove(tree.Uri(), recursive).error().code == IOErrorCode::NotSupported);
+    CHECK(fs.Copy(uri, uri).error().code == IOErrorCode::NotSupported);
+    CHECK(fs.List(tree.Uri(), {}).error().code == IOErrorCode::NotSupported);
+    CHECK(fs.Iterate(tree.Uri(), {}).error().code == IOErrorCode::NotSupported);
+    CHECK(fs.CreateWatcher().error().code == IOErrorCode::NotSupported);
 
     const auto caps = fs.Capabilities();
     CHECK(caps.canOpenRead);
@@ -288,7 +288,7 @@ void WriteText(FS::NativeFileSystem& fs, const Path::Uri& uri, const Stream::Fil
     CHECK(stream.value()->Flush());
     CHECK(stream.value()->Close());
     CHECK_FALSE(stream.value()->IsOpen());
-    CHECK(stream.value()->Write(text.data(), text.size()).error().code == IoErrorCode::WriteFailed);
+    CHECK(stream.value()->Write(text.data(), text.size()).error().code == IOErrorCode::WriteFailed);
 }
 
 TEST_CASE("NativeFileSystem writes files: truncate, append and the platform's line endings") {
@@ -319,13 +319,13 @@ TEST_CASE("NativeFileSystem creates directories and keeps the engine/os cause of
 
     auto missing = fs.Open(tree.Uri("absent/x.log"), Stream::OpenWriteBinaryTruncate());
     REQUIRE_FALSE(missing);
-    CHECK(missing.error().code == IoErrorCode::NotFound);
+    CHECK(missing.error().code == IOErrorCode::NotFound);
     CHECK(missing.error().detail.find("NotFound: ") != std::string::npos);
     CHECK(missing.error().detail.find("path_bytes=") != std::string::npos);
 
     auto onFile = fs.CreateDirectories(tree.Uri("logs/2026/10/client.log"));
     REQUIRE_FALSE(onFile);
-    CHECK(onFile.error().code == IoErrorCode::InvalidPath);
+    CHECK(onFile.error().code == IOErrorCode::InvalidPath);
 }
 
 TEST_CASE("NativeFileSystem moves a file over another and removes files") {
@@ -340,17 +340,17 @@ TEST_CASE("NativeFileSystem moves a file over another and removes files") {
 
     const auto missing = fs.Move(tree.Uri("absent.tmp"), tree.Uri("menu.json"));
     REQUIRE_FALSE(missing);
-    CHECK(missing.error().code == IoErrorCode::NotFound);
+    CHECK(missing.error().code == IOErrorCode::NotFound);
     CHECK(missing.error().detail.find("NotFound: ") != std::string::npos);
     CHECK(ReadBack(tree.Native("menu.json")) == "new");
 
     REQUIRE(fs.Remove(tree.Uri("menu.json"), {}));
     CHECK_FALSE(fs.Exists(tree.Uri("menu.json")).value());
-    CHECK(fs.Remove(tree.Uri("menu.json"), {}).error().code == IoErrorCode::NotFound);
+    CHECK(fs.Remove(tree.Uri("menu.json"), {}).error().code == IOErrorCode::NotFound);
     // A directory stays, with its contents, and is InvalidPath on every platform.
     const auto folder = fs.Remove(tree.Uri("folder"), {});
     REQUIRE_FALSE(folder);
-    CHECK(folder.error().code == IoErrorCode::InvalidPath);
+    CHECK(folder.error().code == IOErrorCode::InvalidPath);
     CHECK(ReadBack(tree.Native("folder/inner.txt")) == "inner");
 }
 
@@ -360,7 +360,7 @@ TEST_CASE("NativeFileSystem writes a file atomically through a temporary file") 
     const TempTree tree;
     FS::NativeFileSystem fs;
     const auto bytes = [](const std::string& text) {
-        return Engine::Base::ConstSpan<std::byte>(reinterpret_cast<const std::byte*>(text.data()), text.size());
+        return GYO::Engine::Base::ConstSpan<std::byte>(reinterpret_cast<const std::byte*>(text.data()), text.size());
     };
     const std::string first = "first\n";
     const std::string second = "second\r\n";
@@ -390,7 +390,7 @@ TEST_CASE("NativeFileSystem writes a file atomically through a temporary file") 
     // A missing parent directory is not made.
     const auto noParent = Helpers::WriteFileAtomically(fs, tree.Uri("absent/export.json"), bytes(first));
     REQUIRE_FALSE(noParent);
-    CHECK(noParent.error().code == IoErrorCode::NotFound);
+    CHECK(noParent.error().code == IOErrorCode::NotFound);
 }
 
 namespace {
@@ -402,19 +402,19 @@ public:
     Stream::StreamCaps Caps() const noexcept override { return inner_->Caps(); }
     bool IsOpen() const noexcept override { return inner_->IsOpen(); }
     bool IsEof() const noexcept override { return inner_->IsEof(); }
-    Engine::Base::Result<std::size_t, IoError> Read(void* dst, const std::size_t bytes) override {
+    GYO::Engine::Base::Result<std::size_t, IOError> Read(void* dst, const std::size_t bytes) override {
         return inner_->Read(dst, bytes);
     }
-    Engine::Base::Result<std::size_t, IoError> Write(const void*, std::size_t) override {
-        return Engine::Base::Err(IoError::Make(IoErrorCode::WriteFailed, "injected write failure"));
+    GYO::Engine::Base::Result<std::size_t, IOError> Write(const void*, std::size_t) override {
+        return GYO::Engine::Base::Err(IOError::Make(IOErrorCode::WriteFailed, "injected write failure"));
     }
-    Engine::Base::Result<std::uint64_t, IoError> Tell() const override { return inner_->Tell(); }
-    Engine::Base::Result<std::uint64_t, IoError> Seek(const std::int64_t offset, const Stream::SeekWhence whence) override {
+    GYO::Engine::Base::Result<std::uint64_t, IOError> Tell() const override { return inner_->Tell(); }
+    GYO::Engine::Base::Result<std::uint64_t, IOError> Seek(const std::int64_t offset, const Stream::SeekWhence whence) override {
         return inner_->Seek(offset, whence);
     }
-    Engine::Base::Result<std::uint64_t, IoError> Size() const override { return inner_->Size(); }
-    Engine::Base::Result<void, IoError> Flush() override { return inner_->Flush(); }
-    Engine::Base::Result<void, IoError> Close() override { return inner_->Close(); }
+    GYO::Engine::Base::Result<std::uint64_t, IOError> Size() const override { return inner_->Size(); }
+    GYO::Engine::Base::Result<void, IOError> Flush() override { return inner_->Flush(); }
+    GYO::Engine::Base::Result<void, IOError> Close() override { return inner_->Close(); }
 
 private:
     std::unique_ptr<Stream::IStream> inner_;
@@ -429,33 +429,33 @@ public:
     bool failWrites = false;
 
     const char* Name() const noexcept override { return "Recording"; }
-    IoResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri& uri, const Stream::FileOpenMode mode) override {
+    IOResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri& uri, const Stream::FileOpenMode mode) override {
         opened.push_back(uri.path.Str());
         auto stream = native_.Open(uri, mode);
         if (!stream || !failWrites) return stream;
         return std::unique_ptr<Stream::IStream>(std::make_unique<FailingWriteStream>(std::move(stream.value())));
     }
-    IoResult<bool> Exists(const Path::Uri& uri) override { return native_.Exists(uri); }
-    IoResult<FS::FileInfo> Stat(const Path::Uri& uri) override { return native_.Stat(uri); }
-    IoResult<void> CreateDirectories(const Path::Uri& uri) override { return native_.CreateDirectories(uri); }
-    IoResult<void> Remove(const Path::Uri& uri, const FS::RemoveOptions& opt) override {
+    IOResult<bool> Exists(const Path::Uri& uri) override { return native_.Exists(uri); }
+    IOResult<FS::FileInfo> Stat(const Path::Uri& uri) override { return native_.Stat(uri); }
+    IOResult<void> CreateDirectories(const Path::Uri& uri) override { return native_.CreateDirectories(uri); }
+    IOResult<void> Remove(const Path::Uri& uri, const FS::RemoveOptions& opt) override {
         removed.push_back(uri.path.Str());
         return native_.Remove(uri, opt);
     }
-    IoResult<void> Move(const Path::Uri& from, const Path::Uri& to) override {
+    IOResult<void> Move(const Path::Uri& from, const Path::Uri& to) override {
         moved.emplace_back(from.path.Str(), to.path.Str());
         return native_.Move(from, to);
     }
-    IoResult<void> Copy(const Path::Uri& from, const Path::Uri& to) override { return native_.Copy(from, to); }
-    IoResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri& uri, const FS::ListOptions& opt) override {
+    IOResult<void> Copy(const Path::Uri& from, const Path::Uri& to) override { return native_.Copy(from, to); }
+    IOResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri& uri, const FS::ListOptions& opt) override {
         return native_.List(uri, opt);
     }
-    IoResult<std::string> ToNativePathString(const Path::Uri& uri) override { return native_.ToNativePathString(uri); }
+    IOResult<std::string> ToNativePathString(const Path::Uri& uri) override { return native_.ToNativePathString(uri); }
     FS::FileSystemCapabilities Capabilities() const noexcept override { return native_.Capabilities(); }
-    IoResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri& uri, const FS::ListOptions& opt) override {
+    IOResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri& uri, const FS::ListOptions& opt) override {
         return native_.Iterate(uri, opt);
     }
-    IoResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override { return native_.CreateWatcher(); }
+    IOResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override { return native_.CreateWatcher(); }
 
 private:
     FS::NativeFileSystem native_;
@@ -471,7 +471,7 @@ TEST_CASE("NativeFileSystem atomic writes go through a temporary file and a move
     tree.Write("export.json", "old");
     const std::string target = tree.Uri("export.json").path.Str();
     const std::string text = "new";
-    const Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
+    const GYO::Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
 
     RecordingFileSystem recording;
     REQUIRE(Helpers::WriteFileAtomically(recording, tree.Uri("export.json"), bytes));
@@ -488,7 +488,7 @@ TEST_CASE("NativeFileSystem atomic writes go through a temporary file and a move
     failing.failWrites = true;
     const auto failed = Helpers::WriteFileAtomically(failing, tree.Uri("export.json"), bytes);
     REQUIRE_FALSE(failed);
-    CHECK(failed.error().code == IoErrorCode::WriteFailed);
+    CHECK(failed.error().code == IOErrorCode::WriteFailed);
     REQUIRE(failing.opened.size() == 1);
     CHECK(failing.moved.empty());
     CHECK(failing.removed == std::vector<std::string>{failing.opened.front()});
@@ -502,9 +502,9 @@ TEST_CASE("NativeFileSystem atomic writes go through a temporary file and a move
 TEST_CASE("NativeFileSystem takes file URIs only") {
     FS::NativeFileSystem fs;
     const auto logical = Path::ParseUriLoose("asset://textures/a.png");
-    CHECK(fs.Open(logical, Stream::OpenReadBinary()).error().code == IoErrorCode::InvalidPath);
-    CHECK(fs.Exists(logical).error().code == IoErrorCode::InvalidPath);
-    CHECK(fs.Stat(logical).error().code == IoErrorCode::InvalidPath);
+    CHECK(fs.Open(logical, Stream::OpenReadBinary()).error().code == IOErrorCode::InvalidPath);
+    CHECK(fs.Exists(logical).error().code == IOErrorCode::InvalidPath);
+    CHECK(fs.Stat(logical).error().code == IOErrorCode::InvalidPath);
     const TempTree tree;
     CHECK(fs.ToNativePathString(tree.Uri("f.bin")).value() == tree.Native("f.bin"));
 }
@@ -523,5 +523,5 @@ TEST_CASE("NativeFileSystem serves a VFS mount on a file root") {
     const auto bytes = Helpers::ReadAllBytes(vfs, Path::ParseUriLoose("asset://textures/g.bin"));
     REQUIRE(bytes);
     CHECK(AsText(bytes.value()) == "mounted");
-    CHECK(vfs.Stat(Path::ParseUriLoose("asset://textures/missing.bin")).error().code == IoErrorCode::NotFound);
+    CHECK(vfs.Stat(Path::ParseUriLoose("asset://textures/missing.bin")).error().code == IOErrorCode::NotFound);
 }

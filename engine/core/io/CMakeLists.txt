@@ -25,7 +25,7 @@ add_library(gyo_io STATIC
     src/stream/StreamReader.cpp
     src/stream/StreamWriter.cpp
 )
-add_library(GYO::Io ALIAS gyo_io)
+add_library(GYO::IO ALIAS gyo_io)
 
 target_include_directories(gyo_io PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -36,4 +36,4 @@ target_compile_features(gyo_io PUBLIC cxx_std_20)
 # Modules and are not registered (O-6 covers the Modules and Plugins only).
 # Base public; Math (stream helpers use its scalars) and the OS layer (the
 # native file system) private.
-target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::Os)
+target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::OS)

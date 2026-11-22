@@ -128,7 +128,7 @@ SystemResult SpawnBombAtTwo(SpawnWithId<Bundle<Bomb>> spawn, Res<TickCount> tick
     return Ok();
 }
 SystemResult FailAtB() {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "stage B fails"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "stage B fails"));
 }
 SystemResult ZoneCReadsPos(Query<Read<Pos>>) { return Ok(); }
 SystemResult EarlyReader(MessageReader<Ping> pings, Res<TickCount> tick) {
@@ -173,7 +173,7 @@ SystemResult ArmBomb(HookCtx ctx, CommandsFor<Inserts<Fuse>, Removes<>> commands
     return Ok();
 }
 SystemResult Explode(HookCtx) {
-    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the fuse's own Err"));
+    return GYO::Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the fuse's own Err"));
 }
 SystemResult ThrowOnFuse(HookCtx) {
     throw std::runtime_error("the fuse throws");
@@ -284,7 +284,7 @@ void ChainSystems(Registrar& r) {
 }
 
 // One Run of Tick with a chain of the given depth (rounds needed: depth).
-Engine::Base::Result<void, KernelError> RunChain(Rig& rig, std::int32_t depth) {
+GYO::Engine::Base::Result<void, KernelError> RunChain(Rig& rig, std::int32_t depth) {
     rig.world().SetResource(Depth{depth});
     return rig.Run();
 }

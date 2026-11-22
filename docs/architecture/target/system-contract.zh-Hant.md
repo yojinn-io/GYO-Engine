@@ -52,7 +52,7 @@
 | 名字 | 是什麼 | 對應條文 |
 |---|---|---|
 | `Registrar::AddSystem<&Fn>(SystemOptions)`、`Registrar::AddSystem<Lambda>(SystemOptions)` | 登記 System：非成員函式以非型別模板引數、無捕獲 lambda 以型別傳入 | spec B.4 第 1 點；§3 |
-| `SystemResult` | `Engine::Base::Result<void, KernelError>`，System 的回傳型別 | §2；spec S-2 |
+| `SystemResult` | `GYO::Engine::Base::Result<void, KernelError>`，System 的回傳型別 | §2；spec S-2 |
 | `SystemOptions` | 顯式的一半：`name`、`effects`、`mounts`（`zone`、`ingress`、`rollbackSafe` 等第 4 批拿掉，`v8-arch-gyo2-authority-rollback`；判定資料改由權威 Module 登記） | spec B.1 declared |
 | 參數型別 | `Query<Read<T>, Write<T>, With<T>, Without<T>, Changed<T>, Added<T>>`、`Res<T>`、`ResMut<T>`、`EventReader<E>`、`EventWriter<E>`、`Commands`、`CommandsFor<Inserts<…>, Removes<…>>`、`Spawn<Bundle<…>>`、`SpawnWithId<Bundle<…>>`、`Despawn`、`Local<T>`、`CurrentTick`、`DiagnosticsWriter<T>`、`SetRead<SetTag>`、`ExclusiveWorld`、`Extract<Read<T>>`、`ExtractRes<R>` | spec B.4 第 4 點 |
 | `ParamTraits<P>`（`valid`、`readOnly`、`Contribution`） | 參數型別的特化；`Contribution` 是 `TypeList<Access::…>`，存取項在 `Access.hpp` | spec B.4 第 3 點；DI-KS 1 |

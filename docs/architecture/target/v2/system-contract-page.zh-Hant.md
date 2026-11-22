@@ -110,7 +110,7 @@ SystemResult SpawnsWave(Spawn<Bundle<Position, Velocity, Health>> spawn) {
     for (int member = 0; member < 3; ++member) {
         auto made = spawn.New(Position{0, 0}, Velocity{0, 0}, Health{1});
         if (!made) {
-            return Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
+            return GYO::Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
         }
     }
     return Ok();
@@ -320,9 +320,9 @@ SystemResult Spawner(Spawn<Bundle<Arrival>> spawn) { ... spawn.New(Arrival{0, 10
 // 驅動固定步的 System（示意：它本身是下一批的事；steps 從時間的 Resource 算出來）
 SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
     auto steps = world.Read<StepBudget>([](const StepBudget& budget) { return budget.steps; });
-    if (!steps) return Engine::Base::Err(std::move(steps).error());
+    if (!steps) return GYO::Engine::Base::Err(std::move(steps).error());
     for (int i = 0; i < steps->value_or(0); ++i) {
-        if (auto ran = world.RunSchedule("FixedUpdate"); !ran) return Engine::Base::Err(std::move(ran).error());
+        if (auto ran = world.RunSchedule("FixedUpdate"); !ran) return GYO::Engine::Base::Err(std::move(ran).error());
     }
     return Ok();
 }
@@ -398,10 +398,10 @@ Kernel 不再有開局的 schedule（`v8-arch-gyo2-orchestration-skeleton` 第 2
 SystemResult LoadSave(ExclusiveWorld<> world) {
     for (const SavedUnit& unit : saved.units) {
         auto spawned = world.SpawnWithId(unit.id, Position{unit.x, unit.y}, Health{unit.hp});
-        if (!spawned) return Engine::Base::Err(std::move(spawned).error());
+        if (!spawned) return GYO::Engine::Base::Err(std::move(spawned).error());
         if (*spawned) { /* 沒生成：理由在 *spawned，也記進了 RejectedSpawn */ }
     }
-    if (auto set = world.SetResource(Round{saved.round}); !set) return Engine::Base::Err(std::move(set).error());
+    if (auto set = world.SetResource(Round{saved.round}); !set) return GYO::Engine::Base::Err(std::move(set).error());
     return world.RunSchedule("FixedUpdate");   // 裡面看得到剛放回去的實體
 }
 ```
@@ -450,4 +450,4 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 - **動態插入**：`InsertSystems(world, owner, [](Registrar& r) { … })` 走 Kernel 的兩步（第 12 節）；`owner` 不能是登記單位或產品自己的名字（`OwnerTaken`）。World 不准（`dynamicInsert = false`）或建 Plan 失敗時，編排層記**一次**警告、把錯誤回給你、World 照跑（CCR-3）。登記單位的 `Finish`、`Check` 不重跑。
 - **`World(name)` 的參照**：`Product::World(name)` 給的 `WorldExecutor&` 在那個名字下一次被替換之前有效；替換之後要重新拿。
 - **執行緒**：建、跑、替換、插入、銷毀 `Product` 都在呼叫的那條執行緒上（CCR-5）。
-- **標頭的順序**：編排層是第一個 `GYO::Engine` 命名空間的 Module；Kernel 的公開標頭已改寫 `::Engine::Base`，先 include 編排層再 include Kernel 也能編譯（`gyo_orchestration_include_order` 守著）。
+- **標頭的順序**：Engine 的單位都在 `GYO::Engine` 底下（2026-11-22 起，`v8-arch-gyo2-namespace-root`），舊根 `Engine::` 和 `GYO::Engine` 互相遮蔽的問題不再存在；當時守它的 include-order 編譯檢查同日拿掉（使用者決定）。

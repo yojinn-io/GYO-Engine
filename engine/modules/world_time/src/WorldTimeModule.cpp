@@ -13,7 +13,7 @@ namespace GYO::Engine::WorldTime {
 
 namespace {
 
-using SystemResult = ::Engine::Base::Result<void, Kernel::KernelError>;
+using SystemResult = ::GYO::Engine::Base::Result<void, Kernel::KernelError>;
 
 const WorldTimeOptions& OptionsOf(const WorldTimeOptions* given) {
     static const WorldTimeOptions defaults{};
@@ -124,7 +124,7 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
     std::memcpy(config.fixedSchedule, options.fixedSchedule.data(), options.fixedSchedule.size());
     const bool pausable = options.pausable;
     const StepLength step = options.step;
-    setup.Prepare([config, pausable, step](Kernel::World& world) -> ::Engine::Base::Result<void, Orchestration::OrchestrationError> {
+    setup.Prepare([config, pausable, step](Kernel::World& world) -> ::GYO::Engine::Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent(world, RealTime{});
         PutIfAbsent(world, VirtualTime{});
         // Carried over (O-7): its elapsed time and remainder stay, the step length is this World's setting

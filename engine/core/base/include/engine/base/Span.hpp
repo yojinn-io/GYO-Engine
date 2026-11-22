@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
     // C++17 用の軽量 span（std::span の代替）
     // - 非所有 (non-owning)
@@ -56,4 +56,4 @@ namespace Engine::Base {
     template <class T>
     using ConstSpan = Span<const T>;
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base

@@ -47,10 +47,10 @@ inline void HashValue(Kernel::Hasher& h, const RollbackPending& v) {
 }
 
 // The Systems of the rollback Module (RollbackModule.cpp).
-::Engine::Base::Result<void, Kernel::KernelError> RecordStep(Exclusive world);
-::Engine::Base::Result<void, Kernel::KernelError> RunRollback(Exclusive world);
-::Engine::Base::Result<void, Kernel::KernelError> CorrectFrame(Exclusive world);
-::Engine::Base::Result<void, Kernel::KernelError> SendRollbackNotes(Kernel::ResMut<RollbackPending> pending,
+::GYO::Engine::Base::Result<void, Kernel::KernelError> RecordStep(Exclusive world);
+::GYO::Engine::Base::Result<void, Kernel::KernelError> RunRollback(Exclusive world);
+::GYO::Engine::Base::Result<void, Kernel::KernelError> CorrectFrame(Exclusive world);
+::GYO::Engine::Base::Result<void, Kernel::KernelError> SendRollbackNotes(Kernel::ResMut<RollbackPending> pending,
                                                                   Kernel::MessageWriter<RollbackAbandoned> notes);
 
 } // namespace GYO::Engine::Rollback

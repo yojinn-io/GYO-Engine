@@ -1,4 +1,4 @@
-// Characterization of the single Engine::Math implementations against the
+// Characterization of the single GYO::Engine::Math implementations against the
 // per-module engine helpers they replace (math-foundation plan, batch B1).
 //
 // Every helper under namespace Legacy is frozen verbatim from master 0bd5363:
@@ -589,7 +589,7 @@ namespace UiValidationCpp {
 
 namespace {
 
-namespace Math = Engine::Math;
+namespace Math = GYO::Engine::Math;
 
 constexpr float kInfinity = std::numeric_limits<float>::infinity();
 constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
@@ -628,8 +628,8 @@ private:
     std::uint32_t state_;
 };
 
-using Engine::Test::SameBits;
-using Engine::Test::UlpDistance;
+using GYO::Test::SameBits;
+using GYO::Test::UlpDistance;
 
 [[nodiscard]] std::string Describe(const float value) {
     std::ostringstream stream;
@@ -758,7 +758,7 @@ using Float4Input = std::array<float, 4>;
 // Angles including the exact float Pi values, a large angle whose sin/cos
 // rely on argument reduction, and tiny angles.
 constexpr std::array<float, 12> kAngles{
-    0.0F, -0.0F, Engine::Math::Pi, -Engine::Math::Pi, Engine::Math::HalfPi, -Engine::Math::HalfPi,
+    0.0F, -0.0F, GYO::Engine::Math::Pi, -GYO::Engine::Math::Pi, GYO::Engine::Math::HalfPi, -GYO::Engine::Math::HalfPi,
     100.0F, -100.0F, 1.0e-7F, 0.5F, 3.0F, -2.25F,
 };
 

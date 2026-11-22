@@ -10,7 +10,7 @@
 #include "engine/base/Result.hpp"
 #include "engine/base/Span.hpp"
 
-namespace Engine::Audio::Detail {
+namespace GYO::Engine::Audio::Detail {
 
 // One play whose start is already a sample position of the output. Signed, so
 // a time before the first rendered frame is a position too (and is late).
@@ -149,4 +149,4 @@ private:
     Counters counters_;
 };
 
-} // namespace Engine::Audio::Detail
+} // namespace GYO::Engine::Audio::Detail

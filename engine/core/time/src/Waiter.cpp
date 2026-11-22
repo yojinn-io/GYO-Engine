@@ -10,7 +10,7 @@
 #include <string>
 #include <utility>
 
-namespace Engine::Time {
+namespace GYO::Engine::Time {
 namespace {
 
 // Longest single platform wait; longer deadlines simply wait again.
@@ -25,12 +25,12 @@ Duration LateSince(const TimePoint deadline, const TimePoint now) noexcept {
 
 // The engine/os mechanism as this Waiter's backend: the same values in the same
 // order, so the names consumers log stay (Invariant 7).
-WaitBackend ToBackend(const Os::WaitMechanism mechanism) noexcept {
-    static_assert(static_cast<int>(Os::WaitMechanism::Kqueue) == static_cast<int>(WaitBackend::Kqueue));
-    static_assert(static_cast<int>(Os::WaitMechanism::HighResolutionWaitableTimer) ==
+WaitBackend ToBackend(const OS::WaitMechanism mechanism) noexcept {
+    static_assert(static_cast<int>(OS::WaitMechanism::Kqueue) == static_cast<int>(WaitBackend::Kqueue));
+    static_assert(static_cast<int>(OS::WaitMechanism::HighResolutionWaitableTimer) ==
                   static_cast<int>(WaitBackend::HighResolutionWaitableTimer));
-    static_assert(static_cast<int>(Os::WaitMechanism::WaitableTimer) == static_cast<int>(WaitBackend::WaitableTimer));
-    static_assert(static_cast<int>(Os::WaitMechanism::ConditionVariable) ==
+    static_assert(static_cast<int>(OS::WaitMechanism::WaitableTimer) == static_cast<int>(WaitBackend::WaitableTimer));
+    static_assert(static_cast<int>(OS::WaitMechanism::ConditionVariable) ==
                   static_cast<int>(WaitBackend::ConditionVariable));
     return static_cast<WaitBackend>(mechanism);
 }
@@ -41,7 +41,7 @@ WaitBackend ToBackend(const Os::WaitMechanism mechanism) noexcept {
 // wake means stays here: the latch, the single waiter, the deadline loop and
 // the re-check of the time base after every platform wake.
 struct Waiter::Impl final {
-    explicit Impl(Os::WakeSignal wakeSignal) noexcept : primitive(std::move(wakeSignal)) {}
+    explicit Impl(OS::WakeSignal wakeSignal) noexcept : primitive(std::move(wakeSignal)) {}
 
     // The latch: set by Notify, consumed by the waiting thread. It is Time's
     // state; engine/os never reads it and keeps its own pending signal
@@ -49,11 +49,11 @@ struct Waiter::Impl final {
     std::atomic<bool> notified{false};
     // Guards the single-waiter contract.
     std::atomic<bool> waiting{false};
-    Os::WakeSignal primitive;
+    OS::WakeSignal primitive;
 };
 
 Base::Result<Waiter, TimeError> Waiter::Create() {
-    auto primitive = Os::WakeSignal::Create();
+    auto primitive = OS::WakeSignal::Create();
     if (!primitive)
         return Base::Err(TimeError::Make(TimeErrorCode::WaitPrimitiveUnavailable, primitive.error().message,
             Base::CauseDetail(primitive.error())));
@@ -105,4 +105,4 @@ WaitBackend Waiter::Backend() const {
     return ToBackend(impl_->primitive.Mechanism());
 }
 
-} // namespace Engine::Time
+} // namespace GYO::Engine::Time

@@ -10,7 +10,7 @@
 #include <cstdlib>
 #include <limits>
 
-namespace Engine::Test {
+namespace GYO::Test {
 
 // Reading through a volatile keeps the compiler from constant-folding either
 // side with a rounding that differs from run time.
@@ -62,4 +62,4 @@ namespace Engine::Test {
     return x > y ? x - y : y - x;
 }
 
-} // namespace Engine::Test
+} // namespace GYO::Test

@@ -337,7 +337,7 @@ TEST_CASE("Writer: the same number text on every platform (structured golden)") 
     REQUIRE(writer.Finish().has_value());
     INFO(out);
     CHECK(written == 2198);
-    CHECK(Engine::Base::Fnv1a64(out) == 0x0483ADE1A5CA673BULL);
+    CHECK(GYO::Engine::Base::Fnv1a64(out) == 0x0483ADE1A5CA673BULL);
 }
 
 // Added after the adversarial check of the mutation list (Fable/high, 2026-11-20;

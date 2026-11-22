@@ -11,7 +11,7 @@
 #include <mutex>
 #include <utility>
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 struct WakeSignal::Impl final {
     std::mutex mutex;
@@ -39,7 +39,7 @@ struct WakeSignal::Impl final {
     }
 };
 
-Base::Result<WakeSignal, OsError> WakeSignal::Create() {
+Base::Result<WakeSignal, OSError> WakeSignal::Create() {
     return WakeSignal(std::make_unique<Impl>());
 }
 
@@ -62,4 +62,4 @@ WaitMechanism WakeSignal::Mechanism() const {
     return WaitMechanism::ConditionVariable;
 }
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

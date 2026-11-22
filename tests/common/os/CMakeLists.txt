@@ -1,9 +1,9 @@
 # Tests of the OS layer (docs/architecture/os.md). This is the one common test
 # directory allowed to assert per OS; the boundary guard does not scan it.
-add_executable(gyo_os_tests OsErrorTests.cpp FilesTests.cpp FileWriterTests.cpp FileChangeTests.cpp
+add_executable(gyo_os_tests OSErrorTests.cpp FilesTests.cpp FileWriterTests.cpp FileChangeTests.cpp
     ProcessTests.cpp ConsoleTests.cpp ThreadTests.cpp WakeSignalTests.cpp)
 # GYO::Threads: ThreadTests reads a role's priority back on the role's thread.
-target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support doctest::doctest)
+target_link_libraries(gyo_os_tests PRIVATE GYO::OS GYO::Threads gyo_test_support doctest::doctest)
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)
 set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
@@ -28,11 +28,11 @@ endif()
 # Design Invariant 4 (Windows side): the public headers reach no Windows header
 # and define no min or max. A separate executable, since the check must run
 # before doctest's own windows.h.
-add_executable(gyo_os_header_tests OsHeaderHygieneTests.cpp)
-target_link_libraries(gyo_os_header_tests PRIVATE GYO::Os doctest::doctest)
+add_executable(gyo_os_header_tests OSHeaderHygieneTests.cpp)
+target_link_libraries(gyo_os_header_tests PRIVATE GYO::OS doctest::doctest)
 target_compile_definitions(gyo_os_header_tests PRIVATE
     GYO_OS_INCLUDE_DIR="${GYO_REPOSITORY_ROOT}/engine/core/os/include"
-    GYO_OS_HYGIENE_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/OsHeaderHygieneTests.cpp")
+    GYO_OS_HYGIENE_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/OSHeaderHygieneTests.cpp")
 add_test(NAME os.header_hygiene COMMAND gyo_os_header_tests)
 set_tests_properties(os.header_hygiene PROPERTIES LABELS "cpu" TIMEOUT 60)
 
@@ -49,7 +49,7 @@ set_tests_properties(os.boundary_guard os.boundary_guard_selftest PROPERTIES LAB
 # is started by console_check.py, which exits 77 for a check this runner cannot
 # run (CTest shows it as skipped, so a gap stays visible).
 add_executable(gyo_os_console_probe ConsoleProbe.cpp)
-target_link_libraries(gyo_os_console_probe PRIVATE GYO::Os)
+target_link_libraries(gyo_os_console_probe PRIVATE GYO::OS)
 set(gyo_os_console_checks arguments shutdown)
 if(WIN32)
     list(APPEND gyo_os_console_checks ctrl-c close)

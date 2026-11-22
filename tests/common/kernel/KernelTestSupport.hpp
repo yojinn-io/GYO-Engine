@@ -50,7 +50,7 @@ inline SystemResult Ok() { return {}; }
 // The kernel's two registration steps over functions, in list order: one
 // Register per (owner name, build), then BuildPlans. Registration units and
 // their lifecycle are the orchestration layer's (v8-arch-gyo2-orchestration-skeleton).
-inline Engine::Base::Result<void, StartupReport> RegisterAll(
+inline GYO::Engine::Base::Result<void, StartupReport> RegisterAll(
     Registry& registry, std::vector<std::pair<std::string, std::function<void(Registrar&)>>> builds) {
     std::uint32_t seq = 0;
     for (auto& [name, build] : builds) {
@@ -110,7 +110,7 @@ inline void RegisterCommonData(Registrar& r) {
 // Registers functions in list order and builds the Plans (RegisterAll).
 struct Built {
     std::unique_ptr<Registry> registry;
-    Engine::Base::Result<void, StartupReport> result;
+    GYO::Engine::Base::Result<void, StartupReport> result;
 };
 
 inline Built Finish(std::vector<std::pair<std::string, std::function<void(Registrar&)>>> builds) {
@@ -157,7 +157,7 @@ inline bool HasError(const Built& built, StartupCode code) {
     return ErrorCount(built, code) > 0;
 }
 
-inline std::size_t ErrorCount(const Engine::Base::Result<void, StartupReport>& result, StartupCode code) {
+inline std::size_t ErrorCount(const GYO::Engine::Base::Result<void, StartupReport>& result, StartupCode code) {
     return result ? 0 : result.error().Count(code);
 }
 

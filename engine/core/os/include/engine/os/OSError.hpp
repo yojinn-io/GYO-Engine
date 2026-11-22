@@ -12,34 +12,34 @@
 // converts it with Base::CauseDetail and a log that prints it carry the same
 // text on every platform.
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
-enum class OsErrorCode : std::uint16_t {
+enum class OSErrorCode : std::uint16_t {
     NotFound = 1,
     AccessDenied,
     InvalidPath,
     // A path or text argument is not valid UTF-8.
     InvalidEncoding,
     TooLarge,
-    IoFailed,
+    IOFailed,
     Unsupported,
 };
 
-[[nodiscard]] constexpr const char* ToString(const OsErrorCode code) noexcept {
+[[nodiscard]] constexpr const char* ToString(const OSErrorCode code) noexcept {
     switch (code) {
-    case OsErrorCode::NotFound:        return "NotFound";
-    case OsErrorCode::AccessDenied:    return "AccessDenied";
-    case OsErrorCode::InvalidPath:     return "InvalidPath";
-    case OsErrorCode::InvalidEncoding: return "InvalidEncoding";
-    case OsErrorCode::TooLarge:        return "TooLarge";
-    case OsErrorCode::IoFailed:        return "IoFailed";
-    case OsErrorCode::Unsupported:     return "Unsupported";
+    case OSErrorCode::NotFound:        return "NotFound";
+    case OSErrorCode::AccessDenied:    return "AccessDenied";
+    case OSErrorCode::InvalidPath:     return "InvalidPath";
+    case OSErrorCode::InvalidEncoding: return "InvalidEncoding";
+    case OSErrorCode::TooLarge:        return "TooLarge";
+    case OSErrorCode::IOFailed:        return "IOFailed";
+    case OSErrorCode::Unsupported:     return "Unsupported";
     }
     return "Unknown";
 }
 
-using OsError = Base::Error<OsErrorCode>;
-static_assert(Base::CodedError<OsError>);
+using OSError = Base::Error<OSErrorCode>;
+static_assert(Base::CodedError<OSError>);
 
 // Where a native error code comes from: errno (POSIX and the C runtime) or a
 // Win32 error (GetLastError).
@@ -50,11 +50,11 @@ struct NativeError final {
     std::int64_t value;
 };
 
-// The detail of an OsError: "errno=<n>" or "win32=<n>", followed by
+// The detail of an OSError: "errno=<n>" or "win32=<n>", followed by
 // "; path_bytes=<n>" when the failure concerns a path (its UTF-8 length).
 [[nodiscard]] std::string NativeErrorDetail(NativeError native, std::optional<std::size_t> pathBytes = std::nullopt);
 
-[[nodiscard]] OsError MakeOsError(OsErrorCode code, std::string message, NativeError native,
+[[nodiscard]] OSError MakeOSError(OSErrorCode code, std::string message, NativeError native,
                                   std::optional<std::size_t> pathBytes = std::nullopt);
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

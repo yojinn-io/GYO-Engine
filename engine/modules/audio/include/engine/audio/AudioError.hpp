@@ -4,7 +4,7 @@
 
 #include "engine/base/Error.hpp"
 
-namespace Engine::Audio {
+namespace GYO::Engine::Audio {
 
 enum class AudioErrorCode : std::uint16_t {
     // A clip that is empty, has a channel count other than 1 or 2, a sample
@@ -34,4 +34,4 @@ enum class AudioErrorCode : std::uint16_t {
 using AudioError = Base::Error<AudioErrorCode>;
 static_assert(Base::CodedError<AudioError>);
 
-} // namespace Engine::Audio
+} // namespace GYO::Engine::Audio

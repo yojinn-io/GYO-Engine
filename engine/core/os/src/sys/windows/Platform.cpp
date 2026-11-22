@@ -3,7 +3,7 @@
 // (sys/Platform.hpp). Nothing on Windows calls them.
 #include "../Platform.hpp"
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 namespace {
 
 class WindowsPlatform final : public Platform {
@@ -14,8 +14,8 @@ public:
     }
     std::vector<std::string> FontDirectoryCandidates() const override { return {}; }
     bool CaseSensitivePaths() const noexcept override { return false; }
-    Base::Result<std::string, OsError> NativeExecutablePath() const override {
-        return Base::Err(OsError::Make(OsErrorCode::Unsupported, "not used on Windows"));
+    Base::Result<std::string, OSError> NativeExecutablePath() const override {
+        return Base::Err(OSError::Make(OSErrorCode::Unsupported, "not used on Windows"));
     }
 };
 
@@ -26,4 +26,4 @@ const Platform& CurrentPlatform() noexcept {
     return platform;
 }
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

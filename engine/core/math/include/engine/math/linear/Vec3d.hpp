@@ -6,7 +6,7 @@
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Double precision for algorithms that must keep accuracy over short sweeps
 // and long rays. Only the operations those algorithms need are provided.
@@ -48,4 +48,4 @@ static_assert(std::is_aggregate_v<Vec3d>);
     return std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

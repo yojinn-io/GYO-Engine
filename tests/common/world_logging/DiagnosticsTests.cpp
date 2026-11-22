@@ -13,7 +13,7 @@
 #include "engine/world_logging/TakeKernelDiagnostics.hpp"
 
 namespace WL = GYO::Engine::WorldLogging;
-using namespace GYO::Engine::WorldLogging::Test;
+using namespace GYO::Test::WorldLogging;
 
 namespace {
 
@@ -36,7 +36,7 @@ K::SystemResult ReadNotes(K::MessageReader<Note> notes) {
     return {};
 }
 K::SystemResult FailIfAsked(K::Res<FailNow> fail) {
-    if (fail->on != 0) return ::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "asked to fail"));
+    if (fail->on != 0) return ::GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "asked to fail"));
     return {};
 }
 K::SystemResult SpawnSevenTwice(K::SpawnWithId<K::Bundle<Body>> spawn) {
@@ -62,7 +62,7 @@ O::ProductDescription NotesProduct(const bool spawnTwice) {
             r.AddSystem<&SpawnSevenTwice>(At("SpawnSevenTwice", "Main", "Update"));
         }
     };
-    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(FailNow{});
         return {};
     });

@@ -5,7 +5,7 @@
 #include "engine/math/geometry/Aabb.hpp"
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 struct Sphere final {
     Vec3 center{};
@@ -35,4 +35,4 @@ static_assert(std::is_aggregate_v<Sphere>);
 
 [[nodiscard]] inline bool Overlaps(const Aabb& box, const Sphere& sphere) noexcept { return Overlaps(sphere, box); }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

@@ -9,7 +9,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-namespace Engine::Os::Thread {
+namespace GYO::Engine::OS::Thread {
 
 bool SetCurrentName(const std::string_view utf8Name) noexcept {
     const std::string name(utf8Name);
@@ -23,4 +23,4 @@ bool SetCurrentPriority(const PriorityHint hint) noexcept {
     return setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10) == 0;
 }
 
-} // namespace Engine::Os::Thread
+} // namespace GYO::Engine::OS::Thread

@@ -11,10 +11,10 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/audio/Mixer.hpp"
 
-using namespace Engine::Audio;
+using namespace GYO::Engine::Audio;
 using namespace std::chrono_literals;
-using Engine::Time::Duration;
-using Engine::Time::TimePoint;
+using GYO::Engine::Time::Duration;
+using GYO::Engine::Time::TimePoint;
 
 namespace {
 
@@ -32,7 +32,7 @@ Rig MakeRig(const Duration delay = Duration::zero(), const std::uint32_t capacit
             const std::uint32_t voices = 64) {
     ClipBank bank;
     const std::vector<std::int16_t> one{kImpulse};
-    auto clip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
+    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
     REQUIRE(clip.has_value());
     MixerConfig config;
     config.scheduleDelay = delay;
@@ -47,7 +47,7 @@ Rig MakeRig(const Duration delay = Duration::zero(), const std::uint32_t capacit
 
 std::vector<std::int16_t> RenderBlock(Mixer& mixer, const std::uint32_t frames, const TimePoint anchor) {
     std::vector<std::int16_t> out(std::size_t{frames} * kChannels, 0x5555);
-    mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+    mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
     return out;
 }
 
@@ -144,7 +144,7 @@ TEST_CASE("Audio Mixer hands out each submitter once, also to concurrent callers
 TEST_CASE("Audio Mixer gives each submitter its own queue") {
     ClipBank bank;
     const std::vector<std::int16_t> one{kImpulse};
-    const auto clip = *bank.Add(Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
+    const auto clip = *bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
     MixerConfig config;
     config.maxSubmitters = 3;
     config.queueCapacity = 1;
@@ -323,7 +323,7 @@ TEST_CASE("Audio Mixer balances and plays every request from concurrent producer
     std::vector<ClipId> clips;
     for (int p = 0; p < kProducers; ++p) {
         const std::vector<std::int16_t> one{static_cast<std::int16_t>(8 * (p + 1))};
-        clips.push_back(*bank.Add(Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate));
+        clips.push_back(*bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate));
     }
     MixerConfig config;
     config.maxSubmitters = kProducers;
@@ -363,7 +363,7 @@ TEST_CASE("Audio Mixer balances and plays every request from concurrent producer
     std::int64_t outputSum = 0;
     TimePoint anchor = kAnchor;
     const auto renderOnce = [&] {
-        mixer.Render(Engine::Base::Span<std::int16_t>(block.data(), block.size()), anchor);
+        mixer.Render(GYO::Engine::Base::Span<std::int16_t>(block.data(), block.size()), anchor);
         for (std::size_t f = 0; f < 480; ++f) outputSum += block[f * 2];
         anchor += Ns(10'000'000);
     };
@@ -416,7 +416,7 @@ TEST_CASE("Audio Mixer writes silence where it has nothing to render") {
     for (const std::int16_t sample : out) CHECK(sample == 0);
 
     std::vector<std::int16_t> odd(5, 0x5555);
-    moved.Render(Engine::Base::Span<std::int16_t>(odd.data(), odd.size()), kAnchor);
+    moved.Render(GYO::Engine::Base::Span<std::int16_t>(odd.data(), odd.size()), kAnchor);
     CHECK(odd[0] == kImpulse);
     CHECK(odd[4] == 0);
     CHECK(moved.Stats().renderedFrames == 2);

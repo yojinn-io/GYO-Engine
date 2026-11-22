@@ -64,7 +64,7 @@ SystemResult Act(ExclusiveWorld<> world) {
         });
         world.ReadColumn<Tag>([&](EntityId e, ChangeStamp, ChangeStamp, const Tag& t) { r.tag.push_back({e, t}); });
         auto out = world.Read<Out>([](const Out& o) { return o; });
-        if (!out) return Engine::Base::Err(std::move(out).error());
+        if (!out) return GYO::Engine::Base::Err(std::move(out).error());
         r.out = *out;
         r.outStamp = world.ResourceStamp<Out>();
         r.stamp = world.Stamp();
@@ -72,13 +72,13 @@ SystemResult Act(ExclusiveWorld<> world) {
     }
     case 2: {
         auto despawned = world.Despawn(101);
-        if (!despawned) return Engine::Base::Err(std::move(despawned).error());
+        if (!despawned) return GYO::Engine::Base::Err(std::move(despawned).error());
         auto moved = world.Modify<Pos>(2, [](Pos& p) { p.x = 99; });
-        if (!moved) return Engine::Base::Err(std::move(moved).error());
+        if (!moved) return GYO::Engine::Base::Err(std::move(moved).error());
         auto removed = world.Remove<Tag>(3);
-        if (!removed) return Engine::Base::Err(std::move(removed).error());
+        if (!removed) return GYO::Engine::Base::Err(std::move(removed).error());
         auto set = world.SetResource(Out{7});
-        if (!set) return Engine::Base::Err(std::move(set).error());
+        if (!set) return GYO::Engine::Base::Err(std::move(set).error());
         return Ok();
     }
     case 3: {
@@ -89,18 +89,18 @@ SystemResult Act(ExclusiveWorld<> world) {
         set.Resource<Out>(r.out, &SameOut);
         r.restoreStamp = world.Stamp();
         auto restored = world.Restore(std::move(set));
-        if (!restored) return Engine::Base::Err(std::move(restored).error());
+        if (!restored) return GYO::Engine::Base::Err(std::move(restored).error());
         return Ok();
     }
     case 4: {
         // Writes Pos of 2 in a later step than the Host put it in: its changed stamp is above its added stamp.
         auto moved = world.Modify<Pos>(2, [](Pos& p) { p.x = 20; });
-        if (!moved) return Engine::Base::Err(std::move(moved).error());
+        if (!moved) return GYO::Engine::Base::Err(std::move(moved).error());
         return Ok();
     }
     case 6: {
         auto despawned = world.Despawn(2);
-        if (!despawned) return Engine::Base::Err(std::move(despawned).error());
+        if (!despawned) return GYO::Engine::Base::Err(std::move(despawned).error());
         return Ok();
     }
     case 5: {
@@ -108,7 +108,7 @@ SystemResult Act(ExclusiveWorld<> world) {
         RestoreSet set;
         set.Column<Pos>(r.pos, &SamePos);
         auto restored = world.Restore(std::move(set));
-        if (!restored) return Engine::Base::Err(std::move(restored).error());
+        if (!restored) return GYO::Engine::Base::Err(std::move(restored).error());
         return Ok();
     }
     default: return Ok();

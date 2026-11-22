@@ -24,10 +24,10 @@ enum class LoggingErrorCode : std::uint16_t {
     return "Unknown";
 }
 
-using LoggingError = ::Engine::Base::Error<LoggingErrorCode>;
-static_assert(::Engine::Base::CodedError<LoggingError>);
+using LoggingError = ::GYO::Engine::Base::Error<LoggingErrorCode>;
+static_assert(::GYO::Engine::Base::CodedError<LoggingError>);
 
 template <class T>
-using LoggingResult = ::Engine::Base::Result<T, LoggingError>;
+using LoggingResult = ::GYO::Engine::Base::Result<T, LoggingError>;
 
 } // namespace GYO::Engine::Logging

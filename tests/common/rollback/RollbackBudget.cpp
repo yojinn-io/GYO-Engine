@@ -89,23 +89,23 @@ Timings& Measured() {
 class TimedStrategy final : public R::StateRollbackStrategy {
 public:
     using R::StateRollbackStrategy::StateRollbackStrategy;
-    ::Engine::Base::Result<void, K::KernelError> Record(R::RecordContext& context) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Record(R::RecordContext& context) override {
         if (Measured().resimulating) return R::StateRollbackStrategy::Record(context);
         const double start = NowNs();
         auto done = R::StateRollbackStrategy::Record(context);
         Measured().record.push_back(NowNs() - start);
         return done;
     }
-    ::Engine::Base::Result<void, K::KernelError> Decide(R::DecideContext& context) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Decide(R::DecideContext& context) override {
         Measured().decideStart = NowNs();
         return R::StateRollbackStrategy::Decide(context);
     }
-    ::Engine::Base::Result<void, K::KernelError> Restore(R::RestoreContext& context) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Restore(R::RestoreContext& context) override {
         Measured().resimulating = true;
         Measured().rollbackStart = Measured().decideStart;
         return R::StateRollbackStrategy::Restore(context);
     }
-    ::Engine::Base::Result<void, K::KernelError> Resimulate(R::ResimulateContext& context) override {
+    ::GYO::Engine::Base::Result<void, K::KernelError> Resimulate(R::ResimulateContext& context) override {
         auto done = R::StateRollbackStrategy::Resimulate(context);
         Measured().rollback.push_back(NowNs() - Measured().rollbackStart);
         Measured().resimulating = false;

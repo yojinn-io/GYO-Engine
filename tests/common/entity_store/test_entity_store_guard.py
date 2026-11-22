@@ -15,7 +15,7 @@ CLEAN_HEADER = """#pragma once
 #include <algorithm>
 #include <vector>
 
-namespace Engine::EntityStore {
+namespace GYO::Engine::EntityStore {
 // Static analysis is not a static variable; this comment says static int x;
 template <typename T>
 struct EntityKey {
@@ -33,7 +33,7 @@ bool Check(const T& value) {
     const char* text = "std::unordered_map static int cache;";
     return narrow < limit && text != nullptr;
 }
-} // namespace Engine::EntityStore
+} // namespace GYO::Engine::EntityStore
 """
 
 
@@ -54,7 +54,7 @@ class GuardTree(unittest.TestCase):
 
     def header(self, body):
         self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
-                   "#pragma once\nnamespace Engine::EntityStore {\n" + body + "\n}\n")
+                   "#pragma once\nnamespace GYO::Engine::EntityStore {\n" + body + "\n}\n")
 
     def assertReported(self, needle):
         problems = guard.check(self.root)

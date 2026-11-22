@@ -12,7 +12,7 @@
 # also selected for any platform that is neither Windows nor Apple.
 add_library(gyo_os STATIC
     src/common/Calendar.cpp
-    src/common/OsError.cpp
+    src/common/OSError.cpp
     src/common/Paths.cpp
     src/common/Shutdown.cpp
 )
@@ -38,7 +38,7 @@ else()
             src/sys/linux/Platform.cpp src/sys/linux/Thread.cpp src/sys/linux/WakeSignal.cpp)
     endif()
 endif()
-add_library(GYO::Os ALIAS gyo_os)
+add_library(GYO::OS ALIAS gyo_os)
 
 target_include_directories(gyo_os PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include

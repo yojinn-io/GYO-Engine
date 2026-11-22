@@ -112,7 +112,7 @@ K::SystemResult MoveRacer(K::ResMut<RacerState> racer, K::Res<Breaker> breaker, 
     const auto frame = static_cast<std::int32_t>(racer->frames);
     for (std::int32_t i = 0; i < burst->count; ++i) laps.Send(Lap{i, frame});
     if (breaker->frame == frame && breaker->how == 1) {
-        return ::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "MoveRacer: the racer fell"));
+        return ::GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "MoveRacer: the racer fell"));
     }
     if (breaker->frame == frame && breaker->how == 2) throw std::runtime_error("MoveRacer threw");
     return {};
@@ -167,7 +167,7 @@ O::ProductDescription Relay(const RelayOptions& options) {
         s.Registrar().Resource<LobbyFrames>({.name = "LobbyFrames"});
         s.Registrar().AddSystem<&CountLobby>(At("CountLobby", "Update"));
     };
-    lobby.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    lobby.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(LobbyFrames{});
         return {};
     });
@@ -193,7 +193,7 @@ O::ProductDescription Relay(const RelayOptions& options) {
     const Breaker breaker = options.breaker;
     const std::int32_t burst = options.burst;
     const W::Nanoseconds delta = options.delta;
-    match.prepare.push_back([breaker, burst, delta](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    match.prepare.push_back([breaker, burst, delta](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(RacerState{});
         world.SetResource(LapsRead{});
         world.SetResource(breaker);
@@ -290,7 +290,7 @@ TEST_CASE("scenario segment 3: S3-1 a broken World's reason written through Base
     REQUIRE_FALSE(exit.reason.empty());
     const std::size_t before = logs.Problems().size();
     // Whoever decides what follows writes the reason (the category is its choice).
-    ::Engine::Base::Log(::Engine::Base::LogLevel::Error, "relay", exit.reason);
+    ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Error, "relay", exit.reason);
     const auto problems = logs.Problems();
     REQUIRE_MESSAGE(problems.size() == before + 1, "S3-1: one Base::Log line became one record (entrance 3)");
     const L::StoredRecord& line = problems.back();

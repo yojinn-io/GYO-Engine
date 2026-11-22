@@ -201,12 +201,12 @@ TEST_CASE("J-22: an ExclusiveWorld System conflicts with another System of its s
 
 TEST_CASE("J-23: two Systems declaring one effect conflict and are ordered by registration") {
     Built sameEffect = FinishOne([](Registrar& r) {
-        r.Effect("Io:file");
+        r.Effect("IO:file");
         SystemOptions a = Sys("SaveFirst", {At("Update", "First")});
-        a.effects = {"Io:file"};
+        a.effects = {"IO:file"};
         r.AddSystem<&Nothing>(a);
         SystemOptions b = Sys("SaveSecond", {At("Update", "First")});
-        b.effects = {"Io:file"};
+        b.effects = {"IO:file"};
         const auto second = []() -> SystemResult { return {}; };
         r.AddSystem<decltype(second)>(b);
     });

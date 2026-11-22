@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-namespace Engine::Os {
+namespace GYO::Engine::OS {
 
 namespace Detail {
 
@@ -47,17 +47,17 @@ bool IsValidUtf8(const std::string_view text) noexcept {
     return true;
 }
 
-OsError RefusedArgument(const OsErrorCode code, std::string message, const std::size_t pathBytes) {
-    return OsError::Make(code, std::move(message), "path_bytes=" + std::to_string(pathBytes));
+OSError RefusedArgument(const OSErrorCode code, std::string message, const std::size_t pathBytes) {
+    return OSError::Make(code, std::move(message), "path_bytes=" + std::to_string(pathBytes));
 }
 
-Base::Result<void, OsError> CheckPath(const std::string_view utf8Path) {
-    if (utf8Path.empty()) return Base::Err(RefusedArgument(OsErrorCode::InvalidPath, "path is empty", 0));
+Base::Result<void, OSError> CheckPath(const std::string_view utf8Path) {
+    if (utf8Path.empty()) return Base::Err(RefusedArgument(OSErrorCode::InvalidPath, "path is empty", 0));
     if (utf8Path.find('\0') != std::string_view::npos) {
-        return Base::Err(RefusedArgument(OsErrorCode::InvalidPath, "path contains a NUL byte", utf8Path.size()));
+        return Base::Err(RefusedArgument(OSErrorCode::InvalidPath, "path contains a NUL byte", utf8Path.size()));
     }
     if (!IsValidUtf8(utf8Path)) {
-        return Base::Err(RefusedArgument(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", utf8Path.size()));
+        return Base::Err(RefusedArgument(OSErrorCode::InvalidEncoding, "path is not valid UTF-8", utf8Path.size()));
     }
     return {};
 }
@@ -66,10 +66,10 @@ Base::Result<void, OsError> CheckPath(const std::string_view utf8Path) {
 
 namespace Files {
 
-Base::Result<std::filesystem::path, OsError> PathFromUtf8(const std::string_view utf8) {
+Base::Result<std::filesystem::path, OSError> PathFromUtf8(const std::string_view utf8) {
     // Validated first: on Windows the standard library would throw on invalid UTF-8.
     if (!Detail::IsValidUtf8(utf8)) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", utf8.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding, "path is not valid UTF-8", utf8.size()));
     }
     std::u8string text;
     text.reserve(utf8.size());
@@ -79,4 +79,4 @@ Base::Result<std::filesystem::path, OsError> PathFromUtf8(const std::string_view
 
 } // namespace Files
 
-} // namespace Engine::Os
+} // namespace GYO::Engine::OS

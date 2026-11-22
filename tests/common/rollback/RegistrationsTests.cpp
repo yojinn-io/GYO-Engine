@@ -236,7 +236,7 @@ TEST_CASE("rollback registrations: a registration after Build, or without the ro
         auto build = [](O::WorldSetup& s) {
             RegisterData(s);
             auto kept = std::make_shared<R::RollbackEntry>(s);
-            s.Prepare([kept](K::World&) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+            s.Prepare([kept](K::World&) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 kept->Component<Health>();
                 return {};
             });

@@ -46,9 +46,9 @@ struct LoggerState final {
     // calls at once cannot leave floor at a value one of them computed earlier.
     std::mutex levelMutex;
     bool tookBaseLog{false};
-    ::Engine::Base::LogHandler previousBaseLog{nullptr};
+    ::GYO::Engine::Base::LogHandler previousBaseLog{nullptr};
     bool tookAssertions{false};
-    ::Engine::Base::AssertionHandler previousAssertion{nullptr};
+    ::GYO::Engine::Base::AssertionHandler previousAssertion{nullptr};
     bool tookTerminate{false};
     std::terminate_handler previousTerminate{nullptr};
     std::chrono::nanoseconds fatalFlushTimeout{};
@@ -72,7 +72,7 @@ inline constinit std::atomic<State*> current{nullptr};
 // set (Install allows at most 64 sinks).
 [[nodiscard]] std::uint64_t TakingSinks(const State& state, Level level, std::string_view category) noexcept;
 
-// The default clocks: Engine::Time::NowNs, and the system clock with the C
+// The default clocks: GYO::Engine::Time::NowNs, and the system clock with the C
 // runtime's local offset from UTC.
 [[nodiscard]] std::int64_t DefaultMonoNs() noexcept;
 [[nodiscard]] WallTime DefaultWall() noexcept;

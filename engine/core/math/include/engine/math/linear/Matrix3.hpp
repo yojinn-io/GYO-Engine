@@ -9,7 +9,7 @@
 
 #include "engine/math/linear/Vec3.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Same convention as Matrix4: column-major storage (values[column * 3 + row])
 // and column vectors (p' = M * p). The default is the identity.
@@ -81,4 +81,4 @@ static_assert(std::is_aggregate_v<Matrix3>);
     return std::all_of(matrix.values.begin(), matrix.values.end(), [](float v) { return std::isfinite(v); });
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

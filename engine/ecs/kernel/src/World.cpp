@@ -138,11 +138,11 @@ World::~World() {
 void World::CheckThread(ResourceId id) const {
     if (!data_->resources[id].threadBound) return;
     const Detail::ResourceBase& slot = *resources_[id];
-    GYO_ASSERT(slot.thread == 0 || slot.thread == Engine::Base::CurrentThreadSerial());
+    GYO_ASSERT(slot.thread == 0 || slot.thread == GYO::Engine::Base::CurrentThreadSerial());
 }
 
 void World::BindThread(ResourceId id) {
-    if (data_->resources[id].threadBound) resources_[id]->thread = Engine::Base::CurrentThreadSerial();
+    if (data_->resources[id].threadBound) resources_[id]->thread = GYO::Engine::Base::CurrentThreadSerial();
 }
 
 // ---- Public reads and Host writes
@@ -488,7 +488,7 @@ void AddDiagnostics(World& world, TypeKey key, std::unique_ptr<DiagnosticsBase> 
 // The Executor's merge of one call's errors (spec B.4 point 7, E.2 step 5):
 // violations, boundary differences, kernel errors the System dropped and the
 // System's own Err, as one sibling list (one error alone is returned as is).
-std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result<void, KernelError> result,
+std::optional<KernelError> CombineCall(SystemContext& call, GYO::Engine::Base::Result<void, KernelError> result,
                                        const std::vector<std::string>& changed) {
     World& world = *call.world;
     std::vector<KernelError> list = std::move(call.errors);
@@ -522,7 +522,7 @@ std::optional<KernelError> CombineCall(SystemContext& call, Engine::Base::Result
 
 // ---- Hooks (spec F.4)
 
-Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityId entity, ComponentId component,
+GYO::Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityId entity, ComponentId component,
                                                        std::uint32_t planPos, std::string_view schedule, ChangeStamp stamp) {
     const Detail::HookRecord& record = data_->hooks[hook];
     Detail::SystemContext call;
@@ -549,7 +549,7 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     // writes are deferred records, events and diagnostics), so every storage but
     // the event buffers it declares must be unchanged by the call.
     if (verification_) TakeSnapshots();
-    Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
+    GYO::Engine::Base::Result<void, KernelError> result = [&]() -> GYO::Engine::Base::Result<void, KernelError> {
         Detail::CallScope scope(call);
         return record.run(call);
     }();
@@ -563,14 +563,14 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
                 (call.immediateChange ? "step " + std::to_string(planPos) + " (an immediate change)"
                                       : "sync point step " + std::to_string(planPos)) +
                 " of schedule '" + std::string(schedule) + "'");
-    return Engine::Base::Err(std::move(*error));
+    return GYO::Engine::Base::Err(std::move(*error));
 }
 
 // Per (entity, component), the lifecycle reactions of one cell (time-events
 // declaration 4.2; flecs and Bevy order them so): a new cell's OnAdd hooks,
 // then its Add observers; a leaving cell's Remove observers, then its OnRemove
 // hooks (the cell still readable by both).
-Engine::Base::Result<void, KernelError> World::RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
+GYO::Engine::Base::Result<void, KernelError> World::RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
                                                         std::uint32_t planPos, std::string_view schedule,
                                                         ChangeStamp stamp) {
     if (trigger == HookTrigger::OnRemove) {
@@ -591,7 +591,7 @@ Engine::Base::Result<void, KernelError> World::RunHooks(HookTrigger trigger, Ent
 
 // ---- Observers (event cursor declaration 3.3)
 
-Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trigger, std::uint32_t id, const void* payload,
+GYO::Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trigger, std::uint32_t id, const void* payload,
                                                             std::optional<EntityId> target, std::uint32_t planPos,
                                                             std::string_view schedule, ChangeStamp stamp, bool ownStamp) {
     for (const std::uint32_t index : data_->observerOrder) {
@@ -623,7 +623,7 @@ Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trig
         const std::size_t recordsBefore = into.records.size();
         // Layer 2 around the call (spec A.6), like a hook's.
         if (verification_) TakeSnapshots();
-        Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
+        GYO::Engine::Base::Result<void, KernelError> result = [&]() -> GYO::Engine::Base::Result<void, KernelError> {
             Detail::CallScope scope(call);
             return record.run(call);
         }();
@@ -642,7 +642,7 @@ Engine::Base::Result<void, KernelError> World::RunObservers(ObserverTrigger trig
                     (call.immediateChange ? "step " + std::to_string(planPos) + " (outside a sync point)"
                                           : "sync point step " + std::to_string(planPos)) +
                     " of schedule '" + std::string(schedule) + "'");
-        return Engine::Base::Err(std::move(*error));
+        return GYO::Engine::Base::Err(std::move(*error));
     }
     return {};
 }
@@ -658,12 +658,12 @@ struct NewCell {
 
 } // namespace
 
-Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, std::string_view schedule,
+GYO::Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, std::string_view schedule,
                                                          ChangeStamp stamp, std::vector<Detail::Record>* immediate,
                                                          Detail::Derive derive) {
     using Detail::Record;
     using Detail::RecordKind;
-    using Result = Engine::Base::Result<void, KernelError>;
+    using Result = GYO::Engine::Base::Result<void, KernelError>;
 
     // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
     std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
@@ -1141,7 +1141,7 @@ constexpr std::uint32_t kSummaryVersion = 3;
 // A type with no HashValue that has a value in the World (a cell, a present
 // resource, a message record) makes the call an Err naming every such type;
 // with no value it is not hashed and not reported (declaration 3.3).
-Engine::Base::Result<Fingerprint, KernelError> World::Summary() const {
+GYO::Engine::Base::Result<Fingerprint, KernelError> World::Summary() const {
     GYO_ASSERT(state_ == WorldState::Ready || state_ == WorldState::Interrupted);
     Sync();
     std::vector<std::string> missing;
@@ -1160,7 +1160,7 @@ Engine::Base::Result<Fingerprint, KernelError> World::Summary() const {
         KernelError error(KernelErrorCode::HashMissing,
                           "World::Summary: a type with a value in the World has no HashValue", names);
         error.world = name_;
-        return Engine::Base::Err(std::move(error));
+        return GYO::Engine::Base::Err(std::move(error));
     }
     Hasher h;
     SummaryText(h, "gyo.kernel.world-summary");
@@ -1201,7 +1201,7 @@ Engine::Base::Result<Fingerprint, KernelError> World::Summary() const {
         h.U64(cursor.slot);
         h.U64(cursor.read);
     }
-    return Fingerprint{kSummaryVersion, Engine::Base::Sha256(h.Data())};
+    return Fingerprint{kSummaryVersion, GYO::Engine::Base::Sha256(h.Data())};
 }
 
 } // namespace GYO::Kernel

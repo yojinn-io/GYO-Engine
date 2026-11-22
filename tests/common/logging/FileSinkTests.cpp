@@ -27,7 +27,7 @@ namespace Logging = GYO::Engine::Logging;
 namespace Json = GYO::Engine::Json;
 using Logging::Level;
 using Logging::Record;
-using Logging::Test::RecordingOutput;
+using GYO::Test::Logging::RecordingOutput;
 
 namespace {
 
@@ -40,7 +40,7 @@ struct Injected {
 
     explicit Injected(const std::size_t capacity = 65536) {
         auto opened = Logging::JsonLinesFileSink::Open({.capacity = capacity,
-                                                        .monoNs = &Logging::Test::TestMonoNs,
+                                                        .monoNs = &GYO::Test::Logging::TestMonoNs,
                                                         .output = output,
                                                         .fatalOutput = fatal});
         REQUIRE(opened);
@@ -215,7 +215,7 @@ TEST_CASE("file: the real file: Install opens it, records and the end line reach
         options.sinks.push_back({.name = "file",
                                  .sink = Logging::JsonLinesFileOptions{.path = path.string()},
                                  .filter = {.minimum = Level::Trace}});
-        options.clock = Logging::Test::TestClock();
+        options.clock = GYO::Test::Logging::TestClock();
         auto handle = Logging::Install(std::move(options));
         REQUIRE(handle);
         REQUIRE(handle.value().FindSink("file") != nullptr);

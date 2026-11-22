@@ -33,7 +33,7 @@
 // C++26 mapping: GYO_ASSERT corresponds to contract_assert, and
 // SetAssertionHandler to the replaceable contract-violation handler.
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 // Deliberately not derived from std::exception, so a catch (const
 // std::exception&) boundary never swallows a failure thrown by a test handler.
@@ -106,16 +106,16 @@ namespace Detail {
 
 } // namespace Detail
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base
 
 // Variadic so a condition containing commas (template arguments) needs no
 // extra parentheses. Relies on the standard-conforming preprocessor checked
 // at the top of this header.
 #define GYO_ASSERT(...)                                                        \
     ((__VA_ARGS__) ? static_cast<void>(0)                                      \
-                   : ::Engine::Base::Detail::AssertionFailed(#__VA_ARGS__))
+                   : ::GYO::Engine::Base::Detail::AssertionFailed(#__VA_ARGS__))
 
 // Marks a branch that a correct program never reaches (for example after a
 // switch that handles every enumerator). Reaching it is a Programmer Error
 // reported like a failed GYO_ASSERT; the call does not return.
-#define GYO_UNREACHABLE() ::Engine::Base::Detail::AssertionFailed("unreachable")
+#define GYO_UNREACHABLE() ::GYO::Engine::Base::Detail::AssertionFailed("unreachable")

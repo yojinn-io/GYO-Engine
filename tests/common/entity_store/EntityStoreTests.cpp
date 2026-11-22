@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace {
-using Engine::EntityStore::EntityId;
+using GYO::Engine::EntityStore::EntityId;
 
 // Keyed by the primary EntityKey: the member id.
 struct OnlyId final {
@@ -51,31 +51,29 @@ std::size_t countedReads = 0;
 
 // Declared before any use of EntityKey for these types (EntityKey.hpp,
 // visibility rule).
-namespace Engine::EntityStore {
 template <>
-struct EntityKey<OnlySpecialized> {
+struct GYO::Engine::EntityStore::EntityKey<OnlySpecialized> {
     [[nodiscard]] static constexpr EntityId Of(const OnlySpecialized& value) noexcept { return value.handle; }
 };
 template <>
-struct EntityKey<Both> {
+struct GYO::Engine::EntityStore::EntityKey<Both> {
     [[nodiscard]] static constexpr EntityId Of(const Both& value) noexcept { return value.handle; }
 };
 template <>
-struct EntityKey<Counted> {
+struct GYO::Engine::EntityStore::EntityKey<Counted> {
     [[nodiscard]] static EntityId Of(const Counted& value) noexcept {
         ++countedReads;
         return value.key;
     }
 };
-} // namespace Engine::EntityStore
 
 namespace {
-using Engine::EntityStore::EntityOf;
-using Engine::EntityStore::EraseEntity;
-using Engine::EntityStore::FindEntity;
-using Engine::EntityStore::HasEntityKey;
-using Engine::EntityStore::InsertEntity;
-using Engine::EntityStore::StrictlyAscending;
+using GYO::Engine::EntityStore::EntityOf;
+using GYO::Engine::EntityStore::EraseEntity;
+using GYO::Engine::EntityStore::FindEntity;
+using GYO::Engine::EntityStore::HasEntityKey;
+using GYO::Engine::EntityStore::InsertEntity;
+using GYO::Engine::EntityStore::StrictlyAscending;
 
 template <typename T>
 std::vector<EntityId> Keys(const std::vector<T>& column) {
@@ -105,17 +103,17 @@ const T* FindEverywhere(std::vector<T>& column, EntityId id) {
 // A type the column functions accept (Guard row 10, "neither").
 template <typename T>
 concept Insertable = requires(std::vector<T>& column, T value) {
-    Engine::EntityStore::InsertEntity(column, value);
+    GYO::Engine::EntityStore::InsertEntity(column, value);
 };
 template <typename T>
 concept Findable = requires(const std::vector<T>& column) {
-    Engine::EntityStore::FindEntity(column, EntityId{});
+    GYO::Engine::EntityStore::FindEntity(column, EntityId{});
 };
 } // namespace
 
 TEST_CASE("Entity store keys: zero, the top bit and the maximum are ordinary keys") {
     // Guard row 1: the store reserves no value.
-    Engine::Test::ScopedAssertionHandler throwing;
+    GYO::Test::ScopedAssertionHandler throwing;
     constexpr EntityId top = EntityId{1} << 63;
     constexpr EntityId maximum = std::numeric_limits<EntityId>::max();
     std::vector<OnlyId> column;
@@ -141,7 +139,7 @@ TEST_CASE("Entity store keys: zero, the top bit and the maximum are ordinary key
 
 TEST_CASE("Entity store insert: the ordered position, never an append") {
     // Guard row 2: descending runs, a key below every key, a key above every key.
-    Engine::Test::ScopedAssertionHandler throwing;
+    GYO::Test::ScopedAssertionHandler throwing;
     std::vector<OnlyId> column;
     for (const EntityId id : {EntityId{5}, EntityId{1}, EntityId{9}, EntityId{3}})
         InsertEntity(column, OnlyId{id, int(id) * 10});
@@ -159,7 +157,7 @@ TEST_CASE("Entity store insert: the ordered position, never an append") {
 
 TEST_CASE("Entity store insert: a present key fails GYO_ASSERT and leaves the column") {
     // Guard row 7 (insert part).
-    Engine::Test::ScopedAssertionHandler throwing;
+    GYO::Test::ScopedAssertionHandler throwing;
     std::vector<OnlyId> column;
     InsertEntity(column, OnlyId{7, 70});
     InsertEntity(column, OnlyId{3, 30});
@@ -172,7 +170,7 @@ TEST_CASE("Entity store insert: a present key fails GYO_ASSERT and leaves the co
 TEST_CASE("Entity store erase: keeps the order of the rest") {
     // Guard row 2: erase the middle and the ends. Swap-and-pop would give
     // 1, 9, 5 after erasing 3.
-    Engine::Test::ScopedAssertionHandler throwing;
+    GYO::Test::ScopedAssertionHandler throwing;
     std::vector<OnlyId> column;
     for (const EntityId id : {EntityId{5}, EntityId{1}, EntityId{9}, EntityId{3}, EntityId{7}})
         InsertEntity(column, OnlyId{id, int(id)});
@@ -196,7 +194,7 @@ TEST_CASE("Entity store erase: keeps the order of the rest") {
 
 TEST_CASE("Entity store find: present, absent, below and above; span and vectors agree") {
     // Guard row 3.
-    Engine::Test::ScopedAssertionHandler throwing;
+    GYO::Test::ScopedAssertionHandler throwing;
     std::vector<OnlyId> column;
     for (const EntityId id : {EntityId{10}, EntityId{20}, EntityId{30}}) InsertEntity(column, OnlyId{id, int(id)});
     for (const EntityId id : {EntityId{10}, EntityId{20}, EntityId{30}}) {
@@ -261,7 +259,7 @@ TEST_CASE("Entity store StrictlyAscending: no descent, no duplicate") {
 
 TEST_CASE("Entity store key access: member id, specialization, both, neither") {
     // Guard row 10.
-    Engine::Test::ScopedAssertionHandler throwing;
+    GYO::Test::ScopedAssertionHandler throwing;
     static_assert(HasEntityKey<OnlyId>);
     static_assert(HasEntityKey<OnlySpecialized>);
     static_assert(HasEntityKey<Both>);

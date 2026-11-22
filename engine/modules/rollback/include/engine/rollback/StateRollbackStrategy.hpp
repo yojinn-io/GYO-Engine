@@ -45,11 +45,11 @@ public:
 
     [[nodiscard]] std::string_view Name() const override { return "StateRollbackStrategy"; }
     void Check(CheckContext& context) override;
-    ::Engine::Base::Result<void, Kernel::KernelError> Record(RecordContext& context) override;
-    ::Engine::Base::Result<void, Kernel::KernelError> Decide(DecideContext& context) override;
-    ::Engine::Base::Result<void, Kernel::KernelError> Restore(RestoreContext& context) override;
-    ::Engine::Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) override;
-    ::Engine::Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) override;
+    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Record(RecordContext& context) override;
+    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Decide(DecideContext& context) override;
+    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Restore(RestoreContext& context) override;
+    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) override;
+    ::GYO::Engine::Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) override;
     [[nodiscard]] std::uint32_t DefaultInputLength() const noexcept override { return settings_.depth; }
 
     [[nodiscard]] const StateRollbackSettings& Settings() const noexcept { return settings_; }

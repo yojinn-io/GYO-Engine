@@ -44,11 +44,11 @@ KERNEL_ALLOWED = {
     "tlCurrent": re.compile(r"^GYO::Kernel::(?:\w+::)*tlCurrent$"),
 }
 FOREIGN = {
-    "GYO::Base assertion handler": re.compile(r"^Engine::Base::Detail::assertionHandler$"),
-    "GYO::Base assertion reentry flag": re.compile(r"^Engine::Base::Detail::reportingAssertion$"),
-    "GYO::Base thread serial issuer": re.compile(r"^Engine::Base::Detail::threadSerials$"),
-    "GYO::Base thread serial": re.compile(r"^Engine::Base::Detail::threadSerial$"),
-    "GYO::Base trace receiver": re.compile(r"^Engine::Base::Detail::traceReceiver$"),
+    "GYO::Base assertion handler": re.compile(r"^GYO::Engine::Base::Detail::assertionHandler$"),
+    "GYO::Base assertion reentry flag": re.compile(r"^GYO::Engine::Base::Detail::reportingAssertion$"),
+    "GYO::Base thread serial issuer": re.compile(r"^GYO::Engine::Base::Detail::threadSerials$"),
+    "GYO::Base thread serial": re.compile(r"^GYO::Engine::Base::Detail::threadSerial$"),
+    "GYO::Base trace receiver": re.compile(r"^GYO::Engine::Base::Detail::traceReceiver$"),
 }
 # Names the toolchain emits that are not a variable of any source: GCC's indirect reference to the C++
 # personality routine (DW.ref.__gxx_personality_v0, in .data.rel.local on ELF) and assembler section labels.

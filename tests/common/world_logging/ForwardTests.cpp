@@ -19,7 +19,7 @@
 
 namespace WL = GYO::Engine::WorldLogging;
 namespace W = GYO::Engine::WorldTime;
-using namespace GYO::Engine::WorldLogging::Test;
+using namespace GYO::Test::WorldLogging;
 
 namespace {
 
@@ -77,7 +77,7 @@ O::ProductDescription PingProduct(const std::string& worldName, const bool forwa
     O::WorldDescription w;
     w.name = worldName;
     w.build = [forward](O::WorldSetup& s) { PingWorld(s, forward); };
-    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(Outbox{});
         return {};
     });
@@ -208,7 +208,7 @@ TEST_CASE("forward: TimeDiscardedLog: the time Module's message is logged with i
     w.name = "Simulation";
     w.build = [](O::WorldSetup& s) { WL::Forward<W::TimeDiscardedLog>(s, {.schedule = "Main", .stage = "Last"}); };
     // One real second in one frame: more fixed steps than a frame may run, so time is discarded.
-    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(W::TimeSampling{1'000'000'000, W::SamplingMode::ManualDelta});
         return {};
     });

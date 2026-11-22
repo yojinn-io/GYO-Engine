@@ -55,19 +55,19 @@ TEST_CASE("alloc: a refused record allocates nothing and reads no clock; a taken
     Logging::LoggerOptions options;
     options.sinks.push_back(
         {.name = "memory", .sink = memory, .filter = {.exclude = {"trace."}, .minimum = Level::Warning}});
-    options.clock = Logging::Test::TestClock();
+    options.clock = GYO::Test::Logging::TestClock();
     auto handle = Logging::Install(std::move(options));
     REQUIRE(handle);
-    Logging::Test::ResetClock();
+    GYO::Test::Logging::ResetClock();
 
     const std::size_t before = allocations;
     Logging::Write(Level::Debug, "net", "below the level", {{"bytes", 512}, {"peer", "client-3"}, {"rate", 0.25}});
     Logging::Write(Level::Error, "trace.net", "excluded category", {{"bytes", 512}});
     CHECK(allocations == before);
-    CHECK(Logging::Test::clockReads.load() == 0);
+    CHECK(GYO::Test::Logging::clockReads.load() == 0);
 
     Logging::Write(Level::Warning, "net", "taken");
-    CHECK(Logging::Test::clockReads.load() == 2);
+    CHECK(GYO::Test::Logging::clockReads.load() == 2);
     CHECK(memory->Records().size() == 1);
 }
 
@@ -85,7 +85,7 @@ TEST_CASE("alloc: the fatal path formats its lines in the capacity Install reser
     auto counting = std::make_shared<CountingSink>();
     Logging::LoggerOptions options;
     options.sinks.push_back({.name = "counting", .sink = counting, .filter = {}});
-    options.clock = Logging::Test::TestClock();
+    options.clock = GYO::Test::Logging::TestClock();
     options.takeAssertions = false;
     options.takeTerminate = false;
     auto handle = Logging::Install(std::move(options));
@@ -115,7 +115,7 @@ TEST_CASE("alloc: the file sink's writer thread out of memory still writes the l
     auto output = std::make_shared<MeasuringOutput>();
     auto fatal = std::make_shared<MeasuringOutput>();
     auto opened = Logging::JsonLinesFileSink::Open(
-        {.monoNs = &Logging::Test::TestMonoNs, .output = output, .fatalOutput = fatal});
+        {.monoNs = &GYO::Test::Logging::TestMonoNs, .output = output, .fatalOutput = fatal});
     REQUIRE(opened);
     auto sink = opened.value();
     const std::string big(2u << 20, 'x');

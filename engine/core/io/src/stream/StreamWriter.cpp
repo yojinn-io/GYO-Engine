@@ -2,12 +2,12 @@
 
 #include <cstring>
 
-namespace Engine::IO::Stream {
+namespace GYO::Engine::IO::Stream {
 
 
     StreamWriter::StreamWriter(IStream& s) : s_(s) {}
 
-    IoResult<void> StreamWriter::WriteExactly(const void* src, std::size_t bytes) {
+    IOResult<void> StreamWriter::WriteExactly(const void* src, std::size_t bytes) {
         std::size_t done = 0;
         const auto* in = static_cast<const std::byte*>(src);
 
@@ -17,8 +17,8 @@ namespace Engine::IO::Stream {
 
             const std::size_t n = wr.value();
             if (n == 0) {
-                return Base::Err(IoError::Make(
-                    Engine::IO::IoErrorCode::WriteFailed,
+                return Base::Err(IOError::Make(
+                    GYO::Engine::IO::IOErrorCode::WriteFailed,
                     "StreamWriter: inner write returned 0 (stalled)"));
             }
             done += n;
@@ -26,12 +26,12 @@ namespace Engine::IO::Stream {
         return {};
     }
 
-    IoResult<void> StreamWriter::WriteAllBytes(Engine::Base::Span<const std::byte> bytes) {
+    IOResult<void> StreamWriter::WriteAllBytes(GYO::Engine::Base::Span<const std::byte> bytes) {
         if (bytes.empty()) return {};
         return WriteExactly(bytes.data(), bytes.size());
     }
 
-    IoResult<void> StreamWriter::WriteAllText(std::string_view text, const TextWriteOptions& opt) {
+    IOResult<void> StreamWriter::WriteAllText(std::string_view text, const TextWriteOptions& opt) {
         // BOM
         if (opt.writeUtf8Bom) {
             const std::byte bom[3] = { std::byte{0xEF}, std::byte{0xBB}, std::byte{0xBF} };
@@ -58,11 +58,11 @@ namespace Engine::IO::Stream {
         return WriteExactly(tmp.data(), tmp.size());
     }
 
-    IoResult<void> StreamWriter::WriteU8(std::uint8_t v) {
+    IOResult<void> StreamWriter::WriteU8(std::uint8_t v) {
         return WriteExactly(&v, 1);
     }
 
-    IoResult<void> StreamWriter::WriteU16LE(std::uint16_t v) {
+    IOResult<void> StreamWriter::WriteU16LE(std::uint16_t v) {
         std::uint8_t b[2] = {
             static_cast<std::uint8_t>(v & 0xFF),
             static_cast<std::uint8_t>((v >> 8) & 0xFF)
@@ -70,7 +70,7 @@ namespace Engine::IO::Stream {
         return WriteExactly(b, 2);
     }
 
-    IoResult<void> StreamWriter::WriteU32LE(std::uint32_t v) {
+    IOResult<void> StreamWriter::WriteU32LE(std::uint32_t v) {
         std::uint8_t b[4] = {
             static_cast<std::uint8_t>(v & 0xFF),
             static_cast<std::uint8_t>((v >> 8) & 0xFF),
@@ -80,7 +80,7 @@ namespace Engine::IO::Stream {
         return WriteExactly(b, 4);
     }
 
-    IoResult<void> StreamWriter::WriteU64LE(std::uint64_t v) {
+    IOResult<void> StreamWriter::WriteU64LE(std::uint64_t v) {
         std::uint8_t b[8];
         for (int i = 0; i < 8; ++i) {
             b[i] = static_cast<std::uint8_t>((v >> (8 * i)) & 0xFF);
@@ -88,7 +88,7 @@ namespace Engine::IO::Stream {
         return WriteExactly(b, 8);
     }
 
-    IoResult<void> StreamWriter::WriteLine(std::string_view line) {
+    IOResult<void> StreamWriter::WriteLine(std::string_view line) {
         auto r1 = WriteExactly(line.data(), line.size());
         if (!r1) return r1;
 
@@ -96,8 +96,8 @@ namespace Engine::IO::Stream {
         return WriteExactly(&nl, 1);
     }
 
-    IoResult<void> StreamWriter::Flush() {
+    IOResult<void> StreamWriter::Flush() {
         return s_.Flush();
     }
 
-} // namespace Engine::IO::Stream
+} // namespace GYO::Engine::IO::Stream

@@ -8,7 +8,7 @@
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
 
-namespace Engine::Audio::Detail {
+namespace GYO::Engine::Audio::Detail {
 
 namespace {
 
@@ -209,4 +209,4 @@ std::uint64_t VoiceMixer::RenderedFrames() const noexcept {
     return counters_.renderedFrames.load(std::memory_order_relaxed);
 }
 
-} // namespace Engine::Audio::Detail
+} // namespace GYO::Engine::Audio::Detail

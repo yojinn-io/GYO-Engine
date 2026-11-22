@@ -5,7 +5,7 @@
 
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // GYO uses one vector type per dimension for points, directions and sizes;
 // TransformPoint/TransformVector express the point/direction distinction.
@@ -54,4 +54,4 @@ static_assert(std::is_aggregate_v<Vec2>);
 
 [[nodiscard]] inline bool IsFinite(const Vec2 a) noexcept { return std::isfinite(a.x) && std::isfinite(a.y); }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

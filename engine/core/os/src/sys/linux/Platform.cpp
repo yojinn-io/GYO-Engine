@@ -8,7 +8,7 @@
 
 #include <unistd.h>
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 namespace {
 
 class LinuxPlatform final : public Platform {
@@ -28,13 +28,13 @@ public:
 
     bool CaseSensitivePaths() const noexcept override { return true; }
 
-    Base::Result<std::string, OsError> NativeExecutablePath() const override {
+    Base::Result<std::string, OSError> NativeExecutablePath() const override {
         std::vector<char> buffer(1024);
         for (;;) {
             const ssize_t length = ::readlink("/proc/self/exe", buffer.data(), buffer.size());
             if (length < 0) {
                 const int error = errno;
-                return Base::Err(MakeOsError(OsErrorCode::IoFailed, "cannot locate the executable",
+                return Base::Err(MakeOSError(OSErrorCode::IOFailed, "cannot locate the executable",
                     {NativeErrorDomain::Errno, error}));
             }
             if (static_cast<std::size_t>(length) < buffer.size()) {
@@ -52,4 +52,4 @@ const Platform& CurrentPlatform() noexcept {
     return platform;
 }
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

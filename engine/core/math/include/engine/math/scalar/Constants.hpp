@@ -2,7 +2,7 @@
 
 #include <numbers>
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Angles are radians throughout GYO.
 inline constexpr float Pi = std::numbers::pi_v<float>;
@@ -10,4 +10,4 @@ inline constexpr float Pi = std::numbers::pi_v<float>;
 inline constexpr float TwoPi = 2.0F * Pi;
 inline constexpr float HalfPi = 0.5F * Pi;
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

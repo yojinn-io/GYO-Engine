@@ -131,20 +131,20 @@ class Rules(GuardTree):
         self.assertReported("build/acceptance/sample/main.cpp:1: R2 _WIN32")
 
     def test_engine_os_includes_only_base_and_itself(self):
-        self.write("engine/core/os/src/common/A.cpp", '#include "engine/os/OsError.hpp"\n#include "engine/base/Result.hpp"\n'
+        self.write("engine/core/os/src/common/A.cpp", '#include "engine/os/OSError.hpp"\n#include "engine/base/Result.hpp"\n'
                                                  '#include "Local.hpp"\n#include <vector>\n#include <sys/event.h>\n')
         self.assertClean()
-        self.write("engine/core/os/src/common/B.cpp", '#include "engine/io/IoError.hpp"\n#include <SDL3/SDL.h>\n'
+        self.write("engine/core/os/src/common/B.cpp", '#include "engine/io/IOError.hpp"\n#include <SDL3/SDL.h>\n'
                                                  '#include <asio.hpp>\n')
-        self.assertReported("engine/core/os/src/common/B.cpp:1: R5 engine/io/IoError.hpp")
+        self.assertReported("engine/core/os/src/common/B.cpp:1: R5 engine/io/IOError.hpp")
         self.assertReported("engine/core/os/src/common/B.cpp:2: R5 SDL3/SDL.h")
         self.assertReported("engine/core/os/src/common/B.cpp:3: R5 asio.hpp")
 
     def test_engine_os_relative_includes_must_stay_inside_engine_os(self):
         self.write("engine/core/os/src/posix/Files.cpp", '#include "../common/Paths.hpp"\n#include "./Local.hpp"\n')
         self.assertClean()
-        self.write("engine/core/os/src/posix/Up.cpp", '#include "../../../io/include/engine/io/IoError.hpp"\n')
-        self.assertReported("engine/core/os/src/posix/Up.cpp:1: R5 ../../../io/include/engine/io/IoError.hpp")
+        self.write("engine/core/os/src/posix/Up.cpp", '#include "../../../io/include/engine/io/IOError.hpp"\n')
+        self.assertReported("engine/core/os/src/posix/Up.cpp:1: R5 ../../../io/include/engine/io/IOError.hpp")
 
     def test_ansi_code_page_in_engine_os_is_reported(self):
         for constant in ("CP_ACP", "CP_THREAD_ACP", "CP_OEMCP", "CP_MACCP"):

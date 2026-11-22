@@ -69,9 +69,9 @@ std::vector<Round> Measure(F&& call) {
     std::vector<std::int64_t> samples(kPerRound);
     for (int r = 0; r < kRounds; ++r) {
         for (int i = 0; i < kPerRound; ++i) {
-            const std::int64_t start = ::Engine::Time::NowNs();
+            const std::int64_t start = ::GYO::Engine::Time::NowNs();
             call(i);
-            samples[static_cast<std::size_t>(i)] = ::Engine::Time::NowNs() - start;
+            samples[static_cast<std::size_t>(i)] = ::GYO::Engine::Time::NowNs() - start;
         }
         std::sort(samples.begin(), samples.end());
         rounds.push_back({samples[kPerRound / 2], samples[kPerRound * 99 / 100]});
@@ -156,7 +156,7 @@ std::unique_ptr<O::Product> MoveProduct(const bool forward) {
         s.Registrar().AddSystem<&SendMove>(At("SendMove", "Update"));
         if (forward) WL::Forward<MoveLog>(s, {.schedule = "Main", .stage = "Last"});
     };
-    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(TickCount{});
         return {};
     });

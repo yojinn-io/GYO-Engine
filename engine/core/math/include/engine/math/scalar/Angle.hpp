@@ -4,7 +4,7 @@
 
 #include "engine/math/scalar/Constants.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // A single correctly rounded multiplication, so constant evaluation and run
 // time give the same bits; constexpr lets products declare angle constants.
@@ -26,4 +26,4 @@ namespace Engine::Math {
     return std::remainder(a + std::remainder(b - a, TwoPi) * t, TwoPi);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

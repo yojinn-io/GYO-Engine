@@ -21,7 +21,7 @@ using namespace OrchTest::Save;
 
 namespace {
 
-namespace Base = ::Engine::Base;
+namespace Base = ::GYO::Engine::Base;
 
 std::vector<std::string>* events = nullptr;
 std::uint64_t nextId = 1;
@@ -127,8 +127,8 @@ TEST_CASE("trace-spans: a DropOldFirst replacement the orchestration layer fails
     REQUIRE(static_cast<bool>(p.RunFrame()));
     O::ReplaceRequest request;
     request.order = O::ReplaceOrder::DropOldFirst;
-    request.extra = [](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
-        return Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the save is broken"));
+    request.extra = [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the save is broken"));
     };
     Recording recording;
     auto replaced = p.ReplaceWorld("Main", std::move(request));

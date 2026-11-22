@@ -6,7 +6,7 @@ Owner：架構。來源：事前宣告 [logging-declaration.zh-Hant.md](logging-
 
 | Module | 內容 | 依賴（公開；私有） |
 |---|---|---|
-| `logging`（`GYO::Engine::Logging`） | `Record`、`Level`、`FieldValue`、`RecordBuilder`；一個行程一個 `Logger`（`Install` 回 `Result`、`LoggerHandle` 卸下）；輸出端 `Sink` 與三個內建（`ConsoleSink`、`JsonLinesFileSink`、`MemorySink`）；JSON lines 與文字格式；`Write`（直接寫一筆）；`WriteFatalRecord`（致命時的最後一道）；斷言與 `std::terminate` 的處理器。不認得 ECS | `GYO::Base`；私有 `GYO::Json`、`GYO::Os`、`GYO::Threads`、`GYO::Time` |
+| `logging`（`GYO::Engine::Logging`） | `Record`、`Level`、`FieldValue`、`RecordBuilder`；一個行程一個 `Logger`（`Install` 回 `Result`、`LoggerHandle` 卸下）；輸出端 `Sink` 與三個內建（`ConsoleSink`、`JsonLinesFileSink`、`MemorySink`）；JSON lines 與文字格式；`Write`（直接寫一筆）；`WriteFatalRecord`（致命時的最後一道）；斷言與 `std::terminate` 的處理器。不認得 ECS | `GYO::Base`；私有 `GYO::Json`、`GYO::OS`、`GYO::Threads`、`GYO::Time` |
 | `world_logging`（`GYO::Engine::WorldLogging`） | `Forward<D>`（把健康 World 的 `Message` 寫成紀錄）、`LogWorldLabel<D>`、`TakeKernelDiagnostics` | `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration` |
 
 兩個都 `library_only=yes`、`default=no`：`Logger` 由 `main` 裝；`Forward` 由接線的人在自己的 `build` 裡呼叫；描述器（例：`WorldTime::TimeDiscardedLog`）由發出訊息的 Module 寫在訊息旁邊（宣告第 13 節第 1 題 D）。沒有外部組件，所以沒有 `src/adapters/`。
@@ -18,7 +18,7 @@ World 健康時
   ① Message ──Forward──→ ┐
   ② Kernel 的診斷紀錄 ──runner 在兩次 Run 之間取走（TakeKernelDiagnostics）──→ ┤
 World 外的程式                                                                   ├──→ Logger ──→ Sink
-  ③ Engine::Base::Log ──處理器──→ ┤   （World 壞掉時，產品的 main 要記那一行，通常走這裡）
+  ③ GYO::Engine::Base::Log ──處理器──→ ┤   （World 壞掉時，產品的 main 要記那一行，通常走這裡）
   ④ Logging::Write（直接寫一筆）──→ ┘
 致命時（E0）
   ⑥ 斷言失敗、std::terminate ──處理器──→ WriteFatalRecord（主控台＋各輸出端的致命寫出口，不等任何東西；之後 flush，有期限）
@@ -42,7 +42,7 @@ World 外的程式                                                              
 守衛：`world_logging.forward`（遊戲的讀者讀到的相同、描述器丟例外）、編譯失敗樣本（`tests/common/world_logging/compile_fail/ForwardSample.cpp`，`GYO_WORLD_LOGGING_REJECT_WRITE`／`_DESCRIPTOR`）、`scenario.segment3`（S3-3）；突變 `lg-forward-*`。
 
 <a id="lg-4"></a>
-**LG-4 不認得產品與其他 Module。** `engine/modules/logging` 只含入 Base、Json、Os、Threads、Time 與自己；公開標頭只含入 Base 與自己。`engine/modules/world_logging` 只含入 Base、Logging、Kernel、Orchestration 與自己。兩個都不認得任何訊息型別、產品的詞（描述器在發出訊息的 Module 那邊）。
+**LG-4 不認得產品與其他 Module。** `engine/modules/logging` 只含入 Base、Json、OS、Threads、Time 與自己；公開標頭只含入 Base 與自己。`engine/modules/world_logging` 只含入 Base、Logging、Kernel、Orchestration 與自己。兩個都不認得任何訊息型別、產品的詞（描述器在發出訊息的 Module 那邊）。
 守衛：ctest `logging.guard`（`tests/common/logging/logging_guard.py`：三條含入規則、正例、目錄不存在時失敗）與 `logging.guard_selftest`；突變 `lg-guard-*`。
 
 <a id="lg-5"></a>
@@ -65,7 +65,7 @@ World 外的程式                                                              
 **LG-9（修訂 3 退役）。** 原本是 logging 的 span。使用者 2026-11-21 定日誌和 trace 是兩個 Module，span 歸 trace Module（另寫宣告）；logging 不再有 span，條號不重用。
 
 <a id="lg-10"></a>
-**LG-10 依賴。** `gyo_logging` 公開只連 `GYO::Base`、私有只連 `GYO::Json`、`GYO::Os`、`GYO::Threads`、`GYO::Time`（不交給使用者）；`gyo_world_logging` 只連 `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration`；沒有外部組件（之後有的話放 `src/adapters/<組件>/`）。
+**LG-10 依賴。** `gyo_logging` 公開只連 `GYO::Base`、私有只連 `GYO::Json`、`GYO::OS`、`GYO::Threads`、`GYO::Time`（不交給使用者）；`gyo_world_logging` 只連 `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration`；沒有外部組件（之後有的話放 `src/adapters/<組件>/`）。
 守衛：`gyo_expect_links`（`tests/common/logging/CMakeLists.txt`、`tests/common/world_logging/CMakeLists.txt`）；突變 `lg-link-kernel`。
 
 <a id="lg-11"></a>

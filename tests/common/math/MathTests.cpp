@@ -41,7 +41,7 @@
 // contract (docs/architecture/math.md, header comments) and hand calculation,
 // never from the implementation's own expressions.
 
-using namespace Engine::Math;
+using namespace GYO::Engine::Math;
 
 namespace {
 

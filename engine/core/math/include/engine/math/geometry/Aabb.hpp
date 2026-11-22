@@ -5,7 +5,7 @@
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/linear/Vec3d.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Axis-aligned box; valid when minimum <= maximum on every axis.
 struct Aabb final {
@@ -66,4 +66,4 @@ static_assert(std::is_aggregate_v<Aabbd>);
 
 [[nodiscard]] inline bool IsFinite(const Aabb& box) noexcept { return IsFinite(box.minimum) && IsFinite(box.maximum); }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

@@ -1,6 +1,6 @@
 # GYO OS layer
 
-Owner: Engine (`engine/core/os` → `GYO::Os`).
+Owner: Engine (`engine/core/os` → `GYO::OS`).
 Plan and record: [os-subsystem](plans/os-subsystem/README.md), batch os-skeleton onwards (D40–D46).
 Proposed direction (not yet in this contract): [build-baseline](plans/build-baseline/README.md) — platform and toolchain
 tiers, and Windows processes fixing their code page to UTF-8 through the manifest's `activeCodePage` (decided
@@ -27,7 +27,7 @@ products / tools ──┬──→ engine/modules/* ──→ engine/core/* (lo
                    └──→ engine/core/os (process facts, console)
 ```
 
-`GYO::Os` is a leaf directly above `GYO::Base`. Modules keep their own abstractions and call it: engine/core/io keeps
+`GYO::OS` is a leaf directly above `GYO::Base`. Modules keep their own abstractions and call it: engine/core/io keeps
 `IFileSystem`, `Vfs`, `Uri` and streams, and its native file-system backend calls the file primitives here;
 engine/core/time's `Waiter` and engine/core/threads' `RoleThread` keep their public APIs and use the wait and thread
 primitives here.
@@ -36,7 +36,7 @@ primitives here.
 
 | Component | What it gives | Status |
 |---|---|---|
-| `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
+| `OSError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
 | Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`), message text for a path (`PathForMessage`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files; message text: os-path-utf8-sweep (landed) |
 | Process | Executable path, process and thread CPU time, local calendar time, the process ANSI code page (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`, `AnsiCodePage`) | os-process-info; code page: os-utf8-codepage (landed) |
 | Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/core/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
@@ -50,8 +50,8 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
 
 ## Contracts
 
-- **Errors.** `Base::Result<T, OsError>`; `OsErrorCode` starts at 1. The detail is `errno=<n>` or `win32=<n>`,
-  followed by `; path_bytes=<n>` when the failure concerns a path (`Os::NativeErrorDetail`). An argument the layer
+- **Errors.** `Base::Result<T, OSError>`; `OSErrorCode` starts at 1. The detail is `errno=<n>` or `win32=<n>`,
+  followed by `; path_bytes=<n>` when the failure concerns a path (`OS::NativeErrorDetail`). An argument the layer
   refuses itself, before or instead of an OS call (an empty path, a NUL, invalid UTF-8, an offset or length out of
   range, a file that is not a regular file), has no native error: its detail is `path_bytes=<n>` alone; no native
   code is made up. An outer module keeps the detail with `Base::CauseDetail` (error-handling.md rule 5).
@@ -185,7 +185,7 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     fields (month 1–12) and the offset from UTC in seconds, computed from those fields, so a caller printing the
     offset as a sign (`+` for zero), hours and minutes gets the bytes strftime's `%z` gave on every platform. A time
     point the platform cannot convert is `Unsupported` with the native error (Windows: after the year 3000).
-  - An OS failure of `ExecutablePath` is `IoFailed` (the native error stays in the detail; no caller branches on
+  - An OS failure of `ExecutablePath` is `IOFailed` (the native error stays in the detail; no caller branches on
     the code), a path longer than Windows allows is `TooLarge`, and a path with no UTF-8 form is `InvalidEncoding`.
 - **Console.**
   - `CommandLineUtf8` gives the process's arguments in UTF-8, the program name first. Windows reads
@@ -231,7 +231,7 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     with `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`, else a plain one (`WaitableTimer`); the timeout is set in 100 ns
     units rounded up, with a millisecond fallback when the timer cannot be set. Other platforms (Linux): a mutex, a
     condition variable and a pending flag, set and cleared under the mutex. `Mechanism` reports which.
-  - A primitive the OS refuses is `IoFailed` with the native error. `Block` lets the fallback's
+  - A primitive the OS refuses is `IOFailed` with the native error. `Block` lets the fallback's
     `std::system_error` pass through (Invariant 6). A moved-from signal ignores `Signal`; `Block` and `Mechanism`
     on it are Programmer Errors.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
@@ -296,7 +296,7 @@ from the recorded directories, and runs on every platform, so a target the walk 
 `cmake.ProcessCodePage` runs the build layer and the check on a synthetic tree: a plain build, a standalone tool
 wrapper, a directory the build layer did not record (refused) and an exemption (listed).
 
-`OsHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/core/os public
+`OSHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/core/os public
 headers, no `windows.h` or winsock guard macro and no `min` or `max` macro is defined. It is recorded before
 doctest is included and fails if a public header is not included by the test. The POSIX side is the text scan of
 engine/core/os/include, since libc++ and libstdc++ define `_PTHREAD_H` from `<string>`.
@@ -313,7 +313,7 @@ Known blind spots, left to review:
   `if(WIN32)`): it configures a header and is not identification, so it is allowed. `-D` flags in
   `CMAKE_<LANG>_FLAGS` or inside a generator expression in `COMPILE_OPTIONS`, and third_party's interface
   definitions (asio's `_WIN32_WINNT` and `WIN32_LEAN_AND_MEAN`), are not checked.
-- Paths taken from narrow `argv` strings in programs that do not use `Os::Console::CommandLineUtf8` (today the
+- Paths taken from narrow `argv` strings in programs that do not use `OS::Console::CommandLineUtf8` (today the
   acceptance programs and the host shader tool): on Windows 10 1903 and later they are UTF-8 through the manifest
   (Invariant 11); on earlier Windows they are in the system's ANSI code page.
 - R6 reads names, not values: a code page given as a number (`MultiByteToWideChar(0, ...)`, 0 being `CP_ACP`), a
@@ -351,7 +351,7 @@ Known blind spots, left to review:
    directly. (master's engine/trace wrote its files through engine/core/os directly, os-subsystem open decision 2,
    D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
-3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`
+3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::OS` links only `GYO::Base`
    and OS system libraries (`shell32` on Windows; `Threads::Threads` elsewhere, since the thread naming moved in,
    os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/core/os
    includes only engine/core/base, the standard library and OS headers. Its API has no type of a module above it: no
@@ -363,7 +363,7 @@ Known blind spots, left to review:
    spans, time is `std::chrono`. Invalid UTF-8 is `InvalidEncoding`. On Windows every path is converted to UTF-16
    for the wide APIs; the ANSI code page APIs are never used. Long-path forms are made only inside engine/core/os just
    before the OS call; they are never returned or written into an error.
-6. **Failures are Runtime Errors.** Functions return `Base::Result<_, OsError>`; the detail keeps the native error
+6. **Failures are Runtime Errors.** Functions return `Base::Result<_, OSError>`; the detail keeps the native error
    in the fixed form of the Contracts section. A request that only reports whether the platform applied it returns
    `bool` instead (the thread name and priority, `Utf8ConsoleOutput::Applied()`): not being applied is a result,
    not a failure (Invariant 10; D70). No exception crosses the public boundary or an OS callback (signal
@@ -400,7 +400,7 @@ Known blind spots, left to review:
     setting (Windows 10 1903 and later). It is the second line: engine/core/os still converts with `CP_UTF8` and calls
     only wide APIs (Invariant 5), so its behaviour does not depend on the manifest. Guards: the configure-time check
     that every executable target carries the manifest or a reasoned exemption; `gyo_os_tests` reads its own manifest
-    resource and checks `GetACP()` ("Os files run with UTF-8 as the process ANSI code page"); the source guard
+    resource and checks `GetACP()` ("OS files run with UTF-8 as the process ANSI code page"); the source guard
     refuses the ANSI code page constants and ANSI Win32 entry points in engine/core/os (R6); `cmake.ProcessCodePage`.
     Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6 and pu-x5.
 

@@ -29,7 +29,7 @@
 #endif
 #endif
 
-using namespace Engine::Os;
+using namespace GYO::Engine::OS;
 using namespace std::chrono_literals;
 
 namespace {
@@ -165,9 +165,9 @@ std::string FormatWall(const Process::LocalTime& local, const char* format) {
 
 } // namespace
 
-TEST_CASE("Os process executable path names this test executable, as the old lookup did") {
+TEST_CASE("OS process executable path names this test executable, as the old lookup did") {
     const auto path = Process::ExecutablePath();
-    REQUIRE_MESSAGE(path, (path ? std::string{} : Engine::Base::Describe(path.error())));
+    REQUIRE_MESSAGE(path, (path ? std::string{} : GYO::Engine::Base::Describe(path.error())));
     CHECK(Files::IsAbsolutePath(*path));
     const auto exists = Files::Exists(*path);
     REQUIRE(exists);
@@ -180,20 +180,20 @@ TEST_CASE("Os process executable path names this test executable, as the old loo
     CHECK(*again == *path);
 }
 
-TEST_CASE("Os process reports its ANSI code page where the platform has one") {
+TEST_CASE("OS process reports its ANSI code page where the platform has one") {
     const auto page = Process::AnsiCodePage();
 #if defined(_WIN32)
     // The manifest every executable of the repository embeds (Design Invariant 11).
-    REQUIRE_MESSAGE(page, (page ? std::string{} : Engine::Base::Describe(page.error())));
+    REQUIRE_MESSAGE(page, (page ? std::string{} : GYO::Engine::Base::Describe(page.error())));
     CHECK(*page == 65001u);
     CHECK(*page == ::GetACP());
 #else
     REQUIRE_FALSE(page);
-    CHECK(page.error().code == OsErrorCode::Unsupported);
+    CHECK(page.error().code == OSErrorCode::Unsupported);
 #endif
 }
 
-TEST_CASE("Os process CPU times never decrease and the calling thread's grows with work") {
+TEST_CASE("OS process CPU times never decrease and the calling thread's grows with work") {
     const auto process = Process::ProcessCpuTime();
     const auto thread = Process::CurrentThreadCpuTime();
     REQUIRE(process);
@@ -211,7 +211,7 @@ TEST_CASE("Os process CPU times never decrease and the calling thread's grows wi
     CHECK(*threadAfter > *thread);
 }
 
-TEST_CASE("Os process CPU times read the clocks the old lookups read") {
+TEST_CASE("OS process CPU times read the clocks the old lookups read") {
     // Each clock is read the old way just before and just after engine/os
     // reads it on the same thread: a monotonic clock puts engine/os's answer
     // between the two, in the same unit. (Two different clocks, such as the
@@ -234,7 +234,7 @@ TEST_CASE("Os process CPU times read the clocks the old lookups read") {
     CHECK(*thread <= threadAfter);
 }
 
-TEST_CASE("Os process thread CPU time belongs to the calling thread only") {
+TEST_CASE("OS process thread CPU time belongs to the calling thread only") {
     // The main thread has spun; a new thread has not, so its own time is
     // below the process's time read before it started.
     const auto until = std::chrono::steady_clock::now() + 50ms;
@@ -250,7 +250,7 @@ TEST_CASE("Os process thread CPU time belongs to the calling thread only") {
     CHECK(*fresh < *process);
 }
 
-TEST_CASE("Os process local time matches the C runtime's fields and %z under fixed time zones") {
+TEST_CASE("OS process local time matches the C runtime's fields and %z under fixed time zones") {
     // Whole seconds since the epoch: 2026-10-16T01:40:11Z, 2026-07-01T12:00:00Z,
     // 2026-01-15T12:00:00Z, 2000-02-29T23:59:59Z, 2026-03-08T10:30:00Z and
     // 2026-11-01T05:00:00Z (near the North American daylight saving changes).
@@ -262,7 +262,7 @@ TEST_CASE("Os process local time matches the C runtime's fields and %z under fix
             CAPTURE(seconds);
             const auto point = std::chrono::system_clock::from_time_t(seconds) + 999ms;
             const auto local = Process::ToLocalTime(point);
-            REQUIRE_MESSAGE(local, (local ? std::string{} : Engine::Base::Describe(local.error())));
+            REQUIRE_MESSAGE(local, (local ? std::string{} : GYO::Engine::Base::Describe(local.error())));
             const auto reference = ReferenceLocal(seconds);
             CHECK(local->year == reference.tm_year + 1900);
             CHECK(local->month == reference.tm_mon + 1);
@@ -279,7 +279,7 @@ TEST_CASE("Os process local time matches the C runtime's fields and %z under fix
     }
 }
 
-TEST_CASE("Os process local time offsets: zero, half hours and negative") {
+TEST_CASE("OS process local time offsets: zero, half hours and negative") {
     const auto at = std::chrono::system_clock::from_time_t(1768478400); // 2026-01-15T12:00:00Z
     {
         const ScopedTimeZone scoped("UTC0");
@@ -308,11 +308,11 @@ TEST_CASE("Os process local time offsets: zero, half hours and negative") {
 }
 
 #if defined(_WIN32)
-TEST_CASE("Os process local time refuses a time point the C runtime cannot convert") {
+TEST_CASE("OS process local time refuses a time point the C runtime cannot convert") {
     // The Windows C runtime converts up to the year 3000.
     const auto local = Process::ToLocalTime(std::chrono::system_clock::time_point{} + std::chrono::seconds{33'000'000'000});
     REQUIRE_FALSE(local);
-    CHECK(local.error().code == OsErrorCode::Unsupported);
+    CHECK(local.error().code == OSErrorCode::Unsupported);
     CHECK(local.error().detail.rfind("errno=", 0) == 0);
 }
 #endif

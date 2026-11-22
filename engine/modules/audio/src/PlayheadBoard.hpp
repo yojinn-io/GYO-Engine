@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace Engine::Audio::Detail {
+namespace GYO::Engine::Audio::Detail {
 
 // Wait-free reads and writes need lock-free 64-bit atomics.
 static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
@@ -83,4 +83,4 @@ private:
     std::vector<Entry> entries_;
 };
 
-} // namespace Engine::Audio::Detail
+} // namespace GYO::Engine::Audio::Detail

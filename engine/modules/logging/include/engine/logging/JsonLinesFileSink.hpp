@@ -52,7 +52,7 @@ struct JsonLinesFileOptions final {
     std::size_t capacity{65536};
     // The writer thread's name; non-empty.
     std::string threadName{"gyo-log"};
-    // The time base of the end line; nullptr is Engine::Time::NowNs. Install
+    // The time base of the end line; nullptr is GYO::Engine::Time::NowNs. Install
     // fills it with the Logger's clock when left nullptr.
     std::int64_t (*monoNs)() noexcept = nullptr;
     // Tests only: what the writer thread and the fatal path write to, instead

@@ -58,7 +58,7 @@ K::SystemResult Mark(K::Query<K::Read<Tag>>) {
     return {};
 }
 inline K::SystemResult Fail(K::Query<K::Read<Tag>>) {
-    return Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "the test System failed"));
+    return GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "the test System failed"));
 }
 
 // A one-stage schedule (the kernel keeps no clock since batch 3: a schedule belongs to no domain).
@@ -175,7 +175,7 @@ inline O::WorldDescription World(std::string name, std::function<void(O::WorldSe
     return w;
 }
 
-using BuildResult = Engine::Base::Result<std::unique_ptr<O::Product>, O::ProductStartupReport>;
+using BuildResult = GYO::Engine::Base::Result<std::unique_ptr<O::Product>, O::ProductStartupReport>;
 
 inline std::string Describe(const BuildResult& built) {
     return built ? std::string("ok") : built.error().detail;

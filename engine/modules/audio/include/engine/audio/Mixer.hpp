@@ -10,7 +10,7 @@
 #include "engine/base/Span.hpp"
 #include "engine/time/MonotonicClock.hpp"
 
-namespace Engine::Audio {
+namespace GYO::Engine::Audio {
 
 namespace Detail {
 struct ClipSlot;
@@ -205,4 +205,4 @@ private:
     std::shared_ptr<Detail::MixerState> state_;
 };
 
-} // namespace Engine::Audio
+} // namespace GYO::Engine::Audio

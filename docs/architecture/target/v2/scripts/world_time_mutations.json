@@ -849,28 +849,6 @@
    "expect": "\\[wt\\-sample\\-reader\\]"
   },
   {
-   "id": "wt-include-order-unqualified",
-   "what": "include order: a world_time header names Engine::Base unqualified inside GYO::Engine::WorldTime (the check is the build of the include-order objects; the command after it only completes the run) (time Module, step 4). Only it catches an unqualified Engine:: in a world_time header; it is the only mutant of the include-order objects",
-   "guards": [
-    "world-time WT-4",
-    "time-events-declaration 3.1"
-   ],
-   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
-   "find": "[[nodiscard]] ::Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
-   "replace": "[[nodiscard]] Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
-   "target": "gyo_orchestration_include_order",
-   "expect_build_failure": true,
-   "expect": "(?s)gyo_orchestration_include_order\\.dir.*no member named 'Base' in namespace 'GYO::Engine'",
-   "platforms": [
-    "darwin"
-   ],
-   "command": [
-    "{python}",
-    "-c",
-    "pass"
-   ]
-  },
-  {
    "id": "wt-carried-value-overwritten",
    "what": "the time Module overwrites a time value carried over (WT-1, O-7: a value already there is kept). Only it catches PutIfAbsent becoming a plain write (adversarial check W38, step 7)",
    "guards": [
@@ -1251,34 +1229,8 @@
    "expect": "\\[wt\\-restore\\-put\\-back\\]"
   },
   {
-   "id": "wt-guard-naming-root-dropped",
-   "what": "naming guard (authority-rollback step 1): engine/modules/world_time is no longer mapped to GYO::Engine::WorldTime. Only it drops the world_time row of ROOTS (that row's whole rule, README rule 4); wt-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent the shared fail closed",
-   "guards": [
-    "world-time WT-4",
-    "naming DI 1",
-    "time-events-declaration 6.3",
-    "authority-rollback-declaration 9.5"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": ",\n         (\"engine/modules/world_time\", \"GYO::Engine::WorldTime\"))",
-   "replace": ")",
-   "expect": "FAIL: test_n1_world_time_other_namespace_is_reported",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
    "id": "wt-guard-real-n1-other-namespace",
-   "what": "naming guard's world_time row on the real tree (authority-rollback step 1, README rule 4: positive control): a world_time source opens GYO::Engine::Orchestration. Only it shows the world_time row firing on the real tree; wt-guard-naming-root-dropped drops the row in the self-tests",
+   "what": "naming guard's world_time row on the real tree (authority-rollback step 1, README rule 4: positive control): a world_time source opens GYO::Engine::Orchestration. Only it shows the world_time row firing on the real tree; nm-unit-name-underscore (naming_mutations.json) breaks the derivation of world_time's name in the self-tests; wt-guard-naming-root-dropped was retired by v8-arch-gyo2-namespace-root with the ROOTS row",
    "guards": [
     "world-time WT-4",
     "naming DI 1",

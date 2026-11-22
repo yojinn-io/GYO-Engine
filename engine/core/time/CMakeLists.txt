@@ -1,6 +1,6 @@
 # The engine time base: the monotonic clock every engine module uses, the
 # deadline-or-notify Waiter and late-wake statistics. A leaf above GYO::Base;
-# the platform wait mechanism comes through GYO::Os, privately (its WakeSignal,
+# the platform wait mechanism comes through GYO::OS, privately (its WakeSignal,
 # v8-arch-gyo2-os-wait), so no OS API is called here. No SDL, so roles without a
 # window may use it.
 add_library(gyo_time STATIC
@@ -17,4 +17,4 @@ target_compile_features(gyo_time PUBLIC cxx_std_20)
 # Engine-internal links are written here: core, ecs and orchestration are not
 # Modules and are not registered (O-6 covers the Modules and Plugins only).
 target_link_libraries(gyo_time PUBLIC GYO::Base)
-target_link_libraries(gyo_time PRIVATE GYO::Os)
+target_link_libraries(gyo_time PRIVATE GYO::OS)

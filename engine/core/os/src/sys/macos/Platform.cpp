@@ -10,10 +10,10 @@
 
 #include <mach-o/dyld.h>
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 namespace {
 
-class MacOsPlatform final : public Platform {
+class MacOSPlatform final : public Platform {
 public:
     const timespec& ModifiedTimespec(const struct stat& status) const noexcept override { return status.st_mtimespec; }
 
@@ -28,20 +28,20 @@ public:
 
     bool CaseSensitivePaths() const noexcept override { return false; }
 
-    Base::Result<std::string, OsError> NativeExecutablePath() const override {
+    Base::Result<std::string, OSError> NativeExecutablePath() const override {
         std::vector<char> buffer(1024);
         auto size = static_cast<std::uint32_t>(buffer.size());
         if (::_NSGetExecutablePath(buffer.data(), &size) != 0) {
             // size now holds the length needed.
             buffer.resize(size);
             if (::_NSGetExecutablePath(buffer.data(), &size) != 0) {
-                return Base::Err(OsError::Make(OsErrorCode::IoFailed, "cannot locate the executable"));
+                return Base::Err(OSError::Make(OSErrorCode::IOFailed, "cannot locate the executable"));
             }
         }
         const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(buffer.data(), nullptr), &std::free);
         if (!resolved) {
             const int error = errno;
-            return Base::Err(MakeOsError(OsErrorCode::IoFailed, "cannot resolve the executable path",
+            return Base::Err(MakeOSError(OSErrorCode::IOFailed, "cannot resolve the executable path",
                 {NativeErrorDomain::Errno, error}));
         }
         return std::string(resolved.get());
@@ -51,8 +51,8 @@ public:
 } // namespace
 
 const Platform& CurrentPlatform() noexcept {
-    static const MacOsPlatform platform;
+    static const MacOSPlatform platform;
     return platform;
 }
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

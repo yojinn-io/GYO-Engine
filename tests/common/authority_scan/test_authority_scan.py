@@ -86,7 +86,7 @@ class PositiveCases(OwnerTree):
                         2, "ZS2", "int counter")
 
     def test_positive_time_now(self):
-        self.assertOnly(self.scan_source("namespace Own {\nvoid Step() {\n    const auto now = Engine::Time::Now();\n}\n}\n"),
+        self.assertOnly(self.scan_source("namespace Own {\nvoid Step() {\n    const auto now = GYO::Engine::Time::Now();\n}\n}\n"),
                         3, "ZS4", "Time::Now")
 
     def test_positive_imgui_getio(self):
@@ -317,7 +317,7 @@ class RuleZS3ZS4ZS6ZS7Names(OwnerTree):
                 self.assertOnly(self.scan_source(self.body(statement)), 3, "ZS3", text)
 
     def test_zs4_clock_aliases(self):
-        for statement, text in {"auto t = Engine::Time::NowNs();": "Time::NowNs", "auto t = Clock::now();": "Clock::now",
+        for statement, text in {"auto t = GYO::Engine::Time::NowNs();": "Time::NowNs", "auto t = Clock::now();": "Clock::now",
                                 "auto t = std::chrono::steady_clock::now();": "steady_clock",
                                 "auto t = std::chrono::system_clock::now();": "system_clock",
                                 "auto t = high_resolution_clock::now();": "high_resolution_clock",

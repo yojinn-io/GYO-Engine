@@ -281,8 +281,8 @@
     "trace-declaration D2"
    ],
    "file": "engine/ecs/kernel/src/Executor.cpp",
-   "find": "            Engine::Base::TraceSpan systemSpan;\n",
-   "replace": "            Engine::Base::TraceSpan systemSpan;\n            systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
+   "find": "            GYO::Engine::Base::TraceSpan systemSpan;\n",
+   "replace": "            GYO::Engine::Base::TraceSpan systemSpan;\n            systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
    "target": "gyo_kernel_tests",
    "cases": "kernel trace: a System its run condition skips*",
    "expect": "\\[ks-trace-skipped\\]"
@@ -295,7 +295,7 @@
     "trace-declaration D4"
    ],
    "file": "engine/ecs/kernel/src/Executor.cpp",
-   "find": "    if (Engine::Base::TraceActive()) Engine::Base::TraceMarkCurrent(error.Text(), origin);\n",
+   "find": "    if (GYO::Engine::Base::TraceActive()) GYO::Engine::Base::TraceMarkCurrent(error.Text(), origin);\n",
    "replace": "",
    "target": "gyo_kernel_tests",
    "cases": "kernel trace: a System's Err is marked*",
@@ -661,7 +661,7 @@
     "trace TR-5"
    ],
    "file": "engine/modules/trace/src/Trace.cpp",
-   "find": "    return clock != nullptr ? clock() : ::Engine::Time::NowNs();",
+   "find": "    return clock != nullptr ? clock() : ::GYO::Engine::Time::NowNs();",
    "replace": "    return clock != nullptr ? clock() : 0;",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 4: S4-1*",

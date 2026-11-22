@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace Engine::Os::Detail {
+namespace GYO::Engine::OS::Detail {
 
 namespace {
 
@@ -35,4 +35,4 @@ Process::LocalTime LocalTimeFromCalendar(const std::tm& local, const std::time_t
             .utcOffset = std::chrono::seconds{asUtc - static_cast<std::int64_t>(time)}};
 }
 
-} // namespace Engine::Os::Detail
+} // namespace GYO::Engine::OS::Detail

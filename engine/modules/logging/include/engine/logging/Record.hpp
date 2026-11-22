@@ -92,7 +92,7 @@ struct Record final {
     std::string_view category;
     std::string_view text;
     WallTime wall;
-    // The engine time base (Engine::Time::NowNs) when the record was written.
+    // The engine time base (GYO::Engine::Time::NowNs) when the record was written.
     std::int64_t monoNs{};
     // The World, when the record came from one (Forward, TakeKernelDiagnostics).
     std::string_view world;

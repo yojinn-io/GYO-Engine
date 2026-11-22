@@ -119,7 +119,7 @@ struct WorldLife {
     }
 };
 
-inline K::SystemResult Fail(K::KernelError error) { return ::Engine::Base::Err(std::move(error)); }
+inline K::SystemResult Fail(K::KernelError error) { return ::GYO::Engine::Base::Err(std::move(error)); }
 
 // ---- Systems
 
@@ -262,7 +262,7 @@ inline void InsertAccelerate(K::Registrar& r) { r.AddSystem<&Accelerate>(In("Acc
 
 // The description's prepare: defaults that never overwrite what is there (a
 // carried value), the allotter range [1, last], the life marker.
-inline ::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w) {
+inline ::GYO::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w) {
     if (w.Resource<KeyBindings>() == nullptr) w.SetResource(KeyBindings{0});
     w.SetResource(K::RangeAllotter::Of(1, kLast));
     w.SetResource(WorldLife{});
@@ -306,7 +306,7 @@ inline SaveData MakeSave(const K::World& w) {
 // The extra prepare of a load (S1-6): the save, the allotter's lower bound at
 // the save's next number, the score's default.
 inline O::PrepareFn LoadInto(SaveData save) {
-    return [save](K::World& w) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    return [save](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(save);
         w.SetResource(K::RangeAllotter::Of(save.next, kLast));
         w.SetResource(Score{0});
@@ -320,7 +320,7 @@ inline O::PrepareFn LoadInto(SaveData save) {
 // load is the author's job (DI-KS 18, "a direct insert does not look at the
 // allotter"; v8-arch-gyo2-direct-insert-no-allotter-range).
 inline O::PrepareFn LoadForgettingTheLowerBound(SaveData save) {
-    return [save](K::World& w) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    return [save](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         SaveData rest = save;
         rest.hasPlayer = false;
         w.SetResource(rest);

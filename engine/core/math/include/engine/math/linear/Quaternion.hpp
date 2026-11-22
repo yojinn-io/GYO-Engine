@@ -7,7 +7,7 @@
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // xyzw order; the default is the identity rotation. Rotations follow the
 // left-handed basis: a positive angle about +Y turns +Z toward +X.
@@ -103,4 +103,4 @@ static_assert(std::is_aggregate_v<Quaternion>);
     return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) && std::isfinite(q.w);
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

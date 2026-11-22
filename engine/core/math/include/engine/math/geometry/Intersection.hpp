@@ -10,7 +10,7 @@
 #include "engine/math/geometry/Sphere.hpp"
 #include "engine/math/geometry/Triangle.hpp"
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Pure geometric ray intersections. Each returns the smallest t >= 0 at which
 // the ray meets the primitive (t in units of |direction|, see Ray), or nullopt.
@@ -100,4 +100,4 @@ namespace Engine::Math {
     return t;
 }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

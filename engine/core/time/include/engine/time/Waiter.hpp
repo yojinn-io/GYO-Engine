@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace Engine::Time {
+namespace GYO::Engine::Time {
 
 // The platform mechanism behind a Waiter. A plain waitable timer means the
 // high-resolution one was not available on this Windows version.
@@ -74,4 +74,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace Engine::Time
+} // namespace GYO::Engine::Time

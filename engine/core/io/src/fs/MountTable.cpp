@@ -1,5 +1,5 @@
 #include "engine/io/fs/MountTable.hpp"
 
-namespace Engine::IO::FS {
+namespace GYO::Engine::IO::FS {
 
 }

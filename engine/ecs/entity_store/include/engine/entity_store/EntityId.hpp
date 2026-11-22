@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace Engine::EntityStore {
+namespace GYO::Engine::EntityStore {
 
 // The key of every column element (docs/architecture/entity-store.md, Design
 // Invariant 1). The caller gives every value: the store never allots, recycles
@@ -10,4 +10,4 @@ namespace Engine::EntityStore {
 // may give 0 or any other value a meaning; the store does not.
 using EntityId = std::uint64_t;
 
-} // namespace Engine::EntityStore
+} // namespace GYO::Engine::EntityStore

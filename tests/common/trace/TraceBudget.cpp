@@ -53,9 +53,9 @@ std::vector<Round> Measure(const int warmup, const int perRound, F&& call) {
     std::vector<std::int64_t> samples(static_cast<std::size_t>(perRound));
     for (int r = 0; r < 5; ++r) {
         for (int i = 0; i < perRound; ++i) {
-            const std::int64_t start = ::Engine::Time::NowNs();
+            const std::int64_t start = ::GYO::Engine::Time::NowNs();
             call();
-            samples[static_cast<std::size_t>(i)] = ::Engine::Time::NowNs() - start;
+            samples[static_cast<std::size_t>(i)] = ::GYO::Engine::Time::NowNs() - start;
         }
         std::sort(samples.begin(), samples.end());
         rounds.push_back({samples[static_cast<std::size_t>(perRound / 2)], samples[static_cast<std::size_t>(perRound * 99 / 100)]});
@@ -79,7 +79,7 @@ void Print(const char* name, const std::vector<Round>& rounds) {
 }
 
 void OneSpan() {
-    ::Engine::Base::TraceSpan span;
+    ::GYO::Engine::Base::TraceSpan span;
     span.Begin("kernel", "MoveRacer", "Match");
 }
 
@@ -128,7 +128,7 @@ std::unique_ptr<O::Product> Twenty() {
             s.Registrar().AddSystem<&Count>(std::move(o));
         }
     };
-    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+    w.prepare.push_back([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(Counter{});
         return {};
     });

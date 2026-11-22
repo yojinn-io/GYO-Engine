@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <type_traits>
 
-namespace Engine::Math {
+namespace GYO::Engine::Math {
 
 // Integer vectors for grid cells, pixel coordinates and counts. Exact, so
 // equality is provided (float vectors deliberately have none).
@@ -36,4 +36,4 @@ static_assert(std::is_aggregate_v<Vec2i> && std::is_aggregate_v<Vec3i>);
 }
 [[nodiscard]] constexpr Vec3i operator-(const Vec3i a) noexcept { return {-a.x, -a.y, -a.z}; }
 
-} // namespace Engine::Math
+} // namespace GYO::Engine::Math

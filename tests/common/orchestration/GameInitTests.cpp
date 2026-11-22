@@ -217,7 +217,7 @@ bool& InitBreaks() {
 }
 
 K::SystemResult BreaksInit(K::Query<K::Read<Tag>>) {
-    if (InitBreaks()) return Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "game initialization breaks"));
+    if (InitBreaks()) return GYO::Engine::Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "game initialization breaks"));
     Log().push_back("init");
     return {};
 }
@@ -241,7 +241,7 @@ TEST_CASE("O-1: D10: game initialization fails on the new first World of a Build
     auto built = O::Product::Build(std::move(d), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
-    auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> Engine::Base::Result<void, O::OrchestrationError> {
+    auto replaced = p.ReplaceWorld("Main", O::ReplaceRequest{[](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         InitBreaks() = true;  // only the new World's game initialization breaks
         return {};
     }});

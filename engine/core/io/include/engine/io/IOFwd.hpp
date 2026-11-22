@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Engine::IO {
+namespace GYO::Engine::IO {
 
     namespace Path {
         class Path;
@@ -21,4 +21,4 @@ namespace Engine::IO {
         class Vfs;            // optional
     } // namespace FS
 
-} // namespace Engine::IO
+} // namespace GYO::Engine::IO

@@ -5,7 +5,7 @@
 #include <atomic>
 #include <cstdint>
 
-namespace Engine::Base {
+namespace GYO::Engine::Base {
 
 // Issues numbers from one source. Every Next() of one IdIssuer returns a
 // number no earlier Next() of it returned while the program runs: numbers are
@@ -44,4 +44,4 @@ inline constinit thread_local std::uint64_t threadSerial = 0;
     return Detail::threadSerial;
 }
 
-} // namespace Engine::Base
+} // namespace GYO::Engine::Base
