@@ -45,6 +45,7 @@ struct Peer final {
 // Hashes nothing: a Peer is the network's state, not World state two runs must agree on (its connection id is
 // random).
 inline void HashValue(Kernel::Hasher&, const Peer&) {}
+static_assert(Kernel::Detail::kStorable<Peer>, "Peer is an ECS component: nothrow movable (W-8)");
 
 // A retained message: a connection was made (peer is its entity).
 struct PeerConnected final {

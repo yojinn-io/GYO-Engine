@@ -39,6 +39,7 @@
 #include "engine/kernel/TypeKey.hpp"
 #include "engine/kernel/World.hpp"
 #include "engine/net/Codec.hpp"
+#include "engine/net/FlatMap.hpp"
 #include "engine/net/NetService.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
@@ -164,9 +165,9 @@ struct PendingPart final {
     std::vector<Kernel::EntityId> entities;
 };
 struct PeerLedger final {
-    std::map<Kernel::EntityId, LedgerEntity> entities;
+    FlatMap<Kernel::EntityId, LedgerEntity> entities;
     // Value parts sent and not confirmed, by (tick << 16) | part.
-    std::map<std::uint64_t, PendingPart> pending;
+    FlatMap<std::uint64_t, PendingPart> pending;
     std::uint32_t lastStructureTick = 0;
     std::optional<std::uint32_t> lastSentTick;
     // Raised by the client's resync (its World was replaced): older messages are ignored there.
@@ -322,7 +323,7 @@ struct PeerInput final {
         T value{};
         ViewTime view;
     };
-    std::map<std::uint32_t, Slot> slots;
+    FlatMap<std::uint32_t, Slot> slots;
     // The newest tick consumed (the server's window starts after it), and the last value written (held when a
     // slot is missing).
     std::optional<std::uint32_t> consumedThrough;
@@ -336,12 +337,20 @@ struct PeerInput final {
 };
 template <class T>
 inline void HashValue(Kernel::Hasher&, const PeerInput<T>&) {}
+static_assert(Kernel::Detail::kStorable<PeerInput<int>>, "PeerInput<T> is an ECS component: nothrow movable (W-8)");
 
 // The entity a Peer controls (written by the product; the network does not know the player, P12).
 struct PeerControls final {
     Kernel::EntityId entity = 0;
 };
 inline void HashValue(Kernel::Hasher& h, const PeerControls& v) { HashValue(h, v.entity); }
+
+// W-8 for every ECS component of the net Module, checked where they are defined. libc++ and libstdc++ move std::map
+// without throwing and MSVC does not, so a node container in a component compiles here and fails only on Windows:
+// the components hold FlatMap and std::vector instead (FlatMap.hpp), and these asserts keep the rule visible.
+static_assert(Kernel::Detail::kStorable<PeerLedger>, "PeerLedger is an ECS component: nothrow movable (W-8)");
+static_assert(Kernel::Detail::kStorable<PeerControls>, "PeerControls is an ECS component: nothrow movable (W-8)");
+static_assert(Kernel::Detail::kStorable<FlatMap<std::uint32_t, int>>, "FlatMap must stay nothrow movable (W-8)");
 
 // The options of an input type.
 template <class T>
