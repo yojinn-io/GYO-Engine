@@ -1,6 +1,11 @@
 # 事前宣告：網路 Module（`v8-arch-gyo2-net-module`）
 
-狀態：修訂 1。修訂 0 經敵對式檢查（Fable／high：擋核准 5、應改 12、小事 5），處理對照在第 15 節。**待使用者動工前核准。**
+狀態：修訂 2。
+- 修訂 0 經敵對式檢查（Fable／high：擋核准 5、應改 12、小事 5），處理對照在第 15 節。
+- 修訂 1 經窄複查（Fable／high：擋核准 2、應改 5、小事 2），處理對照在第 16 節。
+- 修訂 2 加了狀態機卡轉來的「狀態怎麼複製到 Client」（Q8）。
+
+**待使用者動工前核准。**
 
 性質：批次表第 6 列「網路 Module」的事前宣告（AGENTS §2 基盤 Architecture、§3 Architecture Delta、§4 系譜）。網路是機制、在搬產品之前做（`v8-arch-gyo2-net-is-mechanism-first`）；開卡：`v8-arch-gyo2-next-batches-start`（2026-11-22「網路 Module 可以開卡做了。」）。
 
@@ -31,9 +36,10 @@
   - Match 跑完後，網路把這一步改過的值送給每個 Client：
     - 生成、刪除、加減元件走可靠有序；
     - 值走不可靠、只送最新的，每個 tick 都送一則（沒變也送空的）。
-- **Client 收到**：
-  - 不模擬的 Client（例：觀戰、只顯示）把值直接寫進 World。
-  - 模擬的 Client 把權威值寫進 `RollbackInbox`，收齊後說「第 100 步以前都收齊了」，回滾 Module 比對、重跑。
+- **Client 收到**（Client 分三種，D-5）：
+  - 只顯示的 Client（例：觀戰）：把值直接寫進 World。
+  - 模擬但不回滾的 Client：本機照跑，收到的值直接蓋上。
+  - 模擬又回滾的 Client：權威值寫進 `RollbackInbox`，收齊後說「第 100 步以前都收齊了」，回滾 Module 比對、重跑。
   - 「門開了」「誰擊殺了誰」這類事件走可靠的事件串流，不會比它指到的實體先到。
 - **斷線**：
   - 資料流本身就是心跳。一陣子收不到就進「中斷」，再久就斷線。
@@ -150,7 +156,7 @@
 | 預測與回滾 | 單一 entity：live 值＋`ConfirmedHistory`＋`PredictionHistory` | 不做，留 `ConfirmHistory`、receive marker | 只回滾這次有更新的 ghost；上限 64 tick | — | GYO 的回滾 Module 已做（R-8） | 網路只寫 `RollbackInbox` |
 | 單機的成本 | prediction 用 `run_if` 關 | 送只在 `ServerState::Running`、收只在 `Connected`；單機什麼都不跑 | — | — | **不選角色＝什麼都不登記** | — |
 | 握手與協議檢查 | netcode.io：Request→Challenge→Response→KeepAlive | `ProtocolHash`（型別名與順序） | 四個 hash 不符斷線：「別讓不相容的版本玩到一半才爆」 | — | **比雜湊、拒絕寫理由** | 比 GYO 自己的項目（F15） |
-| 只複製元件 | 元件 | 元件 | ghost＝entity | — | **只複製元件，Resource 不複製**；全局的狀態（計分）放在一個實體上 | — |
+| 複製的單位 | 元件 | 元件 | ghost＝entity | — | **元件的複製** | Resource 形的狀態（狀態機）三家都沒有：Q8 |
 | host 模式 | HostClient | 不在同一個 world 同時跑 client 與 server（延遲的資料會蓋掉最新值） | single-world／binary-worlds host | — | 記錄，不做（沒點名） | — |
 
 **master 的結構與坑**（只取結構，P9；`recon-master-structure.md`）：
@@ -185,7 +191,9 @@
 
 - 網路 Module 裡的傳輸層是**純的狀態機**：輸入是「收到的 datagram＋現在的時間」，輸出是「要送的 datagram」。不碰 socket、不讀時鐘。
 - 測試用記憶體裡的 Link，加可重現的掉包、重複、亂序（種子固定），並計數它丟了幾個。
-- 標頭照 lightyear 的五欄，加魔數、協議版本、World 世代；packet id 只增，重送在訊息層；ack＋32 位元 bitfield；分片；MTU 預設 1200。
+- 標頭照 lightyear 的五欄，加魔數、協議版本、**連線識別**（握手產生的隨機 32 位元）、World 世代。
+  - packet id 只增，重送在訊息層；ack＋32 位元 bitfield；分片；MTU 預設 1200。
+  - 連線識別不符的 datagram（例：同一個位址上舊連線還在飛的包）丟掉並計數。
 - 通道兩種：Unreliable、Ordered Reliable。
 - **系譜**：lightyear 的 transport（Gaffer 式，它自做）；Unity 用自家的 Unity Transport；replicon 不做。
 - **退掉的**：
@@ -199,7 +207,8 @@
 - **Link**（interface）：送 datagram 給某個遠端、收 datagram（帶來源）、連線的狀態。第一個實作是 UDP，測試用記憶體裡的 Link。WebSocket、Steam 等是另一個 Link。
 - **一套內部協議**：Link 之上只有一種標頭、通道、訊息的格式。Client 從哪個 Link 進來，Match 看到的都一樣。這是「外部多種 Client、內部一套抽象協議」。
 - **無狀態的邊緣**：Link 只有 bytes 與連線狀態。
-  - 去重、重送、可見性的決定在 Match World 裡的 **Peer 實體**（P12），用網路自己的元件：帳本、可見性、輸入緩衝。
+  - 去重、重送、可見性的決定在 Match World 裡的 **Peer 實體**（P12），用網路自己的元件：帳本、可見性、輸入緩衝、控制的實體。
+  - Client World 裡也有一個 Peer 實體，代表它對 Match 的那條連線：帶本機的輸入緩衝與控制的實體，所以兩端的入口 System 讀寫同一組元件（D-11）。
   - 這些元件不是判定資料（不進權威登記、不進 digest 與指紋），是網路自己可以重建的狀態（AGENTS §3）。
 - **傳輸物件**（暫名 `NetTransport`：Link 們、連線表）放 Product 一份的共用處（O-15），網路 Module 在 `Configure` 建。
 - **接線**（P11）：
@@ -237,6 +246,7 @@
   - 握手時 Match 帶自己的配發器範圍，Client 檢查自己 World 的範圍和它不重疊；重疊就拒絕（`IdRangeOverlap`，寫明兩個範圍）。
   - 範圍判斷讀 World 的 `RangeAllotter` Resource；作者換了別的配發器時，由作者用網路的選項給出範圍。
 - **為什麼能同號**：`RangeAllotter` 單調、不重用（EI-2）。同一個編號不會先後指兩個實體，所以進出可見性用同一個編號安全。重連另換新的 World（D-8），也安全。
+  - Match 換成別的配發器（例：會回收編號的）時，「不重用」由作者保證；回收的話，Client 可能把新實體當成舊的。
 - **好處**：
   - 元件裡存 `EntityId` 的欄位不用每個型別寫對映函式。C++ 沒有反射，對照表要每個作者替每個元件寫 `MapEntities`，這就是「機制分散在各個實作裡」。
   - `RollbackInbox`、digest、日誌在兩端講同一個編號。
@@ -248,7 +258,8 @@
 ### D-5 複製（伺服器 → Client）
 
 - **登記**：網路 Module 自己的入口（統合 :603「要不要複製是網路 Module 自己的登記」）。
-  - 寫法：`NetEntry(s).Replicate<T>(name, options)`，`options` 帶編碼函式與範圍。只登記元件，Resource 不複製（三家都是）。
+  - 寫法：`NetEntry(s).Replicate<T>(name, options)`，`options` 帶編碼函式與範圍。
+  - 元件照本節。Resource 形的狀態（狀態機、作者的判定 Resource）怎麼到 Client 是 Q8；三家都只複製元件。
   - 數值與 enum 有預設的編碼；其他型別由作者給編碼函式，不用位元組照抄（padding 不上 wire）。
 - **wire id 與協議雜湊**：wire id 是登記的順序；協議雜湊由名字、順序、編碼的版本算出，握手時比。
 - **結構與值**：照 replicon。
@@ -264,15 +275,20 @@
 - **World 世代**：Match 的 World 被替換（`ReplaceWorld`）時世代加一，標頭帶它。
   - Peer 實體在舊 World 裡，隨 World 一起沒了；新 World 裡由網路重建 Peer 實體、帳本從空開始，所以重送整份。
   - Client 收到新世代：丟掉舊世代的訊息，並發一則網路的訊息「伺服器換了 World」。換不換 Client 的 World 由產品決定（錯誤與事件只告訴外面發生了什麼）。
-- **Client 怎麼寫進 World**（收件的套用點，`First`）：
-  - **不模擬的 Client**（World 沒有權威策略）：結構更新用 `SpawnWithId`、加減元件；值直接寫進元件。
-  - **模擬的 Client**（World 選了伺服器權威＋回滾）：
-    - 值寫 `RollbackInbox::Value`／`Removed`；
-    - 實體的出現與消失寫 `Entered`／`Exited`；
-    - 照 D-7 寫 `ConfirmedThrough`；
-    - **不在 `First` 直接加減可回滾的元件**（R-2 前提 5：可回滾的資料只被步與入口寫）。
-    - 要改回滾的已核准文字（第 5 節），第 4 步開工前另給使用者看。
-  - 收件、送件的 System 只在一端：標 `authority.OneEndOnly`（統合 L23）。
+- **Client 怎麼寫進 World**（收件的套用點，`First`）。Client 分三種，由 World 選的策略決定：
+
+  | Client | World 的選擇 | 登記 | 結構與值怎麼寫 | 比指紋 |
+  |---|---|---|---|---|
+  | K1 只顯示 | 沒有權威策略、沒有權威登記 | 網路不經權威登記任何東西（入口與收件 System 直接 `AddSystem`；否則是 AU-E2） | `SpawnWithId`、加減元件；值直接寫進元件 | 不比 |
+  | K2 模擬、不回滾 | 伺服器權威、沒有回滾策略（權威頁「不預測的 Client」） | 照權威登記 | 同 K1；本機的模擬寫的判定資料被收到的值蓋掉 | 比 |
+  | K3 模擬、回滾 | 伺服器權威＋回滾 | 照權威與回滾登記 | 見下 | 比 |
+
+  **K3 的寫法**：
+  - 登記成可回滾的元件（`RollbackRegistry` 裡有的）：值寫 `RollbackInbox::Value`／`Removed`，實體的出現與消失寫 `Entered`／`Exited`，照 D-7 寫 `ConfirmedThrough`。**不在 `First` 直接加減可回滾的元件**（R-2 前提 5：可回滾的資料只被步與入口寫）。
+  - 不可回滾的複製元件（表現用、`NoRollback`）：直接寫進元件，同 K1。
+  - 輸入元件：遠端玩家的輸入本線不送（Q7「遠端輸入」）。Client 上只有本機玩家的輸入，由入口寫（D-11）。
+  - 要改回滾的已核准文字（第 5 節），第 4 步開工前另給使用者看。
+- 收件、送件的 System 只在一端：K2、K3 標 `authority.OneEndOnly`（統合 L23）；K1 沒有權威登記，不用標。
 - **系譜**：replicon 的 Updates／Mutations、`ClientTicks`、`MutationAcks`、`track_mutate_messages`；lightyear 的 Actions／Updates。
 - **退掉的**：
   - (a) Unity 的 snapshot＋baseline delta：每連線每 chunk 32 份 history，記憶體與複雜度高；GYO 沒有 chunk 的佈局可以利用。
@@ -285,8 +301,9 @@
   - 「請求」帶協議版本、網路的協議雜湊、步長、Client World 的配發器範圍、不透明的使用者 id（u64）、token 欄（先留、不驗證）、一致性指紋（Client 的 World 有權威策略時）。
   - 「接受」帶 Match 的當前 tick、步長、World 世代、Match 的配發器範圍。
 - **比對**：任何一項不同就拒絕，寫明哪一項。
-  - Client 沒有權威策略（不模擬，只收值）：不比指紋。
-  - 有權威策略：兩端的指紋要相同。
+  - K1（沒有權威策略，不模擬，只收值）：不比指紋。它不寫判定資料，指紋沒有意義。
+  - K2、K3（有權威策略）：兩端的指紋要相同。
+  - 步長放握手、不放指紋（authority 4 延到這裡的二選一）：步長是時間 Module 的設定，不是判定的 System；放握手時拒絕的理由寫得出「步長不同」。
   - 兩端都有的同名入口 System 不必標 `OneEndOnly`（D-11）。
 - **產品決定收不收**：Match 在「接受」之前問產品（E2 的回傳），產品可以拒絕（例：房間滿了）。
 - **斷線的理由**：`Closed`、`Timeout`、`ClosedByRemote`、`ProtocolMismatch`（帶哪一項）、`FingerprintMismatch`、`StepLengthMismatch`、`IdRangeOverlap`、`HandshakeTimeout`、`Refused`。斷線冗餘送幾包（次數在第 1 步從參考實作推）。
@@ -328,7 +345,7 @@
   - 產品先換一個新的 Client World（`ReplaceWorld`），再用同一個使用者 id 握手。網路給一則「斷線了」的訊息，不替產品換。
   - 新 World 裡沒有舊的複製實體、回滾沒有舊歷史（R-5），Match 會重送整份。
   - 斷線期間 Match 刪掉的實體不會殘留。舊的編號不會被 `SpawnWithId` 撞到（DI-KS 18）。
-  - Client 重新對時。舊連線的輸入用窗擋掉、計數（C-IN1）。
+  - Client 重新對時。舊連線還在飛的 datagram，因連線識別不符被丟、計數（D-2）。
   - Player 怎麼接回來，由產品依使用者 id 決定（P15）。
 - **系譜**：lightyear（重新 Connect、sync reset）、replicon（新 client 的 ticks 空、整份重送）；讀檔一律在新的 World（restore-entry，使用者 11-16）。
 - **退掉的**：
@@ -374,10 +391,12 @@
   - 伺服器權威要替**元件**的輸入代為登記輸入紀錄。現在只對 Resource 做（`authority.zh-Hant.md:101`）。
   - 回滾要支援元件的輸入紀錄：每個實體按 tick 一份，重跑每一步前寫回（`Registrations.hpp:314` 只有 Resource）。
   - 兩個都是延伸、不改既有的契約，列在第 5 節。
-- **入口 System**：網路 Module 在兩端都掛同一個名字、同樣存取、同樣掛載的入口 System（經 `authority.Ingress`，重跑時不跑）。
-  - Match：從 Peer 實體的輸入緩衝取第 T 格，寫進那個 Peer 控制的實體。
-  - Client：從產品放進網路的「本機的輸入」取第 T 格，寫進本機玩家的實體，同時放進待送。
-  - 兩端的 System 相同，所以一致性指紋相同。資料從哪裡來（World 外）不同，不進指紋。
+- **入口 System**：網路 Module 在兩端都掛同一個名字、同樣存取、同樣掛載的入口 System。
+  - 有權威策略的 World 經 `authority.Ingress`（重跑時不跑）；K1 直接 `AddSystem`。
+  - **兩端讀寫同一組元件**：讀 Peer 實體上的輸入緩衝 `PeerInput<T>` 與控制的實體 `PeerControls`，寫控制的實體上的 `T`（D-3：Client World 也有一個 Peer 實體）。
+  - Match：輸入緩衝由收件的 System 從 wire 填。
+  - Client：產品經網路的函式把本機的輸入放進自己的 Peer 的緩衝；入口 System 取第 T 格寫進本機玩家的實體，送件的 System 從緩衝送出。
+  - 兩端的入口 System 名字、存取、掛載都相同，所以一致性指紋相同。
 - **Client**：一包帶最後 N 步（N 在第 3 步推；系譜：lightyear 5、Unity 2+2）。單次觸發用（Peer, tick）去重（C-IN3）。每筆帶畫面的時間（C-IN2）。
 - **Match**：
   - 沒有就沿用上一步（hold-last），並計數「缺」。hold-last 是 Match 的判定的一部分，在入口 System 裡、在 Match World 裡（不是副本）。
@@ -389,6 +408,19 @@
   - (a) Client 用 Resource、Match 用元件（修訂 0）：權威登記的種類兩端不同，指紋永遠不同。
   - (b) 兩端各自的入口 System 標 `OneEndOnly`：指紋就看不到輸入怎麼進判定，失去指紋的意義。
 - **需要它的**：F1、F2、F5（Match、Client）。
+
+### D-13 只在一端跑的遊戲邏輯（F20、F21 (a)）
+
+- 例：生成門、生成召喚物的 System 只該在 Match 跑。
+- 寫法：**兩端都登記同一個 System，加網路給的執行條件** `OnServer()`（另有 `OnClient()`）。條件讀 World 的角色 Resource。
+  - 兩端的登記與條件的名字相同，所以一致性指紋相同；在 Client 上它不跑。
+  - 不用 `OneEndOnly`。`OneEndOnly` 拿來標一般的遊戲邏輯，會觸發權威 RC 5（「作者要為了過檢查而標記一般的遊戲邏輯」）。
+- **代價**：Client World 裡多一個永遠不跑的 System。
+- **系譜**：lightyear 依 `NetworkTopology` 的 run condition；replicon 的 `ServerState`／`ClientState` 條件。
+- **退掉的**：
+  - (a) 只在 Match 登記：指紋不同，握手一律拒絕。
+  - (b) 標 `OneEndOnly`：觸發權威 RC 5。
+- **需要它的**：F20、F21 (a)（Match、Client）。
 
 ### D-12 丟棄與診斷
 
@@ -421,10 +453,12 @@
    |---|---|---|---|
    | 新 Module `engine/modules/net` | 新 Subsystem、Build Graph、登記檔多一列 | 1 | 本宣告 |
    | `core/os` | 公開介面加 UDP socket；os.md 的 Out of scope 與 Net 列改寫（DI 7 不變） | 0 | **Q5** |
-   | 回滾 Module | 元件的輸入紀錄（新的登記，不改 R-1 的掛點） | 3 | 本宣告 |
+   | 回滾 Module | 元件的輸入紀錄：新的登記，不改 R-1 的掛點；R-6 的「六種登記」多一種、只認 Resource 的 `InputRecord` 要延伸（`Registrations.hpp:314`） | 3 | 本宣告 |
    | 權威 Module | 元件輸入的代為登記（`authority.zh-Hant.md` 第 4 節的限界那一條改寫） | 3 | 本宣告 |
    | 時間 Module | 對時的倍率入口、前跳 k 步；WT-3、WT-6 的文字 | 3 | 第 3 步開工前給文字 |
    | 回滾 Module | 實作 `Entered`、`Exited`、`NotSent`；**改 R-8 的已核准文字**（「只看 C 當時存活」要加「進入、退出由呼叫者明說時照它」）與限界（「步外生成要不要回滾，等 Client 那一批」由本線回答：網路生成的走 `Entered`） | 4、5 | 第 4 步開工前給文字 |
+   | 回滾 Module（Q8 選 (b) 時） | 入口收 Resource 的權威值（改 rollback 限界「Resource 本批只從歷史還原」） | 4 | **Q8** |
+   | 狀態機 Module（Q8 選 (b) 時） | `RequestSilent` 與兩個套用函式（狀態機修訂 8 第 2.1 節留給本線） | 2 | **Q8** |
    | entity_ids、編排層、Kernel | 不改 | — | — |
 
 4. **影響的**：`core/os`、world_time、rollback、authority、網路（新）。編排層、Kernel、entity_ids 不改。現有產品沒有（`gyo2` 上沒有產品）。
@@ -495,12 +529,12 @@
 | G-2 傳輸 | 測試 Link 掉包 20%、重複 10%、亂序（種子固定，10 000 則）：<br>• Ordered Reliable 每則恰好一次、照順序；<br>• Unreliable 不交出重複的；<br>• 分片的訊息只在全到時交出 | **件數的突き合わせ**：送的＝交出的＋各理由的丟棄計數＋測試 Link 注入的掉包數，逐項相等 | 1 |
 | G-3 握手 | 協議版本、協議雜湊、步長、配發器範圍、指紋（有權威策略時）各自不同時，回對應的理由；挑戰回錯拒絕；產品拒絕回 `Refused`；沒有權威策略的 Client 不比指紋 | 每個案例只改一項 | 1 |
 | G-4 存活 | 雙向有資料時不送 keepalive；閒置時照設定的間隔送；收不到時，超過第一個門檻進「中斷」，超過第二個進「斷線（Timeout）」 | 時間由測試給（傳輸層不讀時鐘）；在門檻前一刻與後一刻各看一次 | 1 |
-| G-5 複製（不模擬的 Client） | 伺服器的 World 跑 N 步：生成、刪除、加減元件、改值、實體互指、地圖實體（F20）、事件。Client 經有損的 Link 收 | (1) **每次 D-7 的兩個條件對某個 tick T 成立時**（不模擬的 Client 也算，只是不寫入口），Client World 的複製元件（逐型別逐實體）和實體編號集合，等於測試替伺服器記下的第 T 步；<br>(2) 結束時伺服器停止變動，Link 排空、全部確認後再比一次；<br>(3) 事件交出時，它指到的實體在 Client 已經存在；<br>(4) 件數對上 | 2 |
+| G-5 複製（K1 只顯示的 Client） | 伺服器的 World 跑 N 步：生成、刪除、加減元件、改值、實體互指、地圖實體（F20）、事件。Client 經有損的 Link 收 | (1) **每次 D-7 的兩個條件對某個 tick T 成立、而且當時還沒套用過任何 tick > T 的值或結構時**（K1 也算，只是不寫入口），Client World 的複製元件（逐型別逐實體）和實體編號集合，等於測試替伺服器記下的第 T 步。這種時點要佔全部 tick 的 10% 以上，不到就是「觀測不成立」：停下回報，不放寬；<br>(2) 結束時伺服器停止變動，Link 排空、全部確認後再比一次；<br>(3) 事件交出時，它指到的實體在 Client 已經存在；<br>(4) 件數對上 | 2 |
 | G-6 輸入 | 掉包下，Match 在每個 tick 拿到的輸入等於 Client 送的（冗餘蓋得住的範圍內）；超出的沿用並計數；已消耗與窗外的丟並計數；單次觸發只觸發一次 | 測試記下 Client 每 tick 送的與 Match 每 tick 入口寫的，逐 tick 比；件數對上 | 3 |
 | G-7 UDP | loopback 上 G-3、G-5 的縮小版通過；Windows 送給沒在聽的位址之後，收件不中斷 | 三平台 L1 | 0、1、2 |
 | G-8 大小 | 固定情境的每 tick、每 Peer 位元組數 | 兩次執行逐位元組相同；數字記錄，選定預算後（Q7）再判 | 2、3 |
-| G-9 重連 | 斷線後產品換新 World、新連線 | Match 重送整份；Client 在確認後和 Match 相同（G-5 的方法）；斷線期間 Match 刪掉的實體不在 Client；舊連線的輸入被擋、計數 | 3 |
-| G-10 模擬的 Client | 選回滾的 Client，對一個確定性的 2D 樣本 | 情境最後一段（≥ 回滾深度的步數）所有玩家的輸入不變：結束時 Client 在它的第 P 步的 `Digest` 等於 Match 記下的第 P 步的 `Digest`；網路生成的實體回滾到它出生之前不被刪掉（`Entered`）；件數對上 | 4 |
+| G-9 重連 | 斷線後產品換新 World、新連線 | Match 重送整份；Client 在確認後和 Match 相同（G-5 的方法）；斷線期間 Match 刪掉的實體不在 Client；舊連線還在飛的 datagram 因連線識別不符被丟、計數 | 3 |
+| G-10 模擬的 Client | 選回滾的 Client，對一個確定性的 2D 樣本 | 前提：情境最後一段（≥ 回滾深度的步數）所有玩家送的都是預設的輸入值。遠端玩家的輸入本線不送，Client 上它們的輸入元件一直是預設值；最後一段讓兩端相同。結束時 Client 在它的第 P 步的 `Digest` 等於 Match 記下的第 P 步的 `Digest`；網路生成的實體回滾到它出生之前不被刪掉（`Entered`）；件數對上 | 4 |
 | G-11 相關性 | 看不到的實體不送；再看到時用同一個編號；私人元件只送給指定的 Peer；模擬的 Client 不把 `NotSent` 當「沒變」 | 逐 Peer 記下收到的實體與元件，對照測試給的可見性規則 | 5 |
 
 - **scenario test**：第 2 步起加一段「伺服器＋兩個 Client」（2D 樣本，`v8-arch-gyo2-migration-needs-consent` 允許自建樣本）。綁實作方式的守衛在那段通過之後立（AGENTS §3）。
@@ -578,10 +612,44 @@
 | WebSocket、瀏覽器 Client | 不做 | Link interface |
 | 執行中的 digest 比對 | 不做，只在測試比（G-10） | — |
 | 內插 | 不做；PvP Client 移植時再問 | F2 的欄位不依賴它 |
-| F21 (b) 預先生成 | 不做；作者讓生成的 System 只在 Match 跑（F21 (a)） | — |
+| F21 (b) 預先生成 | 不做；作者用 `OnServer()` 讓生成的 System 只在 Match 跑（F21 (a)、D-13） | — |
+| 遠端玩家的輸入送給 Client（lightyear 的 rebroadcast） | 不做；遠端玩家在 Client 上用預設的輸入預測，靠權威值修正 | 輸入的形狀兩個方向都能用 |
 | 地圖實體的 prespawn 最佳化 | 不做；地圖實體由 Match 生成、經複製 | — |
 | 觀戰者 | 不做 | Peer 與 Player 分開 |
 | P2P | 不做（權威是佔位） | Link 與輸入不分角色 |
+
+### Q8 Resource 形的狀態怎麼到 Client（狀態機卡轉來；含 `RequestSilent`、`Change` 參數）
+
+**用遊戲講**：聯機的天氣 `Weather` 是一個狀態機。它的值在 Resource `StateMachine<Weather>`，型別封閉，只有狀態機 Module 建得出來。伺服器在第 3600 步換成起霧，Client 的畫面要跟著起霧。作者的判定資料若放在 Resource（例：計分），也是同一個問題。
+
+**為什麼現在要定**：
+- 狀態機修訂 8（使用者 2026-11-22 核准「照建議，三件都核准，開始」）第 2.1 節把 `RequestSilent` 留到本線：Engine 的放回都有型別，網路要把線上來的值放進 World，就得有一條建出 `StateMachine<S>` 的路。
+- 窄複查 N7：只複製元件的話，`authority.Resource` 的判定資料沒辦法由伺服器校正。
+
+**要重問的舊決定**（原話在 HANDOFF）：
+- `v8-arch-gyo2-state-machine-silent-request-and-child-reset` 一：要求分兩種，`Request`（跑離開與進入）與 `RequestSilent`（不跑）。使用者比過四個選項選了它，理由「狀態機不能手動換，相當於遊戲邏輯必須完全依託於狀態機了」。
+- `v8-arch-gyo2-state-machine-silent-parent-keeps-child`：父 silent 換成同一個值時，子不動。
+- `v8-arch-gyo2-state-machine-remaining-eight` 四：(c) 區另外選「怎麼換」（權威端換／兩端同規則），例 `RegisterStateMachine<Weather>(r, 插在哪, Level::C, Change::Authority)`。
+- 同一則的七：快照蓋掉值時跑不跑離開與進入，「這個也是看遊戲設計的」。
+
+| | (a) 兩端同規則、不複製 | (b) 網路複製 Resource，型別的擁有者給套用函式（建議） | (c) 狀態機開「依快照設值」 | (d) 不複製 Resource，作者放在實體上 |
+|---|---|---|---|---|
+| 做法 | K2、K3 照同樣的規則算出狀態；K3 回滾時重算（狀態機的兩個 Resource 已登記回滾） | `NetEntry(s).ReplicateResource<T>(name, {codec, apply})`；每個 tick 的值訊息多一段單例；Client 收到時呼叫 `apply`（預設 `SetResource<T>`）。狀態機給兩個套用函式：照 `Request`（跑離開與進入）、照 `RequestSilent`（不跑；子不動） | 網路的套用直接建出 `StateMachine<S>`，不經套用的 System | 作者把要同步的值放在一個實體的元件上，自己寫 System 收值後 `Request` |
+| K1（只顯示）拿得到狀態嗎 | 拿不到 | 拿得到 | 拿得到 | 拿得到 |
+| 跑／不跑離開與進入（七） | 跑（本機自己換） | 作者每個狀態機選 | 不跑 | 作者自己寫 |
+| `Change` 參數（四） | 沒有路 | **移到網路的登記**：不登記複製＝兩端同規則；登記複製並選套用函式＝權威端換。狀態機不依賴網路，所以不放在 `RegisterStateMachine` | 移到網路的登記 | 沒有 |
+| 舊決定 | `RequestSilent` 不需要：推翻一；`-silent-parent-keeps-child` 用不到；四的「權威端換」沒有路 | 一、`-silent-parent-keeps-child`、七都保留；四的形狀從狀態機的登記移到網路的登記（要你同意） | 推翻一（你當時比過、沒選這個） | 同 (a)，另外每個作者自己寫轉接 |
+| K3 要改什麼 | 不改 | 回滾的入口收 Resource 的權威值（rollback 限界「Resource 本批只從歷史還原，不收權威值」要改；第 4 步） | 同 (b) | 不改 |
+| 系譜 | Bevy States（replicon、lightyear 都不複製 Resource） | 三家都沒有 Resource 的複製；套用函式的形狀照 replicon 的 `RuleFns` 的 `with_consume`（收到時由規則決定怎麼寫） | 修訂 7 前比過的「Module 開依快照設值的入口」 | replicon、lightyear 的慣例：要同步的全局狀態放在單例實體上 |
+| 代價 | 規則依賴的資料若有不同，只靠 digest 發現 | 網路多一種登記；狀態機多兩個套用函式與 silent 對子的規則 | 子的存在跟不上父 | 機制分散在每個作者 |
+
+**建議 (b)**：
+- 你 11-16 選 `RequestSilent` 的理由（「遊戲邏輯不必完全依託狀態機」）在 (b) 裡還成立。
+- 「跑不跑看遊戲設計」（七）由作者選套用函式。
+- `authority.Resource` 的判定資料也有了校正的路。
+- 和三家不同（它們不複製 Resource），所以交你。
+
+選 (b) 時：網路的 Resource 複製在第 2 步（K1、K2 直接套用）、第 4 步（K3 經回滾的入口）；狀態機的兩個套用函式與 `RequestSilent` 由兩邊誰後合併的一方做（第 14 節）。
 
 ---
 
@@ -594,7 +662,10 @@
 - `default=yes`、不選角色就沒有（D-10）：照 P20 與權威、回滾的先例。
 - 輸入在實體上、兩端同名的入口 System（D-11）：照 lightyear、Unity；為了指紋。
 - 輸入窗用 `Long`（64）：系譜 lightyear ±64、Unity 回滾上限 64。
-- 只複製元件、Resource 不複製：三家都是。
+- K1 不比指紋（D-6）：它不寫判定資料。
+- 步長放握手、不放指紋（D-6；authority 4 延到這裡的二選一）。
+- 只在一端跑的邏輯用兩端同登記＋`OnServer()` 條件（D-13）：照 lightyear、replicon 的 run condition；不用 `OneEndOnly`（權威 RC 5）。
+- 遠端玩家的輸入不送（Q7 有列）。
 - 換 World 的世代欄（D-5）、重連換新的 Client World（D-8）：照讀檔一律在新的 World 的既有決定。
 - 名字（`NetEntry`、`DatagramSocket`、`NetTransport` 等）實作時照命名規範定，這裡是暫名。
 
@@ -683,7 +754,7 @@
   - 讀檔與重連都換新的 World，用同一個 `ReplaceWorld`。
   - 範圍由產品放的 `EntityIdsOptions`，讀檔時照常蓋。
   - 網路不改它們。
-- **狀態機**（`gyo2-state-machine-r8`）：狀態機的值若是判定資料又要複製，它是元件或 Resource 的形狀會影響能不能複製（本線只複製元件）。不改它的設計；碰到時經主會話協調。
+- **狀態機**（`gyo2-state-machine-r8`）：修訂 8 第 2.1 節把 `RequestSilent`、「權威端換、Client 採用」、`Change` 參數交給本宣告（Q8）。Q8 選 (b) 時，`RequestSilent` 與套用函式改在狀態機 Module。由兩邊誰後合併的一方做，經主會話協調；本卡做的話排在第 2 步、狀態機修訂 8 合併之後。
 - **asset**（`gyo2-asset`）：都用 Product 一份的共用處、都是套用點；不碰同一批檔案。
 - **threads／io 重審**（`gyo2-threads-io-review`）：第 7 節的需求經主會話轉。
 
@@ -717,3 +788,21 @@
 | M3 | 小事 | `PartialValue`、`FromEvent` 沒交代 | 第 13 節交代 |
 | M4 | 小事 | 連線對到哪個 World | D-3：一個 Product 一個連線對到一個 World；多 World 列限界 |
 | M5 | 小事 | 第 11 節沒寫模型的理由 | 補上 |
+
+---
+
+## 16. 修訂 1 的窄複查：處理對照
+
+檢查者 Fable／high；原文 `build/evidence/gyo2-net-module/narrow-recheck-rev1-fable.md`。其餘指摘的處理，複查者查過、成立。
+
+| # | 嚴重度 | 指出的 | 處理 |
+|---|---|---|---|
+| N1 | 仍擋核准 | G-5 (1) 的觀測時點在亂序下不成立 | G-5 (1) 加條件「當時沒套用過任何 > T 的值或結構」，並要求這種時點佔 10% 以上，不到就是觀測不成立、停下回報 |
+| N2 | 仍擋核准 | 「不模擬＝沒有權威策略」和自己的權威登記衝突（AU-E2）；權威無回滾的 Client 沒寫 | D-5 把 Client 分成 K1／K2／K3，逐種寫登記、寫入、比不比指紋；K1 網路不經權威登記（直接 `AddSystem`） |
+| N3 | 應改 | 兩端「同樣存取」不成立 | Client World 也有 Peer 實體（D-3）；兩端的入口都讀 `PeerInput<T>`、`PeerControls`，寫 `T`（D-11） |
+| N4 | 應改 | K3 上不可回滾的複製元件沒有寫入路徑；遠端輸入沒寫；G-10 的前提 | D-5：不可回滾的直接寫；遠端輸入本線不送（Q7 列）；G-10 的前提改成最後一段都送預設輸入 |
+| N5 | 應改 | 只在 Match 跑會撞指紋 | 新增 D-13：兩端同登記＋`OnServer()` 條件，不用 `OneEndOnly`（權威 RC 5） |
+| N6 | 應改 | 重連沒有連線識別 | 標頭加連線識別（D-2），D-8、G-9 改成依它丟舊連線的包 |
+| N7 | 應改 | 第 9、10 節漏列；Resource 不複製的影響 | 第 10 節補 K1 不比指紋、步長放握手；Resource 形的狀態併進 Q8（和狀態機卡轉來的題目同一件） |
+| M-a | 小事 | 換配發器時「不重用」由誰保證 | D-4 補一句 |
+| M-b | 小事 | 元件輸入紀錄碰 R-6 與 `InputRecord` | 第 5 節回滾列補上 |
