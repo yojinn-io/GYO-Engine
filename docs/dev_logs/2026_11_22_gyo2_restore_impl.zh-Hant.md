@@ -21,11 +21,11 @@
 - 先生成再插入（案例 8）：`[or-restore-spawn-insert]`。
 - 既有案例只改標記字樣：金幣的 `[or-restore-gold]` 兩處期待值不同，拆成 `[or-restore-gold-startup]`／`[or-restore-gold-in-game]`；讀兩次相同加 `[or-restore-twice-same]`。判定不變。
 
-### 第 3 步：存檔版本 Module（`engine/modules/save_version`）
+### 第 3 步：存檔版本（`engine/modules/save_version`）
 
-- `SaveVersionOptions{current, oldestSupported}`、`Policy::Current()`、`Policy::Check(版本)`（收 `oldestSupported ≤ 版本 ≤ current`，否則 `PrepareFailed`＋`reporterCode` `"save-version-too-old"`／`"save-version-too-new"`）、`SaveVersionModule`（`Configure` 檢查設定、把 `Policy` 放進 Product 的共用處；`Build` 不登記任何東西）。
-- `config/modules.csv` 一列 `library_only=no`、`default=no`（第一個這樣的單位）。
-- 測試 `tests/common/save_version/`：`save_version.check`、`.configure`、`.default`（V1～V8＋設定相等的一案）。
+- 先照宣告 19.1 做成登記單位（`SaveVersionModule`：`Configure` 檢查 `SaveVersionOptions`、把 `Policy` 放進 Product 的共用處），突變 12/12 killed（`mutants-run1.log`）。
+- 合併前的設計審查 S1 之後，使用者「選(B)，照建議改」：改成純程式庫（`config/modules.csv` `library_only=yes`、`default=no`）。只留 `Policy{current, oldestSupported}`（`constexpr`）、`Current()`、`Check(版本)`（收 `oldestSupported ≤ 版本 ≤ current`，否則 `PrepareFailed`＋`reporterCode` `"save-version-too-old"`／`"save-version-too-new"`）與 `SaveVersionCodes`。標頭改名 `SaveVersion.hpp`。
+- 測試 `tests/common/save_version/`：`save_version.check`（收兩端、太舊經 `ReplaceWorld` 的 `extra`、太新、啟動時讀檔 O-E7、相等只收現在、`Current`）。
 - 舊的合成範例碼 `"save-version-unsupported"`（`OrchestrationError.hpp` 的註解、`RestoreFlowTests.cpp`、`DefectTests.cpp`）改成 `"save-version-too-old"`。
 
 ### 第 4 步：文件
@@ -43,24 +43,24 @@
 
 ## 突變的結果
 
-- 本批新的 21 個：第一輪 20/20 killed（`save_version` 12、`entity_ids` 的 `re-` 3、`orchestration` 的 `re-` 5；記錄 `mutants-run1.log`）；之後補的 `re-spawn-new-wrong-id` 1/1 killed（`mutants-run2.log`）。沒有存活、沒有 wrong_failure、沒有建置失敗。
+- 第一輪 20/20 killed（`save_version` 當時的 12、`entity_ids` 的 `re-` 3、`orchestration` 的 `re-` 5；記錄 `mutants-run1.log`）；之後補的 `re-spawn-new-wrong-id` 1/1 killed（`mutants-run2.log`）。改成純程式庫之後，`save_version` 留下的 7 個在新程式上重跑 7/7 killed（`mutants-run4-save-version-b.log`）；拿掉的 5 個（`sv-no-policy`、`sv-order-unchecked`、`sv-missing-defaulted`、`sv-default-on`、`sv-equal-refused`）守的東西已不存在（§14.5 第 7 點：機能を取り除く変更で退ける）。沒有存活、沒有 wrong_failure、沒有建置失敗。
 - 既有、殺它的測試檔被本批改過的（D184）：`or-extra-skipped`、`or-beforeswap-skipped`、`or-prepare-failure-swaps`、`or-replace-gameinit-again`、`or-carry-not-given-back`、`g8-beforeswap-failure-swaps`（`RestoreFlowTests.cpp` 改了標記字樣）、`ei-not-default`（`config/modules.csv` 多一列）：7/7 killed（`mutants-run3-existing.log`）。
 - 第一次跑之前，突變清單經 Fable／high 對抗檢查（§14.2）：四個存檔版本突變的標記前面有不帶標記的 `REQUIRE_FALSE` 先中止（會被算成存活），把標記掛到先判的那一行；`Configure` 的 `>`→`>=`、碼的字串值兩處存活，補案例「設定相等」與突變 `sv-equal-refused`、`sv-codes-equal`，測試改和字面比；`[sv-buffer-policy]` 拆成兩個。
 
 ## 加的突變（§14.5 第 8 點）
 
-共 21 個，每個都寫了它獨抓的誤り與 `guards`：
+最後共 16 個，每個都寫了它獨抓的誤り與 `guards`：
 - `entity_ids`（真 `RangeAllotter`，宣告 18.2 第 1 件）3 個：`re-owns-always`、`re-owns-never`、`re-allot-stays`。`Of` 忽略下界不另立（就是既有的 `sc-lower-bound-not-moved`）。
 - Kernel（讀檔形狀的案例抓）6 個：`re-spawn-cells-no-onadd`、`re-hook-spawn-lost`、`re-spawn-stamp-one`、`re-insert-before-spawn`、`re-resmut-write-lost`、`re-spawn-new-wrong-id`。「拿掉範圍檢查」「同一記錄者留最後一筆」「不同記錄者留一筆」不另立（`sr-dropped-made-alive`、`sr-keep-last`、`sr-two-emitters-keep-first`）。
-- `save_version` 12 個。
-- README 第 8 點的門檻：本批改的 Design Invariants 是新頁 SV-1～SV-3（3 條 × 5＝15）。存檔版本 12 個在門檻內；讀檔的 9 個守的是宣告的判定（18.3），不是 Design Invariants 的條文。合計 21 個超過 15，合併前核准時說明。
+- `save_version` 7 個（改成純程式庫前是 12 個，拿掉 5 個，見上）。
+- README 第 8 點的門檻：本批改的 Design Invariants 是新頁 SV-1～SV-3（3 條 × 5＝15）。合計 16 個，超過 1 個：讀檔的 9 個守的是宣告的判定（18.3），不是 Design Invariants 的條文。合併前核准時說明。
 - 前綴用 `re-`（restore-entry），不用 `rs-`（Kernel 清單 registry-schedule 那一批已用）。
 
 ## 和宣告的出入
 
 - `re-insert-before-spawn` 不是「調換兩段」，是在第 5 步加條件模擬「插入在生成之前」（單一 find／replace 的限制）；和既有的 `sr-same-call-inserts-dropped` 改同一行但守不同的誤り、不同的執行檔。
 - 宣告 18.2 第 1 件的代價寫「案例 2 用到的 Engine 部分由 Kernel 既有的突變守」：查了沒有守「`Spawn::New` 回傳配到的編號」的既有突變，補 `re-spawn-new-wrong-id`（只收緊）。
-- SV-2 後半「啟用也不登記任何 World 的東西」不立守衛：它綁實作的方式（AGENTS §3「ガードを立てる時期」），由合併前的設計審查看。
+- 存檔版本改成純程式庫（使用者選 (B)），宣告 19.1、19.5、19.7、19.8 被取代的地方以 `save-version.zh-Hant.md` 為準。
 
 ## 設計審查（Fable 5.2／high，唯讀，HEAD db5178eb）
 
@@ -68,15 +68,15 @@
 
 | # | 指出 | 處理 |
 |---|---|---|
-| S1 | `save_version` 的形狀比內容重（設定→`Configure` 抄成 `Policy`→放共用處→作者再 `Find`；`Build` 空、`Policy` 建構式公開）；選項 (A) 維持、(B) 改 `library_only=yes`、只留 `Policy`＋`Check`＋兩個碼 | **交使用者**（改已核准的宣告 19.1） |
+| S1 | `save_version` 的形狀比內容重（設定→`Configure` 抄成 `Policy`→放共用處→作者再 `Find`；`Build` 空、`Policy` 建構式公開）；選項 (A) 維持、(B) 改 `library_only=yes`、只留 `Policy`＋`Check`＋兩個碼 | 交使用者，選 (B)（「選(B)，照建議改」），已改 |
 | S2 | `Check` 回 `OrchestrationError{PrepareFailed}`，runner 在替換前判時沒有準備函式 | 這批不改型別；說明頁寫明判斷看 `reporterCode` |
-| S3 | `std::as_const(...).Find` 不需要（Product 的共用處不凍結） | 等 S1 |
+| S3 | `std::as_const(...).Find` 不需要（Product 的共用處不凍結） | (B) 之後不存在 |
 | S4 | 啟動時讀檔：描述的準備每次替換都重跑；三條路的表沒有啟動時的那一條 | 說明頁補「從 World 外的待讀處拿、拿了就清」與啟動時 `RunSchedule` 一列 |
 | S5 | 說明頁寫了還沒合併的 `SetInitial` | 標明「狀態機那一批合併之後」、出處改成分支上的宣告 |
 | S6 | 新 DI 頁沒進 `target/v2/README.md` 的「給作者看的」（`entity-ids` 也漏） | 兩頁都加 |
-| S7 | 啟用方式 `gyo_product_units(... MODULES save_version)` 沒有 target 走過 | 等 S1（選 (B) 時不適用） |
-| S8 | DI 頁「會進 World 的單位」和 SV-2 矛盾 | 等 S1 |
-| S9 | 設定回報碼的寫法和鄰居（`AU-E1` 等）不同 | 等 S1 |
+| S7 | 啟用方式 `gyo_product_units(... MODULES save_version)` 沒有 target 走過 | (B) 之後不適用 |
+| S8 | DI 頁「會進 World 的單位」和 SV-2 矛盾 | (B) 之後不存在 |
+| S9 | 設定回報碼的寫法和鄰居（`AU-E1` 等）不同 | (B) 之後不存在 |
 
 ## 未結
 

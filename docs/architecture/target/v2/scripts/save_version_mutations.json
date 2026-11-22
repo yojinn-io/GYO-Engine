@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the save version Module (docs/architecture/target/v2/restore-entry-declaration.zh-Hant.md, section 19.5; Design Invariants SV-1 to SV-3 in docs/architecture/target/v2/save-version.zh-Hant.md). A mutant is killed only when the named test case fails with the expected message.",
+ "description": "Declared mutants of save versions (docs/architecture/target/v2/restore-entry-declaration.zh-Hant.md, section 19.5; Design Invariants SV-1 to SV-3 in docs/architecture/target/v2/save-version.zh-Hant.md). A mutant is killed only when the named test case fails with the expected message.",
  "mutants": [
   {
    "id": "sv-too-old-taken",
@@ -9,7 +9,7 @@
     "save-version SV-1",
     "restore-entry-declaration 19.5"
    ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
    "find": "    if (saved < oldestSupported_) return refuse(SaveVersionCodes::tooOld, \"older than the oldest supported\");\n",
    "replace": "",
    "target": "gyo_save_version_tests",
@@ -23,7 +23,7 @@
     "restore-entry-declaration 19.4",
     "restore-entry-declaration 19.5"
    ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
    "find": "if (saved < oldestSupported_)",
    "replace": "if (saved <= oldestSupported_)",
    "target": "gyo_save_version_tests",
@@ -37,7 +37,7 @@
     "restore-entry-declaration 19.3",
     "restore-entry-declaration 19.5"
    ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
    "find": "    if (saved > current_) return refuse(SaveVersionCodes::tooNew, \"newer than the current version\");\n",
    "replace": "",
    "target": "gyo_save_version_tests",
@@ -51,7 +51,7 @@
     "restore-entry-declaration 19.4",
     "restore-entry-declaration 19.5"
    ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
    "find": "if (saved > current_)",
    "replace": "if (saved >= current_)",
    "target": "gyo_save_version_tests",
@@ -65,68 +65,12 @@
     "save-version SV-3",
     "restore-entry-declaration 19.5"
    ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
+   "file": "engine/modules/save_version/src/SaveVersion.cpp",
    "find": "refuse(SaveVersionCodes::tooOld,",
    "replace": "refuse(SaveVersionCodes::tooNew,",
    "target": "gyo_save_version_tests",
    "cases": "check:*",
    "expect": "\\[sv\\-too\\-old\\].*save-version-too-new"
-  },
-  {
-   "id": "sv-no-policy",
-   "what": "Configure puts no Policy into the Product's buffer",
-   "guards": [
-    "save-version SV-2",
-    "restore-entry-declaration 19.1"
-   ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
-   "find": "    setup.Buffer().Create<Policy>(options->current, options->oldestSupported);\n",
-   "replace": "",
-   "target": "gyo_save_version_tests",
-   "cases": "check:*",
-   "expect": "\\[sv\\-buffer\\-policy\\]"
-  },
-  {
-   "id": "sv-order-unchecked",
-   "what": "Configure takes oldestSupported > current",
-   "guards": [
-    "restore-entry-declaration 19.1",
-    "restore-entry-declaration 19.5"
-   ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
-   "find": "    if (options->oldestSupported > options->current) {",
-   "replace": "    if (false) {",
-   "target": "gyo_save_version_tests",
-   "cases": "configure:*",
-   "expect": "\\[sv\\-config\\-order\\]"
-  },
-  {
-   "id": "sv-missing-defaulted",
-   "what": "Configure without SaveVersionOptions makes a default Policy instead of reporting",
-   "guards": [
-    "restore-entry-declaration 19.1",
-    "restore-entry-declaration 19.5"
-   ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
-   "find": "    if (options == nullptr) {\n        setup.Report(std::string(SaveVersionCodes::optionsMissing), \"save_version is enabled without SaveVersionOptions\");\n        return;\n    }",
-   "replace": "    if (options == nullptr) {\n        setup.Buffer().Create<Policy>(0u, 0u);\n        return;\n    }",
-   "target": "gyo_save_version_tests",
-   "cases": "configure:*",
-   "expect": "\\[sv\\-config\\-missing\\]"
-  },
-  {
-   "id": "sv-default-on",
-   "what": "config/modules.csv carries save_version by default",
-   "guards": [
-    "save-version SV-2",
-    "restore-entry-declaration 19.1"
-   ],
-   "file": "config/modules.csv",
-   "find": "checked by the author's load\",no,no,",
-   "replace": "checked by the author's load\",no,yes,",
-   "target": "gyo_save_version_default_units_tests",
-   "cases": "default:*",
-   "expect": "\\[sv\\-default\\-off\\]"
   },
   {
    "id": "sv-current-is-oldest",
@@ -135,26 +79,12 @@
     "restore-entry-declaration 19.1",
     "restore-entry-declaration 19.5"
    ],
-   "file": "engine/modules/save_version/include/engine/save_version/SaveVersionModule.hpp",
-   "find": "    [[nodiscard]] std::uint32_t Current() const noexcept { return current_; }",
-   "replace": "    [[nodiscard]] std::uint32_t Current() const noexcept { return oldestSupported_; }",
+   "file": "engine/modules/save_version/include/engine/save_version/SaveVersion.hpp",
+   "find": "    [[nodiscard]] constexpr std::uint32_t Current() const noexcept { return current_; }",
+   "replace": "    [[nodiscard]] constexpr std::uint32_t Current() const noexcept { return oldestSupported_; }",
    "target": "gyo_save_version_tests",
    "cases": "check:*",
    "expect": "\\[sv\\-current\\]"
-  },
-  {
-   "id": "sv-equal-refused",
-   "what": "Configure refuses oldestSupported == current (> became >=), so 'take only the current version' cannot be set (19.4 item 1)",
-   "guards": [
-    "restore-entry-declaration 19.4",
-    "restore-entry-declaration 19.5"
-   ],
-   "file": "engine/modules/save_version/src/SaveVersionModule.cpp",
-   "find": "    if (options->oldestSupported > options->current) {",
-   "replace": "    if (options->oldestSupported >= options->current) {",
-   "target": "gyo_save_version_tests",
-   "cases": "configure:*",
-   "expect": "\\[sv\\-config\\-equal\\]"
   },
   {
    "id": "sv-codes-equal",
@@ -163,7 +93,7 @@
     "save-version SV-3",
     "restore-entry-declaration 19.5"
    ],
-   "file": "engine/modules/save_version/include/engine/save_version/SaveVersionModule.hpp",
+   "file": "engine/modules/save_version/include/engine/save_version/SaveVersion.hpp",
    "find": "    static constexpr std::string_view tooNew = \"save-version-too-new\";",
    "replace": "    static constexpr std::string_view tooNew = \"save-version-too-old\";",
    "target": "gyo_save_version_tests",

@@ -500,7 +500,7 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 **一律在新的 World。**
 - **啟動時讀檔**：沒有 `ReplaceWorld`。描述的準備函式放存檔資料（暫存的 Resource）與配發器的下界。**描述的準備每次建 World 都會跑，包括之後每一次替換**：存檔要從 World 外一個「待讀」的地方拿、拿了就清掉；直接寫死在描述的準備裡，之後不帶 `extra` 的替換（例：回主選單）會把那份存檔再放一次。
 - **遊戲中讀檔**：`ReplaceWorld(name, {extra, beforeSwap, order})`。新 World 照描述重新登記（之前動態插入的 System 不在）；`extra` 準備函式放存檔資料與配發器的下界；遊戲初始化不重跑；`CarryOver` 標記的 Resource 帶過去（值裡不能有指向舊 World 的參照）。
-- **發替換之前先驗**：版本（下面的存檔版本 Module）、資產 id 載好了沒有、能不能解析。驗不過就不發替換。選 `DropOldFirst`（先銷毀舊的）時只能在發替換之前驗：它一失敗位置就空了，`Product` 結束。
+- **發替換之前先驗**：版本（下面的存檔版本，15.1）、資產 id 載好了沒有、能不能解析。驗不過就不發替換。選 `DropOldFirst`（先銷毀舊的）時只能在發替換之前驗：它一失敗位置就空了，`Product` 結束。
 
 **放回的三條路（失敗的後果不同）。**
 
@@ -537,12 +537,12 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **`Restore` 不是預設的讀檔寫法。** `ExclusiveWorld::Restore` 是回滾用的原語，Kernel 不認得放回的用途（DI-KS 12）；它整份換掉 World 的狀態（名單外的實體與格都拿掉、不補初始值、不看配發器的範圍），只適合存了整個 World 的作者。照「先生成關卡、再放回存檔」的流程用它，剛生成的關卡會被整個刪掉。
 
-### 15.1 存檔版本 Module（`save_version`）
+### 15.1 存檔版本（`save_version`）
 
 **例子。** RPG 1.0 的存檔格式是第 3 版。1.5 改了背包，作者把現在的版本訂成 5、最舊支援訂成 4。玩家拿 1.0 的存檔按「讀取」：選單直接顯示「這個存檔太舊，請開新遊戲」，現在的 World 照跑。
 
-- **預設不帶**。產品用 `gyo_product_units(<target> MODULES save_version)` 啟用，並在 `ProductDescription::options` 給 `SaveVersionOptions{current, oldestSupported}`（沒給、或 `oldestSupported > current` 是啟動錯誤）。啟用時只在 Product 的共用處放一個 `Policy`，不在任何 World 登記東西。
-- **存的時候**：`Policy::Current()` 寫進你的存檔格式的任何位置。Module 不碰檔案、不定格式。
-- **讀的時候**：用你的格式讀出版本數字，交給 `Policy::Check(版本)`。收 `oldestSupported ≤ 版本 ≤ current`；太舊回 `reporterCode == "save-version-too-old"`、太新回 `"save-version-too-new"`。中間的舊版由你的讀檔程式補轉換。
-- **在哪裡呼叫**（都在換上之前）：(1) 發 `ReplaceWorld` 之前，從 `std::as_const(product.Buffer()).Find<SaveVersion::Policy>()` 拿（選 `DropOldFirst` 時只能這裡）；(2) `extra` 準備函式裡呼叫、把錯誤原樣回傳 → `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode` 照帶、舊 World 照跑；(3) 啟動時讀檔：在描述的 `build` 回呼裡用 `std::as_const(setup.ProductBuffer()).Find<SaveVersion::Policy>()` 取出，再 `setup.Prepare(...)` 登記一個呼叫它的準備函式 → 被拒時 `Product::Build` 失敗（O-E7，碼在訊息文字裡）。**不要在生成期間呼叫**（那裡失敗是 `Product` 結束）。
-- **啟用本身不擋任何東西**：不呼叫 `Check` 的讀檔照收。被拒不是事件，是 `Result`。錯誤的型別是 `OrchestrationError`（碼 `PrepareFailed`，為了能直接從準備函式回傳）；在發替換之前判的時候也一樣，**分辨被拒的原因看 `reporterCode`**。
+- **預設不帶**。純程式庫：要用的產品 link `GYO::SaveVersion`，自己持有一份 `constexpr SaveVersion::Policy kSaveVersion{5, 4};`（現在 5、最舊收 4；兩個相等＝只收現在的版本）。不登記任何東西。
+- **存的時候**：`kSaveVersion.Current()` 寫進你的存檔格式的任何位置。它不碰檔案、不定格式。
+- **讀的時候**：用你的格式讀出版本數字，交給 `kSaveVersion.Check(版本)`。收 `oldestSupported ≤ 版本 ≤ current`；太舊回 `reporterCode == "save-version-too-old"`、太新回 `"save-version-too-new"`。中間的舊版由你的讀檔程式補轉換。
+- **在哪裡呼叫**（都在換上之前）：(1) 發 `ReplaceWorld` 之前（選 `DropOldFirst` 時只能這裡）；(2) `extra` 準備函式裡呼叫、把錯誤原樣回傳 → `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode` 照帶、舊 World 照跑；(3) 啟動時讀檔：描述的準備函式裡呼叫 → 被拒時 `Product::Build` 失敗（O-E7，碼在訊息文字裡）。**不要在生成期間呼叫**（那裡失敗是 `Product` 結束）。
+- **不呼叫 `Check` 的讀檔照收**。被拒不是事件，是 `Result`。錯誤的型別是 `OrchestrationError`（碼 `PrepareFailed`，為了能直接從準備函式回傳）；在發替換之前判的時候也一樣，**分辨被拒的原因看 `reporterCode`**。

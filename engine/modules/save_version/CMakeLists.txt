@@ -1,8 +1,8 @@
-# The save version Module (docs/architecture/target/v2/restore-entry-declaration.zh-Hant.md, section 19; Design
-# Invariants in docs/architecture/target/v2/save-version.zh-Hant.md): one place for "the current save version and the
-# oldest one taken", and the check a load calls. Not carried by default (config/modules.csv default=no).
+# Save versions (docs/architecture/target/v2/restore-entry-declaration.zh-Hant.md, section 19; Design Invariants in
+# docs/architecture/target/v2/save-version.zh-Hant.md): Policy, "the current save version and the oldest one taken",
+# and the check a load calls. A library (config/modules.csv library_only=yes): no registration unit.
 add_library(gyo_save_version STATIC
-    src/SaveVersionModule.cpp
+    src/SaveVersion.cpp
 )
 add_library(GYO::SaveVersion ALIAS gyo_save_version)
 
@@ -12,6 +12,7 @@ target_include_directories(gyo_save_version PUBLIC
 
 # Links to core, ecs and orchestration are written here; links to other Modules
 # come from config/modules.csv (O-6). It depends on no other Module.
+# OrchestrationError is the refusal's type (a prepare function returns it as it is).
 target_link_libraries(gyo_save_version PUBLIC GYO::Base GYO::Orchestration)
 gyo_link_registered_dependencies(save_version)
 target_compile_features(gyo_save_version PUBLIC cxx_std_20)
