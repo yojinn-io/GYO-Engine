@@ -1,6 +1,6 @@
 # 預設的實體配發器（`engine/modules/entity_ids`）
 
-更新：2026-11-22（新頁，`v8-arch-gyo2-world-gen` 第 1 步）。由來：[事前宣告](world-gen-declaration.zh-Hant.md)（`v8-arch-gyo2-world-gen`，2026-11-22 動工前核准）第 5.10 節、第 7.3 節。**Design Invariants 的最終文字在合併前核准時定稿**。
+更新：2026-11-22（新頁，`v8-arch-gyo2-world-gen` 第 1 步）。由來：[事前宣告](world-gen-declaration.zh-Hant.md)（`v8-arch-gyo2-world-gen`，2026-11-22 動工前核准）第 5.10 節、第 7.3 節。**Design Invariants 的最終文字：使用者 2026-11-22 合併前核准**（[合併前核准頁](world-gen-merge-approval.zh-Hant.md)）。
 
 Owner：架構。程式：`engine/modules/entity_ids/`（`GYO::Engine::EntityIds`，target `GYO::EntityIds`，登記單位 `EntityIdsModule`）。行為測試：`tests/common/entity_ids/`。
 

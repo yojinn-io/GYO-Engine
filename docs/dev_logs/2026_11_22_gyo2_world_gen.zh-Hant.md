@@ -68,9 +68,11 @@
 - DI-KS 27 的條文仍寫「Kernel 自己的型別（配發器、…）」：改字，列進合併前核准。
 - 測試替身的位置和宣告 5.10 不同、`HashTests.cpp` 的 `static_assert` 換成替身沒交代：寫進合併前核准頁。
 
+## 合併前核准
+
+使用者 2026-11-22（約 20:17 JST）在本卡：「照建議，全部核准」——核准 [合併前核准頁](../architecture/target/v2/world-gen-merge-approval.zh-Hant.md)（f6eaec1f）的三件：守衛搬家、和宣告的偏差、Design Invariants 的最終文字。合併要使用者另外說「合併」。
+
 ## 合併前（未完成）
 
 - CI L1 三平台（PR 上）。
 - C19（交換函式的進出包住生成中的一輪）：和 PR #270 誰後合併誰補；合併時進、出放進 `RunRound`，「進」在前處理之後、「出」在判定之後（設計審查 A5）。
-- §14.4：第 10 節的 DI 守衛搬家（J-8 兩個突變、`ks-hash-allotter-as-bytes`、D-9 的 padding 案）請使用者核准；檢證者 Fable／high。
-- 合併前核准：第 7 節的最終文字。

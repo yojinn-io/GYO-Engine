@@ -1,6 +1,8 @@
 # 合併前核准：生成世界＋預設的實體配發器（`v8-arch-gyo2-world-gen`）
 
-更新：2026-11-22（草稿）。PR [yojinn-io/GYO-Engine#272](https://github.com/yojinn-io/GYO-Engine/pull/272)。宣告：[world-gen-declaration.zh-Hant.md](world-gen-declaration.zh-Hant.md) 修訂 2（2026-11-22 動工前核准）。dev_log：[2026_11_22_gyo2_world_gen.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_world_gen.zh-Hant.md)。
+更新：2026-11-22。**狀態：合併前核准（使用者 2026-11-22，原話「照建議，全部核准」）。合併要使用者另外說「合併」。**PR [yojinn-io/GYO-Engine#272](https://github.com/yojinn-io/GYO-Engine/pull/272)。宣告：[world-gen-declaration.zh-Hant.md](world-gen-declaration.zh-Hant.md) 修訂 2（2026-11-22 動工前核准）。dev_log：[2026_11_22_gyo2_world_gen.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_world_gen.zh-Hant.md)。
+
+> **核准**（使用者，2026-11-22 約 20:17 JST，本卡的對話）：原話「照建議，全部核准」。核准的版本是本頁 f6eaec1f：第 1 節的守衛搬家（四組，含檢證者補出、已用案例收掉的第二個緩的面）、第 2 節和宣告的偏差（D-9 留一份另加一份、測試替身的位置）、第 3 節 Design Invariants 的最終文字（O-14 等、DI-KS 4／15 (7)／27、EI-1～EI-3）。未結事項 C19 照第 4.1 節，和 PR #270 誰後合併誰補。
 
 **這一頁請你核准三件**：第 1 節 Design Invariants 守衛的搬家（AGENTS §14.4：DI 的守衛不論有沒有緩的面都要你核准）；第 2 節和宣告的偏差；第 3 節 Design Invariants 的最終文字。設計審查的結論在第 4 節，CI 的結果在第 5 節。
 
