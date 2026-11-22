@@ -22,7 +22,7 @@ Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。宣
   - 不改 Kernel 與編排層的任何檔。
 - **文件**：
   - 條文頁 `state-machine.zh-Hant.md`（DI 1～5、7～10，RC 1～8）。
-  - [System 契約說明頁](../architecture/target/v2/system-contract-page.zh-Hant.md)第 15 節。事件游標重評卡也加第 15 節，誰後合併誰改號。
+  - [System 契約說明頁](../architecture/target/v2/system-contract-page.zh-Hant.md)第 16 節（事件游標重評卡 #278 先合併、佔了第 15 節「帶條件或不常跑的讀者」，照約定改號；讀者的寫法連到第 15 節）。
   - 用詞表加「State Machine（狀態機）」一列；README 加索引。
   - `docs/cross-component-rules.md` 查過：沒有同樣的規則；套用的 System 照 CCR-2（巢狀 `RunSchedule` 的 Err 往上傳）。
 
@@ -79,7 +79,7 @@ Fable 5.2／high，唯讀，對象 d614a34c；報告 `design-review-fable.md`。
 **記下交之後的**：
 - 網路那一批：計數與自訂比較、`Access` 的形狀要一起看。
 - 讀檔卡：`SetInitial` 不驗值，說明頁寫「先用 `NameOf` 驗」；「存了再讀摘要相同」靠 D9 的改法。
-- 第 15 節撞號：後合併的一方改號。
+- 第 15 節撞號：#278 先合併，狀態機那一節已改成第 16 節（7091c854）。
 - 父的要求不合法時子的要求沒被取走，World 已中斷，沒有後果。
 - MSVC 能不能編樣板參數的 lambda，看 L1。
 
