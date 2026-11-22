@@ -563,7 +563,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 ## 14. 要使用者定的
 
-### Q1：SDL 的 adapter 放哪 —— **已定：B'**（使用者 2026-11-23，side chat，P27）
+### Q1：SDL 的 adapter 放哪 —— **已定：B'**（使用者 2026-11-23，side chat，P27；HANDOFF `v8-arch-gyo2-sdl-q1-b-prime`）
 
 **原話**（依序）：對 A／A'／B 的比較「那我們就不做adapters，做一個簡單的介面，直接對接sdl 如何？」；釐清「不不不，就沒有Module，只用plugin」；聽到只用 Plugin 會卡住（Module 不能依賴 Plugin，ui／網路／回滾拿不到輸入型別；換 SDL 產品要改）「卡住的地方，好難受，就只有B方案了麼。」；問 IME 怎麼處理、看完放進現有結構的圖後問「render呢？」；對最後的形「可以，轉給任務卡」。
 
@@ -577,7 +577,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **規則文字**（交風紀委員起草、使用者核准）：`plugins/sdl*` 裡是我們寫的程式，讀寫的是 Engine 的資料型別——AGENTS §6 的判斷句（「誰が保守し、外に見せる Interface は誰のものか」）與同詞異義表第 0 節的 Plugin 定義（「第三方官方維護、接進來用的」）要補一句說明這種「接第三方組件、我們寫的單位」歸 Plugin；「一個外部組件一個 adapter」的數法（SDL 家族一組 Plugin 算一個）寫在架構文件。批次表 SDL 列的「SDL 放 `src/adapters/sdl/`」改成 `plugins/sdl*`。
 
-### Q2：ufbx 歸哪一類 —— **已定：Module 這一側**（使用者 2026-11-23，side chat）
+### Q2：ufbx 歸哪一類 —— **已定：Module 這一側**（使用者 2026-11-23，side chat；HANDOFF `v8-arch-gyo2-sdl-q2-ufbx-stb-module`）
 
 **原話**（依序）：「這個不是定了麼？還是說沒有結論？」→「ufbx 內化到Engine 中，還是放Module。主會話不是有相關討論嗎？」→「就是 ufbx、stb_image 走 Module 這一側。」
 
@@ -641,7 +641,7 @@ B'（P27）的 Module 只有資料、沒有後端與缺後端的檢查：沒有 
 - **`gyo2-kernel-summary-msg`**（Kernel 的 `Summary` 與訊息）：輸入用 `Message` 還是 Resource 照它的結論，**W 開工前要有**（第 6.3 節）；它和 KR 都改 Kernel，誰後合併誰跟上 gyo2。
 - **主會話（Kernel）**：KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
 - **圖書管理員**：「送進 World 外服務的時刻都是時間基準」登記成 CCR（第 8 節末）。
-- **風紀委員**：Q1（B'，已定）的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句：`plugins/sdl*` 裡是我們寫的程式、讀寫 Engine 的資料）；Q2 不必改規則文字（判斷句字面成立），只在同詞異義表第 0 節「還沒確認」那一行補「ufbx：Module 側（model 的 `src/adapters/ufbx/`），使用者 2026-11-23」——這一行由主會話（文件 owner）改，或併進子批 P；Q3 推翻 11-13 的「ImGui 官方的 SDL3 平台與 SDL_GPU 繪製後端放在 `sdl` plugin 內的獨立 target」（使用者已定）、Q4 撤回後 P22 那一句沒有對象，runtime-composition §4 的統一處理時一起改。
+- **風紀委員**：Q1（B'，已定）的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句：`plugins/sdl*` 裡是我們寫的程式、讀寫 Engine 的資料）；Q2 不必改規則文字（判斷句字面成立），同詞異義表第 0 節「還沒確認」那一行與第 6 節 ufbx 那一列，主會話已在 gyo2 補上結論（4ece17b4；HANDOFF `v8-arch-gyo2-sdl-q2-ufbx-stb-module`），子批 P 不再改；Q3 推翻 11-13 的「ImGui 官方的 SDL3 平台與 SDL_GPU 繪製後端放在 `sdl` plugin 內的獨立 target」（使用者已定）、Q4 撤回後 P22 那一句沒有對象，runtime-composition §4 的統一處理時一起改。
 - **KeepTool**：子批 K 等於 `-keeptool` 那一批，主會話確認是否併進本線。
 - **物理 2D、3D**：`physics_2d`、`physics_3d` 兩個 Module，依賴 `transform`，跟著點名的產品回來，不在本線（P24、P25）。
 
