@@ -527,12 +527,12 @@
   },
   {
    "id": "rb-input-capacity-unchecked",
-   "what": "the official strategy does not report an input history shorter than the depth (review of step 4, 1-6: RB-E9). Only it catches RB-E9",
+   "what": "the official strategy does not report an input history shorter than the depth (review of step 4, 1-6: RB-E9). Only it catches RB-E9 (v8-arch-gyo2-batch4-followups: find follows the capacity 0 case A5 added)",
    "guards": [
     "rollback R-2"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "        if (input.capacity >= settings_.depth) continue;",
+   "find": "        if (input.capacity == 0 || input.capacity >= settings_.depth) continue;",
    "replace": "        continue;",
    "target": "gyo_rollback_tests",
    "cases": "rollback checks: RB-E9*",
@@ -1047,7 +1047,7 @@
    "replace": "strategy interface\",no,yes,world_time;json,,GYO::Engine::Rollback::RollbackModule,",
    "target": "gyo_rollback_tests",
    "expect_build_failure": true,
-   "expect": "gyo_rollback\\s+links\\s+GYO::Base;GYO::Json;GYO::Kernel;GYO::Orchestration;GYO::WorldTime;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime"
+   "expect": "gyo_rollback\\s+links\\s+GYO::Base;GYO::Json;GYO::Kernel;GYO::Orchestration;GYO::WorldTime;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime(?![;\\w])"
   },
   {
    "id": "rb-r3-authority-from-later-directory",
@@ -1060,7 +1060,7 @@
    "replace": "target_link_libraries(gyo_authority_tests PRIVATE GYO::Authority gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_rollback PUBLIC GYO::Authority)",
    "target": "gyo_rollback_tests",
    "expect_build_failure": true,
-   "expect": "gyo_rollback\\s+links\\s+\\S*GYO::Authority\\S*\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime"
+   "expect": "gyo_rollback\\s+links\\s+\\S*GYO::Authority\\S*\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime(?![;\\w])"
   }
  ]
 }

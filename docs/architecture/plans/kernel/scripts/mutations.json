@@ -204,11 +204,11 @@
     },
     {
       "id": "ks-k6-calls-off",
-      "what": "K6 no longer reports log calls (v8-arch-gyo2-batch4-followups: rewritten on the loop itself; error levels D1 removed the executor_file condition around it)",
+      "what": "K6 no longer reports log calls (v8-arch-gyo2-batch4-followups: rewritten on the loop itself, error levels D1 removed the executor_file condition around it; merged in test_k6_executor_file_is_checked, whose tightened call assertion this edit also fails. ks-k6-every-file-exempt was retired: it guarded the scope of the Executor's exemption, which D1 removed)",
       "file": "tests/common/kernel/kernel_guard.py",
       "find": "    for match in K6.finditer(code):\n",
       "replace": "    for match in K6.finditer(code[:0]):\n",
-      "expect": "FAIL: test_k6_log_call_is_reported",
+      "expect": "(?=[\\s\\S]*(?:FAIL: test_k6_log_call_is_reported))[\\s\\S]*(?:FAIL: test_k6_executor_file_is_checked)",
       "command": [
         "{python}",
         "-B",
@@ -226,12 +226,15 @@
       ]
     },
     {
-      "id": "ks-k6-every-file-exempt",
-      "what": "K6 exempts the Executor again (v8-arch-gyo2-batch4-followups: rewritten. The mutant guarded the exemption's scope; error levels D1 made that scope empty, no file is exempt, so the error left is an Executor exemption coming back. Only it reaches test_k6_executor_file_is_checked; ks-adv-executor-exempt-all exempts the Executor from every other rule and returns before K6 too, but its expect names the other rules' test)",
+      "id": "ks-k6-log-header-off",
+      "what": "K6 no longer reports an include of a log header (v8-arch-gyo2-batch4-followups, adversarial check F1). Only it reaches K6's LOG_HEADERS branch: K5 allows engine/base/Log.hpp, <iostream>, <cstdio> and <print>, and ks-k6-calls-off leaves the branch on",
+      "guards": [
+        "error-handling DI 2"
+      ],
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "    for match in K6.finditer(code):\n",
-      "replace": "    for match in ([] if Path(relative).name.startswith(\"Executor\") else K6.finditer(code)):\n",
-      "expect": "FAIL: test_k6_executor_file_is_checked",
+      "find": "        if target in LOG_HEADERS:\n",
+      "replace": "        if False:\n",
+      "expect": "FAIL: test_k6_log_header_is_reported",
       "command": [
         "{python}",
         "-B",
@@ -243,9 +246,6 @@
         "-p",
         "test_kernel_guard.py",
         "-v"
-      ],
-      "guards": [
-        "error-handling DI 2"
       ]
     },
     {
@@ -1669,13 +1669,16 @@
     },
     {
       "id": "rs-iv-fc3-step0-skipped",
-      "what": "step 5a does not run for the hook records applied at step 0 (initial value, v8-arch-gyo2-funnel-check) (replace rewritten for v8-arch-gyo2-kernel-subtract-structure: the phase has no pending list; step 0's records are the hooks')",
+      "what": "step 5a does not run for the hook records applied at step 0 (initial value, v8-arch-gyo2-funnel-check) (replace rewritten for v8-arch-gyo2-kernel-subtract-structure: the phase has no pending list; step 0's records are the hooks') (v8-arch-gyo2-batch4-followups: find follows the derive condition A3 put on step 5a)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "if (!data_->initialValues.empty()) {",
-      "replace": "if (!data_->initialValues.empty() && (records.empty() || !records.front().emitterHook)) {",
+      "find": "if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {",
+      "replace": "if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty() && (records.empty() || !records.front().emitterHook)) {",
       "target": "gyo_kernel_tests",
       "cases": "initial value:*",
-      "expect": "TEST CASE:\\s+initial value: a request recorded by a hook is filled at the next sync point"
+      "expect": "TEST CASE:\\s+initial value: a request recorded by a hook is filled at the next sync point",
+      "guards": [
+        "kernel DI-KS 9"
+      ]
     },
     {
       "id": "rs-iv-fc4-request-role-unchecked",
@@ -3114,13 +3117,16 @@
       "id": "hf-round-skips-initial-values",
       "file": "engine/ecs/kernel/src/World.cpp",
       "target": "gyo_kernel_tests",
-      "find": "        if (!data_->initialValues.empty()) {",
-      "replace": "        if (!data_->initialValues.empty() && !trackRoundRecorders_) {",
+      "find": "        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {",
+      "replace": "        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty() && !trackRoundRecorders_) {",
       "expect": "rig\\->world\\(\\)\\.Get<Filled>\\(1\\)\\ !=\\ nullptr",
-      "what": "a round fills no initial value (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "what": "a round fills no initial value (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (v8-arch-gyo2-batch4-followups: find follows the derive condition A3 put on step 5a)",
       "cases": "J-54: a round is a whole application*",
       "ran_as": "ck-decl-round-skips-initial-values",
-      "note": "同上"
+      "note": "同上",
+      "guards": [
+        "kernel DI-KS 9"
+      ]
     },
     {
       "id": "hf-round-skips-onremove",
@@ -4995,23 +5001,29 @@
     },
     {
       "id": "ks-s5-change-deferred",
-      "what": "S5: the immediate change goes into the window and waits for the sync point (not applied now) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (v8-arch-gyo2-mutation-prune merged in ks-s5-j45-spawn-deferred: the same find and replace, so their cases and assertions now run here; every listed message must appear)",
+      "what": "S5: the immediate change goes into the window and waits for the sync point (not applied now) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (v8-arch-gyo2-mutation-prune merged in ks-s5-j45-spawn-deferred: the same find and replace, so their cases and assertions now run here; every listed message must appear) (v8-arch-gyo2-batch4-followups: find follows ApplySync's derive argument, A3)",
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
-      "replace": "    world.window_.push_back(std::move(change.front()));\n    change.clear();\n    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
+      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);",
+      "replace": "    world.window_.push_back(std::move(change.front()));\n    change.clear();\n    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn takes an id*,J-45:*",
-      "expect": "(?=[\\s\\S]*\\[ks\\-s5\\-spawn\\])[\\s\\S]*J\\-45\\ spawn"
+      "expect": "(?=[\\s\\S]*\\[ks\\-s5\\-spawn\\])[\\s\\S]*J\\-45\\ spawn",
+      "guards": [
+        "kernel DI-KS 18"
+      ]
     },
     {
       "id": "ks-s5-change-stamp",
-      "what": "S5: the change carries a new stamp instead of the handle's (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6)",
+      "what": "S5: the change carries a new stamp instead of the handle's (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (v8-arch-gyo2-batch4-followups: find follows ApplySync's derive argument, A3)",
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change);",
-      "replace": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, world.stamp_ + 1, &change);",
+      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);",
+      "replace": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, world.stamp_ + 1, &change, derive);",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn takes an id*",
-      "expect": "\\[ks\\-s5\\-spawn\\-stamp\\]"
+      "expect": "\\[ks\\-s5\\-spawn\\-stamp\\]",
+      "guards": [
+        "kernel DI-KS 18"
+      ]
     },
     {
       "id": "ks-s5-no-allotter-code",
@@ -6241,7 +6253,7 @@
     },
     {
       "id": "ks-k8-skips-executor-files",
-      "what": "K8 is skipped for Executor files like K6 (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure) (adversarial check of K8, Fable 5.2/high; v8-arch-gyo2-kernel-subtract-structure) (v8-arch-gyo2-batch4-followups: rewritten without executor_file, which error levels D1 removed; the error is still writable as a name test)",
+      "what": "K8 is skipped for Executor files (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure; v8-arch-gyo2-batch4-followups: rewritten without executor_file, which error levels D1 removed with K6's exemption, so the error is now an Executor test of its own. Only it reaches test_k8_executor_file_is_checked; ks-adv-executor-exempt-all also fails that test but is a different edit, every rule at once)",
       "file": "tests/common/kernel/kernel_guard.py",
       "find": "        if not DIRECTIVE.match(code_lines[number - 1]):\n",
       "replace": "        if not Path(relative).name.startswith(\"Executor\") and not DIRECTIVE.match(code_lines[number - 1]):\n",
@@ -8079,13 +8091,13 @@
     },
     {
       "id": "ks-restore-record-by-record",
-      "what": "Restore applies record by record: an OnAdd of the first column does not see the later column (only scenario S5-5 caught it). Only it catches the one immediate change for the kernel",
+      "what": "Restore applies record by record: an OnAdd of the first column does not see the later column (only scenario S5-5 caught it). Only it catches the one immediate change for the kernel (v8-arch-gyo2-batch4-followups: find follows ApplyImmediateRecords' derive parameter, A3)",
       "guards": [
         "authority-rollback-declaration 2.1"
       ],
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "    return ApplyImmediateRecords(call, std::move(records), stamp, who, where);",
-      "replace": "    for (Detail::Record& record : records) {\n        std::vector<Detail::Record> one;\n        one.push_back(std::move(record));\n        auto applied = ApplyImmediateRecords(call, std::move(one), stamp, who, where);\n        if (!applied) return applied;\n    }\n    return {};",
+      "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);",
+      "replace": "    for (Detail::Record& record : records) {\n        std::vector<Detail::Record> one;\n        one.push_back(std::move(record));\n        auto applied = ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(one), stamp, who, where);\n        if (!applied) return applied;\n    }\n    return {};",
       "target": "gyo_kernel_tests",
       "cases": "restore: an OnAdd of the first*",
       "expect": "\\[ks\\-restore\\-hooks\\-after\\-any\\-column\\]"

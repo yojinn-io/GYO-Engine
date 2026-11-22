@@ -87,13 +87,13 @@
   },
   {
    "id": "au-input-rolled",
-   "what": "an input is registered as rollback state on behalf (authority 4.3, Z8: inputs are never); the World then fails with AU-E7. Only it catches the input filter of the on-behalf registration",
+   "what": "an input is registered as rollback state on behalf (authority 4.3, Z8: inputs are never); the World then fails with AU-E7. Only it catches the input filter of the on-behalf registration (v8-arch-gyo2-batch4-followups: rewritten. A5 moved the input filter into a branch of its own that records the input's history and returns before the rollback registration; the property, an input is never rollback state, is unchanged, so the mutant drops that return)",
    "guards": [
     "authority-module-declaration 4.3"
    ],
    "file": "engine/modules/authority/src/Registrations.cpp",
-   "find": "    if (data_->ops->registerInRollback == nullptr || data_->options.input) return;",
-   "replace": "    if (data_->ops->registerInRollback == nullptr) return;",
+   "find": "        if (data_->ops->recordInput != nullptr && data_->options.rollback == RollbackChoice::Rollback) data_->ops->recordInput(rollback_);\n        return;\n    }\n",
+   "replace": "        if (data_->ops->recordInput != nullptr && data_->options.rollback == RollbackChoice::Rollback) data_->ops->recordInput(rollback_);\n    }\n",
    "target": "gyo_authority_tests",
    "cases": "authority registrations: the rollback options*",
    "expect": "AU\\-E7 decision input 'Command'"
@@ -1291,14 +1291,14 @@
   },
   {
    "id": "au-digest-resource-dropped",
-   "what": "a decision resource's value is not in the digest. Only it catches the resources in the digest",
+   "what": "a decision resource's value is not in the digest. Only it catches the resources in the digest (v8-arch-gyo2-batch4-followups: find follows the recordInput field A5 added)",
    "guards": [
     "authority DI-A 12",
     "authority-module-declaration 5.6"
    ],
    "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
-   "find": "inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, &ResourceDigest<T>};",
-   "replace": "inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, nullptr};",
+   "find": "inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, &ResourceDigest<T>,\n                                      &RecordInput<T>};",
+   "replace": "inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, nullptr,\n                                      &RecordInput<T>};",
    "target": "gyo_authority_tests",
    "cases": "authority consistency: a decision resource*",
    "expect": "\\[au\\-digest\\-resource\\]"
