@@ -24,7 +24,9 @@ struct MixerConfig final {
     std::uint32_t maxSubmitters = 4;   // 1 to 64, all allocated at creation
     std::uint32_t queueCapacity = 256; // per submitter, 1 to 65536: plays, stops and unloads
     // Clips each submitter may load while output runs, 0 to 256; 0 allocates
-    // nothing. A slot is reused once its clip is unloaded and no voice reads it.
+    // nothing, so LoadClip then always returns NoClipSlot: a consumer whose clips
+    // arrive after the mixer exists sets it. A slot is reused once its clip is
+    // unloaded and no voice reads it.
     std::uint32_t clipSlotsPerSubmitter = 0;
     // Added to every mapped start, so a request sent a little after its time still
     // starts on time; it is also the least latency of a sound played "now". 0 to
@@ -38,7 +40,13 @@ struct MixerConfig final {
 // One sound, played once. The consumer turns direction and distance into gains.
 struct PlayRequest final {
     ClipId clip;
-    Time::TimePoint at{};    // the Engine time the sound belongs to
+    // The moment the sound belongs to, on the Engine time base (Time::MonotonicClock),
+    // never a scalable game time (Design Invariant 3). Always set it: left at its
+    // default (the clock's epoch) the play lies before any anchor (by the time
+    // since the clock's start, clamped to an hour), so it starts at once, without
+    // the schedule delay, and is counted late by that much (Stats().playedLate;
+    // maxLateness then hides smaller real latenesses).
+    Time::TimePoint at{};
     float gainLeft = 1.0f;   // 0 to kMaxGain
     float gainRight = 1.0f;
 };
@@ -101,10 +109,13 @@ struct MixerStats final {
 
 class Mixer;
 
-// The producer end of one bounded single-producer, single-consumer queue. The
-// first thread that calls Play, Stop, StopAll, LoadClip or UnloadClip owns it;
-// calling them from another thread afterwards is a Programmer Error. It shares the mixer's state, so it may
-// outlive the Mixer (its plays are then never rendered).
+// The producer end of one bounded single-producer, single-consumer queue. It is
+// not bound to a thread: one user at a time calls Play, Stop, StopAll, LoadClip
+// and UnloadClip, and when another thread takes it over, the last call of the
+// one before must happen-before the first call of the next (a join, the same
+// mutex unlocked and locked, any hand-over that synchronizes); calls merely
+// apart in time, without such an order, are a data race. It shares the mixer's
+// state, so it may outlive the Mixer (its plays are then never rendered).
 class Submitter final {
 public:
     Submitter(Submitter&& other) noexcept;
@@ -115,19 +126,18 @@ public:
 
     // An invalid handle when the queue is full; the request is then dropped and
     // counted. A clip neither in the mixer's bank nor loaded through this
-    // submitter (and not unloaded since), a gain outside [0, kMaxGain],
-    // another thread than the owner, and a moved-from Submitter are Programmer
-    // Errors (as for every member below).
+    // submitter (and not unloaded since), a gain outside [0, kMaxGain] and a
+    // moved-from Submitter are Programmer Errors, asserted before anything is
+    // counted (as for every member below).
     SoundHandle Play(const PlayRequest& request);
     // Ends the sound at the frame `at` maps to, by the same rule as a play's
     // start (delay included), from the anchor of the block that takes the stop.
     // A sound stopped before it started, at or before its start, stays silent; a
     // started sound stopped at a frame already rendered stops at the first frame
     // of that block, counted late. With several stops, the earliest frame wins.
-    // An invalid handle does nothing else and returns true (the call still
-    // claims the submitter for its thread). Another submitter's handle, or one this submitter never returned, is
-    // a Programmer Error. False when the queue is full (counted; the sound keeps
-    // playing).
+    // An invalid handle does nothing and returns true. Another submitter's
+    // handle, or one this submitter never returned, is a Programmer Error. False
+    // when the queue is full (counted; the sound keeps playing).
     [[nodiscard]] bool Stop(SoundHandle sound, Time::TimePoint at);
     // The same for every sound this submitter sent before the call; one stop
     // request in the counters.
@@ -150,7 +160,6 @@ public:
 private:
     friend class Mixer;
     Submitter(std::shared_ptr<Detail::MixerState> state, Detail::SubmitterSlot* slot) noexcept;
-    void ClaimOwner();
     bool Enqueue(const Detail::Command& command);
     bool SendStop(const Detail::Command& command);
     // This submitter's slot of a runtime clip that is loaded under that id, or null.
@@ -178,7 +187,8 @@ public:
 
     // Any thread, at any time. TooManySubmitters once maxSubmitters have been
     // created over the mixer's life: a destroyed Submitter does not give its
-    // queue back, so create one per producer thread and keep it.
+    // queue back. Create one per producer and keep it where it outlives the
+    // producer's own rebuilds.
     [[nodiscard]] Base::Result<Submitter, AudioError> CreateSubmitter();
     // Any thread. A gain outside [0, kMaxGain] is a Programmer Error.
     void SetMasterGain(float gain);
@@ -188,8 +198,8 @@ public:
     // Error this cannot detect.
     [[nodiscard]] Playhead PlayheadOf(SoundHandle sound) const noexcept;
 
-    // The audio thread, once per block. anchor is the Engine time read once at
-    // the start of this block. Every queued request is taken in its queue's
+    // The audio thread, once per block. anchor is the Engine time base read once
+    // at the start of this block, the same time base as the requests' times. Every queued request is taken in its queue's
     // order (a stop after the plays it names) and a play starts at
     //   renderedFrames + floor((at - anchor) * 48000 + 1/2) + delayFrames,
     // with at - anchor clamped to one hour either way and delayFrames the
