@@ -266,6 +266,7 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 **範圍的限界**：
 
 - 每個 tick 送一次：一幀跑了好幾個 tick 時只送最後一個；沒有固定步、tick 不動的 World 不複製。
+  - tick 不動的期間（沒有固定步、伺服器長時間暫停），作者發的伺服器訊息留在 `NetOutbox` 裡、只進不出，恢復時一次送出，可能超過可靠佇列而被拒（有計數）。上限等有點名的情境再定（PR-1 窄複查之後的確認，小事 1）。
 - 「複製的實體」＝至少有一個複製元件的實體。全部複製元件都拿掉的實體，在 Client 上被刪掉。Peer 實體不複製。
 - 最多 64 種複製元件（遮罩是 64 位元）。
 - 換 World 之間 Client 仍套用新世代的訊息到舊 World；產品沒換 World 時，同號的實體會被 `SpawnWithId` 拒絕（計數）。
