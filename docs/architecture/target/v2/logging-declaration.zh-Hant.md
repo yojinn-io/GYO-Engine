@@ -226,6 +226,7 @@ WorldLogging::Forward<TimeDiscardedLog>(setup, {.schedule = DefaultSchedules::fr
 - 取走會清空：同一個 World 只能有一個取走的人。runner 要自己也看，就自己取、用 ④ 寫。
 - **World 中斷之後**：Kernel 特意讓診斷紀錄在中斷後仍讀得到（`World.hpp:296-298`、`:314-315`）。修訂 0 寫成斷言，Fable 指出那樣壞掉那一幀的紀錄（可能正是原因）就永遠進不了日誌。修訂 1 的建議：准許，紀錄加 `world_interrupted: true`；**順序規則**：先 `WriteFailure`，再取診斷。這是讀壞掉的 World，和 D2 第 5 點的界線要使用者看——第 13 節第 2 題 (c)。
 - 交換點在第 5 條才由編排層排；那時這個呼叫可以移到交換點，介面不變。
+  - 〔2026-11-22 加註，`v8-arch-gyo2-exchange`〕交換點已排：交換函式的「出」（[O-12](orchestration.zh-Hant.md#o-12)）；`TakeKernelDiagnostics` 的介面不變，由日誌那一側給一個接 `WorldSetup` 的函式登記它。World 壞掉之後照本節的順序規則走 runner 直接讀寫。
 
 ### 5.5 ③ `Base::Log` 與 ④ 直接寫一筆
 

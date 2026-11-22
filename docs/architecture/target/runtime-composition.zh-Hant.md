@@ -18,6 +18,7 @@
 - **渲染只經 Extract 以 const 方式讀來源 World，無反饋**：extract System 的參數 `Extract<Read<T>>`／`ExtractRes<R>` 只讀來源；`Extract<Write<…>>` 不存在（編譯期擋下）；來源 World 在 extract 期間任何經 World API 的寫入都由存取驗證（可關）記為違規、以 Err 回傳（2026-11-12 改寫，原文「debug 下…斷言」）；渲染 Runtime 不得以任何參數寫回來源，含 boundary Resource；來源 Registry 必須先凍結（spec H-6、J-43；DI-KS 13）。
 - 代價：多一個 World 與每幀一次 extract。使用者的理由：合起來看著簡單，代價很高——合併後「渲染不改模擬」只能靠 RenderSubmit 唯讀的存取宣告守，而宣告的真實性在 C++ 攔不到（LIM-3）；分開則由機制守。
 - 交換點：意圖 F → S、呈現 S → F 經 Host 擁有的 Mailbox，只在 schedule 之間存取；Link 經 Host 與網路執行緒在 S 的 schedule 前後交換。
+  - 〔2026-11-22 加註，`v8-arch-gyo2-exchange`〕這一句出自規格 H.4.2，不是使用者 11-11 另外定的（K.3 第 6 項是「模擬與渲染的 World 分開、只經 Extract」）；Host 已由用詞表 v3 換成「組裝」與「runner」。畫面與模擬之間的資料用套用點還是交換函式，PvP 移植時定（[交換點的宣告](v2/exchange-declaration.zh-Hant.md)第 18 節、[O-12](v2/orchestration.zh-Hant.md#o-12)）。
 
 ## 3. Match：Join／Leave 在 tick 內（使用者 2026-11-11 決定，spec K.3 第 10 項）
 

@@ -196,11 +196,14 @@
    "id": "or-runframe-no-gameinit",
    "what": "O-1: RunFrame does not run game initialization first",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    for (WorldSlot& slot : worlds_) {",
-   "replace": "    for (WorldSlot& slot : worlds_) {",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {",
+   "replace": "    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: insertions place*",
-   "expect": "\\[or\\-gi\\-order\\-once\\] t \\| s \\| t \\| s"
+   "expect": "\\[or\\-gi\\-order\\-once\\] t \\| s \\| t \\| s",
+   "guards": [
+    "orchestration O-1"
+   ]
   },
   {
    "id": "or-runschedule-no-gameinit",
@@ -216,11 +219,14 @@
    "id": "or-runner-not-called",
    "what": "O-3: an installed runner is not called",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (runner_) return runner_(*this);",
-   "replace": "    if (runner_) return RunnerExit{};",
+   "find": "    if (runners_.size() == 1 && runners_.front().runner) return runners_.front().runner(*this);",
+   "replace": "    if (runners_.size() == 1 && runners_.front().runner) return RunnerExit{};",
    "target": "gyo_orchestration_tests",
    "cases": "O-3:*",
-   "expect": "\\[or\\-runner\\-installed\\]"
+   "expect": "\\[or\\-runner\\-installed\\]",
+   "guards": [
+    "orchestration O-3"
+   ]
   },
   {
    "id": "or-prepare-skipped-at-startup",
@@ -436,11 +442,14 @@
    "id": "g8-product-build-before-units",
    "what": "G-8 candidate (g8-check-fable-high.md)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n",
-   "replace": "    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
+   "find": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, name_, registrar, world.options, frame, prepares, carries,\n                                                       *buffer, *buffer_, exchanges);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n",
+   "replace": "    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, name_, registrar, world.options, frame, prepares, carries,\n                                                       *buffer, *buffer_, exchanges);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: the product's own build*",
-   "expect": "\\[or\\-product\\-build\\-last\\]"
+   "expect": "\\[or\\-product\\-build\\-last\\]",
+   "guards": [
+    "orchestration O-2"
+   ]
   },
   {
    "id": "g8-bare-world-no-own-register",
@@ -636,11 +645,14 @@
    "id": "g8-swap-keeps-old-lists",
    "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    slot.frame = std::move(registration.frame);\n    slot.carries = std::move(registration.carries);\n    slot.lastSchedule.clear();",
-   "replace": "    slot.lastSchedule.clear();",
+   "find": "    slot.frame = std::move(registration.frame);\n    slot.carries = std::move(registration.carries);\n    slot.exchangeIn = std::move(registration.exchangeIn);\n    slot.exchangeOut = std::move(registration.exchangeOut);\n    slot.lastSchedule.clear();",
+   "replace": "    slot.exchangeIn = std::move(registration.exchangeIn);\n    slot.exchangeOut = std::move(registration.exchangeOut);\n    slot.lastSchedule.clear();",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: a registration that differs*",
-   "expect": "\\[or\\-swap\\-new\\-frame\\]"
+   "expect": "\\[or\\-swap\\-new\\-frame\\]",
+   "guards": [
+    "orchestration O-8"
+   ]
   },
   {
    "id": "el-insert-owner-dropped",
@@ -660,21 +672,27 @@
    "id": "g8-check-report-unit",
    "what": "G-8 candidate (g8-check-fable-high.md)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);",
-   "replace": "        WorldCheck context(world.name, world.name, world.dynamicInsert, world.options, unitErrors, *buffer);",
+   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer, *buffer_);",
+   "replace": "        WorldCheck context(world.name, world.name, world.dynamicInsert, world.options, unitErrors, *buffer, *buffer_);",
    "target": "gyo_orchestration_tests",
    "cases": "O-5: a Check error names*",
-   "expect": "\\[or\\-check\\-unit\\-name\\]"
+   "expect": "\\[or\\-check\\-unit\\-name\\]",
+   "guards": [
+    "orchestration O-5"
+   ]
   },
   {
    "id": "g8-check-inside-finish-loop",
    "what": "G-8 candidate: O-2: Configure once each* | \\[or\\-lifecycle\\-order\\].*finish time@Main v1 \\| check time@Main",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (std::size_t index : slot.units) {\n        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(frozen, context);\n    }\n    for (std::size_t index : slot.units) {\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);\n        units_[index].unit->Check(frozen, context);\n    }",
-   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish finishContext(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(frozen, finishContext);\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);\n        units_[index].unit->Check(frozen, context);\n    }",
+   "find": "    for (std::size_t index : slot.units) {\n        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer, *buffer_);\n        units_[index].unit->Finish(frozen, context);\n    }\n    for (std::size_t index : slot.units) {\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer, *buffer_);\n        units_[index].unit->Check(frozen, context);\n    }",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish finishContext(world.name, units_[index].row, unitErrors, *buffer, *buffer_);\n        units_[index].unit->Finish(frozen, finishContext);\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer, *buffer_);\n        units_[index].unit->Check(frozen, context);\n    }",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: Configure once each*",
-   "expect": "\\[or\\-lifecycle\\-order\\].*finish time@Main v1 \\| check time@Main"
+   "expect": "\\[or\\-lifecycle\\-order\\].*finish time@Main v1 \\| check time@Main",
+   "guards": [
+    "orchestration O-2"
+   ]
   },
   {
    "id": "g8-plugins-before-modules",
@@ -740,11 +758,14 @@
    "id": "g8-check-sees-true",
    "what": "G-8 candidate: O-2: options reach* | \\[or\\-check\\-declaration\\] Check saw",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);",
-   "replace": "units_[index].row, true, world.options, unitErrors, *buffer);",
+   "find": "units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer, *buffer_);",
+   "replace": "units_[index].row, true, world.options, unitErrors, *buffer, *buffer_);",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: options reach*",
-   "expect": "\\[or\\-check\\-declaration\\] Check saw"
+   "expect": "\\[or\\-check\\-declaration\\] Check saw",
+   "guards": [
+    "orchestration O-2"
+   ]
   },
   {
    "id": "g8-insert-after-as-before",
@@ -1824,7 +1845,7 @@
    "what": "G-7 (group B): a dynamic insert runs every unit Finish of the World again (declaration section 9 \"插入後重跑 Finish\"; moved from the kernel catalog ks-s2-plugin-finish-again)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = slot->registry->BuildPlans();\n    if (!built) {",
-   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        ModuleBuffer frozen;\n        frozen.Freeze();\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink, frozen);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        ModuleBuffer frozen;\n        frozen.Freeze();\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink, frozen, *buffer_);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-9: an allowing World*",
    "expect": "\\[or-insert-no-lifecycle\\]"
@@ -1834,7 +1855,7 @@
    "what": "G-7 (group B): Finish also runs before BuildPlans (it would read version 0, no Plan; moved from the kernel catalog ks-s3-version-before-finish) (the kernel refuses the read-only view before a successful BuildPlans, so the Product build aborts at that assertion)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
-   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors, *buffer, *buffer_);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: Configure once*",
    "expect": "GYO_ASSERT failed: data_->frozen"
@@ -2452,8 +2473,8 @@
     "time-events-declaration 3.6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
-   "replace": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
+   "find": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
+   "replace": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-4: a unit inserts a stage into Main*",
    "expect": "\\[or\\-skeleton\\-before\\-build\\]"
@@ -2877,8 +2898,8 @@
     "authority-rollback-declaration 6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);",
-   "replace": "        ModuleBuffer other;\n        WorldFinish context(world.name, units_[index].row, unitErrors, other);",
+   "find": "        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer, *buffer_);",
+   "replace": "        ModuleBuffer other;\n        WorldFinish context(world.name, units_[index].row, unitErrors, other, *buffer_);",
    "target": "gyo_orchestration_tests",
    "cases": "module-buffer: the owner creates*",
    "expect": "\\[or\\-buffer\\-finish\\]"
@@ -2890,8 +2911,8 @@
     "authority-rollback-declaration 6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);",
-   "replace": "        ModuleBuffer other;\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, other);",
+   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer, *buffer_);",
+   "replace": "        ModuleBuffer other;\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, other, *buffer_);",
    "target": "gyo_orchestration_tests",
    "cases": "module-buffer: the owner creates*",
    "expect": "\\[or\\-buffer\\-check\\]"
@@ -2904,7 +2925,7 @@
    ],
    "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
    "find": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
-   "replace": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        if (Raw(Kernel::KeyOf<T>()) == nullptr) return &Create<T>();\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
+   "replace": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        if constexpr (std::is_default_constructible_v<T>) {\n            if (Raw(Kernel::KeyOf<T>()) == nullptr) return &Create<T>();\n        }\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
    "target": "gyo_orchestration_tests",
    "cases": "module-buffer: Find of a type nobody created*",
    "expect": "\\[or\\-buffer\\-absent\\]"
@@ -3040,6 +3061,480 @@
    "expect": "gyo_world_time links\\s+GYO::Base;GYO::Kernel;GYO::Logging;GYO::Math;GYO::Orchestration;GYO::Time;\\s+expected exactly"
   },
   {
+   "id": "or-pbuf-world-buffer-given",
+   "what": "WorldSetup's ProductBuffer() is the World build's buffer instead of the Product's (exchange declaration 5.2 point 1). Only it catches which buffer a World build is given",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,",
+   "replace": "            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer,",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-1*,product-buffer: P-3*",
+   "expect": "\\[or\\-pbuf\\-same\\]"
+  },
+  {
+   "id": "or-pbuf-options-dropped",
+   "what": "the description's options are not handed to the units (5.2 point 2). Only it catches the Product-level options",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    self.options_ = std::move(description.options);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-4*",
+   "expect": "\\[or\\-pbuf\\-options\\]"
+  },
+  {
+   "id": "or-pbuf-report-lost",
+   "what": "ProductSetup::Report records nothing (5.2 point 3). Only it catches the report reaching ProductStartupReport",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Setup.cpp",
+   "find": "    reports_->push_back(UnitReportedError{installer_, std::string(), std::move(code), std::move(message)});",
+   "replace": "    static_cast<void>(code);\n    static_cast<void>(message);",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-7*",
+   "expect": "TEST CASE:\\s+product-buffer: P-7"
+  },
+  {
+   "id": "or-pbuf-report-builds-worlds",
+   "what": "a Configure report does not stop the World builds (5.2 point 3: no World's Build runs). Only it catches the skip",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    const bool configureReported = !unitErrors.empty();",
+   "replace": "    const bool configureReported = false;",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-7*",
+   "expect": "\\[or\\-pbuf\\-report\\-no\\-build\\] a World's Build ran"
+  },
+  {
+   "id": "or-pbuf-ondestroy-forward",
+   "what": "OnDestroy callbacks run in registration order instead of the reverse (5.2 point 4). Only it catches their order",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        std::function<void()> callback = std::move(onDestroy_.back());\n        onDestroy_.pop_back();",
+   "replace": "        std::function<void()> callback = std::move(onDestroy_.front());\n        onDestroy_.erase(onDestroy_.begin());",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\][^\\n]*ondestroy store ondestroy pool"
+  },
+  {
+   "id": "or-pbuf-ondestroy-lost",
+   "what": "~Product does not call the OnDestroy callbacks (5.2 point 4: exactly once on every way a Product ends). Only it catches the callbacks running",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (callback) callback();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-6*",
+   "expect": "\\[or\\-pbuf\\-ondestroy\\-once\\]"
+  },
+  {
+   "id": "or-pbuf-worlds-forward",
+   "what": "~Product destroys the Worlds in description order instead of the reverse (5.2 point 5: a World extracting from another goes first). Only it catches the order between Worlds",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {",
+   "replace": "    for (auto slot = worlds_.begin(); slot != worlds_.end(); ++slot) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\] ~exchange A ~world A ~exchange B ~world B"
+  },
+  {
+   "id": "or-pbuf-exchange-after-world",
+   "what": "a World's exchange functions are let go after the World instead of before (5.2 point 5). Only it catches the order inside one World",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        slot->exchangeOut.clear();\n        slot->exchangeIn.clear();\n        slot->executor.reset();",
+   "replace": "        slot->executor.reset();\n        slot->exchangeOut.clear();\n        slot->exchangeIn.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\] ~world B ~exchange B"
+  },
+  {
+   "id": "or-pbuf-worlds-late",
+   "what": "~Product skips its World step, so the Worlds go with the descriptions after the Product's buffer (5.2: the buffer outlives every World). Only it catches a World Resource outliving the buffer object it points at",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        slot->executor.reset();\n        slot->registry.reset();\n    }\n    // 2. The OnDestroy",
+   "replace": "    }\n    // 2. The OnDestroy",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-8*",
+   "expect": "\\[or\\-pbuf\\-outlives\\]"
+  },
+  {
+   "id": "or-pbuf-runner-step-off",
+   "what": "the runner is not let go at its own step (5.2 point 5: after the OnDestroy callbacks, before the buffer), so it outlives the buffer and the units. Only it catches the runner step",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    // 3. The runners (one may hold a window or threads a callback still used, and may point into the buffer).\n    while (!runners_.empty()) runners_.pop_back();\n",
+   "replace": "    // 3. The runners (one may hold a window or threads a callback still used, and may point into the buffer).\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\][^\\n]*~unit\\-closure ~runner"
+  },
+  {
+   "id": "or-pbuf-failed-build-runners",
+   "what": "the installed runners are a local of Build instead of the Product's (5.2 point 4: a failed Build destroys them in ~Product's order, after the OnDestroy callbacks). Only it catches the failure path's runner step",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    std::vector<ProductSetup::Installed>& runners = self.runners_;\n",
+   "replace": "    std::vector<ProductSetup::Installed> runners;\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\-failed\\][^\\n]*~runners ondestroy store"
+  },
+  {
+   "id": "or-pbuf-buffer-forward",
+   "what": "the buffer's objects are destroyed in Create order instead of the reverse (5.2 point 5; a vector's own order is not specified, so ~ModuleBuffer pops). Only it catches the order inside the buffer",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "        while (!entries_.empty()) entries_.pop_back();",
+   "replace": "        while (!entries_.empty()) entries_.erase(entries_.begin());",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\][^\\n]*~buffer\\-first ~buffer\\-second"
+  },
+  {
+   "id": "or-exch-in-off",
+   "what": "RunFrame does not call the \"in\" exchange functions (5.1). Only it catches the in side",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-1 RunFrame*",
+   "expect": "\\[or\\-exch\\-order\\] a out net@A"
+  },
+  {
+   "id": "or-exch-out-before-round",
+   "what": "RunFrame calls the \"out\" exchange functions before the round (5.1: in, round, out). Only it catches the out side's place",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n    // The exchange functions' \"out\", after the judgement: the \"out\" of the frame generation ended in reads it ended.\n    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n",
+   "replace": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n    // The exchange functions' \"out\", after the judgement: the \"out\" of the frame generation ended in reads it ended.\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-1 RunFrame*",
+   "expect": "\\[or\\-exch\\-order\\] in net@A in game@A out net@A out logs@A out game@A a"
+  },
+  {
+   "id": "or-exch-init-after-in",
+   "what": "RunFrame's game initialization runs after the Worlds' rounds, so after the first World's \"in\" (5.1: it comes before it). Only it catches that place (or-runframe-no-gameinit drops it)",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {\n        if (auto ran = RunRound(slot); !ran) return ran;\n    }\n",
+   "replace": "    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {\n        if (auto ran = RunRound(slot); !ran) return ran;\n    }\n    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-8*",
+   "expect": "\\[or\\-exch\\-init\\-first\\] in game@A"
+  },
+  {
+   "id": "or-exch-runschedule-calls",
+   "what": "RunSchedule calls the World's exchange functions (5.1: only RunFrame does). Only it catches RunSchedule staying out",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "replace": "    if (auto exchanged = Exchange(slot->exchangeIn, slot->executor->GetWorld(), \"in\"); !exchanged) return exchanged;\n    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-2*",
+   "expect": "\\[or\\-exch\\-only\\-runframe\\]"
+  },
+  {
+   "id": "or-exch-failure-ignored",
+   "what": "a failing exchange function does not stop RunFrame (5.1: RunFrame stops and returns ExchangeFailed). Only it catches the stop",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            return Base::Err(std::move(error));\n        }\n    }\n    return {};\n}",
+   "replace": "            continue;\n        }\n    }\n    return {};\n}",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3*",
+   "expect": "TEST CASE:\\s+exchange: X-3"
+  },
+  {
+   "id": "or-exch-code",
+   "what": "the error keeps the function's code instead of ExchangeFailed (5.1). Only it catches the code",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            error.code = OrchestrationErrorCode::ExchangeFailed;\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3*",
+   "expect": "\\[or\\-exch\\-failed\\] PrepareFailed"
+  },
+  {
+   "id": "or-exch-names",
+   "what": "the error does not name the World, the side and the unit (5.1). Only it catches the message",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            error.message = \"exchange function (\" + std::string(side) + \") of \" + Quoted(entry.unit) + \" on World \" +\n                            Quoted(world.Name()) + \" failed\" + (error.message.empty() ? std::string() : \": \" + error.message);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3*",
+   "expect": "\\[or\\-exch\\-failed\\-names\\]"
+  },
+  {
+   "id": "or-exch-failure-ends-product",
+   "what": "a failing exchange function ends the Product (5.1: E2, the World is healthy). Only it catches the World staying healthy",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            error.code = OrchestrationErrorCode::ExchangeFailed;\n",
+   "replace": "            error.code = OrchestrationErrorCode::ExchangeFailed;\n            WorldFailure ended;\n            ended.world = world.Name();\n            error.failure = Break(std::move(ended));\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3*",
+   "expect": "\\[or\\-exch\\-healthy\\]"
+  },
+  {
+   "id": "or-exch-throw-breaks",
+   "what": "an exception from an exchange function marks the Product ended (5.1: it passes through, the World is not broken). Only it catches the exception path",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        auto done = entry.fn(world);",
+   "replace": "        auto done = [&] {\n            try {\n                return entry.fn(world);\n            } catch (...) {\n                WorldFailure ended;\n                ended.world = world.Name();\n                Break(std::move(ended));\n                throw;\n            }\n        }();",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-4*",
+   "expect": "\\[or\\-exch\\-throw\\-healthy\\]"
+  },
+  {
+   "id": "or-exch-next-called",
+   "what": "after a failing exchange function the next one of the same World still runs (5.1). Only it catches the stop inside one World",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (Detail::ExchangeEntry& entry : entries) {\n        if (!entry.fn) continue;\n        auto done = entry.fn(world);\n        if (!done) {\n            OrchestrationError error = std::move(done).error();\n            error.code = OrchestrationErrorCode::ExchangeFailed;\n            error.message = \"exchange function (\" + std::string(side) + \") of \" + Quoted(entry.unit) + \" on World \" +\n                            Quoted(world.Name()) + \" failed\" + (error.message.empty() ? std::string() : \": \" + error.message);\n            return Base::Err(std::move(error));\n        }\n    }\n    return {};\n}",
+   "replace": "    std::optional<OrchestrationError> first;\n    for (Detail::ExchangeEntry& entry : entries) {\n        if (!entry.fn) continue;\n        auto done = entry.fn(world);\n        if (!done) {\n            OrchestrationError error = std::move(done).error();\n            error.code = OrchestrationErrorCode::ExchangeFailed;\n            error.message = \"exchange function (\" + std::string(side) + \") of \" + Quoted(entry.unit) + \" on World \" +\n                            Quoted(world.Name()) + \" failed\" + (error.message.empty() ? std::string() : \": \" + error.message);\n            if (!first) first = std::move(error);\n            continue;\n        }\n    }\n    if (first) return Base::Err(std::move(*first));\n    return {};\n}",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-8*",
+   "expect": "\\[or\\-exch\\-stop\\-later\\]"
+  },
+  {
+   "id": "or-exch-break-calls-out",
+   "what": "a World breaking in its round still has its \"out\" called (5.1, O-11). Only it catches the break path",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n",
+   "replace": "        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) {\n            static_cast<void>(Exchange(slot.exchangeOut, world, \"out\"));\n            return ran;\n        }\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-7*",
+   "expect": "\\[or\\-exch\\-break\\-no\\-out\\]"
+  },
+  {
+   "id": "or-exch-replace-not-swapped",
+   "what": "a replacement keeps the old World's exchange functions (5.1: they come with the new build). Only it catches the swap",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.exchangeIn = std::move(registration.exchangeIn);\n    slot.exchangeOut = std::move(registration.exchangeOut);\n    slot.lastSchedule.clear();",
+   "replace": "    slot.lastSchedule.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-6*",
+   "expect": "\\[or\\-exch\\-replaced\\]"
+  },
+  {
+   "id": "or-exch-replace-failed-cleared",
+   "what": "a BuildNewFirst replacement clears the old exchange functions before it knows it succeeds (5.1: a failed one keeps the old). Only it catches the failure path",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    // DropOldFirst: the marked values are taken out, then the old World and its Registry go.\n",
+   "replace": "    slot.exchangeOut.clear();\n    slot.exchangeIn.clear();\n    // DropOldFirst: the marked values are taken out, then the old World and its Registry go.\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-6*",
+   "expect": "\\[or\\-exch\\-replace\\-failed\\-keeps\\]"
+  },
+  {
+   "id": "or-pbuf-options-early",
+   "what": "the options are let go at the start of ~Product instead of at step 5 (5.2 points 4 and 5: an executor the product gives through the options outlives the callbacks and the buffer). Only it catches when the options go",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {\n        slot->exchangeOut.clear();",
+   "replace": "    options_ = OptionBag();\n    for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {\n        slot->exchangeOut.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\] ~options "
+  },
+  {
+   "id": "or-exch-unit-name",
+   "what": "a unit's exchange function is recorded under the product's name (5.1: the error names the unit). Only it catches the unit name of a function a unit registered",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,",
+   "replace": "            WorldSetup setup(world.name, name_, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3 a unit's*",
+   "expect": "\\[or\\-exch\\-names\\-unit\\]"
+  },
+  {
+   "id": "or-exch-out-side-label",
+   "what": "a failing \"out\" function is reported as \"in\" (5.1: the error names the side). Only it catches the side of an \"out\" failure",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "Exchange(slot.exchangeOut, world, \"out\")",
+   "replace": "Exchange(slot.exchangeOut, world, \"in\")",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3 a unit's*",
+   "expect": "\\[or\\-exch\\-names\\-out\\]"
+  },
+  {
+   "id": "or-exch-replace-out-kept",
+   "what": "a replacement takes the new build's \"in\" functions but keeps the old \"out\" ones (5.1). Only it catches the out side of the swap",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    slot.exchangeIn = std::move(registration.exchangeIn);\n    slot.exchangeOut = std::move(registration.exchangeOut);\n    slot.lastSchedule.clear();",
+   "replace": "    slot.exchangeIn = std::move(registration.exchangeIn);\n    slot.lastSchedule.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-6*",
+   "expect": "\\[or\\-exch\\-replaced\\] in build2@Main out build1@Main"
+  },
+  {
+   "id": "or-pbuf-frozen",
+   "what": "the Product's buffer is frozen once Configure has run (5.2 point 1: never frozen). Only it catches a freeze of the Product's buffer",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    const bool configureReported = !unitErrors.empty();",
+   "replace": "    self.buffer_->Freeze();\n    const bool configureReported = !unitErrors.empty();",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "ModuleBuffer::Create after Build: the buffer is frozen"
+  },
+  {
+   "id": "or-pbuf-ondestroy-before-worlds",
+   "what": "the OnDestroy callbacks run before the Worlds go (5.2 point 4: after every World). Only it catches steps 1 and 2 swapped",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {\n        slot->exchangeOut.clear();",
+   "replace": "    while (!onDestroy_.empty()) {\n        std::function<void()> early = std::move(onDestroy_.back());\n        onDestroy_.pop_back();\n        if (early) early();\n    }\n    for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {\n        slot->exchangeOut.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5*",
+   "expect": "\\[or\\-pbuf\\-order\\] ondestroy pool ondestroy store ~exchange B"
+  },
+  {
+   "id": "or-pbuf-buffer-before-ondestroy",
+   "what": "the Product's buffer goes before the OnDestroy callbacks (5.2 point 4: every object of the buffer is still there while they run). Only it catches steps 2 and 4 swapped",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    while (!onDestroy_.empty()) {\n        std::function<void()> callback",
+   "replace": "    buffer_.reset();\n    while (!onDestroy_.empty()) {\n        std::function<void()> callback",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-5 *",
+   "expect": "\\[or\\-pbuf\\-order\\][^\\n]*~world A ~buffer\\-second ~buffer\\-first ondestroy pool"
+  },
+  {
+   "id": "or-pbuf-report-stops-configure",
+   "what": "the first Configure report stops the later units' Configure (5.2 point 3: the others still run and the errors are collected). Only it catches the later units running",
+   "guards": [
+    "orchestration O-2",
+    "exchange-declaration 5.2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        unit.unit->Configure(setup);\n        for (auto& installed : setup.runners_) runners.push_back(std::move(installed));\n",
+   "replace": "        unit.unit->Configure(setup);\n        for (auto& installed : setup.runners_) runners.push_back(std::move(installed));\n        if (!unitErrors.empty()) break;\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "product-buffer: P-7*",
+   "expect": "\\[or\\-pbuf\\-report\\-all\\]"
+  },
+  {
+   "id": "or-exch-round-after-failed-in",
+   "what": "after a failing \"in\" the World's round still runs before RunFrame returns the error (5.1: RunFrame stops). Only it catches the round not running",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (auto exchanged = Exchange(slot.exchangeIn, slot.executor->GetWorld(), \"in\"); !exchanged) return exchanged;\n        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n        }\n",
+   "replace": "        auto enteredIn = Exchange(slot.exchangeIn, slot.executor->GetWorld(), \"in\");\n        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n        }\n        if (!enteredIn) return enteredIn;\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3 a failing*",
+   "expect": "\\[or\\-exch\\-stops\\] in game@A a out game@A in game@B b",
    "id": "wg-held-not-cleared",
    "what": "a generating frame does not start with nobody holding: a Hold() stays and generation never ends. Only it catches the step before the frame",
    "guards": [
@@ -3137,6 +3632,50 @@
    "target": "gyo_orchestration_tests",
    "cases": "O-14: with the skeleton off*",
    "expect": "GYO_ASSERT failed: entry != nullptr && entry->role == TypeRole::Resource"
+  },
+  {
+   "id": "or-exch-in-before-generation-step",
+   "what": "the \"in\" exchange functions run before generation's pre-step, which then clears a Hold() the \"in\" made (exchange declaration W-2: pre-step, in, round, judgement, out; C19). Only it catches the in's place against the pre-step",
+   "guards": [
+    "orchestration O-12",
+    "orchestration O-14",
+    "exchange-declaration W-2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (generating) world.SetResource(WorldGeneration{.generating = true, .held = false});\n    // The exchange functions' \"in\", after the step above (world-gen declaration 5.1; exchange declaration W-2):\n    // an \"in\" that holds generation for this frame is not cleared by it.\n    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n",
+   "replace": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    if (generating) world.SetResource(WorldGeneration{.generating = true, .held = false});\n    // The exchange functions' \"in\", (mutant: before the step above) (world-gen declaration 5.1; exchange declaration W-2):\n    // an \"in\" that holds generation for this frame is not cleared by it.\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-9*",
+   "expect": "\\[or\\-exch\\-generation\\] in generating \\| r \\| out \\| in"
+  },
+  {
+   "id": "or-exch-out-before-judgement",
+   "what": "the \"out\" exchange functions run before generation's judgement, so the out of the frame generation ended in still reads it generating (W-2; C19). Only it catches the out's place against the judgement",
+   "guards": [
+    "orchestration O-12",
+    "orchestration O-14",
+    "exchange-declaration W-2"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n    // The exchange functions' \"out\", after the judgement: the \"out\" of the frame generation ended in reads it ended.\n    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n",
+   "replace": "    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-9*",
+   "expect": "\\[or\\-exch\\-generation\\] in generating \\| r \\| out generating \\| in generating \\| r \\| out generating \\| in generating \\| r \\| out generating"
+  },
+  {
+   "id": "or-exch-round-after-failed-in",
+   "what": "after a failing \"in\" the World's round still runs before RunFrame returns the error (5.1: RunFrame stops). Only it catches the round not running",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n",
+   "replace": "    auto exchanged = Exchange(slot.exchangeIn, world, \"in\");\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n    if (!exchanged) return exchanged;\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3 a failing*",
+   "expect": "\\[or\\-exch\\-stops\\] in game@A a out game@A in game@B b"
   }
  ]
 }
