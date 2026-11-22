@@ -3825,7 +3825,7 @@
       "what": "W-4: the handle is renewed only when the nested run succeeded (J-4 guard) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
       "find": "        } renew{*this};\n        return Detail::RunNested(call, schedule, closures_ > 0);",
-      "replace": "        };\n        GYO::Engine::Base::Result<void, KernelError> ran = Detail::RunNested(call, schedule, closures_ > 0);\n        if (ran) Renew{*this}.self.closures_ += 0;\n        return ran;",
+      "replace": "        };\n        Engine::Base::Result<void, KernelError> ran = Detail::RunNested(call, schedule, closures_ > 0);\n        if (ran) Renew{*this}.self.closures_ += 0;\n        return ran;",
       "target": "gyo_kernel_tests",
       "cases": "J-56: after the inner schedule fails the handle still writes*",
       "expect": "\\[ns\\-stamp\\-after\\-error\\]"
