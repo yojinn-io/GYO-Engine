@@ -35,7 +35,7 @@
 | [回滾](rollback.zh-Hant.md)（`RollbackInbox`、R-3）、[權威](authority.zh-Hant.md)（DI-A 7） | 已合併（#259） | 網路寫進 World 的位置 |
 | [日誌宣告](logging-declaration.zh-Hant.md) 5.4 | 已合併（#256） | Kernel 診斷紀錄「runner 在兩次 Run 之間取走」，「交換點在第 5 條才由編排層排；那時這個呼叫可以移到交換點，介面不變」（第 228 行） |
 | asset 宣告（分支 `claude/gyo2-asset-585196`，55a14825 動工前核准，1b120a86 紀錄） | **已核准、未合併** | X-1～X-6（5.6）、O-A1～O-A4（5.4）、G-1～G-3（5.13）、第 22 節 |
-| 生成世界的宣告（分支 `claude/gyo2-world-gen-77331d`，修訂 0 c8b5faf4） | 寫作中 | 交界（第 13 節） |
+| 生成世界的宣告（分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2） | 寫作中（建議 B、A／B 交使用者） | 交界（第 13 節） |
 
 任務卡寫「asset 5.5 的 X-1～X-8」「G-1～G-4」：核准版（55a14825）的交換點需求是 5.6 的 **X-1～X-6**（X-7、X-8 是修訂 0、1 的編號，已併入），生成世界的是 5.13 的 **G-1～G-3**。本頁照核准版。
 
@@ -192,7 +192,7 @@
 
 | 形 | 什麼 | 時點 | 誰寫 | 用它的（點名的） | 系譜 |
 |---|---|---|---|---|---|
-| **(1) 套用點** | World 裡的 System 呼叫 World 外的服務（有自己的鎖），把結果一次寫進 World；或把要送的交給服務 | 「進」：一輪最前面（預設骨架 `Main`／`First`；生成中是 `Generate`／`First`，第 13 節）；「出」：最後（`Main`／`Last`）。骨架關掉的 World 由產品指定 | 擁有服務的 Module | asset 的套用 System（E-6、E-20）；網路的收件與送件（E-8，網路 Module 批照下面的規則選 (1) 或 (2)） | Bevy asset server、gilrs；lightyear、bevy_replicon；Unity Netcode 的 receive group；flecs 的 `OnLoad`／`OnStore`；Mass 的 `SyncWorldToMass`（第 4.1 節） |
+| **(1) 套用點** | World 裡的 System 呼叫 World 外的服務（有自己的鎖），把結果一次寫進 World；或把要送的交給服務 | 「進」：一輪最前面（預設骨架 `Main`／`First`；生成世界若選 A，生成中另掛 `Generate`／`First`，第 13 節 W-3）；「出」：最後（`Main`／`Last`）。骨架關掉的 World 由產品指定 | 擁有服務的 Module | asset 的套用 System（E-6、E-20）；網路的收件與送件（E-8，網路 Module 批照下面的規則選 (1) 或 (2)） | Bevy asset server、gilrs；lightyear、bevy_replicon；Unity Netcode 的 receive group；flecs 的 `OnLoad`／`OnStore`；Mass 的 `SyncWorldToMass`（第 4.1 節） |
 | **(2) 交換函式** | 單位登記的函式，World 不在 Run 裡、Ready 時拿整個 World 做事 | 編排層在每個 World 的**一輪**之前（進）、之後（出）依登記的順序呼叫（一輪的定義見第 13 節 W-2） | 登記它的單位（或產品自己的 `build`） | Kernel 診斷紀錄的取走（E-19）；Client 的郵箱（E-22）；之後：時間的投影（E-18，若 SDL 那批移給 runner）、`HostClockSample`（PvP） | 時間設計 5.3（規格 H.1）；別家沒有這一層，最近的是 flecs 的 `ecs_run_post_frame`（一次性的佇列）與 replicon 測試在兩次 update 之間搬緩衝（第 4.1 節） |
 | **(3) runner 在兩次入口之間** | runner（或 Product 的持有者）在 World 不在 Run 裡時直接讀寫 World，或呼叫某個 Module 給的函式 | 兩次 `Product` 入口之間 | runner／產品 | runner 擁有的視窗的事件（E-10，若不走服務）；World 壞掉之後先寫失敗、再取診斷（日誌宣告 5.4 的順序規則） | Bevy winit 的 runner 在 update 之前寫視窗事件（第 4.1 節） |
 | **(4) Extract** | 一個 World 唯讀地讀另一個 World | 來源跑完、讀者的一輪之前，兩個都停著 | 讀者的 extract schedule | 渲染 World（E-11、E-14） | Bevy `SubApp::extract`（第 4.2 節） |
@@ -277,7 +277,7 @@
 4. **O-11 照舊成立**：交出不改「一個 World 壞了 Product 就結束」。實作那一批要說明它怎麼保住（候選：交出的租約帶一個放在編排層的原子旗標，壞掉當下設、每個入口先看；Kernel 不加原子操作），保不住就照 §3 交使用者。
 5. **Extract 在兩邊都停著的時點**（第 5.4 節）。
 
-**留給實作那一批的**（第一個點名的使用者：PvP Client 移植；檢查 S8）：入口的形（暫名 `Product::Lend(world)` → `WorldLease`、`Return`）、`RunFrame` 遇到交出的 World 怎麼辦、指名它的入口回什麼；遊戲初始化要在交出之前跑完（O-1）；讀者交出期間來源 `InsertSystems`（讀者的 Registry 讀來源的登記表，CCR-5 蓋不到這條跨 Registry 的讀）；準備函式在 Product 的執行緒跑、放進去的綁執行緒 Resource 交出後會斷言（Bevy 的 `!Send` 坑）；交出的 World 的形 (3) 由誰做。
+**留給實作那一批的**（第一個點名的使用者：PvP Client 移植；檢查 S8）：入口的形（暫名 `Product::Lend(world)` → `WorldLease`、`Return`；租約推一輪時和 `RunFrame` 共用同一段生成的處理與交換函式的呼叫，第 13 節 W-10）、`RunFrame` 遇到交出的 World 怎麼辦、指名它的入口回什麼；遊戲初始化要在交出之前跑完（O-1）；讀者交出期間來源 `InsertSystems`（讀者的 Registry 讀來源的登記表，CCR-5 蓋不到這條跨 Registry 的讀）；準備函式在 Product 的執行緒跑、放進去的綁執行緒 Resource 交出後會斷言（Bevy 的 `!Send` 坑）；交出的 World 的形 (3) 由誰做。
 
 **系譜與比過的**：
 - **整個交出**（**選這個**）：Bevy pipelined 渲染把 render SubApp 整個當值經 channel 送到渲染執行緒、同步點只在 extract（第 4.2 節）——這是「在別的執行緒跑整個 World」的直接先例。Unity 的 `ExclusiveEntityTransaction` 也是整個交出，但只開放一部分 `EntityManager` 操作給載入用的 World、不在那條執行緒跑 System，作為先例較弱（檢查 S8 (e)）。
@@ -319,7 +319,7 @@
 |---|---|---|---|
 | X-1 執行器：讀檔解碼在 World 執行緒外；停了之後提交是空操作；介面由 asset 自己的話定 | asset 5.6 | 執行器的實作由產品（或測試）放進 `ProductDescription::options` 的持有者結構，world_asset 在 `Configure` 讀；或由 world_asset 依賴的單位（之後的 threads Module）在它自己的 `Configure` `Create` 進共用處，world_asset 在 `Configure` `Find`（第 5.2 節第 1、2 點）。停了之後的行為是執行器自己的契約 | 選項、共用處實作；執行器本身在 asset 實作批與 threads 重審 |
 | X-2 交換點不認得 asset | asset 5.6 | 形 (1) | 契約（O-12） |
-| X-3 若定了「每幀的邊界」，套用 System 掛在它之後 | asset 5.6 | 形 (1) 的「進」＝一輪最前面的 stage（`Main`／`First`、生成中 `Generate`／`First`）；交換函式的「進」在它之前 | 契約（O-12） |
+| X-3 若定了「每幀的邊界」，套用 System 掛在它之後 | asset 5.6 | 形 (1) 的「進」＝一輪最前面的 stage（`Main`／`First`；生成世界選 A 時生成中另掛 `Generate`／`First`）；交換函式的「進」在它之前 | 契約（O-12） |
 | X-4 執行緒的數量與歸屬由交換點或 runner 定 | asset 5.6 | 執行緒池由產品或 threads 的 Module 建（同 X-1 的兩條路）；World 的執行緒由 runner 定（第 5.3 節） | 契約 |
 | X-5 測試能控制工作何時開工、完成 | asset 5.6 | 測試在 `ProductDescription::options` 放自己的執行器（持有者結構） | 選項實作 |
 | X-6 Product 結束時，未完成的工作能停下或等完 | asset 5.6 | world_asset 的 `OnDestroy` 回呼叫執行器停下（執行器介面是 asset 的話，可以帶 `Stop`）；回呼跑時執行器一定還在（第 5.2 節第 4、5 點） | 實作 |
@@ -491,19 +491,20 @@
 
 ## 13. 和生成世界（重做）的交界
 
-生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 0 c8b5faf4，第 5.1～5.5、5.14 節）。2026-11-22 兩張卡用 SendMessage 對齊，結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）：
+生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2；交界表在它的 5.12）。2026-11-22 兩張卡用 SendMessage 對齊，結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議 **B「生成期間每幀清單照跑」**，A「生成中跑另一份生成清單」與 B 之間交使用者定；下表對兩者都成立，只有 W-3 分開寫。
 
 | # | 事項 | 誰負責 | 對齊的內容 |
 |---|---|---|---|
-| W-1 | 生成的形 | 生成世界 | 每個 World 有生成清單與每幀清單；生成中的 World 在一次 `RunFrame` 裡跑一批生成清單、不跑每幀清單；哪一批跑完沒人 `Hold()` 就結束，同一次 `RunFrame` 接著跑每幀清單（照 Bevy 第一次 update 先跑 startup）。一批＝一次 `RunFrame`，批與批之間 runner 回到迴圈 |
-| W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部：平常＝每幀清單；生成中、這批有人 `Hold()`＝這一批生成清單；生成結束的那一批＝那批生成清單＋接著的每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 在讀者的一輪之前（第 5.4 節）。生成世界不必提供「這一輪是不是生成」給交換函式（要的時候是 RC-O11） |
-| W-3 | 套用點（形 (1)） | 擁有服務的 Module | 把 World 外的結果帶進 World 的 System（asset 的套用、網路的收件），預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`；骨架關掉時作者自己掛（同 O-4）。asset G-1 由此成立 |
-| W-4 | `beforeSwap` | 生成世界（保留）；本頁寫明 | `beforeSwap` 是換上之前同步跑一次的關卡，不是生成；期間沒有套用點、沒有交換點（asset G-3），不加機制 |
-| W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（形 (2)），或 Module 的服務＋套用點（形 (1)）。生成世界提供 `Product::Generating`、`GenerationPasses` 與 World 內的 `WorldGeneration` |
+| W-1 | 生成的形 | 生成世界（5.1、5.2） | B：每幀清單照常跑；編排層擁有「生成中」的狀態（World 的 Resource `WorldGeneration`：`Generating()`、`Hold()`），提供條件 `WhileGenerating`／`AfterGenerating`，作者用帶條件的 set 擋。A：生成中的 World 在一次 `RunFrame` 裡跑一批生成清單、不跑每幀清單，結束的那一批同一次接著跑每幀清單。兩者都是一批＝一次 `RunFrame`，批與批之間 runner 回到迴圈 |
+| W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部。B 下就是每幀清單（生成中也一樣）；A 下生成中是那一批生成清單、結束的那一批是生成清單＋每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 在讀者的一輪之前（第 5.4 節）。生成世界不提供「這一輪是不是生成」給交換函式（要的時候是 RC-O11） |
+| W-3 | 套用點（形 (1)） | 擁有服務的 Module；生成世界 5.12 | B：掛 `Main`／`First` 一處即可。A（使用者選 A 時）：預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`，骨架關掉時作者自己掛（同 O-4）。asset G-1 兩者都成立 |
+| W-4 | `beforeSwap` | 生成世界（5.4）；本頁寫明 | `beforeSwap` 是換上之前同步跑一次的關卡，不是生成；期間沒有套用點、沒有交換點（asset G-3），不加機制 |
+| W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（形 (3)），或交換函式、Module 的服務＋套用點。生成世界提供 `Product::Generating`、`GenerationPasses` 與 World 內的 `WorldGeneration`（5.2、5.3） |
 | W-6 | 產品給 Module 的設定 | 本頁（Product 層）；生成世界（配發器） | 預設實體配發器的範圍每個 World 可能不同，用 `WorldDescription::options`（`EntityAllotterOptions`），不用 Product 層 Resource；Product 層 Resource 的形狀歸本頁 |
-| W-7 | 執行緒 | 本頁 | 生成的狀態在 Product 的 World 槽、照 CCR-5 在呼叫的執行緒上讀寫；World 交出到別的執行緒時，生成的狀態跟著交出，那幾批由持有的執行緒經交出的入口推動（第 5.3 節） |
+| W-7 | 執行緒 | 本頁 | 生成的狀態在 Product 的 World 槽、照 CCR-5 在呼叫的執行緒上讀寫；World 交出到別的執行緒時，生成的狀態跟著交出（第 5.3 節） |
 | W-8 | 結束條件 | 生成世界 | 由作者的 System 給（asset G-2），不經本頁 |
-| W-9 | 遊戲初始化 | 生成世界 | 照舊先跑，跑在第一個 World 的生成之前 |
+| W-9 | 遊戲初始化 | 生成世界（5.4） | 照舊先跑，跑在第一個 World 的生成之前 |
+| W-10 | `RunSchedule` 與一輪的入口 | 生成世界（5.3）；本頁（交出的入口） | `RunSchedule` 不讀寫生成的狀態，只用它推的 World 推不動生成。之後的「一個 World 的一輪」入口（第 5.3 節的交出，暫名 `WorldLease`）和 `RunFrame` 共用編排層內同一段生成的處理（私有步驟）與同一段交換函式的呼叫；只定契約，本批不實作 |
 
 ## 14. 範圍的限界
 
