@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 4）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 5）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 5**：主會話知會兩張新卡——audio 那一側的小批另開 `gyo2-audio-clip-loader`（第 7 節改成只做輸出後端）、Kernel 的 `Summary` 與訊息另開 `gyo2-kernel-summary-msg`（第 6.3、6.6 節改成引用它、W 開工前要有結論）；跟上 gyo2 02a22176（HANDOFF 與批次表已在 gyo2 上）。
 - **修訂 4**：修訂 3（fae7eb38）送 Fable／high 窄複查：blocker 2、should 10、nit 13（`build/evidence/gyo2-sdl-declaration/declaration-r3-narrow-check.md`）。全部採用，對照在第 20 節。最大的改動：KR 在統合只寫需求與邊界，和 GYO 現行 Kernel 契約的九個衝突點（hook 的種類、不可就地改、一致的時點、連帶刪除的輪數、子的順序、回滾、讀檔、複製、內建元件的登記）列成表，要改條文的在 KR 的宣告交使用者；渲染 World 的保留式照 Bevy 實際的做法改寫、列出四個衝突點；第 6.6 節補九項（最大的是 `gyo.ui` 的節點模型）；X 拆成 X1（平的）、X2（階層，等 KR）；Q4 加照 Bevy 的 (d)。
 - **修訂 3**：使用者在主會話更正父子的位置——照 Bevy 放進 Kernel（通用的關係機制、`ChildOf`），`transform` 只放 `Transform`、`GlobalTransform`、傳播；並定「ECS 相關的機制以 Bevy（含生態）為主參考，偏離要寫衝突點與膠水量」（HANDOFF `v8-arch-gyo2-hierarchy-bevy-and-primary-reference`）。改：P25、P26、第 3.3、4.2、4.3、6.4 節；新的第 6.5 節（Kernel 的關係，子批 KR，排在 X 之前）、第 6.6 節（借自別家與偏離 Bevy 的逐項檢查）；渲染 World 的實體改照 Bevy 0.15 起的保留式（第 6.1 節 8、R6）；縮放照 Bevy 用 `Vec3`、不再交使用者。
 - **修訂 2**：修訂 1（95f799c0）送 Fable／high 窄複查：blocker 1、should 11、nit 13（`build/evidence/gyo2-sdl-declaration/declaration-r1-narrow-check.md`）。全部採用，處理對照在第 18 節。最大的改動：**來源側與渲染側的單位拆成不同的列**、後端的單位不放進任何 World（第 3.3、9.3 節，修 blocker：依賴逐 World 檢查）；R1 拆成 R1a／R1b，讓來源替換那一題不擋 KeepTool；`GlobalTransform` 定成畫面用的推導值、不進摘要；Q2 只問 ufbx；Q3、Q4 的比較表修正並補選項。同日使用者在主會話定「Transform、相機、物理全部放Module裡」（HANDOFF `v8-arch-gyo2-transform-camera-physics-modules`），寫進 P25、第 6.4 節、子批 X。
@@ -22,7 +23,7 @@
 ## 0. 根據與讀的版本
 
 - 程式：`origin/gyo2` 1d4a8d7a（PR #283 asset 合併之後）。`engine/core/time/include/engine/time/MonotonicClock.hpp`；`engine/ecs/kernel` 的 Extract 宣告那一半（`Params.hpp:1318-1340`、`Registry.hpp:673-676`、`Declarations.hpp:90-91`；`Registry::SetExtractSource` 存的是裸指標，`Registry.cpp:673`；**執行那一半隨第 4 批拿掉**，參數建構子會斷言 `Params.hpp:1325`）；`engine/core/math`（`Vec3`、`Quaternion`、`Matrix4`；沒有 Transform 元件）；Kernel 沒有父子關係（`ChildOf` 一類）；`build/cmake/GyoUnitRegistry.cmake`（Plugin 可以 `library_only`；`library_only` 的依賴不必由產品帶，`:236-242`；Plugin 不能 `default=yes`，`:120`；**Module 依賴 Plugin 是 FATAL_ERROR**，`:164-165`；有登記單位的列必須 `library_only=no`，`:105-110`）；`GyoBuild.cmake`（`third_party/` 在登記檔載入之前加入，`:34` 先於 `:55`；**登記檔裡每一個 Plugin 都 `add_subdirectory(plugins/<名>)`，不看產品選了沒**，`:59-66`）；`engine/orchestration/src/Product.cpp`（Plugin 的 `Configure` 在 Module 之後，`:215-218`；銷毀的先後 World → `OnDestroy` 反序 → runner → 共用處，`:75-104`）；`config/plugins.csv`（只有表頭）；頂層沒有 `plugins/`。
-- 文件：批次表（文件分支 `origin/claude/gyo2-time-design`）SDL 列、audio 那一側的小批、「不擋路的小事」；HANDOFF（副本：主 checkout `build/evidence/gyo2-sdl-declaration/HANDOFF-d315368c.md`）的 `-platform-obsolete-split-into-modules`、`-os-in-core-platform-dirs`、`-json-adapters-dir`（含 11-20 兩次推廣）、`-plan-gaps-2026-11-21`、`-audio-review-approved`、`-world-audio-withdrawn`、`-infrastructure-before-products`、`-module-plugin-game-tool`、`-module-plugin-owner-definition`、`-module-plugin-registers`、`-module-deps-in-registers`、`-products-pick-modules`、`-keeptool`、`-thread-binding-by-runner`、`-asset-adapter-world-asset`；主會話 2026-11-23 轉來的 `-2d-and-3d`。
+- 文件：批次表（修訂 4 以前讀文件分支 `origin/claude/gyo2-time-design`；之後 HANDOFF 與批次表都在 gyo2 上）SDL 列、audio 那一側的小批、「不擋路的小事」；HANDOFF（副本：主 checkout `build/evidence/gyo2-sdl-declaration/HANDOFF-d315368c.md`）的 `-platform-obsolete-split-into-modules`、`-os-in-core-platform-dirs`、`-json-adapters-dir`（含 11-20 兩次推廣）、`-plan-gaps-2026-11-21`、`-audio-review-approved`、`-world-audio-withdrawn`、`-infrastructure-before-products`、`-module-plugin-game-tool`、`-module-plugin-owner-definition`、`-module-plugin-registers`、`-module-deps-in-registers`、`-products-pick-modules`、`-keeptool`、`-thread-binding-by-runner`、`-asset-adapter-world-asset`；主會話 2026-11-23 轉來的 `-2d-and-3d`。
 - 同詞異義表 `rebuild-vocabulary.zh-Hant.md` 第 0 節末；AGENTS §2、§3、§4、§6、§14。
 - `audio.zh-Hant.md` 第 4 節、第 5.2 節、DI 2、DI 3、DI 7。asset 宣告 `asset-declaration.zh-Hant.md` 5.4、5.7、5.9.1、5.11（stb_image）、第 15 節第 1、8 項。
 - 編排層 O-3、O-4、O-6、O-8、O-11～O-15、RC-O13；交換點宣告 5.3～5.6；`world-time.zh-Hant.md` 第 3 節、WT-2、WT-6；時間設計 5.5（二）（三）、第 9 節 (a)；Kernel 頁 DI-KS 13、14、15、26。
@@ -254,10 +255,11 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 
 **事實**：Kernel 的 `World::Summary` 雜湊每個訊息緩衝的序號與游標（`engine/ecs/kernel/src/World.cpp:1190-1205`，gyo2 1d4a8d7a；和 payload 的雜湊函式無關）。依 OS 事件發 `Message`，摘要就依時序而變。
 
-**本卡的判斷**（L17）：`input` 把這一幀的狀態與依序事件放在一個 **Resource**（每輪由套用 System 換掉），**不用 `Message`**；這個 Resource 的雜湊函式什麼都不寫。`window` 的視窗事件（大小改變、要求關閉）同樣放 Resource。
-- 理由：和 asset 的 `AssetView`（asset 宣告 5.9.1、5.7 末）、audio 5.4（依時序變的值不進摘要）同一個判法；原始的 OS 輸入本來就不是決定性的資料。判定要的輸入由作者換成每 tick 的遊戲輸入，走回滾的輸入歷史（`rollback.Input<T>()`）——那份才進摘要。
-- 代價：(1) 和 Bevy 不同（Bevy 用 `Messages<KeyboardInput>`，偵察 2.1）；(2) 判定的 System 若直接讀原始輸入，摘要抓不到——這是誤用，由設計審查抓（不加守衛）；(3) Resource 每幀換一次，固定步的 System 一幀跑 0 次會漏掉、跑多次會重讀同一批「依序事件」（`Message` 每個讀者有自己的游標，沒有這個問題）——作者要在每幀的 System 把輸入累積成自己的每 tick 輸入（Bevy 官方範例 `physics_in_fixed_timestep.rs` 也是在 fixed loop 之前累積），寫進子批 W 的說明頁。
-- **要不要給訊息型別一個「不進摘要」的選項**：Kernel 的事，交主會話定，本線不改。有了那個選項，`input` 可以改回 `Message`（子批 W 之後的事）。
+**怎麼定**（2026-11-23 起）：這一題由主會話另開的 Kernel 卡 **`gyo2-kernel-summary-msg`** 處理（依外部事件發的 `Message` 讓摘要隨時序變），本線不自己定、不改 Kernel。子批 W 照那張卡的結論做，**W 開工前要有它的結論**：
+- 那張卡給了「這類訊息不讓摘要隨時序變」的做法 → `input`、`window` 照 Bevy 用 `Message`（`Messages<KeyboardInput>`、`Messages<WindowResized>`），每個讀者有自己的游標，固定步跑 0 次或多次也不漏不重。
+- 沒有 → `input` 把這一幀的狀態與依序事件放在一個 Resource（每輪由套用 System 換掉、雜湊函式什麼都不寫，同 asset 的 `AssetView`、audio 5.4）；代價是偏離 Bevy、作者要在每幀的 System 把輸入累積成自己的每 tick 輸入（Bevy 的 `ButtonInput` 在固定步也要累積，官方範例 `physics_in_fixed_timestep.rs`），寫進 W 的說明頁。
+- 兩種都一樣的：原始的 OS 輸入不是決定性的資料；判定要的輸入由作者換成每 tick 的遊戲輸入，走回滾的輸入歷史（`rollback.Input<T>()`）——那份才進摘要。判定的 System 直接讀原始輸入是誤用，由設計審查抓（不加守衛）。
+- 和 KR 的關係：那張卡與子批 KR 都改 Kernel，誰後合併誰跟上 gyo2（條號照第 10.1 節的分配）。
 
 ### 6.4 Transform、相機、物理與 2D／3D 管線（使用者 11-23，P24、P25、P26）
 
@@ -327,7 +329,7 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 | 輸入的雙軌資料（狀態＋依序事件） | 同 Bevy（`ButtonInput`＋訊息）；做法來自 master | — | — | — | 照 Bevy |
 | 有視窗的 runner 由 SDL 的實作在 `Configure` 裝 | 同 Bevy（`WinitPlugin::set_runner`） | — | — | — | 照 Bevy |
 | 輸入經「runner 泵＋服務＋套用 System」進 World | 接合點：泵像 `bevy_winit`（在 runner），進 World 的那一步是 GYO 的 O-12 套用點（`bevy_gilrs` 的 `Gilrs` 是 World 裡的 Resource、由 System 自己取，`gilrs_system.rs:38-48`，不完全同） | — | Bevy 由 runner 直接寫 World；GYO 的 runner 不認得輸入型別、多個 World 各自取 | 一個套用 System | GYO 的 O-12，寫明接合點 |
-| **輸入與視窗事件放 Resource、不用 `Message`** | **偏離**（Bevy 用 `Messages<KeyboardInput>`、`Messages<WindowResized>`） | — | Kernel 的 `Summary` 雜湊訊息的序號與游標（第 6.3 節） | 一個每幀換掉的 Resource＋作者在固定步之前累積；**回頭改回 `Message` 時，每個讀輸入的 System（`world_imgui`、`world_ui`、作者的 System、W 的說明頁）都要改** | **要主會話在 W 開工前回答**「訊息型別不進摘要」的選項；有就照 Bevy 用 `Message`，沒有才偏離（第 16 節） |
+| 輸入與視窗事件用 `Message` 還是 Resource | 照 Bevy 是 `Message`（`Messages<KeyboardInput>`、`Messages<WindowResized>`） | — | Kernel 的 `Summary` 雜湊訊息的序號與游標（第 6.3 節） | 用 Resource：一個每幀換掉的 Resource＋作者在固定步之前累積；之後再改回 `Message`，每個讀輸入的 System 都要改 | **照 Kernel 卡 `gyo2-kernel-summary-msg` 的結論**，W 開工前要有；那張卡解掉就照 Bevy |
 | **事件時刻保留、在平台邊界換成時間基準** | **偏離**（Bevy 不保留 OS 的事件時刻） | Unity Input System 保留時刻（對照）；做法來自 master | 和 ECS 不衝突（只在 SDL 的實作裡） | 一個配對的純函式＋換算 | 使用者的決定（P11）；不是混搭 |
 | **要後端的 Module `default=no`** | **偏離**：Bevy 的 `InputPlugin`、`WindowPlugin` 無條件在 `DefaultPlugins`，沒有後端也照跑（只是資料） | Godot 的 headless 選 dummy（對照） | **使用者 11-13 的「缺後端是明確錯誤」**（P22）與第 9.2 節第 3 點：預設帶又沒有後端就報錯 | `default=no`：有畫面的產品列 3～5 列 | 隨 Q4：選照 Bevy 的 (d) 時 `input`、`window` 改 `default=yes`、缺後端不是錯；`render_world` 照角色只放渲染 World，仍 `default=no` |
 | 混音器由開裝置的單位建 | 只有「開裝置的一方擁有輸出」同 Bevy；Bevy 的混音器是 rodio 的（`bevy_audio/src/audio_output.rs:9-22`），沒有「Module 介面＋後端單位」的分法 | — | — | — | GYO 的 audio Module＋後端，接合點同 Bevy |
@@ -371,7 +373,7 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 
 **Q1 各選項下**：音訊後端的單位不論在哪（B：`sdl_audio` Plugin；A／A'：音訊 adapter 的單位），(i) 都成立——它只要求「建混音器與開裝置是同一個單位」。
 
-**「audio 那一側的小批」（clip 來源、音效 loader）要不要併進本線**：**建議維持另做**（asset 已合併，可以現在開），不併。理由：(1) 它的兩件（`ClipBank` 留不留、`"sound"` 的資料契約與 loader）是資料層，用現有的 `Mixer::Render` 測試與 asset 的 loader 測試就驗得到；批次表的「那時才有真的 `Render` 可驗」——真的裝置驗的是後端，不是 clip 的來源；(2) 它依賴 asset、不依賴 SDL；本線大，併進來拖慢它；(3) 兩者交界只有「混音器由誰建」，本節已定。批次先後是主會話照 L17 排的，這裡只是建議。
+**「audio 那一側的小批」（clip 來源、音效 loader）**：主會話已另開卡 `gyo2-audio-clip-loader`（使用者在主會話「開 audio 那一側的小批和 Kernel 兩件」），不併進本線。本線只做輸出後端（audio 頁第 4 節）；兩者交界只有「混音器由誰建」，本節已定，那張卡照用。
 
 ## 8. 輸入事件的到達時刻（要涵蓋的第 6 項）
 
@@ -472,7 +474,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 先後：
 - **馬上可以開**：KR（Kernel）、R1a、R1b（只動 Kernel 與編排層，不依賴 P）、X1、I（不依賴 SDL；I 定的像素格式、原點、列距要和 R2b 對過，master 坑 17）。
 - **KR 之後**：X2（傳播讀 `ChildOf`）。KR 帶著要交使用者的題（第 6.5 節），不擋 X1、R2b、K。
-- **改 Kernel 的三個子批（KR、R1a、R1b）**：會改同一段同步點的套用（`World.cpp`）與執行（`Executor.cpp`），不只是文件的條號。建議 **R1a 先合**（改動淺：加 `RunExtract`），KR 跟上再合（套用步驟的改動深），R1b 在 R1a 之後。條號先分配：DI-KS 29～34 給 KR、35～37 給 R1a、38～40 給 R1b；Kernel 的 RC（目前到 RC 24）25～27 給 KR、28～29 給 R1a、R1b；`KernelErrorCode` 的新值照合併的先後接著編。主會話那一側若同時有 Kernel 卡（例：「訊息型別不進摘要」的選項），從 41、RC 30 起。
+- **改 Kernel 的三個子批（KR、R1a、R1b）**：會改同一段同步點的套用（`World.cpp`）與執行（`Executor.cpp`），不只是文件的條號。建議 **R1a 先合**（改動淺：加 `RunExtract`），KR 跟上再合（套用步驟的改動深），R1b 在 R1a 之後。條號先分配：DI-KS 29～34 給 KR、35～37 給 R1a、38～40 給 R1b；Kernel 的 RC（目前到 RC 24）25～27 給 KR、28～29 給 R1a、R1b；`KernelErrorCode` 的新值照合併的先後接著編。主會話那一側的 Kernel 卡（`gyo2-kernel-summary-msg`）若要新條號，從 DI-KS 41、RC 30 起；誰後合併誰跟上 gyo2。
 - **P 之後**：W、A、T（`sdl_ttf` 依賴 `sdl`；T 的驗收是點陣圖的形狀與 rowPitch，不需要畫）。
 - **R2a** 等 P、W（畫到視窗）。R2a 自己用一個 World 加「出」的 System 驗，不需要 Extract。
 - **K** 等 R2a、R1a（draw list 經 Extract）、W。Q3 (a) 時 K 不需要 R2a 的 2D pass 與 shader 管線（官方繪製後端自帶 shader〔知〕），只要裝置與 swapchain——那時 R2a 可以拆出前半讓 K 先用。K 是本線唯一使用者點名的 Feature，不等整個 Renderer 與 3D 管線（AGENTS §2：衝突時保 Feature 的方向）。
@@ -547,7 +549,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | L-10 | 後端的注入通則（第 9.2 節）、測試用假後端的 Plugin 單位、條號的分配 | 只用 O-2、O-15 已有的規則 |
 | L-11 | `GlobalTransform` 的雜湊函式什麼都不寫、判定不讀它；相機帶不透明的目標 id、不依賴 render（Q4 選 (d) 時照 Bevy 依賴 `window`）；Kernel 的關係拆成先行的子批 KR；X 拆 X1／X2 | 第 6.4、6.5 節 |
 | L-12 | B 的登記形傾向「多列」（不是一列多 target） | 第 9.1 節；Q1 一起看 |
-| L-13 | audio 那一側的小批維持另做；子批的先後與改 Kernel 的三個子批的合併先後、條號的分配（建議，主會話排） | 第 7 節、第 10.1 節 |
+| L-13 | 子批的先後與改 Kernel 的三個子批的合併先後、條號的分配（建議，主會話排） | 第 7 節、第 10.1 節 |
 | L-14 | 第 6.6 節的處置欄（哪些照 Bevy、哪些是有理由的偏離） | P26 的判法；偏離的都寫了衝突點與膠水量 |
 | L-15 | 渲染 World 的實體對應照 Bevy 0.15 起分三種、R2b 逐種判（修訂 2 以前的「每輪全部重抽」拿掉） | 第 6.1 節 8；P26 |
 | L-16 | 縮放照 Bevy 用 `Vec3`，不再交使用者 | 第 6.4 節；P26 |
@@ -661,11 +663,13 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 ## 16. 和其他卡的協調（經主會話）
 
-- **asset（PR #283，已合併）**：音效 loader 與 clip 來源在 audio 那一側的小批（第 7 節）；圖片 loader 在子批 I（image Module，stb_image）。
+- **asset（PR #283，已合併）**：圖片 loader 在子批 I（image Module，stb_image）。
+- **`gyo2-audio-clip-loader`**（音效 loader 與 clip 來源）：混音器由音訊後端的單位建、產品可經選項覆寫（第 7 節），那張卡照用。
 - **網路 Module（PR #275）**：輸入的時刻給網路的預測用；事件時刻對到 tick、`Transform` 要不要複製是網路那一側的事；`ChildOf` 的複製、實體編號、父比子晚到（K8）和 KR 對。
 - **回滾 Module**：`Children` 在 R-2 前提 1 裡屬哪一類、回滾的做法（K6），KR 的宣告和回滾頁一起改。
 - **讀檔**：存不存 `Children`、放回時跳不跳維護（K7），KR 的宣告和讀檔的說明頁（`system-contract-page.zh-Hant.md` 的讀檔一節）一起改。
-- **主會話（Kernel）**：「訊息型別不進摘要」的選項——**要在子批 W 開工前回答**（有就照 Bevy 用 `Message`；之後再改回，每個讀輸入的 System 都要改，第 6.6 節）；KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
+- **`gyo2-kernel-summary-msg`**（Kernel 的 `Summary` 與訊息）：輸入用 `Message` 還是 Resource 照它的結論，**W 開工前要有**（第 6.3 節）；它和 KR 都改 Kernel，誰後合併誰跟上 gyo2。
+- **主會話（Kernel）**：KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
 - **圖書管理員**：「送進 World 外服務的時刻都是時間基準」登記成 CCR（第 8 節末）。
 - **風紀委員**：Q1、Q2 的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句）；Q3、Q4 若推翻 11-13 的句子，runtime-composition §4 的統一處理時一起改。
 - **KeepTool**：子批 K 等於 `-keeptool` 那一批，主會話確認是否併進本線。
