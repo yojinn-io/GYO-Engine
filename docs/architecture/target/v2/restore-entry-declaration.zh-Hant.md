@@ -11,6 +11,7 @@
 - **修訂 10（2026-11-17）**：照第二次換模型檢查（Fable／high，blocker 3、should 11、nit 8，全部採用；報告 `build/evidence/gyo2-restore-entry/declaration-check-fable-r9.md`）整份重寫。最大的三處：判定改寫成「實作時的 Engine」（批次表第五段，Kernel 減法、編排層、時間 Module、權威與回滾都已做完）；讀檔放在**編排層的「生成世界」**（使用者 `two-layers-like-bevy`），修訂 6～9 的「建世界的階段整件拿掉」是錯的（拿掉的只有 Kernel 那一層）；5.5 照 `clock-out-of-kernel` 重判。逐條對照在第 16 節。
 
 - **修訂 11（2026-11-17）**：照窄檢查（Fable／high；報告 `declaration-check-fable-r10-narrow.md`；舊 blocker：5.5 與 `two-layers-like-bevy` 已改好、判定剩一處；新的 blocker 2、should 5、nit 6，全部採用）改。最大的兩處：Resource 放回改成「編排層先放、讀檔的 System 用 `ResMut` 覆寫」（System 沒有參數能放進不存在的 Resource）；補上使用者的 `game-init-list`（遊戲初始化只在行程啟動時跑一次、跑在第一個 World），修正 1.1、第 2、4、15 節。5.1 改成移配發器範圍的下界。對照在第 17 節。
+- **修訂 12（2026-11-22，草案，等動工前核准）**：實作卡 `gyo2-restore-impl` 開工前照現在的 `origin/gyo2`（879350d4，第 4 批、生成世界 #272 已合併）逐條對照。大部分已被骨架、生成世界兩批做掉；剩下的範圍縮小，判定改成「先用既有測試跑突變，存活的才補案例」。全文在第 18 節；第 2、5.8、5.7、13 節被第 18 節取代的地方以第 18 節為準，原文保留不改（核准的是修訂 11）。
 - Owner：架構（GYO2 主會話開的任務卡）。這一批只做到宣告核准為止，**不實作**。實作是批次表第五段「讀檔的實作」（`rebuild-batch-plan.zh-Hant.md`）。
 - 讀的版本：程式 `origin/gyo2` 15ba81ef（K0、測試舊帳已合併）；批次表與 HANDOFF 在 `claude/gyo2-time-design` f530a1a4；統合修訂 33（1b3f6886，DI-KS 15 第 (7) 項收了「Ready 時設配發器」）；回滾份 `claude/gyo2-rollback-module-8bac02` 9418fcf1（第 7.4 節）。
 - 證據：開發機（Intel Mac，使用者的本機）主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-restore-entry/`（git 不追蹤）：`scout-old-design.md`、`scout-mature-practice.md`、`premises-and-scope.md`、`declaration-check-fable-r0.md`、`declaration-check-fable-r9.md`。
@@ -343,3 +344,88 @@ Engine 的兩點保證分在兩層：
 | should：5.1 要移下界 | 5.1 寫明；DI-KS 15 第 (7) 項的字面請主會話改 |
 | should：「執行中丟掉 World、建新的」沒有寄 | 5.7、第 8 節給骨架那一批 |
 | nit：代號、Bevy 出處、5.5 措辭、OnAdd 的突變範圍、「字面」、過時字樣 | 第 0 節改代號；第 4 節出處改 `bevy_world_serialization`；5.5 改寫；判定 1 加註；第 4、15 節改「卡片的讀法」；讀的版本與第 14 節更新。批次表的兩處（第一段還寫「等使用者回 5.3」、骨架那一列寫「放回存檔的實體」）轉主會話 |
+
+---
+
+## 18. 修訂 12：實作前對照現況（草案，等動工前核准）
+
+讀的版本：`origin/gyo2` 879350d4（第 4 批 #259、#265，生成世界 #272，N13 #271 已合併）；交換點 #270（`claude/gyo2-exchange-81ea9f` 7b4cf2e9，未合併）；asset 宣告（`claude/gyo2-asset-585196`）；狀態機修訂 8 的卡（`gyo2-state-machine-r8`）還沒有 commit。
+
+**一句話**：這份宣告要的東西，骨架與生成世界兩批已經做掉大半（讀檔放在新 World 的生成世界、移下界的時機、遊戲中讀檔、讀兩次相同、新 World 的紀錄從空開始，都有案例）。剩下的是：一個沒有任何測試的寫法（重新配號）、說明頁的讀檔一節、照現在的程式重跑判定 2 的突變。
+
+### 18.1 逐條對照
+
+**A. 仍成立（照做，不改）**
+
+| 節 | 內容 | 現況的根據 |
+|---|---|---|
+| 4 | 一律新 World；讀檔是生成世界裡作者的 System | O-8、O-14（`orchestration.zh-Hant.md`）；第 15 節已核准 |
+| 5.1 | 編號兩種寫法；Kernel 的兩點（範圍外的 `SpawnWithId` 照常、範圍內的被丟並留紀錄） | DI-KS 15 (7)（生成世界改字）；`World.cpp` 的 `IdInAllotterRange` |
+| 5.2 | 讀檔不受寫者規則管 | 第 4 批拿掉寫者的數量 |
+| 5.3 | hook 照常觸發（Bevy、flecs） | 讀檔走一般的 `Spawn`／`SpawnWithId`，Kernel 不認得讀檔 |
+| 5.4 | 放回的格子取套用那個同步點的 stamp | 同上 |
+| 5.6 | 新 World 的紀錄從空開始 | `RestoreFlowTests` case 3 `[or-restore-new-records]` |
+| 6 | 讀檔不帶回滾的歷史 | 回滾的狀態在 World 的 Resource 與每個 World 一份的 `ModuleBuffer`（`Setup.hpp:142`），替換時隨新的登記重建 |
+| 10、11 | Delta、Replacement Criteria | 不變 |
+
+**B. 已被別批做掉（這一批不再做，只在說明頁引用）**
+
+| 節 | 宣告要的 | 誰做的、在哪裡 |
+|---|---|---|
+| 5.1 編排層半 | 建 World 後、第一次 Run 前設配發器的時機 | 骨架：O-7 準備時機（帶過去 → 登記單位的準備 → 描述的準備 → `extra`）；生成世界：`entity_ids` 只在沒有值時放預設範圍，`extra` 蓋得掉（EI-1～EI-3） |
+| 5.7、第 8 節 | 執行中丟掉 World、建新的；遊戲初始化只跑一次；帶過去 | 骨架：`ReplaceWorld`（O-8）、O-1、O-10；`RestoreFlowTests` case 3、6 |
+| 5.7、第 8 節 | 讀檔 System 掛在生成世界；分批時第一批前設好配發器 | 生成世界：`WhileGenerating()`、`Hold()`；`WorldGenTests` C1～C3、C8 |
+| 5.5 | 時間 Module 的 Resource 能被讀檔放回 | 時間＋事件：`RestoreFixedTime`（`FixedStep.hpp:92`、WT-3：在準備時機放回）；情境測試第二段 `[sc-s2-8-fixed-put-back]` |
+| 第 9 節 | 主會話持有的兩句 | 已改（gyo2-time-design c47769b1） |
+| DI-KS 15 (7) 的字面 | 「範圍（含下界）」 | 生成世界合併前核准的最終文字（「設定配發器的值」；「範圍的下界」是搬出去的型別的概念） |
+| 判定 1 | 案例 1、3、5、9、10 | 編排層與情境測試已有同一件事的案例（18.3 的表） |
+| 判定 1 | 案例 4 (a)(b)(c) | Kernel 的 J-55（`SpawnRejectTests.cpp`：「one emitter spawns one id twice」「two emitters spawn one id」「an alive id」）——讀檔就是一般的 `SpawnWithId`，同一條規則 |
+
+**C. 前提變了，要改**
+
+| # | 宣告寫的 | 現在 | 修訂（卡片照 L17 判，標「交使用者」的除外） |
+|---|---|---|---|
+| C-1 | 5.8：System 放不進不存在的 Resource，預設寫法是「編排層先放預設值、讀檔 System 用 `ResMut` 覆寫」 | 已經有：`Commands::SetResource`（同步點的 resource 那一步套用，DI-KS 9）與 `ExclusiveWorld::SetResource`（當場，DI-KS 18）；說明頁 11.6 已寫 | 5.8 改成三種都可以：準備函式放預設值＋`ResMut` 覆寫、讀檔 System 用 `Commands::SetResource`、獨占的讀檔 System 用 `ExclusiveWorld::SetResource`。和 Bevy 的 `Commands::insert_resource` 相同。不加介面（本來就不加），只改說明 |
+| C-2 | 第 2 節：配發器、F-13 留在 Kernel | `RangeAllotter` 搬到 `entity_ids` Module（預設帶）；Kernel 只留 `EntityAllotter` 的概念與丟棄規則；Kernel 與編排層的測試用替身 `tests/common/support/TestRangeAllotter.hpp` | 說明頁寫 `EntityIds::RangeAllotter`；判定 2 的四個配發器突變照生成世界第 14 節第 4 件（使用者已核准「改替身」）改替身 |
+| C-3 | 第 3 節、第 14 節：判定在現在的程式上會被 D-E2、D-E12 擋住 | 第 4 批後都不在 | 刪掉這兩句的效力（歷史保留） |
+| C-4 | 生成世界 5.7 留給本批：讀檔要不要用 `ExclusiveWorld::Restore` | `Restore` 是回滾的原語，Kernel 不認得用途（DI-KS 12）；不補 `InitialValue`（#259、#265 的 `Detail::Derive` 分開）、全部放回後才跑 hook、範圍內的 id 也復活 | **不當預設的路，說明頁寫成可以用**、列三個差別：(1) 存檔沒存的衍生元件（`InitialValue` 補的）不會補，存檔要存齊；(2) 不看配發器的範圍，之後的 `Spawn` 要先移下界或放回配發器，否則 `AllottedIdAlive`；(3) hook 看到的是放回完的實體。系譜：Bevy `DynamicWorld`（`dynamic_world.rs:95-106`）與 Unity `SerializeUtility.DeserializeWorld`（`SerializeUtility.cs:125-176`，收空 World、配新實體再 remap 參照）都是重新配號＋對照表，對應 GYO 的第二種寫法；照原編號放回的先例是 flecs（`ecs_make_alive` 可指定編號，生成世界宣告第 4 節的表）。`Restore` 是回滾的原語、整批放回，別家讀檔沒有用回滾原語的先例，所以只寫成「可以用」、不當預設 |
+| C-5 | 5.3 只寫 hook | 第 4 批後 `InitialValue` 只在一般的生成與插入補（`SpawnWithId` 帶的 bundle 已有的元件不蓋，`InitialValueTests`「a component the entity already has is left as it is」） | 說明頁補一句：照一般寫法讀檔時，存檔沒存的衍生元件由初始值的宣告補；存了的照存檔的值 |
+| C-6 | 沒寫 asset | asset 宣告：資產在 World 外，World 只持有 id | 說明頁補：存檔存資產 id、不存資產本身；id 能不能用在發替換之前驗（生成世界 5.4、5.9 已寫，引用） |
+| C-7 | 第 13 節判定 1：新開 `tests/common/kernel/RestoreEntryTests.cpp`、十個案例 | 十個案例裡八個已有同一件事的案例（18.3）。照 AGENTS §14.5（只為既有的抓不到的誤り加）與「不堆屎山」，再寫一份是重複 | **交使用者（改已核准的判定）**：見 18.2 |
+| C-8 | 狀態機 | 狀態機修訂 8 的卡在做；舊宣告 3.8「第一次套用一律先進初始值」。讀檔放回狀態時，新 World 會先進初始狀態、再轉到存檔的狀態（初始狀態的 OnEnter 會跑一次） | 不在本批定。經主會話轉狀態機卡：讀檔時狀態怎麼放回（例：在準備函式放好、第一次套用就進存檔的狀態；或照常先進初始狀態）由那一批定，本批說明頁只指路 |
+
+### 18.2 交使用者的一件：判定 1 改成「先跑突變，存活的才補案例」
+
+**遊戲例子**：「讀檔時同一個編號出現兩次，留第一筆」——這條規則 Kernel 已經有測試（J-55）守著，讀檔只是用同一個 `SpawnWithId`。宣告原本要在 `RestoreEntryTests.cpp` 再寫一次，只是換成讀檔的名字。
+
+| 選項 | 內容 | 代價 |
+|---|---|---|
+| **改（建議）** | 不新開 Kernel 的讀檔測試檔。實作第一步：把判定 2 的十二個突變照現在的位置改寫，用**既有**的測試跑；被抓到的記下是哪個案例抓的（預期失敗寫成那個案例的標記）；存活的才補案例，補在最接近的既有檔（Kernel 的機制補在 Kernel 的檔、讀檔的寫法補在 `RestoreFlowTests.cpp`）。另外一定新增一案：**重新配號**（宣告案例 2；兩種寫法之一，現在沒有任何案例） | 判定的形狀和核准的不同；檢出力的證據改成「哪個既有案例抓到」 |
+| 照原判定 | 新開 `RestoreEntryTests.cpp`，十個案例照寫 | 八個和既有案例重複；突變被兩處抓到，不增加檢出力（§14.5） |
+
+這不是放寬：每個突變仍要被抓到（抓不到就補案例），只是不為了換名字重寫已有的案例。結果出來之前宣告，結果出來之後不改（§14.1）。
+
+### 18.3 判定 1 的十個案例對照（實作第一步用突變確認，表是預期）
+
+| 案例 | 預期由誰守 |
+|---|---|
+| 1 照存檔編號放回 | `RestoreFlowTests` case 1（`[or-restore-ids]`、`[or-restore-ref]`、`[or-restore-range]`、`[or-restore-nothing-dropped]`）；`WorldGenTests` C1；情境第一段 S1-7 |
+| 2 重新配號 | **沒有** → 新增一案到 `RestoreFlowTests.cpp`（替身配發器：存檔的三個實體用 `Spawn` 放回、編號 ≥ 存檔的下一號、大小順序和存檔相同、`ChaseTarget` 改寫後指向新編號） |
+| 3 範圍沒設好 | `RestoreFlowTests` case 2（`[or-restore-control]`）；`entity_ids` 的「with the default allotter, an id in its range is dropped」 |
+| 4 同一編號兩筆 | J-55 三案（18.1 B） |
+| 5 Resource | `RestoreFlowTests` case 1、3（`[or-restore-gold]`）；`Commands::SetResource` 由 `ImmediateChangeTests`「Commands::SetResource and RemoveResource are applied at the sync point's resource step」 |
+| 6 hook（OnAdd 一次、hook 在讀檔中生成血條） | Kernel 的 hook 與清空輪的案例（`HookFlushTests` J-54、`ImmediateChangeTests`「what the hooks of an immediate change record is applied before it returns」）；突變存活就補 |
+| 7 stamp | J-30「Added sees new cells only」；突變存活就補 |
+| 8 先生成再插入 | 突變「插入排在生成之前套用」跑既有測試確認；存活就補 |
+| 9 新 World 隔離 | `RestoreFlowTests` case 3 |
+| 10 讀兩次相同 | `RestoreFlowTests` case 5；`WorldGenTests` C3 |
+
+判定 2 的突變照現在的位置：配發器四個改 `tests/common/support/TestRangeAllotter.hpp`（使用者已核准「改替身」）；「spawn 階段拿掉落在範圍的檢查」已有 `sr-range-*`（`docs/architecture/plans/kernel/scripts/mutations.json`），照 §14.5 不另立、記下沿用哪一個；其餘照原表在 `World.cpp`、`Params.hpp`。
+
+### 18.4 說明頁
+
+`system-contract-page.zh-Hant.md` 第 14 節的「讀檔」一段移成獨立一節（第 15 節「讀檔」），一處寫完、第 14 節與第 13 節的替換那一條改成指過去：遊戲例子、新 World、生成世界、兩種寫法（含重新配號的對照表寫法）、Resource 的三種放法（C-1）、hook 與衍生實體（hook 生成的若也存進存檔，讀檔後兩份）、初始值（C-5）、stamp、時間（引用 WT-3）、asset id（C-6）、`Restore` 的三個差別（C-4）、狀態機指路（C-8）。
+
+### 18.5 時間、角色
+
+實作約 1.5～2 小時（突變 0.5、一案 0.3、說明頁 0.5、L1 0.5）。角色照第 12 節：實作 Opus／high；突變清單與修訂 12 的對抗檢查 Fable／high；合併前設計審查 Fable／high（唯讀）。
