@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 #include <set>
 #include <thread>
 #include <vector>
@@ -307,20 +308,28 @@ TEST_CASE("Audio Submitter treats misused runtime clips as Programmer Errors") {
     GYO_CHECK_ASSERTS(a->Play({*clip, kAnchor})); // unloaded
     GYO_CHECK_ASSERTS(a->UnloadClip(*clip));      // unloaded twice
     GYO_CHECK_ASSERTS(a->Play({ClipId{clip->value + 1}, kAnchor})); // a slot never loaded
+    // The Programmer Errors are asserted before anything is counted: only the accepted unload counts.
+    CHECK(mixer->Stats().unloadsSubmitted == 1);
 }
 
-TEST_CASE("Audio Submitter's clip calls belong to the thread that owns it") {
-    Rig rig = MakeRig(2);
-    std::thread other([&] { CHECK(Load(rig.submitter, 10, 1).has_value()); });
+TEST_CASE("Audio Submitter loads on one thread and plays and unloads on another after a hand-over") {
+    // One user at a time; the join orders the first thread's calls before the second's.
+    Rig rig = MakeRig(1); // one slot: the reload below succeeds only once the slot is handed back and freed
+    std::optional<ClipId> loaded;
+    std::thread other([&] {
+        auto clip = Load(rig.submitter, 10, 1);
+        if (clip) loaded = *clip;
+    });
     other.join();
-    GYO_CHECK_ASSERTS(Load(rig.submitter, 10, 1));
-
-    Rig owned = MakeRig(2);
-    auto clip = Load(owned.submitter, 10, 1);
-    REQUIRE(clip.has_value());
-    std::thread intruder([&] { GYO_CHECK_ASSERTS(owned.submitter.UnloadClip(*clip)); });
-    intruder.join();
-    CHECK(owned.mixer.Stats().unloadsSubmitted == 0);
+    REQUIRE(loaded.has_value());
+    CHECK(rig.submitter.Play({*loaded, kAnchor}));
+    CHECK(rig.submitter.UnloadClip(*loaded));
+    static_cast<void>(RenderBlock(rig.mixer, 48));
+    CHECK(Load(rig.submitter, 10, 1).has_value()); // frees and reuses the handed-back slot on this thread
+    const auto stats = rig.mixer.Stats();
+    CHECK(stats.unloadsSubmitted == 1);
+    CHECK(stats.unloadsSubmitted == stats.unloadsTaken + stats.unloadsDroppedQueueFull);
+    CHECK(stats.submitted == stats.playedOnTime + stats.playedLate + stats.droppedQueueFull + stats.droppedNoVoice);
 }
 
 TEST_CASE("Audio Mixer rejects more than 256 clip slots per submitter") {

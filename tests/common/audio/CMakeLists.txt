@@ -34,7 +34,7 @@ set_tests_properties(gyo_audio_alloc_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # The mixer is a leaf above the time base: its links, private and interface
 # alike, are exactly GYO::Base and GYO::Time, so no SDL, asset or engine library
-# edge appears (docs/architecture/audio.md, Design Invariants 1 and 2;
+# edge appears (docs/architecture/target/v2/audio.zh-Hant.md, Design Invariants 1 and 2;
 # gyo_expect_links: tests/common/support/ExpectLinks.cmake).
 # Checked once the whole project is configured.
 function(gyo_expect_audio_links)

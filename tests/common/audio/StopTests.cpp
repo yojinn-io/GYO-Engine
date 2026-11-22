@@ -365,9 +365,12 @@ TEST_CASE("Audio Mixer treats a foreign or never-issued handle as a Programmer E
     GYO_CHECK_ASSERTS(a->Stop(mine, kAnchor));
     GYO_CHECK_ASSERTS(a->StopAll(kAnchor));
     CHECK(moved.Stop(mine, kAnchor));
+    // The Programmer Errors are asserted before anything is counted: only the two accepted stops count.
+    CHECK(mixer->Stats().stopsSubmitted == 2);
 }
 
-TEST_CASE("Audio Submitter's stops belong to the thread that owns it") {
+TEST_CASE("Audio Submitter stops on another thread after a hand-over") {
+    // One user at a time; the join orders the first thread's calls before the second's.
     ClipBank bank;
     const ClipId clip = AddConstant(bank, 10);
     auto mixer = Mixer::Create(MixerConfig{}, std::move(bank));
@@ -378,9 +381,12 @@ TEST_CASE("Audio Submitter's stops belong to the thread that owns it") {
     std::thread other([&] { sound = submitter->Play({clip, kAnchor}); });
     other.join();
     REQUIRE(sound);
-    GYO_CHECK_ASSERTS(submitter->Stop(sound, kAnchor));
-    GYO_CHECK_ASSERTS(submitter->StopAll(kAnchor));
-    CHECK(mixer->Stats().stopsSubmitted == 0);
+    CHECK(submitter->Stop(sound, kAnchor));
+    CHECK(submitter->StopAll(kAnchor));
+    static_cast<void>(RenderBlock(*mixer, 4, kAnchor));
+    const auto stats = mixer->Stats();
+    CHECK(stats.stopsSubmitted == 2);
+    CHECK(stats.stopsSubmitted == stats.stopsMatched + stats.stopsUnmatched + stats.stopsDroppedQueueFull);
 }
 
 TEST_CASE("Audio Mixer gives the last of 64 submitters valid handles") {

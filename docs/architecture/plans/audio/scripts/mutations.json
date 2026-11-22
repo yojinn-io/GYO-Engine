@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the audio plan, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog. A mutant is killed only when its test run fails with the expected message. The au-sdl-* mutants need the test preset (SDL_AUDIO built) and ctest on PATH; run them with --build-dir build/target/_build/test --only au-sdl-...",
+  "description": "Declared mutants of the audio Module (docs/architecture/target/v2/audio.zh-Hant.md), run with python3 tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/audio/scripts/mutations.json --build-dir <build dir>. A mutant is killed only when its test run fails with the expected message. The SDL output backend's mutants left with the backend (v8-arch-gyo2-audio-review); the SDL batch sets up its own.",
   "mutants": [
     {
       "id": "au-core-start-shifted",
@@ -74,23 +74,16 @@
     },
     {
       "id": "au-link-engine",
-      "what": "The mixer links the engine library",
+      "what": "The mixer links another Engine library (GYO::Kernel): audio's links are exactly GYO::Base and GYO::Time",
       "file": "engine/modules/audio/CMakeLists.txt",
       "find": "target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time)",
-      "replace": "target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time PRIVATE GYO::Engine)",
+      "replace": "target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time PRIVATE GYO::Kernel)",
       "target": "gyo_audio_tests",
       "expect_build_failure": true,
-      "expect": "gyo_audio links .*expected exactly"
-    },
-    {
-      "id": "au-soundloader-bits-unchecked",
-      "what": "SoundLoader accepts samples other than 16-bit",
-      "file": "engine/asset/src/loaders/SoundLoader.cpp",
-      "find": "        if (bitsPerSample != 16) {",
-      "replace": "        if (bitsPerSample != 16 && false) {",
-      "target": "engine_tests",
-      "cases": "*rejects files it cannot represent as PCM16*",
-      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+      "expect": "gyo_audio links .*expected exactly",
+      "guards": [
+        "audio DI 2"
+      ]
     },
     {
       "id": "au-sched-block-start-ignored",
@@ -193,16 +186,6 @@
       "expect": "is NOT correct"
     },
     {
-      "id": "au-sched-owner-unchecked",
-      "what": "Playing from another thread than the owner is not caught",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        GYO_ASSERT(owner == self);",
-      "replace": "        static_cast<void>(owner);",
-      "target": "gyo_audio_tests",
-      "cases": "*belongs to the first thread*",
-      "expect": "expected GYO_ASSERT to fail"
-    },
-    {
       "id": "au-sched-same-slot",
       "what": "Every submitter gets the first queue",
       "file": "engine/modules/audio/src/Mixer.cpp",
@@ -213,164 +196,18 @@
       "expect": "is NOT correct"
     },
     {
-      "id": "au-sdl-not-resumed",
-      "what": "The device stream stays paused after opening",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "    if (!SDL_ResumeAudioStreamDevice(self.stream)) return Base::Err(Unavailable(\"the playback device did not start\"));\n",
-      "replace": "",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.dummy$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( Advances\\(output\\) \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-quit-twice",
-      "what": "Closing an output releases SDL's audio subsystem twice, stopping the other outputs (an output then outlives the subsystem and may crash on close)",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "    if (impl_->subsystem) SDL_QuitSubSystem(SDL_INIT_AUDIO);",
-      "replace": "    if (impl_->subsystem) { SDL_QuitSubSystem(SDL_INIT_AUDIO); SDL_QuitSubSystem(SDL_INIT_AUDIO); }",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.dummy$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( Advances\\(a\\) \\) is NOT correct|test case CRASHED"
-    },
-    {
-      "id": "au-sdl-error-without-detail",
-      "what": "An unavailable device is reported without SDL's message",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "    return AudioError::Make(AudioErrorCode::DeviceUnavailable, message, detail != nullptr ? detail : \"\");",
-      "replace": "    static_cast<void>(detail);\n    return AudioError::Make(AudioErrorCode::DeviceUnavailable, message, \"\");",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.unavailable$",
-        "--output-on-failure"
-      ],
-      "expect": "CHECK_FALSE\\( output.error\\(\\).detail.empty\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-header-includes-sdl",
-      "what": "The backend's public header includes SDL (G1)",
-      "file": "engine/audio/backend/sdl/include/engine/audio/backend/sdl/SdlAudioOutput.hpp",
-      "find": "#include <cstdint>\n",
-      "replace": "#include <SDL3/SDL_audio.h>\n#include <cstdint>\n",
-      "target": "platform_sdl_header_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^platform_sdl_header_tests$",
-        "--output-on-failure"
-      ],
-      "expect": "a non-native SDL backend header includes SDL"
-    },
-    {
-      "id": "au-sdl-public-sdl",
-      "what": "The backend passes SDL3 on to its users (G3)",
-      "file": "engine/audio/backend/sdl/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_audio_sdl PUBLIC GYO::Audio PRIVATE SDL3::SDL3)",
-      "replace": "target_link_libraries(gyo_audio_sdl PUBLIC GYO::Audio SDL3::SDL3)",
-      "target": "gyo_audio_sdl_tests",
-      "expect_build_failure": true,
-      "expect": "G3: gyo_audio_sdl passes SDL3",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.unavailable$",
-        "--output-on-failure"
+      "id": "au-review-handoff-rebound",
+      "what": "A thread binding is put back into Submitter::Play (the first thread to play through a submitter claims it, another thread then asserts): the hand-over contract (one user at a time, ordered by happens-before) no longer holds. Only the hand-over cases catch it; the removed owner mutants caught the opposite (a binding that was not checked).",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "    GYO_ASSERT(IsValidGain(request.gainLeft) && IsValidGain(request.gainRight));\n\n    slot_->submitted.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "    GYO_ASSERT(IsValidGain(request.gainLeft) && IsValidGain(request.gainRight));\n    {\n        static std::atomic<const void*> claimed{nullptr};\n        thread_local const void* mine = nullptr;\n        const void* expected = nullptr;\n        if (claimed.compare_exchange_strong(expected, slot_)) mine = slot_;\n        else if (expected == slot_) GYO_ASSERT(mine == slot_);\n    }\n\n    slot_->submitted.fetch_add(1, std::memory_order_relaxed);\n",
+      "target": "gyo_audio_tests",
+      "cases": "*plays on another thread after a hand-over*",
+      "expect": "GYO_ASSERT failed: mine == slot_",
+      "guards": [
+        "audio-review-declaration 判定 2",
+        "audio Contract Submitter"
       ]
-    },
-    {
-      "id": "au-sdl-anchor-not-logged",
-      "what": "The callback logs no anchor",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);\n",
-      "replace": "",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.dummy$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "REQUIRE\\( first >= 2 \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-anchor-wrong-frame",
-      "what": "An anchor is logged with the block's frame off by one",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);",
-      "replace": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames + 1);",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.disk$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( atAnchor \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-anchor-full-uncounted",
-      "what": "An anchor dropped by a full log is not counted",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "            anchorsDropped.fetch_add(1, std::memory_order_relaxed);\n",
-      "replace": "",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.dummy$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( output.Stats\\(\\).anchorsDropped > 0 \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-anchor-head-not-published",
-      "what": "Taking anchors never frees the log, so the same anchors are handed out again",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "    self.anchorHead.store(head, std::memory_order_release);\n",
-      "replace": "",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.dummy$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( anchors\\[first\\].firstFrame > anchors\\[first - 1\\].firstFrame \\) is NOT correct"
     },
     {
       "id": "au-ctl-golden-gain-rounding",
@@ -553,26 +390,6 @@
       "expect": "CHECK\\( rig.mixer.Stats\\(\\).droppedNoVoice == 0 \\) is NOT correct"
     },
     {
-      "id": "au-ctl-stop-owner-unchecked",
-      "what": "Stop does not claim or check the owner thread",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    ClaimOwner();\n    if (!sound.Valid()) return true;",
-      "replace": "    if (!sound.Valid()) return true;",
-      "target": "gyo_audio_tests",
-      "cases": "*stops belong to the thread that owns it*",
-      "expect": "expected GYO_ASSERT to fail: submitter->Stop"
-    },
-    {
-      "id": "au-ctl-stopall-owner-unchecked",
-      "what": "StopAll does not claim or check the owner thread",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    ClaimOwner();\n    return SendStop(Command{CommandKind::StopAll",
-      "replace": "    return SendStop(Command{CommandKind::StopAll",
-      "target": "gyo_audio_tests",
-      "cases": "*stops belong to the thread that owns it*",
-      "expect": "expected GYO_ASSERT to fail: submitter->StopAll"
-    },
-    {
       "id": "au-ctl-stop-sequence-zero",
       "what": "A handle with sequence 0 passes as issued",
       "file": "engine/modules/audio/src/Mixer.cpp",
@@ -580,7 +397,10 @@
       "replace": "    GYO_ASSERT(sequence <= slot_->lastSequence);",
       "target": "gyo_audio_tests",
       "cases": "*foreign or never-issued handle*",
-      "expect": "expected GYO_ASSERT to fail"
+      "expect": "expected GYO_ASSERT to fail",
+      "guards": [
+        "audio DI 11"
+      ]
     },
     {
       "id": "au-ctl-alloc-in-stop",
@@ -690,7 +510,10 @@
       "replace": "    entry->state = Detail::SlotState::Unloading;\n    slot_->unloadsSubmitted.fetch_add(1, std::memory_order_relaxed);\n",
       "target": "gyo_audio_tests",
       "cases": "*unload again after its queue was full*",
-      "expect": "GYO_ASSERT failed: IsRuntimeClip\\(request.clip\\) \\? LoadedClip"
+      "expect": "GYO_ASSERT failed: IsRuntimeClip\\(request.clip\\) \\? LoadedClip",
+      "guards": [
+        "audio DI 6"
+      ]
     },
     {
       "id": "au-ctl-clip-lease-flag-not-count",
@@ -741,16 +564,6 @@
       "target": "gyo_audio_tests",
       "cases": "*releases the lease of every voice a block frees*",
       "expect": "CHECK\\( Load\\(rig.submitter, 10, 1\\).has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "au-ctl-unloadclip-owner-unchecked",
-      "what": "UnloadClip does not claim or check the owner thread",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    ClaimOwner();\n    GYO_ASSERT(IsRuntimeClip(clip));",
-      "replace": "    GYO_ASSERT(IsRuntimeClip(clip));",
-      "target": "gyo_audio_tests",
-      "cases": "*clip calls belong to the thread that owns it*",
-      "expect": "expected GYO_ASSERT to fail: owned.submitter.UnloadClip"
     },
     {
       "id": "au-ctl-playhead-tag-before-state",
@@ -889,78 +702,6 @@
       ],
       "timeout": 120,
       "expect": "the audio thread must not read the playhead board"
-    },
-    {
-      "id": "au-sdl-render-anchor-shifted",
-      "what": "The callback renders with an anchor 1 ms later than the one it logs, so stops land 48 frames early against the log",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "                              anchor + FramesToDuration(done));",
-      "replace": "                              anchor + FramesToDuration(done) + std::chrono::milliseconds(1));",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.disk$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( found \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-stop-one-block-late",
-      "what": "A stop lands one block (480 frames) after its mapped frame, which the disk test's widened block window must still catch",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(request.at), anchorNs)) + state.delayFrames;",
-      "replace": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(request.at), anchorNs)) + state.delayFrames + 480;",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.disk$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( found \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-anchor-logged-block-late",
-      "what": "An anchor is logged with the block's frame one block (480 frames) late, the offset the disk file's leading silence used to add",
-      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
-      "find": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);",
-      "replace": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames + 480);",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.disk$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( found \\) is NOT correct"
-    },
-    {
-      "id": "au-sdl-late-stop-uncounted",
-      "what": "A late stop is not counted late, which the disk test's late case checks against the frame it ends at",
-      "file": "engine/modules/audio/src/VoiceMixer.cpp",
-      "find": "            if (stopFrame < nextFrame_) result.late = true;\n",
-      "replace": "",
-      "target": "gyo_audio_sdl_tests",
-      "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/test",
-        "-R",
-        "^audio_sdl\\.disk$",
-        "--output-on-failure"
-      ],
-      "timeout": 180,
-      "expect": "CHECK\\( found \\) is NOT correct"
     },
     {
       "id": "au-ctl-reuse-never-playing",

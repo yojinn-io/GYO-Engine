@@ -382,12 +382,20 @@ TEST_CASE("Audio Mixer balances and plays every request from concurrent producer
     CHECK(outputSum == expectedSum.load());
 }
 
-TEST_CASE("Audio Submitter belongs to the first thread that plays through it") {
+TEST_CASE("Audio Submitter plays on another thread after a hand-over") {
+    // One user at a time; the join orders the first thread's calls before the second's.
     Rig rig = MakeRig();
-    std::thread other([&] { CHECK(rig.submitter.Play({rig.impulse, kAnchor})); });
+    SoundHandle first;
+    std::thread other([&] { first = rig.submitter.Play({rig.impulse, kAnchor}); });
     other.join();
-    GYO_CHECK_ASSERTS(rig.submitter.Play({rig.impulse, kAnchor}));
-    CHECK(rig.mixer.Stats().submitted == 1);
+    const SoundHandle second = rig.submitter.Play({rig.impulse, kAnchor});
+    CHECK(first);
+    CHECK(second);
+    CHECK(second.value == first.value + 1);
+    static_cast<void>(RenderBlock(rig.mixer, 4, kAnchor));
+    const auto stats = rig.mixer.Stats();
+    CHECK(stats.submitted == 2);
+    CHECK(stats.submitted == stats.playedOnTime + stats.playedLate + stats.droppedQueueFull + stats.droppedNoVoice);
 }
 
 TEST_CASE("Audio Submitter treats a foreign clip, a bad gain and a moved-from handle as Programmer Errors") {
