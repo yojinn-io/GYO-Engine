@@ -89,7 +89,12 @@ Owner：架構（GYO2 主會話開的任務卡 `local_a184932c`）。分支 `cla
 ## 最後的確認
 
 - 本機（合併 gyo2 #273、#274 之後）：全量建置通過；`ctest -L 'cpu|shader'` 169/169。
-- L1 三平台、四份清單的完整突變重跑：PR 上跑，結果補在這裡。
+- L1 三平台（PR #277，head e524acec，run 45030563218）：linux-x64 13m56s、macos-arm64 8m27s、windows-x64 9m53s 都通過，CI gate 通過。之後合併 gyo2（#278，只有文件）的推送再跑一次 L1，結果見 PR。
+- 四份清單的完整突變重跑（宣告 10.2-2，本機背景）：
+  - os-subsystem：116/116 killed，35 個只在別的平台跑。
+  - framework-rework 的 io_user_files：14/14 killed，1 個略過。
+  - time-threads-trace：跑完 8 個（都 killed）後中斷。清單裡的 trace 突變指向 gyo2 已不存在的 `engine/trace/src/TraceSink.cpp`，是 HANDOFF 待辦「小批清理」#269 列的舊路徑，不是本批造成的。和本批有關的 `wp-*` 五個另外單獨跑過，5/5 killed；`tt1`、`tt2` 打的 `RoleThread` 本批沒有改。
+  - orchestration（283 個）：沒有跑完。使用者 2026-11-23 說「merge」，那時它還在跑，我把它停掉了。停在某個突變的中間，`Product.cpp` 還留著突變的改動，已用 `git checkout` 還原，確認工作樹乾淨。和本批有關的 `cr-io-links-more`、`cr-io-os-public` 已經單獨跑過，2/2 killed。
 
 ## 後續（不在本批）
 
