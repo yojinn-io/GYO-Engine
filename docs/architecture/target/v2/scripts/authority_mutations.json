@@ -847,13 +847,13 @@
   },
   {
    "id": "au-z6-input-history-ignored",
-   "what": "an input with a kept history is not left out of Z6 (a step that consumes it would have no way out: it may not roll back, Z8). Only it catches the exemption",
+   "what": "an input with a kept history is not left out of Z6 (a step that consumes it would have no way out: it may not roll back, Z8). Only it catches the exemption (find follows the kind of v8-arch-gyo2-net-module step 3a)",
    "guards": [
     "authority-module-declaration 5.11"
    ],
    "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
-   "find": "    for (const Rollback::InputRecord& record : rollback.inputs) {\n        if (const auto id = record.idIn(registry)) inputsKept.insert({Kernel::AccessKind::Resource, *id});",
-   "replace": "    for (const Rollback::InputRecord& record : std::vector<Rollback::InputRecord>{}) {\n        if (const auto id = record.idIn(registry)) inputsKept.insert({Kernel::AccessKind::Resource, *id});",
+   "find": "    for (const Rollback::InputRecord& record : rollback.inputs) {\n        if (const auto id = record.idIn(registry)) {",
+   "replace": "    for (const Rollback::InputRecord& record : std::vector<Rollback::InputRecord>{}) {\n        if (const auto id = record.idIn(registry)) {",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E6 leaves out an input*",
    "expect": "\\[au\\-z6\\-input\\-history\\]"
@@ -1557,6 +1557,34 @@
    "target": "gyo_authority_tests",
    "expect_build_failure": true,
    "expect": "gyo_authority\\s+links\\s+\\S*GYO::Json\\S*\\s+expected\\s+exactly"
+  },
+  {
+   "id": "au-component-input-no-history",
+   "what": "a component decision input gets no recorded history on the author's behalf. Only it catches the component input's registration",
+   "guards": [
+    "authority-module-declaration 4.3",
+    "net-module-declaration D-11"
+   ],
+   "file": "engine/modules/authority/include/engine/authority/Registrations.hpp",
+   "find": "inline constexpr DataOps kComponentOps{&ComponentIdIn<T>, &RegisterComponent<T>, &ComponentInRollback<T>, &ComponentDigest<T>,\n                                       &RecordComponentInput<T>};",
+   "replace": "inline constexpr DataOps kComponentOps{&ComponentIdIn<T>, &RegisterComponent<T>, &ComponentInRollback<T>, &ComponentDigest<T>};",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: a component decision input*",
+   "expect": "\\[au\\-component\\-input\\-history\\-on\\-behalf\\]"
+  },
+  {
+   "id": "au-component-input-kept-as-resource",
+   "what": "AU-E6 looks up a kept component input as a resource, so a step that consumes it is reported. Only it catches the kind in the check",
+   "guards": [
+    "authority-module-declaration 5.11",
+    "net-module-declaration D-11"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "            const auto kind = record.kind == Rollback::DataKind::Component ? Kernel::AccessKind::Component : Kernel::AccessKind::Resource;",
+   "replace": "            const auto kind = Kernel::AccessKind::Resource;",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E6 leaves out a component input*",
+   "expect": "\\[au\\-z6\\-component\\-input\\-history\\]"
   }
  ]
 }

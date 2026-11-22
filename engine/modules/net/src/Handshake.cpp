@@ -104,6 +104,7 @@ void EncodeRequestBody(const ConnectRequest& request, std::vector<std::byte>& ou
     U64(writer, request.facts.idRange.first);
     U64(writer, request.facts.idRange.last);
     U64(writer, request.userId);
+    U64(writer, request.salt);
     writer.U8(request.facts.fingerprint ? 1 : 0);
     const std::string fingerprint = request.facts.fingerprint.value_or(std::string{});
     Bytes16(writer, std::as_bytes(std::span(fingerprint.data(), fingerprint.size())));
@@ -118,7 +119,8 @@ NetResult<ConnectRequest> DecodeRequestBody(const std::span<const std::byte> bod
     std::vector<std::byte> fingerprint;
     if (!reader.U32(request.facts.protocolVersion) || !ReadU64(reader, request.facts.protocolHash) ||
         !ReadU64(reader, step) || !ReadU64(reader, request.facts.idRange.first) ||
-        !ReadU64(reader, request.facts.idRange.last) || !ReadU64(reader, request.userId) || !reader.U8(hasFingerprint) ||
+        !ReadU64(reader, request.facts.idRange.last) || !ReadU64(reader, request.userId) || !ReadU64(reader, request.salt) ||
+        !reader.U8(hasFingerprint) ||
         !ReadBytes16(reader, fingerprint) || !ReadBytes16(reader, request.token)) {
         return Base::Err(Short("a connect request is cut short"));
     }

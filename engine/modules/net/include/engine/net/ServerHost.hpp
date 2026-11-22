@@ -70,6 +70,7 @@ private:
     struct Peer final {
         Endpoint endpoint;
         std::uint64_t userId = 0;
+        std::uint64_t salt = 0;
         Connection connection;
         NetTime lastReceived{0};
         NetTime lastSent{0};

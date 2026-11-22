@@ -18,7 +18,7 @@ constexpr std::size_t kMaxDatagramsPerPump = 4096;
 NetService::NetService(NetProductOptions options, std::shared_ptr<Link> link, const Endpoint serverEndpoint,
                        const std::uint64_t secret, const std::uint64_t idSeed)
     : options_(std::move(options)), link_(std::move(link)), serverEndpoint_(serverEndpoint), secret_(secret),
-      idSeed_(idSeed) {}
+      idSeed_(idSeed), saltState_(secret ^ 0x5A17ull) {}
 
 NetTime NetService::Now() const {
     if (options_.clock) return options_.clock();
@@ -35,7 +35,18 @@ void NetService::SetFacts(const HandshakeFacts& facts, const NetTime now, const 
         return;
     }
     if (!client_ || (newWorld && client_->State() == ClientState::Disconnected)) {
-        client_.emplace(options_.session, ConnectRequest{facts, options_.userId, options_.token}, now);
+        // The ended session's last datagrams (its Disconnect packets after a Close) go out before the new one starts.
+        if (client_) {
+            for (auto& datagram : client_->Collect(now, {})) {
+                if (auto sent = link_->Send(serverEndpoint_, datagram); !sent) Failed(std::move(sent).error());
+            }
+        }
+        // A salt per handshake (D-8: a reconnect is a new connection, told apart from a repeated response).
+        std::uint64_t z = (saltState_ += 0x9E3779B97F4A7C15ull);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+        ConnectRequest request{facts, options_.userId, options_.token, z ^ (z >> 31)};
+        client_.emplace(options_.session, std::move(request), now);
     }
 }
 

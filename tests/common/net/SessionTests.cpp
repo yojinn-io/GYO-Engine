@@ -56,7 +56,7 @@ struct Wire {
 std::optional<N::Rejection> Shake(const N::HandshakeFacts& client, const N::HandshakeFacts& server = ServerFacts(),
                                   N::ServerHost::Admission admission = {}) {
     N::ServerHost host(Settings(), server, 77, 99, std::move(admission));
-    N::ClientSession session(Settings(), N::ConnectRequest{client, 42, {}}, Ms(0));
+    N::ClientSession session(Settings(), N::ConnectRequest{client, 42, {}, 0}, Ms(0));
     Wire wire{host, session};
     for (int i = 0; i < 4; ++i) wire.Round(Ms(i));
     if (session.State() == N::ClientState::Connected) return std::nullopt;
@@ -70,7 +70,7 @@ N::PacketKind KindOf(const std::vector<std::byte>& datagram) { return N::DecodeP
 
 TEST_CASE("handshake: matching facts connect, and the accept carries the server's tick, step and range") {
     N::ServerHost host(Settings(), ServerFacts(), 77, 99);
-    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, Bytes({9, 9})}, Ms(0));
+    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, Bytes({9, 9}), 0}, Ms(0));
     Wire wire{host, client};
     wire.Round(Ms(0), {500, 3});
     // After the request the server keeps nothing: the challenge is a hash it can recompute.
@@ -143,7 +143,7 @@ TEST_CASE("handshake: a client without an authority strategy is not compared on 
 TEST_CASE("handshake: a response with another server's challenge is rejected") {
     N::ServerHost first(Settings(), ServerFacts(), 77, 99);
     N::ServerHost second(Settings(), ServerFacts(), 78, 99);
-    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, {}}, Ms(0));
+    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 0}, Ms(0));
     // The challenge comes from the first server, the response goes to the second.
     for (const auto& datagram : client.Collect(Ms(0), {})) first.Receive(kClient, datagram, Ms(0));
     for (const auto& [to, datagram] : first.Collect(Ms(0), {})) client.Receive(datagram, Ms(0));
@@ -170,7 +170,7 @@ TEST_CASE("handshake: the product's refusal is Refused with its text") {
 }
 
 TEST_CASE("handshake: no answer within the handshake timeout ends the client") {
-    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, {}}, Ms(0));
+    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 0}, Ms(0));
     // Requests are resent every keepalive interval while nothing answers.
     CHECK(client.Collect(Ms(0), {}).size() == 1);
     CHECK(client.Collect(Ms(100), {}).empty());
@@ -193,7 +193,7 @@ TEST_CASE("handshake: a request smaller than a challenge gets no answer") {
     CHECK_MESSAGE(host.Collect(Ms(0), {}).empty(), "a request smaller than a challenge gets no answer");
     CHECK(host.Drops()[static_cast<std::size_t>(N::DropReason::Unexpected)] == 1);
     // A real request is never smaller than the challenge.
-    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, {}}, Ms(0));
+    N::ClientSession client(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 0}, Ms(0));
     const auto request = client.Collect(Ms(0), {});
     REQUIRE(request.size() == 1);
     for (const auto& datagram : request) host.Receive(kClient, datagram, Ms(0));
@@ -202,12 +202,42 @@ TEST_CASE("handshake: a request smaller than a challenge gets no answer") {
     CHECK(request[0].size() >= challenge[0].second.size());
 }
 
+TEST_CASE("handshake: a new handshake from the same endpoint is a new connection; a repeated response is not") {
+    N::ServerHost host(Settings(), ServerFacts(), 77, 99);
+    N::ClientSession first(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 1}, Ms(0));
+    Wire wire{host, first};
+    wire.Round(Ms(0));
+    // The response is sent twice (as when its Accepted is lost): one connection, the same id.
+    const auto response = first.Collect(Ms(1), {});
+    REQUIRE(response.size() == 1);
+    host.Receive(kClient, response[0], Ms(1));
+    host.Receive(kClient, response[0], Ms(1));
+    for (const auto& [to, datagram] : host.Collect(Ms(1), {})) first.Receive(datagram, Ms(1));
+    REQUIRE(first.State() == N::ClientState::Connected);
+    CHECK(host.ConnectionCount() == 1);
+    const std::uint32_t oldId = first.Accepted()->connectionId;
+    (void)host.TakeEvents();
+    // The same user from the same endpoint shakes hands again (another salt): the old connection ends.
+    N::ClientSession second(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 2}, Ms(2));
+    Wire again{host, second};
+    again.Round(Ms(2));
+    again.Round(Ms(3));
+    REQUIRE(second.State() == N::ClientState::Connected);
+    CHECK_MESSAGE(second.Accepted()->connectionId != oldId, "a reconnect from the same endpoint is a new connection");
+    CHECK(host.ConnectionCount() == 1);
+    const auto events = host.TakeEvents();
+    REQUIRE(events.size() == 2);
+    CHECK(events[0].kind == N::HostEventKind::Disconnected);
+    CHECK(events[0].reason == N::DisconnectReason::ClosedByRemote);
+    CHECK(events[1].kind == N::HostEventKind::Connected);
+}
+
 namespace {
 
 // A connected pair at time 0 (the handshake takes the rounds at 0 and 1 ms... all before 2 ms).
 struct Connected {
     N::ServerHost host{Settings(), ServerFacts(), 77, 99};
-    N::ClientSession client{Settings(), N::ConnectRequest{ClientFacts(), 42, {}}, Ms(0)};
+    N::ClientSession client{Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 0}, Ms(0)};
     Wire wire{host, client};
     std::uint32_t id = 0;
     Connected() {

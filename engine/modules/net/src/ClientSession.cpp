@@ -17,7 +17,11 @@ void ClientSession::End(const DisconnectReason reason, std::string detail) {
 }
 
 void ClientSession::Receive(const std::span<const std::byte> datagram, const NetTime now) {
-    if (state_ == ClientState::Disconnected) return;
+    if (state_ == ClientState::Disconnected) {
+        // A datagram for a connection that has ended (D-12: counted, not silent).
+        Count(DropReason::UnknownSource);
+        return;
+    }
     const auto header = DecodePacketHeader(datagram);
     if (!header) {
         Count(DropReason::DecodeFailed);

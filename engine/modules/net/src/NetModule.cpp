@@ -158,6 +158,7 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
     Kernel::Registrar& r = setup.Registrar();
     r.Component<Peer>({.name = "Peer"});
     r.Component<PeerLedger>({.name = "PeerLedger"});
+    r.Component<PeerControls>({.name = "PeerControls"});
     table.role = role->role;
     r.Resource<NetWorldLink>({.name = "NetWorldLink"});
     r.Resource<NetWorldRole>({.name = "NetWorldRole"});
@@ -180,6 +181,10 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
         out.mounts.front().before.push_back("SendNet");
         r.AddSystem<&Detail::ReplicateOut>(std::move(out));
         Detail::MarkOneEnd(setup, "ReplicateOut", "the net Module reads the server's World for its clients");
+        Kernel::SystemOptions inputs = Detail::MountedAt("ReceiveInputs", Orchestration::DefaultSchedules::first);
+        inputs.mounts.front().after.push_back("ReceiveNet");
+        r.AddSystem<&Detail::ReceiveInputs>(std::move(inputs));
+        Detail::MarkOneEnd(setup, "ReceiveInputs", "the net Module fills the Peers' input buffers at the server");
     } else {
         r.Resource<NetReplicaState>({.name = "NetReplicaState"});
         r.Message<ServerWorldReplaced>({.name = "ServerWorldReplaced"});
@@ -187,6 +192,10 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
         apply.mounts.front().after.push_back("ReceiveNet");
         r.AddSystem<&Detail::ApplyReplication>(std::move(apply));
         r.AddSystem<&Detail::NotifyReplica>(Detail::MountedAt("NotifyReplica", Orchestration::DefaultSchedules::preUpdate));
+        Kernel::SystemOptions inputs = Detail::MountedAt("SendInputs", Orchestration::DefaultSchedules::last);
+        inputs.mounts.front().before.push_back("SendNet");
+        r.AddSystem<&Detail::SendInputs>(std::move(inputs));
+        Detail::MarkOneEnd(setup, "SendInputs", "the net Module sends the client's inputs");
         // It writes the replicated components (decision data at K2) at the client only.
         Detail::MarkOneEnd(setup, "ApplyReplication", "the net Module writes the server's values at the client");
     }

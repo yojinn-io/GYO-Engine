@@ -48,16 +48,16 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
         Reject(from, Rejection{DisconnectReason::ChallengeFailed, "the response does not carry this server's challenge"});
         return;
     }
-    // A second response from a client already accepted (its first Accepted was lost): the same answer again.
+    // A second response of the same handshake (its first Accepted was lost): the same answer again. A new
+    // handshake from that endpoint (another salt: the client reconnected) ends the old connection first.
     if (const auto known = byEndpoint_.find(from.value); known != byEndpoint_.end()) {
         auto& peer = peers_.at(known->second);
-        if (peer.userId == request->userId && !peer.closing) {
+        if (peer.salt == request->salt && peer.userId == request->userId && !peer.closing) {
             Reply reply{from, PacketKind::Accepted, known->second, {}};
             replies_.push_back(std::move(reply));
             return;
         }
-        Count(DropReason::Unexpected);
-        return;
+        End(peers_.find(known->second), DisconnectReason::ClosedByRemote);
     }
     if (auto mismatch = CompareFacts(request->facts, facts_)) {
         Reject(from, std::move(*mismatch));
@@ -72,7 +72,7 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
     const std::uint32_t id = NewConnectionId();
     ConnectionSettings transport = settings_.transport;
     transport.connectionId = id;
-    peers_.emplace(id, Peer{from, request->userId, Connection(std::move(transport)), now, now, false, 0});
+    peers_.emplace(id, Peer{from, request->userId, request->salt, Connection(std::move(transport)), now, now, false, 0});
     byEndpoint_[from.value] = id;
     events_.push_back(HostEvent{HostEventKind::Connected, id, request->userId, from, DisconnectReason::Closed});
     replies_.push_back(Reply{from, PacketKind::Accepted, id, {}});

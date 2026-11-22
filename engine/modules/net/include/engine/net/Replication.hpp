@@ -30,15 +30,19 @@
 #include <utility>
 #include <vector>
 
+#include "engine/authority/AuthorityStrategy.hpp"
+#include "engine/authority/Registrations.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/kernel/Hash.hpp"
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/TypeKey.hpp"
+#include "engine/kernel/World.hpp"
 #include "engine/net/Codec.hpp"
 #include "engine/net/NetService.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
+#include "engine/world_time/TimeTypes.hpp"
 
 namespace GYO::Engine::Net {
 
@@ -51,7 +55,9 @@ struct NetWorldRole final {
 inline void HashValue(Kernel::Hasher& h, const NetWorldRole& v) { HashValue(h, v.role); }
 
 // What applying one received value did.
-enum class ApplyOutcome : std::uint8_t { Applied = 1, Malformed, Rejected, Missing, Failed };
+// Unchanged: the value is the one the World has (compared through the codec's bytes; not written, so the cell's
+// changed stamp stays: CCR-8).
+enum class ApplyOutcome : std::uint8_t { Applied = 1, Malformed, Rejected, Missing, Failed, Unchanged };
 enum class ApplyMode : std::uint8_t {
     // SpawnWithId with this value (the first component of a spawn).
     Spawn = 1,
@@ -92,10 +98,30 @@ struct MessageEntry final : MessageEntryBase {
     std::function<std::optional<Kernel::EntityId>(const M&)> recipient;
 };
 
+// One input type (D-11), type-erased where its type is known (NetEntry::Input<T>).
+struct InputEntry final {
+    std::string name;
+    std::uint32_t version = 1;
+    std::uint16_t wire = 0;
+    Kernel::TypeKey key;
+    std::uint16_t redundancy = 5;
+    // Client: writes the Peer's last `redundancy` slots up to its newest tick into one input message; false when the
+    // Peer has no input yet.
+    std::function<bool(ReplicaWorld&, Kernel::EntityId peer, NetWriter&)> encodeRecent;
+    // Server: reads one input message into the Peer's buffer, within the window of the server's tick.
+    std::function<void(ReplicaWorld&, Kernel::EntityId peer, NetReader&, std::uint32_t serverTick)> fill;
+    // Server: gives the Peer its buffer of T when it has none (from the first frame of the connection, so every step
+    // the entry runs is counted, consumed or missing).
+    std::function<void(ReplicaWorld&, Kernel::EntityId peer)> ensure;
+    // The InputOptions<T> given (read back by ApplyInput<T>).
+    std::shared_ptr<const void> options;
+};
+
 // The registrations of one World, in registration order.
 struct NetRegistry final {
     std::vector<std::shared_ptr<const ComponentEntry>> components;
     std::vector<std::shared_ptr<const MessageEntryBase>> messages;
+    std::vector<std::shared_ptr<const InputEntry>> inputs;
 
     // The protocol hash: names, order and codec versions.
     [[nodiscard]] std::uint64_t Hash() const;
@@ -217,6 +243,10 @@ struct NetReplicaState final {
     std::uint64_t serverMessagesReceived = 0;
     std::uint64_t serverMessagesDelivered = 0;
     std::uint64_t confirmationsSent = 0;
+    // The client's tick of its last input message (one a tick).
+    std::optional<std::uint64_t> lastInputTick;
+    // Values that were the World's already: not written (CCR-8).
+    std::uint64_t unchangedNotWritten = 0;
     std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
 inline void HashValue(Kernel::Hasher&, const NetReplicaState&) {}
@@ -257,9 +287,123 @@ struct NetWorldLink final {
 };
 inline void HashValue(Kernel::Hasher&, const NetWorldLink&) {}
 
+// The time the player saw when it gave an input (C-IN2): a Match tick and the fraction towards the next one. The
+// fraction is one byte, as lightyear's Overstep goes on the wire (crates/core/core/src/time.rs:25-33, 90-104: a
+// U0F16 kept, a U0F8 sent; its note: about 0.2 % quantization for one byte).
+struct ViewTime final {
+    std::uint32_t tick = 0;
+    std::uint8_t overstep = 0;
+    friend constexpr bool operator==(const ViewTime&, const ViewTime&) noexcept = default;
+};
+
+// The counts of one Peer's input buffer (D-12; G-6).
+struct InputCounts final {
+    // Slots read from input messages, and what became of each.
+    std::uint64_t slotsReceived = 0;
+    std::uint64_t stored = 0;
+    std::uint64_t duplicates = 0;
+    // At or before the tick already consumed.
+    std::uint64_t late = 0;
+    // Beyond the server's tick + window.
+    std::uint64_t outsideWindow = 0;
+    // Steps the entry ran: with the slot of that tick, or holding the last one (missing).
+    std::uint64_t consumed = 0;
+    std::uint64_t missing = 0;
+    // Input messages sent (client) or read (server).
+    std::uint64_t messages = 0;
+};
+
+// One Peer's inputs of type T by tick (D-11; on the Peer entity at both ends: NT-10). The client's product puts its
+// local input in with Set; the server fills it from the client's messages. The entry writes slot n into the
+// controlled entity's T in step n. lightyear's InputBuffer (crates/inputs/inputs/src/input_buffer.rs) is the shape.
+template <class T>
+struct PeerInput final {
+    struct Slot {
+        T value{};
+        ViewTime view;
+    };
+    std::map<std::uint32_t, Slot> slots;
+    // The newest tick consumed (the server's window starts after it), and the last value written (held when a
+    // slot is missing).
+    std::optional<std::uint32_t> consumedThrough;
+    std::optional<T> last;
+    ViewTime lastView;
+    std::uint32_t lastSentTick = 0;
+    InputCounts counts;
+
+    // The client's product: the input of tick (a Match tick) and the time the player saw.
+    void Set(const std::uint32_t tick, T value, const ViewTime view = {}) { slots[tick] = Slot{std::move(value), view}; }
+};
+template <class T>
+inline void HashValue(Kernel::Hasher&, const PeerInput<T>&) {}
+
+// The entity a Peer controls (written by the product; the network does not know the player, P12).
+struct PeerControls final {
+    Kernel::EntityId entity = 0;
+};
+inline void HashValue(Kernel::Hasher& h, const PeerControls& v) { HashValue(h, v.entity); }
+
+// The options of an input type.
+template <class T>
+struct InputOptions final {
+    Codec<T> codec = DefaultCodec<T>();
+    // Slots repeated in each message (lightyear crates/inputs/inputs/src/config.rs:16-19, 50: packet_redundancy 5).
+    std::uint16_t redundancy = 5;
+    // The server takes slots in (consumed, tick + window] (the rollback Module's InputHistoryLength::Long; lightyear
+    // keeps +-64 ticks).
+    std::uint32_t window = 64;
+    // Applied to the last value when a slot is missing and it is held: clears the one-shot fields (a press) so a
+    // held input does not fire again (C-IN3). None: held as it is.
+    std::function<void(T&)> held;
+};
+
 namespace Detail {
 
 using SystemResult = Base::Result<void, Kernel::KernelError>;
+
+// Prunes a buffer to the window behind its newest slot (both ends).
+template <class T>
+void PruneInputs(PeerInput<T>& input, const std::uint32_t keep) {
+    if (input.slots.empty()) return;
+    const std::uint32_t newest = input.slots.rbegin()->first;
+    while (!input.slots.empty() && input.slots.begin()->first + keep < newest) input.slots.erase(input.slots.begin());
+}
+
+// The entry System of input T (D-11): the same name, access and mount at both ends (so the consistency fingerprints
+// agree). In step n it writes each Peer's slot n into the entity the Peer controls; a missing slot holds the last
+// value (counted). Added through authority.Ingress where the World has an authority strategy (it is skipped while
+// resimulating; the rollback Module writes the recorded inputs back), with AddSystem otherwise (K1).
+template <class T>
+SystemResult ApplyInput(Kernel::Query<Kernel::Write<PeerInput<T>>, Kernel::Read<PeerControls>> peers,
+                        Kernel::Query<Kernel::Write<T>> targets, Kernel::Res<WorldTime::Tick> tick,
+                        Kernel::Res<NetWorldLink> link) {
+    const auto now = static_cast<std::uint32_t>(tick->value);
+    const InputOptions<T>* options = nullptr;
+    for (const auto& input : link->registry->inputs) {
+        if (input->key == Kernel::KeyOf<T>()) options = static_cast<const InputOptions<T>*>(input->options.get());
+    }
+    peers.ForEach([&](Kernel::EntityId, Kernel::Mut<PeerInput<T>> input, const PeerControls& controls) {
+        if (controls.entity == 0 || !targets.Contains(controls.entity)) return;
+        auto& buffer = input.Get();
+        T value{};
+        const auto slot = buffer.slots.find(now);
+        if (slot != buffer.slots.end()) {
+            value = slot->second.value;
+            buffer.lastView = slot->second.view;
+            ++buffer.counts.consumed;
+        } else {
+            // Hold the last value, its one-shot fields cleared (a press fires once: C-IN3).
+            if (buffer.last) value = *buffer.last;
+            if (options != nullptr && options->held) options->held(value);
+            ++buffer.counts.missing;
+        }
+        buffer.last = value;
+        buffer.consumedThrough = now;
+        *targets.template GetMut<T>(controls.entity) = value;
+    });
+    return {};
+}
+
 
 inline Kernel::SystemOptions MountedAt(std::string name, const std::string_view stage) {
     Kernel::SystemOptions options;
@@ -350,11 +494,22 @@ public:
             auto read = world.template Read<T>(id, [&](const T& value) { encode(writer, value); });
             return read.has_value() && *read;
         };
-        entry->apply = [decode = codec.decode](ReplicaWorld& world, Kernel::EntityId id, std::span<const std::byte> bytes,
-                                               ApplyMode mode) -> ApplyOutcome {
+        entry->apply = [decode = codec.decode, encode = codec.encode](ReplicaWorld& world, Kernel::EntityId id,
+                                                                      std::span<const std::byte> bytes, ApplyMode mode) -> ApplyOutcome {
             T value{};
             NetReader reader(bytes);
             if (!decode(reader, value) || reader.Remaining() != 0) return ApplyOutcome::Malformed;
+            if (mode != ApplyMode::Spawn) {
+                // CCR-8: the same value sent again is not written, so the cell's changed stamp says only that the
+                // server changed it. Compared through the codec's bytes: T needs no ==.
+                auto same = world.template Read<T>(id, [&](const T& now) {
+                    std::vector<std::byte> current;
+                    NetWriter currentWriter(current);
+                    encode(currentWriter, now);
+                    return current.size() == bytes.size() && std::equal(current.begin(), current.end(), bytes.begin());
+                });
+                if (same && same->has_value() && **same) return ApplyOutcome::Unchanged;
+            }
             if (mode == ApplyMode::Spawn) {
                 auto spawned = world.SpawnWithId(id, std::move(value));
                 if (!spawned) return ApplyOutcome::Failed;
@@ -402,13 +557,131 @@ public:
         }
     }
 
+    // An input (D-11): T is a component on the player's entity at both ends, written by the entry System
+    // ApplyInput:<name> in step n from the slot n of the Peer that controls the entity (PeerControls). The client's
+    // product puts its inputs into its own Peer's PeerInput<T> (LocalInput<T>); the client sends one message a tick
+    // with the last `redundancy` slots, Unreliable; the server keeps each (Peer, tick) once. T is registered by the
+    // author (with authority.Component<T>(name, {.input = true}) for a decision input).
+    template <class T>
+    void Input(std::string name, InputOptions<T> options = {}) {
+        GYO_ASSERT(options.codec.encode && options.codec.decode && "NetEntry::Input<T>: give T's codec (encode and decode)");
+        auto shared = std::make_shared<InputOptions<T>>(std::move(options));
+        auto entry = std::make_shared<InputEntry>();
+        entry->name = name;
+        entry->version = shared->codec.version;
+        entry->wire = static_cast<std::uint16_t>(table_->registry.inputs.size());
+        entry->key = Kernel::KeyOf<T>();
+        entry->redundancy = shared->redundancy;
+        entry->options = shared;
+        const InputOptions<T>* typed = shared.get();
+        entry->encodeRecent = [typed](ReplicaWorld& world, Kernel::EntityId peer, NetWriter& writer) {
+            auto written = world.template Modify<PeerInput<T>>(peer, [&](PeerInput<T>& input) {
+                if (input.slots.empty()) return false;
+                const std::uint32_t end = input.slots.rbegin()->first;
+                const std::uint16_t count = typed->redundancy;
+                writer.Value(end);
+                writer.Value(count);
+                for (std::uint32_t back = count; back-- > 0;) {
+                    const auto slot = input.slots.find(end - back);
+                    writer.Value(static_cast<std::uint8_t>(slot != input.slots.end() ? 1 : 0));
+                    if (slot == input.slots.end()) continue;
+                    writer.Value(slot->second.view.tick);
+                    writer.Value(slot->second.view.overstep);
+                    std::vector<std::byte> bytes;
+                    NetWriter valueWriter(bytes);
+                    typed->codec.encode(valueWriter, slot->second.value);
+                    writer.Value(static_cast<std::uint16_t>(bytes.size()));
+                    writer.Bytes(bytes);
+                }
+                ++input.counts.messages;
+                Detail::PruneInputs(input, 2 * typed->window);
+                return true;
+            });
+            return written.has_value() && written->has_value() && **written;
+        };
+        entry->ensure = [](ReplicaWorld& world, Kernel::EntityId peer) {
+            const auto has = world.template Read<PeerInput<T>>(peer, [](const PeerInput<T>&) {});
+            if (!(has && *has)) (void)world.Insert(peer, PeerInput<T>{});
+        };
+        entry->fill = [typed](ReplicaWorld& world, Kernel::EntityId peer, NetReader& reader, std::uint32_t serverTick) {
+            const auto has = world.template Read<PeerInput<T>>(peer, [](const PeerInput<T>&) {});
+            if (!(has && *has)) (void)world.Insert(peer, PeerInput<T>{});
+            (void)world.template Modify<PeerInput<T>>(peer, [&](PeerInput<T>& input) {
+                std::uint32_t end = 0;
+                std::uint16_t count = 0;
+                if (!reader.Value(end) || !reader.Value(count)) return;
+                ++input.counts.messages;
+                for (std::uint32_t back = count; back-- > 0;) {
+                    std::uint8_t present = 0;
+                    if (!reader.Value(present)) return;
+                    if (present == 0) continue;
+                    typename PeerInput<T>::Slot slot;
+                    std::uint16_t length = 0;
+                    std::span<const std::byte> bytes;
+                    if (!reader.Value(slot.view.tick) || !reader.Value(slot.view.overstep) || !reader.Value(length) ||
+                        !reader.Bytes(length, bytes)) {
+                        return;
+                    }
+                    NetReader valueReader(bytes);
+                    if (!typed->codec.decode(valueReader, slot.value)) return;
+                    const std::uint32_t tick = end - back;
+                    ++input.counts.slotsReceived;
+                    // The window (consumed, serverTick + window]; each (Peer, tick) kept once (C-IN1, C-IN3).
+                    if (input.consumedThrough && tick <= *input.consumedThrough) {
+                        ++input.counts.late;
+                    } else if (tick > serverTick + typed->window) {
+                        ++input.counts.outsideWindow;
+                    } else if (!input.slots.emplace(tick, std::move(slot)).second) {
+                        ++input.counts.duplicates;
+                    } else {
+                        ++input.counts.stored;
+                    }
+                }
+                if (input.consumedThrough) {
+                    while (!input.slots.empty() && input.slots.begin()->first <= *input.consumedThrough) {
+                        input.slots.erase(input.slots.begin());
+                    }
+                }
+            });
+        };
+        table_->registry.inputs.push_back(std::move(entry));
+        if (!table_->role) return;
+        setup_->Registrar().Component<PeerInput<T>>({.name = "PeerInput:" + name});
+        Kernel::SystemOptions apply;
+        apply.name = "ApplyInput:" + name;
+        Kernel::Mount mount;
+        mount.schedule = fixedSchedule_;
+        mount.stage = std::string(Orchestration::DefaultSchedules::first);
+        apply.mounts.push_back(std::move(mount));
+        const auto* authority = setup_->Options<Authority::AuthorityOptions>();
+        if (authority != nullptr && authority->strategy != nullptr &&
+            setup_->Buffer().Find<Authority::AuthorityRegistrations>() != nullptr) {
+            Authority::AuthorityEntry(*setup_).Ingress<&Detail::ApplyInput<T>>(std::move(apply));
+        } else {
+            setup_->Registrar().AddSystem<&Detail::ApplyInput<T>>(std::move(apply));
+        }
+    }
+
 private:
     Orchestration::WorldSetup* setup_;
     NetRegistrations* table_;
+    std::string fixedSchedule_ = std::string(Orchestration::DefaultSchedules::fixed);
 };
 
+// The client's own Peer's buffer of input T, made when it is not there yet (between two Runs, or from the product's
+// code with the World); nullptr before the client's Peer exists.
+template <class T>
+[[nodiscard]] PeerInput<T>* LocalInput(Kernel::World& world) {
+    const NetWorldLink* link = world.Resource<NetWorldLink>();
+    if (link == nullptr || link->clientPeer == 0 || !world.Alive(link->clientPeer)) return nullptr;
+    if (world.Get<PeerInput<T>>(link->clientPeer) == nullptr) world.Insert(link->clientPeer, PeerInput<T>{});
+    return world.GetMut<PeerInput<T>>(link->clientPeer);
+}
+
 namespace Detail {
-// The Systems NetModule registers for replication.
+// The Systems NetModule registers for replication and inputs.
+SystemResult ReceiveInputs(ReplicaWorld world);
+SystemResult SendInputs(ReplicaWorld world);
 SystemResult ReplicateOut(ReplicaWorld world);
 SystemResult ApplyReplication(ReplicaWorld world);
 SystemResult NotifyReplica(Kernel::ResMut<NetReplicaState> state, Kernel::MessageWriter<ServerWorldReplaced> replaced);

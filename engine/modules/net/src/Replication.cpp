@@ -17,6 +17,9 @@ std::uint64_t NetRegistry::Hash() const {
     std::string text = "gyo.net.registrations/2;";
     for (const auto& entry : components) text += "c:" + entry->name + ":" + std::to_string(entry->version) + ";";
     for (const auto& entry : messages) text += "m:" + entry->name + ":" + std::to_string(entry->version) + ";";
+    for (const auto& entry : inputs) {
+        text += "i:" + entry->name + ":" + std::to_string(entry->version) + ":" + std::to_string(entry->redundancy) + ";";
+    }
     return Base::Fnv1a64(text);
 }
 
@@ -43,7 +46,7 @@ namespace {
 // The kinds of replication's messages: the first byte of each. Structure, Confirm, ServerMessage and Resync go on the
 // reliable channel, Values on the values channel. After the kind: the server World's generation and the client's
 // resync epoch (u32 each).
-enum class Kind : std::uint8_t { Structure = 1, Confirm = 2, ServerMessage = 3, Resync = 4, Values = 5 };
+enum class Kind : std::uint8_t { Structure = 1, Confirm = 2, ServerMessage = 3, Resync = 4, Values = 5, Inputs = 6 };
 
 // A value part's payload budget: one part fits one packet without fragments at the default mtu (1170 bytes).
 constexpr std::size_t kValuePartBudget = 1100;
@@ -350,6 +353,7 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             }
             if (outcome == ApplyOutcome::Rejected) Drop(state, ReplicaDrop::SpawnRejected);
             if (outcome == ApplyOutcome::Malformed) Drop(state, ReplicaDrop::Malformed);
+            if (outcome == ApplyOutcome::Unchanged) ++state.unchangedNotWritten;
             first = false;
             state.written[{entity, wire}] = tick;
         }
@@ -393,7 +397,8 @@ SystemResult ApplyValues(ReplicaWorld& world, const NetRegistry& registry, NetRe
             }
             if (outcome == ApplyOutcome::Missing) Drop(state, ReplicaDrop::MissingTarget);
             if (outcome == ApplyOutcome::Malformed) Drop(state, ReplicaDrop::Malformed);
-            if (outcome == ApplyOutcome::Applied) state.written[{entity, wire}] = part.tick;
+            if (outcome == ApplyOutcome::Unchanged) ++state.unchangedNotWritten;
+            if (outcome == ApplyOutcome::Applied || outcome == ApplyOutcome::Unchanged) state.written[{entity, wire}] = part.tick;
         }
     }
     return {};
@@ -569,3 +574,72 @@ SystemResult NotifyReplica(Kernel::ResMut<NetReplicaState> state, Kernel::Messag
 
 } // namespace Detail
 } // namespace GYO::Engine::Net
+
+namespace GYO::Engine::Net::Detail {
+
+// Server, Main/First after ReceiveNet: each Peer's input messages (the values channel carries only those from a
+// client) into its buffers, within the window of the server's tick.
+SystemResult ReceiveInputs(ReplicaWorld world) {
+    NetService* service = nullptr;
+    std::shared_ptr<const NetRegistry> registry;
+    std::map<std::uint32_t, Kernel::EntityId> peers;
+    (void)world.Read<NetWorldLink>([&](const NetWorldLink& link) {
+        service = link.service;
+        registry = link.registry;
+        peers = link.peers;
+    });
+    ServerHost* server = service != nullptr ? service->Server() : nullptr;
+    if (server == nullptr || !registry) return {};
+    const auto tick = static_cast<std::uint32_t>(
+        world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0));
+    for (const auto& [connectionId, peer] : peers) {
+        Connection* connection = server->Find(connectionId);
+        if (connection == nullptr) continue;
+        for (const auto& input : registry->inputs) input->ensure(world, peer);
+        while (auto message = connection->Pop(kValuesChannel)) {
+            NetReader reader(*message);
+            std::uint8_t kind = 0;
+            std::uint32_t generation = 0, epoch = 0;
+            std::uint16_t wire = 0;
+            if (!reader.Value(kind) || kind != static_cast<std::uint8_t>(Kind::Inputs) || !reader.Value(generation) ||
+                !reader.Value(epoch) || !reader.Value(wire) || wire >= registry->inputs.size()) {
+                continue;
+            }
+            registry->inputs[wire]->fill(world, peer, reader, tick);
+        }
+    }
+    return {};
+}
+
+// Client, Main/Last before SendNet: once a tick, each input's last slots of its own Peer, Unreliable.
+SystemResult SendInputs(ReplicaWorld world) {
+    NetService* service = nullptr;
+    std::shared_ptr<const NetRegistry> registry;
+    Kernel::EntityId peer = 0;
+    (void)world.Read<NetWorldLink>([&](const NetWorldLink& link) {
+        service = link.service;
+        registry = link.registry;
+        peer = link.clientPeer;
+    });
+    ClientSession* client = service != nullptr ? service->Client() : nullptr;
+    Connection* connection = client != nullptr && client->State() != ClientState::Disconnected ? client->Transport() : nullptr;
+    if (connection == nullptr || !registry || peer == 0) return {};
+    // One message a tick (D-11).
+    const std::uint64_t tick = world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0);
+    bool due = false;
+    (void)world.Modify<NetReplicaState>([&](NetReplicaState& state) {
+        due = !state.lastInputTick || *state.lastInputTick != tick;
+        state.lastInputTick = tick;
+    });
+    if (!due) return {};
+    for (const auto& entry : registry->inputs) {
+        std::vector<std::byte> body;
+        NetWriter writer(body);
+        Head(writer, Kind::Inputs, 0, 0);
+        writer.Value(entry->wire);
+        if (entry->encodeRecent(world, peer, writer)) (void)connection->Send(kValuesChannel, body);
+    }
+    return {};
+}
+
+} // namespace GYO::Engine::Net::Detail

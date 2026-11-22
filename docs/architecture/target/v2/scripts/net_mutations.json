@@ -508,6 +508,132 @@
    "target": "gyo_net_tests",
    "cases": "replication: a client with a rollback strategy*",
    "expect": "a\\ client\\ with\\ a\\ rollback\\ strategy\\ is\\ refused\\ until\\ step\\ 4\\ \\(NT\\-E5\\)"
+  },
+  {
+   "id": "nt-input-not-held",
+   "what": "a missing slot does not hold the last input (the default value is written). Only it catches hold-last",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            if (buffer.last) value = *buffer.last;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ each\\ server\\ tick\\ has\\ the\\ client's\\ input\\ of\\ that\\ tick,\\ or\\ the\\ last\\ one\\ held"
+  },
+  {
+   "id": "nt-held-fires-again",
+   "what": "a held input keeps its one-shot fields, so a press fires again. Only it catches InputOptions::held (C-IN3)",
+   "guards": [
+    "net-module-declaration C-IN3",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            if (options != nullptr && options->held) options->held(value);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ a\\ one\\-shot\\ input\\ fires\\ only\\ at\\ the\\ tick\\ it\\ was\\ given\\ \\(once\\)"
+  },
+  {
+   "id": "nt-input-window-unchecked",
+   "what": "a slot beyond the server's tick + window is stored. Only it catches the window's upper edge",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    } else if (tick > serverTick + typed->window) {",
+   "replace": "                    } else if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ a\\ slot\\ beyond\\ the\\ window\\ is\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-input-late-stored",
+   "what": "a slot at or before the tick already consumed is stored. Only it catches the window's lower edge",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    if (input.consumedThrough && tick <= *input.consumedThrough) {",
+   "replace": "                    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ slots\\ stored\\ ==\\ consumed\\ \\+\\ still\\ ahead"
+  },
+  {
+   "id": "nt-input-overwritten",
+   "what": "a slot that arrives again overwrites the kept one and counts as stored ((Peer, tick) not kept once), so more slots are stored than consumed. Only it catches the de-duplication of C-IN1",
+   "guards": [
+    "net-module-declaration C-IN1",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    } else if (!input.slots.emplace(tick, std::move(slot)).second) {",
+   "replace": "                    } else if ((input.slots[tick] = std::move(slot), false)) {",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ slots\\ stored\\ ==\\ consumed\\ \\+\\ still\\ ahead"
+  },
+  {
+   "id": "nt-input-missing-uncounted",
+   "what": "a held step is not counted as missing. Only it catches the missing count (D-12)",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration D-12",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            ++buffer.counts.missing;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ every\\ held\\ input\\ is\\ counted\\ as\\ missing"
+  },
+  {
+   "id": "nt-input-entry-not-ingress",
+   "what": "the entry is added with AddSystem even where the World has an authority strategy (it would run while resimulating). Only it catches authority.Ingress",
+   "guards": [
+    "net-module-declaration D-11"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            Authority::AuthorityEntry(*setup_).Ingress<&Detail::ApplyInput<T>>(std::move(apply));",
+   "replace": "            setup_->Registrar().AddSystem<&Detail::ApplyInput<T>>(std::move(apply));",
+   "target": "gyo_net_tests",
+   "cases": "input: the entry has the same name*",
+   "expect": "the\\ entry\\ is\\ added\\ through\\ authority\\.Ingress\\ where\\ the\\ World\\ has\\ a\\ strategy"
+  },
+  {
+   "id": "nt-ccr8-write-same",
+   "what": "a value sent again unchanged is written again, so Changed<T> is true without a change. Only it catches the comparison before the write (CCR-8)",
+   "guards": [
+    "cross-component-rules CCR-8",
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                if (same && same->has_value() && **same) return ApplyOutcome::Unchanged;",
+   "replace": "                (void)same;",
+   "target": "gyo_net_tests",
+   "cases": "replication: a value sent again unchanged*",
+   "expect": "a\\ value\\ sent\\ again\\ unchanged\\ does\\ not\\ make\\ Changed<T>\\ true\\ \\(CCR\\-8\\)"
+  },
+  {
+   "id": "nt-reconnect-reuses-connection",
+   "what": "a new handshake from the same endpoint gets the old connection back (the salt is not compared). Only it catches the salt",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-9"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "        if (peer.salt == request->salt && peer.userId == request->userId && !peer.closing) {",
+   "replace": "        if (peer.userId == request->userId && !peer.closing) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a new handshake from the same endpoint*",
+   "expect": "a\\ reconnect\\ from\\ the\\ same\\ endpoint\\ is\\ a\\ new\\ connection"
   }
  ]
 }

@@ -168,7 +168,10 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     // run again, so a step that writes it (consumes it) does not need it to roll back (it may not: Z8).
     std::set<Kernel::AccessKey> inputsKept;
     for (const Rollback::InputRecord& record : rollback.inputs) {
-        if (const auto id = record.idIn(registry)) inputsKept.insert({Kernel::AccessKind::Resource, *id});
+        if (const auto id = record.idIn(registry)) {
+            const auto kind = record.kind == Rollback::DataKind::Component ? Kernel::AccessKind::Component : Kernel::AccessKind::Resource;
+            inputsKept.insert({kind, *id});
+        }
     }
     // The decision data a writer's check looks at: not a message (messages are not in a rollback snapshot), not
     // the tick (a decision datum that does not roll back: a resimulation moves it back itself), not an input with

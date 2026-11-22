@@ -79,6 +79,9 @@ struct ConnectRequest final {
     std::uint64_t userId = 0;
     // Carried, not checked (Q7: no authentication in this line).
     std::vector<std::byte> token;
+    // Drawn per handshake by the client: a second response of the same handshake (its Accepted was lost) carries
+    // the same salt, a new handshake from the same endpoint (a reconnect) another one (D-8).
+    std::uint64_t salt = 0;
 
     friend bool operator==(const ConnectRequest&, const ConnectRequest&) = default;
 };

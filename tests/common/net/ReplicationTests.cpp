@@ -387,3 +387,36 @@ TEST_CASE("replication: G-8 the bytes per tick and Peer are the same in two runs
     MESSAGE("G-8: ticks=" << first.size() << " total bytes=" << total << " max per tick=" << most
                           << " mean=" << (static_cast<double>(total) / static_cast<double>(first.size())) << " series=" << series);
 }
+
+TEST_CASE("replication: a value sent again unchanged is not written, so Changed<T> tells only real changes (CCR-8)") {
+    // Confirmations get through rarely: the server sends the same values again and again.
+    N::MemoryLinkSettings link;
+    link.seed = 8;
+    link.bToA = {8000, 0, 0, 0};
+    Game game(link, GameRules{300, true});
+    game.Build();
+    // Play until the server's last change (tick 300) is written at the client and the client equals the server.
+    for (int i = 0; i < 800 && !(game.Replica().maxAppliedTick >= 300 && StateOf(game.ClientWorld()) == StateOf(game.ServerWorld())); ++i) {
+        game.ServerFrame();
+        game.ClientFrame();
+    }
+    REQUIRE(StateOf(game.ClientWorld()) == StateOf(game.ServerWorld()));
+    const std::uint64_t changedWhilePlaying = game.ClientWorld().Resource<ClientLog>()->positionsChanged;
+    // From now on nothing changes at the server; what the client gets are the same values sent again.
+    const std::uint64_t changedBefore = changedWhilePlaying;
+    const std::uint64_t unchangedBefore = game.Replica().unchangedNotWritten;
+    const std::uint64_t processedBefore = game.Replica().valuePartsProcessed;
+    for (int i = 0; i < 60; ++i) {
+        game.ServerFrame();
+        game.ClientFrame();
+    }
+    const std::uint64_t changedAfter = game.ClientWorld().Resource<ClientLog>()->positionsChanged;
+    MESSAGE("CCR-8: Changed<Position> while playing=" << changedWhilePlaying << ", while only resent=" << (changedAfter - changedBefore)
+                                                      << "; values not written because unchanged=" << game.Replica().unchangedNotWritten
+                                                      << " (" << (game.Replica().unchangedNotWritten - unchangedBefore)
+                                                      << " while watching); value parts processed while watching="
+                                                      << (game.Replica().valuePartsProcessed - processedBefore));
+    CHECK(changedWhilePlaying > 0);
+    CHECK(game.Replica().unchangedNotWritten > unchangedBefore);
+    CHECK_MESSAGE(changedAfter == changedBefore, "a value sent again unchanged does not make Changed<T> true (CCR-8)");
+}
