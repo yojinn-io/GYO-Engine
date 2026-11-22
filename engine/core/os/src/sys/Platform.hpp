@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/base/Result.hpp"
-#include "engine/os/OsError.hpp"
+#include "engine/os/OSError.hpp"
 
 #include <string>
 #include <vector>
@@ -30,7 +30,7 @@ public:
     // Files: whether paths compare case-sensitively by default.
     [[nodiscard]] virtual bool CaseSensitivePaths() const noexcept = 0;
     // Process: the executable's path as the OS reports it (not yet checked for UTF-8).
-    [[nodiscard]] virtual Base::Result<std::string, OsError> NativeExecutablePath() const = 0;
+    [[nodiscard]] virtual Base::Result<std::string, OSError> NativeExecutablePath() const = 0;
 };
 
 // The platform this build targets.

@@ -28,8 +28,10 @@
 正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 1. **namespace 與目錄一一對應**，Kernel／Engine／Plugins／產品四個根。對應以「目錄 ↔ namespace」的一張表給定，不要求兩邊拼字相同（例：`RetroFPS/Sim` ↔ `fps::pvp::sim`；產品的根 namespace 由產品定）。守衛：掃描（檔案路徑與 namespace 不符即違規；`v8-arch-kernel-scaffold` 新增，J-9 掃描器擴充）。
+   **gyo2（2026-11-22，使用者同意，`v8-arch-gyo2-namespace-root`）**：Engine 的單位預設從目錄名推出 namespace，例外寫進表（`UNIT_OVERRIDES`）並附理由；產品不受影響（產品的根仍由產品定）。守衛：`tests/common/kernel/naming_guard.py`，規則見 [`v2/rebuild-naming.zh-Hant.md`](v2/rebuild-naming.zh-Hant.md) N17 與「N17 的根」。
 2. **System 是動詞片語、資料是名詞、Event 是過去式、Plugin 帶後綴**。守衛：登記時的名稱檢查（Registry 可對 System 名做詞性白名單的弱檢查）＋審查。
 3. **第 5 條的後綴在 Kernel、Engine、Plugins 的新程式中不出現**。守衛：掃描（`Manager|Renderer|ViewModel|Host|Shell|Runtime|Controller` 作為型別名尾；白名單只有仍存在的舊程式，隨遷移縮小）。
+   **gyo2 不適用（2026-11-22，使用者選 (a)，`v8-arch-gyo2-namespace-root`）**：第 5 條 2026-11-14 沒有轉入 gyo2；後綴黑名單擋不住說不出用途的名字、又會誤擋合理的名字，名字改由每批的設計審查看。守衛的 N3 同日拿掉。
 
 4. **名字是概念的 tag；Engine 的名字只指 Engine 的概念。** `engine/` 裡出現產品的詞，就是 Engine 裡有了產品的概念，那個東西不屬於 Engine。名字乾淨不等於概念乾淨：對一個中性的值做只有某個產品懂的處理，同樣違反本條。守衛：名字由掃描查（`neutral_names_guard.py`，voxel-mesh 與 map-markers；Kernel 目錄的產品名禁字表，`v8-arch-kernel-scaffold` 新增，J-9）；名字查不到的由審查查。（使用者 2026-11-13：名字是一個概念的極簡 tag，所以這一條既是命名也是分層；分層那邊引用到這裡——`runtime-composition.zh-Hant.md` §4。承接 legacy `docs/architecture.md`〈Layers〉check 1。plugins 層的同一條性質寫在 `docs/plugins/` 的層 DI，`v8-arch-plugins-foundation` 建。）
 

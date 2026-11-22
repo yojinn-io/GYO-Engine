@@ -22,14 +22,14 @@ public:
     explicit ScriptedFileSystem(std::string name) : name_(std::move(name)) {}
 
     void Found() { error_.reset(); }
-    void Fails(IoErrorCode code, std::string message) {
-        error_ = IoError::Make(code, std::move(message));
+    void Fails(IOErrorCode code, std::string message) {
+        error_ = IOError::Make(code, std::move(message));
     }
     int Calls() const noexcept { return calls_; }
 
     const char* Name() const noexcept override { return name_.c_str(); }
 
-    IoResult<FS::FileInfo> Stat(const Path::Uri&) override {
+    IOResult<FS::FileInfo> Stat(const Path::Uri&) override {
         ++calls_;
         if (error_) return GYO::Engine::Base::Err(*error_);
         FS::FileInfo info;
@@ -38,51 +38,51 @@ public:
         return info;
     }
 
-    IoResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri&, Stream::FileOpenMode) override {
+    IOResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri&, Stream::FileOpenMode) override {
         ++calls_;
         if (error_) return GYO::Engine::Base::Err(*error_);
         std::vector<std::byte> bytes(name_.size());
         for (std::size_t i = 0; i < name_.size(); ++i) bytes[i] = static_cast<std::byte>(name_[i]);
         return std::make_unique<Stream::MemoryStream>(std::move(bytes), Stream::MemoryStream::Options{});
     }
-    IoResult<bool> Exists(const Path::Uri&) override {
+    IOResult<bool> Exists(const Path::Uri&) override {
         ++calls_;
         if (error_) return GYO::Engine::Base::Err(*error_);
         return true;
     }
-    IoResult<void> CreateDirectories(const Path::Uri&) override {
+    IOResult<void> CreateDirectories(const Path::Uri&) override {
         return GYO::Engine::Base::Err(Unsupported());
     }
-    IoResult<void> Remove(const Path::Uri&, const FS::RemoveOptions&) override {
+    IOResult<void> Remove(const Path::Uri&, const FS::RemoveOptions&) override {
         return GYO::Engine::Base::Err(Unsupported());
     }
-    IoResult<void> Move(const Path::Uri&, const Path::Uri&) override {
+    IOResult<void> Move(const Path::Uri&, const Path::Uri&) override {
         return GYO::Engine::Base::Err(Unsupported());
     }
-    IoResult<void> Copy(const Path::Uri&, const Path::Uri&) override {
+    IOResult<void> Copy(const Path::Uri&, const Path::Uri&) override {
         return GYO::Engine::Base::Err(Unsupported());
     }
-    IoResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri&, const FS::ListOptions&) override {
+    IOResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri&, const FS::ListOptions&) override {
         return GYO::Engine::Base::Err(Unsupported());
     }
-    IoResult<std::string> ToNativePathString(const Path::Uri&) override {
+    IOResult<std::string> ToNativePathString(const Path::Uri&) override {
         return GYO::Engine::Base::Err(Unsupported());
     }
     FS::FileSystemCapabilities Capabilities() const noexcept override { return {}; }
-    IoResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri&, const FS::ListOptions&) override {
+    IOResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri&, const FS::ListOptions&) override {
         return GYO::Engine::Base::Err(Unsupported());
     }
-    IoResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override {
+    IOResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override {
         return GYO::Engine::Base::Err(Unsupported());
     }
 
 private:
-    static IoError Unsupported() {
-        return IoError::Make(IoErrorCode::NotSupported, "ScriptedFileSystem: not scripted");
+    static IOError Unsupported() {
+        return IOError::Make(IOErrorCode::NotSupported, "ScriptedFileSystem: not scripted");
     }
 
     std::string name_;
-    std::optional<IoError> error_;
+    std::optional<IOError> error_;
     int calls_ = 0;
 };
 
@@ -114,7 +114,7 @@ struct OverlayFixture {
 
 TEST_CASE("Vfs: Stat falls through NotFound to the next mount") {
     OverlayFixture f;
-    f.high->Fails(IoErrorCode::NotFound, "high: missing");
+    f.high->Fails(IOErrorCode::NotFound, "high: missing");
     f.low->Found();
 
     const auto info = f.vfs.Stat(f.uri);
@@ -126,24 +126,24 @@ TEST_CASE("Vfs: Stat falls through NotFound to the next mount") {
 
 TEST_CASE("Vfs: Stat stops at the first error that is not NotFound") {
     OverlayFixture f;
-    f.high->Fails(IoErrorCode::PermissionDenied, "high: denied");
+    f.high->Fails(IOErrorCode::PermissionDenied, "high: denied");
     f.low->Found();
 
     const auto info = f.vfs.Stat(f.uri);
     REQUIRE_FALSE(info);
-    CHECK(info.error().code == IoErrorCode::PermissionDenied);
+    CHECK(info.error().code == IOErrorCode::PermissionDenied);
     CHECK(info.error().message == "high: denied");
     CHECK(f.low->Calls() == 0);
 }
 
 TEST_CASE("Vfs: Stat reports the last NotFound when every mount misses") {
     OverlayFixture f;
-    f.high->Fails(IoErrorCode::NotFound, "high: missing");
-    f.low->Fails(IoErrorCode::NotFound, "low: missing");
+    f.high->Fails(IOErrorCode::NotFound, "high: missing");
+    f.low->Fails(IOErrorCode::NotFound, "low: missing");
 
     const auto info = f.vfs.Stat(f.uri);
     REQUIRE_FALSE(info);
-    CHECK(info.error().code == IoErrorCode::NotFound);
+    CHECK(info.error().code == IOErrorCode::NotFound);
     CHECK(info.error().message == "low: missing");
     CHECK(f.high->Calls() == 1);
     CHECK(f.low->Calls() == 1);
@@ -152,7 +152,7 @@ TEST_CASE("Vfs: Stat reports the last NotFound when every mount misses") {
 TEST_CASE("Vfs: read Open follows the same NotFound overlay rule") {
     SUBCASE("falls through NotFound") {
         OverlayFixture f;
-        f.high->Fails(IoErrorCode::NotFound, "high: missing");
+        f.high->Fails(IOErrorCode::NotFound, "high: missing");
         f.low->Found();
         auto stream = f.vfs.Open(f.uri, Stream::FileOpenMode::Read);
         REQUIRE(stream);
@@ -163,20 +163,20 @@ TEST_CASE("Vfs: read Open follows the same NotFound overlay rule") {
     }
     SUBCASE("stops on another error") {
         OverlayFixture f;
-        f.high->Fails(IoErrorCode::ReadFailed, "high: broken");
+        f.high->Fails(IOErrorCode::ReadFailed, "high: broken");
         f.low->Found();
         const auto stream = f.vfs.Open(f.uri, Stream::FileOpenMode::Read);
         REQUIRE_FALSE(stream);
-        CHECK(stream.error().code == IoErrorCode::ReadFailed);
+        CHECK(stream.error().code == IOErrorCode::ReadFailed);
         CHECK(f.low->Calls() == 0);
     }
     SUBCASE("reports the last NotFound") {
         OverlayFixture f;
-        f.high->Fails(IoErrorCode::NotFound, "high: missing");
-        f.low->Fails(IoErrorCode::NotFound, "low: missing");
+        f.high->Fails(IOErrorCode::NotFound, "high: missing");
+        f.low->Fails(IOErrorCode::NotFound, "low: missing");
         const auto stream = f.vfs.Open(f.uri, Stream::FileOpenMode::Read);
         REQUIRE_FALSE(stream);
-        CHECK(stream.error().code == IoErrorCode::NotFound);
+        CHECK(stream.error().code == IOErrorCode::NotFound);
         CHECK(stream.error().message == "low: missing");
     }
 }
@@ -184,7 +184,7 @@ TEST_CASE("Vfs: read Open follows the same NotFound overlay rule") {
 TEST_CASE("Vfs: Exists treats NotFound as absent and stops on another error") {
     SUBCASE("NotFound then found") {
         OverlayFixture f;
-        f.high->Fails(IoErrorCode::NotFound, "high: missing");
+        f.high->Fails(IOErrorCode::NotFound, "high: missing");
         f.low->Found();
         const auto exists = f.vfs.Exists(f.uri);
         REQUIRE(exists);
@@ -192,19 +192,19 @@ TEST_CASE("Vfs: Exists treats NotFound as absent and stops on another error") {
     }
     SUBCASE("every mount misses") {
         OverlayFixture f;
-        f.high->Fails(IoErrorCode::NotFound, "high: missing");
-        f.low->Fails(IoErrorCode::NotFound, "low: missing");
+        f.high->Fails(IOErrorCode::NotFound, "high: missing");
+        f.low->Fails(IOErrorCode::NotFound, "low: missing");
         const auto exists = f.vfs.Exists(f.uri);
         REQUIRE(exists);
         CHECK_FALSE(exists.value());
     }
     SUBCASE("another error is returned") {
         OverlayFixture f;
-        f.high->Fails(IoErrorCode::PermissionDenied, "high: denied");
+        f.high->Fails(IOErrorCode::PermissionDenied, "high: denied");
         f.low->Found();
         const auto exists = f.vfs.Exists(f.uri);
         REQUIRE_FALSE(exists);
-        CHECK(exists.error().code == IoErrorCode::PermissionDenied);
+        CHECK(exists.error().code == IOErrorCode::PermissionDenied);
         CHECK(f.low->Calls() == 0);
     }
 }

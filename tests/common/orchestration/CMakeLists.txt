@@ -51,64 +51,6 @@ add_test(NAME orchestration.units COMMAND gyo_orchestration_units_tests "--test-
 set_tests_properties(orchestration.units PROPERTIES LABELS "cpu" TIMEOUT 60
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
-# Include order (defect found in segment 3): each public orchestration header
-# first, then every public kernel header. The orchestration layer was the first
-# GYO::Engine namespace while the carried units still lived under the old root
-# Engine::; a kernel header that named Engine::Base unqualified inside GYO::Kernel
-# then looked in GYO::Engine and failed to compile. Since
-# v8-arch-gyo2-namespace-root every unit is under GYO::Engine and that collision
-# cannot happen; whether to keep these objects is a decision pending with the
-# user (dev_log 2026_11_22_gyo2_namespace_root). Built with the tests; a compile
-# error is the failure.
-file(GLOB_RECURSE _orchestration_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/orchestration/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/orchestration/include/*.hpp")
-file(GLOB_RECURSE _kernel_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include/*.hpp")
-list(SORT _orchestration_headers)
-list(SORT _kernel_headers)
-set(_kernel_includes "")
-foreach(_header IN LISTS _kernel_headers)
-    string(APPEND _kernel_includes "#include \"${_header}\"\n")
-endforeach()
-set(_order_sources "")
-foreach(_header IN LISTS _orchestration_headers)
-    string(MAKE_C_IDENTIFIER "${_header}" _id)
-    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}.cpp")
-    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every kernel header.\n#include \"${_header}\"\n${_kernel_includes}" @ONLY)
-    list(APPEND _order_sources "${_source}")
-endforeach()
-# The first Engine Module in GYO::Engine that goes into a World, engine/world_time
-# (time-events declaration 3.1): each of its public headers first, then every
-# orchestration and kernel header; and each orchestration header first, then
-# every world_time header (the order gyo_product_units generates). A header that
-# named the old root Engine:: unqualified inside GYO::Engine::WorldTime failed here
-# (see above: the collision is gone).
-file(GLOB_RECURSE _world_time_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include"
-    CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include/*.hpp")
-list(SORT _world_time_headers)
-set(_orchestration_includes "")
-foreach(_header IN LISTS _orchestration_headers)
-    string(APPEND _orchestration_includes "#include \"${_header}\"\n")
-endforeach()
-set(_world_time_includes "")
-foreach(_header IN LISTS _world_time_headers)
-    string(APPEND _world_time_includes "#include \"${_header}\"\n")
-endforeach()
-foreach(_header IN LISTS _world_time_headers)
-    string(MAKE_C_IDENTIFIER "${_header}" _id)
-    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}.cpp")
-    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every orchestration and kernel header.\n#include \"${_header}\"\n${_orchestration_includes}${_kernel_includes}" @ONLY)
-    list(APPEND _order_sources "${_source}")
-endforeach()
-foreach(_header IN LISTS _orchestration_headers)
-    string(MAKE_C_IDENTIFIER "${_header}" _id)
-    set(_source "${CMAKE_CURRENT_BINARY_DIR}/include_order/${_id}_then_world_time.cpp")
-    file(CONFIGURE OUTPUT "${_source}" CONTENT "// Generated: ${_header} first, then every world_time header.\n#include \"${_header}\"\n${_world_time_includes}" @ONLY)
-    list(APPEND _order_sources "${_source}")
-endforeach()
-add_library(gyo_orchestration_include_order OBJECT ${_order_sources})
-target_link_libraries(gyo_orchestration_include_order PRIVATE GYO::Orchestration GYO::WorldTime)
-
 # The scans the skeleton declaration deferred (section 7.4), stood up by
 # v8-arch-gyo2-time-events step 1 once scenario segment 1 had passed:
 #   orchestration.guard  O-3 (no Plan step read, no System called), O-4 (the

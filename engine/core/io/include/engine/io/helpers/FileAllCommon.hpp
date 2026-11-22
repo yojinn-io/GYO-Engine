@@ -12,8 +12,8 @@
 #include "engine/base/Result.hpp"
 #include "engine/base/Span.hpp"
 
-#include "engine/io/IoError.hpp"
-#include "engine/io/IoFwd.hpp"                // Path::Uri, Stream::IStream fwd
+#include "engine/io/IOError.hpp"
+#include "engine/io/IOFwd.hpp"                // Path::Uri, Stream::IStream fwd
 #include "engine/io/fs/IFileSystem.hpp"       // IFileSystem
 #include "engine/io/fs/Vfs.hpp"              // Vfs（使わないなら外してOK）
 #include "engine/io/stream/FileOpenMode.hpp"  // FileOpenMode, Has/IsValid
@@ -32,18 +32,18 @@ namespace GYO::Engine::IO::Helpers {
         bool flush = true;
     };
 
-    inline IoError MakeErr(GYO::Engine::IO::IoErrorCode code, const char* msg, std::string detail = {}) {
-        return IoError::Make(code, msg, std::move(detail));
+    inline IOError MakeErr(GYO::Engine::IO::IOErrorCode code, const char* msg, std::string detail = {}) {
+        return IOError::Make(code, msg, std::move(detail));
     }
 
-    inline IoResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
+    inline IOResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
     OpenRead(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri) {
         using GYO::Engine::IO::Stream::FileOpenMode;
         auto mode = FileOpenMode::Read | FileOpenMode::Binary;
         return fs.Open(uri, mode);
     }
 
-    inline IoResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
+    inline IOResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
     OpenWriteTruncate(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri) {
         using GYO::Engine::IO::Stream::FileOpenMode;
         auto mode = FileOpenMode::Write | FileOpenMode::Binary | FileOpenMode::Truncate | FileOpenMode::CreateIfMissing;
@@ -51,20 +51,20 @@ namespace GYO::Engine::IO::Helpers {
     }
 
     // VFS overload（必要ないなら削ってOK）
-    inline IoResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
+    inline IOResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
     OpenRead(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri) {
         using GYO::Engine::IO::Stream::FileOpenMode;
         auto mode = FileOpenMode::Read | FileOpenMode::Binary;
         return vfs.Open(uri, mode);
     }
-    inline IoResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
+    inline IOResult<std::unique_ptr<GYO::Engine::IO::Stream::IStream>>
     OpenWriteTruncate(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri) {
         using GYO::Engine::IO::Stream::FileOpenMode;
         auto mode = FileOpenMode::Write | FileOpenMode::Binary | FileOpenMode::Truncate | FileOpenMode::CreateIfMissing;
         return vfs.Open(uri, mode);
     }
 
-    inline IoResult<std::vector<std::byte>>
+    inline IOResult<std::vector<std::byte>>
     ReadAllFromStream(GYO::Engine::IO::Stream::IStream& s, const ReadAllOptions& opt) {
         std::vector<std::byte> out;
 
@@ -74,7 +74,7 @@ namespace GYO::Engine::IO::Helpers {
             if (szr) {
                 const auto sz = static_cast<std::size_t>(szr.value());
                 if (sz > opt.maxBytes) {
-                    return Base::Err(MakeErr(GYO::Engine::IO::IoErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
+                    return Base::Err(MakeErr(GYO::Engine::IO::IOErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
                 }
                 out.reserve(sz);
             }
@@ -90,7 +90,7 @@ namespace GYO::Engine::IO::Helpers {
             if (n == 0) break;
 
             if (out.size() + n > opt.maxBytes) {
-                return Base::Err(MakeErr(GYO::Engine::IO::IoErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
+                return Base::Err(MakeErr(GYO::Engine::IO::IOErrorCode::ReadFailed, "ReadAllBytes: exceeds maxBytes"));
             }
 
             const std::size_t old = out.size();
@@ -101,7 +101,7 @@ namespace GYO::Engine::IO::Helpers {
         return std::move(out);
     }
 
-    inline IoResult<void>
+    inline IOResult<void>
     WriteAllToStream(GYO::Engine::IO::Stream::IStream& s, GYO::Engine::Base::ConstSpan<std::byte> data) {
         std::size_t offset = 0;
         while (offset < data.size()) {
@@ -112,7 +112,7 @@ namespace GYO::Engine::IO::Helpers {
             const std::size_t n = wr.value();
             if (n == 0) {
                 return Base::Err(MakeErr(
-                    GYO::Engine::IO::IoErrorCode::WriteFailed, "WriteAllBytes: zero write"));
+                    GYO::Engine::IO::IOErrorCode::WriteFailed, "WriteAllBytes: zero write"));
             }
             offset += n;
         }

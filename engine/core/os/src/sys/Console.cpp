@@ -26,14 +26,14 @@ bool installed = false;
 
 } // namespace
 
-Base::Result<std::vector<std::string>, OsError> CommandLineUtf8(const int argc, const char* const* const argv) {
+Base::Result<std::vector<std::string>, OSError> CommandLineUtf8(const int argc, const char* const* const argv) {
     std::vector<std::string> arguments;
     if (argv == nullptr) return arguments;
     arguments.reserve(argc > 0 ? static_cast<std::size_t>(argc) : 0U);
     for (int index = 0; index < argc && argv[index] != nullptr; ++index) {
         std::string argument(argv[index]);
         if (!Detail::IsValidUtf8(argument)) {
-            return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,
+            return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding,
                                                      "command line argument is not valid UTF-8", argument.size()));
         }
         arguments.push_back(std::move(argument));
@@ -51,7 +51,7 @@ Utf8ConsoleOutput::Utf8ConsoleOutput(Utf8ConsoleOutput&& other) noexcept
 
 Utf8ConsoleOutput::~Utf8ConsoleOutput() = default;
 
-Base::Result<void, OsError> InstallShutdownRequests() {
+Base::Result<void, OSError> InstallShutdownRequests() {
     // A second caller waits until the first one has finished installing.
     const std::scoped_lock lock(installing);
     if (installed) return {};
@@ -68,7 +68,7 @@ Base::Result<void, OsError> InstallShutdownRequests() {
             const int error = errno;
             // All or nothing: the ones already replaced get their handlers back.
             for (std::size_t undo = 0; undo < index; ++undo) static_cast<void>(::sigaction(signals[undo], &previous[undo], nullptr));
-            return Base::Err(MakeOsError(OsErrorCode::Unsupported, "cannot install the shutdown-request handler",
+            return Base::Err(MakeOSError(OSErrorCode::Unsupported, "cannot install the shutdown-request handler",
                                          {NativeErrorDomain::Errno, error}));
         }
     }

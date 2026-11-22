@@ -1111,24 +1111,6 @@
    "timeout": 300
   },
   {
-   "id": "ur-include-order-kernel-unqualified",
-   "what": "step 3 (include order): a kernel header names GYO::Engine::Base unqualified inside GYO::Kernel (the check is the build of the include-order objects; the command after it only completes the run)",
-   "file": "engine/ecs/kernel/include/engine/kernel/WorldExecutor.hpp",
-   "find": "    ::GYO::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
-   "replace": "    GYO::Engine::Base::Result<void, KernelError> Run(std::string_view schedule);",
-   "target": "gyo_orchestration_include_order",
-   "expect_build_failure": true,
-   "expect": "(?s)gyo_orchestration_include_order\\.dir.*no member named 'Base' in namespace 'GYO::Engine'",
-   "platforms": [
-    "darwin"
-   ],
-   "command": [
-    "{python}",
-    "-c",
-    "pass"
-   ]
-  },
-  {
    "id": "sc-gameinit-every-frame",
    "what": "step 4 (scenario segment 1): S1-2/S1-3: game initialization runs again every frame (the score restarts)",
    "file": "engine/orchestration/src/Product.cpp",

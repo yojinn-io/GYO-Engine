@@ -367,46 +367,6 @@
       ]
     },
     {
-      "id": "ks-n3-off",
-      "what": "N3 reports no suffix",
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "                if ROLE_SUFFIX.search(name.split(\"::\")[-1]):",
-      "replace": "                if False:",
-      "expect": "FAIL: test_n3_host_suffix_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n3-using-dropped",
-      "what": "N3 no longer reads using aliases",
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "    r\"|\\busing\\s+(\\w+)\\s*=\"\n",
-      "replace": "    r\"|\\busing\\s+(\\w+)\\s*=(?!)\"\n",
-      "expect": "FAIL: test_n3_runtime_alias_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
       "id": "ks-real-product-name",
       "what": "K1 reports a connection-role word in engine/kernel: the real-tree positive control of K1 (rewritten by v8-arch-gyo2-mutation-prune: gyo2 registers no product, so a product name is no longer found in the real tree; the role word PlayerState stands in)",
       "file": "engine/ecs/kernel/include/engine/kernel/Plan.hpp",
@@ -430,19 +390,6 @@
         "{python}",
         "-B",
         "tests/common/kernel/kernel_guard.py"
-      ]
-    },
-    {
-      "id": "ks-real-role-suffix",
-      "what": "a type with a role suffix enters engine/kernel",
-      "file": "engine/ecs/kernel/include/engine/kernel/Plan.hpp",
-      "find": "namespace GYO::Kernel {\n\n// A SHA-256",
-      "replace": "namespace GYO::Kernel {\nstruct WorldHost {};\n\n// A SHA-256",
-      "expect": "N3 type WorldHost",
-      "command": [
-        "{python}",
-        "-B",
-        "tests/common/kernel/naming_guard.py"
       ]
     },
     {
@@ -856,46 +803,6 @@
       "find": "r\"\\s+|\\binline\\b\"",
       "replace": "r\"\\s+|inline\"",
       "expect": "FAIL: test_n1_inline_nested_namespace_keeps_its_name",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n3-typedef-dropped",
-      "what": "N3 drops typedef (review A9)",
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "\n    r\"|\\btypedef\\b[^;{}]*?(\\w+)\\s*(?:\\[[^\\]]*\\]\\s*)*;\")",
-      "replace": "\n    r\"|(?!)(\\w+)\")",
-      "expect": "FAIL: test_n3_every_declaration_keyword_is_reported",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_naming_guard.py",
-        "-v"
-      ]
-    },
-    {
-      "id": "ks-n3-qualified-dropped",
-      "what": "N3 reads only the first part of a qualified name (review A9)",
-      "file": "tests/common/kernel/naming_guard.py",
-      "find": "    r\"(\\w+(?:\\s*::\\s*\\w+)*)\"",
-      "replace": "    r\"(\\w+)\"",
-      "expect": "FAIL: test_n3_every_declaration_keyword_is_reported",
       "command": [
         "{python}",
         "-B",

@@ -37,7 +37,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
   `HighResolutionWaitableTimer` on Windows, or `WaitableTimer` when the high-resolution timer is not available;
   `ConditionVariable` elsewhere. The names are part of the consumer's log lines (`wait_backend=`).
 - `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive; the message is engine/core/os's and
-  the detail carries engine/core/os's error (`Base::CauseDetail`, for example `IoFailed: errno=24`; ★ in
+  the detail carries engine/core/os's error (`Base::CauseDetail`, for example `IOFailed: errno=24`; ★ in
   v8-arch-gyo2-os-wait, where it replaced `strerror` text and `GetLastError=<n>`). A moved-from Waiter ignores
   `Notify` (it is `noexcept` and cannot assert); waiting on it is a Programmer Error (`GYO_ASSERT`).
 
@@ -86,7 +86,7 @@ the main checkout.
 7. **The backend is reported, and its names stay.** `Backend()` answers which mechanism this Waiter uses, on every
    platform (the Windows fallback included); the `ToString` names do not change, since consumer logs carry them
    (os.md Invariant 9). The names are Time's `WaitBackend`; `OS::WaitMechanism` maps to it value for value
-   (`static_assert` in `Waiter.cpp`). Guards: `tests/common/os/WakeSignalTests.cpp` "Os wake signal uses the platform
+   (`static_assert` in `Waiter.cpp`). Guards: `tests/common/os/WakeSignalTests.cpp` "OS wake signal uses the platform
    mechanism" for the selection (mutants ow-x8, ow-x14, ow-x15), "Time Waiter reports the os mechanism" for the
    mapping (mutant ow-x7), "Time Waiter backend names stay as consumers log them" for the names; mutant
    `ti-x3-backend-name-changed`.

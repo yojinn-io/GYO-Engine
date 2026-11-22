@@ -33,16 +33,16 @@
     {
       "id": "os-g5-upward",
       "what": "engine/os includes a module above it (R5)",
-      "file": "engine/core/os/src/common/OsError.cpp",
-      "find": "#include \"engine/os/OsError.hpp\"\n",
-      "replace": "#include \"engine/os/OsError.hpp\"\n#include \"engine/io/IoError.hpp\"\n",
+      "file": "engine/core/os/src/common/OSError.cpp",
+      "find": "#include \"engine/os/OSError.hpp\"\n",
+      "replace": "#include \"engine/os/OSError.hpp\"\n#include \"engine/io/IOError.hpp\"\n",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
         "--root",
         "."
       ],
-      "expect": "engine/core/os/src/common/OsError\\.cpp:\\d+: R5 engine/io/IoError\\.hpp"
+      "expect": "engine/core/os/src/common/OSError\\.cpp:\\d+: R5 engine/io/IOError\\.hpp"
     },
     {
       "id": "os-g6-stale",
@@ -64,7 +64,7 @@
     {
       "id": "os-g7-public-header",
       "what": "An engine/os public header includes windows.h (Invariant 4)",
-      "file": "engine/core/os/include/engine/os/OsError.hpp",
+      "file": "engine/core/os/include/engine/os/OSError.hpp",
       "find": "#include \"engine/base/Error.hpp\"\n",
       "replace": "#include \"engine/base/Error.hpp\"\n#include <windows.h>\n",
       "command": [
@@ -73,7 +73,7 @@
         "--root",
         "."
       ],
-      "expect": "engine/core/os/include/engine/os/OsError\\.hpp:\\d+: R1 windows\\.h"
+      "expect": "engine/core/os/include/engine/os/OSError\\.hpp:\\d+: R1 windows\\.h"
     },
     {
       "id": "os-g8-link",
@@ -109,7 +109,7 @@
     {
       "id": "os-e1-detail",
       "what": "The native error detail drops its fixed domain prefix",
-      "file": "engine/core/os/src/common/OsError.cpp",
+      "file": "engine/core/os/src/common/OSError.cpp",
       "find": "? \"win32=\" : \"errno=\"",
       "replace": "? \"\" : \"errno=\"",
       "target": "gyo_os_tests",
@@ -160,8 +160,8 @@
       "id": "io-m5-long-prefix",
       "what": "A long-path or NT prefix is accepted into an engine/io path when it appears only after extra leading slashes collapse (///??/)",
       "file": "engine/core/io/src/path/Uri.cpp",
-      "find": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
-      "replace": "        if (false) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
+      "find": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
+      "replace": "        if (false) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
       "target": "engine_tests",
       "cases": "Uri:*",
       "expect": "the URI text file:///\\?\\?/ does not parse"
@@ -234,11 +234,11 @@
         "linux"
       ],
       "file": "engine/core/os/src/sys/Files.cpp",
-      "find": "    case ENOENT:\n    case ENOTDIR:\n        return OsErrorCode::NotFound;",
-      "replace": "    case ENOTDIR:\n        return OsErrorCode::NotFound;",
+      "find": "    case ENOENT:\n    case ENOTDIR:\n        return OSErrorCode::NotFound;",
+      "replace": "    case ENOTDIR:\n        return OSErrorCode::NotFound;",
       "target": "gyo_os_tests",
       "cases": "*NotFound*",
-      "expect": "CHECK\\( file.error\\(\\).code == OsErrorCode::NotFound \\) is NOT correct"
+      "expect": "CHECK\\( file.error\\(\\).code == OSErrorCode::NotFound \\) is NOT correct"
     },
     {
       "id": "os-f2-utf8",
@@ -248,7 +248,7 @@
       "replace": "    if (false) {",
       "target": "gyo_os_tests",
       "cases": "*invalid arguments*",
-      "expect": "CHECK\\( OpenError\\(invalid\\) == OsErrorCode::InvalidEncoding \\) is NOT correct"
+      "expect": "CHECK\\( OpenError\\(invalid\\) == OSErrorCode::InvalidEncoding \\) is NOT correct"
     },
     {
       "id": "os-f3-posix-regular",
@@ -289,7 +289,7 @@
       "replace": "",
       "target": "gyo_os_tests",
       "cases": "*NotFound*",
-      "expect": "CHECK\\( file.error\\(\\).code == OsErrorCode::NotFound \\) is NOT correct"
+      "expect": "CHECK\\( file.error\\(\\).code == OSErrorCode::NotFound \\) is NOT correct"
     },
     {
       "id": "io-n1-caps",
@@ -325,11 +325,11 @@
       "id": "io-n4-notfound",
       "what": "An engine/os NotFound becomes OpenFailed, so a VFS overlay stops instead of trying the next mount",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "            case OS::OsErrorCode::NotFound:        return IoErrorCode::NotFound;",
-      "replace": "            case OS::OsErrorCode::NotFound:        return otherwise;",
+      "find": "            case OS::OSErrorCode::NotFound:        return IOErrorCode::NotFound;",
+      "replace": "            case OS::OSErrorCode::NotFound:        return otherwise;",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
-      "expect": "CHECK\\( opened.error\\(\\).code == IoErrorCode::NotFound \\) is NOT correct"
+      "expect": "CHECK\\( opened.error\\(\\).code == IOErrorCode::NotFound \\) is NOT correct"
     },
     {
       "id": "os-f6-posix-moved-from",
@@ -339,8 +339,8 @@
         "linux"
       ],
       "file": "engine/core/os/src/sys/Files.cpp",
-      "find": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n    GYO_ASSERT(impl_ != nullptr);\n",
-      "replace": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n",
+      "find": "Base::Result<std::size_t, OSError> FileReader::Read(const std::span<std::byte> into) {\n    GYO_ASSERT(impl_ != nullptr);\n",
+      "replace": "Base::Result<std::size_t, OSError> FileReader::Read(const std::span<std::byte> into) {\n",
       "target": "gyo_os_tests",
       "cases": "*moved-from*",
       "expect": "CRASHED|SIGSEGV|GYO_CHECK_ASSERTS"
@@ -353,8 +353,8 @@
         "linux"
       ],
       "file": "engine/core/os/src/sys/Files.cpp",
-      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
-      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
+      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
+      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
       "target": "gyo_os_tests",
       "cases": "*no UTF-8 form*",
       "expect": "REQUIRE_FALSE\\( text \\) is NOT correct"
@@ -367,7 +367,7 @@
       "replace": "",
       "target": "gyo_os_tests",
       "cases": "*invalid arguments*",
-      "expect": "CHECK\\( OpenError\\(invalid\\) == OsErrorCode::InvalidEncoding \\) is NOT correct"
+      "expect": "CHECK\\( OpenError\\(invalid\\) == OSErrorCode::InvalidEncoding \\) is NOT correct"
     },
     {
       "id": "io-n5-seek-past-end",
@@ -387,11 +387,11 @@
       "replace": "            if (false) {",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
-      "expect": "\\(posix.error\\(\\).code == IoErrorCode::InvalidPath\\) != \\(drive.error\\(\\).code == IoErrorCode::InvalidPath\\) \\) is NOT correct"
+      "expect": "\\(posix.error\\(\\).code == IOErrorCode::InvalidPath\\) != \\(drive.error\\(\\).code == IOErrorCode::InvalidPath\\) \\) is NOT correct"
     },
     {
       "id": "p1-no-long-path-form",
-      "what": "OsCallPath hands a long full path to the API without the long-path form (consumer windows-long-path P1)",
+      "what": "OSCallPath hands a long full path to the API without the long-path form (consumer windows-long-path P1)",
       "platforms": [
         "win32"
       ],
@@ -502,19 +502,19 @@
         "win32"
       ],
       "file": "engine/core/os/include/engine/os/Files.hpp",
-      "find": "#include \"engine/os/OsError.hpp\"\n",
-      "replace": "#include \"engine/os/OsError.hpp\"\n#ifndef NOMINMAX\n#define NOMINMAX\n#endif\n#include <windows.h>\n",
+      "find": "#include \"engine/os/OSError.hpp\"\n",
+      "replace": "#include \"engine/os/OSError.hpp\"\n#ifndef NOMINMAX\n#define NOMINMAX\n#endif\n#include <windows.h>\n",
       "target": "gyo_os_header_tests",
       "expect": "includes windows\\.h or winsock"
     },
     {
       "id": "os-g17-hygiene-coverage",
       "what": "The header hygiene test stops including an engine/os public header",
-      "file": "tests/common/os/OsHeaderHygieneTests.cpp",
-      "find": "#include \"engine/os/OsError.hpp\"\n",
+      "file": "tests/common/os/OSHeaderHygieneTests.cpp",
+      "find": "#include \"engine/os/OSError.hpp\"\n",
       "replace": "",
       "target": "gyo_os_header_tests",
-      "expect": "not included by OsHeaderHygieneTests\\.cpp:\\s*engine/os/OsError\\.hpp"
+      "expect": "not included by OSHeaderHygieneTests\\.cpp:\\s*engine/os/OSError\\.hpp"
     },
     {
       "id": "os-p1-thread-clock",
@@ -867,7 +867,7 @@
       "what": "NativeFileSystem::CreateDirectories reports success without creating",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        auto created = OS::Files::CreateDirectories(native.value());",
-      "replace": "        auto created = Base::Result<void, OS::OsError>{};",
+      "replace": "        auto created = Base::Result<void, OS::OSError>{};",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "creates directories and keeps the engine/os cause"
@@ -953,7 +953,7 @@
       "what": "A file URI with a host is refused again (the D46 behaviour)",
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (!IsLocalAuthority(authority)) return CanonicalFilePath(\"//\" + std::string(authority) + path);",
-      "replace": "        if (!IsLocalAuthority(authority)) return Base::Err(IoError::Make(IoErrorCode::NotSupported, \"UNC file URIs are not supported\", std::string(rest)));",
+      "replace": "        if (!IsLocalAuthority(authority)) return Base::Err(IOError::Make(IOErrorCode::NotSupported, \"UNC file URIs are not supported\", std::string(rest)));",
       "target": "engine_tests",
       "cases": "Uri*",
       "expect": "ParseUri failed for file://server/share/x"
@@ -1005,8 +1005,8 @@
         "linux"
       ],
       "file": "engine/core/os/src/sys/Files.cpp",
-      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
-      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
+      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
+      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
       "target": "gyo_os_tests",
       "cases": "*current directory with no UTF-8*",
       "expect": "REQUIRE_FALSE\\( \\*relative \\) is NOT correct"
@@ -1090,8 +1090,8 @@
       "id": "io-m20-namespace-before-collapse",
       "what": "The namespace check runs before extra leading slashes collapse, so ///??/ becomes the NT prefix /??/",
       "file": "engine/core/io/src/path/Uri.cpp",
-      "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n",
-      "replace": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
+      "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n        if (HasNamespacePrefix(path)) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n",
+      "replace": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
       "target": "engine_tests",
       "cases": "Uri*",
       "expect": "no native path back for ///\\?\\?/"
@@ -1246,7 +1246,7 @@
       "what": "NativeFileSystem::Move reports success without renaming",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        auto moved = OS::Files::RenameReplacing(source.value(), target.value());",
-      "replace": "        auto moved = Base::Result<void, OS::OsError>{};",
+      "replace": "        auto moved = Base::Result<void, OS::OSError>{};",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( ReadBack\\(tree.Native\\(\"menu.json\"\\)\\) == \"new\" \\) is NOT correct"
@@ -1256,7 +1256,7 @@
       "what": "NativeFileSystem::Remove reports success without removing",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        auto removed = OS::Files::RemoveFile(native.value());",
-      "replace": "        auto removed = Base::Result<void, OS::OsError>{};",
+      "replace": "        auto removed = Base::Result<void, OS::OSError>{};",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK_FALSE\\( fs.Exists\\(tree.Uri\\(\"menu.json\"\\)\\).value\\(\\) \\) is NOT correct"
@@ -1269,7 +1269,7 @@
       "replace": "",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
-      "expect": "CHECK\\( fs.Remove\\(tree.Uri\\(\\), recursive\\).error\\(\\).code == IoErrorCode::NotSupported \\) is NOT correct"
+      "expect": "CHECK\\( fs.Remove\\(tree.Uri\\(\\), recursive\\).error\\(\\).code == IOErrorCode::NotSupported \\) is NOT correct"
     },
     {
       "id": "io-x4-atomic-temporary-left",
@@ -1342,7 +1342,7 @@
       "replace": "        if (false) {",
       "target": "gyo_os_tests",
       "cases": "*remove a file*",
-      "expect": "CHECK\\( onDirectory.error\\(\\).code == OsErrorCode::InvalidPath \\) is NOT correct"
+      "expect": "CHECK\\( onDirectory.error\\(\\).code == OSErrorCode::InvalidPath \\) is NOT correct"
     },
     {
       "id": "io-x6-atomic-write-direct",
@@ -1556,7 +1556,7 @@
         "linux"
       ],
       "file": "engine/core/os/src/sys/Process.cpp",
-      "find": "    return Base::Err(OsError::Make(OsErrorCode::Unsupported, \"this platform has no ANSI code page\"));",
+      "find": "    return Base::Err(OSError::Make(OSErrorCode::Unsupported, \"this platform has no ANSI code page\"));",
       "replace": "    return 65001u;",
       "target": "gyo_os_tests",
       "cases": "*reports its ANSI code page*",

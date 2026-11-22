@@ -8,15 +8,15 @@
 
 namespace GYO::Engine::IO::Helpers {
 
-    IoResult<FileStamp> ProbeFileStamp(FS::IFileSystem& fs, const Path::Uri& uri, const ReadAllOptions& read) {
+    IOResult<FileStamp> ProbeFileStamp(FS::IFileSystem& fs, const Path::Uri& uri, const ReadAllOptions& read) {
         auto info = fs.Stat(uri);
         if (!info) {
-            if (info.error().code == IoErrorCode::NotFound) return FileStamp{};
+            if (info.error().code == IOErrorCode::NotFound) return FileStamp{};
             return Base::Err(std::move(info.error()));
         }
         // Refused before opening: opening a pipe, a device or a terminal has effects of its own.
         if (!info.value().IsFile()) {
-            return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "not a regular file", uri.ToString()));
+            return Base::Err(IOError::Make(IOErrorCode::InvalidPath, "not a regular file", uri.ToString()));
         }
         auto bytes = ReadAllBytes(fs, uri, read);
         if (!bytes) return Base::Err(std::move(bytes.error()));

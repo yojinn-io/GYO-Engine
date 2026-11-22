@@ -42,7 +42,7 @@ World 外的程式                                                              
 守衛：`world_logging.forward`（遊戲的讀者讀到的相同、描述器丟例外）、編譯失敗樣本（`tests/common/world_logging/compile_fail/ForwardSample.cpp`，`GYO_WORLD_LOGGING_REJECT_WRITE`／`_DESCRIPTOR`）、`scenario.segment3`（S3-3）；突變 `lg-forward-*`。
 
 <a id="lg-4"></a>
-**LG-4 不認得產品與其他 Module。** `engine/modules/logging` 只含入 Base、Json、Os、Threads、Time 與自己；公開標頭只含入 Base 與自己。`engine/modules/world_logging` 只含入 Base、Logging、Kernel、Orchestration 與自己。兩個都不認得任何訊息型別、產品的詞（描述器在發出訊息的 Module 那邊）。
+**LG-4 不認得產品與其他 Module。** `engine/modules/logging` 只含入 Base、Json、OS、Threads、Time 與自己；公開標頭只含入 Base 與自己。`engine/modules/world_logging` 只含入 Base、Logging、Kernel、Orchestration 與自己。兩個都不認得任何訊息型別、產品的詞（描述器在發出訊息的 Module 那邊）。
 守衛：ctest `logging.guard`（`tests/common/logging/logging_guard.py`：三條含入規則、正例、目錄不存在時失敗）與 `logging.guard_selftest`；突變 `lg-guard-*`。
 
 <a id="lg-5"></a>

@@ -100,7 +100,7 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
     (`InvalidPath`) instead of letting the OS reinterpret them.
   - Its read stream seeks like the other read-only streams (`MemoryStream`, `SpanStream`): a target outside
     `[0, Size()]` is `SeekFailed`; a read of zero bytes is not the end of the file.
-- **Errors.** Failures are `IoError`. When a backend converts an engine/os failure, it chooses the `IoErrorCode`,
+- **Errors.** Failures are `IOError`. When a backend converts an engine/os failure, it chooses the `IOErrorCode`,
   keeps the inner message, and records the cause with `Base::CauseDetail(osError, outerDetail)`, for example
   `C:/x/y.dxil; NotFound: win32=3; path_bytes=271`. The native error code is never dropped.
 - **User files** (v8-engine-io-user-files). Helpers for native paths a person names, in UTF-8, through

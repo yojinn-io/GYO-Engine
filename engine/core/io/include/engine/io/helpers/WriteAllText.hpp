@@ -7,7 +7,7 @@
  */
 namespace GYO::Engine::IO::Helpers {
 
-    inline IoResult<void>
+    inline IOResult<void>
     WriteAllTextUtf8(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
                      std::string_view text,
                      const WriteAllOptions& opt = {}) {
@@ -16,7 +16,7 @@ namespace GYO::Engine::IO::Helpers {
         return WriteAllBytes(fs, uri, span, opt);
     }
 
-    inline IoResult<void>
+    inline IOResult<void>
     WriteAllTextUtf8(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri,
                      std::string_view text,
                      const WriteAllOptions& opt = {}) {

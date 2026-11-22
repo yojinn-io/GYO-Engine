@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/base/Result.hpp"
-#include "engine/os/OsError.hpp"
+#include "engine/os/OSError.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -27,8 +27,8 @@ public:
     // with NOTE_CRITICAL (no timer-coalescing leeway). Windows: an auto-reset
     // event and a high-resolution waitable timer, else a plain one. Other
     // platforms: a mutex, a condition variable and a pending flag, which cannot
-    // fail. A primitive the OS refuses is IoFailed with the native error.
-    [[nodiscard]] static Base::Result<WakeSignal, OsError> Create();
+    // fail. A primitive the OS refuses is IOFailed with the native error.
+    [[nodiscard]] static Base::Result<WakeSignal, OSError> Create();
 
     WakeSignal(WakeSignal&& other) noexcept;
     WakeSignal& operator=(WakeSignal&& other) noexcept;

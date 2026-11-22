@@ -101,12 +101,12 @@ C++26 has no run-time function to swap the handler and chooses semantics per bui
 `GYO::Engine::Base::Result<T, E>` holds either a value or an error; `E` must satisfy `CodedError` (below), so a string or another uncoded type does not compile. Its interface is a subset of C++23 `std::expected`, with `Base::Err` in the role of `std::unexpected`:
 
 ```cpp
-Base::Result<Path, IoError> Parse(std::string_view raw) {
+Base::Result<Path, IOError> Parse(std::string_view raw) {
     auto normalized = Normalize(raw);
     if (!normalized) return Base::Err(std::move(normalized).error());  // propagate
     return Path::FromNormalized(std::move(*normalized));               // success
 }
-Base::Result<void, IoError> Close() { /* ... */ return {}; }           // void success
+Base::Result<void, IOError> Close() { /* ... */ return {}; }           // void success
 ```
 
 - **Success**: return the value; it converts implicitly when `T` does. A braced value names its type (`return T{...};`); a non-void `Result` has no default constructor, so `return {};` cannot silently succeed with a default `T`.
@@ -127,4 +127,4 @@ Every error type `E` used with `Result` satisfies the `Base::CodedError` concept
 - `detail` is optional context, such as a path or, at a module boundary, the inner error's code name and detail.
 - There is no default constructor, so an error value always describes a failure. A state that may or may not hold an error uses `std::optional<E>` (for example `AssetManager::GetError`).
 
-`GYO::Engine::Base::Error<Code>` is the common error type: public `code`, `message` and `detail`, constructed with `Error<Code>::Make(code, message, detail)`. A module may define its own type when it needs more context; `Ui::UiError` adds the document `source` and `jsonPointer`. Each module declares its error type exactly once next to its code enum, optionally with a `<Module>Result<T>` alias (`IoResult`, `UiResult`, `ModelResult`; the UI editor uses its own `Result<T, E>` alias). `Base::Describe(error)` formats any `CodedError` as `<CodeName>: <message>`, followed by ` (<detail>)` when there is a detail. GYO has no global error enum, no error chains and no type-erased error categories. *(2026-11-13, `v8-arch-a6-revision`: **narrowed for the kernel, not withdrawn**: `Base::Error` and every module error type carry no chain, as before; the kernel's `KernelError` is the one type that carries a context chain and a sibling list. Text: `target/error-handling.md`, section "Relation to 'no error chains' in the current contract".)* Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).
+`GYO::Engine::Base::Error<Code>` is the common error type: public `code`, `message` and `detail`, constructed with `Error<Code>::Make(code, message, detail)`. A module may define its own type when it needs more context; `Ui::UiError` adds the document `source` and `jsonPointer`. Each module declares its error type exactly once next to its code enum, optionally with a `<Module>Result<T>` alias (`IOResult`, `UiResult`, `ModelResult`; the UI editor uses its own `Result<T, E>` alias). `Base::Describe(error)` formats any `CodedError` as `<CodeName>: <message>`, followed by ` (<detail>)` when there is a detail. GYO has no global error enum, no error chains and no type-erased error categories. *(2026-11-13, `v8-arch-a6-revision`: **narrowed for the kernel, not withdrawn**: `Base::Error` and every module error type carry no chain, as before; the kernel's `KernelError` is the one type that carries a context chain and a sibling list. Text: `target/error-handling.md`, section "Relation to 'no error chains' in the current contract".)* Production code that needs to branch on a failure branches on the module's code (for example the VFS read overlay, which tries the next mount on `NotFound`).

@@ -20,7 +20,7 @@ namespace GYO::Engine::IO::Path {
         }
 
         // 生入力から安全に生成
-        static Base::Result<Path, IoError> Parse(std::string_view raw,
+        static Base::Result<Path, IOError> Parse(std::string_view raw,
                                          const NormalizeOptions& opt = {}) {
             auto n = Normalize(raw, opt);
             if (!n) {

@@ -450,4 +450,4 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 - **動態插入**：`InsertSystems(world, owner, [](Registrar& r) { … })` 走 Kernel 的兩步（第 12 節）；`owner` 不能是登記單位或產品自己的名字（`OwnerTaken`）。World 不准（`dynamicInsert = false`）或建 Plan 失敗時，編排層記**一次**警告、把錯誤回給你、World 照跑（CCR-3）。登記單位的 `Finish`、`Check` 不重跑。
 - **`World(name)` 的參照**：`Product::World(name)` 給的 `WorldExecutor&` 在那個名字下一次被替換之前有效；替換之後要重新拿。
 - **執行緒**：建、跑、替換、插入、銷毀 `Product` 都在呼叫的那條執行緒上（CCR-5）。
-- **標頭的順序**：Engine 的單位都在 `GYO::Engine` 底下（2026-11-22 起，`v8-arch-gyo2-namespace-root`），編排層與 Kernel 的標頭用什麼順序 include 都能編譯（`gyo_orchestration_include_order` 守著）。
+- **標頭的順序**：Engine 的單位都在 `GYO::Engine` 底下（2026-11-22 起，`v8-arch-gyo2-namespace-root`），舊根 `Engine::` 和 `GYO::Engine` 互相遮蔽的問題不再存在；當時守它的 include-order 編譯檢查同日拿掉（使用者決定）。

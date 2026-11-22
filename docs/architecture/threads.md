@@ -58,13 +58,13 @@ stop and join.
    error; `Normal` is applied on every platform, by the call on macOS and Windows and with no call elsewhere (os.md
    Invariant 10). No timing behaviour depends on it.
    Guard: the priority case of "a role reports its name…" (`Normal` applied everywhere; every priority applied on
-   macOS and Windows); `tests/common/os/ThreadTests.cpp` "Os thread applies the priority hints as the platform reads
+   macOS and Windows); `tests/common/os/ThreadTests.cpp` "OS thread applies the priority hints as the platform reads
    them back" reads the class, priority or niceness back; mutants `th-x4` (macOS), `th-x5` (Windows), `th-x6`
    (Linux).
 6. **The name is reported, and its truncation stays.** A non-empty name is required; `NameApplied()` tells whether the
    platform took it; Linux keeps 15 bytes (os.md Invariant 9 keeps that truncation when the backend moves). Guards:
    "a role needs a name and a body", the name case of "a role reports its name…" (applied on macOS and Linux, also
-   for a name longer than 15 bytes, which is reported in full); `tests/common/os/ThreadTests.cpp` "Os thread names
+   for a name longer than 15 bytes, which is reported in full); `tests/common/os/ThreadTests.cpp` "OS thread names
    the calling thread as the platform reads it back" (the name the OS keeps, Linux's 15 bytes, a Windows name
    beyond ASCII); mutants `ti-x4-linux-name-not-cut` (Linux), `th-x7` (macOS), `th-x3` (Windows).
 7. **Each role waits on its own Waiter.** Wakes reach only that role, and `WaitBackend()` answers that Waiter's

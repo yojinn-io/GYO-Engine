@@ -66,7 +66,7 @@ std::string AsText(const std::vector<std::byte>& bytes) {
     return out;
 }
 
-std::string Describe(const IoError& error) { return error.message + " " + error.detail; }
+std::string Describe(const IOError& error) { return error.message + " " + error.detail; }
 
 // One file named by its UNC path: the URI text, the way back, a read and a
 // write through NativeFileSystem.
@@ -119,7 +119,7 @@ void CheckFile(const std::string& host, const std::string& unc, const std::files
     const auto missing = FS::NativeFileUri(unc + ".missing");
     if (missing) {
         const auto status = fs.Stat(missing.value());
-        Check(!status && status.error().code == IoErrorCode::NotFound, "a missing file is NotFound");
+        Check(!status && status.error().code == IOErrorCode::NotFound, "a missing file is NotFound");
     }
 }
 

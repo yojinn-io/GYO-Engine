@@ -52,15 +52,15 @@ namespace GYO::Engine::IO::Path {
         return false;
     }
 
-    Base::Result<std::string, IoError> Normalize(std::string_view raw, const NormalizeOptions& opt) {
+    Base::Result<std::string, IOError> Normalize(std::string_view raw, const NormalizeOptions& opt) {
         if (opt.rejectNullByte && ContainsNullByte(raw)) {
-            return Base::Err(IoError::Make(GYO::Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::InvalidPath,
                                         "path contains null byte",
                                         std::string(raw)));
         }
 
         if (opt.rejectAbsoluteLike && IsAbsoluteLike(raw)) {
-            return Base::Err(IoError::Make(GYO::Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::InvalidPath,
                                         "absolute-like path is not allowed",
                                         std::string(raw)));
         }
@@ -119,11 +119,11 @@ namespace GYO::Engine::IO::Path {
                         continue;
                     }
                     // root越え（相対パスで上に出る）
-                    return Base::Err(IoError::Make(GYO::Engine::IO::IoErrorCode::PathEscapesRoot,
+                    return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::PathEscapesRoot,
                                                 "path escapes root by '..'",
                                                 std::string(raw)));
                 } else if (opt.rejectTraversal) {
-                    return Base::Err(IoError::Make(GYO::Engine::IO::IoErrorCode::InvalidPath,
+                    return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::InvalidPath,
                                                 "path traversal '..' is not allowed",
                                                 std::string(raw)));
                 }
@@ -152,7 +152,7 @@ namespace GYO::Engine::IO::Path {
 
         // 追加の traversal 判定（resolveDotDot=false時の保険）
         if (opt.rejectTraversal && ContainsTraversal(out)) {
-            return Base::Err(IoError::Make(GYO::Engine::IO::IoErrorCode::InvalidPath,
+            return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::InvalidPath,
                                         "path traversal '..' is not allowed",
                                         out));
         }

@@ -52,12 +52,12 @@ struct WakeSignal::Impl final {
     }
 };
 
-Base::Result<WakeSignal, OsError> WakeSignal::Create() {
+Base::Result<WakeSignal, OSError> WakeSignal::Create() {
     auto impl = std::make_unique<Impl>();
     impl->event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!impl->event) {
         const auto error = static_cast<std::int64_t>(GetLastError());
-        return Base::Err(MakeOsError(OsErrorCode::IoFailed, "CreateEventW failed", {NativeErrorDomain::Win32, error}));
+        return Base::Err(MakeOSError(OSErrorCode::IOFailed, "CreateEventW failed", {NativeErrorDomain::Win32, error}));
     }
     impl->timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     impl->mechanism = WaitMechanism::HighResolutionWaitableTimer;
@@ -67,7 +67,7 @@ Base::Result<WakeSignal, OsError> WakeSignal::Create() {
     }
     if (!impl->timer) {
         const auto error = static_cast<std::int64_t>(GetLastError());
-        return Base::Err(MakeOsError(OsErrorCode::IoFailed, "CreateWaitableTimerExW failed",
+        return Base::Err(MakeOSError(OSErrorCode::IOFailed, "CreateWaitableTimerExW failed",
             {NativeErrorDomain::Win32, error}));
     }
     return WakeSignal(std::move(impl));

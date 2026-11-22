@@ -138,7 +138,7 @@ Clock::duration LongestTimedBlockAfterAWake(WakeSignal& wake) {
 
 } // namespace
 
-TEST_CASE("Os wake signal uses the platform mechanism") {
+TEST_CASE("OS wake signal uses the platform mechanism") {
     const auto wake = MakeWakeSignal();
 #if defined(GYO_WAKE_SIGNAL_FALLBACK)
     CHECK(wake.Mechanism() == WaitMechanism::ConditionVariable);
@@ -152,7 +152,7 @@ TEST_CASE("Os wake signal uses the platform mechanism") {
 #endif
 }
 
-TEST_CASE("Os wake signal: a signal sent before the block stays pending") {
+TEST_CASE("OS wake signal: a signal sent before the block stays pending") {
     auto wake = MakeWakeSignal();
     wake.Signal();
     const auto start = Clock::now();
@@ -164,7 +164,7 @@ TEST_CASE("Os wake signal: a signal sent before the block stays pending") {
 // A pending signal ends one block, then it is gone, as kqueue's EV_CLEAR and
 // the Windows auto-reset event behave. A primitive that kept it would end every
 // later block at once and the Waiter would spin.
-TEST_CASE("Os wake signal: a consumed signal does not end the next block") {
+TEST_CASE("OS wake signal: a consumed signal does not end the next block") {
     auto wake = MakeWakeSignal();
     SUBCASE("signals sent before the block") {
         wake.Signal();
@@ -180,7 +180,7 @@ TEST_CASE("Os wake signal: a consumed signal does not end the next block") {
 
 // The same for a signal that arrives during a block: the block it ends takes
 // it, so the next block waits for its own timeout.
-TEST_CASE("Os wake signal: a signal that ended a block does not end the next one") {
+TEST_CASE("OS wake signal: a signal that ended a block does not end the next one") {
     auto wake = MakeWakeSignal();
     const auto longest = LongestTimedBlockAfterAWake(wake);
     CHECK_MESSAGE(longest >= std::chrono::milliseconds(10), "a signal that ended a block also ended the next one");
@@ -189,7 +189,7 @@ TEST_CASE("Os wake signal: a signal that ended a block does not end the next one
 // A block without a timeout returns only on a signal (or rarely spuriously); a
 // primitive that returned at once would turn every untimed Waiter::Wait into a
 // busy loop. A timed block first leaves a timer behind, as the Waiter does.
-TEST_CASE("Os wake signal: a block without a timeout ends only on a signal") {
+TEST_CASE("OS wake signal: a block without a timeout ends only on a signal") {
     const Watchdog watchdog("a block without a timeout did not end on a signal");
     auto wake = MakeWakeSignal();
     wake.Block(std::chrono::milliseconds(1));
@@ -209,7 +209,7 @@ TEST_CASE("Os wake signal: a block without a timeout ends only on a signal") {
     CHECK_MESSAGE(blocks <= 3, "a block without a timeout returned without a signal");
 }
 
-TEST_CASE("Os wake signal ends a block on a signal from another thread") {
+TEST_CASE("OS wake signal ends a block on a signal from another thread") {
     const Watchdog watchdog("a block without a timeout did not end on a signal from another thread");
     auto wake = MakeWakeSignal();
     for (const std::optional<std::chrono::nanoseconds> perBlock :
@@ -227,7 +227,7 @@ TEST_CASE("Os wake signal ends a block on a signal from another thread") {
     }
 }
 
-TEST_CASE("Os wake signal ends a block by its relative timeout") {
+TEST_CASE("OS wake signal ends a block by its relative timeout") {
     auto wake = MakeWakeSignal();
     // A timer armed for no time at all ends every block at once.
     const auto longest = LongestOfThreeTimedBlocks(wake);
@@ -247,7 +247,7 @@ TEST_CASE("Os wake signal ends a block by its relative timeout") {
 // This is the lost wakeup the fallback avoids by setting and reading its
 // pending flag under its mutex (Design Invariant 8). The spin falls back to
 // yielding, so one CPU still makes progress.
-TEST_CASE("Os wake signal loses no signal sent while the waiter checks its flag") {
+TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag") {
     constexpr int Rounds = 20000;
     constexpr int StopAfterLost = 3;
     constexpr int SpinsBeforeYield = 4096;
@@ -295,7 +295,7 @@ TEST_CASE("Os wake signal loses no signal sent while the waiter checks its flag"
     CHECK_MESSAGE(lost == 0, "a signal sent while the waiter checked its flag was lost until the block timed out");
 }
 
-TEST_CASE("Os wake signal ignores a signal on a moved-from signal and refuses its use") {
+TEST_CASE("OS wake signal ignores a signal on a moved-from signal and refuses its use") {
     auto first = MakeWakeSignal();
     auto second = std::move(first);
     first.Signal();  // NOLINT(bugprone-use-after-move): a moved-from signal ignores Signal

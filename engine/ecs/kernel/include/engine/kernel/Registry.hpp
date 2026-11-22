@@ -214,7 +214,7 @@ public:
     }
 
     // An effect id (spec C.1 effects): an opaque side-effect class such as
-    // "Io:file". Two Systems declaring the same effect conflict (spec D.1).
+    // "IO:file". Two Systems declaring the same effect conflict (spec D.1).
     EffectId Effect(std::string name);
 
     // A named component set (spec C.1 namedSets, S13), owned by this owner.

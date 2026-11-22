@@ -96,7 +96,7 @@ TEST_CASE("ProbeFileStamp reports a missing file, a file and what is not a file"
 
     auto directory = Helpers::ProbeFileStamp(files, tree.Uri("名前"), AnySize());
     REQUIRE_FALSE(directory);
-    CHECK(directory.error().code == IoErrorCode::InvalidPath);
+    CHECK(directory.error().code == IOErrorCode::InvalidPath);
     // Refused from its status, before anything is opened.
     CHECK(std::string_view(directory.error().message).find("not a regular file") != std::string_view::npos);
 }
@@ -149,7 +149,7 @@ TEST_CASE("WriteFileAtomically with createParentDirectories writes a file at a v
         std::error_code ignored;
         std::filesystem::remove(file, ignored);
     } else {
-        CHECK(written.error().code != IoErrorCode::InvalidPath);
+        CHECK(written.error().code != IOErrorCode::InvalidPath);
     }
 }
 
@@ -281,7 +281,7 @@ TEST_CASE("IsNativePathWithin refuses a namespace prefix as the file mapping doe
     for (const char* prefixed : {"//?/C:/x/doc.json", "//./C:/x/doc.json", "\\\\?\\C:\\x\\doc.json"}) {
         auto within = FS::IsNativePathWithin(prefixed, "//?/C:/x");
         REQUIRE_FALSE(within);
-        CHECK(within.error().code == IoErrorCode::InvalidPath);
+        CHECK(within.error().code == IOErrorCode::InvalidPath);
     }
 }
 
@@ -290,6 +290,6 @@ TEST_CASE("IsNativePathWithin refuses a path that is not UTF-8") {
     for (const auto& [candidate, root] : {std::pair<std::string, std::string>{invalid, "/"}, {"/", invalid}}) {
         auto within = FS::IsNativePathWithin(candidate, root);
         REQUIRE_FALSE(within);
-        CHECK(within.error().code == IoErrorCode::InvalidPath);
+        CHECK(within.error().code == IOErrorCode::InvalidPath);
     }
 }

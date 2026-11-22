@@ -4,7 +4,7 @@
 
 namespace GYO::Engine::IO::Helpers {
 
-    inline IoResult<void>
+    inline IOResult<void>
     WriteAllBytes(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
                   GYO::Engine::Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {
@@ -24,7 +24,7 @@ namespace GYO::Engine::IO::Helpers {
         return {};
     }
 
-    inline IoResult<void>
+    inline IOResult<void>
     WriteAllBytes(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri,
                   GYO::Engine::Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {

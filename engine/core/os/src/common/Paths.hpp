@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/base/Result.hpp"
-#include "engine/os/OsError.hpp"
+#include "engine/os/OSError.hpp"
 
 #include <cstddef>
 #include <string>
@@ -17,9 +17,9 @@ namespace GYO::Engine::OS::Detail {
 
 // An argument the layer refuses before any OS call: there is no native error,
 // so the detail is "path_bytes=<n>" alone (docs/architecture/os.md).
-[[nodiscard]] OsError RefusedArgument(OsErrorCode code, std::string message, std::size_t pathBytes);
+[[nodiscard]] OSError RefusedArgument(OSErrorCode code, std::string message, std::size_t pathBytes);
 
 // Not empty, no NUL, valid UTF-8.
-[[nodiscard]] Base::Result<void, OsError> CheckPath(std::string_view utf8Path);
+[[nodiscard]] Base::Result<void, OSError> CheckPath(std::string_view utf8Path);
 
 } // namespace GYO::Engine::OS::Detail

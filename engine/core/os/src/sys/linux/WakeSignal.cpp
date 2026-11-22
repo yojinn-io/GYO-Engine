@@ -39,7 +39,7 @@ struct WakeSignal::Impl final {
     }
 };
 
-Base::Result<WakeSignal, OsError> WakeSignal::Create() {
+Base::Result<WakeSignal, OSError> WakeSignal::Create() {
     return WakeSignal(std::make_unique<Impl>());
 }
 

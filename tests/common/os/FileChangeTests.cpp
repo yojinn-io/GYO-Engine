@@ -83,7 +83,7 @@ std::filesystem::path DeepPath(const std::filesystem::path& root) {
 
 } // namespace
 
-TEST_CASE("Os files rename a file over an existing one in one step") {
+TEST_CASE("OS files rename a file over an existing one in one step") {
     TempDirectory dir("gyo-os-rename");
     const auto from = dir.Path() / "export.json.tmp";
     const auto to = dir.Path() / "export.json";
@@ -100,13 +100,13 @@ TEST_CASE("Os files rename a file over an existing one in one step") {
     CHECK(ReadBytes(fresh) == "fresh");
 }
 
-TEST_CASE("Os files keep the target when renaming over it fails") {
+TEST_CASE("OS files keep the target when renaming over it fails") {
     TempDirectory dir("gyo-os-rename-fail");
     const auto to = dir.Path() / "export.json";
     WriteBytes(to, "kept");
     const auto missing = RenameReplacing(Utf8(dir.Path() / "absent.tmp"), Utf8(to));
     REQUIRE_FALSE(missing);
-    CHECK(missing.error().code == OsErrorCode::NotFound);
+    CHECK(missing.error().code == OSErrorCode::NotFound);
     CHECK(ReadBytes(to) == "kept");
 
     // A directory is not replaced by a file.
@@ -120,7 +120,7 @@ TEST_CASE("Os files keep the target when renaming over it fails") {
     CHECK(ReadBytes(from) == "new");
 }
 
-TEST_CASE("Os files rename and remove under a path longer than 300 characters") {
+TEST_CASE("OS files rename and remove under a path longer than 300 characters") {
     TempDirectory dir("gyo-os-rename-long");
     const auto deep = DeepPath(dir.Path());
     std::filesystem::create_directories(TempDirectory::SetupPath(deep));
@@ -135,7 +135,7 @@ TEST_CASE("Os files rename and remove under a path longer than 300 characters") 
     CHECK_FALSE(Exists(Utf8(to)).value());
 }
 
-TEST_CASE("Os files remove a file, not a directory") {
+TEST_CASE("OS files remove a file, not a directory") {
     TempDirectory dir("gyo-os-remove");
     const auto file = dir.Path() / "a.tmp";
     WriteBytes(file, "x");
@@ -144,17 +144,17 @@ TEST_CASE("Os files remove a file, not a directory") {
 
     const auto missing = RemoveFile(Utf8(file));
     REQUIRE_FALSE(missing);
-    CHECK(missing.error().code == OsErrorCode::NotFound);
+    CHECK(missing.error().code == OSErrorCode::NotFound);
 
     const auto folder = dir.Path() / "folder";
     std::filesystem::create_directories(folder);
     const auto onDirectory = RemoveFile(Utf8(folder));
     REQUIRE_FALSE(onDirectory);
-    CHECK(onDirectory.error().code == OsErrorCode::InvalidPath);
+    CHECK(onDirectory.error().code == OSErrorCode::InvalidPath);
     CHECK(std::filesystem::is_directory(folder));
 }
 
-TEST_CASE("Os files resolve a path as std::filesystem::weakly_canonical does") {
+TEST_CASE("OS files resolve a path as std::filesystem::weakly_canonical does") {
     TempDirectory dir("gyo-os-resolve");
     std::filesystem::create_directories(dir.Path() / "real" / "sub");
     WriteBytes(dir.Path() / "real" / "file.txt", "x");
@@ -197,7 +197,7 @@ TEST_CASE("Os files resolve a path as std::filesystem::weakly_canonical does") {
 
 // Nothing exists after the root: the root stays as written, with the rest
 // appended (the walk back must stop there, not resolve or drop the root).
-TEST_CASE("Os files resolve a path whose only existing part is the root") {
+TEST_CASE("OS files resolve a path whose only existing part is the root") {
     const auto root = std::filesystem::temp_directory_path().root_path();
     for (const auto& input : {root / "gyo-no-such-top-directory" / "x.json", root / "gyo-no-such-top-directory"}) {
         const std::string text = Utf8(input);
@@ -212,7 +212,7 @@ TEST_CASE("Os files resolve a path whose only existing part is the root") {
 // A drive letter that names a directory (as subst makes one, here with
 // DefineDosDeviceW, which needs no privilege): a resolved prefix is the
 // directory's real path, while a drive with nothing existing after it stays.
-TEST_CASE("Os files resolve a path on a drive letter that names a directory") {
+TEST_CASE("OS files resolve a path on a drive letter that names a directory") {
     TempDirectory dir("gyo-os-resolve-drive");
     std::filesystem::create_directories(dir.Path() / "existing");
     const DWORD used = ::GetLogicalDrives();
@@ -251,7 +251,7 @@ TEST_CASE("Os files resolve a path on a drive letter that names a directory") {
 
 // A UNC path through the administrative share of the temporary directory's
 // drive, when this machine reaches it (as tests/common/core/io/UncProbe.cpp).
-TEST_CASE("Os files resolve a UNC path as weakly_canonical does") {
+TEST_CASE("OS files resolve a UNC path as weakly_canonical does") {
     TempDirectory dir("gyo-os-resolve-unc");
     std::filesystem::create_directories(dir.Path() / "existing");
     const std::string local = Utf8(std::filesystem::absolute(dir.Path()));
@@ -273,14 +273,14 @@ TEST_CASE("Os files resolve a UNC path as weakly_canonical does") {
 }
 #endif
 
-TEST_CASE("Os files resolve a relative path against the current directory") {
+TEST_CASE("OS files resolve a relative path against the current directory") {
     const auto resolved = ResolvedPath("gyo-no-such-directory/x.json");
     REQUIRE(resolved);
     CHECK(resolved.value() ==
           Utf8(std::filesystem::weakly_canonical(std::filesystem::current_path() / "gyo-no-such-directory/x.json")));
 }
 
-TEST_CASE("Os files compare path components as the platform names entries") {
+TEST_CASE("OS files compare path components as the platform names entries") {
     CHECK(SamePathComponent("assets", "assets").value());
     CHECK_FALSE(SamePathComponent("assets", "asset").value());
     CHECK(SamePathComponent("", "").value());
@@ -299,10 +299,10 @@ TEST_CASE("Os files compare path components as the platform names entries") {
 #endif
     const auto invalid = SamePathComponent("a\xFF", "a");
     REQUIRE_FALSE(invalid);
-    CHECK(invalid.error().code == OsErrorCode::InvalidEncoding);
+    CHECK(invalid.error().code == OSErrorCode::InvalidEncoding);
 }
 
-TEST_CASE("Os files list the font directories that exist, system first") {
+TEST_CASE("OS files list the font directories that exist, system first") {
     const auto directories = FontDirectories();
     REQUIRE(directories);
     for (const auto& directory : directories.value()) {

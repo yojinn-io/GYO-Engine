@@ -1,4 +1,4 @@
-"""Naming guard (docs/architecture/target/naming.zh-Hant.md, Design Invariants 1 and 3; the GYO2 rule is N17 of
+"""Naming guard (docs/architecture/target/naming.zh-Hant.md, Design Invariant 1; the GYO2 rule is N17 of
 docs/architecture/target/v2/rebuild-naming.zh-Hant.md, whose section 3 names this guard).
 
 Rewritten by v8-arch-gyo2-namespace-root: the namespace table is no longer a list of rows. It is the closed table
@@ -31,12 +31,8 @@ added later is checked without changing this script.
                  A product opens its own root (<product>::), which this guard does not read. A namespace
                  declaration this guard cannot read is reported here too (fail closed).
       The CMake target names (N14) are a convention checked in review, not here: the build owns them.
-  N3  no type declared under N3_DIRECTORIES (class, struct, union, enum, concept, "using X =", typedef; a qualified
-      name such as Detail::ImplHost is judged by its last part) has a name ending in one of ROLE_SUFFIXES (DI 3;
-      naming rule 5). Case-sensitive: "Ghost", "Hostname" and "RuntimeStats" pass. Kept on the three directories
-      it covered before the rewrite (not widened by v8-arch-gyo2-namespace-root). Limits: a type name after an
-      export macro ("class GYO_API X") is read as the macro; a template parameter named like a role (THost) is
-      reported (fail closed).
+N3 (the role suffixes of naming rule 5, DI 3) was removed by v8-arch-gyo2-namespace-root: rule 5 was not carried
+to gyo2 (user 2026-11-14), and the user removed the check on 2026-11-22; names are seen in each batch's design review.
 
 A scan root that does not exist is skipped (apps/ does not exist yet), not a finding; engine/ must exist and hold
 units. spikes/ is not scanned (an independent project). Limits (text level, the rest is review): a top-level
@@ -62,18 +58,10 @@ ACRONYMS = {"io": "IO", "os": "OS"}
 GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "plugins", "Test": "tests"}
 SCAN_ROOTS = ("engine", "apps", "tools", "framework", "plugins", "tests", "examples")
 OLD_ROOT = "Engine"
-N3_DIRECTORIES = ("engine/ecs/kernel", "engine/orchestration", "engine/modules/world_time")
 SUFFIXES = KERNEL_SUFFIXES | {".m", ".mm"}  # the same C/C++ files kernel_guard reads, plus Objective-C++
-ROLE_SUFFIXES = ("Manager", "Renderer", "ViewModel", "Host", "Shell", "Runtime", "Controller")
 
 TOKEN = re.compile(r"\{|\}|\bnamespace\b")
 NAMESPACE = re.compile(r"namespace\s*(?:\[\[[^\]]*\]\]\s*)?((?:::)?\s*\w+(?:\s*::\s*(?:inline\s+)?\w+)*)?\s*(?:\[\[[^\]]*\]\]\s*)?(\{|=)")
-TYPE_DECLARATION = re.compile(
-    r"\b(?:class|struct|union|enum(?:\s+(?:class|struct))?|concept)\s+(?:\[\[[^\]]*\]\]\s*)?(?:alignas\s*\([^)]*\)\s*)?"
-    r"(\w+(?:\s*::\s*\w+)*)"
-    r"|\busing\s+(\w+)\s*="
-    r"|\btypedef\b[^;{}]*?(\w+)\s*(?:\[[^\]]*\]\s*)*;")
-ROLE_SUFFIX = re.compile(r"(?:" + "|".join(ROLE_SUFFIXES) + r")$")
 
 
 def namespaces(code):
@@ -176,12 +164,6 @@ def check_forward(root, directory, mapped, problems):
                                 f"scope (expected only {mapped})")
             elif full and not within(full, mapped):
                 problems.append(f"{relative}:{line_of(code, offset)}: N1 namespace {full} (expected {mapped})")
-        if directory in N3_DIRECTORIES:
-            for match in TYPE_DECLARATION.finditer(code):
-                name = re.sub(r"\s+", "", match.group(1) or match.group(2) or match.group(3))
-                if ROLE_SUFFIX.search(name.split("::")[-1]):
-                    problems.append(f"{relative}:{line_of(code, match.start())}: N3 type {name} ends in a role "
-                                    f"suffix ({'|'.join(ROLE_SUFFIXES)})")
 
 
 def check_roots(root, unit_directories, problems):
@@ -236,7 +218,7 @@ def main(argv=None):
     for line in problems:
         print(line)
     if problems:
-        print(f"naming guard: {len(problems)} finding(s) (target/naming Design Invariants 1 and 3; rebuild-naming N17)")
+        print(f"naming guard: {len(problems)} finding(s) (target/naming Design Invariant 1; rebuild-naming N17)")
         return 1
     print("naming guard: clean")
     return 0

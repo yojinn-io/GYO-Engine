@@ -46,18 +46,18 @@ struct WakeSignal::Impl final {
     }
 };
 
-Base::Result<WakeSignal, OsError> WakeSignal::Create() {
+Base::Result<WakeSignal, OSError> WakeSignal::Create() {
     auto impl = std::make_unique<Impl>();
     impl->queue = kqueue();
     if (impl->queue < 0) {
         const int error = errno;
-        return Base::Err(MakeOsError(OsErrorCode::IoFailed, "kqueue() failed", {NativeErrorDomain::Errno, error}));
+        return Base::Err(MakeOSError(OSErrorCode::IOFailed, "kqueue() failed", {NativeErrorDomain::Errno, error}));
     }
     struct kevent change {};
     EV_SET(&change, Impl::UserIdent, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);
     if (kevent(impl->queue, &change, 1, nullptr, 0, nullptr) < 0) {
         const int error = errno;
-        return Base::Err(MakeOsError(OsErrorCode::IoFailed, "kevent(EVFILT_USER) registration failed",
+        return Base::Err(MakeOSError(OSErrorCode::IOFailed, "kevent(EVFILT_USER) registration failed",
             {NativeErrorDomain::Errno, error}));
     }
     return WakeSignal(std::move(impl));

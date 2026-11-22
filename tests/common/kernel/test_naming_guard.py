@@ -315,52 +315,8 @@ class GuardTree(unittest.TestCase):
 
     # N1 target --------------------------------------------------------------------------------------------------
 
-    # N3 ---------------------------------------------------------------------------------------------------------
-    def test_n3_every_declaration_keyword_is_reported(self):
-        for text, name in (("union DataShell { int a; };", "DataShell"), ("enum struct ModeController { A };", "ModeController"),
-                           ("template <typename T>\nconcept TaskManager = sizeof(T) > 0;", "TaskManager"),
-                           ("struct [[nodiscard]] TaskRuntime {};", "TaskRuntime"),
-                           ("struct alignas(16) GpuHost {};", "GpuHost"), ("typedef int ViewModel;", "ViewModel"),
-                           ("typedef int ArrayShell[4];", "ArrayShell"), ("struct Detail::ImplHost {};", "ImplHost")):
-            with self.subTest(text=text):
-                self.kernel_header("namespace GYO::Kernel {\n" + text + "\n}\n")
-                self.assertReported("N3", name)
-
-    def test_n3_host_suffix_is_reported(self):
-        self.kernel_header("namespace GYO::Kernel {\nstruct WorldHost {};\n}\n")
-        self.assertReported("N3", "WorldHost")
-
-    def test_n3_renderer_suffix_on_class_is_reported(self):
-        self.kernel_header("namespace GYO::Kernel {\nclass SceneRenderer;\n}\n")
-        self.assertReported("N3", "SceneRenderer")
-
-    def test_n3_runtime_alias_is_reported(self):
-        self.kernel_header("namespace GYO::Kernel {\nusing Runtime = int;\n}\n")
-        self.assertReported("N3", "Runtime")
-
-    def test_n3_every_suffix_is_reported(self):
-        body = "".join(f"struct Some{suffix} {{}};\n" for suffix in guard.ROLE_SUFFIXES)
-        self.kernel_header("namespace GYO::Kernel {\n" + body + "}\n")
-        problems = guard.check(self.root)
-        for suffix in guard.ROLE_SUFFIXES:
-            self.assertTrue(any(f"N3 type Some{suffix} " in p for p in problems), suffix)
-
-    def test_n3_enum_class_suffix_is_reported(self):
-        self.kernel_header("namespace GYO::Kernel {\nenum class StateController { A };\n}\n")
-        self.assertReported("N3", "StateController")
-
-    def test_n3_is_read_in_orchestration_and_world_time(self):
-        self.write("engine/orchestration/src/Host.cpp", "namespace GYO::Engine::Orchestration {\nstruct ProductHost {};\n}\n")
-        self.write("engine/modules/world_time/src/Manager.cpp", "namespace GYO::Engine::WorldTime {\nstruct ClockManager {};\n}\n")
-        self.assertReported("N3", "ProductHost")
-        self.assertReported("N3", "ClockManager")
-
-    def test_role_suffixes_are_naming_rule_5(self):
-        self.assertEqual(guard.ROLE_SUFFIXES,
-                         ("Manager", "Renderer", "ViewModel", "Host", "Shell", "Runtime", "Controller"))
-
     def test_main_returns_one_on_finding(self):
-        self.kernel_header("namespace GYO::Kernel {\nstruct WorldHost {};\n}\n")
+        self.kernel_header("namespace Engine::Kernel {\n}\n")
         self.assertEqual(guard.main(["--root", str(self.root)]), 1)
 
     def test_main_returns_zero_when_clean(self):

@@ -60,12 +60,12 @@ struct LocalFreeDeleter final {
 
 } // namespace
 
-Base::Result<std::vector<std::string>, OsError> CommandLineUtf8(int /*argc*/, const char* const* /*argv*/) {
+Base::Result<std::vector<std::string>, OSError> CommandLineUtf8(int /*argc*/, const char* const* /*argv*/) {
     int count = 0;
     const std::unique_ptr<LPWSTR, LocalFreeDeleter> wide(::CommandLineToArgvW(::GetCommandLineW(), &count));
     if (!wide) {
         const DWORD error = ::GetLastError();
-        return Base::Err(MakeOsError(OsErrorCode::IoFailed, "cannot read the command line",
+        return Base::Err(MakeOSError(OSErrorCode::IOFailed, "cannot read the command line",
                                      {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)}));
     }
     std::vector<std::string> arguments;
@@ -95,13 +95,13 @@ Utf8ConsoleOutput::~Utf8ConsoleOutput() {
     if (previous_ != 0) static_cast<void>(::SetConsoleOutputCP(previous_));
 }
 
-Base::Result<void, OsError> InstallShutdownRequests() {
+Base::Result<void, OSError> InstallShutdownRequests() {
     // A second caller waits until the first one has finished installing.
     const std::scoped_lock lock(installing);
     if (installed) return {};
     if (!::SetConsoleCtrlHandler(&OnConsoleControl, TRUE)) {
         const DWORD error = ::GetLastError();
-        return Base::Err(MakeOsError(OsErrorCode::Unsupported, "cannot install the shutdown-request handler",
+        return Base::Err(MakeOSError(OSErrorCode::Unsupported, "cannot install the shutdown-request handler",
                                      {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)}));
     }
     installed = true;

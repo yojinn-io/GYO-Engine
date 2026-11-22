@@ -91,7 +91,7 @@ std::filesystem::path SetupPath(const std::filesystem::path& path) {
 
 } // namespace
 
-TEST_CASE("Os files write a new file and truncate an existing one") {
+TEST_CASE("OS files write a new file and truncate an existing one") {
     TempDirectory dir("gyo-os-write-truncate");
     const auto path = dir.Path() / "trace.jsonl";
     WriteAll(path, WriteMode::Truncate, LineEndings::AsWritten, "0123456789");
@@ -100,7 +100,7 @@ TEST_CASE("Os files write a new file and truncate an existing one") {
     CHECK(ReadBytes(path) == "abc");
 }
 
-TEST_CASE("Os files append to a file, creating it when missing") {
+TEST_CASE("OS files append to a file, creating it when missing") {
     TempDirectory dir("gyo-os-write-append");
     const auto path = dir.Path() / "log.txt";
     WriteAll(path, WriteMode::Append, LineEndings::AsWritten, "one\n");
@@ -108,7 +108,7 @@ TEST_CASE("Os files append to a file, creating it when missing") {
     CHECK(ReadBytes(path) == "one\ntwo\n");
 }
 
-TEST_CASE("Os files write the same bytes as a C++ file stream in each mode") {
+TEST_CASE("OS files write the same bytes as a C++ file stream in each mode") {
     TempDirectory dir("gyo-os-write-reference");
     for (const auto mode : {WriteMode::Truncate, WriteMode::Append}) {
         for (const auto endings : {LineEndings::AsWritten, LineEndings::Native}) {
@@ -128,7 +128,7 @@ TEST_CASE("Os files write the same bytes as a C++ file stream in each mode") {
     }
 }
 
-TEST_CASE("Os files write native line endings in pieces as in one write") {
+TEST_CASE("OS files write native line endings in pieces as in one write") {
     // A text-mode stream translates every '\n' wherever a write splits the text.
     TempDirectory dir("gyo-os-write-pieces");
     const auto pieces = dir.Path() / "pieces.txt";
@@ -143,14 +143,14 @@ TEST_CASE("Os files write native line endings in pieces as in one write") {
     CHECK(ReadBytes(pieces) == ReadBytes(whole));
 }
 
-TEST_CASE("Os files write a path outside the ANSI code page") {
+TEST_CASE("OS files write a path outside the ANSI code page") {
     TempDirectory dir("gyo-os-write-unicode");
     const auto path = dir.Path() / std::filesystem::path(u8"日本語-한글-é.jsonl");
     WriteAll(path, WriteMode::Truncate, LineEndings::AsWritten, "{}\n");
     CHECK(ReadBytes(path) == "{}\n");
 }
 
-TEST_CASE("Os files let a reader open a file a writer holds") {
+TEST_CASE("OS files let a reader open a file a writer holds") {
     // The C++ stream shared its file with readers and writers, not with
     // deleters (_SH_DENYNO on Windows); so does the writer.
     TempDirectory dir("gyo-os-write-share");
@@ -174,7 +174,7 @@ TEST_CASE("Os files let a reader open a file a writer holds") {
     CHECK(writer->Close());
 }
 
-TEST_CASE("Os files append every write at the end, whoever wrote last") {
+TEST_CASE("OS files append every write at the end, whoever wrote last") {
     // Two appending writers on one file: each write goes after the other's.
     TempDirectory dir("gyo-os-write-interleave");
     const auto path = dir.Path() / "shared.log";
@@ -190,26 +190,26 @@ TEST_CASE("Os files append every write at the end, whoever wrote last") {
     CHECK(ReadBytes(path) == "abc");
 }
 
-TEST_CASE("Os files report write failures with the native code") {
+TEST_CASE("OS files report write failures with the native code") {
     TempDirectory dir("gyo-os-write-errors");
     const auto missing = FileWriter::Open(Utf8(dir.Path() / "absent" / "x.txt"), WriteMode::Truncate,
                                           LineEndings::AsWritten);
     REQUIRE_FALSE(missing);
-    CHECK(missing.error().code == OsErrorCode::NotFound);
+    CHECK(missing.error().code == OSErrorCode::NotFound);
     CHECK((missing.error().detail.rfind("errno=", 0) == 0 || missing.error().detail.rfind("win32=", 0) == 0));
     CHECK(missing.error().detail.find("; path_bytes=") != std::string::npos);
 
     const auto directory = FileWriter::Open(Utf8(dir.Path()), WriteMode::Truncate, LineEndings::AsWritten);
     REQUIRE_FALSE(directory);
-    CHECK(directory.error().code == OsErrorCode::InvalidPath);
+    CHECK(directory.error().code == OSErrorCode::InvalidPath);
 
     const auto invalid = FileWriter::Open("bad-\xFF", WriteMode::Truncate, LineEndings::AsWritten);
     REQUIRE_FALSE(invalid);
-    CHECK(invalid.error().code == OsErrorCode::InvalidEncoding);
+    CHECK(invalid.error().code == OSErrorCode::InvalidEncoding);
     CHECK(invalid.error().detail == "path_bytes=5");
 }
 
-TEST_CASE("Os files write nothing for an empty span and refuse a moved-from writer") {
+TEST_CASE("OS files write nothing for an empty span and refuse a moved-from writer") {
     TempDirectory dir("gyo-os-write-moved");
     const auto path = dir.Path() / "moved.txt";
     auto writer = FileWriter::Open(Utf8(path), WriteMode::Truncate, LineEndings::Native);
@@ -224,7 +224,7 @@ TEST_CASE("Os files write nothing for an empty span and refuse a moved-from writ
     CHECK_THROWS_AS(static_cast<void>(moved.Write(Bytes("y"))), GYO::Engine::Base::AssertionFailure);
 }
 
-TEST_CASE("Os files create directories with their missing parents") {
+TEST_CASE("OS files create directories with their missing parents") {
     TempDirectory dir("gyo-os-mkdirs");
     const auto nested = dir.Path() / "a" / "b" / u8"日本";
     REQUIRE(CreateDirectories(Utf8(nested)));
@@ -239,11 +239,11 @@ TEST_CASE("Os files create directories with their missing parents") {
     REQUIRE_FALSE(underFile);
     const auto onFile = CreateDirectories(Utf8(file));
     REQUIRE_FALSE(onFile);
-    CHECK(onFile.error().code == OsErrorCode::InvalidPath);
+    CHECK(onFile.error().code == OSErrorCode::InvalidPath);
 
     const auto empty = CreateDirectories("");
     REQUIRE_FALSE(empty);
-    CHECK(empty.error().code == OsErrorCode::InvalidPath);
+    CHECK(empty.error().code == OSErrorCode::InvalidPath);
 }
 
 #if defined(_WIN32)
@@ -251,7 +251,7 @@ TEST_CASE("Os files create directories with their missing parents") {
 // after it, as after a drive (os-utf8-codepage; the D201 run found no case
 // here). Through the administrative share of the temporary directory's drive,
 // when this machine reaches it (as FileChangeTests.cpp's UNC case).
-TEST_CASE("Os files create directories under a UNC share") {
+TEST_CASE("OS files create directories under a UNC share") {
     TempDirectory dir("gyo-os-mkdirs-unc");
     const std::string local = Utf8(std::filesystem::absolute(dir.Path()));
     REQUIRE(local.size() > 3);
@@ -268,7 +268,7 @@ TEST_CASE("Os files create directories under a UNC share") {
 }
 #endif
 
-TEST_CASE("Os files write and create directories under a path longer than 300 characters") {
+TEST_CASE("OS files write and create directories under a path longer than 300 characters") {
     TempDirectory dir("gyo-os-write-long");
     const auto top = dir.Path() / "segment-of-a-deep-release-folder";
     std::filesystem::path deep = top;

@@ -294,13 +294,13 @@ TEST_CASE("DI-KS 26: BuildPlans with nothing registered does nothing") {
 TEST_CASE("DI-KS 3: a second round that adds one unrelated System leaves ties, effects, order and other Plans as they were") {
     const auto first = [](Registrar& r) {
         Data(r);
-        r.Effect("Io:file");
+        r.Effect("IO:file");
         ScheduleOptions other;
         other.name = "Other";
         other.stages = {"Only"};
         r.Schedule(other);
         SystemOptions writes = B("WritesFlag", "A");
-        writes.effects = {"Io:file"};
+        writes.effects = {"IO:file"};
         r.AddSystem<&WritesFlag>(writes);
         r.AddSystem<&ReadsFlag>(B("ReadsFlag", "A"));  // conflicts with WritesFlag, no order: a tie
         r.AddSystem<&Plain>(B("Plain", "B", {}, {}));
@@ -880,14 +880,14 @@ TEST_CASE("DI-KS 25: hooks, initial values, schedules, sets, effects and annotat
     FirstRound(registry, [](Registrar& r) {
         Data(r);
         r.Component<Later>({.name = "Later"});
-        r.Effect("Io:file");
+        r.Effect("IO:file");
         r.InsertStage("Tick", "A", StagePlace::After, "AB");
         r.Hook<Tag, &OnTag>(HookTrigger::OnRemove, {.name = "OnTagRemoved"});
         r.InitialValue<Mode, &ModeFromLater>();
         r.Set({.name = "Grp", .schedule = "Tick", .before = {"Plain"}, .after = {}},
               {Condition<&FlagIsSet>("FlagIsSet")});
         SystemOptions writes = B("WritesFlag", "A");
-        writes.effects = {"Io:file"};
+        writes.effects = {"IO:file"};
         r.AddSystem<&WritesFlag>(writes);
         r.AddSystem<&AnnotatesFlag>(B("AnnotatesFlag", "C"));
         r.AddSystem<&Plain>(B("Plain", "A"));

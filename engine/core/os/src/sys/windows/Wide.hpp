@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/base/Result.hpp"
-#include "engine/os/OsError.hpp"
+#include "engine/os/OSError.hpp"
 
 #include <string>
 #include <string_view>
@@ -12,9 +12,9 @@
 namespace GYO::Engine::OS::Detail {
 
 // An unpaired surrogate is InvalidEncoding, never a silent U+FFFD.
-[[nodiscard]] Base::Result<std::string, OsError> WideToUtf8(std::wstring_view wide);
+[[nodiscard]] Base::Result<std::string, OSError> WideToUtf8(std::wstring_view wide);
 
 // Text that is not UTF-8 is InvalidEncoding.
-[[nodiscard]] Base::Result<std::wstring, OsError> Utf8ToWide(std::string_view utf8);
+[[nodiscard]] Base::Result<std::wstring, OSError> Utf8ToWide(std::string_view utf8);
 
 } // namespace GYO::Engine::OS::Detail

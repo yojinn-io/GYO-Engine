@@ -6,7 +6,7 @@
 #include "engine/base/Result.hpp"   // Base::Result<T>
 #include "engine/base/Error.hpp"    // Base::Error（必要なら）
 #include "engine/base/Span.hpp"
-#include "engine/io/IoError.hpp"    // IoErrorCode（ReadFailed/WriteFailed/SeekFailed/NotSupported など）
+#include "engine/io/IOError.hpp"    // IOErrorCode（ReadFailed/WriteFailed/SeekFailed/NotSupported など）
 #include "engine/io/stream/Seek.hpp"
 
 
@@ -34,34 +34,34 @@ namespace GYO::Engine::IO::Stream {
 
         // ---- Read / Write ----
         // 成功：読み込めた/書き込めたバイト数（0もあり得る）
-        // 失敗：unexpected(Error)（IoErrorCode::ReadFailed 等）
-        virtual Base::Result<std::size_t, IoError> Read(void* dst, std::size_t bytes) = 0;
-        virtual Base::Result<std::size_t, IoError> Write(const void* src, std::size_t bytes) = 0;
+        // 失敗：unexpected(Error)（IOErrorCode::ReadFailed 等）
+        virtual Base::Result<std::size_t, IOError> Read(void* dst, std::size_t bytes) = 0;
+        virtual Base::Result<std::size_t, IOError> Write(const void* src, std::size_t bytes) = 0;
 
         // span 版（非virtualラッパ）
-        Base::Result<std::size_t, IoError> Read(Base::Span<std::byte> dst) {
+        Base::Result<std::size_t, IOError> Read(Base::Span<std::byte> dst) {
             return Read(dst.data(), dst.size());
         }
-        Base::Result<std::size_t, IoError> Write(Base::Span<const std::byte> src) {
+        Base::Result<std::size_t, IOError> Write(Base::Span<const std::byte> src) {
             return Write(src.data(), src.size());
         }
 
         // ---- Seek / Tell / Size ----
         // seekable でない場合は NotSupported を返す
-        virtual Base::Result<std::uint64_t, IoError> Tell() const = 0;
-        virtual Base::Result<std::uint64_t, IoError> Seek(std::int64_t offset, SeekWhence whence) = 0;
+        virtual Base::Result<std::uint64_t, IOError> Tell() const = 0;
+        virtual Base::Result<std::uint64_t, IOError> Seek(std::int64_t offset, SeekWhence whence) = 0;
 
         // サイズ取得は「可能なら提供」。
         // - seekable な実装なら比較的簡単
         // - network stream 等は NotSupported でもOK
-        virtual Base::Result<std::uint64_t, IoError> Size() const = 0;
+        virtual Base::Result<std::uint64_t, IOError> Size() const = 0;
 
         // ---- Flush / Close ----
         // writable でない場合 Flush は NotSupported でもOK
-        virtual Base::Result<void, IoError> Flush() = 0;
+        virtual Base::Result<void, IOError> Flush() = 0;
 
         // Close を持たせると stream 単体で寿命管理しやすい（unique_ptr で扱いやすい）
-        virtual Base::Result<void, IoError> Close() = 0;
+        virtual Base::Result<void, IOError> Close() = 0;
 
         // copy禁止（基本は unique_ptr で持つ）
         IStream(const IStream&) = delete;

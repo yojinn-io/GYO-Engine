@@ -62,8 +62,9 @@
 | `GYO::Test` | `tests/`（測試自己的東西；共用的放 `tests/common/support`，各單位的測試輔助放 `GYO::Test::<單位>`，例 `GYO::Test::Logging`） | 固定 |
 
 - **「Engine 的單位」**：#261（`v8-arch-gyo2-core-not-registered`）之後 core、ecs、orchestration 不再登記成 Module，但它們和 modules 一樣是 `engine/` 裡的一個單位，根都是 `GYO::Engine::<單位>`（2026-11-14 的改名決定就列了 core 的單位）。所以 N17 寫「單位」，不寫「Module」。
-- **縮寫表**：`io`→`IO`、`os`→`OS`，namespace 與 target 都全大寫；`json` 照舊寫 `Json`。型別名與檔名（`IoError`、`OsError.cpp`）照 N15、N16 的駝峰，不在這張表管的範圍（要不要也改，合併前核准時問）。新的縮寫要寫進這張表，守衛的 `ACRONYMS` 同步改。
+- **縮寫表**：`io`→`IO`、`os`→`OS`；`json` 照舊寫 `Json`。**縮寫要嘛全大寫、要嘛全小寫，不准一大一小**：namespace、target、型別名、函式名、檔名都照這條（`IOError`、`OSErrorCode`、`FromOS`、`OSError.hpp`；全小寫的 `io`、`os`、`gyo_io`、目錄與含入路徑本來就合規）。新的縮寫要寫進這張表，守衛的 `ACRONYMS`（從目錄名推 namespace 用）同步改。型別名、函式名、檔名的這一條守衛不查，由審查看。
   - 使用者 2026-11-22：「IO、OS 這些就不要一個大一個小了。看著很難受。」比過的選項：縮寫全大寫（`Json` 也改 `JSON`）／縮寫全大寫、`Json` 不動／都只首字母大寫（`Io`、`Os`，原本的寫法）。使用者選第二個。理由：看著很難受；`Json` 不動的理由使用者沒有說。出處：`v8-arch-gyo2-namespace-root` 卡片的對話。
+  - 同日第二次（side chat，經卡片照四樣轉達）：使用者被問到縮寫表要不要也管型別名與檔名，原話：「b，看的是真的難受。要不然全小寫io也好，要不然全大寫IO也行，一小一大很噁心」。比過的選項：(a) 只管 namespace 與 target／(b) 型別名、檔名也改，這一批一起做／(c) 先立規則、改名另開一批。選 (b)。理由：`GYO::Engine::IO::IoError` 這種一大一小的組合看著難受；改名越晚影響越大。
   - 取代第 3 節原本的「只有第一個字母大寫，例如 `Io`、`Os`」。
 - **根寫成封閉的表**：使用者 2026-11-22：「另外GYO::Engine 既然有，那麼就會有其他的 例如非Engine 層的。」所以規則管的是 `GYO::` 底下全部的根，不只 `GYO::Engine`。出處同上。
 - **打開別人的 namespace**：一個 namespace 只在它的目錄裡打開。要特化別的單位的樣板（例：`EntityKey`），寫全限定的特化 `template <> struct GYO::Engine::EntityStore::EntityKey<T> { … };`，不打開 `namespace GYO::Engine::EntityStore {`。用 `using namespace`、別名（寫在自己的 namespace 裡）不算打開。
@@ -89,7 +90,7 @@
 
 | 項目 | 為什麼不定 |
 |---|---|
-| 型別不用 `Manager`、`Host`、`Shell`、`Runtime`、`Controller`、`Renderer`、`ViewModel` 這類後綴（舊命名條文第 5 條） | 你 2026-11-14 說只轉 1～4，這一條不轉 |
+| 型別不用 `Manager`、`Host`、`Shell`、`Runtime`、`Controller`、`Renderer`、`ViewModel` 這類後綴（舊命名條文第 5 條） | 你 2026-11-14 說只轉 1～4，這一條不轉。2026-11-22 使用者再定：gyo2 上拿掉守衛的 N3，正式命名文件的 DI 3 標成 gyo2 不適用（原話「同意，選（a）」；比過：拿掉／留三個目錄／擴到全部／這批不定；理由：後綴黑名單擋不住說不出用途的名字、又會誤擋合理的名字，改由每批的設計審查看；出處：`v8-arch-gyo2-namespace-root` 的 side chat） |
 | World 的事件緩衝叫 Event 還是照 Bevy 叫 Message | 和事件的設計一起定 |
 
 ## 6. 要你確認的事
@@ -111,4 +112,4 @@
 - 第 3 節是從七個模組的標頭抽樣歸納的，沒有逐檔核對；之後發現例外，補記在這裡。
 - 批次代號、分支、PR 標題、dev_log 檔名的規則是既有的流程規則，這份不重述。
 - N17 有守衛（第 3 節「N17 的根」末）。其他條還沒有守衛；哪些要用掃描守、怎麼守，等有新程式時再提。
-- 守衛的 N3（`ROLE_SUFFIXES`，舊命名條文第 5 條）仍在 kernel、orchestration、world_time 三個目錄上查；第 5 條 2026-11-14 沒有轉入（第 5 節），這個不一致留給後續判斷，`v8-arch-gyo2-namespace-root` 沒有擴大也沒有拿掉它。
+- 守衛的 N3（舊命名條文第 5 條的角色後綴）2026-11-22 拿掉（第 5 節）。

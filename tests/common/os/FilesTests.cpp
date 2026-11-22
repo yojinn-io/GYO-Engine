@@ -84,7 +84,7 @@ std::string ReadAll(FileReader& file) {
     }
 }
 
-OsErrorCode OpenError(const std::string& path) {
+OSErrorCode OpenError(const std::string& path) {
     auto file = FileReader::Open(path);
     REQUIRE_MESSAGE(!file, "FileReader::Open accepted " << path);
     return file.error().code;
@@ -92,7 +92,7 @@ OsErrorCode OpenError(const std::string& path) {
 
 } // namespace
 
-TEST_CASE("Os files read a whole file through its UTF-8 path") {
+TEST_CASE("OS files read a whole file through its UTF-8 path") {
     const TempDirectory temp("gyo-os-files");
     const std::string bytes("hello\0world", 11);
     const auto path = temp.Write("a.bin", bytes);
@@ -106,7 +106,7 @@ TEST_CASE("Os files read a whole file through its UTF-8 path") {
     CHECK(file.value().Read(std::span<std::byte>{}).value() == 0);
 }
 
-TEST_CASE("Os files open a path outside the ANSI code page") {
+TEST_CASE("OS files open a path outside the ANSI code page") {
     // Japanese and Traditional Chinese characters, which a Western code page cannot represent.
     const TempDirectory temp("gyo-os-files");
     const auto path =
@@ -119,7 +119,7 @@ TEST_CASE("Os files open a path outside the ANSI code page") {
     CHECK(Exists(utf8).value());
 }
 
-TEST_CASE("Os files seek and tell") {
+TEST_CASE("OS files seek and tell") {
     const TempDirectory temp("gyo-os-files");
     auto file = FileReader::Open(Utf8(temp.Write("c.bin", "hello world")));
     REQUIRE(file);
@@ -134,10 +134,10 @@ TEST_CASE("Os files seek and tell") {
     CHECK(ReadAll(file.value()).empty());
     const auto huge = file.value().Seek((std::numeric_limits<std::uint64_t>::max)());
     REQUIRE_FALSE(huge);
-    CHECK(huge.error().code == OsErrorCode::TooLarge);
+    CHECK(huge.error().code == OSErrorCode::TooLarge);
 }
 
-TEST_CASE("Os files move an open file and refuse a moved-from one") {
+TEST_CASE("OS files move an open file and refuse a moved-from one") {
     const TempDirectory temp("gyo-os-files");
     auto opened = FileReader::Open(Utf8(temp.Write("m.bin", "moved")));
     REQUIRE(opened);
@@ -154,12 +154,12 @@ TEST_CASE("Os files move an open file and refuse a moved-from one") {
     GYO_CHECK_ASSERTS(static_cast<void>(first.Size()));
 }
 
-TEST_CASE("Os files report a missing file as NotFound with the native code") {
+TEST_CASE("OS files report a missing file as NotFound with the native code") {
     const TempDirectory temp("gyo-os-files");
     const std::string missing = Utf8(temp.Path() / "missing.bin");
     auto file = FileReader::Open(missing);
     REQUIRE_FALSE(file);
-    CHECK(file.error().code == OsErrorCode::NotFound);
+    CHECK(file.error().code == OSErrorCode::NotFound);
 #if defined(_WIN32)
     const std::regex detail(R"(win32=\d+; path_bytes=(\d+))");
 #else
@@ -168,47 +168,47 @@ TEST_CASE("Os files report a missing file as NotFound with the native code") {
     std::smatch match;
     REQUIRE_MESSAGE(std::regex_match(file.error().detail, match, detail), file.error().detail);
     CHECK(match[1].str() == std::to_string(missing.size()));
-    CHECK(OpenError(Utf8(temp.Path() / "no-such-directory" / "x.bin")) == OsErrorCode::NotFound);
+    CHECK(OpenError(Utf8(temp.Path() / "no-such-directory" / "x.bin")) == OSErrorCode::NotFound);
     // A parent that is a file, not a directory.
     const std::string under = Utf8(temp.Write("plain.bin", "x")) + "/x";
-    CHECK(OpenError(under) == OsErrorCode::NotFound);
+    CHECK(OpenError(under) == OSErrorCode::NotFound);
     CHECK_FALSE(Exists(under).value());
-    CHECK(Stat(under).error().code == OsErrorCode::NotFound);
+    CHECK(Stat(under).error().code == OSErrorCode::NotFound);
 }
 
-TEST_CASE("Os files open regular files only") {
+TEST_CASE("OS files open regular files only") {
     const TempDirectory temp("gyo-os-files");
-    CHECK(OpenError(Utf8(temp.Path())) == OsErrorCode::InvalidPath);
+    CHECK(OpenError(Utf8(temp.Path())) == OSErrorCode::InvalidPath);
 #if defined(_WIN32)
     // A device opens through CreateFileW but is not a file.
-    CHECK(OpenError("NUL") == OsErrorCode::InvalidPath);
+    CHECK(OpenError("NUL") == OSErrorCode::InvalidPath);
 #else
     // A FIFO without a writer: refused at once, not waited on.
     const std::string fifo = Utf8(temp.Path() / "fifo");
     REQUIRE(::mkfifo(fifo.c_str(), 0600) == 0);
-    CHECK(OpenError(fifo) == OsErrorCode::InvalidPath);
+    CHECK(OpenError(fifo) == OSErrorCode::InvalidPath);
 #endif
 }
 
-TEST_CASE("Os files refuse invalid arguments before the OS sees them") {
-    CHECK(OpenError("") == OsErrorCode::InvalidPath);
-    CHECK(OpenError(std::string("a\0b", 3)) == OsErrorCode::InvalidPath);
+TEST_CASE("OS files refuse invalid arguments before the OS sees them") {
+    CHECK(OpenError("") == OSErrorCode::InvalidPath);
+    CHECK(OpenError(std::string("a\0b", 3)) == OSErrorCode::InvalidPath);
     // A truncated sequence, overlong two-, three- and four-byte forms, a surrogate, a code point beyond
     // U+10FFFF, a stray continuation byte.
     for (const char* invalid : {"x\xE8\xB3", "\xC0\xAF", "\xE0\x80\xAF", "\xF0\x80\x80\xAF", "\xED\xA0\x80",
                                 "\xF4\x90\x80\x80", "\x80x"}) {
-        CHECK(OpenError(invalid) == OsErrorCode::InvalidEncoding);
-        CHECK(Stat(invalid).error().code == OsErrorCode::InvalidEncoding);
-        CHECK(Exists(invalid).error().code == OsErrorCode::InvalidEncoding);
-        CHECK(MakeAbsolute(invalid).error().code == OsErrorCode::InvalidEncoding);
-        CHECK(PathFromUtf8(invalid).error().code == OsErrorCode::InvalidEncoding);
+        CHECK(OpenError(invalid) == OSErrorCode::InvalidEncoding);
+        CHECK(Stat(invalid).error().code == OSErrorCode::InvalidEncoding);
+        CHECK(Exists(invalid).error().code == OSErrorCode::InvalidEncoding);
+        CHECK(MakeAbsolute(invalid).error().code == OSErrorCode::InvalidEncoding);
+        CHECK(PathFromUtf8(invalid).error().code == OSErrorCode::InvalidEncoding);
     }
     const auto refused = FileReader::Open("\xC0\xAF");
     REQUIRE_FALSE(refused);
     CHECK(refused.error().detail == "path_bytes=2");
 }
 
-TEST_CASE("Os files refuse a path that has no UTF-8 form") {
+TEST_CASE("OS files refuse a path that has no UTF-8 form") {
 #if defined(_WIN32)
     // An unpaired surrogate, which NTFS allows in a name.
     const std::filesystem::path unpaired(std::wstring(L"a\xD800" L"b"));
@@ -218,10 +218,10 @@ TEST_CASE("Os files refuse a path that has no UTF-8 form") {
 #endif
     const auto text = PathToUtf8(unpaired);
     REQUIRE_FALSE(text);
-    CHECK(text.error().code == OsErrorCode::InvalidEncoding);
+    CHECK(text.error().code == OSErrorCode::InvalidEncoding);
 }
 
-TEST_CASE("Os files stat and check existence") {
+TEST_CASE("OS files stat and check existence") {
     const TempDirectory temp("gyo-os-files");
     const auto before = std::chrono::system_clock::now().time_since_epoch();
     const auto file = temp.Write("d.bin", "12345");
@@ -238,7 +238,7 @@ TEST_CASE("Os files stat and check existence") {
     REQUIRE(directory);
     CHECK(directory.value().kind == FileKind::Directory);
     CHECK(directory.value().sizeBytes == 0);
-    CHECK(Stat(Utf8(temp.Path() / "missing")).error().code == OsErrorCode::NotFound);
+    CHECK(Stat(Utf8(temp.Path() / "missing")).error().code == OSErrorCode::NotFound);
 
     CHECK(Exists(Utf8(file)).value());
     CHECK(Exists(Utf8(temp.Path())).value());
@@ -246,7 +246,7 @@ TEST_CASE("Os files stat and check existence") {
     CHECK_FALSE(Exists(Utf8(temp.Path() / "missing" / "x")).value());
 }
 
-TEST_CASE("Os files stat follows a symbolic link") {
+TEST_CASE("OS files stat follows a symbolic link") {
     const TempDirectory temp("gyo-os-files");
     const auto target = temp.Write("target.bin", "1234567");
     const auto link = temp.Path() / "link.bin";
@@ -267,7 +267,7 @@ TEST_CASE("Os files stat follows a symbolic link") {
     CHECK_FALSE(Exists(Utf8(dangling)).value());
 }
 
-TEST_CASE("Os files make a relative path absolute") {
+TEST_CASE("OS files make a relative path absolute") {
     const auto absolute = MakeAbsolute("some/relative/file.txt");
     REQUIRE(absolute);
     const std::string& text = absolute.value();
@@ -294,7 +294,7 @@ TEST_CASE("Os files make a relative path absolute") {
 // A relative path under a current directory with no UTF-8 form has no UTF-8
 // absolute form either (D43, D54): InvalidEncoding, while an absolute path is
 // unaffected.
-TEST_CASE("Os files refuse to make a path absolute under a current directory with no UTF-8 form") {
+TEST_CASE("OS files refuse to make a path absolute under a current directory with no UTF-8 form") {
     const TempDirectory temp("gyo-os-files");
 #if defined(_WIN32)
     const auto odd = temp.Path() / std::filesystem::path(std::wstring(L"a\xD800" L"b"));
@@ -314,8 +314,8 @@ TEST_CASE("Os files refuse to make a path absolute under a current directory wit
         std::filesystem::path previous = std::filesystem::current_path();
         ~RestoreCurrentPath() { std::filesystem::current_path(previous); }
     };
-    std::optional<GYO::Engine::Base::Result<std::string, OsError>> relative;
-    std::optional<GYO::Engine::Base::Result<std::string, OsError>> absolute;
+    std::optional<GYO::Engine::Base::Result<std::string, OSError>> relative;
+    std::optional<GYO::Engine::Base::Result<std::string, OSError>> absolute;
     {
         const RestoreCurrentPath restore;
         std::filesystem::current_path(odd);
@@ -323,12 +323,12 @@ TEST_CASE("Os files refuse to make a path absolute under a current directory wit
         absolute = MakeAbsolute(Utf8(temp.Path() / "x.bin"));
     }
     REQUIRE_FALSE(*relative);
-    CHECK(relative->error().code == OsErrorCode::InvalidEncoding);
+    CHECK(relative->error().code == OSErrorCode::InvalidEncoding);
     CHECK(relative->error().detail.find("path_bytes=5") != std::string::npos);
     CHECK(*absolute);
 }
 
-TEST_CASE("Os files tell absolute paths per platform") {
+TEST_CASE("OS files tell absolute paths per platform") {
     CHECK_FALSE(IsAbsolutePath(""));
     CHECK_FALSE(IsAbsolutePath("a/b"));
 #if defined(_WIN32)
@@ -344,14 +344,14 @@ TEST_CASE("Os files tell absolute paths per platform") {
 #endif
 }
 
-TEST_CASE("Os files convert std::filesystem paths to UTF-8 and back") {
+TEST_CASE("OS files convert std::filesystem paths to UTF-8 and back") {
     const std::string utf8 = "dir/\xE8\xB3\x87\xE6\x96\x99/\xC3\xA9.txt";
     const auto path = Native(utf8);
     CHECK(Utf8(path) == utf8);
     CHECK(path.filename() == Native("\xC3\xA9.txt"));
 }
 
-TEST_CASE("Os files print a path for a message in UTF-8 and never fail") {
+TEST_CASE("OS files print a path for a message in UTF-8 and never fail") {
     CHECK(PathForMessage({}).empty());
     CHECK(PathForMessage(Native("logs/run.txt")) == "logs/run.txt");
     // Characters outside the ANSI code page (Japanese, Korean) keep their UTF-8 form.
@@ -370,7 +370,7 @@ TEST_CASE("Os files print a path for a message in UTF-8 and never fail") {
 #endif
 }
 
-TEST_CASE("Os files case sensitivity default per platform") {
+TEST_CASE("OS files case sensitivity default per platform") {
 #if defined(_WIN32) || defined(__APPLE__)
     CHECK_FALSE(DefaultCaseSensitivePaths());
 #else
@@ -382,7 +382,7 @@ TEST_CASE("Os files case sensitivity default per platform") {
 // Every Windows executable of the repository declares UTF-8 as its ANSI code
 // page in its manifest (os.md Invariant 11, os-utf8-codepage, D64): the
 // process does not take the system's setting.
-TEST_CASE("Os files run with UTF-8 as the process ANSI code page") {
+TEST_CASE("OS files run with UTF-8 as the process ANSI code page") {
     MESSAGE("GetACP() = " << ::GetACP());
     CHECK(::GetACP() == CP_UTF8);
     // The declaration itself, which this checks on a machine whose system code
@@ -421,7 +421,7 @@ std::filesystem::path SetupPath(const std::filesystem::path& path) {
 // A missing path longer than the Windows MAX_PATH (260) is NotFound on every
 // platform: on Windows the open reaches the file system (long-path form)
 // instead of failing on the length. The error never shows the long-path form.
-TEST_CASE("Os files report a missing path longer than 260 characters as not found") {
+TEST_CASE("OS files report a missing path longer than 260 characters as not found") {
     const TempDirectory temp("gyo-os-files");
     const std::string path = Utf8(DeepPath(temp.Path()) / "shader.dxil");
     REQUIRE(path.size() > 300);
@@ -429,7 +429,7 @@ TEST_CASE("Os files report a missing path longer than 260 characters as not foun
     REQUIRE_FALSE(file);
     MESSAGE("long path (" << path.size() << " bytes): " << std::string(ToString(file.error().code)) << " "
                           << file.error().detail);
-    CHECK(file.error().code == OsErrorCode::NotFound);
+    CHECK(file.error().code == OSErrorCode::NotFound);
     CHECK(file.error().detail.find("path_bytes=" + std::to_string(path.size())) != std::string::npos);
     CHECK(file.error().detail.find('?') == std::string::npos);
     CHECK_FALSE(Exists(path).value());
@@ -438,7 +438,7 @@ TEST_CASE("Os files report a missing path longer than 260 characters as not foun
 // A file of a package unpacked under a folder deep enough that its path
 // exceeds 260 characters opens, reads and stats through
 // its plain UTF-8 path, in '/' form and, on Windows, in '\' form.
-TEST_CASE("Os files read an existing file under a path longer than 300 characters") {
+TEST_CASE("OS files read an existing file under a path longer than 300 characters") {
     const TempDirectory temp("gyo-os-files");
     const auto deep = DeepPath(temp.Path());
     const std::string bytes("long\0path", 10);

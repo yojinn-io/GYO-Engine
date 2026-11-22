@@ -33,10 +33,10 @@
     "rebuild-naming N17",
     "naming DI 1"
    ],
-   "file": "engine/core/os/src/common/OsError.cpp",
+   "file": "engine/core/os/src/common/OSError.cpp",
    "find": "namespace GYO::Engine::OS {",
    "replace": "namespace GYO::Engine::Os {",
-   "expect": "engine/core/os/src/common/OsError\\.cpp:\\d+: N1 namespace GYO::Engine::Os \\(expected GYO::Engine::OS\\)",
+   "expect": "engine/core/os/src/common/OSError\\.cpp:\\d+: N1 namespace GYO::Engine::Os \\(expected GYO::Engine::OS\\)",
    "command": [
     "{python}",
     "-I",

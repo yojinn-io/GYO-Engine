@@ -32,31 +32,31 @@ constexpr std::size_t kMaximumRead = std::size_t{1} << 30;
 // The whole seconds std::chrono::nanoseconds (64-bit) can hold with room for the fraction.
 constexpr std::int64_t kMaximumSeconds = (std::numeric_limits<std::int64_t>::max)() / 1'000'000'000 - 1;
 
-OsErrorCode CodeFromErrno(const int error) noexcept {
+OSErrorCode CodeFromErrno(const int error) noexcept {
     switch (error) {
     case ENOENT:
     case ENOTDIR:
-        return OsErrorCode::NotFound;
+        return OSErrorCode::NotFound;
     case EACCES:
     case EPERM:
-        return OsErrorCode::AccessDenied;
+        return OSErrorCode::AccessDenied;
     case EISDIR:
     case ENAMETOOLONG:
     case ELOOP:
     case EINVAL:
-        return OsErrorCode::InvalidPath;
+        return OSErrorCode::InvalidPath;
     case EFBIG:
     case EOVERFLOW:
-        return OsErrorCode::TooLarge;
+        return OSErrorCode::TooLarge;
     default:
-        return OsErrorCode::IoFailed;
+        return OSErrorCode::IOFailed;
     }
 }
 
 // The error is passed in, read from errno right after the failing call, before
 // any string is built.
-OsError FromErrno(const int error, std::string message, const std::string_view path) {
-    return MakeOsError(CodeFromErrno(error), std::move(message), {NativeErrorDomain::Errno, error}, path.size());
+OSError FromErrno(const int error, std::string message, const std::string_view path) {
+    return MakeOSError(CodeFromErrno(error), std::move(message), {NativeErrorDomain::Errno, error}, path.size());
 }
 
 std::chrono::nanoseconds ModifiedTime(const struct stat& status) noexcept {
@@ -92,7 +92,7 @@ FileReader::FileReader(FileReader&& other) noexcept = default;
 FileReader& FileReader::operator=(FileReader&& other) noexcept = default;
 FileReader::~FileReader() = default;
 
-Base::Result<FileReader, OsError> FileReader::Open(const std::string_view utf8Path) {
+Base::Result<FileReader, OSError> FileReader::Open(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     std::string path(utf8Path);
     int fd = -1;
@@ -112,12 +112,12 @@ Base::Result<FileReader, OsError> FileReader::Open(const std::string_view utf8Pa
     }
     // A directory, FIFO or device opens on POSIX; only regular files are files here, as on Windows.
     if (!S_ISREG(status.st_mode)) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidPath, "not a regular file", utf8Path.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidPath, "not a regular file", utf8Path.size()));
     }
     return FileReader(std::move(impl));
 }
 
-Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {
+Base::Result<std::size_t, OSError> FileReader::Read(const std::span<std::byte> into) {
     GYO_ASSERT(impl_ != nullptr);
     if (into.empty()) return std::size_t{0};
     const std::size_t asked = std::min(into.size(), kMaximumRead);
@@ -132,7 +132,7 @@ Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> i
     return static_cast<std::size_t>(got);
 }
 
-Base::Result<std::uint64_t, OsError> FileReader::Size() const {
+Base::Result<std::uint64_t, OSError> FileReader::Size() const {
     GYO_ASSERT(impl_ != nullptr);
     struct stat status {};
     if (::fstat(impl_->descriptor, &status) != 0) {
@@ -142,10 +142,10 @@ Base::Result<std::uint64_t, OsError> FileReader::Size() const {
     return static_cast<std::uint64_t>(status.st_size);
 }
 
-Base::Result<void, OsError> FileReader::Seek(const std::uint64_t offset) {
+Base::Result<void, OSError> FileReader::Seek(const std::uint64_t offset) {
     GYO_ASSERT(impl_ != nullptr);
     if (offset > static_cast<std::uint64_t>((std::numeric_limits<off_t>::max)())) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "seek offset is too large", impl_->path.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::TooLarge, "seek offset is too large", impl_->path.size()));
     }
     if (::lseek(impl_->descriptor, static_cast<off_t>(offset), SEEK_SET) < 0) {
         const int error = errno;
@@ -154,7 +154,7 @@ Base::Result<void, OsError> FileReader::Seek(const std::uint64_t offset) {
     return {};
 }
 
-Base::Result<std::uint64_t, OsError> FileReader::Tell() const {
+Base::Result<std::uint64_t, OSError> FileReader::Tell() const {
     GYO_ASSERT(impl_ != nullptr);
     const off_t position = ::lseek(impl_->descriptor, 0, SEEK_CUR);
     if (position < 0) {
@@ -182,7 +182,7 @@ FileWriter& FileWriter::operator=(FileWriter&& other) noexcept = default;
 FileWriter::~FileWriter() = default;
 
 // '\n' is the line ending here, so Native writes the bytes as given.
-Base::Result<FileWriter, OsError> FileWriter::Open(const std::string_view utf8Path, const WriteMode mode,
+Base::Result<FileWriter, OSError> FileWriter::Open(const std::string_view utf8Path, const WriteMode mode,
                                                    LineEndings /*endings*/) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     std::string path(utf8Path);
@@ -199,7 +199,7 @@ Base::Result<FileWriter, OsError> FileWriter::Open(const std::string_view utf8Pa
     return FileWriter(std::make_unique<Impl>(fd, std::move(path)));
 }
 
-Base::Result<void, OsError> FileWriter::Write(const std::span<const std::byte> bytes) {
+Base::Result<void, OSError> FileWriter::Write(const std::span<const std::byte> bytes) {
     GYO_ASSERT(impl_ != nullptr);
     std::size_t done = 0;
     while (done < bytes.size()) {
@@ -215,7 +215,7 @@ Base::Result<void, OsError> FileWriter::Write(const std::span<const std::byte> b
     return {};
 }
 
-Base::Result<void, OsError> FileWriter::Close() {
+Base::Result<void, OSError> FileWriter::Close() {
     GYO_ASSERT(impl_ != nullptr);
     const int fd = std::exchange(impl_->descriptor, -1);
     const std::string path = std::move(impl_->path);
@@ -228,7 +228,7 @@ Base::Result<void, OsError> FileWriter::Close() {
     return {};
 }
 
-Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
+Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     const std::string path(utf8Path);
     // Every prefix that ends at a '/' or at the end, from the outermost: each
@@ -242,7 +242,7 @@ Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
         if (error == EEXIST) {
             struct stat status {};
             if (::stat(prefix.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) continue;
-            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "exists and is not a directory",
+            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "exists and is not a directory",
                                          {NativeErrorDomain::Errno, error}, utf8Path.size()));
         }
         return Base::Err(FromErrno(error, "cannot create directory", utf8Path));
@@ -250,7 +250,7 @@ Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
     return {};
 }
 
-Base::Result<void, OsError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
+Base::Result<void, OSError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
     if (auto checked = Detail::CheckPath(utf8From); !checked) return Base::Err(std::move(checked.error()));
     if (auto checked = Detail::CheckPath(utf8To); !checked) return Base::Err(std::move(checked.error()));
     const std::string from(utf8From);
@@ -262,7 +262,7 @@ Base::Result<void, OsError> RenameReplacing(const std::string_view utf8From, con
     return {};
 }
 
-Base::Result<void, OsError> RemoveFile(const std::string_view utf8Path) {
+Base::Result<void, OSError> RemoveFile(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     const std::string path(utf8Path);
     if (::unlink(path.c_str()) != 0) {
@@ -270,7 +270,7 @@ Base::Result<void, OsError> RemoveFile(const std::string_view utf8Path) {
         // unlink refuses a directory with EPERM (macOS) or EISDIR (Linux): one code for both.
         struct stat status {};
         if (::lstat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {
-            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "is a directory, not a file",
+            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "is a directory, not a file",
                                          {NativeErrorDomain::Errno, error}, utf8Path.size()));
         }
         return Base::Err(FromErrno(error, "cannot remove file", utf8Path));
@@ -278,7 +278,7 @@ Base::Result<void, OsError> RemoveFile(const std::string_view utf8Path) {
     return {};
 }
 
-Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
+Base::Result<FileStatus, OSError> Stat(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     const std::string path(utf8Path);
     struct stat status {};
@@ -293,7 +293,7 @@ Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
     return out;
 }
 
-Base::Result<bool, OsError> Exists(const std::string_view utf8Path) {
+Base::Result<bool, OSError> Exists(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     const std::string path(utf8Path);
     struct stat status {};
@@ -303,7 +303,7 @@ Base::Result<bool, OsError> Exists(const std::string_view utf8Path) {
     return Base::Err(FromErrno(error, "cannot read file status", utf8Path));
 }
 
-Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path) {
+Base::Result<std::string, OSError> MakeAbsolute(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     if (utf8Path.front() == '/') return std::string(utf8Path);
     std::vector<char> buffer(256);
@@ -315,7 +315,7 @@ Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path)
     std::string out(buffer.data());
     // The current directory is bytes; a result that is not UTF-8 would not be a UTF-8 path (D43).
     if (!Detail::IsValidUtf8(out)) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding,
                                                  "the current directory is not valid UTF-8", utf8Path.size()));
     }
     if (out.empty() || out.back() != '/') out.push_back('/');
@@ -323,7 +323,7 @@ Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path)
     return out;
 }
 
-Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path) {
+Base::Result<std::string, OSError> ResolvedPath(const std::string_view utf8Path) {
     auto absolute = MakeAbsolute(utf8Path);
     if (!absolute) return absolute;
     const std::string& path = absolute.value();
@@ -344,7 +344,7 @@ Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path)
             std::string out(resolved);
             std::free(resolved);
             if (!Detail::IsValidUtf8(out)) {
-                return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,
+                return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding,
                                                          "the resolved path is not valid UTF-8", utf8Path.size()));
             }
             out.append(path, end, std::string::npos);
@@ -359,11 +359,11 @@ Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path)
     }
 }
 
-Base::Result<bool, OsError> SamePathComponent(const std::string_view utf8Left, const std::string_view utf8Right) {
+Base::Result<bool, OSError> SamePathComponent(const std::string_view utf8Left, const std::string_view utf8Right) {
     for (const std::string_view text : {utf8Left, utf8Right}) {
         if (!Detail::IsValidUtf8(text)) {
             return Base::Err(
-                Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path component is not valid UTF-8", text.size()));
+                Detail::RefusedArgument(OSErrorCode::InvalidEncoding, "path component is not valid UTF-8", text.size()));
         }
     }
     return utf8Left == utf8Right;
@@ -373,12 +373,12 @@ bool IsAbsolutePath(const std::string_view utf8Path) noexcept {
     return !utf8Path.empty() && utf8Path.front() == '/';
 }
 
-Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path) {
+Base::Result<std::string, OSError> PathToUtf8(const std::filesystem::path& path) {
     // POSIX paths are bytes; they are UTF-8 only if the bytes are.
     const std::u8string text = path.generic_u8string();
     std::string out(text.begin(), text.end());
     if (!Detail::IsValidUtf8(out)) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", out.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding, "path is not valid UTF-8", out.size()));
     }
     return out;
 }
@@ -403,7 +403,7 @@ std::string PathForMessage(const std::filesystem::path& path) {
     return out;
 }
 
-Base::Result<std::vector<std::string>, OsError> FontDirectories() {
+Base::Result<std::vector<std::string>, OSError> FontDirectories() {
     std::vector<std::string> candidates = Detail::CurrentPlatform().FontDirectoryCandidates();
     std::vector<std::string> out;
     for (auto& candidate : candidates) {

@@ -4,7 +4,7 @@
 #include <string_view>
 
 #include "engine/base/Result.hpp"
-#include "engine/io/IoError.hpp"
+#include "engine/io/IOError.hpp"
 
 namespace GYO::Engine::IO::Path {
 
@@ -23,7 +23,7 @@ namespace GYO::Engine::IO::Path {
     bool ContainsNullByte(std::string_view s) noexcept;
     bool ContainsTraversal(std::string_view s) noexcept;  // ".." セグメント
 
-    Base::Result<std::string, IoError> Normalize(std::string_view raw,
+    Base::Result<std::string, IOError> Normalize(std::string_view raw,
                                           const NormalizeOptions& opt = {});
 
     // 文字列ユーティリティ（OS非依存）

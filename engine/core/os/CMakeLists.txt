@@ -12,7 +12,7 @@
 # also selected for any platform that is neither Windows nor Apple.
 add_library(gyo_os STATIC
     src/common/Calendar.cpp
-    src/common/OsError.cpp
+    src/common/OSError.cpp
     src/common/Paths.cpp
     src/common/Shutdown.cpp
 )

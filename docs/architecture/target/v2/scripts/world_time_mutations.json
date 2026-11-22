@@ -849,28 +849,6 @@
    "expect": "\\[wt\\-sample\\-reader\\]"
   },
   {
-   "id": "wt-include-order-unqualified",
-   "what": "include order: a world_time header names GYO::Engine::Base unqualified inside GYO::Engine::WorldTime (the check is the build of the include-order objects; the command after it only completes the run) (time Module, step 4). Only it catches an unqualified Engine:: in a world_time header; it is the only mutant of the include-order objects",
-   "guards": [
-    "world-time WT-4",
-    "time-events-declaration 3.1"
-   ],
-   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
-   "find": "[[nodiscard]] ::GYO::Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
-   "replace": "[[nodiscard]] GYO::Engine::Base::Result<void, Kernel::KernelError> RunOneFixedStep(ExclusiveWorldType& world,",
-   "target": "gyo_orchestration_include_order",
-   "expect_build_failure": true,
-   "expect": "(?s)gyo_orchestration_include_order\\.dir.*no member named 'Base' in namespace 'GYO::Engine'",
-   "platforms": [
-    "darwin"
-   ],
-   "command": [
-    "{python}",
-    "-c",
-    "pass"
-   ]
-  },
-  {
    "id": "wt-carried-value-overwritten",
    "what": "the time Module overwrites a time value carried over (WT-1, O-7: a value already there is kept). Only it catches PutIfAbsent becoming a plain write (adversarial check W38, step 7)",
    "guards": [

@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "engine/io/IoFwd.hpp"          // GYO::Engine::IO::Path::Uri fwd
+#include "engine/io/IOFwd.hpp"          // GYO::Engine::IO::Path::Uri fwd
 #include "engine/io/fs/IFileSystem.hpp" // FS::IFileSystem
 #include "engine/io/path/Uri.hpp"
 #include "engine/io/stream/FileOpenMode.hpp"

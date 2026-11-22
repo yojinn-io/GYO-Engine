@@ -11,12 +11,12 @@
 // error E, which must satisfy CodedError (engine/base/Error.hpp). A Programmer
 // Error is a GYO_ASSERT instead; see docs/architecture/error-handling.md.
 //
-//     Base::Result<Path, IoError> Parse(std::string_view raw) {
+//     Base::Result<Path, IOError> Parse(std::string_view raw) {
 //         auto normalized = Normalize(raw);
 //         if (!normalized) return Base::Err(std::move(normalized).error());
 //         return Path::FromNormalized(std::move(*normalized));
 //     }
-//     Base::Result<void, IoError> Close() { ...; return {}; }
+//     Base::Result<void, IOError> Close() { ...; return {}; }
 //
 // The interface is a subset of C++23 std::expected (Err for std::unexpected),
 // so a later migration is mechanical. Unlike std::expected, reading the side

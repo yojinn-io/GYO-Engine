@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/base/Result.hpp"
-#include "engine/os/OsError.hpp"
+#include "engine/os/OSError.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -19,7 +19,7 @@ namespace GYO::Engine::OS::Console {
 // page is; argc and argv are not read. POSIX: argv as given.
 // InvalidEncoding when an argument has no UTF-8 form (on POSIX, bytes that are
 // not UTF-8).
-[[nodiscard]] Base::Result<std::vector<std::string>, OsError> CommandLineUtf8(int argc, const char* const* argv);
+[[nodiscard]] Base::Result<std::vector<std::string>, OSError> CommandLineUtf8(int argc, const char* const* argv);
 
 // While it lives, UTF-8 written to the process's console shows as UTF-8: on
 // Windows the console's output code page is UTF-8 and the previous one comes
@@ -73,7 +73,7 @@ enum class ShutdownReason : std::uint8_t {
 // After a request, another Ctrl+C or Ctrl+Break ends the process at once, as a
 // second Ctrl+C did before. On a close the OS ends the process when the
 // handler returns, so the handler waits up to 4 s for the program to finish.
-[[nodiscard]] Base::Result<void, OsError> InstallShutdownRequests();
+[[nodiscard]] Base::Result<void, OSError> InstallShutdownRequests();
 
 // The first shutdown request since InstallShutdownRequests, if any. Any thread.
 [[nodiscard]] std::optional<ShutdownReason> RequestedShutdown() noexcept;

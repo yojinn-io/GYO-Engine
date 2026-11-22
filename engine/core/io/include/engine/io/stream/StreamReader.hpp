@@ -7,7 +7,7 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
-#include "engine/io/IoError.hpp"
+#include "engine/io/IOError.hpp"
 #include "engine/io/stream/IStream.hpp"
 
 namespace GYO::Engine::IO::Stream {
@@ -25,20 +25,20 @@ namespace GYO::Engine::IO::Stream {
     public:
         explicit StreamReader(IStream& s);
 
-        IoResult<std::vector<std::byte>> ReadAllBytes(std::size_t maxBytes = 0);
-        IoResult<std::size_t> ReadExactly(void* dst, std::size_t bytes);
+        IOResult<std::vector<std::byte>> ReadAllBytes(std::size_t maxBytes = 0);
+        IOResult<std::size_t> ReadExactly(void* dst, std::size_t bytes);
 
-        IoResult<std::uint8_t>  ReadU8();
-        IoResult<std::uint16_t> ReadU16LE();
-        IoResult<std::uint32_t> ReadU32LE();
-        IoResult<std::uint64_t> ReadU64LE();
+        IOResult<std::uint8_t>  ReadU8();
+        IOResult<std::uint16_t> ReadU16LE();
+        IOResult<std::uint32_t> ReadU32LE();
+        IOResult<std::uint64_t> ReadU64LE();
 
-        IoResult<std::string> ReadAllText(const TextReadOptions& opt = {});
-        IoResult<bool> ReadLine(std::string& outLine, std::size_t maxLineBytes = 4096);
+        IOResult<std::string> ReadAllText(const TextReadOptions& opt = {});
+        IOResult<bool> ReadLine(std::string& outLine, std::size_t maxLineBytes = 4096);
 
     private:
-        IoResult<std::size_t> ReadSome(void* dst, std::size_t bytes);
-        IoResult<std::size_t> FillLineBuffer();
+        IOResult<std::size_t> ReadSome(void* dst, std::size_t bytes);
+        IOResult<std::size_t> FillLineBuffer();
 
     private:
         IStream& s_;

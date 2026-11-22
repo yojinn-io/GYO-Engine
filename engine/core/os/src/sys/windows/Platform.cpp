@@ -14,8 +14,8 @@ public:
     }
     std::vector<std::string> FontDirectoryCandidates() const override { return {}; }
     bool CaseSensitivePaths() const noexcept override { return false; }
-    Base::Result<std::string, OsError> NativeExecutablePath() const override {
-        return Base::Err(OsError::Make(OsErrorCode::Unsupported, "not used on Windows"));
+    Base::Result<std::string, OSError> NativeExecutablePath() const override {
+        return Base::Err(OSError::Make(OSErrorCode::Unsupported, "not used on Windows"));
     }
 };
 

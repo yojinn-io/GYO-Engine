@@ -118,7 +118,7 @@ constexpr Thread::PriorityHint kHints[] = {Thread::PriorityHint::Background, Thr
 
 } // namespace
 
-TEST_CASE("Os thread names the calling thread as the platform reads it back") {
+TEST_CASE("OS thread names the calling thread as the platform reads it back") {
 #if defined(_WIN32)
     bool ascii = false, beyondAscii = false, invalid = true;
     std::wstring afterAscii, afterBeyond, afterInvalid;
@@ -163,7 +163,7 @@ TEST_CASE("Os thread names the calling thread as the platform reads it back") {
 #endif
 }
 
-TEST_CASE("Os thread applies the priority hints as the platform reads them back") {
+TEST_CASE("OS thread applies the priority hints as the platform reads them back") {
     for (const auto hint : kHints) {
         CAPTURE(static_cast<int>(hint));
         long before = 0;
@@ -182,7 +182,7 @@ TEST_CASE("Os thread applies the priority hints as the platform reads them back"
 // The role threads hand their priority to engine/os as the same level
 // (engine/threads' RoleThread, threads.md Invariant 5): read back on the role's
 // own thread.
-TEST_CASE("Os thread receives a role's priority as the same hint") {
+TEST_CASE("OS thread receives a role's priority as the same hint") {
     using GYO::Engine::Threads::ThreadPriority;
     const std::pair<ThreadPriority, Thread::PriorityHint> levels[] = {
         {ThreadPriority::Background, Thread::PriorityHint::Background},

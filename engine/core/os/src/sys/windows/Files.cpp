@@ -35,41 +35,41 @@ constexpr DWORD kShareAll = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELE
 // A writer shares its file as the C runtime's streams do (_SH_DENYNO): others may read and write, not delete.
 constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;
 
-OsErrorCode CodeFromWin32(const DWORD error) noexcept {
+OSErrorCode CodeFromWin32(const DWORD error) noexcept {
     switch (error) {
     case ERROR_FILE_NOT_FOUND:
     case ERROR_PATH_NOT_FOUND:
     case ERROR_INVALID_DRIVE:
     case ERROR_BAD_NETPATH:
     case ERROR_BAD_NET_NAME:
-        return OsErrorCode::NotFound;
+        return OSErrorCode::NotFound;
     case ERROR_ACCESS_DENIED:
     case ERROR_SHARING_VIOLATION:
     case ERROR_LOCK_VIOLATION:
-        return OsErrorCode::AccessDenied;
+        return OSErrorCode::AccessDenied;
     case ERROR_INVALID_NAME:
     case ERROR_BAD_PATHNAME:
     case ERROR_FILENAME_EXCED_RANGE:
     case ERROR_DIRECTORY:
-        return OsErrorCode::InvalidPath;
+        return OSErrorCode::InvalidPath;
     case ERROR_NO_UNICODE_TRANSLATION:
-        return OsErrorCode::InvalidEncoding;
+        return OSErrorCode::InvalidEncoding;
     default:
-        return OsErrorCode::IoFailed;
+        return OSErrorCode::IOFailed;
     }
 }
 
 // The error is passed in, read with GetLastError right after the failing call,
 // before any string is built.
-OsError FromWin32(const DWORD error, std::string message, const std::string_view path) {
-    return MakeOsError(CodeFromWin32(error), std::move(message),
+OSError FromWin32(const DWORD error, std::string message, const std::string_view path) {
+    return MakeOSError(CodeFromWin32(error), std::move(message),
                        {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)}, path.size());
 }
 
 // The UTF-16 form of a checked UTF-8 path, with '\' separators.
-Base::Result<std::wstring, OsError> ToWide(const std::string_view utf8Path) {
+Base::Result<std::wstring, OSError> ToWide(const std::string_view utf8Path) {
     if (utf8Path.size() > static_cast<std::size_t>(INT_MAX)) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "path is too long", utf8Path.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::TooLarge, "path is too long", utf8Path.size()));
     }
     const int bytes = static_cast<int>(utf8Path.size());
     const int length = ::MultiByteToWideChar(kPathCodePage, MB_ERR_INVALID_CHARS, utf8Path.data(), bytes, nullptr, 0);
@@ -89,7 +89,7 @@ Base::Result<std::wstring, OsError> ToWide(const std::string_view utf8Path) {
 
 // The full path GetFullPathNameW makes of a UTF-16 path: resolved against the
 // current directory, dot segments and trailing dots and spaces removed.
-Base::Result<std::wstring, OsError> FullWidePath(const std::wstring& wide, const std::string_view utf8Path) {
+Base::Result<std::wstring, OSError> FullWidePath(const std::wstring& wide, const std::string_view utf8Path) {
     DWORD needed = ::GetFullPathNameW(wide.c_str(), 0, nullptr, nullptr);
     while (true) {
         if (needed == 0) {
@@ -142,7 +142,7 @@ constexpr std::size_t kLongPathFrom = MAX_PATH - 12;
 // form, \\?\ or \\.\, kept as it is) and a full path that is neither on a
 // drive nor UNC (a device such as \\.\NUL) go to the API exactly as before, as
 // does a path GetFullPathNameW cannot make full.
-Base::Result<std::wstring, OsError> OsCallPath(const std::string_view utf8Path) {
+Base::Result<std::wstring, OSError> OSCallPath(const std::string_view utf8Path) {
     auto wide = ToWide(utf8Path);
     if (!wide) return wide;
     if (wide.value().starts_with(L"\\\\") && !IsUncPath(wide.value())) return wide;
@@ -155,10 +155,10 @@ Base::Result<std::wstring, OsError> OsCallPath(const std::string_view utf8Path) 
 }
 
 // UTF-16 to UTF-8 in '/' form; an unpaired surrogate is InvalidEncoding, not a silent U+FFFD.
-Base::Result<std::string, OsError> ToUtf8(const std::wstring_view wide, const std::string_view forErrors) {
+Base::Result<std::string, OSError> ToUtf8(const std::wstring_view wide, const std::string_view forErrors) {
     if (wide.empty()) return std::string{};
     if (wide.size() > static_cast<std::size_t>(INT_MAX)) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "path is too long", forErrors.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::TooLarge, "path is too long", forErrors.size()));
     }
     const int length = static_cast<int>(wide.size());
     const int bytes =
@@ -206,7 +206,7 @@ std::uint64_t SizeFrom(const DWORD high, const DWORD low) noexcept {
 
 // GetFileAttributesExW describes a symbolic link itself; for a reparse point
 // the target is opened and described instead, as POSIX stat does.
-Base::Result<NativeStatus, OsError> QueryStatus(const std::wstring& path, const std::string_view utf8Path) {
+Base::Result<NativeStatus, OSError> QueryStatus(const std::wstring& path, const std::string_view utf8Path) {
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (!::GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
         const DWORD error = ::GetLastError();
@@ -258,9 +258,9 @@ FileReader::FileReader(FileReader&& other) noexcept = default;
 FileReader& FileReader::operator=(FileReader&& other) noexcept = default;
 FileReader::~FileReader() = default;
 
-Base::Result<FileReader, OsError> FileReader::Open(const std::string_view utf8Path) {
+Base::Result<FileReader, OSError> FileReader::Open(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto path = OsCallPath(utf8Path);
+    auto path = OSCallPath(utf8Path);
     if (!path) return Base::Err(std::move(path.error()));
     const HANDLE file = ::CreateFileW(path.value().c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING,
                                       FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -268,7 +268,7 @@ Base::Result<FileReader, OsError> FileReader::Open(const std::string_view utf8Pa
         const DWORD error = ::GetLastError();
         // Opening a directory is refused with ERROR_ACCESS_DENIED; report it as POSIX does.
         if (error == ERROR_ACCESS_DENIED && IsDirectory(path.value())) {
-            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "not a regular file",
+            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "not a regular file",
                                          {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
                                          utf8Path.size()));
         }
@@ -277,12 +277,12 @@ Base::Result<FileReader, OsError> FileReader::Open(const std::string_view utf8Pa
     auto impl = std::make_unique<Impl>(file, std::string(utf8Path));
     // A device (NUL, CON, a pipe) opens too; only disk files are files here, as on POSIX.
     if (::GetFileType(file) != FILE_TYPE_DISK) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidPath, "not a regular file", utf8Path.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidPath, "not a regular file", utf8Path.size()));
     }
     return FileReader(std::move(impl));
 }
 
-Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {
+Base::Result<std::size_t, OSError> FileReader::Read(const std::span<std::byte> into) {
     GYO_ASSERT(impl_ != nullptr);
     if (into.empty()) return std::size_t{0};
     const DWORD asked = static_cast<DWORD>((std::min)(into.size(), static_cast<std::size_t>(kMaximumRead)));
@@ -296,7 +296,7 @@ Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> i
     return static_cast<std::size_t>(got);
 }
 
-Base::Result<std::uint64_t, OsError> FileReader::Size() const {
+Base::Result<std::uint64_t, OSError> FileReader::Size() const {
     GYO_ASSERT(impl_ != nullptr);
     LARGE_INTEGER size{};
     if (!::GetFileSizeEx(impl_->handle, &size)) {
@@ -306,10 +306,10 @@ Base::Result<std::uint64_t, OsError> FileReader::Size() const {
     return static_cast<std::uint64_t>(size.QuadPart);
 }
 
-Base::Result<void, OsError> FileReader::Seek(const std::uint64_t offset) {
+Base::Result<void, OSError> FileReader::Seek(const std::uint64_t offset) {
     GYO_ASSERT(impl_ != nullptr);
     if (offset > static_cast<std::uint64_t>((std::numeric_limits<LONGLONG>::max)())) {
-        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "seek offset is too large", impl_->path.size()));
+        return Base::Err(Detail::RefusedArgument(OSErrorCode::TooLarge, "seek offset is too large", impl_->path.size()));
     }
     LARGE_INTEGER distance{};
     distance.QuadPart = static_cast<LONGLONG>(offset);
@@ -320,7 +320,7 @@ Base::Result<void, OsError> FileReader::Seek(const std::uint64_t offset) {
     return {};
 }
 
-Base::Result<std::uint64_t, OsError> FileReader::Tell() const {
+Base::Result<std::uint64_t, OSError> FileReader::Tell() const {
     GYO_ASSERT(impl_ != nullptr);
     LARGE_INTEGER zero{};
     LARGE_INTEGER position{};
@@ -350,10 +350,10 @@ FileWriter::FileWriter(FileWriter&& other) noexcept = default;
 FileWriter& FileWriter::operator=(FileWriter&& other) noexcept = default;
 FileWriter::~FileWriter() = default;
 
-Base::Result<FileWriter, OsError> FileWriter::Open(const std::string_view utf8Path, const WriteMode mode,
+Base::Result<FileWriter, OSError> FileWriter::Open(const std::string_view utf8Path, const WriteMode mode,
                                                    const LineEndings endings) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto path = OsCallPath(utf8Path);
+    auto path = OSCallPath(utf8Path);
     if (!path) return Base::Err(std::move(path.error()));
     // As the C runtime opens a stream for "w" (CREATE_ALWAYS) or "a"; an append-only handle
     // puts every write at the end of the file.
@@ -365,7 +365,7 @@ Base::Result<FileWriter, OsError> FileWriter::Open(const std::string_view utf8Pa
         const DWORD error = ::GetLastError();
         // Opening a directory is refused with ERROR_ACCESS_DENIED; report it as POSIX does.
         if (error == ERROR_ACCESS_DENIED && IsDirectory(path.value())) {
-            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "is a directory",
+            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "is a directory",
                                          {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
                                          utf8Path.size()));
         }
@@ -376,7 +376,7 @@ Base::Result<FileWriter, OsError> FileWriter::Open(const std::string_view utf8Pa
 
 namespace {
 
-Base::Result<void, OsError> WriteAll(const HANDLE file, const std::byte* data, std::size_t size,
+Base::Result<void, OSError> WriteAll(const HANDLE file, const std::byte* data, std::size_t size,
                                      const std::string_view path) {
     while (size > 0) {
         const DWORD chunk = static_cast<DWORD>((std::min)(size, static_cast<std::size_t>(kMaximumRead)));
@@ -393,7 +393,7 @@ Base::Result<void, OsError> WriteAll(const HANDLE file, const std::byte* data, s
 
 } // namespace
 
-Base::Result<void, OsError> FileWriter::Write(const std::span<const std::byte> bytes) {
+Base::Result<void, OSError> FileWriter::Write(const std::span<const std::byte> bytes) {
     GYO_ASSERT(impl_ != nullptr);
     if (impl_->endings == LineEndings::AsWritten) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);
     // As the C runtime's text mode writes: every '\n' becomes "\r\n", whatever precedes it.
@@ -406,7 +406,7 @@ Base::Result<void, OsError> FileWriter::Write(const std::span<const std::byte> b
     return WriteAll(impl_->handle, translated.data(), translated.size(), impl_->path);
 }
 
-Base::Result<void, OsError> FileWriter::Close() {
+Base::Result<void, OSError> FileWriter::Close() {
     GYO_ASSERT(impl_ != nullptr);
     const HANDLE file = std::exchange(impl_->handle, INVALID_HANDLE_VALUE);
     const std::string path = std::move(impl_->path);
@@ -457,7 +457,7 @@ std::size_t RootLength(const std::string_view path) noexcept {
 
 } // namespace
 
-Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
+Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     // Every prefix after the root that ends at a separator or at the end, from
     // the outermost: each either is a directory already or is made one, as
@@ -466,7 +466,7 @@ Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
         if (end != utf8Path.size() && !IsSlash(utf8Path[end])) continue;
         const std::string_view prefix = utf8Path.substr(0, end);
         if (IsSlash(prefix.back())) continue;
-        auto native = OsCallPath(prefix);
+        auto native = OSCallPath(prefix);
         if (!native) return Base::Err(std::move(native.error()));
         if (IsDirectory(native.value())) continue;
         if (::CreateDirectoryW(native.value().c_str(), nullptr)) continue;
@@ -474,7 +474,7 @@ Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
         if (error == ERROR_ALREADY_EXISTS) {
             // Another process may have made it meanwhile.
             if (IsDirectory(native.value())) continue;
-            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "exists and is not a directory",
+            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "exists and is not a directory",
                                          {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
                                          utf8Path.size()));
         }
@@ -483,12 +483,12 @@ Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
     return {};
 }
 
-Base::Result<void, OsError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
+Base::Result<void, OSError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
     if (auto checked = Detail::CheckPath(utf8From); !checked) return Base::Err(std::move(checked.error()));
     if (auto checked = Detail::CheckPath(utf8To); !checked) return Base::Err(std::move(checked.error()));
-    auto from = OsCallPath(utf8From);
+    auto from = OSCallPath(utf8From);
     if (!from) return Base::Err(std::move(from.error()));
-    auto to = OsCallPath(utf8To);
+    auto to = OSCallPath(utf8To);
     if (!to) return Base::Err(std::move(to.error()));
     // The flags of the atomic save this primitive replaced (os-subsystem D56; Design Invariant 9).
     if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
@@ -498,14 +498,14 @@ Base::Result<void, OsError> RenameReplacing(const std::string_view utf8From, con
     return {};
 }
 
-Base::Result<void, OsError> RemoveFile(const std::string_view utf8Path) {
+Base::Result<void, OSError> RemoveFile(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto path = OsCallPath(utf8Path);
+    auto path = OSCallPath(utf8Path);
     if (!path) return Base::Err(std::move(path.error()));
     if (!::DeleteFileW(path.value().c_str())) {
         const DWORD error = ::GetLastError();
         if (IsDirectory(path.value())) {
-            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "is a directory, not a file",
+            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "is a directory, not a file",
                                          {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
                                          utf8Path.size()));
         }
@@ -514,9 +514,9 @@ Base::Result<void, OsError> RemoveFile(const std::string_view utf8Path) {
     return {};
 }
 
-Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
+Base::Result<FileStatus, OSError> Stat(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto path = OsCallPath(utf8Path);
+    auto path = OSCallPath(utf8Path);
     if (!path) return Base::Err(std::move(path.error()));
     auto status = QueryStatus(path.value(), utf8Path);
     if (!status) return Base::Err(std::move(status.error()));
@@ -530,17 +530,17 @@ Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
     return out;
 }
 
-Base::Result<bool, OsError> Exists(const std::string_view utf8Path) {
+Base::Result<bool, OSError> Exists(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto path = OsCallPath(utf8Path);
+    auto path = OSCallPath(utf8Path);
     if (!path) return Base::Err(std::move(path.error()));
     auto status = QueryStatus(path.value(), utf8Path);
     if (status) return true;
-    if (status.error().code == OsErrorCode::NotFound) return false;
+    if (status.error().code == OSErrorCode::NotFound) return false;
     return Base::Err(std::move(status.error()));
 }
 
-Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path) {
+Base::Result<std::string, OSError> MakeAbsolute(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     auto wide = ToWide(utf8Path);
     if (!wide) return Base::Err(std::move(wide.error()));
@@ -563,7 +563,7 @@ bool IsMissingComponent(const DWORD error) noexcept {
 
 // The final path of an open file or directory (links followed, the case on
 // disk), without the \\?\ or \\?\UNC\ form GetFinalPathNameByHandleW gives it.
-Base::Result<std::wstring, OsError> FinalPath(const HANDLE handle, const std::string_view utf8Path) {
+Base::Result<std::wstring, OSError> FinalPath(const HANDLE handle, const std::string_view utf8Path) {
     constexpr DWORD kFlags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
     DWORD needed = ::GetFinalPathNameByHandleW(handle, nullptr, 0, kFlags);
     while (true) {
@@ -590,7 +590,7 @@ Base::Result<std::wstring, OsError> FinalPath(const HANDLE handle, const std::st
 
 } // namespace
 
-Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path) {
+Base::Result<std::string, OSError> ResolvedPath(const std::string_view utf8Path) {
     auto absolute = MakeAbsolute(utf8Path);
     if (!absolute) return absolute;
     const std::string& path = absolute.value();
@@ -601,7 +601,7 @@ Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path)
     // written when nothing after it exists.
     std::size_t end = path.size();
     while (true) {
-        auto native = OsCallPath(std::string_view(path).substr(0, end));
+        auto native = OSCallPath(std::string_view(path).substr(0, end));
         if (!native) return Base::Err(std::move(native.error()));
         // Only attributes are read, as the standard library's canonical opens
         // it. Backup semantics open a directory too; links are followed.
@@ -630,11 +630,11 @@ Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path)
     }
 }
 
-Base::Result<bool, OsError> SamePathComponent(const std::string_view utf8Left, const std::string_view utf8Right) {
+Base::Result<bool, OSError> SamePathComponent(const std::string_view utf8Left, const std::string_view utf8Right) {
     for (const std::string_view text : {utf8Left, utf8Right}) {
         if (!Detail::IsValidUtf8(text)) {
             return Base::Err(
-                Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path component is not valid UTF-8", text.size()));
+                Detail::RefusedArgument(OSErrorCode::InvalidEncoding, "path component is not valid UTF-8", text.size()));
         }
     }
     // ToWide refuses an empty text; two empty components are the same, an empty and a non-empty one are not.
@@ -659,7 +659,7 @@ bool IsAbsolutePath(const std::string_view utf8Path) noexcept {
     return letter && utf8Path[1] == ':' && IsSlash(utf8Path[2]);
 }
 
-Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path) {
+Base::Result<std::string, OSError> PathToUtf8(const std::filesystem::path& path) {
     // From the native UTF-16 directly: the standard library would throw on an unpaired surrogate.
     return ToUtf8(path.native(), {});
 }
@@ -679,7 +679,7 @@ std::string PathForMessage(const std::filesystem::path& path) {
     return utf8;
 }
 
-Base::Result<std::vector<std::string>, OsError> FontDirectories() {
+Base::Result<std::vector<std::string>, OSError> FontDirectories() {
     std::vector<std::wstring> candidates;
     const UINT needed = ::GetSystemWindowsDirectoryW(nullptr, 0);
     if (needed == 0) {

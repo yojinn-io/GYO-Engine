@@ -10,9 +10,9 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
-#include "engine/io/IoError.hpp"
+#include "engine/io/IOError.hpp"
 
-#include "engine/io/IoFwd.hpp" // Path::Uri
+#include "engine/io/IOFwd.hpp" // Path::Uri
 #include "engine/io/fs/IFileSystem.hpp"
 #include "engine/io/stream/FileOpenMode.hpp"
 #include "engine/io/fs/MountPoint.hpp"
@@ -61,8 +61,8 @@ namespace detail {
         return UriParse(r);
     }
 
-    inline bool IsNotFound(const IoError& e) noexcept {
-        return e.code == GYO::Engine::IO::IoErrorCode::NotFound;
+    inline bool IsNotFound(const IOError& e) noexcept {
+        return e.code == GYO::Engine::IO::IOErrorCode::NotFound;
     }
 
     inline bool WantsWrite(GYO::Engine::IO::Stream::FileOpenMode m) noexcept {
@@ -87,15 +87,15 @@ namespace detail {
     /// - scheme で候補を取り出し、priority 降順で並べる
     class MountTable final {
     public:
-        IoResult<void> Mount(MountPoint mp) {
+        IOResult<void> Mount(MountPoint mp) {
             if (!mp.fs) {
-                return Base::Err(IoError::Make(
-                    GYO::Engine::IO::IoErrorCode::InvalidPath,
+                return Base::Err(IOError::Make(
+                    GYO::Engine::IO::IOErrorCode::InvalidPath,
                     "MountTable: fs is null"));
             }
             if (mp.name.empty()) {
-                return Base::Err(IoError::Make(
-                    GYO::Engine::IO::IoErrorCode::InvalidPath,
+                return Base::Err(IOError::Make(
+                    GYO::Engine::IO::IOErrorCode::InvalidPath,
                     "MountTable: mount name is empty"));
             }
             mounts_.push_back(std::move(mp));
@@ -135,12 +135,12 @@ namespace detail {
         }
 
         /// 読み取り向け解決：存在する（または open/stat できる） mount を上から探すのは Vfs 側で行う
-        IoResult<ResolvedMount> Resolve(const MountPoint& mp, const GYO::Engine::IO::Path::Uri& vfsUri) const {
+        IOResult<ResolvedMount> Resolve(const MountPoint& mp, const GYO::Engine::IO::Path::Uri& vfsUri) const {
             const std::string u = detail::UriText(vfsUri);
             const std::string_view rel = detail::ExtractAfterScheme(u);
             // A mount never reaches outside its root (docs/architecture/io.md).
             if (GYO::Engine::IO::Path::ContainsTraversal(rel)) {
-                return Base::Err(IoError::Make(GYO::Engine::IO::IoErrorCode::PathEscapesRoot,
+                return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::PathEscapesRoot,
                                                "MountTable: the request has a '..' segment", std::string(rel)));
             }
             ResolvedMount r;
