@@ -643,16 +643,6 @@
    "expect": "\\[or\\-swap\\-new\\-frame\\]"
   },
   {
-   "id": "g8-replace-prepare-from-old-registration",
-   "what": "G-8 candidate (g8-check-fable-high.md) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "Prepare(slot, *world, registration.unitPrepares, request.extra",
-   "replace": "Prepare(slot, *world, slot.unitPrepares, request.extra",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: a registration that differs*",
-   "expect": "\\[or\\-swap\\-new\\-prepare\\]"
-  },
-  {
    "id": "el-insert-owner-dropped",
    "what": "the refusal error no longer names the owner, so the error no longer says who was refused (rewritten from g8-insert-warning-text by v8-arch-gyo2-error-levels D2: the orchestration layer logs nothing and the error carries what the warning carried)",
    "file": "engine/orchestration/src/Product.cpp",
@@ -1852,7 +1842,7 @@
    "what": "G-7 (group B): a dynamic insert runs every unit Finish of the World again (declaration section 9 \"插入後重跑 Finish\"; moved from the kernel catalog ks-s2-plugin-finish-again)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = slot->registry->BuildPlans();\n    if (!built) {",
-   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        ModuleBuffer frozen;\n        frozen.Freeze();\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink, frozen);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-9: an allowing World*",
    "expect": "\\[or-insert-no-lifecycle\\]"
@@ -1862,7 +1852,7 @@
    "what": "G-7 (group B): Finish also runs before BuildPlans (it would read version 0, no Plan; moved from the kernel catalog ks-s3-version-before-finish) (the kernel refuses the read-only view before a successful BuildPlans, so the Product build aborts at that assertion)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
-   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: Configure once*",
    "expect": "GYO_ASSERT failed: data_->frozen"

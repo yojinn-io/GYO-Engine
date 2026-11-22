@@ -115,6 +115,12 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 - 低價值：版本常數 b01、b02、d05、d14（`rs-b6-cfp-version-1` 同類）；訊息措辭 e16、A47、d16、c04、d15（只換錯誤碼的名字）；預設值 A53、e01；回滾 A6（沒有流程替作者代為登記步的 schedule）；a16（AU-E4 先報）；`rs-j17-generated-by`、`rs-j17-zone-b-listed`（多列一個讀者只是多掃一個檔）。
 - 等價或只影響成本：b42～b45、e09、d06、A13、A30、A32、A51、B16。
 
+## 第 8 步：從頭完整跑的突變（ecae9977，主 checkout `build/evidence/gyo2-authority-rollback/full-mutation-ecae9977/`）
+
+- 回滾 74/74、權威 115/115、時間 95/95 killed。
+- 編排層 237/242。本分支造成的 3 個已處理：`g8-replace-prepare-from-old-registration` 退役（E8 之後 World 的 slot 沒有準備函式，這個誤點寫不出來，README 第 7 條）；`or-insert-reruns-finish`、`or-finish-before-plans` 的 replace 跟上第 3 步給 `WorldFinish` 加的 buffer 參數（再跑 2/2 killed）。`gyo2` 上本來就這樣的 2 個列為後續：`or-failure-no-product`（被前面的補值蓋掉、等價）、`or-runner-logs-back`（`Product.cpp` 沒有含入 `Log.hpp`，建置失敗）。
+- Kernel：（待填）。
+
 ## 第 8 步：審查 A3 的處置（使用者選 (a2)）
 
 - 決定：使用者 2026-11-22「同意轉給任務卡」，經主會話轉（主會話記進 HANDOFF）。內容：`Restore` 照給的內容放回，通知照跑、不補 `InitialValue`；在 Kernel 裡把「通知」和「補資料」分開，不在第 5a 步加「跳過 Restore」的特例；預測死亡的復活一併處理。

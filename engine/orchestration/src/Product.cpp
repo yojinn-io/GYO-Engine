@@ -250,7 +250,7 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     std::vector<PrepareFn> prepares;
     std::vector<Detail::CarryEntry> carries;
     // The Modules' buffer of this build (authority-rollback declaration section 6): written during Build, frozen
-    // before BuildPlans, read by Finish and Check, kept with the prepare functions.
+    // before BuildPlans, read by Finish, Check and the prepare functions, let go once those have run (O-2).
     auto buffer = std::make_shared<ModuleBuffer>();
 
     // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).
