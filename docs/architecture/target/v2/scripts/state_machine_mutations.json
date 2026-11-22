@@ -890,6 +890,20 @@
    "target": "gyo_state_machine_tests",
    "cases": "behaviour:*",
    "expect": "CHECK\\( Mach<Pause>\\(\\*paused\\) == Mach<Pause>\\(\\*running\\) \\)"
+  },
+  {
+   "id": "sm-empty-take-writes",
+   "what": "Taking the request writes the Resource even when nothing is pending (every frame). Only it catches CCR-8's compare-then-write in the apply",
+   "guards": [
+    "cross-component-rules CCR-8",
+    "state-machine DI 3"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    if (!pending->value()) return std::nullopt;\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK\\( RequestStamps\\(\\)\\[1\\]\\ ==\\ RequestStamps\\(\\)\\[2\\] \\)"
   }
  ]
 }

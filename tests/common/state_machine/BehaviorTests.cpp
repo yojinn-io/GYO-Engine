@@ -620,3 +620,30 @@ TEST_CASE("behaviour: an absent child is the same whatever value it had") {
     Frame(*running);
     CHECK(Mach<Pause>(*paused) == Mach<Pause>(*running));
 }
+
+namespace {
+std::vector<K::ChangeStamp>& RequestStamps() {
+    static std::vector<K::ChangeStamp> stamps;
+    return stamps;
+}
+K::SystemResult RecordRequestStamp(K::ExclusiveWorld<> world) {
+    RequestStamps().push_back(world.ResourceStamp<SM::StateMachineRequest<Flow>>().value_or(0));
+    return {};
+}
+} // namespace
+
+TEST_CASE("behaviour: an apply with no request does not write the request Resource (CCR-8)") {
+    RequestStamps().clear();
+    Setup s;
+    s.extra = [](O::WorldSetup& w) {
+        w.Registrar().AddSystem<&RecordRequestStamp>(At("RecordRequestStamp", std::string(O::DefaultSchedules::frame),
+                                                        std::string(O::DefaultSchedules::last)));
+    };
+    auto p = Make(std::move(s));
+    REQUIRE(p);
+    Frame(*p);
+    Frame(*p);
+    Frame(*p);
+    REQUIRE(RequestStamps().size() == 3);
+    CHECK(RequestStamps()[1] == RequestStamps()[2]);
+}

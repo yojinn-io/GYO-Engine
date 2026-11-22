@@ -73,8 +73,13 @@ void ModifyMachine(W& world, F&& f) {
     GYO_ASSERT(done && *done);
 }
 
+// Read first, write only when there is a request (CCR-8): an apply runs every frame, and an empty take would mark
+// the request Resource written each frame.
 template <class S, class W>
 std::optional<S> TakeRequest(W& world) {
+    auto pending = world.template Read<StateMachineRequest<S>>([](const StateMachineRequest<S>& r) { return r.Pending(); });
+    GYO_ASSERT(pending && pending->has_value());
+    if (!pending->value()) return std::nullopt;
     auto taken = world.template Modify<StateMachineRequest<S>>(
         [](StateMachineRequest<S>& r) { return Access<S>::Take(r); });
     GYO_ASSERT(taken && taken->has_value());

@@ -28,7 +28,7 @@ Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。宣
 
 ## 驗證與經過
 
-- **判定 1（行為）**：`state_machine.behaviour` 29 個案例（設計審查後加 1）。這個 target 只連 `GYO::StateMachine`，它編得過也是 DI 8 的守衛之一。
+- **判定 1（行為）**：`state_machine.behaviour` 30 個案例（設計審查後加 1，CCR-8 加 1）。這個 target 只連 `GYO::StateMachine`，它編得過也是 DI 8 的守衛之一。
 - **組合的案例**：`state_machine.combination` 8 個。
   - 進入裡生成的實體同一幀看得到。
   - 登記兩次是 R-E2。
@@ -91,6 +91,10 @@ Fable 5.2／high，唯讀，對象 d614a34c；報告 `design-review-fable.md`。
 3. 突變 63 個，超過 README 第 8 條的參考（DI 條數 × 5，約 45）：多的集中在 DI 2（24 個）。
 4. 特性的成員名照命名規範用小駝峰（`parentValue`、`keepOnParentReenter`）。
 
+## CCR-8（合併前，主會話 2026-11-23 知會）
+
+Kernel 卡要登記 CCR-8：反覆同步同一個值的寫者，值相同就不寫（先比再寫），因為 `Res::Changed()` 的意思是「被寫過」、不比值。查了這一批：套用的 System 每一幀都用 `Modify` 取走要求，沒有要求時也把父與每個子的 `StateMachineRequest` 標成寫過。改成先讀、有要求才 `Modify`（`TakeRequest`）。加案例「an apply with no request does not write the request Resource (CCR-8)」（用 `ExclusiveWorld::ResourceStamp` 讀 changed stamp）與突變 `sm-empty-take-writes`；重跑它與取走要求相關的四個突變，5/5 killed（`mutations-run5-ccr8.txt`）。突變共 64 個。其餘的寫入（值、`MarkApplied`）都只在換值或第一次套用時。
+
 ## 交給設計審查與之後的
 
 - `RequestSilent` 與 Request／RequestSilent 兩個套用函式：網路宣告 Q8 (b)，狀態機先合併時由網路卡在它的第 2 步加。
@@ -100,6 +104,6 @@ Fable 5.2／high，唯讀，對象 d614a34c；報告 `design-review-fable.md`。
 這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-state-machine-r8/`（git 不追蹤）：
 - 宣告的檢查報告：`declaration-check-r8-fable.md`。
 - 交叉比對：`crosscheck-network-adoption.md`、`crosscheck-initial-load.md`、`crosscheck-message-retention.md`。
-- 突變：`mutation-check-fable.md`（清單的敵對式檢查）、`mutations-run1.txt`、`mutations-run2-registration.txt`、`mutations-run3.txt`、`mutations-run4-review.txt`。
+- 突變：`mutation-check-fable.md`（清單的敵對式檢查）、`mutations-run1.txt`、`mutations-run2-registration.txt`、`mutations-run3.txt`、`mutations-run4-review.txt`、`mutations-run5-ccr8.txt`。
 - 設計審查：`design-review-fable.md`。
 - 建置與測試：`build-full.txt`、`ctest-full.txt`。
