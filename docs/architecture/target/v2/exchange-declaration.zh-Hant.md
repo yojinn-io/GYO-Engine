@@ -502,12 +502,12 @@
 
 ## 13. 和生成世界（重做）的交界
 
-生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2；交界表在它的 5.12）。2026-11-22 兩張卡用 SendMessage 對齊，結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議 **B「生成期間每幀清單照跑」**，A「生成中跑另一份生成清單」與 B 之間交使用者定；下表對兩者都成立，只有 W-3 分開寫。
+生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2；交界表在它的 5.12）。2026-11-22～24 兩張卡用 SendMessage 對齊（生成世界的 5.12 已照本頁修訂 2 的四種形與郵箱＝形 (2) 改好），結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議 **B「生成期間每幀清單照跑」**，A「生成中跑另一份生成清單」與 B 之間交使用者定；下表對兩者都成立，只有 W-3 分開寫。
 
 | # | 事項 | 誰負責 | 對齊的內容 |
 |---|---|---|---|
 | W-1 | 生成的形 | 生成世界（5.1、5.2） | B：每幀清單照常跑；編排層擁有「生成中」的狀態（World 的 Resource `WorldGeneration`：`Generating()`、`Hold()`），提供條件 `WhileGenerating`／`AfterGenerating`，作者用帶條件的 set 擋。A：生成中的 World 在一次 `RunFrame` 裡跑一批生成清單、不跑每幀清單，結束的那一批同一次接著跑每幀清單。兩者都是一批＝一次 `RunFrame`，批與批之間 runner 回到迴圈 |
-| W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部。B 下就是每幀清單（生成中也一樣）；A 下生成中是那一批生成清單、結束的那一批是生成清單＋每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 屬於讀者的一輪（第 5.4 節）。**先後**（檢查 B4）：生成的前處理（寫 `WorldGeneration`）→ 進 → 一輪 → 判斷生成是否結束 → 出。B 下「是不是生成」在 World 的 Resource，交換函式從 `World&` 讀得到；A 下才要另外提供（RC-O11） |
+| W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部。B 下就是每幀清單（生成中也一樣）；A 下生成中是那一批生成清單、結束的那一批是生成清單＋每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 屬於讀者的一輪（第 5.4 節）。**先後**（檢查 B4）：生成的前處理（寫 `WorldGeneration`）→ 進 → 一輪 → 判斷生成是否結束 → 出（所以生成結束那一輪的「出」已讀到「不在生成」）。B 下「是不是生成」在 World 的 Resource，交換函式從 `World&` 讀得到；A 下才要另外提供（RC-O11） |
 | W-3 | 套用點（形 (1)） | 擁有服務的 Module；生成世界 5.12 | B：掛 `Main`／`First` 一處即可。A（使用者選 A 時）：預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`，骨架關掉時作者自己掛（同 O-4）。asset G-1 兩者都成立 |
 | W-4 | `beforeSwap` | 生成世界（5.4）；本頁寫明 | `beforeSwap` 是換上之前同步跑一次的關卡，不是生成；期間沒有套用點、沒有交換點（asset G-3），不加機制 |
 | W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（形 (3)），或交換函式、Module 的服務＋套用點。**交出到別的執行緒的 World 只能經它自己的「出」＋有鎖的服務**（跨執行緒讀 `Generating` 違反 O-13 第 2 條；檢查 B4）。生成世界提供 `Product::Generating`、`GenerationPasses` 與 World 內的 `WorldGeneration`（5.2、5.3） |
