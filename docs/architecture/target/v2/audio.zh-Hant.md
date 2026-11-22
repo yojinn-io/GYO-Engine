@@ -103,7 +103,7 @@ struct GameAudio {                       // 產品自己的型別（示意）
 - **clip 格不跟著沿用**：舊 World 載的 clip 留在共用提交口的格裡；舊 World 的 `ClipId` 隨它消失，就沒人卸得掉，幾次替換之後 `NoClipSlot`。所以替換之前（或在舊 World 的最後一幀）卸掉舊 World 載的 clip，或把 `ClipId` 放在活過替換的地方（例：同一個 `GameAudio`），新 World 沿用。
 - **替換時的注意**：預設的 `BuildNewFirst` 在新 World 上跑準備函式與 `beforeSwap`，這時舊 World 還在、而且和新 World 共用同一個提交口。在那裡 `Play`、`StopAll`、`LoadClip`、`UnloadClip`，影響的是共用的提交口：替換若之後失敗、留下舊 World，新 World 做過的事不復原——舊聲音可能已停、舊 clip 可能已卸（舊的 `ClipId` 再 `Play` 是 Programmer Error）。要停舊聲音、卸舊 clip，在替換成功之後做。
 - **World 交給別的執行緒時**：指標跟著 World 走；換手由 runner 的交出同步（第 3 節的執行緒契約），不必另拿提交口。交出中的 World 能不能替換、它的提交口怎麼辦，在 World 交出的入口那一批定（O-13）。
-- **編排層的字面**：O-2 寫「登記單位以 World 名為鍵記的資料在 `Build` 時重設」。提交口是 Product 一份的連線、放在共用處，不是登記單位記在自己身上的每 World 資料；這個讀法經主會話確認（合併前核准頁第 4.1 節）。
+- **根據**：O-15 的共用處「規則同 O-2 的每 World 那一份……但**不凍結**」，而且「每個 World 都比共用處先銷毀」——它比每個 World 活得久。提交口是連到 Product 一份服務的連線，不是 World 的狀態，放在那裡、替換時沿用，合 O-15 的用意。O-2 的「登記單位以 World 名為鍵記的資料在 `Build` 時重設」管的是登記單位記在自己身上、屬於某個 World 的狀態（不讓前一個 World 的狀態留到替換後），不及於共用處（主會話 2026-11-23 確認）。
 
 ### 5.3 一個 System 在 `Main`／`Last` 交給提交口
 
