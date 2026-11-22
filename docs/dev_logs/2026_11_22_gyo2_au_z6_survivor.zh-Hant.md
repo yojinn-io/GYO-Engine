@@ -95,4 +95,5 @@ Fable 5.2／high，唯讀（實作者 Opus 5.5）。審查的是第一版 58c652
 - `rerun-5263c865.log`、`rerun-61d6f72c.log`：歷史 commit 上單獨重跑。
 - `rerun-fix.log`：第一版的 5 個相關突變。
 - `rerun-fix2.log`：最終修正的 4 個相關突變。
+- `rerun-fix2-after-merge-eacab4d7.log`：merge 目前的 gyo2（eacab4d7，#270 合併後）後重跑同 4 個，4/4 killed；`gyo_authority_tests` 47/47。
 - 手動套突變後印出的結果（官方策略一例 `built`、`every mount skipped` 以 AU-E6 失敗）只當出處，未保存。
