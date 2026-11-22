@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 6）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 7）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 7**：使用者在 side chat 定了 Q2——ufbx、stb_image 都走 Module 這一側（第 14 節 Q2 記成已定）。交使用者的只剩 Q3、Q5。
 - **修訂 6**：使用者在本卡 fork 出的 side chat 定了 Q1＝**B'**（Module 只放資料，SDL 的呼叫全在 Plugin；P27）。照它重寫第 3.3 節（Module 只有資料、`render` 產出 `RenderCommands`）、第 9 節（`plugins/sdl` 拆成角色各一列——留給本卡的選擇，建議理由：一列放不進兩個 World）；第 9.2 節的「後端注入通則」拿掉；Q1 記成已定、Q4 撤回；`input`、`window` 改 `default=yes`、`camera` 照 Bevy 依賴 `window`；第 6.6 節加 `RenderCommands` 這一層的偏離。
 - **修訂 5**：主會話知會兩張新卡——audio 那一側的小批另開 `gyo2-audio-clip-loader`（第 7 節改成只做輸出後端）、Kernel 的 `Summary` 與訊息另開 `gyo2-kernel-summary-msg`（第 6.3、6.6 節改成引用它、W 開工前要有結論）；跟上 gyo2 02a22176（HANDOFF 與批次表已在 gyo2 上）。
 - **修訂 4**：修訂 3（fae7eb38）送 Fable／high 窄複查：blocker 2、should 10、nit 13（`build/evidence/gyo2-sdl-declaration/declaration-r3-narrow-check.md`）。全部採用，對照在第 20 節。最大的改動：KR 在統合只寫需求與邊界，和 GYO 現行 Kernel 契約的九個衝突點（hook 的種類、不可就地改、一致的時點、連帶刪除的輪數、子的順序、回滾、讀檔、複製、內建元件的登記）列成表，要改條文的在 KR 的宣告交使用者；渲染 World 的保留式照 Bevy 實際的做法改寫、列出四個衝突點；第 6.6 節補九項（最大的是 `gyo.ui` 的節點模型）；X 拆成 X1（平的）、X2（階層，等 KR）；Q4 加照 Bevy 的 (d)。
@@ -52,7 +53,7 @@
 | # | 前提 | 誰定的（出處） | 掛在它上面的決定 |
 |---|---|---|---|
 | P1 | master 的 `engine/platform` 不帶回，功能拆進各 Module | 使用者 2026-11-19（`-platform-obsolete-split-into-modules`） | 第 3 節的拆法全部 |
-| P2 | Module＝我們維護、介面是我們的（外部函式庫完全藏在我們的介面後面也算）；Plugin＝第三方官方維護、接進來用的；SDL 家族與 ImGui 是 Plugin | 使用者 2026-11-16（`-module-plugin-owner-definition`；同詞異義表第 0 節末；AGENTS §6 的判斷句）。**未確認**：SDL 的 adapter 歸哪、ufbx 歸哪 | Q1、Q2 |
+| P2 | Module＝我們維護、介面是我們的（外部函式庫完全藏在我們的介面後面也算）；Plugin＝第三方官方維護、接進來用的；SDL 家族與 ImGui 是 Plugin | 使用者 2026-11-16（`-module-plugin-owner-definition`；同詞異義表第 0 節末；AGENTS §6 的判斷句）。**未確認**（當時）：SDL 的 adapter 歸哪、ufbx 歸哪——2026-11-23 都已定（Q1＝B'，P27；Q2＝Module 側） | Q1、Q2 |
 | P3 | Plugin 可以依賴 Module，Module 不能依賴 Plugin；Module 先登記 | 使用者 2026-11-14（`-module-plugin-registers` 第 (5) 點）；建置層 FATAL_ERROR | Q1；Plugin 的 `Configure` 在所有 Module 之後（第 9.2 節） |
 | P4 | 外部組件只在它的 adapter 裡；一個外部組件一個 adapter；adapter 的介面用使用方的詞；「何を一つの外部 Component と数えるか」寫在架構文件；Plugin は Engine から参照されない、Engine の外に置く | AGENTS §6；使用者 2026-11-13（`v8-arch-external-components-as-adapters`） | Q1 各選項撞哪一句 |
 | P5 | Module 裡碰外部組件的程式放 `src/adapters/<組件>/`；主會話回報「SDL 那一批也沿用 `adapters/sdl`」，使用者「good，我剛想和你說其他的adapter也這樣的。」 | 使用者 2026-11-20（`-json-adapters-dir` 與兩次推廣） | Q1 的 A、A'；批次表 SDL 列「SDL 放 `src/adapters/sdl/`」 |
@@ -122,7 +123,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | `GYO::AudioBackendSDL` | SDL 的音訊實作（第 7 節） | Engine（P10） | |
 | `GYO::AssetSdlImage` | **不帶**；改由 **image Module**（stb_image adapter） | Engine | P20 |
 | image Module（asset 宣告 5.11 定好位置、授權、adapter） | **子批 I**；第一個使用者是 R2b 的貼圖（之後 `ui_render` 的圖片） | Engine | asset 宣告第 15 節第 1 項；stb 的下載照 asset 宣告第 13 節，在 I 問使用者 |
-| ufbx（model 的匯入器） | model 回來時，model Module 的 `src/adapters/ufbx/`（Q2） | Engine | 不在本線 |
+| ufbx（model 的匯入器） | model 回來時，model Module 的 `src/adapters/ufbx/`（Q2，使用者已定） | Engine | 不在本線 |
 
 ### 3.3 新 Module 與 Plugin 的清單、「列的角色」（使用者 Q1＝B'，P27；名字照命名規範 N7、N8、N20、N21，卡片照 L17 判；子批可照規範微調）
 
@@ -576,18 +577,17 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **規則文字**（交風紀委員起草、使用者核准）：`plugins/sdl*` 裡是我們寫的程式，讀寫的是 Engine 的資料型別——AGENTS §6 的判斷句（「誰が保守し、外に見せる Interface は誰のものか」）與同詞異義表第 0 節的 Plugin 定義（「第三方官方維護、接進來用的」）要補一句說明這種「接第三方組件、我們寫的單位」歸 Plugin；「一個外部組件一個 adapter」的數法（SDL 家族一組 Plugin 算一個）寫在架構文件。批次表 SDL 列的「SDL 放 `src/adapters/sdl/`」改成 `plugins/sdl*`。
 
-### Q2：ufbx 歸哪一類
+### Q2：ufbx 歸哪一類 —— **已定：Module 這一側**（使用者 2026-11-23，side chat）
 
-**前提**：Engine 的（同 Q1）。**例子**：model 回來時要讀 FBX。ufbx 是單檔的 C 函式庫，master 用 `UFBX_NO_STDIO`（不自己開檔、一律經資產讀進來），輸出轉成我們的 model 型別，沒有全域狀態、沒有主執行緒規則、沒有要拿它原始型別的第三方。
+**原話**（依序）：「這個不是定了麼？還是說沒有結論？」→「ufbx 內化到Engine 中，還是放Module。主會話不是有相關討論嗎？」→「就是 ufbx、stb_image 走 Module 這一側。」
 
-**對照的既定事實**：stb_image 的位置你已經定了（11-21「只在一個 adapter」，asset 宣告 5.11 動工前核准：`engine/modules/image/src/adapters/stb_image/`）——那是 Module 側。
+**定下的**：ufbx 放 model Module 的 `src/adapters/ufbx/`（model 回來那一批做，本線不實作）；stb_image 照 asset 宣告 5.11（`engine/modules/image/src/adapters/stb_image/`，已核准，這次一併確認）。同詞異義表第 0 節「還沒確認」那一行的「ufbx 歸哪」補上結論（第 16 節）。
 
-| | **Module 側**（model Module 的 `src/adapters/ufbx/`）← 建議 | **Plugin** |
-|---|---|---|
-| 和既有的對照 | 同 JSON（yyjson、fast_float）、同 stb_image（已定） | 11-13 runtime-composition §4 把 ufbx 列在第 1 類 plugin（v2 之前） |
-| AGENTS §6 判斷句 | 介面是我們的、組件完全藏在後面 → Module（字面成立） | 要讀成「第三方的就是 Plugin」，和 JSON、stb_image 的判法不一致 |
+**比過的選項**：Module 側（擁有型別的 Module 的 `src/adapters/<組件>/`）←選／Plugin（`plugins/ufbx`；11-13 舊文件的列法；model 依賴 Plugin 會撞「Module 不依賴 Plugin」）／內化進 core（使用者問的）。
 
-**建議 Module 側**。和 Q1 不同的地方：ufbx 沒有 SDL 那些全域狀態、主執行緒規則，也沒有像 ImGui 這種要拿它原始型別的第三方——是 yyjson、stb_image 的同類。本線不實作，只定歸類，寫進同詞異義表第 0 節的「還沒確認」那一行。
+**理由**（side chat 查證的，使用者沒另外說）：主會話沒有專門討論過 ufbx（HANDOFF 只有「未定」）；套用兩個既有決定——(1) 11-21 `v8-arch-gyo2-engine-layers`：外部函式庫藏在我們介面後面的放 `modules/`、不放 core（使用者當時更正「json 不是Module嗎？」）；(2) 11-23 `-transform-camera-physics-modules`：core 不認得 World、不能依賴 Module，而 ufbx 是 model 的 loader、接 asset（Module）。AGENTS §6 的判斷句字面成立，不必改規則文字。和 SDL（Q1，進 Plugin）不同：SDL 是有全域狀態、主執行緒規則的平台層，ufbx、stb_image 只是解析器，同 yyjson。
+
+**出處**：使用者在本卡 fork 出的 side chat，2026-11-23。
 
 ### Q3：ImGui 的接法（推翻 11-13 的一部分）
 
@@ -647,7 +647,7 @@ B'（P27）的 Module 只有資料、沒有後端與缺後端的檢查：沒有 
 - **`gyo2-kernel-summary-msg`**（Kernel 的 `Summary` 與訊息）：輸入用 `Message` 還是 Resource 照它的結論，**W 開工前要有**（第 6.3 節）；它和 KR 都改 Kernel，誰後合併誰跟上 gyo2。
 - **主會話（Kernel）**：KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
 - **圖書管理員**：「送進 World 外服務的時刻都是時間基準」登記成 CCR（第 8 節末）。
-- **風紀委員**：Q1（B'，已定）與 Q2 的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句：`plugins/sdl*` 裡是我們寫的程式、讀寫 Engine 的資料）；Q3 若推翻 11-13 的句子、Q4 撤回後 P22 那一句沒有對象，runtime-composition §4 的統一處理時一起改。
+- **風紀委員**：Q1（B'，已定）的規則文字（同詞異義表第 0 節、AGENTS §6 判斷句：`plugins/sdl*` 裡是我們寫的程式、讀寫 Engine 的資料）；Q2 不必改規則文字（判斷句字面成立），只在同詞異義表第 0 節「還沒確認」那一行補「ufbx：Module 側（model 的 `src/adapters/ufbx/`），使用者 2026-11-23」——這一行由主會話（文件 owner）改，或併進子批 P；Q3 若推翻 11-13 的句子、Q4 撤回後 P22 那一句沒有對象，runtime-composition §4 的統一處理時一起改。
 - **KeepTool**：子批 K 等於 `-keeptool` 那一批，主會話確認是否併進本線。
 - **物理 2D、3D**：`physics_2d`、`physics_3d` 兩個 Module，依賴 `transform`，跟著點名的產品回來，不在本線（P24、P25）。
 
@@ -759,3 +759,10 @@ B'（P27）的 Module 只有資料、沒有後端與缺後端的檢查：沒有 
 | `RenderCommands` 這一層和 Bevy 不同（`bevy_render` 直接用 wgpu），膠水在 `GpuSubmit` | 第 6.6 節 |
 | Q3 的比較改寫：(a) 讓畫面有兩條路（官方後端繞過 `RenderCommands`），(b) 合 P27 | 第 14 節 Q3 |
 | 子批 W、A、T、R2a 的範圍照 Plugin 的各件改寫 | 第 10 節 |
+
+## 22. 修訂 7：使用者定 Q2（side chat 轉來）
+
+| 改了什麼 | 改在哪 |
+|---|---|
+| ufbx、stb_image 都走 Module 這一側；Q2 記成已定 | 第 14 節 Q2、P2、第 3.2 節 |
+| 同詞異義表第 0 節的「還沒確認」補 ufbx 的結論（不改規則文字） | 第 16 節 |
