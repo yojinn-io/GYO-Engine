@@ -1,0 +1,543 @@
+{
+ "version": 1,
+ "description": "Declared mutants of step 1 of the asset batch (docs/architecture/target/v2/asset-declaration.zh-Hant.md, sections 9 and 10; ids as- catalog, ar- references, al- loaders, rw- whole-file reading). Each guards a rule of the declaration (5.3 (A), 5.16, 5.17) or a Design Invariant written there (AS-2, AS-3, AS-9, AS-12, AS-13), to be moved to target/v2/asset.zh-Hant.md in step 6. Run: python3 -B tests/common/mutation/run_mutations.py --build-dir build/target/_build/core --catalog tests/common/asset/mutations.json --cmake <cmake>",
+ "mutants": [
+  {
+   "id": "as-id-charset",
+   "what": "rule 4: uppercase letters are let into an id",
+   "guards": [
+    "asset-declaration 5.3 (A) 4",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/AssetId.cpp",
+   "find": "(character >= 'a' && character <= 'z') || (character >= '0'",
+   "replace": "(character >= 'A' && character <= 'z') || (character >= '0'",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r4\\-id\\-uppercase"
+  },
+  {
+   "id": "as-id-length",
+   "what": "rule 4: an id of 129 characters is let through",
+   "guards": [
+    "asset-declaration 5.3 (A) 4",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/AssetId.cpp",
+   "find": "text.size() > kMaxAssetIdLength",
+   "replace": "text.size() > kMaxAssetIdLength + 1",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r4\\-id\\-too\\-long"
+  },
+  {
+   "id": "as-id-length-edge",
+   "what": "rule 4: an id of exactly 128 characters is refused (the limit too strict; as-id-length catches it too loose)",
+   "guards": [
+    "asset-declaration 5.3 (A) 4",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/AssetId.cpp",
+   "find": "text.size() > kMaxAssetIdLength",
+   "replace": "text.size() >= kMaxAssetIdLength",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "reading\\ valid/format\\-and\\-settings:\\ BadId"
+  },
+  {
+   "id": "as-path-dotdot",
+   "what": "rules 1, 5: a '..' segment is let into a content path",
+   "guards": [
+    "asset-declaration 5.3 (A) 5",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
+   "replace": "if (segment.empty() || segment == \".\") return false;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r5\\-path\\-escapes"
+  },
+  {
+   "id": "as-path-backslash",
+   "what": "rule 5: a backslash is let into a content path",
+   "guards": [
+    "asset-declaration 5.3 (A) 5",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (byte < 0x20 || character == '\\\\' || character == ':') return false;",
+   "replace": "if (byte < 0x20 || character == ':') return false;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r5\\-path\\-backslash"
+  },
+  {
+   "id": "as-entry-content-json",
+   "what": "rule 5: an asset path may be content.json",
+   "guards": [
+    "asset-declaration 5.3 (A) 5",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "!IsRelativeContentPath(entry.path) || entry.path == kContentManifestName",
+   "replace": "!IsRelativeContentPath(entry.path)",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r5\\-path\\-is\\-content\\-json"
+  },
+  {
+   "id": "as-catalog-content-json",
+   "what": "rule 1: content.json may list itself as a catalog",
+   "guards": [
+    "asset-declaration 5.3 (A) 1",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "!IsRelativeContentPath(path) || path == kContentManifestName",
+   "replace": "!IsRelativeContentPath(path)",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "wrong\\ code\\ for\\ invalid\\ example\\ r1\\-catalog\\-is\\-content\\-json"
+  },
+  {
+   "id": "as-catalog-twice",
+   "what": "rule 1: a catalog may be listed twice",
+   "guards": [
+    "asset-declaration 5.3 (A) 1",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (!listed.insert(path).second) {",
+   "replace": "if (!listed.insert(path).second && false) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "wrong\\ code\\ for\\ invalid\\ example\\ r1\\-catalog\\-listed\\-twice"
+  },
+  {
+   "id": "as-version-unknown",
+   "what": "rules 1, 2: a version this version does not know is read",
+   "guards": [
+    "asset-declaration 5.3 (3)",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (*number != known) {",
+   "replace": "if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r1\\-version\\-unknown"
+  },
+  {
+   "id": "as-unreadable-code",
+   "what": "rule 1: a listed catalog that cannot be read is reported as something else",
+   "guards": [
+    "asset-declaration 5.3 (A) 1",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "Fail(CatalogFailureCode::Unreadable, \"\\\"\" + std::string(relative)",
+   "replace": "Fail(CatalogFailureCode::NotJson, \"\\\"\" + std::string(relative)",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "wrong\\ code\\ for\\ invalid\\ example\\ r1\\-catalog\\-unreadable"
+  },
+  {
+   "id": "as-id-twice-within",
+   "what": "rule 3: an id may repeat inside one catalog",
+   "guards": [
+    "asset-declaration 5.3 (A) 3",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "seen.emplace(entry.id.Text(), index);\n        if (!inserted) {",
+   "replace": "seen.emplace(entry.id.Text(), index);\n        if (false && !inserted) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: one catalog read alone*",
+   "expect": "a\\ catalog\\ read\\ alone\\ accepts\\ a\\ repeated\\ id"
+  },
+  {
+   "id": "as-id-twice-across",
+   "what": "rule 3: an id may repeat across catalogs",
+   "guards": [
+    "asset-declaration 5.3 (A) 3",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "owner.emplace(entry.id.Text(), file);\n            if (!inserted) {",
+   "replace": "owner.emplace(entry.id.Text(), file);\n            if (false && !inserted) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r3\\-id\\-in\\-two\\-catalogs"
+  },
+  {
+   "id": "as-no-format",
+   "what": "rule 6: a path without an extension and without a format is read",
+   "guards": [
+    "asset-declaration 5.3 (A) 6",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "} else if (PathExtension(entry.path).empty()) {",
+   "replace": "} else if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r6\\-no\\-extension"
+  },
+  {
+   "id": "as-extension-last-segment",
+   "what": "rule 6: a '.' in a directory name counts as an extension",
+   "guards": [
+    "asset-declaration 5.3 (A) 6",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "const std::string_view last = slash == std::string_view::npos ? path : path.substr(slash + 1);",
+   "replace": "const std::string_view last = slash == std::string_view::npos ? path : path;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r6\\-dot\\-only\\-in\\-directory"
+  },
+  {
+   "id": "as-extension-lowercase",
+   "what": "rule 6: the extension is not lowercased",
+   "guards": [
+    "asset-declaration 5.3 (A) 6",
+    "asset-declaration 5.3 (1)"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (character >= 'A' && character <= 'Z') character = static_cast<char>(character - 'A' + 'a');",
+   "replace": "(void)character;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "the\\ extension\\ is\\ not\\ lowercased"
+  },
+  {
+   "id": "as-format-charset",
+   "what": "rule 7: uppercase letters are let into a format",
+   "guards": [
+    "asset-declaration 5.3 (A) 7",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (!((character >= 'a' && character <= 'z') || (character >= '0'",
+   "replace": "if (!((character >= 'A' && character <= 'z') || (character >= '0'",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r7\\-format\\-uppercase"
+  },
+  {
+   "id": "as-settings-object",
+   "what": "rule 7: a settings value that is not an object is read",
+   "guards": [
+    "asset-declaration 5.3 (A) 7",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (!settings || settings->Root().GetKind() != Json::Kind::Object) {",
+   "replace": "if (!settings) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r7\\-settings\\-not\\-object"
+  },
+  {
+   "id": "as-shader-bundles-required",
+   "what": "5.3 (1): shader_bundles is required again, as on master",
+   "guards": [
+    "asset-declaration 5.3 (1)",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (const std::optional<Json::Value> bundles = root->Find(\"shader_bundles\")) {",
+   "replace": "if (!root->Find(\"shader_bundles\")) return Base::Err(Fail(CatalogFailureCode::BadShape, \"shader_bundles is missing\"));\n    if (const std::optional<Json::Value> bundles = root->Find(\"shader_bundles\")) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "reading\\ valid/type\\-without\\-loader:\\ BadShape"
+  },
+  {
+   "id": "as-unknown-dropped",
+   "what": "5.3 (1): unknown members are dropped instead of kept",
+   "guards": [
+    "asset-declaration 5.3 (1)",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "        if (IsKnown(known, member.key)) continue;\n        auto text = Compact(",
+   "replace": "        continue;\n        auto text = Compact(",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "REQUIRE\\(\\ content\\.manifest\\.extra\\.size\\(\\)\\ ==\\ 1\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-unknown-refused",
+   "what": "5.3 (1): an unknown member is refused instead of kept and not read",
+   "guards": [
+    "asset-declaration 5.3 (1)",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "        if (IsKnown(known, member.key)) continue;\n        auto text = Compact(",
+   "replace": "        if (!IsKnown(known, member.key)) return Base::Err(Fail(CatalogFailureCode::BadShape, \"unknown member\"));\n        continue;\n        auto text = Compact(",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "reading\\ valid/unknown\\-members\\-kept:\\ BadShape"
+  },
+  {
+   "id": "as-write-format",
+   "what": "AS-12 round trip: format is not written",
+   "guards": [
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "            writer.Key(\"format\");\n            writer.String(*entry.format);\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what is written*",
+   "expect": "a\\ written\\ catalog\\ does\\ not\\ read\\ back"
+  },
+  {
+   "id": "as-write-settings",
+   "what": "AS-12 round trip: settings is not written",
+   "guards": [
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "            writer.Key(\"settings\");\n            (void)WriteRaw(writer, *entry.settings); // an object, checked by ValidateCatalog\n",
+   "replace": "            (void)0;\n",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what is written*",
+   "expect": "the\\ catalog\\ does\\ not\\ read\\ back\\ equal"
+  },
+  {
+   "id": "as-write-preserved",
+   "what": "AS-12 round trip: kept members are not written back",
+   "guards": [
+    "asset-declaration AS-12",
+    "asset-declaration 5.3 (1)"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "        writer.Key(member.key);\n        (void)WriteRaw(writer, member.json); // checked by CheckPreserved\n",
+   "replace": "        (void)member;\n",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what is written*",
+   "expect": "content\\.json\\ does\\ not\\ read\\ back\\ equal"
+  },
+  {
+   "id": "as-write-validates",
+   "what": "5.3 (2): writing does not check the rules reading checks",
+   "guards": [
+    "asset-declaration 5.3 (2)",
+    "asset-declaration AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "    if (auto valid = ValidateCatalog(catalog); !valid) return Base::Err(std::move(valid).error());\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: writing checks*",
+   "expect": "a\\ catalog\\ that\\ breaks\\ rule\\ 4\\ was\\ written"
+  },
+  {
+   "id": "ar-ref-above-root",
+   "what": "5.17: a '..' above the content root is dropped instead of BadReference",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (resolved.empty()) return std::nullopt; // above the content root",
+   "replace": "if (resolved.empty()) continue; // above the content root",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "resolved\\ escapes\\-root"
+  },
+  {
+   "id": "ar-ref-absolute",
+   "what": "5.17: an absolute reference (or an empty segment) resolves instead of BadReference",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (segment.empty()) return std::nullopt;",
+   "replace": "if (segment.empty()) continue;",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "resolved\\ absolute"
+  },
+  {
+   "id": "ar-ref-parent-directory",
+   "what": "5.17: a reference resolves against the parent's file, not its directory",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "    resolved.pop_back(); // the parent's own file name\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "wrong\\ resolution\\ of\\ sibling"
+  },
+  {
+   "id": "ar-ref-dotdot",
+   "what": "5.17: '..' does not take back a segment",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "            resolved.pop_back();\n            continue;",
+   "replace": "            continue;",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "wrong\\ resolution\\ of\\ parent\\-segment"
+  },
+  {
+   "id": "ar-ref-bad-recorded",
+   "what": "5.17: a refused path is recorded without BadReference",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset-declaration AS-13"
+   ],
+   "file": "engine/modules/asset/src/LoadContext.cpp",
+   "find": "        reference.failure = ReferenceFailureCode::BadReference;",
+   "replace": "        (void)0;",
+   "target": "gyo_asset_tests",
+   "cases": "loader: a loader that declares*",
+   "expect": "a\\ path\\ above\\ the\\ content\\ root\\ is\\ not\\ BadReference"
+  },
+  {
+   "id": "ar-ref-id-recorded",
+   "what": "5.17 / AS-3: a reference by id is not recorded",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset-declaration AS-3"
+   ],
+   "file": "engine/modules/asset/src/LoadContext.cpp",
+   "find": "void LoadContext::RecordId(const std::string_view typeName, const AssetId& id) {\n    references_.push_back(",
+   "replace": "void LoadContext::RecordId(const std::string_view typeName, const AssetId& id) {\n    if (false) references_.push_back(",
+   "target": "gyo_asset_tests",
+   "cases": "loader: a loader that declares*",
+   "expect": "the\\ declared\\ references\\ are\\ not\\ all\\ recorded"
+  },
+  {
+   "id": "al-type-name",
+   "what": "5.4 / 5.16: a loader whose type name differs from its Output's is a loader",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset-declaration 5.4",
+    "asset-declaration AS-9"
+   ],
+   "file": "engine/modules/asset/include/engine/asset/AssetLoader.hpp",
+   "find": "    requires std::string_view(L::kTypeName) == std::string_view(AssetTypeName<typename L::Output>::value);\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader's declaration*",
+   "expect": "a\\ loader\\ whose\\ type\\ name\\ differs\\ from\\ its\\ Output's\\ is\\ accepted"
+  },
+  {
+   "id": "al-formats",
+   "what": "5.16: a loader with no format is a loader",
+   "guards": [
+    "asset-declaration 5.16"
+   ],
+   "file": "engine/modules/asset/include/engine/asset/AssetLoader.hpp",
+   "find": "    requires std::size(L::kFormats) > 0;\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader's declaration*",
+   "expect": "a\\ loader\\ with\\ no\\ format\\ is\\ accepted"
+  },
+  {
+   "id": "al-utf8-overlong",
+   "what": "5.16 text loader: an overlong three-byte form passes as UTF-8",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset-declaration AS-2"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "if (lead == 0xE0) low = 0xA0;   // overlong",
+   "replace": "// overlong",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "wrong\\ UTF\\-8\\ verdict\\ on\\ overlong\\-3"
+  },
+  {
+   "id": "al-utf8-surrogate",
+   "what": "5.16 text loader: an encoded surrogate passes as UTF-8",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset-declaration AS-2"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "if (lead == 0xED) high = 0x9F;  // surrogates",
+   "replace": "// surrogates",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "wrong\\ UTF\\-8\\ verdict\\ on\\ surrogate"
+  },
+  {
+   "id": "al-utf8-continuation",
+   "what": "5.16 text loader: a byte that is not a continuation passes inside a sequence",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset-declaration AS-2"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "if (continuation < 0x80 || continuation > 0xBF) return index;",
+   "replace": "(void)continuation;",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "wrong\\ UTF\\-8\\ verdict\\ on\\ bad\\-continuation"
+  },
+  {
+   "id": "al-text-unchanged",
+   "what": "5.16 text loader: the bytes are not handed over unchanged",
+   "guards": [
+    "asset-declaration 5.16"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "return Text(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()));",
+   "replace": "return Text(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size() - 1));",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "the\\ bytes\\ were\\ changed\\ for\\ ascii"
+  },
+  {
+   "id": "rw-too-large-code",
+   "what": "R9: a file over the limit is reported as ReadFailed, not TooLarge",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset-declaration 5.8"
+   ],
+   "file": "engine/modules/asset/src/ReadWholeFile.cpp",
+   "find": "return FileReadFailure::Make(FileReadFailureCode::TooLarge,",
+   "replace": "return FileReadFailure::Make(FileReadFailureCode::ReadFailed,",
+   "target": "gyo_asset_tests",
+   "cases": "read: a file over*",
+   "expect": "CHECK\\(\\ std::string\\(Asset::ToString\\(read\\.error\\(\\)\\.code\\)\\)\\ ==\\ \"TooLarge\"\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "rw-limit-edge",
+   "what": "R9: a file of exactly the limit is refused",
+   "guards": [
+    "asset-declaration 5.16"
+   ],
+   "file": "engine/modules/asset/src/ReadWholeFile.cpp",
+   "find": "if (*size > maxBytes) return Base::Err(TooLarge(nativePath, maxBytes));",
+   "replace": "if (*size >= maxBytes) return Base::Err(TooLarge(nativePath, maxBytes));",
+   "target": "gyo_asset_tests",
+   "cases": "read: a file within*",
+   "expect": "a\\ file\\ of\\ exactly\\ the\\ limit\\ is\\ refused"
+  },
+  {
+   "id": "rw-not-found",
+   "what": "5.8: a missing file is ReadFailed, not NotFound",
+   "guards": [
+    "asset-declaration 5.8"
+   ],
+   "file": "engine/modules/asset/src/ReadWholeFile.cpp",
+   "find": "error.code == IO::IOErrorCode::NotFound ? FileReadFailureCode::NotFound",
+   "replace": "false ? FileReadFailureCode::NotFound",
+   "target": "gyo_asset_tests",
+   "cases": "read: a missing file*",
+   "expect": "CHECK\\(\\ std::string\\(Asset::ToString\\(read\\.error\\(\\)\\.code\\)\\)\\ ==\\ \"NotFound\"\\ \\)\\ is\\ NOT\\ correct!"
+  }
+ ]
+}
