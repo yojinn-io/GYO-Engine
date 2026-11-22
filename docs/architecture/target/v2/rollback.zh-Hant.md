@@ -59,7 +59,7 @@ Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；
 前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
 
 <a id="r-3"></a>
-**R-3 不認得權威、網路、狀態機**：回滾 Module 不 include 它們。守衛（`v8-arch-gyo2-batch4-followups` 起常設）：`gyo_rollback` 的連結集釘成 `GYO::Base`、`GYO::Kernel`、`GYO::Orchestration`、`GYO::WorldTime`（`tests/common/rollback/CMakeLists.txt` 的 `gyo_expect_links`，整個專案 configure 完才查，別的目錄後來加的連結也看得到）：連到任何別的 Module 就停在 configure，之後才登記的網路、狀態機也一樣，沒連到就沒有它們的標頭目錄。用相對路徑或另加標頭目錄、不經連結去 include 它們，連結集看不到；這是刻意繞過連結的寫法，目前交審查，要不要立 include 准許清單待使用者決定。權威另有兩道：登記檔的順序（authority 排在 rollback 之後，rollback 列寫 authority 會被擋）與 O6（`engine/` 裡手寫連結登記的 target）。突變：`rb-r3-links-more`（真實樹上的陽性對照）、`rb-r3-authority-from-later-directory`（從較晚 configure 的目錄連入權威）。
+**R-3 不認得權威、網路、狀態機**：回滾 Module 不 include 它們。守衛：`gyo_rollback` 的連結集（`tests/common/rollback/CMakeLists.txt` 的 `gyo_expect_links`，整個專案 configure 完才查，別的目錄後來加的連結也看得到）。它釘的是整個集合，比本條嚴：加的依賴不屬權威、網路、狀態機時，改登記列與那一行，本條不變。權威另有登記檔的順序（authority 排在 rollback 之後）與 O6（`engine/` 裡手寫連結登記的 target）。不經連結的 include（相對路徑、另加標頭目錄）交每批的設計審查（`v8-arch-gyo2-include-bypass-to-review`）。突變：`rb-r3-links-more`、`rb-r3-authority-from-later-directory`。
 
 <a id="r-4"></a>
 **R-4 沒選就沒有**：產品不選回滾 Module 時，Kernel 與編排層裡沒有回滾的狀態或分支；World 沒選回滾策略時，沒有歷史（型別也不登記）、不掛記錄 System。守衛：`rollback strategy: R-4`。

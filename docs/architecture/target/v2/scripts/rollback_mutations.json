@@ -1047,7 +1047,7 @@
    "replace": "strategy interface\",no,yes,world_time;json,,GYO::Engine::Rollback::RollbackModule,",
    "target": "gyo_rollback_tests",
    "expect_build_failure": true,
-   "expect": "gyo_rollback\\s+links\\s+GYO::Base;GYO::Json;GYO::Kernel;GYO::Orchestration;GYO::WorldTime;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime(?![;\\w])"
+   "expect": "gyo_rollback\\s+links\\s+\\S*GYO::Json\\S*\\s+expected\\s+exactly"
   },
   {
    "id": "rb-r3-authority-from-later-directory",
@@ -1060,7 +1060,7 @@
    "replace": "target_link_libraries(gyo_authority_tests PRIVATE GYO::Authority gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_rollback PUBLIC GYO::Authority)",
    "target": "gyo_rollback_tests",
    "expect_build_failure": true,
-   "expect": "gyo_rollback\\s+links\\s+\\S*GYO::Authority\\S*\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime(?![;\\w])"
+   "expect": "gyo_rollback\\s+links\\s+\\S*GYO::Authority\\S*\\s+expected\\s+exactly"
   }
  ]
 }

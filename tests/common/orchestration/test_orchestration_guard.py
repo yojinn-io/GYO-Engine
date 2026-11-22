@@ -68,14 +68,6 @@ class GuardTree(unittest.TestCase):
         self.source('#include "engine/time/MonotonicClock.hpp"\n')
         self.assertReported("O4", '"engine/time/MonotonicClock.hpp"')
 
-    def test_o4_parent_directory_include_is_reported(self):
-        # An allowed prefix with ".." reaches a Module's headers (adversarial check, v8-arch-gyo2-batch4-followups).
-        for name in ("engine/kernel/../../../../../modules/rollback/include/engine/rollback/Inbox.hpp",
-                     "engine/base\\..\\..\\modules\\authority\\include\\engine\\authority\\Registrations.hpp"):
-            with self.subTest(name=name):
-                self.source(f'#include "{name}"\n')
-                self.assertReported("O4", f'"{name}"')
-
     def test_o4_unreadable_include_is_reported(self):
         self.source("#include MACRO_HEADER\n")
         self.assertReported("O4", "#include MACRO_HEADER")

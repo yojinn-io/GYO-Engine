@@ -472,11 +472,11 @@
     },
     {
       "id": "ks-adv-executor-exempt-all",
-      "what": "the Executor file is exempt from every rule (review B2)",
+      "what": "the Executor file is exempt from every rule (review B2) (v8-arch-gyo2-batch4-followups, design review 6: merged in test_k8_executor_file_is_checked from ks-k8-skips-executor-files, retired: that mutant's error, K8 copying K6's Executor exemption, went with the exemption in error levels D1; an Executor exempt from every rule at once is the one Executor error left)",
       "file": "tests/common/kernel/kernel_guard.py",
       "find": "    if Path(relative).suffix not in SUFFIXES:\n        return",
       "replace": "    if Path(relative).suffix not in SUFFIXES or Path(relative).name.startswith(\"Executor\"):\n        return",
-      "expect": "FAIL: test_executor_file_is_checked_by_every_other_rule",
+      "expect": "(?=[\\s\\S]*(?:FAIL: test_executor_file_is_checked_by_every_other_rule))[\\s\\S]*(?:FAIL: test_k8_executor_file_is_checked)",
       "command": [
         "{python}",
         "-B",
@@ -6250,30 +6250,6 @@
         "tests/common/kernel/kernel_guard.py"
       ],
       "expect": "CMakeLists\\.txt:\\d+: K8 IdIssuer"
-    },
-    {
-      "id": "ks-k8-skips-executor-files",
-      "what": "K8 is skipped for Executor files (K8 adversarial check, v8-arch-gyo2-kernel-subtract-structure; v8-arch-gyo2-batch4-followups: rewritten without executor_file, which error levels D1 removed with K6's exemption, so the error is now an Executor test of its own. Only it reaches test_k8_executor_file_is_checked; ks-adv-executor-exempt-all also fails that test but is a different edit, every rule at once)",
-      "file": "tests/common/kernel/kernel_guard.py",
-      "find": "        if not DIRECTIVE.match(code_lines[number - 1]):\n",
-      "replace": "        if not Path(relative).name.startswith(\"Executor\") and not DIRECTIVE.match(code_lines[number - 1]):\n",
-      "command": [
-        "{python}",
-        "-I",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/kernel",
-        "-p",
-        "test_kernel_guard.py",
-        "-v"
-      ],
-      "expect": "FAIL: test_k8_executor_file_is_checked",
-      "guards": [
-        "kernel DI-KS 14"
-      ]
     },
     {
       "id": "ks-k8-skips-source-files",
