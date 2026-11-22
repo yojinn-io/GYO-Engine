@@ -93,7 +93,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 網路複製的外來編號也要先動配發器的範圍 | 同上 | 網路複製那批 |
 | 「條件擋住的讀者拉住保留」是事件游標契約的問題 | 同上 | 狀態機那一批提 |
 | 私有常數 `kSkeletonOwner` 的名字已過時 | 同上 | 下一次動 orchestration 的批 |
-| 權威突變 `au-z6-skipped-counted` 存活（find 在 `ServerAuthorityStrategy.cpp` 的 `RunsWhileResimulating` 那行，replace 換成 `MountedIn`）：突變過時（fadaeb55 之後兩者可能等價），或測試在 #269 之後失去檢出力；不是第 5 批造成 | 交換點卡的合併前完整突變（0bca189d；證據 主 checkout `build/evidence/gyo2-exchange/full-mutation-0bca189d/authority_mutations.log`） | 待使用者排 |
+| 權威突變 `au-z6-skipped-counted` 存活（find 在 `ServerAuthorityStrategy.cpp` 的 `RunsWhileResimulating` 那行，replace 換成 `MountedIn`）：突變過時（fadaeb55 之後兩者可能等價），或測試在 #269 之後失去檢出力；不是第 5 批造成 | 交換點卡的合併前完整突變（0bca189d；證據 主 checkout `build/evidence/gyo2-exchange/full-mutation-0bca189d/authority_mutations.log`） | 2026-11-22 開卡查，PR #273（原因：61d6f72c 起測試失去檢出力；修正：expect 改指既有 CHECK `[au-z6-mount-added-after-skip]`，不放寬判定）|
+| 入口寫 **Component** 的決策輸入時沒有輸入歷史，預測的 World 重跑時讀到最新值；61d6f72c 只替 Resource 解掉（代為登記 `rollback.Input<T>()`），Component 那邊還在。機制層問題 | au-z6 卡（PR #273）| 待使用者決定 |
 | N13 條文補兩條判斷、兩個例外：2026-11-22 使用者「照建議補」，PR #274（`v8-arch-gyo2-n13-rule-text`）。剩 tests/、examples/ 的 493 處全名（89 檔）與 `GYO::Test` 裡的寫法；過時註解 `BufferedStream.cpp:10`、`MountPoint.hpp:7` | N13 短名卡（#271） | 493 處：下一次碰測試命名的批 |
 | 生成世界的文件遺留：dev_log 開頭改已合併（PR #272，879350d4）、CI 補 run 45019227814；核准頁第 5 節補 16a3b0d9 的 L1；README 索引兩行改已合併 | 生成世界卡（#272 合併後） | 下一批一起改（第 1 批先例） |
 
