@@ -1,6 +1,6 @@
 # 回滾 Module（`engine/modules/rollback`）
 
-更新：2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 4 步）。Owner：架構。程式：`engine/modules/rollback/`（`GYO::Engine::Rollback`，target `GYO::Rollback`，登記單位 `RollbackModule`）。行為測試：`tests/common/rollback/`（ctest `rollback.rollback_registrations`、`rollback.rollback_strategy`、`rollback.rollback_checks`，標籤 `cpu`）；突變清單 [`scripts/rollback_mutations.json`](scripts/rollback_mutations.json)（`rb-`）。
+更新：2026-11-22（`v8-arch-gyo2-batch4-followups`：R-3 的常設守衛）；2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 4 步）。Owner：架構。程式：`engine/modules/rollback/`（`GYO::Engine::Rollback`，target `GYO::Rollback`，登記單位 `RollbackModule`）。行為測試：`tests/common/rollback/`（ctest `rollback.rollback_registrations`、`rollback.rollback_strategy`、`rollback.rollback_checks`，標籤 `cpu`）；突變清單 [`scripts/rollback_mutations.json`](scripts/rollback_mutations.json)（`rb-`）。
 
 由來：[回滾份](rollback-module-declaration.zh-Hant.md)（修訂 6，已核准）第 5、9 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 5、6 節與第 11.3 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。Design Invariants 的最終文字使用者 2026-11-22 核准（[合併前核准](authority-rollback-merge-approval.zh-Hant.md)）；和回滾份字面不同的地方在條末標「實作」。
 
@@ -59,7 +59,7 @@ Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；
 前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
 
 <a id="r-3"></a>
-**R-3 不認得權威、網路、狀態機**：回滾 Module 不 include 它們。守衛：判定 4 的一次性方向掃描；常設的依賴掃描延到第 5 批（宣告 9.5）。
+**R-3 不認得權威、網路、狀態機**：回滾 Module 不 include 它們。守衛（`v8-arch-gyo2-batch4-followups` 起常設）：`gyo_rollback` 的連結集釘成 `GYO::Base`、`GYO::Kernel`、`GYO::Orchestration`、`GYO::WorldTime`（`tests/common/rollback/CMakeLists.txt` 的 `gyo_expect_links`，整個專案 configure 完才查，別的目錄後來加的連結也看得到）：連到任何別的 Module 就停在 configure，之後才登記的網路、狀態機也一樣；沒連到就拿不到它們的標頭。權威另有兩道：登記檔的順序（authority 排在 rollback 之後，rollback 列寫 authority 會被擋）與 O6（`engine/` 裡手寫連結登記的 target）。突變：`rb-r3-links-more`（真實樹上的陽性對照）、`rb-r3-authority-from-later-directory`（從較晚 configure 的目錄連入權威）。
 
 <a id="r-4"></a>
 **R-4 沒選就沒有**：產品不選回滾 Module 時，Kernel 與編排層裡沒有回滾的狀態或分支；World 沒選回滾策略時，沒有歷史（型別也不登記）、不掛記錄 System。守衛：`rollback strategy: R-4`。

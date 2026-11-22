@@ -1035,6 +1035,32 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback checks: a recorded input's length*",
    "expect": "\\[rb\\-input\\-length\\-default\\-depth\\]"
+  },
+  {
+   "id": "rb-r3-links-more",
+   "what": "R-3 link set on the real tree (v8-arch-gyo2-batch4-followups, README rule 4: positive control): the rollback Module's registered row depends on one more Module (json, a row before rollback, so the register's order check lets it through). Only gyo_expect_links on gyo_rollback stops it; no other check pins the rollback Module's links",
+   "guards": [
+    "rollback R-3"
+   ],
+   "file": "config/modules.csv",
+   "find": "strategy interface\",no,yes,world_time,,GYO::Engine::Rollback::RollbackModule,",
+   "replace": "strategy interface\",no,yes,world_time;json,,GYO::Engine::Rollback::RollbackModule,",
+   "target": "gyo_rollback_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_rollback\\s+links\\s+GYO::Base;GYO::Json;GYO::Kernel;GYO::Orchestration;GYO::WorldTime;\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime"
+  },
+  {
+   "id": "rb-r3-authority-from-later-directory",
+   "what": "R-3: a directory configured after tests/common/rollback (tests/common/authority) links GYO::Authority into gyo_rollback, the rollback Module knowing authority (v8-arch-gyo2-batch4-followups). Only the DEFER of the gyo_rollback check sees a link added later from another directory, and it is the one way to link authority into rollback that the register (authority comes later) and O6 (scans engine/ only) leave open. The \\S* allows CMake's directory scope markers that a link from another directory adds",
+   "guards": [
+    "rollback R-3"
+   ],
+   "file": "tests/common/authority/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_authority_tests PRIVATE GYO::Authority gyo_test_support doctest::doctest)",
+   "replace": "target_link_libraries(gyo_authority_tests PRIVATE GYO::Authority gyo_test_support doctest::doctest)\ntarget_link_libraries(gyo_rollback PUBLIC GYO::Authority)",
+   "target": "gyo_rollback_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_rollback\\s+links\\s+\\S*GYO::Authority\\S*\\s+expected\\s+exactly\\s+GYO::Base;GYO::Kernel;GYO::Orchestration;GYO::WorldTime"
   }
  ]
 }

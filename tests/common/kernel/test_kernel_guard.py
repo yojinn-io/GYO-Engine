@@ -316,7 +316,9 @@ class GuardTree(unittest.TestCase):
                    '#include "engine/base/Log.hpp"\nnamespace GYO::Kernel {\n'
                    'void Report() { Engine::Base::Log(Engine::Base::LogLevel::Error, "kernel", "x"); }\n}\n')
         self.assertReported("K6", "engine/base/Log.hpp")
-        self.assertReported("K6", "Log")
+        # The call on its own: the needle "Log" alone also matches the header's finding above.
+        problems = guard.check(self.root)
+        self.assertTrue(any(p.endswith(": K6 Log") for p in problems), problems)
 
     # K7 ---------------------------------------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 # 判定程式的來源檔清單（資料契約 `gyo.authority-sources` v1）
 
-更新：2026-11-22（`v8-arch-gyo2-authority-rollback` 第 8 步：頁名與內文照實作改成權威 Module 的格式名；格式改名在[第 4 批宣告](target/v2/authority-rollback-declaration.zh-Hant.md) 4.3 核准，頁名照宣告第 7 步的待定由本卡定，使用者 2026-11-22 核准）。Owner：架構（契約的審核者是架構師會話；掃描器與自測在 `tests/common/authority_scan/`）。**狀態：正式**（原 `gyo.zone-c-sources` v1，使用者 2026-11-13 核定，`v8-arch-zone-c-sources-promote`；草案 2026-11-12，`v8-arch-j17-scanner`，含 `owner_root`／`include_roots` 兩欄、同 owner 多份清單）。消費端（掃描器）已實作並在 CI 跑自測；生產端是權威 Module 的匯出（`Authority::ExportAuthoritySources`，`generated_by = "gyo-authority-report"`）或手寫的清單。2026-11-21 以前 Kernel 有區時，格式名是 `gyo.zone-c-sources`、生產端是 Kernel 的 G-5 匯出（第 6 步隨區拿掉）；欄位與規則沒變。
+更新：2026-11-22（`v8-arch-gyo2-batch4-followups`：DI 1 與 Replacement Criteria 的生產端用詞改成「Engine」「權威 Module 的匯出」；`v8-arch-gyo2-authority-rollback` 第 8 步：頁名與內文照實作改成權威 Module 的格式名；格式改名在[第 4 批宣告](target/v2/authority-rollback-declaration.zh-Hant.md) 4.3 核准，頁名照宣告第 7 步的待定由本卡定，使用者 2026-11-22 核准）。Owner：架構（契約的審核者是架構師會話；掃描器與自測在 `tests/common/authority_scan/`）。**狀態：正式**（原 `gyo.zone-c-sources` v1，使用者 2026-11-13 核定，`v8-arch-zone-c-sources-promote`；草案 2026-11-12，`v8-arch-j17-scanner`，含 `owner_root`／`include_roots` 兩欄、同 owner 多份清單）。消費端（掃描器）已實作並在 CI 跑自測；生產端是權威 Module 的匯出（`Authority::ExportAuthoritySources`，`generated_by = "gyo-authority-report"`）或手寫的清單。2026-11-21 以前 Kernel 有區時，格式名是 `gyo.zone-c-sources`、生產端是 Kernel 的 G-5 匯出（第 6 步隨區拿掉）；欄位與規則沒變。
 
 這份契約是寫給三種人的：產品裡新增判定的程式檔、要把它列進清單的人；改掃描器的人；改權威 Module 匯出的人。三條 Design Invariants 擋的是兩種漂移：清單長出判斷邏輯，掃描器長出產品特例。
 出處：spec G-5（啟動時匯出來源檔清單）、J-17（讀清單並掃描）、J.4（產品守衛）、B.5（文字掃描清單）；權威份 4.3、5.9；交接卡 `docs/architecture/plans/kernel/j17-scanner.zh-Hant.md` §2 的 v1 草案。AGENTS §8：契約資料可由手工、Script、別的工具產生；Runtime 不依賴產生它的工具。
@@ -85,10 +85,10 @@
 
 ## Design Invariants
 
-1. 清單只說「哪些檔」，不說「怎麼判」：生產端不展開標頭、不預判規則；消費端不讀 CMake、不讀 Kernel 內部結構。
+1. 清單只說「哪些檔」，不說「怎麼判」：生產端不展開標頭、不預判規則；消費端不讀 CMake、不讀 Engine 內部結構。
 2. `version` 進格式；消費端拒絕不認得的版本，不猜。
 3. 清單與掃描器都不含產品名的分支（AGENTS §9）：owner 由 `owner_root` 給，產品差異只在資料。
 
-Replacement Criteria：Kernel 的 G-5 匯出落地後，若匯出的內容無法以本格式表達（例：一個 System 跨多個編譯單位、或需要列標頭），不加欄硬撐，改版本或換契約。
+Replacement Criteria：權威 Module 的匯出落地後，若匯出的內容無法以本格式表達（例：一個 System 跨多個編譯單位、或需要列標頭），不加欄硬撐，改版本或換契約。
 
-（註，`v8-arch-gyo2-authority-rollback` 第 8 步：Design Invariants 與 Replacement Criteria 的條文照 2026-11-13 核定的原文，沒改。第 4 批起「Kernel 的 G-5 匯出」由權威 Module 的匯出取代；條文維持原文，要改另議。）
+（註：DI 1 的「不讀 Kernel 內部結構」與 Replacement Criteria 的「Kernel 的 G-5 匯出」是 2026-11-13 核定時的生產端。第 4 批起生產端是權威 Module 的匯出，`v8-arch-gyo2-batch4-followups` 只把這兩處的生產端用詞改成「Engine」「權威 Module 的匯出」，條文的意思不變（使用者 2026-11-22「先修這個」）。）

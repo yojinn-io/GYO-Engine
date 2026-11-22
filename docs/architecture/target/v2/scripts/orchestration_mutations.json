@@ -2039,13 +2039,16 @@
   },
   {
    "id": "or-failure-no-product",
-   "what": "the failure does not name the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "the failure does not name the Product (v8-arch-gyo2-broken-world-ends-product; v8-arch-gyo2-batch4-followups: rewritten. Dropping RunOn's early 'failure.product = name_' was equivalent, Break fills an empty product; Break's fill is what names the Product for a World interrupted outside the Product, a DropOldFirst replacement and a dropped World, and no check read it. [or-ended-outside-product] reads it now)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    failure.product = name_;\n",
+   "find": "    if (failure.product.empty()) failure.product = name_;  // made earlier when it had to allocate nothing later (P12)\n",
    "replace": "",
    "target": "gyo_orchestration_tests",
-   "cases": "O-8: one interrupted World ends the Product*",
-   "expect": "\\[or\\-ended\\-failure\\-who\\]"
+   "cases": "O-8: a World interrupted outside the Product*",
+   "expect": "\\[or\\-ended\\-outside\\-product\\]",
+   "guards": [
+    "orchestration O-8"
+   ]
   },
   {
    "id": "or-failure-no-schedule",
@@ -2818,16 +2821,24 @@
   },
   {
    "id": "or-runner-logs-back",
-   "what": "the default runner writes the failure itself again before returning (log-and-return: the error would be written twice, once here and once by the layer that decides). Only this mutant: the runner's own silence",
+   "what": "the default runner writes the failure itself again before returning (log-and-return: the error would be written twice, once here and once by the layer that decides). Only this mutant: the runner's own silence (v8-arch-gyo2-batch4-followups: rewritten like or-failure-logged: Product.cpp no longer includes Base::Log, so a one-edit mutant writes to standard error and orchestration.el-silent, which now runs the O-3 default runner case, catches it; [or-runner-default-silent] counts Base::Log lines, which a one-edit mutant cannot add any more)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
-   "replace": "        ::Engine::Base::Log(::Engine::Base::LogLevel::Error, \"orchestration\", error.failure->Text());\n        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
+   "replace": "        std::fputs(error.failure->Text().c_str(), stderr);\n        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
    "target": "gyo_orchestration_tests",
-   "cases": "O-3: the default runner returns*",
-   "expect": "\\[or\\-runner\\-default\\-silent\\]",
+   "expect": "orchestration\\.el-silent: \\[O-3: the default runner returns",
    "guards": [
     "orchestration O-3",
     "error-handling DI 4"
+   ],
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
    ]
   },
   {
