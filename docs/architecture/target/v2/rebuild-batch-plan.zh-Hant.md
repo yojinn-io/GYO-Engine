@@ -93,6 +93,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 網路複製的外來編號也要先動配發器的範圍 | 同上 | 網路複製那批 |
 | 「條件擋住的讀者拉住保留」是事件游標契約的問題 | 同上 | 狀態機那一批提 |
 | 私有常數 `kSkeletonOwner` 的名字已過時 | 同上 | 下一次動 orchestration 的批 |
+| 權威突變 `au-z6-skipped-counted` 存活（find 在 `ServerAuthorityStrategy.cpp` 的 `RunsWhileResimulating` 那行，replace 換成 `MountedIn`）：突變過時（fadaeb55 之後兩者可能等價），或測試在 #269 之後失去檢出力；不是第 5 批造成 | 交換點卡的合併前完整突變（0bca189d；證據 主 checkout `build/evidence/gyo2-exchange/full-mutation-0bca189d/authority_mutations.log`） | 待使用者排 |
+| N13 條文補兩條判斷、兩個例外；tests/、examples/ 的 493 處全名 | N13 短名卡（#271）共用筆記 `gyo2-n13-short-names.md` | 待使用者決定 |
 
 ## 不擋路的小事
 
