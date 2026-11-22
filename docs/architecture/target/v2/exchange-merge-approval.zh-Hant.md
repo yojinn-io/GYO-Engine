@@ -12,7 +12,7 @@
 |---|---|---|
 | 1 | 本機 macOS x86_64 全量 ctest 163/163（7ca34378 之後；161 加新的兩組）；編排層 103 案、663 個斷言全過（91f652f0）。L1 三平台：PR #270 上跑（結果補記） | `impl-ctest.log` |
 | 2 | P-1～P-9、X-1～X-8 全過（敵對式檢查後 P-1、P-5、X-3、X-6、X-7 加了案或斷言，見第 3 節） | `orchestration.product-buffer`、`orchestration.exchange` |
-| 3 | 本批的突變經 Fable 5.2／high 敵對式檢查補齊；相關突變 45/45；合併前的完整跑（0bca189d）：編排層 270/273，另 3 個是我改了 `WorldFinish` 的建構子與新測試用了不能預設建構的型別，讓它們的 `replace` 建置失敗，修正後 3/3 killed；`world_time` 92/92；其餘清單補記 | `run-impl-mutants.log`、`run-impl-mutants-2.log`、`mutants-adversarial-check.md` |
+| 3 | 本批的突變經 Fable 5.2／high 敵對式檢查補齊；相關突變 45/45；合併前的完整跑（0bca189d）：編排層 270/273，另 3 個是我改了 `WorldFinish` 的建構子與新測試用了不能預設建構的型別，讓它們的 `replace` 建置失敗，修正後 3/3 killed；`world_time` 92/92；權威 117/118（存活的 `au-z6-skipped-counted` 不是本批造成的：本批沒改權威的程式與測試，見 dev_log「合併前」）；回滾 79/79、base 10/10、naming 28/28；Kernel 補記 | `run-impl-mutants.log`、`run-impl-mutants-2.log`、`mutants-adversarial-check.md` |
 | 4 | 設計審查（Fable 5.2／high）：整體合理，沒有新的要你定的設計題；8 處小修都已改（第 5 節），一個可選提案在第 8 節 | `design-review/REPORT.md` |
 
 ## 2. Design Invariants 的最終文字（各頁標〔草稿，`v8-arch-gyo2-exchange`〕的段落）

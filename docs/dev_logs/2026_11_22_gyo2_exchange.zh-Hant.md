@@ -80,3 +80,10 @@
 主 checkout 的 `build/evidence/gyo2-exchange/`（使用者的 Intel Mac，git 不追蹤）：`impl-build.log`、`impl-ctest.log`、`run-impl-mutants.log`、`run-impl-mutants-2.log`、`mutants-adversarial-check.md`（與 `-proposed.json`、`-tests.patch`、`-run.log`）、`design-review/REPORT.md`；宣告階段的 `survey-bevy-lightyear.md`、`survey-unity-flecs-mass.md`、`declaration-r0-adversarial-check.md`、`declaration-r1-recheck.md`。
 
 合併前核准頁：[`exchange-merge-approval.zh-Hant.md`](../architecture/target/v2/exchange-merge-approval.zh-Hant.md)。
+
+## 合併前（2026-11-22）
+
+- 使用者說「合併」時，`gyo2` 已合進 #271（N13 短名）：merge 跟上（無衝突），編排層沒有殘留全名；重建後全量 ctest 163/163（`merge2-ctest.log`），主要清單的 `find` 靜態掃描 0 問題。
+- 完整跑（0bca189d）：編排層 273/273（3 個修正 `replace` 後）、`world_time` 92/92、權威 117/118、回滾 79/79、base 10/10、naming 28/28、Kernel 跑中。
+- 權威的 `au-z6-skipped-counted` 存活：本批和 `gyo2`（65d6c131）在 `engine/modules`、`engine/ecs` 與權威、回滾、Kernel 的測試上沒有差異，所以不是本批造成的；`gyo2` 上動過那兩個檔的是 #269（33f4afb7、ad80c2f3）。已轉主會話，不在本批修。
+
