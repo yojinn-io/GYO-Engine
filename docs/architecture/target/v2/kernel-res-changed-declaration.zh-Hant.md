@@ -8,6 +8,7 @@
 - 修訂 0：照卡片寫。送換模型的敵對式檢查（Fable／high，唯讀）：blocker 1、should 5、nit 8。報告：主 checkout `build/evidence/gyo2-kernel-res-changed/declaration-check-r1-fable.md`。檢查者沒有建置、沒有跑測試；observer 那一項（S2）是照程式推的。
 - 修訂 1：照報告改。最大的一項（B1）：點名的 Feature「階段一變就換 UI」光靠「被寫過」做不到，因為計畫中的寫者（網路的預設套用、狀態機的套用）同值也寫；寫成第 3.1 節的決定點。其他：observer 不在承諾內（S2）、換掉錯的單機例子（S1）、跟上 `origin/gyo2`（#278、#282，S3）、補列 set 條件與拿掉時的 stamp（S4）、登記跨部件規則（S5）、nit 全收。
 - **核准（2026-11-23）**：使用者在本卡選 3.1 (a)（Kernel 照三家「被寫過」，同值不寫的規則登記 CCR-8、經主會話轉給網路卡與狀態機卡），3.2、3.3 照建議（run 條件比掛載的上次跑、照現狀寫明；`is_added`、`set_if_neq`、`last_changed`、`resource_removed` 不做）。
+- 合併前的設計審查（Fable／high）之後，實作與文件改了兩處和本宣告不同的地方，本宣告內文不改：(1) 2.2「自己上次跑寫的，下一次是 false」只對當場寫成立；經 `Commands` 延後寫的，下一次是 true（同 Bevy；審查 S1）。(2) 說明頁的新節是第 18 節，不是第 16 節：第 16、17 節留給 PR #281、#276（審查 S5）。詳見 dev_log。
 
 ---
 

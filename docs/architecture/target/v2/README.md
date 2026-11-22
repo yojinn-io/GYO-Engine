@@ -106,7 +106,7 @@
 - [2026_11_22_gyo2_au_z6_survivor.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_au_z6_survivor.zh-Hant.md)：權威 Module 的突變 `au-z6-skipped-counted` 存活的原因（61d6f72c 起突變指定的 AU-E8 一例因 Resource 輸入另有歷史而失去檢出力）與修正（突變改接既有的 `every mount skipped`；`v8-arch-gyo2-au-z6-survivor`）。
 - [2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md)：事件游標的重評——帶條件或不常跑的讀者交給作者、System 契約說明頁第 15 節、Kernel RC 24、CCR-7（`v8-arch-gyo2-event-cursor-reeval`）。
 - [2026_11_22_gyo2_threads_io_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_threads_io_review.zh-Hant.md)：threads、io 重審（`v8-arch-gyo2-threads-io-review`；`WorkerPool`、io 縮減、`TooLarge`、io DI 5 刪除與 DI 6）。
-- [2026_11_23_gyo2_kernel_res_changed.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_res_changed.zh-Hant.md)：Resource 的變更偵測——`Res`／`ResMut` 的 `Changed()`、Kernel DI-KS 28、System 契約說明頁第 16 節、CCR-8。
+- [2026_11_23_gyo2_kernel_res_changed.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_res_changed.zh-Hant.md)：Resource 的變更偵測——`Res`／`ResMut` 的 `Changed()`、Kernel DI-KS 28、System 契約說明頁第 18 節、CCR-8。
 
 ## 沒有搬過來的
 

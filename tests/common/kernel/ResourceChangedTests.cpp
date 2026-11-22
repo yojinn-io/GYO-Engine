@@ -125,6 +125,13 @@ SystemResult Ran() {
     return Ok();
 }
 
+// Reads Changed; on Act 1 records a deferred SetResource of the same resource.
+SystemResult EchoOut(Res<Out> out, Commands commands) {
+    Log().push_back("echo:" + Bit(out.Changed()));
+    if (Act() == 1) commands.SetResource(Out{5});
+    return Ok();
+}
+
 } // namespace
 
 TEST_CASE("DI-KS 28: a mount's first run sees a resource put in; a run with no write does not") {
@@ -139,6 +146,35 @@ TEST_CASE("DI-KS 28: a mount's first run sees a resource put in; a run with no w
     rig->world().SetResource(Out{1});  // the Host writes between two Runs, the same value
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(Join(Log()) == "see:1 see:0 see:1", "[rc-first-run] " << Join(Log()));
+}
+
+TEST_CASE("DI-KS 28: at the Run's first step, a Host write is seen once") {
+    // The Host's write in Ready takes the stamp the first step of the next Run
+    // takes (WriteStamp), so the strict comparison is what keeps it from being
+    // seen twice.
+    auto rig = MakeRig([](Registrar& r) {
+        Setup(r);
+        r.AddSystem<&SeeOut>(In("SeeOut", "Tick", "A"));
+    });
+    Log().clear();
+    rig->world().SetResource(Out{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Join(Log()) == "see:1 see:0", "[rc-first-step] " << Join(Log()));
+}
+
+TEST_CASE("DI-KS 28: the Host's ResourceMut between two Runs is a write") {
+    auto rig = MakeRig([](Registrar& r) {
+        Setup(r);
+        r.AddSystem<&SeeOut>(In("SeeOut", "Tick", "B"));
+    });
+    rig->world().SetResource(Out{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Log().clear();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    static_cast<void>(rig->world().ResourceMut<Out>());  // taken for writing, value not changed
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Join(Log()) == "see:0 see:1", "[rc-host-resourcemut] " << Join(Log()));
 }
 
 TEST_CASE("DI-KS 28: an absent resource is not changed, also right after it was taken out") {
@@ -204,6 +240,25 @@ TEST_CASE("DI-KS 28: ResMut sees its own write in the call, not at its next run"
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(Join(Log()) == "own:11 own:01", "[rc-own-write] " << Join(Log()));
+}
+
+TEST_CASE("DI-KS 28: a mount's own deferred write is seen at its next run") {
+    // Commands::SetResource is applied at the sync point after the mount, with
+    // that sync point's stamp, newer than the mount's last run (as in Bevy).
+    auto rig = MakeRig([](Registrar& r) {
+        Setup(r);
+        r.AddSystem<&EchoOut>(In("EchoOut", "Tick", "A"));
+    });
+    rig->world().SetResource(Out{0});
+    Act() = 0;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Log().clear();
+    Act() = 1;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // records the write; applied after A
+    Act() = 0;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // its own last write
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(Join(Log()) == "echo:0 echo:1 echo:0", "[rc-own-deferred] " << Join(Log()));
 }
 
 TEST_CASE("DI-KS 28: deferred and immediate writes, and a restore, are seen by a later mount") {

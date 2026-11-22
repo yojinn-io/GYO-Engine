@@ -7860,7 +7860,7 @@
     },
     {
       "id": "rc-changed-at-last-run",
-      "what": "Changed() also true when the write took the mount's last-run stamp (>= for >): a ResMut mount sees its own last write again. Only it catches the strict comparison (a Res mount never writes with its own stamp)",
+      "what": "Changed() also true when the write took the mount's last-run stamp (>= for >): a ResMut mount sees its own last write again, and a Res mount at a Run's first step sees the Host's write made in Ready (which took that step's stamp) twice. Only it catches the strict comparison",
       "guards": [
         "kernel DI-KS 28"
       ],
@@ -7869,7 +7869,7 @@
       "replace": "return slot.value.has_value() && slot.changed >= lastRun;",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 28:*",
-      "expect": "\\[rc\\-own\\-write\\]"
+      "expect": "(?=[\\s\\S]*(?:\\[rc\\-own\\-write\\]))[\\s\\S]*(?:\\[rc\\-first\\-step\\])"
     },
     {
       "id": "rc-changed-ignores-present",
@@ -7922,6 +7922,19 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 28:*",
       "expect": "\\[rc\\-settings\\]"
+    },
+    {
+      "id": "rc-host-resourcemut-unstamped",
+      "what": "World::ResourceMut does not mark the changed stamp: a Host write through the pointer is not seen. Only it catches this write path (no other kernel test reads the stamp ResourceMut sets)",
+      "guards": [
+        "kernel DI-KS 28"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/World.hpp",
+      "find": "        if (!slot.value) return nullptr;\n        slot.changed = WriteStamp();",
+      "replace": "        if (!slot.value) return nullptr;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 28:*",
+      "expect": "\\[rc\\-host\\-resourcemut\\]"
     }
   ]
 }
