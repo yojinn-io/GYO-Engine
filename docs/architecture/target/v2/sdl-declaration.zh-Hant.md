@@ -1,6 +1,6 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 10）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 10，補產品與資產的位置）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
 - **修訂 10**：使用者在 side chat 定了 Q5——要移植的 2D 遊戲是 Object_Connect，需求併進 R2b、不另開 R2d（第 14 節 Q5 記成已定、第 6.4 節改寫）。交使用者的只剩 Q6。
@@ -510,7 +510,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | A | 第 7 節（`sdl_audio`） | 上段：audio DI 7 | Opus／high ×3 | `OnDestroy` 的先後（裝置先停）；產品給的混音器（覆寫）；SDL `disk`／`dummy` 驅動；`scheduleDelay` 的量測（判定先宣告） | 有（DI 7 的守衛） |
 | T | `text`＋照 Q6 的點陣化（Module 側的 adapter，或 `sdl_ttf`＋資料形） | 上段：公開介面 | Opus／high ×3 | 點陣圖的形狀與 rowPitch；上下顛倒的坑（master 坑 17：在 UV 轉換的單一邊界修，那半在 R2b） | 有（受理判定） |
 | R2a | 裝置在哪一步建（`sdl_gpu` 的 `Configure`，讓替換 World 時 `Build` 重跑不重建裝置）；`render` 的 `RenderCommands` 格式（P27：貼圖 id、shader id、頂點、裁切框、混合模式、實例數等）與一個 2D pass（貼圖、混合、裁切）、`render_world`、`sdl_gpu`（Gpu：裝置、swapchain、id 對照、上傳、pipeline；GpuSubmit）、視窗登錄表的交接、最小的 shader 管線（HLSL 在 `render`、host 工具在 `sdl_gpu`、ABI、共通管線找編譯器） | 上段：公開介面 | Opus／high ×3 | Linux Lavapipe 上的像素比對（比確切顏色，master 坑 18）；macOS Metallib 離線編譯；幀時間的預算先宣告 | 有 |
-| K | `imgui`、`world_imgui`、`imgui_render`（兩段接法：平台＝讀 `input`、鍵碼對應、寫請求資料；繪製＝draw list → `RenderCommands`）；draw list 經 Extract；全域 context 的例外（第 6.2 節，查版本寫清範圍）；KeepTool 的登記（`keep_tool`）；組字的畫法（ImGui 不畫組字）；CJK 字型；tools 線打包與授權告示；第 9.1 節延後的實作方式守衛 | 上段：使用者指定的 Feature | Opus／high ×3 | tools 線打包；IME 實機按一次（CI 只驗文字事件的路徑）——「tools 線不需要實機證據」的現行規則要不要改，交 K 的宣告 | 有 |
+| K | `imgui`、`world_imgui`、`imgui_render`（兩段接法：平台＝讀 `input`、鍵碼對應、寫請求資料；繪製＝draw list → `RenderCommands`）；draw list 經 Extract；全域 context 的例外（第 6.2 節，查版本寫清範圍）；KeepTool 的登記（`keep_tool`；位置 `tools/keep_tool/`，資產若有放 `assets/keep_tool/`，目錄在 K 建——HANDOFF `v8-arch-gyo2-top-dirs-games-assets-tools`）；組字的畫法（ImGui 不畫組字）；CJK 字型；tools 線打包與授權告示；第 9.1 節延後的實作方式守衛 | 上段：使用者指定的 Feature | Opus／high ×3 | tools 線打包；IME 實機按一次（CI 只驗文字事件的路徑）——「tools 線不需要實機證據」的現行規則要不要改，交 K 的宣告 | 有 |
 | R2b | `Renderer`（對照 Bevy 的 render graph／phase）、讀相機、合成、渲染 World 的實體對應（逐種判、四個衝突點）、可畫元件的來源側單位、3D 場景、疊層（sprite、文字的繪製）、讀 `GlobalTransform`、R7、Object_Connect 的兩件（`RenderCommands` 的每幀動態頂點；固定解析度在不同視窗大小下的縮放：黑邊或拉伸） | 上段：公開介面 | Opus／high ×3 | 像素比對；動態頂點每幀換內容不漏畫、不累積；視窗大小改變時固定解析度的畫面照選的縮放方式；來源實體刪掉後對應的實體被刪、換來源後對照清空；幀時間的預算先宣告 | 有 |
 | U | `ui`、`world_ui`、`ui_render` | 上段：資料契約（Editor↔Runtime） | Opus／high ×3 | `gyo.ui` v1／v2 的資料契約測試；文字框的組字 | 有（受理判定） |
 
@@ -631,6 +631,8 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 **理由**：side chat 從 Object_Connect 的 README 與 `Docs/Architecture.md`（第 10、11、11.1、13 節）推需求；只有兩件超出現有範圍，量小，併進 R2b 比另開子批省。
 
 **出處**：使用者在本卡 fork 出的 side chat，2026-11-23；遊戲原始碼 `~/Code/GitHome/Object_Connect`。
+
+**移植的位置**（移植本身不在本線）：`games/object_connect/`＋`assets/object_connect/`（asset catalog 也在裡面），目錄等移植那一批再建（HANDOFF `v8-arch-gyo2-top-dirs-games-assets-tools`）。
 
 ### Q6：字型的點陣化放哪（修訂 9 新增；窄複查 B-1）
 
