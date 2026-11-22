@@ -15,7 +15,7 @@
 #include <thread>
 #include <vector>
 
-using namespace OrchTest;
+using namespace GYO::Test::Orchestration;
 
 namespace {
 
