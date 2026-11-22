@@ -86,7 +86,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | world_logging 給一個接 `WorldSetup` 的登記函式（登記呼叫 `TakeKernelDiagnostics` 的交換函式「出」），加走真的 `TakeKernelDiagnostics` 的測試 | 交換點實作 PR #270 的設計審查 | 交換點合併後 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
-| 三份突變清單的路徑還指向 master（big-map engine_format 67 個、audio 12 個、time-threads-trace 6 個）；authority_scan 的路徑寫法待確認 | #269 | 小批清理 |
+| 三份突變清單的路徑還指向 master（big-map engine_format 67 個、audio 12 個、time-threads-trace 6 個）；authority_scan 的路徑寫法待確認。2026-11-22 交換點卡的靜態掃描：所有清單裡 find 指向 gyo2 已刪檔案的共 103 條（master 時代舊計畫的清單） | #269、#270 | 小批清理 |
 | 實樹陽性對照重疊：`wt-guard-real` 與 `nm-real-acronym` | #269 | 下一次碰 naming 的批 |
 | 作者寫 `WorldGeneration` 就能結束或重新進入生成，`Product::Regenerate` 不必做 | 生成世界 PR #272 的設計審查 | 有產品需要重新生成時再看 |
 | 預設都帶 `entity_ids` 與回滾時，配發器沒有登記成可回滾 | 同上 | 回滾與 entity_ids 一起動的批 |
