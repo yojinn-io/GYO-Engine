@@ -16,7 +16,7 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
    - 搬檔對照守衛 glob：掃描範圍沒有縮小——naming_guard 讀的是 `--root` 底下的 `SCAN_ROOTS`，和它自己放在哪裡無關；預設 `--root` 是 `parents[3]`，新位置深度相同。自測 53 案的名字前後一樣。
 2. **`gyo_expect_links` 換到中立的位置**：定義從 `tests/common/time/CMakeLists.txt` 搬到 `tests/common/support/ExpectLinks.cmake`（本體逐字相同，加 `include_guard(GLOBAL)`）。用它的 14 個目錄（audio、core、entity_store、json、kernel、logging、math、orchestration、os、rollback、time、trace、world_logging、world_time）各自 `include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")`，不再靠 `tests/common/CMakeLists.txt` 的先後（那行註解拿掉）。放 `tests/common/support` 而不放 `build/cmake`：它是測試的檢查，不是建置的一部分；`gyo_test_support`、`SilentProbe.cmake` 已在這裡。
 3. **`engine/` 的 `::GYO::Engine::<單位>::` 改短名**：234 處中 232 處。在 `GYO::Engine` 裡寫 `<單位>::`（例 `Base::`、`Time::`、`IO::Path::`），在 `GYO::Kernel` 裡寫 `Engine::<單位>::`（`GYO::Kernel` 看不到兄弟單位，只看得到 `GYO::Engine`）。`Assert.hpp` 的兩個巨集（`GYO_ASSERT`、`GYO_UNREACHABLE`）保留全限定：巨集在任何 namespace 展開。腳本依所在 namespace 決定寫法，存在 `build/evidence/gyo2-naming-cleanup/short_names.py`。突變的 find／replace 含 `::GYO::Engine::` 的 28 個照同一張對照表改寫（find 在檔案裡的次數前後都是 1）。
-4. **測試輔助的 namespace 收斂成一套**：`KernelTest`、`WorldTest` → `GYO::Test::Kernel`；`OrchTest`（含 `OrchTest::Save`）→ `GYO::Test::Orchestration`（`::Save`）；`RollbackTest` → `GYO::Test::Rollback`。判斷：N17「`GYO::Test` 的根」那一列本來就寫「各單位的測試輔助放 `GYO::Test::<單位>`」，頂層的四個是漏網的舊寫法，不是另一套規則；寫明「兩套都可以」等於留兩個出口。Kernel 的兩份標頭同在 `GYO::Test::Kernel`：`WorldTest` 本來就 `using namespace KernelTest`，兩份宣告的名字不重疊；若拆成 `GYO::Test::Kernel::World`，namespace 名 `World` 會遮住 `GYO::Kernel::World`。巨集（`KERNEL_REQUIRE_OK`、`KERNEL_REQUIRE_RUN_OK`、`ORCH_REQUIRE_BUILT`）寫 `::GYO::Test::…` 全限定。命名規範「N17 的根」補一條說明（`rebuild-naming.zh-Hant.md`）。守衛不查頂層的根（和產品的根分不出來），由審查看。
+4. **測試輔助的 namespace 收斂成一套**：`KernelTest`、`WorldTest` → `GYO::Test::Kernel`；`AuthorityTest` → `GYO::Test::Authority`（brief 沒點名，設計審查找到，同批補）；`OrchTest`（含 `OrchTest::Save`）→ `GYO::Test::Orchestration`（`::Save`）；`RollbackTest` → `GYO::Test::Rollback`。判斷：N17「`GYO::Test` 的根」那一列本來就寫「各單位的測試輔助放 `GYO::Test::<單位>`」，頂層的四個是漏網的舊寫法，不是另一套規則；寫明「兩套都可以」等於留兩個出口。Kernel 的兩份標頭同在 `GYO::Test::Kernel`：`WorldTest` 本來就 `using namespace KernelTest`，兩份宣告的名字不重疊；若拆成 `GYO::Test::Kernel::World`，namespace 名 `World` 會遮住 `GYO::Kernel::World`。巨集（`KERNEL_REQUIRE_OK`、`KERNEL_REQUIRE_RUN_OK`、`ORCH_REQUIRE_BUILT`）寫 `::GYO::Test::…` 全限定。命名規範「N17 的根」補一條說明（`rebuild-naming.zh-Hant.md`）。守衛不查頂層的根（和產品的根分不出來），由審查看。`tests/` 裡剩下的頂層 namespace（`Legacy`：凍結的 master 程式，作特性比對；`Sample`：合成的錯誤型別；`OrchUnits`：合成的登記單位；`Walker`：scenario 的遊戲）都是在測試裡扮演別人的程式或產品的替身，不是測試輔助，不動。
 5. **`detail` 對齊 N13 的 `Detail`**：`engine/core/io` 的 `MountTable.hpp`、`Vfs.hpp`，`engine/ecs/entity_store` 的 `EntityColumns.hpp`（`namespace detail`／`detail::` → `Detail`）；`engine/core/math` 的 `Frustum.hpp`（`FrustumDetail` → `Detail`，math 裡沒有別的 `Detail`）。gyo2 的突變清單沒有指到這些字（master 時代的 `voxel_map_editor_mutations.json` 有一個 `FrustumDetail`，屬範圍外的 15 份）。
 6. **`SCAN_ROOTS` 只拿掉 `framework`，留 `apps`、`tools`**（和 brief 不同，理由）：framework 層 2026-11-11 退役，`build/` 已不讀它；`apps/`、`tools/` 雖然現在不存在，`build/cmake/GyoBuild.cmake` 仍照登記檔把 `apps/<app>`、`tools/<tool>` 加進建置（第 68、76 行），是產品的家。拿掉它們，之後加進來的產品打開 `GYO::Engine::…`、`GYO::Test` 時就不會報。不存在的掃描根照舊跳過。若主會話或使用者要照 brief 一起拿掉，改這一行與 pin 的自測即可。
 7. **authority、rollback 在範圍內**：#266 之後單位從目錄推出，`engine/modules/authority`→`GYO::Engine::Authority`、`engine/modules/rollback`→`GYO::Engine::Rollback` 已自動涵蓋（第 4 批宣告 9.5 延下來的那條，不用補）。證據：在 `engine/` 的複本上把兩個單位各一個原始檔改成打開 `GYO::Engine::Orchestration`，守衛各報一條（`item7-probe.log`）。
@@ -24,6 +24,14 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
 文件跟著改的：`rebuild-naming.zh-Hant.md`（守衛位置、測試輔助一條）、`target/naming.zh-Hant.md`（守衛路徑）、`world-time.zh-Hant.md`（守衛欄的 ctest 名；WT-4 守衛欄原本寫已退役的 `wt-guard-naming-root-dropped`，改成現行的 `wt-guard-real-n1-other-namespace`；條文本身不變）、`entity-store.md`（`gyo_expect_links` 的位置）、`target/v2/README.md`（本 dev_log）。歷史紀錄（dev_log、HANDOFF、已核准的宣告）不改寫。
 
 ## AGENTS §14.4
+
+### 自測收緊：`test_n1_every_scan_root_is_scanned` 的 engine 分支（naming DI 1 的守衛測試，只收緊；照 §14.4 仍要使用者核准）
+
+1. **守的性質**：每個掃描根都被讀。
+2. **緩める面**：無（只加斷言，原本的斷言不變）。
+3. **締める面**：roots 檢查漏讀 `engine/` 底下不屬任何單位的檔時，自測失敗（以前通過）。
+4. —
+5. **根據與證據**：設計審查 B 的探針；`design-review/hole-closed.log`（兩種改法都 FAIL）；自測 53/53。
 
 驗證者（Opus 5.5／high，和實作者不是同一個 agent；照 navigator「計畫沒指派的 §14.4 驗證者跟實作者的指派」）用實際資料確認下面 1～5：判定的變更本身沒問題；它指出 1、2 原本列得不完整（漏了舊根、讀不懂的宣告、`.m`／`.mm`、經目錄連結才讀到的檔）、5 漏了行號，已照改。探針：在新樹的複本加 `framework/` 的檔與連結，舊守衛報 12 條、新守衛報 1 條，少掉的 11 條都在 `framework/` 底下；新守衛的輸出是舊守衛的子集。反向：把 `framework` 加回清單，`test_n1_scan_roots_are_pinned` 失敗。
 
@@ -67,14 +75,40 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
 
 ## 設計審查（每批固定的一步）
 
-（審查完填）
+- 審查者：Fable 5.2／high，唯讀（實作者 Opus 5.5）。第一次啟動因 Fable 用量上限中斷；主會話通知額度恢復後，從中斷處續跑（中斷期間照 navigator 用 Opus 代替的審查已停掉，沒有採用）。報告：主 checkout `build/evidence/gyo2-naming-cleanup/design-review/REPORT.md`。同一個審查者也做了 §14.2 的敵對式檢查（`SCAN_ROOTS` 的判定變更）。
+- A：8 項，保留 6、改 2。
+
+| # | 項目 | 審查的判斷 | 處置 |
+|---|---|---|---|
+| 1 | naming_guard 搬家、突變收回 | 守衛讀六個根、不屬任何單位；orchestration_guard 不再依賴 kernel 目錄 | 保留 |
+| 2 | `source_text.py` | 「一個出口、各自注入」的形狀，但還不是唯一出口：entity_store_guard、os_boundary_guard 各有一份逐字相同的 `strip_comments_and_strings`，`SUFFIXES` 已漂開（entity_store 少 `.ipp`、`.tpp`、`.inc`、`.ixx`）；json／logging／trace 的 `strip_block_comments` 是另一種讀法，不硬併 | 保留；兩份重複列後續 |
+| 3 | `ExpectLinks.cmake` | `include_guard(GLOBAL)`＋使用方各自 include 是慣用法 | 保留 |
+| 4 | `engine/` 短名 | 只換了帶前導 `::` 的 232 處；不帶前導 `::` 的全名約 267 處、`::GYO::Kernel::` 16 處仍在，同一型別兩種寫法；命名規範沒寫單位之間怎麼引用，下一批會繼續混寫。遮蔽的結果是編譯錯誤、不是靜默換義，可接受 | 規則一句交使用者（見下）；殘留列後續（brief 只點名 234 處） |
+| 5 | 測試輔助收斂 | 方向對；`AuthorityTest` 漏網 | 改：同批補 |
+| 6 | `Detail` | 純對齊 N13 | 保留 |
+| 7 | `SCAN_ROOTS` 只拿掉 framework | 偏離 brief 的理由成立：brief 把「現在沒有」當成「gyo2 不再有」；拿掉 apps／tools 會讓「產品不打開 `GYO::`」與舊根的過渡規則在產品移植回來時失效 | 保留；請使用者知悉 |
+| 8 | authority、rollback 在範圍內 | 靠目錄推出 | 保留 |
+
+- 小點（不擋合併）：N1 forward 有四個實樹陽性對照，`wt-guard-real-n1-other-namespace` 與 `nm-real-acronym` 看起來重疊，下次碰到時可併（列後續）。
+- B（敵對式檢查）：22 種改法，9 killed、13 存活。存活的 11 種不補：多掃（只會更嚴）2、讀法的深度 2（README 第 4 條：見到漏網才加）、某條規則在某個根靜默的交叉組合 6（守衛沒有按根分支）、等價 1。**該補的 1 個洞**（2 種改法）：roots 檢查跳過 `engine/`（迴圈改成 `SCAN_ROOTS[1:]`、或跳過 `engine/` 底下所有檔），自測與實樹都過——`test_n1_every_scan_root_is_scanned` 的 engine 分支只斷言「不是層」。本批以前就有。處置：那個測試的 engine 分支加兩個斷言（`engine/sample/Leak.cpp` 與層目錄下的散檔 `engine/core/Loose.hpp` 都要報 roots 的發現）；兩種改法現在都讓自測失敗（`design-review/hole-closed.log`）。照 README 第 4 條（清單的每個項目由自測逐一確認，清單只要一個突變，已有 `nm-scan-roots-examples`），不加突變。
+- 拿掉 framework 本身：加回清單會被 `test_n1_scan_roots_are_pinned` 殺；§14.4 的 1～5 和程式一致。
+
+### 交使用者決定：N13 補一句「單位之間怎麼引用」
+
+- 現況：`engine/` 裡同一個型別有兩種寫法（例：`World.hpp` 的 `Engine::Base::Result` 與 `Executor.cpp` 的 `GYO::Engine::Base::Result`），命名規範沒有寫該用哪一種。
+- 審查的建議：N13 補「Engine 單位內寫 `<單位>::`，Kernel 內寫 `Engine::<單位>::`，巨集全限定」，由審查看、不立守衛。
+- 選項：(a) 補這一句；剩下約 267 處全名與 16 處 `::GYO::Kernel::` 另開一批改完（推薦：先有規則，下一批才不會繼續混寫；改名越晚影響越大）／(b) 補這一句，殘留在本批一起改完／(c) 不補，維持「兩種都可以」。
+- 本卡沒有改規則（規則的變更要使用者同意）。
 
 ## 證據
 
-主 checkout 的 `build/evidence/gyo2-naming-cleanup/`（使用者的 Intel Mac，git 不追蹤）：`configure-1.log`、`configure-2.log`、`build-1.log`、`ctest-full-1.log`、`short_names.py`、`item3-scan.log`、`item7-probe.log`、`judgement-unchanged.log`、`mutations/`、`design-review/REPORT.md`。
+主 checkout 的 `build/evidence/gyo2-naming-cleanup/`（使用者的 Intel Mac，git 不追蹤）：`configure-1.log`、`configure-2.log`、`build-1.log`、`ctest-full-1.log`、`short_names.py`、`item3-scan.log`、`item7-probe.log`、`judgement-unchanged.log`、`mutations/`（`full/` 是合併前的完整重跑）、`design-review/`（`REPORT.md`、敵對式檢查的腳本 `adv.py`、`adv2.py`、`count.py`、`hole-closed.log`）。
 
 ## 後續（範圍外，沒有做）
 
+- `engine/` 裡不帶前導 `::` 的全名約 267 處（IO 最多）、`::GYO::Kernel::` 16 處（world_time 的 `HashValue`）：等 N13 的那一句定了再改（見「交使用者決定」）。
+- 「切段找 `..`」的同一個運算式有 5 份（kernel_guard K5、orchestration_guard O4、entity_store_guard，以及 #267 新加的 trace_guard、logging_guard），各綁一個突變；能共用的只有「切段找 `..`」（gyo2-stale-cleanup 卡轉來，出處 `build/evidence/gyo2-stale-cleanup/design-review/REPORT.md` B 節第 3 項）。可併進 `source_text.py`，誰後合併誰對齊。
+- N1 forward 的四個實樹陽性對照裡，`wt-guard-real-n1-other-namespace` 與 `nm-real-acronym` 看起來重疊（設計審查小點）。
 - naming_guard 的 `SCAN_ROOTS` 不含 `build/acceptance`（建置會讀，現在沒有 C/C++ 檔）。本批以前就有的缺口，驗證者發現。
 - `tests/common/entity_store/entity_store_guard.py`、`tests/common/os/os_boundary_guard.py` 各自還有一份 `strip_comments_and_strings`（和 `STANDARD_HEADERS`），可以改用 `source_text.py`。本批只處理 brief 指名的兩支守衛。
 - 突變清單 `plans/audio`、`plans/time-threads-trace` 有 18 個指向 master 路徑的突變，不在 brief 列的「15 份 master 時代清單」裡；`authority_scan/mutations.json` 的路徑寫法要確認執行器怎麼解讀。

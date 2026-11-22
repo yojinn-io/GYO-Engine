@@ -295,8 +295,16 @@ class GuardTree(unittest.TestCase):
             with self.subTest(root=root):
                 self.write(f"{root}/sample/Leak.cpp", "namespace GYO::Kernel {\n}\n")
                 if root == "engine":  # engine/sample is not a layer
+                    found = guard.check(self.root)
                     self.assertIn("engine/sample: not a layer of the naming table (ENGINE_LAYERS); add it with the "
-                                  "naming rule (N17)", guard.check(self.root))
+                                  "naming rule (N17)", found)
+                    # The roots check reads engine/ too: a loose file in a layer of units belongs to no unit
+                    # (design review of v8-arch-gyo2-naming-cleanup, B: skipping engine/ in check_roots passed).
+                    self.assertIn("engine/sample/Leak.cpp:1: N1 namespace GYO::Kernel opened outside its unit", found)
+                    self.write("engine/core/Loose.hpp", "namespace GYO::Engine::Time {\n}\n")
+                    self.assertReported("N1", "engine/core/Loose.hpp:1: N1 namespace GYO::Engine::Time opened "
+                                              "outside its unit")
+                    (self.root / "engine/core/Loose.hpp").unlink()
                 else:
                     self.assertReported("N1", f"{root}/sample/Leak.cpp:1: N1 namespace GYO::Kernel opened outside its unit")
                 shutil.rmtree(self.root / f"{root}/sample")
