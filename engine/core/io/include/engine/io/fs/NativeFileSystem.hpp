@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "engine/io/fs/IFileSystem.hpp"
 
@@ -13,9 +12,9 @@ namespace GYO::Engine::IO::FS {
     /// - A URI names a native path through the file:// mapping (Path::NativePathFromFileUri).
     /// - Open reads, or writes a file it creates when missing (Write | CreateIfMissing with Truncate or
     ///   Append; Text for the platform's line endings). Exists, Stat, CreateDirectories, Move (one rename on
-    ///   one volume that replaces a file already at the target, OS::Files::RenameReplacing), Remove (a file,
-    ///   not recursive) and ToNativePathString work; every other operation is NotSupported, as
-    ///   Capabilities() says.
+    ///   one volume that replaces a file already at the target, OS::Files::RenameReplacing), Remove (a file;
+    ///   a directory is InvalidPath) and ToNativePathString work.
+    /// - It keeps no state, so any number of threads may call it at once (Design Invariant 6).
     /// - An engine/os failure keeps its code name and native detail (Base::CauseDetail).
     class NativeFileSystem final : public IFileSystem {
     public:
@@ -28,16 +27,10 @@ namespace GYO::Engine::IO::FS {
         IOResult<bool> Exists(const Path::Uri& uri) override;
         IOResult<FileInfo> Stat(const Path::Uri& uri) override;
         IOResult<std::string> ToNativePathString(const Path::Uri& uri) override;
-        FileSystemCapabilities Capabilities() const noexcept override;
 
         IOResult<void> CreateDirectories(const Path::Uri& uri) override;
-        IOResult<void> Remove(const Path::Uri& uri, const RemoveOptions& opt) override;
+        IOResult<void> Remove(const Path::Uri& uri) override;
         IOResult<void> Move(const Path::Uri& from, const Path::Uri& to) override;
-        IOResult<void> Copy(const Path::Uri& from, const Path::Uri& to) override;
-        IOResult<std::vector<DirectoryEntry>> List(const Path::Uri& uri, const ListOptions& opt) override;
-        IOResult<std::unique_ptr<DirectoryIterator>> Iterate(const Path::Uri& uri,
-                                                             const ListOptions& opt) override;
-        IOResult<std::unique_ptr<IFileWatcher>> CreateWatcher() override;
     };
 
     /// The file URI of a native path in UTF-8, for this backend. A relative path is made absolute against the
