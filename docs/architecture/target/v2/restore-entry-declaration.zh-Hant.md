@@ -392,6 +392,7 @@ Engine 的兩點保證分在兩層：
 | C-5 | 5.3 只寫 hook | 第 4 批後 `InitialValue` 只在一般的生成與插入補（`SpawnWithId` 帶的 bundle 已有的元件不蓋，`InitialValueTests`「a component the entity already has is left as it is」） | 說明頁補一句：照一般寫法讀檔時，存檔沒存的衍生元件由初始值的宣告補；存了的照存檔的值 |
 | C-6 | 沒寫 asset | asset 宣告：資產在 World 外，World 只持有 id | 說明頁補：存檔存資產 id、不存資產本身；id 能不能用在發替換之前驗（生成世界 5.4、5.9 已寫，引用） |
 | C-7 | 第 13 節判定 1：新開 `tests/common/kernel/RestoreEntryTests.cpp`、十個案例 | 十個案例裡八個已有同一件事的案例（18.3）。照 AGENTS §14.5（只為既有的抓不到的誤り加）與「不堆屎山」，再寫一份是重複 | **交使用者（改已核准的判定）**：見 18.2 |
+| C-9 | 沒寫讀檔完成的通知 | 送法原則（`v8-arch-gyo2-event-delivery-rule`，使用者 11-19）的表寫「讀檔完成由新 World 準備後發 `Message`（讀檔批定案）」，同一則 (3)「之後各批照原則定送法，不再逐批問」 | 照原則 (1)「一直存在的狀態 → 讀 Resource」定：**Engine 不發「讀檔完成」**。Engine 不認得讀檔（第 4 節），「放回完了」就是生成結束，讀 `WorldGeneration`（`Generating()`）或掛 `AfterGenerating()`。作者要通知別的 System，由讀檔 System 自己發 `Message`（注意生成世界 5.5：沒有讀者拉住時跑完就被修剪）。不是推翻：表把它留給本批定，照同一則的原則判 |
 | C-8 | 狀態機 | 狀態機修訂 8 的卡在做；舊宣告 3.8「第一次套用一律先進初始值」。讀檔放回狀態時，新 World 會先進初始狀態、再轉到存檔的狀態（初始狀態的 OnEnter 會跑一次） | 不在本批定。經主會話轉狀態機卡：讀檔時狀態怎麼放回（例：在準備函式放好、第一次套用就進存檔的狀態；或照常先進初始狀態）由那一批定，本批說明頁只指路 |
 
 ### 18.2 交使用者的一件：判定 1 改成「先跑突變，存活的才補案例」
@@ -429,3 +430,72 @@ Engine 的兩點保證分在兩層：
 ### 18.5 時間、角色
 
 實作約 1.5～2 小時（突變 0.5、一案 0.3、說明頁 0.5、L1 0.5）。角色照第 12 節：實作 Opus／high；突變清單與修訂 12 的對抗檢查 Fable／high；合併前設計審查 Fable／high（唯讀）。
+
+---
+
+## 19. 存檔版本 Module（`v8-arch-gyo2-save-version-into-restore`；修訂 12 草案）
+
+**來由**：使用者 2026-11-18（`v8-arch-gyo2-save-version-module`）：「需要提供version module，默認不啟用，啟用之後過時檔會直接拒絕。這個補充不放在編排裡，但是得放計劃中。Engine需要支持。」前一句（`-replace-order-author-choice`）：「壞檔問題是最嚴重的Bug，通常是來自於系統更新……通常製作的時候直接上version 管理。太老的檔案不支持。讓玩家自己開新檔。」2026-11-22 併進本卡、同一份宣告、同一個 PR（原話「合併進去。」）。
+
+**用遊戲講**：RPG 1.0 的存檔格式是第 3 版。一年後的 1.5 改了背包，作者把現在的版本訂成 5、最舊支援訂成 4。玩家拿 1.0 的存檔（第 3 版）按「讀取」：選單上直接顯示「這個存檔太舊，請開新遊戲」，現在的 World 照跑，沒有半個讀進來的 World。存檔時寫上 5。
+
+**核心一句**：Engine 只比對一個數字。數字寫在存檔的哪裡、怎麼讀出來，是作者的格式；Module 給的是「現在幾版、最舊收幾版」的一處設定和「收不收」的判斷，拒絕走讀檔失敗的路。
+
+### 19.1 四件
+
+| 件 | 判（卡片照 L17 判，標「使用者」的除外） |
+|---|---|
+| **存的時候** | 作者從 Module 拿「現在的版本」（`SaveVersion::Policy::Current()`），寫進自己的存檔格式的任何位置。Module 不寫檔頭、不定位置、不碰 io（「不認得存檔只指格式」，使用者 `-save-unaware-means-format-only`） |
+| **讀的時候** | 作者先用自己的格式讀出版本數字，交給 `Policy::Check(版本)`；回 `Result`：收、或拒絕（`OrchestrationError`，`reporterCode` 是 `"save-version-too-old"` 或 `"save-version-too-new"`）。**檢查的位置**三處擇一，都在換上之前：(1) 發 `ReplaceWorld` 之前（runner 從 `Product::Buffer()` 拿 `Policy`；選 `DropOldFirst` 時只能這裡，否則被拒＝位置空了、Product 結束）；(2) `ReplaceRequest::extra` 準備函式裡呼叫、把錯誤原樣回傳 → `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode` 照帶（O-8、O-5；`BuildNewFirst` 時舊 World 照跑）；(3) 啟動時讀檔：描述的準備函式裡呼叫 → O-E7。**不放在生成期間**（生成期間的錯誤是 Product 結束，生成世界 5.4、5.9） |
+| **預設不啟用** | 使用者明說。`config/modules.csv` 一列 `default=no`；產品沒列就不 link、不登記，零成本。啟用時也只在 `Configure` 放一個 `Policy` 進 Product 一份的共用處（交換點 #270 的 `ModuleBuffer`），**不登記任何 World 的元件、Resource、System**：每幀零成本 |
+| **作者的關係** | 版本欄位是作者格式的一部分（作者的資料契約，AGENTS §8）。Module 只要一個整數；作者用別的版本表示（字串、語意版本）時自己換成整數。設定由 `ProductDescription::options` 給 `SaveVersionOptions{ std::uint32_t current; std::uint32_t oldestSupported; }`；`oldestSupported > current` 或沒給設定是 `Configure` 的回報（啟動錯誤，O-5） |
+
+### 19.2 和別家對照
+
+| 誰 | 版本怎麼處理 | 出處 |
+|---|---|---|
+| Unity Entities | `BlobAssetReference<T>.TryRead(reader, version, out)`：讀檔頭的一個 int，和呼叫者給的期望值**不等就回 false**（不丟例外、不轉換）；版本數字由呼叫者給（`SerializeUtility.CurrentFileFormatVersion = 78` 等常數） | `Unity.Entities/Blobs.cs:558-580`；`Serialization/SerializeUtility.cs:592` |
+| Bevy | 世界序列化沒有版本欄位；靠 reflect 的型別路徑，對不上就是反序列化錯誤。版本管理交作者 | `crates/bevy_world_serialization/src` 沒有 version（本機 `git grep` 只命中無關的字） |
+| flecs | JSON 的 `"version"` 是實體的世代，不是檔案版本；沒有檔案版本 | `src/addons/json/deserialize.c:445` |
+| Unreal | 一般知識（沒讀原始碼）：`FArchive` 帶引擎版本與各子系統的 custom version，載入舊版走程式碼轉換 | — |
+
+**和別家不同的地方**（交使用者確認，19.4 第 1 件）：
+- Unity 是「不等就拒」，本頁是「低於最舊或高於現在才拒」——中間的版本收，舊檔要轉換的部分由作者的讀檔程式處理（使用者「太老的檔案不支持」讀成「有一條最舊線」）。
+- Unity 的版本寫在檔頭、由 Engine 讀；本頁由作者讀出交給 Module（GYO 不認得格式）。
+- Bevy、flecs 沒有這個 Module；本頁照使用者的決定提供（不是推翻）。
+
+### 19.3 卡片照 L17 判、不交使用者的
+
+- **高於現在也拒**（玩家降版或拿到別人新版的檔）：碼分兩個，選單可以顯示不同的話。Unity 的「不等就拒」也拒新版。
+- **不轉換**：使用者「或者提供存檔轉換功能」是可能的另一條路，沒有要 Engine 做；轉換是作者讀檔程式的事。
+- **不加編排層的步驟**（使用者「不放在編排裡」）：檢查由作者呼叫，走已有的準備函式與 `reporterCode`（骨架 3.9 已確認接得住）。
+- **不是事件**：被拒是 `Result`（送法原則的表；時間＋事件宣告第 268 行）。
+- **位置與名字**：`engine/modules/save_version`、namespace `GYO::Engine::SaveVersion`、target `GYO::SaveVersion`、登記單位 `SaveVersionModule`（N11～N17、N20；`entity_ids` 的先例）。
+
+### 19.4 交使用者的
+
+1. **「過時」的界線**：(a) **最舊支援線（建議）**——`oldestSupported ≤ 版本 ≤ current` 收，中間舊版由作者的讀檔程式補；(b) **只收現在的版本**（Unity `TryRead` 的做法）——任何不等都拒，作者每改一次格式就讓所有舊檔失效。理由：使用者說的是「太老的檔案不支持」，不是「舊的都不支持」；(b) 可以用 `oldestSupported = current` 做到，所以 (a) 包含 (b)。
+2. **「直接拒絕」的讀法**：卡片讀成「Engine 不嘗試轉換、回錯誤；檢查由作者在讀檔入口呼叫一次」，不是「Engine 自動攔下每次讀檔」。自動攔要 Engine 認得存檔（讀出版本數字），和 `-save-unaware-means-format-only` 衝突；或要編排層多一個「替換前問各單位」的步驟，和「不放在編排裡」衝突。若你要的是自動攔，請更正。
+
+### 19.5 判定（加進第 13 節的判定，結果出來前宣告）
+
+`tests/common/save_version/`（link `GYO::Orchestration`＋`GYO::SaveVersion`，合成的單機遊戲沿用 `SaveGame.hpp`）：
+
+| # | 案例 | 檢查（標記） |
+|---|---|---|
+| V1 | 收：`{current 5, oldest 4}`，版本 4、5 | `Check` 成功；`extra` 裡呼叫時 `ReplaceWorld` 成功（`[sv-accept]`） |
+| V2 | 太舊：版本 3，`BuildNewFirst`，`extra` 裡呼叫 | `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode == "save-version-too-old"`、舊 World 照跑（金幣、實體數不變）（`[sv-too-old]`、`[sv-keep-old]`） |
+| V3 | 太新：版本 6 | `reporterCode == "save-version-too-new"`（`[sv-too-new]`） |
+| V4 | `DropOldFirst` 前先驗：runner 從 `Product::Buffer()` 拿 `Policy`，版本 3 不發替換 | World 還在、沒有 `WorldMissing`（`[sv-before-replace]`） |
+| V5 | 啟動時讀檔被拒：描述的準備裡呼叫 | `Product::Build` 失敗、報告是 O-E7、碼照帶（`[sv-startup]`） |
+| V6 | 設定錯：`oldest 6 > current 5`；沒給設定 | `Product::Build` 失敗、單位回報（`[sv-config]`） |
+| V7 | 不啟用：產品的單位表由真的 `config/modules.csv` 產生 | 沒有 `Policy`、World 的登記表沒有這個 Module 的任何型別（`[sv-default-off]`；`default=yes` 時失敗） |
+| V8 | 存的時候：`Current()` | 回 5（`[sv-current]`） |
+
+檢出力：`Check` 的兩個比較各改成 `<=`／`>=`（V1 的邊界）、拿掉「太新」（V3）、兩個碼對調（V2、V3）、`Configure` 不檢查設定（V6）、`default=no` 改 `yes`（V7）、`Current()` 回 `oldest`（V8）。突變清單在實作前送 Fable／high 對抗檢查（§14.2）。
+
+時間：約 1.5 小時（Module 0.5、案例 0.5、突變與說明頁 0.5）。說明頁第 15 節「讀檔」加一小節。
+
+### 19.6 對 io 的需求（給 threads／io 重審卡，經主會話）
+
+讀檔與存檔版本 Module 對 io **沒有新需求**：Engine 不做存檔的讀寫。作者用 io 讀寫存檔時用到的是既有的：存檔目錄（`engine/io/helpers/UserFiles.hpp`）、整檔原子寫入（`WriteFileAtomically.hpp`，防寫到一半的壞檔——使用者說壞檔是最嚴重的 Bug）、整檔讀（`ReadAllBytes.hpp`）；讀檔在 World 執行緒外先讀好、驗好版本再發替換（不在 World 裡做 io）。重審若要拿掉或改這三個，請先和本卡對齊。
