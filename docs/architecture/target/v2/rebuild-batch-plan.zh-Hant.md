@@ -84,6 +84,10 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | entity_store、trace、logging 三個 include 守衛的 `..` 路徑：照 O4 先例補 | #265 設計審查 | 2026-11-22 開卡（`v8-arch-gyo2-stale-cleanup-start`） |
 | kernel_guard K6 的標頭分支（守的是寫法）值不值得留 | #265 設計審查 | 下一次設計審查一起看 |
 | world_logging 給一個接 `WorldSetup` 的登記函式（登記呼叫 `TakeKernelDiagnostics` 的交換函式「出」），加走真的 `TakeKernelDiagnostics` 的測試 | 交換點實作 PR #270 的設計審查 | 交換點合併後 |
+| 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
+| naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
+| 三份突變清單的路徑還指向 master（big-map engine_format 67 個、audio 12 個、time-threads-trace 6 個）；authority_scan 的路徑寫法待確認 | #269 | 小批清理 |
+| 實樹陽性對照重疊：`wt-guard-real` 與 `nm-real-acronym` | #269 | 下一次碰 naming 的批 |
 
 ## 不擋路的小事
 
