@@ -22,6 +22,15 @@
 #include <ws2tcpip.h>
 #include <mstcpip.h>
 
+// mstcpip.h declares these only for some SDK targets; the values are the
+// documented Winsock IOCTL codes (IOC_VENDOR 12 and 15).
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
+#ifndef SIO_UDP_NETRESET
+#define SIO_UDP_NETRESET _WSAIOW(IOC_VENDOR, 15)
+#endif
+
 namespace GYO::Engine::OS {
 namespace {
 
