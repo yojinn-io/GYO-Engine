@@ -21,7 +21,7 @@
 - [統合宣告](kernel-app-boundary-declaration.zh-Hant.md)修訂 38：L4、L14、L16、L17；第 240 行（11-11 的讀取畫面與分批載入→生成世界）。
 - [讀檔宣告](restore-entry-declaration.zh-Hant.md)修訂 11：4、5.1、5.8、第 8 節第 198 行（給本批的要求）、第 13 節判定 1、2、第 15 節。
 - asset 宣告修訂 3（分支 `claude/gyo2-asset-585196` 1b120a86，已核准、未合併）：5.6、5.7、5.13（G-1～G-3）、5.14；決定 9。
-- 交換點宣告修訂 0（分支 `claude/gyo2-exchange-81ea9f`，檢查中）：5.1、5.3、5.4、第 13 節。
+- 交換點宣告修訂 1（分支 `claude/gyo2-exchange-81ea9f` 840cb86c）：5.1、5.3、5.4、第 10 節末、第 13 節 W-1～W-9。
 - 第 4 批（已合併）：[權威頁](authority.zh-Hant.md) DI-A 5、第 4 節；[回滾頁](rollback.zh-Hant.md) R-2 前提 6；Kernel DI-KS 12、DI-KS 15 第 (7)、(13) 項、DI-KS 27。
 - 已合併的程式：`origin/gyo2` 45f13757——`engine/orchestration`（`Product.hpp`、`Setup.hpp`、`src/Product.cpp`）、`engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp:409-462`（`EntityAllotter`、`RangeAllotter`）、`Registry.hpp:238-249`、`src/Registry.cpp:693-711`（兩個不同的配發器是 RE2）、`World.cpp:1042-1049`（訊息修剪取所有游標的最小值）、`engine/modules/world_time/src/TimeTypes.cpp:64-67`（暫停時這一幀的量 0、不累加、不扣）、[orchestration.zh-Hant.md](orchestration.zh-Hant.md) O-1～O-11、[world-time.zh-Hant.md](world-time.zh-Hant.md) WT-2、WT-3。
 - 別家原始碼：主 checkout `build/evidence/gyo2-world-gen/other-engines.md`（偵察者 Opus／high；路徑:行號都在裡面）。
@@ -220,17 +220,18 @@ bool AfterGenerating(Kernel::Res<WorldGeneration>);
 
 ### 5.12 和交換點卡的交界（`gyo2-exchange`，`local_7876c9c8`）
 
-**已對齊**（2026-11-22，兩張卡以 SendMessage 往返兩次；修訂 1 改建議 B 之後的差異見表末）。交換點卡的宣告：`exchange-declaration.zh-Hant.md`（分支 `claude/gyo2-exchange-81ea9f`，修訂 0）——交換點第 5.1 節、執行緒第 5.3 節、Extract 第 5.4 節、交界第 13 節。
+**已對齊**（2026-11-22，兩張卡以 SendMessage 往返；修訂 1 改建議 B 之後的差異見表末）。交換點卡的宣告：`exchange-declaration.zh-Hant.md`（分支 `claude/gyo2-exchange-81ea9f`，修訂 1 840cb86c）——交換點第 5.1 節、執行緒第 5.3 節、Extract 第 5.4 節、交界第 13 節 W-1～W-9（它引用本頁修訂 0 的節號 5.1～5.5、5.14；本頁修訂 1 的對應是 5.1～5.4、5.12，已通知對方）。
 
 **「一輪」**（兩卡共用的定義）：一個 World 在一次 `RunFrame` 裡跑的全部。
 
 | 交界 | 本卡負責 | 交換點卡負責 |
 |---|---|---|
-| 資料進出 World 的三種形 | 形 (1) 套用點（World 裡的 System：asset、網路的收件送件、World 之間的郵箱）：生成中照常跑（B 之下掛 `Main` 一處即可） | 形 (2) runner 在兩次入口之間直接讀寫 World：和生成無關；形 (3) Extract：在讀者的「一輪」之前跑。交換函式要不要登記交使用者定（交換點卡第 12 節第 2 題）；若登記，進、出包住「一輪」 |
+| 資料進出 World 的三種形 | 形 (1) 套用點（World 裡的 System：asset、網路的收件送件、World 之間的郵箱）：生成中照常跑（B 之下掛 `Main` 一處即可） | 形 (2) runner 在兩次入口之間直接讀寫 World：和生成無關；形 (3) Extract：在讀者的「一輪」之前跑。**交換函式照已核准的時間設計 5.3 登記**（交換點卡修訂 1；Kernel 診斷紀錄的取走與 11-11 的郵箱需要它）：「進」「出」包住「一輪」，生成結束那一批也只各一次；只由 `RunFrame` 呼叫，`RunGameInit`、`RunSchedule` 不呼叫；有 World 壞了不呼叫。本卡不需要提供「這一輪是不是生成」 |
 | 別的 World 要知道某個 World 在生成 | 提供 `Product::Generating(world)` 與 World 內的 `WorldGeneration` | 不加新機制：runner 在兩次入口之間讀 `Generating` 寫進別的 World（形 (2)），或 Module 的服務＋套用 System（形 (1)） |
 | 一個 World 的一輪的入口（分頻率、分執行緒的 runner） | 生成的處理是一個私有步驟，`RunFrame` 與交換點卡的入口共用（5.3） | 入口的形狀（暫名 `Product::Lend`→`WorldLease`，本批不實作）；交出期間由持有的執行緒推它的一輪，生成的狀態跟著交出（交換點卡 5.3） |
 | 產品把設定交給 Module | `entity_ids` 用每個 World 的 `WorldDescription::options` | Product 一份的設定走 `ProductDescription::options`（Product 層 Resource）及其形狀 |
 | `beforeSwap` 期間 | 不改（5.4） | 寫明沒有套用點、沒有交換點（照 asset G-3） |
+| 兩批合起來的案例（交換函式的進出包住生成中的一輪） | — | 後合併的那一批補測試（交換點卡第 10 節末） |
 | 網路的初始同步 | 作者的 System 等到了才停止 `Hold()` | 屬網路 Module（之後）；lightyear 的 `CatchUpSnapshotReady`／`HasCaughtUp`（`other-engines.md` A9）是參考 |
 
 修訂 1 改建議 B 之後：「一輪」的定義不變（B 之下一輪就是每幀清單）；修訂 0 要求「套用點掛 `Main/First` 與 `Generate/First` 兩處」的規則在 B 之下不需要。已通知交換點卡；你選 A 的話恢復修訂 0 的規則。
@@ -423,7 +424,7 @@ bool AfterGenerating(Kernel::Res<WorldGeneration>);
 - 生成期間出錯 Product 就結束；要「失敗就留舊的」的驗證放在 `beforeSwap` 或發替換之前（5.4、5.5）。
 - 「分批數不同、結果相同」是作者寫法的性質，Engine 不保證；C3 只示範一種寫法下成立。
 - 只用 `RunSchedule` 推的 World 推不動生成；一個 World 的一輪的入口歸交換點卡（5.3、5.12）。
-- 交換點卡的宣告還在檢查中；5.12 照兩卡對齊的內容寫，它的節號若改，合併前對一次。
+- 5.12 照兩卡對齊的內容寫（交換點卡修訂 1）；任一邊的節號再改，合併前對一次。
 
 ## 14. 要你定與確認的
 
