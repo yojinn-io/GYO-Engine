@@ -693,15 +693,16 @@
       "replace": "void PublishVoices(MixerState& state) noexcept {\n    std::uint64_t peek = 0;\n    static_cast<void>(state.board.Read(1, peek));\n",
       "target": "gyo_audio_tests",
       "command": [
-        "ctest",
-        "--test-dir",
-        "build/target/_build/core",
-        "-R",
-        "^gyo_audio_board_readers$",
-        "--output-on-failure"
+        "{cmake}",
+        "-DSOURCE_DIR=engine/modules/audio/src",
+        "-P",
+        "tests/common/audio/CheckBoardReaders.cmake"
       ],
       "timeout": 120,
-      "expect": "the audio thread must not read the playhead board"
+      "expect": "the audio thread must not read the playhead board",
+      "guards": [
+        "audio DI 4"
+      ]
     },
     {
       "id": "au-ctl-reuse-never-playing",
