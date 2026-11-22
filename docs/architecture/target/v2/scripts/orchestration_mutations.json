@@ -3080,6 +3080,91 @@
    "target": "gyo_world_time_tests",
    "expect_build_failure": true,
    "expect": "gyo_world_time links\\s+GYO::Base;GYO::Kernel;GYO::Logging;GYO::Math;GYO::Orchestration;GYO::Time;\\s+expected exactly"
+  },
+  {
+   "id": "wg-held-not-cleared",
+   "what": "a generating frame does not start with nobody holding: a Hold() stays and generation never ends. Only it catches the step before the frame",
+   "guards": [
+    "orchestration O-14",
+    "world-gen-declaration 判定 1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (generating) world.SetResource(WorldGeneration{.generating = true, .held = false});",
+   "replace": "    if (generating) world.SetResource(WorldGeneration{.generating = true, .held = before->held});",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-14:*",
+   "expect": "\\[wg\\-c2\\-ends\\]"
+  },
+  {
+   "id": "wg-ends-while-held",
+   "what": "generation ends after a frame in which a System held (a half-built World starts). Only it catches the judgement reading held",
+   "guards": [
+    "orchestration O-14",
+    "world-gen-declaration 判定 1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});",
+   "replace": "        if (after != nullptr) world.SetResource(WorldGeneration{.generating = false, .held = false});",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-14:*",
+   "expect": "\\[wg\\-c2\\-held\\]"
+  },
+  {
+   "id": "wg-not-generating-when-built",
+   "what": "a World is not generating when it is built (startup and replacement share this line): prepare functions, game initialization and the first frame see a World that has generated. Only it catches the value put when the World is built",
+   "guards": [
+    "orchestration O-14",
+    "world-gen-declaration 判定 1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    executor->GetWorld().SetResource(WorldGeneration{true, false});",
+   "replace": "    executor->GetWorld().SetResource(WorldGeneration{false, false});",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-14:*",
+   "expect": "\\[wg\\-c17\\-built\\]"
+  },
+  {
+   "id": "wg-generating-not-cleared",
+   "what": "the end of generation leaves generating set: AfterGenerating never runs. Only it catches the value written at the end",
+   "guards": [
+    "orchestration O-14",
+    "world-gen-declaration 判定 1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "WorldGeneration{.generating = false, .held = false}",
+   "replace": "WorldGeneration{.generating = true, .held = false}",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-14:*",
+   "expect": "\\[wg\\-c1\\-ended\\]"
+  },
+  {
+   "id": "wg-runschedule-judges",
+   "what": "RunSchedule runs a round (the generation's step and judgement) instead of the named schedule alone. Only it catches RunSchedule leaving generation alone",
+   "guards": [
+    "orchestration O-14",
+    "world-gen-declaration 判定 1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    return RunOn(*slot, schedule, \"RunSchedule\");",
+   "replace": "    return RunRound(*slot);",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-14:*",
+   "expect": "\\[wg\\-c10\\-runschedule\\]"
+  },
+  {
+   "id": "wg-hold-unconditional",
+   "what": "Hold() sets held after generation has ended: held stays true in the World summary. Only it catches Hold having no effect after the end",
+   "guards": [
+    "orchestration O-14",
+    "world-gen-declaration 判定 1",
+    "orchestration O-2"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/WorldGeneration.hpp",
+   "find": "    void Hold() noexcept { held = generating; }",
+   "replace": "    void Hold() noexcept { held = true; }",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-14:*",
+   "expect": "\\[wg\\-c18\\-held\\]"
   }
  ]
 }
