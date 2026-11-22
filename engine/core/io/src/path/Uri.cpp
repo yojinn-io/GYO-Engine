@@ -277,12 +277,10 @@ namespace GYO::Engine::IO::Path {
         NormalizeOptions opt{};
         opt.rejectNullByte = true;
 
-        // asset/http/https/unknown は基本「相対論理パス」を想定（file:// は上で処理済み）
+        // A scheme other than file takes a relative logical path (file:// is handled above).
         opt.rejectAbsoluteLike = true;
         opt.rejectTraversal    = true;
 
-        // http/https の場合、ここで path を “エンジンの Path” にするかは用途次第。
-        // 今回は設計維持のため、同じ Path として扱う（必要なら別設計に分離可能）。
         if (!pathPart.empty()) {
             auto p = Path::Parse(pathPart, opt);
             if (!p) {

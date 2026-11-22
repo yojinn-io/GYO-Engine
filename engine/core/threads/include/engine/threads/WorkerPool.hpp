@@ -20,20 +20,20 @@ struct WorkerPoolOptions final {
     ThreadPriority priority{ThreadPriority::Normal};
 };
 
-enum class StopMode : std::uint8_t {
-    // Runs the jobs already queued, then stops.
-    Drain,
-    // Drops the jobs not started; a job already running finishes.
-    Discard,
-};
-
 // A fixed number of threads taking jobs in the order they were submitted (docs/architecture/threads.md). Whoever
 // creates it owns it: there is no shared or global pool (Design Invariant 12). No futures, priorities, work
 // stealing or scopes. A job must not let an exception escape (as a RoleThread body, Design Invariant 8). Stop and
-// the destructor are not called from one of the pool's own threads.
+// the destructor are not called from one of the pool's own threads, nor from two threads at once.
 class WorkerPool final {
 public:
     using Job = std::function<void()>;
+
+    enum class StopMode : std::uint8_t {
+        // Runs the jobs already queued, then stops.
+        Drain,
+        // Drops the jobs not started; a job already running finishes.
+        Discard,
+    };
 
     [[nodiscard]] static Base::Result<WorkerPool, ThreadError> Start(WorkerPoolOptions options);
 

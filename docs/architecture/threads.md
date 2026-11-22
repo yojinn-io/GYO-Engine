@@ -23,8 +23,9 @@ GYO::OS   ◄──┘ (privately: the thread name and priority calls)
 
 Users: logging's file writer thread is a role. A runner may hand a whole World to a role it creates and joins
 (orchestration O-3, O-13; the entry's shape comes with the first product that does it); the World is not bound to
-the thread. A product that wants World-external work off the World's threads (asset reads and decodes, asset X-1)
-creates a `WorkerPool`, chooses its thread count (asset X-4), and hands it on through `ProductDescription::options`;
+the thread. A product that wants World-external work off the World's threads (asset reads and decodes: the asset
+declaration, branch `claude/gyo2-asset-585196`, X-1) creates a `WorkerPool`, chooses its thread count (X-4 there),
+and hands it on through `ProductDescription::options`;
 the Engine starts no pool by default.
 
 Ownership: Engine owns the thread's lifetime, its name and priority hint per platform, and its wake. engine/threads
@@ -61,7 +62,13 @@ which roles stop and join, and what a job does.
   not called from one of the pool's threads, nor from two threads at once. A moved-from pool takes no job. No guard
   checks that the destructor drops the queued jobs (a test cannot tell when the destructor has begun), that the
   priority reaches the threads (the pool reads none back), or that a failed `Start` stops the threads it started
-  (no failure can be injected); review keeps them.
+  (no failure can be injected); review keeps them. Linux keeps 15 bytes of a name, so a long pool name can lose its
+  `(<index>)`. Dropped jobs are destroyed on the thread that called `Stop`.
+- Each pool thread is a `RoleThread` (one place for the name, the priority and the start handshake, as a Bevy pool
+  is a set of named threads joined on drop). Its body waits on the pool, not on its `RoleContext`: the pool, not
+  the role's stop request, ends it, an exception to Invariant 8's wording that the pool keeps by stopping before
+  any of its roles is destroyed. Each thread also makes a Waiter it never uses (a kqueue on macOS, an event and a
+  timer on Windows), and a Waiter the OS refuses fails `Start`.
 
 ## Design Invariants
 
@@ -117,6 +124,8 @@ Stop adding features and propose redesigning instead of patching when any of the
    its own, or replace `WorkerPool`, instead of growing RoleThread or the pool.
 2. A second consumer needs a pool (after asset): propose one Module that creates the Product's pool into the shared
    place (orchestration O-15) instead of each consumer asking the product for its own.
-3. A platform needs priority or affinity with timing semantics (real-time scheduling, CPU pinning) rather than a hint.
-4. The order in which roles stop has to be enforced by the library, or the destructor's stop-and-join is not enough
+3. The pool's unused Waiters cost too many handles, or fail its start: split the thread start (name, priority,
+   handshake) out of `RoleThread` and start pool threads without a Waiter.
+4. A platform needs priority or affinity with timing semantics (real-time scheduling, CPU pinning) rather than a hint.
+5. The order in which roles stop has to be enforced by the library, or the destructor's stop-and-join is not enough
    for a consumer's shutdown.

@@ -26,7 +26,7 @@ Owner：架構（GYO2 主會話開的任務卡 `local_a184932c`）。分支 `cla
    - io 不再連結 `GYO::Math`（只有被拿掉的 Stream 類用到）。
 2. **io 補與改**：`IOErrorCode::TooLarge`，`ReadAllBytes`／`ReadAllTextUtf8`／`ProbeFileStamp` 超過上限回它（I6b；兩條路徑都經 `TooLargeErr()`）；`IFileSystem` 與原生後端的註解寫明 DI 6。
 3. **測試執行檔** `engine_tests` → `gyo_io_tests`（N14）；io 突變的 `target` 跟著改。
-4. **threads**：`WorkerPool`（`WorkerPool.hpp`、`WorkerPool.cpp`，約 150 行；工作者是 `RoleThread`）與 `WorkerPoolTests.cpp`（8 案）。`RoleThread` 不改名（同詞異義表與 N2，宣告 T2）。
+4. **threads**：`WorkerPool`（`WorkerPool.hpp`、`WorkerPool.cpp`，約 150 行；工作者是 `RoleThread`）與 `WorkerPoolTests.cpp`（7 案）。`RoleThread` 不改名（同詞異義表與 N2，宣告 T2）。
 5. **文件**：io.md、threads.md 照 gyo2 現況重寫（DI 5 刪除、DI 6 新增、threads DI 10～12、兩邊的 RC）；os.md 的 Files 一節寫明檔案呼叫沒有共享的可變狀態（io DI 6 的依據）；rebuild-concept C8 改寫。
 
 ## 驗證與經過
@@ -68,9 +68,28 @@ Owner：架構（GYO2 主會話開的任務卡 `local_a184932c`）。分支 `cla
   - `wp-last-in-first-out`：先進先出。
 - 這批改了 4 條 Design Invariants（threads 10、11、12，io 6），上限是 20 個，6 個在範圍內。
 
+## 合併前的設計審查（Fable 5.2／high，唯讀）
+
+設計上沒有必修。程序上的必修 1 件：本節之後的「最後的確認」原本是佔位。應修 5、輕微 9，處理如下：
+
+- **應修**：
+  - `WaitUntilRefused` 的上限從次數改成時間（10 秒）並 yield。原因是 CI 的 `ctest --parallel` 下，stopper 可能排不到。
+  - threads.md 寫明工作者用 `RoleThread` 的例外與代價：body 看的是池、不是 `RoleContext`；每條執行緒多一個不用的 Waiter。RC 加一條「拆出執行緒啟動」。`Start` 中途丟例外的情況寫進註解。
+  - os.md 第 30～31 行還寫 io 持有 `Vfs` 與 streams，已改。
+  - io.md、threads.md 引用別份文件的節號時，補上檔名與分支。
+  - dev_log 的案數改正（7 案），證據位置寫明是哪一台機器。
+- **輕微，有處理的**：
+  - `StopMode` 收進 `WorkerPool::` 底下。
+  - threads.md 補兩句：Linux 名字的截斷、丟掉的工作在呼叫 `Stop` 的執行緒上解構。
+  - io DI 6 的標題改成「call」，涵蓋所有呼叫。
+  - io.md、`Uri.cpp`、`FileInfo.hpp` 裡 master 時代的殘留註解。
+- **輕微，不在本批**：同一判準下沒人用、但宣告沒列的 `IOFwd.hpp`、`IFileSystem::Name()`、`FileInfo` 的 ctime／atime／permissions、`NormalizeOptions` 的旗標，列進後續。`ThreadCount()`、`ThreadName()`、`priority` 超出宣告列的介面：`ThreadName` 給測試用，`priority` 照 `RoleThread` 帶下去，留下。
+- 處理之後：`wp-*` 重跑 5/5 killed，`gyo_threads_tests` 連跑 30 次都過。
+
 ## 最後的確認
 
-（PR 前填：最後一次本機 ctest、L1 三平台、合併前的設計審查。）
+- 本機（合併 gyo2 #273、#274 之後）：全量建置通過；`ctest -L 'cpu|shader'` 169/169。
+- L1 三平台、四份清單的完整突變重跑：PR 上跑，結果補在這裡。
 
 ## 後續（不在本批）
 
@@ -78,10 +97,11 @@ Owner：架構（GYO2 主會話開的任務卡 `local_a184932c`）。分支 `cla
 - **asset 卡**（已經主會話轉告）：asset 宣告 5.12 引的 `MountPoint.hpp`、`Vfs.hpp` 行號失效；可以改用 `ReadAllBytes`（有 `TooLarge` 了）；產品沒給執行器時怎麼辦由 asset 卡定（AS-4 不允許在 World 執行緒上當場跑）。
 - `OS::Files::DefaultCaseSensitivePaths` 在 io 拿掉能力表之後沒有 Engine 內的使用者（os 的測試仍在用），去留在 os 那邊看。
 - 突變清單的路徑還指向 master 的計畫資料夾（HANDOFF 待辦「小批清理」#269）。
+- io 裡同一判準下沒人用、宣告沒列的：`IOFwd.hpp`（沒有任何 include）、`IFileSystem::Name()`、`FileInfo` 的 ctime／atime／permissions、`NormalizeOptions` 的旗標（只用預設值）。下次動 io 時照「先問該不該存在」判。
 
 ## 證據
 
-主 checkout `build/evidence/gyo2-threads-io-review/`（git 不追蹤）：
+作者的 Mac（macOS arm64）上主 checkout 的 `build/evidence/gyo2-threads-io-review/`（git 不追蹤）：
 - `inventory.py`、`inventory.txt`：設計段的使用者盤點。
 - `os-files-shared-state.txt`：os 檔案呼叫的共享狀態掃描。
 - `removed_scan.py`、`removed_scan.txt`：判定 3 的走查。

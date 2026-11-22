@@ -20,9 +20,10 @@ OS operation:
 asset, tools, a game's save files ──→ engine/core/io (IFileSystem, Uri, helpers) ──→ engine/core/os (Files) ──→ engine/core/base
 ```
 
-Users: asset reads content files from threads outside the World (asset 5.12); tools read and write the files a
-person names (user files, below); a game reads and writes its save files with `ReadAllBytes` and
-`WriteFileAtomically` (restore-entry 19.6; the save format is the author's).
+Users: asset reads content files from threads outside the World (the asset declaration, branch
+`claude/gyo2-asset-585196`, 5.12); tools read and write the files a person names (user files, below); a game reads
+and writes its save files with `ReadAllBytes` and `WriteFileAtomically` (the restore-entry declaration, revision 12
+draft on branch `claude/gyo2-restore-impl-7e6bc6`; the save format is the author's).
 
 ## Path contract
 
@@ -85,7 +86,7 @@ person names (user files, below); a game reads and writes its save files with `R
   and `ToNativePathString` work. `Move` is one rename on one volume that replaces a file already at the target
   (`OS::Files::RenameReplacing`); `Remove` removes a file (a directory is `InvalidPath` on every platform, D56).
   It keeps no state (Design Invariant 6).
-  - `Helpers::WriteFileAtomically` is the one atomic write (D56; the editor's save, and IP-5's settings later): the
+  - `Helpers::WriteFileAtomically` is the one atomic write (D56; a tool's save, a game's save file): the
     bytes go to `<name>.tmp.<time>.<random>` beside the target, which is closed and then moved over it, so a reader
     sees the old file or all of the new bytes. When a step fails the temporary file is removed and the target keeps
     its old file. It works on any `IFileSystem` whose `Move` replaces in one step; the parent directory must exist
@@ -141,8 +142,9 @@ person names (user files, below); a game reads and writes its save files with `R
 4. **Long-path prefixes never appear in engine/io strings.** `ParseUri` and `FileUriFromNativePath` reject them
    (`UriTests`); engine/os makes them just before the OS call.
 5. (Dropped with `MountTable` in v8-arch-gyo2-threads-io-review; it was "a mount never names a path outside its
-   root". A content root and its relative paths are asset's, asset 5.3.)
-6. **Many threads may read at once.** An `IFileSystem` implementation takes concurrent calls from any thread; a
+   root". A content root and its relative paths are asset's: the asset declaration, branch
+   `claude/gyo2-asset-585196`, 5.3.)
+6. **Many threads may call at once.** An `IFileSystem` implementation takes concurrent calls from any thread; a
    stream that `Open` returns is used by one thread at a time. The native backend keeps no members and engine/os's
    file calls keep no shared mutable state. No guard (review): no change to a backend makes a test fail every
    time; `NativeFileSystemTests.cpp` "NativeFileSystem serves whole-file reads from several threads at once" is a

@@ -28,7 +28,7 @@ products / tools ──┬──→ engine/modules/* ──→ engine/core/* (lo
 ```
 
 `GYO::OS` is a leaf directly above `GYO::Base`. Modules keep their own abstractions and call it: engine/core/io keeps
-`IFileSystem`, `Vfs`, `Uri` and streams, and its native file-system backend calls the file primitives here;
+`IFileSystem`, `Uri` and `IStream`, and its native file-system backend calls the file primitives here;
 engine/core/time's `Waiter` and engine/core/threads' `RoleThread` keep their public APIs and use the wait and thread
 primitives here.
 

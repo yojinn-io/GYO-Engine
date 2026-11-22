@@ -41,6 +41,8 @@ Base::Result<WorkerPool, ThreadError> WorkerPool::Start(WorkerPoolOptions option
     GYO_ASSERT(!options.name.empty());
     GYO_ASSERT(options.threadCount >= 1);
     auto state = std::make_shared<State>();
+    // An exception thrown here (an allocation) would destroy started workers that wait on the pool and never return;
+    // a role thread that fails to start is reported and handled below.
     std::vector<RoleThread> workers;
     workers.reserve(options.threadCount);
     for (std::size_t index = 0; index < options.threadCount; ++index) {
