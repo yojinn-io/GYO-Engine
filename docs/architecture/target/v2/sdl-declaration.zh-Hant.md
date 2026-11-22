@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 9）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 10）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 10**：使用者在 side chat 定了 Q5——要移植的 2D 遊戲是 Object_Connect，需求併進 R2b、不另開 R2d（第 14 節 Q5 記成已定、第 6.4 節改寫）。交使用者的只剩 Q6。
 - **修訂 9**：(1) 使用者在 side chat 定了 Q4——(b) 照 Bevy，沒選 SDL Plugin 不算錯（第 14 節 Q4 記成已定）。(2) 修訂 6～8 送 Fable／high 窄複查：blocker 1、should 9、nit 10（`build/evidence/gyo2-sdl-declaration/declaration-r8-narrow-check.md`），全部採用，對照在第 24 節。最大的改動：`text`／`sdl_ttf` 在 B' 下沒有接法（SDL_ttf 又連 SDL、不能進 `engine/`），列成新的 **Q6** 交使用者；函式庫可以依賴有單位的列（只取型別）寫明；`sdl_window` 只放進一個在主執行緒的 World；`camera` 不依賴 `window`（GYO 的視窗不是實體，依賴沒有內容）；第 6.6 節補三項；B' 的殘留九格改掉。
 - **修訂 8**：使用者在 side chat 定了 Q3——ImGui 走 (b)，接在 Engine 的 `input`／`window`／`render` 上、不碰 SDL（第 14 節 Q3 記成已定）；`sdl_imgui` 那一列與 (a) 的分支拿掉；剪貼簿、游標形狀的請求資料進 W。交使用者的只剩 Q5。
 - **修訂 7**：使用者在 side chat 定了 Q2——ufbx、stb_image 都走 Module 這一側（第 14 節 Q2 記成已定）。交使用者的只剩 Q3、Q5。
@@ -180,7 +181,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | 根據 | 種類（§2） | 導出的基盤要求 |
 |---|---|---|
 | KeepTool（P14） | 1 名指的 Feature | 視窗、鍵盤滑鼠、文字輸入與組字、ImGui 畫在 SDL_GPU 上、tools 線能打包；顯示日文要 CJK 字型；刪掉 KeepTool 回到零工具 |
-| 2D 遊戲的移植（P24） | 1 名指的 Feature（遊戲還沒點名，Q5） | Transform 一套（z 排序）、正交相機、2D 管線；細節推不出來的列 Q5 |
+| 2D 遊戲的移植（P24）：**Object_Connect**（Q5，使用者已定；`~/Code/GitHome/Object_Connect` ca4482c） | 1 名指的 Feature | Transform 一套（z 排序）、正交相機、sprite＋image、純色三角形、半透明、畫的先後、日文 HUD 與選單；**本線多出的兩件**：每幀即時產生的動態頂點、固定解析度的縮放（併進 R2b） |
 | PvP Client（master 的完整遊戲，P13 的對照） | 1 計畫上的 Feature | 輸入帶 OS 時刻；3D 場景＋疊層＋`gyo.ui`；模擬在自己的執行緒、主執行緒＝事件＋畫面（O-13、時間設計 5.5（三）、runtime-composition §2 的三個 World）；live resize；讀檔換模擬 World 時畫面不重建；VFX（半透明、billboard、instancing，主會話轉來的「不要堵死」） |
 | 四個工具（master） | 1（之後回來） | ImGui、3D 預覽（draw list 引用 render target 的貼圖，§3b）、音效預覽、檔案對話框（工具那批） |
 | Match | 1 | 不選 SDL 也建得起、跑得起；SDL3 不被抓、不被建 |
@@ -293,7 +294,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 - **共用的底層**：Extract、讀相機（`camera`）、合成（多個相機與疊層組成一幀）、`RenderCommands` 的格式；裝置、真的資源、畫面送出在 `sdl_gpu`（P27）。
 - **上層的管線**：3D 場景、2D 世界、疊層（螢幕座標的 sprite 與文字，HUD 用）、UI（`ui_render`）。
 - **本線實作**：底層全部（`render` 這一側與 `sdl_gpu` 那一側）；3D 場景（PvP、工具的預覽）；疊層（sprite 原語、半透明混合——UI 與文字本來就要）；UI。
-- **2D 世界的管線**：使用者會移植的 2D 遊戲還沒點名，推不出需求（sprite 的數量、合批與 z 排序、tilemap、圖集、像素對齊、2D 的光影）。正交相機、sprite 原語、半透明已經在共用的底層與疊層裡；**2D 世界管線本身列成未決 Q5**，請使用者點名遊戲或類別，並決定它在本線（R2b 之後一個子批）還是跟著移植做。
+- **2D 世界的管線**（Q5，使用者已定：Object_Connect，需求併進 R2b）：Object_Connect（C++20＋KamataEngine／DirectX 12 的 2D 血管接續解謎，固定 1280×720，核心不依賴引擎、沒有 ECS）要的，大多已在本線——正交相機（`camera`）、sprite＋image（節點貼圖，每關 ≤255 種、依格子座標放）、純色三角形 list（矩形、圓、外框，R2a 的 2D pass）、半透明（光暈、脈動、inactive 55% 亮度）、畫的先後（背景 → 血管 → 節點 → HUD 文字最上層：z 排序＋疊層）、日文 HUD 與選單（`text`、`ui`）、滑鼠游標（sprite）。**本線多出的兩件併進 R2b**：(1) `RenderCommands` 支援每幀即時產生的動態頂點（血管是 Verlet 粒子鏈＋三角形帶，Object_Connect `Docs/Architecture.md` 第 10、11 節）；(2) 固定解析度（1280×720）遇到不同視窗大小時的縮放（加黑邊或拉伸，R2b 的宣告定預設、作者可選）。**不做**：tilemap（格子只用來放節點）、大量 sprite 的合批、圖集、2D 光影、物理 Module（Verlet 鏈是遊戲邏輯）——留到有需要的遊戲再做。
 - **VFX**：R7（預見但不實作）。
 
 ### 6.5 Kernel 的關係（子批 KR，P26）
@@ -478,7 +479,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 ├─ T   text｜text Module＋字型的點陣化（照 Q6） ── Opus／high
 ├─ R2a render-core｜render 的 RenderCommands 格式與一個 2D pass（貼圖、混合、裁切）、render_world＋sdl_gpu（Gpu、GpuSubmit：裝置、swapchain）、最小的 shader 管線 ── Opus／high
 ├─ K   keep-tool｜ImGui（兩半、draw list 經 Extract）＋KeepTool＋IME 實機一次 ── Opus／high
-├─ R2b render-pipelines｜Renderer、讀相機、合成、渲染 World 的實體對應（逐種判）、3D 場景、疊層、讀 GlobalTransform、VFX 預見 ── Opus／high
+├─ R2b render-pipelines｜Renderer、讀相機、合成、渲染 World 的實體對應（逐種判）、3D 場景、疊層、讀 GlobalTransform、Object_Connect 的兩件（動態頂點、固定解析度的縮放）、VFX 預見 ── Opus／high
 └─ U   ui｜ui、world_ui、ui_render ── Opus／high
 ```
 
@@ -510,7 +511,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | T | `text`＋照 Q6 的點陣化（Module 側的 adapter，或 `sdl_ttf`＋資料形） | 上段：公開介面 | Opus／high ×3 | 點陣圖的形狀與 rowPitch；上下顛倒的坑（master 坑 17：在 UV 轉換的單一邊界修，那半在 R2b） | 有（受理判定） |
 | R2a | 裝置在哪一步建（`sdl_gpu` 的 `Configure`，讓替換 World 時 `Build` 重跑不重建裝置）；`render` 的 `RenderCommands` 格式（P27：貼圖 id、shader id、頂點、裁切框、混合模式、實例數等）與一個 2D pass（貼圖、混合、裁切）、`render_world`、`sdl_gpu`（Gpu：裝置、swapchain、id 對照、上傳、pipeline；GpuSubmit）、視窗登錄表的交接、最小的 shader 管線（HLSL 在 `render`、host 工具在 `sdl_gpu`、ABI、共通管線找編譯器） | 上段：公開介面 | Opus／high ×3 | Linux Lavapipe 上的像素比對（比確切顏色，master 坑 18）；macOS Metallib 離線編譯；幀時間的預算先宣告 | 有 |
 | K | `imgui`、`world_imgui`、`imgui_render`（兩段接法：平台＝讀 `input`、鍵碼對應、寫請求資料；繪製＝draw list → `RenderCommands`）；draw list 經 Extract；全域 context 的例外（第 6.2 節，查版本寫清範圍）；KeepTool 的登記（`keep_tool`）；組字的畫法（ImGui 不畫組字）；CJK 字型；tools 線打包與授權告示；第 9.1 節延後的實作方式守衛 | 上段：使用者指定的 Feature | Opus／high ×3 | tools 線打包；IME 實機按一次（CI 只驗文字事件的路徑）——「tools 線不需要實機證據」的現行規則要不要改，交 K 的宣告 | 有 |
-| R2b | `Renderer`（對照 Bevy 的 render graph／phase）、讀相機、合成、渲染 World 的實體對應（逐種判、四個衝突點）、可畫元件的來源側單位、3D 場景、疊層（sprite、文字的繪製）、讀 `GlobalTransform`、R7 | 上段：公開介面 | Opus／high ×3 | 像素比對；來源實體刪掉後對應的實體被刪、換來源後對照清空；幀時間的預算先宣告 | 有 |
+| R2b | `Renderer`（對照 Bevy 的 render graph／phase）、讀相機、合成、渲染 World 的實體對應（逐種判、四個衝突點）、可畫元件的來源側單位、3D 場景、疊層（sprite、文字的繪製）、讀 `GlobalTransform`、R7、Object_Connect 的兩件（`RenderCommands` 的每幀動態頂點；固定解析度在不同視窗大小下的縮放：黑邊或拉伸） | 上段：公開介面 | Opus／high ×3 | 像素比對；動態頂點每幀換內容不漏畫、不累積；視窗大小改變時固定解析度的畫面照選的縮放方式；來源實體刪掉後對應的實體被刪、換來源後對照清空；幀時間的預算先宣告 | 有 |
 | U | `ui`、`world_ui`、`ui_render` | 上段：資料契約（Editor↔Runtime） | Opus／high ×3 | `gyo.ui` v1／v2 的資料契約測試；文字框的組字 | 有（受理判定） |
 
 - 敵對式檢查（navigator：作者 Opus → 檢查者用別的、不小的模型 → Fable）：每個子批的宣告、以及表裡標「有」的突變清單，都送 **Fable／high**。Fable 用不到時，照 navigator「同じモデルで行い、報告に書く」。
@@ -619,15 +620,17 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **出處**：使用者在本卡 fork 出的 side chat，2026-11-23。（修訂 6 已照 B' 撤回這一題，結果相同；修訂 9 改記成使用者的決定。修訂 6 寫的「`camera` 照 Bevy 依賴 `window`」不是這一題的連帶結論，修訂 9 依窄複查拿掉，第 3.3 節。）
 
-### Q5：要移植的 2D 遊戲是哪一個（或哪一類）
+### Q5：要移植的 2D 遊戲 —— **已定：Object_Connect，需求併進 R2b、不另開 R2d**（使用者 2026-11-23，side chat）
 
-**前提**：作者（產品）的需求決定 Engine 要做到哪裡；管線本身是 Engine 的。
+**原話**：「GitHome下有一個Object_Connect」→（看完需求表與結論後）「可以轉過去」
 
-**例子**：橫向捲軸動作（tilemap、大量小 sprite、像素對齊、正交相機跟隨）、俯視角 RPG（tilemap 多層、y 排序）、卡牌或解謎（少量大圖、UI 為主）——需要的 2D 世界管線差很多。
+**定下的**：點名的 2D 遊戲是 `~/Code/GitHome/Object_Connect`（C++20＋KamataEngine／DirectX 12 的 2D 血管接續解謎 MVP，固定 1280×720，約 10,757 行，核心不依賴引擎、沒有 ECS；HEAD ca4482c）。本線多出來的只有兩件，併進 R2b：(1) `RenderCommands` 支援每幀即時產生的動態頂點；(2) 固定解析度遇到不同視窗大小時的縮放（加黑邊或拉伸）。其餘需求已在本線；tilemap、大量 sprite 的合批、圖集、2D 光影、物理 Module 不需要（第 6.4 節）。
 
-**已經在本線的**：正交相機（`camera`）、sprite 原語、半透明、z 排序的依據（`Transform` 的 z）。**推不出來的**：sprite 的數量級與合批、tilemap、圖集、像素對齊、2D 的光影、z 相同時的排序規則。
+**比過的選項**：現在點名、本線加子批 R2d（2D 世界管線）／不點名、跟著移植做／**點名 Object_Connect、需求併進 R2b、不開 R2d** ←選（推出來的需求很輕，幾乎都在 R2a、R2b 範圍）。
 
-**請你定**：點名要移植的 2D 遊戲，或至少說是哪一類。**現在點名，就在本線 R2b 之後排一個子批 `R2d`（2D 世界管線）；沒點名，就跟著那個遊戲的移植做**（需求要從那個遊戲推，HANDOFF `-2d-and-3d` 的連帶）。
+**理由**：side chat 從 Object_Connect 的 README 與 `Docs/Architecture.md`（第 10、11、11.1、13 節）推需求；只有兩件超出現有範圍，量小，併進 R2b 比另開子批省。
+
+**出處**：使用者在本卡 fork 出的 side chat，2026-11-23；遊戲原始碼 `~/Code/GitHome/Object_Connect`。
 
 ### Q6：字型的點陣化放哪（修訂 9 新增；窄複查 B-1）
 
@@ -656,7 +659,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 - 「替換成另一個實作」在第二個實作出現前只是預留（R1）。
 - `text`、`ui`、`world_ui`、`ui_render`、Kernel 的父子、`camera`、R2b 的 3D 場景在本線沒有使用它們的 Feature（KeepTool 不用），只能靠測試驗收；第一個點名的產品回來時才有實際的使用者。
 - PvP Client 組法（三）（模擬在別的執行緒）的渲染時間來源、S 與 F 之間的交換，不在本線（第 6.1 節）。
-- 2D 世界管線的需求未定（Q5）。
+- 2D 世界管線較重的部分（tilemap、大量 sprite 的合批、圖集、2D 光影）不在本線（Q5：Object_Connect 不需要），有需要的遊戲來時再做。
 - `GlobalTransform` 不進摘要、判定不讀它（第 6.4 節）：畫面與判定的姿態可能差一幀以內，這是有意的。
 
 ## 16. 和其他卡的協調（經主會話）
@@ -824,3 +827,11 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | N-8「改視窗」是卡片推的 | 列進 L-12 | 第 13 節 |
 | N-9 過時的字 | 改 | 文首、P3、P19、第 3.1、6.4 節 |
 | N-10 asset 宣告的過時行 | 請圖書管理員 | 第 16 節 |
+
+## 25. 修訂 10：使用者定 Q5（side chat 轉來）
+
+| 改了什麼 | 改在哪 |
+|---|---|
+| 2D 遊戲＝Object_Connect；需求併進 R2b、不開 R2d；Q5 記成已定 | 第 14 節 Q5、第 4.1 節、第 6.4 節 |
+| R2b 加兩件：`RenderCommands` 的每幀動態頂點、固定解析度的縮放 | 第 10.1、10.2 節 |
+| 2D 世界管線較重的部分列進範囲の限界 | 第 15 節 |
