@@ -1,6 +1,6 @@
 # 命名規範（`v8-arch-rebuild`）
 
-更新：2026-11-14；2026-11-22（N13、N14、N17、第 3、5、6、7 節：`v8-arch-gyo2-namespace-root`，namespace 的根統一並立守衛；N13 的「引用別的單位」、測試輔助的根：`v8-arch-gyo2-naming-cleanup`）。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**
+更新：2026-11-14；2026-11-22（N13、N14、N17、第 3、5、6、7 節：`v8-arch-gyo2-namespace-root`，namespace 的根統一並立守衛；N13 的「引用別的單位」、測試輔助的根：`v8-arch-gyo2-naming-cleanup`；N13 的「引用自己的單位」「引用 Kernel」與兩個例外：`v8-arch-gyo2-n13-short-names`）。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**
 
 使用者（2026-11-14）：「你後面做好表之後，也做一個命名規範。」
 
@@ -45,7 +45,7 @@
 |---|---|---|---|
 | N11 | 一個模組一個目錄：`engine/<模組>/`，底下 `include/engine/<模組>/` 與 `src/` | `engine/core/time/include/engine/time/Waiter.hpp` | 事實 |
 | N12 | 含入路徑從 `engine/` 起算 | `#include "engine/time/Waiter.hpp"` | 事實 |
-| N13 | namespace 照 N17 的根：Engine 的單位是 `GYO::Engine::<單位>`，Kernel 是 `GYO::Kernel`；單位內部的東西放 `Detail`。**引用別的單位**：Engine 的單位裡寫 `<單位>::`，Kernel 裡寫 `Engine::<單位>::`，巨集寫全限定 `::GYO::Engine::<單位>::`（巨集在任何 namespace 展開）。守衛不查，審查看 | `GYO::Engine::Time`、`GYO::Engine::Threads`；`Base::Result`（Engine 的單位裡）、`Engine::Base::Result`（Kernel 裡） | 事實；2026-11-22 根從 `Engine::` 改成 `GYO::Engine::`（`v8-arch-gyo2-namespace-root`，第 6 節）。「引用別的單位」：使用者 2026-11-22 選 (a)（`v8-arch-gyo2-naming-cleanup`，見下方「N17 的根」末的說明） |
+| N13 | namespace 照 N17 的根：Engine 的單位是 `GYO::Engine::<單位>`，Kernel 是 `GYO::Kernel`；單位內部的東西放 `Detail`。**引用別的單位**：Engine 的單位裡寫 `<單位>::`，Kernel 裡寫 `Engine::<單位>::`，巨集寫全限定 `::GYO::Engine::<單位>::`（巨集在任何 namespace 展開）。**引用自己的單位**：全名拿掉，直接寫名字。**Engine 的單位裡引用 Kernel**：寫 `Kernel::`。**例外**（只在名字被遮住、或要擋 ADL 時多寫一層）：同名類別遮住子 namespace 時寫 `IO::Path::…`（`Path.hpp`）；要擋 ADL 時寫 `EntityStore::EntityOf`（`EntityColumns.hpp`）。守衛不查，審查看 | `GYO::Engine::Time`、`GYO::Engine::Threads`；`Base::Result`（Engine 的單位裡）、`Engine::Base::Result`（Kernel 裡）；IO 裡寫 `Path`，不寫 `GYO::Engine::IO::Path`；`Kernel::Hasher`（Engine 的單位裡） | 事實；2026-11-22 根從 `Engine::` 改成 `GYO::Engine::`（`v8-arch-gyo2-namespace-root`，第 6 節）。「引用別的單位」：使用者 2026-11-22 選 (a)（`v8-arch-gyo2-naming-cleanup`，見下方「N17 的根」末的說明）。「引用自己的單位」「引用 Kernel」與兩個例外：使用者 2026-11-22「N13 條文照建議補」（`v8-arch-gyo2-n13-short-names`，見下方說明） |
 | N14 | 一個目錄一個 CMake target：`gyo_<目錄名>`，別名 `GYO::<名>`（`<名>` 照 N17 從目錄名推） | `gyo_time`、`GYO::Time`；`gyo_world_time`、`GYO::WorldTime`；`gyo_io`、`GYO::IO` | 事實；縮寫的寫法見 N17。守衛不查，審查看 |
 | N15 | 型別、函式用大寫開頭的駝峰；成員變數小寫開頭、結尾加底線；常數 `k` 開頭；巨集 `GYO_` 開頭全大寫 | `RoleThread`、`StopRequested()`、`state_`、`kSampleRate`、`GYO_ASSERT` | 事實 |
 | N16 | 檔名等於它主要的型別名 | `RoleThread.hpp`、`RoleThread.cpp` | 事實 |
@@ -71,6 +71,7 @@
 - **打開別人的 namespace**：一個 namespace 只在它的目錄裡打開。要特化別的單位的樣板（例：`EntityKey`），寫全限定的特化 `template <> struct GYO::Engine::EntityStore::EntityKey<T> { … };`，不打開 `namespace GYO::Engine::EntityStore {`。用 `using namespace`、別名（寫在自己的 namespace 裡）不算打開。
 - **守衛**：`tests/common/naming/naming_guard.py`（ctest `naming.guard`、自測 `naming.guard_selftest`；讀 C/C++ 文字的共用函式在 `tests/common/support/source_text.py`；2026-11-22 從 `tests/common/kernel/`、ctest `kernel.naming_guard` 搬來，`v8-arch-gyo2-naming-cleanup`；突變在 `docs/architecture/target/v2/scripts/naming_mutations.json`）。它只守歸屬：每個 Engine 單位的 namespace 是表裡推出的根；一個單位的根只在它的目錄打開；`GYO` 單獨、不在表裡的 `GYO::<X>`、`GYO::Plugins` 在 `plugins/` 以外、`GYO::Test` 在 `tests/` 以外，都報；`engine/` 底下不在層表裡的目錄報（fail closed）。新加的單位不用改守衛就會被查；拿掉一個 Module 也不用改守衛。不守的（審查看）：target 名（N14，由建置與登記檔負責）、namespace 別名（別名不是打開）、產品自己的根。
 - **N13「引用別的單位」的來源**：使用者 2026-11-22 原話「核准，N13 選 (a)」。比過的選項：(a) 補這一句，剩下的全名（`engine/` 裡不帶前導 `::` 的約 267 處、`::GYO::Kernel::` 16 處）另開一批改完／(b) 補這一句，殘留在同一批改完／(c) 不補，兩種寫法都可以。理由：`v8-arch-gyo2-naming-cleanup` 把 `::GYO::Engine::` 改成短名後，同一個型別有兩種寫法、規範沒寫用哪一種，下一批會繼續混寫（設計審查第 4 項）；先有規則，改名排在前面。出處：`v8-arch-gyo2-naming-cleanup` 卡片的對話。
+- **N13「引用自己的單位」「引用 Kernel」與兩個例外的來源**：使用者 2026-11-22 原話「N13 條文照建議補」。比過的選項：照 N13 短名卡（PR #271）的設計審查（Fable／high）建議，在條文補兩條判斷與兩個既有例外／不補（審查看）。理由：#271 改名時實際用了這兩條判斷（IO 裡指自己的 `GYO::Engine::IO::` 183 處拿掉；`HashValue` 的 `Kernel::Hasher`），條文沒寫，下一批會再混寫；`IO::Path::…`（同名類別 `Path` 遮住子 namespace）與 `EntityStore::EntityOf`（擋 ADL）是程式上必要的寫法，不寫成例外，審查會誤判。`tests/`、`examples/` 裡還有 493 處全名（89 檔），N13 沒講 `GYO::Test` 裡怎麼寫，不在這次範圍。出處：N13 短名卡對話與 PR #271 的 dev_log `2026_11_22_gyo2_n13_short_names.zh-Hant.md`。
 - **舊根 `Engine` 的檢查是過渡規則**：沒有人打開 `namespace Engine`，讓帶過來的程式不會回到舊根。拿掉的條件：不再從 master 帶程式過來（產品都移植完）。
 
 ## 4. ECS 相關的命名（提案）
