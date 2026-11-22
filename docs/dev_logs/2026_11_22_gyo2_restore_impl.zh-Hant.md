@@ -94,6 +94,8 @@
 - run（aa34c0e7，`<ostream>` 的修正之後）：linux-x64、macos-arm64、windows-x64 都通過。
 - 之後 merge `origin/gyo2` 6ee8d8b1（#278 事件游標）：說明頁的節號撞到（#278 的第 15 節），讀檔改成第 17 節（第 16 節排給狀態機 #281），引用處一起改；狀態機那一段改成連到第 16 節。merge 後的 L1 見 PR。
 
+- 再 merge `origin/gyo2`（#277 threads／io 重審、#282 O-2）：衝突只有 `target/v2/README.md` 的 dev_log 索引一行（兩邊都留）；`orchestration_mutations.json` 自動合併，和 gyo2 比對：gyo2 的 282 筆都在、內容不變，加本批 6 筆，沒有重複的鍵。本機 `ctest -LE "gpu|network"` 170/170。這次 merge 沒有改到本批突變的檔案與殺它們的測試，本批 16 個突變的 find 都還是恰好一處，所以不重跑（D184）。
+
 ## 未結
 
-- merge 後的 L1。合併等使用者說「合併」。
+- 合併：使用者定的順序 #280 → #279 → #281 → #276，由主會話執行。
