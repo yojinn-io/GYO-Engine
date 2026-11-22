@@ -290,3 +290,12 @@ Design Invariants 都不改，逐條對照：
 | 5.1 測試 1～8 | 另加字型目錄的 POSIX 案例 | 確認字型目錄小函式化之後結果不變（敵對式檢查指出既有的字型測試擋不住） |
 
 其餘照宣告。dev_log：`docs/dev_logs/2026_11_22_gyo2_os_user_data.zh-Hant.md`。
+
+### 11.1 合併前，使用者的決定（照四樣記，轉主會話寫進 HANDOFF）
+
+| | 突變的去留 |
+|---|---|
+| 原話 | 「照建議，三個都保留」（2026-11-22） |
+| 比過的選項 | 設計審查者（Fable／high）建議退掉 `ou-x20`（守錯誤碼 `IOFailed`，os.md 寫呼叫者不依碼分支）、`ou-x7`、`ou-x8`（守 `HOME` 結尾 `/` 造成路徑中間的 `//`）／卡片建議三個都保留 |
+| 理由（卡片的建議） | `ou-x7`、`ou-x8` 守實作時刻意加的行為，有測試支撐；`ou-x20` 是 `CHECK(withoutHome.error().code == IOFailed)` 唯一的突變（mutation README「尋ねるもの」）。20 個全部留下；第 8 條的說明在 dev_log |
+| 出處 | 本卡對話；dev_log `2026_11_22_gyo2_os_user_data.zh-Hant.md` |
