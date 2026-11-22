@@ -13,12 +13,7 @@ namespace GYO::Engine::IO {
 
     namespace FS {
         struct FileInfo;
-        struct DirectoryEntry;
-
         class IFileSystem;
-        class IFileWatcher;   // optional
-        class MountTable;     // optional
-        class Vfs;            // optional
     } // namespace FS
 
 } // namespace GYO::Engine::IO

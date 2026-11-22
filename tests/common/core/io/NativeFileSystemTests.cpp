@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -11,10 +12,10 @@
 #include <memory>
 #include <utility>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "engine/io/fs/NativeFileSystem.hpp"
-#include "engine/io/fs/Vfs.hpp"
 #include "engine/io/helpers/ReadAllBytes.hpp"
 #include "engine/io/helpers/WriteFileAtomically.hpp"
 #include "engine/io/path/Uri.hpp"
@@ -226,8 +227,8 @@ TEST_CASE("NativeFileSystem takes only paths absolute on this platform") {
 }
 
 // os-files-write opened writing (a file it creates, emptied or appended to) and
-// CreateDirectories; os-tool-files opened Move (replacing) and Remove (files,
-// not recursive). The rest stays NotSupported and Capabilities() says so.
+// CreateDirectories; os-tool-files opened Move (replacing) and Remove (files).
+// The other open modes stay NotSupported.
 TEST_CASE("NativeFileSystem says what it supports") {
     const TempTree tree;
     tree.Write("e.bin", "x");
@@ -240,29 +241,6 @@ TEST_CASE("NativeFileSystem says what it supports") {
     // Overwriting in place, or writing an existing file only, is not offered.
     CHECK(OpenError(fs, uri, FileOpenMode::Write | FileOpenMode::CreateIfMissing) == IOErrorCode::NotSupported);
     CHECK(OpenError(fs, uri, Stream::OpenWriteBinaryTruncate(false)) == IOErrorCode::NotSupported);
-    FS::RemoveOptions recursive;
-    recursive.recursive = true;
-    CHECK(fs.Remove(tree.Uri(), recursive).error().code == IOErrorCode::NotSupported);
-    CHECK(fs.Copy(uri, uri).error().code == IOErrorCode::NotSupported);
-    CHECK(fs.List(tree.Uri(), {}).error().code == IOErrorCode::NotSupported);
-    CHECK(fs.Iterate(tree.Uri(), {}).error().code == IOErrorCode::NotSupported);
-    CHECK(fs.CreateWatcher().error().code == IOErrorCode::NotSupported);
-
-    const auto caps = fs.Capabilities();
-    CHECK(caps.canOpenRead);
-    CHECK(caps.canStat);
-    CHECK(caps.supportsToNativePath);
-    CHECK(caps.supportsMtime);
-    CHECK(caps.canOpenWrite);
-    CHECK(caps.canCreateDirectories);
-    CHECK_FALSE(caps.canList);
-    CHECK_FALSE(caps.canIterate);
-    CHECK(caps.canRemove);
-    CHECK_FALSE(caps.canRemoveRecursive);
-    CHECK(caps.canMove);
-    CHECK_FALSE(caps.canCopy);
-    CHECK_FALSE(caps.supportsWatch);
-    CHECK_FALSE(caps.supportsRecursiveWatch);
 }
 
 std::filesystem::path FromUtf8(const std::string& native) {
@@ -344,11 +322,11 @@ TEST_CASE("NativeFileSystem moves a file over another and removes files") {
     CHECK(missing.error().detail.find("NotFound: ") != std::string::npos);
     CHECK(ReadBack(tree.Native("menu.json")) == "new");
 
-    REQUIRE(fs.Remove(tree.Uri("menu.json"), {}));
+    REQUIRE(fs.Remove(tree.Uri("menu.json")));
     CHECK_FALSE(fs.Exists(tree.Uri("menu.json")).value());
-    CHECK(fs.Remove(tree.Uri("menu.json"), {}).error().code == IOErrorCode::NotFound);
+    CHECK(fs.Remove(tree.Uri("menu.json")).error().code == IOErrorCode::NotFound);
     // A directory stays, with its contents, and is InvalidPath on every platform.
-    const auto folder = fs.Remove(tree.Uri("folder"), {});
+    const auto folder = fs.Remove(tree.Uri("folder"));
     REQUIRE_FALSE(folder);
     CHECK(folder.error().code == IOErrorCode::InvalidPath);
     CHECK(ReadBack(tree.Native("folder/inner.txt")) == "inner");
@@ -438,24 +416,15 @@ public:
     IOResult<bool> Exists(const Path::Uri& uri) override { return native_.Exists(uri); }
     IOResult<FS::FileInfo> Stat(const Path::Uri& uri) override { return native_.Stat(uri); }
     IOResult<void> CreateDirectories(const Path::Uri& uri) override { return native_.CreateDirectories(uri); }
-    IOResult<void> Remove(const Path::Uri& uri, const FS::RemoveOptions& opt) override {
+    IOResult<void> Remove(const Path::Uri& uri) override {
         removed.push_back(uri.path.Str());
-        return native_.Remove(uri, opt);
+        return native_.Remove(uri);
     }
     IOResult<void> Move(const Path::Uri& from, const Path::Uri& to) override {
         moved.emplace_back(from.path.Str(), to.path.Str());
         return native_.Move(from, to);
     }
-    IOResult<void> Copy(const Path::Uri& from, const Path::Uri& to) override { return native_.Copy(from, to); }
-    IOResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri& uri, const FS::ListOptions& opt) override {
-        return native_.List(uri, opt);
-    }
     IOResult<std::string> ToNativePathString(const Path::Uri& uri) override { return native_.ToNativePathString(uri); }
-    FS::FileSystemCapabilities Capabilities() const noexcept override { return native_.Capabilities(); }
-    IOResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri& uri, const FS::ListOptions& opt) override {
-        return native_.Iterate(uri, opt);
-    }
-    IOResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override { return native_.CreateWatcher(); }
 
 private:
     FS::NativeFileSystem native_;
@@ -501,7 +470,7 @@ TEST_CASE("NativeFileSystem atomic writes go through a temporary file and a move
 
 TEST_CASE("NativeFileSystem takes file URIs only") {
     FS::NativeFileSystem fs;
-    const auto logical = Path::ParseUriLoose("asset://textures/a.png");
+    const auto logical = Path::ParseUri("asset://textures/a.png").value();
     CHECK(fs.Open(logical, Stream::OpenReadBinary()).error().code == IOErrorCode::InvalidPath);
     CHECK(fs.Exists(logical).error().code == IOErrorCode::InvalidPath);
     CHECK(fs.Stat(logical).error().code == IOErrorCode::InvalidPath);
@@ -509,19 +478,44 @@ TEST_CASE("NativeFileSystem takes file URIs only") {
     CHECK(fs.ToNativePathString(tree.Uri("f.bin")).value() == tree.Native("f.bin"));
 }
 
-TEST_CASE("NativeFileSystem serves a VFS mount on a file root") {
+// A caller tells a file over its limit from one it could not read (docs/architecture/io.md): TooLarge, whether
+// the size is known before reading or found while reading.
+TEST_CASE("ReadAllBytes reports a file over the limit as TooLarge") {
     const TempTree tree;
-    tree.Write("assets/textures/g.bin", "mounted");
-    FS::Vfs vfs;
-    FS::MountPoint mount;
-    mount.name = "native";
-    mount.readOnly = true;
-    mount.mountUri = Path::ParseUriLoose("asset://");
-    mount.rootUri = tree.Uri("assets");
-    mount.fs = std::make_shared<FS::NativeFileSystem>();
-    REQUIRE(vfs.Mount(std::move(mount)));
-    const auto bytes = Helpers::ReadAllBytes(vfs, Path::ParseUriLoose("asset://textures/g.bin"));
-    REQUIRE(bytes);
-    CHECK(AsText(bytes.value()) == "mounted");
-    CHECK(vfs.Stat(Path::ParseUriLoose("asset://textures/missing.bin")).error().code == IOErrorCode::NotFound);
+    tree.Write("big.bin", std::string(64, 'x'));
+    FS::NativeFileSystem fs;
+    Helpers::ReadAllOptions small;
+    small.maxBytes = 16;
+    const auto sized = Helpers::ReadAllBytes(fs, tree.Uri("big.bin"), small);
+    REQUIRE_FALSE(sized);
+    CHECK(sized.error().code == IOErrorCode::TooLarge);
+    small.tryUseSizeHint = false;
+    small.chunkBytes = 8;
+    const auto streamed = Helpers::ReadAllBytes(fs, tree.Uri("big.bin"), small);
+    REQUIRE_FALSE(streamed);
+    CHECK(streamed.error().code == IOErrorCode::TooLarge);
+    small.maxBytes = 64;
+    CHECK(Helpers::ReadAllBytes(fs, tree.Uri("big.bin"), small));
+}
+
+// Design Invariant 6: one NativeFileSystem read by many threads at once. A smoke test, not a guard: no change
+// to the backend makes it fail every time (docs/architecture/io.md).
+TEST_CASE("NativeFileSystem serves whole-file reads from several threads at once") {
+    const TempTree tree;
+    const std::string contents[] = {std::string(70000, 'a'), std::string(3, 'b'), std::string(130001, 'c')};
+    for (std::size_t i = 0; i < std::size(contents); ++i) tree.Write("f" + std::to_string(i) + ".bin", contents[i]);
+    FS::NativeFileSystem fs;
+    std::atomic<int> wrong{0};
+    std::vector<std::thread> readers;
+    for (int t = 0; t < 8; ++t) {
+        readers.emplace_back([&, t] {
+            for (int round = 0; round < 200; ++round) {
+                const std::size_t i = static_cast<std::size_t>(t + round) % std::size(contents);
+                const auto bytes = Helpers::ReadAllBytes(fs, tree.Uri("f" + std::to_string(i) + ".bin"));
+                if (!bytes || AsText(bytes.value()) != contents[i]) ++wrong;
+            }
+        });
+    }
+    for (auto& reader : readers) reader.join();
+    CHECK(wrong.load() == 0);
 }

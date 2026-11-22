@@ -3027,24 +3027,24 @@
     "orchestration O-6"
    ],
    "file": "engine/core/io/CMakeLists.txt",
-   "find": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::OS)",
-   "replace": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::OS GYO::Time)",
-   "target": "engine_tests",
+   "find": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::OS)",
+   "replace": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::OS GYO::Time)",
+   "target": "gyo_io_tests",
    "expect_build_failure": true,
-   "expect": "gyo_io links GYO::Base;GYO::Math;GYO::OS;GYO::Time; expected exactly"
+   "expect": "gyo_io links GYO::Base;GYO::OS;GYO::Time; expected exactly"
   },
   {
-   "id": "cr-io-math-public",
-   "what": "core link visibility (v8-arch-gyo2-core-not-registered; io.md: Math and the OS layer private): io links Math publicly. Only it reaches the io INTERFACE check",
+   "id": "cr-io-os-public",
+   "what": "core link visibility (v8-arch-gyo2-core-not-registered; io.md: the OS layer private): io links the OS layer publicly. Only it reaches the io INTERFACE check (was cr-io-math-public; GYO::Math left io in v8-arch-gyo2-threads-io-review)",
    "guards": [
     "orchestration O-6"
    ],
    "file": "engine/core/io/CMakeLists.txt",
-   "find": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::Math GYO::OS)",
-   "replace": "target_link_libraries(gyo_io PUBLIC GYO::Base GYO::Math PRIVATE GYO::OS)",
-   "target": "engine_tests",
+   "find": "target_link_libraries(gyo_io PUBLIC GYO::Base PRIVATE GYO::OS)",
+   "replace": "target_link_libraries(gyo_io PUBLIC GYO::Base GYO::OS)",
+   "target": "gyo_io_tests",
    "expect_build_failure": true,
-   "expect": "gyo_io exposes GYO::Math to its users; link it PRIVATE"
+   "expect": "gyo_io exposes GYO::OS to its users; link it PRIVATE"
   },
   {
    "id": "wt-links-more",
