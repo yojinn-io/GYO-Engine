@@ -24,7 +24,7 @@
 - [統合宣告](kernel-app-boundary-declaration.zh-Hant.md)修訂 38：L4、L14、L16、L17；第 240 行（11-11 的讀取畫面與分批載入→生成世界）。
 - [讀檔宣告](restore-entry-declaration.zh-Hant.md)修訂 11：4、5.1、5.8、第 8 節第 198 行（給本批的要求）、第 13 節判定 1、2、第 15 節。
 - asset 宣告修訂 3（分支 `claude/gyo2-asset-585196` 1b120a86，已核准、未合併）：5.6、5.7、5.13（G-1～G-3）、5.14；決定 9。
-- 交換點宣告（分支 `claude/gyo2-exchange-81ea9f` e2e6f1cd，修訂 2 之後）：5.1、5.3、5.4、第 10 節末、第 13 節 W-1～W-10（已改用本頁修訂 1 的節號；資料進出 World 改成四種形）。
+- 交換點宣告（分支 `claude/gyo2-exchange-81ea9f` e2e6f1cd，修訂 2 之後）：5.1、5.3、5.4、第 10 節末、第 13 節 W-1～W-10（已改用本頁修訂 1 的節號；資料進出 World 的四種做法改用名字）。
 - 第 4 批（已合併）：[權威頁](authority.zh-Hant.md) DI-A 5、第 4 節；[回滾頁](rollback.zh-Hant.md) R-2 前提 6；Kernel DI-KS 12、DI-KS 15 第 (7)、(13) 項、DI-KS 27。
 - 已合併的程式：`origin/gyo2` 45f13757——`engine/orchestration`（`Product.hpp`、`Setup.hpp`、`src/Product.cpp`）、`engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp:409-462`（`EntityAllotter`、`RangeAllotter`）、`Registry.hpp:238-249`、`src/Registry.cpp:693-711`（兩個不同的配發器是 RE2）、`World.cpp:1042-1049`（訊息修剪取所有游標的最小值）、`engine/modules/world_time/src/TimeTypes.cpp:64-67`（暫停時這一幀的量 0、不累加、不扣）、[orchestration.zh-Hant.md](orchestration.zh-Hant.md) O-1～O-11、[world-time.zh-Hant.md](world-time.zh-Hant.md) WT-2、WT-3。
 - 別家原始碼：主 checkout `build/evidence/gyo2-world-gen/other-engines.md`（偵察者 Opus／high；路徑:行號都在裡面）。
@@ -113,7 +113,7 @@
 - **進入**：World 建好的當下（**準備函式之前**；啟動時在 `Product::Build` 的第 6 步建好 World 時，替換時在新 World 建好時），編排層把它的 `WorldGeneration` 放成 `{generating = true, held = false}`。所以準備函式、遊戲初始化（替換第一個 World 而遊戲初始化還沒跑時，在新 World 上）、`beforeSwap`、第一個 `RunFrame` 之前的 `RunSchedule`，看到的都是「生成中」，和 `Product::Generating()` 一致（窄複查 S2）。一律如此，沒有開關：不在意的作者什麼都不寫，第一幀結束就結束（第 1 節最後一例）。
 - **一次 `RunFrame` 裡一個 World 的先後**（和交換點卡 W-2 對齊；窄複查 S9）：
   1. **前處理**：生成中的 World，編排層在兩次 Run 之間把 `WorldGeneration` 寫成 `{true, false}`（清掉上一幀的 `held`）。
-  2. **進**：交換函式的「進」（交換點卡形 (2)；在 `Build` 時登記、存在 World 槽，交換點卡 5.1）。它也讀得到 `Generating()`、可以 `Hold()`。「進」失敗（E2，`ExchangeFailed`）時這一輪不跑、不判定，World 不算壞；下一個 `RunFrame` 照樣從前處理開始。
+  2. **進**：交換函式的「進」（交換點卡的「交換函式」；在 `Build` 時登記、存在 World 槽，交換點卡 5.1）。它也讀得到 `Generating()`、可以 `Hold()`。「進」失敗（E2，`ExchangeFailed`）時這一輪不跑、不判定，World 不算壞；下一個 `RunFrame` 照樣從前處理開始。
   3. **一輪**：每幀清單照常跑。
   4. **判定**：整份每幀清單成功跑完之後讀 `WorldGeneration`——有人 `Hold()`：仍是生成中；沒有人：生成結束，寫成 `{false, false}`。World 中斷時不判定（中斷的 World 寫入是斷言，`World.cpp:239`；Product 已結束，O-11）。
   5. **出**：交換函式的「出」。生成結束那一幀的「出」已讀到 `generating = false`；「出」失敗（E2）不影響已經做完的判定。
@@ -153,7 +153,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 ### 5.3 `Product` 的入口與查詢（W4）
 
-- `bool Generating(std::string_view world) const`：讀那個 World 的 `WorldGeneration`（`GYO_ASSERT`：沒有那個 World 或位置是空的，同 `World()`）。runner 用它決定要不要在別的 World 畫讀取畫面（交換點卡形 (3)）。World 交給別的執行緒期間不能從別的執行緒呼叫（交換點卡 W-5）。
+- `bool Generating(std::string_view world) const`：讀那個 World 的 `WorldGeneration`（`GYO_ASSERT`：沒有那個 World 或位置是空的，同 `World()`）。runner 用它決定要不要在別的 World 畫讀取畫面（交換點卡的「runner 直接讀寫」）。World 交給別的執行緒期間不能從別的執行緒呼叫（交換點卡 W-5）。
 - `RunFrame`：遊戲初始化沒跑時先跑它（O-1），再逐 World 照 5.1 的五步。
 - `RunSchedule(world, schedule)`：照舊跑那一張，**不寫也不判生成的狀態**（不做前處理、不判定）。只用 `RunSchedule` 推一個 World 的 runner 推不動生成：要推，用交換點卡定的「一個 World 的一輪」入口，那個入口和 `RunFrame` 共用同一段處理（前處理、進、一輪、判定、出；實作上一個私有步驟）。入口本身兩卡都只定契約、本批不實作（交換點卡 5.3、W-10）。
 - `RunGameInit`、`InsertSystems`、`World()`：照舊；生成中照樣可以動態插入（O-2）。
@@ -251,8 +251,8 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 | 交界 | 本卡負責 | 交換點卡負責 |
 |---|---|---|
-| 資料進出 World 的四種形（交換點卡修訂 2 的編號） | 形 (1) 套用點（World 裡的 System：asset 的套用、網路的收件送件）：生成中照常跑（「生成期間每幀照跑」之下掛 `Main` 一處即可，使用者選「另跑生成清單」才同時掛 `Generate/First`） | 形 (2) 交換函式（照已核准的時間設計 5.3 登記；登記的理由是日誌宣告 5.4 的 Kernel 診斷紀錄要在 Run 之外取；World 之間的郵箱用形 (1) 還是形 (2) **還沒定**，PvP 移植時定——「郵箱只在 schedule 之間存取」是舊規格 H.4.2 的細節、不是使用者的決定，交換點卡第 18 節更正）：只由 `RunFrame` 呼叫，`RunGameInit`、`RunSchedule` 不呼叫，有 World 壞了不呼叫；形 (3) runner 在兩次入口之間直接讀寫 World：和生成無關；形 (4) Extract：在讀者的「一輪」之前跑。本卡不需要提供「這一輪是不是生成」：「生成期間每幀照跑」之下它在 World 的 `WorldGeneration`，交換函式從 `World&` 讀得到 |
-| 別的 World 要知道某個 World 在生成 | 提供 `Product::Generating(world)` 與 World 內的 `WorldGeneration` | 不加新機制：runner 在兩次入口之間讀 `Generating` 寫進別的 World（形 (3)），或那個 World 的「出」＋有鎖的服務（形 (2)）。交出到別的執行緒的 World，別的 World 只能經它自己的「出」＋有鎖的服務知道它在生成，不能跨執行緒讀 `Product::Generating`（交換點卡 W-5） |
+| 資料進出 World 的四種做法（名字照交換點卡：套用點、交換函式、runner 直接讀寫、Extract） | **套用點**（World 裡的 System：asset 的套用、網路的收件送件）：生成中照常跑（「生成期間每幀照跑」之下掛 `Main` 一處即可） | **交換函式**（照已核准的時間設計 5.3 登記；登記的理由是日誌宣告 5.4 的 Kernel 診斷紀錄要在 Run 之外取）：只由 `RunFrame` 呼叫，`RunGameInit`、`RunSchedule` 不呼叫，有 World 壞了不呼叫；**runner 直接讀寫**（兩次入口之間）：和生成無關；**Extract**：在讀者的「一輪」之前跑。畫面與模擬之間的資料（Product 一份、有自己的鎖的物件，PvP 的 Module 的物件）用套用點還是交換函式，PvP 移植時定。本卡不需要提供「這一輪是不是生成」：它在 World 的 `WorldGeneration`，交換函式從 `World&` 讀得到 |
+| 別的 World 要知道某個 World 在生成 | 提供 `Product::Generating(world)` 與 World 內的 `WorldGeneration` | 不加新機制：runner 在兩次入口之間讀 `Generating` 寫進別的 World（runner 直接讀寫），或那個 World 的「出」＋有鎖的服務（交換函式）。交出到別的執行緒的 World，別的 World 只能經它自己的「出」＋有鎖的服務知道它在生成，不能跨執行緒讀 `Product::Generating`（交換點卡 W-5） |
 | 一個 World 的一輪的入口（分頻率、分執行緒的 runner） | 生成的處理是一個私有步驟，`RunFrame` 與交換點卡的入口共用（5.3） | 入口的形狀（暫名 `Product::Lend`→`WorldLease`，本批不實作）；交出期間由持有的執行緒推它的一輪，生成的狀態跟著交出（交換點卡 5.3） |
 | 一次 `RunFrame` 裡一個 World 的先後（交換點卡 W-2） | 生成的前處理（寫 `WorldGeneration` 成生成中、清 `held`）與「判斷生成是否結束」兩步 | 「進」在前處理之後、「出」在判斷之後：前處理 → 進 → 一輪 → 判斷生成是否結束 → 出。所以生成結束那一輪的「出」已讀到 `generating=false` |
 | 產品把設定交給 Module | `entity_ids` 用每個 World 的 `WorldDescription::options` | Product 一份的設定走 `ProductDescription::options`（Product 層 Resource）及其形狀 |
@@ -610,7 +610,7 @@ void HashValue(Kernel::Hasher&, const WorldGeneration&);
 
 只改用詞與引用，設計不變：
 - **set 與 run 條件**：照 [scheduler 頁](../scheduler.zh-Hant.md)與 Kernel 條文，set 是 `Registrar::Set`（`SetOptions`）的「具名的 System 群組」，和元件的「具名集合」不同；作者用的條件一律寫「run 條件」（5.1、5.2）。
-- **郵箱**：交換點卡第 18 節更正「郵箱只在 schedule 之間存取」不是使用者的決定、用哪一形還沒定；5.12 原本照抄了舊說法，改掉。
+- **畫面與模擬之間的資料**：5.12 原本照抄舊規格 H.4.2 的說法，寫成「只在 schedule 之間存取」的使用者決定；交換點卡已更正那不是 GYO2 的概念、也不是使用者定的。改成「Product 一份、有自己的鎖的物件（PvP 的 Module 的物件）」，用套用點還是交換函式，PvP 移植時定。資料進出 World 的四種做法照交換點卡改用名字（套用點、交換函式、runner 直接讀寫、Extract），不用序號。
 - **交換函式失敗**：補「進」失敗（E2、`ExchangeFailed`）時這一輪不跑、不判定、World 不算壞（5.1 第 2 步；照交換點卡 5.1）。
 - **已合併與待合併的 PR**：PR #267（舊清單整理）已併入 `gyo2`，Kernel 的突變清單保留，第 16 節那一條改成已處理；本分支已 merge `origin/gyo2`（05afdc7a）。PR #269（命名收尾，未合併）把 `gyo_expect_links` 移到 `tests/common/support/ExpectLinks.cmake`、測試補助的 namespace 改成 `GYO::Test::<單位>`，EI-3 與判定 1 照它寫。
 - **交換點卡的版本**：引用改成 e2e6f1cd。
