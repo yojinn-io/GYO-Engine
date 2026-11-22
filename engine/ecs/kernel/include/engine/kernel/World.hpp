@@ -428,8 +428,13 @@ private:
     // stamp: the sync point's stamp. immediate (S5, WorldExecutor::ImmediateFrom):
     // applies only these records, as one phase of steps 2 to 7; the window, the
     // hook queue and the sync epoch are left alone.
+    // derive: whether the application derives data from the cells it adds (step 5a, Registrar::InitialValue).
+    // Applying records and notifying (OnAdd, OnRemove, observers) is one thing; deriving new data from a new
+    // cell is another, and belongs to a change. A restore puts back what it is given and derives nothing
+    // (DI-KS 12; user 2026-11-22, (a2)); every other application derives.
     ::Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr);
+                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr,
+                                                      Detail::Derive derive = Detail::Derive::InitialValues);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
     void RecordRejectedSpawn(RejectedSpawn rejected);
     // Spec E.5: discards every record not yet applied (hook queue included).

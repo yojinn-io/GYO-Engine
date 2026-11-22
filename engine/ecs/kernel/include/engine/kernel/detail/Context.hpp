@@ -65,6 +65,12 @@ struct AccessDesc {
 };
 
 // The record kinds of the deferred queue (spec F.1).
+// Whether an application of records derives data from the cells it adds (World::ApplySync).
+enum class Derive : std::uint8_t {
+    InitialValues,  // a change: step 5a fills each Registrar::InitialValue target of a new request cell
+    Nothing,        // a restore: the records are put back as given (DI-KS 12)
+};
+
 enum class RecordKind : std::uint8_t {
     Spawn,
     Insert,

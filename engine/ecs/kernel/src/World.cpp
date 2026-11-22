@@ -659,7 +659,8 @@ struct NewCell {
 } // namespace
 
 Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                         ChangeStamp stamp, std::vector<Detail::Record>* immediate) {
+                                                         ChangeStamp stamp, std::vector<Detail::Record>* immediate,
+                                                         Detail::Derive derive) {
     using Detail::Record;
     using Detail::RecordKind;
     using Result = Engine::Base::Result<void, KernelError>;
@@ -856,8 +857,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         // cell this step adds is looked at in the next round, so a chain of
         // declarations completes at this sync point. A Target the entity
         // already has is left as it is, so a round adds each cell at most once
-        // and the rounds end.
-        if (!data_->initialValues.empty()) {
+        // and the rounds end. Only an application that derives (a change, not a restore: DI-KS 12).
+        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {
             const auto& rules = data_->initialValues;
             std::vector<NewCell> round = added;
             while (!round.empty()) {

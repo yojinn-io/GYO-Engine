@@ -878,3 +878,109 @@ TEST_CASE("rollback strategy: R-8: the authoritative value is laid over the hist
     CHECK_MESSAGE((health->At(1, 5).has_value() && health->At(1, 5)->hp == 7),
                   "[rb-history-adopted] step 5 in the history: " << (health->At(1, 5) ? health->At(1, 5)->hp : -1));
 }
+
+// ---- R-2 × InitialValue: a restore puts back what was recorded and derives nothing (review of step 8, A3;
+// user 2026-11-22 (a2): notifications run, InitialValue does not).
+
+namespace {
+struct Req {
+    std::int32_t v = 0;
+    friend bool operator==(const Req&, const Req&) = default;
+};
+void HashValue(K::Hasher& h, const Req& r) { HashValue(h, r.v); }
+struct Tgt {
+    std::int32_t v = 0;
+    friend bool operator==(const Tgt&, const Tgt&) = default;
+};
+void HashValue(K::Hasher& h, const Tgt& r) { HashValue(h, r.v); }
+Tgt TgtFromReq(const Req& r) { return Tgt{r.v}; }
+
+// Step 2 inserts Req (the kernel fills Tgt), step 4 removes Tgt; step 7 removes Req (R-2) or, in the death case,
+// a Health at 0 despawns the entity.
+K::SystemResult ReqScript(K::CommandsFor<K::Inserts<Req>, K::Removes<Tgt, Req>> c, K::Res<W::Tick> tick) {
+    if (tick->value == 2) c.Insert<Req>(1, Req{5});
+    if (tick->value == 4) c.Remove<Tgt>(1);
+    return {};
+}
+K::SystemResult DropReqAtSeven(K::CommandsFor<K::Inserts<>, K::Removes<Req>> c, K::Res<W::Tick> tick) {
+    if (tick->value == 7) c.Remove<Req>(1);
+    return {};
+}
+K::SystemResult Wear(K::Query<K::Write<Health>> health) {
+    health.ForEach([](K::EntityId, K::Mut<Health> hp) { hp->hp -= 1; });
+    return {};
+}
+K::SystemResult DieAtZero(K::Despawn despawn, K::Query<K::Read<Health>> health) {
+    health.ForEach([&despawn](K::EntityId entity, const Health& hp) {
+        if (hp.hp <= 0) despawn.Entity(entity);
+    });
+    return {};
+}
+std::vector<std::string>& TgtAdds() {
+    static std::vector<std::string> adds;
+    return adds;
+}
+K::SystemResult TgtAdded(K::HookCtx ctx, K::Res<W::Resimulation> resimulation) {
+    TgtAdds().push_back(std::to_string(ctx.Entity()) + (resimulation->active != 0 ? " resimulating" : ""));
+    return {};
+}
+void RegisterReq(O::WorldSetup& s) {
+    K::Registrar& r = s.Registrar();
+    r.Component<Health>({.name = "Health"});
+    r.Component<Req>({.name = "Req"});
+    r.Component<Tgt>({.name = "Tgt"});
+    r.InitialValue<Tgt, &TgtFromReq>();
+    R::RollbackEntry rollback(s);
+    rollback.Component<Health>();
+    rollback.Component<Req>();
+    rollback.Component<Tgt>();
+    rollback.StepSchedule();
+    r.AddSystem<&ReqScript>(In("ReqScript", "FixedUpdate", "Update"));
+}
+void BuildReqDrop(O::WorldSetup& s) {
+    RegisterReq(s);
+    s.Registrar().AddSystem<&DropReqAtSeven>(In("DropReqAtSeven", "FixedUpdate", "Update"));
+}
+void BuildReqDeath(O::WorldSetup& s) {
+    RegisterReq(s);
+    s.Registrar().AddSystem<&Wear>(In("Wear", "FixedUpdate", "PreUpdate"));
+    s.Registrar().AddSystem<&DieAtZero>(In("DieAtZero", "FixedUpdate", "PostUpdate"));
+    s.Registrar().Hook<Tgt, &TgtAdded>(K::HookTrigger::OnAdd, {.name = "TgtAdded"});
+}
+std::unique_ptr<O::Product> MakeReq(O::OptionBag options, void (*build)(O::WorldSetup&), std::int32_t hp) {
+    auto built = O::Product::Build(Game(build, std::move(options)), Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    K::World& world = (*built)->World("Main").GetWorld();
+    world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
+    world.Insert(1, Health{hp});
+    return std::move(*built);
+}
+} // namespace
+
+TEST_CASE("rollback strategy: R-2: a restore puts back a request without filling its InitialValue target") {
+    auto straight = MakeReq(WithStrategy(), &BuildReqDrop, 100);
+    Frames(*straight, 10);
+    auto rolled = MakeReq(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildReqDrop, 100);
+    Frames(*rolled, 9);
+    REQUIRE((WorldOf(*rolled).Get<Req>(1) == nullptr && WorldOf(*rolled).Get<Tgt>(1) == nullptr));
+    // Step 5 had Req and no Tgt.
+    Inbox(*rolled).ConfirmedThrough(5);
+    Frames(*rolled, 1);
+    CHECK_MESSAGE(WorldOf(*rolled).Get<Tgt>(1) == nullptr, "[rb-restore-no-initial-value] the restore filled Tgt");
+    CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-restore-no-initial-value] the World summaries differ");
+}
+
+TEST_CASE("rollback strategy: R-2: an entity a predicted death took comes back as recorded: no InitialValue, its hooks see resimulating") {
+    // Health 7, one less each step: the prediction kills entity 1 at step 7. The authority says 100 at step 5.
+    auto p = MakeReq(WithStrategy(), &BuildReqDeath, 7);
+    Frames(*p, 9);
+    REQUIRE(!WorldOf(*p).Alive(1));
+    TgtAdds().clear();
+    Inbox(*p).Value<Health>(1, 5, Health{100});
+    Inbox(*p).ConfirmedThrough(5);
+    Frames(*p, 1);
+    REQUIRE_MESSAGE(WorldOf(*p).Alive(1), "[rb-revive-no-initial-value] entity 1 did not come back");
+    CHECK_MESSAGE(WorldOf(*p).Get<Req>(1) != nullptr, "[rb-revive-no-initial-value] Req did not come back");
+    CHECK_MESSAGE(WorldOf(*p).Get<Tgt>(1) == nullptr, "[rb-revive-no-initial-value] the revival filled Tgt");
+    CHECK_MESSAGE(TgtAdds().empty(), "[rb-revive-no-initial-value] OnAdd of a Tgt nobody recorded: " << TgtAdds().size());
+}

@@ -54,6 +54,8 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 6. 步的 schedule 上有生成時，配發器登記成可回滾。
 7. 輸入的入口登記成「重跑時不跑」。
 
+Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；第 8 步審查 A3 發現它原本會補、等價破掉，使用者選 (a2) 從源頭修），所以「請求在、目標當時不在」也照樣等價，不必當成前提。守衛：`rollback strategy: R-2: a restore puts back a request…`、`…an entity a predicted death took comes back…`。
+
 前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
 
 <a id="r-3"></a>

@@ -8126,6 +8126,19 @@
       "target": "gyo_kernel_tests",
       "cases": "D-9 hash: a type with no hash*",
       "expect": "\\[ks\\-hash\\-missing\\-world\\]"
+    },
+    {
+      "id": "ks-restore-derives-initial-values",
+      "what": "Restore derives InitialValue targets from the request cells it puts back (DI-KS 12; user 2026-11-22 (a2): a restore puts back what it is given). Only it catches the restore's no-derive",
+      "guards": [
+        "kernel DI-KS 12"
+      ],
+      "file": "engine/ecs/kernel/src/Executor.cpp",
+      "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);",
+      "replace": "    return ApplyImmediateRecords(Detail::Derive::InitialValues, call, std::move(records), stamp, who, where);",
+      "target": "gyo_kernel_tests",
+      "cases": "restore: Restore puts back what it is given*",
+      "expect": "\\[ks\\-restore\\-no\\-initial\\-value\\]"
     }
   ]
 }

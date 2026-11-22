@@ -98,6 +98,11 @@ SystemResult Act(ExclusiveWorld<> world) {
         if (!moved) return Engine::Base::Err(std::move(moved).error());
         return Ok();
     }
+    case 6: {
+        auto despawned = world.Despawn(2);
+        if (!despawned) return Engine::Base::Err(std::move(despawned).error());
+        return Ok();
+    }
     case 5: {
         // Only the Pos column: no Alive (the alive set stays), no Tag, no Out.
         RestoreSet set;
@@ -125,9 +130,12 @@ SystemResult TagAddedReadsPos(HookCtx ctx, Query<Read<Pos>> positions) {
     return Ok();
 }
 
-std::unique_ptr<Rig> RestoreRig(bool posHook = false) {
-    auto rig = MakeRig([posHook](Registrar& r) {
+Tag TagFromPos(const Pos& pos) { return Tag{pos.x + 1}; }
+
+std::unique_ptr<Rig> RestoreRig(bool posHook = false, bool initialTag = false) {
+    auto rig = MakeRig([posHook, initialTag](Registrar& r) {
         Data(r, true);
+        if (initialTag) r.InitialValue<Tag, &TagFromPos>();
         r.AddSystem<&Act>(B("Act", "A"));
         if (posHook) {
             r.Hook<Pos, &PosAddedReadsTag>(HookTrigger::OnAdd, {.name = "PosAddedReadsTag"});
@@ -287,4 +295,20 @@ TEST_CASE("restore: an OnAdd of the first column sees the entity's later column 
     Phase() = 3;
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK_MESSAGE(Join(Log()) == "pos-added:101 tag=50", "[ks-restore-hooks-after-any-column] " << Join(Log()));
+}
+
+TEST_CASE("restore: Restore puts back what it is given: it derives no InitialValue") {
+    auto rig = RestoreRig(false, true);
+    World& world = rig->world();
+    REQUIRE(world.Get<Tag>(2) == nullptr);  // the Host's insert of Pos of 2 filled nothing
+    Phase() = 1;  // 2 is recorded with Pos and no Tag
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Phase() = 6;  // despawns 2
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(!world.Alive(2));
+    Log().clear();
+    Phase() = 3;
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE((world.Alive(2) && world.Get<Pos>(2) != nullptr));
+    CHECK_MESSAGE(world.Get<Tag>(2) == nullptr, "[ks-restore-no-initial-value] the restore filled Tag of 2 from its Pos");
 }

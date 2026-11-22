@@ -159,7 +159,7 @@ private:
     ::Engine::Base::Result<void, KernelError> RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
                                                             const std::string& who, const std::string& where);
     // The change itself and its hook rounds, as one immediate change with stamp.
-    ::Engine::Base::Result<void, KernelError> ApplyImmediateRecords(Detail::SystemContext& call,
+    ::Engine::Base::Result<void, KernelError> ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
                                                                   std::vector<Detail::Record> change, ChangeStamp stamp,
                                                                   const std::string& who, const std::string& where);
     // Detail::TriggerNow: ExclusiveWorld::Trigger of the running exclusive System call.

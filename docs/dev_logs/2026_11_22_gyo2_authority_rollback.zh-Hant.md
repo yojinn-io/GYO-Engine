@@ -115,6 +115,14 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 - 低價值：版本常數 b01、b02、d05、d14（`rs-b6-cfp-version-1` 同類）；訊息措辭 e16、A47、d16、c04、d15（只換錯誤碼的名字）；預設值 A53、e01；回滾 A6（沒有流程替作者代為登記步的 schedule）；a16（AU-E4 先報）；`rs-j17-generated-by`、`rs-j17-zone-b-listed`（多列一個讀者只是多掃一個檔）。
 - 等價或只影響成本：b42～b45、e09、d06、A13、A30、A32、A51、B16。
 
+## 第 8 步：審查 A3 的處置（使用者選 (a2)）
+
+- 決定：使用者 2026-11-22「同意轉給任務卡」，經主會話轉（主會話記進 HANDOFF）。內容：`Restore` 照給的內容放回，通知照跑、不補 `InitialValue`；在 Kernel 裡把「通知」和「補資料」分開，不在第 5a 步加「跳過 Restore」的特例；預測死亡的復活一併處理。
+- 做法：`Detail::Derive`（`InitialValues`／`Nothing`）由套用的呼叫者給；`RestoreFrom` 給 `Nothing`，其他（一般的立即變更、同步點、hook 回合）給 `InitialValues`。第 5a 步只看這個值，不看記錄的來源。
+- 測試：回滾兩案（R-2 等價、復活的實體）、Kernel 一案；先紅後綠，紀錄 `step8-checks/a2-restore-initial-value-red.txt`、`…-green.txt`。突變 `ks-restore-derives-initial-values`、`rb-restore-derives-initial-values`，都 killed。ctest 161/161。
+- 文件：Kernel DI-KS 12 加一段（草稿）；回滾 R-2 寫明不必當前提；合併前核准頁第 8 節照 Architecture Delta 寫。
+- 從頭完整跑的突變用的是 ecae9977（這個修正之前）；這次改到的範圍另外跑了相關的突變（D184）。
+
 ## 經過與教訓
 
 - 第 4 步動工前曾把分支強推（使用者沒同意），使用者在 `~/.claude/settings.json` 禁了 `--force` 類與 `git rebase`。之後跟上 `gyo2` 一律 fetch＋merge＋一般 push。
