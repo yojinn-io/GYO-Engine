@@ -10,9 +10,9 @@
 
 | # | 結果 | 證據 |
 |---|---|---|
-| 1 | 本機 macOS x86_64 全量 ctest 163/163（7ca34378 之後；161 加新的兩組）；編排層 103 案、663 個斷言全過（91f652f0）。L1 三平台：PR #270 上跑（結果補記） | `impl-ctest.log` |
-| 2 | P-1～P-9、X-1～X-8 全過（敵對式檢查後 P-1、P-5、X-3、X-6、X-7 加了案或斷言，見第 3 節） | `orchestration.product-buffer`、`orchestration.exchange` |
-| 3 | 本批的突變經 Fable 5.2／high 敵對式檢查補齊；相關突變 45/45；合併前的完整跑（0bca189d）：編排層 270/273，另 3 個是我改了 `WorldFinish` 的建構子與新測試用了不能預設建構的型別，讓它們的 `replace` 建置失敗，修正後 3/3 killed；`world_time` 92/92；權威 117/118（存活的 `au-z6-skipped-counted` 不是本批造成的：本批沒改權威的程式與測試，見 dev_log「合併前」）；回滾 79/79、base 10/10、naming 28/28；Kernel 補記 | `run-impl-mutants.log`、`run-impl-mutants-2.log`、`mutants-adversarial-check.md` |
+| 1 | 本機 macOS x86_64 全量 ctest 163/163（7ca34378 之後；161 加新的兩組）；編排層 103 案、663 個斷言全過（91f652f0）。合進 #272 之後：169/169、編排層 117 案、809 個斷言。L1 三平台：PR #270 上跑（結果補記） | `impl-ctest.log`、`merge3-ctest.log` |
+| 2 | P-1～P-9、X-1～X-9 全過（敵對式檢查後 P-1、P-5、X-3、X-6、X-7 加了案或斷言，見第 3 節；X-9 是合進 #272 後的 C19） | `orchestration.product-buffer`、`orchestration.exchange` |
+| 3 | 本批的突變經 Fable 5.2／high 敵對式檢查補齊；相關突變 45/45；合併前的完整跑（0bca189d）：編排層 270/273，另 3 個是我改了 `WorldFinish` 的建構子與新測試用了不能預設建構的型別，讓它們的 `replace` 建置失敗，修正後 3/3 killed；`world_time` 92/92；權威 117/118（存活的 `au-z6-skipped-counted` 不是本批造成的：本批沒改權威的程式與測試，見 dev_log「合併前」）；回滾 79/79、base 10/10、naming 28/28。**完整跑涵蓋到 0bca189d（#271、#272 合進來之前）**；Kernel 沒跑完：本批沒改 Kernel 的程式，你說「停了，要處理就只跑改過的那幾個。」，判定 3 的範圍改成改過的那幾個。合進 #272 之後，`find` 落在 `RunRound` 的突變 12/12 killed | `run-impl-mutants.log`、`run-impl-mutants-2.log`、`mutants-adversarial-check.md`、`c19-mutants.log` |
 | 4 | 設計審查（Fable 5.2／high）：整體合理，沒有新的要你定的設計題；8 處小修都已改（第 5 節），一個可選提案在第 8 節 | `design-review/REPORT.md` |
 
 ## 2. Design Invariants 的最終文字（各頁標〔草稿，`v8-arch-gyo2-exchange`〕的段落）
@@ -52,11 +52,11 @@ P-1～P-9、X-1～X-8 守 O-2、O-12、O-15，屬 Design Invariants 的守衛，
 
 | 清單 | 本批加 | 復原或改寫 | 只收窄 expect | 退 | 現在 |
 |---|---|---|---|---|---|
-| `orchestration_mutations.json` | 34（宣告時 25＋敵對式檢查後 9） | 復原 9（本批改文字讓它們的 `find` 對不上）、改寫 1 | 10 | 0 | 275 |
+| `orchestration_mutations.json` | 36（宣告時 25＋敵對式檢查後 9＋C19 的 2） | 復原 9（本批改文字讓它們的 `find` 對不上）、改寫 1；合進 #272 時補回 1（解衝突時丟了，見 dev_log） | 10 | 0 | 282（合併前 273＋#272 的 7＋C19 的 2） |
 | Kernel `mutations.json`（第 0 步，#268 已合併） | 1 | — | — | 0 | — |
 | `authority_mutations.json`（第 0 步，#268 已合併） | 1 | — | — | 0 | — |
 
-- 基準：改的條文 O-2、O-3、O-5、O-7、O-8、O-12、O-13、O-15、DI-KS 13 共 9 條 × 5＝45。本批加 34，在基準內。
+- 基準：改的條文 O-2、O-3、O-5、O-7、O-8、O-12、O-13、O-15、DI-KS 13 共 9 條 × 5＝45。本批加 36，在基準內。C19 的 2 個：「進」搬到生成前處理之前、「出」搬到判定之前，各自只捕自己的錯。
 - 不採的提案（README「尋ねずに行う」的分類）：
   - 逐欄細項 3 個（`ProductBuffer()` 在產品自己的 `build`、`Finish`、`Check` 各一個）。
   - `~Product` 相鄰步驟中檢查者沒標「建議採」的 3 個。
@@ -64,7 +64,7 @@ P-1～P-9、X-1～X-8 守 O-2、O-12、O-15，屬 Design Invariants 的守衛，
   - 預設 runner 的 E2、`reporterCode` 各 1 個。
   - 這些錯誤，測試今天已經會失敗，只是沒有突變專門指著它。
 - 相關突變：本批的 34 個與改過 `find` 的 11 個（復原 9、`or-runner-not-called`、`or-buffer-create-after-freeze`）：45/45 killed（第一次 43/45，兩個是我改程式後沒對齊的 `replace` 與 `expect`，修正後重跑殺掉；dev_log「突變」）。
-- 合併前的完整跑（宣告判定 3：Kernel＋編排層＋`world_time`＋權威＋回滾＋base＋naming）：背景跑，結果補記。
+- 合併前的完整跑：見第 1 節判定 3（涵蓋到 0bca189d；Kernel 依你的指示停掉）。
 - 靜態掃描（不建置，數每個突變的 `find` 出現幾次）：所有清單都恰好一次（91f652f0）。
 
 ## 5. 和宣告不同的地方
@@ -95,7 +95,7 @@ P-1～P-9、X-1～X-8 守 O-2、O-12、O-15，屬 Design Invariants 的守衛，
 - World 交出到別的執行緒（O-13 的入口）：PvP 的 Client 移植那批。交出那批要把「進 → 一輪 → 出」做成單一入口，`RunFrame` 改成呼叫它。
 - Extract 的實作與來源替換的做法（「讀者一起重建」或「准許換來源」）：SDL 那批。
 - 時間取樣移給 runner：第一個需要的 runner 那批（第 2 節的 world-time）。
-- 生成世界合併後，「一輪」含生成那一批的合起來案例，由後合併的那一批補（生成世界宣告的 C19）。合併時的寫法（生成世界卡 #272 的合併前核准頁 4.1）：先後必須是「前處理 → 進 → 一輪 → 判定 → 出」（W-2）；**不能寫成「進；`RunRound`；出」**——那樣前處理跑在「進」之後，「進」裡的 `Hold()` 會被清掉，只有 C19 的測試抓得到。#272 後合併：把進、出放進它的 `RunRound`（已用註解標出位置）；#270 後合併：把前處理與判定拆出來，放在進、出的外面。
+- ~~生成世界的 C19~~：已做。#272 先合併，本批把「進」放在 `RunRound` 的生成前處理之後、「出」放在判定之後（「前處理 → 進 → 一輪 → 判定 → 出」，W-2），加 X-9 與 2 個突變（dev_log「跟上 `gyo2`（#272 生成世界）與 C19」）。
 - 只在 macOS（AppleClang、libc++）跑過突變；銷毀順序靠明確的步驟，不依賴標準庫，L1 的三平台會跑 P-5。
 
 ## 8. 設計審查的可選提案：`~Product` 的兩個細項要不要降成實作細節

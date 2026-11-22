@@ -3662,6 +3662,20 @@
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-9*",
    "expect": "\\[or\\-exch\\-generation\\] in generating \\| r \\| out generating \\| in generating \\| r \\| out generating \\| in generating \\| r \\| out generating"
+  },
+  {
+   "id": "or-exch-round-after-failed-in",
+   "what": "after a failing \"in\" the World's round still runs before RunFrame returns the error (5.1: RunFrame stops). Only it catches the round not running",
+   "guards": [
+    "orchestration O-12",
+    "exchange-declaration 5.1"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n",
+   "replace": "    auto exchanged = Exchange(slot.exchangeIn, world, \"in\");\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n    if (!exchanged) return exchanged;\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "exchange: X-3 a failing*",
+   "expect": "\\[or\\-exch\\-stops\\] in game@A a out game@A in game@B b"
   }
  ]
 }
