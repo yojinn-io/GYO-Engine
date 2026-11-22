@@ -1,6 +1,6 @@
 # 命名規範（`v8-arch-rebuild`）
 
-更新：2026-11-14；2026-11-22（N13、N14、N17、第 3、5、6、7 節：`v8-arch-gyo2-namespace-root`，namespace 的根統一並立守衛）。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**
+更新：2026-11-14；2026-11-22（N13、N14、N17、第 3、5、6、7 節：`v8-arch-gyo2-namespace-root`，namespace 的根統一並立守衛；N13 的「引用別的單位」、測試輔助的根：`v8-arch-gyo2-naming-cleanup`）。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**
 
 使用者（2026-11-14）：「你後面做好表之後，也做一個命名規範。」
 
@@ -45,7 +45,7 @@
 |---|---|---|---|
 | N11 | 一個模組一個目錄：`engine/<模組>/`，底下 `include/engine/<模組>/` 與 `src/` | `engine/core/time/include/engine/time/Waiter.hpp` | 事實 |
 | N12 | 含入路徑從 `engine/` 起算 | `#include "engine/time/Waiter.hpp"` | 事實 |
-| N13 | namespace 照 N17 的根：Engine 的單位是 `GYO::Engine::<單位>`，Kernel 是 `GYO::Kernel`；單位內部的東西放 `Detail` | `GYO::Engine::Time`、`GYO::Engine::Threads` | 事實；2026-11-22 根從 `Engine::` 改成 `GYO::Engine::`（`v8-arch-gyo2-namespace-root`，第 6 節） |
+| N13 | namespace 照 N17 的根：Engine 的單位是 `GYO::Engine::<單位>`，Kernel 是 `GYO::Kernel`；單位內部的東西放 `Detail`。**引用別的單位**：Engine 的單位裡寫 `<單位>::`，Kernel 裡寫 `Engine::<單位>::`，巨集寫全限定 `::GYO::Engine::<單位>::`（巨集在任何 namespace 展開）。守衛不查，審查看 | `GYO::Engine::Time`、`GYO::Engine::Threads`；`Base::Result`（Engine 的單位裡）、`Engine::Base::Result`（Kernel 裡） | 事實；2026-11-22 根從 `Engine::` 改成 `GYO::Engine::`（`v8-arch-gyo2-namespace-root`，第 6 節）。「引用別的單位」：使用者 2026-11-22 選 (a)（`v8-arch-gyo2-naming-cleanup`，見下方「N17 的根」末的說明） |
 | N14 | 一個目錄一個 CMake target：`gyo_<目錄名>`，別名 `GYO::<名>`（`<名>` 照 N17 從目錄名推） | `gyo_time`、`GYO::Time`；`gyo_world_time`、`GYO::WorldTime`；`gyo_io`、`GYO::IO` | 事實；縮寫的寫法見 N17。守衛不查，審查看 |
 | N15 | 型別、函式用大寫開頭的駝峰；成員變數小寫開頭、結尾加底線；常數 `k` 開頭；巨集 `GYO_` 開頭全大寫 | `RoleThread`、`StopRequested()`、`state_`、`kSampleRate`、`GYO_ASSERT` | 事實 |
 | N16 | 檔名等於它主要的型別名 | `RoleThread.hpp`、`RoleThread.cpp` | 事實 |
@@ -70,6 +70,7 @@
 - **測試輔助只有一套根**：各單位的測試輔助都在 `GYO::Test::<單位>`（例 `GYO::Test::Kernel`、`GYO::Test::Orchestration`、`GYO::Test::Rollback`、`GYO::Test::Logging`），不另開頂層的 `KernelTest`、`WorldTest`、`OrchTest`、`RollbackTest` 這類 namespace（2026-11-22 收斂，`v8-arch-gyo2-naming-cleanup`；Kernel 的兩份輔助標頭 `KernelTestSupport.hpp`、`WorldTestSupport.hpp` 同在 `GYO::Test::Kernel`）。守衛不查頂層的根（產品的根和它分不出來），由審查看。
 - **打開別人的 namespace**：一個 namespace 只在它的目錄裡打開。要特化別的單位的樣板（例：`EntityKey`），寫全限定的特化 `template <> struct GYO::Engine::EntityStore::EntityKey<T> { … };`，不打開 `namespace GYO::Engine::EntityStore {`。用 `using namespace`、別名（寫在自己的 namespace 裡）不算打開。
 - **守衛**：`tests/common/naming/naming_guard.py`（ctest `naming.guard`、自測 `naming.guard_selftest`；讀 C/C++ 文字的共用函式在 `tests/common/support/source_text.py`；2026-11-22 從 `tests/common/kernel/`、ctest `kernel.naming_guard` 搬來，`v8-arch-gyo2-naming-cleanup`；突變在 `docs/architecture/target/v2/scripts/naming_mutations.json`）。它只守歸屬：每個 Engine 單位的 namespace 是表裡推出的根；一個單位的根只在它的目錄打開；`GYO` 單獨、不在表裡的 `GYO::<X>`、`GYO::Plugins` 在 `plugins/` 以外、`GYO::Test` 在 `tests/` 以外，都報；`engine/` 底下不在層表裡的目錄報（fail closed）。新加的單位不用改守衛就會被查；拿掉一個 Module 也不用改守衛。不守的（審查看）：target 名（N14，由建置與登記檔負責）、namespace 別名（別名不是打開）、產品自己的根。
+- **N13「引用別的單位」的來源**：使用者 2026-11-22 原話「核准，N13 選 (a)」。比過的選項：(a) 補這一句，剩下的全名（`engine/` 裡不帶前導 `::` 的約 267 處、`::GYO::Kernel::` 16 處）另開一批改完／(b) 補這一句，殘留在同一批改完／(c) 不補，兩種寫法都可以。理由：`v8-arch-gyo2-naming-cleanup` 把 `::GYO::Engine::` 改成短名後，同一個型別有兩種寫法、規範沒寫用哪一種，下一批會繼續混寫（設計審查第 4 項）；先有規則，改名排在前面。出處：`v8-arch-gyo2-naming-cleanup` 卡片的對話。
 - **舊根 `Engine` 的檢查是過渡規則**：沒有人打開 `namespace Engine`，讓帶過來的程式不會回到舊根。拿掉的條件：不再從 master 帶程式過來（產品都移植完）。
 
 ## 4. ECS 相關的命名（提案）

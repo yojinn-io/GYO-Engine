@@ -23,6 +23,27 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
 
 文件跟著改的：`rebuild-naming.zh-Hant.md`（守衛位置、測試輔助一條）、`target/naming.zh-Hant.md`（守衛路徑）、`world-time.zh-Hant.md`（守衛欄的 ctest 名；WT-4 守衛欄原本寫已退役的 `wt-guard-naming-root-dropped`，改成現行的 `wt-guard-real-n1-other-namespace`；條文本身不變）、`entity-store.md`（`gyo_expect_links` 的位置）、`target/v2/README.md`（本 dev_log）。歷史紀錄（dev_log、HANDOFF、已核准的宣告）不改寫。
 
+## 使用者的決定（照四樣，轉主會話記 HANDOFF；不是合併同意）
+
+1. **合併前核准**（2026-11-22）
+   - 原話：「核准，N13 選 (a)」。
+   - 範圍：本卡回報時列的待決四件裡的前三件，也就是：
+     - §14.4 `SCAN_ROOTS` 拿掉 framework（naming DI 1 守衛的放寬）；
+     - §14.4 `test_n1_every_scan_root_is_scanned` 的收緊；
+     - 第 6 件留 `apps`、`tools`（偏離 brief）。
+   - 比過的選項：第 6 件是「照 brief 一起拿掉 apps、tools」對「只拿掉 framework」。
+   - 理由：見各節的 1～5、第 6 件與設計審查第 7 項。
+   - 出處：本卡對話。
+2. **N13 補「引用別的單位」，選 (a)**
+   - 原話：同上。
+   - 比過的選項：
+     - (a) 補這一句，殘留另開一批；
+     - (b) 補這一句，殘留本批改完；
+     - (c) 不補。
+   - 理由：見「交使用者決定」與設計審查第 4 項。
+   - 出處：本卡對話。
+   - 處置：`rebuild-naming.zh-Hant.md` N13 補「Engine 的單位裡寫 `<單位>::`，Kernel 裡寫 `Engine::<單位>::`，巨集全限定」，「N17 的根」末記來源。殘留（不帶前導 `::` 的約 267 處、`::GYO::Kernel::` 16 處）交主會話開卡。
+
 ## AGENTS §14.4
 
 ### 自測收緊：`test_n1_every_scan_root_is_scanned` 的 engine 分支（naming DI 1 的守衛測試，只收緊；照 §14.4 仍要使用者核准）
@@ -93,7 +114,7 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
 - B（敵對式檢查）：22 種改法，9 killed、13 存活。存活的 11 種不補：多掃（只會更嚴）2、讀法的深度 2（README 第 4 條：見到漏網才加）、某條規則在某個根靜默的交叉組合 6（守衛沒有按根分支）、等價 1。**該補的 1 個洞**（2 種改法）：roots 檢查跳過 `engine/`（迴圈改成 `SCAN_ROOTS[1:]`、或跳過 `engine/` 底下所有檔），自測與實樹都過——`test_n1_every_scan_root_is_scanned` 的 engine 分支只斷言「不是層」。本批以前就有。處置：那個測試的 engine 分支加兩個斷言（`engine/sample/Leak.cpp` 與層目錄下的散檔 `engine/core/Loose.hpp` 都要報 roots 的發現）；兩種改法現在都讓自測失敗（`design-review/hole-closed.log`）。照 README 第 4 條（清單的每個項目由自測逐一確認，清單只要一個突變，已有 `nm-scan-roots-examples`），不加突變。
 - 拿掉 framework 本身：加回清單會被 `test_n1_scan_roots_are_pinned` 殺；§14.4 的 1～5 和程式一致。
 
-### 交使用者決定：N13 補一句「單位之間怎麼引用」
+### 交使用者決定：N13 補一句「單位之間怎麼引用」——已決定 (a)，見「使用者的決定」
 
 - 現況：`engine/` 裡同一個型別有兩種寫法（例：`World.hpp` 的 `Engine::Base::Result` 與 `Executor.cpp` 的 `GYO::Engine::Base::Result`），命名規範沒有寫該用哪一種。
 - 審查的建議：N13 補「Engine 單位內寫 `<單位>::`，Kernel 內寫 `Engine::<單位>::`，巨集全限定」，由審查看、不立守衛。
@@ -106,7 +127,7 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
 
 ## 後續（範圍外，沒有做）
 
-- `engine/` 裡不帶前導 `::` 的全名約 267 處（IO 最多）、`::GYO::Kernel::` 16 處（world_time 的 `HashValue`）：等 N13 的那一句定了再改（見「交使用者決定」）。
+- `engine/` 裡不帶前導 `::` 的全名約 267 處（IO 最多）、`::GYO::Kernel::` 16 處（world_time 的 `HashValue`）：照 N13 新加的那一句改成短名，另開一批（使用者選 (a)）。
 - 「切段找 `..`」的同一個運算式有 5 份（kernel_guard K5、orchestration_guard O4、entity_store_guard，以及 #267 新加的 trace_guard、logging_guard），各綁一個突變；能共用的只有「切段找 `..`」（gyo2-stale-cleanup 卡轉來，出處 `build/evidence/gyo2-stale-cleanup/design-review/REPORT.md` B 節第 3 項）。可併進 `source_text.py`，誰後合併誰對齊。
 - N1 forward 的四個實樹陽性對照裡，`wt-guard-real-n1-other-namespace` 與 `nm-real-acronym` 看起來重疊（設計審查小點）。
 - naming_guard 的 `SCAN_ROOTS` 不含 `build/acceptance`（建置會讀，現在沒有 C/C++ 檔）。本批以前就有的缺口，驗證者發現。
