@@ -10,7 +10,7 @@
 
 | # | 結果 | 證據 |
 |---|---|---|
-| 1 | 本機 macOS x86_64（Intel i9-9980HK）`ctest -L 'cpu\|shader'` 161/161（ecae9977）。L1 三平台（linux-x64、windows-x64、macos-arm64）在 ecae9977 全部通過（手動 dispatch，run 44932280155）。`git grep -n -i "summary-padding-a-then-c" -- tests engine` 0 命中（終了碼 1；正例 59fd4da9 命中 14 行） | 本機 ctest；GitHub Actions |
+| 1 | 本機 macOS x86_64（Intel i9-9980HK）`ctest -L 'cpu\|shader'` 161/161（61d6f72c）。L1 三平台（linux-x64、windows-x64、macos-arm64）全部通過：ecae9977（run 44932280155）、5263c865（A3 的修正，run 44977025203）、61d6f72c（A5 的修正，run 44978850493）；之後只改了註解、突變清單與文件。`git grep -n -i "summary-padding-a-then-c" -- tests engine` 0 命中（終了碼 1；正例 59fd4da9 命中 14 行） | 本機 ctest；GitHub Actions |
 | 2 | 第 9.3 節的案全過；scenario 第 5 段 S5-1～S5-8 全過（宣告寫第 3 段，見第 5 節）。9.3 漏的 `BuildNewFirst` 失敗案第 8 步補上 | `rollback.*`、`authority.*`、`kernel.*`、`scenario.segment5` |
 | 3 | 三份新清單經 Fable 5.2／high 敵對式檢查補齊。從頭完整跑（ecae9977）：回滾 74/74、權威 115/115、時間 95/95、`authority_scan` 18/18；編排層 237/242、Kernel 659/671——本分支造成的 7 個已修或退役（再跑都 killed，dev_log 逐個寫），其餘 10 個是 `gyo2` 上本來就壞的（Kernel 的 7 個 stale 與 `ks-k8-skips-executor-files`、編排層 2 個），列為後續。之後 A3、A5 的修正與突變另外跑過，都 killed | `full-mutation-ecae9977/`、`step8-checks/` |
 | 4 | 31 個樣式在 HEAD 零命中，每個樣式在 f25837b0 先命中（正例）；方向兩條（`engine/(authority\|rollback)/` 的 include、`Authority::`／`Rollback::`）零命中 | `judgement4_scan.py`、`judgement4-ecae9977.txt` |
