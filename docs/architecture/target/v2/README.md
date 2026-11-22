@@ -65,6 +65,7 @@
 - [event-cursor-declaration.zh-Hant.md](event-cursor-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor` 的事前宣告（事件：保留式改名 `Message` 與游標修剪，推送式 `Event`＋`Observer`；邊界統合的子份）；修訂 4 與修訂 5、6，使用者 2026-11-17 核准（758f651f）。
 - [event-cursor-reeval-declaration.zh-Hant.md](event-cursor-reeval-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor-reeval` 的事前宣告（被條件長期擋住或不常跑的 `Message` 讀者：查證後判為作者的問題，Kernel 不改，說明頁寫寫法、Kernel 加 RC 24）；修訂 3，使用者 2026-11-22 核准。
 - [kernel-res-changed-declaration.zh-Hant.md](kernel-res-changed-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-res-changed` 的事前宣告（`Res`／`ResMut` 的 `Changed()`：比掛載的上次跑、寫入就算；同值不寫的規則登記 CCR-8）。使用者 2026-11-23 核准（3.1 選 (a)）。
+- [kernel-summary-messages-declaration.zh-Hant.md](kernel-summary-messages-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-summary-messages` 的事前宣告（World 摘要與訊息：序號與游標是歷史的計數，回滾重跑或外部事件會讓同樣的狀態得到不同摘要）。使用者 2026-11-23 選 (b)。
 - [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
 - [threads-io-review-declaration.zh-Hant.md](threads-io-review-declaration.zh-Hant.md)：`v8-arch-gyo2-threads-io-review` 的重審報告兼事前宣告（threads 加 `WorkerPool`、`RoleThread` 不改名；io 拿掉沒有使用者的部分與 `Vfs`、補 `TooLarge` 與多執行緒讀的契約）；修訂 1，使用者 2026-11-22 動工前核准（74d38577）。
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
@@ -122,6 +123,7 @@
 - [2026_11_22_gyo2_state_machine.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_state_machine.zh-Hant.md)：狀態機 Module（第 5 批，宣告修訂 8）。
 - [2026_11_22_gyo2_restore_impl.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_restore_impl.zh-Hant.md)：第 5 批 讀檔的實作（讀檔宣告修訂 12：沿用既有案例、補四個生成期間的讀檔案例、說明頁第 15 節）與存檔版本 `save_version`（純程式庫、預設不帶）。
 - [2026_11_23_gyo2_kernel_res_changed.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_res_changed.zh-Hant.md)：Resource 的變更偵測——`Res`／`ResMut` 的 `Changed()`、Kernel DI-KS 28、System 契約說明頁第 18 節、CCR-8。
+- [2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md)：World 摘要版本 4——訊息只收留著的筆數與內容，不收寫入序號、紀錄的序號與游標表（使用者選 (b)；Kernel DI-KS 10、27，RC 25）。
 
 ## 沒有搬過來的
 

@@ -535,7 +535,7 @@ asset 不寫日誌、不自己重試、不讓 World 中斷。要不要因為載�
 | 型別 | 雜湊什麼 | 理由 |
 |---|---|---|
 | `AssetRequests` | **什麼都不寫** | 只是請求入口，沒有要比的內容 |
-| `AssetView` | **什麼都不寫** | 依完成時序變；告知用輪詢、不用 Kernel 的 `Message`，所以沒有序號與游標進摘要（5.7） |
+| `AssetView` | **什麼都不寫** | 依完成時序變；告知用輪詢、不用 Kernel 的 `Message`，所以沒有序號與游標進摘要（5.7）〔2026-11-23 註：摘要版本 4 起訊息的序號與游標本來就不進摘要，`v8-arch-gyo2-kernel-summary-messages`〕 |
 | `AssetRef<T>` | id 的字串 | 同 `Handle<T>` |
 | `Handle<T>` | **id 的字串** | 跨行程穩定；不含型別序號（`Handle<T>` 的靜態型別已決定是哪一欄；修訂 2 檢查 S10）；不含 store 內部索引 |
 | `AssetId` | id 的字串 | 同上；接 Kernel 的同一個客製點（一個概念一個實作） |
@@ -995,7 +995,7 @@ F9（2D 單機）：不呼叫 `Summary` 就不碰這些。
 5. **catalog 的 owner 已由決定 6 解消**：格式歸 asset；master 的 `AssetCatalog` 的工具（audio_editor 寫，ui_editor、model_viewer 讀）搬回時照新的契約。
 6. **生成世界那批收 5.13 的 G-1～G-3，交換點、threads 那批收 5.6 的 X-1～X-6。**
 7. **11-11 方向 2 已推翻**（決定 7）：舊頁 `assets.zh-Hant.md` 與 `rebuild-1111-decisions-status.zh-Hant.md` 對這一條的狀態要更新（主會話的文件整理）。
-8. **Kernel 的 `Message` 與 `Summary`**：第 4 批的 `Summary` 雜湊每個訊息緩衝的序號與游標（第 4 批分支 `World.cpp:1188-1201`），和 payload 的雜湊函式無關。依完成時序或外部事件發訊息的 Module（asset 以外，例：日後的網路、輸入）都會讓摘要依時序變。asset 改用 Resource 繞開（5.7）；要不要給訊息型別「不進摘要」的選項，交主會話與第 4 批判斷。
+8. **Kernel 的 `Message` 與 `Summary`**：〔2026-11-23 已解：使用者選 (b)，摘要版本 4 不收訊息的序號與游標，見 [`kernel-summary-messages-declaration.zh-Hant.md`](kernel-summary-messages-declaration.zh-Hant.md)〕第 4 批的 `Summary` 雜湊每個訊息緩衝的序號與游標（第 4 批分支 `World.cpp:1188-1201`），和 payload 的雜湊函式無關。依完成時序或外部事件發訊息的 Module（asset 以外，例：日後的網路、輸入）都會讓摘要依時序變。asset 改用 Resource 繞開（5.7）；要不要給訊息型別「不進摘要」的選項，交主會話與第 4 批判斷。
 9. **編排層的結束回呼**：登記單位沒有 Product 結束時的回呼，World 也先銷毀，所以 asset 的丟棄件數（E3）沒有出口（5.8）。要不要加，交主會話。
 10. **cross-component-rules**：AS-10 (c)（loader 的值 const 並行安全、解構不綁執行緒）與「判定用的內容在進判定前載完」、「判定用內容的 Handle 要一直持有，放在沒有用 `rollback.` 登記的 Resource」在實作第 6 步登記，owner asset。
 11. **D6b、M11 的加註**（決定 14）：asset 把「World 內不上鎖」讀成「World 的資料不上鎖；System 呼叫外部服務時，那個服務可以拿它自己的鎖」，結果只在套用點批次進 World。同步呼叫外部服務可以帶回的，只有不進雜湊、不進相等的身分資訊（asset 是 Handle 的生命序號，效果只有 `State` 回 `Queued`）。請主會話在 `rebuild-concept.zh-Hant.md` 的 D6b、M11 加註這個讀法，免得日後網路等 Module 各自解讀。 登記與預先登記的回傳值是設定錯誤的回報（正確設定下一律成功），System 不得拿它分支判定。通則是：同步呼叫外部服務帶回的值，不得讓判定依時序而變。

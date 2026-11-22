@@ -516,7 +516,7 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(9)->t == 200);
         const std::string summary = SummaryOf(rig->world()).Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "3:3f782d8237ce0e8f80a0f53d42883688f02f5d75620f9c289d52a472f5fdd0b4");
+        CHECK(summary == "4:5f5fc699806710d5d4921bae5c5b098c33358968d2024b420194dc8d895b9dcc");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {

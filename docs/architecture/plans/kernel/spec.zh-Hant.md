@@ -517,7 +517,7 @@ ScheduleGraph（每個 schedule 一張）
 | D-6 | Plan 在 finish 時建一次；Running 期間不重建、不改步驟；run 條件只決定跑或跳過 | Plan 是 const 物件；審查 |
 | D-7 | Scheduler 只讀描述，不打開函式體，不認識任何型別名稱 | Scheduler 標頭不 include 任何元件型別（掃描）；R-7 |
 | D-8 | With／Without 在 v1 不減少衝突 | J-25：兩個 System 各寫 A，一個帶 `With<B>`、一個帶 `Without<B>`，仍算衝突 |
-| D-9 | (c) 區對登記順序不敏感：把同一組 (c) System 的登記順序任意排列，要嘛全部 D-E8，要嘛每一對衝突 System 的先後相同、World 摘要相同。「World 摘要」＝所有欄的 keys 與值、Resource 的值、事件 payload，**不含** `added`／`changed` stamp、`tickStamps`、Plan 位置（重排無衝突的 System 會改 stamp，那不是 (c) 資料；修訂：N6） | J-44（排列測試；主張 A 的守衛） |
+| D-9 | (c) 區對登記順序不敏感：把同一組 (c) System 的登記順序任意排列，要嘛全部 D-E8，要嘛每一對衝突 System 的先後相同、World 摘要相同。「World 摘要」＝所有欄的 keys 與值、Resource 的值、事件 payload，**不含** `added`／`changed` stamp、`tickStamps`、Plan 位置（重排無衝突的 System 會改 stamp，那不是 (c) 資料；修訂：N6），也不含訊息的寫入序號、紀錄的序號與游標（`v8-arch-gyo2-kernel-summary-messages`，摘要版本 4） | J-44（排列測試；主張 A 的守衛） |
 | D-10 | 全序的平手鍵只有 registrationSeq；不用 name、指標、雜湊 | 突變：改依 name → D-9 仍成立但 J-23 失敗；改依指標 → J-20 失敗 |
 
 ### D.4 C++ 實現手段

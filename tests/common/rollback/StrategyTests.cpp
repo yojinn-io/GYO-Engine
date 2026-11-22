@@ -151,6 +151,32 @@ void BuildFeed(O::WorldSetup& s, bool feedFirst) {
     s.Registrar().AddSystem<&Feed>(feed);
 }
 void Build(O::WorldSetup& s) { BuildFeed(s, false); }
+
+// R-2 premise 4: a message the step writes and reads within the step (a hit). A resimulation writes it again, and
+// messages do not roll back (kernel DI-KS 10), so the sequence numbers and the cursor end further on than running
+// straight; since summary version 4 they are not in the World summary (v8-arch-gyo2-kernel-summary-messages).
+struct Hit {
+    std::int32_t move;
+};
+void HashValue(K::Hasher& h, const Hit& v) { HashValue(h, v.move); }
+K::SystemResult SendHit(K::MessageWriter<Hit> hits, K::Res<Command> command) {
+    hits.Send(Hit{command->move});
+    return {};
+}
+int& HitsRead() {
+    static int count = 0;
+    return count;
+}
+K::SystemResult TakeHits(K::MessageReader<Hit> hits) {
+    HitsRead() += static_cast<int>(hits.Read().size());
+    return {};
+}
+void BuildHit(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Message<Hit>({.name = "Hit"});
+    s.Registrar().AddSystem<&SendHit>(In("SendHit", "FixedUpdate", "Update"));
+    s.Registrar().AddSystem<&TakeHits>(In("TakeHits", "FixedUpdate", "PostUpdate"));
+}
 void BuildFeedFirst(O::WorldSetup& s) { BuildFeed(s, true); }
 
 // A System of the step takes Health off entity 2 at step 7 (the cell is gone, the entity stays).
@@ -242,6 +268,22 @@ TEST_CASE("rollback strategy: R-2: going back and resimulating gives the World r
                                                 << WorldOf(*straight).Get<Health>(1)->hp);
     CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-r2-equal] the World summaries differ");
     CHECK_MESSAGE(WorldOf(*rolled).Resource<W::Resimulation>()->active == 0, "[rb-resimulation-lowered]");
+}
+
+TEST_CASE("rollback strategy: R-2: a message written and read within the step leaves the summary of running straight") {
+    auto straight = Make(WithStrategy(), &BuildHit);
+    Frames(*straight, 12);
+    HitsRead() = 0;
+    auto rolled = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildHit);
+    Frames(*rolled, 9);
+    Inbox(*rolled).ConfirmedThrough(4);
+    Frames(*rolled, 3);
+    // The resimulation ran steps 5 to 9 again and their hits were written and read again.
+    REQUIRE_MESSAGE(HitsRead() == 12 + 5, "[rb-r2-message-in-step] hits read " << HitsRead());
+    REQUIRE(WorldOf(*rolled).MessagePayloads<Hit>().empty());
+    REQUIRE(WorldOf(*straight).MessagePayloads<Hit>().empty());
+    CHECK_MESSAGE(WorldOf(*rolled).Get<Health>(1)->hp == WorldOf(*straight).Get<Health>(1)->hp, "[rb-r2-message-in-step] Health of 1");
+    CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-r2-message-in-step] the World summaries differ");
 }
 
 TEST_CASE("rollback strategy: each step run again has a span.rollback around it; the first run has none") {

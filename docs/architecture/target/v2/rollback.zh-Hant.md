@@ -56,7 +56,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 
 Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；第 8 步審查 A3 發現它原本會補、等價破掉，使用者選 (a2) 從源頭修），所以「請求在、目標當時不在」也照樣等價，不必當成前提。守衛：`rollback strategy: R-2: a restore puts back a request…`、`…an entity a predicted death took comes back…`。
 
-前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
+前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；`R-2: a message written and read within the step leaves the summary of running straight`：前提 4 的訊息，重跑再寫一次，摘要仍和直跑相同〔`v8-arch-gyo2-kernel-summary-messages`，摘要版本 4〕；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
 
 <a id="r-3"></a>
 **R-3 不認得權威、網路、狀態機**：回滾 Module 不依賴它們：不連結，也不用它們的型別與名字。守衛：「不連結」由 `gyo_rollback` 的連結集（`tests/common/rollback/CMakeLists.txt` 的 `gyo_expect_links`，整個專案 configure 完才查，別的目錄後來加的連結也看得到）。它釘的是整個集合，比本條嚴：加的依賴不屬權威、網路、狀態機時，改登記列與那一行，本條不變。權威另有登記檔的順序（authority 排在 rollback 之後）與 O6（`engine/` 裡手寫連結登記的 target）。「不用它們的型別與名字」沒有機械守衛，交每批的設計審查（`v8-arch-gyo2-include-bypass-to-review`）：不經連結的 include（相對路徑、另加標頭目錄）、在回滾裡抄一份它們的型別或欄位表、用名字字串去找它們的東西，都是違反。突變：`rb-r3-links-more`、`rb-r3-authority-from-later-directory`。
