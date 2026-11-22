@@ -1845,7 +1845,7 @@
    "what": "G-7 (group B): a dynamic insert runs every unit Finish of the World again (declaration section 9 \"插入後重跑 Finish\"; moved from the kernel catalog ks-s2-plugin-finish-again)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = slot->registry->BuildPlans();\n    if (!built) {",
-   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        ModuleBuffer frozen;\n        frozen.Freeze();\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink, frozen);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        ModuleBuffer frozen;\n        frozen.Freeze();\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink, frozen, *buffer_);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-9: an allowing World*",
    "expect": "\\[or-insert-no-lifecycle\\]"
@@ -1855,7 +1855,7 @@
    "what": "G-7 (group B): Finish also runs before BuildPlans (it would read version 0, no Plan; moved from the kernel catalog ks-s3-version-before-finish) (the kernel refuses the read-only view before a successful BuildPlans, so the Product build aborts at that assertion)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
-   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors, *buffer, *buffer_);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: Configure once*",
    "expect": "GYO_ASSERT failed: data_->frozen"
@@ -2925,7 +2925,7 @@
    ],
    "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
    "find": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
-   "replace": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        if (Raw(Kernel::KeyOf<T>()) == nullptr) return &Create<T>();\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
+   "replace": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        if constexpr (std::is_default_constructible_v<T>) {\n            if (Raw(Kernel::KeyOf<T>()) == nullptr) return &Create<T>();\n        }\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
    "target": "gyo_orchestration_tests",
    "cases": "module-buffer: Find of a type nobody created*",
    "expect": "\\[or\\-buffer\\-absent\\]"

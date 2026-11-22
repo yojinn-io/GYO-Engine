@@ -7,6 +7,7 @@
 - 使用者 2026-11-22：「第5批可以開始了。」任務卡先寫事前宣告 [`exchange-declaration.zh-Hant.md`](../architecture/target/v2/exchange-declaration.zh-Hant.md)。
 - 動工前核准：使用者 2026-11-22「照建議，選共用處，核准」（宣告第 12 節的決定紀錄；`v8-arch-gyo2-exchange-declaration-approved`）。之後使用者問「郵箱？」「Host？」，宣告更正出處、做一次用詞對齊（宣告第 18、19 節），設計不變。
 - 開工：使用者 2026-11-22「開始」。
+- 合併前核准：使用者 2026-11-22「照現狀，核准」（核准頁第 8 節選照現狀）。合併等使用者說「合併」。
 - 第 0 步（兩條守衛）已由 #268 合併，紀錄在 [`2026_11_22_gyo2_exchange_guards.zh-Hant.md`](2026_11_22_gyo2_exchange_guards.zh-Hant.md)。
 
 ## 做了什麼（宣告第 9 節的 thin start）
@@ -56,7 +57,7 @@
 - 檢查後加的 9 個與復原、改寫、改過 `find` 的：45 個裡 43/45 → 兩個是我之後改程式沒對齊（`or-exch-out-side-label` 的 `replace` 還寫舊參數、建置失敗；`or-exch-replace-out-kept` 的 `expect` 照拿掉 `clear()` 之後的訊息改），改後 45/45 killed（`run-impl-mutants-2.log` 與之後的單獨重跑）。
 - 本批加 34 個（宣告 25＋檢查後 9），基準是改的條文 9 條 × 5＝45。各自只捕自己的錯，寫在 `what`，都有 `guards`。
 - 靜態掃描（不建置，數每個突變的 `find` 出現幾次）：所有清單都恰好一次。
-- 合併前的完整跑（宣告判定 3）：第一次從 0ae8a8fa 開始後，`gyo2` 合進了 #269（命名收尾），PR 有衝突，所以停掉、merge 之後從 0bca189d 重跑（臨時的 detached 工作樹 `.claude/worktrees/gyo2-exchange-fullmut`，腳本 `fullmut.sh`）。結果見下方補記。
+- 合併前的完整跑（宣告判定 3）：0bca189d 的編排層 270/273、`world_time` 92/92；編排層沒殺掉的 3 個（`or-insert-reruns-finish`、`or-finish-before-plans`、`or-buffer-find-makes`）是本批改了 `WorldFinish` 的建構子、新測試用了不能預設建構的 `Probe`，讓它們的 `replace` 建置失敗——stale 的同一類，`find` 的靜態掃描抓不到 `replace` 這一側；修正 `replace` 後 3/3 killed。其餘清單補記。第一次從 0ae8a8fa 開始後，`gyo2` 合進了 #269（命名收尾），PR 有衝突，所以停掉、merge 之後從 0bca189d 重跑（臨時的 detached 工作樹 `.claude/worktrees/gyo2-exchange-fullmut`，腳本 `fullmut.sh`）。結果見下方補記。
 
 ## 跟上 `gyo2`（#269）
 

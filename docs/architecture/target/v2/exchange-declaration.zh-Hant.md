@@ -1,6 +1,6 @@
 # 事前宣告：多個 World、交換點、Product 層 Resource（`v8-arch-gyo2-exchange`）
 
-狀態：修訂 2（修訂 0 的敵對式檢查與修訂 1 的窄複查都已處理，第 16、17 節）。**2026-11-22 使用者動工前核准**（第 12 節的決定紀錄；`v8-arch-gyo2-exchange-declaration-approved`）。實作等使用者說開始。
+狀態：修訂 2（修訂 0 的敵對式檢查與修訂 1 的窄複查都已處理，第 16、17 節）。**2026-11-22 使用者動工前核准**（第 12 節的決定紀錄；`v8-arch-gyo2-exchange-declaration-approved`）；同日開始實作，合併前核准（「照現狀，核准」，[核准頁](exchange-merge-approval.zh-Hant.md)）。
 
 性質：實作段第 5 批「多個 World、交換點」的事前宣告（AGENTS §2 基盤 Architecture、§3 Architecture Delta、§4 系譜）。連同編排層缺的「Product 層 Resource」一起推（`v8-arch-gyo2-product-level-resource-open`、`v8-arch-gyo2-batch5-start`）。
 
