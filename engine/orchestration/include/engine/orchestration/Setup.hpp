@@ -82,8 +82,8 @@ using PrepareFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationE
 // An exchange function (exchange declaration section 5.1): called by RunFrame
 // on a Ready World, before ("in") or after ("out") the World's round, outside
 // any Run. To fail, return an OrchestrationError with the function's own code
-// in reporterCode; RunFrame then stops and returns ExchangeFailed (E2: the
-// World stays healthy). It may keep pointers to objects of the Product-level
+// in reporterCode (its code field is replaced by ExchangeFailed); RunFrame then
+// stops and returns ExchangeFailed (E2: the World stays healthy). It may keep pointers to objects of the Product-level
 // ModuleBuffer, never to objects of a World build's ModuleBuffer (that one is
 // let go once the prepare functions have run). It waits for no other thread.
 using ExchangeFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationError>(Kernel::World&)>;
@@ -180,7 +180,7 @@ struct ExchangeEntry {
 //     (WorldSetup::Buffer) writes; the buffer is frozen when every Build has
 //     run, and Finish and Check (WorldFinish, WorldCheck) only read.
 //   - The Product has one (exchange declaration section 5.2; the user's
-//     decision, 2026-11-24): an object one unit, the product or its runner puts
+//     decision, 2026-11-22): an object one unit, the product or its runner puts
 //     for the others for the Product's whole life (a store, a pool, a device).
 //     Never frozen; it outlives every World of the Product. An object another
 //     thread uses brings its own synchronization.
@@ -212,7 +212,7 @@ public:
         entries_.emplace_back(Kernel::KeyOf<T>(), std::move(box));
         return made;
     }
-    // The object of type T to write (Build only), or nullptr.
+    // The object of type T to write, or nullptr (a World build's buffer: during Build only).
     template <class T>
     [[nodiscard]] T* Find() {
         GYO_ASSERT(!frozen_ && "a writable ModuleBuffer::Find after Build: the buffer is frozen");

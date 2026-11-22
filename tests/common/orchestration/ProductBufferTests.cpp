@@ -81,6 +81,10 @@ public:
 struct ExecutorOption {
     std::shared_ptr<Executor> executor;
 };
+// An option only the Product's option bag holds: logs when the options go.
+struct OptionProbe {
+    std::shared_ptr<Probe> probe;
+};
 
 O::ProductDescription Game(std::function<void(O::WorldSetup&)> build = {}, std::string world = "Main") {
     O::ProductDescription d;
@@ -103,10 +107,12 @@ std::string LogSince(std::size_t from) {
 TEST_CASE("product-buffer: P-1 one unit creates in Configure; later units, the product and the runner find it") {
     Log().clear();
     std::vector<std::string> seen;
+    const O::ModuleBuffer* productBuffer = nullptr;
     Units units;
     units.Module("store", {.configure = [](O::ProductSetup& p) { p.Buffer().Create<Store>().entries.push_back("store"); }});
     units.Module("user",
-                 {.configure = [&seen](O::ProductSetup& p) {
+                 {.configure = [&seen, &productBuffer](O::ProductSetup& p) {
+                      productBuffer = &p.Buffer();
                       Store* store = p.Buffer().Find<Store>();
                       seen.push_back(store != nullptr ? "configure:found" : "configure:none");
                       if (store != nullptr) store->entries.push_back("user");
@@ -119,11 +125,13 @@ TEST_CASE("product-buffer: P-1 one unit creates in Configure; later units, the p
                       seen.push_back(s.ProductBuffer().Find<ProductThing>() != nullptr ? "build:product-thing"
                                                                                        : "build:no-product-thing");
                   },
-                  .finish = [&seen](const K::FrozenRegistry&, O::WorldFinish& c) {
+                  .finish = [&seen, &productBuffer](const K::FrozenRegistry&, O::WorldFinish& c) {
+                      if (&c.ProductBuffer() != productBuffer) return seen.push_back("finish:other-buffer");
                       Store* store = c.ProductBuffer().Find<Store>();  // writable: the Product's buffer is never frozen
                       seen.push_back(store != nullptr ? "finish:found" : "finish:none");
                   },
-                  .check = [&seen](const K::FrozenRegistry&, O::WorldCheck& c) {
+                  .check = [&seen, &productBuffer](const K::FrozenRegistry&, O::WorldCheck& c) {
+                      if (&c.ProductBuffer() != productBuffer) return seen.push_back("check:other-buffer");
                       Store* store = c.ProductBuffer().Find<Store>();
                       seen.push_back(store != nullptr ? "check:found" : "check:none");
                   }},
@@ -234,6 +242,7 @@ TEST_CASE("product-buffer: P-5 ~Product destroys Worlds in reverse, then OnDestr
                 });
             }, {"Tick"}));
         }
+        d.options.Set(OptionProbe{Shared("options")});
         d.configure = [](O::ProductSetup& p) {
             auto runnerProbe = Shared("runner");  // only the runner holds it
             p.InstallRunner("r", [runnerProbe](O::Product&) { return O::RunnerExit{}; });
@@ -248,7 +257,7 @@ TEST_CASE("product-buffer: P-5 ~Product destroys Worlds in reverse, then OnDestr
         (*built).reset();
         CHECK_MESSAGE(LogSince(from) ==
                           "~exchange B ~world B ~exchange A ~world A ondestroy pool ondestroy store ~runner "
-                          "~buffer-second ~buffer-first ~description ~unit-closure",
+                          "~buffer-second ~buffer-first ~description ~options ~unit-closure",
                       "[or-pbuf-order] " << LogSince(from));
     }
     SUBCASE("a Product whose Build failed (two runners: O-E4) follows the same order") {
@@ -367,17 +376,17 @@ TEST_CASE("product-buffer: P-7 a Configure report builds no World; the other uni
     auto built = O::Product::Build(std::move(d), units.Take());
     REQUIRE_FALSE(static_cast<bool>(built));
     const O::ProductStartupReport& report = built.error();
-    REQUIRE_MESSAGE(report.unitErrors.size() == 3, "[or-pbuf-report] " << report.detail);
+    REQUIRE_MESSAGE(report.unitErrors.size() == 3, "[or-pbuf-report-all] " << report.detail);
     CHECK_MESSAGE((report.unitErrors[0].unit == "asset" && report.unitErrors[0].code == "asset-catalog" &&
                    report.unitErrors[0].world.empty()),
-                  "[or-pbuf-report] " << report.detail);
+                  "[or-pbuf-report-fields] " << report.detail);
     CHECK_MESSAGE((report.unitErrors[1].unit == "image" && report.unitErrors[1].code == "image-no-loader-registry"),
                   "[or-pbuf-report] " << report.detail);
     CHECK_MESSAGE((report.unitErrors[2].unit == "game" && report.unitErrors[2].code == "product-bad"),
                   "[or-pbuf-report] the product's own report names the product: " << report.detail);
     CHECK_MESSAGE(!Logged("build asset@Main"), "[or-pbuf-report-no-build] a World's Build ran: " << Joined());
     REQUIRE(report.worlds.size() == 1);
-    CHECK_MESSAGE(report.worlds[0].notChecked, "[or-pbuf-report-no-build] the World is not marked not checked");
+    CHECK_MESSAGE(report.worlds[0].notChecked, "[or-pbuf-report-not-checked] the World is not marked not checked");
 }
 
 TEST_CASE("product-buffer: P-8 a World Resource pointing at a Product buffer object is still valid when the World goes") {

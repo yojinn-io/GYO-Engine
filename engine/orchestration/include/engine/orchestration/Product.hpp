@@ -149,7 +149,7 @@ private:
     ::GYO::Engine::Base::Result<void, OrchestrationError> InsertSystemsSteps(std::string_view world, std::string owner, InsertFn build);
     // Calls one side of a World's exchange functions in order; the first error stops it (ExchangeFailed).
     ::GYO::Engine::Base::Result<void, OrchestrationError> Exchange(std::vector<Detail::ExchangeEntry>& entries,
-                                                                   const std::string& world, std::string_view side);
+                                                                   Kernel::World& world, std::string_view side);
 
     struct UnitSlot {
         std::string row;
@@ -220,9 +220,8 @@ private:
     std::vector<std::function<void()>> onDestroy_;
     std::vector<WorldSlot> worlds_;
     std::vector<std::string> gameInit_;
-    Runner runner_;
-    // Every runner installed when there are more than one (O-E4): kept until ~Product's runner step.
-    std::vector<ProductSetup::Installed> extraRunners_;
+    // Every runner installed (one at most is valid, O-E4); the runner is the only one. Kept until ~Product's runner step.
+    std::vector<ProductSetup::Installed> runners_;
     bool gameInitRan_ = false;
     bool ran_ = false;
     std::optional<WorldFailure> failure_;

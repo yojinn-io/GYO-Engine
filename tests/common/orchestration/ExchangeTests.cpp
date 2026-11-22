@@ -25,7 +25,7 @@ O::ExchangeFn Logs(std::string what) {
 }
 
 PResult Refuse(std::string code) {
-    return ::GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the mailbox is closed", {},
+    return ::GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the exchange refused", {},
                                                           std::move(code)));
 }
 
@@ -116,7 +116,7 @@ TEST_CASE("exchange: X-3 a failing exchange function stops RunFrame with Exchang
     bool refuse = true;
     auto built = O::Product::Build(TwoWorlds({}, [&refuse](O::WorldSetup& s) {
                                        s.ExchangeIn([&refuse](K::World&) -> PResult {
-                                           if (refuse) return Refuse("mailbox-closed");
+                                           if (refuse) return Refuse("exchange-refused");
                                            return {};
                                        });
                                    }),
@@ -129,7 +129,7 @@ TEST_CASE("exchange: X-3 a failing exchange function stops RunFrame with Exchang
     REQUIRE_FALSE(static_cast<bool>(ran));
     const O::OrchestrationError& error = ran.error();
     CHECK_MESSAGE(error.code == O::OrchestrationErrorCode::ExchangeFailed, "[or-exch-failed] " << O::ToString(error.code));
-    CHECK_MESSAGE(error.reporterCode == "mailbox-closed", "[or-exch-failed] " << error.reporterCode);
+    CHECK_MESSAGE(error.reporterCode == "exchange-refused", "[or-exch-reporter-code] " << error.reporterCode);
     CHECK_MESSAGE((error.message.find("'B'") != std::string::npos && error.message.find("(in)") != std::string::npos &&
                    error.message.find("'game'") != std::string::npos),
                   "[or-exch-failed-names] " << error.message);
@@ -139,6 +139,22 @@ TEST_CASE("exchange: X-3 a failing exchange function stops RunFrame with Exchang
     CHECK_MESSAGE(LogSince(from) == "in game@A a out game@A in game@B", "[or-exch-stops] " << LogSince(from));
     refuse = false;
     CHECK_MESSAGE(static_cast<bool>(p.RunFrame()), "[or-exch-healthy] the next RunFrame failed");
+}
+
+TEST_CASE("exchange: X-3 a unit's failing out is named with the unit, the side and the World") {
+    Log().clear();
+    Units units;
+    units.Module("mail", {.build = [](O::WorldSetup& s) {
+                      if (s.WorldName() == "B") s.ExchangeOut([](K::World&) -> PResult { return Refuse("mail-full"); });
+                  }});
+    auto built = O::Product::Build(TwoWorlds(), units.Take());
+    ORCH_REQUIRE_BUILT(built);
+    auto ran = (*built)->RunFrame();
+    REQUIRE_FALSE(static_cast<bool>(ran));
+    const std::string& message = ran.error().message;
+    CHECK_MESSAGE(message.find("'mail'") != std::string::npos, "[or-exch-names-unit] " << message);
+    CHECK_MESSAGE(message.find("(out)") != std::string::npos, "[or-exch-names-out] " << message);
+    CHECK_MESSAGE(message.find("'B'") != std::string::npos, "[or-exch-names-world] " << message);
 }
 
 TEST_CASE("exchange: X-4 an exception from an exchange function passes through; the World is not broken") {
@@ -192,6 +208,7 @@ TEST_CASE("exchange: X-6 a replacement brings the new build's exchange functions
                                  Log().push_back(tag + "@" + std::string(w.Name()));
                                  return {};
                              });
+                             s.ExchangeOut(Logs("out build" + std::to_string(build)));
                          }});
     O::ProductDescription d;
     d.name = "game";
@@ -206,12 +223,12 @@ TEST_CASE("exchange: X-6 a replacement brings the new build's exchange functions
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{})));
     std::size_t from = Log().size();
     REQUIRE(static_cast<bool>(p.RunFrame()));
-    CHECK_MESSAGE(LogSince(from) == "in build2@Main", "[or-exch-replaced] " << LogSince(from));
+    CHECK_MESSAGE(LogSince(from) == "in build2@Main out build2@Main", "[or-exch-replaced] " << LogSince(from));
     // A BuildNewFirst replacement that fails (its beforeSwap breaks) keeps the old World and its exchange functions.
     REQUIRE_FALSE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{{}, {"Junk"}, O::ReplaceOrder::BuildNewFirst})));
     from = Log().size();
     REQUIRE(static_cast<bool>(p.RunFrame()));
-    CHECK_MESSAGE(LogSince(from) == "in build2@Main", "[or-exch-replace-failed-keeps] " << LogSince(from));
+    CHECK_MESSAGE(LogSince(from) == "in build2@Main out build2@Main", "[or-exch-replace-failed-keeps] " << LogSince(from));
     CHECK_MESSAGE(p.Buffer().Find<Counter2>()->frames == 3, "[or-exch-replaced] " << p.Buffer().Find<Counter2>()->frames);
 }
 
@@ -226,6 +243,7 @@ TEST_CASE("exchange: X-7 a World breaking in its round: neither its out nor any 
     auto ran = p.RunFrame();
     REQUIRE_FALSE(static_cast<bool>(ran));
     CHECK(ran.error().failure.has_value());
+    CHECK_MESSAGE(LogSince(from).rfind("in game@A", 0) == 0, "[or-exch-break-reached] " << LogSince(from));
     CHECK_MESSAGE(LogSince(from).find("out game@A") == std::string::npos, "[or-exch-break-no-out] " << LogSince(from));
     CHECK_MESSAGE(LogSince(from).find("@B") == std::string::npos, "[or-exch-break-no-later] " << LogSince(from));
 }

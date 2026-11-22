@@ -90,8 +90,7 @@ Product::~Product() {
         if (callback) callback();
     }
     // 3. The runners (one may hold a window or threads a callback still used, and may point into the buffer).
-    runner_ = nullptr;
-    while (!extraRunners_.empty()) extraRunners_.pop_back();
+    while (!runners_.empty()) runners_.pop_back();
     // 4. The Product's buffer: its objects in the reverse order of their Create.
     buffer_.reset();
     // 5. The descriptions (their closures) and the options.
@@ -211,7 +210,7 @@ Product::~Product() {
     // OnDestroy callback and the Product's buffer are the Product's from here on, so a
     // failed Build destroys them in ~Product's order (exchange declaration 5.2).
     ScheduleList gameInit(std::move(description.gameInit));
-    std::vector<ProductSetup::Installed>& runners = self.extraRunners_;
+    std::vector<ProductSetup::Installed>& runners = self.runners_;
     for (UnitSlot& unit : self.units_) {
         ProductSetup setup(self.name_, unit.row, gameInit, *self.buffer_, self.options_, unitErrors, self.onDestroy_);
         unit.unit->Configure(setup);
@@ -227,9 +226,6 @@ Product::~Product() {
         for (const auto& installed : runners) installers.push_back(installed.installer);
         errors.push_back({OrchestrationCode::OE4, std::to_string(runners.size()) + " runners are installed; a Product has one",
                           installers});
-    } else if (runners.size() == 1) {
-        self.runner_ = std::move(runners.front().runner);
-        runners.clear();
     }
     // A Configure report (exchange declaration 5.2 point 3): no World is built and no
     // World's Build runs (a unit that reported may not have made what its dependants find).
@@ -591,26 +587,25 @@ template <class Steps>
     // Each World: its "in" exchange functions, its round, its "out" ones (exchange declaration 5.1).
     // A World breaking in its round stops here: neither its "out" nor any later World's exchange runs.
     for (WorldSlot& slot : worlds_) {
-        if (auto exchanged = Exchange(slot.exchangeIn, slot.description.name, "in"); !exchanged) return exchanged;
+        if (auto exchanged = Exchange(slot.exchangeIn, slot.executor->GetWorld(), "in"); !exchanged) return exchanged;
         for (const std::string& schedule : slot.frame) {
             if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
         }
-        if (auto exchanged = Exchange(slot.exchangeOut, slot.description.name, "out"); !exchanged) return exchanged;
+        if (auto exchanged = Exchange(slot.exchangeOut, slot.executor->GetWorld(), "out"); !exchanged) return exchanged;
     }
     return {};
 }
 
 ::GYO::Engine::Base::Result<void, OrchestrationError> Product::Exchange(std::vector<Detail::ExchangeEntry>& entries,
-                                                                    const std::string& world, std::string_view side) {
-    Kernel::World& target = Find(world)->executor->GetWorld();
+                                                                    Kernel::World& world, std::string_view side) {
     for (Detail::ExchangeEntry& entry : entries) {
         if (!entry.fn) continue;
-        auto done = entry.fn(target);
+        auto done = entry.fn(world);
         if (!done) {
             OrchestrationError error = std::move(done).error();
             error.code = OrchestrationErrorCode::ExchangeFailed;
             error.message = "exchange function (" + std::string(side) + ") of " + Quoted(entry.unit) + " on World " +
-                            Quoted(world) + " failed" + (error.message.empty() ? std::string() : ": " + error.message);
+                            Quoted(world.Name()) + " failed" + (error.message.empty() ? std::string() : ": " + error.message);
             return ::GYO::Engine::Base::Err(std::move(error));
         }
     }
@@ -633,7 +628,7 @@ template <class Steps>
 RunnerExit Product::Run() {
     GYO_ASSERT(!ran_);
     ran_ = true;
-    if (runner_) return runner_(*this);
+    if (runners_.size() == 1 && runners_.front().runner) return runners_.front().runner(*this);
     // The default runner: one frame (Bevy run_once). It writes nothing: it returns the
     // reason with the error's context, and the layer that decides what follows (a product's
     // main) writes it once and decides (the error is handled in one place).
@@ -719,8 +714,6 @@ bool Product::HasWorld(std::string_view name) const noexcept {
             for (auto& [entry, box] : moved) entry.put(slot.executor->GetWorld(), box);
             throw;
         }
-        slot.exchangeOut.clear();
-        slot.exchangeIn.clear();
         slot.executor.reset();
         slot.registry.reset();
         // An empty place from here on is this replacement's, until it swaps or records the failure.
@@ -851,10 +844,8 @@ bool Product::HasWorld(std::string_view name) const noexcept {
         throw;
     }
 
-    // Step 5: swap. The old exchange functions first, then the old executor, then its Registry.
+    // Step 5: swap. The old executor first, then its Registry; the exchange functions come with the new build.
     slot.replacing = false;
-    slot.exchangeOut.clear();
-    slot.exchangeIn.clear();
     slot.executor.reset();
     slot.registry.reset();
     slot.registry = std::move(registration.registry);

@@ -1,12 +1,12 @@
-# 2026-11-24 GYO2：第 5 批 多個 World、交換點、Product 層 Resource
+# 2026-11-22 GYO2：第 5 批 多個 World、交換點、Product 層 Resource
 
 批次代號：`v8-arch-gyo2-exchange`。分支 `claude/gyo2-exchange-81ea9f`（從 `gyo2` 45f13757；開工時 merge 了 `gyo2` 0f0ab8a5，含第 0 步的 #268）。任務卡，主會話「[GYO2][不良少年]新架構重構」開的。實作者 Opus 5.5／high；敵對式檢查與設計審查是 Fable 5.2／high（唯讀）。
 
 ## 起因與核准
 
 - 使用者 2026-11-22：「第5批可以開始了。」任務卡先寫事前宣告 [`exchange-declaration.zh-Hant.md`](../architecture/target/v2/exchange-declaration.zh-Hant.md)。
-- 動工前核准：使用者 2026-11-24「照建議，選共用處，核准」（宣告第 12 節的決定紀錄；`v8-arch-gyo2-exchange-declaration-approved`）。之後使用者問「郵箱？」「Host？」，宣告更正出處、做一次用詞對齊（宣告第 18、19 節），設計不變。
-- 開工：使用者 2026-11-24「開始」。
+- 動工前核准：使用者 2026-11-22「照建議，選共用處，核准」（宣告第 12 節的決定紀錄；`v8-arch-gyo2-exchange-declaration-approved`）。之後使用者問「郵箱？」「Host？」，宣告更正出處、做一次用詞對齊（宣告第 18、19 節），設計不變。
+- 開工：使用者 2026-11-22「開始」。
 - 第 0 步（兩條守衛）已由 #268 合併，紀錄在 [`2026_11_22_gyo2_exchange_guards.zh-Hant.md`](2026_11_22_gyo2_exchange_guards.zh-Hant.md)。
 
 ## 做了什麼（宣告第 9 節的 thin start）
