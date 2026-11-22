@@ -1389,7 +1389,7 @@ dd31fff8 檢查的 B-1～B-3、S-1、S-6、S-7、S-9 隨形狀消失；B-4 照�
 - **「連同依賴」的優先序**：自己或任何遞迴依賴還沒結束 → `Incomplete`（即使已有失敗）；全部結束、有失敗 → `Failed`；其餘 `Complete`。5.17 只列三種狀態，沒寫同時成立時誰優先。照「`Failed` 是結束後的結論」判，和 `DependenciesFinished` 一致。
 - **`maxInFlight` 預設 0＝不設限**：3.3「預設不設限，標明不是判定」的落點。
 - **建 store 時 catalog 有重複 id 是 `GYO_ASSERT`**：`AssetStore` 的建構收「已照 (A) 驗過」的項目；重複 id 是呼叫者的程式錯誤（E0），不是內容錯誤。內容的重複由 (A) 3 在讀 catalog 時回 `DuplicateId`。
-- **`Shutdown(Drain)` 的語意**：先等到沒有排隊與在飛的工作（含完成的工作排進來的依賴），要求執行器還在跑；之後和 `Discard` 一樣停。只有第一次呼叫有作用；不能從工作裡呼叫；不等已在跑的工作（它們發現 store 已關，什麼都不留）。X-6「能停下或等完」的落點。
+- **`Shutdown(Drain)` 的語意**：先等到沒有排隊與在飛的工作（含完成的工作排進來的依賴），要求執行器還在跑；之後和 `Discard` 一樣停。只有第一次呼叫有作用；不能從工作裡呼叫；~~不等已在跑的工作（它們發現 store 已關，什麼都不留）~~（30.3 B2 改成兩種模式都等已開工的工作跑完）。X-6「能停下或等完」的落點。
 - **強連通分量把已標循環的邊也算進圖**：已標 `CyclicReference` 的邊不持有，但重算時仍是圖的邊。不算的話，經已標循環的邊閉合的新環會依完成順序有時被標、有時不被標（AS-5）。守衛：`depend: a cycle closed through an edge already marked is marked too`，突變 `as-store-cycle-skips-marked-edges`。
 - **等價測試的批次**：(2) 反序改成每批 5 筆、直到做完（依賴會排出更多工作，所以多於宣告的 4 批）；(3) 交錯照 3、3、3、3、3、3、2 筆之後再跑完其餘。判定（和自己的基準比、不比生命序號與嘗試序號）不變。
 - **件數多了幾項**：`newLivesNoExecutor`、`referenceNewLivesNoExecutor`、`jobsWaiting`、`jobsInFlight`、`fileReads` 與維護的 `dropsTaken == dropsStale + dropsSkipped + removals`。5.8 的等式在沒有排隊與在飛時成立，這是同一條等式加上進行中的兩項，沒有放寬。
@@ -1399,3 +1399,29 @@ dd31fff8 檢查的 B-1～B-3、S-1、S-6、S-7、S-9 隨形狀消失；B-4 照�
 - **catalog 檔沒有大小上限**：`ReadContent` 以 `std::numeric_limits<std::size_t>::max()` 讀；catalog 是產品寫的內容，沒有自己的上限（RC-AS8 的成本另量）。
 - **由副檔名推出的 `format` 不驗**：(A) 7 只驗「有寫的 `format`」是 `[a-z0-9]+`；推出來的不驗（副檔名轉小寫後照用；沒有 loader 認它時，請求是 `NoLoader`）。
 - **寫入多驗保留欄位**：`WriteContentManifest`、`WriteCatalog` 除了 (A) 規則，還驗保留欄位不和已知鍵或彼此重複、本身是 JSON（`WriteFailed`），保證寫出的讀得回來且相等。
+
+### 30.3 合併前設計審查的處理（2026-11-23）
+
+Fable 的合併前設計審查（blocker 2、should 8、nit 7；摘要與探針在主 checkout `build/evidence/gyo2-asset/design-review/`）之後，主會話逐條判定，實作者（Opus 5.5／high）照判定做。正式頁照實作的事實改；Design Invariants 的文字仍等合併前核准。
+
+| # | 審查指出 | 處理 | 落點（測試／突變） |
+|---|---|---|---|
+| B1 | `LoaderTests.cpp` 靠間接含入拿 `std::ostream`，windows-x64 的 MSVC 編不過 | 用 `<<` 給 doctest 的測試檔與兩個支援標頭都直接含 `<ostream>` | `LoaderTests.cpp`、`CatalogTests.cpp`、`ContentPathTests.cpp`、`StoreSupport.hpp`、`WorldAssetSupport.hpp` |
+| B2 | `Shutdown(Discard)` 返回時工作還在 loader 裡；world_asset 的 `OnDestroy` 返回時工作沒停，違反 O-15 | 兩種模式都等「已開工、未完成」的工作歸零（開工時在鎖下加一，`Complete` 之後減一，條件變數等）；`Discard` 仍不開新工作；值在返回前解構。30.2 的「不等已在跑的工作」因此改掉 | `store: Shutdown waits for a job that is already in its loader, in both modes`（另一條執行緒 100 ms 後放閂，閂本身 10 s 有界）；`as-store-shutdown-waits-running` |
+| S1 | 已 `Failed` 的依賴被之後完成的每個父項重載 | 保留（核准的 5.5，同 Bevy）；正式頁第 4 節寫明，AS-13 加守衛 | `depend: a failed dependency is read again by each parent that finishes after it (5.5, as Bevy)`；`as-store-edge-reloads-failed` |
+| S2 | `Handle::Body()`、`Life()` 公開；store 在 Product 的共用處，作者的 Module 可 `Find` 它呼叫 `Request`／`Read`／`Pump`／`Shutdown` | `Body()`、`Life()` 改 private，store、world_asset、測試經 `Detail::HandleAccess`；store 由 `WorldAssetModule` 持有（`unique_ptr`），共用處只 `Create` `AssetLoaderRegistry` 與唯讀的 `AssetStoreDiagnostics`（`Counts()`、`Probe(id)`）。測試的 `Find<AssetStore>` 改成 `Find<AssetStoreDiagnostics>`；`SummaryTests.cpp` 與突變 `aw-hash-index` 改經 `Detail::HandleAccess` | 樣本 `GYO_ASSET_SAMPLE_HANDLE_BODY_IS_PRIVATE`、`GYO_ASSET_SAMPLE_HANDLE_LIFE_IS_PRIVATE`；`aw-sample-handle-body`、`aw-sample-handle-life` |
+| S3 | `AssetExecutor.hpp` 說 threads 的 `WorkerPool`「照原樣接得上」，但 gyo2 上沒有它 | 註解改成事實；正式頁第 4、9 節與 dev_log 加限界：今天沒有正式的執行器，產品自己寫 adapter；`WorkerPool` 合進來時把 adapter 定在一處並加真 pool 的案例 | `AssetExecutor.hpp`；正式頁 |
+| S4 | 已登記的 loader 再預先登記它不認的 `format` 會被記下，那個 `format` 的請求永遠等 | 最小修法：這時回 `FormatNotTaken`（新碼，什麼都不記）；同一 loader 再登記時清掉它的預先登記（`InstallLoader` 的「同一 loader 再登記」不再提前返回）。不改成「直接用 `kFormats`」（會改核准的 5.4） | `store: preregistering a format its registered loader does not take is refused`；`as-store-preregister-not-taken` |
+| S5 | 探針存活的決定與「測試已在、清單沒有突變」的機制 | 存活的 8 個：r1、r4、r5、r9、r10、r16、r20 加案例或斷言與突變；r19 見下。已有測試的 7 個掛成突變。AS-1 加專屬案例與突變（每個 World 各建一個 store） | r1 `as-store-noloader-then-waits`；r4 `aw-waiting-finished`；r5 `aw-request-failure-complete`；r9 `aw-get-ignores-cpp-type`；r10 `aw-unseen-dependencies-finished`；r16 `as-snapshot-root-failed`；r20 `aw-world-options-ignored`；7 個 `aw-prepare-no-maintenance`、`aw-apply-no-maintenance`、`aw-no-on-destroy-shutdown`、`aw-prepare-no-view`、`as-store-edge-holds-nothing`、`as-store-pump-one-round`、`aw-view-rebuilt-empty`；AS-1 `aw-one-store-per-world` |
+| S6 | 骨架關掉、沒給 `WorldAssetOptions` 時的錯誤看不出是 asset | 照 world_time 的先例加案例：給了選項正常 `Loaded`；沒給時是 Kernel 的 D-E1，啟動報告寫「System 'ApplyAssets' is mounted in schedule 'Main', which this Product does not have」，已經看得出是 world_asset 的 System，**不另加回報碼**（卡片判） | `view: a World with the skeleton off names where ApplyAssets goes (WorldAssetOptions)`；`aw-world-options-ignored` |
+| S7 | 兩份突變清單要在分支頭完整跑一次 | 分支頭各完整跑一次，輸出在主 checkout `build/evidence/gyo2-asset/final/` | dev_log |
+| S8 | `docs/cross-component-rules.md` 的三條沒登記 | 登記 CCR-8（AS-10 (c)）、CCR-9（判定用的內容在進判定前載完）、CCR-10（判定用內容的 Handle 一直持有，放在沒有用 `rollback.` 登記的 Resource），owner asset | `docs/cross-component-rules.md` |
+| N1 | 突變的 `guards` 指宣告的 DI | 兩份清單的 `asset-declaration AS-n` 改成 `asset AS-n`（守第 5 節規則的照舊指宣告） | 兩份 `mutations.json` |
+| N2 | dev_log 說雜湊成本沒量（同頁已記約 150 ms）；正式頁與 dev_log 說 MSVC、GCC 未實測 | 刪掉「雜湊成本沒量」；改成 CI 的事實（L1 三平台的 configure 照判法通過；linux-x64、macos-arm64 通過，windows-x64 修正 B1 後看 L1） | 正式頁第 9 節、dev_log |
+| N3 | 「內容根目錄＋相對路徑」兩處各寫一份；相對的根目錄隨工作目錄變 | 收成 `ContentPath.hpp` 的 `JoinContentRoot`，catalog 的讀取與 store 共用；建 store 時把相對的 `contentRoot` 經 io（`NativeFileUri`、`NativePathFromFileUri`）轉成絕對路徑 | `ContentPath.cpp`、`Catalog.cpp`、`AssetStore.cpp` |
+| N4 | `MarkCycles` 每次都掃全部 info；`Ready` 的去重是 O(n²) | 完成的項目沒有圖的邊（持有或已標循環）就提前返回；`Ready` 用集合去重 | `AssetStore.cpp`、`AssetView.cpp`（行為不變，沒有加突變） |
+| N5 | `Catalog.cpp:253` 的 `text` 遮住參數（MSVC C4457） | 改名 `bundleText` | `Catalog.cpp` |
+| N6 | `ReadWholeFile` 與 `Sha256` 丟例外（`bad_alloc`）時名額不還 | 包進 `try`，丟例外是 id 級 `ReadFailed`（讀檔這一步的碼，不是 `LoaderThrew`），名額照還；`LoadContext::References()` 的複製也移進 loader 的 `try`。開工的計數用 RAII 減，例外離開 `Run` 時 `Shutdown` 也不會永遠等 | `AssetStore.cpp`（注入 `bad_alloc` 需要測試掛鉤，沒有加案例與突變） |
+| N7 | `AssetStore::Read` 不查 Handle 是不是這個 store 的 | 比 `body->drops` 與 store 的佇列，不是就回空 | `store: a Handle of another store reads as null`；`as-store-read-other-store` |
+
+**r19（「已登記的 loader 不再記成預先登記」）沒有加突變**（卡片判）：同一個（`type`、`format`）已有 loader 時，判定（`Judge`）、引用的略過與登記的衝突檢查都先看 loader 表；loader 不會被取消登記，所以多記的預先登記沒有任何讀出點，突變和原碼等價。S4 的「再登記時清掉預先登記」同理：有了 `FormatNotTaken`，已登記的 loader 不會再留下預先登記，清掉的那一段今天也沒有讀出點；它是防守，不立突變。兩者都記在 dev_log。
