@@ -1,6 +1,6 @@
 # GYO error handling
 
-> **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/kernel` on) by target. Target design: [`target/error-handling.md`](target/error-handling.md); it replaces this document when the migration batch completes (the batch is set by `v8-arch-migration-plan`).
+> **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/ecs/kernel` on) by target. Target design: [`target/error-handling.md`](target/error-handling.md); it replaces this document when the migration batch completes (the batch is set by `v8-arch-migration-plan`).
 
 GYO separates failures by who can do something about them:
 
@@ -12,7 +12,7 @@ Result = Runtime Error
 | | Programmer Error | Runtime Error |
 |---|---|---|
 | Meaning | The program is wrong: a broken precondition or internal invariant, API misuse, an unreachable branch | The program is right, but external data or the environment failed it |
-| Mechanism | `GYO_ASSERT`, `GYO_UNREACHABLE` (`engine/base/include/engine/base/Assert.hpp`) | `GYO::Engine::Base::Result<T, E>` (`engine/base/include/engine/base/Result.hpp`) with the module's error type |
+| Mechanism | `GYO_ASSERT`, `GYO_UNREACHABLE` (`engine/core/base/include/engine/base/Assert.hpp`) | `GYO::Engine::Base::Result<T, E>` (`engine/core/base/include/engine/base/Result.hpp`) with the module's error type |
 | Caller | Does not handle it; the fix is in the code | Must handle it (`[[nodiscard]]`) |
 | When it happens | The assertion handler runs, by default printing the condition and aborting, in every build configuration | The function returns the error, carrying the module's own code |
 | Shown to people | The handler prints the condition and its location | The error's code, message and detail |
@@ -74,7 +74,7 @@ The scope is the layer of an Engine platform backend that calls a C library dire
 
 ## Assert
 
-`GYO_ASSERT(condition)` is defined in `engine/base/include/engine/base/Assert.hpp` (target `GYO::Base`).
+`GYO_ASSERT(condition)` is defined in `engine/core/base/include/engine/base/Assert.hpp` (target `GYO::Base`).
 
 - It is evaluated in every build configuration, unlike `<cassert>`'s `assert`, which GYO code outside products does not use. The condition is evaluated exactly once and must have no side effects.
 - On failure it calls the installed `AssertionHandler`. `SetAssertionHandler` installs one for the whole program and returns the previous one; `nullptr` selects the default, which prints `GYO_ASSERT failed: <condition>` with the file, line and function to stderr. If a handler returns, the process aborts; a failure inside a handler aborts immediately. Install a handler before starting threads. Product handlers may log; they must not throw.
@@ -120,7 +120,7 @@ Base::Result<void, IOError> Close() { /* ... */ return {}; }           // void s
 
 > **Marker** (`v8-arch-gyo2-error-levels`, draft): new error type names carry their level (`…Error` = E1, `…Failure` = E2); renaming the existing types is a follow-up. See [`target/error-handling.md`](target/error-handling.md), "Error levels".
 
-Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/base/include/engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
+Every error type `E` used with `Result` satisfies the `Base::CodedError` concept (`engine/core/base/include/engine/base/Error.hpp`), checked by a `static_assert` next to its declaration:
 
 - `code` is an enum owned by the module. Zero is not a valid code: each enum starts at 1, and `Error::Make` asserts against zero. The numeric values are not a data contract. A `ToString(code)` in the enum's namespace names each code.
 - `message` is for people (logs, diagnostics) and is never parsed by code; tests compare `code`.

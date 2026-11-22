@@ -32,3 +32,12 @@ add_test(NAME authority.sources_scan
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/authority_sources_check.py"
         --root "${GYO_REPOSITORY_ROOT}" --list "${CMAKE_CURRENT_BINARY_DIR}/authority_sources.json")
 set_tests_properties(authority.sources_scan PROPERTIES FIXTURES_REQUIRED authority_sources_export LABELS "cpu" TIMEOUT 60)
+
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
+# Design Invariant DI-A 9 (docs/architecture/target/v2/authority.zh-Hant.md): the authority Module reads only the
+# public registrations of rollback and time and depends on no state machine. Its links, private and interface
+# alike, are exactly these (stricter than DI-A 9: no network Module either, DI-A 1 "does not transmit"), so a link to any
+# other Module, one registered later included, stops the configure. Checked once the whole project is configured, so
+# an edge added later from another directory is seen too (as for gyo_rollback and gyo_world_time).
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_links gyo_authority
+    GYO::Base GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback)
