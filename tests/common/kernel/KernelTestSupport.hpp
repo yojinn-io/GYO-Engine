@@ -7,6 +7,8 @@
 
 #include "engine/kernel/Kernel.hpp"
 
+#include "TestRangeAllotter.hpp"
+
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -22,6 +24,7 @@
 namespace KernelTest {
 
 using namespace GYO::Kernel;
+using GYO::Test::TestRangeAllotter;
 
 struct TestPos { std::int32_t x, y, z; };
 struct TestVel { std::int32_t x, y, z; };

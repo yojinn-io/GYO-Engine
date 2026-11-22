@@ -1162,8 +1162,8 @@
   },
   {
    "id": "sc-lower-bound-not-moved",
-   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets (find rewritten by v8-arch-gyo2-authority-rollback step 1: the allotter lost its padding field)",
-   "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
+   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets (find rewritten by v8-arch-gyo2-authority-rollback step 1: the allotter lost its padding field); the file moved to the entity_ids Module with RangeAllotter (v8-arch-gyo2-world-gen)",
+   "file": "engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp",
    "find": "        return RangeAllotter{first, last, first, first > last};",
    "replace": "        return RangeAllotter{1, last, 1, first > last};",
    "target": "gyo_scenario_tests",

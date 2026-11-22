@@ -10,6 +10,7 @@
 
 #include "RollbackTestSupport.hpp"
 
+#include "engine/entity_ids/RangeAllotter.hpp"
 #include "engine/base/Trace.hpp"
 #include "engine/rollback/Inbox.hpp"
 #include "engine/rollback/Runtime.hpp"
@@ -73,7 +74,7 @@ K::SystemResult HealthAdded(K::HookCtx, K::Res<W::Resimulation> resimulation) {
     AddedFlags().push_back(resimulation->active);
     return {};
 }
-bool SameAllotter(const K::RangeAllotter& a, const K::RangeAllotter& b) {
+bool SameAllotter(const GYO::Engine::EntityIds::RangeAllotter& a, const GYO::Engine::EntityIds::RangeAllotter& b) {
     return a.first == b.first && a.last == b.last && a.next == b.next && a.exhausted == b.exhausted;
 }
 
@@ -178,10 +179,10 @@ void BuildStrip(O::WorldSetup& s) {
 
 void BuildChurn(O::WorldSetup& s) {
     Build(s);
-    s.Registrar().Resource<K::RangeAllotter>({.name = "Allotter"});
-    s.Registrar().Allotter<K::RangeAllotter>();
+    s.Registrar().Resource<GYO::Engine::EntityIds::RangeAllotter>({.name = "Allotter"});
+    s.Registrar().Allotter<GYO::Engine::EntityIds::RangeAllotter>();
     R::RollbackEntry rollback(s);
-    rollback.Resource<K::RangeAllotter>({.equal = &SameAllotter});
+    rollback.Resource<GYO::Engine::EntityIds::RangeAllotter>({.equal = &SameAllotter});
     s.Registrar().AddSystem<&Churn>(In("Churn", "FixedUpdate", "Update"));
     K::SystemOptions side = In("SideEffect", "FixedUpdate", "PostUpdate");
     rollback.SkipDuringResimulation(side);
@@ -197,7 +198,7 @@ std::unique_ptr<O::Product> Make(O::OptionBag options, void (*build)(O::WorldSet
     world.SetResource(Command{});
     world.Insert(1, Health{100});
     world.Insert(2, Health{50});
-    if (world.Types().ResourceIdOf<K::RangeAllotter>()) world.SetResource(K::RangeAllotter::Of(1000, 1999));
+    if (world.Types().ResourceIdOf<GYO::Engine::EntityIds::RangeAllotter>()) world.SetResource(GYO::Engine::EntityIds::RangeAllotter::Of(1000, 1999));
     return std::move(*built);
 }
 

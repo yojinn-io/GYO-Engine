@@ -5,7 +5,7 @@
 add_executable(gyo_scenario_tests TestMain.cpp ScenarioTests.cpp ScenarioSegment2Tests.cpp ScenarioSegment3Tests.cpp ScenarioSegment4Tests.cpp
     ScenarioSegment5Tests.cpp)
 target_include_directories(gyo_scenario_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(gyo_scenario_tests PRIVATE GYO::Orchestration GYO::WorldTime GYO::WorldLogging GYO::Logging GYO::Trace GYO::Json
+target_link_libraries(gyo_scenario_tests PRIVATE GYO::Orchestration GYO::EntityIds GYO::WorldTime GYO::WorldLogging GYO::Logging GYO::Trace GYO::Json
     GYO::Rollback GYO::Authority
     gyo_test_support doctest::doctest)
 # Files a test writes go to the build directory (trace declaration T6).

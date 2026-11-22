@@ -14,6 +14,7 @@ using KernelTest::Built;
 using KernelTest::Describe;
 using KernelTest::HasRule;
 using KernelTest::Ok;
+using KernelTest::TestRangeAllotter;
 
 namespace {
 
@@ -57,8 +58,8 @@ void Data(Registrar& r) {
     r.Component<Label>({.name = "Label"});
     r.Component<Crate>({.name = "Crate"});
     // Every System with a Spawn parameter writes the allotter.
-    r.Resource<RangeAllotter>({.name = "Allotter"});
-    r.Allotter<RangeAllotter>();
+    r.Resource<TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<TestRangeAllotter>();
     // The Runs of Tick the test counted (Rig::Run writes it; time-events declaration 6.2).
     r.Resource<WorldTest::TickCount>({.name = "TickCount"});
     r.Schedule(Tick());
@@ -103,7 +104,7 @@ SystemResult BodyAdded(HookCtx ctx) {
 std::unique_ptr<WorldTest::Rig> Start(std::function<void(Registrar&)> build) {
     Seen().clear();
     auto rig = WorldTest::MakeRig(std::move(build));
-    if (rig->executor) rig->world().SetResource(RangeAllotter::Of(100, 199));
+    if (rig->executor) rig->world().SetResource(TestRangeAllotter::Of(100, 199));
     return rig;
 }
 
@@ -565,8 +566,8 @@ void SeatData(Registrar& r, bool count = true) {
     r.Component<Spark>({.name = "Spark"});
     r.Component<Gate>({.name = "Gate"});
     r.Component<Ember>({.name = "Ember"});
-    r.Resource<RangeAllotter>({.name = "Allotter"});
-    r.Allotter<RangeAllotter>();
+    r.Resource<TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<TestRangeAllotter>();
     if (count) r.Resource<WorldTest::TickCount>({.name = "TickCount"});
     r.Schedule(KernelTest::FixedSchedule());
 }

@@ -11,6 +11,7 @@
 // OptionsMenu; Boot, PlacePlayer and LoadSave use ExclusiveWorld (not counted)
 // and BestScore goes through the untyped Commands (not counted).
 
+#include "engine/entity_ids/RangeAllotter.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
@@ -241,8 +242,8 @@ inline void Register(O::WorldSetup& s) {
     r.Resource<KeyBindings>({.name = "KeyBindings"});
     r.Resource<SaveData>({.name = "SaveData"});
     r.Resource<WorldLife>({.name = "WorldLife"});
-    r.Resource<K::RangeAllotter>({.name = "Allotter"});
-    r.Allotter<K::RangeAllotter>();
+    r.Resource<GYO::Engine::EntityIds::RangeAllotter>({.name = "Allotter"});
+    r.Allotter<GYO::Engine::EntityIds::RangeAllotter>();
     r.Schedule(Schedule("Boot"));
     r.Schedule(Schedule("PlacePlayer"));
     r.Schedule(Schedule("Load"));
@@ -264,7 +265,7 @@ inline void InsertAccelerate(K::Registrar& r) { r.AddSystem<&Accelerate>(In("Acc
 // carried value), the allotter range [1, last], the life marker.
 inline ::GYO::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World& w) {
     if (w.Resource<KeyBindings>() == nullptr) w.SetResource(KeyBindings{0});
-    w.SetResource(K::RangeAllotter::Of(1, kLast));
+    w.SetResource(GYO::Engine::EntityIds::RangeAllotter::Of(1, kLast));
     w.SetResource(WorldLife{});
     return {};
 }
@@ -298,7 +299,7 @@ inline SaveData MakeSave(const K::World& w) {
     save.score = score != nullptr ? score->v : -1;
     const BestScore* best = w.Resource<BestScore>();
     save.best = best != nullptr ? best->v : -1;
-    const K::RangeAllotter* allotter = w.Resource<K::RangeAllotter>();
+    const GYO::Engine::EntityIds::RangeAllotter* allotter = w.Resource<GYO::Engine::EntityIds::RangeAllotter>();
     save.next = allotter != nullptr ? allotter->next : 0;
     return save;
 }
@@ -308,7 +309,7 @@ inline SaveData MakeSave(const K::World& w) {
 inline O::PrepareFn LoadInto(SaveData save) {
     return [save](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(save);
-        w.SetResource(K::RangeAllotter::Of(save.next, kLast));
+        w.SetResource(GYO::Engine::EntityIds::RangeAllotter::Of(save.next, kLast));
         w.SetResource(Score{0});
         return {};
     };

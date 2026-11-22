@@ -80,8 +80,8 @@ inline void Data(Registrar& r, bool allotter = false) {
     r.Resource<CRes>({.name = "CRes"});
     r.Message<Ping>({.name = "Ping"});
     if (allotter) {
-        r.Resource<RangeAllotter>({.name = "Allotter"});
-        r.Allotter<RangeAllotter>();
+        r.Resource<TestRangeAllotter>({.name = "Allotter"});
+        r.Allotter<TestRangeAllotter>();
     }
     r.Resource<TickCount>({.name = "TickCount"});
     r.Schedule(TickSchedule());

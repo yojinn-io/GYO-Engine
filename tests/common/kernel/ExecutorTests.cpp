@@ -591,7 +591,7 @@ TEST_CASE("J-32b: untyped Commands write any column; a kernel Err the System dro
             Data(r, true);
             r.AddSystem<&SpawnDropped>(B("SpawnDropped", "A"));
         }, false);
-        rig->world().SetResource(RangeAllotter::Of(1, 0));  // used up
+        rig->world().SetResource(TestRangeAllotter::Of(1, 0));  // used up
         CheckErrOnce(*rig, KernelErrorCode::AllotterExhausted, "W-9");
     }
     SUBCASE("a dropped Err beside the System's own Err") {
@@ -599,7 +599,7 @@ TEST_CASE("J-32b: untyped Commands write any column; a kernel Err the System dro
             Data(r, true);
             r.AddSystem<&DroppedBesideOwn>(B("DroppedBesideOwn", "A"));
         }, false);
-        rig->world().SetResource(RangeAllotter::Of(1, 0));  // used up
+        rig->world().SetResource(TestRangeAllotter::Of(1, 0));  // used up
         const auto result = rig->Run();
         REQUIRE_FALSE(static_cast<bool>(result));
         CHECK(result.error().Has(KernelErrorCode::AllotterExhausted));
@@ -818,11 +818,11 @@ TEST_CASE("J-45: ExclusiveWorld writes any component value, in every build") {
     }
     SUBCASE("spawn: the typed Spawn gives an id from the allotter, and the entity is there in the call") {
         auto rig = ExclusiveRig([](Registrar& r) {
-            r.Resource<RangeAllotter>({.name = "Allotter"});
-            r.Allotter<RangeAllotter>();
+            r.Resource<TestRangeAllotter>({.name = "Allotter"});
+            r.Allotter<TestRangeAllotter>();
             r.AddSystem<&ExclusiveSpawns>(B("X", "A"));
         }, false);
-        rig->world().SetResource(RangeAllotter::Of(10, 19));
+        rig->world().SetResource(TestRangeAllotter::Of(10, 19));
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK_MESSAGE(Log() == std::vector<std::string>{"spawned 10 tag 3"}, "J-45 spawn: " << (Log().empty() ? std::string("nothing") : Log().front()));

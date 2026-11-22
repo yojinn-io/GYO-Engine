@@ -5,6 +5,7 @@
 // product's own build. Not a product: only what the orchestration tests need.
 
 #include "OrchestrationTestSupport.hpp"
+#include "TestRangeAllotter.hpp"
 
 #include "engine/base/Log.hpp"
 
@@ -174,8 +175,8 @@ inline void Register(O::WorldSetup& s) {
     r.Resource<Score>({.name = "Score"});
     r.Resource<SaveData>({.name = "SaveData"});
     r.Resource<Sentinel>({.name = "Sentinel"});
-    r.Resource<K::RangeAllotter>({.name = "Allotter"});
-    r.Allotter<K::RangeAllotter>();
+    r.Resource<GYO::Test::TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<GYO::Test::TestRangeAllotter>();
     r.Schedule(Once("Boot"));
     r.Schedule(Once("Load"));
     r.Schedule(Once("Junk"));
@@ -194,7 +195,7 @@ inline GYO::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World&
     w.SetResource(Gold{0});
     w.SetResource(Score{0});
     w.SetResource(Sentinel{});
-    w.SetResource(K::RangeAllotter::Of(first, kLast));
+    w.SetResource(GYO::Test::TestRangeAllotter::Of(first, kLast));
     return {};
 }
 
@@ -202,7 +203,7 @@ inline GYO::Engine::Base::Result<void, O::OrchestrationError> Defaults(K::World&
 inline O::PrepareFn LoadInto(SaveData save, bool moveLowerBound = true) {
     return [save, moveLowerBound](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(save);
-        if (moveLowerBound) w.SetResource(K::RangeAllotter::Of(save.next, kLast));
+        if (moveLowerBound) w.SetResource(GYO::Test::TestRangeAllotter::Of(save.next, kLast));
         return {};
     };
 }

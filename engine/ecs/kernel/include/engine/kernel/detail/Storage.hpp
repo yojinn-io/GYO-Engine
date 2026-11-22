@@ -416,40 +416,8 @@ concept EntityAllotter = requires(A allotter, const A& constant, EntityId id) {
     { constant.Owns(id) } -> std::same_as<bool>;
 };
 
-// The kernel's range allotter (spec A.1, W-9): one range [first, last],
-// monotonic, never reuses an id, reports exhaustion and never wraps; no reset.
-// The policy "monotonic, generation 0" of target/world section 1 is this
-// allotter with a product's range. A product may declare its own type instead.
-struct RangeAllotter {
-    EntityId first = 0;
-    EntityId last = 0;
-    EntityId next = 0;
-    bool exhausted = false;
-
-    [[nodiscard]] static RangeAllotter Of(EntityId first, EntityId last) noexcept {
-        return RangeAllotter{first, last, first, first > last};
-    }
-
-    [[nodiscard]] std::optional<EntityId> Allot() noexcept {
-        if (exhausted) return std::nullopt;
-        const EntityId id = next;
-        if (id == last) {
-            exhausted = true;
-        } else {
-            ++next;
-        }
-        return id;
-    }
-
-    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }
-};
-// Field by field: the padding after exhausted is not hashed.
-inline void HashValue(Hasher& h, const RangeAllotter& value) {
-    HashValue(h, value.first);
-    HashValue(h, value.last);
-    HashValue(h, value.next);
-    HashValue(h, value.exhausted);
-}
+// The kernel ships no allotter type (DI-KS 4): the default strategy, RangeAllotter, is in the entity_ids
+// Module (engine/entity_ids/RangeAllotter.hpp); a product may declare its own.
 
 namespace Detail {
 

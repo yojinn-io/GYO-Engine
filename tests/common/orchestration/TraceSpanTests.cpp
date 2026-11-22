@@ -4,6 +4,7 @@
 // World broke (D4 (i)). A recording receiver of the test's own; each CHECK carries a tag "[or-trace-...]".
 
 #include "SaveGame.hpp"
+#include "TestRangeAllotter.hpp"
 
 // MSVC: doctest messages stream std::string_view; that needs the full ostream.
 #include <ostream>
@@ -93,7 +94,7 @@ TEST_CASE("trace-spans: an error the orchestration layer produces is the origin 
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     Recording recording;
-    auto inserted = p.InsertSystems("Main", "console", [](K::Registrar& r) { r.Allotter<K::RangeAllotter>(); });
+    auto inserted = p.InsertSystems("Main", "console", [](K::Registrar& r) { r.Allotter<GYO::Test::TestRangeAllotter>(); });
     REQUIRE_FALSE(static_cast<bool>(inserted));
     CHECK_MESSAGE(recording.Joined() == "begin orchestration InsertSystems | error 1 origin | end 1", "[or-trace-origin] " << recording.Joined());
     CHECK_MESSAGE(recording.errorText.rfind("InsertBuildFailed: ", 0) == 0, "[or-trace-mark-text] " << recording.errorText);
