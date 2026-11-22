@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "generator": {"tool": "audio_editor", "rev": 7},
+  "assets": [
+    { "id": "sample.readme", "type": "text", "path": "docs/readme.txt", "note": "hand written", "tags": ["a", "b"] }
+  ]
+}

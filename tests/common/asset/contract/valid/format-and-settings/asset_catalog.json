@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "assets": [
+    { "id": "sample.region", "type": "region", "path": "maps/region_0_0", "format": "gyoreg2" },
+    { "id": "sample.upper", "type": "text", "path": "docs.v2/READ.ME.TXT" },
+    { "id": "sample.engine", "type": "text", "path": "docs/readme.gyotxt", "format": "gyotxt", "settings": {"trim": true, "limit": 10} },
+    { "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "type": "text", "path": "docs/long.txt" },
+    { "id": "0-9._-", "type": "text", "path": "docs/marks.txt" }
+  ]
+}
