@@ -21,7 +21,7 @@
 - [統合宣告](kernel-app-boundary-declaration.zh-Hant.md)修訂 38：L4、L14、L16、L17；第 240 行（11-11 的讀取畫面與分批載入→生成世界）。
 - [讀檔宣告](restore-entry-declaration.zh-Hant.md)修訂 11：4、5.1、5.8、第 8 節第 198 行（給本批的要求）、第 13 節判定 1、2、第 15 節。
 - asset 宣告修訂 3（分支 `claude/gyo2-asset-585196` 1b120a86，已核准、未合併）：5.6、5.7、5.13（G-1～G-3）、5.14；決定 9。
-- 交換點宣告修訂 1（分支 `claude/gyo2-exchange-81ea9f` 840cb86c）：5.1、5.3、5.4、第 10 節末、第 13 節 W-1～W-9。
+- 交換點宣告修訂 1（分支 `claude/gyo2-exchange-81ea9f` 96496511）：5.1、5.3、5.4、第 10 節末、第 13 節 W-1～W-10（已改用本頁修訂 1 的節號）。
 - 第 4 批（已合併）：[權威頁](authority.zh-Hant.md) DI-A 5、第 4 節；[回滾頁](rollback.zh-Hant.md) R-2 前提 6；Kernel DI-KS 12、DI-KS 15 第 (7)、(13) 項、DI-KS 27。
 - 已合併的程式：`origin/gyo2` 45f13757——`engine/orchestration`（`Product.hpp`、`Setup.hpp`、`src/Product.cpp`）、`engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp:409-462`（`EntityAllotter`、`RangeAllotter`）、`Registry.hpp:238-249`、`src/Registry.cpp:693-711`（兩個不同的配發器是 RE2）、`World.cpp:1042-1049`（訊息修剪取所有游標的最小值）、`engine/modules/world_time/src/TimeTypes.cpp:64-67`（暫停時這一幀的量 0、不累加、不扣）、[orchestration.zh-Hant.md](orchestration.zh-Hant.md) O-1～O-11、[world-time.zh-Hant.md](world-time.zh-Hant.md) WT-2、WT-3。
 - 別家原始碼：主 checkout `build/evidence/gyo2-world-gen/other-engines.md`（偵察者 Opus／high；路徑:行號都在裡面）。
@@ -220,7 +220,7 @@ bool AfterGenerating(Kernel::Res<WorldGeneration>);
 
 ### 5.12 和交換點卡的交界（`gyo2-exchange`，`local_7876c9c8`）
 
-**已對齊**（2026-11-22，兩張卡以 SendMessage 往返；修訂 1 改建議 B 之後的差異見表末）。交換點卡的宣告：`exchange-declaration.zh-Hant.md`（分支 `claude/gyo2-exchange-81ea9f`，修訂 1 840cb86c）——交換點第 5.1 節、執行緒第 5.3 節、Extract 第 5.4 節、交界第 13 節 W-1～W-9（它引用本頁修訂 0 的節號 5.1～5.5、5.14；本頁修訂 1 的對應是 5.1～5.4、5.12，已通知對方）。
+**已對齊**（2026-11-22，兩張卡以 SendMessage 往返；修訂 1 改建議 B 之後的差異見表末）。交換點卡的宣告：`exchange-declaration.zh-Hant.md`（分支 `claude/gyo2-exchange-81ea9f`，修訂 1 96496511）——交換點第 5.1 節、執行緒第 5.3 節、Extract 第 5.4 節、交界第 13 節 W-1～W-10（引用本頁修訂 1 的 5.1～5.5、5.12；W-1 並列 A／B、W-3「B 掛一處、選 A 才掛兩處」、W-10「RunSchedule 不讀寫生成狀態、交出入口與 RunFrame 共用同一段處理」）。
 
 **「一輪」**（兩卡共用的定義）：一個 World 在一次 `RunFrame` 裡跑的全部。
 
