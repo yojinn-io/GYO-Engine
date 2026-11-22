@@ -30,7 +30,7 @@
 | [時間設計](rebuild-time-design.zh-Hant.md)第 5.1～5.5、6.4 節 | 已核准（決定 1～7） | 交換點的原形（5.3：進、出、交換函式的登記、七個點名的使用者）、三種組合、跨 World 事件的形狀 |
 | [world-time](world-time.zh-Hant.md) 第 3 節、WT-6 | 已合併 | 取樣的過渡（第 5.5 節） |
 | [rebuild-concept](rebuild-concept.zh-Hant.md) M11、D6b（含 2026-11-22 的加註） | 已核准 | 交換點的不變量 |
-| [runtime-composition](../runtime-composition.zh-Hant.md) 第 2 節（Client 三個 World、Mailbox 由 Host 擁有、只在 schedule 之間存取）、第 3b 節（Editor；沒有影像回到文件 World） | 使用者 11-11 決定 | 第 5.1、5.4 節 |
+| [runtime-composition](../runtime-composition.zh-Hant.md) 第 2 節（Client 三個 World）、第 3b 節（Editor；沒有影像回到文件 World） | 使用者 11-11 決定（K.3 第 6 項：模擬與渲染的 World 分開、只經 Extract）。第 2 節的「Mailbox 由 Host 擁有、只在 schedule 之間存取」是從規格 H.4.2（`spec.zh-Hant.md:903`）抄進來的細節，不是使用者另外定的（2026-11-24 更正，見第 18 節） | 第 5.1、5.4 節 |
 | [kernel](../kernel.zh-Hant.md) DI-KS 13、15、26；[cross-component-rules](../../../cross-component-rules.md) CCR-5 | 已合併 | Extract 的 Kernel 那一半；單執行緒的前提 |
 | [回滾](rollback.zh-Hant.md)（`RollbackInbox`、R-3）、[權威](authority.zh-Hant.md)（DI-A 7） | 已合併（#259） | 網路寫進 World 的位置 |
 | [日誌宣告](logging-declaration.zh-Hant.md) 5.4 | 已合併（#256） | Kernel 診斷紀錄「runner 在兩次 Run 之間取走」，「交換點在第 5 條才由編排層排；那時這個呼叫可以移到交換點，介面不變」（第 228 行） |
@@ -43,11 +43,11 @@
 
 ## 1. 這一批做什麼（先用遊戲講）
 
-**PvP 的 Client**：三個 World——模擬（固定步，自己的執行緒）、畫面（每幀，主執行緒）、渲染（每幀，主執行緒，只經 Extract 唯讀拿畫面 World 的資料）。網路收到伺服器的快照，模擬 World 每一輪開頭把它們寫進 `RollbackInbox`；畫面 World 把玩家的指令交給模擬 World，模擬 World 把「這一步角色在哪」交回畫面 World（經 Host 擁有的郵箱，只在 schedule 之間存取，使用者 11-11）。貼圖的解碼在 IO 執行緒。每個 World 跑完一輪，Kernel 的診斷紀錄（丟掉的訊息、被拒的生成）要被取走交給日誌。
+**PvP 的 Client**：三個 World——模擬（固定步，自己的執行緒）、畫面（每幀，主執行緒）、渲染（每幀，主執行緒，只經 Extract 唯讀拿畫面 World 的資料）。網路收到伺服器的快照，模擬 World 每一輪開頭把它們寫進 `RollbackInbox`；畫面 World 把玩家的指令交給模擬 World，模擬 World 把「這一步角色在哪」交回畫面 World（兩邊在不同執行緒，中間放一個有鎖的「郵箱」，一邊投、另一邊下次自己拿；怎麼做在 PvP 移植時定）。貼圖的解碼在 IO 執行緒。每個 World 跑完一輪，Kernel 的診斷紀錄（丟掉的訊息、被拒的生成）要被取走交給日誌。
 
 這裡有四種「資料進出 World」：
 1. **外部服務的結果在幀裡進 World**（asset 的載入結果、網路的快照）：服務在 World 之外、有自己的鎖；World 裡的 System 在每一輪的固定位置一次拉進來。
-2. **在兩次 Run 之間、拿整個 World 做的事**（郵箱的進出、診斷紀錄的取走）：World 不在 Run 裡時，由編排層依序呼叫各單位登記的函式。
+2. **在兩次 Run 之間、拿整個 World 做的事**（診斷紀錄的取走）：World 不在 Run 裡時，由編排層依序呼叫各單位登記的函式。
 3. **runner 自己的事**（它擁有的視窗的事件）：runner 在兩次入口之間直接寫。
 4. **渲染讀畫面**：渲染 World 在一個時點唯讀地看畫面 World 的資料（Extract），不寫回。
 
@@ -113,7 +113,7 @@
 | E-19 | 日誌：Kernel 的診斷紀錄在每個 World 跑完之後取走；World 不在 Run 裡、做不成 System（1） | 日誌宣告 5.4、第 228 行 | 編排層在每個 World 的一輪之後依序呼叫單位登記的函式（形 (2)「出」） | 5.1 |
 | E-20 | 生成世界：分批之間 asset 的套用 System 會跑（1） | asset G-1～G-3 | 套用點是 World 裡的 System，跟著 World 的每一輪走 | 5.1、13 |
 | E-21 | 規模：PvP 64 Hz、Client 三個 World；Match 一個 World；工具一到兩個 World（3） | 時間設計、runtime-composition | World 數是個位數；Product 層的查找不必比線性快（照 `OptionBag`、`ModuleBuffer` 的線性表） | 5.2 |
-| E-22 | PvP Client：意圖 F → S、呈現 S → F 經 Host 擁有的郵箱，**只在 schedule 之間存取**（1；使用者 11-11） | runtime-composition 第 2 節 | 兩次 Run 之間、拿整個 World 的插口（形 (2)） | 5.1、5.3 |
+| E-22 | PvP Client：畫面 World 與模擬 World 互交指令與位置（1；Client 三個 World 是使用者 11-11 定的。「經 Host 擁有的 Mailbox、只在 schedule 之間存取」是規格 H.4.2 的細節，不是使用者定的） | runtime-composition 第 2 節；規格 H.4.2 | 兩邊不等另一條執行緒；用形 (1)（有鎖的服務＋套用 System）或形 (2)，PvP 移植時定 | 5.1、5.3 |
 | E-23 | 時間設計 5.3 點名的七個使用者：時間的投影、`HostClockSample`（PvP）、網路的收發緩衝、平台事件、資產 IO 的完成通知、World 之間的資料、診斷的輸出（1） | 時間設計 5.3（第 328 行） | 逐一落到四種形（第 5.1 節的表） | 5.1 |
 
 修訂 0 的 E-9（同一個行程裡的伺服器 World 與 Client World）只有根據 2（Unity Netcode、lightyear 有 host 模式），批次表網路列沒有點名，修訂 1 拿掉（檢查 S4）；網路 Module 若點名，照第 5.6 節的對照接。
@@ -139,7 +139,7 @@
 | flecs | 慣例：`OnLoad` 把外部資料拉進來、`OnStore` 寫出去（`docs/DesignWithFlecs.md:135-136`）；別的執行緒用自己的 stage 累積、`ecs_merge` 在獨占時套用（`src/stage.c:169-189`）；`ecs_run_post_frame` 在 `ecs_frame_end` 跑（`src/addons/frame.c:151-199`） | 〔原〕形 (1)、(2) |
 | Unreal Mass | 引擎與 Mass 的交換是處理器群組 `SyncWorldToMass`、`UpdateWorldFromMass`；物理是有自己鎖的外部服務，平行讀、最後一次寫（MassSample `MSSceneCompTransformToActorTranslators.cpp:13-22`、`:63-112`） | 〔原〕形 (1) |
 
-**共通**：World 的資料不上鎖、不共享；一條執行緒在一個時點擁有一個 World。外部的生產者寫進自己擁有的緩衝（channel、stage、驅動的佇列），World 在固定的頭（收、`OnLoad`、`SyncWorldToMass`）尾（送、`OnStore`、`UpdateWorldFromMass`）一次套用。**沒有一家有「編排層依序呼叫的交換函式登記」**；最接近的是 flecs 的 `ecs_run_post_frame`（一次性的動作佇列）與 replicon 測試在兩次 update 之間搬緩衝。GYO 照時間設計 5.3 留這一層，理由是 GYO 自己的兩個決定（第 5.1 節）：Kernel 的診斷紀錄要在 Run 之外取（日誌宣告 5.4）、Client 的郵箱只在 schedule 之間存取（使用者 11-11）。
+**共通**：World 的資料不上鎖、不共享；一條執行緒在一個時點擁有一個 World。外部的生產者寫進自己擁有的緩衝（channel、stage、驅動的佇列），World 在固定的頭（收、`OnLoad`、`SyncWorldToMass`）尾（送、`OnStore`、`UpdateWorldFromMass`）一次套用。**沒有一家有「編排層依序呼叫的交換函式登記」**；最接近的是 flecs 的 `ecs_run_post_frame`（一次性的動作佇列）與 replicon 測試在兩次 update 之間搬緩衝。GYO 照時間設計 5.3 留這一層，理由是 GYO 自己已核准的決定（第 5.1 節）：Kernel 的診斷紀錄要在 Run 之外取（日誌宣告 5.4）。
 
 **落差與坑**（偵察報告列的，和本頁有關的）：交換位置排晚了就晚一幀（Unity 的串流文件：排在 `SceneSystemGroup` 之前的 System 晚一幀看到）；佇列的語意要寫明（Netcode 只留最新一份）；無上限的 channel 沒有流量控制；一個執行緒一個 stage。
 
@@ -200,7 +200,7 @@
 | 時間在 World 裡取樣（維持過渡） | 同（`time_system`；有渲染時取樣點來自 present） | 同（`UpdateWorldTimeSystem`） | 不同：呼叫者給 delta（可選自己量） | 同（測試用 `ManualInstant` 由外面發） | 未查 |
 
 **GYO 和所有查到的別家都不同的四處**（設計審查要特別看的地方）：
-1. **交換函式的登記**：沒有一家有。GYO 留著，是因為自己的兩個決定——Kernel 的診斷紀錄要在 Run 之外取（日誌宣告 5.4）、Client 的郵箱只在 schedule 之間存取（使用者 11-11）。RC-O11 寫了何時拿掉。
+1. **交換函式的登記**：沒有一家有。GYO 留著，是因為已核准的時間設計 5.3 與日誌宣告 5.4——Kernel 的診斷紀錄要在 Run 之外取。（修訂 2 原本另列「Client 的郵箱只在 schedule 之間存取（使用者 11-11）」，出處寫錯，已拿掉，第 18 節。）RC-O11 寫了何時拿掉。
 2. **Product 一份的共用處**：沒有一家獨立於 World；最接近的 Unreal subsystem 是〔知〕、沒有原始碼可對。GYO 的理由是 `Configure` 時沒有 World、World 彼此平等（第 4.3 節）；使用者 2026-11-24 選了這個（第 12 節）。
 3. **Extract 不寫回**：Bevy 會寫回（readback）。這是使用者 11-11 的決定，不是本頁的選擇。
 4. **套用掛 `First`**：別家在 `PreUpdate`。理由是 GYO 的回滾決定掛在 `PreUpdate`（`RollbackStrategy.hpp:177`）。
@@ -213,7 +213,7 @@
 
 **已定的不變量**：外部系統不持有、不修改 World；只經受控的交換點交換資料（M11）；外部訊息只在邊界批次進入 World（D6b）。2026-11-22 的加註（asset 宣告第 15 節第 11 項）：World 的資料不上鎖；System 呼叫外部服務時，服務可以拿它自己的鎖，結果只在套用點或交換點批次進 World；同步呼叫外部服務帶回的值，只能是不進雜湊、不進相等的身分資訊，不得讓判定依時序而變。
 
-**已核准的原形**：時間設計 5.3（規格 H.1）——每個 World 每一輪有「進」（跑之前）與「出」（跑完之後）兩個交換點；登記單位登記交換函式，依登記的順序呼叫；交換函式不等待別的執行緒、只用短的鎖。統合 L19 把它的位置定在編排層；runtime-composition 第 2 節（使用者 11-11）要 Client 的郵箱「只在 schedule 之間存取」。之後 asset 照 Bevy 定了套用點（asset X-2：交換點不需要認得 asset）。
+**已核准的原形**：時間設計 5.3（規格 H.1）——每個 World 每一輪有「進」（跑之前）與「出」（跑完之後）兩個交換點；登記單位登記交換函式，依登記的順序呼叫；交換函式不等待別的執行緒、只用短的鎖。統合 L19 把它的位置定在編排層。規格 H.4.2 寫 Client 的 Mailbox「只在 schedule 之間存取」（抄進 runtime-composition 第 2 節；不是使用者另外定的，第 18 節）。之後 asset 照 Bevy 定了套用點（asset X-2：交換點不需要認得 asset）。
 
 **本頁和時間設計 5.3 的三個差別**（檢查 A2；本卡照 L17 判，理由都是 5.3 之後的使用者決定，揭露、不交使用者）：
 1. **登記的時機**：5.3 寫登記單位在 finish 登記；本頁在 `Build` 登記。理由：替換 World 時只重走 `Build`～`Check`（O-2），交換函式要和那個 World 的登記一起重來；登記在 `Build` 和準備函式、帶過去同一個時點（O-7）。
@@ -225,7 +225,7 @@
 | 形 | 什麼 | 時點 | 誰寫 | 用它的（點名的） | 系譜 |
 |---|---|---|---|---|---|
 | **(1) 套用點** | World 裡的 System 呼叫 World 外的服務（有自己的鎖），把結果一次寫進 World；或把要送的交給服務 | 「進」：一輪最前面（預設骨架 `Main`／`First`；生成世界若選「另跑生成清單」，生成中另掛 `Generate`／`First`，第 13 節 W-3）；「出」：最後（`Main`／`Last`）。骨架關掉的 World 由產品指定 | 擁有服務的 Module | asset 的套用 System（E-6、E-20）；網路的收件與送件（E-8，網路 Module 批照下面的規則選 (1) 或 (2)） | Bevy asset server、gilrs；lightyear、bevy_replicon；Unity Netcode 的 receive group；flecs 的 `OnLoad`／`OnStore`；Mass 的 `SyncWorldToMass`（第 4.1 節） |
-| **(2) 交換函式** | 單位登記的函式，World 不在 Run 裡、Ready 時拿整個 World 做事 | 編排層在每個 World 的**一輪**之前（進）、之後（出）依登記的順序呼叫（一輪的定義見第 13 節 W-2） | 登記它的單位（或產品自己的 `build`） | Kernel 診斷紀錄的取走（E-19）；Client 的郵箱（E-22）；之後：時間的投影（E-18，若 SDL 那批移給 runner）、`HostClockSample`（PvP） | 時間設計 5.3（規格 H.1）；別家沒有這一層，最近的是 flecs 的 `ecs_run_post_frame`（一次性的佇列）與 replicon 測試在兩次 update 之間搬緩衝（第 4.1 節） |
+| **(2) 交換函式** | 單位登記的函式，World 不在 Run 裡、Ready 時拿整個 World 做事 | 編排層在每個 World 的**一輪**之前（進）、之後（出）依登記的順序呼叫（一輪的定義見第 13 節 W-2） | 登記它的單位（或產品自己的 `build`） | Kernel 診斷紀錄的取走（E-19）；之後可能：Client 的郵箱（E-22，PvP 移植時定用 (1) 或 (2)）、時間的投影（E-18，若 SDL 那批移給 runner）、`HostClockSample`（PvP） | 時間設計 5.3（規格 H.1）；別家沒有這一層，最近的是 flecs 的 `ecs_run_post_frame`（一次性的佇列）與 replicon 測試在兩次 update 之間搬緩衝（第 4.1 節） |
 | **(3) runner 在兩次入口之間** | runner（或 Product 的持有者）在 World 不在 Run 裡時直接讀寫 World，或呼叫某個 Module 給的函式 | 兩次 `Product` 入口之間 | runner／產品 | runner 擁有的視窗的事件（E-10，若不走服務）；World 壞掉之後先寫失敗、再取診斷（日誌宣告 5.4 的順序規則） | Bevy winit 的 runner 在 update 之前寫視窗事件（第 4.1 節） |
 | **(4) Extract** | 一個 World 唯讀地讀另一個 World | 來源跑完之後、讀者的一輪裡（extract schedule 寫在讀者的每幀清單裡，兩個都不在 Run 裡；第 5.4 節） | 讀者的 extract schedule | 渲染 World（E-11、E-14） | Bevy `SubApp::extract`（第 4.2 節） |
 
@@ -233,7 +233,7 @@
 
 **選哪一種的規則**（寫進 O-12）：
 - **(1) 是 Module 擁有的外部服務在幀裡進出 World 的預設**：結果要和 World 裡的 System 排先後（例：網路的收件要在回滾的決定之前）、要跟著生成的每一批走、或由很多 System 讀的，用 (1)。
-- **(2) 給「必須在 schedule 之間」或「要整個 World、在 Run 之外」的事**：使用者定了只在 schedule 之間存取的（郵箱，E-22）；Run 裡看不到全部結果的（診斷紀錄要在最後一個同步點之後取）；骨架關掉時也要自動接上、不靠作者掛的。
+- **(2) 給「必須在 schedule 之間」或「要整個 World、在 Run 之外」的事**：Run 裡看不到全部結果的（診斷紀錄要在最後一個同步點之後取）；骨架關掉時也要自動接上、不靠作者掛的。
 - **(3) 只給 runner 自己擁有的東西**；Module 的資料不要求 runner 認得（RC-O1「Host 長回來」）。runner 也可以呼叫 Module 給的函式（例：`WorldLogging::TakeKernelDiagnostics`），接線歸 runner／產品。
 - 同一件事不要兩種形都做：網路 Module、SDL 那批選定一種，寫在自己的宣告。
 
@@ -302,12 +302,12 @@
 - 編排層現在把 `Product` 的建立、執行、替換、插入、銷毀都放在呼叫的執行緒上（`Product.hpp` 開頭的註解，CCR-5）。
 - 一個 World 壞了，Product 就結束；每個入口先檢查所有 World（O-11，使用者 `v8-arch-gyo2-broken-world-ends-product`）。
 
-**要求**（E-13、E-22）：PvP Client 的模擬 World 在自己的執行緒跑，主執行緒停住時模擬照跑；畫面與模擬之間的郵箱只在 schedule 之間存取。
+**要求**（E-13、E-22）：PvP Client 的模擬 World 在自己的執行緒跑，主執行緒停住時模擬照跑；畫面與模擬之間交換資料時不等另一條執行緒。
 
 **本批寫進 O-13 的不變量**（本卡照 L17 判；照檢查 M5 建議的「只寫不變量」那一種做法：入口層級的行為留給實作那一批）：
 1. **單位是一整個 World**。不把一個 World 拆給兩條執行緒（World 的資料不上鎖，D6b、M11）。同一個 World 裡的並行是 Kernel 執行器的事（LIM-2），不在本頁。
 2. **整個交出**：runner 把一個 World 交給別的執行緒時，交出期間只有那條執行緒碰它（它的 Registry、執行、交換函式、生成的狀態，第 13 節 W-7）；Product 與別的執行緒不碰。CCR-5 對每個 World 照舊成立。
-3. **兩邊只經有鎖的服務交換**（郵箱是 Product 一份、有自己的鎖的物件，各 World 在自己的交換函式裡碰，E-22）；不等另一條執行緒。郵箱是「只留最新一份」還是佇列、誰持有、上限，由用它的 Module 定（Unity Netcode 的快照只留最新一份，第 4.1 節）。
+3. **兩邊只經有鎖的服務交換**（郵箱是 Product 一份、有自己的鎖的物件，各 World 在自己的套用 System 或交換函式裡碰，E-22）；不等另一條執行緒。郵箱是「只留最新一份」還是佇列、誰持有、上限，由用它的 Module 定（Unity Netcode 的快照只留最新一份，第 4.1 節）。
 4. **O-11 照舊成立**：交出不改「一個 World 壞了 Product 就結束」。實作那一批要說明它怎麼保住（候選：交出的租約帶一個放在編排層的原子旗標，壞掉當下設、每個入口先看；Kernel 不加原子操作），保不住就照 §3 交使用者。
 5. **Extract 在兩邊都停著的時點**（第 5.4 節）。
 
@@ -366,7 +366,7 @@
 | SDL：OS 事件進 World | 批次表 SDL 列 | 有視窗的 runner 走形 (3)（Bevy winit），或輸入服務＋形 (1)（Bevy gilrs）；SDL 那批選 | 契約 |
 | SDL：渲染 World、Extract | runtime-composition 第 2 節 | 第 5.4 節 | 契約；實作在 SDL 那批 |
 | SDL：裝置是 Product 一份 | asset 5.4「預先登記」 | 共用處 | 共用處實作 |
-| PvP Client：郵箱 | runtime-composition 第 2 節 | 郵箱是共用處裡有鎖的物件；兩個 World 各在自己的交換函式裡碰（形 (2)） | 交換函式的登記實作；郵箱在 PvP 移植 |
+| PvP Client：郵箱 | runtime-composition 第 2 節（規格 H.4.2 的細節） | 郵箱是共用處裡有鎖的物件；兩個 World 各在自己的套用 System（形 (1)）或交換函式（形 (2)）裡碰，PvP 移植時定 | 共用處與交換函式的登記實作；郵箱在 PvP 移植 |
 | threads：runner 的執行緒 | R0 附錄 | runner 建、runner 收；World 整個交出（第 5.3 節） | 不變量；threads 重審照它重寫 `RoleThread` 的用途 |
 | io：多執行緒同時讀檔 | asset 5.12 | io 自己的契約；本頁只要求 World 外的服務自己同步 | 不在本頁 |
 | audio：混音器、`Submitter` | 批次表 audio 列 | 混音器是 Product 一份的物件；`Submitter` 綁執行緒、自己記；World 交出到別的執行緒時要在那條執行緒上另拿一個——audio 重審要對的點 | 不變量；audio 重審照它 |
@@ -383,7 +383,7 @@
 4. **影響的 Module／Product／Tool**：編排層（實作）；asset、網路、SDL、threads、audio、world_logging（照本頁接）；world_time（SDL 那批若移取樣）；現有產品沒有（`gyo2` 上沒有產品）。
 5. **Dependency Direction**：不變。共用處與選項的型別由放的一方定，編排層不 include 任何 Module（O-4、RC-O4）。Module 之間經共用處互相拿物件時，依賴照舊寫在登記檔（O-6）。
 6. **Ownership**：「Product 一份的共用處、Product 層的選項、`Configure` 的回報、銷毀的回呼與順序」歸編排層（O-2、O-5；是否算職責清單多一項，交使用者確認，第 12 節）；交換函式的登記歸編排層（O-4 已列「交換點」）。共用處裡的物件歸放它的一方。
-7. **為什麼不能更小**：只給 asset 一個專用入口會讓編排層認得 asset（RC-O4、RC-O8），下一個又要加；不做交換函式的登記，Kernel 診斷紀錄的取走要每個 runner 各接一次（RC-O1 第二句、日誌的 RC-L2），郵箱也沒有「只在 schedule 之間」的地方；不寫交換點與執行緒的契約，網路、SDL、threads 會各自定一套。
+7. **為什麼不能更小**：只給 asset 一個專用入口會讓編排層認得 asset（RC-O4、RC-O8），下一個又要加；不做交換函式的登記，Kernel 診斷紀錄的取走要每個 runner 各接一次（RC-O1 第二句、日誌的 RC-L2）；不寫交換點與執行緒的契約，網路、SDL、threads 會各自定一套。
 
 ---
 
@@ -412,12 +412,12 @@
 
 **world-time `world-time.zh-Hant.md`**（檢查 A3）：第 3 節「在那之前照 Bevy」與 WT-6 第 (2) 項「交換點做出來後這一項移給 runner」的退出條件，改成「到第一個需要的 runner 那批」（方向不變；第 5.5 節）。
 
-**加註**（不改當時的紀錄，只在頁內加一行指向本頁）：runtime-composition 第 2 節末列（郵箱 → 形 (2)）、日誌宣告 5.4 末句（交換點已排：形 (2) 的「出」）、時間設計 5.3（交換函式的登記照它做；和它的三個差別——`Build` 登記、編排層呼叫、只給 `World&`——在本頁 5.1）與 6.4（形狀落在形 (2)）。
+**加註**（不改當時的紀錄，只在頁內加一行指向本頁）：runtime-composition 第 2 節末列（Mailbox 那一句出自規格 H.4.2、不是使用者另外定的；郵箱用形 (1) 或 (2) 在 PvP 移植時定）、日誌宣告 5.4 末句（交換點已排：形 (2) 的「出」）、時間設計 5.3（交換函式的登記照它做；和它的三個差別——`Build` 登記、編排層呼叫、只給 `World&`——在本頁 5.1）與 6.4（形狀落在形 (2)）。
 
 ### Replacement Criteria（寫在積上去之前）
 
 - **RC-O10 改寫**：CCR-5 放寬時（建 World 要並行、一個 World 的登記單位並行 `Build`、或 World 交出到別的執行緒），每 World 與 Product 一份的 `ModuleBuffer` 需要加鎖或改成別的同步方式；或整個交出（O-13）保不住 O-11、做不出點名的 Feature。
-- **RC-O11 新增**：交換函式的登記沒有點名的使用者了（例：診斷紀錄與郵箱都改成別的形），或某個點名的 Feature 需要進、出之外的呼叫點（例：每張 schedule 之間），或需要編排層傳這一輪的資訊（時間設計 5.3 原形有的取樣時刻、第幾輪；「另跑生成清單」時的「是不是生成」）才做得出。
+- **RC-O11 新增**：交換函式的登記沒有點名的使用者了（例：診斷紀錄改成別的形），或某個點名的 Feature 需要進、出之外的呼叫點（例：每張 schedule 之間），或需要編排層傳這一輪的資訊（時間設計 5.3 原形有的取樣時刻、第幾輪；「另跑生成清單」時的「是不是生成」）才做得出。
 - **RC-O12 新增**：Product 一份的共用處需要知道放進去的物件是什麼（例：要依型別做不同的收尾）、`OnDestroy` 的反序排不出某個收尾的先後，或兩個單位需要共同擁有一個型別。
 - **RC-O13 新增**：Extract 的來源替換（O-8）讓讀者的重建成為替換時間的主要部分，或讀者有不能重建的狀態（和 RC-O9 第二句一起看）。
 
@@ -431,7 +431,7 @@
 | Product 層的選項經描述給 | `WorldDescription::options`；Bevy Plugin 的欄位（`AssetPlugin { file_path }`） | 單位表讓產品自己建單位物件（產生的單位表的形狀要改，O-6）；產品在 `configure` 寫進共用處（產品的 `configure` 在所有單位之後，O-A1、X-1、X-5 不成立） | E-2、E-5、E-7 要「產品與測試的東西在單位的 `Configure` 就在」 | asset |
 | `OnDestroy`：兩段式、World 之後、反序 | flecs `ecs_atfini`（時點同；先後不同：flecs 是登記順序）；C++ 解構與 `atexit` 的反序 | 只靠共用處物件的解構子（收尾時依賴可能已解構）；單位的解構子（單位最後銷毀，物件已不在）；回呼回錯誤（解構裡沒有上層） | E-4：收尾時所有依賴都要在 | asset |
 | 明確的銷毀順序 | — | `= default` 靠成員宣告與 `vector` 的解構順序（標準未規定、平台不同） | 三平台同一個結果；Extract 的讀者先於來源 | 全部 |
-| 交換函式的登記（形 (2)） | 時間設計 5.3（規格 H.1）、統合 L19、runtime-composition 第 2 節 | 不做（只有形 (1)、(3)、(4)；修訂 0 的建議） | E-19：診斷紀錄要在 Run 之外取；E-22：郵箱只在 schedule 之間（使用者 11-11）。別家沒有這一層（第 4.1 節），GYO 有這兩個自己的決定 | 日誌、PvP Client |
+| 交換函式的登記（形 (2)） | 時間設計 5.3（規格 H.1）、統合 L19 | 不做（只有形 (1)、(3)、(4)；修訂 0 的建議） | E-19：診斷紀錄要在 Run 之外取（日誌宣告 5.4 已寫明等交換點）。別家沒有這一層（第 4.1 節） | 日誌 |
 | 四種形與選擇的規則 | Bevy、lightyear、Unity Netcode、flecs、Mass（形 (1)、(3)、(4)） | 一律交換函式（asset 已定套用 System，X-2；和 System 排先後做不到） | E-6、E-8、E-10、E-20 | asset、網路、SDL |
 | World 整個交出（只寫不變量） | Bevy pipelined 渲染 | `Product` 入口加鎖；World 綁執行緒 | E-13：主執行緒停住時模擬照跑，且 World 的資料不上鎖 | PvP Client |
 | Extract：來源在前、讀者的一輪之前、替換後不讀舊來源（只寫契約） | Bevy `SubApp::extract`；K.3 第 6 項 | 現在就定「讀者一起重建」或「准許換來源」（兩種都留給 SDL 那批比） | E-11、E-14 要的是時機與唯讀；替換的做法要等渲染 World 的實際狀態 | Client、Editor 的渲染 |
@@ -539,7 +539,7 @@
 
 ## 13. 和生成世界（重做）的交界
 
-生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 2，2af04db2；交界表在它的 5.12）。2026-11-22～24 兩張卡用 SendMessage 對齊（生成世界的 5.12 已照本頁修訂 2 的四種形與郵箱＝形 (2) 改好），結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議**「生成期間每幀照跑」**，它和**「另跑生成清單」**（生成中跑另一份生成清單）之間交使用者定；下表對兩者都成立，分開寫的地方標明是哪一種。
+生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 2，2af04db2；交界表在它的 5.12）。2026-11-22～24 兩張卡用 SendMessage 對齊（生成世界的 5.12 已照本頁修訂 2 的四種形改好），結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議**「生成期間每幀照跑」**，它和**「另跑生成清單」**（生成中跑另一份生成清單）之間交使用者定；下表對兩者都成立，分開寫的地方標明是哪一種。
 
 | # | 事項 | 誰負責 | 對齊的內容 |
 |---|---|---|---|
@@ -627,3 +627,18 @@
 | 輕微 | `Build` 失敗路徑的銷毀順序 | 寫明照第 5 點；P-5 也跑失敗路徑 | 5.2 第 4 點、10 |
 | 輕微 | `OnDestroy` 的閉包何時放 | 跑完就放 | 5.2 第 4 點 |
 | 輕微 | 日誌的接線每個產品各寫一份 | 由日誌那一側給接 `WorldSetup` 的函式 | 5.6 |
+
+---
+
+## 18. 2026-11-24 更正：「郵箱只在 schedule 之間存取」不是使用者的決定
+
+使用者看到回報裡的「郵箱只在 schedule 之間存取」後問「郵箱？」。查出處：這句原文是架構師的舊規格 H.4.2（`docs/architecture/plans/kernel/spec.zh-Hant.md:903`：「意圖 F → S、呈現 S → F，經 Host 擁有的 `Mailbox<T>`……只在 schedule 之間存取」），之後抄進 runtime-composition 第 2 節；那一節的標題是「使用者 2026-11-11 決定（K.3 第 6 項）」，但 K.3 第 6 項的內容是「模擬與渲染的 World 分開、渲染只經 Extract 唯讀拿資料」（`rebuild-1111-decisions-status.zh-Hant.md:75`），郵箱是規格原有的細節；這段規格還用著退役的「Host」與已拿掉的「一個 World 綁一條執行緒」。
+
+修訂 2 把它寫成「使用者 11-11 的決定」，並當成保留交換函式登記的兩個理由之一（來自修訂 0 的檢查 M2）。這是本卡把出處寫錯。
+
+更正（設計不變）：
+- 交換函式的登記仍照做，理由剩已核准的：時間設計 5.3 的形、日誌宣告 5.4（Kernel 診斷紀錄要在最後一個同步點之後、Run 之外取，已寫明等交換點）。
+- 郵箱改成「還沒定」：PvP 移植時定用形 (1)（有鎖的服務＋套用 System）或形 (2)（交換函式）。
+- 改的地方：第 0 節文件表、第 1 節、E-22、4.1 與 4.5 的「和別家不同」、5.1 的原形與表與規則、5.3、5.6、第 6 節第 7 項、第 7 節的加註與 RC-O11、第 8 節。第 16 節的 M2 列是當時的處理紀錄，照留，以本節為準。
+- 使用者的動工前核准（第 12 節）是在這個錯的前提下給的；設計沒有變，已在回報裡說明，若使用者要重看交換函式的登記，照使用者的話處理。
+
