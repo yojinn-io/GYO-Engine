@@ -1,6 +1,6 @@
 # 權威 Module（`engine/modules/authority`）
 
-更新：2026-11-22（`v8-arch-gyo2-batch4-followups`：DI-A 2 的守衛改成常設的寫法）；2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 5 步）。Owner：架構。程式：`engine/modules/authority/`（`GYO::Engine::Authority`，target `GYO::Authority`，登記單位 `AuthorityModule`）。行為測試：`tests/common/authority/`（ctest `authority.authority_socket`、`authority.authority_registrations`、`authority.authority_checks`、`authority.authority_consistency`、`authority.authority_sources`、`authority.sources_scan`，標籤 `cpu`）；突變清單 [`scripts/authority_mutations.json`](scripts/authority_mutations.json)（`au-`）。產品那一側的來源掃描：`tests/common/authority_scan/`（原 `zone_scan`，第 5 步照命名規範改名；規則 ZS1～ZS7 不改名）。
+更新：2026-11-22（`v8-arch-gyo2-exchange` 第 0 步：DI-A 9 加連結集的守衛、DI-A 2 指向 K9 的「拿掉的名字」）；2026-11-22（`v8-arch-gyo2-batch4-followups`：DI-A 2 的守衛改成常設的寫法）；2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 5 步）。Owner：架構。程式：`engine/modules/authority/`（`GYO::Engine::Authority`，target `GYO::Authority`，登記單位 `AuthorityModule`）。行為測試：`tests/common/authority/`（ctest `authority.authority_socket`、`authority.authority_registrations`、`authority.authority_checks`、`authority.authority_consistency`、`authority.authority_sources`、`authority.sources_scan`，標籤 `cpu`）；突變清單 [`scripts/authority_mutations.json`](scripts/authority_mutations.json)（`au-`）。產品那一側的來源掃描：`tests/common/authority_scan/`（原 `zone_scan`，第 5 步照命名規範改名；規則 ZS1～ZS7 不改名）。
 
 由來：[權威份](authority-module-declaration.zh-Hant.md)（修訂 5，已核准）第 4、5、7 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 4、6 節與第 11.2 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。Design Invariants 的最終文字使用者 2026-11-22 核准（[合併前核准](authority-rollback-merge-approval.zh-Hant.md)）；和權威份字面不同的地方在條末標「實作」。
 
@@ -39,7 +39,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 **DI-A 1 職責**：權威 Module 的職責是讓作者選的一致性策略有機制可用——作者的權威登記（代為登記進 Kernel）、策略的插口與佔位策略、代為登記（Kernel、回滾、重跑時不跑）、啟動時的檢查、一致性的計算（一致性指紋、digest、G-5 的兩份匯出）。不攔執行期的寫入、不做回滾、不存 tick、不傳輸、不檢查判定資料的讀寫。
 
 <a id="di-a-2"></a>
-**DI-A 2 Kernel 不認得權威**：權威的宣告只存在權威 Module；Kernel 收到的是一般的登記。守衛：Kernel 由 `kernel_guard.py` K5 的 include 准許清單與連結集 `gyo_expect_links(gyo_kernel …)` 守；編排層由 `orchestration_guard.py` O4 的准許清單（路徑不准有 `..`，同 K5）與連結集 `gyo_expect_links(gyo_orchestration …)` 守；`world_time` 由連結集（WT-4）守。`world_time` 不經連結的 include（相對路徑、另加標頭目錄）與用到權威的名字，交每批的設計審查（`v8-arch-gyo2-include-bypass-to-review`）。Kernel 自己長回區、寫者等舊概念不屬這條，由[第 4 批宣告](authority-rollback-declaration.zh-Hant.md) 9.5 的「拿掉的名字不回來」管。
+**DI-A 2 Kernel 不認得權威**：權威的宣告只存在權威 Module；Kernel 收到的是一般的登記。守衛：Kernel 由 `kernel_guard.py` K5 的 include 准許清單與連結集 `gyo_expect_links(gyo_kernel …)` 守；編排層由 `orchestration_guard.py` O4 的准許清單（路徑不准有 `..`，同 K5）與連結集 `gyo_expect_links(gyo_orchestration …)` 守；`world_time` 由連結集（WT-4）守。`world_time` 不經連結的 include（相對路徑、另加標頭目錄）與用到權威的名字，交每批的設計審查（`v8-arch-gyo2-include-bypass-to-review`）。Kernel 自己長回區、寫者等舊概念不屬這條，由 `kernel_guard.py` K9 的「拿掉的名字」清單管（[kernel DI-KS 15](../kernel.zh-Hant.md#di-ks-15)；第 4 批宣告 9.5，`v8-arch-gyo2-exchange` 第 0 步立）。
 
 <a id="di-a-3"></a>
 **DI-A 3 策略是 interface＋實作**：官方實作與作者的走同一個插口、沒有特權。`Name`、`Version`、`OnRegister`、`Check`、`ConsistencyFingerprint` 與它們的時機是契約，每個掛點只收一個自己的情境物件（實作）；`Digest`、`OnMismatch` 的形狀不在這次的契約內（官方 digest 是 World 的函式，`Consistency.hpp`）。守衛：`authority socket: an author's strategy…`、`authority checks: AU-E8…`（作者繼承官方實作改掉一個掛點）。
@@ -60,7 +60,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 **DI-A 8 不數寫者、不檢查讀寫**：伺服器權威策略不數寫者、不檢查判定資料的讀寫（P13、P14）；同一張 schedule 內收進一致性指紋的 System 之間的先後由指紋蓋到，跨 schedule、只在一端、untyped 的寫入只靠 digest 與覆蓋。
 
 <a id="di-a-9"></a>
-**DI-A 9 只讀公開的**：權威不讀回滾、時間的內部，只讀公開登記（回滾的 `Resolve` 與 `RollbackRegistry`、時間的 `Tick` 與 `TickWriters()`）；不依賴狀態機；回滾、時間、狀態機都不依賴權威。
+**DI-A 9 只讀公開的**：權威不讀回滾、時間的內部，只讀公開登記（回滾的 `Resolve` 與 `RollbackRegistry`、時間的 `Tick` 與 `TickWriters()`）；不依賴狀態機；回滾、時間、狀態機都不依賴權威。守衛：權威這一側「不依賴狀態機」的連結那一半由 `gyo_authority` 的連結集守（`tests/common/authority/CMakeLists.txt` 的 `gyo_expect_links`，整個專案 configure 完才查；比本條嚴：多連任何 target 都擋，正當加依賴時改登記列與那一行）；反方向「回滾、時間不依賴權威」由 `gyo_rollback` 的連結集（[R-3](rollback.zh-Hant.md#r-3)）、`gyo_world_time` 的連結集（WT-4）與登記檔的順序（權威排在兩者之後，O-6）守；「不讀內部」與不經連結的寫法交每批的設計審查（`v8-arch-gyo2-include-bypass-to-review`）。
 
 <a id="di-a-10"></a>
 **DI-A 10 標記不重複登記**：別的 Module 已登記的型別與 System 只標記、不重複登記；標記、`Ingress`、`Runs`、`OneEndOnly` 對不到唯讀登記表是啟動錯誤 AU-E4。守衛：`authority registrations: a mark only records…`、`authority checks: AU-E4…`。
