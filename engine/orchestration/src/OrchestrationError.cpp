@@ -62,6 +62,7 @@ std::string_view ToString(OrchestrationErrorCode code) noexcept {
     case OrchestrationErrorCode::InsertBuildFailed: return "InsertBuildFailed";
     case OrchestrationErrorCode::OwnerTaken: return "OwnerTaken";
     case OrchestrationErrorCode::PrepareFailed: return "PrepareFailed";
+    case OrchestrationErrorCode::ExchangeFailed: return "ExchangeFailed";
     }
     return "?";
 }
