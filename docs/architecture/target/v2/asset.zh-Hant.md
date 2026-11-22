@@ -1,6 +1,6 @@
 # 資產（`engine/modules/asset`、`engine/modules/world_asset`）
 
-更新：2026-11-22（新頁，`v8-arch-gyo2-asset` 第 6 步，宣告 R10）；2026-11-23（合併前設計審查的處理，宣告 30.3）。由來：[事前宣告](asset-declaration.zh-Hant.md)（`v8-arch-gyo2-asset`，使用者 2026-11-22 動工前核准，核准的版本 55a14825）第 5 節、第 7 節；實作時的調整在宣告第 30 節。**Design Invariants 的最終文字：等合併前核准。**
+更新：2026-11-22（新頁，`v8-arch-gyo2-asset` 第 6 步，宣告 R10）；2026-11-23（合併前設計審查的處理，宣告 30.3）。由來：[事前宣告](asset-declaration.zh-Hant.md)（`v8-arch-gyo2-asset`，使用者 2026-11-22 動工前核准，核准的版本 55a14825）第 5 節、第 7 節；實作時的調整在宣告第 30 節。**Design Invariants 的最終文字：使用者 2026-11-23 合併前核准。**
 
 Owner：架構。取代舊頁 [target/assets.zh-Hant.md](../assets.zh-Hant.md)（11-11 的方向與 11-13 的 DI 1～3）。
 
