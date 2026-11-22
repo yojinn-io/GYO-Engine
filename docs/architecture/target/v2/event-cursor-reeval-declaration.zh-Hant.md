@@ -1,5 +1,7 @@
 # 事件游標的重評：事前宣告（修訂 3）
 
+> **核准**：使用者 2026-11-22 在本卡對話核准修訂 3（f7aeaa6f），原話「核准，加 RC 24，開始」。
+
 > 性質：事前宣告。結論是**不改 Kernel 的程式與契約**，只改說明頁，另加一條 Replacement Criteria（草案）。**使用者核准、說「開始」之前不改文件。** 加 RC 是 Kernel 的 Design Invariants 節的變更，要使用者同意（AGENTS §3）。
 > 批次代號：`v8-arch-gyo2-event-cursor-reeval`。Owner：架構（GYO2 主會話開的任務卡）。更新：2026-11-22。
 > 起因：使用者 2026-11-22 在狀態機卡選 (A＋)——狀態機那一批照 (A) 做，另外現在就開這張卡重評（HANDOFF `v8-arch-gyo2-state-machine-r8-crosscheck`，記在 `claude/gyo2-time-design` 1e4fd1ab）。
