@@ -1,0 +1,909 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the state machine (docs/architecture/target/v2/state-machine-declaration.zh-Hant.md, section 7 judgement 2; ids sm-). A mutant is killed only when the named test case fails; a build failure does not count. The Fable/high adversarial check of this list is recorded in the dev_log.",
+ "mutants": [
+  {
+   "id": "sm-first-no-enter",
+   "what": "The first apply does not run the root's enter. Only it catches the first apply's enter (later applies' enters are sm-enter-old-value's)",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    if (auto ran = world.RunSchedule(EnterScheduleName(value)); !ran) return ran;\n    Kernel::SystemResult result;\n",
+   "replace": "    Kernel::SystemResult result;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: initial\\ enter"
+  },
+  {
+   "id": "sm-first-enter-before-set",
+   "what": "The first apply runs the enter before setting the value: the enter reads 'not entered'. Only it catches the first apply's order",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    ModifyMachine<S>(world, [value](StateMachine<S>& m) {\n        Access<S>::Enter(m, value);\n        Access<S>::MarkApplied(m);\n    });\n    if (auto ran = world.RunSchedule(EnterScheduleName(value)); !ran) return ran;\n",
+   "replace": "    if (auto ran = world.RunSchedule(EnterScheduleName(value)); !ran) return ran;\n    ModifyMachine<S>(world, [value](StateMachine<S>& m) {\n        Access<S>::Enter(m, value);\n        Access<S>::MarkApplied(m);\n    });\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: initial\\ enter"
+  },
+  {
+   "id": "sm-first-applies-request",
+   "what": "The first apply goes on, in the same apply, to take and apply the requests made before it (the root read again after the first apply). Only it catches the first apply handling requests",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    const StateMachine<S> root = ReadMachine<S>(world);\n    if (!Access<S>::Applied(root)) return FirstApply<S>(world, root);\n",
+   "replace": "    if (!Access<S>::Applied(ReadMachine<S>(world))) { if (auto first = FirstApply<S>(world, ReadMachine<S>(world)); !first) return first; }\n    const StateMachine<S> root = ReadMachine<S>(world);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ request\\ made\\ in\\ game\\ initialization\\ waits"
+  },
+  {
+   "id": "sm-first-clears-root-request",
+   "what": "The first apply throws the root's pending request away. Only it catches the root's request being dropped by the first apply",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    const S value = Access<S>::Initial(root).value_or(StateMachineTraits<S>::initial);\n",
+   "replace": "    (void)TakeRequest<S>(world);\n    const S value = Access<S>::Initial(root).value_or(StateMachineTraits<S>::initial);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ request\\ made\\ in\\ game\\ initialization\\ waits"
+  },
+  {
+   "id": "sm-first-takes-child-request",
+   "what": "The first apply takes the children's requests. Only it catches a child's request taken by the first apply",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        const std::optional<Child> given = Access<Child>::Initial(child);\n",
+   "replace": "        const std::optional<Child> given = Access<Child>::Initial(child);\n        (void)TakeRequest<Child>(world);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ child's\\ request\\ in\\ game\\ initialization\\ is\\ not\\ taken"
+  },
+  {
+   "id": "sm-instate-not-entered-true",
+   "what": "InState is true while the state is not entered or absent. Only it catches InState's status check",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/Conditions.hpp",
+   "find": "    return machine->Status() == StateStatus::Active && *machine->Current() == V;",
+   "replace": "    return machine->Status() != StateStatus::Active || *machine->Current() == V;",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: conditions\\ are\\ false\\ before\\ the\\ first\\ apply)(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent)[\\s\\S]*"
+  },
+  {
+   "id": "sm-notinstate-not-entered-true",
+   "what": "NotInState is true while the state is not entered or absent. Only it catches NotInState's status check",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/Conditions.hpp",
+   "find": "    return machine->Status() == StateStatus::Active && *machine->Current() != V;",
+   "replace": "    return machine->Status() != StateStatus::Active || *machine->Current() != V;",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: conditions\\ are\\ false\\ before\\ the\\ first\\ apply)(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent)[\\s\\S]*"
+  },
+  {
+   "id": "sm-instate-no-compare",
+   "what": "InState ignores the value. Only it catches InState's comparison",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/Conditions.hpp",
+   "find": "    return machine->Status() == StateStatus::Active && *machine->Current() == V;",
+   "replace": "    return machine->Status() == StateStatus::Active;",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: changing\\ state"
+  },
+  {
+   "id": "sm-notinstate-no-compare",
+   "what": "NotInState ignores the value. Only it catches NotInState's comparison",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/Conditions.hpp",
+   "find": "    return machine->Status() == StateStatus::Active && *machine->Current() != V;",
+   "replace": "    return machine->Status() == StateStatus::Active;",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: changing\\ state"
+  },
+  {
+   "id": "sm-set-before-exit",
+   "what": "The root's value changes before its exit: the exit reads the new value. Only it catches the exit-reads-old-value order",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n        ModifyMachine<S>(world, [to](StateMachine<S>& m) { Access<S>::Enter(m, to); });\n",
+   "replace": "        ModifyMachine<S>(world, [to](StateMachine<S>& m) { Access<S>::Enter(m, to); });\n        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: changing\\ state"
+  },
+  {
+   "id": "sm-no-root-exit",
+   "what": "The root's exit is not run. Only it catches a missing exit",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: changing\\ state"
+  },
+  {
+   "id": "sm-exit-new-value",
+   "what": "The exit run is the new value's schedule. Only it catches the wrong exit schedule",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n",
+   "replace": "        if (auto ran = world.RunSchedule(ExitScheduleName(to)); !ran) return ran;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: changing\\ state"
+  },
+  {
+   "id": "sm-enter-old-value",
+   "what": "The enter run is the old value's schedule. Only it catches the wrong enter schedule",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n",
+   "replace": "        if (auto ran = world.RunSchedule(EnterScheduleName(from)); !ran) return ran;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: changing\\ state"
+  },
+  {
+   "id": "sm-request-not-cleared",
+   "what": "Taking a request leaves it pending. Only it catches the request not being cleared",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        std::optional<S> taken = r.pending_;\n        r.pending_.reset();\n",
+   "replace": "        std::optional<S> taken = r.pending_;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: changing\\ state"
+  },
+  {
+   "id": "sm-root-request-taken-late",
+   "what": "The root's request is read at the start but cleared at the end of the apply: a request made in an enter is lost. Only it catches the root's take time",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    const std::optional<S> rootRequest = TakeRequest<S>(world);\n",
+   "replace": "    struct LateTake { ApplyWorld<S>& w; ~LateTake() { (void)TakeRequest<S>(w); } } lateTake{world};\n    const std::optional<S> rootRequest = **world.template Read<StateMachineRequest<S>>([](const StateMachineRequest<S>& r) { return r.Pending(); });\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: one\\ request\\ per\\ state\\ per\\ apply"
+  },
+  {
+   "id": "sm-child-requests-taken-late",
+   "what": "The children's requests are read at the start but cleared at the end of the apply. Only it catches the children's take time",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    Kernel::SystemResult result;\n    // The children's requests, taken and checked together with the root's, absent children's too.\n    auto childRequests = [&]<class... Children>(Kernel::TypeList<Children...>) {\n        return std::tuple<std::optional<Children>...>{TakeRequest<Children>(world)...};\n    }(SubStatesOf<S>{});\n",
+   "replace": "    struct LateTake { ApplyWorld<S>& w; ~LateTake() { ForEachChild(SubStatesOf<S>{}, [this]<class C>() { (void)TakeRequest<C>(w); }); } } lateTake{world};\n    Kernel::SystemResult result;\n    auto childRequests = [&]<class... Children>(Kernel::TypeList<Children...>) {\n        return std::tuple<std::optional<Children>...>{**world.template Read<StateMachineRequest<Children>>([](const StateMachineRequest<Children>& r) { return r.Pending(); })...};\n    }(SubStatesOf<S>{});\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: one\\ request\\ per\\ state\\ per\\ apply)(?=[\\s\\S]*TEST CASE:\\s+behaviour: a\\ request\\ for\\ another\\ child\\ made\\ in\\ one\\ child's\\ enter)[\\s\\S]*"
+  },
+  {
+   "id": "sm-appear-no-enter",
+   "what": "A child appearing does not run its enter. Only it catches the child's enter on appearing",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    return world.RunSchedule(EnterScheduleName(value));\n}\n",
+   "replace": "    return {};\n}\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: children\\ appear\\ with\\ the\\ parent"
+  },
+  {
+   "id": "sm-children-appear-before-parent-enter",
+   "what": "Children appear before the parent's enter. Only it catches the parent-then-children enter order",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n        ForEachChild(SubStatesOf<S>{}, [&]<class Child>() {\n            if (!result) return;\n            if (StateMachineTraits<Child>::parentValue != to) return;\n            if (from == to && KeepsOnParentReenter<Child>() &&\n                ReadMachine<Child>(world).Status() == StateStatus::Active) {\n                return;\n            }\n            result = Appear<Child>(world, std::nullopt);\n        });\n        if (!result) return result;\n",
+   "replace": "        ForEachChild(SubStatesOf<S>{}, [&]<class Child>() {\n            if (!result) return;\n            if (StateMachineTraits<Child>::parentValue != to) return;\n            if (from == to && KeepsOnParentReenter<Child>() &&\n                ReadMachine<Child>(world).Status() == StateStatus::Active) {\n                return;\n            }\n            result = Appear<Child>(world, std::nullopt);\n        });\n        if (!result) return result;\n        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: changing\\ state)(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ appear\\ with\\ the\\ parent)[\\s\\S]*"
+  },
+  {
+   "id": "sm-child-change-runs-parent",
+   "what": "A child's own change also runs the parent's exit. Only it catches the parent staying still while a child changes",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        const Child to = *request;\n",
+   "replace": "        (void)world.RunSchedule(ExitScheduleName(*ReadMachine<S>(world).Current()));\n        const Child to = *request;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ child\\ changing\\ leaves\\ the\\ parent"
+  },
+  {
+   "id": "sm-children-leave-after-parent",
+   "what": "Children leave after the parent's exit. Only it catches the children-then-parent exit order",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        // Children leave first, in registration order, each marked absent as soon as it has left.\n        ForEachChild(SubStatesOf<S>{}, [&]<class Child>() {\n            if (!result) return;\n            const StateMachine<Child> child = ReadMachine<Child>(world);\n            if (child.Status() != StateStatus::Active) return;\n            if (from == to && KeepsOnParentReenter<Child>()) return;\n            result = world.RunSchedule(ExitScheduleName(*child.Current()));\n            if (result) ModifyMachine<Child>(world, [](StateMachine<Child>& m) { Access<Child>::Leave(m); });\n        });\n        if (!result) return result;\n        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n",
+   "replace": "        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n        // Children leave first, in registration order, each marked absent as soon as it has left.\n        ForEachChild(SubStatesOf<S>{}, [&]<class Child>() {\n            if (!result) return;\n            const StateMachine<Child> child = ReadMachine<Child>(world);\n            if (child.Status() != StateStatus::Active) return;\n            if (from == to && KeepsOnParentReenter<Child>()) return;\n            result = world.RunSchedule(ExitScheduleName(*child.Current()));\n            if (result) ModifyMachine<Child>(world, [](StateMachine<Child>& m) { Access<Child>::Leave(m); });\n        });\n        if (!result) return result;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: children leave with the parent"
+  },
+  {
+   "id": "sm-child-not-marked-absent",
+   "what": "A child that left is not marked absent. Only it catches the child's absence after leaving",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (result) ModifyMachine<Child>(world, [](StateMachine<Child>& m) { Access<Child>::Leave(m); });\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent"
+  },
+  {
+   "id": "sm-children-absent-together",
+   "what": "Children are marked absent only after all of them have left. Only it catches 'each absent as soon as it has left'",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (result) ModifyMachine<Child>(world, [](StateMachine<Child>& m) { Access<Child>::Leave(m); });\n        });\n",
+   "replace": "        });\n        ForEachChild(SubStatesOf<S>{}, [&]<class Child>() { if (ReadMachine<Child>(world).Status() == StateStatus::Active && !(from == to && KeepsOnParentReenter<Child>())) ModifyMachine<Child>(world, [](StateMachine<Child>& m) { Access<Child>::Leave(m); }); });\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent"
+  },
+  {
+   "id": "sm-absent-request-applied",
+   "what": "A request for an absent child enters it. Only it catches dropping an absent child's request",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (child.Status() != StateStatus::Active) return;\n        result = world.RunSchedule(ExitScheduleName(*child.Current()));\n        if (!result) return;\n",
+   "replace": "        if (child.Status() == StateStatus::Active) {\n            result = world.RunSchedule(ExitScheduleName(*child.Current()));\n            if (!result) return;\n        }\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ request\\ for\\ an\\ absent\\ child\\ is\\ dropped"
+  },
+  {
+   "id": "sm-absent-request-kept",
+   "what": "A request for an absent child is kept for later. Only it catches keeping instead of dropping",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (child.Status() != StateStatus::Active) return;\n        result = world.RunSchedule(ExitScheduleName(*child.Current()));\n",
+   "replace": "        if (child.Status() != StateStatus::Active) { (void)world.template Modify<StateMachineRequest<Child>>([&](StateMachineRequest<Child>& r) { r.Request(*request); }); return; }\n        result = world.RunSchedule(ExitScheduleName(*child.Current()));\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ request\\ for\\ an\\ absent\\ child\\ is\\ dropped"
+  },
+  {
+   "id": "sm-parent-change-drops-child-requests",
+   "what": "After the parent changed, the children's requests are not looked at. Only it catches the same-apply child request",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (!request) return;\n",
+   "replace": "        if (!request || rootRequest) return;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: parent\\ and\\ child\\ requests\\ in\\ one\\ apply"
+  },
+  {
+   "id": "sm-children-reverse-order",
+   "what": "Children are visited in reverse registration order (every child loop). Only it catches registration order; one mutant, since the loops share ForEachChild",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    (f.template operator()<Children>(), ...);\n",
+   "replace": "    int unused = 0;\n    ((f.template operator()<Children>(), unused) = ... = 0);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: two\\ children's\\ requests\\ in\\ one\\ apply)(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ appear\\ with\\ the\\ parent)(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent)[\\s\\S]*"
+  },
+  {
+   "id": "sm-same-value-no-reset",
+   "what": "The parent entered again with the same value does not make its children leave. Only it catches the default reset",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (from == to && KeepsOnParentReenter<Child>()) return;\n",
+   "replace": "            if (from == to) return;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: the\\ parent\\ entered\\ again\\ with\\ the\\ same\\ value\\ resets"
+  },
+  {
+   "id": "sm-keep-ignored",
+   "what": "keepOnParentReenter is ignored. Only it catches the option",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/Traits.hpp",
+   "find": "        return StateMachineTraits<S>::keepOnParentReenter;\n",
+   "replace": "        return false;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ child\\ with\\ keepOnParentReenter\\ keeps\\ its\\ value"
+  },
+  {
+   "id": "sm-keep-for-any-value",
+   "what": "keepOnParentReenter also keeps the child when the parent goes to another value. Only it catches 'only for the same value'",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (from == to && KeepsOnParentReenter<Child>()) return;\n",
+   "replace": "            if (KeepsOnParentReenter<Child>()) return;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ child\\ with\\ keepOnParentReenter\\ keeps\\ its\\ value"
+  },
+  {
+   "id": "sm-earlier-request-wins",
+   "what": "The first request wins. Only it catches later-wins",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        if (pending_) ++overwritten_;\n        pending_ = value;\n",
+   "replace": "        if (pending_) { ++overwritten_; return; }\n        pending_ = value;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: two\\ requests\\ before\\ one\\ apply"
+  },
+  {
+   "id": "sm-overwritten-not-counted",
+   "what": "An overwritten request is not counted. Only it catches the count",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        if (pending_) ++overwritten_;\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: two\\ requests\\ before\\ one\\ apply"
+  },
+  {
+   "id": "sm-overwritten-counts-every-write",
+   "what": "Every request is counted. Only it catches counting only the overwritten ones",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        if (pending_) ++overwritten_;\n",
+   "replace": "        ++overwritten_;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: two\\ requests\\ before\\ one\\ apply"
+  },
+  {
+   "id": "sm-overwritten-reset-on-apply",
+   "what": "The count is reset when an apply takes the request. Only it catches 'not reset while the World lives'",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        r.pending_.reset();\n",
+   "replace": "        r.pending_.reset();\n        r.overwritten_ = 0;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: two\\ requests\\ before\\ one\\ apply"
+  },
+  {
+   "id": "sm-root-value-not-checked",
+   "what": "The root's requested value is not checked. Only it catches SM-E1 for the root",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    if (auto valid = Valid<S>(rootRequest); !valid) return valid;\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ value\\ not\\ in\\ the\\ table"
+  },
+  {
+   "id": "sm-absent-child-value-not-checked",
+   "what": "An absent child's requested value is not checked. Only it catches checking absent children too",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (result) result = Valid<Child>(std::get<std::optional<Child>>(childRequests));\n",
+   "replace": "        if (result && ReadMachine<Child>(world).Status() == StateStatus::Active) result = Valid<Child>(std::get<std::optional<Child>>(childRequests));\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a\\ value\\ not\\ in\\ the\\ table"
+  },
+  {
+   "id": "sm-exit-error-swallowed",
+   "what": "After the root's exit failed (the kernel interrupts the World and returns the Err once), the apply goes on and changes the value. Only it catches stopping right after the exit's Err",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n",
+   "replace": "        (void)world.RunSchedule(ExitScheduleName(from));\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: an\\ exit\\ or\\ an\\ enter\\ failing"
+  },
+  {
+   "id": "sm-enter-error-continues",
+   "what": "The root's enter failing does not stop the children appearing. Only it catches stopping after the enter's Err",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n",
+   "replace": "        (void)world.RunSchedule(EnterScheduleName(to));\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: an\\ exit\\ or\\ an\\ enter\\ failing"
+  },
+  {
+   "id": "sm-child-enter-error-continues",
+   "what": "A child's enter failing does not stop the next child appearing. Only it catches stopping after a child's Err",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (!result) return;\n            if (StateMachineTraits<Child>::parentValue != to) return;\n",
+   "replace": "            if (StateMachineTraits<Child>::parentValue != to) return;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: an\\ exit\\ or\\ an\\ enter\\ failing"
+  },
+  {
+   "id": "sm-registration-no-child-values",
+   "what": "The registration's prepare function does not put the children's first values. Only it catches the children's first values (cases narrowed to its own case: without the children's values the other cases stop at a GYO_ASSERT first; tests/common/mutation/README.md rule 1)",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (world.Resource<StateMachine<Child>>() == nullptr) world.SetResource(Detail::Access<Child>::Child());\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour: the first values are put by the registration",
+   "expect": "TEST CASE:\\s+behaviour: the\\ first\\ values\\ are\\ put\\ by\\ the\\ registration"
+  },
+  {
+   "id": "sm-setinitial-ignored",
+   "what": "The first apply ignores the root's SetInitial. Only it catches the root's given initial value",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    const S value = Access<S>::Initial(root).value_or(StateMachineTraits<S>::initial);\n",
+   "replace": "    const S value = StateMachineTraits<S>::initial;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: an\\ initial\\ value\\ given\\ with\\ SetInitial)(?=[\\s\\S]*TEST CASE:\\s+behaviour: loading\\ a\\ save\\ enters\\ the\\ saved\\ values)[\\s\\S]*"
+  },
+  {
+   "id": "sm-child-setinitial-ignored",
+   "what": "The first apply ignores a child's SetInitial. Only it catches the child's given initial value",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 第 2.2 節",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (StateMachineTraits<Child>::parentValue == value) result = Appear<Child>(world, given);\n",
+   "replace": "        if (StateMachineTraits<Child>::parentValue == value) result = Appear<Child>(world, std::nullopt);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: loading\\ a\\ save\\ enters\\ the\\ saved\\ values"
+  },
+  {
+   "id": "sm-child-setinitial-makes-it-appear",
+   "what": "A child's SetInitial makes it appear although the parent's first value is not its parent value. Only it catches dropping that value",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 第 2.2 節",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (StateMachineTraits<Child>::parentValue == value) result = Appear<Child>(world, given);\n",
+   "replace": "        if (StateMachineTraits<Child>::parentValue == value || given) result = Appear<Child>(world, given);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: loading\\ a\\ save\\ enters\\ the\\ saved\\ values"
+  },
+  {
+   "id": "sm-default-place-before",
+   "what": "The default place is before Main/PreUpdate. Only it catches the default anchor side",
+   "guards": [
+    "state-machine-declaration 第 5.2 節 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    Kernel::StagePlace place = Kernel::StagePlace::After;\n",
+   "replace": "    Kernel::StagePlace place = Kernel::StagePlace::Before;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: the\\ default\\ place"
+  },
+  {
+   "id": "sm-conditions-ignored",
+   "what": "The apply System's conditions are not mounted. Only it catches the conditions option (cases narrowed to its own case: in 'loading a save' the missing condition makes SetInitial assert first)",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 第 5.2 節 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    mount.conditions = std::move(options.conditions);\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour: the apply System's conditions hold back the first apply",
+   "expect": "TEST CASE:\\s+behaviour: the apply System's conditions hold back"
+  },
+  {
+   "id": "sm-constructible-from-value",
+   "what": "StateMachine gets a public constructor from a value. Only it catches DI 1's no-construction-from-a-value",
+   "guards": [
+    "state-machine DI 1",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "    [[nodiscard]] StateStatus Status() const noexcept { return status_; }\n",
+   "replace": "    explicit StateMachine(S value) : value_(value) {}\n    [[nodiscard]] StateStatus Status() const noexcept { return status_; }\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: the\\ closed\\ type"
+  },
+  {
+   "id": "sm-default-constructible",
+   "what": "StateMachine's default constructor is public (an author could reset a state to 'not entered'). Only it catches the private default constructor",
+   "guards": [
+    "state-machine DI 1",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "    friend struct Detail::Access<S>;\n    StateMachine() = default;\n",
+   "replace": "    friend struct Detail::Access<S>;\n\npublic:\n    StateMachine() = default;\n\nprivate:\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: the\\ closed\\ type"
+  },
+  {
+   "id": "sm-schedule-name-no-state",
+   "what": "Enter schedule names leave out the state's name. Only it catches the state name in schedule names",
+   "guards": [
+    "state-machine DI 10",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/Names.hpp",
+   "find": "    return Detail::Joined(StateName<S>(), \"Enter\", NameOf(value).value_or(\"?\"));",
+   "replace": "    return Detail::Joined(\"Enter\", NameOf(value).value_or(\"?\"));",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: names\\ come\\ from\\ the\\ traits"
+  },
+  {
+   "id": "sm-notinstate-named-instate",
+   "what": "NotInState is named like InState. Only it catches the two condition names differing",
+   "guards": [
+    "state-machine DI 10",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/Conditions.hpp",
+   "find": "Detail::Joined(\"NotInState\", StateName<S>(), *NameOf(V))",
+   "replace": "Detail::Joined(\"InState\", StateName<S>(), *NameOf(V))",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: names\\ come\\ from\\ the\\ traits"
+  },
+  {
+   "id": "sm-child-set-before-exit",
+   "what": "A child's own change sets the value before its exit: the exit reads the new value. Only it catches a child's exit-reads-old-value",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        result = world.RunSchedule(ExitScheduleName(*child.Current()));\n        if (!result) return;\n        const Child to = *request;\n        ModifyMachine<Child>(world, [to](StateMachine<Child>& m) { Access<Child>::Enter(m, to); });\n",
+   "replace": "        const Child to = *request;\n        ModifyMachine<Child>(world, [to](StateMachine<Child>& m) { Access<Child>::Enter(m, to); });\n        result = world.RunSchedule(ExitScheduleName(*child.Current()));\n        if (!result) return;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( Seen\\(\\)\\[\"Exit\\.Pause\\.Running\"\\]\\ ==\\ \"F=InLevel,P=Running,I=Closed\" \\)"
+  },
+  {
+   "id": "sm-child-same-value-skipped",
+   "what": "A child's request for its current value is skipped. Only it catches 'the same value runs exit and enter' for a child",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (child.Status() != StateStatus::Active) return;\n        result = world.RunSchedule(ExitScheduleName(*child.Current()));\n",
+   "replace": "        if (child.Status() != StateStatus::Active) return;\n        if (*child.Current() == *request) return;\n        result = world.RunSchedule(ExitScheduleName(*child.Current()));\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( Frame\\(\\*p\\)\\ ==\\ List\\{\"Exit\\.Pause\\.Running\",\\ \"Enter\\.Pause\\.Running\"\\} \\)"
+  },
+  {
+   "id": "sm-same-value-skipped",
+   "what": "The root's request for its current value is skipped. Only it catches 'the same value runs exit and enter' for the root",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    if (rootRequest) {\n        const S from = *root.Current();\n",
+   "replace": "    if (rootRequest && *rootRequest != *root.Current()) {\n        const S from = *root.Current();\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( Frame\\(\\*p\\)\\ ==\\ List\\{\"Exit\\.Flow\\.MainMenu\",\\ \"Enter\\.Flow\\.MainMenu\"\\} \\)"
+  },
+  {
+   "id": "sm-current-when-not-active",
+   "what": "Current() returns the stored value while not entered or absent. Only it catches Current()'s empty result",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        if (status_ != StateStatus::Active) return std::nullopt;\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour: the first values are put by the registration",
+   "expect": "CHECK(?:_FALSE)?\\( Mach<Flow>\\(\\*p\\)\\.Current\\(\\)\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "sm-default-anchor-fixedmainloop",
+   "what": "The default anchor is Main/FixedMainLoop instead of PreUpdate. Only it catches the default anchor stage",
+   "guards": [
+    "state-machine-declaration 第 5.2 節 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    std::string anchor = std::string(Orchestration::DefaultSchedules::preUpdate);\n",
+   "replace": "    std::string anchor = std::string(Orchestration::DefaultSchedules::fixedMainLoop);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( events\\[events\\.size\\(\\)\\ \\-\\ 2\\]\\ ==\\ \"probe3:InLevel\" \\)"
+  },
+  {
+   "id": "sm-resource-name",
+   "what": "The value Resource is registered under another name. Only it catches the registered Resource name (DI 10; the authority fingerprint uses it)",
+   "guards": [
+    "state-machine DI 10",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        r.Resource<StateMachine<T>>({.name = ResourceName<T>()});\n",
+   "replace": "        r.Resource<StateMachine<T>>({.name = \"State.\" + std::string(StateName<T>())});\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( types\\.Resources\\(\\)\\[\\*flowId\\]\\.name\\ ==\\ \"StateMachine\\.Flow\" \\)"
+  },
+  {
+   "id": "sm-writes-empty",
+   "what": "The apply System's Writes<...> annotation is empty. Only it catches the annotation the authority Module reads (AU-E6)",
+   "guards": [
+    "state-machine-declaration 第 4 節 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    using type = Kernel::Writes<StateMachine<S>, StateMachineRequest<S>, StateMachine<Children>...,\n                                StateMachineRequest<Children>...>;\n",
+   "replace": "    using type = Kernel::Writes<>;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( apply\\->access\\.annotatedWrites\\.size\\(\\)\\ ==\\ 6 \\)"
+  },
+  {
+   "id": "sm-request-eq-counter",
+   "what": "A request's == compares the overwritten count too. Only it catches == looking at the pending request only",
+   "guards": [
+    "state-machine-declaration 第 5.2 節 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        return a.pending_ == b.pending_;\n",
+   "replace": "        return a.pending_ == b.pending_ && a.overwritten_ == b.overwritten_;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( once\\ ==\\ twice \\)"
+  },
+  {
+   "id": "sm-child-requests-taken-each-turn",
+   "what": "A child's request made during this apply is taken when the child's turn comes and applied in the same apply. Only it catches 'a request made during this apply waits' for children",
+   "guards": [
+    "state-machine DI 3",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        const std::optional<Child> request = std::get<std::optional<Child>>(childRequests);\n        if (!request) return;\n",
+   "replace": "        std::optional<Child> request = std::get<std::optional<Child>>(childRequests);\n        if (auto late = TakeRequest<Child>(world)) request = late;\n        if (!request) return;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*CHECK(?:_FALSE)?\\( Mach<Pause>\\(\\*p\\)\\.Current\\(\\)\\ ==\\ Pause::Running \\))(?=[\\s\\S]*CHECK(?:_FALSE)?\\( Mach<Inventory>\\(\\*p\\)\\.Current\\(\\)\\ ==\\ Inventory::Closed \\))[\\s\\S]*"
+  },
+  {
+   "id": "sm-child-reappears-last-value",
+   "what": "A child appearing again keeps its last value instead of its initial one. Only it catches 'each appearance starts from the initial value'",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        m.status_ = StateStatus::Active;\n        m.value_ = value;\n",
+   "replace": "        if (!(m.status_ == StateStatus::Absent && value == StateMachineTraits<S>::initial)) m.value_ = value;\n        m.status_ = StateStatus::Active;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent)[\\s\\S]*"
+  },
+  {
+   "id": "sm-first-apply-every-time",
+   "what": "Every apply is a first apply (the root never marked applied). Only it catches 'the first apply happens once'",
+   "guards": [
+    "state-machine DI 4",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        Access<S>::Enter(m, value);\n        Access<S>::MarkApplied(m);\n",
+   "replace": "        Access<S>::Enter(m, value);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: initial\\ enter)[\\s\\S]*"
+  },
+  {
+   "id": "sm-root-set-after-enter",
+   "what": "The root's value changes after its enter: the enter reads the old value. Only it catches set-then-enter",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        ModifyMachine<S>(world, [to](StateMachine<S>& m) { Access<S>::Enter(m, to); });\n        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n",
+   "replace": "        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n        ModifyMachine<S>(world, [to](StateMachine<S>& m) { Access<S>::Enter(m, to); });\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( Seen\\(\\)\\[\"Enter\\.Flow\\.InLevel\"\\]\\ ==\\ \"F=InLevel,P=\\-,I=\\-\" \\)"
+  },
+  {
+   "id": "sm-enter-before-exit",
+   "what": "The root's enter runs before its exit. Only it catches exit-then-enter",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n        ModifyMachine<S>(world, [to](StateMachine<S>& m) { Access<S>::Enter(m, to); });\n        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n",
+   "replace": "        ModifyMachine<S>(world, [to](StateMachine<S>& m) { Access<S>::Enter(m, to); });\n        if (auto ran = world.RunSchedule(EnterScheduleName(to)); !ran) return ran;\n        if (auto ran = world.RunSchedule(ExitScheduleName(from)); !ran) return ran;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: changing\\ state)[\\s\\S]*"
+  },
+  {
+   "id": "sm-child-enter-before-set",
+   "what": "A child appearing runs its enter before taking its value: the enter reads 'absent'. Only it catches the child's set-then-enter",
+   "guards": [
+    "state-machine DI 2",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    ModifyMachine<Child>(world, [value](StateMachine<Child>& m) { Access<Child>::Enter(m, value); });\n    return world.RunSchedule(EnterScheduleName(value));\n",
+   "replace": "    auto ran = world.RunSchedule(EnterScheduleName(value));\n    ModifyMachine<Child>(world, [value](StateMachine<Child>& m) { Access<Child>::Enter(m, value); });\n    return ran;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK(?:_FALSE)?\\( Seen\\(\\)\\[\"Enter\\.Pause\\.Running\"\\]\\ ==\\ \"F=InLevel,P=Running,I=\\-\" \\)"
+  },
+  {
+   "id": "sm-child-appears-under-any-value",
+   "what": "After the first apply, children appear under any parent value. Only it catches 'a child exists only under its parent value' in later applies",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (StateMachineTraits<Child>::parentValue != to) return;\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent)[\\s\\S]*"
+  },
+  {
+   "id": "sm-child-first-value-active",
+   "what": "The registration puts a child's first value as 'not entered' instead of 'absent'. Only it catches the children's first status",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "            if (world.Resource<StateMachine<Child>>() == nullptr) world.SetResource(Detail::Access<Child>::Child());\n",
+   "replace": "            if (world.Resource<StateMachine<Child>>() == nullptr) world.SetResource(Detail::Access<Child>::Root());\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour: the first values are put by the registration",
+   "expect": "CHECK(?:_FALSE)?\\( Mach<Pause>\\(\\*p\\)\\.Status\\(\\)\\ ==\\ SM::StateStatus::Absent \\)"
+  }
+ ]
+}

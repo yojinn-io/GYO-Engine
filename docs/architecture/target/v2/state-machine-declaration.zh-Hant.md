@@ -425,3 +425,4 @@ rollback.NestedSchedule("Weather.Enter.Fog", "FixedUpdate"); // ... one per ente
 | 「兩端同規則」回滾重跑進入／離開 | **分歧**：沒有一家重跑轉換。交使用者 → 「1 保留」；副作用用 `Resimulation` 擋（第 5.3 節） |
 | 停跑的讀者拉住保留＋恢復時補讀 | **分歧**：五家都沒有這個組合；Bevy 在兩次 update 的曝露下就遇到跨狀態讀到舊訊息，在 Plugin 層加了清除（commit adc2cf7df，#15085）；replicon 自己寫補償。交使用者 → 「2 選 A＋」：這一批照 (A)，另開「事件游標重評」的卡（照游標修剪是使用者定的 `event-trim-by-cursor`，結論交使用者） |
 | 事實更正 | Bevy 暫停時訊息全部留著（第 2.3 節表已改）；游標宣告第 3.2 節引的 lightyear 行號已漂移（現在 `receive.rs:54`、`:105-110`、`:153-160`、`:447-456`），轉主會話交圖書管理員 |
+| 事件游標重評的結果（2026-11-22，主會話轉達） | 使用者定案：作者的問題，Engine 只負責講清楚，(A)＋說明頁、不改 Kernel（`v8-arch-gyo2-event-cursor-reeval-author-side`）。這一批照 (A) 做的不改；通用寫法在 System 契約說明頁（游標重評卡寫），狀態機的條文頁連過去 |

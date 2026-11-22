@@ -101,10 +101,12 @@
 - [2026_11_22_gyo2_n13_short_names.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_n13_short_names.zh-Hant.md)：`engine/` 剩下的全名照 N13「引用別的單位」改成短名（`v8-arch-gyo2-n13-short-names`；IO 指自己的拿掉、Kernel 寫 `Engine::Base::`、`HashValue` 寫 `Kernel::Hasher`；巨集保留全限定）。
 - [2026_11_22_gyo2_world_gen.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_world_gen.zh-Hant.md)：第 5 批 生成世界（生成中、`WorldGeneration`、`WhileGenerating()`／`AfterGenerating()`）與預設的實體配發器 `entity_ids`（`RangeAllotter` 搬出 Kernel）；使用者 2026-11-22 合併前核准，合併待使用者說。
 - [2026_11_22_gyo2_au_z6_survivor.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_au_z6_survivor.zh-Hant.md)：權威 Module 的突變 `au-z6-skipped-counted` 存活的原因（61d6f72c 起突變指定的 AU-E8 一例因 Resource 輸入另有歷史而失去檢出力）與修正（突變改接既有的 `every mount skipped`；`v8-arch-gyo2-au-z6-survivor`）。
+- [2026_11_22_gyo2_state_machine.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_state_machine.zh-Hant.md)：狀態機 Module（第 5 批，宣告修訂 8）。
 
 ## 沒有搬過來的
 
 - 圖三 `networking-systems.svg` 沒有改過，留在 [`../../plans/kernel/diagrams/`](../../plans/kernel/diagrams/)；網路的圖等機制完成後再處理（`v8-arch-gyo2-network-diagram-after-mechanism`）。
 - 規格（`spec.zh-Hant.md`）、mechanism、blueprint、networking、spike-report 等 11 月 11 日到 13 日的文件留在 `plans/kernel/`，本資料夾的文件引用它們時連到那裡。
+- [state-machine.zh-Hant.md](state-machine.zh-Hant.md)：狀態機 Module 的 Design Invariants 與寫法；[state-machine-declaration.zh-Hant.md](state-machine-declaration.zh-Hant.md)：它的事前宣告（修訂 8，2026-11-22）。
 - [recovered-from-stale-cards.zh-Hant.md](recovered-from-stale-cards.zh-Hant.md)：從前提已變的任務卡（狀態機、重新評估 Loading）回收的資源，以及哪些舊設計不要帶進來（2026-11-17）。
 - [rebuild-batch-plan.zh-Hant.md](rebuild-batch-plan.zh-Hant.md)：GYO2 批次表（2026-11-17 重排，取代時間設計第 11 節的表）：設計段（2026-11-17 完成）、統合核准之後的實作段、不擋路的小事。

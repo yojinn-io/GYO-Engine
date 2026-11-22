@@ -490,3 +490,13 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 **生成用的 System 不讀 `Message`。** 生成結束後 `WhileGenerating()` 的 set 不再跑，裡面讀 `Message` 的 System 的游標會一直拉住保留；要交給遊戲邏輯的結果放 Resource。
 
 **Module 的 System 不受你的條件管。** 你的 set 只管得到你自己的 System；Module 掛的 System 生成期間照跑。Module 需要停時由它開條件選項（例：`fixedStepConditions`）。
+
+## 15. 狀態機：主選單、關卡中、暫停
+
+（`v8-arch-gyo2-state-machine`；規則全文與寫法在 [state-machine](state-machine.zh-Hant.md)。）
+
+**一個例子。** 啟動後是主選單，按「開始」進關卡，關卡中可以暫停。作者寫一個列舉 `Flow { MainMenu, InLevel }`、特化一次 `StateMachineTraits<Flow>`，在產品的 `build` 呼叫 `RegisterStateMachine<Flow>(setup)`。進主選單時生成按鈕：System 掛在 `Flow.Enter.MainMenu`（stage `Update`）。只在關卡中、沒暫停時移動角色：條件 `InState<Pause, Pause::Running>()`。按「開始」：寫 `StateMachineRequest<Flow>` 的 `Request(Flow::InLevel)`。
+
+- 套用的 System 預設在 `Main` 的 `PreUpdate` 之後：排在 `PreUpdate` 的 System 同一幀讀到換之前的值，排在 `Update` 的讀到換之後的。
+- 進入之後只能經要求換值（型別封閉）；一次套用每種狀態最多換一次，離開或進入裡提的要求留到下一次。
+- 讀檔、生成中、進入／離開裡讀訊息的三個後果、(c) 區的接法：見 [state-machine](state-machine.zh-Hant.md) 第 3 節。
