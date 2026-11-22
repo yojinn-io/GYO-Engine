@@ -107,7 +107,9 @@ TEST_CASE("ProbeFileStamp reads no more than the caller allows") {
     FS::NativeFileSystem files;
     Helpers::ReadAllOptions small;
     small.maxBytes = 16;
-    CHECK_FALSE(Helpers::ProbeFileStamp(files, tree.Uri("big.bin"), small));
+    const auto refused = Helpers::ProbeFileStamp(files, tree.Uri("big.bin"), small);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == IOErrorCode::TooLarge);
     CHECK(Helpers::ProbeFileStamp(files, tree.Uri("big.bin"), AnySize()));
 }
 

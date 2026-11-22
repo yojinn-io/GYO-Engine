@@ -166,6 +166,76 @@
       "target": "gyo_threads_tests",
       "cases": "*backend of its own Waiter*",
       "expect": "CHECK\\( role.WaitBackend\\(\\) == waiter->Backend\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "wp-submit-after-stop",
+      "what": "A stopped pool still queues a submitted job and answers true (threads.md Invariant 10). Only it reaches the stopping check in Submit",
+      "guards": [
+        "threads 10"
+      ],
+      "file": "engine/core/threads/src/WorkerPool.cpp",
+      "find": "        if (state_->stopping) return false;\n",
+      "replace": "",
+      "target": "gyo_threads_tests",
+      "cases": "WorkerPool takes no job after Stop",
+      "timeout": 120,
+      "expect": "CHECK_FALSE\\( submitted \\) is NOT correct"
+    },
+    {
+      "id": "wp-drain-drops-queued",
+      "what": "Stop with Drain drops the queued jobs as Discard does (threads.md Invariant 11, Drain). Only it reaches the mode test in Stop",
+      "guards": [
+        "threads 11"
+      ],
+      "file": "engine/core/threads/src/WorkerPool.cpp",
+      "find": "        if (mode == StopMode::Discard) dropped.swap(state_->queue);\n",
+      "replace": "        dropped.swap(state_->queue);\n",
+      "target": "gyo_threads_tests",
+      "cases": "WorkerPool Stop with Drain runs the jobs already queued",
+      "timeout": 120,
+      "expect": "CHECK\\( drained == 5 \\+ accepted \\) is NOT correct"
+    },
+    {
+      "id": "wp-discard-returns-early",
+      "what": "Stop with Discard returns before the running job has finished (threads.md Invariant 11, waiting). Only it reaches the join in Stop for Discard",
+      "guards": [
+        "threads 11"
+      ],
+      "file": "engine/core/threads/src/WorkerPool.cpp",
+      "find": "    for (auto& worker : workers_) worker.Join();\n",
+      "replace": "    if (mode == StopMode::Drain) for (auto& worker : workers_) worker.Join();\n",
+      "target": "gyo_threads_tests",
+      "cases": "WorkerPool Stop with Discard drops the queued jobs and waits for the running one",
+      "timeout": 120,
+      "expect": "CHECK\\( waited \\) is NOT correct"
+    },
+    {
+      "id": "wp-discard-keeps-queued",
+      "what": "Stop with Discard runs the queued jobs as Drain does (threads.md Invariant 11, Discard). The opposite of wp-drain-drops-queued on the same line; only it reaches the Discard case's count",
+      "guards": [
+        "threads 11"
+      ],
+      "file": "engine/core/threads/src/WorkerPool.cpp",
+      "find": "        if (mode == StopMode::Discard) dropped.swap(state_->queue);\n",
+      "replace": "",
+      "target": "gyo_threads_tests",
+      "cases": "WorkerPool Stop with Discard drops the queued jobs and waits for the running one",
+      "timeout": 120,
+      "expect": "CHECK\\( queuedRan == 0 \\) is NOT correct"
+    },
+    {
+      "id": "wp-last-in-first-out",
+      "what": "A worker takes the newest job instead of the oldest (threads.md Contracts: jobs start in the order they were submitted). Only it reaches the order case",
+      "guards": [
+        "threads-io-review-declaration Q1"
+      ],
+      "file": "engine/core/threads/src/WorkerPool.cpp",
+      "find": "            job = std::move(queue.front());\n            queue.pop_front();\n",
+      "replace": "            job = std::move(queue.back());\n            queue.pop_back();\n",
+      "target": "gyo_threads_tests",
+      "cases": "WorkerPool starts jobs in the order they were submitted",
+      "timeout": 120,
+      "expect": "CHECK\\( order == expected \\) is NOT correct"
     }
   ]
 }

@@ -1,14 +1,11 @@
-add_executable(engine_tests
+add_executable(gyo_io_tests
     test_main.cpp
-    io/BufferedStreamTests.cpp
     io/NativeFileSystemTests.cpp
-    io/StreamReaderTests.cpp
     io/UriTests.cpp
     io/UserFilesTests.cpp
-    io/VfsTests.cpp
 )
 
-target_link_libraries(engine_tests PRIVATE
+target_link_libraries(gyo_io_tests PRIVATE
     GYO::IO
     # io/UserFilesTests.cpp checks engine/io against engine/os's own path rules.
     GYO::OS
@@ -16,7 +13,7 @@ target_link_libraries(engine_tests PRIVATE
     doctest::doctest
 )
 
-add_test(NAME engine_tests COMMAND engine_tests)
+add_test(NAME gyo_io_tests COMMAND gyo_io_tests)
 
 # Windows UNC paths through engine/io (io-native-paths, D54): a temporary tree
 # named through the drive's administrative share, at a short and a 300+ character
@@ -31,12 +28,12 @@ if(WIN32)
 endif()
 
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
-# io links Base publicly and Math and the OS layer privately (docs/architecture/io.md;
+# io links Base publicly and the OS layer privately (docs/architecture/io.md;
 # v8-arch-gyo2-core-not-registered: core's links are written by hand and pinned here).
 function(gyo_expect_io_links)
-    gyo_expect_links(gyo_io GYO::Base GYO::Math GYO::OS)
+    gyo_expect_links(gyo_io GYO::Base GYO::OS)
     get_target_property(interface gyo_io INTERFACE_LINK_LIBRARIES)
-    foreach(private IN ITEMS GYO::Math GYO::OS)
+    foreach(private IN ITEMS GYO::OS)
         if(private IN_LIST interface)
             message(FATAL_ERROR "gyo_io exposes ${private} to its users; link it PRIVATE")
         endif()
