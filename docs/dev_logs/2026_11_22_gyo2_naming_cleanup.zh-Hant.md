@@ -83,7 +83,16 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
 
 - 加的突變：0。退的：0。搬的 12 個 id 不變（README 第 8 條：本批沒有新加，不用比「條數 × 5」）。
 - 靜態的 find 次數檢查（不建置）：gyo2 在用的清單 1784 個，本批沒有造成任何 find 失效；36 個在基準上就找不到（`plans/audio` 12、`plans/time-threads-trace` 6，指 master 的路徑；`tests/common/authority_scan/mutations.json` 18，路徑寫法另一套），和本批無關，列後續。
-- 第 4 件（測試輔助 namespace）只改了測試檔的 namespace，判定不變；殺 Kernel、編排層、回滾突變的測試檔因此「被改過」。照 D184，這些測試所在檔案上的既有突變（改動檔案上共 752 個）在 PR 線合併前背景完整跑一次，結果記在下面。
+- **沒有做「改動檔案上的既有突變」完整重跑**：本批只改名字與位置，行為不變，測試的檢出力不會變。改名真正會弄壞突變的只有兩種——find 找不到（上面的靜態檢查）、expect 裡含被改的文字（靜態查過，只有 `lg-file-writer-timer`，已改）——都已處理。照 D184 開過一次完整重跑（640 個），跑到 Kernel 清單一半時使用者問「你改名還需要突變嗎？」，停掉；跑完的 entity-store 11/11 killed，其餘沒有結果，不當證據用（`mutations/full/`）。
+
+## 跟上 gyo2
+
+- #267（`v8-arch-gyo2-stale-cleanup`，05afdc7a）與 #268（`v8-arch-gyo2-exchange`，0f0ab8a5）合併後 merge `origin/gyo2`（25f9201f，不 rebase）。
+- 衝突兩處：`kernel_guard.py` 的 K9 一行採 #268 的 `K9_MOVED + K9_CLOCK + K9_REMOVED`，下面的 `DIRECTIVE`、`TARGET` 照本批拿掉（從 `source_text.py` 匯入；和交換點卡事先約定）；`target/v2/README.md` 的 dev_log 一覽兩行都留。
+- 約定的另一處：#268 加的 `gyo_authority` 連結集的 DEFER 前補 `include(.../ExpectLinks.cmake)`；現在用 `gyo_expect_links` 的 15 個目錄都自己 include。
+- #267 新加的 trace、logging 守衛沒有從 `kernel_guard` 匯入；合併後的樹再掃一次：`engine/` 沒有新的 `::GYO::Engine::`、沒有舊的頂層測試 namespace、沒有小寫 `detail`；靜態 find 檢查 19 份清單 1872 個，不是剛好一次的 103 個都在本批以前就失效的清單（`plans/big-map/scripts/engine_format_mutations.json` 67、`authority_scan` 18、`plans/audio` 12、`plans/time-threads-trace` 6）。
+- 合併時動到的行對應的突變：`ks-k9-clock-dropped`、`ks-k9-removed-dropped`（K9 那一行）、`or-guard-o4-parent-directory`（orchestration_guard 的匯入）、`au-links-more`（新補的 include）4/4 killed（`mutations/run-after-merge-*.log`）。
+- 合併後全量 ctest：第一次 159/161，`gyo_os_tests`、`os.wake_fallback` 逾時（60 秒）。當時 load average 約 32（同機有別的建置）；本批對 os 只改了 CMake 的 include 一行；兩個單獨重跑 1.3 秒通過（`ctest-os-rerun.log`）→ 判定為環境。再跑一次全量 161/161（`ctest-full-2.log`、`ctest-full-3.log`）。
 
 ## 驗證
 
@@ -132,5 +141,5 @@ namespace 改名（#266，45f13757）與第 4 批後續（#265，96a38061）的�
 - N1 forward 的四個實樹陽性對照裡，`wt-guard-real-n1-other-namespace` 與 `nm-real-acronym` 看起來重疊（設計審查小點）。
 - naming_guard 的 `SCAN_ROOTS` 不含 `build/acceptance`（建置會讀，現在沒有 C/C++ 檔）。本批以前就有的缺口，驗證者發現。
 - `tests/common/entity_store/entity_store_guard.py`、`tests/common/os/os_boundary_guard.py` 各自還有一份 `strip_comments_and_strings`（和 `STANDARD_HEADERS`），可以改用 `source_text.py`。本批只處理 brief 指名的兩支守衛。
-- 突變清單 `plans/audio`、`plans/time-threads-trace` 有 18 個指向 master 路徑的突變，不在 brief 列的「15 份 master 時代清單」裡；`authority_scan/mutations.json` 的路徑寫法要確認執行器怎麼解讀。
+- 突變清單 `plans/audio`、`plans/time-threads-trace` 有 18 個、`plans/big-map/scripts/engine_format_mutations.json` 有 67 個指向 master 路徑的突變（#267 刪的 15 份以外）；`authority_scan/mutations.json` 的路徑寫法要確認執行器怎麼解讀。
 - brief 原列的範圍外照舊：15 份 master 時代的突變清單、文件路徑與 master 時代文件的去留、entity_store／trace／logging 三個 include 守衛的 `..`、Kernel「拿掉的名字不回來」的守衛、權威 Module 的 `gyo_expect_links`、K6 標頭分支的去留。
