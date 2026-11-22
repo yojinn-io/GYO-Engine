@@ -271,7 +271,7 @@
   },
   {
    "id": "au-z6-skipped-counted",
-   "what": "a System skipped while resimulating (an entry writing a decision input with no kept history: a component input) counts for Z6. Only it catches the exemption (a resource input is also left out by its kept history since the official strategy registers rollback.Input<T>, 61d6f72c)",
+   "what": "a System skipped while resimulating (every mount carries the condition) counts for Z6. Only it catches the exemption (the AU-E8 official-strategy case no longer could: since 61d6f72c its resource input is left out of Z6 by its kept history)",
    "guards": [
     "authority-module-declaration 5.11"
    ],
@@ -279,8 +279,8 @@
    "find": "        if (system.removed || !Rollback::RunsWhileResimulating(system, resimulated)) continue;",
    "replace": "        if (system.removed || !MountedIn(system, resimulated)) continue;",
    "target": "gyo_authority_tests",
-   "cases": "authority checks: AU-E8*",
-   "expect": "\\[au\\-z6\\-skipped\\-entry\\]"
+   "cases": "authority checks: AU-E6 and AU-E8 ask each mount*",
+   "expect": "\\[au\\-z6\\-mount\\-added\\-after\\-skip\\] every mount skipped"
   },
   {
    "id": "au-z8-unchecked",
