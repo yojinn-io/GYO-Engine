@@ -756,13 +756,14 @@
     },
     {
       "id": "rs-sample-marker-on-error-line",
-      "what": "a compile-failure variant fails with an unrelated hard error (a misspelt type) on the line that carries its marker. The compiler echoes that source line, so a check that only looks for the marker in the output passes; only this mutant catches a judgement that does not require the marker on a static assertion's failure line (asset declaration section 15 item 12). rs-sample-wrong-failure has no marker on its error line",
+      "what": "a compile-failure variant fails with an unrelated static assertion and, on a later line, an unrelated hard error (a misspelt type) on the line that carries its marker. The compiler echoes that source line, so a check that looks for the marker anywhere in the output passes, and so does one that takes any static assertion's failure with the marker anywhere after it; only this mutant catches a judgement that does not require the marker on the failure line of a static assertion (asset declaration section 15 item 12; merge review S1). rs-sample-wrong-failure has no marker on its error line",
       "guards": [
+        "asset-declaration 第 10 節「負向編譯的判法」",
         "AGENTS §14.2"
       ],
       "file": "tests/common/kernel/compile_fail/SystemContractSample.cpp",
       "find": "    static_assert(std::is_copy_constructible_v<Query<Read<SamplePos>>> || std::is_move_constructible_v<Query<Read<SamplePos>>> ||\n                      std::is_copy_constructible_v<Res<SamplePos>> || std::is_move_constructible_v<Res<SamplePos>> ||\n                      std::is_copy_constructible_v<Commands> || std::is_move_constructible_v<Commands>,\n                  \"GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE: kernel handles are neither copyable nor movable\");\n",
-      "replace": "    static_assert(std::is_copy_constructible_v<Query<Read<SamplePosTypo>>>, \"GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE: kernel handles are neither copyable nor movable\");\n",
+      "replace": "    static_assert(false, \"GYO_KERNEL_SAMPLE_UNRELATED: an unrelated static assertion\");\n    static_assert(std::is_copy_constructible_v<Query<Read<SamplePosTypo>>>, \"GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE: kernel handles are neither copyable nor movable\");\n",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true,
       "expect": "variant HANDLE_COPY failed without"
