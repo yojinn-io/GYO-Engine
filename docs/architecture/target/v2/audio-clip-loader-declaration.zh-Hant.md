@@ -1,10 +1,11 @@
 # 事前宣告：audio 那一側的小批（clip 的來源、音效 loader）（`v8-arch-gyo2-audio-clip-loader`）
 
-更新：2026-11-23（修訂 1）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-audio-clip-loader`）。**狀態：草稿，交使用者動工前核准。使用者說「開始」之前不改程式。**
+更新：2026-11-23（修訂 2）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-audio-clip-loader`）。**狀態：草稿，交使用者動工前核准。使用者說「開始」之前不改程式。**
 
 **經過**：
 - 修訂 0（d97150df）送 Fable 5.2／high 敵對式檢查：blocker 2、should 11、nit 9（主 checkout `build/evidence/gyo2-audio-clip-loader/declaration-r0-adversarial.md`）。全部採用成**修訂 1**，處理對照在第 15 節。
-- 最大的改動：(E) 的內部做法改成檢查 N-4 提的形——**音訊執行緒手上只有 view 與整數**，clip 的參照由提交口這一側的一張表握著，回收環上只走表的格號。DI 7 回到結構保證（音訊執行緒沒有擁有記憶體的物件），回收環不可能滿，修訂 0 的「上限恰好取到」（S-2）與「三處覆寫前必須是空的」（S-3）不再存在。
+- 修訂 1（6e79de6f）送同一位檢查者窄複查：blocker 0、should 6、nit 8（同目錄 `declaration-r1-narrow-check.md`）。全部採用成**修訂 2**，對照在第 16 節。主要補的是「格號還得太早」的判定、表用光改成斷言、租約標記的編碼、規則 8 的位置。
+- 修訂 1 最大的改動：(E) 的內部做法改成檢查 N-4 提的形——**音訊執行緒手上只有 view 與整數**，clip 的參照由提交口這一側的一張表握著，回收環上只走表的格號。DI 7 回到結構保證（音訊執行緒沒有擁有記憶體的物件），回收環不可能滿，修訂 0 的「上限恰好取到」（S-2）與「三處覆寫前必須是空的」（S-3）不再存在。
 
 **性質**：批次表「6. audio 那一側的小批」一列（HANDOFF `v8-arch-gyo2-world-audio-withdrawn`）的事前宣告。`engine/modules/audio` 是 Engine 的公開 Interface，音效的格式是工具與遊戲之間的 Data Contract，照 AGENTS §2 當**基盤**處理（第 3 節）。
 
@@ -18,7 +19,7 @@
 
 - 程式：`origin/gyo2` 641a1f26 的 `engine/modules/audio`（`Mixer`、`ClipBank`、`VoiceMixer`、`ClipValidation`、`PlayheadBoard`）、`engine/modules/asset`（`AssetLoader`、`LoadContext`、`AssetTypeName`、`TextLoader`、`ReadWholeFile`）、`engine/modules/world_asset`（`AssetView::Get` 回 `const T*`）、`tests/common/audio`（7 個檔；`ClipSlotTests.cpp` 15 案：第 78、103、120、136、156、171、181、215、227、254、273、292、317、338、348 行）。
 - 合約：[audio 頁](audio.zh-Hant.md)（DI 1～11、RC 1～9、第 5 節作者的寫法）；[asset 頁](asset.zh-Hant.md)（AS-2、AS-3、AS-9、AS-10、第 3 節 Validation Rule (B)、第 5 節 loader 介面）；[asset 宣告](asset-declaration.zh-Hant.md) 5.10、5.16；[audio 重審宣告](audio-review-declaration.zh-Hant.md) 第 2、4.2、5、14 節；`docs/cross-component-rules.md` CCR-6、CCR-9；HANDOFF `v8-arch-gyo2-world-audio-withdrawn`（`HANDOFF.md:271`）。
-- 突變清單：`docs/architecture/plans/audio/scripts/mutations.json`（78 條）、`mutations-asan.json`（1）、`mutations-tsan.json`（7）。這一批會碰到的（`cases` 在 `ClipSlotTests.cpp`、或 find 在要拿掉的程式）：`au-clip-rate-unchecked`、`au-review-handoff-rebound`、`au-review-unload-counts-before-assert`、`au-ctl-clip-handback-ignores-voices`、`au-ctl-clip-lease-not-ended-render`、`au-ctl-clip-lease-not-ended-before-start`、`au-ctl-clip-lease-not-ended-late-stop`、`au-ctl-clip-unload-flag-not-reset`、`au-ctl-clip-reuse-without-check`、`au-ctl-clip-generation-not-bumped`、`au-ctl-unload-uncounted`、`au-ctl-unload-marks-on-full`、`au-ctl-clip-handback-ignores-count`、`au-ctl-ended-not-cleared`、`au-ctl-ended-capacity-one`、`au-ctl-reuse-ended-comes-back`、`au-ctl-alloc-in-render`、ASAN 的 `au-ctl-clip-reuse-without-check-asan`、TSAN 的 `au-ctl-clip-handback-relaxed`、`au-ctl-clip-reclaim-relaxed`。另外 find 落在 `Mixer.cpp` 取命令的迴圈、`Command{…PlayRequest{ClipId{}, at}…}`、`ClipBank` 的設定的，改寫後會失配，實作第 0 步用執行器的「find 不中」逐條列出。
+- 突變清單：`docs/architecture/plans/audio/scripts/mutations.json`（78 條）、`mutations-asan.json`（1）、`mutations-tsan.json`（7）。這一批會碰到的 22 條（`cases` 在 `ClipSlotTests.cpp`、或 find 在要拿掉的程式）：`mutations.json` 19 條——`au-clip-rate-unchecked`、`au-review-handoff-rebound`、`au-review-unload-counts-before-assert`、`au-ctl-alloc-in-render`、`au-ctl-clip-handback-ignores-voices`、`au-ctl-clip-lease-not-ended-render`、`au-ctl-clip-lease-not-ended-before-start`、`au-ctl-clip-lease-not-ended-late-stop`、`au-ctl-clip-lease-counts-novoice`、`au-ctl-clip-lease-flag-not-count`、`au-ctl-clip-unload-flag-not-reset`、`au-ctl-clip-reuse-without-check`、`au-ctl-clip-generation-not-bumped`、`au-ctl-unload-uncounted`、`au-ctl-unload-marks-on-full`、`au-ctl-clip-handback-ignores-count`、`au-ctl-ended-not-cleared`、`au-ctl-ended-capacity-one`、`au-ctl-stop-no-drain`；ASAN 的 `au-ctl-clip-reuse-without-check-asan`；TSAN 的 `au-ctl-clip-handback-relaxed`、`au-ctl-clip-reclaim-relaxed`。（`au-ctl-reuse-ended-comes-back` 的 find 在 `PlayheadOf`、和 clip 無關，不算。）另外 find 落在 `Mixer.cpp` 取命令的迴圈、`Command{…PlayRequest{ClipId{}, at}…}`、`ClipBank` 的設定的，與 `expect` 的正規式對的是測試設定文字的（例 `mixer.Schedule\(\{clip, 4, 1.0f, 1.0f\}\)`），改寫後會失配，實作第 0 步逐條列出。
 - master（只看為什麼，不拿數據當設計）：`engine/asset/src/loaders/SoundLoader.cpp`（WAV PCM16、不查取樣率、查奇數長度 `:78-80`、沒有測試）；`docs/architecture/plans/audio/HANDOFF.md:126` `v8-engine-audio-clip-format`（`ClipBank` 複製；不讓 Audio 依賴 Engine 的理由是「離線測試要連整個 Engine」）；`docs/tools/plans/v8/assets.md:53-56`（Data Contract 是「48 kHz PCM16 的 WAV＋catalog 條目」）；`docs/audio_editor/architecture.md` DI 2；`tools/audio_editor/src/WavFile.cpp:124-154` `EncodePcm16Wav`（44 位元組檔頭、格式碼 1）；`assets/object_fps_pvp/asset_catalog.json:19-22`（4 筆 `"type": "sound"`、`.wav`、不寫 `format`）。
 - 別家：
   - **Bevy**（主參考；`~/Code/GitHome/bevy/crates/bevy_audio`）：`audio_source.rs:7-20` `AudioSource { bytes: Arc<[u8]> }` 是 Asset，複製只加參照計數；`audio_source.rs:39-75` `AudioLoader`（整檔讀進來不解碼，認 wav／ogg／flac／mp3 看 feature）；`lib.rs:97-101` `AudioPlugin::build` 自己 `init_asset_loader::<AudioLoader>()`；`Cargo.toml:13-18` bevy_audio 依賴 bevy_app、bevy_asset、bevy_ecs、bevy_transform——它是**接 ECS 的那一層**，混音的是第三方 rodio，rodio 不認得 bevy_asset；`audio_output.rs:84-112` 播放的 System 從 `Assets<Source>` 取值，沒載好就下一幀再試，取到就 `decoder()`（`audio_source.rs:94-100`，把 `AudioSource` 的複製交給 rodio、在混音那一側解碼）。rodio 在哪條執行緒放掉那份複製〔知：混音執行緒〕。
@@ -106,11 +107,11 @@ struct PlayRequest final { Clip clip; Time::TimePoint at{}; float gainLeft = 1.0
 - 留：`ClipView`（搬到 `Clip.hpp`）、`SoundHandle`、`Stop`、`StopAll`、`PlayheadOf`、其餘計數、時間點換算、`VoiceMixer` 的混音與它的「租約標記」管道（`ScheduledPlay::view`／`lease`、`Ended()`，標記改指表的格）。
 
 **做法**（每個提交口；全部在建混音器時配好）：
-1. **參照表**：`queueCapacity + maxVoices + 1` 格的 `Clip`，加一個空格的堆疊。只有使用提交口的一方碰它（和今天提交口私有的欄位一樣，換手照第 3 節的執行緒契約）。
-2. **`Play`**：先取空回收環（第 4 點），再從堆疊拿一個空格、把請求的 clip 複製進去（參照計數加一，在使用提交口的一方），命令裡只放那一格的 view 指標與格號。堆疊空了（照下面的界不會發生）就和環滿一樣丟掉並記數（`droppedQueueFull`）、回無效的 handle——在生產端，安全地處理，不靠推導。
-3. **音訊執行緒**：照今天的租約管道——拿到 voice 的播放，格號跟著 voice；沒有 voice 的、voice 結束的（播完、停止、還沒開始就被停），把格號推進那個提交口的**回收環**（`uint32` 的 SPSC 環，release／acquire 同命令環）。音訊執行緒手上只有 view 與整數，**沒有擁有記憶體的物件**。
-4. **取空**：使用提交口的一方在**每個成員呼叫**（`Play`、`Stop`——含無效 handle、`StopAll`）開頭、與 `~Submitter` 裡，把回收環取空：每個格號的那一格清掉（最後一份參照可能在這裡放掉）、格號放回堆疊。
-5. **界**：回收環與參照表一樣大。一個格號同時只在一處（堆疊、命令環、voice、回收環之一），所以回收環**不可能滿**——結構保證，不需要「恰好取到」的推導。表不會用光：每次 `Play` 先取空，之後佔用的格只在命令環（≤ `queueCapacity`）或先前 block 的 voice（≤ `maxVoices`），所以至少剩一格（修訂 0 檢查「確認成立的」第 1 項的推導；堆疊空時第 2 點的處理是保險，不是正確性的前提）。
+1. **參照表**：`queueCapacity + maxVoices + 1` 格的 `Clip`（設定的上限下最多 66561 格），加一個空格的堆疊。只有使用提交口的一方碰它（和今天提交口私有的欄位一樣，換手照第 3 節的執行緒契約）。
+2. **`Play`**：先取空回收環（第 4 點），再從堆疊拿一個空格、把請求的 clip 複製進去（參照計數加一，在使用提交口的一方）。命令裡放 **view 的值**（取樣指標、聲道數、frame 數）與格號——音訊執行緒完全不讀提交口的表。環滿時（`Enqueue` 失敗）把那一格清掉、格號放回堆疊，再照今天丟掉並記數（`droppedQueueFull`）、回無效的 handle。**堆疊空了是混音器內部的不變量被破**（照第 5 點的界不會發生），在生產端以 `GYO_ASSERT` 斷言，不併進 `droppedQueueFull`（否則和真的環滿分不開）。
+3. **音訊執行緒**：照今天的租約管道——拿到 voice 的播放，租約標記跟著 voice（voice 起播時把 view 複製成自己的）；沒有 voice 的、voice 結束的（播完、停止、還沒開始就被停），把格號推進那個提交口的**回收環**（`uint32` 的 SPSC 環，release／acquire 同命令環）。音訊執行緒手上只有 view 與整數，**沒有擁有記憶體的物件**。**租約標記的編碼**改成「提交口加一 << 32 ｜ 格號（32 位元）」（今天是 `<< 16`、格號 16 位元，`Mixer.cpp:89-91`，放不下 66561 格），以 `static_assert` 釘住格數上限放得進。
+4. **取空**：使用提交口的一方在**每個成員呼叫**（`Play`、`Stop`——含無效 handle，排在今天的提早返回之前、`StopAll`）開頭、與 `~Submitter` 裡（被搬走的跳過），把回收環取空：每個格號的那一格清掉（最後一份參照可能在這裡放掉）、格號放回堆疊。`~Submitter` 因此算一次成員呼叫，進第 3 節的執行緒契約（換手要 happens-before）。
+5. **界**：回收環與參照表一樣大。一個格號同時只在一處（堆疊、命令環、voice、`VoiceMixer` 的結束清單、回收環、使用提交口的一方取出到放回之間之一），所以回收環**不可能滿**——結構保證，不需要「恰好取到」的推導。表不會用光：每次 `Play` 先取空，之後佔用的格只在命令環（≤ `queueCapacity`）或先前 block 的 voice（≤ `maxVoices`），所以至少剩一格（修訂 0、修訂 1 檢查「確認成立的」第 1 項的推導）。
 6. **限界**（寫進 Contract）：混音器握的參照最晚在那個提交口下一次被呼叫時放掉；不再被呼叫的提交口，它的格留到混音器的狀態解構（上限：表的大小）。沒有 `Render`（後端沒開）時，排著的請求的格留在環裡，直到混音器的狀態解構。`Play`、`Stop` 可能在呼叫的執行緒上釋放大塊記憶體（表現層 System 的那一幀）。
 
 **比過的選項**（audio 重審宣告第 5 節的 A～D，加本卡的 E）：
@@ -125,7 +126,7 @@ struct PlayRequest final { Clip clip; Time::TimePoint at{}; float gainLeft = 1.0
 
 **(E) 內部的兩種做法**（使用者不必選，卡片判；寫出來照 AGENTS §4 的系譜）：
 - (E-1，修訂 0)：命令環與回收環上走 `shared_ptr`，音訊執行緒搬動參照。退掉：音訊執行緒手上有擁有記憶體的物件，DI 7 變成「voice 重用、回收環的一格、暫存物件三處覆寫前一定是空的」的紀律；回收環的容量是恰好取到的上限，滿了音訊執行緒沒有安全的處理（修訂 0 檢查 S-1 第 4 點、S-2、S-3）。
-- **(E-2，採用)**：上面的做法（檢查 N-4 提的形）。DI 7 照今天一樣靠結構；回收環不會滿；表用光時在生產端處理。
+- **(E-2，採用)**：上面的做法（檢查 N-4 提的形）。DI 7 照今天一樣靠結構；回收環不會滿；表用光是生產端的斷言。危險換成「**格號還得太早**」（voice 還在讀時格號就回到提交口、被清掉）——今天由「does not hand back a clip while a voice reads it」等守的同一個性質，第 10 節第 3 項與突變接手。
 
 **為什麼建議 (E)**：
 1. (A)(E) 都做到「播它、不另存一份」「任何 World 都能播」「記憶體一份」；差別是 (E) 不必逐提交口載入與卸載、沒有格數。
@@ -170,7 +171,7 @@ master 當年不讓 Audio 依賴 Engine 的理由（「離線測試要連整個 
 
 ## 5. 音效的 Data Contract（`sound`／`wav`）——卡片判（照 master 與 AGENTS §8）
 
-**誰產生、誰讀**：audio_editor 寫（搬回時照這裡）、Script（master 的 `convert_wav.py` 類）、手工（任何能輸出 48 kHz PCM16 WAV 的軟體），一樣有效；遊戲經 asset 讀，執行期讀、不需要 build 的產物；工具要驗證自己的輸出就呼叫同一個 loader，並比大小（5.2 規則 8：大小由 store 判，直接呼叫 loader 驗不到）。
+**誰產生、誰讀**：audio_editor 寫（搬回時照這裡）、Script（master 的 `convert_wav.py` 類）、手工（任何能輸出 48 kHz PCM16 WAV 的軟體），一樣有效；遊戲經 asset 讀，執行期讀、不需要 build 的產物；工具要驗證自己的輸出就呼叫同一個 loader，並比大小（5.2「大小」：由 store 判，直接呼叫 loader 驗不到）。
 
 ### 5.1 catalog 的項目
 
@@ -184,22 +185,26 @@ master 當年不讓 Audio 依賴 Engine 的理由（「離線測試要連整個 
 
 ### 5.2 檔案格式（`wav` 第 1 版）
 
-RIFF/WAVE，小端序。**照下表的順序判，回第一條違反的碼**（loader 是純函式，先後是合約的一部分；同時違反多條時回編號最小的）：
+RIFF/WAVE，小端序。
+
+**大小**（不是 loader 的規則）：經 store 載入時先判，檔案不超過上限——預設 64 MiB，產品可用 asset 的 `byteLimits` 依（`sound`、`wav`）覆寫；超過是 asset 的 `TooLarge`，loader 不被呼叫（`ReadWholeFile.cpp:39,48`）。直接呼叫 loader 時不判；工具匯出時自己比這個數字。
+
+**loader 照下表的順序判，回第一條違反的碼**（loader 是純函式，先後是合約的一部分；同時違反多條時回編號最小的；規則 2 對整串 chunk 走完才判規則 3）：
 
 | # | 規則 | 碼（`WavLoaderCode`） |
 |---|---|---|
 | 1 | 至少 12 位元組，開頭是 `RIFF`、第 8～11 位元組是 `WAVE` | `NotWave` |
 | 2 | 從第 12 位元組起是一串 chunk（4 位元組 id＋4 位元組長度＋內容，長度是奇數時補 1 位元組）。每個 chunk 的內容都在檔案內；最後一個 chunk 的補位可以缺；最後剩不到 8 位元組的尾巴忽略（照 master）。RIFF 檔頭的長度欄不查（寫錯的軟體常見） | `Truncated` |
-| 3 | `fmt ` 與 `data` 各恰好一個（先後不限）；其他 chunk（`LIST` 等）跳過 | `MissingChunk`、`DuplicateChunk` |
+| 3a | `fmt ` 與 `data` 都至多一個；其他 chunk（`LIST` 等）跳過 | `DuplicateChunk` |
+| 3b | `fmt ` 與 `data` 都至少一個（先後不限） | `MissingChunk` |
 | 4 | `fmt ` 至少 16 位元組 | `BadFormatChunk` |
 | 5 | 格式碼 1（整數 PCM）、每樣本 16 位元 | `NotPcm16` |
-| 6 | 聲道數 1 或 2；block align 等於聲道數 × 2 | `BadFormatChunk`（聲道數不對時 detail 寫聲道數） |
+| 6 | block align 等於 `fmt ` 的聲道數 × 2（只比，不除） | `BadFormatChunk` |
 | 7 | `data` 的長度是 2 的倍數（master `SoundLoader.cpp:78-80`；奇數時最後一個位元組不能變成樣本） | `PartialSample` |
-| 8 | 檔案不超過上限：預設 64 MiB，產品可用 asset 的 `byteLimits` 依（`sound`、`wav`）覆寫（由 store 讀檔時判，碼是 asset 的 `TooLarge`） | asset `TooLarge` |
-| 9 | `Clip::Make` 的規則（取樣率 48000、`data` 非空、樣本數是聲道數的整數倍、frame 數 ≤ 2^32 − 1），失敗原樣帶出（detail 是 `Clip::Make` 的訊息，例「a clip is 48000 Hz」） | `InvalidClip` |
+| 8 | `Clip::Make` 的規則（聲道數 1 或 2、取樣率 48000、`data` 非空、樣本數是聲道數的整數倍、frame 數 ≤ 2^32 − 1），失敗原樣帶出（detail 是 `Clip::Make` 的訊息，例「a clip is 48000 Hz」「a clip has 1 or 2 channels」） | `InvalidClip` |
 
-- 取樣是有號 16 位元、小端序、聲道交錯，照位元組原樣變成 clip（不抖動、不換算）；逐樣本組合（不依賴主機的位元組序）。`fmt ` 的 byte rate 不查。
-- **64 MiB 的根據**：卡片判，沒有 Feature 推得出（點名的內容最大 184 KB）。48 kHz 立體聲 PCM16 約 5.8 分鐘，容得下一般的音效與短的音樂；產品要更大或更小就覆寫。工具匯出時自己比這個數字（audio_editor 的讀檔上限是**來源檔**的上限，和輸出無關）。
+- 取樣是有號 16 位元、小端序、聲道交錯，照位元組原樣變成 clip（不抖動、不換算）；逐樣本組合（不依賴主機的位元組序）。`fmt ` 的 byte rate 不查。5.1 聲道等合法但混音器不收的 WAV 走到規則 8（`InvalidClip`，「a clip has 1 or 2 channels」），不說成 `fmt ` 壞了。
+- **64 MiB 的根據**：卡片判，沒有 Feature 推得出（點名的內容最大 184 KB）。48 kHz 立體聲 PCM16 約 5.8 分鐘，容得下一般的音效與短的音樂；產品要更大或更小就覆寫（audio_editor 的讀檔上限是**來源檔**的上限，和輸出無關）。
 - **Version**：WAV 沒有 GYO 的版本欄。`wav` 的版本記在 audio 頁的格式節（今天第 1 版）。**放寬**（多收：例 `WAVE_FORMAT_EXTENSIBLE` 裡的 PCM16）時版本加一、`format` 名不變：舊執行檔拒收用到新功能的檔（例 `NotPcm16`），內容與執行檔一起出貨，不另設協商；工具預設只寫第 1 版的寫法。**收窄**、或改變已收內容的意思，用新的 `format` 名登記另一個 loader（AS-9；例：日後的引擎格式）。
 - **標準寫法**（工具、腳本照這個寫）：44 位元組檔頭（`RIFF`、`WAVE`、16 位元組的 `fmt `、`data`），即 master `EncodePcm16Wav` 的輸出。
 
@@ -233,6 +238,7 @@ public:
 
 - **DI 2**（第 2 題 (i)）：連結恰好是 `GYO::Base`、`GYO::Time`、`GYO::Asset`；守衛 `gyo_expect_audio_links` 跟著改。「不含 SDL」不變。第 1 節「不認得 SDL、asset、World、產品」改成「不認得 SDL、World、產品；認得 asset 的 loader 介面」。
 - **DI 6**：拿掉卸載的帳（`unloadsSubmitted` 一句與守衛「may unload again after its queue was full」）。
+- **第 3 節的執行緒契約**：成員呼叫加 `~Submitter`（它取空回收環）；拿掉 `LoadClip`、`UnloadClip`。
 - **DI 7**：「一個 clip 的樣本在 voice 或排著的播放可能讀它時不變」改成：clip 的取樣不可變（`Clip` 沒有改它的操作）；混音器為每個排著或播放中的請求在提交口這一側的表裡握一份參照，**音訊執行緒不握參照**（只有 view 與格號），用完經回收環還格號；使用提交口的一方在下一次呼叫或 `~Submitter` 時放掉那份參照，或隨混音器的狀態放掉。守衛見第 10 節第 2～5 項。
 - **DI 9**：守衛名從「ClipBank rejects…」改成「Clip rejects clips the mixer cannot play」。
 - **DI 11**：拿掉「執行中的 `ClipId` 指一格的一個世代」一句與它的兩個守衛（`ClipId` 不在了）。
@@ -247,7 +253,7 @@ public:
 | 決定 | 系譜 | 退掉的與理由 | 要它的 Feature |
 |---|---|---|---|
 | 共用的 clip 值、播放帶參照 | Bevy `AudioSource`、Kira `StaticSoundData` | (A)～(D)，第 4.1 節表。C-1～C-4 兩者都滿足，決勝是機制少與不保守 | C-1、C-3、C-4（(A) 也滿足） |
-| 參照留在生產端的表、回收環只走格號 | 今天的租約管道（`VoiceMixer` 的 `lease`／`Ended()`）；檢查 N-4；Kira 的「遊戲那一側才 drop」 | (E-1) 環上走 `shared_ptr`：音訊執行緒手上有擁有物，DI 7 變紀律、回收環容量恰好取到；在音訊執行緒放掉（Bevy／rodio〔知〕）、SoLoud 的 mutex：破 DI 7 | C-2（替換時聲音照響） |
+| 參照留在生產端的表、回收環只走格號 | 今天的租約管道（`VoiceMixer` 的 `lease`／`Ended()`）；檢查 N-4；Kira 的「遊戲那一側才 drop」 | (E-1) 環上走 `shared_ptr`：音訊執行緒手上有擁有物，DI 7 變紀律、回收環容量恰好取到；在音訊執行緒放掉（Bevy／rodio〔知〕）、SoLoud 的 mutex：破 DI 7 | 不是 Feature 推出的：DI 7 加上共用所有權要求它 |
 | loader 在 audio、audio 連 asset | bevy_audio 的 Module 層級（混音核心不同，4.2） | (ii) 另開函式庫：多一個 Module、型別與特性分兩處 | C-1、C-4 |
 | WAV PCM16 48 kHz、載入時變成取樣 | master `SoundLoader`＋audio_editor 的輸出；Kira／miniaudio DECODE | Bevy 存編碼位元組、播時解碼：破 DI 7；收任何取樣率：破 DI 9 | C-1、C-4 |
 
@@ -258,7 +264,7 @@ public:
 0. **基準**：改之前跑 audio 的 3 個 CTest（本機 Intel Mac）與第 0 節列的突變；在 ThreadSanitizer、AddressSanitizer 的手動組態各跑一次 audio 的 CTest（同 #279 的組態）；跑一次完整突變清單、記下哪些 find 會在改寫後失配。log 放主 checkout 的 `build/evidence/gyo2-audio-clip-loader/`。
 1. **clip（第 1 題）**：`Clip`、`PlayRequest` 帶 clip、參照表與回收環、拿掉 `ClipBank`／`ClipId`／`LoadClip`／`UnloadClip`／clip 格。測試照下面處理：
    - 設定從 `ClipBank::Add` 換成 `Clip::Make`、判定不變：`MixerTests`、`ScheduleTests`、`StopTests`、`PlayheadTests`、`CharacterizationTests`（**雜湊常數不改**——輸出逐位元相同是 (E) 不改混音的證據）。
-   - `ClipSlotTests.cpp` 換成 `ClipTests.cpp`：**15 案逐判定**，每個判定寫 AGENTS §14.4 的 1～5（守的性質、緩的面、緊的面、性質由哪個判定接手、根據）。它們是 DI 6、DI 7、DI 9、DI 11 的守衛，**緩的面有無都要使用者核准**（§14.4）：1～5 進合併前核准頁，先做突變與別的檢證者（Opus 5.5／high，作者以外的 Agent，照領航員規則「計畫沒有指派的 §14.4 檢證者照實作者的指派」）的檢證。隨機制拿掉的判定（格數上限、`NoClipSlot`、世代、卸載的帳、卸載後的 Programmer Error）寫明拿掉、不接手。
+   - `ClipSlotTests.cpp` 換成 `ClipTests.cpp`：**15 案逐判定**，每個判定寫 AGENTS §14.4 的 1～5（守的性質、緩的面、緊的面、性質由哪個判定接手、根據）。它們是 DI 6、DI 7、DI 9、DI 11 的守衛，**緩的面有無都要使用者核准**（§14.4）：1～5 進合併前核准頁，先做突變與別的檢證者（Opus 5.5／high，作者以外的 Agent，照領航員規則「計畫沒有指派的 §14.4 檢證者照實作者的指派」）的檢證。隨機制拿掉的判定（格數上限、`NoClipSlot`、世代、卸載的帳）寫明拿掉、不接手。「卸載後的 Programmer Error 在任何計數之前斷言」的性質還在：由「空的 `Clip` 拿去播是 Programmer Error、在任何計數之前斷言」一案接手，突變 `au-review-unload-counts-before-assert` 改寫到那裡。
    - 第 317 行的換手案（audio 重審判定 2 的守衛之一，突變 `au-review-handoff-rebound`）不拿掉：改寫成「A 播、`join`、B 播、B 取空 A 送出的播放的參照」，ThreadSanitizer 下跑。
    - `RenderAllocTests` 的兩案照第 10 節第 3 項改成分段計數（`Render` 一段、提交口的呼叫一段）。
 2. **loader（第 5 節）**：`WavLoader`、`WavLoaderCode`、`AssetTypeName<Clip>`；登記檔與 CMake（第 2 題）。
@@ -277,12 +283,18 @@ public:
    - `Clip` 的複製、`Play` 的呼叫（回收環是空的時）在呼叫的執行緒上配置數為 0（`gyo_audio_alloc_tests`）。
    - `Clip::Make(vector&&)` 不複製：`View().samples.data()` 等於傳進去的 vector 的 `data()`。
    - 經 `AssetStore` 載好的 clip（`Read<Clip>`）與它的複製，`View().samples.data()` 相等。
-3. **音訊執行緒不放掉**（新，DI 7；分段計數：`Render` 一段、提交口的呼叫一段、各在自己的執行緒）：外面的持有者在播放中放掉最後一份參照之後，每一段 `Render` 的配置數與釋放數都是 0，直到播放結束之後；提交口的下一次呼叫那一段的**釋放數等於單獨解構一個同樣大小的 clip 的釋放數**（在測試裡先量好）。結局逐一一案：準時播完、晚到播完、沒有 voice、停在開始前（`Stop` 裡當場釋放 voice）、停在之後的 frame（在混音裡結束）、晚到的停止（在 block 開頭結束）。「環滿」不經過音訊執行緒（`Play` 當場失敗），另一案判「格當場放回、釋放落在這次呼叫」。
-4. **表與回收環繞過兩圈**（新）：`queueCapacity = 1`、`maxVoices = 1`（表 3 格），播放、結束、取空跑到格號與兩個環都繞過兩圈以上，每輪外面的持有者先放掉；每輪都照第 3 項判，最後每個格都空、堆疊滿。
+3. **音訊執行緒不放掉、提交口不早放**（新，DI 7；分段計數：`Render` 一段、提交口的呼叫一段、各在自己的執行緒）：外面的持有者在播放中放掉最後一份參照之後——
+   - (a) **還沒結束時**提交口呼叫一次（`Stop(無效 handle)`），那一段釋放數為 0；之後每一段 `Render` 的配置數與釋放數都是 0，輸出和預期**逐樣本相同**（格號還得太早、取樣被釋放時這裡失敗或讀到垃圾）；
+   - (b) **結束之後**提交口的下一次呼叫那一段的**釋放數等於單獨解構一個同樣大小的 clip 的釋放數**（在測試裡先量好）。
+   - 結局逐一一案：準時播完、晚到播完、沒有 voice（只有 (b)）、停在開始前（`Stop` 裡當場釋放 voice）、停在之後的 frame（在混音裡結束）、晚到的停止（在 block 開頭結束）。
+   - (b) 的「下一次呼叫」做成五種各一段：`Play`（別的 clip）、`Stop`（有效 handle）、`Stop`（無效 handle）、`StopAll`、`~Submitter`。
+   - 「環滿」不經過音訊執行緒（`Play` 當場失敗）：請求是最後一個持有者（`PlayRequest{std::move(clip), …}` 的暫存），計數段包住整個敘述，判「釋放落在這次呼叫」；另一段判「連續環滿丟掉超過表的格數次之後 `Render` 一次，下一次 `Play` 回有效 handle」（環滿那一支沒把格號放回堆疊時，表會漸漸用光、斷言）。
+4. **表與回收環繞過兩圈**（新）：`queueCapacity = 1`、`maxVoices = 1`（表 3 格），輪數超過表的格數的兩倍；每輪外面的持有者先放掉；有**只用 `Play` 取空**的輪、有**沒有 voice** 的輪（voice 佔著時再送）。判：全程每次 `Play` 回有效 handle、`droppedQueueFull == 0`、沒有斷言，每輪照第 3 項 (b) 判釋放數。另一案：`queueCapacity = 65536`、`maxVoices = 1`，用到格號 65536 以上的一格播完、格號回到同一個提交口（租約標記的編碼）。
 5. **ThreadSanitizer、AddressSanitizer**（本機手動組態）：「plays and drops clips while another thread renders」（生產者每輪放掉自己手上的 clip，ASan 抓音訊執行緒讀已釋放的取樣）、換手案、既有壓力測試沒有報告；和第 0 步比。
 6. **loader**（新，DI 12）：
-   - 第 5.2 節規則 1～7、9 各一案、碼對得上；同時違反兩條的三案（例：22050 Hz 的 24 位元 → `NotPcm16`；缺 `data` 而 `fmt ` 不足 16 → `MissingChunk`；聲道 3 而 `data` 奇數 → `BadFormatChunk`），判先後。
-   - 規則 8：經 `AssetStore`、`byteLimits` 設得比檔小 → `TooLarge`。
+   - 第 5.2 節規則 1～8 的**每個條件**各一案、碼對得上（規則 3a 兩種 chunk、3b 兩種 chunk、規則 5 格式碼與位元數、規則 8 的五個條件）。
+   - 同時違反兩條的五案，判先後：22050 Hz 的 24 位元 → `NotPcm16`（5 先於 8）；缺 `data` 而 `fmt ` 不足 16 → `MissingChunk`（3b 先於 4）；聲道 3 而 `data` 奇數 → `PartialSample`（7 先於 8）；第二個 `fmt ` 在前、越界的 chunk 在後 → `Truncated`（2 走完才判 3）；`fmt ` 兩個且沒有 `data` → `DuplicateChunk`（3a 先於 3b）。
+   - 大小：經 `AssetStore`、`byteLimits` 設得比檔小 → asset 的 `TooLarge`，loader 不被呼叫。
    - master 的 `player_footstep.wav`（34 KB；從 origin/master 3b411e21 複製進 fixture，git 物件相同）原樣載得了：frame 數、聲道數、取樣與檔案位元組相同。4 個檔全載的結果記在證據（4 個檔頭同形，放 1 個就夠，§14.5）。
    - `LIST` chunk 跳過、奇數長度 chunk 的補位、最後一個 chunk 缺補位、不到 8 位元組的尾巴。
    - 同樣的位元組兩次同結果、兩條執行緒各 1000 次同結果（AS-3）。
@@ -291,12 +303,16 @@ public:
 
 **突變**（AGENTS §14.5，只跑相關的；預期失敗在立清單時逐條寫案名）：
 - **改之前**跑第 0 節列的突變當基準。
-- **退役**：第 0 節列的 20 條逐條判，寫「隨哪個機制拿掉」或「守的性質由哪條新突變接手」。TSAN 的 `-handback-relaxed`、`-reclaim-relaxed` 守的是交還的記憶體順序，改寫到回收環兩端（release／acquire 放寬成 relaxed，預期第 5 項的 ThreadSanitizer 案失敗）。
+- **退役**：第 0 節列的 22 條逐條判，寫「隨哪個機制拿掉」或「守的性質由哪條新突變接手」。TSAN 的 `-handback-relaxed`、`-reclaim-relaxed` 守的是交還的記憶體順序，改寫到回收環兩端（release／acquire 放寬成 relaxed，預期第 5 項的 ThreadSanitizer 案失敗）。`au-ctl-stop-no-drain` 守的性質（`Stop` 釋放的 voice 的格號要在下一個播放重用它之前取走，否則結束清單滿、格號遺失）還在，改寫到 (E-2) 的同一處（預期第 4 項的斷言或有效 handle 判定失敗）。
 - **新增**（每條寫只有它捕的誤；`guards` 指 DI 7、DI 12 的條文）：
-  - 取空時不清那一格（預期第 3 項的「下一次呼叫的釋放數」案失敗）；
-  - 沒有 voice 的播放不還格號（預期第 4 項的「堆疊滿」案失敗）；
-  - voice 結束不還格號（同上，另一案）；
-  - `Play` 拿格時不先取空（預期第 4 項在表 3 格時用光、回無效 handle）；
+  - voice 起播時就還格號（預期第 3 項 (a) 失敗）；
+  - 停止 frame 在未來時就還格號（預期第 3 項「停在之後的 frame」的 (a) 失敗）；
+  - 取空時不清那一格（預期第 3 項 (b) 失敗）；
+  - 沒有 voice 的播放不還格號（預期第 4 項的「沒有 voice」輪斷言或回無效 handle）；
+  - voice 結束不還格號（預期第 4 項失敗，另一輪）；
+  - `Play` 拿格時不先取空（預期第 4 項「只用 `Play` 取空」的輪失敗）；
+  - 環滿時不把格號放回堆疊（預期第 3 項「連續環滿之後的 `Play`」失敗）；
+  - 租約標記照舊 `<< 16`（預期第 4 項的 65536 那一案失敗）；
   - `Clip` 的複製改成深複製（預期第 2 項的 `data()` 相等案失敗）；
   - loader：取樣率寫死 48000、不查位元數、不查格式碼、不查 block align、`data` 奇數照收、接受越界的 chunk、接受重複的 chunk、不跳過補位（各預期第 6 項對應的案）。
 - 碰到的突變清單受一次別的模型（Fable／high）的敵對式檢查（§14.2）；合併前在背景跑一次完整清單（`mutation-rerun-scope`）。
@@ -334,7 +350,7 @@ public:
 
 - 實作段的測試、判定卡住：AGENTS §14 冒頭的三條。
 - 第 10 節第 1 項的雜湊常數必須改才通過（代表 (E) 改了混音，不是只改 clip 的來源）。
-- 參照表用光的保險（4.1 第 2 點）在任何測試裡被觸發（代表第 5 點的界不成立）。
+- 參照表用光的斷言（4.1 第 2 點）在任何測試裡觸發（代表第 5 點的界不成立）。
 - 發現 gyo2 上有 audio 的其他使用者（第 6 節第 4 項的掃描有命中）。
 
 ## 15. 修訂 0 檢查的處理（全部採用）
@@ -350,7 +366,7 @@ public:
 | S-5 §14.4、15 案、換手案 | 第 0 節、第 9 節改 15 案；1～5 進合併前核准頁、使用者核准、Opus／high 檢證；換手案改寫保留 |
 | S-6 範圍的限界 | 新增第 13 節 |
 | S-7 奇數長度、聲道 0、突變 | 5.2 加規則 7、判的先後、聲道數在 block align 之前；4.1 那句改成「clip 的規則在 `Clip::Make`，位元組層的在 loader」；突變加取樣率寫死、奇數照收 |
-| S-8 64 MiB | 改成卡片判並寫實際的根據；大小寫成 5.2 規則 8；C-5 拿掉 |
+| S-8 64 MiB | 改成卡片判並寫實際的根據；大小寫進 5.2（修訂 2 移出編號，R1-S-4）；C-5 拿掉 |
 | S-9 前提表 | 加 P9（11-22 判作者的兩件、本批提議收回）、P12（`ClipBank` 填不進是卡片的前提）；P8 標卡片的前提；「推翻的舊決定」加 audio 頁 5.2、5.4、5.5 |
 | S-10 規則的模糊處 | 尾巴忽略、判的先後、`fmt ` 不足 16 改 `BadFormatChunk`、Version 的放寬寫法；第 1 節改成「訊息說」 |
 | S-11 CCR-9、註解、RC | 6.4 與第 9 節第 3 步加；4.1 與第 12 節寫 RC 1、RC 6 的狀態 |
@@ -363,3 +379,22 @@ public:
 | N-7 | 時間估計寫明不含的回合 |
 | N-8 | 10.3 分兩種停止、環滿另判 |
 | N-9 | 預期失敗在立清單時寫案名；TSAN 的兩條改寫到回收環兩端 |
+
+## 16. 修訂 1 窄複查的處理（全部採用）
+
+| 檢查 | 處理 |
+|---|---|
+| R1-S-1 沒有「格號還得太早」的判定與突變 | 10.3 加 (a)：還沒結束時提交口呼叫一次、釋放數 0、輸出逐樣本相同；突變加「起播時就還」「停止 frame 在未來時就還」；4.1 (E-2) 寫明危險換到這裡 |
+| R1-S-2 表用光併進 `droppedQueueFull` | 4.1 第 2 點改成生產端的 `GYO_ASSERT`；10.4 改成看得到的判定（每次有效 handle、`droppedQueueFull == 0`、沒有斷言）；10.3 加「連續環滿之後的 `Play`」與突變「環滿時不放回堆疊」；第 14 節改成「斷言觸發」 |
+| R1-S-3 租約標記放不下格號 | 4.1 第 3 點改編碼（提交口加一 << 32 ｜ 32 位元格號）並 `static_assert`；10.4 加 `queueCapacity = 65536` 一案；突變「照舊 `<< 16`」 |
+| R1-S-4 規則 8 的位置、規則 3 的兩碼、規則 2 與 3 的先後 | 大小移出編號、寫成表前一句；規則 3 拆成 3a（`DuplicateChunk`）、3b（`MissingChunk`）；寫明規則 2 走完整串才判 3；10.6 加兩個先後案 |
+| R1-S-5 五個取空點、`~Submitter` 的契約 | 10.3 (b) 五種各一段；10.4 加只用 `Play` 取空的輪與沒有 voice 的輪；第 7 節加執行緒契約含 `~Submitter`；4.1 第 4 點寫被搬走的跳過 |
+| R1-S-6 第 0 節漏 3 多 1 | 改成 22 條；`au-ctl-reuse-ended-comes-back` 拿出；`au-ctl-stop-no-drain` 寫接手 |
+| R1-N-1 | 命令帶 view 的值，音訊執行緒不讀表（4.1 第 2 點） |
+| R1-N-2 | 聲道數留給 `Clip::Make`（規則 8），規則 6 只比 block align；例子改成 `PartialSample` |
+| R1-N-3 | 10.6 改成「每個條件各一案」 |
+| R1-N-4 | 10.3 的環滿案寫明最後一個持有者與計數段 |
+| R1-N-5 | 第 8 節第 2 列改成「DI 7 加共用所有權要求它」 |
+| R1-N-6 | 第 9 節第 1 步：空 `Clip` 的斷言接手「在任何計數之前斷言」，改寫 `au-review-unload-counts-before-assert` |
+| R1-N-7 | 第 0 節：`expect` 的正規式失配也一起列 |
+| R1-N-8 | 4.1 第 5 點補兩個暫時的位置 |
