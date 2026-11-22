@@ -142,7 +142,7 @@
 |---|---|---|
 | asset（`gyo2-asset`，實作中，工作樹未提交） | `NativeFileUri`、`NativeFileSystem::Open`、`IStream`；自寫讀迴圈；不用 `Vfs`、`MountPoint`、`ReadAllBytes`；5.6 的 X-1 執行器 | 用到的介面都留下。經主會話轉告三件事：Q1 的結論；Q2 的結論（asset 5.12 引的 `MountPoint.hpp`、`Vfs.hpp` 行號會失效）；I6b 補了 `TooLarge`，可以改用 `ReadAllBytes` |
 | 讀檔＋存檔版本（`gyo2-restore-impl`） | 宣告 19.6：作者讀寫存檔用 `WriteFileAtomically`、`ReadAllBytes`；存檔目錄由本卡問使用者 | 兩個 API 留下（已回覆，主會話轉告）；存檔目錄是 Q3 |
-| 網路 Module（`gyo2-net-module`） | 不用 threads、io（宣告第 353～357 行） | 無影響；它提到的 `SpanStream` 會被拿掉，要用時照 datagram 的需要重新設計 |
+| 網路 Module（`gyo2-net-module`） | 宣告修訂 2（aca5fd46）第 7 節，2026-11-22 經主會話轉來：(1) `core/os` 加非阻塞的 UDP socket（網路的 Q5），threads／io 不必提供；(2) 收發在套用點的 System 裡、跑在那個 World 的執行緒上，不開 IO 執行緒；(3) 傳輸物件放 Product 一份的共用處，之後若改用專門的 IO 執行緒，同步由傳輸物件自己負責；(4) 不需要 threads 的新原語；(5) 編碼與解碼用 `std::span<std::byte>`，不依賴 `core/io` 的 stream | **已對過，沒有衝突**：(1) 是 os 層的事，不在本批；(2)(4) 和 T5、Q1 無關，Q1 不論選哪個，網路都不用池；(3) 之後若要專門的 IO 執行緒，用現有的 `RoleThread` 就夠，不必加原語；(5) I5 拿掉的 `SpanStream` 網路本來就沒用，日後要用時照 datagram 的需要重新設計 |
 | audio 重審（`gyo2-audio-review`） | 不用 | 無影響 |
 | 日誌（目前沒有在跑的卡） | `RoleThread` | 不改名，無影響 |
 
