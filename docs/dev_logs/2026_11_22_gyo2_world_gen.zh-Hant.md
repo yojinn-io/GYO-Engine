@@ -16,7 +16,7 @@
 - `engine/orchestration/include/engine/orchestration/WorldGeneration.hpp`、`src/WorldGeneration.cpp`：`WorldGeneration`（`Generating()`、`Hold()` 寫成 `held = generating`）、逐欄雜湊、名字固定的 run 條件 `WhileGenerating()`／`AfterGenerating()`。
 - `Product`：每個 World 在任何登記單位的 `Build` 之前登記 `WorldGeneration`（和預設骨架同一次 `Register`，owner `orchestration`）；`MakeExecutor` 建好 World 時放 `{true, false}`（在準備函式之前，啟動與替換共用）；`RunFrame` 改成逐 World 呼叫私有的 `RunRound`（前處理 → 每幀清單 → 判定）；`RunSchedule` 不碰生成的狀態；`Product::Generating(name)` 讀 Resource。
 - 案例：`orchestration.O-14`（`WorldGenTests.cpp`：C1～C3、C5～C12、C17、C18）；`world_time.generation`（`WorldGenTimeTests.cpp`：C4 兩種不 tick 的寫法）。
-- 突變 `wg-` 6 個（清單 `orchestration_mutations.json`）。和宣告的差異：宣告列的 `wg-skeleton-off-unregistered` **沒有立**——拿掉登記時，`MakeExecutor` 對沒登記的型別 `SetResource` 會讓 Kernel 的斷言中止程式，抓不到識別得出的失敗（§14.2），性質由 C11 與審查守。
+- 突變 `wg-` 6 個（清單 `orchestration_mutations.json`）。宣告列的 `wg-skeleton-off-unregistered` 當時沒有立，理由寫「Kernel 的斷言中止程式，抓不到識別得出的失敗」；設計審查指出清單已有先例（`g8-frame-error-ignored`：Kernel 斷言文字＋限定案例），照先例補立（見「設計審查」），和宣告不再有偏差。
 
 ### merge #269（fb92b179）
 
@@ -41,11 +41,28 @@
   - find 被本批改到而重寫的既有突變 5 個（`g8-frame-list-reversed`、`g8-frame-error-ignored`、`or-skeleton-not-declared`、`or-skeleton-off-ignored`、`or-skeleton-after-units`），連同 find 落在改動範圍的 `or-runframe-no-gameinit`、`sc-lower-bound-not-moved`、`or-guard-real-o4-module-include`、`or-guard-real-o3-plan-read`、`rb-r3-links-more`：10/10 killed。
   - Kernel 清單裡靠配發器行為的 23 個（`what` 或 find 提到 allotter、或 cases 是 J-8）：第一次 22/23，`ks-hash-summary-resource-bytes` 存活。它守 Kernel 自己的性質（World 摘要對 Resource 呼叫逐型別雜湊，DI-KS 27），原本由 Kernel 的 D-9 padding 案例抓；第 1 步把那個案例整個搬去 `entity_ids`，Kernel 就沒有案例抓它了（搬過頭）。改成 **D-9 案例在 Kernel 留一份**（用替身配發器，守 Kernel 的摘要路徑），`entity_ids` 那份守 `RangeAllotter` 自己的雜湊函式；之後 killed，23/23。和宣告第 10 節第 3 列（「D-9 搬到 entity_ids」）的差異：留一份、另加一份，不是搬走，沒有緩的面。
 - 加的突變（§14.5 第 8 點）：`ei-prepare-overwrites`、`ei-not-default`、`ei-links-more`、`wg-` 6 個，共 9 個；每個都寫了它獨抓的誤り與 `guards`。搬家 3 個（id 不變）。
-- 證據：本機的建置與突變記錄在工作樹的 `build/evidence-local/`（git 不追蹤，這台機器）；別家對照與宣告的兩次檢查報告在主 checkout `build/evidence/gyo2-world-gen/`。
+- 證據：本機的突變與 ctest 記錄在主 checkout `build/evidence/gyo2-world-gen/impl/`（git 不追蹤，這台 macOS Intel 機器）；別家對照與宣告的兩次檢查報告在主 checkout `build/evidence/gyo2-world-gen/`。
+
+## 設計審查（Fable 5.2／high，唯讀，HEAD cdfc304b）
+
+報告：主 checkout `build/evidence/gyo2-world-gen/impl/design-review-fable.md`。總評：生成的狀態只有一個來源；配發器是「Kernel 一個公開出口＋Module 注入實現」；沒有需要推翻設計的問題。建議改 6 條，全部照改：
+
+| # | 指出 | 處理 |
+|---|---|---|
+| A1 | `RangeAllotter.hpp`（與測試替身）直接 include `entity_store`，靠 Kernel 的 PUBLIC link 傳遞，EI-3 的連結守衛看不到 | 改用 `Kernel::EntityId`（include Kernel 的公開標頭），EI-3 寫明 |
+| A2 | Kernel 的註解點名上層 Module；concept 的說明用「範圍、不回繞」描述所有配發器 | 註解改成中立 |
+| A3 | O-14 寫進私有函式名、一行實作、作者的做法 | O-14 只留編排層保證的事，作者的做法指說明頁第 14 節；EI-3 守衛欄改成已立 |
+| A4 | `wg-skeleton-off-unregistered` 不立的理由站不住 | 照先例立起來（cases 限 C11，expect 是 Kernel `ResourceIdOf` 的斷言文字）；見下面的突變結果 |
+| A5 | 和 PR #270 合併時，最省事的解衝突會把「進」放到前處理之前，只有 C19 抓得到 | `RunRound` 裡加註解標出進／出的位置；未結事項列 C19 |
+| A6 | 讀檔移下界的範例把預設上限抄成字面值 | scenario 第 6 段與說明頁改成讀現有值的 `last` |
+
+改後：受影響的突變（`wg-skeleton-off-unregistered`、`wg-held-not-cleared`、`wg-ends-while-held`、`entity_ids` 清單 6 個）9/9 killed（主 checkout `build/evidence/gyo2-world-gen/impl/mut-review.log`）；`ctest -L "cpu|shader"` 167/167。
+
+另順手改的（記下的那一段）：B1 測試替身的註解不再宣稱「和 `RangeAllotter` 同語意」；B6 `RunRound` 的回傳型別照 N13 寫 `Base::Result`。其餘記下的不改，交之後的批（主會話轉）：B3 作者寫 `WorldGeneration` 就能結束或重新進入生成，`Product::Regenerate` 不必做（狀態機那一批問「World 內換關卡」時的答案）；B6 `RunRound` 的 entry 寫死 `"RunFrame"`（交換點的入口共用時加參數）、`kSkeletonOwner`／`own0` 名字已過時（交主會話判）；B7 預設都帶 `entity_ids` 與 `rollback` 時配發器沒有登記成可回滾，回滾可向 Kernel 問哪個 Resource 是配發器；B8 預設範圍佔滿 32 位元 index，網路複製的外來編號也要先動範圍；B9「條件擋住的讀者拉住保留」是事件游標契約的問題，狀態機那一批提；B10 只用 `RunSchedule` 推的 runner 推不動生成；B11 C16 以「全預設 Module 不給設定就能建 World」為前提；B12 換自訂配發器要把其他單位全列出來；B13 `Hold()` 要 `ResMut`，並行時會串行化。
 
 ## 合併前（未完成）
 
 - CI L1 三平台（PR 上）。
-- 設計審查（批次表〈每批的設計審查〉，Fable／high，唯讀）。
+- C19（交換函式的進出包住生成中的一輪）：和 PR #270 誰後合併誰補；合併時進、出放進 `RunRound`，「進」在前處理之後、「出」在判定之後（設計審查 A5）。
 - §14.4：第 10 節的 DI 守衛搬家（J-8 兩個突變、`ks-hash-allotter-as-bytes`、D-9 的 padding 案）請使用者核准；檢證者 Fable／high。
 - 合併前核准：第 7 節的最終文字。

@@ -406,18 +406,18 @@ struct AllotterOps {
 
 } // namespace Detail
 
-// What Registrar::Allotter<T> requires of an allotter resource (spec A.1, W-9):
-// Allot gives the next id or nothing when the range is used up (an error is
-// reported, never a wrap); Owns says whether an id is in this World's range
-// (a SpawnWithId with one is dropped at the sync point: spec F-13).
+// What Registrar::Allotter<T> requires of an allotter resource (spec A.1):
+// Allot gives the next id, or nothing when it has none to give (the kernel
+// reports AllotterExhausted); Owns says whether an id is one this allotter gives
+// (a SpawnWithId with one is dropped at the sync point: spec F-13). The
+// strategy (a range, recycling, ...) is the declared type's.
 template <class A>
 concept EntityAllotter = requires(A allotter, const A& constant, EntityId id) {
     { allotter.Allot() } -> std::same_as<std::optional<EntityId>>;
     { constant.Owns(id) } -> std::same_as<bool>;
 };
 
-// The kernel ships no allotter type (DI-KS 4): the default strategy, RangeAllotter, is in the entity_ids
-// Module (engine/entity_ids/RangeAllotter.hpp); a product may declare its own.
+// The kernel ships no allotter type (DI-KS 4): a Module or a product declares one.
 
 namespace Detail {
 

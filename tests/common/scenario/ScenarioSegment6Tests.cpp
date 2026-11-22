@@ -258,7 +258,9 @@ TEST_CASE("scenario segment 6: S6-1 to S6-5 generate the map paused, walk, save,
     O::ReplaceRequest request;
     request.extra = [save](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(save);
-        w.SetResource(E::RangeAllotter::Of(save.next, 0xFFFF'FFFFULL));
+        // The Module's prepare function already put the World's range (EntityIdsOptions): keep its last.
+        const K::EntityId last = w.Resource<E::RangeAllotter>()->last;
+        w.SetResource(E::RangeAllotter::Of(save.next, last));
         return {};
     };
     REQUIRE(static_cast<bool>(p->ReplaceWorld("Main", std::move(request))));

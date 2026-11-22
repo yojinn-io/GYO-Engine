@@ -549,12 +549,13 @@ Base::Result<void, OrchestrationError> Product::RunFrameSteps() {
     return {};
 }
 
-::GYO::Engine::Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot) {
+Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot) {
     Kernel::World& world = slot.executor->GetWorld();
     const WorldGeneration* before = world.Resource<WorldGeneration>();
     const bool generating = before != nullptr && before->generating;
     // A generating frame starts with nobody holding.
     if (generating) world.SetResource(WorldGeneration{.generating = true, .held = false});
+    // The exchange functions' "in" goes here, after the step above (world-gen declaration 5.1; exchange W-2).
     for (const std::string& schedule : slot.frame) {
         if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
     }
@@ -563,6 +564,7 @@ Base::Result<void, OrchestrationError> Product::RunFrameSteps() {
         const WorldGeneration* after = world.Resource<WorldGeneration>();
         if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});
     }
+    // The exchange functions' "out" goes here, after the judgement.
     return {};
 }
 

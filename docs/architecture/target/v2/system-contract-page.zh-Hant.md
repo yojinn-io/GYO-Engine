@@ -485,7 +485,7 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **放行的三種情形（要小心）。** 「沒人 `Hold()` 就結束」在下面三種情形會讓 World 半成品開跑，沒有任何訊號：(1) 生成用的 System 被別的條件跳過；(2) 提早回 Ok、忘了 `Hold()`；(3) **幀內先後**——工作在這一幀中途才產生（例：地圖做完那一幀才發資產請求），而等它的 System 排在前面、還沒看到。對 (3)：產生工作的 System 那一幀自己也 `Hold()`，或把等的 System 排在產生的之後。
 
-**讀檔。** 讀檔一律在新的 World（`ReplaceWorld`）。存檔資料與配發器的下界在 `extra` 準備函式裡放（`SetResource(EntityIds::RangeAllotter::Of(存檔的下一號, 上限))`；預設的配發器 Module 只在沒有值時放預設範圍，`extra` 在它之後跑，會蓋掉）；讀檔 System 放在 `WhileGenerating()` 的 set，存檔大就分幾幀、`Hold()`。時間的放回（`RestoreFixedTime`、`Tick`）也在 `extra`，不要放在生成期間的 System 裡（WT-3）。發現存檔壞了不要回 `Err`（那會結束 `Product`）：把錯寫進自己的 Resource，runner 在兩次入口之間讀它、改發替換回主選單；不要用 `Message`，沒有讀者拉住時那次 Run 結束就被修剪。
+**讀檔。** 讀檔一律在新的 World（`ReplaceWorld`）。存檔資料與配發器的下界在 `extra` 準備函式裡放（`extra` 跑的時候預設的配發器 Module 已經放好這個 World 的範圍，讀它的上限再移下界：`const auto last = w.Resource<EntityIds::RangeAllotter>()->last; w.SetResource(EntityIds::RangeAllotter::Of(存檔的下一號, last));`；Module 只在沒有值時放預設範圍，`extra` 在它之後跑，會蓋掉）；讀檔 System 放在 `WhileGenerating()` 的 set，存檔大就分幾幀、`Hold()`。時間的放回（`RestoreFixedTime`、`Tick`）也在 `extra`，不要放在生成期間的 System 裡（WT-3）。發現存檔壞了不要回 `Err`（那會結束 `Product`）：把錯寫進自己的 Resource，runner 在兩次入口之間讀它、改發替換回主選單；不要用 `Message`，沒有讀者拉住時那次 Run 結束就被修剪。
 
 **生成用的 System 不讀 `Message`。** 生成結束後 `WhileGenerating()` 的 set 不再跑，裡面讀 `Message` 的 System 的游標會一直拉住保留；要交給遊戲邏輯的結果放 Resource。
 

@@ -3123,6 +3123,20 @@
    "target": "gyo_orchestration_tests",
    "cases": "O-14:*",
    "expect": "\\[wg\\-c18\\-held\\]"
+  },
+  {
+   "id": "wg-skeleton-off-unregistered",
+   "what": "WorldGeneration is registered only with the default skeleton: a World with the skeleton off has none (O-2 'the skeleton on or off alike'). Only it catches the registration not depending on the skeleton; like g8-frame-error-ignored, the identifiable failure is the kernel's assertion in that one case, when the World built with the skeleton off is given its WorldGeneration",
+   "guards": [
+    "orchestration O-2",
+    "orchestration O-14"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n",
+   "replace": "        if (world.skeleton == ScheduleSkeleton::Default) {\n            registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n            DeclareDefaultSkeleton(registrar);\n        }\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "O-14: with the skeleton off*",
+   "expect": "GYO_ASSERT failed: entry != nullptr && entry->role == TypeRole::Resource"
   }
  ]
 }

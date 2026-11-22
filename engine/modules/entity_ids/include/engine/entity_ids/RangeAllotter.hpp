@@ -6,14 +6,14 @@
 // reports exhaustion and never wraps; no reset. It is one strategy behind the kernel's EntityAllotter concept
 // (Registrar::Allotter<T>); the kernel ships none (DI-KS 4). A product may declare its own type instead.
 
-#include "engine/entity_store/EntityId.hpp"
 #include "engine/kernel/Hash.hpp"
+#include "engine/kernel/Registry.hpp"
 
 #include <optional>
 
 namespace GYO::Engine::EntityIds {
 
-using EntityId = EntityStore::EntityId;
+using EntityId = Kernel::EntityId;
 
 struct RangeAllotter {
     EntityId first = 0;

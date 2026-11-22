@@ -26,7 +26,7 @@ GYO::Base ◄── GYO::Kernel ◄── GYO::Orchestration ◄── GYO::Enti
 
 ## Design Invariants
 
-守衛欄：行為測試（`entity_ids.*` 的 ctest 群組、突變 `ei-` 與搬來的三個）照常是守衛。綁實作方式的守衛（`gyo_expect_links`）在 scenario 第 6 段通過之後才立（AGENTS §3「ガードを立てる時期」；宣告第 9 節第 4 步）。
+守衛欄：行為測試（`entity_ids.*` 的 ctest 群組、突變 `ei-` 與搬來的三個）照常是守衛。綁實作方式的守衛（`gyo_expect_links`）在 scenario 第 6 段通過之後立（AGENTS §3「ガードを立てる時期」；宣告第 9 節第 4 步）。
 
 <a id="ei-1"></a>
 **EI-1 職責。** 每個選了它的 World：登記 `RangeAllotter` 為那個 World 的配發器；準備函式在沒有值時放 `EntityIdsOptions` 的範圍（預設 `[1, 2^32−1]`），已經有（帶過去的）就不蓋。不做回收、回滾登記（作者的責任，回滾 R-2 前提 6）、網路的編號對映、存檔。Kernel 與編排層不認得它。同時選它又登記另一種配發器是 Kernel 既有的 RE2，不另加檢查。守衛：`entity_ids.module`「with entity_ids an author spawns without declaring an allotter」「each World allots from its own range」「a carried-over allotter is not replaced」、`entity_ids.default`（產品的登記單位表由真的 `config/modules.csv` 產生）；突變 `ei-prepare-overwrites`、`ei-not-default`。
@@ -35,7 +35,7 @@ GYO::Base ◄── GYO::Kernel ◄── GYO::Orchestration ◄── GYO::Enti
 **EI-2 範圍配發器。** `RangeAllotter`：一個範圍 `[first, last]`，單調、不重用、用完回 `nullopt`（Kernel 報 `AllotterExhausted`）、不回繞、沒有 `Reset`；`Owns` 是範圍內。逐欄雜湊（padding 不進 World 摘要）。守衛：`entity_ids.allotter` 兩案；突變 `we-j8-allotter-wraps`、`we-j8-allotter-reset`、`ks-hash-allotter-as-bytes`（隨型別從 Kernel 的清單搬來，id 不變）。
 
 <a id="ei-3"></a>
-**EI-3 依賴。** 只依賴 orchestration、kernel、base；不依賴回滾、權威、時間。守衛：`gyo_expect_links`（第 4 步立；在那之前靠本頁與審查）。
+**EI-3 依賴。** 只依賴 orchestration、kernel、base；不依賴回滾、權威、時間。守衛：`gyo_expect_links(gyo_entity_ids GYO::Base GYO::Kernel GYO::Orchestration)`（`tests/common/entity_ids/CMakeLists.txt`，configure 時檢查；scenario 第 6 段通過後立），突變 `ei-links-more`。只經 Kernel 的公開標頭取 `EntityId`（`Kernel::EntityId`），不直接 include `entity_store`。
 
 ### Replacement Criteria
 
