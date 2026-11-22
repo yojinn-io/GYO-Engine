@@ -24,7 +24,7 @@ namespace GYO::Engine::IO::Stream {
     public:
         explicit StreamWriter(IStream& s);
 
-        IOResult<void> WriteAllBytes(GYO::Engine::Base::Span<const std::byte> bytes);
+        IOResult<void> WriteAllBytes(Base::Span<const std::byte> bytes);
         IOResult<void> WriteAllText(std::string_view text, const TextWriteOptions& opt = {});
 
         IOResult<void> WriteU8(std::uint8_t v);

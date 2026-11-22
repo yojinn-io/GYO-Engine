@@ -211,7 +211,7 @@ namespace GYO::Engine::IO::Path {
 
     Base::Result<Uri, IOError> ParseUri(std::string_view s) {
         if (s.empty()) {
-            return Base::Err(IOError::Make(GYO::Engine::IO::IOErrorCode::InvalidPath,
+            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,
                                         "uri is empty"));
         }
 

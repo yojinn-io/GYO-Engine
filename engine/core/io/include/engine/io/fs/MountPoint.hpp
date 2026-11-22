@@ -21,13 +21,13 @@ namespace GYO::Engine::IO::FS {
         bool readOnly = false;
 
         // 例: "assets://" / "user://" のような論理スキーム
-        GYO::Engine::IO::Path::Uri mountUri;
+        Path::Uri mountUri;
 
         // 下位 FS の root（例: file:///.../assets , pak://base.pak#assets）
-        GYO::Engine::IO::Path::Uri rootUri;
+        Path::Uri rootUri;
 
         // 実体
-        std::shared_ptr<GYO::Engine::IO::FS::IFileSystem> fs;
+        std::shared_ptr<FS::IFileSystem> fs;
 
         // オプション: 書き込み先として優先したい場合
         bool preferWrite = false;

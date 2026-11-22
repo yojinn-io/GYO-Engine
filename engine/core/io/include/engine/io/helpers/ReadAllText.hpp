@@ -11,7 +11,7 @@ namespace GYO::Engine::IO::Helpers {
 
 
     inline IOResult<std::string>
-    ReadAllTextUtf8(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
+    ReadAllTextUtf8(FS::IFileSystem& fs, const Path::Uri& uri,
                     const ReadAllOptions& opt = {}) {
         auto br = ReadAllBytes(fs, uri, opt);
         if (!br) return Base::Err(br.error());
@@ -27,7 +27,7 @@ namespace GYO::Engine::IO::Helpers {
     }
 
     inline IOResult<std::string>
-    ReadAllTextUtf8(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri,
+    ReadAllTextUtf8(FS::Vfs& vfs, const Path::Uri& uri,
                     const ReadAllOptions& opt = {}) {
         auto br = ReadAllBytes(vfs, uri, opt);
         if (!br) return Base::Err(br.error());

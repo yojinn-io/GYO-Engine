@@ -5,8 +5,8 @@
 namespace GYO::Engine::IO::Helpers {
 
     inline IOResult<void>
-    WriteAllBytes(GYO::Engine::IO::FS::IFileSystem& fs, const GYO::Engine::IO::Path::Uri& uri,
-                  GYO::Engine::Base::ConstSpan<std::byte> data,
+    WriteAllBytes(FS::IFileSystem& fs, const Path::Uri& uri,
+                  Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {
         auto orw = OpenWriteTruncate(fs, uri);
         if (!orw) return Base::Err(orw.error());
@@ -25,8 +25,8 @@ namespace GYO::Engine::IO::Helpers {
     }
 
     inline IOResult<void>
-    WriteAllBytes(GYO::Engine::IO::FS::Vfs& vfs, const GYO::Engine::IO::Path::Uri& uri,
-                  GYO::Engine::Base::ConstSpan<std::byte> data,
+    WriteAllBytes(FS::Vfs& vfs, const Path::Uri& uri,
+                  Base::ConstSpan<std::byte> data,
                   const WriteAllOptions& opt = {}) {
         auto orw = OpenWriteTruncate(vfs, uri);
         if (!orw) return Base::Err(orw.error());

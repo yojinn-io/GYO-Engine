@@ -10,8 +10,6 @@ namespace GYO::Engine::Logging {
 
 namespace {
 
-namespace Json = GYO::Engine::Json;
-
 // Days since 1970-01-01 to a proleptic Gregorian date (Howard Hinnant's civil_from_days).
 void CivilFromDays(std::int64_t days, int& year, int& month, int& day) noexcept {
     days += 719468;

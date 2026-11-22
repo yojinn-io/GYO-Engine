@@ -180,7 +180,7 @@
       "id": "io-m7-mount-escape",
       "what": "A mount request with a '..' segment resolves outside the mount root",
       "file": "engine/core/io/include/engine/io/fs/MountTable.hpp",
-      "find": "            if (GYO::Engine::IO::Path::ContainsTraversal(rel)) {",
+      "find": "            if (Path::ContainsTraversal(rel)) {",
       "replace": "            if (false) {",
       "target": "engine_tests",
       "cases": "Uri:*",
