@@ -11,6 +11,7 @@
 - [world-time.zh-Hant.md](world-time.zh-Hant.md)：時間 Module（`engine/modules/world_time`）——Resource、System、取樣、和讀檔／回滾／權威的交界、Design Invariants（型別 1～3、WT-1～WT-6）與 Replacement Criteria（`v8-arch-gyo2-time-events`，最終文字在合併前核准定稿；`v8-arch-gyo2-authority-rollback` 補 WT-1 的 `Resimulation` 每次準備放 false、WT-5 的伺服器權威 tick 寫者檢查，型別 3 改成逐型別雜湊，最終文字使用者 2026-11-22 核准）。
 - [authority.zh-Hant.md](authority.zh-Hant.md)：權威 Module（`engine/modules/authority`）——權威登記、策略的插口、伺服器權威策略的啟動檢查（AU-E1～AU-E9，含從 Kernel 搬來的 Z6、Z8、D-E15）、一致性指紋、digest、G-5 的匯出；Design Invariants DI-A 1～12 與 Replacement Criteria（`v8-arch-gyo2-authority-rollback`，最終文字使用者 2026-11-22 核准）。
 - [rollback.zh-Hant.md](rollback.zh-Hant.md)：回滾 Module（`engine/modules/rollback`）——`RollbackStrategy` 的契約、公開登記、官方策略（記錄、判斷、還原、重跑、輸入的歷史、權威值的入口）；Design Invariants R-1～R-8（R-7 取代 Kernel 的 D-E16）與 Replacement Criteria（含從 Kernel 搬來的「回滾等價破裂」；`v8-arch-gyo2-authority-rollback`，最終文字使用者 2026-11-22 核准）。
+- [audio.zh-Hant.md](audio.zh-Hant.md)：混音器 Module（`engine/modules/audio`）——clip、voice、提交口與它的執行緒契約、時間點的換算、後端要求的介面；Design Invariants 1～11 與 Replacement Criteria 1～9（`v8-arch-gyo2-audio-review` 從 master 的 `audio.md` 搬來改寫，最終文字在合併前核准定稿）。
 - [json.zh-Hant.md](json.zh-Hant.md)：JSON Module（`engine/modules/json`）的 Design Invariants J-1～J-9 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-json-module` 合併前的合併前核准定稿）。
 - [logging.zh-Hant.md](logging.zh-Hant.md)：日誌（`engine/modules/logging`、`engine/modules/world_logging`）——入口 ①②③④⑥、E0 的致命路徑、JSON lines 資料契約、Design Invariants LG-1～LG-11（LG-9 退役）與 Replacement Criteria。trace 是另一個 Module（下一列）。
 - [trace.zh-Hant.md](trace.zh-Hant.md)：trace（Base 的門面 `Trace.hpp`、`engine/modules/trace`）——每執行緒的段堆疊、父子、計時、路徑，經日誌寫出；Kernel 與編排層發的段；Design Invariants TR-1～TR-7 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-trace` 的合併前核准定稿）。
@@ -65,8 +66,11 @@
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
 - [orchestration-skeleton-merge-approval.zh-Hant.md](orchestration-skeleton-merge-approval.zh-Hant.md)：同一批的合併前核准資料（判定的結果、照 G-7 改寫的第 7.1、7.2 節、第 10 節的最終文字、和宣告不同的地方、要你判的一件）。
 - [time-events-declaration.zh-Hant.md](time-events-declaration.zh-Hant.md)：`v8-arch-gyo2-time-events` 的事前宣告（第 3 批：時間 Module `engine/modules/world_time`、Kernel 拿掉時鐘、保留式 `Message` 與游標、推送式 `Event`＋`Observer`、編排層的預設骨架、scenario 第 2 段）；修訂 4，使用者 2026-11-19 動工前核准。
+- [os-user-data-declaration.zh-Hant.md](os-user-data-declaration.zh-Hant.md)：`v8-arch-gyo2-os-user-data` 的事前宣告（core/os 加「這個使用者的資料目錄」：一個公開出口、三個平台注入 base；Q1 名字一層、Q2 新建的層 0700）；修訂 1，使用者 2026-11-22 動工前核准（「Q1 (b)、Q2 (a)，開始」）。
 - [world-gen-merge-approval.zh-Hant.md](world-gen-merge-approval.zh-Hant.md)：同一批的合併前核准資料（守衛搬家的 1～5、和宣告的偏差、Design Invariants 的最終文字、設計審查與 §14.4 檢證的結論）；使用者 2026-11-22 核准「照建議，全部核准」。
 - [world-gen-declaration.zh-Hant.md](world-gen-declaration.zh-Hant.md)：`v8-arch-gyo2-world-gen` 的事前宣告（第 5 批：生成世界——每個 World 建好就從「生成中」開始、生成期間每幀照跑、作者用 run 條件 `WhileGenerating()`／`AfterGenerating()` 分開生成與遊戲邏輯、沒人 `Hold()` 就結束；預設的實體配發器 `entity_ids` Module、`RangeAllotter` 搬出 Kernel）；修訂 2，使用者 2026-11-22 動工前核准（「照建議，全部核准」）。
+- [audio-review-declaration.zh-Hant.md](audio-review-declaration.zh-Hant.md)：`v8-arch-gyo2-audio-review` 的重審報告與事前宣告（第 6 批 audio 重審：`Submitter` 不綁執行緒、時間點的邊界；修訂 2，使用者 2026-11-22 動工前核准「照建議，全部核准」；之後 `world_audio` 撤掉（`v8-arch-gyo2-world-audio-withdrawn`），作者的寫法併進 [audio.zh-Hant.md](audio.zh-Hant.md) 第 5 節，clip 的來源與音效 loader 歸 audio 那一側的小批）。
+- [audio-review-merge-approval.zh-Hant.md](audio-review-merge-approval.zh-Hant.md)：同一批的合併前核准頁（拿掉 `gyo_audio_board_readers` 的 1～5、和宣告的偏差、Design Invariants 的最終文字、判定的結果）。
 - [kernel-mutation-prune-report.zh-Hant.md](kernel-mutation-prune-report.zh-Hant.md)：`v8-arch-gyo2-mutation-prune` 的盤點與退役表（Kernel 突變清單 777 個的分類、退役候選與緩的面、增長判準草案；使用者 2026-11-18 核定，777 → 714）。
 - [kernel-mutation-subsumption-report.zh-Hant.md](kernel-mutation-subsumption-report.zh-Hant.md)：同一批第 3 步的 subsumption 檢查（714 個逐個跑全部 Kernel 測試、最小集合 469、退 51 個；使用者 2026-11-19 核准，714 → 663）。
 - [scripts/base_mutations.json](scripts/base_mutations.json)：GYO2 線 Base 的突變清單（`bs-`，`IdIssuer`／`CurrentThreadSerial`；2026-11-19 從 Kernel 的清單搬來，`v8-arch-gyo2-move-bs-mutants`）。
@@ -105,8 +109,10 @@
 - [2026_11_22_gyo2_n13_short_names.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_n13_short_names.zh-Hant.md)：`engine/` 剩下的全名照 N13「引用別的單位」改成短名（`v8-arch-gyo2-n13-short-names`；IO 指自己的拿掉、Kernel 寫 `Engine::Base::`、`HashValue` 寫 `Kernel::Hasher`；巨集保留全限定）。
 - [2026_11_22_gyo2_world_gen.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_world_gen.zh-Hant.md)：第 5 批 生成世界（生成中、`WorldGeneration`、`WhileGenerating()`／`AfterGenerating()`）與預設的實體配發器 `entity_ids`（`RangeAllotter` 搬出 Kernel）；使用者 2026-11-22 合併前核准，合併待使用者說。
 - [2026_11_22_gyo2_au_z6_survivor.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_au_z6_survivor.zh-Hant.md)：權威 Module 的突變 `au-z6-skipped-counted` 存活的原因（61d6f72c 起突變指定的 AU-E8 一例因 Resource 輸入另有歷史而失去檢出力）與修正（突變改接既有的 `every mount skipped`；`v8-arch-gyo2-au-z6-survivor`）。
+- [2026_11_22_gyo2_audio_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_audio_review.zh-Hant.md)：第 6 批 audio 重審。
 - [2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md)：事件游標的重評——帶條件或不常跑的讀者交給作者、System 契約說明頁第 15 節、Kernel RC 24、CCR-7（`v8-arch-gyo2-event-cursor-reeval`）。
 - [2026_11_22_gyo2_threads_io_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_threads_io_review.zh-Hant.md)：threads、io 重審（`v8-arch-gyo2-threads-io-review`；`WorkerPool`、io 縮減、`TooLarge`、io DI 5 刪除與 DI 6）。
+- [2026_11_22_gyo2_os_user_data.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_os_user_data.zh-Hant.md)：core/os 加 `OS::Files::UserDataDirectory`（`v8-arch-gyo2-os-user-data`；三個平台經 `Detail::Platform::UserDataBase()` 注入 base、組合只寫一次；名字一層、新建的層 0700）。
 - [2026_11_22_gyo2_state_machine.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_state_machine.zh-Hant.md)：狀態機 Module（第 5 批，宣告修訂 8）。
 
 ## 沒有搬過來的

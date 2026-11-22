@@ -14,8 +14,8 @@ enum class AudioErrorCode : std::uint16_t {
     InvalidConfig = 2,
     // Every submitter slot of the mixer is taken.
     TooManySubmitters = 3,
-    // The output backend could not start audio or open the playback device.
-    DeviceUnavailable = 4,
+    // 4 was DeviceUnavailable, an output backend's error; it moved out with the
+    // backend (v8-arch-gyo2-audio-review). Values are not renumbered.
     // Every clip slot of the submitter is loaded or not yet handed back.
     NoClipSlot = 5,
 };
@@ -25,7 +25,6 @@ enum class AudioErrorCode : std::uint16_t {
     case AudioErrorCode::InvalidClip:   return "InvalidClip";
     case AudioErrorCode::InvalidConfig: return "InvalidConfig";
     case AudioErrorCode::TooManySubmitters: return "TooManySubmitters";
-    case AudioErrorCode::DeviceUnavailable: return "DeviceUnavailable";
     case AudioErrorCode::NoClipSlot: return "NoClipSlot";
     }
     return "Unknown";

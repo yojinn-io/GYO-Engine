@@ -14,10 +14,11 @@ every tool reaches the operating system through neutral APIs, so none of them br
 Inside, the sources are laid out by platform (v8-arch-gyo2-os-src-platform): `src/common` holds what does not depend
 on the OS; everything that does lives under `src/sys`. `src/sys/<platform>` (`windows`, `macos`, `linux`) holds each
 platform's own sources, and the build selects one (`linux` also for any platform that is neither Windows nor
-Apple). `src/sys/Files.cpp`, `Process.cpp` and `Console.cpp` are the implementation macOS and Linux share; where the
-two differ it calls the abstract `Detail::Platform` (`src/sys/Platform.hpp`), which `src/sys/macos` and
-`src/sys/linux` implement. Windows implements the primitives itself and inherits `Platform` with empty steps. No
-source under `src/sys` branches on the OS with the preprocessor.
+Apple). `src/sys/Files.cpp`, `Process.cpp` and `Console.cpp` are the implementation macOS and Linux share, and
+`src/sys/UserData.cpp` is shared by all three (v8-arch-gyo2-os-user-data); where the platforms differ, the shared
+implementation calls the abstract `Detail::Platform` (`src/sys/Platform.hpp`), which each `src/sys/<platform>`
+implements. Windows implements the file, process and console primitives itself, so it leaves their steps empty and
+implements only `UserDataBase`. No source under `src/sys` branches on the OS with the preprocessor.
 
 ```text
 products / tools ──┬──→ engine/modules/* ──→ engine/core/* (logging: engine/core/os, threads, time)
@@ -37,7 +38,7 @@ primitives here.
 | Component | What it gives | Status |
 |---|---|---|
 | `OSError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
-| Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`), message text for a path (`PathForMessage`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files; message text: os-path-utf8-sweep (landed) |
+| Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`), message text for a path (`PathForMessage`), the font directories (`FontDirectories`) and this user's data directory for an application (`UserDataDirectory`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files; message text: os-path-utf8-sweep; user data directory: v8-arch-gyo2-os-user-data (landed; brought in by the user's owner decision of 2026-11-22 for players' saves) |
 | Process | Executable path, process and thread CPU time, local calendar time, the process ANSI code page (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`, `AnsiCodePage`) | os-process-info; code page: os-utf8-codepage (landed) |
 | Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/core/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
@@ -139,6 +140,32 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     in each directory, system directories first (D56 ★: it searched only the system directory before, so only a
     font that is missing there can be found elsewhere now; D57: on Linux a Windows or macOS font in the same
     directory now comes before Noto, and Windows reads the system Windows directory instead of `WINDIR`).
+  - `UserDataDirectory(organization, application)` (v8-arch-gyo2-os-user-data; declaration
+    `target/v2/os-user-data-declaration.zh-Hant.md`, C1–C10) answers `<base>/<organization>/<application>`, or
+    `<base>/<application>` when the organization is empty, and makes the directory and its missing parents. Only
+    the base differs between platforms, and each `Detail::Platform` names it (`UserDataBase`); the names are
+    checked, the path is joined and the directories are made once in `src/sys/UserData.cpp`, which every platform
+    compiles.
+    - Base: macOS `$HOME/Library/Application Support` (as Godot; not Foundation, which would be a new link);
+      Windows the Roaming AppData known folder from `SHGetFolderPathW(CSIDL_APPDATA | CSIDL_FLAG_CREATE)` in
+      shell32 (it wraps `SHGetKnownFolderPath`, which would need ole32 for `CoTaskMemFree`); elsewhere
+      `$XDG_DATA_HOME` when it is an absolute path (a relative or empty one is ignored, as the XDG specification
+      says), else `$HOME/.local/share`. The trailing `/` of `HOME` and of the base are dropped, so a base of `/`
+      gives `/<organization>/<application>`.
+    - Each name is one path component (the user's decision Q1 (b)): an empty application, `.`, `..` or a name
+      with `/` or `\` is `InvalidPath` before any directory is made (detail `path_bytes=<n>` of the name). A NUL
+      or text that is not UTF-8 is refused by `CreateDirectories`' own check of the whole path. Anything else
+      about a name is left to the OS and not defined here: on Windows a name ending in `.` or a space, a reserved
+      name (`CON`) or `:` goes to `CreateDirectories` as it is.
+    - Directories it makes are 0700 on POSIX (the user's decision Q2 (a), as SDL and the XDG specification);
+      levels that exist keep their access, and the public `CreateDirectories` keeps 0777 less the umask. On
+      Windows a new directory inherits its parent's ACL.
+    - No base is `IOFailed`: POSIX without an absolute `HOME` (no native error, no detail; it never falls back to
+      the current directory as Godot does), Windows when `SHGetFolderPathW` fails (`win32=<n>` when the HRESULT
+      is a Win32 one). A base with no UTF-8 form is `InvalidEncoding`; a directory that cannot be made reports
+      `CreateDirectories`' error. As with `ExecutablePath`, no caller branches on the code.
+    - It answers an absolute UTF-8 path in `/` form without a trailing separator, reading the OS and the
+      environment on every call (Invariant 8). What goes in the directory is the caller's (Invariant 7).
 - **Process code page** (os-utf8-codepage, D64–D66).
   - `engine/core/os/cmake/utf8-codepage.manifest` declares `<activeCodePage>UTF-8</activeCodePage>` and nothing else.
     `engine/core/os/cmake/GyoProcessCodePage.cmake` embeds it in one executable. With MSVC, clang-cl and Clang on the
@@ -285,8 +312,9 @@ deletes its allowlist and no common file changes.
 
 Three configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
 links exactly `GYO::Base` and system libraries Invariant 3 allows: on Windows `shell32` for `CommandLineToArgvW`
-(D49, D50), elsewhere `Threads::Threads` for `pthread_setname_np` (D69) and the wait fallback's mutex and condition
-variable (v8-arch-gyo2-os-wait); and no target or directory under the scanned roots outside engine/core/os and
+(D49, D50) and `SHGetFolderPathW` (v8-arch-gyo2-os-user-data), elsewhere `Threads::Threads` for
+`pthread_setname_np` (D69) and the wait fallback's mutex and condition variable (v8-arch-gyo2-os-wait); and
+no target or directory under the scanned roots outside engine/core/os and
 tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
