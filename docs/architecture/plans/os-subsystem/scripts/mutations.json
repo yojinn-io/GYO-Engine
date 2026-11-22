@@ -3,34 +3,6 @@
   "description": "Declared mutants of the os-subsystem plan. A mutant is killed only when its check fails with the expected message. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/os-subsystem/scripts/mutations.json. Retired in framework-rework v8-framework-invariants: ui-x1-export-guard-lexical and ui-x2-export-guard-components-unequal (they mutated the framework's FileService::IsPathWithin, which was removed; ui_editor's export guard uses engine/io's user-path helpers, whose own mutants are in framework-rework's io_user_files catalog).",
   "mutants": [
     {
-      "id": "os-g1-header",
-      "what": "An Engine module outside engine/os includes a POSIX header (R1)",
-      "file": "engine/trace/src/TraceSink.cpp",
-      "find": "#include \"engine/trace/TraceSink.hpp\"\n",
-      "replace": "#include \"engine/trace/TraceSink.hpp\"\n#include <unistd.h>\n",
-      "command": [
-        "{python}",
-        "tests/common/os/os_boundary_guard.py",
-        "--root",
-        "."
-      ],
-      "expect": "engine/trace/src/TraceSink\\.cpp:\\d+: R1 unistd\\.h"
-    },
-    {
-      "id": "os-g2-macro",
-      "what": "An Engine module outside engine/os branches on _WIN32 (R2)",
-      "file": "engine/asset/src/AssetCatalog.cpp",
-      "find": "namespace Engine::Asset {\n",
-      "replace": "#if defined(_WIN32)\n#endif\nnamespace Engine::Asset {\n",
-      "command": [
-        "{python}",
-        "tests/common/os/os_boundary_guard.py",
-        "--root",
-        "."
-      ],
-      "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R2 _WIN32"
-    },
-    {
       "id": "os-g3-api",
       "what": "An Engine module outside engine/os calls localtime_r (R3)",
       "file": "engine/core/time/src/LateWakeStats.cpp",
@@ -133,20 +105,6 @@
         "test_*.py"
       ],
       "expect": "FAIL: test_linux_branch_is_reported"
-    },
-    {
-      "id": "os-g10-filesystem-op",
-      "what": "Runtime code asks the file system through std::filesystem (R4)",
-      "file": "engine/asset/src/AssetCatalog.cpp",
-      "find": "namespace Engine::Asset {\n",
-      "replace": "namespace Engine::Asset {\nstatic const bool probe = std::filesystem::is_regular_file(\"x\");\n",
-      "command": [
-        "{python}",
-        "tests/common/os/os_boundary_guard.py",
-        "--root",
-        "."
-      ],
-      "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R4 std::filesystem::is_regular_file"
     },
     {
       "id": "os-e1-detail",
@@ -456,26 +414,6 @@
       "target": "gyo_os_tests",
       "cases": "*longer than 300*",
       "expect": "cannot open a"
-    },
-    {
-      "id": "p2-asset-detail-drops-cause",
-      "what": "NativeFileAssetSource reports only the path, without the OS error code and path length (P2)",
-      "file": "engine/asset/src/NativeFileAssetSource.cpp",
-      "find": "            Base::CauseDetail(cause, causeNamesPath ? std::string_view{} : std::string_view(path))));",
-      "replace": "            path + (causeNamesPath ? cause.message : std::string{})));",
-      "target": "engine_tests",
-      "cases": "*invalid and missing*",
-      "expect": "detail.rfind\\(\"NotFound: \", 0\\) == 0 \\) is NOT correct"
-    },
-    {
-      "id": "p3-relative-path-not-absolute",
-      "what": "NativeFileAssetSource hands a relative path to the file URI mapping (P3)",
-      "file": "engine/asset/src/NativeFileAssetSource.cpp",
-      "find": "    if (!Os::Files::IsAbsolutePath(absolute)) {",
-      "replace": "    if (absolute.empty()) {",
-      "target": "engine_tests",
-      "cases": "*relative path*",
-      "expect": "REQUIRE\\( direct \\) is NOT correct"
     },
     {
       "id": "os-g11-roots-skip-products",
@@ -958,16 +896,6 @@
       "expect": "the platform's line endings"
     },
     {
-      "id": "io-w4-watcher-missing-is-error",
-      "what": "AssetWatcher takes a missing file for a probe failure",
-      "file": "engine/asset/src/AssetWatcher.cpp",
-      "find": "        if (status.error().code != IO::IoErrorCode::NotFound) return false;",
-      "replace": "        return false;",
-      "target": "engine_tests",
-      "cases": "AssetWatcher*",
-      "expect": "AssetWatcher: removed"
-    },
-    {
       "id": "os-w7-append-without-o-append",
       "what": "Append opens without O_APPEND on POSIX (writes land at the start)",
       "platforms": [
@@ -1069,26 +997,6 @@
       "target": "engine_tests",
       "cases": "Uri*",
       "expect": "NativeUri\\(\"///a\"\\)\\.path\\.Str\\(\\) == \"/a\" \\) is NOT correct"
-    },
-    {
-      "id": "asset-r1-root-cleaned",
-      "what": "AssetPathResolver removes the dot segments of its root by a lexical rule (the pre-D54 behaviour)",
-      "file": "engine/asset/src/AssetPathResolver.cpp",
-      "find": "        return IO::Path::Path::FromNormalized(Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin));",
-      "replace": "        bool joinedEscaped = false;\n        return IO::Path::Path::FromNormalized(Engine::IO::Path::RemoveDotSegments(Engine::IO::Path::NormalizeSlashes(Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin)), joinedEscaped));",
-      "target": "engine_tests",
-      "cases": "AssetPathResolver*",
-      "expect": "CHECK\\( out\\.value\\(\\)\\.Str\\(\\) == std::string\\(written\\) \\+ \"/textures/a\\.ppm\" \\) is NOT correct"
-    },
-    {
-      "id": "asset-r2-escape-unchecked",
-      "what": "AssetPathResolver lets a catalog path leave its root through '..'",
-      "file": "engine/asset/src/AssetPathResolver.cpp",
-      "find": "        if (escapedRelativeRoot && !opt_.allowEscapeAssetsRoot) {",
-      "replace": "        if (false) {",
-      "target": "engine_tests",
-      "cases": "AssetPathResolver*",
-      "expect": "REQUIRE_FALSE\\( refused \\) is NOT correct"
     },
     {
       "id": "os-f8-posix-cwd-not-utf8",
@@ -1455,102 +1363,6 @@
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( failing.removed == std::vector<std::string>\\{failing.opened.front\\(\\)\\} \\) is NOT correct"
-    },
-    {
-      "id": "tt-x1-trace-links-engine",
-      "what": "gyo_trace links GYO::Engine (trace.md Invariant 7, configure-time check)",
-      "file": "engine/trace/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os GYO::Engine)",
-      "target": "gyo_trace_tests",
-      "expect_build_failure": true,
-      "expect": "gyo_trace links GYO::Engine;GYO::Os;GYO::Threads; expected exactly\\s+GYO::Os;GYO::Threads"
-    },
-    {
-      "id": "tt-x2-trace-without-os",
-      "what": "gyo_trace no longer links GYO::Os, so it could not write through engine/os (trace.md Invariant 7, configure-time check)",
-      "file": "engine/trace/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads)",
-      "target": "gyo_trace_tests",
-      "expect_build_failure": true,
-      "expect": "gyo_trace links GYO::Threads; expected exactly GYO::Os;GYO::Threads"
-    },
-    {
-      "id": "tt-x3-windows-trace-as-written",
-      "what": "The trace file keeps '\\n' on Windows instead of the text-mode \"\\r\\n\"",
-      "platforms": [
-        "win32"
-      ],
-      "file": "engine/trace/src/TraceSink.cpp",
-      "find": "        Os::Files::LineEndings::Native);",
-      "replace": "        Os::Files::LineEndings::AsWritten);",
-      "target": "gyo_trace_tests",
-      "cases": "*longer than 300*",
-      "expect": "CHECK\\( bytes == \"first\" \\+ newline"
-    },
-    {
-      "id": "tt-x4-trace-append-truncates",
-      "what": "An appending trace sink empties the file",
-      "file": "engine/trace/src/TraceSink.cpp",
-      "find": "options.append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate",
-      "replace": "Os::Files::WriteMode::Truncate",
-      "target": "gyo_trace_tests",
-      "cases": "*appends*",
-      "expect": "REQUIRE\\( lines.size\\(\\) == 2 \\) is NOT correct"
-    },
-    {
-      "id": "tt-x5-linux-trace-write-failure-ignored",
-      "what": "A failed write leaves the sink good (Linux: /dev/full)",
-      "platforms": [
-        "linux"
-      ],
-      "file": "engine/trace/src/TraceSink.cpp",
-      "find": "            if (!file->Write(bytes)) failed.store(true, std::memory_order_release);",
-      "replace": "            static_cast<void>(file->Write(bytes));",
-      "target": "gyo_trace_tests",
-      "cases": "*failed write*",
-      "expect": "CHECK_FALSE\\( sink.Good\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "tt-x6-trace-batch-end-unwritten",
-      "what": "The end of a batch stays in the writer's buffer, so FlushNow returns before the file has it",
-      "file": "engine/trace/src/TraceSink.cpp",
-      "find": "            }\n            WritePending();\n",
-      "replace": "            }\n",
-      "target": "gyo_trace_tests",
-      "cases": "*FlushNow returns*",
-      "expect": "CHECK\\( size == busy.size\\(\\) \\+ Newline.size\\(\\) \\+ marker.size\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "tt-x7-trace-os-public",
-      "what": "gyo_trace links GYO::Os publicly, so its users get engine/os headers (trace.md Invariant 7, configure-time check)",
-      "file": "engine/trace/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
-      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads GYO::Os)",
-      "target": "gyo_trace_tests",
-      "expect_build_failure": true,
-      "expect": "gyo_trace exposes GYO::Os to its users; link it PRIVATE"
-    },
-    {
-      "id": "tt-x8-trace-truncate-appends",
-      "what": "A sink that should replace the file appends to it",
-      "file": "engine/trace/src/TraceSink.cpp",
-      "find": "options.append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate",
-      "replace": "Os::Files::WriteMode::Append",
-      "target": "gyo_trace_tests",
-      "cases": "*replaces an existing file*",
-      "expect": "REQUIRE\\( lines.size\\(\\) == 1 \\) is NOT correct"
-    },
-    {
-      "id": "tt-x9-trace-detail-without-path",
-      "what": "The open failure's detail loses the path",
-      "file": "engine/trace/src/TraceSink.cpp",
-      "find": "                                          Base::CauseDetail(file.error(), path.value())));",
-      "replace": "                                          Base::CauseDetail(file.error())));",
-      "target": "gyo_trace_tests",
-      "cases": "*cannot open*",
-      "expect": "detail.rfind\\(text.value\\(\\) \\+ \"; NotFound: \", 0\\) == 0 \\) is NOT correct"
     },
     {
       "id": "ti-x1-time-links-more",

@@ -1,9 +1,9 @@
 # GYO time base and wait primitive
 
-Owner: Engine (`engine/time` → `GYO::Time`).
+Owner: Engine (`engine/core/time` → `GYO::Time`).
 Plan and record: [time-threads-trace](plans/time-threads-trace/README.md), batch TT-1 (D29); this document was written
 in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants. The platform wait mechanism is
-engine/os's `WakeSignal` (v8-arch-gyo2-os-wait, [declaration](target/v2/os-wait-declaration.zh-Hant.md)); the Waiter
+engine/core/os's `WakeSignal` (v8-arch-gyo2-os-wait, [declaration](target/v2/os-wait-declaration.zh-Hant.md)); the Waiter
 keeps what a wake means and calls no OS API itself.
 
 ## What it is
@@ -32,12 +32,12 @@ GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
 - One thread waits; any thread may `Notify`. A notification is latched: one sent before the wait starts is not lost,
   and several before one wake coalesce into that wake.
 - `Wait()` has no deadline and returns only when notified.
-- `Backend()` names the platform mechanism engine/os uses (os.md, Wait): `Kqueue` on macOS (an `EVFILT_TIMER` with `NOTE_CRITICAL`, which avoids
+- `Backend()` names the platform mechanism engine/core/os uses (os.md, Wait): `Kqueue` on macOS (an `EVFILT_TIMER` with `NOTE_CRITICAL`, which avoids
   the timer-coalescing leeway std and SDL sleeps get, and `EVFILT_USER` for notifications);
   `HighResolutionWaitableTimer` on Windows, or `WaitableTimer` when the high-resolution timer is not available;
   `ConditionVariable` elsewhere. The names are part of the consumer's log lines (`wait_backend=`).
-- `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive; the message is engine/os's and
-  the detail carries engine/os's error (`Base::CauseDetail`, for example `IoFailed: errno=24`; ★ in
+- `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive; the message is engine/core/os's and
+  the detail carries engine/core/os's error (`Base::CauseDetail`, for example `IoFailed: errno=24`; ★ in
   v8-arch-gyo2-os-wait, where it replaced `strerror` text and `GetLastError=<n>`). A moved-from Waiter ignores
   `Notify` (it is `noexcept` and cannot assert); waiting on it is a Programmer Error (`GYO_ASSERT`).
 
@@ -91,14 +91,14 @@ the main checkout.
    mapping (mutant ow-x7), "Time Waiter backend names stay as consumers log them" for the names; mutant
    `ti-x3-backend-name-changed`.
 8. **The latch is Time's state** (AGENTS.md §3, State Authority): no other component keeps a copy of it or decides on
-   it. engine/os never reads the latch; the wake primitive keeps its own pending signal (os.md Invariant 8). Guard:
-   structural: `WakeSignal`'s API takes no latch, and engine/os cannot reach engine/time (os.md Invariant 3, R5 and
+   it. engine/core/os never reads the latch; the wake primitive keeps its own pending signal (os.md Invariant 8). Guard:
+   structural: `WakeSignal`'s API takes no latch, and engine/core/os cannot reach engine/core/time (os.md Invariant 3, R5 and
    the link check).
 9. **Use after move is refused**: waiting on a moved-from Waiter is a Programmer Error, and `Notify` on it does
    nothing. Guard: "rejects use after move and ignores notifications on a moved-from waiter".
 10. **`GYO::Time` links exactly `GYO::Base` and, privately, `GYO::Os`** (checked at configure time by
     `tests/common/time/CMakeLists.txt`, which also refuses `GYO::Os` in its interface): no SDL, no `GYO::Engine`, no
-    other engine unit. The thread library comes through engine/os where the fallback needs it. Guards: mutants
+    other engine unit. The thread library comes through engine/core/os where the fallback needs it. Guards: mutants
     `ti-x1-time-links-more`, `ow-x2-time-os-public`.
 11. **`LateWakeStats` has fixed bins, allocates nothing and runs no thread.** Guard: "Time LateWakeStats bins late
     wakes and bounds quantiles" for the bins and quantiles. No guard for the allocation.
@@ -111,7 +111,7 @@ Stop adding features and propose redesigning instead of patching when any of the
    own flag: the single-waiter latch would have to become something else.
 2. A backend cannot keep Invariants 2 and 5 with a relative timeout and a re-check (a platform without relative
    timers, or a wake source that cannot be re-checked).
-3. (Removed in v8-arch-gyo2-os-wait.) It said: moving the backends into engine/os changes a wake measurably in the
+3. (Removed in v8-arch-gyo2-os-wait.) It said: moving the backends into engine/core/os changes a wake measurably in the
    Wait timing L2. It fired at W3 (the Windows window-mode deadline P50, os-windows-run) and ended in the D78
    freeze without the cause found; the move was then accepted by CI L1, the guards and mutants instead of a timing
    L2, by the user's decision (declaration 5.4). Timing changes of the backends are os.md Replacement Criterion 2.

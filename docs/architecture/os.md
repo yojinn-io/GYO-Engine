@@ -1,6 +1,6 @@
 # GYO OS layer
 
-Owner: Engine (`engine/os` → `GYO::Os`).
+Owner: Engine (`engine/core/os` → `GYO::Os`).
 Plan and record: [os-subsystem](plans/os-subsystem/README.md), batch os-skeleton onwards (D40–D46).
 Proposed direction (not yet in this contract): [build-baseline](plans/build-baseline/README.md) — platform and toolchain
 tiers, and Windows processes fixing their code page to UTF-8 through the manifest's `activeCodePage` (decided
@@ -20,16 +20,16 @@ two differ it calls the abstract `Detail::Platform` (`src/sys/Platform.hpp`), wh
 source under `src/sys` branches on the OS with the preprocessor.
 
 ```text
-products / tools ──┬──→ engine/asset ──→ engine/io ──→ engine/os ──→ engine/base
-                   ├──→ engine/trace ──→ engine/threads ──→ engine/time ──→ engine/os
-                   │                     engine/threads ──→ engine/os (thread name and priority)
-                   ├──→ engine/platform/sdl ──→ engine/os, SDL
-                   └──→ engine/os (process facts, console)
+products / tools ──┬──→ engine/modules/* ──→ engine/core/* (logging: engine/core/os, threads, time)
+                   ├──→ engine/core/io ──→ engine/core/os ──→ engine/core/base
+                   ├──→ engine/core/threads ──→ engine/core/time ──→ engine/core/os (the wait primitive)
+                   │    engine/core/threads ──→ engine/core/os (thread name and priority)
+                   └──→ engine/core/os (process facts, console)
 ```
 
-`GYO::Os` is a leaf directly above `GYO::Base`. Modules keep their own abstractions and call it: engine/io keeps
+`GYO::Os` is a leaf directly above `GYO::Base`. Modules keep their own abstractions and call it: engine/core/io keeps
 `IFileSystem`, `Vfs`, `Uri` and streams, and its native file-system backend calls the file primitives here;
-engine/time's `Waiter` and engine/threads' `RoleThread` keep their public APIs and use the wait and thread
+engine/core/time's `Waiter` and engine/core/threads' `RoleThread` keep their public APIs and use the wait and thread
 primitives here.
 
 ## Components
@@ -39,7 +39,7 @@ primitives here.
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
 | Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`), message text for a path (`PathForMessage`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files; message text: os-path-utf8-sweep (landed) |
 | Process | Executable path, process and thread CPU time, local calendar time, the process ANSI code page (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`, `AnsiCodePage`) | os-process-info; code page: os-utf8-codepage (landed) |
-| Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
+| Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/core/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
 | Wait | The wake primitive behind `Time::Waiter` (`WakeSignal`: `Create`, `Signal`, `Block`, `Mechanism`) | v8-arch-gyo2-os-wait (landed; the user's owner decision of 2026-11-21 lifted the D78 freeze, and the batch was accepted by CI L1, the guards and mutants instead of the Wait timing L2) |
@@ -76,8 +76,8 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     under Design Invariant 9. A UNC full path (`\\server\share\...`) that long goes as `\\?\UNC\` plus the full
     path after its `\\` (D54, io-native-paths). A shorter path, a full path that is neither on a drive letter nor
     UNC (a device such as `\\.\NUL`) and a path `GetFullPathNameW` refuses go to the API as before. A path the
-    caller already gives in a `\\?\` or `\\.\` form is passed on unchanged (engine/io refuses such paths, io.md
-    Invariant 4; engine/os keeps Win32's meaning for them). Errors keep the caller's path length (`path_bytes`), not
+    caller already gives in a `\\?\` or `\\.\` form is passed on unchanged (engine/core/io refuses such paths, io.md
+    Invariant 4; engine/core/os keeps Win32's meaning for them). Errors keep the caller's path length (`path_bytes`), not
     the prefixed form.
   - `IsAbsolutePath` answers per platform as a pure string rule: `/x` on POSIX; `C:/x`, `C:\x` or a `\\` or `//`
     prefix on Windows.
@@ -137,8 +137,8 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     font that is missing there can be found elsewhere now; D57: on Linux a Windows or macOS font in the same
     directory now comes before Noto, and Windows reads the system Windows directory instead of `WINDIR`).
 - **Process code page** (os-utf8-codepage, D64–D66).
-  - `engine/os/cmake/utf8-codepage.manifest` declares `<activeCodePage>UTF-8</activeCodePage>` and nothing else.
-    `engine/os/cmake/GyoProcessCodePage.cmake` embeds it in one executable. With MSVC, clang-cl and Clang on the
+  - `engine/core/os/cmake/utf8-codepage.manifest` declares `<activeCodePage>UTF-8</activeCodePage>` and nothing else.
+    `engine/core/os/cmake/GyoProcessCodePage.cmake` embeds it in one executable. With MSVC, clang-cl and Clang on the
     MSVC ABI it is a `.manifest` source, which the linker merges into the manifest it embeds as resource 1 (the
     linker's own is `requestedExecutionLevel asInvoker`). With MinGW it is the `RT_MANIFEST` resource 1 of a
     generated `.rc`, with an explicit language and a dependency on the manifest file; whether it wins over
@@ -152,10 +152,10 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     on every platform. No product is named: a new, cloned or removed product needs no common change. A target
     that must run without it sets `GYO_PROCESS_CODE_PAGE_EXEMPT` to the reason (there is none today). Third-party
     programs that FetchContent adds (protoc) are outside the roots and keep their own manifests; Go services are
-    not CMake executables. The separately configured host shader tool includes the engine/os module and applies it
+    not CMake executables. The separately configured host shader tool includes the engine/core/os module and applies it
     itself.
   - Windows 10 1903 and later honour the declaration; earlier versions ignore it and the process takes the system
-    setting, which engine/os does not depend on (Invariant 5). Whether Proton and Wine honour it is not verified
+    setting, which engine/core/os does not depend on (Invariant 5). Whether Proton and Wine honour it is not verified
     (open decision 20); `longPathAware` is not declared (open decision 21), since it takes effect only where the
     machine's registry enables it.
   - ★ (declared before the batch, D66): third-party and CRT narrow text becomes UTF-8 in our processes, for
@@ -169,14 +169,14 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
 - **Process.**
   - `AnsiCodePage` is `GetACP()` on Windows: 65001 (UTF-8) in every executable of the repository (Invariant 11),
     the system's setting in an executable built elsewhere or on Windows before 10 1903. It is for diagnostics, such
-    as a start line; engine/os never converts through it. `Unsupported` on POSIX, which has no ANSI code page
+    as a start line; engine/core/os never converts through it. `Unsupported` on POSIX, which has no ANSI code page
     (narrow text is bytes).
   - `ExecutablePath` is the running image as an absolute UTF-8 path, read from the OS on every call:
     `GetModuleFileNameW` on Windows (a `\\?\` or `\\?\UNC\` prefix is removed, Invariant 5), `/proc/self/exe` on
     Linux, `_NSGetExecutablePath` with links resolved (`realpath`) on macOS; `Unsupported` elsewhere. It answers in
-    `/` form like every engine/os path. It is not the resource directory of an application: a macOS app bundle
-    keeps those apart, and engine/platform/sdl's `BaseDirectory` stays the authority for SDL's resource base
-    (os-subsystem open decision 8).
+    `/` form like every engine/core/os path. It is not the resource directory of an application: a macOS app bundle
+    keeps those apart, and the SDL adapter's `BaseDirectory` stays the authority for SDL's resource base
+    (os-subsystem open decision 8; SDL is not in gyo2 yet and returns with the SDL batch).
   - `ProcessCpuTime` and `CurrentThreadCpuTime` are user plus kernel time in `std::chrono::nanoseconds`:
     `GetProcessTimes`/`GetThreadTimes` on Windows (scheduler ticks, about 15.6 ms), `getrusage(RUSAGE_SELF)` and
     `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` on POSIX. A refused query is `Unsupported` with the native error.
@@ -196,7 +196,7 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     previous one when destroyed; it is not applied without a console. POSIX needs no change and counts as applied.
     Output redirected to a file or a pipe is bytes either way.
   - `InstallShutdownRequests` installs the process's handlers once (all or nothing); `RequestedShutdown` reads the
-    first request's reason from any thread. The flag is the one process state engine/os owns (Invariant 8); what a
+    first request's reason from any thread. The flag is the one process state engine/core/os owns (Invariant 8); what a
     program does on a request is its policy.
     - POSIX: SIGINT and SIGTERM with `sigaction`, carrying the `sa_flags` `std::signal` sets on the platform's C
       library (`SA_RESTART`, the handler kept): later signals only repeat the request.
@@ -205,8 +205,8 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
       the C runtime's SIGINT handling reset itself. On a close the handler waits up to 4 s, since the OS ends the
       process when it returns (about 5 s after the close); the program's own exit ends the wait sooner. Log off
       and system shutdown keep the default handling. `TerminateProcess` never reaches a handler.
-- **Thread** (os-threads-backend, D69). The calls engine/threads' `RoleThread` makes on a new role's thread before its
-  body runs, moved from it line by line; what a role is and its lifetime stay with engine/threads. One source per
+- **Thread** (os-threads-backend, D69). The calls engine/core/threads' `RoleThread` makes on a new role's thread before its
+  body runs, moved from it line by line; what a role is and its lifetime stay with engine/core/threads. One source per
   platform (`src/sys/<platform>/Thread.cpp`; it was one source with per-OS branches until
   v8-arch-gyo2-os-src-platform). Each answers whether the platform took the request and is never an error
   (Invariant 10).
@@ -219,7 +219,7 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     nice 10, which fails if the process already runs nicer. Normal on Linux and other platforms makes no call and
     counts as applied; Interactive on Linux needs privileges and is not tried.
 - **Wait.** `WakeSignal` wakes one blocking thread when another signals it or a relative timeout passes; what a
-  wake means (the latch, the single waiter, deadlines, the re-check of the time base) is engine/time's.
+  wake means (the latch, the single waiter, deadlines, the re-check of the time base) is engine/core/time's.
   - `Signal` (any thread, `noexcept`) leaves one pending signal, kept by the primitive itself; several pending
     signals end one block. `Block` (the single waiting thread) returns when signalled, when the relative timeout
     has passed (none: only a signal ends it) or spuriously. One pending signal ends at most one block; one that
@@ -238,7 +238,7 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
 - **Data and time.** Bytes are `std::span<std::byte>`; durations and time points are `std::chrono`.
-- **Names.** engine/os names never reuse a Win32 function name or a `windows.h` A/W macro name (`ReadFile`,
+- **Names.** engine/core/os names never reuse a Win32 function name or a `windows.h` A/W macro name (`ReadFile`,
   `WriteFile`, `CreateDirectory`, `DeleteFile`, `MoveFile`, `CopyFile`, `GetFileAttributes` and the like): product
   translation units see `windows.h` indirectly (through asio), and a name that collides there is ambiguous or
   renamed by the preprocessor. The read primitive was renamed from `ReadFile` to `FileReader` when windows-x64
@@ -258,18 +258,18 @@ Invariants 1–3 as text, so the result is the same on every platform:
   architecture macros (`_MSC_VER`, `__clang__`, `_M_X64`, `__aarch64__`) are not OS branches.
 - **R3**: a listed OS or CRT-split API (`localtime_r`, `localtime_s`, `std::signal`, `pthread_*`, `kqueue`,
   `GetLastError`, `SetThreadPriority` and others).
-- **R4**: in runtime code (engine outside engine/os and the host shader tool, apps and tools), fstream, `fopen`
+- **R4**: in runtime code (engine outside engine/core/os and the host shader tool, apps and tools), fstream, `fopen`
   and every `std::filesystem` operation that touches the file system. The `path` type and pure path
   operations are allowed.
-- **R5**: in engine/os, an include of anything but the standard library, OS headers, `engine/base` and
-  `engine/os`.
-- **R6**: in engine/os, an ANSI code page constant (`CP_ACP`, `CP_THREAD_ACP`, `CP_OEMCP`, `CP_MACCP`) or an ANSI
+- **R5**: in engine/core/os, an include of anything but the standard library, OS headers, `engine/core/base` and
+  `engine/core/os`.
+- **R6**: in engine/core/os, an ANSI code page constant (`CP_ACP`, `CP_THREAD_ACP`, `CP_OEMCP`, `CP_MACCP`) or an ANSI
   Win32 entry point (a name ending in a capital `A` after a lower-case letter or digit, called unqualified or with
-  `::`: `CreateFileA(`, `GetModuleFileNameA(`). Invariants 5 and 11: engine/os converts with `CP_UTF8` through the
+  `::`: `CreateFileA(`, `GetModuleFileNameA(`). Invariants 5 and 11: engine/core/os converts with `CP_UTF8` through the
   wide entry points and does not rely on the process code page. `gyo_os` is compiled with `UNICODE`, so a Win32
   name without its suffix resolves to the wide entry point.
 
-engine/os/src is scanned for R5 and R6 only; engine/os/include is scanned for everything. Comments, string literals and
+engine/core/os/src is scanned for R5 and R6 only; engine/core/os/include is scanned for everything. Comments, string literals and
 character literals are ignored; `#include` lines are matched as written. The scan covers engine, apps, tools,
 build/acceptance and tests (except tests/common/os, third_party and build/target), and every existing root must
 yield at least one source. The roots name no product, so adding or removing a product changes no guard file.
@@ -283,7 +283,7 @@ deletes its allowlist and no common file changes.
 Three configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
 links exactly `GYO::Base` and system libraries Invariant 3 allows: on Windows `shell32` for `CommandLineToArgvW`
 (D49, D50), elsewhere `Threads::Threads` for `pthread_setname_np` (D69) and the wait fallback's mutex and condition
-variable (v8-arch-gyo2-os-wait); and no target or directory under the scanned roots outside engine/os and
+variable (v8-arch-gyo2-os-wait); and no target or directory under the scanned roots outside engine/core/os and
 tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
@@ -296,10 +296,10 @@ from the recorded directories, and runs on every platform, so a target the walk 
 `cmake.ProcessCodePage` runs the build layer and the check on a synthetic tree: a plain build, a standalone tool
 wrapper, a directory the build layer did not record (refused) and an exemption (listed).
 
-`OsHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/os public
+`OsHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/core/os public
 headers, no `windows.h` or winsock guard macro and no `min` or `max` macro is defined. It is recorded before
 doctest is included and fails if a public header is not included by the test. The POSIX side is the text scan of
-engine/os/include, since libc++ and libstdc++ define `_PTHREAD_H` from `<string>`.
+engine/core/os/include, since libc++ and libstdc++ define `_PTHREAD_H` from `<string>`.
 
 Known blind spots, left to review:
 
@@ -328,8 +328,9 @@ Known blind spots, left to review:
 
 ## Out of scope
 
-- Windows, input, clipboard, GPU and the SDL clock domain stay with engine/platform/sdl and its own Design
-  Invariants; engine/os does not link SDL or call `SDL_Init`.
+- Windows, input, clipboard, GPU and the SDL clock domain stay with the SDL adapter and its own Design
+  Invariants (not in gyo2 yet; it returns with the SDL batch, without `engine/platform`); engine/core/os does not
+  link SDL or call `SDL_Init`.
 - Sockets themselves stay with asio in the products that use them.
 - The build layer: CMake's `WIN32`/`APPLE`/`UNIX`, MSVC flags, CI workflows, Python acceptance scripts and the
   platform columns of `config/`. Exception: Invariant 1's ban on OS-identifying macros also applies to
@@ -338,46 +339,46 @@ Known blind spots, left to review:
 
 ## Design Invariants
 
-1. **OS knowledge lives only in engine/os.** C/C++ sources outside engine/os/src (engine, apps, tools,
+1. **OS knowledge lives only in engine/core/os.** C/C++ sources outside engine/core/os/src (engine, apps, tools,
    build/acceptance and tests, except tests/common/os) include no OS header (R1), branch on no OS macro in a
    preprocessor condition (R2) and call no listed OS or CRT-split API (R3). A non-os target gets no
    OS-identifying compile definition from CMake. Compiler and architecture macros are not OS branches. Exceptions
    live only in an owner's ratchet allowlist.
-2. **Native file access goes through engine/os only** (R4). Runtime code in engine (outside engine/os and the host
-   shader tool, engine/io included), apps and tools uses no fstream, `fopen` or `_wfopen` and no
+2. **Native file access goes through engine/core/os only** (R4). Runtime code in engine (outside engine/core/os and the host
+   shader tool, engine/core/io included), apps and tools uses no fstream, `fopen` or `_wfopen` and no
    `std::filesystem` operation that touches the file system; only the `path` type and pure path operations. Files
-   go through engine/io's abstraction, whose native backend calls engine/os; process facts come from engine/os
-   directly. engine/trace, which sits below `GYO::Engine` and so below engine/io, writes its files through engine/os
-   directly (os-subsystem open decision 2, D58). Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
+   go through engine/core/io's abstraction, whose native backend calls engine/core/os; process facts come from engine/core/os
+   directly. (master's engine/trace wrote its files through engine/core/os directly, os-subsystem open decision 2,
+   D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
-3. **engine/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`
+3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`
    and OS system libraries (`shell32` on Windows; `Threads::Threads` elsewhere, since the thread naming moved in,
-   os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/os
-   includes only engine/base, the standard library and OS headers. Its API has no type of a module above it: no
+   os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/core/os
+   includes only engine/core/base, the standard library and OS headers. Its API has no type of a module above it: no
    `Uri`, `IFileSystem` or `IStream`.
-4. **Public headers do not leak the OS.** engine/os/include includes only the standard library and engine/base. A
+4. **Public headers do not leak the OS.** engine/core/os/include includes only the standard library and engine/core/base. A
    class that holds a native handle keeps it opaque (pimpl or opaque storage); no `HANDLE` or file descriptor type
    appears in a header. Code that includes these headers needs no `NOMINMAX`.
 5. **Neutral types and UTF-8.** Paths are UTF-8 `std::string_view` (UTF-8 `std::string` out), data are byte
    spans, time is `std::chrono`. Invalid UTF-8 is `InvalidEncoding`. On Windows every path is converted to UTF-16
-   for the wide APIs; the ANSI code page APIs are never used. Long-path forms are made only inside engine/os just
+   for the wide APIs; the ANSI code page APIs are never used. Long-path forms are made only inside engine/core/os just
    before the OS call; they are never returned or written into an error.
 6. **Failures are Runtime Errors.** Functions return `Base::Result<_, OsError>`; the detail keeps the native error
    in the fixed form of the Contracts section. A request that only reports whether the platform applied it returns
    `bool` instead (the thread name and priority, `Utf8ConsoleOutput::Applied()`): not being applied is a result,
    not a failure (Invariant 10; D70). No exception crosses the public boundary or an OS callback (signal
    handler, console control handler), with one exception: `WakeSignal::Block` lets the standard library's
-   `std::system_error` from the fallback's mutex and condition variable pass through, as engine/time's `Waiter`
+   `std::system_error` from the fallback's mutex and condition variable pass through, as engine/core/time's `Waiter`
    did before the move (as D72 approved for the earlier move). The OS callbacks only write a lock-free atomic (and, on a console close,
-   wait) and are `noexcept`, so engine/os needs none of error-handling.md's "Exception at the platform boundary"
-   rules (no `catch (...)`, no destructor checking global state); that section's scope stays engine/platform/sdl
-   (D49).
+   wait) and are `noexcept`, so engine/core/os needs none of error-handling.md's "Exception at the platform boundary"
+   rules (no `catch (...)`, no destructor checking global state); that section's scope stays the SDL adapter
+   (D49; not in gyo2 yet).
 7. **No product knowledge, no policy.** No product or tool name, file name, schema or log field appears in
-   engine/os. Which socket errors are transient, what follows a shutdown request and how a time stamp is formatted
+   engine/core/os. Which socket errors are transient, what follows a shutdown request and how a time stamp is formatted
    are decided by the caller.
-8. **State authority** (AGENTS.md §3). engine/os owns only its own OS resources and the shutdown-request flag.
+8. **State authority** (AGENTS.md §3). engine/core/os owns only its own OS resources and the shutdown-request flag.
    Queries (executable path, CPU time, file status) read the OS every time; nothing is cached to decide on. The
-   Waiter's latch belongs to Time; engine/os never reads it. A pending signal is the wake primitive's own state on
+   Waiter's latch belongs to Time; engine/core/os never reads it. A pending signal is the wake primitive's own state on
    every platform and ends at most one block (kqueue's user event with `EV_CLEAR`, the Windows auto-reset event, the
    fallback's flag set and cleared under its mutex). Guards: `WakeSignal`'s API takes no latch; the WakeSignalTests
    cases "a signal sent before the block stays pending", "a consumed signal does not end the next block", "a signal
@@ -396,46 +397,46 @@ Known blind spots, left to review:
     executable that CMake builds from this repository's own C/C++ sources (products, tools, tests, probes, the host
     shader tool) embeds the manifest that declares `activeCodePage` UTF-8, so `GetACP()` is 65001 in the process
     whatever the system
-    setting (Windows 10 1903 and later). It is the second line: engine/os still converts with `CP_UTF8` and calls
+    setting (Windows 10 1903 and later). It is the second line: engine/core/os still converts with `CP_UTF8` and calls
     only wide APIs (Invariant 5), so its behaviour does not depend on the manifest. Guards: the configure-time check
     that every executable target carries the manifest or a reasoned exemption; `gyo_os_tests` reads its own manifest
     resource and checks `GetACP()` ("Os files run with UTF-8 as the process ANSI code page"); the source guard
-    refuses the ANSI code page constants and ANSI Win32 entry points in engine/os (R6); `cmake.ProcessCodePage`.
+    refuses the ANSI code page constants and ANSI Win32 entry points in engine/core/os (R6); `cmake.ProcessCodePage`.
     Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6 and pu-x5.
 
 ### Replacement Criteria
 
-1. A consumer needs engine/os to hand out a native handle (socket, `HANDLE`, file descriptor), or must know which
+1. A consumer needs engine/core/os to hand out a native handle (socket, `HANDLE`, file descriptor), or must know which
    OS it is on to use a neutral function correctly: stop adding parameters; propose a native-handle layer or a
    redesign of that component.
 2. A change to the Wait backends changes timing behaviour (another mechanism, another timeout conversion), or a
    Feature needs a sub-millisecond verdict that CI L1 cannot give: propose splitting Wait into a component of its
    own with its own timing acceptance, guard and criteria.
-3. Implementing a capability needs engine/os to depend on engine/io, Time, Threads, Trace, SDL, asio or
+3. Implementing a capability needs engine/core/os to depend on engine/core/io, Time, Threads, Trace, SDL, asio or
    `GYO::Engine`: the layering is wrong; stop and let the user decide instead of adding the edge.
 4. A consumer needs asynchronous or event-driven file I/O, directory watching or large directory listings, and the
    narrow primitives of Files would have to grow into a second `IFileSystem`: stop and redraw the split between
-   engine/os primitives and engine/io backends.
-5. Keeping a caller's bytes (Invariant 9, for example CRLF) needs engine/io or engine/os to maintain OS-specific
+   engine/core/os primitives and engine/core/io backends.
+5. Keeping a caller's bytes (Invariant 9, for example CRLF) needs engine/core/io or engine/core/os to maintain OS-specific
    stream wrappers: propose deciding line-ending semantics as a Data Contract instead of converting silently in a
    backend.
 6. An allowlist grows instead of shrinking for two batches in a row, more than two permanent entries are needed
    outside tests, or false positives need repeated rule changes: rewrite the rules or narrow Invariant 1 instead of
    adding exceptions.
-7. One capability on one OS needs branches across two or more engine/os files, the per-OS files are mostly
+7. One capability on one OS needs branches across two or more engine/core/os files, the per-OS files are mostly
    duplicates, or a platform whose process and file model differs from both POSIX and Win32 is added: propose a
    backend interface with a selection table.
 8. (os-utf8-codepage, D67) A product or tool needs manifest settings of its own (DPI awareness, the
-   UAC level, `longPathAware`) or a code page other than UTF-8: stop editing engine/os's manifest for it; decide how
+   UAC level, `longPathAware`) or a code page other than UTF-8: stop editing engine/core/os's manifest for it; decide how
    an owner declares manifest parts and how they merge (MSVC merges `.manifest` sources, a `.rc` holds one
-   resource), or move the manifest out of engine/os.
-9. (os-closeout, D78) engine/os stays the only place for OS differences, and grows only with observed pressure
-   (the user's owner decision D78 for engine/os, stricter than AGENTS.md §2, which lets foundation architecture be designed
-   ahead from foreseen pressure). A batch that moves a site into engine/os is accepted
+   resource), or move the manifest out of engine/core/os.
+9. (os-closeout, D78) engine/core/os stays the only place for OS differences, and grows only with observed pressure
+   (the user's owner decision D78 for engine/core/os, stricter than AGENTS.md §2, which lets foundation architecture be designed
+   ahead from foreseen pressure). A batch that moves a site into engine/core/os is accepted
    by CI L1 and the guards alone. If it needs a real-machine L2 or L3, a ★ declaration or a changed test verdict
    (AGENTS.md §14.4) to be accepted, it is not a pure move: stop, keep the move behaviour-preserving, and hand the
    behaviour change to the product version whose Feature needs it. A component or batch that no observed pressure
-   and no Feature needs is not started; OS code outside engine/os moves in only when pressure is observed there.
+   and no Feature needs is not started; OS code outside engine/core/os moves in only when pressure is observed there.
    The user's owner decision can also bring a frozen component back; such a batch is accepted as its own declaration
    says, and the declaration names its ★ items and its test verdict changes (AGENTS.md §14.4). Wait came back this
    way (v8-arch-gyo2-os-wait, 2026-11-21).
