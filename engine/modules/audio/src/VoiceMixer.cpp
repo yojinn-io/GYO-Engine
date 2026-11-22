@@ -31,34 +31,24 @@ void RaiseMax(std::atomic<std::uint64_t>& target, const std::uint64_t value) noe
 
 } // namespace
 
-Base::Result<VoiceMixer, AudioError> VoiceMixer::Create(const std::uint32_t maxVoices, ClipBank&& clips) {
+Base::Result<VoiceMixer, AudioError> VoiceMixer::Create(const std::uint32_t maxVoices) {
     if (maxVoices == 0 || maxVoices > kMaxVoices) {
         return Base::Err(AudioError::Make(AudioErrorCode::InvalidConfig, "a mixer has 1 to 1024 voices",
                                           "maxVoices=" + std::to_string(maxVoices)));
     }
-    return VoiceMixer(maxVoices, std::move(clips));
+    return VoiceMixer(maxVoices);
 }
 
-VoiceMixer::VoiceMixer(const std::uint32_t maxVoices, ClipBank&& clips)
-    : clips_(std::move(clips)),
-      voices_(maxVoices),
-      accumulator_(std::size_t{kChunkFrames} * kChannels),
-      ended_(maxVoices) {
-    // ClipBank::View asserts, so the audio thread reads views prepared here.
-    views_.reserve(clips_.Count());
-    for (std::uint32_t i = 1; i <= clips_.Count(); ++i) views_.push_back(clips_.View(ClipId{i}));
-}
+VoiceMixer::VoiceMixer(const std::uint32_t maxVoices)
+    : voices_(maxVoices), accumulator_(std::size_t{kChunkFrames} * kChannels), ended_(maxVoices) {}
 
 VoiceMixer::VoiceMixer(VoiceMixer&& other) noexcept
-    : clips_(std::move(other.clips_)),
-      views_(std::move(other.views_)),
-      voices_(std::move(other.voices_)),
+    : voices_(std::move(other.voices_)),
       accumulator_(std::move(other.accumulator_)),
       ended_(std::move(other.ended_)),
       endedCount_(other.endedCount_),
       nextFrame_(other.nextFrame_),
       masterGainQ16_(other.masterGainQ16_.load(std::memory_order_relaxed)) {
-    // ClipView spans point into clip vectors, whose buffers a move keeps.
     auto copy = [](std::atomic<std::uint64_t>& to, const std::atomic<std::uint64_t>& from) {
         to.store(from.load(std::memory_order_relaxed), std::memory_order_relaxed);
     };
@@ -72,7 +62,7 @@ VoiceMixer::VoiceMixer(VoiceMixer&& other) noexcept
 }
 
 StartOutcome VoiceMixer::Schedule(const ScheduledPlay& play) {
-    GYO_ASSERT(play.view != nullptr || clips_.Contains(play.clip));
+    GYO_ASSERT(play.clip.frames != 0 && (play.clip.channels == 1 || play.clip.channels == 2));
     GYO_ASSERT(IsValidGain(play.gainLeft) && IsValidGain(play.gainRight));
     return ScheduleChecked(play);
 }
@@ -96,9 +86,8 @@ StartOutcome VoiceMixer::ScheduleChecked(const ScheduledPlay& play) noexcept {
     } else {
         counters_.onTime.fetch_add(1, std::memory_order_relaxed);
     }
-    const ClipView& clip = play.view != nullptr ? *play.view : views_[play.clip.value - 1];
     *free = Voice{true, start, std::numeric_limits<std::int64_t>::max(), play.cookie, play.lease, 0,
-                  ToQ16(play.gainLeft), ToQ16(play.gainRight), clip};
+                  ToQ16(play.gainLeft), ToQ16(play.gainRight), play.clip};
     return outcome;
 }
 

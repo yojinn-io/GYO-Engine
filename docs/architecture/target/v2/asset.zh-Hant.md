@@ -33,7 +33,7 @@ GYO::Base ◄── GYO::Asset ◄── GYO::WorldAsset ──► GYO::Kernel�
 - 登記檔：asset 是 `library_only=yes`、`default=no`、`private_depends=json`；world_asset 是 `library_only=no`、`default=yes`、`depends=asset`。base、io、kernel、orchestration 的 link 寫在各自的 `CMakeLists.txt`。
 - 拆兩個的理由：工具（模型檢視器的 `info`、audio_editor 寫 catalog）與擁有型別的 Module 只要 loader、catalog 與 store，不該為此連上 kernel、orchestration。
 - 擁有型別的 Module 也照這個拆法：loader 與型別特性的函式庫只依賴 asset；World 端的單位依賴 world_asset。
-- 不在範圍：其他 loader（模型、圖片、字型、音效）、image Module 與 stb_image、GPU 資源、事先轉檔的工具、大地圖的串流、熱重載、子 asset（宣告 2.2）。
+- 不在範圍：其他 loader（模型、圖片、字型；音效 loader 在 audio，`WavLoader`，[audio 頁](audio.zh-Hant.md)第 6 節〔`v8-arch-gyo2-audio-clip-loader`〕）、image Module 與 stb_image、GPU 資源、事先轉檔的工具、大地圖的串流、熱重載、子 asset（宣告 2.2）。
 
 ## 2. id
 
@@ -299,7 +299,7 @@ RC-AS10（凍結後只准相同）隨凍結機制撤回（宣告第 22 節，使
 
 ## 9. 範圍的限界
 
-- 只有文字 loader；依賴追蹤只用測試用的 loader 驗。第一個真正的使用者（模型引用貼圖）在產品搬回或 SDL 那批。
+- asset 自己只有文字 loader；擁有型別的 Module 的第一個 loader 是 audio 的 `WavLoader`（`sound`／`wav`，`v8-arch-gyo2-audio-clip-loader`）。依賴追蹤只用測試用的 loader 驗。第一個真正的使用者（模型引用貼圖）在產品搬回或 SDL 那批。
 - 執行器 adapter：world_asset 的 `WorkerPoolExecutor`（使用者 2026-11-23「adapter 照建議放 world_asset」，核准後加入）。用真 pool 的案例是 `scenario: threads' WorkerPool behind an AssetExecutor loads what two Worlds request`（兩個 World、兩條執行緒）；`Shutdown` 的兩種模式由 store 層的案例擔保，沒有用真 pool 的案例。
 - 預算延後：沒有載入時間、記憶體、catalog 讀取時間、雜湊成本、等鎖時間的判定。
 - World 層的真執行緒：經 Product 入口今天不能兩條執行緒各跑一個 World，由 store 層的真執行緒案例擔保。

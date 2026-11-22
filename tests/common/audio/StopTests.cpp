@@ -24,9 +24,9 @@ const TimePoint kAnchor = TimePoint{} + std::chrono::duration_cast<Duration>(10s
 Duration Ns(const std::int64_t ns) { return std::chrono::duration_cast<Duration>(std::chrono::nanoseconds(ns)); }
 Duration Ms(const std::int64_t ms) { return Ns(ms * 1'000'000); }
 
-ClipId AddConstant(ClipBank& bank, const std::uint32_t frames, const std::int16_t level = kLevel) {
+Clip AddConstant(const std::uint32_t frames, const std::int16_t level = kLevel) {
     const std::vector<std::int16_t> samples(frames, level);
-    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
+    auto clip = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
     REQUIRE(clip.has_value());
     return *clip;
 }
@@ -34,20 +34,19 @@ ClipId AddConstant(ClipBank& bank, const std::uint32_t frames, const std::int16_
 struct Rig final {
     Mixer mixer;
     Submitter submitter;
-    ClipId clip;  // 4800 frames of kLevel
-    ClipId burst; // 10 frames of kLevel
+    Clip clip;  // 4800 frames of kLevel
+    Clip burst; // 10 frames of kLevel
 };
 
 Rig MakeRig(const Duration delay = Duration::zero(), const std::uint32_t voices = 8,
             const std::uint32_t capacity = 64) {
-    ClipBank bank;
-    const ClipId clip = AddConstant(bank, 4800);
-    const ClipId burst = AddConstant(bank, 10);
+    const Clip clip = AddConstant(4800);
+    const Clip burst = AddConstant(10);
     MixerConfig config;
     config.scheduleDelay = delay;
     config.maxVoices = voices;
     config.queueCapacity = capacity;
-    auto mixer = Mixer::Create(config, std::move(bank));
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     auto submitter = mixer->CreateSubmitter();
     REQUIRE(submitter.has_value());
@@ -254,12 +253,11 @@ TEST_CASE("Audio Mixer maps a stop like a play from the block's anchor") {
 }
 
 TEST_CASE("Audio Mixer StopAll stops only its own submitter's sounds") {
-    ClipBank bank;
-    const ClipId loud = AddConstant(bank, 4800, kLevel);
-    const ClipId soft = AddConstant(bank, 4800, 3);
+    const Clip loud = AddConstant(4800, kLevel);
+    const Clip soft = AddConstant(4800, 3);
     MixerConfig config;
     config.scheduleDelay = Duration::zero();
-    auto mixer = Mixer::Create(config, std::move(bank));
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     auto a = mixer->CreateSubmitter();
     auto b = mixer->CreateSubmitter();
@@ -348,9 +346,8 @@ TEST_CASE("Audio Mixer ignores a stop of an invalid handle") {
 }
 
 TEST_CASE("Audio Mixer treats a foreign or never-issued handle as a Programmer Error") {
-    ClipBank bank;
-    const ClipId clip = AddConstant(bank, 10);
-    auto mixer = Mixer::Create(MixerConfig{}, std::move(bank));
+    const Clip clip = AddConstant(10);
+    auto mixer = Mixer::Create(MixerConfig{});
     REQUIRE(mixer.has_value());
     auto a = mixer->CreateSubmitter();
     auto b = mixer->CreateSubmitter();
@@ -371,9 +368,8 @@ TEST_CASE("Audio Mixer treats a foreign or never-issued handle as a Programmer E
 
 TEST_CASE("Audio Submitter stops on another thread after a hand-over") {
     // One user at a time; the join orders the first thread's calls before the second's.
-    ClipBank bank;
-    const ClipId clip = AddConstant(bank, 10);
-    auto mixer = Mixer::Create(MixerConfig{}, std::move(bank));
+    const Clip clip = AddConstant(10);
+    auto mixer = Mixer::Create(MixerConfig{});
     REQUIRE(mixer.has_value());
     auto submitter = mixer->CreateSubmitter();
     REQUIRE(submitter.has_value());
@@ -395,13 +391,12 @@ TEST_CASE("Audio Submitter stops on another thread after a hand-over") {
 }
 
 TEST_CASE("Audio Mixer gives the last of 64 submitters valid handles") {
-    ClipBank bank;
-    const ClipId loud = AddConstant(bank, 4800, kLevel);
-    const ClipId soft = AddConstant(bank, 4800, 3);
+    const Clip loud = AddConstant(4800, kLevel);
+    const Clip soft = AddConstant(4800, 3);
     MixerConfig config;
     config.maxSubmitters = 64;
     config.scheduleDelay = Duration::zero();
-    auto mixer = Mixer::Create(config, std::move(bank));
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     std::vector<Submitter> submitters;
     for (int i = 0; i < 64; ++i) submitters.push_back(std::move(mixer->CreateSubmitter()).value());
@@ -424,14 +419,13 @@ TEST_CASE("Audio Mixer balances plays and stops from concurrent producers") {
     // outcome (Design Invariant 6).
     constexpr int kProducers = 4;
     constexpr int kEach = 3000;
-    ClipBank bank;
-    const ClipId clip = AddConstant(bank, 64);
+    const Clip clip = AddConstant(64);
     MixerConfig config;
     config.maxSubmitters = kProducers;
     config.queueCapacity = 32;
     config.maxVoices = 16;
     config.scheduleDelay = Duration::zero();
-    auto created = Mixer::Create(config, std::move(bank));
+    auto created = Mixer::Create(config);
     REQUIRE(created.has_value());
     Mixer mixer = std::move(created).value();
     std::vector<Submitter> submitters;

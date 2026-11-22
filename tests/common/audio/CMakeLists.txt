@@ -1,9 +1,12 @@
 # The mixer's sample-domain core is tested offline, without a device: the test
 # reaches the internal VoiceMixer header (engine/modules/audio/src) on purpose, since
 # the public Mixer that wraps it arrives with v8-engine-audio-schedule.
-add_executable(gyo_audio_tests MixerTests.cpp ScheduleTests.cpp CharacterizationTests.cpp StopTests.cpp ClipSlotTests.cpp PlayheadTests.cpp)
+add_executable(gyo_audio_tests MixerTests.cpp ScheduleTests.cpp CharacterizationTests.cpp StopTests.cpp ClipTests.cpp PlayheadTests.cpp
+    WavLoaderTests.cpp)
 target_include_directories(gyo_audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/engine/modules/audio/src)
 target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)
+# The "sound" Data Contract's sample content: master's player_footstep.wav, unchanged.
+target_compile_definitions(gyo_audio_tests PRIVATE GYO_AUDIO_CONTRACT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/contract")
 # The ThreadSanitizer stress case runs as its own CTest, so its time never eats
 # into the other cases' timeout. Its three runs are bounded inside the case at
 # 20 s each, 60 s under ThreadSanitizer, so a run that never reaches its counts
@@ -26,12 +29,13 @@ add_test(NAME gyo_audio_alloc_tests COMMAND gyo_audio_alloc_tests)
 set_tests_properties(gyo_audio_alloc_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
-# The mixer is a leaf above the time base: its links, private and interface
-# alike, are exactly GYO::Base and GYO::Time, so no SDL, asset or engine library
-# edge appears (docs/architecture/target/v2/audio.zh-Hant.md, Design Invariants 1 and 2;
+# The mixer sits above the time base and asset's loader interface: its links,
+# private and interface alike, are exactly GYO::Base, GYO::Time and GYO::Asset,
+# so no SDL or other engine library edge appears
+# (docs/architecture/target/v2/audio.zh-Hant.md, Design Invariants 1 and 2;
 # gyo_expect_links: tests/common/support/ExpectLinks.cmake).
 # Checked once the whole project is configured.
 function(gyo_expect_audio_links)
-    gyo_expect_links(gyo_audio GYO::Base GYO::Time)
+    gyo_expect_links(gyo_audio GYO::Base GYO::Time GYO::Asset)
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_audio_links)

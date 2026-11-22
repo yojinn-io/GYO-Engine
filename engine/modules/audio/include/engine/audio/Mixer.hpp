@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "engine/audio/AudioError.hpp"
-#include "engine/audio/ClipBank.hpp"
+#include "engine/audio/Clip.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/base/Span.hpp"
 #include "engine/time/MonotonicClock.hpp"
@@ -13,7 +13,6 @@
 namespace GYO::Engine::Audio {
 
 namespace Detail {
-struct ClipSlot;
 struct Command;
 struct MixerState;
 struct SubmitterSlot;
@@ -22,12 +21,7 @@ struct SubmitterSlot;
 struct MixerConfig final {
     std::uint32_t maxVoices = 32;      // playing plus scheduled voices, 1 to 1024
     std::uint32_t maxSubmitters = 4;   // 1 to 64, all allocated at creation
-    std::uint32_t queueCapacity = 256; // per submitter, 1 to 65536: plays, stops and unloads
-    // Clips each submitter may load while output runs, 0 to 256; 0 allocates
-    // nothing, so LoadClip then always returns NoClipSlot: a consumer whose clips
-    // arrive after the mixer exists sets it. A slot is reused once its clip is
-    // unloaded and no voice reads it.
-    std::uint32_t clipSlotsPerSubmitter = 0;
+    std::uint32_t queueCapacity = 256; // per submitter, 1 to 65536: plays and stops
     // Added to every mapped start, so a request sent a little after its time still
     // starts on time; it is also the least latency of a sound played "now". 0 to
     // 1 s. The default covers a consumer at 30 FPS (a request up to 33 ms late)
@@ -39,7 +33,9 @@ struct MixerConfig final {
 
 // One sound, played once. The consumer turns direction and distance into gains.
 struct PlayRequest final {
-    ClipId clip;
+    // What to play. The mixer holds a reference to it until the sound has ended
+    // and the submitter is called again; the samples are never copied.
+    Clip clip;
     // The moment the sound belongs to, on the Engine time base (Time::MonotonicClock),
     // never a scalable game time (Design Invariant 3). Always set it: left at its
     // default (the clock's epoch) the play lies before any anchor (by the time
@@ -97,11 +93,6 @@ struct MixerStats final {
     std::uint64_t stopsUnmatched = 0;
     std::uint64_t stopsDroppedQueueFull = 0;
     std::uint64_t stopsLate = 0;
-    // Unload requests are taken or droppedQueueFull; unloadsSubmitted is their
-    // sum once none is in flight.
-    std::uint64_t unloadsSubmitted = 0;
-    std::uint64_t unloadsTaken = 0;
-    std::uint64_t unloadsDroppedQueueFull = 0;
     Time::Duration maxLateness{};     // the latest late start
     std::uint64_t renderedFrames = 0;
     std::uint64_t clippedSamples = 0;
@@ -110,12 +101,20 @@ struct MixerStats final {
 class Mixer;
 
 // The producer end of one bounded single-producer, single-consumer queue. It is
-// not bound to a thread: one user at a time calls Play, Stop, StopAll, LoadClip
-// and UnloadClip, and when another thread takes it over, the last call of the
-// one before must happen-before the first call of the next (a join, the same
-// mutex unlocked and locked, any hand-over that synchronizes); calls merely
-// apart in time, without such an order, are a data race. It shares the mixer's
-// state, so it may outlive the Mixer (its plays are then never rendered).
+// not bound to a thread: one user at a time calls Play, Stop, StopAll and the
+// destructor, and when another thread takes it over, the last call of the one
+// before must happen-before the first call of the next (a join, the same mutex
+// unlocked and locked, any hand-over that synchronizes); calls merely apart in
+// time, without such an order, are a data race. It shares the mixer's state, so
+// it may outlive the Mixer (its plays are then never rendered).
+//
+// The mixer holds a reference to the clip of every play in this submitter's
+// table, never on the audio thread; the audio thread hands back the table entry
+// of each play that ended (or got no voice), and every call of this submitter
+// (Play, Stop, StopAll, the destructor) first lets go of the clips handed back.
+// So a clip the mixer holds is let go at the latest on the submitter's next
+// call; those of a submitter never called again are let go with the mixer's
+// state.
 class Submitter final {
 public:
     Submitter(Submitter&& other) noexcept;
@@ -125,17 +124,16 @@ public:
     ~Submitter();
 
     // An invalid handle when the queue is full; the request is then dropped and
-    // counted. A clip neither in the mixer's bank nor loaded through this
-    // submitter (and not unloaded since), a gain outside [0, kMaxGain] and a
-    // moved-from Submitter are Programmer Errors, asserted before anything is
-    // counted (as for every member below).
+    // counted. An empty clip, a gain outside [0, kMaxGain] and a moved-from
+    // Submitter are Programmer Errors, asserted before anything is counted (as
+    // for every member below).
     SoundHandle Play(const PlayRequest& request);
     // Ends the sound at the frame `at` maps to, by the same rule as a play's
     // start (delay included), from the anchor of the block that takes the stop.
     // A sound stopped before it started, at or before its start, stays silent; a
     // started sound stopped at a frame already rendered stops at the first frame
     // of that block, counted late. With several stops, the earliest frame wins.
-    // An invalid handle does nothing and returns true. Another submitter's
+    // An invalid handle stops nothing and returns true. Another submitter's
     // handle, or one this submitter never returned, is a Programmer Error. False
     // when the queue is full (counted; the sound keeps playing).
     [[nodiscard]] bool Stop(SoundHandle sound, Time::TimePoint at);
@@ -143,27 +141,13 @@ public:
     // request in the counters.
     [[nodiscard]] bool StopAll(Time::TimePoint at);
 
-    // Copies a clip into one of this submitter's slots, on this thread, also
-    // while output runs, and returns its id for Play. The slots of clips whose
-    // unload the audio thread has taken and no voice reads any more are freed
-    // first. InvalidClip as ClipBank::Add; NoClipSlot when every slot is loaded
-    // or not handed back yet (an output that never renders hands none back).
-    [[nodiscard]] Base::Result<ClipId, AudioError> LoadClip(Base::ConstSpan<std::int16_t> interleaved,
-                                                            std::uint16_t channels, std::uint32_t sampleRate);
-    // Releases a loaded clip behind every play already queued: sounds already
-    // sent play to their end (stop them first to free it sooner). Playing or
-    // unloading it afterwards, a clip of another submitter and a bank clip are
-    // Programmer Errors. False when the queue is full (counted; the clip stays
-    // loaded and may be unloaded again).
-    [[nodiscard]] bool UnloadClip(ClipId clip);
-
 private:
     friend class Mixer;
     Submitter(std::shared_ptr<Detail::MixerState> state, Detail::SubmitterSlot* slot) noexcept;
     bool Enqueue(const Detail::Command& command);
     bool SendStop(const Detail::Command& command);
-    // This submitter's slot of a runtime clip that is loaded under that id, or null.
-    [[nodiscard]] Detail::ClipSlot* LoadedClip(ClipId clip) const noexcept;
+    // Lets go of the clips of the table entries the audio thread handed back.
+    void Reclaim() noexcept;
 
     std::shared_ptr<Detail::MixerState> state_; // keeps the mixer's state alive
     Detail::SubmitterSlot* slot_ = nullptr;     // this submitter's queue inside it
@@ -175,7 +159,7 @@ private:
 class Mixer final {
 public:
     // InvalidConfig for a value outside MixerConfig's documented limits.
-    [[nodiscard]] static Base::Result<Mixer, AudioError> Create(const MixerConfig& config, ClipBank&& clips);
+    [[nodiscard]] static Base::Result<Mixer, AudioError> Create(const MixerConfig& config);
 
     // A moved-from Mixer renders silence, reports empty Stats and NotPlaying
     // playheads; its other members are Programmer Errors.

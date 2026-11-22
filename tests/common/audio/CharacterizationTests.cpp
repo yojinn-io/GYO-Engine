@@ -47,21 +47,20 @@ struct Fnv1a final {
 } // namespace
 
 TEST_CASE("Audio Mixer renders a recorded one-shot sequence bit-identically") {
-    ClipBank bank;
     const auto shortMono = MakeClip(37, 1, 1);
     const auto stereo = MakeClip(500, 2, 2);
     const auto longMono = MakeClip(2000, 1, 3);
-    auto a = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(shortMono.data(), shortMono.size()), 1, kSampleRate);
-    auto b = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(stereo.data(), stereo.size()), 2, kSampleRate);
-    auto c = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(longMono.data(), longMono.size()), 1, kSampleRate);
+    auto a = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(shortMono.data(), shortMono.size()), 1, kSampleRate);
+    auto b = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(stereo.data(), stereo.size()), 2, kSampleRate);
+    auto c = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(longMono.data(), longMono.size()), 1, kSampleRate);
     REQUIRE((a && b && c));
-    const ClipId clips[] = {*a, *b, *c};
+    const Clip clips[] = {*a, *b, *c};
 
     MixerConfig config; // the default 60 ms delay
     config.maxVoices = 6;
     config.maxSubmitters = 2;
     config.queueCapacity = 8;
-    auto mixer = Mixer::Create(config, std::move(bank));
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     auto first = mixer->CreateSubmitter();
     auto second = mixer->CreateSubmitter();
