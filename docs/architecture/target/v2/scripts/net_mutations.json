@@ -634,6 +634,73 @@
    "target": "gyo_net_tests",
    "cases": "handshake: a new handshake from the same endpoint*",
    "expect": "a\\ reconnect\\ from\\ the\\ same\\ endpoint\\ is\\ a\\ new\\ connection"
+  },
+  {
+   "id": "nt-clock-no-jump",
+   "what": "the clock sync never jumps (not even on connecting). Only it catches the snap",
+   "guards": [
+    "net-module-declaration D-9",
+    "net-module-declaration 18"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (!sync.synced || std::abs(error) > sync.settings.snapTicks) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "clock: a client at tick 0*",
+   "expect": "the\\ first\\ sync\\ after\\ connecting\\ jumps\\ to\\ the\\ target"
+  },
+  {
+   "id": "nt-clock-speed-reversed",
+   "what": "a client behind its target slows down instead of speeding up. Only it catches the direction of the speed",
+   "guards": [
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (sync.consecutive >= sync.settings.consecutive) scale = behind ? sync.settings.speedup : 1.0 / sync.settings.speedup;",
+   "replace": "            if (sync.consecutive >= sync.settings.consecutive) scale = behind ? 1.0 / sync.settings.speedup : sync.settings.speedup;",
+   "target": "gyo_net_tests",
+   "cases": "clock: when the latency grows*",
+   "expect": "a\\ client\\ falling\\ behind\\ its\\ target\\ speeds\\ up"
+  },
+  {
+   "id": "nt-clock-speed-kept",
+   "what": "back within the deadband the speed stays as it was. Only it catches the return to 1",
+   "guards": [
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        } else {\n            sync.consecutive = 0;\n        }\n    }\n    if (scale != sync.scale) ++sync.speedChanges;",
+   "replace": "        } else {\n            sync.consecutive = 0;\n            scale = sync.scale;\n        }\n    }\n    if (scale != sync.scale) ++sync.speedChanges;",
+   "target": "gyo_net_tests",
+   "cases": "clock: when the latency grows*",
+   "expect": "back\\ near\\ the\\ target\\ the\\ speed\\ is\\ 1\\ again"
+  },
+  {
+   "id": "nt-clock-not-tick-writer",
+   "what": "the clock sync is not added to the time Module's Tick writers, so a server-authority client is AU-E5. Only it catches the registration",
+   "guards": [
+    "net-module-declaration D-9",
+    "world-time WT-5"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "        WorldTime::WorldTimeModule::AddTickWriter(setup, \"SyncClock\");\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: the entry has the same name*",
+   "expect": "AU\\-E5\\ System\\ 'SyncClock'"
+  },
+  {
+   "id": "nt-clock-unsmoothed",
+   "what": "the remote estimate takes each packet as it is (no EMA). Only it catches the smoothing of the remote estimate",
+   "guards": [
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            sync.offset = sync.haveOffset ? sync.offset + alpha * (raw - sync.offset) : raw;",
+   "replace": "            sync.offset = raw + 0.0 * alpha;",
+   "target": "gyo_net_tests",
+   "cases": "clock: a client at tick 0*",
+   "expect": "once\\ settled\\ the\\ client\\ stays\\ within\\ 2\\ ticks\\ of\\ its\\ sync\\ target"
   }
  ]
 }

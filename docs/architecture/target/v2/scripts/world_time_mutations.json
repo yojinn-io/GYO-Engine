@@ -409,13 +409,13 @@
   },
   {
    "id": "wt-control-ignored",
-   "what": "AdvanceTime ignores TimeControl (time Module, step 4). Only it catches AdvanceTime not passing the World's TimeControl; wt-pause-advances and wt-scale-* break AdvanceVirtual itself",
+   "what": "AdvanceTime ignores TimeControl (time Module, step 4). Only it catches AdvanceTime not passing the World's TimeControl; wt-pause-advances and wt-scale-* break AdvanceVirtual itself (find follows the TimeSyncScale argument of v8-arch-gyo2-net-module step 3b)",
    "guards": [
     "world-time WT-2"
    ],
    "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
-   "find": "    return Advance(*real, *virt, *fixed, *active, *sampling, *control, *config, discarded);",
-   "replace": "    return Advance(*real, *virt, *fixed, *active, *sampling, TimeControl{}, *config, discarded);",
+   "find": "    return Advance(*real, *virt, *fixed, *active, *sampling, *control, *sync, *config, discarded);",
+   "replace": "    return Advance(*real, *virt, *fixed, *active, *sampling, TimeControl{}, *sync, *config, discarded);",
    "target": "gyo_world_time_tests",
    "cases": "sampling:*",
    "expect": "\\[wt\\-paused\\]"
@@ -1254,6 +1254,65 @@
    "target": "gyo_world_time_tests",
    "cases": "carry-over:*",
    "expect": "\\[wt\\-resimulation\\-reset\\]"
+  },
+  {
+   "id": "wt-sync-scale-ignored",
+   "what": "AdvanceTime ignores TimeSyncScale (only the product's scale). Only it catches the product of the two scales",
+   "guards": [
+    "world-time WT-6",
+    "net-module-declaration D-9",
+    "net-module-declaration 18"
+   ],
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
+   "find": "    control.scale = product.scale * sync.scale;",
+   "replace": "    control.scale = product.scale;",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-sync\\-multiplies\\]"
+  },
+  {
+   "id": "wt-jump-tick-only",
+   "what": "JumpFixedSteps moves Tick and leaves the fixed time. Only it catches FixedTime::elapsed moving with Tick",
+   "guards": [
+    "world-time WT-3",
+    "net-module-declaration D-9",
+    "net-module-declaration 18"
+   ],
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "        time.elapsed += static_cast<Nanoseconds>(k) * time.accumulator.Step();\n    }));\n}\n\nnamespace Detail {",
+   "replace": "        (void)time;\n    }));\n}\n\nnamespace Detail {",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "\\[wt\\-jump\\-forward\\]"
+  },
+  {
+   "id": "wt-jump-below-zero-allowed",
+   "what": "JumpFixedSteps may take Tick below 0. Only it catches the lower bound",
+   "guards": [
+    "world-time WT-3",
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/world_time/include/engine/world_time/FixedStep.hpp",
+   "find": "        GYO_ASSERT(k >= 0 || static_cast<std::uint64_t>(-k) <= tick.value);",
+   "replace": "",
+   "target": "gyo_world_time_tests",
+   "cases": "fixed:*",
+   "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ W::JumpFixedSteps\\(below,\\ \\-4\\)"
+  },
+  {
+   "id": "wt-tick-writer-not-added",
+   "what": "AddTickWriter does not add the System to the list. Only it catches the registrable list",
+   "guards": [
+    "world-time WT-5",
+    "net-module-declaration D-9",
+    "net-module-declaration 18"
+   ],
+   "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
+   "find": "    table->names.push_back(std::move(system));",
+   "replace": "    (void)system;",
+   "target": "gyo_world_time_tests",
+   "cases": "module:*",
+   "expect": "\\[wt\\-tick\\-writer\\-added\\]"
   }
  ]
 }

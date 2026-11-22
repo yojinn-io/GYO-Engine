@@ -1585,6 +1585,21 @@
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E6 leaves out a component input*",
    "expect": "\\[au\\-z6\\-component\\-input\\-history\\]"
+  },
+  {
+   "id": "au-tick-writers-fixed-list",
+   "what": "AU-E5 reads the time Module's own driver only, not the writers other units added. Only it catches the World's list",
+   "guards": [
+    "authority-module-declaration 5.4",
+    "world-time WT-5",
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/authority/src/ServerAuthorityStrategy.cpp",
+   "find": "        const std::vector<std::string> allowed = WorldTime::WorldTimeModule::TickWriters(context.World().Buffer());",
+   "replace": "        const std::vector<std::string> allowed = WorldTime::WorldTimeModule::TickWriters();",
+   "target": "gyo_authority_tests",
+   "cases": "authority checks: AU-E5 accepts a Tick writer*",
+   "expect": "\\[au\\-tick\\-writer\\-registered\\]"
   }
  ]
 }

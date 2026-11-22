@@ -179,6 +179,13 @@ public:
 
     // The smoothed round-trip time; zero before the first sample.
     [[nodiscard]] NetTime SmoothedRtt() const noexcept { return smoothedRtt_; }
+    // The jitter: half the smoothed absolute deviation of the RTT samples (lightyear
+    // crates/core/sync/src/ping/estimator.rs: RTT_DEV_EWMA_BETA = 1/6, the first deviation half the first sample, the
+    // jitter half the deviation); zero before the first sample.
+    [[nodiscard]] NetTime Jitter() const noexcept { return rttDeviation_ / 2; }
+    [[nodiscard]] bool HasRtt() const noexcept { return haveRtt_; }
+    // When the newest packet (RemoteStamp) was accepted.
+    [[nodiscard]] NetTime RemoteStampAt() const noexcept { return remoteStampAt_; }
 
     [[nodiscard]] const ConnectionStats& Stats() const noexcept { return stats_; }
     [[nodiscard]] const ConnectionSettings& Settings() const noexcept { return settings_; }
@@ -263,6 +270,8 @@ private:
     std::optional<std::uint16_t> newestReceived_;
     bool ackOwed_ = false;
     NetTime smoothedRtt_{0};
+    NetTime rttDeviation_{0};
+    NetTime remoteStampAt_{0};
     bool haveRtt_ = false;
     std::optional<Stamp> remoteStamp_;
     bool closing_ = false;

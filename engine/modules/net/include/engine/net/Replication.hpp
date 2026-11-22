@@ -687,8 +687,54 @@ template <class T>
     return world.GetMut<PeerInput<T>>(link->clientPeer);
 }
 
+// The clock sync of a client World (D-9; 3b). Its constants follow lightyear's SyncConfig defaults
+// (crates/core/sync/src/timeline/sync.rs:210-220) and its objective lightyear's input timeline
+// (crates/core/sync/src/timeline/input.rs:628-629); the remote estimate is lightyear's RemoteTimeline
+// (crates/core/sync/src/timeline/remote.rs:109-221): an offset between the Match's ticks and the local clock,
+// smoothed by an EMA whose weight goes from 0.10 (jitter <= 1 ms) down to 0.02 (jitter >= 10 ms):
+//   raw     = (Match tick of a newer packet + RTT/2 / step) - its arrival time / step
+//   remote  = now / step + offset (offset: raw the first time, then offset + alpha x (raw - offset))
+//   target  = remote + (RTT/2 + 4 x jitter) / step + 1 (jitter margin) + 1 + 1 (error margin)  [ticks]
+//   error   = target - (Tick + overstep / step)
+//   |error| > 10: JumpFixedSteps(round(error)) (also the first sync after connecting);
+//   |error| > 1 three times in a row with one sign: speed 1.05 (behind) or 1 / 1.05 (ahead);
+//   |error| <= 1: speed 1.
+struct ClockSyncSettings final {
+    double snapTicks = 10.0;
+    double deadbandTicks = 1.0;
+    std::uint8_t consecutive = 3;
+    double speedup = 1.05;
+    double jitterMultiple = 4.0;
+    // jitter margin (1 tick) + the input's own tick (1) + the error margin (1 tick).
+    double marginTicks = 3.0;
+    // The EMA weights of the remote estimate and the jitter (ms) they go between.
+    double maxAlpha = 0.10;
+    double minAlpha = 0.02;
+    double lowJitterMs = 1.0;
+    double highJitterMs = 10.0;
+};
+struct ClockSync final {
+    ClockSyncSettings settings;
+    bool synced = false;
+    std::uint8_t consecutive = 0;
+    bool previousBehind = true;
+    double lastError = 0.0;
+    double lastTarget = 0.0;
+    double scale = 1.0;
+    std::uint64_t jumps = 0;
+    std::int64_t lastJump = 0;
+    std::uint64_t speedChanges = 0;
+    // The remote estimate: the smoothed offset (ticks), and the last packet it took.
+    bool haveOffset = false;
+    double offset = 0.0;
+    std::uint32_t lastStampTick = 0;
+    NetTime lastStampAt{0};
+};
+inline void HashValue(Kernel::Hasher&, const ClockSync&) {}
+
 namespace Detail {
 // The Systems NetModule registers for replication and inputs.
+SystemResult SyncClock(Kernel::ExclusiveWorld<Kernel::Writes<WorldTime::Tick, WorldTime::FixedTime, WorldTime::TimeSyncScale>> world);
 SystemResult ReceiveInputs(ReplicaWorld world);
 SystemResult SendInputs(ReplicaWorld world);
 SystemResult ReplicateOut(ReplicaWorld world);

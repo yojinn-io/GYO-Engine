@@ -201,6 +201,12 @@ void Connection::Acknowledge(const std::uint16_t id, const NetTime now) {
         const NetTime sample = std::max(now - packet.sentAt, NetTime{0});
         // EWMA with lightyear's weight 1/12 (crates/core/sync/src/ping/estimator.rs:4, RTT_EWMA_ALPHA), in
         // integer nanoseconds so every platform computes the same value.
+        if (haveRtt_) {
+            const NetTime error = sample > smoothedRtt_ ? sample - smoothedRtt_ : smoothedRtt_ - sample;
+            rttDeviation_ += (error - rttDeviation_) / 6;
+        } else {
+            rttDeviation_ = sample / 2;
+        }
         smoothedRtt_ = haveRtt_ ? smoothedRtt_ + (sample - smoothedRtt_) / 12 : sample;
         haveRtt_ = true;
     }
@@ -305,7 +311,10 @@ NetResult<void> Connection::Receive(const std::span<const std::byte> datagram, c
     const bool newest = !newestReceived_ || SequenceNewer(header.packetId, *newestReceived_);
     MarkReceived(header.packetId);
     ++stats_.datagramsAccepted;
-    if (newest) remoteStamp_ = Stamp{header.tick, header.worldGeneration};
+    if (newest) {
+        remoteStamp_ = Stamp{header.tick, header.worldGeneration};
+        remoteStampAt_ = now;
+    }
     if (header.kind == PacketKind::Data) ackOwed_ = true;
     if (header.kind == PacketKind::Disconnect) remoteClosed_ = true;
     Acknowledge(header.ack, now);

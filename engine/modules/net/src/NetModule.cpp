@@ -14,6 +14,7 @@
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/rollback/RollbackStrategy.hpp"
 #include "engine/world_time/TimeTypes.hpp"
+#include "engine/world_time/WorldTimeModule.hpp"
 
 namespace GYO::Engine::Net {
 namespace {
@@ -192,6 +193,13 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
         apply.mounts.front().after.push_back("ReceiveNet");
         r.AddSystem<&Detail::ApplyReplication>(std::move(apply));
         r.AddSystem<&Detail::NotifyReplica>(Detail::MountedAt("NotifyReplica", Orchestration::DefaultSchedules::preUpdate));
+        // The clock sync (D-9): a Tick writer of the time Module's list (WT-5), at the client only.
+        r.Resource<ClockSync>({.name = "ClockSync"});
+        Kernel::SystemOptions clock = Detail::MountedAt("SyncClock", Orchestration::DefaultSchedules::last);
+        clock.mounts.front().before.push_back("SendInputs");
+        r.AddSystem<&Detail::SyncClock>(std::move(clock));
+        WorldTime::WorldTimeModule::AddTickWriter(setup, "SyncClock");
+        Detail::MarkOneEnd(setup, "SyncClock", "the net Module's clock sync moves the client's Tick toward the Match's");
         Kernel::SystemOptions inputs = Detail::MountedAt("SendInputs", Orchestration::DefaultSchedules::last);
         inputs.mounts.front().before.push_back("SendNet");
         r.AddSystem<&Detail::SendInputs>(std::move(inputs));
@@ -226,6 +234,7 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
                 NetReplicaState state;
                 state.resyncNeeded = service->BeginClientWorld() > 1;
                 world.SetResource(std::move(state));
+                world.SetResource(ClockSync{});
             }
             const auto* fixed = world.Resource<WorldTime::FixedTime>();
             const auto* allotter = world.Resource<EntityIds::RangeAllotter>();

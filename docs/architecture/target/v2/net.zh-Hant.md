@@ -1,8 +1,8 @@
 # 網路 Module（`engine/modules/net`）
 
-更新：2026-11-22（新頁，`v8-arch-gyo2-net-module` 第 1 步前半 1a：傳輸層）；2026-11-23（第 3 步前半 3a：輸入、重連、CCR-8；新增第 9 節，第 3、7、8 節補，NT-1、NT-3、NT-10 補 3a）；2026-11-23（第 2 步：元件的複製、伺服器訊息、`OnServer()`／`OnClient()`、World 世代；新增第 8 節，第 7 節補登記的東西，NT-1、NT-3、NT-8、NT-9、NT-10 補第 2 步）；2026-11-22（第 1 步後半 1b：握手、存活、登記單位、Peer 實體、套用點；第 1、2 節改寫，第 3 節補握手的種類與 payload，新增第 6、7 節，NT-1、NT-6、NT-7、NT-8、NT-10 補 1b）。由來：[事前宣告](net-module-declaration.zh-Hant.md)（修訂 2，2026-11-22 動工前核准「照建議，全部核准」）D-2、D-3、D-12、第 8 節 G-2、第 12 節。**Design Invariants 與 Replacement Criteria 是草稿，最終文字在合併前核准定稿。**本頁照 1a、1b、第 2 步、3a 的實作寫。
+更新：2026-11-22（新頁，`v8-arch-gyo2-net-module` 第 1 步前半 1a：傳輸層）；2026-11-23（第 3 步後半 3b：對時、W-8；新增第 10 節，第 9 節拿掉 3a 的暫時做法，NT-1、NT-4 補 3b）；2026-11-23（第 3 步前半 3a：輸入、重連、CCR-8；新增第 9 節，第 3、7、8 節補，NT-1、NT-3、NT-10 補 3a）；2026-11-23（第 2 步：元件的複製、伺服器訊息、`OnServer()`／`OnClient()`、World 世代；新增第 8 節，第 7 節補登記的東西，NT-1、NT-3、NT-8、NT-9、NT-10 補第 2 步）；2026-11-22（第 1 步後半 1b：握手、存活、登記單位、Peer 實體、套用點；第 1、2 節改寫，第 3 節補握手的種類與 payload，新增第 6、7 節，NT-1、NT-6、NT-7、NT-8、NT-10 補 1b）。由來：[事前宣告](net-module-declaration.zh-Hant.md)（修訂 2，2026-11-22 動工前核准「照建議，全部核准」）D-2、D-3、D-12、第 8 節 G-2、第 12 節。**Design Invariants 與 Replacement Criteria 是草稿，最終文字在合併前核准定稿。**本頁照 1a、1b、第 2 步、3a、3b 的實作寫。
 
-Owner：架構。程式：`engine/modules/net/`（`GYO::Engine::Net`，target `GYO::Net`，登記單位 `NetModule`）。行為測試：`tests/common/net/`（ctest `net.header`、`net.connection`、`net.transport`、`net.link`、`net.handshake`、`net.liveness`、`net.module`、`net.replication`、`net.scenario`、`net.input`、`net.reconnect`，標籤 `cpu`）；突變清單 [`scripts/net_mutations.json`](scripts/net_mutations.json)（`nt-`）。
+Owner：架構。程式：`engine/modules/net/`（`GYO::Engine::Net`，target `GYO::Net`，登記單位 `NetModule`）。行為測試：`tests/common/net/`（ctest `net.header`、`net.connection`、`net.transport`、`net.link`、`net.handshake`、`net.liveness`、`net.module`、`net.replication`、`net.scenario`、`net.input`、`net.reconnect`、`net.clock`，標籤 `cpu`）；突變清單 [`scripts/net_mutations.json`](scripts/net_mutations.json)（`nt-`）。
 
 ## 一個例子
 
@@ -302,14 +302,33 @@ Net::NetEntry(setup).Input<Move>("Move", options);
 - 斷掉的 session 還沒送完的 Disconnect 先送，再開新的握手。
 - 握手的請求帶 salt：同一個 endpoint 帶別的 salt 的回應是新的握手，Match 先結束舊的連線（`ClosedByRemote`）再配新的連線識別；同一個 salt 是重送的回應，回同一個連線識別。
 - 舊連線還在飛的 datagram：新連線連上後是連線識別不符（`ConnectionMismatch`），連上之前是 `UnknownSource`，都計數；已斷的 session 收到的也計 `UnknownSource`。
-- **tick 對齊不在 3a**：新 World 的 tick 怎麼對上 Match 是對時（3b）的事。3a 的測試的輸入以 Match 的 tick 為鍵（測試讀得到），是暫時的。
+- **tick 對齊**：3b 的對時（第 10 節）。Client 的入口與送件以對時後的自己的 `Tick` 為鍵（3a 測試裡「讀 Match 的 tick 加提前量」的暫時做法已拿掉）。
+
+## 10. 對時（宣告 D-9、第 18 節 (A)；3b）
+
+Client 的 World（K1 也有）掛 `SyncClock`（`ExclusiveWorld<Writes<Tick, FixedTime, TimeSyncScale>>`，`Main`／`Last`，在 `SendInputs` 之前）；它登記進時間 Module 的 `TickWriters`（`AddTickWriter`），有權威策略時標 `OneEndOnly`。狀態在 Resource `ClockSync`（量到的誤差、倍率、跳的次數）。
+
+- **量測**（牆鐘只在 IO 層）：
+  - Match 的 tick 在每個封包的標頭；RTT 由封包確認的樣本推（1a 的 EWMA 1/12），jitter＝RTT 偏差的一半（偏差的 EWMA 1/6、第一個樣本的一半；lightyear `crates/core/sync/src/ping/estimator.rs`）。
+  - **Match 現在第幾步**：照 lightyear 的 `RemoteTimeline`（`crates/core/sync/src/timeline/remote.rs:109-221`）。收到較新的封包時算 `raw＝它的 Match tick＋RTT/2÷步長－它到的時間÷步長`，平滑的位移 `offset` 第一次取 raw，之後以 EMA 追（權重隨 jitter 從 0.10（≤1 ms）降到 0.02（≥10 ms））；`remote＝現在÷步長＋offset`。
+  - **目標**＝`remote＋（RTT/2＋4×jitter）÷步長＋1＋1＋1`：lightyear 的輸入時間線（`crates/core/sync/src/timeline/input.rs:628-629`）：網路延遲、jitter 邊際（4×jitter＋1 tick）、輸入自己的一個 tick、誤差邊際 1 tick（`SyncConfig` 的預設，`sync.rs:210-220`）。
+- **調整**（誤差＝目標－（`Tick`＋餘數÷步長））：
+  - 剛連上（握手的 Match tick）或 |誤差| > 10 tick：`JumpFixedSteps(round(誤差))`。
+  - |誤差| > 1 tick 連續 3 次同方向：倍率 1.05（落後）或 1/1.05（超前）。
+  - |誤差| ≤ 1 tick（死區＝lightyear 的 `error_margin`，也就是目標裡加的那一個 tick）：倍率 1。
+  - 倍率寫進 `TimeSyncScale`，`AdvanceTime` 乘上產品的倍率。lightyear 的增益隨誤差加大（`1＋0.05×誤差÷10×2`）；這裡照主會話的卡片用固定的 1.05。
+- 跳之後，回滾照既有的規則（確認點早於第一筆記錄就放棄）；K3 在第 4 步。
+
+## 11. ECS 元件與 W-8（3b 修正）
+
+網路登記成 ECS 元件的型別（`Peer`、`PeerLedger`、`PeerControls`、`PeerInput<T>`）要 nothrow 可搬移（Kernel spec W-8）。MSVC 的 `std::map`、`std::deque`、`std::unordered_map` 的搬移建構不是 noexcept（libc++、libstdc++ 是），所以元件裡的容器一律用 `std::vector` 或排序的 `std::vector` 的 `FlatMap`（`FlatMap.hpp`）。每個元件的定義旁有 `static_assert(kStorable<…>)`；macOS 與 Linux 驗不出 MSVC 的這一點，L1 的 windows-x64 是實際的守衛。Resource（`NetReplicaState`、`NetWorldLink`）沒有這個斷言，照舊。
 
 ## Design Invariants
 
 **草稿**（宣告第 12 節）。最終文字在合併前核准定稿。守衛欄寫 1a 已有的；綁實作方式的守衛（`gyo_expect_links` 等）在 scenario「伺服器＋兩個 Client」通過之後立（AGENTS §3「ガードを立てる時期」；宣告第 8 節）。
 
 <a id="nt-1"></a>
-**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節；對時 (6) 在 3b）。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`、`nt-k3-as-k2`。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
+**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節）；3b 有 (6) 對時的量測與給時間 Module 的輸入（第 10 節）。守衛（3b）：`net.clock` 兩案；突變 `nt-clock-*`。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`、`nt-k3-as-k2`。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
 
 <a id="nt-2"></a>
 **NT-2 一套內部協議。** Link 之上只有一種協議；Link 只有 bytes 與連線狀態。1a：`Link` 只有 `Send`、`Receive`；`UdpLink`、`MemoryLink` 換了上層不改（`net.transport` 用 `MemoryLink`、`net.link` 用 `UdpLink`，`Connection` 同一份）。
@@ -318,7 +337,7 @@ Net::NetEntry(setup).Input<Move>("Move", options);
 **NT-3 冪等的鍵。** 每一筆帶宣告 D-4 表的鍵，重複收到不改結果。1a：可靠訊息的鍵（連線、通道、訊息序號），重複收到丟掉並計數；封包層以 packet id 去重。第 2 步：值以（World 世代、實體、元件、tick）為鍵，新的蓋舊的、比寫過的舊就不寫並計數；結構以（World 世代、結構 tick）在一條有序的通道上恰好一次。3a：輸入以（Peer, tick）為鍵，只收一次、不覆蓋；值相同就不寫（CCR-8）。守衛：G-2（`net.transport`）、G-5、G-6；突變 `nt-ordered-no-dedup`、`nt-packet-no-dedup`、`nt-stale-value-applied`、`nt-input-overwritten`、`nt-ccr8-write-same`。
 
 <a id="nt-4"></a>
-**NT-4 判定用的時間只有 tick。** 牆鐘只在 IO 層。1a：`Connection` 不讀時鐘，時間由呼叫者給（`NetTime`），只用來算 RTT、重送與分片逾時；標頭的 tick 照呼叫者給的寫。
+**NT-4 判定用的時間只有 tick。** 牆鐘只在 IO 層。3b：對時讀牆鐘只為量測，改 World 的只有時間 Module 的 `JumpFixedSteps` 與 `TimeSyncScale`（判定用的仍只有 tick）。1a：`Connection` 不讀時鐘，時間由呼叫者給（`NetTime`），只用來算 RTT、重送與分片逾時；標頭的 tick 照呼叫者給的寫。
 
 <a id="nt-5"></a>
 **NT-5 確認點。** 只在宣告 D-7 的兩個條件成立後寫 `ConfirmedThrough`。（第 4 步）

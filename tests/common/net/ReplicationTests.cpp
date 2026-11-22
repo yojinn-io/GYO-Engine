@@ -84,8 +84,8 @@ struct Game {
 N::MemoryLinkSettings Lossy() {
     N::MemoryLinkSettings settings;
     settings.seed = 0x5EED0005u;
-    settings.aToB = {2000, 1000, 2500, 3};
-    settings.bToA = {2000, 1000, 2500, 3};
+    settings.aToB = {2000, 1000, 2500, 3, 0};
+    settings.bToA = {2000, 1000, 2500, 3, 0};
     return settings;
 }
 
@@ -392,7 +392,7 @@ TEST_CASE("replication: a value sent again unchanged is not written, so Changed<
     // Confirmations get through rarely: the server sends the same values again and again.
     N::MemoryLinkSettings link;
     link.seed = 8;
-    link.bToA = {8000, 0, 0, 0};
+    link.bToA = {8000, 0, 0, 0, 0};
     Game game(link, GameRules{300, true});
     game.Build();
     // Play until the server's last change (tick 300) is written at the client and the client equals the server.

@@ -28,6 +28,8 @@ struct MemoryLinkImpairment final {
     // A delivered copy is held back for 1..maxDelaySteps Advance calls, so later datagrams overtake it.
     std::uint32_t delayPer10000 = 0;
     std::uint32_t maxDelaySteps = 0;
+    // Every copy is held back this many Advance calls on top (a fixed latency).
+    std::uint32_t fixedDelaySteps = 0;
 };
 
 struct MemoryLinkSettings final {
@@ -84,6 +86,10 @@ public:
     [[nodiscard]] const MemoryLinkCounts& Outgoing() const noexcept;
     // Copies on the way to this end, available or held back.
     [[nodiscard]] std::size_t InFlightToSelf() const noexcept;
+
+    // Changes the impairment of the direction from this end to the other from the next datagram on (the copies on the
+    // way keep theirs).
+    void SetOutgoingImpairment(const MemoryLinkImpairment& impairment) noexcept;
 
     // Observes the injections on the direction from this end to the other.
     void SetInjectionObserver(InjectionObserver observer);

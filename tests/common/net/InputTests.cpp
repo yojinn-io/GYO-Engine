@@ -1,12 +1,12 @@
 // Inputs (declaration D-11, C-IN1 to C-IN3): judgement G-6 as declared in section 8 (not loosened after the
 // results), and the entry's consistency fingerprint at both ends.
 //
-// Ticks: until the clock sync of step 3b the client does not know the Match's tick by itself; this test keys the
-// client's inputs by the server's tick (the test reads it) plus a lead, as a synced client will. A temporary
-// arrangement of the test, not of the Module.
+// Ticks: the client's inputs are keyed by its own Tick, which the clock sync (3b, D-9) keeps ahead of the Match's
+// (3a keyed them by the server's tick read by the test; that temporary arrangement is gone).
 #include <doctest/doctest.h>
 
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <vector>
@@ -146,8 +146,8 @@ Move ScriptAt(const std::uint32_t tick) {
 TEST_CASE("input: G-6 the server's step gets the client's input through losses; missing ones are held and counted") {
     N::MemoryLinkSettings lossy;
     lossy.seed = 0x5EED0006u;
-    lossy.aToB = {2000, 1000, 2500, 3};
-    lossy.bToA = {2000, 1000, 2500, 3};
+    lossy.aToB = {2000, 1000, 2500, 3, 0};
+    lossy.bToA = {2000, 1000, 2500, 3, 0};
     InputGame game(lossy);
     game.Build();
     // Connect; the server's product gives the Peer its player.
@@ -157,17 +157,25 @@ TEST_CASE("input: G-6 the server's step gets the client's input through losses; 
     game.ServerWorld().Insert(game.ServerPeer(), N::PeerControls{kPlayer});
     for (int i = 0; i < 3; ++i) game.Frame();
 
-    constexpr std::uint32_t kLead = 3;
     constexpr int kRounds = 400;
     std::map<std::uint32_t, Move> sent;
+    std::set<std::uint32_t> gaps;
     std::uint32_t firstSent = 0;
     for (int round = 0; round < kRounds; ++round) {
-        const std::uint32_t target = game.ServerTick() + kLead;
+        // The next step of the client's own (synced) Tick; a tick is given once (a backward jump does not redo it).
+        const std::uint32_t target = static_cast<std::uint32_t>(game.ClientWorld().Resource<W::Tick>()->value) + 1;
         N::PeerInput<Move>* local = N::LocalInput<Move>(game.ClientWorld());
         REQUIRE(local != nullptr);
-        if (firstSent == 0) firstSent = target;
-        local->Set(target, ScriptAt(target), N::ViewTime{target - 6, 128});
-        sent[target] = ScriptAt(target);
+        // Every 50 ticks the two ticks after a press get no input at all: the server holds the last one (its press
+        // cleared), so the hold and the one-shot rule are exercised whatever the clock sync does to the losses.
+        const bool gap = target % 50 == 1 || target % 50 == 2;
+        if (gap) {
+            gaps.insert(target);
+        } else if (sent.count(target) == 0 && (firstSent == 0 || target > firstSent)) {
+            if (firstSent == 0) firstSent = target;
+            local->Set(target, ScriptAt(target), N::ViewTime{target - 6, 128});
+            sent[target] = ScriptAt(target);
+        }
         // Once, a slot far beyond the server's window goes out with the others, then is taken back.
         const bool far = round == 200;
         if (far) local->Set(target + 500, Move{99, 0});
@@ -183,25 +191,28 @@ TEST_CASE("input: G-6 the server's step gets the client's input through losses; 
     }
     REQUIRE(static_cast<bool>(game.serverProduct->RunFrame()));
 
-    // Each server tick from the first input on: the client's value of that tick, or the last one held (fire cleared).
+    // Each server tick from the first input to the last: the client's value of that tick, or the last one held
+    // (fire cleared) when its slot did not come (lost, late, or not given: the gaps).
+    const std::uint32_t lastSent = sent.empty() ? 0 : sent.rbegin()->first;
     const auto& seen = game.ServerWorld().Resource<InputLog>()->seen;
-    std::uint64_t matched = 0, held = 0, wrong = 0, firesSent = 0, firesSeen = 0, firesWhereNotSent = 0;
+    std::uint64_t matched = 0, held = 0, wrong = 0, heldInGaps = 0, firesSent = 0, firesSeen = 0, firesWhereNotSent = 0;
     std::optional<Move> previous;
     for (const auto& [tick, move] : seen) {
-        if (tick < firstSent || sent.count(tick) == 0) {
+        if (tick < firstSent || tick > lastSent) {
             previous = move;
             continue;
         }
-        const Move expected = sent.at(tick);
-        firesSent += expected.fire;
+        const auto given = sent.find(tick);
+        if (given != sent.end()) firesSent += given->second.fire;
         firesSeen += move.fire;
-        if (move.fire != 0 && expected.fire == 0) ++firesWhereNotSent;
+        if (move.fire != 0 && (given == sent.end() || given->second.fire == 0)) ++firesWhereNotSent;
         Move heldValue = previous.value_or(Move{});
         heldValue.fire = 0;
-        if (move == expected) {
+        if (given != sent.end() && move == given->second) {
             ++matched;
         } else if (move == heldValue) {
             ++held;
+            heldInGaps += gaps.count(tick);
         } else {
             ++wrong;
         }
@@ -212,18 +223,21 @@ TEST_CASE("input: G-6 the server's step gets the client's input through losses; 
     std::uint64_t ahead = 0;
     for (const auto& [tick, slot] : buffer->slots) ahead += (!buffer->consumedThrough || tick > *buffer->consumedThrough) ? 1 : 0;
     const auto& clientCounts = N::LocalInput<Move>(game.ClientWorld())->counts;
+    const auto& clock = *game.ClientWorld().Resource<N::ClockSync>();
+    MESSAGE("G-6 clock: jumps=" << clock.jumps << " last error=" << clock.lastError << " speed=" << clock.scale);
     MESSAGE("G-6: ticks compared=" << (matched + held + wrong) << " matched=" << matched << " held=" << held << " wrong=" << wrong
-                                   << " | fires sent=" << firesSent << " seen=" << firesSeen << " where not sent=" << firesWhereNotSent
+                                   << " (in the gaps " << heldInGaps << ")" << " | fires sent=" << firesSent << " seen=" << firesSeen << " where not sent=" << firesWhereNotSent
                                    << " | slots received=" << counts.slotsReceived << " stored=" << counts.stored
                                    << " duplicates=" << counts.duplicates << " late=" << counts.late << " outside window="
                                    << counts.outsideWindow << " | consumed=" << counts.consumed << " missing=" << counts.missing
                                    << " ahead=" << ahead << " | messages sent=" << clientCounts.messages << " read="
                                    << counts.messages << " lost with datagrams=" << game.lostInputMessages);
     CHECK_MESSAGE(wrong == 0, "G-6: each server tick has the client's input of that tick, or the last one held");
-    // The steps without a slot: those held among the compared ticks, and the ticks no input was given for (before
-    // the first and after the last).
+    // The steps without a slot: those held among the compared ticks, and the ticks before the first input and after
+    // the last.
     const std::uint64_t notGiven = seen.size() - (matched + held + wrong);
     CHECK_MESSAGE(counts.missing == held + notGiven, "G-6: every held input is counted as missing");
+    CHECK(heldInGaps > 0);
     CHECK_MESSAGE(counts.consumed + counts.missing == seen.size(), "G-6: steps run == consumed + missing");
     CHECK_MESSAGE(firesWhereNotSent == 0, "G-6: a one-shot input fires only at the tick it was given (once)");
     CHECK(firesSeen > 0);

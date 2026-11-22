@@ -136,7 +136,8 @@ void ServerAuthorityStrategy::Check(CheckContext& context) {
     std::optional<Kernel::AccessKey> tick;
     if (const auto id = registry.ResourceIdOf<WorldTime::Tick>()) tick = Kernel::AccessKey{Kernel::AccessKind::Resource, *id};
     if (tick) {
-        const std::vector<std::string> allowed = WorldTime::WorldTimeModule::TickWriters();
+        // The time Module's own driver and the Systems other units added (the net Module's clock sync, D-9).
+        const std::vector<std::string> allowed = WorldTime::WorldTimeModule::TickWriters(context.World().Buffer());
         const auto writesTick = [&](const Kernel::AccessSet& access) {
             const std::vector<Kernel::AccessKey> written = WrittenKeys(registry, access);
             return std::binary_search(written.begin(), written.end(), *tick);

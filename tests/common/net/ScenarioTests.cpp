@@ -47,8 +47,8 @@ TEST_CASE("scenario: a server and two clients: players move, a door opens, both 
     auto reader = [clock] { return *clock; };
     N::MemoryLinkSettings lossy;
     lossy.seed = 21;
-    lossy.aToB = {1000, 500, 2000, 2};
-    lossy.bToA = {1000, 500, 2000, 2};
+    lossy.aToB = {1000, 500, 2000, 2, 0};
+    lossy.bToA = {1000, 500, 2000, 2, 0};
     auto first = N::MemoryLink::Pair(lossy);
     lossy.seed = 22;
     auto second = N::MemoryLink::Pair(lossy);

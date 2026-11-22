@@ -57,6 +57,7 @@ void ClientSession::Receive(const std::span<const std::byte> datagram, const Net
             transport.connectionId = accepted->connectionId;
             connection_.emplace(std::move(transport));
             state_ = ClientState::Connected;
+            acceptedAt_ = now;
             lastReceived_ = now;
             lastSent_ = now;
             return;

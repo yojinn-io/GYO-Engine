@@ -1,6 +1,7 @@
 #include "engine/net/Replication.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <string>
 #include <utility>
@@ -9,6 +10,7 @@
 #include "engine/authority/Registrations.hpp"
 #include "engine/base/Fnv1a.hpp"
 #include "engine/net/NetModule.hpp"
+#include "engine/world_time/FixedStep.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
 namespace GYO::Engine::Net {
@@ -639,6 +641,86 @@ SystemResult SendInputs(ReplicaWorld world) {
         writer.Value(entry->wire);
         if (entry->encodeRecent(world, peer, writer)) (void)connection->Send(kValuesChannel, body);
     }
+    return {};
+}
+
+} // namespace GYO::Engine::Net::Detail
+
+namespace GYO::Engine::Net::Detail {
+
+// Client, Main/Last before SendInputs: the clock sync (D-9; the formulas at ClockSync). The wall clock is read only
+// here, in the IO layer, and never written into decision data: what changes the World is Tick (through the time
+// Module's JumpFixedSteps) and TimeSyncScale.
+SystemResult SyncClock(Kernel::ExclusiveWorld<Kernel::Writes<WorldTime::Tick, WorldTime::FixedTime, WorldTime::TimeSyncScale>> world) {
+    NetService* service = nullptr;
+    (void)world.Read<NetWorldLink>([&](const NetWorldLink& link) { service = link.service; });
+    ClientSession* client = service != nullptr ? service->Client() : nullptr;
+    const bool connected = client != nullptr &&
+                           (client->State() == ClientState::Connected || client->State() == ClientState::Interrupted);
+    ClockSync sync;
+    (void)world.Modify<ClockSync>([&](ClockSync& kept) { sync = kept; });
+    double scale = 1.0;
+    if (!connected || client->Transport() == nullptr) {
+        sync.synced = false;
+        sync.consecutive = 0;
+        sync.haveOffset = false;
+    } else {
+        const Connection& connection = *client->Transport();
+        const auto step = static_cast<double>(
+            world.Read<WorldTime::FixedTime>([](const WorldTime::FixedTime& t) { return t.accumulator.Step(); })->value_or(1));
+        const auto overstep = static_cast<double>(
+            world.Read<WorldTime::FixedTime>([](const WorldTime::FixedTime& t) { return t.accumulator.Overstep(); })->value_or(0));
+        const auto tick = static_cast<double>(world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0));
+        const NetTime now = service->Now();
+        std::uint32_t base = 0;
+        NetTime at{0};
+        if (const auto stamp = connection.RemoteStamp()) {
+            base = stamp->tick;
+            at = connection.RemoteStampAt();
+        } else {
+            base = client->Accepted()->tick;
+            at = client->AcceptedAt();
+        }
+        const auto rtt = static_cast<double>(connection.SmoothedRtt().count());
+        const auto jitter = static_cast<double>(connection.Jitter().count());
+        // A newer packet updates the smoothed offset between the Match's ticks and the local clock.
+        if (!sync.haveOffset || base != sync.lastStampTick || at != sync.lastStampAt) {
+            const double raw = static_cast<double>(base) + rtt / 2.0 / step - static_cast<double>(at.count()) / step;
+            const double jitterMs = jitter / 1e6;
+            const double position = std::clamp((jitterMs - sync.settings.lowJitterMs) / (sync.settings.highJitterMs - sync.settings.lowJitterMs), 0.0, 1.0);
+            const double alpha = sync.settings.maxAlpha - position * (sync.settings.maxAlpha - sync.settings.minAlpha);
+            sync.offset = sync.haveOffset ? sync.offset + alpha * (raw - sync.offset) : raw;
+            sync.haveOffset = true;
+            sync.lastStampTick = base;
+            sync.lastStampAt = at;
+        }
+        const double remote = static_cast<double>(now.count()) / step + sync.offset;
+        const double target = remote + (rtt / 2.0 + sync.settings.jitterMultiple * jitter) / step + sync.settings.marginTicks;
+        const double error = target - (tick + overstep / step);
+        sync.lastTarget = target;
+        sync.lastError = error;
+        if (!sync.synced || std::abs(error) > sync.settings.snapTicks) {
+            const auto k = static_cast<std::int64_t>(std::llround(error));
+            if (k != 0) WorldTime::JumpFixedSteps(world, k);
+            sync.synced = true;
+            sync.consecutive = 0;
+            ++sync.jumps;
+            sync.lastJump = k;
+            sync.lastError = error - static_cast<double>(k);
+        } else if (std::abs(error) > sync.settings.deadbandTicks) {
+            const bool behind = error > 0.0;
+            sync.consecutive = behind == sync.previousBehind ? static_cast<std::uint8_t>(sync.consecutive + 1) : 1;
+            sync.previousBehind = behind;
+            scale = sync.scale;
+            if (sync.consecutive >= sync.settings.consecutive) scale = behind ? sync.settings.speedup : 1.0 / sync.settings.speedup;
+        } else {
+            sync.consecutive = 0;
+        }
+    }
+    if (scale != sync.scale) ++sync.speedChanges;
+    sync.scale = scale;
+    (void)world.Modify<WorldTime::TimeSyncScale>([scale](WorldTime::TimeSyncScale& kept) { kept.scale = scale; });
+    (void)world.Modify<ClockSync>([&](ClockSync& kept) { kept = sync; });
     return {};
 }
 

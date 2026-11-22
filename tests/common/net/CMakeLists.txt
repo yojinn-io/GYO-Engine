@@ -4,7 +4,7 @@
 # ("link:" also runs G-7 over UDP loopback); "handshake:" is G-3, "liveness:" G-4 (step 1b); "module:" is G-1
 # and the net Module in a Product with a MemoryLink.
 add_executable(gyo_net_tests TestMain.cpp HeaderTests.cpp ConnectionTests.cpp TransportTests.cpp LinkTests.cpp
-    SessionTests.cpp ModuleTests.cpp ReplicationTests.cpp ScenarioTests.cpp InputTests.cpp ReconnectTests.cpp)
+    SessionTests.cpp ModuleTests.cpp ReplicationTests.cpp ScenarioTests.cpp InputTests.cpp ReconnectTests.cpp ClockTests.cpp)
 target_link_libraries(gyo_net_tests PRIVATE GYO::Net doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_net_tests PRIVATE /W4 /permissive-)
@@ -12,8 +12,18 @@ if(MSVC)
 else()
     target_compile_options(gyo_net_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS header connection transport link handshake liveness module replication scenario input reconnect)
+foreach(group IN ITEMS header connection transport link handshake liveness module replication scenario input reconnect clock)
     add_test(NAME net.${group} COMMAND gyo_net_tests "--test-case=${group}:*")
     set_tests_properties(net.${group} PROPERTIES LABELS "cpu" TIMEOUT 120
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 endforeach()
+
+# The CPU measurement of declaration section 6 (step 3b): run by hand on one host, not a ctest.
+add_executable(gyo_net_budget NetBudget.cpp)
+target_link_libraries(gyo_net_budget PRIVATE GYO::Net doctest::doctest)
+if(MSVC)
+    target_compile_options(gyo_net_budget PRIVATE /W4 /permissive-)
+    target_compile_definitions(gyo_net_budget PRIVATE NOMINMAX)
+else()
+    target_compile_options(gyo_net_budget PRIVATE -Wall -Wextra -Wpedantic)
+endif()

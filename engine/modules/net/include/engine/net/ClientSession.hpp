@@ -41,6 +41,8 @@ public:
     // Why it ended, once Disconnected.
     [[nodiscard]] const std::optional<Rejection>& Ended() const noexcept { return ended_; }
     [[nodiscard]] const std::optional<ConnectAccepted>& Accepted() const noexcept { return accepted_; }
+    // When the Accepted arrived.
+    [[nodiscard]] NetTime AcceptedAt() const noexcept { return acceptedAt_; }
     // The transport, once Accepted.
     [[nodiscard]] Connection* Transport() noexcept { return connection_ ? &*connection_ : nullptr; }
     [[nodiscard]] const Connection* Transport() const noexcept { return connection_ ? &*connection_ : nullptr; }
@@ -62,6 +64,7 @@ private:
     std::optional<ConnectAccepted> accepted_;
     std::optional<Connection> connection_;
     NetTime lastReceived_{0};
+    NetTime acceptedAt_{0};
     NetTime lastSent_{0};
     std::optional<Rejection> ended_;
     std::array<std::uint64_t, kDropReasonCount> drops_{};

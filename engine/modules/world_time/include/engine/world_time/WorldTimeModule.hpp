@@ -49,6 +49,13 @@ struct WorldTimeOptions final {
     std::vector<Kernel::ConditionRef> fixedStepConditions;
 };
 
+// The Systems that may write Tick in one World (WT-5): the time Module's own driver, and those other units add while
+// the World is built (the net Module's clock sync, D-9). In the World build's ModuleBuffer; read by the server
+// authority strategy's AU-E5 through WorldTimeModule::TickWriters(buffer).
+struct TickWriterRegistrations final {
+    std::vector<std::string> names;
+};
+
 class WorldTimeModule final : public Orchestration::Module {
 public:
     WorldTimeModule() = default;
@@ -56,8 +63,14 @@ public:
     void Build(Orchestration::WorldSetup& setup) override;
     void Check(const Kernel::FrozenRegistry& registry, Orchestration::WorldCheck& context) override;
 
-    // The Systems that drive Tick (L27; authority strategy, batch 4). A clock-sync System joins with the Client batch.
+    // The time Module's own Tick driver (L27; authority strategy, batch 4).
     [[nodiscard]] static std::vector<std::string> TickWriters();
+    // Every Tick writer of the World being built: TickWriters() and those added with AddTickWriter (a World the time
+    // Module is not built into: TickWriters()).
+    [[nodiscard]] static std::vector<std::string> TickWriters(const Orchestration::ModuleBuffer& buffer);
+    // From a unit's Build after the time Module's: adds a System that writes Tick (through JumpFixedSteps). Without
+    // the time Module in the World it is a GYO_ASSERT.
+    static void AddTickWriter(Orchestration::WorldSetup& setup, std::string system);
 };
 
 } // namespace GYO::Engine::WorldTime

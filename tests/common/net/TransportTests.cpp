@@ -143,8 +143,8 @@ void Reconcile(const std::string& direction, const N::Connection& from, const N:
 TEST_CASE("transport: G-2 losses, duplicates and reordering with a fixed seed") {
     N::MemoryLinkSettings linkSettings;
     linkSettings.seed = 0x5EED0002u;
-    linkSettings.aToB = {2000, 1000, 2500, 3};
-    linkSettings.bToA = {2000, 1000, 2500, 3};
+    linkSettings.aToB = {2000, 1000, 2500, 3, 0};
+    linkSettings.bToA = {2000, 1000, 2500, 3, 0};
     auto [linkA, linkB] = N::MemoryLink::Pair(linkSettings);
     Injected aToB, bToA;
     Observe(linkA, aToB);
@@ -230,7 +230,7 @@ TEST_CASE("transport: the memory link repeats itself for one seed") {
     auto run = [] {
         N::MemoryLinkSettings settings;
         settings.seed = 42;
-        settings.aToB = {2000, 1000, 2500, 3};
+        settings.aToB = {2000, 1000, 2500, 3, 0};
         auto [a, b] = N::MemoryLink::Pair(settings);
         std::vector<std::uint32_t> order;
         std::vector<std::byte> buffer(16);

@@ -21,8 +21,8 @@ TEST_CASE("reconnect: G-9 a new client World after a disconnect gets the server'
     N::MemoryLinkSettings link;
     link.seed = 0x5EED0009u;
     // Datagrams are held back up to 6 steps, so some of the old connection's arrive after the new one is made.
-    link.aToB = {1000, 500, 5000, 6};
-    link.bToA = {1000, 500, 5000, 6};
+    link.aToB = {1000, 500, 5000, 6, 0};
+    link.bToA = {1000, 500, 5000, 6, 0};
     auto links = N::MemoryLink::Pair(link);
     End server = GameEnd(N::NetRole::Server, GameRules{400, true});
     server.net.link = std::make_shared<N::MemoryLink>(links.first);

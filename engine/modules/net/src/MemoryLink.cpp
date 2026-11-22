@@ -60,9 +60,9 @@ struct MemoryLinkState final {
 
     std::uint64_t DelayOf(Direction& direction) {
         const auto& impairment = direction.impairment;
-        if (impairment.maxDelaySteps == 0 || !direction.random.Chance(impairment.delayPer10000)) return 0;
+        if (impairment.maxDelaySteps == 0 || !direction.random.Chance(impairment.delayPer10000)) return impairment.fixedDelaySteps;
         ++direction.counts.delayed;
-        return 1 + direction.random.Next() % impairment.maxDelaySteps;
+        return impairment.fixedDelaySteps + 1 + direction.random.Next() % impairment.maxDelaySteps;
     }
 };
 
@@ -130,6 +130,10 @@ const MemoryLinkCounts& MemoryLink::Outgoing() const noexcept {
 
 std::size_t MemoryLink::InFlightToSelf() const noexcept {
     return state_->directions[static_cast<std::size_t>(1 - side_)].queue.size();
+}
+
+void MemoryLink::SetOutgoingImpairment(const MemoryLinkImpairment& impairment) noexcept {
+    state_->directions[static_cast<std::size_t>(side_)].impairment = impairment;
 }
 
 void MemoryLink::SetInjectionObserver(InjectionObserver observer) {

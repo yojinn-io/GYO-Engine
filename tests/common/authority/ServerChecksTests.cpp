@@ -487,3 +487,28 @@ TEST_CASE("authority checks: AU-E6 leaves out a component input whose history th
     const std::string bare = BuildText(build(false), Client());
     CHECK_MESSAGE(Has(bare, "AU-E6 System 'ConsumeCommandComponent'"), "[au-z6-component-input-no-history] " << bare);
 }
+
+namespace {
+// A unit that adds AnnotateTick to the time Module's Tick writers (as the net Module's clock sync does, D-9).
+class TickWriterUnit final : public O::Module {
+public:
+    void Build(O::WorldSetup& setup) override { W::WorldTimeModule::AddTickWriter(setup, "AnnotateTick"); }
+};
+} // namespace
+
+TEST_CASE("authority checks: AU-E5 accepts a Tick writer another unit added to the time Module's list") {
+    auto units = Units();
+    O::RegisterRow row;
+    row.name = "clock";
+    row.kind = O::UnitKind::Module;
+    row.libraryOnly = false;
+    row.defaultOn = true;
+    row.depends = {"world_time"};
+    units.rows.push_back(row);
+    units.modules.push_back({"clock", std::make_unique<TickWriterUnit>()});
+    auto built = O::Product::Build(Game([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Mark<W::Tick>();
+        s.Registrar().AddSystem<&AnnotateTick>(In("AnnotateTick", "Main", "Update"));
+    }, Setting{}), std::move(units));
+    CHECK_MESSAGE(Reported(built) == "built", "[au-tick-writer-registered] " << Reported(built));
+}
