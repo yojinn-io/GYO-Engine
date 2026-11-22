@@ -1,6 +1,6 @@
 # 事前宣告：遊戲的狀態機（`v8-arch-gyo2-state-machine`，修訂 8）
 
-更新：2026-11-22（修訂 8）。Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。**狀態：修訂 8，使用者 2026-11-22 動工前核准（「照建議，三件都核准，開始」）：第 2.1 節選 (d)、第 2.2 節選 (i)、第 2.3 節選 (A)、不另開 Kernel 的一批；第 2.4 節照判。下文「選 (a) 或 (d) 時」「選 (i) 時」的條件都照這個結果成立。**
+更新：2026-11-22（修訂 8）。Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。**狀態：修訂 8，使用者 2026-11-22 動工前核准（「照建議，三件都核准，開始」）：第 2.1 節選 (d)、第 2.2 節選 (i)、第 2.3 節選 (A)、不另開 Kernel 的一批；第 2.4 節照判。下文「選 (a) 或 (d) 時」「選 (i) 時」的條件都照這個結果成立。之後使用者要求多家交叉比對（第 12 節），同日再定兩件（「照建議，1 保留，2 選 A＋，開始」）：「兩端同規則」回滾時重跑進入／離開照舊保留，進入／離開裡的副作用由作者用 `Resimulation` 擋；第 2.3 節改成 (A＋)——這一批照 (A)，另開一張「事件游標重評」的卡。**
 
 **起點**：修訂 7（2026-11-16 使用者核准；分支 `claude/gyo2-state-machine-520d19`，commit 25c3949b，同名檔案）。核准之後，前提換了（Kernel 只做 ECS、另立編排層、權威與回滾是 Module，第 0 節）。批次表第 5 條要求重做成修訂 8：**只改建立在舊前提上的地方，遊戲看得到的行為照舊**（[回收清單](recovered-from-stale-cards.zh-Hant.md)第 1 節）。修訂 7 第 3 節的選項表、偵察與檢查的經過，以修訂 7 為準，這裡不重抄；本頁沿用修訂 7 的節號（第 5～10 節），改過的地方寫明。
 
@@ -123,7 +123,7 @@
 
 | | (A) 不改契約，說明頁寫明（我的建議） | (B) 離開時清掉某種訊息 | (C) 改契約：被 run 條件擋住的那一次放開保留 | (E) 讀者的選項「沒跑就放開，下次從當下讀起」 | (F) 訊息種類的選項「固定保留 N 次 Run，不看讀者」 | (G) 進入時把指定讀者的游標推到最新 |
 |---|---|---|---|---|---|---|
-| 系譜 | GYO 的游標宣告 | Bevy `clear_messages_on_exit`（`state_scoped_events.rs:67-86`） | 接近 Bevy 的效果 | 新導 | Bevy 的保留模型（固定兩次 update，游標宣告引 `messages.rs:69-77`） | Bevy `clear_messages_on_enter`（`:88-107`）的對應 |
+| 系譜 | GYO 的游標宣告（Bevy 暫停時也全部留著：有固定步時只在跑過固定步的那幀輪替，`bevy_time/src/lib.rs:102-106`、`message/update.rs:43-57`） | Bevy `clear_messages_on_exit`（`state_scoped_events.rs:67-86`） | 接近 Bevy 的效果 | 新導 | Bevy 的保留模型（兩次 update，不看讀者；有固定步時只在跑過固定步的那幀輪替，暫停時全部留著） | Bevy `clear_messages_on_enter`（`:88-107`）的對應 |
 | 後果 1 | 不解；記錄照記 | 不解：清掉之後那個讀者照樣拉住之後的（Bevy 能用是因為它不看讀者） | 解 | 解 | 不解（那種訊息不再被讀者拉住，但也沒有丟棄記錄） | 不解 |
 | 後果 2 | 不解；說明頁寫 | 部分（只清離開時已有的） | 解 | 解 | 解（N 次之後就沒了） | 解 |
 | 後果 3 | 不解；說明頁寫：要帶進「進入」的放 Resource | 不解 | 不解（那是 schedule 沒跑，不是條件） | 不解（進入時從當下讀起，讀不到上一幀的） | 解（N≥2） | 不解 |
@@ -206,7 +206,7 @@
 | 6 | `ApplyStateMachine<S>` | 獨占的 System，照第 5.1 節；`ExclusiveWorld<Writes<父與每個子的 StateMachine 與 StateMachineRequest>>`。要求值不在對照表：取走時回 Err（這個 Module 自己的規則字串），不跑任何離開、不改任何值 |
 | 7 | `InState<S, V>()`、`NotInState<S, V>()` | 回傳 `ConditionRef`，名字 `InState.<狀態名>.<值名>`、`NotInState.<狀態名>.<值名>`（條件名進權威的一致性指紋，名字固定；先例 `WhileGenerating`）；讀 `Res<StateMachine<S>>`；「還沒進入」「不存在」都回否 |
 | 8 | 測試 `tests/common/state_machine/`（ctest 標籤 `cpu`） | 行為的案例一個 target，只連 `gyo_state_machine`；組合的案例（權威、回滾、生成、替換）另一個 target；連結集 `gyo_expect_links(gyo_state_machine …)`（DI 8） |
-| 9 | 文件 | 新頁 `docs/architecture/target/v2/state-machine.zh-Hant.md`（Design Invariants、Replacement Criteria、寫法；同 `world-time.zh-Hant.md` 的形）；[System 契約說明頁](system-contract-page.zh-Hant.md)加一節（掛在哪、進入／離開、條件、子狀態與 `KeepOnParentReenter`、跨樹的先後看插入位置、暫停要不要停時間的寫法、生成中與 `AfterGenerating`、`SetInitial` 與讀檔、新 World 與 World 內兩種進關卡、(c) 區的標記與回滾的登記、第 4 節講明的幾點、第 2.3 節的三個後果與寫法）；[用詞表](rebuild-vocabulary.zh-Hant.md)加一列「State Machine（狀態機）：一個 World 一份的全局狀態機；AI 這類每個實體一份的狀態機不用這一層」；`docs/cross-component-rules.md` 查有沒有同樣的規則；dev_log |
+| 9 | 文件 | 新頁 `docs/architecture/target/v2/state-machine.zh-Hant.md`（Design Invariants、Replacement Criteria、寫法；同 `world-time.zh-Hant.md` 的形）；[System 契約說明頁](system-contract-page.zh-Hant.md)加一節（掛在哪、進入／離開、條件、子狀態與 `KeepOnParentReenter`、跨樹的先後看插入位置、暫停要不要停時間的寫法、生成中與 `AfterGenerating`、`SetInitial` 與讀檔、新 World 與 World 內兩種進關卡、(c) 區的標記與回滾的登記、第 4 節講明的幾點、第 2.3 節的三個後果與寫法、遊戲初始化裡 `InState`／`NotInState` 一律回否、套用的 System 帶的條件擋的是每一次套用（例：帶 `AfterGenerating()` 時，World 內重新生成期間的要求延到生成結束）、重跑時用 `Resimulation` 擋只該發生一次的副作用）；[用詞表](rebuild-vocabulary.zh-Hant.md)加一列「State Machine（狀態機）：一個 World 一份的全局狀態機；AI 這類每個實體一份的狀態機不用這一層」；`docs/cross-component-rules.md` 查有沒有同樣的規則；dev_log |
 
 **不碰**：`engine/ecs/kernel`、`engine/orchestration`、其他 Module 的程式；既有測試與守衛的判定；`.github/`。
 
@@ -227,6 +227,8 @@ rollback.Resource<StateMachine::StateMachine<Weather>>();
 rollback.Resource<StateMachine::StateMachineRequest<Weather>>();
 rollback.NestedSchedule("Weather.Enter.Fog", "FixedUpdate"); // ... one per enter/exit schedule
 ```
+
+**重跑時的副作用**（使用者 2026-11-22「1 保留」）：回滾重跑那一步時，「進入起霧」會再跑一次。改世界狀態的（能見度）照常重跑；只該發生一次的副作用（音效、粒子）由作者在進入／離開裡讀 `Resimulation` 擋——別家的對應是 lightyear 的 `is_in_rollback`、Unity Netcode 的 `IsFirstTimeFullyPredictingTick`。別家都不重跑轉換（lightyear 回滾只重跑固定步、Bevy 的轉換不在固定步裡），GYO 照使用者 11-15～16 的決定重跑（第 12 節）。組合的案例示範一次。
 
 沒有回滾登記時，套用的 System 寫的判定資料在可回滾的步上會報 AU-E6（P9），回滾重跑也退不回轉換。`StateMachineRequest` 被回滾還原時，被蓋掉的計數跟著還原（不再是整個 World 期間的累計）——寫進第 10 節。
 
@@ -291,7 +293,7 @@ rollback.NestedSchedule("Weather.Enter.Fog", "FixedUpdate"); // ... one per ente
 - 兩棵樹的實際先後（`Weather` 與 `Flow` 插在同一個錨點之後、`Flow` 先登記 → `Weather` 的 stage 緊貼錨點、先套用）——固定實際行為，不是承諾。
 - 生成中、套用的 System 沒有條件：第一幀就進初始值（固定實際行為）。
 - 進入那張的讀者：第一次進入讀不到選關那一幀寫的訊息；第二次進入讀到上次以來的全部（固定第 2.3 節後果 3 的實際行為；第 2.3 節的結果改了契約時跟著改）。
-- (c) 區「兩端同規則」（第 5.3 節）：選伺服器權威的 World，`Mark`、`Runs` 不報 AU-E4；回滾登記了兩種 Resource 與巢狀的進入／離開時不報 AU-E6、AU-E9；值換了 digest 跟著變；回滾退回 k 步重跑時，那一步的轉換重跑一次（「進入起霧」在重跑裡跑了）。
+- (c) 區「兩端同規則」（第 5.3 節）：選伺服器權威的 World，`Mark`、`Runs` 不報 AU-E4；回滾登記了兩種 Resource 與巢狀的進入／離開時不報 AU-E6、AU-E9；值換了 digest 跟著變；回滾退回 k 步重跑時，那一步的轉換重跑一次（「進入起霧」在重跑裡跑了），而進入裡讀 `Resimulation` 擋住的副作用在重跑裡沒有發生。
 
 **判定 2：檢出力。** 突變清單由實作者（Opus）定案，交別的模型（Fable）做敵對式檢查（AGENTS §14.2），找出「把實作改壞而案例全過」的地方補上。預期的那個案例失敗才算抓到；建置失敗不算。每個突變照 §14.5 寫它獨自抓的錯與守的對象；只跑這一批相關的突變。至少包含修訂 7 第 7 節判定 2 表裡和上面案例有關的那幾列（行為的突變），並照下表增減：
 
@@ -409,3 +411,17 @@ rollback.NestedSchedule("Weather.Enter.Fog", "FixedUpdate"); // ... one per ente
 | S10 | 第 4 節第 1 點補讀的兩個陷阱；組合案例加一個 |
 | S11 | 案例加「待用值只用一次」；「準備函式不蓋」照 §14.5 不加並寫明；DI 4 的守衛欄補 |
 | nit 1～13 | 行號、代號、草稿程式、`set_if_different`、前提的編號、證據的「未保存」、名字列進 DI 10、開局的字、動態插入那一點拿掉、`SetInitial` 的時機、和 Bevy 不同的條件入口、作者與檢查者的模型，都已改 |
+
+---
+
+## 12. 多家交叉比對（2026-11-22，動工前核准之後）
+
+使用者問「你有交叉比對其他家的實作嗎？」——修訂 8 只對照了 Bevy。使用者：「先做比對，有分歧再交給我」。三個唯讀偵察（Opus／high），讀本機 `~/Code/GitHome` 的原始碼；報告在主 checkout `build/evidence/gyo2-state-machine-r8/`：`crosscheck-network-adoption.md`（bevy_replicon、lightyear、Unity Netcode）、`crosscheck-initial-load.md`（flecs、Unity Entities、MassSample）、`crosscheck-message-retention.md`（flecs、Unity Entities、Unity Netcode、lightyear、bevy_replicon）。
+
+| 題目 | 結果 |
+|---|---|
+| 第 2.1 節 (d) | 站得住：三家的網路層都直接寫值、不跑轉換；要跑轉換由作者另走訊息再發要求。網路宣告核准的 (b)（`-net-…` Q8，Request 與 RequestSilent 兩個套用函式）蓋得到兩種，相關兩點已轉主會話 |
+| 初始值、讀檔、子狀態、套用的位置與條件 | 沒有分歧：Unity、Mass 也是「初始化之後、每個 World 各自」；Unity 的 `DeserializeWorld` 要讀進空 World、讀完才加 System，和「新 World、等載完、直接進存檔的值」相符；flecs 讀檔途中就觸發進入（反例） |
+| 「兩端同規則」回滾重跑進入／離開 | **分歧**：沒有一家重跑轉換。交使用者 → 「1 保留」；副作用用 `Resimulation` 擋（第 5.3 節） |
+| 停跑的讀者拉住保留＋恢復時補讀 | **分歧**：五家都沒有這個組合；Bevy 在兩次 update 的曝露下就遇到跨狀態讀到舊訊息，在 Plugin 層加了清除（commit adc2cf7df，#15085）；replicon 自己寫補償。交使用者 → 「2 選 A＋」：這一批照 (A)，另開「事件游標重評」的卡（照游標修剪是使用者定的 `event-trim-by-cursor`，結論交使用者） |
+| 事實更正 | Bevy 暫停時訊息全部留著（第 2.3 節表已改）；游標宣告第 3.2 節引的 lightyear 行號已漂移（現在 `receive.rs:54`、`:105-110`、`:153-160`、`:447-456`），轉主會話交圖書管理員 |
