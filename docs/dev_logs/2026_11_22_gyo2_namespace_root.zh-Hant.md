@@ -28,6 +28,22 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-namespac
 2. **規則管 `GYO::` 底下全部的根**。原話：「另外GYO::Engine 既然有，那麼就會有其他的 例如非Engine 層的。」比過的選項：只管 `GYO::Engine::<單位>`（卡片原本的打算）／`GYO::` 底下的根做成封閉的表（卡片照這句話提出、使用者沒有反對）。理由：`GYO::Engine` 之外還有別的根。出處同上。
 3. 開工前使用者看了要改的根的表，說「開始」。
 
+合併前核准的五件（side chat，2026-11-22；卡片逐件說明機制、選項與推薦後，使用者逐件回答，經 side chat 照四樣轉達本卡）。**這不是合併同意**：仍要使用者明確說「合併」。
+
+4. **守衛判定的放寬**（拿掉 Module 不必改守衛）。原話：「同意」。比過的選項：(a) 同意（推薦）／(b) 保留「刪 Module 必須改守衛」。理由：AGENTS §7 要求增減 Module 不改共通層；「什麼都沒掃到也通過」仍由三處擋住（層不見或空、kernel 不見、單位沒有原始碼）。
+5. **include-order 編譯物件**。原話：「照推薦」，即 (a)。比過的選項：(a) 連同編譯物件與兩個突變一起拿掉／(b) 改成「標頭能單獨編譯」的檢查、突變改寫／(c) 不動。理由：它防的是兩個根互相遮蔽，改名後只剩一個根，這個危險已不存在；不留永遠不會失敗的檢查。
+6. **DI 1 的收緊**。原話：「同意」。比過的選項：(a) 同意（推薦）／(b) 維持「有表即可、拼字不限」，守衛改回逐列登記。理由：目錄、namespace、target 三者看名字就對得上；新單位不登記也會被查；例外看得見、要附理由。
+7. **N3（型別名的角色後綴）**。原話：「同意，選（a）」。比過的選項：(a) gyo2 上拿掉（設計審查與卡片推薦）／(b) 維持三個目錄／(c) 擴到全部單位／(d) 這批不定。理由：11-14 使用者說命名條文第 5 條不轉；後綴黑名單擋不住說不出用途的名字、又會誤擋合理的名字，改由每批的設計審查看。
+8. **縮寫全大寫的範圍**。原話：「b，看的是真的難受。要不然全小寫io也好，要不然全大寫IO也行，一小一大很噁心」。比過的選項：(a) 只管 namespace 與 target／(b) 型別名、檔名也改，這一批一起做（卡片後來改推這個）／(c) 先立規則、改名另開一批。理由：`GYO::Engine::IO::IoError` 這種一大一小的組合看著難受；改名越晚影響越大。
+
+### 照五件決定做的
+
+- 4：不改程式（判定照原樣）。
+- 5：`tests/common/orchestration/CMakeLists.txt` 的 include-order 編譯物件（57 行）拿掉；突變 `ur-include-order-kernel-unqualified`、`wt-include-order-unqualified` 照 README 第 7 條退役；`world-time.zh-Hant.md`、`system-contract-page.zh-Hant.md` 提到它的地方一起改。
+- 6：正式的 `docs/architecture/target/naming.zh-Hant.md` DI 1 補一句「Engine 的單位預設從目錄名推出，例外寫進表（`UNIT_OVERRIDES`）並附理由；產品不受影響」。
+- 7：守衛的 N3、相關自測（8 案）與突變（`ks-n3-off`、`ks-n3-using-dropped`、`ks-n3-typedef-dropped`、`ks-n3-qualified-dropped`、`ks-real-role-suffix`）退役；`naming.zh-Hant.md` 的 DI 3 標成 gyo2 不適用；`rebuild-naming` 第 5、7 節同步。
+- 8：型別名、函式名、檔名、測試名裡一大一小的 `Io`、`Os` 改成 `IO`、`OS`（腳本 `build/evidence/gyo2-namespace-root/rename_acronyms.py`，1,118 處＋現行文件 22 處；檔案 `IOError.hpp`、`IOFwd.hpp`、`OSError.hpp`、`OSError.cpp`、`OSErrorTests.cpp`、`OSHeaderHygieneTests.cpp`）。例：`IoErrorCode`→`IOErrorCode`、`IoResult`→`IOResult`、`OsError`→`OSError`、`MakeOsError`→`MakeOSError`、`FromOs`→`FromOS`、`IoFailed`→`IOFailed`（`ToString` 回的碼名也跟著變成 `"IOFailed"`，錯誤訊息裡看得到）、`MacOsPlatform`→`MacOSPlatform`、測試名「Os files …」→「OS files …」、範例的 effect 名 `"Io:file"`→`"IO:file"`。規則寫進縮寫表（N17 表下）：縮寫要嘛全大寫、要嘛全小寫；型別名、函式名、檔名這一條守衛不查，由審查看。
+
 ## 本卡自己判的（名字照命名規範）
 
 - `Engine::Test` 改 `GYO::Test`（不放進 `GYO::Engine`：它是整個 repo 的測試輔助，不是 Engine 的單位）；各單位的測試輔助放 `GYO::Test::<單位>`。
@@ -52,7 +68,7 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-namespac
 
 自測其他的改動都是同等或收緊：`test_n1_kernel_namespace_outside_kernel_is_reported` 的訊息改成 forward 的（time 現在是單位）；`test_n1_every_source_type_is_scanned` 的位置從 `engine/core/time` 移到 `tests/common/time`；`test_n1_every_scan_root_is_scanned` 的 engine、plugins 改用各自的訊息確認；`ks-n1-mapped-root-silent` 原本合併了兩個自測的 expect，拆成它（kernel 不見）和 `nm-layer-gone-silent`（層不見）。
 
-### 要使用者決定的（設計審查提出、本卡判斷是使用者的事）
+### 要使用者決定的（設計審查提出、本卡判斷是使用者的事）——已決定，見上面第 4～8 點
 
 - **DI 1 的收緊**：正式的 DI 1 寫「不要求兩邊拼字相同」；N17 與守衛對 Engine 的單位改成「預設從目錄名推，例外寫進 `UNIT_OVERRIDES` 並附理由」。產品不受影響。推薦同意（設計審查也建議）。
 - **N3（角色後綴，舊命名條文第 5 條）**：2026-11-14 沒有轉入 gyo2，守衛仍在 kernel、orchestration、world_time 三個目錄查（本卡沒有擴大、沒有拿掉）。選項：(a) gyo2 上拿掉（設計審查推薦）；(b) 留三個目錄；(c) 擴到全部單位。它是 DI 3 的守衛，可以不在這一批定。
@@ -85,7 +101,9 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-namespac
 | logging | 92/92 killed | 第一輪的紀錄被 trace 的覆蓋（本卡產生紀錄檔名的寫法讓兩份撞名），重跑一次 |
 | rollback、trace、io_user_files | 3/3、3/3、2/2（1 個跳過） | |
 
-加的突變（README 第 8 條）：`naming_mutations.json` 16 個；退 1 個（`wt-guard-naming-root-dropped`）。參考值「條數 × 5」以 N17 一條計是 5。超過的理由：守衛從固定的三列改成推導＋兩條規則（forward、根）＋舊根的過渡規則。README 第 4 點要求每條規則三個（關掉、真實樹的陽性對照、fail closed），再加每個獨立的分支或清單一個：推導 4（縮寫表、`_` 分段、例外表、真實樹）、層的 fail closed 4（未知層、空層、層不見、單位沒有原始碼）、根 6（`GYO` 單獨、不在表裡、非單位的根的位置、讀不懂、掃描範圍清單、真實樹）、舊根 2（關掉、真實樹）。
+**合併前的五件決定與跟上 #265 之後**（以 f5e92a71 為基準，entry 改過或 find 在改動範圍的，以及 `naming_guard` 的全部）：Kernel 22/22、os-subsystem 21/21（4 個此平台跳過）、`naming_mutations.json` 16/16、orchestration 5/5（含 `or-runner-logs-back`，#265 修好了）、rollback 3/3、authority 2/2、world_time 1/1、io_user_files 2/2——全部 killed。退役：include-order 的 2 個（決定 5）、N3 的 5 個（決定 7）。紀錄在主 checkout 的 `build/evidence/gyo2-namespace-root/mutations-after-265/`。
+
+加的突變（README 第 8 條）：`naming_mutations.json` 16 個；退 8 個（`wt-guard-naming-root-dropped`；include-order 2 個；N3 5 個）。參考值「條數 × 5」以 N17 一條計是 5。超過的理由：守衛從固定的三列改成推導＋兩條規則（forward、根）＋舊根的過渡規則。README 第 4 點要求每條規則三個（關掉、真實樹的陽性對照、fail closed），再加每個獨立的分支或清單一個：推導 4（縮寫表、`_` 分段、例外表、真實樹）、層的 fail closed 4（未知層、空層、層不見、單位沒有原始碼）、根 6（`GYO` 單獨、不在表裡、非單位的根的位置、讀不懂、掃描範圍清單、真實樹）、舊根 2（關掉、真實樹）。
 
 ## 設計審查（Fable 5.2／high，唯讀）
 
@@ -109,12 +127,16 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-namespac
 
 要使用者決定的，見「合併前要給使用者看的」。
 
+## 跟上 gyo2
+
+- #265（`v8-arch-gyo2-batch4-followups`）合併後 merge `origin/gyo2`（8c5f1aa4，不 rebase）。衝突在 Kernel、orchestration 的突變清單 6 處（#265 改了 find 的內容，本分支改了名字）：採 #265 的版本，再對合併後的整棵樹重跑兩支改名腳本（舊根 12 處、縮寫 0 處）。改名前就找不到 find 的那些突變已由 #265 處理，合併後沒有 stale 的突變。
+- 合併後本機 `ctest --preset test` 161/161。
+
 ## 後續（範圍外，沒有做）
 
 - 設計審查提出的：`naming_guard` 搬到中立的 owner（例 `tests/common/naming/`，ctest `naming.guard`），共用的讀法函式從 `kernel_guard` 抽出，四份清單裡的突變歸位；`engine/` 裡 234 處 `::GYO::Engine::` 是相撞時期的繞法，現在可以寫短名；測試輔助的 namespace 有兩套（`GYO::Test::<單位>` 與 `KernelTest`／`OrchTest`／`RollbackTest`／`WorldTest`），要收斂或寫明兩者都可；單位裡的巢狀名會遮住同名的兄弟單位（`OS::Files`、`IO::Path`），加單位時由審查看；`SCAN_ROOTS` 的 framework、apps、tools 在 gyo2 上不存在，清單可以縮；`kernel_guard.camel_case` 和 `unit_name` 是同一個轉換。
 
-- io 的 `IO::FS` 是全大寫縮寫，合現在的縮寫表；io、entity_store 內部用小寫 `detail`，math 用 `FrustumDetail`，和 N13 的 `Detail` 不一致。
-- 守衛的 N3（舊命名條文第 5 條的角色後綴）2026-11-14 沒有轉入 gyo2，但守衛仍在三個目錄上查。
+- io、entity_store 內部用小寫 `detail`，math 用 `FrustumDetail`，和 N13 的 `Detail` 不一致（`IO::FS` 全大寫，合縮寫表）。
 - 15 份 master 時代的突變清單（`docs/architecture/plans/{framework-*,input-and-present,event-sounds,big-map/engine_grid}`、`docs/tools/plans/v8/scripts/*`）指向的檔案在 gyo2 已不存在。
-- 現行清單裡 find 已找不到的突變（改名前就是這樣，不是本卡造成）：Kernel 清單 `ks-k6-calls-off`、`ks-k6-every-file-exempt`、`rs-iv-fc3-step0-skipped`、`hf-round-skips-initial-values`、`ks-s2-interrupted-stops-refusing`、`ks-s5-change-deferred`、`ks-s5-change-stamp`、`obs-host-err-not-failed`、`obs-exclusive-err-not-left`、`obs-host-no-snapshot-after`、`el-kernel-print-back`、`ks-restore-record-by-record`；權威 `au-input-rolled`、`au-digest-resource-dropped`；回滾 `rb-input-capacity-unchecked`。可能是 `gyo2-batch4-followups` 卡正在處理的。
+- （已解決）改名前就找不到 find 的 Kernel、權威、回滾突變：#265 已處理，合併後沒有 stale 的。
 - `docs/architecture/entity-store.md`、`math.md`、`error-handling.md` 的路徑還是 `engine/<模組>`（沒有層）；`docs/architecture/trace.md`、`input.md` 是 master 時代的文件。
