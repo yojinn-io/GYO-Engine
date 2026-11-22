@@ -1,6 +1,6 @@
 # 時間 Module（`engine/modules/world_time`）
 
-更新：2026-11-22（`v8-arch-gyo2-authority-rollback` 第 7 步：WT-1 補「`Resimulation` 每次準備都放成 false，`CarryOver` 不帶它」並隨區拿掉「(b) 區」的字樣，WT-5 補伺服器權威策略檢查 `TickWriters()` 名單外的寫者，第 2 節刪第 3 批的 G4 註記；型別 2、型別 3、WT-4、第 1～4 節與 Design Invariants 的開頭照逐型別雜湊與第 1 步立的守衛改寫；照[事前宣告](authority-rollback-declaration.zh-Hant.md)第 11.4 節，方向使用者 2026-11-20 核准，最終文字使用者 2026-11-22 核准）；2026-11-20（新頁，`v8-arch-gyo2-time-events` 第 6 步；同日第 6 步 C 補 `WorldTimeOptions::fixedStep`：沒有固定步的 World 用 250 ms 的上限，宣告第 3.2 節、`v8-arch-gyo2-t1-three-items`；同日第 7 步依換模型審查：放回與帶過去的步長以這次的設定為準（S1、S4）、放回的時點（S5）、倍率 -0 寫成 +0（S7），型別 2、型別 3、WT-1、WT-3 改寫）。Owner：架構。程式：`engine/modules/world_time/`（`GYO::Engine::WorldTime`，target `GYO::WorldTime`，登記單位 `WorldTimeModule`）。行為測試：`tests/common/world_time/`（ctest `world_time.types`、`world_time.module`、`world_time.sampling`、`world_time.fixed`、`world_time.restore`、`world_time.carry-over`，標籤 `cpu`）；突變清單 [`scripts/world_time_mutations.json`](scripts/world_time_mutations.json)（`wt-`）。
+更新：2026-11-22（`v8-arch-gyo2-exchange` 第 3 步：第 3 節與 WT-6 第 (2) 項的退出條件改成「第一個需要 runner 取樣的 runner 那批」，方向不變；使用者 2026-11-22 合併前核准）；2026-11-22（`v8-arch-gyo2-authority-rollback` 第 7 步：WT-1 補「`Resimulation` 每次準備都放成 false，`CarryOver` 不帶它」並隨區拿掉「(b) 區」的字樣，WT-5 補伺服器權威策略檢查 `TickWriters()` 名單外的寫者，第 2 節刪第 3 批的 G4 註記；型別 2、型別 3、WT-4、第 1～4 節與 Design Invariants 的開頭照逐型別雜湊與第 1 步立的守衛改寫；照[事前宣告](authority-rollback-declaration.zh-Hant.md)第 11.4 節，方向使用者 2026-11-20 核准，最終文字使用者 2026-11-22 核准）；2026-11-20（新頁，`v8-arch-gyo2-time-events` 第 6 步；同日第 6 步 C 補 `WorldTimeOptions::fixedStep`：沒有固定步的 World 用 250 ms 的上限，宣告第 3.2 節、`v8-arch-gyo2-t1-three-items`；同日第 7 步依換模型審查：放回與帶過去的步長以這次的設定為準（S1、S4）、放回的時點（S5）、倍率 -0 寫成 +0（S7），型別 2、型別 3、WT-1、WT-3 改寫）。Owner：架構。程式：`engine/modules/world_time/`（`GYO::Engine::WorldTime`，target `GYO::WorldTime`，登記單位 `WorldTimeModule`）。行為測試：`tests/common/world_time/`（ctest `world_time.types`、`world_time.module`、`world_time.sampling`、`world_time.fixed`、`world_time.restore`、`world_time.carry-over`，標籤 `cpu`）；突變清單 [`scripts/world_time_mutations.json`](scripts/world_time_mutations.json)（`wt-`）。
 
 由來：[事前宣告](time-events-declaration.zh-Hant.md)（`v8-arch-gyo2-time-events`，2026-11-19 動工前核准，`v8-arch-gyo2-time-events-declaration-approved`）第 3 節、第 10.3、10.4 節；遊戲時間全部放這裡、`engine/core/time` 只留時間基準（使用者 2026-11-19，`v8-arch-gyo2-game-time-in-world-time`）。本頁照第 2～5 步的實作寫；**Design Invariants 的最終文字在合併前核准時定稿**。和宣告文字不同的地方在每條末尾標「實作」。
 
@@ -51,7 +51,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::WorldTime ──► GYO::Orchestrat
 
 ## 3. 取樣（過渡）
 
-時間設計的形狀是「runner 在交換點寫取樣的時間點」，交換點在編排層第 5 條。在那之前照 Bevy `TimeUpdateStrategy`，取樣放在 `TimeSampling`：
+時間設計的形狀是「runner 在交換點寫取樣的時間點」。〔`v8-arch-gyo2-exchange`，使用者 2026-11-22 合併前核准；方向不變、退出條件改寫，合併前核准時給使用者看〕交換點在第 5 批做出來了（編排層 O-12），但這一項不跟著移：到第一個需要「runner 取樣」的 runner 那批再移（有視窗的是 SDL 那批；沒畫面的 Match 的 runner 若先來就是它那批；[交換點的宣告](exchange-declaration.zh-Hant.md)第 5.5 節）。在那之前照 Bevy `TimeUpdateStrategy`，取樣放在 `TimeSampling`：
 
 - `TimeBase`（預設）：`AdvanceTime` 讀 `::GYO::Engine::Time::NowNs()`；建好 World 後第一次取樣 `delta`＝0。
 - `ManualInstant`：`value` 是這一幀的時間點；第一次取樣 `delta`＝0。
@@ -108,7 +108,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::WorldTime ──► GYO::Orchestrat
 **WT-5 寫者的約定。** `RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`、`TimeConfig` 只由時間 Module 寫；`TimeControl`、`TimeSampling` 由產品（與測試）寫；`Resimulation` 只由回滾策略寫；`Tick` 另外可由回滾策略寫、讀檔時由作者放回——**約定，不是啟動檢查**（Kernel 不數寫者，`-kernel-is-ecs-no-restrictions`）。`TickWriters()` 公開驅動者名單、`RunFixedSteps` 帶 `Writes<Tick>`；選了伺服器權威策略的 World，由策略在啟動時檢查 `TickWriters()` 名單外的 `Tick` 寫者（System、hook、observer，`Writes<Tick>` 標註也算；AU-E5，[權威頁](authority.zh-Hant.md)第 3 節；權威份 5.4），沒選的 World 照舊只是約定。實作：加 `TimeConfig`。守衛：突變 `wt-tick-writers-empty`、`wt-driver-no-writes-tick`（`world_time.module`「TickWriters names RunFixedSteps …」）；`authority.authority_checks`「authority checks: AU-E5: only the time Module's drivers write the tick」「authority checks: AU-E5 sees an ExclusiveWorld<Writes<Tick>> annotation, a hook and an observer」；其餘靠審查。（使用者 2026-11-22 核准，`v8-arch-gyo2-authority-rollback`）
 
 <a id="wt-6"></a>
-**WT-6 職責清單。** 時間 Module 的職責是：(1) 把時間的 Resource 登記進它被建進的每個 World；(2) 取樣（照 `TimeSampling`；交換點做出來後這一項移給 runner，Resource 的形狀不變）；(3) 真實時間與可縮放時間的推進（暫停、倍率、上限、扣掉的記錄）；(4) 固定步的累加與驅動、`Tick`、退回 k 步、放回固定步的狀態；(5) `ActiveTime` 的切換；(6) 登記「重跑中」並放初始值（回滾 5.7）；(7) 發 `TimeDiscarded`。不在清單上的：回滾的判斷、還原與重跑（回滾 Module）；tick 只有一個來源的檢查（權威）；schedule 的骨架（編排層 O-4）；runner 的等待與交換點（編排層）；狀態（狀態機）。不另發「固定步跑了一步」「暫停、恢復」的事件：被跑到就是通知、連續的狀態讀 Resource（`v8-arch-gyo2-event-delivery-rule`）。守衛：審查；RC (d)。
+**WT-6 職責清單。** 時間 Module 的職責是：(1) 把時間的 Resource 登記進它被建進的每個 World；(2) 取樣（照 `TimeSampling`；到第一個需要 runner 取樣的 runner 那批，這一項移給 runner，Resource 的形狀不變〔`v8-arch-gyo2-exchange`，使用者 2026-11-22 合併前核准〕）；(3) 真實時間與可縮放時間的推進（暫停、倍率、上限、扣掉的記錄）；(4) 固定步的累加與驅動、`Tick`、退回 k 步、放回固定步的狀態；(5) `ActiveTime` 的切換；(6) 登記「重跑中」並放初始值（回滾 5.7）；(7) 發 `TimeDiscarded`。不在清單上的：回滾的判斷、還原與重跑（回滾 Module）；tick 只有一個來源的檢查（權威）；schedule 的骨架（編排層 O-4）；runner 的等待與交換點（編排層）；狀態（狀態機）。不另發「固定步跑了一步」「暫停、恢復」的事件：被跑到就是通知、連續的狀態讀 Resource（`v8-arch-gyo2-event-delivery-rule`）。守衛：審查；RC (d)。
 
 ### Replacement Criteria
 

@@ -88,6 +88,8 @@
 - [2026_11_20_gyo2_json_module.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_json_module.zh-Hant.md)：JSON Module（`v8-arch-gyo2-json-module`）。
 - [2026_11_20_gyo2_error_levels.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_error_levels.zh-Hant.md)：異常分級（Kernel 不再印錯誤、編排層不再記警告、P12、P15；級別與命名的條文草稿）。
 - [2026_11_20_gyo2_logging.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_logging.zh-Hant.md)：日誌機制（`v8-arch-gyo2-logging`；trace 另一個 Module）。
+- [2026_11_22_gyo2_exchange_guards.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_exchange_guards.zh-Hant.md)：第 5 批第 0 步，Kernel「拿掉的名字不回來」與權威 Module 的連結集（PR #268 併入）。
+- [2026_11_22_gyo2_exchange.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_exchange.zh-Hant.md)：第 5 批，Product 一份的共用處、交換函式的登記、多個 World 的執行緒與 Extract 的契約（`v8-arch-gyo2-exchange`，PR #270）。
 - [2026_11_21_gyo2_trace.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_trace.zh-Hant.md)：trace（`v8-arch-gyo2-trace`）。
 - [2026_11_21_gyo2_stale_mutants.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_stale_mutants.zh-Hant.md)：os-subsystem 清單裡 6 個在基準上跑不起來的突變（改寫 6、敵對式檢查後新增 4；`v8-arch-gyo2-stale-mutants`）。
 - [2026_11_21_gyo2_os_wait.zh-Hant.md](../../../dev_logs/2026_11_21_gyo2_os_wait.zh-Hant.md)：core/time 的等待改呼叫 core/os（`v8-arch-gyo2-os-wait`）。
@@ -98,6 +100,7 @@
 - [2026_11_22_gyo2_naming_cleanup.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_naming_cleanup.zh-Hant.md)：命名收尾（`v8-arch-gyo2-naming-cleanup`；`naming_guard` 搬到 `tests/common/naming/`、共用讀法與 `gyo_expect_links` 搬到 `tests/common/support/`、`engine/` 改短名、測試輔助 namespace 收斂成 `GYO::Test::<單位>`、`Detail` 對齊 N13）。
 - [2026_11_22_gyo2_n13_short_names.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_n13_short_names.zh-Hant.md)：`engine/` 剩下的全名照 N13「引用別的單位」改成短名（`v8-arch-gyo2-n13-short-names`；IO 指自己的拿掉、Kernel 寫 `Engine::Base::`、`HashValue` 寫 `Kernel::Hasher`；巨集保留全限定）。
 - [2026_11_22_gyo2_world_gen.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_world_gen.zh-Hant.md)：第 5 批 生成世界（生成中、`WorldGeneration`、`WhileGenerating()`／`AfterGenerating()`）與預設的實體配發器 `entity_ids`（`RangeAllotter` 搬出 Kernel）；使用者 2026-11-22 合併前核准，合併待使用者說。
+- [2026_11_22_gyo2_au_z6_survivor.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_au_z6_survivor.zh-Hant.md)：權威 Module 的突變 `au-z6-skipped-counted` 存活的原因（61d6f72c 起突變指定的 AU-E8 一例因 Resource 輸入另有歷史而失去檢出力）與修正（突變改接既有的 `every mount skipped`；`v8-arch-gyo2-au-z6-survivor`）。
 
 ## 沒有搬過來的
 
