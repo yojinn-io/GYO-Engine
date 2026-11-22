@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Memory-order mutants of the audio plan's SPSC rings. Killed only by a ThreadSanitizer build of gyo_audio_tests (configure with -fsanitize=thread) run with TSAN_OPTIONS=ignore_interceptors_accesses=0, which macOS needs to check the ring's memcpy writes; an ordinary build cannot see them. Run with run_mutations.py --catalog this file --build-dir <the TSan build>.",
+  "description": "Memory-order mutants of the audio plan's SPSC rings. Killed only by a ThreadSanitizer build of gyo_audio_tests (configure with -fsanitize=thread) run with TSAN_OPTIONS=ignore_interceptors_accesses=0, which macOS needs to check the ring's memcpy writes; an ordinary build cannot see them. Run with tests/common/mutation/run_mutations.py --catalog this file --build-dir <the TSan build>.",
   "mutants": [
     {
       "id": "au-sched-play-head-relaxed",

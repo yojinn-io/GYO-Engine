@@ -600,7 +600,7 @@ Engine 的兩點保證分在兩層：
 
 ### 19.6 對 io 的需求（給 threads／io 重審卡，經主會話）
 
-讀檔與存檔版本 Module 對 io **沒有新需求**：Engine 不做存檔的讀寫。作者用 io 讀寫存檔時用到的是既有的：整檔原子寫入（`engine/io/helpers/WriteFileAtomically.hpp`，防寫到一半的壞檔——使用者說壞檔是最嚴重的 Bug）、整檔讀（`ReadAllBytes.hpp`）；讀檔在 World 執行緒外先讀好、驗好版本再發替換（不在 World 裡做 io）。重審卡回覆兩個都留下（重審宣告 I6）。**存檔目錄**：目前 Engine（io、os）不提供每個使用者的資料目錄（macOS Application Support、Windows `%APPDATA%`、Linux `$XDG_DATA_HOME`），存檔路徑由作者自己決定（`UserFiles.hpp` 只有 `ProbeFileStamp`，讀整檔算戳記判斷有沒有被改過，不是目錄）。使用者在 threads／io 重審卡答 Q3 選 (a)（2026-11-22，經主會話轉）：存檔目錄要補、放在 os 層（os 卡已核准的介面：`OS::Files::UserDataDirectory(organization, application)`，回傳「base／公司／遊戲」、不存在就建、POSIX 用 0700），另開一個小批做，不在讀檔卡、也不在重審卡。那一批合併前，作者自己決定路徑；讀檔的實作不等它。
+讀檔與存檔版本 Module 對 io **沒有新需求**：Engine 不做存檔的讀寫。作者用 io 讀寫存檔時用到的是既有的：整檔原子寫入（`engine/io/helpers/WriteFileAtomically.hpp`，防寫到一半的壞檔——使用者說壞檔是最嚴重的 Bug）、整檔讀（`ReadAllBytes.hpp`）；讀檔在 World 執行緒外先讀好、驗好版本再發替換（不在 World 裡做 io）。重審卡回覆兩個都留下（重審宣告 I6）。**存檔目錄**：目前 Engine（io、os）不提供每個使用者的資料目錄（macOS Application Support、Windows `%APPDATA%`、Linux `$XDG_DATA_HOME`），存檔路徑由作者自己決定（`UserFiles.hpp` 只有 `ProbeFileStamp`，讀整檔算戳記判斷有沒有被改過，不是目錄）。使用者在 threads／io 重審卡答 Q3 選 (a)（2026-11-22，經主會話轉）：存檔目錄要補、放在 os 層（os 卡已核准的介面：`OS::Files::UserDataDirectory(organization, application)`，回傳「base／公司／遊戲」、不存在就建、POSIX 用 0700），另開一個小批做，不在讀檔卡、也不在重審卡。那一批合併前，作者自己決定路徑；讀檔的實作不等它。（之後 #280 先合併，說明頁改成指向 `OS::Files::UserDataDirectory`。）
 
 ### 19.7 Derivation Order 與 Architecture Delta（AGENTS §2、§3）
 

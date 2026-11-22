@@ -96,6 +96,8 @@
 
 - 再 merge `origin/gyo2`（#277 threads／io 重審、#282 O-2）：衝突只有 `target/v2/README.md` 的 dev_log 索引一行（兩邊都留）；`orchestration_mutations.json` 自動合併，和 gyo2 比對：gyo2 的 282 筆都在、內容不變，加本批 6 筆，沒有重複的鍵。本機 `ctest -LE "gpu|network"` 170/170。這次 merge 沒有改到本批突變的檔案與殺它們的測試，本批 16 個突變的 find 都還是恰好一處，所以不重跑（D184）。
 
+- 再 merge `origin/gyo2`（#280 os 的 `UserDataDirectory`、#279 audio 重審、#281 狀態機）：衝突三處都兩邊留——`config/modules.csv`（`state_machine` 與 `save_version` 兩列）、`target/v2/README.md`（給作者看的索引、dev_log 索引）、說明頁（第 16 節狀態機在前、第 17 節讀檔在後）。讀檔一節的狀態機那一段照 `state-machine.zh-Hant.md` 第 3 節改寫（`ResMut<StateMachine<S>>` 的 `SetInitial`），連到第 16 節；存檔目錄改成指向已合併的 `OS::Files::UserDataDirectory`。
+
 ## 未結
 
 - 合併：使用者定的順序 #280 → #279 → #281 → #276，由主會話執行。

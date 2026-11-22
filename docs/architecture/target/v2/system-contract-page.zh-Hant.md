@@ -537,6 +537,17 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **為什麼 Engine 不替你處理。** 被狀態擋住的讀者回來該不該補讀，是遊戲的判斷：成就計數可能要補，按鈕處理不該補。各家引擎都把它交給作者（Bevy 的核心要讀者每幀讀；lightyear 的範例把接收器寫成不帶狀態條件；flecs、Unity 看狀態的現在值）。作者若開始反覆寫這類補償，Kernel 會照 [RC 24](../kernel.zh-Hant.md#rc-24) 重評。
 
+## 16. 狀態機：主選單、關卡中、暫停
+
+（`v8-arch-gyo2-state-machine`；規則全文與寫法在 [state-machine](state-machine.zh-Hant.md)。）
+
+**一個例子。** 啟動後是主選單，按「開始」進關卡，關卡中可以暫停。作者寫一個列舉 `Flow { MainMenu, InLevel }`、特化一次 `StateMachineTraits<Flow>`，在產品的 `build` 呼叫 `RegisterStateMachine<Flow>(setup)`。進主選單時生成按鈕：System 掛在 `Flow.Enter.MainMenu`（stage `Update`）。只在關卡中、沒暫停時移動角色：條件 `InState<Pause, Pause::Running>()`。按「開始」：寫 `StateMachineRequest<Flow>` 的 `Request(Flow::InLevel)`。
+
+- 套用的 System 預設在 `Main` 的 `PreUpdate` 之後：排在 `PreUpdate` 的 System 同一幀讀到換之前的值，排在 `Update` 的讀到換之後的。
+- 進入之後只能經要求換值（型別封閉）；一次套用每種狀態最多換一次，離開或進入裡提的要求留到下一次。
+- 讀檔、生成中、(c) 區的接法：見 [state-machine](state-machine.zh-Hant.md) 第 3 節。
+- 帶 `InState`／`NotInState` 的讀者、進入／離開那兩張裡的讀者：照[第 15 節](#15-帶條件或不常跑的讀者)的寫法（要帶進「進入」的資料放 Resource）。
+
 ## 17. 讀檔
 
 （`v8-arch-gyo2-restore-impl`；宣告 [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md) 修訂 12 第 18、19 節，使用者 2026-11-22 動工前核准。規則全文在 [orchestration](orchestration.zh-Hant.md) 的 O-7、O-8、O-14，Kernel 的 DI-KS 9、15 (7)、18。）
@@ -573,9 +584,9 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **資產。** 存檔記資產的 id，不存資產本身；id 能不能用在發替換之前驗。
 
-**存檔放在哪裡。** Engine 不讀寫存檔；讀寫用 io 的整檔讀（`ReadAllBytes`）與整檔原子寫入（`WriteFileAtomically`，避免寫到一半的壞檔），在 World 外先讀好、驗好版本再發替換。存檔目錄（這個使用者的資料目錄）由 os 層的另一批提供（`OS::Files::UserDataDirectory(organization, application)`）；那一批合併前，路徑由作者自己決定。
+**存檔放在哪裡。** Engine 不讀寫存檔；讀寫用 io 的整檔讀（`ReadAllBytes`）與整檔原子寫入（`WriteFileAtomically`，避免寫到一半的壞檔），在 World 外先讀好、驗好版本再發替換。存檔目錄（這個使用者的資料目錄）用 os 層的 `OS::Files::UserDataDirectory(organization, application)`（回傳「base／公司／遊戲」、不存在就建；公司名與應用名各一層）。
 
-**狀態機。** 讀檔時狀態怎麼放回，見[第 16 節「狀態機：主選單、關卡中、暫停」](#16-狀態機主選單關卡中暫停)（讀檔 System 在生成中填存檔的狀態，第一次套用就直接進它，不先跑初始狀態的 `OnEnter`。例：存檔停在「關卡中＋暫停」，讀檔後直接回到「關卡中＋暫停」）。
+**狀態機。** 讀檔時狀態怎麼放回，見[第 16 節「狀態機：主選單、關卡中、暫停」](#16-狀態機主選單關卡中暫停)與 [state-machine](state-machine.zh-Hant.md) 第 3 節：讀檔 System 在生成中對 `ResMut<StateMachine<S>>` 呼叫 `SetInitial(存檔的值)`（子狀態也可以），套用的 System 帶 `AfterGenerating()`，第一次套用就直接進存檔的狀態，不先跑初始狀態的 `OnEnter`。例：存檔停在「關卡中＋暫停」，讀檔後直接回到「關卡中＋暫停」。
 
 **讀檔完成。** Engine 不發「讀檔完成」的通知：Engine 不認得讀檔，「放回完了」就是生成結束——讀 `WorldGeneration` 的 `Generating()`，或把遊戲邏輯掛 `AfterGenerating()`。`AfterGenerating()` 之後一直為真；要「讀檔完成時只做一次」，自己記一個旗標。要通知別的 System，讀檔 System 自己發 `Message`（沒有讀者拉住時那次 Run 結束就被修剪，第 14 節）。（Bevy 的讀檔由 Engine 自己的生成器做，所以發得出 `WorldInstanceReady`；GYO 的讀檔是作者的 System。）
 

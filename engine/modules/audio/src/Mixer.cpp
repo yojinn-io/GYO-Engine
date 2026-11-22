@@ -5,7 +5,6 @@
 #include <chrono>
 #include <limits>
 #include <string>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -32,20 +31,20 @@ struct Command final {
 
 enum class SlotState : std::uint8_t { Free, Loaded, Unloading };
 
-// One clip a submitter loads while output runs. The owner producer allocates
-// and frees the samples; the audio thread reads them through `view` only for
-// plays queued after the load, and counts the voices reading them in its own
+// One clip a submitter loads while output runs. The producer (whoever uses the
+// submitter, one at a time) allocates and frees the samples; the audio thread
+// reads them through `view` only for plays queued after the load, and counts the voices reading them in its own
 // lease. Once it has taken the clip's unload and no voice reads it, it resets
-// its lease and hands the slot back with a release store; the owner frees the
+// its lease and hands the slot back with a release store; the producer frees the
 // samples only after an acquire load sees that (Design Invariant 7).
 struct ClipSlot final {
-    // The owner producer's own.
+    // The producer's own.
     std::vector<std::int16_t> samples;
     SlotState state = SlotState::Free;
     // The generation of the next or current clip; never 0. It wraps after 2^32 - 1
     // unloads of one slot, which no consumer reaches; an id that old would alias.
     std::uint32_t generation = 1;
-    // Written by the owner before the plays that read it are queued.
+    // Written by the producer before the plays that read it are queued.
     ClipView view;
     // The audio thread's own lease.
     std::uint32_t voices = 0;
@@ -65,8 +64,7 @@ struct SubmitterSlot final {
     const std::uint64_t handlePrefix; // (index + 1) << kSequenceBits
     alignas(64) std::atomic<std::uint64_t> tail{0};
     alignas(64) std::atomic<std::uint64_t> head{0};
-    alignas(64) std::atomic<std::thread::id> owner{};
-    // The owner producer's own: the last handle sequence issued. 2^57 plays
+    // The producer's own: the last handle sequence issued. 2^57 plays
     // would overflow it, which no mixer reaches.
     std::uint64_t lastSequence = 0;
     std::atomic<std::uint64_t> submitted{0};
@@ -173,7 +171,7 @@ std::int64_t ClampedOffset(const std::int64_t a, const std::int64_t b) noexcept 
 }
 
 // The audio thread. Resets its lease, then hands the slot back: the release
-// store orders every read of the samples before the owner frees them.
+// store orders every read of the samples before the producer frees them.
 void HandBack(Detail::ClipSlot& slot) noexcept {
     slot.voices = 0;
     slot.unloadTaken = false;
@@ -232,15 +230,6 @@ Submitter& Submitter::operator=(Submitter&& other) noexcept {
 
 Submitter::~Submitter() = default;
 
-void Submitter::ClaimOwner() {
-    GYO_ASSERT(slot_ != nullptr);
-    const std::thread::id self = std::this_thread::get_id();
-    std::thread::id owner{};
-    if (!slot_->owner.compare_exchange_strong(owner, self, std::memory_order_relaxed)) {
-        GYO_ASSERT(owner == self);
-    }
-}
-
 bool Submitter::Enqueue(const Detail::Command& command) {
     const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);
     const std::uint64_t head = slot_->head.load(std::memory_order_acquire);
@@ -253,7 +242,6 @@ bool Submitter::Enqueue(const Detail::Command& command) {
 
 SoundHandle Submitter::Play(const PlayRequest& request) {
     GYO_ASSERT(slot_ != nullptr);
-    ClaimOwner(); // before reading the owner's own clip slots
     GYO_ASSERT(IsRuntimeClip(request.clip) ? LoadedClip(request.clip) != nullptr
                                            : state_->voices.Clips().Contains(request.clip));
     GYO_ASSERT(IsValidGain(request.gainLeft) && IsValidGain(request.gainRight));
@@ -270,7 +258,6 @@ SoundHandle Submitter::Play(const PlayRequest& request) {
 
 bool Submitter::Stop(const SoundHandle sound, const Time::TimePoint at) {
     GYO_ASSERT(slot_ != nullptr);
-    ClaimOwner();
     if (!sound.Valid()) return true;
     GYO_ASSERT((sound.value & ~Detail::kSequenceMask) == slot_->handlePrefix);
     const std::uint64_t sequence = sound.value & Detail::kSequenceMask;
@@ -280,7 +267,6 @@ bool Submitter::Stop(const SoundHandle sound, const Time::TimePoint at) {
 
 bool Submitter::StopAll(const Time::TimePoint at) {
     GYO_ASSERT(slot_ != nullptr);
-    ClaimOwner();
     return SendStop(Command{CommandKind::StopAll, PlayRequest{ClipId{}, at}, slot_->handlePrefix});
 }
 
@@ -298,7 +284,6 @@ Detail::ClipSlot* Submitter::LoadedClip(const ClipId clip) const noexcept {
 Base::Result<ClipId, AudioError> Submitter::LoadClip(const Base::ConstSpan<std::int16_t> interleaved,
                                                      const std::uint16_t channels, const std::uint32_t sampleRate) {
     GYO_ASSERT(slot_ != nullptr);
-    ClaimOwner();
     // Free the slots the audio thread handed back; the acquire load orders its
     // last read of the samples before this thread frees them.
     for (Detail::ClipSlot& entry : slot_->clips) {
@@ -330,7 +315,6 @@ Base::Result<ClipId, AudioError> Submitter::LoadClip(const Base::ConstSpan<std::
 
 bool Submitter::UnloadClip(const ClipId clip) {
     GYO_ASSERT(slot_ != nullptr);
-    ClaimOwner();
     GYO_ASSERT(IsRuntimeClip(clip));
     Detail::ClipSlot* const entry = LoadedClip(clip);
     GYO_ASSERT(entry != nullptr);

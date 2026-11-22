@@ -1,5 +1,7 @@
 # GYO audio mixer
 
+> **Legacy** (current-state record of master's audio mixer; `v8-arch-docs-legacy`). On the `gyo2` branch the audio Module's design authority is [`target/v2/audio.zh-Hant.md`](target/v2/audio.zh-Hant.md) (`v8-arch-gyo2-audio-review`, 2026-11-22): it carries Design Invariants 1–11 and Replacement Criteria 1–9 with the same numbers. Superseded here: Design Invariants 1 ("and its backend"), 2 (the backend half), 3 (one sentence added there), 4 (the `gyo_audio_board_readers` guard, removed with the user's approval on 2026-11-22), 7 ("owner thread"), 10 (the `audio_sdl.disk` guard); in the Contracts, the owner-thread rule and who must not move the `Mixer` while it renders (its holder, no longer "the backend"), plus a new limit on request times; the SDL output sections, replaced by the interface the backend must meet (section 4 there); Replacement Criteria 1, 2, 5 and the new 9. The SDL output backend sections describe master; the backend is not on `gyo2` (the SDL batch sets it up).
+
 Owner: Engine (`engine/audio` → `GYO::Audio`; the SDL output backend `engine/audio/backend/sdl` →
 `GYO::AudioBackendSDL`, built when a product declares the `SDL_AUDIO` component).
 Plan and record: [audio](plans/audio/README.md), batches v8-engine-audio-core, -schedule, -sdl and -record.

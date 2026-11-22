@@ -2,6 +2,7 @@
 #include "engine/os/Files.hpp"
 
 #include "../../common/Paths.hpp"
+#include "../Platform.hpp"
 
 #include "engine/base/Assert.hpp"
 
@@ -717,3 +718,12 @@ bool DefaultCaseSensitivePaths() noexcept {
 }
 
 } // namespace GYO::Engine::OS::Files
+
+namespace GYO::Engine::OS::Detail {
+
+// A new directory inherits its parent's ACL; there is no mode to set.
+Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path, NewDirectoryAccess) {
+    return Files::CreateDirectories(utf8Path);
+}
+
+} // namespace GYO::Engine::OS::Detail
