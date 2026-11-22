@@ -75,6 +75,12 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       Since v8-arch-gyo2-authority-rollback step 1 also the clock that moved out to the time Module (K9_CLOCK: the
       old clock domain, CurrentTick, the tick-to-stamp table, the time Module's type names), written as identifiers
       so the comments saying the kernel keeps no clock stay allowed.
+      Since v8-arch-gyo2-exchange step 0 also the names of what the kernel no longer has (K9_REMOVED: the zones,
+      the write policy and the exclusive-writer check, the rollback flags and roles, the ingress flag, the digest
+      marks, the C fingerprint and the zone rule codes; DI-KS 15: the kernel knows no zone, authority or rollback
+      strategy), the one-time scan of authority-rollback-declaration section 13 (judgment 4) made standing as its
+      section 9.5 deferred. Written as identifiers, so lower-case prose in comments saying the kernel keeps no zone
+      or digest stays allowed; a capitalized identifier (Zone..., Rollback::, "Z1") counts in a comment too.
   K0  a file under engine/kernel/ that this guard cannot scan: anything but SUFFIXES and CMakeLists.txt. A file
       type the guard does not read would otherwise pass every rule unseen.
 
@@ -126,7 +132,20 @@ K9_CLOCK = (
     r"\bDomainName\b", r"\benum\s+class\s+Domain\b", r"\bDomain::\w+", r"\brejectTick\b", r"\btickOfSchedule\b",
     r"\boptions\.clock\b", r"\bbool\s+clock\b",
     r"\b(?:VirtualTime|FixedTime|RealTime|ActiveTime|TimeControl|Resimulation|TickWriters|TickAccumulator)\b")
-K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK)
+# What the kernel no longer has (v8-arch-gyo2-authority-rollback took it out; made standing by
+# v8-arch-gyo2-exchange step 0, the guard authority-rollback-declaration 9.5 deferred). Source: the patterns of
+# that declaration's judgment 4, written as identifiers (an identifier holding Zone, zoneX, .zone, .external,
+# ingress...) so lower-case prose in comments ("the kernel keeps no zone or digest") stays allowed; a capitalized
+# identifier (Zone..., Rollback::, "Z1") counts in a comment too. The digest itself is the authority Module's
+# (DI-A 12): only the kernel's old digest marks are named here. The old startup codes (DE2, DE9, XE1, ...) are not
+# listed: the StartupCode set is pinned by "DI-KS 15: the StartupCode values" (RegistryTests.cpp).
+K9_REMOVED = (
+    r"\b\w*Zone\w*", r"\bzone[A-Z]\w*", r"\.zone\b", r"\b[Ww]ritePolicy\b", r"\bCheckExclusiveWriters\b",
+    r"\bFunnel\w*", r"\bRollback::", r"\benum\s+class\s+(?:Role|Rollback)\b", r"\bRole::(?:Input|State)\b",
+    r"\brollback(?:Enabled|Safe|Active)\b", r"\bnotInRollback\b", r"\bingress\w*", r"\bbool\s+external\b",
+    r"\.external\b", r"\b\w*DigestSet\b", r"\bdigestMarks\b", r"\bk?CFingerprint\w*", r"\bparallelGuardTest\b",
+    r'"Z[0-9]"')
+K9 = tuple(re.compile(p) for p in K9_MOVED + K9_CLOCK + K9_REMOVED)
 DIRECTIVE = re.compile(r"^[ \t]*(?:#|%:)[ \t]*(?:include_next|include|import)\b")
 TARGET = re.compile(r"[ \t]*([<\"])([^>\"]+)[>\"]")
 # engine/entity_store/: Delta-3 of the migration plan (user 2026-11-13, world-exec): the World's columns are kept by
