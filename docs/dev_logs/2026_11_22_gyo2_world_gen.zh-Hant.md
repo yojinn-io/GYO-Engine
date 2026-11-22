@@ -8,7 +8,7 @@
 
 - `engine/modules/entity_ids`：`RangeAllotter`（連同逐欄雜湊）與 `EntityIdsModule`。每個選了它的 World 登記 `RangeAllotter` 為配發器，準備函式在沒有值時放 `EntityIdsOptions` 的範圍（預設 `[1, 2^32−1]`）。登記檔一列 `default=yes`、`depends` 空。
 - Kernel 的 `Storage.hpp` 拿掉 `RangeAllotter`（Kernel 不附任何配發器型別，DI-KS 4）。
-- 測試：Kernel 與編排層的測試改用共用的替身 `tests/common/support/TestRangeAllotter.hpp`（同語意，`GYO::Test`）；回滾與 scenario 改用 `EntityIds::RangeAllotter`。`RangeAllotter` 自己的性質（Kernel J-8 的前半、D-9 的 padding 案）搬到 `tests/common/entity_ids/`；Kernel 的 J-8 留機制的半（用完回報、範圍內的 `SpawnWithId` 被丟）。新案例 C13～C16（`entity_ids.module`、`entity_ids.default`：C16 用 `gyo_product_units` 由真的 `config/modules.csv` 產生登記單位表）。
+- 測試：Kernel 與編排層的測試改用共用的替身 `tests/common/support/TestRangeAllotter.hpp`（測試自己的範圍配發器，`GYO::Test`；宣告 5.10 寫放 `WorldTestSupport.hpp`，編排層也要用所以放共用處）；回滾與 scenario 改用 `EntityIds::RangeAllotter`。`RangeAllotter` 自己的性質（Kernel J-8 的前半、D-9 的 padding 案）搬到 `tests/common/entity_ids/`；Kernel 的 J-8 留機制的半（用完回報、範圍內的 `SpawnWithId` 被丟）。新案例 C13～C16（`entity_ids.module`、`entity_ids.default`：C16 用 `gyo_product_units` 由真的 `config/modules.csv` 產生登記單位表）。
 - 突變：`we-j8-allotter-wraps`、`we-j8-allotter-reset`、`ks-hash-allotter-as-bytes` 從 Kernel 清單搬到新清單 `docs/architecture/target/v2/scripts/entity_ids_mutations.json`（id 不變，補 `guards`）；新增 `ei-prepare-overwrites`、`ei-not-default`；`sc-lower-bound-not-moved` 的 `file` 改指 Module 的標頭。
 
 ### 第 2 步：生成中（c361eb88）
@@ -59,6 +59,14 @@
 改後：受影響的突變（`wg-skeleton-off-unregistered`、`wg-held-not-cleared`、`wg-ends-while-held`、`entity_ids` 清單 6 個）9/9 killed（主 checkout `build/evidence/gyo2-world-gen/impl/mut-review.log`）；`ctest -L "cpu|shader"` 167/167。
 
 另順手改的（記下的那一段）：B1 測試替身的註解不再宣稱「和 `RangeAllotter` 同語意」；B6 `RunRound` 的回傳型別照 N13 寫 `Base::Result`。其餘記下的不改，交之後的批（主會話轉）：B3 作者寫 `WorldGeneration` 就能結束或重新進入生成，`Product::Regenerate` 不必做（狀態機那一批問「World 內換關卡」時的答案）；B6 `RunRound` 的 entry 寫死 `"RunFrame"`（交換點的入口共用時加參數）、`kSkeletonOwner`／`own0` 名字已過時（交主會話判）；B7 預設都帶 `entity_ids` 與 `rollback` 時配發器沒有登記成可回滾，回滾可向 Kernel 問哪個 Resource 是配發器；B8 預設範圍佔滿 32 位元 index，網路複製的外來編號也要先動範圍；B9「條件擋住的讀者拉住保留」是事件游標契約的問題，狀態機那一批提；B10 只用 `RunSchedule` 推的 runner 推不動生成；B11 C16 以「全預設 Module 不給設定就能建 World」為前提；B12 換自訂配發器要把其他單位全列出來；B13 `Hold()` 要 `ResMut`，並行時會串行化。
+
+## §14.4 的檢證（Fable 5.2／high，唯讀，對象 7fad36c6）
+
+報告：主 checkout `build/evidence/gyo2-world-gen/impl/verification-14-4-fable.md`。沒有被丟掉而沒交代的斷言、搬過去的突變沒有變弱。指出並處理的：
+- 緩的面少寫一個：Kernel 與編排層的機制測試改用替身後，「用完時 Kernel 報 `AllotterExhausted`」「範圍內的 `SpawnWithId` 被丟」沒有用真 `RangeAllotter` 的案例。補 `entity_ids.module`「with the default allotter, an id in its range is dropped and a used-up range is reported」。
+- 突變的記錄不全或是舊程式的（`ks-hash-summary-resource-bytes` 修好後的重跑沒存、編排層 9 個在 7fad36c6 之前跑、`rb-r3-links-more` 沒存）；Kernel 的選法照所寫的條件應是 25 個（漏 `sr-no-record`、`sr-no-count`）。在目前的程式上重跑並存檔：主 checkout `build/evidence/gyo2-world-gen/impl/mut-head-kernel.log` 25/25、`mut-head-orchestration.log` 9/9、`mut-head-rollback.log` 1/1 killed。
+- DI-KS 27 的條文仍寫「Kernel 自己的型別（配發器、…）」：改字，列進合併前核准。
+- 測試替身的位置和宣告 5.10 不同、`HashTests.cpp` 的 `static_assert` 換成替身沒交代：寫進合併前核准頁。
 
 ## 合併前（未完成）
 

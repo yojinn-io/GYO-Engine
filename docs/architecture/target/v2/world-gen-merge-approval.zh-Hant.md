@@ -11,10 +11,12 @@
 `RangeAllotter` 自己的性質（單調、用完回 `nullopt`、不回繞、`Owns`、沒有 `Reset`）原本寫在 Kernel 的 J-8 案例前半，由突變 `we-j8-allotter-wraps`、`we-j8-allotter-reset` 守。型別搬到 `entity_ids` 之後，這些斷言與兩個突變跟著搬到 `tests/common/entity_ids/EntityIdsTests.cpp`「allotter: monotonic, exhaustion reported, never wraps; no Reset」與 `entity_ids_mutations.json`。Kernel 的 J-8 留下機制的半（用完時 Kernel 回 `AllotterExhausted`、範圍內的 `SpawnWithId` 被丟並記 `IdInAllotterRange`、沒有配發器就不能 `Spawn`），改用測試替身。
 
 1. **守的性質**：預設的配發策略單調、不回繞、不能歸零（Kernel DI-KS 4 的〔併自 world DI 2〕，現在是 entity_ids 的 EI-2）。
-2. **緩的面**：Kernel 的測試不再檢查任何配發器型別自己的行為——Kernel 已經不附配發器型別，所以 Kernel 那一側沒有東西可檢查。若有人在 Kernel 裡再放一個配發器型別，Kernel 的測試不會替它檢查單調與不回繞。
+2. **緩的面**（兩個；檢證者補出第二個）：
+   - Kernel 的測試不再檢查任何配發器型別自己的行為——Kernel 已經不附配發器型別，所以 Kernel 那一側沒有東西可檢查。若有人在 Kernel 裡再放一個配發器型別，Kernel 的測試不會替它檢查單調與不回繞。
+   - Kernel 與編排層的機制測試改用測試自己的範圍配發器（`tests/common/support/TestRangeAllotter.hpp`），不再用出貨的 `RangeAllotter` 跑。「用完時 Kernel 報 `AllotterExhausted`」與「範圍內的 `SpawnWithId` 被丟」原本沒有用真型別的案例；**已補一案**：`entity_ids.module`「with the default allotter, an id in its range is dropped and a used-up range is reported」（Product＋Module 的 World），所以這一個緩的面收掉了。替身目前和 `RangeAllotter` 逐行同邏輯，但沒有東西保證以後一致；它守的是 Kernel 的機制，不是預設策略。
 3. **締的面**：沒有。
-4. **性質由誰繼續守**：`entity_ids.allotter` 的同一組斷言（逐字搬過去）；`we-j8-allotter-wraps`、`we-j8-allotter-reset` 改成改 `engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp`，由那個案例在預期的訊息下抓到（killed）。
-5. **根據與證據**：宣告第 10 節第 1 列、5.10；commit 5260f06a；突變記錄 主 checkout `build/evidence/gyo2-world-gen/impl/mut-ei.log`。
+4. **性質由誰繼續守**：`entity_ids.allotter` 的同一組斷言（逐字搬過去，15 個判定）；`HashTests.cpp` 的 `static_assert(Hashable<RangeAllotter>)` 改成對替身，真型別可雜湊由 `entity_ids.allotter` 的 padding 案（`Summary` 成功）間接守；`we-j8-allotter-wraps`、`we-j8-allotter-reset` 改成改 `engine/modules/entity_ids/include/engine/entity_ids/RangeAllotter.hpp`，由那個案例在預期的訊息下抓到（killed）。
+5. **根據與證據**：宣告第 10 節第 1 列、5.10；commit 5260f06a；突變記錄 主 checkout `build/evidence/gyo2-world-gen/impl/mut-ei.log`（第 1 步，5/5）與 `mut-review.log`（設計審查改完之後，6/6；和目前的程式相符的是這一份）。
 
 ### 1.2 `ks-hash-allotter-as-bytes` 搬到 `entity_ids`
 
@@ -22,7 +24,7 @@
 2. **緩的面**：沒有——雜湊函式跟著型別搬；突變改的是同一個函式（只換了檔案與 namespace），由 `entity_ids.allotter`「equal allotters give one World summary」抓。
 3. **締的面**：沒有。
 4. **性質由誰繼續守**：上述案例與突變（killed）；Kernel 這一側「摘要對 Resource 呼叫逐型別雜湊」由 Kernel 的 D-9 案例與 `ks-hash-summary-resource-bytes` 守（見 1.3）。
-5. **根據與證據**：宣告第 10 節第 2 列；主 checkout `build/evidence/gyo2-world-gen/impl/mut-ei.log`。
+5. **根據與證據**：宣告第 10 節第 2 列；主 checkout `build/evidence/gyo2-world-gen/impl/mut-ei.log`（第 1 步）與 `mut-review.log`（目前的程式，killed）。另：DI-KS 27 的條文原本寫「Kernel 自己的型別（配發器、…）在 Kernel 裡寫好」，已改字（第 3 節）。
 
 ### 1.3 Kernel 的 D-9 padding 案例：留一份、另加一份（和宣告不同）
 
@@ -32,13 +34,17 @@
 2. **緩的面**：沒有（Kernel 的案例還在，判定同一句）。
 3. **締的面**：`entity_ids` 多一份同樣的檢查，對象是搬過去的型別。
 4. —（沒有緩的面）。
-5. **根據與證據**：dev_log「驗證與經過」；主 checkout `build/evidence/gyo2-world-gen/impl/mut-d184-kernel.log`（第一次 22/23，留一份之後 `ks-hash-summary-resource-bytes` killed）。
+5. **根據與證據**：dev_log「驗證與經過」；主 checkout `build/evidence/gyo2-world-gen/impl/mut-d184-kernel.log`（第一次，22/23，`ks-hash-summary-resource-bytes` survived）；留一份之後在目前的程式上重跑：`mut-head-kernel.log`，`ks-hash-summary-resource-bytes` killed。
 
 ### 1.4 不屬判定變更、只報告的
 
-- 本批改了程式而 find 對不上的 5 個既有突變（`g8-frame-list-reversed`、`g8-frame-error-ignored`、`or-skeleton-not-declared`、`or-skeleton-off-ignored`、`or-skeleton-after-units`）：照新程式重寫 find／replace，改的性質、案例、預期訊息都不變；10/10 killed（含 find 落在改動範圍的 5 個）。
+- 本批改了程式而 find 對不上的 5 個既有突變（`g8-frame-list-reversed`、`g8-frame-error-ignored`、`or-skeleton-not-declared`、`or-skeleton-off-ignored`、`or-skeleton-after-units`）：照新程式重寫 find／replace，改的性質、案例、預期訊息都不變。連同 find 落在改動範圍的 `or-runframe-no-gameinit`、`sc-lower-bound-not-moved`、`or-guard-real-o4-module-include`、`or-guard-real-o3-plan-read`，在目前的程式上重跑：`mut-head-orchestration.log` 9/9 killed；`rb-r3-links-more`：`mut-head-rollback.log` 1/1 killed。
 - `sc-lower-bound-not-moved`（scenario 第一段的受け入れ判定）：`file` 改指 `entity_ids` 的標頭，find、expect 不變；killed。
-- Kernel 測試的 `RangeAllotter` 換成同語意的測試替身；靠配發器行為的 Kernel 突變 23 個照跑，23/23 killed。
+- Kernel 測試的 `RangeAllotter` 換成測試自己的範圍配發器（見 1.1 的第二個緩的面）。靠配發器行為的 Kernel 突變——`what` 或 find 提到 allotter、或 cases 含 J-8——共 25 個（第一次選的 23 個漏了 `sr-no-record`、`sr-no-count`），在目前的程式上重跑：`mut-head-kernel.log` 25/25 killed。
+
+## 1.5 §14.4 的檢證
+
+檢證者 Fable 5.2／high，唯讀，對象 7fad36c6；報告在主 checkout `build/evidence/gyo2-world-gen/impl/verification-14-4-fable.md`。結論：沒有被丟掉而沒交代的斷言（J-8 前半 15 個判定逐字搬到 entity_ids；其餘 Kernel 測試檔除型別名外沒有差異）；搬過去的三個突變沒有變弱。指出的是：1.1 少寫一個緩的面（已補案例收掉）、`HashTests.cpp` 的 `static_assert` 沒交代、幾處突變的記錄不全或是舊程式的（已在目前的程式上重跑並存檔）、DI-KS 27 的條文沒跟上（已改字，第 3 節）、替身的位置和宣告不同（第 2 節）。上面 1.1～1.4 已照它改。
 
 ## 2. 和宣告的偏差
 
@@ -47,13 +53,14 @@
 | 宣告 | 實作 | 理由 |
 |---|---|---|
 | 第 10 節第 3 列 D-9 搬到 entity_ids | Kernel 留一份、entity_ids 另加一份 | 1.3 |
+| 5.10：測試替身放 `tests/common/kernel/WorldTestSupport.hpp` | 放 `tests/common/support/TestRangeAllotter.hpp` | 編排層的測試也要用，放共用處只有一份；宣告第 14 節第 4 件「改替身」的突變位置跟著是這個檔 |
 | 判定 1 C2 的「遊戲初始化的計數仍是 1」 | 用「`probe generating` 只出現一次」數（遊戲初始化的 schedule 裡一個 System 記一行） | 同一個性質；測試用的遊戲沒有獨立的計數 Resource |
 
 ## 3. Design Invariants 的最終文字（請你核准）
 
 已照宣告第 7 節寫進各頁，標「最終文字在合併前核准定稿」：
 - [orchestration.zh-Hant.md](orchestration.zh-Hant.md)：O-14（新）、O-2、O-3、O-4、O-8 的補句、RC-O14～RC-O19。
-- [kernel.zh-Hant.md](../kernel.zh-Hant.md)：DI-KS 4 的補句（Kernel 不附配發器型別；J-8 的分工）、DI-KS 15 第 (7) 項改字。
+- [kernel.zh-Hant.md](../kernel.zh-Hant.md)：DI-KS 4 的補句（Kernel 不附配發器型別；J-8 的分工）、DI-KS 15 第 (7) 項改字、DI-KS 27 改字（Kernel 自己的型別不再含配發器；檢證者指出）。
 - [entity-ids.zh-Hant.md](entity-ids.zh-Hant.md)：EI-1～EI-3、RC-EI1～RC-EI4。
 
 ## 4. 設計審查（批次表〈每批的設計審查〉）

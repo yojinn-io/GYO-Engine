@@ -179,3 +179,52 @@ TEST_CASE("module: a carried-over allotter is not replaced by the default range"
     CHECK_MESSAGE((Spawned() == std::vector<EntityId>{1, 2, 3}),
                   "[ei-carry-kept] the carried allotter goes on at 3; the default would restart at 1");
 }
+
+namespace {
+
+// Spawns one card with an id inside the default range (dropped at the sync point: IdInAllotterRange).
+K::SystemResult PutCardAt5(K::SpawnWithId<K::Bundle<Card>> put) {
+    put.New(5, Card{9});
+    return {};
+}
+
+}  // namespace
+
+// The kernel's machinery with the shipped allotter (the §14.4 check of the world-gen merge approval, 1.1): the
+// kernel and orchestration tests run it with a test allotter, so this is the one case with the real type.
+TEST_CASE("module: with the default allotter, an id in its range is dropped and a used-up range is reported") {
+    Spawned().clear();
+    {
+        O::ProductDescription d;
+        d.name = "in-range";
+        O::WorldDescription w = CardWorld("Main");
+        w.build = [](O::WorldSetup& s) {
+            s.Registrar().Component<Card>({.name = "Card"});
+            s.Registrar().AddSystem<&PutCardAt5>(InUpdate("PutCardAt5"));
+        };
+        d.worlds.push_back(std::move(w));
+        auto p = Make(std::move(d));
+        REQUIRE(static_cast<bool>(p->RunFrame()));
+        K::World& world = p->World("Main").GetWorld();
+        CHECK_MESSAGE(!world.Alive(5), "[ei-real-in-range-dropped] an id in the default range is not spawned");
+        const std::vector<K::RejectedSpawn> rejected = world.Diagnostics<K::RejectedSpawn>();
+        REQUIRE(rejected.size() == 1);
+        CHECK(rejected[0].reason == K::SpawnRejectReason::IdInAllotterRange);
+    }
+    {
+        O::ProductDescription d;
+        d.name = "used-up";
+        O::WorldDescription w = CardWorld("Main");
+        w.options.Set(E::EntityIdsOptions{100, 101});
+        d.worlds.push_back(std::move(w));
+        auto p = Make(std::move(d));
+        REQUIRE(static_cast<bool>(p->RunFrame()));
+        REQUIRE(static_cast<bool>(p->RunFrame()));
+        auto third = p->RunFrame();
+        REQUIRE(!third);
+        REQUIRE(p->Failure() != nullptr);
+        CHECK_MESSAGE(p->Failure()->kernelCode == std::optional<K::KernelErrorCode>(K::KernelErrorCode::AllotterExhausted),
+                      "[ei-real-exhausted] a used-up default range is reported as AllotterExhausted");
+        CHECK((Spawned() == std::vector<EntityId>{100, 101}));
+    }
+}
