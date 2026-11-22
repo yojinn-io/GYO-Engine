@@ -23,7 +23,7 @@ Owner：Kernel（GYO2 主會話開的任務卡）。分支 `claude/gyo2-kernel-r
 - `engine/ecs/kernel/src/World.cpp`：World 建立時放進的 `KernelSettings` 打 `WriteStamp()`（原本 stamp 是 0，第一次跑的掛載看不到它被放進去，和「放進去也算」不一致）。
 - `tests/common/kernel/ResourceChangedTests.cpp`（新，ctest `kernel.others`）：`DI-KS 28:` 十二案（九案＋合併前審查補的三案）——第一次跑與 Host 在兩次 Run 之間寫；Run 第一步的讀者；Host 的 `ResourceMut`；沒有值、拿掉、放回；寫入不比值、`Read()` 不算；寫在讀者之後；自己的寫入（當場的、經 `Commands` 延後的）；`Commands`、`ExclusiveWorld::Modify`／`SetResource`、`Restore`；跳過的掛載、同一個 System 掛兩處、巢狀；run 條件；`KernelSettings`。
 - `docs/architecture/target/kernel.zh-Hant.md`：DI-KS 28（草稿）；DI-KS 10 的 observer 那句補「同一個同步點後面才寫的看不到」那一半；表頭。
-- `docs/architecture/target/v2/system-contract-page.zh-Hant.md`：第 3 節的參數表、第 15 節一句、新第 18 節（第 16、17 節留給開著的 #281、#276）（寫法、同值不寫、比的是誰、Engine 自己每幀寫的 Resource）。
+- `docs/architecture/target/v2/system-contract-page.zh-Hant.md`：第 3 節的參數表、第 15 節一句、新第 18 節（第 16、17 節是 #281 狀態機、#276 讀檔的）（寫法、同值不寫、比的是誰、Engine 自己每幀寫的 Resource）。
 - `docs/cross-component-rules.md`：CCR-8。
 - `docs/architecture/plans/kernel/scripts/mutations.json`：突變 `rc-` 六個；`we-j12-fetch-side-effect` 的 find／replace 照 `ResMut` 建構子的新寫法改、補 `guards`。
 - `docs/architecture/target/v2/README.md`：宣告與本 dev_log 列入。
@@ -77,3 +77,6 @@ Fable 5.2／high（唯讀），報告：主 checkout `build/evidence/gyo2-kernel
 - DI-KS 28：照草稿定稿。kernel 頁的三處「草稿」換成核准的出處，`target/README.md` 的條數那一行同樣處理。
 - CCR-8：`Product::RunRound` 每幀寫的 `WorldGeneration`、回滾的 `InputHistory::WriteBack`／`PutBack`，現在都不算在規則內，已知處那一欄照這樣寫。程式不改。
 
+## 跟上 #281、#276
+
+#281（狀態機）、#276（讀檔）併入 `gyo2` 之後 merge（不 rebase）。衝突只在 `v2/README.md` 的 dev_log 列表與說明頁（更新行、新節），兩邊都留：說明頁照第 16 節狀態機、第 17 節讀檔、第 18 節本批的順序；第 18 節開頭那句「留給開著的 PR」拿掉（兩個 PR 已併入）。`kernel.zh-Hant.md`、`cross-component-rules.md` 自動合併、沒有衝突。

@@ -180,7 +180,7 @@ struct OrchestrationError {
     OrchestrationErrorCode code;
     std::string message;
     std::string detail;
-    // The reporter's own code (a prepare function's, for example "save-version-unsupported"),
+    // The reporter's own code (a prepare function's, for example "save-version-too-old"),
     // carried unchanged through ReplaceWorld (section 3.9).
     std::string reporterCode;
     // The kernel error behind ScheduleFailed, ReplaceScheduleFailed or InsertRefused (zero or one).
