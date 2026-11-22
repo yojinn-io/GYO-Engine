@@ -31,7 +31,7 @@ namespace GYO::Engine::IO::FS {
         /// 先頭に戻す（対応しない backend は NotSupported を返してOK）
         virtual IOResult<void> Reset() {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::NotSupported,
+                IOErrorCode::NotSupported,
                 "DirectoryIterator: reset not supported"));
         }
 
@@ -59,7 +59,7 @@ namespace GYO::Engine::IO::FS {
         IOResult<bool> Next(DirectoryEntry& out) override {
             if (!open_) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::ReadFailed,
+                    IOErrorCode::ReadFailed,
                     "VectorDirectoryIterator: next on closed iterator"));
             }
             if (index_ >= entries_.size()) return false;
@@ -70,7 +70,7 @@ namespace GYO::Engine::IO::FS {
         IOResult<void> Reset() override {
             if (!open_) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::NotSupported,
+                    IOErrorCode::NotSupported,
                     "VectorDirectoryIterator: reset on closed iterator"));
             }
             index_ = 0;

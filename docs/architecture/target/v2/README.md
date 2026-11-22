@@ -96,6 +96,7 @@
 - [2026_11_22_gyo2_namespace_root.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_namespace_root.zh-Hant.md)：namespace 的根統一成 `GYO::`，`naming_guard` 守 N17 的根（`v8-arch-gyo2-namespace-root`）。
 - [2026_11_22_gyo2_stale_cleanup.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_stale_cleanup.zh-Hant.md)：三個 include 守衛補 `..`、刪 15 份 master 時代的突變清單、文件路徑補層名（`v8-arch-gyo2-stale-cleanup`）。
 - [2026_11_22_gyo2_naming_cleanup.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_naming_cleanup.zh-Hant.md)：命名收尾（`v8-arch-gyo2-naming-cleanup`；`naming_guard` 搬到 `tests/common/naming/`、共用讀法與 `gyo_expect_links` 搬到 `tests/common/support/`、`engine/` 改短名、測試輔助 namespace 收斂成 `GYO::Test::<單位>`、`Detail` 對齊 N13）。
+- [2026_11_22_gyo2_n13_short_names.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_n13_short_names.zh-Hant.md)：`engine/` 剩下的全名照 N13「引用別的單位」改成短名（`v8-arch-gyo2-n13-short-names`；IO 指自己的拿掉、Kernel 寫 `Engine::Base::`、`HashValue` 寫 `Kernel::Hasher`；巨集保留全限定）。
 
 ## 沒有搬過來的
 

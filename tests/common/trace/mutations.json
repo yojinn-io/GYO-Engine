@@ -281,8 +281,8 @@
     "trace-declaration D2"
    ],
    "file": "engine/ecs/kernel/src/Executor.cpp",
-   "find": "            GYO::Engine::Base::TraceSpan systemSpan;\n",
-   "replace": "            GYO::Engine::Base::TraceSpan systemSpan;\n            systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
+   "find": "            Engine::Base::TraceSpan systemSpan;\n",
+   "replace": "            Engine::Base::TraceSpan systemSpan;\n            systemSpan.Begin(\"kernel\", system.options.name, world.name_);\n",
    "target": "gyo_kernel_tests",
    "cases": "kernel trace: a System its run condition skips*",
    "expect": "\\[ks-trace-skipped\\]"
@@ -295,7 +295,7 @@
     "trace-declaration D4"
    ],
    "file": "engine/ecs/kernel/src/Executor.cpp",
-   "find": "    if (GYO::Engine::Base::TraceActive()) GYO::Engine::Base::TraceMarkCurrent(error.Text(), origin);\n",
+   "find": "    if (Engine::Base::TraceActive()) Engine::Base::TraceMarkCurrent(error.Text(), origin);\n",
    "replace": "",
    "target": "gyo_kernel_tests",
    "cases": "kernel trace: a System's Err is marked*",

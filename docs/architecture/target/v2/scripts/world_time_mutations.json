@@ -1235,7 +1235,7 @@
     "authority-rollback-declaration 3.3"
    ],
    "file": "engine/modules/world_time/include/engine/world_time/TimeTypes.hpp",
-   "find": "inline void HashValue(::GYO::Kernel::Hasher& h, const Resimulation& v) { HashValue(h, v.active); }\n",
+   "find": "inline void HashValue(Kernel::Hasher& h, const Resimulation& v) { HashValue(h, v.active); }\n",
    "replace": "",
    "target": "gyo_world_time_tests",
    "cases": "module: every time type has a hash function*",

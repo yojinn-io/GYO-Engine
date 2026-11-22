@@ -18,7 +18,7 @@ namespace GYO::Engine::IO::Stream {
             const std::size_t n = wr.value();
             if (n == 0) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::WriteFailed,
+                    IOErrorCode::WriteFailed,
                     "StreamWriter: inner write returned 0 (stalled)"));
             }
             done += n;
@@ -26,7 +26,7 @@ namespace GYO::Engine::IO::Stream {
         return {};
     }
 
-    IOResult<void> StreamWriter::WriteAllBytes(GYO::Engine::Base::Span<const std::byte> bytes) {
+    IOResult<void> StreamWriter::WriteAllBytes(Base::Span<const std::byte> bytes) {
         if (bytes.empty()) return {};
         return WriteExactly(bytes.data(), bytes.size());
     }

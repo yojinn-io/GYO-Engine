@@ -6,12 +6,12 @@ namespace GYO::Engine::IO::Stream {
     IOResult<std::size_t> MemoryStream::Read(void* dst, std::size_t bytes) {
         if (!open_) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::ReadFailed,
+                IOErrorCode::ReadFailed,
                 "MemoryStream: read on closed stream"));
         }
         if (!opt_.readable) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::NotSupported,
+                IOErrorCode::NotSupported,
                 "MemoryStream: read not supported"));
         }
         if (bytes == 0) return 0;
@@ -36,12 +36,12 @@ namespace GYO::Engine::IO::Stream {
     IOResult<std::size_t> MemoryStream::Write(const void* src, std::size_t bytes)  {
         if (!open_) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::WriteFailed,
+                IOErrorCode::WriteFailed,
                 "MemoryStream: write on closed stream"));
         }
         if (!opt_.writable) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::NotSupported,
+                IOErrorCode::NotSupported,
                 "MemoryStream: write not supported"));
         }
         if (bytes == 0) return 0;
@@ -52,7 +52,7 @@ namespace GYO::Engine::IO::Stream {
         if (need > static_cast<std::uint64_t>(buf_.size())) {
             if (!opt_.growable) {
                 return Base::Err(IOError::Make(
-                    GYO::Engine::IO::IOErrorCode::WriteFailed,
+                    IOErrorCode::WriteFailed,
                     "MemoryStream: no space (not growable)",
                     "need=" + std::to_string(need) + " size=" + std::to_string(buf_.size())));
             }
@@ -68,7 +68,7 @@ namespace GYO::Engine::IO::Stream {
     IOResult<std::uint64_t> MemoryStream::Tell() const  {
         if (!open_) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::SeekFailed,
+                IOErrorCode::SeekFailed,
                 "MemoryStream: tell on closed stream"));
         }
         return pos_;
@@ -77,7 +77,7 @@ namespace GYO::Engine::IO::Stream {
     IOResult<std::uint64_t> MemoryStream::Seek(std::int64_t offset, SeekWhence whence)  {
         if (!open_) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::SeekFailed,
+                IOErrorCode::SeekFailed,
                 "MemoryStream: seek on closed stream"));
         }
 
@@ -94,7 +94,7 @@ namespace GYO::Engine::IO::Stream {
 
         if (target < 0) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::SeekFailed,
+                IOErrorCode::SeekFailed,
                 "MemoryStream: seek before begin",
                 "target=" + std::to_string(target)));
         }
@@ -103,7 +103,7 @@ namespace GYO::Engine::IO::Stream {
         const bool allowBeyondEnd = (opt_.writable && opt_.growable);
         if (!allowBeyondEnd && target > end) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::SeekFailed,
+                IOErrorCode::SeekFailed,
                 "MemoryStream: seek beyond end",
                 "target=" + std::to_string(target) + " end=" + std::to_string(end)));
         }
@@ -116,7 +116,7 @@ namespace GYO::Engine::IO::Stream {
     IOResult<std::uint64_t> MemoryStream::Size() const  {
         if (!open_) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::NotSupported,
+                IOErrorCode::NotSupported,
                 "MemoryStream: size on closed stream"));
         }
         return static_cast<std::uint64_t>(buf_.size());
@@ -125,7 +125,7 @@ namespace GYO::Engine::IO::Stream {
     IOResult<void> MemoryStream::Flush()  {
         if (!open_) {
             return Base::Err(IOError::Make(
-                GYO::Engine::IO::IOErrorCode::NotSupported,
+                IOErrorCode::NotSupported,
                 "MemoryStream: flush on closed stream"));
         }
         // no-op

@@ -18,7 +18,6 @@ namespace GYO::Engine::Trace {
 
 namespace {
 
-namespace Logging = GYO::Engine::Logging;
 using Logging::Field;
 using Logging::Level;
 

@@ -28,10 +28,10 @@ namespace GYO::Engine::IO::FS {
         FileChangeKind kind = FileChangeKind::Unknown;
 
         // 監視対象の path
-        GYO::Engine::IO::Path::Uri path;
+        Path::Uri path;
 
         // Renamed のときのみ oldPath が有効
-        GYO::Engine::IO::Path::Uri oldPath;
+        Path::Uri oldPath;
         bool hasOldPath = false;
 
         // backend 名（デバッグ用）
@@ -57,7 +57,7 @@ namespace GYO::Engine::IO::FS {
         virtual bool IsOpen() const noexcept = 0;
 
         /// 監視を追加
-        virtual IOResult<WatchId> AddWatch(const GYO::Engine::IO::Path::Uri& uri,
+        virtual IOResult<WatchId> AddWatch(const Path::Uri& uri,
                                           const WatchOptions& opt = {}) = 0;
 
         /// 監視を削除
