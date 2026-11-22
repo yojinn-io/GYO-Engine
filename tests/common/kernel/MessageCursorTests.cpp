@@ -53,6 +53,12 @@ SystemResult WriteFlagPing(MessageWriter<Ping> pings, Res<Flag> flag) {
     pings.Send(Ping{static_cast<std::uint32_t>(flag->on)});
     return Ok();
 }
+// Writes Ping{9}, then Ping{Flag}: two records a Run, only the second follows Flag.
+SystemResult WriteNineThenFlag(MessageWriter<Ping> pings, Res<Flag> flag) {
+    pings.Send(Ping{9});
+    pings.Send(Ping{static_cast<std::uint32_t>(flag->on)});
+    return Ok();
+}
 SystemResult WriteQuiet(MessageWriter<Quiet> quiet) {
     quiet.Send(Quiet{1});
     return Ok();
@@ -464,8 +470,9 @@ TEST_CASE("J-36: with verification on, reading and the trim at the end of a Run 
     CHECK(rig->world().MessagePayloads<Ping>().empty());
 }
 
-// Summary version 4 (v8-arch-gyo2-kernel-summary-messages, the user's (b)): the write sequence number, a record's
-// seq and the cursor table are counts of the history, not in the summary; the held records' payloads are.
+// Summary version 4 (v8-arch-gyo2-kernel-summary-messages, the user's (b)): the write sequence number and a
+// record's seq are counts of the history and the cursor table is left out knowingly (kernel RC 25); the held
+// records' count and payloads are in the summary.
 TEST_CASE("J-36: the World summary holds no message cursor and no write sequence (summary version 4)") {
     auto summary = [](std::function<void(Registrar&)> build, int runs) {
         auto rig = MakeRig(std::move(build), false);
@@ -592,11 +599,13 @@ TEST_CASE("J-36: the World summary hashes a held message's payload, and reports 
             Data(r);
             // The reader runs before the writer: its cursor holds the record written after it.
             r.AddSystem<&Reader>(B("Reader", "A"));
-            r.AddSystem<&WriteFlagPing>(B("Write", "B"));
+            r.AddSystem<&WriteNineThenFlag>(B("Write", "B"));
         }, false);
         rig->world().SetResource(Flag{flag});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        REQUIRE(rig->world().MessagePayloads<Ping>().size() == 1);
+        // Two held records; only the second one's payload differs between the two Worlds (merge review S3: every
+        // held record is hashed, not the first only).
+        REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "9 " + std::to_string(flag));
         rig->world().SetResource(Flag{0});  // only the payload differs between the two
         return SummaryOf(rig->world());
     };

@@ -7821,6 +7821,21 @@
       "expect": "\\[ks\\-summary\\-message\\-payload\\]"
     },
     {
+      "id": "ks-summary-message-first-only",
+      "what": "the World summary hashes only the first held record of each message type (merge review of v8-arch-gyo2-kernel-summary-messages, S3: no case held two records). Only it catches a later record left out; ks-summary-message-payload-dropped leaves out every payload",
+      "guards": [
+        "kernel DI-KS 10",
+        "kernel DI-KS 27",
+        "kernel-summary-messages-declaration 第 5 節"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n",
+      "replace": "        for (std::size_t i = 0; i < buffer->Size() && i < 1; ++i) buffer->HashAt(h, i);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the World summary hashes*",
+      "expect": "\\[ks\\-summary\\-message\\-payload\\]"
+    },
+    {
       "id": "ks-hash-signed-not-extended",
       "what": "a signed integer is not sign-extended to 64 bits. Only it catches the sign extension",
       "guards": [

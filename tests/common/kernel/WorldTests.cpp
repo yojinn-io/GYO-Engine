@@ -493,9 +493,9 @@ SystemResult LogAddTag(HookCtx ctx) {
 
 } // namespace
 
-// The golden below is summary format 3, re-taken by v8-arch-gyo2-authority-rollback
-// step 1 (each value through its type's hash function, every number as 8 bytes);
-// the judgement is unchanged.
+// The golden below is summary format 4, re-taken by v8-arch-gyo2-kernel-summary-messages
+// (format 3 by v8-arch-gyo2-authority-rollback step 1: each value through its type's
+// hash function, every number as 8 bytes); the judgement is unchanged.
 TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.2's order (golden)") {
     SUBCASE("reordering two Systems that do not conflict keeps the World") {
         CHECK(ReorderSummary(true) == ReorderSummary(false));

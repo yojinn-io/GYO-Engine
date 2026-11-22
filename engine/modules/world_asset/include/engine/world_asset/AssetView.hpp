@@ -153,9 +153,8 @@ private:
     Asset::AssetSnapshot snapshot_;
 };
 
-// Not hashed (declaration 5.9.1): it changes with the order jobs finish in. It is told by polling, not by the
-// Kernel's messages (since summary version 4 a message's sequence number is not in World::Summary either;
-// v8-arch-gyo2-kernel-summary-messages).
+// Not hashed (declaration 5.9.1): it changes with the order jobs finish in, so the same World state could give
+// two summaries.
 inline void HashValue(Kernel::Hasher&, const AssetView&) {}
 
 } // namespace GYO::Engine::WorldAsset

@@ -1128,9 +1128,11 @@ void SummaryText(Hasher& h, std::string_view text) {
 // and the message cursors (v8-arch-gyo2-time-events step 3).
 // 3: each value through its type's hash function (Hash.hpp), no longer its
 // object bytes (v8-arch-gyo2-authority-rollback step 1, declaration section 3).
-// 4: no write sequence number, record seq or cursor table again (counts of the
-// history, not state: one more record written once changed every later summary;
-// v8-arch-gyo2-kernel-summary-messages, the user's (b)).
+// 4: no write sequence number or record seq (counts of the history: one more
+// record written once changed every later summary) and no cursor table (whether
+// a reader has run and where it read to are state, left out knowingly: the keys
+// follow the registration order; kernel RC 25); v8-arch-gyo2-kernel-summary-messages,
+// the user's (b).
 constexpr std::uint32_t kSummaryVersion = 4;
 
 } // namespace
