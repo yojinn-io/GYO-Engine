@@ -1,6 +1,6 @@
 # 事前宣告：asset Module（`v8-arch-gyo2-asset`）
 
-更新：2026-11-22（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-22，原話「核准」；核准的版本 55a14825）；實作完成；合併前核准（使用者 2026-11-23：「Probe 留著，adapter 交主會話」、「AS-1、AS-11 和突變數都核准」——DI 的最終文字與突變 108 個）。**核准後加入 adapter**：使用者 2026-11-23 在主會話「adapter 照建議放 world_asset」，world_asset 加 `WorkerPoolExecutor` 與對 `GYO::Threads` 的連結（第 15 節第 13 項、30.3 的 S3 列）；這部分等使用者確認。** 實作和本頁不同、或本頁沒寫清楚而在實作時判的地方，列在第 30 節；正式頁是 [asset.zh-Hant.md](asset.zh-Hant.md)。
+更新：2026-11-22（修訂 3）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（使用者 2026-11-22，原話「核准」；核准的版本 55a14825）；實作完成；合併前核准（使用者 2026-11-23：「Probe 留著，adapter 交主會話」、「AS-1、AS-11 和突變數都核准」——DI 的最終文字與突變 108 個）。**核准後加入 adapter**：使用者 2026-11-23 在主會話「adapter 照建議放 world_asset」，world_asset 加 `WorkerPoolExecutor` 與對 `GYO::Threads` 的連結（第 15 節第 13 項、30.3 的 S3 列）；使用者 2026-11-23 確認（在主會話「沒事了，繼續 adapter 照建議放 world_asset」）。** 實作和本頁不同、或本頁沒寫清楚而在實作時判的地方，列在第 30 節；正式頁是 [asset.zh-Hant.md](asset.zh-Hant.md)。
 
 **經過**：
 - 修訂 0（f93edb7e）送 Fable 5.2／high 敵對式檢查，blocker 4、should 15、nit 12，全部採用成修訂 1（b050e13b），對照在第 17 節。
