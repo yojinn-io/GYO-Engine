@@ -1,6 +1,8 @@
 # 合併前核准：audio 重審（`v8-arch-gyo2-audio-review`）
 
-更新：2026-11-22。**狀態：待使用者合併前核准。合併要使用者另外說「合併」。**宣告：[audio-review-declaration.zh-Hant.md](audio-review-declaration.zh-Hant.md)（修訂 2，動工前核准）。dev_log：[2026_11_22_gyo2_audio_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_audio_review.zh-Hant.md)。
+更新：2026-11-22。**狀態：合併前核准（使用者 2026-11-22，原話「照建議，全部核准」）。合併要使用者另外說「合併」。**宣告：[audio-review-declaration.zh-Hant.md](audio-review-declaration.zh-Hant.md)（修訂 2，動工前核准）。dev_log：[2026_11_22_gyo2_audio_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_audio_review.zh-Hant.md)。
+
+> **核准**（使用者，2026-11-22，本卡的對話）：原話「照建議，全部核准」。核准的是本頁 7cc8ffa4 的五件：第 1 節拿掉 `gyo_audio_board_readers`（§14.4 的 1～5）、第 2 節 DI 11 守衛測試加的判定、第 3 節的偏差 D-1～D-7、第 4 節 Design Invariants 與 Replacement Criteria 的最終文字、第 4.1 節的範圍擴大（含第 4.2 節範圍擴大的設計審查的處理）。核准後照第 1 節「核准後一起做」拿掉守衛與突變 `au-ctl-board-read-in-render`（突變 79 → 78）、新頁 DI 4 改寫、`audio.md` 的 Legacy 行、kernel 盤點表那一列。
 
 **這一頁請你核准五件**：
 1. 第 1 節：拿掉 DI 4 的原始碼掃描守衛 `gyo_audio_board_readers`（宣告第 12 節第 3 題的正式核准；AGENTS §14.4：DI 的守衛不論有沒有緩的面都要你核准）。
@@ -136,4 +138,5 @@ blocker 1、should 8、nit 10。要你看的（其餘照改，細節在報告檔
 - 判定 4（連結）：`au-link-engine` killed。
 - 突變：改之前 3/3（`mut-baseline.log`）；改過之後相關 4/4（`mut-after-r2.log`：`au-review-handoff-rebound`、`au-review-unload-counts-before-assert`、`au-ctl-stop-sequence-zero`、`au-ctl-board-read-in-render`）；完整清單（489aadcb，78 條）77/78，存活的 `au-ctl-stress-reassign-every-block` 是時序偶發：同一個 commit 上單獨跑 3/3 killed、未改的程式上 2/2 killed（`stress-reassign-on-change.log`、`stress-reassign-on-base.log`），它標明「只在並行時抓得到」，當時機器同時跑審查 Agent。
 - 全量 `ctest -L "cpu|shader"`（本機 Intel Mac，preset `test`）：9d1e0d19 169/169（`full-ctest.log`）；三處文件併入後 169/169（`full-ctest-docs3.log`）；範圍擴大後 169/169（`full-ctest-expansion.log`）；範圍擴大的審查改完之後 169/169（`full-ctest-expansion-r2.log`；新測試的判定改成恰好 1 h − 60 ms 後通過）。
-- L1：PR 上的三平台結果，開 PR 後補。
+- 核准後的收尾（拿掉守衛之後）：全量 `ctest -L "cpu|shader"` 168/168（`full-ctest-final.log`）。
+- L1：PR #279 上的三平台結果。

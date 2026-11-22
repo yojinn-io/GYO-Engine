@@ -81,9 +81,15 @@
 
 範圍擴大的設計審查（Fable 5.2／high，唯讀，`design-review-expansion.md`）：blocker 1、should 8、nit 10。blocker 是第 5.1 節「固定步寫 `Message`、`Main` 讀」在用官方回滾策略的 World 是啟動錯誤 RB-E8（`StateRollbackStrategy.cpp` 的 `CheckMessages`）；改成分有沒有回滾兩種寫法。其餘：(b) 的式子補累加器的餘數、clip 格不跟著沿用、建混音器的是誰交 SDL 那一批、依時序變的值一起列、標頭註解改回中性、測試改成恰好 1 h − 60 ms。處理對照在合併前核准頁第 4.2 節。全量 `ctest -L "cpu|shader"`：範圍擴大後 169/169（`full-ctest-expansion.log`），審查改完 169/169（`full-ctest-expansion-r2.log`）。
 
+## 合併前核准之後
+
+使用者 2026-11-22 合併前核准（原話「照建議，全部核准」，核准頁 7cc8ffa4 的五件）。之後：
+- merge `origin/gyo2`（#278 event-cursor-reeval；`target/v2/README.md` 的 dev_log 清單衝突，兩行都留）。
+- 照核准頁第 1 節「核准後一起做」：刪 `tests/common/audio/CheckBoardReaders.cmake` 與 `CMakeLists.txt` 的 `gyo_audio_board_readers`；退役突變 `au-ctl-board-read-in-render`（79 → 78，機能拿掉，README 第 7 條）；新頁 DI 4 的守衛改成「由設計審查守」並記核准；`audio.md` 的 Legacy 行改成已拿掉；`guards-inventory.zh-Hant.md` 的 board readers 列改成「已拿掉」。
+- 驗證：audio 的 CTest 從 4 個變 3 個（`gyo_audio_tests`、`gyo_audio_playhead_stress`、`gyo_audio_alloc_tests`）；全量 `ctest -L "cpu|shader"` 168/168（少的一個就是拿掉的掃描；`full-ctest-final.log`）。
+
 ## 留給之後的
 
 - audio 那一側的小批（asset 實作合併之後，或併進 SDL 那一批）：clip 的來源（宣告第 5 節的四個選項與寫判定要照的事）、音效 loader。預設起播時刻、提交口的數量是作者的寫法（新頁第 5 節）。（原寫「`world_audio` 那一批」，該批已撤掉。）
-- 第 3 題的正式核准後：拿掉 `gyo_audio_board_readers` 與 `au-ctl-board-read-in-render`，DI 4 的守衛清單刪那一項。
 - 「送進 World 外服務的時刻都是時間基準」要不要成為跨 Component 規則：主會話已排給圖書管理員。
 - SDL 那一批：後端照新頁第 4 節接；`scheduleDelay` 的預設值重新推導；後端的突變照自己的測試重立。

@@ -700,25 +700,6 @@
       "expect": "CHECK\\( now.status == Playhead::Status::Playing \\) is NOT correct"
     },
     {
-      "id": "au-ctl-board-read-in-render",
-      "what": "The audio thread reads the playhead board while publishing",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "void PublishVoices(MixerState& state) noexcept {\n",
-      "replace": "void PublishVoices(MixerState& state) noexcept {\n    std::uint64_t peek = 0;\n    static_cast<void>(state.board.Read(1, peek));\n",
-      "target": "gyo_audio_tests",
-      "command": [
-        "{cmake}",
-        "-DSOURCE_DIR=engine/modules/audio/src",
-        "-P",
-        "tests/common/audio/CheckBoardReaders.cmake"
-      ],
-      "timeout": 120,
-      "expect": "the audio thread must not read the playhead board",
-      "guards": [
-        "audio DI 4"
-      ]
-    },
-    {
       "id": "au-ctl-reuse-never-playing",
       "what": "PlayheadOf reports every sound as not playing (block-by-block case)",
       "file": "engine/modules/audio/src/Mixer.cpp",
