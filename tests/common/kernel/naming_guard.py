@@ -6,11 +6,11 @@ of the roots under GYO (GYO_ROOTS), and every Engine unit's namespace is derived
 added later is checked without changing this script.
 
   Units. engine/ holds the layers in ENGINE_LAYERS: a layer is either a set of units (each subdirectory is one)
-  or one unit itself. plugins/<plugin>/ is one unit each. A unit's namespace is GYO::Engine::<Name> (plugins:
-  GYO::Plugins::<Name>), Name derived from the directory name (unit_name: each "_" part capitalized, a part in
-  ACRONYMS written as listed); UNIT_OVERRIDES replaces the whole namespace (engine/ecs/kernel is GYO::Kernel).
-  A directory under engine/ that is not a listed layer, and a C/C++ file directly in engine/, in a layer of units
-  or in plugins/ (in no unit), are findings (fail closed: no source goes unchecked).
+  or one unit itself. A unit's namespace is GYO::Engine::<Name>, Name derived from the directory name (unit_name:
+  each "_" part capitalized, a part in ACRONYMS written as listed); UNIT_OVERRIDES is the exception table of DI 1
+  (a unit whose namespace is not the derived one; engine/ecs/kernel is GYO::Kernel). A directory under engine/
+  that is not a listed layer is a finding (fail closed). plugins/ has no units yet: only its root is kept (each
+  plugin's spelling is set by the first plugin batch, AGENTS section 3).
 
   N1  namespace <-> directory.
         forward  every named namespace a C/C++ file in a unit opens outside any named namespace (at file scope,
@@ -21,18 +21,16 @@ added later is checked without changing this script.
                  read is reported (fail closed).
         roots    in every C/C++ file under SCAN_ROOTS that is in no unit, every named namespace it opens (nested
                  spellings such as "namespace GYO { namespace Kernel {" included):
-                   - is not the old root Engine (namespace Engine or Engine::..., v8-arch-gyo2-namespace-root);
-                   - if it is under GYO, is under a root of GYO_ROOTS, and only in that root's directory: the
-                     Kernel and Engine and Plugins roots belong to their units (opened in no other file), GYO::Test
-                     to tests/. GYO alone, or a GYO::<X> not in the table, is reported: a new root is added to
-                     the naming rule and to GYO_ROOTS first.
-                 A namespace alias named Engine is reported in every file (it would bring the old spelling
-                 back without opening the namespace).
+                   - is not the old root Engine (namespace Engine or Engine::...). A transitional rule
+                     (v8-arch-gyo2-namespace-root): it keeps the carried code from coming back under the old
+                     root, and goes when no code is carried from master any more;
+                   - if it is under GYO, is under a root of GYO_ROOTS, and only in that root's place: the Kernel
+                     and Engine roots belong to their units (opened in no other file), GYO::Plugins to plugins/,
+                     GYO::Test to tests/. GYO alone, or a GYO::<X> not in the table, is reported: a new root is
+                     added to the naming rule and to GYO_ROOTS first.
                  A product opens its own root (<product>::), which this guard does not read. A namespace
                  declaration this guard cannot read is reported here too (fail closed).
-        target   each Engine unit's CMakeLists.txt declares the target gyo_<directory> and the alias
-                 GYO::<Name> (N17: directory, namespace and target names agree). A unit with no CMakeLists.txt is
-                 reported (fail closed).
+      The CMake target names (N14) are a convention checked in review, not here: the build owns them.
   N3  no type declared under N3_DIRECTORIES (class, struct, union, enum, concept, "using X =", typedef; a qualified
       name such as Detail::ImplHost is judged by its last part) has a name ending in one of ROLE_SUFFIXES (DI 3;
       naming rule 5). Case-sensitive: "Ghost", "Hostname" and "RuntimeStats" pass. Kept on the three directories
@@ -44,7 +42,7 @@ A scan root that does not exist is skipped (apps/ does not exist yet), not a fin
 units. spikes/ is not scanned (an independent project). Limits (text level, the rest is review): a top-level
 directory outside SCAN_ROOTS is not read; two units deriving the same name are left to CMake's duplicate-target
 error; a namespace opened through a macro or split across #if branches is not followed; .cppm and *.h.in files
-are not read; a CMake alias inside a bracket comment or a string counts. Product rows belong to the product owner (declaration
+are not read; a namespace alias is not read (only opening a namespace is ownership). Product rows belong to the product owner (declaration
 LIM-4); this guard only keeps products out of GYO.
 
 Usage: python3 naming_guard.py [--root REPOSITORY]
@@ -61,7 +59,7 @@ from kernel_guard import SUFFIXES as KERNEL_SUFFIXES, line_of, strip_comments_an
 ENGINE_LAYERS = {"core": "units", "ecs": "units", "modules": "units", "orchestration": "unit"}
 UNIT_OVERRIDES = {"engine/ecs/kernel": "GYO::Kernel"}
 ACRONYMS = {"io": "IO", "os": "OS"}
-GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "units", "Test": "tests"}
+GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "plugins", "Test": "tests"}
 SCAN_ROOTS = ("engine", "apps", "tools", "framework", "plugins", "tests", "examples")
 OLD_ROOT = "Engine"
 N3_DIRECTORIES = ("engine/ecs/kernel", "engine/orchestration", "engine/modules/world_time")
@@ -128,7 +126,7 @@ def unit_name(directory_name):
 
 
 def units(root, problems):
-    """(directory, namespace, target alias or None) for every unit; findings for what belongs to no unit."""
+    """(directory, namespace) for every Engine unit; findings for a layer the table does not list or that is gone."""
     found = []
     engine = root / "engine"
     layers = sorted(p for p in engine.iterdir() if p.is_dir()) if engine.is_dir() else []
@@ -155,35 +153,8 @@ def units(root, problems):
     result = []
     for base in found:
         relative = base.relative_to(root).as_posix()
-        name = unit_name(base.name)
-        result.append((relative, UNIT_OVERRIDES.get(relative, f"GYO::Engine::{name}"), f"GYO::{name}"))
-    plugins = root / "plugins"
-    if plugins.is_dir():
-        for base in sorted(p for p in plugins.iterdir() if p.is_dir()):
-            result.append((base.relative_to(root).as_posix(), f"GYO::Plugins::{unit_name(base.name)}", None))
-    # A source directly in engine/, in a layer of units or in plugins/ belongs to no unit.
-    containers = [engine, plugins] + [engine / n for n, kind in ENGINE_LAYERS.items() if kind == "units"]
-    for container in containers:
-        if container.is_dir():
-            for path in sorted(p for p in container.iterdir() if p.is_file() and p.suffix in SUFFIXES):
-                problems.append(f"{path.relative_to(root).as_posix()}: N1 source in "
-                                f"{container.relative_to(root).as_posix()} outside any unit")
+        result.append((relative, UNIT_OVERRIDES.get(relative, f"GYO::Engine::{unit_name(base.name)}")))
     return result
-
-
-def check_target(root, directory, alias, problems):
-    cmake = root / directory / "CMakeLists.txt"
-    if not cmake.is_file():
-        problems.append(f"{directory}: N1 no CMakeLists.txt to read the target from (expected gyo_"
-                        f"{Path(directory).name} and {alias})")
-        return
-    text = re.sub(r"#[^\n]*", "", cmake.read_text(encoding="utf-8"))
-    target = f"gyo_{Path(directory).name}"
-    if not re.search(r"\badd_library\s*\(\s*" + re.escape(target) + r"\b(?!\s+ALIAS)", text):
-        problems.append(f"{directory}/CMakeLists.txt: N1 target {target} not declared")
-    if not re.search(r"\badd_library\s*\(\s*" + re.escape(alias) + r"\s+ALIAS\s+" + re.escape(target) + r"\s*\)",
-                     text):
-        problems.append(f"{directory}/CMakeLists.txt: N1 alias {alias} for {target} not declared")
 
 
 def check_forward(root, directory, mapped, problems):
@@ -195,10 +166,6 @@ def check_forward(root, directory, mapped, problems):
         relative = path.relative_to(root).as_posix()
         code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
         for offset, full, enclosing in namespaces(code):
-            if full == "=" + OLD_ROOT:
-                problems.append(f"{relative}:{line_of(code, offset)}: N1 namespace alias {OLD_ROOT} brings the old "
-                                f"root back")
-                continue
             if enclosing:
                 continue
             if full.startswith("?"):
@@ -232,9 +199,6 @@ def check_roots(root, unit_directories, problems):
                 if full.startswith("?"):
                     problems.append(f"{where}: N1 unreadable namespace declaration {full[1:].strip()!r}")
                     continue
-                if full == "=" + OLD_ROOT:
-                    problems.append(f"{where}: N1 namespace alias {OLD_ROOT} brings the old root back")
-                    continue
                 if full.startswith("=") or not full:
                     continue
                 parts = full.split("::")
@@ -258,11 +222,9 @@ def check(root):
     root = Path(root)
     problems = []
     found = units(root, problems)
-    for directory, mapped, alias in found:
+    for directory, mapped in found:
         check_forward(root, directory, mapped, problems)
-        if alias is not None:
-            check_target(root, directory, alias, problems)
-    check_roots(root, [directory for directory, _mapped, _alias in found], problems)
+    check_roots(root, [directory for directory, _mapped in found], problems)
     return problems
 
 

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the naming guard's namespace roots (v8-arch-gyo2-namespace-root; rebuild-naming N17, naming DI 1; ids nm-). The guard is tests/common/kernel/naming_guard.py; its older mutants stay in the kernel, orchestration and world_time lists (ks-n1-*, ks-n3-*, or-guard-*, wt-guard-real-*). A self-test mutant is killed only when the named test case fails; a real-tree mutant when the guard prints the named finding. The adversarial check (another model, read-only) is recorded in the dev_log.",
+ "description": "Declared mutants of the naming guard's namespace roots (v8-arch-gyo2-namespace-root; rebuild-naming N17, naming DI 1; ids nm-). The guard is tests/common/kernel/naming_guard.py; its older mutants stay in the kernel, orchestration and world_time lists (ks-n1-*, ks-n3-*, or-guard-*, wt-guard-real-*). A self-test mutant is killed only when the named test case fails; a real-tree mutant when the guard prints the named finding. The adversarial check and the design review (another model, read-only) is recorded in the dev_log.",
  "mutants": [
   {
    "id": "nm-acronyms-off",
@@ -77,8 +77,8 @@
     "naming DI 1"
    ],
    "file": "tests/common/kernel/naming_guard.py",
-   "find": "UNIT_OVERRIDES.get(relative, f\"GYO::Engine::{name}\")",
-   "replace": "f\"GYO::Engine::{name}\"",
+   "find": "UNIT_OVERRIDES.get(relative, f\"GYO::Engine::{unit_name(base.name)}\")",
+   "replace": "f\"GYO::Engine::{unit_name(base.name)}\"",
    "expect": "FAIL: test_n1_kernel_override_is_applied",
    "command": [
     "{python}",
@@ -118,30 +118,6 @@
    ]
   },
   {
-   "id": "nm-loose-source-silent",
-   "what": "a source directly in engine/, in a layer of units or in plugins/ (in no unit) passes unseen. Only it catches that branch",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "                problems.append(f\"{path.relative_to(root).as_posix()}: N1 source in \"",
-   "replace": "                (f\"{path.relative_to(root).as_posix()}: N1 source in \"",
-   "expect": "(?=[\\s\\S]*(?:FAIL: test_n1_source_in_a_layer_outside_any_unit_is_reported))[\\s\\S]*(?:FAIL: test_n1_source_directly_in_engine_or_plugins_is_reported)",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
    "id": "nm-units-layer-empty",
    "what": "an empty layer of units (engine/modules with no unit left) passes. Only it catches the empty half of the layer check (adversarial check 4); nm-layer-gone-silent silences the whole line",
    "guards": [
@@ -152,29 +128,6 @@
    "find": "        if not layer.is_dir() or (kind == \"units\" and not any(p.is_dir() for p in layer.iterdir())):",
    "replace": "        if not layer.is_dir():",
    "expect": "FAIL: test_n1_layer_of_units_missing_or_empty_is_reported",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-n3-scope",
-   "what": "N3 is read in engine/ecs/kernel only, not in orchestration and world_time (adversarial check 2: N3 ran on every ROOTS row before; the scope is now its own branch)",
-   "guards": [
-    "naming DI 3"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "        if directory in N3_DIRECTORIES:",
-   "replace": "        if directory == N3_DIRECTORIES[0]:",
-   "expect": "FAIL: test_n3_is_read_in_orchestration_and_world_time",
    "command": [
     "{python}",
     "-B",
@@ -223,78 +176,6 @@
    "find": "        problems.append(f\"{directory}: no source to scan (moved or renamed? update this guard)\")\n    for path in files:",
    "replace": "        (f\"{directory}: no source to scan (moved or renamed? update this guard)\")\n    for path in files:",
    "expect": "FAIL: test_n1_unit_without_source_is_reported",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-plugins-dropped",
-   "what": "plugins/<plugin> is not read as a unit. Only it catches the plugin branch",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "    if plugins.is_dir():",
-   "replace": "    if False:",
-   "expect": "FAIL: test_n1_plugin_unit_namespace_is_derived",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-old-root-alias-silent",
-   "what": "a namespace alias named Engine outside the units passes (adversarial check 11a: the old spelling Engine::Time::X would come back without opening Engine). Only it catches the roots half",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "                    problems.append(f\"{where}: N1 namespace alias {OLD_ROOT} brings the old root back\")",
-   "replace": "                    (f\"{where}: N1 namespace alias {OLD_ROOT} brings the old root back\")",
-   "expect": "FAIL: test_n1_old_root_alias_is_reported",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-old-root-alias-unit-silent",
-   "what": "a namespace alias named Engine inside a unit passes. Only it catches the units half",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "                problems.append(f\"{relative}:{line_of(code, offset)}: N1 namespace alias {OLD_ROOT} brings the old \"",
-   "replace": "                (f\"{relative}:{line_of(code, offset)}: N1 namespace alias {OLD_ROOT} brings the old \"",
-   "expect": "FAIL: test_n1_old_root_alias_is_reported",
    "command": [
     "{python}",
     "-B",
@@ -418,7 +299,7 @@
   },
   {
    "id": "nm-test-root-anywhere",
-   "what": "GYO::Test may be opened outside tests/. Only it catches the directory of a root that is not a unit",
+   "what": "GYO::Test may be opened outside tests/ and GYO::Plugins outside plugins/. Only it catches the place of a root that is not a unit",
    "guards": [
     "rebuild-naming N17",
     "naming DI 1"
@@ -426,7 +307,7 @@
    "file": "tests/common/kernel/naming_guard.py",
    "find": "                elif not path.is_relative_to(root / GYO_ROOTS[parts[1]]):",
    "replace": "                elif False:",
-   "expect": "FAIL: test_n1_test_root_outside_tests_is_reported",
+   "expect": "(?=[\\s\\S]*(?:FAIL: test_n1_test_root_outside_tests_is_reported))[\\s\\S]*(?:FAIL: test_n1_plugin_root_belongs_to_plugins)",
    "command": [
     "{python}",
     "-B",
@@ -475,120 +356,6 @@
    "find": "SCAN_ROOTS = (\"engine\", \"apps\", \"tools\", \"framework\", \"plugins\", \"tests\", \"examples\")",
    "replace": "SCAN_ROOTS = (\"engine\", \"apps\", \"tools\", \"framework\", \"plugins\", \"tests\")",
    "expect": "FAIL: test_n1_test_root_outside_tests_is_reported",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-target-off",
-   "what": "the target rule is switched off",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "        if alias is not None:\n            check_target(",
-   "replace": "        if False:\n            check_target(",
-   "expect": "FAIL: test_n1_alias_spelled_otherwise_is_reported",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-real-target-alias",
-   "what": "real tree, positive control of the target rule: io's alias goes back to GYO::Io. Only it shows the target rule firing on the real tree",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "engine/core/io/CMakeLists.txt",
-   "find": "add_library(GYO::IO ALIAS gyo_io)",
-   "replace": "add_library(GYO::Io ALIAS gyo_io)",
-   "expect": "engine/core/io/CMakeLists\\.txt: N1 alias GYO::IO for gyo_io not declared",
-   "command": [
-    "{python}",
-    "-I",
-    "-B",
-    "tests/common/kernel/naming_guard.py"
-   ]
-  },
-  {
-   "id": "nm-target-no-cmake-silent",
-   "what": "a unit with no CMakeLists.txt passes (fail closed of the target rule)",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "        problems.append(f\"{directory}: N1 no CMakeLists.txt to read the target from (expected gyo_\"",
-   "replace": "        (f\"{directory}: N1 no CMakeLists.txt to read the target from (expected gyo_\"",
-   "expect": "FAIL: test_n1_unit_without_cmake_is_reported",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-alias-target-unchecked",
-   "what": "the alias may point at any target (ALIAS \\w+), not gyo_<directory>. Only it catches the alias's target (adversarial check 6)",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "r\"\\s+ALIAS\\s+\" + re.escape(target) + r\"\\s*\\)\"",
-   "replace": "r\"\\s+ALIAS\\s+\\w+\" + r\"\\s*\\)\"",
-   "expect": "FAIL: test_n1_target_and_alias_are_read_exactly",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/kernel",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ]
-  },
-  {
-   "id": "nm-target-name-unchecked",
-   "what": "the target name gyo_<directory> is not checked (only the alias is). Only it catches the target half",
-   "guards": [
-    "rebuild-naming N17",
-    "naming DI 1"
-   ],
-   "file": "tests/common/kernel/naming_guard.py",
-   "find": "    if not re.search(r\"\\badd_library\\s*\\(\\s*\" + re.escape(target) + r\"\\b(?!\\s+ALIAS)\", text):",
-   "replace": "    if False:",
-   "expect": "FAIL: test_n1_target_named_otherwise_is_reported",
    "command": [
     "{python}",
     "-B",

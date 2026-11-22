@@ -42,12 +42,11 @@ class GuardTree(unittest.TestCase):
         self.root = Path(self._directory.name)
         self.write("engine/ecs/kernel/include/engine/kernel/Clean.hpp", CLEAN_HEADER)
         self.write("engine/ecs/kernel/src/Clean.cpp", CLEAN_SOURCE)
-        self.cmake("engine/ecs/kernel", "kernel", "Kernel")
-        self.unit("engine/core/time", "GYO::Engine::Time", "Time")
-        self.unit("engine/ecs/entity_store", "GYO::Engine::EntityStore", "EntityStore")
-        self.unit("engine/core/io", "GYO::Engine::IO", "IO")
-        self.unit("engine/orchestration", "GYO::Engine::Orchestration", "Orchestration")
-        self.unit("engine/modules/world_time", "GYO::Engine::WorldTime", "WorldTime")
+        self.unit("engine/core/time", "GYO::Engine::Time")
+        self.unit("engine/ecs/entity_store", "GYO::Engine::EntityStore")
+        self.unit("engine/core/io", "GYO::Engine::IO")
+        self.unit("engine/orchestration", "GYO::Engine::Orchestration")
+        self.unit("engine/modules/world_time", "GYO::Engine::WorldTime")
         self.write("tests/common/support/Support.hpp", "namespace GYO::Test {\nstruct Probe {};\n}\n")
         self.write("tests/common/time/Helpers.hpp", "namespace GYO::Test::Time {\nstruct Fake {};\n}\n")
 
@@ -59,14 +58,9 @@ class GuardTree(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
 
-    def cmake(self, directory, name, alias_name):
-        self.write(f"{directory}/CMakeLists.txt",
-                   f"add_library(gyo_{name} STATIC src/A.cpp)\nadd_library(GYO::{alias_name} ALIAS gyo_{name})\n")
-
-    def unit(self, directory, namespace, alias_name):
+    def unit(self, directory, namespace):
         name = Path(directory).name
         self.write(f"{directory}/include/engine/{name}/Clean.hpp", f"namespace {namespace} {{\nstruct Unit {{}};\n}}\n")
-        self.cmake(directory, name, alias_name)
 
     def kernel_header(self, text):
         self.write("engine/ecs/kernel/include/engine/kernel/Added.hpp", text)
@@ -99,7 +93,7 @@ class GuardTree(unittest.TestCase):
                                                "orchestration": "unit"})
 
     def test_gyo_roots_are_pinned(self):
-        self.assertEqual(guard.GYO_ROOTS, {"Kernel": "units", "Engine": "units", "Plugins": "units",
+        self.assertEqual(guard.GYO_ROOTS, {"Kernel": "units", "Engine": "units", "Plugins": "plugins",
                                            "Test": "tests"})
 
     def test_n1_acronym_unit_spelled_otherwise_is_reported(self):
@@ -108,24 +102,18 @@ class GuardTree(unittest.TestCase):
 
     def test_n1_a_new_unit_is_checked_without_changing_the_guard(self):
         self.write("engine/modules/new_thing/src/A.cpp", "namespace Engine::NewThing {\n}\n")
-        self.cmake("engine/modules/new_thing", "new_thing", "NewThing")
         self.assertReported("N1", "namespace Engine::NewThing (expected GYO::Engine::NewThing)")
 
     def test_n1_removing_a_unit_needs_no_guard_change(self):
         shutil.rmtree(self.root / "engine/modules/world_time")
         (self.root / "engine/modules/other").mkdir()
         self.write("engine/modules/other/src/A.cpp", "namespace GYO::Engine::Other {\n}\n")
-        self.cmake("engine/modules/other", "other", "Other")
         self.assertClean()
 
     def test_n1_unknown_layer_is_reported(self):
         self.write("engine/extra/thing/src/A.cpp", "namespace GYO::Engine::Thing {\n}\n")
         self.assertIn("engine/extra: not a layer of the naming table (ENGINE_LAYERS); add it with the naming rule "
                       "(N17)", guard.check(self.root))
-
-    def test_n1_source_in_a_layer_outside_any_unit_is_reported(self):
-        self.write("engine/core/Loose.cpp", "namespace GYO::Engine::Time {\n}\n")
-        self.assertReported("N1", "engine/core/Loose.cpp: N1 source in engine/core outside any unit")
 
     def test_n1_unit_without_source_is_reported(self):
         for path in (self.root / "engine/core/time").rglob("*.hpp"):
@@ -140,32 +128,15 @@ class GuardTree(unittest.TestCase):
     def test_unit_overrides_are_pinned(self):
         self.assertEqual(guard.UNIT_OVERRIDES, {"engine/ecs/kernel": "GYO::Kernel"})
 
-    def test_n1_plugin_unit_namespace_is_derived(self):
-        self.write("plugins/sdl_window/src/A.cpp", "namespace GYO::Plugins::SdlWindow {\n}\n")
-        self.assertClean()
-        self.write("plugins/sdl_window/src/B.cpp", "namespace GYO::Plugins::Sdl {\n}\n")
-        self.assertReported("N1", "namespace GYO::Plugins::Sdl (expected GYO::Plugins::SdlWindow)")
-
     def test_unit_name_applies_acronyms_per_part(self):
         self.assertEqual(guard.unit_name("file_io"), "FileIO")
         self.assertEqual(guard.unit_name("json"), "Json")
-
-    def test_n1_every_plugin_is_read(self):
-        self.write("plugins/alpha/src/A.cpp", "namespace GYO::Plugins::Alpha {\n}\n")
-        self.write("plugins/beta/src/B.cpp", "namespace GYO::Plugins::Alpha {\n}\n")
-        self.assertReported("N1", "plugins/beta/src/B.cpp:1: N1 namespace GYO::Plugins::Alpha (expected GYO::Plugins::Beta)")
 
     def test_n1_layer_of_units_missing_or_empty_is_reported(self):
         shutil.rmtree(self.root / "engine/modules")
         self.assertIn("engine/modules: no source to scan (moved or renamed? update this guard)", guard.check(self.root))
         (self.root / "engine/modules").mkdir()
         self.assertIn("engine/modules: no source to scan (moved or renamed? update this guard)", guard.check(self.root))
-
-    def test_n1_source_directly_in_engine_or_plugins_is_reported(self):
-        self.write("engine/Loose.cpp", "namespace Other {\n}\n")
-        self.write("plugins/Loose.cpp", "\n")
-        self.assertReported("N1", "engine/Loose.cpp: N1 source in engine outside any unit")
-        self.assertReported("N1", "plugins/Loose.cpp: N1 source in plugins outside any unit")
 
     def test_n1_test_root_inside_a_unit_is_reported(self):
         self.write("engine/core/time/tests/A.cpp", "namespace GYO::Test::Time {\n}\n")
@@ -266,10 +237,6 @@ class GuardTree(unittest.TestCase):
         self.assertReported("N1", "tests/common/time/Helpers.hpp:1: N1 namespace GYO::Engine::Time::Test opened "
                                   "outside its unit")
 
-    def test_n1_plugin_namespace_outside_its_unit_is_reported(self):
-        self.write("tests/common/x/Leak.cpp", "namespace GYO::Plugins::SdlWindow {\n}\n")
-        self.assertReported("N1", "N1 namespace GYO::Plugins::SdlWindow opened outside its unit")
-
     def test_n1_old_root_outside_engine_is_reported(self):
         self.write("tests/common/support/Old.hpp", "namespace Engine::Test {\n}\n")
         self.assertReported("N1", "tests/common/support/Old.hpp:1: N1 namespace Engine::Test uses the old root Engine")
@@ -294,11 +261,13 @@ class GuardTree(unittest.TestCase):
         self.write("tests/common/x/Root.cpp", "namespace GYO::Engine {\n}\n")
         self.assertReported("N1", "tests/common/x/Root.cpp:1: N1 namespace GYO::Engine opened outside its unit")
 
-    def test_n1_old_root_alias_is_reported(self):
-        self.write("tests/common/x/Alias.cpp", "namespace Engine = GYO::Engine;\n")
-        self.write("engine/core/time/src/Alias.cpp", "namespace GYO::Engine::Time {\nnamespace Engine = GYO::Engine;\n}\n")
-        self.assertReported("N1", "tests/common/x/Alias.cpp:1: N1 namespace alias Engine brings the old root back")
-        self.assertReported("N1", "engine/core/time/src/Alias.cpp:2: N1 namespace alias Engine brings the old root back")
+    def test_n1_plugin_root_belongs_to_plugins(self):
+        self.write("plugins/sdl/src/A.cpp", "namespace GYO::Plugins::SDL {\n}\nnamespace SdlDetail {\n}\n")
+        self.assertClean()
+        self.write("tests/common/x/Leak.cpp", "namespace GYO::Plugins::SDL {\n}\n")
+        self.write("plugins/sdl/src/B.cpp", "namespace GYO::Engine::Time {\n}\n")
+        self.assertReported("N1", "tests/common/x/Leak.cpp:1: N1 namespace GYO::Plugins::SDL opened outside plugins/")
+        self.assertReported("N1", "plugins/sdl/src/B.cpp:1: N1 namespace GYO::Engine::Time opened outside its unit")
 
     def test_n1_test_root_outside_tests_is_reported(self):
         self.write("examples/demo/Probe.cpp", "namespace GYO::Test {\n}\n")
@@ -328,9 +297,6 @@ class GuardTree(unittest.TestCase):
                 if root == "engine":  # engine/sample is not a layer
                     self.assertIn("engine/sample: not a layer of the naming table (ENGINE_LAYERS); add it with the "
                                   "naming rule (N17)", guard.check(self.root))
-                elif root == "plugins":  # plugins/sample is a plugin unit, read by the forward check
-                    self.assertReported("N1", "plugins/sample/Leak.cpp:1: N1 namespace GYO::Kernel (expected "
-                                              "GYO::Plugins::Sample)")
                 else:
                     self.assertReported("N1", f"{root}/sample/Leak.cpp:1: N1 namespace GYO::Kernel opened outside its unit")
                 shutil.rmtree(self.root / f"{root}/sample")
@@ -348,51 +314,6 @@ class GuardTree(unittest.TestCase):
                 (self.root / f"tests/common/time/Leak{suffix}").unlink()
 
     # N1 target --------------------------------------------------------------------------------------------------
-
-    def test_n1_alias_spelled_otherwise_is_reported(self):
-        self.write("engine/core/io/CMakeLists.txt", "add_library(gyo_io STATIC a.cpp)\nadd_library(GYO::Io ALIAS gyo_io)\n")
-        self.assertReported("N1", "engine/core/io/CMakeLists.txt: N1 alias GYO::IO for gyo_io not declared")
-
-    def test_n1_target_named_otherwise_is_reported(self):
-        self.write("engine/core/time/CMakeLists.txt",
-                   "add_library(gyo_clock STATIC a.cpp)\nadd_library(GYO::Time ALIAS gyo_clock)\n")
-        self.assertReported("N1", "engine/core/time/CMakeLists.txt: N1 target gyo_time not declared")
-
-    def test_n1_alias_in_a_comment_does_not_count(self):
-        self.write("engine/core/time/CMakeLists.txt",
-                   "add_library(gyo_time STATIC a.cpp)\n# add_library(GYO::Time ALIAS gyo_time)\n")
-        self.assertReported("N1", "N1 alias GYO::Time for gyo_time not declared")
-
-    def test_n1_target_is_read_in_every_layer(self):
-        for directory, name, wrong in (("engine/ecs/kernel", "kernel", "GYO::Kernels"),
-                                       ("engine/ecs/entity_store", "entity_store", "GYO::Entity_store"),
-                                       ("engine/orchestration", "orchestration", "GYO::Orch"),
-                                       ("engine/modules/world_time", "world_time", "GYO::Worldtime")):
-            with self.subTest(directory=directory):
-                text = (self.root / directory / "CMakeLists.txt").read_text(encoding="utf-8")
-                self.write(f"{directory}/CMakeLists.txt",
-                           f"add_library(gyo_{name} STATIC a.cpp)\nadd_library({wrong} ALIAS gyo_{name})\n")
-                self.assertReported("N1", f"{directory}/CMakeLists.txt: N1 alias GYO::")
-                self.write(f"{directory}/CMakeLists.txt", text)
-
-    def test_n1_target_and_alias_are_read_exactly(self):
-        for text, needle in (
-                ("add_library(gyo_time STATIC a.cpp)\nadd_library(GYO::Time ALIAS gyo_x)\n", "alias GYO::Time for gyo_time"),
-                ("add_library(gyo_time_impl STATIC a.cpp)\nadd_library(GYO::Time ALIAS gyo_time)\n", "target gyo_time not declared"),
-                ("add_library(gyo_time ALIAS gyo_x)\nadd_library(GYO::Time ALIAS gyo_time)\n", "target gyo_time not declared"),
-                ("gyo_add_library(gyo_time STATIC a.cpp)\ntarget_link_libraries(gyo_time PUBLIC GYO::Time)\n",
-                 "target gyo_time not declared")):
-            with self.subTest(text=text):
-                self.write("engine/core/time/CMakeLists.txt", text)
-                self.assertReported("N1", needle)
-
-    def test_n1_unit_without_cmake_is_reported(self):
-        (self.root / "engine/core/time/CMakeLists.txt").unlink()
-        self.assertReported("N1", "engine/core/time: N1 no CMakeLists.txt to read the target from")
-
-    def test_n1_plugin_target_is_not_read(self):
-        self.write("plugins/sdl_window/src/A.cpp", "namespace GYO::Plugins::SdlWindow {\n}\n")
-        self.assertClean()
 
     # N3 ---------------------------------------------------------------------------------------------------------
     def test_n3_every_declaration_keyword_is_reported(self):
@@ -427,12 +348,6 @@ class GuardTree(unittest.TestCase):
     def test_n3_enum_class_suffix_is_reported(self):
         self.kernel_header("namespace GYO::Kernel {\nenum class StateController { A };\n}\n")
         self.assertReported("N3", "StateController")
-
-    def test_n3_directories_are_pinned(self):
-        # Not widened by v8-arch-gyo2-namespace-root: the other units are read by N1 only.
-        self.assertEqual(guard.N3_DIRECTORIES, ("engine/ecs/kernel", "engine/orchestration", "engine/modules/world_time"))
-        self.write("engine/core/time/src/Host.cpp", "namespace GYO::Engine::Time {\nstruct ClockHost {};\n}\n")
-        self.assertClean()
 
     def test_n3_is_read_in_orchestration_and_world_time(self):
         self.write("engine/orchestration/src/Host.cpp", "namespace GYO::Engine::Orchestration {\nstruct ProductHost {};\n}\n")

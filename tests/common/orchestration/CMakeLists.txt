@@ -52,10 +52,14 @@ set_tests_properties(orchestration.units PROPERTIES LABELS "cpu" TIMEOUT 60
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
 # Include order (defect found in segment 3): each public orchestration header
-# first, then every public kernel header. The orchestration layer is the first
-# GYO::Engine namespace; a kernel header that names GYO::Engine::Base unqualified
-# inside GYO::Kernel would then look in GYO::Engine and fail to compile. Built
-# with the tests; a compile error is the failure.
+# first, then every public kernel header. The orchestration layer was the first
+# GYO::Engine namespace while the carried units still lived under the old root
+# Engine::; a kernel header that named Engine::Base unqualified inside GYO::Kernel
+# then looked in GYO::Engine and failed to compile. Since
+# v8-arch-gyo2-namespace-root every unit is under GYO::Engine and that collision
+# cannot happen; whether to keep these objects is a decision pending with the
+# user (dev_log 2026_11_22_gyo2_namespace_root). Built with the tests; a compile
+# error is the failure.
 file(GLOB_RECURSE _orchestration_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/orchestration/include"
     CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/orchestration/include/*.hpp")
 file(GLOB_RECURSE _kernel_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include"
@@ -77,7 +81,8 @@ endforeach()
 # (time-events declaration 3.1): each of its public headers first, then every
 # orchestration and kernel header; and each orchestration header first, then
 # every world_time header (the order gyo_product_units generates). A header that
-# names Engine:: unqualified inside GYO::Engine::WorldTime fails here.
+# named the old root Engine:: unqualified inside GYO::Engine::WorldTime failed here
+# (see above: the collision is gone).
 file(GLOB_RECURSE _world_time_headers RELATIVE "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include"
     CONFIGURE_DEPENDS "${GYO_REPOSITORY_ROOT}/engine/modules/world_time/include/*.hpp")
 list(SORT _world_time_headers)

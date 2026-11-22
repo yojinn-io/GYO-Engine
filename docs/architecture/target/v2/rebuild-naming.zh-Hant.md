@@ -46,7 +46,7 @@
 | N11 | 一個模組一個目錄：`engine/<模組>/`，底下 `include/engine/<模組>/` 與 `src/` | `engine/core/time/include/engine/time/Waiter.hpp` | 事實 |
 | N12 | 含入路徑從 `engine/` 起算 | `#include "engine/time/Waiter.hpp"` | 事實 |
 | N13 | namespace 照 N17 的根：Engine 的單位是 `GYO::Engine::<單位>`，Kernel 是 `GYO::Kernel`；單位內部的東西放 `Detail` | `GYO::Engine::Time`、`GYO::Engine::Threads` | 事實；2026-11-22 根從 `Engine::` 改成 `GYO::Engine::`（`v8-arch-gyo2-namespace-root`，第 6 節） |
-| N14 | 一個目錄一個 CMake target：`gyo_<目錄名>`，別名 `GYO::<名>`（`<名>` 照 N17 從目錄名推） | `gyo_time`、`GYO::Time`；`gyo_world_time`、`GYO::WorldTime`；`gyo_io`、`GYO::IO` | 事實；縮寫的寫法見 N17 |
+| N14 | 一個目錄一個 CMake target：`gyo_<目錄名>`，別名 `GYO::<名>`（`<名>` 照 N17 從目錄名推） | `gyo_time`、`GYO::Time`；`gyo_world_time`、`GYO::WorldTime`；`gyo_io`、`GYO::IO` | 事實；縮寫的寫法見 N17。守衛不查，審查看 |
 | N15 | 型別、函式用大寫開頭的駝峰；成員變數小寫開頭、結尾加底線；常數 `k` 開頭；巨集 `GYO_` 開頭全大寫 | `RoleThread`、`StopRequested()`、`state_`、`kSampleRate`、`GYO_ASSERT` | 事實 |
 | N16 | 檔名等於它主要的型別名 | `RoleThread.hpp`、`RoleThread.cpp` | 事實 |
 | N17 | 歸屬＝namespace 與目錄一一對應。目錄、namespace、target 三者的名字要對得上。`GYO::` 底下第二層的根是一張封閉的表（本表下方「N17 的根」），不在表裡的 `GYO::<X>` 不能用；要加新的根，先改這張表與守衛。產品用自己的根 `<產品>::`，不打開 `GYO::` 底下的任何 namespace | `engine/ecs/kernel`↔`GYO::Kernel`；`engine/core/io`↔`GYO::Engine::IO`↔`GYO::IO` | 你的決定（11 月 11 日命名規範第 1 條，2026-11-14 轉入）。原文寫「能力」的地方，照今天的用詞寫 Module；2026-11-22 把「Engine 的 Module」改寫成「Engine 的單位」並把根寫成表（`v8-arch-gyo2-namespace-root`，理由見表下） |
@@ -56,18 +56,19 @@
 
 | 根 | 目錄 | 名字怎麼來 |
 |---|---|---|
-| `GYO::Kernel` | `engine/ecs/kernel` | 固定（通用機制，第 6 節） |
+| `GYO::Kernel` | `engine/ecs/kernel` | 固定（通用機制，第 6 節）。它是 DI 1「目錄 ↔ namespace 的表」裡唯一的例外列：Engine 的單位預設從目錄名推，推不出想要的名字時把例外寫進這一列的表（守衛的 `UNIT_OVERRIDES`）並附理由 |
 | `GYO::Engine::<單位>` | Engine 的單位：`engine/core/<單位>`、`engine/ecs/<單位>`（kernel 除外）、`engine/modules/<單位>`，以及 `engine/orchestration` 本身 | 從目錄名推：以 `_` 分段、每段首字母大寫；縮寫段照下面的縮寫表。例：`world_time`→`WorldTime`、`entity_store`→`EntityStore` |
-| `GYO::Plugins::<plugin>` | `plugins/<plugin>`（目錄還沒有；出現時就套用） | 同上 |
+| `GYO::Plugins::<plugin>` | `plugins/<plugin>`（目錄還沒有） | 第一個 plugin 進來的那一批定（例如 SDL 是不是縮寫）；在那之前只守「`GYO::Plugins` 只在 `plugins/` 打開」 |
 | `GYO::Test` | `tests/`（測試自己的東西；共用的放 `tests/common/support`，各單位的測試輔助放 `GYO::Test::<單位>`，例 `GYO::Test::Logging`） | 固定 |
 
 - **「Engine 的單位」**：#261（`v8-arch-gyo2-core-not-registered`）之後 core、ecs、orchestration 不再登記成 Module，但它們和 modules 一樣是 `engine/` 裡的一個單位，根都是 `GYO::Engine::<單位>`（2026-11-14 的改名決定就列了 core 的單位）。所以 N17 寫「單位」，不寫「Module」。
-- **縮寫表**：`io`→`IO`、`os`→`OS`，namespace 與 target 都全大寫；`json` 照舊寫 `Json`。新的縮寫要寫進這張表，守衛的 `ACRONYMS` 同步改。
+- **縮寫表**：`io`→`IO`、`os`→`OS`，namespace 與 target 都全大寫；`json` 照舊寫 `Json`。型別名與檔名（`IoError`、`OsError.cpp`）照 N15、N16 的駝峰，不在這張表管的範圍（要不要也改，合併前核准時問）。新的縮寫要寫進這張表，守衛的 `ACRONYMS` 同步改。
   - 使用者 2026-11-22：「IO、OS 這些就不要一個大一個小了。看著很難受。」比過的選項：縮寫全大寫（`Json` 也改 `JSON`）／縮寫全大寫、`Json` 不動／都只首字母大寫（`Io`、`Os`，原本的寫法）。使用者選第二個。理由：看著很難受；`Json` 不動的理由使用者沒有說。出處：`v8-arch-gyo2-namespace-root` 卡片的對話。
   - 取代第 3 節原本的「只有第一個字母大寫，例如 `Io`、`Os`」。
 - **根寫成封閉的表**：使用者 2026-11-22：「另外GYO::Engine 既然有，那麼就會有其他的 例如非Engine 層的。」所以規則管的是 `GYO::` 底下全部的根，不只 `GYO::Engine`。出處同上。
 - **打開別人的 namespace**：一個 namespace 只在它的目錄裡打開。要特化別的單位的樣板（例：`EntityKey`），寫全限定的特化 `template <> struct GYO::Engine::EntityStore::EntityKey<T> { … };`，不打開 `namespace GYO::Engine::EntityStore {`。用 `using namespace`、別名（寫在自己的 namespace 裡）不算打開。
-- **守衛**：`tests/common/kernel/naming_guard.py`（ctest `kernel.naming_guard`、自測 `kernel.naming_guard_selftest`；突變在 `docs/architecture/target/v2/scripts/naming_mutations.json`）。它查：每個單位的 namespace 是表裡推出的根；舊根 `Engine` 沒有人打開；`GYO` 單獨打開、不在表裡的 `GYO::<X>`、在別的目錄打開某個單位的根，都報錯；每個 Engine 單位的 target 是 `gyo_<目錄名>`、別名 `GYO::<名>`。`engine/` 底下不在層表裡的目錄、層裡不屬於任何單位的原始檔也報錯（fail closed）。新加的單位不用改守衛就會被查；拿掉一個 Module 也不用改守衛。
+- **守衛**：`tests/common/kernel/naming_guard.py`（ctest `kernel.naming_guard`、自測 `kernel.naming_guard_selftest`；突變在 `docs/architecture/target/v2/scripts/naming_mutations.json`）。它只守歸屬：每個 Engine 單位的 namespace 是表裡推出的根；一個單位的根只在它的目錄打開；`GYO` 單獨、不在表裡的 `GYO::<X>`、`GYO::Plugins` 在 `plugins/` 以外、`GYO::Test` 在 `tests/` 以外，都報；`engine/` 底下不在層表裡的目錄報（fail closed）。新加的單位不用改守衛就會被查；拿掉一個 Module 也不用改守衛。不守的（審查看）：target 名（N14，由建置與登記檔負責）、namespace 別名（別名不是打開）、產品自己的根。
+- **舊根 `Engine` 的檢查是過渡規則**：沒有人打開 `namespace Engine`，讓帶過來的程式不會回到舊根。拿掉的條件：不再從 master 帶程式過來（產品都移植完）。
 
 ## 4. ECS 相關的命名（提案）
 
