@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-22（新第 17 節「讀檔」、第 13、14 節的讀檔改成指過去：`v8-arch-gyo2-restore-impl`）；2026-11-22（第 5 節「訊息」、第 14 節、新第 15 節：`v8-arch-gyo2-event-cursor-reeval`——帶條件或不常跑的讀者的寫法；Kernel 的規則不變）；2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-23（第 3、15 節、新第 18 節：`v8-arch-gyo2-kernel-res-changed`——Resource 的 `Changed()`；Kernel DI-KS 28）；2026-11-22（新第 17 節「讀檔」、第 13、14 節的讀檔改成指過去：`v8-arch-gyo2-restore-impl`）；2026-11-22（第 5 節「訊息」、第 14 節、新第 15 節：`v8-arch-gyo2-event-cursor-reeval`——帶條件或不常跑的讀者的寫法；Kernel 的規則不變）；2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -50,7 +50,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 | 參數 | 用來做什麼 | 算什麼存取 |
 |---|---|---|
 | `Query<Read<T>, Write<U>, With<V>, Without<W>, Changed<X>, Added<Y>>` | 依 id 由小到大走過符合的實體；`Read` 拿到 `const T&`，`Write` 拿到 `Mut<U>` | 讀 T、寫 U；其餘是篩選 |
-| `Res<T>`、`ResMut<T>` | 讀、寫一個 Resource | 讀、寫 T |
+| `Res<T>`、`ResMut<T>` | 讀、寫一個 Resource；`Changed()`：這個掛載上次跑之後被寫過（第 18 節） | 讀、寫 T |
 | `MessageReader<M>`、`MessageWriter<M>` | 讀（照這個讀者自己的游標，上次之後寫的全部）、送保留式訊息 | 讀、寫 M |
 | `Spawn<Bundle<A, B…>>` | 生成實體，當場拿到 id；下一個同步點才看得到 | 寫配發器；延後寫 A、B… |
 | `SpawnWithId<Bundle<…>>` | 用指定的 id 生成（讀檔、連線） | 延後寫 |
@@ -526,7 +526,7 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
   }
   ```
 
-  帶狀態條件、但不讀 `Message` 的 System（只讀元件與 Resource）照常用條件。（`StateMachine<Flow>` 的介面以狀態機那一批為準，這裡只示意。）
+  帶狀態條件、但不讀 `Message` 的 System（只讀元件與 Resource）照常用條件。被條件擋住的期間，`Changed<T>` 與 `Res::Changed()` 會累積：回來那一次是 true，和訊息的「回來補讀」是同一類後果，只是只有一個 bool（第 18 節）。（`StateMachine<Flow>` 的介面以狀態機那一批為準，這裡只示意。）
 
   **轉換那一幀還有一個洞**：這個寫法照「讀的當下」的狀態判斷。讀者在 Plan 裡排在寫者之前（這一幀的按鈕下一幀才讀到），或讀者在固定步裡（晚一幀讀），關卡裡按的「回主選單」可能在狀態已經換成主選單之後才被讀到，被當成主選單的按鈕。要避免：讀者排在寫者之後、同一幀讀；或訊息自己帶「在哪個狀態按的」，讀者比對。
 - **要帶進「進入」或交給之後的資料，放 Resource。** 選了哪一關、生成的結果、讀檔的內容，寫進 Resource，讓「進入關卡中」或遊戲邏輯讀它，不靠訊息跨過狀態轉換。
@@ -603,3 +603,30 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 - **讀的時候**：用你的格式讀出版本數字，交給 `kSaveVersion.Check(版本)`。收 `oldestSupported ≤ 版本 ≤ current`；太舊回 `reporterCode == "save-version-too-old"`、太新回 `"save-version-too-new"`。中間的舊版由你的讀檔程式補轉換。
 - **在哪裡呼叫**（都在換上之前）：(1) 發 `ReplaceWorld` 之前（選 `DropOldFirst` 時只能這裡）；(2) `extra` 準備函式裡呼叫、把錯誤原樣回傳 → `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode` 照帶、舊 World 照跑；(3) 啟動時讀檔：描述的準備函式裡呼叫 → 被拒時 `Product::Build` 失敗（O-E7，碼在訊息文字裡）。**不要在生成期間呼叫**（那裡失敗是 `Product` 結束）。
 - **不呼叫 `Check` 的讀檔照收**。被拒不是事件，是 `Result`。錯誤的型別是 `OrchestrationError`（碼 `PrepareFailed`，為了能直接從準備函式回傳）；在發替換之前判的時候也一樣，**分辨被拒的原因看 `reporterCode`**。
+
+## 18. Resource 被寫過了沒（`Changed()`）
+
+（`v8-arch-gyo2-kernel-res-changed`，使用者 2026-11-23 核准；規則全文在 kernel [DI-KS 28](../kernel.zh-Hant.md#di-ks-28)，本節只講寫法。跨部件規則 [CCR-8](../../../cross-component-rules.md)。）
+
+設定畫面改了 `GameSettings`，另一個 System 只在設定改了的那一幀重建混音與畫質：
+
+```cpp
+K::SystemResult RebuildMixer(K::Res<GameSettings> settings, K::ResMut<Mixer> mixer) {
+    if (!settings.Changed()) return {};   // 上次跑之後沒人寫過：不重建
+    mixer->Rebuild(*settings);
+    return {};
+}
+```
+
+- **是「被寫過」，不是「值變了」。** 拿 `ResMut` 取值寫入（`Get()`、`*`、`->`）就算，寫回同一個值也算；只讀用 `ResMut::Read()`，不算。和元件的 `Changed<T>`、Bevy、flecs、Unity 一樣。
+- **反覆同步同一個值的寫者，值相同就不寫**（CCR-8）。不然讀者每次都拿到 true，又得自己存上一次的值來比：
+
+  ```cpp
+  if (current.Read() != incoming) *current = incoming;   // 值不同才寫
+  ```
+
+- **比的是這個掛載上次跑。** 第一次跑看到全部有值且寫過的；自己上次經 `ResMut` 當場寫的下一次不算，經 `Commands` 延後寫的下一次算（在同步點取較新的 stamp，同 Bevy）；同一個 Run 裡排在後面的 System 寫的，下一次才看到；被 run 條件擋下的期間寫入會累積（第 15 節）。run 條件裡讀 `Changed()` 比的也是這個掛載上次跑——被別的條件擋下時，變更留到它真的跑那次（Bevy 的條件有自己的上次檢查，會錯過）；set 的條件逐成員求值，成員不保證同進同出。
+- **沒有值是 false**，拿掉的那次也是。要知道「被拿掉了」，自己記上次有沒有值（Bevy 的 `resource_removed` 也是這樣做的）：記在 `Local`；在步的 schedule 上不能用 `Local`（R-2 前提 2），要記在自己登記成可回滾的 Resource。
+- **hook 與 observer 裡不要靠它。** hook 沒有上次跑（等於「有值、寫過」）；同步點裡的 observer 看不到同一個同步點後面才寫的（DI-KS 10）。
+- **重跑時反映實際執行的歷史。** stamp 不退回：步的 schedule 上，判定結果取決於 `Changed()` 的 System 不在回滾等價之內（R-2「stamp 除外」）。
+- **Engine 自己每幀或每步都寫、`Changed()` 幾乎恆為 true 的 Resource**：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`（每幀，`AdvanceTime`）、`Tick`（每個固定步）、生成中的 `WorldGeneration`、配發器（每配一個編號）。要抓「暫停了沒」讀時間 Module 的 `TimeControl`（它的值由作者寫，作者也要值不同才寫），不要讀 `VirtualTime` 的 `Changed()`。

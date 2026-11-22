@@ -57,8 +57,11 @@ World::World(const Registry& registry, std::string name, WorldOptions options)
     // never saw registered).
     GYO_ASSERT(registry.pending_ == nullptr);
     AttachVersion();
-    // The kernel's own resource is present from the start (the Host or a System may overwrite it).
-    static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data_->kernelSettings]).value = KernelSettings{};
+    // The kernel's own resource is present from the start (the Host or a System may overwrite it),
+    // put in like the Host's SetResource: a mount's first run sees it changed (DI-KS 28).
+    auto& settings = static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data_->kernelSettings]);
+    settings.value = KernelSettings{};
+    settings.changed = WriteStamp();
     ++data_->liveWorlds;
     if (!options_.dynamicInsert) ++data_->refusingWorlds;
 }
