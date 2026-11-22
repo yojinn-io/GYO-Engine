@@ -107,7 +107,7 @@
 | 卡 | 它用到 io／threads 的什麼 | 本批之後 |
 |---|---|---|
 | asset（`gyo2-asset`，已核准、未實作） | 5.12：`ReadAllBytes`、掛載點、疊掛（本批不靠）、`IFileWatcher`（本批不用）；5.6：X-1 執行器、X-4、X-6 | 用到的全留；`IFileWatcher` 拿掉與 asset 5.12「本批不用」一致，熱重載那批再加。**Q1 的結論**決定 world_asset 有沒有 Engine 給的預設池 → 經主會話轉 asset 卡 |
-| 讀檔＋存檔版本（`gyo2-restore-impl`） | 宣告與分支都沒有用 io | 無影響 |
+| 讀檔＋存檔版本（`gyo2-restore-impl`） | 程式沒有用 io。宣告修訂 12 草案（7970a9d6，第 501 行）寫作者讀寫存檔用三個既有的：「存檔目錄（`UserFiles.hpp`）」、`WriteFileAtomically`、`ReadAllBytes`，並請本卡要拿掉或改時先對齊（2026-11-22 經主會話轉來） | 三個都**留下、不改**（I6）。**更正**：`UserFiles.hpp` 只有 `ProbeFileStamp`（讀整檔算戳記，判斷檔案有沒有被改過），io、os 都**沒有**「存檔目錄」（每個使用者的資料目錄，例：macOS 的 Application Support、Windows 的 `%APPDATA%`、Linux 的 `$XDG_DATA_HOME`）的 API。別家：Godot `user://`、Unity `Application.persistentDataPath`、Unreal `FPaths::ProjectSavedDir`〔知〕；Bevy 沒有內建（用外部 crate）。這是 OS 層（adaptor）的事，不在本批；經主會話轉讀檔卡更正描述，要不要補由主會話排 |
 | 網路 Module（`gyo2-net-module`） | 分支沒有用 io、threads | 無影響；之後若要收包執行緒，用 `DedicatedThread` |
 | audio 重審（`gyo2-audio-review`） | audio 不用 threads、io | 無影響 |
 | 日誌（無在跑的卡） | `RoleThread` | 第 1 步跟著改名（行為不變） |
@@ -227,6 +227,7 @@
 - 不加 runner 的執行緒入口（O-13 的形在 PvP Client 移植那批）。
 - 不做 asset 的執行器介面與預設池的接線（asset 卡）；不做熱重載、目錄瀏覽、pack 後端。
 - 不改日誌的行為；不改 os 的 `Thread`、`Files`。
+- 不加「存檔目錄」（每個使用者的資料目錄）的 API：屬 OS 層，第 5 節讀檔卡那一列。
 - 三份突變清單的路徑還指向 master 計畫資料夾（HANDOFF 待辦「小批清理」#269）：本批只改清單裡的目標檔與目標執行檔，不搬清單。
 - io 在 macOS x64、Windows UNC（`gyo_io_unc_probe`）的行為照舊；本機只有 macOS arm64，Windows 靠 L1。
 
