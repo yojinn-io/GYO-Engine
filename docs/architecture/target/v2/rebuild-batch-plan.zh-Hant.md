@@ -103,8 +103,10 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 生成世界的文件遺留：dev_log 開頭改已合併（PR #272，879350d4）、CI 補 run 45019227814；核准頁第 5 節補 16a3b0d9 的 L1；README 索引兩行改已合併；宣告「三家讀檔都重新配號」改正（flecs 是混合型，`deserialize.c:129-168`；讀檔卡 2026-11-22 指出） | 生成世界卡（#272 合併後） | 下一批一起改（第 1 批先例） |
 | 已合併批次的 dev_log 開頭補「已合併」：threads／io（PR #277，0f3be2cc）、狀態機（PR #281，1df88fe7；L1 run 45042604998） | threads／io 卡、狀態機卡 | 下一批一起改 |
 | gyo2 上狀態機的測試有一個編譯警告（網路卡的實作者跟上 gyo2 時看到；Windows 若把警告當錯誤會擋住） | 網路卡 2026-11-23 | 看 #275 的 L1（run 45056638255）；擋住就交網路卡在同一 PR 修，否則下一次動狀態機的批 |
-| **Kernel 的 `Message` 與 `Summary`**：`Summary` 雜湊每個訊息緩衝的序號與游標，依完成時序或外部事件發訊息的 Module（網路、輸入）會讓摘要依時序變；asset 用 Resource 繞開。要不要給訊息型別「不進摘要」的選項 | asset 宣告第 15 節第 8 項 | 2026-11-23 開卡（`local_b3d28b59`，先宣告） |
-| **Kernel 負向編譯樣本可能空過**：`tests/common/kernel/CMakeLists.txt:231` 只在輸出裡找標記，同一行有無關硬錯誤時編譯器印出原始碼行、標記就在裡面，樣本永遠通過；asset 改用「靜態斷言失敗＋標記同一行」 | asset 宣告第 15 節第 12 項 | 2026-11-23 開卡（`local_b3d28b59`，第一件，可單獨 PR） |
+| **Kernel 的 `Message` 與 `Summary`**：`Summary` 雜湊每個訊息緩衝的序號與游標，依完成時序或外部事件發訊息的 Module（網路、輸入）會讓摘要依時序變；asset 用 Resource 繞開。要不要給訊息型別「不進摘要」的選項 | asset 宣告第 15 節第 8 項 | 2026-11-23 開卡（`local_b3d28b59`）；宣告修訂 1（分支 `claude/gyo2-kernel-summary-messages-decl`）建議 (b) 回到摘要版本 1（只收每種訊息的筆數與內容，拿掉序號與游標表）；權威 digest 本來不收訊息、受影響的是用 `World::Summary` 判相同的測試；等窄複查與使用者定「摘要要不要看得到還沒讀的訊息」 |
+| **Kernel 負向編譯樣本可能空過**：`tests/common/kernel/CMakeLists.txt:231` 只在輸出裡找標記，同一行有無關硬錯誤時編譯器印出原始碼行、標記就在裡面，樣本永遠通過；asset 改用「靜態斷言失敗＋標記同一行」 | asset 宣告第 15 節第 12 項 | 2026-11-23 開卡（`local_b3d28b59`）；PR #286：重現空過、判法收成共用函式 `tests/common/support/ExpectStaticAssert.cmake`（Kernel、world_logging、world_asset 三處）、27/27；等使用者 §14.4 核准（只收緊，DI 守衛仍要核准）與「合併」 |
+| 負向編譯樣本在判法以外的骨架（對照組、迴圈、MSVC 旗標）三處各有一份（Kernel、world_logging、world_asset） | #286 設計審查 should 4 | 下一次碰負向編譯樣本的批收成一份 |
+| 游標的鍵含 System 的索引、跟登記順序走，和 D-9／J-44「對登記順序不敏感」相衝（讀程式推得、未實測）；摘要選 (b) 時離開摘要 | Kernel 卡 | 摘要定案後看還在不在 |
 | asset 丟棄件數（E3）沒有出口：登記單位原本沒有 Product 結束回呼 | asset 宣告第 15 節第 9 項 | 交換點批已加 O-15 `OnDestroy`，待確認是否已解 |
 | 批次表 asset 列的依賴（生成世界、JSON）與單位兩個；SDL 那批範圍記「image Module（stb adapter）」 | asset 宣告第 15 節第 1 項 | 已轉 SDL 宣告卡 |
 | v2 之前的 target 文件（`runtime-composition` §3a 與 DI 3、`target/README.md` K.3 表 A3、A4）建立在已拿掉的前提上；舊頁 `assets.zh-Hant.md` 與 `rebuild-1111-decisions-status` 對 11-11 方向 2 已推翻的狀態要更新 | asset 宣告第 15 節第 2、7 項 | 主會話的文件整理（併「v2 之前的 target 文件」那件） |
