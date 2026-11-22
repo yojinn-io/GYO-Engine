@@ -271,7 +271,7 @@
   },
   {
    "id": "au-z6-skipped-counted",
-   "what": "a System skipped while resimulating (an entry writing the decision input) counts for Z6. Only it catches the exemption",
+   "what": "a System skipped while resimulating (an entry writing a decision input with no kept history: a component input) counts for Z6. Only it catches the exemption (a resource input is also left out by its kept history since the official strategy registers rollback.Input<T>, 61d6f72c)",
    "guards": [
     "authority-module-declaration 5.11"
    ],
@@ -280,7 +280,7 @@
    "replace": "        if (system.removed || !MountedIn(system, resimulated)) continue;",
    "target": "gyo_authority_tests",
    "cases": "authority checks: AU-E8*",
-   "expect": "\\[au\\-ingress\\-not\\-skipped\\] the official strategy"
+   "expect": "\\[au\\-z6\\-skipped\\-entry\\]"
   },
   {
    "id": "au-z8-unchecked",

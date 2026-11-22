@@ -172,6 +172,16 @@ TEST_CASE("authority checks: AU-E8 (D-E15): an entry in a resimulated schedule i
     const std::string text = BuildText(build, bare);
     CHECK_MESSAGE(Has(text, "AU-E8 entry System 'ReadCommand'"), "[au-ingress-not-skipped] " << text);
     CHECK_MESSAGE(BuildText(build, Client()) == "built", "[au-ingress-not-skipped] the official strategy");
+    // Skipped while resimulating, the entry is not counted by Z6. Command above is left out of Z6 by its kept
+    // history too (the official strategy registers rollback.Input<T> for a resource input); a component input has
+    // no kept history (rollback.Input<T> is for resources), so the skip is its only way out.
+    const std::string component = BuildText([](O::WorldSetup& s) {
+        Step(s);
+        A::AuthorityEntry authority(s);
+        authority.Component<Health>("Health", {.input = true});
+        authority.Ingress<&WriteHealth>(In("WriteHealth", "FixedUpdate", "First"));
+    }, Client());
+    CHECK_MESSAGE(component == "built", "[au-z6-skipped-entry] " << component);
 }
 
 TEST_CASE("authority checks: AU-E6 and AU-E8 ask each mount whether it runs while resimulating, not the System's name") {
