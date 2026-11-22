@@ -2690,48 +2690,48 @@
    ]
   },
   {
-    "id": "el-replace-fail-warn-back",
-    "what": "a failed ReplaceWorld writes a line to standard error again (error levels D2: the orchestration layer writes nothing; the failure goes back to the caller). Only this mutant: WarningCounter sees Base::Log, not a direct write",
-    "file": "engine/orchestration/src/Product.cpp",
-    "find": "    auto fail = [&](OrchestrationError error) -> Base::Result<void, OrchestrationError> {\n",
-    "replace": "    auto fail = [&](OrchestrationError error) -> Base::Result<void, OrchestrationError> {\n        std::fputs(\"orchestration: ReplaceWorld failed\\n\", stderr);\n",
-    "target": "gyo_orchestration_tests",
-    "command": [
-      "{cmake}",
-      "-DCASES=tests/common/orchestration/silent_cases.txt",
-      "-DNAME=orchestration.el-silent",
-      "-P",
-      "tests/common/support/SilentProbe.cmake",
-      "{exe:gyo_orchestration_tests}",
-      "{exe:gyo_silent_probe_positive}"
-    ],
-    "expect": "orchestration\\.el-silent: \\[O-8: a replacement does not mend",
-    "guards": [
-      "orchestration O-11",
-      "error-handling DI 4"
-    ]
+   "id": "el-replace-fail-warn-back",
+   "what": "a failed ReplaceWorld writes a line to standard error again (error levels D2: the orchestration layer writes nothing; the failure goes back to the caller). Only this mutant: WarningCounter sees Base::Log, not a direct write",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    auto fail = [&](OrchestrationError error) -> Base::Result<void, OrchestrationError> {\n",
+   "replace": "    auto fail = [&](OrchestrationError error) -> Base::Result<void, OrchestrationError> {\n        std::fputs(\"orchestration: ReplaceWorld failed\\n\", stderr);\n",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-8: a replacement does not mend",
+   "guards": [
+    "orchestration O-11",
+    "error-handling DI 4"
+   ]
   },
   {
-    "id": "el-insert-warn-back",
-    "what": "a refused dynamic insert writes a line to standard error again (error levels D2, O-9)",
-    "file": "engine/orchestration/src/Product.cpp",
-    "find": "        return Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
-    "replace": "        std::fputs(\"orchestration: insert refused\\n\", stderr);\n        return Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
-    "target": "gyo_orchestration_tests",
-    "command": [
-      "{cmake}",
-      "-DCASES=tests/common/orchestration/silent_cases.txt",
-      "-DNAME=orchestration.el-silent",
-      "-P",
-      "tests/common/support/SilentProbe.cmake",
-      "{exe:gyo_orchestration_tests}",
-      "{exe:gyo_silent_probe_positive}"
-    ],
-    "expect": "orchestration\\.el-silent: \\[O-9: a refusing World",
-    "guards": [
-      "orchestration O-9",
-      "error-handling DI 4"
-    ]
+   "id": "el-insert-warn-back",
+   "what": "a refused dynamic insert writes a line to standard error again (error levels D2, O-9)",
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        return Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "replace": "        std::fputs(\"orchestration: insert refused\\n\", stderr);\n        return Base::Err(FromKernel(OrchestrationErrorCode::InsertRefused,",
+   "target": "gyo_orchestration_tests",
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
+   ],
+   "expect": "orchestration\\.el-silent: \\[O-9: a refusing World",
+   "guards": [
+    "orchestration O-9",
+    "error-handling DI 4"
+   ]
   },
   {
    "id": "el-replace-catch-warn-back",

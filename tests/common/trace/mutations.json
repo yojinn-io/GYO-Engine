@@ -655,17 +655,17 @@
    "expect": "TR-7: Close restores the earlier receiver"
   },
   {
-    "id": "tr-default-clock-zero",
-    "what": "TR-5: with no clock given begin_ns is not on the engine time base (adversarial check 2026-11-21, Fable 5.2)",
-    "guards": [
-      "trace TR-5"
-    ],
-    "file": "engine/modules/trace/src/Trace.cpp",
-    "find": "    return clock != nullptr ? clock() : Time::NowNs();",
-    "replace": "    return clock != nullptr ? clock() : 0;",
-    "target": "gyo_scenario_tests",
-    "cases": "scenario segment 4: S4-1*",
-    "expect": "S4-1: begin_ns is on the engine time base"
+   "id": "tr-default-clock-zero",
+   "what": "TR-5: with no clock given begin_ns is not on the engine time base (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "trace TR-5"
+   ],
+   "file": "engine/modules/trace/src/Trace.cpp",
+   "find": "    return clock != nullptr ? clock() : Time::NowNs();",
+   "replace": "    return clock != nullptr ? clock() : 0;",
+   "target": "gyo_scenario_tests",
+   "cases": "scenario segment 4: S4-1*",
+   "expect": "S4-1: begin_ns is on the engine time base"
   },
   {
    "id": "tr-kernel-sync-origin-always",

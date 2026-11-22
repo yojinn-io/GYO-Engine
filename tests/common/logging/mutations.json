@@ -177,31 +177,31 @@
    "expect": "REQUIRE\\(\\ records\\.size\\(\\)\\ ==\\ 1\\ \\) is NOT correct!"
   },
   {
-    "id": "lg-assert-not-chained",
-    "what": "takeAssertions: the earlier assertion handler is not called (Base aborts)",
-    "guards": [
-      "logging LG-2",
-      "logging-declaration 5.6"
-    ],
-    "file": "engine/modules/logging/src/Logger.cpp",
-    "find": "    (previous != nullptr ? previous : &Base::DefaultAssertionHandler)(failure);",
-    "replace": "    static_cast<void>(previous);",
-    "target": "gyo_logging_tests",
-    "cases": "fatal: a failed GYO_ASSERT*",
-    "expect": "fatal: a failed GYO_ASSERT[^\\n]*\\n[\\s\\S]*CRASHED: SIGABRT"
+   "id": "lg-assert-not-chained",
+   "what": "takeAssertions: the earlier assertion handler is not called (Base aborts)",
+   "guards": [
+    "logging LG-2",
+    "logging-declaration 5.6"
+   ],
+   "file": "engine/modules/logging/src/Logger.cpp",
+   "find": "    (previous != nullptr ? previous : &Base::DefaultAssertionHandler)(failure);",
+   "replace": "    static_cast<void>(previous);",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a failed GYO_ASSERT*",
+   "expect": "fatal: a failed GYO_ASSERT[^\\n]*\\n[\\s\\S]*CRASHED: SIGABRT"
   },
   {
-    "id": "lg-assert-not-restored",
-    "what": "LG-8: Close does not put the earlier assertion handler back",
-    "guards": [
-      "logging LG-8"
-    ],
-    "file": "engine/modules/logging/src/Logger.cpp",
-    "find": "    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n",
-    "replace": "",
-    "target": "gyo_logging_tests",
-    "cases": "fatal: a failed GYO_ASSERT*",
-    "expect": "CHECK\\(\\ now\\ ==\\ \\&GYO::Test::ThrowAssertionFailure\\ \\) is NOT correct!"
+   "id": "lg-assert-not-restored",
+   "what": "LG-8: Close does not put the earlier assertion handler back",
+   "guards": [
+    "logging LG-8"
+   ],
+   "file": "engine/modules/logging/src/Logger.cpp",
+   "find": "    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "fatal: a failed GYO_ASSERT*",
+   "expect": "CHECK\\(\\ now\\ ==\\ \\&GYO::Test::ThrowAssertionFailure\\ \\) is NOT correct!"
   },
   {
    "id": "lg-terminate-not-restored",
@@ -230,17 +230,17 @@
    "expect": "REQUIRE\\(\\ pings\\.size\\(\\)\\ ==\\ 2\\ \\) is NOT correct!"
   },
   {
-    "id": "lg-forward-describe-fails-system",
-    "what": "LG-3: a descriptor's exception makes the System return an error (the World is interrupted)",
-    "guards": [
-      "logging LG-3"
-    ],
-    "file": "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
-    "find": "                CountFailedDescription();\n                WriteDescriptionFailure(D::name, world);\n            }\n        }",
-    "replace": "                return Base::Err(Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, \"describe\"));\n            }\n        }",
-    "target": "gyo_world_logging_tests",
-    "cases": "forward: a descriptor that throws*",
-    "expect": "REQUIRE\\(\\ static_cast<bool>\\(ran\\)\\ \\)\\ is\\ NOT\\ correct!"
+   "id": "lg-forward-describe-fails-system",
+   "what": "LG-3: a descriptor's exception makes the System return an error (the World is interrupted)",
+   "guards": [
+    "logging LG-3"
+   ],
+   "file": "engine/modules/world_logging/include/engine/world_logging/Forward.hpp",
+   "find": "                CountFailedDescription();\n                WriteDescriptionFailure(D::name, world);\n            }\n        }",
+   "replace": "                return Base::Err(Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, \"describe\"));\n            }\n        }",
+   "target": "gyo_world_logging_tests",
+   "cases": "forward: a descriptor that throws*",
+   "expect": "REQUIRE\\(\\ static_cast<bool>\\(ran\\)\\ \\)\\ is\\ NOT\\ correct!"
   },
   {
    "id": "lg-forward-readonly-assert",
@@ -416,18 +416,18 @@
    "expect": "CHECK\\(\\ counts\\.droppedClosed\\ ==\\ 1\\ \\) is NOT correct!"
   },
   {
-    "id": "lg-file-no-end-line",
-    "what": "LG-6: Close writes no end line",
-    "guards": [
-      "logging LG-6",
-      "logging LG-5"
-    ],
-    "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
-    "find": "        AppendJsonEndLine(impl_->pending, impl_->monoNs ? impl_->monoNs() : Time::NowNs(), counts);\n",
-    "replace": "",
-    "target": "gyo_logging_tests",
-    "cases": "file: lines are written in Write order*",
-    "expect": "REQUIRE\\(\\ lines\\.size\\(\\)\\ ==\\ 101\\ \\) is NOT correct!"
+   "id": "lg-file-no-end-line",
+   "what": "LG-6: Close writes no end line",
+   "guards": [
+    "logging LG-6",
+    "logging LG-5"
+   ],
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
+   "find": "        AppendJsonEndLine(impl_->pending, impl_->monoNs ? impl_->monoNs() : Time::NowNs(), counts);\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "file: lines are written in Write order*",
+   "expect": "REQUIRE\\(\\ lines\\.size\\(\\)\\ ==\\ 101\\ \\) is NOT correct!"
   },
   {
    "id": "lg-file-batch-reversed",
@@ -457,17 +457,17 @@
    "expect": "CHECK\\(\\ file\\.sink\\->Counts\\(\\)\\.fatalDirect\\ ==\\ 1\\ \\) is NOT correct!"
   },
   {
-    "id": "lg-file-writer-timer",
-    "what": "LG-6: the writer wakes on a timer instead of only when notified",
-    "guards": [
-      "logging LG-6"
-    ],
-    "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
-    "find": "            const auto wake = context.Wait();",
-    "replace": "            const auto wake = context.WaitUntil(Time::Now() + std::chrono::milliseconds{1});",
-    "target": "gyo_logging_tests",
-    "cases": "file: an idle writer sleeps until it is notified*",
-    "expect": "GYO_ASSERT\\ failed:\\ wake\\.reason\\ ==\\ ::GYO::Engine::Time::WakeReason::Notified"
+   "id": "lg-file-writer-timer",
+   "what": "LG-6: the writer wakes on a timer instead of only when notified",
+   "guards": [
+    "logging LG-6"
+   ],
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
+   "find": "            const auto wake = context.Wait();",
+   "replace": "            const auto wake = context.WaitUntil(Time::Now() + std::chrono::milliseconds{1});",
+   "target": "gyo_logging_tests",
+   "cases": "file: an idle writer sleeps until it is notified*",
+   "expect": "GYO_ASSERT\\ failed:\\ wake\\.reason\\ ==\\ Time::WakeReason::Notified"
   },
   {
    "id": "lg-file-flush-ignores-failure",
@@ -601,17 +601,17 @@
    "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ Logging::Install\\(\\{\\}\\)"
   },
   {
-    "id": "lg-baselog-not-restored",
-    "what": "LG-8: Close does not put GYO::Engine::Base::Log's earlier handler back",
-    "guards": [
-      "logging LG-8"
-    ],
-    "file": "engine/modules/logging/src/Logger.cpp",
-    "find": "    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n",
-    "replace": "",
-    "target": "gyo_logging_tests",
-    "cases": "logger: GYO::Engine::Base::Log lines become records*",
-    "expect": "CHECK\\(\\ after\\ ==\\ before\\ \\) is NOT correct!"
+   "id": "lg-baselog-not-restored",
+   "what": "LG-8: Close does not put GYO::Engine::Base::Log's earlier handler back",
+   "guards": [
+    "logging LG-8"
+   ],
+   "file": "engine/modules/logging/src/Logger.cpp",
+   "find": "    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "logger: GYO::Engine::Base::Log lines become records*",
+   "expect": "CHECK\\(\\ after\\ ==\\ before\\ \\) is NOT correct!"
   },
   {
    "id": "lg-link-kernel",
@@ -1092,17 +1092,17 @@
    "expect": "GYO_LOGGING_TERMINATE_CHAINED: probe \\(std\\)"
   },
   {
-    "id": "lg-close-sinks-before-handlers",
-    "what": "LG-8 order: the sinks are closed before the handlers are put back and the Logger is uninstalled (adversarial check 2026-11-21, Fable 5.2)",
-    "guards": [
-      "logging LG-8"
-    ],
-    "file": "engine/modules/logging/src/Logger.cpp",
-    "find": "    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
-    "replace": "    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n",
-    "target": "gyo_logging_tests",
-    "cases": "logger: uninstalling puts the handlers back*",
-    "expect": "LG-8: the handlers are put back before the sinks are closed"
+   "id": "lg-close-sinks-before-handlers",
+   "what": "LG-8 order: the sinks are closed before the handlers are put back and the Logger is uninstalled (adversarial check 2026-11-21, Fable 5.2)",
+   "guards": [
+    "logging LG-8"
+   ],
+   "file": "engine/modules/logging/src/Logger.cpp",
+   "find": "    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n",
+   "replace": "    for (Detail::SinkEntry& entry : state->sinks) entry.sink->Close();\n    if (state->tookBaseLog) Base::SetLogHandler(state->previousBaseLog);\n    if (state->tookAssertions) Base::SetAssertionHandler(state->previousAssertion);\n    if (state->tookTerminate) std::set_terminate(state->previousTerminate);\n    Detail::current.store(nullptr, std::memory_order_release);\n",
+   "target": "gyo_logging_tests",
+   "cases": "logger: uninstalling puts the handlers back*",
+   "expect": "LG-8: the handlers are put back before the sinks are closed"
   },
   {
    "id": "lg-close-sinks-reversed",
