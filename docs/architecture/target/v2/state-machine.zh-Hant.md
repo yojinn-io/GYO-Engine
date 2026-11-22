@@ -2,7 +2,7 @@
 
 更新：2026-11-22（新頁，`v8-arch-gyo2-state-machine`）。Owner：架構。程式：`engine/modules/state_machine/`（`GYO::Engine::StateMachine`，target `GYO::StateMachine`，登記檔一列 `state_machine`，`library_only=yes`、`default=no`）。行為測試：`tests/common/state_machine/`（ctest `state_machine.behaviour`、`state_machine.combination`，標籤 `cpu`）；突變清單 [`scripts/state_machine_mutations.json`](scripts/state_machine_mutations.json)（`sm-`）。
 
-由來：[事前宣告](state-machine-declaration.zh-Hant.md)修訂 8（2026-11-22 動工前核准：「照建議，三件都核准，開始」；交叉比對後「照建議，1 保留，2 選 A＋，開始」）。遊戲看得到的行為照修訂 7（2026-11-16 核准）。**Design Invariants 的最終文字在合併前核准時定稿**。和宣告文字不同的地方在條末標「實作」。
+由來：[事前宣告](state-machine-declaration.zh-Hant.md)修訂 8（2026-11-22 動工前核准：「照建議，三件都核准，開始」；交叉比對後「照建議，1 保留，2 選 A＋，開始」）。遊戲看得到的行為照修訂 7（2026-11-16 核准）。Design Invariants 的最終文字使用者 2026-11-23 合併前核准（「照建議，四件都核准」）。和宣告文字不同的地方在條末標「實作」。
 
 ## 一個例子
 

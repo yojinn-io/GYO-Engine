@@ -83,6 +83,14 @@ Fable 5.2／high，唯讀，對象 d614a34c；報告 `design-review-fable.md`。
 - 父的要求不合法時子的要求沒被取走，World 已中斷，沒有後果。
 - MSVC 能不能編樣板參數的 lambda，看 L1。
 
+## 合併前核准
+
+使用者 2026-11-23：「照建議，四件都核准」。四件：
+1. 條文頁的 Design Invariants（DI 1～5、7～10）與 RC 1～8 的最終文字，含兩處「實作」：DI 1 沒有公開的預設建構；DI 5 不存在的子不留之前的值。
+2. 判定 2 有兩列不加突變：「`SetInitial` 以外的改值成員」只能列名字驗；「子的待用值用完沒清」的單點改法等價。
+3. 突變 63 個，超過 README 第 8 條的參考（DI 條數 × 5，約 45）：多的集中在 DI 2（24 個）。
+4. 特性的成員名照命名規範用小駝峰（`parentValue`、`keepOnParentReenter`）。
+
 ## 交給設計審查與之後的
 
 - `RequestSilent` 與 Request／RequestSilent 兩個套用函式：網路宣告 Q8 (b)，狀態機先合併時由網路卡在它的第 2 步加。
