@@ -117,6 +117,9 @@ enum class LoaderRegistrationFailureCode : std::uint8_t {
     FormatPreregistered,
     // A different C++ type already declared this type name.
     TypeNameTaken,
+    // Preregistration only: the loader type is already registered and does not
+    // take one of the formats (it would wait for a loader that will not come).
+    FormatNotTaken,
 };
 
 [[nodiscard]] constexpr const char* ToString(const LoaderRegistrationFailureCode code) noexcept {
@@ -124,6 +127,7 @@ enum class LoaderRegistrationFailureCode : std::uint8_t {
     case LoaderRegistrationFailureCode::FormatTaken: return "FormatTaken";
     case LoaderRegistrationFailureCode::FormatPreregistered: return "FormatPreregistered";
     case LoaderRegistrationFailureCode::TypeNameTaken: return "TypeNameTaken";
+    case LoaderRegistrationFailureCode::FormatNotTaken: return "FormatNotTaken";
     }
     return "Unknown";
 }

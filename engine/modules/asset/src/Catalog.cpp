@@ -193,16 +193,9 @@ CatalogResult<std::string> FinishWriting(Json::Writer& writer, std::string& text
     return std::move(text);
 }
 
-std::string Join(const std::string_view root, const std::string_view relative) {
-    std::string path{root};
-    if (!path.empty() && path.back() != '/' && path.back() != '\\') path += '/';
-    path += relative;
-    return path;
-}
-
 CatalogResult<std::string> ReadText(const std::string_view root, const std::string_view relative) {
     // A catalog is content the product wrote; it has no byte limit of its own.
-    auto bytes = ReadWholeFile(Join(root, relative), std::numeric_limits<std::size_t>::max());
+    auto bytes = ReadWholeFile(JoinContentRoot(root, relative), std::numeric_limits<std::size_t>::max());
     if (!bytes) {
         return Base::Err(Fail(CatalogFailureCode::Unreadable, "\"" + std::string(relative) + "\" cannot be read",
                               Base::CauseDetail(bytes.error(), relative)));

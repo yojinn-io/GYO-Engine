@@ -41,7 +41,7 @@ struct AssetAccess;
 class UntypedHandle final {
 public:
     template <class T>
-    UntypedHandle(const Asset::Handle<T>& handle) : body_(handle.Body()) {} // NOLINT: converts implicitly
+    UntypedHandle(const Asset::Handle<T>& handle) : body_(Asset::Detail::HandleAccess::Body(handle)) {} // NOLINT: converts implicitly
 
     [[nodiscard]] const Asset::AssetId& Id() const noexcept;
 
@@ -99,17 +99,17 @@ public:
     // carried or extracted from a World that pulled later); a Handle that names nothing is NotRequested.
     template <class T>
     [[nodiscard]] Asset::AssetState State(const Asset::Handle<T>& handle) const {
-        return StateOf(handle.Body().get());
+        return StateOf(Asset::Detail::HandleAccess::Body(handle).get());
     }
     // The failure behind Failed: the Handle's request-level failure, or the item's id-level one; otherwise null.
     template <class T>
     [[nodiscard]] const Asset::AssetLoadFailure* Failure(const Asset::Handle<T>& handle) const {
-        return FailureOf(handle.Body().get());
+        return FailureOf(Asset::Detail::HandleAccess::Body(handle).get());
     }
     // The value when the Handle's item is Loaded in this view and its value is a T; otherwise null.
     template <class T>
     [[nodiscard]] const T* Get(const Asset::Handle<T>& handle) const {
-        const void* value = ValueOf(Matching(handle.Body().get()), typeid(T));
+        const void* value = ValueOf(Matching(Asset::Detail::HandleAccess::Body(handle).get()), typeid(T));
         return static_cast<const T*>(value);
     }
     // The value of a referenced asset (5.17): always there in the view in which its parent is Complete with its
@@ -123,7 +123,7 @@ public:
     // in this view with a file read; null otherwise ("not computed", 5.5).
     template <class T>
     [[nodiscard]] const std::string* SourceDigest(const Asset::Handle<T>& handle) const {
-        return DigestOf(Matching(handle.Body().get()));
+        return DigestOf(Matching(Asset::Detail::HandleAccess::Body(handle).get()));
     }
 
     [[nodiscard]] AssetReadiness Ready(std::span<const UntypedHandle> handles) const;

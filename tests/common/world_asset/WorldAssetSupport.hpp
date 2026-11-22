@@ -204,15 +204,15 @@ inline DiscardRecord& TheDiscardRecord() {
 }
 
 // A unit before world_asset: its OnDestroy runs after world_asset's (reverse order), with the Product's buffer
-// still there, so it reads the store's counts after Shutdown (5.8, O-A4).
+// still there, so it reads the store's counts (AssetStoreDiagnostics) after Shutdown (5.8, O-A4).
 class DiscardWatchModule final : public O::Module {
 public:
     void Configure(O::ProductSetup& setup) override {
         O::ModuleBuffer* buffer = &setup.Buffer();
         setup.OnDestroy([buffer] {
-            const Asset::AssetStore* store = std::as_const(*buffer).Find<Asset::AssetStore>();
-            TheDiscardRecord().ran = store != nullptr;
-            if (store != nullptr) TheDiscardRecord().counts = store->Counts();
+            const auto* diagnostics = std::as_const(*buffer).Find<Asset::AssetStoreDiagnostics>();
+            TheDiscardRecord().ran = diagnostics != nullptr;
+            if (diagnostics != nullptr) TheDiscardRecord().counts = diagnostics->Counts();
         });
     }
     void Build(O::WorldSetup&) override {}
@@ -329,10 +329,12 @@ inline Orders& OrdersOf(O::Product& product, std::string_view name) {
     REQUIRE(orders != nullptr);
     return *orders;
 }
-inline const Asset::AssetStore& StoreOf(O::Product& product) {
-    const Asset::AssetStore* store = std::as_const(product.Buffer()).Find<Asset::AssetStore>();
-    REQUIRE(store != nullptr);
-    return *store;
+// The store's diagnostic reads (counts, the store's own read of an id): the only part of the store in the
+// Product's buffer besides the registry.
+inline const Asset::AssetStoreDiagnostics& StoreOf(O::Product& product) {
+    const auto* diagnostics = std::as_const(product.Buffer()).Find<Asset::AssetStoreDiagnostics>();
+    REQUIRE(diagnostics != nullptr);
+    return *diagnostics;
 }
 
 inline std::vector<WA::UntypedHandle> Group(const std::vector<TextHandle>& handles, std::size_t from = 0,

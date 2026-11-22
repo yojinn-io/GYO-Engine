@@ -20,7 +20,7 @@ TEST_CASE("store: a request is refused at the request level without the lock and
     const Asset::Handle<Probe> unknown = store.Request<Probe>(AssetId("nope"));
     REQUIRE(unknown.RequestFailure() != nullptr);
     CHECK(unknown.RequestFailure()->code == AssetLoadFailureCode::UnknownId);
-    CHECK(unknown.Life() == 0);
+    CHECK(Asset::Detail::HandleAccess::Life(unknown) == 0);
     // No loader is registered: the type name alone decides (section 10 "型別名").
     const Asset::Handle<Linked> mismatch = store.Request<Linked>(AssetId("x"));
     REQUIRE(mismatch.RequestFailure() != nullptr);
@@ -116,12 +116,12 @@ TEST_CASE("store: a request after maintenance starts a new life and reads again"
     RegisterTestLoaders(store);
     {
         const Asset::Handle<Probe> handle = store.Request<Probe>(AssetId("x"));
-        CHECK(handle.Life() == 1);
+        CHECK(Asset::Detail::HandleAccess::Life(handle) == 1);
         executor.RunAll();
     }
     store.Pump();
     const Asset::Handle<Probe> again = store.Request<Probe>(AssetId("x"));
-    CHECK(again.Life() == 2);
+    CHECK(Asset::Detail::HandleAccess::Life(again) == 2);
     CHECK(StateOf(store, "x") == AssetState::Queued);
     executor.RunAll();
     CHECK(store.Read(again) != nullptr);
@@ -280,6 +280,50 @@ TEST_CASE("store: preregistration makes requests wait; formats the loader does n
     // Another loader may still take jpg.
     CHECK(store.Loaders().Register<JpgLoader>());
     const Asset::Handle<Image> jpgAgain = store.Request<Image>(AssetId("j"));
+    executor.RunAll();
+    CHECK(store.Read(jpg) != nullptr);
+    CheckEquations(store.Counts());
+}
+
+TEST_CASE("store: a Failed(NoLoader) asset waits once its loader is preregistered and it is requested again") {
+    Fresh fresh;
+    TestContent content("noloader-then-waits");
+    content.Add("j", "image", "j.jpg", "j");
+    ControlledExecutor executor;
+    Asset::AssetStore store(content.Entries(), content.Options(), &executor);
+    const Asset::Handle<Image> first = store.Request<Image>(AssetId("j"));
+    CHECK(FailureOf(store, "j") == AssetLoadFailureCode::NoLoader);
+    REQUIRE(store.Loaders().Preregister<JpgLoader>({"jpg"}));
+    CHECK(FailureOf(store, "j") == AssetLoadFailureCode::NoLoader); // judged again only on a request
+    const Asset::Handle<Image> again = store.Request<Image>(AssetId("j"));
+    CHECK_MESSAGE(StateOf(store, "j") == AssetState::WaitingForLoader,
+                  "[as-store-noloader-then-waits] a Failed(NoLoader) asset requested after its loader was "
+                  "preregistered did not wait for it");
+    REQUIRE(store.Loaders().Register<JpgLoader>());
+    CHECK(StateOf(store, "j") == AssetState::Queued);
+    executor.RunAll();
+    CHECK(store.Read(first) != nullptr);
+    CheckEquations(store.Counts());
+}
+
+TEST_CASE("store: preregistering a format its registered loader does not take is refused") {
+    Fresh fresh;
+    TestContent content("preregister-not-taken");
+    content.Add("j", "image", "j.jpg", "j");
+    ControlledExecutor executor;
+    Asset::AssetStore store(content.Entries(), content.Options(), &executor);
+    REQUIRE(store.Loaders().Register<PngLoader>()); // takes png only
+    const auto refused = store.Loaders().Preregister<PngLoader>({"jpg"});
+    CHECK_FALSE_MESSAGE(static_cast<bool>(refused), "[as-store-preregister-not-taken] a registered loader was "
+                                                    "preregistered for a format it does not take");
+    if (!refused) CHECK(refused.error().code == Asset::LoaderRegistrationFailureCode::FormatNotTaken);
+    CHECK_FALSE(store.Loaders().Preregister<PngLoader>({"png", "jpg"})); // nothing recorded when one is refused
+    CHECK(store.Loaders().Preregister<PngLoader>({"png"}));              // a format it takes: nothing to wait for
+    // jpg does not wait for a loader that will not come, and is still free for another loader.
+    const Asset::Handle<Image> jpg = store.Request<Image>(AssetId("j"));
+    CHECK(FailureOf(store, "j") == AssetLoadFailureCode::NoLoader);
+    CHECK(store.Loaders().Register<JpgLoader>());
+    const Asset::Handle<Image> again = store.Request<Image>(AssetId("j"));
     executor.RunAll();
     CHECK(store.Read(jpg) != nullptr);
     CheckEquations(store.Counts());
@@ -661,6 +705,48 @@ TEST_CASE("store: Shutdown discards or drains") {
     }
 }
 
+TEST_CASE("store: Shutdown waits for a job that is already in its loader, in both modes") {
+    // O-15: world_asset's OnDestroy calls Shutdown, and the work it stops must have stopped when it returns. The
+    // loader waits at a gate; another thread opens it later; Shutdown must not return before that, and the job's
+    // value (kept nowhere) is destroyed before it returns.
+    for (const Asset::AssetShutdown mode : {Asset::AssetShutdown::Discard, Asset::AssetShutdown::Drain}) {
+        Fresh fresh;
+        TestContent content(mode == Asset::AssetShutdown::Discard ? "shutdown-running-discard"
+                                                                  : "shutdown-running-drain");
+        content.Add("x", "probe", "x.probe", "x-bytes");
+        ControlledExecutor executor;
+        auto store = std::make_unique<Asset::AssetStore>(content.Entries(), content.Options(), &executor);
+        RegisterTestLoaders(*store);
+        TheScript().Gate("x");
+        std::optional<Asset::Handle<Probe>> handle = store->Request<Probe>(AssetId("x"));
+        std::thread job = executor.StartNext();
+        REQUIRE(TheScript().WaitForCalls(1)); // the loader is running, held at the gate
+        const int before = TheDestructions().count.load();
+        std::atomic<bool> opened{false};
+        std::thread opener([&opened] {
+            std::this_thread::sleep_for(100ms);
+            opened = true;
+            TheScript().Open("x");
+        });
+        // Bounded: the gate itself lets go after 10 seconds.
+        store->Shutdown(mode);
+        const bool openedBeforeReturn = opened.load();
+        const int destroyed = TheDestructions().count.load() - before;
+        CHECK_MESSAGE(openedBeforeReturn,
+                      "[as-shutdown-waits-running] Shutdown returned while a job was still in the loader");
+        CHECK(destroyed == 1);
+        opener.join();
+        job.join();
+        const auto counts = store->Counts();
+        // Discard: the job in the loader counts as discarded. Drain: it finished before the store closed.
+        CHECK(counts.jobsLoaded == (mode == Asset::AssetShutdown::Drain ? 1u : 0u));
+        CHECK(counts.jobsDiscarded == (mode == Asset::AssetShutdown::Discard ? 1u : 0u));
+        CheckEquations(counts);
+        handle.reset();
+        store.reset();
+    }
+}
+
 TEST_CASE("store: the last holder of a value on another thread destroys it, once") {
     Fresh fresh;
     TestContent content("destroy-elsewhere");
@@ -729,6 +815,24 @@ TEST_CASE("store: the version changes with every info and a pull is skipped when
     handle.reset();
     store.Pump();
     CHECK_MESSAGE(store.Version() != loaded, "removing an info did not change the version");
+}
+
+TEST_CASE("store: a Handle of another store reads as null") {
+    Fresh fresh;
+    TestContent content("other-store");
+    content.Add("x", "probe", "x.probe", "x-bytes");
+    ControlledExecutor executor;
+    Asset::AssetStore first(content.Entries(), content.Options(), &executor);
+    Asset::AssetStore second(content.Entries(), content.Options(), &executor);
+    RegisterTestLoaders(first);
+    RegisterTestLoaders(second);
+    const Asset::Handle<Probe> mine = first.Request<Probe>(AssetId("x"));
+    const Asset::Handle<Probe> theirs = second.Request<Probe>(AssetId("x"));
+    executor.RunAll();
+    // Same entry index, same life, both Loaded: only the core tells the stores apart.
+    REQUIRE(first.Read(mine) != nullptr);
+    REQUIRE(second.Read(theirs) != nullptr);
+    CHECK_MESSAGE(second.Read(mine) == nullptr, "[as-store-read-other-store] a store read a Handle of another store");
 }
 
 TEST_CASE("store: a value of another C++ type with the same type name reads as null") {

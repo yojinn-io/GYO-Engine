@@ -59,6 +59,8 @@ function(gyo_world_asset_compile_fail_samples)
     set(summary "control compiled")
     foreach(variant IN ITEMS HANDLE_STATE:GYO_ASSET_SAMPLE_HANDLE_HAS_NO_STATE
                              HANDLE_GET:GYO_ASSET_SAMPLE_HANDLE_HAS_NO_GET
+                             HANDLE_BODY:GYO_ASSET_SAMPLE_HANDLE_BODY_IS_PRIVATE
+                             HANDLE_LIFE:GYO_ASSET_SAMPLE_HANDLE_LIFE_IS_PRIVATE
                              REQUESTS_STATE:GYO_ASSET_SAMPLE_REQUESTS_HAVE_NO_STATE
                              REQUESTS_STORE:GYO_ASSET_SAMPLE_REQUESTS_GIVE_NO_STORE
                              VIEW_GET_WRITABLE:GYO_ASSET_SAMPLE_VIEW_GET_IS_READ_ONLY

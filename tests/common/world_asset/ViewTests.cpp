@@ -102,7 +102,7 @@ K::SystemResult ReloadOne(K::Res<WA::AssetRequests> requests, K::Res<WA::AssetVi
     TextHandle handle = requests->Load<Text>(Asset::AssetId("a.one"));
     TheReload().state = view->State(handle);
     TheReload().value = view->Get(handle) != nullptr;
-    TheReload().life = handle.Life();
+    TheReload().life = Asset::Detail::HandleAccess::Life(handle);
     held->handles.push_back(std::move(handle));
     return {};
 }
@@ -132,11 +132,11 @@ TEST_CASE("view: an older view against a newer life is Queued, with no value (5.
     description.worlds.push_back(AuthorWorld("B"));
     auto product = Build(std::move(description), Units());
     O::Product& p = *product;
-    const Asset::AssetStore& store = StoreOf(p);
+    const Asset::AssetStoreDiagnostics& store = StoreOf(p);
     HeldOf(p, "A").handles.push_back(RequestsOf(p, "A").Load<Text>(Asset::AssetId("a.one")));
     executor.RunAll();
     Frame(p);
-    const std::uint64_t oldLife = HeldOf(p, "A").handles.front().Life();
+    const std::uint64_t oldLife = Asset::Detail::HandleAccess::Life(HeldOf(p, "A").handles.front());
     REQUIRE(ViewOf(p, "A").State(HeldOf(p, "A").handles.front()) == Asset::AssetState::Loaded);
 
     // World A applies; within A's frame it lets the last Handle go; World B's apply point runs maintenance and
@@ -160,6 +160,10 @@ TEST_CASE("view: an older view against a newer life is Queued, with no value (5.
     executor.RunAll();
     CHECK(ViewOf(p, "A").State(Passed().front()) == Asset::AssetState::Queued);
     CHECK(ViewOf(p, "A").Get(Passed().front()) == nullptr);
+    // A Handle the view has not seen has not finished, nor with its dependencies (5.7).
+    CHECK_FALSE_MESSAGE(ViewOf(p, "A").Ready({Passed().front()}).dependenciesFinished,
+                        "[aw-unseen-dependencies-unfinished] a Handle the view has not seen counted as finished with "
+                        "its dependencies");
     Schedule(p, "A", O::DefaultSchedules::frame);
     CHECK(ViewOf(p, "A").State(Passed().front()) == Asset::AssetState::Loaded);
     Passed().clear();
@@ -195,6 +199,7 @@ TEST_CASE("view: request-level failures are the Handle's, and touch no item") {
         CHECK(view.Failure(unknown)->code == Asset::AssetLoadFailureCode::UnknownId);
         const WA::AssetReadiness ready = view.Ready({wrong, unknown});
         CHECK(ready.allFinished);
+        CHECK_FALSE_MESSAGE(ready.complete, "[aw-request-failure-incomplete] a group of request-level failures is complete");
         CHECK(ready.failed == 2);
         CHECK(ready.failures.size() == 2);
         CHECK(view.Failures().empty());  // no item failed
@@ -334,6 +339,128 @@ TEST_CASE("view: content that breaks the catalog's rules is a startup error repo
     CHECK_MESSAGE(detail.find("LT-E") == std::string::npos, detail);
 }
 
+TEST_CASE("view: a Handle waiting for its loader has not finished") {
+    Fresh fresh;
+    Content content("waiting-unfinished");
+    content.Add("i.wait", "image", "i/wait.png", "png").Write();
+    AssetTest::ControlledExecutor executor(AssetTest::ControlledExecutor::Mode::RunNow);
+    O::ProductDescription description;
+    description.name = "waiting-unfinished";
+    WA::AssetOptions options;
+    options.contentRoot = content.Root();
+    options.executor = &executor;
+    description.options.Set(options);
+    description.worlds.push_back(AuthorWorld("W"));
+    // linked_type preregisters PngLoader for png and does not register it.
+    auto product = Build(std::move(description), Units({.linkedType = true}));
+    O::Product& p = *product;
+    const Asset::Handle<AssetTest::Image> waiting = RequestsOf(p, "W").Load<AssetTest::Image>(Asset::AssetId("i.wait"));
+    Frame(p);
+    const WA::AssetView& view = ViewOf(p, "W");
+    REQUIRE(view.State(waiting) == Asset::AssetState::WaitingForLoader);
+    CHECK_MESSAGE(view.Unfinished({waiting}) == 1, "[aw-waiting-unfinished] a Handle waiting for its loader counted as finished");
+    const WA::AssetReadiness ready = view.Ready({waiting});
+    CHECK_FALSE(ready.allFinished);
+    CHECK_FALSE(ready.complete);
+    CHECK(Ids(ready.waitingForLoader) == "i.wait");
+}
+
+TEST_CASE("view: Get reads a value only as the C++ type it was loaded as") {
+    Fresh fresh;
+    Content content("get-cpp-type");
+    content.Add("t.twin", "probe", "t/twin.bin", "twin", std::string("twin")).Write();
+    AssetTest::ControlledExecutor executor(AssetTest::ControlledExecutor::Mode::RunNow);
+    O::ProductDescription description;
+    description.name = "get-cpp-type";
+    WA::AssetOptions options;
+    options.contentRoot = content.Root();
+    options.executor = &executor;
+    description.options.Set(options);
+    description.worlds.push_back(AuthorWorld("W"));
+    auto product = Build(std::move(description), Units());
+    O::Product& p = *product;
+    // Only ProbeTwin has a loader for "probe": a Handle<Probe> passes the request (same type name) and its item
+    // loads as a ProbeTwin.
+    const Asset::AssetLoaderRegistry* registry = std::as_const(p.Buffer()).Find<Asset::AssetLoaderRegistry>();
+    REQUIRE(registry != nullptr);
+    REQUIRE(static_cast<bool>(registry->Register<AssetTest::ProbeTwinLoader>()));
+    const Asset::Handle<AssetTest::Probe> handle = RequestsOf(p, "W").Load<AssetTest::Probe>(Asset::AssetId("t.twin"));
+    REQUIRE(handle.RequestFailure() == nullptr);
+    Frame(p);
+    const WA::AssetView& view = ViewOf(p, "W");
+    REQUIRE(view.State(handle) == Asset::AssetState::Loaded);
+    CHECK_MESSAGE(view.Get(handle) == nullptr, "[aw-get-cpp-type] AssetView::Get read a value as a C++ type it is not");
+}
+
+namespace {
+
+K::SystemResult Nothing() { return {}; }
+
+// A World with the skeleton off and its own frame schedule "Frame" (stages Begin, Late); with WorldAssetOptions
+// naming Frame/Begin, or without any.
+O::WorldDescription OwnSchedules(const bool giveOptions) {
+    O::WorldDescription world;
+    world.name = "Own";
+    world.skeleton = O::ScheduleSkeleton::Off;
+    world.frame = {"Frame"};
+    if (giveOptions) {
+        WA::WorldAssetOptions options;
+        options.applySchedule = "Frame";
+        options.applyStage = "Begin";
+        world.options.Set(std::move(options));
+    }
+    world.build = [](O::WorldSetup& s) {
+        K::Registrar& r = s.Registrar();
+        K::ScheduleOptions frame;
+        frame.name = "Frame";
+        frame.stages = {"Begin", "Late"};
+        r.Schedule(frame);
+        r.AddSystem<&Nothing>(At("Nothing", "Frame", "Late"));
+    };
+    return world;
+}
+
+O::ProductDescription OwnSchedulesProduct(const Content& content, AssetTest::ControlledExecutor& executor,
+                                          const bool giveOptions) {
+    O::ProductDescription description;
+    description.name = "own-schedules";
+    WA::AssetOptions options;
+    options.contentRoot = content.Root();
+    options.executor = &executor;
+    description.options.Set(options);
+    description.worlds.push_back(OwnSchedules(giveOptions));
+    return description;
+}
+
+}  // namespace
+
+TEST_CASE("view: a World with the skeleton off names where ApplyAssets goes (WorldAssetOptions)") {
+    // The precedent: world_time's "an author who turns the skeleton off names its own schedules" (O-4).
+    Fresh fresh;
+    Content content("own-schedules");
+    content.Add("a.one", "text", "a/one.txt", "one").Write();
+    AssetTest::ControlledExecutor executor(AssetTest::ControlledExecutor::Mode::RunNow);
+    {
+        auto built = O::Product::Build(OwnSchedulesProduct(content, executor, true), Units());
+        REQUIRE_MESSAGE(static_cast<bool>(built), "[aw-own-schedule-built] " << (built ? std::string() : built.error().detail));
+        O::Product& p = **built;
+        const TextHandle handle = RequestsOf(p, "Own").Load<Text>(Asset::AssetId("a.one"));
+        Frame(p);
+        CHECK(ViewOf(p, "Own").State(handle) == Asset::AssetState::Loaded);
+    }
+    {
+        // Without the options the default Main/First is not a schedule of the World: the kernel's D-E1 for the
+        // System ApplyAssets, which names world_asset's System.
+        auto built = O::Product::Build(OwnSchedulesProduct(content, executor, false), Units());
+        REQUIRE_FALSE(static_cast<bool>(built));
+        const K::StartupReport* report = built.error().KernelReportOf("Own");
+        REQUIRE_MESSAGE(report != nullptr, built.error().detail);
+        CHECK_MESSAGE(report->Has(K::StartupCode::DE1), report->detail);
+        CHECK_MESSAGE(built.error().detail.find("System 'ApplyAssets' is mounted in schedule 'Main'") != std::string::npos,
+                      "[aw-own-schedule-missing-named] " << built.error().detail);
+    }
+}
+
 TEST_CASE("view: an AssetView an author removed is built again by the apply System") {
     Fresh fresh;
     Content content("rebuilt");
@@ -352,7 +479,8 @@ TEST_CASE("view: an AssetView an author removed is built again by the apply Syst
     WorldOf(p, "W").RemoveResource<WA::AssetView>();
     REQUIRE(std::as_const(WorldOf(p, "W")).Resource<WA::AssetView>() == nullptr);
     Frame(p);
-    CHECK(ViewOf(p, "W").State(HeldOf(p, "W").handles.front()) == Asset::AssetState::Loaded);
+    CHECK_MESSAGE(ViewOf(p, "W").State(HeldOf(p, "W").handles.front()) == Asset::AssetState::Loaded,
+                  "[aw-view-rebuilt] the view built again does not have what the store has");
 }
 
 }  // namespace WorldAssetTest

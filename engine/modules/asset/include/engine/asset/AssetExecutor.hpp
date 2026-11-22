@@ -15,11 +15,14 @@
 //   from inside a job and run it after, never recursively.
 // - The store calls Submit with no lock of its own held.
 //
-// A thin worker pool (threads' WorkerPool: Submit, Stop(Drain|Discard)) fits
-// behind this as it is. The store's Shutdown has the same two modes: drain
-// (wait for every queued job) or discard (count what did not finish as
-// discarded). A store given no executor fails every request that needs a job
-// with NoExecutor (E2); it never runs a job on the caller's thread.
+// There is no Engine executor today: threads' WorkerPool is not on this branch
+// yet, so a product writes its own adapter behind this interface (the tests use
+// a controlled executor and a small pool of their own). When WorkerPool comes,
+// the adapter goes in one place and a case with the real pool is added. The
+// store's Shutdown has two modes: drain (wait for every queued job) or discard
+// (count what did not finish as discarded); both wait for jobs already in a
+// loader. A store given no executor fails every request that needs a job with
+// NoExecutor (E2); it never runs a job on the caller's thread.
 
 namespace GYO::Engine::Asset {
 

@@ -1,13 +1,13 @@
 {
  "version": 1,
- "description": "Declared mutants of steps 1 and 2 of the asset batch (docs/architecture/target/v2/asset-declaration.zh-Hant.md, sections 9 and 10; ids as- catalog, ar- references, al- loaders, rw- whole-file reading, as-store-/as-snapshot- the store of step 2). Each guards a rule of the declaration (5.3 (A), 5.16, 5.17) or a Design Invariant written there (AS-2, AS-3, AS-9, AS-12, AS-13), to be moved to target/v2/asset.zh-Hant.md in step 6. Run: python3 -B tests/common/mutation/run_mutations.py --build-dir build/target/_build/core --catalog tests/common/asset/mutations.json --cmake <cmake>",
+ "description": "Declared mutants of the asset Module (docs/architecture/target/v2/asset.zh-Hant.md; declaration docs/architecture/target/v2/asset-declaration.zh-Hant.md, sections 9, 10 and 30.3; ids as- catalog, ar- references, al- loaders, rw- whole-file reading, as-store-/as-snapshot- the store). Each guards a Design Invariant of the formal page (guards 'asset AS-n') or a rule of the declaration (guards 'asset-declaration 5.x'). Run: python3 -B tests/common/mutation/run_mutations.py --build-dir build/target/_build/core --catalog tests/common/asset/mutations.json --cmake <cmake>",
  "mutants": [
   {
    "id": "as-id-charset",
    "what": "rule 4: uppercase letters are let into an id",
    "guards": [
     "asset-declaration 5.3 (A) 4",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/AssetId.cpp",
    "find": "(character >= 'a' && character <= 'z') || (character >= '0'",
@@ -21,7 +21,7 @@
    "what": "rule 4: an id of 129 characters is let through",
    "guards": [
     "asset-declaration 5.3 (A) 4",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/AssetId.cpp",
    "find": "text.size() > kMaxAssetIdLength",
@@ -35,7 +35,7 @@
    "what": "rule 4: an id of exactly 128 characters is refused (the limit too strict; as-id-length catches it too loose)",
    "guards": [
     "asset-declaration 5.3 (A) 4",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/AssetId.cpp",
    "find": "text.size() > kMaxAssetIdLength",
@@ -49,7 +49,7 @@
    "what": "rules 1, 5: a '..' segment is let into a content path",
    "guards": [
     "asset-declaration 5.3 (A) 5",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/ContentPath.cpp",
    "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
@@ -63,7 +63,7 @@
    "what": "rule 5: a backslash is let into a content path",
    "guards": [
     "asset-declaration 5.3 (A) 5",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/ContentPath.cpp",
    "find": "if (byte < 0x20 || character == '\\\\' || character == ':') return false;",
@@ -77,7 +77,7 @@
    "what": "rule 5: an asset path may be content.json",
    "guards": [
     "asset-declaration 5.3 (A) 5",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "!IsRelativeContentPath(entry.path) || entry.path == kContentManifestName",
@@ -91,7 +91,7 @@
    "what": "rule 1: content.json may list itself as a catalog",
    "guards": [
     "asset-declaration 5.3 (A) 1",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "!IsRelativeContentPath(path) || path == kContentManifestName",
@@ -105,7 +105,7 @@
    "what": "rule 1: a catalog may be listed twice",
    "guards": [
     "asset-declaration 5.3 (A) 1",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "if (!listed.insert(path).second) {",
@@ -119,7 +119,7 @@
    "what": "rules 1, 2: a version this version does not know is read",
    "guards": [
     "asset-declaration 5.3 (3)",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "if (*number != known) {",
@@ -133,7 +133,7 @@
    "what": "rule 1: a listed catalog that cannot be read is reported as something else",
    "guards": [
     "asset-declaration 5.3 (A) 1",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "Fail(CatalogFailureCode::Unreadable, \"\\\"\" + std::string(relative)",
@@ -147,7 +147,7 @@
    "what": "rule 3: an id may repeat inside one catalog",
    "guards": [
     "asset-declaration 5.3 (A) 3",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "seen.emplace(entry.id.Text(), index);\n        if (!inserted) {",
@@ -161,7 +161,7 @@
    "what": "rule 3: an id may repeat across catalogs",
    "guards": [
     "asset-declaration 5.3 (A) 3",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "owner.emplace(entry.id.Text(), file);\n            if (!inserted) {",
@@ -175,7 +175,7 @@
    "what": "rule 6: a path without an extension and without a format is read",
    "guards": [
     "asset-declaration 5.3 (A) 6",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "} else if (PathExtension(entry.path).empty()) {",
@@ -189,7 +189,7 @@
    "what": "rule 6: a '.' in a directory name counts as an extension",
    "guards": [
     "asset-declaration 5.3 (A) 6",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/ContentPath.cpp",
    "find": "const std::string_view last = slash == std::string_view::npos ? path : path.substr(slash + 1);",
@@ -217,7 +217,7 @@
    "what": "rule 7: uppercase letters are let into a format",
    "guards": [
     "asset-declaration 5.3 (A) 7",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "if (!((character >= 'a' && character <= 'z') || (character >= '0'",
@@ -231,7 +231,7 @@
    "what": "rule 7: a settings value that is not an object is read",
    "guards": [
     "asset-declaration 5.3 (A) 7",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "if (!settings || settings->Root().GetKind() != Json::Kind::Object) {",
@@ -245,7 +245,7 @@
    "what": "5.3 (1): shader_bundles is required again, as on master",
    "guards": [
     "asset-declaration 5.3 (1)",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "if (const std::optional<Json::Value> bundles = root->Find(\"shader_bundles\")) {",
@@ -259,7 +259,7 @@
    "what": "5.3 (1): unknown members are dropped instead of kept",
    "guards": [
     "asset-declaration 5.3 (1)",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "        if (IsKnown(known, member.key)) continue;\n        auto text = Compact(",
@@ -273,7 +273,7 @@
    "what": "5.3 (1): an unknown member is refused instead of kept and not read",
    "guards": [
     "asset-declaration 5.3 (1)",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "        if (IsKnown(known, member.key)) continue;\n        auto text = Compact(",
@@ -286,7 +286,7 @@
    "id": "as-write-format",
    "what": "AS-12 round trip: format is not written",
    "guards": [
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "            writer.Key(\"format\");\n            writer.String(*entry.format);\n",
@@ -299,7 +299,7 @@
    "id": "as-write-settings",
    "what": "AS-12 round trip: settings is not written",
    "guards": [
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "            writer.Key(\"settings\");\n            (void)WriteRaw(writer, *entry.settings); // an object, checked by ValidateCatalog\n",
@@ -312,7 +312,7 @@
    "id": "as-write-preserved",
    "what": "AS-12 round trip: kept members are not written back",
    "guards": [
-    "asset-declaration AS-12",
+    "asset AS-12",
     "asset-declaration 5.3 (1)"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
@@ -327,7 +327,7 @@
    "what": "5.3 (2): writing does not check the rules reading checks",
    "guards": [
     "asset-declaration 5.3 (2)",
-    "asset-declaration AS-12"
+    "asset AS-12"
    ],
    "file": "engine/modules/asset/src/Catalog.cpp",
    "find": "    if (auto valid = ValidateCatalog(catalog); !valid) return Base::Err(std::move(valid).error());\n",
@@ -393,7 +393,7 @@
    "what": "5.17: a refused path is recorded without BadReference",
    "guards": [
     "asset-declaration 5.17",
-    "asset-declaration AS-13"
+    "asset AS-13"
    ],
    "file": "engine/modules/asset/src/LoadContext.cpp",
    "find": "        reference.failure = ReferenceFailureCode::BadReference;",
@@ -407,7 +407,7 @@
    "what": "5.17 / AS-3: a reference by id is not recorded",
    "guards": [
     "asset-declaration 5.17",
-    "asset-declaration AS-3"
+    "asset AS-3"
    ],
    "file": "engine/modules/asset/src/LoadContext.cpp",
    "find": "void LoadContext::RecordId(const std::string_view typeName, const AssetId& id) {\n    references_.push_back(",
@@ -422,7 +422,7 @@
    "guards": [
     "asset-declaration 5.16",
     "asset-declaration 5.4",
-    "asset-declaration AS-9"
+    "asset AS-9"
    ],
    "file": "engine/modules/asset/include/engine/asset/AssetLoader.hpp",
    "find": "    requires std::string_view(L::kTypeName) == std::string_view(AssetTypeName<typename L::Output>::value);\n",
@@ -449,7 +449,7 @@
    "what": "5.16 text loader: an overlong three-byte form passes as UTF-8",
    "guards": [
     "asset-declaration 5.16",
-    "asset-declaration AS-2"
+    "asset AS-2"
    ],
    "file": "engine/modules/asset/src/TextLoader.cpp",
    "find": "if (lead == 0xE0) low = 0xA0;   // overlong",
@@ -463,7 +463,7 @@
    "what": "5.16 text loader: an encoded surrogate passes as UTF-8",
    "guards": [
     "asset-declaration 5.16",
-    "asset-declaration AS-2"
+    "asset AS-2"
    ],
    "file": "engine/modules/asset/src/TextLoader.cpp",
    "find": "if (lead == 0xED) high = 0x9F;  // surrogates",
@@ -477,7 +477,7 @@
    "what": "5.16 text loader: a byte that is not a continuation passes inside a sequence",
    "guards": [
     "asset-declaration 5.16",
-    "asset-declaration AS-2"
+    "asset AS-2"
    ],
    "file": "engine/modules/asset/src/TextLoader.cpp",
    "find": "if (continuation < 0x80 || continuation > 0xBF) return index;",
@@ -571,7 +571,7 @@
    "id": "as-store-complete-ignores-life",
    "what": "(3) a finished job's result is written whatever the life, so an old life's late result lands in the new life",
    "guards": [
-    "asset-declaration AS-10 (b)",
+    "asset AS-10 (b)",
     "asset-declaration 判定 (3)"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
@@ -599,7 +599,7 @@
    "id": "as-store-request-submits-locked",
    "what": "(6) a request submits its jobs while it holds the lock (the executor's Submit calls the store)",
    "guards": [
-    "asset-declaration AS-11",
+    "asset AS-11",
     "asset-declaration 判定 (6)"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
@@ -613,7 +613,7 @@
    "id": "as-store-decodes-locked",
    "what": "(7) a job reads and decodes while it holds the lock, so a request waits for it",
    "guards": [
-    "asset-declaration AS-11",
+    "asset AS-11",
     "asset-declaration 判定 (7)"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
@@ -641,7 +641,7 @@
    "id": "as-store-completion-submits-locked",
    "what": "(11) a finished job submits its dependencies' jobs while it holds the lock",
    "guards": [
-    "asset-declaration AS-11",
+    "asset AS-11",
     "asset-declaration 判定 (11)"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
@@ -655,7 +655,7 @@
    "id": "as-store-destroys-locked",
    "what": "(12) maintenance destroys a removed value while it holds the lock",
    "guards": [
-    "asset-declaration AS-11",
+    "asset AS-11",
     "asset-declaration 判定 (12)"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
@@ -669,7 +669,7 @@
    "id": "as-store-settings-locked",
    "what": "(13) registration reads the entries' settings while it holds the lock",
    "guards": [
-    "asset-declaration AS-11",
+    "asset AS-11",
     "asset-declaration 5.4",
     "asset-declaration 判定 (13)"
    ],
@@ -685,7 +685,7 @@
    "what": "a request does not compare the type name, so a wrong type is not refused at the request level",
    "guards": [
     "asset-declaration 5.5",
-    "asset-declaration AS-8"
+    "asset AS-8"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "        if (entry.catalog.type != typeName) {",
@@ -778,7 +778,7 @@
    "what": "(B) 1: a second loader takes a pair another loader has",
    "guards": [
     "asset-declaration 5.3 (B) 1",
-    "asset-declaration AS-2"
+    "asset AS-2"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "                other != loaders_.end() && other->second->loaderType != loader.loaderType) {",
@@ -792,7 +792,7 @@
    "what": "registering the same loader again is refused (not idempotent)",
    "guards": [
     "asset-declaration 5.16",
-    "asset-declaration AS-9"
+    "asset AS-9"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "                other != loaders_.end() && other->second->loaderType != loader.loaderType) {",
@@ -819,7 +819,7 @@
    "what": "the in-flight limit is ignored",
    "guards": [
     "asset-declaration 5.5",
-    "asset-declaration AS-4"
+    "asset AS-4"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "(options_.maxInFlight == 0 || inFlight_ < options_.maxInFlight)",
@@ -832,11 +832,11 @@
    "id": "as-store-digest-always",
    "what": "the source digest is computed although it is off",
    "guards": [
-    "asset-declaration AS-7"
+    "asset AS-7"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
-   "find": "        if (options_.sourceDigest) outcome.sourceDigest",
-   "replace": "        if (true) outcome.sourceDigest",
+   "find": "            if (options_.sourceDigest) outcome.sourceDigest",
+   "replace": "            if (true) outcome.sourceDigest",
    "target": "gyo_asset_tests",
    "cases": "store: the source digest*",
    "expect": "the\\ digest\\ is\\ computed\\ although\\ it\\ is\\ off"
@@ -846,7 +846,7 @@
    "what": "Shutdown does not count jobs in flight as discarded",
    "guards": [
     "asset-declaration 5.8",
-    "asset-declaration AS-8"
+    "asset AS-8"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "counts_.jobsDiscarded += waiting_.size() + inFlight_;",
@@ -914,7 +914,7 @@
    "what": "a job cancelled before it starts is not counted, so the job equation breaks",
    "guards": [
     "asset-declaration 5.8",
-    "asset-declaration AS-8"
+    "asset AS-8"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "                // Removed before it started: nothing is read; the slot goes on.\n                ++counts_.jobsCancelled;\n",
@@ -928,7 +928,7 @@
    "what": "edges in a strongly connected component are not marked, so a cycle holds itself",
    "guards": [
     "asset-declaration 5.17",
-    "asset-declaration AS-13"
+    "asset AS-13"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "                if (edge.view.status != EdgeStatus::Held || !component.contains(edge.target)) continue;",
@@ -942,8 +942,8 @@
    "what": "edges already marked cyclic are left out of the graph, so the marks depend on the order",
    "guards": [
     "asset-declaration 5.17",
-    "asset-declaration AS-5",
-    "asset-declaration AS-13"
+    "asset AS-5",
+    "asset AS-13"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "edge.view.status == EdgeStatus::Held ||\n                                               edge.view.status == EdgeStatus::Cyclic);",
@@ -957,7 +957,7 @@
    "what": "an edge marked cyclic stays counted in its first kind, so the reference equation breaks",
    "guards": [
     "asset-declaration 5.17 件數",
-    "asset-declaration AS-8"
+    "asset AS-8"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "                UncountReference(edge.kind);\n",
@@ -971,7 +971,7 @@
    "what": "a dependency whose loader is preregistered is skipped instead of waiting",
    "guards": [
     "asset-declaration 5.17 (4)",
-    "asset-declaration AS-13"
+    "asset AS-13"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "!loaders_.contains(slot) && !preregistered_.contains(slot)) {",
@@ -985,7 +985,7 @@
    "what": "an edge to an entry of another type is held",
    "guards": [
     "asset-declaration 5.17 (3)",
-    "asset-declaration AS-13"
+    "asset AS-13"
    ],
    "file": "engine/modules/asset/src/AssetStore.cpp",
    "find": "            } else if (entries_[found->second].catalog.type != declared.typeName) {",
@@ -999,7 +999,7 @@
    "what": "a dependency not finished does not keep the status Incomplete",
    "guards": [
     "asset-declaration 5.17",
-    "asset-declaration AS-13"
+    "asset AS-13"
    ],
    "file": "engine/modules/asset/src/AssetSnapshot.cpp",
    "find": "        default: unfinished = true; continue;",
@@ -1047,6 +1047,117 @@
    "target": "gyo_asset_tests",
    "cases": "loader: with a path index*",
    "expect": "a\\ path\\ two\\ entries\\ have\\ is\\ not\\ AmbiguousReference"
+  },
+  {
+   "id": "as-store-shutdown-waits-running",
+   "what": "Shutdown(Discard) returns while a job is still in its loader (only the Drain wait remains): the work world_asset's OnDestroy stops has not stopped when it returns",
+   "guards": [
+    "asset AS-8",
+    "asset-declaration 5.8",
+    "orchestration O-15"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            runningDone_.wait(wait, [this] { return running_.load() == 0; });",
+   "replace": "            (void)wait;",
+   "target": "gyo_asset_tests",
+   "cases": "store: Shutdown waits for a job that is already in its loader*",
+   "expect": "\\[as\\-shutdown\\-waits\\-running\\]"
+  },
+  {
+   "id": "as-store-preregister-not-taken",
+   "what": "a loader type already registered is preregistered for a format it does not take (recorded, so requests of that format wait for nothing)",
+   "guards": [
+    "asset AS-12",
+    "asset-declaration 5.4"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            if (registered != nullptr &&\n",
+   "replace": "            if (false && registered != nullptr &&\n",
+   "target": "gyo_asset_tests",
+   "cases": "store: preregistering a format its registered loader does not take*",
+   "expect": "\\[as\\-store\\-preregister\\-not\\-taken\\]"
+  },
+  {
+   "id": "as-store-read-other-store",
+   "what": "Read does not check that the Handle's core is this store's: a Handle of another store with the same entry index and life reads this store's value",
+   "guards": [
+    "asset AS-6"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": " || body->drops != drops_",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: a Handle of another store reads as null*",
+   "expect": "\\[as\\-store\\-read\\-other\\-store\\]"
+  },
+  {
+   "id": "as-store-edge-reloads-failed",
+   "what": "a request (and so an edge) does not judge a Failed info again: a parent finishing after its dependency failed does not read it again (approved 5.5, as Bevy's load_dependency)",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        const bool reloading = Rejudge(index, entry, info);",
+   "replace": "        const bool reloading = false;",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a failed dependency is read again by each parent*",
+   "expect": "\\[as\\-store\\-edge\\-reloads\\-failed\\]"
+  },
+  {
+   "id": "as-store-noloader-then-waits",
+   "what": "judging a Failed(NoLoader) info again never makes it wait: after its loader is preregistered a request leaves it Failed (design review r1)",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.4"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        Judgment judgment = Judge(entry);\n        if (judgment.state == AssetState::Failed && judgment.failure->code == info.failure->code) return false;",
+   "replace": "        Judgment judgment = Judge(entry);\n        if (judgment.state == AssetState::WaitingForLoader) return false;\n        if (judgment.state == AssetState::Failed && judgment.failure->code == info.failure->code) return false;",
+   "target": "gyo_asset_tests",
+   "cases": "store: a Failed(NoLoader) asset waits once its loader is preregistered*",
+   "expect": "\\[as\\-store\\-noloader\\-then\\-waits\\]"
+  },
+  {
+   "id": "as-snapshot-root-failed",
+   "what": "a root that failed itself is not Failed with its dependencies (Complete when it has no edges) (design review r16)",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/AssetSnapshot.cpp",
+   "find": "            if (record == root) rootFailed = true;\n            continue;",
+   "replace": "            continue;",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a parent that fails to decode*",
+   "expect": "\\[as\\-snapshot\\-root\\-failed\\]"
+  },
+  {
+   "id": "as-store-pump-one-round",
+   "what": "maintenance takes one round of drops only: the drops the removed infos' edges push stay for the next Pump, so a chain outlives its head",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            // Removed values (and the holds of their edges, which may push\n            // more drops for the next round) go here, outside the lock.\n        }",
+   "replace": "            // Removed values (and the holds of their edges, which may push\n            // more drops for the next round) go here, outside the lock.\n            break;\n        }",
+   "target": "gyo_asset_tests",
+   "cases": "depend: dropping the head of a chain*",
+   "expect": "\\[as\\-store\\-pump\\-to\\-empty\\]"
+  },
+  {
+   "id": "as-store-edge-holds-nothing",
+   "what": "a Held edge keeps no hold on its target: the shared dependency of a diamond is requested again instead of hit",
+   "guards": [
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                edge.hold = std::move(body);\n                edge.kind = CountReference(branch);",
+   "replace": "                edge.kind = CountReference(branch);",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a diamond reads its shared dependency once*",
+   "expect": "\\[as\\-store\\-edge\\-holds\\]"
   }
  ]
 }

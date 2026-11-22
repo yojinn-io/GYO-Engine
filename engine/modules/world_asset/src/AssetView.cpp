@@ -1,15 +1,24 @@
 #include "engine/world_asset/AssetView.hpp"
 
-#include <algorithm>
 #include <typeindex>
+#include <unordered_set>
 
 namespace GYO::Engine::WorldAsset {
 
 namespace {
 
-void AddOnce(std::vector<Asset::AssetId>& list, const Asset::AssetId& id) {
-    if (std::find(list.begin(), list.end(), id) == list.end()) list.push_back(id);
-}
+// A list of ids in the order first added, each once (a set beside it, so a group is O(n), not O(n^2)).
+class OrderedIds final {
+public:
+    explicit OrderedIds(std::vector<Asset::AssetId>& list) : list_(list) {}
+    void Add(const Asset::AssetId& id) {
+        if (seen_.insert(id).second) list_.push_back(id);
+    }
+
+private:
+    std::vector<Asset::AssetId>& list_;
+    std::unordered_set<Asset::AssetId> seen_;
+};
 
 bool Finished(const Asset::AssetState state) {
     return state == Asset::AssetState::Loaded || state == Asset::AssetState::Failed;
@@ -63,11 +72,14 @@ const std::string* AssetView::DigestOf(const Asset::AssetRecord* record) {
 
 AssetReadiness AssetView::Ready(const std::span<const UntypedHandle> handles) const {
     AssetReadiness readiness;
+    OrderedIds ids(readiness.ids);
+    OrderedIds skippedIds(readiness.skipped);
+    OrderedIds waitingIds(readiness.waitingForLoader);
     for (const UntypedHandle& handle : handles) {
         const Asset::Detail::HandleBody* body = handle.body_.get();
         const Asset::AssetState state = StateOf(body);
         const Asset::AssetId& id = handle.Id();
-        if (!id.Empty()) AddOnce(readiness.ids, id);
+        if (!id.Empty()) ids.Add(id);
         if (body != nullptr && body->failure) {
             // Refused at the request level: finished, failed, no item and no dependency.
             ++readiness.failed;
@@ -91,9 +103,9 @@ AssetReadiness AssetView::Ready(const std::span<const UntypedHandle> handles) co
         }
         if (!Finished(state)) readiness.allFinished = false;
         const Asset::DependencyStatus dependencies = snapshot_.WithDependencies(id);
-        for (const Asset::AssetId& reached : dependencies.ids) AddOnce(readiness.ids, reached);
-        for (const Asset::AssetId& skipped : dependencies.skipped) AddOnce(readiness.skipped, skipped);
-        for (const Asset::AssetId& waiting : dependencies.waiting) AddOnce(readiness.waitingForLoader, waiting);
+        for (const Asset::AssetId& reached : dependencies.ids) ids.Add(reached);
+        for (const Asset::AssetId& skipped : dependencies.skipped) skippedIds.Add(skipped);
+        for (const Asset::AssetId& waiting : dependencies.waiting) waitingIds.Add(waiting);
         for (const Asset::DependencyFailure& failure : dependencies.failures) {
             readiness.failures.push_back(
                 AssetReadyFailure{id, failure.parent, failure.reference, failure.writtenPath, failure.code});

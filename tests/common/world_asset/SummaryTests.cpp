@@ -51,7 +51,8 @@ TEST_CASE("summary: two catalogs listing the entries in different orders give th
     Frame(*first);
     Frame(*second);
     // The stores' internal indices differ: the catalogs list the entries in reverse orders.
-    REQUIRE(HeldOf(*first, "S").handles.front().Body()->entry != HeldOf(*second, "S").handles.front().Body()->entry);
+    REQUIRE(Asset::Detail::HandleAccess::Body(HeldOf(*first, "S").handles.front())->entry !=
+            Asset::Detail::HandleAccess::Body(HeldOf(*second, "S").handles.front())->entry);
     CHECK_MESSAGE(SummaryOf(*first) == SummaryOf(*second),
                   "[aw-summary-catalog-order] the Summary depends on the order the catalog lists its entries in");
     // Control: other Handles give another Summary (the Handles are hashed at all).

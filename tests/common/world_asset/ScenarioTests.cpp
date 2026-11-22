@@ -93,7 +93,7 @@ TEST_CASE("scenario: generate, share, load a save (BuildNewFirst, DropOldFirst),
     description.worlds.push_back(AuthorWorld("View"));
     auto product = Build(std::move(description), Units({.discardWatch = true}));
     O::Product& p = *product;
-    const Asset::AssetStore& store = StoreOf(p);
+    const Asset::AssetStoreDiagnostics& store = StoreOf(p);
 
     // Step 1: the World generates in two batches; between frames the jobs finish a few at a time (G-1: the
     // apply System runs every generating frame, or the view would never change and generation never end).
@@ -268,6 +268,34 @@ TEST_CASE("scenario: generate, share, load a save (BuildNewFirst, DropOldFirst),
     CHECK_MESSAGE(TheDiscardRecord().counts.jobsDiscarded == 1, "[aw-discarded] the unfinished job was not discarded");
     CHECK(TheDiscardRecord().counts.jobsQueued == 8);
     AssetTest::CheckEquations(TheDiscardRecord().counts);
+}
+
+TEST_CASE("scenario: two Worlds of a Product share one store: one read, one value (AS-1)") {
+    Fresh fresh;
+    Content content("one-store");
+    content.Add("a.one", "text", "a/one.txt", "one").Write();
+    AssetTest::ControlledExecutor executor(AssetTest::ControlledExecutor::Mode::RunNow);
+    O::ProductDescription description;
+    description.name = "one-store";
+    WA::AssetOptions options;
+    options.contentRoot = content.Root();
+    options.executor = &executor;
+    description.options.Set(options);
+    description.worlds.push_back(AuthorWorld("A"));
+    description.worlds.push_back(AuthorWorld("B"));
+    auto product = Build(std::move(description), Units());
+    O::Product& p = *product;
+    OrdersOf(p, "A").load = {"a.one"};
+    Frame(p);
+    OrdersOf(p, "B").load = {"a.one"};
+    Frame(p);
+    Frame(p);
+    const Text* inA = ViewOf(p, "A").Get(HeldOf(p, "A").handles.front());
+    const Text* inB = ViewOf(p, "B").Get(HeldOf(p, "B").handles.front());
+    REQUIRE(inA != nullptr);
+    REQUIRE(inB != nullptr);
+    CHECK_MESSAGE(inA == inB, "[aw-one-store-shared] the two Worlds read different objects for one id");
+    CHECK(StoreOf(p).Counts().fileReads == 1);
 }
 
 }  // namespace WorldAssetTest

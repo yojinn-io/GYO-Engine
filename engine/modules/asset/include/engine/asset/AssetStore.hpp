@@ -216,6 +216,8 @@ private:
                                                         std::string_view typeName);
 [[nodiscard]] std::shared_ptr<const void> Read(const StoreState& state, const HandleBody* body,
                                                std::type_index type);
+[[nodiscard]] AssetStoreCounts Counts(const StoreState& state);
+[[nodiscard]] AssetProbe Probe(const StoreState& state, const AssetId& id);
 
 } // namespace Detail
 
@@ -258,13 +260,30 @@ private:
     Detail::StoreState* state_;
 };
 
+// Only the store's diagnostic reads: the counts of 5.8 and the store's own read
+// of one id (AssetProbe). No Request, Read, Pump, Snapshot or Shutdown. What
+// world_asset puts in the Product's buffer next to the registry, for tests and
+// tools that read the counts (a System reads states through AssetView, AS-11).
+class AssetStoreDiagnostics final {
+public:
+    [[nodiscard]] AssetStoreCounts Counts() const { return Detail::Counts(*state_); }
+    // NotRequested for an id that is in no catalog.
+    [[nodiscard]] AssetProbe Probe(const AssetId& id) const { return Detail::Probe(*state_, id); }
+
+    explicit AssetStoreDiagnostics(const Detail::StoreState& state) : state_(&state) {}
+
+private:
+    const Detail::StoreState* state_;
+};
+
 // How Shutdown treats jobs not finished (5.8, X-6).
 enum class AssetShutdown : std::uint8_t {
     // Wait until no job is waiting or in flight (the jobs of dependencies that
     // finishing jobs queue included), then stop. The executor must still be
     // running jobs.
     Drain = 1,
-    // Stop at once; jobs not finished count as discarded.
+    // Start no job and submit none; jobs not finished count as discarded (the
+    // ones already in a loader are still waited for).
     Discard,
 };
 
@@ -281,6 +300,7 @@ public:
     AssetStore& operator=(const AssetStore&) = delete;
 
     [[nodiscard]] AssetLoaderRegistry Loaders() const { return AssetLoaderRegistry(*state_); }
+    [[nodiscard]] AssetStoreDiagnostics Diagnostics() const { return AssetStoreDiagnostics(*state_); }
 
     // A request (5.5). Refused at the request level, without the lock and
     // without touching any info, when the id is in no catalog (UnknownId) or
@@ -308,11 +328,12 @@ public:
     void Pump();
 
     // The value of the asset the Handle holds, under the read lock; null when
-    // it is not loaded, the Handle has no core or the value is not a T.
+    // it is not loaded, the Handle has no core, the core is another store's or
+    // the value is not a T.
     template <class T>
     [[nodiscard]] std::shared_ptr<const T> Read(const Handle<T>& handle) const {
         return std::static_pointer_cast<const T>(
-            Detail::Read(*state_, handle.Body().get(), std::type_index(typeid(T))));
+            Detail::Read(*state_, Detail::HandleAccess::Body(handle).get(), std::type_index(typeid(T))));
     }
 
     // Changes whenever an info does (created, a state, a value, an edge,
@@ -331,10 +352,14 @@ public:
     // Stops (5.8, X-6): with Drain, first waits until no job is waiting or in
     // flight. Then no job is started or submitted, the queue of waiting jobs is
     // emptied, jobs not finished count as discarded, every info goes and
-    // Handles dropped later push nothing. Waits for a job that is submitting
-    // to return from Submit; does not wait for running jobs, which find the
-    // store shut down and keep nothing. Only the first call acts. Not to be
-    // called from a job.
+    // Handles dropped later push nothing. In both modes it then waits for the
+    // jobs already started (reading or in a loader) to finish: they find the
+    // store shut down, keep nothing and destroy their values before Shutdown
+    // returns (O-15: the work an OnDestroy stops has stopped when it returns).
+    // Jobs submitted and not started do not run their loader. It also waits for
+    // a job that is submitting to return from Submit. Only the first call acts.
+    // Not to be called from a job, nor while holding something a loader waits
+    // for.
     void Shutdown(AssetShutdown mode);
 
 private:

@@ -80,8 +80,8 @@ TEST_CASE("depend: dropping the head of a chain removes the chain at the next ma
     }
     store.Pump();
     for (const char* id : {"a", "b", "c"}) {
-        CAPTURE(std::string(id));
-        CHECK(StateOf(store, id) == AssetState::NotRequested);
+        CHECK_MESSAGE(StateOf(store, id) == AssetState::NotRequested,
+                      "[as-store-pump-to-empty] " << id << " outlived the head of its chain after one Pump");
     }
     CHECK(store.Counts().removals == 3);
 }
@@ -99,7 +99,8 @@ TEST_CASE("depend: a diamond reads its shared dependency once") {
     CHECK(TheScript().CallsOf("d") == 1);
     CHECK(store.Counts().fileReads == 4);
     CHECK(StatusOf(store, "a").state == DependencyState::Complete);
-    CHECK(store.Counts().referenceHits == 1);
+    CHECK_MESSAGE(store.Counts().referenceHits == 1,
+                  "[as-store-edge-holds] the second parent's edge did not hit the dependency the first edge holds");
     CheckEquations(store.Counts());
 }
 
@@ -298,6 +299,36 @@ TEST_CASE("depend: an ancestor recovers when a failed dependency is loaded again
                   "the ancestor did not recover after the dependency loaded");
 }
 
+TEST_CASE("depend: a failed dependency is read again by each parent that finishes after it (5.5, as Bevy)") {
+    // A, B -> X; X's file is missing. A finishes and queues X; X fails; B finishes later: its edge is a request,
+    // and a request judges a Failed info again, so X is read again (Bevy's load_dependency does the same). A
+    // parent that finishes while X is still queued only hits it.
+    Fresh fresh;
+    TestContent content("failed-dependency-again");
+    content.Add("a", "linked", "a.links", "probe:x").Add("b", "linked", "b.links", "probe:x");
+    content.Add("x", "probe", "x.probe"); // no file: NotFound
+    ControlledExecutor executor;
+    Asset::AssetStore store(content.Entries(), content.Options(), &executor);
+    RegisterTestLoaders(store);
+    const Asset::Handle<Linked> a = store.Request<Linked>(AssetId("a"));
+    const Asset::Handle<Linked> b = store.Request<Linked>(AssetId("b"));
+    REQUIRE(executor.Pending() == 2);
+    executor.RunNext(); // a: queues x behind b
+    REQUIRE(executor.RunAt(1)); // x fails
+    CHECK(FailureOf(store, "x") == AssetLoadFailureCode::NotFound);
+    CHECK(store.Probe(AssetId("x")).attempts == 1);
+    executor.RunAll(); // b finishes: its edge queues x again, which fails again
+    CHECK_MESSAGE(store.Probe(AssetId("x")).attempts == 2,
+                  "[as-store-edge-reloads-failed] a parent finishing after its dependency failed did not read it again");
+    const auto counts = store.Counts();
+    CHECK(counts.fileReads == 4); // a, x, b, x
+    CHECK(counts.jobsFailed == 2);
+    CHECK(counts.hitsReloading == 0); // the reload was an edge's, not a request's
+    CheckEquations(counts);
+    CHECK(StatusOf(store, "a").state == DependencyState::Failed);
+    CHECK(StatusOf(store, "b").state == DependencyState::Failed);
+}
+
 TEST_CASE("depend: an edge-level failure never recovers") {
     Fresh fresh;
     TestContent content("edge-never");
@@ -325,6 +356,8 @@ TEST_CASE("depend: a parent that fails to decode loads none of its dependencies"
     const Asset::Handle<Linked> p = store.Request<Linked>(AssetId("p"));
     executor.RunAll();
     CHECK(FailureOf(store, "p") == AssetLoadFailureCode::LoaderFailed);
+    CHECK_MESSAGE(StatusOf(store, "p").state == DependencyState::Failed,
+                  "[as-snapshot-root-failed] a root that failed itself is not Failed with its dependencies");
     CHECK(StateOf(store, "z") == AssetState::NotRequested);
     CHECK(store.Counts().references == 0);
 }

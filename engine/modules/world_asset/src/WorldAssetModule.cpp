@@ -82,10 +82,11 @@ void WorldAssetModule::Configure(Orchestration::ProductSetup& setup) {
                                       (failure.detail.empty() ? std::string() : " (" + failure.detail + ")"));
         }
     }
-    Asset::AssetStore& store = setup.Buffer().Create<Asset::AssetStore>(
-        std::span<const Asset::CatalogEntry>(entries), StoreOptionsOf(options), options.executor);
-    store_ = &store;
+    store_ = std::make_unique<Asset::AssetStore>(std::span<const Asset::CatalogEntry>(entries), StoreOptionsOf(options),
+                                                 options.executor);
+    Asset::AssetStore& store = *store_;
     setup.Buffer().Create<Asset::AssetLoaderRegistry>(store.Loaders());
+    setup.Buffer().Create<Asset::AssetStoreDiagnostics>(store.Diagnostics());
     if (auto registered = store.Loaders().Register<Asset::TextLoader>(); !registered) {
         setup.Report("WA-E2", "registering the text loader failed: " +
                                   std::string(Asset::ToString(registered.error().code)) + ": " + registered.error().message);
@@ -105,7 +106,7 @@ void WorldAssetModule::Build(Orchestration::WorldSetup& setup) {
     // A World's start (5.6): maintenance first, so a DropOldFirst replacement's old World's drops are taken
     // before anything here requests, then the view. Requests made later in the prepare functions, beforeSwap or
     // game initialization hit what is loaded; new ones enter the view at the next apply point (G-3).
-    Asset::AssetStore* store = store_;
+    Asset::AssetStore* store = store_.get();
     setup.Prepare([store](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         store->Pump();
         world.SetResource(Detail::AssetAccess::MakeRequests(*store));

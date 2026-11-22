@@ -1,12 +1,12 @@
 {
  "version": 1,
- "description": "Declared mutants of step 3 of the asset batch (world_asset; docs/architecture/target/v2/asset-declaration.zh-Hant.md, sections 9 and 10): (4), (8) and (10) of section 10, one 'add that member' mutant per compile-failure sample, and the hash of 5.9.1 (AS-6). Each guards a Design Invariant written there (AS-4, AS-6, AS-10 (a), AS-11) or a rule of 5.6, 5.7, 5.9.1, to be moved to target/v2/asset.zh-Hant.md in step 6. Run: python3 -B tests/common/mutation/run_mutations.py --build-dir build/target/_build/core --catalog tests/common/world_asset/mutations.json --cmake <cmake>",
+ "description": "Declared mutants of world_asset (docs/architecture/target/v2/asset.zh-Hant.md; declaration docs/architecture/target/v2/asset-declaration.zh-Hant.md, sections 9, 10 and 30.3): the scenario, view and summary tests, one 'add that member' mutant per compile-failure sample, and the hash of 5.9.1 (AS-6). Each guards a Design Invariant of the formal page (guards 'asset AS-n') or a rule of the declaration. Run: python3 -B tests/common/mutation/run_mutations.py --build-dir build/target/_build/core --catalog tests/common/world_asset/mutations.json --cmake <cmake>",
  "mutants": [
   {
    "id": "aw-apply-mid-frame",
    "what": "(4) the apply System pulls the view again in the middle of the frame (a second mount at PostUpdate): a System later in the same frame sees a job that finished in that frame",
    "guards": [
-    "asset-declaration AS-4",
+    "asset AS-4",
     "asset-declaration 5.6 一幀之內看到同一份"
    ],
    "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
@@ -21,7 +21,7 @@
    "what": "(8) the view does not compare lives: an older view gives the old life's Loaded (and value) for a Handle of a newer life",
    "guards": [
     "asset-declaration 5.7",
-    "asset-declaration AS-4"
+    "asset AS-4"
    ],
    "file": "engine/modules/world_asset/src/AssetView.cpp",
    "find": "    if (record != nullptr && record->life == body->life) return record;",
@@ -34,12 +34,12 @@
    "id": "aw-hash-index",
    "what": "a Handle's hash also writes the store's internal index of its entry: two catalogs listing the entries in different orders give different Summaries",
    "guards": [
-    "asset-declaration AS-6",
+    "asset AS-6",
     "asset-declaration 5.9.1"
    ],
    "file": "engine/modules/asset/include/engine/asset/Handle.hpp",
    "find": "void HashValue(Sink& sink, const Handle<T>& handle) {\n    HashValue(sink, handle.Id());\n",
-   "replace": "void HashValue(Sink& sink, const Handle<T>& handle) {\n    HashValue(sink, handle.Id());\n    HashValue(sink, handle.Body() ? handle.Body()->entry : std::size_t{0});\n",
+   "replace": "void HashValue(Sink& sink, const Handle<T>& handle) {\n    HashValue(sink, handle.Id());\n    HashValue(sink, Detail::HandleAccess::Body(handle) ? Detail::HandleAccess::Body(handle)->entry : std::size_t{0});\n",
    "target": "gyo_world_asset_tests",
    "cases": "summary: two catalogs*",
    "expect": "\\[aw\\-summary\\-catalog\\-order\\]"
@@ -48,7 +48,7 @@
    "id": "aw-sample-handle-state",
    "what": "(10) a Handle gets State(): the AS-11 sample HANDLE_STATE compiles",
    "guards": [
-    "asset-declaration AS-11"
+    "asset AS-11"
    ],
    "file": "engine/modules/asset/include/engine/asset/Handle.hpp",
    "find": "    // Names nothing.\n    Handle() = default;\n",
@@ -61,7 +61,7 @@
    "id": "aw-sample-handle-get",
    "what": "a Handle gets Get(): the AS-11 sample HANDLE_GET compiles",
    "guards": [
-    "asset-declaration AS-11"
+    "asset AS-11"
    ],
    "file": "engine/modules/asset/include/engine/asset/Handle.hpp",
    "find": "    // Names nothing.\n    Handle() = default;\n",
@@ -74,7 +74,7 @@
    "id": "aw-sample-requests-state",
    "what": "AssetRequests gets State(handle): the AS-11 sample REQUESTS_STATE compiles",
    "guards": [
-    "asset-declaration AS-11"
+    "asset AS-11"
    ],
    "file": "engine/modules/world_asset/include/engine/world_asset/AssetRequests.hpp",
    "find": "\nprivate:\n    friend struct Detail::AssetAccess;\n    explicit AssetRequests(",
@@ -87,7 +87,7 @@
    "id": "aw-sample-requests-store",
    "what": "AssetRequests gives its store: the AS-11 sample REQUESTS_STORE compiles",
    "guards": [
-    "asset-declaration AS-11"
+    "asset AS-11"
    ],
    "file": "engine/modules/world_asset/include/engine/world_asset/AssetRequests.hpp",
    "find": "\nprivate:\n    friend struct Detail::AssetAccess;\n    explicit AssetRequests(",
@@ -100,11 +100,11 @@
    "id": "aw-sample-view-get-writable",
    "what": "AssetView::Get gives a writable T*: the AS-10 (a) sample VIEW_GET_WRITABLE compiles",
    "guards": [
-    "asset-declaration AS-10 (a)"
+    "asset AS-10 (a)"
    ],
    "file": "engine/modules/world_asset/include/engine/world_asset/AssetView.hpp",
-   "find": "[[nodiscard]] const T* Get(const Asset::Handle<T>& handle) const {\n        const void* value = ValueOf(Matching(handle.Body().get()), typeid(T));\n        return static_cast<const T*>(value);",
-   "replace": "[[nodiscard]] T* Get(const Asset::Handle<T>& handle) const {\n        void* value = const_cast<void*>(ValueOf(Matching(handle.Body().get()), typeid(T)));\n        return static_cast<T*>(value);",
+   "find": "[[nodiscard]] const T* Get(const Asset::Handle<T>& handle) const {\n        const void* value = ValueOf(Matching(Asset::Detail::HandleAccess::Body(handle).get()), typeid(T));\n        return static_cast<const T*>(value);",
+   "replace": "[[nodiscard]] T* Get(const Asset::Handle<T>& handle) const {\n        void* value = const_cast<void*>(ValueOf(Matching(Asset::Detail::HandleAccess::Body(handle).get()), typeid(T)));\n        return static_cast<T*>(value);",
    "target": "gyo_world_asset_tests",
    "expect": "variant\\ VIEW_GET_WRITABLE\\ compiled",
    "expect_build_failure": true
@@ -113,8 +113,8 @@
    "id": "aw-sample-view-mutation",
    "what": "AssetView gets a mutating member (Replace): the AS-10 (a) sample VIEW_MUTATION compiles",
    "guards": [
-    "asset-declaration AS-10 (a)",
-    "asset-declaration AS-4"
+    "asset AS-10 (a)",
+    "asset AS-4"
    ],
    "file": "engine/modules/world_asset/include/engine/world_asset/AssetView.hpp",
    "find": "    [[nodiscard]] std::vector<Asset::FailureRecord> Failures() const { return snapshot_.Failures(); }\n",
@@ -127,7 +127,7 @@
    "id": "aw-sample-view-copy-assign",
    "what": "AssetView becomes copy assignable: the AS-10 (a) sample VIEW_COPY_ASSIGN compiles",
    "guards": [
-    "asset-declaration AS-10 (a)"
+    "asset AS-10 (a)"
    ],
    "file": "engine/modules/world_asset/include/engine/world_asset/AssetView.hpp",
    "find": "    AssetView& operator=(const AssetView&) = delete;\n",
@@ -140,13 +140,188 @@
    "id": "aw-sample-view-construct",
    "what": "AssetView's constructor becomes public: the AS-10 (a) sample VIEW_CONSTRUCT compiles",
    "guards": [
-    "asset-declaration AS-10 (a)"
+    "asset AS-10 (a)"
    ],
    "file": "engine/modules/world_asset/include/engine/world_asset/AssetView.hpp",
    "find": "private:\n    friend struct Detail::AssetAccess;\n    explicit AssetView(",
    "replace": "    friend struct Detail::AssetAccess;\n    explicit AssetView(",
    "target": "gyo_world_asset_tests",
    "expect": "variant\\ VIEW_CONSTRUCT\\ compiled",
+   "expect_build_failure": true
+  },
+  {
+   "id": "aw-one-store-per-world",
+   "what": "world_asset makes a store for each World (the catalog kept in the Product's buffer): two Worlds decode the same id apart and read different objects",
+   "guards": [
+    "asset AS-1"
+   ],
+   "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
+   "find": "    setup.OnDestroy([&store] { store.Shutdown(Asset::AssetShutdown::Discard); });\n}\n\nvoid WorldAssetModule::Build(Orchestration::WorldSetup& setup) {\n    const WorldAssetOptions& options = OptionsOf(setup.Options<WorldAssetOptions>());\n    Kernel::Registrar& r = setup.Registrar();\n    r.Resource<AssetRequests>({.name = \"AssetRequests\"});\n    r.Resource<AssetView>({.name = \"AssetView\"});\n    r.AddSystem<&ApplyAssets>(Mounted(\"ApplyAssets\", options.applySchedule, options.applyStage));\n\n    // A World's start (5.6): maintenance first, so a DropOldFirst replacement's old World's drops are taken\n    // before anything here requests, then the view. Requests made later in the prepare functions, beforeSwap or\n    // game initialization hit what is loaded; new ones enter the view at the next apply point (G-3).\n    Asset::AssetStore* store = store_.get();\n",
+   "replace": "    setup.OnDestroy([&store] { store.Shutdown(Asset::AssetShutdown::Discard); });\n    setup.Buffer().Create<std::vector<Asset::CatalogEntry>>(entries);\n    setup.Buffer().Create<AssetOptions>(options);\n}\n\nvoid WorldAssetModule::Build(Orchestration::WorldSetup& setup) {\n    const WorldAssetOptions& options = OptionsOf(setup.Options<WorldAssetOptions>());\n    Kernel::Registrar& r = setup.Registrar();\n    r.Resource<AssetRequests>({.name = \"AssetRequests\"});\n    r.Resource<AssetView>({.name = \"AssetView\"});\n    r.AddSystem<&ApplyAssets>(Mounted(\"ApplyAssets\", options.applySchedule, options.applyStage));\n\n    // A World's start (5.6): maintenance first, so a DropOldFirst replacement's old World's drops are taken\n    // before anything here requests, then the view. Requests made later in the prepare functions, beforeSwap or\n    // game initialization hit what is loaded; new ones enter the view at the next apply point (G-3).\n    const auto* keptEntries = std::as_const(setup.ProductBuffer()).Find<std::vector<Asset::CatalogEntry>>();\n    const auto* keptOptions = std::as_const(setup.ProductBuffer()).Find<AssetOptions>();\n    static std::vector<std::shared_ptr<Asset::AssetStore>> perWorld;\n    perWorld.push_back(std::make_shared<Asset::AssetStore>(std::span<const Asset::CatalogEntry>(*keptEntries),\n                                                           StoreOptionsOf(*keptOptions), keptOptions->executor));\n    (void)perWorld.back()->Loaders().Register<Asset::TextLoader>();\n    Asset::AssetStore* store = perWorld.back().get();\n",
+   "target": "gyo_world_asset_tests",
+   "cases": "scenario: two Worlds of a Product share one store*",
+   "expect": "\\[aw\\-one\\-store\\-shared\\]"
+  },
+  {
+   "id": "aw-prepare-no-maintenance",
+   "what": "the prepare function does not run maintenance first: a DropOldFirst replacement's old World's drops are not taken before the new World requests, so an id held only by the old World is revived instead of read again",
+   "guards": [
+    "asset-declaration 5.6"
+   ],
+   "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
+   "find": "        store->Pump();\n        world.SetResource(Detail::AssetAccess::MakeRequests(*store));",
+   "replace": "        world.SetResource(Detail::AssetAccess::MakeRequests(*store));",
+   "target": "gyo_world_asset_tests",
+   "cases": "scenario: generate*",
+   "expect": "\\[aw\\-drop\\-old\\-reread\\]"
+  },
+  {
+   "id": "aw-apply-no-maintenance",
+   "what": "the apply System does not run maintenance: an id no World holds stays alive",
+   "guards": [
+    "asset-declaration 5.6"
+   ],
+   "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
+   "find": "    Asset::AssetStore& store = Detail::AssetAccess::Store(*requests);\n    store.Pump();",
+   "replace": "    Asset::AssetStore& store = Detail::AssetAccess::Store(*requests);",
+   "target": "gyo_world_asset_tests",
+   "cases": "scenario: generate*",
+   "expect": "\\[aw\\-unwanted\\-removed\\]"
+  },
+  {
+   "id": "aw-no-on-destroy-shutdown",
+   "what": "world_asset registers no OnDestroy: the store is not stopped at the Product's end, and the unfinished job is not counted as discarded while the Product's buffer is there",
+   "guards": [
+    "asset AS-8",
+    "orchestration O-15"
+   ],
+   "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
+   "find": "    setup.OnDestroy([&store] { store.Shutdown(Asset::AssetShutdown::Discard); });",
+   "replace": "    (void)store;",
+   "target": "gyo_world_asset_tests",
+   "cases": "scenario: generate*",
+   "expect": "\\[aw\\-discarded\\]"
+  },
+  {
+   "id": "aw-prepare-no-view",
+   "what": "the prepare function puts an empty view in the World: beforeSwap sees Queued for what is loaded",
+   "guards": [
+    "asset AS-4",
+    "asset-declaration 5.6"
+   ],
+   "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
+   "find": "        world.SetResource(Detail::AssetAccess::MakeView(store->Snapshot()));\n        return {};",
+   "replace": "        world.SetResource(Detail::AssetAccess::MakeView(Asset::AssetSnapshot{}));\n        return {};",
+   "target": "gyo_world_asset_tests",
+   "cases": "scenario: generate*",
+   "expect": "\\[aw\\-before\\-swap\\-loaded\\]"
+  },
+  {
+   "id": "aw-view-rebuilt-empty",
+   "what": "the apply System rebuilds a removed view empty instead of from the store",
+   "guards": [
+    "asset AS-4"
+   ],
+   "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
+   "find": "        commands.SetResource(Detail::AssetAccess::MakeView(store.Snapshot()));\n        return {};",
+   "replace": "        commands.SetResource(Detail::AssetAccess::MakeView(Asset::AssetSnapshot{}));\n        return {};",
+   "target": "gyo_world_asset_tests",
+   "cases": "view: an AssetView an author removed*",
+   "expect": "\\[aw\\-view\\-rebuilt\\]"
+  },
+  {
+   "id": "aw-waiting-finished",
+   "what": "WaitingForLoader counts as finished in Ready and Unfinished (design review r4)",
+   "guards": [
+    "asset-declaration 5.7"
+   ],
+   "file": "engine/modules/world_asset/src/AssetView.cpp",
+   "find": "    return state == Asset::AssetState::Loaded || state == Asset::AssetState::Failed;",
+   "replace": "    return state == Asset::AssetState::Loaded || state == Asset::AssetState::Failed ||\n           state == Asset::AssetState::WaitingForLoader;",
+   "target": "gyo_world_asset_tests",
+   "cases": "view: a Handle waiting for its loader*",
+   "expect": "\\[aw\\-waiting\\-unfinished\\]"
+  },
+  {
+   "id": "aw-request-failure-complete",
+   "what": "a request-level failure leaves the group complete (design review r5)",
+   "guards": [
+    "asset-declaration 5.7",
+    "asset AS-8"
+   ],
+   "file": "engine/modules/world_asset/src/AssetView.cpp",
+   "find": "            readiness.failures.push_back(AssetReadyFailure{id, {}, id, {}, body->failure->code});\n            readiness.complete = false;",
+   "replace": "            readiness.failures.push_back(AssetReadyFailure{id, {}, id, {}, body->failure->code});",
+   "target": "gyo_world_asset_tests",
+   "cases": "view: request-level failures*",
+   "expect": "\\[aw\\-request\\-failure\\-incomplete\\]"
+  },
+  {
+   "id": "aw-get-ignores-cpp-type",
+   "what": "AssetView::Get does not check the C++ type: a value of another type with the same type name is read as T (design review r9)",
+   "guards": [
+    "asset-declaration 5.7",
+    "asset AS-10 (a)"
+   ],
+   "file": "engine/modules/world_asset/src/AssetView.cpp",
+   "find": "    if (record == nullptr || record->state != Asset::AssetState::Loaded || !record->value || !record->valueType ||\n        *record->valueType != std::type_index(type)) {",
+   "replace": "    (void)type;\n    if (record == nullptr || record->state != Asset::AssetState::Loaded || !record->value || !record->valueType) {",
+   "target": "gyo_world_asset_tests",
+   "cases": "view: Get reads a value only as the C++ type*",
+   "expect": "\\[aw\\-get\\-cpp\\-type\\]"
+  },
+  {
+   "id": "aw-unseen-dependencies-finished",
+   "what": "a Handle the view has not seen leaves dependenciesFinished true (design review r10)",
+   "guards": [
+    "asset-declaration 5.7",
+    "asset AS-4"
+   ],
+   "file": "engine/modules/world_asset/src/AssetView.cpp",
+   "find": "            readiness.allFinished = false;\n            readiness.complete = false;\n            readiness.dependenciesFinished = false;\n            continue;",
+   "replace": "            readiness.allFinished = false;\n            readiness.complete = false;\n            continue;",
+   "target": "gyo_world_asset_tests",
+   "cases": "view: an older view against a newer life*",
+   "expect": "\\[aw\\-unseen\\-dependencies\\-unfinished\\]"
+  },
+  {
+   "id": "aw-world-options-ignored",
+   "what": "Build ignores WorldAssetOptions: a World with the skeleton off that names its own apply schedule fails to build (design review r20)",
+   "guards": [
+    "asset-declaration 5.6",
+    "orchestration O-4"
+   ],
+   "file": "engine/modules/world_asset/src/WorldAssetModule.cpp",
+   "find": "    const WorldAssetOptions& options = OptionsOf(setup.Options<WorldAssetOptions>());",
+   "replace": "    const WorldAssetOptions& options = OptionsOf(nullptr);",
+   "target": "gyo_world_asset_tests",
+   "cases": "view: a World with the skeleton off*",
+   "expect": "\\[aw\\-own\\-schedule\\-built\\]"
+  },
+  {
+   "id": "aw-sample-handle-body",
+   "what": "Handle::Body() becomes public: the AS-11 sample HANDLE_BODY compiles",
+   "guards": [
+    "asset AS-11"
+   ],
+   "file": "engine/modules/asset/include/engine/asset/Handle.hpp",
+   "find": "    // The body (the strong core or the request-level failure), through Detail::HandleAccess only.\n",
+   "replace": "public:\n    // The body (the strong core or the request-level failure), through Detail::HandleAccess only.\n",
+   "target": "gyo_world_asset_tests",
+   "expect": "variant\\ HANDLE_BODY\\ compiled",
+   "expect_build_failure": true
+  },
+  {
+   "id": "aw-sample-handle-life",
+   "what": "Handle::Life() becomes public (Body() stays private): the AS-11 sample HANDLE_LIFE compiles",
+   "guards": [
+    "asset AS-11"
+   ],
+   "file": "engine/modules/asset/include/engine/asset/Handle.hpp",
+   "find": "    // The life of the asset this Handle holds; 0 without a core. Through Detail::HandleAccess only.\n    [[nodiscard]] std::uint64_t Life() const noexcept { return body_ ? body_->life : 0; }\n",
+   "replace": "public:\n    // The life of the asset this Handle holds; 0 without a core. Through Detail::HandleAccess only.\n    [[nodiscard]] std::uint64_t Life() const noexcept { return body_ ? body_->life : 0; }\nprivate:\n",
+   "target": "gyo_world_asset_tests",
+   "expect": "variant\\ HANDLE_LIFE\\ compiled",
    "expect_build_failure": true
   }
  ]

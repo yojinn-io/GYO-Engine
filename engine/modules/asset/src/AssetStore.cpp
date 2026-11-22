@@ -13,9 +13,12 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "engine/asset/ContentPath.hpp"
 #include "engine/asset/ReadWholeFile.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/base/Sha256.hpp"
+#include "engine/io/fs/NativeFileSystem.hpp"
+#include "engine/io/path/Uri.hpp"
 
 namespace GYO::Engine::Asset {
 namespace Detail {
@@ -234,18 +237,46 @@ AssetLoadFailureCode FromFileRead(const FileReadFailureCode code) {
     GYO_UNREACHABLE();
 }
 
-std::string JoinPath(const std::string& root, const std::string& path) {
-    if (root.empty()) return path;
-    if (root.back() == '/') return root + path;
-    return root + "/" + path;
+// The content root made absolute against the current directory once, when the
+// store is made, so jobs on any thread name the same files whatever the
+// current directory is later. A root the OS cannot make absolute is kept as
+// given (reading under it fails with the file's own error).
+AssetStoreOptions WithAbsoluteRoot(AssetStoreOptions options) {
+    if (options.contentRoot.empty()) return options;
+    auto uri = IO::FS::NativeFileUri(options.contentRoot);
+    if (!uri) return options;
+    auto absolute = IO::Path::NativePathFromFileUri(*uri);
+    if (absolute) options.contentRoot = std::move(*absolute);
+    return options;
 }
+
+// Counts a started job down when it leaves Run, however it leaves.
+class RunningJob final {
+public:
+    RunningJob(std::atomic<std::size_t>& running, std::mutex& mutex, std::condition_variable& done)
+        : running_(running), mutex_(mutex), done_(done) {}
+    ~RunningJob() {
+        {
+            const std::lock_guard guard(mutex_);
+            running_.fetch_sub(1);
+        }
+        done_.notify_all();
+    }
+    RunningJob(const RunningJob&) = delete;
+    RunningJob& operator=(const RunningJob&) = delete;
+
+private:
+    std::atomic<std::size_t>& running_;
+    std::mutex& mutex_;
+    std::condition_variable& done_;
+};
 
 } // namespace
 
 class StoreState final : public ContentPathIndex, public std::enable_shared_from_this<StoreState> {
 public:
     StoreState(const std::span<const CatalogEntry> entries, AssetStoreOptions options, AssetExecutor* executor)
-        : options_(std::move(options)), executor_(executor), drops_(std::make_shared<DropQueue>()) {
+        : options_(WithAbsoluteRoot(std::move(options))), executor_(executor), drops_(std::make_shared<DropQueue>()) {
         entries_.reserve(entries.size());
         for (const CatalogEntry& catalog : entries) {
             const bool added = byId_.emplace(catalog.id, entries_.size()).second;
@@ -340,6 +371,9 @@ public:
                 info->state = AssetState::Loading;
                 ++version_;
                 started = Start(entry);
+                // Started: Shutdown waits for it to finish (O-15: when world_asset's OnDestroy returns, no job of
+                // the store is still running).
+                running_.fetch_add(1);
             }
         }
         if (!started.loader) {
@@ -347,6 +381,7 @@ public:
             NotifyProgress();
             return;
         }
+        const RunningJob counted(running_, runningMutex_, runningDone_);
         Outcome outcome = Execute(started);
         Complete(job, std::move(outcome));
     }
@@ -370,8 +405,20 @@ public:
     LoaderRegistrationResult PreregisterLoader(const std::type_index loaderType, const std::string_view typeName,
                                                const std::span<const std::string_view> formats) {
         WriteGuard guard(lock_);
+        // The loader type already registered: it takes the formats it took then and no other, so a format it
+        // does not take would wait for nothing.
+        const ErasedLoader* registered = nullptr;
+        for (const auto& [slot, loader] : loaders_) {
+            if (loader->loaderType == loaderType) registered = loader.get();
+        }
         for (const std::string_view format : formats) {
             const Slot slot{std::string(typeName), std::string(format)};
+            if (registered != nullptr &&
+                std::find(registered->formats.begin(), registered->formats.end(), format) == registered->formats.end()) {
+                return Base::Err(LoaderRegistrationFailure::Make(
+                    LoaderRegistrationFailureCode::FormatNotTaken,
+                    "the loader is registered and does not take this format", slot.first + ", " + slot.second));
+            }
             if (const auto loader = loaders_.find(slot); loader != loaders_.end() &&
                                                          loader->second->loaderType != loaderType) {
                 return Base::Err(LoaderRegistrationFailure::Make(
@@ -395,7 +442,8 @@ public:
     // ---- Reads ----
 
     std::shared_ptr<const void> Read(const HandleBody* body, const std::type_index type) const {
-        if (body == nullptr || !body->drops) return nullptr;
+        // No core, or the core of another store (its index means nothing here).
+        if (body == nullptr || !body->drops || body->drops != drops_) return nullptr;
         ReadGuard guard(lock_);
         const Info* info = entries_[body->entry].info.get();
         if (info == nullptr || info->life != body->life || info->state != AssetState::Loaded) return nullptr;
@@ -474,6 +522,12 @@ public:
                 ++entry.life;
             }
             ++version_;
+        }
+        {
+            // Jobs already in a loader finish (in both modes), find the store shut down and keep nothing; their
+            // values are destroyed before they count down.
+            std::unique_lock wait(runningMutex_);
+            runningDone_.wait(wait, [this] { return running_.load() == 0; });
         }
         std::unique_lock wait(submitMutex_);
         submitDone_.wait(wait, [this] { return submitting_.load() == 0; });
@@ -624,22 +678,39 @@ private:
     Outcome Execute(const Started& started) {
         Outcome outcome;
         fileReads_.fetch_add(1, std::memory_order_relaxed);
-        auto bytes = ReadWholeFile(JoinPath(options_.contentRoot, started.path), started.maxBytes);
-        if (!bytes) {
-            outcome.failure = AssetLoadFailure::Make(FromFileRead(bytes.error().code), bytes.error().message,
-                                                     Base::CauseDetail(bytes.error(), started.id.Text()));
+        std::vector<std::byte> bytes;
+        // Reading and hashing can throw (std::bad_alloc for a large file): the job still fails with a code and
+        // Complete gives its in-flight slot back.
+        try {
+            auto read = ReadWholeFile(JoinContentRoot(options_.contentRoot, started.path), started.maxBytes);
+            if (!read) {
+                outcome.failure = AssetLoadFailure::Make(FromFileRead(read.error().code), read.error().message,
+                                                         Base::CauseDetail(read.error(), started.id.Text()));
+                return outcome;
+            }
+            bytes = std::move(*read);
+            if (options_.sourceDigest) outcome.sourceDigest = Base::Sha256(bytes);
+        } catch (const std::exception& error) {
+            outcome.sourceDigest.reset();
+            outcome.failure = AssetLoadFailure::Make(AssetLoadFailureCode::ReadFailed, "reading the file threw",
+                                                     started.id.Text() + ": " + error.what());
+            return outcome;
+        } catch (...) {
+            outcome.sourceDigest.reset();
+            outcome.failure =
+                AssetLoadFailure::Make(AssetLoadFailureCode::ReadFailed, "reading the file threw", started.id.Text());
             return outcome;
         }
-        if (options_.sourceDigest) outcome.sourceDigest = Base::Sha256(*bytes);
         LoadContext context(started.id, started.path, started.maxBytes, this);
         try {
-            LoadedValue loaded = started.loader->Load(*bytes, started.settings.get(), context);
+            LoadedValue loaded = started.loader->Load(bytes, started.settings.get(), context);
             if (loaded.failure) {
                 outcome.failure = std::move(loaded.failure);
                 return outcome;
             }
             outcome.value = std::move(loaded.value);
             outcome.valueType = started.loader->outputType;
+            outcome.references = context.References();
         } catch (const std::exception& error) {
             outcome.failure =
                 AssetLoadFailure::Make(AssetLoadFailureCode::LoaderThrew, "the loader threw",
@@ -650,7 +721,6 @@ private:
                                                      started.id.Text());
             return outcome;
         }
-        outcome.references = context.References();
         return outcome;
     }
 
@@ -797,6 +867,9 @@ private:
             return edge.target != kNoEntry && (edge.view.status == EdgeStatus::Held ||
                                                edge.view.status == EdgeStatus::Cyclic);
         };
+        // A new component contains one of added's edges: none, no new cycle (and no walk over every info).
+        const std::vector<Edge>& addedEdges = entries_[added].info->edges;
+        if (std::none_of(addedEdges.begin(), addedEdges.end(), graphEdge)) return;
         std::unordered_set<std::size_t> forward{added};
         std::vector<std::size_t> stack{added};
         while (!stack.empty()) {
@@ -874,7 +947,6 @@ private:
             Slot slot{loader->typeName, format};
             if (loaders_.emplace(slot, loader).second) changed.insert(std::move(slot));
         }
-        if (changed.empty()) return; // the same loader again
         for (ParsedEntry& entry : parsed) {
             Entry& target = entries_[entry.entry];
             if (!changed.contains(target.slot)) continue;
@@ -1010,6 +1082,11 @@ private:
     std::atomic<std::size_t> submitting_{0};
     std::mutex submitMutex_;
     std::condition_variable submitDone_;
+    // Jobs started (past the life check, into the file and the loader) and not yet through Complete:
+    // incremented under lock_ (so none starts after shutdown), decremented under runningMutex_.
+    std::atomic<std::size_t> running_{0};
+    std::mutex runningMutex_;
+    std::condition_variable runningDone_;
     std::uint64_t progress_ = 0;
     std::mutex progressMutex_;
     std::condition_variable progressChanged_;
@@ -1032,6 +1109,10 @@ std::shared_ptr<const HandleBody> Request(StoreState& state, const AssetId& id, 
 std::shared_ptr<const void> Read(const StoreState& state, const HandleBody* body, const std::type_index type) {
     return state.Read(body, type);
 }
+
+AssetStoreCounts Counts(const StoreState& state) { return state.Counts(); }
+
+AssetProbe Probe(const StoreState& state, const AssetId& id) { return state.Probe(id); }
 
 } // namespace Detail
 

@@ -42,6 +42,13 @@ bool IsRelativeContentPath(const std::string_view path) noexcept {
     }
 }
 
+std::string JoinContentRoot(const std::string_view contentRoot, const std::string_view relative) {
+    std::string path{contentRoot};
+    if (!path.empty() && path.back() != '/' && path.back() != '\\') path += '/';
+    path += relative;
+    return path;
+}
+
 std::string PathExtension(const std::string_view path) {
     const std::size_t slash = path.rfind('/');
     const std::string_view last = slash == std::string_view::npos ? path : path.substr(slash + 1);

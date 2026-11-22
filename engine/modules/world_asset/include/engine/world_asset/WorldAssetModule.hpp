@@ -5,9 +5,11 @@
 // World it is built into.
 //
 // - Configure (Product level, once): reads AssetOptions from the product description, reads the content's catalog,
-//   Creates the AssetStore and its AssetLoaderRegistry in the Product's buffer (a unit that owns a type Finds the
-//   registry in its own Configure and registers its loader), registers the text loader, and stops the store when
-//   the Product is destroyed (OnDestroy: Shutdown(Discard); the discarded jobs stay in the store's counts).
+//   makes the AssetStore (held by this unit, not put in the Product's buffer: only world_asset requests, reads
+//   and pumps), Creates its AssetLoaderRegistry (a unit that owns a type Finds the registry in its own Configure
+//   and registers its loader) and its AssetStoreDiagnostics (the counts, read-only) in the Product's buffer,
+//   registers the text loader, and stops the store when the Product is destroyed (OnDestroy: Shutdown(Discard),
+//   which returns once no job is in a loader; the discarded jobs stay in the store's counts).
 // - Build (each World): registers AssetRequests and AssetView, mounts the apply System ApplyAssets (Main/First by
 //   default) and gives a prepare function that first runs the store's maintenance and then pulls the view.
 // - ApplyAssets, each frame: maintenance (Pump), then the view pulled again only when the store's version
@@ -18,6 +20,7 @@
 // apply System, not through an exchange function.
 
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -65,8 +68,9 @@ public:
     void Build(Orchestration::WorldSetup& setup) override;
 
 private:
-    // The Product's store, in the Product's buffer (Created in Configure).
-    Asset::AssetStore* store_ = nullptr;
+    // The Product's store, made in Configure. The unit outlives the Product's buffer (O-15: units go last), so
+    // the registry and the diagnostics there never outlive it; OnDestroy has stopped it before then.
+    std::unique_ptr<Asset::AssetStore> store_;
 };
 
 } // namespace GYO::Engine::WorldAsset

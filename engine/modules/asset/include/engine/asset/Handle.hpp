@@ -28,7 +28,8 @@
 //
 // A Handle tells nothing of the store's current state (Design Invariant AS-11):
 // the life it was given is only for a view to tell that it is older than the
-// Handle.
+// Handle, and like the body it is reached through Detail::HandleAccess (the
+// store, world_asset, tests), not by authors.
 
 namespace GYO::Engine::Asset {
 
@@ -57,6 +58,10 @@ public:
     std::optional<AssetLoadFailure> failure;
 };
 
+// The store's and world_asset's access to a Handle's body and life (not for
+// authors: a System reads states through AssetView, AS-11).
+struct HandleAccess;
+
 } // namespace Detail
 
 template <class T>
@@ -68,9 +73,6 @@ public:
 
     [[nodiscard]] const AssetId& Id() const noexcept { return body_ ? body_->id : EmptyId(); }
 
-    // The life of the asset this Handle holds; 0 without a core.
-    [[nodiscard]] std::uint64_t Life() const noexcept { return body_ ? body_->life : 0; }
-
     // The request-level failure (UnknownId, TypeMismatch), or null.
     [[nodiscard]] const AssetLoadFailure* RequestFailure() const noexcept {
         return body_ && body_->failure ? &*body_->failure : nullptr;
@@ -80,12 +82,16 @@ public:
         return left.Id() == right.Id();
     }
 
-    // The store's and world_asset's access to the body; not for authors.
-    [[nodiscard]] const std::shared_ptr<const Detail::HandleBody>& Body() const noexcept { return body_; }
-
     explicit Handle(std::shared_ptr<const Detail::HandleBody> body) : body_(std::move(body)) {}
 
 private:
+    friend struct Detail::HandleAccess;
+
+    // The body (the strong core or the request-level failure), through Detail::HandleAccess only.
+    [[nodiscard]] const std::shared_ptr<const Detail::HandleBody>& Body() const noexcept { return body_; }
+    // The life of the asset this Handle holds; 0 without a core. Through Detail::HandleAccess only.
+    [[nodiscard]] std::uint64_t Life() const noexcept { return body_ ? body_->life : 0; }
+
     static const AssetId& EmptyId() noexcept {
         static const AssetId empty;
         return empty;
@@ -93,6 +99,21 @@ private:
 
     std::shared_ptr<const Detail::HandleBody> body_;
 };
+
+namespace Detail {
+
+struct HandleAccess final {
+    template <class T>
+    [[nodiscard]] static const std::shared_ptr<const HandleBody>& Body(const Handle<T>& handle) noexcept {
+        return handle.Body();
+    }
+    template <class T>
+    [[nodiscard]] static std::uint64_t Life(const Handle<T>& handle) noexcept {
+        return handle.Life();
+    }
+};
+
+} // namespace Detail
 
 // The hash function of a Handle (declaration 5.9.1): its id string only, so a Handle hashes the same in every
 // process and whatever order the catalog lists its entries in (Design Invariant AS-6).

@@ -19,6 +19,13 @@ inline constexpr std::string_view kContentManifestName = "content.json";
 // ':' or control character (bytes below 0x20).
 [[nodiscard]] bool IsRelativeContentPath(std::string_view path) noexcept;
 
+// A file under the content root: contentRoot (a native path in UTF-8) and a
+// relative content path, joined with one '/' (none added when the root already
+// ends with '/' or '\\'). An empty root gives the relative path as it is. The
+// catalog reader (content.json, the catalogs) and the store (an entry's file)
+// both name files this way.
+[[nodiscard]] std::string JoinContentRoot(std::string_view contentRoot, std::string_view relative);
+
 // The extension of a path: what follows the last '.' of its last segment,
 // lowercased (ASCII). Empty when the last segment has no '.' or ends with one;
 // a '.' in a directory name does not count (rule (A) 6 of 5.3).

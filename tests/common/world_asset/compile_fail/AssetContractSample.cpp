@@ -7,6 +7,8 @@
 // (GYO_ASSET_SAMPLE_ACCEPTED) checks a member that does exist with the same form, and must compile.
 //   HANDLE_STATE      a Handle has State()                 -> GYO_ASSET_SAMPLE_HANDLE_HAS_NO_STATE
 //   HANDLE_GET        a Handle has Get()                   -> GYO_ASSET_SAMPLE_HANDLE_HAS_NO_GET
+//   HANDLE_BODY       an author reaches a Handle's body    -> GYO_ASSET_SAMPLE_HANDLE_BODY_IS_PRIVATE
+//   HANDLE_LIFE       an author reads a Handle's life      -> GYO_ASSET_SAMPLE_HANDLE_LIFE_IS_PRIVATE
 //   REQUESTS_STATE    AssetRequests has State(handle)      -> GYO_ASSET_SAMPLE_REQUESTS_HAVE_NO_STATE
 //   REQUESTS_STORE    AssetRequests gives the store        -> GYO_ASSET_SAMPLE_REQUESTS_GIVE_NO_STORE
 //   VIEW_GET_WRITABLE AssetView::Get gives a writable T*   -> GYO_ASSET_SAMPLE_VIEW_GET_IS_READ_ONLY
@@ -39,6 +41,11 @@ template <class H>
 concept HasGet = requires(const H& handle) { handle.Get(); };
 template <class H>
 concept HasId = requires(const H& handle) { handle.Id(); };
+// The body and the life are the store's and world_asset's (Detail::HandleAccess), not an author's.
+template <class H>
+concept HasBody = requires(const H& handle) { handle.Body(); };
+template <class H>
+concept HasLife = requires(const H& handle) { handle.Life(); };
 
 // ---- AssetRequests (AS-11): no State(handle), no store ----
 template <class R>
@@ -73,6 +80,10 @@ concept HasRead = requires(V& view, const TextHandle& handle) { view.State(handl
 static_assert(HasState<TextHandle>, "GYO_ASSET_SAMPLE_HANDLE_HAS_NO_STATE: a Handle tells nothing of the store's state");
 #elif defined(GYO_ASSET_SAMPLE_HANDLE_GET)
 static_assert(HasGet<TextHandle>, "GYO_ASSET_SAMPLE_HANDLE_HAS_NO_GET: a value is read through AssetView only");
+#elif defined(GYO_ASSET_SAMPLE_HANDLE_BODY)
+static_assert(HasBody<TextHandle>, "GYO_ASSET_SAMPLE_HANDLE_BODY_IS_PRIVATE: an author does not reach a Handle's body");
+#elif defined(GYO_ASSET_SAMPLE_HANDLE_LIFE)
+static_assert(HasLife<TextHandle>, "GYO_ASSET_SAMPLE_HANDLE_LIFE_IS_PRIVATE: an author does not read a Handle's life");
 #elif defined(GYO_ASSET_SAMPLE_REQUESTS_STATE)
 static_assert(RequestsHaveState<WA::AssetRequests>, "GYO_ASSET_SAMPLE_REQUESTS_HAVE_NO_STATE: states are read from AssetView");
 #elif defined(GYO_ASSET_SAMPLE_REQUESTS_STORE)
