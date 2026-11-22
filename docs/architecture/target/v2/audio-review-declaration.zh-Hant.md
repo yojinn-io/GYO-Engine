@@ -33,6 +33,11 @@
   - Kira 0.12.6（docs.rs）：`StartTime::{Immediate, Delayed, ClockTime}`；時鐘可 `pause`、`set_speed`；`PlaySoundError::SoundLimitReached`（回給該次呼叫者）；`StaticSoundData.frames: Arc<[Frame]>`；`AudioManager` 在後端 `Send` 時 `Send`，`play` 取 `&mut self`（編譯器擋同時使用）；`assert_no_alloc`。
     - 本機原始碼（`~/Code/GitHome/kira`，b0325713，2026-11-22 使用者 clone）核對：滿了回錯誤 `crates/kira/src/track/main/handle.rs:24-26`（`insert` 失敗 → `SoundLimitReached`）；每個 track 的聲音上限預設 128（`track/main/builder.rs:26`、`:147`；docs.rs 的 `Capacities` 沒有這一欄，上限在 track 的 builder）；樣本共用 `sound/static_sound/data.rs:32`（`Arc<[Frame]>`）；**音訊執行緒不釋放**：用完的聲音由音訊執行緒推進「unused」的 SPSC 環（rtrb），遊戲那一側取出後才 drop（`backend/resources.rs:27-60`）——和 GYO 的「交還後由擁有者釋放」（DI 7）同一個做法。
   - Unity（docs.unity.com）：`PlayScheduled` 用 `AudioSettings.dspTime`；`AudioListener.pause` 暫停全部、凍結 dspTime；`priority` 0～256，低的先虛擬化；`Time.timeScale` 的頁沒提聲音（沒提，不等於確定不碰）。Unity Netcode（本機 `~/Code/GitHome/com.unity.netcode/Runtime/PredictionTicking/NetworkTime.cs:44`、`:164`）：`IsFirstTimeFullyPredictingTick`——「play sounds… only happens once」，由作者判。
+  - SoLoud（本機 `~/Code/GitHome/soloud`，e82fd32，2026-11-22 使用者 clone）：
+    - **滿了搶占最舊的**：`findFreeVoice_internal` 沒有空位時停掉 `mPlayIndex` 最小、且沒標 `PROTECTED` 的 voice（`src/core/soloud_core_getters.cpp:309-337`）；作者可用 `setProtectVoice` 保護（`include/soloud.h:353`）。voice 槽 1024（`soloud.h:89`），實際混的「active」voice 預設 16（`src/core/soloud.cpp:167`），其餘照音量虛擬化。
+    - **暫停在音訊那一側**：`setPauseAll` 暫停全部 voice（`soloud_core_setters.cpp:94`），不連遊戲時間。
+    - **上鎖**：API 和音訊執行緒的混音共用一把 mutex（`soloud_core_setters.cpp:96`、`soloud.cpp:2126`）——GYO 的音訊執行緒不上鎖（DI 7），這一點不採。
+    - **`playClocked(aSoundTime, …)`**（`soloud_core_basicops.cpp:112-131`）：遊戲傳自己的時間；每個輸出 block 裡第一個請求當錨點，之後的請求照和它的時間差往後延（上限 2048 個取樣）。不需要和音訊共用絕對時間線，就能讓同一幀裡不同時刻的聲音分開。這是第 12 節第 5 題第 1 件（預設起播時刻）的直接參考，交 `world_audio` 那批比較。
   - FMOD〔知〕：`setDelay` 用 DSP 時鐘；虛擬 voice。Wwise〔知〕：`PostEvent` 進佇列、`RenderAudio` 每幀送；播放上限。Unreal、Godot：這次沒查（檢查者憑記憶：兩者遊戲暫停時預設帶到聲音）。
 
 ## 1. 先用遊戲講
@@ -115,7 +120,7 @@
 3. 判定程式不讀時鐘（determinism 第 11 節）；`TimeTypes.hpp:3-6` 刻意不帶時鐘型別。所以時鐘型別留在 World 外。
 
 **未解的缺口**（owner：`world_audio` 那批，和 world_time 對齊；卡片照 L17 判 owner）：
-- **預設的時刻**：只用 `RealTime::now`，同一幀的聲音擠在同一刻、起播落在幀格上，A-1 做不到。
+- **預設的時刻**：只用 `RealTime::now`，同一幀的聲音擠在同一刻、起播落在幀格上，A-1 做不到。參考：SoLoud 的 `playClocked`（第 0 節）用「block 內第一個請求當錨、其餘照時間差往後延」解這件事。
 - **固定步第 i 步對應時間基準的哪一刻**：一幀跑多步（快轉、補幀）時要分得開；慢動作下這個對應怎麼定，world_time 今天沒有答案。
 - **到達時刻**：輸入事件帶時間基準的到達時刻時，直接用它（SDL 那批的平台事件換算，`MonotonicClock.hpp` 的註解）。
 
@@ -337,7 +342,7 @@
 
 - 第 7 節的條文改動都是 DI 節的改動，要你同意（AGENTS §3）。現在問方向。
 - **和別家不同的兩處**：
-  - **不搶占**（新 RC 9）：Unity 有優先度與虛擬 voice；FMOD、Wwise〔知〕也有；Kira 和 GYO 一樣不搶占（但 Kira 把錯誤回給該次呼叫者，GYO 只記總數）。
+  - **不搶占**（新 RC 9）：Unity 有優先度與虛擬 voice；SoLoud 搶占最舊、可保護（本機原始碼，核准後補查）；FMOD、Wwise〔知〕也有；Kira 和 GYO 一樣不搶占（但 Kira 把錯誤回給該次呼叫者，GYO 只記總數）。
   - **暫停、倍率不碰聲音**（DI 3 的新句、RC 2 的補句）：Bevy、Kira 不碰；Godot、Unreal 預設會帶著聲音暫停（未查證）。
 - **建議**：照第 7 節；這兩件等點名的 Feature 出現再照 RC 9、RC 2 處理。
 
