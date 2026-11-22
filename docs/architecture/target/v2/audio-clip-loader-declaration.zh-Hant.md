@@ -1,6 +1,8 @@
 # 事前宣告：audio 那一側的小批（clip 的來源、音效 loader）（`v8-arch-gyo2-audio-clip-loader`）
 
-更新：2026-11-23（修訂 2）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-audio-clip-loader`）。**狀態：草稿，交使用者動工前核准。使用者說「開始」之前不改程式。**
+更新：2026-11-23（修訂 2）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-audio-clip-loader`）。**狀態：動工前核准（使用者 2026-11-23）。使用者說「開始」之前不改程式。**
+
+> **核准**（使用者，2026-11-23，本卡的對話）：原話「照建議，全部核准」。核准的是修訂 2（3b45170b）第 12 節三題照建議：第 1 題 (E)（拿掉 `ClipBank` 與 clip 格；播放帶共用的 clip；參照留在提交口這一側、音訊執行緒只還格號），附帶：不加只取空的入口（RC 10）；第 2 題 (i)（`GYO::Audio` 連 `GYO::Asset`，改 DI 2）；第 3 題：和 Bevy 不同的 1～3 照舊，第 4 處 (a) 產品登記 loader、SDL 那批有建混音器的單位時改由它。第 7 節 DI／RC 的方向一併核准，最終文字在合併前核准；被拿掉或改寫的 DI 守衛測試照 §14.4 在合併前核准頁逐判定交核准。
 
 **經過**：
 - 修訂 0（d97150df）送 Fable 5.2／high 敵對式檢查：blocker 2、should 11、nit 9（主 checkout `build/evidence/gyo2-audio-clip-loader/declaration-r0-adversarial.md`）。全部採用成**修訂 1**，處理對照在第 15 節。
