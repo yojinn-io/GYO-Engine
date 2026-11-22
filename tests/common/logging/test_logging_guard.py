@@ -93,8 +93,9 @@ class LoggingGuard(unittest.TestCase):
                 ("engine/modules/logging/include/engine/logging/Bad.hpp", "LG4-LOGGING-PUBLIC",
                  "engine/logging/..\\..\\..\\..\\json\\include\\engine\\json\\Writer.hpp"),
                 ("engine/modules/world_logging/src/Bad.cpp", "LG4-WORLD",
-                 "engine/kernel/../../../../modules/world_time/include/engine/world_time/TimeTypes.hpp")):
-            with self.subTest(rule=rule):
+                 "engine/kernel/../../../../modules/world_time/include/engine/world_time/TimeTypes.hpp"),
+                ("engine/modules/logging/src/Detail.cpp", "LG4-LOGGING", "engine/logging/detail/../Write.hpp")):
+            with self.subTest(rule=rule, name=name):
                 write(self.root, relative, f'#include "{name}"\n')
                 status, output = run(self.root)
                 (self.root / relative).unlink()

@@ -59,7 +59,8 @@ class TraceGuard(unittest.TestCase):
         # An allowed module followed by ".." reaches any header (as kernel_guard K5 and orchestration_guard O4;
         # v8-arch-gyo2-stale-cleanup).
         for name in ("engine/base/../../../ecs/kernel/include/engine/kernel/World.hpp",
-                     "engine/time/..\\..\\..\\..\\orchestration\\include\\engine\\orchestration\\Product.hpp"):
+                     "engine/time/..\\..\\..\\..\\orchestration\\include\\engine\\orchestration\\Product.hpp",
+                     "engine/trace/detail/../Span.hpp"):
             with self.subTest(name=name):
                 write(self.root, "engine/modules/trace/src/Bad.cpp", f'#include "{name}"\n')
                 status, output = run(self.root)

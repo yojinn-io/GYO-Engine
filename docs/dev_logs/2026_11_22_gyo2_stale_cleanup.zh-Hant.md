@@ -12,17 +12,17 @@
 
 ## 1. 三個 include 守衛的 `..`
 
-條件和 K5、O4 同一個：路徑以 `/` 或 `\` 切開後，有一段是 `..` 就報。准許的前綴後面接 `..` 可以走到任何 header（例：`engine/base/../../../ecs/kernel/include/engine/kernel/World.hpp`），所以這是准許清單自己的洞，不是替誤用另加守衛。只補這三個准許清單，範圍不擴大。
+條件和 K5、O4 同一個：路徑以 `/` 或 `\` 切開後，有一段是 `..` 就報（trace、logging 只對它們讀的 `engine/<module>/…` 形式、模組名之後的部分查，見下「沒做」）。准許的前綴後面接 `..` 可以走到任何 header（例：`engine/base/../../../ecs/kernel/include/engine/kernel/World.hpp`），所以這是准許清單自己的洞，不是替誤用另加守衛。只補這三個准許清單，範圍不擴大。
 
 | 守衛 | 改了什麼 | 自測 | 突變 |
 |---|---|---|---|
-| `tests/common/trace/trace_guard.py`（TR-1） | `ENGINE_INCLUDE` 多抓 header 的路徑；路徑有 `..` 段就報 `TR1-TRACE … (".." in the path)`，不算進正例 | `test_parent_directory_after_an_allowed_module_is_reported`（`/` 與 `\` 各一例） | `tr-guard-parent-directory`（`tests/common/trace/mutations.json`） |
-| `tests/common/logging/logging_guard.py`（LG-4、LG-10） | 同上，三條規則都讀 | `test_parent_directory_after_an_allowed_module_is_reported`（三條規則各一例） | `lg-guard-parent-directory`（`tests/common/logging/mutations.json`） |
-| `tests/common/entity_store/entity_store_guard.py`（entity-store DI 9，W5） | 專案 include 的准許改成「前綴對、且沒有 `..` 段」，寫法照 K5 | `test_parent_directory_after_an_allowed_prefix_is_reported`（`/` 與 `\` 各一例） | `es-guard-parent-directory`（`docs/architecture/plans/entity-store/scripts/mutations.json`） |
+| `tests/common/trace/trace_guard.py`（TR-1） | `ENGINE_INCLUDE` 多抓 header 的路徑；路徑有 `..` 段就報 `TR1-TRACE … (".." in the path)`，不算進正例 | `test_parent_directory_after_an_allowed_module_is_reported`（`/`、`\`、子目錄後單一個 `..` 各一例） | `tr-guard-parent-directory`（`tests/common/trace/mutations.json`） |
+| `tests/common/logging/logging_guard.py`（LG-4、LG-10） | 同上，三條規則都讀 | `test_parent_directory_after_an_allowed_module_is_reported`（三條規則各一例，加子目錄後單一個 `..`） | `lg-guard-parent-directory`（`tests/common/logging/mutations.json`） |
+| `tests/common/entity_store/entity_store_guard.py`（entity-store DI 9，W5） | 專案 include 的准許改成「前綴對、且沒有 `..` 段」，寫法照 K5 | `test_parent_directory_after_an_allowed_prefix_is_reported`（`/`、前綴後接 `\`、子目錄後的 `..` 各一例） | `es-guard-parent-directory`（`docs/architecture/plans/entity-store/scripts/mutations.json`） |
 
 - 條件照 O4 的寫法寫在各守衛裡，沒有從 `kernel_guard` 匯入共用函式：#265 設計審查的選項 (b)（收成 `kernel_guard` 的一個函式）沒有被採用；共用讀法函式的抽出由 `gyo2-naming-cleanup` 卡做，這批不先動同一批檔案。
 - trace 的改法保留原本的 `if module in ALLOWED:` 那一行（`..` 的判斷放在前面、`continue`），既有突變 `tr-guard-rule-off` 的 find 不必改。logging 用同一個形狀。
-- 沒做（範圍外）：trace、logging 只讀 `engine/<module>/…` 形式的 include；`engine/base\..\…`（模組名後面直接接反斜線）或不以 `engine/` 開頭的相對路徑本來就不讀，屬於「讀的範圍」，不是准許清單的洞。照 `v8-arch-gyo2-include-bypass-to-review` 交審查。
+- 沒做（範圍外）：trace、logging 只讀 `engine/<module>/…` 形式的 include。模組位本身是 `..` 的 `engine/../…`、`engine/base\..\…`（模組名後面直接接反斜線）、不以 `engine/` 開頭的相對路徑本來就不讀，仍然通過（設計審查實測）。屬於「讀的範圍」，不是准許清單的洞；照 `v8-arch-gyo2-include-bypass-to-review` 交審查。所以這兩個守衛是關掉同效路徑中的一條，不是把路全部封死。entity_store 是完整的准許清單（不在清單就報），這三種都報 W5。
 
 ### AGENTS §14.4 的 1～5（三個守衛相同）
 
@@ -42,6 +42,18 @@
 
 - 第一版 trace 新突變的 expect 用 verbose 那一行的 `… \.\.\. FAIL`，結果 `wrong_failure`：用了 `subTest`，那一行後面是空的，失敗在子測試的行。改成 `FAIL: test_parent_directory_after_an_allowed_module_is_reported`（和 orchestration、logging 相同的寫法）後 killed。
 - 加的突變照 `tests/common/mutation/README.md` 第 4 點：規則裡獨立可錯的分支一個，三個守衛各一個，共 3 個（變更的條文 3 條 × 5 以內）。每個都寫了只有它捕到的錯（拿掉 `..` 條件）和 `guards`。
+
+### 敵對式檢查（Fable 5.2／high，唯讀）
+
+報告：主 checkout `build/evidence/gyo2-stale-cleanup/design-review/REPORT.md` A 節。
+
+- 新突變 3 個、原有突變 18 個都 killed；新舊守衛各 1500 棵隨機樹比對，放寬 0 件（收緊 427／907／234 件）。
+- 套 54 個改壞的實作，32 個自測沒失敗，歸 5 類。處理 2 類，只改自測、不加突變：
+  - entity_store 的 `\` 例沒走到 `..` 條件：第二例 `engine/entity_store\..\…` 在前綴就被擋掉，改成 `engine/entity_store/..\…`（和 K5 自測同寫法）。改前「只切 `/`」「`"../" not in`」等存活。
+  - 三個守衛都只驗「`..` 緊接在前綴後、連續三個以上」：各補一例子目錄後面單一個 `..`（`engine/trace/detail/../Span.hpp`、`engine/logging/detail/../Write.hpp`、`engine/base/detail/../../../../modules/…`）。改前「只看第一段」「至少兩個才報」存活。
+  - 改後重套審查者列的 7 個存活改法，全部被自測抓到（`build/evidence/gyo2-stale-cleanup/adversarial-recheck.txt`）；三份清單的相關突變重跑 5/5、8/8、5/5 killed（`mut-*-2.txt`）。
+  - 沒加突變：這兩類是自測的案例不足，照 `tests/common/mutation/README.md` 第 6 點補 case；條件本身的突變各一個（拿掉整個條件），和 K5、O4 相同。
+- 不處理的 3 類：多報方向的反例（`a..b.hpp`、`..hidden/`、`.../`；現行實作不報，讀法細節，觀測到再加）、只驗引號形式（實作不依括號分支）、等價的改法。
 
 ## 2. 刪掉 15 份 master 時代的突變清單
 
@@ -74,6 +86,7 @@
 
 - 卡片寫的是「framework-rework 的 framework_*」；`platform_path_dialog_mutations*.json` 兩份不是這個名字，但同樣全部指向不存在的檔案，namespace-root dev_log 的「15 份」就是把它們算進去的數，所以一起刪。
 - 計畫資料夾裡的 Markdown（PLAN、README、宣告）提到這些清單的地方是當時的紀錄，不改。
+- 設計審查另外重查（504 個突變的 `file` 全不存在、Markdown 以外引用 0），結論相同。
 
 ## 3. 文件
 
@@ -90,9 +103,23 @@
 
 ## 驗證
 
-（本機與 L1 的結果寫在下面。）
+- 本機（macOS arm64）：`ctest --preset test` 161/161（主 checkout `build/evidence/gyo2-stale-cleanup/ctest.txt`）。
+- 突變：見第 1 節（`build/evidence/gyo2-stale-cleanup/mut-*.txt`）。
+- L1 三平台：（待填）。
+
+## 設計審查（Fable 5.2／high，唯讀）
+
+報告：主 checkout `build/evidence/gyo2-stale-cleanup/design-review/REPORT.md` B 節。8 項中 7 項保留；要改的 3 件都是本 dev_log（trace、logging 補的範圍寫清楚、刪清單的文字出處列進後續、填驗證），已改。
+
+要使用者在合併前核准時確認的 1 件：
+
+- `docs/architecture/time.md` 的 `Design Invariants` 第 6 條，括號裡的例子「(trace.md Invariant 2)」改成「(the logging file sink's writer, logging LG-6)」。條文的承諾（`Wait()` 沒有計時器）不變，只換「誰依賴它」的例子，因為 trace.md 刪掉了。照 AGENTS §3，改 Design Invariants 節要使用者同意。
 
 ## 後續（範圍外，沒有做）
+
+- 計畫資料夾以外有 6 份文件用文字指著這次刪掉的清單當守衛出處：`docs/architecture/animation-events.md:99`、`collision.md:94`、`voxel-mesh.md:245`、`docs/cross-component-rules.md:24`（CCR-1）、`docs/framework/event-sounds.md:163`、`docs/framework/preview.md:88`。描述的都是 gyo2 上已不存在的 master 程式，交 Legacy 整理（CCR-1 屬圖書管理員）。
+- O4 的自測（#265，`tests/common/orchestration/test_orchestration_guard.py:74`）有和 entity_store 第二例同樣的洞（`engine/base\..` 在前綴就被擋掉，O4 改成只切 `/` 仍存活）。不在本批的三個守衛裡，沒改。
+- 同一個「切段找 `..`」的運算式現在有 5 份（K5、O4、entity_store、trace、logging），各有一個 find 綁著它的突變；`gyo2-naming-cleanup` 抽共用讀法函式時要一起改寫突變。
 
 - `docs/architecture.md` 的 `GYO::Trace` 列、`docs/architecture/platform-sdl.md` 整份描述的是 gyo2 上已不存在的程式（master 的 trace 傳輸、`engine/platform/sdl`）。`error-handling.md` 第 73 行的「today `engine/platform/sdl`」也一樣。要不要改寫或刪，屬 Legacy 文件的整理。
 - `docs/architecture/plans/framework-rework/scripts/run_shell_test.py`：刪掉的 `framework_shell_mutations.json` 的伴隨腳本，指向的也是 master 的 framework；沒查是否還有人用，沒動。

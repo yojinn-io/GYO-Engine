@@ -143,8 +143,11 @@ class Rules(GuardTree):
 
     def test_parent_directory_after_an_allowed_prefix_is_reported(self):
         # An allowed prefix followed by ".." reaches any header (as kernel_guard K5; v8-arch-gyo2-stale-cleanup).
+        # The backslash example keeps the "/" after the prefix so it reaches the ".." condition (as kernel_guard's
+        # self-test); the third has one ".." after a subdirectory.
         for name in ("engine/base/../../../modules/rollback/include/engine/rollback/Inbox.hpp",
-                     "engine/entity_store\\..\\..\\..\\core\\math\\include\\engine\\math\\Vec3.hpp"):
+                     "engine/entity_store/..\\..\\..\\core\\math\\include\\engine\\math\\Vec3.hpp",
+                     "engine/base/detail/../../../../modules/rollback/include/engine/rollback/Inbox.hpp"):
             with self.subTest(name=name):
                 self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
                            "#pragma once\n#include \"" + name + "\"\n")
