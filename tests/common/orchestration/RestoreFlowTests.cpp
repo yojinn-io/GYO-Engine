@@ -137,19 +137,20 @@ TEST_CASE("restore: case 4, a load that fails: BuildNewFirst keeps the old World
     }
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
 TEST_CASE("restore: case 5, the same save loaded twice gives the same World summary") {
     auto built = O::Product::Build(Game(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     REQUIRE(static_cast<bool>(p.RunFrame()));
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}})));
-    const K::Fingerprint first = p.World("Main").GetWorld().Summary();
+    const auto firstSummary = p.World("Main").GetWorld().Summary();
+    REQUIRE_MESSAGE(static_cast<bool>(firstSummary), (firstSummary ? std::string() : firstSummary.error().Text()));
+    const K::Fingerprint first = *firstSummary;
     REQUIRE(static_cast<bool>(p.RunFrame()));
     REQUIRE(static_cast<bool>(p.ReplaceWorld("Main", O::ReplaceRequest{LoadInto(TheSave()), {"Load"}})));
-    CHECK(p.World("Main").GetWorld().Summary() == first);
+    const auto second = p.World("Main").GetWorld().Summary();
+    REQUIRE_MESSAGE(static_cast<bool>(second), (second ? std::string() : second.error().Text()));
+    CHECK(*second == first);
 }
 
 TEST_CASE("restore: case 6, what game initialization put in the first World: a marked value carries over (changed in game), the rest is fresh") {

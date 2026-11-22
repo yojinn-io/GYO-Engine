@@ -84,7 +84,6 @@ K::SystemResult Rerun(K::ExclusiveWorld<> world) {
 K::SystemOptions At(std::string name, std::string schedule, std::string stage) {
     K::SystemOptions o;
     o.name = std::move(name);
-    o.zone = K::Zone::B;
     K::Mount m;
     m.schedule = std::move(schedule);
     m.stage = std::move(stage);
@@ -120,9 +119,9 @@ O::RegisteredUnits TimeUnits() {
 
 void LoggingSystems(O::WorldSetup& s) {
     K::Registrar& r = s.Registrar();
-    r.Resource<Gate>({.name = "Gate", .zone = K::Zone::B});
-    r.Resource<FailAt>({.name = "FailAt", .zone = K::Zone::B});
-    r.Resource<Rewind>({.name = "Rewind", .zone = K::Zone::B});
+    r.Resource<Gate>({.name = "Gate"});
+    r.Resource<FailAt>({.name = "FailAt"});
+    r.Resource<Rewind>({.name = "Rewind"});
     r.AddSystem<&LogStep>(At("LogStep", "FixedUpdate", "First"));
     r.AddSystem<&FailAtTick>(At("FailAtTick", "FixedUpdate", "Update"));
     r.AddSystem<&LogFrame>(At("LogFrame", "Main", "Update"));
@@ -138,7 +137,7 @@ O::ProductDescription Game(Nanoseconds delta, W::WorldTimeOptions options = {}) 
     w.options.Set(std::move(options));
     w.build = LoggingSystems;
     w.prepare.push_back([delta](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
         world.SetResource(Gate{});
         world.SetResource(FailAt{});
         world.SetResource(Rewind{});
@@ -164,7 +163,7 @@ const T& Get(O::Product& p) {
 }
 
 void Frame(O::Product& p, Nanoseconds delta) {
-    WorldOf(p).SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta, {}});
+    WorldOf(p).SetResource(W::TimeSampling{delta, W::SamplingMode::ManualDelta});
     auto ran = p.RunFrame();
     REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
 }
@@ -191,12 +190,28 @@ TEST_CASE("module: every time Resource is registered and put in; Resimulation is
     CHECK_MESSAGE((world.Resource<W::Tick>() != nullptr && world.Resource<W::Tick>()->value == 0), "[wt-tick-zero]");
     CHECK_MESSAGE((world.Resource<W::FixedTime>() != nullptr && world.Resource<W::FixedTime>()->accumulator.Step() == kStep),
                   "[wt-step-default] 64 Hz");
-    // Every time Resource is zone B (declaration 4.5): a zone C System reads no Tick until batch 4 (G4).
-    for (const K::ResourceInfo& info : registry.Resources()) {
-        if (info.owner != "world_time") continue;
-        CHECK_MESSAGE(info.zone == K::Zone::B, "[wt-time-zone-b] " << info.name);
-    }
-    CHECK_MESSAGE(registry.Resources()[*registry.ResourceIdOf<W::Tick>()].zone == K::Zone::B, "[wt-time-zone-b] Tick");
+}
+
+// Authority-rollback declaration 3.3: every type the time Module puts into a World has a hash function, so a
+// World with only the Module (no test Resource) has a summary, before and after a frame that discards time.
+TEST_CASE("module: every time type has a hash function: a World with only the time Module has a summary") {
+    O::ProductDescription d;
+    d.name = "game";
+    O::WorldDescription w;
+    w.name = "Main";
+    w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(W::TimeSampling{kStep * 9, W::SamplingMode::ManualDelta});
+        return {};
+    });
+    d.worlds.push_back(std::move(w));
+    auto p = Make(std::move(d));
+    const auto before = WorldOf(*p).Summary();
+    CHECK_MESSAGE(static_cast<bool>(before), "[wt-hash-summary] " << (before ? std::string() : before.error().Text()));
+    auto ran = p->RunFrame();
+    REQUIRE(static_cast<bool>(ran));
+    const auto after = WorldOf(*p).Summary();
+    CHECK_MESSAGE(static_cast<bool>(after), "[wt-hash-summary] " << (after ? std::string() : after.error().Text()));
+    CHECK_MESSAGE((before && after && *before != *after), "[wt-hash-summary] a frame left the summary the same");
 }
 
 TEST_CASE("module: by default AdvanceTime is mounted in Main's First and RunFixedSteps in Main's FixedMainLoop") {
@@ -239,7 +254,8 @@ TEST_CASE("module: TickWriters names RunFixedSteps, which annotates Writes<Tick>
     REQUIRE(driver != nullptr);
     const K::ResourceId tick = *registry.ResourceIdOf<W::Tick>();
     const auto& listed = driver->access.annotatedWrites;
-    CHECK_MESSAGE(std::find(listed.begin(), listed.end(), tick) != listed.end(), "[wt-driver-writes-tick]");
+    CHECK_MESSAGE(std::find(listed.begin(), listed.end(), K::AccessKey{K::AccessKind::Resource, tick}) != listed.end(),
+                  "[wt-driver-writes-tick]");
     CHECK(driver->access.exclusive);
 }
 
@@ -292,7 +308,7 @@ TEST_CASE("module: an author who turns the skeleton off names its own schedules:
         r.AddSystem<&LogStep>(At("LogStep", "Physics", "S"));
     };
     w.prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-        world.SetResource(W::TimeSampling{40 * kMs, W::SamplingMode::ManualDelta, {}});
+        world.SetResource(W::TimeSampling{40 * kMs, W::SamplingMode::ManualDelta});
         return {};
     });
     d.worlds.push_back(std::move(w));
@@ -382,10 +398,10 @@ TEST_CASE("sampling: a manual duration applies every frame, the first included, 
 
 TEST_CASE("sampling: a manual next instant: the first sample after the World is built gives delta 0") {
     auto p = Make(Game(0));
-    WorldOf(*p).SetResource(W::TimeSampling{500 * kMs, W::SamplingMode::ManualInstant, {}});
+    WorldOf(*p).SetResource(W::TimeSampling{500 * kMs, W::SamplingMode::ManualInstant});
     REQUIRE(static_cast<bool>(p->RunFrame()));
     CHECK_MESSAGE((Get<W::RealTime>(*p).delta == 0 && Get<W::RealTime>(*p).now == 500 * kMs), "[wt-first-sample-zero]");
-    WorldOf(*p).SetResource(W::TimeSampling{520 * kMs, W::SamplingMode::ManualInstant, {}});
+    WorldOf(*p).SetResource(W::TimeSampling{520 * kMs, W::SamplingMode::ManualInstant});
     REQUIRE(static_cast<bool>(p->RunFrame()));
     CHECK_MESSAGE((Get<W::RealTime>(*p).delta == 20 * kMs && Get<W::VirtualTime>(*p).elapsed == 20 * kMs), "[wt-manual-instant]");
 }
@@ -405,13 +421,13 @@ TEST_CASE("sampling: SampleRealTime reads the given time base in the time-base m
     W::SampleRealTime(real, W::TimeSampling{}, []() noexcept -> Nanoseconds { return 7; });
     W::SampleRealTime(real, W::TimeSampling{}, []() noexcept -> Nanoseconds { return 19; });
     CHECK_MESSAGE((real.now == 19 && real.delta == 12), "[wt-sample-reader] " << real.now << " " << real.delta);
-    W::SampleRealTime(real, W::TimeSampling{5, W::SamplingMode::ManualDelta, {}}, []() noexcept -> Nanoseconds { return 1000; });
+    W::SampleRealTime(real, W::TimeSampling{5, W::SamplingMode::ManualDelta}, []() noexcept -> Nanoseconds { return 1000; });
     CHECK_MESSAGE((real.now == 24 && real.delta == 5), "[wt-sample-manual-no-reader] " << real.now << " " << real.delta);
 }
 
 TEST_CASE("sampling: a paused World advances real time, not virtual time, and runs no fixed step") {
     auto p = Make(Game(20 * kMs));
-    WorldOf(*p).SetResource(W::TimeControl{1.0, 1, {}});
+    WorldOf(*p).SetResource(W::TimeControl{1.0, 1});
     REQUIRE(static_cast<bool>(p->RunFrame()));
     CHECK_MESSAGE((Get<W::RealTime>(*p).elapsed == 20 * kMs && Get<W::VirtualTime>(*p).elapsed == 0 && Get<W::Tick>(*p).value == 0),
                   "[wt-paused]");
@@ -518,7 +534,7 @@ TEST_CASE("fixed: the j-th of k steps returns Err: no later step runs, the Err g
     Log().clear();
     auto p = Make(Game(0));
     WorldOf(*p).SetResource(FailAt{2});
-    WorldOf(*p).SetResource(W::TimeSampling{3 * kStep, W::SamplingMode::ManualDelta, {}});
+    WorldOf(*p).SetResource(W::TimeSampling{3 * kStep, W::SamplingMode::ManualDelta});
     auto ran = p->RunFrame();
     REQUIRE_FALSE_MESSAGE(static_cast<bool>(ran), "[wt-step-err] the frame succeeded");
     CHECK_MESSAGE(ran.error().code == O::OrchestrationErrorCode::ScheduleFailed, "[wt-step-err] code");
@@ -571,7 +587,6 @@ struct PutBack {
     Nanoseconds elapsed = 0;
     Nanoseconds overstep = 0;
     std::uint8_t armed = 0;
-    std::uint8_t reserved[7] = {};
 };
 K::SystemResult PutBackNow(K::ExclusiveWorld<> world) {
     const PutBack put = W::Detail::Present(world.Read<PutBack>([](const PutBack& p) { return p; }));
@@ -601,11 +616,11 @@ TEST_CASE("restore: a remainder saved under a longer step keeps what is below th
         auto build = d.worlds[0].build;
         d.worlds[0].build = [build](O::WorldSetup& s) {
             build(s);
-            s.Registrar().Resource<PutBack>({.name = "PutBack", .zone = K::Zone::B});
+            s.Registrar().Resource<PutBack>({.name = "PutBack"});
             s.Registrar().AddSystem<&PutBackNow>(At("PutBackNow", "Main", "Last"));
         };
         d.worlds[0].prepare.push_back([](K::World& world) -> ::Engine::Base::Result<void, O::OrchestrationError> {
-            world.SetResource(PutBack{2 * 31'250'000, 20 * kMs, 1, {}});
+            world.SetResource(PutBack{2 * 31'250'000, 20 * kMs, 1});
             return {};
         });
         auto p = Make(std::move(d));
@@ -657,4 +672,21 @@ TEST_CASE("carry-over: carried time values are kept; FixedTime takes this World'
                   "[wt-carried-step-setting] " << fixed.accumulator.Step() << " " << fixed.elapsed << " " << fixed.accumulator.Overstep());
     CHECK_MESSAGE(Get<W::VirtualTime>(*p).discarded == kStep, "[wt-carried-discarded] " << Get<W::VirtualTime>(*p).discarded);
     CHECK_MESSAGE(Get<W::TimeConfig>(*p).limits.maxStepsPerFrame == 5, "[wt-carried-config-setting] " << Get<W::TimeConfig>(*p).limits.maxStepsPerFrame);
+}
+
+// WT-1 (authority-rollback declaration 2.3): Resimulation is put false whenever a World is prepared, even when
+// it is carried over: a rollback cut short by a replacement leaves no "resimulating" behind.
+TEST_CASE("carry-over: Resimulation is false in the new World, carried over or not") {
+    Log().clear();
+    O::ProductDescription d = Game(0);
+    auto build = d.worlds[0].build;
+    d.worlds[0].build = [build](O::WorldSetup& s) {
+        build(s);
+        s.CarryOver<W::Resimulation>("Resimulation");
+    };
+    auto p = Make(std::move(d));
+    WorldOf(*p).SetResource(W::Resimulation{1});
+    auto replaced = p->ReplaceWorld("Main", O::ReplaceRequest{});
+    REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message + "\n" + replaced.error().detail));
+    CHECK_MESSAGE(Get<W::Resimulation>(*p).active == 0, "[wt-resimulation-reset] " << int(Get<W::Resimulation>(*p).active));
 }

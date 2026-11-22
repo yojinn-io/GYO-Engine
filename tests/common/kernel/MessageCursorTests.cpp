@@ -43,7 +43,24 @@ std::string Numbers(const std::vector<Ping>& pings) {
     return out;
 }
 
+// A message type with no hash function (Summary reports it while a record of it is held).
+struct Quiet { std::uint32_t n; };
+
 // ---- Systems (captureless; what they see goes to Log())
+
+// Writes Ping{Flag} once a Run (the payload a summary must see).
+SystemResult WriteFlagPing(MessageWriter<Ping> pings, Res<Flag> flag) {
+    pings.Send(Ping{static_cast<std::uint32_t>(flag->on)});
+    return Ok();
+}
+SystemResult WriteQuiet(MessageWriter<Quiet> quiet) {
+    quiet.Send(Quiet{1});
+    return Ok();
+}
+SystemResult ReadQuiet(MessageReader<Quiet> quiet) {
+    static_cast<void>(quiet.Read());
+    return Ok();
+}
 
 // Writes Ping{run number} on every run (its own count, one per mount: B-12).
 SystemResult WriteEveryRun(MessageWriter<Ping> pings, Local<std::uint32_t> runs) {
@@ -191,8 +208,8 @@ TEST_CASE("J-36: a reader whose schedule did not run reads what was written mean
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.Schedule(SpawnerSchedule());
-        r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", Zone::B, {At("Spawner", "S")}));
-        r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag", .zone = Zone::B});
+        r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", {At("Spawner", "S")}));
+        r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag"});
         r.AddSystem<&Reader>(B("Reader", "A"));
     });
     Log().clear();
@@ -210,8 +227,8 @@ TEST_CASE("J-36: a reader that has never run holds nothing back; when it first r
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.Schedule(SpawnerSchedule());
-            r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", Zone::B, {At("Spawner", "S")}));
-            r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag", .zone = Zone::B});
+            r.AddSystem<&SpawnTagEachRun>(Sys("SpawnTagEachRun", {At("Spawner", "S")}));
+            r.Hook<Tag, &PingOnTag>(HookTrigger::OnAdd, {.name = "PingOnTag"});
             r.AddSystem<&Reader>(B("Reader", "A"));
         });
         Log().clear();
@@ -317,7 +334,7 @@ TEST_CASE("J-36: Read twice in one call gives the same records; the cursor moves
 TEST_CASE("J-36: a write to a full buffer drops the oldest record; one DroppedMessages per message type per Run") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
+        r.Message<Beep>({.name = "Beep", .capacity = 3});
         r.AddSystem<&BeepReader>(B("BeepReader", "A"));
         r.AddSystem<&WriteFiveBeepsOnSecondRun>(B("WriteBeeps", "B"));
     });
@@ -342,7 +359,7 @@ TEST_CASE("J-36: a write to a full buffer drops the oldest record; one DroppedMe
 TEST_CASE("J-36: drops in one Run make one record; a reader that has read a dropped record is not listed") {
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
+        r.Message<Beep>({.name = "Beep", .capacity = 3});
         r.AddSystem<&WriteThreeBeeps>(B("WriteThree", "A"));
         r.AddSystem<&BeepReader>(B("BeepReader", "B"));
         r.AddSystem<&WriteOneBeep>(B("WriteOne", "C"));
@@ -366,7 +383,7 @@ TEST_CASE("J-36: drops in one Run make one record; a reader that has read a drop
 TEST_CASE("J-36: the Registry lists each message type's capacity and its readers (DI-KS 25)") {
     const Built built = Finish({{"test", [](Registrar& r) {
                                      Data(r);
-                                     r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 3});
+                                     r.Message<Beep>({.name = "Beep", .capacity = 3});
                                      r.AddSystem<&WriteEveryRun>(B("Write", "A"));
                                      SystemOptions reader = B("Reader", "B");
                                      reader.mounts[0].conditions = {Condition<&HasPings>("HasPings")};
@@ -385,14 +402,33 @@ TEST_CASE("J-36: the Registry lists each message type's capacity and its readers
     CHECK_MESSAGE(beep->readers.empty(), "[msg-registry-readers] " << ReadersText(beep->readers));
 }
 
+// The writer list (authority-rollback declaration 2.2): the rollback Module's cross-schedule message check reads
+// who writes each message type, in the readers' shape.
+TEST_CASE("J-36: the Registry lists each message type's writers: System mounts, then hooks") {
+    const Built built = Finish({{"test", [](Registrar& r) {
+                                     Data(r);
+                                     r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode"});
+                                     r.AddSystem<&WriteEveryRun>(B("Write", "A"));
+                                     r.AddSystem<&Reader>(B("Reader", "B"));
+                                 }}});
+    KERNEL_REQUIRE_OK(built);
+    const MessageInfo* ping = InfoNamed(built.registry->Frozen(), "Ping");
+    REQUIRE(ping != nullptr);
+    std::string listed;
+    for (const MessageWriterInfo& writer : ping->writers) {
+        listed += (listed.empty() ? "" : ", ") + writer.system + (writer.hook ? "(hook)" : "@" + writer.schedule);
+    }
+    CHECK_MESSAGE(listed == "Write@Tick, PingOnMode(hook)", "[msg-registry-writers] " << listed);
+}
+
 TEST_CASE("J-36: the records are trimmed when the outermost Run ends, after the hook rounds") {
     // Each Run spawns a Tag; its OnAdd hook inserts Mode, applied by hook round 2,
     // whose OnAdd hook writes Ping 77: after the last sync point.
     auto rig = MakeRig([](Registrar& r) {
         Data(r);
         r.AddSystem<&SpawnTagEachRun>(B("SpawnTagEachRun", "C"));
-        r.Hook<Tag, &TagAddsMode>(HookTrigger::OnAdd, {.name = "TagAddsMode", .zone = Zone::B});
-        r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode", .zone = Zone::B});
+        r.Hook<Tag, &TagAddsMode>(HookTrigger::OnAdd, {.name = "TagAddsMode"});
+        r.Hook<Mode, &PingOnMode>(HookTrigger::OnAdd, {.name = "PingOnMode"});
         SystemOptions reader = B("Reader", "A");
         reader.mounts[0].conditions = {Condition<&FlagOn>("FlagOn")};
         r.AddSystem<&Reader>(std::move(reader));
@@ -432,7 +468,7 @@ TEST_CASE("J-36: the World summary holds the message cursors and the write seque
     auto summary = [](std::function<void(Registrar&)> build, int runs) {
         auto rig = MakeRig(std::move(build), false);
         for (int run = 0; run < runs; ++run) KERNEL_REQUIRE_RUN_OK(rig->Run());
-        return rig->world().Summary();
+        return SummaryOf(rig->world());
     };
     const auto writerOnly = [](Registrar& r) {
         Data(r);
@@ -455,27 +491,19 @@ TEST_CASE("J-36: the World summary holds the message cursors and the write seque
     CHECK_MESSAGE(summary(writerOnly, 2) != summary(writesTwice, 2), "[msg-summary-seq] the write sequence is not in the summary");
 }
 
-TEST_CASE("J-18: a message type's capacity changes the Registry fingerprint and, for a zone C type, the C fingerprint") {
-    const auto build = [](Zone zone, std::uint32_t capacity) {
-        return Finish({{"test", [zone, capacity](Registrar& r) {
+TEST_CASE("J-18: a message type's capacity changes the Registry fingerprint") {
+    const auto build = [](std::uint32_t capacity) {
+        return Finish({{"test", [capacity](Registrar& r) {
                             Data(r);
-                            r.Message<Beep>({.name = "Beep", .zone = zone, .capacity = capacity});
+                            r.Message<Beep>({.name = "Beep", .capacity = capacity});
                         }}});
     };
-    const Built b3 = build(Zone::B, 3);
-    const Built b4 = build(Zone::B, 4);
-    const Built c3 = build(Zone::C, 3);
-    const Built c4 = build(Zone::C, 4);
+    const Built b3 = build(3);
+    const Built b4 = build(4);
     KERNEL_REQUIRE_OK(b3);
     KERNEL_REQUIRE_OK(b4);
-    KERNEL_REQUIRE_OK(c3);
-    KERNEL_REQUIRE_OK(c4);
     CHECK_MESSAGE(b3.registry->Frozen().RegistryFingerprint() != b4.registry->Frozen().RegistryFingerprint(),
                   "[msg-capacity-registry-fp] the capacity is not in the Registry fingerprint");
-    // A zone B type is not in the C fingerprint at all.
-    CHECK(b3.registry->Frozen().CFingerprint() == b4.registry->Frozen().CFingerprint());
-    CHECK_MESSAGE(c3.registry->Frozen().CFingerprint() != c4.registry->Frozen().CFingerprint(),
-                  "[msg-capacity-c-fp] a zone C type's capacity is not in the C fingerprint");
 }
 
 // ---- Step 7: the cases the adversarial check of the mutant list found missing
@@ -509,7 +537,7 @@ TEST_CASE("J-36: the Registry's readers: a named set's run condition; two Messag
 TEST_CASE("J-36: a message type's capacity is at least 1: 0 is a Programmer Error at registration") {
     GYO_CHECK_ASSERTS(Finish({{"test", [](Registrar& r) {
         Data(r);
-        r.Message<Beep>({.name = "Beep", .zone = Zone::B, .capacity = 0});
+        r.Message<Beep>({.name = "Beep", .capacity = 0});
     }}}));
 }
 
@@ -535,8 +563,54 @@ TEST_CASE("J-36: the World summary holds where each cursor has read to") {
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         rig->world().SetResource(Out{1});
         REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "2 3");
-        return rig->world().Summary();
+        return SummaryOf(rig->world());
     };
     CHECK(summary(true) == summary(true));
     CHECK_MESSAGE(summary(true) != summary(false), "[msg-summary-cursor-position] where a cursor has read to is not in the summary");
+}
+
+TEST_CASE("J-36: the World summary hashes a held message's payload, and reports a message type with no hash function") {
+    const auto summary = [](std::int32_t flag) {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            // The reader runs before the writer: its cursor holds the record written after it.
+            r.AddSystem<&Reader>(B("Reader", "A"));
+            r.AddSystem<&WriteFlagPing>(B("Write", "B"));
+        }, false);
+        rig->world().SetResource(Flag{flag});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        REQUIRE(rig->world().MessagePayloads<Ping>().size() == 1);
+        rig->world().SetResource(Flag{0});  // only the payload differs between the two
+        return SummaryOf(rig->world());
+    };
+    CHECK_MESSAGE(summary(1) != summary(2), "[ks-summary-message-payload] two payloads give one summary");
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.Message<Quiet>({.name = "Quiet"});
+        r.AddSystem<&ReadQuiet>(B("ReadQuiet", "A"));
+        r.AddSystem<&WriteQuiet>(B("WriteQuiet", "B"));
+    }, false);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const auto held = rig->world().Summary();
+    REQUIRE_MESSAGE(!held, "[ks-hash-missing-message] a held record of a message with no HashValue went into the summary");
+    CHECK_MESSAGE(held.error().detail.find("message Quiet") != std::string::npos, "[ks-hash-missing-message] " << held.error().Text());
+}
+
+TEST_CASE("J-36: a System mounted in two schedules is listed as a writer for each mount") {
+    const Built built = Finish({{"test", [](Registrar& r) {
+                                     Data(r);
+                                     ScheduleOptions other;
+                                     other.name = "Other";
+                                     other.stages = {"A"};
+                                     r.Schedule(std::move(other));
+                                     SystemOptions write = B("Write", "A");
+                                     write.mounts.push_back(Mount{"Other", "A"});
+                                     r.AddSystem<&WriteEveryRun>(std::move(write));
+                                 }}});
+    KERNEL_REQUIRE_OK(built);
+    const MessageInfo* ping = InfoNamed(built.registry->Frozen(), "Ping");
+    REQUIRE(ping != nullptr);
+    std::string listed;
+    for (const MessageWriterInfo& writer : ping->writers) listed += (listed.empty() ? "" : ", ") + writer.system + "@" + writer.schedule;
+    CHECK_MESSAGE(listed == "Write@Tick, Write@Other", "[msg-registry-writers-each-mount] " << listed);
 }

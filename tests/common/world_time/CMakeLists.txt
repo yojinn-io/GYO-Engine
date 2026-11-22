@@ -7,7 +7,7 @@ if(MSVC)
 else()
     target_compile_options(gyo_world_time_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS types module sampling fixed restore)
+foreach(group IN ITEMS types module sampling fixed restore carry-over)
     add_test(NAME world_time.${group} COMMAND gyo_world_time_tests "--test-case=${group}:*")
     set_tests_properties(world_time.${group} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

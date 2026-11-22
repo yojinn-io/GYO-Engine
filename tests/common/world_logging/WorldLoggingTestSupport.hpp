@@ -44,7 +44,6 @@ struct Logged {
 inline K::SystemOptions At(std::string name, std::string schedule, std::string stage) {
     K::SystemOptions o;
     o.name = std::move(name);
-    o.zone = K::Zone::B;
     K::Mount m;
     m.schedule = std::move(schedule);
     m.stage = std::move(stage);

@@ -30,7 +30,7 @@ SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, Active
     if (fixed.pending > 0) {
         // The fixed step did not take the last frame's time (RunFixedSteps did not run): discarded, not carried.
         virt.discarded += fixed.pending;
-        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven, {}});
+        discarded.Send(TimeDiscarded{fixed.pending, real.delta, DiscardCause::NotDriven});
         fixed.pending = 0;
     }
     const bool hasFixedStep = config.fixedStep != 0;
@@ -40,7 +40,7 @@ SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, Active
     if (hasFixedStep) {
         fixed.pending = advanced.delta;
     }
-    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause, {}});
+    if (advanced.discarded > 0) discarded.Send(TimeDiscarded{advanced.discarded, real.delta, advanced.cause});
     return {};
 }
 
@@ -76,7 +76,6 @@ SystemResult RunFixedSteps(Kernel::ExclusiveWorld<Kernel::Writes<Tick, FixedTime
 Kernel::SystemOptions Mounted(std::string name, const std::string& schedule, const std::string& stage) {
     Kernel::SystemOptions options;
     options.name = std::move(name);
-    options.zone = Kernel::Zone::B;
     Kernel::Mount mount;
     mount.schedule = schedule;
     mount.stage = stage;
@@ -96,17 +95,16 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
     // The fixed-step schedule's name fits TimeConfig (a Programmer Error otherwise).
     GYO_ASSERT(options.fixedSchedule.size() < sizeof(TimeConfig::fixedSchedule));
     Kernel::Registrar& r = setup.Registrar();
-    // Every time type is zone B (declaration 4.5): a zone C System reads no Tick until batch 4 (G4).
-    r.Resource<RealTime>({.name = "RealTime", .zone = Kernel::Zone::B});
-    r.Resource<VirtualTime>({.name = "VirtualTime", .zone = Kernel::Zone::B});
-    r.Resource<FixedTime>({.name = "FixedTime", .zone = Kernel::Zone::B});
-    r.Resource<ActiveTime>({.name = "ActiveTime", .zone = Kernel::Zone::B});
-    r.Resource<Tick>({.name = "Tick", .zone = Kernel::Zone::B});
-    r.Resource<TimeSampling>({.name = "TimeSampling", .zone = Kernel::Zone::B});
-    r.Resource<Resimulation>({.name = "Resimulation", .zone = Kernel::Zone::B});
-    r.Resource<TimeConfig>({.name = "TimeConfig", .zone = Kernel::Zone::B});
-    if (options.pausable) r.Resource<TimeControl>({.name = "TimeControl", .zone = Kernel::Zone::B});
-    r.Message<TimeDiscarded>({.name = "TimeDiscarded", .zone = Kernel::Zone::B});
+    r.Resource<RealTime>({.name = "RealTime"});
+    r.Resource<VirtualTime>({.name = "VirtualTime"});
+    r.Resource<FixedTime>({.name = "FixedTime"});
+    r.Resource<ActiveTime>({.name = "ActiveTime"});
+    r.Resource<Tick>({.name = "Tick"});
+    r.Resource<TimeSampling>({.name = "TimeSampling"});
+    r.Resource<Resimulation>({.name = "Resimulation"});
+    r.Resource<TimeConfig>({.name = "TimeConfig"});
+    if (options.pausable) r.Resource<TimeControl>({.name = "TimeControl"});
+    r.Message<TimeDiscarded>({.name = "TimeDiscarded"});
 
     if (options.pausable) {
         r.AddSystem<&AdvanceTime>(Mounted("AdvanceTime", options.frameSchedule, options.advanceStage));
@@ -140,7 +138,9 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
         PutIfAbsent(world, ActiveTime{});
         PutIfAbsent(world, Tick{});
         PutIfAbsent(world, TimeSampling{});
-        PutIfAbsent(world, Resimulation{});
+        // Always false when a World is prepared, carried over or not (authority-rollback declaration 2.3, WT-1):
+        // a rollback interrupted by a replacement leaves no "resimulating" behind.
+        world.SetResource(Resimulation{});
         // The settings of this World, always (the step length too, through FixedTime above: a restore or a
         // carry-over keeps FixedTime's elapsed time and remainder only, RestoreFixedTime).
         world.SetResource(config);

@@ -544,19 +544,3 @@ TEST_CASE("O-9: the refusal error names the World and the owner; nothing is logg
 K::SystemResult WriteTagBoot(K::Query<K::Write<Tag>>) { return {}; }
 K::SystemResult WriteTagFrame(K::Query<K::Write<Tag>>) { return {}; }
 
-// "A game initialization schedule belongs to a domain" (D-E12, the O-1 transition sentence) left with the clock
-// in batch 3 (G2, v8-arch-gyo2-clock-out-of-kernel).
-TEST_CASE("O-1: game initialization and the frame both writing one column is D-E2") {
-    Log().clear();
-    O::ProductDescription twoWriters;
-    twoWriters.name = "game";
-    twoWriters.gameInit = {"Boot"};
-    twoWriters.worlds.push_back(World("Main", [](O::WorldSetup& s) {
-        Basics(s.Registrar(), {Once("Boot"), FrameClock("Tick")});
-        s.Registrar().AddSystem<&WriteTagBoot>(In("WriteBoot", "Boot"));
-        s.Registrar().AddSystem<&WriteTagFrame>(In("WriteFrame", "Tick"));
-    }, {"Tick"}));
-    auto counted = O::Product::Build(std::move(twoWriters), Units().Take());
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(counted), "[or-gi-writer-counted] built");
-    CHECK_MESSAGE(counted.error().detail.find("D-E2") != std::string::npos, "[or-gi-writer-counted] " << counted.error().detail);
-}

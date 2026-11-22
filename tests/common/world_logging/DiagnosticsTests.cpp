@@ -52,13 +52,13 @@ O::ProductDescription NotesProduct(const bool spawnTwice) {
     w.name = "Simulation";
     w.build = [spawnTwice](O::WorldSetup& s) {
         K::Registrar& r = s.Registrar();
-        r.Resource<FailNow>({.name = "FailNow", .zone = K::Zone::B});
-        r.Message<Note>({.name = "Note", .zone = K::Zone::B, .capacity = 2});
+        r.Resource<FailNow>({.name = "FailNow"});
+        r.Message<Note>({.name = "Note", .capacity = 2});
         r.AddSystem<&SendFiveNotes>(At("SendFiveNotes", "Main", "Update"));
         r.AddSystem<&ReadNotes>(At("ReadNotes", "Main", "PostUpdate"));
         r.AddSystem<&FailIfAsked>(At("FailIfAsked", "Main", "Last"));
         if (spawnTwice) {
-            r.Component<Body>({.name = "Body", .zone = K::Zone::B});
+            r.Component<Body>({.name = "Body"});
             r.AddSystem<&SpawnSevenTwice>(At("SpawnSevenTwice", "Main", "Update"));
         }
     };

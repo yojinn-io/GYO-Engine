@@ -13,6 +13,7 @@
 #include "engine/kernel/Access.hpp"
 #include "engine/kernel/WorldExecutor.hpp"
 #include "engine/kernel/Declarations.hpp"
+#include "engine/kernel/Hash.hpp"
 #include "engine/kernel/KernelError.hpp"
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Plan.hpp"

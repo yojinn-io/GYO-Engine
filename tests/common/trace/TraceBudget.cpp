@@ -116,11 +116,10 @@ std::unique_ptr<O::Product> Twenty() {
     O::WorldDescription w;
     w.name = "Match";
     w.build = [](O::WorldSetup& s) {
-        s.Registrar().Resource<Counter>({.name = "Counter", .zone = K::Zone::B, .writePolicy = K::WritePolicy::Shared});
+        s.Registrar().Resource<Counter>({.name = "Counter"});
         for (int i = 0; i < 20; ++i) {
             K::SystemOptions o;
             o.name = "Count" + std::to_string(i);
-            o.zone = K::Zone::B;
             K::Mount m;
             m.schedule = "Main";
             m.stage = "Update";

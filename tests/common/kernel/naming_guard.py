@@ -20,14 +20,16 @@ Declared in docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.m
       reported (fail closed).
 
 Roots behave differently on purpose, and the self-test pins both:
-  - a mapped directory (engine/kernel) must exist and hold files: missing or empty is a finding, so the guard
+  - a mapped directory (engine/ecs/kernel) must exist and hold files: missing or empty is a finding, so the guard
     never passes by scanning nothing;
   - a reverse root that does not exist is skipped (plugins/ does not exist yet), not a finding.
 spikes/ is not scanned (an independent project, namespace KernelSpike, deleted under migration plan U10).
 
-The table has two rows: engine/kernel, and engine/orchestration (added by v8-arch-gyo2-time-events step 1, the
-guard the orchestration-skeleton declaration section 7.4 deferred until scenario segment 1 passed). Product rows belong to the product owner and are to come from product-side
-data (like the zone-c-sources list), proposed by the first product batch that needs them; they are not added
+The table has three rows: engine/ecs/kernel; engine/orchestration (added by v8-arch-gyo2-time-events step 1, the
+guard the orchestration-skeleton declaration section 7.4 deferred until scenario segment 1 passed); and
+engine/modules/world_time (added by v8-arch-gyo2-authority-rollback step 1, the guard time-events-declaration 6.3 deferred
+until scenario segment 2 passed). Product rows belong to the product owner and are to come from product-side
+data (like the authority-sources list), proposed by the first product batch that needs them; they are not added
 to this common script (declaration LIM-4).
 
 Usage: python3 naming_guard.py [--root REPOSITORY]
@@ -41,7 +43,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kernel_guard import SUFFIXES as KERNEL_SUFFIXES, line_of, strip_comments_and_strings  # noqa: E402
 
-ROOTS = (("engine/ecs/kernel", "GYO::Kernel"), ("engine/orchestration", "GYO::Engine::Orchestration"))
+ROOTS = (("engine/ecs/kernel", "GYO::Kernel"), ("engine/orchestration", "GYO::Engine::Orchestration"),
+         ("engine/modules/world_time", "GYO::Engine::WorldTime"))
 REVERSE_ROOTS = ("engine", "apps", "tools", "framework", "plugins", "tests")
 SUFFIXES = KERNEL_SUFFIXES | {".m", ".mm"}  # the same C/C++ files kernel_guard reads, plus Objective-C++
 ROLE_SUFFIXES = ("Manager", "Renderer", "ViewModel", "Host", "Shell", "Runtime", "Controller")

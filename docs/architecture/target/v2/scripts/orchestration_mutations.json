@@ -226,7 +226,7 @@
    "id": "or-prepare-skipped-at-startup",
    "what": "O-7: prepare functions do not run at startup",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), slot.unitPrepares, nullptr);",
+   "find": "        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), registrations[i].unitPrepares, nullptr);",
    "replace": "        ::Engine::Base::Result<void, OrchestrationError> prepared{};",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: prepare order*",
@@ -436,8 +436,8 @@
    "id": "g8-product-build-before-units",
    "what": "G-8 candidate (g8-check-fable-high.md)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n",
-   "replace": "    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
+   "find": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n",
+   "replace": "    auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},\n                                  [&](Kernel::Registrar& registrar) {\n                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n                                      if (world.build) world.build(setup);\n                                  });\n    GYO_ASSERT(static_cast<bool>(own));\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: the product's own build*",
    "expect": "\\[or\\-product\\-build\\-last\\]"
@@ -636,21 +636,11 @@
    "id": "g8-swap-keeps-old-lists",
    "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    slot.frame = std::move(registration.frame);\n    slot.unitPrepares = std::move(registration.unitPrepares);\n    slot.carries = std::move(registration.carries);\n    slot.lastSchedule.clear();",
+   "find": "    slot.frame = std::move(registration.frame);\n    slot.carries = std::move(registration.carries);\n    slot.lastSchedule.clear();",
    "replace": "    slot.lastSchedule.clear();",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: a registration that differs*",
    "expect": "\\[or\\-swap\\-new\\-frame\\]"
-  },
-  {
-   "id": "g8-replace-prepare-from-old-registration",
-   "what": "G-8 candidate (g8-check-fable-high.md) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "Prepare(slot, *world, registration.unitPrepares, request.extra",
-   "replace": "Prepare(slot, *world, slot.unitPrepares, request.extra",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-8: a registration that differs*",
-   "expect": "\\[or\\-swap\\-new\\-prepare\\]"
   },
   {
    "id": "el-insert-owner-dropped",
@@ -670,8 +660,8 @@
    "id": "g8-check-report-unit",
    "what": "G-8 candidate (g8-check-fable-high.md)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);",
-   "replace": "        WorldCheck context(world.name, world.name, world.dynamicInsert, world.options, unitErrors);",
+   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);",
+   "replace": "        WorldCheck context(world.name, world.name, world.dynamicInsert, world.options, unitErrors, *buffer);",
    "target": "gyo_orchestration_tests",
    "cases": "O-5: a Check error names*",
    "expect": "\\[or\\-check\\-unit\\-name\\]"
@@ -680,8 +670,8 @@
    "id": "g8-check-inside-finish-loop",
    "what": "G-8 candidate: O-2: Configure once each* | \\[or\\-lifecycle\\-order\\].*finish time@Main v1 \\| check time@Main",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (std::size_t index : slot.units) {\n        WorldFinish context(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(frozen, context);\n    }\n    for (std::size_t index : slot.units) {\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);\n        units_[index].unit->Check(frozen, context);\n    }",
-   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish finishContext(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(frozen, finishContext);\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);\n        units_[index].unit->Check(frozen, context);\n    }",
+   "find": "    for (std::size_t index : slot.units) {\n        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(frozen, context);\n    }\n    for (std::size_t index : slot.units) {\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);\n        units_[index].unit->Check(frozen, context);\n    }",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish finishContext(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(frozen, finishContext);\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);\n        units_[index].unit->Check(frozen, context);\n    }",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: Configure once each*",
    "expect": "\\[or\\-lifecycle\\-order\\].*finish time@Main v1 \\| check time@Main"
@@ -750,8 +740,8 @@
    "id": "g8-check-sees-true",
    "what": "G-8 candidate: O-2: options reach* | \\[or\\-check\\-declaration\\] Check saw",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "units_[index].row, world.dynamicInsert, world.options, unitErrors);",
-   "replace": "units_[index].row, true, world.options, unitErrors);",
+   "find": "units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);",
+   "replace": "units_[index].row, true, world.options, unitErrors, *buffer);",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: options reach*",
    "expect": "\\[or\\-check\\-declaration\\] Check saw"
@@ -1190,10 +1180,10 @@
   },
   {
    "id": "sc-lower-bound-not-moved",
-   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets",
+   "what": "step 4 (scenario segment 1): S1-7: the allotter's range ignores the lower bound the load sets (find rewritten by v8-arch-gyo2-authority-rollback step 1: the allotter lost its padding field)",
    "file": "engine/ecs/kernel/include/engine/kernel/detail/Storage.hpp",
-   "find": "        return RangeAllotter{first, last, first, first > last, {}};",
-   "replace": "        return RangeAllotter{1, last, 1, first > last, {}};",
+   "find": "        return RangeAllotter{first, last, first, first > last};",
+   "replace": "        return RangeAllotter{1, last, 1, first > last};",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 1:*",
    "expect": "\\[sc-s1-7-put-rejected\\]"
@@ -1266,8 +1256,8 @@
     "time-events-declaration 判定 2"
    ],
    "file": "engine/modules/world_time/src/WorldTimeModule.cpp",
-   "find": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\", .zone = Kernel::Zone::B});\n",
-   "replace": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\", .zone = Kernel::Zone::B});\n    setup.CarryOver<RealTime>(\"RealTime\");\n",
+   "find": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\"});\n",
+   "replace": "    if (options.pausable) r.Resource<TimeControl>({.name = \"TimeControl\"});\n    setup.CarryOver<RealTime>(\"RealTime\");\n",
    "target": "gyo_scenario_tests",
    "cases": "scenario segment 2:*",
    "expect": "\\[sc-s2-8-real-fresh\\]"
@@ -1852,7 +1842,7 @@
    "what": "G-7 (group B): a dynamic insert runs every unit Finish of the World again (declaration section 9 \"插入後重跑 Finish\"; moved from the kernel catalog ks-s2-plugin-finish-again)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = slot->registry->BuildPlans();\n    if (!built) {",
-   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
+   "replace": "    {\n        std::vector<UnitReportedError> sink;\n        ModuleBuffer frozen;\n        frozen.Freeze();\n        for (std::size_t index : slot->units) {\n            WorldFinish again(slot->description.name, units_[index].row, sink, frozen);\n            units_[index].unit->Finish(slot->registry->Frozen(), again);\n        }\n    }\n    auto built = slot->registry->BuildPlans();\n    if (!built) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-9: an allowing World*",
    "expect": "\\[or-insert-no-lifecycle\\]"
@@ -1862,20 +1852,10 @@
    "what": "G-7 (group B): Finish also runs before BuildPlans (it would read version 0, no Plan; moved from the kernel catalog ks-s3-version-before-finish) (the kernel refuses the read-only view before a successful BuildPlans, so the Product build aborts at that assertion)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
-   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
+   "replace": "    for (std::size_t index : slot.units) {\n        WorldFinish early(world.name, units_[index].row, unitErrors, *buffer);\n        units_[index].unit->Finish(registry->Frozen(), early);\n    }\n    auto built = registry->BuildPlans();\n    if (!built) {\n        result.kernel.emplace(std::move(built).error());",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: Configure once*",
    "expect": "GYO_ASSERT failed: data_->frozen"
-  },
-  {
-   "id": "or-gi-writer-uncounted",
-   "what": "G-7 (group E): game initialization and the frame both writing one Exclusive column is not D-E2 (writers counted until batch 4) (v8-arch-gyo2-time-events step 4: cases follow the O-1 case renamed when its D-E12 half left, G2)",
-   "file": "engine/ecs/kernel/src/Registry.cpp",
-   "find": "        if (policy != WritePolicy::Exclusive || list.size() < 2) continue;",
-   "replace": "        if (true) continue;",
-   "target": "gyo_orchestration_tests",
-   "cases": "O-1: game initialization and the frame both writing one column*",
-   "expect": "\\[or-gi-writer-counted\\]"
   },
   {
    "id": "g8s-old-world-leaked",
@@ -2231,14 +2211,14 @@
   },
   {
    "id": "or-guard-naming-root-dropped",
-   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration row of ROOTS (that row's whole rule, README rule 4); or-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent its fail closed",
+   "what": "N17 / naming guard (time-events step 1): engine/orchestration is no longer mapped to GYO::Engine::Orchestration. Only it drops the orchestration row of ROOTS (that row's whole rule, README rule 4); or-guard-real-n1-other-namespace is the row's positive control and ks-n1-mapped-root-silent its fail closed (find rewritten by v8-arch-gyo2-authority-rollback step 1: ROOTS gained the world_time row)",
    "guards": [
     "orchestration O-4",
     "time-events-declaration 6.3"
    ],
    "file": "tests/common/kernel/naming_guard.py",
-   "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"))",
-   "replace": ",)",
+   "find": ", (\"engine/orchestration\", \"GYO::Engine::Orchestration\"),",
+   "replace": ",",
    "expect": "FAIL: test_n1_orchestration_other_namespace_is_reported",
    "command": [
     "{python}",
@@ -2511,8 +2491,8 @@
     "time-events-declaration 3.6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
-   "replace": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
+   "find": "    // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
+   "replace": "    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-4: a unit inserts a stage into Main*",
    "expect": "\\[or\\-skeleton\\-before\\-build\\]"
@@ -2862,6 +2842,97 @@
    "guards": [
     "orchestration O-3"
    ]
+  },
+  {
+   "id": "or-buffer-not-frozen",
+   "what": "the ModuleBuffer is not frozen after Build (declaration 6 point 1: Build writes, Finish and Check read). Only it catches the freeze",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    buffer->Freeze();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: the owner creates*",
+   "expect": "\\[or\\-buffer\\-frozen\\]"
+  },
+  {
+   "id": "or-buffer-create-twice",
+   "what": "a second unit's Create of one type is not refused (declaration 6 point 2: one owner per type). Only it catches the one-owner check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "        GYO_ASSERT(Raw(Kernel::KeyOf<T>()) == nullptr && \"two registration units create one type in the ModuleBuffer\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: two units creating one type*",
+   "expect": "expected GYO_ASSERT to fail"
+  },
+  {
+   "id": "or-buffer-create-after-freeze",
+   "what": "Create after Build is not refused (declaration 6 point 1). Only it catches the Create freeze check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "        GYO_ASSERT(!frozen_ && \"ModuleBuffer::Create after Build: the buffer is frozen\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: a Create or a writable Find after Build*",
+   "expect": "expected GYO_ASSERT to fail: O::Product::Build[\\s\\S]*SUBCASE: Create from a prepare|Create from a prepare[\\s\\S]*expected GYO_ASSERT to fail"
+  },
+  {
+   "id": "or-buffer-writable-find-after-freeze",
+   "what": "a writable Find after Build is not refused (declaration 6 point 1). Only it catches the writable Find freeze check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: a Create or a writable Find after Build*",
+   "expect": "writable Find from a prepare[\\s\\S]*expected GYO_ASSERT to fail|expected GYO_ASSERT to fail[\\s\\S]*writable Find from a prepare"
+  },
+  {
+   "id": "or-buffer-finish-other",
+   "what": "Finish reads another buffer than the one Build wrote. Only it catches the buffer handed to Finish",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);",
+   "replace": "        ModuleBuffer other;\n        WorldFinish context(world.name, units_[index].row, unitErrors, other);",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: the owner creates*",
+   "expect": "\\[or\\-buffer\\-finish\\]"
+  },
+  {
+   "id": "or-buffer-check-other",
+   "what": "Check reads another buffer than the one Build wrote. Only it catches the buffer handed to Check",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);",
+   "replace": "        ModuleBuffer other;\n        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, other);",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: the owner creates*",
+   "expect": "\\[or\\-buffer\\-check\\]"
+  },
+  {
+   "id": "or-buffer-find-makes",
+   "what": "Find of an absent type makes an empty object (declaration 6 point 2: Find does not make one). Only it catches Find making nothing",
+   "guards": [
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/orchestration/include/engine/orchestration/Setup.hpp",
+   "find": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
+   "replace": "    [[nodiscard]] T* Find() {\n        GYO_ASSERT(!frozen_ && \"a writable ModuleBuffer::Find after Build: the buffer is frozen\");\n        if (Raw(Kernel::KeyOf<T>()) == nullptr) return &Create<T>();\n        return static_cast<T*>(Raw(Kernel::KeyOf<T>()));",
+   "target": "gyo_orchestration_tests",
+   "cases": "module-buffer: Find of a type nobody created*",
+   "expect": "\\[or\\-buffer\\-absent\\]"
   },
   {
    "id": "or-guard-o6-every-alias",

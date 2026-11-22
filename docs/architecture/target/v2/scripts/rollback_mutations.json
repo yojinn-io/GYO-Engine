@@ -1,0 +1,1040 @@
+{
+ "version": 1,
+ "description": "Mutants of the rollback Module (docs/architecture/target/v2/authority-rollback-declaration.zh-Hant.md section 9.4; tests/common/mutation/README.md). Run with tests/common/mutation/run_mutations.py --catalog.",
+ "mutants": [
+  {
+   "id": "rb-first-counts",
+   "what": "the first registration of a type counts, whatever its source (rollback 5.4: the author's over one made on behalf, whatever the order). Only it catches the author's preference",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "        const Source counts = anyAuthor ? Source::Author : Source::OnBehalf;",
+   "replace": "        const Source counts = records[group.front()].source;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: the author's registration counts*",
+   "expect": "\\[rb\\-author\\-counts\\]"
+  },
+  {
+   "id": "rb-conflict-silent",
+   "what": "two registrations of one source with different options are not reported (RB-E1). Only it catches the conflict",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "                errors.push_back(describe(*chosen, std::string(\"two of \") + SourceText(counts) +\n                                                       \" registrations with different options\"));",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: two of the author's*",
+   "expect": "\\[rb\\-e1\\-author\\]"
+  },
+  {
+   "id": "rb-e1-unnamed",
+   "what": "RB-E1 does not name the type. Only it catches the name in the report",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "error.message + (error.idIn != nullptr ? \" (\" + TypeNameIn(registry, error.idIn, error.kind) + \")\" : \"\")",
+   "replace": "error.message",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: two of the author's*",
+   "expect": "\\[rb\\-e1\\-names\\]"
+  },
+  {
+   "id": "rb-data-unchecked",
+   "what": "a type that may roll back but is not registered in the World is not reported (RB-E2). Only it catches the data check",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "        if (!record.ops->idIn(registry)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: what the read-only registry*",
+   "expect": "\\[rb\\-e2\\]"
+  },
+  {
+   "id": "rb-input-unchecked",
+   "what": "an input not registered in the World is not reported (RB-E3). Only it catches the input check",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "        if (!record.idIn(registry)) {\n            context.Report(\"RB-E3\"",
+   "replace": "        if (false) {\n            context.Report(\"RB-E3\"",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: what the read-only registry*",
+   "expect": "\\[rb\\-e3\\]"
+  },
+  {
+   "id": "rb-step-unchecked",
+   "what": "a step schedule the World does not have is not reported (RB-E4). Only it catches the step schedule check",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "            context.Report(\"RB-E4\", \"rollback.StepSchedule '\" + record.name + \"': no schedule of that name in this World\");",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: what the read-only registry*",
+   "expect": "\\[rb\\-e4\\]"
+  },
+  {
+   "id": "rb-nested-step-unchecked",
+   "what": "a nested schedule whose step schedule is not registered is not reported (RB-E5). Only it catches that check",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "        if (registrations.StepSchedule(record.stepSchedule) == nullptr) {",
+   "replace": "        if (false) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: what the read-only registry*",
+   "expect": "\\[rb\\-e5\\]"
+  },
+  {
+   "id": "rb-strategy-check-skipped",
+   "what": "the chosen strategy's startup check is not run (rollback 5.3). Only it catches the call",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "        options->strategy->Check(check);",
+   "replace": "        static_cast<void>(check);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: the peer-to-peer strategy*",
+   "expect": "\\[rb\\-e6\\-peer\\]"
+  },
+  {
+   "id": "rb-skip-no-condition",
+   "what": "SkipDuringResimulation gives no run condition: the System runs while resimulating. Only it catches the condition",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "        mount.conditions.push_back(Kernel::Condition<&NotResimulating>(\"NotResimulating\"));",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: a System registered as skipped*",
+   "expect": "\\[rb\\-skip\\-skipped\\]"
+  },
+  {
+   "id": "rb-not-resimulating-inverted",
+   "what": "the run condition is true while resimulating and false otherwise. Only it catches the condition's sense",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "bool NotResimulating(Kernel::Res<WorldTime::Resimulation> resimulation) { return resimulation->active == 0; }",
+   "replace": "bool NotResimulating(Kernel::Res<WorldTime::Resimulation> resimulation) { return resimulation->active != 0; }",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: a System registered as skipped*",
+   "expect": "\\[rb\\-skip\\-runs\\]"
+  },
+  {
+   "id": "rb-registry-not-put",
+   "what": "the resolved registrations are not put into the World (authority-rollback 5.1: read at run time from the World's Resource). Only it catches the prepare function",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "        world.SetResource(std::move(registry));",
+   "replace": "        static_cast<void>(registry);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: each kind*",
+   "expect": "\\[rb\\-registry\\-resource\\]"
+  },
+  {
+   "id": "rb-append-after-freeze",
+   "what": "a registration after Build is appended (declaration 6: the owner refuses it). Only it catches the owner's freeze check",
+   "guards": [
+    "rollback R-6",
+    "authority-rollback-declaration 6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    GYO_ASSERT(!buffer_->Frozen() && \"a rollback registration after Build: the registrations are frozen\");",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: a registration after Build*",
+   "expect": "through an entry kept from Build[\\s\\S]*expected GYO_ASSERT to fail|expected GYO_ASSERT to fail[\\s\\S]*through an entry kept from Build"
+  },
+  {
+   "id": "rb-tick-not-rewound",
+   "what": "the resimulation does not take Tick back (R-2 mutant: 漏退 tick). Only it catches the rewind",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    WorldTime::RewindFixedSteps(world, steps);\n",
+   "replace": "    static_cast<void>(steps);\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: going back*",
+   "expect": "\\[rb\\-r2\\-equal\\]"
+  },
+  {
+   "id": "rb-alive-not-restored",
+   "what": "the restore leaves the alive set as it is (R-2 mutant: 漏退存活集合). Only it catches the alive set (the restore then puts back cells of an entity it does not put back alive: the kernel's RestoreSet GYO_ASSERT)",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        set.Alive(*alive);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2 with spawns*",
+   "expect": "binary_search\\(after\\.begin\\(\\), after\\.end\\(\\), entity\\)"
+  },
+  {
+   "id": "rb-resimulating-not-raised",
+   "what": "deciding to go back does not raise \"resimulating\" (R-2 mutant: 重跑中沒立). Only it catches the raise",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        auto raised = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 1; });\n        if (!raised) return ::Engine::Base::Err(std::move(raised).error());\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2 with spawns*",
+   "expect": "\\[rb\\-side\\-effect\\-skipped\\]"
+  },
+  {
+   "id": "rb-resimulating-raised-late",
+   "what": "\"resimulating\" is raised after the restore (R-2 mutant: 還原之後才立; the restore's hooks see it lowered). Only it catches the order",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    return world.Restore(std::move(***built));",
+   "replace": "    static_cast<void>(world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 0; }));\n    auto restored = world.Restore(std::move(***built));\n    static_cast<void>(world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 1; }));\n    return restored;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2 with spawns*",
+   "expect": "\\[rb\\-resimulating\\-before\\-restore\\]"
+  },
+  {
+   "id": "rb-resimulating-not-lowered",
+   "what": "\"resimulating\" is not lowered after the resimulation (R-2 mutant: 重跑完沒放下). Only it catches the lowering",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    auto lowered = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 0; });\n    if (!lowered) return ::Engine::Base::Err(std::move(lowered).error());\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: going back*",
+   "expect": "\\[rb\\-resimulation\\-lowered\\]"
+  },
+  {
+   "id": "rb-inputs-not-written-back",
+   "what": "the resimulation does not write the inputs back (rollback 5.5 point 6). Only it catches the write-back",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            for (const auto& input : history.inputs) input->WriteBack(world, step);",
+   "replace": "            static_cast<void>(history);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: going back*",
+   "expect": "\\[rb\\-r2\\-equal\\]"
+  },
+  {
+   "id": "rb-authority-not-laid-over",
+   "what": "the restore takes the history's values only, not the authoritative ones (declaration 5.5 (a)). Only it catches the authority over the history",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                column->AddTo(set, target, *alive, values);",
+   "replace": "                column->AddTo(set, target, *alive, nullptr);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: an authoritative value that differs*",
+   "expect": "\\[rb\\-authority\\-adopted\\]"
+  },
+  {
+   "id": "rb-check-always-differs",
+   "what": "mode Check goes back even when the authority agrees. Only it catches the comparison's result",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        rollBack = differs;",
+   "replace": "        rollBack = true;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: mode Check does not go back*",
+   "expect": "\\[rb\\-check\\-agrees\\]"
+  },
+  {
+   "id": "rb-record-new-only",
+   "what": "a record keeps only the cells it had not seen (not the changed ones; G5). Only it catches the changed-stamp test",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (changed > since || !Has(entity)) entries_[entity].push_back({tick, value});",
+   "replace": "            if (!Has(entity)) entries_[entity].push_back({tick, value});",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: going back*",
+   "expect": "\\[rb\\-r2\\-equal\\]"
+  },
+  {
+   "id": "rb-input-record-drops-later",
+   "what": "recording an input drops the later ticks' inputs (the defect the R-2 test found). Only it catches keeping the later inputs",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "        if (at != ring_.end() && at->first == tick) {\n            at->second = **value;\n        } else {\n            ring_.insert(at, {tick, **value});\n        }",
+   "replace": "        ring_.erase(at, ring_.end());\n        ring_.emplace_back(tick, **value);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: going back*",
+   "expect": "\\[rb\\-r2\\-equal\\]"
+  },
+  {
+   "id": "rb-r7-unchecked",
+   "what": "R-7 is not checked: a Derived read with no writer ordered before it passes. Only it catches the Derived check",
+   "guards": [
+    "rollback R-7"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    CheckDerivedOrder(context, schedules);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: R-7: a Derived read*",
+   "expect": "\\[rb\\-r7\\-no\\-writer\\]"
+  },
+  {
+   "id": "rb-r7-deferred-counts",
+   "what": "a deferred writer counts as an immediate one (R-7 mutant: 把延後寫算成立即寫). Only it catches the immediate-write test",
+   "guards": [
+    "rollback R-7"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                    if (!std::binary_search(writer.access.writes.begin(), writer.access.writes.end(), key)) continue;",
+   "replace": "                    if (!std::binary_search(writer.access.writes.begin(), writer.access.writes.end(), key) &&\n                        std::find(writer.access.deferredWrites.begin(), writer.access.deferredWrites.end(), id) == writer.access.deferredWrites.end()) continue;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: R-7: a Derived read*",
+   "expect": "\\[rb\\-r7\\-deferred\\]"
+  },
+  {
+   "id": "rb-r7-order-ignored",
+   "what": "any writer counts, ordered before the reader or not. Only it catches the order test",
+   "guards": [
+    "rollback R-7"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                    if (reaches(writer.name, reader.name)) {",
+   "replace": "                    if (true) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: R-7: a Derived read*",
+   "expect": "\\[rb\\-r7\\-writer\\-after\\]"
+  },
+  {
+   "id": "rb-r7-every-schedule",
+   "what": "R-7 checks every schedule, not only the resimulated ones. Only it catches the schedule set",
+   "guards": [
+    "rollback R-7"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            if (!mounted) continue;\n            for (const Kernel::ComponentId id : derived) {",
+   "replace": "            static_cast<void>(mounted);\n            for (const Kernel::ComponentId id : derived) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: R-7 looks at*",
+   "expect": "\\[rb\\-r7\\-frame\\-unchecked\\]"
+  },
+  {
+   "id": "rb-msg-read-outside-unchecked",
+   "what": "a message written in a resimulated schedule may be read outside them (time-plan-two (5), first direction). Only it catches that direction",
+   "guards": [
+    "rollback-module-declaration 7.1"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (writtenIn) {",
+   "replace": "        if (false) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: a message does not cross*",
+   "expect": "\\[rb\\-msg\\-read\\-outside\\]"
+  },
+  {
+   "id": "rb-msg-written-outside-unchecked",
+   "what": "a message read in a resimulated schedule may be written outside them (time-plan-two (5), second direction). Only it catches that direction",
+   "guards": [
+    "rollback-module-declaration 7.1"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (readIn) {",
+   "replace": "        if (false) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: a message does not cross*",
+   "expect": "\\[rb\\-msg\\-written\\-outside\\]"
+  },
+  {
+   "id": "rb-history-no-drop",
+   "what": "a record during a resimulation keeps the entries of the steps it replaces (review of step 4). Only it catches the column history being rewritten by a resimulation",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "        DropFrom(tick);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: a second rollback reads*",
+   "expect": "\\[rb\\-rewritten\\-history\\-read\\]"
+  },
+  {
+   "id": "rb-alive-history-not-rewritten",
+   "what": "a record during a resimulation keeps the alive sets of the steps it replaces (review of step 4): they pile up past the depth. Only it catches the alive history being rewritten",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.2"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        while (!history.alive.empty() && history.alive.back().first >= tick) history.alive.pop_back();\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: rollbacks every frame*",
+   "expect": "\\[rb\\-history\\-pruned\\]"
+  },
+  {
+   "id": "rb-prune-window-start",
+   "what": "the column prune drops the newest entry at or before the window start too (review of step 4). Only it catches the base the window starts from",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            while (list.size() >= 2 && list[1].tick <= oldest) list.pop_front();",
+   "replace": "            while (!list.empty() && list[0].tick <= oldest) list.pop_front();",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: rollbacks every frame*",
+   "expect": "\\[rb\\-consecutive\\-equal\\]"
+  },
+  {
+   "id": "rb-never-pruned",
+   "what": "the history is never pruned (review of step 4; rollback declaration 5.5 point 1: what is older than the depth is dropped). Only it catches the prune running",
+   "guards": [
+    "rollback-module-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (tick > depth) {\n",
+   "replace": "        if (false) {\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: rollbacks every frame*",
+   "expect": "\\[rb\\-history\\-pruned\\]"
+  },
+  {
+   "id": "rb-depth-edge",
+   "what": "a confirmed point exactly depth steps behind is given up (review of step 4: > became >=). Only it catches the edge of the depth",
+   "guards": [
+    "rollback R-8",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (tick - point > settings_.depth || ",
+   "replace": "        if (tick - point >= settings_.depth || ",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: rollbacks every frame*",
+   "expect": "\\[rb\\-consecutive\\-steps\\]"
+  },
+  {
+   "id": "rb-removed-not-recorded",
+   "what": "a record keeps no entry for a cell gone since the last record (review of step 4). Only it catches the removal of a cell (not of an entity) being recorded",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (!std::binary_search(present.begin(), present.end(), entity)) list.push_back({tick, std::nullopt});\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: a cell a step removed*",
+   "expect": "\\[rb\\-removed\\-cell\\-recorded\\]"
+  },
+  {
+   "id": "rb-inbox-same-tick-only",
+   "what": "an authoritative value counts only at its own tick, not as the last value at or before C (review of step 4; R-8, MC-1). Only it catches \"the last value at or before\"",
+   "guards": [
+    "rollback R-8",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "        if (it->first.first != entity) return std::nullopt;",
+   "replace": "        if (it->first.first != entity || it->first.second != tick) return std::nullopt;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: an authoritative value before C*",
+   "expect": "\\[rb\\-authority\\-before\\-c\\]"
+  },
+  {
+   "id": "rb-inbox-not-pruned",
+   "what": "the inbox is not pruned when C moves without a rollback (review of step 4, 1-3: it grew without a bound). Only it catches that prune",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        auto pruned = world.Modify<RollbackInbox>([point](RollbackInbox& inbox) { inbox.Prune(point); });",
+   "replace": "        auto pruned = world.Modify<RollbackInbox>([point](RollbackInbox&) { static_cast<void>(point); });",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: the inbox is pruned*",
+   "expect": "\\[rb\\-inbox\\-pruned\\]"
+  },
+  {
+   "id": "rb-not-alive-compared",
+   "what": "an authoritative value for an entity the history has not alive at C is compared (review of step 4, 1-2: every C then went back). Only it catches the alive filter of the comparison",
+   "guards": [
+    "rollback R-8",
+    "authority-rollback-declaration 5.5"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (!std::binary_search(alive.begin(), alive.end(), entity)) continue;\n            const std::optional<T> wanted",
+   "replace": "            const std::optional<T> wanted",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: a value for an entity this World does not have*",
+   "expect": "\\[rb\\-not\\-alive\\-ignored\\]"
+  },
+  {
+   "id": "rb-input-not-put-back",
+   "what": "after a resimulation the input keeps the last step written back, not this frame's (review of step 4, 1-5). Only it catches the put back",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        for (auto& input : history.inputs) input->PutBack(world);",
+   "replace": "        static_cast<void>(history);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: an input entry that runs before the rollback*",
+   "expect": "\\[rb\\-input\\-put\\-back\\]"
+  },
+  {
+   "id": "rb-input-capacity-unchecked",
+   "what": "the official strategy does not report an input history shorter than the depth (review of step 4, 1-6: RB-E9). Only it catches RB-E9",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (input.capacity >= settings_.depth) continue;",
+   "replace": "        continue;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: RB-E9*",
+   "expect": "\\[rb\\-input\\-capacity\\]"
+  },
+  {
+   "id": "rb-disabled-ignored",
+   "what": "mode Disabled goes back like mode Check (review of step 4). Only it catches mode Disabled",
+   "guards": [
+    "authority-rollback-declaration 5.2"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (settings_.mode == RollbackMode::Disabled) return;\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: mode Disabled*",
+   "expect": "\\[rb\\-disabled\\]"
+  },
+  {
+   "id": "rb-ahead-not-waited",
+   "what": "a confirmed point ahead of the World is not waited for (review of step 4: the tick difference wraps and the rollback is given up). Only it catches the wait",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    if (point > tick) return {};  // the authority is ahead: wait until this World has run that step\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: a confirmed point ahead*",
+   "expect": "\\[rb\\-ahead\\-waits\\]"
+  },
+  {
+   "id": "rb-resource-not-restored",
+   "what": "a rollback-able Resource is not put back (rollback declaration 9, R-2 mutant 漏退配發器: the allotter is such a Resource). Only it catches the Resource history's restore",
+   "guards": [
+    "rollback R-2",
+    "authority-rollback-declaration 5.2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "        set.Resource<T>(std::move(value), [equal = equal_](const T& a, const T& b) {",
+   "replace": "        if (false) set.Resource<T>(std::move(value), [equal = equal_](const T& a, const T& b) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2 with spawns*",
+   "expect": "\\[rb\\-r2\\-churn\\]"
+  },
+  {
+   "id": "rb-r7-nested-ignored",
+   "what": "the nested schedules are left out of the resimulated ones (review of step 4: R-7 and RB-E8 then miss them). Only it catches the nested schedules being looked at",
+   "guards": [
+    "rollback R-7"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    for (const NestedScheduleRecord& record : registry.nestedSchedules) names.insert(record.name);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: R-7 looks at the nested schedules too*",
+   "expect": "\\[rb\\-r7\\-nested\\]"
+  },
+  {
+   "id": "rb-r7-tie-counts",
+   "what": "an order by registration (a tie break) counts as ordered before (review of step 4; R-7: a tie by registration is no order). Only it catches the tie edges being left out",
+   "guards": [
+    "rollback R-7"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            if (edge.source == Kernel::OrderSource::TieBreak) continue;\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: R-7 looks at the nested schedules too*",
+   "expect": "\\[rb\\-r7\\-tie\\-not\\-order\\]"
+  },
+  {
+   "id": "rb-r7-direct-only",
+   "what": "R-7 looks at a direct edge only, not a path (rollback declaration 9, R-7 mutant 只看直接邊). Only it catches the path search",
+   "guards": [
+    "rollback R-7"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                    if (seen.insert(next).second) pending.push_back(next);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: R-7 follows a path*",
+   "expect": "\\[rb\\-r7\\-transitive\\]"
+  },
+  {
+   "id": "rb-msg-hook-counted",
+   "what": "a hook that writes a message read in a resimulated schedule counts as a writer outside them (review of step 4; 7.1: hooks and observers are the author's). Only it catches hooks being left out of RB-E8",
+   "guards": [
+    "rollback-module-declaration 7.1"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                if (writer.hook || writer.observer || schedules.count(writer.schedule) != 0) continue;",
+   "replace": "                if (writer.observer || schedules.count(writer.schedule) != 0) continue;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: messages*",
+   "expect": "\\[rb\\-msg\\-hook\\-unchecked\\]"
+  },
+  {
+   "id": "rb-cross-kind-unresolved",
+   "what": "rollback state and Derived of one type are resolved apart, not across the kinds (review of step 8, B3: the author's Derived and a Component made on behalf both count). Only it catches the cross-kind resolution",
+   "guards": [
+    "rollback R-6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    out.registry.data = std::move(kept);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: rollback state and Derived of one type*",
+   "expect": "\\[rb\\-cross\\-kind\\-author\\]"
+  },
+  {
+   "id": "rb-trace-resimulate-missing",
+   "what": "no trace span around a step run again: a resimulation's spans cannot be told from the first run's (authority-rollback declaration 10.4). Only it catches the span",
+   "guards": [
+    "authority-rollback-declaration 10.4"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        resimulateSpan.Begin(\"rollback\", \"resimulate\");\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: each step run again has a span.rollback*",
+   "expect": "\\[rb\\-trace\\-resimulate\\] runs of FixedUpdate under"
+  },
+  {
+   "id": "rb-step-default-ignores-time",
+   "what": "StepSchedule() takes the skeleton's fixed-step schedule, not the time Module's (authority-rollback declaration 2.3). Only it catches the default following the time Module",
+   "guards": [
+    "authority-rollback-declaration 2.3"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "void RollbackEntry::StepSchedule() { StepSchedule(fixedSchedule_); }",
+   "replace": "void RollbackEntry::StepSchedule() { StepSchedule(std::string(Orchestration::DefaultSchedules::fixed)); }",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: the step schedule and the frame schedule default*",
+   "expect": "\\[rb\\-step\\-default\\-follows\\]"
+  },
+  {
+   "id": "rb-frame-default-ignores-time",
+   "what": "the rollback's frame Systems are mounted in the skeleton's frame schedule, not the time Module's (authority-rollback declaration 2.3). Only it catches the frame default",
+   "guards": [
+    "authority-rollback-declaration 2.3"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "                                  : time != nullptr                ? time->frameSchedule",
+   "replace": "                                  : false                          ? time->frameSchedule",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: the step schedule and the frame schedule default*",
+   "expect": "\\[rb\\-frame\\-default\\-follows\\]"
+  },
+  {
+   "id": "rb-e10-unchecked",
+   "what": "the official strategy without a step schedule is not reported: it records nothing and never takes an authoritative value, silently (review of step 8, A4). Only it catches RB-E10",
+   "guards": [
+    "rollback R-6"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    if (context.Registrations().stepSchedules.empty()) {",
+   "replace": "    if (false) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: the step schedule and the frame schedule default*",
+   "expect": "\\[rb\\-e10\\]"
+  },
+  {
+   "id": "rb-notes-not-cleared",
+   "what": "the notes left for SendRollbackNotes are not cleared: RollbackAbandoned is sent again every frame. Only it catches the clear",
+   "guards": [
+    "rollback R-8",
+    "authority-rollback-declaration 10.3"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "    pending->abandoned.clear();\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: C earlier than*",
+   "expect": "\\[rb\\-abandoned\\-once\\]"
+  },
+  {
+   "id": "rb-before-first-record-kept",
+   "what": "C earlier than the World's first record is not given up (rollback page section 3). Only it catches the AliveAt half of giving up",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {",
+   "replace": "        if (tick - point > settings_.depth) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: C earlier than*",
+   "expect": "\\[rb\\-before\\-first\\-record\\]"
+  },
+  {
+   "id": "rb-columns-never-pruned",
+   "what": "the column histories are never pruned (rb-never-pruned looks at the alive set only). Only it catches the columns' prune",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            for (auto& column : history.columns) column->Prune(oldest);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: the column history is pruned*",
+   "expect": "\\[rb\\-columns\\-pruned\\]"
+  },
+  {
+   "id": "rb-prune-drops-unchanged-base",
+   "what": "prune drops a cell's only entry older than the window though it still holds a value: an unchanged cell loses its base. Only it catches the base kept",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "(list.size() == 1 && list.front().tick <= oldest && !list.front().value)",
+   "replace": "(list.size() == 1 && list.front().tick <= oldest)",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: the column history is pruned*",
+   "expect": "\\[rb\\-prune\\-keeps\\-unchanged\\-base\\]"
+  },
+  {
+   "id": "rb-resource-history-not-replaced",
+   "what": "a resource's history keeps what a resimulation replaces (the column and alive set halves have their own mutants). Only it catches the resource half",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "        while (!entries_.empty() && entries_.back().tick >= tick) entries_.pop_back();\n        const std::optional<Kernel::ChangeStamp> stamp",
+   "replace": "        const std::optional<Kernel::ChangeStamp> stamp",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: a resource's history*",
+   "expect": "\\[rb\\-resource\\-history\\-replaced\\]"
+  },
+  {
+   "id": "rb-resource-absence-not-recorded",
+   "what": "a resource's absence is not recorded: restoring a step where it was gone brings it back. Only it catches the absence",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (!entries_.empty() && entries_.back().value) entries_.push_back({tick, std::nullopt});\n            return;",
+   "replace": "            return;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: a resource's history*",
+   "expect": "\\[rb\\-resource\\-history\\-absence\\]"
+  },
+  {
+   "id": "rb-differs-comparison-ignored",
+   "what": "the decision ignores the registered comparison. Only it catches the comparison in Differs",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "    static bool Same(Equal equal, const T& a, const T& b) {\n        if (equal != nullptr) return equal(a, b);",
+   "replace": "    static bool Same(Equal equal, const T& a, const T& b) {\n        static_cast<void>(equal);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: Differs compares at C*",
+   "expect": "\\[rb\\-differs\\-registered\\-comparison\\]"
+  },
+  {
+   "id": "rb-history-not-adopted",
+   "what": "the authoritative value is not laid over the history at C (a value equal to the World's is not rewritten by the restore nor recorded again). Only it catches Adopt",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                if (values != nullptr) column->Adopt(target, *values, *alive);",
+   "replace": "                static_cast<void>(values);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: the authoritative value is laid over*",
+   "expect": "\\[rb\\-history\\-adopted\\]"
+  },
+  {
+   "id": "rb-inbox-not-pruned-after-rollback",
+   "what": "the inbox is not pruned after a rollback (the existing mutant guards the agreeing path). Only it catches the prune after resimulating",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    auto pruned = world.Modify<RollbackInbox>([target](RollbackInbox& inbox) { inbox.Prune(target); });\n    if (!pruned) return ::Engine::Base::Err(std::move(pruned).error());\n",
+   "replace": "    static_cast<void>(target);\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: the inbox is pruned after*",
+   "expect": "\\[rb\\-inbox\\-pruned\\-after\\-rollback\\]"
+  },
+  {
+   "id": "rb-inbox-prune-drops-base",
+   "what": "pruning drops the newest value at or before C when a later one exists. Only it catches the \"at or before C\" bound",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "if (it->first.second < oldest && laterOfSameEntity && next->first.second <= oldest) {",
+   "replace": "if (it->first.second < oldest && laterOfSameEntity) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: pruning keeps*",
+   "expect": "\\[rb\\-inbox\\-prune\\-keeps\\-c\\]"
+  },
+  {
+   "id": "rb-inbox-prune-across-entities",
+   "what": "pruning takes another entity's entry for a later value of the same entity. Only it catches the per-entity bound",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "const bool laterOfSameEntity = next != entries_.end() && next->first.first == it->first.first;",
+   "replace": "const bool laterOfSameEntity = next != entries_.end();",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: pruning keeps*",
+   "expect": "\\[rb\\-inbox\\-prune\\-per\\-entity\\]"
+  },
+  {
+   "id": "rb-input-ring-off-by-one",
+   "what": "an input history of capacity n keeps n - 1 steps (RB-E9 says capacity equal to the depth is enough). Only it catches the edge",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "        while (ring_.size() > capacity_) ring_.pop_front();",
+   "replace": "        while (ring_.size() >= capacity_) ring_.pop_front();",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: an input history of capacity*",
+   "expect": "\\[rb\\-input\\-capacity\\-edge\\]"
+  },
+  {
+   "id": "rb-msg-observer-writer-counted",
+   "what": "an observer's write counts as a writer outside the resimulated schedules (RB-E8 looks at System mounts only). Only it catches the observer writer exemption",
+   "guards": [
+    "rollback-module-declaration 7.1"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                if (writer.hook || writer.observer || schedules.count(writer.schedule) != 0) continue;",
+   "replace": "                if (writer.hook || schedules.count(writer.schedule) != 0) continue;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: messages: an observer's*",
+   "expect": "\\[rb\\-msg\\-observer\\-writer\\-unchecked\\]"
+  },
+  {
+   "id": "rb-msg-observer-reader-counted",
+   "what": "an observer's read counts as a reader outside the resimulated schedules. Only it catches the observer reader exemption",
+   "guards": [
+    "rollback-module-declaration 7.1"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                if (reader.observer || schedules.count(reader.schedule) != 0) continue;",
+   "replace": "                if (schedules.count(reader.schedule) != 0) continue;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: messages: an observer's*",
+   "expect": "\\[rb\\-msg\\-observer\\-reader\\-unchecked\\]"
+  },
+  {
+   "id": "rb-record-without-strategy",
+   "what": "the record System is mounted in a World without a strategy (R-4: no history, nothing recorded). Only it catches the record half of R-4",
+   "guards": [
+    "rollback R-4"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    if (first && strategy_) {",
+   "replace": "    if (first) {",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-4*",
+   "expect": "\\[rb\\-r4\\-no\\-record\\]"
+  },
+  {
+   "id": "rb-history-without-strategy",
+   "what": "RollbackHistory is registered in a World without a strategy. Only it catches the history half of R-4",
+   "guards": [
+    "rollback R-4"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "    if (strategy != nullptr) {\n        const WorldTime::WorldTimeOptions* time = setup.Options<WorldTime::WorldTimeOptions>();",
+   "replace": "    r.Resource<RollbackHistory>({.name = \"RollbackHistory\"});\n    if (strategy != nullptr) {\n        const WorldTime::WorldTimeOptions* time = setup.Options<WorldTime::WorldTimeOptions>();",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-4*",
+   "expect": "\\[rb\\-r4\\-no\\-history\\]"
+  },
+  {
+   "id": "rb-abandon-without-note",
+   "what": "giving up does not call Abandon: no RollbackAbandoned. Only it catches the note",
+   "guards": [
+    "rollback R-8",
+    "authority-rollback-declaration 10.3"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            context.Abandon(point, settings_.depth);\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: a confirmed point further back*",
+   "expect": "\\[rb\\-abandoned\\]"
+  },
+  {
+   "id": "rb-removed-falls-to-history",
+   "what": "an authoritative removal falls back to the history's value. Only it catches Removed",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "                    if (*value) cells.emplace_back(entity, **value);\n                    continue;",
+   "replace": "                    if (*value) {\n                        cells.emplace_back(entity, **value);\n                        continue;\n                    }",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy*",
+   "expect": "\\[rb\\-removed\\-adopted\\]"
+  },
+  {
+   "id": "rb-inbox-not-pruned-on-abandon",
+   "what": "the inbox is not pruned when C moves and the rollback is given up (or the mode is Disabled). Only it catches the prune on giving up",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        history.decided = point;\n        fresh = true;\n        if (settings_.mode == RollbackMode::Disabled) return;\n        if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {\n            context.Abandon(point, settings_.depth);\n            return;\n        }\n        if (settings_.mode == RollbackMode::Always) {\n            rollBack = true;\n            return;\n        }\n        bool differs = false;",
+   "replace": "        history.decided = point;\n        if (settings_.mode == RollbackMode::Disabled) return;\n        if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {\n            context.Abandon(point, settings_.depth);\n            return;\n        }\n        if (settings_.mode == RollbackMode::Always) {\n            rollBack = true;\n            return;\n        }\n        fresh = true;\n        bool differs = false;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: the inbox is pruned after*",
+   "expect": "\\[rb\\-inbox\\-pruned\\-after\\-abandon\\]"
+  },
+  {
+   "id": "rb-differs-lacking-ignored",
+   "what": "an authoritative value where the prediction had no component does not differ. Only it catches that direction",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (wanted.has_value() != had.has_value()) return true;\n",
+   "replace": "            if (!wanted.has_value() && had.has_value()) return true;\n            if (wanted.has_value() && !had.has_value()) continue;\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: Differs compares at C*",
+   "expect": "\\[rb\\-differs\\-prediction\\-lacks\\]"
+  },
+  {
+   "id": "rb-differs-future-value",
+   "what": "Differs compares a value later than C. Only it catches the \"at C\"",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            const std::optional<T> wanted = *inbox.At(entity, tick);",
+   "replace": "            const std::optional<T> wanted = *inbox.At(entity, UINT64_MAX);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8: Differs compares at C*",
+   "expect": "\\[rb\\-differs\\-later\\-waits\\]"
+  },
+  {
+   "id": "rb-skip-first-mount-only",
+   "what": "SkipDuringResimulation conditions only the first mount. Only it catches \"every mount\"",
+   "guards": [
+    "rollback R-6"
+   ],
+   "file": "engine/modules/rollback/src/Registrations.cpp",
+   "find": "    for (Kernel::Mount& mount : options.mounts) {\n        mount.conditions.push_back(Kernel::Condition<&NotResimulating>(\"NotResimulating\"));\n    }",
+   "replace": "    if (!options.mounts.empty()) options.mounts.front().conditions.push_back(Kernel::Condition<&NotResimulating>(\"NotResimulating\"));",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback registrations: SkipDuringResimulation puts*",
+   "expect": "\\[rb\\-skip\\-every\\-mount\\]"
+  },
+  {
+   "id": "rb-correct-not-mounted",
+   "what": "the frame's correction System is not mounted: a strategy's Correct is never called. Only it catches the Correct socket",
+   "guards": [
+    "rollback R-1"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "        r.AddSystem<&CorrectFrame>(correct);",
+   "replace": "        static_cast<void>(correct);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-1*",
+   "expect": "\\[rb\\-r1\\-correct\\-called\\]"
+  },
+  {
+   "id": "rb-restore-derives-initial-values",
+   "what": "the kernel's Restore derives InitialValue targets: R-2 breaks when a request comes back without its target (review of step 8, A3), and a revived entity gets a target it never had. The rollback's view of ks-restore-derives-initial-values",
+   "guards": [
+    "rollback R-2",
+    "kernel DI-KS 12"
+   ],
+   "file": "engine/ecs/kernel/src/Executor.cpp",
+   "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);",
+   "replace": "    return ApplyImmediateRecords(Detail::Derive::InitialValues, call, std::move(records), stamp, who, where);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2: a*InitialValue*",
+   "expect": "\\[rb\\-restore\\-no\\-initial\\-value\\]"
+  },
+  {
+   "id": "rb-input-default-length-ignored",
+   "what": "a recorded input of the default length keeps the number 0 instead of the strategy's depth: nothing is written back. Only it catches StrategyDepth",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "                history.inputs.push_back(record.makeHistory(record.capacity != 0 ? record.capacity : strategy->DefaultInputLength()));",
+   "replace": "                history.inputs.push_back(record.makeHistory(record.capacity));",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy*",
+   "expect": "\\[rb\\-(r2|consecutive)"
+  },
+  {
+   "id": "rb-e9-default-length-reported",
+   "what": "RB-E9 takes the default length (0) for a length shorter than the depth. Only it catches the default in RB-E9",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (input.capacity == 0 || input.capacity >= settings_.depth) continue;  // 0: the depth itself",
+   "replace": "        if (input.capacity >= settings_.depth) continue;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: a recorded input's length*",
+   "expect": "\\[rb\\-input\\-length\\-default\\-depth\\]"
+  }
+ ]
+}

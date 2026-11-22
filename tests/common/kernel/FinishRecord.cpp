@@ -39,8 +39,7 @@ constexpr int kStages = 5;
 
 template <int... C>
 void RegisterColumns(Registrar& r, std::integer_sequence<int, C...>) {
-    (r.Component<Column<C>>({.name = "Column" + std::to_string(C), .zone = Zone::B,
-                             .writePolicy = WritePolicy::Shared}),
+    (r.Component<Column<C>>({.name = "Column" + std::to_string(C)}),
      ...);
 }
 
@@ -50,7 +49,7 @@ void RegisterOne(Registrar& r) {
     m.schedule = "Update";
     m.stage = "Stage" + std::to_string(S % kStages);
     if (S % 10 == 0 && S + kStages < kSystems) m.before = {"System" + std::to_string(S + kStages)};
-    r.AddSystem<&Work<S>>({.name = "System" + std::to_string(S), .zone = Zone::B, .mounts = {m}});
+    r.AddSystem<&Work<S>>({.name = "System" + std::to_string(S), .mounts = {m}});
 }
 
 // In chunks of 100: one fold over 500 arguments exceeds AppleClang's expression nesting limit (256).

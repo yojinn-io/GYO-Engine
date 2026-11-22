@@ -107,20 +107,13 @@ struct Mount {
     std::vector<std::string> after;
     std::vector<std::string> sets;
     std::vector<ConditionRef> conditions;
-    // The kernel's NotInRollback condition (spec H-10, D-E15): skipped during
-    // Replay. Its run-time half arrives with rollback-extract.
-    bool notInRollback = false;
 };
 
 struct SystemOptions {
     std::string name;
-    Zone zone = Zone::Unset;
-    // Zone B only: may write role=Input (c) data, in the ingress stage (Z3).
-    bool ingress = false;
     // Effect names registered with Registrar::Effect. "Diagnostics" cannot be
     // written here; it comes only from DiagnosticsWriter<T> (spec S-8).
     std::vector<std::string> effects;
-    bool rollbackSafe = false;
     std::vector<Mount> mounts;
 };
 
@@ -131,7 +124,6 @@ enum class HookTrigger : std::uint8_t {
 
 struct HookOptions {
     std::string name;
-    Zone zone = Zone::Unset;
 };
 
 enum class StagePlace : std::uint8_t {
@@ -243,13 +235,6 @@ public:
         AddSetMember(KeyOf<SetTag>(), KeyOf<T>());
     }
 
-    // Marks a named set as the authority digest set (spec S-12): every member
-    // must be Exclusive (D-E2).
-    template <class SetTag>
-    void DigestSet() {
-        MarkDigestSet(KeyOf<SetTag>());
-    }
-
     // Declares resource T as the World's entity allotter (spec A.1): Spawn
     // writes it; without one, a Spawn parameter is D-E3.
     template <class T>
@@ -257,12 +242,6 @@ public:
         static_assert(EntityAllotter<T>, "an allotter has std::optional<EntityId> Allot() and bool Owns(EntityId) const");
         DeclareAllotter(KeyOf<T>(), Detail::AllotterOps{&Detail::AllotIn<T>, &Detail::OwnsIn<T>});
     }
-
-    // Makes a zone left Unset a startup error (D-E7, S-6) for the whole
-    // Registry instead of zone B. Called by the owner of the product's
-    // (c) data, so a forgotten zone cannot pass as (b). Any owner may call it;
-    // calling it twice is the same as once.
-    void RequireExplicitZones();
 
     void Schedule(ScheduleOptions options);
     // Inserts a stage before or after an existing stage of a schedule (spec C.2 point 2).
@@ -296,7 +275,7 @@ public:
     }
 
     // Hooks (spec F.4): OnAdd / OnRemove of component T, run at sync points in
-    // registration order. Their writes count as writers (DI-KS 6, 11).
+    // registration order (DI-KS 11).
     template <class T, auto Fn>
     void Hook(HookTrigger trigger, HookOptions options, std::source_location source = std::source_location::current()) {
         Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();
@@ -315,9 +294,8 @@ public:
     // has no Target, the kernel puts Fn(request) there at that same sync point,
     // before the OnAdd hooks. Fn is a function `Target Fn(const Request&)`.
     //
-    // This is how a component with one writing System gets its first value
-    // from other Systems: they spawn or insert Request (usually Shared), and
-    // only the writer of Target appears in Target's writer count. A Target the
+    // This is how a component gets its first value from other Systems: they
+    // spawn or insert Request, and the kernel fills Target. A Target the
     // entity already has is left as it is; overwriting an existing Request cell
     // does nothing; the Request cell stays on the entity. A Target that is
     // itself the Request of another declaration is filled at the same sync
@@ -326,11 +304,9 @@ public:
     // ComponentId gives the value; a Request that appears through a chain is
     // looked at in the next round, after the direct ones.
     //
-    // Zone rules: a System or hook that inserts or spawns Request writes Target,
-    // through chains of declarations, for Z1, Z2, Z3 and Z6 (not for the writer
-    // count), so the funnel allows what a direct write allows. Writing Request
-    // in place or removing it fills nothing and does not count. A zone C Target takes its
-    // value from a zone C Request only (Z1).
+    // The kernel counts it as nobody's write (no writer rules); a Module that
+    // looks at what writes what (the authority Module's checks) reads the
+    // declarations from the read-only registry (InitialValues).
     template <class Target, auto Fn>
     void InitialValue(std::source_location source = std::source_location::current()) {
         using Signature = Detail::InitialValueRequest<Target, decltype(Fn)>;
@@ -367,7 +343,6 @@ private:
                           Detail::ResolveFn resolve, Detail::RunFn run, std::source_location source);
     SetId RegisterNamedSet(TypeKey key, std::string name);
     void AddSetMember(TypeKey set, TypeKey component);
-    void MarkDigestSet(TypeKey set);
     void DeclareAllotter(TypeKey resource, Detail::AllotterOps ops);
     RegistrationSeq RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly, Detail::RunFn run,
                                    std::source_location source);
@@ -446,10 +421,11 @@ struct AccessSet {
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;
-    // The resources an ExclusiveWorld<Writes<R...>> lists (DI-KS 1): an
-    // annotation for the authority policy to read; not a write, not a writer,
-    // no conflict. In the Registry fingerprint.
-    std::vector<ResourceId> annotatedWrites;
+    // The components and resources an ExclusiveWorld<Writes<T...>> lists
+    // (DI-KS 1; components too since v8-arch-gyo2-authority-rollback step 2,
+    // authority declaration 5.8): an annotation for the authority Module to
+    // read; not a write, no conflict. In the Registry fingerprint.
+    std::vector<AccessKey> annotatedWrites;
     bool changeFilters = false;
     bool local = false;
     bool exclusive = false;
@@ -464,10 +440,6 @@ struct ColumnInfo {
     std::size_t size;
     std::size_t align;
     bool trivialRelocate;
-    WritePolicy writePolicy;
-    Zone zone;
-    Role role;
-    Rollback rollback;
     std::string owner;
 };
 
@@ -475,11 +447,6 @@ struct ResourceInfo {
     std::string name;
     std::size_t size;
     std::size_t align;
-    WritePolicy writePolicy;
-    Zone zone;
-    Role role;
-    Rollback rollback;
-    bool external;
     bool threadBound;
     std::string owner;
 };
@@ -498,20 +465,36 @@ struct MessageReaderInfo {
     friend bool operator==(const MessageReaderInfo&, const MessageReaderInfo&) = default;
 };
 
+// One writer of a message type (authority-rollback declaration 2.2; the
+// rollback Module's cross-schedule message check reads it): a System's mount,
+// a hook or an observer, each writing through MessageWriter<M>.
+struct MessageWriterInfo {
+    // The System's, hook's or observer's name.
+    std::string system;
+    // The mount's schedule; empty for a hook or an observer.
+    std::string schedule;
+    bool hook = false;
+    bool observer = false;
+
+    friend bool operator==(const MessageWriterInfo&, const MessageWriterInfo&) = default;
+};
+
 struct MessageInfo {
     std::string name;
-    Zone zone;
     std::string owner;
     std::uint32_t capacity = 1024;
     // Derived at every BuildPlans: every reader, by (registrationSeq, mount,
     // condition) order, then the observers in Registrar::Observer order (DI-KS 25).
     std::vector<MessageReaderInfo> readers;
+    // Derived at every BuildPlans, in the same shape: every System mount by
+    // (registrationSeq, mount) order, then the hooks in Registrar::Hook order,
+    // then the observers in Registrar::Observer order.
+    std::vector<MessageWriterInfo> writers;
 };
 
 // One pushed event type (Registrar::Event).
 struct EventInfo {
     std::string name;
-    Zone zone;
     std::string owner;
 };
 
@@ -522,7 +505,6 @@ struct ObserverInfo {
     std::string name;
     ObserverTrigger trigger;
     std::uint32_t id;
-    Zone zone;
     AccessSet access;
     std::string source;
     std::string owner;
@@ -531,8 +513,6 @@ struct ObserverInfo {
 struct SystemInfo {
     std::string name;
     RegistrationSeq registrationSeq;
-    Zone zone;
-    bool ingress;
     std::vector<Mount> mounts;
     AccessSet access;
     // "file:line" of the registration (spec B.1 source).
@@ -550,7 +530,6 @@ struct HookInfo {
     std::string name;
     HookTrigger trigger;
     ComponentId component;
-    Zone zone;
     AccessSet access;
     std::string source;
     std::string owner;
@@ -603,7 +582,7 @@ struct OrderEdge {
 };
 
 // One conflicting pair with no order path that the Scheduler ordered by
-// registration (spec D.2 step 10), zone C or not: listed at diagnostic level.
+// registration (spec D.2 step 10): listed at diagnostic level.
 // There is no ambiguity error (v8-arch-gyo2-no-ambiguity-detection): a Serial
 // schedule runs the two in some order anyway, and the kernel does not promise
 // a result that is the same in every registration order (DI-KS 5).
@@ -611,16 +590,6 @@ struct TieBreak {
     std::string schedule;
     std::string first;
     std::string second;
-};
-
-// Spec G-5 export (docs/architecture/zone-c-sources.zh-Hant.md, gyo.zone-c-sources v1).
-struct ZoneCSourcesOptions {
-    // Absolute path of the repository root; registration sites are made
-    // relative to it.
-    std::string repositoryRoot;
-    std::string ownerRoot;
-    std::vector<std::string> includeRoots;
-    std::string repoCommit;
 };
 
 // The read-only, versioned view of a Registry (DI-KS 25). The object itself
@@ -667,8 +636,8 @@ public:
     [[nodiscard]] std::span<const SetInfo> Sets() const noexcept;
     // The resolved order of one schedule, System to System, each edge with its
     // source, in (first, second) registrationSeq order; empty for an unknown
-    // schedule. The order D-E16 reads; a rollback Module reads it instead of
-    // resolving the order rules again.
+    // schedule. A rollback Module reads it (its Derived order check, R-7) instead
+    // of resolving the order rules again.
     [[nodiscard]] std::span<const OrderEdge> OrderGraph(std::string_view schedule) const noexcept;
     // Members of a named set (spec S13), in registration order of the members.
     [[nodiscard]] std::vector<ComponentId> SetMembers(SetId set) const;
@@ -676,18 +645,10 @@ public:
     // Fingerprints (spec C.2 point 5, H-4, J-18, J-20). Each carries its
     // format version; see Fingerprint.cpp for the exact bytes hashed.
     [[nodiscard]] Fingerprint RegistryFingerprint() const;
-    // Only the zone C part (spec H.3: two Products share one FixedUpdate when their
-    // cFingerprints match).
-    [[nodiscard]] Fingerprint CFingerprint() const;
 
     // Text report of every Plan (Plan.hpp ExportPlans).
     [[nodiscard]] std::string ExportPlans() const;
 
-    // Spec G-5: the source files of zone C Systems as gyo.zone-c-sources v1
-    // JSON. Err when a registration site is outside repositoryRoot or
-    // ownerRoot, so the list never names a file the scanner cannot read.
-    [[nodiscard]] ::Engine::Base::Result<std::string, KernelError> ExportZoneCSources(
-        const ZoneCSourcesOptions& options) const;
 
 private:
     friend class Registry;

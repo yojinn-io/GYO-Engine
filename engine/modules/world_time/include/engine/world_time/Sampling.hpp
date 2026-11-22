@@ -2,7 +2,7 @@
 
 // The time Module's sampling (time-events declaration 3.4): the one header of engine/world_time that reads the time
 // base. The type headers (TimeTypes.hpp, FixedStep.hpp) do not include it, so a source that may not read the clock
-// (zone_scan ZS1: a zone C System) can still name Tick and the time Resources.
+// (authority_scan ZS1: a System that writes decision data) can still name Tick and the time Resources.
 
 #include "engine/time/MonotonicClock.hpp"
 #include "engine/world_time/TimeTypes.hpp"

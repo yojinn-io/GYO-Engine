@@ -139,6 +139,8 @@ private:
     friend ::Engine::Base::Result<void, KernelError> Detail::TriggerNow(Detail::SystemContext&, EventTypeId,
                                                                       std::unique_ptr<Detail::ValueBox>,
                                                                       std::optional<EntityId>, bool);
+    friend ::Engine::Base::Result<void, KernelError> Detail::ApplyRestore(Detail::SystemContext&,
+                                                                        std::vector<Detail::Record>, ChangeStamp, bool);
 
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
@@ -149,6 +151,17 @@ private:
     ::Engine::Base::Result<Detail::ImmediateOutcome, KernelError> ImmediateFrom(Detail::SystemContext& call,
                                                                               Detail::Record record, ChangeStamp stamp,
                                                                               bool closureOpen);
+    // Detail::ApplyRestore: the records of ExclusiveWorld::Restore, as one immediate change.
+    ::Engine::Base::Result<void, KernelError> RestoreFrom(Detail::SystemContext& call, std::vector<Detail::Record> records,
+                                                        ChangeStamp stamp, bool closureOpen);
+    // The checks an immediate change and a restore share, in the order of
+    // RunNestedFrom (hook, closure, Interrupted, W-3, A.6 layer 2). Err: refused.
+    ::Engine::Base::Result<void, KernelError> RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
+                                                            const std::string& who, const std::string& where);
+    // The change itself and its hook rounds, as one immediate change with stamp.
+    ::Engine::Base::Result<void, KernelError> ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
+                                                                  std::vector<Detail::Record> change, ChangeStamp stamp,
+                                                                  const std::string& who, const std::string& where);
     // Detail::TriggerNow: ExclusiveWorld::Trigger of the running exclusive System call.
     ::Engine::Base::Result<void, KernelError> TriggerFrom(Detail::SystemContext& call, EventTypeId id,
                                                         std::unique_ptr<Detail::ValueBox> payload,

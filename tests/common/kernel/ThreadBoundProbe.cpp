@@ -26,7 +26,7 @@ struct Bound {
 };
 
 void BuildProbe(Registrar& r) {
-    r.Resource<Bound>({.name = "Bound", .zone = Zone::B, .threadBound = true});
+    r.Resource<Bound>({.name = "Bound", .threadBound = true});
     ScheduleOptions s;
     s.name = "Tick";
     s.stages = {"A"};

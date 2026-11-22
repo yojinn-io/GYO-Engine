@@ -79,7 +79,7 @@ Registry*& KeptRegistry() {
 }
 SystemResult RegistersFromSystem(Res<Flag>) {
     static_cast<void>(KeptRegistry()->Register(kCommand, [](Registrar& r) {
-        r.Component<Later>({.name = "Later", .zone = Zone::B});
+        r.Component<Later>({.name = "Later"});
     }));
     return Ok();
 }
@@ -184,9 +184,20 @@ TEST_CASE("DI-KS 26: a System registered after the first BuildPlans runs from th
                   "round state: " << Join(Log()));
 }
 
-// Partly solved (v8-arch-gyo2-summary-padding-a-then-c): World::Summary hashes
-// raw bytes, so every type compared here must have no padding. The full
-// solution, a hash function per type, is batch 4.
+// The message writer list is derived again at every BuildPlans (authority-rollback declaration 2.2), as the readers.
+TEST_CASE("DI-KS 26: a later BuildPlans lists a message type's writer once") {
+    Registry registry;
+    FirstRound(registry, [](Registrar& r) {
+        Base(r);
+        r.Message<LaterEvent>({.name = "LaterEvent"});
+        r.AddSystem<&SendsLater>(B("SendsLater", "A"));
+    });
+    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.AddSystem<&NewSystem>(B("NewSystem", "B")); })));
+    REQUIRE(Done(registry.BuildPlans()));
+    const auto& writers = registry.Frozen().Messages()[*registry.Frozen().MessageIdOf<LaterEvent>()].writers;
+    CHECK_MESSAGE(writers.size() == 1, "[ks-msg-writers-round] " << writers.size());
+}
+
 TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses the new types") {
     Registry registry;
     FirstRound(registry);
@@ -194,8 +205,8 @@ TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses t
     World& world = executor.GetWorld();
     world.Insert(1, Tag{1});
     REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-        r.Component<Later>({.name = "Later", .zone = Zone::B});
-        r.Resource<LaterRes>({.name = "LaterRes", .zone = Zone::B});
+        r.Component<Later>({.name = "Later"});
+        r.Resource<LaterRes>({.name = "LaterRes"});
         r.AddSystem<&UsesLater>(B("UsesLater", "A"));
     })));
     REQUIRE(Done(registry.BuildPlans()));
@@ -203,7 +214,7 @@ TEST_CASE("DI-KS 26: after BuildPlans, before the next Run, the World API uses t
     // its summary has the new storage, like a World made at the new version.
     World fresh(registry, "fresh");
     fresh.Insert(1, Tag{1});
-    CHECK_MESSAGE(world.Summary() == fresh.Summary(), "attach at the World API entry (summary)");
+    CHECK_MESSAGE(SummaryOf(world) == SummaryOf(fresh), "attach at the World API entry (summary)");
     world.Insert(1, Later{7});
     world.SetResource(LaterRes{9});
     CHECK_MESSAGE(world.Get<Later>(1) != nullptr, "attach at the World API entry");
@@ -218,7 +229,7 @@ TEST_CASE("DI-KS 25: what a later round registers is not visible before its Buil
     Registry registry;
     FirstRound(registry);
     WorldExecutor executor(registry, "rounds");
-    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); })));
+    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later"}); })));
     CHECK_MESSAGE(!registry.Frozen().ComponentIdOf<Later>().has_value(), "pending round visible in the Registry view");
     CHECK(registry.Frozen().Version() == 1U);
     GYO_CHECK_ASSERTS(executor.GetWorld().Insert(1, Later{1}));  // an unregistered type for the World API
@@ -232,7 +243,7 @@ TEST_CASE("DI-KS 4: a failed BuildPlans drops its round; the World runs the old 
     const std::size_t components = registry.Frozen().Components().size();
     const std::string plan = registry.Frozen().PlanOf("Tick")->fingerprint.Text();
     REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-        r.Component<Later>({.name = "Later", .zone = Zone::B});
+        r.Component<Later>({.name = "Later"});
         r.AddSystem<&UsesUnknown>(B("UsesUnknown", "A"));  // Other is not registered: R-E4
     })));
     const auto failed = registry.BuildPlans();
@@ -246,7 +257,7 @@ TEST_CASE("DI-KS 4: a failed BuildPlans drops its round; the World runs the old 
     CHECK(registry.Frozen().PlanOf("Tick")->fingerprint.Text() == plan);
     CHECK(registry.Frozen().SystemNamed("UsesUnknown") == nullptr);
     // The failed round's id for Later is void: the next round gives the next id from the old version.
-    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Other>({.name = "Other", .zone = Zone::B}); })));
+    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Other>({.name = "Other"}); })));
     REQUIRE(Done(registry.BuildPlans()));
     CHECK(registry.Frozen().ComponentIdOf<Other>() == static_cast<ComponentId>(components));
     CHECK_FALSE(registry.Frozen().ComponentIdOf<Later>().has_value());
@@ -258,13 +269,13 @@ TEST_CASE("DI-KS 4: DiscardRegistrations drops the round the same way") {
     FirstRound(registry);
     WorldExecutor executor(registry, "rounds");
     const std::size_t components = registry.Frozen().Components().size();
-    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); })));
+    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later"}); })));
     registry.DiscardRegistrations();
     CHECK(Done(registry.BuildPlans()));  // nothing left to build
     CHECK_MESSAGE(registry.Frozen().Version() == 1U, "a discarded round was built");
     CHECK_FALSE(registry.Frozen().ComponentIdOf<Later>().has_value());
     KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
-    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Other>({.name = "Other", .zone = Zone::B}); })));
+    REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Other>({.name = "Other"}); })));
     REQUIRE(Done(registry.BuildPlans()));
     CHECK(registry.Frozen().ComponentIdOf<Other>() == static_cast<ComponentId>(components));
 }
@@ -312,7 +323,7 @@ TEST_CASE("DI-KS 3: a second round that adds one unrelated System leaves ties, e
     const std::string tickPlan = view.PlanOf("Tick")->fingerprint.Text();
     REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
         Mount m = At("Other", "Only");
-        r.AddSystem<&Plain>(Sys("OtherPlain", Zone::B, {m}));
+        r.AddSystem<&Plain>(Sys("OtherPlain", {m}));
     })));
     REQUIRE(Done(registry.BuildPlans()));
     CHECK_MESSAGE(ties() == tiesBefore, "ties after the second round: " << Join(ties()));
@@ -421,18 +432,18 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
         KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     };
     SUBCASE("a hook on a component the previous version has") {
-        refused("hook", [](Registrar& r) { r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag", .zone = Zone::B}); });
+        refused("hook", [](Registrar& r) { r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag"}); });
     }
     SUBCASE("an initial value whose Target the previous version has") {
         refused("InitialValue Target", [](Registrar& r) {
-            r.Component<Later>({.name = "Later", .zone = Zone::B});
+            r.Component<Later>({.name = "Later"});
             r.InitialValue<Mode, &ModeFromLater>();
         });
     }
     SUBCASE("an initial value whose Request the previous version has") {
         // Entities that have Tag already would never get Other (S2 of the segment 2 review).
         refused("InitialValue Request", [](Registrar& r) {
-            r.Component<Other>({.name = "Other", .zone = Zone::B});
+            r.Component<Other>({.name = "Other"});
             r.InitialValue<Other, &OtherFromTag>();
         });
     }
@@ -441,40 +452,32 @@ TEST_CASE("DI-KS 26: a later round may not register what only the first round ma
     }
     SUBCASE("an allotter") {
         refused("allotter", [](Registrar& r) {
-            r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
+            r.Resource<RangeAllotter>({.name = "Allotter"});
             r.Allotter<RangeAllotter>();
         });
     }
-    SUBCASE("the digest set") {
-        refused("DigestSet", [](Registrar& r) { r.DigestSet<ReplicatedSet>(); });
-    }
-    SUBCASE("explicit zones") {
-        refused("RequireExplicitZones", [](Registrar& r) { r.RequireExplicitZones(); });
-    }
     SUBCASE("every kind in one round") {
         REQUIRE(Done(registry.Register(kBase, [](Registrar& r) {
-            r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag", .zone = Zone::B});
-            r.Component<Later>({.name = "Later", .zone = Zone::B});
-            r.Component<Other>({.name = "Other", .zone = Zone::B});
+            r.Hook<Tag, &OnTag>(HookTrigger::OnAdd, {.name = "OnTag"});
+            r.Component<Later>({.name = "Later"});
+            r.Component<Other>({.name = "Other"});
             r.InitialValue<Mode, &ModeFromLater>();
             r.InitialValue<Other, &OtherFromTag>();
             r.AddToSet<ReplicatedSet, Tag>();
-            r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::B});
+            r.Resource<RangeAllotter>({.name = "Allotter"});
             r.Allotter<RangeAllotter>();
-            r.DigestSet<ReplicatedSet>();
-            r.RequireExplicitZones();
         })));
         const auto result = registry.BuildPlans();
         const std::size_t count = ErrorCount(result, StartupCode::RE7);
-        CHECK_MESSAGE(count == 7, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
+        CHECK_MESSAGE(count == 5, "R-E7 count (all kinds) = " << count << ": " << Describe(result));
         CHECK(registry.Frozen().Version() == 1U);
         KERNEL_REQUIRE_RUN_OK(executor.Run("Tick"));
     }
     SUBCASE("what a later round may: a hook and an initial value of new components, a new named set") {
         REQUIRE(Done(registry.Register(kBase, [](Registrar& r) {
-            r.Component<Later>({.name = "Later", .zone = Zone::B});
-            r.Component<Other>({.name = "Other", .zone = Zone::B});
-            r.Hook<Later, &OnTag>(HookTrigger::OnAdd, {.name = "OnLater", .zone = Zone::B});
+            r.Component<Later>({.name = "Later"});
+            r.Component<Other>({.name = "Other"});
+            r.Hook<Later, &OnTag>(HookTrigger::OnAdd, {.name = "OnLater"});
             r.InitialValue<Other, &OtherFromLater>();
             r.NamedSet<DigestTag>("Fresh");
             r.AddToSet<DigestTag, Tag>();
@@ -497,7 +500,7 @@ TEST_CASE("DI-KS 26: a World that declares no dynamic insert refuses Register fo
         bool called = false;
         const auto result = registry.Register(kCommand, [&](Registrar& r) {
             called = true;
-            r.Component<Later>({.name = "Later", .zone = Zone::B});
+            r.Component<Later>({.name = "Later"});
         });
         REQUIRE_MESSAGE(!Done(result), "a World that declares no dynamic insert did not refuse");
         CHECK(result.error().code == KernelErrorCode::DynamicInsertRefused);
@@ -510,7 +513,7 @@ TEST_CASE("DI-KS 26: a World that declares no dynamic insert refuses Register fo
         KERNEL_REQUIRE_RUN_OK(allowing.Run("Tick"));
     }
     // The refusing World is gone: Register is allowed again.
-    REQUIRE_MESSAGE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); })),
+    REQUIRE_MESSAGE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later"}); })),
                     "Register refused after the refusing World is gone");
     REQUIRE(Done(registry.BuildPlans()));
     CHECK(registry.Frozen().Version() == 2U);
@@ -529,7 +532,7 @@ TEST_CASE("DI-KS 26: an Interrupted World does not count as running; one that de
         REQUIRE(executor.GetWorld().State() == WorldState::Interrupted);
         bool registered = false;
         const std::string asserted = AssertionIn([&] {
-            registered = Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); }));
+            registered = Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later"}); }));
         });
         REQUIRE_MESSAGE(asserted.empty(), "an Interrupted World counts as running: " << asserted);
         REQUIRE(registered);
@@ -546,7 +549,7 @@ TEST_CASE("DI-KS 26: an Interrupted World does not count as running; one that de
         executor.GetWorld().SetResource(Flag{0});
         REQUIRE_FALSE(Done(executor.Run("Tick")));
         REQUIRE(executor.GetWorld().State() == WorldState::Interrupted);
-        const auto result = registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); });
+        const auto result = registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later"}); });
         REQUIRE_MESSAGE(!Done(result), "an Interrupted World that declares no dynamic insert stopped refusing");
         CHECK(result.error().code == KernelErrorCode::DynamicInsertRefused);
         CHECK(registry.Frozen().Version() == 1U);
@@ -591,7 +594,7 @@ TEST_CASE("DI-KS 26: while a World made from the Registry runs, nothing may regi
         Registry hooked;
         FirstRound(hooked, [](Registrar& r) {
             Data(r);
-            r.Hook<Mode, &HookRegisters>(HookTrigger::OnAdd, {.name = "HookRegisters", .zone = Zone::B});
+            r.Hook<Mode, &HookRegisters>(HookTrigger::OnAdd, {.name = "HookRegisters"});
             r.AddSystem<&InsertsMode>(B("InsertsMode", "A"));
         });
         WorldExecutor hookOwn(hooked, "own");
@@ -604,7 +607,7 @@ TEST_CASE("DI-KS 26: while a World made from the Registry runs, nothing may regi
         Registry filled;
         FirstRound(filled, [](Registrar& r) {
             Data(r);
-            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Later>({.name = "Later"});
             r.InitialValue<Mode, &ModeFromLaterRegisters>();
             r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
         });
@@ -662,14 +665,14 @@ TEST_CASE("DI-KS 26: a build callable that throws leaves its registrations in th
     Registry registry;
     FirstRound(registry);
     CHECK_THROWS_AS(static_cast<void>(registry.Register(kCommand, [](Registrar& r) {
-        r.Component<Later>({.name = "Later", .zone = Zone::B});
+        r.Component<Later>({.name = "Later"});
         throw std::runtime_error("planned throw");
     })), std::runtime_error);
     // The round is pending (a World may not be made) and goes on with the next Register.
     GYO_CHECK_ASSERTS(World(registry, "late"));
     bool registered = false;
     const std::string asserted = AssertionIn([&] {
-        registered = Done(registry.Register(kCommand, [](Registrar& r) { r.Resource<LaterRes>({.name = "LaterRes", .zone = Zone::B}); }));
+        registered = Done(registry.Register(kCommand, [](Registrar& r) { r.Resource<LaterRes>({.name = "LaterRes"}); }));
     });
     REQUIRE_MESSAGE(asserted.empty(), "a build that threw left its Registrar open: " << asserted);
     REQUIRE(registered);
@@ -715,7 +718,7 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     // Each SUBCASE adds one kind of table, so a table the World misses fails only its own label.
     SUBCASE("message buffers") {
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-            r.Message<LaterEvent>({.name = "LaterEvent", .zone = Zone::B});
+            r.Message<LaterEvent>({.name = "LaterEvent"});
             r.AddSystem<&SendsLater>(B("SendsLater", "A"));
             r.AddSystem<&HoldsLater>(B("HoldsLater", "A", {"SendsLater"}));
         })));
@@ -733,7 +736,7 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     SUBCASE("verification exclusions") {
         // ExcludeFromVerification is for a World that has not run: one made before the round.
         WorldExecutor unrun(registry, "unrun");
-        REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later", .zone = Zone::B}); })));
+        REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) { r.Component<Later>({.name = "Later"}); })));
         REQUIRE(Done(registry.BuildPlans()));
         std::vector<std::string> excluded;
         const std::string asserted = AssertionIn([&] {
@@ -745,8 +748,8 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
     }
     SUBCASE("hook access") {
         REQUIRE(Done(registry.Register(kCommand, [](Registrar& r) {
-            r.Component<Later>({.name = "Later", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Hook<Later, &OnLaterAdd>(HookTrigger::OnAdd, {.name = "OnLaterAdd", .zone = Zone::B});
+            r.Component<Later>({.name = "Later"});
+            r.Hook<Later, &OnLaterAdd>(HookTrigger::OnAdd, {.name = "OnLaterAdd"});
             r.AddSystem<&InsertsLater>(B("InsertsLater", "A"));
         })));
         REQUIRE(Done(registry.BuildPlans()));
@@ -763,7 +766,7 @@ TEST_CASE("DI-KS 26: an existing World attaches every table a later round adds (
             late.name = "Late";
             late.stages = {"Only"};
             r.Schedule(late);
-            r.AddSystem<&NewSystem>(Sys("LateSystem", Zone::B, {At("Late", "Only")}));
+            r.AddSystem<&NewSystem>(Sys("LateSystem", {At("Late", "Only")}));
         })));
         REQUIRE(Done(registry.BuildPlans()));
         std::string late;
@@ -814,7 +817,7 @@ TEST_CASE("DI-KS 13: an extract source registers again, then the Registry that r
     };
     Registry source;
     REQUIRE(Done(source.Register(kBase, [](Registrar& r) {
-        r.Component<TestPos>({.name = "TestPos", .zone = Zone::C});
+        r.Component<TestPos>({.name = "TestPos"});
         r.Schedule(FixedSchedule());
     })));
     REQUIRE(Done(source.BuildPlans()));
@@ -822,18 +825,18 @@ TEST_CASE("DI-KS 13: an extract source registers again, then the Registry that r
     render.SetExtractSource(source);
     REQUIRE(Done(render.Register(kBase, [extractSchedule](Registrar& r) {
         extractSchedule(r);
-        r.AddSystem<&ExtractPosOf>(Sys("ExtractPos", Zone::B, {At("Extract", "Copy")}));
+        r.AddSystem<&ExtractPosOf>(Sys("ExtractPos", {At("Extract", "Copy")}));
     })));
     REQUIRE(Done(render.BuildPlans()));
     // TestVel is not in the source yet.
     REQUIRE(Done(render.Register(kCommand, [](Registrar& r) {
-        r.AddSystem<&ExtractVelOf>(Sys("ExtractVel", Zone::B, {At("Extract", "Copy")}));
+        r.AddSystem<&ExtractVelOf>(Sys("ExtractVel", {At("Extract", "Copy")}));
     })));
     CHECK(ErrorCount(render.BuildPlans(), StartupCode::RE4) == 1);
-    REQUIRE(Done(source.Register(kCommand, [](Registrar& r) { r.Component<TestVel>({.name = "TestVel", .zone = Zone::C}); })));
+    REQUIRE(Done(source.Register(kCommand, [](Registrar& r) { r.Component<TestVel>({.name = "TestVel"}); })));
     REQUIRE(Done(source.BuildPlans()));
     REQUIRE(Done(render.Register(kCommand, [](Registrar& r) {
-        r.AddSystem<&ExtractVelOf>(Sys("ExtractVel", Zone::B, {At("Extract", "Copy")}));
+        r.AddSystem<&ExtractVelOf>(Sys("ExtractVel", {At("Extract", "Copy")}));
     })));
     const auto rebuilt = render.BuildPlans();
     REQUIRE_MESSAGE(Done(rebuilt), Describe(rebuilt));
@@ -876,10 +879,10 @@ TEST_CASE("DI-KS 25: hooks, initial values, schedules, sets, effects and annotat
     Registry registry;
     FirstRound(registry, [](Registrar& r) {
         Data(r);
-        r.Component<Later>({.name = "Later", .zone = Zone::B});
+        r.Component<Later>({.name = "Later"});
         r.Effect("Io:file");
         r.InsertStage("Tick", "A", StagePlace::After, "AB");
-        r.Hook<Tag, &OnTag>(HookTrigger::OnRemove, {.name = "OnTagRemoved", .zone = Zone::B});
+        r.Hook<Tag, &OnTag>(HookTrigger::OnRemove, {.name = "OnTagRemoved"});
         r.InitialValue<Mode, &ModeFromLater>();
         r.Set({.name = "Grp", .schedule = "Tick", .before = {"Plain"}, .after = {}},
               {Condition<&FlagIsSet>("FlagIsSet")});
@@ -911,7 +914,7 @@ TEST_CASE("DI-KS 25: hooks, initial values, schedules, sets, effects and annotat
     CHECK_MESSAGE(view.SystemNamed("WritesFlag")->effects.size() == 1, "DI-KS 25 System effects");
     CHECK(view.SystemNamed("Plain")->effects.empty());
     CHECK(view.SystemNamed("AnnotatesFlag")->access.annotatedWrites ==
-          std::vector<ResourceId>{*view.ResourceIdOf<Flag>()});
+          (std::vector<AccessKey>{{AccessKind::Resource, *view.ResourceIdOf<Flag>()}}));
 }
 
 TEST_CASE("DI-KS 25: the order graph lists System-to-System edges with their source") {
@@ -926,7 +929,7 @@ TEST_CASE("DI-KS 25: the order graph lists System-to-System edges with their sou
                            std::vector<std::string> after = {}, std::vector<std::string> sets = {}) {
             Mount m = At("Ordered", std::move(stage), std::move(before), std::move(after));
             m.sets = std::move(sets);
-            return Sys(std::move(name), Zone::B, {m});
+            return Sys(std::move(name), {m});
         };
         r.Set({.name = "Grp", .schedule = "Ordered", .before = {"Z"}, .after = {}});
         r.AddSystem<&WritesFlag>(at("X", "A"));

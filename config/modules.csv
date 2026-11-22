@@ -5,3 +5,5 @@ logging,modules/logging,GYO::Logging,"Records, the Logger, sinks, the JSON lines
 trace,modules/trace,GYO::Trace,"Spans: the per-thread stack, parents, timing and the path, written as logging records",yes,no,,logging,,
 world_time,modules/world_time,GYO::WorldTime,"Game time in a World: time Resources, the fixed step, the tick",no,yes,logging,,GYO::Engine::WorldTime::WorldTimeModule,engine/world_time/WorldTimeModule.hpp
 world_logging,modules/world_logging,GYO::WorldLogging,"The World end of logging: Forward and the Kernel diagnostics a runner takes",yes,no,logging,,,
+rollback,modules/rollback,GYO::Rollback,"Putting a World back to an earlier step and running it again: the public registrations and the strategy interface",no,yes,world_time,,GYO::Engine::Rollback::RollbackModule,engine/rollback/RollbackModule.hpp
+authority,modules/authority,GYO::Authority,"Who decides the state of the game, chosen per World as a strategy: the registrations of decision data, the server authority strategy, the consistency fingerprint and the digest",no,yes,world_time;rollback,,GYO::Engine::Authority::AuthorityModule,engine/authority/AuthorityModule.hpp

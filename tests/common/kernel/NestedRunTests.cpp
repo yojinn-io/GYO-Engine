@@ -39,7 +39,6 @@ ScheduleOptions Schedule(std::string name, std::vector<std::string> stages) {
 
 ScheduleOptions FrameSchedule() {
     ScheduleOptions s = Schedule("Frame", {"In", "Drive", "Out"});
-    s.ingressStage = "In";
     return s;
 }
 
@@ -51,9 +50,9 @@ void Nest(Registrar& r, bool allotter = false) {
     r.Schedule(Schedule("Deep", {"D"}));
 }
 
-SystemOptions In(std::string name, std::string schedule, std::string stage, Zone zone = Zone::B,
+SystemOptions In(std::string name, std::string schedule, std::string stage,
                  std::vector<std::string> before = {}, std::vector<std::string> after = {}) {
-    return Sys(std::move(name), zone, {At(std::move(schedule), std::move(stage), std::move(before), std::move(after))});
+    return Sys(std::move(name), {At(std::move(schedule), std::move(stage), std::move(before), std::move(after))});
 }
 
 std::string Joined() {
@@ -242,7 +241,7 @@ TEST_CASE("J-56: the inner schedule spawns and despawns: no assert, and the oute
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&SpawnSeventy>(In("Spawn70", "Tick", "A"));
         r.AddSystem<&DespawnOne>(In("Despawn1", "Tick", "A"));
-        r.AddSystem<&LookForMembers>(In("Look", "Frame", "Drive", Zone::B, {}, {"Driver"}));
+        r.AddSystem<&LookForMembers>(In("Look", "Frame", "Drive", {}, {"Driver"}));
     });
     rig->world().Insert(1, Tag{1});
     Runs()["Driver"] = {"Tick"};
@@ -317,13 +316,13 @@ SystemResult LogTagAdd(HookCtx ctx) {
 }
 void OuterRecords(Registrar& r, bool nest) {
     Nest(r);
-    r.AddSystem<&InsertTagOnOne>(In("Early", "Frame", "Drive", Zone::B, {"Driver"}));
+    r.AddSystem<&InsertTagOnOne>(In("Early", "Frame", "Drive", {"Driver"}));
     r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
-    r.AddSystem<&InsertTagOnOneLate>(In("Late", "Frame", "Drive", Zone::B, {}, {"Driver"}));
+    r.AddSystem<&InsertTagOnOneLate>(In("Late", "Frame", "Drive", {}, {"Driver"}));
     r.AddSystem<&ProbeTagOfOne>(In("Probe", "Tick", "B"));
     if (nest) r.AddSystem<&SeedMode>(In("Seed", "Tick", "C"));
-    r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-    r.Hook<Tag, &LogTagAdd>(HookTrigger::OnAdd, {.name = "LogTagAdd", .zone = Zone::B});
+    r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
+    r.Hook<Tag, &LogTagAdd>(HookTrigger::OnAdd, {.name = "LogTagAdd"});
 }
 } // namespace
 
@@ -361,10 +360,10 @@ SystemResult DespawnFive(Despawn despawn) {
 }
 } // namespace
 
-TEST_CASE("J-56: an outer zone B insert into E and an inner despawn of E: the outer sync point drops the insert and counts it") {
+TEST_CASE("J-56: an outer insert into E and an inner despawn of E: the outer sync point drops the insert and counts it") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
-        r.AddSystem<&InsertTagOnFive>(In("Early", "Frame", "Drive", Zone::B, {"Driver"}));
+        r.AddSystem<&InsertTagOnFive>(In("Early", "Frame", "Drive", {"Driver"}));
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&DespawnFive>(In("Kill", "Tick", "A"));
     });
@@ -401,8 +400,8 @@ TEST_CASE("J-56: the outer schedule's hook queue is neither applied nor dropped 
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&InsertTagOnSix>(In("Seed", "Frame", "In"));
-        r.Hook<Tag, &TagToMode>(HookTrigger::OnAdd, {.name = "TagToMode", .zone = Zone::B});
-        r.Hook<Mode, &LogModeAdd>(HookTrigger::OnAdd, {.name = "LogModeAdd", .zone = Zone::B});
+        r.Hook<Tag, &TagToMode>(HookTrigger::OnAdd, {.name = "TagToMode"});
+        r.Hook<Mode, &LogModeAdd>(HookTrigger::OnAdd, {.name = "LogModeAdd"});
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&ProbeModeOfSix>(In("Probe", "Tick", "C"));
     });
@@ -427,7 +426,7 @@ SystemResult SpawnSeven(SpawnWithId<Bundle<Tag>> spawn) {
 }
 void SameId(Registrar& r) {
     Nest(r);
-    r.AddSystem<&DespawnSeven>(In("Leave", "Frame", "Drive", Zone::B, {"Driver"}));
+    r.AddSystem<&DespawnSeven>(In("Leave", "Frame", "Drive", {"Driver"}));
     r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
     r.AddSystem<&SpawnSeven>(In("Join", "Tick", "A"));
 }
@@ -497,7 +496,7 @@ SystemResult DriveThenTamperPing(ExclusiveWorld<> world) {
 }
 } // namespace
 
-TEST_CASE("J-56: verification on: the exclusive System's writes of Shared data and listed resources around a nested run are not reported") {
+TEST_CASE("J-56: verification on: the exclusive System's writes of components and listed resources around a nested run are not reported") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&WriteSharedAndListed>(In("Driver", "Frame", "Drive"));
@@ -532,7 +531,7 @@ TEST_CASE("J-56: verification on: a forbidden write before the nested run is the
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
         r.AddSystem<&TamperPingThenDrive>(In("Driver", "Frame", "Drive"));
-        r.AddSystem<&HoldsPings>(In("HoldsPings", "Tick", "A", Zone::B, {"SendsPing"}));
+        r.AddSystem<&HoldsPings>(In("HoldsPings", "Tick", "A", {"SendsPing"}));
         r.AddSystem<&SendsPing>(In("SendsPing", "Tick", "A"));
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
@@ -814,7 +813,7 @@ TEST_CASE("J-56: refused and swallowed: the running schedule itself") {
 TEST_CASE("J-56: refused and swallowed: an outer level's schedule (A runs B, B runs A)") {
     auto rig = NestRig([](Registrar& r) {
         SwallowRig(r);
-        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", Zone::B, {"Fails"}));
+        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", {"Fails"}));
     });
     Runs()["Driver"] = {"Step"};
     Runs()["Driver2"] = {"Frame"};
@@ -841,7 +840,7 @@ TEST_CASE("J-56: refused and swallowed: an extract schedule") {
 TEST_CASE("J-56: refused and swallowed: RunSchedule inside a Read closure") {
     auto rig = NestRig([](Registrar& r) {
         SwallowRig(r);
-        r.AddSystem<&RunInsideClosure>(In("Closure", "Frame", "Drive", Zone::B, {}, {"Driver"}));
+        r.AddSystem<&RunInsideClosure>(In("Closure", "Frame", "Drive", {}, {"Driver"}));
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
     rig->world().Insert(1, Tag{1});
@@ -854,7 +853,7 @@ TEST_CASE("J-56: refused and swallowed: RunSchedule in a hook") {
         SwallowRig(r);
         // OnRemove of a despawn: the hook runs before the entity's cells go, so no membership has changed yet.
         r.AddSystem<&DespawnSix>(In("Leave", "Frame", "In"));
-        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns"});
         r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
     });
     rig->world().Insert(6, Tag{6});
@@ -935,8 +934,8 @@ TEST_CASE("J-56: the inner schedule's hooks run, and their records are applied w
         Nest(r);
         r.AddSystem<&ReadTagOfNinety>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&SeedNinety>(In("Seed", "Tick", "A"));
-        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag", .zone = Zone::B});
-        r.Hook<Mode, &HookLogsHere>(HookTrigger::OnAdd, {.name = "HookLogs", .zone = Zone::B});
+        r.Hook<Mode, &ModeAddsTag>(HookTrigger::OnAdd, {.name = "ModeAddsTag"});
+        r.Hook<Mode, &HookLogsHere>(HookTrigger::OnAdd, {.name = "HookLogs"});
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run("Frame"));
     CHECK_MESSAGE(Logged("hook HookLogs@Tick"), "[ns-hook-inner] " << Joined());
@@ -1167,7 +1166,7 @@ SystemResult Ingress(ExclusiveWorld<>) { return Ok(); }
 
 void ResourceRig(Registrar& r) {
     Nest(r);
-    r.Resource<Pinned>({.name = "Pinned", .zone = Zone::B, .threadBound = true});
+    r.Resource<Pinned>({.name = "Pinned", .threadBound = true});
 }
 } // namespace
 
@@ -1193,7 +1192,7 @@ TEST_CASE("J-57: resources: any is read; one absent is not") {
     }
 }
 
-TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an unlisted single-writer one are written") {
+TEST_CASE("J-57: resources: a listed resource and unlisted ones are written") {
     {
         auto rig = NestRig([](Registrar& r) {
             ResourceRig(r);
@@ -1230,7 +1229,7 @@ TEST_CASE("J-57: resources: a listed single-writer resource, a Shared one and an
 // Writes<...> is an annotation (v8-arch-gyo2-exclusive-writes-optional, DI-KS 1):
 // no resource write, so no zone rule, no D-E18 and no S-18 sees it. S-17 stays
 // (a zone rule, a later batch).
-TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a hook with Writes pass; ingress is S-17") {
+TEST_CASE("J-57: declarations: a listed resource, KernelSettings and a hook with Writes pass") {
     const Built zoneC = Finish({{"test", [](Registrar& r) {
                                     Nest(r);
                                     r.AddSystem<&ListsZoneC>(In("ListsZoneC", "Frame", "Drive"));
@@ -1242,13 +1241,6 @@ TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a ho
                                        r.AddSystem<&ListsSettings>(In("ListsSettings", "Frame", "Drive"));
                                    }}});
     CHECK_MESSAGE(static_cast<bool>(settings.result), "[ns-decl-settings] " << Describe(settings));
-    const Built ingress = Finish({{"test", [](Registrar& r) {
-                                      Nest(r);
-                                      SystemOptions options = In("Ingress", "Frame", "In");
-                                      options.ingress = true;
-                                      r.AddSystem<&Ingress>(options);
-                                  }}});
-    CHECK_MESSAGE(HasRule(ingress, StartupCode::DE7, "S-17"), "[ns-decl-ingress] " << Describe(ingress));
     const Built inStage = Finish({{"test", [](Registrar& r) {
                                       Nest(r);
                                       r.AddSystem<&Ingress>(In("NotIngress", "Frame", "In"));
@@ -1256,7 +1248,7 @@ TEST_CASE("J-57: declarations: a listed zone C resource, KernelSettings and a ho
     CHECK_MESSAGE(static_cast<bool>(inStage.result), "[ns-decl-ingress-stage] " << Describe(inStage));
     const Built hook = Finish({{"test", [](Registrar& r) {
                                    Nest(r);
-                                   r.Hook<Tag, &HookWithWrites>(HookTrigger::OnAdd, {.name = "HookWithWrites", .zone = Zone::B});
+                                   r.Hook<Tag, &HookWithWrites>(HookTrigger::OnAdd, {.name = "HookWithWrites"});
                                }}});
     CHECK_MESSAGE(static_cast<bool>(hook.result), "[ns-decl-hook] " << Describe(hook));
 }
@@ -1302,7 +1294,7 @@ TEST_CASE("J-50: KernelSettings read and written through ExclusiveWorld: the rea
 TEST_CASE("J-50: a nested RunSchedule does not read KernelSettings again; the next outermost Run does") {
     auto rig = NestRig([](Registrar& r) {
         Nest(r);
-        r.AddSystem<&TurnsVerificationOn>(In("TurnsOn", "Frame", "Drive", Zone::B, {"Driver"}));
+        r.AddSystem<&TurnsVerificationOn>(In("TurnsOn", "Frame", "Drive", {"Driver"}));
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&ReadsPosUndeclared>(In("ReadsPosUndeclared", "Tick", "A"));
     }, false);
@@ -1417,7 +1409,7 @@ TEST_CASE("J-56: refused, swallowed, then a valid schedule in the same System: i
 TEST_CASE("J-56: B runs B (a level that is not the outermost runs itself): refused") {
     auto rig = NestRig([](Registrar& r) {
         SwallowRig(r);
-        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", Zone::B, {"Fails"}));
+        r.AddSystem<&DriveSwallow>(In("Driver2", "Step", "S", {"Fails"}));
     });
     Runs()["Driver"] = {"Step"};
     Runs()["Driver2"] = {"Step"};
@@ -1472,7 +1464,6 @@ SystemResult ResourceStampAround(ExclusiveWorld<> world) {
     if (auto r = world.Modify<Out>([](Out& o) { o.value += 1; }); !r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
-SystemResult IngressDeclared(ExclusiveWorld<Writes<Flag>>) { return Ok(); }
 } // namespace
 
 TEST_CASE("J-57: ExclusiveWorld writes and reads any value: the closure is called and the value written") {
@@ -1566,16 +1557,6 @@ TEST_CASE("J-57: a resource Modify between two nested runs takes the new stamp")
     CHECK_MESSAGE(changed > innerLast, "[ns-stamp-resource] changed " << changed << ", inner last " << innerLast);
 }
 
-TEST_CASE("J-57: declarations: ExclusiveWorld<Writes<...>> with the ingress flag is S-17 too") {
-    const Built built = Finish({{"test", [](Registrar& r) {
-                                    Nest(r);
-                                    SystemOptions options = In("IngressDeclared", "Frame", "In");
-                                    options.ingress = true;
-                                    r.AddSystem<&IngressDeclared>(options);
-                                }}});
-    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "S-17"), "[ns-decl-ingress] declared: " << Describe(built));
-}
-
 // ---- Added after the line-by-line review (Opus/xhigh, build/evidence/gyo2-nested-schedule/impl-review-opus-xhigh.md)
 
 namespace {
@@ -1590,7 +1571,7 @@ TEST_CASE("J-56: a hook of the inner schedule runs a schedule: refused, reported
         Nest(r);
         r.AddSystem<&Drive>(In("Driver", "Frame", "Drive"));
         r.AddSystem<&DespawnSixInside>(In("Leave", "Tick", "A"));
-        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns", .zone = Zone::B});
+        r.Hook<Tag, &HookRunsSchedule>(HookTrigger::OnRemove, {.name = "HookRuns"});
     });
     rig->world().Insert(6, Tag{6});
     Runs()["Driver"] = {"Tick"};

@@ -52,23 +52,23 @@ void Base(Registrar& r, const Limits& limits = {}) {
     early.stages = {"X"};
     early.hookRoundLimit = limits.early;
     r.Schedule(early);
-    r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Seed>({.name = "Seed", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Bullet>({.name = "Bullet", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Trail>({.name = "Trail", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Chain>({.name = "Chain", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Fan>({.name = "Fan", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Score>({.name = "Score", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Marker>({.name = "Marker", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Req>({.name = "Req", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Filled>({.name = "Filled", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Bomb>({.name = "Bomb", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<Fuse>({.name = "Fuse", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Resource<Depth>({.name = "Depth", .zone = Zone::B});
-    r.Message<Ping>({.name = "Ping", .zone = Zone::B});
-    r.Resource<TickCount>({.name = "TickCount", .zone = Zone::C, .role = Role::Input});
+    r.Component<Pos>({.name = "Pos"});
+    r.Component<Vel>({.name = "Vel"});
+    r.Component<Seed>({.name = "Seed"});
+    r.Component<Tag>({.name = "Tag"});
+    r.Component<Bullet>({.name = "Bullet"});
+    r.Component<Trail>({.name = "Trail"});
+    r.Component<Chain>({.name = "Chain"});
+    r.Component<Fan>({.name = "Fan"});
+    r.Component<Score>({.name = "Score"});
+    r.Component<Marker>({.name = "Marker"});
+    r.Component<Req>({.name = "Req"});
+    r.Component<Filled>({.name = "Filled"});
+    r.Component<Bomb>({.name = "Bomb"});
+    r.Component<Fuse>({.name = "Fuse"});
+    r.Resource<Depth>({.name = "Depth"});
+    r.Message<Ping>({.name = "Ping"});
+    r.Resource<TickCount>({.name = "TickCount"});
     ScheduleOptions tick;
     tick.name = "Tick";
     tick.stages = limits.tickStages;
@@ -76,8 +76,8 @@ void Base(Registrar& r, const Limits& limits = {}) {
     r.Schedule(tick);
 }
 
-SystemOptions Put(std::string name, std::string schedule, std::string stage, Zone zone = Zone::B) {
-    return Sys(std::move(name), zone, {KernelTest::At(std::move(schedule), std::move(stage))});
+SystemOptions Put(std::string name, std::string schedule, std::string stage) {
+    return Sys(std::move(name), {KernelTest::At(std::move(schedule), std::move(stage))});
 }
 
 // ---- Systems
@@ -143,7 +143,7 @@ SystemResult LateReader(MessageReader<Ping> pings, Res<TickCount> tick) {
     Log().push_back(line);
     return Ok();
 }
-SystemResult ZoneCSpawnsSeed(SpawnWithId<Bundle<Seed>> spawn, Res<TickCount> tick) {
+SystemResult SpawnsSeed(SpawnWithId<Bundle<Seed>> spawn, Res<TickCount> tick) {
     if (tick->value == 1) spawn.New(3, Seed{3});
     return Ok();
 }
@@ -280,7 +280,7 @@ std::unique_ptr<Rig> MakeFlushRig(std::function<void(Registrar&)> build, Limits 
 
 void ChainSystems(Registrar& r) {
     r.AddSystem<&SpawnChain>(Put("SpawnChain", "Tick", "C"));
-    r.Hook<Chain, &Grow>(HookTrigger::OnAdd, {.name = "Grow", .zone = Zone::B});
+    r.Hook<Chain, &Grow>(HookTrigger::OnAdd, {.name = "Grow"});
 }
 
 // One Run of Tick with a chain of the given depth (rounds needed: depth).
@@ -321,7 +321,7 @@ TEST_CASE("J-54: fixed-step end: a hook's records at the last sync point are app
             [](Registrar& r) {
                 r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
                 r.AddSystem<&CountTrails>(Put("CountTrails", "Early", "X"));
-                r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+                r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
             },
             {}, verification);
         Log().clear();
@@ -344,7 +344,7 @@ TEST_CASE("J-54: run once: a one-off schedule's hook records at its last sync po
                 once.stages = {"S"};
                 r.Schedule(once);
                 r.AddSystem<&SpawnBulletOnce>(Put("SpawnBulletOnce", "Startup", "S"));
-                r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+                r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
             },
             {}, verification);
         KERNEL_REQUIRE_RUN_OK(rig->Run("Startup"));
@@ -397,7 +397,7 @@ TEST_CASE("J-54: a schedule's own limit overrides the product's default, larger 
         auto early = MakeFlushRig(
             [](Registrar& r) {
                 r.AddSystem<&SpawnChain>(Put("SpawnChain", "Early", "X"));
-                r.Hook<Chain, &Grow>(HookTrigger::OnAdd, {.name = "Grow", .zone = Zone::B});
+                r.Hook<Chain, &Grow>(HookTrigger::OnAdd, {.name = "Grow"});
             },
             limits, false, 2U);
         early->world().SetResource(Depth{3});
@@ -510,7 +510,7 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     auto build = [](Limits limits) {
         return Finish({{"test", [limits](Registrar& r) {
                             Base(r, limits);
-                            r.AddSystem<&ZoneCReadsPos>(Put("ZoneCReadsPos", "Tick", "A", Zone::C));
+                            r.AddSystem<&ZoneCReadsPos>(Put("ZoneCReadsPos", "Tick", "A"));
                         }}});
     };
     auto planOf = [](const Built& built, const char* schedule) { return built.registry->Frozen().PlanOf(schedule)->fingerprint; };
@@ -528,23 +528,19 @@ TEST_CASE("J-54: the schedule's limit is in the Plan and C fingerprints; version
     const Built t6 = build(tick6);
     const Built t8 = build(tick8);
     const Built e5 = build(early5);
-    // Tick runs a zone C System: its limit is in all three.
+    // A schedule's limit is in its Plan and in the Registry fingerprint.
     CHECK(planOf(t5, "Tick") != planOf(none, "Tick"));
-    CHECK(t5.registry->Frozen().CFingerprint() != none.registry->Frozen().CFingerprint());
     CHECK(t5.registry->Frozen().RegistryFingerprint() != none.registry->Frozen().RegistryFingerprint());
-    // Early runs only zone B: Plan and Registry, not C.
+    // The same for another schedule.
     CHECK(planOf(e5, "Early") != planOf(none, "Early"));
     CHECK(e5.registry->Frozen().RegistryFingerprint() != none.registry->Frozen().RegistryFingerprint());
-    CHECK(e5.registry->Frozen().CFingerprint() == none.registry->Frozen().CFingerprint());
     // The value, not only its presence; "not declared" is not the default value.
     CHECK(planOf(t5, "Tick") != planOf(t6, "Tick"));
-    CHECK(t5.registry->Frozen().CFingerprint() != t6.registry->Frozen().CFingerprint());
     CHECK(planOf(t8, "Tick") != planOf(none, "Tick"));
     CHECK(planOf(none, "Tick").version == 8U);
-    CHECK(none.registry->Frozen().CFingerprint().version == 11U);
-    CHECK(none.registry->Frozen().RegistryFingerprint().version == 7U);
+    CHECK(none.registry->Frozen().RegistryFingerprint().version == 9U);
     const std::string report = t5.registry->Frozen().ExportPlans();
-    CHECK(report.find("gyo.kernel.plans 6") == 0);
+    CHECK(report.find("gyo.kernel.plans 7") == 0);
     CHECK(report.find("  hook-round-limit 5\n") != std::string::npos);
     CHECK(report.find("  hook-round-limit default\n") != std::string::npos);
 }
@@ -555,8 +551,8 @@ TEST_CASE("J-54: at the limit: Err F-12 once, the World interrupted, the rest no
         auto rig = MakeFlushRig(
             [](Registrar& r) {
                 r.AddSystem<&SpawnFan>(Put("SpawnFan", "Tick", "C"));
-                r.Hook<Fan, &FanP>(HookTrigger::OnAdd, {.name = "FanP", .zone = Zone::B});
-                r.Hook<Fan, &FanQ>(HookTrigger::OnAdd, {.name = "FanQ", .zone = Zone::B});
+                r.Hook<Fan, &FanP>(HookTrigger::OnAdd, {.name = "FanP"});
+                r.Hook<Fan, &FanQ>(HookTrigger::OnAdd, {.name = "FanQ"});
             },
             {}, false, 3U, breakOn);
         int breaks = 0;
@@ -594,8 +590,8 @@ TEST_CASE("J-54: an Err in a round: the rest of the Run is not done, the applied
             r.AddSystem<&WritePingAtTwo>(Put("WritePingAtTwo", "Tick", "A"));
             r.AddSystem<&ReadPings>(Put("ReadPings", "Tick", "B"));
             r.AddSystem<&SpawnBombAtTwo>(Put("SpawnBombAtTwo", "Tick", "C"));
-            r.Hook<Bomb, &ArmBomb>(HookTrigger::OnAdd, {.name = "ArmBomb", .zone = Zone::B});
-            r.Hook<Fuse, &Explode>(HookTrigger::OnAdd, {.name = "Explode", .zone = Zone::B});
+            r.Hook<Bomb, &ArmBomb>(HookTrigger::OnAdd, {.name = "ArmBomb"});
+            r.Hook<Fuse, &Explode>(HookTrigger::OnAdd, {.name = "Explode"});
         },
         {}, false);
     KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1: ReadPings runs once, so it holds what comes after
@@ -623,8 +619,8 @@ TEST_CASE("J-54: a mid-Plan hook record at an earlier sync point: the rounds sti
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "A"));
             r.AddSystem<&CountTrailsB>(Put("CountTrailsB", "Tick", "B"));
             r.AddSystem<&SpawnChain>(Put("SpawnChain", "Tick", "C"));
-            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
-            r.Hook<Chain, &Grow>(HookTrigger::OnAdd, {.name = "Grow", .zone = Zone::B});
+            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
+            r.Hook<Chain, &Grow>(HookTrigger::OnAdd, {.name = "Grow"});
         },
         limits);
     Log().clear();
@@ -641,7 +637,7 @@ TEST_CASE("J-54: mid-Plan hook records still wait for the next sync point; no ro
         r.AddSystem<&CountTrailsB>(Put("CountTrailsB", "Tick", "B"));
         r.AddSystem<&MarkTwo>(Put("MarkTwo", "Tick", "B"));
         r.AddSystem<&CountTrailsC>(Put("CountTrailsC", "Tick", "C"));
-        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
     });
     rig->world().Insert(2, Tag{2});
     const Plan* plan = rig->built.registry->Frozen().PlanOf("Tick");
@@ -663,8 +659,8 @@ TEST_CASE("J-54: mid-Plan hook records still wait for the next sync point; no ro
 TEST_CASE("J-54: a round is applied while the World is Applying (F-5)") {
     auto rig = MakeFlushRig([](Registrar& r) {
         r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
-        r.Hook<Trail, &TrailOnSystemPath>(HookTrigger::OnAdd, {.name = "TrailOnSystemPath", .zone = Zone::B});
+        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
+        r.Hook<Trail, &TrailOnSystemPath>(HookTrigger::OnAdd, {.name = "TrailOnSystemPath"});
     });
     KeptWorld() = &rig->world();
     GYO_CHECK_ASSERTS(rig->Run());
@@ -676,8 +672,8 @@ TEST_CASE("J-54: a round is a whole application") {
         auto rig = MakeFlushRig([](Registrar& r) {
             r.InitialValue<Filled, &FilledFrom>();
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-            r.Hook<Bullet, &BulletAsksFilled>(HookTrigger::OnAdd, {.name = "BulletAsksFilled", .zone = Zone::B});
-            r.Hook<Filled, &FilledAddsScore>(HookTrigger::OnAdd, {.name = "FilledAddsScore", .zone = Zone::B});
+            r.Hook<Bullet, &BulletAsksFilled>(HookTrigger::OnAdd, {.name = "BulletAsksFilled"});
+            r.Hook<Filled, &FilledAddsScore>(HookTrigger::OnAdd, {.name = "FilledAddsScore"});
         });
         Log().clear();
         KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -694,9 +690,9 @@ TEST_CASE("J-54: a round is a whole application") {
     SUBCASE("a despawn and a remove in a round run OnRemove") {
         auto rig = MakeFlushRig([](Registrar& r) {
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-            r.Hook<Bullet, &BulletDespawnsThree>(HookTrigger::OnAdd, {.name = "BulletDespawnsThree", .zone = Zone::B});
-            r.Hook<Bullet, &BulletRemovesScoreOfFour>(HookTrigger::OnAdd, {.name = "BulletRemovesScoreOfFour", .zone = Zone::B});
-            r.Hook<Score, &LogScoreRemoved>(HookTrigger::OnRemove, {.name = "LogScoreRemoved", .zone = Zone::B});
+            r.Hook<Bullet, &BulletDespawnsThree>(HookTrigger::OnAdd, {.name = "BulletDespawnsThree"});
+            r.Hook<Bullet, &BulletRemovesScoreOfFour>(HookTrigger::OnAdd, {.name = "BulletRemovesScoreOfFour"});
+            r.Hook<Score, &LogScoreRemoved>(HookTrigger::OnRemove, {.name = "LogScoreRemoved"});
         });
         rig->world().Insert(3, Score{3});
         rig->world().Insert(4, Score{4});
@@ -712,8 +708,8 @@ TEST_CASE("J-54: a round is a whole application") {
 TEST_CASE("J-54: two hooks insert one cell in one round: the later record wins") {
     auto rig = MakeFlushRig([](Registrar& r) {
         r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-        r.Hook<Bullet, &ScoreOne>(HookTrigger::OnAdd, {.name = "ScoreOne", .zone = Zone::B});
-        r.Hook<Bullet, &ScoreTwo>(HookTrigger::OnAdd, {.name = "ScoreTwo", .zone = Zone::B});
+        r.Hook<Bullet, &ScoreOne>(HookTrigger::OnAdd, {.name = "ScoreOne"});
+        r.Hook<Bullet, &ScoreTwo>(HookTrigger::OnAdd, {.name = "ScoreTwo"});
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(rig->world().Get<Score>(1) != nullptr);
@@ -724,10 +720,10 @@ TEST_CASE("J-54: rounds are separate applications") {
     SUBCASE("a remove in round 1 and an insert of the same cell in round 2 both take effect") {
         auto rig = MakeFlushRig([](Registrar& r) {
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-            r.Hook<Bullet, &BulletSwapsNine>(HookTrigger::OnAdd, {.name = "BulletSwapsNine", .zone = Zone::B});
-            r.Hook<Marker, &MarkerAddsScore>(HookTrigger::OnAdd, {.name = "MarkerAddsScore", .zone = Zone::B});
-            r.Hook<Score, &LogScoreRemoved>(HookTrigger::OnRemove, {.name = "LogScoreRemoved", .zone = Zone::B});
-            r.Hook<Score, &LogScoreAdded>(HookTrigger::OnAdd, {.name = "LogScoreAdded", .zone = Zone::B});
+            r.Hook<Bullet, &BulletSwapsNine>(HookTrigger::OnAdd, {.name = "BulletSwapsNine"});
+            r.Hook<Marker, &MarkerAddsScore>(HookTrigger::OnAdd, {.name = "MarkerAddsScore"});
+            r.Hook<Score, &LogScoreRemoved>(HookTrigger::OnRemove, {.name = "LogScoreRemoved"});
+            r.Hook<Score, &LogScoreAdded>(HookTrigger::OnAdd, {.name = "LogScoreAdded"});
         });
         rig->world().Insert(9, Score{5});
         Log().clear();
@@ -736,14 +732,14 @@ TEST_CASE("J-54: rounds are separate applications") {
         REQUIRE(rig->world().Get<Score>(9) != nullptr);
         CHECK(rig->world().Get<Score>(9)->s == 6);
     }
-    SUBCASE("a zone B despawn in round 1 and a zone C insert in round 2: dropped and counted") {
+    SUBCASE("a despawn in round 1 and an insert in round 2: dropped and counted") {
         auto rig = MakeFlushRig(
             [](Registrar& r) {
                 r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-                r.AddSystem<&ZoneCSpawnsSeed>(Put("ZoneCSpawnsSeed", "Tick", "C", Zone::C));
-                r.Hook<Bullet, &BulletDespawnsSix>(HookTrigger::OnAdd, {.name = "BulletDespawnsSix", .zone = Zone::B});
-                r.Hook<Seed, &ZoneCSeedInsertsVelIntoTwo>(HookTrigger::OnAdd, {.name = "ZoneCSeedInsertsVelIntoTwo", .zone = Zone::C});
-                r.Hook<Vel, &ZoneCVelInsertsPosIntoSix>(HookTrigger::OnAdd, {.name = "ZoneCVelInsertsPosIntoSix", .zone = Zone::C});
+                r.AddSystem<&SpawnsSeed>(Put("SpawnsSeed", "Tick", "C"));
+                r.Hook<Bullet, &BulletDespawnsSix>(HookTrigger::OnAdd, {.name = "BulletDespawnsSix"});
+                r.Hook<Seed, &ZoneCSeedInsertsVelIntoTwo>(HookTrigger::OnAdd, {.name = "ZoneCSeedInsertsVelIntoTwo"});
+                r.Hook<Vel, &ZoneCVelInsertsPosIntoSix>(HookTrigger::OnAdd, {.name = "ZoneCVelInsertsPosIntoSix"});
             },
             {}, false);
         rig->world().Insert(6, Tag{6});
@@ -764,7 +760,7 @@ TEST_CASE("J-54: with verification on, the snapshots are taken again after the r
         once.stages = {"S"};
         r.Schedule(once);
         r.AddSystem<&SpawnBulletOnce>(Put("SpawnBulletOnce", "Startup", "S"));
-        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
     });
     KERNEL_REQUIRE_RUN_OK(rig->Run("Startup"));  // round 1 adds Trail; no hook runs after it
     const auto result = rig->Run("Early");
@@ -776,8 +772,8 @@ TEST_CASE("J-54: a message a hook writes in a round is read once by every reader
         r.AddSystem<&EarlyReader>(Put("EarlyReader", "Tick", "A"));
         r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
         r.AddSystem<&LateReader>(Put("LateReader", "Tick", "C"));
-        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
-        r.Hook<Trail, &PingOnTrail>(HookTrigger::OnAdd, {.name = "PingOnTrail", .zone = Zone::B});
+        r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
+        r.Hook<Trail, &PingOnTrail>(HookTrigger::OnAdd, {.name = "PingOnTrail"});
     });
     Log().clear();
     for (int tick = 0; tick < 3; ++tick) KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -788,8 +784,8 @@ TEST_CASE("J-54: a hook that throws in a round: the exception goes on and the Wo
     auto rig = MakeFlushRig(
         [](Registrar& r) {
             r.AddSystem<&SpawnBombAtTwo>(Put("SpawnBombAtTwo", "Tick", "C"));
-            r.Hook<Bomb, &ArmBomb>(HookTrigger::OnAdd, {.name = "ArmBomb", .zone = Zone::B});
-            r.Hook<Fuse, &ThrowOnFuse>(HookTrigger::OnAdd, {.name = "ThrowOnFuse", .zone = Zone::B});
+            r.Hook<Bomb, &ArmBomb>(HookTrigger::OnAdd, {.name = "ArmBomb"});
+            r.Hook<Fuse, &ThrowOnFuse>(HookTrigger::OnAdd, {.name = "ThrowOnFuse"});
         },
         {}, false);
     KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -803,7 +799,7 @@ TEST_CASE("J-54: an Err before the last sync point: no round, the queued hook re
         [](Registrar& r) {
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "A"));
             r.AddSystem<&FailAtB>(Put("FailAtB", "Tick", "B"));
-            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
         },
         {}, false);
     const auto result = rig->Run();
@@ -847,13 +843,13 @@ TEST_CASE("J-54: at a schedule's own limit: whose limit, which round, only the l
         [](Registrar& r) {
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
             // Records at the last sync point, before round 1.
-            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
             // Round 2 (the last): Score's hook is called before Marker's (ComponentId order), but is registered after it.
-            r.Hook<Marker, &QuietOnMarker>(HookTrigger::OnAdd, {.name = "QuietOnMarker", .zone = Zone::B});
-            r.Hook<Marker, &MarkerAddsBomb>(HookTrigger::OnAdd, {.name = "MarkerAddsBomb", .zone = Zone::B});
-            r.Hook<Score, &ScoreAddsFuse>(HookTrigger::OnAdd, {.name = "ScoreAddsFuse", .zone = Zone::B});
+            r.Hook<Marker, &QuietOnMarker>(HookTrigger::OnAdd, {.name = "QuietOnMarker"});
+            r.Hook<Marker, &MarkerAddsBomb>(HookTrigger::OnAdd, {.name = "MarkerAddsBomb"});
+            r.Hook<Score, &ScoreAddsFuse>(HookTrigger::OnAdd, {.name = "ScoreAddsFuse"});
             // Round 1 only.
-            r.Hook<Trail, &TrailAddsScoreAndMarker>(HookTrigger::OnAdd, {.name = "TrailAddsScoreAndMarker", .zone = Zone::B});
+            r.Hook<Trail, &TrailAddsScoreAndMarker>(HookTrigger::OnAdd, {.name = "TrailAddsScoreAndMarker"});
         },
         limits, false, 8U, true);
     int breaks = 0;
@@ -884,9 +880,9 @@ TEST_CASE("J-54: an Err in round 2 says round 2; round 1 stays") {
     auto rig = MakeFlushRig(
         [](Registrar& r) {
             r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
-            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
-            r.Hook<Trail, &TrailAddsFuse>(HookTrigger::OnAdd, {.name = "TrailAddsFuse", .zone = Zone::B});
-            r.Hook<Fuse, &Explode>(HookTrigger::OnAdd, {.name = "Explode", .zone = Zone::B});
+            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail"});
+            r.Hook<Trail, &TrailAddsFuse>(HookTrigger::OnAdd, {.name = "TrailAddsFuse"});
+            r.Hook<Fuse, &Explode>(HookTrigger::OnAdd, {.name = "Explode"});
         },
         {}, false);
     const auto result = rig->Run();
@@ -923,7 +919,7 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
     auto build = [](Limits limits) {
         return Finish({{"test", [limits](Registrar& r) {
                             Base(r, limits);
-                            r.AddSystem<&ZoneCReadsPos>(Put("ZoneCReadsPos", "Tick", "A", Zone::C));
+                            r.AddSystem<&ZoneCReadsPos>(Put("ZoneCReadsPos", "Tick", "A"));
                         }}});
     };
     const Built none = build({});
@@ -934,13 +930,9 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
     tick8.tick = 8U;
     const Built t5 = build(tick5);
     const Built t8 = build(tick8);
-    CHECK_MESSAGE(t8.registry->Frozen().CFingerprint() != none.registry->Frozen().CFingerprint(),
-                  "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
     CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "8:9e9f1eeabb8adadea081c9b457fba880ca1fa9df1b956783177576323485e1c6",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "11:f31f21e186ac7a964238c17093b3f5d492834259eaf4b0af473385d87f869040",
-                  "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "7:cebcb67082271602510f4f4bea36aaea2795e8054b3bcf4c46a846a2fec942a6",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "9:1067fa129f74f435a46566ebf1db292facfc893c5b54f0a205e3f5936a918b64",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
     CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 8:") != std::string::npos,

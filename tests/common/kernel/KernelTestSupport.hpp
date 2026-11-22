@@ -28,15 +28,12 @@ struct TestVel { std::int32_t x, y, z; };
 struct TestMarker { std::uint8_t on; };
 struct TestHealth { std::int32_t points; };
 struct TestMode { std::uint32_t mode; };
-struct TestInput { std::uint32_t bits; };
 struct TestDerived { std::int32_t value; };
 struct TestEvent { std::uint32_t id; };
 struct TestOtherEvent { std::uint32_t id; };
 struct TestFrameEvent { std::uint32_t id; };
 struct TestRes { std::int64_t value; };
 struct TestOtherRes { std::int64_t value; };
-struct TestLink { std::uint32_t handle; };
-struct TestFrameTime { std::int64_t ns; };
 // Satisfies EntityAllotter with one 8-byte member, so its registered shape (and
 // the Registry fingerprint goldens of registry-schedule) stays as it was.
 struct TestAllotter {
@@ -65,8 +62,7 @@ inline Engine::Base::Result<void, StartupReport> RegisterAll(
     return registry.BuildPlans();
 }
 
-// Schedules most tests use: a frame schedule (Update) and a fixed-step schedule (FixedUpdate)
-// with an ingress stage and rollback.
+// Schedules most tests use: a frame schedule (Update) and a fixed-step schedule (FixedUpdate).
 inline ScheduleOptions UpdateSchedule() {
     ScheduleOptions s;
     s.name = "Update";
@@ -74,12 +70,10 @@ inline ScheduleOptions UpdateSchedule() {
     return s;
 }
 
-inline ScheduleOptions FixedSchedule(bool rollback = false) {
+inline ScheduleOptions FixedSchedule() {
     ScheduleOptions s;
     s.name = "FixedUpdate";
-    s.rollbackEnabled = rollback;
     s.stages = {"Ingress", "Simulate", "Present"};
-    s.ingressStage = "Ingress";
     return s;
 }
 
@@ -93,25 +87,24 @@ inline Mount At(std::string schedule, std::string stage, std::vector<std::string
     return m;
 }
 
-inline SystemOptions Sys(std::string name, Zone zone, std::vector<Mount> mounts) {
+inline SystemOptions Sys(std::string name, std::vector<Mount> mounts) {
     SystemOptions o;
     o.name = std::move(name);
-    o.zone = zone;
     o.mounts = std::move(mounts);
     return o;
 }
 
-// Registers the common data types; zone C unless stated.
+// Registers the common data types.
 inline void RegisterCommonData(Registrar& r) {
-    r.Component<TestPos>({.name = "TestPos", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestVel>({.name = "TestVel", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestMarker>({.name = "TestMarker", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-    r.Component<TestHealth>({.name = "TestHealth", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Component<TestMode>({.name = "TestMode", .zone = Zone::B});
-    r.Message<TestEvent>({.name = "TestEvent", .zone = Zone::C});
-    r.Message<TestFrameEvent>({.name = "TestFrameEvent", .zone = Zone::B});
-    r.Resource<TestRes>({.name = "TestRes", .zone = Zone::C, .rollback = Rollback::Yes});
-    r.Resource<TestOtherRes>({.name = "TestOtherRes", .zone = Zone::B});
+    r.Component<TestPos>({.name = "TestPos"});
+    r.Component<TestVel>({.name = "TestVel"});
+    r.Component<TestMarker>({.name = "TestMarker"});
+    r.Component<TestHealth>({.name = "TestHealth"});
+    r.Component<TestMode>({.name = "TestMode"});
+    r.Message<TestEvent>({.name = "TestEvent"});
+    r.Message<TestFrameEvent>({.name = "TestFrameEvent"});
+    r.Resource<TestRes>({.name = "TestRes"});
+    r.Resource<TestOtherRes>({.name = "TestOtherRes"});
 }
 
 // Registers functions in list order and builds the Plans (RegisterAll).
@@ -127,11 +120,11 @@ inline Built Finish(std::vector<std::pair<std::string, std::function<void(Regist
 }
 
 // One plugin with the common data, the two schedules and the given extra registrations.
-inline Built FinishOne(std::function<void(Registrar&)> extra, bool rollback = false) {
-    return Finish({{"test", [extra = std::move(extra), rollback](Registrar& r) {
+inline Built FinishOne(std::function<void(Registrar&)> extra) {
+    return Finish({{"test", [extra = std::move(extra)](Registrar& r) {
                         RegisterCommonData(r);
                         r.Schedule(UpdateSchedule());
-                        r.Schedule(FixedSchedule(rollback));
+                        r.Schedule(FixedSchedule());
                         extra(r);
                     }}});
 }
@@ -185,6 +178,14 @@ inline std::vector<std::string> SystemSteps(const Plan& plan) {
         if (step.kind == StepKind::System) names.push_back(step.name);
     }
     return names;
+}
+
+// The World summary of a World every value type of which has a hash function:
+// fails the test case with the error when Summary returns one.
+inline Fingerprint SummaryOf(const World& world) {
+    auto summary = world.Summary();
+    REQUIRE_MESSAGE(static_cast<bool>(summary), (summary ? std::string() : summary.error().Text()));
+    return *summary;
 }
 
 inline std::size_t PositionOf(const Plan& plan, std::string_view name) {

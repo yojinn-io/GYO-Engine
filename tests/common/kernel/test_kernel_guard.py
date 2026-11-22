@@ -140,6 +140,26 @@ class GuardTree(unittest.TestCase):
                 self.header(text)
                 self.assertReported("K9", needle)
 
+    def test_k9_every_clock_name_is_reported(self):
+        for text, needle in (("void DomainTick();", "DomainTick"), ("struct DomainTickRead;", "DomainTickRead"),
+                             ("class CurrentTick;", "CurrentTick"), ("int TickStampSlot;", "TickStampSlot"),
+                             ("int tickStamps_;", "tickStamps_"), ("int kTickStampSlots;", "kTickStampSlots"),
+                             ("const char* DomainName();", "DomainName"), ("enum class Domain {};", "enum class Domain"),
+                             ("auto d = Domain::None;", "Domain::None"), ("int rejectTick;", "rejectTick"),
+                             ("int tickOfSchedule;", "tickOfSchedule"), ("bool c = options.clock;", "options.clock"),
+                             ("struct S { bool clock; };", "bool clock"), ("struct VirtualTime;", "VirtualTime"),
+                             ("struct FixedTime;", "FixedTime"), ("struct RealTime;", "RealTime"),
+                             ("struct ActiveTime;", "ActiveTime"), ("struct TimeControl;", "TimeControl"),
+                             ("struct Resimulation;", "Resimulation"), ("void TickWriters();", "TickWriters"),
+                             ("class TickAccumulator;", "TickAccumulator")):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertReported("K9", needle)
+
+    def test_k9_clock_comments_stay_allowed(self):
+        self.header("// the kernel keeps no clock: the tick is the time Module's\nint ticks = 0; // a tick count")
+        self.assertFalse([p for p in guard.check(self.root) if ": K9 " in p])
+
     def test_k9_executor_file_is_checked(self):
         self.write("engine/ecs/kernel/src/Executor.cpp", "namespace GYO::Kernel {\nvoid InstallRunner() {}\n}\n")
         self.assertReported("K9", "InstallRunner")

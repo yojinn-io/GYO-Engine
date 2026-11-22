@@ -107,7 +107,6 @@ struct RejectedSpawn {
     // The System or hook that recorded the spawn.
     std::string emitter;
     bool emitterIsHook = false;
-    Zone emitterZone = Zone::B;
     // Recorded by Spawn (the allotter's id: Spawn<Bundle<C...>> or
     // ExclusiveWorld::Spawn), not SpawnWithId.
     bool fromAllotter = false;
@@ -346,10 +345,11 @@ public:
     // The World summary of spec D-9: keys and values of every column, resource
     // values, every message record (seq and payload) with each type's next write
     // sequence number, and the message cursors; without stamps or
-    // Plan positions. Version 2 (World.cpp). Readable in Ready and Interrupted. Values
-    // are hashed as raw bytes: a type in the summary must have no padding (the
-    // author's responsibility; v8-arch-gyo2-summary-padding-a-then-c).
-    [[nodiscard]] Fingerprint Summary() const;
+    // Plan positions. Version 3 (World.cpp). Readable in Ready and Interrupted.
+    // Each value goes through its type's hash function (Hash.hpp). Err
+    // (HashMissing, naming the types) when a type with no hash function has a
+    // value in the World.
+    [[nodiscard]] ::Engine::Base::Result<Fingerprint, KernelError> Summary() const;
 
     // The break hook called where a KernelError is made when
     // KernelSettings::breakOnKernelError is on (target/system-contract 2b). It
@@ -428,8 +428,13 @@ private:
     // stamp: the sync point's stamp. immediate (S5, WorldExecutor::ImmediateFrom):
     // applies only these records, as one phase of steps 2 to 7; the window, the
     // hook queue and the sync epoch are left alone.
+    // derive: whether the application derives data from the cells it adds (step 5a, Registrar::InitialValue).
+    // Applying records and notifying (OnAdd, OnRemove, observers) is one thing; deriving new data from a new
+    // cell is another, and belongs to a change. A restore puts back what it is given and derives nothing
+    // (DI-KS 12; user 2026-11-22, (a2)); every other application derives.
     ::Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
-                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr);
+                                                      ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr,
+                                                      Detail::Derive derive = Detail::Derive::InitialValues);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
     void RecordRejectedSpawn(RejectedSpawn rejected);
     // Spec E.5: discards every record not yet applied (hook queue included).

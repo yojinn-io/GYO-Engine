@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-13（`v8-arch-kernel-registry-schedule`：§4 API 名稱）。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §B（System 契約）、§E.5（例外與錯誤）。
+更新：2026-11-22（DI 3 的「(c) 區無 `Local`」改指回滾 Module R-2，`v8-arch-gyo2-authority-rollback` 第 7 步，使用者 2026-11-22 核准）；2026-11-13（`v8-arch-kernel-registry-schedule`：§4 API 名稱）。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §B（System 契約）、§E.5（例外與錯誤）。
 本文件只寫**使用者已裁決**的部分；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 描述從簽名推出，一份（mechanism §3.1 審查修正 4）
@@ -53,16 +53,16 @@
 |---|---|---|
 | `Registrar::AddSystem<&Fn>(SystemOptions)`、`Registrar::AddSystem<Lambda>(SystemOptions)` | 登記 System：非成員函式以非型別模板引數、無捕獲 lambda 以型別傳入 | spec B.4 第 1 點；§3 |
 | `SystemResult` | `Engine::Base::Result<void, KernelError>`，System 的回傳型別 | §2；spec S-2 |
-| `SystemOptions` | 顯式的一半：`name`、`zone`（沒有預設，`Zone::Unset`＝D-E7）、`ingress`、`affinity`、`effects`、`rollbackSafe`、`mounts` | spec B.1 declared、S-6 |
+| `SystemOptions` | 顯式的一半：`name`、`effects`、`mounts`（`zone`、`ingress`、`rollbackSafe` 等第 4 批拿掉，`v8-arch-gyo2-authority-rollback`；判定資料改由權威 Module 登記） | spec B.1 declared |
 | 參數型別 | `Query<Read<T>, Write<T>, With<T>, Without<T>, Changed<T>, Added<T>>`、`Res<T>`、`ResMut<T>`、`EventReader<E>`、`EventWriter<E>`、`Commands`、`CommandsFor<Inserts<…>, Removes<…>>`、`Spawn<Bundle<…>>`、`SpawnWithId<Bundle<…>>`、`Despawn`、`Local<T>`、`CurrentTick`、`DiagnosticsWriter<T>`、`SetRead<SetTag>`、`ExclusiveWorld`、`Extract<Read<T>>`、`ExtractRes<R>` | spec B.4 第 4 點 |
 | `ParamTraits<P>`（`valid`、`readOnly`、`Contribution`） | 參數型別的特化；`Contribution` 是 `TypeList<Access::…>`，存取項在 `Access.hpp` | spec B.4 第 3 點；DI-KS 1 |
 | `Condition<&Fn>(name)`、`Condition<Lambda>(name)`（`ConditionRef`） | run 條件：回 `bool`、參數全唯讀 | spec E.4、S-5 |
 | `Rejection`、`SystemRejectionOf<F>()`、`SystemRejectionOfFunction<Fn>()`、`ConditionRejectionOf…` | 簽名被拒的理由（測試讀它）；登記點以 `static_assert` 擋，訊息帶 `GYO_KERNEL_REJECT_…` 標記 | spec S-1～S-3、S-5、S-10、J-10、J-11、J-13 |
 | `AccessSet`、`AccessKey`、`AccessKind` | finish 後以 id 表示的推導存取（reads、writes、membershipReads、deferredWrites、setReads、extractReads 與旗標） | spec B.1 derived、S-4 |
 | `KernelSettings` | Kernel 自己的 Resource（ResourceId 0，登記在所有 plugin 之前，每個 World 一份）：驗證開關、`breakOnKernelError`、hook 輪上限的預設 `hookRoundLimit`（spec F-12）；System 宣告 `Res`／`ResMut` 它＝D-E18 | §2b；spec D-E18 |
-| `StartupError`（`code`、`step`、`rule`、`subjects`、`sources`）、`StartupReport` | 啟動錯誤一次全部回報；`code` 與 `step` 不同時，`step` 是 D.2 的步驟代號（親和：X-E2／X-E3 與 D-E10；(c) Parallel 無守衛：X-E1 與 D-E11） | spec D.2、D-5、C.4 |
+| `StartupError`（`code`、`rule`、`subjects`、`sources`）、`StartupReport` | 啟動錯誤一次全部回報（`step` 欄第 4 批拿掉：沒有和 `code` 不同的情形了） | spec D.2、D-5、C.4 |
 | `Registry`、`Plugin`、`Registrar`、`FinishContext`、`FrozenRegistry` | 生命週期：`Registry(plugins).Finish()` 依序 build → requires 檢查 → finish → 凍結 → Plan；`FinishContext::InstallRunner`（第二個＝R-E6） | spec C.2、C.5 |
-| `FrozenRegistry::ExportZoneCSources` | G-5：(c) System 的登記處 `.cpp` 以 `gyo.zone-c-sources` v1 匯出（`generated_by = "gyo-kernel-report"`） | spec G-5；`docs/architecture/zone-c-sources.zh-Hant.md` |
+| ~~`FrozenRegistry::ExportZoneCSources`~~ | 第 4 批拿掉；G-5 的來源檔清單改由權威 Module 的 `ExportAuthoritySources` 以 `gyo.authority-sources` v1 匯出 | spec G-5；`docs/architecture/authority-sources.zh-Hant.md` |
 
 ## Design Invariants
 
@@ -72,7 +72,7 @@
 
 1. **描述從簽名推出，一份**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1) 約束：**全文與守衛見該條，改動前必讀**。
 2. **System 回 `Result<void, KernelError>`，不靜默**——受 kernel [DI-KS 2](kernel.zh-Hant.md#di-ks-2) 約束：**全文與守衛見該條，改動前必讀**。
-3. **System 無狀態；(c) 區無 `Local`**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1)、[DI-KS 12](kernel.zh-Hant.md#di-ks-12) 約束：**全文與守衛見該條，改動前必讀**。
+3. **System 無狀態**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1) 約束：**全文與守衛見該條，改動前必讀**。「(c) 區無 `Local`」隨第 4 批拿掉（區拿掉，kernel [DI-KS 12](kernel.zh-Hant.md#di-ks-12) 改成只給回滾用的原語）：現在是回滾等價的前提之一——步的 schedule 與巢狀 schedule 上的 System 不用 `Local`（回滾 Module [R-2](v2/rollback.zh-Hant.md#r-2) 前提 2），作者的責任，回滾 Module 不檢查。（使用者 2026-11-22 核准，`v8-arch-gyo2-authority-rollback`）
 
 ### Replacement Criteria
 

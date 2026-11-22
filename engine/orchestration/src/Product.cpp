@@ -221,12 +221,12 @@ Product::~Product() = default;
         Registration& registration = registrations[i];
         slot.registry = std::move(registration.registry);
         slot.frame = std::move(registration.frame);
-        slot.unitPrepares = std::move(registration.unitPrepares);
         slot.carries = std::move(registration.carries);
         slot.executor = self.MakeExecutor(slot, *slot.registry);
     }
-    for (WorldSlot& slot : self.worlds_) {
-        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), slot.unitPrepares, nullptr);
+    for (std::size_t i = 0; i < self.worlds_.size(); ++i) {
+        WorldSlot& slot = self.worlds_[i];
+        auto prepared = self.Prepare(slot, slot.executor->GetWorld(), registrations[i].unitPrepares, nullptr);
         if (!prepared) {
             const OrchestrationError& error = prepared.error();
             errors.push_back({OrchestrationCode::OE7,
@@ -249,6 +249,9 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     ScheduleList frame(InitialFrame(world));
     std::vector<PrepareFn> prepares;
     std::vector<Detail::CarryEntry> carries;
+    // The Modules' buffer of this build (authority-rollback declaration section 6): written during Build, frozen
+    // before BuildPlans, read by Finish, Check and the prepare functions, let go once those have run (O-2).
+    auto buffer = std::make_shared<ModuleBuffer>();
 
     // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).
     if (world.skeleton == ScheduleSkeleton::Default) {
@@ -261,17 +264,18 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     for (std::size_t index : slot.units) {
         UnitSlot& unit = units_[index];
         auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {
-            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);
+            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);
             unit.unit->Build(setup);
         });
         GYO_ASSERT(static_cast<bool>(registered));
     }
     auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},
                                   [&](Kernel::Registrar& registrar) {
-                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries);
+                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);
                                       if (world.build) world.build(setup);
                                   });
     GYO_ASSERT(static_cast<bool>(own));
+    buffer->Freeze();
 
     auto built = registry->BuildPlans();
     if (!built) {
@@ -281,11 +285,11 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     }
     const Kernel::FrozenRegistry& frozen = registry->Frozen();
     for (std::size_t index : slot.units) {
-        WorldFinish context(world.name, units_[index].row, unitErrors);
+        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);
         units_[index].unit->Finish(frozen, context);
     }
     for (std::size_t index : slot.units) {
-        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors);
+        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);
         units_[index].unit->Check(frozen, context);
     }
     for (const std::string& anchor : frame.missingAnchors_) {
@@ -313,6 +317,7 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     registration.frame = std::move(frame.names_);
     registration.unitPrepares = std::move(prepares);
     registration.carries = std::move(carries);
+    registration.buffer = std::move(buffer);
     return registration;
 }
 
@@ -780,7 +785,6 @@ bool Product::HasWorld(std::string_view name) const noexcept {
     slot.registry = std::move(registration.registry);
     slot.executor = std::move(fresh);
     slot.frame = std::move(registration.frame);
-    slot.unitPrepares = std::move(registration.unitPrepares);
     slot.carries = std::move(registration.carries);
     slot.lastSchedule.clear();
     slot.nextInsertSeq = 0;
