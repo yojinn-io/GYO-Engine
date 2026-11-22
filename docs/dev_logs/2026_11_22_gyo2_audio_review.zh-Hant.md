@@ -63,6 +63,7 @@
 - 全量 `ctest -L "cpu|shader"`（9d1e0d19）：169/169（`full-ctest.log`）。
 - 設計審查＋突變清單的敵對式檢查（Fable 5.2／high，唯讀）：blocker 0、should 7、nit 8，突變清單 3 處可存活；全部處理，對照在合併前核准頁第 5 節（`design-review.md`）。
 - §14.4 檢證者（Opus 5.5／high，唯讀）：第 3 項 CONFIRMED，第 1、2、4、5 項 PARTLY（結論成立、措辭更正），照它改寫成合併前核准頁第 1 節（`q3-verifier.md`）。
+- 主會話要求併進本批的三處文件（2026-11-22）：`docs/architecture/target/README.md:29` 把 audio 移出「還沒有 target 檔」並指向新頁；`rebuild-concept.zh-Hant.md` 的 audio core 列原文不改，表後加註（時間點的邊界已寫進 DI 3、預設起播時刻未解、執行緒綁定已拿掉）；`docs/architecture/plans/kernel/guards-inventory.zh-Hant.md` 的 board readers 列只更新路徑（`engine/modules/audio/src`），「留／已拿掉」等第 3 題的合併前核准再改。查會讀文件的測試：`git grep` `tests/`、`build/cmake/`、`.github/` 裡這三個檔名與 `docs` 的讀取，只命中註解、docstring 與突變清單的說明，沒有測試讀它們；照實再跑全量 `ctest -L "cpu|shader"` 169/169（`full-ctest-docs3.log`）。
 - 證據：主 checkout `build/evidence/gyo2-audio-review/`（本機 Intel Mac，git 不追蹤）。
 
 ## 突變的基準（README 第 8 條）

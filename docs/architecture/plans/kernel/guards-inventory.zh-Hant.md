@@ -158,7 +158,7 @@
 | model | 恰連 Engine、Math、json | animation-events DI 1 → 只在 legacy | 留 | `ae-model-links-audio`、`es-link-model-json-public`：留 | assets-core（＝§5.2 第 16 列） | loader 由 plugin 登記（plan 3.11）；`engine/asset` 今天在 `engine` target 內，所以 model 用新的 `Assets<T>`／登記 API 不改連結。**若 assets-core 另開 `GYO::Asset` target**，model 連它就失敗→ DI 變更交使用者（Q3） |
 | map_markers、voxel_mesh | 恰連 Base、Math、json | map-markers DI 2、voxel-mesh DI 1 → 只在 legacy | 留 | `mm-links-voxel-mesh`、`vm-links-collision`：留 | — | 無 |
 | audio links | `gyo_audio` 恰連 Base、Time | audio DI 2 → 只在 legacy；target spec I.1「`Submitter` 是帶親和的 Resource」 | 留；Submitter 要認 kernel 的 Resource 型別時＝連 `GYO::Kernel`＝DI 2 變更交使用者（§5.2 第 16 列同判） | `au-link-engine`：留 | wrap-render | wrap-render 把 Submitter 包成 Resource 若在 `engine/audio` 內 include kernel 標頭→失敗。正確：包在「包」層（Host 零件），audio 不認 kernel |
-| board readers | 只有 `Mixer::PlayheadOf` 讀 playhead board（`CheckBoardReaders.cmake` 掃 `engine/audio/src`） | audio DI 4 → 只在 legacy | 留 | audio 清單 Mixer／PlayheadBoard 的相關條：留 | wrap-render | 無 |
+| board readers | 只有 `Mixer::PlayheadOf` 讀 playhead board（`CheckBoardReaders.cmake` 掃 `engine/modules/audio/src`） | audio DI 4 → 只在 legacy | 留 | audio 清單 Mixer／PlayheadBoard 的相關條：留 | wrap-render | 無 |
 | alloc tests | `Render` 不配置、不鎖、不拋 | audio DI 7 → 只在 legacy | 留 | 留 | — | 無 |
 
 ### 2.17 input 與 ui（`tests/common/input/SdlInputTests.cpp` IP-1 判定、`input-and-present/scripts/mutations.json` m7～m9；`tests/common/ui/ui_dependency_guard.py`，ctest `ui.dependency_guard`；owner Engine input／ui）
