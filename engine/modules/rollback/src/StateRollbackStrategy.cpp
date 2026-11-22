@@ -133,7 +133,7 @@ void StateRollbackStrategy::Check(CheckContext& context) {
     // A rollback of depth steps writes back the inputs of depth steps: an input history that keeps fewer would
     // resimulate those steps with whatever the input holds, silently (review of step 4, 1-6).
     for (const InputRecord& input : context.Registrations().inputs) {
-        if (input.capacity >= settings_.depth) continue;
+        if (input.capacity == 0 || input.capacity >= settings_.depth) continue;  // 0: the depth itself
         context.Report("RB-E9", "rollback.Input: the input history keeps " + std::to_string(input.capacity) +
                                     " steps, fewer than the official strategy's depth " + std::to_string(settings_.depth));
     }

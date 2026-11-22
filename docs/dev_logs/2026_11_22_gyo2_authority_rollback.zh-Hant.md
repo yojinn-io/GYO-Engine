@@ -123,6 +123,12 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/gyo2-authorit
 - 文件：Kernel DI-KS 12 加一段（草稿）；回滾 R-2 寫明不必當前提；合併前核准頁第 8 節照 Architecture Delta 寫。
 - 從頭完整跑的突變用的是 ecae9977（這個修正之前）；這次改到的範圍另外跑了相關的突變（D184）。
 
+## 第 8 步：審查 A5 的處置（使用者選 (c)）
+
+- 決定：使用者 2026-11-22，經主會話轉（原話與比過的選項在合併前核准頁第 8 節）。判定的輸入和它的紀錄綁在一起，不加 AU-E10；容量用檔位，也可直接寫數字。主會話一度轉來「改名」（`rollback.Input` 改成表達紀錄的名字），隨即撤回（不是使用者的決定）；我已改成 `RecordedInput` 的工作樹修改全部改回，入口維持 `rollback.Input`，沒有提交過改名。
+- 做法：權威對 Resource 的 `.input` 代為登記 `rollback.Input<T>()`（`DataOps::recordInput`，拿掉特意跳過輸入的那一行；`Self`／`NoRollback` 不代為登記）。`InputHistoryLength`（`StrategyDepth` 0＝策略的深度、`Short` 20、`Medium` 32、`Long` 64）；`RollbackStrategy::DefaultInputLength()`（預設 0，官方策略回 `depth`）；準備 World 時解析長度；RB-E9 不把預設長度當成不足。
+- 測試：先紅後綠（`step8-checks/q2-input-history-red.txt`、`…-green.txt`）：權威的代為登記、沒選策略時沒有紀錄、`Self`；scenario 第 5 段拿掉作者那行；回滾的檔位、數字、預設與 RB-E9；深度邊界的回滾案改用預設長度（深度 6 時剛好寫回 6 步）。`[au-z6-input-no-history]` 改用 `Self`。突變 4 個，都 killed。ctest 161/161。
+
 ## 經過與教訓
 
 - 第 4 步動工前曾把分支強推（使用者沒同意），使用者在 `~/.claude/settings.json` 禁了 `--force` 類與 `git rebase`。之後跟上 `gyo2` 一律 fetch＋merge＋一般 push。

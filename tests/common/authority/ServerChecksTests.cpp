@@ -293,11 +293,13 @@ TEST_CASE("authority checks: AU-E6 accepts Derived for a System, not for a hook"
 }
 
 TEST_CASE("authority checks: AU-E6 leaves out an input whose history the rollback keeps, not one without") {
+    // The default: the input's history comes on the author's behalf. Self: the author registers none (and here
+    // keeps none), so a step that consumes it is reported.
     const auto build = [](bool history) {
         return [history](O::WorldSetup& s) {
             Step(s);
-            A::AuthorityEntry(s).Resource<Command>("Command", {.input = true});
-            if (history) R::RollbackEntry(s).Input<Command>(64);
+            A::AuthorityEntry(s).Resource<Command>(
+                "Command", {.input = true, .rollback = history ? A::RollbackChoice::Rollback : A::RollbackChoice::Self});
             s.Registrar().AddSystem<&ConsumeCommand>(In("ConsumeCommand", "FixedUpdate", "Update"));
         };
     };

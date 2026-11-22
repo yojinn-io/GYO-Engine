@@ -155,6 +155,10 @@ public:
     virtual ::Engine::Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) = 0;
     // Each frame, on the view side: what the frame adds to hide the difference a resimulation made.
     virtual ::Engine::Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) = 0;
+    // The steps of a recorded input kept when its length is InputHistoryLength::StrategyDepth (a resimulation
+    // writes back at most this many). The official strategy: its depth. An author's strategy that keeps its own
+    // inputs may leave it at 0 (the official history then keeps none).
+    [[nodiscard]] virtual std::uint32_t DefaultInputLength() const noexcept { return 0; }
 
 protected:
     RollbackStrategy() = default;

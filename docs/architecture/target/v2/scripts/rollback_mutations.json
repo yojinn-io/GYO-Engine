@@ -1009,6 +1009,32 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-2: a*InitialValue*",
    "expect": "\\[rb\\-restore\\-no\\-initial\\-value\\]"
+  },
+  {
+   "id": "rb-input-default-length-ignored",
+   "what": "a recorded input of the default length keeps the number 0 instead of the strategy's depth: nothing is written back. Only it catches StrategyDepth",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/src/RollbackModule.cpp",
+   "find": "                history.inputs.push_back(record.makeHistory(record.capacity != 0 ? record.capacity : strategy->DefaultInputLength()));",
+   "replace": "                history.inputs.push_back(record.makeHistory(record.capacity));",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy*",
+   "expect": "\\[rb\\-(r2|consecutive)"
+  },
+  {
+   "id": "rb-e9-default-length-reported",
+   "what": "RB-E9 takes the default length (0) for a length shorter than the depth. Only it catches the default in RB-E9",
+   "guards": [
+    "rollback R-2"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (input.capacity == 0 || input.capacity >= settings_.depth) continue;  // 0: the depth itself",
+   "replace": "        if (input.capacity >= settings_.depth) continue;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback checks: a recorded input's length*",
+   "expect": "\\[rb\\-input\\-length\\-default\\-depth\\]"
   }
  ]
 }

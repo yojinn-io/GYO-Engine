@@ -71,7 +71,9 @@ void RollbackModule::Build(Orchestration::WorldSetup& setup) {
         if (strategy != nullptr) {
             RollbackHistory history;
             for (const DataRecord& record : registry.data) history.columns.push_back(record.ops->makeHistory(record.comparison));
-            for (const InputRecord& record : registry.inputs) history.inputs.push_back(record.makeHistory(record.capacity));
+            for (const InputRecord& record : registry.inputs) {
+                history.inputs.push_back(record.makeHistory(record.capacity != 0 ? record.capacity : strategy->DefaultInputLength()));
+            }
             world.SetResource(std::move(history));
             const std::string step = registry.stepSchedules.empty() ? std::string() : registry.stepSchedules.front().name;
             world.SetResource(RollbackRuntime{strategy, step});

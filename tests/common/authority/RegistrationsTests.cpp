@@ -178,3 +178,33 @@ TEST_CASE("authority registrations: every entry hands its one registration to th
     CHECK_MESSAGE(calls.oneEnd == 1, "[au-onregister-one-end] " << calls.oneEnd);
     CHECK_MESSAGE(calls.other == 0, "[au-onregister-one-each] calls with not exactly one registration: " << calls.other);
 }
+
+TEST_CASE("authority registrations: a decision input brings its recorded history, and only in a World that predicts") {
+    // With a rollback strategy: the input's history by tick is registered on the author's behalf, as long as the
+    // strategy's depth (the default length).
+    Setting client;
+    client.rollback = std::make_shared<R::StateRollbackStrategy>(R::StateRollbackSettings{.depth = 40});
+    auto predicted = Build([](O::WorldSetup& s) {
+        R::RollbackEntry(s).StepSchedule();
+        A::AuthorityEntry(s).Resource<Command>("Command", {.input = true});
+    }, client);
+    REQUIRE_MESSAGE(static_cast<bool>(predicted), Reported(predicted));
+    const R::RollbackRegistry& rollback = RollbackOf(**predicted);
+    CHECK_MESSAGE((rollback.inputs.size() == 1 && rollback.inputs[0].source == R::Source::OnBehalf),
+                  "[au-input-history-on-behalf] inputs: " << rollback.inputs.size());
+    CHECK_MESSAGE(rollback.data.empty(), "[au-input-history-on-behalf] the input became rollback state");
+    const R::RollbackHistory* history = (*predicted)->World("Main").GetWorld().Resource<R::RollbackHistory>();
+    CHECK_MESSAGE((history != nullptr && history->inputs.size() == 1), "[au-input-history-on-behalf] no history kept");
+    // Without a rollback strategy (a Match, a Client that does not predict): nothing is kept.
+    auto match = Build([](O::WorldSetup& s) { A::AuthorityEntry(s).Resource<Command>("Command", {.input = true}); });
+    REQUIRE_MESSAGE(static_cast<bool>(match), Reported(match));
+    CHECK_MESSAGE(!(*match)->World("Main").GetWorld().Types().ResourceIdOf<R::RollbackHistory>().has_value(),
+                  "[au-input-no-strategy-no-history] a World that does not predict keeps a history");
+    // The author's own choice: Self registers nothing on behalf.
+    auto self = Build([](O::WorldSetup& s) {
+        R::RollbackEntry(s).StepSchedule();
+        A::AuthorityEntry(s).Resource<Command>("Command", {.input = true, .rollback = A::RollbackChoice::Self});
+    }, client);
+    REQUIRE_MESSAGE(static_cast<bool>(self), Reported(self));
+    CHECK_MESSAGE(RollbackOf(**self).inputs.empty(), "[au-input-self] Self registered a history on behalf");
+}

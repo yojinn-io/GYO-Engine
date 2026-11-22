@@ -98,6 +98,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 ## 4. 本批的限界
 
 - Z6 不看「重跑時不跑」的 System（入口寫判定的輸入，重跑時不會再寫；實作）。權威份 5.11 寫「掛在可回滾 schedule 上的 System」，這是它的細化。
+- 判定的輸入（Resource）由伺服器權威代為登記 `rollback.Input<T>()`（策略的深度；使用者 2026-11-22 選 (c)，對照 lightyear 的 InputBuffer、Unity Netcode 的 `IInputComponentData`：宣告一次輸入，紀錄自動就有）。宣告輸入不等於選了預測：紀錄只在選了回滾策略的 World 建（R-4），Match 與不預測的 Client 什麼都不建。作者選 `Self` 或 `NoRollback` 時不代為登記。元件的輸入沒有紀錄可代為登記（回滾 Module 只記 Resource 的輸入），照舊受 Z6 檢查。守衛：`authority registrations: a decision input brings its recorded history…`、scenario 第 5 段（作者不再寫這行）；突變 `au-input-history-not-recorded`、`au-input-self-recorded`。
 - 有 `rollback.Input` 歷史的輸入不受 Z6 檢查（審查 1-5：輸入不能登記成可回滾（Z8），步上的 System 消耗它時沒有合法出口；回滾在重跑每一步前把它寫回）。沒有歷史的輸入在步上被寫照樣 AU-E6。
 - 一致性指紋不收 `KernelSettings::hookRoundLimit`（World 的設定值，執行時才讀），只收 schedule 的選項。
 - System 自己讀 `Resimulation`、又帶回滾的「重跑時不跑」條件時，指紋看不出前者（條件的讀取和它分不開）。

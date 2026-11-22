@@ -66,7 +66,9 @@ enum class RollbackChoice : std::uint8_t {
 // The options of Component<T> and Resource<T> (authority declaration 4.3).
 struct DataOptions {
     // An outside input's buffer (a decision input): never registered as rollback
-    // state (Z8; rollback.Input<T> keeps its history instead).
+    // state (Z8). With the server authority, a resource input gets its recorded history on the author's behalf
+    // (rollback.Input<T>, the strategy's depth; user 2026-11-22, (c)): declaring an input does not choose
+    // prediction, a World without a rollback strategy keeps no history (R-4).
     bool input = false;
     // Left out of the digest (authority declaration 5.6).
     bool digestExclude = false;
@@ -84,6 +86,9 @@ struct DataOps {
     void (*registerInRollback)(Rollback::RollbackEntry& rollback, RollbackChoice choice) = nullptr;
     // The digest's sum over the type's values in world, each hashed with index (nullptr for a message).
     std::uint64_t (*digest)(const Kernel::World& world, std::uint64_t index) = nullptr;
+    // A decision input's recorded history on the author's behalf (resources only: the rollback Module records
+    // resource inputs); nullptr for the other kinds.
+    void (*recordInput)(Rollback::RollbackEntry& rollback) = nullptr;
 };
 
 // One decision type. seq: its place in the authority registration order (data and marks counted together; the
@@ -214,6 +219,10 @@ void ComponentInRollback(Rollback::RollbackEntry& rollback, RollbackChoice choic
     }
 }
 template <class T>
+void RecordInput(Rollback::RollbackEntry& rollback) {
+    rollback.Input<T>();
+}
+template <class T>
 void ResourceInRollback(Rollback::RollbackEntry& rollback, RollbackChoice choice) {
     GYO_ASSERT(choice != RollbackChoice::Derived && "authority.Resource<T>: Derived is for components only");
     if (choice != RollbackChoice::Rollback) return;
@@ -251,7 +260,8 @@ std::uint64_t ResourceDigest(const Kernel::World& world, std::uint64_t index) {
 template <class T>
 inline constexpr DataOps kComponentOps{&ComponentIdIn<T>, &RegisterComponent<T>, &ComponentInRollback<T>, &ComponentDigest<T>};
 template <class T>
-inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, &ResourceDigest<T>};
+inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, &ResourceDigest<T>,
+                                      &RecordInput<T>};
 template <class T>
 inline constexpr DataOps kMessageOps{&MessageIdIn<T>, &RegisterMessage<T>, nullptr, nullptr};
 // A marked type by type: found and hashed, never registered (another Module did).

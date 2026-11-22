@@ -157,8 +157,8 @@ void Register(O::WorldSetup& s, const Variant& v) {
     authority.Resource<Command>("Command", {.input = true});
     authority.Mark<W::Tick>();
     if (v.shield) authority.Component<Shield>("Shield");
+    // Command's history by tick comes with the input declaration (user 2026-11-22, (c)): no second line here.
     R::RollbackEntry rollback(s);
-    rollback.Input<Command>(64);
     rollback.StepSchedule("FixedUpdate", "Last");
     s.Registrar().Resource<Script>({.name = "Script"});
     s.Registrar().Resource<Footsteps>({.name = "Footsteps"});

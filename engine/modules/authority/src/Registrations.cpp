@@ -94,7 +94,12 @@ void RegisterContext::RegisterInKernel() {
 
 void RegisterContext::RegisterInRollback() {
     GYO_ASSERT(data_ != nullptr && "RegisterContext::RegisterInRollback: not a data registration");
-    if (data_->ops->registerInRollback == nullptr || data_->options.input) return;
+    if (data_->options.input) {
+        // A decision input: its recorded history, not rollback state (Z8). Self and NoRollback: the author's own.
+        if (data_->ops->recordInput != nullptr && data_->options.rollback == RollbackChoice::Rollback) data_->ops->recordInput(rollback_);
+        return;
+    }
+    if (data_->ops->registerInRollback == nullptr) return;
     data_->ops->registerInRollback(rollback_, data_->options.rollback);
 }
 

@@ -1517,6 +1517,33 @@
    "target": "gyo_authority_tests",
    "cases": "authority consistency: what only one end has*",
    "expect": "AU\\-E4[\\s\\S]*OnStrike"
+  },
+  {
+   "id": "au-input-history-not-recorded",
+   "what": "a decision input gets no recorded history on the author's behalf (user 2026-11-22, (c): declaring an input brings its history; review of step 8, A5: a step reading it resimulated with the newest input, silently). Only it catches the on-behalf record",
+   "guards": [
+    "authority DI-A 11",
+    "authority-module-declaration 4.3"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "        if (data_->ops->recordInput != nullptr && data_->options.rollback == RollbackChoice::Rollback) data_->ops->recordInput(rollback_);",
+   "replace": "        static_cast<void>(rollback_);",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: a decision input brings*",
+   "expect": "\\[au\\-input\\-history\\-on\\-behalf\\]"
+  },
+  {
+   "id": "au-input-self-recorded",
+   "what": "an input the author registers with Self still gets a history on behalf. Only it catches the author's choice for inputs",
+   "guards": [
+    "authority-module-declaration 4.3"
+   ],
+   "file": "engine/modules/authority/src/Registrations.cpp",
+   "find": "        if (data_->ops->recordInput != nullptr && data_->options.rollback == RollbackChoice::Rollback) data_->ops->recordInput(rollback_);",
+   "replace": "        if (data_->ops->recordInput != nullptr) data_->ops->recordInput(rollback_);",
+   "target": "gyo_authority_tests",
+   "cases": "authority registrations: a decision input brings*",
+   "expect": "\\[au\\-input\\-self\\]"
   }
  ]
 }

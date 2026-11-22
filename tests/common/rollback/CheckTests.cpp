@@ -12,6 +12,7 @@
 #include "engine/rollback/Inbox.hpp"
 #include "engine/rollback/StateRollbackStrategy.hpp"
 
+#include <functional>
 #include <string>
 
 using namespace RollbackTest;
@@ -48,6 +49,11 @@ K::SystemResult ReadHitOnBump(K::On<Bump>, K::MessageReader<Hit>) { return {}; }
 O::OptionBag WithStrategy() {
     O::OptionBag options;
     options.Set(R::RollbackOptions{std::make_shared<R::StateRollbackStrategy>()});
+    return options;
+}
+O::OptionBag WithDepth(std::uint32_t depth) {
+    O::OptionBag options;
+    options.Set(R::RollbackOptions{std::make_shared<R::StateRollbackStrategy>(R::StateRollbackSettings{.depth = depth})});
     return options;
 }
 
@@ -209,4 +215,37 @@ TEST_CASE("rollback checks: messages: an observer's reads and writes are not loo
         s.Registrar().AddSystem<&SendHit>(In("SendHit", "FixedUpdate", "Update"));
     });
     CHECK_MESSAGE(reader == "built", "[rb-msg-observer-reader-unchecked] " << reader);
+}
+
+TEST_CASE("rollback checks: a recorded input's length: a tier, a number, or the strategy's depth (RB-E9 against the depth)") {
+    const auto registryOf = [](std::function<void(R::RollbackEntry&)> add) {
+        auto built = O::Product::Build(Game([add](O::WorldSetup& s) {
+                                           s.Registrar().Resource<Aim>({.name = "Aim"});
+                                           R::RollbackEntry rollback(s);
+                                           rollback.StepSchedule();
+                                           add(rollback);
+                                       }, WithDepth(20)),
+                                       Units());
+        REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+        return (*built)->World("Main").GetWorld().Resource<R::RollbackRegistry>()->inputs.front().capacity;
+    };
+    CHECK_MESSAGE(registryOf([](R::RollbackEntry& r) { r.Input<Aim>(); }) == 0, "[rb-input-length-default]");
+    CHECK_MESSAGE(registryOf([](R::RollbackEntry& r) { r.Input<Aim>(R::InputHistoryLength::Short); }) == 20, "[rb-input-length-tier] Short");
+    CHECK_MESSAGE(registryOf([](R::RollbackEntry& r) { r.Input<Aim>(R::InputHistoryLength::Medium); }) == 32, "[rb-input-length-tier] Medium");
+    CHECK_MESSAGE(registryOf([](R::RollbackEntry& r) { r.Input<Aim>(R::InputHistoryLength::Long); }) == 64, "[rb-input-length-tier] Long");
+    CHECK_MESSAGE(registryOf([](R::RollbackEntry& r) { r.Input<Aim>(48); }) == 48, "[rb-input-length-number]");
+    // The default never falls short of the depth; a tier shorter than the depth is RB-E9.
+    const auto with = [](std::uint32_t depth, std::function<void(R::RollbackEntry&)> add) {
+        auto built = O::Product::Build(Game([add](O::WorldSetup& s) {
+                                           s.Registrar().Resource<Aim>({.name = "Aim"});
+                                           R::RollbackEntry rollback(s);
+                                           rollback.StepSchedule();
+                                           add(rollback);
+                                       }, WithDepth(depth)),
+                                       Units());
+        return Reported(built);
+    };
+    CHECK_MESSAGE(with(40, [](R::RollbackEntry& r) { r.Input<Aim>(); }) == "built", "[rb-input-length-default-depth]");
+    CHECK_MESSAGE(with(40, [](R::RollbackEntry& r) { r.Input<Aim>(R::InputHistoryLength::Medium); }).find("RB-E9") != std::string::npos,
+                  "[rb-input-length-tier-short-of-depth]");
 }

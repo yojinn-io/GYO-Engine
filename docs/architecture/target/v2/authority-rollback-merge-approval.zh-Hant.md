@@ -4,7 +4,7 @@
 
 日期：2026-11-22。分支 `claude/gyo2-authority-rollback-bda9ba`（draft PR #259，base `gyo2`）。事前宣告：[authority-rollback-declaration.zh-Hant.md](authority-rollback-declaration.zh-Hant.md)（修訂 6）。Design Invariants：[authority.zh-Hant.md](authority.zh-Hant.md)、[rollback.zh-Hant.md](rollback.zh-Hant.md)，以及第 2 節列的別頁。經過與證據：[dev_log](../../../dev_logs/2026_11_22_gyo2_authority_rollback.zh-Hant.md)；證據在主 checkout `build/evidence/gyo2-authority-rollback/`。
 
-**請你核准的**：第 2 節（各頁 Design Invariants 的最終文字）、第 3 節（9.1 判定變更的緩的面，含檢證者補出的）、第 4 節（突變的數目）、第 5 節（和宣告不同的地方）、第 6 節（新型別與新碼）、第 7 節（沒做、記下的事）。**第 8 節**：第 1 題已定 (a2) 並實作，請核准 Architecture Delta 與 DI-KS 12 的文字；第 2 題還要你定（沒有實作）。核准後我把 draft 改成 ready、看 L1；你說「合併」才合併。
+**請你核准的**：第 2 節（各頁 Design Invariants 的最終文字）、第 3 節（9.1 判定變更的緩的面，含檢證者補出的）、第 4 節（突變的數目）、第 5 節（和宣告不同的地方）、第 6 節（新型別與新碼）、第 7 節（沒做、記下的事）。**第 8 節**：兩題都已定（第 1 題 (a2)、第 2 題 (c)）並實作，請核准兩個 Architecture Delta 與條文。核准後我把 draft 改成 ready、看 L1；你說「合併」才合併。
 
 ## 1. 判定的結果（宣告第 13 節）
 
@@ -44,8 +44,8 @@
 
 | 清單 | 本分支加 | 退 | 現在 |
 |---|---|---|---|
-| `authority_mutations.json`（新） | 115 | 0 | 115 |
-| `rollback_mutations.json`（新） | 76 | 1 | 75 |
+| `authority_mutations.json`（新） | 117 | 0 | 117 |
+| `rollback_mutations.json`（新） | 78 | 1 | 77 |
 | Kernel `mutations.json` | 44 | 109 | 672 |
 | `orchestration_mutations.json` | 7 | 1 | 242 |
 | `world_time_mutations.json` | 4 | 1 | 95 |
@@ -75,6 +75,7 @@
 
 - `RollbackFailure`（E2：`NotImplemented`）、`AuthorityFailure`（E2：`NoAuthority`、`SourceOutsideRoot`）。
 - 新碼：RB-E9（輸入歷史短於深度）、RB-E10（官方策略沒有步的 schedule）。
+- 回滾的新型別與掛點：`InputHistoryLength`（`StrategyDepth`、`Short`、`Medium`、`Long`）、`RollbackStrategy::DefaultInputLength()`；權威的 `DataOps::recordInput`。
 - 回滾的公開函式：`ResimulatedSchedules`、`IsSkipCondition`、`SkippedWhileResimulating`、`RunsWhileResimulating`。
 - 契約頁的檔名 `authority-sources.zh-Hant.md`。
 
@@ -88,7 +89,7 @@
 | 回滾 Resource 不收權威值 | `RollbackInbox` 只有元件 | 宣告的範圍（Client 那一批） |
 | digest 何時比 | 只在回歸測試與 scenario 用 | 延到網路 Module |
 
-## 8. 審查 A3 的處置（Architecture Delta）與還要你定的一題
+## 8. 審查 A3、A5 的處置（兩個 Architecture Delta）
 
 ### 第 1 題（已定 (a2)）：`Restore` 照給的內容放回，不補 `InitialValue`
 
@@ -113,9 +114,29 @@
 - 回滾頁 R-2：寫明這件不必當前提（已改）。
 - 突變：`ks-restore-derives-initial-values`（Kernel 的案）、`rb-restore-derives-initial-values`（回滾的兩案），都 killed。
 
-### 第 2 題：判定的輸入沒有 `rollback.Input` 歷史時沒有任何檢查
+### 第 2 題（已定 (c)）：判定的輸入和它的紀錄綁在一起
 
-- **現象**（審查 A5，讀程式）：Client 寫 `authority.Resource<Command>("Command", {.input = true})`，忘了 `rollback.Input<Command>(n)`；入口掛了「重跑時不跑」，步上的 System 只讀 `Command`。AU-E6、AU-E7、RB-E9 都不報；重跑的每一步都用同一個（最新的）輸入。
-- **選項**：
-  - (a) 新碼 AU-E10：選了回滾策略的 World，判定的輸入在重跑的 schedule 裡被讀、卻沒有 `rollback.Input` 歷史，啟動報錯。**建議**（和 RB-E10 同一類：不報就靜靜地錯）。
-  - (b) 不檢查，寫進權威頁的限界。
+**決定**：使用者 2026-11-22，經主會話轉。side chat 原話：「我有一個問題，按鍵屬於玩家操作，為何要rollback ？」「交叉比對個家方案。」「我的意思是，我把2個綁在一起，作者就不得不預測了」→「嗯，加過去吧。」主會話原話：「【rollback.Input<T>(n)】不需要讓作者直接填數字（作者可能不知道這些概念），可以預設一個Enum，分幾個檔位（檔位裡面是數字，讓作者直接調用這個Enum）。當然作者像直接寫數字，也不攔著。」比過的選項：(a) 新碼 AU-E10；(b) 寫進限界；(c) 綁在一起（採用，因此不需要 AU-E10）。對照：lightyear 的輸入 crate 自帶 InputBuffer；Unity Netcode 的 `IInputComponentData` 自動配 command buffer——兩家都是「宣告一次輸入，紀錄自動就有」。主會話另外撤回了「改名」那一點（不是使用者的決定）：入口維持 `rollback.Input`。
+
+**現象**（審查 A5）：作者宣告 `authority.Resource<Command>({.input = true})`、忘了 `rollback.Input<Command>(n)` 時，AU-E6、AU-E7、RB-E9 都不報，重跑的每一步都用最新的輸入。先紅：scenario 第 5 段拿掉作者那行後，S5-3、S5-5 的 digest 不同、生命值錯（`step8-checks/q2-input-history-red.txt`）；後綠（`…-green.txt`）。
+
+**做了什麼**：
+
+- 伺服器權威對 Resource 的 `.input` 代為登記 `rollback.Input<T>()`，走既有的代為登記路徑（`DataOps::recordInput`），拿掉原本特意跳過輸入的那一行；作者選 `Self`／`NoRollback` 時不代為登記。
+- 長度：`rollback.Input<T>(InputHistoryLength)` 或 `Input<T>(步數)`。檔位 `StrategyDepth`（0，預設：準備 World 時取策略的深度，經新的 `RollbackStrategy::DefaultInputLength()`，官方策略回它的 `depth`）、`Short` 20、`Medium` 32、`Long` 64。系譜：`Short` 是預算 P1、P3 的深度與 lightyear 的預設回滾深度；`Medium` 是 P2 的深度；`Long` 是時間 Module 預設 64 Hz 的一秒。直接寫數字不攔；RB-E9 照舊（預設長度不會小於深度）。
+- 零成本的約束：紀錄只在選了回滾策略的 World 建（R-4、DI-A 1），原本的機制已經這樣；這次寫進條文、用測試守（`[au-input-no-strategy-no-history]`：沒選策略的 World 宣告 `.input` 之後沒有 `RollbackHistory`）。
+- 元件的 `.input`：回滾 Module 只記 Resource 的輸入，元件的照舊不代為登記、受 Z6 檢查（寫進權威頁）。
+
+**放寬的地方**（§14.4 的緩的面）：以前作者要寫兩行（`.input` 與 `rollback.Input`），現在不必寫第二行；以前「沒寫第二行」在消耗它的步上會被 AU-E6 報出（作者寫了第二行才不報），現在預設自己帶紀錄、不報——守住它的性質（重跑時輸入是那一步的值）改由紀錄本身與 scenario 第 5 段守。`[au-z6-input-no-history]` 改成用 `Self`（作者不要代為登記、自己也沒登記）時照樣報 AU-E6。
+
+**Architecture Delta**（AGENTS §3 的七項）：
+
+1. 需要它的：Client 的預測與回滾（scenario 第 5 段）；審查 A5 的洞。
+2. 現在的問題：輸入的宣告與它的紀錄分在兩個 Module 兩行，漏寫一行時靜靜地錯。
+3. 變的邊界：權威 Module 代為登記的範圍多了輸入的紀錄（原本只代登記可回滾狀態）；`RollbackStrategy` 多一個有預設實作的掛點 `DefaultInputLength()`（R-1 的掛點清單加一項；不是純虛擬，作者的策略不必改）。
+4. 影響：`engine/modules/authority`（`Registrations`）、`engine/modules/rollback`（`Registrations`、`RollbackStrategy`、`StateRollbackStrategy`、`RollbackModule`）。Kernel、編排層不變。
+5. 依賴方向：不變（權威→回滾，本來就有）。
+6. Ownership：紀錄仍由回滾 Module 擁有；權威只代為呼叫它的公開入口。
+7. 更小的改法為什麼不行：(a) AU-E10 只是把漏寫報出來，作者還是得寫第二行；(b) 寫成限界等於把洞留給作者。
+
+**要你核准的條文**：權威頁第 4 節的新一條（代為登記、零成本、元件不在內）；回滾頁第 2 節 `Input<T>(length)` 那一列（檔位與系譜）；R-1 的掛點多 `DefaultInputLength()`（回滾頁 R-1 的條文我照實作補一句，草稿）。突變：`au-input-history-not-recorded`、`au-input-self-recorded`、`rb-input-default-length-ignored`、`rb-e9-default-length-reported`，都 killed。

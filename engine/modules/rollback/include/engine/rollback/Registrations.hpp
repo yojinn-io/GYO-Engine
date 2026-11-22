@@ -106,11 +106,24 @@ struct NestedScheduleRecord {
 // An input whose history the strategy keeps by tick. The type itself is
 // registered in the kernel by one entry only (the author's Registrar, or the
 // authority Module's input registration); Input<T> does not register it.
+// How many steps of a recorded input are kept: a tier, or any number of steps written directly (not refused).
+// The tiers follow the batch 4 budget (authority-rollback declaration 5.4): Short is the depth of the P1 and P3
+// cases and lightyear's default rollback depth (20), Medium the P2 case's (32), Long one second at the time
+// Module's default 64 Hz (64). StrategyDepth (0) takes the strategy's own depth when the World is prepared, so it
+// never falls short of it (RB-E9).
+enum class InputHistoryLength : std::uint32_t {
+    StrategyDepth = 0,
+    Short = 20,
+    Medium = 32,
+    Long = 64,
+};
+
 struct InputRecord {
     Kernel::TypeKey key;
     IdLookup idIn = nullptr;
     // The official strategy's history of the input.
     std::unique_ptr<InputHistoryBase> (*makeHistory)(std::uint32_t capacity) = nullptr;
+    // Steps kept; 0: the strategy's depth (InputHistoryLength::StrategyDepth).
     std::uint32_t capacity = 0;
     Source source = Source::Author;
 };
@@ -288,11 +301,17 @@ public:
     // condition on each of its mounts, given now (before AddSystem), and the
     // registration recorded. Call it with the options passed to AddSystem.
     void SkipDuringResimulation(Kernel::SystemOptions& options);
-    // The strategy keeps T's history by tick, at most capacity ticks. T is
-    // registered in the kernel elsewhere (Check reports RB-E3 when it is not).
+    // T is an outside input whose value the strategy records by tick and writes back before each step it runs
+    // again (a recorded input; not rollback state). The length is a tier or a number of steps; the default is the
+    // strategy's depth. T is registered in the kernel elsewhere (Check reports RB-E3 when it is not); the
+    // authority Module registers it on the author's behalf for a decision input (authority.Resource<T>({.input = true})).
     template <class T>
-    void Input(std::uint32_t capacity) {
-        table_->Append(InputRecord{Kernel::KeyOf<T>(), &Detail::ResourceIdIn<T>, &Detail::MakeInputHistory<T>, capacity, source_});
+    void Input(InputHistoryLength length = InputHistoryLength::StrategyDepth) {
+        Input<T>(static_cast<std::uint32_t>(length));
+    }
+    template <class T>
+    void Input(std::uint32_t steps) {
+        table_->Append(InputRecord{Kernel::KeyOf<T>(), &Detail::ResourceIdIn<T>, &Detail::MakeInputHistory<T>, steps, source_});
     }
 
 private:

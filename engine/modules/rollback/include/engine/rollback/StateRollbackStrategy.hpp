@@ -50,6 +50,7 @@ public:
     ::Engine::Base::Result<void, Kernel::KernelError> Restore(RestoreContext& context) override;
     ::Engine::Base::Result<void, Kernel::KernelError> Resimulate(ResimulateContext& context) override;
     ::Engine::Base::Result<void, Kernel::KernelError> Correct(CorrectContext& context) override;
+    [[nodiscard]] std::uint32_t DefaultInputLength() const noexcept override { return settings_.depth; }
 
     [[nodiscard]] const StateRollbackSettings& Settings() const noexcept { return settings_; }
 

@@ -131,7 +131,7 @@ void BuildFeed(O::WorldSetup& s, bool feedFirst) {
     s.Registrar().Resource<Command>({.name = "Command"});
     R::RollbackEntry rollback(s);
     rollback.Component<Health>();
-    rollback.Input<Command>(64);
+    rollback.Input<Command>();  // the strategy's depth: the depth-edge cases below write back that many
     rollback.StepSchedule("FixedUpdate", "Last");
     s.Registrar().AddSystem<&Advance>(In("Advance", "FixedUpdate", "Update"));
     s.Registrar().AddSystem<&CountStep>(In("CountStep", "FixedUpdate", "Update"));

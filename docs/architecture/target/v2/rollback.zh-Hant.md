@@ -29,7 +29,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 | `StepSchedule(name, recordStage)`、`StepSchedule()` | 回滾的單位；有策略的 World 在登記當下把記錄 System 掛到那個 stage。預設跟著時間 Module（回滾份 2.3）：不帶參數＝`WorldTimeOptions::fixedSchedule`，`recordStage` 預設 `Last`。選了官方策略卻沒有步的 schedule 是 RB-E10（什麼都不記、權威值永遠不採用） |
 | `NestedSchedule(name, stepSchedule)` | 從步的 schedule 巢狀跑的 schedule；重跑時會跑到，只進檢查的範圍 |
 | `SkipDuringResimulation(options)` | 在 `AddSystem` 之前給它的每個掛載加執行條件（讀時間 Module 的 `Resimulation`）。「重跑時跑不跑」逐個掛載看條件（`RunsWhileResimulating`）：之後才加的掛載會重跑 |
-| `Input<T>(capacity)` | 官方策略替 `T` 保留按 tick 的歷史；不登記 `T` |
+| `Input<T>(length)` | 官方策略替 `T` 保留按 tick 的紀錄，重跑每一步前寫回（不是回滾狀態）；不登記 `T`。長度用檔位 `InputHistoryLength`（`StrategyDepth`＝策略的深度、預設；`Short` 20、`Medium` 32、`Long` 64）或直接寫步數，不攔。檔位的系譜：`Short` 是預算 P1、P3 的深度與 lightyear 的預設回滾深度，`Medium` 是 P2 的深度，`Long` 是時間 Module 預設 64 Hz 的一秒。容量小於深度照舊是 RB-E9；預設長度不會小於深度。伺服器權威的判定輸入（`authority.Resource<T>({.input = true})`）由權威代為登記（預設長度），作者不必寫這行（2026-11-22 使用者選 (c)）；只有選了回滾策略的 World 才建紀錄，沒選的零成本（R-4） |
 
 同一型別同時登記成可回滾與 `Derived`：作者的蓋過代為的（跨兩種也一樣）；兩筆都是作者的是 RB-E1。
 
@@ -42,7 +42,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 ## Design Invariants
 
 <a id="r-1"></a>
-**R-1 契約不變**：`RollbackStrategy` 的掛點與語意是契約——`Name`、`Check`（啟動）與執行時的 `Record`、`Decide`、`Restore`、`Resimulate`、`Correct`，每個掛點只收一個自己的情境物件（之後要給更多東西時加在情境物件上、不改簽名；實作）；官方實作的內部不保證不變。守衛：測試裡一個不用官方實作、從頭實作介面的策略，通過同一個等價案（`rollback strategy: R-1`）。
+**R-1 契約不變**：`RollbackStrategy` 的掛點與語意是契約——`Name`、`Check`（啟動）與執行時的 `Record`、`Decide`、`Restore`、`Resimulate`、`Correct`，每個掛點只收一個自己的情境物件（之後要給更多東西時加在情境物件上、不改簽名；實作）；另有一個有預設實作的唯讀掛點 `DefaultInputLength()`（輸入紀錄的預設長度：官方策略回它的深度，預設 0；第 8 步隨使用者選 (c) 加，草稿）；官方實作的內部不保證不變。守衛：測試裡一個不用官方實作、從頭實作介面的策略，通過同一個等價案（`rollback strategy: R-1`）。
 
 <a id="r-2"></a>
 **R-2 回滾等價**：從狀態 s 直接跑 k 步，與「跑到現在、退回第 T 步、重跑回現在」，可回滾的欄、Resource、實體存活集合逐位元相同（stamp 除外），前提：
