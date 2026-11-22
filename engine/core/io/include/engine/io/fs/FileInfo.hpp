@@ -44,8 +44,7 @@ namespace GYO::Engine::IO::FS {
         // 取れないOS/実装なら 0（UNIX permission 風の 0xxx を入れるなど）
         std::uint32_t permissions = 0;
 
-        // 任意補助（VFSやpack等で “物理ソース” を持つなら埋める）
-        // 例: "file", "pak", "http"
+        // The backend that answered, when it says (the native one leaves it empty).
         std::string backend;
 
         constexpr bool Exists() const noexcept { return type != FileType::None; }
@@ -54,9 +53,5 @@ namespace GYO::Engine::IO::FS {
         constexpr bool IsSymlink() const noexcept { return type == FileType::Symlink; }
     };
 
-    /// Remove の挙動指定
-    struct RemoveOptions final {
-        bool recursive = false; // ディレクトリ削除を許可するか
-    };
 
 } // namespace GYO::Engine::IO::FS

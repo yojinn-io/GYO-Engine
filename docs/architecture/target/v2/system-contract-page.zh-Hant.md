@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-23（第 3、15 節、新第 18 節：`v8-arch-gyo2-kernel-res-changed`——Resource 的 `Changed()`；Kernel DI-KS 28）；2026-11-22（新第 17 節「讀檔」、第 13、14 節的讀檔改成指過去：`v8-arch-gyo2-restore-impl`）；2026-11-22（第 5 節「訊息」、第 14 節、新第 15 節：`v8-arch-gyo2-event-cursor-reeval`——帶條件或不常跑的讀者的寫法；Kernel 的規則不變）；2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -50,7 +50,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 | 參數 | 用來做什麼 | 算什麼存取 |
 |---|---|---|
 | `Query<Read<T>, Write<U>, With<V>, Without<W>, Changed<X>, Added<Y>>` | 依 id 由小到大走過符合的實體；`Read` 拿到 `const T&`，`Write` 拿到 `Mut<U>` | 讀 T、寫 U；其餘是篩選 |
-| `Res<T>`、`ResMut<T>` | 讀、寫一個 Resource | 讀、寫 T |
+| `Res<T>`、`ResMut<T>` | 讀、寫一個 Resource；`Changed()`：這個掛載上次跑之後被寫過（第 18 節） | 讀、寫 T |
 | `MessageReader<M>`、`MessageWriter<M>` | 讀（照這個讀者自己的游標，上次之後寫的全部）、送保留式訊息 | 讀、寫 M |
 | `Spawn<Bundle<A, B…>>` | 生成實體，當場拿到 id；下一個同步點才看得到 | 寫配發器；延後寫 A、B… |
 | `SpawnWithId<Bundle<…>>` | 用指定的 id 生成（讀檔、連線） | 延後寫 |
@@ -81,7 +81,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 - **排順序**：照 `before`／`after`，不照登記的先後。兩個 System 寫同一個東西又沒寫先後：依登記的先後，並列在一張清單裡（`FrozenRegistry::TieBreaks`，每一對帶 schedule 名）；不論決定性區，都不是錯誤。結果要不受登記順序影響，就自己寫 `before`／`after`（使用者 2026-11-16：「偵測歧義其實是很麻煩的。我個人覺得沒必要。」；嚴格模式 `RequireExplicitOrder` 一起拿掉）。
 - **綁執行緒的 Resource**：標 `threadBound` 的 Resource 記下值放進去的那條執行緒；別的執行緒用 `Res`／`ResMut`、`ExclusiveWorld`、World API 碰它，蓋寫、拿掉它，讀 World 摘要，或在值還在時銷毀 World，都是斷言。拿掉值之後換執行緒放回可以。哪條執行緒跑哪張 schedule 由組裝的人安排，啟動時不再檢查（使用者 2026-11-16：「別人掉過的坑，我沒必要在跳一次。」；照 Bevy 的 `NonSend`）。
 - **同步點**：每個 stage 結束時套用延後的變更。在前一個 stage 生成的實體，下一個 stage 就看得到。
-- **訊息**：每個讀者有自己的游標，讀到上次之後寫的全部；任何 schedule 都能讀寫，被跳過的讀者下次補讀（上限內不漏）。推送式事件在觸發時跑 observer。全文在 kernel [DI-KS 10](../kernel.zh-Hant.md#di-ks-10)。
+- **訊息**：每個讀者有自己的游標，讀到上次之後寫的全部；任何 schedule 都能讀寫，被跳過的讀者下次補讀（上限內不漏）——所以被條件長期擋住、或不常跑的讀者會拉住保留、回來補讀舊的，寫法見第 15 節。推送式事件在觸發時跑 observer。全文在 kernel [DI-KS 10](../kernel.zh-Hant.md#di-ks-10)。
 - **hook**：元件被加上或移除時，在同步點呼叫登記的函式（`ExclusiveWorld` 當場改時當場呼叫，第 11.6 節）。hook 記的變更什麼時候生效，見第 9 節。
 - **啟動檢查**：順序成環、獨占的元件有第二個寫者、用到沒登記的型別，啟動時一次全部報出來。
 - **出錯**：見下一節。
@@ -445,7 +445,7 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 - **遊戲初始化**：`ProductDescription::gameInit`（schedule 名的清單；登記單位可以 `Append`／`InsertBefore`／`InsertAfter`），整個行程一次、在第一個 World、在任何一幀與任何 `RunSchedule` 之前。`RunFrame`、`RunSchedule` 在它還沒跑時先跑它；直接呼叫 `WorldExecutor::Run` 是繞過編排層，不會先跑。某一張回錯誤就停下回傳、記為已跑。
 - **每一幀**：`RunFrame()` 照 World 的順序跑各 World 的每幀清單；某一張回錯誤就停下回傳（排在後面的 World 那一次不跑）。**一個 World 壞了（中斷，或替換失敗後位置是空的），`Product` 就結束**：之後每個入口都先檢查、什麼都不跑，回 `WorldInterrupted`／`WorldMissing`，錯誤上掛著 `WorldFailure`（哪個 World、怎麼壞的、壞在哪裡、之前最後跑的 schedule）；runner 決定關掉程式或另建一個 `Product`（回主選單）。編排層不寫日誌，要記就由你（或之後的日誌機制）拿 `WorldFailure` 去記（O-11）。runner（預設只跑一次 `RunFrame`）擁有迴圈；runner 與持有 `Product` 的人只呼叫 `RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`、`InsertSystems`。只跑某一張（例：放玩家、讀檔）用 `RunSchedule(world, schedule)`。
 - **準備**：每個 World 建好之後、第一次 Run 之前（啟動與每次替換），照「帶過去 → 登記單位的準備 → 描述的準備 → 替換帶的 `extra`」呼叫。準備放預設值時**不要蓋掉已經在的值**（帶過去的值先放進來了）。失敗時這個 World 不用。
-- **替換 World（讀檔）**：`ReplaceWorld(name, {extra, beforeSwap, order})` 照描述重新登記那個 World（新的 Registry；之前動態插入的一律不在），帶過去、準備、在新 World 上跑 `beforeSwap`（例：讀檔的 schedule），全部成功才換上；遊戲初始化不重跑。`order` 預設 `BuildNewFirst`（失敗時保留舊的）；兩個 World 放不下時用 `DropOldFirst`（先銷毀舊的，失敗時位置是空的、`Product` 結束，不能再填）。壞掉的 World 不能拿替換來救。存檔的格式與版本是作者的，Engine 不認得：**發替換之前自己驗證存檔版本、素材、網路快照**，驗不過就不發（選 `DropOldFirst` 時尤其要先驗）。換上之後新 World 從「生成中」開始（第 14 節）：跨幾幀放回存檔放在生成期間；生成期間失敗 `Product` 就結束，所以驗證要在換上之前；一次放得完的讀檔也可以整個放在 `beforeSwap`，失敗時保留舊 World。
+- **替換 World（讀檔）**：`ReplaceWorld(name, {extra, beforeSwap, order})` 照描述重新登記那個 World（新的 Registry；之前動態插入的一律不在），帶過去、準備、在新 World 上跑 `beforeSwap`（例：讀檔的 schedule），全部成功才換上；遊戲初始化不重跑。`order` 預設 `BuildNewFirst`（失敗時保留舊的）；兩個 World 放不下時用 `DropOldFirst`（先銷毀舊的，失敗時位置是空的、`Product` 結束，不能再填）。壞掉的 World 不能拿替換來救。存檔的格式與版本是作者的，Engine 不認得：**發替換之前自己驗證存檔版本、素材、網路快照**，驗不過就不發（選 `DropOldFirst` 時尤其要先驗）。換上之後新 World 從「生成中」開始（第 14 節）：跨幾幀放回存檔放在生成期間；生成期間失敗 `Product` 就結束，所以驗證要在換上之前；一次放得完的讀檔也可以整個放在 `beforeSwap`，失敗時保留舊 World。讀檔的整體寫法在第 17 節。
 - **帶過去**：`WorldSetup::CarryOver<T>()` 標記某個 Resource 換 World 時帶到新的（例：選項選單改過的按鍵）。**值裡不能存指向舊 World 的參照（`EntityId`、指標、句柄）**，這是作者的責任。
 - **動態插入**：`InsertSystems(world, owner, [](Registrar& r) { … })` 走 Kernel 的兩步（第 12 節）；`owner` 不能是登記單位或產品自己的名字（`OwnerTaken`）。World 不准（`dynamicInsert = false`）或建 Plan 失敗時，編排層記**一次**警告、把錯誤回給你、World 照跑（CCR-3）。登記單位的 `Finish`、`Check` 不重跑。
 - **`World(name)` 的參照**：`Product::World(name)` 給的 `WorldExecutor&` 在那個名字下一次被替換之前有效；替換之後要重新拿。
@@ -485,8 +485,148 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **放行的三種情形（要小心）。** 「沒人 `Hold()` 就結束」在下面三種情形會讓 World 半成品開跑，沒有任何訊號：(1) 生成用的 System 被別的條件跳過；(2) 提早回 Ok、忘了 `Hold()`；(3) **幀內先後**——工作在這一幀中途才產生（例：地圖做完那一幀才發資產請求），而等它的 System 排在前面、還沒看到。對 (3)：產生工作的 System 那一幀自己也 `Hold()`，或把等的 System 排在產生的之後。
 
-**讀檔。** 讀檔一律在新的 World（`ReplaceWorld`）。存檔資料與配發器的下界在 `extra` 準備函式裡放（`extra` 跑的時候預設的配發器 Module 已經放好這個 World 的範圍，讀它的上限再移下界：`const auto last = w.Resource<EntityIds::RangeAllotter>()->last; w.SetResource(EntityIds::RangeAllotter::Of(存檔的下一號, last));`；Module 只在沒有值時放預設範圍，`extra` 在它之後跑，會蓋掉）；讀檔 System 放在 `WhileGenerating()` 的 set，存檔大就分幾幀、`Hold()`。時間的放回（`RestoreFixedTime`、`Tick`）也在 `extra`，不要放在生成期間的 System 裡（WT-3）。發現存檔壞了不要回 `Err`（那會結束 `Product`）：把錯寫進自己的 Resource，runner 在兩次入口之間讀它、改發替換回主選單；不要用 `Message`，沒有讀者拉住時那次 Run 結束就被修剪。
+**讀檔。** 讀檔掛在生成世界的寫法、移下界、時間的放回、存檔壞了怎麼辦，都在第 17 節。
 
-**生成用的 System 不讀 `Message`。** 生成結束後 `WhileGenerating()` 的 set 不再跑，裡面讀 `Message` 的 System 的游標會一直拉住保留；要交給遊戲邏輯的結果放 Resource。
+**生成用的 System 不讀 `Message`。** 生成結束後 `WhileGenerating()` 的 set 不再跑，裡面讀 `Message` 的 System 的游標會一直拉住保留；要交給遊戲邏輯的結果放 Resource（第 15 節）。
 
 **Module 的 System 不受你的條件管。** 你的 set 只管得到你自己的 System；Module 掛的 System 生成期間照跑。Module 需要停時由它開條件選項（例：`fixedStepConditions`）。
+
+## 15. 帶條件或不常跑的讀者
+
+（`v8-arch-gyo2-event-cursor-reeval`，使用者 2026-11-22 核准；規則全文在 kernel [DI-KS 10](../kernel.zh-Hant.md#di-ks-10)，本節只講寫法。跨部件規則 [CCR-7](../../../cross-component-rules.md)。）
+
+`Message` 的保證是「讀者在上限內不漏讀」：讀者沒跑的期間，訊息替它留著，它下次跑時補讀。這讓「每幀寫、固定步讀」在固定步這幀跑 0 次時也不漏。代價是：**一個被條件長期擋住、或很少跑的讀者，會一直拉住保留，回來時一次讀到它不在的期間的全部（上限內）。**這和 Bevy 不同——Bevy 的訊息兩次 update 就過期，所以把狀態條件掛在讀者上在 Bevy 大致沒事，在 GYO 會出錯。
+
+**三個看得到的後果。**
+1. **拉住保留、一直記丟棄**：主選單的「處理按鈕」帶 `InState<Flow, MainMenu>`，讀 `ButtonPressed`。進了關卡它不跑，但它跑過，所以拉住；關卡裡寫滿上限（預設 1024）之後，每次有人寫的那次 Run 都記一筆 `DroppedMessages`（「讀者：處理主選單按鈕」），記錄失去警報的作用。
+2. **回來補讀舊的**：回到主選單那一幀，它把關卡期間的 `ButtonPressed` 一次當成主選單的按鈕處理。網路對戰裡暫停選單不停模擬時，帶 `InState<Flow, Playing>` 的「播命中特效」關掉選單時，一次播出暫停期間的全部命中。
+3. **第一次讀不到、之後讀到上次以來的全部**：「進入關卡中」那張裡讀 `LevelSelected` 的 System，第一次進關卡時從沒跑過、不拉住；寫 `LevelSelected` 的那次最外層 Run 結束時它就被修剪（每幀清單的每張 schedule 各是一次最外層 Run），進入若在之後的 Run 才套用，它讀到空的；之後每次進入，讀到上次進入以來的全部。
+
+**一個讀者會不會拉住、補讀。**
+
+| 讀者的情形 | 拉住保留 | 下次補讀 | 例 |
+|---|---|---|---|
+| 跑了、呼叫了 `Read()` | 讀到的放開 | — | 一般情形 |
+| 跑了、沒呼叫 `Read()` | 是 | 是 | System 裡提早 return |
+| 被 run 條件跳過（自己的或 set 的） | 是（跑過一次之後） | 是 | 帶 `InState` 的主選單處理；帶 `WhileGenerating()` 的生成用 System |
+| 所在 schedule 沒跑 | 是（跑過一次之後） | 是 | 固定步這幀跑 0 次；時間暫停；`fixedStepConditions` 擋住驅動固定步的 System；進入／離開狀態的那兩張 |
+| observer 這次沒被觸發 | 是（跑過一次之後） | 是 | 少觸發的 observer 帶 `MessageReader` |
+| 從沒跑過 | 否 | 第一次從還留著的最舊一筆讀起：同一次最外層 Run 裡較早寫的一定還在；更早的取決於別的讀者有沒有拉住，不要依賴 | 第一次進入的那張；帶 `AfterGenerating()` 的讀者在生成期間 |
+
+**寫法。**
+- **讀者不帶狀態條件，在 System 裡判斷。** 每幀都 `Read()`，不在那個狀態就丟掉：
+
+  ```cpp
+  // 不要：r.AddSystem<&HandleMenuButtons>(… conditions = {InState<Flow, MainMenu>()} …)
+  K::SystemResult HandleMenuButtons(K::MessageReader<ButtonPressed> pressed, K::Res<StateMachine<Flow>> flow) {
+      const auto all = pressed.Read();           // 每幀讀，游標跟上，不拉住
+      if (flow->Current() != Flow::MainMenu) return {};  // 不在主選單：讀了就丟
+      for (const ButtonPressed* p : all) { /* 處理 */ }
+      return {};
+  }
+  ```
+
+  帶狀態條件、但不讀 `Message` 的 System（只讀元件與 Resource）照常用條件。被條件擋住的期間，`Changed<T>` 與 `Res::Changed()` 會累積：回來那一次是 true，和訊息的「回來補讀」是同一類後果，只是只有一個 bool（第 18 節）。（`StateMachine<Flow>` 的介面以狀態機那一批為準，這裡只示意。）
+
+  **轉換那一幀還有一個洞**：這個寫法照「讀的當下」的狀態判斷。讀者在 Plan 裡排在寫者之前（這一幀的按鈕下一幀才讀到），或讀者在固定步裡（晚一幀讀），關卡裡按的「回主選單」可能在狀態已經換成主選單之後才被讀到，被當成主選單的按鈕。要避免：讀者排在寫者之後、同一幀讀；或訊息自己帶「在哪個狀態按的」，讀者比對。
+- **要帶進「進入」或交給之後的資料，放 Resource。** 選了哪一關、生成的結果、讀檔的內容，寫進 Resource，讓「進入關卡中」或遊戲邏輯讀它，不靠訊息跨過狀態轉換。
+- **暫停時擋住寫者。** 時間暫停時固定步不跑，固定步裡的讀者會拉住、恢復時補讀暫停期間寫的。暫停期間不該生效的輸入，在寫的那一側用狀態條件擋（例：讀手把轉成「開火」的 System 帶 `InState<Flow, Playing>`）。那個寫者若自己也讀 `Message`（例：讀原始的按鍵訊息），它就成了帶狀態條件的讀者，問題搬到上一層——它照第一點的寫法：不帶條件、讀了再判斷要不要寫。
+- **進入／離開的那兩張、observer 裡不讀和這次無關的訊息。** 它們兩次執行之間照樣拉住，下次讀到上次以來的全部。
+
+**同一個「暫停」意圖的三種寫法，讀者看到的不同**：讀者上帶狀態條件（拉住、回來補讀，後果 1、2）；`fixedStepConditions` 或 `TimeControl.paused`（固定步裡的讀者拉住、恢復時補讀）；讀者不帶條件、在 System 裡判斷（每幀讀、不拉住，暫停期間的丟掉）。要「暫停期間的不算」就用第三種——只對每幀都跑的 schedule 裡的讀者成立；固定步裡的讀者在時間暫停時根本不跑，要擋就擋寫者。
+
+**為什麼 Engine 不替你處理。** 被狀態擋住的讀者回來該不該補讀，是遊戲的判斷：成就計數可能要補，按鈕處理不該補。各家引擎都把它交給作者（Bevy 的核心要讀者每幀讀；lightyear 的範例把接收器寫成不帶狀態條件；flecs、Unity 看狀態的現在值）。作者若開始反覆寫這類補償，Kernel 會照 [RC 24](../kernel.zh-Hant.md#rc-24) 重評。
+
+## 16. 狀態機：主選單、關卡中、暫停
+
+（`v8-arch-gyo2-state-machine`；規則全文與寫法在 [state-machine](state-machine.zh-Hant.md)。）
+
+**一個例子。** 啟動後是主選單，按「開始」進關卡，關卡中可以暫停。作者寫一個列舉 `Flow { MainMenu, InLevel }`、特化一次 `StateMachineTraits<Flow>`，在產品的 `build` 呼叫 `RegisterStateMachine<Flow>(setup)`。進主選單時生成按鈕：System 掛在 `Flow.Enter.MainMenu`（stage `Update`）。只在關卡中、沒暫停時移動角色：條件 `InState<Pause, Pause::Running>()`。按「開始」：寫 `StateMachineRequest<Flow>` 的 `Request(Flow::InLevel)`。
+
+- 套用的 System 預設在 `Main` 的 `PreUpdate` 之後：排在 `PreUpdate` 的 System 同一幀讀到換之前的值，排在 `Update` 的讀到換之後的。
+- 進入之後只能經要求換值（型別封閉）；一次套用每種狀態最多換一次，離開或進入裡提的要求留到下一次。
+- 讀檔、生成中、(c) 區的接法：見 [state-machine](state-machine.zh-Hant.md) 第 3 節。
+- 帶 `InState`／`NotInState` 的讀者、進入／離開那兩張裡的讀者：照[第 15 節](#15-帶條件或不常跑的讀者)的寫法（要帶進「進入」的資料放 Resource）。
+
+## 17. 讀檔
+
+（`v8-arch-gyo2-restore-impl`；宣告 [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md) 修訂 12 第 18、19 節，使用者 2026-11-22 動工前核准。規則全文在 [orchestration](orchestration.zh-Hant.md) 的 O-7、O-8、O-14，Kernel 的 DI-KS 9、15 (7)、18。）
+
+**一個例子。** RPG 玩家在第 3 關存檔：身上有 3 瓶藥水、金幣 120，任務做到第 2 步，正在「關卡中＋暫停」。隔天讀檔（或遊戲中讀另一個存檔）：一個新的 World 建好，從「生成中」開始；作者的程式照第 3 關的資產生成地圖、怪物，讀檔 System 放回物品、金幣、任務進度；生成結束，遊戲回到「關卡中＋暫停」。Engine 不認得任何一種存檔格式：存什麼、怎麼寫、怎麼讀，都是作者的。
+
+**一律在新的 World。**
+- **啟動時讀檔**：沒有 `ReplaceWorld`。描述的準備函式放存檔資料（暫存的 Resource）與配發器的下界。**描述的準備每次建 World 都會跑，包括之後每一次替換**：存檔要從 World 外一個「待讀」的地方拿、拿了就清掉；直接寫死在描述的準備裡，之後不帶 `extra` 的替換（例：回主選單）會把那份存檔再放一次。
+- **遊戲中讀檔**：`ReplaceWorld(name, {extra, beforeSwap, order})`。新 World 照描述重新登記（之前動態插入的 System 不在）；`extra` 準備函式放存檔資料與配發器的下界；遊戲初始化不重跑；`CarryOver` 標記的 Resource 帶過去（值裡不能有指向舊 World 的參照）。
+- **發替換之前先驗**：版本（下面的存檔版本，17.1）、資產 id 載好了沒有、能不能解析。驗不過就不發替換。選 `DropOldFirst`（先銷毀舊的）時只能在發替換之前驗：它一失敗位置就空了，`Product` 結束。
+
+**放回的三條路（失敗的後果不同）。**
+
+| 路 | 什麼時候用 | 失敗時 | 和其他兩條的差別 |
+|---|---|---|---|
+| `beforeSwap` 裡的 schedule（例：獨占 System 當場 `SpawnWithId`） | 一次放得完 | `BuildNewFirst` 時舊 World 照跑 | 換上之前同步跑；這段期間沒有交換點（拿不到這一幀的外部資料） |
+| 生成期間（讀檔 System 放在 `WhileGenerating()` 的 set） | 存檔大、要分幾幀、要讀取畫面會動 | **`Product` 結束**（所以驗證要在換上之前） | 每幀照常跑；沒做完就 `Hold()` |
+| 啟動時：第一幀之前用 `RunSchedule` 跑讀檔的 schedule | 一次放得完、啟動時讀檔 | **`Product` 結束**（沒有舊 World 可留） | 和 `beforeSwap` 同樣是同步跑完一張 schedule；啟動時的準備函式失敗則是 `Product::Build` 失敗（O-E7） |
+| 準備函式裡用 `World::Insert` 直接放 | 只放資料、不需要 hook 的東西 | 同準備函式失敗（`BuildNewFirst` 保留舊 World） | **不跑 hook、不補初始值、不看配發器的範圍**（`World.hpp:215-216` 的設計；DI-KS 18）。碰撞體要靠 OnAdd 進空間索引的、要靠初始值補衍生元件的，不要走這條；走這條也要移下界，否則之後的 `Spawn` 回 `AllottedIdAlive` |
+
+**編號的兩種寫法（作者選）。**
+- **照存檔編號放回**：存檔記「下一個號」。準備函式把配發器範圍的下界移到它：`const auto last = w.Resource<EntityIds::RangeAllotter>()->last; w.SetResource(EntityIds::RangeAllotter::Of(存檔的下一號, last));`（預設的 `entity_ids` Module 只在沒有值時放預設範圍，描述的準備與 `extra` 在它之後跑，會蓋掉）。再用 `SpawnWithId` 照存檔編號放回。**忘了移下界**，每一筆都以 `IdInAllotterRange` 被丟（明細查得到，第 10 節）。
+- **重新配號**：不必移下界。依存檔編號由小到大用 `Spawn` 放回，`New` 回傳新的編號；作者自己記「存檔編號 → 新編號」的對照表，用它改寫參照（例：怪物的追擊目標）。參照指向的實體要先放回，或先全部生成、再用 `Commands::Insert` 補參照。Bevy、Unity 讀檔都是這種。
+
+**Resource 的三種放法。** (1) 準備函式先放預設值，讀檔 System 用 `ResMut` 覆寫；(2) 讀檔 System 用 `Commands::SetResource`——同步點第 7 步才套用，晚於同一個同步點的 OnAdd，套用之前對它用 `Res`／`ResMut` 是斷言；(3) 獨占的讀檔 System 用 `ExclusiveWorld::SetResource`，當場生效。
+
+**hook、初始值、stamp。**
+- 讀檔走一般的 `Spawn`／`SpawnWithId`：**hook 照常觸發**（寶箱的 OnAdd 播音效、碰撞體的 OnAdd 加進空間索引）。要分辨「這是讀檔」，讀檔 System 自己記狀態。
+- hook 生成的衍生實體（例：怪物的 OnAdd 生成血條）若也存進了存檔，讀檔後會有兩份。衍生的東西不要存，或讀檔時不放回。
+- 存檔沒存的衍生元件由初始值的宣告補（第 8 節）；存了的照存檔的值（bundle 已有的元件不蓋）。
+- 放回的格子取套用那個同步點的 stamp：讀檔之後才跑的讀者，`Added<T>`、`Changed<T>` 對它們成立一次。
+
+**時間。** 時間與 tick 是時間 Module 的 Resource。讀檔要接著存檔時的時間，就把它們存進存檔、在準備函式（`extra`）放回：`RestoreFixedTime`、`Tick`。不要放在生成期間的 System 裡（WT-3：`AdvanceTime` 與 `RunFixedSteps` 之間有禁止的窗）。生成期間要不要 tick 見第 14 節。
+
+**資產。** 存檔記資產的 id，不存資產本身；id 能不能用在發替換之前驗。
+
+**存檔放在哪裡。** Engine 不讀寫存檔；讀寫用 io 的整檔讀（`ReadAllBytes`）與整檔原子寫入（`WriteFileAtomically`，避免寫到一半的壞檔），在 World 外先讀好、驗好版本再發替換。存檔目錄（這個使用者的資料目錄）用 os 層的 `OS::Files::UserDataDirectory(organization, application)`（回傳「base／公司／遊戲」、不存在就建；公司名與應用名各一層）。
+
+**狀態機。** 讀檔時狀態怎麼放回，見[第 16 節「狀態機：主選單、關卡中、暫停」](#16-狀態機主選單關卡中暫停)與 [state-machine](state-machine.zh-Hant.md) 第 3 節：讀檔 System 在生成中對 `ResMut<StateMachine<S>>` 呼叫 `SetInitial(存檔的值)`（子狀態也可以），套用的 System 帶 `AfterGenerating()`，第一次套用就直接進存檔的狀態，不先跑初始狀態的 `OnEnter`。例：存檔停在「關卡中＋暫停」，讀檔後直接回到「關卡中＋暫停」。
+
+**讀檔完成。** Engine 不發「讀檔完成」的通知：Engine 不認得讀檔，「放回完了」就是生成結束——讀 `WorldGeneration` 的 `Generating()`，或把遊戲邏輯掛 `AfterGenerating()`。`AfterGenerating()` 之後一直為真；要「讀檔完成時只做一次」，自己記一個旗標。要通知別的 System，讀檔 System 自己發 `Message`（沒有讀者拉住時那次 Run 結束就被修剪，第 14 節）。（Bevy 的讀檔由 Engine 自己的生成器做，所以發得出 `WorldInstanceReady`；GYO 的讀檔是作者的 System。）
+
+**存檔壞了。** 生成期間發現存檔壞了不要回 `Err`（那會結束 `Product`）：把錯寫進自己的 Resource，runner 在兩次入口之間讀它、改發替換回主選單。
+
+**`Restore` 不是預設的讀檔寫法。** `ExclusiveWorld::Restore` 是回滾用的原語，Kernel 不認得放回的用途（DI-KS 12）；它整份換掉 World 的狀態（名單外的實體與格都拿掉、不補初始值、不看配發器的範圍），只適合存了整個 World 的作者。照「先生成關卡、再放回存檔」的流程用它，剛生成的關卡會被整個刪掉。
+
+### 17.1 存檔版本（`save_version`）
+
+**例子。** RPG 1.0 的存檔格式是第 3 版。1.5 改了背包，作者把現在的版本訂成 5、最舊支援訂成 4。玩家拿 1.0 的存檔按「讀取」：選單直接顯示「這個存檔太舊，請開新遊戲」，現在的 World 照跑。
+
+- **預設不帶**。純程式庫：要用的產品 link `GYO::SaveVersion`，自己持有一份 `constexpr SaveVersion::Policy kSaveVersion{5, 4};`（現在 5、最舊收 4；兩個相等＝只收現在的版本）。不登記任何東西。
+- **存的時候**：`kSaveVersion.Current()` 寫進你的存檔格式的任何位置。它不碰檔案、不定格式。
+- **讀的時候**：用你的格式讀出版本數字，交給 `kSaveVersion.Check(版本)`。收 `oldestSupported ≤ 版本 ≤ current`；太舊回 `reporterCode == "save-version-too-old"`、太新回 `"save-version-too-new"`。中間的舊版由你的讀檔程式補轉換。
+- **在哪裡呼叫**（都在換上之前）：(1) 發 `ReplaceWorld` 之前（選 `DropOldFirst` 時只能這裡）；(2) `extra` 準備函式裡呼叫、把錯誤原樣回傳 → `ReplaceWorld` 回 `ReplacePrepareFailed`、`reporterCode` 照帶、舊 World 照跑；(3) 啟動時讀檔：描述的準備函式裡呼叫 → 被拒時 `Product::Build` 失敗（O-E7，碼在訊息文字裡）。**不要在生成期間呼叫**（那裡失敗是 `Product` 結束）。
+- **不呼叫 `Check` 的讀檔照收**。被拒不是事件，是 `Result`。錯誤的型別是 `OrchestrationError`（碼 `PrepareFailed`，為了能直接從準備函式回傳）；在發替換之前判的時候也一樣，**分辨被拒的原因看 `reporterCode`**。
+
+## 18. Resource 被寫過了沒（`Changed()`）
+
+（`v8-arch-gyo2-kernel-res-changed`，使用者 2026-11-23 核准；規則全文在 kernel [DI-KS 28](../kernel.zh-Hant.md#di-ks-28)，本節只講寫法。跨部件規則 [CCR-8](../../../cross-component-rules.md)。）
+
+設定畫面改了 `GameSettings`，另一個 System 只在設定改了的那一幀重建混音與畫質：
+
+```cpp
+K::SystemResult RebuildMixer(K::Res<GameSettings> settings, K::ResMut<Mixer> mixer) {
+    if (!settings.Changed()) return {};   // 上次跑之後沒人寫過：不重建
+    mixer->Rebuild(*settings);
+    return {};
+}
+```
+
+- **是「被寫過」，不是「值變了」。** 拿 `ResMut` 取值寫入（`Get()`、`*`、`->`）就算，寫回同一個值也算；只讀用 `ResMut::Read()`，不算。和元件的 `Changed<T>`、Bevy、flecs、Unity 一樣。
+- **反覆同步同一個值的寫者，值相同就不寫**（CCR-8）。不然讀者每次都拿到 true，又得自己存上一次的值來比：
+
+  ```cpp
+  if (current.Read() != incoming) *current = incoming;   // 值不同才寫
+  ```
+
+- **比的是這個掛載上次跑。** 第一次跑看到全部有值且寫過的；自己上次經 `ResMut` 當場寫的下一次不算，經 `Commands` 延後寫的下一次算（在同步點取較新的 stamp，同 Bevy）；同一個 Run 裡排在後面的 System 寫的，下一次才看到；被 run 條件擋下的期間寫入會累積（第 15 節）。run 條件裡讀 `Changed()` 比的也是這個掛載上次跑——被別的條件擋下時，變更留到它真的跑那次（Bevy 的條件有自己的上次檢查，會錯過）；set 的條件逐成員求值，成員不保證同進同出。
+- **沒有值是 false**，拿掉的那次也是。要知道「被拿掉了」，自己記上次有沒有值（Bevy 的 `resource_removed` 也是這樣做的）：記在 `Local`；在步的 schedule 上不能用 `Local`（R-2 前提 2），要記在自己登記成可回滾的 Resource。
+- **hook 與 observer 裡不要靠它。** hook 沒有上次跑（等於「有值、寫過」）；同步點裡的 observer 看不到同一個同步點後面才寫的（DI-KS 10）。
+- **重跑時反映實際執行的歷史。** stamp 不退回：步的 schedule 上，判定結果取決於 `Changed()` 的 System 不在回滾等價之內（R-2「stamp 除外」）。
+- **Engine 自己每幀或每步都寫、`Changed()` 幾乎恆為 true 的 Resource**：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`（每幀，`AdvanceTime`）、`Tick`（每個固定步）、生成中的 `WorldGeneration`、配發器（每配一個編號）。要抓「暫停了沒」讀時間 Module 的 `TimeControl`（它的值由作者寫，作者也要值不同才寫），不要讀 `VirtualTime` 的 `Changed()`。

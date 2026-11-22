@@ -26,7 +26,7 @@
   - 遷移期間，現有程式受其 legacy 文件的 Design Invariants 約束；新程式（`engine/ecs/kernel` 起）受 target 約束。判斷依據是程式是舊是新，不是文件日期。一個部件遷移完成時，legacy 檔刪、target 檔搬回 `docs/architecture/`，檔名照本節的對照。framework 三份隨 `framework/` 程式被 plugins 遷移批刪除時一起刪。
 
 - **沒有 target 對應的頂層文件**（`v8-arch-docs-scope-of-target`，架構師 2026-11-13）：頂層文件分三種——有 `> **Legacy**` 行的是現況紀錄；沒有 Legacy 行的是正式文件（沒有 target 對應的部件，或已搬回）；target/ 是目標。一個部件的新設計決定寫在哪裡，看它**會不會因改造而改變**：
-  - 改造會改變它（成為 plugin、改成 Resource 或 Host 零件、介面要重定）：在 target/ 開對應檔寫，同一批在頂層原檔加 Legacy 行（開 target 檔的那一批就標，不等遷移完成）。今天屬這一類而還沒有 target 檔的：audio、input、platform-sdl、trace、io（依 `v8-arch-external-components-as-adapters` 與 `v8-arch-engine-or-plugin-criteria`，由規劃批 `v8-arch-adapter-plugins-plan` 逐個定）。
+  - 改造會改變它（成為 plugin、改成 Resource 或 Host 零件、介面要重定）：在 target/ 開對應檔寫，同一批在頂層原檔加 Legacy 行（開 target 檔的那一批就標，不等遷移完成）。今天屬這一類而還沒有 target 檔的：input、platform-sdl、trace、io（audio 已有 target 檔 [`target/v2/audio.zh-Hant.md`](v2/audio.zh-Hant.md)，頂層 `audio.md` 已加 Legacy 行，`v8-arch-gyo2-audio-review`；依 `v8-arch-external-components-as-adapters` 與 `v8-arch-engine-or-plugin-criteria`，由規劃批 `v8-arch-adapter-plugins-plan` 逐個定）。
   - 改造不改變它（留 Engine 且形狀不變，例 collision、math、os、threads、time）：頂層原檔就是權威，新決定直接寫在那裡，不開 target 檔。
   - 一個部件改歸哪一類由架構師在規劃批定、記進 kernel HANDOFF；在定之前，碰到它的新設計決定先問架構師。
 - 文件層級的 Legacy 行與條文層級的「已被取代／相容（措辭更新）」標註是兩件事：前者標整份文件（開 target 檔時），後者標單一條文（`v8-arch-legacy-marks-by-migration-batch`：由各部件的遷移批在動到它時標）。
@@ -92,7 +92,7 @@
 
 **已核准**：使用者 2026-11-13 一次核准（遷移計畫 §7 U13；kernel HANDOFF `v8-arch-target-di-approved`）。各頁的 `Design Invariants` 與 Replacement Criteria 都是正式條文（Replacement Criteria 由使用者同日另一句「照建議」核准），變更要使用者同意。
 
-全文條數 **41**＝kernel 頁 22（DI-KS 1～27，拿掉的 6、7、8、22、23 不計；下面第一層的表只列 DI-KS 1～15，16～27 看 kernel 頁）＋各部件頁特有 13＋資料契約 3＋產品的 target 檔 3（`docs/object_fps_pvp/target/entity-model.zh-Hant.md`）。2026-11-22 照 `v8-arch-gyo2-authority-rollback` 之後的 kernel 頁重算（原為 34＝kernel 頁 15＋13＋3＋3）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
+全文條數 **42**＝kernel 頁 23（DI-KS 1～28，拿掉的 6、7、8、22、23 不計；下面第一層的表只列 DI-KS 1～15，16～28 看 kernel 頁）＋各部件頁特有 13＋資料契約 3＋產品的 target 檔 3（`docs/object_fps_pvp/target/entity-model.zh-Hant.md`）。2026-11-22 照 `v8-arch-gyo2-authority-rollback` 之後的 kernel 頁重算（原為 34＝kernel 頁 15＋13＋3＋3）（2026-11-22 改寫，`v8-arch-gyo2-authority-rollback`，使用者 2026-11-22 核准）。2026-11-23 加 DI-KS 28（`v8-arch-gyo2-kernel-res-changed`，使用者 2026-11-23 合併前核准）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
 
 ### 第一層：跨部件，先讀——[kernel.zh-Hant.md](kernel.zh-Hant.md)
 
@@ -144,7 +144,7 @@
 
 ## 目錄
 
-- [kernel.zh-Hant.md](kernel.zh-Hant.md)：**先讀**。Kernel（`engine/ecs/kernel`）的 Design Invariants（DI-KS 1～27；6、7、8、22、23 拿掉，編號保留）與 Replacement Criteria（RC 1～23；2、3、10、12 拿掉，7 移到編排層、11 移到回滾 Module，編號保留）全文；每條有錨點，部件頁連到單一條款。
+- [kernel.zh-Hant.md](kernel.zh-Hant.md)：**先讀**。Kernel（`engine/ecs/kernel`）的 Design Invariants（DI-KS 1～28；6、7、8、22、23 拿掉，編號保留）與 Replacement Criteria（RC 1～24；2、3、10、12 拿掉，7 移到編排層、11 移到回滾 Module，編號保留）全文；每條有錨點，部件頁連到單一條款。
 - [system-contract.zh-Hant.md](system-contract.zh-Hant.md)：System 契約（描述從簽名推出、回 `Result<void, KernelError>`、無狀態）。
 - [error-handling.md](error-handling.md)：錯誤處理的擴充列（以執行期資料偵測的 Programmer Error：Result 帶上下文、Executor 記錄一次並 Interrupted、不靜默）。英文，因為最終併入的 `docs/architecture/error-handling.md` 是英文。
 - [determinism.md](determinism.md)：決定性（判定的時間只來自 tick 與被記錄的 boundary 輸入——tick 在時間 Module；區隨第 4 批拿掉，Z6、Z8 與 `Tick` 的寫者檢查在權威 Module 的伺服器權威策略；亂數是每實體元件、四處契約）。英文，因為最終併入的 `docs/architecture/determinism.md` 是英文。

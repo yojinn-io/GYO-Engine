@@ -384,14 +384,32 @@ struct ParamTraits<Query<Terms...>>
     : Detail::HandleTraits<Query<Terms...>, Concat<typename QueryTerm<Terms>::Contribution...>,
                            (QueryTerm<Terms>::readOnly && ...)> {};
 
+namespace Detail {
+
+// DI-KS 28: present and written after the mount's last run (putting a value in
+// is a write), the rule of Changed<T> (spec B-12). A write counts whether or
+// not it changed the value.
+template <class T>
+[[nodiscard]] bool ResourceChangedSince(const ResourceSlot<T>& slot, ChangeStamp lastRun) noexcept {
+    return slot.value.has_value() && slot.changed > lastRun;
+}
+
+} // namespace Detail
+
 template <class T>
 class Res final : Detail::Handle {
-    GYO_KERNEL_HANDLE(Res) : Handle(call), id_(Detail::ResourceIdOf(*call.world, KeyOf<T>())) {}
+    GYO_KERNEL_HANDLE(Res)
+        : Handle(call), id_(Detail::ResourceIdOf(*call.world, KeyOf<T>())), lastRun_(call.lastRun) {}
 
 public:
     [[nodiscard]] bool Present() const {
         Check("Res");
         return Slot().value.has_value();
+    }
+    // Written after this mount's last run (DI-KS 28; Detail::ResourceChangedSince).
+    [[nodiscard]] bool Changed() const {
+        Check("Res");
+        return Detail::ResourceChangedSince(Slot(), lastRun_);
     }
     [[nodiscard]] const T& operator*() const {
         Check("Res");
@@ -405,18 +423,25 @@ private:
         return static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, id_));
     }
     ResourceId id_;
+    ChangeStamp lastRun_;
 };
 template <class T>
 struct ParamTraits<Res<T>> : Detail::HandleTraits<Res<T>, TypeList<Access::ResourceRead<T>>, true> {};
 
 template <class T>
 class ResMut final : Detail::Handle {
-    GYO_KERNEL_HANDLE(ResMut) : Handle(call), id_(Detail::ResourceIdOf(*call.world, KeyOf<T>())), stamp_(call.stamp) {}
+    GYO_KERNEL_HANDLE(ResMut)
+        : Handle(call), id_(Detail::ResourceIdOf(*call.world, KeyOf<T>())), stamp_(call.stamp), lastRun_(call.lastRun) {}
 
 public:
     [[nodiscard]] bool Present() const {
         Check("ResMut");
         return Slot().value.has_value();
+    }
+    // As Res::Changed (DI-KS 28); this call's own Get() counts.
+    [[nodiscard]] bool Changed() const {
+        Check("ResMut");
+        return Detail::ResourceChangedSince(Slot(), lastRun_);
     }
     [[nodiscard]] const T& Read() const {
         Check("ResMut");
@@ -440,6 +465,7 @@ private:
     }
     ResourceId id_;
     ChangeStamp stamp_;
+    ChangeStamp lastRun_;
 };
 template <class T>
 struct ParamTraits<ResMut<T>> : Detail::HandleTraits<ResMut<T>, TypeList<Access::ResourceWrite<T>>, false> {};

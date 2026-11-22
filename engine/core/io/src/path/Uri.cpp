@@ -13,11 +13,8 @@ namespace GYO::Engine::IO::Path {
     }
 
     static UriScheme SchemeFrom(std::string_view schemeLower) {
-        if (schemeLower == "asset") return UriScheme::Asset;
-        if (schemeLower == "file")  return UriScheme::File;
-        if (schemeLower == "http")  return UriScheme::Http;
-        if (schemeLower == "https") return UriScheme::Https;
-        return UriScheme::Unknown;
+        // Only file has rules of its own here; any other scheme keeps its name in schemeText.
+        return schemeLower == "file" ? UriScheme::File : UriScheme::Unknown;
     }
 
     // ASCII only, so the mapping does not depend on the C locale.
@@ -181,17 +178,7 @@ namespace GYO::Engine::IO::Path {
         if (scheme == UriScheme::None) {
             appendPath();
         } else {
-            // scheme text
-            if (scheme == UriScheme::Unknown) out += schemeText;
-            else {
-                switch (scheme) {
-                case UriScheme::Asset: out += "asset"; break;
-                case UriScheme::File:  out += "file";  break;
-                case UriScheme::Http:  out += "http";  break;
-                case UriScheme::Https: out += "https"; break;
-                default: out += "unknown"; break;
-                }
-            }
+            out += schemeText;
             out += "://";
             out += authority;
             if (!authority.empty() && !path.Empty() && path.Str().front() != '/') out += "/";
@@ -290,12 +277,10 @@ namespace GYO::Engine::IO::Path {
         NormalizeOptions opt{};
         opt.rejectNullByte = true;
 
-        // asset/http/https/unknown は基本「相対論理パス」を想定（file:// は上で処理済み）
+        // A scheme other than file takes a relative logical path (file:// is handled above).
         opt.rejectAbsoluteLike = true;
         opt.rejectTraversal    = true;
 
-        // http/https の場合、ここで path を “エンジンの Path” にするかは用途次第。
-        // 今回は設計維持のため、同じ Path として扱う（必要なら別設計に分離可能）。
         if (!pathPart.empty()) {
             auto p = Path::Parse(pathPart, opt);
             if (!p) {
@@ -311,38 +296,6 @@ namespace GYO::Engine::IO::Path {
         return uri;;
     }
 
-    Uri ParseUriLoose(std::string_view s) {
-        Uri u;
-
-        auto pos = s.find("://");
-        if (pos == std::string_view::npos) {
-            u.path = Path::FromNormalized(std::string(s));
-            return u;
-        }
-
-        // "://"" の直後から
-        std::string_view rest = s.substr(pos + 3);
-
-        if (SchemeFrom(ToLower(s.substr(0, pos))) == UriScheme::File) {
-            if (auto filePath = FilePathFromRest(rest)) {
-                u.scheme = UriScheme::File;
-                u.path = Path::FromNormalized(std::move(filePath.value()));
-                return u;
-            }
-            // A file URI that ParseUri rejects is no file URI here either: it keeps no scheme, so it
-            // never names a native path (docs/architecture/io.md).
-        } else {
-            u.scheme = SchemeFrom(std::string(s.substr(0, pos)));
-        }
-
-        // "res:///a" などは先頭スラッシュを剥がして相対寄りに
-        while (!rest.empty() && (rest.front() == '/' || rest.front() == '\\')) {
-            rest.remove_prefix(1);
-        }
-
-        u.path =  Path::FromNormalized(std::string(rest));
-        return u;
-    }
 
     Base::Result<Uri, IOError> FileUriFromNativePath(std::string_view utf8AbsolutePath) {
         const std::string path = ToForwardSlashes(utf8AbsolutePath);

@@ -18,8 +18,8 @@
     },
     {
       "id": "os-g4-io-opens",
-      "what": "engine/io opens a file itself instead of calling engine/os (R4, D41)",
-      "file": "engine/core/io/src/fs/Vfs.cpp",
+      "what": "engine/io opens a file itself instead of calling engine/os (R4, D41) (v8-arch-gyo2-threads-io-review: retargeted from the empty Vfs.cpp, removed with Vfs)",
+      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "namespace GYO::Engine::IO::FS {\n",
       "replace": "namespace GYO::Engine::IO::FS {\nstatic std::ifstream probe;\n",
       "command": [
@@ -28,7 +28,7 @@
         "--root",
         "."
       ],
-      "expect": "engine/core/io/src/fs/Vfs\\.cpp:\\d+: R4 std::ifstream"
+      "expect": "engine/core/io/src/fs/NativeFileSystem\\.cpp:\\d+: R4 std::ifstream"
     },
     {
       "id": "os-g5-upward",
@@ -122,7 +122,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        return CanonicalFilePath(std::string(native));\n",
       "replace": "        return CanonicalFilePath(std::string(native.substr(1)));\n",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "ParseUri failed for file:///Users/x"
     },
@@ -132,7 +132,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');",
       "replace": "return (c >= 'A' && c <= 'Z');",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "CHECK\\( FilePath\\(\"file:///c:/game\"\\) == \"c:/game\" \\) is NOT correct"
     },
@@ -142,7 +142,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "            if (text.empty() || text.front() != '/') out += \"/\";\n",
       "replace": "",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "CHECK\\( uri.value\\(\\).ToString\\(\\) == text \\) is NOT correct"
     },
@@ -152,7 +152,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "authority.empty() || ToLower(authority) == \"localhost\"",
       "replace": "authority.empty() || authority == \"localhost\"",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "CHECK\\( FilePath\\(\"file://LOCALHOST/C:/x\"\\) == \"C:/x\" \\) is NOT correct"
     },
@@ -162,29 +162,9 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
       "replace": "        if (false) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "the URI text file:///\\?\\?/ does not parse"
-    },
-    {
-      "id": "io-m6-loose-fallback",
-      "what": "The loose parser keeps the file scheme for a file URI that ParseUri rejects",
-      "file": "engine/core/io/src/path/Uri.cpp",
-      "find": "            // A file URI that ParseUri rejects is no file URI here either: it keeps no scheme, so it\n",
-      "replace": "            u.scheme = UriScheme::File;\n",
-      "target": "engine_tests",
-      "cases": "Uri:*",
-      "expect": "CHECK\\( uri.scheme != Path::UriScheme::File \\) is NOT correct"
-    },
-    {
-      "id": "io-m7-mount-escape",
-      "what": "A mount request with a '..' segment resolves outside the mount root",
-      "file": "engine/core/io/include/engine/io/fs/MountTable.hpp",
-      "find": "            if (Path::ContainsTraversal(rel)) {",
-      "replace": "            if (false) {",
-      "target": "engine_tests",
-      "cases": "Uri:*",
-      "expect": "REQUIRE_FALSE\\( resolved \\) is NOT correct"
     },
     {
       "id": "io-m8-four-slash-unc",
@@ -192,7 +172,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (path.starts_with(\"//\")) return CanonicalFilePath(",
       "replace": "        if (false) return CanonicalFilePath(",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "CHECK\\( FilePath\\(\"file://///a\"\\) == \"//a\" \\) is NOT correct"
     },
@@ -202,7 +182,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (canonical.value() != native) {",
       "replace": "        if (false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "NativePathFromFileUri accepted (///a|C:)"
     },
@@ -212,7 +192,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (NamesDriveUnderRoot(path)) {",
       "replace": "        if (false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "FileUriFromNativePath accepted /C:/x"
     },
@@ -222,7 +202,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if ((utf8AbsolutePath.starts_with('\\\\') && !(path.size() >= 2 && path[1] == '/')) ||\n            (path.size() == 2 && IsDriveLetter(path))) {",
       "replace": "        if (false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri:*",
       "expect": "FileUriFromNativePath accepted (C:|\\\\x)"
     },
@@ -292,22 +272,12 @@
       "expect": "CHECK\\( file.error\\(\\).code == OSErrorCode::NotFound \\) is NOT correct"
     },
     {
-      "id": "io-n1-caps",
-      "what": "The native backend keeps a default capability (canList = true) instead of setting it",
-      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "        caps.canList = false;\n",
-      "replace": "",
-      "target": "engine_tests",
-      "cases": "NativeFileSystem*",
-      "expect": "CHECK_FALSE\\( caps.canList \\) is NOT correct"
-    },
-    {
       "id": "io-n2-write-mode",
       "what": "The native backend opens a mode it does not support (read and write together)",
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            if (Stream::CanRead(mode) || !Stream::Has(mode, FileOpenMode::CreateIfMissing) ||",
       "replace": "            if (!Stream::Has(mode, FileOpenMode::CreateIfMissing) ||",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "NativeFileSystem opened mode"
     },
@@ -317,7 +287,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "Base::CauseDetail(error, nativePath));",
       "replace": "std::string(nativePath));",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( opened.error\\(\\).detail.starts_with\\(expectedStart\\) \\) is NOT correct"
     },
@@ -327,7 +297,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            case OS::OSErrorCode::NotFound:        return IOErrorCode::NotFound;",
       "replace": "            case OS::OSErrorCode::NotFound:        return otherwise;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( opened.error\\(\\).code == IOErrorCode::NotFound \\) is NOT correct"
     },
@@ -375,7 +345,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "                    static_cast<std::uint64_t>(base + offset) > size.value()) {",
       "replace": "                    false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "GYO_ASSERT failed"
     },
@@ -385,7 +355,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "            if (!OS::Files::IsAbsolutePath(native.value())) {",
       "replace": "            if (false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "\\(posix.error\\(\\).code == IOErrorCode::InvalidPath\\) != \\(drive.error\\(\\).code == IOErrorCode::InvalidPath\\) \\) is NOT correct"
     },
@@ -868,7 +838,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        auto created = OS::Files::CreateDirectories(native.value());",
       "replace": "        auto created = Base::Result<void, OS::OSError>{};",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "creates directories and keeps the engine/os cause"
     },
@@ -878,7 +848,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "(!append && !Stream::Has(mode, FileOpenMode::Truncate))",
       "replace": "false",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "says what it supports"
     },
@@ -891,7 +861,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "const auto endings = Stream::Has(mode, FileOpenMode::Text) ? OS::Files::LineEndings::Native",
       "replace": "const auto endings = false ? OS::Files::LineEndings::Native",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "the platform's line endings"
     },
@@ -954,7 +924,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (!IsLocalAuthority(authority)) return CanonicalFilePath(\"//\" + std::string(authority) + path);",
       "replace": "        if (!IsLocalAuthority(authority)) return Base::Err(IOError::Make(IOErrorCode::NotSupported, \"UNC file URIs are not supported\", std::string(rest)));",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "ParseUri failed for file://server/share/x"
     },
@@ -964,7 +934,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "            if (host.empty()) {\n",
       "replace": "            if (true) {\n",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "ParseUri failed for file://server/share/x"
     },
@@ -974,7 +944,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "            return path;\n        }\n        if (StartsWithDrive(path)) {",
       "replace": "            bool escaped = false;\n            return RemoveDotSegments(path, escaped);\n        }\n        if (StartsWithDrive(path)) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*,NativeFileSystem*",
       "expect": "CHECK\\( FilePath\\(\"file:///a/\\./b/\\.\\./c\"\\) == \"/a/\\./b/\\.\\./c\" \\) is NOT correct"
     },
@@ -984,7 +954,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "                return (IsLocalAuthority(host) ? \"file://\" : \"file:\") + text;",
       "replace": "                return \"file:\" + text;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "Printed\\(\"file:////localhost/C\\$/x\"\\) == \"file:////localhost/C\\$/x\" \\) is NOT correct"
     },
@@ -994,7 +964,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
       "replace": "",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "NativeUri\\(\"///a\"\\)\\.path\\.Str\\(\\) == \"/a\" \\) is NOT correct"
     },
@@ -1062,7 +1032,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        return host.find_first_of(\"?:\") != std::string_view::npos;",
       "replace": "        return false;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "ParseUri accepted file:////C:/x"
     },
@@ -1072,7 +1042,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        return LooksLikeDriveUnderRoot(path) || LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
       "replace": "        return LooksLikeDriveUnderRoot(path);",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "ParseUri accepted file:///\\./C:/x"
     },
@@ -1082,7 +1052,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        return LooksLikeDriveUnderRoot(path) || LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
       "replace": "        return LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "CHECK\\( reparsed\\.value\\(\\)\\.path == uri\\.value\\(\\)\\.path \\) is NOT correct"
     },
@@ -1092,7 +1062,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n        if (HasNamespacePrefix(path)) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n",
       "replace": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IOError::Make(IOErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "no native path back for ///\\?\\?/"
     },
@@ -1102,7 +1072,7 @@
       "file": "engine/core/io/src/path/Uri.cpp",
       "find": "            if (IsDriveLetter(uri.authority) || uri.authority.find_first_of(\"/\\\\\") != std::string::npos ||\n                (!native.empty() && native.front() != '/')) {",
       "replace": "            if (false) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "Uri*",
       "expect": "NativePathFromFileUri accepted share"
     },
@@ -1247,7 +1217,7 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        auto moved = OS::Files::RenameReplacing(source.value(), target.value());",
       "replace": "        auto moved = Base::Result<void, OS::OSError>{};",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( ReadBack\\(tree.Native\\(\"menu.json\"\\)\\) == \"new\" \\) is NOT correct"
     },
@@ -1257,39 +1227,19 @@
       "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
       "find": "        auto removed = OS::Files::RemoveFile(native.value());",
       "replace": "        auto removed = Base::Result<void, OS::OSError>{};",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK_FALSE\\( fs.Exists\\(tree.Uri\\(\"menu.json\"\\)\\).value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "io-x3-remove-recursive-accepted",
-      "what": "NativeFileSystem::Remove takes a recursive request it cannot carry out",
-      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "        if (opt.recursive) return Base::Err(Unsupported(\"Remove with recursive\"));\n",
-      "replace": "",
-      "target": "engine_tests",
-      "cases": "NativeFileSystem*",
-      "expect": "CHECK\\( fs.Remove\\(tree.Uri\\(\\), recursive\\).error\\(\\).code == IOErrorCode::NotSupported \\) is NOT correct"
     },
     {
       "id": "io-x4-atomic-temporary-left",
       "what": "WriteFileAtomically leaves its temporary file when the move fails",
       "file": "engine/core/io/src/helpers/WriteFileAtomically.cpp",
-      "find": "        auto moved = fs.Move(temporary, uri);\n        if (!moved) {\n            (void)fs.Remove(temporary, {});",
+      "find": "        auto moved = fs.Move(temporary, uri);\n        if (!moved) {\n            (void)fs.Remove(temporary);",
       "replace": "        auto moved = fs.Move(temporary, uri);\n        if (!moved) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( left == std::vector<std::string>\\{\"export.json\", \"taken\"\\} \\) is NOT correct"
-    },
-    {
-      "id": "io-x5-move-not-advertised",
-      "what": "NativeFileSystem keeps saying it cannot move",
-      "file": "engine/core/io/src/fs/NativeFileSystem.cpp",
-      "find": "        caps.canMove = true;",
-      "replace": "        caps.canMove = false;",
-      "target": "engine_tests",
-      "cases": "NativeFileSystem*",
-      "expect": "CHECK\\( caps.canMove \\) is NOT correct"
     },
     {
       "id": "os-x11-windows-root-opened",
@@ -1350,7 +1300,7 @@
       "file": "engine/core/io/src/helpers/WriteFileAtomically.cpp",
       "find": "        temporary.path = Path::Path::FromNormalized(uri.path.Str() + TemporarySuffix());",
       "replace": "        temporary.path = uri.path;",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( temporary != target \\) is NOT correct"
     },
@@ -1358,11 +1308,24 @@
       "id": "io-x7-atomic-failed-write-left",
       "what": "WriteFileAtomically leaves its temporary file when a write fails",
       "file": "engine/core/io/src/helpers/WriteFileAtomically.cpp",
-      "find": "        if (!written || !closed) {\n            (void)fs.Remove(temporary, {});",
+      "find": "        if (!written || !closed) {\n            (void)fs.Remove(temporary);",
       "replace": "        if (!written || !closed) {",
-      "target": "engine_tests",
+      "target": "gyo_io_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( failing.removed == std::vector<std::string>\\{failing.opened.front\\(\\)\\} \\) is NOT correct"
+    },
+    {
+      "id": "io-y1-too-large-as-read-failed",
+      "what": "A whole-file read over its limit is reported as ReadFailed, so a caller cannot tell a file that is too big from one it could not read (v8-arch-gyo2-threads-io-review I6b). Only it reaches TooLargeErr, which both the size-hint and the streaming paths return",
+      "guards": [
+        "threads-io-review-declaration I6b"
+      ],
+      "file": "engine/core/io/include/engine/io/helpers/FileAllCommon.hpp",
+      "find": "inline IOError TooLargeErr() { return MakeErr(IOErrorCode::TooLarge,",
+      "replace": "inline IOError TooLargeErr() { return MakeErr(IOErrorCode::ReadFailed,",
+      "target": "gyo_io_tests",
+      "cases": "ReadAllBytes reports a file over the limit as TooLarge",
+      "expect": "CHECK\\( sized.error\\(\\).code == IOErrorCode::TooLarge \\) is NOT correct"
     },
     {
       "id": "ti-x1-time-links-more",
@@ -2077,6 +2040,313 @@
       "target": "gyo_os_wake_fallback_tests",
       "cases": "*relative timeout*",
       "expect": "no block with a 20 ms timeout waited for it"
+    },
+    {
+      "id": "ou-x1-not-created",
+      "what": "UserDataDirectory answers the path without making the directory (v8-arch-gyo2-os-user-data; only it catches: the directory not being made)",
+      "guards": [
+        "os-user-data-declaration C6"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (auto made = Detail::CreateDirectories(path, Detail::NewDirectoryAccess::OwnerOnly); !made) {",
+      "replace": "if (auto made = Base::Result<void, OSError>{}; !made) {",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "REQUIRE\\( status \\)"
+    },
+    {
+      "id": "ou-x2-dot-segment-accepted",
+      "what": "A name that is . or .. is accepted, so the directory is another application's (v8-arch-gyo2-os-user-data; only it catches: the dot-segment branch of the name check)",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (name == \".\" || name == \"..\") {",
+      "replace": "if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( asApplication \\)[\\s\\S]*logged: name := \\."
+    },
+    {
+      "id": "ou-x3-separator-accepted",
+      "what": "A name with / or \\ is accepted and makes more than one level (v8-arch-gyo2-os-user-data; only it catches: the separator branch of the name check, the user's Q1 (b))",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (name.find_first_of(\"/\\\\\") != std::string_view::npos) {",
+      "replace": "if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( asApplication \\)[\\s\\S]*logged: name := a/b"
+    },
+    {
+      "id": "ou-x4-empty-application-accepted",
+      "what": "An empty application name is accepted, so the answer is the organization's directory (v8-arch-gyo2-os-user-data; only it catches: the empty-application branch)",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "CheckName(application, false)",
+      "replace": "CheckName(application, true)",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( emptyApplication \\)"
+    },
+    {
+      "id": "ou-x5-empty-organization-joined",
+      "what": "An empty organization still adds a separator (base//application) (v8-arch-gyo2-os-user-data; only it catches: the form without an organization)",
+      "guards": [
+        "os-user-data-declaration C1",
+        "os-user-data-declaration C7"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "if (!organization.empty()) path.append(\"/\").append(organization);",
+      "replace": "path.append(\"/\").append(organization);",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "CHECK\\( bare\\.value\\(\\) == base \\+ \"/(?:Bare App\"|\" \\+ org) \\)"
+    },
+    {
+      "id": "ou-x6-base-trailing-slash-kept",
+      "what": "The trailing / of the base is kept (XDG_DATA_HOME ending in /) (v8-arch-gyo2-os-user-data; only it catches: the shared trimming in sys/UserData.cpp; only XDG_DATA_HOME reaches it untrimmed)",
+      "guards": [
+        "os-user-data-declaration C7"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "std::string path(Detail::WithoutTrailingSlashes(base.value()));",
+      "replace": "std::string path(base.value());",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)[\\s\\S]*values: CHECK\\( [^\\n]*//GYO Test Org"
+    },
+    {
+      "id": "ou-x7-macos-home-slash-kept",
+      "what": "macOS joins a HOME that ends in / as it is (home//Library/...) (v8-arch-gyo2-os-user-data; only it catches: the macOS base's trimming of HOME)",
+      "guards": [
+        "os-user-data-declaration C7"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "return std::string(WithoutTrailingSlashes(home)) + \"/Library/Application Support\";",
+      "replace": "return std::string(home) + \"/Library/Application Support\";",
+      "target": "gyo_os_tests",
+      "cases": "*trailing separator of the user data base*",
+      "expect": "CHECK\\( made\\.value\\(\\)\\.find\\(\"//\"\\) == std::string::npos \\)"
+    },
+    {
+      "id": "ou-x8-linux-home-slash-kept",
+      "what": "Linux joins a HOME that ends in / as it is (home//.local/share/...) (v8-arch-gyo2-os-user-data; only it catches: the Linux base's trimming of HOME)",
+      "guards": [
+        "os-user-data-declaration C7"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return std::string(WithoutTrailingSlashes(home)) + \"/.local/share\";",
+      "replace": "return std::string(home) + \"/.local/share\";",
+      "target": "gyo_os_tests",
+      "cases": "*trailing separator of the user data base*",
+      "expect": "CHECK\\( made\\.value\\(\\)\\.find\\(\"//\"\\) == std::string::npos \\)"
+    },
+    {
+      "id": "ou-x9-no-home-falls-back-to-cwd",
+      "what": "macOS without an absolute HOME answers a directory relative to the current one, as Godot falls back to \".\" (v8-arch-gyo2-os-user-data; only it catches: the missing-HOME failure)",
+      "guards": [
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "        const char* home = Home();\n        if (home == nullptr) {",
+      "replace": "        const char* home = Home();\n        if (home == nullptr) return std::string(\".\");\n        if (home == nullptr) {",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "REQUIRE_FALSE\\( withoutHome \\)"
+    },
+    {
+      "id": "ou-x10-linux-base-cached",
+      "what": "Linux keeps the first XDG_DATA_HOME it read for later calls (v8-arch-gyo2-os-user-data; only it catches: caching, Design Invariant 8)",
+      "guards": [
+        "os-user-data-declaration C9"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "if (const char* data = DataHome()) return std::string(data);",
+      "replace": "static const std::string cached = DataHome() ? DataHome() : \"\";\n        if (!cached.empty()) return cached;",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "values: CHECK\\( /[^\\n]*xdg-data[^\\n]*/GYO Test Org/Test App ==[^\\n]*\\n\\s*logged: ignored := relative-data"
+    },
+    {
+      "id": "ou-x11-macos-base-wrong",
+      "what": "The macOS base drops Library/ (~/Application Support) (v8-arch-gyo2-os-user-data; only it catches: the macOS base directory)",
+      "guards": [
+        "os-user-data-declaration C2"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "\"/Library/Application Support\"",
+      "replace": "\"/Application Support\"",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "CHECK\\( made\\.value\\(\\) == base \\+ \"/\" \\+ org \\+ \"/Test App\" \\)"
+    },
+    {
+      "id": "ou-x12-linux-relative-xdg-accepted",
+      "what": "Linux accepts a relative XDG_DATA_HOME (v8-arch-gyo2-os-user-data; only it catches: the absolute check the specification asks for)",
+      "guards": [
+        "os-user-data-declaration C4"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return data != nullptr && data[0] == '/' ? data : nullptr;",
+      "replace": "return data != nullptr && data[0] != '\\0' ? data : nullptr;",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "values: CHECK\\( relative-data/GYO Test Org[^\\n]*\\n\\s*logged: ignored := relative-data"
+    },
+    {
+      "id": "ou-x13-linux-home-first",
+      "what": "Linux takes HOME even when XDG_DATA_HOME is absolute (v8-arch-gyo2-os-user-data; only it catches: the order of the two)",
+      "guards": [
+        "os-user-data-declaration C4"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "if (const char* data = DataHome()) return std::string(data);",
+      "replace": "if (const char* data = DataHome(); data != nullptr && Home() == nullptr) return std::string(data);",
+      "target": "gyo_os_tests",
+      "cases": "*user data base from XDG_DATA_HOME*",
+      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)[\\s\\S]*values: CHECK\\( [^\\n]*/\\.local/share/GYO Test Org"
+    },
+    {
+      "id": "ou-x14-default-access",
+      "what": "The directories UserDataDirectory makes get the default access, readable by others (v8-arch-gyo2-os-user-data; only it catches: the 0700 the user chose, Q2 (a))",
+      "guards": [
+        "os-user-data-declaration C6"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/Files.cpp",
+      "find": "const mode_t mode = access == NewDirectoryAccess::OwnerOnly ? 0700 : 0777;",
+      "replace": "const mode_t mode = 0777;",
+      "target": "gyo_os_tests",
+      "cases": "*new user data directories for the owner only*",
+      "expect": "CHECK\\( fs::status\\(level\\)\\.permissions\\(\\) == fs::perms::owner_all \\)"
+    },
+    {
+      "id": "ou-x15-owner-only-everywhere",
+      "what": "The public CreateDirectories makes every directory 0700 too (v8-arch-gyo2-os-user-data; only it catches: a change of the public CreateDirectories, Design Invariant 9)",
+      "guards": [
+        "os-user-data-declaration C6",
+        "os 9"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/Files.cpp",
+      "find": "const mode_t mode = access == NewDirectoryAccess::OwnerOnly ? 0700 : 0777;",
+      "replace": "const mode_t mode = 0700;",
+      "target": "gyo_os_tests",
+      "cases": "*new user data directories for the owner only*",
+      "expect": "CHECK\\( static_cast<mode_t>\\(fs::status\\(shared\\)\\.permissions\\(\\)\\) == \\(0777 & ~mode_t\\{022\\}\\) \\)"
+    },
+    {
+      "id": "ou-x16-organization-unchecked",
+      "what": "The organization name is not checked, so . or a separator there escapes or nests (v8-arch-gyo2-os-user-data; only it catches: the check of the organization, which ou-x2 and ou-x3 never reach)",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "    if (auto checked = CheckName(organization, true); !checked) return Base::Err(std::move(checked.error()));\n",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( asOrganization \\)[\\s\\S]*logged: name := \\."
+    },
+    {
+      "id": "ou-x17-macos-relative-home",
+      "what": "macOS takes a relative HOME and makes the directory under the current one (v8-arch-gyo2-os-user-data; only it catches: the absolute check of HOME on macOS)",
+      "guards": [
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "return home != nullptr && home[0] == '/' ? home : nullptr;",
+      "replace": "return home;",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "REQUIRE_FALSE\\( relativeHome \\)"
+    },
+    {
+      "id": "ou-x18-linux-relative-home",
+      "what": "Linux takes a relative HOME and makes the directory under the current one (v8-arch-gyo2-os-user-data; only it catches: the absolute check of HOME on Linux)",
+      "guards": [
+        "os-user-data-declaration C4",
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return home != nullptr && home[0] == '/' ? home : nullptr;",
+      "replace": "return home;",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "REQUIRE_FALSE\\( relativeHome \\)"
+    },
+    {
+      "id": "ou-x19-linux-base-wrong",
+      "what": "The Linux base from HOME drops share (~/.local) (v8-arch-gyo2-os-user-data; only it catches: the Linux base directory under HOME)",
+      "guards": [
+        "os-user-data-declaration C4"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return std::string(WithoutTrailingSlashes(home)) + \"/.local/share\";",
+      "replace": "return std::string(WithoutTrailingSlashes(home)) + \"/.local\";",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "CHECK\\( made\\.value\\(\\) == base \\+ \"/\" \\+ org \\+ \"/Test App\" \\)"
+    },
+    {
+      "id": "ou-x20-macos-no-home-code",
+      "what": "macOS without HOME reports NotFound instead of IOFailed (v8-arch-gyo2-os-user-data; only it catches: the error code of a missing base)",
+      "guards": [
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "return Base::Err(OSError::Make(OSErrorCode::IOFailed,\n                \"cannot name the user data directory: HOME",
+      "replace": "return Base::Err(OSError::Make(OSErrorCode::NotFound,\n                \"cannot name the user data directory: HOME",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "CHECK\\( withoutHome\\.error\\(\\)\\.code == OSErrorCode::IOFailed \\)"
     },
     {
       "id": "od-trunc-ignored",
