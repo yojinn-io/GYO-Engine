@@ -701,6 +701,61 @@
    "target": "gyo_net_tests",
    "cases": "clock: a client at tick 0*",
    "expect": "once\\ settled\\ the\\ client\\ stays\\ within\\ 2\\ ticks\\ of\\ its\\ sync\\ target"
+  },
+  {
+   "id": "nt-resource-sent-again",
+   "what": "A replicated Resource is sent every tick, confirmed or not. Only it catches the ledger's check of a Resource's confirmed stamp",
+   "guards": [
+    "net-module-declaration Q8",
+    "net 12"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (confirmed) continue;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "resource:*",
+   "expect": "a\\ confirmed\\ Resource\\ is\\ not\\ sent\\ again"
+  },
+  {
+   "id": "nt-resource-default-writes-same",
+   "what": "The default Resource apply writes the value even when it is the same. Only it catches CCR-8 for a replicated Resource",
+   "guards": [
+    "net-module-declaration Q8",
+    "cross-component-rules CCR-8"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                if (same->has_value() && **same) return ApplyOutcome::Unchanged;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "resource:*",
+   "expect": "Changed\\(\\)\\ is\\ true\\ once\\ per\\ real\\ change\\ of\\ the\\ score"
+  },
+  {
+   "id": "nt-resource-hash-missing",
+   "what": "The protocol hash leaves the replicated Resources out. Only it catches the Resources' part of the hash",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration Q8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    for (const auto& entry : resources) text += \"r:\" + entry->name + \":\" + std::to_string(entry->version) + \";\";\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "resource:*",
+   "expect": "the\\ protocol\\ hash\\ includes\\ the\\ replicated\\ Resources"
+  },
+  {
+   "id": "nt-resource-apply-not-called",
+   "what": "The client does not call the apply given to ReplicateResource (the value is dropped as applied). Only it catches the registration's apply being the one called (the state machine's request kind reaches the client through it)",
+   "guards": [
+    "net-module-declaration Q8"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                if (auto applied = apply(world, *value); !applied) return Base::Err(std::move(applied).error());\n",
+   "replace": "                if (auto applied = Kernel::SystemResult{}; !applied) return Base::Err(std::move(applied).error());\n",
+   "target": "gyo_net_tests",
+   "cases": "statesync:*",
+   "expect": "TEST CASE:\\s+statesync: the server's request reaches the client"
   }
  ]
 }

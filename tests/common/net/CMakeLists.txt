@@ -4,15 +4,19 @@
 # ("link:" also runs G-7 over UDP loopback); "handshake:" is G-3, "liveness:" G-4 (step 1b); "module:" is G-1
 # and the net Module in a Product with a MemoryLink.
 add_executable(gyo_net_tests TestMain.cpp HeaderTests.cpp ConnectionTests.cpp TransportTests.cpp LinkTests.cpp
-    SessionTests.cpp ModuleTests.cpp ReplicationTests.cpp ScenarioTests.cpp InputTests.cpp ReconnectTests.cpp ClockTests.cpp)
-target_link_libraries(gyo_net_tests PRIVATE GYO::Net doctest::doctest)
+    SessionTests.cpp ModuleTests.cpp ReplicationTests.cpp ScenarioTests.cpp InputTests.cpp ReconnectTests.cpp ClockTests.cpp
+    ResourceTests.cpp)
+# GYO::StateMachine: the "statesync:" cases join the state machine and the net Module as a product does (neither
+# Module depends on the other).
+target_link_libraries(gyo_net_tests PRIVATE GYO::Net GYO::StateMachine doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_net_tests PRIVATE /W4 /permissive-)
     target_compile_definitions(gyo_net_tests PRIVATE NOMINMAX)
 else()
     target_compile_options(gyo_net_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS header connection transport link handshake liveness module replication scenario input reconnect clock)
+foreach(group IN ITEMS header connection transport link handshake liveness module replication scenario input reconnect clock
+    resource statesync)
     add_test(NAME net.${group} COMMAND gyo_net_tests "--test-case=${group}:*")
     set_tests_properties(net.${group} PROPERTIES LABELS "cpu" TIMEOUT 120
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

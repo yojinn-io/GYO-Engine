@@ -92,6 +92,18 @@ Base::Result<void, Kernel::KernelError> Valid(std::optional<S> value) {
     return {};
 }
 
+// The kind of S's pending request, read before the take (DI 6).
+template <class S>
+struct KindOf {
+    RequestKind kind = RequestKind::Normal;
+};
+template <class S, class W>
+KindOf<S> PendingKindOf(W& world) {
+    auto kind = world.template Read<StateMachineRequest<S>>([](const StateMachineRequest<S>& r) { return r.PendingKind(); });
+    GYO_ASSERT(kind && kind->has_value());
+    return KindOf<S>{**kind};
+}
+
 // A child appears under its parent's new value: its initial value (given, for the first apply, by SetInitial),
 // then its enter schedule.
 template <class Child, class W>
@@ -126,11 +138,19 @@ Kernel::SystemResult FirstApply(ApplyWorld<S>& world, const StateMachine<S>& roo
 
 // One apply after the first (section 5.1): take every request of the tree and check them; the root's change
 // (children leave in registration order, the root leaves, changes, enters, children appear); then each child's
-// own request. A request made during this apply waits for the next one (DI 3).
+// own request. A request made during this apply waits for the next one (DI 3). A silent request (DI 6) runs no
+// exit or enter: the same value is not written (CCR-8) and a root asked for its own value leaves its children as
+// they are; another value makes its children leave, or appear at their initial value, without them.
 template <RootState S>
 Kernel::SystemResult Apply(ApplyWorld<S> world) {
     const StateMachine<S> root = ReadMachine<S>(world);
     if (!Access<S>::Applied(root)) return FirstApply<S>(world, root);
+
+    // The kinds, read before the requests are taken (a take puts the kind back to Normal).
+    const RequestKind rootKind = PendingKindOf<S>(world).kind;
+    const auto childKinds = [&]<class... Children>(Kernel::TypeList<Children...>) {
+        return std::tuple<KindOf<Children>...>{PendingKindOf<Children>(world)...};
+    }(SubStatesOf<S>{});
 
     const std::optional<S> rootRequest = TakeRequest<S>(world);
     if (auto valid = Valid<S>(rootRequest); !valid) return valid;
@@ -144,7 +164,23 @@ Kernel::SystemResult Apply(ApplyWorld<S> world) {
     });
     if (!result) return result;
 
-    if (rootRequest) {
+    if (rootRequest && rootKind == RequestKind::Silent) {
+        const S from = *root.Current();
+        const S value = *rootRequest;
+        if (from != value) {
+            // Children leave and appear with the root's value, without their exits and enters.
+            ForEachChild(SubStatesOf<S>{}, [&]<class Child>() {
+                if (ReadMachine<Child>(world).Status() != StateStatus::Active) return;
+                ModifyMachine<Child>(world, [](StateMachine<Child>& m) { Access<Child>::Leave(m); });
+            });
+            ModifyMachine<S>(world, [value](StateMachine<S>& m) { Access<S>::Enter(m, value); });
+            ForEachChild(SubStatesOf<S>{}, [&]<class Child>() {
+                if (StateMachineTraits<Child>::parentValue == value) {
+                    ModifyMachine<Child>(world, [](StateMachine<Child>& m) { Access<Child>::Enter(m, StateMachineTraits<Child>::initial); });
+                }
+            });
+        }
+    } else if (rootRequest) {
         const S from = *root.Current();
         const S to = *rootRequest;
         // Children leave first, in registration order, each marked absent as soon as it has left.
@@ -177,6 +213,14 @@ Kernel::SystemResult Apply(ApplyWorld<S> world) {
         if (!result) return;
         const std::optional<Child> request = std::get<std::optional<Child>>(childRequests);
         if (!request) return;
+        if (std::get<KindOf<Child>>(childKinds).kind == RequestKind::Silent) {
+            const StateMachine<Child> present = ReadMachine<Child>(world);
+            const Child value = *request;
+            if (present.Status() == StateStatus::Active && *present.Current() != value) {
+                ModifyMachine<Child>(world, [value](StateMachine<Child>& m) { Access<Child>::Enter(m, value); });
+            }
+            return;
+        }
         const StateMachine<Child> child = ReadMachine<Child>(world);
         if (child.Status() != StateStatus::Active) return;
         result = world.RunSchedule(ExitScheduleName(*child.Current()));

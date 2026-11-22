@@ -716,8 +716,8 @@
     "state-machine-declaration 判定 1"
    ],
    "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
-   "find": "    if (rootRequest) {\n        const S from = *root.Current();\n",
-   "replace": "    if (rootRequest && *rootRequest != *root.Current()) {\n        const S from = *root.Current();\n",
+   "find": "    } else if (rootRequest) {\n        const S from = *root.Current();\n",
+   "replace": "    } else if (rootRequest && *rootRequest != *root.Current()) {\n        const S from = *root.Current();\n",
    "target": "gyo_state_machine_tests",
    "cases": "behaviour:*",
    "expect": "CHECK(?:_FALSE)?\\( Frame\\(\\*p\\)\\ ==\\ List\\{\"Exit\\.Flow\\.MainMenu\",\\ \"Enter\\.Flow\\.MainMenu\"\\} \\)"
@@ -904,6 +904,89 @@
    "target": "gyo_state_machine_tests",
    "cases": "behaviour:*",
    "expect": "CHECK\\( RequestStamps\\(\\)\\[1\\]\\ ==\\ RequestStamps\\(\\)\\[2\\] \\)"
+  },
+  {
+   "id": "sm-silent-runs-transitions",
+   "what": "A root's silent request runs the exits and enters like a Request. Only it catches the root's silent branch (the child's is sm-silent-child-runs-transitions)",
+   "guards": [
+    "state-machine DI 6",
+    "net-module-declaration Q8"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "    if (rootRequest && rootKind == RequestKind::Silent) {\n",
+   "replace": "    if (false) {\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a silent request changes the value"
+  },
+  {
+   "id": "sm-silent-same-resets-children",
+   "what": "A root's silent request for its own value makes the children leave and appear again (reset). Only it catches silent-parent-keeps-child",
+   "guards": [
+    "state-machine DI 6"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (from != value) {\n",
+   "replace": "        if (true) {\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "the child is not reset \\(silent-parent-keeps-child\\)"
+  },
+  {
+   "id": "sm-silent-same-writes",
+   "what": "A root's silent request for its own value writes the value again (its children left alone). Only it catches CCR-8 for the silent same value",
+   "guards": [
+    "state-machine DI 6",
+    "cross-component-rules CCR-8"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (from != value) {\n",
+   "replace": "        if (from == value) ModifyMachine<S>(world, [value](StateMachine<S>& m) { Access<S>::Enter(m, value); });\n        if (from != value) {\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "the same value is not written \\(CCR-8\\)"
+  },
+  {
+   "id": "sm-silent-child-runs-transitions",
+   "what": "A child's silent request runs its exit and enter like a Request. Only it catches the child's silent branch",
+   "guards": [
+    "state-machine DI 6"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/RegisterStateMachine.hpp",
+   "find": "        if (std::get<KindOf<Child>>(childKinds).kind == RequestKind::Silent) {\n",
+   "replace": "        if (false) {\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a child's silent request"
+  },
+  {
+   "id": "sm-kind-not-overwritten",
+   "what": "A later request overwrites the value but keeps the earlier one's kind. Only it catches \"value and kind together\" in overwriting",
+   "guards": [
+    "state-machine DI 6",
+    "state-machine DI 3"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        pending_ = value;\n        kind_ = kind;\n",
+   "replace": "        if (!pending_) kind_ = kind;\n        pending_ = value;\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "TEST CASE:\\s+behaviour: a Request overwritten by a RequestSilent"
+  },
+  {
+   "id": "sm-adopt-writes-same",
+   "what": "The apply functions write a request even when the state already goes to the value. Only it catches CCR-8 in AdoptByRequest and AdoptByRequestSilent",
+   "guards": [
+    "state-machine DI 6",
+    "cross-component-rules CCR-8",
+    "net-module-declaration Q8"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/AdoptValue.hpp",
+   "find": "    if (**same) return {};\n",
+   "replace": "",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "the same value adopted twice before an apply is written once"
   }
  ]
 }

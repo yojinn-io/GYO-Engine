@@ -324,18 +324,40 @@ Client 的 World（K1 也有）掛 `SyncClock`（`ExclusiveWorld<Writes<Tick, Fi
 
 網路登記成 ECS 元件的型別（`Peer`、`PeerLedger`、`PeerControls`、`PeerInput<T>`）要 nothrow 可搬移（Kernel spec W-8）。MSVC 的 `std::map`、`std::deque`、`std::unordered_map` 的搬移建構不是 noexcept（libc++、libstdc++ 是），所以元件裡的容器一律用 `std::vector` 或排序的 `std::vector` 的 `FlatMap`（`FlatMap.hpp`）。每個元件的定義旁有 `static_assert(kStorable<…>)`；macOS 與 Linux 驗不出 MSVC 的這一點，L1 的 windows-x64 是實際的守衛。Resource（`NetReplicaState`、`NetWorldLink`）沒有這個斷言，照舊。
 
+## 12. Resource 的複製（宣告 Q8 (b)；第 2 步的補完）
+
+```cpp
+net.ReplicateResource<Score>("Score", {ScoreCodec()});                  // 值＝Resource 本身，預設的 apply
+N::NetEntry::ResourceOptions<StateMachine<Weather>, Weather> weather;    // 值是 Weather，不是封閉的 StateMachine
+weather.read  = [](const StateMachine<Weather>& m) { return m.Current(); };
+weather.apply = &AdoptByRequestSilent<Weather>;                          // 或 AdoptByRequest<Weather>
+net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
+```
+
+- **登記**：`ReplicateResource<R, V = R>(名字, {codec, read, apply})`。`R` 是作者在兩端登記的 Resource；`V` 是上 wire 的值。`V` 就是 `R` 時 `read`、`apply` 可以不給。`V` 不是 `R` 時（例：狀態機的值型別封閉、Client 造不出 `StateMachine<S>`）兩個都要給（斷言）。wire id＝登記順序；協議雜湊加 `r:名字:版本`，雜湊的版本字串升到 `/3`（值訊息多了一段，見下）。
+- **送**（伺服器的 `ReplicateOut`）：每 tick 讀每個登記的 Resource 的變更戳記（Kernel 的 `ExclusiveWorld::ResourceStamp<R>()`）與值（`read`；`nullopt` 或 Resource 不在就不送），所有 Peer 共用。Peer 的帳本 `PeerLedger::resources` 記每個 Resource 上次確認的 World 戳記（和實體的 `confirmedStamp` 同一個尺度）；戳記比它新、或還沒確認過，就送。
+- **wire**：每則值訊息在 tick、結構 tick、第幾則、共幾則之後，先放 `u8` Resource 個數與每個（`u16` wire id、`u32` 長度、值），再放實體。Resource 只放在第 0 則（算進那一則的大小），其他則的個數是 0。
+- **確認**：和實體同一條。Client 處理完那一則才回確認；伺服器收到時把那一則帶的 Resource 的確認戳記前推（`PendingPart::resources`）。
+- **收**（Client 的 `ApplyReplication`，K1、K2）：和實體的值一樣，等那一則要的結構 tick 套用後才寫；比寫過的 tick 舊就丟（`StaleValue`）。寫用登記的 `apply`：
+  - 預設（`V`＝`R`）：用 codec 把現值編碼、和收到的位元組比，相同就不寫（CCR-8，`resourceValuesUnchanged` 計數），不同就 `Modify`，Resource 不在就 `SetResource`。
+  - 作者給的 `apply`：`Kernel::SystemResult(Kernel::ExclusiveWorld<>&, const V&)`，回 Err 時 World 照 Kernel 的錯誤停。作者的 `apply` 也先比、相同就不寫（CCR-8）。狀態機的兩個套用函式（`AdoptByRequest`、`AdoptByRequestSilent`，狀態機頁第 2 節）照這個形狀，經要求換值，生效在狀態的套用 System（預設 `PreUpdate` 之後），所以收到與生效在同一幀，比它早跑的 System 看到舊值。
+  - K3 照舊由 `NT-E5` 擋（第 4 步經回滾的入口）。
+- **狀態機與網路不互相依賴**：網路不連狀態機，狀態機只用 Kernel 的型別（狀態機 DI 8 的連結集只有 Kernel 與編排層）；產品在自己的 `build` 把兩者接起來。
+- **時間的 Resource 不複製**：它們每幀被寫，`Changed()` 恆為真，戳記每 tick 都新；每端各自走自己的時間（D-9）。作者不登記它們；不加守衛。
+- **計數**：`PeerLedger::resourceValuesSent`；`NetReplicaState::resourceValuesApplied`、`resourceValuesUnchanged`、`resourcesWritten`（每個 wire id 寫過的最新 tick）。
+
 ## Design Invariants
 
 **草稿**（宣告第 12 節）。最終文字在合併前核准定稿。守衛欄寫 1a 已有的；綁實作方式的守衛（`gyo_expect_links` 等）在 scenario「伺服器＋兩個 Client」通過之後立（AGENTS §3「ガードを立てる時期」；宣告第 8 節）。
 
 <a id="nt-1"></a>
-**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節）；3b 有 (6) 對時的量測與給時間 Module 的輸入（第 10 節）。守衛（3b）：`net.clock` 兩案；突變 `nt-clock-*`。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`、`nt-k3-as-k2`。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
+**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節）；3b 有 (6) 對時的量測與給時間 Module 的輸入（第 10 節）；Q8 (b) 在 (3) 加 Resource 的複製（第 12 節；實作，合併前核准定稿）。守衛（Q8）：`net.resource`、`net.statesync`；突變 `nt-resource-*`。守衛（3b）：`net.clock` 兩案；突變 `nt-clock-*`。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`、`nt-k3-as-k2`。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
 
 <a id="nt-2"></a>
 **NT-2 一套內部協議。** Link 之上只有一種協議；Link 只有 bytes 與連線狀態。1a：`Link` 只有 `Send`、`Receive`；`UdpLink`、`MemoryLink` 換了上層不改（`net.transport` 用 `MemoryLink`、`net.link` 用 `UdpLink`，`Connection` 同一份）。
 
 <a id="nt-3"></a>
-**NT-3 冪等的鍵。** 每一筆帶宣告 D-4 表的鍵，重複收到不改結果。1a：可靠訊息的鍵（連線、通道、訊息序號），重複收到丟掉並計數；封包層以 packet id 去重。第 2 步：值以（World 世代、實體、元件、tick）為鍵，新的蓋舊的、比寫過的舊就不寫並計數；結構以（World 世代、結構 tick）在一條有序的通道上恰好一次。3a：輸入以（Peer, tick）為鍵，只收一次、不覆蓋；值相同就不寫（CCR-8）。守衛：G-2（`net.transport`）、G-5、G-6；突變 `nt-ordered-no-dedup`、`nt-packet-no-dedup`、`nt-stale-value-applied`、`nt-input-overwritten`、`nt-ccr8-write-same`。
+**NT-3 冪等的鍵。** 每一筆帶宣告 D-4 表的鍵，重複收到不改結果。1a：可靠訊息的鍵（連線、通道、訊息序號），重複收到丟掉並計數；封包層以 packet id 去重。第 2 步：值以（World 世代、實體、元件、tick）為鍵，新的蓋舊的、比寫過的舊就不寫並計數；結構以（World 世代、結構 tick）在一條有序的通道上恰好一次。3a：輸入以（Peer, tick）為鍵，只收一次、不覆蓋；值相同就不寫（CCR-8）。Q8：Resource 的值以（World 世代、wire id、tick）為鍵，比寫過的舊就不寫並計數；預設的 apply 值相同就不寫（實作，合併前核准定稿）。守衛：G-2（`net.transport`）、G-5、G-6；突變 `nt-ordered-no-dedup`、`nt-packet-no-dedup`、`nt-stale-value-applied`、`nt-input-overwritten`、`nt-ccr8-write-same`。
 
 <a id="nt-4"></a>
 **NT-4 判定用的時間只有 tick。** 牆鐘只在 IO 層。3b：對時讀牆鐘只為量測，改 World 的只有時間 Module 的 `JumpFixedSteps` 與 `TimeSyncScale`（判定用的仍只有 tick）。1a：`Connection` 不讀時鐘，時間由呼叫者給（`NetTime`），只用來算 RTT、重送與分片逾時；標頭的 tick 照呼叫者給的寫。
@@ -356,7 +378,7 @@ Client 的 World（K1 也有）掛 `SyncClock`（`ExclusiveWorld<Writes<Tick, Fi
 **NT-9 編號。** 伺服器配的實體在 Client 上用同一個編號；範圍由產品分開，握手時檢查不重疊（Q1 核准：兩端同號，照 LIM-7）。第 2 步：Client 用 `SpawnWithId` 生成伺服器配的編號；元件裡的 `EntityId` 原樣上 wire、不用對照表。守衛：G-5（實體編號集合與互指的元件逐項相同、`SpawnRejected` 為 0）。
 
 <a id="nt-10"></a>
-**NT-10 每收件者的狀態在 Peer 實體。** 帳本、可見性、輸入緩衝；不進判定、可重建。1b：每條連線一個 `Peer` 實體（伺服器每個 Client 一個、Client 一個），連上時 spawn、斷了 despawn，帶連線識別、使用者 id、丟棄計數；第 2 步加帳本 `PeerLedger`（Client 有的實體與元件遮罩、確認過的戳記、未確認的值訊息）；3a 加輸入緩衝 `PeerInput<T>` 與控制的實體 `PeerControls`；可見性在第 5 步加。守衛：`net.module`「a client connects, both Worlds get a Peer, and closing ends the server's with ClosedByRemote」；突變 `nt-peer-not-despawned`。
+**NT-10 每收件者的狀態在 Peer 實體。** 帳本、可見性、輸入緩衝；不進判定、可重建。1b：每條連線一個 `Peer` 實體（伺服器每個 Client 一個、Client 一個），連上時 spawn、斷了 despawn，帶連線識別、使用者 id、丟棄計數；第 2 步加帳本 `PeerLedger`（Client 有的實體與元件遮罩、確認過的戳記、未確認的值訊息；Q8 加每個複製的 Resource 確認過的戳記）；3a 加輸入緩衝 `PeerInput<T>` 與控制的實體 `PeerControls`；可見性在第 5 步加。守衛：`net.module`「a client connects, both Worlds get a Peer, and closing ends the server's with ClosedByRemote」；突變 `nt-peer-not-despawned`。
 
 ### Replacement Criteria
 

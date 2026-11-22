@@ -19,8 +19,10 @@
 namespace GYO::Engine::Net {
 
 std::uint64_t NetRegistry::Hash() const {
-    std::string text = "gyo.net.registrations/2;";
+    // /3: the value parts carry the replicated Resources (Q8 (b)).
+    std::string text = "gyo.net.registrations/3;";
     for (const auto& entry : components) text += "c:" + entry->name + ":" + std::to_string(entry->version) + ";";
+    for (const auto& entry : resources) text += "r:" + entry->name + ":" + std::to_string(entry->version) + ";";
     for (const auto& entry : messages) text += "m:" + entry->name + ":" + std::to_string(entry->version) + ";";
     for (const auto& entry : inputs) {
         text += "i:" + entry->name + ":" + std::to_string(entry->version) + ":" + std::to_string(entry->redundancy) + ";";
@@ -171,6 +173,7 @@ void ReadClient(PeerLedger& ledger, Connection& connection) {
             // The client's World was replaced: everything is sent again, under the new epoch.
             ledger.entities.clear();
             ledger.pending.clear();
+            ledger.resources.clear();
             ledger.lastStructureTick = 0;
             ledger.epoch = epoch;
             continue;
@@ -190,6 +193,11 @@ void ReadClient(PeerLedger& ledger, Connection& connection) {
                 if (known != ledger.entities.end()) {
                     known->second.confirmedStamp = std::max(known->second.confirmedStamp, pending->second.stamp);
                 }
+            }
+            for (const std::uint16_t wire : pending->second.resources) {
+                if (ledger.resources.size() <= wire) ledger.resources.resize(wire + std::size_t{1});
+                auto& confirmed = ledger.resources[wire];
+                confirmed = std::max(confirmed.value_or(0), pending->second.stamp);
             }
             ledger.pending.erase(pending);
         }
@@ -225,6 +233,22 @@ SystemResult ReplicateOut(ReplicaWorld world) {
     std::vector<Kernel::EntityId> restructured, currentEntities;
     std::vector<std::vector<std::byte>> parts;
     std::vector<std::vector<Kernel::EntityId>> partEntities;
+    // The replicated Resources this frame (Q8 (b)): changed stamp and encoded value, shared by every Peer.
+    struct TakenResource {
+        std::optional<Kernel::ChangeStamp> stamp;
+        bool sendable = false;
+        std::vector<std::byte> bytes;
+    };
+    std::vector<TakenResource> resourcesNow(registry->resources.size());
+    for (std::size_t r = 0; r < registry->resources.size(); ++r) {
+        TakenResource& taken = resourcesNow[r];
+        taken.stamp = registry->resources[r]->stamp(world);
+        if (!taken.stamp) continue;
+        NetWriter resourceWriter(taken.bytes);
+        taken.sendable = registry->resources[r]->encode(world, resourceWriter);
+    }
+    std::vector<std::byte> resourceBytes;
+    std::vector<std::uint16_t> firstPartResources;
 
     for (const auto& [connectionId, peerEntity] : peers) {
         Connection* connection = server->Find(connectionId);
@@ -305,6 +329,22 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             }
 
             // The values changed since the client last confirmed them, in parts of whole entities.
+            // The Resources written since this Peer last confirmed them go in the first part (before its entities).
+            resourceBytes.clear();
+            firstPartResources.clear();
+            NetWriter resourceWriter(resourceBytes);
+            for (std::size_t r = 0; r < resourcesNow.size(); ++r) {
+                const TakenResource& taken = resourcesNow[r];
+                if (!taken.sendable) continue;
+                const auto wire = static_cast<std::uint16_t>(r);
+                const bool confirmed = wire < ledger.resources.size() && ledger.resources[wire] && *taken.stamp <= *ledger.resources[wire];
+                if (confirmed) continue;
+                resourceWriter.Value(wire);
+                resourceWriter.Value(static_cast<std::uint32_t>(taken.bytes.size()));
+                resourceWriter.Bytes(taken.bytes);
+                firstPartResources.push_back(wire);
+                ++ledger.resourceValuesSent;
+            }
             std::size_t partCountSoFar = 0;
             current.clear();
             currentEntities.clear();
@@ -312,9 +352,17 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             std::uint32_t currentCount = 0;
             auto close = [&] {
                 if (parts.size() == partCountSoFar) parts.emplace_back();
-                std::vector<std::byte>& part = parts[partCountSoFar++];
+                const std::size_t partIndex = partCountSoFar++;
+                std::vector<std::byte>& part = parts[partIndex];
                 part.clear();
                 NetWriter partWriter(part);
+                // Each part: the Resources (only the first has any), then the entities.
+                if (partIndex == 0) {
+                    partWriter.Value(static_cast<std::uint8_t>(firstPartResources.size()));
+                    partWriter.Bytes(resourceBytes);
+                } else {
+                    partWriter.Value(std::uint8_t{0});
+                }
                 partWriter.Value(currentCount);
                 partWriter.Bytes(current);
                 partEntities.push_back(std::move(currentEntities));
@@ -339,7 +387,8 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 oneWriter.Value(entity);
                 Components(world, *registry, snapshot, *taken, changedMask, oneWriter);
                 // An entity's data is never split: a part closes before an entity that would not fit.
-                if (currentCount > 0 && current.size() + one.size() > kValuePartBudget) close();
+                const std::size_t resourcesHere = partCountSoFar == 0 ? resourceBytes.size() : 0;
+                if ((currentCount > 0 || resourcesHere > 0) && current.size() + resourcesHere + one.size() > kValuePartBudget) close();
                 current.insert(current.end(), one.begin(), one.end());
                 currentEntities.push_back(entity);
                 ++currentCount;
@@ -358,6 +407,7 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 valueWriter.Bytes(parts[index]);
                 (void)connection->Send(kValuesChannel, body);
                 ledger.pending[(std::uint64_t{tick} << 16) | index] = PendingPart{now, std::move(partEntities[index])};
+                if (index == 0) ledger.pending[std::uint64_t{tick} << 16].resources = firstPartResources;
                 ++ledger.valuePartsSent;
             }
             while (!ledger.pending.empty() && (ledger.pending.begin()->first >> 16) + kPendingTicks < tick) {
@@ -441,6 +491,38 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
 
 SystemResult ApplyValues(ReplicaWorld& world, const NetRegistry& registry, NetReplicaState& state, const NetReplicaState::Part& part) {
     NetReader reader(part.entries);
+    // The replicated Resources (Q8 (b)), written with their registration's apply.
+    std::uint8_t resourceCount = 0;
+    if (!reader.Value(resourceCount)) {
+        Drop(state, ReplicaDrop::Malformed);
+        return {};
+    }
+    for (std::uint8_t r = 0; r < resourceCount; ++r) {
+        std::uint16_t wire = 0;
+        std::uint32_t length = 0;
+        std::span<const std::byte> bytes;
+        if (!reader.Value(wire) || !reader.Value(length) || !reader.Bytes(length, bytes) || wire >= registry.resources.size()) {
+            Drop(state, ReplicaDrop::Malformed);
+            return {};
+        }
+        const auto written = state.resourcesWritten.find(wire);
+        if (written != state.resourcesWritten.end() && written->second > part.tick) {
+            Drop(state, ReplicaDrop::StaleValue);
+            continue;
+        }
+        auto outcome = registry.resources[wire]->apply(world, bytes);
+        if (!outcome) return Base::Err(std::move(outcome).error());
+        if (*outcome == ApplyOutcome::Failed) {
+            return Base::Err(Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, "the net Module could not apply a Resource"));
+        }
+        if (*outcome == ApplyOutcome::Malformed) {
+            Drop(state, ReplicaDrop::Malformed);
+            continue;
+        }
+        ++state.resourceValuesApplied;
+        if (*outcome == ApplyOutcome::Unchanged) ++state.resourceValuesUnchanged;
+        state.resourcesWritten[wire] = part.tick;
+    }
     std::uint32_t count = 0;
     if (!reader.Value(count)) {
         Drop(state, ReplicaDrop::Malformed);
@@ -500,6 +582,7 @@ bool Current(NetReplicaState& state, NetReader& reader) {
         state.heldMessages.clear();
         state.ticks.clear();
         state.written.clear();
+        state.resourcesWritten.clear();
         state.maxAppliedTick = 0;
         state.latestConfirmed.reset();
         return true;

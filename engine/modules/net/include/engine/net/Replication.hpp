@@ -5,6 +5,9 @@
 //
 //   NetEntry(setup).Replicate<T>(name, codec)        a component the server sends (the author registers T itself)
 //   NetEntry(setup).ServerMessage<M>(name, codec)    a World message the server sends, bound to a structure tick
+//   NetEntry(setup).ReplicateResource<R, V>(name, {codec, read, apply})
+//                                                    a Resource the server sends as a value V (Q8 (b)); the client
+//                                                    writes it with apply (by default SetResource<R>)
 //   OnServer(), OnClient()                           run conditions for logic of one end (D-13)
 //
 // The wire id is the registration order; the protocol hash (compared in the handshake) is made of the names, the
@@ -19,6 +22,7 @@
 // need is applied, and confirms each value part it processed (Ordered Reliable). Only that confirmation moves the
 // Peer's ledger on; the packet acks do not.
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -27,12 +31,14 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "engine/authority/AuthorityStrategy.hpp"
 #include "engine/authority/Registrations.hpp"
 #include "engine/base/Assert.hpp"
+#include "engine/base/Result.hpp"
 #include "engine/kernel/Hash.hpp"
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
@@ -84,6 +90,20 @@ struct ComponentEntry final {
     std::function<bool(ReplicaWorld&, Kernel::EntityId)> remove;
 };
 
+// One replicated Resource (Q8 (b)), type-erased where its types are known (ReplicateResource<R, V>).
+struct ResourceEntry final {
+    std::string name;
+    std::uint32_t version = 1;
+    std::uint16_t wire = 0;
+    Kernel::TypeKey key;
+    // Server: the Resource's changed stamp; nullopt when it is absent.
+    std::function<std::optional<Kernel::ChangeStamp>(ReplicaWorld&)> stamp;
+    // Server: writes the value to send; false when there is none (absent, or the read gave none).
+    std::function<bool(ReplicaWorld&, NetWriter&)> encode;
+    // Client: decodes the value and writes it with the registration's apply.
+    std::function<Base::Result<ApplyOutcome, Kernel::KernelError>(ReplicaWorld&, std::span<const std::byte>)> apply;
+};
+
 struct MessageEntryBase {
     std::string name;
     std::uint32_t version = 1;
@@ -121,6 +141,7 @@ struct InputEntry final {
 // The registrations of one World, in registration order.
 struct NetRegistry final {
     std::vector<std::shared_ptr<const ComponentEntry>> components;
+    std::vector<std::shared_ptr<const ResourceEntry>> resources;
     std::vector<std::shared_ptr<const MessageEntryBase>> messages;
     std::vector<std::shared_ptr<const InputEntry>> inputs;
 
@@ -163,11 +184,15 @@ struct LedgerEntity final {
 struct PendingPart final {
     Kernel::ChangeStamp stamp = 0;
     std::vector<Kernel::EntityId> entities;
+    // The wire ids of the Resources this part carried.
+    std::vector<std::uint16_t> resources{};
 };
 struct PeerLedger final {
     FlatMap<Kernel::EntityId, LedgerEntity> entities;
     // Value parts sent and not confirmed, by (tick << 16) | part.
     FlatMap<std::uint64_t, PendingPart> pending;
+    // Per replicated Resource (by wire id): the World stamp of the newest value the client confirmed; nullopt before.
+    std::vector<std::optional<Kernel::ChangeStamp>> resources;
     std::uint32_t lastStructureTick = 0;
     std::optional<std::uint32_t> lastSentTick;
     // Raised by the client's resync (its World was replaced): older messages are ignored there.
@@ -177,6 +202,8 @@ struct PeerLedger final {
     std::uint64_t valuePartsSent = 0;
     std::uint64_t serverMessagesSent = 0;
     std::uint64_t confirmationsReceived = 0;
+    // Replicated Resource values sent (Q8 (b)).
+    std::uint64_t resourceValuesSent = 0;
 };
 inline void HashValue(Kernel::Hasher&, const PeerLedger&) {}
 
@@ -225,6 +252,8 @@ struct NetReplicaState final {
     std::uint64_t confirmedTicks = 0;
     // The tick of the newest value or structure written per (entity, wire).
     std::map<std::pair<Kernel::EntityId, std::uint16_t>, std::uint32_t> written;
+    // The tick of the newest value written per replicated Resource (wire).
+    std::map<std::uint16_t, std::uint32_t> resourcesWritten;
     struct Ready {
         std::uint16_t wire = 0;
         std::vector<std::byte> bytes;
@@ -248,6 +277,9 @@ struct NetReplicaState final {
     std::optional<std::uint64_t> lastInputTick;
     // Values that were the World's already: not written (CCR-8).
     std::uint64_t unchangedNotWritten = 0;
+    // Replicated Resource values handed to their apply (Q8 (b)), and of those the default apply found unchanged.
+    std::uint64_t resourceValuesApplied = 0;
+    std::uint64_t resourceValuesUnchanged = 0;
     std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
 inline void HashValue(Kernel::Hasher&, const NetReplicaState&) {}
@@ -538,6 +570,86 @@ public:
             return removed.has_value() && *removed;
         };
         table_->registry.components.push_back(std::move(entry));
+    }
+
+    // A Resource R the server replicates as a value V (net-module declaration Q8 (b)); R is registered as a Resource by
+    // the author at both ends. Every tick the server sends V when R was written since that Peer last confirmed it
+    // (its changed stamp), in the first value part, under the same confirmation as the components. The client
+    // writes it with apply once the structure the part needs is applied (K1, K2; K3 is NT-E5 until step 4).
+    //   codec  how V goes on the wire (DefaultCodec<V> for a number or an enum);
+    //   read   server: the value of R to send, nullopt for none; empty when V is R (R itself);
+    //   apply  client: writes the value; empty when V is R: SetResource<R>, not written when the codec gives the
+    //          same bytes as the value there (CCR-8). An apply of the author's own compares first as well (CCR-8).
+    // The time Module's Resources are written every frame (their Changed() is always true): they are not replicated
+    // and an author does not register them (each end keeps its own time, D-9).
+    template <class R, class V = R>
+    struct ResourceOptions final {
+        Codec<V> codec = DefaultCodec<V>();
+        std::function<std::optional<V>(const R&)> read;
+        std::function<Kernel::SystemResult(ReplicaWorld&, const V&)> apply;
+    };
+    template <class R, class V = R>
+    void ReplicateResource(std::string name, ResourceOptions<R, V> options = {}) {
+        static_assert(std::is_default_constructible_v<V>, "NetEntry::ReplicateResource: the value type is decoded into a V{}");
+        GYO_ASSERT(options.codec.encode && options.codec.decode &&
+                   "NetEntry::ReplicateResource: give the value's codec (encode and decode); no byte copy");
+        if constexpr (!std::is_same_v<R, V>) {
+            GYO_ASSERT(options.read && options.apply &&
+                       "NetEntry::ReplicateResource<R, V>: a value type other than the Resource needs read and apply");
+        }
+        GYO_ASSERT(table_->registry.resources.size() < 255 && "NetEntry::ReplicateResource: at most 255 replicated Resources");
+        auto entry = std::make_shared<ResourceEntry>();
+        entry->name = std::move(name);
+        entry->version = options.codec.version;
+        entry->wire = static_cast<std::uint16_t>(table_->registry.resources.size());
+        entry->key = Kernel::KeyOf<R>();
+        entry->stamp = [](ReplicaWorld& world) { return world.template ResourceStamp<R>(); };
+        entry->encode = [encode = options.codec.encode, read = options.read](ReplicaWorld& world, NetWriter& writer) {
+            auto written = world.template Read<R>([&](const R& resource) {
+                if constexpr (std::is_same_v<R, V>) {
+                    if (!read) {
+                        encode(writer, resource);
+                        return true;
+                    }
+                }
+                const std::optional<V> value = read(resource);
+                if (!value) return false;
+                encode(writer, *value);
+                return true;
+            });
+            return written && written->has_value() && **written;
+        };
+        entry->apply = [codec = options.codec, apply = options.apply](ReplicaWorld& world, std::span<const std::byte> bytes)
+            -> Base::Result<ApplyOutcome, Kernel::KernelError> {
+            std::optional<V> value{std::in_place};
+            NetReader reader(bytes);
+            if (!codec.decode(reader, *value) || reader.Remaining() != 0) return ApplyOutcome::Malformed;
+            if (apply) {
+                if (auto applied = apply(world, *value); !applied) return Base::Err(std::move(applied).error());
+                return ApplyOutcome::Applied;
+            }
+            if constexpr (std::is_same_v<R, V>) {
+                // CCR-8: compared through the codec's bytes, so R needs no ==.
+                auto same = world.template Read<R>([&](const R& now) {
+                    std::vector<std::byte> current;
+                    NetWriter currentWriter(current);
+                    codec.encode(currentWriter, now);
+                    return current.size() == bytes.size() && std::equal(current.begin(), current.end(), bytes.begin());
+                });
+                if (!same) return Base::Err(std::move(same).error());
+                if (same->has_value() && **same) return ApplyOutcome::Unchanged;
+                if (same->has_value()) {
+                    auto modified = world.template Modify<R>([&value](R& cell) { cell = std::move(*value); });
+                    if (!modified) return Base::Err(std::move(modified).error());
+                    return ApplyOutcome::Applied;
+                }
+                if (auto set = world.SetResource(std::move(*value)); !set) return Base::Err(std::move(set).error());
+                return ApplyOutcome::Applied;
+            } else {
+                return ApplyOutcome::Failed;
+            }
+        };
+        table_->registry.resources.push_back(std::move(entry));
     }
 
     // A World message M the server sends to every Peer (or to the one recipient names), after the structure update
