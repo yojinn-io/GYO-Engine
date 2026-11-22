@@ -1,6 +1,6 @@
 # 權威 Module（`engine/modules/authority`）
 
-更新：2026-11-22（`v8-arch-gyo2-exchange` 第 0 步：DI-A 9 加連結集的守衛、DI-A 2 指向 K9 的「拿掉的名字」）；2026-11-22（`v8-arch-gyo2-batch4-followups`：DI-A 2 的守衛改成常設的寫法）；2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 5 步）。Owner：架構。程式：`engine/modules/authority/`（`GYO::Engine::Authority`，target `GYO::Authority`，登記單位 `AuthorityModule`）。行為測試：`tests/common/authority/`（ctest `authority.authority_socket`、`authority.authority_registrations`、`authority.authority_checks`、`authority.authority_consistency`、`authority.authority_sources`、`authority.sources_scan`，標籤 `cpu`）；突變清單 [`scripts/authority_mutations.json`](scripts/authority_mutations.json)（`au-`）。產品那一側的來源掃描：`tests/common/authority_scan/`（原 `zone_scan`，第 5 步照命名規範改名；規則 ZS1～ZS7 不改名）。
+更新：2026-11-23（`v8-arch-gyo2-net-module` 第 3 步前半：判定的輸入是元件時也代為登記輸入紀錄，第 4 節限界那一條改寫、AU-E6 的例外含元件的輸入；網路宣告第 5 節，使用者已核准；**實作，最終文字在合併前核准定稿**）；2026-11-22（`v8-arch-gyo2-exchange` 第 0 步：DI-A 9 加連結集的守衛、DI-A 2 指向 K9 的「拿掉的名字」）；2026-11-22（`v8-arch-gyo2-batch4-followups`：DI-A 2 的守衛改成常設的寫法）；2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 5 步）。Owner：架構。程式：`engine/modules/authority/`（`GYO::Engine::Authority`，target `GYO::Authority`，登記單位 `AuthorityModule`）。行為測試：`tests/common/authority/`（ctest `authority.authority_socket`、`authority.authority_registrations`、`authority.authority_checks`、`authority.authority_consistency`、`authority.authority_sources`、`authority.sources_scan`，標籤 `cpu`）；突變清單 [`scripts/authority_mutations.json`](scripts/authority_mutations.json)（`au-`）。產品那一側的來源掃描：`tests/common/authority_scan/`（原 `zone_scan`，第 5 步照命名規範改名；規則 ZS1～ZS7 不改名）。
 
 由來：[權威份](authority-module-declaration.zh-Hant.md)（修訂 5，已核准）第 4、5、7 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 4、6 節與第 11.2 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。Design Invariants 的最終文字使用者 2026-11-22 核准（[合併前核准](authority-rollback-merge-approval.zh-Hant.md)）；和權威份字面不同的地方在條末標「實作」。
 
@@ -88,7 +88,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 | AU-E3 | World 准動態插入 | 5.5 | `authority checks: AU-E3…` |
 | AU-E4 | 標記、`Ingress`、`Runs`、`OneEndOnly` 對不到（被 `RemoveSystem` 拿掉的 System 算對不到） | DI-A 10 | `…AU-E4…` 兩案、`…a mark only records…` |
 | AU-E5 | `Tick` 的寫者不在時間 Module 的 `TickWriters()`（System、hook、observer；`Writes<Tick>` 標註也算） | 5.4 | `…AU-E5…` 兩案 |
-| AU-E6 | Z6：可回滾 schedule（步的與巢狀的）上、重跑時會跑的 System 寫的判定資料，要可回滾或 Derived；World 有步的 schedule 時，hook 與 observer 寫的判定資料要可回滾（不能是 Derived）。`Tick` 例外、有 `rollback.Input` 歷史的輸入例外（重跑前會寫回；實作），訊息不看；延後寫、`Writes<…>` 標註、經 `InitialValue` 的漏斗（沿鏈；原地寫與移除請求不算）都算寫 | 5.11 | `…AU-E6…` 五案 |
+| AU-E6 | Z6：可回滾 schedule（步的與巢狀的）上、重跑時會跑的 System 寫的判定資料，要可回滾或 Derived；World 有步的 schedule 時，hook 與 observer 寫的判定資料要可回滾（不能是 Derived）。`Tick` 例外、有 `rollback.Input` 歷史的輸入（Resource 與元件）例外（重跑前會寫回；實作），訊息不看；延後寫、`Writes<…>` 標註、經 `InitialValue` 的漏斗（沿鏈；原地寫與移除請求不算）都算寫 | 5.11 | `…AU-E6…` 五案 |
 | AU-E7 | Z8：判定的輸入登記成回滾狀態或 Derived（`rollback.Input<T>` 不算；元件與 Resource 都查） | 5.11 | `…AU-E7…` |
 | AU-E8 | D-E15：可回滾 schedule 上的入口不在「重跑時不跑」 | 5.11 | `…AU-E8…` |
 | AU-E9 | 可回滾 schedule 上的 `Runs` System 會跑的 schedule 沒登記成巢狀（步的 schedule 本身不算巢狀登記） | 5.11 | `…AU-E9…` 兩案 |
@@ -98,7 +98,7 @@ PvP 射擊的 Match 與 Client 都選 `ServerAuthorityStrategy`。作者在產�
 ## 4. 本批的限界
 
 - Z6 不看「重跑時不跑」的 System（入口寫判定的輸入，重跑時不會再寫；實作）。權威份 5.11 寫「掛在可回滾 schedule 上的 System」，這是它的細化。
-- 判定的輸入（Resource）由伺服器權威代為登記 `rollback.Input<T>()`（策略的深度；使用者 2026-11-22 選 (c)，對照 lightyear 的 InputBuffer、Unity Netcode 的 `IInputComponentData`：宣告一次輸入，紀錄自動就有）。宣告輸入不等於選了預測：紀錄只在選了回滾策略的 World 建（R-4），Match 與不預測的 Client 什麼都不建。作者選 `Self` 或 `NoRollback` 時不代為登記。元件的輸入沒有紀錄可代為登記（回滾 Module 只記 Resource 的輸入），照舊受 Z6 檢查。守衛：`authority registrations: a decision input brings its recorded history…`、scenario 第 5 段（作者不再寫這行）；突變 `au-input-history-not-recorded`、`au-input-self-recorded`。
+- 判定的輸入（Resource 與元件〔實作，合併前核准定稿〕）由伺服器權威代為登記 `rollback.Input<T>()`（元件是 `rollback.Input<T>(StrategyDepth, DataKind::Component)`，每個實體一份；策略的深度；使用者 2026-11-22 選 (c)，對照 lightyear 的 InputBuffer、Unity Netcode 的 `IInputComponentData`：宣告一次輸入，紀錄自動就有）。宣告輸入不等於選了預測：紀錄只在選了回滾策略的 World 建（R-4），Match 與不預測的 Client 什麼都不建。作者選 `Self` 或 `NoRollback` 時不代為登記。〔實作，合併前核准定稿；取代「元件的輸入沒有紀錄可代為登記，照舊受 Z6 檢查」〕元件的輸入也代為登記（網路宣告 D-11：輸入是玩家實體上的元件），有紀錄的元件輸入和 Resource 一樣不受 Z6 檢查，AU-E7 照舊查元件與 Resource。守衛：`authority registrations: a decision input brings its recorded history…`、`…a component decision input brings its recorded history per entity…`、`authority checks: AU-E6 leaves out a component input whose history the rollback keeps…`、scenario 第 5 段（作者不再寫這行）；突變 `au-input-history-not-recorded`、`au-input-self-recorded`、`au-component-input-no-history`、`au-component-input-kept-as-resource`。
 - 有 `rollback.Input` 歷史的輸入不受 Z6 檢查（審查 1-5：輸入不能登記成可回滾（Z8），步上的 System 消耗它時沒有合法出口；回滾在重跑每一步前把它寫回）。沒有歷史的輸入在步上被寫照樣 AU-E6。
 - 一致性指紋不收 `KernelSettings::hookRoundLimit`（World 的設定值，執行時才讀），只收 schedule 的選項。
 - System 自己讀 `Resimulation`、又帶回滾的「重跑時不跑」條件時，指紋看不出前者（條件的讀取和它分不開）。
