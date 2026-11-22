@@ -58,7 +58,10 @@ which roles stop and join, and what a job does.
   start in the order they were submitted. `Stop(Drain)` runs the jobs already queued, `Stop(Discard)` drops the
   jobs not started; both return once no job is running and every thread has returned, and a second `Stop` does
   nothing. The destructor is `Stop(Discard)`. A job must not let an exception escape. `Stop` and the destructor are
-  not called from one of the pool's threads. A moved-from pool takes no job.
+  not called from one of the pool's threads, nor from two threads at once. A moved-from pool takes no job. No guard
+  checks that the destructor drops the queued jobs (a test cannot tell when the destructor has begun), that the
+  priority reaches the threads (the pool reads none back), or that a failed `Start` stops the threads it started
+  (no failure can be injected); review keeps them.
 
 ## Design Invariants
 
@@ -101,7 +104,8 @@ which roles stop and join, and what a job does.
 11. **Stopping a pool ends its work.** `Stop` returns once no job is running and every thread has returned; `Drain`
     runs the jobs already queued first, `Discard` drops them. Guards: "WorkerPool Stop with Drain runs the jobs
     already queued", "WorkerPool Stop with Discard drops the queued jobs and waits for the running one"; mutants
-    `wp-drain-drops-queued`, `wp-discard-returns-early`.
+    `wp-drain-drops-queued`, `wp-discard-keeps-queued`, `wp-discard-returns-early`. The order of jobs (Contracts):
+    "WorkerPool starts jobs in the order they were submitted", mutant `wp-last-in-first-out`.
 12. **A pool is not global.** There is no shared or singleton pool: whoever creates one owns it and passes it on
     (orchestration O-15: one process may hold several Products). No guard; the API has no such accessor.
 

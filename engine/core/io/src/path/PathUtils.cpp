@@ -174,7 +174,7 @@ namespace GYO::Engine::IO::Path {
     std::string RemoveDotSegments(std::string_view path, bool& escapedAboveRoot) {
         escapedAboveRoot = false;
 
-        // "/" 区切り想定（NormalizeSlashes で揃っている前提）
+        // Expects "/" separators.
         // ただし Windows drive/UNC も来るので prefix を扱う
         std::string prefix;
         std::string_view p = path;

@@ -3,17 +3,21 @@
 #include "engine/threads/WorkerPool.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <mutex>
 #include <set>
 #include <thread>
 #include <utility>
+#include <vector>
 
 using namespace GYO::Engine::Threads;
+using namespace std::chrono_literals;
 
-// docs/architecture/threads.md, WorkerPool: Design Invariants 10 and 11. Each Stop case holds the pool's one
-// thread in a job, stops from another thread, and lets the job go only once the pool refuses jobs, so the queue
-// is known to be full when the stop decides what to do with it.
+// docs/architecture/threads.md, WorkerPool: the Contracts and Design Invariants 10 and 11. Each Stop case holds the
+// pool's one thread in a job that has started, stops from another thread, and lets the job go only once the pool
+// refuses jobs, so the queue is known to be full when the stop decides what to do with it, and the running job is
+// known to be running.
 
 namespace {
 
@@ -23,11 +27,33 @@ WorkerPool StartPool(WorkerPoolOptions options) {
     return std::move(*pool);
 }
 
+// A job that reports it has started, then waits for the gate.
+struct HeldJob {
+    std::promise<void> started;
+    std::promise<void> gate;
+    std::shared_future<void> opened = gate.get_future().share();
+    std::atomic<bool> finished{false};
+
+    WorkerPool::Job Job() {
+        return [this] {
+            started.set_value();
+            opened.wait();
+            finished = true;
+        };
+    }
+    // Returns once the pool's thread runs the job; a pool that never wakes for a submitted job fails here.
+    void WaitStarted() { REQUIRE(started.get_future().wait_for(10s) == std::future_status::ready); }
+    void Open() { gate.set_value(); }
+};
+
 // Submits no-op jobs that count themselves until the pool refuses one: the stop has begun. Returns how many it
-// queued before that.
+// queued before that. A pool that never refuses fails here instead of growing its queue until the test times out.
 int WaitUntilRefused(WorkerPool& pool, std::atomic<int>& ran) {
     int accepted = 0;
-    while (pool.Submit([&ran] { ++ran; })) ++accepted;
+    while (pool.Submit([&ran] { ++ran; })) {
+        ++accepted;
+        REQUIRE_MESSAGE(accepted < 1'000'000, "the pool still takes jobs while it stops");
+    }
     return accepted;
 }
 
@@ -54,46 +80,60 @@ TEST_CASE("WorkerPool runs submitted jobs on its own named threads") {
     CHECK(threads.size() <= 3);
 }
 
+TEST_CASE("WorkerPool starts jobs in the order they were submitted") {
+    auto pool = StartPool({.name = "gyo-test-order"});
+    HeldJob held;
+    REQUIRE(pool.Submit(held.Job()));
+    held.WaitStarted();
+    std::vector<int> order;
+    for (int i = 0; i < 8; ++i) REQUIRE(pool.Submit([&order, i] { order.push_back(i); }));
+    held.Open();
+    pool.Stop(StopMode::Drain);
+    const std::vector<int> expected{0, 1, 2, 3, 4, 5, 6, 7};
+    CHECK(order == expected);
+}
+
 TEST_CASE("WorkerPool takes no job after Stop") {
     auto pool = StartPool({.name = "gyo-test-stopped"});
     pool.Stop(StopMode::Drain);
-    std::atomic<bool> ran{false};
-    const bool submitted = pool.Submit([&ran] { ran = true; });
+    const bool submitted = pool.Submit([] {});
     CHECK_FALSE(submitted);
     pool.Stop(StopMode::Drain);
-    CHECK_FALSE(ran.load());
 }
 
 TEST_CASE("WorkerPool Stop with Drain runs the jobs already queued") {
     auto pool = StartPool({.name = "gyo-test-drain"});
-    std::promise<void> gate;
-    auto opened = gate.get_future().share();
+    HeldJob held;
     std::atomic<int> ran{0};
-    REQUIRE(pool.Submit([opened, &ran] { opened.wait(); ++ran; }));
+    REQUIRE(pool.Submit(held.Job()));
+    held.WaitStarted();
     for (int i = 0; i < 5; ++i) REQUIRE(pool.Submit([&ran] { ++ran; }));
-    std::thread stopper([&pool] { pool.Stop(StopMode::Drain); });
+    std::atomic<int> ranWhenStopped{-1};
+    std::thread stopper([&] {
+        pool.Stop(StopMode::Drain);
+        ranWhenStopped = ran.load();
+    });
     const int accepted = WaitUntilRefused(pool, ran);
-    gate.set_value();
+    held.Open();
     stopper.join();
-    const int drained = ran.load();
-    CHECK(drained == 1 + 5 + accepted);
+    const int drained = ranWhenStopped.load();
+    CHECK(drained == 5 + accepted);
 }
 
 TEST_CASE("WorkerPool Stop with Discard drops the queued jobs and waits for the running one") {
     auto pool = StartPool({.name = "gyo-test-discard"});
-    std::promise<void> gate;
-    auto opened = gate.get_future().share();
-    std::atomic<bool> finished{false};
+    HeldJob held;
     std::atomic<int> ran{0};
-    REQUIRE(pool.Submit([opened, &finished] { opened.wait(); finished = true; }));
+    REQUIRE(pool.Submit(held.Job()));
+    held.WaitStarted();
     for (int i = 0; i < 5; ++i) REQUIRE(pool.Submit([&ran] { ++ran; }));
     std::atomic<bool> finishedWhenStopped{false};
     std::thread stopper([&] {
         pool.Stop(StopMode::Discard);
-        finishedWhenStopped = finished.load();
+        finishedWhenStopped = held.finished.load();
     });
     static_cast<void>(WaitUntilRefused(pool, ran));
-    gate.set_value();
+    held.Open();
     stopper.join();
     const bool waited = finishedWhenStopped.load();
     CHECK(waited);
@@ -101,20 +141,22 @@ TEST_CASE("WorkerPool Stop with Discard drops the queued jobs and waits for the 
     CHECK(queuedRan == 0);
 }
 
-TEST_CASE("WorkerPool destruction drops the queued jobs and waits for the running one") {
-    std::promise<void> gate;
-    auto opened = gate.get_future().share();
-    std::atomic<bool> finished{false};
-    std::atomic<int> ran{0};
+// The destructor waits for the running job. That it drops the queued jobs (it is Stop(Discard)) has no guard: the
+// test cannot tell when the destructor has begun, so it cannot open the gate only after that.
+TEST_CASE("WorkerPool destruction waits for the running job") {
+    HeldJob held;
+    std::thread opener;
     {
         auto pool = StartPool({.name = "gyo-test-destroy"});
-        REQUIRE(pool.Submit([opened, &finished] { opened.wait(); finished = true; }));
-        for (int i = 0; i < 5; ++i) REQUIRE(pool.Submit([&ran] { ++ran; }));
-        std::thread opener([&gate] { gate.set_value(); });
-        opener.join();
+        REQUIRE(pool.Submit(held.Job()));
+        held.WaitStarted();
+        opener = std::thread([&held] {
+            std::this_thread::sleep_for(20ms);
+            held.Open();
+        });
     }
-    CHECK(finished.load());
-    CHECK(ran.load() <= 5);
+    CHECK(held.finished.load());
+    opener.join();
 }
 
 TEST_CASE("WorkerPool moved from takes no job") {
