@@ -3523,18 +3523,6 @@
    "expect": "\\[or\\-pbuf\\-report\\-all\\]"
   },
   {
-   "id": "or-exch-round-after-failed-in",
-   "what": "after a failing \"in\" the World's round still runs before RunFrame returns the error (5.1: RunFrame stops). Only it catches the round not running",
-   "guards": [
-    "orchestration O-12",
-    "exchange-declaration 5.1"
-   ],
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (auto exchanged = Exchange(slot.exchangeIn, slot.executor->GetWorld(), \"in\"); !exchanged) return exchanged;\n        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n        }\n",
-   "replace": "        auto enteredIn = Exchange(slot.exchangeIn, slot.executor->GetWorld(), \"in\");\n        for (const std::string& schedule : slot.frame) {\n            if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n        }\n        if (!enteredIn) return enteredIn;\n",
-   "target": "gyo_orchestration_tests",
-   "cases": "exchange: X-3 a failing*",
-   "expect": "\\[or\\-exch\\-stops\\] in game@A a out game@A in game@B b",
    "id": "wg-held-not-cleared",
    "what": "a generating frame does not start with nobody holding: a Hold() stays and generation never ends. Only it catches the step before the frame",
    "guards": [
@@ -3676,6 +3664,75 @@
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-3 a failing*",
    "expect": "\\[or\\-exch\\-stops\\] in game@A a out game@A in game@B b"
+  },
+  {
+   "id": "re-spawn-cells-no-onadd",
+   "what": "step 4: the cells a spawn's bundle brings are not added to the OnAdd list (no OnAdd, no initial value for them) — restore-entry declaration 18.3 case 6, a load put back while generating. The sr-*-cells-added mutants do the opposite (dropped records that still go to OnAdd)",
+   "guards": [
+    "restore-entry-declaration 18.3",
+    "restore-entry-declaration 5.3"
+   ],
+   "file": "engine/ecs/kernel/src/World.cpp",
+   "find": "                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }",
+   "replace": "                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                }",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore:*",
+   "expect": "\\[or\\-restore\\-onadd\\-once\\]"
+  },
+  {
+   "id": "re-hook-spawn-lost",
+   "what": "a spawn a hook recorded is never applied: the phase shared by step 0, the hook rounds and immediate changes skips hook spawn records (restore-entry declaration 18.3 case 6: an OnAdd that spawns a blood bar while a load is put back; Bevy #14300's shape). No other mutant drops hook spawns",
+   "guards": [
+    "restore-entry-declaration 18.3",
+    "restore-entry-declaration 5.3"
+   ],
+   "file": "engine/ecs/kernel/src/World.cpp",
+   "find": "            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);",
+   "replace": "            if (r.kind == RecordKind::Spawn && !r.emitterHook) spawns.push_back(&r);",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore:*",
+   "expect": "\\[or\\-restore\\-hook\\-spawn\\]"
+  },
+  {
+   "id": "re-spawn-stamp-one",
+   "what": "step 4: a spawned cell takes stamp 1 (added and changed) instead of the sync point's, so a reader that ran before the load does not see Added (restore-entry declaration 18.3 case 7, 5.4)",
+   "guards": [
+    "restore-entry-declaration 18.3",
+    "restore-entry-declaration 5.4"
+   ],
+   "file": "engine/ecs/kernel/src/World.cpp",
+   "find": "                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {",
+   "replace": "                if (part.value->PutInto(*columns_[part.component], spawn.entity, ChangeStamp{1})) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore:*",
+   "expect": "\\[or\\-restore\\-added\\-seen\\]"
+  },
+  {
+   "id": "re-insert-before-spawn",
+   "what": "step 5 acts as if inserts were applied before step 4's spawns (simulated with a condition, not by moving the two steps): an insert into an entity spawned in the same phase is dropped as missing (restore-entry declaration 18.3 case 8, a load while generating). we-j32-spawn-before-despawn moves step 4 before step 3; sr-same-call-inserts-dropped edits the same line but drops the inserts of a call whose spawn was dropped (kernel J-55), another executable and another error",
+   "guards": [
+    "restore-entry-declaration 18.3"
+   ],
+   "file": "engine/ecs/kernel/src/World.cpp",
+   "find": "            if (!std::binary_search(entities_.begin(), entities_.end(), winner.entity)) {\n                droppedMissingEntity_ += end - i;",
+   "replace": "            if (!std::binary_search(entities_.begin(), entities_.end(), winner.entity) ||\n                std::any_of(accepted.begin(), accepted.end(), [&](const Record* a) { return a->entity == winner.entity; })) {\n                droppedMissingEntity_ += end - i;",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore:*",
+   "expect": "\\[or\\-restore\\-spawn\\-insert\\]"
+  },
+  {
+   "id": "re-resmut-write-lost",
+   "what": "ResMut::operator-> points at a copy rebuilt on every call: a write through it does not reach the World (restore-entry declaration 18.3, case 5 through ResMut while generating; 5.8 / C-1)",
+   "guards": [
+    "restore-entry-declaration 18.3",
+    "restore-entry-declaration 5.8"
+   ],
+   "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+   "find": "        slot.changed = stamp_;\n        return *slot.value;\n    }\n    T& operator*() { return Get(); }\n    T* operator->() { return &Get(); }",
+   "replace": "        slot.changed = stamp_;\n        return *slot.value;\n    }\n    T& operator*() { return Get(); }\n    T* operator->() { static thread_local std::optional<T> copy; copy.emplace(Get()); return &*copy; }",
+   "target": "gyo_orchestration_tests",
+   "cases": "restore:*",
+   "expect": "\\[or\\-gen\\-resmut\\-gold\\]"
   }
  ]
 }
