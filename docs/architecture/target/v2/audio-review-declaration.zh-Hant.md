@@ -31,6 +31,7 @@
 - 別家：
   - Bevy（本機 `~/Code/GitHome/bevy/crates/bevy_audio/src`）：`lib.rs:82-118`（播放的 System 全在 `PostUpdate`）、`audio_output.rs:16-31`（輸出裝置是 World 的 Resource）、`audio_output.rs:84-`（載好才播）、`audio_source.rs:8-20`（`Arc<[u8]>` 共用）、`audio.rs:35-45`（`speed`、`paused` 是每個 sink 的）；整個 crate 不引用 `bevy_time`。
   - Kira 0.12.6（docs.rs）：`StartTime::{Immediate, Delayed, ClockTime}`；時鐘可 `pause`、`set_speed`；`PlaySoundError::SoundLimitReached`（回給該次呼叫者）；`StaticSoundData.frames: Arc<[Frame]>`；`AudioManager` 在後端 `Send` 時 `Send`，`play` 取 `&mut self`（編譯器擋同時使用）；`assert_no_alloc`。
+    - 本機原始碼（`~/Code/GitHome/kira`，b0325713，2026-11-22 使用者 clone）核對：滿了回錯誤 `crates/kira/src/track/main/handle.rs:24-26`（`insert` 失敗 → `SoundLimitReached`）；每個 track 的聲音上限預設 128（`track/main/builder.rs:26`、`:147`；docs.rs 的 `Capacities` 沒有這一欄，上限在 track 的 builder）；樣本共用 `sound/static_sound/data.rs:32`（`Arc<[Frame]>`）；**音訊執行緒不釋放**：用完的聲音由音訊執行緒推進「unused」的 SPSC 環（rtrb），遊戲那一側取出後才 drop（`backend/resources.rs:27-60`）——和 GYO 的「交還後由擁有者釋放」（DI 7）同一個做法。
   - Unity（docs.unity.com）：`PlayScheduled` 用 `AudioSettings.dspTime`；`AudioListener.pause` 暫停全部、凍結 dspTime；`priority` 0～256，低的先虛擬化；`Time.timeScale` 的頁沒提聲音（沒提，不等於確定不碰）。Unity Netcode（本機 `~/Code/GitHome/com.unity.netcode/Runtime/PredictionTicking/NetworkTime.cs:44`、`:164`）：`IsFirstTimeFullyPredictingTick`——「play sounds… only happens once」，由作者判。
   - FMOD〔知〕：`setDelay` 用 DSP 時鐘；虛擬 voice。Wwise〔知〕：`PostEvent` 進佇列、`RenderAudio` 每幀送；播放上限。Unreal、Godot：這次沒查（檢查者憑記憶：兩者遊戲暫停時預設帶到聲音）。
 
