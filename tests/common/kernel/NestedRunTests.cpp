@@ -26,9 +26,9 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
-// ---- Schedules: Frame (ingress stage In), Tick (WorldTest's), Step and Deep, Extract (an extract schedule).
+// ---- Schedules: Frame (ingress stage In), Tick (WorldTestSupport.hpp's), Step and Deep, Extract (an extract schedule).
 
 ScheduleOptions Schedule(std::string name, std::vector<std::string> stages) {
     ScheduleOptions s;
@@ -42,7 +42,7 @@ ScheduleOptions FrameSchedule() {
     return s;
 }
 
-// WorldTest's data and Tick, plus Frame, Step and Deep.
+// WorldTestSupport.hpp's data and Tick, plus Frame, Step and Deep.
 void Nest(Registrar& r, bool allotter = false) {
     Data(r, allotter);
     r.Schedule(FrameSchedule());

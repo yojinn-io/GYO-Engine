@@ -19,7 +19,7 @@
 
 namespace {
 
-using namespace WorldTest;
+using namespace GYO::Test::Kernel;
 
 const Pos* g_keptPos = nullptr;
 const Res<Out>* g_keptHandle = nullptr;

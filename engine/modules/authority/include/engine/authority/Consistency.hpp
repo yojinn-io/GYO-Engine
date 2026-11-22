@@ -63,8 +63,8 @@ struct AuthorityFailure {
         : code(failureCode), message(std::move(failureMessage)), detail(std::move(failureDetail)) {}
 };
 
-[[nodiscard]] ::GYO::Engine::Base::Result<Kernel::Fingerprint, AuthorityFailure> ConsistencyFingerprintOf(const Kernel::World& world);
-[[nodiscard]] ::GYO::Engine::Base::Result<std::uint64_t, AuthorityFailure> Digest(const Kernel::World& world);
+[[nodiscard]] Base::Result<Kernel::Fingerprint, AuthorityFailure> ConsistencyFingerprintOf(const Kernel::World& world);
+[[nodiscard]] Base::Result<std::uint64_t, AuthorityFailure> Digest(const Kernel::World& world);
 
 // What writes decision data, seen at startup (the consistency fingerprint's definition, authority declaration 5.5).
 struct Collected {
@@ -90,7 +90,7 @@ struct DecisionKeys {
 [[nodiscard]] std::vector<Kernel::AccessKey> WrittenKeys(const Kernel::FrozenRegistry& registry, const Kernel::AccessSet& access);
 [[nodiscard]] Collected CollectedOf(const Kernel::FrozenRegistry& registry, const AuthorityRegistry& registrations);
 
-[[nodiscard]] ::GYO::Engine::Base::Result<std::string, AuthorityFailure> DatasetReport(const Kernel::World& world);
+[[nodiscard]] Base::Result<std::string, AuthorityFailure> DatasetReport(const Kernel::World& world);
 
 struct AuthoritySourcesOptions {
     // Absolute path of the repository root; registration sites are made relative to it.
@@ -99,7 +99,7 @@ struct AuthoritySourcesOptions {
     std::vector<std::string> includeRoots;
     std::string repoCommit;
 };
-[[nodiscard]] ::GYO::Engine::Base::Result<std::string, AuthorityFailure> ExportAuthoritySources(
+[[nodiscard]] Base::Result<std::string, AuthorityFailure> ExportAuthoritySources(
     const Kernel::World& world, const AuthoritySourcesOptions& options);
 
 } // namespace GYO::Engine::Authority

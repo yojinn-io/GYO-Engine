@@ -8,7 +8,7 @@
 
 namespace {
 
-using namespace KernelTest;
+using namespace GYO::Test::Kernel;
 
 SystemResult ReadPos(Query<Read<TestPos>>) { return Ok(); }
 SystemResult TracePos(DiagnosticsWriter<TestRecord>, Query<Read<TestPos>>) { return Ok(); }

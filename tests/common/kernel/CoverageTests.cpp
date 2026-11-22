@@ -14,7 +14,7 @@
 
 namespace {
 
-using namespace KernelTest;
+using namespace GYO::Test::Kernel;
 
 struct SharedA { std::int32_t v; };
 struct SharedB { std::int32_t v; };

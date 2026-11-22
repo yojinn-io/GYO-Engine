@@ -96,25 +96,19 @@ endforeach()
 # from a stale cache.
 #   kernel.guard         spec J-9 (target/kernel DI-KS 3 and 15, target/naming
 #                        DI 4, target/error-handling DI 2)
-#   kernel.naming_guard  target/naming DI 1 (namespace and directory) and DI 3
-#                        (no role suffix on type names)
+# The naming guard (every Engine unit, not the kernel's) is tests/common/naming.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME kernel.guard
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/kernel_guard.py" --root "${GYO_REPOSITORY_ROOT}")
 add_test(NAME kernel.guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_kernel_guard.py" -v)
-add_test(NAME kernel.naming_guard
-    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/naming_guard.py" --root "${GYO_REPOSITORY_ROOT}")
-add_test(NAME kernel.naming_guard_selftest
-    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_naming_guard.py" -v)
 # kernel.store_stamp_guard: engine/entity_store holds no change stamp (target/world section 6; world-exec).
 add_test(NAME kernel.store_stamp_guard
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/store_stamp_guard.py" --root "${GYO_REPOSITORY_ROOT}")
 add_test(NAME kernel.store_stamp_guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_store_stamp_guard.py" -v)
 set_tests_properties(kernel.store_stamp_guard kernel.store_stamp_guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
-set_tests_properties(kernel.guard kernel.guard_selftest kernel.naming_guard kernel.naming_guard_selftest
-    PROPERTIES LABELS "cpu" TIMEOUT 60)
+set_tests_properties(kernel.guard kernel.guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
 
 # Writable data symbols of the kernel library (registry-schedule declaration
 # section 3 item 1, judgement 9; world-exec makes both allowed names required,
@@ -229,10 +223,10 @@ function(gyo_kernel_compile_fail_samples)
 endfunction()
 gyo_kernel_compile_fail_samples()
 
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Delta-1 of the migration plan: the kernel is a leaf directly above GYO::Base;
 # Delta-3 (world-exec) adds GYO::EntityStore, whose algorithms keep the World's
 # columns. Its links, private and interface alike, are exactly these two.
-# gyo_expect_links is defined with the time tests, which configure first.
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too.
 function(gyo_expect_kernel_links)

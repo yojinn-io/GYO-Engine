@@ -133,20 +133,20 @@ public:
 
     // Not this batch's behaviour (declaration 5.5): each returns NotImplemented.
     template <class T>
-    ::GYO::Engine::Base::Result<void, RollbackFailure> PartialValue(Kernel::EntityId, std::uint64_t, T) {
+    Base::Result<void, RollbackFailure> PartialValue(Kernel::EntityId, std::uint64_t, T) {
         return NotImplemented("a value of part of an entity's components");
     }
-    ::GYO::Engine::Base::Result<void, RollbackFailure> NotSent(Kernel::EntityId, std::uint64_t) {
+    Base::Result<void, RollbackFailure> NotSent(Kernel::EntityId, std::uint64_t) {
         return NotImplemented("\"this snapshot does not carry it\" (interest management)");
     }
-    ::GYO::Engine::Base::Result<void, RollbackFailure> Entered(Kernel::EntityId, std::uint64_t) {
+    Base::Result<void, RollbackFailure> Entered(Kernel::EntityId, std::uint64_t) {
         return NotImplemented("an explicit entry of an entity (a loaded segment)");
     }
-    ::GYO::Engine::Base::Result<void, RollbackFailure> Exited(Kernel::EntityId, std::uint64_t) {
+    Base::Result<void, RollbackFailure> Exited(Kernel::EntityId, std::uint64_t) {
         return NotImplemented("an explicit exit of an entity (an unloaded segment)");
     }
     template <class T>
-    ::GYO::Engine::Base::Result<void, RollbackFailure> FromEvent(Kernel::EntityId, std::uint64_t, T) {
+    Base::Result<void, RollbackFailure> FromEvent(Kernel::EntityId, std::uint64_t, T) {
         return NotImplemented("a value from an event written into the history (MC-2)");
     }
 
@@ -176,8 +176,8 @@ private:
         columns_.emplace_back(Kernel::KeyOf<T>(), std::make_unique<InboxColumn<T>>());
         return static_cast<InboxColumn<T>*>(columns_.back().second.get());
     }
-    static ::GYO::Engine::Base::Result<void, RollbackFailure> NotImplemented(std::string what) {
-        return ::GYO::Engine::Base::Err(RollbackFailure{RollbackFailureCode::NotImplemented,
+    static Base::Result<void, RollbackFailure> NotImplemented(std::string what) {
+        return Base::Err(RollbackFailure{RollbackFailureCode::NotImplemented,
                                                    "RollbackInbox: " + std::move(what) + " is not implemented yet"});
     }
 

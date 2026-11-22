@@ -17,8 +17,8 @@ foreach(group IN ITEMS forward diagnostics)
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 endforeach()
 
-# Design Invariant LG-10: GYO::Logging, GYO::Kernel and GYO::Orchestration, nothing else (gyo_expect_links
-# comes from tests/common/time).
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
+# Design Invariant LG-10: GYO::Logging, GYO::Kernel and GYO::Orchestration, nothing else.
 function(gyo_expect_world_logging_links)
     gyo_expect_links(gyo_world_logging GYO::Logging GYO::Kernel GYO::Orchestration)
 endfunction()

@@ -22,7 +22,7 @@
 #include <utility>
 #include <vector>
 
-namespace AuthorityTest {
+namespace GYO::Test::Authority {
 
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
@@ -139,4 +139,4 @@ inline std::string BuildText(std::function<void(O::WorldSetup&)> build, const Se
     return Reported(Build(std::move(build), setting));
 }
 
-} // namespace AuthorityTest
+} // namespace GYO::Test::Authority

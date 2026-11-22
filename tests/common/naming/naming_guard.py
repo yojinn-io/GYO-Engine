@@ -6,10 +6,11 @@ of the roots under GYO (GYO_ROOTS), and every Engine unit's namespace is derived
 added later is checked without changing this script.
 
   Units. engine/ holds the layers in ENGINE_LAYERS: a layer is either a set of units (each subdirectory is one)
-  or one unit itself. A unit's namespace is GYO::Engine::<Name>, Name derived from the directory name (unit_name:
-  each "_" part capitalized, a part in ACRONYMS written as listed); UNIT_OVERRIDES is the exception table of DI 1
-  (a unit whose namespace is not the derived one; engine/ecs/kernel is GYO::Kernel). A directory under engine/
-  that is not a listed layer is a finding (fail closed). plugins/ has no units yet: only its root is kept (each
+  or one unit itself. A unit's namespace is GYO::Engine::<Name>, Name derived from the directory name
+  (camel_case of tests/common/support/source_text.py with ACRONYMS: each "_" part capitalized, a part in ACRONYMS
+  written as listed); UNIT_OVERRIDES is the exception table of DI 1 (a unit whose namespace is not the derived
+  one; engine/ecs/kernel is GYO::Kernel). A directory under engine/ that is not a listed layer is a finding (fail
+  closed). plugins/ has no units yet: only its root is kept (each
   plugin's spelling is set by the first plugin batch, AGENTS section 3).
 
   N1  namespace <-> directory.
@@ -34,8 +35,11 @@ added later is checked without changing this script.
 N3 (the role suffixes of naming rule 5, DI 3) was removed by v8-arch-gyo2-namespace-root: rule 5 was not carried
 to gyo2 (user 2026-11-14), and the user removed the check on 2026-11-22; names are seen in each batch's design review.
 
-A scan root that does not exist is skipped (apps/ does not exist yet), not a finding; engine/ must exist and hold
-units. spikes/ is not scanned (an independent project). Limits (text level, the rest is review): a top-level
+SCAN_ROOTS are the directories the build reads sources from (build/cmake/GyoBuild.cmake): engine/, plugins/,
+apps/ and tools/ (one subdirectory per registered product), tests/ and examples/; framework/ was dropped with the
+framework layer (v8-arch-gyo2-naming-cleanup). A scan root that does not exist is skipped (plugins/, apps/ and
+tools/ have no entry yet), not a finding; engine/ must exist and hold units. spikes/ is not scanned (an
+independent project). Limits (text level, the rest is review): a top-level
 directory outside SCAN_ROOTS is not read; two units deriving the same name are left to CMake's duplicate-target
 error; a namespace opened through a macro or split across #if branches is not followed; .cppm and *.h.in files
 are not read; a namespace alias is not read (only opening a namespace is ownership). Product rows belong to the product owner (declaration
@@ -49,16 +53,16 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kernel_guard import SUFFIXES as KERNEL_SUFFIXES, line_of, strip_comments_and_strings  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
+from source_text import SUFFIXES as C_SUFFIXES, camel_case, line_of, strip_comments_and_strings  # noqa: E402
 
 ENGINE_LAYERS = {"core": "units", "ecs": "units", "modules": "units", "orchestration": "unit"}
 UNIT_OVERRIDES = {"engine/ecs/kernel": "GYO::Kernel"}
 ACRONYMS = {"io": "IO", "os": "OS"}
 GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "plugins", "Test": "tests"}
-SCAN_ROOTS = ("engine", "apps", "tools", "framework", "plugins", "tests", "examples")
+SCAN_ROOTS = ("engine", "apps", "tools", "plugins", "tests", "examples")
 OLD_ROOT = "Engine"
-SUFFIXES = KERNEL_SUFFIXES | {".m", ".mm"}  # the same C/C++ files kernel_guard reads, plus Objective-C++
+SUFFIXES = C_SUFFIXES | {".m", ".mm"}  # the C/C++ files the guards read (source_text), plus Objective-C++
 
 TOKEN = re.compile(r"\{|\}|\bnamespace\b")
 NAMESPACE = re.compile(r"namespace\s*(?:\[\[[^\]]*\]\]\s*)?((?:::)?\s*\w+(?:\s*::\s*(?:inline\s+)?\w+)*)?\s*(?:\[\[[^\]]*\]\]\s*)?(\{|=)")
@@ -109,10 +113,6 @@ def source_files(base):
     return sorted(p for p in base.rglob("*") if p.is_file() and p.suffix in SUFFIXES)
 
 
-def unit_name(directory_name):
-    return "".join(ACRONYMS.get(part, part[:1].upper() + part[1:]) for part in directory_name.split("_"))
-
-
 def units(root, problems):
     """(directory, namespace) for every Engine unit; findings for a layer the table does not list or that is gone."""
     found = []
@@ -141,7 +141,7 @@ def units(root, problems):
     result = []
     for base in found:
         relative = base.relative_to(root).as_posix()
-        result.append((relative, UNIT_OVERRIDES.get(relative, f"GYO::Engine::{unit_name(base.name)}")))
+        result.append((relative, UNIT_OVERRIDES.get(relative, f"GYO::Engine::{camel_case(base.name, ACRONYMS)}")))
     return result
 
 

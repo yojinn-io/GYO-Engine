@@ -77,7 +77,7 @@ private:
 // A prepare function (section 3.8): called after a World is built and before
 // its first Run, on the Ready World. To fail, return an OrchestrationError with
 // code PrepareFailed and the author's own code in reporterCode.
-using PrepareFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationError>(Kernel::World&)>;
+using PrepareFn = std::function<Base::Result<void, OrchestrationError>(Kernel::World&)>;
 
 // An exchange function (exchange declaration section 5.1): called by RunFrame
 // on a Ready World, before ("in") or after ("out") the World's round, outside
@@ -86,7 +86,7 @@ using PrepareFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationE
 // stops and returns ExchangeFailed (E2: the World stays healthy). It may keep pointers to objects of the Product-level
 // ModuleBuffer, never to objects of a World build's ModuleBuffer (that one is
 // let go once the prepare functions have run). It waits for no other thread.
-using ExchangeFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationError>(Kernel::World&)>;
+using ExchangeFn = std::function<Base::Result<void, OrchestrationError>(Kernel::World&)>;
 
 enum class RunnerExitCode : unsigned char { Success = 1, Failure };
 

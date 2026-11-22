@@ -9,8 +9,8 @@
 
 namespace GYO::Engine::WorldTime {
 
-// The time base now, in nanoseconds (::GYO::Engine::Time::MonotonicClock).
-[[nodiscard]] inline Nanoseconds ReadTimeBase() noexcept { return ::GYO::Engine::Time::NowNs(); }
+// The time base now, in nanoseconds (Time::MonotonicClock).
+[[nodiscard]] inline Nanoseconds ReadTimeBase() noexcept { return Time::NowNs(); }
 
 // Takes the frame's sample as sampling says and advances real time: the time base (now given by readTimeBase),
 // a manual duration every frame, or a manual next instant. The first sample of a World gives delta 0 in the

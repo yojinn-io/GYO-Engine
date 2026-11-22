@@ -65,7 +65,7 @@ void RollbackModule::Build(Orchestration::WorldSetup& setup) {
     // When the World is prepared: the resolved registrations go into it (read at run time from there, so a failed
     // replacement leaves the old World's as they were; authority-rollback declaration 5.1), an empty inbox, and,
     // with a strategy, an empty history for every registered type and the strategy to call.
-    setup.Prepare([&table, strategy](Kernel::World& world) -> ::GYO::Engine::Base::Result<void, Orchestration::OrchestrationError> {
+    setup.Prepare([&table, strategy](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         RollbackRegistry registry = Resolve(table).registry;
         world.SetResource(RollbackInbox{});
         if (strategy != nullptr) {
@@ -86,7 +86,7 @@ void RollbackModule::Build(Orchestration::WorldSetup& setup) {
 
 namespace {
 
-using Ok = ::GYO::Engine::Base::Result<void, Kernel::KernelError>;
+using Ok = Base::Result<void, Kernel::KernelError>;
 
 // The strategy and step schedule of the World (a copy: no pointer into the World leaves a closure), or nothing.
 std::optional<RollbackRuntime> RuntimeOf(Exclusive& world) {
@@ -120,7 +120,7 @@ Ok RunRollback(Exclusive world) {
         auto noted = world.Modify<RollbackPending>([&decide, tick](RollbackPending& pending) {
             for (const auto& [requested, depth] : decide.Abandoned()) pending.abandoned.push_back({requested, tick, depth});
         });
-        if (!noted) return ::GYO::Engine::Base::Err(std::move(noted).error());
+        if (!noted) return Base::Err(std::move(noted).error());
     }
     if (!decide.Target()) return {};
     RestoreContext restore(world, *decide.Target(), tick);
@@ -194,10 +194,10 @@ void PeerRollbackStrategy::Check(CheckContext& context) {
 }
 
 // Never run: Check refuses every World that chooses this strategy.
-::GYO::Engine::Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Record(RecordContext&) { return {}; }
-::GYO::Engine::Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Decide(DecideContext&) { return {}; }
-::GYO::Engine::Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Restore(RestoreContext&) { return {}; }
-::GYO::Engine::Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Resimulate(ResimulateContext&) { return {}; }
-::GYO::Engine::Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Correct(CorrectContext&) { return {}; }
+Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Record(RecordContext&) { return {}; }
+Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Decide(DecideContext&) { return {}; }
+Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Restore(RestoreContext&) { return {}; }
+Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Resimulate(ResimulateContext&) { return {}; }
+Base::Result<void, Kernel::KernelError> PeerRollbackStrategy::Correct(CorrectContext&) { return {}; }
 
 } // namespace GYO::Engine::Rollback

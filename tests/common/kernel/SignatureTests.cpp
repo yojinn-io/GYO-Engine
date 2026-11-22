@@ -9,7 +9,7 @@
 
 namespace {
 
-using namespace KernelTest;
+using namespace GYO::Test::Kernel;
 
 // ---- Signatures used by J-12. Each is a non-member function; the body is
 // empty (Systems do not run in this batch).

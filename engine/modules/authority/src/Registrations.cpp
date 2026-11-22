@@ -76,7 +76,7 @@ std::uint64_t CellDigest(std::uint64_t index, const Kernel::Hasher& value) {
     h.U64(index);
     h.Bytes(value.Data());
     // The first 16 hex digits of the SHA-256 (GYO::Engine::Base::Sha256 is lowercase hex).
-    const std::string hex = ::GYO::Engine::Base::Sha256(h.Data());
+    const std::string hex = Base::Sha256(h.Data());
     std::uint64_t out = 0;
     for (std::size_t i = 0; i < 16; ++i) {
         const char c = hex[i];

@@ -15,7 +15,7 @@
 #include <string>
 #include <utility>
 
-namespace RollbackTest {
+namespace GYO::Test::Rollback {
 
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
@@ -93,4 +93,4 @@ std::string Reported(const Built& built) {
     return out.empty() ? built.error().detail : out;
 }
 
-} // namespace RollbackTest
+} // namespace GYO::Test::Rollback

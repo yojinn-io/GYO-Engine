@@ -24,7 +24,7 @@ static_assert(sizeof(Frustum) == 96 && alignof(Frustum) == 4);
 static_assert(std::is_trivially_copyable_v<Frustum> && std::is_standard_layout_v<Frustum>);
 static_assert(std::is_aggregate_v<Frustum>);
 
-namespace FrustumDetail {
+namespace Detail {
 
 // Clip-space inequality row . (p, 1) >= 0 as a plane: normal (a, b, c), distance -d, normalized.
 [[nodiscard]] inline Plane PlaneFromRow(const float a, const float b, const float c, const float d) noexcept {
@@ -33,7 +33,7 @@ namespace FrustumDetail {
     return {normal / length, -d / length};
 }
 
-} // namespace FrustumDetail
+} // namespace Detail
 
 // Planes of a clip matrix (for example Multiply(projection, view)) under the
 // math.md clip convention: -w <= x, y <= w and 0 <= z <= w. The matrix must
@@ -43,7 +43,7 @@ namespace FrustumDetail {
     // Row i of a column-major matrix is (m[i], m[4 + i], m[8 + i], m[12 + i]).
     // Each plane is the inequality w + sign * row(j) >= 0.
     const auto bound = [&m](const std::size_t j, const float sign) noexcept {
-        return FrustumDetail::PlaneFromRow(m[3] + sign * m[j], m[7] + sign * m[4 + j], m[11] + sign * m[8 + j],
+        return Detail::PlaneFromRow(m[3] + sign * m[j], m[7] + sign * m[4 + j], m[11] + sign * m[8 + j],
                                            m[15] + sign * m[12 + j]);
     };
     Frustum result;
@@ -51,7 +51,7 @@ namespace FrustumDetail {
     result.planes[1] = bound(0, -1.0F);                                       // right:  w - x >= 0
     result.planes[2] = bound(1, 1.0F);                                        // bottom: w + y >= 0
     result.planes[3] = bound(1, -1.0F);                                       // top:    w - y >= 0
-    result.planes[4] = FrustumDetail::PlaneFromRow(m[2], m[6], m[10], m[14]); // near:   z >= 0
+    result.planes[4] = Detail::PlaneFromRow(m[2], m[6], m[10], m[14]); // near:   z >= 0
     result.planes[5] = bound(2, -1.0F);                                       // far:    w - z >= 0
     return result;
 }

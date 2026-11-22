@@ -9,7 +9,7 @@
 
 namespace {
 
-using namespace KernelTest;
+using namespace GYO::Test::Kernel;
 
 SystemResult ReadPos(Query<Read<TestPos>>) { return Ok(); }
 SystemResult ReadVel(Query<Read<TestVel>>) { return Ok(); }
@@ -156,7 +156,7 @@ TEST_CASE("J-19: a type registered by two plugins is R-E2") {
                               r.Component<TestPos>({.name = "TestPosAgain"});
                               Schedules(r);
                           }}});
-    CHECK(KernelTest::ErrorCount(built, StartupCode::RE2) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(built, StartupCode::RE2) == 1);
     REQUIRE_FALSE(static_cast<bool>(built.result));
     const StartupError& error = built.result.error().errors.front();
     CHECK(std::find(error.subjects.begin(), error.subjects.end(), "movement") != error.subjects.end());
@@ -172,7 +172,7 @@ TEST_CASE("J-19: removing the owner plugin gives R-E4 to every System that uses 
     Built with = Finish({{"movement", Movement}, {"host", host}});
     KERNEL_REQUIRE_OK(with);
     Built without = Finish({{"host", host}});
-    CHECK(KernelTest::ErrorCount(without, StartupCode::RE4) == 2);
+    CHECK(GYO::Test::Kernel::ErrorCount(without, StartupCode::RE4) == 2);
     REQUIRE_FALSE(static_cast<bool>(without.result));
     CHECK(without.result.error().detail.find("ReadPos") != std::string::npos);
     CHECK(without.result.error().detail.find("ReadVel") != std::string::npos);
@@ -196,9 +196,9 @@ TEST_CASE("J-24: R-E5 (two types share one key) is reported") {
                                                                            {.name = "Forged"});
                                   Schedules(r);
                               }}});
-    CHECK(KernelTest::ErrorCount(collision, StartupCode::RE5) == 1);
+    CHECK(GYO::Test::Kernel::ErrorCount(collision, StartupCode::RE5) == 1);
     REQUIRE_FALSE(static_cast<bool>(collision.result));
-    CHECK(KernelTest::ErrorCount(collision, StartupCode::RE2) == 0);
+    CHECK(GYO::Test::Kernel::ErrorCount(collision, StartupCode::RE2) == 0);
 }
 
 TEST_CASE("J-24: R-E2 and R-E4 each from a minimal Registry, all in one report") {

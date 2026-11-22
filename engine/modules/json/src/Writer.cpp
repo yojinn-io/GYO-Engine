@@ -16,7 +16,7 @@ namespace GYO::Engine::Json {
 
 namespace {
 
-using ::GYO::Engine::Base::Err;
+using Base::Err;
 
 // The length of the valid UTF-8 sequence starting at text[i] (RFC 3629: no
 // overlong forms, no surrogates, nothing above U+10FFFF), or 0. The same set
