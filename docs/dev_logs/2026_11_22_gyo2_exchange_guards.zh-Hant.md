@@ -9,7 +9,7 @@
 1. Kernel「拿掉的名字不回來」：第 4 批判定 4 的一次性掃描變成常設。
 2. 權威 Module 的 `gyo_expect_links`。
 
-`naming_guard` 加 `engine/modules/authority`、`engine/modules/rollback` 那一條不在本步（命名收尾卡 `gyo2-naming-cleanup` 在搬 `naming_guard`）。`world_time` 與回滾不經連結的 include 已由使用者定 (c) 交設計審查（`v8-arch-gyo2-include-bypass-to-review`），不做。
+`naming_guard` 加 `engine/modules/authority`、`engine/modules/rollback` 那一條不在本步（命名收尾卡 `gyo2-naming-cleanup` 在搬 `naming_guard`）。`world_time` 與回滾不經連結的 include 已由使用者定「不加守衛、交設計審查」（`v8-arch-gyo2-include-bypass-to-review`），不做。
 
 ## 1. Kernel：K9 加「拿掉的名字」清單
 

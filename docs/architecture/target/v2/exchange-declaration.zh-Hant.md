@@ -6,7 +6,7 @@
 
 用詞：「設計段／實作段」「動工前核准／合併前核准」「第 N 步」照第 3 批。標「**本卡照 L17 判**」的是這張卡的判斷（名字照命名規範、細節照別家原始碼），**不是使用者的話**。本卡新加的詞第一次出現時標「本卡加的詞」。
 
-經過：修訂 0（a12b9fc2）送 Fable 5.2／high 敵對式檢查：必修 6、提案 9、輕微 5（報告：主 checkout `build/evidence/gyo2-exchange/declaration-r0-adversarial-check.md`）。修訂 1 全部處理，對照在第 16 節。最大的兩處：交換函式的登記從「建議不做」改成**照已核准的時間設計 5.3 做**（M2：有點名的使用者）；時間的取樣從「交使用者」改成**維持過渡、到 SDL 那批定**（S3）。所以交使用者的題目只剩一題（第 12 節）。96496511 照生成世界宣告修訂 1（建議 B）更新第 13 節的交界表。修訂 1 送 Fable 5.2／high 窄複查（Fable 用量上限延到 2026-11-24 重置後跑）：修訂 0 的 20 項都確實處理；新的必修 3、提案 7、輕微 7，修訂 2 全部處理（第 17 節；報告 `build/evidence/gyo2-exchange/declaration-r1-recheck.md`）。
+經過：修訂 0（a12b9fc2）送 Fable 5.2／high 敵對式檢查：必修 6、提案 9、輕微 5（報告：主 checkout `build/evidence/gyo2-exchange/declaration-r0-adversarial-check.md`）。修訂 1 全部處理，對照在第 16 節。最大的兩處：交換函式的登記從「建議不做」改成**照已核准的時間設計 5.3 做**（M2：有點名的使用者）；時間的取樣從「交使用者」改成**維持過渡、到 SDL 那批定**（S3）。所以交使用者的題目只剩一題（第 12 節）。96496511 照生成世界宣告修訂 1（建議「生成期間每幀照跑」）更新第 13 節的交界表。修訂 1 送 Fable 5.2／high 窄複查（Fable 用量上限延到 2026-11-24 重置後跑）：修訂 0 的 20 項都確實處理；新的必修 3、提案 7、輕微 7，修訂 2 全部處理（第 17 節；報告 `build/evidence/gyo2-exchange/declaration-r1-recheck.md`）。
 
 ---
 
@@ -35,7 +35,7 @@
 | [回滾](rollback.zh-Hant.md)（`RollbackInbox`、R-3）、[權威](authority.zh-Hant.md)（DI-A 7） | 已合併（#259） | 網路寫進 World 的位置 |
 | [日誌宣告](logging-declaration.zh-Hant.md) 5.4 | 已合併（#256） | Kernel 診斷紀錄「runner 在兩次 Run 之間取走」，「交換點在第 5 條才由編排層排；那時這個呼叫可以移到交換點，介面不變」（第 228 行） |
 | asset 宣告（分支 `claude/gyo2-asset-585196`，55a14825 動工前核准，1b120a86 紀錄） | **已核准、未合併** | X-1～X-6（5.6）、O-A1～O-A4（5.4）、G-1～G-3（5.13）、第 22 節 |
-| 生成世界的宣告（分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2） | 寫作中（建議 B、A／B 交使用者） | 交界（第 13 節） |
+| 生成世界的宣告（分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2） | 寫作中（建議「生成期間每幀照跑」；它和「另跑生成清單」之間交使用者） | 交界（第 13 節） |
 
 任務卡寫「asset 5.5 的 X-1～X-8」「G-1～G-4」：核准版（55a14825）的交換點需求是 5.6 的 **X-1～X-6**（X-7、X-8 是修訂 0、1 的編號，已併入），生成世界的是 5.13 的 **G-1～G-3**。本頁照核准版。
 
@@ -197,7 +197,7 @@
 
 | 形 | 什麼 | 時點 | 誰寫 | 用它的（點名的） | 系譜 |
 |---|---|---|---|---|---|
-| **(1) 套用點** | World 裡的 System 呼叫 World 外的服務（有自己的鎖），把結果一次寫進 World；或把要送的交給服務 | 「進」：一輪最前面（預設骨架 `Main`／`First`；生成世界若選 A，生成中另掛 `Generate`／`First`，第 13 節 W-3）；「出」：最後（`Main`／`Last`）。骨架關掉的 World 由產品指定 | 擁有服務的 Module | asset 的套用 System（E-6、E-20）；網路的收件與送件（E-8，網路 Module 批照下面的規則選 (1) 或 (2)） | Bevy asset server、gilrs；lightyear、bevy_replicon；Unity Netcode 的 receive group；flecs 的 `OnLoad`／`OnStore`；Mass 的 `SyncWorldToMass`（第 4.1 節） |
+| **(1) 套用點** | World 裡的 System 呼叫 World 外的服務（有自己的鎖），把結果一次寫進 World；或把要送的交給服務 | 「進」：一輪最前面（預設骨架 `Main`／`First`；生成世界若選「另跑生成清單」，生成中另掛 `Generate`／`First`，第 13 節 W-3）；「出」：最後（`Main`／`Last`）。骨架關掉的 World 由產品指定 | 擁有服務的 Module | asset 的套用 System（E-6、E-20）；網路的收件與送件（E-8，網路 Module 批照下面的規則選 (1) 或 (2)） | Bevy asset server、gilrs；lightyear、bevy_replicon；Unity Netcode 的 receive group；flecs 的 `OnLoad`／`OnStore`；Mass 的 `SyncWorldToMass`（第 4.1 節） |
 | **(2) 交換函式** | 單位登記的函式，World 不在 Run 裡、Ready 時拿整個 World 做事 | 編排層在每個 World 的**一輪**之前（進）、之後（出）依登記的順序呼叫（一輪的定義見第 13 節 W-2） | 登記它的單位（或產品自己的 `build`） | Kernel 診斷紀錄的取走（E-19）；Client 的郵箱（E-22）；之後：時間的投影（E-18，若 SDL 那批移給 runner）、`HostClockSample`（PvP） | 時間設計 5.3（規格 H.1）；別家沒有這一層，最近的是 flecs 的 `ecs_run_post_frame`（一次性的佇列）與 replicon 測試在兩次 update 之間搬緩衝（第 4.1 節） |
 | **(3) runner 在兩次入口之間** | runner（或 Product 的持有者）在 World 不在 Run 裡時直接讀寫 World，或呼叫某個 Module 給的函式 | 兩次 `Product` 入口之間 | runner／產品 | runner 擁有的視窗的事件（E-10，若不走服務）；World 壞掉之後先寫失敗、再取診斷（日誌宣告 5.4 的順序規則） | Bevy winit 的 runner 在 update 之前寫視窗事件（第 4.1 節） |
 | **(4) Extract** | 一個 World 唯讀地讀另一個 World | 來源跑完之後、讀者的一輪裡（extract schedule 寫在讀者的每幀清單裡，兩個都不在 Run 裡；第 5.4 節） | 讀者的 extract schedule | 渲染 World（E-11、E-14） | Bevy `SubApp::extract`（第 4.2 節） |
@@ -277,7 +277,7 @@
 
 **要求**（E-13、E-22）：PvP Client 的模擬 World 在自己的執行緒跑，主執行緒停住時模擬照跑；畫面與模擬之間的郵箱只在 schedule 之間存取。
 
-**本批寫進 O-13 的不變量**（本卡照 L17 判；檢查 M5 (a)：只寫不變量，入口層級的行為留給實作那一批）：
+**本批寫進 O-13 的不變量**（本卡照 L17 判；照檢查 M5 建議的「只寫不變量」那一種做法：入口層級的行為留給實作那一批）：
 1. **單位是一整個 World**。不把一個 World 拆給兩條執行緒（World 的資料不上鎖，D6b、M11）。同一個 World 裡的並行是 Kernel 執行器的事（LIM-2），不在本頁。
 2. **整個交出**：runner 把一個 World 交給別的執行緒時，交出期間只有那條執行緒碰它（它的 Registry、執行、交換函式、生成的狀態，第 13 節 W-7）；Product 與別的執行緒不碰。CCR-5 對每個 World 照舊成立。
 3. **兩邊只經有鎖的服務交換**（郵箱是 Product 一份、有自己的鎖的物件，各 World 在自己的交換函式裡碰，E-22）；不等另一條執行緒。郵箱是「只留最新一份」還是佇列、誰持有、上限，由用它的 Module 定（Unity Netcode 的快照只留最新一份，第 4.1 節）。
@@ -304,11 +304,11 @@
 1. **來源**：一個讀者 World 宣告一個來源 World（描述裡）；來源排在讀者之前（World 照描述的順序跑，所以讀的是來源這一輪跑完的狀態）。編排層在讀者的第一次 `BuildPlans` 之前呼叫 `SetExtractSource`。
 2. **時機**：extract schedule 屬於讀者的一輪：照樣寫在讀者的每幀清單裡（不另立一套排序；檢查 S2），編排層看到 `extract` 旗標就改用 Extract 的入口跑；讀者的交換函式「進」在它之前（檢查 B3）。這時來源已跑完這一輪，兩個 World 都不在 Run 裡。extract schedule 不在清單最前面時算不算錯，留給 SDL 那批。
 3. **唯讀**：來源在 extract 期間不被寫（DI-KS 13）；Kernel 的執行原語拿來源當 `const`（暫名 `WorldExecutor::RunExtract(schedule, const World& source)`；DI-KS 15 第 (3)、(4) 項之內，不是清單多一項）。
-4. **來源被替換後，讀者不得再讀舊來源**。做法留給實作那一批比（檢查 S2）：(a) 讀者跟著一起重建（只動編排層；代價：讀者的 Resource、準備函式、`beforeSwap`／`extra` 的歸屬，`DropOldFirst` 時兩個都先丟）；(b) 准許讀者再設一次來源、再建一輪 Plan（DI-KS 13 已寫「來源再登記後，讀它的 Registry 下一次建 Plan 讀到新的內容」，DI-KS 26 有之後一輪的 `BuildPlans`；要把 `SetExtractSource` 的「第一次 `BuildPlans` 之前」放寬）。
+4. **來源被替換後，讀者不得再讀舊來源**。做法留給實作那一批比（檢查 S2）：「讀者一起重建」——讀者跟著一起重建（只動編排層；代價：讀者的 Resource、準備函式、`beforeSwap`／`extra` 的歸屬，`DropOldFirst` 時兩個都先丟）；「准許換來源」——准許讀者再設一次來源、再建一輪 Plan（DI-KS 13 已寫「來源再登記後，讀它的 Registry 下一次建 Plan 讀到新的內容」，DI-KS 26 有之後一輪的 `BuildPlans`；要把 `SetExtractSource` 的「第一次 `BuildPlans` 之前」放寬）。
 5. **銷毀**：讀者先於來源（第 5.2 節第 5 點的反序）。
 6. **來源壞了**：Product 已經結束（O-11），不跑 Extract。
 
-**留給 SDL 那批的**：Kernel 的原語、描述的欄位名（暫名 `extractFrom`）與它的啟動錯誤、4 的 (a)／(b)、清單或 `RunSchedule` 指名 extract schedule 時的處理（今天最外層會斷言）、測試。批次表 SDL 列「render 回來時一起做 K.3-6」。
+**留給 SDL 那批的**：Kernel 的原語、描述的欄位名（暫名 `extractFrom`）與它的啟動錯誤、4 的「讀者一起重建」或「准許換來源」、清單或 `RunSchedule` 指名 extract schedule 時的處理（今天最外層會斷言）、測試。批次表 SDL 列「render 回來時一起做 K.3-6」。
 
 ### 5.5 時間的取樣（維持過渡，到第一個需要的 runner 那批定）
 
@@ -326,7 +326,7 @@
 |---|---|---|---|
 | X-1 執行器：讀檔解碼在 World 執行緒外；停了之後提交是空操作；介面由 asset 自己的話定 | asset 5.6 | 執行器的實作由產品（或測試）放進 `ProductDescription::options` 的持有者結構，world_asset 在 `Configure` 讀；或由 world_asset 依賴的單位（之後的 threads Module）在它自己的 `Configure` `Create` 進共用處，world_asset 在 `Configure` `Find`（第 5.2 節第 1、2 點）。停了之後的行為是執行器自己的契約 | 選項、共用處實作；執行器本身在 asset 實作批與 threads 重審 |
 | X-2 交換點不認得 asset | asset 5.6 | 形 (1) | 契約（O-12） |
-| X-3 若定了「每幀的邊界」，套用 System 掛在它之後 | asset 5.6 | 形 (1) 的「進」＝一輪最前面的 stage（`Main`／`First`；生成世界選 A 時生成中另掛 `Generate`／`First`）；交換函式的「進」在它之前 | 契約（O-12） |
+| X-3 若定了「每幀的邊界」，套用 System 掛在它之後 | asset 5.6 | 形 (1) 的「進」＝一輪最前面的 stage（`Main`／`First`；生成世界選「另跑生成清單」時生成中另掛 `Generate`／`First`）；交換函式的「進」在它之前 | 契約（O-12） |
 | X-4 執行緒的數量與歸屬由交換點或 runner 定 | asset 5.6 | 執行緒池由產品或 threads 的 Module 建（同 X-1 的兩條路）；World 的執行緒由 runner 定（第 5.3 節） | 契約 |
 | X-5 測試能控制工作何時開工、完成 | asset 5.6 | 測試在 `ProductDescription::options` 放自己的執行器（持有者結構） | 選項實作 |
 | X-6 Product 結束時，未完成的工作能停下或等完 | asset 5.6 | world_asset 的 `OnDestroy` 回呼叫執行器停下（執行器介面是 asset 的話，可以帶 `Stop`）；回呼跑時執行器一定還在（第 5.2 節第 4、5 點） | 實作 |
@@ -388,7 +388,7 @@
 ### Replacement Criteria（寫在積上去之前）
 
 - **RC-O10 改寫**：CCR-5 放寬時（建 World 要並行、一個 World 的登記單位並行 `Build`、或 World 交出到別的執行緒），每 World 與 Product 一份的 `ModuleBuffer` 需要加鎖或改成別的同步方式；或整個交出（O-13）保不住 O-11、做不出點名的 Feature。
-- **RC-O11 新增**：交換函式的登記沒有點名的使用者了（例：診斷紀錄與郵箱都改成別的形），或某個點名的 Feature 需要進、出之外的呼叫點（例：每張 schedule 之間），或需要編排層傳這一輪的資訊（時間設計 5.3 原形有的取樣時刻、第幾輪；A 下的「是不是生成」）才做得出。
+- **RC-O11 新增**：交換函式的登記沒有點名的使用者了（例：診斷紀錄與郵箱都改成別的形），或某個點名的 Feature 需要進、出之外的呼叫點（例：每張 schedule 之間），或需要編排層傳這一輪的資訊（時間設計 5.3 原形有的取樣時刻、第幾輪；「另跑生成清單」時的「是不是生成」）才做得出。
 - **RC-O12 新增**：Product 一份的共用處需要知道放進去的物件是什麼（例：要依型別做不同的收尾）、`OnDestroy` 的反序排不出某個收尾的先後，或兩個單位需要共同擁有一個型別。
 - **RC-O13 新增**：Extract 的來源替換（O-8）讓讀者的重建成為替換時間的主要部分，或讀者有不能重建的狀態（和 RC-O9 第二句一起看）。
 
@@ -398,7 +398,7 @@
 
 | 決定 | 系譜 | 退掉的選項 | 決勝理由 | 需要它的 Feature／Product |
 |---|---|---|---|---|
-| Product 一份的 `ModuleBuffer`（交使用者，第 12 節） | 第 4 批的 `ModuleBuffer`（規則「一方建、別人找」）；Bevy 的 main World Resource、lightyear 的 `ComponentRegistry`；flecs 的 world ctx（第 4.3 節） | 第 12 節的 (乙) 單位互相找、(丙) 放在某個 World；給每個 Module 專用入口（認得 Module，RC-O4）；新型別（見第 5.2 節第 1 點：共用的只有「一方建、別人找」，兩種用法的差別寫在型別註解） | E-1、E-12、E-16 要的只是「一方建、別人找、Product 一份」；產品、runner、測試也要放（E-5、E-7），單位的類別不必公開 | asset、SDL、audio、threads |
+| Product 一份的 `ModuleBuffer`（交使用者，第 12 節） | 第 4 批的 `ModuleBuffer`（規則「一方建、別人找」）；Bevy 的 main World Resource、lightyear 的 `ComponentRegistry`；flecs 的 world ctx（第 4.3 節） | 第 12 節的「單位互相找」「放在某個 World」；給每個 Module 專用入口（認得 Module，RC-O4）；新型別（見第 5.2 節第 1 點：共用的只有「一方建、別人找」，兩種用法的差別寫在型別註解） | E-1、E-12、E-16 要的只是「一方建、別人找、Product 一份」；產品、runner、測試也要放（E-5、E-7），單位的類別不必公開 | asset、SDL、audio、threads |
 | Product 層的選項經描述給 | `WorldDescription::options`；Bevy Plugin 的欄位（`AssetPlugin { file_path }`） | 單位表讓產品自己建單位物件（產生的單位表的形狀要改，O-6）；產品在 `configure` 寫進共用處（產品的 `configure` 在所有單位之後，O-A1、X-1、X-5 不成立） | E-2、E-5、E-7 要「產品與測試的東西在單位的 `Configure` 就在」 | asset |
 | `OnDestroy`：兩段式、World 之後、反序 | flecs `ecs_atfini`（時點同；先後不同：flecs 是登記順序）；C++ 解構與 `atexit` 的反序 | 只靠共用處物件的解構子（收尾時依賴可能已解構）；單位的解構子（單位最後銷毀，物件已不在）；回呼回錯誤（解構裡沒有上層） | E-4：收尾時所有依賴都要在 | asset |
 | 明確的銷毀順序 | — | `= default` 靠成員宣告與 `vector` 的解構順序（標準未規定、平台不同） | 三平台同一個結果；Extract 的讀者先於來源 | 全部 |
@@ -491,9 +491,9 @@
 
 - **背景**：asset 的 O-A1～O-A4、X-1、X-5、X-6（第 5.6 節）；SDL 的裝置、audio 的混音器、執行緒池也都是 Product 一份。**前提的更正**：這一題原本寫「像 Bevy 的 App 層 Resource」。偵察查到 Bevy 的 `App` 在 World 外沒有 Resource（`bevy_app/src/app.rs:85-96`），那是 main World 的 Resource；Bevy 能這樣做是因為它有主 World、Plugin `build` 時 World 已經在。GYO 的 World 彼此平等、`Configure` 時還沒有 World（第 4.3 節）。別家沒有一家有獨立於 World 的 Product 一份的型別化存放處，最接近的是 Unreal 的 GameInstance subsystem〔知〕。
 - **遊戲的例子**：world_asset 在 `Configure` 建 asset store；image Module（之後的 SDL 那批）要在 `Configure` 拿到它來登記貼圖的 loader；產品要在描述裡給內容根目錄；測試要換成自己控制的執行器；Product 結束時 asset 要停工作、記丟棄件數。
-- **(甲) Product 一份的 `ModuleBuffer`＋描述的選項（建議）**：第 5.2 節。單位建的放共用處；產品、測試給的放選項。共用的是「服務物件」，單位的類別不必公開。代價（檢查 B6）：以型別為鍵的存放處，依賴不出現在介面上（靠登記檔與 `Find` 回 `nullptr`）；一個型別一個擁有者；不凍結，執行期 runner 也能寫；編排層多兩個要守的契約（`OnDestroy` 與銷毀順序）。
-- **(乙) 單位互相找**：`ProductSetup::Unit<T>()` 拿到別的登記單位的實例、呼叫它的公開方法。系譜：Unreal 的 subsystem（以類別為鍵、有依賴的先後）〔知〕、Bevy 的 `get_added_plugins::<T>()`（唯讀、讀設定，`bevy_app/src/app.rs:596`）。代價：每個單位的類別變成公開介面；runner 拿物件要經單位。產品、測試的物件照樣走描述的選項。
-- **(丙) 照 Bevy 放在某個 World**（第一個 World，或每個 World 一份副本）：`Configure` 時沒有 World，O-A1、O-A2 做不到；要改生命週期（O-2），第一個 World 被替換時要搬。不建議。
+- **「Product 一份的共用處」：Product 一份的 `ModuleBuffer`＋描述的選項（建議）**：第 5.2 節。單位建的放共用處；產品、測試給的放選項。共用的是「服務物件」，單位的類別不必公開。代價（檢查 B6）：以型別為鍵的存放處，依賴不出現在介面上（靠登記檔與 `Find` 回 `nullptr`）；一個型別一個擁有者；不凍結，執行期 runner 也能寫；編排層多兩個要守的契約（`OnDestroy` 與銷毀順序）。
+- **「單位互相找」**：`ProductSetup::Unit<T>()` 拿到別的登記單位的實例、呼叫它的公開方法。系譜：Unreal 的 subsystem（以類別為鍵、有依賴的先後）〔知〕、Bevy 的 `get_added_plugins::<T>()`（唯讀、讀設定，`bevy_app/src/app.rs:596`）。代價：每個單位的類別變成公開介面；runner 拿物件要經單位。產品、測試的物件照樣走描述的選項。
+- **「放在某個 World」（照 Bevy）**（第一個 World，或每個 World 一份副本）：`Configure` 時沒有 World，O-A1、O-A2 做不到；要改生命週期（O-2），第一個 World 被替換時要搬。不建議。
 - 三個選項都配 `ProductDescription::options`（O-A1）、`ProductSetup::Report`（O-A3）、`OnDestroy` 與明確的銷毀順序（O-A4）。
 - **職責清單**（檢查 S6）：第 4 批每 World 那一份「不算 O-4 多一項」是使用者 2026-11-20 確認的。這一次多了執行期也能讀寫的 `Product::Buffer()`（runner 用）與銷毀回呼，超出「登記單位與生命週期」的字面。本卡的判斷是仍屬「登記單位與生命週期」「啟動錯誤的彙整」、不算多一項；請一起確認。
 - **根據**：第 4.3 節、第 5.2 節。
@@ -502,17 +502,17 @@
 
 ## 13. 和生成世界（重做）的交界
 
-生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2；交界表在它的 5.12）。2026-11-22～24 兩張卡用 SendMessage 對齊（生成世界的 5.12 已照本頁修訂 2 的四種形與郵箱＝形 (2) 改好），結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議 **B「生成期間每幀清單照跑」**，A「生成中跑另一份生成清單」與 B 之間交使用者定；下表對兩者都成立，只有 W-3 分開寫。
+生成世界的宣告由另一張卡寫（`gyo2-world-gen`，`docs/architecture/target/v2/world-gen-declaration.zh-Hant.md`，分支 `claude/gyo2-world-gen-77331d`，修訂 1 8e3e17a2；交界表在它的 5.12）。2026-11-22～24 兩張卡用 SendMessage 對齊（生成世界的 5.12 已照本頁修訂 2 的四種形與郵箱＝形 (2) 改好），結果如下（**已對齊**；兩份宣告各自核准時以這張表為準）。生成世界修訂 1 建議**「生成期間每幀照跑」**，它和**「另跑生成清單」**（生成中跑另一份生成清單）之間交使用者定；下表對兩者都成立，分開寫的地方標明是哪一種。
 
 | # | 事項 | 誰負責 | 對齊的內容 |
 |---|---|---|---|
-| W-1 | 生成的形 | 生成世界（5.1、5.2） | B：每幀清單照常跑；編排層擁有「生成中」的狀態（World 的 Resource `WorldGeneration`：`Generating()`、`Hold()`），提供條件 `WhileGenerating`／`AfterGenerating`，作者用帶條件的 set 擋。A：生成中的 World 在一次 `RunFrame` 裡跑一批生成清單、不跑每幀清單，結束的那一批同一次接著跑每幀清單。兩者都是一批＝一次 `RunFrame`，批與批之間 runner 回到迴圈 |
-| W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部。B 下就是每幀清單（生成中也一樣）；A 下生成中是那一批生成清單、結束的那一批是生成清單＋每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 屬於讀者的一輪（第 5.4 節）。**先後**（檢查 B4）：生成的前處理（寫 `WorldGeneration`）→ 進 → 一輪 → 判斷生成是否結束 → 出（所以生成結束那一輪的「出」已讀到「不在生成」）。B 下「是不是生成」在 World 的 Resource，交換函式從 `World&` 讀得到；A 下才要另外提供（RC-O11） |
-| W-3 | 套用點（形 (1)） | 擁有服務的 Module；生成世界 5.12 | B：掛 `Main`／`First` 一處即可。A（使用者選 A 時）：預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`，骨架關掉時作者自己掛（同 O-4）。asset G-1 兩者都成立 |
+| W-1 | 生成的形 | 生成世界（5.1、5.2） | 「生成期間每幀照跑」：每幀清單照常跑；編排層擁有「生成中」的狀態（World 的 Resource `WorldGeneration`：`Generating()`、`Hold()`），提供條件 `WhileGenerating`／`AfterGenerating`，作者用帶條件的 set 擋。「另跑生成清單」：生成中的 World 在一次 `RunFrame` 裡跑一批生成清單、不跑每幀清單，結束的那一批同一次接著跑每幀清單。兩者都是一批＝一次 `RunFrame`，批與批之間 runner 回到迴圈 |
+| W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部。「生成期間每幀照跑」時就是每幀清單（生成中也一樣）；「另跑生成清單」時生成中是那一批生成清單、結束的那一批是生成清單＋每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 屬於讀者的一輪（第 5.4 節）。**先後**（檢查 B4）：生成的前處理（寫 `WorldGeneration`）→ 進 → 一輪 → 判斷生成是否結束 → 出（所以生成結束那一輪的「出」已讀到「不在生成」）。「生成期間每幀照跑」時「是不是生成」在 World 的 Resource，交換函式從 `World&` 讀得到；「另跑生成清單」時才要另外提供（RC-O11） |
+| W-3 | 套用點（形 (1)） | 擁有服務的 Module；生成世界 5.12 | 「生成期間每幀照跑」：掛 `Main`／`First` 一處即可。「另跑生成清單」（使用者選它時）：預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`，骨架關掉時作者自己掛（同 O-4）。asset G-1 兩者都成立 |
 | W-4 | `beforeSwap` | 生成世界（5.4）；本頁寫明 | `beforeSwap` 是換上之前同步跑一次的關卡，不是生成；期間沒有套用點、沒有交換點（asset G-3），不加機制 |
 | W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（形 (3)），或交換函式、Module 的服務＋套用點。**交出到別的執行緒的 World 只能經它自己的「出」＋有鎖的服務**（跨執行緒讀 `Generating` 違反 O-13 第 2 條；檢查 B4）。生成世界提供 `Product::Generating`、`GenerationPasses` 與 World 內的 `WorldGeneration`（5.2、5.3） |
 | W-6 | 產品給 Module 的設定 | 本頁（Product 層）；生成世界（配發器） | 預設實體配發器的範圍每個 World 可能不同，用 `WorldDescription::options`（`EntityAllotterOptions`），不用 Product 層 Resource；Product 層 Resource 的形狀歸本頁 |
-| W-7 | 執行緒 | 本頁 | 生成的狀態（B 下在 World 的 Resource `WorldGeneration`，A 下另有 Product 的 World 槽）照 CCR-5 在呼叫的執行緒上讀寫；World 交出到別的執行緒時，生成的狀態跟著交出（第 5.3 節） |
+| W-7 | 執行緒 | 本頁 | 生成的狀態（「生成期間每幀照跑」時在 World 的 Resource `WorldGeneration`，「另跑生成清單」時另有 Product 的 World 槽）照 CCR-5 在呼叫的執行緒上讀寫；World 交出到別的執行緒時，生成的狀態跟著交出（第 5.3 節） |
 | W-8 | 結束條件 | 生成世界 | 由作者的 System 給（asset G-2），不經本頁 |
 | W-9 | 遊戲初始化 | 生成世界（5.4） | 照舊先跑，跑在第一個 World 的生成之前 |
 | W-10 | `RunSchedule` 與一輪的入口 | 生成世界（5.3）；本頁（交出的入口） | `RunSchedule` 不讀寫生成的狀態，只用它推的 World 推不動生成。之後的「一個 World 的一輪」入口（第 5.3 節的交出，暫名 `WorldLease`）和 `RunFrame` 共用編排層內同一段生成的處理（私有步驟）與同一段交換函式的呼叫；只定契約，本批不實作 |
@@ -548,10 +548,10 @@
 | M2 必修 | 形 (2) 的規則和 E-19（診斷紀錄）矛盾；第 2 題漏了點名的使用者、runtime-composition 第 2 節（郵箱只在 schedule 之間）與 L19 | 交換函式的登記照時間設計 5.3 做（不推翻、不交使用者）；加 E-19 的改寫、E-22、E-23（七個使用者逐一對到四種形）；形 (3) 允許 runner 呼叫 Module 給的函式 | 3.2、5.1、5.6、11、12 |
 | M3 必修 | readback 經服務、晚一幀，牴觸使用者 11-11（沒有影像回到文件 World） | 整段刪掉，只留「Bevy 的寫回不照」 | 5.4 |
 | M4 必修 | 銷毀順序靠 `vector` 的解構順序（標準未規定）、`runner_` 比 World 先解構、讀者要先於來源 | `~Product` 明確的六步；P-5 三平台驗 | 5.2 第 5 點、10 |
-| M5 必修 | O-13 第 2 點弱化 O-11 卻寫成「限界」 | 照 (a)：O-13 只寫不變量，第 4 條寫明 O-11 照舊成立，入口層級的行為留給實作那一批（附候選做法） | 5.3 |
+| M5 必修 | O-13 第 2 點弱化 O-11 卻寫成「限界」 | 照檢查建議的「只寫不變量」：O-13 只寫不變量，第 4 條寫明 O-11 照舊成立，入口層級的行為留給實作那一批（附候選做法） | 5.3 |
 | M6 必修 | 第 8 節兩列的決勝理由是「既有的不必改」 | 改成以 Feature 為準；回答「兩種 `ModuleBuffer` 是不是同一個概念」 | 5.2 第 1 點、8 |
 | S1 提案 | `OnDestroy` 沒和 RAII 比 | 寫明兩段式的理由與 asset 的收尾走法；RC-O12 加「反序排不出的收尾」 | 5.2 第 4 點、7、8 |
-| S2 提案 | Extract 來源替換的退掉選項寫得太重；extract schedule 的排序另立一套；最外層 `Run` 不擋 extract schedule | O-12 只寫「替換後不讀舊來源」，(a)／(b) 留給 SDL 那批；extract schedule 照樣寫在每幀清單；現況更正 | 5.4 |
+| S2 提案 | Extract 來源替換的退掉選項寫得太重；extract schedule 的排序另立一套；最外層 `Run` 不擋 extract schedule | O-12 只寫「替換後不讀舊來源」，「讀者一起重建」與「准許換來源」留給 SDL 那批；extract schedule 照樣寫在每幀清單；現況更正 | 5.4 |
 | S3 提案 | 第 1 題少「延後」的選項與兩個後果 | 改成維持過渡、到 SDL 那批定（不交使用者）；那一批要一起定的列出 | 5.5 |
 | S4 提案 | E-9、pipelined 渲染只有根據 2 | E-9 拿掉；pipelined 從 Feature 欄拿掉、降成註記 | 3.2、5.3 |
 | S5 提案 | `Configure` 回報之後的流程沒定、測試缺口 | 有回報就不建任何 World；`unit` 欄的值；`OnDestroy` 各路徑恰好一次；替換後同一份；回呼裡 `Find` 還在 | 5.2 第 3 點、10 |
@@ -581,7 +581,7 @@
 | B3 提案 | Extract「一輪之前」和「寫在清單裡」矛盾 | extract schedule 屬於一輪、「進」在它之前；不在最前面算不算錯留給 SDL 那批 | 5.1、5.4、13 |
 | B4 提案 | 生成和交換函式的先後；交出的 World 讀不了 `Generating`；A 的說法殘留 | W-2 寫先後；W-5、5.3 加交出的限制；W-7、W-2、RC-O11 改成 B 的說法 | 13、5.3、7 |
 | B5 提案 | 銷毀時交出的 World；回呼返回時工作要已停 | 六步加前提；寫明「回呼返回時工作已停、不再碰共用處」 | 5.2 第 4、5 點、5.3 |
-| B6 提案 | 第 12 節 (甲) 沒寫代價 | 補 | 12 |
+| B6 提案 | 第 12 節「Product 一份的共用處」沒寫代價 | 補 | 12 |
 | B7 提案 | 「到 SDL 那批」不準；渲染 World 的時間「經 Extract」是未定 | 改成「第一個需要的 runner 那批」；渲染的時間標未定 | 5.5 |
 | 輕微 | 生成世界 5.12 用舊的三種形編號、郵箱放套用點 | 已通知生成世界卡改 | 13 |
 | 輕微 | 第 16 節的「W-1～W-9」；「經過」沒寫 96496511 | 改 | 開頭、16 |
