@@ -34,7 +34,8 @@
 | 既有突變中 find 落在改動附近、或函式搬了位置的（D184） | `os-w4`、`os-w5`、`os-x6`：3／3 killed | `build/evidence/gyo2-os-paths/mutants-darwin-existing.log` |
 | 設計審查後的修改（`DataHome` 改名、`Detail` 搬到檔尾、`S_OK`）之後重跑 | macOS：`ou-x1`、`ou-x14`、`ou-x15`、`os-w4`、`os-w5` 5／5；Linux：受影響的 7 個 `ou-` 加 `ou-x14`、`ou-x15`、`os-w4`、`os-w5` 11／11；兩邊的 `gyo_os_tests` 全部通過 | `build/evidence/gyo2-os-paths/mutants-darwin-after-review.log`、`mutants-linux-after-review.log` |
 | `os-g18-windows-extra-link`（find 和改動的行相鄰） | 只在 Windows 跑，本機沒有執行。find 那一行（`target_link_libraries(gyo_os PRIVATE shell32)`）沒有改動 | — |
-| CI L1 三個平台 | 開 PR 後補記 | — |
+| CI L1 三個平台 | 在 dd6956a7（merge gyo2 0f3be2cc、#277 之後的 head）linux-x64、macos-arm64、windows-x64 全部通過。第一輪（4684075c）只有 macos-arm64 跑完並通過，linux 和 windows 被第二次推送取消 | run 45038318239；第一輪 run 45033628392 |
+| merge gyo2（#277）之後的本機全量 ctest | 169／169 通過。衝突只在本頁 README 的 dev_log 清單（兩邊都留），沒有對應的突變要重跑 | `build/evidence/gyo2-os-paths/full-ctest-dd6956a7.log` |
 
 證據放在這台 Mac 的主 checkout：`/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-os-paths/`（不進 repo）。
 
@@ -78,7 +79,7 @@
 - 每一個的 `what` 都寫了只有它捕捉的錯。
 - 宣告預計 11 個。多出的 9 個都來自兩次敵對式檢查指出的缺口，以及實作時多出的位置（結尾的 `/` 要分平台去掉）。
 
-合併前核准時交使用者看：使用者 2026-11-22 看過數量與審查者「退 3 個」的建議後，選「照建議，三個都保留」，20 個全部留下。
+合併前核准時交使用者看：使用者 2026-11-22 看過數量與審查者「退 3 個」的建議後，選「照建議，三個都保留」，20 個全部留下。使用者 2026-11-23 在本卡說「合併」。
 
 ## 沒做的與後續
 
