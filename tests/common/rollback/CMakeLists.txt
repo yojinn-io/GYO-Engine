@@ -24,3 +24,10 @@ if(MSVC)
 else()
     target_compile_options(gyo_rollback_budget PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Design Invariant R-3 (docs/architecture/target/v2/rollback.zh-Hant.md): the rollback Module knows no authority,
+# network or state machine. Its links, private and interface alike, are exactly these, so a link to any other Module,
+# one registered later included, stops the configure. Checked once the whole project is configured, so an edge added
+# later from another directory is seen too (as for gyo_time and gyo_world_time).
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_links gyo_rollback
+    GYO::Base GYO::Kernel GYO::Orchestration GYO::WorldTime)

@@ -2021,13 +2021,16 @@
   },
   {
    "id": "or-failure-no-product",
-   "what": "the failure does not name the Product (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "the failure does not name the Product (v8-arch-gyo2-broken-world-ends-product; v8-arch-gyo2-batch4-followups: rewritten. Dropping RunOn's early 'failure.product = name_' was equivalent, Break fills an empty product; Break's fill is what names the Product for a World interrupted outside the Product, a DropOldFirst replacement and a dropped World, and no check read it. [or-ended-outside-product] reads it now)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    failure.product = name_;\n",
+   "find": "    if (failure.product.empty()) failure.product = name_;  // made earlier when it had to allocate nothing later (P12)\n",
    "replace": "",
    "target": "gyo_orchestration_tests",
-   "cases": "O-8: one interrupted World ends the Product*",
-   "expect": "\\[or\\-ended\\-failure\\-who\\]"
+   "cases": "O-8: a World interrupted outside the Product*",
+   "expect": "\\[or\\-ended\\-outside\\-product\\]",
+   "guards": [
+    "orchestration O-8"
+   ]
   },
   {
    "id": "or-failure-no-schedule",
@@ -2584,6 +2587,30 @@
    ]
   },
   {
+   "id": "or-guard-o4-parent-directory",
+   "what": "O4 accepts a quoted include with .. after an allowed prefix (v8-arch-gyo2-batch4-followups, adversarial check F5: engine/kernel/../../../../../modules/rollback/include/... reached the rollback Module's headers from the orchestration layer). Only it reaches O4's .. condition",
+   "guards": [
+    "orchestration O-4",
+    "authority DI-A 2"
+   ],
+   "file": "tests/common/orchestration/orchestration_guard.py",
+   "find": " or \"..\" in re.split(r\"[/\\\\]\", name)",
+   "replace": "",
+   "expect": "FAIL: test_o4_parent_directory_include_is_reported",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/orchestration",
+    "-p",
+    "test_orchestration_guard.py",
+    "-v"
+   ]
+  },
+  {
    "id": "or-guard-o0-source-silent",
    "what": "O0 (step 7, README rule 4: fail closed): a missing engine/orchestration passes by scanning nothing (O3 and O4 share it). Only it catches the sources' O0",
    "guards": [
@@ -2800,16 +2827,24 @@
   },
   {
    "id": "or-runner-logs-back",
-   "what": "the default runner writes the failure itself again before returning (log-and-return: the error would be written twice, once here and once by the layer that decides). Only this mutant: the runner's own silence",
+   "what": "the default runner writes the failure itself again before returning (log-and-return: the error would be written twice, once here and once by the layer that decides). Only this mutant: the runner's own silence (v8-arch-gyo2-batch4-followups: rewritten like or-failure-logged: Product.cpp no longer includes Base::Log, so a one-edit mutant writes to standard error and orchestration.el-silent, which now runs the O-3 default runner case, catches it; [or-runner-default-silent] counts Base::Log lines, which a one-edit mutant cannot add any more)",
    "file": "engine/orchestration/src/Product.cpp",
    "find": "        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
-   "replace": "        ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Error, \"orchestration\", error.failure->Text());\n        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
+   "replace": "        std::fputs(error.failure->Text().c_str(), stderr);\n        return RunnerExit{RunnerExitCode::Failure, \"the Product ended: \" + error.failure->Text()};\n",
    "target": "gyo_orchestration_tests",
-   "cases": "O-3: the default runner returns*",
-   "expect": "\\[or\\-runner\\-default\\-silent\\]",
+   "expect": "orchestration\\.el-silent: \\[O-3: the default runner returns",
    "guards": [
     "orchestration O-3",
     "error-handling DI 4"
+   ],
+   "command": [
+    "{cmake}",
+    "-DCASES=tests/common/orchestration/silent_cases.txt",
+    "-DNAME=orchestration.el-silent",
+    "-P",
+    "tests/common/support/SilentProbe.cmake",
+    "{exe:gyo_orchestration_tests}",
+    "{exe:gyo_silent_probe_positive}"
    ]
   },
   {

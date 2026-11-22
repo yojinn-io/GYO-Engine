@@ -339,6 +339,8 @@ TEST_CASE("O-8: a World interrupted outside the Product ends it too; RunGameInit
     CHECK_MESSAGE((p.Failure()->world == "Side" && p.Failure()->entry == "outside the Product" && p.Failure()->lastSchedule.empty() &&
                    !p.Failure()->kernelCode.has_value()),
                   "[or-ended-outside-fields] " << p.Failure()->Text());
+    // No entry point made this failure: Break names the Product (O-8: the failure says what broke).
+    CHECK_MESSAGE(p.Failure()->product == "game", "[or-ended-outside-product] " << p.Failure()->Text());
     CHECK_MESSAGE(!p.RunFrame(), "[or-ended-outside] RunFrame succeeded");
 }
 
