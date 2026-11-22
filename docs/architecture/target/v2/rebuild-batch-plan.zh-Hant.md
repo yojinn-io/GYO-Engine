@@ -101,6 +101,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | N13 條文補兩條判斷、兩個例外：2026-11-22 使用者「照建議補」，PR #274 已合併（8e894776，`v8-arch-gyo2-n13-rule-text`）。剩 tests/、examples/ 的 493 處全名（89 檔）與 `GYO::Test` 裡的寫法；過時註解 `BufferedStream.cpp:10`、`MountPoint.hpp:7` | N13 短名卡（#271） | 493 處：下一次碰測試命名的批 |
 | 生成世界的文件遺留：dev_log 開頭改已合併（PR #272，879350d4）、CI 補 run 45019227814；核准頁第 5 節補 16a3b0d9 的 L1；README 索引兩行改已合併；宣告「三家讀檔都重新配號」改正（flecs 是混合型，`deserialize.c:129-168`；讀檔卡 2026-11-22 指出） | 生成世界卡（#272 合併後） | 下一批一起改（第 1 批先例） |
 | threads／io 的文件遺留：dev_log 開頭補「已合併（PR #277，0f3be2cc）」 | threads／io 卡 | 下一批一起改 |
+| io 裡還有沒人用、但不在重審宣告清單裡的介面：`IOFwd.hpp`、`IFileSystem::Name()`、`FileInfo` 的 ctime／atime／permissions、`NormalizeOptions` 的旗標；`OS::Files::DefaultCaseSensitivePaths` 留不留未定（threads／io dev_log「後續」） | threads／io 卡（#277） | 下一次動 io 的批照同一判準（該不該存在）處理 |
 | `gyo_os_tests` 在全量 `-j8` 後偶爾逾時（60 秒）：狀態機卡 2026-11-23 本機兩次逾時、之後單獨重跑 25 秒與 0.8 秒通過；原因未分（機器負載或 os 測試裡等時間的案例偶爾卡住，AGENTS §14.1）；紀錄在主 checkout `build/evidence/gyo2-state-machine-r8/` | 狀態機卡（#281 跟上 #280 後） | 再出現時開卡查（先加計數或時間紀錄再判） |
 | `target/v2/README.md` 的 dev_log 清單：每合一個 PR，其他開著的 PR 就在這裡撞一次 | 2026-11-23 合併順序 | 待使用者決定要不要改寫法 |
 | `orchestration_mutations.json` 約第 3521～3532 行留著 `or-exch-round-after-failed-in` 的舊副本（find 是 C19 之前的寫法，少了收尾 `},` 而和 `wg-held-not-cleared` 黏成一個物件，鍵重複被後面那組蓋掉）。同 id 的現行版（find 對 `RunRound`）在後面另一個物件，已執行並 killed（`build/evidence/gyo2-exchange/c19-mutants.log`）。刪掉舊副本後解析結果完全相同（282 條、無重複鍵、find 各命中一次），不必重跑。threads／io 卡發現（它判成「從沒執行過」，實際只是殘留文字） | 7b4cf2e9（交換點補回突變時）；threads／io 卡 2026-11-22 | 下一個改這份清單的批順手刪（第 1 批先例，不單開 PR） |
