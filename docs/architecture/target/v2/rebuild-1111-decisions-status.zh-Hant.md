@@ -43,14 +43,14 @@
 | K.3-5 讀 (c) 的 (b) System 必須和 (c) 的寫者有顯式順序 | 有（區的規則） | ① | 選項是使用者選的 | 帶。不用決定性區的產品碰不到 |
 | K.3-14 v1 任何 Parallel 宣告都是啟動錯誤 | 有 | ①②③（第一版都只有 Serial） | 選項是使用者選的 | 帶 |
 | K.3-15 事件只在所屬時鐘的 schedule 裡讀寫；其他 schedule 用元件或 Resource 傳遞 | 有。事件登記時一定要指定時鐘，否則是啟動錯誤 | ①；②③是限制 | 「同一時鐘下的另一張 schedule」那一半是使用者選的；「跨時鐘禁止」那一半當時沒有單獨講過 | **改**（使用者 2026-11-14，`v8-arch-gyo2-cross-clock-events-open`）：跨時鐘放開，照 Bevy 讓事件留到另一側讀過為止；設計還沒做，單機與網路都要顧到 |
-| runner 由 plugin 在 finish 時安裝，一個 Product 只能有一個 | 只做了一半：記錄誰安裝、第二個是啟動錯誤。runner 本身還不能被安裝成可呼叫的東西，目前是產品自己呼叫 `Product::Run` | ①②③ | 使用者（framework 退役時定的） | 帶；還沒做完 |
+| runner 由 plugin 在 finish 時安裝，一個 Product 只能有一個 | 只做了一半：記錄誰安裝、第二個是啟動錯誤。runner 本身還不能被安裝成可呼叫的東西，目前是產品自己呼叫 `Product::Run` | ①②③ | 使用者（framework 退役時定的） | 帶；還沒做完。**2026-11-21 註：第 2 批已做**——`Setup::InstallRunner(name, Runner)`（`Runner` 是可呼叫物件，裝第二個是 O-E4），產品的 main 呼叫 `Product::Run`、由它呼叫裝好的 runner（#244） |
 | plugin 在 build 時可以往 schedule 插入 stage | 有（`InsertStage`） | ③（Editor 的標準 stage）；①② | 同上 | 帶 |
 
 ## 4. D 組：時間
 
 | 決定 | 程式 | 誰需要 | 判定 |
 |---|---|---|---|
-| K.3-11 (c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入；System 自己讀時鐘禁止 | tick 有（`CurrentTick`、每個 `Domain` 一個 tick）。boundary 輸入（`HostClockSample`）沒有 | ① | 帶；boundary 輸入還沒做 |
+| K.3-11 (c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入；System 自己讀時鐘禁止 | tick 有（`CurrentTick`、每個 `Domain` 一個 tick）。boundary 輸入（`HostClockSample`）沒有 | ① | 帶；boundary 輸入還沒做。**2026-11-21 註：已移出 Engine**——11-17 統合把「(c) 區的時間只來自 tick 與被記錄的 boundary 輸入」歸伺服器權威策略（L12、`clock-out-of-kernel`）；官方策略收或延到 PvP 產品，由第 4 批宣告寫明（`v8-arch-gyo2-boundary-input-to-authority-card`） |
 
 機制裡目前**沒有**「時間的 Resource」（步長、速度、暫停），也沒有固定步的累加；只有 tick 的計數。**方向已定**（使用者 2026-11-14，`v8-arch-gyo2-unified-time`）：時間的來源統一；參考 Bevy 重構 GYO::Time（一個來源、導出幾個時鐘，暫停與慢動作改的是遊戲時間那一層，UI 讀真實時間）；`FixedTickRuntime` 帶過來、改名。設計還沒做。
 
@@ -74,7 +74,7 @@
 |---|---|---|---|
 | K.3-6 模擬的 World 與渲染的 World 分開；渲染的有自己的 Registry，只經 Extract 唯讀拿資料 | 只做了宣告與啟動檢查：`SetExtractSource`、extract 的 schedule、`Extract<Read<T>>`（沒有寫的版本，寫不出來）。**執行還沒做**：Extract 的參數一被取用就斷言 | ①②③ | 帶；執行的那一半是接渲染之前要做的 |
 | Editor 預覽的資料只往前流：文件的 World→Extract→渲染的 World | 沒有（gyo2 上沒有 Editor） | ③ | 帶，當方向；做工具時用 |
-| 資產照 Bevy 的模型：請求狀態是 Resource、每個型別一個 `Assets<T>`、loader 由 plugin 登記、載入完成後依請求順序在同步點套用 | 沒有（gyo2 上沒有資產模組） | ①②③ | 帶，當方向；做資產時用 |
+| 資產照 Bevy 的模型：請求狀態是 Resource、每個型別一個 `Assets<T>`、loader 由 plugin 登記、載入完成後依請求順序在同步點套用 | 沒有（gyo2 上沒有資產模組） | ①②③ | 帶，當方向；做資產時用**2026-11-22 註：已被 asset 宣告取代**——資產管理放在 World 外、World 只持 id（推翻 11-11 方向 2，`v8-arch-gyo2-asset-outside-world`）；載好就可見＋就緒查詢（不照請求順序，`-visible-on-arrival`）；loader 表帶鎖、隨時可登記（`-no-freeze`）；宣告 `asset-declaration.zh-Hant.md`（55a14825，待動工前核准） |
 | Loading：Startup 只放不依內容的登記；另有可分批的 Loading schedule；載入順序是計畫的函數 | 只有 `Domain::Loading` 這個值；分批與驅動還沒有 | ①②③（使用者今天：Loading 是遊戲都有的） | 帶。「地圖→…→玩家」的 stage 序與 wire 的 ready 事件屬 PvP，移植時處理 |
 
 ## 7. 要你定的 5 件
