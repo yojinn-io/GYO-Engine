@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Clip-lifetime mutants of the audio plan, killed only by an AddressSanitizer build of gyo_audio_tests (configure with -fsanitize=address, BUILD_TESTING=ON, no products, for example build/target/_build/audio-asan). Run with run_mutations.py --catalog this file --build-dir <the ASan build>.",
+  "description": "Clip-lifetime mutants of the audio plan, killed only by an AddressSanitizer build of gyo_audio_tests (configure with -fsanitize=address, BUILD_TESTING=ON, no products, for example build/target/_build/audio-asan). Run with tests/common/mutation/run_mutations.py --catalog this file --build-dir <the ASan build>.",
   "mutants": [
     {
       "id": "au-ctl-clip-reuse-without-check-asan",
