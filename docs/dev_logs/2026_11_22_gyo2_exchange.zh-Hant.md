@@ -41,14 +41,33 @@
 
 - 新測試：`orchestration.product-buffer`（P-1～P-9）、`orchestration.exchange`（X-1～X-8）18 案全過；編排層既有 84 案照過。
 - 測試寫的過程中抓到的（都是測試自己的錯，實作沒改）：P-5 同一型別 `Probe` 建兩次（斷言正確擋下，改成兩個型別）；P-5 的 runner 探針被 configure 閉包多抓一份（改成只讓 runner 持有）；P-8 被移走的那一份也記錄、檢查恆真（改成比「World 的 Resource 先死、共用處的物件後死」的先後）；X-2、X-8 的紀錄比對寫錯分隔與起點。
-- 全量建置與 ctest：163/163（`impl-ctest.log`；161 加新的兩組）。新的建置警告 0（16 個都是既有的）。
+- 全量建置與 ctest：163/163（`impl-ctest.log`；161 加新的兩組）。新的建置警告 0（16 個都是既有的）。敵對式檢查後編排層 103 案、663 個斷言全過。
 - 突變：見下。
 - L1：PR 上跑。
 
-## 突變（README 第 3 點；本批加 25 個）
+## 突變（README 第 3、8 點）
 
-（結果見下方補記）
+- 宣告時的 25 個（`or-pbuf-` 12、`or-exch-` 13）：25/25 killed（`run-impl-mutants.log`）。
+- **敵對式檢查**（Fable 5.2／high，唯讀；作者 Opus 5.5；`mutants-adversarial-check.md`）：必修 6、提案 6、輕微 5。
+  - M1：本批改了 `Product.cpp` 的文字，讓 9 個既有突變的 `find` 對不上（`or-runframe-no-gameinit`、`g8-product-build-before-units`、`g8-swap-keeps-old-lists`、`g8-check-report-unit`、`g8-check-inside-finish-loop`、`g8-check-sees-true`、`or-skeleton-after-units`、`or-buffer-finish-other`、`or-buffer-check-other`）。原因：我每步只跑新的突變、沒做靜態的 find 次數掃描（第 4 批後續卡提過的同一個漏洞）。復原 9 個；其中 6 個的 `guards` 是檢查者照案名填的，我核對過條文。
+  - M2：`or-exch-init-after-in` 實際是刪掉遊戲初始化（和 `or-runframe-no-gameinit` 同一個改動），改寫成真的搬到第一個「進」之後。
+  - M3～M6：替換時的「出」、錯誤訊息的單位名與「出」、選項的銷毀時點、「不凍結」各補測試或突變。
+  - 提案採了檢查者標「建議採」的 4 個（`or-pbuf-ondestroy-before-worlds`、`or-pbuf-buffer-before-ondestroy`、`or-pbuf-report-stops-configure`、`or-exch-round-after-failed-in`）與 10 個 `expect` 的收窄；逐欄細項等 10 個不採（README「尋ねずに行う」的分類，理由在合併前核准頁第 4 節）。P6：替換時 4 行沒有條文與測試的 `clear()` 拿掉。
+- 檢查後加的 9 個與復原、改寫、改過 `find` 的：45 個裡 43/45 → 兩個是我之後改程式沒對齊（`or-exch-out-side-label` 的 `replace` 還寫舊參數、建置失敗；`or-exch-replace-out-kept` 的 `expect` 照拿掉 `clear()` 之後的訊息改），改後 45/45 killed（`run-impl-mutants-2.log` 與之後的單獨重跑）。
+- 本批加 34 個（宣告 25＋檢查後 9），基準是改的條文 9 條 × 5＝45。各自只捕自己的錯，寫在 `what`，都有 `guards`。
+- 靜態掃描（不建置，數每個突變的 `find` 出現幾次）：所有清單都恰好一次。
+- 合併前的完整跑（宣告判定 3）：見下方補記。
+
+## 設計審查（每批固定的一步）
+
+- 審查者：Fable 5.2／high，唯讀（實作者 Opus 5.5）。報告：主 checkout `build/evidence/gyo2-exchange/design-review/REPORT.md`。結論：整體合理，沒有新的要使用者定的設計題。
+- 保留：`ModuleBuffer` 一個型別兩種範圍、描述的選項、`OnDestroy` 兩段式（系譜補 Unity Entities 的「停 → `OnDestroy` → 銷毀」、照建立的反序）、交換函式的登記（近例 Bevy `SubApp::set_extract`）。
+- 改了：`~Product` 的條文改寫成「誰比誰活得久」；`runner_` 與 `extraRunners_` 合併；O-2 的 Product 層那一組拆成 O-15（和生成世界卡協調編號）；O-3 補「做了一部分的 E2」；O-12 的 Extract 縮成本質一句；O-13 拿掉重複與待辦；DI-KS 13、WT-6 拿掉進度與沿革；宣告兩處引用改正確；日期改回 2026-11-22；測試字串的 mailbox 拿掉；`Exchange` 直接收 `World&`。
+- 可選提案（`~Product` 的兩個細項降成實作細節，會放寬判定 P-5）：交使用者，合併前核准頁第 8 節。
+- 後續（轉主會話排批）：world_logging 給接 `WorldSetup` 的登記函式，加一個走真的 `TakeKernelDiagnostics` 的測試；本批 Engine 裡沒有交換函式的呼叫者。
 
 ## 證據
 
-主 checkout 的 `build/evidence/gyo2-exchange/`（使用者的 Intel Mac，git 不追蹤）：`impl-build.log`、`impl-ctest.log`、`run-impl-mutants.log`；宣告階段的 `survey-bevy-lightyear.md`、`survey-unity-flecs-mass.md`、`declaration-r0-adversarial-check.md`、`declaration-r1-recheck.md`。
+主 checkout 的 `build/evidence/gyo2-exchange/`（使用者的 Intel Mac，git 不追蹤）：`impl-build.log`、`impl-ctest.log`、`run-impl-mutants.log`、`run-impl-mutants-2.log`、`mutants-adversarial-check.md`（與 `-proposed.json`、`-tests.patch`、`-run.log`）、`design-review/REPORT.md`；宣告階段的 `survey-bevy-lightyear.md`、`survey-unity-flecs-mass.md`、`declaration-r0-adversarial-check.md`、`declaration-r1-recheck.md`。
+
+合併前核准頁：[`exchange-merge-approval.zh-Hant.md`](../architecture/target/v2/exchange-merge-approval.zh-Hant.md)。

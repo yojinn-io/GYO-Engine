@@ -144,15 +144,15 @@ TEST_CASE("exchange: X-3 a failing exchange function stops RunFrame with Exchang
 TEST_CASE("exchange: X-3 a unit's failing out is named with the unit, the side and the World") {
     Log().clear();
     Units units;
-    units.Module("mail", {.build = [](O::WorldSetup& s) {
-                      if (s.WorldName() == "B") s.ExchangeOut([](K::World&) -> PResult { return Refuse("mail-full"); });
+    units.Module("sender", {.build = [](O::WorldSetup& s) {
+                      if (s.WorldName() == "B") s.ExchangeOut([](K::World&) -> PResult { return Refuse("out-refused"); });
                   }});
     auto built = O::Product::Build(TwoWorlds(), units.Take());
     ORCH_REQUIRE_BUILT(built);
     auto ran = (*built)->RunFrame();
     REQUIRE_FALSE(static_cast<bool>(ran));
     const std::string& message = ran.error().message;
-    CHECK_MESSAGE(message.find("'mail'") != std::string::npos, "[or-exch-names-unit] " << message);
+    CHECK_MESSAGE(message.find("'sender'") != std::string::npos, "[or-exch-names-unit] " << message);
     CHECK_MESSAGE(message.find("(out)") != std::string::npos, "[or-exch-names-out] " << message);
     CHECK_MESSAGE(message.find("'B'") != std::string::npos, "[or-exch-names-world] " << message);
 }

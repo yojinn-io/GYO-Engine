@@ -3489,14 +3489,14 @@
    ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "Exchange(slot.exchangeOut, slot.executor->GetWorld(), \"out\")",
-   "replace": "Exchange(slot.exchangeOut, slot.description.name, \"in\")",
+   "replace": "Exchange(slot.exchangeOut, slot.executor->GetWorld(), \"in\")",
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-3 a unit's*",
    "expect": "\\[or\\-exch\\-names\\-out\\]"
   },
   {
    "id": "or-exch-replace-out-kept",
-   "what": "a replacement takes the new build's \"in\" functions but not its \"out\" ones (5.1). Only it catches the out side of the swap",
+   "what": "a replacement takes the new build's \"in\" functions but keeps the old \"out\" ones (5.1). Only it catches the out side of the swap",
    "guards": [
     "orchestration O-12",
     "exchange-declaration 5.1"
@@ -3506,7 +3506,7 @@
    "replace": "    slot.exchangeIn = std::move(registration.exchangeIn);\n    slot.lastSchedule.clear();",
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-6*",
-   "expect": "\\[or\\-exch\\-replaced\\] in build2@Main\\n"
+   "expect": "\\[or\\-exch\\-replaced\\] in build2@Main out build1@Main"
   },
   {
    "id": "or-pbuf-frozen",
