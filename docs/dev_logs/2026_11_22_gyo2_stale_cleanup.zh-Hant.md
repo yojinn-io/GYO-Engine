@@ -105,15 +105,24 @@
 
 - 本機（macOS arm64）：`ctest --preset test` 161/161（主 checkout `build/evidence/gyo2-stale-cleanup/ctest.txt`）。
 - 突變：見第 1 節（`build/evidence/gyo2-stale-cleanup/mut-*.txt`）。
-- L1 三平台：（待填）。
+- L1 三平台（手動 dispatch，b5e44b8b，run 45000629055）：linux-x64 16m10s、windows-x64 14m46s、macos-arm64 6m17s 通過，Quick acceptance 與 CI gate 通過。第一次 dispatch（5b880da4，run 45000321899）在補自測的 commit 推上後取消，沒有結果。
 
 ## 設計審查（Fable 5.2／high，唯讀）
 
 報告：主 checkout `build/evidence/gyo2-stale-cleanup/design-review/REPORT.md` B 節。8 項中 7 項保留；要改的 3 件都是本 dev_log（trace、logging 補的範圍寫清楚、刪清單的文字出處列進後續、填驗證），已改。
 
-要使用者在合併前核准時確認的 1 件：
+要使用者在合併前核准時確認的 1 件（使用者 2026-11-22「核准」，見下「使用者的決定」）：
 
 - `docs/architecture/time.md` 的 `Design Invariants` 第 6 條，括號裡的例子「(trace.md Invariant 2)」改成「(the logging file sink's writer, logging LG-6)」。條文的承諾（`Wait()` 沒有計時器）不變，只換「誰依賴它」的例子，因為 trace.md 刪掉了。照 AGENTS §3，改 Design Invariants 節要使用者同意。
+
+## 使用者的決定
+
+1. `time.md` Design Invariants 第 6 條的例子改成 logging LG-6。
+   - 原話：「核准」。
+   - 比過的選項：照本 PR 的改法（例子換成 gyo2 的對應者 LG-6）／不改（留指向已刪的 trace.md）。卡片提的是前者。
+   - 理由：trace.md 刪掉了，承諾（`Wait()` 沒有計時器）不變，只換依賴它的例子。
+   - 出處：本卡對話；設計審查報告 B 節第 7 項。
+   - 這是合併前核准，不是合併的同意。
 
 ## 後續（範圍外，沒有做）
 
