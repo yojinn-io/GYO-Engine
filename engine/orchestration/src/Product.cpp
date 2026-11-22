@@ -3,6 +3,7 @@
 // sections 3.4 to 3.12).
 
 #include "engine/orchestration/Product.hpp"
+#include "engine/orchestration/WorldGeneration.hpp"
 
 #include "engine/base/Assert.hpp"
 #include "engine/base/Trace.hpp"
@@ -34,8 +35,8 @@ std::string Quoted(std::string_view text) {
     return "'" + std::string(text) + "'";
 }
 
-// The owner name of the default skeleton's declarations (no unit row is
-// "orchestration": the orchestration layer is library-only in the register).
+// The owner name of the orchestration layer's own declarations, the default skeleton and WorldGeneration (no unit
+// row is "orchestration": the orchestration layer is library-only in the register).
 constexpr const char* kSkeletonOwner = "orchestration";
 
 // The default skeleton (ScheduleSkeleton.hpp): names and stage order only.
@@ -253,11 +254,13 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     // before BuildPlans, read by Finish, Check and the prepare functions, let go once those have run (O-2).
     auto buffer = std::make_shared<ModuleBuffer>();
 
-    // The default skeleton first, before any unit's Build (O-4; time-events declaration 3.6).
-    if (world.skeleton == ScheduleSkeleton::Default) {
-        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);
-        GYO_ASSERT(static_cast<bool>(skeleton));
-    }
+    // The orchestration layer's own declarations first, before any unit's Build: WorldGeneration in every World
+    // (O-2, O-14; world-gen declaration 5.2), the default skeleton when it is on (O-4; time-events declaration 3.6).
+    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {
+        registrar.Resource<WorldGeneration>({.name = "WorldGeneration"});
+        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);
+    });
+    GYO_ASSERT(static_cast<bool>(own0));
 
     // Build: every unit of the World in order, then the product's own (always
     // registered, so a World with no unit still freezes; section 3.3).
@@ -324,6 +327,8 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
 std::unique_ptr<Kernel::WorldExecutor> Product::MakeExecutor(WorldSlot& slot, const Kernel::Registry& registry) {
     auto executor = std::make_unique<Kernel::WorldExecutor>(registry, slot.description.name,
                                                             Kernel::WorldOptions{slot.description.dynamicInsert});
+    // Generating from the moment it is built, before its prepare functions (world-gen declaration 5.1, O-14).
+    executor->GetWorld().SetResource(WorldGeneration{true, false});
     return executor;
 }
 
@@ -539,10 +544,27 @@ Base::Result<void, OrchestrationError> Product::RunFrameSteps() {
         if (auto ran = RunGameInit(); !ran) return ran;
     }
     for (WorldSlot& slot : worlds_) {
-        for (const std::string& schedule : slot.frame) {
-            if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
-        }
+        if (auto ran = RunRound(slot); !ran) return ran;
     }
+    return {};
+}
+
+Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot) {
+    Kernel::World& world = slot.executor->GetWorld();
+    const WorldGeneration* before = world.Resource<WorldGeneration>();
+    const bool generating = before != nullptr && before->generating;
+    // A generating frame starts with nobody holding.
+    if (generating) world.SetResource(WorldGeneration{.generating = true, .held = false});
+    // The exchange functions' "in" goes here, after the step above (world-gen declaration 5.1; exchange W-2).
+    for (const std::string& schedule : slot.frame) {
+        if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
+    }
+    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.
+    if (generating) {
+        const WorldGeneration* after = world.Resource<WorldGeneration>();
+        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});
+    }
+    // The exchange functions' "out" goes here, after the judgement.
     return {};
 }
 
@@ -582,6 +604,13 @@ Kernel::WorldExecutor& Product::World(std::string_view name) {
     WorldSlot* slot = Find(name);
     GYO_ASSERT(slot != nullptr && slot->executor != nullptr);
     return *slot->executor;
+}
+
+bool Product::Generating(std::string_view name) const {
+    const WorldSlot* slot = Find(name);
+    GYO_ASSERT(slot != nullptr && slot->executor != nullptr && "Product::Generating: no World of that name, or its place is empty");
+    const WorldGeneration* generation = slot->executor->GetWorld().Resource<WorldGeneration>();
+    return generation != nullptr && generation->generating;
 }
 
 bool Product::HasWorld(std::string_view name) const noexcept {

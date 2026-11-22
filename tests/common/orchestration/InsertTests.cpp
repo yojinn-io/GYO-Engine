@@ -1,6 +1,7 @@
 // O-9 (the orchestration half of dynamic insertion) (declaration 7.3).
 
 #include "SaveGame.hpp"
+#include "TestRangeAllotter.hpp"
 
 #include <stdexcept>
 
@@ -61,7 +62,7 @@ TEST_CASE("O-9: BuildPlans fails (R-E7): InsertBuildFailed, nothing logged, the 
     ORCH_REQUIRE_BUILT(built);
     O::Product& p = **built;
     WarningCounter warnings;
-    auto inserted = p.InsertSystems("Main", "console", [](K::Registrar& r) { r.Allotter<K::RangeAllotter>(); });
+    auto inserted = p.InsertSystems("Main", "console", [](K::Registrar& r) { r.Allotter<GYO::Test::TestRangeAllotter>(); });
     REQUIRE_FALSE(static_cast<bool>(inserted));
     CHECK_MESSAGE(inserted.error().code == O::OrchestrationErrorCode::InsertBuildFailed, "[or-insert-build-failed]");
     CHECK_MESSAGE(inserted.error().detail.find("R-E7") != std::string::npos, "[or-insert-build-failed] " << inserted.error().detail);

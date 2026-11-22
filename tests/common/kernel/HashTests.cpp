@@ -87,7 +87,7 @@ struct UnhashedSetting {
 
 static_assert(Hashable<std::int32_t> && Hashable<Kind> && Hashable<double> && Hashable<std::string>);
 static_assert(Hashable<std::vector<std::optional<std::pair<std::int16_t, float>>>>);
-static_assert(Hashable<Padded> && Hashable<Raw> && Hashable<RangeAllotter>);
+static_assert(Hashable<Padded> && Hashable<Raw> && Hashable<TestRangeAllotter>);
 static_assert(!Hashable<Unhashed> && !Hashable<std::vector<Unhashed>> && !Hashable<long double>);
 
 // A value built in memory that held fill before (what a stack slot may hold).

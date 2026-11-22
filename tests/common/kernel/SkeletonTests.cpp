@@ -17,6 +17,7 @@
 #include <vector>
 
 using namespace GYO::Kernel;
+using GYO::Test::TestRangeAllotter;
 using GYO::Test::Kernel::At;
 using GYO::Test::Kernel::Built;
 using GYO::Test::Kernel::Describe;
@@ -140,8 +141,8 @@ void GameData(Registrar& r) {
     r.Resource<Gravity>({.name = "Gravity"});
     r.Resource<Paused>({.name = "Paused"});
     r.Resource<Stats>({.name = "Stats"});
-    r.Resource<RangeAllotter>({.name = "Allotter"});
-    r.Allotter<RangeAllotter>();
+    r.Resource<TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<TestRangeAllotter>();
     r.Message<Hit>({.name = "Hit"});
     r.Schedule(GameTick());
 }
@@ -168,7 +169,7 @@ std::unique_ptr<GYO::Test::Kernel::Rig> StartGame() {
     rig->world().SetResource(Gravity{1});
     rig->world().SetResource(Paused{0});
     rig->world().SetResource(Stats{0, 0});
-    rig->world().SetResource(RangeAllotter::Of(100, 999));
+    rig->world().SetResource(TestRangeAllotter::Of(100, 999));
     return rig;
 }
 
@@ -290,7 +291,7 @@ TEST_CASE("skeleton: an Err comes back once, with the chain of where it happened
         r.AddSystem<&SpawnsWave>(In("SpawnsWave", "Input"));
     });
     REQUIRE(rig->executor);
-    rig->world().SetResource(RangeAllotter::Of(1, 2));  // room for two of the three
+    rig->world().SetResource(TestRangeAllotter::Of(1, 2));  // room for two of the three
     const auto result = rig->Run();
     REQUIRE_FALSE(static_cast<bool>(result));
     CHECK(result.error().Has(KernelErrorCode::AllotterExhausted));
@@ -334,7 +335,7 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
     });
     REQUIRE(rig->executor);
     World& world = rig->world();
-    world.SetResource(RangeAllotter::Of(500, 599));
+    world.SetResource(TestRangeAllotter::Of(500, 599));
     world.Insert(1, Position{0, 0});
     KERNEL_REQUIRE_RUN_OK(rig->Run());
     // Spawned, then despawned in the same call: the despawn finds nothing yet, the spawn stays.
@@ -414,8 +415,8 @@ void LimitData(Registrar& r) {
     r.Component<Health>({.name = "Health"});
     r.Component<Armor>({.name = "Armor"});
     r.Resource<Stats>({.name = "Stats"});
-    r.Resource<RangeAllotter>({.name = "Allotter"});
-    r.Allotter<RangeAllotter>();
+    r.Resource<TestRangeAllotter>({.name = "Allotter"});
+    r.Allotter<TestRangeAllotter>();
     r.Schedule(GameTick());
 }
 
@@ -440,7 +441,7 @@ double TimeTicks(std::size_t entities, const char* name, int ticks, double* fill
     REQUIRE(rig->executor);
     World& world = rig->world();
     world.SetResource(Stats{0, 0});
-    world.SetResource(RangeAllotter::Of(10'000'000, 20'000'000));
+    world.SetResource(TestRangeAllotter::Of(10'000'000, 20'000'000));
     const auto fillStart = Clock::now();
     for (std::size_t i = 0; i < entities; ++i) {
         const EntityId id = static_cast<EntityId>(i + 1);

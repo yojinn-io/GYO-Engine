@@ -21,6 +21,7 @@
 //   S5-7  a single-player World choosing nothing: no history, no authority checks.
 //   S5-8  the same save read twice (a float and a std::vector, hashed by the author's function): equal summaries.
 
+#include "engine/entity_ids/RangeAllotter.hpp"
 #include "engine/authority/AuthorityModule.hpp"
 #include "engine/authority/Consistency.hpp"
 #include "engine/authority/Registrations.hpp"
@@ -162,9 +163,9 @@ void Register(O::WorldSetup& s, const Variant& v) {
     rollback.StepSchedule("FixedUpdate", "Last");
     s.Registrar().Resource<Script>({.name = "Script"});
     s.Registrar().Resource<Footsteps>({.name = "Footsteps"});
-    s.Registrar().Resource<K::RangeAllotter>({.name = "Allotter"});
-    s.Registrar().Allotter<K::RangeAllotter>();
-    rollback.Resource<K::RangeAllotter>({.equal = [](const K::RangeAllotter& a, const K::RangeAllotter& b) {
+    s.Registrar().Resource<GYO::Engine::EntityIds::RangeAllotter>({.name = "Allotter"});
+    s.Registrar().Allotter<GYO::Engine::EntityIds::RangeAllotter>();
+    rollback.Resource<GYO::Engine::EntityIds::RangeAllotter>({.equal = [](const GYO::Engine::EntityIds::RangeAllotter& a, const GYO::Engine::EntityIds::RangeAllotter& b) {
         return a.first == b.first && a.last == b.last && a.next == b.next && a.exhausted == b.exhausted;
     }});
     if (v.hitFlash) s.Registrar().Component<HitFlash>({.name = v.hitFlashName});
@@ -235,7 +236,7 @@ std::unique_ptr<O::Product> Duel(Variant match, Variant client) {
         world.SetResource(Command{});
         world.SetResource(Script{});
         world.SetResource(Footsteps{});
-        world.SetResource(K::RangeAllotter::Of(1000, 1999));
+        world.SetResource(GYO::Engine::EntityIds::RangeAllotter::Of(1000, 1999));
         // Two players, alive from the start, with ids inside the allotter's range (the host's Insert neither checks
         // nor moves the range, DI-KS 18): bringing one back is a restore's spawn of such an id (S5-5).
         world.Insert(kPlayer1, Health{10});
