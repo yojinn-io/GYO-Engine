@@ -300,7 +300,7 @@ RC-AS10（凍結後只准相同）隨凍結機制撤回（宣告第 22 節，使
 ## 9. 範圍的限界
 
 - 只有文字 loader；依賴追蹤只用測試用的 loader 驗。第一個真正的使用者（模型引用貼圖）在產品搬回或 SDL 那批。
-- 今天沒有正式的執行器：gyo2 上還沒有 threads 的 `WorkerPool`，產品自己寫接 `AssetExecutor` 的 adapter。`WorkerPool` 合進來時，把 adapter 定在一處（擁有它的單位），並加一個用真 pool 的案例（含 `Shutdown` 的兩種模式）。
+- Engine 沒有現成的執行器 adapter：threads 的 `WorkerPool` 已在 gyo2（#277），產品自己寫接 `AssetExecutor` 的 adapter（三行，`WorkerPool::Submit` 會把工作裡的 `Submit` 排隊、停了之後不收，合乎執行器的契約）。用真 pool 的案例是 `scenario: threads' WorkerPool behind an AssetExecutor loads what two Worlds request`（兩個 World、兩條執行緒）；`Shutdown` 的兩種模式由 store 層的案例擔保。要不要把 adapter 定在 Engine 的一個單位，會加一條依賴 threads 的邊，交主會話決定（宣告第 15 節）。
 - 預算延後：沒有載入時間、記憶體、catalog 讀取時間、雜湊成本、等鎖時間的判定。
 - World 層的真執行緒：經 Product 入口今天不能兩條執行緒各跑一個 World，由 store 層的真執行緒案例擔保。
 - 回滾重跑步裡的 `Load` 與「同一幀的重跑步與新步看到同一份」沒有專門的案例。

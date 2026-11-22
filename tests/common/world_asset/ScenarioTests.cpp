@@ -5,6 +5,11 @@
 // run when the test says (X-5, the store's controlled executor).
 #include "WorldAssetSupport.hpp"
 
+#include <chrono>
+#include <thread>
+
+#include "engine/threads/WorkerPool.hpp"
+
 namespace WorldAssetTest {
 namespace {
 
@@ -296,6 +301,63 @@ TEST_CASE("scenario: two Worlds of a Product share one store: one read, one valu
     REQUIRE(inB != nullptr);
     CHECK_MESSAGE(inA == inB, "[aw-one-store-shared] the two Worlds read different objects for one id");
     CHECK(StoreOf(p).Counts().fileReads == 1);
+}
+
+// threads' WorkerPool behind an AssetExecutor: the adapter a product writes (AssetOptions::executor; merge review
+// S3). WorkerPool::Submit queues a job submitted from inside a job, so a finished job submitting its dependencies
+// does not recurse; after Stop it takes nothing, which the executor contract allows. The store's jobs hold the
+// store's state, so a job the pool runs after the Product is gone returns at once.
+class WorkerPoolExecutor final : public Asset::AssetExecutor {
+public:
+    explicit WorkerPoolExecutor(GYO::Engine::Threads::WorkerPool& pool) : pool_(pool) {}
+    void Submit(Job job) override { (void)pool_.Submit(std::move(job)); }
+
+private:
+    GYO::Engine::Threads::WorkerPool& pool_;
+};
+
+TEST_CASE("scenario: threads' WorkerPool behind an AssetExecutor loads what two Worlds request") {
+    Fresh fresh;
+    Content content("worker-pool");
+    content.Add("a.one", "text", "a/one.txt", "one")
+        .Add("a.two", "text", "a/two.txt", "two")
+        .Add("a.three", "text", "a/three.txt", "three")
+        .Write();
+    auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "asset-test", .threadCount = 2});
+    REQUIRE(started.has_value());
+    GYO::Engine::Threads::WorkerPool pool = std::move(started).value();
+    WorkerPoolExecutor executor(pool);
+    {
+        O::ProductDescription description;
+        description.name = "worker-pool";
+        WA::AssetOptions options;
+        options.contentRoot = content.Root();
+        options.executor = &executor;
+        description.options.Set(options);
+        description.worlds.push_back(AuthorWorld("A"));
+        description.worlds.push_back(AuthorWorld("B"));
+        auto product = Build(std::move(description), Units());
+        O::Product& p = *product;
+        OrdersOf(p, "A").load = {"a.one", "a.two"};
+        OrdersOf(p, "B").load = {"a.two", "a.three"};
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        bool ready = false;
+        while (!ready && std::chrono::steady_clock::now() < deadline) {
+            Frame(p);
+            ready = ViewOf(p, "A").Ready(Group(HeldOf(p, "A").handles)).complete &&
+                    ViewOf(p, "B").Ready(Group(HeldOf(p, "B").handles)).complete;
+            if (!ready) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE_MESSAGE(ready, "the pool did not load the four requests within 10 s");
+        REQUIRE(HeldOf(p, "A").handles.size() == 2);
+        REQUIRE(HeldOf(p, "B").handles.size() == 2);
+        CHECK(ValueOf(ViewOf(p, "A"), HeldOf(p, "A").handles[0]) == "one");
+        CHECK(ValueOf(ViewOf(p, "A"), HeldOf(p, "A").handles[1]) == "two");
+        CHECK(ValueOf(ViewOf(p, "B"), HeldOf(p, "B").handles[0]) == "two");
+        CHECK(ValueOf(ViewOf(p, "B"), HeldOf(p, "B").handles[1]) == "three");
+        CHECK(StoreOf(p).Counts().fileReads == 3);
+    }
+    pool.Stop(GYO::Engine::Threads::WorkerPool::StopMode::Drain);
 }
 
 }  // namespace WorldAssetTest

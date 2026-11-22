@@ -15,10 +15,10 @@
 //   from inside a job and run it after, never recursively.
 // - The store calls Submit with no lock of its own held.
 //
-// There is no Engine executor today: threads' WorkerPool is not on this branch
-// yet, so a product writes its own adapter behind this interface (the tests use
-// a controlled executor and a small pool of their own). When WorkerPool comes,
-// the adapter goes in one place and a case with the real pool is added. The
+// The Engine has no ready-made adapter: a product puts threads' WorkerPool
+// behind this interface itself (a few lines: WorkerPool::Submit queues a
+// Submit made from inside a job and takes nothing after Stop, as this contract
+// asks; tests/common/world_asset/ScenarioTests.cpp has one). The
 // store's Shutdown has two modes: drain (wait for every queued job) or discard
 // (count what did not finish as discarded); both wait for jobs already in a
 // loader. A store given no executor fails every request that needs a job with
