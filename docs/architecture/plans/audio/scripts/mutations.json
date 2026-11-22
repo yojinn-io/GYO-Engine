@@ -197,16 +197,30 @@
     },
     {
       "id": "au-review-handoff-rebound",
-      "what": "A thread binding is put back into Submitter::Play (the first thread to play through a submitter claims it, another thread then asserts): the hand-over contract (one user at a time, ordered by happens-before) no longer holds. Only the hand-over cases catch it; the removed owner mutants caught the opposite (a binding that was not checked).",
+      "what": "A thread binding is put back into Submitter::Enqueue, which Play, Stop, StopAll and UnloadClip share (the first thread to queue through a submitter claims it, another thread then asserts): the hand-over contract (one user at a time, ordered by happens-before) no longer holds. Only the three hand-over cases catch it; the removed owner mutants caught the opposite (a binding that was not checked).",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    GYO_ASSERT(IsValidGain(request.gainLeft) && IsValidGain(request.gainRight));\n\n    slot_->submitted.fetch_add(1, std::memory_order_relaxed);\n",
-      "replace": "    GYO_ASSERT(IsValidGain(request.gainLeft) && IsValidGain(request.gainRight));\n    {\n        static std::atomic<const void*> claimed{nullptr};\n        thread_local const void* mine = nullptr;\n        const void* expected = nullptr;\n        if (claimed.compare_exchange_strong(expected, slot_)) mine = slot_;\n        else if (expected == slot_) GYO_ASSERT(mine == slot_);\n    }\n\n    slot_->submitted.fetch_add(1, std::memory_order_relaxed);\n",
+      "find": "    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);\n",
+      "replace": "    {\n        static std::atomic<const void*> claimed{nullptr};\n        thread_local const void* mine = nullptr;\n        const void* expected = nullptr;\n        if (claimed.compare_exchange_strong(expected, slot_)) mine = slot_;\n        else if (expected == slot_) GYO_ASSERT(mine == slot_);\n    }\n    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);\n",
       "target": "gyo_audio_tests",
-      "cases": "*plays on another thread after a hand-over*",
+      "cases": "*plays on another thread after a hand-over*,*stops on another thread after a hand-over*,*loads on one thread and plays and unloads on another after a hand-over*",
       "expect": "GYO_ASSERT failed: mine == slot_",
       "guards": [
         "audio-review-declaration 判定 2",
-        "audio Contract Submitter"
+        "audio 第 3 節"
+      ]
+    },
+    {
+      "id": "au-review-unload-counts-before-assert",
+      "what": "UnloadClip counts the request before its Programmer Error checks, so a misused unload is counted although it asserts (the Contract: Programmer Errors are asserted before anything is counted). Only the moved count in 'misused runtime clips' catches it.",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "    GYO_ASSERT(IsRuntimeClip(clip));\n",
+      "replace": "    slot_->unloadsSubmitted.fetch_add(1, std::memory_order_relaxed);\n    GYO_ASSERT(IsRuntimeClip(clip));\n",
+      "target": "gyo_audio_tests",
+      "cases": "*misused runtime clips*",
+      "expect": "CHECK\\( mixer->Stats\\(\\).unloadsSubmitted == 1 \\) is NOT correct",
+      "guards": [
+        "audio 第 3 節",
+        "audio DI 11"
       ]
     },
     {
@@ -399,7 +413,7 @@
       "cases": "*foreign or never-issued handle*",
       "expect": "expected GYO_ASSERT to fail",
       "guards": [
-        "audio DI 11"
+        "audio 第 3 節"
       ]
     },
     {

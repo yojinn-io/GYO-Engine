@@ -4,7 +4,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <optional>
 #include <set>
 #include <thread>
 #include <vector>
@@ -17,6 +16,9 @@ using namespace GYO::Engine::Audio;
 using namespace std::chrono_literals;
 using GYO::Engine::Time::Duration;
 using GYO::Engine::Time::TimePoint;
+
+// Error values are not renumbered when one is removed (4 was DeviceUnavailable, v8-arch-gyo2-audio-review).
+static_assert(static_cast<int>(AudioErrorCode::NoClipSlot) == 5);
 
 namespace {
 
@@ -314,20 +316,21 @@ TEST_CASE("Audio Submitter treats misused runtime clips as Programmer Errors") {
 
 TEST_CASE("Audio Submitter loads on one thread and plays and unloads on another after a hand-over") {
     // One user at a time; the join orders the first thread's calls before the second's.
-    Rig rig = MakeRig(1); // one slot: the reload below succeeds only once the slot is handed back and freed
-    std::optional<ClipId> loaded;
-    std::thread other([&] {
+    // One slot: the second side's LoadClip succeeds only once the first side's clip was handed back, and frees its
+    // samples on the second side's thread. Each side calls LoadClip, Play and UnloadClip.
+    Rig rig = MakeRig(1);
+    auto use = [&] {
         auto clip = Load(rig.submitter, 10, 1);
-        if (clip) loaded = *clip;
-    });
+        REQUIRE(clip.has_value());
+        CHECK(rig.submitter.Play({*clip, kAnchor}));
+        CHECK(rig.submitter.UnloadClip(*clip));
+        static_cast<void>(RenderBlock(rig.mixer, 48)); // the voice ends and the slot is handed back
+    };
+    std::thread other(use);
     other.join();
-    REQUIRE(loaded.has_value());
-    CHECK(rig.submitter.Play({*loaded, kAnchor}));
-    CHECK(rig.submitter.UnloadClip(*loaded));
-    static_cast<void>(RenderBlock(rig.mixer, 48));
-    CHECK(Load(rig.submitter, 10, 1).has_value()); // frees and reuses the handed-back slot on this thread
+    use();
     const auto stats = rig.mixer.Stats();
-    CHECK(stats.unloadsSubmitted == 1);
+    CHECK(stats.unloadsSubmitted == 2);
     CHECK(stats.unloadsSubmitted == stats.unloadsTaken + stats.unloadsDroppedQueueFull);
     CHECK(stats.submitted == stats.playedOnTime + stats.playedLate + stats.droppedQueueFull + stats.droppedNoVoice);
 }

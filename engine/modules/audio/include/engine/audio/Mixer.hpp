@@ -38,7 +38,9 @@ struct MixerConfig final {
 // One sound, played once. The consumer turns direction and distance into gains.
 struct PlayRequest final {
     ClipId clip;
-    Time::TimePoint at{};    // the Engine time the sound belongs to
+    // The moment the sound belongs to, on the Engine time base (Time::MonotonicClock),
+    // never a scalable game time (Design Invariant 3).
+    Time::TimePoint at{};
     float gainLeft = 1.0f;   // 0 to kMaxGain
     float gainRight = 1.0f;
 };
@@ -105,7 +107,7 @@ class Mixer;
 // not bound to a thread: one user at a time calls Play, Stop, StopAll, LoadClip
 // and UnloadClip, and when another thread takes it over, the last call of the
 // one before must happen-before the first call of the next (a join, the same
-// mutex unlocked and locked, the runner's hand-over of a World); calls merely
+// mutex unlocked and locked, any hand-over that synchronizes); calls merely
 // apart in time, without such an order, are a data race. It shares the mixer's
 // state, so it may outlive the Mixer (its plays are then never rendered).
 class Submitter final {
@@ -179,7 +181,7 @@ public:
 
     // Any thread, at any time. TooManySubmitters once maxSubmitters have been
     // created over the mixer's life: a destroyed Submitter does not give its
-    // queue back, so create one per producer thread and keep it.
+    // queue back, so create one per producer and keep it.
     [[nodiscard]] Base::Result<Submitter, AudioError> CreateSubmitter();
     // Any thread. A gain outside [0, kMaxGain] is a Programmer Error.
     void SetMasterGain(float gain);
@@ -189,8 +191,8 @@ public:
     // Error this cannot detect.
     [[nodiscard]] Playhead PlayheadOf(SoundHandle sound) const noexcept;
 
-    // The audio thread, once per block. anchor is the Engine time read once at
-    // the start of this block. Every queued request is taken in its queue's
+    // The audio thread, once per block. anchor is the Engine time base read once
+    // at the start of this block, the same time base as the requests' times. Every queued request is taken in its queue's
     // order (a stop after the plays it names) and a play starts at
     //   renderedFrames + floor((at - anchor) * 48000 + 1/2) + delayFrames,
     // with at - anchor clamped to one hour either way and delayFrames the

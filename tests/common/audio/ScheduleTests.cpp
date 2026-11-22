@@ -388,7 +388,7 @@ TEST_CASE("Audio Submitter plays on another thread after a hand-over") {
     SoundHandle first;
     std::thread other([&] { first = rig.submitter.Play({rig.impulse, kAnchor}); });
     other.join();
-    const SoundHandle second = rig.submitter.Play({rig.impulse, kAnchor});
+    const SoundHandle second = rig.submitter.Play({rig.impulse, kAnchor}); // the handle sequence carries over
     CHECK(first);
     CHECK(second);
     CHECK(second.value == first.value + 1);

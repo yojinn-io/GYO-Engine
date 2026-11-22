@@ -377,15 +377,20 @@ TEST_CASE("Audio Submitter stops on another thread after a hand-over") {
     REQUIRE(mixer.has_value());
     auto submitter = mixer->CreateSubmitter();
     REQUIRE(submitter.has_value());
-    SoundHandle sound;
-    std::thread other([&] { sound = submitter->Play({clip, kAnchor}); });
+    // Each side calls every member that queues a request: Play, Stop and StopAll.
+    auto use = [&] {
+        const SoundHandle sound = submitter->Play({clip, kAnchor});
+        REQUIRE(sound);
+        CHECK(submitter->Stop(sound, kAnchor));
+        CHECK(submitter->StopAll(kAnchor));
+    };
+    std::thread other(use);
     other.join();
-    REQUIRE(sound);
-    CHECK(submitter->Stop(sound, kAnchor));
-    CHECK(submitter->StopAll(kAnchor));
+    use();
     static_cast<void>(RenderBlock(*mixer, 4, kAnchor));
     const auto stats = mixer->Stats();
-    CHECK(stats.stopsSubmitted == 2);
+    CHECK(stats.submitted == 2);
+    CHECK(stats.stopsSubmitted == 4);
     CHECK(stats.stopsSubmitted == stats.stopsMatched + stats.stopsUnmatched + stats.stopsDroppedQueueFull);
 }
 
