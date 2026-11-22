@@ -2351,9 +2351,12 @@
     {
       "id": "we-j12-fetch-side-effect",
       "what": "J-12 (B.4 point 7): a Fetch with a side effect (ResMut advances the call's stamp) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts)",
+      "guards": [
+        "kernel DI-KS 1"
+      ],
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
-      "find": "stamp_(call.stamp) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
-      "replace": "stamp_(call.stamp++) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
+      "find": "stamp_(call.stamp), lastRun_(call.lastRun) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
+      "replace": "stamp_(call.stamp++), lastRun_(call.lastRun) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
       "target": "gyo_kernel_tests",
       "cases": "J-12:*",
       "expect": "world\\.Stamps<Tag>\\(1\\)\\->second\\ ==\\ 1"
@@ -7854,6 +7857,84 @@
       "target": "gyo_kernel_tests",
       "cases": "restore: Restore puts back what it is given*",
       "expect": "\\[ks\\-restore\\-no\\-initial\\-value\\]"
+    },
+    {
+      "id": "rc-changed-at-last-run",
+      "what": "Changed() also true when the write took the mount's last-run stamp (>= for >): a ResMut mount sees its own last write again, and a Res mount at a Run's first step sees the Host's write made in Ready (which took that step's stamp) twice. Only it catches the strict comparison",
+      "guards": [
+        "kernel DI-KS 28"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "return slot.value.has_value() && slot.changed > lastRun;",
+      "replace": "return slot.value.has_value() && slot.changed >= lastRun;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 28:*",
+      "expect": "(?=[\\s\\S]*(?:\\[rc\\-own\\-write\\]))[\\s\\S]*(?:\\[rc\\-first\\-step\\])"
+    },
+    {
+      "id": "rc-changed-ignores-present",
+      "what": "Changed() true for an absent resource whose stamp moved when it was taken out. Only it catches the presence check",
+      "guards": [
+        "kernel DI-KS 28"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "return slot.value.has_value() && slot.changed > lastRun;",
+      "replace": "return slot.changed > lastRun;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 28:*",
+      "expect": "\\[rc\\-absent\\]"
+    },
+    {
+      "id": "rc-res-last-run-zero",
+      "what": "Res compares with 0 instead of the mount's last run: every run sees a resource written once. Only it catches the base Res takes from the call",
+      "guards": [
+        "kernel DI-KS 28"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "lastRun_(call.lastRun) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"Res\");",
+      "replace": "lastRun_(0) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"Res\");",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 28:*",
+      "expect": "\\[rc\\-first\\-run\\]"
+    },
+    {
+      "id": "rc-resmut-base-is-stamp",
+      "what": "ResMut compares with the call's own stamp instead of the mount's last run: its own write in the call is not seen. Only it catches the base ResMut passes",
+      "guards": [
+        "kernel DI-KS 28"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        Check(\"ResMut\");\n        return Detail::ResourceChangedSince(Slot(), lastRun_);",
+      "replace": "        Check(\"ResMut\");\n        return Detail::ResourceChangedSince(Slot(), stamp_);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 28:*",
+      "expect": "\\[rc\\-own\\-write\\]"
+    },
+    {
+      "id": "rc-settings-unstamped",
+      "what": "the World's constructor puts KernelSettings in with stamp 0: a mount's first run does not see it changed. Only it catches the constructor's stamp",
+      "guards": [
+        "kernel DI-KS 28"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "    settings.changed = WriteStamp();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 28:*",
+      "expect": "\\[rc\\-settings\\]"
+    },
+    {
+      "id": "rc-host-resourcemut-unstamped",
+      "what": "World::ResourceMut does not mark the changed stamp: a Host write through the pointer is not seen. Only it catches this write path (no other kernel test reads the stamp ResourceMut sets)",
+      "guards": [
+        "kernel DI-KS 28"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/World.hpp",
+      "find": "        if (!slot.value) return nullptr;\n        slot.changed = WriteStamp();",
+      "replace": "        if (!slot.value) return nullptr;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 28:*",
+      "expect": "\\[rc\\-host\\-resourcemut\\]"
     }
   ]
 }

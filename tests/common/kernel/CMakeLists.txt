@@ -28,6 +28,7 @@ set(GYO_KERNEL_TEST_SOURCES
     TraceSpanTests.cpp
     HashTests.cpp
     RestoreTests.cpp
+    ResourceChangedTests.cpp
 )
 function(gyo_kernel_test_executable name)
     add_executable(${name} ${ARGN})
