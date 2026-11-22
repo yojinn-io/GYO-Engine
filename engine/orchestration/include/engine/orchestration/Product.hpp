@@ -185,7 +185,7 @@ private:
     // One World's round of a RunFrame (world-gen declaration 5.1): the generation's step before (a generating World
     // is written {true, false}), the frame list, the generation's judgement after (nobody held: {false, false}).
     // The entry point that will run one World's round on its own (the exchange declaration's lent World) shares it.
-    ::GYO::Engine::Base::Result<void, OrchestrationError> RunRound(WorldSlot& slot);
+    Base::Result<void, OrchestrationError> RunRound(WorldSlot& slot);
     // The refusal of an entry point while a World is broken (nullopt: every World is healthy).
     // A World found interrupted without a recorded failure (run outside the Product) is recorded here.
     std::optional<OrchestrationError> Ended();

@@ -72,6 +72,10 @@
 
 使用者 2026-11-22（約 20:17 JST）在本卡：「照建議，全部核准」——核准 [合併前核准頁](../architecture/target/v2/world-gen-merge-approval.zh-Hant.md)（f6eaec1f）的三件：守衛搬家、和宣告的偏差、Design Invariants 的最終文字。合併要使用者另外說「合併」。
 
+## 合併前跟上 #271（N13 短名）
+
+使用者說「合併」之後，`gyo2` 已併入 #271（b5083915）。merge 跟上，衝突只有 README 索引一處；本批新寫的程式只有 `Product.hpp` 的 `RunRound` 宣告還用全名，照 N13 改成 `Base::Result`。所有突變清單的 find 逐一檢查仍各命中一次；`ctest -L "cpu|shader"` 167/167（主 checkout `build/evidence/gyo2-world-gen/impl/ctest-after-271.log`）。
+
 ## 合併前（未完成）
 
 - CI L1 三平台（PR 上）。
