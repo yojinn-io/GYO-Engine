@@ -607,11 +607,16 @@ TEST_CASE("behaviour: the closed type: no construction from a value, no default 
     CHECK(std::is_nothrow_move_constructible_v<M>);
     CHECK(std::equality_comparable<M>);
     CHECK(std::is_default_constructible_v<SM::StateMachineRequest<Flow>>);
-    // A request's == looks at the pending request only, not the overwritten count (a diagnostic).
-    SM::StateMachineRequest<Flow> once;
-    once.Request(Flow::InLevel);
-    SM::StateMachineRequest<Flow> twice;
-    twice.Request(Flow::MainMenu);
-    twice.Request(Flow::InLevel);
-    CHECK(once == twice);
+}
+
+TEST_CASE("behaviour: an absent child is the same whatever value it had") {
+    auto paused = InLevel();
+    Req<Pause>(*paused).Request(Pause::Paused);
+    Frame(*paused);
+    Req<Flow>(*paused).Request(Flow::MainMenu);
+    Frame(*paused);
+    auto running = InLevel();
+    Req<Flow>(*running).Request(Flow::MainMenu);
+    Frame(*running);
+    CHECK(Mach<Pause>(*paused) == Mach<Pause>(*running));
 }

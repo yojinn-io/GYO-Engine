@@ -28,7 +28,7 @@ Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。宣
 
 ## 驗證與經過
 
-- **判定 1（行為）**：`state_machine.behaviour` 28 個案例。這個 target 只連 `GYO::StateMachine`，它編得過也是 DI 8 的守衛之一。
+- **判定 1（行為）**：`state_machine.behaviour` 29 個案例（設計審查後加 1）。這個 target 只連 `GYO::StateMachine`，它編得過也是 DI 8 的守衛之一。
 - **組合的案例**：`state_machine.combination` 8 個。
   - 進入裡生成的實體同一幀看得到。
   - 登記兩次是 R-E2。
@@ -38,7 +38,7 @@ Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。宣
   - 進入那張的讀者：後果 3。
   - 條件擋住的讀者：後果 1、2，照事件游標重評的結論固定現況。
   - (c) 區「兩端同規則」：伺服器權威＋狀態回滾，不報 AU-E4／E6／E9；值換了 digest 跟著變；回滾退回 6 步重跑時「進入下雨」再跑一次，`Resimulation` 擋住的音效沒有重發。
-- **判定 2（檢出力）**：突變清單 [state_machine_mutations.json](../architecture/target/v2/scripts/state_machine_mutations.json)，64 個，64 killed。
+- **判定 2（檢出力）**：突變清單 [state_machine_mutations.json](../architecture/target/v2/scripts/state_machine_mutations.json)，最後 63 個，全部 killed（設計審查後退 2 加 1，見〈設計審查〉）。
   - 第一輪 48 個：47 killed。`sm-registration-no-child-values` 是 wrong_failure：缺子的值時前面的案例先斷言中止。把 cases 縮成它自己的案例後 killed（README 第 1 條）。
   - 清單交 Fable 5.2／high 做敵對式檢查（作者 Opus 5.5）：契約要補 18、誤用不補 5、細節不補 9。
   - 「契約要補」的處理：
@@ -60,12 +60,31 @@ Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。宣
 
 ## 設計審查
 
-（合併前，Fable／high，唯讀；結果寫在本節。）
+Fable 5.2／high，唯讀，對象 d614a34c；報告 `design-review-fable.md`。
+
+**結論**：可以合併，沒有要重做的地方。職責與依賴沒有問題（只用 Kernel 與編排層的公開標頭，兩者沒有一行提到狀態機，連結集有釘）；套用的順序、第一次套用、子狀態、`keepOnParentReenter`、`SetInitial`、預設插法、條件、名字都照宣告；沒有替誤用加的守衛或突變。
+
+**建議改 6 條，全部已改**：
+- `StateMachineRequest` 的 `==` 改回比全部欄位：Kernel 的回滾還原「相等就不寫回」，只比待處理的要求時計數不會還原。拿掉 `once == twice` 那句與突變 `sm-request-eq-counter`。
+- D9：`Leave` 把值重設成初始值，不存在的子不留之前的值（`Hash.hpp` 不雜湊殘留的原則；Bevy 是把 `State<S>` 整個移掉）。加案例「an absent child is the same whatever value it had」與突變 `sm-leave-keeps-value`；`sm-child-reappears-last-value` 因此變成等價，退掉。
+- M3：判成誤用，程式不改；DI 1 的字面寫明「`Detail` 之外」，「沒有公開的預設建構」的理由改成「作者只能放回存過的值、造不出沒存過的值」。
+- 索引改放〈給作者看的〉與〈計畫與批次的紀錄〉。
+- 條文頁：表補 `Pending()`；(c) 區的例子用 `ApplySystemName`／`EnterScheduleName`；宣告第 4 節第 4、5 點寫進第 3 節；特性的成員名和宣告字面的差別寫明。
+- 拿掉沒用到的 `Detail::kAlwaysFalse`。
+
+改後重跑相關的突變：`sm-leave-keeps-value`、`sm-overwritten-reset-on-apply`、`sm-child-not-marked-absent` 3/3 killed（`mutations-run4-review.txt`）。突變清單共 63 個。
+
+**要使用者定的 1 條**：判定 2 有兩列沒照宣告加突變（「`SetInitial` 以外的改值成員」、「子的待用值用完沒清」），是放寬事前宣告的判定。審查者的看法：兩列都接受。合併前核准時交使用者。
+
+**記下交之後的**：
+- 網路那一批：計數與自訂比較、`Access` 的形狀要一起看。
+- 讀檔卡：`SetInitial` 不驗值，說明頁寫「先用 `NameOf` 驗」；「存了再讀摘要相同」靠 D9 的改法。
+- 第 15 節撞號：後合併的一方改號。
+- 父的要求不合法時子的要求沒被取走，World 已中斷，沒有後果。
+- MSVC 能不能編樣板參數的 lambda，看 L1。
 
 ## 交給設計審查與之後的
 
-- **M3**：`Detail::Access<S>` 是公開的 struct，作者叫得到 `Enter`、`Root`。這算誤用，但 DI 1「沒有公開的預設建構」的理由在這條路上不成立。
-- **D9**：`Leave` 不清 `value_`，不存在的子帶著上次的值進 World 摘要與回滾比對。網路 Module 那一批（伺服器覆蓋）要看。
 - `RequestSilent` 與 Request／RequestSilent 兩個套用函式：網路宣告 Q8 (b)，狀態機先合併時由網路卡在它的第 2 步加。
 
 ## 證據
@@ -73,5 +92,6 @@ Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。宣
 這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-state-machine-r8/`（git 不追蹤）：
 - 宣告的檢查報告：`declaration-check-r8-fable.md`。
 - 交叉比對：`crosscheck-network-adoption.md`、`crosscheck-initial-load.md`、`crosscheck-message-retention.md`。
-- 突變：`mutation-check-fable.md`（清單的敵對式檢查）、`mutations-run1.txt`、`mutations-run2-registration.txt`、`mutations-run3.txt`。
+- 突變：`mutation-check-fable.md`（清單的敵對式檢查）、`mutations-run1.txt`、`mutations-run2-registration.txt`、`mutations-run3.txt`、`mutations-run4-review.txt`。
+- 設計審查：`design-review-fable.md`。
 - 建置與測試：`build-full.txt`、`ctest-full.txt`。

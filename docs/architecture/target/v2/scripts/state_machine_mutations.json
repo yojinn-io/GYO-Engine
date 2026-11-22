@@ -780,20 +780,6 @@
    "expect": "CHECK(?:_FALSE)?\\( apply\\->access\\.annotatedWrites\\.size\\(\\)\\ ==\\ 6 \\)"
   },
   {
-   "id": "sm-request-eq-counter",
-   "what": "A request's == compares the overwritten count too. Only it catches == looking at the pending request only",
-   "guards": [
-    "state-machine-declaration 第 5.2 節 4",
-    "state-machine-declaration 判定 1"
-   ],
-   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
-   "find": "        return a.pending_ == b.pending_;\n",
-   "replace": "        return a.pending_ == b.pending_ && a.overwritten_ == b.overwritten_;\n",
-   "target": "gyo_state_machine_tests",
-   "cases": "behaviour:*",
-   "expect": "CHECK(?:_FALSE)?\\( once\\ ==\\ twice \\)"
-  },
-  {
    "id": "sm-child-requests-taken-each-turn",
    "what": "A child's request made during this apply is taken when the child's turn comes and applied in the same apply. Only it catches 'a request made during this apply waits' for children",
    "guards": [
@@ -806,20 +792,6 @@
    "target": "gyo_state_machine_tests",
    "cases": "behaviour:*",
    "expect": "(?=[\\s\\S]*CHECK(?:_FALSE)?\\( Mach<Pause>\\(\\*p\\)\\.Current\\(\\)\\ ==\\ Pause::Running \\))(?=[\\s\\S]*CHECK(?:_FALSE)?\\( Mach<Inventory>\\(\\*p\\)\\.Current\\(\\)\\ ==\\ Inventory::Closed \\))[\\s\\S]*"
-  },
-  {
-   "id": "sm-child-reappears-last-value",
-   "what": "A child appearing again keeps its last value instead of its initial one. Only it catches 'each appearance starts from the initial value'",
-   "guards": [
-    "state-machine DI 5",
-    "state-machine-declaration 判定 1"
-   ],
-   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
-   "find": "        m.status_ = StateStatus::Active;\n        m.value_ = value;\n",
-   "replace": "        if (!(m.status_ == StateStatus::Absent && value == StateMachineTraits<S>::initial)) m.value_ = value;\n        m.status_ = StateStatus::Active;\n",
-   "target": "gyo_state_machine_tests",
-   "cases": "behaviour:*",
-   "expect": "(?=[\\s\\S]*TEST CASE:\\s+behaviour: children\\ leave\\ with\\ the\\ parent)[\\s\\S]*"
   },
   {
    "id": "sm-first-apply-every-time",
@@ -904,6 +876,20 @@
    "target": "gyo_state_machine_tests",
    "cases": "behaviour: the first values are put by the registration",
    "expect": "CHECK(?:_FALSE)?\\( Mach<Pause>\\(\\*p\\)\\.Status\\(\\)\\ ==\\ SM::StateStatus::Absent \\)"
+  },
+  {
+   "id": "sm-leave-keeps-value",
+   "what": "A child that leaves keeps its last value: two absent children with different histories differ (World::Summary, the digest). Only it catches the reset on leaving; it replaces sm-child-reappears-last-value, which the reset made equivalent",
+   "guards": [
+    "state-machine DI 5",
+    "state-machine-declaration 判定 1"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/StateMachine.hpp",
+   "find": "        m.value_ = StateMachineTraits<S>::initial;\n    }\n",
+   "replace": "    }\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "CHECK\\( Mach<Pause>\\(\\*paused\\) == Mach<Pause>\\(\\*running\\) \\)"
   }
  ]
 }

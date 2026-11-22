@@ -48,9 +48,6 @@ struct StateMachineTraits;
 
 namespace Detail {
 
-template <class T>
-inline constexpr bool kAlwaysFalse = false;
-
 template <class S>
 concept HasTable = std::is_enum_v<S> && requires {
     { StateMachineTraits<S>::name } -> std::convertible_to<std::string_view>;

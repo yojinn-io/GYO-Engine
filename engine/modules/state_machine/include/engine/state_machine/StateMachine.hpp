@@ -4,10 +4,11 @@
 // section 5.2 rows 3 and 4; Design Invariants 1 and 4 in docs/architecture/target/v2/state-machine.zh-Hant.md).
 //
 // StateMachine<S> holds the current value. Once the state is entered, an author's code changes it only through a
-// request (StateMachineRequest<S>), applied by the state's apply System: the type has no constructor from a value
-// of S and no member that sets a value, apart from SetInitial before the first apply (DI 1; the user's "use and
-// patch" of Bevy's State, which a public State::new lets anyone overwrite). Copy, move and == are public: rollback
-// and CarryOver put back a value saved before.
+// request (StateMachineRequest<S>), applied by the state's apply System: outside the Module's Detail, the type has
+// no constructor from a value of S, no public default constructor and no member that sets a value, apart from
+// SetInitial before the first apply (DI 1; the user's "use and patch" of Bevy's State, which a public State::new lets
+// anyone overwrite). Copy, move and == are public: rollback and CarryOver put back a value saved before; an author
+// can put back a saved value but cannot make one that was never saved.
 
 #include "engine/base/Assert.hpp"
 #include "engine/kernel/Hash.hpp"
@@ -93,11 +94,9 @@ public:
     // rest of the value; declaration section 10).
     [[nodiscard]] std::uint64_t Overwritten() const noexcept { return overwritten_; }
 
-    // The pending request only: the count is a diagnostic both ends need not share (declaration 5.2 row 4), and a
-    // rollback compare must not see a mismatch in it.
-    friend bool operator==(const StateMachineRequest& a, const StateMachineRequest& b) noexcept {
-        return a.pending_ == b.pending_;
-    }
+    // Every field: a rollback puts the value back only when it differs (RestoreSet::Resource), so the count must
+    // count. The hash leaves the count out: a diagnostic, not part of the game's state (declaration 5.2 row 4).
+    friend bool operator==(const StateMachineRequest&, const StateMachineRequest&) = default;
     friend void HashValue(Kernel::Hasher& h, const StateMachineRequest& v) { HashValue(h, v.pending_); }
 
 private:
@@ -124,7 +123,11 @@ struct Access {
         m.status_ = StateStatus::Active;
         m.value_ = value;
     }
-    static void Leave(StateMachine<S>& m) noexcept { m.status_ = StateStatus::Absent; }
+    // An absent child keeps nothing of where it was: the same whatever its history (World::Summary, the digest).
+    static void Leave(StateMachine<S>& m) noexcept {
+        m.status_ = StateStatus::Absent;
+        m.value_ = StateMachineTraits<S>::initial;
+    }
     // The first apply has used (or dropped) the initial value given with SetInitial.
     static void MarkApplied(StateMachine<S>& m) noexcept {
         m.applied_ = true;

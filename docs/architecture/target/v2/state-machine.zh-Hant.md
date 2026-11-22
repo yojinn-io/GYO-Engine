@@ -54,9 +54,9 @@ r.AddSystem<&MovePlayer>({.name = "MovePlayer", .mounts = {{.schedule = "Main", 
 
 | 東西 | 意思 |
 |---|---|
-| `StateMachineTraits<S>` | 作者對自己的列舉特化：`name`、`values`、`initial`；父另列 `SubStates`（登記順序）；子另寫 `Parent`、`parentValue`、`keepOnParentReenter`（選填，預設 false）。只做一層；寫錯編不過 |
+| `StateMachineTraits<S>` | 作者對自己的列舉特化（成員名照命名規範用小駝峰；宣告寫的 `kParentValue`、`KeepOnParentReenter` 在程式裡是 `parentValue`、`keepOnParentReenter`）：`name`、`values`、`initial`；父另列 `SubStates`（登記順序）；子另寫 `Parent`、`parentValue`、`keepOnParentReenter`（選填，預設 false）。只做一層；寫錯編不過 |
 | `StateMachine<S>` | 現在的值：`Status()`（`NotEntered`／`Absent`／`Active`）、`Current()`；`SetInitial(值)` 只在第一次套用之前有用（之後斷言） |
-| `StateMachineRequest<S>` | `Request(值)`：下一次套用換到那個值（換成同一個值也跑離開與進入）；`Overwritten()`：被蓋掉的要求的累計數 |
+| `StateMachineRequest<S>` | `Request(值)`：下一次套用換到那個值（換成同一個值也跑離開與進入）；`Pending()`：待處理的要求；`Overwritten()`：被蓋掉的要求的累計數。`==` 比全部欄位（回滾「相等就不寫回」靠它）；雜湊不收計數 |
 | `RegisterStateMachine<S>(setup, options)` | 登記父與每個子的兩種 Resource、每個值一張進入與離開的 schedule（各一個 stage `Update`）、自己的 stage `<S>.Apply` 與套用的 System；加一個準備函式放第一個值。`options`：`schedule`／`anchor`／`place`（預設 `Main`、`PreUpdate`、之後）、套用的 System 的 `conditions` 與 `sets` |
 | `InState<S, V>()`、`NotInState<S, V>()` | run 條件；還沒進入、不存在時都是否 |
 | 名字 | `StateMachine.<S>`、`StateMachineRequest.<S>`、`ApplyStateMachine.<S>`、`<S>.Apply`、`<S>.Enter.<值>`、`<S>.Exit.<值>`、`InState.<S>.<值>`、`NotInState.<S>.<值>` |
@@ -64,7 +64,7 @@ r.AddSystem<&MovePlayer>({.name = "MovePlayer", .mounts = {{.schedule = "Main", 
 ## Design Invariants
 
 <a id="sm-di-1"></a>
-**DI 1 封閉的型別**：一種狀態進入之後，作者的程式只能經要求改它的值：`StateMachine<S>` 沒有從 `S` 的值建構、沒有公開的預設建構、沒有 `SetInitial` 以外的改值成員，`SetInitial` 只在第一次套用之前有用；複製、搬移、比較公開（回滾與 `CarryOver` 放回的是之前存下的值）。守衛：`behaviour: the closed type…`；突變 `sm-constructible-from-value`、`sm-default-constructible`。「沒有公開的預設建構」是宣告沒寫明、實作補的（公開的話作者能把狀態蓋回「還沒進入」，重跑初始的進入；實作）。
+**DI 1 封閉的型別**：一種狀態進入之後，作者的程式只能經要求改它的值：在這個 Module 的 `Detail` 之外，`StateMachine<S>` 沒有從 `S` 的值建構、沒有公開的預設建構、沒有 `SetInitial` 以外的改值成員，`SetInitial` 只在第一次套用之前有用；複製、搬移、比較公開（回滾與 `CarryOver` 放回的是之前存下的值）。作者能放回存過的值，造不出沒存過的值。`Detail` 裡的東西（`Detail::Access`）是 Module 自己用的，作者用它是誤用（命名 N13；Bevy 靠 `pub(crate)`）。守衛：`behaviour: the closed type…`；突變 `sm-constructible-from-value`、`sm-default-constructible`。「沒有公開的預設建構」是宣告沒寫明、實作補的（實作）。
 
 <a id="sm-di-2"></a>
 **DI 2 一次套用的順序**：取走要求（父與每個子一起取、一起驗；值不在名字表是 Err SM-E1，什麼都不跑）→ 子照登記的順序離開、每個一離開就記成不存在 → 父的離開（現在的值仍是舊的）→ 改值 → 父的進入 → 子照登記的順序設初始值、進入 → 子各自處理自己的要求。巢狀的 Err 往上傳，已經改的值不還原。守衛：`behaviour: changing state…`、`…children appear…`、`…children leave…`、`…two children's requests…`、`…a value not in the table…`、`…an exit or an enter failing…`。
@@ -76,7 +76,7 @@ r.AddSystem<&MovePlayer>({.name = "MovePlayer", .mounts = {{.schedule = "Main", 
 **DI 4 第一次套用**：套用的 System 第一次執行時，一律先進初始值（父的，再父的初始值底下的子），在遊戲初始化之後（O-1）；初始值是特性的 `initial`，或第一次套用之前用 `SetInitial` 給的；之前提出的要求留到下一次；在那之前兩種條件都是否。每個 World 各自、每次建 World 各自。套用的 System 帶的條件擋每一次套用，第一次也算。守衛：`behaviour: initial enter…`、`…a request made in game initialization…`、`…a child's request in game initialization…`、`…conditions are false before the first apply`、`…an initial value given with SetInitial…`、`…loading a save…`、`…the apply System's conditions…`、`…the first values are put by the registration`。
 
 <a id="sm-di-5"></a>
-**DI 5 子狀態**：子只在父的指定值底下存在；不存在時兩種條件都是否、對它的要求丟掉；每次重新出現從初始值開始——例外是第一次套用時作者用 `SetInitial` 給的值，只用一次（父的初始值底下不存在時丟掉；宣告第 2.2 節 (i)）；父換成同一個值時默認重設，`keepOnParentReenter` 時保留（只對同一個值）。守衛：`behaviour: children leave…`、`…a request for an absent child…`、`…the parent entered again with the same value…`、`…keepOnParentReenter…`、`…loading a save…`。
+**DI 5 子狀態**：子只在父的指定值底下存在；不存在時兩種條件都是否、對它的要求丟掉、不留之前的值（兩個經歷不同的不存在的子相等，World 摘要與 digest 相同；實作）；每次重新出現從初始值開始——例外是第一次套用時作者用 `SetInitial` 給的值，只用一次（父的初始值底下不存在時丟掉；宣告第 2.2 節 (i)）；父換成同一個值時默認重設，`keepOnParentReenter` 時保留（只對同一個值）。守衛：`behaviour: children leave…`、`…a request for an absent child…`、`…the parent entered again with the same value…`、`…keepOnParentReenter…`、`…loading a save…`、`…an absent child is the same whatever value it had`。
 
 <a id="sm-di-7"></a>
 **DI 7 同一種狀態只在一處套用**：登記函式呼叫兩次是 Kernel 的 R-E2。作者另外登記套用的函式是誤用，不守。守衛：`combination: registering one state twice…`。（DI 6 `RequestSilent` 不在這一批：宣告第 2.1 節 (d)，和網路 Module 那一批一起定；網路宣告 Q8 已定 (b)，由後合併的一方加。）
@@ -105,6 +105,8 @@ r.AddSystem<&MovePlayer>({.name = "MovePlayer", .mounts = {{.schedule = "Main", 
 
 ## 3. 寫法與要小心的
 
+- **套用的 System**：它是獨占的，和同一個 stage 的每個 System 都衝突，所以自己佔一個 stage；它用 `ExclusiveWorld<Writes<…>>` 標註父與每個子的兩種 Resource（伺服器權威策略靠這個看見它寫了什麼）。多個寫要求的 System 在同一個 stage 照登記的先後。
+- **進入裡生成的實體**：在那張進入的同步點就套用；排在套用的 System 後面的 System 同一幀看得到。
 - **掛在哪**：預設 `Main` 的 `PreUpdate` 之後（Bevy 的位置）。同一個錨點插兩棵樹時，後登記的緊貼錨點、先套用；兩棵互不相干的樹之間的先後不是承諾，要同一幀生效就自己選插入位置。
 - **遊戲初始化**：初始的進入在遊戲初始化之後，讀得到它放的設定；遊戲初始化裡 `InState`／`NotInState` 一律是否（任何 World 都還沒進狀態）。套用的 System 不要掛在遊戲初始化清單的 schedule 上。
 - **生成中**：套用的 System 預設沒有條件，第一幀就進初始值，即使 World 還在生成中——這時只帶 `InState` 的遊戲邏輯在生成中就會跑。要等生成完才進，給 `options.conditions = {Orchestration::AfterGenerating()}`。條件擋的是每一次套用：World 內重新生成期間，要求延到生成結束。
@@ -112,12 +114,12 @@ r.AddSystem<&MovePlayer>({.name = "MovePlayer", .mounts = {{.schedule = "Main", 
 - **進關卡用新 World 還是同一個 World**：兩種都行。同一個 World：「進入關卡中」裡把 `WorldGeneration` 寫回生成中；那一輪開始時不是生成中，幀尾不判定，下一幀開頭 `held` 清掉，要靠帶 `WhileGenerating()` 的 System 每幀 `Hold()` 撐到載完。新 World：`ReplaceWorld`，從初始值開始，要直接在「關卡中」就 `SetInitial`。
 - **進入／離開裡的訊息（三個後果）**：(1) 帶狀態條件的讀者進了別的狀態不再跑，但它跑過，所以拉住保留；寫滿上限後每次寫入都丟最舊、記一筆 `DroppedMessages`。(2) 它回到原狀態的那一幀，把期間累積的舊訊息一次讀到。(3) 進入那張裡的讀者第一次讀不到之前寫的，之後每次讀到上次進入以來的全部。要帶進「進入」的資料（例：選了哪一關）放 Resource；讀訊息的 System 不要帶狀態條件。事件游標重評已定案：這是作者的問題，Engine 只負責講清楚，不改 Kernel（使用者 2026-11-22，`v8-arch-gyo2-event-cursor-reeval-author-side`）；通用寫法在 [System 契約說明頁](system-contract-page.zh-Hant.md)（由事件游標重評那張卡寫）。
 - **暫停要不要停時間**：作者決定，狀態機不碰 `TimeControl`。要停：「進入暫停」寫 `TimeControl` 暫停、「離開暫停」設回。注意：把 (b) 區的暫停掛在固定步、又照這樣寫，會永遠離不開暫停（暫停時固定步不跑，套用的 System 也不跑）。
-- **(c) 區「兩端同規則」**（例：天氣）：`RegisterStateMachine<Weather>(setup, {.schedule = "FixedUpdate", .anchor = "First"})`；選了伺服器權威的產品用 `AuthorityEntry::Mark<StateMachine<Weather>>()`、`Mark<StateMachineRequest<Weather>>()`（依型別，進 digest）與 `Runs("ApplyStateMachine.Weather", {每張進入與離開})`；有回滾的 Client 用 `RollbackEntry::Resource` 登記兩種 Resource、`NestedSchedule(每張進入與離開, "FixedUpdate")`。回滾重跑那一步時轉換重跑：改世界狀態的照常重跑，只該發生一次的副作用（音效、粒子）讀 `Resimulation` 擋（別家的 `is_in_rollback`、`IsFirstTimeFullyPredictingTick`）。「權威端換、Client 採用」在網路 Module 那一批。
+- **(c) 區「兩端同規則」**（例：天氣）：`RegisterStateMachine<Weather>(setup, {.schedule = "FixedUpdate", .anchor = "First"})`；選了伺服器權威的產品用 `AuthorityEntry::Mark<StateMachine<Weather>>()`、`Mark<StateMachineRequest<Weather>>()`（依型別，進 digest）與 `Runs(ApplySystemName<Weather>(), {EnterScheduleName(Weather::Clear), ExitScheduleName(Weather::Clear), …})`（名字用函式組，不手寫字串）；有回滾的 Client 用 `RollbackEntry::Resource` 登記兩種 Resource、`NestedSchedule(每張進入與離開, "FixedUpdate")`。回滾重跑那一步時轉換重跑：改世界狀態的照常重跑，只該發生一次的副作用（音效、粒子）讀 `Resimulation` 擋（別家的 `is_in_rollback`、`IsFirstTimeFullyPredictingTick`）。「權威端換、Client 採用」在網路 Module 那一批。
 - **不擋的**：套件插的 stage 別人可以掛進來；作者自己的獨占 System 可以直接跑「進入」（現在的值不會變）；用了這些，套用的規則不保證。
 
 ## 4. 本批的限界
 
 - 三個 (b) 區的 Feature 只在一個 World 的組合下驗；模擬與畫面分兩個 World 時，暫停的要求怎麼傳是交換的資料（O-12）。
 - 「權威端換、Client 採用」、`RequestSilent`、`Change` 參數：網路 Module 那一批（網路宣告 Q8 (b)）。
-- `StateMachineRequest` 被回滾還原時，被蓋掉的計數跟著還原。`==` 與雜湊只看待處理的要求，不看計數（計數是診斷，兩端不必相同，回滾比對不該因它判成不一致；實作）。
+- `StateMachineRequest` 被回滾還原時，被蓋掉的計數跟著還原（`==` 比全部欄位）。雜湊不收計數：它是診斷，不算遊戲的狀態（宣告 5.2 第 4 列）。網路那一批若給回滾自訂的比較，要一起看計數要不要移出判定資料。
 - 效能沒有量。
