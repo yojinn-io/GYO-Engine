@@ -30,7 +30,7 @@
 
 ### 第 4 步：文件
 
-- [說明頁](../architecture/target/v2/system-contract-page.zh-Hant.md)新第 15 節「讀檔」與 15.1「存檔版本 Module」；第 13、14 節的讀檔改成指過去。
+- [說明頁](../architecture/target/v2/system-contract-page.zh-Hant.md)新第 17 節「讀檔」與 17.1「存檔版本」（gyo2 的第 15 節已是事件游標〔#278〕、第 16 節排給狀態機〔#281〕；合併時以 gyo2 當時的節號為準）；第 13、14 節的讀檔改成指過去。
 - 新頁 [save-version.zh-Hant.md](../architecture/target/v2/save-version.zh-Hant.md)：SV-1～SV-3、RC-SV1～RC-SV3（最終文字等合併前核准）。
 - `docs/architecture/README.md` 的 Module 清單加 `save_version`；`target/v2/README.md` 加本 dev_log。
 
@@ -89,6 +89,11 @@
 
 使用者 2026-11-22 在本卡：「照建議，全部核准」——核准 [合併前核准頁](../architecture/target/v2/restore-impl-merge-approval.zh-Hant.md) 的四件（SV-1～SV-3 的最終文字、太新也拒、突變 16 個超過門檻、和宣告的三處出入）。
 
+## L1
+
+- run（aa34c0e7，`<ostream>` 的修正之後）：linux-x64、macos-arm64、windows-x64 都通過。
+- 之後 merge `origin/gyo2` 6ee8d8b1（#278 事件游標）：說明頁的節號撞到（#278 的第 15 節），讀檔改成第 17 節（第 16 節排給狀態機 #281），引用處一起改；狀態機那一段改成連到第 16 節。merge 後的 L1 見 PR。
+
 ## 未結
 
-- L1 三平台的結果（PR #276 的 CI）。合併等使用者說「合併」。
+- merge 後的 L1。合併等使用者說「合併」。
