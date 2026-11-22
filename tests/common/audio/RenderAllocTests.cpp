@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <new>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -287,6 +288,48 @@ TEST_CASE("Audio Mixer hands back every voice that ends in one block") {
     CHECK(counted.frees == 0);
     const Counted call = Count([&] { CHECK(rig.submitter.Stop(SoundHandle{}, kAnchor)); });
     CHECK(call.frees == 2 * one);
+}
+
+TEST_CASE("Audio Mixer keeps a clip two plays share until the second ends") {
+    // Two plays of one clip; the caller lets go; the first ends a block before
+    // the second. Its entry coming back lets go of nothing: the second play's
+    // entry still holds the clip.
+    const std::uint64_t one = FreesOfOneClip();
+    Rig rig = MakeRig(2, 4);
+    {
+        const Clip clip = Constant(960, 300); // 2 blocks
+        REQUIRE(rig.submitter.Play({clip, kAnchor}));
+        REQUIRE(rig.submitter.Play({clip, kAnchor + Ms(10)}));
+    }
+    Counted counted;
+    auto left = RenderCounted(rig.mixer, counted);                // the first plays
+    CHECK(std::count(left.begin(), left.end(), std::int16_t{300}) == 480);
+    left = RenderCounted(rig.mixer, counted, kAnchor + Ms(10));   // both play; the first ends
+    CHECK(std::count(left.begin(), left.end(), std::int16_t{600}) == 480);
+    const Counted early = Count([&] { CHECK(rig.submitter.Stop(SoundHandle{}, kAnchor)); });
+    CHECK(early.frees == 0); // the first entry came back; the second still holds the clip
+    left = RenderCounted(rig.mixer, counted, kAnchor + Ms(20));   // the second alone
+    CHECK(counted.frees == 0);
+    CHECK(std::count(left.begin(), left.end(), std::int16_t{300}) == 480);
+    static_cast<void>(RenderCounted(rig.mixer, counted, kAnchor + Ms(30)));
+    const Counted last = Count([&] { CHECK(rig.submitter.Stop(SoundHandle{}, kAnchor)); });
+    CHECK(last.frees == one);
+}
+
+TEST_CASE("Audio Submitter lets go, on the thread it was handed to, of a clip played before the hand-over") {
+    // The audio-review hand-over contract with clips: the first thread plays and
+    // lets go of its clip; after the join the second thread's first call lets go
+    // of it, on the second thread.
+    const std::uint64_t one = FreesOfOneClip();
+    Rig rig = MakeRig(1, 1);
+    std::thread first([&] {
+        CHECK(rig.submitter.Play(PlayRequest{Constant(10, 1), kAnchor}));
+        Counted counted;
+        static_cast<void>(RenderCounted(rig.mixer, counted)); // it ends; its entry comes back
+    });
+    first.join();
+    const Counted call = Count([&] { CHECK(rig.submitter.Stop(SoundHandle{}, kAnchor)); });
+    CHECK(call.frees == one);
 }
 
 TEST_CASE("Audio Mixer does not hand a reused entry back early") {

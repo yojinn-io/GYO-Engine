@@ -20,7 +20,9 @@
 
 namespace GYO::Engine::Audio {
 
-// The rules are checked in this order and the first one broken is returned.
+// The code of the first rule broken, in the order of the Data Contract's rules
+// (audio.zh-Hant.md section 6: 1, 2, 3a, 3b, 4, 5, 6, 7, 8); the values are not
+// that order (BadFormatChunk covers rules 4 and 6).
 enum class WavLoaderCode : std::uint8_t {
     // Fewer than 12 bytes, or not "RIFF" ... "WAVE".
     NotWave = 1,

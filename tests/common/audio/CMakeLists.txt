@@ -1,6 +1,6 @@
-# The mixer's sample-domain core is tested offline, without a device: the test
-# reaches the internal VoiceMixer header (engine/modules/audio/src) on purpose, since
-# the public Mixer that wraps it arrives with v8-engine-audio-schedule.
+# The mixer is tested offline, without a device; MixerTests reaches the internal
+# VoiceMixer header (engine/modules/audio/src) on purpose, to test the sample-domain
+# core below the public Mixer.
 add_executable(gyo_audio_tests MixerTests.cpp ScheduleTests.cpp CharacterizationTests.cpp StopTests.cpp ClipTests.cpp PlayheadTests.cpp
     WavLoaderTests.cpp)
 target_include_directories(gyo_audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/engine/modules/audio/src)

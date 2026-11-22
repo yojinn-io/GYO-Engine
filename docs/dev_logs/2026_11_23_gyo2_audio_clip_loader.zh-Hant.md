@@ -13,7 +13,7 @@
 
 ### clip（宣告第 1 題 (E)）
 
-- `engine/audio/Clip.hpp`、`src/Clip.cpp`（新）：`Clip` 是共用取樣的不可變值（`shared_ptr<const vector<int16_t>>`＋快取的 `ClipView`）。`Make(span)` 複製一次，`Make(vector&&)` 不複製。規則照 `ClipValidation`，加一條 frame 數 ≤ 2^32 − 1（`ClipView::frames` 與 voice 的位置是 32 位元）。`AssetTypeName<Clip>` 是 `sound`。
+- `engine/audio/Clip.hpp`、`src/Clip.cpp`（新）：`Clip` 是共用取樣的不可變值（`shared_ptr<const Detail::ClipData>`，`ClipData` 裝取樣與聲道數，`View()` 每次現算、傳值；第一版快取了 view，設計審查 S-1 指出搬動後懸空，改回宣告的形）。`Make(span)` 複製一次，`Make(vector&&)` 不複製。規則照 `ClipValidation`，加一條 frame 數 ≤ 2^32 − 1（`ClipView::frames` 與 voice 的位置是 32 位元）。`AssetTypeName<Clip>` 是 `sound`。
 - 拿掉 `ClipBank.hpp`、`ClipBank.cpp`、`ClipId`、`Submitter::LoadClip`／`UnloadClip`、`MixerConfig::clipSlotsPerSubmitter`、`MixerStats` 的三個卸載計數、`AudioErrorCode::NoClipSlot`（5 不重編）。
 - `PlayRequest::clip` 是 `Clip`。`Mixer::Create(config)` 不再收庫。
 - `Mixer.cpp`：
@@ -55,7 +55,7 @@
 - **改過之後**：
   - audio 的 3 個 CTest 通過；`gyo_audio_tests`（含壓力案）連跑 5 次都通過。
   - 全量 `ctest -L "cpu|shader" -j4`：181/182，`gyo_os_tests` 逾時（`after-full-ctest.log`）。單獨重跑 0.74 s 通過（`after-os-rerun.log`）。切分：環境——當時乾淨 checkout 上的突變基準同時在建置與跑測試，os 不依賴 audio。（合併前再跑一次全量，見核准頁。）
-  - 突變（`mut-after-full.log`、`mut-after-rerun.log`）：完整清單 86 條，第一輪 78/86；沒殺的 8 條逐條處理——`au-link-engine`（連結清單變長後 CMake 的訊息在 expected 之後換行，expect 改成專屬的 `gyo_audio links .*GYO::Kernel`）、3 條 `au-ctl-stop-*`（find 的 `request.at` 隨程式改名成 `command.at`，純改名）、3 條新突變的 `cases` 含逗號（doctest 把逗號當分隔，一案都沒跑；改成不含逗號的片段）、`au-ctl-ended-not-cleared`（真的存活：缺「重用的格號不提早回來」的案，補上）。重跑 8/8 killed。合計 85/86；存活的 `au-ctl-stress-reassign-every-block` 在未改的程式上也存活。
+  - 突變（`mut-after-full.log`、`mut-after-rerun.log`；後者跑在 2d7db6c0＋工作樹上，內容即之後 commit 的 03b6ea0c）：完整清單 86 條，第一輪 78/86；沒殺的 8 條逐條處理——`au-link-engine`（連結清單變長後 CMake 的訊息在 expected 之後換行，expect 改成專屬的 `gyo_audio links .*GYO::Kernel`）、3 條 `au-ctl-stop-*`（find 的 `request.at` 隨程式改名成 `command.at`，純改名）、3 條新突變的 `cases` 含逗號（doctest 把逗號當分隔，一案都沒跑；改成不含逗號的片段）、`au-ctl-ended-not-cleared`（真的存活：缺「重用的格號不提早回來」的案，補上）。重跑 8/8 killed。合計 85/86；存活的 `au-ctl-stress-reassign-every-block` 在未改的程式上也存活。
   - `au-ctl-stress-reassign-every-block`：DI 4 播放位置看板的並行突變，標「只在並行時抓得到」；上一批（audio 重審 dev_log 第 62 行）已記為時序偶發（同一 commit 單獨 3/3 killed、未改 2/2 killed）。這次基準與改過之後各存活一次（單獨跑那一次也存活）。和本批的改動無關（`PublishVoices` 未改）；報主會話，不在本批處理。
   - TSan、ASan（同基準的組態）：audio 的 3 個 CTest 各 3/3、沒有報告（`after-thread-ctest.log`、`after-address-ctest.log`）。突變 TSan 7/7（含改寫到回收環兩端的 `-handback-relaxed`、`-reclaim-relaxed`）、ASan 1/1（`au-clip-entry-back-on-start-asan`，`heap-use-after-free`）（`mut-after-tsan.log`、`mut-after-asan.log`）。
 
@@ -69,10 +69,19 @@
 - `mutations-asan.json`：`au-ctl-clip-reuse-without-check-asan` → `au-clip-entry-back-on-start-asan`（同一個「還得太早」在 ASan 下的讀已釋放）。`mutations-tsan.json`：`-handback-relaxed`、`-reclaim-relaxed` 改到回收環兩端。
 - 宣告列了但沒立的：「`Clip` 的複製改成深複製」——`Clip` 的複製是 `shared_ptr` 的預設複製，沒有可改的一行；改成兩條各自可改的（`au-clip-play-copies-samples`、`au-clip-make-vector-copies`）。
 
+## 合併前的設計審查與 §14.4 的檢證（03b6ea0c 之後）
+
+- 設計審查（Fable 5.2／high，唯讀，`design-review.md`）：blocker 0、should 5、nit 10，牽動已核准決定的 4 條。處理對照在[合併前核准頁](../architecture/target/v2/audio-clip-loader-merge-approval.zh-Hant.md)第 4.1 節。改了的：S-1（`Clip` 改回宣告的形，加「被搬走的 clip 的 view 是空的」判定）、S-4（DI 7 只留本質三件）、S-5（audio 頁兩處舊說法）、N-1（`ClipValidation.hpp` 併進 `Clip.cpp`）、N-2（搬動賦值先取空，執行緒契約與 `Mixer.hpp` 的註解寫進去）、N-9、N-10（含測試 CMake 的過時註解）。A-1（無效 handle 的 `Stop` 就是只取空的入口）交使用者選。S-2（loader 的失敗訊息裡 id 由每個 loader 各拼一次，owner asset）、S-3（`Mixer.cpp` 兩份手寫的 SPSC 環）轉主會話排到之後。
+- 不改、記下的：N-3（空格堆疊與回收環可合成一個環；但「重用的格號不提早回來」與 65536 那一案的檢出力靠堆疊的順序，換成先進先出時測試不會失敗、只會悄悄失去檢出力）、N-4（兩個測不到的靜默分支；`VoiceMixer` 的結束清單「每次 `Stop` 之後一定要取」是沒寫在型別上的約定，下次動 `VoiceMixer` 時考慮改成回呼）、N-5（釋放數的基準用 10 frame 的 clip，今天釋放次數和大小無關）、N-6、N-7（65536 那一案與 `au-clip-empty-counts-before-assert` 是日後退役的候選）、N-8（`InvalidClip` 收五種理由，audio_editor 搬回時若要分碼再定）。
+- §14.4 的檢證（Opus 5.5／high，唯讀，`verifier-14-4.md`）：19 列 CONFIRMED 13、PARTLY 6、WRONG 0。補了兩案（「keeps a clip two plays share until the second ends」「lets go, on the thread it was handed to, of a clip played before the hand-over」）、換手案再用 5 次、突變 `au-clip-play-holds-nothing`（86 → 87），核准頁的表照它改寫。
+- 審查修正之後的一輪（`r2-*`）：全量 `ctest -L "cpu|shader"` 182/182；完整突變 86/87（存活的同上：`au-ctl-stress-reassign-every-block`）；TSan、ASan 各 3/3、沒有報告；突變 TSan 7/7、ASan 1/1。
+- 審查修正的檢證跑的時候，我改了 `Mixer.hpp` 的註解（執行緒契約多寫搬動賦值）；只是註解，突變清單沒有以 `Mixer.hpp` 為對象的條目。
+
 ## 和宣告的偏差
 
 - 上面「宣告列了但沒立的」一條。
 - 宣告 10.4 的「表與回收環繞過兩圈」用 12 輪（表 3 格），另加「重用的格號不提早回來」一案（窄複查之後才發現缺）。
+- `Clip` 的內部形第一版和宣告不同，設計審查後改回（上一節）。
 
 ## 之後
 

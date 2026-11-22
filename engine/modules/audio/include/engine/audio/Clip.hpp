@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "engine/asset/AssetTypeName.hpp"
@@ -18,6 +19,14 @@ struct ClipView final {
     std::uint16_t channels = 0;            // 1 or 2
     std::uint32_t frames = 0;
 };
+
+namespace Detail {
+// The one shared block of a clip: its samples and channel count.
+struct ClipData final {
+    std::vector<std::int16_t> samples; // interleaved
+    std::uint16_t channels = 0;
+};
+} // namespace Detail
 
 // An immutable PCM16 clip whose samples are shared: copying a Clip adds a
 // reference, never copies the samples, so the asset store, the author and the
@@ -38,14 +47,19 @@ public:
     [[nodiscard]] static Base::Result<Clip, AudioError> Make(std::vector<std::int16_t>&& interleaved,
                                                              std::uint16_t channels, std::uint32_t sampleRate);
 
-    [[nodiscard]] const ClipView& View() const noexcept { return view_; }
-    [[nodiscard]] explicit operator bool() const noexcept { return samples_ != nullptr; }
+    // Computed from the shared block each time, so an empty or moved-from Clip
+    // has an empty view.
+    [[nodiscard]] ClipView View() const noexcept {
+        if (!data_) return ClipView{};
+        return ClipView{Base::ConstSpan<std::int16_t>(data_->samples.data(), data_->samples.size()), data_->channels,
+                        static_cast<std::uint32_t>(data_->samples.size() / data_->channels)};
+    }
+    [[nodiscard]] explicit operator bool() const noexcept { return data_ != nullptr; }
 
 private:
-    Clip(std::shared_ptr<const std::vector<std::int16_t>> samples, std::uint16_t channels) noexcept;
+    explicit Clip(std::shared_ptr<const Detail::ClipData> data) noexcept : data_(std::move(data)) {}
 
-    std::shared_ptr<const std::vector<std::int16_t>> samples_;
-    ClipView view_;
+    std::shared_ptr<const Detail::ClipData> data_;
 };
 
 } // namespace GYO::Engine::Audio

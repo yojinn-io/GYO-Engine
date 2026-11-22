@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include "ClipValidation.hpp"
 #include "PlayheadBoard.hpp"
 #include "VoiceMixer.hpp"
 #include "engine/audio/AudioFormat.hpp"
@@ -222,6 +221,8 @@ Submitter::Submitter(Submitter&& other) noexcept
     : state_(std::move(other.state_)), slot_(std::exchange(other.slot_, nullptr)) {}
 
 Submitter& Submitter::operator=(Submitter&& other) noexcept {
+    // Letting go of this submitter counts as one of its calls, as the destructor does.
+    if (slot_ != nullptr) Reclaim();
     state_ = std::move(other.state_);
     slot_ = std::exchange(other.slot_, nullptr);
     return *this;

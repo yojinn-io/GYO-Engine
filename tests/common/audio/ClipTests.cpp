@@ -143,10 +143,11 @@ TEST_CASE("Audio Submitter plays on one thread and lets go on another after a ha
     };
     std::thread other(use, std::int16_t{1});
     other.join();
-    use(2);
-    use(3);
+    // Three entries: more plays than that succeed only if each Play takes back
+    // what came back, on this thread too.
+    for (std::int16_t level = 2; level <= 6; ++level) use(level);
     const auto stats = rig.mixer.Stats();
-    CHECK(stats.submitted == 3);
+    CHECK(stats.submitted == 6);
     CHECK(stats.droppedQueueFull == 0);
     CheckBalance(stats);
 }

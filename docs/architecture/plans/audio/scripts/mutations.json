@@ -848,8 +848,8 @@
       "id": "au-clip-make-vector-copies",
       "what": "Clip::Make(vector&&) copies the samples instead of taking them.",
       "file": "engine/modules/audio/src/Clip.cpp",
-      "find": "    return Clip(std::make_shared<const std::vector<std::int16_t>>(std::move(interleaved)), channels);\n",
-      "replace": "    return Clip(std::make_shared<const std::vector<std::int16_t>>(interleaved), channels);\n",
+      "find": "    return Clip(std::make_shared<const Detail::ClipData>(Detail::ClipData{std::move(interleaved), channels}));\n",
+      "replace": "    return Clip(std::make_shared<const Detail::ClipData>(Detail::ClipData{interleaved, channels}));\n",
       "target": "gyo_audio_tests",
       "cases": "*copies samples given as a span once and shares them from then on*",
       "expect": "CHECK\\( taken->View\\(\\).samples.data\\(\\) == data \\) is NOT correct",
@@ -959,6 +959,20 @@
       "expect": "CHECK\\( Load\\(Riff\\(\\{Chunk\\(\"LIST\", Bytes\\(3, std::byte\\{7\\}\\)\\), Fmt\\(\\), Data\\(kStereo\\)\\}\\)\\).has_value\\(\\) \\) is NOT correct",
       "guards": [
         "audio DI 12"
+      ]
+    },
+    {
+      "id": "au-clip-play-holds-nothing",
+      "what": "Play queues the clip's view without keeping a reference in the table, so a play outlives its samples once the caller lets go (only the table keeps them alive while the audio thread reads them).",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "    slot_->held[entry] = request.clip;\n",
+      "replace": "",
+      "target": "gyo_audio_alloc_tests",
+      "cases": "*on the submitter's next call after its play ended*",
+      "expect": "CHECK\\( next.frees == one \\) is NOT correct",
+      "guards": [
+        "audio DI 7",
+        "audio-clip-loader-declaration 10.3 (b)"
       ]
     }
   ]

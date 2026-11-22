@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "AssertTestSupport.hpp"
@@ -85,6 +86,15 @@ TEST_CASE("Audio Clip copies samples given as a span once and shares them from t
     CHECK(copy.View().samples.data() == first.View().samples.data());
     CHECK(static_cast<bool>(copy));
     CHECK_FALSE(static_cast<bool>(Clip{}));
+    CHECK(Clip{}.View().samples.empty());
+
+    // A moved-from clip is empty, view included: it shares nothing any more.
+    Clip moved = first;
+    const Clip into = std::move(moved);
+    CHECK(into.View().samples.data() == first.View().samples.data());
+    CHECK_FALSE(static_cast<bool>(moved)); // NOLINT(bugprone-use-after-move)
+    CHECK(moved.View().samples.empty());   // NOLINT(bugprone-use-after-move)
+    CHECK(moved.View().frames == 0);       // NOLINT(bugprone-use-after-move)
 
     // Samples given as a vector are taken without a copy.
     std::vector<std::int16_t> stereo{1, 2, 3, 4};

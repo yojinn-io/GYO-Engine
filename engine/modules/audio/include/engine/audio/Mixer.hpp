@@ -101,8 +101,9 @@ struct MixerStats final {
 class Mixer;
 
 // The producer end of one bounded single-producer, single-consumer queue. It is
-// not bound to a thread: one user at a time calls Play, Stop, StopAll and the
-// destructor, and when another thread takes it over, the last call of the one
+// not bound to a thread: one user at a time calls Play, Stop, StopAll, the
+// destructor and the move assignment that overwrites it, and when another
+// thread takes it over, the last call of the one
 // before must happen-before the first call of the next (a join, the same mutex
 // unlocked and locked, any hand-over that synchronizes); calls merely apart in
 // time, without such an order, are a data race. It shares the mixer's state, so
@@ -111,7 +112,8 @@ class Mixer;
 // The mixer holds a reference to the clip of every play in this submitter's
 // table, never on the audio thread; the audio thread hands back the table entry
 // of each play that ended (or got no voice), and every call of this submitter
-// (Play, Stop, StopAll, the destructor) first lets go of the clips handed back.
+// (Play, Stop, StopAll, the destructor, the move assignment that overwrites it)
+// first lets go of the clips handed back.
 // So a clip the mixer holds is let go at the latest on the submitter's next
 // call; those of a submitter never called again are let go with the mixer's
 // state.
