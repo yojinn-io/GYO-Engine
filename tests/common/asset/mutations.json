@@ -1,0 +1,1163 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the asset Module (docs/architecture/target/v2/asset.zh-Hant.md; declaration docs/architecture/target/v2/asset-declaration.zh-Hant.md, sections 9, 10 and 30.3; ids as- catalog, ar- references, al- loaders, rw- whole-file reading, as-store-/as-snapshot- the store). Each guards a Design Invariant of the formal page (guards 'asset AS-n') or a rule of the declaration (guards 'asset-declaration 5.x'). Run: python3 -B tests/common/mutation/run_mutations.py --build-dir build/target/_build/core --catalog tests/common/asset/mutations.json --cmake <cmake>",
+ "mutants": [
+  {
+   "id": "as-id-charset",
+   "what": "rule 4: uppercase letters are let into an id",
+   "guards": [
+    "asset-declaration 5.3 (A) 4",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/AssetId.cpp",
+   "find": "(character >= 'a' && character <= 'z') || (character >= '0'",
+   "replace": "(character >= 'A' && character <= 'z') || (character >= '0'",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r4\\-id\\-uppercase"
+  },
+  {
+   "id": "as-id-length",
+   "what": "rule 4: an id of 129 characters is let through",
+   "guards": [
+    "asset-declaration 5.3 (A) 4",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/AssetId.cpp",
+   "find": "text.size() > kMaxAssetIdLength",
+   "replace": "text.size() > kMaxAssetIdLength + 1",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r4\\-id\\-too\\-long"
+  },
+  {
+   "id": "as-id-length-edge",
+   "what": "rule 4: an id of exactly 128 characters is refused (the limit too strict; as-id-length catches it too loose)",
+   "guards": [
+    "asset-declaration 5.3 (A) 4",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/AssetId.cpp",
+   "find": "text.size() > kMaxAssetIdLength",
+   "replace": "text.size() >= kMaxAssetIdLength",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "reading\\ valid/format\\-and\\-settings:\\ BadId"
+  },
+  {
+   "id": "as-path-dotdot",
+   "what": "rules 1, 5: a '..' segment is let into a content path",
+   "guards": [
+    "asset-declaration 5.3 (A) 5",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
+   "replace": "if (segment.empty() || segment == \".\") return false;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r5\\-path\\-escapes"
+  },
+  {
+   "id": "as-path-backslash",
+   "what": "rule 5: a backslash is let into a content path",
+   "guards": [
+    "asset-declaration 5.3 (A) 5",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (byte < 0x20 || character == '\\\\' || character == ':') return false;",
+   "replace": "if (byte < 0x20 || character == ':') return false;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r5\\-path\\-backslash"
+  },
+  {
+   "id": "as-entry-content-json",
+   "what": "rule 5: an asset path may be content.json",
+   "guards": [
+    "asset-declaration 5.3 (A) 5",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "!IsRelativeContentPath(entry.path) || entry.path == kContentManifestName",
+   "replace": "!IsRelativeContentPath(entry.path)",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r5\\-path\\-is\\-content\\-json"
+  },
+  {
+   "id": "as-catalog-content-json",
+   "what": "rule 1: content.json may list itself as a catalog",
+   "guards": [
+    "asset-declaration 5.3 (A) 1",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "!IsRelativeContentPath(path) || path == kContentManifestName",
+   "replace": "!IsRelativeContentPath(path)",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "wrong\\ code\\ for\\ invalid\\ example\\ r1\\-catalog\\-is\\-content\\-json"
+  },
+  {
+   "id": "as-catalog-twice",
+   "what": "rule 1: a catalog may be listed twice",
+   "guards": [
+    "asset-declaration 5.3 (A) 1",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (!listed.insert(path).second) {",
+   "replace": "if (!listed.insert(path).second && false) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "wrong\\ code\\ for\\ invalid\\ example\\ r1\\-catalog\\-listed\\-twice"
+  },
+  {
+   "id": "as-version-unknown",
+   "what": "rules 1, 2: a version this version does not know is read",
+   "guards": [
+    "asset-declaration 5.3 (3)",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (*number != known) {",
+   "replace": "if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r1\\-version\\-unknown"
+  },
+  {
+   "id": "as-unreadable-code",
+   "what": "rule 1: a listed catalog that cannot be read is reported as something else",
+   "guards": [
+    "asset-declaration 5.3 (A) 1",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "Fail(CatalogFailureCode::Unreadable, \"\\\"\" + std::string(relative)",
+   "replace": "Fail(CatalogFailureCode::NotJson, \"\\\"\" + std::string(relative)",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "wrong\\ code\\ for\\ invalid\\ example\\ r1\\-catalog\\-unreadable"
+  },
+  {
+   "id": "as-id-twice-within",
+   "what": "rule 3: an id may repeat inside one catalog",
+   "guards": [
+    "asset-declaration 5.3 (A) 3",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "seen.emplace(entry.id.Text(), index);\n        if (!inserted) {",
+   "replace": "seen.emplace(entry.id.Text(), index);\n        if (false && !inserted) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: one catalog read alone*",
+   "expect": "a\\ catalog\\ read\\ alone\\ accepts\\ a\\ repeated\\ id"
+  },
+  {
+   "id": "as-id-twice-across",
+   "what": "rule 3: an id may repeat across catalogs",
+   "guards": [
+    "asset-declaration 5.3 (A) 3",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "owner.emplace(entry.id.Text(), file);\n            if (!inserted) {",
+   "replace": "owner.emplace(entry.id.Text(), file);\n            if (false && !inserted) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r3\\-id\\-in\\-two\\-catalogs"
+  },
+  {
+   "id": "as-no-format",
+   "what": "rule 6: a path without an extension and without a format is read",
+   "guards": [
+    "asset-declaration 5.3 (A) 6",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "} else if (PathExtension(entry.path).empty()) {",
+   "replace": "} else if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r6\\-no\\-extension"
+  },
+  {
+   "id": "as-extension-last-segment",
+   "what": "rule 6: a '.' in a directory name counts as an extension",
+   "guards": [
+    "asset-declaration 5.3 (A) 6",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "const std::string_view last = slash == std::string_view::npos ? path : path.substr(slash + 1);",
+   "replace": "const std::string_view last = slash == std::string_view::npos ? path : path;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r6\\-dot\\-only\\-in\\-directory"
+  },
+  {
+   "id": "as-extension-lowercase",
+   "what": "rule 6: the extension is not lowercased",
+   "guards": [
+    "asset-declaration 5.3 (A) 6",
+    "asset-declaration 5.3 (1)"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (character >= 'A' && character <= 'Z') character = static_cast<char>(character - 'A' + 'a');",
+   "replace": "(void)character;",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "the\\ extension\\ is\\ not\\ lowercased"
+  },
+  {
+   "id": "as-format-charset",
+   "what": "rule 7: uppercase letters are let into a format",
+   "guards": [
+    "asset-declaration 5.3 (A) 7",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (!((character >= 'a' && character <= 'z') || (character >= '0'",
+   "replace": "if (!((character >= 'A' && character <= 'z') || (character >= '0'",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r7\\-format\\-uppercase"
+  },
+  {
+   "id": "as-settings-object",
+   "what": "rule 7: a settings value that is not an object is read",
+   "guards": [
+    "asset-declaration 5.3 (A) 7",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (!settings || settings->Root().GetKind() != Json::Kind::Object) {",
+   "replace": "if (!settings) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: every invalid example*",
+   "expect": "accepted\\ invalid\\ example\\ r7\\-settings\\-not\\-object"
+  },
+  {
+   "id": "as-shader-bundles-required",
+   "what": "5.3 (1): shader_bundles is required again, as on master",
+   "guards": [
+    "asset-declaration 5.3 (1)",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "if (const std::optional<Json::Value> bundles = root->Find(\"shader_bundles\")) {",
+   "replace": "if (!root->Find(\"shader_bundles\")) return Base::Err(Fail(CatalogFailureCode::BadShape, \"shader_bundles is missing\"));\n    if (const std::optional<Json::Value> bundles = root->Find(\"shader_bundles\")) {",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "reading\\ valid/type\\-without\\-loader:\\ BadShape"
+  },
+  {
+   "id": "as-unknown-dropped",
+   "what": "5.3 (1): unknown members are dropped instead of kept",
+   "guards": [
+    "asset-declaration 5.3 (1)",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "        if (IsKnown(known, member.key)) continue;\n        auto text = Compact(",
+   "replace": "        continue;\n        auto text = Compact(",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "REQUIRE\\(\\ content\\.manifest\\.extra\\.size\\(\\)\\ ==\\ 1\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-unknown-refused",
+   "what": "5.3 (1): an unknown member is refused instead of kept and not read",
+   "guards": [
+    "asset-declaration 5.3 (1)",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "        if (IsKnown(known, member.key)) continue;\n        auto text = Compact(",
+   "replace": "        if (!IsKnown(known, member.key)) return Base::Err(Fail(CatalogFailureCode::BadShape, \"unknown member\"));\n        continue;\n        auto text = Compact(",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what the rules deliberately accept*",
+   "expect": "reading\\ valid/unknown\\-members\\-kept:\\ BadShape"
+  },
+  {
+   "id": "as-write-format",
+   "what": "AS-12 round trip: format is not written",
+   "guards": [
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "            writer.Key(\"format\");\n            writer.String(*entry.format);\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what is written*",
+   "expect": "a\\ written\\ catalog\\ does\\ not\\ read\\ back"
+  },
+  {
+   "id": "as-write-settings",
+   "what": "AS-12 round trip: settings is not written",
+   "guards": [
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "            writer.Key(\"settings\");\n            (void)WriteRaw(writer, *entry.settings); // an object, checked by ValidateCatalog\n",
+   "replace": "            (void)0;\n",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what is written*",
+   "expect": "the\\ catalog\\ does\\ not\\ read\\ back\\ equal"
+  },
+  {
+   "id": "as-write-preserved",
+   "what": "AS-12 round trip: kept members are not written back",
+   "guards": [
+    "asset AS-12",
+    "asset-declaration 5.3 (1)"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "        writer.Key(member.key);\n        (void)WriteRaw(writer, member.json); // checked by CheckPreserved\n",
+   "replace": "        (void)member;\n",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: what is written*",
+   "expect": "content\\.json\\ does\\ not\\ read\\ back\\ equal"
+  },
+  {
+   "id": "as-write-validates",
+   "what": "5.3 (2): writing does not check the rules reading checks",
+   "guards": [
+    "asset-declaration 5.3 (2)",
+    "asset AS-12"
+   ],
+   "file": "engine/modules/asset/src/Catalog.cpp",
+   "find": "    if (auto valid = ValidateCatalog(catalog); !valid) return Base::Err(std::move(valid).error());\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "catalog: writing checks*",
+   "expect": "a\\ catalog\\ that\\ breaks\\ rule\\ 4\\ was\\ written"
+  },
+  {
+   "id": "ar-ref-above-root",
+   "what": "5.17: a '..' above the content root is dropped instead of BadReference",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (resolved.empty()) return std::nullopt; // above the content root",
+   "replace": "if (resolved.empty()) continue; // above the content root",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "resolved\\ escapes\\-root"
+  },
+  {
+   "id": "ar-ref-absolute",
+   "what": "5.17: an absolute reference (or an empty segment) resolves instead of BadReference",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "if (segment.empty()) return std::nullopt;",
+   "replace": "if (segment.empty()) continue;",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "resolved\\ absolute"
+  },
+  {
+   "id": "ar-ref-parent-directory",
+   "what": "5.17: a reference resolves against the parent's file, not its directory",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "    resolved.pop_back(); // the parent's own file name\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "wrong\\ resolution\\ of\\ sibling"
+  },
+  {
+   "id": "ar-ref-dotdot",
+   "what": "5.17: '..' does not take back a segment",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/ContentPath.cpp",
+   "find": "            resolved.pop_back();\n            continue;",
+   "replace": "            continue;",
+   "target": "gyo_asset_tests",
+   "cases": "path: a referenced*",
+   "expect": "wrong\\ resolution\\ of\\ parent\\-segment"
+  },
+  {
+   "id": "ar-ref-bad-recorded",
+   "what": "5.17: a refused path is recorded without BadReference",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/LoadContext.cpp",
+   "find": "        reference.failure = ReferenceFailureCode::BadReference;",
+   "replace": "        (void)0;",
+   "target": "gyo_asset_tests",
+   "cases": "loader: a loader that declares*",
+   "expect": "a\\ path\\ above\\ the\\ content\\ root\\ is\\ not\\ BadReference"
+  },
+  {
+   "id": "ar-ref-id-recorded",
+   "what": "5.17 / AS-3: a reference by id is not recorded",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset AS-3"
+   ],
+   "file": "engine/modules/asset/src/LoadContext.cpp",
+   "find": "void LoadContext::RecordId(const std::string_view typeName, const AssetId& id) {\n    references_.push_back(",
+   "replace": "void LoadContext::RecordId(const std::string_view typeName, const AssetId& id) {\n    if (false) references_.push_back(",
+   "target": "gyo_asset_tests",
+   "cases": "loader: a loader that declares*",
+   "expect": "the\\ declared\\ references\\ are\\ not\\ all\\ recorded"
+  },
+  {
+   "id": "al-type-name",
+   "what": "5.4 / 5.16: a loader whose type name differs from its Output's is a loader",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset-declaration 5.4",
+    "asset AS-9"
+   ],
+   "file": "engine/modules/asset/include/engine/asset/AssetLoader.hpp",
+   "find": "    requires std::string_view(L::kTypeName) == std::string_view(AssetTypeName<typename L::Output>::value);\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader's declaration*",
+   "expect": "a\\ loader\\ whose\\ type\\ name\\ differs\\ from\\ its\\ Output's\\ is\\ accepted"
+  },
+  {
+   "id": "al-formats",
+   "what": "5.16: a loader with no format is a loader",
+   "guards": [
+    "asset-declaration 5.16"
+   ],
+   "file": "engine/modules/asset/include/engine/asset/AssetLoader.hpp",
+   "find": "    requires std::size(L::kFormats) > 0;\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader's declaration*",
+   "expect": "a\\ loader\\ with\\ no\\ format\\ is\\ accepted"
+  },
+  {
+   "id": "al-utf8-overlong",
+   "what": "5.16 text loader: an overlong three-byte form passes as UTF-8",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset AS-2"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "if (lead == 0xE0) low = 0xA0;   // overlong",
+   "replace": "// overlong",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "wrong\\ UTF\\-8\\ verdict\\ on\\ overlong\\-3"
+  },
+  {
+   "id": "al-utf8-surrogate",
+   "what": "5.16 text loader: an encoded surrogate passes as UTF-8",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset AS-2"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "if (lead == 0xED) high = 0x9F;  // surrogates",
+   "replace": "// surrogates",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "wrong\\ UTF\\-8\\ verdict\\ on\\ surrogate"
+  },
+  {
+   "id": "al-utf8-continuation",
+   "what": "5.16 text loader: a byte that is not a continuation passes inside a sequence",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset AS-2"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "if (continuation < 0x80 || continuation > 0xBF) return index;",
+   "replace": "(void)continuation;",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "wrong\\ UTF\\-8\\ verdict\\ on\\ bad\\-continuation"
+  },
+  {
+   "id": "al-text-unchanged",
+   "what": "5.16 text loader: the bytes are not handed over unchanged",
+   "guards": [
+    "asset-declaration 5.16"
+   ],
+   "file": "engine/modules/asset/src/TextLoader.cpp",
+   "find": "return Text(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()));",
+   "replace": "return Text(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size() - 1));",
+   "target": "gyo_asset_tests",
+   "cases": "loader: the text loader checks*",
+   "expect": "the\\ bytes\\ were\\ changed\\ for\\ ascii"
+  },
+  {
+   "id": "rw-too-large-code",
+   "what": "R9: a file over the limit is reported as ReadFailed, not TooLarge",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset-declaration 5.8"
+   ],
+   "file": "engine/modules/asset/src/ReadWholeFile.cpp",
+   "find": "return FileReadFailure::Make(FileReadFailureCode::TooLarge,",
+   "replace": "return FileReadFailure::Make(FileReadFailureCode::ReadFailed,",
+   "target": "gyo_asset_tests",
+   "cases": "read: a file over*",
+   "expect": "CHECK\\(\\ std::string\\(Asset::ToString\\(read\\.error\\(\\)\\.code\\)\\)\\ ==\\ \"TooLarge\"\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "rw-limit-edge",
+   "what": "R9: a file of exactly the limit is refused",
+   "guards": [
+    "asset-declaration 5.16"
+   ],
+   "file": "engine/modules/asset/src/ReadWholeFile.cpp",
+   "find": "if (*size > maxBytes) return Base::Err(TooLarge(nativePath, maxBytes));",
+   "replace": "if (*size >= maxBytes) return Base::Err(TooLarge(nativePath, maxBytes));",
+   "target": "gyo_asset_tests",
+   "cases": "read: a file within*",
+   "expect": "a\\ file\\ of\\ exactly\\ the\\ limit\\ is\\ refused"
+  },
+  {
+   "id": "rw-not-found",
+   "what": "5.8: a missing file is ReadFailed, not NotFound",
+   "guards": [
+    "asset-declaration 5.8"
+   ],
+   "file": "engine/modules/asset/src/ReadWholeFile.cpp",
+   "find": "error.code == IO::IOErrorCode::NotFound ? FileReadFailureCode::NotFound",
+   "replace": "false ? FileReadFailureCode::NotFound",
+   "target": "gyo_asset_tests",
+   "cases": "read: a missing file*",
+   "expect": "CHECK\\(\\ std::string\\(Asset::ToString\\(read\\.error\\(\\)\\.code\\)\\)\\ ==\\ \"NotFound\"\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-skip-ignored",
+   "what": "(1) maintenance does not look at the drops to skip, so a revival loses its value",
+   "guards": [
+    "asset-declaration 5.5",
+    "asset-declaration 判定 (1)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        if (info->dropsToSkip > 0) {",
+   "replace": "        if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "store: a request after the last Handle went*",
+   "expect": "the\\ value\\ went\\ after\\ a\\ revival"
+  },
+  {
+   "id": "as-store-skip-not-used-up",
+   "what": "(2) a drop while the info skips drops does not use one up, so a revival dropped again stays",
+   "guards": [
+    "asset-declaration 5.5",
+    "asset-declaration 判定 (2)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            --info->dropsToSkip;\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: a revived asset dropped again*",
+   "expect": "a\\ revived\\ asset\\ dropped\\ again\\ was\\ kept"
+  },
+  {
+   "id": "as-store-complete-ignores-life",
+   "what": "(3) a finished job's result is written whatever the life, so an old life's late result lands in the new life",
+   "guards": [
+    "asset AS-10 (b)",
+    "asset-declaration 判定 (3)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "const bool current = info != nullptr && info->life == job.life;",
+   "replace": "const bool current = info != nullptr;",
+   "target": "gyo_asset_tests",
+   "cases": "store: the result of an old life arriving late*",
+   "expect": "the\\ old\\ life's\\ result\\ was\\ written\\ into\\ the\\ new\\ life"
+  },
+  {
+   "id": "as-store-request-level-core",
+   "what": "(5) a request-level Handle gets a core of the current life, so dropping it removes what another holds",
+   "guards": [
+    "asset-declaration 5.5",
+    "asset-declaration 判定 (5)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "entries_[index].catalog.id, index, kNoLife, nullptr,",
+   "replace": "entries_[index].catalog.id, index, ProbeEntry(index).life, drops_,",
+   "target": "gyo_asset_tests",
+   "cases": "store: a request-level Handle holds no core*",
+   "expect": "dropping\\ a\\ request\\-level\\ Handle\\ removed\\ the\\ asset\\ another\\ holds"
+  },
+  {
+   "id": "as-store-request-submits-locked",
+   "what": "(6) a request submits its jobs while it holds the lock (the executor's Submit calls the store)",
+   "guards": [
+    "asset AS-11",
+    "asset-declaration 判定 (6)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            BeginSubmit(jobs);\n        }\n        SubmitJobs(jobs);\n        return body;",
+   "replace": "            BeginSubmit(jobs);\n            SubmitJobs(jobs);\n        }\n        return body;",
+   "target": "gyo_asset_tests",
+   "cases": "store: the store holds no lock while*",
+   "expect": "\\[hook\\]\\ executor\\ Submit\\ during\\ request\\nGYO_ASSERT\\ failed:\\ [^\\n]*taken\\ again\\ on\\ the\\ thread\\ that\\ holds\\ it"
+  },
+  {
+   "id": "as-store-decodes-locked",
+   "what": "(7) a job reads and decodes while it holds the lock, so a request waits for it",
+   "guards": [
+    "asset AS-11",
+    "asset-declaration 判定 (7)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        Outcome outcome = Execute(started);",
+   "replace": "        Outcome outcome;\n        {\n            WriteGuard held(lock_);\n            outcome = Execute(started);\n        }",
+   "target": "gyo_asset_tests",
+   "cases": "store: a job decoding does not block a request*",
+   "expect": "a\\ request\\ waited\\ for\\ a\\ job\\ that\\ was\\ decoding"
+  },
+  {
+   "id": "as-store-start-ignores-life",
+   "what": "(9) a job does not compare lives before it starts, so a job of a removed life reads its file",
+   "guards": [
+    "asset-declaration 5.5",
+    "asset-declaration 判定 (9)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            if (info == nullptr || info->life != job.life) {",
+   "replace": "            if (info == nullptr) {",
+   "target": "gyo_asset_tests",
+   "cases": "store: the in-flight limit keeps request order*",
+   "expect": "a\\ job\\ removed\\ before\\ it\\ started\\ read\\ its\\ file"
+  },
+  {
+   "id": "as-store-completion-submits-locked",
+   "what": "(11) a finished job submits its dependencies' jobs while it holds the lock",
+   "guards": [
+    "asset AS-11",
+    "asset-declaration 判定 (11)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            BeginSubmit(jobs);\n        }\n        SubmitJobs(jobs);\n        NotifyProgress();\n    }",
+   "replace": "            BeginSubmit(jobs);\n            SubmitJobs(jobs);\n        }\n        NotifyProgress();\n    }",
+   "target": "gyo_asset_tests",
+   "cases": "store: the store holds no lock while*",
+   "expect": "\\[hook\\]\\ executor\\ Submit\\ during\\ completion\\nGYO_ASSERT\\ failed:\\ [^\\n]*taken\\ again\\ on\\ the\\ thread\\ that\\ holds\\ it"
+  },
+  {
+   "id": "as-store-destroys-locked",
+   "what": "(12) maintenance destroys a removed value while it holds the lock",
+   "guards": [
+    "asset AS-11",
+    "asset-declaration 判定 (12)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        garbage.infos.push_back(std::move(entry.info));\n        ++entry.life;\n        ++counts_.removals;",
+   "replace": "        entry.info.reset();\n        ++entry.life;\n        ++counts_.removals;",
+   "target": "gyo_asset_tests",
+   "cases": "store: the store holds no lock while*",
+   "expect": "\\[hook\\]\\ value\\ destructor\\ during\\ maintenance\\nGYO_ASSERT\\ failed:\\ [^\\n]*taken\\ again\\ on\\ the\\ thread\\ that\\ holds\\ it"
+  },
+  {
+   "id": "as-store-settings-locked",
+   "what": "(13) registration reads the entries' settings while it holds the lock",
+   "guards": [
+    "asset AS-11",
+    "asset-declaration 5.4",
+    "asset-declaration 判定 (13)"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        std::vector<ParsedEntry> parsed = ParseSettingsFor(*loader);\n        std::vector<Job> jobs;\n        {\n            WriteGuard guard(lock_);\n",
+   "replace": "        std::vector<Job> jobs;\n        {\n            WriteGuard guard(lock_);\n            std::vector<ParsedEntry> parsed = ParseSettingsFor(*loader);\n",
+   "target": "gyo_asset_tests",
+   "cases": "store: the store holds no lock while*",
+   "expect": "\\[hook\\]\\ settings\\ parser\\ during\\ registration\\nGYO_ASSERT\\ failed:\\ [^\\n]*taken\\ again\\ on\\ the\\ thread\\ that\\ holds\\ it"
+  },
+  {
+   "id": "as-store-request-type-unchecked",
+   "what": "a request does not compare the type name, so a wrong type is not refused at the request level",
+   "guards": [
+    "asset-declaration 5.5",
+    "asset AS-8"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        if (entry.catalog.type != typeName) {",
+   "replace": "        if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "store: a request is refused at the request level*",
+   "expect": "REQUIRE\\(\\ mismatch\\.RequestFailure\\(\\)\\ !=\\ nullptr\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-no-executor-code",
+   "what": "a request that needs a job without an executor is not NoExecutor",
+   "guards": [
+    "asset-declaration 5.8"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "AssetLoadFailure::Make(AssetLoadFailureCode::NoExecutor,",
+   "replace": "AssetLoadFailure::Make(AssetLoadFailureCode::NoLoader,",
+   "target": "gyo_asset_tests",
+   "cases": "store: without an executor*",
+   "expect": "CHECK\\(\\ FailureOf\\(store,\\ \"x\"\\)\\ ==\\ AssetLoadFailureCode::NoExecutor\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-bad-settings-not-first",
+   "what": "the judgment does not look at BadSettings, so an entry whose settings failed queues a job",
+   "guards": [
+    "asset-declaration 5.4",
+    "asset-declaration 5.3 (B) 2"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        if (entry.badSettings) return Judgment{AssetState::Failed, entry.badSettings};\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: BadSettings both ways*",
+   "expect": "BadSettings\\ queued\\ a\\ job"
+  },
+  {
+   "id": "as-store-orphan-waits",
+   "what": "a waiter of a preregistered format the loader does not take keeps waiting instead of becoming NoLoader",
+   "guards": [
+    "asset-declaration 5.4"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            changed.insert(preregistration->first);\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: preregistration makes requests wait*",
+   "expect": "a\\ waiter\\ of\\ a\\ format\\ the\\ loader\\ does\\ not\\ take\\ still\\ waits"
+  },
+  {
+   "id": "as-store-register-ignores-preregistration",
+   "what": "(B) 5: a loader registers a pair another loader type preregistered",
+   "guards": [
+    "asset-declaration 5.3 (B) 5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                other != preregistered_.end() && other->second != loader.loaderType) {",
+   "replace": "                false && other != preregistered_.end() && other->second != loader.loaderType) {",
+   "target": "gyo_asset_tests",
+   "cases": "store: preregistration conflicts in three directions*",
+   "expect": "a\\ loader\\ registered\\ a\\ pair\\ another\\ loader\\ type\\ preregistered"
+  },
+  {
+   "id": "as-store-preregister-ignores-loader",
+   "what": "(B) 5: a loader type preregisters a pair another loader has",
+   "guards": [
+    "asset-declaration 5.3 (B) 5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "loader != loaders_.end() &&\n",
+   "replace": "false && loader != loaders_.end() &&\n",
+   "target": "gyo_asset_tests",
+   "cases": "store: preregistration conflicts in three directions*",
+   "expect": "a\\ loader\\ type\\ preregistered\\ a\\ pair\\ another\\ loader\\ has"
+  },
+  {
+   "id": "as-store-preregister-ignores-preregistration",
+   "what": "(B) 5: two loader types preregister one pair",
+   "guards": [
+    "asset-declaration 5.3 (B) 5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "other != preregistered_.end() &&\n",
+   "replace": "false && other != preregistered_.end() &&\n",
+   "target": "gyo_asset_tests",
+   "cases": "store: preregistration conflicts in three directions*",
+   "expect": "two\\ loader\\ types\\ preregistered\\ one\\ pair"
+  },
+  {
+   "id": "as-store-format-taken",
+   "what": "(B) 1: a second loader takes a pair another loader has",
+   "guards": [
+    "asset-declaration 5.3 (B) 1",
+    "asset AS-2"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                other != loaders_.end() && other->second->loaderType != loader.loaderType) {",
+   "replace": "                false && other != loaders_.end() && other->second->loaderType != loader.loaderType) {",
+   "target": "gyo_asset_tests",
+   "cases": "store: registration refuses*",
+   "expect": "a\\ second\\ loader\\ took\\ a\\ pair\\ another\\ loader\\ has"
+  },
+  {
+   "id": "as-store-same-loader-refused",
+   "what": "registering the same loader again is refused (not idempotent)",
+   "guards": [
+    "asset-declaration 5.16",
+    "asset AS-9"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                other != loaders_.end() && other->second->loaderType != loader.loaderType) {",
+   "replace": "                other != loaders_.end()) {",
+   "target": "gyo_asset_tests",
+   "cases": "store: registration refuses*",
+   "expect": "registering\\ the\\ same\\ loader\\ again\\ failed"
+  },
+  {
+   "id": "as-store-type-name-taken",
+   "what": "(B) 4: a second C++ type takes a type name",
+   "guards": [
+    "asset-declaration 5.3 (B) 4"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "owner != typeNameOwners_.end() && owner->second != loader.outputType) {",
+   "replace": "false && owner != typeNameOwners_.end() && owner->second != loader.outputType) {",
+   "target": "gyo_asset_tests",
+   "cases": "store: registration refuses*",
+   "expect": "a\\ second\\ C\\+\\+\\ type\\ took\\ a\\ type\\ name"
+  },
+  {
+   "id": "as-store-in-flight-unlimited",
+   "what": "the in-flight limit is ignored",
+   "guards": [
+    "asset-declaration 5.5",
+    "asset AS-4"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "(options_.maxInFlight == 0 || inFlight_ < options_.maxInFlight)",
+   "replace": "(options_.maxInFlight == 0 || true)",
+   "target": "gyo_asset_tests",
+   "cases": "store: the in-flight limit keeps request order*",
+   "expect": "CHECK\\(\\ executor\\.Pending\\(\\)\\ ==\\ 2\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-digest-always",
+   "what": "the source digest is computed although it is off",
+   "guards": [
+    "asset AS-7"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            if (options_.sourceDigest) outcome.sourceDigest",
+   "replace": "            if (true) outcome.sourceDigest",
+   "target": "gyo_asset_tests",
+   "cases": "store: the source digest*",
+   "expect": "the\\ digest\\ is\\ computed\\ although\\ it\\ is\\ off"
+  },
+  {
+   "id": "as-store-discard-forgets-in-flight",
+   "what": "Shutdown does not count jobs in flight as discarded",
+   "guards": [
+    "asset-declaration 5.8",
+    "asset AS-8"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "counts_.jobsDiscarded += waiting_.size() + inFlight_;",
+   "replace": "counts_.jobsDiscarded += waiting_.size();",
+   "target": "gyo_asset_tests",
+   "cases": "store: Shutdown discards or drains*",
+   "expect": "CHECK\\(\\ counts\\.jobsDiscarded\\ ==\\ 2\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-drain-does-not-wait",
+   "what": "Shutdown(Drain) does not wait for the queued jobs",
+   "guards": [
+    "asset-declaration 5.8",
+    "asset-declaration 5.6 X-6"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        if (mode == AssetShutdown::Drain) WaitUntilIdle();\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: Shutdown discards or drains*",
+   "expect": "CHECK\\(\\ counts\\.jobsLoaded\\ ==\\ 3\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-pull-always",
+   "what": "a pull with the current version copies the infos again",
+   "guards": [
+    "asset-declaration 5.6"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            if (lastVersion && *lastVersion == version_) return std::nullopt;\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: the version changes*",
+   "expect": "a\\ pull\\ with\\ the\\ current\\ version\\ copied\\ the\\ infos"
+  },
+  {
+   "id": "as-store-removal-keeps-version",
+   "what": "removing an info does not change the version",
+   "guards": [
+    "asset-declaration 5.6"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        ++counts_.removals;\n        ++version_;",
+   "replace": "        ++counts_.removals;",
+   "target": "gyo_asset_tests",
+   "cases": "store: the version changes*",
+   "expect": "removing\\ an\\ info\\ did\\ not\\ change\\ the\\ version"
+  },
+  {
+   "id": "as-store-read-ignores-type",
+   "what": "Read gives a value as a C++ type it is not",
+   "guards": [
+    "asset-declaration 5.3 (B) 4",
+    "asset-declaration 5.5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        if (!info->valueType || *info->valueType != type) return nullptr;\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: a value of another C++ type*",
+   "expect": "a\\ value\\ read\\ as\\ a\\ C\\+\\+\\ type\\ it\\ is\\ not"
+  },
+  {
+   "id": "as-store-cancel-uncounted",
+   "what": "a job cancelled before it starts is not counted, so the job equation breaks",
+   "guards": [
+    "asset-declaration 5.8",
+    "asset AS-8"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                // Removed before it started: nothing is read; the slot goes on.\n                ++counts_.jobsCancelled;\n",
+   "replace": "                // Removed before it started: nothing is read; the slot goes on.\n",
+   "target": "gyo_asset_tests",
+   "cases": "store: the in-flight limit keeps request order*",
+   "expect": "CHECK\\(\\ store\\.Counts\\(\\)\\.jobsCancelled\\ ==\\ 1\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-cycle-not-marked",
+   "what": "edges in a strongly connected component are not marked, so a cycle holds itself",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                if (edge.view.status != EdgeStatus::Held || !component.contains(edge.target)) continue;",
+   "replace": "                if (true) continue;",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a cycle is marked whichever finishes first*",
+   "expect": "a\\ cyclic\\ edge\\ kept\\ its\\ target\\ alive"
+  },
+  {
+   "id": "as-store-cycle-skips-marked-edges",
+   "what": "edges already marked cyclic are left out of the graph, so the marks depend on the order",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset AS-5",
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "edge.view.status == EdgeStatus::Held ||\n                                               edge.view.status == EdgeStatus::Cyclic);",
+   "replace": "edge.view.status == EdgeStatus::Held);",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a cycle closed through an edge already marked*",
+   "expect": "CHECK\\(\\ results\\[0\\]\\ ==\\ results\\[1\\]\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-cyclic-count-not-moved",
+   "what": "an edge marked cyclic stays counted in its first kind, so the reference equation breaks",
+   "guards": [
+    "asset-declaration 5.17 件數",
+    "asset AS-8"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                UncountReference(edge.kind);\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a cycle is marked whichever finishes first*",
+   "expect": "CHECK\\(\\ c\\.references\\ ==\\ c\\.referenceHits\\ \\+\\ c\\.referenceRevives\\ \\+\\ c\\.referenceNewLives\\ \\+\\ c\\.referenceSkipped\\ \\+\\ c\\.referenceFailures\\ \\+\\ c\\.referenceCyclic\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
+   "id": "as-store-skip-ignores-preregistration",
+   "what": "a dependency whose loader is preregistered is skipped instead of waiting",
+   "guards": [
+    "asset-declaration 5.17 (4)",
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "!loaders_.contains(slot) && !preregistered_.contains(slot)) {",
+   "replace": "!loaders_.contains(slot)) {",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a dependency with no loader is skipped*",
+   "expect": "a\\ preregistered\\ dependency\\ was\\ skipped"
+  },
+  {
+   "id": "as-store-edge-type-unchecked",
+   "what": "an edge to an entry of another type is held",
+   "guards": [
+    "asset-declaration 5.17 (3)",
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            } else if (entries_[found->second].catalog.type != declared.typeName) {",
+   "replace": "            } else if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "depend: edge-level UnknownId and TypeMismatch*",
+   "expect": "an\\ edge\\ to\\ an\\ entry\\ of\\ another\\ type\\ was\\ held"
+  },
+  {
+   "id": "as-snapshot-finished-early",
+   "what": "a dependency not finished does not keep the status Incomplete",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/AssetSnapshot.cpp",
+   "find": "        default: unfinished = true; continue;",
+   "replace": "        default: continue;",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a chain is complete when its last link loads*",
+   "expect": "complete\\ before\\ the\\ last\\ link\\ loaded"
+  },
+  {
+   "id": "as-snapshot-failure-parent",
+   "what": "a failed dependency is listed with the asset asked about instead of its parent",
+   "guards": [
+    "asset-declaration 5.17 告知"
+   ],
+   "file": "engine/modules/asset/src/AssetSnapshot.cpp",
+   "find": "status.failures.push_back(DependencyFailure{record->id, edge.target, edge.reference.writtenPath,\n                                                                target->failure->code});",
+   "replace": "status.failures.push_back(DependencyFailure{id, edge.target, edge.reference.writtenPath,\n                                                                target->failure->code});",
+   "target": "gyo_asset_tests",
+   "cases": "depend: an ancestor recovers*",
+   "expect": "a\\ dependency\\ failure\\ names\\ the\\ wrong\\ parent"
+  },
+  {
+   "id": "ar-path-unlisted",
+   "what": "with a path index, a path no entry has is not UnlistedReference",
+   "guards": [
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/LoadContext.cpp",
+   "find": "                reference.failure = ReferenceFailureCode::UnlistedReference;\n",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "loader: with a path index*",
+   "expect": "a\\ path\\ no\\ entry\\ has\\ is\\ not\\ UnlistedReference"
+  },
+  {
+   "id": "ar-path-ambiguous",
+   "what": "with a path index, a path two entries have maps to the first instead of AmbiguousReference",
+   "guards": [
+    "asset-declaration 5.17",
+    "asset-declaration 5.3 刻意不查的"
+   ],
+   "file": "engine/modules/asset/src/LoadContext.cpp",
+   "find": "            } else if (ids.size() > 1) {",
+   "replace": "            } else if (false) {",
+   "target": "gyo_asset_tests",
+   "cases": "loader: with a path index*",
+   "expect": "a\\ path\\ two\\ entries\\ have\\ is\\ not\\ AmbiguousReference"
+  },
+  {
+   "id": "as-store-shutdown-waits-running",
+   "what": "Shutdown(Discard) returns while a job is still in its loader (only the Drain wait remains): the work world_asset's OnDestroy stops has not stopped when it returns",
+   "guards": [
+    "asset AS-8",
+    "asset-declaration 5.8",
+    "orchestration O-15"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            runningDone_.wait(wait, [this] { return running_.load() == 0; });",
+   "replace": "            (void)wait;",
+   "target": "gyo_asset_tests",
+   "cases": "store: Shutdown waits for a job that is already in its loader*",
+   "expect": "\\[as\\-shutdown\\-waits\\-running\\]"
+  },
+  {
+   "id": "as-store-preregister-not-taken",
+   "what": "a loader type already registered is preregistered for a format it does not take (recorded, so requests of that format wait for nothing)",
+   "guards": [
+    "asset AS-12",
+    "asset-declaration 5.4"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            if (registered != nullptr &&\n",
+   "replace": "            if (false && registered != nullptr &&\n",
+   "target": "gyo_asset_tests",
+   "cases": "store: preregistering a format its registered loader does not take*",
+   "expect": "\\[as\\-store\\-preregister\\-not\\-taken\\]"
+  },
+  {
+   "id": "as-store-read-other-store",
+   "what": "Read does not check that the Handle's core is this store's: a Handle of another store with the same entry index and life reads this store's value",
+   "guards": [
+    "asset AS-6"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": " || body->drops != drops_",
+   "replace": "",
+   "target": "gyo_asset_tests",
+   "cases": "store: a Handle of another store reads as null*",
+   "expect": "\\[as\\-store\\-read\\-other\\-store\\]"
+  },
+  {
+   "id": "as-store-edge-reloads-failed",
+   "what": "a request (and so an edge) does not judge a Failed info again: a parent finishing after its dependency failed does not read it again (approved 5.5, as Bevy's load_dependency)",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        const bool reloading = Rejudge(index, entry, info);",
+   "replace": "        const bool reloading = false;",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a failed dependency is read again by each parent*",
+   "expect": "\\[as\\-store\\-edge\\-reloads\\-failed\\]"
+  },
+  {
+   "id": "as-store-noloader-then-waits",
+   "what": "judging a Failed(NoLoader) info again never makes it wait: after its loader is preregistered a request leaves it Failed (design review r1)",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.4"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "        Judgment judgment = Judge(entry);\n        if (judgment.state == AssetState::Failed && judgment.failure->code == info.failure->code) return false;",
+   "replace": "        Judgment judgment = Judge(entry);\n        if (judgment.state == AssetState::WaitingForLoader) return false;\n        if (judgment.state == AssetState::Failed && judgment.failure->code == info.failure->code) return false;",
+   "target": "gyo_asset_tests",
+   "cases": "store: a Failed(NoLoader) asset waits once its loader is preregistered*",
+   "expect": "\\[as\\-store\\-noloader\\-then\\-waits\\]"
+  },
+  {
+   "id": "as-snapshot-root-failed",
+   "what": "a root that failed itself is not Failed with its dependencies (Complete when it has no edges) (design review r16)",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.17"
+   ],
+   "file": "engine/modules/asset/src/AssetSnapshot.cpp",
+   "find": "            if (record == root) rootFailed = true;\n            continue;",
+   "replace": "            continue;",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a parent that fails to decode*",
+   "expect": "\\[as\\-snapshot\\-root\\-failed\\]"
+  },
+  {
+   "id": "as-store-pump-one-round",
+   "what": "maintenance takes one round of drops only: the drops the removed infos' edges push stay for the next Pump, so a chain outlives its head",
+   "guards": [
+    "asset AS-13",
+    "asset-declaration 5.5"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "            // Removed values (and the holds of their edges, which may push\n            // more drops for the next round) go here, outside the lock.\n        }",
+   "replace": "            // Removed values (and the holds of their edges, which may push\n            // more drops for the next round) go here, outside the lock.\n            break;\n        }",
+   "target": "gyo_asset_tests",
+   "cases": "depend: dropping the head of a chain*",
+   "expect": "\\[as\\-store\\-pump\\-to\\-empty\\]"
+  },
+  {
+   "id": "as-store-edge-holds-nothing",
+   "what": "a Held edge keeps no hold on its target: the shared dependency of a diamond is requested again instead of hit",
+   "guards": [
+    "asset AS-13"
+   ],
+   "file": "engine/modules/asset/src/AssetStore.cpp",
+   "find": "                edge.hold = std::move(body);\n                edge.kind = CountReference(branch);",
+   "replace": "                edge.kind = CountReference(branch);",
+   "target": "gyo_asset_tests",
+   "cases": "depend: a diamond reads its shared dependency once*",
+   "expect": "\\[as\\-store\\-edge\\-holds\\]"
+  }
+ ]
+}

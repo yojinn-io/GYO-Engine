@@ -1,5 +1,7 @@
 # 資產（目標架構）
 
+> 已由 [`target/v2/asset.zh-Hant.md`](v2/asset.zh-Hant.md) 取代（2026-11-22，`v8-arch-gyo2-asset`）。以下保留作紀錄。
+
 > Status: target, not implemented
 
 更新：2026-11-11。Owner：架構（架構師會話）。來源：audit §3.6 第 4 項的使用者決定（側邊會話轉述）；參考 Bevy 的資產模型（`AssetServer`、`Assets<T>`、`RenderAssets<T>`）。

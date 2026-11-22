@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "assets": [
+    { "id": "sample.gizmo", "type": "made_up_type", "path": "gizmos/gizmo.bin" }
+  ]
+}

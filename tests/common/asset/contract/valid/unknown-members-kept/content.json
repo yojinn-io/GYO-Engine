@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "catalogs": ["asset_catalog.json"],
+  "future_manifest_key": {"a": [1, 2.5, "x"]}
+}
