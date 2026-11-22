@@ -1,0 +1,168 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the net Module, step 1a (docs/architecture/target/v2/net-module-declaration.zh-Hant.md, D-2, D-4, D-12 and judgement G-2; Design Invariants draft in docs/architecture/target/v2/net.zh-Hant.md; ids nt-). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "nt-ackbits-31",
+   "what": "the ack bitfield covers 31 packets instead of 32: the oldest acknowledged packet is left out. Only it catches the width of the bitfield (G-2 still passes, since a later header acknowledges it)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        for (std::uint16_t i = 0; i < 32; ++i) {\n            if (WasReceived(static_cast<std::uint16_t>(header.ack - 1 - i))) header.ackBits |= (1u << i);",
+   "replace": "        for (std::uint16_t i = 0; i < 31; ++i) {\n            if (WasReceived(static_cast<std::uint16_t>(header.ack - 1 - i))) header.ackBits |= (1u << i);",
+   "target": "gyo_net_tests",
+   "cases": "connection: the ack bitfield*",
+   "expect": "the\\ ack\\ bitfield\\ covers\\ the\\ 32\\ packets\\ before\\ ack"
+  },
+  {
+   "id": "nt-ack-ignores-pieces",
+   "what": "an acknowledged packet does not acknowledge the reliable pieces it carried, so they are resent forever. Only it catches the packet-to-piece acknowledgement (G-2 still delivers, with duplicates dropped)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        if (!piece.acked) {\n            piece.acked = true;\n            --message.open;\n        }",
+   "replace": "        (void)piece;",
+   "target": "gyo_net_tests",
+   "cases": "connection: an acknowledged piece*",
+   "expect": "an\\ acknowledged\\ piece\\ is\\ not\\ sent\\ again"
+  },
+  {
+   "id": "nt-resend-no-rtt",
+   "what": "the resend delay ignores the RTT and uses the floor only. Only it catches the 1.5 x RTT term (lightyear ReliableSettings::resend_delay)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "    const NetTime resendDelay = std::max(smoothedRtt_ * 3 / 2, settings_.resendMinDelay);",
+   "replace": "    const NetTime resendDelay = settings_.resendMinDelay;",
+   "target": "gyo_net_tests",
+   "cases": "connection: the resend delay*",
+   "expect": "a\\ piece\\ is\\ not\\ resent\\ before\\ 1\\.5\\ x\\ RTT"
+  },
+  {
+   "id": "nt-ordered-no-dedup",
+   "what": "an Ordered Reliable piece received twice while its message waits behind a gap is counted twice, so the message is never handed out. Only it catches the receiver's piece de-duplication (a duplicate of a message already handed out is caught by the id check before it)",
+   "guards": [
+    "net-module-declaration D-2",
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "            if (slot.have[pieceIndex]) {\n                DropPieces(entry.channel, DropReason::DuplicateMessage, 1);\n                continue;\n            }\n            slot.have[pieceIndex] = true;",
+   "replace": "            slot.have[pieceIndex] = true;",
+   "target": "gyo_net_tests",
+   "cases": "connection: a reliable piece received twice*",
+   "expect": "a\\ reliable\\ piece\\ received\\ twice\\ is\\ handed\\ out\\ once"
+  },
+  {
+   "id": "nt-fragment-incomplete",
+   "what": "an unreliable fragmented message is handed out after its first piece. Only it catches the completeness check of the unreliable reassembly",
+   "guards": [
+    "net-module-declaration D-2",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        if (message.received < message.pieces.size()) continue;",
+   "replace": "        if (message.received < 1) continue;",
+   "target": "gyo_net_tests",
+   "cases": "connection: an incomplete fragmented message*",
+   "expect": "an\\ incomplete\\ fragmented\\ message\\ is\\ not\\ handed\\ out"
+  },
+  {
+   "id": "nt-connid-unchecked",
+   "what": "a datagram of another connection is accepted. Only it catches the connection id comparison",
+   "guards": [
+    "net-module-declaration D-2",
+    "net-module-declaration D-12"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "    if (header.connectionId != settings_.connectionId) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "connection: a datagram of another connection*",
+   "expect": "a\\ datagram\\ of\\ another\\ connection\\ is\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-timeout-uncounted",
+   "what": "the pieces of an unreliable fragmented message that timed out are dropped without being counted. Only it catches a drop left out of the count (the reconciliation of G-2)",
+   "guards": [
+    "net-module-declaration D-12",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "                DropPieces(i, DropReason::FragmentTimeout, it->second.received);",
+   "replace": "                (void)i;",
+   "target": "gyo_net_tests",
+   "cases": "transport: G-2*",
+   "expect": "unreliable\\ pieces:\\ sent\\ \\+\\ in\\ duplicates\\ ==\\ handed\\ out\\ \\+\\ dropped\\ \\+\\ in\\ losses"
+  },
+  {
+   "id": "nt-ackonly-elicits",
+   "what": "an AckOnly packet asks for an acknowledgement, so two idle ends trade AckOnly packets forever. Only it catches the AckOnly rule (lightyear packet_type.rs:27-37)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "    if (header.kind == PacketKind::Data) ackOwed_ = true;",
+   "replace": "    if (header.kind != PacketKind::Disconnect) ackOwed_ = true;",
+   "target": "gyo_net_tests",
+   "cases": "connection: an AckOnly packet*",
+   "expect": "an\\ AckOnly\\ packet\\ does\\ not\\ ask\\ for\\ an\\ acknowledgement"
+  },
+  {
+   "id": "nt-packet-no-dedup",
+   "what": "a packet id already received is processed again, so an unreliable message in a duplicated datagram is handed out twice. Only it catches the packet-level de-duplication",
+   "guards": [
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        if (WasReceived(header.packetId)) {\n            refuse(DropReason::DuplicatePacket);\n            return {};\n        }\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "transport: G-2*",
+   "expect": "Unreliable\\ hands\\ out\\ no\\ duplicate"
+  },
+  {
+   "id": "nt-magic",
+   "what": "the magic number changes. Only it catches the magic constant of the wire format (README rule 2: one per constant)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/include/engine/net/PacketHeader.hpp",
+   "find": "inline constexpr std::uint16_t kPacketMagic = 0x4E47;",
+   "replace": "inline constexpr std::uint16_t kPacketMagic = 0x4E48;",
+   "target": "gyo_net_tests",
+   "cases": "header: the bytes are the documented*",
+   "expect": "the\\ header\\ bytes\\ are\\ the\\ documented\\ layout"
+  },
+  {
+   "id": "nt-version",
+   "what": "the protocol version changes without the documented layout changing. Only it catches the version constant (README rule 2: one per constant)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/include/engine/net/PacketHeader.hpp",
+   "find": "inline constexpr std::uint8_t kProtocolVersion = 1;",
+   "replace": "inline constexpr std::uint8_t kProtocolVersion = 2;",
+   "target": "gyo_net_tests",
+   "cases": "header: the bytes are the documented*",
+   "expect": "the\\ header\\ bytes\\ are\\ the\\ documented\\ layout"
+  },
+  {
+   "id": "nt-unknown-kind",
+   "what": "a packet kind outside the table (a reserved handshake kind included) is read as Data. Only it catches the closed kind table of the decoder",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/PacketHeader.cpp",
+   "find": "    default:\n        return Base::Err(NetFailure::Make(NetFailureCode::UnknownPacketKind,",
+   "replace": "    default:\n        header.kind = PacketKind::Data;\n        break;\n        return Base::Err(NetFailure::Make(NetFailureCode::UnknownPacketKind,",
+   "target": "gyo_net_tests",
+   "cases": "header: a datagram that is not a header*",
+   "expect": "a\\ kind\\ outside\\ the\\ table\\ \\(a\\ reserved\\ handshake\\ kind\\ included\\)\\ is\\ UnknownPacketKind"
+  }
+ ]
+}
