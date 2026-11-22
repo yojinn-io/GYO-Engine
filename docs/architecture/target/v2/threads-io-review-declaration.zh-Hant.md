@@ -1,6 +1,6 @@
 # threads、io 重審：報告與事前宣告（`v8-arch-gyo2-threads-io-review`）
 
-更新：2026-11-22（修訂 1：Fable 5.2／high 敵對式檢查的必修 5、應修 4、輕微 6 全部處理，對照在第 13 節）。Owner：架構（GYO2 主會話開的任務卡 `local_a184932c`）。**狀態：待使用者核准動工（交使用者的是第 7 節 Q1～Q3 與第 8 節的 Design Invariants 變更）。**
+更新：2026-11-22（修訂 1：Fable 5.2／high 敵對式檢查的必修 5、應修 4、輕微 6 全部處理，對照在第 13 節）。Owner：架構（GYO2 主會話開的任務卡 `local_a184932c`）。**狀態：動工前核准（使用者 2026-11-22，原話「Q1 選 a、Q2 選 a、Q3 選 a，開始」；核准的版本 74d38577）。實作段進行中。**
 
 批次表第 6 組「threads、io 重審」（`v8-arch-gyo2-threads-io-audio-review-start`）。R0（`v8-arch-rebuild-r0-approved`）把 `engine/core/threads`、`engine/core/io` 照 master 帶過來、標「帶過去並重審」，重審點在 [R0 清單](rebuild-r0-carry-list.zh-Hant.md)附錄 A.1。
 

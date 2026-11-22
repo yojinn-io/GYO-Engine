@@ -10,14 +10,14 @@ namespace GYO::Engine::IO::Path {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
     }
 
-    bool ContainsNullByte(std::string_view s) noexcept {
+    static bool ContainsNullByte(std::string_view s) noexcept {
         for (char ch : s) {
             if (ch == '\0') return true;
         }
         return false;
     }
 
-    bool IsAbsoluteLike(std::string_view s) noexcept {
+    static bool IsAbsoluteLike(std::string_view s) noexcept {
         if (s.empty()) return false;
 
         // POSIX absolute "/..."
@@ -34,7 +34,7 @@ namespace GYO::Engine::IO::Path {
         return false;
     }
 
-    bool ContainsTraversal(std::string_view s) noexcept {
+    static bool ContainsTraversal(std::string_view s) noexcept {
         // セグメント単位で ".." を検出（"/../" や 末尾 ".." など）
         // ここは簡易：Normalize 内で確実に処理するので、早期判定用途。
         size_t i = 0;
@@ -160,30 +160,6 @@ namespace GYO::Engine::IO::Path {
         return out;
     }
 
-    std::string Join(std::string_view a, std::string_view b) {
-        if (a.empty()) return std::string(b);
-        if (b.empty()) return std::string(a);
-
-        std::string out;
-        out.reserve(a.size() + 1 + b.size());
-        out.append(a);
-
-        const bool aEnds = (!out.empty() && out.back() == '/');
-        const bool bBeg  = (!b.empty() && b.front() == '/');
-
-        if (aEnds && bBeg) {
-            // "a/" + "/b" -> "a/b"
-            out.pop_back();
-            out.append(b.data(), b.size());
-        } else if (!aEnds && !bBeg) {
-            out.push_back('/');
-            out.append(b.data(), b.size());
-        } else {
-            out.append(b.data(), b.size());
-        }
-        return out;
-    }
-
     std::string Parent(std::string_view s) {
         if (s.empty()) return {};
         // 末尾スラッシュ除去
@@ -193,141 +169,6 @@ namespace GYO::Engine::IO::Path {
         const size_t pos = s.find_last_of('/');
         if (pos == std::string_view::npos) return {};
         return std::string(s.substr(0, pos));
-    }
-
-    std::string_view Filename(std::string_view s) noexcept {
-        if (s.empty()) return {};
-        // 末尾スラッシュ除去
-        while (!s.empty() && s.back() == '/') s.remove_suffix(1);
-        if (s.empty()) return {};
-
-        const size_t pos = s.find_last_of('/');
-        if (pos == std::string_view::npos) {
-            return std::move(s);
-        }
-        return s.substr(pos + 1);
-    }
-
-    std::string_view Extension(std::string_view s) noexcept {
-        std::string_view fn = Filename(s);
-        if (fn.empty()) return {};
-        const size_t dot = fn.find_last_of('.');
-        if (dot == std::string_view::npos) return {};
-        // ".gitignore" みたいな先頭ドットは拡張子扱いしない（好みで変更可）
-        if (dot == 0) return {};
-        return fn.substr(dot);
-    }
-
-    std::string ReplaceExtension(std::string_view s, std::string_view ext) {
-        // ext は ".png" でも "png" でも受ける
-        std::string e(ext);
-        if (!e.empty() && e.front() != '.') e.insert(e.begin(), '.');
-
-        std::string out(s);
-        std::string_view fn = Filename(s);
-        if (fn.empty()) return out;
-
-        const size_t lastSlash = out.find_last_of('/');
-        const size_t start = (lastSlash == std::string::npos) ? 0 : (lastSlash + 1);
-
-        const size_t dot = out.find_last_of('.');
-        if (dot == std::string::npos || dot < start) {
-            // 既存拡張子なし
-            out += e;
-            return out;
-        }
-
-        out.erase(dot);
-        out += e;
-        return out;
-    }
-
-    bool IsSlash(char c) noexcept { return c == '/' || c == '\\'; }
-
-    std::string NormalizeSlashes(std::string_view path,
-                                 bool normalizeSeparators,
-                                 bool squashSlashes) {
-        std::string out;
-        out.reserve(path.size());
-
-        bool prevSlash = false;
-        for (char c : path) {
-            char x = c;
-
-            if (normalizeSeparators && x == '\\') x = '/';
-
-            const bool isSlash = (x == '/');
-            if (squashSlashes) {
-                if (isSlash) {
-                    if (prevSlash) continue;
-                    prevSlash = true;
-                } else {
-                    prevSlash = false;
-                }
-            }
-            out.push_back(x);
-        }
-
-        // 末尾の "/" は原則保持（現行方針）
-        return out;
-    }
-
-    bool IsAbsolutePathLike(std::string_view p) {
-        if (p.empty()) return false;
-
-        // Unix: "/..."
-        if (p.size() >= 1 && p[0] == '/') return true;
-
-        // Windows UNC: "\\server\share"（Normalize前でも来るので両方対応）
-        if (p.size() >= 2 && IsSlash(p[0]) && IsSlash(p[1])) return true;
-
-        // Windows drive: "C:\..." or "C:/..."
-        if (p.size() >= 3 &&
-            std::isalpha(static_cast<unsigned char>(p[0])) &&
-            p[1] == ':' &&
-            IsSlash(p[2])) {
-            return true;
-        }
-        return false;
-    }
-
-    std::string StripSchemeLoose(std::string_view p, bool& stripped) {
-        stripped = false;
-
-        auto pos = p.find("://");
-        if (pos == std::string_view::npos) {
-            return std::string(p);
-        }
-
-        // scheme 名は検証しない（許可するなら剥がす方針）
-        stripped = true;
-
-        std::string_view rest = p.substr(pos + 3);
-
-        // "res:///a" のようなケースを "a" に寄せる（先頭スラッシュ削除）
-        while (!rest.empty() && (rest.front() == '/' || rest.front() == '\\')) {
-            rest.remove_prefix(1);
-        }
-        return std::string(rest);
-    }
-
-    std::string JoinRootAndRelative(std::string_view root, std::string_view rel) {
-        std::string r = std::string(root);
-        if (r.empty()) r = "assets";
-
-        // 正規化前提で "/" へ寄せる
-        for (auto& c : r) {
-            if (c == '\\') c = '/';
-        }
-
-        // root の末尾が "/" で終わるようにする
-        if (!r.empty() && r.back() != '/') r.push_back('/');
-
-        // rel 先頭の "/" を除く（相対のはずだが保険）
-        while (!rel.empty() && IsSlash(rel.front())) rel.remove_prefix(1);
-
-        r.append(rel.data(), rel.size());
-        return r;
     }
 
     std::string RemoveDotSegments(std::string_view path, bool& escapedAboveRoot) {

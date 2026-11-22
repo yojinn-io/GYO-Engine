@@ -1,24 +1,36 @@
-# GYO role threads
+# GYO threads
 
-Owner: Engine (`engine/threads` → `GYO::Threads`).
+Owner: Engine (`engine/core/threads` → `GYO::Threads`; core, not a Module).
 Plan and record: [time-threads-trace](plans/time-threads-trace/README.md), batch TT-1 (D27, D29); this document was
 written in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants; the thread naming and priority
-calls moved into engine/os in batch os-threads-backend (D69).
+calls moved into engine/os in batch os-threads-backend (D69). Re-reviewed for GYO2 in
+[threads-io-review](target/v2/threads-io-review-declaration.zh-Hant.md) (`v8-arch-gyo2-threads-io-review`, 2026-11-22):
+`RoleThread` kept as it is, `WorkerPool` added.
 
 ## What it is
 
 ```text
-GYO::Time ◄── GYO::Threads ◄── GYO::Trace, products
+GYO::Time ◄── GYO::Threads ◄── engine/modules/logging, products (runners, pools for World-external work)
 GYO::OS   ◄──┘ (privately: the thread name and priority calls)
 ```
 
-- **`Threads::RoleThread`**: one long-lived, named thread running one role's loop, with its own `Time::Waiter`.
+- **`Threads::RoleThread`**: one long-lived, named thread running one role's loop, with its own `Time::Waiter`. A role
+  is a thread with a name and a fixed duty ([vocabulary](target/v2/rebuild-vocabulary.zh-Hant.md), Role); it is
+  the dedicated-thread placement of an executor (rebuild-concept C8).
 - **`Threads::RoleContext`**: what the loop sees: its stop request and its Waiter.
+- **`Threads::WorkerPool`**: a fixed number of role threads taking jobs first in, first out; the worker-pool placement
+  of C8. Whoever creates it owns it.
+
+Users: logging's file writer thread is a role. A runner may hand a whole World to a role it creates and joins
+(orchestration O-3, O-13; the entry's shape comes with the first product that does it); the World is not bound to
+the thread. A product that wants World-external work off the World's threads (asset reads and decodes, asset X-1)
+creates a `WorkerPool`, chooses its thread count (asset X-4), and hands it on through `ProductDescription::options`;
+the Engine starts no pool by default.
 
 Ownership: Engine owns the thread's lifetime, its name and priority hint per platform, and its wake. engine/threads
-owns the role and its lifetime; the OS calls that name and prioritize the thread are engine/os's (`OS::Thread`,
-os-threads-backend, D69). The consumer owns the loop, its tick policy and thresholds, and the order in which roles
-stop and join.
+owns the role and its lifetime and the pool's queue; the OS calls that name and prioritize the thread are engine/os's
+(`OS::Thread`, os-threads-backend, D69). The consumer owns the loop, its tick policy and thresholds, the order in
+which roles stop and join, and what a job does.
 
 ## Contracts
 
@@ -40,6 +52,13 @@ stop and join.
   `PriorityApplied()` tells whether the platform took it. `Normal` is the default class or priority: macOS and
   Windows set it explicitly, Linux and other platforms make no call, and it counts as applied there.
 - `WaitBackend()` reports the backend of the role's own Waiter.
+- `WorkerPool::Start(options)` starts `threadCount` (at least one) role threads named `"<name> (<index>)"` with the
+  given priority; a thread the OS refuses is `StartFailed` and the pool's other threads are stopped and joined.
+  `Submit(job)` queues the job and returns true, or, once `Stop` has begun, takes nothing and returns false; jobs
+  start in the order they were submitted. `Stop(Drain)` runs the jobs already queued, `Stop(Discard)` drops the
+  jobs not started; both return once no job is running and every thread has returned, and a second `Stop` does
+  nothing. The destructor is `Stop(Discard)`. A job must not let an exception escape. `Stop` and the destructor are
+  not called from one of the pool's threads. A moved-from pool takes no job.
 
 ## Design Invariants
 
@@ -76,12 +95,24 @@ stop and join.
    `GYO::Engine`, and what links `GYO::Threads` gets no engine/os headers from it (os-threads-backend, D69). Guards:
    mutants `ti-x2-threads-links-more`, `th-x1-threads-os-public`.
 
+10. **A stopped pool takes no job.** After `Stop` has begun, `Submit` returns false and the job neither runs nor
+    stays. Guard: `tests/common/threads/WorkerPoolTests.cpp` "WorkerPool takes no job after Stop"; mutant
+    `wp-submit-after-stop`.
+11. **Stopping a pool ends its work.** `Stop` returns once no job is running and every thread has returned; `Drain`
+    runs the jobs already queued first, `Discard` drops them. Guards: "WorkerPool Stop with Drain runs the jobs
+    already queued", "WorkerPool Stop with Discard drops the queued jobs and waits for the running one"; mutants
+    `wp-drain-drops-queued`, `wp-discard-returns-early`.
+12. **A pool is not global.** There is no shared or singleton pool: whoever creates one owns it and passes it on
+    (orchestration O-15: one process may hold several Products). No guard; the API has no such accessor.
+
 ### Replacement Criteria
 
 Stop adding features and propose redesigning instead of patching when any of these holds:
 
-1. A consumer needs a thread pool, a scheduler, a work queue or channels: plan a component of its own instead of
-   growing RoleThread.
-2. A platform needs priority or affinity with timing semantics (real-time scheduling, CPU pinning) rather than a hint.
-3. The order in which roles stop has to be enforced by the library, or the destructor's stop-and-join is not enough
+1. A consumer needs a scheduler, dependencies between jobs, job priorities, scopes or channels: plan a component of
+   its own, or replace `WorkerPool`, instead of growing RoleThread or the pool.
+2. A second consumer needs a pool (after asset): propose one Module that creates the Product's pool into the shared
+   place (orchestration O-15) instead of each consumer asking the product for its own.
+3. A platform needs priority or affinity with timing semantics (real-time scheduling, CPU pinning) rather than a hint.
+4. The order in which roles stop has to be enforced by the library, or the destructor's stop-and-join is not enough
    for a consumer's shutdown.

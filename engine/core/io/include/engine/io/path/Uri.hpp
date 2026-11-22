@@ -8,12 +8,11 @@
 
 namespace GYO::Engine::IO::Path {
 
+    // file has the rules of docs/architecture/io.md; any other scheme is Unknown and keeps its name in
+    // schemeText.
     enum class UriScheme {
         None,
-        Asset,
         File,
-        Http,
-        Https,
         Unknown
     };
 
@@ -21,7 +20,7 @@ namespace GYO::Engine::IO::Path {
         UriScheme scheme = UriScheme::None;
         Path path;                // 論理パス（正規化済み）
 
-        std::string schemeText;   // Unknown の場合に保持
+        std::string schemeText;   // the scheme's name when Unknown
         std::string authority;    // "scheme://authority/path"
         std::string query;        // "?a=b"
         std::string fragment;     // "#xxx"
@@ -39,12 +38,6 @@ namespace GYO::Engine::IO::Path {
     // any other names a UNC host; '?' and '#' belong to the path.
     Base::Result<Uri, IOError>  ParseUri(std::string_view s);
 
-    // 失敗はしない方針（空文字は呼び出し側で弾く）
-    // - scheme があれば剥がして path に入れる
-    // - scheme が無ければ scheme=""、path=入力
-    // - file:// that ParseUri accepts gets ParseUri's path; other schemes keep
-    //   the loose meaning (leading slashes dropped)
-    Uri ParseUriLoose(std::string_view s);
 
     // A native absolute path in UTF-8 ("/Users/x", "C:/x", "C:\x" or a UNC
     // path "//server/x", "\\server\x") as a file URI, the path kept as written.

@@ -99,7 +99,7 @@ namespace GYO::Engine::IO::FS {
                 return position.value();
             }
 
-            // Like the other read-only streams (MemoryStream, SpanStream), a target outside [0, Size()] fails.
+            // A target outside [0, Size()] fails.
             Base::Result<std::uint64_t, IOError> Seek(const std::int64_t offset,
                                                       const Stream::SeekWhence whence) override {
                 if (!file_) return Base::Err(Closed(IOErrorCode::SeekFailed));
@@ -358,31 +358,6 @@ namespace GYO::Engine::IO::FS {
         return NativePath(uri);
     }
 
-    FileSystemCapabilities NativeFileSystem::Capabilities() const noexcept {
-        // Set every field: most defaults are true, and a VFS must not take this backend for writable.
-        FileSystemCapabilities caps;
-        caps.canOpenRead = true;
-        caps.canOpenWrite = true;
-        caps.canList = false;
-        caps.canIterate = false;
-        caps.canStat = true;
-        caps.canCreateDirectories = true;
-        caps.canRemove = true;
-        caps.canRemoveRecursive = false;
-        caps.canMove = true;
-        caps.canCopy = false;
-        caps.supportsSymlink = false;
-        caps.supportsPermissions = false;
-        caps.supportsHiddenFlag = false;
-        caps.caseSensitivePaths = OS::Files::DefaultCaseSensitivePaths();
-        caps.supportsToNativePath = true;
-        caps.supportsMtime = true;
-        caps.supportsCtime = false;
-        caps.supportsAtime = false;
-        caps.supportsWatch = false;
-        caps.supportsRecursiveWatch = false;
-        return caps;
-    }
 
     IOResult<void> NativeFileSystem::CreateDirectories(const Path::Uri& uri) {
         auto native = NativePath(uri);
@@ -392,9 +367,8 @@ namespace GYO::Engine::IO::FS {
         return {};
     }
 
-    IOResult<void> NativeFileSystem::Remove(const Path::Uri& uri, const RemoveOptions& opt) {
-        // Files only: a directory, with or without its contents, stays (canRemoveRecursive is false).
-        if (opt.recursive) return Base::Err(Unsupported("Remove with recursive"));
+    IOResult<void> NativeFileSystem::Remove(const Path::Uri& uri) {
+        // Files only: a directory, with or without its contents, stays.
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
         auto removed = OS::Files::RemoveFile(native.value());
@@ -410,22 +384,6 @@ namespace GYO::Engine::IO::FS {
         auto moved = OS::Files::RenameReplacing(source.value(), target.value());
         if (!moved) return Base::Err(FromOS(moved.error(), target.value(), IOErrorCode::WriteFailed));
         return {};
-    }
-
-    IOResult<void> NativeFileSystem::Copy(const Path::Uri&, const Path::Uri&) {
-        return Base::Err(Unsupported("Copy"));
-    }
-
-    IOResult<std::vector<DirectoryEntry>> NativeFileSystem::List(const Path::Uri&, const ListOptions&) {
-        return Base::Err(Unsupported("List"));
-    }
-
-    IOResult<std::unique_ptr<DirectoryIterator>> NativeFileSystem::Iterate(const Path::Uri&, const ListOptions&) {
-        return Base::Err(Unsupported("Iterate"));
-    }
-
-    IOResult<std::unique_ptr<IFileWatcher>> NativeFileSystem::CreateWatcher() {
-        return Base::Err(Unsupported("CreateWatcher"));
     }
 
 } // namespace GYO::Engine::IO::FS

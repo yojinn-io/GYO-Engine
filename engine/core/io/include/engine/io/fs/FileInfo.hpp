@@ -54,9 +54,5 @@ namespace GYO::Engine::IO::FS {
         constexpr bool IsSymlink() const noexcept { return type == FileType::Symlink; }
     };
 
-    /// Remove の挙動指定
-    struct RemoveOptions final {
-        bool recursive = false; // ディレクトリ削除を許可するか
-    };
 
 } // namespace GYO::Engine::IO::FS

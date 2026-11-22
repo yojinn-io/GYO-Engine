@@ -56,6 +56,9 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
   range, a file that is not a regular file), has no native error: its detail is `path_bytes=<n>` alone; no native
   code is made up. An outer module keeps the detail with `Base::CauseDetail` (error-handling.md rule 5).
 - **Files.**
+  - The file calls keep no shared mutable state, so any number of threads may call them at once; a `FileReader` or
+    `FileWriter` is used by one thread at a time. engine/core/io's Design Invariant 6 rests on this
+    (v8-arch-gyo2-threads-io-review).
   - A missing path is `NotFound`, and `Exists` is false (also for a missing parent and a dangling link).
   - Only regular files open: a directory, a FIFO or a device is `InvalidPath` on every platform. POSIX opens with
     `O_NONBLOCK`, so a FIFO is refused at once instead of waiting for a writer.
