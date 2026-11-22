@@ -257,7 +257,7 @@
    | `ClipSlotTests.cpp:323` | 斷言後 `unloadsSubmitted == 0` | 同 `StopTests.cpp:383` | 搬到 `ClipSlotTests.cpp:289` 那一案 |
 2. **錯誤碼**：拿掉 `DeviceUnavailable`（`NoClipSlot` 留 5）。
 3. **守衛**：第 3 題正式核准後拿掉 `gyo_audio_board_readers`。
-4. **文件**：第 7 節（位置經主會話確認）；程式註解裡的 DI 引用改指新頁。
+4. **文件**：第 7 節（位置主會話 2026-11-22 確認：`target/v2/audio.zh-Hant.md`、`audio.md` 加 Legacy 行、`target/v2/README.md` 加一列）；程式註解裡的 DI 引用改指新頁；交換點宣告第 110、372 行在原文旁加更正「被 `v8-arch-gyo2-audio-review-approved` 第 2 題推翻：Submitter 不綁執行緒，同一時間一方使用，換手要 happens-before」，原文不刪（主會話 2026-11-22 指定在本批的 PR 裡改）。
 5. **突變**：第 10 節。
 6. dev_log、設計審查（Fable／high，唯讀）。
 7. 合併前核准頁 `audio-review-merge-approval.zh-Hant.md`（照同線慣例）：DI／RC 的最終文字、第 3 題的 §14.4 正式核准、測試判定的變更、突變的結果。之後開 PR（base `gyo2`），等使用者明確說「合併」。
@@ -352,6 +352,8 @@
 - **取捨**：(A) 三件都要等使用者流程（asset、World 的請求緩衝）定了才判得準，本批只做現在就能驗證的部分；代價是 `world_audio` 之前 audio 的時間契約只有邊界。(B) 早一點補上 A-1，但沒有使用者流程，固定步的時刻要先猜，而且動到 world_time 的 Design Invariants。
 
 ## 13. 和其他卡的協調（經主會話）
+
+**主會話的回覆（2026-11-22，HANDOFF `v8-arch-gyo2-audio-review-approved`）**：(1) `world_audio` 已加進批次表（asset 實作合併之後、SDL 那批之前或同一批），三件開著的事與音效 loader 寫在那一列，loader 位置的改動由主會話轉告 asset 卡；(2) 交換點宣告第 110、372 行由本批的 PR 加更正（第 9 節第 4 步）；(3) 文件位置照第 7 節，GYO2 線的文件一律放 `target/v2/`，由主會話管；(4) 跨 Component 規則已排給圖書管理員，本批只寫在 DI 3。
 
 - **主會話**：(1) 第 7 節的文件位置（`target/v2/audio.zh-Hant.md`＋`audio.md` 的 Legacy 行＋`target/v2/README.md` 加一列；`target/README.md:31` 說定之前先問架構師）；(2) 第 2 題 (A) 核准後改交換點宣告第 110、372 行；(3) 第 5 題：`world_audio` 的排程與第 4.1、4.2、5 節留給它的事；(4) 「送進 World 外服務的時刻都是時間基準」要不要成為跨 Component 的規則，請圖書管理員對照 `cross-component-rules.md`。
 - **asset（`gyo2-asset`）**：asset 宣告 2.2 寫「音效（audio 重審那批）」。本卡建議改到 `world_audio` 那批（loader、型別特性，和第 5 節的 clip 來源一起定）。不改 asset 的任何東西。
