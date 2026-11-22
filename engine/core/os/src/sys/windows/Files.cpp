@@ -484,19 +484,6 @@ Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path) {
     return {};
 }
 
-} // namespace GYO::Engine::OS::Files
-
-namespace GYO::Engine::OS::Detail {
-
-// A new directory inherits its parent's ACL; there is no mode to set.
-Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path, NewDirectoryAccess) {
-    return Files::CreateDirectories(utf8Path);
-}
-
-} // namespace GYO::Engine::OS::Detail
-
-namespace GYO::Engine::OS::Files {
-
 Base::Result<void, OSError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
     if (auto checked = Detail::CheckPath(utf8From); !checked) return Base::Err(std::move(checked.error()));
     if (auto checked = Detail::CheckPath(utf8To); !checked) return Base::Err(std::move(checked.error()));
@@ -731,3 +718,12 @@ bool DefaultCaseSensitivePaths() noexcept {
 }
 
 } // namespace GYO::Engine::OS::Files
+
+namespace GYO::Engine::OS::Detail {
+
+// A new directory inherits its parent's ACL; there is no mode to set.
+Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path, NewDirectoryAccess) {
+    return Files::CreateDirectories(utf8Path);
+}
+
+} // namespace GYO::Engine::OS::Detail

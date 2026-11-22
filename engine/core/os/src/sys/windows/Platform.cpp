@@ -42,7 +42,7 @@ public:
         wchar_t path[MAX_PATH] = {};
         const HRESULT result =
             ::SHGetFolderPathW(nullptr, CSIDL_APPDATA | CSIDL_FLAG_CREATE, nullptr, SHGFP_TYPE_CURRENT, path);
-        if (FAILED(result)) {
+        if (result != S_OK) {
             if (HRESULT_FACILITY(result) == FACILITY_WIN32) {
                 return Base::Err(MakeOSError(OSErrorCode::IOFailed, "cannot name the user data directory",
                     {NativeErrorDomain::Win32, static_cast<std::int64_t>(HRESULT_CODE(result))}));

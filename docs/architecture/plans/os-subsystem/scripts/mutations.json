@@ -2218,8 +2218,8 @@
         "linux"
       ],
       "file": "engine/core/os/src/sys/linux/Platform.cpp",
-      "find": "if (const char* data = XdgDataHome()) return std::string(data);",
-      "replace": "static const std::string cached = XdgDataHome() ? XdgDataHome() : \"\";\n        if (!cached.empty()) return cached;",
+      "find": "if (const char* data = DataHome()) return std::string(data);",
+      "replace": "static const std::string cached = DataHome() ? DataHome() : \"\";\n        if (!cached.empty()) return cached;",
       "target": "gyo_os_tests",
       "cases": "*user data base from XDG_DATA_HOME*",
       "expect": "values: CHECK\\( /[^\\n]*xdg-data[^\\n]*/GYO Test Org/Test App ==[^\\n]*\\n\\s*logged: ignored := relative-data"
@@ -2266,8 +2266,8 @@
         "linux"
       ],
       "file": "engine/core/os/src/sys/linux/Platform.cpp",
-      "find": "if (const char* data = XdgDataHome()) return std::string(data);",
-      "replace": "if (const char* data = XdgDataHome(); data != nullptr && Home() == nullptr) return std::string(data);",
+      "find": "if (const char* data = DataHome()) return std::string(data);",
+      "replace": "if (const char* data = DataHome(); data != nullptr && Home() == nullptr) return std::string(data);",
       "target": "gyo_os_tests",
       "cases": "*user data base from XDG_DATA_HOME*",
       "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)[\\s\\S]*values: CHECK\\( [^\\n]*/\\.local/share/GYO Test Org"

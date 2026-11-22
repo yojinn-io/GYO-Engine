@@ -232,36 +232,6 @@ Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path) {
     return Detail::CreateDirectories(utf8Path, Detail::NewDirectoryAccess::Default);
 }
 
-} // namespace GYO::Engine::OS::Files
-
-namespace GYO::Engine::OS::Detail {
-
-Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path, const NewDirectoryAccess access) {
-    if (auto checked = CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    const mode_t mode = access == NewDirectoryAccess::OwnerOnly ? 0700 : 0777;
-    const std::string path(utf8Path);
-    // Every prefix that ends at a '/' or at the end, from the outermost: each
-    // either is a directory already or is made one.
-    for (std::size_t end = 1; end <= path.size(); ++end) {
-        if (end != path.size() && path[end] != '/') continue;
-        const std::string prefix = path.substr(0, end);
-        if (prefix.back() == '/') continue;
-        if (::mkdir(prefix.c_str(), mode) == 0) continue;
-        const int error = errno;
-        if (error == EEXIST) {
-            struct stat status {};
-            if (::stat(prefix.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) continue;
-            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "exists and is not a directory",
-                                         {NativeErrorDomain::Errno, error}, utf8Path.size()));
-        }
-        return Base::Err(Files::FromErrno(error, "cannot create directory", utf8Path));
-    }
-    return {};
-}
-
-} // namespace GYO::Engine::OS::Detail
-
-namespace GYO::Engine::OS::Files {
 
 Base::Result<void, OSError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
     if (auto checked = Detail::CheckPath(utf8From); !checked) return Base::Err(std::move(checked.error()));
@@ -430,3 +400,30 @@ Base::Result<std::vector<std::string>, OSError> FontDirectories() {
 bool DefaultCaseSensitivePaths() noexcept { return Detail::CurrentPlatform().CaseSensitivePaths(); }
 
 } // namespace GYO::Engine::OS::Files
+
+namespace GYO::Engine::OS::Detail {
+
+Base::Result<void, OSError> CreateDirectories(const std::string_view utf8Path, const NewDirectoryAccess access) {
+    if (auto checked = CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    const mode_t mode = access == NewDirectoryAccess::OwnerOnly ? 0700 : 0777;
+    const std::string path(utf8Path);
+    // Every prefix that ends at a '/' or at the end, from the outermost: each
+    // either is a directory already or is made one.
+    for (std::size_t end = 1; end <= path.size(); ++end) {
+        if (end != path.size() && path[end] != '/') continue;
+        const std::string prefix = path.substr(0, end);
+        if (prefix.back() == '/') continue;
+        if (::mkdir(prefix.c_str(), mode) == 0) continue;
+        const int error = errno;
+        if (error == EEXIST) {
+            struct stat status {};
+            if (::stat(prefix.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) continue;
+            return Base::Err(MakeOSError(OSErrorCode::InvalidPath, "exists and is not a directory",
+                                         {NativeErrorDomain::Errno, error}, utf8Path.size()));
+        }
+        return Base::Err(Files::FromErrno(error, "cannot create directory", utf8Path));
+    }
+    return {};
+}
+
+} // namespace GYO::Engine::OS::Detail

@@ -19,7 +19,7 @@
   - Q2 (a)：這次新建的每一層在 POSIX 上是 0700。為此 os 內部加了 `Detail::CreateDirectories(path, NewDirectoryAccess)`；公開的 `CreateDirectories` 仍是 0777 扣掉 umask。
 - 取不到 base 時回 `IOFailed`（POSIX 沒有絕對路徑的 `HOME`），不退到目前的工作目錄。
 - `HOME`、base 結尾的 `/` 會去掉（`Detail::WithoutTrailingSlashes`）。
-- 字型目錄改成呼叫同一組小函式（macOS `Home()`；Linux `XdgDataHome()`、`Home()`），判斷方式和結果不變。這一點由新的測試確認（見下）。
+- 字型目錄改成呼叫同一組小函式（macOS `Home()`；Linux `DataHome()`、`Home()`），判斷方式和結果不變。這一點由新的測試確認（見下）。
 - os.md：Components 表的 Files 列、Contracts 的 Files 加一段、Guard 節 shell32 的用途。Design Invariants 節沒有改。
 - CMake 的註解：shell32 的用途補上 `SHGetFolderPathW`（`engine/core/os/CMakeLists.txt`、`tests/common/os/CMakeLists.txt`）。不加連結。
 
@@ -32,6 +32,7 @@
 | Linux（Docker `gyo-linux-run:1`，gcc-14）`gyo_os_tests` | 74 個案例、1075 個斷言全部通過（多一個只在 Linux 跑的 XDG 案例） | 主 checkout `build/evidence/gyo2-os-paths/linux-run.log`、`mutants-linux-rerun.log` 開頭 |
 | 新突變 `ou-x1`～`ou-x20` | 20／20 killed（macOS 13、Linux 7） | `build/evidence/gyo2-os-paths/mutants-darwin-ou.log`、`mutants-linux-rerun.log` |
 | 既有突變中 find 落在改動附近、或函式搬了位置的（D184） | `os-w4`、`os-w5`、`os-x6`：3／3 killed | `build/evidence/gyo2-os-paths/mutants-darwin-existing.log` |
+| 設計審查後的修改（`DataHome` 改名、`Detail` 搬到檔尾、`S_OK`）之後重跑 | macOS：`ou-x1`、`ou-x14`、`ou-x15`、`os-w4`、`os-w5` 5／5；Linux：受影響的 7 個 `ou-` 加 `ou-x14`、`ou-x15`、`os-w4`、`os-w5` 11／11；兩邊的 `gyo_os_tests` 全部通過 | `build/evidence/gyo2-os-paths/mutants-darwin-after-review.log`、`mutants-linux-after-review.log` |
 | `os-g18-windows-extra-link`（find 和改動的行相鄰） | 只在 Windows 跑，本機沒有執行。find 那一行（`target_link_libraries(gyo_os PRIVATE shell32)`）沒有改動 | — |
 | CI L1 三個平台 | 開 PR 後補記 | — |
 
@@ -56,6 +57,18 @@
   - expect：`ou-x5` 對 Windows 的分支也匹配；`ou-x6` 和 `ou-x13`、`ou-x10` 和 `ou-x12` 加上能區分的 `values:` 片段；`ou-x15` 的 `guards` 改成 `"os 9"`。
 - Linux 第一次跑，`ou-x10`、`ou-x12` 是 wrong_failure。在 Docker 手動套上 `ou-x12` 重現，發現 `CAPTURE` 一個 `const char*` 時 doctest 印的是指標位址（`logged: ignored := 0x55c9…`），不是字串。迴圈變數改成 `std::string` 後重跑，7／7 killed。斷言與 expect 都沒改。
 - 第一次在 macOS 跑突變時，zsh 沒有拆開沒加引號的 `$IDS`，`ou-` 的突變沒被選到。用 `${=IDS}` 重跑。
+- 合併前的設計審查（Fable 5.2／high，唯讀）：必修 2、應修 3、輕微 5。
+  - 照改：
+    - os.md 的「What it is」補上 `src/sys/UserData.cpp` 三個平台共用、Windows 只實作 `UserDataBase`。
+    - os.md 對 Windows 名字結尾 `.`／空格、保留名的說法，改成「交給 OS、不定義」（原本寫得比程式能保證的多）。
+    - `XdgDataHome` 改回 `DataHome`（N17：縮寫不准一大一小）。
+    - `Platform.hpp` 的註解說明 `Detail::CreateDirectories` 由兩個 `Files.cpp` 實作。
+    - `Detail` 那一段搬到兩個 `Files.cpp` 的檔尾，`Files` namespace 不再從中間切開。
+    - Windows 改成 `result != S_OK`（`S_FALSE` 加空緩衝不會變成空的 base）。
+    - 註解的用詞：名字是被檢查的，不是被建立的。
+    - 排版。
+  - 交使用者：審查者建議退掉 `ou-x20`（守 `IOFailed`，但 os.md 寫「呼叫者不依碼分支」）、`ou-x7`、`ou-x8`（守 `HOME` 結尾 `/` 造成路徑中間的 `//`）。`ou-x20` 是 `CHECK(withoutHome.error().code == IOFailed)` 唯一的突變，照 mutation README「尋ねるもの」要問使用者，所以合併前核准時一起交。
+  - 必修 2（Windows 只能靠 CI）：見驗證表的 CI L1 列。
 
 ## 突變的數量（mutation README 第 8 條）
 

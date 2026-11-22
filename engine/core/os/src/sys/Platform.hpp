@@ -42,8 +42,9 @@ public:
     [[nodiscard]] virtual Base::Result<std::string, OSError> UserDataBase() const = 0;
 };
 
-// Files::CreateDirectories, with the access of the directories it makes
-// (sys/Files.cpp, sys/windows/Files.cpp). OwnerOnly makes them 0700 on POSIX;
+// Files::CreateDirectories, with the access of the directories it makes. Unlike
+// the steps above it is a function, implemented next to CreateDirectories in
+// sys/Files.cpp and sys/windows/Files.cpp. OwnerOnly makes them 0700 on POSIX;
 // Windows ignores it, since a new directory inherits its parent's ACL.
 enum class NewDirectoryAccess : std::uint8_t { Default, OwnerOnly };
 [[nodiscard]] Base::Result<void, OSError> CreateDirectories(std::string_view utf8Path, NewDirectoryAccess access);

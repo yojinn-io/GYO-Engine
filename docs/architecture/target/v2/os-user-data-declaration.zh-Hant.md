@@ -285,7 +285,8 @@ Design Invariants 都不改，逐條對照：
 |---|---|---|
 | 5.2 預計 11 個突變 | 20 個（`ou-x1`～`ou-x20`），全部 killed | 突變清單的敵對式檢查補了 5 個（organization 的檢查、macOS 和 Linux 的相對 `HOME`、Linux 的 `.local/share`、錯誤碼）；結尾的 `/` 要在三處去掉（共用的組合、macOS、Linux 的 `HOME`），各一個。mutation README 第 8 條的說明在 dev_log |
 | C7「base 結尾的 `/` 去掉」 | 另外在 macOS、Linux 從 `HOME` 拼 base 時，先去掉 `HOME` 結尾的 `/` | `HOME=/x/` 會在 base 中間留下 `//`，不只是結尾。字型目錄沿用舊的拼法，結果不變 |
-| 3.1「Linux 的 `DataHome()`」 | Linux 是 `XdgDataHome()` 和 `Home()` 兩個小函式 | 字型目錄和使用者資料目錄從 `HOME` 拼的路徑不同，共用的是「是不是絕對路徑」的判斷 |
+| 3.1「Linux 的 `DataHome()`」 | Linux 是 `DataHome()`（只看 `XDG_DATA_HOME`）和 `Home()` 兩個小函式 | 字型目錄和使用者資料目錄從 `HOME` 拼的路徑不同，共用的是「是不是絕對路徑」的判斷。一度寫成 `XdgDataHome`，違反 N17 的縮寫規則（不准一大一小），設計審查指出後改回 |
+| C10「Windows 名字結尾的 `.`、空格……之後再經 os 開檔也會做同樣的正規化，照樣打得開」 | os.md 只寫「交給 OS、不定義」 | 設計審查指出：Win32 只在路徑的最後一段去掉結尾空格，中間段的行為不同，「照樣打得開」沒有測試也沒有在 Windows 驗證過。照 C10 的原意（不加檢查）只寫交給 OS |
 | 5.1 測試 1～8 | 另加字型目錄的 POSIX 案例 | 確認字型目錄小函式化之後結果不變（敵對式檢查指出既有的字型測試擋不住） |
 
 其餘照宣告。dev_log：`docs/dev_logs/2026_11_22_gyo2_os_user_data.zh-Hant.md`。

@@ -7,10 +7,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <vector>
-
-#include <optional>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX

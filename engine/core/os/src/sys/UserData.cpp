@@ -1,7 +1,7 @@
 // Files::UserDataDirectory on every platform (docs/architecture/os.md, Files;
 // v8-arch-gyo2-os-user-data). Only the base directory differs between
-// platforms: each Platform names it (sys/<platform>/Platform.cpp), and the
-// names, the path and the directories are made here once.
+// platforms: each Platform names it (sys/<platform>/Platform.cpp), and here,
+// once, the names are checked, the path joined and the directories made.
 #include "engine/os/Files.hpp"
 
 #include "Platform.hpp"
