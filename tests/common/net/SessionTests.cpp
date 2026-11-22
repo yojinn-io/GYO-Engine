@@ -107,7 +107,7 @@ TEST_CASE("handshake: each fact that differs is rejected with its own reason (G-
     REQUIRE(ReasonOf(ClientFacts()) == kConnected);
 
     auto version = ClientFacts();
-    version.protocolVersion = 2;
+    version.protocolVersion = N::kNetProtocolVersion + 1;
     CHECK_MESSAGE(ReasonOf(version) == N::DisconnectReason::ProtocolMismatch, "a protocol version that differs is ProtocolMismatch");
     CHECK(Shake(version).value_or(N::Rejection{}).detail.find("version") != std::string::npos);
 
@@ -222,7 +222,9 @@ TEST_CASE("handshake: a new handshake from the same endpoint is a new connection
     Wire again{host, second};
     again.Round(Ms(2));
     again.Round(Ms(3));
-    REQUIRE(second.State() == N::ClientState::Connected);
+    // Given the old connection back, the accept carries the old salt and the newer session does not take it (S2).
+    REQUIRE_MESSAGE(second.State() == N::ClientState::Connected,
+                    "a reconnect from the same endpoint is a new connection: the newer handshake connects");
     CHECK_MESSAGE(second.Accepted()->connectionId != oldId, "a reconnect from the same endpoint is a new connection");
     CHECK(host.ConnectionCount() == 1);
     const auto events = host.TakeEvents();
@@ -366,4 +368,47 @@ TEST_CASE("liveness: a closed client sends its Disconnect packets and the server
     CHECK(events[0].reason == N::DisconnectReason::ClosedByRemote);
     // The other nine are of a connection that no longer exists.
     CHECK(pair.host.Drops()[static_cast<std::size_t>(N::DropReason::UnknownSource)] == 9);
+}
+
+// ---- Fixes of the design review before PR-1's merge (S2): the salt tells a newer handshake from an older one.
+
+TEST_CASE("handshake: a late response of an older handshake does not end the newer connection (S2 a)") {
+    N::ServerHost host(Settings(), ServerFacts(), 77, 99);
+    N::ClientSession first(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 1}, Ms(0));
+    Wire wire{host, first};
+    wire.Round(Ms(0));
+    // The first handshake's response, held back on the way (the client resends every 100 ms; this copy is late).
+    const auto late = first.Collect(Ms(1), {});
+    REQUIRE(late.size() == 1);
+    // A newer handshake from the same endpoint (salt 2) connects.
+    N::ClientSession second(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 2}, Ms(2));
+    Wire again{host, second};
+    again.Round(Ms(2));
+    again.Round(Ms(3));
+    REQUIRE(second.State() == N::ClientState::Connected);
+    const std::uint32_t id = second.Accepted()->connectionId;
+    (void)host.TakeEvents();
+    host.Receive(kClient, late[0], Ms(4));
+    (void)host.Collect(Ms(4), {});
+    CHECK_MESSAGE(host.TakeEvents().empty(), "S2 a: an older handshake's response neither ends nor opens a connection");
+    CHECK(host.ConnectionCount() == 1);
+    CHECK(host.Find(id) != nullptr);
+    CHECK(host.Drops()[static_cast<std::size_t>(N::DropReason::Unexpected)] == 1);
+}
+
+TEST_CASE("handshake: a connecting client does not take the accept of an older handshake (S2 b)") {
+    N::ServerHost host(Settings(), ServerFacts(), 77, 99);
+    N::ClientSession first(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 1}, Ms(0));
+    Wire wire{host, first};
+    wire.Round(Ms(0));
+    for (const auto& datagram : first.Collect(Ms(1), {})) host.Receive(kClient, datagram, Ms(1));
+    // The server's accept for the first handshake, which arrives only after the client started a new one.
+    const auto replies = host.Collect(Ms(1), {});
+    REQUIRE(replies.size() == 1);
+    REQUIRE(KindOf(replies[0].second) == N::PacketKind::Accepted);
+    N::ClientSession second(Settings(), N::ConnectRequest{ClientFacts(), 42, {}, 2}, Ms(2));
+    (void)second.Collect(Ms(2), {});
+    second.Receive(replies[0].second, Ms(3));
+    CHECK_MESSAGE(second.State() == N::ClientState::Connecting, "S2 b: the accept of an older handshake is not taken");
+    CHECK(second.Drops()[static_cast<std::size_t>(N::DropReason::Unexpected)] == 1);
 }

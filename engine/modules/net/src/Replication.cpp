@@ -162,29 +162,64 @@ void Components(ReplicaWorld& world, const NetRegistry& registry, Snapshot& snap
     }
 }
 
+void DropAt(PeerLedger& ledger, const ReplicaDrop reason) { ++ledger.drops[static_cast<std::size_t>(reason)]; }
+
+// The structure update a message needs, on the wire: 0 when none was sent yet, else its tick + 1 (S1: tick 0 is a
+// structure tick like any other).
+std::uint32_t StructureOnWire(const std::optional<std::uint32_t> tick) { return tick ? *tick + 1 : 0; }
+std::optional<std::uint32_t> StructureFromWire(const std::uint32_t value) {
+    if (value == 0) return std::nullopt;
+    return value - 1;
+}
+// Whether the structure a message needs is applied.
+bool StructureApplied(const std::optional<std::uint32_t> needed, const std::optional<std::uint32_t> applied) {
+    return !needed || (applied && *needed <= *applied);
+}
+
 // The client's messages on the reliable channel: confirmations and resyncs, read by the server before it sends.
-void ReadClient(PeerLedger& ledger, Connection& connection) {
+// What cannot be read, is of another kind, generation or epoch is dropped and counted on the Peer (D-12).
+void ReadClient(PeerLedger& ledger, Connection& connection, const std::uint32_t serverGeneration) {
     while (auto message = connection.Pop(kReliableChannel)) {
         NetReader reader(*message);
         std::uint8_t kind = 0;
         std::uint32_t generation = 0, epoch = 0;
-        if (!reader.Value(kind) || !reader.Value(generation) || !reader.Value(epoch)) continue;
+        if (!reader.Value(kind) || !reader.Value(generation) || !reader.Value(epoch)) {
+            DropAt(ledger, ReplicaDrop::Malformed);
+            continue;
+        }
         if (kind == static_cast<std::uint8_t>(Kind::Resync)) {
             // The client's World was replaced: everything is sent again, under the new epoch.
             ledger.entities.clear();
             ledger.pending.clear();
             ledger.resources.clear();
-            ledger.lastStructureTick = 0;
+            ledger.lastStructureTick.reset();
             ledger.epoch = epoch;
             continue;
         }
-        if (kind != static_cast<std::uint8_t>(Kind::Confirm) || epoch != ledger.epoch) continue;
+        if (kind != static_cast<std::uint8_t>(Kind::Confirm)) {
+            DropAt(ledger, ReplicaDrop::Malformed);
+            continue;
+        }
+        if (generation != serverGeneration) {
+            DropAt(ledger, ReplicaDrop::StaleGeneration);
+            continue;
+        }
+        if (epoch != ledger.epoch) {
+            DropAt(ledger, ReplicaDrop::StaleEpoch);
+            continue;
+        }
         std::uint32_t count = 0;
-        if (!reader.Value(count)) continue;
+        if (!reader.Value(count)) {
+            DropAt(ledger, ReplicaDrop::Malformed);
+            continue;
+        }
         for (std::uint32_t i = 0; i < count; ++i) {
             std::uint32_t tick = 0;
             std::uint16_t part = 0;
-            if (!reader.Value(tick) || !reader.Value(part)) break;
+            if (!reader.Value(tick) || !reader.Value(part)) {
+                DropAt(ledger, ReplicaDrop::Malformed);
+                break;
+            }
             ++ledger.confirmationsReceived;
             const auto pending = ledger.pending.find((std::uint64_t{tick} << 16) | part);
             if (pending == ledger.pending.end()) continue;
@@ -215,22 +250,32 @@ SystemResult ReplicateOut(ReplicaWorld world) {
         registry = link.registry;
         peers = link.peers;
     });
-    std::vector<OutgoingServerMessage> outgoing;
-    (void)world.Modify<NetOutbox>([&](NetOutbox& box) {
-        outgoing = std::move(box.messages);
-        box.messages.clear();
-    });
     ServerHost* server = service != nullptr ? service->Server() : nullptr;
     if (server == nullptr || !registry) return {};
     const auto tick = static_cast<std::uint32_t>(
         world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0));
     const std::uint32_t generation = service->Generation();
+    // The server messages go out with a tick not sent yet (B2): in a frame without a fixed step the Peers send
+    // nothing, and the messages stay in the outbox for the next tick.
+    bool newTick = peers.empty();
+    for (const auto& [connectionId, peerEntity] : peers) {
+        auto sent = world.Read<PeerLedger>(peerEntity, [&](const PeerLedger& kept) { return kept.lastSentTick != tick; });
+        if (sent && sent->has_value() && **sent) newTick = true;
+    }
+    std::vector<OutgoingServerMessage> outgoing;
+    if (newTick) {
+        (void)world.Modify<NetOutbox>([&](NetOutbox& box) {
+            outgoing = std::move(box.messages);
+            box.messages.clear();
+        });
+    }
 
     Snapshot snapshot = Take(world, *registry);
     const Kernel::ChangeStamp now = world.Stamp();
     // Buffers kept across the Peers of this frame (their capacity is reused, their content is not).
     std::vector<std::byte> structure, ops, current, one, body;
-    std::vector<Kernel::EntityId> restructured, currentEntities;
+    std::vector<Kernel::EntityId> restructured, currentEntities, despawned;
+    std::vector<LedgerEntity> restructuredAs;
     std::vector<std::vector<std::byte>> parts;
     std::vector<std::vector<Kernel::EntityId>> partEntities;
     // The replicated Resources this frame (Q8 (b)): changed stamp and encoded value, shared by every Peer.
@@ -260,7 +305,7 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             hasLedger = true;
         });
         if (!hasLedger) continue;
-        ReadClient(ledger, *connection);
+        ReadClient(ledger, *connection, generation);
 
         if (ledger.lastSentTick != tick) {
             // The structure update: what this client has against what the World has.
@@ -271,19 +316,19 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             ops.clear();
             NetWriter opWriter(ops);
             std::uint32_t opCount = 0;
-            // Ascending: the snapshot is walked by id.
+            // Ascending: the snapshot is walked by id. The ledger takes the changes only once the connection took the
+            // update (S3: a refused reliable send does not move the ledger on; the update is made again next tick).
             restructured.clear();
-            for (auto it = ledger.entities.begin(); it != ledger.entities.end();) {
-                if (snapshot.Find(it->first) != nullptr) {
-                    ++it;
-                    continue;
-                }
+            despawned.clear();
+            restructuredAs.clear();
+            for (auto it = ledger.entities.begin(); it != ledger.entities.end(); ++it) {
+                if (snapshot.Find(it->first) != nullptr) continue;
                 opWriter.Value(it->first);
                 opWriter.Value(std::uint8_t{2}); // despawn
                 opWriter.Value(std::uint8_t{0});
                 opWriter.Value(std::uint8_t{0});
                 ++opCount;
-                it = ledger.entities.erase(it);
+                despawned.push_back(it->first);
             }
             for (const Snapshot::Entity& taken : snapshot.entities) {
                 const Kernel::EntityId entity = taken.id;
@@ -302,16 +347,22 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 }
                 // The values of an entity whose structure changed go with the structure (all of its components).
                 Components(world, *registry, snapshot, taken, mask, opWriter);
-                ledger.entities[entity] = LedgerEntity{mask, now};
+                restructuredAs.push_back(LedgerEntity{mask, now});
                 restructured.push_back(entity);
                 ++opCount;
             }
             if (opCount > 0) {
                 writer.Value(opCount);
                 writer.Bytes(ops);
-                (void)connection->Send(kReliableChannel, structure);
-                ledger.lastStructureTick = tick;
-                ++ledger.structuresSent;
+                if (connection->Send(kReliableChannel, structure)) {
+                    for (const Kernel::EntityId gone : despawned) ledger.entities.erase(gone);
+                    for (std::size_t i = 0; i < restructured.size(); ++i) ledger.entities[restructured[i]] = restructuredAs[i];
+                    ledger.lastStructureTick = tick;
+                    ++ledger.structuresSent;
+                } else {
+                    ++ledger.reliableRejected;
+                    restructured.clear();
+                }
             }
 
             // The server messages of this frame, after the structure they may point into.
@@ -321,11 +372,14 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 NetWriter messageWriter(body);
                 Head(messageWriter, Kind::ServerMessage, generation, ledger.epoch);
                 messageWriter.Value(message.wire);
-                messageWriter.Value(ledger.lastStructureTick);
+                messageWriter.Value(StructureOnWire(ledger.lastStructureTick));
                 messageWriter.Value(static_cast<std::uint32_t>(message.bytes.size()));
                 messageWriter.Bytes(message.bytes);
-                (void)connection->Send(kReliableChannel, body);
-                ++ledger.serverMessagesSent;
+                if (connection->Send(kReliableChannel, body)) {
+                    ++ledger.serverMessagesSent;
+                } else {
+                    ++ledger.reliableRejected;
+                }
             }
 
             // The values changed since the client last confirmed them, in parts of whole entities.
@@ -401,7 +455,7 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 NetWriter valueWriter(body);
                 Head(valueWriter, Kind::Values, generation, ledger.epoch);
                 valueWriter.Value(tick);
-                valueWriter.Value(ledger.lastStructureTick);
+                valueWriter.Value(StructureOnWire(ledger.lastStructureTick));
                 valueWriter.Value(index);
                 valueWriter.Value(partCount);
                 valueWriter.Bytes(parts[index]);
@@ -478,6 +532,7 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             }
             if (outcome == ApplyOutcome::Rejected) Drop(state, ReplicaDrop::SpawnRejected);
             if (outcome == ApplyOutcome::Malformed) Drop(state, ReplicaDrop::Malformed);
+            if (outcome == ApplyOutcome::Missing) Drop(state, ReplicaDrop::MissingTarget);
             if (outcome == ApplyOutcome::Unchanged) ++state.unchangedNotWritten;
             first = false;
             state.written[{entity, wire}] = tick;
@@ -574,10 +629,14 @@ bool Current(NetReplicaState& state, NetReader& reader) {
         return false;
     }
     if (!state.generation || generation > *state.generation) {
-        if (state.generation) state.replacedGenerations.push_back(generation);
+        // B1: a new client World knows no generation yet and keeps its own epoch (the NetService's count); only a
+        // replaced server World (a newer generation than one already seen) brings its Peers' epoch, a new ledger.
+        if (state.generation) {
+            state.replacedGenerations.push_back(generation);
+            state.epoch = epoch;
+        }
         state.generation = generation;
-        state.epoch = epoch;
-        state.appliedStructureTick = 0;
+        state.appliedStructureTick.reset();
         state.pendingValues.clear();
         state.heldMessages.clear();
         state.ticks.clear();
@@ -585,7 +644,6 @@ bool Current(NetReplicaState& state, NetReader& reader) {
         state.resourcesWritten.clear();
         state.maxAppliedTick = 0;
         state.latestConfirmed.reset();
-        return true;
     }
     if (epoch < state.epoch) {
         Drop(state, ReplicaDrop::StaleEpoch);
@@ -610,8 +668,7 @@ SystemResult ApplyReplication(ReplicaWorld world) {
     (void)world.Modify<NetReplicaState>([&](NetReplicaState& kept) { state = std::move(kept); });
 
     if (state.resyncNeeded) {
-        // This World replaced an earlier one: ask for everything again, under a new epoch.
-        ++state.epoch;
+        // This World replaced an earlier one: ask for everything again, under its epoch (set when it was prepared).
         std::vector<std::byte> body;
         NetWriter writer(body);
         Head(writer, Kind::Resync, state.generation.value_or(0), state.epoch);
@@ -641,14 +698,15 @@ SystemResult ApplyReplication(ReplicaWorld world) {
                 continue;
             }
             ++state.serverMessagesReceived;
-            state.heldMessages.push_back({structureTick, {wire, std::vector<std::byte>(bytes.begin(), bytes.end())}});
+            state.heldMessages.push_back(
+                {StructureFromWire(structureTick), {wire, std::vector<std::byte>(bytes.begin(), bytes.end())}});
         } else {
             Drop(state, ReplicaDrop::Malformed);
         }
     }
     // A server message is handed out once the structure tick it needs is applied (C-MS1).
     for (auto it = state.heldMessages.begin(); it != state.heldMessages.end();) {
-        if (it->requiredStructure > state.appliedStructureTick) {
+        if (!StructureApplied(it->requiredStructure, state.appliedStructureTick)) {
             ++it;
             continue;
         }
@@ -665,11 +723,13 @@ SystemResult ApplyReplication(ReplicaWorld world) {
         }
         if (!Current(state, reader)) continue;
         std::span<const std::byte> rest;
-        if (!reader.Value(part.tick) || !reader.Value(part.requiredStructure) || !reader.Value(part.part) ||
+        std::uint32_t structureTick = 0;
+        if (!reader.Value(part.tick) || !reader.Value(structureTick) || !reader.Value(part.part) ||
             !reader.Value(part.partCount) || part.partCount == 0 || !reader.Bytes(reader.Remaining(), rest)) {
             Drop(state, ReplicaDrop::Malformed);
             continue;
         }
+        part.requiredStructure = StructureFromWire(structureTick);
         part.entries.assign(rest.begin(), rest.end());
         ++state.valuePartsReceived;
         state.pendingValues.push_back(std::move(part));
@@ -681,7 +741,7 @@ SystemResult ApplyReplication(ReplicaWorld world) {
     std::vector<std::pair<std::uint32_t, std::uint16_t>> confirmations;
     std::vector<NetReplicaState::Part> waiting;
     for (NetReplicaState::Part& part : state.pendingValues) {
-        if (!result || part.requiredStructure > state.appliedStructureTick) {
+        if (!result || !StructureApplied(part.requiredStructure, state.appliedStructureTick)) {
             waiting.push_back(std::move(part));
             continue;
         }
@@ -754,16 +814,32 @@ SystemResult ReceiveInputs(ReplicaWorld world) {
         Connection* connection = server->Find(connectionId);
         if (connection == nullptr) continue;
         for (const auto& input : registry->inputs) input->ensure(world, peer);
+        // What cannot be read, or is of another server World, is dropped and counted on the Peer (D-12, D-4).
+        std::array<std::uint64_t, kReplicaDropCount> dropped{};
         while (auto message = connection->Pop(kValuesChannel)) {
             NetReader reader(*message);
             std::uint8_t kind = 0;
             std::uint32_t generation = 0, epoch = 0;
             std::uint16_t wire = 0;
             if (!reader.Value(kind) || kind != static_cast<std::uint8_t>(Kind::Inputs) || !reader.Value(generation) ||
-                !reader.Value(epoch) || !reader.Value(wire) || wire >= registry->inputs.size()) {
+                !reader.Value(epoch)) {
+                ++dropped[static_cast<std::size_t>(ReplicaDrop::Malformed)];
                 continue;
             }
-            registry->inputs[wire]->fill(world, peer, reader, tick);
+            if (generation != service->Generation()) {
+                ++dropped[static_cast<std::size_t>(ReplicaDrop::StaleGeneration)];
+                continue;
+            }
+            if (!reader.Value(wire) || wire >= registry->inputs.size()) {
+                ++dropped[static_cast<std::size_t>(ReplicaDrop::Malformed)];
+                continue;
+            }
+            if (!registry->inputs[wire]->fill(world, peer, reader, tick)) ++dropped[static_cast<std::size_t>(ReplicaDrop::Malformed)];
+        }
+        if (dropped != std::array<std::uint64_t, kReplicaDropCount>{}) {
+            (void)world.Modify<PeerLedger>(peer, [&](PeerLedger& ledger) {
+                for (std::size_t i = 0; i < kReplicaDropCount; ++i) ledger.drops[i] += dropped[i];
+            });
         }
     }
     return {};
@@ -785,15 +861,20 @@ SystemResult SendInputs(ReplicaWorld world) {
     // One message a tick (D-11).
     const std::uint64_t tick = world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0);
     bool due = false;
+    // The server World the inputs are for (small thing 2): the newest generation seen, else the one of the accept.
+    std::uint32_t generation = client->Accepted() ? client->Accepted()->worldGeneration : 0;
+    std::uint32_t epoch = 0;
     (void)world.Modify<NetReplicaState>([&](NetReplicaState& state) {
         due = !state.lastInputTick || *state.lastInputTick != tick;
         state.lastInputTick = tick;
+        if (state.generation) generation = *state.generation;
+        epoch = state.epoch;
     });
     if (!due) return {};
     for (const auto& entry : registry->inputs) {
         std::vector<std::byte> body;
         NetWriter writer(body);
-        Head(writer, Kind::Inputs, 0, 0);
+        Head(writer, Kind::Inputs, generation, epoch);
         writer.Value(entry->wire);
         if (entry->encodeRecent(world, peer, writer)) (void)connection->Send(kValuesChannel, body);
     }

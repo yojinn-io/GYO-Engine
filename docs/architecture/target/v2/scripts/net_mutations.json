@@ -382,7 +382,7 @@
     "net-module-declaration 判定 G-5"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "        if (!result || part.requiredStructure > state.appliedStructureTick) {",
+   "find": "        if (!result || !StructureApplied(part.requiredStructure, state.appliedStructureTick)) {",
    "replace": "        if (!result) {",
    "target": "gyo_net_tests",
    "cases": "replication: G-5*",
@@ -756,6 +756,229 @@
    "target": "gyo_net_tests",
    "cases": "statesync:*",
    "expect": "TEST CASE:\\s+statesync: the server's request reaches the client"
+  },
+  {
+   "id": "nt-epoch-taken-from-message",
+   "what": "A new client World takes the epoch of the first message it reads (the server's old one) instead of keeping its own. Only it catches B1's \"the epoch is not taken from a message\"",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (state.generation) {\n            state.replacedGenerations.push_back(generation);\n            state.epoch = epoch;\n        }\n",
+   "replace": "        if (state.generation) state.replacedGenerations.push_back(generation);\n        state.epoch = epoch;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B1:\\ after\\ a\\ resync\\ the\\ server\\ takes\\ the\\ client's\\ confirmations\\ again"
+  },
+  {
+   "id": "nt-epoch-not-per-world",
+   "what": "Every client World after the first gets epoch 1, so the third World's resync is not told from the second's. Only it catches B1's \"the epoch grows with every client World\"",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "                state.epoch = clientWorlds - 1;\n",
+   "replace": "                state.epoch = clientWorlds > 1 ? 1 : 0;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B1:\\ the\\ messages\\ of\\ the\\ client's\\ old\\ epoch\\ are\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-first-message-epoch-unchecked",
+   "what": "The first message a client World reads is taken whatever its epoch (the generation branch returns before the epoch check). Only it catches the epoch check of a new World's first messages",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        state.maxAppliedTick = 0;\n        state.latestConfirmed.reset();\n    }\n    if (epoch < state.epoch) {\n",
+   "replace": "        state.maxAppliedTick = 0;\n        state.latestConfirmed.reset();\n        return true;\n    }\n    if (epoch < state.epoch) {\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B1:\\ the\\ messages\\ of\\ the\\ client's\\ old\\ epoch\\ are\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-outbox-cleared-without-tick",
+   "what": "ReplicateOut empties the outbox in a frame whose tick it does not send, so those server messages are lost. Only it catches B2",
+   "guards": [
+    "net-module-declaration D-12",
+    "net-module-declaration C-MS1",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    if (newTick) {\n",
+   "replace": "    if (true) {\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B2:\\ every\\ server\\ message\\ written\\ goes\\ out"
+  },
+  {
+   "id": "nt-structure-none-as-applied",
+   "what": "A message needing a structure counts it as applied when none was applied yet (0 meant both \"none\" and \"tick 0\"). Only it catches S1",
+   "guards": [
+    "net-module-declaration D-7",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    return !needed || (applied && *needed <= *applied);\n",
+   "replace": "    return !needed || !applied || *needed <= *applied;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S1:\\ no\\ value\\ is\\ written\\ before\\ the\\ structure\\ of\\ tick\\ 0"
+  },
+  {
+   "id": "nt-ledger-before-send",
+   "what": "The ledger takes a structure update the connection refused. Only it catches S3",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    ++ledger.reliableRejected;\n                    restructured.clear();\n",
+   "replace": "                    ++ledger.reliableRejected;\n                    for (const Kernel::EntityId gone : despawned) ledger.entities.erase(gone);\n                    for (std::size_t i = 0; i < restructured.size(); ++i) ledger.entities[restructured[i]] = restructuredAs[i];\n                    ledger.lastStructureTick = tick;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S3:\\ a\\ refused\\ structure\\ update\\ is\\ sent\\ again"
+  },
+  {
+   "id": "nt-older-salt-ends-connection",
+   "what": "A late response of an older handshake (smaller salt) ends the newer connection. Only it catches S2 (a)",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "        if (request->salt < peer.salt) {\n            Count(DropReason::Unexpected);\n            return;\n        }\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "handshake:*",
+   "expect": "S2\\ a:"
+  },
+  {
+   "id": "nt-accept-salt-unchecked",
+   "what": "A connecting client takes an accept of another handshake. Only it catches S2 (b)",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "            if (accepted->salt != request_.salt) {\n",
+   "replace": "            if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "handshake:*",
+   "expect": "S2\\ b:"
+  },
+  {
+   "id": "nt-peer-drop-uncounted",
+   "what": "What the server drops from a client's confirmations and resyncs is not counted on its Peer. Only it catches S4's server-side counts (the inputs' are counted apart)",
+   "guards": [
+    "net-module-declaration D-12",
+    "net NT-8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "void DropAt(PeerLedger& ledger, const ReplicaDrop reason) { ++ledger.drops[static_cast<std::size_t>(reason)]; }",
+   "replace": "void DropAt(PeerLedger&, const ReplicaDrop) {}",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S4:\\ unreadable\\ messages\\ and\\ unknown\\ kinds\\ are\\ counted"
+  },
+  {
+   "id": "nt-structure-missing-uncounted",
+   "what": "A structure update's component for an entity the client lacks is not counted. Only it catches S4's structure count",
+   "guards": [
+    "net-module-declaration D-12",
+    "net NT-8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (outcome == ApplyOutcome::Malformed) Drop(state, ReplicaDrop::Malformed);\n            if (outcome == ApplyOutcome::Missing) Drop(state, ReplicaDrop::MissingTarget);\n",
+   "replace": "            if (outcome == ApplyOutcome::Malformed) Drop(state, ReplicaDrop::Malformed);\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S4:\\ a\\ structure\\ update's\\ component\\ for\\ a\\ missing\\ entity\\ is\\ counted"
+  },
+  {
+   "id": "nt-confirm-generation-unchecked",
+   "what": "The server takes a confirmation of another server World. Only it catches the confirmations' generation check",
+   "guards": [
+    "net-module-declaration D-4",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (generation != serverGeneration) {\n",
+   "replace": "        if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "small\\ thing\\ 2:\\ confirmations\\ and\\ inputs\\ of\\ another\\ generation"
+  },
+  {
+   "id": "nt-input-generation-unchecked",
+   "what": "The server fills inputs of another server World into the Peer's buffer. Only it catches the inputs' generation check",
+   "guards": [
+    "net-module-declaration D-4",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (generation != service->Generation()) {\n",
+   "replace": "            if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "small\\ thing\\ 2:\\ confirmations\\ and\\ inputs\\ of\\ another\\ generation"
+  },
+  {
+   "id": "nt-input-not-expired",
+   "what": "With nothing consuming them, the slots the server's tick passed stay in the buffer. Only it catches small thing 1",
+   "guards": [
+    "net-module-declaration C-IN1",
+    "net 9"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    while (!input.slots.empty() && input.slots.begin()->first <= serverTick) {\n",
+   "replace": "                    while (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "input:*",
+   "expect": "small\\ thing\\ 1:\\ the\\ server\\ keeps\\ no\\ slot\\ behind\\ its\\ tick"
+  },
+  {
+   "id": "nt-link-failure-retried",
+   "what": "A lasting Link failure is tried again in the same frame. Only it catches small thing 3",
+   "guards": [
+    "net-module-declaration D-12",
+    "net 7"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "            if (tooLarge) continue;\n            break;\n",
+   "replace": "            continue;\n",
+   "target": "gyo_net_tests",
+   "cases": "module:*",
+   "expect": "small\\ thing\\ 3:\\ a\\ lasting\\ failure\\ stops"
+  },
+  {
+   "id": "nt-window-not-power-of-two",
+   "what": "A reliable window that is not a power of two is taken. Only it catches small thing 4's assertion",
+   "guards": [
+    "net 4"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": " &&\n               (settings_.reliableWindow & (settings_.reliableWindow - 1)) == 0);",
+   "replace": ");",
+   "target": "gyo_net_tests",
+   "cases": "connection:*",
+   "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ N::Connection\\(settings\\)"
+  },
+  {
+   "id": "nt-links-more",
+   "what": "NT-7 link set: the net Module links one more target (the state machine). Only it reaches gyo_net's link set",
+   "guards": [
+    "net NT-7"
+   ],
+   "file": "engine/modules/net/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_net PUBLIC GYO::Base GYO::OS GYO::Time GYO::Kernel GYO::Orchestration)",
+   "replace": "target_link_libraries(gyo_net PUBLIC GYO::Base GYO::OS GYO::Time GYO::Kernel GYO::Orchestration GYO::StateMachine)",
+   "target": "gyo_net_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_net links\\s+GYO::Authority;GYO::Base;GYO::EntityIds;GYO::Kernel;GYO::OS;GYO::Orchestration;GYO::Rollback;GYO::StateMachine;GYO::Time;GYO::WorldTime;\\s+expected exactly"
   }
  ]
 }

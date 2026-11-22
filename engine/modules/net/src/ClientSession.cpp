@@ -52,6 +52,11 @@ void ClientSession::Receive(const std::span<const std::byte> datagram, const Net
                 Count(DropReason::DecodeFailed);
                 return;
             }
+            if (accepted->salt != request_.salt) {
+                // The accept of an older handshake (S2): not this session's.
+                Count(DropReason::Unexpected);
+                return;
+            }
             accepted_ = *accepted;
             ConnectionSettings transport = settings_.transport;
             transport.connectionId = accepted->connectionId;

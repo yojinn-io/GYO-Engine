@@ -1,5 +1,6 @@
 #include "engine/net/NetService.hpp"
 
+#include <algorithm>
 #include <utility>
 
 #include "engine/net/UdpLink.hpp"
@@ -18,7 +19,7 @@ constexpr std::size_t kMaxDatagramsPerPump = 4096;
 NetService::NetService(NetProductOptions options, std::shared_ptr<Link> link, const Endpoint serverEndpoint,
                        const std::uint64_t secret, const std::uint64_t idSeed)
     : options_(std::move(options)), link_(std::move(link)), serverEndpoint_(serverEndpoint), secret_(secret),
-      idSeed_(idSeed), saltState_(secret ^ 0x5A17ull) {}
+      idSeed_(idSeed) {}
 
 NetTime NetService::Now() const {
     if (options_.clock) return options_.clock();
@@ -41,11 +42,11 @@ void NetService::SetFacts(const HandshakeFacts& facts, const NetTime now, const 
                 if (auto sent = link_->Send(serverEndpoint_, datagram); !sent) Failed(std::move(sent).error());
             }
         }
-        // A salt per handshake (D-8: a reconnect is a new connection, told apart from a repeated response).
-        std::uint64_t z = (saltState_ += 0x9E3779B97F4A7C15ull);
-        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
-        z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
-        ConnectRequest request{facts, options_.userId, options_.token, z ^ (z >> 31)};
+        // A salt per handshake, larger than the one before (D-8, S2): the IO layer's monotonic time in nanoseconds,
+        // or one more than the last when the clock has not moved; so a client that starts again (a new process on the
+        // same machine) keeps going up as well.
+        lastSalt_ = std::max(lastSalt_ + 1, static_cast<std::uint64_t>(std::max<NetTime::rep>(now.count(), 0)));
+        ConnectRequest request{facts, options_.userId, options_.token, lastSalt_};
         client_.emplace(options_.session, std::move(request), now);
     }
 }
@@ -60,8 +61,12 @@ void NetService::Pump(const NetTime now) {
     for (std::size_t i = 0; i < kMaxDatagramsPerPump; ++i) {
         auto received = link_->Receive(buffer);
         if (!received) {
+            // A datagram too large was dropped and the next may be fine; any other failure lasts, and this frame's
+            // receiving stops (small thing 3: a broken socket is not tried kMaxDatagramsPerPump times a frame).
+            const bool tooLarge = received.error().code == NetFailureCode::DatagramTooLarge;
             Failed(std::move(received).error());
-            continue;
+            if (tooLarge) continue;
+            break;
         }
         if (!received->has_value()) break;
         const auto datagram = std::span<const std::byte>(buffer).first((*received)->size);

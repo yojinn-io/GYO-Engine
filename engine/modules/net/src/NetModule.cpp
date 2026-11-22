@@ -232,7 +232,10 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
                 world.SetResource(NetOutbox{});
             } else {
                 NetReplicaState state;
-                state.resyncNeeded = service->BeginClientWorld() > 1;
+                // B1: the epoch grows with every client World of the Product; a World after the first asks for a resync.
+                const std::uint32_t clientWorlds = service->BeginClientWorld();
+                state.epoch = clientWorlds - 1;
+                state.resyncNeeded = clientWorlds > 1;
                 world.SetResource(std::move(state));
                 world.SetResource(ClockSync{});
             }

@@ -8,7 +8,7 @@ add_executable(gyo_net_tests TestMain.cpp HeaderTests.cpp ConnectionTests.cpp Tr
     ResourceTests.cpp)
 # GYO::StateMachine: the "statesync:" cases join the state machine and the net Module as a product does (neither
 # Module depends on the other).
-target_link_libraries(gyo_net_tests PRIVATE GYO::Net GYO::StateMachine doctest::doctest)
+target_link_libraries(gyo_net_tests PRIVATE GYO::Net GYO::StateMachine gyo_test_support doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_net_tests PRIVATE /W4 /permissive-)
     target_compile_definitions(gyo_net_tests PRIVATE NOMINMAX)
@@ -31,3 +31,13 @@ if(MSVC)
 else()
     target_compile_options(gyo_net_budget PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
+# NT-7: the net Module links the core libraries it uses and the Modules of its register row (world_time, rollback,
+# authority, entity_ids), nothing else; no Module links it (the state machine's own link set is pinned by its tests).
+# Set up once net.scenario passed (AGENTS §3, the time to set a guard; design review before PR-1, small thing 6).
+function(gyo_expect_net_links)
+    gyo_expect_links(gyo_net GYO::Base GYO::OS GYO::Time GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
+        GYO::Authority GYO::EntityIds)
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_net_links)

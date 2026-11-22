@@ -118,7 +118,10 @@ const char* ToString(const DropReason reason) noexcept {
 Connection::Connection(ConnectionSettings settings) : settings_(std::move(settings)) {
     GYO_ASSERT(settings_.channels.size() <= 255);
     GYO_ASSERT(settings_.mtu > kPacketHeaderSize + kFragmentEntryOverhead);
-    GYO_ASSERT(settings_.reliableWindow >= 1 && settings_.reliableWindow <= 0x8000u);
+    // A power of two (small thing 4): the ring is indexed id % size, and 65 536 % size == 0 keeps two ids a window
+    // apart in different slots across the u16 wrap.
+    GYO_ASSERT(settings_.reliableWindow >= 1 && settings_.reliableWindow <= 0x8000u &&
+               (settings_.reliableWindow & (settings_.reliableWindow - 1)) == 0);
     maxWholePayload_ = std::min<std::size_t>(settings_.mtu - kPacketHeaderSize - kWholeEntryOverhead, 0xFFFF);
     fragmentPayload_ = std::min<std::size_t>(settings_.mtu - kPacketHeaderSize - kFragmentEntryOverhead, 0xFFFF);
     GYO_ASSERT((settings_.maxMessageBytes + fragmentPayload_ - 1) / fragmentPayload_ <= 0xFFFF);

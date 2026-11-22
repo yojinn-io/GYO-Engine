@@ -987,6 +987,20 @@
    "target": "gyo_state_machine_tests",
    "cases": "behaviour:*",
    "expect": "the same value adopted twice before an apply is written once"
+  },
+  {
+   "id": "sm-adopt-current-with-pending",
+   "what": "With another request pending, adopting the current value asks for it again (an A to A exit and enter). Only it catches small thing 5",
+   "guards": [
+    "state-machine DI 6",
+    "cross-component-rules CCR-8"
+   ],
+   "file": "engine/modules/state_machine/include/engine/state_machine/AdoptValue.hpp",
+   "find": "        return **current == value || (r.Pending() && *r.Pending() == value && r.PendingKind() == kind);\n",
+   "replace": "        return r.Pending() ? (*r.Pending() == value && r.PendingKind() == kind) : (**current == value);\n",
+   "target": "gyo_state_machine_tests",
+   "cases": "behaviour:*",
+   "expect": "small thing 5: the current value adopted writes no request"
   }
  ]
 }

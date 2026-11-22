@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "AssertTestSupport.hpp"
 #include "NetTestSupport.hpp"
 #include "engine/net/Connection.hpp"
 
@@ -250,4 +251,13 @@ TEST_CASE("connection: a datagram that cannot be read returns its failure and is
     CHECK(CodeOf(b.Receive(datagram, Ms(0))) == N::NetFailureCode::MalformedPayload);
     CHECK(Dropped(b, N::DropReason::DecodeFailed) == 2);
     CHECK(b.Stats().datagramsAccepted == 0);
+}
+
+TEST_CASE("connection: the reliable window is a power of two (small thing 4)") {
+    N::ConnectionSettings settings = TwoChannels();
+    settings.reliableWindow = 100;
+    GYO_CHECK_ASSERTS(N::Connection(settings));
+    settings.reliableWindow = 128;
+    N::Connection fine(settings);
+    CHECK(fine.Settings().reliableWindow == 128);
 }

@@ -102,7 +102,7 @@ private:
     std::optional<std::string> boundWorld_;
     std::uint32_t generation_ = 0;
     std::uint32_t clientWorlds_ = 0;
-    std::uint64_t saltState_ = 0;
+    std::uint64_t lastSalt_ = 0;
     std::uint64_t linkFailures_ = 0;
     std::optional<NetFailure> lastLinkFailure_;
     std::array<std::uint64_t, kDropReasonCount> drops_{};

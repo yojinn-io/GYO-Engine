@@ -22,15 +22,16 @@ namespace GYO::Engine::StateMachine {
 
 namespace Detail {
 
-// CCR-8: nothing is written when the state already goes to value, so a value sent again on every snapshot does not
-// mark the request Resource, nor make the apply run anything. "Already goes to": the pending request's value and
-// kind when there is one, else the current value.
+// CCR-8: nothing is written when the value is already the state's (the current value), or already asked for (the
+// pending request's value and kind), so a value sent again on every snapshot does not mark the request Resource, nor
+// make the apply run anything. With another request pending locally, the current value is still not asked for again
+// (a Request of the current value would run its exit and enter: small thing 5 of the design review).
 template <State S>
 Kernel::SystemResult Adopt(Kernel::ExclusiveWorld<>& world, const S value, const RequestKind kind) {
     auto current = world.template Read<StateMachine<S>>([](const StateMachine<S>& m) { return m.Current(); });
     GYO_ASSERT(current && current->has_value() && "AdoptByRequest: the state machine is not registered in this World");
     auto same = world.template Read<StateMachineRequest<S>>([&](const StateMachineRequest<S>& r) {
-        return r.Pending() ? (*r.Pending() == value && r.PendingKind() == kind) : (**current == value);
+        return **current == value || (r.Pending() && *r.Pending() == value && r.PendingKind() == kind);
     });
     GYO_ASSERT(same && same->has_value());
     if (**same) return {};

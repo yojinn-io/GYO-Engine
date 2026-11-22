@@ -22,7 +22,8 @@ namespace GYO::Engine::Net {
 
 // The net Module's own protocol version (what the messages above the header mean), compared in the handshake.
 // The header's kProtocolVersion is the framing; a datagram of another framing cannot be read at all.
-inline constexpr std::uint32_t kNetProtocolVersion = 1;
+// 2: the accept carries the handshake's salt (S2).
+inline constexpr std::uint32_t kNetProtocolVersion = 2;
 
 // Why a connection ended or was never made. Zero is not a reason.
 enum class DisconnectReason : std::uint8_t {
@@ -79,8 +80,9 @@ struct ConnectRequest final {
     std::uint64_t userId = 0;
     // Carried, not checked (Q7: no authentication in this line).
     std::vector<std::byte> token;
-    // Drawn per handshake by the client: a second response of the same handshake (its Accepted was lost) carries
-    // the same salt, a new handshake from the same endpoint (a reconnect) another one (D-8).
+    // Drawn per handshake by the client, larger than the one before (S2): a second response of the same handshake
+    // (its Accepted was lost) carries the same salt, a newer handshake from the same endpoint (a reconnect) a larger
+    // one, a late copy of an older handshake a smaller one (dropped, it does not end the newer connection) (D-8).
     std::uint64_t salt = 0;
 
     friend bool operator==(const ConnectRequest&, const ConnectRequest&) = default;
@@ -88,6 +90,8 @@ struct ConnectRequest final {
 
 struct ConnectAccepted final {
     std::uint32_t connectionId = 0;
+    // The salt of the handshake it answers: a client takes only the accept of its own handshake (S2).
+    std::uint64_t salt = 0;
     std::uint32_t tick = 0;
     std::int64_t stepNanoseconds = 0;
     std::uint32_t worldGeneration = 0;

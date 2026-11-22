@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -419,4 +420,228 @@ TEST_CASE("replication: a value sent again unchanged is not written, so Changed<
     CHECK(changedWhilePlaying > 0);
     CHECK(game.Replica().unchangedNotWritten > unchangedBefore);
     CHECK_MESSAGE(changedAfter == changedBefore, "a value sent again unchanged does not make Changed<T> true (CCR-8)");
+}
+
+// ---- The fixes of the design review before PR-1's merge (dev_log 2026-11-23 review_fixes). Each case first
+// failed on the code before its fix (AGENTS §14.3).
+
+namespace {
+
+std::uint64_t DropOf(const std::array<std::uint64_t, N::kReplicaDropCount>& drops, const N::ReplicaDrop reason) {
+    return drops[static_cast<std::size_t>(reason)];
+}
+
+void Frames(Game& game, const int count) {
+    for (int i = 0; i < count; ++i) {
+        game.ServerFrame();
+        game.ClientFrame();
+    }
+}
+
+// A message the test writes on the client's connection, as a client could send it.
+std::vector<std::byte> ClientMessage(const std::uint8_t kind, const std::uint32_t generation, const std::uint32_t epoch,
+                                     const std::vector<std::uint32_t>& rest = {}) {
+    std::vector<std::byte> body;
+    N::NetWriter writer(body);
+    writer.Value(kind);
+    writer.Value(generation);
+    writer.Value(epoch);
+    for (const std::uint32_t value : rest) writer.Value(value);
+    return body;
+}
+
+} // namespace
+
+TEST_CASE("replication: a replaced client World resyncs: the server takes its confirmations again, the old epoch's messages are dropped (B1)") {
+    Game game;
+    game.Build();
+    Frames(game, 20);
+    for (int world = 2; world <= 3; ++world) {
+        CAPTURE(world);
+        REQUIRE(static_cast<bool>(game.clientProduct->ReplaceWorld("Net", {})));
+        Frames(game, 30);
+        const auto before = game.LedgerOfFirstPeer().confirmationsReceived;
+        Frames(game, 10);
+        CHECK_MESSAGE(game.LedgerOfFirstPeer().confirmationsReceived > before,
+                      "B1: after a resync the server takes the client's confirmations again");
+        CHECK_MESSAGE(DropOf(game.Replica().drops, N::ReplicaDrop::StaleEpoch) > 0,
+                      "B1: the messages of the client's old epoch are dropped and counted");
+        CHECK(StateOf(game.ClientWorld()) == StateOf(game.ServerWorld()));
+    }
+}
+
+namespace {
+
+struct SentMessages {
+    std::uint64_t frames = 0;
+    std::uint64_t sent = 0;
+};
+inline void HashValue(K::Hasher&, const SentMessages&) {}
+
+// At the server, Main/Update: one DoorOpened a frame for 40 frames once a client is connected.
+K::SystemResult SendEveryFrame(K::Res<N::NetWorldLink> link, K::ResMut<SentMessages> log, K::MessageWriter<DoorOpened> opened) {
+    if (link->peers.empty() || log.Read().frames >= 40) return {};
+    ++log->frames;
+    opened.Send(DoorOpened{0, 1});
+    ++log->sent;
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("replication: a server message written in a frame without a fixed step goes out with the next tick (B2)") {
+    // The rules stop at tick 1: no other System writes DoorOpened.
+    Game game({}, GameRules{1, false});
+    const GameRules rules{1, false};
+    game.server.build = [rules](O::WorldSetup& s) {
+        RegisterGame(s, rules);
+        s.Registrar().Resource<SentMessages>({.name = "SentMessages"});
+        K::SystemOptions options = N::Detail::MountedAt("SendEveryFrame", "Update");
+        options.mounts.front().conditions.push_back(N::OnServer());
+        s.Registrar().AddSystem<&SendEveryFrame>(std::move(options));
+        s.Prepare([](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            world.SetResource(SentMessages{});
+            world.SetResource(W::TimeSampling{7'812'500, W::SamplingMode::ManualDelta});
+            return {};
+        });
+    };
+    game.Build();
+    Frames(game, 120);
+    const auto sent = game.ServerWorld().Resource<SentMessages>()->sent;
+    REQUIRE(sent == 40);
+    CHECK_MESSAGE(game.LedgerOfFirstPeer().serverMessagesSent == sent, "B2: every server message written goes out, steps or not");
+    CHECK(game.ClientWorld().Resource<ClientLog>()->messages == sent);
+}
+
+namespace {
+
+// The sample game's replication (the same registrations as RegisterGame, so the protocol hash is the same) with only
+// MoveAll: no structure changes after the first.
+void RegisterMovesOnly(O::WorldSetup& s, const GameRules rules) {
+    auto& r = s.Registrar();
+    r.Component<Position>({.name = "Position"});
+    r.Component<Health>({.name = "Health"});
+    r.Component<Target>({.name = "Target"});
+    r.Component<Door>({.name = "Door"});
+    r.Message<DoorOpened>({.name = "DoorOpened"});
+    r.Resource<GameRules>({.name = "GameRules"});
+    r.Resource<ClientLog>({.name = "ClientLog"});
+    N::NetEntry net(s);
+    net.Replicate<Position>("Position", PositionCodec());
+    net.Replicate<Health>("Health", HealthCodec());
+    net.Replicate<Target>("Target", TargetCodec());
+    net.Replicate<Door>("Door", DoorCodec());
+    net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
+    r.AddSystem<&MoveAll>(Fixed("MoveAll", true));
+    s.Prepare([rules](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(rules);
+        world.SetResource(ClientLog{});
+        return {};
+    });
+}
+
+} // namespace
+
+TEST_CASE("replication: a value part needing the structure of tick 0 waits for it (S1)") {
+    Game game({}, GameRules{1000, false});
+    const GameRules rules{1000, false};
+    // Each server World starts with five entities of its own ids (put by a prepare function; the client keeps the
+    // first World's when the server's is replaced) and runs no step in its first frame, so its only structure update
+    // is the one of tick 0; afterwards only the positions change.
+    auto builds = std::make_shared<K::EntityId>(0);
+    game.server.build = [rules, builds](O::WorldSetup& s) {
+        RegisterMovesOnly(s, rules);
+        const K::EntityId base = 50'000 + 10'000 * (*builds)++;
+        s.Prepare([base](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            world.SetResource(W::TimeSampling{7'812'500, W::SamplingMode::ManualDelta});
+            for (K::EntityId id = base + 1; id <= base + 5; ++id) {
+                world.Insert(id, Position{static_cast<std::int32_t>(id), 0});
+                world.Insert(id, Health{100});
+            }
+            return {};
+        });
+    };
+    game.Build();
+    Frames(game, 30);
+    const std::uint64_t missingBefore = DropOf(game.Replica().drops, N::ReplicaDrop::MissingTarget);
+    // The new World's first frame (tick 0): its structure update is lost on the way and resent later; the value part
+    // of tick 1, which needs it, arrives first.
+    game.links.first.SetOutgoingImpairment({10000, 0, 0, 0, 0});
+    REQUIRE(static_cast<bool>(game.serverProduct->ReplaceWorld("Net", {})));
+    game.ServerFrame();
+    game.ClientFrame();
+    game.links.first.SetOutgoingImpairment({0, 0, 0, 0, 0});
+    Frames(game, 40);
+    CHECK_MESSAGE(DropOf(game.Replica().drops, N::ReplicaDrop::MissingTarget) == missingBefore,
+                  "S1: no value is written before the structure of tick 0 it needs");
+    CHECK(StateOf(game.ClientWorld()).positions.count(60'001) == 1);
+}
+
+TEST_CASE("replication: a reliable send the connection refuses does not move the ledger on (S3)") {
+    Game game(Lossy(), GameRules{120, true});
+    // One reliable message at a time: a structure update or a server message is refused while another is unacked.
+    game.server.net.session.transport.sendQueueCapacity = 1;
+    game.Build();
+    while (game.ServerTick() < 120) Frames(game, 1);
+    for (int drain = 0; drain < 600; ++drain) {
+        Frames(game, 1);
+        if (drain > 60 && StateOf(game.ClientWorld()) == StateOf(game.ServerWorld())) break;
+    }
+    const auto ledger = game.LedgerOfFirstPeer();
+    MESSAGE("S3: reliable sends refused=" << ledger.reliableRejected);
+    REQUIRE_MESSAGE(ledger.reliableRejected > 0, "S3: the queue refused reliable sends");
+    CHECK_MESSAGE(Difference(StateOf(game.ClientWorld()), StateOf(game.ServerWorld())).empty(),
+                  "S3: a refused structure update is sent again, so the client ends equal to the server");
+}
+
+TEST_CASE("replication: what the server drops from a client is counted on its Peer (S4, small thing 2)") {
+    Game game({}, GameRules{1, false});
+    game.Build();
+    Frames(game, 20);
+    N::Connection* up = game.ClientService().Client()->Transport();
+    REQUIRE(up != nullptr);
+    const std::uint32_t generation = game.ServerService().Generation();
+    // Cut short; an unknown kind; a confirmation of another epoch; a confirmation of another generation.
+    REQUIRE(up->Send(N::kReliableChannel, std::vector<std::byte>{std::byte{2}}).has_value());
+    REQUIRE(up->Send(N::kReliableChannel, ClientMessage(99, generation, 0)).has_value());
+    REQUIRE(up->Send(N::kReliableChannel, ClientMessage(2, generation, 7, {0})).has_value());
+    REQUIRE(up->Send(N::kReliableChannel, ClientMessage(2, generation + 5, 0, {0})).has_value());
+    // An input message cut short; one of another generation.
+    REQUIRE(up->Send(N::kValuesChannel, std::vector<std::byte>{std::byte{6}}).has_value());
+    REQUIRE(up->Send(N::kValuesChannel, ClientMessage(6, generation + 5, 0)).has_value());
+    Frames(game, 5);
+    const auto ledger = game.LedgerOfFirstPeer();
+    CHECK_MESSAGE(DropOf(ledger.drops, N::ReplicaDrop::Malformed) == 3, "S4: unreadable messages and unknown kinds are counted");
+    CHECK_MESSAGE(DropOf(ledger.drops, N::ReplicaDrop::StaleEpoch) == 1, "S4: a confirmation of another epoch is counted");
+    CHECK_MESSAGE(DropOf(ledger.drops, N::ReplicaDrop::StaleGeneration) == 2,
+                  "small thing 2: confirmations and inputs of another generation are dropped and counted");
+}
+
+TEST_CASE("replication: a structure update for an entity the client does not have is counted (S4)") {
+    Game game({}, GameRules{1, false});
+    game.Build();
+    Frames(game, 20);
+    const std::uint64_t before = DropOf(game.Replica().drops, N::ReplicaDrop::MissingTarget);
+    const auto ids = game.ServerService().Server()->ConnectionIds();
+    REQUIRE(ids.size() == 1);
+    // A structure update (as the server sends it) changing an entity the client has not got: one Position set.
+    std::vector<std::byte> body;
+    N::NetWriter writer(body);
+    writer.Value(std::uint8_t{1});
+    writer.Value(game.ServerService().Generation());
+    writer.Value(game.LedgerOfFirstPeer().epoch);
+    writer.Value(static_cast<std::uint32_t>(game.ServerTick()));
+    writer.Value(std::uint32_t{1});
+    writer.Value(K::EntityId{777'777});
+    writer.Value(std::uint8_t{0});
+    writer.Value(std::uint8_t{0});
+    writer.Value(std::uint8_t{1});
+    writer.Value(std::uint16_t{0});
+    writer.Value(std::uint32_t{8});
+    writer.Value(std::int32_t{1});
+    writer.Value(std::int32_t{2});
+    REQUIRE(game.ServerService().Server()->Find(ids[0])->Send(N::kReliableChannel, body).has_value());
+    Frames(game, 3);
+    CHECK_MESSAGE(DropOf(game.Replica().drops, N::ReplicaDrop::MissingTarget) == before + 1,
+                  "S4: a structure update's component for a missing entity is counted");
 }

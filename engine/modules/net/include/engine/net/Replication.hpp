@@ -130,7 +130,8 @@ struct InputEntry final {
     // Peer has no input yet.
     std::function<bool(ReplicaWorld&, Kernel::EntityId peer, NetWriter&)> encodeRecent;
     // Server: reads one input message into the Peer's buffer, within the window of the server's tick.
-    std::function<void(ReplicaWorld&, Kernel::EntityId peer, NetReader&, std::uint32_t serverTick)> fill;
+    // false when the message cannot be read (counted Malformed on the Peer's ledger).
+    std::function<bool(ReplicaWorld&, Kernel::EntityId peer, NetReader&, std::uint32_t serverTick)> fill;
     // Server: gives the Peer its buffer of T when it has none (from the first frame of the connection, so every step
     // the entry runs is counted, consumed or missing).
     std::function<void(ReplicaWorld&, Kernel::EntityId peer)> ensure;
@@ -169,9 +170,29 @@ struct OutgoingServerMessage final {
     std::vector<std::byte> bytes;
 };
 struct NetOutbox final {
+    // Kept until a frame whose tick ReplicateOut has not sent yet takes them (B2: a frame without a fixed step sends
+    // nothing, and its messages wait for the next tick).
     std::vector<OutgoingServerMessage> messages;
 };
 inline void HashValue(Kernel::Hasher&, const NetOutbox&) {}
+
+// Why a replication message or value was dropped (D-12): at the client (NetReplicaState), and at the server for what
+// a client sent (PeerLedger: Malformed, StaleEpoch, StaleGeneration).
+enum class ReplicaDrop : std::uint8_t {
+    // Of an older server World (generation).
+    StaleGeneration = 0,
+    // Of an earlier resync of this client.
+    StaleEpoch,
+    // Cannot be read.
+    Malformed,
+    // SpawnWithId refused the id (it is in this World's own range, or alive).
+    SpawnRejected,
+    // A value for an entity or component this World does not have.
+    MissingTarget,
+    // A value older than one already written for that entity and component.
+    StaleValue,
+};
+inline constexpr std::size_t kReplicaDropCount = 6;
 
 // The ledger of one Peer (declaration D-5; on the Peer entity, NT-10): what that client has been sent and has
 // confirmed. It decides what to send; it is not a copy of the game's state.
@@ -193,9 +214,10 @@ struct PeerLedger final {
     FlatMap<std::uint64_t, PendingPart> pending;
     // Per replicated Resource (by wire id): the World stamp of the newest value the client confirmed; nullopt before.
     std::vector<std::optional<Kernel::ChangeStamp>> resources;
-    std::uint32_t lastStructureTick = 0;
+    // The tick of the newest structure update sent; nullopt before the first (S1: tick 0 is a structure tick too).
+    std::optional<std::uint32_t> lastStructureTick;
     std::optional<std::uint32_t> lastSentTick;
-    // Raised by the client's resync (its World was replaced): older messages are ignored there.
+    // The client World's epoch, set by its resync (its World was replaced): older messages are dropped there.
     std::uint32_t epoch = 0;
     // Counts (G-5 item 4).
     std::uint64_t structuresSent = 0;
@@ -204,36 +226,26 @@ struct PeerLedger final {
     std::uint64_t confirmationsReceived = 0;
     // Replicated Resource values sent (Q8 (b)).
     std::uint64_t resourceValuesSent = 0;
+    // Reliable sends the connection refused (queue full, too large): the ledger did not move on for them.
+    std::uint64_t reliableRejected = 0;
+    // What this client sent that the server dropped (confirmations, resyncs, inputs), by reason.
+    std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
 inline void HashValue(Kernel::Hasher&, const PeerLedger&) {}
 
-// Why the client dropped a replication message or value (D-12).
-enum class ReplicaDrop : std::uint8_t {
-    // Of an older server World (generation).
-    StaleGeneration = 0,
-    // Of an earlier resync of this client.
-    StaleEpoch,
-    // Cannot be read.
-    Malformed,
-    // SpawnWithId refused the id (it is in this World's own range, or alive).
-    SpawnRejected,
-    // A value for an entity or component this World does not have.
-    MissingTarget,
-    // A value older than one already written for that entity and component.
-    StaleValue,
-};
-inline constexpr std::size_t kReplicaDropCount = 6;
 
 // The client's receiving side (a Resource of a client World).
 struct NetReplicaState final {
     std::optional<std::uint32_t> generation;
+    // This client World's epoch: the NetService's count of client Worlds minus one (B1: it grows with every client
+    // World of the Product and is never taken from a message).
     std::uint32_t epoch = 0;
     bool resyncNeeded = false;
-    // The tick of the last structure update applied (they arrive in order).
-    std::uint32_t appliedStructureTick = 0;
+    // The tick of the last structure update applied (they arrive in order); nullopt before the first.
+    std::optional<std::uint32_t> appliedStructureTick;
     struct Part {
         std::uint32_t tick = 0;
-        std::uint32_t requiredStructure = 0;
+        std::optional<std::uint32_t> requiredStructure;
         std::uint16_t part = 0;
         std::uint16_t partCount = 0;
         std::vector<std::byte> entries;
@@ -261,7 +273,7 @@ struct NetReplicaState final {
     std::vector<Ready> readyMessages;
     // Server messages that arrived before the structure tick they need (kept until it is applied).
     struct Held {
-        std::uint32_t requiredStructure = 0;
+        std::optional<std::uint32_t> requiredStructure;
         Ready message;
     };
     std::vector<Held> heldMessages;
@@ -342,6 +354,8 @@ struct InputCounts final {
     // Steps the entry ran: with the slot of that tick, or holding the last one (missing).
     std::uint64_t consumed = 0;
     std::uint64_t missing = 0;
+    // Stored and passed by the server's tick without the entry consuming them (no controlled entity yet).
+    std::uint64_t expired = 0;
     // Input messages sent (client) or read (server).
     std::uint64_t messages = 0;
 };
@@ -727,24 +741,35 @@ public:
         entry->fill = [typed](ReplicaWorld& world, Kernel::EntityId peer, NetReader& reader, std::uint32_t serverTick) {
             const auto has = world.template Read<PeerInput<T>>(peer, [](const PeerInput<T>&) {});
             if (!(has && *has)) (void)world.Insert(peer, PeerInput<T>{});
+            bool readable = true;
             (void)world.template Modify<PeerInput<T>>(peer, [&](PeerInput<T>& input) {
                 std::uint32_t end = 0;
                 std::uint16_t count = 0;
-                if (!reader.Value(end) || !reader.Value(count)) return;
+                if (!reader.Value(end) || !reader.Value(count)) {
+                    readable = false;
+                    return;
+                }
                 ++input.counts.messages;
                 for (std::uint32_t back = count; back-- > 0;) {
                     std::uint8_t present = 0;
-                    if (!reader.Value(present)) return;
+                    if (!reader.Value(present)) {
+                        readable = false;
+                        return;
+                    }
                     if (present == 0) continue;
                     typename PeerInput<T>::Slot slot;
                     std::uint16_t length = 0;
                     std::span<const std::byte> bytes;
                     if (!reader.Value(slot.view.tick) || !reader.Value(slot.view.overstep) || !reader.Value(length) ||
                         !reader.Bytes(length, bytes)) {
+                        readable = false;
                         return;
                     }
                     NetReader valueReader(bytes);
-                    if (!typed->codec.decode(valueReader, slot.value)) return;
+                    if (!typed->codec.decode(valueReader, slot.value)) {
+                        readable = false;
+                        return;
+                    }
                     const std::uint32_t tick = end - back;
                     ++input.counts.slotsReceived;
                     // The window (consumed, serverTick + window]; each (Peer, tick) kept once (C-IN1, C-IN3).
@@ -762,8 +787,16 @@ public:
                     while (!input.slots.empty() && input.slots.begin()->first <= *input.consumedThrough) {
                         input.slots.erase(input.slots.begin());
                     }
+                } else {
+                    // Nothing consumed yet (no controlled entity, small thing 1): the slots the server's tick passed
+                    // are expired, counted (stored = consumed + expired + still ahead).
+                    while (!input.slots.empty() && input.slots.begin()->first <= serverTick) {
+                        input.slots.erase(input.slots.begin());
+                        ++input.counts.expired;
+                    }
                 }
             });
+            return readable;
         };
         table_->registry.inputs.push_back(std::move(entry));
         if (!table_->role) return;

@@ -263,3 +263,25 @@ TEST_CASE("input: the entry has the same name, access and mount at both ends, so
     for (const auto& ingress : registry->ingress) entry = entry || ingress.system == "ApplyInput:Move";
     CHECK_MESSAGE(entry, "the entry is added through authority.Ingress where the World has a strategy");
 }
+
+TEST_CASE("input: without a controlled entity the server keeps only the window ahead; stored = consumed + expired + ahead (small thing 1)") {
+    InputGame game({});
+    game.Build();
+    for (int i = 0; i < 6 && game.ServerPeer() == 0; ++i) game.Frame();
+    REQUIRE(game.ServerPeer() != 0);
+    // The server's product gives the Peer no player (no PeerControls): nothing consumes its inputs.
+    for (int round = 0; round < 200; ++round) {
+        const std::uint32_t target = static_cast<std::uint32_t>(game.ClientWorld().Resource<W::Tick>()->value) + 1;
+        N::LocalInput<Move>(game.ClientWorld())->Set(target, ScriptAt(target), N::ViewTime{target, 0});
+        game.Frame();
+    }
+    const auto* buffer = game.ServerWorld().Get<N::PeerInput<Move>>(game.ServerPeer());
+    REQUIRE(buffer != nullptr);
+    const auto& counts = buffer->counts;
+    MESSAGE("small thing 1: stored=" << counts.stored << " consumed=" << counts.consumed << " expired=" << counts.expired
+                                     << " ahead=" << buffer->slots.size() << " late=" << counts.late);
+    REQUIRE(counts.stored > 100);
+    CHECK_MESSAGE(buffer->slots.size() <= 64 + 1, "small thing 1: the server keeps no slot behind its tick");
+    CHECK_MESSAGE(counts.stored == counts.consumed + counts.expired + buffer->slots.size(),
+                  "small thing 1: every slot stored is consumed, expired or still ahead");
+}

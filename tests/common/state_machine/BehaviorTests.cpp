@@ -811,3 +811,31 @@ TEST_CASE("behaviour: AdoptByRequest and AdoptByRequestSilent go through a reque
         CHECK(!Req<Flow>(*p).Pending().has_value());
     }
 }
+
+namespace {
+K::SystemResult AdoptInLevelOnce(K::ExclusiveWorld<> world) { return SM::AdoptByRequest<Flow>(world, Flow::InLevel); }
+} // namespace
+
+TEST_CASE("behaviour: adopting the current value writes nothing even with another request pending (small thing 5)") {
+    // The adopt function runs in Main/First every frame with InLevel; a local request (MainMenu) is pending when the
+    // current value is already InLevel.
+    auto q = Make([] {
+        Setup s;
+        s.extra = [](O::WorldSetup& w) {
+            w.Registrar().AddSystem<&AdoptInLevelOnce>(At("AdoptInLevelOnce", std::string(O::DefaultSchedules::frame),
+                                                          std::string(O::DefaultSchedules::first)));
+        };
+        return s;
+    }());
+    REQUIRE(q);
+    Frame(*q);
+    Frame(*q); // InLevel now (the first frame's adopt was applied in the second)
+    REQUIRE(Mach<Flow>(*q).Current() == Flow::InLevel);
+    Req<Flow>(*q).Request(Flow::MainMenu);
+    const std::uint64_t overwritten = Req<Flow>(*q).Overwritten();
+    const List events = Frame(*q);
+    CHECK_MESSAGE(Req<Flow>(*q).Overwritten() == overwritten, "small thing 5: the current value adopted writes no request (CCR-8)");
+    const List expected{"Exit.Pause.Running", "Exit.Inventory.Closed", "Exit.Flow.InLevel", "Enter.Flow.MainMenu"};
+    CHECK_MESSAGE(events == expected,
+                  "small thing 5: the local request is applied; no exit and enter of InLevel again");
+}

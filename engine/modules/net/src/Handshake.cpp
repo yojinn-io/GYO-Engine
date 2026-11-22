@@ -136,6 +136,7 @@ NetResult<ConnectRequest> DecodeRequestBody(const std::span<const std::byte> bod
 void EncodeAccepted(const ConnectAccepted& accepted, std::vector<std::byte>& out) {
     ByteWriter writer(out);
     writer.U32(accepted.connectionId);
+    U64(writer, accepted.salt);
     writer.U32(accepted.tick);
     U64(writer, static_cast<std::uint64_t>(accepted.stepNanoseconds));
     writer.U32(accepted.worldGeneration);
@@ -147,7 +148,7 @@ NetResult<ConnectAccepted> DecodeAccepted(const std::span<const std::byte> body)
     ByteReader reader(body);
     ConnectAccepted accepted;
     std::uint64_t step = 0;
-    if (!reader.U32(accepted.connectionId) || !reader.U32(accepted.tick) || !ReadU64(reader, step) ||
+    if (!reader.U32(accepted.connectionId) || !ReadU64(reader, accepted.salt) || !reader.U32(accepted.tick) || !ReadU64(reader, step) ||
         !reader.U32(accepted.worldGeneration) || !ReadU64(reader, accepted.idRange.first) ||
         !ReadU64(reader, accepted.idRange.last)) {
         return Base::Err(Short("an accept is cut short"));

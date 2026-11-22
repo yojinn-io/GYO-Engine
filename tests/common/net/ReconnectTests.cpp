@@ -52,6 +52,12 @@ TEST_CASE("reconnect: G-9 a new client World after a disconnect gets the server'
     REQUIRE(PeersOf(match.World("Net").GetWorld()).size() == 1);
     const std::uint32_t oldConnection = PeersOf(match.World("Net").GetWorld())[0].connectionId;
 
+    // The old connection's last datagrams from the server are held back long (40 steps), so they arrive after the new
+    // connection is made (D-8: dropped as a connection id mismatch, counted).
+    links.first.SetOutgoingImpairment({0, 0, 0, 0, 40});
+    for (int i = 0; i < 5; ++i) frame();
+    links.first.SetOutgoingImpairment(link.aToB);
+
     // The client closes; the product replaces its World at once, and the new World shakes hands again.
     player.Buffer().Find<N::NetService>()->Close();
     const std::set<K::EntityId> before = StateOf(match.World("Net").GetWorld()).entities;
@@ -97,5 +103,5 @@ TEST_CASE("reconnect: G-9 a new client World after a disconnect gets the server'
     CHECK_MESSAGE(mismatches == 0, "G-9: after the reconnect the client equals the server at each confirmed tick");
     CHECK(deleted > 0);
     CHECK_MESSAGE(deletedStillThere == 0, "G-9: an entity the server deleted during the disconnect is not at the client");
-    CHECK_MESSAGE(mismatchedConnection + beforeConnected > 0, "G-9: the old connection's datagrams are dropped and counted");
+    CHECK_MESSAGE(mismatchedConnection > 0, "G-9: the old connection's datagrams are dropped as a connection id mismatch and counted");
 }

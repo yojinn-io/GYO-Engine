@@ -235,3 +235,38 @@ TEST_CASE("module: with authority strategies the fingerprints are compared; a cl
         CHECK(EndOf(pair) == N::DisconnectReason::IdRangeOverlap);
     }
 }
+
+namespace {
+
+// A Link whose receive fails the way the test says: a lasting failure, or one datagram too large then nothing.
+class FailingReceive final : public N::Link {
+public:
+    explicit FailingReceive(const N::NetFailureCode code) : code_(code) {}
+    N::NetResult<void> Send(N::Endpoint, std::span<const std::byte>) override { return {}; }
+    N::NetResult<std::optional<N::ReceivedDatagram>> Receive(std::span<std::byte>) override {
+        ++calls;
+        if (code_ == N::NetFailureCode::DatagramTooLarge && calls > 1) return std::optional<N::ReceivedDatagram>{};
+        return GYO::Engine::Base::Err(N::NetFailure::Make(code_, "the test's failure"));
+    }
+    std::uint64_t calls = 0;
+
+private:
+    N::NetFailureCode code_;
+};
+
+} // namespace
+
+TEST_CASE("module: a lasting Link failure stops the frame's receiving; a datagram too large does not (small thing 3)") {
+    N::NetProductOptions options;
+    options.role = N::NetRole::Server;
+    auto failing = std::make_shared<FailingReceive>(N::NetFailureCode::LinkFailed);
+    N::NetService lasting(options, failing, {}, 1, 2);
+    lasting.Pump(N::NetTime{0});
+    CHECK_MESSAGE(failing->calls == 1, "small thing 3: a lasting failure stops this frame's receiving");
+    CHECK(lasting.LinkFailures() == 1);
+    auto large = std::make_shared<FailingReceive>(N::NetFailureCode::DatagramTooLarge);
+    N::NetService once(options, large, {}, 1, 2);
+    once.Pump(N::NetTime{0});
+    CHECK_MESSAGE(large->calls == 2, "small thing 3: after a datagram too large the frame keeps receiving");
+    CHECK(once.LinkFailures() == 1);
+}

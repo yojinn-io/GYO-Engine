@@ -1,6 +1,6 @@
 # 網路 Module（`engine/modules/net`）
 
-更新：2026-11-22（新頁，`v8-arch-gyo2-net-module` 第 1 步前半 1a：傳輸層）；2026-11-23（第 3 步後半 3b：對時、W-8；新增第 10 節，第 9 節拿掉 3a 的暫時做法，NT-1、NT-4 補 3b）；2026-11-23（第 3 步前半 3a：輸入、重連、CCR-8；新增第 9 節，第 3、7、8 節補，NT-1、NT-3、NT-10 補 3a）；2026-11-23（第 2 步：元件的複製、伺服器訊息、`OnServer()`／`OnClient()`、World 世代；新增第 8 節，第 7 節補登記的東西，NT-1、NT-3、NT-8、NT-9、NT-10 補第 2 步）；2026-11-22（第 1 步後半 1b：握手、存活、登記單位、Peer 實體、套用點；第 1、2 節改寫，第 3 節補握手的種類與 payload，新增第 6、7 節，NT-1、NT-6、NT-7、NT-8、NT-10 補 1b）。由來：[事前宣告](net-module-declaration.zh-Hant.md)（修訂 2，2026-11-22 動工前核准「照建議，全部核准」）D-2、D-3、D-12、第 8 節 G-2、第 12 節。**Design Invariants 與 Replacement Criteria 是草稿，最終文字在合併前核准定稿。**本頁照 1a、1b、第 2 步、3a、3b 的實作寫。
+更新：2026-11-22（新頁，`v8-arch-gyo2-net-module` 第 1 步前半 1a：傳輸層）；2026-11-23（第 3 步後半 3b：對時、W-8；新增第 10 節，第 9 節拿掉 3a 的暫時做法，NT-1、NT-4 補 3b）；2026-11-23（第 3 步前半 3a：輸入、重連、CCR-8；新增第 9 節，第 3、7、8 節補，NT-1、NT-3、NT-10 補 3a）；2026-11-23（第 2 步：元件的複製、伺服器訊息、`OnServer()`／`OnClient()`、World 世代；新增第 8 節，第 7 節補登記的東西，NT-1、NT-3、NT-8、NT-9、NT-10 補第 2 步）；2026-11-22（第 1 步後半 1b：握手、存活、登記單位、Peer 實體、套用點；第 1、2 節改寫，第 3 節補握手的種類與 payload，新增第 6、7 節，NT-1、NT-6、NT-7、NT-8、NT-10 補 1b）。由來：[事前宣告](net-module-declaration.zh-Hant.md)（修訂 2，2026-11-22 動工前核准「照建議，全部核准」）D-2、D-3、D-12、第 8 節 G-2、第 12 節。**Design Invariants 與 Replacement Criteria 是草稿，最終文字在合併前核准定稿。**本頁照 1a、1b、第 2 步、3a、3b 的實作寫。；2026-11-23（PR-1 合併前設計審查的修正：B1、B2、S1～S4、小事 1～7，dev_log review_fixes）
 
 Owner：架構。程式：`engine/modules/net/`（`GYO::Engine::Net`，target `GYO::Net`，登記單位 `NetModule`）。行為測試：`tests/common/net/`（ctest `net.header`、`net.connection`、`net.transport`、`net.link`、`net.handshake`、`net.liveness`、`net.module`、`net.replication`、`net.scenario`、`net.input`、`net.reconnect`、`net.clock`，標籤 `cpu`）；突變清單 [`scripts/net_mutations.json`](scripts/net_mutations.json)（`nt-`）。
 
@@ -62,7 +62,7 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
 | `fragmentTimeout` | 3000 ms | lightyear `channel/receive.rs:53` `DISCARD_AFTER` |
 | `maxMessageBytes` | 16 MiB | lightyear `channel/fragments/receive.rs` `DEFAULT_MAX_FRAGMENTED_MESSAGE_SIZE` |
 | `disconnectPackets` | 10 | lightyear `crates/connection/netcode/src/client.rs:57` `num_disconnect_packets` |
-| `reliableWindow` | 256 | 本卡定：u16 的序號用一半以內就不會判錯先後；256 遠大於 64 Hz 下一個 RTT 內的可靠訊息數 |
+| `reliableWindow` | 256 | 本卡定：u16 的序號用一半以內就不會判錯先後；256 遠大於 64 Hz 下一個 RTT 內的可靠訊息數。要是 2 的次方（斷言，審查小事 4）：環以 `id % 大小` 索引，65 536 整除才不會在回繞處讓窗內兩個 id 落在同一格 |
 | `inboxCapacity` | 1024 | 本卡定（設定值） |
 | `sendQueueCapacity` | 4096 | 本卡定（設定值） |
 | `maxPendingFragmented` | 64 | 本卡定（設定值） |
@@ -117,12 +117,12 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
 
 | 欄位 | 大小 | 說明 |
 |---|---|---|
-| 網路協議版本 | u32 | `kNetProtocolVersion`（1）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
+| 網路協議版本 | u32 | `kNetProtocolVersion`（2；2 起接受帶 salt，審查 S2）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
 | 協議雜湊 | u64 | 網路的登記的雜湊；1b 還沒有複製的登記，是空登記的雜湊（`NetProtocolHash`） |
 | 步長 | u64 | 奈秒（時間 Module 的 `FixedTime` 的步長） |
 | 配發器範圍 | u64＋u64 | [first, last] |
 | 使用者 id | u64 | 不透明；產品對到自己的 Player |
-| salt | u64 | 3a：每次握手 Client 抽一個；同一次握手重送的回應帶同一個，重連（新的握手）帶別的（D-8） |
+| salt | u64 | 3a：每次握手一個；同一次握手重送的回應帶同一個，重連（新的握手）帶更大的（D-8）。審查 S2 起是遞增的：IO 層單調時鐘的奈秒，時鐘沒動時取上一個加一，所以同一台機器上重開的 Client 也往上走。接受（Accepted）帶回同一個 salt |
 | 有沒有指紋 | u8 | 0 或 1（World 有權威策略時 1） |
 | 指紋 | u16＋bytes | `Fingerprint::Text()`；沒有時長度 0 |
 | token | u16＋bytes | 只帶、不驗證（Q7） |
@@ -211,7 +211,7 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
 - **每一幀**：`ReceiveNet` 讀時鐘、`Pump`（收每個等著的 datagram、算存活），把連線層的事件寫進 World：連上 → spawn 一個 `Peer` 實體、發 `PeerConnected{peer, userId}`；斷了 → despawn、發 `PeerDisconnected{peer, userId, reason, detail}`（Client 的握手失敗沒有 Peer 實體，`peer` 是 0）。`SendNet` 更新事實、`Flush`（送）、把每條連線的丟棄計數寫回 `Peer`。tick 讀時間 Module 的 `Tick`，寫進標頭。
 - **時間**：時鐘只在 IO 層（存活、RTT），不寫進判定資料（D-9）。
 - **不是判定資料**：`Peer`、`NetWorldLink` 不進權威登記、不進 digest；它們的雜湊函式什麼都不雜湊（連線識別是隨機的，不是兩次執行要一致的 World 狀態）。
-- **Link 的錯誤**（E2）：`NetService` 記下並計數（`LinkFailures`、`LastLinkFailure`），World 照跑；`ReceiveNet` 每幀看到新的失敗就發 World 的訊息 `NetLinkFailed{failures, code, message}`（形狀照 `TimeDiscarded`），產品看得到。交給 runner 的部分在合併前核准時交使用者。
+- **Link 的錯誤**（E2）：`NetService` 記下並計數（`LinkFailures`、`LastLinkFailure`），World 照跑；收件時只有 `DatagramTooLarge`（那一個丟掉）繼續收，其他錯誤停掉這一幀的收件（審查小事 3）；`ReceiveNet` 每幀看到新的失敗就發 World 的訊息 `NetLinkFailed{failures, code, message}`（形狀照 `TimeDiscarded`），產品看得到。交給 runner 的部分在合併前核准時交使用者。
 - **第 2 步加的登記**（有角色時）：
   - 兩端：Resource `NetWorldRole`（執行條件讀它）、ECS 元件 `PeerLedger`（Peer 實體上的帳本）、訊息 `NetLinkFailed`。
   - 伺服器：Resource `NetOutbox`、System `ReplicateOut`（`Main`／`Last`，在 `SendNet` 之前，`ExclusiveWorld`）、每種伺服器訊息一個 `CollectServerMessages:<名字>`（`Main`／`PostUpdate`）。
@@ -231,14 +231,15 @@ net.Replicate<Position>("Position", PositionCodec());      // 元件；編碼函
 net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 ```
 
-- 只收元件（Resource 的複製是 Q8，交主會話決定）。
+- 元件、伺服器訊息、Resource（第 12 節，Q8 (b)）。
 - 編碼（`Codec<T>`：`encode`、`decode`、`version`）：數值與 enum 有預設；其他型別由作者給，**沒有位元組照抄**（padding 不上 wire）。`NetWriter`／`NetReader` 逐欄寫小端序。
 - wire id＝登記的順序；協議雜湊＝名字、順序、編碼版本的雜湊（`NetRegistry::Hash`），取代 1b 的空登記雜湊，握手照舊比（兩端登記不同 → `ProtocolMismatch`）。
 
 **送**（伺服器的 `ReplicateOut`，每個 tick、每個 Peer；同一個 tick 不送第二次）：
 
-- **結構更新**：Peer 的帳本記著這個 Client 有哪些實體、每個實體有哪些複製元件（遮罩）。和 World 現在的比：多出來的 → 生成，少了的 → 刪除，遮罩不同 → 加減元件。一則、Ordered Reliable、整則一起套用。結構有變的實體，它的全部複製元件的值併進這一則。沒有變化就不送。
-- **伺服器訊息**：這一幀收集到的（`CollectServerMessages`，用自己的游標讀 World 的 `Message<M>`），在結構更新之後、同一條 Ordered Reliable 送；帶它要的結構 tick；可以只送給一個 Peer（`recipient`）。
+- **結構更新**：Peer 的帳本記著這個 Client 有哪些實體、每個實體有哪些複製元件（遮罩）。和 World 現在的比：多出來的 → 生成，少了的 → 刪除，遮罩不同 → 加減元件。一則、Ordered Reliable、整則一起套用。結構有變的實體，它的全部複製元件的值併進這一則。沒有變化就不送。連線收下了才改帳本：可靠的送件被拒（佇列滿、太大）時帳本不動、下一個 tick 再做一次，計 `PeerLedger::reliableRejected`（審查 S3）。
+- **伺服器訊息**：收集到的（`CollectServerMessages`，用自己的游標讀 World 的 `Message<M>`），在結構更新之後、同一條 Ordered Reliable 送；帶它要的結構 tick；可以只送給一個 Peer（`recipient`）。沒有跑固定步的那一幀不送（tick 沒變），訊息留在 `NetOutbox` 等下一個 tick（審查 B2）。被連線拒絕的計 `reliableRejected`（那一則不重送）。
+- **要的結構 tick 的寫法**：wire 上是「結構 tick＋1」，0＝還沒有結構更新；tick 0 的結構和其他 tick 一樣（審查 S1）。
 - **值**：帳本裡每個實體記著 Client 上次確認的快照的 World 戳記；元件的變更戳記（Kernel 的 `ReadColumn`）比它新的，送最新的值。Unreliable，分成數則，每則帶 tick、「這個 tick 共幾則」、要的結構 tick；一個實體的資料不拆開（一則約 1100 bytes，放得進一個不分片的封包）。沒有變化也送一則空的（C-RP4）。
 - **一個 tick 編碼一次**（3c）：快照（實體依 id 排序、每個元件一格的變更戳記）每 tick 取一次；一個值第一次有 Peer 要送時編碼，同一個 tick 的其他 Peer 用同樣的位元組（`ReplicateOut` 執行中 World 不變，wire 上的位元組和各自編碼相同）。費用與量法見 dev_log 2026-11-23 step3c（判定 G-12）。
 - **確認**（應用層）：Client 處理完一則值訊息才回確認（Ordered Reliable）；伺服器收到才把那則帶的實體的戳記前推。封包層的 ack 不前推帳本。帳本只決定送什麼，不是遊戲狀態的副本。
@@ -250,13 +251,14 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 - **值相同就不寫**（3a，CCR-8）：寫之前用那個型別的編碼函式把現值編碼，和收到的位元組比，相同就不 `Modify`、不打變更戳記（`NetReplicaState::unchangedNotWritten` 計數）。值訊息送的是「自上次確認以來的最新值」，確認還沒到時會重送同一個值；不比就寫的話，遊戲的 `Changed<T>` 分不出伺服器真的換了值。比位元組，所以 `T` 不必有 `==`。
 - 伺服器訊息等它要的結構 tick 套用後，由 `DeliverServerMessages` 寫進 World 的 `Message<M>`；不算進確認點。
 - **D-7 的兩個條件**（K1 也記，不寫回滾的入口）：第 C 個 tick 的值訊息全部處理過（每則都要等它要的結構套用）。`NetReplicaState::latestConfirmed` 是最新的這種 C，`maxAppliedTick` 是寫進 World 的最新的值或結構的 tick。
-- 丟棄有理由、有計數（`ReplicaDrop`）：舊世代、舊 epoch、讀不了、`SpawnWithId` 被拒、找不到對象（實體或元件已不在）、比寫過的舊。
+- 丟棄有理由、有計數（`ReplicaDrop`）：舊世代、舊 epoch、讀不了、`SpawnWithId` 被拒、找不到對象（實體或元件已不在；結構更新也算，審查 S4）、比寫過的舊。
+- 伺服器收到 Client 的東西也一樣（審查 S4、小事 2）：確認、resync、輸入訊息讀不了或種類不對是 `Malformed`，確認與輸入的世代不是現在的是 `StaleGeneration`，確認的 epoch 不對是 `StaleEpoch`，計在那個 Peer 的 `PeerLedger::drops`。
 
 **World 世代與 resync**：
 
 - 伺服器每次建 World 時世代加一，寫進標頭與複製的每則訊息。換 World 後，`ReceiveNet` 替已連上的連線重建 Peer 實體，帳本從空開始（整份重送）。
 - Client 收到新世代：丟掉舊的進度，發 `ServerWorldReplaced{generation}`；換不換自己的 World 由產品決定。舊世代的訊息丟掉並計數。
-- Client 的 World 被換掉（第二個以上的 Client World）：新 World 送 resync（epoch 加一），伺服器把那個 Peer 的帳本清空、整份重送；舊 epoch 的訊息在 Client 丟掉並計數。
+- Client 的 World 被換掉（第二個以上的 Client World）：新 World 送 resync，伺服器把那個 Peer 的帳本清空、整份重送；舊 epoch 的訊息在 Client 丟掉並計數。epoch＝`NetService` 數到的第幾個 Client World 減一，每個 Client World 遞增、不從訊息拿（審查 B1）；只有伺服器換了 World（比已知更新的世代）時，Client 採用訊息帶的 epoch（新的 Peer、新的帳本）。
 
 **只在一端跑的邏輯**（D-13）：`OnServer()`、`OnClient()` 是讀 `NetWorldRole` 的執行條件。兩端登記同一個 System 加條件，一致性指紋相同，另一端不跑。只能用在有角色的 World。
 
@@ -266,6 +268,7 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 - 「複製的實體」＝至少有一個複製元件的實體。全部複製元件都拿掉的實體，在 Client 上被刪掉。Peer 實體不複製。
 - 最多 64 種複製元件（遮罩是 64 位元）。
 - 換 World 之間 Client 仍套用新世代的訊息到舊 World；產品沒換 World 時，同號的實體會被 `SpawnWithId` 拒絕（計數）。
+- tick 在 wire 上截成 u32，各處直接比大小、不處理回繞：64 Hz 約 2.1 年回繞一次，一個 World 連續跑這麼久不在範圍內（審查小事 7）。
 
 ## 9. 輸入與重連（宣告 D-11、C-IN1～3、D-8；3a）
 
@@ -292,16 +295,17 @@ Net::NetEntry(setup).Input<Move>("Move", options);
 
 **Match**：`ReceiveInputs`（`Main`／`First`，在 `ReceiveNet` 之後）替每個 Peer 備好緩衝（從連上的第一幀起，入口跑的每一步都算進消耗或缺），把輸入訊息填進去：
 
-- 收的窗＝`(已消耗的 tick, 現在的 tick + L]`，L 預設 64（回滾的 `InputHistoryLength::Long`；lightyear 收 ±64）。已消耗的（`late`）、窗外的（`outsideWindow`）丟掉並各自計數。
+- 收的窗＝`(已消耗的 tick, 現在的 tick + L]`，L 預設 64（回滾的 `InputHistoryLength::Long`；lightyear 收 ±64）。已消耗的（`late`）、窗外的（`outsideWindow`）丟掉並各自計數。還沒消耗過（產品還沒給 `PeerControls`）時，被現在的 tick 超過、沒人消耗的格修剪掉，計 `expired`（審查小事 1）。
+- 讀不了的輸入訊息、別的世代的輸入（Client 填它知道的最新世代，還沒收到複製時用接受帶的世代）丟掉並計在 Peer 的 `PeerLedger::drops`（審查 S4、小事 2）。
 - 每個（Peer, tick）只收一次（C-IN1）：重複的計 `duplicates`、不覆蓋。
 - **單次觸發**（C-IN3）：作者把觸發放在輸入元件的欄位裡。冗餘的幾格裡任一格帶到，就算那一格（每格只收一次，所以只觸發一次）；那一格始終沒到時沿用上一格，`held` 清掉觸發，不會再觸發一次。系譜：Unity 的 `InputEvent`（掉包也不漏、不重複的單次事件）、lightyear 的 `ActionState` 的 just pressed。
-- 件數：收到的格＝收下＋重複＋已消耗＋窗外；收下＝消耗＋還在前面的；入口跑的步＝消耗＋缺。
+- 件數：收到的格＝收下＋重複＋已消耗＋窗外；收下＝消耗＋過期＋還在前面的（有 `PeerControls` 時過期是 0）；入口跑的步＝消耗＋缺。
 
 **重連**（D-8）：
 
 - Client 斷線後網路發 `PeerDisconnected`，不替產品換 World。產品換一個新的 Client World（`ReplaceWorld`），新 World 準備時用同一個使用者 id 重新握手：新連線、新 Peer、Match 重送整份（新 World 也送 resync）。
 - 斷掉的 session 還沒送完的 Disconnect 先送，再開新的握手。
-- 握手的請求帶 salt：同一個 endpoint 帶別的 salt 的回應是新的握手，Match 先結束舊的連線（`ClosedByRemote`）再配新的連線識別；同一個 salt 是重送的回應，回同一個連線識別。
+- 握手的請求帶 salt：同一個 endpoint 帶更大的 salt 的回應是新的握手，Match 先結束舊的連線（`ClosedByRemote`）再配新的連線識別；同一個 salt 是重送的回應，回同一個連線識別；更小的 salt 是舊握手晚到的回應，丟掉並計 `Unexpected`，現有的連線不動（審查 S2 (a)）。Client 只採用帶自己 salt 的接受，別的計 `Unexpected`（S2 (b)）。系譜：netcode.io 的 connect token 帶建立時間、伺服器不接受過期的（時間決定新舊）；這裡只比大小、不設期限。
 - 舊連線還在飛的 datagram：新連線連上後是連線識別不符（`ConnectionMismatch`），連上之前是 `UnknownSource`，都計數；已斷的 session 收到的也計 `UnknownSource`。
 - **tick 對齊**：3b 的對時（第 10 節）。Client 的入口與送件以對時後的自己的 `Tick` 為鍵（3a 測試裡「讀 Match 的 tick 加提前量」的暫時做法已拿掉）。
 
@@ -369,7 +373,7 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 **NT-6 不選就沒有**（G-1）。Product 沒有 `NetProductOptions` 就不建 `NetService`、不開 socket；World 沒有 `NetWorldOptions` 就不登記任何東西（System、Resource、元件、訊息都和不選網路 Module 時逐項相同）。守衛：`net.module`「without a role or settings the net Module adds nothing (G-1)」；突變 `nt-registers-without-role`。
 
 <a id="nt-7"></a>
-**NT-7 依賴。** 網路依賴權威、回滾、時間、entity_ids；它們都不依賴網路；外部組件只經 `core/os`。1b：登記檔 `depends=world_time;rollback;authority;entity_ids`，另連 `GYO::Base`、`GYO::OS`、`GYO::Time`、`GYO::Kernel`、`GYO::Orchestration`。
+**NT-7 依賴。** 網路依賴權威、回滾、時間、entity_ids；它們都不依賴網路；外部組件只經 `core/os`。1b：登記檔 `depends=world_time;rollback;authority;entity_ids`，另連 `GYO::Base`、`GYO::OS`、`GYO::Time`、`GYO::Kernel`、`GYO::Orchestration`。守衛（`net.scenario` 通過後立，AGENTS §3）：`tests/common/net/CMakeLists.txt` 的 `gyo_expect_links(gyo_net …)`（連結集剛好是這五個與登記的四個 Module）；突變 `nt-links-more`。
 
 <a id="nt-8"></a>
 **NT-8 丟棄有理由、有計數。** 第 5 節的十一個理由（1a 九個，1b 加連線層的 `UnknownSource`、`Unexpected`）；`Connection`、`ClientSession`、`ServerHost`、`NetService` 沒有不計數的丟棄出口；第 2 步的複製另有六個理由（`ReplicaDrop`），Link 的失敗發 `NetLinkFailed`。守衛：G-2 的件數突き合わせ（`net.transport`）、`net.connection` 的各案；突變 `nt-timeout-uncounted`、`nt-connid-unchecked`。

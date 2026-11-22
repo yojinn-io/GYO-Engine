@@ -48,13 +48,18 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
         Reject(from, Rejection{DisconnectReason::ChallengeFailed, "the response does not carry this server's challenge"});
         return;
     }
-    // A second response of the same handshake (its first Accepted was lost): the same answer again. A new
-    // handshake from that endpoint (another salt: the client reconnected) ends the old connection first.
+    // A second response of the same handshake (its first Accepted was lost): the same answer again. A newer
+    // handshake from that endpoint (a larger salt: the client reconnected) ends the old connection first; a late copy
+    // of an older one (a smaller salt) is dropped and counted, and the connection stays (S2).
     if (const auto known = byEndpoint_.find(from.value); known != byEndpoint_.end()) {
         auto& peer = peers_.at(known->second);
         if (peer.salt == request->salt && peer.userId == request->userId && !peer.closing) {
             Reply reply{from, PacketKind::Accepted, known->second, {}};
             replies_.push_back(std::move(reply));
+            return;
+        }
+        if (request->salt < peer.salt) {
+            Count(DropReason::Unexpected);
             return;
         }
         End(peers_.find(known->second), DisconnectReason::ClosedByRemote);
@@ -146,7 +151,7 @@ std::vector<std::pair<Endpoint, std::vector<std::byte>>> ServerHost::Collect(con
         if (reply.kind == PacketKind::Accepted) {
             const auto peer = peers_.find(reply.connectionId);
             if (peer == peers_.end()) continue; // ended before its answer went out
-            Detail::EncodeAccepted(ConnectAccepted{reply.connectionId, stamp.tick, facts_.stepNanoseconds,
+            Detail::EncodeAccepted(ConnectAccepted{reply.connectionId, peer->second.salt, stamp.tick, facts_.stepNanoseconds,
                                                    stamp.worldGeneration, facts_.idRange},
                                    reply.payload);
         }
