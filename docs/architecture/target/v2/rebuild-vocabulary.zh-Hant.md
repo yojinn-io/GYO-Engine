@@ -75,7 +75,7 @@ v3 和 v2 的差別：
 - **網路**：登記型別的名字 `NetPlugin` 改成 `NetModule`，放在 Engine 裡，不放 `plugins/net/`。程式還不在 gyo2 上，實作時照新名字。
 - **權威檢查**是 Module。同日再改（決定表 `v8-arch-gyo2-authority-is-game-design`，方向，細節未定）：權威判定是遊戲設計的一部分，權威檢查做成策略式的 Module，**由作者選一個策略**（例：不用、伺服器權威、P2P 回滾），由策略決定開哪些檢查；權威 Module 自己登記並代為登記進 Kernel，Kernel 不存標籤（`v8-arch-gyo2-authority-own-registration`）。原話：「這個東西本身就是遊戲邏輯的一部分，是否權威，走什麼協議，其實都是看遊戲如何設計的，例如我做格鬥遊戲，就直接p2p了。」「不不不，我的意思是由作者去選。」
 - **參照的例子**：O3DE 把官方的 gem 分成兩個 repo——core（`o3de/o3de`，自己能建置、不依賴 core 以外的東西）與 extras（`o3de-extras`，官方認可但不是建置必需），各有自己的登記。我們借的是「分兩類、各一份清單」的形狀；分類的依據是誰維護、介面是誰的。Unity 的內建模組（`com.unity.modules.*`）隨引擎附帶、可以逐個關掉，是「Module 隨 Engine、可以不選」的前例。來源與其他引擎的比較：主 checkout `build/evidence/gyo2-module-plugin-definition/references.md`。
-- **還沒確認**（第 6 節第 5 點）：產品（作者）能不能在 Module 登記檔裡只選部分 Module；SDL 的 adapter（我們寫、實作 Engine 定的後端介面）歸哪；ufbx 歸哪。
+- **還沒確認**（第 6 節第 5 點）：產品（作者）能不能在 Module 登記檔裡只選部分 Module；SDL 的 adapter（我們寫、實作 Engine 定的後端介面）歸哪；ufbx 歸哪。〔2026-11-23 更新：SDL 已定為 B'——只做 `plugins/sdl*`，Engine 的 `input`、`window`、`render` 只有資料，依賴只從 Plugin 指向 Engine（HANDOFF `v8-arch-gyo2-sdl-q1-b-prime`）；ufbx、stb_image 已定為 Module 側，放擁有型別的 Module 的 `src/adapters/<組件>/`（HANDOFF `v8-arch-gyo2-sdl-q2-ufbx-stb-module`）。〕
 
 **「有問題的是解釋」的讀法**（架構師提出、使用者 2026-11-14 回「這個方向沒錯」）：詞本身是通用的技術名詞，照用；v2 的解釋把它們說成「舊 Kernel 設計的…」「PvP 的…」，還加了「（舊）」這類限定，這才是問題。v3 照這個讀法改寫。
 
@@ -195,7 +195,7 @@ v3 和 v2 的差別：
 5. **Module／Plugin 改定後還沒確認的**（2026-11-16，`v8-arch-gyo2-module-plugin-definition` 列給使用者，尚未回覆）：
    - **產品（作者）能不能只選部分 Module**：作者選不選權威 Module、選哪個策略，以這個為前提。前例：O3DE 的專案在 `<project>/Code/enabled_gems.cmake` 列要用的 gem；Unity 的內建模組可以逐個關掉。
    - **SDL 的 adapter 歸哪**：adapter 是我們寫的、實作 Engine 定的後端介面。讀法之一：JSON 的第三方型別完全藏住，所以是 Module；SDL 的 adapter 會對產品露出 SDL 型別（ImGui 的 SDL 後端要用），又帶一族子函式庫，所以整包是 Plugin。可檢查的形式是「第三方型別有沒有露出我們的介面」。這個讀法沒有經使用者確認。
-   - **ufbx 歸哪**：2026-11-13 的組成文件把它列為必備後端的 plugin；若完全藏在我們的模型載入介面後面，照 JSON 的理由會是 Module。
+   - **ufbx 歸哪**：2026-11-13 的組成文件把它列為必備後端的 plugin；若完全藏在我們的模型載入介面後面，照 JSON 的理由會是 Module。〔2026-11-23 已定：Module 側（`engine/modules/model/src/adapters/ufbx/`，隨 model 那一批做；stb_image 照 asset 宣告 5.11 在 `engine/modules/image/src/adapters/stb_image/`）；理由：完全藏在我們的介面後面、只是解析器，和 yyjson 同類；SDL 有全域狀態與主執行緒規則所以不同。使用者「就是 ufbx、stb_image 走 Module 這一側。」〕
 
 ## 7. 範囲の限界
 
