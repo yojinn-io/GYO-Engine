@@ -27,10 +27,10 @@
 | [批次表](rebuild-batch-plan.zh-Hant.md)第 5、6 組各列（文件分支 `claude/gyo2-time-design`） | 主會話 | 誰等這一批、等什麼（第 3.2 節） |
 | [統合](kernel-app-boundary-declaration.zh-Hant.md)修訂 38：L19（交換函式的登記改在編排層）、第 3 節、9.2 的 O-3、O-4 | 已核准 | 交換點、extract 的時機、執行緒的安排歸編排層 |
 | [編排層](orchestration.zh-Hant.md) O-1～O-11、RC-O1～RC-O10 | 已合併 | 本批改 O-2、O-3、O-5、O-7、O-8，加 O-12、O-13（第 7 節） |
-| [時間設計](rebuild-time-design.zh-Hant.md)第 5.1～5.5、6.4 節 | 已核准（決定 1～7） | 交換點的原形（5.3：進、出、交換函式的登記、七個點名的使用者）、三種組合、跨 World 事件的形狀 |
+| [時間設計](rebuild-time-design.zh-Hant.md)第 5.1～5.5、6.4 節 | 已核准（決定 1～7）；**部分過時**：寫在 11-16～17 的分層之前，Kernel 的交換函式登記（第 8 節）、「一個 World 綁一條執行緒」、第 11 節的批次表已被統合 L19、`-thread-binding-by-runner`、批次表取代；本頁只用它的形狀，不用它的歸屬 | 交換點的原形（5.3：進、出、交換函式的登記、七個點名的使用者）、三種組合、跨 World 事件的形狀 |
 | [world-time](world-time.zh-Hant.md) 第 3 節、WT-6 | 已合併 | 取樣的過渡（第 5.5 節） |
 | [rebuild-concept](rebuild-concept.zh-Hant.md) M11、D6b（含 2026-11-22 的加註） | 已核准 | 交換點的不變量 |
-| [runtime-composition](../runtime-composition.zh-Hant.md) 第 2 節（Client 三個 World）、第 3b 節（Editor；沒有影像回到文件 World） | 使用者 11-11 決定（K.3 第 6 項：模擬與渲染的 World 分開、只經 Extract）。第 2 節的「Mailbox 由 Host 擁有、只在 schedule 之間存取」是從規格 H.4.2（`spec.zh-Hant.md:903`）抄進來的細節，不是使用者另外定的（2026-11-24 更正，見第 18 節） | 第 5.1、5.4 節 |
+| [runtime-composition](../runtime-composition.zh-Hant.md) 第 2 節（Client 三個 World）、第 3b 節（Editor；沒有影像回到文件 World） | **部分過時**（2026-11-13 的頁，用退役的 Runtime、Host、區、「一個 World 一條執行緒」）；本頁只用使用者 11-11 定的部分：（K.3 第 6 項：模擬與渲染的 World 分開、只經 Extract）。第 2 節的「Mailbox 由 Host 擁有、只在 schedule 之間存取」是從規格 H.4.2（`spec.zh-Hant.md:903`）抄進來的細節，不是使用者另外定的（2026-11-24 更正，見第 18 節） | 第 5.1、5.4 節 |
 | [kernel](../kernel.zh-Hant.md) DI-KS 13、15、26；[cross-component-rules](../../../cross-component-rules.md) CCR-5 | 已合併 | Extract 的 Kernel 那一半；單執行緒的前提 |
 | [回滾](rollback.zh-Hant.md)（`RollbackInbox`、R-3）、[權威](authority.zh-Hant.md)（DI-A 7） | 已合併（#259） | 網路寫進 World 的位置 |
 | [日誌宣告](logging-declaration.zh-Hant.md) 5.4 | 已合併（#256） | Kernel 診斷紀錄「runner 在兩次 Run 之間取走」，「交換點在第 5 條才由編排層排；那時這個呼叫可以移到交換點，介面不變」（第 228 行） |
@@ -43,7 +43,7 @@
 
 ## 1. 這一批做什麼（先用遊戲講）
 
-**PvP 的 Client**：三個 World——模擬（固定步，自己的執行緒）、畫面（每幀，主執行緒）、渲染（每幀，主執行緒，只經 Extract 唯讀拿畫面 World 的資料）。網路收到伺服器的快照，模擬 World 每一輪開頭把它們寫進 `RollbackInbox`；畫面 World 把玩家的指令交給模擬 World，模擬 World 把「這一步角色在哪」交回畫面 World（兩邊在不同執行緒，中間放一個有鎖的「郵箱」，一邊投、另一邊下次自己拿；怎麼做在 PvP 移植時定）。貼圖的解碼在 IO 執行緒。每個 World 跑完一輪，Kernel 的診斷紀錄（丟掉的訊息、被拒的生成）要被取走交給日誌。
+**PvP 的 Client**：三個 World——模擬（固定步，自己的執行緒）、畫面（每幀，主執行緒）、渲染（每幀，主執行緒，只經 Extract 唯讀拿畫面 World 的資料）。網路收到伺服器的快照，模擬 World 每一輪開頭把它們寫進 `RollbackInbox`；畫面 World 把玩家的指令交給模擬 World，模擬 World 把「這一步角色在哪」交回畫面 World（兩邊在不同執行緒，中間放一個 Product 一份、有自己的鎖的物件，一邊放、另一邊下次自己拿；它是 PvP 的 Module 的物件，Engine 不另立概念，怎麼做在 PvP 移植時定）。貼圖的解碼在 IO 執行緒。每個 World 跑完一輪，Kernel 的診斷紀錄（丟掉的訊息、被拒的生成）要被取走交給日誌。
 
 這裡有四種「資料進出 World」：
 1. **外部服務的結果在幀裡進 World**（asset 的載入結果、網路的快照）：服務在 World 之外、有自己的鎖；World 裡的 System 在每一輪的固定位置一次拉進來。
@@ -63,7 +63,7 @@
 
 - **第 0 步**（已做，見第 15 節）：第 4 批宣告 9.5 延下來的兩條守衛（PR #268）。
 - **Product 層 Resource**（第 5.2 節）：Product 一份、以型別為鍵的共用處；產品給 Module 的 Product 層選項；`Configure` 的錯誤回報；Product 銷毀時的回呼；明確的銷毀順序。**實作**（asset 是直近的使用者）。
-- **交換函式的登記**（第 5.1 節的形 (2)）：每個 World 的「進」「出」兩份登記，`RunFrame` 包住每個 World 的一輪呼叫。**實作**（點名的使用者：Kernel 診斷紀錄的取走，日誌宣告 5.4 等它）。
+- **交換函式的登記**（第 5.1 節的交換函式）：每個 World 的「進」「出」兩份登記，`RunFrame` 包住每個 World 的一輪呼叫。**實作**（點名的使用者：Kernel 診斷紀錄的取走，日誌宣告 5.4 等它）。
 - **交換點的契約**（第 5.1 節）：四種形、各自的時點與規則，寫進編排層的 Design Invariants。
 - **多個 World 的執行緒**（第 5.3 節）：只寫不變量（整個 World 交出、交出期間別的執行緒不碰）；入口層級的行為留給實作那一批。**不實作**。
 - **Extract**（第 5.4 節）：只寫時機與「來源替換後讀者不得讀舊來源」；執行的原語與編排層的呼叫在 SDL 那批實作。
@@ -72,7 +72,7 @@
 ### 2.2 不在這一批
 
 - 網路 Module 本身、SDL 的 runner、asset 的實作、threads／io／audio 的重審：各自的批，照第 5.6 節的對照接上。
-- 跨 World 的事件（時間設計 6.4，決定 7）：照舊延後，形狀落在形 (2)（第 5.1 節末）。
+- 跨 World 的事件（時間設計 6.4，決定 7）：照舊延後，形狀落在交換函式（第 5.1 節末）。
 - 時間的取樣移給 runner（時間設計 5.4、world-time 第 3 節的過渡）：維持過渡，到 SDL 那批有了有視窗的 runner 再定（第 5.5 節）。
 - 生成世界：另一張卡（`gyo2-world-gen`）；交界在第 13 節。
 
@@ -98,22 +98,22 @@
 | E-3 | asset：`Configure` 階段的錯誤回報（1） | asset O-A3 | `ProductSetup` 能回報錯誤，收進 `ProductStartupReport` | 5.2 |
 | E-4 | asset：Product 結束時記丟棄件數、停下工作（1） | asset O-A4、X-6 | Product 銷毀時，依序呼叫單位登記的回呼；所有回呼跑的時候，共用處的物件都還在 | 5.2 |
 | E-5 | asset：讀檔與解碼在 World 執行緒外跑；執行器由這裡給；執行緒的數量與歸屬由 runner／產品定（1） | asset X-1、X-4 | 產品或測試給的物件（執行器的實作）在單位的 `Configure` 就拿得到；單位建的物件放共用處 | 5.2 |
-| E-6 | asset：交換點不認得 asset；World 靠自己的套用點看到結果（1） | asset X-2、X-3 | 外部服務的結果在幀裡進 World 的走套用點（形 (1)），編排層不認得內容 | 5.1 |
+| E-6 | asset：交換點不認得 asset；World 靠自己的套用點看到結果（1） | asset X-2、X-3 | 外部服務的結果在幀裡進 World 的走套用點（套用點），編排層不認得內容 | 5.1 |
 | E-7 | asset：測試能控制工作何時開工、完成（1） | asset X-5 | 測試能給自己的執行器（介面型別的物件） | 5.2 |
 | E-8 | 網路：伺服器的權威值寫進 `RollbackInbox`，下一幀開頭判斷（1） | rollback.zh-Hant.md 第 2 節、DI-A 7 | 收件在模擬 World 每一輪的回滾決定之前寫進 World；送件在每一輪最後 | 5.1 |
-| E-10 | SDL：OS 事件在每一輪開頭進 World；有視窗的 runner（1） | 批次表 SDL 列；時間設計 5.5 (二) | runner 在兩次入口之間可以寫 World（形 (3)）；或輸入服務＋套用點 | 5.1 |
+| E-10 | SDL：OS 事件在每一輪開頭進 World；有視窗的 runner（1） | 批次表 SDL 列；時間設計 5.5「有視窗、同一條執行緒」 | runner 在兩次入口之間可以寫 World（runner 直接讀寫）；或輸入服務＋套用點 | 5.1 |
 | E-11 | SDL：渲染 World 有自己的 Registry，只經 Extract 唯讀拿資料，無反饋（1） | runtime-composition 第 2、3b 節（K.3 第 6 項）、DI-KS 13、批次表 SDL 列 | Extract 的時機、來源的設定與替換、Kernel 的執行原語 | 5.4 |
 | E-12 | SDL：render 的裝置是 Product 一份；貼圖的 loader 要等裝置建好（1） | asset 5.4「預先登記」 | 裝置放共用處 | 5.2 |
-| E-13 | PvP Client：模擬 World 在自己的執行緒，主執行緒停 250 ms 時模擬照跑（1） | 時間設計 5.5 (三)；runtime-composition 第 2 節 | 一個 Product 的 World 可以在不同執行緒跑；World 之間的交換不等另一條執行緒 | 5.3、5.1 |
+| E-13 | PvP Client：模擬 World 在自己的執行緒，主執行緒停 250 ms 時模擬照跑（1） | 時間設計 5.5「固定步在自己的執行緒」；runtime-composition 第 2 節 | 一個 Product 的 World 可以在不同執行緒跑；World 之間的交換不等另一條執行緒 | 5.3、5.1 |
 | E-14 | Editor：文件 World＋渲染 World（1） | runtime-composition 第 3b 節 | 同 E-11 | 5.4 |
 | E-15 | threads 重審：`RoleThread` 的②③是 runner 的執行緒（1） | 批次表 threads 列、R0 附錄 | 執行緒由 runner 建、由 runner 收；World 不綁執行緒 | 5.3 |
 | E-16 | audio 重審：`Submitter` 歸第一個呼叫它的執行緒；混音器有自己的迴圈（1） | 批次表 audio 列 | 混音器放共用處；綁執行緒的物件自己記執行緒（`v8-arch-gyo2-thread-binding-by-runner`） | 5.2、5.3 |
 | E-17 | io 重審：多執行緒同時讀檔的契約（1） | asset 5.12 | 不在本頁定；本頁只要求「World 外的服務自己負責自己的同步」 | 5.1 |
-| E-18 | 時間：「一次醒來只取樣一次」、取樣歸 runner（時間設計決定 1 B；WT-6 第 (2) 項的過渡）（1） | 時間設計 5.2、5.4；world-time 第 3 節 | 維持過渡，到 SDL 那批定（第 5.5 節）；交換函式的登記讓那時有地方接 | 5.5 |
-| E-19 | 日誌：Kernel 的診斷紀錄在每個 World 跑完之後取走；World 不在 Run 裡、做不成 System（1） | 日誌宣告 5.4、第 228 行 | 編排層在每個 World 的一輪之後依序呼叫單位登記的函式（形 (2)「出」） | 5.1 |
+| E-18 | 時間：「一次醒來只取樣一次」、取樣歸 runner（時間設計決定 1：runner 每輪取樣寫進 World、時間的 System 從它算時間；WT-6 第 (2) 項的過渡）（1） | 時間設計 5.2、5.4；world-time 第 3 節 | 維持過渡，到 SDL 那批定（第 5.5 節）；交換函式的登記讓那時有地方接 | 5.5 |
+| E-19 | 日誌：Kernel 的診斷紀錄在每個 World 跑完之後取走；World 不在 Run 裡、做不成 System（1） | 日誌宣告 5.4、第 228 行 | 編排層在每個 World 的一輪之後依序呼叫單位登記的函式（交換函式「出」） | 5.1 |
 | E-20 | 生成世界：分批之間 asset 的套用 System 會跑（1） | asset G-1～G-3 | 套用點是 World 裡的 System，跟著 World 的每一輪走 | 5.1、13 |
 | E-21 | 規模：PvP 64 Hz、Client 三個 World；Match 一個 World；工具一到兩個 World（3） | 時間設計、runtime-composition | World 數是個位數；Product 層的查找不必比線性快（照 `OptionBag`、`ModuleBuffer` 的線性表） | 5.2 |
-| E-22 | PvP Client：畫面 World 與模擬 World 互交指令與位置（1；Client 三個 World 是使用者 11-11 定的。「經 Host 擁有的 Mailbox、只在 schedule 之間存取」（規格原文；Host 是用詞表 v3 已換掉的角色詞，現在是組裝與 runner）是規格 H.4.2 的細節，不是使用者定的） | runtime-composition 第 2 節；規格 H.4.2 | 兩邊不等另一條執行緒；用形 (1)（有鎖的服務＋套用 System）或形 (2)，PvP 移植時定 | 5.1、5.3 |
+| E-22 | PvP Client：畫面 World 與模擬 World 互交指令與位置（1；Client 三個 World 是使用者 11-11 定的。「經 Host 擁有的 Mailbox、只在 schedule 之間存取」（規格原文；Host 是用詞表 v3 已換掉的角色詞，現在是組裝與 runner）是規格 H.4.2 的細節，不是使用者定的） | runtime-composition 第 2 節；規格 H.4.2 | 兩邊不等另一條執行緒；用套用點（有鎖的服務＋套用 System）或交換函式，PvP 移植時定 | 5.1、5.3 |
 | E-23 | 時間設計 5.3 點名的七個使用者：時間的投影、`HostClockSample`（PvP；時間設計原文的型別名）、網路的收發緩衝、平台事件、資產 IO 的完成通知、World 之間的資料、診斷的輸出（1） | 時間設計 5.3（第 328 行） | 逐一落到四種形（第 5.1 節的表） | 5.1 |
 
 修訂 0 的 E-9（同一個行程裡的伺服器 World 與 Client World）只有根據 2（Unity Netcode、lightyear 有 host 模式），批次表網路列沒有點名，修訂 1 拿掉（檢查 S4）；網路 Module 若點名，照第 5.6 節的對照接。
@@ -130,14 +130,14 @@
 
 | 別家 | 怎麼做 | 種類 |
 |---|---|---|
-| Bevy asset server | IO 工作經 crossbeam channel 送結果；`PreUpdate` 的 `handle_internal_asset_events` 一次收（`bevy_asset/src/server/mod.rs:896-923`、`:1889-1938`） | 〔原〕形 (1) |
-| Bevy gilrs | `PreUpdate` 的 System 把手把事件取完（`bevy_gilrs/src/lib.rs:109-111`） | 〔原〕形 (1) |
-| Bevy winit | 視窗事件先存在 runner 的緩衝，update 之前 `forward_bevy_events` 一次寫進 World（`bevy_winit/src/state.rs:779-787`、`:908-926`） | 〔原〕形 (2) |
-| lightyear | 收件全部在 `PreUpdate`、送件全部在 `PostUpdate` 的 set；權威值先進 `ConfirmedHistory`，回滾在 `PreUpdate` 判斷並重跑 `FixedMain`（`io/link/src/lib.rs:313-348`、`prediction/src/plugin.rs:246-253`、`rollback.rs:1186-1307`）。UDP 在 System 裡直接讀非阻塞 socket，沒有 IO 執行緒（`io/udp/src/lib.rs:186-251`） | 〔原〕形 (1) |
-| bevy_replicon | `PreUpdate` 收、`PostUpdate` 送（`bevy_replicon/src/client.rs:53-69`、`server.rs:151-163`）；兩個 App 之間的測試交換在兩次 update 之間搬緩衝（`test_app.rs:136-153`） | 〔原〕形 (1)、(2) |
-| Unity Netcode | receive group 在 Simulation 的最前面，傳輸的 pump 是 job，結果填進每個連線的緩衝；快照只留最新一份（`Runtime/Connection/NetworkStreamReceiveSystem.cs:24-38`、`:983-992`）；送件在最後（`GhostSendSystem.cs:505-510`） | 〔原〕形 (1) |
-| flecs | 慣例：`OnLoad` 把外部資料拉進來、`OnStore` 寫出去（`docs/DesignWithFlecs.md:135-136`）；別的執行緒用自己的 stage 累積、`ecs_merge` 在獨占時套用（`src/stage.c:169-189`）；`ecs_run_post_frame` 在 `ecs_frame_end` 跑（`src/addons/frame.c:151-199`） | 〔原〕形 (1)、(2) |
-| Unreal Mass | 引擎與 Mass 的交換是處理器群組 `SyncWorldToMass`、`UpdateWorldFromMass`；物理是有自己鎖的外部服務，平行讀、最後一次寫（MassSample `MSSceneCompTransformToActorTranslators.cpp:13-22`、`:63-112`） | 〔原〕形 (1) |
+| Bevy asset server | IO 工作經 crossbeam channel 送結果；`PreUpdate` 的 `handle_internal_asset_events` 一次收（`bevy_asset/src/server/mod.rs:896-923`、`:1889-1938`） | 〔原〕套用點 |
+| Bevy gilrs | `PreUpdate` 的 System 把手把事件取完（`bevy_gilrs/src/lib.rs:109-111`） | 〔原〕套用點 |
+| Bevy winit | 視窗事件先存在 runner 的緩衝，update 之前 `forward_bevy_events` 一次寫進 World（`bevy_winit/src/state.rs:779-787`、`:908-926`） | 〔原〕runner 直接讀寫 |
+| lightyear | 收件全部在 `PreUpdate`、送件全部在 `PostUpdate` 的 set；權威值先進 `ConfirmedHistory`，回滾在 `PreUpdate` 判斷並重跑 `FixedMain`（`io/link/src/lib.rs:313-348`、`prediction/src/plugin.rs:246-253`、`rollback.rs:1186-1307`）。UDP 在 System 裡直接讀非阻塞 socket，沒有 IO 執行緒（`io/udp/src/lib.rs:186-251`） | 〔原〕套用點 |
+| bevy_replicon | `PreUpdate` 收、`PostUpdate` 送（`bevy_replicon/src/client.rs:53-69`、`server.rs:151-163`）；兩個 App 之間的測試交換在兩次 update 之間搬緩衝（`test_app.rs:136-153`） | 〔原〕套用點、runner 直接讀寫 |
+| Unity Netcode | receive group 在 Simulation 的最前面，傳輸的 pump 是 job，結果填進每個連線的緩衝；快照只留最新一份（`Runtime/Connection/NetworkStreamReceiveSystem.cs:24-38`、`:983-992`）；送件在最後（`GhostSendSystem.cs:505-510`） | 〔原〕套用點 |
+| flecs | 慣例：`OnLoad` 把外部資料拉進來、`OnStore` 寫出去（`docs/DesignWithFlecs.md:135-136`）；別的執行緒用自己的 stage 累積、`ecs_merge` 在獨占時套用（`src/stage.c:169-189`）；`ecs_run_post_frame` 在 `ecs_frame_end` 跑（`src/addons/frame.c:151-199`） | 〔原〕套用點、runner 直接讀寫 |
+| Unreal Mass | 引擎與 Mass 的交換是處理器群組 `SyncWorldToMass`、`UpdateWorldFromMass`；物理是有自己鎖的外部服務，平行讀、最後一次寫（MassSample `MSSceneCompTransformToActorTranslators.cpp:13-22`、`:63-112`） | 〔原〕套用點 |
 
 **共通**：World 的資料不上鎖、不共享；一條執行緒在一個時點擁有一個 World。外部的生產者寫進自己擁有的緩衝（channel、stage、驅動的佇列），World 在固定的頭（收、`OnLoad`、`SyncWorldToMass`）尾（送、`OnStore`、`UpdateWorldFromMass`）一次套用。**沒有一家有「編排層依序呼叫的交換函式登記」**；最接近的是 flecs 的 `ecs_run_post_frame`（一次性的動作佇列）與 replicon 測試在兩次 update 之間搬緩衝。GYO 照時間設計 5.3 留這一層，理由是 GYO 自己已核准的決定（第 5.1 節）：Kernel 的診斷紀錄要在 Run 之外取（日誌宣告 5.4）。
 
@@ -147,7 +147,7 @@
 
 | 別家 | 怎麼做 | 種類 |
 |---|---|---|
-| Bevy SubApp | 一次 update：main 的 schedule → 每個 sub-app `extract(&mut main)` → sub-app `update()`（`bevy_app/src/sub_app.rs:575-591`）。extract 時把 main World 用 `mem::replace` 取出、當 `MainWorld` Resource 放進 render World 跑 `ExtractSchedule`，完了放回，不上鎖（`bevy_extract/src/extract_plugin.rs:136-147`）。`Extract<P>` 是唯讀參數（`extract_param.rs:19-20`、`:51-90`） | 〔原〕形 (3) |
+| Bevy SubApp | 一次 update：main 的 schedule → 每個 sub-app `extract(&mut main)` → sub-app `update()`（`bevy_app/src/sub_app.rs:575-591`）。extract 時把 main World 用 `mem::replace` 取出、當 `MainWorld` Resource 放進 render World 跑 `ExtractSchedule`，完了放回，不上鎖（`bevy_extract/src/extract_plugin.rs:136-147`）。`Extract<P>` 是唯讀參數（`extract_param.rs:19-20`、`:51-90`） | 〔原〕Extract |
 | Bevy 的寫回 | **render 在 extract 時經 `ResMut<MainWorld>` 寫回 main**：GPU readback 的結果、surface 的色彩空間（「main world sees the previous frame's result」）（`bevy_render/src/gpu_readback.rs:66`、`:275-289`；`view/window/mod.rs:301-319`）。只有 `Extract<P>` 是唯讀 | 〔原〕；**GYO 不照**（使用者 11-11 定「無反饋」，第 5.4 節） |
 | Bevy pipelined 渲染 | `cleanup` 把 RenderApp 從 App 拿走，兩條容量 1 的 channel 把整個 SubApp 當值送來送去；唯一的同步點在 `renderer_extract`：main 等渲染執行緒交回上一幀的 render app，extract 完再送出去（`bevy_render/src/pipelined_rendering.rs:155-214`、`:217-240`）。PR #6503 的理由：scope 的做法讓渲染沒辦法在 IO 處理之前開始；關閉時的死結另修（PR #25722） | 〔原〕World 整個交出 |
 | Unity Entities | 每個 World 的三個群組掛進 PlayerLoop，全在主執行緒，World 之間的先後＝加入的先後（`ScriptBehaviourUpdateOrder.cs:280-297`、`:400-412`）。載入用的 staging World 以 `ExclusiveEntityTransaction` 整個交給工作執行緒：交出期間 staging World 的一般 `EntityManager` 會丟例外，main World 照跑；結束只在主執行緒、先等 job 完成（`ExclusiveEntityTransaction.cs:6-19`、`EntityManager.cs:69-90`、`EntityManagerExclusiveEntityTransaction.cs:102-118`）；之後 `MoveEntitiesFrom` 帶重編號搬進 main World（`EntityManager.cs:3925-3946`），一次 update 最多搬一個 World（`Unity.Scenes/SceneSectionStreamingSystem.cs:71`） | 〔原〕World 整個交出 |
@@ -186,10 +186,10 @@
 
 | GYO 的決定 | Bevy | Unity Entities／Netcode | flecs | lightyear／replicon | Unreal（Mass） |
 |---|---|---|---|---|---|
-| 外部服務的結果在幀頭由 System 套用（形 (1)） | 同（asset、gilrs 在 `PreUpdate`） | 同（Netcode 的 receive group 在 Simulation 最前） | 同（`OnLoad`／`OnStore` 的慣例） | 同（`PreUpdate` 收、`PostUpdate` 送） | 同（`SyncWorldToMass`／`UpdateWorldFromMass`） |
+| 外部服務的結果在幀頭由 System 套用（套用點） | 同（asset、gilrs 在 `PreUpdate`） | 同（Netcode 的 receive group 在 Simulation 最前） | 同（`OnLoad`／`OnStore` 的慣例） | 同（`PreUpdate` 收、`PostUpdate` 送） | 同（`SyncWorldToMass`／`UpdateWorldFromMass`） |
 | 套用掛 `First`（因回滾的決定在 `PreUpdate`） | 不同：套用在 `PreUpdate`，`First` 放時間 | 不同：以 system group 排 | 不同：phase 排 | 不同：收件與回滾都在 `PreUpdate`，以 set 排先後 | 未查 |
-| 交換函式的登記（形 (2)） | 無 | 無 | 無（最近的是一次性的 `ecs_run_post_frame`） | 無（replicon 測試在兩次 update 之間手動搬） | 無 |
-| runner 在兩次入口之間寫 World（形 (3)） | 同（winit runner 寫視窗事件） | 未查 | 同（`ecs_progress` 前後由呼叫者做） | 同（測試的 stepper） | 未查 |
+| 交換函式的登記 | 無 | 無 | 無（最近的是一次性的 `ecs_run_post_frame`） | 無（replicon 測試在兩次 update 之間手動搬） | 無 |
+| runner 在兩次入口之間寫 World（runner 直接讀寫） | 同（winit runner 寫視窗事件） | 未查 | 同（`ecs_progress` 前後由呼叫者做） | 同（測試的 stepper） | 未查 |
 | Extract 唯讀、**不寫回** | 不同：`Extract<P>` 唯讀，但 render 經 `ResMut<MainWorld>` 寫回（readback） | 無（模擬與呈現在同一個 World） | 無 | 無 | 不同〔知〕：render proxy，資料單向送到 render thread |
 | 別的執行緒跑 World＝整個交出 | 同（pipelined：render SubApp 當值送走，同步點在 extract） | 同但較弱（`ExclusiveEntityTransaction` 交出 staging World，不在那條執行緒跑 System） | 不同：同一個 world 用多個 stage 並行，合併在獨占時 | 無 | 不同〔知〕：同一個 World，工作切成 task |
 | 模擬的 World 之間不直接共享資料 | 同（只有 extract 一點） | 同（Netcode 的兩個 World 只經 IPC 驅動） | 未查 | 同（host 用單一 World 模擬兩端；replicon 明寫一個 World 當兩端會繞圈） | 未查 |
@@ -200,7 +200,7 @@
 | 時間在 World 裡取樣（維持過渡） | 同（`time_system`；有渲染時取樣點來自 present） | 同（`UpdateWorldTimeSystem`） | 不同：呼叫者給 delta（可選自己量） | 同（測試用 `ManualInstant` 由外面發） | 未查 |
 
 **GYO 和所有查到的別家都不同的四處**（設計審查要特別看的地方）：
-1. **交換函式的登記**：沒有一家有。GYO 留著，是因為已核准的時間設計 5.3 與日誌宣告 5.4——Kernel 的診斷紀錄要在 Run 之外取。（修訂 2 原本另列「Client 的郵箱只在 schedule 之間存取（使用者 11-11）」，出處寫錯，已拿掉，第 18 節。）RC-O11 寫了何時拿掉。
+1. **交換函式的登記**：沒有一家有。GYO 留著，是因為已核准的時間設計 5.3 與日誌宣告 5.4——Kernel 的診斷紀錄要在 Run 之外取。（修訂 2 原本另列「Client 的 Mailbox 只在 schedule 之間存取（使用者 11-11）」，出處寫錯，已拿掉，第 18 節。）RC-O11 寫了何時拿掉。
 2. **Product 一份的共用處**：沒有一家獨立於 World；最接近的 Unreal subsystem 是〔知〕、沒有原始碼可對。GYO 的理由是 `Configure` 時沒有 World、World 彼此平等（第 4.3 節）；使用者 2026-11-24 選了這個（第 12 節）。
 3. **Extract 不寫回**：Bevy 會寫回（readback）。這是使用者 11-11 的決定，不是本頁的選擇。
 4. **套用掛 `First`**：別家在 `PreUpdate`。理由是 GYO 的回滾決定掛在 `PreUpdate`（`RollbackStrategy.hpp:177`）。
@@ -224,34 +224,34 @@
 
 | 形 | 什麼 | 時點 | 誰寫 | 用它的（點名的） | 系譜 |
 |---|---|---|---|---|---|
-| **(1) 套用點** | World 裡的 System 呼叫 World 外的服務（有自己的鎖），把結果一次寫進 World；或把要送的交給服務 | 「進」：一輪最前面（預設骨架 `Main`／`First`；生成世界若選「另跑生成清單」，生成中另掛 `Generate`／`First`，第 13 節 W-3）；「出」：最後（`Main`／`Last`）。骨架關掉的 World 由產品指定 | 擁有服務的 Module | asset 的套用 System（E-6、E-20）；網路的收件與送件（E-8，網路 Module 批照下面的規則選 (1) 或 (2)） | Bevy asset server、gilrs；lightyear、bevy_replicon；Unity Netcode 的 receive group；flecs 的 `OnLoad`／`OnStore`；Mass 的 `SyncWorldToMass`（第 4.1 節） |
-| **(2) 交換函式** | 單位登記的函式，World 不在 Run 裡、Ready 時拿整個 World 做事 | 編排層在每個 World 的**一輪**之前（進）、之後（出）依登記的順序呼叫（一輪的定義見第 13 節 W-2） | 登記它的單位（或產品自己的 `build`） | Kernel 診斷紀錄的取走（E-19）；之後可能：Client 的郵箱（E-22，PvP 移植時定用 (1) 或 (2)）、時間的投影（E-18，若 SDL 那批移給 runner）、`HostClockSample`（PvP） | 時間設計 5.3（規格 H.1）；別家沒有這一層，最近的是 flecs 的 `ecs_run_post_frame`（一次性的佇列）與 replicon 測試在兩次 update 之間搬緩衝（第 4.1 節） |
-| **(3) runner 在兩次入口之間** | runner（或 Product 的持有者）在 World 不在 Run 裡時直接讀寫 World，或呼叫某個 Module 給的函式 | 兩次 `Product` 入口之間 | runner／產品 | runner 擁有的視窗的事件（E-10，若不走服務）；World 壞掉之後先寫失敗、再取診斷（日誌宣告 5.4 的順序規則） | Bevy winit 的 runner 在 update 之前寫視窗事件（第 4.1 節） |
-| **(4) Extract** | 一個 World 唯讀地讀另一個 World | 來源跑完之後、讀者的一輪裡（extract schedule 寫在讀者的每幀清單裡，兩個都不在 Run 裡；第 5.4 節） | 讀者的 extract schedule | 渲染 World（E-11、E-14） | Bevy `SubApp::extract`（第 4.2 節） |
+| **套用點** | World 裡的 System 呼叫 World 外的服務（有自己的鎖），把結果一次寫進 World；或把要送的交給服務 | 「進」：一輪最前面（預設骨架 `Main`／`First`；生成世界若選「另跑生成清單」，生成中另掛 `Generate`／`First`，第 13 節 W-3）；「出」：最後（`Main`／`Last`）。骨架關掉的 World 由產品指定 | 擁有服務的 Module | asset 的套用 System（E-6、E-20）；網路的收件與送件（E-8，網路 Module 批照下面的規則選 (1) 或 (2)） | Bevy asset server、gilrs；lightyear、bevy_replicon；Unity Netcode 的 receive group；flecs 的 `OnLoad`／`OnStore`；Mass 的 `SyncWorldToMass`（第 4.1 節） |
+| **交換函式** | 單位登記的函式，World 不在 Run 裡、Ready 時拿整個 World 做事 | 編排層在每個 World 的**一輪**（本卡與生成世界卡加的詞：一個 World 在一次 `RunFrame` 裡跑的全部，第 13 節 W-2）之前（進）、之後（出）依登記的順序呼叫 | 登記它的單位（或產品自己的 `build`） | Kernel 診斷紀錄的取走（E-19）；之後可能：Client 的畫面與模擬之間的資料（E-22，PvP 移植時定用套用點或交換函式）、時間的投影（E-18，若 SDL 那批移給 runner）、`HostClockSample`（PvP） | 時間設計 5.3（規格 H.1）；別家沒有這一層，最近的是 flecs 的 `ecs_run_post_frame`（一次性的佇列）與 replicon 測試在兩次 update 之間搬緩衝（第 4.1 節） |
+| **runner 直接讀寫**（本卡加的詞：runner 在兩次入口之間） | runner（或 Product 的持有者）在 World 不在 Run 裡時直接讀寫 World，或呼叫某個 Module 給的函式 | 兩次 `Product` 入口之間 | runner／產品 | runner 擁有的視窗的事件（E-10，若不走服務）；World 壞掉之後先寫失敗、再取診斷（日誌宣告 5.4 的順序規則） | Bevy winit 的 runner 在 update 之前寫視窗事件（第 4.1 節） |
+| **Extract** | 一個 World 唯讀地讀另一個 World | 來源跑完之後、讀者的一輪裡（extract schedule 寫在讀者的每幀清單裡，兩個都不在 Run 裡；第 5.4 節） | 讀者的 extract schedule | 渲染 World（E-11、E-14） | Bevy `SubApp::extract`（第 4.2 節） |
 
-時間設計 5.3 點名的七個使用者（E-23）：時間的投影 → (2)（若移給 runner，第 5.5 節）；`HostClockSample` → (2)（PvP 移植時）；網路的收發緩衝 → (1) 或 (2)；平台事件 → (3) 或 (1)；資產 IO 的完成通知 → (1)；World 之間的資料 → (2)；診斷的輸出 → (2)。
+時間設計 5.3 點名的七個使用者（E-23）：時間的投影 → 交換函式（若移給 runner，第 5.5 節）；`HostClockSample` → 交換函式（PvP 移植時）；網路的收發緩衝 → 套用點或交換函式；平台事件 → runner 直接讀寫或套用點；資產 IO 的完成通知 → 套用點；World 之間的資料 → 套用點或交換函式（PvP 移植時定）；診斷的輸出 → 交換函式。
 
 **選哪一種的規則**（寫進 O-12）：
-- **(1) 是 Module 擁有的外部服務在幀裡進出 World 的預設**：結果要和 World 裡的 System 排先後（例：網路的收件要在回滾的決定之前）、要跟著生成的每一批走、或由很多 System 讀的，用 (1)。
-- **(2) 給「必須在 schedule 之間」或「要整個 World、在 Run 之外」的事**：Run 裡看不到全部結果的（診斷紀錄要在最後一個同步點之後取）；骨架關掉時也要自動接上、不靠作者掛的。
-- **(3) 只給 runner 自己擁有的東西**；Module 的資料不要求 runner 認得（RC-O1：協調的邏輯散到編排層外、在各產品重複）。runner 也可以呼叫 Module 給的函式（例：`WorldLogging::TakeKernelDiagnostics`），接線歸 runner／產品。
+- **套用點是 Module 擁有的外部服務在幀裡進出 World 的預設**：結果要和 World 裡的 System 排先後（例：網路的收件要在回滾的決定之前）、要跟著生成的每一批走、或由很多 System 讀的，用套用點。
+- **交換函式給「要整個 World、在 Run 之外」的事**：Run 裡看不到全部結果的（診斷紀錄要在最後一個同步點之後取）；骨架關掉時也要自動接上、不靠作者掛的。
+- **runner 直接讀寫只給 runner 自己擁有的東西**；Module 的資料不要求 runner 認得（RC-O1：協調的邏輯散到編排層外、在各產品重複）。runner 也可以呼叫 Module 給的函式（例：`WorldLogging::TakeKernelDiagnostics`），接線歸 runner／產品。
 - 同一件事不要兩種形都做：網路 Module、SDL 那批選定一種，寫在自己的宣告。
 
 **每一種的規則**：
-- (1)：World 不上鎖；服務自己同步。套用 System 只在自己的時點把結果寫進 World（asset 的 AS-4、AS-11 是先例）。服務帶回的值照 D6b 的加註。**不等另一條執行緒**：拿服務的鎖只做表的操作，不等工作完成（時間設計 5.5 (三) 的條件）。**和別家的差別**：別家的套用多在 `PreUpdate`、`First` 放時間（Bevy）；GYO 的回滾決定在 `PreUpdate`（`RollbackOptions::decideStage` 的預設，`RollbackStrategy.hpp:177`），所以要在決定之前看到的收件掛 `First`，和 `AdvanceTime` 同一個 stage。同一個 stage 裡各 Module 的套用 System 之間沒有預設的先後，要先後的自己宣告（Kernel 的順序宣告）。
-- (2)：見下面「交換函式的登記」。
-- (3)：只在 World 不在 Run 裡時；寫的是一般的 World 寫入（不跑 hook 的那條路，DI-KS 18）。runner 只呼叫 `Product` 的執行入口與 Module 給的函式，不排 System 的先後（O-3 不變）。
-- (4)：第 5.4 節。
+- 套用點：World 不上鎖；服務自己同步。套用 System 只在自己的時點把結果寫進 World（asset 的 AS-4、AS-11 是先例）。服務帶回的值照 D6b 的加註。**不等另一條執行緒**：拿服務的鎖只做表的操作，不等工作完成（時間設計 5.5「固定步在自己的執行緒」 的條件）。**和別家的差別**：別家的套用多在 `PreUpdate`、`First` 放時間（Bevy）；GYO 的回滾決定在 `PreUpdate`（`RollbackOptions::decideStage` 的預設，`RollbackStrategy.hpp:177`），所以要在決定之前看到的收件掛 `First`，和 `AdvanceTime` 同一個 stage。同一個 stage 裡各 Module 的套用 System 之間沒有預設的先後，要先後的自己宣告（Kernel 的順序宣告）。
+- 交換函式：見下面「交換函式的登記」。
+- runner 直接讀寫：只在 World 不在 Run 裡時；寫的是一般的 World 寫入（不跑 hook 的那條路，DI-KS 18）。runner 只呼叫 `Product` 的執行入口與 Module 給的函式，不排 System 的先後（O-3 不變）。
+- Extract：第 5.4 節。
 
-**交換函式的登記**（形 (2)；本卡照 L17 定細節，形狀照時間設計 5.3）：
+**交換函式的登記**（交換函式；本卡照 L17 定細節，形狀照時間設計 5.3）：
 1. **登記**：`WorldSetup::ExchangeIn(fn)`、`WorldSetup::ExchangeOut(fn)`（名字照同組的 `Prepare(fn)`），在 `Build` 時登記（單位依序、產品自己的 `build` 最後）；替換 World 時隨 `Build` 重新登記（登記的時機和準備函式相同）。**存在 World 槽、活到那個 World 被替換或銷毀**（準備函式在準備跑完就放掉，交換函式不是；檢查 A1）。函式的型別 `Result<void, OrchestrationError>(Kernel::World&)`。可以捕 Product 一份的共用處裡的物件（第 5.2 節）；**不得捕每次建 World 那一份 `ModuleBuffer` 裡的物件**（它在準備跑完就放掉；要留到執行時的照 O-2 放進 World 的 Resource，交換函式從 `World&` 讀）。`BuildNewFirst` 失敗時舊的 World 與它的一組交換函式照舊。
-2. **呼叫**：`RunFrame` 對每個 World：進 → 一輪 → 出（一輪的定義與和生成的先後：第 13 節 W-2；生成結束的那一批也只各一次）。`RunFrame` 先跑的遊戲初始化在第一個 World 的「進」之前。`RunGameInit`、`RunSchedule` 不呼叫（遊戲初始化不是一輪；`RunSchedule` 是 runner 自己排的原語，runner 要時用形 (3)）。同一個 World 有多個函式時依登記的順序，前一個失敗，後面的不呼叫。沒有登記就不呼叫。
-3. **壞掉的 World**：O-11 照舊——有 World 壞了，`RunFrame` 什麼都不跑，所以也不呼叫交換函式。**一輪中途壞掉時，那個 World 的「出」不呼叫，之後的 World 的進、出也不呼叫**（`RunFrame` 在那裡停下回 E1；檢查 B1）。壞掉之後要取診斷，走形 (3)（日誌宣告 5.4 的順序規則：先寫失敗、再取）。
+2. **呼叫**：`RunFrame` 對每個 World：進 → 一輪 → 出（一輪的定義與和生成的先後：第 13 節 W-2；生成結束的那一批也只各一次）。`RunFrame` 先跑的遊戲初始化在第一個 World 的「進」之前。`RunGameInit`、`RunSchedule` 不呼叫（遊戲初始化不是一輪；`RunSchedule` 是 runner 自己排的原語，runner 要時用runner 直接讀寫）。同一個 World 有多個函式時依登記的順序，前一個失敗，後面的不呼叫。沒有登記就不呼叫。
+3. **壞掉的 World**：O-11 照舊——有 World 壞了，`RunFrame` 什麼都不跑，所以也不呼叫交換函式。**一輪中途壞掉時，那個 World 的「出」不呼叫，之後的 World 的進、出也不呼叫**（`RunFrame` 在那裡停下回 E1；檢查 B1）。壞掉之後要取診斷，走runner 直接讀寫（日誌宣告 5.4 的順序規則：先寫失敗、再取）。
 4. **失敗**：函式回錯誤 → `RunFrame` 停下、回 E2（新碼 `ExchangeFailed`；錯誤帶 World 名、進或出、登記它的單位名與函式自己的碼，同準備函式的 `PrepareFailed` 寫法）；預設 runner 收到它回 `RunnerExit` 的 `Failure`（`Product.cpp:576` 的註解「RunFrame does not return one today」隨之改寫）；World 沒有在 Run 裡，**不算壞**、Product 不結束。前面的 World 已經跑了這一輪（和一張 schedule 在中途失敗時一樣，不留回滾）；接下來怎麼辦由 runner 決定（錯誤只告訴外面發生了什麼）。函式丟例外：原樣往外傳，World 不標成壞（不在 Run 裡）。
 5. **不等另一條執行緒**、只用短的鎖（時間設計 5.3）；不加守衛，交設計審查。
-6. **和 (1) 是兩個時點**：(2) 在 World 的 Run 之外、包住整個一輪；(1) 在 Run 裡、某個 stage。不是同一件事的兩條路（選哪一種照上面的規則）。
+6. **和套用點是兩個時點**：交換函式在 World 的 Run 之外、包住整個一輪；套用點在 Run 裡、某個 stage。不是同一件事的兩條路（選哪一種照上面的規則）。
 
-**跨 World 的事件**（時間設計 6.4，決定 7）：照舊只定形狀、不實作。形狀落在 (2)：來源 World 的「出」讀自己的訊息（自己的游標）、交給郵箱，目的 World 的「進」寫進自己的訊息；每筆帶來源的 tick 與取樣時間由用它的 Module 定；郵箱有上限、丟了要記（時間設計 6.4 的兩個洞照那裡的改法）。
+**跨 World 的事件**（時間設計 6.4，決定 7）：照舊只定形狀、不實作。形狀落在交換函式：來源 World 的「出」讀自己的訊息（自己的游標）、交給兩個 World 之間交換資料的物件，目的 World 的「進」寫進自己的訊息；每筆帶來源的 tick 與取樣時間由用它的 Module 定；那個物件有上限、丟了要記（時間設計 6.4 的兩個洞照那裡的改法）。
 
 ### 5.2 Product 層 Resource
 
@@ -261,7 +261,7 @@
 
 **建議的做法**（要不要有這一層、用什麼形，是第 12 節第 1 題；形狀照 `ModuleBuffer`、不加凍結是任務卡的指定）：
 
-1. **Product 一份的 `ModuleBuffer`**（放「單位建的物件」）：沿用 `ModuleBuffer` 型別，`Product` 多持有一份，活到 Product 結束。每種型別只由擁有它的一方 `Create<T>`（第二次 `Create` 同一型別是斷言），別人 `Find<T>`（找不到回 `nullptr`、不代建）。**不凍結**：不呼叫 `Freeze`。拿得到它的地方：
+1. **Product 一份的 `ModuleBuffer`**（本頁叫它「共用處」，本卡加的詞；放「單位建的物件」）：沿用 `ModuleBuffer` 型別，`Product` 多持有一份，活到 Product 結束。每種型別只由擁有它的一方 `Create<T>`（第二次 `Create` 同一型別是斷言），別人 `Find<T>`（找不到回 `nullptr`、不代建）。**不凍結**：不呼叫 `Freeze`。拿得到它的地方：
    - `ProductSetup::Buffer()`（`Configure`）；
    - `WorldSetup`、`WorldFinish`、`WorldCheck` 的 `ProductBuffer()`，**都給可寫的**（每 World 那一份在 `Finish`／`Check` 給 `const` 是凍結的結果；Product 這一份不凍結，給 `const` 等於半個凍結，檢查 N1）；
    - `Product::Buffer()`（runner、Product 的持有者，在兩次入口之間）；
@@ -307,11 +307,11 @@
 **本批寫進 O-13 的不變量**（本卡照 L17 判；照檢查 M5 建議的「只寫不變量」那一種做法：入口層級的行為留給實作那一批）：
 1. **單位是一整個 World**。不把一個 World 拆給兩條執行緒（World 的資料不上鎖，D6b、M11）。同一個 World 裡的並行是 Kernel 執行器的事（LIM-2），不在本頁。
 2. **整個交出**：runner 把一個 World 交給別的執行緒時，交出期間只有那條執行緒碰它（它的 Registry、執行、交換函式、生成的狀態，第 13 節 W-7）；Product 與別的執行緒不碰。CCR-5 對每個 World 照舊成立。
-3. **兩邊只經有鎖的服務交換**（郵箱是 Product 一份、有自己的鎖的物件，各 World 在自己的套用 System 或交換函式裡碰，E-22）；不等另一條執行緒。郵箱是「只留最新一份」還是佇列、誰持有、上限，由用它的 Module 定（Unity Netcode 的快照只留最新一份，第 4.1 節）。
+3. **兩邊只經有鎖的服務交換**（Product 一份、有自己的鎖的物件，各 World 在自己的套用點或交換函式裡碰，E-22）；不等另一條執行緒。它是「只留最新一份」還是佇列、誰持有、上限，由用它的 Module 定（Unity Netcode 的快照只留最新一份，第 4.1 節）。
 4. **O-11 照舊成立**：交出不改「一個 World 壞了 Product 就結束」。實作那一批要說明它怎麼保住（候選：交出的租約帶一個放在編排層的原子旗標，壞掉當下設、每個入口先看；Kernel 不加原子操作），保不住就照 §3 交使用者。
 5. **Extract 在兩邊都停著的時點**（第 5.4 節）。
 
-**留給實作那一批的**（第一個點名的使用者：PvP Client 移植；檢查 S8）：入口的形（暫名 `Product::Lend(world)` → `WorldLease`、`Return`；租約推一輪時和 `RunFrame` 共用同一段生成的處理與交換函式的呼叫，第 13 節 W-10）、`RunFrame` 遇到交出的 World 怎麼辦、指名它的入口回什麼；遊戲初始化要在交出之前跑完（O-1）；讀者交出期間來源 `InsertSystems`（讀者的 Registry 讀來源的登記表，CCR-5 蓋不到這條跨 Registry 的讀）；準備函式在 Product 的執行緒跑、放進去的綁執行緒 Resource 交出後會斷言（Bevy 的 `!Send` 坑）；交出的 World 的形 (3) 由誰做；別的 World 要知道交出的 World 在生成，只能經它自己的「出」＋有鎖的服務，不能跨執行緒讀 `Product::Generating(world)`（第 13 節 W-5）；銷毀前收回交出的 World（第 5.2 節第 5 點的前提）。
+**留給實作那一批的**（第一個點名的使用者：PvP Client 移植；檢查 S8）：入口的形（暫名 `Product::Lend(world)` → `WorldLease`、`Return`；租約推一輪時和 `RunFrame` 共用同一段生成的處理與交換函式的呼叫，第 13 節 W-10）、`RunFrame` 遇到交出的 World 怎麼辦、指名它的入口回什麼；遊戲初始化要在交出之前跑完（O-1）；讀者交出期間來源 `InsertSystems`（讀者的 Registry 讀來源的登記表，CCR-5 蓋不到這條跨 Registry 的讀）；準備函式在 Product 的執行緒跑、放進去的綁執行緒 Resource 交出後會斷言（Bevy 的 `!Send` 坑）；交出的 World 的runner 直接讀寫 由誰做；別的 World 要知道交出的 World 在生成，只能經它自己的「出」＋有鎖的服務，不能跨執行緒讀 `Product::Generating(world)`（第 13 節 W-5）；銷毀前收回交出的 World（第 5.2 節第 5 點的前提）。
 
 **系譜與比過的**：
 - **整個交出**（**選這個**）：Bevy pipelined 渲染把 render SubApp 整個當值經 channel 送到渲染執行緒、同步點只在 extract（第 4.2 節）——這是「在別的執行緒跑整個 World」的直接先例。Unity 的 `ExclusiveEntityTransaction` 也是整個交出，但只開放一部分 `EntityManager` 操作給載入用的 World、不在那條執行緒跑 System，作為先例較弱（檢查 S8 (e)）。
@@ -339,21 +339,21 @@
 
 ### 5.5 時間的取樣（維持過渡，到第一個需要的 runner 那批定）
 
-**現況**（world-time 第 3 節、WT-6 第 (2) 項，使用者 2026-11-19 核准）：照 Bevy `TimeUpdateStrategy`，`AdvanceTime` 在 World 裡依 `TimeSampling` 取樣；標成「過渡」，寫明「交換點做出來後這一項移給 runner」。**原形**（時間設計決定 1 B，使用者 11-14）：runner 每輪取樣一次、寫進 World。
+**現況**（world-time 第 3 節、WT-6 第 (2) 項，使用者 2026-11-19 核准）：照 Bevy `TimeUpdateStrategy`，`AdvanceTime` 在 World 裡依 `TimeSampling` 取樣；標成「過渡」，寫明「交換點做出來後這一項移給 runner」。**原形**（時間設計決定 1，使用者 11-14）：runner 每輪取樣一次、寫進 World。
 
 **本卡照 L17 判：這一批不移、維持過渡，到第一個需要的 runner 那批定**（有視窗的是 SDL 那批；沒畫面的 Match 的 runner 若先來就是它那批；檢查 B7）。方向（取樣歸 runner）不變，**退出條件從「交換點做出來」改成「第一個需要的 runner 那批」**：world-time 第 3 節與 WT-6 第 (2) 項（使用者 2026-11-19 核准）的文字照這樣改，列在第 7 節，合併前核准時給使用者看（檢查 A3）。理由：
 - 別家分成兩種（第 4.4 節）：Bevy、Unity 在 World 裡取樣；flecs 由呼叫者給 delta。Bevy 的教訓是取樣點要貼近 present（PR #4744）：答案取決於有視窗的 runner，那在 SDL 那批才有。
-- 目前沒有點名的 Feature 需要「同一條執行緒上兩個都推進時間的 World 用同一個取樣」：Client 的模擬與畫面在兩條執行緒、各自取樣（時間設計 5.5 (三)）；渲染 World 的時間從哪裡來，時間設計 5.5 (二) 寫的是未定（`rebuild-time-design.zh-Hant.md:376`），同一批定。
+- 目前沒有點名的 Feature 需要「同一條執行緒上兩個都推進時間的 World 用同一個取樣」：Client 的模擬與畫面在兩條執行緒、各自取樣（時間設計 5.5「固定步在自己的執行緒」）；渲染 World 的時間從哪裡來，時間設計 5.5「有視窗、同一條執行緒」 寫的是未定（`rebuild-time-design.zh-Hant.md:376`），同一批定。
 - 這一批做的交換函式的登記，讓那時有地方接（world_time 登記一個「進」，把 runner 給的取樣寫進 `TimeSampling` 的 `ManualInstant`）。
-- **那一批要一起定的**（檢查 S3）：等待零件在哪、時間設計 5.5 (一) 第 5 步的「取樣時刻」runner 從哪讀；渲染 World 的時間從哪裡來、它的描述要不要帶 world_time（今天 `default=yes`，帶了就自己取樣；描述的 `units` 可以不帶它）；WT-2 的「每幀只取一次樣」的範圍。
+- **那一批要一起定的**（檢查 S3）：等待零件在哪、時間設計 5.5「沒畫面」 第 5 步的「取樣時刻」runner 從哪讀；渲染 World 的時間從哪裡來、它的描述要不要帶 world_time（今天 `default=yes`，帶了就自己取樣；描述的 `units` 可以不帶它）；WT-2 的「每幀只取一次樣」的範圍。
 
 ### 5.6 各批的需求怎麼接
 
 | 需求 | 出處 | 接法 | 本批做到哪 |
 |---|---|---|---|
 | X-1 執行器：讀檔解碼在 World 執行緒外；停了之後提交是空操作；介面由 asset 自己的話定 | asset 5.6 | 執行器的實作由產品（或測試）放進 `ProductDescription::options` 的持有者結構，world_asset 在 `Configure` 讀；或由 world_asset 依賴的單位（之後的 threads Module）在它自己的 `Configure` `Create` 進共用處，world_asset 在 `Configure` `Find`（第 5.2 節第 1、2 點）。停了之後的行為是執行器自己的契約 | 選項、共用處實作；執行器本身在 asset 實作批與 threads 重審 |
-| X-2 交換點不認得 asset | asset 5.6 | 形 (1) | 契約（O-12） |
-| X-3 若定了「每幀的邊界」，套用 System 掛在它之後 | asset 5.6 | 形 (1) 的「進」＝一輪最前面的 stage（`Main`／`First`；生成世界選「另跑生成清單」時生成中另掛 `Generate`／`First`）；交換函式的「進」在它之前 | 契約（O-12） |
+| X-2 交換點不認得 asset | asset 5.6 | 套用點 | 契約（O-12） |
+| X-3 若定了「每幀的邊界」，套用 System 掛在它之後 | asset 5.6 | 套用點 的「進」＝一輪最前面的 stage（`Main`／`First`；生成世界選「另跑生成清單」時生成中另掛 `Generate`／`First`）；交換函式的「進」在它之前 | 契約（O-12） |
 | X-4 執行緒的數量與歸屬由交換點或 runner 定 | asset 5.6 | 執行緒池由產品或 threads 的 Module 建（同 X-1 的兩條路）；World 的執行緒由 runner 定（第 5.3 節） | 契約 |
 | X-5 測試能控制工作何時開工、完成 | asset 5.6 | 測試在 `ProductDescription::options` 放自己的執行器（持有者結構） | 選項實作 |
 | X-6 Product 結束時，未完成的工作能停下或等完 | asset 5.6 | world_asset 的 `OnDestroy` 回呼叫執行器停下（執行器介面是 asset 的話，可以帶 `Stop`）；回呼跑時執行器一定還在（第 5.2 節第 4、5 點） | 實作 |
@@ -362,15 +362,15 @@
 | O-A3 `Configure` 的錯誤回報 | asset 5.4 | `ProductSetup::Report` | 實作 |
 | O-A4 Product 結束時的回呼 | asset 5.4 | `ProductSetup::OnDestroy` | 實作 |
 | G-1～G-3 生成世界分批之間的套用點 | asset 5.13 | 第 13 節 W-2～W-4 | 和生成世界卡對齊 |
-| 網路：權威值寫進 `RollbackInbox`、下一幀開頭判斷 | rollback 第 2 節 | 收件在回滾的決定（`PreUpdate`）之前：形 (1) 掛 `First`，或形 (2) 的「進」；網路 Module 批照第 5.1 節的規則選一種。傳輸物件在共用處 | 契約 |
-| SDL：OS 事件進 World | 批次表 SDL 列 | 有視窗的 runner 走形 (3)（Bevy winit），或輸入服務＋形 (1)（Bevy gilrs）；SDL 那批選 | 契約 |
+| 網路：權威值寫進 `RollbackInbox`、下一幀開頭判斷 | rollback 第 2 節 | 收件在回滾的決定（`PreUpdate`）之前：套用點 掛 `First`，或交換函式 的「進」；網路 Module 批照第 5.1 節的規則選一種。傳輸物件在共用處 | 契約 |
+| SDL：OS 事件進 World | 批次表 SDL 列 | 有視窗的 runner 走runner 直接讀寫（Bevy winit），或輸入服務＋套用點（Bevy gilrs）；SDL 那批選 | 契約 |
 | SDL：渲染 World、Extract | runtime-composition 第 2 節 | 第 5.4 節 | 契約；實作在 SDL 那批 |
 | SDL：裝置是 Product 一份 | asset 5.4「預先登記」 | 共用處 | 共用處實作 |
-| PvP Client：郵箱 | runtime-composition 第 2 節（規格 H.4.2 的細節） | 郵箱是共用處裡有鎖的物件；兩個 World 各在自己的套用 System（形 (1)）或交換函式（形 (2)）裡碰，PvP 移植時定 | 共用處與交換函式的登記實作；郵箱在 PvP 移植 |
+| PvP Client：畫面與模擬之間的資料 | runtime-composition 第 2 節（規格 H.4.2 的細節） | PvP 的 Module 放進共用處、有自己的鎖的物件；兩個 World 各在自己的套用點或交換函式裡碰，PvP 移植時定 | 共用處與交換函式的登記實作；那個物件在 PvP 移植 |
 | threads：runner 的執行緒 | R0 附錄 | runner 建、runner 收；World 整個交出（第 5.3 節） | 不變量；threads 重審照它重寫 `RoleThread` 的用途 |
 | io：多執行緒同時讀檔 | asset 5.12 | io 自己的契約；本頁只要求 World 外的服務自己同步 | 不在本頁 |
 | audio：混音器、`Submitter` | 批次表 audio 列 | 混音器是 Product 一份的物件；`Submitter` 綁執行緒、自己記；World 交出到別的執行緒時要在那條執行緒上另拿一個——audio 重審要對的點 | 不變量；audio 重審照它 |
-| 日誌：Kernel 診斷紀錄 | 日誌宣告 5.4 | 形 (2) 的「出」：由日誌那一側給一個接 `WorldSetup` 的函式（登記一個呼叫 `WorldLogging::TakeKernelDiagnostics` 的「出」），產品在每個 World 的 `build` 呼叫它，或之後把 world_logging 做成登記單位，免得每個產品各寫一份；World 壞掉之後照日誌宣告的順序走形 (3)。`TakeKernelDiagnostics` 的介面不變 | 交換函式的登記實作；接線在日誌那一側 |
+| 日誌：Kernel 診斷紀錄 | 日誌宣告 5.4 | 交換函式 的「出」：由日誌那一側給一個接 `WorldSetup` 的函式（登記一個呼叫 `WorldLogging::TakeKernelDiagnostics` 的「出」），產品在每個 World 的 `build` 呼叫它，或之後把 world_logging 做成登記單位，免得每個產品各寫一份；World 壞掉之後照日誌宣告的順序走runner 直接讀寫。`TakeKernelDiagnostics` 的介面不變 | 交換函式的登記實作；接線在日誌那一側 |
 | 時間：取樣 | world-time 第 3 節、WT-6 | 第 5.5 節 | 維持過渡 |
 
 ---
@@ -393,7 +393,7 @@
 
 **編排層 `orchestration.zh-Hant.md`**：
 - **O-2 加一段**：Product 一份的 `ModuleBuffer`（不凍結、活到 Product 結束、表只在擁有 Product 的執行緒上碰、物件的同步歸物件）；Product 層的選項只轉交、不解讀，產品／測試的物件經它在 `Configure` 就到；`Configure` 有回報就不建任何 World；`OnDestroy`（兩段式、登記的反序、`Build` 失敗也恰好一次）；`~Product` 的六步順序。
-- **O-3 加一句**：runner 在兩次入口之間讀寫 World、呼叫 Module 給的函式是交換點的形 (3)；只做屬於 runner 的事，Module 的資料走 (1)、(2)。「只呼叫 Product 的執行入口」改成「只呼叫 Product 的執行入口與 Module 給的函式」。
+- **O-3 加一句**：runner 在兩次入口之間讀寫 World、呼叫 Module 給的函式是交換點的runner 直接讀寫；只做屬於 runner 的事，Module 的資料走套用點或交換函式。「只呼叫 Product 的執行入口」改成「只呼叫 Product 的執行入口與 Module 給的函式」。
 - **O-5 加一句**：`ProductSetup::Report` 收進 `ProductStartupReport`；`Configure` 有回報就不建任何 World（O-2 的「其餘照做」不及於 `Build`）；交換函式的失敗是 E2 `ExchangeFailed`。
 - **O-7 加一句**：交換函式和準備函式一樣在 `Build` 登記、隨替換重新登記。
 - **O-8 加一句**：Extract 的來源被替換後，讀者不得讀舊來源（做法在 SDL 那批）。
@@ -412,7 +412,7 @@
 
 **world-time `world-time.zh-Hant.md`**（檢查 A3）：第 3 節「在那之前照 Bevy」與 WT-6 第 (2) 項「交換點做出來後這一項移給 runner」的退出條件，改成「到第一個需要的 runner 那批」（方向不變；第 5.5 節）。
 
-**加註**（不改當時的紀錄，只在頁內加一行指向本頁）：runtime-composition 第 2 節末列（Mailbox 那一句出自規格 H.4.2、不是使用者另外定的；郵箱用形 (1) 或 (2) 在 PvP 移植時定）、日誌宣告 5.4 末句（交換點已排：形 (2) 的「出」）、時間設計 5.3（交換函式的登記照它做；和它的三個差別——`Build` 登記、編排層呼叫、只給 `World&`——在本頁 5.1）與 6.4（形狀落在形 (2)）。
+**加註**（不改當時的紀錄，只在頁內加一行指向本頁）：runtime-composition 第 2 節末列（Mailbox 那一句出自規格 H.4.2、不是使用者另外定的；畫面與模擬之間的資料用套用點或交換函式，PvP 移植時定）、日誌宣告 5.4 末句（交換點已排：交換函式 的「出」）、時間設計 5.3（交換函式的登記照它做；和它的三個差別——`Build` 登記、編排層呼叫、只給 `World&`——在本頁 5.1）與 6.4（形狀落在交換函式）。
 
 ### Replacement Criteria（寫在積上去之前）
 
@@ -431,8 +431,8 @@
 | Product 層的選項經描述給 | `WorldDescription::options`；Bevy Plugin 的欄位（`AssetPlugin { file_path }`） | 單位表讓產品自己建單位物件（產生的單位表的形狀要改，O-6）；產品在 `configure` 寫進共用處（產品的 `configure` 在所有單位之後，O-A1、X-1、X-5 不成立） | E-2、E-5、E-7 要「產品與測試的東西在單位的 `Configure` 就在」 | asset |
 | `OnDestroy`：兩段式、World 之後、反序 | flecs `ecs_atfini`（時點同；先後不同：flecs 是登記順序）；C++ 解構與 `atexit` 的反序 | 只靠共用處物件的解構子（收尾時依賴可能已解構）；單位的解構子（單位最後銷毀，物件已不在）；回呼回錯誤（解構裡沒有上層） | E-4：收尾時所有依賴都要在 | asset |
 | 明確的銷毀順序 | — | `= default` 靠成員宣告與 `vector` 的解構順序（標準未規定、平台不同） | 三平台同一個結果；Extract 的讀者先於來源 | 全部 |
-| 交換函式的登記（形 (2)） | 時間設計 5.3（規格 H.1）、統合 L19 | 不做（只有形 (1)、(3)、(4)；修訂 0 的建議） | E-19：診斷紀錄要在 Run 之外取（日誌宣告 5.4 已寫明等交換點）。別家沒有這一層（第 4.1 節） | 日誌 |
-| 四種形與選擇的規則 | Bevy、lightyear、Unity Netcode、flecs、Mass（形 (1)、(3)、(4)） | 一律交換函式（asset 已定套用 System，X-2；和 System 排先後做不到） | E-6、E-8、E-10、E-20 | asset、網路、SDL |
+| 交換函式的登記 | 時間設計 5.3（規格 H.1）、統合 L19 | 不做（只有套用點、runner 直接讀寫、Extract；修訂 0 的建議） | E-19：診斷紀錄要在 Run 之外取（日誌宣告 5.4 已寫明等交換點）。別家沒有這一層（第 4.1 節） | 日誌 |
+| 四種形與選擇的規則 | Bevy、lightyear、Unity Netcode、flecs、Mass（套用點、runner 直接讀寫、Extract） | 一律交換函式（asset 已定套用 System，X-2；和 System 排先後做不到） | E-6、E-8、E-10、E-20 | asset、網路、SDL |
 | World 整個交出（只寫不變量） | Bevy pipelined 渲染 | `Product` 入口加鎖；World 綁執行緒 | E-13：主執行緒停住時模擬照跑，且 World 的資料不上鎖 | PvP Client |
 | Extract：來源在前、讀者的一輪之前、替換後不讀舊來源（只寫契約） | Bevy `SubApp::extract`；K.3 第 6 項 | 現在就定「讀者一起重建」或「准許換來源」（兩種都留給 SDL 那批比） | E-11、E-14 要的是時機與唯讀；替換的做法要等渲染 World 的實際狀態 | Client、Editor 的渲染 |
 | 時間的取樣維持過渡 | Bevy、Unity（World 裡）；flecs（呼叫者） | 現在移給 runner；現在拿掉「過渡」 | 沒有點名的 Feature；取樣點跟著有視窗的 runner（Bevy PR #4744） | — |
@@ -480,7 +480,7 @@
 | P-6 | `OnDestroy` 在每一種結束路徑各恰好一次：正常銷毀、World 壞掉之後銷毀、`DropOldFirst` 失敗留下空位之後銷毀、O-E 啟動錯誤、Kernel 啟動錯誤、`Configure` 回報、`Configure` 丟例外、準備失敗（O-E7）；回呼裡 `Find` 還拿得到共用處的物件；沒登記時什麼都不做 |
 | P-7 | `ProductSetup::Report`：`Build` 失敗、不跑任何 World 的 `Build`（每個 World 標沒檢查）、其餘單位的 `Configure` 照跑完；依賴回報單位的單位在 `Configure` `Find` 到 `nullptr`，自己 `Report` 後返回、不斷言；錯誤在 `unitErrors`（`world` 空；`unit` 是登記列名，產品自己的是產品名） |
 | P-8 | World Resource 裡指向 Product 層物件的指標，在每個 World 銷毀時都還有效 |
-| P-9 | 形 (1) 走一遍（檢查 S9）：合成的服務（一條真的工作執行緒＋閂）由單位 A 放進共用處；World 的 `First` 套用 System 拉結果寫進 World；`OnDestroy` 停工作；工作在回呼之後不再碰服務 |
+| P-9 | 套用點 走一遍（檢查 S9）：合成的服務（一條真的工作執行緒＋閂）由單位 A 放進共用處；World 的 `First` 套用 System 拉結果寫進 World；`OnDestroy` 停工作；工作在回呼之後不再碰服務 |
 | X-1 | 交換函式：`RunFrame` 對每個 World 照「進 → 一輪 → 出」呼叫，單位依序、產品的最後；沒有登記時不呼叫 |
 | X-2 | `RunGameInit`、`RunSchedule` 不呼叫交換函式 |
 | X-3 | 函式回錯誤：`RunFrame` 回 `ExchangeFailed`（帶函式的碼），World 沒有壞、Product 沒有結束，前面的 World 已跑；下一次 `RunFrame` 照常 |
@@ -502,7 +502,7 @@
 
 ## 11. 本卡照 L17 判的（不是使用者的話）
 
-- **交換函式的登記照做**：時間設計 5.3、統合 L19 都已經是這個形；修訂 0 建議不做是推翻，檢查 M2 指出它有點名的使用者（E-19：日誌宣告 5.4 已寫明 Kernel 診斷紀錄等交換點；修訂 2 另列的郵箱 E-22 出處寫錯，第 18 節），所以照原形做，不交使用者。細節（`Build` 登記、只在 `RunFrame`、失敗是 E2、壞掉的 World 不呼叫）照準備函式與 O-11 的寫法；和時間設計 5.3 的三個差別（登記的時機、誰呼叫、只給 `World&`）照 5.3 之後的使用者決定（O-2 的替換、L19、O-4），在 5.1 揭露。
+- **交換函式的登記照做**：時間設計 5.3、統合 L19 都已經是這個形；修訂 0 建議不做是推翻，檢查 M2 指出它有點名的使用者（E-19：日誌宣告 5.4 已寫明 Kernel 診斷紀錄等交換點；修訂 2 另列的 E-22（Mailbox）出處寫錯，第 18 節），所以照原形做，不交使用者。細節（`Build` 登記、只在 `RunFrame`、失敗是 E2、壞掉的 World 不呼叫）照準備函式與 O-11 的寫法；和時間設計 5.3 的三個差別（登記的時機、誰呼叫、只給 `World&`）照 5.3 之後的使用者決定（O-2 的替換、L19、O-4），在 5.1 揭露。
 - **時間的取樣維持過渡**：第 5.5 節；方向不變、退出條件延後，world-time 的文字列在第 7 節，合併前核准時給使用者看。
 - **執行緒只寫不變量**、**Extract 的替換兩種做法都留給 SDL 那批**：thin start；名指的使用者還沒搬回。
 - **名字**：沿用 `ModuleBuffer`、`OptionBag`；`ProductBuffer()`、`ExchangeIn`／`ExchangeOut`、`OnDestroy`、`ExchangeFailed` 照同組的寫法；暫名（`Lend`、`WorldLease`、`RunExtract`、`extractFrom`）在實作的那批照命名規範定。
@@ -545,9 +545,9 @@
 |---|---|---|---|
 | W-1 | 生成的形 | 生成世界（5.1、5.2） | 「生成期間每幀照跑」：每幀清單照常跑；編排層擁有「生成中」的狀態（World 的 Resource `WorldGeneration`：`Generating()`、`Hold()`），提供條件 `WhileGenerating`／`AfterGenerating`，作者用帶條件的 set 擋。「另跑生成清單」：生成中的 World 在一次 `RunFrame` 裡跑一批生成清單、不跑每幀清單，結束的那一批同一次接著跑每幀清單。兩者都是一批＝一次 `RunFrame`，批與批之間 runner 回到迴圈 |
 | W-2 | 「一輪」的定義 | 本頁（生成世界提案、本頁同意） | 一輪＝這個 World 在這次 `RunFrame` 裡跑的全部。「生成期間每幀照跑」時就是每幀清單（生成中也一樣）；「另跑生成清單」時生成中是那一批生成清單、結束的那一批是生成清單＋每幀清單。交換函式的「進」「出」包住一輪，結束那一批也只各一次（第 5.1 節）；Extract 屬於讀者的一輪（第 5.4 節）。**先後**（檢查 B4）：生成的前處理（寫 `WorldGeneration`）→ 進 → 一輪 → 判斷生成是否結束 → 出（所以生成結束那一輪的「出」已讀到「不在生成」）。「生成期間每幀照跑」時「是不是生成」在 World 的 Resource，交換函式從 `World&` 讀得到；「另跑生成清單」時才要另外提供（RC-O11） |
-| W-3 | 套用點（形 (1)） | 擁有服務的 Module；生成世界 5.12 | 「生成期間每幀照跑」：掛 `Main`／`First` 一處即可。「另跑生成清單」（使用者選它時）：預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`，骨架關掉時作者自己掛（同 O-4）。asset G-1 兩者都成立 |
+| W-3 | 套用點（套用點） | 擁有服務的 Module；生成世界 5.12 | 「生成期間每幀照跑」：掛 `Main`／`First` 一處即可。「另跑生成清單」（使用者選它時）：預設骨架下同時掛 `Main`／`First` 與 `Generate`／`First`，骨架關掉時作者自己掛（同 O-4）。asset G-1 兩者都成立 |
 | W-4 | `beforeSwap` | 生成世界（5.4）；本頁寫明 | `beforeSwap` 是換上之前同步跑一次的關卡，不是生成；期間沒有套用點、沒有交換點（asset G-3），不加機制 |
-| W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（形 (3)），或交換函式、Module 的服務＋套用點。**交出到別的執行緒的 World 只能經它自己的「出」＋有鎖的服務**（跨執行緒讀 `Generating` 違反 O-13 第 2 條；檢查 B4）。生成世界提供 `Product::Generating(world)`（讀 World 的 Resource）與 World 內的 `WorldGeneration`（5.2、5.3；`GenerationPasses` 已拿掉，沒有 Feature 用） |
+| W-5 | 別的 World 知道某個 World 在生成 | 本頁 | 不加新機制：runner 在兩次入口之間讀 `Product::Generating(world)` 寫進別的 World（runner 直接讀寫），或交換函式、Module 的服務＋套用點。**交出到別的執行緒的 World 只能經它自己的「出」＋有鎖的服務**（跨執行緒讀 `Generating` 違反 O-13 第 2 條；檢查 B4）。生成世界提供 `Product::Generating(world)`（讀 World 的 Resource）與 World 內的 `WorldGeneration`（5.2、5.3；`GenerationPasses` 已拿掉，沒有 Feature 用） |
 | W-6 | 產品給 Module 的設定 | 本頁（Product 層）；生成世界（配發器） | 預設實體配發器的範圍每個 World 可能不同，用 `WorldDescription::options`（`EntityIdsOptions`，Module `entity_ids`），不用 Product 層 Resource；Product 層 Resource 的形狀歸本頁 |
 | W-7 | 執行緒 | 本頁 | 生成的狀態**只在 World 的 Resource `WorldGeneration`**（`Product` 的 World 槽不另存；World 建好的當下、準備函式之前就放成「生成中」），照 CCR-5 在呼叫的執行緒上讀寫；World 交出到別的執行緒時，狀態跟著 World 走，不會一份在槽、一份在 Resource（第 5.3 節） |
 | W-8 | 結束條件 | 生成世界 | 由作者的 System 給（asset G-2），不經本頁 |
@@ -582,7 +582,7 @@
 | # | 指出 | 處理 | 落點 |
 |---|---|---|---|
 | M1 必修 | 產品／測試在 `configure` 放進共用處的東西，單位的 `Configure` 拿不到；`Create<T>` 放不進介面型別 | 通則：產品、測試的物件走 `ProductDescription::options`（持有者結構）；介面用持有者結構；X-1、X-5 改寫；P-1、P-4 加案 | 5.2 第 1、2 點、5.6 |
-| M2 必修 | 形 (2) 的規則和 E-19（診斷紀錄）矛盾；第 2 題漏了點名的使用者、runtime-composition 第 2 節（郵箱只在 schedule 之間）與 L19 | 交換函式的登記照時間設計 5.3 做（不推翻、不交使用者）；加 E-19 的改寫、E-22、E-23（七個使用者逐一對到四種形）；形 (3) 允許 runner 呼叫 Module 給的函式 | 3.2、5.1、5.6、11、12 |
+| M2 必修 | runner 直接讀寫的規則（修訂 0 的編號是第二種形）和 E-19（診斷紀錄）矛盾；第 2 題漏了點名的使用者、runtime-composition 第 2 節（Mailbox 只在 schedule 之間；出處見第 18 節的更正）與 L19 | 交換函式的登記照時間設計 5.3 做（不推翻、不交使用者）；加 E-19 的改寫、E-22、E-23（七個使用者逐一對到四種形）；runner 直接讀寫也可以呼叫 Module 給的函式 | 3.2、5.1、5.6、11、12 |
 | M3 必修 | readback 經服務、晚一幀，牴觸使用者 11-11（沒有影像回到文件 World） | 整段刪掉，只留「Bevy 的寫回不照」 | 5.4 |
 | M4 必修 | 銷毀順序靠 `vector` 的解構順序（標準未規定）、`runner_` 比 World 先解構、讀者要先於來源 | `~Product` 明確的六步；P-5 三平台驗 | 5.2 第 5 點、10 |
 | M5 必修 | O-13 第 2 點弱化 O-11 卻寫成「限界」 | 照檢查建議的「只寫不變量」：O-13 只寫不變量，第 4 條寫明 O-11 照舊成立，入口層級的行為留給實作那一批（附候選做法） | 5.3 |
@@ -595,7 +595,7 @@
 | S6 提案 | 「不算 O-4 多一項」要交使用者確認 | 併進第 12 節第 1 題 | 12 |
 | S7 提案 | 跨元件規則、要改的文件沒列全 | 跨元件規則新登記一條、CCR-5 的「誰負責」；O-3、O-5、O-7、O-8 的改寫；加註清單 | 7 |
 | S8 提案 | 交出／交還的五個缺口；Unity 的先例偏弱 | 列進「留給實作那一批的」；系譜改寫 | 5.3 |
-| S9 提案 | 形 (1) 沒有測試 | P-9 | 10 |
+| S9 提案 | 套用點 沒有測試 | P-9 | 10 |
 | N1 | `Finish`／`Check` 給 `const` 等於半個凍結 | 都給可寫的 | 5.2 第 1 點 |
 | N2 | 套用掛 `First` 和別家不同；同一 stage 的先後 | 寫明 | 5.1 |
 | N3 | 第 13 節的對齊結果是空的 | 已對齊（W-1～W-10） | 13 |
@@ -620,7 +620,7 @@
 | B5 提案 | 銷毀時交出的 World；回呼返回時工作要已停 | 六步加前提；寫明「回呼返回時工作已停、不再碰共用處」 | 5.2 第 4、5 點、5.3 |
 | B6 提案 | 第 12 節「Product 一份的共用處」沒寫代價 | 補 | 12 |
 | B7 提案 | 「到 SDL 那批」不準；渲染 World 的時間「經 Extract」是未定 | 改成「第一個需要的 runner 那批」；渲染的時間標未定 | 5.5 |
-| 輕微 | 生成世界 5.12 用舊的三種形編號、郵箱放套用點 | 已通知生成世界卡改 | 13 |
+| 輕微 | 生成世界 5.12 用舊的三種形編號、World 之間交換資料的物件放套用點 | 已通知生成世界卡改 | 13 |
 | 輕微 | 第 16 節的「W-1～W-9」；「經過」沒寫 96496511 | 改 | 開頭、16 |
 | 輕微 | `ExchangeFailed` 要帶什麼 | World 名、進或出、單位名、函式的碼 | 5.1 |
 | 輕微 | P-6 少兩條路徑與 `Configure` 丟例外 | 補 | 10 |
@@ -638,7 +638,24 @@
 
 更正（設計不變）：
 - 交換函式的登記仍照做，理由剩已核准的：時間設計 5.3 的形、日誌宣告 5.4（Kernel 診斷紀錄要在最後一個同步點之後、Run 之外取，已寫明等交換點）。
-- 郵箱改成「還沒定」：PvP 移植時定用形 (1)（有鎖的服務＋套用 System）或形 (2)（交換函式）。
+- 畫面與模擬之間的資料改成「還沒定」：PvP 移植時定用套用點（有鎖的服務＋套用 System）或交換函式。「郵箱」這個詞（規格的 `Mailbox<T>`）不再用：它不是 GYO2 的概念，只是 PvP 的 Module 的一個物件。
 - 改的地方：第 0 節文件表、第 1 節、E-22、4.1 與 4.5 的「和別家不同」、5.1 的原形與表與規則、5.3、5.6、第 6 節第 7 項、第 7 節的加註與 RC-O11、第 8 節。第 16 節的 M2 列是當時的處理紀錄，照留，以本節為準。
 - 使用者的動工前核准（第 12 節）是在這個錯的前提下給的；設計沒有變，已在回報裡說明，若使用者要重看交換函式的登記，照使用者的話處理。
 
+
+---
+
+## 19. 2026-11-24 對齊：用詞、編號與過時的來源
+
+使用者：「你的規格書很多都過時了，用詞也不准『郵箱』是什麼？是錯字還是概念？」「做一次對齊。」本卡對照用詞表 v3（`rebuild-vocabulary.zh-Hant.md`）、已合併的條文與 HANDOFF 的決定，逐項改：
+
+| 問題 | 改法 |
+|---|---|
+| 「郵箱」：從舊規格 H.4.2 的 `Mailbox<T>` 搬來的概念，GYO2 沒有這個型別、用詞表沒有、使用者沒定 | 不再用。改寫成「Product 一份、有自己的鎖的物件（PvP 的 Module 的物件，Engine 不另立概念）」；只留使用者原話的引文（第 18 節） |
+| 「Host」：用詞表 v3 已換成「組裝」與「runner」 | 自己的句子不用；只留規格原文的引文並加註 |
+| 「形 (1)～(4)」：序號當主詞（`plain-names-in-reports`）；而且第 4.1、4.2 節還是修訂 0 的三種形編號，修訂 1 改成四種之後錯位（Bevy winit 標成交換函式、Bevy SubApp 標成 runner 直接讀寫） | 一律用名字：「套用點」「交換函式」「runner 直接讀寫」「Extract」；第 4.1、4.2 節照修訂 0 的意思換成名字，錯位隨之消失 |
+| 時間設計 5.5 的「(一)(二)(三)」、「決定 1 B」 | 寫成內容：「沒畫面」「有視窗、同一條執行緒」「固定步在自己的執行緒」；決定 1 寫成「runner 每輪取樣寫進 World、時間的 System 從它算時間」 |
+| 過時的來源被當成現況 | 第 0 節的文件表標明時間設計與 runtime-composition「部分過時」與哪些部分過時；本頁只用時間設計的形狀、不用它的歸屬；runtime-composition 只用使用者 11-11 定的部分 |
+| 本卡新加的詞沒標 | 「共用處」「一輪」「runner 直接讀寫」標「本卡加的詞」 |
+
+掃描（Python，`[甲乙丙丁]`、`\([a-dA-D]\)`、`[AB]／[AB]`、`形 ?\([1-4]\)`、`[（(][一二三四][）)]`、`郵箱`、`Host`，先用正例確認會命中）：剩下的只有使用者原話與規格原文的引文、其他文件自己的條號（WT-6 第 (2) 項、DI-KS 15 第 (3) 項）與 `HostClockSample` 這個原文型別名。
