@@ -58,6 +58,7 @@
 - [rollback-module-declaration.zh-Hant.md](rollback-module-declaration.zh-Hant.md)：`v8-arch-gyo2-rollback-module` 的事前宣告（回滾 Module：`RollbackStrategy` interface、第一版官方實作、P2P 佔位、要 Kernel 給的原語；邊界統合的子份，修訂 4 使用者 2026-11-17 核准（7dfd7167）；修訂 5、6 照第四輪檢查與窄複查改，使用者 2026-11-17 核准（9418fcf1））。
 - [event-cursor-declaration.zh-Hant.md](event-cursor-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor` 的事前宣告（事件：保留式改名 `Message` 與游標修剪，推送式 `Event`＋`Observer`；邊界統合的子份）；修訂 4 與修訂 5、6，使用者 2026-11-17 核准（758f651f）。
 - [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
+- [threads-io-review-declaration.zh-Hant.md](threads-io-review-declaration.zh-Hant.md)：`v8-arch-gyo2-threads-io-review` 的重審報告兼事前宣告（threads 加 `WorkerPool`、`RoleThread` 不改名；io 拿掉沒有使用者的部分與 `Vfs`、補 `TooLarge` 與多執行緒讀的契約）；修訂 1，使用者 2026-11-22 動工前核准（74d38577）。
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
 - [orchestration-skeleton-merge-approval.zh-Hant.md](orchestration-skeleton-merge-approval.zh-Hant.md)：同一批的合併前核准資料（判定的結果、照 G-7 改寫的第 7.1、7.2 節、第 10 節的最終文字、和宣告不同的地方、要你判的一件）。
 - [time-events-declaration.zh-Hant.md](time-events-declaration.zh-Hant.md)：`v8-arch-gyo2-time-events` 的事前宣告（第 3 批：時間 Module `engine/modules/world_time`、Kernel 拿掉時鐘、保留式 `Message` 與游標、推送式 `Event`＋`Observer`、編排層的預設骨架、scenario 第 2 段）；修訂 4，使用者 2026-11-19 動工前核准。
@@ -100,6 +101,7 @@
 - [2026_11_22_gyo2_naming_cleanup.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_naming_cleanup.zh-Hant.md)：命名收尾（`v8-arch-gyo2-naming-cleanup`；`naming_guard` 搬到 `tests/common/naming/`、共用讀法與 `gyo_expect_links` 搬到 `tests/common/support/`、`engine/` 改短名、測試輔助 namespace 收斂成 `GYO::Test::<單位>`、`Detail` 對齊 N13）。
 - [2026_11_22_gyo2_n13_short_names.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_n13_short_names.zh-Hant.md)：`engine/` 剩下的全名照 N13「引用別的單位」改成短名（`v8-arch-gyo2-n13-short-names`；IO 指自己的拿掉、Kernel 寫 `Engine::Base::`、`HashValue` 寫 `Kernel::Hasher`；巨集保留全限定）。
 - [2026_11_22_gyo2_world_gen.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_world_gen.zh-Hant.md)：第 5 批 生成世界（生成中、`WorldGeneration`、`WhileGenerating()`／`AfterGenerating()`）與預設的實體配發器 `entity_ids`（`RangeAllotter` 搬出 Kernel）；使用者 2026-11-22 合併前核准，合併待使用者說。
+- [2026_11_22_gyo2_threads_io_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_threads_io_review.zh-Hant.md)：threads、io 重審（`v8-arch-gyo2-threads-io-review`；`WorkerPool`、io 縮減、`TooLarge`、io DI 5 刪除與 DI 6）。
 
 ## 沒有搬過來的
 
