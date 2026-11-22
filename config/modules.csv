@@ -3,6 +3,7 @@ json,modules/json,GYO::Json,"JSON reading and writing behind the engine's own in
 audio,modules/audio,GYO::Audio,The audio mixer,yes,no,,,,
 logging,modules/logging,GYO::Logging,"Records, the Logger, sinks, the JSON lines format and the fatal path's last write",yes,no,,json,,
 trace,modules/trace,GYO::Trace,"Spans: the per-thread stack, parents, timing and the path, written as logging records",yes,no,,logging,,
+asset,modules/asset,GYO::Asset,"Asset ids, the catalog Data Contract, the loader interface, whole-file reading and the text loader",yes,no,,json,,
 entity_ids,modules/entity_ids,GYO::EntityIds,"The default entity allotter: RangeAllotter registered in every World with a default range",no,yes,,,GYO::Engine::EntityIds::EntityIdsModule,engine/entity_ids/EntityIdsModule.hpp
 world_time,modules/world_time,GYO::WorldTime,"Game time in a World: time Resources, the fixed step, the tick",no,yes,logging,,GYO::Engine::WorldTime::WorldTimeModule,engine/world_time/WorldTimeModule.hpp
 world_logging,modules/world_logging,GYO::WorldLogging,"The World end of logging: Forward and the Kernel diagnostics a runner takes",yes,no,logging,,,
