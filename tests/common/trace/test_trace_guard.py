@@ -55,6 +55,17 @@ class TraceGuard(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("TR1-TRACE", output)
 
+    def test_parent_directory_after_an_allowed_module_is_reported(self):
+        # An allowed module followed by ".." reaches any header (as kernel_guard K5 and orchestration_guard O4;
+        # v8-arch-gyo2-stale-cleanup).
+        for name in ("engine/base/../../../ecs/kernel/include/engine/kernel/World.hpp",
+                     "engine/time/..\\..\\..\\..\\orchestration\\include\\engine\\orchestration\\Product.hpp"):
+            with self.subTest(name=name):
+                write(self.root, "engine/modules/trace/src/Bad.cpp", f'#include "{name}"\n')
+                status, output = run(self.root)
+                self.assertEqual(status, 1, output)
+                self.assertIn(f'engine/modules/trace/src/Bad.cpp:1: TR1-TRACE: includes {name} (".." in the path)', output)
+
     def test_each_allowed_module_passes(self):
         for module in sorted(guard.ALLOWED):
             write(self.root, "engine/modules/trace/src/Each.cpp", f'#include "engine/{module}/X.hpp"\n')

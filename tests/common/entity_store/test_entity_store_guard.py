@@ -141,6 +141,15 @@ class Rules(GuardTree):
         self.assertReported("Added.hpp:2: W5 engine/math/linear/Vec3.hpp")
         self.assertReported("Added.hpp:3: W5 engine/os/Files.hpp")
 
+    def test_parent_directory_after_an_allowed_prefix_is_reported(self):
+        # An allowed prefix followed by ".." reaches any header (as kernel_guard K5; v8-arch-gyo2-stale-cleanup).
+        for name in ("engine/base/../../../modules/rollback/include/engine/rollback/Inbox.hpp",
+                     "engine/entity_store\\..\\..\\..\\core\\math\\include\\engine\\math\\Vec3.hpp"):
+            with self.subTest(name=name):
+                self.write("engine/ecs/entity_store/include/engine/entity_store/Added.hpp",
+                           "#pragma once\n#include \"" + name + "\"\n")
+                self.assertReported("Added.hpp:2: W5 " + name)
+
     def test_platform_and_c_headers_are_reported(self):
         for header in ("pthread.h", "windows.h", "unistd.h", "stdatomic.h", "threads.h", "stdint.h",
                        "sys/time.h", "boost/container/flat_map.hpp"):

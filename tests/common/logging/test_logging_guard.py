@@ -84,6 +84,23 @@ class LoggingGuard(unittest.TestCase):
             status, output = run(self.root)
             self.assertEqual(status, 0, module + ": " + output)
 
+    def test_parent_directory_after_an_allowed_module_is_reported(self):
+        # An allowed module followed by ".." reaches any header (as kernel_guard K5 and orchestration_guard O4;
+        # v8-arch-gyo2-stale-cleanup). Every rule reads it.
+        for relative, rule, name in (
+                ("engine/modules/logging/src/Bad.cpp", "LG4-LOGGING",
+                 "engine/base/../../../ecs/kernel/include/engine/kernel/World.hpp"),
+                ("engine/modules/logging/include/engine/logging/Bad.hpp", "LG4-LOGGING-PUBLIC",
+                 "engine/logging/..\\..\\..\\..\\json\\include\\engine\\json\\Writer.hpp"),
+                ("engine/modules/world_logging/src/Bad.cpp", "LG4-WORLD",
+                 "engine/kernel/../../../../modules/world_time/include/engine/world_time/TimeTypes.hpp")):
+            with self.subTest(rule=rule):
+                write(self.root, relative, f'#include "{name}"\n')
+                status, output = run(self.root)
+                (self.root / relative).unlink()
+                self.assertEqual(status, 1, output)
+                self.assertIn(f'{relative}:1: {rule}: includes {name} (".." in the path)', output)
+
     def test_an_include_in_a_block_comment_is_not_code(self):
         status, output = run(self.root)
         self.assertNotIn("Logger.cpp:6", output)

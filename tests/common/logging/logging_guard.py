@@ -11,6 +11,9 @@ messages or the parts of the engine it does not depend on:
   LG4-WORLD           an #include "engine/<module>/..." under engine/world_logging/ whose module is not base,
                       logging, kernel, orchestration or world_logging.
 
+In every rule an include whose path has a ".." segment ("/" and "\\" both separate) is reported too: an allowed
+module followed by ".." reaches any header (as kernel_guard K5 and orchestration_guard O4).
+
 Only includes of the engine's form "engine/<module>/<header>" are read (a standard header or a header of the
 Module's own src/ is not an engine include). Includes are read from code lines, with block comments blanked.
 
@@ -27,7 +30,7 @@ import sys
 from pathlib import Path
 
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl"}
-ENGINE_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"]engine/([A-Za-z0-9_]+)/[^>"\n]*[>"]', re.MULTILINE)
+ENGINE_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"]engine/([A-Za-z0-9_]+)/([^>"\n]*)[>"]', re.MULTILINE)
 RULES = (
     # (rule, directory, allowed modules); a file is checked against every rule whose directory holds it.
     ("LG4-LOGGING", "engine/modules/logging/", {"base", "json", "os", "threads", "time", "logging"}),
@@ -66,6 +69,10 @@ def scan(root):
             text = strip_block_comments(path.read_text(encoding="utf-8", errors="replace"))
             for match in ENGINE_INCLUDE.finditer(text):
                 module = match.group(1)
+                if ".." in re.split(r"[/\\]", match.group(2)):
+                    findings.append(f"{relative}:{line_of(text, match.start())}: {rule}: "
+                                    f"includes engine/{module}/{match.group(2)} (\"..\" in the path)")
+                    continue
                 if module in modules:
                     allowed[rule] += 1
                 else:
