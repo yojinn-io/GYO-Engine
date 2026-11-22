@@ -15,11 +15,15 @@
 #include <vector>
 
 // The contexts the orchestration layer hands to registration units and to the
-// product's own callbacks (declaration sections 3.3, 3.6 to 3.8, 3.12).
+// product's own callbacks (declaration sections 3.3, 3.6 to 3.8, 3.12; the
+// Product-level buffer, options, Configure reports, OnDestroy and the exchange
+// functions: docs/architecture/target/v2/exchange-declaration.zh-Hant.md
+// sections 5.1 and 5.2).
 
 namespace GYO::Engine::Orchestration {
 
 class Product;
+class ModuleBuffer;
 
 // Options the World description carries for the Modules to read, keyed by type
 // (section 3.4). The orchestration layer stores and hands them over; it never
@@ -75,6 +79,15 @@ private:
 // code PrepareFailed and the author's own code in reporterCode.
 using PrepareFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationError>(Kernel::World&)>;
 
+// An exchange function (exchange declaration section 5.1): called by RunFrame
+// on a Ready World, before ("in") or after ("out") the World's round, outside
+// any Run. To fail, return an OrchestrationError with the function's own code
+// in reporterCode; RunFrame then stops and returns ExchangeFailed (E2: the
+// World stays healthy). It may keep pointers to objects of the Product-level
+// ModuleBuffer, never to objects of a World build's ModuleBuffer (that one is
+// let go once the prepare functions have run). It waits for no other thread.
+using ExchangeFn = std::function<::GYO::Engine::Base::Result<void, OrchestrationError>(Kernel::World&)>;
+
 enum class RunnerExitCode : unsigned char { Success = 1, Failure };
 
 struct RunnerExit {
@@ -96,14 +109,41 @@ public:
     [[nodiscard]] ScheduleList& GameInit() noexcept { return *gameInit_; }
     // At most one runner per Product; a second is O-E4.
     void InstallRunner(std::string name, Runner runner);
+    // The Product's buffer (exchange declaration 5.2): what a unit Creates here
+    // the units after it find in their Configure, and every unit in each World build.
+    [[nodiscard]] ModuleBuffer& Buffer() noexcept { return *buffer_; }
+    // The product description's option of this type, or nullptr. What the product
+    // or a test gives is here from the first unit's Configure on (the product's
+    // own configure runs after every unit).
+    template <class T>
+    [[nodiscard]] const T* Options() const {
+        return options_->Get<T>();
+    }
+    // An error in the unit's own Configure: no World is built; the other units'
+    // Configure still run and the errors are collected (ProductStartupReport::unitErrors).
+    // A unit that finds no object of a dependency here (that dependency reported) reports
+    // and returns too; it does not assert.
+    void Report(std::string code, std::string message);
+    // Called once when the Product is destroyed, after every World and before the
+    // Product's buffer, in the reverse order of the calls to OnDestroy; also when
+    // Product::Build fails after this Configure. Every object of the buffer is still
+    // there while it runs. Work it is responsible for must have stopped when it returns.
+    void OnDestroy(std::function<void()> fn);
 
 private:
     friend class Product;
-    ProductSetup(std::string productName, std::string installer, ScheduleList& gameInit)
-        : productName_(std::move(productName)), installer_(std::move(installer)), gameInit_(&gameInit) {}
+    ProductSetup(std::string productName, std::string installer, ScheduleList& gameInit, ModuleBuffer& buffer,
+                 const OptionBag& options, std::vector<UnitReportedError>& reports,
+                 std::vector<std::function<void()>>& destroys)
+        : productName_(std::move(productName)), installer_(std::move(installer)), gameInit_(&gameInit), buffer_(&buffer),
+          options_(&options), reports_(&reports), destroys_(&destroys) {}
     std::string productName_;
     std::string installer_;
     ScheduleList* gameInit_;
+    ModuleBuffer* buffer_;
+    const OptionBag* options_;
+    std::vector<UnitReportedError>* reports_;
+    std::vector<std::function<void()>>* destroys_;
     struct Installed {
         std::string name;
         std::string installer;
@@ -124,26 +164,43 @@ struct CarryEntry {
     // Puts a taken value into a World; false when the World has no such type registered.
     std::function<bool(Kernel::World&, std::shared_ptr<void>&)> put;
 };
+// One registered exchange function and the unit (or the product) that registered it.
+struct ExchangeEntry {
+    std::string unit;
+    ExchangeFn fn;
+};
 } // namespace Detail
 
-// The Modules' buffer of one World build (authority-rollback declaration
-// section 6; the user's decision (a), 2026-11-20): a place, keyed by type, where
-// one registration unit puts an object the others and the product's own build
-// use while the World is built (a Module's registration table, its author
-// entry). Made anew each time the World is built and kept with that build's
-// prepare functions; never read by the orchestration layer (O-2).
-//   - Build (WorldSetup) writes; Finish and Check (WorldFinish, WorldCheck)
-//     only read: the buffer is frozen when every Build has run.
+// A place, keyed by type, where one party puts an object the others use. Two
+// uses share this one rule ("one owner Creates, the others Find"):
+//   - Each World build has one (authority-rollback declaration section 6; the
+//     user's decision, 2026-11-20): a unit's registration table, its author
+//     entry, used while the World is built. Made anew each time the World is
+//     built, kept with that build's prepare functions and then let go. Build
+//     (WorldSetup::Buffer) writes; the buffer is frozen when every Build has
+//     run, and Finish and Check (WorldFinish, WorldCheck) only read.
+//   - The Product has one (exchange declaration section 5.2; the user's
+//     decision, 2026-11-24): an object one unit, the product or its runner puts
+//     for the others for the Product's whole life (a store, a pool, a device).
+//     Never frozen; it outlives every World of the Product. An object another
+//     thread uses brings its own synchronization.
+// Both:
 //   - One type, one owner: the owner Creates it (a second Create of a type is a
 //     GYO_ASSERT), the others Find it; Find does not make an empty one.
 //   - A Create, or a writable Find, after the freeze is a GYO_ASSERT. A write
 //     through a reference kept from Build is the owner's to refuse.
+//   - The orchestration layer never reads what is inside (O-2).
+//   - Objects are destroyed in the reverse order of their Create.
 //   - One thread (CCR-5): no lock.
 class ModuleBuffer {
 public:
     ModuleBuffer() = default;
     ModuleBuffer(const ModuleBuffer&) = delete;
     ModuleBuffer& operator=(const ModuleBuffer&) = delete;
+    // The reverse order of Create (a vector's own order of destruction is not specified).
+    ~ModuleBuffer() {
+        while (!entries_.empty()) entries_.pop_back();
+    }
 
     // The owner's object of type T, made from args.
     template <class T, class... Args>
@@ -198,8 +255,15 @@ public:
     [[nodiscard]] ScheduleList& Frame() noexcept { return *frame_; }
     // This World build's ModuleBuffer, to write.
     [[nodiscard]] ModuleBuffer& Buffer() noexcept { return *buffer_; }
+    // The Product's buffer (exchange declaration 5.2), to write.
+    [[nodiscard]] ModuleBuffer& ProductBuffer() noexcept { return *productBuffer_; }
     // A prepare function of this World, after the earlier units' ones.
     void Prepare(PrepareFn fn);
+    // Exchange functions of this World (exchange declaration 5.1), after the earlier
+    // units' ones: RunFrame calls the "in" ones before the World's round and the
+    // "out" ones after it. Kept with the World until it is replaced or destroyed.
+    void ExchangeIn(ExchangeFn fn);
+    void ExchangeOut(ExchangeFn fn);
     // Marks Resource T to be carried to the new World when this World is
     // replaced (section 3.12). The value is moved whole and never read; it must
     // not hold anything that points into the old World (an EntityId, a pointer,
@@ -237,18 +301,27 @@ public:
 
 private:
     friend class Product;
-    WorldSetup(std::string worldName, Kernel::Registrar& registrar, const OptionBag& options, ScheduleList& frame,
-               std::vector<PrepareFn>& prepares, std::vector<Detail::CarryEntry>& carries, ModuleBuffer& buffer)
-        : worldName_(std::move(worldName)), registrar_(&registrar), options_(&options), frame_(&frame),
-          buffer_(&buffer), prepares_(&prepares), carries_(&carries) {}
+    struct Exchanges {
+        std::vector<Detail::ExchangeEntry> in;
+        std::vector<Detail::ExchangeEntry> out;
+    };
+    WorldSetup(std::string worldName, std::string unit, Kernel::Registrar& registrar, const OptionBag& options,
+               ScheduleList& frame, std::vector<PrepareFn>& prepares, std::vector<Detail::CarryEntry>& carries,
+               ModuleBuffer& buffer, ModuleBuffer& productBuffer, Exchanges& exchanges)
+        : worldName_(std::move(worldName)), unit_(std::move(unit)), registrar_(&registrar), options_(&options),
+          frame_(&frame), buffer_(&buffer), productBuffer_(&productBuffer), prepares_(&prepares), carries_(&carries),
+          exchanges_(&exchanges) {}
     void AddCarry(Detail::CarryEntry entry);
     std::string worldName_;
+    std::string unit_;
     Kernel::Registrar* registrar_;
     const OptionBag* options_;
     ScheduleList* frame_;
     ModuleBuffer* buffer_;
+    ModuleBuffer* productBuffer_;
     std::vector<PrepareFn>* prepares_;
     std::vector<Detail::CarryEntry>* carries_;
+    Exchanges* exchanges_;
 };
 
 // After the World's Plans are built (Finish).
@@ -260,17 +333,22 @@ public:
     [[nodiscard]] const std::string& WorldName() const noexcept { return worldName_; }
     // This World build's ModuleBuffer, frozen: to read.
     [[nodiscard]] const ModuleBuffer& Buffer() const noexcept { return *buffer_; }
+    // The Product's buffer (exchange declaration 5.2), to write: it is never frozen.
+    [[nodiscard]] ModuleBuffer& ProductBuffer() const noexcept { return *productBuffer_; }
     // An error in the unit's own code (collected into the startup report).
     void Report(std::string code, std::string message);
 
 private:
     friend class Product;
-    WorldFinish(std::string worldName, std::string unit, std::vector<UnitReportedError>& sink, const ModuleBuffer& buffer)
-        : worldName_(std::move(worldName)), unit_(std::move(unit)), sink_(&sink), buffer_(&buffer) {}
+    WorldFinish(std::string worldName, std::string unit, std::vector<UnitReportedError>& sink, const ModuleBuffer& buffer,
+                ModuleBuffer& productBuffer)
+        : worldName_(std::move(worldName)), unit_(std::move(unit)), sink_(&sink), buffer_(&buffer),
+          productBuffer_(&productBuffer) {}
     std::string worldName_;
     std::string unit_;
     std::vector<UnitReportedError>* sink_;
     const ModuleBuffer* buffer_;
+    ModuleBuffer* productBuffer_;
 };
 
 // After every unit's Finish of the World (Check). The World is not built yet:
@@ -289,20 +367,23 @@ public:
     }
     // This World build's ModuleBuffer, frozen: to read.
     [[nodiscard]] const ModuleBuffer& Buffer() const noexcept { return *buffer_; }
+    // The Product's buffer (exchange declaration 5.2), to write: it is never frozen.
+    [[nodiscard]] ModuleBuffer& ProductBuffer() const noexcept { return *productBuffer_; }
     void Report(std::string code, std::string message);
 
 private:
     friend class Product;
     WorldCheck(std::string worldName, std::string unit, bool dynamicInsert, const OptionBag& options,
-               std::vector<UnitReportedError>& sink, const ModuleBuffer& buffer)
+               std::vector<UnitReportedError>& sink, const ModuleBuffer& buffer, ModuleBuffer& productBuffer)
         : worldName_(std::move(worldName)), unit_(std::move(unit)), dynamicInsert_(dynamicInsert), options_(&options),
-          sink_(&sink), buffer_(&buffer) {}
+          sink_(&sink), buffer_(&buffer), productBuffer_(&productBuffer) {}
     std::string worldName_;
     std::string unit_;
     bool dynamicInsert_;
     const OptionBag* options_;
     std::vector<UnitReportedError>* sink_;
     const ModuleBuffer* buffer_;
+    ModuleBuffer* productBuffer_;
 };
 
 } // namespace GYO::Engine::Orchestration

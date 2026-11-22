@@ -71,7 +71,38 @@ OrchestrationError FromKernel(OrchestrationErrorCode code, std::string message, 
 
 } // namespace
 
-Product::~Product() = default;
+Product::~Product() {
+    // Exchange declaration 5.2 point 5: an explicit order (the order members and vector elements are
+    // destroyed in is not relied on). No World is lent to another thread (O-13; lending is not built yet).
+    // 1. Every World, in the reverse order of the description (a World that extracts from another comes
+    //    after it, so it goes first): its exchange functions, the World, its Registry.
+    for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {
+        slot->exchangeOut.clear();
+        slot->exchangeIn.clear();
+        slot->executor.reset();
+        slot->registry.reset();
+    }
+    // 2. The OnDestroy callbacks, the last registered first; each closure goes once it has run. Every
+    //    object of the Product's buffer is still there.
+    while (!onDestroy_.empty()) {
+        std::function<void()> callback = std::move(onDestroy_.back());
+        onDestroy_.pop_back();
+        if (callback) callback();
+    }
+    // 3. The runners (one may hold a window or threads a callback still used, and may point into the buffer).
+    runner_ = nullptr;
+    while (!extraRunners_.empty()) extraRunners_.pop_back();
+    // 4. The Product's buffer: its objects in the reverse order of their Create.
+    buffer_.reset();
+    // 5. The descriptions (their closures) and the options.
+    while (!worlds_.empty()) worlds_.pop_back();
+    configure_ = nullptr;
+    options_ = OptionBag();
+    // 6. The units, the last added first.
+    while (!units_.empty()) units_.pop_back();
+    while (!owned_.plugins.empty()) owned_.plugins.pop_back();
+    while (!owned_.modules.empty()) owned_.modules.pop_back();
+}
 
 ::GYO::Engine::Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(ProductDescription description,
                                                                                     RegisteredUnits units) {
@@ -79,6 +110,8 @@ Product::~Product() = default;
     Product& self = *product;
     self.name_ = std::move(description.name);
     self.configure_ = std::move(description.configure);
+    self.options_ = std::move(description.options);
+    self.buffer_ = std::make_unique<ModuleBuffer>();
     self.owned_ = std::move(units);
 
     std::vector<OrchestrationStartupError> errors;
@@ -174,16 +207,18 @@ Product::~Product() = default;
         self.worlds_.push_back(std::move(slot));
     }
 
-    // Step 2: Configure, every unit in order, then the product's own.
+    // Step 2: Configure, every unit in order, then the product's own. A runner, an
+    // OnDestroy callback and the Product's buffer are the Product's from here on, so a
+    // failed Build destroys them in ~Product's order (exchange declaration 5.2).
     ScheduleList gameInit(std::move(description.gameInit));
-    std::vector<ProductSetup::Installed> runners;
+    std::vector<ProductSetup::Installed>& runners = self.extraRunners_;
     for (UnitSlot& unit : self.units_) {
-        ProductSetup setup(self.name_, unit.row, gameInit);
+        ProductSetup setup(self.name_, unit.row, gameInit, *self.buffer_, self.options_, unitErrors, self.onDestroy_);
         unit.unit->Configure(setup);
         for (auto& installed : setup.runners_) runners.push_back(std::move(installed));
     }
     if (self.configure_) {
-        ProductSetup setup(self.name_, self.name_, gameInit);
+        ProductSetup setup(self.name_, self.name_, gameInit, *self.buffer_, self.options_, unitErrors, self.onDestroy_);
         self.configure_(setup);
         for (auto& installed : setup.runners_) runners.push_back(std::move(installed));
     }
@@ -194,7 +229,11 @@ Product::~Product() = default;
                           installers});
     } else if (runners.size() == 1) {
         self.runner_ = std::move(runners.front().runner);
+        runners.clear();
     }
+    // A Configure report (exchange declaration 5.2 point 3): no World is built and no
+    // World's Build runs (a unit that reported may not have made what its dependants find).
+    const bool configureReported = !unitErrors.empty();
     for (const std::string& anchor : gameInit.missingAnchors_) {
         errors.push_back({OrchestrationCode::OE5, "game initialization list: no anchor " + Quoted(anchor), {anchor}});
     }
@@ -203,6 +242,10 @@ Product::~Product() = default;
     // Step 3 and 4: every World's registration and list checks.
     std::vector<Registration> registrations;
     for (std::size_t i = 0; i < self.worlds_.size(); ++i) {
+        if (configureReported) {
+            results.push_back(WorldStartupResult{self.worlds_[i].description.name, std::nullopt, true});
+            continue;
+        }
         WorldStartupResult result{self.worlds_[i].description.name, std::nullopt, false};
         registrations.push_back(self.Register(self.worlds_[i], i == 0, result, errors, unitErrors));
         results.push_back(std::move(result));
@@ -222,6 +265,8 @@ Product::~Product() = default;
         slot.registry = std::move(registration.registry);
         slot.frame = std::move(registration.frame);
         slot.carries = std::move(registration.carries);
+        slot.exchangeIn = std::move(registration.exchangeIn);
+        slot.exchangeOut = std::move(registration.exchangeOut);
         slot.executor = self.MakeExecutor(slot, *slot.registry);
     }
     for (std::size_t i = 0; i < self.worlds_.size(); ++i) {
@@ -249,6 +294,7 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     ScheduleList frame(InitialFrame(world));
     std::vector<PrepareFn> prepares;
     std::vector<Detail::CarryEntry> carries;
+    WorldSetup::Exchanges exchanges;
     // The Modules' buffer of this build (authority-rollback declaration section 6): written during Build, frozen
     // before BuildPlans, read by Finish, Check and the prepare functions, let go once those have run (O-2).
     auto buffer = std::make_shared<ModuleBuffer>();
@@ -264,14 +310,16 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     for (std::size_t index : slot.units) {
         UnitSlot& unit = units_[index];
         auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {
-            WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);
+            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,
+                             exchanges);
             unit.unit->Build(setup);
         });
         GYO_ASSERT(static_cast<bool>(registered));
     }
     auto own = registry->Register(Kernel::RegistrationOwner{name_, static_cast<std::uint32_t>(units_.size())},
                                   [&](Kernel::Registrar& registrar) {
-                                      WorldSetup setup(world.name, registrar, world.options, frame, prepares, carries, *buffer);
+                                      WorldSetup setup(world.name, name_, registrar, world.options, frame, prepares, carries,
+                                                       *buffer, *buffer_, exchanges);
                                       if (world.build) world.build(setup);
                                   });
     GYO_ASSERT(static_cast<bool>(own));
@@ -285,11 +333,11 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     }
     const Kernel::FrozenRegistry& frozen = registry->Frozen();
     for (std::size_t index : slot.units) {
-        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer);
+        WorldFinish context(world.name, units_[index].row, unitErrors, *buffer, *buffer_);
         units_[index].unit->Finish(frozen, context);
     }
     for (std::size_t index : slot.units) {
-        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer);
+        WorldCheck context(world.name, units_[index].row, world.dynamicInsert, world.options, unitErrors, *buffer, *buffer_);
         units_[index].unit->Check(frozen, context);
     }
     for (const std::string& anchor : frame.missingAnchors_) {
@@ -317,6 +365,8 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     registration.frame = std::move(frame.names_);
     registration.unitPrepares = std::move(prepares);
     registration.carries = std::move(carries);
+    registration.exchangeIn = std::move(exchanges.in);
+    registration.exchangeOut = std::move(exchanges.out);
     registration.buffer = std::move(buffer);
     return registration;
 }
@@ -538,9 +588,30 @@ template <class Steps>
     if (!gameInitRan_) {
         if (auto ran = RunGameInit(); !ran) return ran;
     }
+    // Each World: its "in" exchange functions, its round, its "out" ones (exchange declaration 5.1).
+    // A World breaking in its round stops here: neither its "out" nor any later World's exchange runs.
     for (WorldSlot& slot : worlds_) {
+        if (auto exchanged = Exchange(slot.exchangeIn, slot.description.name, "in"); !exchanged) return exchanged;
         for (const std::string& schedule : slot.frame) {
             if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
+        }
+        if (auto exchanged = Exchange(slot.exchangeOut, slot.description.name, "out"); !exchanged) return exchanged;
+    }
+    return {};
+}
+
+::GYO::Engine::Base::Result<void, OrchestrationError> Product::Exchange(std::vector<Detail::ExchangeEntry>& entries,
+                                                                    const std::string& world, std::string_view side) {
+    Kernel::World& target = Find(world)->executor->GetWorld();
+    for (Detail::ExchangeEntry& entry : entries) {
+        if (!entry.fn) continue;
+        auto done = entry.fn(target);
+        if (!done) {
+            OrchestrationError error = std::move(done).error();
+            error.code = OrchestrationErrorCode::ExchangeFailed;
+            error.message = "exchange function (" + std::string(side) + ") of " + Quoted(entry.unit) + " on World " +
+                            Quoted(world) + " failed" + (error.message.empty() ? std::string() : ": " + error.message);
+            return ::GYO::Engine::Base::Err(std::move(error));
         }
     }
     return {};
@@ -573,7 +644,7 @@ RunnerExit Product::Run() {
         // E1: a World is broken and the Product cannot run again.
         return RunnerExit{RunnerExitCode::Failure, "the Product ended: " + error.failure->Text()};
     }
-    // E2: this request was not done (RunFrame does not return one today).
+    // E2: this request was not done (an exchange function failed; the World is healthy).
     return RunnerExit{RunnerExitCode::Failure,
                       std::string(ToString(error.code)) + ": " + error.message + (error.detail.empty() ? "" : "\n" + error.detail)};
 }
@@ -648,6 +719,8 @@ bool Product::HasWorld(std::string_view name) const noexcept {
             for (auto& [entry, box] : moved) entry.put(slot.executor->GetWorld(), box);
             throw;
         }
+        slot.exchangeOut.clear();
+        slot.exchangeIn.clear();
         slot.executor.reset();
         slot.registry.reset();
         // An empty place from here on is this replacement's, until it swaps or records the failure.
@@ -778,14 +851,18 @@ bool Product::HasWorld(std::string_view name) const noexcept {
         throw;
     }
 
-    // Step 5: swap. The old executor first, then its Registry.
+    // Step 5: swap. The old exchange functions first, then the old executor, then its Registry.
     slot.replacing = false;
+    slot.exchangeOut.clear();
+    slot.exchangeIn.clear();
     slot.executor.reset();
     slot.registry.reset();
     slot.registry = std::move(registration.registry);
     slot.executor = std::move(fresh);
     slot.frame = std::move(registration.frame);
     slot.carries = std::move(registration.carries);
+    slot.exchangeIn = std::move(registration.exchangeIn);
+    slot.exchangeOut = std::move(registration.exchangeOut);
     slot.lastSchedule.clear();
     slot.nextInsertSeq = 0;
     return {};

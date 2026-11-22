@@ -168,6 +168,10 @@ enum class OrchestrationErrorCode : std::uint8_t {
     OwnerTaken,
     // What a prepare function returns to say it failed; the author's own code goes in reporterCode.
     PrepareFailed,
+    // RunFrame: an exchange function returned an error (exchange declaration 5.1). The message names
+    // the World, "in" or "out" and the unit; the function's own code is in reporterCode. The World is
+    // not broken and the Product goes on (E2); the Worlds before it ran this round.
+    ExchangeFailed,
 };
 
 [[nodiscard]] std::string_view ToString(OrchestrationErrorCode code) noexcept;

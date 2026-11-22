@@ -45,6 +45,22 @@ void WorldSetup::Prepare(PrepareFn fn) {
     prepares_->push_back(std::move(fn));
 }
 
+void WorldSetup::ExchangeIn(ExchangeFn fn) {
+    exchanges_->in.push_back(Detail::ExchangeEntry{unit_, std::move(fn)});
+}
+
+void WorldSetup::ExchangeOut(ExchangeFn fn) {
+    exchanges_->out.push_back(Detail::ExchangeEntry{unit_, std::move(fn)});
+}
+
+void ProductSetup::Report(std::string code, std::string message) {
+    reports_->push_back(UnitReportedError{installer_, std::string(), std::move(code), std::move(message)});
+}
+
+void ProductSetup::OnDestroy(std::function<void()> fn) {
+    destroys_->push_back(std::move(fn));
+}
+
 void WorldSetup::AddCarry(Detail::CarryEntry entry) {
     for (Detail::CarryEntry& existing : *carries_) {
         if (existing.key == entry.key) {

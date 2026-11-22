@@ -20,7 +20,9 @@
 // sections 3.4 to 3.12): a group of Worlds, each with its own kernel Registry,
 // built from a description and the registration units the product carries;
 // the game initialization list, each World's frame list, the runner, prepare
-// functions, World replacement and dynamic insertion.
+// functions, World replacement and dynamic insertion; the Product's buffer,
+// options, OnDestroy and the exchange functions
+// (docs/architecture/target/v2/exchange-declaration.zh-Hant.md, sections 5.1, 5.2).
 //
 // Everything happens on the calling thread (CCR-5): building, running,
 // replacing, inserting and destroying the Product.
@@ -57,6 +59,10 @@ struct ProductDescription {
     std::vector<std::string> gameInit;
     // The product's own Configure, after every unit's.
     std::function<void(ProductSetup&)> configure;
+    // Options for the Modules at Product level (exchange declaration 5.2): there from the first unit's
+    // Configure on (ProductSetup::Options). What the product or a test gives a unit (an executor, a
+    // content root) goes here, in a small holder struct when it is an interface. Never read here (O-2).
+    OptionBag options;
 };
 
 enum class ReplaceOrder : unsigned char {
@@ -111,6 +117,9 @@ public:
     // of that name, or its place is empty.
     [[nodiscard]] Kernel::WorldExecutor& World(std::string_view name);
     [[nodiscard]] bool HasWorld(std::string_view name) const noexcept;
+    // The Product's buffer (exchange declaration 5.2), between two entry points: what the units put
+    // there for the Product's whole life. It outlives every World.
+    [[nodiscard]] ModuleBuffer& Buffer() noexcept { return *buffer_; }
 
     // Replaces a healthy World (section 3.9): registers it again from the
     // description, carries the marked Resources over, runs the prepare functions
@@ -138,6 +147,9 @@ private:
     ::GYO::Engine::Base::Result<void, OrchestrationError> RunScheduleSteps(std::string_view world, std::string_view schedule);
     ::GYO::Engine::Base::Result<void, OrchestrationError> ReplaceWorldSteps(std::string_view name, ReplaceRequest request);
     ::GYO::Engine::Base::Result<void, OrchestrationError> InsertSystemsSteps(std::string_view world, std::string owner, InsertFn build);
+    // Calls one side of a World's exchange functions in order; the first error stops it (ExchangeFailed).
+    ::GYO::Engine::Base::Result<void, OrchestrationError> Exchange(std::vector<Detail::ExchangeEntry>& entries,
+                                                                   const std::string& world, std::string_view side);
 
     struct UnitSlot {
         std::string row;
@@ -152,6 +164,9 @@ private:
         std::unique_ptr<Kernel::WorldExecutor> executor;
         std::vector<std::string> frame;
         std::vector<Detail::CarryEntry> carries;
+        // The exchange functions of this World's build: kept until the World is replaced or destroyed.
+        std::vector<Detail::ExchangeEntry> exchangeIn;
+        std::vector<Detail::ExchangeEntry> exchangeOut;
         // The last schedule the Product ran with success on this World (WorldFailure::lastSchedule).
         std::string lastSchedule;
         std::uint32_t nextInsertSeq = 0;
@@ -166,6 +181,8 @@ private:
         std::vector<std::string> frame;
         std::vector<PrepareFn> unitPrepares;
         std::vector<Detail::CarryEntry> carries;
+        std::vector<Detail::ExchangeEntry> exchangeIn;
+        std::vector<Detail::ExchangeEntry> exchangeOut;
         std::shared_ptr<ModuleBuffer> buffer;
     };
 
@@ -192,13 +209,20 @@ private:
     std::unique_ptr<Kernel::WorldExecutor> MakeExecutor(WorldSlot& slot, const Kernel::Registry& registry);
 
     std::string name_;
-    // Units first so they outlive every Registry and World (members are destroyed in reverse).
+    // ~Product destroys these in an explicit order (exchange declaration 5.2 point 5): the Worlds
+    // (reverse description order), the OnDestroy callbacks, the runners, the Product's buffer, the
+    // descriptions and options, the units. The declaration order below is not relied on.
     RegisteredUnits owned_;
     std::vector<UnitSlot> units_;
     std::function<void(ProductSetup&)> configure_;
+    OptionBag options_;
+    std::unique_ptr<ModuleBuffer> buffer_;
+    std::vector<std::function<void()>> onDestroy_;
     std::vector<WorldSlot> worlds_;
     std::vector<std::string> gameInit_;
     Runner runner_;
+    // Every runner installed when there are more than one (O-E4): kept until ~Product's runner step.
+    std::vector<ProductSetup::Installed> extraRunners_;
     bool gameInitRan_ = false;
     bool ran_ = false;
     std::optional<WorldFailure> failure_;
