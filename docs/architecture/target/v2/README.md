@@ -57,6 +57,7 @@
 - [authority-module-declaration.zh-Hant.md](authority-module-declaration.zh-Hant.md)：`v8-arch-gyo2-authority-module` 的事前宣告（權威 Module：策略 interface、伺服器權威策略、代為登記、digest；不數寫者；邊界統合的子份）；修訂 4 與之後的改動，使用者 2026-11-17 核准（7f9bbb85）。
 - [rollback-module-declaration.zh-Hant.md](rollback-module-declaration.zh-Hant.md)：`v8-arch-gyo2-rollback-module` 的事前宣告（回滾 Module：`RollbackStrategy` interface、第一版官方實作、P2P 佔位、要 Kernel 給的原語；邊界統合的子份，修訂 4 使用者 2026-11-17 核准（7dfd7167）；修訂 5、6 照第四輪檢查與窄複查改，使用者 2026-11-17 核准（9418fcf1））。
 - [event-cursor-declaration.zh-Hant.md](event-cursor-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor` 的事前宣告（事件：保留式改名 `Message` 與游標修剪，推送式 `Event`＋`Observer`；邊界統合的子份）；修訂 4 與修訂 5、6，使用者 2026-11-17 核准（758f651f）。
+- [event-cursor-reeval-declaration.zh-Hant.md](event-cursor-reeval-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor-reeval` 的事前宣告（被條件長期擋住或不常跑的 `Message` 讀者：查證後判為作者的問題，Kernel 不改，說明頁寫寫法、Kernel 加 RC 24）；修訂 3，使用者 2026-11-22 核准。
 - [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
 - [threads-io-review-declaration.zh-Hant.md](threads-io-review-declaration.zh-Hant.md)：`v8-arch-gyo2-threads-io-review` 的重審報告兼事前宣告（threads 加 `WorkerPool`、`RoleThread` 不改名；io 拿掉沒有使用者的部分與 `Vfs`、補 `TooLarge` 與多執行緒讀的契約）；修訂 1，使用者 2026-11-22 動工前核准（74d38577）。
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
@@ -102,6 +103,7 @@
 - [2026_11_22_gyo2_n13_short_names.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_n13_short_names.zh-Hant.md)：`engine/` 剩下的全名照 N13「引用別的單位」改成短名（`v8-arch-gyo2-n13-short-names`；IO 指自己的拿掉、Kernel 寫 `Engine::Base::`、`HashValue` 寫 `Kernel::Hasher`；巨集保留全限定）。
 - [2026_11_22_gyo2_world_gen.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_world_gen.zh-Hant.md)：第 5 批 生成世界（生成中、`WorldGeneration`、`WhileGenerating()`／`AfterGenerating()`）與預設的實體配發器 `entity_ids`（`RangeAllotter` 搬出 Kernel）；使用者 2026-11-22 合併前核准，合併待使用者說。
 - [2026_11_22_gyo2_au_z6_survivor.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_au_z6_survivor.zh-Hant.md)：權威 Module 的突變 `au-z6-skipped-counted` 存活的原因（61d6f72c 起突變指定的 AU-E8 一例因 Resource 輸入另有歷史而失去檢出力）與修正（突變改接既有的 `every mount skipped`；`v8-arch-gyo2-au-z6-survivor`）。
+- [2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_event_cursor_reeval.zh-Hant.md)：事件游標的重評——帶條件或不常跑的讀者交給作者、System 契約說明頁第 15 節、Kernel RC 24、CCR-7（`v8-arch-gyo2-event-cursor-reeval`）。
 - [2026_11_22_gyo2_threads_io_review.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_threads_io_review.zh-Hant.md)：threads、io 重審（`v8-arch-gyo2-threads-io-review`；`WorkerPool`、io 縮減、`TooLarge`、io DI 5 刪除與 DI 6）。
 
 ## 沒有搬過來的
