@@ -2142,7 +2142,7 @@
       "replace": "path.append(\"/\").append(organization);",
       "target": "gyo_os_tests",
       "cases": "*user data directory under the platform base*",
-      "expect": "CHECK\\( bare\\.value\\(\\) == base \\+ \"/Bare App\" \\)"
+      "expect": "CHECK\\( bare\\.value\\(\\) == base \\+ \"/(?:Bare App\"|\" \\+ org) \\)"
     },
     {
       "id": "ou-x6-base-trailing-slash-kept",
@@ -2158,7 +2158,7 @@
       "replace": "std::string path(base.value());",
       "target": "gyo_os_tests",
       "cases": "*user data base from XDG_DATA_HOME*",
-      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)"
+      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)[\\s\\S]*values: CHECK\\( [^\\n]*//GYO Test Org"
     },
     {
       "id": "ou-x7-macos-home-slash-kept",
@@ -2206,7 +2206,7 @@
       "replace": "        const char* home = Home();\n        if (home == nullptr) return std::string(\".\");\n        if (home == nullptr) {",
       "target": "gyo_os_tests",
       "cases": "*fail without a home for the user data directory*",
-      "expect": "REQUIRE_FALSE\\( made \\)"
+      "expect": "REQUIRE_FALSE\\( withoutHome \\)"
     },
     {
       "id": "ou-x10-linux-base-cached",
@@ -2222,7 +2222,7 @@
       "replace": "static const std::string cached = XdgDataHome() ? XdgDataHome() : \"\";\n        if (!cached.empty()) return cached;",
       "target": "gyo_os_tests",
       "cases": "*user data base from XDG_DATA_HOME*",
-      "expect": "logged: ignored := relative-data"
+      "expect": "values: CHECK\\( /[^\\n]*xdg-data[^\\n]*/GYO Test Org/Test App ==[^\\n]*\\n\\s*logged: ignored := relative-data"
     },
     {
       "id": "ou-x11-macos-base-wrong",
@@ -2254,7 +2254,7 @@
       "replace": "return data != nullptr && data[0] != '\\0' ? data : nullptr;",
       "target": "gyo_os_tests",
       "cases": "*user data base from XDG_DATA_HOME*",
-      "expect": "logged: ignored := relative-data"
+      "expect": "values: CHECK\\( relative-data/GYO Test Org[^\\n]*\\n\\s*logged: ignored := relative-data"
     },
     {
       "id": "ou-x13-linux-home-first",
@@ -2270,7 +2270,7 @@
       "replace": "if (const char* data = XdgDataHome(); data != nullptr && Home() == nullptr) return std::string(data);",
       "target": "gyo_os_tests",
       "cases": "*user data base from XDG_DATA_HOME*",
-      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)"
+      "expect": "CHECK\\( made\\.value\\(\\) == dataText \\+ \"/GYO Test Org/Test App\" \\)[\\s\\S]*values: CHECK\\( [^\\n]*/\\.local/share/GYO Test Org"
     },
     {
       "id": "ou-x14-default-access",
@@ -2294,7 +2294,7 @@
       "what": "The public CreateDirectories makes every directory 0700 too (v8-arch-gyo2-os-user-data; only it catches: a change of the public CreateDirectories, Design Invariant 9)",
       "guards": [
         "os-user-data-declaration C6",
-        "os-user-data-declaration os 9"
+        "os 9"
       ],
       "platforms": [
         "darwin",
@@ -2305,7 +2305,85 @@
       "replace": "const mode_t mode = 0700;",
       "target": "gyo_os_tests",
       "cases": "*new user data directories for the owner only*",
-      "expect": "CHECK\\( static_cast<mode_t>\\(fs::status\\(shared\\)\\.permissions\\(\\)\\) == \\(0777 & ~mask\\) \\)"
+      "expect": "CHECK\\( static_cast<mode_t>\\(fs::status\\(shared\\)\\.permissions\\(\\)\\) == \\(0777 & ~mode_t\\{022\\}\\) \\)"
+    },
+    {
+      "id": "ou-x16-organization-unchecked",
+      "what": "The organization name is not checked, so . or a separator there escapes or nests (v8-arch-gyo2-os-user-data; only it catches: the check of the organization, which ou-x2 and ou-x3 never reach)",
+      "guards": [
+        "os-user-data-declaration C5"
+      ],
+      "file": "engine/core/os/src/sys/UserData.cpp",
+      "find": "    if (auto checked = CheckName(organization, true); !checked) return Base::Err(std::move(checked.error()));\n",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*user data names that are not one path component*",
+      "expect": "REQUIRE_FALSE\\( asOrganization \\)[\\s\\S]*logged: name := \\."
+    },
+    {
+      "id": "ou-x17-macos-relative-home",
+      "what": "macOS takes a relative HOME and makes the directory under the current one (v8-arch-gyo2-os-user-data; only it catches: the absolute check of HOME on macOS)",
+      "guards": [
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "return home != nullptr && home[0] == '/' ? home : nullptr;",
+      "replace": "return home;",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "REQUIRE_FALSE\\( relativeHome \\)"
+    },
+    {
+      "id": "ou-x18-linux-relative-home",
+      "what": "Linux takes a relative HOME and makes the directory under the current one (v8-arch-gyo2-os-user-data; only it catches: the absolute check of HOME on Linux)",
+      "guards": [
+        "os-user-data-declaration C4",
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return home != nullptr && home[0] == '/' ? home : nullptr;",
+      "replace": "return home;",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "REQUIRE_FALSE\\( relativeHome \\)"
+    },
+    {
+      "id": "ou-x19-linux-base-wrong",
+      "what": "The Linux base from HOME drops share (~/.local) (v8-arch-gyo2-os-user-data; only it catches: the Linux base directory under HOME)",
+      "guards": [
+        "os-user-data-declaration C4"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/linux/Platform.cpp",
+      "find": "return std::string(WithoutTrailingSlashes(home)) + \"/.local/share\";",
+      "replace": "return std::string(WithoutTrailingSlashes(home)) + \"/.local\";",
+      "target": "gyo_os_tests",
+      "cases": "*user data directory under the platform base*",
+      "expect": "CHECK\\( made\\.value\\(\\) == base \\+ \"/\" \\+ org \\+ \"/Test App\" \\)"
+    },
+    {
+      "id": "ou-x20-macos-no-home-code",
+      "what": "macOS without HOME reports NotFound instead of IOFailed (v8-arch-gyo2-os-user-data; only it catches: the error code of a missing base)",
+      "guards": [
+        "os-user-data-declaration C8"
+      ],
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/core/os/src/sys/macos/Platform.cpp",
+      "find": "return Base::Err(OSError::Make(OSErrorCode::IOFailed,\n                \"cannot name the user data directory: HOME",
+      "replace": "return Base::Err(OSError::Make(OSErrorCode::NotFound,\n                \"cannot name the user data directory: HOME",
+      "target": "gyo_os_tests",
+      "cases": "*fail without a home for the user data directory*",
+      "expect": "CHECK\\( withoutHome\\.error\\(\\)\\.code == OSErrorCode::IOFailed \\)"
     }
   ]
 }

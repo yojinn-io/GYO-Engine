@@ -359,9 +359,10 @@ TEST_CASE("OS files list the font directories that exist, system first") {
 
 // ---- The user data directory (v8-arch-gyo2-os-user-data; declaration
 // os-user-data-declaration.zh-Hant.md, C1-C10). On POSIX every case points HOME
-// (and XDG_DATA_HOME) at a temporary directory first, so no case touches the
-// developer's own directories; on Windows the base cannot be redirected, so the
-// cases use names of their own under %APPDATA% and remove them.
+// (and XDG_DATA_HOME) at a temporary directory and runs in a temporary current
+// directory, so no case, and no mutant of it, touches the developer's own
+// directories or the repository; on Windows the base cannot be redirected, so
+// the cases use names of their own under %APPDATA% and remove them.
 
 namespace {
 
@@ -386,6 +387,43 @@ private:
     std::optional<std::string> previous_;
 };
 
+// Runs in a temporary current directory and goes back afterwards, also when a
+// REQUIRE ends the case; anything made relative to it is checked by the case.
+class ScopedCurrentPath final {
+public:
+    ScopedCurrentPath() : directory_("gyo-os-user-data-cwd"), previous_(std::filesystem::current_path()) {
+        std::filesystem::current_path(directory_.Path());
+    }
+    ScopedCurrentPath(const ScopedCurrentPath&) = delete;
+    ScopedCurrentPath& operator=(const ScopedCurrentPath&) = delete;
+    ~ScopedCurrentPath() {
+        std::error_code ignored;
+        std::filesystem::current_path(previous_, ignored);
+    }
+    bool Empty() const { return std::filesystem::is_empty(directory_.Path()); }
+
+private:
+    TempDirectory directory_;
+    std::filesystem::path previous_;
+};
+
+// A temporary HOME with XDG_DATA_HOME unset, in a temporary current directory.
+class ScopedHome final {
+public:
+    explicit ScopedHome(const char* name)
+        : home_(name), text_(Utf8(home_.Path())), setHome_("HOME", text_.c_str()), noData_("XDG_DATA_HOME", nullptr) {}
+    const std::filesystem::path& Path() const noexcept { return home_.Path(); }
+    const std::string& Text() const noexcept { return text_; }
+    bool CurrentDirectoryEmpty() const { return cwd_.Empty(); }
+
+private:
+    ScopedCurrentPath cwd_;
+    TempDirectory home_;
+    std::string text_;
+    ScopedEnvironment setHome_;
+    ScopedEnvironment noData_;
+};
+
 // The base the contract names for a HOME of home, with XDG_DATA_HOME unset.
 std::string BaseForHome(const std::string& home) {
 #if defined(__APPLE__)
@@ -395,12 +433,20 @@ std::string BaseForHome(const std::string& home) {
 #endif
 }
 #else
-std::string AppDataBase() {
+std::optional<std::string> AppDataBaseOrNothing() {
     wchar_t path[MAX_PATH] = {};
-    REQUIRE(SUCCEEDED(::SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, path)));
-    std::string base = Utf8(std::filesystem::path(path));
+    if (FAILED(::SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, path))) return std::nullopt;
+    auto text = PathToUtf8(std::filesystem::path(path));
+    if (!text) return std::nullopt;
+    std::string base = std::move(text.value());
     std::replace(base.begin(), base.end(), '\\', '/');
     return base;
+}
+
+std::string AppDataBase() {
+    auto base = AppDataBaseOrNothing();
+    REQUIRE_MESSAGE(base, "SHGetFolderPathW failed");
+    return *base;
 }
 
 // A name no other run uses, removed with everything under it afterwards.
@@ -413,8 +459,10 @@ public:
     ScopedAppDataName(const ScopedAppDataName&) = delete;
     ScopedAppDataName& operator=(const ScopedAppDataName&) = delete;
     ~ScopedAppDataName() {
+        const auto base = AppDataBaseOrNothing();
+        if (!base) return;
         std::error_code ignored;
-        if (auto path = PathFromUtf8(AppDataBase() + "/" + name_)) std::filesystem::remove_all(path.value(), ignored);
+        if (auto path = PathFromUtf8(*base + "/" + name_)) std::filesystem::remove_all(path.value(), ignored);
     }
     const std::string& Name() const noexcept { return name_; }
 
@@ -441,11 +489,8 @@ TEST_CASE("OS files make the user data directory under the platform base") {
     const std::string base = AppDataBase();
     const std::string& org = organization.Name();
 #else
-    const TempDirectory home("gyo-os-user-data-home");
-    const std::string homeText = Utf8(home.Path());
-    const ScopedEnvironment setHome("HOME", homeText.c_str());
-    const ScopedEnvironment noData("XDG_DATA_HOME", nullptr);
-    const std::string base = BaseForHome(homeText);
+    const ScopedHome home("gyo-os-user-data-home");
+    const std::string base = BaseForHome(home.Text());
     const std::string org = "GYO Test Org";
 #endif
     const auto made = UserDataDirectory(org, "Test App");
@@ -467,67 +512,68 @@ TEST_CASE("OS files make the user data directory under the platform base") {
     const auto bare = UserDataDirectory("", "Bare App");
     REQUIRE(bare);
     CHECK(bare.value() == base + "/Bare App");
+    CHECK(home.CurrentDirectoryEmpty());
 #endif
     CheckIsDirectory(bare.value());
 }
 
 TEST_CASE("OS files refuse user data names that are not one path component") {
-#if !defined(_WIN32)
-    const TempDirectory home("gyo-os-user-data-names");
-    const std::string homeText = Utf8(home.Path());
-    const ScopedEnvironment setHome("HOME", homeText.c_str());
-    const ScopedEnvironment noData("XDG_DATA_HOME", nullptr);
+#if defined(_WIN32)
+    const ScopedAppDataName organization;
+    const std::string org = organization.Name();
+#else
+    const ScopedHome home("gyo-os-user-data-names");
+    const std::string org = "GYO Test Org";
 #endif
     const std::vector<std::string> invalid = {".", "..", "a/b", "a\\b", "/", std::string("a\0b", 3)};
     for (const auto& name : invalid) {
         CAPTURE(name);
-        const auto asApplication = UserDataDirectory("GYO Test Org", name);
+        const auto asApplication = UserDataDirectory(org, name);
         REQUIRE_FALSE(asApplication);
         CHECK(asApplication.error().code == OSErrorCode::InvalidPath);
         const auto asOrganization = UserDataDirectory(name, "Test App");
         REQUIRE_FALSE(asOrganization);
         CHECK(asOrganization.error().code == OSErrorCode::InvalidPath);
     }
-    const auto emptyApplication = UserDataDirectory("GYO Test Org", "");
+    const auto emptyApplication = UserDataDirectory(org, "");
     REQUIRE_FALSE(emptyApplication);
     CHECK(emptyApplication.error().code == OSErrorCode::InvalidPath);
-    const auto notUtf8 = UserDataDirectory("GYO Test Org", "a\xFF");
+    const auto notUtf8 = UserDataDirectory(org, "a\xFF");
     REQUIRE_FALSE(notUtf8);
     CHECK(notUtf8.error().code == OSErrorCode::InvalidEncoding);
 #if !defined(_WIN32)
     // Nothing was made: the names are refused before any directory is.
     CHECK(std::filesystem::is_empty(home.Path()));
+    CHECK(home.CurrentDirectoryEmpty());
 #endif
 }
 
 #if !defined(_WIN32)
 TEST_CASE("OS files fail without a home for the user data directory") {
-    const TempDirectory cwd("gyo-os-user-data-cwd");
-    const auto previous = std::filesystem::current_path();
-    std::filesystem::current_path(cwd.Path());
+    const ScopedCurrentPath cwd;
     const ScopedEnvironment noData("XDG_DATA_HOME", nullptr);
     {
         const ScopedEnvironment noHome("HOME", nullptr);
-        const auto made = UserDataDirectory("GYO Test Org", "Test App");
-        REQUIRE_FALSE(made);
-        CHECK(made.error().code == OSErrorCode::IOFailed);
+        const auto withoutHome = UserDataDirectory("GYO Test Org", "Test App");
+        REQUIRE_FALSE(withoutHome);
+        CHECK(withoutHome.error().code == OSErrorCode::IOFailed);
     }
     {
-        const ScopedEnvironment relativeHome("HOME", "relative-home");
-        const auto made = UserDataDirectory("GYO Test Org", "Test App");
-        REQUIRE_FALSE(made);
-        CHECK(made.error().code == OSErrorCode::IOFailed);
+        const ScopedEnvironment setHome("HOME", "relative-home");
+        const auto relativeHome = UserDataDirectory("GYO Test Org", "Test App");
+        REQUIRE_FALSE(relativeHome);
+        CHECK(relativeHome.error().code == OSErrorCode::IOFailed);
     }
-    std::filesystem::current_path(previous);
     // Nothing was made relative to the current directory.
-    CHECK(std::filesystem::is_empty(cwd.Path()));
+    CHECK(cwd.Empty());
 }
 
 TEST_CASE("OS files drop the trailing separator of the user data base") {
+    const ScopedCurrentPath cwd;
     const TempDirectory home("gyo-os-user-data-slash");
     const std::string homeText = Utf8(home.Path());
     const ScopedEnvironment noData("XDG_DATA_HOME", nullptr);
-    const ScopedEnvironment setHome("HOME", (homeText + "/").c_str());
+    const ScopedEnvironment setHome("HOME", (homeText + "//").c_str());
     const auto made = UserDataDirectory("GYO Test Org", "Test App");
     REQUIRE(made);
     CHECK(made.value() == BaseForHome(homeText) + "/GYO Test Org/Test App");
@@ -536,10 +582,13 @@ TEST_CASE("OS files drop the trailing separator of the user data base") {
 
 TEST_CASE("OS files make new user data directories for the owner only") {
     namespace fs = std::filesystem;
-    const TempDirectory home("gyo-os-user-data-access");
-    const std::string homeText = Utf8(home.Path());
-    const ScopedEnvironment setHome("HOME", homeText.c_str());
-    const ScopedEnvironment noData("XDG_DATA_HOME", nullptr);
+    // The umask most systems use, so 0700 and the default differ whatever the runner's is.
+    const mode_t previousMask = ::umask(022);
+    struct RestoreMask final {
+        mode_t mask;
+        ~RestoreMask() { ::umask(mask); }
+    } restoreMask{previousMask};
+    const ScopedHome home("gyo-os-user-data-access");
     // The first level under HOME exists already, readable by others: it stays so.
 #if defined(__APPLE__)
     const fs::path existing = home.Path() / "Library";
@@ -555,6 +604,7 @@ TEST_CASE("OS files make new user data directories for the owner only") {
     REQUIRE(made);
     CHECK(fs::status(existing).permissions() == before);
     // Every level made here, from the one under the existing level to the application's.
+    REQUIRE(made.value().starts_with(Utf8(existing) + "/"));
     const auto madePath = PathFromUtf8(made.value());
     REQUIRE(madePath);
     for (fs::path level = madePath.value(); level != existing; level = level.parent_path()) {
@@ -563,21 +613,56 @@ TEST_CASE("OS files make new user data directories for the owner only") {
     }
 
     // The public CreateDirectories keeps 0777 less the umask (Design Invariant 9).
-    const mode_t mask = ::umask(0);
-    ::umask(mask);
     const fs::path shared = home.Path() / "shared";
     REQUIRE(CreateDirectories(Utf8(shared)));
-    CHECK(static_cast<mode_t>(fs::status(shared).permissions()) == (0777 & ~mask));
+    CHECK(static_cast<mode_t>(fs::status(shared).permissions()) == (0777 & ~mode_t{022}));
+}
+
+// The font directories read HOME (and on Linux XDG_DATA_HOME) through the same
+// helpers as the user data base; the user's font directory is listed last.
+TEST_CASE("OS files list the user's font directory from the environment") {
+    const ScopedHome home("gyo-os-user-data-fonts");
+#if defined(__APPLE__)
+    const std::filesystem::path fonts = home.Path() / "Library" / "Fonts";
+    std::filesystem::create_directories(fonts);
+    const auto directories = FontDirectories();
+    REQUIRE(directories);
+    REQUIRE_FALSE(directories.value().empty());
+    CHECK(directories.value().back() == Utf8(fonts));
+#else
+    const std::filesystem::path homeFonts = home.Path() / ".local" / "share" / "fonts";
+    std::filesystem::create_directories(homeFonts);
+    const TempDirectory data("gyo-os-user-data-font-data");
+    std::filesystem::create_directories(data.Path() / "fonts");
+    {
+        const auto directories = FontDirectories();
+        REQUIRE(directories);
+        REQUIRE_FALSE(directories.value().empty());
+        CHECK(directories.value().back() == Utf8(homeFonts));
+    }
+    {
+        const ScopedEnvironment setData("XDG_DATA_HOME", Utf8(data.Path()).c_str());
+        const auto fromData = FontDirectories();
+        REQUIRE(fromData);
+        REQUIRE_FALSE(fromData.value().empty());
+        CHECK(fromData.value().back() == Utf8(data.Path() / "fonts"));
+    }
+    {
+        const ScopedEnvironment setData("XDG_DATA_HOME", "relative-data");
+        const auto relativeData = FontDirectories();
+        REQUIRE(relativeData);
+        REQUIRE_FALSE(relativeData.value().empty());
+        CHECK(relativeData.value().back() == Utf8(homeFonts));
+    }
+#endif
 }
 #endif
 
 #if !defined(_WIN32) && !defined(__APPLE__)
 TEST_CASE("OS files take the user data base from XDG_DATA_HOME when it is absolute") {
-    const TempDirectory home("gyo-os-user-data-xdg-home");
+    const ScopedHome home("gyo-os-user-data-xdg-home");
     const TempDirectory data("gyo-os-user-data-xdg-data");
-    const std::string homeText = Utf8(home.Path());
     const std::string dataText = Utf8(data.Path());
-    const ScopedEnvironment setHome("HOME", homeText.c_str());
     {
         const ScopedEnvironment setData("XDG_DATA_HOME", dataText.c_str());
         const auto made = UserDataDirectory("GYO Test Org", "Test App");
@@ -592,12 +677,13 @@ TEST_CASE("OS files take the user data base from XDG_DATA_HOME when it is absolu
     }
     // A relative or empty XDG_DATA_HOME is ignored, as the specification says;
     // each call reads the environment again (nothing is cached).
-    for (const char* ignored : {"relative-data", ""}) {
+    for (const std::string& ignored : std::vector<std::string>{"relative-data", ""}) {
         CAPTURE(ignored);
-        const ScopedEnvironment setData("XDG_DATA_HOME", ignored);
+        const ScopedEnvironment setData("XDG_DATA_HOME", ignored.c_str());
         const auto made = UserDataDirectory("GYO Test Org", "Test App");
         REQUIRE(made);
-        CHECK(made.value() == homeText + "/.local/share/GYO Test Org/Test App");
+        CHECK(made.value() == home.Text() + "/.local/share/GYO Test Org/Test App");
     }
+    CHECK(home.CurrentDirectoryEmpty());
 }
 #endif
