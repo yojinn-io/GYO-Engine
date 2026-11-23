@@ -101,7 +101,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `CaseTiming.cpp` 的 listener 與沒有呼叫者的 `Note()`：照 #289 自己寫的條件拿掉 | os 退避卡 PR #293 | 下一次動 os 測試的批 |
 | 「loses no signal」的掃描：遺失只落在 `round % 64` 的頭 0～3 格，縮小掃描範圍檢出力可能提高好幾倍（宣告 Q3） | os 退避卡 PR #293 | 要研究時另開一批（使用者未定） |
 | os Invariant 8 寫「cleared under its mutex」，但把後備實作的 `pending = false` 移到鎖外任何案例都抓不到（只剩 data race） | os 退避卡的驗證者 | 交設計審查，不加突變（`no-guards-against-misuse`） |
-| os.md DI 2 字面仍寫「the host shader tool」豁免，gyo2 的程式已拿掉（`test_os_boundary_guard.py` 的 `test_render_shader_tool_is_runtime_code_for_r4`） | SDL 宣告修訂 20 第 14 節 | 子批 P 或 R2a 的宣告一起改 |
+| os.md DI 2 字面仍寫「the host shader tool」豁免，gyo2 的程式已拿掉（`test_os_boundary_guard.py` 的 `test_render_shader_tool_is_runtime_code_for_r4`） | SDL 宣告修訂 20 第 14 節 | **R2a #315 一起改**（主會話 2026-11-24 判：shader 工具在 `plugins/sdl_gpu` 照 R4，例外已無對象） |
 | 建置層內「遊戲目錄」的規則手寫 4 處；KIND 集合有 3 個讀者；4 個只寫不讀的值 | apps→games #294 設計審查 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
 | `MirrorTests` 的瘦身；`ProjectComposition` 測試對產生器敏感；測試資料仍叫 `sample_app` | apps→games #294 | 下一次動建置層測試的批 |
 | README 三語版、`docs/architecture.md`、`docs/creating_games.md`（#294 由 `creating_apps.md` 改名）大多是 master 的舊內容 | apps→games #294 | 圖書管理員 |
@@ -111,6 +111,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | hitbox 回溯（lag compensation）：master 沒有（判定用當 tick 姿勢），GYO2 要做是全新設計；命中形狀的姿勢要等 model＋骨骼動畫（Match 端也要） | PvP 移植準備（共享筆記 `gyo2-pvp-prep-physics-needs.md`） | PvP 移植時，和網路、權威一起設計 |
 | **待使用者定（未決）：model Module 的時機**——前提：model 放 Engine，做成 `engine/modules/model` 函式庫（`library_only=yes`、`default=no`、無 `ModelModule`；節點、材質、蒙皮網格、動畫片段、取樣 Pose＋ufbx adapter）。(A) 照 11-19 跟著產品（PvP、model_viewer）回來／(B) 現在當基礎做，排在 SDL 之後或併進畫面子批 | 主會話 2026-11-23 提（原文只在對話，11-23 晚補進本表） | PvP 移植準備的盤點出來後交使用者 |
 | **待使用者定（未決）：骨骼動畫的三層**——1 資料與取樣（骨架、片段、時刻 t 的姿勢純函式）→ model 函式庫；2 播放（每個實體播哪個片段、播到哪裡，照 World 時間前進取樣 Pose）→ 登記單位 `animation`／`AnimationModule`，PvP 進模擬所以要能進回滾、取樣照 tick，碰時間／回滾／權威，是基盤；3 蒙皮顯示 → render，經 Extract 拿 Pose。hitbox、切片段、混合規則是遊戲規則 | 主會話 2026-11-23 提（同上） | 同上 |
+| K（KeepTool＋ImGui）：ImGui 預設 16 位元索引，`RenderCommands` 用 32 位元，K 要定 `ImDrawIdx` 怎麼接；R2a 沒排 extract schedule，第一個讀來源 World 的子批（K 或 R2b）排 | R2a #315 | 子批 K／R2b（開卡時寫進 brief） |
 | R2b 讀 `ImageData` 照 `image.zh-Hant.md` 第 2 節：RGBA8、straight alpha、第 0 列在最上面、不翻轉、rowPitch＝寬×4、色彩空間是標籤；上下方向在 R2b 的 UV 轉換單一邊界處理（master 坑 17）。另：X1 定的 2D 排序是 z 大在前 | I #301、X1 #298 | 子批 R2b（開卡時寫進 brief） |
 | 角色控制器（#311，照 avian MoveAndSlide）的已知缺陷 S1：`BoxSet` 相鄰同高方塊的接縫，`CapsuleY(0.5,0.5)` 走過最大抬高 8.8 mm、水平速度慢約 10%（相鄰頂邊給 11° 的接觸平面）；PvP 體素地圖接縫多。主會話判（卡片建議）：修在 Engine，照 parry 複合形狀 `FIX_INTERNAL_EDGES`（`src/shape/compound.rs:30-40`），`BoxSet` 加作者可選的旗標。比過：(a) 工具烘焙時合併共面方塊／(b) Engine 旗標←選／(c) 作者在 onHit 忽略近地面平面 | 3D 物理卡 #311（owner 頁第 3 節、dev_log `2026_11_23_gyo2_physics_3d_move_and_slide`） | 3D 物理卡第三個 PR（疊在 #311 上） |
 | `BoxSet` 的 `FixInternalEdges` 預設改 ON（主會話判，2026-11-23）：照 parry／avian 的 Voxels 形狀（無開關、永遠用鄰居分類避開內部邊，parry `src/shape/voxels/voxels.rs:14-28`），`BoxSet` 用途就是體素地圖，Compound 預設 OFF 的理由大多不成立；§1-10「既定値は便利に」；OFF 時 PvP 忘了開 S1 會靜靜回來。比過：OFF（照 Compound）／ON←選。代價：建立時一次 O(n log n)＋每方塊每面一格記憶體。§12 的「照 parry 定」是卡片自己寫的，改預設不是放寬判定 | 3D 物理 #312 | — |
