@@ -61,4 +61,7 @@
 
 ## 6. 最後的狀態
 
-（推送本頁後補：最後的 head、本機 ctest、L1 run。）
+- 程式的最後 head：6c5438db（第 4 節的修正，加上 merge `origin/gyo2` 到 ba3d4019；合併帶進了 world_logging、os 測試的改動）。之後只改本頁。
+- 本機 ctest（macOS Intel，test preset，合併後的樹）：196/196（`after/ctest5.log`）。
+- L1：run 45122126424（6c5438db）——L1 三平台（linux-x64、windows-x64、macos-arm64）、Quick acceptance、CI gate 全綠。
+- 第 1 節表裡的「最後一次」指這一次。
