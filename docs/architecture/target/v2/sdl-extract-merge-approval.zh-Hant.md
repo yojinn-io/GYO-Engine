@@ -10,7 +10,7 @@
 
 | # | 結果 | 證據 |
 |---|---|---|
-| 1 | 本機 macOS x86_64（Apple clang，preset `test`）全量建置成功、`ctest -L cpu` 197/197（實作完成時）；merge `origin/gyo2` a3cb107e 之後（077cc127）重新 configure、全量建置、`ctest -L cpu` 197/197。`gyo_kernel_tests` 410 案、`gyo_orchestration_tests` 134 案 | 本機 |
+| 1 | 本機 macOS x86_64（Apple clang，preset `test`）全量建置成功、`ctest -L cpu` 197/197（實作完成時）；merge `origin/gyo2` a3cb107e 之後（077cc127）重新 configure、全量建置、`ctest -L cpu` 197/197；再 merge KR（#295，`origin/gyo2` dd09651a）之後（45c7b132）198/198，相關突變 Kernel 19/19、編排層 15/15 killed。和 KR 只有文件、突變清單與 CMakeLists 的文字衝突，兩邊都保留；同步點那一段沒有語意上的交互（KR 改關係的維護、當場改與 `Restore`，R1a 改 `Run` 的入口與步驟的 context）`gyo_kernel_tests` 410 案、`gyo_orchestration_tests` 134 案 | 本機 |
 | 2 | Kernel XK-1～XK-8 與斷言各案、編排層 `orchestration.extract` 14 案全過 | `tests/common/kernel/ExtractTests.cpp`、`tests/common/orchestration/ExtractTests.cpp` |
 | 3 | 相關突變（D184）：Kernel 19/19、編排層 15/15 killed | dev_log「檢驗」 |
 | 4 | 實作審查（Opus／high，同模型）：可合併，B0 S4 N8，S 全採用、N 採用 5 | `build/evidence/gyo2-sdl-extract/review-r0.md` |
