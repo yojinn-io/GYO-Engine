@@ -24,14 +24,14 @@ Owner：架構。GYO2 主會話開的任務卡（使用者「開 R2a」）。分
 | 顏色空間 | 2D pass 照 bytes 混合（UNORM），同 ImGui；3D 的線性空間交 R2b（RC-RD 3） |
 | extract schedule | R2a 不排；第一個讀來源 World 的子批加 |
 | shader id、實例數 | 沒有消費者，R2b 加 |
-| shader 的嵌法 | 建置時編、嵌進 `sdl_gpu`（Dear ImGui 的 SDL_GPU 後端同）；P22「共通管線找編譯器」的讀法已送主會話問使用者 |
+| shader 的嵌法 | 建置時編、嵌進 `sdl_gpu`（Dear ImGui 的 SDL_GPU 後端同）；P22 的讀法使用者定 (a)（見下） |
 | 命名 | `gpu`→`GPU` 進縮寫表（`SDLGPU`、`GPUSubmit`） |
 | 幀時間的預算 | Object_Connect 大小的一幀經 `Capture` 8 ms 以內（只印不判） |
 
 ## 交使用者的
 
 - **shader 編譯器的下載**：使用者選 (A) 照 master、同意五項（2026-11-24，經主會話，原話「照建議」）。比過的 (B)：編好的 shader 當產生檔放進 repo。
-- **P22 的讀法**（內建 shader 跟著 Plugin 走、遊戲 shader 的共通管線留給第一個有遊戲 shader 的批）：送主會話，等回覆。
+- **P22 的讀法**：使用者選 (a)（2026-11-24，經主會話，原話「照建議」）——內建 shader 跟著 Plugin 走、`sdl_gpu` 自己編與嵌；遊戲 shader 的「共通管線找編譯器」由第一個有遊戲 shader 的批做。比過的 (b)：內建 shader 也走共通內容管線、執行時讀資產。
 - 兩頁 Design Invariants（RD-1～RD-4、SDL-4、SDL-5）的最終文字：合併前核准。
 
 ## 設計審查（Opus／high，作者同為 Opus；Fable 暫停）
