@@ -96,6 +96,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `examples/` 有執行檔，卻不在 DI 11（`ProcessCodePageCheck`）的 manifest 根裡（現存缺口） | apps→games 宣告修訂 1 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
 | asset 在建置側的鏡像（`content_contract.py`）和 C++ 契約不一致（例：`shader_bundles` 一邊必填、一邊可省） | apps→games 宣告修訂 1 | owner asset；搬產品、打包回來前對齊 |
 | os.md :318-319 寫「每個存在的根至少要有一個原始碼」，`os_boundary_guard` 對空的產品根是跳過，兩者不一致 | apps→games 宣告修訂 2 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
+| `examples/orchestration/product_main.cpp` 不示範取壞掉 World 的診斷紀錄；world_logging 做成登記單位 | 診斷紀錄接線卡 #292 | 有產品需要時 |
+| O-13 的字面沒有涵蓋同一條執行緒上的第二個 World（例：同執行緒的兩個 World 都要輸入） | SDL 宣告修訂 19 第 16 節第 3 件 | SDL 子批 W 的宣告一起提條文 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
