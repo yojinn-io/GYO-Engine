@@ -26,12 +26,11 @@ endforeach()
 
 # Compile-failure samples (declaration section 10, "負向編譯的判法"): one source, built at configure time once per
 # variant. The control must compile, so a failure elsewhere comes from the sample, not from include paths or
-# flags. Each variant must fail, and with a static assertion's failure that names its marker on the same line: a
-# marker alone is not enough, because a compiler prints the failing source line, and an unrelated hard error on
-# the line of the static_assert would show the marker too (the kernel's precedent, tests/common/kernel/
-# CMakeLists.txt, looks for the marker only; reported in the declaration's section 15 item 12).
+# flags. Each variant must fail, and with a static assertion's failure that names its marker on the same line (the
+# shared judgement, and why the marker alone is not enough: tests/common/support/ExpectStaticAssert.cmake).
 # NO_CACHE: the check runs on every configure; the sample and the asset and world_asset headers are configure
 # dependencies, so editing one runs it again. Any mismatch stops the configure.
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectStaticAssert.cmake")
 function(gyo_world_asset_compile_fail_samples)
     set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/AssetContractSample.cpp")
@@ -80,12 +79,7 @@ function(gyo_world_asset_compile_fail_samples)
             message(FATAL_ERROR "world_asset.compile_fail_sample: variant ${name} compiled; "
                 "the public contract no longer rejects it")
         endif()
-        # A static assertion's failure (clang, gcc: "static assertion failed"; MSVC: "static_assert failed")
-        # with the marker later on the same line.
-        if(NOT rejected_output MATCHES "static[_ ]assert(ion)? failed[^\n]*${marker}")
-            message(FATAL_ERROR "world_asset.compile_fail_sample: variant ${name} failed without a static "
-                "assertion naming ${marker} on its line, so the failure is not the expected one:\n${rejected_output}")
-        endif()
+        gyo_expect_static_assert_failure(world_asset.compile_fail_sample ${name} ${marker} "${rejected_output}")
         string(APPEND summary "; ${name} rejected with ${marker}")
     endforeach()
     message(STATUS "world_asset.compile_fail_sample (try_compile): ${summary}")

@@ -241,8 +241,9 @@ constexpr Rejection ConditionRejectionOfFunction() {
 namespace Detail {
 
 // One static_assert per reason, each with its own marker: tests/common/kernel's
-// try_compile samples look for the marker, so a failure for any other reason is
-// not taken as the expected one (spec J-10, migration plan U5).
+// try_compile samples look for the marker on a static assertion's failure line,
+// so a failure for any other reason is not taken as the expected one (spec J-10,
+// migration plan U5).
 template <Rejection R>
 constexpr void RequireAccepted() {
     static_assert(R != Rejection::NotCallable, "GYO_KERNEL_REJECT_NOT_CALLABLE: a System is a function or a lambda");
