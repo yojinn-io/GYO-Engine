@@ -3,14 +3,17 @@
   "description": "Clip-lifetime mutants of the audio plan, killed only by an AddressSanitizer build of gyo_audio_tests (configure with -fsanitize=address, BUILD_TESTING=ON, no products, for example build/target/_build/audio-asan). Run with tests/common/mutation/run_mutations.py --catalog this file --build-dir <the ASan build>.",
   "mutants": [
     {
-      "id": "au-ctl-clip-reuse-without-check-asan",
-      "what": "LoadClip frees an unloading slot without waiting for the audio thread's hand-back, so the audio thread reads freed samples",
+      "id": "au-clip-entry-back-on-start-asan",
+      "what": "The audio thread hands a play's entry back as soon as it is taken, so the producer lets go of samples a voice still reads (the caller let go already). Takes over from au-ctl-clip-reuse-without-check-asan (clip slots are gone).",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        if (entry.state != Detail::SlotState::Unloading || !entry.handedBack.load(std::memory_order_acquire)) continue;",
-      "replace": "        if (entry.state != Detail::SlotState::Unloading) continue;",
+      "find": "                if (outcome == Detail::StartOutcome::NoVoice) HandBack(state, lease);\n",
+      "replace": "                HandBack(state, lease);\n",
       "target": "gyo_audio_tests",
-      "cases": "*while another thread renders*",
-      "expect": "AddressSanitizer: heap-use-after-free"
+      "cases": "*plays and lets go of clips while another thread renders*",
+      "expect": "heap-use-after-free",
+      "guards": [
+        "audio DI 7"
+      ]
     }
   ]
 }

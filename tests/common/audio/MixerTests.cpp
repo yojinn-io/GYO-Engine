@@ -4,12 +4,13 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "AssertTestSupport.hpp"
 #include "VoiceMixer.hpp"
 #include "engine/audio/AudioFormat.hpp"
-#include "engine/audio/ClipBank.hpp"
+#include "engine/audio/Clip.hpp"
 
 using namespace GYO::Engine::Audio;
 using GYO::Engine::Audio::Detail::ScheduledPlay;
@@ -18,14 +19,17 @@ using GYO::Engine::Audio::Detail::VoiceMixer;
 
 namespace {
 
-ClipId AddClip(ClipBank& bank, const std::vector<std::int16_t>& samples, const std::uint16_t channels) {
-    auto id = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), channels, kSampleRate);
-    REQUIRE(id.has_value());
-    return *id;
+// Makes a clip, keeps it in `bank` (which outlives the mixer) and returns the
+// view a ScheduledPlay carries.
+ClipView AddClip(std::vector<Clip>& bank, const std::vector<std::int16_t>& samples, const std::uint16_t channels) {
+    auto clip = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), channels, kSampleRate);
+    REQUIRE(clip.has_value());
+    bank.push_back(*clip);
+    return bank.back().View();
 }
 
-VoiceMixer MakeMixer(ClipBank&& bank, const std::uint32_t voices = 8) {
-    auto mixer = VoiceMixer::Create(voices, std::move(bank));
+VoiceMixer MakeMixer(const std::uint32_t voices = 8) {
+    auto mixer = VoiceMixer::Create(voices);
     REQUIRE(mixer.has_value());
     return std::move(mixer).value();
 }
@@ -48,55 +52,72 @@ std::int16_t Right(const std::vector<std::int16_t>& out, const std::size_t frame
 
 } // namespace
 
-TEST_CASE("Audio ClipBank rejects clips the mixer cannot play") {
-    ClipBank bank;
+TEST_CASE("Audio Clip rejects clips the mixer cannot play") {
     const std::vector<std::int16_t> three{1, 2, 3};
     const GYO::Engine::Base::ConstSpan<std::int16_t> span(three.data(), three.size());
-    const auto expectInvalid = [](const GYO::Engine::Base::Result<ClipId, AudioError>& result) {
+    const auto expectInvalid = [](const GYO::Engine::Base::Result<Clip, AudioError>& result) {
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == AudioErrorCode::InvalidClip);
     };
-    expectInvalid(bank.Add(span, 0, kSampleRate));
-    expectInvalid(bank.Add(span, 3, kSampleRate));
-    expectInvalid(bank.Add(span, 1, 44100));
-    expectInvalid(bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(), 1, kSampleRate));
-    expectInvalid(bank.Add(span, 2, kSampleRate)); // 3 samples are not whole stereo frames
-    CHECK(bank.Count() == 0);
+    expectInvalid(Clip::Make(span, 0, kSampleRate));
+    expectInvalid(Clip::Make(span, 3, kSampleRate));
+    expectInvalid(Clip::Make(span, 1, 44100));
+    expectInvalid(Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(), 1, kSampleRate));
+    expectInvalid(Clip::Make(span, 2, kSampleRate)); // 3 samples are not whole stereo frames
+    // The same rules for samples taken without a copy.
+    expectInvalid(Clip::Make(std::vector<std::int16_t>{1, 2, 3}, 1, 44100));
+    expectInvalid(Clip::Make(std::vector<std::int16_t>{1, 2, 3}, 2, kSampleRate));
+    expectInvalid(Clip::Make(std::vector<std::int16_t>{}, 1, kSampleRate));
 }
 
-TEST_CASE("Audio ClipBank copies the samples and names clips from one") {
-    ClipBank bank;
+TEST_CASE("Audio Clip copies samples given as a span once and shares them from then on") {
     std::vector<std::int16_t> mono{10, 20, 30};
-    std::vector<std::int16_t> stereo{1, 2, 3, 4};
-    const ClipId first = AddClip(bank, mono, 1);
-    const ClipId second = AddClip(bank, stereo, 2);
-    CHECK(first.value == 1);
-    CHECK(second.value == 2);
-    CHECK_FALSE(bank.Contains(ClipId{}));
-    CHECK_FALSE(bank.Contains(ClipId{3}));
-    mono[0] = 99; // the bank keeps its own copy
+    auto made = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(mono.data(), mono.size()), 1, kSampleRate);
+    REQUIRE(made.has_value());
+    const Clip first = *made;
+    mono[0] = 99; // the clip keeps its own copy
+    CHECK(first.View().channels == 1);
+    CHECK(first.View().frames == 3);
+    CHECK(first.View().samples[0] == 10);
+    CHECK(first.View().samples.data() != mono.data());
 
-    const ClipView view = bank.View(first);
-    CHECK(view.channels == 1);
-    CHECK(view.frames == 3);
-    CHECK(view.samples[0] == 10);
-    CHECK(bank.View(second).frames == 2);
-    GYO_CHECK_ASSERTS(bank.View(ClipId{3}));
+    // A copy shares the samples.
+    const Clip copy = first; // NOLINT(performance-unnecessary-copy-initialization)
+    CHECK(copy.View().samples.data() == first.View().samples.data());
+    CHECK(static_cast<bool>(copy));
+    CHECK_FALSE(static_cast<bool>(Clip{}));
+    CHECK(Clip{}.View().samples.empty());
+
+    // A moved-from clip is empty, view included: it shares nothing any more.
+    Clip moved = first;
+    const Clip into = std::move(moved);
+    CHECK(into.View().samples.data() == first.View().samples.data());
+    CHECK_FALSE(static_cast<bool>(moved)); // NOLINT(bugprone-use-after-move)
+    CHECK(moved.View().samples.empty());   // NOLINT(bugprone-use-after-move)
+    CHECK(moved.View().frames == 0);       // NOLINT(bugprone-use-after-move)
+
+    // Samples given as a vector are taken without a copy.
+    std::vector<std::int16_t> stereo{1, 2, 3, 4};
+    const std::int16_t* const data = stereo.data();
+    auto taken = Clip::Make(std::move(stereo), 2, kSampleRate);
+    REQUIRE(taken.has_value());
+    CHECK(taken->View().samples.data() == data);
+    CHECK(taken->View().frames == 2);
 }
 
 TEST_CASE("Audio VoiceMixer rejects a voice count outside 1 to 1024") {
     for (const std::uint32_t voices : {0u, 1025u}) {
-        auto mixer = VoiceMixer::Create(voices, ClipBank{});
+        auto mixer = VoiceMixer::Create(voices);
         REQUIRE_FALSE(mixer.has_value());
         CHECK(mixer.error().code == AudioErrorCode::InvalidConfig);
     }
-    CHECK(VoiceMixer::Create(1024, ClipBank{}).has_value());
+    CHECK(VoiceMixer::Create(1024).has_value());
 }
 
 TEST_CASE("Audio VoiceMixer starts a clip exactly at its start frame") {
-    ClipBank bank;
-    const ClipId clip = AddClip(bank, {1000, -2000, 3000}, 1);
-    VoiceMixer mixer = MakeMixer(std::move(bank));
+    std::vector<Clip> bank;
+    const ClipView clip = AddClip(bank, {1000, -2000, 3000}, 1);
+    VoiceMixer mixer = MakeMixer();
     CHECK(mixer.Schedule({clip, 5, 1.0f, 1.0f}) == StartOutcome::OnTime);
 
     const auto out = RenderInBlocks(mixer, 10, {10});
@@ -114,18 +135,18 @@ TEST_CASE("Audio VoiceMixer starts a clip exactly at its start frame") {
 }
 
 TEST_CASE("Audio VoiceMixer starts a clip scheduled in a later block at its frame") {
-    ClipBank bank;
-    const ClipId clip = AddClip(bank, {500}, 1);
-    VoiceMixer mixer = MakeMixer(std::move(bank));
+    std::vector<Clip> bank;
+    const ClipView clip = AddClip(bank, {500}, 1);
+    VoiceMixer mixer = MakeMixer();
     REQUIRE(mixer.Schedule({clip, 300, 1.0f, 1.0f}) == StartOutcome::OnTime);
     const auto out = RenderInBlocks(mixer, 400, {100});
     for (std::size_t f = 0; f < 400; ++f) CHECK(Left(out, f) == (f == 300 ? 500 : 0));
 }
 
 TEST_CASE("Audio VoiceMixer applies left and right gains with rounding") {
-    ClipBank bank;
-    const ClipId stereo = AddClip(bank, {1001, -1001, 3, -3}, 2);
-    VoiceMixer mixer = MakeMixer(std::move(bank));
+    std::vector<Clip> bank;
+    const ClipView stereo = AddClip(bank, {1001, -1001, 3, -3}, 2);
+    VoiceMixer mixer = MakeMixer();
     REQUIRE(mixer.Schedule({stereo, 0, 0.5f, 2.0f}) == StartOutcome::OnTime);
     const auto out = RenderInBlocks(mixer, 2, {2});
     CHECK(Left(out, 0) == 501);   // 500.5 rounds half up
@@ -142,11 +163,11 @@ TEST_CASE("Audio VoiceMixer output does not depend on how blocks split it") {
         stereo.push_back(static_cast<std::int16_t>(i * 11 - 2000));
         stereo.push_back(static_cast<std::int16_t>(1500 - i * 7));
     }
+    std::vector<Clip> bank; // outlives every mixer built below: they read its samples
     const auto build = [&] {
-        ClipBank bank;
-        const ClipId a = AddClip(bank, ramp, 1);
-        const ClipId b = AddClip(bank, stereo, 2);
-        VoiceMixer mixer = MakeMixer(std::move(bank));
+        const ClipView a = AddClip(bank, ramp, 1);
+        const ClipView b = AddClip(bank, stereo, 2);
+        VoiceMixer mixer = MakeMixer();
         // Starts on and around the internal 256-frame chunk and the block edges.
         for (const ScheduledPlay play : {ScheduledPlay{a, 0, 0.75f, 0.25f}, ScheduledPlay{b, 255, 1.0f, 1.0f},
                                          ScheduledPlay{a, 256, 1.5f, 0.5f}, ScheduledPlay{b, 999, 0.3f, 0.9f},
@@ -170,9 +191,9 @@ TEST_CASE("Audio VoiceMixer output does not depend on how blocks split it") {
 }
 
 TEST_CASE("Audio VoiceMixer saturates the mix to int16 and counts it") {
-    ClipBank bank;
-    const ClipId loud = AddClip(bank, {30000, -30000, 100}, 1);
-    VoiceMixer mixer = MakeMixer(std::move(bank));
+    std::vector<Clip> bank;
+    const ClipView loud = AddClip(bank, {30000, -30000, 100}, 1);
+    VoiceMixer mixer = MakeMixer();
     REQUIRE(mixer.Schedule({loud, 0, 1.0f, 1.0f}) == StartOutcome::OnTime);
     REQUIRE(mixer.Schedule({loud, 0, 1.0f, 1.0f}) == StartOutcome::OnTime);
     const auto out = RenderInBlocks(mixer, 3, {3});
@@ -183,9 +204,9 @@ TEST_CASE("Audio VoiceMixer saturates the mix to int16 and counts it") {
 }
 
 TEST_CASE("Audio VoiceMixer drops a play when every voice is busy and reuses finished voices") {
-    ClipBank bank;
-    const ClipId clip = AddClip(bank, {100, 100}, 1);
-    VoiceMixer mixer = MakeMixer(std::move(bank), 2);
+    std::vector<Clip> bank;
+    const ClipView clip = AddClip(bank, {100, 100}, 1);
+    VoiceMixer mixer = MakeMixer(2);
     CHECK(mixer.Schedule({clip, 0, 1.0f, 1.0f}) == StartOutcome::OnTime);
     CHECK(mixer.Schedule({clip, 100, 1.0f, 1.0f}) == StartOutcome::OnTime); // a scheduled voice is busy too
     CHECK(mixer.Schedule({clip, 1, 1.0f, 1.0f}) == StartOutcome::NoVoice);
@@ -201,9 +222,9 @@ TEST_CASE("Audio VoiceMixer drops a play when every voice is busy and reuses fin
 }
 
 TEST_CASE("Audio VoiceMixer starts a late play at the next frame and records how late") {
-    ClipBank bank;
-    const ClipId clip = AddClip(bank, {700, 800}, 1);
-    VoiceMixer mixer = MakeMixer(std::move(bank));
+    std::vector<Clip> bank;
+    const ClipView clip = AddClip(bank, {700, 800}, 1);
+    VoiceMixer mixer = MakeMixer();
     static_cast<void>(RenderInBlocks(mixer, 10, {10}));
     CHECK(mixer.Schedule({clip, 4, 1.0f, 1.0f}) == StartOutcome::Late);
     CHECK(mixer.Schedule({clip, 9, 1.0f, 1.0f}) == StartOutcome::Late);  // one frame late
@@ -222,9 +243,9 @@ TEST_CASE("Audio VoiceMixer starts a late play at the next frame and records how
 }
 
 TEST_CASE("Audio VoiceMixer master gain scales and silences the mix") {
-    ClipBank bank;
-    const ClipId clip = AddClip(bank, {1000, 1000, 1000}, 1);
-    VoiceMixer mixer = MakeMixer(std::move(bank));
+    std::vector<Clip> bank;
+    const ClipView clip = AddClip(bank, {1000, 1000, 1000}, 1);
+    VoiceMixer mixer = MakeMixer();
     REQUIRE(mixer.Schedule({clip, 0, 1.0f, 1.0f}) == StartOutcome::OnTime);
     mixer.SetMasterGain(0.5f);
     auto out = RenderInBlocks(mixer, 1, {1});
@@ -237,12 +258,11 @@ TEST_CASE("Audio VoiceMixer master gain scales and silences the mix") {
     CHECK(Left(out, 0) == 8000);
 }
 
-TEST_CASE("Audio VoiceMixer treats a foreign clip and a bad gain as Programmer Errors") {
-    ClipBank bank;
-    const ClipId clip = AddClip(bank, {1}, 1);
-    VoiceMixer mixer = MakeMixer(std::move(bank));
-    GYO_CHECK_ASSERTS(mixer.Schedule({ClipId{2}, 0, 1.0f, 1.0f}));
-    GYO_CHECK_ASSERTS(mixer.Schedule({ClipId{}, 0, 1.0f, 1.0f}));
+TEST_CASE("Audio VoiceMixer treats an empty clip and a bad gain as Programmer Errors") {
+    std::vector<Clip> bank;
+    const ClipView clip = AddClip(bank, {1}, 1);
+    VoiceMixer mixer = MakeMixer();
+    GYO_CHECK_ASSERTS(mixer.Schedule({ClipView{}, 0, 1.0f, 1.0f}));
     GYO_CHECK_ASSERTS(mixer.Schedule({clip, 0, -0.1f, 1.0f}));
     GYO_CHECK_ASSERTS(mixer.Schedule({clip, 0, 1.0f, std::nanf("")}));
     GYO_CHECK_ASSERTS(mixer.Schedule({clip, 0, kMaxGain * 2.0f, 1.0f}));
@@ -251,9 +271,9 @@ TEST_CASE("Audio VoiceMixer treats a foreign clip and a bad gain as Programmer E
 }
 
 TEST_CASE("Audio VoiceMixer keeps playing voices across a move") {
-    ClipBank bank;
-    const ClipId clip = AddClip(bank, {5, 6, 7, 8}, 1);
-    VoiceMixer first = MakeMixer(std::move(bank));
+    std::vector<Clip> bank;
+    const ClipView clip = AddClip(bank, {5, 6, 7, 8}, 1);
+    VoiceMixer first = MakeMixer();
     REQUIRE(first.Schedule({clip, 0, 1.0f, 1.0f}) == StartOutcome::OnTime);
     static_cast<void>(RenderInBlocks(first, 2, {2}));
     VoiceMixer moved(std::move(first));

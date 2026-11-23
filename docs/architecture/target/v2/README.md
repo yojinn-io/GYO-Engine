@@ -77,6 +77,7 @@
 - [world-gen-declaration.zh-Hant.md](world-gen-declaration.zh-Hant.md)：`v8-arch-gyo2-world-gen` 的事前宣告（第 5 批：生成世界——每個 World 建好就從「生成中」開始、生成期間每幀照跑、作者用 run 條件 `WhileGenerating()`／`AfterGenerating()` 分開生成與遊戲邏輯、沒人 `Hold()` 就結束；預設的實體配發器 `entity_ids` Module、`RangeAllotter` 搬出 Kernel）；修訂 2，使用者 2026-11-22 動工前核准（「照建議，全部核准」）。
 - [audio-review-declaration.zh-Hant.md](audio-review-declaration.zh-Hant.md)：`v8-arch-gyo2-audio-review` 的重審報告與事前宣告（第 6 批 audio 重審：`Submitter` 不綁執行緒、時間點的邊界；修訂 2，使用者 2026-11-22 動工前核准「照建議，全部核准」；之後 `world_audio` 撤掉（`v8-arch-gyo2-world-audio-withdrawn`），作者的寫法併進 [audio.zh-Hant.md](audio.zh-Hant.md) 第 5 節，clip 的來源與音效 loader 歸 audio 那一側的小批）。
 - [audio-review-merge-approval.zh-Hant.md](audio-review-merge-approval.zh-Hant.md)：同一批的合併前核准頁（拿掉 `gyo_audio_board_readers` 的 1～5、和宣告的偏差、Design Invariants 的最終文字、判定的結果）。
+- [audio-clip-loader-declaration.zh-Hant.md](audio-clip-loader-declaration.zh-Hant.md)：`v8-arch-gyo2-audio-clip-loader` 的事前宣告（audio 那一側的小批：clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、混音器的參照留在提交口這一側；音效 loader `WavLoader` 與 `sound`／`wav` 的 Data Contract；`GYO::Audio` 連 `GYO::Asset`；修訂 2，使用者 2026-11-23 動工前核准「照建議，全部核准」）。
 - [kernel-mutation-prune-report.zh-Hant.md](kernel-mutation-prune-report.zh-Hant.md)：`v8-arch-gyo2-mutation-prune` 的盤點與退役表（Kernel 突變清單 777 個的分類、退役候選與緩的面、增長判準草案；使用者 2026-11-18 核定，777 → 714）。
 - [kernel-mutation-subsumption-report.zh-Hant.md](kernel-mutation-subsumption-report.zh-Hant.md)：同一批第 3 步的 subsumption 檢查（714 個逐個跑全部 Kernel 測試、最小集合 469、退 51 個；使用者 2026-11-19 核准，714 → 663）。
 - [scripts/base_mutations.json](scripts/base_mutations.json)：GYO2 線 Base 的突變清單（`bs-`，`IdIssuer`／`CurrentThreadSerial`；2026-11-19 從 Kernel 的清單搬來，`v8-arch-gyo2-move-bs-mutants`）。
@@ -125,6 +126,7 @@
 - [2026_11_23_gyo2_kernel_res_changed.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_res_changed.zh-Hant.md)：Resource 的變更偵測——`Res`／`ResMut` 的 `Changed()`、Kernel DI-KS 28、System 契約說明頁第 18 節、CCR-8。
 - [2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md)：World 摘要版本 4——訊息只收留著的筆數與內容，不收寫入序號、紀錄的序號與游標表（使用者選 (b)；Kernel DI-KS 10、27，RC 25）。
 - [2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md)：負向編譯樣本的判法——「靜態斷言失敗＋標記在同一行」做成共用函式 `tests/common/support/ExpectStaticAssert.cmake`，Kernel、world_logging、world_asset 三處改用（asset 宣告第 15 節第 12 項）。
+- [2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)：audio 那一側的小批（clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、參照表與回收環；`WavLoader` 與 `sound`／`wav` 的 Data Contract；`GYO::Audio` 連 `GYO::Asset`）。
 
 ## 沒有搬過來的
 

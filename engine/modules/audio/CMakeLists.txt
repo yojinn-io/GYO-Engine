@@ -1,10 +1,13 @@
-# The engine audio mixer: immutable PCM16 clips, voices started at sample
-# positions and an integer mix to 48 kHz stereo PCM16. Above GYO::Time; no SDL
-# and no asset or product knowledge, so it is tested offline without a device.
+# The engine audio mixer: shared immutable PCM16 clips, voices started at sample
+# positions and an integer mix to 48 kHz stereo PCM16, and the loader of the
+# "sound" type (WAV). Above GYO::Time and GYO::Asset (the loader interface, from
+# config/modules.csv); no SDL and no product knowledge, so it is tested offline
+# without a device.
 add_library(gyo_audio STATIC
-    src/ClipBank.cpp
+    src/Clip.cpp
     src/Mixer.cpp
     src/VoiceMixer.cpp
+    src/WavLoader.cpp
 )
 add_library(GYO::Audio ALIAS gyo_audio)
 
