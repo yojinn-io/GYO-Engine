@@ -201,7 +201,7 @@ std::vector<std::uint32_t> Bits(const ModelData& m) {
 
 } // namespace
 
-TEST_CASE("FbxLoader settings: meshes, nothing else") {
+TEST_CASE("FbxLoader settings: meshes and nothing else") {
     const FbxLoader loader;
     const auto none = loader.ParseSettings(std::nullopt);
     REQUIRE(none.has_value());
@@ -215,7 +215,7 @@ TEST_CASE("FbxLoader settings: meshes, nothing else") {
     const auto empty = loader.ParseSettings("{}");
     REQUIRE(empty.has_value());
     CHECK(empty->meshes);
-    for (const char* bad : {R"({"meshes":1})", R"({"meshes":"false"})", R"({"textures":true})", "[]", "not json"}) {
+    for (const std::string bad : {R"({"meshes":1})", R"({"meshes":"false"})", R"({"textures":true})", "[]", "not json"}) {
         CAPTURE(bad);
         const auto result = loader.ParseSettings(bad);
         REQUIRE_FALSE(result.has_value());
@@ -227,6 +227,8 @@ TEST_CASE("FbxLoader rule 1: NotFbx") {
     CHECK(CodeOf({}) == FbxLoaderCode::NotFbx);
     CHECK(CodeOf(Text("hello, this is not a model")) == FbxLoaderCode::NotFbx);
     CHECK(CodeOf(Text("\x89PNG\r\n\x1a\n")) == FbxLoaderCode::NotFbx);
+    // A file of another format the importer reads (OBJ) is not FBX either.
+    CHECK(CodeOf(Text("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n")) == FbxLoaderCode::NotFbx);
 }
 
 TEST_CASE("FbxLoader rule 2: Undecodable") {
@@ -261,7 +263,24 @@ TEST_CASE("FbxLoader reads the contract example: nodes and their rest pose") {
     CHECK(Near(upperAt.z - lowerAt.z, 0.0F));
 }
 
-TEST_CASE("FbxLoader reads the contract example: the material is data, the texture only named") {
+TEST_CASE("FbxLoader reads the contract example: Blender's front view kept with right +X and up +Y and away +Z") {
+    // Tag's corners in Blender: (1, 0, 0.5), (1.2, 0, 0.5) and (1, -0.3, 0.5),
+    // the last toward the viewer of the front view. Left-handed model space
+    // keeps what that view shows: right is +X, up is +Y, away is +Z, so the
+    // corner toward the viewer is at z = -0.3. A wrong handedness flips z.
+    const auto loaded = Load(Bar());
+    REQUIRE(loaded.has_value());
+    const ModelData& model = *loaded;
+    const auto corners = Skinned(model, MeshNamed(model, "Tag"), Rest(model));
+    REQUIRE(corners.size() == 3);
+    std::vector<Vec3> expected{{1.0F, 0.5F, 0.0F}, {1.2F, 0.5F, 0.0F}, {1.0F, 0.5F, -0.3F}};
+    for (const Vec3 want : expected) {
+        INFO("want " << Show(want));
+        CHECK(std::any_of(corners.begin(), corners.end(), [&](const Vec3 p) { return Math::Distance(p, want) < 1.0e-4F; }));
+    }
+}
+
+TEST_CASE("FbxLoader reads the contract example: the material is data and the texture only named") {
     const auto loaded = Load(Bar());
     REQUIRE(loaded.has_value());
     REQUIRE(loaded->materials.size() == 1);
@@ -286,11 +305,15 @@ TEST_CASE("FbxLoader reads the contract example: the skinned mesh") {
     // Ten quads, two triangles each.
     CHECK(bar.indices.size() == 60);
     REQUIRE(bar.uvs.size() == bar.positions.size());
-    REQUIRE(bar.skin.joints.size() == 2);
+    // Blender writes a cluster for every bone of the armature, so the skin
+    // lists all five, each once.
     const std::uint32_t lower = NodeNamed(model, "Lower");
     const std::uint32_t upper = NodeNamed(model, "Upper");
-    CHECK(((bar.skin.joints[0] == lower && bar.skin.joints[1] == upper) ||
-           (bar.skin.joints[0] == upper && bar.skin.joints[1] == lower)));
+    REQUIRE(bar.skin.joints.size() == 5);
+    for (const char* name : {"Lower", "Upper", "Aux1", "Aux2", "Aux3"}) {
+        CAPTURE(name);
+        CHECK(std::count(bar.skin.joints.begin(), bar.skin.joints.end(), NodeNamed(model, name)) == 1);
+    }
 
     // At rest the skin puts the box where Blender had it: 0.2 wide and deep,
     // from 0 to 2 up model +Y, around Lower's joint.
@@ -331,7 +354,7 @@ TEST_CASE("FbxLoader reads the contract example: the skinned mesh") {
     CHECK(Near(highY, 2.0F));
 }
 
-TEST_CASE("FbxLoader reads the contract example: the four largest weights, scaled; no material") {
+TEST_CASE("FbxLoader reads the contract example: the four largest weights scaled and no material") {
     const auto loaded = Load(Bar());
     REQUIRE(loaded.has_value());
     const ModelData& model = *loaded;
@@ -375,7 +398,7 @@ TEST_CASE("FbxLoader reads the contract example: the four largest weights, scale
     }
 }
 
-TEST_CASE("FbxLoader reads the contract example: the clips, baked to keys") {
+TEST_CASE("FbxLoader reads the contract example: the clips baked to keys") {
     const auto loaded = Load(Bar());
     REQUIRE(loaded.has_value());
     const ModelData& model = *loaded;
@@ -426,7 +449,9 @@ TEST_CASE("FbxLoader reads the contract example: the clips, baked to keys") {
         }
         ++checked;
     }
-    CHECK(checked == 4);
+    // The four top corners, each on the top face and two sides: twelve
+    // vertices with their own normals.
+    CHECK(checked == 12);
     // Half way the turn is about half.
     Model::SampleClip(model.nodes, bend, bend.duration / 2.0F, Wrap::Clamp, pose);
     const auto halfway = Skinned(model, bar, pose);
@@ -450,7 +475,7 @@ TEST_CASE("FbxLoader reads the contract example: the clips, baked to keys") {
     }
 }
 
-TEST_CASE("FbxLoader with meshes false: the same nodes, materials and clips, no meshes") {
+TEST_CASE("FbxLoader with meshes false: the same nodes and materials and clips but no meshes") {
     const auto full = Load(Bar());
     const auto bare = Load(Bar(), FbxSettings{false});
     REQUIRE(full.has_value());
@@ -459,7 +484,7 @@ TEST_CASE("FbxLoader with meshes false: the same nodes, materials and clips, no 
     CHECK(NodesAndClips(*bare) == NodesAndClips(*full));
 }
 
-TEST_CASE("FbxLoader gives the same model for the same bytes, on any thread (AS-3)") {
+TEST_CASE("FbxLoader gives the same model for the same bytes on any thread (AS-3)") {
     const auto first = Load(Bar());
     REQUIRE(first.has_value());
     const auto bits = Bits(*first);
@@ -538,7 +563,7 @@ const Asset::AssetRecord& Record(const Asset::AssetSnapshot& snapshot, const std
 
 } // namespace
 
-TEST_CASE("FbxLoader through the asset store: loaded with its settings, bad settings, the size limit") {
+TEST_CASE("FbxLoader through the asset store: loaded with its settings and bad settings and the size limit") {
     const Content content(Bar());
     InlineExecutor executor;
     const std::vector<Asset::CatalogEntry> entries{Entry("game.bar"), Entry("game.bar_skeleton", R"({"meshes":false})"),

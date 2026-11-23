@@ -11,7 +11,9 @@
 # - a mesh "Bar": a box 0.2 wide and deep, from z = 0 to z = 2, cut at z = 1;
 #   vertices below z = 1 follow Lower (weight 1), above it Upper (weight 1),
 #   at z = 1 both with weight 0.3 each (not summing to 1);
-# - a mesh "Tag" with no material: one triangle at x = 1; its first vertex has
+# - a mesh "Tag" with no material: one triangle at x = 1, z = 0.5, its third
+#   vertex 0.3 toward Blender's front (-Y), off every mirror plane; its first
+#   vertex has
 #   five influences, Lower 0.4, Upper 0.3, Aux1 0.2, Aux2 0.2, Aux3 0.1, the
 #   other two Lower alone;
 # - a material "Paint", base colour (0.8, 0.1, 0.1, 1), its base colour from an
@@ -105,7 +107,7 @@ modifier = bar.modifiers.new("Armature", 'ARMATURE')
 modifier.object = rig
 
 tag_data = bpy.data.meshes.new("Tag")
-tag_data.from_pydata([(1.0, 0.0, 0.5), (1.2, 0.0, 0.5), (1.0, 0.0, 0.7)], [], [(0, 1, 2)])
+tag_data.from_pydata([(1.0, 0.0, 0.5), (1.2, 0.0, 0.5), (1.0, -0.3, 0.5)], [], [(0, 1, 2)])
 tag_data.update()
 tag = bpy.data.objects.new("Tag", tag_data)
 scene.collection.objects.link(tag)

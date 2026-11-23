@@ -220,7 +220,7 @@ TEST_CASE("Validate rule 4: BadClip") {
     CHECK(CodeOf(model) == ModelDataCode::BadClip);
 }
 
-TEST_CASE("Validate checks in order: nodes, then each mesh, then the clips") {
+TEST_CASE("Validate checks in order: nodes then each mesh then the clips") {
     ModelData model = ValidModel();
     model.clips[0].nodeCount = 2;
     model.meshes[0].skin.vertexWeights[1] = {0.5F, 0.25F, 0, 0};
@@ -247,7 +247,7 @@ TEST_CASE("RestPose is every node's rest") {
     for (std::size_t i = 0; i < nodes.size(); ++i) CHECK(SameBits(out[i], nodes[i].rest));
 }
 
-TEST_CASE("SampleClip interpolates between keys: translation linearly, rotation by slerp") {
+TEST_CASE("SampleClip interpolates between keys: translation linearly and rotation by slerp") {
     const auto nodes = Chain();
     const auto pose = Sample(nodes, ArmClip(), 0.5F, Wrap::Clamp);
     INFO("translation " << Show(pose[1].translation) << " rotation " << Show(pose[1].rotation));
@@ -265,7 +265,7 @@ TEST_CASE("SampleClip at a key is the key's value") {
     CHECK(Near(Sample(nodes, ArmClip(), 2.0F, Wrap::Clamp)[1].translation, {0, 5, 0}));
 }
 
-TEST_CASE("SampleClip leaves nodes without a track, and channels without keys, at rest") {
+TEST_CASE("SampleClip leaves nodes without a track and channels without keys at rest") {
     const auto nodes = Chain();
     const auto pose = Sample(nodes, ArmClip(), 0.5F, Wrap::Clamp);
     CHECK(SameBits(pose[0], nodes[0].rest));
@@ -290,7 +290,7 @@ TEST_CASE("Wrap::Clamp holds the ends") {
     CHECK(SameRotation(Sample(nodes, ArmClip(), 5.0F, Wrap::Clamp)[1].rotation, AboutY(90)));
 }
 
-TEST_CASE("Wrap::Loop repeats, negative times counting back from the end") {
+TEST_CASE("Wrap::Loop repeats and negative times count back from the end") {
     const auto nodes = Chain();
     CHECK(Near(Sample(nodes, ArmClip(), 2.5F, Wrap::Loop)[1].translation, {0, 2, 0}));
     CHECK(Near(Sample(nodes, ArmClip(), 4.5F, Wrap::Loop)[1].translation, {0, 2, 0}));
@@ -347,7 +347,7 @@ TEST_CASE("Blend mixes translation and scale linearly and rotation by slerp") {
     CHECK(Near(out[1].scale, {1, 1.25F, 1}));
 }
 
-TEST_CASE("Blend weight 0 is a, weight 1 is b, and out may be an input") {
+TEST_CASE("Blend weight 0 is a and weight 1 is b and out may be an input") {
     const std::vector<LocalTransform> a{{{1, 2, 3}, AboutY(30), {1, 1, 1}}};
     const std::vector<LocalTransform> b{{{5, 6, 7}, AboutY(60), {2, 2, 2}}};
     std::vector<LocalTransform> out(1);
@@ -688,7 +688,7 @@ TEST_CASE("Retarget: a non-uniform scale on nodes that are not above a bound nod
     CHECK(Model::Retarget(source, target, ArmClip(), bindings).has_value());
 }
 
-TEST_CASE("Retarget checks in order: translation scale, bindings, rest scales") {
+TEST_CASE("Retarget checks in order: translation scale then bindings then rest scales") {
     std::vector<Node> source = Chain();
     source[0].rest.scale = {1, 2, 1};
     CHECK(RetargetCodeOf(source, Chain(), {{9, 9}}, 0.0F) == RetargetCode::BadTranslationScale);

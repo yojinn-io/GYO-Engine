@@ -7,6 +7,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -78,7 +79,10 @@ ufbx_load_opts LoadOptions(const ImportOptions& options) {
     opts.load_external_files = false;
     opts.ignore_embedded = true;
     opts.ignore_geometry = !options.meshes;
-    opts.file_format = UFBX_FILE_FORMAT_FBX;
+    // The format is left for ufbx to recognize, so bytes that are no FBX file
+    // are told apart from a broken FBX file (a forced FBX format reads any
+    // text as a truncated ASCII file); a file it reads as another format is
+    // NotFbx too.
     opts.temp_allocator.memory_limit = kMemoryLimit;
     opts.result_allocator.memory_limit = kMemoryLimit;
     return opts;
@@ -91,10 +95,10 @@ public:
     Base::Result<ModelData, ImportFailure> Run() {
         ReadNodes();
         ReadMaterials();
-        if (options_.meshes) {
-            for (const ufbx_node* node : scene_.nodes) {
-                if (auto r = ReadMesh(*node); !r) return Base::Err(std::move(r.error()));
-            }
+        // With meshes off ufbx loads no geometry (ignore_geometry), so every
+        // mesh has no triangles and ReadMesh skips it.
+        for (const ufbx_node* node : scene_.nodes) {
+            if (auto r = ReadMesh(*node); !r) return Base::Err(std::move(r.error()));
         }
         for (const ufbx_anim_stack* stack : scene_.anim_stacks) {
             if (auto r = ReadClip(*stack); !r) return Base::Err(std::move(r.error()));
@@ -335,11 +339,14 @@ Base::Result<ModelData, ImportFailure> ImportFbx(const std::span<const std::byte
     ufbx_error error{};
     const ScenePtr scene(ufbx_load_memory(bytes.data(), bytes.size(), &opts, &error));
     if (!scene) {
-        const ImportProblem problem = error.type == UFBX_ERROR_UNRECOGNIZED_FILE_FORMAT || error.type == UFBX_ERROR_EMPTY_FILE
-                                          ? ImportProblem::NotFbx
-                                          : ImportProblem::Undecodable;
-        return Fail(problem, problem == ImportProblem::NotFbx ? "not an FBX file" : "the importer could not read the file",
-                    Describe(error));
+        const bool notFbx =
+            error.type == UFBX_ERROR_UNRECOGNIZED_FILE_FORMAT || error.type == UFBX_ERROR_EMPTY_FILE;
+        if (notFbx) return Fail(ImportProblem::NotFbx, "not an FBX file", Describe(error));
+        return Fail(ImportProblem::Undecodable, "the importer could not read the file", Describe(error));
+    }
+    if (scene->metadata.file_format != UFBX_FILE_FORMAT_FBX) {
+        return Fail(ImportProblem::NotFbx, "not an FBX file",
+                    "read as file format " + std::to_string(static_cast<int>(scene->metadata.file_format)));
     }
     return Importer(*scene, options).Run();
 }

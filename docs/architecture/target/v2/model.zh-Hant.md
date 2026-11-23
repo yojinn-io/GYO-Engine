@@ -73,14 +73,15 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 
 | # | 規則 | 碼 |
 |---|---|---|
-| 1 | 是 FBX 檔（空的、或 ufbx 認不出格式的不是） | `NotFbx` |
+| 1 | 是 FBX 檔：ufbx 自己認格式（不強制 FBX），空的、認不出的、認成別的格式（例：OBJ）的都不是 | `NotFbx` |
 | 2 | ufbx 讀得完（資料完整、在記憶體上限內）、每個動畫 stack 烘得出 key | `Undecodable` |
 | 3 | 每個網格至多一個 skin；skin 至多 65536 個 joint；網格少於 2^32 個頂點 | `Unsupported` |
 | 4 | 結果守第 2.2 節的規則（例：沒有 NaN） | `BadData` |
 
 **怎麼轉成 `ModelData`**（都在 adapter 裡，ufbx 的選項見 `UfbxImport.cpp` 的 `LoadOptions`）：
 
-- **空間**：轉到 Math 的模型空間（公尺、+Y 上、左手系，鏡像軸 Z），換算放進幾何與變換，根節點不帶換算。幾何變換（FBX 的 geometric transform）放進頂點；非「parent × local」的繼承（例：Maya 的 segment scale compensate）由 ufbx 加 helper 節點表示，所以 `ComputeModelSpace` 的單純連乘就是對的。
+- **格式**：不強制 FBX、讓 ufbx 從內容認——強制時任何文字都被當成截斷的 ASCII FBX（回 Truncated），分不出「不是 FBX」與「壞掉的 FBX」。所以只有 FBX 的檔頭、後面缺的（例：前 27 位元組）是規則 2。
+- **空間**：轉到 Math 的模型空間（公尺、+Y 上、左手系，鏡像軸 Z），換算放進幾何與變換，根節點不帶換算。結果是作者從正面看到的樣子不變：右是 +X、上是 +Y、遠離觀看者是 +Z——Blender 的 (1, −0.3, 0.5)（−Y 是正面圖朝向觀看者那一側）到這裡是 (1, 0.5, −0.3)，Blender 裡面向 −Y 的角色在模型空間面向 −Z（範例檔的 `Tag` 驗這件事；master 用同一組 ufbx 選項）。角色要朝哪個方向是產品的事。幾何變換（FBX 的 geometric transform）放進頂點；非「parent × local」的繼承（例：Maya 的 segment scale compensate）由 ufbx 加 helper 節點表示，所以 `ComputeModelSpace` 的單純連乘就是對的。
 - **節點**：從 ufbx 的根節點（名字空）深度優先、子節點照檔案順序，所以父在子之前。helper 節點也是節點。
 - **材質**：`baseColor` 取 FBX 的 diffuse color 乘 diffuse factor（RGB），alpha 照原樣；`baseColorTexture` 取那張貼圖的 relative filename（沒有就 absolute filename）。**不宣告 reference**：檔裡的路徑常是作者機器上的路徑、也常和 catalog 的格式不同（交付 JPG、catalog 裡是 PNG），宣告了反而讓模型載入失敗；對到 catalog 的 id 是產品的事。
 - **網格**：每個材質分區一個 `Mesh`（名字是節點名）；多邊形照 ufbx 三角化；完全相同的頂點（位置、法線、UV、joint、權重的位元組）合併（`ufbx_generate_indices`）。法線缺的由 ufbx 產生。UV 的 v 翻成 `1 − v`（FBX 的原點在左下）。
@@ -88,7 +89,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 - **片段**：每個 animation stack 一個片段（名字是 stack 名），`ufbx_bake_anim` 以每秒 60 個 key 烘（`kBakeRate`；ufbx 保留原本就是 24／30 Hz 的 key），開頭對齊 0。key 時間轉成 float 後若相同，留後面那個（一個 step 烘成的兩個 key）。`duration`＝stack 的播放長度與最後一個 key 的較大者。
 
 - **Version**：FBX 沒有 GYO 的版本欄，版本記在這一節（今天第 1 版）。放寬（多收：例 morph、多一個設定）時版本加一、`format` 名不變；收窄或改變已收內容的意思，用新的 `format` 名登記另一個 loader（AS-9）。同 image、audio。
-- **範例**：`tests/common/model/contract/skinned_bar.fbx`（`make_skinned_bar.py` 用 Blender 4.5 從零做的：兩根骨頭、蒙皮的長方柱、一個材質、兩個片段，場景寫在腳本開頭）。PvP 的 4 個 FBX 在本機載過一次（dev_log），**不進 Engine 的測試**：Engine 不讀產品的資產（AGENTS §1-8）。
+- **範例**：`tests/common/model/contract/skinned_bar.fbx`（98 KB；`make_skinned_bar.py` 用 Blender 4.5 從零做的：5 根骨頭、蒙皮的長方柱（中段權重 0.3／0.3、未正規化）、有 5 個影響的三角形、一個帶貼圖名的材質、兩個片段，場景寫在腳本開頭）。Blender 對骨架的每根骨頭都輸出 cluster，所以長方柱的 skin 有 5 個 joint。PvP 的 4 個 FBX 在本機從 master 取出載過一次（dev_log），**不進 Engine 的測試**：Engine 不讀產品的資產（AGENTS §1-8）。
 
 ## 4. 骨骼動畫第 1 層（`Animation.hpp`、`Retarget.hpp`）
 
@@ -98,7 +99,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 
 - `RestPose(nodes, out)`：每個節點的 rest。
 - `SampleClip(nodes, clip, seconds, wrap, out)`：先填 rest，再逐 track 取樣。channel 在第一個 key 之前是第一個 key 的值、最後一個之後是最後的值；兩個 key 之間 translation 與 scale 線性、rotation 走最短路徑的 slerp。key 用二分搜尋。照 Jolt（`SkeletalAnimation.cpp:62-110`：二分搜尋、首尾夾住、translation 線性、rotation SLERP）與 Bevy（`bevy_animation/src/blendable.rs:172-179`：`Quat` 用 slerp）。
-- `Wrap::Clamp`：時間夾到 [0, duration]。`Wrap::Loop`：對 duration 取餘數（負的從尾端倒數；剛好等於 duration 就是 0）；duration 為 0 的片段永遠在 0。NaN 的時間是 Programmer Error。
+- `Wrap::Clamp`：首尾夾住——0 之前是 0 的姿勢、duration 之後是 duration 的姿勢（key 都在 [0, duration] 內，所以不必改時間：超出時本來就取 channel 的首尾值）。`Wrap::Loop`：對 duration 取餘數（負的從尾端倒數；剛好等於 duration 就是 0）；duration 為 0 的片段永遠在 0。NaN 的時間是 Programmer Error。
 
 ### 4.2 混合：`Blend`
 
@@ -152,7 +153,8 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 | M-8 | 幾何變換放進頂點（`MODIFY_GEOMETRY`），`Mesh` 沒有 geometry-to-node 矩陣 | 少一個欄位、render 少一個乘法；蒙皮的 `geometry_to_bone` 已含它 | 照 master 保留 `geometryToNode`（`PRESERVE`） |
 | M-9 | settings 只有 `meshes`（預設 true） | Match 只要骨架與片段（盤點 4.4：載入 0.23 s、93 MB）；不認得的成員拒收讓之後加設定是放寬 | 不設 settings |
 | M-10 | joint 索引 `uint16`（至多 65536） | 照 Bevy 的 `Uint16x4`；Bevy 的渲染上限 256（`bevy_pbr/src/render/skin.rs:28`）是渲染的事，資料不先限制 | `uint8`（256） |
-| M-11 | ufbx 抓 `ufbx.h`、`ufbx.c` 兩個檔（FetchContent 的 URL＋SHA-256），不 clone | 照 stb_image（I-6）；釘 commit 的網址加 SHA-256 | 照 master 用 git tag（tag 會動） |
+| M-11 | ufbx v0.23.1 抓 `ufbx.h`、`ufbx.c` 兩個檔（FetchContent 的 URL＋SHA-256），不 clone | 照 stb_image（I-6）；釘 commit 的網址加 SHA-256；下載經使用者同意（2026-11-24「同意下載」，主會話轉） | 照 master 用 git tag（tag 會動） |
+| M-12 | 不強制 FBX 格式，ufbx 認成別的格式也算 `NotFbx` | 強制時文字被當成截斷的 ASCII FBX，規則 1 與 2 分不開（本機實測：`hello…` 回 Truncated） | 自己判 binary 簽名（ASCII FBX 沒有固定的開頭） |
 
 ## Design Invariants
 
@@ -163,7 +165,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 3. **MD-3 第 1 層是純函式。** `RestPose`、`SampleClip`、`Blend`、`ComputeModelSpace` 沒有時鐘、World、呼叫之間的狀態；照第 4.1～4.3 節的定義。守衛：`AnimationTests.cpp` 的取樣（key 之間、key 上、channel 外、Clamp、Loop、duration 0、最短路徑）、混合、模型空間、Programmer Error 各案；`FbxLoaderTests.cpp` 用範例檔的骨頭轉 90 度驗證整條路（載入→取樣→模型空間→蒙皮）。
 4. **MD-4 retarget 搬相對 rest 的動作。** 第 4.4 節的公式與規則；binding 是呼叫者的資料。守衛：`AnimationTests.cpp` 的 retarget 各案（相同節點表、rest 的 key 給 target 的 rest、父 rest 不同時模型空間的旋轉變化相同、平移換座標與比例、scale 比例、丟掉沒綁的、三條規則與先後）。
 5. **MD-5 中立、沒有裝置。** `GYO::Model` 的連結恰好是 `GYO::Base`、`GYO::Math`、`GYO::Asset`、`GYO::Json`、`gyo_ufbx`：沒有 SDL、渲染、GPU、World、產品名。守衛：`gyo_expect_model_links`；中立靠審查。
-6. **MD-6 模型的 Data Contract。** `model`／`fbx` 的規則、先後、轉法、settings 與 Version 在第 3 節；loader 是純函式（沒有 World、時鐘、全域可變狀態；不開檔），只連 `GYO::Model` 就能呼叫。守衛：`FbxLoaderTests.cpp` 的 settings、規則 1、2、範例檔的節點／材質／網格／蒙皮／UV／片段、`meshes: false`、「same model for the same bytes, on any thread (AS-3)」「through the asset store」兩案。規則 3（`Unsupported`）與規則 4（`BadData`）沒有檔案能觸發的測試（要多 skin 的網格或 NaN 的檔，Blender 做不出），靠審查。
+6. **MD-6 模型的 Data Contract。** `model`／`fbx` 的規則、先後、轉法、settings 與 Version 在第 3 節；loader 是純函式（沒有 World、時鐘、全域可變狀態；不開檔），只連 `GYO::Model` 就能呼叫。守衛：`FbxLoaderTests.cpp` 的 settings、規則 1（含認成 OBJ 的檔）、2、範例檔的節點／空間的左右手／材質／網格／蒙皮／UV／片段、`meshes: false`、「same model for the same bytes, on any thread (AS-3)」「through the asset store」兩案。規則 3（`Unsupported`）沒有檔案能觸發的測試（要多 skin 的網格，Blender 做不出），靠審查；規則 4（`BadData`）只由突變 `mf-weights-not-scaled`（權重沒正規化→整檔被拒）間接守住。
 
 ### Replacement Criteria
 

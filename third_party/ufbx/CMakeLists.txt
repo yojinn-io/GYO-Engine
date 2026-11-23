@@ -10,12 +10,12 @@ include(FetchContent)
 set(GYO_UFBX_COMMIT 26a482ae66871d7de36eb722aa060bce95bce274)
 FetchContent_Declare(ufbx_header
     URL https://raw.githubusercontent.com/ufbx/ufbx/${GYO_UFBX_COMMIT}/ufbx.h
-    URL_HASH SHA256=@UFBX_H_SHA256@
+    URL_HASH SHA256=f787be529af577efc04f3e3e735844a08556718dbb613d1211c2b313d72895dc
     DOWNLOAD_NO_EXTRACT TRUE
 )
 FetchContent_Declare(ufbx_source
     URL https://raw.githubusercontent.com/ufbx/ufbx/${GYO_UFBX_COMMIT}/ufbx.c
-    URL_HASH SHA256=@UFBX_C_SHA256@
+    URL_HASH SHA256=4a956c26a708e40d82ecb0aeaee54da709d5ba7c144c9642174970059bda7e1d
     DOWNLOAD_NO_EXTRACT TRUE
 )
 FetchContent_MakeAvailable(ufbx_header ufbx_source)

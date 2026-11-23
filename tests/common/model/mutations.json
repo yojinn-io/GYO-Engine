@@ -12,7 +12,7 @@
    "find": "    RestPose(nodes, out);\n    const float t",
    "replace": "    const float t",
    "target": "gyo_model_animation_tests",
-   "cases": "SampleClip leaves nodes without a track, and channels without keys, at rest",
+   "cases": "SampleClip leaves nodes without a track and channels without keys at rest",
    "expect": "SameBits\\(pose\\[2\\], nodes\\[2\\]\\.rest\\)"
   },
   {
@@ -25,7 +25,7 @@
    "find": "const float s = (t - times[low]) / (times[high] - times[low]);",
    "replace": "const float s = 0.0F;",
    "target": "gyo_model_animation_tests",
-   "cases": "SampleClip interpolates between keys: translation linearly, rotation by slerp",
+   "cases": "SampleClip interpolates between keys: translation linearly and rotation by slerp",
    "expect": "\\{0, 2, 0\\}"
   },
   {
@@ -51,7 +51,7 @@
    "find": "    if (t < 0.0F) t += duration;\n",
    "replace": "",
    "target": "gyo_model_animation_tests",
-   "cases": "Wrap::Loop repeats, negative times counting back from the end",
+   "cases": "Wrap::Loop repeats and negative times count back from the end",
    "expect": "-0\\.5F, Wrap::Loop"
   },
   {
@@ -64,7 +64,7 @@
    "find": "    return t < duration ? t : 0.0F;",
    "replace": "    return t;",
    "target": "gyo_model_animation_tests",
-   "cases": "Wrap::Loop repeats, negative times counting back from the end",
+   "cases": "Wrap::Loop repeats and negative times count back from the end",
    "expect": "-1\\.0e-8F, Wrap::Loop"
   },
   {
@@ -77,7 +77,7 @@
    "find": "    if (wrap == Wrap::Clamp) return seconds;",
    "replace": "    return seconds;",
    "target": "gyo_model_animation_tests",
-   "cases": "Wrap::Loop repeats, negative times counting back from the end",
+   "cases": "Wrap::Loop repeats and negative times count back from the end",
    "expect": "2\\.5F, Wrap::Loop"
   },
   {
@@ -207,7 +207,7 @@
    "find": "    // 2, then 3 for the same mesh\n",
    "replace": "    for (const AnimationClip& clip : model.clips) {\n        if (auto r = ValidateClip(model.nodes, clip); !r) return r;\n    }\n",
    "target": "gyo_model_animation_tests",
-   "cases": "Validate checks in order: nodes, then each mesh, then the clips",
+   "cases": "Validate checks in order: nodes then each mesh then the clips",
    "expect": "BadSkin"
   },
   {
@@ -363,8 +363,8 @@
    "find": "if (member.key != \"meshes\") return BadSettings",
    "replace": "if (false) return BadSettings",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader settings: meshes, nothing else",
-   "expect": "BadSettings"
+   "cases": "FbxLoader settings: meshes and nothing else",
+   "expect": "textures"
   },
   {
    "id": "mf-not-fbx",
@@ -394,7 +394,7 @@
   },
   {
    "id": "mf-weights-not-scaled",
-   "what": "MD-6: the kept weights are not scaled to sum to 1",
+   "what": "MD-6: the kept weights are not scaled to sum to 1 (the loader then refuses the file by rule 4, BadData)",
    "guards": [
     "model MD-6"
    ],
@@ -402,8 +402,8 @@
    "find": "weights[k] = static_cast<float>(all[k].first / total);",
    "replace": "weights[k] = static_cast<float>(all[k].first);",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader reads the contract example: the four largest weights, scaled; no material",
-   "expect": "0\\.4F / 1\\.1F"
+   "cases": "FbxLoader reads the contract example: the four largest weights scaled and no material",
+   "expect": "REQUIRE\\( loaded\\.has_value\\(\\) \\)"
   },
   {
    "id": "mf-weights-all",
@@ -415,7 +415,7 @@
    "find": "const std::size_t count = std::min<std::size_t>(4, all.size());",
    "replace": "const std::size_t count = std::min<std::size_t>(4, all.size()); if (all.size() > 4) std::swap(all[3], all[4]);",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader reads the contract example: the four largest weights, scaled; no material",
+   "cases": "FbxLoader reads the contract example: the four largest weights scaled and no material",
    "expect": "node\\(k\\) != aux3"
   },
   {
@@ -433,7 +433,7 @@
   },
   {
    "id": "mf-axes",
-   "what": "MD-6: the space is not turned to +Y up",
+   "what": "MD-6: the space is not turned to the left-handed model space (Blender's file is already +Y up, so only the handedness shows)",
    "guards": [
     "model MD-6"
    ],
@@ -441,20 +441,33 @@
    "find": "    opts.target_axes = ufbx_axes_left_handed_y_up;\n",
    "replace": "",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader reads the contract example: nodes and their rest pose",
-   "expect": "upperAt\\.y - lowerAt\\.y"
+   "cases": "FbxLoader reads the contract example: Blender's front view kept with right +X and up +Y and away +Z",
+   "expect": "Math::Distance\\(p, want\\)"
   },
   {
-   "id": "mf-meshes-ignored",
-   "what": "MD-6: meshes false still reads the meshes",
+   "id": "mf-not-fbx-format",
+   "what": "MD-6 rule 1: a file ufbx reads as another format (OBJ) is taken",
    "guards": [
     "model MD-6"
    ],
    "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
-   "find": "        if (options_.meshes) {",
-   "replace": "        if (true) {",
+   "find": "    if (scene->metadata.file_format != UFBX_FILE_FORMAT_FBX) {",
+   "replace": "    if (false) {",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader with meshes false: the same nodes, materials and clips, no meshes",
+   "cases": "FbxLoader rule 1: NotFbx",
+   "expect": "v 0 0 0"
+  },
+  {
+   "id": "mf-meshes-ignored",
+   "what": "MD-6: meshes false still reads the geometry",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "    opts.ignore_geometry = !options.meshes;",
+   "replace": "    opts.ignore_geometry = false;",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader with meshes false: the same nodes and materials and clips but no meshes",
    "expect": "meshes\\.empty\\(\\)"
   },
   {
@@ -467,7 +480,7 @@
    "find": "            if (const ufbx_texture* texture = color.texture) {",
    "replace": "            if (const ufbx_texture* texture = nullptr) {",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader reads the contract example: the material is data, the texture only named",
+   "cases": "FbxLoader reads the contract example: the material is data and the texture only named",
    "expect": "paint\\.png"
   },
   {
