@@ -404,20 +404,32 @@ class WorkflowGateTests(unittest.TestCase):
         bash = find_bash()
         if bash is None:
             self.skipTest("Native Bash is unavailable")
+        # The game rows learn from the configure step whether the game registered a product executable.
+        self.assertIn("GYO_PRODUCT_EXECUTABLE: ${{ steps.configure.outputs.product_executable }}", plan)
+        configure = step_with(native, "id: configure")
+        self.assertIn('"product_executable=$((@($build.products) -contains $env:GYO_PRODUCT)', configure)
         script = run_script(plan)
-        for product, tools, assemble in (("toolchain", "", "false"), ("toolchain", "alpha:gui", "true"),
-                                         ("toolchain", "alpha:gui;beta:cli", "true"), ("sample", "", "true")):
-            with self.subTest(product=product, tools=tools), tempfile.TemporaryDirectory() as temporary:
+        no_tool = "::notice::No tool is registered for linux-x64"
+        no_executable = "::notice::Game sample registers no product executable yet"
+        for product, tools, executable, assemble, notice in (
+                ("toolchain", "", "false", "false", no_tool), ("toolchain", "alpha:gui", "true", "true", None),
+                ("toolchain", "alpha:gui;beta:cli", "true", "true", None),
+                ("sample", "", "true", "true", None), ("sample", "", "false", "false", no_executable),
+                ("sample", "", "", "false", no_executable)):
+            with self.subTest(product=product, tools=tools, executable=executable), \
+                    tempfile.TemporaryDirectory() as temporary:
                 # A relative output path: Git Bash on Windows need not parse a drive path.
                 output = Path(temporary) / "output"
                 environment = dict(os.environ, GYO_PRODUCT=product, GYO_SELECTED_TOOLS=tools,
-                                   GYO_PACKAGE_PLATFORM="linux-x64", GITHUB_OUTPUT="output")
+                                   GYO_PRODUCT_EXECUTABLE=executable, GYO_PACKAGE_PLATFORM="linux-x64",
+                                   GITHUB_OUTPUT="output")
                 result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-c", script], cwd=temporary,
                                         env=environment, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.read_text(), f"assemble={assemble}\n")
                 # A skip is announced with its reason; an assembled row announces nothing.
-                self.assertEqual("::notice::No tool is registered for linux-x64" in result.stdout, assemble == "false")
+                for message in (no_tool, no_executable):
+                    self.assertEqual(message in result.stdout, message == notice)
 
     def test_registered_tools_have_no_build_switch_of_their_own_unless_none_is_registered(self):
         # Tools are selected only through GYO_TOOLS: no registered tool may come
@@ -1140,7 +1152,7 @@ python() { printf '%s\\n' "$@" > python-arguments; }
     def test_build_record_lists_every_field_ci_reads(self):
         build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")
         write = next(line for line in build.splitlines() if "gyo-build.json" in line and line.startswith("file(WRITE"))
-        for field in ("shader_bundles", "shader_host_tools", "go_modules", "go_services"):
+        for field in ("shader_bundles", "shader_host_tools", "go_modules", "go_services", "products"):
             self.assertIn(f'\\"{field}\\":', write)
 
     def test_every_external_action_is_pinned_to_a_full_commit(self):

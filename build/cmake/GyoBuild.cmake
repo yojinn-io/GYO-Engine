@@ -124,7 +124,16 @@ if(TARGET gyo_shader_host_tools)
 endif()
 _gyo_registry_json_quote("${CMAKE_BUILD_TYPE}" _gyo_build_configuration)
 gyo_go_build_record(_gyo_go_modules _gyo_go_services)
-file(WRITE "${PROJECT_BINARY_DIR}/gyo-build.json" "{\"configuration\":${_gyo_build_configuration},\"shader_bundles\":${_gyo_shader_bundles},\"shader_host_tools\":${_gyo_shader_host_tools},\"go_modules\":${_gyo_go_modules},\"go_services\":${_gyo_go_services}}\n")
+# The products that registered a product executable (gyo_install_product_target):
+# CI assembles a package only for those. A selected game with none yet (ported
+# before its window exists) is built and tested but has nothing to package.
+get_property(_gyo_product_names GLOBAL PROPERTY GYO_PRODUCTS)
+set(_gyo_products "[]")
+foreach(_gyo_product IN LISTS _gyo_product_names)
+    _gyo_registry_json_quote("${_gyo_product}" _gyo_product_json)
+    _gyo_registry_json_append("${_gyo_products}" "${_gyo_product_json}" _gyo_products)
+endforeach()
+file(WRITE "${PROJECT_BINARY_DIR}/gyo-build.json" "{\"configuration\":${_gyo_build_configuration},\"shader_bundles\":${_gyo_shader_bundles},\"shader_host_tools\":${_gyo_shader_host_tools},\"go_modules\":${_gyo_go_modules},\"go_services\":${_gyo_go_services},\"products\":${_gyo_products}}\n")
 function(gyo_label_tests directory)
     # A standalone tool wrapper adds the repository, which reuses the tool's
     # source directory. Source-based SUBDIRECTORIES lookup can revisit that
