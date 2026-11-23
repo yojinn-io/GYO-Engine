@@ -45,6 +45,7 @@
 #include "engine/kernel/KernelError.hpp"
 #include "engine/kernel/Plan.hpp"
 #include "engine/kernel/Registry.hpp"
+#include "engine/kernel/Relationship.hpp"
 #include "engine/kernel/TypeKey.hpp"
 #include "engine/kernel/detail/Context.hpp"
 #include "engine/kernel/detail/Storage.hpp"
@@ -204,6 +205,8 @@ public:
     // becomes the current stamp.
     template <class T>
     [[nodiscard]] T* GetMut(EntityId id) {
+        static_assert(!kNoInPlaceWrite<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_WORLD_GET_MUT: ChildOf and Children are not written in place (DI-KS 29)");
         const ComponentId component = Detail::ComponentIdOf(*this, KeyOf<T>());
         Access(Detail::EntryKind::Component, component, Detail::kModeWrite, false);
         auto* cell = TypedColumn<T>(component).Find(id);
@@ -216,22 +219,33 @@ public:
     // The allotter's range is neither checked nor moved (DI-KS 18).
     template <class T>
     void Insert(EntityId id, T value) {
+        static_assert(!kKeptByKernel<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_WORLD_INSERT: Children is kept by the kernel from ChildOf (DI-KS 29)");
         const ComponentId component = Detail::ComponentIdOf(*this, KeyOf<T>());
         Access(Detail::EntryKind::Component, component, Detail::kModeWrite, true);
         MakeAlive(id);
-        TypedColumn<T>(component).Put(id, std::move(value), WriteStamp());
+        if constexpr (std::is_same_v<T, ChildOf>) {
+            HostInsertChildOf(id, value);  // DI-KS 30, 31: Children kept here too
+        } else {
+            TypedColumn<T>(component).Put(id, std::move(value), WriteStamp());
+        }
     }
 
     // Host, Ready only.
     template <class T>
     bool Remove(EntityId id) {
+        static_assert(!kKeptByKernel<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_WORLD_REMOVE: Children is kept by the kernel from ChildOf (DI-KS 29)");
         const ComponentId component = Detail::ComponentIdOf(*this, KeyOf<T>());
         Access(Detail::EntryKind::Component, component, Detail::kModeWrite, true);
+        if constexpr (std::is_same_v<T, ChildOf>) return HostRemoveChildOf(id);  // DI-KS 30
         return columns_[component]->Erase(id);
     }
 
     // Host, Ready only: destroys every component of id in ascending
     // ComponentId order (spec W-7); no hook runs (hooks run at sync points).
+    // Its Children go with it, depth first (DI-KS 32), and its parent's
+    // Children forget it (DI-KS 30).
     bool Despawn(EntityId id);
 
     // ---- Resources
@@ -331,6 +345,8 @@ public:
     [[nodiscard]] std::uint64_t DroppedMissingEntity() const noexcept { return droppedMissingEntity_; }
     // Spec F-13: spawn records dropped at sync points over the World's life (TakeDiagnostics does not reset it).
     [[nodiscard]] std::uint64_t RejectedSpawns() const noexcept { return rejectedSpawns_; }
+    // DI-KS 31: relationships that did not hold over the World's life (TakeDiagnostics does not reset it).
+    [[nodiscard]] std::uint64_t RejectedRelationships() const noexcept { return rejectedRelationships_; }
 
     // ---- Verification (spec A.6)
 
@@ -434,11 +450,35 @@ private:
     // Applying records and notifying (OnAdd, OnRemove, observers) is one thing; deriving new data from a new
     // cell is another, and belongs to a change. A restore puts back what it is given and derives nothing
     // (DI-KS 12; user 2026-11-22, (a2)); every other application derives.
+    // relationships: how ChildOf / Children are kept (DI-KS 30 to 33): a change keeps
+    // Children and expands linked despawns; a restore keeps Children without the
+    // expansion, or, when it names Children, puts it back as given.
     Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
                                                       ChangeStamp stamp, std::vector<Detail::Record>* immediate = nullptr,
-                                                      Detail::Derive derive = Detail::Derive::InitialValues);
+                                                      Detail::Derive derive = Detail::Derive::InitialValues,
+                                                      Detail::Relationships relationships = Detail::Relationships::Change);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
     void RecordRejectedSpawn(RejectedSpawn rejected);
+    // DI-KS 31: counts one relationship that did not hold and appends its diagnostics record.
+    void RecordRejectedRelationship(RejectedRelationship rejected);
+    // The Host's World::Insert<ChildOf> and Remove<ChildOf> (DI-KS 30, 31; no hook runs).
+    void HostInsertChildOf(EntityId child, ChildOf value);
+    bool HostRemoveChildOf(EntityId child);
+    // The relationship primitives every path shares (DI-KS 30): take child out of parent's Children (the
+    // cell stays: an apply phase removes an empty one at step 5b, the Host's path at once), and append
+    // child, making the cell when there is none (true then). No hook runs here.
+    enum class Detached : std::uint8_t { No, Yes, Emptied };
+    Detached DetachChild(EntityId child, EntityId parent, ChangeStamp stamp);
+    bool AttachChild(EntityId child, EntityId parent, ChangeStamp stamp);
+    // The Host's path: detach, mark Children written through the World API, drop an empty cell.
+    void HostDetach(EntityId child, EntityId parent);
+    // The fields of a RejectedRelationship every path fills (DI-KS 31).
+    [[nodiscard]] RejectedRelationship RejectedOf(EntityId entity, EntityId target, RelationshipPath path) const;
+    // Appends one record of the kernel's own diagnostics (RejectedSpawn, RejectedRelationship).
+    template <class R>
+    void RecordKernelDiagnostics(R record);
+    // DI-KS 30 with verification on: ChildOf and Children agree (StructureProblem).
+    [[nodiscard]] std::optional<std::string> RelationshipProblem() const;
     // Spec E.5: discards every record not yet applied (hook queue included).
     void DiscardDeferred() noexcept;
     // Event cursor declaration 3.2: when the outermost Run ends, after the hook
@@ -564,6 +604,7 @@ private:
     std::uint64_t entitiesEpoch_ = 0;
     std::uint64_t droppedMissingEntity_ = 0;
     std::uint64_t rejectedSpawns_ = 0;
+    std::uint64_t rejectedRelationships_ = 0;
 
     // Layer 2: one snapshot per column, resource and message buffer; allocated
     // only with verification on (target/system-contract 2b condition 4).

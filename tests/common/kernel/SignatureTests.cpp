@@ -262,7 +262,8 @@ void RegisterJ12Data(Registrar& r) {
     r.Schedule(extract);
 }
 
-AccessKey Comp(std::uint32_t id) { return {AccessKind::Component, id}; }
+// The owner's id-th component (the kernel's own come first: kFirstOwnerComponent).
+AccessKey Comp(std::uint32_t id) { return {AccessKind::Component, kFirstOwnerComponent + id}; }
 AccessKey Resrc(std::uint32_t id) { return {AccessKind::Resource, id}; }
 AccessKey Evt(std::uint32_t id) { return {AccessKind::Message, id}; }
 
@@ -309,32 +310,37 @@ TEST_CASE("J-12: every signature's access set in ids equals the hand-written exp
         return info->access;
     };
     using Keys = std::vector<AccessKey>;
-    using Ids = std::vector<ComponentId>;
+    // The owner's components, in owner order (offset by kFirstOwnerComponent).
+    const auto Ids = [](std::initializer_list<ComponentId> owned) {
+        std::vector<ComponentId> ids;
+        for (ComponentId n : owned) ids.push_back(kFirstOwnerComponent + n);
+        return ids;
+    };
     CHECK(access("ReadPos").reads == Keys{Comp(0)});
     CHECK(access("ReadPos").writes.empty());
     CHECK(access("MovePos").reads == Keys{Comp(1)});
     CHECK(access("MovePos").writes == Keys{Comp(0)});
     CHECK(access("FilterPos").reads == Keys{Comp(0)});
-    CHECK(access("FilterPos").membershipReads == Ids{2, 3});
+    CHECK(access("FilterPos").membershipReads == Ids({2, 3}));
     CHECK_FALSE(access("FilterPos").changeFilters);
-    CHECK(access("WatchVel").membershipReads == Ids{1});
+    CHECK(access("WatchVel").membershipReads == Ids({1}));
     CHECK(access("WatchVel").changeFilters);
     CHECK(access("WatchAdded").reads == Keys{Comp(3)});
-    CHECK(access("WatchAdded").membershipReads == Ids{2});
+    CHECK(access("WatchAdded").membershipReads == Ids({2}));
     CHECK(access("WatchAdded").changeFilters);
     CHECK(access("UseResources").reads == Keys{Resrc(1)});
     CHECK(access("UseResources").writes == Keys{Resrc(2)});
     CHECK(access("UseEvents").reads == Keys{Evt(0)});
     CHECK(access("UseEvents").writes == Keys{Evt(1)});
     CHECK(access("UseCommands").untypedCommands);
-    CHECK(access("UseCommands").deferredWrites == Ids{2, 4});
+    CHECK(access("UseCommands").deferredWrites == Ids({2, 4}));
     CHECK(access("UseCommands").writes.empty());
     CHECK(access("SpawnBodies").spawn);
     CHECK(access("SpawnBodies").writes == Keys{Resrc(3)});
-    CHECK(access("SpawnBodies").deferredWrites == Ids{0, 1});
+    CHECK(access("SpawnBodies").deferredWrites == Ids({0, 1}));
     CHECK_FALSE(access("SpawnGiven").spawn);
     CHECK(access("SpawnGiven").writes.empty());
-    CHECK(access("SpawnGiven").deferredWrites == Ids{4});
+    CHECK(access("SpawnGiven").deferredWrites == Ids({4}));
     CHECK(access("RemoveBodies").despawn);
     CHECK(access("RemoveBodies").writes.empty());
     CHECK(access("RemoveBodies").deferredWrites.empty());
@@ -354,7 +360,7 @@ TEST_CASE("J-12: every signature's access set in ids equals the hand-written exp
     // Run condition reads join the System's reads (spec S-4).
     CHECK(access("GatedWrite").writes == Keys{Comp(1)});
     CHECK(access("GatedWrite").reads == Keys{Resrc(1)});
-    CHECK(access("GatedWrite").membershipReads == Ids{3});
+    CHECK(access("GatedWrite").membershipReads == Ids({3}));
     CHECK(access("LambdaSystem").reads == Keys{Comp(1)});
     CHECK(access("LambdaSystem").writes == Keys{Resrc(1)});
     // Flags that none of the others set stay off.

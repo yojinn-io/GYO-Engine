@@ -29,6 +29,7 @@ set(GYO_KERNEL_TEST_SOURCES
     HashTests.cpp
     RestoreTests.cpp
     ResourceChangedTests.cpp
+    RelationshipTests.cpp
     ExtractTests.cpp
 )
 function(gyo_kernel_test_executable name)
@@ -85,9 +86,11 @@ foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
 endforeach()
 # Everything else in the executable (the Plan export and its dataflow ratio),
 # plus the J-18 link-order run.
-add_test(NAME kernel.others COMMAND gyo_kernel_tests "--test-case-exclude=J-*")
+add_test(NAME kernel.others COMMAND gyo_kernel_tests "--test-case-exclude=J-*,relationship:*")
+# ChildOf and Children (kernel DI-KS 29 to 33; declaration v8-arch-gyo2-kernel-relationship 12.1).
+add_test(NAME kernel.relationship COMMAND gyo_kernel_tests "--test-case=relationship:*")
 add_test(NAME kernel.J-18_link_order COMMAND gyo_kernel_tests_reversed "--test-case=J-18:*")
-foreach(test IN LISTS GYO_KERNEL_J_ENTRIES ITEMS others J-18_link_order)
+foreach(test IN LISTS GYO_KERNEL_J_ENTRIES ITEMS others relationship J-18_link_order)
     set_tests_properties(kernel.${test} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 endforeach()
@@ -162,9 +165,12 @@ endif()
 # stops the configure. CMake folds long FATAL_ERROR messages; mutation
 # expectations use the first words only.
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectStaticAssert.cmake")
-function(gyo_kernel_compile_fail_samples)
+# label: the ctest-like name in the messages; sample: the file under compile_fail/;
+# the rest: NAME:MARKER pairs, one try_compile per variant (-DGYO_KERNEL_SAMPLE_NAME
+# for the System contract sample, -DNAME for the relationship sample: prefix).
+function(gyo_kernel_compile_fail_samples label sample prefix)
     set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-    set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/SystemContractSample.cpp")
+    set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/${sample}")
     # The include directories GYO::Kernel gives its users (kernel, base and,
     # since world-exec's Delta-3, entity_store).
     set(includes "${GYO_REPOSITORY_ROOT}/engine/ecs/kernel/include;${GYO_REPOSITORY_ROOT}/engine/core/base/include;${GYO_REPOSITORY_ROOT}/engine/ecs/entity_store/include")
@@ -188,41 +194,64 @@ function(gyo_kernel_compile_fail_samples)
     string(TIMESTAMP after_control "%s%f")
     math(EXPR control_ms "(${after_control} - ${start}) / 1000")
     if(NOT accepted)
-        message(FATAL_ERROR "kernel.compile_fail_sample: the control did not compile, so a sample "
+        message(FATAL_ERROR "${label}: the control did not compile, so a sample "
             "cannot tell its own failure from a broken setup:\n${accepted_output}")
     endif()
     set(summary "control compiled in ${control_ms} ms")
-    foreach(variant IN ITEMS CAPTURE:GYO_KERNEL_REJECT_CAPTURE WORLD:GYO_KERNEL_REJECT_PARAMETER
-                             RETURN:GYO_KERNEL_REJECT_RETURN SELF_CONFLICT:GYO_KERNEL_REJECT_SELF_CONFLICT
-                             CONDITION_WRITE:GYO_KERNEL_REJECT_CONDITION_WRITE
-                             MEMBER:GYO_KERNEL_REJECT_MEMBER_FUNCTION HOOK_PARAMETER:GYO_KERNEL_REJECT_PARAMETER
-                             HOOK_MESSAGE_READER:GYO_KERNEL_REJECT_HOOK_MESSAGE_READER
-                             OBSERVER_EXCLUSIVE_WORLD:GYO_KERNEL_REJECT_OBSERVER_EXCLUSIVE_WORLD
-                             OBSERVER_ON:GYO_KERNEL_REJECT_OBSERVER_ON
-                             HANDLE_COPY:GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE
-                             KERNEL_DIAGNOSTICS:GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS)
+    foreach(variant IN LISTS ARGN)
         string(REPLACE ":" ";" parts "${variant}")
         list(GET parts 0 name)
         list(GET parts 1 marker)
         string(TIMESTAMP before "%s%f")
         try_compile(rejected SOURCES "${source}"
             CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${includes}"
-            COMPILE_DEFINITIONS -DGYO_KERNEL_SAMPLE_${name} ${flags}
+            COMPILE_DEFINITIONS -D${prefix}${name} ${flags}
             CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON
             OUTPUT_VARIABLE rejected_output
             NO_CACHE)
         string(TIMESTAMP after "%s%f")
         math(EXPR variant_ms "(${after} - ${before}) / 1000")
         if(rejected)
-            message(FATAL_ERROR "kernel.compile_fail_sample: variant ${name} compiled; "
-                "the System contract no longer rejects it")
+            message(FATAL_ERROR "${label}: variant ${name} compiled; "
+                "the kernel no longer rejects it")
         endif()
-        gyo_expect_static_assert_failure(kernel.compile_fail_sample ${name} ${marker} "${rejected_output}")
+        gyo_expect_static_assert_failure(${label} ${name} ${marker} "${rejected_output}")
         string(APPEND summary "; ${name} rejected with ${marker} in ${variant_ms} ms")
     endforeach()
-    message(STATUS "kernel.compile_fail_sample (try_compile): ${summary}")
+    message(STATUS "${label} (try_compile): ${summary}")
 endfunction()
-gyo_kernel_compile_fail_samples()
+gyo_kernel_compile_fail_samples(kernel.compile_fail_sample SystemContractSample.cpp GYO_KERNEL_SAMPLE_
+    CAPTURE:GYO_KERNEL_REJECT_CAPTURE WORLD:GYO_KERNEL_REJECT_PARAMETER
+    RETURN:GYO_KERNEL_REJECT_RETURN SELF_CONFLICT:GYO_KERNEL_REJECT_SELF_CONFLICT
+    CONDITION_WRITE:GYO_KERNEL_REJECT_CONDITION_WRITE
+    MEMBER:GYO_KERNEL_REJECT_MEMBER_FUNCTION HOOK_PARAMETER:GYO_KERNEL_REJECT_PARAMETER
+    HOOK_MESSAGE_READER:GYO_KERNEL_REJECT_HOOK_MESSAGE_READER
+    OBSERVER_EXCLUSIVE_WORLD:GYO_KERNEL_REJECT_OBSERVER_EXCLUSIVE_WORLD
+    OBSERVER_ON:GYO_KERNEL_REJECT_OBSERVER_ON
+    HANDLE_COPY:GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE
+    KERNEL_DIAGNOSTICS:GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS)
+# The relationship pair (DI-KS 29; declaration v8-arch-gyo2-kernel-relationship 12.2): one variant per refused entry.
+gyo_kernel_compile_fail_samples(kernel.relationship_compile_fail RelationshipSample.cpp ""
+    REL_WRITE_TERM_CHILDOF:GYO_KERNEL_REJECT_RELATIONSHIP_WRITE_TERM
+    REL_WRITE_TERM_CHILDREN:GYO_KERNEL_REJECT_RELATIONSHIP_WRITE_TERM
+    REL_WORLD_GET_MUT_CHILDOF:GYO_KERNEL_REJECT_RELATIONSHIP_WORLD_GET_MUT
+    REL_WORLD_GET_MUT_CHILDREN:GYO_KERNEL_REJECT_RELATIONSHIP_WORLD_GET_MUT
+    REL_EXCLUSIVE_MODIFY_CHILDOF:GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_MODIFY
+    REL_EXCLUSIVE_MODIFY_CHILDREN:GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_MODIFY
+    REL_COMMANDS_INSERT:GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_INSERT
+    REL_COMMANDS_REMOVE:GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_REMOVE
+    REL_COMMANDS_FOR_INSERT:GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_FOR_INSERT
+    REL_COMMANDS_FOR_REMOVE:GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_FOR_REMOVE
+    REL_SPAWN:GYO_KERNEL_REJECT_RELATIONSHIP_SPAWN
+    REL_SPAWN_WITH_ID:GYO_KERNEL_REJECT_RELATIONSHIP_SPAWN_WITH_ID
+    REL_EXCLUSIVE_INSERT:GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_INSERT
+    REL_EXCLUSIVE_REMOVE:GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_REMOVE
+    REL_EXCLUSIVE_SPAWN:GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_SPAWN
+    REL_EXCLUSIVE_SPAWN_WITH_ID:GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_SPAWN_WITH_ID
+    REL_WORLD_INSERT:GYO_KERNEL_REJECT_RELATIONSHIP_WORLD_INSERT
+    REL_WORLD_REMOVE:GYO_KERNEL_REJECT_RELATIONSHIP_WORLD_REMOVE
+    REL_INITIAL_VALUE:GYO_KERNEL_REJECT_RELATIONSHIP_INITIAL_VALUE
+    REL_DIAGNOSTICS:GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS)
 
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 # Delta-1 of the migration plan: the kernel is a leaf directly above GYO::Base;

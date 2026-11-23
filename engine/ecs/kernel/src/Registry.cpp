@@ -6,6 +6,7 @@
 
 
 #include "engine/base/Assert.hpp"
+#include "engine/kernel/Relationship.hpp"
 
 #include <algorithm>
 #include <map>
@@ -657,6 +658,20 @@ void AddKernelRegistrations(RegistryData& data) {
                                           false, kKernelOwnerName});
     data.resourceMakers.push_back(&MakeResource<KernelSettings>);
     data.effects.push_back(EffectRecord{kDiagnosticsEffect, kKernelOwner});
+    // The relationship pair (DI-KS 29; declaration v8-arch-gyo2-kernel-relationship 5.1):
+    // every World has ChildOf and Children, as every Bevy World has bevy_ecs's.
+    auto component = [&](TypeKey key, std::size_t size, std::size_t align, bool trivial, const char* name,
+                         MakeColumnFn make) {
+        const auto id = static_cast<ComponentId>(data.components.size());
+        data.types.push_back(TypeEntry{key, size, align, TypeRole::Component, id, kKernelOwner});
+        data.components.push_back(ColumnInfo{name, size, align, trivial, kKernelOwnerName});
+        data.columnMakers.push_back(make);
+        return id;
+    };
+    data.childOf = component(KeyOf<ChildOf>(), sizeof(ChildOf), alignof(ChildOf), std::is_trivially_copyable_v<ChildOf>,
+                             "ChildOf", &MakeColumn<ChildOf>);
+    data.children = component(KeyOf<Children>(), sizeof(Children), alignof(Children),
+                              std::is_trivially_copyable_v<Children>, "Children", &MakeColumn<Children>);
 }
 
 } // namespace

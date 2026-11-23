@@ -32,7 +32,7 @@
   - O-8：R1b 之前替換有讀者的來源是斷言（鏈的中間也算），在丟掉任何東西之前；替換讀者照常。
   - O-12 的 Extract 那一項：`extractFrom`、O-E9 的條件、接來源的時點、三個入口走 `RunExtract`、讀到的時點、一個來源多個讀者與鏈。
   - O-15「誰比誰活得久」：讀者的 Registry 也先於來源的；`Build` 失敗時照反序丟。
-- **說明頁** [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：第 3 節表的 Extract 列、新第 19 節「從別的 World 讀（Extract）」；第 13 節的「O-E1～O-E7」補 O-E9。
+- **說明頁** [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：第 3 節表的 Extract 列、新第 20 節「從別的 World 讀（Extract）」（KR 先佔了第 19 節）；第 13 節的「O-E1～O-E7」補 O-E9。
 
 ## 3. §14.4：守衛的判定
 

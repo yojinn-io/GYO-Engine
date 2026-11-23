@@ -261,7 +261,7 @@ TEST_CASE("DI-KS 4: a failed BuildPlans drops its round; the World runs the old 
     REQUIRE(Done(registry.BuildPlans()));
     CHECK(registry.Frozen().ComponentIdOf<Other>() == static_cast<ComponentId>(components));
     CHECK_FALSE(registry.Frozen().ComponentIdOf<Later>().has_value());
-    CHECK(registry.Frozen().ComponentIdOf<Pos>() == 0U);  // ids of the built version do not change
+    CHECK(registry.Frozen().ComponentIdOf<Pos>() == kFirstOwnerComponent);  // ids of the built version do not change
 }
 
 TEST_CASE("DI-KS 4: DiscardRegistrations drops the round the same way") {
@@ -693,7 +693,7 @@ TEST_CASE("DI-KS 4: DiscardRegistrations in the first round drops what was regis
     const auto built = registry.BuildPlans();
     REQUIRE_MESSAGE(Done(built), Describe(built));
     CHECK(registry.Frozen().Version() == 1U);
-    CHECK(registry.Frozen().ComponentIdOf<Pos>() == 0U);
+    CHECK(registry.Frozen().ComponentIdOf<Pos>() == kFirstOwnerComponent);
 }
 
 TEST_CASE("DI-KS 26: after a failed first round, Register is an assert") {

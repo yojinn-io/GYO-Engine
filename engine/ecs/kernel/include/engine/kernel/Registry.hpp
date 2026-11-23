@@ -4,6 +4,7 @@
 #include "engine/kernel/Declarations.hpp"
 #include "engine/kernel/KernelError.hpp"
 #include "engine/kernel/Plan.hpp"
+#include "engine/kernel/Relationship.hpp"
 #include "engine/kernel/SystemTraits.hpp"
 #include "engine/kernel/TypeKey.hpp"
 
@@ -311,6 +312,8 @@ public:
     void InitialValue(std::source_location source = std::source_location::current()) {
         using Signature = Detail::InitialValueRequest<Target, decltype(Fn)>;
         static_assert(Signature::valid, "InitialValue<Target, Fn>: Fn is a function `Target Fn(const Request&)`");
+        static_assert(!kKeptByKernel<Target>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_INITIAL_VALUE: Children is kept by the kernel from ChildOf (DI-KS 29)");
         if constexpr (Signature::valid) {
             using Request = typename Signature::Type;
             static_assert(!std::is_same_v<Target, Request>, "a component is not its own initial value request");

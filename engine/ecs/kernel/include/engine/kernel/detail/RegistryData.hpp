@@ -174,6 +174,10 @@ struct RegistryData {
     std::vector<std::uint32_t> allotterOwners;
     std::optional<ResourceId> allotter;
     ResourceId kernelSettings = 0;
+    // The kernel's own relationship pair (Relationship.hpp; DI-KS 29): registered
+    // before any owner, so they are ComponentId 0 and 1 in every Registry.
+    ComponentId childOf = 0;
+    ComponentId children = 1;
     const RegistryData* extractSource = nullptr;
     // Test seam (spec J-20): non-zero reorders the Scheduler's internal containers.
     std::uint32_t schedulerShuffle = 0;

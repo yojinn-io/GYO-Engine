@@ -22,7 +22,7 @@ SDL 總宣告（`sdl-declaration.zh-Hant.md` 修訂 21，HANDOFF `v8-arch-gyo2-s
   - 編排層跑 schedule 的三處（清單、`RunSchedule`、`beforeSwap`）經 `RunWith`：extract schedule 走 `RunExtract`。「extract schedule 卻沒有來源」的斷言放在 `RunOn` 的 try 之前（放在裡面會被當成例外、記成 Product 結束）。
   - 替換有讀者的來源（鏈的中間那個也算）是斷言，在丟掉任何東西之前；R1b 定做法時拿掉。
   - `Build` 的登記結果在每條離開的路上照反序丟（scope；含單位的 `Build` 丟例外），讀者的 Registry 先於來源的（DI-KS 37、O-15）。
-- **條文**（Design Invariants；最終文字在合併前核准）：Kernel DI-KS 35～37、RC 28 新增；DI-KS 13 的守衛欄（J-43 → 本批的案與 J-10，Q2）；DI-KS 26 的「`Run`／`RunExtract`」。編排層 O-5（O-E9、沒檢查的讀者）、O-8、O-12 的 Extract 那一項、O-15。說明頁第 3 節表與新第 19 節。
+- **條文**（Design Invariants；最終文字在合併前核准）：Kernel DI-KS 35～37、RC 28 新增；DI-KS 13 的守衛欄（J-43 → 本批的案與 J-10，Q2）；DI-KS 26 的「`Run`／`RunExtract`」。編排層 O-5（O-E9、沒檢查的讀者）、O-8、O-12 的 Extract 那一項、O-15。說明頁第 3 節表與新第 20 節（KR 先佔了第 19 節）。
 
 ## 和宣告不同的地方
 
