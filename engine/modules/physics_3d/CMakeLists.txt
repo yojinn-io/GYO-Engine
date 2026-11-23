@@ -4,6 +4,7 @@
 add_library(gyo_physics_3d STATIC
     src/Shapes.cpp
     src/Queries.cpp
+    src/MoveAndSlide.cpp
     src/Physics3dModule.cpp
 )
 add_library(GYO::Physics3d ALIAS gyo_physics_3d)

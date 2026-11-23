@@ -28,6 +28,9 @@
 
 #include "GPUDevice.hpp"
 
+// The whole file is in the Plugin's namespace (naming N17: a unit opens only its own root, aliases included).
+namespace GYO::Plugins::SDLGPU {
+
 namespace G = GYO::Plugins::SDLGPU;
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
@@ -378,3 +381,5 @@ TEST_CASE("sdl_gpu budget: an Object_Connect-sized 2D frame") {
     MESSAGE("[gp-budget] driver " << device.DriverName() << ": " << ms << " ms a frame (budget 8 ms, render.zh-Hant.md section 2)");
     CHECK(ms > 0.0);
 }
+
+} // namespace GYO::Plugins::SDLGPU

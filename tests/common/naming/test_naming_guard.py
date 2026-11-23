@@ -83,9 +83,10 @@ class GuardTree(unittest.TestCase):
         self.assertEqual(guard.camel_case("entity_store", guard.ACRONYMS), "EntityStore")
         self.assertEqual(guard.camel_case("base", guard.ACRONYMS), "Base")
 
-    def test_acronyms_are_io_os_and_gpu(self):
-        self.assertEqual(guard.ACRONYMS, {"io": "IO", "os": "OS", "gpu": "GPU"})
+    def test_acronym_table(self):
+        self.assertEqual(guard.ACRONYMS, {"io": "IO", "os": "OS", "sdl": "SDL", "spsc": "SPSC", "gpu": "GPU"})
         self.assertEqual(guard.camel_case("io", guard.ACRONYMS), "IO")
+        self.assertEqual(guard.camel_case("sdl_audio", guard.ACRONYMS), "SDLAudio")
         self.assertEqual(guard.camel_case("os", guard.ACRONYMS), "OS")
         self.assertEqual(guard.camel_case("render_gpu", guard.ACRONYMS), "RenderGPU")
 
@@ -263,12 +264,26 @@ class GuardTree(unittest.TestCase):
         self.assertReported("N1", "tests/common/x/Root.cpp:1: N1 namespace GYO::Engine opened outside its unit")
 
     def test_n1_plugin_root_belongs_to_plugins(self):
-        self.write("plugins/sdl/src/A.cpp", "namespace GYO::Plugins::SDL {\n}\nnamespace SdlDetail {\n}\n")
+        self.write("plugins/sdl/src/A.cpp", "namespace GYO::Plugins::SDL {\nnamespace Detail {\n}\n}\n")
         self.assertClean()
         self.write("tests/common/x/Leak.cpp", "namespace GYO::Plugins::SDL {\n}\n")
         self.write("plugins/sdl/src/B.cpp", "namespace GYO::Engine::Time {\n}\n")
         self.assertReported("N1", "tests/common/x/Leak.cpp:1: N1 namespace GYO::Plugins::SDL opened outside plugins/")
-        self.assertReported("N1", "plugins/sdl/src/B.cpp:1: N1 namespace GYO::Engine::Time opened outside its unit")
+        self.assertReported("N1", "plugins/sdl/src/B.cpp:1: N1 namespace GYO::Engine::Time (expected GYO::Plugins::SDL)")
+
+    def test_n1_plugin_unit_namespace_is_derived_from_its_directory(self):
+        self.write("plugins/sdl_audio/src/A.cpp", "namespace GYO::Plugins::SDLAudio {\n}\n")
+        self.write("plugins/sdl_audio/tests/T.cpp", "namespace {\n}\n")
+        self.assertClean()
+        self.write("plugins/sdl_audio/src/B.cpp", "namespace GYO::Plugins::SdlAudio {\n}\n")
+        self.write("plugins/sdl_audio/src/C.cpp", "namespace GYO::Plugins::SDL {\n}\n")
+        self.write("plugins/sdl_audio/src/D.cpp", "namespace AudioDetail {\n}\n")
+        self.assertReported("N1", "plugins/sdl_audio/src/B.cpp:1: N1 namespace GYO::Plugins::SdlAudio (expected "
+                                  "GYO::Plugins::SDLAudio)")
+        self.assertReported("N1", "plugins/sdl_audio/src/C.cpp:1: N1 namespace GYO::Plugins::SDL (expected "
+                                  "GYO::Plugins::SDLAudio)")
+        self.assertReported("N1", "plugins/sdl_audio/src/D.cpp:1: N1 namespace AudioDetail (expected "
+                                  "GYO::Plugins::SDLAudio)")
 
     def test_n1_test_root_outside_tests_is_reported(self):
         self.write("examples/demo/Probe.cpp", "namespace GYO::Test {\n}\n")
@@ -306,6 +321,12 @@ class GuardTree(unittest.TestCase):
                     self.assertReported("N1", "engine/core/Loose.hpp:1: N1 namespace GYO::Engine::Time opened "
                                               "outside its unit")
                     (self.root / "engine/core/Loose.hpp").unlink()
+                elif root == "plugins":  # plugins/sample is a Plugin unit
+                    self.assertReported("N1", "plugins/sample/Leak.cpp:1: N1 namespace GYO::Kernel (expected "
+                                              "GYO::Plugins::Sample)")
+                    self.write("plugins/Loose.hpp", "namespace GYO::Kernel {\n}\n")  # in no unit
+                    self.assertReported("N1", "plugins/Loose.hpp:1: N1 namespace GYO::Kernel opened outside its unit")
+                    (self.root / "plugins/Loose.hpp").unlink()
                 else:
                     self.assertReported("N1", f"{root}/sample/Leak.cpp:1: N1 namespace GYO::Kernel opened outside its unit")
                 shutil.rmtree(self.root / f"{root}/sample")

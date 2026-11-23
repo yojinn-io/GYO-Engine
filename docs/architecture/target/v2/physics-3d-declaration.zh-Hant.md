@@ -171,3 +171,19 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 5. World 查詢只對 `filter` 通過的實體查縮放與組合；有一個組合不支援就整個回 `Unsupported`（作者用 `filter` 排除玩家）。
 6. 核進到方塊裡的接觸取「沿面法線推出量最小的面」（平手 −X、+X、−Y、+Y、−Z、+Z），不一定是真正的最小移動量；兩核重合時法線 +X（同 parry）。
 7. 射線、掃掠對 `BoxSet` 的結果不帶方塊索引（PvP 沒用到；接觸有）。
+
+## 12. 第三個 PR：`BoxSet` 的內部邊（S1）的事前判定（修訂 2，2026-11-23，動工前寫定）
+
+主會話 2026-11-23：照 parry 複合形狀的 `FIX_INTERNAL_EDGES`（parry b3c3584 `src/shape/compound.rs:30-40`），`BoxSet` 加一個作者可選的旗標；把 #311 裡 skip 的量測案例改成正式判定，閾值在看結果之前定好。
+
+**判定（先宣告，結果出來之後不放寬）**——情境同 #311 的量測：方塊 `[-2,0]×[-1,0]×[-1,1]` 與 `[0,2]×[-1,0]×[-1,1]`，`config.planes = {(0,1,0)}`，`CapsuleY(0.5, 0.5)` 從 y＝1.01（皮膚高度）出發，速度 (∓3, −1, 0)，`deltaSeconds` 1/60，60 步，兩個方向各一次：
+
+1. 旗標打開：每一步的 y ≤ 1.01 ＋ 1×10⁻⁵ m（抬高量閾值 0.01 mm；#311 量到 8.8 mm）。
+2. 旗標打開：每一步的 |水平速度| ≥ 2.997（掉速閾值 0.1%；#311 量到 10%）。
+3. 旗標關閉：照舊（行為和 #311 逐位元相同；量到的抬高仍在，證明旗標是開關而不是改了預設行為之外的東西）。
+4. 真的外緣不被抹掉：單獨一個方塊的頂邊（旁邊沒有方塊）在旗標打開時仍給出傾斜的接觸法線（走出平台邊緣時照樣感覺得到邊）。
+5. 既有測試（含兩份 golden）在旗標關閉時全部不變。
+
+旗標的預設值照 parry：關閉（parry b3c3584 `src/shape/compound.rs` 的 `Compound::new` 設 `flags: CompoundFlags::empty()`，`CompoundFlags` 的 `Default` 也是空；`FIX_INTERNAL_EDGES` 只由 `with_flags`／`set_flags` 打開），所以 `BoxSet::Build(boxes)` 等於 `Build(boxes, BoxSetFlags::None)`；不因判定結果改。
+
+**修訂 3（2026-11-23，主會話判）：預設改成打開。** 這是預設值的設計選擇，不是放寬判定：判定 1～5 不變，打開與關閉兩種情形都測。理由：`BoxSet` 的用途是體素地圖，parry／avian 的 `Voxels` 形狀沒有開關、永遠以鄰居分類避開內部邊（parry b3c3584 `src/shape/voxels/voxels.rs:14-28`）；`Compound` 預設關閉的理由（任意凸形、焊接容差的誤判、舊行為相容）在 `BoxSet` 大多不成立；AGENTS §1-10「既定値は便利にし」；預設關閉時產品忘了打開，S1 會悄悄回來。§12 原本那句「照 parry 定」是卡片自己寫的，由主會話判（新 AGENTS §2.6）。

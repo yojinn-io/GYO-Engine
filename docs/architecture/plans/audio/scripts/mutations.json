@@ -161,9 +161,9 @@
     {
       "id": "au-sched-full-off-by-one",
       "what": "A full ring accepts one more request, overwriting the oldest",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    if (tail - head >= capacity) return false;",
-      "replace": "    if (tail - head > capacity) return false;",
+      "file": "engine/modules/audio/src/SPSCRing.hpp",
+      "find": "        if (tail - head >= capacity) return false;",
+      "replace": "        if (tail - head > capacity) return false;",
       "target": "gyo_audio_tests",
       "cases": "*queue is full*",
       "expect": "CHECK_FALSE\\( rig.submitter.Play"
@@ -181,8 +181,8 @@
     {
       "id": "au-sched-head-not-published",
       "what": "The audio thread never frees the ring",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        slot.head.store(head, std::memory_order_release);\n",
+      "file": "engine/modules/audio/src/SPSCRing.hpp",
+      "find": "        head_.store(head, std::memory_order_release);\n",
       "replace": "",
       "target": "gyo_audio_tests",
       "cases": "*wraparound*",
@@ -202,8 +202,8 @@
       "id": "au-review-handoff-rebound",
       "what": "A thread binding is put back into Submitter::Enqueue, which Play, Stop and StopAll share (the first thread to queue through a submitter claims it, another thread then asserts): the hand-over contract (one user at a time, ordered by happens-before) no longer holds. Only the three hand-over cases catch it.",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);\n",
-      "replace": "    {\n        static std::atomic<const void*> claimed{nullptr};\n        thread_local const void* mine = nullptr;\n        const void* expected = nullptr;\n        if (claimed.compare_exchange_strong(expected, slot_)) mine = slot_;\n        else if (expected == slot_) GYO_ASSERT(mine == slot_);\n    }\n    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);\n",
+      "find": "    return slot_->ring.TryPush(command);\n",
+      "replace": "    {\n        static std::atomic<const void*> claimed{nullptr};\n        thread_local const void* mine = nullptr;\n        const void* expected = nullptr;\n        if (claimed.compare_exchange_strong(expected, slot_)) mine = slot_;\n        else if (expected == slot_) GYO_ASSERT(mine == slot_);\n    }\n    return slot_->ring.TryPush(command);\n",
       "target": "gyo_audio_tests",
       "cases": "*plays on another thread after a hand-over*,*stops on another thread after a hand-over*,*plays on one thread and lets go on another after a hand-over*",
       "expect": "GYO_ASSERT failed: mine == slot_",
@@ -239,8 +239,8 @@
       "id": "au-ctl-stop-off-by-one",
       "what": "A stop ends one frame late",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;",
-      "replace": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames + 1;",
+      "find": "            const std::int64_t stopFrame =\n                blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;",
+      "replace": "            const std::int64_t stopFrame =\n                blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames + 1;",
       "target": "gyo_audio_tests",
       "cases": "*stops a sound at the frame its time maps to*",
       "expect": "CHECK\\( frames.back\\(\\) == 479 \\) is NOT correct"
@@ -249,8 +249,8 @@
       "id": "au-ctl-stop-unmapped",
       "what": "A stop ignores its timestamp and applies at the block that takes it",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;",
-      "replace": "blockStart + state.delayFrames;",
+      "find": "            const std::int64_t stopFrame =\n                blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;",
+      "replace": "            const std::int64_t stopFrame =\n                blockStart + state.delayFrames;",
       "target": "gyo_audio_tests",
       "cases": "*maps a stop like a play*",
       "expect": "is NOT correct"
@@ -259,8 +259,8 @@
       "id": "au-ctl-stop-skips-delay",
       "what": "A stop's frame leaves out the schedule delay",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;",
-      "replace": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs));",
+      "find": "            const std::int64_t stopFrame =\n                blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;",
+      "replace": "            const std::int64_t stopFrame =\n                blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs));",
       "target": "gyo_audio_tests",
       "cases": "*maps a stop like a play*",
       "expect": "CHECK\\( frames.back\\(\\) == 480 \\+ 96 \\+ 240 - 1 \\) is NOT correct"
@@ -711,13 +711,13 @@
     },
     {
       "id": "au-ctl-stress-reassign-every-block",
-      "what": "The audio thread reassigns every voice's board slot every block, so a concurrent reader can briefly see a playing sound as not playing (Fable check, place 4; concurrent only)",
+      "what": "The audio thread reassigns every voice's board slot every block, so a concurrent reader can briefly see a playing sound as not playing (Fable check, place 4; concurrent only); v8-arch-gyo2-sdl-a added the long-sounds case, which polls only sounding sounds in a tight loop",
       "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "        if (state.published[i] != voice.cookie) {",
       "replace": "        if (true) {",
       "target": "gyo_audio_tests",
       "cases": "*under a polling thread*",
-      "expect": "CHECK\\( track.bad == 0 \\) is NOT correct"
+      "expect": "CHECK\\( (track\\.bad|gaps) == 0 \\) is NOT correct"
     },
     {
       "id": "au-clip-empty-counts-before-assert",
@@ -778,7 +778,7 @@
       "id": "au-clip-reclaim-keeps-clip",
       "what": "Taking back an entry does not let go of its clip: the mixer holds every clip it ever played until its state goes.",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        slot_->held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread\n",
+      "find": "        slot.held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread\n",
       "replace": "",
       "target": "gyo_audio_alloc_tests",
       "cases": "*lets go of the clips handed back on each of its calls*",
@@ -973,6 +973,208 @@
       "guards": [
         "audio DI 7",
         "audio-clip-loader-declaration 10.3 (b)"
+      ]
+    },
+    {
+      "id": "au-gain-unmapped",
+      "what": "A gain change ignores its time: it starts at the block's first frame plus the delay",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "                    blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;\n                const Detail::GainResult",
+      "replace": "                    blockStart + state.delayFrames;\n                const Detail::GainResult",
+      "target": "gyo_audio_tests",
+      "cases": "*gain at the frame its time maps to*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6",
+        "audio DI 3"
+      ]
+    },
+    {
+      "id": "au-gain-skips-delay",
+      "what": "A gain change is mapped without the schedule delay, unlike a play and a stop",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "                    blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;\n                const Detail::GainResult",
+      "replace": "                    blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs));\n                const Detail::GainResult",
+      "target": "gyo_audio_tests",
+      "cases": "*maps a gain change like a play*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6",
+        "audio DI 3"
+      ]
+    },
+    {
+      "id": "au-gain-late-uncounted",
+      "what": "A late gain change is not counted late",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "                if (result.late) state.gainsLate.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*late gain change*",
+      "expect": "CHECK\\( stats.gainsLate == 1 \\) is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6",
+        "audio DI 6"
+      ]
+    },
+    {
+      "id": "au-gain-unmatched-uncounted",
+      "what": "A gain change that reaches no voice is not counted",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "                    state.gainsUnmatched.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*gain change of a finished or dropped play*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6",
+        "audio DI 6"
+      ]
+    },
+    {
+      "id": "au-gain-full-uncounted",
+      "what": "A gain change the full queue dropped is not counted",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "        slot_->gainsDroppedQueueFull.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*gain change when its queue is full*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6",
+        "audio DI 6"
+      ]
+    },
+    {
+      "id": "au-gain-negative-ramp-unasserted",
+      "what": "A negative ramp is no longer a Programmer Error",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "    GYO_ASSERT(ramp >= Time::Duration::zero());\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*invalid handle and asserts a foreign one*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6"
+      ]
+    },
+    {
+      "id": "au-gain-from-target",
+      "what": "A new gain change starts from the old change's target instead of the gain the sound has when it is taken",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "        voice.left = GainRamp{voice.left.At(nextFrame_, voice.rampStart, voice.rampFrames), ToQ16(gainLeft)};",
+      "replace": "        voice.left = GainRamp{voice.left.to, ToQ16(gainLeft)};",
+      "target": "gyo_audio_tests",
+      "cases": "*from the gain the sound has when it is taken*",
+      "expect": "CHECK\\( second\\[0\\] == kLevel / 2 \\) is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6"
+      ]
+    },
+    {
+      "id": "au-gain-ramp-ignored",
+      "what": "Every gain change applies at once, whatever its ramp",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "        voice.rampFrames = rampFrames;",
+      "replace": "        voice.rampFrames = 0;",
+      "target": "gyo_audio_tests",
+      "cases": "*ramps a gain linearly*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6"
+      ]
+    },
+    {
+      "id": "au-gain-late-not-clamped",
+      "what": "A late gain change starts at its mapped frame in the past, so its ramp is cut short",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "    const std::int64_t start = std::max(startFrame, nextFrame_);",
+      "replace": "    const std::int64_t start = startFrame;",
+      "target": "gyo_audio_tests",
+      "cases": "*late gain change*",
+      "expect": "CHECK\\( left\\[0\\] == kLevel \\) is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6"
+      ]
+    },
+    {
+      "id": "au-gain-ramp-read-once",
+      "what": "A ramping gain is read once per chunk, like a steady one",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "        const bool steady = voice.left.from == voice.left.to && voice.right.from == voice.right.to;",
+      "replace": "        const bool steady = true;",
+      "target": "gyo_audio_tests",
+      "cases": "*ramps a gain linearly*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6"
+      ]
+    },
+    {
+      "id": "au-loop-not-wrapped",
+      "what": "A looping clip ends at its last frame like a one-shot",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "            if (voice.loop && voice.position == voice.clip.frames) voice.position = 0;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*looping clip again from its first frame*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6"
+      ]
+    },
+    {
+      "id": "au-loop-flag-dropped",
+      "what": "The submitter does not carry the loop flag to the audio thread",
+      "file": "engine/modules/audio/src/Mixer.cpp",
+      "find": "                         handle, entry, 0, request.loop})) {",
+      "replace": "                         handle, entry, 0, false})) {",
+      "target": "gyo_audio_tests",
+      "cases": "*intro then a loop*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6"
+      ]
+    },
+    {
+      "id": "au-gain-render-allocates",
+      "what": "Evaluating a ramping gain allocates and frees on the audio thread (an explicit ::operator new call, which the compiler may not elide)",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "                gainLeft = voice.left.At(frame, voice.rampStart, voice.rampFrames);",
+      "replace": "                ::operator delete(::operator new(16));\n                gainLeft = voice.left.At(frame, voice.rampStart, voice.rampFrames);",
+      "target": "gyo_audio_alloc_tests",
+      "cases": "*without allocating*",
+      "expect": "CHECK\\( counted.allocations == 0 \\) is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化、loop）",
+        "audio Replacement Criteria 6",
+        "audio DI 7"
+      ]
+    },
+    {
+      "id": "au-gain-collapse-early",
+      "what": "A ramp is collapsed to its target as soon as it starts, so the rest of it jumps to the new gain at the next chunk",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "        if (!steady && chunkEnd >= voice.rampStart + std::int64_t{voice.rampFrames}) {",
+      "replace": "        if (!steady && chunkEnd >= voice.rampStart) {",
+      "target": "gyo_audio_tests",
+      "cases": "*ramps a gain linearly*,*gain changes does not depend on how blocks split it*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化）",
+        "audio DI 8"
       ]
     }
   ]

@@ -15,6 +15,9 @@
 
 #include "EmbeddedShaders.hpp"
 
+// The whole file is in the Plugin's namespace (naming N17: a unit opens only its own root, aliases included).
+namespace GYO::Plugins::SDLGPU {
+
 namespace O = GYO::Engine::Orchestration;
 namespace Abi = GYO::Engine::Render::ShaderAbi;
 namespace G = GYO::Plugins::SDLGPU;
@@ -75,3 +78,5 @@ TEST_CASE("sdl_gpu shaders: the 2D pass's shaders use what render's ABI says, in
         }
     }
 }
+
+} // namespace GYO::Plugins::SDLGPU

@@ -1,6 +1,6 @@
 # 命名規範（`v8-arch-rebuild`）
 
-更新：2026-11-14；2026-11-22（N13、N14、N17、第 3、5、6、7 節：`v8-arch-gyo2-namespace-root`，namespace 的根統一並立守衛；N13 的「引用別的單位」、測試輔助的根：`v8-arch-gyo2-naming-cleanup`；N13 的「引用自己的單位」「引用 Kernel」與兩個例外：`v8-arch-gyo2-n13-short-names`）。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**
+更新：2026-11-14；2026-11-22（N13、N14、N17、第 3、5、6、7 節：`v8-arch-gyo2-namespace-root`，namespace 的根統一並立守衛；N13 的「引用別的單位」、測試輔助的根：`v8-arch-gyo2-naming-cleanup`；N13 的「引用自己的單位」「引用 Kernel」與兩個例外：`v8-arch-gyo2-n13-short-names`）。Owner：架構（架構師會話）。**狀態：草稿，待使用者確認。它建在[同詞異義表](rebuild-vocabulary.zh-Hant.md)上；那張表確認後才定案。**；2026-11-23（N17 的 `GYO::Plugins` 列與縮寫表的 `sdl`、`spsc`：`v8-arch-gyo2-sdl-a`，第一個有程式的 plugin 批）。
 
 使用者（2026-11-14）：「你後面做好表之後，也做一個命名規範。」
 
@@ -58,11 +58,11 @@
 |---|---|---|
 | `GYO::Kernel` | `engine/ecs/kernel` | 固定（通用機制，第 6 節）。它是 DI 1「目錄 ↔ namespace 的表」裡唯一的例外列：Engine 的單位預設從目錄名推，推不出想要的名字時把例外寫進這一列的表（守衛的 `UNIT_OVERRIDES`）並附理由 |
 | `GYO::Engine::<單位>` | Engine 的單位：`engine/core/<單位>`、`engine/ecs/<單位>`（kernel 除外）、`engine/modules/<單位>`，以及 `engine/orchestration` 本身 | 從目錄名推：以 `_` 分段、每段首字母大寫；縮寫段照下面的縮寫表。例：`world_time`→`WorldTime`、`entity_store`→`EntityStore` |
-| `GYO::Plugins::<plugin>` | `plugins/<plugin>`（目錄還沒有） | 第一個 plugin 進來的那一批定（例如 SDL 是不是縮寫）；在那之前只守「`GYO::Plugins` 只在 `plugins/` 打開」 |
+| `GYO::Plugins::<plugin>` | `plugins/<plugin>`：每個目錄是一個 Plugin 單位 | 從目錄名推，規則同 Engine 的單位（縮寫段照縮寫表）。例：`sdl_audio`→`SDLAudio`、`sdl`→`SDL`。target 是 `gyo_<目錄名>`／`GYO::<推出的名>`（N14），單位型別 `<推出的名>Plugin`（N20），含入路徑 `plugins/<目錄名>/…`；Plugin 的測試在它的目錄裡，也在它的 namespace 裡。〔`v8-arch-gyo2-sdl-a` 定，第一個有程式的 plugin 批；細節在 [`sdl.zh-Hant.md`](sdl.zh-Hant.md) 第 2 節〕 |
 | `GYO::Test` | `tests/`（測試自己的東西；共用的放 `tests/common/support`，各單位的測試輔助放 `GYO::Test::<單位>`，例 `GYO::Test::Logging`） | 固定 |
 
 - **「Engine 的單位」**：#261（`v8-arch-gyo2-core-not-registered`）之後 core、ecs、orchestration 不再登記成 Module，但它們和 modules 一樣是 `engine/` 裡的一個單位，根都是 `GYO::Engine::<單位>`（2026-11-14 的改名決定就列了 core 的單位）。所以 N17 寫「單位」，不寫「Module」。
-- **縮寫表**：`io`→`IO`、`os`→`OS`、`gpu`→`GPU`（`gpu` 是 `v8-arch-gyo2-sdl-r2a` 加：`plugins/sdl_gpu`→`GYO::Plugins::SDLGPU`、`GPUSubmit`；總宣告寫的暫名 `GpuSubmit` 與 N23 例子的 `Gpu*` 照這條寫成 `GPU`）；`json` 照舊寫 `Json`。**縮寫要嘛全大寫、要嘛全小寫，不准一大一小**：namespace、target、型別名、函式名、檔名都照這條（`IOError`、`OSErrorCode`、`FromOS`、`OSError.hpp`；全小寫的 `io`、`os`、`gyo_io`、目錄與含入路徑本來就合規）。新的縮寫要寫進這張表，守衛的 `ACRONYMS`（從目錄名推 namespace 用）同步改。型別名、函式名、檔名的這一條守衛不查，由審查看。
+- **縮寫表**：`io`→`IO`、`os`→`OS`、`sdl`→`SDL`、`spsc`→`SPSC`、`gpu`→`GPU`（`sdl`、`spsc` 是 `v8-arch-gyo2-sdl-a` 加：`GYO::Plugins::SDLAudio`、`SPSCRing`；`gpu` 是 `v8-arch-gyo2-sdl-r2a` 加：`plugins/sdl_gpu`→`GYO::Plugins::SDLGPU`、`GPUSubmit`，總宣告寫的暫名 `GpuSubmit` 與 N23 例子的 `Gpu*` 照這條寫成 `GPU`）；`json` 照舊寫 `Json`。**縮寫要嘛全大寫、要嘛全小寫，不准一大一小**：namespace、target、型別名、函式名、檔名都照這條（`IOError`、`OSErrorCode`、`FromOS`、`OSError.hpp`；全小寫的 `io`、`os`、`gyo_io`、目錄與含入路徑本來就合規）。新的縮寫要寫進這張表，守衛的 `ACRONYMS`（從目錄名推 namespace 用）同步改。型別名、函式名、檔名的這一條守衛不查，由審查看。
   - 使用者 2026-11-22：「IO、OS 這些就不要一個大一個小了。看著很難受。」比過的選項：縮寫全大寫（`Json` 也改 `JSON`）／縮寫全大寫、`Json` 不動／都只首字母大寫（`Io`、`Os`，原本的寫法）。使用者選第二個。理由：看著很難受；`Json` 不動的理由使用者沒有說。出處：`v8-arch-gyo2-namespace-root` 卡片的對話。
   - 同日第二次（side chat，經卡片照四樣轉達）：使用者被問到縮寫表要不要也管型別名與檔名，原話：「b，看的是真的難受。要不然全小寫io也好，要不然全大寫IO也行，一小一大很噁心」。比過的選項：(a) 只管 namespace 與 target／(b) 型別名、檔名也改，這一批一起做／(c) 先立規則、改名另開一批。選 (b)。理由：`GYO::Engine::IO::IoError` 這種一大一小的組合看著難受；改名越晚影響越大。
   - 取代第 3 節原本的「只有第一個字母大寫，例如 `Io`、`Os`」。

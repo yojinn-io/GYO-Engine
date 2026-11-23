@@ -4,13 +4,13 @@
  "mutants": [
   {
    "id": "nm-acronyms-off",
-   "what": "the acronym table is empty, so io and os are expected as Io and Os. Only it catches the acronym list (each item is pinned by test_acronyms_are_io_and_os)",
+   "what": "the acronym table is empty, so io and os are expected as Io and Os. Only it catches the acronym list (each item is pinned by test_acronym_table)",
    "guards": [
     "rebuild-naming N17",
     "naming DI 1"
    ],
    "file": "tests/common/naming/naming_guard.py",
-   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\"}",
+   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\", \"gpu\": \"GPU\"}",
    "replace": "ACRONYMS = {}",
    "expect": "FAIL: test_n1_acronym_unit_spelled_otherwise_is_reported",
    "command": [
@@ -638,6 +638,53 @@
     "-I",
     "-B",
     "tests/common/naming/naming_guard.py"
+   ]
+  },
+  {
+   "id": "nm-plugin-units-skipped",
+   "what": "plugins/ is not read as units any more: a Plugin's files only meet the roots check, so a Plugin opening another Plugin's namespace, or a misspelled one, passes (v8-arch-gyo2-sdl-a)",
+   "guards": [
+    "rebuild-naming N17",
+    "sdl.zh-Hant.md 第 2 節（名字）"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "    if plugins.is_dir():\n",
+   "replace": "    if False:\n",
+   "expect": "FAIL: test_n1_plugin_unit_namespace_is_derived_from_its_directory",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ]
+  },
+  {
+   "id": "nm-acronym-sdl-dropped",
+   "what": "sdl is no longer an acronym: plugins/sdl_audio would be expected as GYO::Plugins::SdlAudio, the mixed case the acronym rule forbids (v8-arch-gyo2-sdl-a)",
+   "guards": [
+    "rebuild-naming N17 縮寫表"
+   ],
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\", \"gpu\": \"GPU\"}",
+   "replace": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"spsc\": \"SPSC\", \"gpu\": \"GPU\"}",
+   "expect": "FAIL: test_n1_plugin_unit_namespace_is_derived_from_its_directory",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
    ]
   }
  ]

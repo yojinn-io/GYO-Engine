@@ -32,7 +32,15 @@ Owner：架構。GYO2 主會話開的任務卡（使用者「開 R2a」）。分
 
 - **shader 編譯器的下載**：使用者選 (A) 照 master、同意五項（2026-11-24，經主會話，原話「照建議」）。比過的 (B)：編好的 shader 當產生檔放進 repo。
 - **P22 的讀法**：使用者選 (a)（2026-11-24，經主會話，原話「照建議」）——內建 shader 跟著 Plugin 走、`sdl_gpu` 自己編與嵌；遊戲 shader 的「共通管線找編譯器」由第一個有遊戲 shader 的批做。比過的 (b)：內建 shader 也走共通內容管線、執行時讀資產。
-- 兩頁 Design Invariants（RD-1～RD-4、SDL-4、SDL-5）的最終文字：合併前核准。
+- 兩頁 Design Invariants（RD-1～RD-4、SDL-4、SDL-5）：照新 AGENTS §2.6 沒有推翻使用者決定的條文，不逐條核准（主會話 2026-11-24）。
+
+## 合併 gyo2 與跟上（2026-11-24）
+
+- A（#306，426add81）合進 gyo2 後 merge：縮寫表與 `naming_guard` 的 `ACRONYMS` 合起來（`sdl`、`spsc`、`gpu`）；`config/plugins.csv` 照登記順序 `sdl_audio` 在 `sdl_gpu` 前；sdl 頁的第 6 節 `sdl_audio`、第 7 節 `sdl_gpu`，SDL-3 取 A 的、SDL-4／SDL-5 取 R2a 的。
+- os.md 的 R4 與 DI 2 拿掉「the host shader tool」的例外，code page 那一段改指 `sdl_gpu` 的 shader 工具（主會話：字面跟上已經做的事）。
+- A 的 naming 守衛（Plugin 的測試整檔在 Plugin 的 namespace）查出 `sdl_gpu` 的兩個測試檔 8 件 → 照 `sdl_window` 包進 `GYO::Plugins::SDLGPU`；A 的突變 `nm-acronyms-off`、`nm-acronym-sdl-dropped` 的 find 跟著縮寫表改，2/2 killed。
+- merge 後本機 `ctest -L 'cpu|gpu'` 234/234。
+- 給 K 的 `ImDrawIdx`（16／32 位元）：主會話記進批次表、K 開卡時寫進 brief。
 
 ## 設計審查（Opus／high，作者同為 Opus；Fable 暫停）
 

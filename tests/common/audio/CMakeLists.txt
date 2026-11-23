@@ -2,7 +2,7 @@
 # VoiceMixer header (engine/modules/audio/src) on purpose, to test the sample-domain
 # core below the public Mixer.
 add_executable(gyo_audio_tests MixerTests.cpp ScheduleTests.cpp CharacterizationTests.cpp StopTests.cpp ClipTests.cpp PlayheadTests.cpp
-    WavLoaderTests.cpp)
+    WavLoaderTests.cpp GainLoopTests.cpp)
 target_include_directories(gyo_audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/engine/modules/audio/src)
 target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)
 # The "sound" Data Contract's sample content: master's player_footstep.wav, unchanged.
