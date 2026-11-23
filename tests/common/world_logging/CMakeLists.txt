@@ -25,8 +25,10 @@ endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_world_logging_links)
 
 # Design Invariant LG-3 at compile time: the System Forward registers only reads, and a descriptor has what
-# Forward needs. Each variant of compile_fail/ForwardSample.cpp must fail with its own marker; the control
-# must compile (as the kernel's compile_fail samples).
+# Forward needs. Each variant of compile_fail/ForwardSample.cpp must fail with a static assertion's failure that
+# names its own marker on the same line (tests/common/support/ExpectStaticAssert.cmake); the control must compile
+# (as the kernel's compile_fail samples).
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectStaticAssert.cmake")
 function(gyo_world_logging_compile_fail_samples)
     set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/ForwardSample.cpp")
@@ -66,11 +68,7 @@ function(gyo_world_logging_compile_fail_samples)
         if(rejected)
             message(FATAL_ERROR "world_logging.compile_fail_sample: variant ${name} compiled; Forward no longer rejects it")
         endif()
-        string(FIND "${rejected_output}" "${marker}" found)
-        if(found EQUAL -1)
-            message(FATAL_ERROR "world_logging.compile_fail_sample: variant ${name} failed without ${marker}, "
-                "so the failure is not the expected one:\n${rejected_output}")
-        endif()
+        gyo_expect_static_assert_failure(world_logging.compile_fail_sample ${name} ${marker} "${rejected_output}")
         string(APPEND summary "; ${name} rejected with ${marker}")
     endforeach()
     message(STATUS "world_logging.compile_fail_sample (try_compile): ${summary}")
