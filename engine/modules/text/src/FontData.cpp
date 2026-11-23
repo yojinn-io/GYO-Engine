@@ -28,7 +28,7 @@ bool IsSfnt(const std::span<const std::byte> bytes) {
 }
 
 bool IsCollection(const std::span<const std::byte> bytes) {
-    return std::memcmp(bytes.data(), "ttcf", 4) == 0;
+    return bytes.size() >= 4 && std::memcmp(bytes.data(), "ttcf", 4) == 0;
 }
 
 TextFailure Fail(const TextFailureCode code, const char* message, const std::uint32_t face) {

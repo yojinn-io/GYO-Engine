@@ -180,4 +180,7 @@ TEST_CASE("text adapter: UTF-8 decoding, U+FFFD per maximal subpart") {
     // Overlong, surrogate, past U+10FFFF, C0/C1, F5.
     DecodeUtf8("\xC0\xAF\xED\xA0\x80\xF4\x90\x80\x80\xF5", cps, offsets);
     CHECK(cps == std::vector<char32_t>(10, 0xFFFD));
+    // An overlong three-byte sequence: E0 needs A0..BF second, so each byte is its own subpart.
+    DecodeUtf8("\xE0\x80\x80", cps, offsets);
+    CHECK(cps == std::vector<char32_t>(3, 0xFFFD));
 }

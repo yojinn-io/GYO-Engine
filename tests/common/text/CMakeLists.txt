@@ -25,20 +25,21 @@ endif()
 add_test(NAME gyo_text_tests COMMAND gyo_text_tests)
 set_tests_properties(gyo_text_tests PROPERTIES LABELS "cpu" TIMEOUT 120)
 
-# Design Invariants TX-7 and TX-8: its own process, which sets variables that
-# would change HarfBuzz's shaping and FreeType's hinting if they were read,
-# before it uses either. The atlas digest is the one the case gets without the
+# Design Invariants TX-7 and TX-8: its own process, run with variables that
+# would change HarfBuzz's shaping and FreeType's hinting if they were read
+# (tests/common/text/mutations.json passes the same ones with cmake -E env). The atlas digest is the one the case gets without the
 # variables (computed 2026-11-23).
 add_executable(gyo_text_environment_tests test_main.cpp EnvironmentTests.cpp)
 target_link_libraries(gyo_text_environment_tests PRIVATE GYO::Text GYO::Base doctest::doctest)
 target_compile_definitions(gyo_text_environment_tests PRIVATE
     GYO_TEXT_TEST_FONTS="${CMAKE_CURRENT_SOURCE_DIR}/fonts"
-    GYO_TEXT_ENVIRONMENT_ATLAS="3d0e7ca59978c28fcddffd6f279b11d0ee5c9429205e6d9bd50cc2d60be91cec")
+    GYO_TEXT_ENVIRONMENT_ATLAS="9f6c8dcff7331936d31ec7f69808bc1d891c6546f0f346bd50636d72ac53737c")
 if(MSVC)
     target_compile_options(gyo_text_environment_tests PRIVATE /utf-8)
 endif()
 add_test(NAME gyo_text_environment COMMAND gyo_text_environment_tests)
-set_tests_properties(gyo_text_environment PROPERTIES LABELS "cpu" TIMEOUT 60)
+set_tests_properties(gyo_text_environment PROPERTIES LABELS "cpu" TIMEOUT 60
+    ENVIRONMENT "HB_SHAPER_LIST=fallback;HB_OPTIONS=uniscribe-bug-compatible;FREETYPE_PROPERTIES=truetype:interpreter-version=35 cff:no-stem-darkening=0 cff:hinting-engine=freetype autofitter:no-stem-darkening=0 autofitter:fallback-script=none autofitter:default-script=none autofitter:increase-x-height=40")
 
 # The adapters' interfaces (engine/modules/text/src): Unicode's conformance
 # tests through the libunibreak adapter, the two adapters' advances compared

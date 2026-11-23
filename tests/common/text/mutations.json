@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the text Module batch (docs/architecture/target/v2/text-declaration.zh-Hant.md, section 8.7; ids tg- the TX-1 guard script, tx<N>- Design Invariant TX-<N> of target/v2/text.zh-Hant.md). Written with the tests; the adversarial check of the catalog (Opus/high, same model as the author while Fable is paused) is recorded in the merge approval page.",
+ "description": "Declared mutants of the text Module batch (docs/architecture/target/v2/text-declaration.zh-Hant.md, section 8.7; ids tg- the TX-1 guard script, tx<N>- Design Invariant TX-<N> of target/v2/text.zh-Hant.md). Written with the tests; the adversarial check of the catalog (Opus/high, same model as the author while Fable is paused) is recorded in the merge approval page. Not kept (equivalent under every input, checked by hand 2026-11-23): drawing glyphs marked invisible: an invisible glyph is HarfBuzz's invisible glyph id (which FreeType cannot draw, so Empty) or a space (an empty bitmap); FreeType's Unscaled advance read without FT_LOAD_NO_SCALE (with no size set FreeType returns the same font units). The mutant tx3-utf8-second-byte-range was equivalent for ED A0 80 (the upper bound rejects it): an overlong E0 80 80 case was added. Also not kept: FreeType built with FT_CONFIG_OPTION_ENVIRONMENT_PROPERTIES (equivalent under the tests: every property that changes this path, the TrueType interpreter, the CFF engine and stem darkening, is set again with FT_Property_Set after FT_Init_FreeType, and the other properties FREETYPE_PROPERTIES may set, including autofitter:increase-x-height=40 and the autofitter scripts, changed none of the environment case's pixels; the #undef stays as a second line of defence).",
  "mutants": [
   {
    "id": "tg-freetype-include-off",
@@ -266,14 +266,14 @@
    "expect": "TX1-FREETYPE: nothing allowed found"
   },
   {
-   "id": "tx2-freetype-advance-hinted",
-   "what": "TX-2: the FreeType adapter's advance is read hinted at its current size, not in font units: it no longer equals HarfBuzz's",
+   "id": "tx2-harfbuzz-advance-scaled",
+   "what": "TX-2: the HarfBuzz adapter reads advances at a scale of 1000 instead of the font units (upem 1024 for the synthetic fonts): they no longer equal FreeType's",
    "guards": [
     "text TX-2"
    ],
-   "file": "engine/modules/text/src/adapters/freetype/FreeTypeRaster.cpp",
-   "find": "FT_Load_Glyph(f, glyph, FT_LOAD_NO_SCALE)",
-   "replace": "FT_Load_Glyph(f, glyph, FT_LOAD_DEFAULT)",
+   "file": "engine/modules/text/src/adapters/harfbuzz/HarfBuzzShaping.cpp",
+   "find": "    FontPtr unscaled(hb_font_create(face.get()));\n",
+   "replace": "    FontPtr unscaled(hb_font_create(face.get()));\n    hb_font_set_scale(unscaled.get(), 1000, 1000);\n",
    "target": "gyo_text_adapter_tests",
    "cases": "text adapter: HarfBuzz and FreeType read the same advances*",
    "expect": "CHECK\\( harfBuzz == freeTypeAdvance \\)"
@@ -301,7 +301,7 @@
    "find": "out.byteEnd = data.offsets[glyph.cpEnd];",
    "replace": "out.byteEnd = data.offsets[glyph.cpBegin] + 1;",
    "target": "gyo_text_tests",
-   "cases": "text shape: fallback takes the first font with the glyph, per grapheme",
+   "cases": "text shape: fallback takes the first font*",
    "expect": "CHECK\\( layout\\.glyphs\\[i\\]\\.byteEnd == expected\\[i\\]\\.end \\)"
   },
   {
@@ -327,7 +327,7 @@
    "find": "return first->penX + advance * passed / graphemes;",
    "replace": "return first->penX + advance;",
    "target": "gyo_text_tests",
-   "cases": "text caret: inside a ligature, a share of its advance per grapheme",
+   "cases": "text caret: inside a ligature*",
    "expect": "CHECK\\( Text::CaretAt\\(layout, Caret\\{1\\}\\)\\.x == Units16\\(600\\) / 2\\.0f \\)"
   },
   {
@@ -392,7 +392,7 @@
    "find": "        if (b >= e) {",
    "replace": "        if (b > e) {",
    "target": "gyo_text_tests",
-   "cases": "text range: one rectangle per line, for a selection or an IME composition",
+   "cases": "text range: one rectangle per line*",
    "expect": "CHECK\\( rects\\.empty\\(\\) \\)"
   },
   {
@@ -432,7 +432,7 @@
    "replace": "const unsigned char lo = 0x80;",
    "target": "gyo_text_adapter_tests",
    "cases": "text adapter: UTF-8 decoding*",
-   "expect": "CHECK\\( cps == std::vector<char32_t>\\(10, 0xFFFD\\) \\)"
+   "expect": "CHECK\\( cps == std::vector<char32_t>\\(3, 0xFFFD\\) \\)"
   },
   {
    "id": "tx3-utf8-subpart-per-byte",
@@ -574,7 +574,7 @@
    "find": "const std::int32_t halfTop = FloorDiv2(leading);",
    "replace": "const std::int32_t halfTop = leading;",
    "target": "gyo_text_tests",
-   "cases": "text layout: one line, the line box*",
+   "cases": "text layout: one line*",
    "expect": "CHECK\\( relative\\.lines\\[0\\]\\.baseline == Units16\\(820 \\+ 102\\) \\)"
   },
   {
@@ -695,19 +695,6 @@
    "expect": "CHECK\\( result\\.placements\\[0\\]\\.status == Text::GlyphRasterStatus::TooLarge \\)"
   },
   {
-   "id": "tx6-invisible-drawn",
-   "what": "TX-6: glyphs that are laid out but never drawn (line breaks) are drawn",
-   "guards": [
-    "text TX-6"
-   ],
-   "file": "engine/modules/text/src/GlyphAtlas.cpp",
-   "find": "        if (!glyph.visible) {",
-   "replace": "        if (false) {",
-   "target": "gyo_text_tests",
-   "cases": "text atlas: line breaks and invisible glyphs*",
-   "expect": "CHECK\\( (result|kana)\\.newGlyphs == [02] \\)"
-  },
-  {
    "id": "tx6-any-context",
    "what": "TX-6: an atlas accepts glyphs from a second context",
    "guards": [
@@ -722,7 +709,7 @@
   },
   {
    "id": "tx7-harfbuzz-reads-environment",
-   "what": "TX-7/TX-8: HarfBuzz reads its environment variables (HB_SHAPER_LIST=fallback drops kerning and ligatures)",
+   "what": "TX-7/TX-8: HarfBuzz reads its environment variables (HB_SHAPER_LIST=fallback drops the ligature and the kerning)",
    "guards": [
     "text TX-7",
     "text TX-8"
@@ -732,25 +719,15 @@
    "replace": "",
    "target": "gyo_text_environment_tests",
    "command": [
+    "{cmake}",
+    "-E",
+    "env",
+    "HB_SHAPER_LIST=fallback",
+    "HB_OPTIONS=uniscribe-bug-compatible",
+    "FREETYPE_PROPERTIES=truetype:interpreter-version=35 cff:no-stem-darkening=0 cff:hinting-engine=freetype autofitter:no-stem-darkening=0 autofitter:fallback-script=none autofitter:default-script=none autofitter:increase-x-height=40",
     "{exe:gyo_text_environment_tests}"
    ],
-   "expect": "CHECK\\( layout\\.glyphs\\[0\\]\\.advance == Units16\\(512 - 128\\) \\)"
-  },
-  {
-   "id": "tx7-freetype-reads-environment",
-   "what": "TX-7/TX-8: FreeType reads FREETYPE_PROPERTIES",
-   "guards": [
-    "text TX-7",
-    "text TX-8"
-   ],
-   "file": "third_party/freetype/config/gyo_ftoption.h",
-   "find": "#undef FT_CONFIG_OPTION_ENVIRONMENT_PROPERTIES\n",
-   "replace": "",
-   "target": "gyo_text_environment_tests",
-   "command": [
-    "{exe:gyo_text_environment_tests}"
-   ],
-   "expect": "CHECK\\( Base::Sha256\\(pixels\\) == std::string\\(GYO_TEXT_ENVIRONMENT_ATLAS\\) \\)"
+   "expect": "REQUIRE\\( layout\\.glyphs\\.size\\(\\) == 3 \\)"
   },
   {
    "id": "tx8-full-hinting",
@@ -803,7 +780,7 @@
    "find": "            if (IsCollection(bytes)) {",
    "replace": "            if (false) {",
    "target": "gyo_text_tests",
-   "cases": "text font: rule 2, a collection with no face",
+   "cases": "text font: rule 2* collection with no face",
    "expect": "TextFailureCode::EmptyCollection"
   },
   {
@@ -816,7 +793,7 @@
    "find": "            if (!check.hasGlyphs) {",
    "replace": "            if (false) {",
    "target": "gyo_text_tests",
-   "cases": "text font: rule 2, a face with no glyph",
+   "cases": "text font: rule 2* face with no glyph",
    "expect": "TextFailureCode::NoGlyphs"
   },
   {
@@ -829,7 +806,7 @@
    "find": "            if (!check.hasUnicodeCmap) {",
    "replace": "            if (false) {",
    "target": "gyo_text_tests",
-   "cases": "text font: rule 2, a face without a Unicode character map",
+   "cases": "text font: rule 2* without a Unicode character map",
    "expect": "TextFailureCode::NoUnicodeCmap"
   },
   {
