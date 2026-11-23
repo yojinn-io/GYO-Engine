@@ -1,9 +1,10 @@
 # Object_Connect's own tests, carried over from the original tests/ with the
-# original harness (TestSupport.hpp). The suites that read the bundled level data
-# from disk come back with the assets (porting inventory, section 5).
+# original harness (TestSupport.hpp). The bundled-data cases read
+# assets/object_connect through BundledData.cpp.
 gyo_get_game_target(object_connect logic object_connect_logic)
 add_executable(gyo_object_connect_logic_tests
     TestMain.cpp
+    BundledData.cpp
     data/PuzzleCatalogTests.cpp
     game/FinalResultsTests.cpp
     game/GameFlowTests.cpp
@@ -15,6 +16,8 @@ add_executable(gyo_object_connect_logic_tests
     tentacle/RibbonStripTests.cpp)
 target_include_directories(gyo_object_connect_logic_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(gyo_object_connect_logic_tests PRIVATE ${object_connect_logic})
+target_compile_definitions(gyo_object_connect_logic_tests PRIVATE
+    OBJECT_CONNECT_TEST_RESOURCE_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_connect")
 if(MSVC)
     target_compile_options(gyo_object_connect_logic_tests PRIVATE /W4 /permissive- /utf-8)
     target_compile_definitions(gyo_object_connect_logic_tests PRIVATE NOMINMAX)

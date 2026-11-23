@@ -1,7 +1,11 @@
 #pragma once
 
+#include "object_connect/data/PuzzleCatalogLoader.hpp"
+#include "object_connect/data/PuzzleData.hpp"
+
 #include <cmath>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -44,6 +48,10 @@ private:
                                       const float tolerance = 0.0001f) noexcept {
     return std::fabs(left - right) <= tolerance;
 }
+
+// The bundled level data under assets/object_connect (BundledData.cpp).
+[[nodiscard]] bool LoadBundledCatalog(PuzzleCatalog& catalog, std::string& error);
+[[nodiscard]] bool LoadBundledNodePresets(NodePresetCatalog& catalog, std::string& error);
 
 void RunPuzzleCatalogTests(TestContext& context);
 void RunFinalResultsTests(TestContext& context);

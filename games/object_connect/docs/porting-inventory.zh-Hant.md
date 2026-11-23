@@ -45,7 +45,7 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | 畫面狀態 | `GameFlow::screen_` | `state_machine`（`StateMachine<S>`＋`StateMachineRequest<S>`、enter／exit schedule） | PR 2 用了（只用值與請求；enter／exit schedule 等畫面與音效接上再看要不要用） |
 | 一幀的時間 | `FrameTimer`（`QueryPerformanceCounter`） | `world_time`（`VirtualTime` 等 Resource） | 已有 |
 | 讀資料檔 | `std::ifstream` | `asset`（catalog Data Contract、`TextLoader`）＋`world_asset`（`AssetRequests`／`AssetView`）；`assets/object_connect/content.json`（建置層生成的 `GYO_GAME_CONTENT_MANIFEST`） | 已有；關卡目錄跨三種檔、`levels.csv` 用路徑指向 `maps/*.csv`，PR 2 判「每個 CSV 一個 text asset、System 組目錄」或「遊戲自己的 loader 經 `LoadContext::Reference` 宣告引用」 |
-| 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | 等 I 合併；資產要先過授權（第 4 節） |
+| 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | 等 I 合併；PNG 已放進 `assets/object_connect/`（第 4 節） |
 | 日文字型、排版 | `FontSystem`（`imstb_truetype`）＋`TextLayout`／`Utf8`（左到右、無 shaping） | `text`（子批 T，已合併：FreeType＋HarfBuzz、換行、圖集） | 已有。原 `Text/*` **不搬**：GYO2 的 `text` 涵蓋（且多了 shaping）；原 `TextLayoutTests`／`Utf8Tests`／`LazyGlyphTests`／`FontSystemLifecycleTests` 跟著不搬 |
 | 音效、BGM | `GameAudio`（XAudio2 經 KamataEngine：載 WAV、播放、迴圈、改音量、查是否在播） | `audio`（`Mixer`、`Clip`、`WavLoader`）；裝置輸出在子批 A（`sdl_audio`） | 部分已有，缺口見第 3 節 G1、G2 |
 | 正交相機、2D 座標 | 固定 1280×720 的像素座標 | `transform`＋`camera`（X1，已合併：正交投影、2D marker） | 已有；縮放模式與換算是 R2b（第 3 節核對） |
@@ -81,22 +81,25 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 
 ## 4. 資產
 
-| 檔 | 大小 | 授權 | 狀態 |
+使用者 2026-11-23 確認（經主會話）：美術、關卡資料、音訊都是使用者本人做的，可以放進 repo；`k025g1030-design` 是使用者的學校帳號；音訊選 (a)，4 個 wav 原樣進 git。授權說明在 `assets/object_connect/LICENSES/README.md`。
+
+| 檔（`assets/object_connect/` 下，相對路徑照原本） | 大小 | 授權 | 狀態 |
 |---|---|---|---|
-| `fonts/BIZUDPGothic-Regular.ttf` | 4.3 MB | SIL OFL 1.1（原專案 `LICENSES/README.md`、`BIZUDPGothic-OFL.txt`） | 可放；要一起帶授權文字 |
-| `assets/textures/node/*.png`（7）、`assets/textures/mouse/*.png`（3） | 40 KB | 原專案 `LICENSES/README.md` 寫明「None of these notices grants additional rights to the game's code, artwork or audio」，沒有寫作者與授權 | **待使用者確認**（已轉主會話） |
-| `audio/*.wav`（4） | 25 MB | 同上 | **待使用者確認**；也要定 25 MB 的 WAV 要不要原樣進 git |
-| `data/levels.csv`、`data/nodes.csv`、`data/maps/stage_01..20.csv` | 96 KB | 同上 | **待使用者確認** |
+| `fonts/BIZUDPGothic-Regular.ttf` | 4.3 MB | SIL OFL 1.1（`LICENSES/BIZUDPGothic-OFL.txt`）；SHA-256 與原專案記錄的相同 | **已放（PR 2）** |
+| `assets/textures/node/*.png`（7）、`assets/textures/mouse/*.png`（3） | 40 KB | 使用者本人 | **已放（PR 2）** |
+| `audio/*.wav`（4） | 25 MB | 使用者本人 | **已放（PR 2）**，原樣 |
+| `data/levels.csv`、`data/nodes.csv`、`data/maps/stage_01..20.csv` | 96 KB | 使用者本人 | **已放（PR 2）** |
+| `data/maps/archive/prototype_0{1,2}.csv` | — | 使用者本人 | 不放（沒有關卡引用的原型） |
 | `white1x1.png`、`kamata.ico`、`axis/*`、`shaders/*.hlsl` | — | KamataEngine 的範本資源 | **不搬**（GYO2 的 render 自己有 shader；`axis` 是 3D 範本） |
 
-格式：PNG 經 `image`（I）、WAV 經 `audio` 的 `WavLoader`、CSV 經 `asset` 的 `TextLoader`，都登記在 `assets/object_connect/` 的 catalog。
+路徑照原本，所以 CSV 不改（`nodes.csv` 寫的是 `assets/textures/node/heart.png`，以 `assets/object_connect/` 為根）。格式：PNG 經 `image`（I）、WAV 經 `audio` 的 `WavLoader`、CSV 經 `asset` 的 `TextLoader`。`content.json`（asset catalog）在掛 main 執行檔時才需要（`GyoContent.cmake`），W 那段一起寫。
 
-## 5. PR 1 拿掉的測試（之後會回來）
+## 5. PR 1 拿掉的測試
 
-| 測試 | 原因 | 何時回來 |
+| 測試 | 原因 | 現況 |
 |---|---|---|
-| `PuzzleCatalogTests` 的 `TestIndependentDiskLoad`、`TestBundledCatalogs` | 讀磁碟上的關卡資料（`Load` 已拿掉；資料待授權） | 資產搬進來、讀檔接上 asset 之後（PR 2 或之後），改用 asset 讀同一份資料、斷言照原本 |
-| `PuzzleBoardTests` 的 `TestBundledStageOneIntegration` | 同上 | 同上 |
+| `PuzzleCatalogTests` 的 `TestBundledCatalogs`、`PuzzleBoardTests` 的 `TestBundledStageOneIntegration` | 讀磁碟上的關卡資料（`Load` 已拿掉） | **PR 2 接回**：測試自己讀 `assets/object_connect/` 的檔（`tests/object_connect/BundledData.cpp`；tests 不受 R4 限制），交給 `Parse`，斷言照原本 |
+| `PuzzleCatalogTests` 的 `TestIndependentDiskLoad` | 測的是 `Load` 本身 | 不回來（`Load` 不存在了；讀檔之後經 asset） |
 | `Text/*`、`FontSystemLifecycleTests` | 原 `Text/*` 不搬（GYO2 `text`） | 不回來 |
 | `GameAudioTests` | `GameAudio` 要改寫在 `audio` 上，且有 G1、G2 | audio 那一段移植時，依新寫法重寫 |
 

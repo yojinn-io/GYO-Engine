@@ -796,6 +796,78 @@ void TestWrappedBoardCollisionLengthAndStateIsolation(TestContext& context) {
 }
 
 
+void TestBundledStageOneIntegration(TestContext& context) {
+    PuzzleCatalog catalog;
+    std::string error;
+    context.Expect(
+        LoadBundledCatalog(catalog, error),
+        "bundled level and map CSV files load for board integration");
+    const PuzzleDefinition* const puzzle = catalog.Find("stage_01");
+    if (puzzle == nullptr) {
+        context.Fail("bundled catalog exposes stage_01");
+        return;
+    }
+
+    const auto rootIt = std::find_if(
+        puzzle->nodes.begin(), puzzle->nodes.end(),
+        [](const NodeDefinition& node) { return node.type == NodeType::Root; });
+    const auto endIt = std::find_if(
+        puzzle->nodes.begin(), puzzle->nodes.end(),
+        [](const NodeDefinition& node) { return node.type == NodeType::End; });
+    if (rootIt == puzzle->nodes.end() || endIt == puzzle->nodes.end()) {
+        context.Fail("stage_01 map snapshot contains root and end roles");
+        return;
+    }
+    const std::size_t rootIndex =
+        static_cast<std::size_t>(std::distance(puzzle->nodes.begin(), rootIt));
+    const std::size_t endIndex =
+        static_cast<std::size_t>(std::distance(puzzle->nodes.begin(), endIt));
+
+    const AxisAlignedBox bounds{{0.0f, 0.0f}, {1280.0f, 720.0f}};
+    PuzzleBoard board;
+    const bool initialized = board.Initialize(*puzzle, bounds, error);
+    context.Expect(initialized,
+                   "board initializes directly from loaded stage_01 map snapshot");
+    if (!initialized) {
+        return;
+    }
+    const PuzzleBoardSnapshot initial = board.MakeSnapshot();
+    context.Expect(initial.nodeStates[rootIndex].active &&
+                       initial.nodeStates[rootIndex].availableSource &&
+                       !initial.nodeStates[endIndex].active &&
+                       !initial.lengthExhausted,
+                   "loaded map roles drive initial root/end runtime state");
+    context.Expect(rootIt->maxOutgoing == 1 && endIt->maxIncoming == 1 &&
+                       NearlyEqual(board.GetRemainingOutgoingLength(rootIndex),
+                                   rootIt->maxOutgoingLength, 0.01f),
+                   "loaded map capacities and local budget reach the board unchanged");
+
+    const Vec2 canonicalEnd = Center(*puzzle, endIndex);
+    context.Expect(!puzzle->wrapEdges,
+                   "authored stage_01 integration level uses direct board routing");
+    const float expectedCommittedLength =
+        Length(canonicalEnd - Center(*puzzle, rootIndex)) *
+        puzzle->minimumSlackRatio;
+    context.Expect(
+        expectedCommittedLength <= puzzle->totalLength,
+        "stage_01 direct route fits its authored global budget");
+
+    BeginDrag(board, *puzzle, rootIndex);
+    board.Update(ReleaseAt(canonicalEnd), 1.0f / 60.0f);
+    context.Expect(board.IsSolved() && board.GetCompletedConnectionCount() == 1,
+                   "loaded first_link root can connect to its end and solve");
+    if (board.GetCommittedLines().empty()) {
+        return;
+    }
+    context.Expect(board.GetCommittedLines().front().fromNodeIndex == rootIndex &&
+                       board.GetCommittedLines().front().toNodeIndex == endIndex,
+                   "loaded-map connection is exposed through runtime scoring data");
+    context.Expect(
+        NearlyEqual(board.GetCommittedLines().front().committedLength,
+                    expectedCommittedLength, 0.01f),
+        "stage_01 consumes the authored direct-route length");
+}
+
 } // namespace
 
 void RunPuzzleBoardTests(TestContext& context) {
@@ -812,6 +884,7 @@ void RunPuzzleBoardTests(TestContext& context) {
     TestWrappedBoardPathAndBoundsContract(context);
     TestWrappedPreviewRetracesThroughPortal(context);
     TestWrappedBoardCollisionLengthAndStateIsolation(context);
+    TestBundledStageOneIntegration(context);
 }
 
 } // namespace object_connect::tests
