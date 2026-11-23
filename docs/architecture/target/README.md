@@ -144,7 +144,7 @@
 
 ## 目錄
 
-- [kernel.zh-Hant.md](kernel.zh-Hant.md)：**先讀**。Kernel（`engine/ecs/kernel`）的 Design Invariants（DI-KS 1～28；6、7、8、22、23 拿掉，編號保留）與 Replacement Criteria（RC 1～24；2、3、10、12 拿掉，7 移到編排層、11 移到回滾 Module，編號保留）全文；每條有錨點，部件頁連到單一條款。
+- [kernel.zh-Hant.md](kernel.zh-Hant.md)：**先讀**。Kernel（`engine/ecs/kernel`）的 Design Invariants（DI-KS 1～28；6、7、8、22、23 拿掉，編號保留）與 Replacement Criteria（RC 1～25；2、3、10、12 拿掉，7 移到編排層、11 移到回滾 Module，編號保留）全文；每條有錨點，部件頁連到單一條款。
 - [system-contract.zh-Hant.md](system-contract.zh-Hant.md)：System 契約（描述從簽名推出、回 `Result<void, KernelError>`、無狀態）。
 - [error-handling.md](error-handling.md)：錯誤處理的擴充列（以執行期資料偵測的 Programmer Error：Result 帶上下文、Executor 記錄一次並 Interrupted、不靜默）。英文，因為最終併入的 `docs/architecture/error-handling.md` 是英文。
 - [determinism.md](determinism.md)：決定性（判定的時間只來自 tick 與被記錄的 boundary 輸入——tick 在時間 Module；區隨第 4 批拿掉，Z6、Z8 與 `Tick` 的寫者檢查在權威 Module 的伺服器權威策略；亂數是每實體元件、四處契約）。英文，因為最終併入的 `docs/architecture/determinism.md` 是英文。

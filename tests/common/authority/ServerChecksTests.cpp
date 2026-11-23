@@ -25,6 +25,7 @@ K::SystemResult InsertHealth(K::CommandsFor<K::Inserts<Health>, K::Removes<>>) {
 K::SystemResult WriteArmorInPlace(K::Query<K::Write<Armor>>) { return {}; }
 K::SystemResult RemoveArmor(K::CommandsFor<K::Inserts<>, K::Removes<Armor>>) { return {}; }
 K::SystemResult ConsumeCommand(K::ResMut<Command>) { return {}; }
+K::SystemResult ConsumeCommandComponent(K::Query<K::Write<Command>>) { return {}; }
 K::SystemResult WriteScore(K::ResMut<Score>) { return {}; }
 K::SystemResult FillAndWriteScore(K::CommandsFor<K::Inserts<Armor>, K::Removes<>>, K::Query<K::Write<Score>>) { return {}; }
 K::SystemResult ReadArmor(K::Query<K::Read<Armor>>) { return {}; }
@@ -470,4 +471,44 @@ TEST_CASE("authority checks: the funnel: every declaration of a request, a chain
         s.Registrar().AddSystem<&ReadArmor>(In("ReadArmor", "FixedUpdate", "Update"));
     }, Client());
     CHECK_MESSAGE(read == "built", "[au-funnel-read-not-filled] " << read);
+}
+
+TEST_CASE("authority checks: AU-E6 leaves out a component input whose history the rollback keeps, not one without") {
+    const auto build = [](bool history) {
+        return [history](O::WorldSetup& s) {
+            Step(s);
+            A::AuthorityEntry(s).Component<Command>(
+                "Command", {.input = true, .rollback = history ? A::RollbackChoice::Rollback : A::RollbackChoice::Self});
+            s.Registrar().AddSystem<&ConsumeCommandComponent>(In("ConsumeCommandComponent", "FixedUpdate", "Update"));
+        };
+    };
+    const std::string kept = BuildText(build(true), Client());
+    CHECK_MESSAGE(kept == "built", "[au-z6-component-input-history] " << kept);
+    const std::string bare = BuildText(build(false), Client());
+    CHECK_MESSAGE(Has(bare, "AU-E6 System 'ConsumeCommandComponent'"), "[au-z6-component-input-no-history] " << bare);
+}
+
+namespace {
+// A unit that adds AnnotateTick to the time Module's Tick writers (as the net Module's clock sync does, D-9).
+class TickWriterUnit final : public O::Module {
+public:
+    void Build(O::WorldSetup& setup) override { W::WorldTimeModule::AddTickWriter(setup, "AnnotateTick"); }
+};
+} // namespace
+
+TEST_CASE("authority checks: AU-E5 accepts a Tick writer another unit added to the time Module's list") {
+    auto units = Units();
+    O::RegisterRow row;
+    row.name = "clock";
+    row.kind = O::UnitKind::Module;
+    row.libraryOnly = false;
+    row.defaultOn = true;
+    row.depends = {"world_time"};
+    units.rows.push_back(row);
+    units.modules.push_back({"clock", std::make_unique<TickWriterUnit>()});
+    auto built = O::Product::Build(Game([](O::WorldSetup& s) {
+        A::AuthorityEntry(s).Mark<W::Tick>();
+        s.Registrar().AddSystem<&AnnotateTick>(In("AnnotateTick", "Main", "Update"));
+    }, Setting{}), std::move(units));
+    CHECK_MESSAGE(Reported(built) == "built", "[au-tick-writer-registered] " << Reported(built));
 }

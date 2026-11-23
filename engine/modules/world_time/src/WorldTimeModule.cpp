@@ -25,7 +25,11 @@ const WorldTimeOptions& OptionsOf(const WorldTimeOptions* given) {
 // VirtualTime::discarded (WT-2). A World without a fixed step (TimeConfig::fixedStep 0): no accumulator, so
 // AdvanceVirtual caps the frame at maxFrameDelta, and nothing is handed to a fixed step (no NotDriven).
 SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, ActiveTime& active, const TimeSampling& sampling,
-                     const TimeControl& control, const TimeConfig& config, Kernel::MessageWriter<TimeDiscarded>& discarded) {
+                     const TimeControl& product, const TimeSyncScale& sync, const TimeConfig& config,
+                     Kernel::MessageWriter<TimeDiscarded>& discarded) {
+    // The product's scale times the clock sync's (net Module declaration D-9, section 18).
+    TimeControl control = product;
+    control.scale = product.scale * sync.scale;
     SampleRealTime(real, sampling);
     if (fixed.pending > 0) {
         // The fixed step did not take the last frame's time (RunFixedSteps did not run): discarded, not carried.
@@ -46,16 +50,16 @@ SystemResult Advance(RealTime& real, VirtualTime& virt, FixedTime& fixed, Active
 
 SystemResult AdvanceTime(Kernel::ResMut<RealTime> real, Kernel::ResMut<VirtualTime> virt, Kernel::ResMut<FixedTime> fixed,
                          Kernel::ResMut<ActiveTime> active, Kernel::Res<TimeSampling> sampling, Kernel::Res<TimeControl> control,
-                         Kernel::Res<TimeConfig> config, Kernel::MessageWriter<TimeDiscarded> discarded) {
-    return Advance(*real, *virt, *fixed, *active, *sampling, *control, *config, discarded);
+                         Kernel::Res<TimeSyncScale> sync, Kernel::Res<TimeConfig> config, Kernel::MessageWriter<TimeDiscarded> discarded) {
+    return Advance(*real, *virt, *fixed, *active, *sampling, *control, *sync, *config, discarded);
 }
 
 // The signature without TimeControl (pausable = false): a type not registered is a startup error (RE4).
 SystemResult AdvanceTimeUnpausable(Kernel::ResMut<RealTime> real, Kernel::ResMut<VirtualTime> virt,
                                    Kernel::ResMut<FixedTime> fixed, Kernel::ResMut<ActiveTime> active,
-                                   Kernel::Res<TimeSampling> sampling, Kernel::Res<TimeConfig> config,
+                                   Kernel::Res<TimeSampling> sampling, Kernel::Res<TimeSyncScale> sync, Kernel::Res<TimeConfig> config,
                                    Kernel::MessageWriter<TimeDiscarded> discarded) {
-    return Advance(*real, *virt, *fixed, *active, *sampling, TimeControl{}, *config, discarded);
+    return Advance(*real, *virt, *fixed, *active, *sampling, TimeControl{}, *sync, *config, discarded);
 }
 
 // RunFixedSteps (declaration 3.3): takes the frame's time, adds it to the accumulator (AdvanceVirtual already kept
@@ -102,6 +106,8 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
     r.Resource<Tick>({.name = "Tick"});
     r.Resource<TimeSampling>({.name = "TimeSampling"});
     r.Resource<Resimulation>({.name = "Resimulation"});
+    r.Resource<TimeSyncScale>({.name = "TimeSyncScale"});
+    setup.Buffer().Create<TickWriterRegistrations>(TickWriterRegistrations{TickWriters()});
     r.Resource<TimeConfig>({.name = "TimeConfig"});
     if (options.pausable) r.Resource<TimeControl>({.name = "TimeControl"});
     r.Message<TimeDiscarded>({.name = "TimeDiscarded"});
@@ -141,6 +147,8 @@ void WorldTimeModule::Build(Orchestration::WorldSetup& setup) {
         // Always false when a World is prepared, carried over or not (authority-rollback declaration 2.3, WT-1):
         // a rollback interrupted by a replacement leaves no "resimulating" behind.
         world.SetResource(Resimulation{});
+        // 1 whenever a World is prepared, carried over or not: a new World's clock sync starts from its own measure.
+        world.SetResource(TimeSyncScale{});
         // The settings of this World, always (the step length too, through FixedTime above: a restore or a
         // carry-over keeps FixedTime's elapsed time and remainder only, RestoreFixedTime).
         world.SetResource(config);
@@ -165,6 +173,17 @@ void WorldTimeModule::Check(const Kernel::FrozenRegistry& registry, Orchestratio
 
 std::vector<std::string> WorldTimeModule::TickWriters() {
     return {"RunFixedSteps"};
+}
+
+std::vector<std::string> WorldTimeModule::TickWriters(const Orchestration::ModuleBuffer& buffer) {
+    const TickWriterRegistrations* table = buffer.Find<TickWriterRegistrations>();
+    return table != nullptr ? table->names : TickWriters();
+}
+
+void WorldTimeModule::AddTickWriter(Orchestration::WorldSetup& setup, std::string system) {
+    TickWriterRegistrations* table = setup.Buffer().Find<TickWriterRegistrations>();
+    GYO_ASSERT(table != nullptr && "WorldTimeModule::AddTickWriter: the time Module is not built into this World");
+    table->names.push_back(std::move(system));
 }
 
 } // namespace GYO::Engine::WorldTime

@@ -1,9 +1,9 @@
 name,dir,target,description,library_only,default,depends,private_depends,unit,header
 json,modules/json,GYO::Json,"JSON reading and writing behind the engine's own interface",yes,no,,,,
-audio,modules/audio,GYO::Audio,The audio mixer,yes,no,,,,
 logging,modules/logging,GYO::Logging,"Records, the Logger, sinks, the JSON lines format and the fatal path's last write",yes,no,,json,,
 trace,modules/trace,GYO::Trace,"Spans: the per-thread stack, parents, timing and the path, written as logging records",yes,no,,logging,,
 asset,modules/asset,GYO::Asset,"Asset ids, the catalog Data Contract, the loader interface, whole-file reading and the text loader",yes,no,,json,,
+audio,modules/audio,GYO::Audio,"The audio mixer, its shared immutable clips and the sound loader",yes,no,asset,,,
 entity_ids,modules/entity_ids,GYO::EntityIds,"The default entity allotter: RangeAllotter registered in every World with a default range",no,yes,,,GYO::Engine::EntityIds::EntityIdsModule,engine/entity_ids/EntityIdsModule.hpp
 world_time,modules/world_time,GYO::WorldTime,"Game time in a World: time Resources, the fixed step, the tick",no,yes,logging,,GYO::Engine::WorldTime::WorldTimeModule,engine/world_time/WorldTimeModule.hpp
 world_logging,modules/world_logging,GYO::WorldLogging,"The World end of logging: Forward and the Kernel diagnostics a runner takes",yes,no,logging,,,
@@ -12,3 +12,4 @@ authority,modules/authority,GYO::Authority,"Who decides the state of the game, c
 world_asset,modules/world_asset,GYO::WorldAsset,"The World end of asset: the Product's AssetStore, AssetRequests and AssetView in every World, the apply System",no,yes,asset,,GYO::Engine::WorldAsset::WorldAssetModule,engine/world_asset/WorldAssetModule.hpp
 state_machine,modules/state_machine,GYO::StateMachine,"A World's global states: the current value, requests, enter and exit schedules, sub-states and run conditions",yes,no,,,,
 save_version,modules/save_version,GYO::SaveVersion,"Save versions: the current version and the oldest one a load takes, checked by the author's load",yes,no,,,,
+net,modules/net,GYO::Net,"The network: the Link (UDP and in memory), the transport (acks, two channels, fragments, drop counts), the handshake and liveness, the Peer entity and the apply points",no,yes,world_time;rollback;authority;entity_ids,,GYO::Engine::Net::NetModule,engine/net/NetModule.hpp

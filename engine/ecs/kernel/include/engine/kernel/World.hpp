@@ -343,9 +343,9 @@ public:
     }
 
     // The World summary of spec D-9: keys and values of every column, resource
-    // values, every message record (seq and payload) with each type's next write
-    // sequence number, and the message cursors; without stamps or
-    // Plan positions. Version 3 (World.cpp). Readable in Ready and Interrupted.
+    // values, and each message type's held records (count and payloads); without
+    // stamps, Plan positions, message sequence numbers or cursors. Version 4
+    // (World.cpp). Readable in Ready and Interrupted.
     // Each value goes through its type's hash function (Hash.hpp). Err
     // (HashMissing, naming the types) when a type with no hash function has a
     // value in the World.

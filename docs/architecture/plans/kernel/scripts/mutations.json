@@ -6465,32 +6465,46 @@
       "expect": "\\[msg\\-condition\\-cursor\\]"
     },
     {
-      "id": "msg-summary-no-cursors",
-      "what": "the World summary leaves out the message cursors (event cursor declaration 3.2). Only it catches the cursor table's presence in the summary; msg-summary-no-cursor-position is where each cursor read to and msg-summary-no-next-seq the sequence numbers (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
+      "id": "msg-summary-next-seq-back",
+      "what": "the World summary hashes each type's write sequence number again (summary version 4 left it out: one record written once changed every later summary; v8-arch-gyo2-kernel-summary-messages (b)). Only it catches the write sequence number; msg-summary-record-seq-back is a record's seq and msg-summary-cursors-back the cursor table",
       "guards": [
         "kernel DI-KS 10",
-        "time-events-declaration 4.4"
+        "kernel-summary-messages-declaration 第 9 節"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    h.U64(cursors_.size());\n    for (const Detail::MessageCursor& cursor : cursors_) {",
-      "replace": "    h.U64(0);\n    if (false) for (const Detail::MessageCursor& cursor : cursors_) {",
+      "find": "        h.U64(buffer->Size());\n        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n",
+      "replace": "        h.U64(buffer->nextSeq);\n        h.U64(buffer->Size());\n        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n",
       "target": "gyo_kernel_tests",
-      "cases": "J-36: the World summary holds*",
-      "expect": "\\[msg\\-summary\\-cursors\\]"
+      "cases": "J-36: the World summary holds no message cursor*",
+      "expect": "\\[msg\\-summary\\-seq\\]"
     },
     {
-      "id": "msg-summary-no-next-seq",
-      "what": "the World summary leaves out each type's write sequence number (event cursor declaration 3.2). Only it catches the write sequence numbers in the summary; msg-summary-no-cursors and msg-summary-no-cursor-position are the cursor table (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
+      "id": "msg-summary-record-seq-back",
+      "what": "the World summary hashes each held record's seq again (v8-arch-gyo2-kernel-summary-messages (b)). Only it catches a record's seq: [msg-summary-seq] compares Worlds with no record held",
       "guards": [
         "kernel DI-KS 10",
-        "time-events-declaration 4.4"
+        "kernel-summary-messages-declaration 第 9 節"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        h.U64(buffer->nextSeq);\n",
-      "replace": "",
+      "find": "        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n",
+      "replace": "        for (std::size_t i = 0; i < buffer->Size(); ++i) {\n            h.U64(buffer->SeqAt(i));\n            buffer->HashAt(h, i);\n        }\n",
       "target": "gyo_kernel_tests",
-      "cases": "J-36: the World summary holds*",
-      "expect": "\\[msg\\-summary\\-seq\\]"
+      "cases": "J-36: the same held record*",
+      "expect": "\\[msg\\-summary\\-record\\-seq\\]"
+    },
+    {
+      "id": "msg-summary-cursors-back",
+      "what": "the World summary hashes the cursor table again (v8-arch-gyo2-kernel-summary-messages (b)). Only it catches the cursor table; a mutant that brought back only where each cursor has read to is caught by [msg-summary-cursors] as well, so [msg-summary-cursor-position] is joined here (合わせ方; declaration revision 2, narrow check N3)",
+      "guards": [
+        "kernel DI-KS 10",
+        "kernel-summary-messages-declaration 第 9 節"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n    }\n    return Fingerprint{kSummaryVersion",
+      "replace": "        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n    }\n    h.U64(cursors_.size());\n    for (const Detail::MessageCursor& cursor : cursors_) {\n        h.U64(cursor.message);\n        h.U64(cursor.system);\n        h.U64(cursor.mount);\n        h.U64(cursor.slot);\n        h.U64(cursor.read);\n    }\n    return Fingerprint{kSummaryVersion",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the World summary holds no message cursor*,J-36: where each cursor has read to*",
+      "expect": "(?=[\\s\\S]*(?:\\[msg\\-summary\\-cursors\\]))[\\s\\S]*(?:\\[msg\\-summary\\-cursor\\-position\\])"
     },
     {
       "id": "msg-hook-reader-accepted",
@@ -6927,20 +6941,6 @@
       "expect": "\\[obs\\-cursor\\-kept\\-on\\-removal\\]"
     },
     {
-      "id": "msg-summary-no-cursor-position",
-      "what": "the World summary leaves out where each cursor has read to (DI-KS 10: summary version 2 holds the cursor table). Only it catches the read position; msg-summary-cursors is the table's presence (adversarial check K21, step 7) (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
-      "guards": [
-        "kernel DI-KS 10",
-        "time-events-declaration 4.4"
-      ],
-      "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        h.U64(cursor.read);\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-36: the World summary holds where each cursor*",
-      "expect": "\\[msg\\-summary\\-cursor\\-position\\]"
-    },
-    {
       "id": "obs-host-trigger-dropped-entries-kept",
       "what": "the Host's Trigger does not start its own DroppedMessages records: its drops go into the last Run's record (DI-KS 10: one record per message type per Run or trigger). Only it catches the reset in TriggerFromHost (adversarial check KE6, step 7)",
       "guards": [
@@ -7090,18 +7090,19 @@
     },
     {
       "id": "msg-summary-version-not-bumped",
-      "what": "the World summary version stays 2 (README rule 2: one mutant per version constant; summary version 3 since authority-rollback step 1, declaration 3.2). Only it catches the summary version (adversarial check K23, step 7; rewritten by v8-arch-gyo2-authority-rollback step 1)",
+      "what": "the World summary version stays 3 (README rule 2: one mutant per version constant; summary version 4 since v8-arch-gyo2-kernel-summary-messages). Only it catches the summary version (adversarial check K23, step 7; rewritten by v8-arch-gyo2-authority-rollback step 1 and v8-arch-gyo2-kernel-summary-messages)",
       "guards": [
         "kernel DI-KS 10",
         "time-events-declaration 4.4",
-        "authority-rollback-declaration 3.2"
+        "authority-rollback-declaration 3.2",
+        "kernel-summary-messages-declaration 第 9 節"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "constexpr std::uint32_t kSummaryVersion = 3;",
-      "replace": "constexpr std::uint32_t kSummaryVersion = 2;",
+      "find": "constexpr std::uint32_t kSummaryVersion = 4;",
+      "replace": "constexpr std::uint32_t kSummaryVersion = 3;",
       "target": "gyo_kernel_tests",
       "cases": "J-32: the sync point's result depends only on the records*",
-      "expect": "2:[0-9a-f]{64} == 3:3f782d82"
+      "expect": "3:[0-9a-f]{64} == 4:5f5fc699"
     },
     {
       "id": "obs-host-direct-write-observed",
@@ -7822,13 +7823,28 @@
     },
     {
       "id": "ks-summary-message-payload-dropped",
-      "what": "a held message's payload is not in the World summary. Only it catches the payload",
+      "what": "a held message's payload is not in the World summary. Only it catches the payload (find rewritten by v8-arch-gyo2-kernel-summary-messages: the record's seq is no longer hashed; the property is the same)",
       "guards": [
         "kernel DI-KS 27"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            h.U64(buffer->SeqAt(i));\n            buffer->HashAt(h, i);",
-      "replace": "            h.U64(buffer->SeqAt(i));",
+      "find": "        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36: the World summary hashes*",
+      "expect": "\\[ks\\-summary\\-message\\-payload\\]"
+    },
+    {
+      "id": "ks-summary-message-first-only",
+      "what": "the World summary hashes only the first held record of each message type (merge review of v8-arch-gyo2-kernel-summary-messages, S3: no case held two records). Only it catches a later record left out; ks-summary-message-payload-dropped leaves out every payload",
+      "guards": [
+        "kernel DI-KS 10",
+        "kernel DI-KS 27",
+        "kernel-summary-messages-declaration 第 5 節"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);\n",
+      "replace": "        for (std::size_t i = 0; i < buffer->Size() && i < 1; ++i) buffer->HashAt(h, i);\n",
       "target": "gyo_kernel_tests",
       "cases": "J-36: the World summary hashes*",
       "expect": "\\[ks\\-summary\\-message\\-payload\\]"

@@ -44,7 +44,7 @@ primitives here.
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
 | Wait | The wake primitive behind `Time::Waiter` (`WakeSignal`: `Create`, `Signal`, `Block`, `Mechanism`) | v8-arch-gyo2-os-wait (landed; the user's owner decision of 2026-11-21 lifted the D78 freeze, and the batch was accepted by CI L1, the guards and mutants instead of the Wait timing L2) |
-| Net (conditional) | Neutral classification of socket error codes | os-net-errors: not started (no observed pressure, D78); the classification stays with the product |
+| Datagram | A non-blocking IPv4 UDP socket and its address (`DatagramSocket`: `Open`, `LocalAddress`, `Send`, `Receive`; `DatagramAddress`: `Loopback`, `Any`, `Parse`, `ToString`), failures in neutral codes | v8-arch-gyo2-net-module step 0 (the user approved the net Module declaration on 2026-11-22, its Q5: the foreseen pressure of the net Module, which comes before the products, replaces D78's "no observed pressure"; which errors are transient stays with the caller, Invariant 7) |
 
 Only the components whose batch has landed exist. A frozen or not-started component comes back only with observed
 pressure, a Feature that needs it, or the user's owner decision (Replacement Criterion 9).
@@ -264,6 +264,21 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
   - A primitive the OS refuses is `IOFailed` with the native error. `Block` lets the fallback's
     `std::system_error` pass through (Invariant 6). A moved-from signal ignores `Signal`; `Block` and `Mechanism`
     on it are Programmer Errors.
+- **Datagram** (v8-arch-gyo2-net-module step 0). `DatagramSocket` sends and receives one IPv4 UDP datagram at a time
+  and never blocks.
+  - `Open(local)` binds (port 0: the OS picks one) and sets the socket non-blocking and not inherited by child
+    processes. A local address another socket holds is `AddressInUse`; an address that is not local is
+    `InvalidAddress`; a refused one is `AccessDenied`; anything else is `IOFailed`.
+  - `Send` is one `sendto`: no room now is `WouldBlock`, a datagram the OS will not send is `TooLarge`, an
+    unreachable peer or network is `Unreachable`. A datagram the OS accepted may still be lost.
+  - `Receive(buffer)` takes one waiting datagram or returns none. A datagram longer than the buffer is dropped and
+    reported as `TooLarge` (POSIX: `MSG_TRUNC` in `recvmsg`'s flags; Windows: `WSAEMSGSIZE`).
+  - An ICMP reply to an earlier send never fails a receive: Windows turns off `SIO_UDP_CONNRESET` and
+    `SIO_UDP_NETRESET` at `Open`; macOS and Linux do not report it on an unconnected socket.
+  - macOS and Linux share `src/sys/DatagramSocket.cpp` (BSD sockets, `fcntl`); Windows (`src/sys/windows/`) holds
+    one `WSAStartup` reference per socket and links `ws2_32`. `DatagramAddress::Parse` (four decimal octets) has no
+    OS call and lives in `src/common`.
+  - IPv6 is not here: no named Feature needs it (the net Module declaration, step 0).
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
@@ -362,7 +377,6 @@ Known blind spots, left to review:
 - Windows, input, clipboard, GPU and the SDL clock domain stay with the SDL adapter and its own Design
   Invariants (not in gyo2 yet; it returns with the SDL batch, without `engine/platform`); engine/core/os does not
   link SDL or call `SDL_Init`.
-- Sockets themselves stay with asio in the products that use them.
 - The build layer: CMake's `WIN32`/`APPLE`/`UNIX`, MSVC flags, CI workflows, Python acceptance scripts and the
   platform columns of `config/`. Exception: Invariant 1's ban on OS-identifying macros also applies to
   compile definitions a non-os target gets from CMake.
@@ -383,7 +397,7 @@ Known blind spots, left to review:
    D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
 3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::OS` links only `GYO::Base`
-   and OS system libraries (`shell32` on Windows; `Threads::Threads` elsewhere, since the thread naming moved in,
+   and OS system libraries (`shell32` and, for `DatagramSocket`, `ws2_32` on Windows (v8-arch-gyo2-net-module step 0); `Threads::Threads` elsewhere, since the thread naming moved in,
    os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/core/os
    includes only engine/core/base, the standard library and OS headers. Its API has no type of a module above it: no
    `Uri`, `IFileSystem` or `IStream`.

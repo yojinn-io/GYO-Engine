@@ -27,18 +27,17 @@ Duration Ms(const std::int64_t ms) { return std::chrono::duration_cast<Duration>
 struct Rig final {
     Mixer mixer;
     Submitter submitter;
-    ClipId clip; // 1000 frames
+    Clip clip; // 1000 frames
 };
 
 Rig MakeRig(const std::uint32_t voices = 4) {
-    ClipBank bank;
     const std::vector<std::int16_t> samples(1000, 100);
-    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
+    auto clip = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate);
     REQUIRE(clip.has_value());
     MixerConfig config;
     config.scheduleDelay = Duration::zero();
     config.maxVoices = voices;
-    auto mixer = Mixer::Create(config, std::move(bank));
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     auto submitter = mixer->CreateSubmitter();
     REQUIRE(submitter.has_value());
@@ -285,20 +284,19 @@ constexpr std::uint32_t kReuseLengths[] = {150, 300, 600};
 
 struct ReuseRig final {
     Mixer mixer;
-    std::vector<ClipId> clips;
+    std::vector<Clip> clips;
 };
 
 ReuseRig MakeReuseRig() {
-    ClipBank bank;
-    std::vector<ClipId> clips;
+    std::vector<Clip> clips;
     for (const std::uint32_t frames : kReuseLengths) {
         const std::vector<std::int16_t> samples(frames, 100);
-        clips.push_back(*bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate));
+        clips.push_back(*Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate));
     }
     MixerConfig config;
     config.scheduleDelay = Duration::zero();
     config.maxVoices = 3;
-    auto created = Mixer::Create(config, std::move(bank));
+    auto created = Mixer::Create(config);
     REQUIRE(created.has_value());
     return ReuseRig{std::move(created).value(), std::move(clips)};
 }

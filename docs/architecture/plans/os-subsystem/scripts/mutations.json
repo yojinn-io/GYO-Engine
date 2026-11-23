@@ -2347,6 +2347,130 @@
       "target": "gyo_os_tests",
       "cases": "*fail without a home for the user data directory*",
       "expect": "CHECK\\( withoutHome\\.error\\(\\)\\.code == OSErrorCode::IOFailed \\)"
+    },
+    {
+      "id": "od-trunc-ignored",
+      "what": "POSIX Receive ignores MSG_TRUNC, so a datagram longer than the buffer comes back cut instead of TooLarge; only it catches the truncation check (v8-arch-gyo2-net-module step 0)",
+      "guards": [
+        "net-module-declaration D-1",
+        "net-module-declaration 判定 G-7"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/DatagramSocket.cpp",
+      "find": "if ((message.msg_flags & MSG_TRUNC) != 0)",
+      "replace": "if (false)",
+      "target": "gyo_os_tests",
+      "cases": "*longer than the buffer*",
+      "timeout": 120,
+      "expect": "REQUIRE_FALSE\\( received->has_value\\(\\) \\)"
+    },
+    {
+      "id": "od-addr-in-use",
+      "what": "Open reports a held port as IOFailed instead of AddressInUse; only it catches the AddressInUse mapping (v8-arch-gyo2-net-module step 0)",
+      "guards": [
+        "net-module-declaration D-1",
+        "net-module-declaration 判定 G-7"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/DatagramSocket.cpp",
+      "find": "if (error == EADDRINUSE) code = OSErrorCode::AddressInUse;",
+      "replace": "if (false) code = OSErrorCode::AddressInUse;",
+      "target": "gyo_os_tests",
+      "cases": "*AddressInUse*",
+      "timeout": 120,
+      "expect": "CHECK\\( second\\.error\\(\\)\\.code == OSErrorCode::AddressInUse \\)"
+    },
+    {
+      "id": "od-addr-not-local",
+      "what": "Open reports a non-local address as IOFailed instead of InvalidAddress; only it catches the InvalidAddress mapping (v8-arch-gyo2-net-module step 0)",
+      "guards": [
+        "net-module-declaration D-1",
+        "net-module-declaration 判定 G-7"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/DatagramSocket.cpp",
+      "find": "else if (error == EADDRNOTAVAIL) code = OSErrorCode::InvalidAddress;",
+      "replace": "else if (false) code = OSErrorCode::InvalidAddress;",
+      "target": "gyo_os_tests",
+      "cases": "*does not have*",
+      "timeout": 120,
+      "expect": "CHECK\\( socket\\.error\\(\\)\\.code == OSErrorCode::InvalidAddress \\)"
+    },
+    {
+      "id": "od-from-lost",
+      "what": "Receive drops the sender's address; only it catches the from field (LocalAddress shares the conversion, so a conversion mutant would hide) (v8-arch-gyo2-net-module step 0)",
+      "guards": [
+        "net-module-declaration D-1",
+        "net-module-declaration 判定 G-7"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/DatagramSocket.cpp",
+      "find": "            return std::optional<ReceivedDatagram>(ReceivedDatagram{static_cast<std::size_t>(received),\n                FromNative(native)});",
+      "replace": "            return std::optional<ReceivedDatagram>(ReceivedDatagram{static_cast<std::size_t>(received),\n                DatagramAddress{}});",
+      "target": "gyo_os_tests",
+      "cases": "*arrives whole*",
+      "timeout": 120,
+      "expect": "CHECK\\( received->from == Local\\(sender\\) \\)"
+    },
+    {
+      "id": "od-win-connreset-on",
+      "what": "Windows leaves SIO_UDP_CONNRESET on, so the ICMP reply to a send to a closed port fails the next receive; only it catches the Windows reset switch (v8-arch-gyo2-net-module step 0)",
+      "guards": [
+        "net-module-declaration D-1",
+        "net-module-declaration 判定 G-7"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "file": "engine/core/os/src/sys/windows/DatagramSocket.cpp",
+      "find": "        BOOL report = FALSE;",
+      "replace": "        BOOL report = TRUE;",
+      "target": "gyo_os_tests",
+      "cases": "*nobody listens*",
+      "timeout": 120,
+      "expect": "REQUIRE\\( nothing\\.has_value\\(\\) \\)"
+    },
+    {
+      "id": "od-parse-leading-zero",
+      "what": "Parse accepts an octet with a leading zero; only it catches the leading-zero rule (v8-arch-gyo2-net-module step 0)",
+      "guards": [
+        "net-module-declaration D-1",
+        "net-module-declaration 判定 G-7"
+      ],
+      "file": "engine/core/os/src/common/DatagramAddress.cpp",
+      "find": "if (digits == 0 || value > 255 || (digits > 1 && text[begin] == '0')) return invalid();",
+      "replace": "if (digits == 0 || value > 255) return invalid();",
+      "target": "gyo_os_tests",
+      "cases": "*dotted IPv4*",
+      "timeout": 120,
+      "expect": "bad := 01\\.2\\.3\\.4"
+    },
+    {
+      "id": "od-parse-trailing",
+      "what": "Parse accepts text after the fourth octet (\"1.2.3.4.5\", the first such case in the list); only it catches the end-of-text rule (v8-arch-gyo2-net-module step 0)",
+      "guards": [
+        "net-module-declaration D-1",
+        "net-module-declaration 判定 G-7"
+      ],
+      "file": "engine/core/os/src/common/DatagramAddress.cpp",
+      "find": "    if (at != text.size()) return invalid();\n",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*dotted IPv4*",
+      "timeout": 120,
+      "expect": "bad := 1\\.2\\.3\\.4\\.5"
     }
   ]
 }
