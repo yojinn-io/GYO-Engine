@@ -6,7 +6,14 @@
 
 這張卡照開卡時的舊 AGENTS 做完（使用者「照你建議。」，HANDOFF `v8-arch-gyo2-core-agents-transition`）。
 
-**請你定與核准的**：第 6 節兩題（換行的語言與禁則強度、TX-1 守衛的範圍）、第 3 節 Design Invariants 的最終文字、第 4 節突變的數目超過基準、第 5 節和宣告不同的地方。核准後照第 6 節的決定改、看 L1 三平台，你說「合併」才合併。
+**請你核准的**：第 3 節 Design Invariants 的最終文字、第 4 節突變的數目超過基準、第 5 節和宣告不同的地方。第 6 節兩題已定（下表），已照決定改。你說「合併」才合併。
+
+**核准紀錄（2026-11-23，使用者在卡片）**：
+
+| 件 | 原話 | 結果 |
+|---|---|---|
+| 第 6 節 第 A 題 換行的語言與禁則強度 | 「第 A、B 兩題，照建議」 | (a)：`ShapeOptions`（`language`、`strictness`）已加，預設不變；測試與突變 `tx4-strictness-ignored`、`tx4-language-not-passed`。已照四樣轉主會話 |
+| 第 6 節 第 B 題 TX-1 守衛的範圍 | 同上 | (a)：縮回 `engine/`＋`tests/`（與 `build/cmake/`、根的 `CMakeLists.txt`）；突變 `tg-plugins-not-scanned` 與它的自我測試退役。§14.4 的 1～5 在第 6 節。已照四樣轉主會話 |
 
 ## 1. 判定的結果（宣告第 9 節）
 
@@ -16,7 +23,7 @@
 | 2 精確值 | 量字、原文範圍、偏移、行高的精確等式全部成立（三平台） |
 | 3 換行與字素的一致性 | `LineBreakTest.txt` 19,338 件、`GraphemeBreakTest.txt` 766 件全部通過、不跳過；兩個檔的 SHA-256 等於 unicode.org 17.0.0 的 |
 | 4 跨平台 | golden（BIZ UDPGothic 12／17／24／45 px、合成 TrueType 與 CFF 字型）在 L1 三平台 0 不一致（run 45136146149） |
-| 5 檢出力 | 突變 79／79 killed（預期的那個失敗）；清單交 Opus／high 敵對式檢查並補過（第 4 節） |
+| 5 檢出力 | 突變 79／79 killed（預期的那個失敗；第 A、B 題之後完整重跑，`mutations-run7.log`）；清單交 Opus／high 敵對式檢查並補過（第 4 節） |
 | 6 建置時間（停止條件） | `harfbuzz.cc` 172.6 s（門檻 180 s）、FreeType＋HarfBuzz 208.0 s（門檻 300 s）：沒觸發，但 HarfBuzz 只差 4%；已報主會話，記在批次表後續小事（`e4d62c50`） |
 | 7 每幀成本（停止條件） | 中位數 8.94～9.11 µs（門檻 50 µs） |
 | 8 件數 | 見頁首 |
@@ -43,10 +50,10 @@
 
 ## 4. 突變的數目（基準 8：超過「變的條文數 × 5＝50」）
 
-79 個（依 id 前綴）：守衛 `tg-` 16、TX-2 4、TX-3 12、TX-4 18、TX-5 9、TX-6 10、TX-7 1、TX-8 1、TX-9 1、TX-10 7。超過的理由：
+79 個（依 id 前綴）：守衛 `tg-` 15、TX-2 4、TX-3 12、TX-4 19、TX-5 9、TX-6 10、TX-7 1、TX-8 1、TX-9 1、TX-10 7。超過的理由：
 
-- 守衛（16）照 README 基準 4「每條規則三件」：四條含入規則、三條名字規則、連結規則各一個「全關」，真實樹上的正例三個（三個 adapter），fail closed 兩個（共用的與連結的），列表項目（`plugins/`、`build/cmake/`）兩個，必要根一個。
-- 換行（TX-4，18）是本批最大的演算法：硬換行、寬度斷行、退回、溢出、行尾 hang、不安全斷開的兩側、對齊、行高與 half-leading、空行，每個獨立決定一個。
+- 守衛（15）照 README 基準 4「每條規則三件」：四條含入規則、三條名字規則、連結規則各一個「全關」，真實樹上的正例三個（三個 adapter）、連結規則的正例一個，fail closed 一個，列表項目（`build/cmake/`）一個，必要根一個（第 B 題之後 `plugins/` 那個退役）。
+- 換行（TX-4，19，含第 A 題的語言與強度兩個）是本批最大的演算法：硬換行、寬度斷行、退回、溢出、行尾 hang、不安全斷開的兩側、對齊、行高與 half-leading、空行，每個獨立決定一個。
 - 敵對式檢查（Opus／high，作者同模型；`build/evidence/gyo2-sdl-text/mutation-check.md`）找到 21 處「改掉後測試仍會通過」：16 處補了測試與突變；2 處只補測試（突變會寫出頁外〔未定義行為〕、或沒有單一改動的突變）；2 處這些字型測不到、審查看（HarfBuzz 的語言、`FT_LOAD_NO_BITMAP`）；1 處低優先不補（一個 cluster 多個字形且中間有字素邊界的字型）。
 - 不留的等價突變 3 個，理由寫在清單的 description（畫不可見字形——本機探針證明是 HarfBuzz 的 invisible id，檢查者的反例推論不成立；FreeType 不帶 `FT_LOAD_NO_SCALE`；FreeType 讀環境變數）。
 - `guards` 欄位全部有。
@@ -58,7 +65,7 @@
 - **介面多了幾個欄位**：`PositionedGlyph` 的 `penX`、`sizePx`、`visible`，`LayoutLine` 的 `hardBreak`（設計審查第 7 條確認應保留）。
 - **Unicode 17.0**：和 libunibreak 8.0.1 對齊（宣告第 12 節的條件）。
 - **環境變數由 `run_with_environment.py` 給**：本來在測試裡設，用了平台分支，違反 os.md R2（L1 的 `os.boundary_guard` 抓到），改成腳本。
-- **宣告第 5.4 節第 2 點「語言由 span 帶」沒做到**：簽名與實作都沒有語言欄位，語言固定 `und`——第 6 節第 A 題。
+- **語言是整段一個，不是每個 span 一個**（宣告第 5.4 節第 2 點寫「語言由 span 帶」）：第 6 節第 A 題的建議與決定是段落層級的 `ShapeOptions`，因為換行機會由 libunibreak 對整段一次算出。
 
 ## 6. 設計審查（批次表〈每批的設計審查〉；Opus／high，作者同模型）與要你定的兩題
 

@@ -130,6 +130,27 @@ TEST_CASE("text layout: Japanese line breaking keeps closing marks and small kan
           std::vector<std::string>{"あいうえおかきくけこ", "さ"});
 }
 
+TEST_CASE("text layout: the language and the strictness are the caller's choice") {
+    Fixture f;
+    const auto lay = [&](const std::string& text, const Text::ShapeOptions& options) {
+        const Text::TextSpan span{0, static_cast<std::uint32_t>(text.size()), f.Style(f.kanaFirst)};
+        return Lines(f.context.Layout(f.context.Shape(text, {&span, 1}, options), Width(160.0f)), text);
+    };
+    // Normal: a small kana may start a line.
+    const std::string small = "あいうえおかきくけこっ";
+    CHECK(lay(small, {}) == std::vector<std::string>{"あいうえおかきくけ", "こっ"});
+    CHECK(lay(small, Text::ShapeOptions{{}, Text::LineBreakStrictness::Normal}) ==
+          std::vector<std::string>{"あいうえおかきくけこ", "っ"});
+    // ① (U+2460, ambiguous): a letter without a language, an ideograph in Japanese.
+    // Eleven of them (the Kana font's .notdef, 16 px each).
+    std::string circled;
+    for (int i = 0; i < 11; ++i) {
+        circled += "\xE2\x91\xA0";
+    }
+    CHECK(lay(circled, {}).size() == 1);
+    CHECK(lay(circled, Text::ShapeOptions{"ja", Text::LineBreakStrictness::Strict}).size() == 2);
+}
+
 TEST_CASE("text layout: mixed Japanese and English breaks between words, not inside them") {
     Fixture f;
     const std::string text = "あいPress Start";

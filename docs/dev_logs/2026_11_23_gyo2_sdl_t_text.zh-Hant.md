@@ -34,7 +34,10 @@
 - **L1**：第一次手動 dispatch（run 45129587421）windows-x64 編譯失敗：`Utf8.cpp` 的 `U'…'` 裡寫成了實際的 U+FFFD 字元（MSVC 沒有 `/utf-8` 讀成多個字元，C2015），改成 `U'�'`（0cd5a435）；第二次（run 45131303066）macos-arm64 與 linux 的 `os.boundary_guard` 失敗：`EnvironmentTests.cpp` 用了 `#if defined(_WIN32)`（R2：平台分支只准在 `core/os`），改成由 CTest 的 `ENVIRONMENT` 給變數。第一次是第 1 步的查證、不是受理判定；兩次都照 §14.1 記在這裡。
 - **本機全量 ctest**：`build.ci` 失敗——測試在建置目錄裡跑 `git rev-parse HEAD`，而本機的建置目錄放在 repo 外的暫存區（環境，不是實作；L1 與 repo 內的建置目錄不會遇到）。其餘全過。
 - **突變（第 1 次完整執行 44/57）**：13 個沒殺，分類——清單寫錯 8 個（`cases` 名稱有逗號，doctest 的 `-tc=` 把逗號當分隔、一個 case 都沒跑；改用 `*`）；`expect` 對錯行 1 個（HarfBuzz 讀環境變數：連字消失，先在 `REQUIRE(size == 3)` 失敗）；測試的缺口 1 個（UTF-8 的第二位元組範圍：`ED A0 80` 照樣被上限擋，補 `E0 80 80`）；突變不改變值 1 個（FreeType 不帶 `FT_LOAD_NO_SCALE` 而沒設字級時回同樣的值：換成「HarfBuzz 以 1000 為 scale」）；等價 2 個（畫不可見字形：不可見字形一定是 HarfBuzz 的 invisible id 或空白，畫出來都是 Empty；FreeType 讀環境變數：會影響這條路的屬性都由 `FT_Property_Set` 重設，其他屬性〔含 `increase-x-height=40`〕沒改變任何像素）——照 README 不留，理由寫在清單的 description。另外 `tx10-sfnt-unchecked` 讓 `FromBytes` 崩潰：`IsCollection` 沒先檢查長度（平常被 `IsSfnt` 擋在前面），補了長度檢查。
-- **突變（修正後）**：見合併前核准頁。
+- **突變（修正後）**：55／55 → 敵對式檢查（Opus／high，作者同模型；`mutation-check.md`）找到 21 處沒被抓的改法：16 處補測試與突變、2 處只補測試、3 處測不到或低優先（理由在清單 description）；檢查者「畫不可見字形不等價」的反例推論不成立（本機探針：缺空白時 HarfBuzz 給的是 invisible id）；清單問題（`expect` 不專一 3、id 與 guards 不一致、環境變數兩處維護）已修 → 79 個，完整執行 78／79，`tx4-width-after-break` 補假名斷行測試後 79／79。
+- **設計審查**（Opus／high，作者同模型；`design-review.md`）：沒有 blocker；第 1、2 條交使用者（第 A、B 題），其餘本批改了文件或記為後續。
+- **使用者定第 A、B 題**（「第 A、B 兩題，照建議」）：`ShapeOptions`（`language`、`strictness`）已加、預設不變；TX-1 守衛縮回 Engine 側、`tg-plugins-not-scanned` 退役。完整重跑突變 79／79（`mutations-run7.log`）。
+- **跟上 `gyo2`**：merge 兩次（`AGENTS.md` 核心版 #296、KR #295），沒有衝突；本機全量 ctest 只有 `build.ci`（環境）失敗。
 
 ## 下一步
 

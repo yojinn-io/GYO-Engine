@@ -86,17 +86,11 @@ class TextGuard(unittest.TestCase):
         self.expect("engine/modules/text/src/B.cpp", "hb_buffer_t* b;\n", "B.cpp:1: TX1-HARFBUZZ-NAME")
         self.expect("engine/modules/text/src/C.cpp", "int x = LINEBREAK_NOBREAK;\n", "C.cpp:1: TX1-LIBUNIBREAK-NAME")
 
-    def test_a_plugin_drawing_text_with_freetype(self):
-        self.expect("plugins/imgui/src/imgui_freetype.cpp", "#include <ft2build.h>\n",
-                    "plugins/imgui/src/imgui_freetype.cpp:1: TX1-FREETYPE")
-        self.expect("plugins/imgui/CMakeLists.txt", "target_link_libraries(imgui PRIVATE gyo_freetype)\n",
-                    "plugins/imgui/CMakeLists.txt:1: TX1-LINK")
-
     def test_link_outside_the_module(self):
         self.expect("engine/modules/ui/CMakeLists.txt", "target_link_libraries(gyo_ui PRIVATE gyo_harfbuzz)\n",
                     "engine/modules/ui/CMakeLists.txt:1: TX1-LINK")
-        self.expect("games/x/CMakeLists.txt", 'include_directories("${harfbuzz_SOURCE_DIR}/src")\n',
-                    "games/x/CMakeLists.txt:1: TX1-LINK")
+        self.expect("tests/common/ui/CMakeLists.txt", 'include_directories("${harfbuzz_SOURCE_DIR}/src")\n',
+                    "tests/common/ui/CMakeLists.txt:1: TX1-LINK")
 
     def test_link_in_build_cmake_and_the_root(self):
         self.expect("build/cmake/GyoText.cmake", "target_link_libraries(x PRIVATE gyo_libunibreak)\n",

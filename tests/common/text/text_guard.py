@@ -25,9 +25,10 @@ hb-ft (HarfBuzz's FreeType glue) appears nowhere:
                          libunibreak's release).
 
 Scanned: C/C++ files and CMake code (CMakeLists.txt, *.cmake) under engine/ and tests/ (they must
-exist) and under plugins/, games/, tools/ and examples/ when present (a Plugin that drew text with
-FreeType itself, such as imgui_freetype, is caught here); build/cmake/ and the repository's
-CMakeLists.txt. third_party/ defines the targets and is not scanned. The tests have no exception:
+exist); build/cmake/ and the repository's CMakeLists.txt. The guard keeps the Engine side only, as
+the user decided for every adapter guard (docs/architecture/plans/kernel/adapter-plugins-plan.zh-Hant.md
+line 15; the JSON Module's J-1 likewise; for this Module, decision v8-arch-gyo2-sdl-t, question B):
+plugins/, games/, tools/ and examples/ are not scanned. third_party/ defines the targets and is not scanned. The tests have no exception:
 they use the adapters' own interfaces. Includes are read from code lines (block comments blanked);
 names from code with comments and string literals blanked; CMake comments are ignored.
 
@@ -46,7 +47,6 @@ from pathlib import Path
 
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl"}
 REQUIRED_ROOTS = ("engine", "tests")
-OPTIONAL_ROOTS = ("plugins", "games", "tools", "examples")
 CMAKE_EXTRA = ("build/cmake",)
 CMAKE_FILES = ("CMakeLists.txt",)
 ADAPTERS = "engine/modules/text/src/adapters/"
@@ -110,7 +110,6 @@ def roots(root, errors):
             found.append(root / top)
         else:
             errors.append(f"scan root {top}/ not found under {root}")
-    found += [root / top for top in OPTIONAL_ROOTS if (root / top).is_dir()]
     return found
 
 

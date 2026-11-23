@@ -135,7 +135,7 @@ HarfBuzzShaper& HarfBuzzShaper::operator=(HarfBuzzShaper&&) noexcept = default;
 
 void HarfBuzzShaper::Shape(const HarfBuzzFace& face, const std::int32_t size26, const std::span<const char32_t> text,
                            const std::size_t begin, const std::size_t length, const ScriptCode script,
-                           std::vector<RawGlyph>& out) {
+                           const std::string_view language, std::vector<RawGlyph>& out) {
     GYO_ASSERT(begin + length <= text.size());
     hb_font_t* const font = impl_->FontFor(face, face.impl_->face.get(), size26);
     hb_buffer_t* const buffer = impl_->buffer.get();
@@ -147,7 +147,9 @@ void HarfBuzzShaper::Shape(const HarfBuzzFace& face, const std::int32_t size26, 
     hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
     hb_buffer_set_script(buffer, static_cast<hb_script_t>(script));
     // Set explicitly: HarfBuzz would otherwise take the process locale (TX-8).
-    hb_buffer_set_language(buffer, impl_->language);
+    hb_buffer_set_language(buffer, language.empty() ? impl_->language
+                                                    : hb_language_from_string(language.data(),
+                                                                              static_cast<int>(language.size())));
     hb_buffer_set_cluster_level(buffer, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES);
     hb_buffer_set_invisible_glyph(buffer, kInvisibleGlyph);
     hb_shape(font, buffer, nullptr, 0);

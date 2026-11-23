@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -83,9 +84,9 @@ public:
     HarfBuzzShaper& operator=(HarfBuzzShaper&&) noexcept;
 
     // Shapes text[begin, begin + length) left to right, the rest of text as
-    // context. Appends to out.
+    // context, in a language (a BCP 47 tag; empty: "und"). Appends to out.
     void Shape(const HarfBuzzFace& face, std::int32_t size26, std::span<const char32_t> text, std::size_t begin,
-               std::size_t length, ScriptCode script, std::vector<RawGlyph>& out);
+               std::size_t length, ScriptCode script, std::string_view language, std::vector<RawGlyph>& out);
     // The face's line metrics at a size (hhea, or OS/2 when the font says so).
     [[nodiscard]] LineMetrics Metrics(const HarfBuzzFace& face, std::int32_t size26);
 

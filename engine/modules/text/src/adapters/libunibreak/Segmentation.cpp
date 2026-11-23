@@ -3,6 +3,7 @@
 #include <graphemebreak.h>
 #include <linebreak.h>
 
+#include <string>
 #include <vector>
 
 #include "engine/base/Assert.hpp"
@@ -11,10 +12,17 @@ namespace GYO::Engine::Text::Detail {
 
 namespace {
 
-// libunibreak's "-strict" is UAX #14's default resolution (CJ resolves to NS);
-// Unicode's LineBreakTest.txt is checked with it (libunibreak's tests.c).
-// libunibreak has no global state: both calls are safe on any thread.
-constexpr const char* kStrict = "-strict";
+// libunibreak's language string: the tag, and "-strict" for CJ as NS. With no
+// tag and "-strict" it is UAX #14's default resolution, the one Unicode's
+// LineBreakTest.txt is checked with (libunibreak's tests.c). libunibreak has no
+// global state: both calls are safe on any thread.
+std::string LibunibreakLanguage(const std::string_view language, const bool strict) {
+    std::string lang(language);
+    if (strict) {
+        lang += "-strict";
+    }
+    return lang;
+}
 
 std::vector<utf32_t> ToUtf32(const std::span<const char32_t> text) {
     std::vector<utf32_t> out(text.size());
@@ -26,14 +34,16 @@ std::vector<utf32_t> ToUtf32(const std::span<const char32_t> text) {
 
 } // namespace
 
-void FindLineBreaks(const std::span<const char32_t> text, std::vector<LineBreakAfter>& out) {
+void FindLineBreaks(const std::span<const char32_t> text, const std::string_view language, const bool strict,
+                    std::vector<LineBreakAfter>& out) {
     out.assign(text.size(), LineBreakAfter::None);
     if (text.empty()) {
         return;
     }
     const std::vector<utf32_t> utf32 = ToUtf32(text);
     std::vector<char> breaks(text.size());
-    set_linebreaks_utf32(utf32.data(), utf32.size(), kStrict, breaks.data());
+    const std::string lang = LibunibreakLanguage(language, strict);
+    set_linebreaks_utf32(utf32.data(), utf32.size(), lang.empty() ? nullptr : lang.c_str(), breaks.data());
     for (std::size_t i = 0; i < text.size(); ++i) {
         switch (breaks[i]) {
         case LINEBREAK_MUSTBREAK:

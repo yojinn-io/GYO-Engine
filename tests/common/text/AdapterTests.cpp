@@ -91,7 +91,7 @@ TEST_CASE("text adapter: Unicode 17.0 LineBreakTest, every case (UAX #14 default
     std::size_t failed = 0;
     std::vector<LineBreakAfter> breaks;
     for (const Case& c : cases) {
-        FindLineBreaks(c.text, breaks);
+        FindLineBreaks(c.text, {}, true, breaks);
         REQUIRE(breaks.size() == c.text.size());
         bool same = true;
         for (std::size_t i = 0; i < c.text.size(); ++i) {
@@ -133,12 +133,12 @@ TEST_CASE("text adapter: Unicode 17.0 GraphemeBreakTest, every case (UAX #29)") 
 TEST_CASE("text adapter: line breaks after mandatory breaks, and at the text's end") {
     std::vector<LineBreakAfter> breaks;
     const std::u32string text = U"a b\nc";
-    FindLineBreaks(text, breaks);
+    FindLineBreaks(text, {}, true, breaks);
     CHECK(breaks == std::vector<LineBreakAfter>{LineBreakAfter::None, LineBreakAfter::Allowed, LineBreakAfter::None,
                                                 LineBreakAfter::Mandatory, LineBreakAfter::Mandatory});
     // CJ (small kana) resolves to NS: no break before っ.
     const std::u32string kana = U"かっこ";
-    FindLineBreaks(kana, breaks);
+    FindLineBreaks(kana, {}, true, breaks);
     CHECK(breaks[0] == LineBreakAfter::None);
     CHECK(breaks[1] == LineBreakAfter::Allowed);
 }

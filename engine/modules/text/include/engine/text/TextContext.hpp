@@ -56,8 +56,10 @@ public:
 
     // Shapes a UTF-8 text. The spans cover it in order; every font of every
     // span belongs to this context. A maximal ill-formed UTF-8 subsequence is
-    // shaped as U+FFFD and keeps its bytes as its cluster.
-    [[nodiscard]] ShapedText Shape(std::string_view utf8, std::span<const TextSpan> spans);
+    // shaped as U+FFFD and keeps its bytes as its cluster. The options'
+    // language and strictness apply to the whole text.
+    [[nodiscard]] ShapedText Shape(std::string_view utf8, std::span<const TextSpan> spans,
+                                   const ShapeOptions& options = {});
     // Breaks a shaped text into lines and places its glyphs. The text must
     // come from this context's Shape.
     [[nodiscard]] TextLayout Layout(const ShapedText& shaped, const LayoutOptions& options);

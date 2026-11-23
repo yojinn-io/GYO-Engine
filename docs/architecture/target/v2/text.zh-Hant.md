@@ -25,7 +25,7 @@ asset 型別 `"font"`、格式 `ttf`、`otf`、`ttc`、`otc`；loader `FontLoade
 
 <a id="tx-1"></a>
 **TX-1 唯一的 adapter。** FreeType 的標頭、型別、呼叫只在 `engine/modules/text/src/adapters/freetype/`，HarfBuzz 的只在 `src/adapters/harfbuzz/`，libunibreak 的只在 `src/adapters/libunibreak/`；`include/` 不含、不露出它們的型別；hb-ft 哪裡都不用；只有 `gyo_text` PRIVATE 連 `gyo_freetype`、`gyo_harfbuzz`、`gyo_libunibreak`。測試也只用 adapter 自己的介面（`AdapterTests.cpp` 含入 `src/` 的 adapter 標頭，不含入外部組件的標頭）。
-守衛：`gyo_expect_links(gyo_text GYO::Base GYO::Asset gyo_freetype gyo_harfbuzz gyo_libunibreak)` 與「不露出給使用者」（`tests/common/text/CMakeLists.txt`）；ctest `text.adapter_guard`（`tests/common/text/text_guard.py`：四條含入規則〔含 hb-ft 哪裡都不准〕、三條名字規則、連結規則；根是 `engine/`、`tests/`〔必須存在〕與 `plugins/`、`games/`、`tools/`、`examples/`〔存在時〕；正例、根不存在時失敗）與 `text.adapter_guard_selftest`。
+守衛：`gyo_expect_links(gyo_text GYO::Base GYO::Asset gyo_freetype gyo_harfbuzz gyo_libunibreak)` 與「不露出給使用者」（`tests/common/text/CMakeLists.txt`）；ctest `text.adapter_guard`（`tests/common/text/text_guard.py`：四條含入規則〔含 hb-ft 哪裡都不准〕、三條名字規則、連結規則；根是 `engine/`、`tests/`〔必須存在〕、`build/cmake/` 與根目錄的 `CMakeLists.txt`；每條規則的正例、根不存在時失敗）與 `text.adapter_guard_selftest`。守衛只守 Engine 這一側（使用者的決定，`docs/architecture/plans/kernel/adapter-plugins-plan.zh-Hant.md` 第 15 行；本 Module 2026-11-23 第 B 題再確認）：`plugins/`、產品不掃，Plugin 要不要直接用 FreeType（例：imgui_freetype）是那個 Plugin 的批交使用者的事（AGENTS §6 的例外）。
 
 <a id="tx-2"></a>
 **TX-2 度量一個來源。** 字形的前進量、偏移、行的上下高度只來自 HarfBuzz adapter（內建的 OpenType 字型函式，讀 `hmtx`、`hhea`／`OS/2`，未 hinting）；點陣圖與 bearing 只來自 FreeType adapter；不用 FreeType 回報的前進量（light hinting 會把它捨成整數像素）。所以游標的位置和畫出來的位置一致。
@@ -36,8 +36,8 @@ asset 型別 `"font"`、格式 `ttf`、`otf`、`ttc`、`otc`；loader `FontLoade
 守衛：`gyo_text_tests`（`ShapeTests.cpp` 的精確範圍、隨機字串的蓋滿性質；`CaretTests.cpp`；`ScenarioTests.cpp` 的文字框）。
 
 <a id="tx-4"></a>
-**TX-4 換行與字素。** 換行機會照 UAX #14、字素照 UAX #29（Unicode 17.0，libunibreak 8.0.1）。換行用 UAX #14 的預設解析（`CJ` 當 `NS`：小假名、長音符不放行首）。硬換行（`BK`、`CR`、`LF`、`NL`）結束一行，文末的硬換行之後留一個空行。依寬度斷行時退回最後一個換行機會、沒有就溢出（不硬切）；行尾的空白（U+0020、U+3000、tab、換行字元）不算寬度、也不觸發斷行——這個集合與「硬換行字元」（`BK`、`CR`、`LF`、`NL` 的字元，shaping 時換成空白、不畫）是 `text` 的固定規則（`src/TextContext.cpp`），換行機會本身只來自 libunibreak。斷點落在 HarfBuzz 標「不安全斷開」的地方時，兩側重新 shaping。對齊（左、中、右）以 `maxWidth`、沒有時以最寬的一行為基準。行高 `RelativeToFont(k)`（字級的 k 倍）或 `Px`，上下各分一半的 leading（half-leading，26.6 定點，向下取整到上方）。
-守衛：`gyo_text_adapter_tests`（Unicode 官方 `LineBreakTest.txt` 19,338 件、`GraphemeBreakTest.txt` 766 件全部，件數斷言；檔案的 SHA-256 等於 unicode.org 的）；`LayoutTests.cpp`（日文禁則、混排、行尾空白、溢出、不安全斷開、對齊、行高）。
+**TX-4 換行與字素。** 換行機會照 UAX #14、字素照 UAX #29（Unicode 17.0，libunibreak 8.0.1）。換行的語言與禁則強度是呼叫者的選擇（`ShapeOptions`，整段一個；使用者 2026-11-23 第 A 題）：`language`（BCP 47）決定模糊類 `AI`（中日韓當 `ID`、其他當 `AL`），並交給 HarfBuzz；`strictness` 的 `Strict` 讓 `CJ` 當 `NS`（小假名、長音符不放行首），`Normal` 當 `ID`。預設是不帶語言＋`Strict`，即 UAX #14 的預設解析。硬換行（`BK`、`CR`、`LF`、`NL`）結束一行，文末的硬換行之後留一個空行。依寬度斷行時退回最後一個換行機會、沒有就溢出（不硬切）；行尾的空白（U+0020、U+3000、tab、換行字元）不算寬度、也不觸發斷行——這個集合與「硬換行字元」（`BK`、`CR`、`LF`、`NL` 的字元，shaping 時換成空白、不畫）是 `text` 的固定規則（`src/TextContext.cpp`），換行機會本身只來自 libunibreak。斷點落在 HarfBuzz 標「不安全斷開」的地方時，兩側重新 shaping。對齊（左、中、右）以 `maxWidth`、沒有時以最寬的一行為基準。行高 `RelativeToFont(k)`（字級的 k 倍）或 `Px`，上下各分一半的 leading（half-leading，26.6 定點，向下取整到上方）。
+守衛：`gyo_text_adapter_tests`（Unicode 官方 `LineBreakTest.txt` 19,338 件、`GraphemeBreakTest.txt` 766 件全部，件數斷言；檔案的 SHA-256 等於 unicode.org 的）；`LayoutTests.cpp`（日文禁則、語言與強度、混排、行尾空白、溢出、不安全斷開、對齊、行高）。
 
 <a id="tx-5"></a>
 **TX-5 Fallback 與缺字。** 每個字素選字型清單裡第一個有全部字形的字型（default-ignorable 的字元不算）；都沒有就用主字型（清單的第一個），缺字畫它的 `.notdef`。不合法的 UTF-8，每個最大的不合法子序列換成一個 U+FFFD 去 shaping，範圍保留原本的位元組。不查系統字型。
@@ -52,7 +52,7 @@ asset 型別 `"font"`、格式 `ttf`、`otf`、`ttc`、`otc`；loader `FontLoade
 守衛：`ScenarioTests.cpp`（8 條執行緒各自一個 context 共用 `FontData`，結果與單執行緒相同；8 條執行緒同時載入字型）；`gyo_text_environment`（自己設 `HB_SHAPER_LIST`、`HB_OPTIONS`、`FREETYPE_PROPERTIES` 再排版與點陣化，kerning、連字、點陣圖不變）。ThreadSanitizer 不在 L1。
 
 <a id="tx-8"></a>
-**TX-8 跨平台相同。** 同樣的字型、文字、選項，排版結果（每個字形的 id、位置、範圍、行、字素邊界）與圖集的位元組在 L1 三平台相同。排版內部用 26.6 定點（HarfBuzz 的單位），最後才轉 `float`（精確）；HarfBuzz 的語言明定（`und`，不讀 process 的 locale）；不為某個平台開分支。
+**TX-8 跨平台相同。** 同樣的字型、文字、選項，排版結果（每個字形的 id、位置、範圍、行、字素邊界）與圖集的位元組在 L1 三平台相同。排版內部用 26.6 定點（HarfBuzz 的單位），最後才轉 `float`（精確）；HarfBuzz 的語言明定（`ShapeOptions::language`，沒有時 `und`；不讀 process 的 locale）；不為某個平台開分支。
 守衛：`GoldenTests.cpp`（BIZ UDPGothic 子集 12、17、24、45 px，合成的 TrueType 與 CFF 字型；排版與圖集的 SHA-256）；`gyo_text_environment`。
 
 <a id="tx-9"></a>

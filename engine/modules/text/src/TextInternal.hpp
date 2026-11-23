@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "adapters/freetype/FreeTypeRaster.hpp"
@@ -71,6 +72,8 @@ struct Glyph {
 
 struct ShapedData {
     std::weak_ptr<ContextIdentity> owner;
+    // ShapeOptions::language, kept for shaping again at a line break.
+    std::string language;
     // The text's code points (ill-formed UTF-8 as U+FFFD) and the byte offset
     // of each (one more entry: the text's length).
     std::vector<char32_t> codePoints;

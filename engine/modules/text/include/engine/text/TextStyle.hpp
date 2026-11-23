@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string_view>
 
 // What a TextContext shapes and lays out: the fonts, the size and the line
 // height of each span of a text, and the options of a layout.
@@ -47,6 +48,26 @@ struct TextSpan {
     std::uint32_t byteBegin = 0;
     std::uint32_t byteEnd = 0;
     TextStyle style{};
+};
+
+// How strictly Japanese and Chinese line-start rules apply (UAX #14's CJ class:
+// small kana and the prolonged sound mark).
+enum class LineBreakStrictness : std::uint8_t {
+    // CJ as NS: no small kana or prolonged sound mark at the start of a line
+    // (UAX #14's default resolution).
+    Strict = 1,
+    // CJ as ID: they may start a line (the browsers' default for Japanese).
+    Normal = 2,
+};
+
+// What applies to a whole Shape call.
+struct ShapeOptions {
+    // A BCP 47 language tag ("ja", "zh-Hant", "en"); empty: none. It selects
+    // HarfBuzz's language-specific forms and resolves UAX #14's ambiguous
+    // characters (AI): as ideographs for Chinese, Japanese and Korean (※, ①
+    // break like kanji), as letters otherwise.
+    std::string_view language;
+    LineBreakStrictness strictness = LineBreakStrictness::Strict;
 };
 
 enum class HorizontalAlign : std::uint8_t { Left = 1, Center = 2, Right = 3 };

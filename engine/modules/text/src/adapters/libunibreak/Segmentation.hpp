@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <vector>
 
 // The libunibreak adapter's interface, in the text Module's words (Design
@@ -18,10 +19,13 @@ enum class LineBreakAfter : std::uint8_t {
     None = 2,
 };
 
-// UAX #14 with the default resolution of its classes (CJ as NS: no small kana
-// at the start of a line), one entry per code point: out[i] is the break after
-// text[i].
-void FindLineBreaks(std::span<const char32_t> text, std::vector<LineBreakAfter>& out);
+// UAX #14, one entry per code point: out[i] is the break after text[i]. The
+// language (a BCP 47 tag, empty for none) resolves the ambiguous class AI (as
+// ID for zh, ja and ko, as AL otherwise); strict resolves CJ as NS (no small
+// kana at the start of a line), otherwise as ID. No language and strict is
+// UAX #14's default resolution.
+void FindLineBreaks(std::span<const char32_t> text, std::string_view language, bool strict,
+                    std::vector<LineBreakAfter>& out);
 
 // UAX #29 extended grapheme clusters: out[i] is 1 when a grapheme ends after
 // text[i] (always at the end of the text).

@@ -151,11 +151,13 @@ FontInfo TextContext::Info(const FontId font) const {
 
 std::uint32_t TextContext::FontCount() const noexcept { return static_cast<std::uint32_t>(state_->fonts.size()); }
 
-ShapedText TextContext::Shape(const std::string_view utf8, const std::span<const TextSpan> spans) {
+ShapedText TextContext::Shape(const std::string_view utf8, const std::span<const TextSpan> spans,
+                              const ShapeOptions& options) {
     GYO_ASSERT(utf8.size() < std::numeric_limits<std::uint32_t>::max());
     GYO_ASSERT(!spans.empty());
     auto data = std::make_shared<ShapedData>();
     data->owner = state_->identity;
+    data->language = std::string(options.language);
     DecodeUtf8(utf8, data->codePoints, data->offsets);
     const auto count = static_cast<std::uint32_t>(data->codePoints.size());
 
@@ -185,7 +187,8 @@ ShapedText TextContext::Shape(const std::string_view utf8, const std::span<const
     }
     GYO_ASSERT(expected == utf8.size());
 
-    FindLineBreaks(data->codePoints, data->lineBreaks);
+    FindLineBreaks(data->codePoints, data->language, options.strictness == LineBreakStrictness::Strict,
+                   data->lineBreaks);
     FindGraphemeBoundaries(data->codePoints, data->graphemeEnds);
     data->shapingCodePoints = data->codePoints;
     for (char32_t& cp : data->shapingCodePoints) {
@@ -270,7 +273,7 @@ ShapedText TextContext::Shape(const std::string_view utf8, const std::span<const
         run.metrics = state_->shaper.Metrics(face, span.size26);
         raw.clear();
         state_->shaper.Shape(face, span.size26, data->shapingCodePoints, run.cpBegin, run.cpEnd - run.cpBegin,
-                             run.script, raw);
+                             run.script, data->language, raw);
         AppendGlyphs(*data, r, run.cpBegin, run.cpEnd, raw, data->glyphs);
     }
     GYO_ASSERT(count == 0 || !data->glyphs.empty());
@@ -377,7 +380,7 @@ TextLayout TextContext::Layout(const ShapedText& shaped, const LayoutOptions& op
             }
             raw.clear();
             state_->shaper.Shape(*state_->fonts[run.font.value].face, data.spans[run.span].size26,
-                                 data.shapingCodePoints, sb, se - sb, run.script, raw);
+                                 data.shapingCodePoints, sb, se - sb, run.script, data.language, raw);
             AppendGlyphs(data, r, sb, se, raw, lineGlyphs[l]);
         }
     }

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the text Module batch (docs/architecture/target/v2/text-declaration.zh-Hant.md, section 8.7; ids tg- the TX-1 guard script, tx<N>- Design Invariant TX-<N> of target/v2/text.zh-Hant.md). Written with the tests; the adversarial check of the catalog (Opus/high, same model as the author while Fable is paused) is recorded in the merge approval page. Not kept (equivalent under every input, checked by hand 2026-11-23): drawing glyphs marked invisible (an invisible glyph is HarfBuzz's invisible glyph id, which FreeType cannot draw, or a space; a probe of the Kana font alone, which has no U+0020, shows \"\\n\\t\" as the invisible id with HarfBuzz's fallback space advance, not .notdef); FreeType's unscaled advance read without FT_LOAD_NO_SCALE (with no size set FreeType returns the same font units); FreeType built with FT_CONFIG_OPTION_ENVIRONMENT_PROPERTIES (the environment case rasterizes BIZ UDPGothic and the CFF Kana font with FREETYPE_PROPERTIES set and gets the same pixels: the TrueType interpreter, the CFF engine and stem darkening are set again with FT_Property_Set after FT_Init_FreeType, and the fonts are hinted by the auto-hinter, whose script and x-height properties changed nothing here; the #undef stays as a second line of defence). Not added as mutants, tests only: the padding counted when a glyph is too large (the mutant writes past the page, undefined behaviour) and TooLarge counted again for a cached glyph (no single-edit mutant). Not testable with these fonts, review: the explicit HarfBuzz language (the process locale is \"C\" in tests) and FT_LOAD_NO_BITMAP (no test font has embedded bitmaps). Adversarial check (Opus/high, same model as the author while Fable is paused, 2026-11-23): build/evidence/gyo2-sdl-text/mutation-check.md.",
+ "description": "Declared mutants of the text Module batch (docs/architecture/target/v2/text-declaration.zh-Hant.md, section 8.7; ids tg- the TX-1 guard script, tx<N>- Design Invariant TX-<N> of target/v2/text.zh-Hant.md). Written with the tests; the adversarial check of the catalog (Opus/high, same model as the author while Fable is paused) is recorded in the merge approval page. Not kept (equivalent under every input, checked by hand 2026-11-23): drawing glyphs marked invisible (an invisible glyph is HarfBuzz's invisible glyph id, which FreeType cannot draw, or a space; a probe of the Kana font alone, which has no U+0020, shows \"\\n\\t\" as the invisible id with HarfBuzz's fallback space advance, not .notdef); FreeType's unscaled advance read without FT_LOAD_NO_SCALE (with no size set FreeType returns the same font units); FreeType built with FT_CONFIG_OPTION_ENVIRONMENT_PROPERTIES (the environment case rasterizes BIZ UDPGothic and the CFF Kana font with FREETYPE_PROPERTIES set and gets the same pixels: the TrueType interpreter, the CFF engine and stem darkening are set again with FT_Property_Set after FT_Init_FreeType, and the fonts are hinted by the auto-hinter, whose script and x-height properties changed nothing here; the #undef stays as a second line of defence). Not added as mutants, tests only: the padding counted when a glyph is too large (the mutant writes past the page, undefined behaviour) and TooLarge counted again for a cached glyph (no single-edit mutant). Not testable with these fonts, review: the language HarfBuzz is given (ShapeOptions::language, or \"und\"; no test font has language-specific forms, and the process locale is \"C\" in tests) and FT_LOAD_NO_BITMAP (no test font has embedded bitmaps). Adversarial check (Opus/high, same model as the author while Fable is paused, 2026-11-23): build/evidence/gyo2-sdl-text/mutation-check.md. Retired 2026-11-23 with the user's decision v8-arch-gyo2-sdl-t question B (the guard keeps the Engine side only): tg-plugins-not-scanned and the self-test it checked.",
  "mutants": [
   {
    "id": "tg-freetype-include-off",
@@ -178,28 +178,6 @@
     "test_text_guard.py"
    ],
    "expect": "FAIL: test_link_outside_the_module\\b"
-  },
-  {
-   "id": "tg-plugins-not-scanned",
-   "what": "TX-1 guard: plugins/ is not scanned (imgui_freetype would pass)",
-   "guards": [
-    "text TX-1"
-   ],
-   "file": "tests/common/text/text_guard.py",
-   "find": "OPTIONAL_ROOTS = (\"plugins\", \"games\", \"tools\", \"examples\")",
-   "replace": "OPTIONAL_ROOTS = (\"games\", \"tools\", \"examples\")",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/text",
-    "-p",
-    "test_text_guard.py"
-   ],
-   "expect": "FAIL: test_a_plugin_drawing_text_with_freetype\\b"
   },
   {
    "id": "tg-fail-closed-off",
@@ -448,17 +426,17 @@
    "expect": "REQUIRE\\( layout\\.glyphs\\.size\\(\\) == expected\\.size\\(\\) \\)"
   },
   {
-   "id": "tx4-normal-not-strict",
-   "what": "TX-4: line breaking with libunibreak's normal resolution (CJ as ID): small kana may start a line",
+   "id": "tx4-strictness-ignored",
+   "what": "TX-4: the strictness option is ignored (always strict): a small kana can never start a line",
    "guards": [
     "text TX-4"
    ],
    "file": "engine/modules/text/src/adapters/libunibreak/Segmentation.cpp",
-   "find": "constexpr const char* kStrict = \"-strict\";",
-   "replace": "constexpr const char* kStrict = nullptr;",
+   "find": "    if (strict) {\n        lang += \"-strict\";",
+   "replace": "    if (true) {\n        lang += \"-strict\";",
    "target": "gyo_text_tests",
-   "cases": "text layout: Japanese line breaking*",
-   "expect": "CHECK\\( Lines\\(f\\.Lay\\(small"
+   "cases": "text layout: the language and the strictness*",
+   "expect": "CHECK\\( lay\\(small, Text::ShapeOptions\\{\\{\\}, Text::LineBreakStrictness::Normal\\}\\) =="
   },
   {
    "id": "tx4-mandatory-ignored",
@@ -1172,6 +1150,19 @@
    "target": "gyo_text_tests",
    "cases": "text font: rule 1* 'true' tag*",
    "expect": "CHECK\\( font\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "tx4-language-not-passed",
+   "what": "TX-4: the language is not given to libunibreak: ambiguous characters (AI) never break like ideographs in Japanese",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/adapters/libunibreak/Segmentation.cpp",
+   "find": "    std::string lang(language);\n",
+   "replace": "    std::string lang;\n",
+   "target": "gyo_text_tests",
+   "cases": "text layout: the language and the strictness*",
+   "expect": "CHECK\\( lay\\(circled, Text::ShapeOptions\\{\"ja\", Text::LineBreakStrictness::Strict\\}\\)\\.size\\(\\) == 2 \\)"
   }
  ]
 }
