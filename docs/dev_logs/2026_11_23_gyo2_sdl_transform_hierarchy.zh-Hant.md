@@ -15,7 +15,8 @@ Owner：架構（GYO2 主會話開的任務卡「開X2、Object_Connect 移植�
 - `ctest -L cpu`：208/208 通過兩次（review 修正之前與之後）；`gyo_transform_tests` 21 案。
 - 突變（`transform_mutations.json` 全部，D184：本批改了 transform 的程式與測試）：第一輪 17/17 killed；review 修正（加 2 個）之後全部重跑 19/19 killed。
 
-- L1 三平台：PR 開出後手動 dispatch，結果記在 PR。
+- L1 三平台：PR #303 開出後手動 dispatch（run 45166119684，HEAD 3aec2f5f）linux-x64、windows-x64、macos-arm64 全部 success。
+- 合併前核准：使用者 2026-11-23「核准」（TF-1、TF-3、TF-5、RC-TF1 的最終文字與短說明的取捨）。之後跟上 gyo2（P #300 等）再 dispatch L1。
 
 ## 經過與判斷
 

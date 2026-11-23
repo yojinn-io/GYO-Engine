@@ -1,6 +1,6 @@
 # 姿態的父子傳播（SDL 線子批 X2，`v8-arch-gyo2-sdl-transform-hierarchy`）
 
-更新：2026-11-23（新頁）。Owner：架構（GYO2 主會話開的任務卡「開X2、Object_Connect 移植準備的卡」）。一頁短說明：設計取捨、和別家的對照、後果。條文在 [transform](transform.zh-Hant.md)（TF-1、TF-3、TF-5，RC-TF1）。
+更新：2026-11-23（新頁）。Owner：架構（GYO2 主會話開的任務卡「開X2、Object_Connect 移植準備的卡」）。一頁短說明：設計取捨、和別家的對照、後果。條文在 [transform](transform.zh-Hant.md)（TF-1、TF-3、TF-5，RC-TF1）。**使用者 2026-11-23 合併前核准**（PR #303，本卡「核准」）。
 
 讀的版本：`origin/gyo2` 7be54ccb（KR #295、X1 #298、R1a #299 都已合併）；Bevy 6a911653f；Unity Entities（`~/Code/GitHome/com.unity.entities`）。
 
