@@ -389,8 +389,8 @@
       "id": "os-g11-roots-skip-products",
       "what": "The guard stops scanning games, so a new product site goes unseen (Invariant 1, os-guard-wide)",
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "ROOTS = (\"engine\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
-      "replace": "ROOTS = (\"engine\", \"tools\", \"build/acceptance\", \"tests\")",
+      "find": "ROOTS = (\"engine\", \"plugins\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
+      "replace": "ROOTS = (\"engine\", \"plugins\", \"tools\", \"build/acceptance\", \"tests\")",
       "command": [
         "{python}",
         "-m",
@@ -449,9 +449,9 @@
     },
     {
       "id": "os-g15-runtime-roots",
-      "what": "R4 stops covering products and tools (Invariant 2)",
+      "what": "R4 stops covering Plugins, products and tools (Invariant 2)",
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "RUNTIME_ROOTS = (\"engine\", \"games\", \"tools\")",
+      "find": "RUNTIME_ROOTS = (\"engine\", \"plugins\", \"games\", \"tools\")",
       "replace": "RUNTIME_ROOTS = (\"engine\",)",
       "command": [
         "{python}",
@@ -1448,8 +1448,8 @@
       "id": "pu-x8-code-page-walk-skips-tests",
       "what": "The build layer stops applying the UTF-8 code page manifest under tests (Design Invariant 11, configure-time check)",
       "file": "build/cmake/GyoCodePage.cmake",
-      "find": "    foreach(root IN ITEMS engine games tools build/acceptance tests)",
-      "replace": "    foreach(root IN ITEMS engine games tools build/acceptance)",
+      "find": "    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)",
+      "replace": "    foreach(root IN ITEMS engine plugins games tools build/acceptance)",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
       "expect": "Process code page guard:"
@@ -1575,8 +1575,8 @@
       "id": "gdir-code-page-walk-skips-games",
       "what": "The build layer stops applying the UTF-8 code page manifest under games/ (only the games/sample fixture of cmake.ProcessCodePage catches it; pu-x8 drops tests, not a product root)",
       "file": "build/cmake/GyoCodePage.cmake",
-      "find": "    foreach(root IN ITEMS engine games tools build/acceptance tests)",
-      "replace": "    foreach(root IN ITEMS engine tools build/acceptance tests)",
+      "find": "    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)",
+      "replace": "    foreach(root IN ITEMS engine plugins tools build/acceptance tests)",
       "command": [
         "cmake",
         "-DWORK_ROOT=build/target",
@@ -1593,8 +1593,8 @@
       "id": "gdir-code-page-check-skips-games",
       "what": "The configure-time check stops walking games/, so a game directory the build layer did not record goes unseen (only the unrecorded_game case catches it)",
       "file": "tests/common/os/ProcessCodePageCheck.cmake",
-      "find": "    if(relative MATCHES \"^(engine|games|tools|build/acceptance|tests)(/|$)\")",
-      "replace": "    if(relative MATCHES \"^(engine|tools|build/acceptance|tests)(/|$)\")",
+      "find": "    if(relative MATCHES \"^(engine|plugins|games|tools|build/acceptance|tests)(/|$)\")",
+      "replace": "    if(relative MATCHES \"^(engine|plugins|tools|build/acceptance|tests)(/|$)\")",
       "command": [
         "cmake",
         "-DWORK_ROOT=build/target",
@@ -2507,6 +2507,122 @@
       "cases": "*dotted IPv4*",
       "timeout": 120,
       "expect": "bad := 1\\.2\\.3\\.4\\.5"
+    },
+    {
+      "id": "sdlp-roots-skip-plugins",
+      "what": "The OS boundary guard stops scanning plugins/, so OS knowledge in a Plugin goes unseen (Invariant 1; v8-arch-gyo2-sdl-p)",
+      "guards": [
+        "os DI 1",
+        "sdl-declaration 9.1"
+      ],
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "ROOTS = (\"engine\", \"plugins\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
+      "replace": "ROOTS = (\"engine\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_os_knowledge_and_file_access_in_plugins_are_reported"
+    },
+    {
+      "id": "sdlp-runtime-roots-skip-plugins",
+      "what": "R4 stops covering plugins/: a Plugin opens files past engine/core/os unseen (Invariant 2; v8-arch-gyo2-sdl-p)",
+      "guards": [
+        "os DI 2",
+        "sdl-declaration 9.1"
+      ],
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "RUNTIME_ROOTS = (\"engine\", \"plugins\", \"games\", \"tools\")",
+      "replace": "RUNTIME_ROOTS = (\"engine\", \"games\", \"tools\")",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_os_knowledge_and_file_access_in_plugins_are_reported"
+    },
+    {
+      "id": "sdlp-code-page-walk-skips-plugins",
+      "what": "The build layer stops applying the UTF-8 code page manifest under plugins/ (a Plugin's program, such as sdl_gpu's shader compiler, runs with the system code page; Invariant 11; v8-arch-gyo2-sdl-p)",
+      "file": "build/cmake/GyoCodePage.cmake",
+      "find": "    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)",
+      "replace": "    foreach(root IN ITEMS engine games tools build/acceptance tests)",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard: sample_plugin_tool \\(plugins/sample\\)",
+      "guards": [
+        "os DI 11",
+        "sdl-declaration 9.1"
+      ]
+    },
+    {
+      "id": "sdlp-code-page-check-skips-plugins",
+      "what": "The configure-time check stops walking plugins/, so a Plugin directory the build layer did not record goes unseen (Invariant 11; v8-arch-gyo2-sdl-p)",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "    if(relative MATCHES \"^(engine|plugins|games|tools|build/acceptance|tests)(/|$)\")",
+      "replace": "    if(relative MATCHES \"^(engine|games|tools|build/acceptance|tests)(/|$)\")",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "unrecorded_plugin: configuration unexpectedly succeeded",
+      "guards": [
+        "os DI 11",
+        "sdl-declaration 9.1"
+      ]
+    },
+    {
+      "id": "sdlp-definition-roots-skip-plugins",
+      "what": "The OS definition guard stops walking plugins/: a Plugin target identifies the OS through a compile definition unseen (Invariant 1; v8-arch-gyo2-sdl-p)",
+      "file": "tests/common/os/OsDefinitionCheck.cmake",
+      "find": "    set(GYO_OS_DEFINITION_ROOTS engine plugins games tools build/acceptance tests)",
+      "replace": "    set(GYO_OS_DEFINITION_ROOTS engine games tools build/acceptance tests)",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "plugin_definition: configuration unexpectedly succeeded",
+      "guards": [
+        "os DI 1",
+        "sdl-declaration 9.1"
+      ]
+    },
+    {
+      "id": "sdlp-definition-walk-revisits",
+      "what": "The OS definition walk loses its ancestry: a standalone tool wrapper, which adds the repository again under the tool's own source directory, sends it round without end (v8-arch-gyo2-sdl-p)",
+      "file": "tests/common/os/OsDefinitionCheck.cmake",
+      "find": "    if(directory IN_LIST ancestors)\n        return()\n    endif()\n    list(APPEND ancestors \"${directory}\")\n    gyo_os_definition_scope",
+      "replace": "    list(APPEND ancestors \"${directory}\")\n    gyo_os_definition_scope",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "wrapper: configuration failed[\\s\\S]*Maximum recursion depth",
+      "guards": [
+        "os DI 1",
+        "sdl-declaration 9.1"
+      ]
     }
   ]
 }

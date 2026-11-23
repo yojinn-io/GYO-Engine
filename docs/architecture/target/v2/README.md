@@ -19,6 +19,7 @@
 - [state-machine.zh-Hant.md](state-machine.zh-Hant.md)：狀態機 Module（`engine/modules/state_machine`）——名字表、封閉的型別、要求、套用的 System、子狀態、條件的 Design Invariants 與寫法。
 - [entity-ids.zh-Hant.md](entity-ids.zh-Hant.md)：預設的實體配發器 `entity_ids`（`RangeAllotter`）的 Design Invariants EI-1～EI-3 與 Replacement Criteria（`v8-arch-gyo2-world-gen`，使用者 2026-11-22 合併前核准）。
 - [save-version.zh-Hant.md](save-version.zh-Hant.md)：存檔版本 `save_version`（純程式庫、預設不帶）的 Design Invariants SV-1～SV-3 與 Replacement Criteria（`v8-arch-gyo2-restore-impl`，使用者 2026-11-22 合併前核准）。
+- [sdl.zh-Hant.md](sdl.zh-Hant.md)：SDL 的 Plugin（`plugins/sdl*`）——列與依賴、目錄的形、只建被選的 Plugin（`GYO_PLUGINS`）、SDL 3.4.0 的取得與補丁、Design Invariants SDL-1、SDL-2（子批 P `v8-arch-gyo2-sdl-p` 開頁；W、A、R2a 各自補）。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
 - [diagrams/mechanism-runtime.svg](diagrams/mechanism-runtime.svg)：圖一，一個 Product 的機制全貌（11 月 11 日的圖，只換名字）。
 - [diagrams/control-plane-revised.svg](diagrams/control-plane-revised.svg)：圖二，基礎的 System 契約（11 月 11 日的圖，換名字並調整）。

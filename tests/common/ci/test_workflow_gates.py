@@ -722,8 +722,19 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         native = run_script(step_with(job_block(self.shared, "native"), "id: core"))
         l1 = run_script(step_with(job_block(self.quick, "l1"), "id: core"))
         self.assertEqual(native, l1)
-        configure = native.splitlines()[0]
-        self.assertTrue(configure.startswith("cmake --preset core "), configure)
+        commands = [line for line in native.splitlines() if not line.startswith("if ($LASTEXITCODE")]
+        # Design Invariant SDL-2: the core baseline builds a copy without the SDL Plugins, every remaining
+        # Plugin selected, and checks afterwards that SDL was neither added nor fetched.
+        self.assertTrue(commands[0].startswith("python build/ci/common/plugin_removal.py copy --repository . "
+                                               "--destination \"build/target/_build/$env:PRESET-core-source\" "
+                                               "--family sdl "), commands[0])
+        configure = commands[1]
+        self.assertTrue(configure.startswith("cmake -S \"build/target/_build/$env:PRESET-core-source\" --preset core "),
+                        configure)
+        self.assertIn(" -DGYO_PLUGINS=ALL ", configure)
+        self.assertTrue(commands[-1].startswith("python build/ci/common/plugin_removal.py check "
+                                                "--build \"build/target/_build/$env:PRESET-core\" --family sdl "),
+                        commands[-1])
         # The core preset keeps MSVC /Zi, whose shared per-target PDB is unsafe
         # behind sccache; only embedded debug information may be cached.
         self.assertIn("'-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>'", configure)

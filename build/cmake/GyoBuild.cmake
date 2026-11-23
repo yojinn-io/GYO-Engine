@@ -10,6 +10,8 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 option(BUILD_TESTING "Build centralized engine and project tests" OFF)
 option(GYO_BUILD_EXAMPLES "Build the programs under examples/" ${BUILD_TESTING})
 option(GYO_ENABLE_PACKAGING "Generate product manifests and acceptance contracts" OFF)
+set(GYO_PLUGINS "" CACHE STRING
+    "Plugins to build besides those the configured products carry: config/plugins.csv names, or ALL")
 include(CTest)
 include("${CMAKE_CURRENT_LIST_DIR}/GyoGames.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/GyoTools.cmake")
@@ -50,20 +52,13 @@ add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
 # The Module and Plugin registers name the engine's Modules (engine/modules/),
 # the Plugins and their dependencies (Design Invariant O-6 of
 # docs/architecture/target/v2/orchestration.zh-Hant.md); engine/CMakeLists.txt
-# adds core, ecs and orchestration directly and the Modules in register order,
-# the Plugins follow from plugins/.
+# adds core, ecs and orchestration directly and the Modules in register order.
+# The Plugins (plugins/) are added after every product, below: only those the
+# products carry or GYO_PLUGINS names.
 gyo_load_unit_registers(GYO_UNITS "${GYO_REPOSITORY_ROOT}/config/modules.csv"
                         "${GYO_REPOSITORY_ROOT}/config/plugins.csv")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/engine")
-get_property(_gyo_units GLOBAL PROPERTY GYO_UNITS_ORDER)
-foreach(_gyo_unit IN LISTS _gyo_units)
-    get_property(_gyo_kind GLOBAL PROPERTY GYO_UNITS_${_gyo_unit}_KIND)
-    if(_gyo_kind STREQUAL "Plugin")
-        add_subdirectory("${GYO_REPOSITORY_ROOT}/plugins/${_gyo_unit}" "plugins/${_gyo_unit}")
-        gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/plugins/${_gyo_unit}")
-    endif()
-endforeach()
 foreach(GYO_CURRENT_GAME IN LISTS GYO_ACTIVE_GAMES)
     set(GYO_GAME_SOURCE_DIR "${GYO_REPOSITORY_ROOT}/games/${GYO_CURRENT_GAME}")
     set(GYO_GAME_BINARY_DIR "${PROJECT_BINARY_DIR}/games/${GYO_CURRENT_GAME}")
@@ -112,6 +107,19 @@ foreach(GYO_CURRENT_TOOL IN LISTS GYO_ACTIVE_TOOLS)
 endforeach()
 unset(GYO_CURRENT_TOOL)
 unset(GYO_TOOL_VARIANT)
+# The Plugins the configured products carry (gyo_product_units records them)
+# and those GYO_PLUGINS names, with the Plugins they depend on, in register
+# order. A Plugin nobody selects is not configured, so nothing it fetches is
+# downloaded or built (Design Invariant SDL-2 of
+# docs/architecture/target/v2/sdl.zh-Hant.md). A product links a Plugin's
+# target by name, which CMake resolves once every directory is configured.
+get_property(_gyo_requested_plugins GLOBAL PROPERTY GYO_PLUGINS_REQUESTED)
+gyo_plugin_selection(GYO_UNITS GYO_SELECTED_PLUGINS ${_gyo_requested_plugins} ${GYO_PLUGINS})
+set_property(GLOBAL PROPERTY GYO_PLUGINS_ADDED TRUE)
+foreach(_gyo_plugin IN LISTS GYO_SELECTED_PLUGINS)
+    add_subdirectory("${GYO_REPOSITORY_ROOT}/plugins/${_gyo_plugin}" "plugins/${_gyo_plugin}")
+    gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/plugins/${_gyo_plugin}")
+endforeach()
 gyo_finalize_product_packages()
 set(_gyo_shader_bundles false)
 set(_gyo_shader_host_tools false)
@@ -124,7 +132,11 @@ if(TARGET gyo_shader_host_tools)
 endif()
 _gyo_registry_json_quote("${CMAKE_BUILD_TYPE}" _gyo_build_configuration)
 gyo_go_build_record(_gyo_go_modules _gyo_go_services)
-file(WRITE "${PROJECT_BINARY_DIR}/gyo-build.json" "{\"configuration\":${_gyo_build_configuration},\"shader_bundles\":${_gyo_shader_bundles},\"shader_host_tools\":${_gyo_shader_host_tools},\"go_modules\":${_gyo_go_modules},\"go_services\":${_gyo_go_services}}\n")
+set(_gyo_plugins_json "[]")
+foreach(_gyo_plugin IN LISTS GYO_SELECTED_PLUGINS)
+    string(JSON _gyo_plugins_json SET "${_gyo_plugins_json}" 9999 "\"${_gyo_plugin}\"")
+endforeach()
+file(WRITE "${PROJECT_BINARY_DIR}/gyo-build.json" "{\"configuration\":${_gyo_build_configuration},\"plugins\":${_gyo_plugins_json},\"shader_bundles\":${_gyo_shader_bundles},\"shader_host_tools\":${_gyo_shader_host_tools},\"go_modules\":${_gyo_go_modules},\"go_services\":${_gyo_go_services}}\n")
 function(gyo_label_tests directory)
     # A standalone tool wrapper adds the repository, which reuses the tool's
     # source directory. Source-based SUBDIRECTORIES lookup can revisit that

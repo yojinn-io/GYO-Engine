@@ -146,15 +146,23 @@ jobs:
       # Same command as the toolchain packaging row, which also runs it on
       # Windows: the core preset leaves MSVC on /Zi, whose shared per-target
       # PDB is unsafe behind sccache; embedded (/Z7) debug info is MSVC-only.
-      - name: Build and test core with optional modules disabled
+      # It builds a work tree of the commit without the SDL Plugins and their
+      # register rows, every remaining Plugin selected, and checks SDL was
+      # neither added nor fetched (Design Invariant SDL-2,
+      # docs/architecture/target/v2/sdl.zh-Hant.md).
+      - name: Build and test core without the SDL Plugins
         id: core
         if: ${{ !cancelled() && runner.os == 'Linux' && steps.setup.outcome == 'success' }}
         run: |
-          cmake --preset core -B "build/target/_build/$env:PRESET-core" '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
+          python build/ci/common/plugin_removal.py copy --repository . --destination "build/target/_build/$env:PRESET-core-source" --family sdl 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-removal.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S "build/target/_build/$env:PRESET-core-source" --preset core -B "build/target/_build/$env:PRESET-core" '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DGYO_PLUGINS=ALL 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build "build/target/_build/$env:PRESET-core" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir "build/target/_build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python build/ci/common/plugin_removal.py check --build "build/target/_build/$env:PRESET-core" --family sdl 2>&1 | Tee-Object -Append "build/target/_build/$env:PRESET/logs/core-removal.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Go work comes only from the configured build record, so it also runs

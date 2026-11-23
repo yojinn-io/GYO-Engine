@@ -1277,7 +1277,7 @@
     "-P",
     "tests/common/cmake/UnitRegistryTests.cmake"
    ],
-   "expect": "The\\ default\\ table\\ lacks\\ 'UnitEntry<Module>\\{\"walk\"",
+   "expect": "The\\ default\\ table\\ lacks\\ 'UnitEntry<Module>\\{\"walk\"|PLUGINS\\s+names\\s+'kit',\\s+which\\s+is\\s+no\\s+in-World\\s+Plugin",
    "timeout": 300
   },
   {
