@@ -95,6 +95,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `plugins/` 不在 code page 的根（`GyoCodePage.cmake:27`），也不在 os 守衛的根 | apps→games 宣告 §6 第 2 項 | 已轉 SDL 宣告卡：第一個 Plugin 進來前補 |
 | `examples/` 有執行檔，卻不在 DI 11（`ProcessCodePageCheck`）的 manifest 根裡（現存缺口） | apps→games 宣告修訂 1 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
 | asset 在建置側的鏡像（`content_contract.py`）和 C++ 契約不一致（例：`shader_bundles` 一邊必填、一邊可省） | apps→games 宣告修訂 1 | owner asset；搬產品、打包回來前對齊 |
+| os.md :318-319 寫「每個存在的根至少要有一個原始碼」，`os_boundary_guard` 對空的產品根是跳過，兩者不一致 | apps→games 宣告修訂 2 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
