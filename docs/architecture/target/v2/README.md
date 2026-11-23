@@ -13,6 +13,7 @@
 - [rollback.zh-Hant.md](rollback.zh-Hant.md)：回滾 Module（`engine/modules/rollback`）——`RollbackStrategy` 的契約、公開登記、官方策略（記錄、判斷、還原、重跑、輸入的歷史、權威值的入口）；Design Invariants R-1～R-8（R-7 取代 Kernel 的 D-E16）與 Replacement Criteria（含從 Kernel 搬來的「回滾等價破裂」；`v8-arch-gyo2-authority-rollback`，最終文字使用者 2026-11-22 核准）。
 - [audio.zh-Hant.md](audio.zh-Hant.md)：混音器 Module（`engine/modules/audio`）——clip、voice、提交口與它的執行緒契約、時間點的換算、後端要求的介面；Design Invariants 1～11 與 Replacement Criteria 1～9（`v8-arch-gyo2-audio-review` 從 master 的 `audio.md` 搬來改寫，最終文字在合併前核准定稿）。
 - [json.zh-Hant.md](json.zh-Hant.md)：JSON Module（`engine/modules/json`）的 Design Invariants J-1～J-9 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-json-module` 合併前的合併前核准定稿）。
+- [text.zh-Hant.md](text.zh-Hant.md)：text Module（`engine/modules/text`）——字型的資料契約 `"font"`、FreeType／HarfBuzz／libunibreak 三個 adapter、Design Invariants TX-1～TX-10 與 Replacement Criteria、使用的一方要照做的四件（CCR-12～14）、授權告示的義務（`v8-arch-gyo2-sdl-t`，最終文字在合併前核准定稿）。
 - [logging.zh-Hant.md](logging.zh-Hant.md)：日誌（`engine/modules/logging`、`engine/modules/world_logging`）——入口 ①②③④⑥、E0 的致命路徑、JSON lines 資料契約、Design Invariants LG-1～LG-11（LG-9 退役）與 Replacement Criteria。trace 是另一個 Module（下一列）。
 - [trace.zh-Hant.md](trace.zh-Hant.md)：trace（Base 的門面 `Trace.hpp`、`engine/modules/trace`）——每執行緒的段堆疊、父子、計時、路徑，經日誌寫出；Kernel 與編排層發的段；Design Invariants TR-1～TR-7 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-trace` 的合併前核准定稿）。
 - [asset.zh-Hant.md](asset.zh-Hant.md)：資產（`engine/modules/asset`、`engine/modules/world_asset`）——id、catalog 的 Data Contract（格式、Version、Validation Rule (A)(B)）、World 外的 `AssetStore`（照 Bevy 的演算法）、每個 World 的 `AssetRequests` 與 `AssetView`、狀態與就緒查詢、錯誤與件數、雜湊函式；Design Invariants AS-1～AS-13 與 Replacement Criteria（`v8-arch-gyo2-asset`，取代 `target/assets.zh-Hant.md`；最終文字使用者 2026-11-23 合併前核准）。
@@ -50,6 +51,8 @@
 - [rebuild-r0b-report.zh-Hant.md](rebuild-r0b-report.zh-Hant.md)：R0b 的報告（刪除舊實現；第 3 節是 R0b-3 的判定變更）。
 - [json-module-declaration.zh-Hant.md](json-module-declaration.zh-Hant.md)：`v8-arch-gyo2-json-module` 的事前宣告（JSON Module；修訂 1，使用者 2026-11-20 動工前核准）。
 - [json-module-merge-approval.zh-Hant.md](json-module-merge-approval.zh-Hant.md)：`v8-arch-gyo2-json-module` 的合併前核准頁（判定的結果、判定 3 的更正、突變的數目、和宣告不同的地方）。
+- [text-declaration.zh-Hant.md](text-declaration.zh-Hant.md)：`v8-arch-gyo2-sdl-t` 的事前宣告（SDL 線子批 T：text Module；修訂 1，使用者 2026-11-23 動工前核准「照建議，1 選丁，2 同意下載，3 門檻照建議」）。
+- [text-merge-approval.zh-Hant.md](text-merge-approval.zh-Hant.md)：`v8-arch-gyo2-sdl-t` 的合併前核准頁。
 - [logging-declaration.zh-Hant.md](logging-declaration.zh-Hant.md)：`v8-arch-gyo2-logging` 的事前宣告（第 6 組：日誌機制；修訂 1，使用者 2026-11-20 動工前核准「照建議，全部核准」；修訂 2 記日誌後退出、不去重；修訂 3 異常分級之後的改寫、日誌和 trace 分成兩個 Module）。
 - [logging-merge-approval.zh-Hant.md](logging-merge-approval.zh-Hant.md)：`v8-arch-gyo2-logging` 的合併前核准頁。
 - [trace-declaration.zh-Hant.md](trace-declaration.zh-Hant.md)：`v8-arch-gyo2-trace` 的事前宣告（修訂 1，使用者 2026-11-21 動工前核准「照建議，全部核准」）。
@@ -102,6 +105,7 @@
 - [2026_11_16_gyo2_module_plugin_definition.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_module_plugin_definition.zh-Hant.md)：Module／Plugin 的定義改成「誰維護、介面是誰的」，AGENTS §6 與 v2 文件對齊。
 - [2026_11_16_gyo2_test_debts.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_test_debts.zh-Hant.md)：Kernel 測試的三筆舊帳（四個對不上的突變、刪除實體時 OnRemove 的先後、還沒搬的 world-exec 突變）。
 - [2026_11_20_gyo2_json_module.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_json_module.zh-Hant.md)：JSON Module（`v8-arch-gyo2-json-module`）。
+- [2026_11_23_gyo2_sdl_t_text.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_sdl_t_text.zh-Hant.md)：SDL 線子批 T，text Module（`v8-arch-gyo2-sdl-t`）。
 - [2026_11_20_gyo2_error_levels.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_error_levels.zh-Hant.md)：異常分級（Kernel 不再印錯誤、編排層不再記警告、P12、P15；級別與命名的條文草稿）。
 - [2026_11_20_gyo2_logging.zh-Hant.md](../../../dev_logs/2026_11_20_gyo2_logging.zh-Hant.md)：日誌機制（`v8-arch-gyo2-logging`；trace 另一個 Module）。
 - [2026_11_22_gyo2_exchange_guards.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_exchange_guards.zh-Hant.md)：第 5 批第 0 步，Kernel「拿掉的名字不回來」與權威 Module 的連結集（PR #268 併入）。
