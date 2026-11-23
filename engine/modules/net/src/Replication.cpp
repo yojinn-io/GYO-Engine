@@ -1,6 +1,7 @@
 #include "engine/net/Replication.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <bit>
 #include <cmath>
 #include <map>
@@ -195,6 +196,9 @@ void ReadClient(PeerLedger& ledger, Connection& connection, const std::uint32_t 
             ledger.pending.clear();
             ledger.resources.clear();
             ledger.lastStructureTick.reset();
+            // What waited is sent with the structure again: no accumulated priority carries over (M1 of PR-2's review).
+            ledger.waiting.clear();
+            ledger.waitedTicks.clear();
             ledger.epoch = epoch;
             server.SetEpoch(connectionId, epoch); // a later server World's ledger starts with it (R2)
             continue;
@@ -392,8 +396,18 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 writer.Value(opCount);
                 writer.Bytes(ops);
                 if (connection->Send(kReliableChannel, structure)) {
-                    for (const Kernel::EntityId gone : despawned) ledger.entities.erase(gone);
-                    for (std::size_t i = 0; i < restructured.size(); ++i) ledger.entities[restructured[i]] = restructuredAs[i];
+                    // An entity removed at the client, or sent whole with its structure, waits no more: its accumulated
+                    // priority does not carry over to a later change (M1 of PR-2's review).
+                    for (const Kernel::EntityId gone : despawned) {
+                        ledger.entities.erase(gone);
+                        ledger.waiting.erase(gone);
+                        ledger.waitedTicks.erase(gone);
+                    }
+                    for (std::size_t i = 0; i < restructured.size(); ++i) {
+                        ledger.entities[restructured[i]] = restructuredAs[i];
+                        ledger.waiting.erase(restructured[i]);
+                        ledger.waitedTicks.erase(restructured[i]);
+                    }
                     ledger.lastStructureTick = tick;
                     ++ledger.structuresSent;
                 } else {
@@ -588,7 +602,7 @@ void Inbox(ReplicaWorld& world, const std::function<void(Rollback::RollbackInbox
 
 // K3: a value of a component that does not roll back for an entity not in the World yet waits for it (newest per wire).
 void Wait(NetReplicaState& state, const Kernel::EntityId entity, const std::uint16_t wire, std::span<const std::byte> bytes) {
-    auto& waiting = state.waitingDirect[entity];
+    auto& waiting = state.waitingDirect[entity].values;
     for (auto& [kept, value] : waiting) {
         if (kept == wire) {
             value.assign(bytes.begin(), bytes.end());
@@ -638,21 +652,41 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             }
             continue;
         }
-        if (rolling != nullptr && flags == 1) {
+        const bool spawnK3 = rolling != nullptr && flags == 1;
+        bool knownBefore = false;
+        if (spawnK3) {
             // K3: the server's spawn goes to the rollback Module (Entered, R-8 A): the entity is put back, with its id,
             // by the rollback at the confirmed point, and later rollbacks keep it. It is not spawned here.
-            Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.Entered(entity, tick); });
+            Inbox(world, [&](Rollback::RollbackInbox& inbox) {
+                knownBefore = inbox.AliveAt(entity, std::numeric_limits<std::uint64_t>::max()).has_value();
+                inbox.Entered(entity, tick);
+            });
             ++state.inboxEntries;
+            if (rolling->Alive(entity)) ++state.entriesWhileAlive;
+            // Its components that do not roll back wait for the entity of this spawn (S1 b, B1 of PR-2's review).
+            auto& waiting = state.waitingDirect[entity];
+            waiting = NetReplicaState::WaitingDirect{};
+            waiting.notBefore = tick;
+            waiting.whole = true;
         }
         for (const std::uint16_t wire : removed) {
             if (rolling != nullptr && rolling->Component(wire)) {
                 registry.components[wire]->removedToInbox(world, entity, tick);
                 ++state.inboxRemovals;
             } else if (wire < registry.components.size()) {
-                (void)registry.components[wire]->remove(world, entity);
+                if (rolling != nullptr) {
+                    // K3: a waiting value of it is not written later (S1 a of PR-2's review).
+                    if (const auto waiting = state.waitingDirect.find(entity); waiting != state.waitingDirect.end()) {
+                        std::erase_if(waiting->second.values, [wire](const auto& value) { return value.first == wire; });
+                    }
+                    if (rolling->Alive(entity)) (void)registry.components[wire]->remove(world, entity);
+                } else {
+                    (void)registry.components[wire]->remove(world, entity);
+                }
             }
             state.written[{entity, wire}] = tick;
         }
+        std::vector<std::uint16_t> spawnedRolling;
         bool first = flags == 1;
         for (std::uint8_t i = 0; i < setCount; ++i) {
             std::uint16_t wire = 0;
@@ -671,7 +705,8 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
                     } else {
                         ++state.inboxValues;
                     }
-                } else if (!rolling->Alive(entity)) {
+                    if (spawnK3) spawnedRolling.push_back(wire);
+                } else if (!rolling->Alive(entity) || state.waitingDirect.count(entity) != 0) {
                     Wait(state, entity, wire, bytes);
                 } else {
                     const ApplyOutcome direct = registry.components[wire]->apply(world, entity, bytes, ApplyMode::Set);
@@ -696,6 +731,15 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             if (outcome == ApplyOutcome::Unchanged) ++state.unchangedNotWritten;
             first = false;
             state.written[{entity, wire}] = tick;
+        }
+        if (spawnK3 && knownBefore) {
+            // K3, an entity seen again (B1 of PR-2's review): a spawn is the whole set, so a rolling-back component it
+            // does not carry was taken off while the entity was away; the inbox's older value must not put it back.
+            for (std::uint16_t wire = 0; wire < registry.components.size(); ++wire) {
+                if (!rolling->Component(wire) || std::find(spawnedRolling.begin(), spawnedRolling.end(), wire) != spawnedRolling.end()) continue;
+                registry.components[wire]->removedToInbox(world, entity, tick);
+                ++state.inboxRemovals;
+            }
         }
     }
     state.appliedStructureTick = tick;
@@ -808,7 +852,7 @@ SystemResult ApplyValues(ReplicaWorld& world, const NetRegistry& registry, NetRe
                 Drop(state, ReplicaDrop::StaleValue);
                 continue;
             }
-            if (rolling != nullptr && !rolling->Alive(entity)) {
+            if (rolling != nullptr && (!rolling->Alive(entity) || state.waitingDirect.count(entity) != 0)) {
                 // K3: the entity comes with the rollback that puts it back; the value waits for it.
                 Wait(state, entity, wire, bytes);
                 state.written[{entity, wire}] = part.tick;
@@ -988,6 +1032,9 @@ SystemResult ApplyReplication(ReplicaWorld world) {
         }
     }
     if (rolling != nullptr) {
+        // The confirmed point the rollback has decided at by now (written last frame; it decides in the frame's
+        // decide stage, after this System).
+        const std::optional<std::uint32_t> decided = state.inboxConfirmed;
         // K3: the confirmed point (D-7: every value part of C processed, the structure they need applied; it falls
         // only on ticks the server sent values for) goes to the rollback Module.
         if (state.latestConfirmed && state.inboxConfirmed != state.latestConfirmed) {
@@ -997,11 +1044,21 @@ SystemResult ApplyReplication(ReplicaWorld world) {
         }
         // The values of components that do not roll back, for entities a rollback has put back since.
         for (auto it = state.waitingDirect.begin(); it != state.waitingDirect.end();) {
-            if (!rolling->Alive(it->first)) {
+            const NetReplicaState::WaitingDirect& waiting = it->second;
+            if (!rolling->Alive(it->first) || (waiting.notBefore != 0 && (!decided || *decided < waiting.notBefore))) {
                 ++it;
                 continue;
             }
-            for (const auto& [wire, bytes] : it->second) {
+            if (waiting.whole) {
+                // The spawn's set is whole: a component that does not roll back and is not in it is taken off.
+                for (std::uint16_t wire = 0; wire < registry->components.size(); ++wire) {
+                    if (rolling->Component(wire)) continue;
+                    const bool carried = std::any_of(waiting.values.begin(), waiting.values.end(),
+                                                     [wire](const auto& value) { return value.first == wire; });
+                    if (!carried) (void)registry->components[wire]->remove(world, it->first);
+                }
+            }
+            for (const auto& [wire, bytes] : waiting.values) {
                 if (registry->components[wire]->apply(world, it->first, bytes, ApplyMode::Set) == ApplyOutcome::Failed) {
                     result = Base::Err(Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, "the net Module could not apply a value"));
                 }

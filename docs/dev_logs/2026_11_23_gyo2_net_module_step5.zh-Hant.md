@@ -65,7 +65,7 @@
 
 ## 4. 數字
 
-- **頻寬判定成立**（第一次正式跑就過，沒有重跑；兩次執行每 tick 的位元組逐項相同）：
+- **頻寬判定成立**（第一次正式跑就過，沒有重跑；兩次執行每 tick 的位元組逐項相同）〔PR-2 設計審查 S4 註：這個情境比閘口 2 的 2.1 輕（看得到約 38、每 tick 動的約 10，2.1 是約 50、約 14）；本節的結果照 §14.1 留著，照 2.1 的情境重跑見 `2026_11_23_gyo2_net_module_pr2_review_fixes.zh-Hant.md`〕：
   | Client | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
   |---|---|---|---|---|---|---|---|---|
   | 平均（kbps，判定 ≤ 512） | 181.06 | 181.51 | 180.92 | 181.03 | 165.13 | 171.10 | 183.69 | 164.38 |
@@ -97,7 +97,7 @@
     - `nt-k3-not-confirmed`：只拿掉寫 inbox，`inboxConfirmed` 計數照樣加，原檢查看計數所以沒抓到、別的檢查失敗。檢查改成讀 Client 的 `RollbackInbox::Confirmed()`（真正的效果），重跑 killed。
     - `nt-deferred-not-notsent`：計數照樣加、件數相等，失敗的是 `Digest`。expect 改指 G-11 NotSent 案例的 `Digest` 檢查（這個案例只有它會壞），重跑 killed。
 - **第 4 步的提醒（共用 `Digest` 的 expect）**：K3 的五個突變拆成各自的檢查（見第 3 節），重跑都 killed：`nt-k3-entered-missing`→Entered 到了、`nt-k3-not-confirmed`→確認點寫進回滾、`nt-k3-as-k1`→進入的件數、`nt-k3-values-direct`→`First` 沒直接寫、`nt-k3-resource-direct`→Resource 進 inbox。K3 的突變不再共用同一條檢查。
-- **第 4 步以前就共用 expect 的**（不在這一步改，列給之後看）：net 有 5 組（`nt-magic`／`nt-version`；G-5 (1) 的 3 個；G-6 的 2 個；B1 的 2 個；R2 a 的 2 個），rollback 有 3 組（`[rb-r2-equal]` 的 4 個；`[rb-history-pruned]` 的 2 個；`[rb-resource-adopted]` 的 2 個）。拆的話要多加檢查（例如 G-5 (1) 分出「值早於結構」「刪除沒編碼」「舊值被套用」），是否值得照 §14.5 判。
+- **第 4 步以前就共用 expect 的**（不在這一步改，列給之後看）：net 有 5 組（`nt-magic`／`nt-version`；G-5 (1) 的 3 個；G-6 的 2 個；B1 的 2 個；R2 a 的 2 個），rollback 有 3 組（`[rb-r2-equal]` 的 4 個；`[rb-history-pruned]` 的 2 個；`[rb-resource-adopted]` 的 2 個）。〔更正，PR-2 設計審查 S5：`[rb-resource-adopted]` 的兩個（`rb-resource-authority-ignored`、`rb-resource-not-put-back`）是 PR-2 第 4 步新增的，不是「第 4 步以前」；`origin/gyo2` 沒有這個標記。已在審查修正拆開，見 `2026_11_23_gyo2_net_module_pr2_review_fixes.zh-Hant.md`〕拆的話要多加檢查（例如 G-5 (1) 分出「值早於結構」「刪除沒編碼」「舊值被套用」），是否值得照 §14.5 判。
 
 ## 6. 自己判的（揭露）
 

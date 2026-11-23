@@ -1167,6 +1167,39 @@ TEST_CASE("rollback strategy: R-8 A: an entity said to exit at or before C is re
     CHECK_MESSAGE(!WorldOf(*p).Alive(2), "[rb-exited-removed] entity 2 came back");
 }
 
+TEST_CASE("rollback strategy: R-8 A: an exit at or before C the World's alive set at C agrees with is forgotten (S6)") {
+    R::RollbackInbox inbox;
+    inbox.Entered(5, 2);
+    inbox.Value<Health>(5, 2, Health{3});
+    inbox.NotSent(5, 7);
+    inbox.Exited(5, 6);
+    inbox.Entered(8, 2);
+    inbox.Exited(8, 6);
+    inbox.Entered(8, 9);
+    // Entity 5 left at 6 and the alive set at 7 lacks it: nothing of it is kept. Entity 4 is still in the World's
+    // alive set (a rollback given up): its exit stays.
+    inbox.Entered(4, 2);
+    inbox.Exited(4, 6);
+    inbox.Prune(7, std::vector<K::EntityId>{1, 4});
+    CHECK_MESSAGE(!inbox.AliveAt(5, 8).has_value(), "[rb-exited-forgotten] the exit of entity 5 is still kept");
+    CHECK_MESSAGE(!inbox.Values<Health>()->At(5, 8).has_value(), "[rb-exited-forgotten] the values of entity 5 are still kept");
+    CHECK_MESSAGE(inbox.NotCarriedAt(7).empty(), "[rb-exited-forgotten] NotSent of entity 5 is still kept");
+    CHECK_MESSAGE((inbox.AliveAt(4, 8).has_value() && !*inbox.AliveAt(4, 8)), "[rb-exit-kept-while-alive] the exit of entity 4 was dropped");
+    CHECK_MESSAGE((inbox.AliveAt(8, 9).has_value() && *inbox.AliveAt(8, 9)), "an entity entering again after C is kept");
+}
+
+TEST_CASE("rollback strategy: R-8 A: an exit the rollback carried out is forgotten by the inbox (S6)") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Exited(2, 4);
+    Inbox(*p).ConfirmedThrough(4);
+    Frames(*p, 1);
+    REQUIRE(!WorldOf(*p).Alive(2));
+    CHECK_MESSAGE(!Inbox(*p).AliveAt(2, 9).has_value(), "[rb-exited-forgotten] the inbox still keeps the exit of entity 2");
+    Frames(*p, 3);
+    CHECK(!WorldOf(*p).Alive(2));
+}
+
 TEST_CASE("rollback strategy: R-8 A: pruning the inbox keeps an entity's last entry or exit at or before C") {
     R::RollbackInbox inbox;
     inbox.Entered(5, 2);
@@ -1208,7 +1241,10 @@ TEST_CASE("rollback strategy: R-8 F: a resource's authoritative value that diffe
         Frames(*p, 9);
         Inbox(*p).ResourceValue<Tally>(5, Tally{1000});
         Inbox(*p).ConfirmedThrough(5);
+        StepsRun() = 0;
         Frames(*p, 1);
+        // Going back (the lookup) and what is put back are checked apart (S5 of PR-2's review).
+        CHECK_MESSAGE(StepsRun() > 1, "[rb-resource-differs] a differing resource value did not go back: steps " << StepsRun());
         std::int32_t later = 0;
         for (std::uint64_t t = 6; t <= 10; ++t) later += kScript[t];
         CHECK_MESSAGE(WorldOf(*p).Resource<Tally>()->sum == 1000 + later, "[rb-resource-adopted] " << WorldOf(*p).Resource<Tally>()->sum);
@@ -1265,6 +1301,23 @@ TEST_CASE("rollback strategy: R-8 third state: an entity the snapshot of C does 
         Frames(*p, 1);
         CHECK_MESSAGE(WorldOf(*p).Get<Health>(1)->hp == predicted1 + kScript[10],
                       "[rb-not-sent-history-kept] " << WorldOf(*p).Get<Health>(1)->hp << " vs " << predicted1 + kScript[10]);
+    }
+    SUBCASE("an entity that entered and is not carried at its first C is put back from the inbox (U1 (c), S2)") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        // The authority spawned entity 77 at step 5 with Health 40; the snapshot of step 6 does not carry it, and this
+        // World has no history of it: the restore takes the inbox's value, not an empty entity.
+        Inbox(*p).Entered(77, 5);
+        Inbox(*p).Value<Health>(77, 5, Health{40});
+        Inbox(*p).NotSent(77, 6);
+        Inbox(*p).ConfirmedThrough(6);
+        Frames(*p, 1);
+        std::int32_t later = 0;
+        for (std::uint64_t t = 7; t <= 10; ++t) later += kScript[t];
+        REQUIRE(WorldOf(*p).Alive(77));
+        const Health* health = WorldOf(*p).Get<Health>(77);
+        CHECK_MESSAGE((health != nullptr && health->hp == 40 + later),
+                      "[rb-not-sent-entered-from-inbox] " << (health != nullptr ? health->hp : -1) << " vs " << 40 + later);
     }
     SUBCASE("at a later C the entity counts again") {
         auto p = Make(WithStrategy());

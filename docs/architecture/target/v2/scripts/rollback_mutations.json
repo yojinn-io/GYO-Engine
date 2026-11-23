@@ -262,8 +262,8 @@
     "authority-rollback-declaration 5.5"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "                column->AddTo(set, target, alive, values, notCarried);",
-   "replace": "                column->AddTo(set, target, alive, nullptr, notCarried);",
+   "find": "                column->AddTo(set, target, alive, values, kept);",
+   "replace": "                column->AddTo(set, target, alive, nullptr, kept);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: an authoritative value that differs*",
    "expect": "\\[rb\\-authority\\-adopted\\]"
@@ -492,8 +492,8 @@
     "rollback R-8"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "        auto pruned = world.Modify<RollbackInbox>([point](RollbackInbox& inbox) { inbox.Prune(point); });",
-   "replace": "        auto pruned = world.Modify<RollbackInbox>([point](RollbackInbox&) { static_cast<void>(point); });",
+   "find": "            if (aliveAtPoint) {\n                inbox.Prune(point, *aliveAtPoint);\n            } else {\n                inbox.Prune(point);\n            }\n",
+   "replace": "            static_cast<void>(inbox);\n            static_cast<void>(point);\n            static_cast<void>(aliveAtPoint);\n",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: the inbox is pruned*",
    "expect": "\\[rb\\-inbox\\-pruned\\]"
@@ -794,7 +794,7 @@
     "rollback R-8"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "                if (values != nullptr) column->Adopt(target, *values, carried);",
+   "find": "                if (values != nullptr) column->Adopt(target, *values, Without(alive, kept));",
    "replace": "                static_cast<void>(values);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8: the authoritative value is laid over*",
@@ -807,8 +807,8 @@
     "rollback R-8"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "    auto pruned = world.Modify<RollbackInbox>([target](RollbackInbox& inbox) { inbox.Prune(target); });\n    if (!pruned) return Base::Err(std::move(pruned).error());\n",
-   "replace": "    static_cast<void>(target);\n",
+   "find": "        if (aliveAtTarget) {\n            inbox.Prune(target, *aliveAtTarget);\n        } else {\n            inbox.Prune(target);\n        }\n",
+   "replace": "        static_cast<void>(inbox);\n        static_cast<void>(target);\n        static_cast<void>(aliveAtTarget);\n",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8: the inbox is pruned after*",
    "expect": "\\[rb\\-inbox\\-pruned\\-after\\-rollback\\]"
@@ -938,8 +938,8 @@
     "rollback R-8"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "        history.decided = point;\n        fresh = true;\n        if (settings_.mode == RollbackMode::Disabled) return;\n        if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {\n            context.Abandon(point, settings_.depth);\n            return;\n        }\n        if (settings_.mode == RollbackMode::Always) {\n            rollBack = true;\n            return;\n        }\n        bool differs = false;",
-   "replace": "        history.decided = point;\n        if (settings_.mode == RollbackMode::Disabled) return;\n        if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {\n            context.Abandon(point, settings_.depth);\n            return;\n        }\n        if (settings_.mode == RollbackMode::Always) {\n            rollBack = true;\n            return;\n        }\n        fresh = true;\n        bool differs = false;",
+   "find": "        history.decided = point;\n        fresh = true;\n        if (const std::vector<Kernel::EntityId>* kept = history.AliveAt(point)) aliveAtPoint = *kept;\n        if (settings_.mode == RollbackMode::Disabled) return;\n        if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {\n            context.Abandon(point, settings_.depth);\n            return;\n        }\n        if (settings_.mode == RollbackMode::Always) {\n            rollBack = true;\n            return;\n        }\n        bool differs = false;",
+   "replace": "        history.decided = point;\n        if (const std::vector<Kernel::EntityId>* kept = history.AliveAt(point)) aliveAtPoint = *kept;\n        if (settings_.mode == RollbackMode::Disabled) return;\n        if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {\n            context.Abandon(point, settings_.depth);\n            return;\n        }\n        if (settings_.mode == RollbackMode::Always) {\n            rollBack = true;\n            return;\n        }\n        fresh = true;\n        bool differs = false;",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8: the inbox is pruned after*",
    "expect": "\\[rb\\-inbox\\-pruned\\-after\\-abandon\\]"
@@ -1167,7 +1167,7 @@
    "replace": "    return column.IsResource() ? nullptr : inbox.ValuesOf(column.Key());\n",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy:*",
-   "expect": "\\[rb\\-resource\\-adopted\\]"
+   "expect": "\\[rb\\-resource\\-differs\\]"
   },
   {
    "id": "rb-resource-not-put-back",
@@ -1220,6 +1220,58 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy:*",
    "expect": "\\[rb\\-not\\-sent\\-only\\-at\\-its\\-tick\\]"
+  },
+  {
+   "id": "rb-not-sent-entered-empty",
+   "what": "An entity not carried at C keeps the history even when the history has nothing of it (an entity that just entered comes back with no components). Only it catches U1 (c)'s inbox fallback (S2 of PR-2's review)",
+   "guards": [
+    "rollback R-8 third state (U1 (c))"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (it != entries_.end() && !it->second.empty() && it->second.front().tick <= tick) kept.push_back(entity);",
+   "replace": "            static_cast<void>(it);\n            kept.push_back(entity);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8 third state*",
+   "expect": "\\[rb\\-not\\-sent\\-entered\\-from\\-inbox\\]"
+  },
+  {
+   "id": "rb-exited-never-forgotten",
+   "what": "The inbox keeps an entity's exit, values and NotSent for ever after C passes its exit (it grows with every entity that ever existed). Only it catches S6's forgetting",
+   "guards": [
+    "rollback R-8 A (S6 of PR-2's review)"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "            for (auto& [key, column] : columns_) column->Forget(entity);\n            notSent_.erase(entity);\n            it = lifecycle_.erase(it);\n",
+   "replace": "            ++it;\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8 A*",
+   "expect": "\\[rb\\-exited\\-forgotten\\]"
+  },
+  {
+   "id": "rb-exited-forgotten-while-alive",
+   "what": "An exit is forgotten although the World's alive set at C still has the entity (a rollback given up): a later C would no longer remove it. Only it catches S6's alive-set condition",
+   "guards": [
+    "rollback R-8 A (S6 of PR-2's review)"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": " &&\n                              !std::binary_search(aliveAtOldest.begin(), aliveAtOldest.end(), entity);",
+   "replace": ";\n            static_cast<void>(aliveAtOldest);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8 A*",
+   "expect": "\\[rb\\-exit\\-kept\\-while\\-alive\\]"
+  },
+  {
+   "id": "rb-entry-rollbacks-not-counted",
+   "what": "The rollbacks an entered entity takes part in are not counted (U3's observation item). Only it catches the count",
+   "guards": [
+    "net RC-NT9 (U3)"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (differs && entered) ++history.rollbacksForEntries;\n",
+   "replace": "        static_cast<void>(entered);\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "U3:\\ the\\ rollbacks\\ entries\\ take\\ part\\ in\\ are\\ counted"
   }
  ]
 }

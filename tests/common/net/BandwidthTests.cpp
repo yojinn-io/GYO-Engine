@@ -3,12 +3,13 @@
 // results and not loosened after them. Bytes are counted, not timed: the case runs in the cpu label.
 //
 // The scenario (fixed seed): a 500 m x 500 m map on two floors, in centimetres. 8 players crowd on floor 0 and wander;
-// 20 AI patrol (both floors); a boss walks a square in a room on floor 0; 200 items, 50 doors and 129 other entities
-// stand still (both floors). The rule each Peer's PeerVisibility is filled with: the same floor and within 100 m of
+// 20 AI patrol (5 near the crowd, the others on both floors); a boss walks a square in a room on floor 0; 200 items
+// (18 near the crowd), 50 doors and 129 other entities stand still (both floors). The rule each Peer's PeerVisibility is filled with: the same floor and within 100 m of
 // its player. One Match and 8 display clients over memory links without loss; 2 000 ticks, one a frame. Every
 // datagram the Match sends to a client counts (values, structure updates, acks, keepalives).
 //   Judgement: each client's average bytes per tick, at 64 Hz, <= 512 kbps; two runs give the same bytes, tick by tick.
-//   Recorded only: the maximum, and the dense scenario (about 50 entities around the players, all moving).
+//   Recorded only: the maximum, and the dense scenario (the same entities, all moving: about 50 seen, all changing).
+//   The scenario is checked against 2.1 (S4 of PR-2's review): seen about 50 (40..60), moving about 14 (10..18).
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -129,13 +130,16 @@ void RegisterWorld(O::WorldSetup& s) {
     });
 }
 
-// The Match's entities: the typical scenario, or the dense one (the 129 others become 42 patrols around the crowd
-// and 87 still ones: about 50 seen, all moving).
+// The Match's entities: the typical scenario of gate 2's 2.1 (a client sees about 50, about 14 of them change each
+// tick: 8 players, about 5 AI, the boss), or the dense one (the same entities, every one of them moving: about 50 seen,
+// all changing). The review of PR-2 (S4): the first scenario of step 5 scattered every AI and still entity evenly and
+// was lighter than 2.1 (about 38 seen, about 10 changing); now 5 AI patrol near the crowd and 18 items lie near it.
 void Populate(K::World& world, const bool dense) {
     std::uint64_t seed = 0x5EED0B0Bu;
     K::EntityId next = kFirst;
     const std::int32_t cx = 25'000, cy = 25'000;
     auto put = [&](std::int32_t x, std::int32_t y, std::uint8_t level, Mover mover) {
+        if (dense && mover.kind == 0) mover = Mover{2, 5, 0, x, 0, 0};
         world.Insert(next, Position{x, y});
         world.Insert(next, Floor{level});
         world.Insert(next, mover);
@@ -146,19 +150,23 @@ void Populate(K::World& world, const bool dense) {
         put(cx + Between(seed, -2'000, 2'000), cy + Between(seed, -2'000, 2'000), 0, m);
     }
     for (int i = 0; i < 20; ++i) {
+        if (i < 5) {
+            const std::int32_t x = cx + Between(seed, -6'000, 6'000);
+            put(x, cy + Between(seed, -6'000, 6'000), 0, Mover{2, 5, 0, x, 0, 0});
+            continue;
+        }
         const std::int32_t x = Between(seed, 1'000, kMap - 1'000);
         put(x, Between(seed, 0, kMap), static_cast<std::uint8_t>(i % 2), Mover{2, 5, 0, x, 0, 0});
     }
     put(cx + 2'000, cy, 0, Mover{3, 3, 0, 0, 0, 0});
-    for (int i = 0; i < 200 + 50; ++i) put(Between(seed, 0, kMap), Between(seed, 0, kMap), static_cast<std::uint8_t>(Next(seed) % 2), Mover{});
-    for (int i = 0; i < 129; ++i) {
-        if (dense && i < 42) {
-            const std::int32_t x = cx + Between(seed, -6'000, 6'000);
-            put(x, cy + Between(seed, -6'000, 6'000), 0, Mover{2, 5, 0, x, 0, 0});
-        } else {
-            put(Between(seed, 0, kMap), Between(seed, 0, kMap), static_cast<std::uint8_t>(Next(seed) % 2), Mover{});
+    for (int i = 0; i < 200 + 50; ++i) {
+        if (i < 18) {
+            put(cx + Between(seed, -6'000, 6'000), cy + Between(seed, -6'000, 6'000), 0, Mover{});
+            continue;
         }
+        put(Between(seed, 0, kMap), Between(seed, 0, kMap), static_cast<std::uint8_t>(Next(seed) % 2), Mover{});
     }
+    for (int i = 0; i < 129; ++i) put(Between(seed, 0, kMap), Between(seed, 0, kMap), static_cast<std::uint8_t>(Next(seed) % 2), Mover{});
 }
 
 class CountingHub final : public N::Link {
@@ -191,6 +199,10 @@ struct Measured {
     std::vector<double> meanKbps;
     std::vector<std::uint64_t> maxBytes;
     std::vector<std::size_t> seenAtEnd;
+    // The scenario itself, over the measured ticks (S4: checked against 2.1): per client per tick, the entities its
+    // Peer sees and of those the ones that move.
+    double meanSeen = 0;
+    double meanMoving = 0;
 };
 
 Measured Measure(const bool dense, const int ticks) {
@@ -248,10 +260,25 @@ Measured Measure(const bool dense, const int ticks) {
     }
     Measured measured;
     measured.perTick.assign(kPlayers, {});
+    std::uint64_t seenSum = 0, movingSum = 0, samples = 0;
     for (int t = 0; t < ticks; ++t) {
         std::fill(bytes->begin(), bytes->end(), 0);
         frame();
         for (int i = 0; i < kPlayers; ++i) measured.perTick[static_cast<std::size_t>(i)].push_back((*bytes)[static_cast<std::size_t>(i)]);
+        for (const K::EntityId id : world.Entities()) {
+            const N::PeerVisibility* visibility = world.Get<N::PeerVisibility>(id);
+            if (visibility == nullptr) continue;
+            ++samples;
+            seenSum += visibility->entities.size();
+            for (const K::EntityId seen : visibility->entities) {
+                const Mover* mover = world.Get<Mover>(seen);
+                movingSum += mover != nullptr && mover->kind != 0 ? 1 : 0;
+            }
+        }
+    }
+    if (samples > 0) {
+        measured.meanSeen = static_cast<double>(seenSum) / static_cast<double>(samples);
+        measured.meanMoving = static_cast<double>(movingSum) / static_cast<double>(samples);
     }
     for (int i = 0; i < kPlayers; ++i) {
         const auto& series = measured.perTick[static_cast<std::size_t>(i)];
@@ -272,7 +299,7 @@ Measured Measure(const bool dense, const int ticks) {
 }
 
 std::string Text(const Measured& m) {
-    std::string out;
+    std::string out = " seen on average " + std::to_string(m.meanSeen).substr(0, 5) + ", moving " + std::to_string(m.meanMoving).substr(0, 5);
     for (std::size_t i = 0; i < m.meanKbps.size(); ++i) {
         out += " | client " + std::to_string(i + 1) + ": mean " + std::to_string(m.meanKbps[i]).substr(0, 6) + " kbps, max " +
                std::to_string(m.maxBytes[i]) + " B/tick, sees " + std::to_string(m.seenAtEnd[i]);
@@ -286,6 +313,9 @@ TEST_CASE("bandwidth: gate 2 the typical scenario: each client's downlink averag
     constexpr int kTicks = 2'000;
     const Measured first = Measure(false, kTicks);
     MESSAGE("bandwidth typical:" << Text(first));
+    // The scenario is 2.1's (S4 of PR-2's review; the ranges are written before the run): seen about 50, about 14 moving.
+    CHECK_MESSAGE((first.meanSeen >= 40.0 && first.meanSeen <= 60.0), "S4: a client sees about 50 entities (2.1): " << first.meanSeen);
+    CHECK_MESSAGE((first.meanMoving >= 10.0 && first.meanMoving <= 18.0), "S4: about 14 of them move each tick (2.1): " << first.meanMoving);
     for (std::size_t i = 0; i < first.meanKbps.size(); ++i) {
         CAPTURE(i);
         CHECK_MESSAGE(first.meanKbps[i] <= 512.0, "gate 2: each client's average downlink is at most 512 kbps");

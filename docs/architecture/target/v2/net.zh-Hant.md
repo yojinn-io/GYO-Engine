@@ -117,7 +117,7 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
 
 | 欄位 | 大小 | 說明 |
 |---|---|---|
-| 網路協議版本 | u32 | `kNetProtocolVersion`（2；2 起接受帶 salt、請求帶 epoch，審查 S2、窄複查 R2；兩者之間沒有發行，所以同一個 2）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
+| 網路協議版本 | u32 | `kNetProtocolVersion`（3；2 起接受帶 salt、請求帶 epoch，審查 S2、窄複查 R2；3 起每則值訊息帶延後清單，PR-2 第 5 步，PR-2 審查 M2：PR-1 的 2 已進 gyo2，所以升版）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
 | 協議雜湊 | u64 | 網路的登記的雜湊；1b 還沒有複製的登記，是空登記的雜湊（`NetProtocolHash`） |
 | 步長 | u64 | 奈秒（時間 Module 的 `FixedTime` 的步長） |
 | 配發器範圍 | u64＋u64 | [first, last] |
@@ -220,7 +220,7 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
   - Client：Resource `NetReplicaState`、訊息 `ServerWorldReplaced`、System `ApplyReplication`（`Main`／`First`，在 `ReceiveNet` 之後，`ExclusiveWorld`）、`NotifyReplica`（`Main`／`PreUpdate`）、每種伺服器訊息一個 `DeliverServerMessages:<名字>`（`Main`／`PreUpdate`）。
   - 有權威策略的 World：`ReplicateOut`、`ApplyReplication`、`DeliverServerMessages:*` 也標 `authority.OneEndOnly`（它們用 `ExclusiveWorld` 或寫遊戲的訊息，只在一端）。
   - 傳輸的通道由網路 Module 定：0 號 Ordered Reliable（結構更新、確認、伺服器訊息、resync）、1 號 Unreliable（值）。
-  - Client 角色的 World 選了回滾策略是 K3（第 13 節）。第 4 步之前的 `NT-E5`（「第 4 步才有」）已拿掉。
+  - Client 角色的 World 選了回滾策略是 K3（第 13 節）。第 4 步之前的 `NT-E5`（「第 4 步才有」）已拿掉。K3 上會回滾、上 wire 的值不是 Resource 本身的複製 Resource 是 `NT-E6`（第 13 節；PR-2 設計審查 B2）。
 
 ## 8. 複製（宣告 D-4、D-5、D-13、C-MS1）
 
@@ -360,16 +360,25 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 
 - **會回滾的元件**：值寫 `RollbackInbox::Value`、拿掉寫 `Removed`，tick 是那一則的 tick；**不在 `First` 直接加減**（回滾 R-2 前提 5）。
 - **伺服器生成、刪除的實體**：寫 `Entered`／`Exited`（回滾 R-8 的明說，網路 PR-2 閘口 1 的 A）。網路不在 `First` 生成或刪除實體：實體在確認點的回滾裡用同一個編號生成、照入口的值放回；之後的回滾不會刪掉它（記下的存活集合沒有它也一樣）。退出的實體在確認點的回滾裡刪掉。
-- **不會回滾的複製元件**：直接寫（同 K1）。實體還不在 World 時（等確認點的回滾放回）先留著（`NetReplicaState::waitingDirect`，每個 wire 留最新的），實體出現後的那一幀寫進去。
-- **複製的 Resource**：會回滾、而且上 wire 的值就是 Resource 本身的，寫 `ResourceValue`（閘口 1 的 F）；其他照第 12 節的 `apply`。
+  - 〔實作，PR-2 設計審查 B1〕再看到的實體（入口還記得它）：生成是整份，所以它沒帶的會回滾的元件寫 `Removed`（隱藏期間被拿掉的；入口裡較舊的值不會把它放回）。
+- **不會回滾的複製元件**：直接寫（同 K1）。實體還不在 World 時（等確認點的回滾放回）先留著（`NetReplicaState::waitingDirect`，每個 wire 留最新的），實體出現後的那一幀寫進去。〔實作，PR-2 設計審查 S1、B1〕
+  - 生成帶來的值一律先留著，等回滾在 ≥ 生成 tick 的確認點決定過、實體在 World 裡才寫：之前那份實體（退出還沒在確認點生效）可能被回到退出與進入之間的回滾刪掉。留著的期間，這個實體後來的值也留著。
+  - 生成是整份：寫的時候，不在生成清單裡的不回滾元件從實體上拿掉（之前那份留下的）。
+  - 拿掉不回滾的元件時，留著的那一個 wire 一併丟掉，之後不會寫回去。
+- **複製的 Resource**：會回滾、而且上 wire 的值就是 Resource 本身的，寫 `ResourceValue`（閘口 1 的 F）；不回滾的照第 12 節的 `apply`。會回滾、上 wire 的值不是 Resource 本身（`ReplicateResource<R, V>`，V ≠ R）的，`Check` 回 `NT-E6`、不建 World（PR-2 設計審查 B2；使用者 2026-11-23 選 U2 (a)：一直拒絕）。`apply` 在 `First` 直接寫會回滾的資料，下一次回滾就把它蓋掉（R-2 前提 5）。
 - **確認點**（D-7）：第 C 個 tick 的值訊息全部處理過、而且它們要求的結構更新已套用（`NetReplicaState::latestConfirmed`）時，寫 `ConfirmedThrough(C)`。C 只落在伺服器送了值的 tick；伺服器一幀跑好幾步時只送最後一步（第 20 節 U4），C 跳著前進（閘口 1 的 B）。伺服器訊息不算。
 - **晚到的值**：比 C 舊的照樣寫進入口（MC-1：回滾在 C 用「C 當時或之前最後的值」）；比 C 還舊超過深度的丟掉，計 `ReplicaDrop::BeyondDepth`。K1、K2 的「比寫過的舊就不寫」不用在 K3 的回滾元件上。
-- **計數**：`NetReplicaState::inboxValues`、`inboxRemovals`、`inboxEntries`、`inboxExits`、`inboxConfirmed`。
+- **計數**：`NetReplicaState::inboxValues`、`inboxRemovals`、`inboxEntries`、`inboxExits`、`inboxConfirmed`；`entriesWhileAlive`（生成到的時候之前那份還在 World 裡）。回滾端的 `RollbackHistory::rollbacksForEntries`：明說進入的實體讓存活集合不同而回滾的次數（使用者 2026-11-23 選 U3：計數、不量 CPU）。
 - **範圍的限界**：
   - 伺服器換了 World（新的世代、tick 從頭算）時，入口的確認點不會往回走；K3 的 Client 要跟著換 World（`ServerWorldReplaced`，第 8 節）。
   - 實體出現在確認點之後（約一個來回），不在伺服器生成的那一 tick 就出現；之後由預測補到現在。
   - 遠端玩家的輸入本線不送（宣告 Q7），Client 上它們的輸入元件是預設值。
-- **守衛**：G-10（`net.k3`：確定性的 2D 樣本，最後 80 步輸入是預設值；Client 第 P 步的 `Digest` 等於 Match 的；網路生成的實體不被回滾刪掉；件數）、伺服器一幀三步、權威刪掉整個實體；突變 `nt-k3-*`。
+  - 〔PR-2 設計審查 M7〕伺服器的生成、刪除與會回滾的值只經回滾放進 World。回滾模式是 `Check` 或 `Disabled` 時永遠不放回，Client 的 World 只剩自己的預測。
+  - 〔PR-2 設計審查 M4〕`BeyondDepth` 用策略的 `DefaultInputLength()`（輸入紀錄的長度）代替回滾深度：官方策略兩者相同，作者的策略不一定。回滾目前沒有查深度的 API，這一步不加；入口本來就會被較新的條目蓋過、修剪也會整理。
+  - 〔U2 (a) 的待辦〕K3 上 V ≠ R 的會回滾 Resource（例如狀態機）一直拒絕。有點名的功能需要時，由狀態機 Module 提供「伺服器的值變成 R」的轉換給網路用（會碰狀態機 DI 8：網路與狀態機互不依賴），那時另開。
+  - 〔PR-2 設計審查 S1〕生成帶來的不回滾元件，在回滾於 ≥ 生成 tick 的確認點決定過之後才寫（上一幀寫的確認點，回滾在同一幀的決定階段用它）。放棄的回滾（超過深度）不放回實體時，它們一直留著。
+  - 〔PR-2 設計審查 S6〕入口忘掉一個退出的實體之後，比退出更早的值才晚到時，入口會再為它留一筆（MC-1 照收）；數量受晚到的值限制。
+- **守衛**：G-10（`net.k3`：確定性的 2D 樣本，最後 80 步輸入是預設值；Client 第 P 步的 `Digest` 等於 Match 的；網路生成的實體不被回滾刪掉；件數）、伺服器一幀三步、權威刪掉整個實體；PR-2 設計審查：`net.k3` 的「hidden and seen again」（B1、S1 a、權威拿掉會回滾的元件、K3＋可見性）與「with losses」（S1 b、B1 的入口還記得的情況；種子 1、18、24）兩案、`net.replication` 的 `NT-E6`；突變 `nt-k3-*`。
 
 ## 14. 相關性與優先度（宣告 C-VIS1、C-VIS2、F4、F7、F19，第 5 步）
 
@@ -381,15 +390,19 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 - **元件範圍（私人資料，C-VIS2）**：`Replicate<T>(名字, codec, {.privateComponent = true})` 的元件只送給 `PeerVisibility::ShowPrivate<T>(entity)` 的 Peer（replicon 的可見性範圍到元件）。其他 Peer 看得到實體也收不到這個元件。
 - **失去可見＝對那個 Peer 刪除**（只用 `WhileVisible`，replicon 的 `ScopeLifetime::WhileVisible`）：結構更新送刪除；再看到時是生成，用同一個編號整份送。Client 端：K1、K2 生成、刪除；K3 寫 `Entered`／`Exited`（第 13 節）。
   - K3 不用 `NotSent` 表示看不到：看不到的實體在 Client 上不該存在（宣告選的 `WhileVisible`），`NotSent` 只表示「這份沒帶」、實體還在。
-- **優先度**：`NetEntry::ValueBytesPerTick(bytes)`（預設 0＝不限）給每個 Peer 每 tick 值的位元組上限。放不下時照 lightyear 的 priority accumulator（`crates/transport/transport/src/packet/priority_manager.rs`）：
+- **優先度**：`NetEntry::ValueBytesPerTick(bytes)`（預設 0＝不限）給每個 Peer 每 tick 值的位元組上限。放不下時取 lightyear 的累積優先度的概念，做法不同（PR-2 設計審查 M3 更正出處）：lightyear 的累積在可靠通道的待送訊息上（`crates/transport/transport/src/channel/send_reliable.rs` 第 37、153 行：每次 `+= base_priority × multiplier`，到 ack 才移除；`packet/priority_manager.rs` 是排序與 token bucket）；這裡在實體上累積、送出就歸零，下一 tick 用最新的值重新編碼：
   - 每個有值要送的實體，分數＝累積的優先度＋權重（實體上的 `NetPriority::weight`，沒有時 1），由高到低放進上限；第一個一定放。
-  - 放不下的累積起來（`PeerLedger::waiting`），送出後歸零。
+  - 放不下的累積起來（`PeerLedger::waiting`），送出後歸零；實體對這個 Peer 刪除、整份隨結構送出、或 Client 要求重送全部（Resync）時也歸零（PR-2 設計審查 M1）。
   - 值訊息照舊分則（一則約 1100 bytes）。
   - 退掉的：replicon 的 `priority × (tick − 上次確認的 tick) ≥ 1`。它限的是送的頻率，不是「一個 tick 放不下時分到後面」。
 - **延後的實體告訴 Client**：值訊息的第 0 則在 Resource 之後多一段（`u16` 個數＋實體編號），其他則的個數是 0（每則多 2 bytes）。K3 對它們寫 `RollbackInbox::NotSent(entity, tick)`：在這個 C 不比對、不推成「沒變」（回滾 R-8 的第三態）；K1、K2 只是晚點收到。
 - **計數**：`PeerLedger::valuesDeferred`、`waitedTicks`、`longestWait`；`NetReplicaState::inboxNotSent`。
+- **範圍的限界**：
+  - 〔PR-2 設計審查 M6〕有了可見性之後，伺服器訊息（事件）可能指向這個 Peer 看不到、Client 上不存在的實體；G-5 (3)「事件交出時實體已存在」只在看得到全部時成立。事件的收件者與內容由作者決定（`ServerMessage` 的 recipient）。
+  - 〔PR-2 設計審查 M8〕延後清單（每筆 8 bytes）只放在第 0 則，不算進預算。大量延後時第 0 則變大、可能分片，整則遺失的機會變高，確認點較常停。有點名的情境延後超過約 100 個實體時再看（例如改成「這個 tick 全部沒帶」）。
+  - 頻寬判定的情境是合成的（見 dev_log）。
 - **頻寬判定**（閘口 2 的 2.3，事前宣告；使用者選 (b) ≤ 512 kbps）：`net.bandwidth`（ctest 的 `cpu` 標籤，算位元組、不計時）。數字見 dev_log 2026-11-23 step5。
-- **守衛**：G-11（`net.visibility`；`net.k3` 的 NotSent 一案）、頻寬判定；突變 `nt-vis-*`、`nt-private-*`、`nt-budget-ignored`、`nt-priority-not-accumulated`、`nt-deferred-not-notsent`。
+- **守衛**：G-11（`net.visibility`，PR-2 設計審查加「整份重送」的不變元件；`net.visibility` 的私人元件不再顯示一案；`net.k3` 的 NotSent 一案）、頻寬判定；突變 `nt-vis-*`、`nt-private-*`、`nt-budget-ignored`、`nt-priority-not-accumulated`、`nt-deferred-not-notsent`。
 
 ## Design Invariants
 
@@ -437,3 +450,4 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 - **RC-NT6**：G-8 的數字超過使用者選的頻寬預算，而且相關性與優先度都已用上。
 - **RC-NT7**：每加一種要複製的元件，就要改網路 Module 的程式（不只是登記）。
 - **RC-NT8**：點名的產品的結構更新超過 `maxMessageBytes`（現在每 tick 被拒、只計數，見第 8 節的限界）。
+- **RC-NT9**（觀測項；使用者 2026-11-23 選 U3）：K3 上每個進入可見範圍的實體都讓確認點的回滾整段重跑（`RollbackHistory::rollbacksForEntries` 計數）。點名的產品裡這個成本超過計畫的預算時，檢討改成 lightyear 的做法（伺服器複製來的實體直接生成、帶確認過的歷史，不經整段重跑）。計數的守衛：`net.k3`「hidden and seen again」的 U3 檢查；突變 `rb-entry-rollbacks-not-counted`。

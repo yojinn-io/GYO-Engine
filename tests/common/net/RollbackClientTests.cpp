@@ -121,6 +121,74 @@ K::SystemResult RemoveFirstCrate(K::Res<W::Tick> tick, K::Query<K::Read<Body>> b
     return {};
 }
 
+// The review of PR-2 (B1, S1, S5): the server hides a crate from the Peer for a while and takes components off
+// crates, by tick. Filled by the server's System; read by the test at the end.
+struct Reshape {
+    bool on = false;
+    bool blink = false;               // the lossy case: the blinking crate is hidden 6 ticks of every 12 in [150, 250)
+    K::EntityId withoutTintSoon = 0;  // spawned at 60, its Tint taken off at 61 (before the client has it in the World)
+    K::EntityId withoutSpeed = 0;     // spawned at 50, its Speed taken off at 110 while seen (Removed)
+    K::EntityId hidden = 0;           // spawned at 40, hidden in [120, 140); its Speed and Tint taken off at 130
+                                      // (blinking: its Speed taken off at 240, while hidden)
+    K::EntityId hiddenToo = 0;        // blinking: spawned at 70, blinks with it; its Tint taken off at 240
+};
+Reshape& Reshaped() {
+    static Reshape reshape;
+    return reshape;
+}
+
+K::EntityId CrateTinted(K::ExclusiveWorld<>& world, const std::int32_t rgb) {
+    for (const K::EntityId id : world.Entities()) {
+        auto tint = world.Read<Tint>(id, [](const Tint& t) { return t.rgb; });
+        if (tint && tint->has_value() && **tint == rgb) return id;
+    }
+    return 0;
+}
+
+bool HiddenAt(const Reshape& reshape, const std::uint64_t t) {
+    if (reshape.blink) return t >= 150 && t < 250 && t % 6 < 2;
+    return t >= 120 && t < 140;
+}
+
+// At the server, after the crates are spawned and removed: the takings-off and each Peer's PeerVisibility.
+K::SystemResult ReshapeAtServer(K::ExclusiveWorld<> world) {
+    Reshape& reshape = Reshaped();
+    const std::uint64_t t = world.Read<W::Tick>([](const W::Tick& tick) { return tick.value; })->value_or(0);
+    if (t == 61) {
+        reshape.withoutTintSoon = CrateTinted(world, 60'000);
+        if (auto removed = world.Remove<Tint>(reshape.withoutTintSoon); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+    }
+    if (t == 110) {
+        reshape.withoutSpeed = CrateTinted(world, 50'000);
+        if (auto removed = world.Remove<Speed>(reshape.withoutSpeed); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+    }
+    if (t == 119 || (reshape.blink && t == 149)) reshape.hidden = CrateTinted(world, 40'000);
+    if (reshape.blink && t == 149) reshape.hiddenToo = CrateTinted(world, 70'000);
+    if (t == 130 && !reshape.blink) {
+        if (auto removed = world.Remove<Speed>(reshape.hidden); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+        if (auto removed = world.Remove<Tint>(reshape.hidden); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+    }
+    if (t == 240 && reshape.blink) {
+        if (auto removed = world.Remove<Speed>(reshape.hidden); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+        if (auto removed = world.Remove<Tint>(reshape.hiddenToo); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+    }
+    const bool hide = reshape.hidden != 0 && HiddenAt(reshape, t);
+    for (const K::EntityId peer : world.Entities()) {
+        auto isPeer = world.Read<N::Peer>(peer, [](const N::Peer&) { return true; });
+        if (!isPeer || !isPeer->has_value()) continue;
+        N::PeerVisibility visibility;
+        visibility.everything = !hide;
+        if (hide) {
+            for (const K::EntityId id : world.Entities()) {
+                auto body = world.Read<Body>(id, [](const Body&) { return true; });
+                if (body && body->has_value() && id != reshape.hidden && id != reshape.hiddenToo) visibility.Show(id);
+            }
+        }
+        if (auto inserted = world.Insert(peer, std::move(visibility)); !inserted) return GYO::Engine::Base::Err(std::move(inserted).error());
+    }
+    return {};
+}
+
 K::SystemOptions FixedAt(std::string name, std::string stage, std::vector<std::string> after, bool onServer) {
     K::SystemOptions options;
     options.name = std::move(name);
@@ -133,7 +201,7 @@ K::SystemOptions FixedAt(std::string name, std::string stage, std::vector<std::s
     return options;
 }
 
-void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep, const std::uint32_t valueBudget = 0) {
+void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep, const std::uint32_t valueBudget = 0, const bool reshape = false) {
     auto& r = s.Registrar();
     A::AuthorityEntry authority(s);
     authority.Component<Body>("Body");
@@ -156,6 +224,7 @@ void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep, const st
     r.AddSystem<&MoveBodies>(FixedAt("MoveBodies", "Update", {"Steer"}, false));
     r.AddSystem<&SpawnCrates>(FixedAt("SpawnCrates", "PostUpdate", {}, true));
     r.AddSystem<&RemoveFirstCrate>(FixedAt("RemoveFirstCrate", "PostUpdate", {"SpawnCrates"}, true));
+    if (reshape) r.AddSystem<&ReshapeAtServer>(FixedAt("ReshapeAtServer", "PostUpdate", {"RemoveFirstCrate"}, true));
     s.Prepare([framesPerStep](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(W::TimeSampling{15'625'000 * framesPerStep, W::SamplingMode::ManualDelta});
         world.Insert(kPlayer, Body{0, 0});
@@ -171,18 +240,21 @@ struct Sample {
     std::pair<N::MemoryLink, N::MemoryLink> links;
     std::unique_ptr<O::Product> server, client;
 
-    Sample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const std::uint32_t valueBudget = 0)
+    Sample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const std::uint32_t valueBudget = 0,
+           const bool reshape = false)
         : links(N::MemoryLink::Pair(link)) {
         auto reader = [now = clock] { return *now; };
         End s = GameEnd(N::NetRole::Server, {});
         s.authority = std::make_shared<A::ServerAuthorityStrategy>();
-        s.build = [serverStepsPerFrame, valueBudget](O::WorldSetup& setup) { RegisterSample(setup, serverStepsPerFrame, valueBudget); };
+        s.build = [serverStepsPerFrame, valueBudget, reshape](O::WorldSetup& setup) {
+            RegisterSample(setup, serverStepsPerFrame, valueBudget, reshape);
+        };
         s.net.link = std::make_shared<N::MemoryLink>(links.first);
         s.net.clock = reader;
         s.net.seed = 31;
         End c = GameEnd(N::NetRole::Client, {});
         c.authority = std::make_shared<A::ServerAuthorityStrategy>();
-        c.build = [](O::WorldSetup& setup) { RegisterSample(setup, 1); };
+        c.build = [reshape](O::WorldSetup& setup) { RegisterSample(setup, 1, 0, reshape); };
         c.net.link = std::make_shared<N::MemoryLink>(links.second);
         c.net.serverEndpoint = N::MemoryLink::EndpointA();
         c.net.userId = 9;
@@ -246,12 +318,26 @@ struct Run {
     std::uint64_t serverDeferred = 0;       // values the server deferred to a later tick for the client's Peer
     std::uint32_t longestWait = 0;          // the most ticks in a row an entity's values waited at the server
     std::optional<std::uint64_t> rollbackConfirmed;  // the confirmed point the rollback Module's inbox has
+    // The review of PR-2 (Reshape): what the client has at the end of the crates the server reshaped.
+    bool speedOffWhileSeen = false;  // the crate whose Speed was taken off while seen has none at the client
+    bool hiddenBack = false;         // the hidden crate is back at the client
+    bool hiddenBodySame = false;     // with the server's Body
+    bool hiddenSpeed = false;        // it has a Speed at the client (the server took it off while hidden)
+    bool hiddenTint = false;         // it has a Tint at the client (the server took it off while hidden)
+    bool tintSoon = false;           // the crate whose Tint was taken off at 61 has a Tint at the client
+    bool hiddenTintSame = false;     // the hidden crate has the server's Tint at the client (the blinking case keeps it)
+    bool hiddenTooTint = false;      // blinking: the second blinking crate has a Tint at the client (the server took it off)
+    std::uint64_t rollbacksForEntries = 0;  // U3: rollbacks an entity said to enter took part in
 };
+
+enum class Shape { None, Seen, Blink };
 
 // G-10's run: connect, give the player, push for a while, then the default input for the last segment; at the end
 // the client's step P and its digest; the server runs on until it records step P.
-Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const int frames, const std::uint32_t valueBudget = 0) {
-    Sample sample(link, serverStepsPerFrame, valueBudget);
+Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const int frames, const std::uint32_t valueBudget = 0,
+              const Shape shape = Shape::None) {
+    Reshaped() = Reshape{shape != Shape::None, shape == Shape::Blink};
+    Sample sample(link, serverStepsPerFrame, valueBudget, shape != Shape::None);
     for (int i = 0; i < 60 && (sample.Peer(sample.ServerWorld()) == 0 || sample.Peer(sample.ClientWorld()) == 0); ++i) {
         REQUIRE(static_cast<bool>(sample.server->RunFrame()));
         REQUIRE(static_cast<bool>(sample.client->RunFrame()));
@@ -317,7 +403,7 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
     for (const K::EntityId id : Crates(sample.ClientWorld())) {
         const Tint* there = sample.ClientWorld().Get<Tint>(id);
         const Tint* wanted = sample.ServerWorld().Get<Tint>(id);
-        if (there == nullptr || wanted == nullptr || !(*there == *wanted)) ++run.tintsWrong;
+        if ((there == nullptr) != (wanted == nullptr) || (there != nullptr && !(*there == *wanted))) ++run.tintsWrong;
     }
     run.serverWave = sample.ServerWorld().Resource<Wave>()->count;
     run.clientWave = sample.ClientWorld().Resource<Wave>()->count;
@@ -330,6 +416,22 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
     }
     // The server sent the player and the seven crates as spawns (each once on this connection).
     run.serverEntered = 1 + 7;
+    const Reshape& reshape = Reshaped();
+    K::World& client = sample.ClientWorld();
+    K::World& server = sample.ServerWorld();
+    if (shape != Shape::None) {
+        run.speedOffWhileSeen = reshape.withoutSpeed != 0 && client.Alive(reshape.withoutSpeed) && client.Get<Speed>(reshape.withoutSpeed) == nullptr;
+        run.hiddenBack = reshape.hidden != 0 && client.Get<Body>(reshape.hidden) != nullptr;
+        run.hiddenBodySame = run.hiddenBack && server.Get<Body>(reshape.hidden) != nullptr &&
+                             *client.Get<Body>(reshape.hidden) == *server.Get<Body>(reshape.hidden);
+        run.hiddenSpeed = run.hiddenBack && client.Get<Speed>(reshape.hidden) != nullptr;
+        run.hiddenTint = run.hiddenBack && client.Get<Tint>(reshape.hidden) != nullptr;
+        run.tintSoon = reshape.withoutTintSoon != 0 && client.Get<Tint>(reshape.withoutTintSoon) != nullptr;
+        run.hiddenTooTint = reshape.hiddenToo != 0 && client.Get<Tint>(reshape.hiddenToo) != nullptr;
+        run.hiddenTintSame = run.hiddenTint && server.Get<Tint>(reshape.hidden) != nullptr &&
+                             *client.Get<Tint>(reshape.hidden) == *server.Get<Tint>(reshape.hidden);
+    }
+    run.rollbacksForEntries = client.Resource<R::RollbackHistory>()->rollbacksForEntries;
     return run;
 }
 
@@ -402,4 +504,48 @@ TEST_CASE("k3: G-11 values the server defers over its budget are NotSent at the 
     REQUIRE(run.serverDigest.has_value());
     CHECK_MESSAGE(run.clientDigest == *run.serverDigest,
                   "G-11: the simulating client does not take NotSent as unchanged (its Digest at P is the Match's)");
+}
+
+TEST_CASE("k3: an entity hidden and seen again comes back with the server's components; components taken off reach the client") {
+    // The review of PR-2: B1 (a component taken off while hidden must not come back), S1 (a component that does not
+    // roll back taken off before the entity is in the World), S5 (Removed of a rolling-back component while seen).
+    const Run run = RunSample(Slow(), 1, 300, 0, Shape::Seen);
+    MESSAGE("K3 reshaped: " << Counts(run) << " | rollbacks for entries=" << run.rollbacksForEntries);
+    CHECK_MESSAGE(run.speedOffWhileSeen, "K3: a rolling-back component the server takes off is gone at the client (Removed)");
+    REQUIRE_MESSAGE(run.hiddenBack, "K3 visibility: the hidden crate is back at the client under its id");
+    CHECK_MESSAGE(run.hiddenBodySame, "K3 visibility: it comes back with the server's values");
+    CHECK_MESSAGE(!run.hiddenSpeed, "B1: a rolling-back component taken off while hidden does not come back with the entity");
+    CHECK_MESSAGE(!run.hiddenTint, "B1: a component that does not roll back taken off while hidden is not at the client");
+    CHECK_MESSAGE(!run.tintSoon, "S1 a: a component that does not roll back taken off before the entity is in the World is not written");
+    CHECK_MESSAGE(run.replica.inboxEntries == run.serverEntered + 1, "K3 visibility: the crate seen again is an entry again (Entered)");
+    CHECK_MESSAGE(run.rollbacksForEntries > 0, "U3: the rollbacks entries take part in are counted");
+    REQUIRE(run.serverDigest.has_value());
+    CHECK_MESSAGE(run.clientDigest == *run.serverDigest, "K3 visibility: at its step P the client's Digest equals the Match's");
+}
+
+TEST_CASE("k3: with losses, an entity seen again before its exit reaches the confirmed point keeps its components") {
+    // S1 b: the spawn comes while the entity of before is still in the World (the confirmed point is before its exit);
+    // a later rollback to a point between the exit and the entry removes it, and the entry puts it back. The crate
+    // blinks (hidden 2 ticks of every 6 in [150, 250)) with a second one, and at 240, while they are hidden, the server
+    // takes the first one's Speed and the second one's Tint off; the server-to-client direction loses and reorders.
+    // The seeds are the ones of 1..24 where the case happened with the fix taken out (S1 b: 1, 18, 24; B1's Removed
+    // on a spawn seen again and its taking-off of the components that do not roll back: 1, 18; the review fixes'
+    // dev_log).
+    N::MemoryLinkSettings lossy = Slow();
+    lossy.aToB.lossPer10000 = 1000;
+    lossy.aToB.delayPer10000 = 3000;
+    lossy.aToB.maxDelaySteps = 4;
+    for (const std::uint64_t seed : {1u, 18u, 24u}) {
+        lossy.seed = seed;
+        const Run run = RunSample(lossy, 1, 360, 0, Shape::Blink);
+        CAPTURE(seed);
+        MESSAGE("K3 blinking with losses, seed " << seed << ": " << Counts(run) << " | spawns while still in the World="
+                                                  << run.replica.entriesWhileAlive << " | tints wrong=" << run.tintsWrong);
+        REQUIRE_MESSAGE(run.replica.entriesWhileAlive > 0, "S1 b: a spawn came while the entity was still in the World");
+        REQUIRE_MESSAGE(run.hiddenBack, "S1 b: the blinking crate is at the client at the end");
+        CHECK_MESSAGE(run.hiddenTintSame, "S1 b: the blinking crate keeps its Tint (a component that does not roll back)");
+        CHECK_MESSAGE(!run.hiddenSpeed, "B1: a rolling-back component taken off while hidden does not come back, its exit not yet forgotten");
+        CHECK_MESSAGE(!run.hiddenTooTint, "B1: a component that does not roll back taken off while hidden is taken off the entity of before");
+        CHECK_MESSAGE(run.tintsWrong == 0, "S1 b: every crate at the client has the server's Tint, or none where the server has none");
+    }
 }

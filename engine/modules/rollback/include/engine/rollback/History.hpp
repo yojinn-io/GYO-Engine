@@ -48,6 +48,13 @@ public:
     // R-8's third state) always the history's.
     virtual void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId> alive,
                        const InboxColumnBase* authoritative, std::span<const Kernel::EntityId> notCarried) const = 0;
+    // Of notCarried (ascending), the entities this history has at tick (an entry at or before it): a restore keeps
+    // their history; one it has nothing of takes the inbox's value (R-8's third state, the user's U1 (c)).
+    [[nodiscard]] virtual std::vector<Kernel::EntityId> Kept(std::span<const Kernel::EntityId> notCarried, std::uint64_t tick) const {
+        static_cast<void>(notCarried);
+        static_cast<void>(tick);
+        return {};
+    }
     // Whether an authoritative value at or before tick differs from the history at tick. Only the entities the
     // inbox has a value for and that are alive at tick are compared: alive is the World's own alive set with the
     // caller's explicit entries and exits applied (R-8 A); an entity not said follows the game's spawns and
@@ -109,6 +116,15 @@ public:
             if (const std::optional<T> value = At(entity, tick)) cells.emplace_back(entity, *value);
         }
         set.Column<T>(std::move(cells), [equal = equal_](const T& a, const T& b) { return Same(equal, a, b); });
+    }
+
+    [[nodiscard]] std::vector<Kernel::EntityId> Kept(std::span<const Kernel::EntityId> notCarried, std::uint64_t tick) const override {
+        std::vector<Kernel::EntityId> kept;
+        for (const Kernel::EntityId entity : notCarried) {
+            const auto it = entries_.find(entity);
+            if (it != entries_.end() && !it->second.empty() && it->second.front().tick <= tick) kept.push_back(entity);
+        }
+        return kept;
     }
 
     [[nodiscard]] bool Differs(std::uint64_t tick, const InboxColumnBase& authoritative,
@@ -372,6 +388,9 @@ struct RollbackHistory {
     std::optional<std::uint64_t> lastTick;
     // The confirmed point the last decision looked at.
     std::optional<std::uint64_t> decided;
+    // Rollbacks an entity said to enter took part in (its entry made the alive set at C differ from the recorded
+    // one; the review of PR-2, U3: the cost of entries is observed, not measured in time).
+    std::uint64_t rollbacksForEntries = 0;
 
     RollbackHistory() = default;
     RollbackHistory(RollbackHistory&&) noexcept = default;

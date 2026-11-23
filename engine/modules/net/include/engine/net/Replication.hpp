@@ -324,10 +324,23 @@ struct NetReplicaState final {
     std::uint64_t inboxEntries = 0;
     std::uint64_t inboxExits = 0;
     std::uint64_t inboxNotSent = 0;
+    // K3 spawns that came while the entity was still in the World (its exit not yet at the confirmed point).
+    std::uint64_t entriesWhileAlive = 0;
     std::optional<std::uint32_t> inboxConfirmed;
-    // K3: the values of components that do not roll back for an entity not in the World yet (it comes with the
-    // rollback that puts it back, R-8 A), written once it is there; by entity, (wire, bytes), the newest per wire.
-    std::map<Kernel::EntityId, std::vector<std::pair<std::uint16_t, std::vector<std::byte>>>> waitingDirect;
+    // K3: the values of components that do not roll back for an entity the World does not have yet as the server
+    // means it (it comes with the rollback that puts it back, R-8 A), written once it is there; by entity.
+    struct WaitingDirect {
+        // A spawn's: written only once the rollback has decided at a confirmed point at or after the spawn's tick,
+        // so not on the entity of before that a rollback to a point before the spawn may still remove (S1 b of
+        // PR-2's review). 0: once the entity is in the World.
+        std::uint32_t notBefore = 0;
+        // A spawn's values are the whole set: the components that do not roll back and are not among them are taken
+        // off the entity when they are written (an entity of before kept them, B1 of PR-2's review).
+        bool whole = false;
+        // (wire, bytes), the newest per wire.
+        std::vector<std::pair<std::uint16_t, std::vector<std::byte>>> values;
+    };
+    std::map<Kernel::EntityId, WaitingDirect> waitingDirect;
     std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
 inline void HashValue(Kernel::Hasher&, const NetReplicaState&) {}
@@ -470,8 +483,9 @@ inline void HashValue(Kernel::Hasher&, const PeerVisibility&) {}
 
 // How much an entity's values matter when a tick's values do not fit the Peer's budget (step 5; author's, on the
 // entity at the server; without it 1). Each tick an entity's changed values wait, its accumulated priority grows by
-// its weight; the tick sends the highest first (lightyear's priority accumulator,
-// crates/transport/transport/src/packet/priority_manager.rs).
+// its weight; the tick sends the highest first, and a sent entity starts again from 0 (the idea of lightyear's
+// accumulated priority, crates/transport/transport/src/channel/send_reliable.rs, kept per entity here, not per
+// message until its ack).
 struct NetPriority final {
     std::uint32_t weight = 1;
 };

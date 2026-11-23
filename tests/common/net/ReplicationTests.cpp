@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -235,6 +236,44 @@ TEST_CASE("replication: a client with a rollback strategy (K3) is built (NT-E5 i
     description.worlds[0].options.Set(rollback);
     const auto built = O::Product::Build(std::move(description), Units(true));
     CHECK_MESSAGE(static_cast<bool>(built), "a client with a rollback strategy is built (K3): " << Reported(built));
+}
+
+namespace {
+// A Resource that rolls back, replicated through a value type of its own (V != R, Q8 (b)'s shape).
+struct Level {
+    std::int32_t value = 0;
+    friend bool operator==(const Level&, const Level&) = default;
+};
+inline void HashValue(K::Hasher& h, const Level& v) { HashValue(h, v.value); }
+} // namespace
+
+TEST_CASE("replication: K3 refuses a rolling-back Resource whose value type is not the Resource (NT-E6, B2)") {
+    End client = GameEnd(N::NetRole::Client, {});
+    client.net.link = std::make_shared<N::MemoryLink>(N::MemoryLink::Pair({}).second);
+    client.build = [](O::WorldSetup& s) {
+        s.Registrar().Component<Position>({.name = "Position"});
+        s.Registrar().Resource<Level>({.name = "Level"});
+        N::NetEntry net(s);
+        net.Replicate<Position>("Position", PositionCodec());
+        N::NetEntry::ResourceOptions<Level, std::int32_t> options;
+        options.codec = {[](N::NetWriter& w, const std::int32_t& v) { w.Value(v); }, [](N::NetReader& r, std::int32_t& v) { return r.Value(v); }, 1};
+        options.read = [](const Level& level) { return std::optional<std::int32_t>{level.value}; };
+        options.apply = [](N::ReplicaWorld& world, const std::int32_t& v) -> K::SystemResult {
+            if (auto set = world.SetResource(Level{v}); !set) return GYO::Engine::Base::Err(std::move(set).error());
+            return {};
+        };
+        net.ReplicateResource<Level, std::int32_t>("Level", std::move(options));
+        GYO::Engine::Rollback::RollbackEntry rollback(s);
+        rollback.StepSchedule();
+        rollback.Resource<Level>();
+    };
+    auto description = Describe(client);
+    GYO::Engine::Rollback::RollbackOptions rollback;
+    rollback.strategy = std::make_shared<GYO::Engine::Rollback::StateRollbackStrategy>();
+    description.worlds[0].options.Set(rollback);
+    const auto refused = O::Product::Build(std::move(description), Units(true));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(refused), "B2: K3 would write a rolling-back Resource in First through its apply");
+    CHECK_MESSAGE(Reported(refused).find("NT-E6") != std::string::npos, "B2: the refusal is NT-E6: " << Reported(refused));
 }
 
 namespace {

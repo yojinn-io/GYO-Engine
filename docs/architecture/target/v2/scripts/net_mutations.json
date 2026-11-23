@@ -1019,7 +1019,7 @@
     "net 13"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "            Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.Entered(entity, tick); });\n",
+   "find": "                inbox.Entered(entity, tick);\n",
    "replace": "",
    "target": "gyo_net_tests",
    "cases": "k3:*",
@@ -1075,8 +1075,8 @@
     "net 13"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "        for (auto it = state.waitingDirect.begin(); it != state.waitingDirect.end();) {\n            if (!rolling->Alive(it->first)) {\n",
-   "replace": "        for (auto it = state.waitingDirect.begin(); it != state.waitingDirect.end();) {\n            if (true) {\n",
+   "find": "            if (!rolling->Alive(it->first) || (waiting.notBefore",
+   "replace": "            if (true || (waiting.notBefore",
    "target": "gyo_net_tests",
    "cases": "k3:*",
    "expect": "K3:\\ a\\ replicated\\ component\\ that\\ does\\ not\\ roll\\ back\\ is\\ written\\ directly"
@@ -1207,6 +1207,85 @@
    "target": "gyo_net_tests",
    "cases": "k3:*",
    "expect": "G\\-11:\\ the\\ simulating\\ client\\ does\\ not\\ take\\ NotSent\\ as\\ unchanged"
+  },
+  {
+   "id": "nt-k3-removed-not-to-inbox",
+   "what": "K3 does not write Removed when the server takes a rolling-back component off: the client keeps it. Only it catches D-5's Removed (S5 of PR-2's review: it had no guard)",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (rolling != nullptr && rolling->Component(wire)) {\n                registry.components[wire]->removedToInbox(world, entity, tick);\n                ++state.inboxRemovals;\n            } else if (wire < registry.components.size()) {",
+   "replace": "            if (rolling != nullptr && rolling->Component(wire)) {\n                ++state.inboxRemovals;\n            } else if (wire < registry.components.size()) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ a\\ rolling\\-back\\ component\\ the\\ server\\ takes\\ off\\ is\\ gone\\ at\\ the\\ client\\ \\(Removed\\)"
+  },
+  {
+   "id": "nt-k3-reentry-removed-missing",
+   "what": "A spawn of an entity the inbox still knows does not write Removed for the rolling-back components it does not carry: one taken off while hidden comes back. Only it catches B1's net side",
+   "guards": [
+    "net 13 (B1 of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (spawnK3 && knownBefore) {",
+   "replace": "        if (spawnK3 && knownBefore && false) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "B1:\\ a\\ rolling\\-back\\ component\\ taken\\ off\\ while\\ hidden\\ does\\ not\\ come\\ back,\\ its\\ exit\\ not\\ yet\\ forgotten"
+  },
+  {
+   "id": "nt-k3-spawn-written-early",
+   "what": "A spawn's non-rolling values are written at once when an entity of that id is still in the World (the entity of before): a rollback to a point between its exit and the entry removes them for good. Only it catches S1 b",
+   "guards": [
+    "net 13 (S1 b of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                } else if (!rolling->Alive(entity) || state.waitingDirect.count(entity) != 0) {",
+   "replace": "                } else if (!rolling->Alive(entity)) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "S1\\ b:\\ the\\ blinking\\ crate\\ keeps\\ its\\ Tint"
+  },
+  {
+   "id": "nt-k3-waiting-removal-kept",
+   "what": "Taking a non-rolling component off does not drop its waiting value: it is written later. Only it catches S1 a",
+   "guards": [
+    "net 13 (S1 a of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                        std::erase_if(waiting->second.values, [wire](const auto& value) { return value.first == wire; });\n",
+   "replace": "                        static_cast<void>(waiting);\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "S1\\ a:"
+  },
+  {
+   "id": "nt-k3-whole-not-taken-off",
+   "what": "Writing a spawn's waiting values does not take off the non-rolling components the spawn does not carry: the entity of before keeps one taken off while hidden. Only it catches B1's whole set",
+   "guards": [
+    "net 13 (B1 of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (waiting.whole) {",
+   "replace": "            if (waiting.whole && false) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "B1:\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\ taken\\ off\\ while\\ hidden\\ is\\ taken\\ off\\ the\\ entity\\ of\\ before"
+  },
+  {
+   "id": "nt-k3-resource-other-type-accepted",
+   "what": "K3 builds with a rolling-back Resource whose value type is not the Resource: its apply writes rolling-back data in First. Only it catches NT-E6 (B2, U2 (a))",
+   "guards": [
+    "net 13 (B2 of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "            if (record == nullptr || record->kind != Rollback::DataKind::Resource || entry->toInbox) continue;",
+   "replace": "            if (record == nullptr || record->kind != Rollback::DataKind::Resource || entry->toInbox || true) continue;",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B2:\\ K3\\ would\\ write"
   }
  ]
 }

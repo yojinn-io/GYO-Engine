@@ -29,7 +29,20 @@ struct Secret {
 };
 inline void HashValue(K::Hasher& h, const Secret& v) { HashValue(h, v.code); }
 
+// A component E2 carries that never changes: seen again, the entity is sent whole, this too (S5 of PR-2's review).
+struct Mark {
+    std::int32_t value = 0;
+    friend bool operator==(const Mark&, const Mark&) = default;
+};
+inline void HashValue(K::Hasher& h, const Mark& v) { HashValue(h, v.value); }
+
 constexpr K::EntityId kE1 = 50'001, kE2 = 50'002, kE3 = 50'003;
+
+// The server's tick from which user 1 no longer sees E3's Secret (G-11: never; S5's case: 100).
+std::uint64_t& PrivateUntil() {
+    static std::uint64_t until = ~std::uint64_t{0};
+    return until;
+}
 
 class Hub final : public N::Link {
 public:
@@ -68,7 +81,7 @@ K::SystemResult See(K::ExclusiveWorld<> world) {
         for (const K::EntityId entity : {kE1, kE2, kE3}) {
             if (Sees(**user, entity, tick)) visibility.Show(entity);
         }
-        if (**user == 1) visibility.ShowPrivate<Secret>(kE3);
+        if (**user == 1 && tick < PrivateUntil()) visibility.ShowPrivate<Secret>(kE3);
         if (auto inserted = world.Insert(peer, std::move(visibility)); !inserted) return GYO::Engine::Base::Err(std::move(inserted).error());
     }
     return {};
@@ -83,8 +96,10 @@ void RegisterVisible(O::WorldSetup& s) {
     auto& r = s.Registrar();
     r.Component<Position>({.name = "Position"});
     r.Component<Secret>({.name = "Secret"});
+    r.Component<Mark>({.name = "Mark"});
     N::NetEntry net(s);
     net.Replicate<Position>("Position", PositionCodec());
+    net.Replicate<Mark>("Mark", {[](N::NetWriter& w, const Mark& v) { w.Value(v.value); }, [](N::NetReader& rd, Mark& v) { return rd.Value(v.value); }, 1});
     net.Replicate<Secret>("Secret", {[](N::NetWriter& w, const Secret& v) { w.Value(v.code); },
                                      [](N::NetReader& rd, Secret& v) { return rd.Value(v.code); }, 1},
                           N::ReplicateOptions{.privateComponent = true});
@@ -101,55 +116,73 @@ void RegisterVisible(O::WorldSetup& s) {
 
 } // namespace
 
-TEST_CASE("visibility: G-11 an entity a Peer does not see is not sent, comes back under the same id; a private component reaches only its Peer") {
-    auto clock = std::make_shared<N::NetTime>(0);
-    auto reader = [clock] { return *clock; };
+// A server and two display clients over memory links (G-11's setup).
+struct Visible {
+    std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
     std::vector<std::pair<N::MemoryLink, N::MemoryLink>> links;
-    for (int i = 0; i < 2; ++i) {
-        N::MemoryLinkSettings settings;
-        settings.seed = static_cast<std::uint64_t>(70 + i);
-        links.push_back(N::MemoryLink::Pair(settings));
-    }
-    End server = GameEnd(N::NetRole::Server, {});
-    server.build = [](O::WorldSetup& s) {
-        RegisterVisible(s);
-        s.Prepare([](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-            world.Insert(kE1, Position{0, 1});
-            world.Insert(kE2, Position{0, 2});
-            world.Insert(kE3, Position{0, 3});
-            world.Insert(kE3, Secret{4242});
-            return {};
-        });
-    };
-    server.net.link = std::make_shared<Hub>(std::vector<N::MemoryLink>{links[0].first, links[1].first});
-    server.net.clock = reader;
-    server.net.seed = 6;
-    auto builtServer = O::Product::Build(Describe(server), Units(true));
-    REQUIRE_MESSAGE(static_cast<bool>(builtServer), Reported(builtServer));
+    std::unique_ptr<O::Product> server;
     std::vector<std::unique_ptr<O::Product>> clients;
-    for (int i = 0; i < 2; ++i) {
-        End client = GameEnd(N::NetRole::Client, {});
-        client.build = &RegisterVisible;
-        client.range = E::EntityIdsOptions{static_cast<K::EntityId>(200'001 + i * 100'000), static_cast<K::EntityId>(300'000 + i * 100'000)};
-        client.net.link = std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second);
-        client.net.serverEndpoint = N::MemoryLink::EndpointA();
-        client.net.userId = static_cast<std::uint64_t>(i + 1);
-        client.net.clock = reader;
-        auto built = O::Product::Build(Describe(client), Units(true));
-        REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
-        clients.push_back(std::move(*built));
+
+    Visible() {
+        auto reader = [now = clock] { return *now; };
+        for (int i = 0; i < 2; ++i) {
+            N::MemoryLinkSettings settings;
+            settings.seed = static_cast<std::uint64_t>(70 + i);
+            links.push_back(N::MemoryLink::Pair(settings));
+        }
+        End serverEnd = GameEnd(N::NetRole::Server, {});
+        serverEnd.build = [](O::WorldSetup& s) {
+            RegisterVisible(s);
+            s.Prepare([](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                world.Insert(kE1, Position{0, 1});
+                world.Insert(kE2, Position{0, 2});
+                world.Insert(kE2, Mark{77});
+                world.Insert(kE3, Position{0, 3});
+                world.Insert(kE3, Secret{4242});
+                return {};
+            });
+        };
+        serverEnd.net.link = std::make_shared<Hub>(std::vector<N::MemoryLink>{links[0].first, links[1].first});
+        serverEnd.net.clock = reader;
+        serverEnd.net.seed = 6;
+        auto builtServer = O::Product::Build(Describe(serverEnd), Units(true));
+        REQUIRE_MESSAGE(static_cast<bool>(builtServer), Reported(builtServer));
+        server = std::move(*builtServer);
+        for (int i = 0; i < 2; ++i) {
+            End client = GameEnd(N::NetRole::Client, {});
+            client.build = &RegisterVisible;
+            client.range = E::EntityIdsOptions{static_cast<K::EntityId>(200'001 + i * 100'000), static_cast<K::EntityId>(300'000 + i * 100'000)};
+            client.net.link = std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second);
+            client.net.serverEndpoint = N::MemoryLink::EndpointA();
+            client.net.userId = static_cast<std::uint64_t>(i + 1);
+            client.net.clock = reader;
+            auto built = O::Product::Build(Describe(client), Units(true));
+            REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+            clients.push_back(std::move(*built));
+        }
     }
-    auto& match = **builtServer;
+    void Frame() {
+        REQUIRE(static_cast<bool>(server->RunFrame()));
+        for (auto& c : clients) REQUIRE(static_cast<bool>(c->RunFrame()));
+        for (auto& [a, b] : links) a.Advance();
+        *clock += Ms(16);
+    }
+    K::World& Client(int i) { return clients[static_cast<std::size_t>(i)]->World("Net").GetWorld(); }
+    K::World& Server() { return server->World("Net").GetWorld(); }
+};
+
+TEST_CASE("visibility: G-11 an entity a Peer does not see is not sent, comes back under the same id; a private component reaches only its Peer") {
+    PrivateUntil() = ~std::uint64_t{0};
+    Visible visible;
+    auto& clients = visible.clients;
+    auto& match = *visible.server;
     // Per client: frames it had each entity; frames E3 carried Secret; whether user 1 lost E2 while hidden and got it back.
     std::map<std::pair<int, K::EntityId>, int> had;
     auto Had = [&had](int client, K::EntityId entity) -> int& { return had[std::make_pair(client, entity)]; };
     int secretAt1 = 0, secretAt2 = 0;
     bool lostE2 = false, backE2 = false;
     for (int frame = 0; frame < 160; ++frame) {
-        REQUIRE(static_cast<bool>(match.RunFrame()));
-        for (auto& c : clients) REQUIRE(static_cast<bool>(c->RunFrame()));
-        for (auto& [a, b] : links) a.Advance();
-        *clock += Ms(16);
+        visible.Frame();
         for (int i = 0; i < 2; ++i) {
             K::World& world = clients[static_cast<std::size_t>(i)]->World("Net").GetWorld();
             for (const K::EntityId entity : {kE1, kE2, kE3}) Had(i, entity) += world.Get<Position>(entity) != nullptr ? 1 : 0;
@@ -175,6 +208,9 @@ TEST_CASE("visibility: G-11 an entity a Peer does not see is not sent, comes bac
     CHECK_MESSAGE(backE2, "G-11: seen again, the entity comes back");
     REQUIRE(world1.Get<Position>(kE2) != nullptr);
     CHECK_MESSAGE(*world1.Get<Position>(kE2) == *serverWorld.Get<Position>(kE2), "G-11: it comes back whole, under the same id");
+    // Whole: a component that did not change while it was hidden comes again too (S5 of PR-2's review).
+    CHECK_MESSAGE((world1.Get<Mark>(kE2) != nullptr && *world1.Get<Mark>(kE2) == Mark{77}),
+                  "G-11: seen again, it is sent whole: a component unchanged while hidden comes too");
     CHECK_MESSAGE(secretAt1 > 0, "G-11: the private component reaches the Peer that is shown it");
     CHECK_MESSAGE(secretAt2 == 0, "G-11: the private component reaches no other Peer");
     CHECK(world2.Get<Position>(kE3) != nullptr);
@@ -191,4 +227,21 @@ TEST_CASE("visibility: G-11 an entity a Peer does not see is not sent, comes bac
                           "G-11: each client ends with exactly the entities its Peer sees");
         }
     }
+}
+
+TEST_CASE("visibility: a private component a Peer stops being shown is taken off at its client; the entity stays") {
+    // S5 of PR-2's review: user 1 is shown E3's Secret until the server's tick 100, then not (HidePrivate's effect).
+    PrivateUntil() = 100;
+    Visible visible;
+    int secretFrames = 0;
+    for (int frame = 0; frame < 160; ++frame) {
+        visible.Frame();
+        secretFrames += visible.Client(0).Get<Secret>(kE3) != nullptr ? 1 : 0;
+    }
+    PrivateUntil() = ~std::uint64_t{0};
+    MESSAGE("HidePrivate: client 1 had Secret in " << secretFrames << " frames");
+    CHECK_MESSAGE(secretFrames > 0, "the private component reached the Peer while it was shown");
+    CHECK_MESSAGE(visible.Client(0).Get<Secret>(kE3) == nullptr, "a private component no longer shown is taken off at that client");
+    CHECK_MESSAGE(visible.Client(0).Get<Position>(kE3) != nullptr, "the entity itself stays (only the component's scope changed)");
+    CHECK(visible.Server().Get<Secret>(kE3) != nullptr);
 }

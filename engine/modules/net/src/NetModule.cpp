@@ -12,6 +12,7 @@
 #include "engine/kernel/World.hpp"
 #include "engine/net/UdpLink.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
+#include "engine/rollback/Registrations.hpp"
 #include "engine/rollback/RollbackStrategy.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 #include "engine/world_time/WorldTimeModule.hpp"
@@ -293,6 +294,22 @@ void NetModule::Check(const Kernel::FrozenRegistry&, Orchestration::WorldCheck& 
     }
     if (!service->Bind(context.WorldName())) {
         context.Report("NT-E3", "World '" + context.WorldName() + "' has a net role, but another World of the Product has one");
+    }
+    // K3 (B2 of PR-2's review; the user's U2 (a)): a replicated Resource that rolls back reaches the rollback Module
+    // only as ResourceValue<R>, which needs the value type to be the Resource. With another value type its apply
+    // would write it in First (R-2 premise 5): refused, as K3 was before step 4.
+    const auto* rollback = context.Options<Rollback::RollbackOptions>();
+    const NetRegistrations* net = context.Buffer().Find<NetRegistrations>();
+    const Rollback::RollbackRegistrations* rollbackTable = context.Buffer().Find<Rollback::RollbackRegistrations>();
+    if (role->role == NetRole::Client && rollback != nullptr && rollback->strategy != nullptr && net != nullptr && rollbackTable != nullptr) {
+        const Rollback::RollbackRegistry registry = Rollback::Resolve(*rollbackTable).registry;
+        for (const auto& entry : net->registry.resources) {
+            const Rollback::DataRecord* record = registry.Data(entry->key);
+            if (record == nullptr || record->kind != Rollback::DataKind::Resource || entry->toInbox) continue;
+            context.Report("NT-E6", "World '" + context.WorldName() + "' is a client with a rollback strategy (K3): the replicated Resource '" +
+                                        entry->name + "' rolls back, and its value type is not the Resource (ReplicateResource<R, V>); "
+                                        "K3 writes a rolling-back Resource only into the rollback inbox, as the Resource itself");
+        }
     }
 }
 

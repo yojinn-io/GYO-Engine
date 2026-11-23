@@ -39,6 +39,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -78,6 +79,8 @@ public:
     [[nodiscard]] virtual std::vector<Kernel::EntityId> EntitiesThrough(std::uint64_t tick) const = 0;
     // Drops what is older than oldest, keeping per entity the newest entry at or before oldest.
     virtual void Prune(std::uint64_t oldest) = 0;
+    // Drops every entry of entity.
+    virtual void Forget(Kernel::EntityId entity) = 0;
 
 protected:
     InboxColumnBase() = default;
@@ -104,6 +107,9 @@ public:
             if (key.second <= tick && (out.empty() || out.back() != key.first)) out.push_back(key.first);
         }
         return out;
+    }
+    void Forget(Kernel::EntityId entity) override {
+        entries_.erase(entries_.lower_bound({entity, 0}), entries_.lower_bound({entity + 1, 0}));
     }
     void Prune(std::uint64_t oldest) override {
         for (auto it = entries_.begin(); it != entries_.end();) {
@@ -219,6 +225,25 @@ public:
     }
     // Drops what is older than oldest (the strategy, after a decision), keeping per entity the newest entry at or
     // before oldest (values, resources' values, entries and exits alike).
+    // The same, and an entity whose last entry or exit is an exit at or before oldest and that aliveAtOldest (the
+    // World's alive set at oldest, ascending) lacks is forgotten: its lifecycle, values and NotSent (the review of
+    // PR-2, S6: the inbox does not grow with every entity that ever existed). One still in aliveAtOldest (a rollback
+    // given up) keeps its exit, so a later C still removes it.
+    void Prune(std::uint64_t oldest, std::span<const Kernel::EntityId> aliveAtOldest) {
+        Prune(oldest);
+        for (auto it = lifecycle_.begin(); it != lifecycle_.end();) {
+            const auto& [entity, entries] = *it;
+            const bool gone = !entries.empty() && !entries.rbegin()->second && entries.rbegin()->first <= oldest &&
+                              !std::binary_search(aliveAtOldest.begin(), aliveAtOldest.end(), entity);
+            if (!gone) {
+                ++it;
+                continue;
+            }
+            for (auto& [key, column] : columns_) column->Forget(entity);
+            notSent_.erase(entity);
+            it = lifecycle_.erase(it);
+        }
+    }
     void Prune(std::uint64_t oldest) {
         for (auto& [key, column] : columns_) column->Prune(oldest);
         for (auto& [key, column] : resources_) column->Prune(oldest);

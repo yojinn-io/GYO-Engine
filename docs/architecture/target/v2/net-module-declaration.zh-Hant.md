@@ -150,7 +150,7 @@
 | 結構與值分流 | Actions（可靠有序）／Updates（sequenced） | Updates（Ordered）／Mutations（Unreliable、min required tick）；同 tick 有結構變更的實體併進 Updates；沒變的 tick 也送 | snapshot＋delta 對最多 3 個已確認的 baseline | 只送一部分會讓元件指到 Client 沒有的實體；全可靠會重送舊資料 | **replicon 的分流**（Q3） | — |
 | 每收件者的帳本與確認 | 用 replicon 的 | `ClientTicks` 掛在 client entity：每實體上次確認的 tick、元件遮罩；**Client 處理完值訊息才回 `MutationAcks`（Ordered）**，伺服器收到才前推 | 每連線每 chunk 32 份 history、ack mask 4096 tick | 帳本只決定重送，不是遊戲狀態的副本 | **帳本掛在 Peer 實體（P12）、應用層的確認** | — |
 | 編號 | `ServerEntityMap`（replicon）；client 用自己的 allocator | 雙向對照表；元件裡的 entity 要標 `#[entities]` 才對映 | ghostId（回收）＋spawnTick；和本地 Entity 分開 | Bevy、Unity 的 entity 會回收，兩端不可能同號 | 對照表的形狀 | **GYO 的配發器不重用（P16），LIM-7 已定「編號只由權威端給」：兩端同號（Q1）** |
-| 可見性 | (entity, link)＋Room；三種失去可見的處理 | 每 client 一份、scope 到元件；三種 `ScopeLifetime`；後兩種「隱藏期間的刪除不會重放」的坑 | Relevancy 三種模式；不相關＝destroyed | 決定一律在 server | **每 Peer 一份、scope 到元件、失去可見＝刪除**（只用 `WhileVisible`） | 模擬的 Client 寫 `Exited`／`NotSent`（MC-3） |
+| 可見性 | (entity, link)＋Room；三種失去可見的處理 | 每 client 一份、scope 到元件；三種 `ScopeLifetime`；後兩種「隱藏期間的刪除不會重放」的坑 | Relevancy 三種模式；不相關＝destroyed | 決定一律在 server | **每 Peer 一份、scope 到元件、失去可見＝刪除**（只用 `WhileVisible`） | 模擬的 Client 寫 `Exited`／`NotSent`（MC-3）〔第 5 步偏離：看不到＝`Exited`、`NotSent`＝預算延後；見 D-7 的註〕 |
 | 輸入 | `end_tick`＋冗餘 5、64 格 ring、hold-last、伺服器只收 ±64 tick | 不做 | 當前＋前 n 份、server 缺輸入沿用上一筆、`InputEvent` | 掉包不缺輸入；擋惡意的大 tick | **冗餘、hold-last、tick 窗、單次觸發、輸入在實體上** | Client 的重跑要每個實體的輸入紀錄（回滾的延伸，第 5 節） |
 | 對時 | header tick＋ping；1.05 倍、>10 tick snap、`LocalTimelineShift` | 不做 | command age 推 time scale（0.9～1.1）、>10 tick 跳 | 步長不動才不會破壞固定步 | **倍率追、太遠就跳** | 經時間 Module 的入口（D-9）；增益與門檻在第 3 步推 |
 | 預測與回滾 | 單一 entity：live 值＋`ConfirmedHistory`＋`PredictionHistory` | 不做，留 `ConfirmHistory`、receive marker | 只回滾這次有更新的 ghost；上限 64 tick | — | GYO 的回滾 Module 已做（R-8） | 網路只寫 `RollbackInbox` |
@@ -324,6 +324,7 @@
   2. 這些值要求的結構更新已套用。
 - 比 C 舊的值晚到：寫進 `RollbackInbox`（MC-1：不靜默丟，回滾照「C 當時或之前最後的值」用）。比回滾深度還舊的丟掉、計數。
 - 可見性外的實體在 C 是「這份沒帶」（`NotSent`），不推成「沒變」（R-8）。
+  - 〔第 5 步偏離，未經核准，待合併核准頁列出（PR-2 設計審查 S3）〕實作改成：可見性外的實體寫 `Exited`（只用 `WhileVisible`：看不到的實體在 Client 不存在，`NotSent` 會讓它留著、值停在舊的）；`NotSent` 改用在「看得到、但這個 tick 的值因預算延後」。為了讓 Client 知道哪些延後，每則值訊息多一段延後清單（wire 欄位：`u16` 個數＋實體編號；`kNetProtocolVersion` 升到 3）。理由與證據：`net.zh-Hant.md` 第 14 節、`docs/dev_logs/2026_11_23_gyo2_net_module_step5.zh-Hant.md` 第 2 節。上面這一行的原文不改。
 - 伺服器的事件訊息（F8）**不算進確認點**：一條卡住的事件串流不讓確認點停（核准的形狀）。
 - **和核准形狀的關係**：
   - 核准的是「收齊只算 snapshot 通道」。
