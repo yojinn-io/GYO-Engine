@@ -1,6 +1,6 @@
 # The transform Module (docs/architecture/target/v2/transform-camera-declaration.zh-Hant.md, section 4.1; Design
-# Invariants TF-1 to TF-4 in docs/architecture/target/v2/transform.zh-Hant.md): Transform, GlobalTransform and the
-# registration unit TransformModule that keeps GlobalTransform equal to Transform for entities without a parent.
+# Invariants TF-1 to TF-5 in docs/architecture/target/v2/transform.zh-Hant.md): Transform, GlobalTransform and the
+# registration unit TransformModule that keeps GlobalTransform = the parent's GlobalTransform * Transform.
 add_library(gyo_transform STATIC
     src/TransformModule.cpp
 )

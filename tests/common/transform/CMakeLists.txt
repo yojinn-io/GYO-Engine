@@ -1,5 +1,5 @@
 # Tests of the transform Module (docs/architecture/target/v2/transform-camera-declaration.zh-Hant.md, section 6.1;
-# Design Invariants TF-1 to TF-4 in docs/architecture/target/v2/transform.zh-Hant.md). Synthetic units only; the
+# Design Invariants TF-1 to TF-5 in docs/architecture/target/v2/transform.zh-Hant.md). Synthetic units only; the
 # rollback equivalence case (T-7) links the time and rollback Modules into the test, not into transform.
 add_executable(gyo_transform_tests TestMain.cpp TransformTests.cpp)
 target_link_libraries(gyo_transform_tests PRIVATE GYO::Transform GYO::EntityIds GYO::WorldTime GYO::Rollback
