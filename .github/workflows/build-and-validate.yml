@@ -106,6 +106,7 @@ jobs:
           "GYO_BUILD_CONFIG=$($build.configuration)" >> $env:GITHUB_ENV
           "has_shader_tools=$($build.shader_host_tools.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           "has_shader_bundles=$($build.shader_bundles.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "product_executable=$((@($build.products) -contains $env:GYO_PRODUCT).ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Verify required offline Metal compilation
         if: runner.os == 'macOS' && steps.configure.outputs.has_shader_bundles == 'true'
@@ -188,14 +189,21 @@ jobs:
       # A toolchain package holds the selected tools. With no tool registered
       # (the tool registry export selects none on every platform) the row still
       # builds and tests the engine, but has nothing to assemble: the package
-      # steps below are skipped and this step says so. Every game row, and every
-      # toolchain row with a tool, assembles its package as before.
+      # steps below are skipped and this step says so. A game row whose game
+      # registers no product executable yet (gyo-build.json "products", read by
+      # the configure step) is skipped and announced the same way. Every other
+      # game row, and every toolchain row with a tool, assembles its package.
       - name: Decide whether this row has a package to assemble
         id: package_plan
         shell: bash
+        env:
+          GYO_PRODUCT_EXECUTABLE: ${{ steps.configure.outputs.product_executable }}
         run: |
           if [ "$GYO_PRODUCT" = toolchain ] && [ -z "$GYO_SELECTED_TOOLS" ]; then
             echo "::notice::No tool is registered for $GYO_PACKAGE_PLATFORM: the toolchain row assembles, checks and archives no package (skipped: install, package checks, installed acceptance, archive, upload)."
+            echo "assemble=false" >> "$GITHUB_OUTPUT"
+          elif [ "$GYO_PRODUCT" != toolchain ] && [ "$GYO_PRODUCT_EXECUTABLE" != true ]; then
+            echo "::notice::Game $GYO_PRODUCT registers no product executable yet: the row builds and tests it for $GYO_PACKAGE_PLATFORM but assembles, checks and archives no package (skipped: install, package checks, installed acceptance, archive, upload)."
             echo "assemble=false" >> "$GITHUB_OUTPUT"
           else
             echo "assemble=true" >> "$GITHUB_OUTPUT"

@@ -416,6 +416,63 @@
       "guards": [
         "build-games-dir-declaration 5.4"
       ]
+    },
+    {
+      "id": "ocp-plan-game-without-executable-assembles",
+      "what": "a game row whose game registers no product executable still assembles (v8-arch-gyo2-object-connect-prep)",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "elif [ \"$GYO_PRODUCT\" != toolchain ] && [ \"$GYO_PRODUCT_EXECUTABLE\" != true ]; then",
+      "replace": "elif false; then",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_only_a_toolchain_row_without_tools_skips_its_package_and_says_so "
+    },
+    {
+      "id": "ocp-configure-no-product-executable",
+      "what": "the configure step stops telling the plan whether the game registered a product executable (v8-arch-gyo2-object-connect-prep)",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "          \"product_executable=$((@($build.products) -contains $env:GYO_PRODUCT).ToString().ToLowerInvariant())\" >> $env:GITHUB_OUTPUT\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_only_a_toolchain_row_without_tools_skips_its_package_and_says_so "
+    },
+    {
+      "id": "ocp-build-record-no-products",
+      "what": "the build record drops the products CI reads (v8-arch-gyo2-object-connect-prep)",
+      "file": "build/cmake/GyoBuild.cmake",
+      "find": ",\\\"products\\\":${_gyo_products}",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_build_record_lists_every_field_ci_reads "
     }
   ]
 }
