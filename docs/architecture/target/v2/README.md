@@ -124,6 +124,7 @@
 - [2026_11_22_gyo2_restore_impl.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_restore_impl.zh-Hant.md)：第 5 批 讀檔的實作（讀檔宣告修訂 12：沿用既有案例、補四個生成期間的讀檔案例、說明頁第 15 節）與存檔版本 `save_version`（純程式庫、預設不帶）。
 - [2026_11_23_gyo2_kernel_res_changed.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_res_changed.zh-Hant.md)：Resource 的變更偵測——`Res`／`ResMut` 的 `Changed()`、Kernel DI-KS 28、System 契約說明頁第 18 節、CCR-8。
 - [2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md)：World 摘要版本 4——訊息只收留著的筆數與內容，不收寫入序號、紀錄的序號與游標表（使用者選 (b)；Kernel DI-KS 10、27，RC 25）。
+- [2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md)：負向編譯樣本的判法——「靜態斷言失敗＋標記在同一行」做成共用函式 `tests/common/support/ExpectStaticAssert.cmake`，Kernel、world_logging、world_asset 三處改用（asset 宣告第 15 節第 12 項）。
 
 ## 沒有搬過來的
 
