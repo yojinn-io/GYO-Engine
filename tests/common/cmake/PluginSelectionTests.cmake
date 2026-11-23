@@ -4,8 +4,9 @@ cmake_minimum_required(VERSION 3.30)
 # the repository configured with no product and GYO_PLUGINS empty adds no Plugin
 # directory, though config/plugins.csv has rows.
 # Configure only. The sources the parent build fetched are reused and the child
-# is disconnected, so the check needs no network; a Plugin the child added
-# would have to download, and fails the configure instead.
+# is disconnected, so the check needs no network. A Plugin the child added
+# configures from the parent's source when the parent fetched it, and the
+# record and directory checks below catch it; otherwise its download fails.
 # The selection itself (closure, ALL, refusals) is cmake.UnitRegistry; the build
 # with the SDL Plugins removed is CI's core step (Design Invariant SDL-2).
 get_filename_component(repository "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
@@ -46,7 +47,7 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -S "${repository}" -B "${binary}" ${a
         -DBUILD_TESTING=OFF -DGYO_BUILD_EXAMPLES=OFF -DGYO_ENABLE_PACKAGING=OFF
         "-DGYO_GAMES=" "-DGYO_TOOLS=" "-DGYO_PLUGINS="
         -DFETCHCONTENT_FULLY_DISCONNECTED=ON
-    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 300)
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 540)
 if(NOT result EQUAL 0)
     message(FATAL_ERROR "The repository did not configure with no Plugin selected (${result}):\n${output}\n${error}")
 endif()

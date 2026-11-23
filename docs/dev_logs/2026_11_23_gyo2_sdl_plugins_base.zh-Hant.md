@@ -18,9 +18,21 @@ Owner：架構（`plugins/sdl*`）。GYO2 主會話開的任務卡（使用者�
 - `GYO_PLUGINS=ALL`：下載 SDL 3.4.0（SHA-256 通過）、補丁上了（`SDL_cocoakeyboard.m` 3 處標記）、SDL 的 revision `SDL-release-3.4.0-0-ga962f40bb`；建置 0 警告；ctest 199/199（多 `sdl.build`）。
 - os 守衛的單元測試 48 個、`build.ci` 266 個（含 `test_plugin_removal.py` 10 個）通過。
 - 突變（`run_mutations.py`，同一個建置）：
-  - 新的與改了 `find` 的：os 目錄 11/11（`sdlp-*` 六個、os-g11、os-g15、pu-x8、gdir 兩個）；`sdl_mutations.json` 6/6。第一輪 `sdl_mutations.json` 3 個是 wrong_failure：CMake 把長訊息換行，expect 改成 `\s+`；`sdlp-late-product-unrefused` 拿掉檢查後探針因別的原因 configure 失敗（`LANGUAGES NONE` 的專案加 `.cpp`），測試照樣失敗、訊息是「did not report」，expect 兩者都收。
+  - 新的與改了 `find` 的：os 目錄 11/11（`sdlp-*` 六個、os-g11、os-g15、pu-x8、gdir 兩個）；`sdl_mutations.json` 5/5（審查後拿掉一個，見下）。第一輪有 wrong_failure：CMake 把長訊息換行，expect 改成 `\s+`。
   - 殺它的測試被這批改了的（`mutation-rerun-scope`）：os 目錄用 os 守衛單元測試或 `ProcessCodePageTests` 的 22/22（另 4 個只在 Windows，略過）；編排層目錄用 `UnitRegistryTests` 的 56/56。其中 `g8s3-default-prefix` 第一次 wrong_failure：探針多了帶 Plugin 的產品，前綴錯時先在那裡失敗，expect 加上那個訊息。
 - 靜態 SDL 仍有 dynamic API：`src/dynapi/SDL_dynapi.h:73-74`，桌面平台預設開，和是不是靜態無關。
+
+## 設計審查（Opus／high，作者同為 Opus；Fable 暫停）與 L1 第一輪
+
+- **L1 windows-x64 在 configure 失敗**（run 45149646782，`ApplyPatches.cmake:32`：`patch failed: src/video/cocoa/SDL_cocoakeyboard.m:45`）。原因：Windows 的 checkout（`core.autocrlf`）把 `.patch` 轉成 CRLF，release archive 的原始碼是 LF；master 是 clone SDL，原始碼也被轉成 CRLF，兩邊一致所以沒出事。本機重現：`core.autocrlf=true` 的 clone 裡補丁是 CRLF，`ApplyPatches.cmake` 對 LF 原始碼報同一個錯；LF 的補丁通過。修法：`plugins/sdl/patches/.gitattributes` 寫 `*.patch -text`（跟著 Plugin 走、刪得掉）。
+- 拿掉「Plugin 加入之後的產品帶 Plugin 是 FATAL_ERROR」：它擋掉 Plugin 自己測試裡的產品，沒被選的 Plugin 在 generate 時 CMake 本來就報 target 不存在（AGENTS §3：不加防誤用的守衛）。突變 `sdlp-late-product-unrefused` 一起拿掉。
+- `check` 多看 CMakeCache 裡家族自己的選項（`SDL_*`）：vendored 或 ExternalProject 的 SDL 不會留下 `_deps`。正例：帶 SDL 的建置命中 93 個；沒有 SDL 的副本照樣通過。
+- 帶 SDL 的產品也看它在 `tests/`、`build/acceptance/`、`assets/` 底下同名目錄的 CMake。`cmake.PluginSelection` 的逾時放寬到 600 秒（整個 repo 的 configure，同 `cmake.ProjectComposition`）、註解更正。
+- master 留下的 SDL「component」機制（`GyoComponents.cmake`、`GyoRuntimeDeployment.cmake` 的 `SDL3-shared`）沒有接上 `plugins/sdl`，寫進 sdl.zh-Hant.md 範囲の限界，留給重審產品登記機制的那批。
+
+## SDL-2 的本機實跑
+
+`plugin_removal.py copy` → `cmake -S <副本> --preset core -DGYO_PLUGINS=ALL` → build → ctest 198/198 → `check` 通過（`plugins: []`，`_deps` 只有 doctest、fast_float、yyjson）。合併 gyo2（X1）後再 `copy` 一次，也拿得乾淨。
 
 ## 還沒做、交給後面的
 

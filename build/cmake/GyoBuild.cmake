@@ -115,7 +115,6 @@ unset(GYO_TOOL_VARIANT)
 # target by name, which CMake resolves once every directory is configured.
 get_property(_gyo_requested_plugins GLOBAL PROPERTY GYO_PLUGINS_REQUESTED)
 gyo_plugin_selection(GYO_UNITS GYO_SELECTED_PLUGINS ${_gyo_requested_plugins} ${GYO_PLUGINS})
-set_property(GLOBAL PROPERTY GYO_PLUGINS_ADDED TRUE)
 foreach(_gyo_plugin IN LISTS GYO_SELECTED_PLUGINS)
     add_subdirectory("${GYO_REPOSITORY_ROOT}/plugins/${_gyo_plugin}" "plugins/${_gyo_plugin}")
     gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/plugins/${_gyo_plugin}")

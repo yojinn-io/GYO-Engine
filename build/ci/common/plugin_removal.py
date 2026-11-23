@@ -13,7 +13,7 @@ and removes, staged, the family's rows of config/plugins.csv and their plugins/<
 or tool whose CMake files name a removed Plugin (its directory, tests, acceptance programs, assets and register
 row). A remaining register row that depends on a removed Plugin, or any other CMake file that still names one, is an
 error: the copy could not configure, and the removal would not be what SDL-2 asks. check reads the build record
-and the fetched sources.
+the fetched sources and the cache.
 
 A family is a name and the names that start with it and an underscore (sdl: sdl, sdl_window, sdl_gpu...).
 Exit status 0 when done; 1 with one line per problem otherwise.
@@ -120,9 +120,10 @@ def remove_family(tree, family):
         for row in product_rows:
             if not row:
                 continue
-            directory = tree / root / row[0]
-            texts = [strip_comments(file.read_text(encoding="utf-8")) for file in directory.rglob("*")
-                     if file.is_file() and CMAKE_FILE.search(file.as_posix())]
+            # The product's own directory and the parts kept elsewhere under its name.
+            directories = [tree / part / row[0] for part in (root, *PRODUCT_PARTS)]
+            texts = [strip_comments(file.read_text(encoding="utf-8")) for directory in directories
+                     for file in directory.rglob("*") if file.is_file() and CMAKE_FILE.search(file.as_posix())]
             if any(names_in(text, removed) for text in texts):
                 dropped.append(row[0])
         if dropped:
@@ -171,6 +172,15 @@ def check(build, family):
         for entry in sorted(deps.iterdir()):
             if entry.name.lower().startswith(family):
                 problems.append(f"{entry}: the build fetched a {family} dependency")
+    # A family added another way (a vendored add_subdirectory, an ExternalProject) leaves no _deps entry, but its
+    # own options in the cache (SDL_STATIC, SDL_SHARED...).
+    cache = build / "CMakeCache.txt"
+    prefix = family.upper() + "_"
+    if cache.is_file():
+        for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+            name = line.split(":", 1)[0].split("=", 1)[0]
+            if name.startswith(prefix):
+                problems.append(f"{cache}: the build configured {name}")
     return problems
 
 

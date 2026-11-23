@@ -413,9 +413,6 @@ string(CONCAT errors_text
     "    gyo_product_units(product REGISTERS a.csv b.csv c.csv)\n"
     "elseif(PROBE_CASE STREQUAL \"registers_none\")\n"
     "    gyo_product_units(product REGISTERS)\n"
-    "elseif(PROBE_CASE STREQUAL \"after_plugins_added\")\n"
-    "    set_property(GLOBAL PROPERTY GYO_PLUGINS_ADDED TRUE)\n"
-    "    gyo_product_units(product PLUGINS tool)\n"
     "elseif(PROBE_CASE STREQUAL \"unknown_argument\")\n"
     "    gyo_product_units(product DISABLE_MODULE off)\n"
     "endif()\n")
@@ -439,6 +436,5 @@ expect_refused_probe(dep_not_defined "'walk' depends on 'core' (GYO::Core), whic
 expect_refused_probe(registers_three "REGISTERS takes <modules.csv> <plugins.csv>")
 expect_refused_probe(registers_none "REGISTERS takes <modules.csv> <plugins.csv>")
 expect_refused_probe(unknown_argument "unknown arguments 'DISABLE_MODULE")
-expect_refused_probe(after_plugins_added "product carries Plugins (tool), but the Plugins were added already")
 
 message(STATUS "Unit register tests passed")

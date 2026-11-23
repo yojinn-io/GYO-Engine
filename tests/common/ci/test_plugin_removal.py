@@ -129,11 +129,12 @@ class PluginRemovalTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("Plugin removal: examples/CMakeLists.txt: still names the removed Plugin 'sdl'", output.getvalue())
 
-    def write_build(self, plugins, deps=()):
+    def write_build(self, plugins, deps=(), cache="CMAKE_BUILD_TYPE:STRING=Release\nGYO_BUILD_SDL_IMAGE_LOADER:BOOL=OFF\n"):
         build = self.base / "build"
         build.mkdir()
         (build / "gyo-build.json").write_text(json.dumps({"configuration": "Release", "plugins": plugins}),
                                               encoding="utf-8")
+        (build / "CMakeCache.txt").write_text(cache, encoding="utf-8")
         for name in deps:
             (build / "_deps" / name).mkdir(parents=True)
         return build
@@ -150,6 +151,21 @@ class PluginRemovalTests(unittest.TestCase):
         self.assertIn("the build added the Plugin 'sdl'", problems[0])
         self.assertTrue(problems[1].endswith("sdl3-build: the build fetched a sdl dependency"), problems[1])
         self.assertTrue(problems[2].endswith("sdl3-src: the build fetched a sdl dependency"), problems[2])
+
+    def test_check_reports_the_family_configured_without_fetching(self):
+        # A vendored add_subdirectory or an ExternalProject leaves no _deps entry, but the family's own options.
+        build = self.write_build([], cache="CMAKE_BUILD_TYPE:STRING=Release\nSDL_STATIC:BOOL=ON\n")
+        problems = plugin_removal.check(build, "sdl")
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].endswith("CMakeCache.txt: the build configured SDL_STATIC"), problems[0])
+
+    def test_a_product_named_only_by_its_tests_is_removed_too(self):
+        self.files["games/keep/CMakeLists.txt"] = "add_executable(keep main.cpp)\n"
+        self.files["tests/keep/CMakeLists.txt"] = "gyo_product_units(keep_tests PLUGINS sdl_window)\n"
+        self.make_repository()
+        _, products = plugin_removal.copy(self.repository, self.copy, "sdl")
+        self.assertEqual(products, ["games/keep"])
+        self.assertFalse((self.copy / "tests/keep").exists())
 
     def test_check_refuses_a_build_without_a_plugins_record(self):
         build = self.base / "build"

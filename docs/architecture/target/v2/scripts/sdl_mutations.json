@@ -79,25 +79,6 @@
    "timeout": 300
   },
   {
-   "id": "sdlp-late-product-unrefused",
-   "what": "A product configured after the Plugins were added is let through: it links a Plugin no directory defines",
-   "guards": [
-    "sdl-declaration 9.1",
-    "SDL-2"
-   ],
-   "file": "build/cmake/GyoUnitRegistry.cmake",
-   "find": "        if(plugins_added)\n",
-   "replace": "        if(FALSE)\n",
-   "command": [
-    "{cmake}",
-    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
-    "-P",
-    "tests/common/cmake/UnitRegistryTests.cmake"
-   ],
-   "expect": "Refused\\s+probe\\s+'after_plugins_added'\\s+(was\\s+configured|did\\s+not\\s+report)",
-   "timeout": 300
-  },
-  {
    "id": "sdlp-every-plugin-added",
    "what": "The build layer adds every Plugin row again, selected or not (before v8-arch-gyo2-sdl-p): a build with no product fetches SDL",
    "guards": [

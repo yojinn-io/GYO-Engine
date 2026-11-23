@@ -368,12 +368,8 @@ function(gyo_product_units target)
     gyo_unit_selection(${prefix} selected DISABLE_MODULES ${ARG_DISABLE_MODULES} MODULES ${ARG_MODULES} PLUGINS ${ARG_PLUGINS})
     if(prefix STREQUAL "GYO_UNITS" AND ARG_PLUGINS)
         # The build layer adds the Plugins the products carry once every product
-        # is configured (build/cmake/GyoBuild.cmake); a product configured after
-        # that would link a Plugin that is never added.
-        get_property(plugins_added GLOBAL PROPERTY GYO_PLUGINS_ADDED)
-        if(plugins_added)
-            message(FATAL_ERROR "gyo_product_units: ${target} carries Plugins (${ARG_PLUGINS}), but the Plugins were added already; configure products before the build layer adds plugins/")
-        endif()
+        # is configured (build/cmake/GyoBuild.cmake). A product in a Plugin's own
+        # directory (its tests) records it too, which changes nothing then.
         set_property(GLOBAL APPEND PROPERTY GYO_PLUGINS_REQUESTED ${ARG_PLUGINS})
     endif()
     get_property(order GLOBAL PROPERTY ${prefix}_ORDER)

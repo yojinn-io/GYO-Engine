@@ -22,4 +22,5 @@ add_test(NAME cmake.PluginSelection
         "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
         "-DPARENT_BINARY=${PROJECT_BINARY_DIR}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/PluginSelectionTests.cmake")
-set_tests_properties(cmake.PluginSelection PROPERTIES LABELS "cpu;build" TIMEOUT 300)
+# A whole-repository configure: room for the Visual Studio generator, as cmake.ProjectComposition.
+set_tests_properties(cmake.PluginSelection PROPERTIES LABELS "cpu;build" TIMEOUT 600)
