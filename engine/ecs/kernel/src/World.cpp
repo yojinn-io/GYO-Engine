@@ -1128,19 +1128,23 @@ void SummaryText(Hasher& h, std::string_view text) {
 // and the message cursors (v8-arch-gyo2-time-events step 3).
 // 3: each value through its type's hash function (Hash.hpp), no longer its
 // object bytes (v8-arch-gyo2-authority-rollback step 1, declaration section 3).
-constexpr std::uint32_t kSummaryVersion = 3;
+// 4: no write sequence number or record seq (counts of the history: one more
+// record written once changed every later summary) and no cursor table (whether
+// a reader has run and where it read to are state, left out knowingly: the keys
+// follow the registration order; kernel RC 25); v8-arch-gyo2-kernel-summary-messages,
+// the user's (b).
+constexpr std::uint32_t kSummaryVersion = 4;
 
 } // namespace
 
-// Format "gyo.kernel.world-summary" version 3, every number as 8 bytes
+// Format "gyo.kernel.world-summary" version 4, every number as 8 bytes
 // little-endian (Hasher::U64): the format string (length, bytes) and version;
 // the alive entities (count, each id); every column in ComponentId order (cell
 // count, then each key and the value through HashValue); every resource in
 // ResourceId order but KernelSettings (present flag, then the value through
-// HashValue when present); every message buffer in MessageTypeId order (next
-// write sequence number, record count, then each record's seq and payload
-// through HashValue); the message cursors in (message, system, mount, slot)
-// order (count, then each field). No stamp, tick or Plan position is hashed.
+// HashValue when present); every message buffer in MessageTypeId order (record
+// count, then each record's payload through HashValue, in write order). No
+// stamp, tick, Plan position, message sequence number or cursor is hashed.
 // A type with no HashValue that has a value in the World (a cell, a present
 // resource, a message record) makes the call an Err naming every such type;
 // with no value it is not hashed and not reported (declaration 3.3).
@@ -1189,20 +1193,8 @@ Engine::Base::Result<Fingerprint, KernelError> World::Summary() const {
     }
     h.U64(messages_.size());
     for (const auto& buffer : messages_) {
-        h.U64(buffer->nextSeq);
         h.U64(buffer->Size());
-        for (std::size_t i = 0; i < buffer->Size(); ++i) {
-            h.U64(buffer->SeqAt(i));
-            buffer->HashAt(h, i);
-        }
-    }
-    h.U64(cursors_.size());
-    for (const Detail::MessageCursor& cursor : cursors_) {
-        h.U64(cursor.message);
-        h.U64(cursor.system);
-        h.U64(cursor.mount);
-        h.U64(cursor.slot);
-        h.U64(cursor.read);
+        for (std::size_t i = 0; i < buffer->Size(); ++i) buffer->HashAt(h, i);
     }
     return Fingerprint{kSummaryVersion, Engine::Base::Sha256(h.Data())};
 }
