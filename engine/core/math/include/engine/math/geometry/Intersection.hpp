@@ -14,8 +14,9 @@ namespace GYO::Engine::Math {
 
 // Pure geometric ray intersections. Each returns the smallest t >= 0 at which
 // the ray meets the primitive (t in units of |direction|, see Ray), or nullopt.
-// An origin inside a solid primitive returns 0. There is no tolerance: callers
-// that need skin widths, sweeps or contact data use the Collision module.
+// An origin inside a solid primitive returns 0. There is no tolerance: decisions
+// that need normals, skin widths, sweeps or contact data use the physics_3d
+// Module (engine/modules/physics_3d).
 // direction must be non-zero. A ray with a non-finite origin or direction, or a
 // computation that overflows to NaN, returns nullopt.
 

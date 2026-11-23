@@ -1,0 +1,118 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the physics_3d Module (docs/architecture/target/v2/physics-3d-declaration.zh-Hant.md, section 6; Design Invariants P3-1 to P3-6 drafted in section 8 for docs/architecture/target/v2/physics-3d.zh-Hant.md; ids p3-). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "p3-boxset-ray-tie-high-index",
+   "what": "a BoxSet ray keeps the higher index when two boxes tie on t. Only it catches the tie rule of the ray query (the normal of the lower index's face)",
+   "guards": [
+    "physics-3d P3-3",
+    "physics-3d-declaration 4.4"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "(t == best->t && box < best->index)",
+   "replace": "(t == best->t && box > best->index)",
+   "target": "gyo_physics_3d_tests",
+   "cases": "queries: a ray reaching two boxes*",
+   "expect": "\\[p3\\-boxset\\-ray\\-tie\\]"
+  },
+  {
+   "id": "p3-boxset-ray-prune-equal",
+   "what": "the ray traversal skips a node whose entry equals the best t. Only it catches a pruned subtree that holds a tied lower index",
+   "guards": [
+    "physics-3d P3-3",
+    "physics-3d-declaration 4.4"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "if (best && static_cast<float>(reach->enter) > best->t) continue;",
+   "replace": "if (best && static_cast<float>(reach->enter) >= best->t) continue;",
+   "target": "gyo_physics_3d_tests",
+   "cases": "box_set: a node whose entry*",
+   "expect": "\\[p3\\-boxset\\-ray\\-prune\\]"
+  },
+  {
+   "id": "p3-boxset-contact-tie-high-index",
+   "what": "the deepest BoxSet contact keeps the higher index when two boxes tie on distance",
+   "guards": [
+    "physics-3d P3-3",
+    "physics-3d-declaration 4.3"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "} else if (out.empty() || distance < out[0].distance) {",
+   "replace": "} else if (out.empty() || distance <= out[0].distance) {",
+   "target": "gyo_physics_3d_tests",
+   "cases": "queries: contact with a BoxSet*",
+   "expect": "\\[p3\\-boxset\\-contact\\-tie\\]"
+  },
+  {
+   "id": "p3-boxset-cast-tie-high-index",
+   "what": "a BoxSet shape cast keeps the higher index when two boxes tie on time. Only the randomized equivalence catches it (the fixed cases tie on equal witnesses)",
+   "guards": [
+    "physics-3d P3-3",
+    "physics-3d-declaration 4.4"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "if (!best || time < bestTime) {",
+   "replace": "if (!best || time <= bestTime) {",
+   "target": "gyo_physics_3d_tests",
+   "cases": "box_set: every query equals*",
+   "expect": "\\[p3\\-boxset\\-equivalence\\-cast\\]"
+  },
+  {
+   "id": "p3-boxset-candidates-too-small",
+   "what": "the query box that picks BoxSet candidates for contacts and casts is shrunk instead of grown by a margin: boxes the linear scan reports are missed",
+   "guards": [
+    "physics-3d P3-3",
+    "physics-3d-declaration 4.4"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "const double margin = (scale + 1.0) * 1.0e-9;",
+   "replace": "const double margin = -0.25 + 0.0 * scale;",
+   "target": "gyo_physics_3d_tests",
+   "cases": "box_set: every query equals*",
+   "expect": "\\[p3\\-boxset\\-equivalence\\-(?:contact|contacts|cast)\\]"
+  },
+  {
+   "id": "p3-cast-tangential-hits",
+   "what": "with stopAtPenetration false, a tangential motion (Dot(motion, normal1) == 0) from an overlap counts as a hit. Only it catches the boundary of the separation test",
+   "guards": [
+    "physics-3d P3-4",
+    "physics-3d-declaration 4.3"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "if (!options.stopAtPenetration && Math::Dot(s.motion, normal) <= 0.0) return std::nullopt;",
+   "replace": "if (!options.stopAtPenetration && Math::Dot(s.motion, normal) < 0.0) return std::nullopt;",
+   "target": "gyo_physics_3d_tests",
+   "cases": "queries: a cast that starts overlapping*",
+   "expect": "\\[p3\\-cast\\-tangential\\]"
+  },
+  {
+   "id": "p3-collider-hash-no-digest",
+   "what": "Collider's HashValue leaves out the BoxSet digest: two BoxSets of the same count with different boxes hash equal while == says they differ (CCR-13)",
+   "guards": [
+    "physics-3d P3-3",
+    "physics-3d-declaration 4.5"
+   ],
+   "file": "engine/modules/physics_3d/include/engine/physics_3d/Collider.hpp",
+   "find": "    Kernel::HashValue(h, v.Digest());\n",
+   "replace": "",
+   "target": "gyo_physics_3d_tests",
+   "cases": "box_set: the digest and ==*",
+   "expect": "\\[p3\\-collider\\-hash\\] the BoxSet digest"
+  },
+  {
+   "id": "p3-scale-not-checked",
+   "what": "the World queries ignore a Transform scale other than (1, 1, 1) instead of returning UnsupportedScale",
+   "guards": [
+    "physics-3d P3-4",
+    "physics-3d-declaration 4.5"
+   ],
+   "file": "engine/modules/physics_3d/include/engine/physics_3d/SpatialQuery.hpp",
+   "find": "        if (!IsUnitScale(transform->scale)) return Base::Err(ScaleError(entity));\n",
+   "replace": "",
+   "target": "gyo_physics_3d_tests",
+   "cases": "world: a collider whose Transform*",
+   "expect": "\\[p3\\-world\\-scale\\] the scale was ignored"
+  }
+ ]
+}
