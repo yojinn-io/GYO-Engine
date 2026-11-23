@@ -1,5 +1,7 @@
 # 2026-11-22 threads、io 重審（`v8-arch-gyo2-threads-io-review`）
 
+**狀態：已合併（PR #277，merge 0f3be2cc）。**（本行由 `v8-arch-gyo2-mech-cleanup` 補上。）
+
 Owner：架構（GYO2 主會話開的任務卡 `local_a184932c`）。分支 `claude/gyo2-threads-io-review-da738d`（base `gyo2`）。實作者 Opus 5.5／high；敵對式檢查 Fable 5.2／high（宣告一次、`WorkerPool` 的突變清單一次，都唯讀）。事前宣告：[threads-io-review-declaration.zh-Hant.md](../architecture/target/v2/threads-io-review-declaration.zh-Hant.md)（修訂 1，動工前核准的版本 74d38577）。
 
 ## 為什麼

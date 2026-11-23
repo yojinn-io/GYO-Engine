@@ -1377,6 +1377,19 @@
     "-v"
    ],
    "expect": "FAIL: test_parent_directory_after_an_allowed_module_is_reported"
+  },
+  {
+   "id": "lg-file-flush-no-wait",
+   "what": "LG-6 / logging-declaration: Flush returns without waiting for the writer to write the lines accepted before it (rewritten from tt2-flush-no-wait of master's TraceSink, retired by v8-arch-gyo2-mech-cleanup). lg-file-flush-ignores-failure only drops the failure test; only it removes the wait",
+   "guards": [
+    "logging LG-6"
+   ],
+   "file": "engine/modules/logging/src/JsonLinesFileSink.cpp",
+   "find": "        impl_->progressChanged.wait_until(lock, deadline,\n                                          [&] { return impl_->flushedThrough >= target || impl_->writerDone; });\n",
+   "replace": "",
+   "target": "gyo_logging_tests",
+   "cases": "file: Flush waits for the lines accepted before it*",
+   "expect": "CHECK\\( std::chrono::steady_clock::now\\(\\) - start >= 50ms \\) is NOT correct!"
   }
  ]
 }
