@@ -1,10 +1,12 @@
 # 合併前核准：audio 那一側的小批（`v8-arch-gyo2-audio-clip-loader`）
 
-更新：2026-11-23。**狀態：合併前核准進行中（第 1、2 件已核准；第 3、4 件待定）。合併要使用者另外說「合併」。** 宣告：[audio-clip-loader-declaration.zh-Hant.md](audio-clip-loader-declaration.zh-Hant.md)（修訂 2，使用者 2026-11-23 動工前核准）。dev_log：[2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)。
+更新：2026-11-23。**狀態：合併前核准進行中（第 1～3 件已核准；第 4 件待定）。合併要使用者另外說「合併」。** 宣告：[audio-clip-loader-declaration.zh-Hant.md](audio-clip-loader-declaration.zh-Hant.md)（修訂 2，使用者 2026-11-23 動工前核准）。dev_log：[2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)。
 
 > **第 1 件核准**（使用者，2026-11-23，side chat 經轉達）：原話「核准」。核准的是第 1 節（被拿掉或改寫的 DI 守衛測試，§14.4 的 1～5；33203a6e 的版本）。比過的選項：核准／不核准。理由：使用者沒有另外說（side chat 的說明：性質還在的由新判定接手、各有突變；隨機制消失的不接手；幾條判定比以前嚴）。
 
 > **第 2 件核准**（使用者，2026-11-23，side chat 經轉達）：原話「核准」。核准的是第 2 節（和宣告的 8 處偏差；33203a6e 的版本）。比過的選項：核准／不核准。理由：使用者沒有另外說（side chat 的說明：宣告字面做不到而換成等價做法〔第 1、3 項〕、補測試的洞〔第 2、4、8 項〕、照審查修回宣告的形〔第 5、6、7 項〕；沒有緩的面）。
+
+> **第 3 件核准**（使用者，2026-11-23，side chat 經轉達）：原話「核准」。核准的是第 3 節（audio 頁 DI／RC 的最終文字；33203a6e 的版本）。轉達的清單寫「DI 2、6、7、9、11、新 DI 12，RC 1、新 RC 10」，沒有提到本節也列的 DI 1（措辭補「與 `sound` 型別的格式；asset 的 loader 介面」，設計審查 N-9）——DI 1 是否在內，回報時向使用者確認。比過的選項：核准／不核准。理由：使用者沒有另外說；side chat 說明 RC 10 的最終措辭隨第 4 件 A-1 的結果改。
 
 **這一頁請你定四件**：
 1. 第 1 節：被拿掉或改寫的 Design Invariants 守衛測試（AGENTS §14.4：DI 的守衛不論有沒有緩的面都要你核准）。
