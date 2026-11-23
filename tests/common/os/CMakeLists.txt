@@ -1,22 +1,28 @@
 # Tests of the OS layer (docs/architecture/os.md). This is the one common test
 # directory allowed to assert per OS; the boundary guard does not scan it.
 add_executable(gyo_os_tests OSErrorTests.cpp FilesTests.cpp FileWriterTests.cpp FileChangeTests.cpp
-    ProcessTests.cpp ConsoleTests.cpp ThreadTests.cpp WakeSignalTests.cpp DatagramSocketTests.cpp)
+    ProcessTests.cpp ConsoleTests.cpp ThreadTests.cpp WakeSignalTests.cpp DatagramSocketTests.cpp
+    CaseTiming.cpp)
 # GYO::Threads: ThreadTests reads a role's priority back on the role's thread.
 target_link_libraries(gyo_os_tests PRIVATE GYO::OS GYO::Threads gyo_test_support doctest::doctest)
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)
 set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
+# CaseTiming.cpp (v8-arch-gyo2-os-test-timeout) times each case and keeps the
+# log of a failed, slow or killed run here; it changes no check.
+set(gyo_os_case_timing_dir "${CMAKE_CURRENT_BINARY_DIR}/case-timing")
+target_compile_definitions(gyo_os_tests PRIVATE GYO_OS_CASE_TIMING_DIR="${gyo_os_case_timing_dir}")
 
 # The wait fallback (src/sys/linux/WakeSignal.cpp) uses the standard library only,
 # so it also builds on macOS: the same WakeSignalTests run against it here, and
 # its mutants are killed on a developer's Mac too. It does not link gyo_os, so
 # no executable holds two definitions of WakeSignal::Impl.
 if(NOT WIN32)
-    add_executable(gyo_os_wake_fallback_tests WakeSignalTests.cpp
+    add_executable(gyo_os_wake_fallback_tests WakeSignalTests.cpp CaseTiming.cpp
         "${GYO_REPOSITORY_ROOT}/engine/core/os/src/sys/linux/WakeSignal.cpp")
     target_include_directories(gyo_os_wake_fallback_tests PRIVATE "${GYO_REPOSITORY_ROOT}/engine/core/os/include")
     target_compile_definitions(gyo_os_wake_fallback_tests PRIVATE
-        GYO_WAKE_SIGNAL_FALLBACK=1 DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN)
+        GYO_WAKE_SIGNAL_FALLBACK=1 DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+        GYO_OS_CASE_TIMING_DIR="${gyo_os_case_timing_dir}")
     target_compile_features(gyo_os_wake_fallback_tests PRIVATE cxx_std_20)
     find_package(Threads REQUIRED)
     target_link_libraries(gyo_os_wake_fallback_tests PRIVATE GYO::Base Threads::Threads gyo_test_support
