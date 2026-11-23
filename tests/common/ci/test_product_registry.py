@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
     sys.path.insert(0, str(ROOT / folder))
 from workspace import TemporaryDirectory
-from game_registry import RELEASE_PLATFORMS, ROOT, export_registry
-import game_registry
+from product_registry import RELEASE_PLATFORMS, ROOT, export_registry
+import product_registry
 
 
 class RegistryMatrixTests(unittest.TestCase):
@@ -49,7 +49,7 @@ class RegistryMatrixTests(unittest.TestCase):
     def test_empty_registry_still_builds_every_core_tool_baseline(self):
         self.write_registry("")
         output = self.root / "outputs.txt"
-        command = [sys.executable, str(ROOT / "build/ci/common/game_registry.py"),
+        command = [sys.executable, str(ROOT / "build/ci/common/product_registry.py"),
                    "--registry", str(self.registry), "--tool-registry", str(self.tool_registry),
                    "--repository-root", str(self.root), "--output", str(output)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
@@ -64,7 +64,7 @@ class RegistryMatrixTests(unittest.TestCase):
     def test_game_rows_are_marked_as_games(self):
         self.write_registry("sample_game,,,true,false,true,false\r\n")
         output = self.root / "outputs.txt"
-        command = [sys.executable, str(ROOT / "build/ci/common/game_registry.py"),
+        command = [sys.executable, str(ROOT / "build/ci/common/product_registry.py"),
                    "--registry", str(self.registry), "--tool-registry", str(self.tool_registry),
                    "--repository-root", str(self.root), "--output", str(output)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
@@ -87,7 +87,7 @@ class RegistryMatrixTests(unittest.TestCase):
             (directory / "project.json").write_text(json.dumps({"version": 2,
                 "default_variant": "native", "requires_games": {},
                 "variants": {"native": {"components": [], "packageable": owner != "local"}}}))
-        tools = game_registry.export_tools(registry, repository_root=self.root)
+        tools = product_registry.export_tools(registry, repository_root=self.root)
         self.assertEqual(tools, {"windows-x64": ["alpha:native"],
             "linux-x64": ["alpha:native", "beta:native"], "macos-arm64": ["alpha:native"]})
 
@@ -96,14 +96,14 @@ class RegistryMatrixTests(unittest.TestCase):
         registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"
                             "local,Local,,1,1,0,1,1,1\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "registry export failed"):
-            game_registry.export_tools(registry, repository_root=self.root)
+            product_registry.export_tools(registry, repository_root=self.root)
 
     def test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so(self):
         registry = self.root / "tools.csv"
         registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n",
                             encoding="utf-8")
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            tools = game_registry.export_tools(registry, repository_root=self.root)
+            tools = product_registry.export_tools(registry, repository_root=self.root)
         self.assertEqual(tools, {platform: [] for platform in RELEASE_PLATFORMS})
         self.assertIn("No tool is registered", stderr.getvalue())
 
@@ -117,9 +117,9 @@ class RegistryMatrixTests(unittest.TestCase):
                     for index, platform in enumerate(RELEASE_PLATFORMS)]
             output.write_text(json.dumps({"include": rows}), encoding="utf-8")
             return subprocess.CompletedProcess(command, 0, "", "")
-        with mock.patch.object(game_registry.subprocess, "run", side_effect=fake_export), \
+        with mock.patch.object(product_registry.subprocess, "run", side_effect=fake_export), \
                 self.assertRaisesRegex(ValueError, "invalid tool selection"):
-            game_registry.export_tools(self.tool_registry, repository_root=self.root)
+            product_registry.export_tools(self.tool_registry, repository_root=self.root)
 
     def test_repository_registries_export_for_ci(self):
         # The registries of this checkout, whatever they hold. The release
@@ -130,7 +130,7 @@ class RegistryMatrixTests(unittest.TestCase):
         with (ROOT / "config/tools.csv").open(encoding="utf-8-sig", newline="") as rows:
             registered = [row["name"] for row in csv.DictReader(rows)]
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            tools = game_registry.export_tools()
+            tools = product_registry.export_tools()
             pairs = export_registry()
         self.assertEqual(list(tools), list(RELEASE_PLATFORMS))
         self.assertEqual(all(tools.values()), bool(registered), tools)

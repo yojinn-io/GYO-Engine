@@ -17,7 +17,7 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_game_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_repository_registries_export_for_ci "
     },
@@ -195,7 +195,7 @@
     {
       "id": "ci-python-partial-empty",
       "what": "the Python consumer accepts a selection that is empty on some platforms only",
-      "file": "build/ci/common/game_registry.py",
+      "file": "build/ci/common/product_registry.py",
       "find": "if any(selected.values()) and not all(selected.values()):",
       "replace": "if False:",
       "command": [
@@ -207,14 +207,14 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_game_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_selection_empty_on_only_some_platforms_is_rejected "
     },
     {
       "id": "ci-python-silent-empty",
       "what": "the Python consumer accepts an empty registry without saying so",
-      "file": "build/ci/common/game_registry.py",
+      "file": "build/ci/common/product_registry.py",
       "find": "        print(\"No tool is registered: the toolchain rows select no tool and assemble no package\", file=sys.stderr)",
       "replace": "        pass",
       "command": [
@@ -226,7 +226,7 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_game_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so "
     },
@@ -245,7 +245,7 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_game_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_registered_tools_without_a_release_selection_are_rejected "
     },

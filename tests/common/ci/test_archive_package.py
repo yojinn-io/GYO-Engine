@@ -13,7 +13,7 @@ for folder in ("build", "build/ci/common", "build/acceptance/common"):
 from workspace import TemporaryDirectory
 from archive_package import package_metadata
 from test_release_pipeline import APP, COMMIT, evidence, manifest, package_contents, package
-from game_registry import release_products
+from product_registry import release_products
 from release_support import validate_archive, RELEASE_PLATFORMS, ReleaseError
 from package_contract import installed_required_files
 from package_contract import manifest_path

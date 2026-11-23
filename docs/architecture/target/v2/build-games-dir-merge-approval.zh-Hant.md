@@ -8,7 +8,7 @@
 
 ## 1. 做完的與驗證
 
-照宣告方案 B 做完：建置層讀 `games/<遊戲>/`；建置與 CI 的 app 改叫 game（`games.csv`、`GYO_GAMES`、`gyo_game_*`、KIND game、打包清單 4、工具描述 2、`game_registry.py`、`game_copy_integration.py`、身分標頭改成 `GYO_GAME_*` 巨集）；共用的 CSV 解析拆到 `GyoRegistryCsv.cmake`；五處守衛的掃描根；複製整合的 mirror 修正；LIM-9。
+照宣告方案 B 做完：建置層讀 `games/<遊戲>/`；建置與 CI 的 app 改叫 game（`games.csv`、`GYO_GAMES`、`gyo_game_*`、KIND game、打包清單 4、工具描述 2、`product_registry.py`、`game_copy_integration.py`、身分標頭改成 `GYO_GAME_*` 巨集）；共用的 CSV 解析拆到 `GyoRegistryCsv.cmake`；五處守衛的掃描根；複製整合的 mirror 修正；LIM-9。
 
 | 驗證 | 結果 |
 |---|---|
@@ -45,7 +45,7 @@
 
 1. **合併**（只認明確的「合併」）。
 2. **第 2 節**：workflow gates 的窄緩面接受與否；`kernel_guard` 證據的更正。
-3. **`game_registry.py` 的名字**（設計審查 B1）：檔裡除了遊戲的匯出，還有 CI 各平台的 runner／toolchain 表、工具的匯出，`ci_scope.py`、`release_pipeline.py`、`archive_package.py` 都從它匯入非遊戲的東西。CMake 那一側本批正是為了同一個理由拆出中性的 `GyoRegistryCsv.cmake`，Python 這一側沒照做，兩邊不一致。選項：
+3. **`game_registry.py` 的名字**（設計審查 B1）——**已定**：使用者 2026-11-23（本卡）「照建議，改成 product_registry.py」，選 (b)，已改（`build/ci/common/product_registry.py`、`tests/common/ci/test_product_registry.py`）。原來的說明：檔裡除了遊戲的匯出，還有 CI 各平台的 runner／toolchain 表、工具的匯出，`ci_scope.py`、`release_pipeline.py`、`archive_package.py` 都從它匯入非遊戲的東西。CMake 那一側本批正是為了同一個理由拆出中性的 `GyoRegistryCsv.cmake`，Python 這一側沒照做，兩邊不一致。選項：
    - (a) 照舊（改名表核准的名字）。
    - (b) 改成中性的 `product_registry.py`（建議；現在約 7 個匯入點，最便宜，照「改名排前面」）。
    - (c) 拆成 CI 平台表一個檔、遊戲與工具的匯出一個檔。

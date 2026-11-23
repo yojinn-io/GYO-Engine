@@ -1,4 +1,7 @@
-"""Export the CMake-owned project registry; Python never interprets CSV rows."""
+"""CI's product register entry: the release platform table, the game and tool exports.
+
+CMake owns the registers (ExportGameRegistry.cmake, ExportToolRegistry.cmake); Python never
+interprets CSV rows."""
 
 import argparse
 import json

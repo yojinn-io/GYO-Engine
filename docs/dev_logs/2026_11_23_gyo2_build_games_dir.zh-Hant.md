@@ -17,7 +17,7 @@ Owner：建置層的產品登記（`build/cmake`、`build/ci/common`、`config/`
   - `GyoAppRegistry.cmake` **拆成兩個**：modules、plugins、tools、games 共用的 CSV／JSON 解析進中性的 `GyoRegistryCsv.cmake`（`GyoUnitRegistry`、`GyoToolRegistry` 改 include 它），遊戲專屬的進 `GyoGameRegistry.cmake`。
   - 產品種類 KIND `app`→`game`；打包清單 `schema_version` 3→4（讀寫者全在 repo 內，不留相容分支）。
   - 工具描述 `requires_apps`→`requires_games`、version 1→2（version 1 被拒，`ToolRegistryTests` 加 `old_version` 一案）。
-  - CI：`app_registry.py`→`game_registry.py`（矩陣的鍵 `game`、`kind="game"`、輸出 `has_games`）、`app_copy_integration.py`→`game_copy_integration.py`、workflow 步驟 `game_copy`、ctest `cmake.GameRegistry`。
+  - CI：`app_registry.py`→`product_registry.py`（矩陣的鍵 `game`、`kind="game"`、輸出 `has_games`；宣告的改名表原寫 `game_registry.py`，合併前使用者改定，見下）、`app_copy_integration.py`→`game_copy_integration.py`、workflow 步驟 `game_copy`、ctest `cmake.GameRegistry`。
   - 生成的身分標頭 `gyo/AppConfig.hpp`（`Gyo::AppConfig::Id` 等）→`gyo/GameConfig.hpp`，巨集 `GYO_GAME_ID`、`GYO_GAME_DISPLAY_NAME`、`GYO_GAME_ASSETS`、`GYO_GAME_CONTENT_MANIFEST`（N15；不打開任何 namespace，複製遊戲不用改原始碼）。
 - **守衛的掃描根**（照 §14.4 核准）：naming `SCAN_ROOTS`、os `ROOTS`／`RUNTIME_ROOTS`／`GYO_OS_DEFINITION_ROOTS`、DI 11 的 `ProcessCodePageCheck`（與實作 `GyoCodePage.cmake`）、workflow gates 的產品目錄與比對式、`kernel_guard` 的 `REGISTRIES`：`apps`→`games`。os.md DI 1、DI 2 與 Contracts 節的掃描根改字（意圖不變，字面範圍跟著建置目錄換）。
 - **複製整合的 mirror**（§14.3）：在 gyo2 上已壞（a8065853 讓 `GyoBuild.cmake` 讀 `config/modules.csv`，mirror 沒跟上）。mirror 加 `config/modules.csv`、`config/plugins.csv`、`plugins/`；遊戲與工具的登記檔不帶。`test_game_copy_integration.py` 加 `MirrorTests` 當回歸測試（在 `build.ci`，L1 會跑）。
@@ -90,5 +90,6 @@ LIM-9：L1（quick）不經過建置層的遊戲路徑，os 定義守衛的 `gam
   - 不補：C8 讓 KIND 多接受 `app`（schema 4 已擋掉所有舊 manifest，只剩手寫的，算誤用）、`GyoUnitRegistry` 改回 include `GyoGameRegistry`（行為不變，交 review）。
   - 順手修：改名留下的「an game」錯字三處、`GyoRegistryCsv.cmake` 的舊註解、`GameRegistryTests` 的 `*_apps` 區域變數。
 - 補完後本機 ctest 196/196（`after/ctest3.log`）。
-- **合併前設計審查**（`design-review.md`）：可以合併。機械式的已修：`release_channels.py` 的 `app_pairs`（改名表有、漏做）、`creating_games.md` 的 `--kind app` 與 `GYO_CURRENT_APP`、同詞異義表 Registry 列、`target/README.md`、`GyoRegistryCsv.cmake` 的檔頭與區域變數（修時一度留下 `string(JSON project SET "${entry}"`，建置類測試前就改回）、`docs/architecture/README.md` 寫明比照 Cargo／go.work 取了什麼。`game_registry.py` 名字（B1）與幾件後續交使用者，見[合併前核准頁](../architecture/target/v2/build-games-dir-merge-approval.zh-Hant.md)第 5 節。
+- **合併前設計審查**（`design-review.md`）：可以合併。機械式的已修：`release_channels.py` 的 `app_pairs`（改名表有、漏做）、`creating_games.md` 的 `--kind app` 與 `GYO_CURRENT_APP`、同詞異義表 Registry 列、`target/README.md`、`GyoRegistryCsv.cmake` 的檔頭與區域變數（修時一度留下 `string(JSON project SET "${entry}"`，建置類測試前就改回）、`docs/architecture/README.md` 寫明比照 Cargo／go.work 取了什麼。幾件後續交使用者，見[合併前核准頁](../architecture/target/v2/build-games-dir-merge-approval.zh-Hant.md)第 5 節。
+- **`game_registry.py`→`product_registry.py`**（設計審查 B1）：使用者 2026-11-23（本卡）「照建議，改成 product_registry.py」。檔裡除了遊戲的匯出還有 CI 各平台的表與工具的匯出，和 CMake 側拆出中性的 `GyoRegistryCsv.cmake` 同一個理由。測試跟著改名 `test_product_registry.py`；r0b3 清單的 `file` 與測試名跟著改。
 

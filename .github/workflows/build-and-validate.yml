@@ -49,7 +49,7 @@ jobs:
         id: registry
         env:
           TRAIN_PRODUCT: ${{ inputs.product }}
-        run: python build/ci/common/game_registry.py --output "$GITHUB_OUTPUT" --product "$TRAIN_PRODUCT"
+        run: python build/ci/common/product_registry.py --output "$GITHUB_OUTPUT" --product "$TRAIN_PRODUCT"
       - name: Test package, draft preparation and smoke failure policies
         run: python -m unittest discover -s tests/common/ci -v
 

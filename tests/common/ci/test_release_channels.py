@@ -126,7 +126,7 @@ class TrainDerivationTests(unittest.TestCase):
 
             def products(selection):
                 output = root / f"outputs-{selection or 'all'}.txt"
-                result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/game_registry.py"),
+                result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/product_registry.py"),
                                          "--registry", str(registry), "--tool-registry", str(tools),
                                          "--repository-root", str(root), "--output", str(output),
                                          "--product", selection], capture_output=True, text=True, timeout=60)

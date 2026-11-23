@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
     sys.path.insert(0, str(ROOT / folder))
 from workspace import TemporaryDirectory
-from game_registry import RELEASE_PLATFORMS, TOOLCHAINS
+from product_registry import RELEASE_PLATFORMS, TOOLCHAINS
 import ci_scope
 from ci_scope import Scope, ScopeError, select_scope
 
