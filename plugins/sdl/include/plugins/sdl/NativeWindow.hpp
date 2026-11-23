@@ -5,7 +5,7 @@
 // puts its window there; another sdl* Plugin Finds it and turns the handle back into SDL_Window* inside its own
 // adapter (src/adapters/sdl/), the only place that names SDL.
 
-namespace GYO::Plugins::Sdl {
+namespace GYO::Plugins::SDL {
 
 // Incomplete on purpose: only an adapter converts it (reinterpret_cast to SDL_Window*).
 struct NativeWindow;
@@ -15,4 +15,4 @@ struct NativeWindows final {
     NativeWindow* main = nullptr;
 };
 
-} // namespace GYO::Plugins::Sdl
+} // namespace GYO::Plugins::SDL

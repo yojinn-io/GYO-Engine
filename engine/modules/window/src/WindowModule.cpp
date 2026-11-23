@@ -62,6 +62,7 @@ void WindowModule::Build(Orchestration::WorldSetup& setup) {
     r.Message<WindowCloseRequested>({.name = "WindowCloseRequested"});
     r.Message<ClipboardChanged>({.name = "ClipboardChanged"});
     r.Message<WarpCursor>({.name = "WarpCursor"});
+    r.Message<ResizeWindow>({.name = "ResizeWindow"});
     r.Message<CopyToClipboard>({.name = "CopyToClipboard"});
     r.Resource<WindowState>({.name = "WindowState"});
     r.Resource<Clipboard>({.name = "Clipboard"});

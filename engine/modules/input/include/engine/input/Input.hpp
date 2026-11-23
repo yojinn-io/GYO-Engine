@@ -112,14 +112,19 @@ struct MouseButtonInput final {
 };
 
 // The cursor moved over the window (Bevy's CursorMoved, bevy_window event.rs:192): its new place, in logical pixels.
+// While a button is held the OS keeps the mouse captured by the window: the place can then be outside the window
+// (negative, or past its size) and no CursorLeft comes until the button is released. A reader that needs a place
+// inside clamps it (Bevy filters such places out of Window::cursor_position, bevy_window window.rs:631-646).
 struct CursorMoved final {
     Math::Vec2 position{};
     Time::TimePoint time{};
 };
 
-// The mouse moved, in the device's own units scaled as the OS does, whether or not the cursor could follow (Bevy's
-// MouseMotion, bevy_input mouse.rs:111): at the window's edge the cursor stops and this still reports the push
-// (Object_Connect G4).
+// The mouse moved (Bevy's MouseMotion, bevy_input mouse.rs:111), in the backend's relative units, not scaled to
+// logical pixels. While window's WindowRequest::cursorGrab is Locked (Bevy's CursorGrabMode::Locked; SDL's relative
+// mode) it is the device's own motion, reported even where the cursor could not move: Object_Connect's push past the
+// window's edge (G4) needs Locked and a cursor drawn by the game. Otherwise it is the cursor's motion, zero where the
+// cursor is stopped by an edge (SDL takes it from the absolute place, SDL_mouse.c:768).
 struct MouseMotion final {
     Math::Vec2 delta{};
     Time::TimePoint time{};
@@ -140,12 +145,14 @@ struct MouseWheel final {
     Time::TimePoint time{};
 };
 
-// The input method's composition changed (Bevy's Ime::Preedit): the text being composed, the caret and the selected
-// range in bytes of text. An empty text ends the composition.
+// The input method's composition changed (Bevy's Ime::Preedit): the text being composed (UTF-8), the start and the
+// length of the selected part as the backend gives them (SDL: in the platform's units, UTF-16 code units on Windows
+// and macOS, SDL_windowskeyboard.c:924-928, SDL_cocoakeyboard.m:148; -1: not given). An empty text ends the
+// composition.
 struct TextComposition final {
     std::string text;
-    std::int32_t cursor = 0;
-    std::int32_t selectionLength = 0;
+    std::int32_t cursor = -1;
+    std::int32_t selectionLength = -1;
     Time::TimePoint time{};
 };
 
@@ -158,7 +165,8 @@ struct TextCommitted final {
 // ---- State (written only by the input Module's UpdateInputState, IN-2).
 
 // Pressed buttons and what changed this frame (Bevy's ButtonInput<T>, bevy_input button_input.rs). A press of a
-// pressed button and a release of a released one change nothing (IN-3).
+// pressed button (the OS's key repeat among them) and a release of a released one change nothing (IN-3). As in Bevy,
+// a repeat of a key that is not held (held through a focus loss and still held on return) presses it.
 template <class T>
 class ButtonInput final {
 public:
@@ -216,8 +224,8 @@ struct CursorPosition final {
 // The composition in progress (the last TextComposition, cleared by a TextCommitted or an empty composition).
 struct TextInput final {
     std::string composition;
-    std::int32_t cursor = 0;
-    std::int32_t selectionLength = 0;
+    std::int32_t cursor = -1;
+    std::int32_t selectionLength = -1;
 };
 
 // What ui or ImGui asks of the input method, read by the backend each frame and applied a frame later (Bevy's

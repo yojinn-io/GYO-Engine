@@ -10,7 +10,10 @@
 
 #include "plugins/sdl/ClockPair.hpp"
 
-namespace S = GYO::Plugins::Sdl;
+// The whole file is in the Plugin's namespace (naming N17: a unit opens only its own root, aliases included).
+namespace GYO::Plugins::SDL {
+
+namespace S = GYO::Plugins::SDL;
 using GYO::Engine::Time::TimePoint;
 using namespace std::chrono_literals;
 
@@ -32,7 +35,7 @@ TimePoint FakeEngineRead() noexcept {
     return TimePoint{} + (engineReads++ == 0 ? 100ns : 900ns);
 }
 
-std::uint64_t FakeSdlRead() noexcept {
+std::uint64_t FakeSDLRead() noexcept {
     readLog += 'S';
     return 5'000;
 }
@@ -42,7 +45,7 @@ std::uint64_t FakeSdlRead() noexcept {
 TEST_CASE("clock: SampleClockPair reads engine, then SDL, then engine") {
     readLog.clear();
     engineReads = 0;
-    const S::ClockPair pair = S::SampleClockPair({&FakeEngineRead, &FakeSdlRead});
+    const S::ClockPair pair = S::SampleClockPair({&FakeEngineRead, &FakeSDLRead});
     CHECK_MESSAGE(readLog == "ESE", "[sc-read-order] the reads are engine, SDL, engine");
     CHECK_MESSAGE(pair.engine == TimePoint{} + 500ns, "[sc-sample-midpoint] the midpoint of its own reads");
     CHECK_MESSAGE(pair.sdlNs == 5'000, "[sc-sample-sdl] its own SDL read");
@@ -53,9 +56,9 @@ TEST_CASE("clock: an SDL time is placed relative to the pair") {
     const TimePoint engine = TimePoint{} + 1000s;
     const S::ClockPair pair{engine, 50'000'000'000ULL, 2us};
     const TimePoint ceiling = engine + 60s;
-    CHECK_MESSAGE(S::ConvertSdlTime(50'000'000'000ULL - 3'000'000ULL, pair, ceiling) == engine - 3ms,
+    CHECK_MESSAGE(S::ConvertSDLTime(50'000'000'000ULL - 3'000'000ULL, pair, ceiling) == engine - 3ms,
                   "[sc-before] an SDL time before the pair maps before the pair's engine time");
-    CHECK_MESSAGE(S::ConvertSdlTime(50'000'000'000ULL + 7'000'000ULL, pair, ceiling) == engine + 7ms,
+    CHECK_MESSAGE(S::ConvertSDLTime(50'000'000'000ULL + 7'000'000ULL, pair, ceiling) == engine + 7ms,
                   "[sc-after] an SDL time after the pair maps after it");
 }
 
@@ -63,9 +66,9 @@ TEST_CASE("clock: promise (1), never later than the delivery time") {
     const TimePoint engine = TimePoint{} + 1000s;
     const S::ClockPair pair{engine, 50'000'000'000ULL, 2us};
     const TimePoint ceiling = engine + 5ms;
-    CHECK_MESSAGE(S::ConvertSdlTime(50'000'000'000ULL + 9'000'000ULL, pair, ceiling) == ceiling,
+    CHECK_MESSAGE(S::ConvertSDLTime(50'000'000'000ULL + 9'000'000ULL, pair, ceiling) == ceiling,
                   "[sc-ceiling] a time later than the ceiling is the ceiling");
-    CHECK_MESSAGE(S::ConvertSdlTime(50'000'000'000ULL + 5'000'000ULL, pair, ceiling) == ceiling,
+    CHECK_MESSAGE(S::ConvertSDLTime(50'000'000'000ULL + 5'000'000ULL, pair, ceiling) == ceiling,
                   "[sc-ceiling-equal] a time equal to the ceiling is the ceiling");
 }
 
@@ -76,7 +79,7 @@ TEST_CASE("clock: promise (2), non-decreasing SDL times stay non-decreasing with
     TimePoint last{};
     bool ordered = true;
     for (std::uint64_t t = 50'000'000'000ULL - 2'000'000ULL; t <= 50'000'000'000ULL + 6'000'000ULL; t += 250'000ULL) {
-        const TimePoint converted = S::ConvertSdlTime(t, pair, ceiling);
+        const TimePoint converted = S::ConvertSDLTime(t, pair, ceiling);
         if (converted < last) ordered = false;
         last = converted;
     }
@@ -87,13 +90,15 @@ TEST_CASE("clock: promise (3), SDL time 0 is the delivery time") {
     const TimePoint engine = TimePoint{} + 1000s;
     const S::ClockPair pair{engine, 50'000'000'000ULL, 2us};
     const TimePoint ceiling = engine + 40ms;
-    CHECK_MESSAGE(S::ConvertSdlTime(0, pair, ceiling) == ceiling, "[sc-zero] SDL time 0 is the delivery time");
+    CHECK_MESSAGE(S::ConvertSDLTime(0, pair, ceiling) == ceiling, "[sc-zero] SDL time 0 is the delivery time");
 }
 
 TEST_CASE("clock: an SDL clock that wrapped still maps by the modular difference") {
     const TimePoint engine = TimePoint{} + 1000s;
     const S::ClockPair pair{engine, 5ULL, 2us};
     const TimePoint ceiling = engine + 60s;
-    CHECK_MESSAGE(S::ConvertSdlTime(UINT64_MAX - 4ULL, pair, ceiling) == engine - 10ns,
+    CHECK_MESSAGE(S::ConvertSDLTime(UINT64_MAX - 4ULL, pair, ceiling) == engine - 10ns,
                   "[sc-wrap] the difference is taken modulo 2^64");
 }
+
+} // namespace GYO::Plugins::SDL

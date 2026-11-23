@@ -6,8 +6,8 @@
 // SDL calls. The input and window Modules keep the state.
 //
 // - Configure (Product level, once): starts SDL's video and makes the window from window's WindowSettings (product
-//   options), puts the window's opaque handle in the Product's buffer (Sdl::NativeWindows) and an SdlWindowPump for a
-//   product's own runner, and installs the window's runner unless SdlWindowOptions::installRunner is false. When the
+//   options), puts the window's opaque handle in the Product's buffer (SDL::NativeWindows) and an SDLWindowPump for a
+//   product's own runner, and installs the window's runner unless SDLWindowOptions::installRunner is false. When the
 //   Product is destroyed (OnDestroy, after every World) the window is destroyed and SDL's video stops.
 // - Build (the one World that lists it; on the main thread): registers its handle Resource (bound to the thread),
 //   mounts WriteInputMessages and WriteWindowMessages in Main/PreUpdate `before` input's and window's sets
@@ -29,18 +29,19 @@
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
 
-namespace GYO::Plugins::SdlWindow {
+namespace GYO::Plugins::SDLWindow {
 
 class Service;
 
 // The Plugin's settings (ProductDescription::options; none given: these defaults). The window itself is described
 // by window's WindowSettings.
-struct SdlWindowOptions final {
-    // false: no runner; the product's runner calls SdlWindowPump::Pump before each RunFrame.
+struct SDLWindowOptions final {
+    // false: no runner; the product's runner calls SDLWindowPump::Pump before each RunFrame.
     bool installRunner = true;
-    // OS events waiting at once (each becomes its Messages together); more are dropped and counted. At most the
-    // kernel's Message capacity (1024).
+    // Messages waiting at once, input's and window's apart (each OS event becomes its Messages together); an event
+    // that does not fit is dropped and counted. Each at most the kernel's Message capacity (1024).
     std::size_t queueCapacity = 1024;
+    std::size_t windowQueueCapacity = 256;
     // The runner waits for an OS event when a frame took less than this (zero: no wait; drawing to the window waits
     // for the display instead, batch R2a).
     std::chrono::nanoseconds minFrameInterval{0};
@@ -53,16 +54,16 @@ struct SdlWindowOptions final {
 
 // Where the Systems run in the World that lists sdl_window (WorldDescription::options; none given: the default
 // skeleton). The writers must be in input's and window's schedule and stage (they are ordered before their sets).
-struct SdlWindowWorldOptions final {
+struct SDLWindowWorldOptions final {
     std::string schedule = std::string(Engine::Orchestration::DefaultSchedules::frame);
     std::string writeStage = std::string(Engine::Orchestration::DefaultSchedules::preUpdate);
     std::string applyStage = std::string(Engine::Orchestration::DefaultSchedules::last);
 };
 
-// For a product's own runner (SdlWindowOptions::installRunner false), in the Product's buffer.
-class SdlWindowPump final {
+// For a product's own runner (SDLWindowOptions::installRunner false), in the Product's buffer.
+class SDLWindowPump final {
 public:
-    explicit SdlWindowPump(Service& service) : service_(&service) {}
+    explicit SDLWindowPump(Service& service) : service_(&service) {}
     // Takes every pending OS event into sdl_window's queue; call it before each RunFrame, on the main thread.
     void Pump();
     // The game's WindowRequest::close was applied: the window is closed and the loop should end.
@@ -77,10 +78,10 @@ private:
     Service* service_;
 };
 
-class SdlWindowPlugin final : public Engine::Orchestration::Plugin {
+class SDLWindowPlugin final : public Engine::Orchestration::Plugin {
 public:
-    SdlWindowPlugin();
-    ~SdlWindowPlugin() override;
+    SDLWindowPlugin();
+    ~SDLWindowPlugin() override;
 
     void Configure(Engine::Orchestration::ProductSetup& setup) override;
     void Build(Engine::Orchestration::WorldSetup& setup) override;
@@ -90,4 +91,4 @@ private:
     std::unique_ptr<Service> service_;
 };
 
-} // namespace GYO::Plugins::SdlWindow
+} // namespace GYO::Plugins::SDLWindow

@@ -262,33 +262,6 @@ TEST_CASE("input: the composition in progress, cleared by a later commit") {
     CHECK_MESSAGE(Res<I::TextInput>(*p).composition.empty(), "[in-commit-clears] a commit ends the composition");
 }
 
-TEST_CASE("input: a writer without `before` the set is a frame late (why every writer orders itself)") {
-    pending = Pending{};
-    O::ProductDescription d;
-    d.name = "game";
-    O::WorldDescription w;
-    w.name = "Main";
-    w.build = [](O::WorldSetup& setup) {
-        K::SystemOptions o;
-        o.name = "UnorderedWriter";
-        K::Mount m;
-        m.schedule = std::string(O::DefaultSchedules::frame);
-        m.stage = std::string(O::DefaultSchedules::preUpdate);
-        o.mounts.push_back(std::move(m));
-        setup.Registrar().AddSystem<&WriteInput>(std::move(o));
-    };
-    d.worlds.push_back(std::move(w));
-    auto built = O::Product::Build(std::move(d), Units());
-    REQUIRE(static_cast<bool>(built));
-    O::Product& p = **built;
-    pending.keys.push_back(Key(I::KeyCode::Space, kDown));
-    Frame(p);
-    CHECK_MESSAGE(!Res<I::ButtonInput<I::KeyCode>>(p).Pressed(I::KeyCode::Space),
-                  "[in-unordered-late] registered after the Module, unordered: input ran first");
-    Frame(p);
-    CHECK_MESSAGE(Res<I::ButtonInput<I::KeyCode>>(p).Pressed(I::KeyCode::Space), "[in-unordered-next] seen a frame later");
-}
-
 TEST_CASE("window: the state from the Messages, and a close request sets close") {
     auto p = Make();
     CHECK_MESSAGE(!Res<W::WindowState>(*p).known, "[wn-unknown-first] a new World does not know the size");

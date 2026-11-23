@@ -11,7 +11,7 @@
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/window/Window.hpp"
-#include "plugins/sdl_window/SdlWindowPlugin.hpp"
+#include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -70,7 +70,7 @@ O::ProductDescription Describe(std::int64_t frames) {
     settings.title = "GYO sdl_window example";
     settings.size = {640, 360};
     description.options.Set(settings);
-    GYO::Plugins::SdlWindow::SdlWindowOptions options;
+    GYO::Plugins::SDLWindow::SDLWindowOptions options;
     // Nothing draws yet (batch R2a waits for the display): do not spin faster than about 60 frames a second.
     options.minFrameInterval = std::chrono::milliseconds(16);
     description.options.Set(options);

@@ -38,6 +38,17 @@ struct WindowSettings final {
     bool closeWhenRequested = true;
 };
 
+// How the cursor is held by the window (Bevy's CursorGrabMode).
+enum class CursorGrab : std::uint8_t {
+    // Free.
+    None = 0,
+    // Kept inside the window (SDL_SetWindowMouseGrab).
+    Confined,
+    // Hidden and held in place; input's MouseMotion reports the device's motion (SDL's relative mode; Object_Connect
+    // G4 with a cursor the game draws).
+    Locked,
+};
+
 // The system cursor's shape (Bevy's SystemCursorIcon, the shapes every desktop OS has).
 enum class CursorIcon : std::uint8_t {
     Default = 0,
@@ -105,6 +116,12 @@ struct WarpCursor final {
     Math::Vec2 position{};
 };
 
+// Sets the window's size, in logical pixels (Bevy's Window::resolution set by the game). A Message, not a field of
+// WindowRequest: the player resizes too, and a standing request would fight the player every frame.
+struct ResizeWindow final {
+    Math::Vec2i size{};
+};
+
 // Puts text on the system clipboard (ImGui's copy).
 struct CopyToClipboard final {
     std::string text;
@@ -136,11 +153,10 @@ struct Clipboard final {
 struct WindowRequest final {
     // nullopt: leave it as it is.
     std::optional<std::string> title;
-    // The size, in logical pixels.
-    std::optional<Math::Vec2i> size;
     std::optional<bool> resizable;
     CursorIcon cursorIcon = CursorIcon::Default;
     bool cursorVisible = true;
+    CursorGrab cursorGrab = CursorGrab::None;
     // Close the window: the backend's runner ends its loop after this frame (WN-4).
     bool close = false;
     // UpdateWindowState sets close when a WindowCloseRequested arrives (WindowSettings::closeWhenRequested).
@@ -153,6 +169,7 @@ inline void HashValue(Kernel::Hasher&, const WindowFocused&) {}
 inline void HashValue(Kernel::Hasher&, const WindowCloseRequested&) {}
 inline void HashValue(Kernel::Hasher&, const ClipboardChanged&) {}
 inline void HashValue(Kernel::Hasher&, const WarpCursor&) {}
+inline void HashValue(Kernel::Hasher&, const ResizeWindow&) {}
 inline void HashValue(Kernel::Hasher&, const CopyToClipboard&) {}
 inline void HashValue(Kernel::Hasher&, const WindowState&) {}
 inline void HashValue(Kernel::Hasher&, const Clipboard&) {}

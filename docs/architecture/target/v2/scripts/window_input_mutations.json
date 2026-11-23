@@ -258,7 +258,7 @@
     "orchestration O-12",
     "v8-arch-gyo2-sdl-input-writer-preupdate"
    ],
-   "file": "plugins/sdl_window/src/SdlWindowPlugin.cpp",
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
    "find": "    mount.before.push_back(std::string(beforeSet));",
    "replace": "",
    "target": "gyo_sdl_window_tests",
@@ -272,7 +272,7 @@
     "sdl SDL-7"
    ],
    "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
-   "find": "        out.input.emplace_back(In::MouseMotion{{event.motion.xrel * k, event.motion.yrel * k}, time});\n",
+   "find": "        out.input.emplace_back(In::MouseMotion{{event.motion.xrel, event.motion.yrel}, time});\n",
    "replace": "",
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: SDL events*",
@@ -338,8 +338,8 @@
     "sdl SDL-7 (1)"
    ],
    "file": "plugins/sdl_window/src/EventQueue.hpp",
-   "find": "        if (input_.size() + window_.size() + translated.Size() > capacity_) {",
-   "replace": "        if (input_.size() + window_.size() >= capacity_) {",
+   "find": "        if (input_.size() + translated.input.size() > inputCapacity_ ||",
+   "replace": "        if (input_.size() >= inputCapacity_ ||",
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: a full queue*",
    "expect": "\\[sw\\-drop\\-kept\\]"
@@ -351,7 +351,7 @@
     "sdl SDL-7 (1)",
     "input IN-3"
    ],
-   "file": "plugins/sdl_window/src/SdlWindowPlugin.cpp",
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
    "find": "        dropped.Send(In::InputEventsDropped{count, Engine::Time::Now()});",
    "replace": "        static_cast<void>(count);",
    "target": "gyo_sdl_window_tests",
@@ -365,7 +365,7 @@
     "sdl SDL-7 (2)",
     "window WN-3"
    ],
-   "file": "plugins/sdl_window/src/SdlWindowPlugin.cpp",
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
    "find": "            resized.Send(Win::WindowResized{now.physicalSize, now.scaleFactor, at});",
    "replace": "",
    "target": "gyo_sdl_window_tests",
@@ -378,7 +378,7 @@
    "guards": [
     "window WN-4"
    ],
-   "file": "plugins/sdl_window/src/SdlWindowPlugin.cpp",
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
    "find": "    if (window.Present() && window->close) service.Close();",
    "replace": "",
    "target": "gyo_sdl_window_tests",
@@ -392,12 +392,66 @@
     "input IN-1",
     "sdl SDL-7"
    ],
-   "file": "plugins/sdl_window/src/SdlWindowPlugin.cpp",
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
    "find": "        apply(backend->SetTextInput(*textInput), applied.textInput, *textInput);",
    "replace": "",
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: the requests*",
    "expect": "\\[sw\\-request\\-text\\-input\\]"
+  },
+  {
+   "id": "sw-window-capacity-shared",
+   "what": "the window Messages share the input bound (a flood of input crowds out a close request)",
+   "guards": [
+    "sdl SDL-7 (1)",
+    "window WN-4"
+   ],
+   "file": "plugins/sdl_window/src/EventQueue.hpp",
+   "find": "            window_.size() + translated.window.size() > windowCapacity_) {",
+   "replace": "            input_.size() + window_.size() + translated.Size() > inputCapacity_) {",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a flood of input*",
+   "expect": "\\[sw\\-window\\-own\\-room\\]"
+  },
+  {
+   "id": "sw-times-unordered",
+   "what": "times within a pump are left as SDL stamped them",
+   "guards": [
+    "sdl SDL-3",
+    "input IN-2"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    if (last && time <= *last) time = *last + std::chrono::nanoseconds(1);\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: within one pump*",
+   "expect": "\\[sw\\-times\\-increase\\]"
+  },
+  {
+   "id": "sw-e1-not-reported",
+   "what": "a window that cannot be made is not reported as SDL-E1",
+   "guards": [
+    "sdl sdl_window"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "setup.Report(\"SDL-E1\",",
+   "replace": "setup.Report(\"SDL-EX\",",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a window that cannot be made*",
+   "expect": "\\[sw\\-e1\\-code\\]"
+  },
+  {
+   "id": "sw-coord-inverted",
+   "what": "logical pixels per coordinate are display scale / pixel density",
+   "guards": [
+    "sdl sdl_window (coordinates)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/Translate.hpp",
+   "find": "pixelDensity / displayScale : 1.0F;",
+   "replace": "displayScale / pixelDensity : 1.0F;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: logical pixels*",
+   "expect": "\\[sw\\-coord\\-windows\\-150\\]"
   }
  ]
 }

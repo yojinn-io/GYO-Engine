@@ -21,23 +21,24 @@
 
 #include "EventQueue.hpp"
 
-namespace GYO::Plugins::SdlWindow {
+namespace GYO::Plugins::SDLWindow {
 
-// Why the window could not be made (SDL's text in message).
-enum class BackendErrorCode : std::uint8_t {
+// Why the window could not be made (SDL's text in message). A Failure (E2, naming N25): the request was not done,
+// nothing is broken; Configure reports it as the startup error SDL-E1.
+enum class BackendFailureCode : std::uint8_t {
     VideoFailed = 1,
     WindowFailed,
 };
-[[nodiscard]] constexpr const char* ToString(const BackendErrorCode code) noexcept {
+[[nodiscard]] constexpr const char* ToString(const BackendFailureCode code) noexcept {
     switch (code) {
-    case BackendErrorCode::VideoFailed: return "VideoFailed";
-    case BackendErrorCode::WindowFailed: return "WindowFailed";
+    case BackendFailureCode::VideoFailed: return "VideoFailed";
+    case BackendFailureCode::WindowFailed: return "WindowFailed";
     }
     return "Unknown";
 }
-using BackendError = Engine::Base::Error<BackendErrorCode>;
+using BackendFailure = Engine::Base::Error<BackendFailureCode>;
 
-// How the backend starts SDL (the Plugin's options, SdlWindowPlugin.hpp, as they reach the adapter).
+// How the backend starts SDL (the Plugin's options, SDLWindowPlugin.hpp, as they reach the adapter).
 struct BackendSettings final {
     Engine::Window::WindowSettings window;
     // SDL's IME hint: the program draws the composition itself (SDL_HINT_IME_IMPLEMENTED_UI "composition").
@@ -51,8 +52,6 @@ struct WindowSnapshot final {
     Engine::Math::Vec2i physicalSize{};
     float scaleFactor = 1.0F;
     bool focused = false;
-    // nullopt: the cursor is not over the window.
-    std::optional<Engine::Math::Vec2> cursor;
     std::string clipboard;
     bool clipboardTruncated = false;
 };
@@ -61,7 +60,7 @@ class WindowBackend final {
 public:
     // Starts SDL's video (with GYO's hints: SDL installs no signal handlers, os owns them; closing the last window
     // does not make SDL quit) and makes the window. The error is SDL's text.
-    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendError> Create(const BackendSettings& settings);
+    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> Create(const BackendSettings& settings);
     ~WindowBackend();
     WindowBackend(const WindowBackend&) = delete;
     WindowBackend& operator=(const WindowBackend&) = delete;
@@ -72,13 +71,16 @@ public:
     // Waits up to ns for an OS event (nothing is taken from SDL's queue).
     void WaitForEvent(std::int64_t ns);
     [[nodiscard]] WindowSnapshot Snapshot() const;
-    [[nodiscard]] Sdl::NativeWindow* Native() const noexcept;
+    // Where the cursor is over the window, in logical pixels; nullopt when it is not over the window.
+    [[nodiscard]] std::optional<Engine::Math::Vec2> CursorNow() const;
+    [[nodiscard]] SDL::NativeWindow* Native() const noexcept;
 
     // Requests. false: SDL refused; the text is in LastError(). The caller keeps what was applied (and so tries a
     // refused request again next frame).
     bool SetTextInput(const Engine::Input::TextInputRequest& request);
     bool SetTitle(const std::string& title);
     bool SetSize(Engine::Math::Vec2i logicalSize);
+    bool SetCursorGrab(Engine::Window::CursorGrab grab);
     bool SetResizable(bool resizable);
     bool SetCursorIcon(Engine::Window::CursorIcon icon);
     bool SetCursorVisible(bool visible);
@@ -94,4 +96,4 @@ private:
     std::string lastError_;
 };
 
-} // namespace GYO::Plugins::SdlWindow
+} // namespace GYO::Plugins::SDLWindow

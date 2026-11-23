@@ -14,25 +14,25 @@
 #include "EventQueue.hpp"
 #include "WindowBackend.hpp"
 
-namespace GYO::Plugins::SdlWindow {
+namespace GYO::Plugins::SDLWindow {
 
 // What SDL accepted last (the request side's own cache, not a copy of input's or window's state: SDL-7; Bevy's
 // CachedWindow, bevy_winit/src/system.rs:302). A refused call leaves it, so the request is tried again next frame.
 struct AppliedRequests final {
     Engine::Input::TextInputRequest textInput{};
     std::string title;
-    Engine::Math::Vec2i size{};
     bool resizable = true;
     Engine::Window::CursorIcon cursorIcon = Engine::Window::CursorIcon::Default;
     bool cursorVisible = true;
+    Engine::Window::CursorGrab cursorGrab = Engine::Window::CursorGrab::None;
 };
 
 class Service final {
 public:
-    Service(std::unique_ptr<WindowBackend> backend, std::size_t queueCapacity, const Engine::Window::WindowSettings& settings)
-        : backend_(std::move(backend)), queue_(queueCapacity) {
+    Service(std::unique_ptr<WindowBackend> backend, std::size_t inputCapacity, std::size_t windowCapacity,
+            const Engine::Window::WindowSettings& settings)
+        : backend_(std::move(backend)), queue_(inputCapacity, windowCapacity) {
         applied_.title = settings.title;
-        applied_.size = settings.size;
         applied_.resizable = settings.resizable;
     }
 
@@ -44,13 +44,13 @@ public:
         if (backend_) backend_->Pump(queue_);
     }
     // The os shutdown request, once: it reaches the game as a close request (source Shutdown), like the window's
-    // close button, so the game can save first (the runner looks at os's flag, never at the events).
+    // close button, so the game can save first (the runner looks at os's flag, never at the events). Seen only once
+    // it is in the queue: a full queue tries again next frame.
     void ShutdownRequested(Engine::Time::TimePoint now) {
         if (shutdownSeen_) return;
-        shutdownSeen_ = true;
         Translated translated;
         translated.window.emplace_back(Engine::Window::WindowCloseRequested{Engine::Window::CloseSource::Shutdown, now});
-        queue_.Accept(std::move(translated));
+        shutdownSeen_ = queue_.Accept(std::move(translated));
     }
     void Close() {
         if (backend_) backend_->Close();
@@ -79,11 +79,11 @@ private:
 // The World's handle (registered by Build; bound to the thread that puts it, DI-KS 14). Hashes nothing: it points at
 // a service outside the World (as world_asset's AssetRequests). The two flags: the World has not had its first
 // round yet, so its writers first write the present state (SDL-7 exception (2)).
-struct SdlWindowHandle final {
+struct SDLWindowHandle final {
     Service* service = nullptr;
     bool inputSnapshotPending = true;
     bool windowSnapshotPending = true;
 };
-inline void HashValue(Kernel::Hasher&, const SdlWindowHandle&) {}
+inline void HashValue(Kernel::Hasher&, const SDLWindowHandle&) {}
 
-} // namespace GYO::Plugins::SdlWindow
+} // namespace GYO::Plugins::SDLWindow

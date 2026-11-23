@@ -8,8 +8,8 @@ Owner：架構。GYO2 主會話開的任務卡（使用者「開 W、A、3D 物�
 1. **`input` Module**（`engine/modules/input`，`default=yes`、沒有依賴）：`Message` 11 種（鍵盤、失焦、丟事件、滑鼠鍵、游標移動、相對移動〔G4〕、進出視窗〔G5〕、滾輪、組字、確定）、狀態（`ButtonInput<KeyCode>`／`<MouseButton>`、`AccumulatedMouseMotion`／`Scroll`、`CursorPosition`、`TextInput`）、`TextInputRequest`；公開 set `InputSystems`（`Main`／`PreUpdate`），五個狀態 System 照 Bevy 分開。`KeyCode` 用 USB HID 的值。
 2. **`window` Module**（`default=yes`、沒有依賴）：`WindowSettings`（產品選項；可不可改大小＝G6）、`Message` 4 種、`WindowState`／`Clipboard`／`WindowRequest`、一次性的 `WarpCursor`（G3）與 `CopyToClipboard`；公開 set `WindowSystems`；`closeWhenRequested` 時收到關閉要求就設 `WindowRequest.close`。
 3. **`window_camera`**（`default=yes`、`depends=window;camera`）：X1 交來的膠水。`WindowState` 知道大小時寫進 `CameraTargetSizes{0}`，值不同才寫；新 World 第一輪就有（後端在第一輪寫目前的大小）。
-4. **`sdl` 函式庫**：`ClockPair`（時鐘配對與換算的純函式，照 master 修過的版本）、`NativeWindows`（不透明把手）；`GYO::Sdl` 從 INTERFACE 改成 STATIC、不連 SDL。
-5. **`sdl_window` Plugin**：`Configure` 建窗、放把手與 `SdlWindowPump`、裝 runner（可不裝）；`Build` 登記 `threadBound` 的把手、兩個寫者（`PreUpdate`、`before` 兩個 set）與套用請求的 System（`Last`）；SDL 只在 `src/adapters/sdl/`。SDL-7 的對應表寫在 sdl 頁第 5 節。
+4. **`sdl` 函式庫**：`ClockPair`（時鐘配對與換算的純函式，照 master 修過的版本）、`NativeWindows`（不透明把手）；`GYO::SDL` 從 INTERFACE 改成 STATIC、不連 SDL。
+5. **`sdl_window` Plugin**：`Configure` 建窗、放把手與 `SDLWindowPump`、裝 runner（可不裝）；`Build` 登記 `threadBound` 的把手、兩個寫者（`PreUpdate`、`before` 兩個 set）與套用請求的 System（`Last`）；SDL 只在 `src/adapters/sdl/`。SDL-7 的對應表寫在 sdl 頁第 5 節。
 6. **examples**：一個 example 一個目錄、照目錄加入；新 `examples/sdl_window`（Escape 或 `--frames N` 關窗）；`plugin_removal.py` 拿掉帶 `sdl*` 的 example 目錄（P 交來的）。
 7. **文件**：新頁 input、window；sdl 頁補 `sdl_window`、SDL-3、SDL-4、SDL-7 與對應表；orchestration O-12 照核准清單第 4 件改字（「進」可以在 `PreUpdate`＋`before` 擁有者的公開 set、登記的可以是 Plugin）。
 
@@ -22,10 +22,10 @@ Owner：架構。GYO2 主會話開的任務卡（使用者「開 W、A、3D 物�
 | 新 World 的初始狀態 | 準備函式放空的；`sdl_window` 在那個 World 的第一輪先寫目前的大小、焦點、剪貼簿、游標（SDL-7 例外 (2)）；按住的鍵不補 |
 | 生成世界期間的事件 | 照常寫、照常更新（輸入不因載入而丟） |
 | 佇列上限與丟棄 | 預設 1024（不大於 Kernel 的 `Message` 上限）；一個 SDL 事件的 `Message` 全進或全不進；丟了寫 `InputEventsDropped`，`input` 放開所有按鍵與滑鼠鍵 |
-| 請求 System 的錯誤 | 不當 System 的錯誤；不記、下一幀重試、計數（`SdlWindowPump`） |
+| 請求 System 的錯誤 | 不當 System 的錯誤；不記、下一幀重試、計數（`SDLWindowPump`） |
 | `SDL_EVENT_QUIT` 與 os 的關機請求 | SDL 不裝訊號處理、最後一個視窗關了不 quit；quit → `WindowCloseRequested{Application}`；runner 第一次看到 os 的旗標 → `{Shutdown}` |
 | 關窗與結束迴圈 | `WindowCloseRequested` →（`closeWhenRequested` 或遊戲）設 `WindowRequest.close` → `Last` 關窗 → runner 跑完這一幀結束；產品可關掉 `closeWhenRequested` 擋下 |
-| 骨架關掉的 World | `InputOptions`、`WindowOptions`、`WindowCameraOptions`、`SdlWindowWorldOptions` 指名 |
+| 骨架關掉的 World | `InputOptions`、`WindowOptions`、`WindowCameraOptions`、`SDLWindowWorldOptions` 指名 |
 | 時間戳 | sdl 函式庫的 `ClockPair`、SDL-3 |
 | 視窗大小進 `CameraTargetSizes` | 新的小單位 `window_camera`（X1 的兩個候選之一） |
 

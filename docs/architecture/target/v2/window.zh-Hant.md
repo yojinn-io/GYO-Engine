@@ -23,7 +23,7 @@ GYO::Window、GYO::Camera ◄── GYO::WindowCamera
 - **`WindowSettings`**（產品選項，後端在 `Configure` 讀；同 Bevy 的 `WindowPlugin::primary_window`）：標題、邏輯大小、能不能改大小（G6）、隱藏（無頭測試）、`closeWhenRequested` 的初值。
 - **`Message`**（寫的一方：後端、測試）：`WindowResized`（物理大小＋縮放比；Bevy 的 `WindowResized` 與 `WindowScaleFactorChanged` 合一）、`WindowFocused`、`WindowCloseRequested`（來源：視窗的關閉鈕／OS 要整個程式結束〔macOS Cmd+Q、登出〕／行程的關機請求〔Ctrl+C、SIGTERM〕）、`ClipboardChanged`（系統剪貼簿的文字，超過上限截在 UTF-8 的邊界、`truncated`）。寫的一方排在 `Main`／`PreUpdate`、`before` `kWindowSet`。
 - **狀態**（只由 `UpdateWindowState` 寫，WN-2）：`WindowState`（物理大小、縮放比、焦點、`known`＝收過 `WindowResized`；`LogicalSize()`＝物理／縮放比）、`Clipboard`（剪貼簿的鏡像）。
-- **請求**（遊戲寫，後端在 `Main`／`Last` 讀、晚一幀生效；值和上次被接受的不同才呼叫）：`WindowRequest`（標題、邏輯大小、能不能改大小、游標形狀、游標顯不顯示、`close`、`closeWhenRequested`）；一次性的用 `Message`：`WarpCursor`（把系統游標移到視窗的某個邏輯像素，G3）、`CopyToClipboard`。
+- **請求**（遊戲寫，後端在 `Main`／`Last` 讀、晚一幀生效；值和上次被接受的不同才呼叫）：`WindowRequest`（標題、能不能改大小、游標形狀、游標顯不顯示、游標的抓法 `cursorGrab`〔None／Confined 關在視窗裡／Locked 藏起來固定不動、`input` 的 `MouseMotion` 是裝置的量；Bevy 的 `CursorGrabMode`〕、`close`、`closeWhenRequested`）；一次性的用 `Message`：`ResizeWindow`（改大小：玩家也會拉，常駐的請求會每幀和玩家搶）、`WarpCursor`（把系統游標移到視窗的某個邏輯像素，G3）、`CopyToClipboard`。
 - **關窗與結束迴圈**（WN-4；總宣告第 10.2 節 W 列的題）：「要求關閉」→ 誰決定結束 → runner 怎麼知道。照 Bevy 的 `close_when_requested`＋`exit_on_all_closed`＋runner 看 `AppExit` 的分工，GYO 只有一個視窗，所以收成：`WindowCloseRequested` →（`closeWhenRequested` 開著時 `window` 的 System，關掉時遊戲）設 `WindowRequest.close` → 後端在 `Last` 關窗 → 後端的 runner 跑完這一幀後結束、回 Success。runner 不看事件的內容（SDL-7），只看後端自己「關了沒」。產品擋得下：關掉 `closeWhenRequested`。
 - **`SDL_EVENT_QUIT` 與 os 的關機請求**：`sdl_window` 讓 SDL 不裝訊號處理（`SDL_HINT_NO_SIGNAL_HANDLERS`）、最後一個視窗關了也不送 quit（`SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE` 關），所以 `SDL_EVENT_QUIT` 只來自 OS 的「結束程式」，翻成 `WindowCloseRequested{Application}`。訊號歸 os 一家（產品呼叫 `OS::Console::InstallShutdownRequests` 時）；runner 每幀看一次 os 的旗標，第一次看到時放一個 `WindowCloseRequested{Shutdown}` 進佇列——遊戲用同一條路存檔、關窗。產品沒裝 os 的處理時 Ctrl+C 照 OS 的預設結束行程。
 - **新的 World**：準備函式放空的狀態（`known=false`）；後端在那個 World 的第一輪先寫目前的大小、焦點、剪貼簿（SDL-7 例外 (2)）。所以新建或替換的 World 第一輪就知道大小，`window_camera` 同一幀就寫進相機（X1 交的題）。
@@ -40,7 +40,8 @@ GYO::Window、GYO::Camera ◄── GYO::WindowCamera
 | 項 | Bevy | GYO | 衝突點 | 膠水量 |
 |---|---|---|---|---|
 | 視窗不是實體 | `Window` 元件同時是狀態與請求 | `WindowState`（從 `Message`）＋`WindowRequest`（遊戲寫） | GYO 一個視窗、在共用處（總宣告第 6.6 節） | 兩個 Resource |
-| 狀態從 `Message` 推 | winit 直接改 `Window`、同時送訊息（`bevy_winit/src/state.rs:256-257`、`:368`） | `UpdateWindowState` 從 `Message` 推 | 後端或 Kernel 的訊息緩衝丟了 `WindowResized` 時大小停在舊值；後端佇列上限 ≤ Kernel 的 1024，一幀內不會溢出 Kernel | 一個 System |
+| 狀態從 `Message` 推 | winit 直接改 `Window`、同時送訊息（`bevy_winit/src/state.rs:256-257`、`:368`） | `UpdateWindowState` 從 `Message` 推 | 後端或 Kernel 的訊息緩衝丟了 `WindowResized`、`WindowFocused`、`WindowCloseRequested` 時狀態停在舊值、關閉沒反應；`sdl_window` 給視窗事件自己的佇列上限（預設 256，輸入灌爆也擠不掉），兩個上限都 ≤ Kernel 的 1024 | 一個 System |
+| 改大小 | 遊戲改 `Window.resolution`；winit 把實際大小寫回，快取跟得上（`state.rs:255-257`、`system.rs:388`） | 一次性的 `ResizeWindow` | GYO 的請求不被後端寫回 | 一個 `Message` |
 | 結束迴圈 | `AppExit` 訊息、runner 看 | `WindowRequest.close`、後端的 runner 看自己關了沒 | 只有一個視窗；runner 不看事件內容 | 一個欄位 |
 | 剪貼簿 | 另一個 crate（arboard），同步呼叫 | `ClipboardChanged`＋鏡像、`CopyToClipboard` | SDL 只在主執行緒；System 裡不直接呼叫 SDL（`-sdl-system-calls-via-adapter`） | 一個 `Message` 一個 Resource |
 

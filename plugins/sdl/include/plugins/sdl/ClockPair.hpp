@@ -15,7 +15,7 @@
 
 #include "engine/time/MonotonicClock.hpp"
 
-namespace GYO::Plugins::Sdl {
+namespace GYO::Plugins::SDL {
 
 struct ClockPair final {
     // The midpoint of the two engine reads.
@@ -38,7 +38,7 @@ struct ClockReaders final {
 [[nodiscard]] ClockPair SampleClockPair(const ClockReaders& readers) noexcept;
 
 // sdlNs placed relative to pair, no later than ceiling (the delivery time); 0 is the ceiling.
-[[nodiscard]] Engine::Time::TimePoint ConvertSdlTime(std::uint64_t sdlNs, const ClockPair& pair,
+[[nodiscard]] Engine::Time::TimePoint ConvertSDLTime(std::uint64_t sdlNs, const ClockPair& pair,
                                                      Engine::Time::TimePoint ceiling) noexcept;
 
-} // namespace GYO::Plugins::Sdl
+} // namespace GYO::Plugins::SDL

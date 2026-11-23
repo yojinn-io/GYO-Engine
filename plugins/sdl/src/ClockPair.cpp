@@ -2,7 +2,7 @@
 
 #include <chrono>
 
-namespace GYO::Plugins::Sdl {
+namespace GYO::Plugins::SDL {
 
 ClockPair MakeClockPair(const Engine::Time::TimePoint engineBefore, const std::uint64_t sdlNs,
                         const Engine::Time::TimePoint engineAfter) noexcept {
@@ -17,7 +17,7 @@ ClockPair SampleClockPair(const ClockReaders& readers) noexcept {
     return MakeClockPair(before, sdl, after);
 }
 
-Engine::Time::TimePoint ConvertSdlTime(const std::uint64_t sdlNs, const ClockPair& pair,
+Engine::Time::TimePoint ConvertSDLTime(const std::uint64_t sdlNs, const ClockPair& pair,
                                        const Engine::Time::TimePoint ceiling) noexcept {
     if (sdlNs == 0) return ceiling;
     // The unsigned difference converted modulo 2^64 (C++20): an event before the pair maps before it, without UB.
@@ -26,4 +26,4 @@ Engine::Time::TimePoint ConvertSdlTime(const std::uint64_t sdlNs, const ClockPai
     return converted < ceiling ? converted : ceiling;
 }
 
-} // namespace GYO::Plugins::Sdl
+} // namespace GYO::Plugins::SDL

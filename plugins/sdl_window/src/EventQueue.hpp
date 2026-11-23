@@ -4,9 +4,11 @@
 // waiting for the writer Systems of the World that lists sdl_window. Its items are the input and window Messages
 // themselves (as Bevy's winit puts bevy_window / bevy_input types into its own queue, bevy_winit/src/state.rs:80).
 //
-// Bounded: one OS event becomes its Messages all together or not at all; an event that does not fit is dropped and
-// counted (SDL-7 exception (1)), and the input writer reports the count as input's InputEventsDropped. The bound is
-// at most the kernel's Message capacity (1024 by default), so one frame's writes never overflow a kernel buffer.
+// Bounded, with one bound for the input Messages and one for the window Messages, so a flood of mouse motion cannot
+// crowd out a focus loss or a close request. One OS event becomes its Messages all together or not at all; an event
+// that does not fit is dropped and counted (SDL-7 exception (1)), and the input writer reports the count as input's
+// InputEventsDropped. Each bound is at most the kernel's Message capacity (1024 by default), so one frame's writes
+// never overflow a kernel buffer.
 
 #include <cstddef>
 #include <cstdint>
@@ -17,7 +19,7 @@
 #include "engine/input/Input.hpp"
 #include "engine/window/Window.hpp"
 
-namespace GYO::Plugins::SdlWindow {
+namespace GYO::Plugins::SDLWindow {
 
 using InputItem = std::variant<Engine::Input::KeyboardInput, Engine::Input::KeyboardFocusLost, Engine::Input::MouseButtonInput,
                                Engine::Input::CursorMoved, Engine::Input::MouseMotion, Engine::Input::CursorEntered,
@@ -36,32 +38,35 @@ struct Translated final {
 
 class EventQueue final {
 public:
-    explicit EventQueue(std::size_t capacity) : capacity_(capacity) {}
+    EventQueue(std::size_t inputCapacity, std::size_t windowCapacity)
+        : inputCapacity_(inputCapacity), windowCapacity_(windowCapacity) {}
 
-    // All of one event's Messages, or none and the drop counted. An event with no Messages changes nothing.
-    void Accept(Translated translated) {
-        if (translated.Size() == 0) return;
-        if (input_.size() + window_.size() + translated.Size() > capacity_) {
+    // All of one event's Messages, or none and the drop counted (false). An event with no Messages changes nothing.
+    bool Accept(Translated translated) {
+        if (translated.Size() == 0) return true;
+        if (input_.size() + translated.input.size() > inputCapacity_ ||
+            window_.size() + translated.window.size() > windowCapacity_) {
             ++dropped_;
             ++droppedTotal_;
-            return;
+            return false;
         }
         for (InputItem& item : translated.input) input_.push_back(std::move(item));
         for (WindowItem& item : translated.window) window_.push_back(std::move(item));
+        return true;
     }
     [[nodiscard]] std::vector<InputItem> TakeInput() { return std::exchange(input_, {}); }
     [[nodiscard]] std::vector<WindowItem> TakeWindow() { return std::exchange(window_, {}); }
     // The events dropped since the last call.
     [[nodiscard]] std::uint64_t TakeDropped() noexcept { return std::exchange(dropped_, 0); }
     [[nodiscard]] std::uint64_t DroppedTotal() const noexcept { return droppedTotal_; }
-    [[nodiscard]] std::size_t Capacity() const noexcept { return capacity_; }
 
 private:
-    std::size_t capacity_;
+    std::size_t inputCapacity_;
+    std::size_t windowCapacity_;
     std::vector<InputItem> input_;
     std::vector<WindowItem> window_;
     std::uint64_t dropped_ = 0;
     std::uint64_t droppedTotal_ = 0;
 };
 
-} // namespace GYO::Plugins::SdlWindow
+} // namespace GYO::Plugins::SDLWindow

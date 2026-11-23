@@ -28,16 +28,20 @@
 #include "engine/window/WindowModule.hpp"
 #include "engine/window_camera/WindowCameraModule.hpp"
 #include "plugins/sdl/NativeWindow.hpp"
-#include "plugins/sdl_window/SdlWindowPlugin.hpp"
+#include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
 #include "../../../src/EventQueue.hpp"
 #include "../../../src/WindowBackend.hpp"
+#include "../../../src/adapters/sdl/Translate.hpp"
+
+// The whole file is in the Plugin's namespace (naming N17: a unit opens only its own root, aliases included).
+namespace GYO::Plugins::SDLWindow {
 
 namespace C = GYO::Engine::Camera;
 namespace I = GYO::Engine::Input;
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
-namespace S = GYO::Plugins::SdlWindow;
+namespace S = GYO::Plugins::SDLWindow;
 namespace W = GYO::Engine::Window;
 
 namespace {
@@ -87,7 +91,7 @@ SDL_Event WindowEvent(SDL_WindowID id, SDL_EventType type) {
 
 // Takes whatever SDL queued on its own (the window's creation), so a test sees only what it pushed.
 void Drain(S::WindowBackend& backend) {
-    S::EventQueue scratch(4096);
+    S::EventQueue scratch(4096, 4096);
     backend.Pump(scratch);
 }
 
@@ -140,7 +144,7 @@ TEST_CASE("sdl_window: SDL events become the Messages of the mapping table, in o
     Push(user);
     Push(Key(id + 1000, SDL_SCANCODE_B, true));
 
-    S::EventQueue queue(1024);
+    S::EventQueue queue(1024, 256);
     backend->Pump(queue);
     const std::vector<S::InputItem> input = queue.TakeInput();
     const std::vector<S::WindowItem> window = queue.TakeWindow();
@@ -158,7 +162,7 @@ TEST_CASE("sdl_window: SDL events become the Messages of the mapping table, in o
     CHECK_MESSAGE(Is<I::MouseButtonInput>(input[4]), "[sw-map-button] a button event becomes a MouseButtonInput");
     CHECK_MESSAGE(std::get<I::MouseButtonInput>(input[4]).button == I::MouseButton::Back, "[sw-map-button-x1] X1 is Back");
     CHECK_MESSAGE(Is<I::MouseWheel>(input[5]), "[sw-map-wheel] a wheel event becomes a MouseWheel");
-    CHECK_MESSAGE(std::get<I::MouseWheel>(input[5]).delta.y == -1.0F, "[sw-map-wheel-flipped] a flipped wheel is turned back");
+    CHECK_MESSAGE(std::get<I::MouseWheel>(input[5]).delta.y == 1.0F, "[sw-map-wheel-as-given] the wheel as the OS gives it (natural scrolling kept)");
     CHECK_MESSAGE(Is<I::CursorEntered>(input[6]), "[sw-map-entered] the mouse entering becomes a CursorEntered (G5)");
     CHECK_MESSAGE(Is<I::KeyboardFocusLost>(input[7]), "[sw-map-focus-input] a focus loss becomes input's KeyboardFocusLost too");
     REQUIRE_MESSAGE(window.size() == 3, "[sw-map-window-count] 3 window Messages (focus, close, quit)");
@@ -176,7 +180,7 @@ TEST_CASE("sdl_window: a focus loss is one SDL event and two Messages, all or no
     Drain(*backend);
     const SDL_WindowID id = IdOf(*backend);
     Push(WindowEvent(id, SDL_EVENT_WINDOW_FOCUS_LOST));
-    S::EventQueue queue(1024);
+    S::EventQueue queue(1024, 256);
     backend->Pump(queue);
     const auto input = queue.TakeInput();
     const auto window = queue.TakeWindow();
@@ -196,11 +200,47 @@ TEST_CASE("sdl_window: a full queue drops whole events and counts them (SDL-7 ex
     Push(motion);  // two Messages: does not fit in the one place left
     Push(Key(id, SDL_SCANCODE_C, true));
     Push(Key(id, SDL_SCANCODE_D, true));
-    S::EventQueue queue(3);
+    S::EventQueue queue(3, 256);
     backend->Pump(queue);
     const auto input = queue.TakeInput();
     CHECK_MESSAGE(input.size() == 3, "[sw-drop-kept] the events that fit are kept (a, b, c)");
     CHECK_MESSAGE(queue.TakeDropped() == 2, "[sw-drop-count] the motion and d are dropped and counted");
+}
+
+TEST_CASE("sdl_window: a flood of input does not crowd out the window's events") {
+    auto backend = MakeBackend();
+    Drain(*backend);
+    const SDL_WindowID id = IdOf(*backend);
+    Push(Key(id, SDL_SCANCODE_A, true));
+    Push(Key(id, SDL_SCANCODE_B, true));
+    Push(Key(id, SDL_SCANCODE_C, true));
+    Push(WindowEvent(id, SDL_EVENT_WINDOW_CLOSE_REQUESTED));
+    S::EventQueue queue(2, 4);
+    backend->Pump(queue);
+    CHECK_MESSAGE(queue.TakeWindow().size() == 1, "[sw-window-own-room] the close request has room of its own");
+    CHECK_MESSAGE(queue.TakeDropped() == 1, "[sw-window-own-room-drop] only the third key is dropped");
+}
+
+TEST_CASE("sdl_window: within one pump the times strictly increase in delivered order") {
+    using namespace std::chrono_literals;
+    const auto base = GYO::Engine::Time::TimePoint{} + 10s;
+    std::optional<GYO::Engine::Time::TimePoint> last;
+    Translated left;
+    left.input.emplace_back(I::CursorLeft{base + 5ms});
+    Adapter::OrderTimes(left, last);
+    Translated moved;
+    moved.input.emplace_back(I::CursorMoved{{1.0F, 2.0F}, base + 2ms});
+    moved.input.emplace_back(I::MouseMotion{{1.0F, 0.0F}, base + 2ms});
+    Adapter::OrderTimes(moved, last);
+    const auto movedAt = std::get<I::CursorMoved>(moved.input[0]).time;
+    CHECK_MESSAGE(movedAt == base + 5ms + 1ns, "[sw-times-increase] a later delivered event stamped earlier comes 1 ns after");
+    CHECK_MESSAGE(std::get<I::MouseMotion>(moved.input[1]).time == movedAt, "[sw-times-same-event] one event's Messages share its time");
+}
+
+TEST_CASE("sdl_window: logical pixels per SDL window coordinate") {
+    CHECK_MESSAGE(Adapter::LogicalPerCoordinate(1.0F, 1.5F) == 1.0F / 1.5F, "[sw-coord-windows-150] Windows at 150 %: 1 / 1.5");
+    CHECK_MESSAGE(Adapter::LogicalPerCoordinate(2.0F, 2.0F) == 1.0F, "[sw-coord-retina] a Retina Mac: 1 (points)");
+    CHECK_MESSAGE(Adapter::LogicalPerCoordinate(0.0F, 2.0F) == 1.0F, "[sw-coord-unknown] no usable value: 1");
 }
 
 TEST_CASE("sdl_window: an event's time is on the engine base, no later than its delivery (SDL-3)") {
@@ -209,7 +249,7 @@ TEST_CASE("sdl_window: an event's time is on the engine base, no later than its 
     const SDL_WindowID id = IdOf(*backend);
     const auto before = GYO::Engine::Time::Now();
     Push(Key(id, SDL_SCANCODE_A, true));  // SDL stamps it with SDL_GetTicksNS at the push
-    S::EventQueue queue(16);
+    S::EventQueue queue(16, 16);
     backend->Pump(queue);
     const auto after = GYO::Engine::Time::Now();
     const auto input = queue.TakeInput();
@@ -245,14 +285,15 @@ O::RegisteredUnits Units() {
     units.modules.push_back({"window_camera", std::make_unique<GYO::Engine::WindowCamera::WindowCameraModule>()});
     units.rows.push_back(Row("sdl", O::UnitKind::Plugin, true));
     units.rows.push_back(Row("sdl_window", O::UnitKind::Plugin, false, {"sdl", "input", "window"}));
-    units.plugins.push_back({"sdl_window", std::make_unique<S::SdlWindowPlugin>()});
+    units.plugins.push_back({"sdl_window", std::make_unique<S::SDLWindowPlugin>()});
     return units;
 }
 
 std::unique_ptr<O::Product> Make(bool runner = false, W::WindowSettings settings = Hidden(), std::size_t queueCapacity = 1024) {
+    static_cast<void>(dummyDriver);
     O::ProductDescription d;
     d.name = "game";
-    S::SdlWindowOptions options;
+    S::SDLWindowOptions options;
     options.installRunner = runner;
     options.queueCapacity = queueCapacity;
     d.options.Set(options);
@@ -266,13 +307,13 @@ std::unique_ptr<O::Product> Make(bool runner = false, W::WindowSettings settings
 }
 
 K::World& WorldOf(O::Product& p) { return p.World("Main").GetWorld(); }
-S::SdlWindowPump& PumpOf(O::Product& p) {
-    S::SdlWindowPump* pump = p.Buffer().Find<S::SdlWindowPump>();
+S::SDLWindowPump& PumpOf(O::Product& p) {
+    S::SDLWindowPump* pump = p.Buffer().Find<S::SDLWindowPump>();
     REQUIRE(pump != nullptr);
     return *pump;
 }
 SDL_Window* WindowOf(O::Product& p) {
-    const auto* windows = p.Buffer().Find<GYO::Plugins::Sdl::NativeWindows>();
+    const auto* windows = p.Buffer().Find<GYO::Plugins::SDL::NativeWindows>();
     REQUIRE(windows != nullptr);
     REQUIRE(windows->main != nullptr);
     return reinterpret_cast<SDL_Window*>(windows->main);
@@ -369,6 +410,25 @@ TEST_CASE("sdl_window: the requests reach SDL a frame later, only when they chan
     CHECK_MESSAGE(PumpOf(*p).RefusedRequests() == 0, "[sw-request-none-refused] SDL refused nothing");
 }
 
+TEST_CASE("sdl_window: a window that cannot be made is the startup error SDL-E1") {
+    // Over SDL_VIDEODRIVER (ctest sets it), then back to the dummy driver.
+    REQUIRE(SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "gyo-no-such-driver", SDL_HINT_OVERRIDE));
+    O::ProductDescription d;
+    d.name = "game";
+    d.options.Set(Hidden());
+    O::WorldDescription w;
+    w.name = "Main";
+    d.worlds.push_back(std::move(w));
+    auto built = O::Product::Build(std::move(d), Units());
+    static_cast<void>(SDL_ResetHint(SDL_HINT_VIDEO_DRIVER));
+    // false when SDL_VIDEODRIVER is set (the environment wins), which is the dummy driver too.
+    static_cast<void>(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
+    REQUIRE_MESSAGE(!built, "[sw-e1-refused] no Product without the window");
+    bool reported = false;
+    for (const auto& error : built.error().unitErrors) reported = reported || error.code == "SDL-E1";
+    CHECK_MESSAGE(reported, "[sw-e1-code] sdl_window reports SDL-E1");
+}
+
 TEST_CASE("sdl_window: a window made not resizable (G6)") {
     W::WindowSettings settings = Hidden();
     settings.resizable = false;
@@ -376,7 +436,7 @@ TEST_CASE("sdl_window: a window made not resizable (G6)") {
     CHECK_MESSAGE((SDL_GetWindowFlags(WindowOf(*p)) & SDL_WINDOW_RESIZABLE) == 0, "[sw-settings-not-resizable] made without resizing");
 }
 
-TEST_CASE("sdl_window: the clipboard both ways, and a warp") {
+TEST_CASE("sdl_window: the clipboard both ways and a warp") {
     auto p = Make();
     Frame(*p);
     SDL_Event update{};
@@ -429,3 +489,5 @@ TEST_CASE("sdl_window: the runner ends with Success when the game's close was ap
     CHECK_MESSAGE(exit.code == O::RunnerExitCode::Success, "[sw-runner-close] the close request ends the loop: " << exit.reason);
     CHECK_MESSAGE(PumpOf(*p).Closed(), "[sw-runner-closed] the window was closed");
 }
+
+} // namespace GYO::Plugins::SDLWindow

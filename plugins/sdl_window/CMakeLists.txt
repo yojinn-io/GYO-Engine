@@ -2,16 +2,16 @@
 # events as input's and window's Messages, the game's requests and the window's runner, through SDL. SDL3 is linked
 # PRIVATE and only src/adapters/sdl/ and tests/adapters/sdl/ include SDL3/ (Design Invariant SDL-1).
 add_library(gyo_sdl_window STATIC
-    src/SdlWindowPlugin.cpp
+    src/SDLWindowPlugin.cpp
     src/adapters/sdl/WindowBackend.cpp
 )
-add_library(GYO::SdlWindow ALIAS gyo_sdl_window)
+add_library(GYO::SDLWindow ALIAS gyo_sdl_window)
 
 target_include_directories(gyo_sdl_window PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# The Modules it writes and GYO::Sdl come from config/plugins.csv (O-6).
+# The Modules it writes and GYO::SDL come from config/plugins.csv (O-6).
 target_link_libraries(gyo_sdl_window PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math GYO::Time
                       PRIVATE GYO::OS SDL3::SDL3-static)
 gyo_link_registered_dependencies(sdl_window)

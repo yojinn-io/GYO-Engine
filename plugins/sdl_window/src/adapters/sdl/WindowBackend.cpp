@@ -14,7 +14,7 @@
 
 #include "Translate.hpp"
 
-namespace GYO::Plugins::SdlWindow {
+namespace GYO::Plugins::SDLWindow {
 
 namespace In = Engine::Input;
 namespace Win = Engine::Window;
@@ -81,16 +81,27 @@ char32_t CharacterOf(const SDL_Scancode scancode) noexcept {
 }
 
 float LogicalPerWindowCoordinate(SDL_Window* window) noexcept {
-    const float density = SDL_GetWindowPixelDensity(window);
-    const float scale = SDL_GetWindowDisplayScale(window);
-    if (!(density > 0.0F) || !(scale > 0.0F)) return 1.0F;
-    return density / scale;
+    return LogicalPerCoordinate(SDL_GetWindowPixelDensity(window), SDL_GetWindowDisplayScale(window));
 }
 
-Translated Translate(const SDL_Event& event, const Sdl::ClockPair& pair, const Engine::Time::TimePoint ceiling,
+void OrderTimes(Translated& translated, std::optional<Engine::Time::TimePoint>& last) {
+    if (translated.Size() == 0) return;
+    Engine::Time::TimePoint time{};
+    if (!translated.input.empty()) {
+        time = std::visit([](const auto& m) { return m.time; }, translated.input.front());
+    } else {
+        time = std::visit([](const auto& m) { return m.time; }, translated.window.front());
+    }
+    if (last && time <= *last) time = *last + std::chrono::nanoseconds(1);
+    last = time;
+    for (InputItem& item : translated.input) std::visit([time](auto& m) { m.time = time; }, item);
+    for (WindowItem& item : translated.window) std::visit([time](auto& m) { m.time = time; }, item);
+}
+
+Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const Engine::Time::TimePoint ceiling,
                      SDL_Window* window, const std::size_t clipboardLimit) {
     Translated out;
-    const Engine::Time::TimePoint time = Sdl::ConvertSdlTime(event.common.timestamp, pair, ceiling);
+    const Engine::Time::TimePoint time = SDL::ConvertSDLTime(event.common.timestamp, pair, ceiling);
     const auto logical = [window](const float x, const float y) {
         const float k = LogicalPerWindowCoordinate(window);
         return Engine::Math::Vec2{x * k, y * k};
@@ -111,9 +122,8 @@ Translated Translate(const SDL_Event& event, const Sdl::ClockPair& pair, const E
     }
     case SDL_EVENT_TEXT_EDITING:
         if (!OwnWindow(window, event.edit.windowID)) break;
-        out.input.emplace_back(In::TextComposition{event.edit.text != nullptr ? event.edit.text : "",
-                                                   std::max<std::int32_t>(event.edit.start, 0),
-                                                   std::max<std::int32_t>(event.edit.length, 0), time});
+        out.input.emplace_back(In::TextComposition{event.edit.text != nullptr ? event.edit.text : "", event.edit.start,
+                                                   event.edit.length, time});
         break;
     case SDL_EVENT_TEXT_INPUT:
         if (!OwnWindow(window, event.text.windowID)) break;
@@ -123,7 +133,7 @@ Translated Translate(const SDL_Event& event, const Sdl::ClockPair& pair, const E
         if (!OwnWindow(window, event.motion.windowID)) break;
         const float k = LogicalPerWindowCoordinate(window);
         out.input.emplace_back(In::CursorMoved{{event.motion.x * k, event.motion.y * k}, time});
-        out.input.emplace_back(In::MouseMotion{{event.motion.xrel * k, event.motion.yrel * k}, time});
+        out.input.emplace_back(In::MouseMotion{{event.motion.xrel, event.motion.yrel}, time});
         break;
     }
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -144,8 +154,8 @@ Translated Translate(const SDL_Event& event, const Sdl::ClockPair& pair, const E
     }
     case SDL_EVENT_MOUSE_WHEEL: {
         if (!OwnWindow(window, event.wheel.windowID)) break;
-        const float flip = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1.0F : 1.0F;
-        out.input.emplace_back(In::MouseWheel{{event.wheel.x * flip, event.wheel.y * flip}, time});
+        // As the OS gives it, natural scrolling included (as Bevy; SDL marks it FLIPPED and leaves the sign alone).
+        out.input.emplace_back(In::MouseWheel{{event.wheel.x, event.wheel.y}, time});
         break;
     }
     case SDL_EVENT_WINDOW_MOUSE_ENTER:
@@ -233,22 +243,29 @@ struct WindowBackend::State {
     std::array<SDL_Cursor*, 12> cursors{};
 };
 
-Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendError> WindowBackend::Create(const BackendSettings& settings) {
+Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBackend::Create(const BackendSettings& settings) {
     RequireMainThread();
-    // The hints are read when the video starts and are process-wide. os owns the process's signals
-    // (InstallShutdownRequests); a closed window is the game's close request, not SDL's quit.
+    // The hints are process-wide (sdl.zh-Hant.md, SDL's global state): each is set for as long as it is read and put
+    // back afterwards. os owns the process's signals (InstallShutdownRequests): SDL reads NO_SIGNAL_HANDLERS when its
+    // events start (VIDEO implies EVENTS). The IME hint is read once when the video starts (master pit 15). A closed
+    // window is the game's close request, not SDL's quit: QUIT_ON_LAST_WINDOW_CLOSE is read while the window lives.
     static_cast<void>(SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1"));
-    static_cast<void>(SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0"));
     if (settings.drawComposition) static_cast<void>(SDL_SetHint(SDL_HINT_IME_IMPLEMENTED_UI, "composition"));
-    if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) return Engine::Base::Err(BackendError::Make(BackendErrorCode::VideoFailed, std::string("SDL_InitSubSystem(VIDEO): ") + SDL_GetError()));
+    const bool started = SDL_InitSubSystem(SDL_INIT_VIDEO);
+    std::string startError = started ? std::string() : std::string("SDL_InitSubSystem(VIDEO): ") + SDL_GetError();
+    static_cast<void>(SDL_ResetHint(SDL_HINT_NO_SIGNAL_HANDLERS));
+    if (settings.drawComposition) static_cast<void>(SDL_ResetHint(SDL_HINT_IME_IMPLEMENTED_UI));
+    if (!started) return Engine::Base::Err(BackendFailure::Make(BackendFailureCode::VideoFailed, std::move(startError)));
+    static_cast<void>(SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0"));
     SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (settings.window.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (settings.window.hidden) flags |= SDL_WINDOW_HIDDEN;
     SDL_Window* window = SDL_CreateWindow(settings.window.title.c_str(), settings.window.size.x, settings.window.size.y, flags);
     if (window == nullptr) {
-        BackendError error = BackendError::Make(BackendErrorCode::WindowFailed, std::string("SDL_CreateWindow: ") + SDL_GetError());
+        BackendFailure failure = BackendFailure::Make(BackendFailureCode::WindowFailed, std::string("SDL_CreateWindow: ") + SDL_GetError());
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        return Engine::Base::Err(std::move(error));
+        static_cast<void>(SDL_ResetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE));
+        return Engine::Base::Err(std::move(failure));
     }
     // SDL makes the window in its window coordinates, which are pixels on Windows: a size asked in logical pixels
     // is set again at the display's scale.
@@ -272,17 +289,22 @@ WindowBackend::~WindowBackend() {
         cursor = nullptr;
     }
     if (state_->window != nullptr) SDL_DestroyWindow(state_->window);
+    // Only its own subsystem, never SDL_Quit (another sdl* Plugin may still use SDL; sdl.zh-Hant.md).
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    static_cast<void>(SDL_ResetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE));
 }
 
 void WindowBackend::Pump(EventQueue& queue) {
     RequireMainThread();
     // One clock pair per pump (SDL declaration section 8). The pump takes SDL's whole pass: leaving SDL_PollEvent
     // early would leave its end-of-pass marker queued and cut the next pump short (master's pit 4).
-    const Sdl::ClockPair pair = Sdl::SampleClockPair({&EngineNow, &SdlNow});
+    const SDL::ClockPair pair = SDL::SampleClockPair({&EngineNow, &SdlNow});
+    std::optional<Engine::Time::TimePoint> last;
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
-        queue.Accept(Adapter::Translate(event, pair, Engine::Time::Now(), state_->window, state_->clipboardLimit));
+        Translated translated = Adapter::Translate(event, pair, Engine::Time::Now(), state_->window, state_->clipboardLimit);
+        Adapter::OrderTimes(translated, last);
+        static_cast<void>(queue.Accept(std::move(translated)));
     }
 }
 
@@ -300,18 +322,22 @@ WindowSnapshot WindowBackend::Snapshot() const {
     now.physicalSize = size.physicalSize;
     now.scaleFactor = size.scaleFactor;
     now.focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
-    if (SDL_GetMouseFocus() == window) {
-        float x = 0.0F;
-        float y = 0.0F;
-        static_cast<void>(SDL_GetMouseState(&x, &y));
-        const float k = Adapter::LogicalPerWindowCoordinate(window);
-        now.cursor = Engine::Math::Vec2{x * k, y * k};
-    }
     now.clipboard = Adapter::ClipboardText(state_->clipboardLimit, now.clipboardTruncated);
     return now;
 }
 
-Sdl::NativeWindow* WindowBackend::Native() const noexcept { return reinterpret_cast<Sdl::NativeWindow*>(state_->window); }
+std::optional<Engine::Math::Vec2> WindowBackend::CursorNow() const {
+    RequireMainThread();
+    SDL_Window* window = state_->window;
+    if (SDL_GetMouseFocus() != window) return std::nullopt;
+    float x = 0.0F;
+    float y = 0.0F;
+    static_cast<void>(SDL_GetMouseState(&x, &y));
+    const float k = Adapter::LogicalPerWindowCoordinate(window);
+    return Engine::Math::Vec2{x * k, y * k};
+}
+
+SDL::NativeWindow* WindowBackend::Native() const noexcept { return reinterpret_cast<SDL::NativeWindow*>(state_->window); }
 
 namespace {
 
@@ -347,6 +373,14 @@ bool WindowBackend::SetSize(const Engine::Math::Vec2i logicalSize) {
     return Done(SDL_SetWindowSize(state_->window, static_cast<int>(std::lround(static_cast<float>(logicalSize.x) * toWindow)),
                                   static_cast<int>(std::lround(static_cast<float>(logicalSize.y) * toWindow))),
                 lastError_);
+}
+
+bool WindowBackend::SetCursorGrab(const Win::CursorGrab grab) {
+    RequireMainThread();
+    SDL_Window* window = state_->window;
+    const bool locked = grab == Win::CursorGrab::Locked;
+    if (!Done(SDL_SetWindowRelativeMouseMode(window, locked), lastError_)) return false;
+    return Done(SDL_SetWindowMouseGrab(window, grab == Win::CursorGrab::Confined), lastError_);
 }
 
 bool WindowBackend::SetResizable(const bool resizable) {
@@ -387,4 +421,4 @@ void WindowBackend::Close() {
     if (state_->window != nullptr) SDL_HideWindow(state_->window);
 }
 
-} // namespace GYO::Plugins::SdlWindow
+} // namespace GYO::Plugins::SDLWindow
