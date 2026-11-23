@@ -17,9 +17,10 @@
 // stays near 0; load is the one-minute average and lags behind.
 //
 // This is a diagnostic for the local timeouts of these two executables. The
-// progress notes inside "loses no signal" are removed once the user's
-// decision on that case is in place; the listener goes when no local timeout
-// of these tests is open in the batch table.
+// progress notes that "loses no signal" wrote were removed with the user's
+// decision on that case (v8-arch-gyo2-os-wake-test-backoff), so Note has no
+// caller now; it goes with the listener, when no local timeout of these tests
+// is open in the batch table.
 //
 // The file goes to $GYO_OS_CASE_TIMING_DIR, or else to the build directory
 // given at compile time. A run that passed within KeepAfter is removed at its
