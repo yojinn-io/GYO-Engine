@@ -44,13 +44,13 @@
 ## 5. 交使用者決定的
 
 1. **合併**（只認明確的「合併」）。
-2. **第 2 節**：workflow gates 的窄緩面接受與否；`kernel_guard` 證據的更正。
+2. **第 2 節**：workflow gates 的窄緩面接受與否；`kernel_guard` 證據的更正。——**已定**：使用者 2026-11-23（本卡）「照建議，窄緩面接受，後續都排進去」：窄緩面接受（死參照由 review 看），證據的更正照第 2 節。
 3. **`game_registry.py` 的名字**（設計審查 B1）——**已定**：使用者 2026-11-23（本卡）「照建議，改成 product_registry.py」，選 (b)，已改（`build/ci/common/product_registry.py`、`tests/common/ci/test_product_registry.py`）。原來的說明：檔裡除了遊戲的匯出，還有 CI 各平台的 runner／toolchain 表、工具的匯出，`ci_scope.py`、`release_pipeline.py`、`archive_package.py` 都從它匯入非遊戲的東西。CMake 那一側本批正是為了同一個理由拆出中性的 `GyoRegistryCsv.cmake`，Python 這一側沒照做，兩邊不一致。選項：
    - (a) 照舊（改名表核准的名字）。
    - (b) 改成中性的 `product_registry.py`（建議；現在約 7 個匯入點，最便宜，照「改名排前面」）。
    - (c) 拆成 CI 平台表一個檔、遊戲與工具的匯出一個檔。
    選 (b) 或 (c) 時本批改，改完重跑 `build.ci` 與相關突變、L1。
-4. **後續要不要排**（本批不改；選要的話主會話記進批次表〈後續小事〉）：
+4. **後續要不要排**（本批不改）——**已定**：同一句「後續都排進去」；主會話已記進批次表〈後續小事〉三列（9f555af6）。原來的清單：
    - 建置層內部「遊戲目錄規則 `games/<名>`」手寫 4 處（`GyoBuild.cmake` 兩個迴圈、`GyoGames.cmake:38`、`GyoGameRegistry.cmake:76`），可以收成一個出口（不影響守衛的刻意獨立）。
    - KIND 的集合 `{game, toolchain}` 列在三個讀者（`GyoRuntimeDeployment.cmake`、`package_contract.py`、`assemble_runtime.py`）；Python 兩處可以共用一個常數。
    - 只寫不讀的值：`GYO_GAME_ASSET_ROOT`、`GYO_GAME_MAIN_TARGET`、`GYO_GAME_CONTENT_STAGE_TARGET`、CI 輸出 `has_games`：先問該不該存在。
