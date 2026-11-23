@@ -841,13 +841,13 @@
   },
   {
    "id": "rb-input-ring-off-by-one",
-   "what": "an input history of capacity n keeps n - 1 steps (RB-E9 says capacity equal to the depth is enough). Only it catches the edge",
+   "what": "an input history of capacity n keeps n - 1 steps (RB-E9 says capacity equal to the depth is enough). Only it catches the edge (find widened by v8-arch-gyo2-net-module step 3a: ComponentInputHistory has the same line)",
    "guards": [
     "rollback R-2"
    ],
    "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
-   "find": "        while (ring_.size() > capacity_) ring_.pop_front();",
-   "replace": "        while (ring_.size() >= capacity_) ring_.pop_front();",
+   "find": "            ring_.insert(at, {tick, **value});\n        }\n        while (ring_.size() > capacity_) ring_.pop_front();",
+   "replace": "            ring_.insert(at, {tick, **value});\n        }\n        while (ring_.size() >= capacity_) ring_.pop_front();",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-2: an input history of capacity*",
    "expect": "\\[rb\\-input\\-capacity\\-edge\\]"
@@ -1061,6 +1061,48 @@
    "target": "gyo_rollback_tests",
    "expect_build_failure": true,
    "expect": "gyo_rollback\\s+links\\s+\\S*GYO::Authority\\S*\\s+expected\\s+exactly"
+  },
+  {
+   "id": "rb-component-input-not-written-back",
+   "what": "a component input's history does not write the entities' inputs back for a step run again. Only it catches the per-entity write-back",
+   "guards": [
+    "rollback R-2",
+    "net-module-declaration D-11"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (kept != tick) continue;\n            Write(world, cells);",
+   "replace": "            if (kept != tick) continue;\n            static_cast<void>(cells);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2 with a component input*",
+   "expect": "\\[rb\\-component\\-input\\-r2\\]"
+  },
+  {
+   "id": "rb-component-input-not-put-back",
+   "what": "after a resimulation the component input keeps the last step written back, not this frame's. Only it catches the component input's put back",
+   "guards": [
+    "rollback R-2",
+    "net-module-declaration D-11"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "        if (!now_) return;\n        Write(world, *now_);",
+   "replace": "        if (!now_) return;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: a component input's entry*",
+   "expect": "\\[rb\\-component\\-input\\-put\\-back\\]"
+  },
+  {
+   "id": "rb-component-input-as-resource",
+   "what": "Input<T>(..., DataKind::Component) is recorded as a resource input. Only it catches the kind",
+   "guards": [
+    "rollback R-6",
+    "net-module-declaration D-11"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Registrations.hpp",
+   "find": "        if (kind == DataKind::Component) {\n            table_->Append(",
+   "replace": "        if (false) {\n            table_->Append(",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-2 with a component input*",
+   "expect": "RB\\-E3"
   }
  ]
 }

@@ -690,3 +690,67 @@ TEST_CASE("carry-over: Resimulation is false in the new World, carried over or n
     REQUIRE_MESSAGE(static_cast<bool>(replaced), (replaced ? std::string() : replaced.error().message + "\n" + replaced.error().detail));
     CHECK_MESSAGE(Get<W::Resimulation>(*p).active == 0, "[wt-resimulation-reset] " << int(Get<W::Resimulation>(*p).active));
 }
+
+// ---- The clock sync's entries (net Module declaration D-9, section 18 (A); 3b)
+
+TEST_CASE("module: TimeSyncScale is registered, put to 1, and multiplies the product's scale") {
+    auto p = Make(Game(0));
+    CHECK_MESSAGE(Frozen()->ResourceIdOf<W::TimeSyncScale>().has_value(), "[wt-sync-registered]");
+    CHECK(Get<W::TimeSyncScale>(*p).scale == 1.0);
+    WorldOf(*p).SetResource(W::TimeControl{0.5, 0});
+    WorldOf(*p).SetResource(W::TimeSyncScale{3.0});
+    Frame(*p, 20 * kMs);
+    CHECK_MESSAGE(Get<W::VirtualTime>(*p).delta == 30 * kMs, "[wt-sync-multiplies] " << Get<W::VirtualTime>(*p).delta);
+    // Without TimeControl (pausable = false) the product's scale is 1.
+    W::WorldTimeOptions options;
+    options.pausable = false;
+    auto unpausable = Make(Game(0, options));
+    WorldOf(*unpausable).SetResource(W::TimeSyncScale{2.0});
+    Frame(*unpausable, 10 * kMs);
+    CHECK_MESSAGE(Get<W::VirtualTime>(*unpausable).delta == 20 * kMs, "[wt-sync-unpausable] " << Get<W::VirtualTime>(*unpausable).delta);
+}
+
+TEST_CASE("fixed: JumpFixedSteps moves Tick and the fixed time k steps either way, and runs no step") {
+    RewindWorld world;
+    world.fixed = W::FixedTime{W::TickAccumulator{W::StepLength{}}, 3 * kStep, 0};
+    W::JumpFixedSteps(world, 5);
+    CHECK_MESSAGE((world.tick.value == 8 && world.fixed.elapsed == 8 * kStep), "[wt-jump-forward] " << world.tick.value);
+    W::JumpFixedSteps(world, -6);
+    CHECK_MESSAGE((world.tick.value == 2 && world.fixed.elapsed == 2 * kStep), "[wt-jump-back] " << world.tick.value);
+    W::JumpFixedSteps(world, -2);
+    CHECK_MESSAGE(world.tick.value == 0, "[wt-jump-to-zero]");
+    RewindWorld below;
+    GYO_CHECK_ASSERTS(W::JumpFixedSteps(below, -4));
+}
+
+namespace {
+class ClockUnit final : public O::Module {
+public:
+    void Build(O::WorldSetup& setup) override { W::WorldTimeModule::AddTickWriter(setup, "SyncClock"); }
+    void Check(const K::FrozenRegistry&, O::WorldCheck& context) override {
+        Writers() = W::WorldTimeModule::TickWriters(context.Buffer());
+    }
+    static std::vector<std::string>& Writers() {
+        static std::vector<std::string> writers;
+        return writers;
+    }
+};
+} // namespace
+
+TEST_CASE("module: a unit adds a Tick writer while the World is built; TickWriters(buffer) lists it after the driver") {
+    O::RegisteredUnits units;
+    for (const char* name : {"world_time", "clock"}) {
+        O::RegisterRow row;
+        row.name = name;
+        row.kind = O::UnitKind::Module;
+        row.libraryOnly = false;
+        row.defaultOn = true;
+        units.rows.push_back(row);
+    }
+    units.modules.push_back({"world_time", std::make_unique<W::WorldTimeModule>()});
+    units.modules.push_back({"clock", std::make_unique<ClockUnit>()});
+    ClockUnit::Writers().clear();
+    auto built = O::Product::Build(Game(0), std::move(units));
+    REQUIRE(static_cast<bool>(built));
+    CHECK_MESSAGE((ClockUnit::Writers() == std::vector<std::string>{"RunFixedSteps", "SyncClock"}), "[wt-tick-writer-added]");
+}

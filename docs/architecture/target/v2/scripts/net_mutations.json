@@ -1,0 +1,1028 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the net Module, steps 1a, 1b and 2 (docs/architecture/target/v2/net-module-declaration.zh-Hant.md, D-2, D-3, D-4, D-6, D-8, D-10, D-12, D-13, C-MS1 and judgements G-1 to G-5; Design Invariants draft in docs/architecture/target/v2/net.zh-Hant.md; ids nt-). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "nt-ackbits-31",
+   "what": "the ack bitfield covers 31 packets instead of 32: the oldest acknowledged packet is left out. Only it catches the width of the bitfield (G-2 still passes, since a later header acknowledges it)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        for (std::uint16_t i = 0; i < 32; ++i) {\n            if (WasReceived(static_cast<std::uint16_t>(header.ack - 1 - i))) header.ackBits |= (1u << i);",
+   "replace": "        for (std::uint16_t i = 0; i < 31; ++i) {\n            if (WasReceived(static_cast<std::uint16_t>(header.ack - 1 - i))) header.ackBits |= (1u << i);",
+   "target": "gyo_net_tests",
+   "cases": "connection: the ack bitfield*",
+   "expect": "the\\ ack\\ bitfield\\ covers\\ the\\ 32\\ packets\\ before\\ ack"
+  },
+  {
+   "id": "nt-ack-ignores-pieces",
+   "what": "an acknowledged packet does not acknowledge the reliable pieces it carried, so they are resent forever. Only it catches the packet-to-piece acknowledgement (G-2 still delivers, with duplicates dropped)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        if (!piece.acked) {\n            piece.acked = true;\n            --message.open;\n        }",
+   "replace": "        (void)piece;",
+   "target": "gyo_net_tests",
+   "cases": "connection: an acknowledged piece*",
+   "expect": "an\\ acknowledged\\ piece\\ is\\ not\\ sent\\ again"
+  },
+  {
+   "id": "nt-resend-no-rtt",
+   "what": "the resend delay ignores the RTT and uses the floor only. Only it catches the 1.5 x RTT term (lightyear ReliableSettings::resend_delay)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "    const NetTime resendDelay = std::max(smoothedRtt_ * 3 / 2, settings_.resendMinDelay);",
+   "replace": "    const NetTime resendDelay = settings_.resendMinDelay;",
+   "target": "gyo_net_tests",
+   "cases": "connection: the resend delay*",
+   "expect": "a\\ piece\\ is\\ not\\ resent\\ before\\ 1\\.5\\ x\\ RTT"
+  },
+  {
+   "id": "nt-ordered-no-dedup",
+   "what": "an Ordered Reliable piece received twice while its message waits behind a gap is counted twice, so the message is never handed out. Only it catches the receiver's piece de-duplication (a duplicate of a message already handed out is caught by the id check before it)",
+   "guards": [
+    "net-module-declaration D-2",
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "            if (slot.have[pieceIndex]) {\n                DropPieces(entry.channel, DropReason::DuplicateMessage, 1);\n                continue;\n            }\n            slot.have[pieceIndex] = true;",
+   "replace": "            slot.have[pieceIndex] = true;",
+   "target": "gyo_net_tests",
+   "cases": "connection: a reliable piece received twice*",
+   "expect": "a\\ reliable\\ piece\\ received\\ twice\\ is\\ handed\\ out\\ once"
+  },
+  {
+   "id": "nt-fragment-incomplete",
+   "what": "an unreliable fragmented message is handed out after its first piece. Only it catches the completeness check of the unreliable reassembly",
+   "guards": [
+    "net-module-declaration D-2",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        if (message.received < message.pieces.size()) continue;",
+   "replace": "        if (message.received < 1) continue;",
+   "target": "gyo_net_tests",
+   "cases": "connection: an incomplete fragmented message*",
+   "expect": "an\\ incomplete\\ fragmented\\ message\\ is\\ not\\ handed\\ out"
+  },
+  {
+   "id": "nt-connid-unchecked",
+   "what": "a datagram of another connection is accepted. Only it catches the connection id comparison",
+   "guards": [
+    "net-module-declaration D-2",
+    "net-module-declaration D-12"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "    if (header.connectionId != settings_.connectionId) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "connection: a datagram of another connection*",
+   "expect": "a\\ datagram\\ of\\ another\\ connection\\ is\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-timeout-uncounted",
+   "what": "the pieces of an unreliable fragmented message that timed out are dropped without being counted. Only it catches a drop left out of the count (the reconciliation of G-2)",
+   "guards": [
+    "net-module-declaration D-12",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "                DropPieces(i, DropReason::FragmentTimeout, it->second.received);",
+   "replace": "                (void)i;",
+   "target": "gyo_net_tests",
+   "cases": "transport: G-2*",
+   "expect": "unreliable\\ pieces:\\ sent\\ \\+\\ in\\ duplicates\\ ==\\ handed\\ out\\ \\+\\ dropped\\ \\+\\ in\\ losses"
+  },
+  {
+   "id": "nt-ackonly-elicits",
+   "what": "an AckOnly packet asks for an acknowledgement, so two idle ends trade AckOnly packets forever. Only it catches the AckOnly rule (lightyear packet_type.rs:27-37)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "    if (header.kind == PacketKind::Data) ackOwed_ = true;",
+   "replace": "    if (header.kind != PacketKind::Disconnect) ackOwed_ = true;",
+   "target": "gyo_net_tests",
+   "cases": "connection: an AckOnly packet*",
+   "expect": "an\\ AckOnly\\ packet\\ does\\ not\\ ask\\ for\\ an\\ acknowledgement"
+  },
+  {
+   "id": "nt-packet-no-dedup",
+   "what": "a packet id already received is processed again, so an unreliable message in a duplicated datagram is handed out twice. Only it catches the packet-level de-duplication",
+   "guards": [
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-2"
+   ],
+   "file": "engine/modules/net/src/Connection.cpp",
+   "find": "        if (WasReceived(header.packetId)) {\n            refuse(DropReason::DuplicatePacket);\n            return {};\n        }\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "transport: G-2*",
+   "expect": "Unreliable\\ hands\\ out\\ no\\ duplicate"
+  },
+  {
+   "id": "nt-magic",
+   "what": "the magic number changes. Only it catches the magic constant of the wire format (README rule 2: one per constant)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/include/engine/net/PacketHeader.hpp",
+   "find": "inline constexpr std::uint16_t kPacketMagic = 0x4E47;",
+   "replace": "inline constexpr std::uint16_t kPacketMagic = 0x4E48;",
+   "target": "gyo_net_tests",
+   "cases": "header: the bytes are the documented*",
+   "expect": "the\\ header\\ bytes\\ are\\ the\\ documented\\ layout"
+  },
+  {
+   "id": "nt-version",
+   "what": "the protocol version changes without the documented layout changing. Only it catches the version constant (README rule 2: one per constant)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/include/engine/net/PacketHeader.hpp",
+   "find": "inline constexpr std::uint8_t kProtocolVersion = 1;",
+   "replace": "inline constexpr std::uint8_t kProtocolVersion = 2;",
+   "target": "gyo_net_tests",
+   "cases": "header: the bytes are the documented*",
+   "expect": "the\\ header\\ bytes\\ are\\ the\\ documented\\ layout"
+  },
+  {
+   "id": "nt-unknown-kind",
+   "what": "a packet kind outside the table is read as Data. Only it catches the closed kind table of the decoder (expect rewritten for step 1b: the handshake kinds 16 to 20 are in the table now)",
+   "guards": [
+    "net-module-declaration D-2"
+   ],
+   "file": "engine/modules/net/src/PacketHeader.cpp",
+   "find": "    default:\n        return Base::Err(NetFailure::Make(NetFailureCode::UnknownPacketKind,",
+   "replace": "    default:\n        header.kind = PacketKind::Data;\n        break;\n        return Base::Err(NetFailure::Make(NetFailureCode::UnknownPacketKind,",
+   "target": "gyo_net_tests",
+   "cases": "header: a datagram that is not a header*",
+   "expect": "a\\ kind\\ outside\\ the\\ table\\ is\\ UnknownPacketKind"
+  },
+  {
+   "id": "nt-compare-version",
+   "what": "the handshake does not compare the net protocol version. Only it catches that item of the comparison",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.protocolVersion != server.protocolVersion) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ protocol\\ version\\ that\\ differs\\ is\\ ProtocolMismatch"
+  },
+  {
+   "id": "nt-compare-hash",
+   "what": "the handshake does not compare the protocol hash. Only it catches that item of the comparison",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.protocolHash != server.protocolHash) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ protocol\\ hash\\ that\\ differs\\ is\\ ProtocolMismatch"
+  },
+  {
+   "id": "nt-compare-step",
+   "what": "the handshake does not compare the step length. Only it catches that item of the comparison",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.stepNanoseconds != server.stepNanoseconds) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ step\\ length\\ that\\ differs\\ is\\ StepLengthMismatch"
+  },
+  {
+   "id": "nt-compare-range",
+   "what": "the handshake does not check that the allotter ranges are apart. Only it catches that item of the comparison (D-4)",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.idRange.Overlaps(server.idRange)) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "overlapping\\ allotter\\ ranges\\ are\\ IdRangeOverlap"
+  },
+  {
+   "id": "nt-compare-fingerprint",
+   "what": "two different fingerprints pass. Only it catches the comparison of the fingerprints' values",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "        if (*client.fingerprint != *server.fingerprint) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: each fact*",
+   "expect": "a\\ fingerprint\\ that\\ differs\\ is\\ FingerprintMismatch"
+  },
+  {
+   "id": "nt-k1-compared",
+   "what": "a client without a fingerprint (K1) is compared on it and rejected by a server with one. Only it catches \"K1 is not compared\"",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/Handshake.cpp",
+   "find": "    if (client.fingerprint) {\n        if (!server.fingerprint) {",
+   "replace": "    if (client.fingerprint != server.fingerprint) {\n        if (!client.fingerprint || !server.fingerprint) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a client without an authority strategy*",
+   "expect": "a\\ client\\ without\\ a\\ fingerprint\\ \\(K1\\)\\ connects\\ to\\ a\\ server\\ with\\ one"
+  },
+  {
+   "id": "nt-challenge-unchecked",
+   "what": "the server accepts a response whatever challenge it carries. Only it catches the check of the challenge",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "    if (challenge != Detail::ChallengeOf(secret_, from, body.first(used))) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a response with another*",
+   "expect": "a\\ wrong\\ challenge\\ is\\ ChallengeFailed"
+  },
+  {
+   "id": "nt-admission-ignored",
+   "what": "the server does not ask the product before it accepts. Only it catches Refused",
+   "guards": [
+    "net-module-declaration D-6",
+    "net-module-declaration 判定 G-3"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "    if (admission_) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: the product's refusal*",
+   "expect": "the\\ product's\\ refusal\\ is\\ Refused"
+  },
+  {
+   "id": "nt-request-min-size",
+   "what": "the server answers a request smaller than its challenge. Only it catches the anti-amplification check",
+   "guards": [
+    "net-module-declaration D-6"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "        if (datagram.size() < Detail::kMinRequestDatagram) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a request smaller*",
+   "expect": "a\\ request\\ smaller\\ than\\ a\\ challenge\\ gets\\ no\\ answer"
+  },
+  {
+   "id": "nt-liveness-not-refreshed",
+   "what": "a datagram of the connection does not refresh \"last received\" at the client. Only it catches the refresh by data (D-8: the data flow is the heartbeat)",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "        lastReceived_ = now;\n        if (state_ == ClientState::Interrupted) state_ = ClientState::Connected;",
+   "replace": "        if (state_ == ClientState::Interrupted) state_ = ClientState::Connected;",
+   "target": "gyo_net_tests",
+   "cases": "liveness: any datagram*",
+   "expect": "a\\ datagram\\ of\\ the\\ connection\\ refreshes\\ its\\ last\\ received\\ time"
+  },
+  {
+   "id": "nt-keepalive-with-data",
+   "what": "the client sends a keepalive even when it has data to send. Only it catches \"no keepalive while data flows\"",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "    if (out.empty() && state_ != ClientState::Disconnected && now - lastSent_ > settings_.keepaliveInterval) {",
+   "replace": "    if (state_ != ClientState::Disconnected && now - lastSent_ > settings_.keepaliveInterval) {",
+   "target": "gyo_net_tests",
+   "cases": "liveness: no keepalive*",
+   "expect": "a\\ frame\\ with\\ data\\ carries\\ no\\ keepalive"
+  },
+  {
+   "id": "nt-interrupt-at-threshold",
+   "what": "the client is interrupted at the first threshold, not past it. Only it catches the boundary of Interrupted",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "    } else if (silent > settings_.interruptAfter) {",
+   "replace": "    } else if (silent >= settings_.interruptAfter) {",
+   "target": "gyo_net_tests",
+   "cases": "liveness: silence past*",
+   "expect": "at\\ the\\ first\\ threshold\\ the\\ client\\ is\\ still\\ connected"
+  },
+  {
+   "id": "nt-timeout-at-threshold",
+   "what": "the client ends with Timeout at the second threshold, not past it. Only it catches the boundary of Timeout",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-4"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "    if (silent > settings_.timeoutAfter) {",
+   "replace": "    if (silent >= settings_.timeoutAfter) {",
+   "target": "gyo_net_tests",
+   "cases": "liveness: silence past*",
+   "expect": "at\\ the\\ second\\ threshold\\ the\\ client\\ is\\ still\\ interrupted"
+  },
+  {
+   "id": "nt-registers-without-role",
+   "what": "the Peer component is registered in a World without a net role. Only it catches \"a World without a role registers nothing\"",
+   "guards": [
+    "net-module-declaration D-10",
+    "net-module-declaration 判定 G-1"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "    if (role == nullptr) return; // G-1: a World without a role registers nothing\n    Kernel::Registrar& r = setup.Registrar();\n    r.Component<Peer>({.name = \"Peer\"});",
+   "replace": "    Kernel::Registrar& r = setup.Registrar();\n    r.Component<Peer>({.name = \"Peer\"});\n    if (role == nullptr) return;",
+   "target": "gyo_net_tests",
+   "cases": "module: without a role*",
+   "expect": "a\\ World\\ without\\ a\\ role\\ has\\ the\\ same\\ components\\ as\\ one\\ without\\ the\\ net\\ Module"
+  },
+  {
+   "id": "nt-peer-not-despawned",
+   "what": "the server keeps the Peer entity of a connection that ended. Only it catches the despawn",
+   "guards": [
+    "net-module-declaration D-3"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "                entity = found->second;\n                despawn.Entity(entity);",
+   "replace": "                entity = found->second;",
+   "target": "gyo_net_tests",
+   "cases": "module: a client connects*",
+   "expect": "the\\ server's\\ Peer\\ entity\\ is\\ despawned\\ when\\ its\\ connection\\ ends"
+  },
+  {
+   "id": "nt-value-before-structure",
+   "what": "a value part is written before the structure update it needs is applied. Only it catches the wait for the structure tick",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration D-7",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (!result || !StructureApplied(part.requiredStructure, state.appliedStructureTick)) {",
+   "replace": "        if (!result) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(1\\):\\ at\\ each\\ observed\\ tick\\ T\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-ledger-at-send",
+   "what": "the ledger moves on when a value part is sent, not when the client confirms it (as if the send or the packet ack confirmed it), so a lost value is never sent again. Only it catches the application-level confirmation",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                ledger.pending[(std::uint64_t{tick} << 16) | index] = PendingPart{now, std::move(partEntities[index])};",
+   "replace": "                for (const Kernel::EntityId sent : partEntities[index]) ledger.entities[sent].confirmedStamp = now;",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(2\\):\\ after\\ the\\ drain\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-empty-tick-not-sent",
+   "what": "a tick with no changed value sends no part. Only it catches C-RP4 (every tick, every Peer, a value message)",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (currentCount > 0 || partCountSoFar == 0) close();",
+   "replace": "            if (currentCount > 0) close();",
+   "target": "gyo_net_tests",
+   "cases": "replication: a tick without changes*",
+   "expect": "every\\ tick\\ sends\\ at\\ least\\ one\\ value\\ part"
+  },
+  {
+   "id": "nt-ledger-not-advanced",
+   "what": "a confirmation does not move the ledger on, so every value is sent every tick. Only it catches the ledger's advance",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    known->second.confirmedStamp = std::max(known->second.confirmedStamp, pending->second.stamp);",
+   "replace": "                    (void)known;",
+   "target": "gyo_net_tests",
+   "cases": "replication: a tick without changes*",
+   "expect": "a\\ confirmed\\ value\\ is\\ not\\ sent\\ again"
+  },
+  {
+   "id": "nt-generation-unchecked",
+   "what": "the client never notices a newer server World generation. Only it catches the generation comparison",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    if (!state.generation || generation > *state.generation) {",
+   "replace": "    if (!state.generation) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: a replaced server World*",
+   "expect": "the\\ client\\ is\\ told\\ that\\ the\\ server's\\ World\\ was\\ replaced"
+  },
+  {
+   "id": "nt-removed-not-encoded",
+   "what": "a structure update leaves out the wire ids of the removed components but keeps their count, so the client misreads the rest of it. Only it catches a field left out of the structure encoding",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                for (std::uint16_t wire = 0; wire < 64; ++wire) {\n                    if ((removed >> wire) & 1u) opWriter.Value(wire);\n                }\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(1\\):\\ at\\ each\\ observed\\ tick\\ T\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-stale-value-applied",
+   "what": "a value older than one already written for that entity and component overwrites it. Only it catches 'the newer wins' (D-4's key)",
+   "guards": [
+    "net-module-declaration D-4",
+    "net-module-declaration 判定 G-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (written != state.written.end() && written->second > part.tick) {",
+   "replace": "            if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: G-5*",
+   "expect": "G\\-5\\ \\(1\\):\\ at\\ each\\ observed\\ tick\\ T\\ the\\ client\\ equals\\ the\\ server"
+  },
+  {
+   "id": "nt-resync-ignored",
+   "what": "the server ignores a client's resync, so a replaced client World gets nothing. Only it catches the resync",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (kind == static_cast<std::uint8_t>(Kind::Resync)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: a replaced server World*",
+   "expect": "a\\ replaced\\ client\\ World\\ gets\\ the\\ server's\\ World\\ again"
+  },
+  {
+   "id": "nt-onserver-everywhere",
+   "what": "OnServer() is true at a client too, so the server's logic also runs there. Only it catches the condition of D-13",
+   "guards": [
+    "net-module-declaration D-13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "bool IsServer(Kernel::Res<NetWorldRole> role) { return role->role == NetRole::Server; }",
+   "replace": "bool IsServer(Kernel::Res<NetWorldRole>) { return true; }",
+   "target": "gyo_net_tests",
+   "cases": "replication: OnServer() is false*",
+   "expect": "OnServer\\(\\)\\ logic\\ does\\ not\\ run\\ at\\ the\\ client"
+  },
+  {
+   "id": "nt-k3-as-k2",
+   "what": "a client with a rollback strategy (K3) is built and treated as K2. Only it catches the refusal until step 4",
+   "guards": [
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "    if (role->role == NetRole::Client && rollback != nullptr && rollback->strategy != nullptr) {",
+   "replace": "    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "replication: a client with a rollback strategy*",
+   "expect": "a\\ client\\ with\\ a\\ rollback\\ strategy\\ is\\ refused\\ until\\ step\\ 4\\ \\(NT\\-E5\\)"
+  },
+  {
+   "id": "nt-input-not-held",
+   "what": "a missing slot does not hold the last input (the default value is written). Only it catches hold-last",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            if (buffer.last) value = *buffer.last;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ each\\ server\\ tick\\ has\\ the\\ client's\\ input\\ of\\ that\\ tick,\\ or\\ the\\ last\\ one\\ held"
+  },
+  {
+   "id": "nt-held-fires-again",
+   "what": "a held input keeps its one-shot fields, so a press fires again. Only it catches InputOptions::held (C-IN3)",
+   "guards": [
+    "net-module-declaration C-IN3",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            if (options != nullptr && options->held) options->held(value);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ a\\ one\\-shot\\ input\\ fires\\ only\\ at\\ the\\ tick\\ it\\ was\\ given\\ \\(once\\)"
+  },
+  {
+   "id": "nt-input-window-unchecked",
+   "what": "a slot beyond the server's tick + window is stored. Only it catches the window's upper edge",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    } else if (tick > serverTick + typed->window) {",
+   "replace": "                    } else if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ a\\ slot\\ beyond\\ the\\ window\\ is\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-input-late-stored",
+   "what": "a slot at or before the tick already consumed is stored. Only it catches the window's lower edge",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    if (input.consumedThrough && tick <= *input.consumedThrough) {",
+   "replace": "                    if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ slots\\ stored\\ ==\\ consumed\\ \\+\\ still\\ ahead"
+  },
+  {
+   "id": "nt-input-overwritten",
+   "what": "a slot that arrives again overwrites the kept one and counts as stored ((Peer, tick) not kept once), so more slots are stored than consumed. Only it catches the de-duplication of C-IN1",
+   "guards": [
+    "net-module-declaration C-IN1",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    } else if (!input.slots.emplace(tick, std::move(slot)).second) {",
+   "replace": "                    } else if ((input.slots[tick] = std::move(slot), false)) {",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ slots\\ stored\\ ==\\ consumed\\ \\+\\ still\\ ahead"
+  },
+  {
+   "id": "nt-input-missing-uncounted",
+   "what": "a held step is not counted as missing. Only it catches the missing count (D-12)",
+   "guards": [
+    "net-module-declaration D-11",
+    "net-module-declaration D-12",
+    "net-module-declaration 判定 G-6"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            ++buffer.counts.missing;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: G-6*",
+   "expect": "G\\-6:\\ every\\ held\\ input\\ is\\ counted\\ as\\ missing"
+  },
+  {
+   "id": "nt-input-entry-not-ingress",
+   "what": "the entry is added with AddSystem even where the World has an authority strategy (it would run while resimulating). Only it catches authority.Ingress",
+   "guards": [
+    "net-module-declaration D-11"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "            Authority::AuthorityEntry(*setup_).Ingress<&Detail::ApplyInput<T>>(std::move(apply));",
+   "replace": "            setup_->Registrar().AddSystem<&Detail::ApplyInput<T>>(std::move(apply));",
+   "target": "gyo_net_tests",
+   "cases": "input: the entry has the same name*",
+   "expect": "the\\ entry\\ is\\ added\\ through\\ authority\\.Ingress\\ where\\ the\\ World\\ has\\ a\\ strategy"
+  },
+  {
+   "id": "nt-ccr8-write-same",
+   "what": "a value sent again unchanged is written again, so Changed<T> is true without a change. Only it catches the comparison before the write (CCR-8)",
+   "guards": [
+    "cross-component-rules CCR-8",
+    "net-module-declaration D-5"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                if (same && same->has_value() && **same) return ApplyOutcome::Unchanged;",
+   "replace": "                (void)same;",
+   "target": "gyo_net_tests",
+   "cases": "replication: a value sent again unchanged*",
+   "expect": "a\\ value\\ sent\\ again\\ unchanged\\ does\\ not\\ make\\ Changed<T>\\ true\\ \\(CCR\\-8\\)"
+  },
+  {
+   "id": "nt-reconnect-reuses-connection",
+   "what": "a new handshake from the same endpoint gets the old connection back (the salt is not compared). Only it catches the salt",
+   "guards": [
+    "net-module-declaration D-8",
+    "net-module-declaration 判定 G-9"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "        if (peer.salt == request->salt && peer.userId == request->userId && !peer.closing) {",
+   "replace": "        if (peer.userId == request->userId && !peer.closing) {",
+   "target": "gyo_net_tests",
+   "cases": "handshake: a new handshake from the same endpoint*",
+   "expect": "a\\ reconnect\\ from\\ the\\ same\\ endpoint\\ is\\ a\\ new\\ connection"
+  },
+  {
+   "id": "nt-clock-no-jump",
+   "what": "the clock sync never jumps (not even on connecting). Only it catches the snap",
+   "guards": [
+    "net-module-declaration D-9",
+    "net-module-declaration 18"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (!sync.synced || std::abs(error) > sync.settings.snapTicks) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "clock: a client at tick 0*",
+   "expect": "the\\ first\\ sync\\ after\\ connecting\\ jumps\\ to\\ the\\ target"
+  },
+  {
+   "id": "nt-clock-speed-reversed",
+   "what": "a client behind its target slows down instead of speeding up. Only it catches the direction of the speed",
+   "guards": [
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (sync.consecutive >= sync.settings.consecutive) scale = behind ? sync.settings.speedup : 1.0 / sync.settings.speedup;",
+   "replace": "            if (sync.consecutive >= sync.settings.consecutive) scale = behind ? 1.0 / sync.settings.speedup : sync.settings.speedup;",
+   "target": "gyo_net_tests",
+   "cases": "clock: when the latency grows*",
+   "expect": "a\\ client\\ falling\\ behind\\ its\\ target\\ speeds\\ up"
+  },
+  {
+   "id": "nt-clock-speed-kept",
+   "what": "back within the deadband the speed stays as it was. Only it catches the return to 1",
+   "guards": [
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        } else {\n            sync.consecutive = 0;\n        }\n    }\n    if (scale != sync.scale) ++sync.speedChanges;",
+   "replace": "        } else {\n            sync.consecutive = 0;\n            scale = sync.scale;\n        }\n    }\n    if (scale != sync.scale) ++sync.speedChanges;",
+   "target": "gyo_net_tests",
+   "cases": "clock: when the latency grows*",
+   "expect": "back\\ near\\ the\\ target\\ the\\ speed\\ is\\ 1\\ again"
+  },
+  {
+   "id": "nt-clock-not-tick-writer",
+   "what": "the clock sync is not added to the time Module's Tick writers, so a server-authority client is AU-E5. Only it catches the registration",
+   "guards": [
+    "net-module-declaration D-9",
+    "world-time WT-5"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "        WorldTime::WorldTimeModule::AddTickWriter(setup, \"SyncClock\");\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "input: the entry has the same name*",
+   "expect": "AU\\-E5\\ System\\ 'SyncClock'"
+  },
+  {
+   "id": "nt-clock-unsmoothed",
+   "what": "the remote estimate takes each packet as it is (no EMA). Only it catches the smoothing of the remote estimate",
+   "guards": [
+    "net-module-declaration D-9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            sync.offset = sync.haveOffset ? sync.offset + alpha * (raw - sync.offset) : raw;",
+   "replace": "            sync.offset = raw + 0.0 * alpha;",
+   "target": "gyo_net_tests",
+   "cases": "clock: a client at tick 0*",
+   "expect": "once\\ settled\\ the\\ client\\ stays\\ within\\ 2\\ ticks\\ of\\ its\\ sync\\ target"
+  },
+  {
+   "id": "nt-resource-sent-again",
+   "what": "A replicated Resource is sent every tick, confirmed or not. Only it catches the ledger's check of a Resource's confirmed stamp",
+   "guards": [
+    "net-module-declaration Q8",
+    "net 12"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (confirmed) continue;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "resource:*",
+   "expect": "a\\ confirmed\\ Resource\\ is\\ not\\ sent\\ again"
+  },
+  {
+   "id": "nt-resource-default-writes-same",
+   "what": "The default Resource apply writes the value even when it is the same. Only it catches CCR-8 for a replicated Resource",
+   "guards": [
+    "net-module-declaration Q8",
+    "cross-component-rules CCR-8"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                if (same->has_value() && **same) return ApplyOutcome::Unchanged;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "resource:*",
+   "expect": "Changed\\(\\)\\ is\\ true\\ once\\ per\\ real\\ change\\ of\\ the\\ score"
+  },
+  {
+   "id": "nt-resource-hash-missing",
+   "what": "The protocol hash leaves the replicated Resources out. Only it catches the Resources' part of the hash",
+   "guards": [
+    "net-module-declaration D-5",
+    "net-module-declaration Q8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    for (const auto& entry : resources) text += \"r:\" + entry->name + \":\" + std::to_string(entry->version) + \";\";\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "resource:*",
+   "expect": "the\\ protocol\\ hash\\ includes\\ the\\ replicated\\ Resources"
+  },
+  {
+   "id": "nt-resource-apply-not-called",
+   "what": "The client does not call the apply given to ReplicateResource (the value is dropped as applied). Only it catches the registration's apply being the one called (the state machine's request kind reaches the client through it)",
+   "guards": [
+    "net-module-declaration Q8"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                if (auto applied = apply(world, *value); !applied) return Base::Err(std::move(applied).error());\n",
+   "replace": "                if (auto applied = Kernel::SystemResult{}; !applied) return Base::Err(std::move(applied).error());\n",
+   "target": "gyo_net_tests",
+   "cases": "statesync:*",
+   "expect": "TEST CASE:\\s+statesync: the server's request reaches the client"
+  },
+  {
+   "id": "nt-epoch-taken-from-message",
+   "what": "A client World takes the epoch of the messages it reads instead of keeping its own. Only it catches B1 and R2's \"the epoch is never taken from a message\"",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (state.generation) state.replacedGenerations.push_back(generation);\n",
+   "replace": "        if (state.generation) state.replacedGenerations.push_back(generation);\n        state.epoch = epoch;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B1:\\ after\\ a\\ resync\\ the\\ server\\ takes\\ the\\ client's\\ confirmations\\ again"
+  },
+  {
+   "id": "nt-epoch-not-per-world",
+   "what": "Every client World after the first gets epoch 1, so the third World's resync is not told from the second's. Only it catches B1's \"the epoch grows with every client World\"",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "                state.epoch = clientWorlds - 1;\n",
+   "replace": "                state.epoch = clientWorlds > 1 ? 1 : 0;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B1:\\ the\\ messages\\ of\\ the\\ client's\\ old\\ epoch\\ are\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-first-message-epoch-unchecked",
+   "what": "The first message a client World reads is taken whatever its epoch (the generation branch returns before the epoch check). Only it catches the epoch check of a new World's first messages",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        state.maxAppliedTick = 0;\n        state.latestConfirmed.reset();\n    }\n    if (epoch < state.epoch) {\n",
+   "replace": "        state.maxAppliedTick = 0;\n        state.latestConfirmed.reset();\n        return true;\n    }\n    if (epoch < state.epoch) {\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B1:\\ the\\ messages\\ of\\ the\\ client's\\ old\\ epoch\\ are\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-outbox-cleared-without-tick",
+   "what": "ReplicateOut empties the outbox in a frame whose tick it does not send, so those server messages are lost. Only it catches B2",
+   "guards": [
+    "net-module-declaration D-12",
+    "net-module-declaration C-MS1",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (!newTick) return;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B2:\\ every\\ server\\ message\\ written\\ goes\\ out"
+  },
+  {
+   "id": "nt-structure-none-as-applied",
+   "what": "A message needing a structure counts it as applied when none was applied yet (0 meant both \"none\" and \"tick 0\"). Only it catches S1",
+   "guards": [
+    "net-module-declaration D-7",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    return !needed || (applied && *needed <= *applied);\n",
+   "replace": "    return !needed || !applied || *needed <= *applied;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S1:\\ no\\ value\\ is\\ written\\ before\\ the\\ structure\\ of\\ tick\\ 0"
+  },
+  {
+   "id": "nt-ledger-before-send",
+   "what": "The ledger takes a structure update the connection refused. Only it catches S3",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    ++ledger.reliableRejected;\n                    restructured.clear();\n",
+   "replace": "                    ++ledger.reliableRejected;\n                    for (const Kernel::EntityId gone : despawned) ledger.entities.erase(gone);\n                    for (std::size_t i = 0; i < restructured.size(); ++i) ledger.entities[restructured[i]] = restructuredAs[i];\n                    ledger.lastStructureTick = tick;\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S3:\\ a\\ refused\\ structure\\ update\\ is\\ sent\\ again"
+  },
+  {
+   "id": "nt-older-salt-ends-connection",
+   "what": "A late response of an older handshake (smaller salt) ends the newer connection. Only it catches S2 (a)",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/ServerHost.cpp",
+   "find": "        if (request->salt < peer.salt) {\n            Count(DropReason::Unexpected);\n            return;\n        }\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "handshake:*",
+   "expect": "S2\\ a:"
+  },
+  {
+   "id": "nt-accept-salt-unchecked",
+   "what": "A connecting client takes an accept of another handshake. Only it catches S2 (b)",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/ClientSession.cpp",
+   "find": "            if (accepted->salt != request_.salt) {\n",
+   "replace": "            if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "handshake:*",
+   "expect": "S2\\ b:"
+  },
+  {
+   "id": "nt-peer-drop-uncounted",
+   "what": "What the server drops from a client's confirmations and resyncs is not counted on its Peer. Only it catches S4's server-side counts (the inputs' are counted apart)",
+   "guards": [
+    "net-module-declaration D-12",
+    "net NT-8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "void DropAt(PeerLedger& ledger, const ReplicaDrop reason) { ++ledger.drops[static_cast<std::size_t>(reason)]; }",
+   "replace": "void DropAt(PeerLedger&, const ReplicaDrop) {}",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S4:\\ unreadable\\ messages\\ and\\ unknown\\ kinds\\ are\\ counted"
+  },
+  {
+   "id": "nt-structure-missing-uncounted",
+   "what": "A structure update's component for an entity the client lacks is not counted. Only it catches S4's structure count",
+   "guards": [
+    "net-module-declaration D-12",
+    "net NT-8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (outcome == ApplyOutcome::Malformed) Drop(state, ReplicaDrop::Malformed);\n            if (outcome == ApplyOutcome::Missing) Drop(state, ReplicaDrop::MissingTarget);\n",
+   "replace": "            if (outcome == ApplyOutcome::Malformed) Drop(state, ReplicaDrop::Malformed);\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "S4:\\ a\\ structure\\ update's\\ component\\ for\\ a\\ missing\\ entity\\ is\\ counted"
+  },
+  {
+   "id": "nt-confirm-generation-unchecked",
+   "what": "The server takes a confirmation of another server World. Only it catches the confirmations' generation check",
+   "guards": [
+    "net-module-declaration D-4",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (generation != serverGeneration) {\n",
+   "replace": "        if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "small\\ thing\\ 2:\\ a\\ confirmation\\ of\\ another\\ generation\\ is\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-input-generation-unchecked",
+   "what": "The server fills inputs of another server World into the Peer's buffer. Only it catches the inputs' generation check",
+   "guards": [
+    "net-module-declaration D-4",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (generation != service->Generation()) {\n",
+   "replace": "            if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "small\\ thing\\ 2:\\ an\\ input\\ message\\ of\\ another\\ generation\\ is\\ dropped\\ and\\ counted"
+  },
+  {
+   "id": "nt-input-not-expired",
+   "what": "With nothing consuming them, the slots the server's tick passed stay in the buffer. Only it catches small thing 1",
+   "guards": [
+    "net-module-declaration C-IN1",
+    "net 9"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "                    while (!input.slots.empty() && input.slots.begin()->first <= serverTick) {\n",
+   "replace": "                    while (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "input:*",
+   "expect": "small\\ thing\\ 1:\\ the\\ server\\ keeps\\ no\\ slot\\ behind\\ its\\ tick"
+  },
+  {
+   "id": "nt-links-more",
+   "what": "NT-7 link set: the net Module links one more target (the state machine). Only it reaches gyo_net's link set",
+   "guards": [
+    "net NT-7"
+   ],
+   "file": "engine/modules/net/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_net PUBLIC GYO::Base GYO::OS GYO::Time GYO::Kernel GYO::Orchestration)",
+   "replace": "target_link_libraries(gyo_net PUBLIC GYO::Base GYO::OS GYO::Time GYO::Kernel GYO::Orchestration GYO::StateMachine)",
+   "target": "gyo_net_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_net links\\s+GYO::Authority;GYO::Base;GYO::EntityIds;GYO::Kernel;GYO::OS;GYO::Orchestration;GYO::Rollback;GYO::StateMachine;GYO::Time;GYO::WorldTime;\\s+expected exactly"
+  },
+  {
+   "id": "nt-outbox-taken-per-peer",
+   "what": "The outbox is taken when any Peer has not sent this tick (B2's first fix): a Peer connecting in a frame without a step takes the frame's messages from the others. Only it catches R1",
+   "guards": [
+    "net-module-declaration D-12",
+    "net-module-declaration C-MS1",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    (void)world.Modify<NetOutbox>([&](NetOutbox& box) {\n        newTick = box.sentTick != tick;\n        if (!newTick) return;\n        outgoing = std::move(box.messages);\n        box.messages.clear();\n        box.sentTick = tick;\n    });\n",
+   "replace": "    for (const auto& [connectionId, peerEntity] : peers) {\n        auto sent = world.Read<PeerLedger>(peerEntity, [&](const PeerLedger& kept) { return kept.lastSentTick != tick; });\n        if (sent && sent->has_value() && **sent) newTick = true;\n    }\n    if (newTick) {\n        (void)world.Modify<NetOutbox>([&](NetOutbox& box) {\n            outgoing = std::move(box.messages);\n            box.messages.clear();\n        });\n    }\n",
+   "target": "gyo_net_tests",
+   "cases": "scenario:*",
+   "expect": "R1:\\ each\\ Peer\\ is\\ sent\\ every\\ server\\ message\\ written\\ since\\ it\\ joined"
+  },
+  {
+   "id": "nt-request-epoch-missing",
+   "what": "The handshake request carries epoch 0 whatever the client World's: a reconnected World drops the new connection's first whole World as another epoch. Only it catches R2's epoch in the request",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "lastSalt_, clientWorlds_ > 0 ? clientWorlds_ - 1 : 0};",
+   "replace": "lastSalt_, 0};",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "R2\\ b:\\ the\\ new\\ connection's\\ messages\\ carry\\ the\\ new\\ World's\\ epoch"
+  },
+  {
+   "id": "nt-new-ledger-epoch-zero",
+   "what": "A server World's new ledger starts with epoch 0, not the connection's. Only it catches R2's ledger start",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "            ledger.epoch = server->EpochOf(id);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "R2\\ a:\\ a\\ later\\ server\\ World\\ starts\\ with\\ the\\ connection's\\ epoch"
+  },
+  {
+   "id": "nt-resync-epoch-not-kept",
+   "what": "A resync changes the ledger's epoch but not the connection's, so a later server World starts with the old one. Only it catches R2's resync kept on the connection",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 8"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            server.SetEpoch(connectionId, epoch); // a later server World's ledger starts with it (R2)\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "R2\\ a:\\ a\\ later\\ server\\ World\\ starts\\ with\\ the\\ connection's\\ epoch"
+  },
+  {
+   "id": "nt-salt-not-increasing",
+   "what": "The salt is drawn at random again (3a's way), not larger than the one before. Only it catches S2's premise at the side that draws it",
+   "guards": [
+    "net-module-declaration D-8",
+    "net 9"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "        lastSalt_ = std::max(lastSalt_ + 1, static_cast<std::uint64_t>(std::max<NetTime::rep>(now.count(), 0)));\n",
+   "replace": "        lastSalt_ = (lastSalt_ + 0x9E3779B97F4A7C15ull) * 0xBF58476D1CE4E5B9ull;\n",
+   "target": "gyo_net_tests",
+   "cases": "module:*",
+   "expect": "recheck\\ small\\ thing\\ b:\\ a\\ new\\ handshake's\\ salt\\ is\\ larger"
+  }
+ ]
+}

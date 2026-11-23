@@ -285,6 +285,57 @@ private:
     std::optional<T> now_;
 };
 
+// A recorded input that is a component (net Module declaration D-11, section 5: the input is a component on the
+// player's entity at both ends): every cell of T by tick, one value per entity, written back cell by cell. The
+// shape follows lightyear's InputBuffer (crates/inputs/inputs/src/input_buffer.rs: one buffer of inputs by tick per
+// entity), kept here as one ring of the whole column per tick. An entity without T at that tick gets nothing back.
+template <class T>
+class ComponentInputHistory final : public InputHistoryBase {
+public:
+    explicit ComponentInputHistory(std::uint32_t capacity) : capacity_(capacity) {}
+    // The cells of tick are replaced, the later ticks are kept (as InputHistory<T>).
+    void Record(Exclusive& world, std::uint64_t tick) override {
+        Cells cells = Read(world);
+        auto at = std::find_if(ring_.begin(), ring_.end(), [tick](const auto& entry) { return entry.first >= tick; });
+        if (at != ring_.end() && at->first == tick) {
+            at->second = std::move(cells);
+        } else {
+            ring_.insert(at, {tick, std::move(cells)});
+        }
+        while (ring_.size() > capacity_) ring_.pop_front();
+    }
+    void WriteBack(Exclusive& world, std::uint64_t tick) const override {
+        for (const auto& [kept, cells] : ring_) {
+            if (kept != tick) continue;
+            Write(world, cells);
+            return;
+        }
+    }
+    void Keep(Exclusive& world) override { now_ = Read(world); }
+    void PutBack(Exclusive& world) override {
+        if (!now_) return;
+        Write(world, *now_);
+        now_.reset();
+    }
+
+private:
+    using Cells = std::vector<std::pair<Kernel::EntityId, T>>;
+    static Cells Read(Exclusive& world) {
+        Cells cells;
+        world.template ReadColumn<T>(
+            [&cells](Kernel::EntityId id, Kernel::ChangeStamp, Kernel::ChangeStamp, const T& value) { cells.emplace_back(id, value); });
+        return cells;
+    }
+    static void Write(Exclusive& world, const Cells& cells) {
+        for (const auto& [id, value] : cells) {
+            static_cast<void>(world.template Modify<T>(id, [&value](T& input) { input = value; }));
+        }
+    }
+    std::uint32_t capacity_;
+    std::deque<std::pair<std::uint64_t, Cells>> ring_;
+    std::optional<Cells> now_;
+};
+
 // The World Resource the official strategy keeps its history in.
 struct RollbackHistory {
     std::vector<std::unique_ptr<ColumnHistoryBase>> columns;

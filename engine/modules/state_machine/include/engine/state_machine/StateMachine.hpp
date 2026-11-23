@@ -32,6 +32,12 @@ template <class S>
 struct Access;
 }
 
+// The kind of a request (Design Invariant 6): Normal runs the exits and enters; Silent changes the value without them.
+enum class RequestKind : std::uint8_t {
+    Normal = 1,
+    Silent,
+};
+
 template <State S>
 class StateMachine final {
 public:
@@ -77,19 +83,24 @@ private:
 };
 
 // The pending request of one state: written by any System; taken by the apply System at the start of an apply.
-// Two requests before one apply: the later one wins, the earlier one is counted (the user's
-// v8-arch-gyo2-state-machine-overwritten-request-counted; a diagnostic, not reset while the World lives).
+// Two requests before one apply: the later one wins, value and kind together, and the earlier one is counted (the
+// user's v8-arch-gyo2-state-machine-overwritten-request-counted; a diagnostic, not reset while the World lives).
 template <State S>
 class StateMachineRequest final {
 public:
     StateMachineRequest() = default;
 
     // Asks for value at the next apply: it runs the exits and enters (also for the current value).
-    void Request(S value) noexcept {
-        if (pending_) ++overwritten_;
-        pending_ = value;
-    }
+    void Request(S value) noexcept { Put(value, RequestKind::Normal); }
+    // Asks for value at the next apply without running the exits and enters, of this state or of the children that
+    // appear or leave with it; the same value changes nothing, and a parent asked for its own value leaves its
+    // children as they are (DI 6; v8-arch-gyo2-state-machine-silent-request-and-child-reset,
+    // v8-arch-gyo2-state-machine-silent-parent-keeps-child). The timing, the check of the value, overwriting and
+    // the count are those of Request.
+    void RequestSilent(S value) noexcept { Put(value, RequestKind::Silent); }
     [[nodiscard]] std::optional<S> Pending() const noexcept { return pending_; }
+    // The kind of the pending request (Normal when there is none).
+    [[nodiscard]] RequestKind PendingKind() const noexcept { return kind_; }
     // Requests overwritten before an apply took them, since the World was built (rollback puts it back with the
     // rest of the value; declaration section 10).
     [[nodiscard]] std::uint64_t Overwritten() const noexcept { return overwritten_; }
@@ -97,14 +108,25 @@ public:
     // Every field: a rollback puts the value back only when it differs (RestoreSet::Resource), so the count must
     // count. The hash leaves the count out: a diagnostic, not part of the game's state (declaration 5.2 row 4).
     friend bool operator==(const StateMachineRequest&, const StateMachineRequest&) = default;
-    friend void HashValue(Kernel::Hasher& h, const StateMachineRequest& v) { HashValue(h, v.pending_); }
+    friend void HashValue(Kernel::Hasher& h, const StateMachineRequest& v) {
+        HashValue(h, v.pending_);
+        HashValue(h, v.kind_);
+    }
 
 private:
     friend struct Detail::Access<S>;
+    void Put(S value, RequestKind kind) noexcept {
+        if (pending_) ++overwritten_;
+        pending_ = value;
+        kind_ = kind;
+    }
 
     std::optional<S> pending_;
+    RequestKind kind_ = RequestKind::Normal;
     std::uint64_t overwritten_ = 0;
 };
+
+
 
 namespace Detail {
 
@@ -133,9 +155,11 @@ struct Access {
         m.applied_ = true;
         m.initial_.reset();
     }
+    // The kind goes back to Normal with the take (read it before, with PendingKind).
     [[nodiscard]] static std::optional<S> Take(StateMachineRequest<S>& r) noexcept {
         std::optional<S> taken = r.pending_;
         r.pending_.reset();
+        r.kind_ = RequestKind::Normal;
         return taken;
     }
 };
