@@ -49,9 +49,18 @@ if(NOT gyo_sdl3_patched)
         "${CMAKE_CURRENT_LIST_DIR}/patches/*.patch to it (docs/architecture/target/v2/sdl.zh-Hant.md, SDL patches).")
 endif()
 
-add_library(gyo_sdl INTERFACE)
+# What the sdl* Plugins share, in GYO's words (no SDL3/ include, no SDL link): the clock pairing and the opaque
+# window handle.
+add_library(gyo_sdl STATIC src/ClockPair.cpp)
 add_library(GYO::SDL ALIAS gyo_sdl)
-target_compile_features(gyo_sdl INTERFACE cxx_std_20)
+target_include_directories(gyo_sdl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(gyo_sdl PUBLIC GYO::Time)
+target_compile_features(gyo_sdl PUBLIC cxx_std_20)
+if(MSVC)
+    target_compile_options(gyo_sdl PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(gyo_sdl PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 if(BUILD_TESTING)
     add_subdirectory(tests)

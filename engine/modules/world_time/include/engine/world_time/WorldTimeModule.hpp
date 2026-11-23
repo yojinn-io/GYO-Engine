@@ -8,7 +8,7 @@
 // orchestration layer know nothing of it (WT-4).
 //
 // Its duties (WT-6): (1) register the time Resources in every World it is built into; (2) sample (TimeSampling;
-// moves to the runner with the exchange point); (3) advance real and virtual time (pause, scale, caps, the
+// stays in AdvanceTime, as Bevy's time_system: v8-arch-gyo2-time-sampling-in-system); (3) advance real and virtual time (pause, scale, caps, the
 // discarded record); (4) accumulate and drive the fixed step, Tick, rewind k steps (FixedStep.hpp); (5) switch
 // ActiveTime; (6) register Resimulation with its initial value; (7) send TimeDiscarded.
 

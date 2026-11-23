@@ -7,7 +7,7 @@ Owner：架構（`plugins/sdl*`）、audio Module。GYO2 主會話開的任務�
 
 1. **`plugins/sdl_audio`**：只做 `Configure` 的單位 `SDLAudioPlugin`（建混音器或用產品給的 `AudioOutputMixer`；有 asset 登記處時登記 `WavLoader`；開預設播放裝置；`AudioOutput` 放進共用處；`OnDestroy` 停）。裝置開不了不是啟動錯誤（`AudioOutputFailure`，E2）。SDL 只在 `src/adapters/sdl/AudioDevice.cpp`。照 master 修過的 `SdlAudioOutput.cpp`，差別是只借混音器、拿掉 anchor 紀錄。
 2. **測試**：`sdl_audio.dummy`（建混音器、登記 loader、播；設定、設定錯誤、產品的混音器與 Product 結束時停、兩個 Product 並存、anchor 每個 block 讀）、`sdl_audio.disk`（檔案裡恰好一個 frame、增益對）、`sdl_audio.unavailable`（不存在的驅動：回報、Product 照跑）。都經 Product、不含 SDL，驅動用環境變數選。計測程式 `gyo_sdl_audio_block_record`。
-3. **`scheduleDelay`**：判定先寫（sdl 頁第 5 節）再量。macOS Intel（coreaudio、預設 1024 frame）最長間隔 21.463／21.470 ms → 54.8 ms → 60 ms 不變。Windows、Linux 沒有實機，未量。
+3. **`scheduleDelay`**：判定先寫（sdl 頁第 6 節）再量。macOS Intel（coreaudio、預設 1024 frame）最長間隔 21.463／21.470 ms → 54.8 ms → 60 ms 不變。Windows、Linux 沒有實機，未量。
 4. **命名**：N17 的 Plugin 根由這批定——SDL 是縮寫；`plugins/<名>` ↔ `GYO::Plugins::<推出的名>` ↔ `GYO::<推出的名>`；naming_guard 把 `plugins/` 每個目錄當單位；P 的 `GYO::Sdl` 改 `GYO::SDL`。已發訊息給 W 對齊。
 5. **audio 的後續小事**（批次表）：`Mixer.cpp` 兩份手寫 SPSC 環收成 `SpscRing.hpp`；突變的 find 跟著改，TSan 清單的 `au-ctl-clip-handback-relaxed`、`au-ctl-clip-reclaim-relaxed` 和同一行的突變重複了、退役。`au-ctl-stress-reassign-every-block` 加「long sounds」案例（只讀鳴響中的聲音、緊迴圈）。
 

@@ -16,8 +16,9 @@ as HEAD has it. copy does the same in a new git work tree of HEAD instead, for a
 developer's tree alone.
 
 Either way the family's rows of config/plugins.csv and their plugins/<name> directories are removed (staged, so
-tests that list files through git see the removal), and every game or tool whose CMake files name a removed Plugin
-(its directory, tests, acceptance programs, assets and register row). A remaining register row that depends on a
+tests that list files through git see the removal), every game or tool whose CMake files name a removed Plugin
+(its directory, tests, acceptance programs, assets and register row), and every example directory (examples/<name>,
+each added by examples/CMakeLists.txt when it has a CMakeLists.txt) whose CMake files name one. A remaining register row that depends on a
 removed Plugin, or any other CMake file that still names one, is an error: the tree could not configure, and the
 removal would not be what SDL-2 asks. check reads the build record, the fetched sources and the cache.
 
@@ -38,6 +39,8 @@ PLUGIN_REGISTER = "config/plugins.csv"
 PRODUCT_KINDS = (("games", "config/games.csv"), ("tools", "config/tools.csv"))
 # Where a product keeps its parts besides games/<name> or tools/<name>.
 PRODUCT_PARTS = ("tests", "build/acceptance", "assets")
+# Examples: one directory each, added by examples/CMakeLists.txt without naming them.
+EXAMPLES = "examples"
 CMAKE_FILE = re.compile(r"(^|/)(CMakeLists\.txt|[^/]+\.cmake)$")
 
 
@@ -137,6 +140,17 @@ def remove_family(tree, family):
             git(tree, "add", "--", register_path)
             remove_paths(tree, [f"{part}/{name}" for name in dropped for part in (root, *PRODUCT_PARTS)])
             products.extend(f"{root}/{name}" for name in dropped)
+
+    examples = tree / EXAMPLES
+    if examples.is_dir():
+        dropped = []
+        for directory in sorted(path for path in examples.iterdir() if path.is_dir()):
+            texts = [strip_comments(file.read_text(encoding="utf-8")) for file in directory.rglob("*")
+                     if file.is_file() and CMAKE_FILE.search(file.as_posix())]
+            if any(names_in(text, removed) for text in texts):
+                dropped.append(f"{EXAMPLES}/{directory.name}")
+        remove_paths(tree, dropped)
+        products.extend(dropped)
 
     # The registers name Plugins only in their dependency columns, checked above; the CMake files anywhere.
     for name in tracked_files(tree):

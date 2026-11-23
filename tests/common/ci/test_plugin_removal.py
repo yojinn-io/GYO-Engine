@@ -141,6 +141,20 @@ class PluginRemovalTests(unittest.TestCase):
                                     "examples/CMakeLists.txt: still names the removed Plugin 'sdl_window'"):
             plugin_removal.copy(self.repository, self.copy, "sdl")
 
+    def test_an_example_directory_that_carries_the_family_is_removed(self):
+        self.make_repository({"examples/CMakeLists.txt": "gyo_add_examples()\n",
+                              "examples/window/CMakeLists.txt": "gyo_product_units(window PLUGINS sdl_window)\n",
+                              "examples/window/main.cpp": "int main() { return 0; }\n",
+                              "examples/headless/CMakeLists.txt": "add_executable(headless main.cpp)  # no sdl_window\n"})
+        removed, products = plugin_removal.copy(self.repository, self.copy, "sdl")
+        self.assertEqual(removed, ["sdl", "sdl_window"])
+        self.assertIn("examples/window", products)
+        listed = self.listed(self.copy)
+        self.assertNotIn("examples/window/CMakeLists.txt", listed)
+        self.assertNotIn("examples/window/main.cpp", listed)
+        self.assertIn("examples/headless/CMakeLists.txt", listed)
+        self.assertFalse((self.copy / "examples/window").exists())
+
     def test_a_longer_name_or_a_comment_is_not_a_removed_name(self):
         self.make_repository({"examples/CMakeLists.txt": "set(sdl_windowing_note on)  # sdl_window\n",
                               "build/cmake/Other.cmake": "set(GYO::Sdl_like 1)\n# sdl\n"})
