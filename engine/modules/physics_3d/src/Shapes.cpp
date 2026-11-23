@@ -147,7 +147,7 @@ bool FinitePositive(const float value) { return std::isfinite(value) && value > 
 } // namespace
 
 Base::Result<BoxSet, Physics3dError> BoxSet::Build(const std::span<const Math::Aabb> boxes) {
-    return Build(boxes, BoxSetFlags::None);
+    return Build(boxes, BoxSetFlags::FixInternalEdges);
 }
 
 Base::Result<BoxSet, Physics3dError> BoxSet::Build(const std::span<const Math::Aabb> boxes, const BoxSetFlags flags) {
@@ -184,7 +184,7 @@ Base::Result<BoxSet, Physics3dError> BoxSet::Build(const std::span<const Math::A
     data->order.resize(count);
     for (std::uint32_t i = 0; i < count; ++i) data->order[i] = i;
     if (count > 0) BuildNode(*data, 0, count);
-    if (flags == BoxSetFlags::FixInternalEdges && count > 0) FindFaceNeighbours(*data);
+    if (HasFlag(flags, BoxSetFlags::FixInternalEdges) && count > 0) FindFaceNeighbours(*data);
     return BoxSet(std::shared_ptr<const Detail::BoxSetData>(std::move(data)));
 }
 

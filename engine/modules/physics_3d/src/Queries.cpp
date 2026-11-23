@@ -408,7 +408,7 @@ struct Outline final {
 };
 
 Outline OutlineOf(const Detail::BoxSetData& data, const std::uint32_t box) {
-    return Outline{data.flags == BoxSetFlags::FixInternalEdges ? &data : nullptr, box};
+    return Outline{HasFlag(data.flags, BoxSetFlags::FixInternalEdges) ? &data : nullptr, box};
 }
 
 // parry's normal constraint, for an axis-aligned box: the box's outward normal at point, with the component along
@@ -863,9 +863,13 @@ Base::Result<std::vector<BoxContact>, Physics3dError> FindBoxContacts(const Shap
     return out;
 }
 
-Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& shape1, const Pose& pose1,
-                                                                const Math::Vec3& motion, const Shape& shape2,
-                                                                const Pose& pose2, const ShapeCastOptions& options) {
+namespace {
+
+// The checks and the set-up every cast does: shape 1 as a ball against a box grown along an axis (Sweep), in shape
+// 2's frame.
+Base::Result<Sweep, Physics3dError> PrepareSweep(const Shape& shape1, const Pose& pose1, const Math::Vec3& motion,
+                                                 const Shape& shape2, const Pose& pose2,
+                                                 const ShapeCastOptions& options) {
     GYO_ASSERT(IsValid(shape1));
     GYO_ASSERT(IsValid(pose1));
     GYO_ASSERT(Math::IsFinite(motion));
@@ -911,6 +915,18 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
         }
     }
     s.inflated = s.radius + static_cast<double>(options.targetDistance);
+    return s;
+}
+
+} // namespace
+
+Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& shape1, const Pose& pose1,
+                                                                const Math::Vec3& motion, const Shape& shape2,
+                                                                const Pose& pose2, const ShapeCastOptions& options) {
+    auto prepared = PrepareSweep(shape1, pose1, motion, shape2, pose2, options);
+    if (!prepared) return Base::Err(std::move(prepared).error());
+    const Sweep& s = *prepared;
+    const Frame f2 = FrameOf(pose2);
     if (const auto* cuboid = std::get_if<Cuboid>(&shape2)) {
         const std::optional<SweepHit> hit = SweepBox(s, CuboidBox(*cuboid), options);
         if (!hit) return std::optional<ShapeHit>{};
@@ -939,6 +955,19 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
     }
     if (!best) return std::optional<ShapeHit>{};
     return std::optional<ShapeHit>(ToShapeHit(f2, *best));
+}
+
+Base::Result<std::optional<ShapeHit>, Physics3dError> CastShapeOnBox(const Shape& shape1, const Pose& pose1,
+                                                                     const Math::Vec3& motion, const BoxSet& boxes,
+                                                                     const std::uint32_t box, const Pose& pose2,
+                                                                     const ShapeCastOptions& options) {
+    GYO_ASSERT(box < boxes.Size());
+    auto prepared = PrepareSweep(shape1, pose1, motion, Shape(boxes), pose2, options);
+    if (!prepared) return Base::Err(std::move(prepared).error());
+    const Detail::BoxSetData& data = *Detail::BoxSetAccess::Data(boxes);
+    const std::optional<SweepHit> hit = SweepBox(*prepared, BoxOf(data.boxes[box]), options, OutlineOf(data, box));
+    if (!hit) return std::optional<ShapeHit>{};
+    return std::optional<ShapeHit>(ToShapeHit(FrameOf(pose2), *hit));
 }
 
 } // namespace GYO::Engine::Physics3d

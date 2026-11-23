@@ -185,3 +185,5 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 5. 既有測試（含兩份 golden）在旗標關閉時全部不變。
 
 旗標的預設值照 parry：關閉（parry b3c3584 `src/shape/compound.rs` 的 `Compound::new` 設 `flags: CompoundFlags::empty()`，`CompoundFlags` 的 `Default` 也是空；`FIX_INTERNAL_EDGES` 只由 `with_flags`／`set_flags` 打開），所以 `BoxSet::Build(boxes)` 等於 `Build(boxes, BoxSetFlags::None)`；不因判定結果改。
+
+**修訂 3（2026-11-23，主會話判）：預設改成打開。** 這是預設值的設計選擇，不是放寬判定：判定 1～5 不變，打開與關閉兩種情形都測。理由：`BoxSet` 的用途是體素地圖，parry／avian 的 `Voxels` 形狀沒有開關、永遠以鄰居分類避開內部邊（parry b3c3584 `src/shape/voxels/voxels.rs:14-28`）；`Compound` 預設關閉的理由（任意凸形、焊接容差的誤判、舊行為相容）在 `BoxSet` 大多不成立；AGENTS §1-10「既定値は便利にし」；預設關閉時產品忘了打開，S1 會悄悄回來。§12 原本那句「照 parry 定」是卡片自己寫的，由主會話判（新 AGENTS §2.6）。

@@ -56,7 +56,13 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 - **作者的規則不在這裡**（§1-1）：站地判定、坡度、台階、貼地、重力。rapier 的 `KinematicCharacterController` 把它們綁在一起，這裡不做；PvP 盤點沒有台階與坡。放置檢查用 `Intersections`。
 - 不支援的組合照樣回錯：對球、膠囊 collider 掃掠是 `Unsupported`，角色自己與其他角色用 `filter` 排除。
 - 走訪的順序固定（實體依 EntityId、方塊依索引），同樣的輸入給同樣的位元；golden 一份（`physics_3d.move_and_slide`）。
-- **`BoxSet` 的內部邊（S1，已用旗標修好）。** 兩個天面同高、相鄰的方塊（`[-2,0]×[-1,0]×[-1,1]` 與 `[0,2]×[-1,0]×[-1,1]`），`config.planes = {(0,1,0)}`，`CapsuleY(0.5, 0.5)` 在皮膚高度（y＝1.01）以速度 (∓3, −1, 0)、1/60 秒走 60 步越過接縫：不開旗標時最大 y 1.01882386（**高出 8.8 mm**）、最小水平速度 2.70010996（**慢約 10%**）；原因是每個方塊各算最近點，相鄰方塊的頂邊在 `2 × skinWidth` 內時給出約 11° 傾斜的接觸平面，超過 cos 5° 不和地面合併。`BoxSet::Build(boxes, BoxSetFlags::FixInternalEdges)`（照 parry 複合形狀的 `FIX_INTERNAL_EDGES`，`src/shape/compound.rs:30-40`、`490-636`，夾法在 `compound_pseudo_normals.rs`）打開後：抬高 0、最小水平速度 3（判定在[事前宣告](physics-3d-declaration.zh-Hant.md)第 12 節，閾值先寫好）。**怎麼選**：體素地圖、拼起來的地板與牆打開；預設關閉（同 parry）。**規則**（逐位元、沒有容差；parry 預設在 4 ULP 內焊接頂點，這裡不焊）：方塊 j 在方塊 i 的面（軸 a、＋側）上的點 p 延續該面，當 j 在 a 的最小值等於 i 在 a 的最大值（float 相等；−側反過來），且 j 在另外兩軸的閉區間包含 p。接觸與掃掠的法線在被延續的面的軸上的分量去掉、重新正規化（全部都要去掉時照原樣）；在方塊裡的形狀從沒被延續的面中推出量最小的那面出去（都被延續時照舊）。只改法線，距離與點不變。建立時跑一次找每個面的鄰居（存在隱藏的 `BoxSetData`）；旗標算進摘要、`==`、`Collider` 的雜湊。**限制**：只認恰好貼齊的鄰居（差 1 ULP 就不算）；射線的法線不夾（射線只給面法線）；鄰居只看同一個 `BoxSet` 內，跨 `BoxSet` 或與 `Cuboid` 之間的接縫不處理。
+- **`BoxSet` 的內部邊（S1，`BoxSetFlags::FixInternalEdges`，預設打開）。** 兩個天面同高、相鄰的方塊（`[-2,0]×[-1,0]×[-1,1]` 與 `[0,2]×[-1,0]×[-1,1]`），`config.planes = {(0,1,0)}`，`CapsuleY(0.5, 0.5)` 在皮膚高度（y＝1.01）以速度 (∓3, −1, 0)、1/60 秒走 60 步越過接縫：關閉旗標時最大 y 1.01882386（**高出 8.8 mm**）、最小水平速度 2.70010996（**慢約 10%**），和 #311 逐位元相同；原因是每個方塊各算最近點，相鄰方塊的頂邊在 `2 × skinWidth` 內時給出約 11° 傾斜的接觸平面，超過 cos 5° 不和地面合併。打開時抬高 0、最小水平速度 3（判定在[事前宣告](physics-3d-declaration.zh-Hant.md)第 12 節，閾值先寫好）。豎直的接縫同理：直立膠囊以 3 m/s 沿兩塊並排的牆滑、同時以 2 m/s 壓向牆，關閉時被推離牆 8.2 mm、慢到 2.511 m/s，打開時兩者都沒有。照 parry 複合形狀的 `FIX_INTERNAL_EDGES`（`src/shape/compound.rs:30-40`、`490-636`，夾法在 `compound_pseudo_normals.rs`），預設照 parry／avian 的 `Voxels`（沒有開關、永遠以鄰居分類避開內部邊，`src/shape/voxels/voxels.rs:14-28`；事前宣告第 12 節修訂 3）。**怎麼關**：`BoxSet::Build(boxes, BoxSetFlags::None)`（要舊行為逐位元相同時，例如既有的 golden）。`BoxSetFlags` 是位元遮罩（`|`、`&`、`HasFlag`）。**規則**（逐位元、沒有容差）：方塊 j 在方塊 i 的面（軸 a、＋側）上的點 p 延續該面，當 j 在 a 的最小值等於 i 在 a 的最大值（float 相等；−側反過來），且 j 在另外兩軸的閉區間包含 p。接觸與掃掠的法線在被延續的面的軸上的分量去掉、重新正規化（全部都要去掉時照原樣）；在方塊裡的形狀從沒被延續的面中推出量最小的那面出去（都被延續時照舊）。判斷用的點 p 是最近點規則選出的那一點：膠囊的線段和邊平行時（直立膠囊靠著豎直接縫），最近點不唯一，取線段參數最小的那一點（`ClosestSegmentPointToBox` 平手取小），延不延續由那一點決定。建立時跑一次找每個面的鄰居（存在隱藏的 `BoxSetData`）；旗標只在不是 `None` 時混進摘要（`None` 的摘要和以前相同），也算進 `==` 與 `Collider` 的雜湊。
+- **和 parry 不同的地方（衝突點）**：
+  - (a) **逐點、部分覆蓋**：parry 只把頂點完全相同的面當切口（`compound.rs:522-547` 的 `face_key`），這裡看接觸點是否落在鄰居的範圍裡。理由：體素工具輸出的是合併過、大小不一的方塊，相鄰的面很少整面相同。
+  - (b) **只改法線，距離與點不變**：parry 改了法線後沿新法線重投射線、重算距離與接觸點，打不到就丟掉接觸（`contact_manifolds_convex_ball.rs:85-115`）。這裡為了簡單不重算；後果是距離仍是到邊的距離、法線是面的法線（P3-7）。
+  - (c) **掃掠也夾**：parry 只夾接觸流形，這裡 `CastShape` 對 `BoxSet` 的法線也夾，而且時間 0 的分離判定（`stopAtPenetration = false`）用夾過的法線，所以旗標可能改變「撞到／沒撞到」，不只改法線。
+  - (d) **六面都被包住的方塊照舊推出**：parry 的 `Compound` 會把它丟掉，`Voxels` 跳過 `Interior` 體素（`contact_manifolds_voxels_ball.rs:58-63`）；這裡刻意保留（都被延續時取推出量最小的面），不讓深陷的形狀失去接觸。
+  - **不做 4 ULP 焊接**（parry 預設 `DEFAULT_WELD_TOLERANCE` 4）：`BoxSet` 的方塊沒有各自的姿態（不經旋轉、平移），體素契約的座標是 `float(整數) × cell_size / 16`，相接的面是同一個 float（`docs/architecture/voxel-mesh.md:53-55`、`157-162`），所以逐位元相等就夠。
 
 ## Design Invariants（草稿）
 
@@ -77,6 +83,9 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 <a id="p3-5"></a>
 **P3-5 數值。** 第 2 節的數值政策；三平台（linux-x64、windows-x64、macos-arm64）同一份 golden（字面 binary32）。守衛：`physics_3d.golden`。golden 在某平台失敗時停下回報，不在物理裡繞過。
 
+<a id="p3-7"></a>
+**P3-7 內部邊只改法線。** `FixInternalEdges` 打開時，對 `BoxSet` 的接觸與掃掠，被鄰居延續的面上的法線分量去掉（第 3 節的規則）；距離、點、時間不重算（和 parry 不同，衝突點 (b)）：在邊附近，距離是到邊的距離、法線是面的法線。守衛：`physics_3d.queries`（`[p3-ie-clamp]` 等）、`physics_3d.move_and_slide`（第 12 節判定 1～3）、`physics_3d.box_set`（旗標打開的等價）；突變 `p3-ie-`。
+
 <a id="p3-6"></a>
 **P3-6 依賴。** 只依賴 base、math、kernel、orchestration、transform。守衛：`gyo_expect_links(gyo_physics_3d GYO::Base GYO::Kernel GYO::Math GYO::Orchestration GYO::Transform)`。
 
@@ -90,6 +99,6 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 ## 範囲の限界
 
 - 沒有剛體、角色移動規則（只有 move-and-slide 的機制）、子實體 collider、縮放、半空間、凸包、三角網格。
-- `BoxSet` 的內部邊只在 `BoxSetFlags::FixInternalEdges` 時處理，且只認同一個 `BoxSet` 內恰好貼齊的鄰居（第 3 節）。
+- `BoxSet` 的內部邊只在 `BoxSetFlags::FixInternalEdges`（預設）時處理，且只認同一個 `BoxSet` 內恰好貼齊的鄰居（差 1 ULP 不算；跨 `BoxSet` 或和 `Cuboid` 之間不算；射線的法線不夾）。**重疊的方塊不算延續**（只有恰好相接才算）；體素契約不禁止重疊（`docs/architecture/voxel-mesh.md:189` 只禁止重複），重疊處的內部邊照舊會出現。
 - golden 是在 Intel Mac（macos-x64）產生的；三平台由 L1 確認。
 - 和 avian、parry、rapier、Jolt 的對照（檔名行號）在[事前宣告](physics-3d-declaration.zh-Hant.md)第 5 節。

@@ -51,8 +51,9 @@ struct BoxSetAccess;
 
 } // namespace Detail
 
-// How a BoxSet is built (parry's CompoundFlags). The default is None, as parry's (Compound::new sets
-// CompoundFlags::empty()).
+// How a BoxSet is built: a bitmask, like parry's CompoundFlags (bitflags). The default of Build(boxes) is
+// FixInternalEdges, like parry's and avian's Voxels (which always classify neighbours; declaration section 12,
+// revision 3); None turns it off.
 enum class BoxSetFlags : std::uint8_t {
     None = 0,
     // parry's FIX_INTERNAL_EDGES for axis-aligned boxes: a face of a box that a neighbouring box continues flush is
@@ -70,6 +71,17 @@ enum class BoxSetFlags : std::uint8_t {
     FixInternalEdges = 1,
 };
 
+[[nodiscard]] constexpr BoxSetFlags operator|(const BoxSetFlags a, const BoxSetFlags b) noexcept {
+    return static_cast<BoxSetFlags>(static_cast<std::uint8_t>(a) | static_cast<std::uint8_t>(b));
+}
+[[nodiscard]] constexpr BoxSetFlags operator&(const BoxSetFlags a, const BoxSetFlags b) noexcept {
+    return static_cast<BoxSetFlags>(static_cast<std::uint8_t>(a) & static_cast<std::uint8_t>(b));
+}
+// Whether every bit of flag is set in flags.
+[[nodiscard]] constexpr bool HasFlag(const BoxSetFlags flags, const BoxSetFlags flag) noexcept {
+    return (flags & flag) == flag;
+}
+
 // Many static boxes in local space (a voxel map's walls), with a static bounding volume hierarchy. Immutable and
 // shared: copies share one body (Bevy/parry's SharedShape).
 //
@@ -84,7 +96,7 @@ public:
 
     // Checks every box (finite, minimum <= maximum on each axis: InvalidBox with the index) and the count (at most
     // 2^32 - 1: TooManyBoxes), builds the hierarchy and the content digest.
-    // Build(boxes) is Build(boxes, BoxSetFlags::None).
+    // Build(boxes) is Build(boxes, BoxSetFlags::FixInternalEdges) (the default; pass None to turn it off).
     [[nodiscard]] static Base::Result<BoxSet, Physics3dError> Build(std::span<const Math::Aabb> boxes);
     [[nodiscard]] static Base::Result<BoxSet, Physics3dError> Build(std::span<const Math::Aabb> boxes,
                                                                     BoxSetFlags flags);

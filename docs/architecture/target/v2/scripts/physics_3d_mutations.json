@@ -150,7 +150,7 @@
     "physics-3d-declaration 12"
    ],
    "file": "engine/modules/physics_3d/src/Queries.cpp",
-   "find": "    return Outline{data.flags == BoxSetFlags::FixInternalEdges ? &data : nullptr, box};",
+   "find": "    return Outline{HasFlag(data.flags, BoxSetFlags::FixInternalEdges) ? &data : nullptr, box};",
    "replace": "    (void)data;\n    return Outline{nullptr, box};",
    "target": "gyo_physics_3d_tests",
    "cases": "move_and_slide: with FixInternalEdges*",

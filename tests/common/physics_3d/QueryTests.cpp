@@ -554,13 +554,15 @@ TEST_CASE("queries: FixInternalEdges leaves a box through a face no neighbour co
 TEST_CASE("queries: the flags are part of a BoxSet's digest, == and Collider hash") {
     const P3::BoxSet off = Flagged(kSeam, P3::BoxSetFlags::None);
     const P3::BoxSet on = Flagged(kSeam, P3::BoxSetFlags::FixInternalEdges);
-    CHECK(off.Flags() == P3::BoxSetFlags::None);
-    CHECK(on.Flags() == P3::BoxSetFlags::FixInternalEdges);
+    CHECK(!HasFlag(off.Flags(), P3::BoxSetFlags::FixInternalEdges));
+    CHECK(HasFlag(on.Flags(), P3::BoxSetFlags::FixInternalEdges));
+    CHECK((P3::BoxSetFlags::None | P3::BoxSetFlags::FixInternalEdges) == P3::BoxSetFlags::FixInternalEdges);
     CHECK_MESSAGE(off.Digest() != on.Digest(), "[p3-ie-digest]");
     CHECK_MESSAGE(!(off == on), "[p3-ie-digest] ==");
     CHECK(on == Flagged(kSeam, P3::BoxSetFlags::FixInternalEdges));
     CHECK(off == Flagged(kSeam, P3::BoxSetFlags::None));
-    CHECK(off.Digest() == (*P3::BoxSet::Build(kSeam)).Digest());  // Build(boxes) is the None flags
+    CHECK(on.Digest() == (*P3::BoxSet::Build(kSeam)).Digest());  // Build(boxes) is FixInternalEdges (the default)
+    CHECK(HasFlag((*P3::BoxSet::Build(kSeam)).Flags(), P3::BoxSetFlags::FixInternalEdges));
 }
 
 // ---- Programmer errors (section 4.2)

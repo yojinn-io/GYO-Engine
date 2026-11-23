@@ -115,11 +115,11 @@ Corpus MakeCorpus(const std::uint64_t seed, const int count, const int poseKind)
     Random r(seed);
     Corpus corpus;
     const std::vector<M::Aabb> boxes = RandomBoxes(r, count);
-    auto built = P3::BoxSet::Build(boxes);
+    auto built = P3::BoxSet::Build(boxes, P3::BoxSetFlags::None);  // the flag-off contract (case 5)
     REQUIRE(static_cast<bool>(built));
     corpus.set = *built;
     for (const M::Aabb& box : boxes) {
-        auto single = P3::BoxSet::Build(std::vector<M::Aabb>{box});
+        auto single = P3::BoxSet::Build(std::vector<M::Aabb>{box}, P3::BoxSetFlags::None);
         REQUIRE(static_cast<bool>(single));
         corpus.singles.push_back(*single);
     }
@@ -289,7 +289,7 @@ TEST_CASE("box_set: Build checks every box and the empty set is valid") {
     REQUIRE_FALSE(static_cast<bool>(infinite));
     auto flat = P3::BoxSet::Build(std::vector<M::Aabb>{{{0, 0, 0}, {1, 0, 1}}});
     CHECK_MESSAGE(static_cast<bool>(flat), "[p3-boxset-build] a box of zero thickness is valid");
-    auto empty = P3::BoxSet::Build(std::vector<M::Aabb>{});
+    auto empty = P3::BoxSet::Build(std::vector<M::Aabb>{}, P3::BoxSetFlags::None);  // BoxSet{} has no flags
     REQUIRE(static_cast<bool>(empty));
     CHECK(empty->Size() == 0);
     CHECK(*empty == P3::BoxSet{});
@@ -402,7 +402,7 @@ std::vector<std::uint32_t> FlushNeighbours(const std::vector<M::Aabb>& boxes, co
 
 } // namespace
 
-TEST_CASE("box_set: with FixInternalEdges, contacts equal the per-box query with that box's flush neighbours") {
+TEST_CASE("box_set: with FixInternalEdges, contacts and casts equal the per-box query with that box's flush neighbours") {
     // P3-3 with the flag: the per-box result depends on the box and its flush neighbours only (build data, not the
     // hierarchy). The reference for box i is box 0 of a set made of box i and its neighbours, with the flag.
     Random r(0x5EED0201ULL);
@@ -426,6 +426,7 @@ TEST_CASE("box_set: with FixInternalEdges, contacts equal the per-box query with
     }
     int contacts = 0;
     int changed = 0;
+    int casts = 0;
     for (int q = 0; q < 400; ++q) {
         const P3::Shape shape = r.Chance(50) ? P3::Shape(P3::Ball{r.Uniform(0.2F, 1.0F)})
                                              : P3::Shape(P3::CapsuleY(r.Uniform(0.0F, 1.0F), r.Uniform(0.2F, 0.8F)));
@@ -441,7 +442,7 @@ TEST_CASE("box_set: with FixInternalEdges, contacts equal the per-box query with
         }
         auto actual = P3::FindBoxContacts(shape, pose, *set, P3::Pose{}, prediction);
         REQUIRE(static_cast<bool>(actual));
-        auto plain = P3::FindBoxContacts(shape, pose, P3::BoxSet(*P3::BoxSet::Build(boxes)), P3::Pose{}, prediction);
+        auto plain = P3::FindBoxContacts(shape, pose, P3::BoxSet(*P3::BoxSet::Build(boxes, P3::BoxSetFlags::None)), P3::Pose{}, prediction);
         REQUIRE(static_cast<bool>(plain));
         REQUIRE_MESSAGE(actual->size() == expected.size(), "[p3-ie-equivalence] " << q);
         for (std::size_t k = 0; k < expected.size(); ++k) {
@@ -461,8 +462,31 @@ TEST_CASE("box_set: with FixInternalEdges, contacts equal the per-box query with
                             "[p3-ie-equivalence] deepest " << q);
         }
         contacts += static_cast<int>(expected.size());
+        // The cast: the earliest of the single-box casts (CastShapeOnBox reads the same build data), ties to the
+        // lowest index.
+        M::Vec3 motion{r.Uniform(-4.0F, 4.0F), r.Uniform(-3.0F, 1.0F), r.Uniform(-4.0F, 4.0F)};
+        if (r.Chance(10)) motion = {};
+        P3::ShapeCastOptions options;
+        options.maxTime = r.Chance(50) ? 1.0F : r.Uniform(0.0F, 1.5F);
+        options.targetDistance = r.Chance(50) ? 0.0F : r.Uniform(0.0F, 0.1F);
+        options.stopAtPenetration = r.Chance(50);
+        std::optional<P3::ShapeHit> earliest;
+        for (std::uint32_t i = 0; i < boxes.size(); ++i) {
+            auto one = P3::CastShapeOnBox(shape, pose, motion, *set, i, P3::Pose{}, options);
+            REQUIRE(static_cast<bool>(one));
+            if (*one && (!earliest || (*one)->time < earliest->time)) earliest = **one;
+        }
+        auto cast = P3::CastShape(shape, pose, motion, *set, P3::Pose{}, options);
+        REQUIRE(static_cast<bool>(cast));
+        REQUIRE_MESSAGE(cast->has_value() == earliest.has_value(), "[p3-ie-equivalence-cast] " << q);
+        if (earliest) {
+            REQUIRE_MESSAGE(SameHit(**cast, *earliest), "[p3-ie-equivalence-cast] " << q);
+            ++casts;
+        }
     }
-    MESSAGE("flush neighbour pairs " << flush << ", contacts " << contacts << ", normals the flag changed " << changed);
+    MESSAGE("flush neighbour pairs " << flush << ", contacts " << contacts << ", normals the flag changed " << changed
+                                     << ", cast hits " << casts);
+    CHECK(casts > 40);
     CHECK(flush > 100);
     CHECK(changed > 0);  // the corpus exercises the clamp
 }
