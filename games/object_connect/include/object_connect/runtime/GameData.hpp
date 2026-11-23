@@ -104,7 +104,7 @@ public:
 [[nodiscard]] std::string ReferenceFromTable(std::string_view tablePath, std::string_view contentPath);
 
 // Registers the game's loaders and the Engine loaders the game's content
-// needs (image's png, text's font) with the Product's store. Call from the
+// needs (image's png, text's font, audio's wav) with the Product's store. Call from the
 // product's Configure (ProductDescription::configure).
 [[nodiscard]] std::optional<std::string> RegisterLoaders(const GYO::Engine::Asset::AssetLoaderRegistry& registry);
 

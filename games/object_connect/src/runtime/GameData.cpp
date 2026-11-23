@@ -2,6 +2,7 @@
 
 #include "object_connect/data/Csv.hpp"
 
+#include "engine/audio/WavLoader.hpp"
 #include "engine/image/PngLoader.hpp"
 #include "engine/text/FontLoader.hpp"
 
@@ -111,6 +112,8 @@ std::optional<std::string> RegisterLoaders(const A::AssetLoaderRegistry& registr
     if (auto f = failed("node table", registry.Register<NodeTableLoader>())) return f;
     if (auto f = failed("png", registry.Register<GYO::Engine::Image::PngLoader>())) return f;
     if (auto f = failed("font", registry.Register<GYO::Engine::Text::FontLoader>())) return f;
+    // sdl_audio registers it too when carried; the same loader again changes nothing.
+    if (auto f = failed("wav", registry.Register<GYO::Engine::Audio::WavLoader>())) return f;
     return std::nullopt;
 }
 

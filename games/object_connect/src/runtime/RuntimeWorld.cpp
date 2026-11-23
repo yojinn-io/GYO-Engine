@@ -1,5 +1,7 @@
 #include "object_connect/runtime/RuntimeWorld.hpp"
 
+#include "object_connect/runtime/GameSound.hpp"
+
 #include "object_connect/data/PuzzleCatalogLoader.hpp"
 #include "object_connect/world/GameScreenState.hpp"
 #include "object_connect/world/Messages.hpp"
@@ -73,6 +75,9 @@ K::SystemResult LoadGameData(K::Res<WA::AssetRequests> requests, K::Res<WA::Asse
         for (std::size_t index = 0; index < kCursorIds.size(); ++index) {
             c.cursors[index] = requests->Load<GYO::Engine::Image::ImageData>(A::AssetId(kCursorIds[index]));
         }
+        for (std::size_t index = 0; index < kSoundIds.size(); ++index) {
+            c.sounds[index] = requests->Load<GYO::Engine::Audio::Clip>(A::AssetId(kSoundIds[index]));
+        }
     }
     const GameContent& c = content.Read();
     const WA::AssetReadiness ready =
@@ -88,9 +93,15 @@ K::SystemResult LoadGameData(K::Res<WA::AssetRequests> requests, K::Res<WA::Asse
         }
         return Failed("the game's content has no loader for: " + ids);
     }
-    if (!ready.complete) {
+    // The sounds are optional (GameAudio::Initialize): wait for them, warn about the ones that failed.
+    const WA::AssetReadiness sounds =
+        view->Ready({c.sounds[0], c.sounds[1], c.sounds[2], c.sounds[3]});
+    if (!ready.complete || !sounds.allFinished) {
         generation->Hold();
         return {};
+    }
+    if (!sounds.failures.empty()) {
+        LogWarning("some sounds did not load and stay silent: " + Describe(sounds.failures));
     }
 
     const LevelTable& levels = *view->Get(c.levels);
@@ -121,6 +132,11 @@ K::SystemResult LoadGameData(K::Res<WA::AssetRequests> requests, K::Res<WA::Asse
         return Failed("the UI font did not open: " + GYO::Engine::Base::Describe(font.error()));
     }
     text->font = *font;
+    for (std::size_t index = 0; index < kSoundIds.size(); ++index) {
+        if (const GYO::Engine::Audio::Clip* clip = view->Get(c.sounds[index])) {
+            content->clips[index] = *clip;
+        }
+    }
     catalog.Get() = std::move(parsed);
     content->loaded = true;
     return {};
@@ -295,6 +311,7 @@ K::SystemOptions InUpdate(std::string name, std::vector<std::string> before, std
 
 void BuildRuntime(O::WorldSetup& setup) {
     world::BuildWorld(setup, world::WorldOptions{{O::AfterGenerating()}});
+    BuildSound(setup);
     K::Registrar& r = setup.Registrar();
     r.Resource<GameContent>({.name = "object_connect.GameContent"});
     r.Resource<UiText>({.name = "object_connect.UiText"});

@@ -7,6 +7,7 @@
 #include "object_connect/ui/MenuLayout.hpp"
 
 #include "engine/asset/Handle.hpp"
+#include "engine/audio/Clip.hpp"
 #include "engine/image/ImageData.hpp"
 #include "engine/kernel/Hash.hpp"
 #include "engine/orchestration/Setup.hpp"
@@ -15,6 +16,7 @@
 #include "engine/text/TextStyle.hpp"
 
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -46,6 +48,12 @@ inline constexpr std::string_view kNodesId = "object_connect.nodes";
 inline constexpr std::string_view kUiFontId = "object_connect.font.ui";
 inline constexpr std::array<std::string_view, 3> kCursorIds{
     "object_connect.cursor.normal", "object_connect.cursor.interactive", "object_connect.cursor.holding"};
+// In SoundId order. Optional, as in the original: one that does not load is a
+// warning and that sound stays silent.
+enum class SoundId : std::uint8_t { Intro, Loop, Hold, Relax };
+inline constexpr std::array<std::string_view, 4> kSoundIds{
+    "object_connect.audio.bgm_start", "object_connect.audio.bgm_loop", "object_connect.audio.line_hold",
+    "object_connect.audio.line_relax"};
 
 // The content the game holds for its whole run, once generation has ended.
 struct GameContent final {
@@ -54,6 +62,9 @@ struct GameContent final {
     GYO::Engine::Asset::Handle<GYO::Engine::Text::FontData> uiFont;
     // In MouseCursorIcon order.
     std::array<GYO::Engine::Asset::Handle<GYO::Engine::Image::ImageData>, 3> cursors;
+    // In SoundId order; a sound that did not load has an empty clip here.
+    std::array<GYO::Engine::Asset::Handle<GYO::Engine::Audio::Clip>, 4> sounds;
+    std::array<GYO::Engine::Audio::Clip, 4> clips;
     bool loaded = false;
 };
 

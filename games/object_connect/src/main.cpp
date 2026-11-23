@@ -1,5 +1,5 @@
 // Object_Connect's program (the original Core/Application and WinMain): the
-// Product with the default Modules, the sdl_window Plugin and one World with
+// Product with the default Modules, the sdl_window and sdl_audio Plugins and one World with
 // the game, run by sdl_window's runner until the game closes the window.
 //
 //   gyo_object_connect               the game in a 1280 x 720 window
@@ -9,7 +9,7 @@
 //                                    the warps as they change (nothing is drawn
 //                                    until the render batch)
 
-#include "object_connect/runtime/GameData.hpp"
+#include "object_connect/runtime/GameSound.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
 #include "object_connect/world/GameScreenState.hpp"
 #include "object_connect/world/Resources.hpp"
@@ -26,6 +26,7 @@
 #include "engine/window/Window.hpp"
 #include "engine/world_asset/WorkerPoolExecutor.hpp"
 #include "engine/world_asset/WorldAssetModule.hpp"
+#include "plugins/sdl_audio/AudioOutput.hpp"
 #include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
 #include <charconv>
@@ -160,17 +161,9 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
     description.worlds.push_back(std::move(world));
-    // The game's loaders join the Product's store; a refusal stops the build before any World is made.
-    description.configure = [](O::ProductSetup& setup) {
-        const auto* registry = setup.Buffer().Find<GYO::Engine::Asset::AssetLoaderRegistry>();
-        if (registry == nullptr) {
-            setup.Report("NoAssetStore", "the asset store is not there (world_asset is not carried)");
-            return;
-        }
-        if (std::optional<std::string> refused = object_connect::runtime::RegisterLoaders(*registry)) {
-            setup.Report("LoaderRefused", std::move(*refused));
-        }
-    };
+    // The game's loaders join the Product's store and the game's submitter joins sdl_audio's mixer; a refusal
+    // stops the build before any World is made.
+    description.configure = [](O::ProductSetup& setup) { object_connect::runtime::ConfigureProduct(setup); };
 
     // The original's window: the 1280 x 720 back buffer, not resizable (G6).
     W::WindowSettings window;
@@ -239,6 +232,15 @@ int main(int argc, char** argv) {
     {
         // The Product and its Worlds go before the pool they submit jobs to.
         std::unique_ptr<O::Product> product = std::move(built).value();
+        // A game without a sound device still plays (the original disabled its audio with a warning).
+        if (const auto* output = std::as_const(product->Buffer()).Find<GYO::Plugins::SDLAudio::AudioOutput>()) {
+            if (const auto* failure = output->Failure()) {
+                ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Warning, GYO_GAME_ID,
+                                         "no sound: " + GYO::Engine::Base::Describe(*failure));
+            } else if (verbose) {
+                LogInfo("sound on the " + output->DriverName() + " driver");
+            }
+        }
         exit = product->Run();
     }
     if (exit.code == O::RunnerExitCode::Failure) {
