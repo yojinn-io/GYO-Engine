@@ -76,6 +76,7 @@ K::SystemResult See(K::ExclusiveWorld<> world) {
     for (const K::EntityId peer : world.Entities()) {
         auto user = world.Read<N::Peer>(peer, [](const N::Peer& p) { return p.userId; });
         if (!user || !user->has_value()) continue;
+        if (**user == 3) continue;  // user 3's Peer has no PeerVisibility: it sees every entity and no private component
         N::PeerVisibility visibility;
         visibility.everything = false;
         for (const K::EntityId entity : {kE1, kE2, kE3}) {
@@ -125,7 +126,7 @@ struct Visible {
 
     Visible() {
         auto reader = [now = clock] { return *now; };
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < 3; ++i) {
             N::MemoryLinkSettings settings;
             settings.seed = static_cast<std::uint64_t>(70 + i);
             links.push_back(N::MemoryLink::Pair(settings));
@@ -137,18 +138,19 @@ struct Visible {
                 world.Insert(kE1, Position{0, 1});
                 world.Insert(kE2, Position{0, 2});
                 world.Insert(kE2, Mark{77});
+                world.Insert(kE2, Secret{7});  // never shown to anyone
                 world.Insert(kE3, Position{0, 3});
                 world.Insert(kE3, Secret{4242});
                 return {};
             });
         };
-        serverEnd.net.link = std::make_shared<Hub>(std::vector<N::MemoryLink>{links[0].first, links[1].first});
+        serverEnd.net.link = std::make_shared<Hub>(std::vector<N::MemoryLink>{links[0].first, links[1].first, links[2].first});
         serverEnd.net.clock = reader;
         serverEnd.net.seed = 6;
         auto builtServer = O::Product::Build(Describe(serverEnd), Units(true));
         REQUIRE_MESSAGE(static_cast<bool>(builtServer), Reported(builtServer));
         server = std::move(*builtServer);
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < 3; ++i) {
             End client = GameEnd(N::NetRole::Client, {});
             client.build = &RegisterVisible;
             client.range = E::EntityIdsOptions{static_cast<K::EntityId>(200'001 + i * 100'000), static_cast<K::EntityId>(300'000 + i * 100'000)};
@@ -179,7 +181,7 @@ TEST_CASE("visibility: G-11 an entity a Peer does not see is not sent, comes bac
     // Per client: frames it had each entity; frames E3 carried Secret; whether user 1 lost E2 while hidden and got it back.
     std::map<std::pair<int, K::EntityId>, int> had;
     auto Had = [&had](int client, K::EntityId entity) -> int& { return had[std::make_pair(client, entity)]; };
-    int secretAt1 = 0, secretAt2 = 0;
+    int secretAt1 = 0, secretAt2 = 0, secretE2At1 = 0, secretAt3 = 0, seenAt3 = 0;
     bool lostE2 = false, backE2 = false;
     for (int frame = 0; frame < 160; ++frame) {
         visible.Frame();
@@ -188,6 +190,10 @@ TEST_CASE("visibility: G-11 an entity a Peer does not see is not sent, comes bac
             for (const K::EntityId entity : {kE1, kE2, kE3}) Had(i, entity) += world.Get<Position>(entity) != nullptr ? 1 : 0;
             (i == 0 ? secretAt1 : secretAt2) += world.Get<Secret>(kE3) != nullptr ? 1 : 0;
         }
+        K::World& third = clients[2]->World("Net").GetWorld();
+        secretE2At1 += clients[0]->World("Net").GetWorld().Get<Secret>(kE2) != nullptr ? 1 : 0;
+        secretAt3 += (third.Get<Secret>(kE2) != nullptr || third.Get<Secret>(kE3) != nullptr) ? 1 : 0;
+        seenAt3 += (third.Get<Position>(kE1) != nullptr && third.Get<Position>(kE2) != nullptr && third.Get<Position>(kE3) != nullptr) ? 1 : 0;
         K::World& first = clients[0]->World("Net").GetWorld();
         if (Had(0, kE2) > 0 && first.Get<Position>(kE2) == nullptr) lostE2 = true;
         if (lostE2 && first.Get<Position>(kE2) != nullptr) backE2 = true;
@@ -213,6 +219,10 @@ TEST_CASE("visibility: G-11 an entity a Peer does not see is not sent, comes bac
                   "G-11: seen again, it is sent whole: a component unchanged while hidden comes too");
     CHECK_MESSAGE(secretAt1 > 0, "G-11: the private component reaches the Peer that is shown it");
     CHECK_MESSAGE(secretAt2 == 0, "G-11: the private component reaches no other Peer");
+    CHECK_MESSAGE(secretE2At1 == 0, "G-11: a private component of another entity is not sent (shown per entity)");
+    MESSAGE("G-11 client 3 (no PeerVisibility): saw E1, E2 and E3 in " << seenAt3 << " frames, a Secret in " << secretAt3);
+    CHECK_MESSAGE(seenAt3 > 0, "G-11: a Peer without PeerVisibility sees every entity");
+    CHECK_MESSAGE(secretAt3 == 0, "G-11: a Peer without PeerVisibility gets no private component");
     CHECK(world2.Get<Position>(kE3) != nullptr);
     REQUIRE(world1.Get<Secret>(kE3) != nullptr);
     CHECK((*world1.Get<Secret>(kE3) == Secret{4242}));

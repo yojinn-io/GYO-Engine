@@ -9,6 +9,7 @@
 // prepare function with a fixed id outside both allotter ranges.
 #include <doctest/doctest.h>
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -125,12 +126,15 @@ K::SystemResult RemoveFirstCrate(K::Res<W::Tick> tick, K::Query<K::Read<Body>> b
 // crates, by tick. Filled by the server's System; read by the test at the end.
 struct Reshape {
     bool on = false;
-    bool blink = false;               // the lossy case: the blinking crate is hidden 6 ticks of every 12 in [150, 250)
+    bool blink = false;               // the lossy case: the blinking crate is hidden 2 ticks of every 6 in [150, 250)
+    bool gate = false;                // the gated case (the recheck's N1): the crate is hidden in [150, 152)
+    bool gateChange = false;          // the gated case: its Tint changes at 153 (the adversarial check's A6)
     K::EntityId withoutTintSoon = 0;  // spawned at 60, its Tint taken off at 61 (before the client has it in the World)
     K::EntityId withoutSpeed = 0;     // spawned at 50, its Speed taken off at 110 while seen (Removed)
     K::EntityId hidden = 0;           // spawned at 40, hidden in [120, 140); its Speed and Tint taken off at 130
                                       // (blinking: its Speed taken off at 240, while hidden)
     K::EntityId hiddenToo = 0;        // blinking: spawned at 70, blinks with it; its Tint taken off at 240
+    K::EntityId tintAgain = 0;        // seen: spawned at 90, its Tint taken off at 160 and put on again at 200
 };
 Reshape& Reshaped() {
     static Reshape reshape;
@@ -146,6 +150,7 @@ K::EntityId CrateTinted(K::ExclusiveWorld<>& world, const std::int32_t rgb) {
 }
 
 bool HiddenAt(const Reshape& reshape, const std::uint64_t t) {
+    if (reshape.gate) return t >= 150 && t < 152;
     if (reshape.blink) return t >= 150 && t < 250 && t % 6 < 2;
     return t >= 120 && t < 140;
 }
@@ -162,11 +167,24 @@ K::SystemResult ReshapeAtServer(K::ExclusiveWorld<> world) {
         reshape.withoutSpeed = CrateTinted(world, 50'000);
         if (auto removed = world.Remove<Speed>(reshape.withoutSpeed); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
     }
-    if (t == 119 || (reshape.blink && t == 149)) reshape.hidden = CrateTinted(world, 40'000);
+    if (t == 119 || ((reshape.blink || reshape.gate) && t == 149)) reshape.hidden = CrateTinted(world, 40'000);
     if (reshape.blink && t == 149) reshape.hiddenToo = CrateTinted(world, 70'000);
-    if (t == 130 && !reshape.blink) {
+    if (t == 130 && !reshape.blink && !reshape.gate) {
         if (auto removed = world.Remove<Speed>(reshape.hidden); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
         if (auto removed = world.Remove<Tint>(reshape.hidden); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+    }
+    const bool seen = !reshape.blink && !reshape.gate;
+    if (reshape.gateChange && t == 153) {
+        // While the crate is gone at the client (the rollback to 151 removed it; it comes back at a point >= 152), its
+        // Tint changes: the value must wait for it (the adversarial check's A6).
+        if (auto set = world.Insert(reshape.hidden, Tint{40'001}); !set) return GYO::Engine::Base::Err(std::move(set).error());
+    }
+    if (seen && t == 160) {
+        reshape.tintAgain = CrateTinted(world, 90'000);
+        if (auto removed = world.Remove<Tint>(reshape.tintAgain); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
+    }
+    if (seen && t == 200) {
+        if (auto set = world.Insert(reshape.tintAgain, Tint{9}); !set) return GYO::Engine::Base::Err(std::move(set).error());
     }
     if (t == 240 && reshape.blink) {
         if (auto removed = world.Remove<Speed>(reshape.hidden); !removed) return GYO::Engine::Base::Err(std::move(removed).error());
@@ -237,20 +255,23 @@ void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep, const st
 
 struct Sample {
     std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
+    // How far the server's clock is ahead of the client's (the gated case lets only the server's time pass).
+    std::shared_ptr<N::NetTime> serverAhead = std::make_shared<N::NetTime>(0);
     std::pair<N::MemoryLink, N::MemoryLink> links;
     std::unique_ptr<O::Product> server, client;
 
     Sample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const std::uint32_t valueBudget = 0,
-           const bool reshape = false)
+           const bool reshape = false, const std::function<std::shared_ptr<N::Link>(N::MemoryLink)>& serverLink = {})
         : links(N::MemoryLink::Pair(link)) {
         auto reader = [now = clock] { return *now; };
+        auto serverReader = [now = clock, ahead = serverAhead] { return *now + *ahead; };
         End s = GameEnd(N::NetRole::Server, {});
         s.authority = std::make_shared<A::ServerAuthorityStrategy>();
         s.build = [serverStepsPerFrame, valueBudget, reshape](O::WorldSetup& setup) {
             RegisterSample(setup, serverStepsPerFrame, valueBudget, reshape);
         };
-        s.net.link = std::make_shared<N::MemoryLink>(links.first);
-        s.net.clock = reader;
+        s.net.link = serverLink ? serverLink(links.first) : std::make_shared<N::MemoryLink>(links.first);
+        s.net.clock = serverReader;
         s.net.seed = 31;
         End c = GameEnd(N::NetRole::Client, {});
         c.authority = std::make_shared<A::ServerAuthorityStrategy>();
@@ -328,6 +349,10 @@ struct Run {
     bool hiddenTintSame = false;     // the hidden crate has the server's Tint at the client (the blinking case keeps it)
     bool hiddenTooTint = false;      // blinking: the second blinking crate has a Tint at the client (the server took it off)
     std::uint64_t rollbacksForEntries = 0;  // U3: rollbacks an entity said to enter took part in
+    std::uint64_t notSentLeftOut = 0;       // entities the client's rollback left out of a comparison (NotSent)
+    bool tintAddedAgain = false;            // the crate whose Tint was put on again at 200 has it at the client
+    std::uint32_t playerLongestWait = 0;    // the most ticks in a row the player's values waited at the server
+    std::uint32_t othersLongestWait = 0;    // the same for every other entity
 };
 
 enum class Shape { None, Seen, Blink };
@@ -335,7 +360,7 @@ enum class Shape { None, Seen, Blink };
 // G-10's run: connect, give the player, push for a while, then the default input for the last segment; at the end
 // the client's step P and its digest; the server runs on until it records step P.
 Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const int frames, const std::uint32_t valueBudget = 0,
-              const Shape shape = Shape::None) {
+              const Shape shape = Shape::None, const std::uint32_t playerWeight = 0) {
     Reshaped() = Reshape{shape != Shape::None, shape == Shape::Blink};
     Sample sample(link, serverStepsPerFrame, valueBudget, shape != Shape::None);
     for (int i = 0; i < 60 && (sample.Peer(sample.ServerWorld()) == 0 || sample.Peer(sample.ClientWorld()) == 0); ++i) {
@@ -348,6 +373,7 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
     REQUIRE(sample.Peer(sample.ClientWorld()) != 0);
     sample.ServerWorld().Insert(sample.Peer(sample.ServerWorld()), N::PeerControls{kPlayer});
     sample.ClientWorld().Insert(sample.Peer(sample.ClientWorld()), N::PeerControls{kPlayer});
+    if (playerWeight > 0) sample.ServerWorld().Insert(kPlayer, N::NetPriority{playerWeight});
 
     Run run;
     std::map<std::uint64_t, std::uint64_t> serverDigests;
@@ -373,6 +399,12 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
             if (now.count(id) == 0 && Crates(sample.ServerWorld()).count(id) != 0) ++run.crateLost;
         }
         for (const K::EntityId id : now) seen.insert(id);
+        if (const auto* ledger = sample.ServerWorld().Get<N::PeerLedger>(sample.Peer(sample.ServerWorld()))) {
+            for (const auto& [entity, waited] : ledger->waitedTicks) {
+                std::uint32_t& longest = entity == kPlayer ? run.playerLongestWait : run.othersLongestWait;
+                longest = std::max(longest, waited);
+            }
+        }
         const auto& replica = sample.Replica();
         if (replica.inboxConfirmed && lastConfirmed && *replica.inboxConfirmed > *lastConfirmed + 1) ++run.confirmedJumps;
         lastConfirmed = replica.inboxConfirmed;
@@ -432,6 +464,11 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
                              *client.Get<Tint>(reshape.hidden) == *server.Get<Tint>(reshape.hidden);
     }
     run.rollbacksForEntries = client.Resource<R::RollbackHistory>()->rollbacksForEntries;
+    run.notSentLeftOut = client.Resource<R::RollbackHistory>()->notSentLeftOut;
+    if (shape == Shape::Seen) {
+        const Tint* again = client.Get<Tint>(reshape.tintAgain);
+        run.tintAddedAgain = again != nullptr && *again == Tint{9};
+    }
     return run;
 }
 
@@ -501,9 +538,28 @@ TEST_CASE("k3: G-11 values the server defers over its budget are NotSent at the 
     REQUIRE_MESSAGE(run.serverDeferred > 0, "step 5: values over the budget wait for a later tick");
     CHECK_MESSAGE(run.longestWait <= 8, "step 5: the accumulated priority lets no entity wait long (longest " << run.longestWait << " ticks)");
     CHECK_MESSAGE(run.replica.inboxNotSent == run.serverDeferred, "G-11: every deferred value is NotSent at the simulating client");
+    CHECK_MESSAGE(run.notSentLeftOut > 0, "G-11: the deferred entities are left out of the client's rollback comparison (" << run.notSentLeftOut << ")");
     REQUIRE(run.serverDigest.has_value());
     CHECK_MESSAGE(run.clientDigest == *run.serverDigest,
                   "G-11: the simulating client does not take NotSent as unchanged (its Digest at P is the Match's)");
+}
+
+TEST_CASE("k3: a budget smaller than one entity still sends one entity a tick") {
+    // net 14: the first candidate is always sent. With 1 byte a tick nothing fits; without that rule nothing would
+    // ever be sent. The bound 32 is written before the run (about 8 bodies move; one a tick).
+    const Run run = RunSample(Slow(), 1, 300, 1);
+    MESSAGE("budget 1: longest wait " << run.longestWait << ", deferred " << run.serverDeferred);
+    REQUIRE(run.serverDeferred > 0);
+    CHECK_MESSAGE(run.longestWait <= 32, "step 5: a budget smaller than one entity still sends one entity a tick (longest wait "
+                                             << run.longestWait << ")");
+}
+
+TEST_CASE("k3: an entity of a heavier NetPriority waits less") {
+    // net 14: the score is the accumulated priority plus the weight. The player weighs 8, the other bodies 1.
+    const Run run = RunSample(Slow(), 1, 300, 90, Shape::None, 8);
+    MESSAGE("weight 8: the player waited at most " << run.playerLongestWait << " ticks, the others " << run.othersLongestWait);
+    REQUIRE(run.othersLongestWait > 0);
+    CHECK_MESSAGE(run.playerLongestWait < run.othersLongestWait, "step 5: a heavier entity waits less");
 }
 
 TEST_CASE("k3: an entity hidden and seen again comes back with the server's components; components taken off reach the client") {
@@ -517,6 +573,7 @@ TEST_CASE("k3: an entity hidden and seen again comes back with the server's comp
     CHECK_MESSAGE(!run.hiddenSpeed, "B1: a rolling-back component taken off while hidden does not come back with the entity");
     CHECK_MESSAGE(!run.hiddenTint, "B1: a component that does not roll back taken off while hidden is not at the client");
     CHECK_MESSAGE(!run.tintSoon, "S1 a: a component that does not roll back taken off before the entity is in the World is not written");
+    CHECK_MESSAGE(run.tintAddedAgain, "K3: a component that does not roll back added to a seen entity reaches the client");
     CHECK_MESSAGE(run.replica.inboxEntries == run.serverEntered + 1, "K3 visibility: the crate seen again is an entry again (Entered)");
     CHECK_MESSAGE(run.rollbacksForEntries > 0, "U3: the rollbacks entries take part in are counted");
     REQUIRE(run.serverDigest.has_value());
@@ -548,4 +605,158 @@ TEST_CASE("k3: with losses, an entity seen again before its exit reaches the con
         CHECK_MESSAGE(!run.hiddenTooTint, "B1: a component that does not roll back taken off while hidden is taken off the entity of before");
         CHECK_MESSAGE(run.tintsWrong == 0, "S1 b: every crate at the client has the server's Tint, or none where the server has none");
     }
+}
+
+namespace {
+
+// The server's Link for the recheck's N1: the test decides, frame by frame, what the server sends. Pass sends at once;
+// Hold keeps a datagram in one of two queues to send later; Drop loses it.
+class Gate final : public N::Link {
+public:
+    enum class Mode { Pass, HoldEarly, Drop, HoldResend };
+    explicit Gate(N::MemoryLink inner) : inner_(std::move(inner)) {}
+    N::NetResult<void> Send(const N::Endpoint to, const std::span<const std::byte> datagram) override {
+        if (mode == Mode::Pass) return inner_.Send(to, datagram);
+        if (mode == Mode::Drop) return {};
+        auto& queue = mode == Mode::HoldEarly ? early : resend;
+        queue.emplace_back(to, std::vector<std::byte>(datagram.begin(), datagram.end()));
+        return {};
+    }
+    N::NetResult<std::optional<N::ReceivedDatagram>> Receive(const std::span<std::byte> buffer) override { return inner_.Receive(buffer); }
+    // Sends what queue holds now, in order.
+    void Release(std::vector<std::pair<N::Endpoint, std::vector<std::byte>>>& queue) {
+        for (const auto& [to, bytes] : queue) REQUIRE(static_cast<bool>(inner_.Send(to, bytes)));
+        queue.clear();
+    }
+    Mode mode = Mode::Pass;
+    std::vector<std::pair<N::Endpoint, std::vector<std::byte>>> early, resend;
+
+private:
+    N::MemoryLink inner_;
+};
+
+struct Gated {
+    bool between = false;      // the confirmed point fell in [exit, entry) after a spawn came while the entity was there
+    std::uint64_t entriesWhileAlive = 0;
+    bool tintThere = false;    // at the end the crate has a Tint at the client
+    bool tintSame = false;     // and it is the server's
+    std::uint64_t confirmedAtRelease = 0;
+    bool removedAtRelease = false;
+};
+
+// S1 b made to happen (the recheck's N1). The crate of 40 is hidden at the server's ticks 150 and 151 (exit 150, entry
+// 152). The datagrams of ticks 150 and 151 are held, the one of tick 152 is lost, and the server pauses (no new tick,
+// so nothing but resends of the reliable structure updates goes out; those are held too). Then:
+//   sameFrame: everything held arrives in one client frame: the exit and the entry are applied while the crate of
+//              before is still in the World, and the values of 150 and 151 make the confirmed point 151;
+//   laterFrame: the resends (the exit and the entry) arrive first, a frame passes, then the values of 150 and 151.
+Gated RunGated(const bool sameFrame, const bool changeTint = false) {
+    Reshaped() = Reshape{true, false, true, changeTint};
+    Gate* gate = nullptr;
+    Sample sample(
+        N::MemoryLinkSettings{}, 1, 0, true,
+        [&gate](N::MemoryLink inner) {
+            auto made = std::make_shared<Gate>(std::move(inner));
+            gate = made.get();
+            return made;
+        });
+    REQUIRE(gate != nullptr);
+    auto clientFrame = [&] {
+        const std::uint64_t target = sample.ClientTick() + 1;
+        if (auto* input = N::LocalInput<Push>(sample.ClientWorld()); input != nullptr && sample.Peer(sample.ClientWorld()) != 0) {
+            input->Set(static_cast<std::uint32_t>(target), Push{0}, N::ViewTime{static_cast<std::uint32_t>(target), 0});
+        }
+        REQUIRE(static_cast<bool>(sample.client->RunFrame()));
+    };
+    auto both = [&] {
+        REQUIRE(static_cast<bool>(sample.server->RunFrame()));
+        clientFrame();
+        sample.links.first.Advance();
+        *sample.clock += Ms(16);
+    };
+    for (int i = 0; i < 60 && (sample.Peer(sample.ServerWorld()) == 0 || sample.Peer(sample.ClientWorld()) == 0); ++i) both();
+    REQUIRE(sample.Peer(sample.ServerWorld()) != 0);
+    sample.ServerWorld().Insert(sample.Peer(sample.ServerWorld()), N::PeerControls{kPlayer});
+    sample.ClientWorld().Insert(sample.Peer(sample.ClientWorld()), N::PeerControls{kPlayer});
+    while (sample.ServerTick() + 1 < 150) both();
+    Gated gated;
+    const std::uint64_t before = sample.Replica().entriesWhileAlive;
+    // Ticks 150 and 151: held; 152: lost. The client runs on, receiving nothing.
+    for (const Gate::Mode mode : {Gate::Mode::HoldEarly, Gate::Mode::HoldEarly, Gate::Mode::Drop}) {
+        gate->mode = mode;
+        both();
+    }
+    REQUIRE(sample.ServerTick() == 152);
+    // The server pauses; its resends are held.
+    sample.ServerWorld().SetResource(W::TimeSampling{0, W::SamplingMode::ManualDelta});
+    gate->mode = Gate::Mode::HoldResend;
+    // Only the server's time passes (the client's time sync is not moved by the pause).
+    for (int i = 0; i < 40; ++i) {
+        REQUIRE(static_cast<bool>(sample.server->RunFrame()));
+        sample.links.first.Advance();
+        *sample.serverAhead += Ms(16);
+    }
+    REQUIRE(sample.ServerTick() == 152);
+    REQUIRE_MESSAGE(!gate->resend.empty(), "N1: the paused server resent its structure updates");
+    auto confirmed = [&] { return sample.Replica().inboxConfirmed.value_or(0); };
+    REQUIRE(confirmed() < 150);
+    if (sameFrame) {
+        gate->Release(gate->early);
+        gate->Release(gate->resend);
+        sample.links.first.Advance();
+        clientFrame();
+    } else {
+        gate->Release(gate->resend);
+        sample.links.first.Advance();
+        clientFrame();
+        REQUIRE_MESSAGE(confirmed() < 150, "N1 later frame: the structures alone do not move the confirmed point");
+        clientFrame();
+        gate->Release(gate->early);
+        sample.links.first.Advance();
+        clientFrame();
+    }
+    gated.entriesWhileAlive = sample.Replica().entriesWhileAlive - before;
+    // The rollback to the confirmed point in [exit, entry) has run (its decide stage is in the client's frame): the
+    // crate of before is gone from the World.
+    gated.confirmedAtRelease = confirmed();
+    gated.removedAtRelease = !sample.ClientWorld().Alive(Reshaped().hidden);
+    gated.between = gated.entriesWhileAlive > 0 && gated.confirmedAtRelease >= 150 && gated.confirmedAtRelease < 152 && gated.removedAtRelease;
+    // The server resumes; the crate comes back at the confirmed point after 152.
+    sample.ServerWorld().SetResource(W::TimeSampling{15'625'000, W::SamplingMode::ManualDelta});
+    gate->mode = Gate::Mode::Pass;
+    for (int i = 0; i < 40; ++i) both();
+    const K::EntityId crate = Reshaped().hidden;
+    const Tint* there = sample.ClientWorld().Get<Tint>(crate);
+    const Tint* wanted = sample.ServerWorld().Get<Tint>(crate);
+    gated.tintThere = there != nullptr;
+    gated.tintSame = there != nullptr && wanted != nullptr && *there == *wanted;
+    MESSAGE("N1 " << std::string(sameFrame ? "same frame" : "later frame") << ": spawns while still in the World=" << gated.entriesWhileAlive
+                  << " confirmed after the release=" << gated.confirmedAtRelease << " crate of before removed=" << gated.removedAtRelease << " client tick=" << sample.ClientTick() << " | " << sample.Replica().inboxEntries << " entries, "
+                  << sample.Replica().inboxExits << " exits");
+    return gated;
+}
+
+} // namespace
+
+TEST_CASE("k3: S1 b made to happen: the confirmed point falls between the exit and the entry in the spawn's frame") {
+    const Gated gated = RunGated(true);
+    REQUIRE_MESSAGE(gated.between, "N1: the spawn came while the crate of before was there, then the confirmed point fell in [exit, entry) and its rollback removed it");
+    CHECK_MESSAGE(gated.tintThere, "S1 b same frame: a spawn's values wait while the entity of before is still in the World");
+    CHECK(gated.tintSame);
+}
+
+TEST_CASE("k3: S1 b made to happen: the confirmed point falls between the exit and the entry two frames after the spawn") {
+    const Gated gated = RunGated(false);
+    REQUIRE_MESSAGE(gated.between, "N1: the spawn came while the crate of before was there, then the confirmed point fell in [exit, entry) and its rollback removed it");
+    CHECK_MESSAGE(gated.tintThere, "S1 b later frame: a spawn's values are written only after the rollback decided at or after the spawn's tick");
+    CHECK(gated.tintSame);
+}
+
+TEST_CASE("k3: a value of a component that does not roll back, come while its entity is gone at the client, waits for it") {
+    // The adversarial check's A6, on the gated case of the same frame: at 153 the server changes the crate's Tint to
+    // 40 001; the client gets it while the crate is gone (the rollback to 151 removed it, the one to a point >= 152
+    // puts it back). The server resends it only until the client confirms the part, which is before the crate is back.
+    const Gated gated = RunGated(true, true);
+    REQUIRE(gated.between);
+    CHECK_MESSAGE(gated.tintSame, "K3: a value of a component that does not roll back, come before the entity is in the World, waits for it");
 }

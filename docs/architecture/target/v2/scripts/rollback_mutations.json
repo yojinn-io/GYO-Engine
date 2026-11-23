@@ -1223,13 +1223,13 @@
   },
   {
    "id": "rb-not-sent-entered-empty",
-   "what": "An entity not carried at C keeps the history even when the history has nothing of it (an entity that just entered comes back with no components). Only it catches U1 (c)'s inbox fallback (S2 of PR-2's review)",
+   "what": "An entity not carried at C keeps the history even when this World did not have it at C (an entity that just entered, or entered again, comes back with no components). Only it catches U1 (c)'s inbox fallback (S2, the recheck's N2)",
    "guards": [
     "rollback R-8 third state (U1 (c))"
    ],
-   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
-   "find": "            if (it != entries_.end() && !it->second.empty() && it->second.front().tick <= tick) kept.push_back(entity);",
-   "replace": "            static_cast<void>(it);\n            kept.push_back(entity);",
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                if (std::binary_search(recorded->begin(), recorded->end(), entity)) kept.push_back(entity);",
+   "replace": "                kept.push_back(entity);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8 third state*",
    "expect": "\\[rb\\-not\\-sent\\-entered\\-from\\-inbox\\]"
@@ -1272,6 +1272,45 @@
    "target": "gyo_net_tests",
    "cases": "k3:*",
    "expect": "U3:\\ the\\ rollbacks\\ entries\\ take\\ part\\ in\\ are\\ counted"
+  },
+  {
+   "id": "rb-entered-forgotten",
+   "what": "The inbox forgets an entity whose last entry is an entry at or before C that the alive set lacks (not put back yet): a later C can never put it back. Only it catches S6's \"last is an exit\" condition",
+   "guards": [
+    "rollback R-8 A (S6)"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "            const bool gone = !entries.empty() && !entries.rbegin()->second && entries.rbegin()->first <= oldest &&",
+   "replace": "            const bool gone = !entries.empty() && entries.rbegin()->first <= oldest &&",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8 A*",
+   "expect": "\\[rb\\-entered\\-not\\-forgotten\\]"
+  },
+  {
+   "id": "rb-forgotten-only-after-rollback",
+   "what": "The inbox forgets an exited entity only after a rollback, not when C moves without one: an entity that entered and left between two C stays for ever. Only it catches S6 on the decision's prune",
+   "guards": [
+    "rollback R-8 A (S6)"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                inbox.Prune(point, *aliveAtPoint);",
+   "replace": "                inbox.Prune(point);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8 A*",
+   "expect": "\\[rb\\-exited\\-forgotten\\-without\\-rollback\\]"
+  },
+  {
+   "id": "rb-entry-rollbacks-count-all",
+   "what": "Every rollback is counted as one for an entry (RC-NT9 reads too high). Only it catches the count's condition",
+   "guards": [
+    "net RC-NT9 (U3)"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "        if (differs && entered) ++history.rollbacksForEntries;",
+   "replace": "        if (differs) ++history.rollbacksForEntries;",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: U3*",
+   "expect": "\\[rb\\-entry\\-rollbacks\\-only\\-entries\\]"
   }
  ]
 }

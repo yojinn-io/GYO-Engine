@@ -214,6 +214,7 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
                                   [&](Kernel::EntityId id) { return !std::binary_search(recorded.begin(), recorded.end(), id); });
             // R-8's third state: an entity the snapshot of C does not carry is not compared (not inferred unchanged).
             const std::vector<Kernel::EntityId> compared = Without(alive, inbox.NotCarriedAt(point));
+            history.notSentLeftOut += alive.size() - compared.size();
             for (const auto& column : history.columns) {
                 if (const InboxColumnBase* values = AuthoritativeOf(inbox, *column)) {
                     differs = differs || column->Differs(point, *values, compared);
@@ -263,12 +264,16 @@ Ok StateRollbackStrategy::Restore(RestoreContext& context) {
             // with its id when it is not there, its values from the inbox); one said to have exited is removed.
             const std::vector<Kernel::EntityId> alive = inbox.AliveWith(*recorded, target);
             set.Alive(alive);
-            // An entity the snapshot of target does not carry keeps the World's own history where it has one, and
-            // takes the inbox's value where it has none (R-8's third state; the user's U1 (c), 2026-11-23).
-            const std::vector<Kernel::EntityId> notCarried = inbox.NotCarriedAt(target);
+            // An entity the snapshot of target does not carry keeps the World's own history when this World had it
+            // at target (its recorded alive set), and takes the inbox's value when it did not, e.g. one that just
+            // entered (R-8's third state; the user's U1 (c), 2026-11-23; the recheck's N2: entries of an entity of
+            // before, or an absence, are not "had it").
+            std::vector<Kernel::EntityId> kept;
+            for (const Kernel::EntityId entity : inbox.NotCarriedAt(target)) {
+                if (std::binary_search(recorded->begin(), recorded->end(), entity)) kept.push_back(entity);
+            }
             for (const auto& column : history.columns) {
                 const InboxColumnBase* values = AuthoritativeOf(inbox, *column);
-                const std::vector<Kernel::EntityId> kept = column->Kept(notCarried, target);
                 column->AddTo(set, target, alive, values, kept);
                 // The history at target agrees with the authority afterwards.
                 if (values != nullptr) column->Adopt(target, *values, Without(alive, kept));

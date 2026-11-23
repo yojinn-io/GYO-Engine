@@ -12,7 +12,7 @@
 | B1 | 成立。實跑：隱藏期間拿掉的 `Speed` 回來了，`Digest` 不等 | 修。兩條路一起守：(1) 回滾端 S6 讓入口在退出生效後忘掉實體，舊值不會再放回；(2) 網路端：入口還記得的實體再生成時，生成沒帶的會回滾元件寫 `Removed`。不回滾元件：生成是整份，寫的時候拿掉清單外的 | `net.k3`「hidden and seen again」、「with losses」 |
 | B2 | 成立（`toInbox` 只在 V＝R 時設） | 修：`Check` 回 `NT-E6`（U2 (a)：一直拒絕） | `net.replication`「K3 refuses … (NT-E6, B2)」 |
 | S1 a | 成立。無損的 Link 就重現：生成後下一 tick 拿掉 `Tint`，回滾放回實體的那一幀又被寫回去 | 修：拿掉不回滾元件時，丟掉留著的那一個 wire | `net.k3`「hidden and seen again」的 `tintSoon` |
-| S1 b | 成立。要有掉包與亂序才重現（種子 1、18、24） | 修：生成的不回滾值留到「回滾在 ≥ 生成 tick 的確認點決定過、實體在 World」才寫；留著的期間，後來的值也留著 | `net.k3`「with losses」 |
+| S1 b | 成立（推理）。〔窄複查 N1 更正：種子 1、18、24 重現的不是 S1 b 本身，見第 9 節；確定性的案例在第 9 節〕 | 修：生成的不回滾值留到「回滾在 ≥ 生成 tick 的確認點決定過、實體在 World」才寫；留著的期間，後來的值也留著 | `net.k3`「with losses」 |
 | S2／U1 | 成立 | 修，照 U1 (c)：歷史有就用歷史，沒有就用入口。欄的歷史多一個 `Kept`，策略只把「歷史有的」當成保留歷史 | `rollback strategy: R-8 third state` 的新一案 |
 | S3 | 成立 | 宣告 D-7 與第 3 節表加註「第 5 步偏離，未經核准」，原文不改 | — |
 | S4 | 成立（實測看得到約 38、動的約 10） | 情境改成 2.1；原本的結果照 §14.1 留在 step5 dev_log 並加註 | `net.bandwidth` 加情境的兩個檢查 |
@@ -35,7 +35,7 @@
   - `net.k3`「hidden and seen again」：`hiddenBodySame`、`!hiddenSpeed`（B1）、`!tintSoon`（S1 a）、`Digest` 失敗。
   - `net.replication`「NT-E6」：建得起來（B2）。
   - `rollback strategy`：S6 的三個檢查、U1 (c) 的一案失敗。
-- **S1 b 的 Red 怎麼證明**：第一次寫的「with losses」在修之前也失敗，但失敗的是另一個實體。`tintsWrong` 把「兩邊都沒有 `Tint`」也算錯，第 61 tick 拿掉 `Tint` 的那個箱子在兩邊都沒有。
+- **S1 b 的 Red 怎麼證明**〔窄複查 N1 更正：本項的種子實際重現的是「生成時之前那份還在」與 `whole` 的交互作用，確認點從沒落在 [退出, 進入)；S1 b 本身的 Red 見第 9 節〕：第一次寫的「with losses」在修之前也失敗，但失敗的是另一個實體。`tintsWrong` 把「兩邊都沒有 `Tint`」也算錯，第 61 tick 拿掉 `Tint` 的那個箱子在兩邊都沒有。
   - 改成只比「有沒有、值一不一樣」。對 G-10 等價：G-10 的箱子在伺服器一定有 `Tint`，所以不是放寬。
   - 檢查也改成只看閃爍的那個箱子。
   - 然後把 S1 b 的修正拿掉，跑種子 1～24，看哪些種子會重現。
@@ -87,7 +87,7 @@
   - find 改寫 2 個：`nt-k3-entered-missing`、`nt-k3-waiting-not-written`。
 - **第一次全跑 net 92／93**：`nt-k3-spawn-written-early` 存活。
   - 那時它拿掉的是「確認點 ≥ 生成 tick 才寫」。
-  - 種子 1～120 都測不出這一條（`probe-120-seeds-notbefore-only.log`）。實際守住 S1 b 的是「之前那份還在時，生成的值也先留著」：拿掉它，120 個種子裡 29 個失敗（`probe-120-seeds-pending-only.log`）。
+  - 種子 1～120 都測不出這一條（`probe-120-seeds-notbefore-only.log`）。〔窄複查 N1 更正：改寫後的突變被殺，是經由 `whole` 的交互作用，不是 S1 b；第 9 節重做〕實際守住 S1 b 的是「之前那份還在時，生成的值也先留著」：拿掉它，120 個種子裡 29 個失敗（`probe-120-seeds-pending-only.log`）。
   - 照 §14.5（誤りが起きるか分からない細部は観測後に加える），突變改成拿掉測得到的那一條，重跑 killed。
   - 「確認點 ≥ 生成 tick」照推理留在程式裡（確認點在之後的幀才落到 [退出, 進入) 時需要它），沒有測試守，寫在第 7 節。
 - **共用 expect**：新加的突變各指自己的檢查，沒有和別的共用。
@@ -111,14 +111,96 @@
 ## 7. 範圍的限界
 
 - 本機 macOS x86_64、`core` preset。頻寬算位元組，平台不影響。
-- S1 b、B1 網路端的情況只在有掉包、亂序的種子重現。種子以外的組合沒有逐一證明。
+- B1 網路端的情況只在有掉包、亂序的種子重現。種子以外的組合沒有逐一證明。（S1 b 見第 9 節的確定性案例。）
 - M1 沒有專用的測試。
-- S1 b 的「確認點 ≥ 生成 tick 才寫」沒有測試守（種子 1～120 都觀測不到它單獨的效果），照推理保留。
+- ~~S1 b 的「確認點 ≥ 生成 tick 才寫」沒有測試守~~〔窄複查 N1：第 9 節的「later frame」案例守住它〕。
 - S6 之後，比退出更早的值晚到時，入口會再為它留一筆（寫在 net 第 13 節的限界）。
 
 ## 8. 證據
 
-主 checkout `build/evidence/gyo2-net-module/pr2-review-fixes/`（git 不追蹤）：`red.log`、`green.log`、`green-k3.log`、`probe.sh`、`probe-24-seeds-*.log`、`probe-120-seeds-*.log`、`bandwidth-try1-11-items-near.log`、`bandwidth-official.log`、`ctest-all.log`、`net-messages.txt`、`mutations-rollback.log`、`mutations-net.log`。
+主 checkout `build/evidence/gyo2-net-module/pr2-review-fixes/`（git 不追蹤）：`red.log`、`green.log`、`green-k3.log`、`probe.sh`、`probe-24-seeds-*.log`、`probe-120-seeds-*.log`、`bandwidth-try1-11-items-near.log`、`bandwidth-official.log`、`ctest-all.log`、`net-messages.txt`、`mutations-rollback.log`、`mutations-net.log`；窄複查之後：`recheck-n1-gated.sh`、`recheck-n1-gated-{none,nb,pend}.log`、`recheck-n2-red.log`、`recheck-n2-green.log`、`adversarial-probe.json`、`adversarial-probe.log`、`recheck-mutations-rollback.log`、`recheck-mutations-net.log`、`recheck-mutations-net-k3-rerun.log`。
+
+## 9. 窄複查 N1、N2
+
+窄複查（Opus／high）：已修 19、修壞 0、新問題 3（主 checkout `build/evidence/gyo2-net-module/design-recheck-pr2-opus.md`）。N3 是核准頁的揭露，協調者寫。
+
+### N1：S1 b 的確定性案例
+
+- **更正**：第 1、2、5 節說「種子 1、18、24 重現 S1 b」不對。
+  - 那些種子重現的是：生成時之前那份實體還在（`entriesWhileAlive > 0`），加上 `whole` 的交互作用。
+  - 確認點從沒落在 [退出, 進入)。
+  - 種子 1～120 拿掉「確認點 ≥ 生成 tick」都不失敗，說明 S1 b 一次都沒出現。
+- **做法**：`net.k3` 加兩案，用測試自己的 Link（`Gate`，包著 MemoryLink）決定伺服器每幀的 datagram。
+  - 箱子在伺服器 tick 150、151 看不到（退出 150、進入 152）。
+  - tick 150、151 的 datagram 先扣住，152 的丟掉。
+  - 伺服器暫停（不再進 tick，只重送可靠的結構更新），重送也扣住。暫停期間只有伺服器的時鐘前進（`Sample::serverAhead`），Client 的對時不受影響。
+  - 「same frame」：全部在同一個 Client 幀放出。退出與進入在之前那份還在時套用，150、151 的值讓確認點落在 151。
+  - 「later frame」：先放重送（結構），過一幀，再放 150、151 的值。
+  - 兩案都 REQUIRE：生成時之前那份還在、放出後確認點落在 [150, 152)、而且那一幀的回滾已把之前那份刪掉（確認不是放棄的回滾）。
+- **Red**（`recheck-n1-gated-{none,nb,pend}.log`，腳本 `recheck-n1-gated.sh`）：
+  - 修正都在：兩案通過。
+  - 拿掉「之前那份還在時，生成的值先留著」：兩案都失敗。
+  - 拿掉「確認點 ≥ 生成 tick 才寫」：兩案都失敗。
+    - same frame 也失敗，因為同一個 `ApplyReplication` 的寫入就在生成之後，回滾前把值寫到之前那份上。
+- **突變**：
+  - `nt-k3-spawn-written-early`（先留著）的 expect 改指「S1 b same frame」。
+  - 新加 `nt-k3-spawn-written-before-decided`（確認點條件），expect 指「S1 b later frame」。
+  - 兩個突變都會讓兩案失敗：它們是同一個機制的兩半，都是「值寫到之前那份上」。各自的 expect 指不同的檢查，但兩條檢查分不出是哪一半。
+- **過程中的兩個測試問題**（不是方法的更換，同一個做法的除錯）：
+  - Client 在連線前設輸入造成崩潰：改成連上之後才設。
+  - 第一版暫停時兩端的時鐘一起走，Client 的對時跳了約 90 tick，超過回滾深度、回滾被放棄。改成只有伺服器的時鐘走。
+
+### N2：`Kept` 的判準
+
+- **確認成立**：
+  - 再進入的實體在退出被回滾執行後、歷史還在深度內時，`Kept` 看到之前那份的條目（或 `nullopt`），判成「歷史有它」，結果又是空殼。
+  - Red：`rollback strategy: R-8 third state` 加「entering again」一案，`recheck-n2-red.log`。
+- **修**：判準改成「這個 World 在 C 記下的存活集合有它」。
+  - 由策略算 `kept`，欄的 `Kept` 拿掉。
+  - Green：`recheck-n2-green.log`。
+- **突變**：`rb-not-sent-entered-empty` 的 find 改到新的判準（第三態的兩案都會失敗）。
+
+## 10. 突變清單的敵對式檢查
+
+- 檢查者 Opus／high，與作者同模型（Fable 暫停，照導航員規則記錄）。報告在主 checkout `build/evidence/gyo2-net-module/mutant-adversarial-pr2-opus.md`。
+- **候選 13 個**：條文缺口 12（A1～A12）、expect 認不出是誰 1（B-1）。
+- **先實跑確認存活**（`adversarial-probe.json`、`adversarial-probe.log`；expect 故意不會命中，`wrong_failure`＝既有測試已抓到）：
+  - 存活 9 個：A1、A2、A3、A6、A7、A9、A10、A11、A12。
+  - 既有測試已抓到 3 個，不加：
+    - A4：K3 樣本建不起來。
+    - A5：「with losses」的 `tintsWrong`。
+    - A8：G-10 的 `crateLost`。
+
+  | 候選 | 新的檢查（案例） | 突變（只有它捕到的錯） |
+  |---|---|---|
+  | A1 | `[rb-entered-not-forgotten]`（S6 單元案例加實體 9） | `rb-entered-forgotten` |
+  | A2 | `[rb-exited-forgotten-without-rollback]`（新案） | `rb-forgotten-only-after-rollback` |
+  | A3 | `[rb-entry-rollbacks-only-entries]`（新案） | `rb-entry-rollbacks-count-all` |
+  | A6 | 新案「come while its entity is gone」：第 9 節的 same frame 案例，伺服器在 153 改箱子的 `Tint`（見下） | `nt-k3-waiting-value-dropped` |
+  | A7 | 同一案：第 160 tick 拿掉、200 tick 再加 90 的箱子的 `Tint` | `nt-k3-direct-not-written` |
+  | A9 | 新案「budget smaller than one entity」（預算 1，最長等待 ≤ 32，跑之前寫的） | `nt-budget-first-not-sent` |
+  | A10 | 新案「heavier NetPriority waits less」（玩家權重 8） | `nt-priority-weight-ignored` |
+  | A11 | G-11：E2 也帶 `Secret`、不給誰看 | `nt-private-per-type` |
+  | A12 | G-11：第三個 Client（user 3）的 Peer 沒有 `PeerVisibility` | `nt-private-without-visibility` |
+
+- **A6 的第一版沒抓到**（第一次全跑 net 99／100，`nt-k3-waiting-value-dropped` 存活，`recheck-mutations-net.log`）：
+  - 第一版是在「hidden and seen again」第 81 tick 改 80 的箱子的 `Tint`。
+  - 追蹤（暫時加印出、已拿掉）：等待的路只走一次（tick 81）。伺服器在 Client 確認之前每 tick 重送這個值（82～86），之後的重送走直接寫的路，所以丟掉的值自己補回來。
+  - 改成在實體不在 Client 的期間比一個來回長的情境：第 9 節的 same frame 閘門案例，伺服器在 153 改 `Tint`（Client 的箱子在回到 151 的回滾裡刪掉，到 ≥ 152 的確認點才回來）。
+  - 第一次把這個改值放進 S1 b 的兩案時，改值本身會把 S1 b 丟掉的 `Tint` 補回來，S1 b 的 Red 消失。所以另開一案（`RunGated(true, true)`），S1 b 的兩案不改值。之後重新確認 S1 b 的 Red（`recheck-n1-gated-*.log` 是最後一版）。
+  - 「hidden and seen again」第 81 tick 的改值拿掉（沒有作用）。
+- **B-1**：回滾加計數 `RollbackHistory::notSentLeftOut`（比對時因 `NotSent` 拿掉的實體數）。NotSent 一案加「the deferred entities are left out of the client's rollback comparison」，`nt-deferred-not-notsent` 的 expect 改指它。
+- 新案的數字：
+  - 預算 1：最長等待 7。
+  - 權重 8：玩家最長等待 0、其他 6。
+  - G-11 的 Client 3：E1／E2／E3 都在 158 幀，`Secret` 0 幀。
+  - G-11 原本的數字不變（158／118／158、0／158／158）。
+- **結果**：
+  - 加的突變：A 9 個、N1 1 個（`nt-k3-spawn-written-before-decided`）；改 expect 2 個（`nt-k3-spawn-written-early`、`nt-deferred-not-notsent`）；改 find 1 個（`rb-not-sent-entered-empty`）。
+  - rollback 98／98 killed（全跑）。
+  - net：全跑 99／100（A6 的第一版存活，見上）；改了 A6 的案例之後，重跑 `k3:*` 的 20 個，20／20 killed。所以 net 100／100。
+  - 新加的突變各指自己的檢查。例外：N1 的兩個突變會讓 S1 b 的兩案都失敗（見第 9 節）。
+  - 全部 ctest 199／199。
 
 ## 之後要接的
 

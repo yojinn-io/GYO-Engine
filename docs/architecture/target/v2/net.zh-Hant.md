@@ -378,7 +378,7 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
   - 〔U2 (a) 的待辦〕K3 上 V ≠ R 的會回滾 Resource（例如狀態機）一直拒絕。有點名的功能需要時，由狀態機 Module 提供「伺服器的值變成 R」的轉換給網路用（會碰狀態機 DI 8：網路與狀態機互不依賴），那時另開。
   - 〔PR-2 設計審查 S1〕生成帶來的不回滾元件，在回滾於 ≥ 生成 tick 的確認點決定過之後才寫（上一幀寫的確認點，回滾在同一幀的決定階段用它）。放棄的回滾（超過深度）不放回實體時，它們一直留著。
   - 〔PR-2 設計審查 S6〕入口忘掉一個退出的實體之後，比退出更早的值才晚到時，入口會再為它留一筆（MC-1 照收）；數量受晚到的值限制。
-- **守衛**：G-10（`net.k3`：確定性的 2D 樣本，最後 80 步輸入是預設值；Client 第 P 步的 `Digest` 等於 Match 的；網路生成的實體不被回滾刪掉；件數）、伺服器一幀三步、權威刪掉整個實體；PR-2 設計審查：`net.k3` 的「hidden and seen again」（B1、S1 a、權威拿掉會回滾的元件、K3＋可見性）與「with losses」（S1 b、B1 的入口還記得的情況；種子 1、18、24）兩案、`net.replication` 的 `NT-E6`；突變 `nt-k3-*`。
+- **守衛**：G-10（`net.k3`：確定性的 2D 樣本，最後 80 步輸入是預設值；Client 第 P 步的 `Digest` 等於 Match 的；網路生成的實體不被回滾刪掉；件數）、伺服器一幀三步、權威刪掉整個實體；PR-2 設計審查：`net.k3` 的「hidden and seen again」（B1、S1 a、權威拿掉會回滾的元件、K3＋可見性、不回滾元件的值等實體與加上）、「with losses」（B1 的入口還記得的情況；種子 1、18、24）、「S1 b made to happen」兩案（確定性的 Link，確認點落在 [退出, 進入)；窄複查 N1）、`net.replication` 的 `NT-E6`；突變 `nt-k3-*`。
 
 ## 14. 相關性與優先度（宣告 C-VIS1、C-VIS2、F4、F7、F19，第 5 步）
 
@@ -402,7 +402,7 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
   - 〔PR-2 設計審查 M8〕延後清單（每筆 8 bytes）只放在第 0 則，不算進預算。大量延後時第 0 則變大、可能分片，整則遺失的機會變高，確認點較常停。有點名的情境延後超過約 100 個實體時再看（例如改成「這個 tick 全部沒帶」）。
   - 頻寬判定的情境是合成的（見 dev_log）。
 - **頻寬判定**（閘口 2 的 2.3，事前宣告；使用者選 (b) ≤ 512 kbps）：`net.bandwidth`（ctest 的 `cpu` 標籤，算位元組、不計時）。數字見 dev_log 2026-11-23 step5。
-- **守衛**：G-11（`net.visibility`，PR-2 設計審查加「整份重送」的不變元件；`net.visibility` 的私人元件不再顯示一案；`net.k3` 的 NotSent 一案）、頻寬判定；突變 `nt-vis-*`、`nt-private-*`、`nt-budget-ignored`、`nt-priority-not-accumulated`、`nt-deferred-not-notsent`。
+- **守衛**：G-11（`net.visibility`，PR-2 設計審查加「整份重送」的不變元件；`net.visibility` 的私人元件不再顯示一案；`net.k3` 的 NotSent 一案）、頻寬判定；突變 `nt-vis-*`、`nt-private-*`、`nt-budget-ignored`、`nt-budget-first-not-sent`、`nt-priority-not-accumulated`、`nt-priority-weight-ignored`、`nt-deferred-not-notsent`。G-11 另有：私人元件以實體為單位（E2 帶不給人看的 `Secret`）、沒有 `PeerVisibility` 的 Peer（第三個 Client）收不到私人元件；`net.k3` 另有：預算比一個實體小時每 tick 仍送一個、權重大的等得少。
 
 ## Design Invariants
 
