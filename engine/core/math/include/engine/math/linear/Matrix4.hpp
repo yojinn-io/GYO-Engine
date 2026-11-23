@@ -10,6 +10,7 @@
 #include "engine/math/linear/Matrix3.hpp"
 #include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec3.hpp"
+#include "engine/math/linear/Vec4.hpp"
 
 namespace GYO::Engine::Math {
 
@@ -48,6 +49,16 @@ static_assert(std::is_aggregate_v<Matrix4>);
         }
     }
     return result;
+}
+
+// The full homogeneous product M * v (no divide by w). A projection's clip
+// coordinates are Multiply(projection, MakePoint4(p)); divide by w for NDC.
+[[nodiscard]] inline Vec4 Multiply(const Matrix4& matrix, const Vec4 v) noexcept {
+    const auto& m = matrix.values;
+    return {m[0] * v.x + m[4] * v.y + m[8] * v.z + m[12] * v.w,
+            m[1] * v.x + m[5] * v.y + m[9] * v.z + m[13] * v.w,
+            m[2] * v.x + m[6] * v.y + m[10] * v.z + m[14] * v.w,
+            m[3] * v.x + m[7] * v.y + m[11] * v.z + m[15] * v.w};
 }
 
 // Applies translation (w = 1). Non-template so TransformPoint(m, {}) works.
@@ -167,6 +178,26 @@ static_assert(std::is_aggregate_v<Matrix4>);
     result.values[10] = farClip / depthRange;
     result.values[11] = 1.0F;
     result.values[14] = -(nearClip * farClip) / depthRange;
+    return result;
+}
+
+// Left-handed orthographic projection with clip depth in [0, 1], the clip
+// convention of MakePerspective: x in [left, right] and y in [bottom, top] map
+// to [-1, 1], z = nearClip maps to 0 and z = farClip to 1. nearClip may be
+// greater than farClip (a larger z is then nearer: a 2D camera's default).
+[[nodiscard]] inline Matrix4 MakeOrthographic(const float left, const float right, const float bottom, const float top,
+                                              const float nearClip, const float farClip) noexcept {
+    Matrix4 result = Zero();
+    const float width = right - left;
+    const float height = top - bottom;
+    const float depth = farClip - nearClip;
+    result.values[0] = 2.0F / width;
+    result.values[5] = 2.0F / height;
+    result.values[10] = 1.0F / depth;
+    result.values[12] = -(right + left) / width;
+    result.values[13] = -(top + bottom) / height;
+    result.values[14] = -nearClip / depth;
+    result.values[15] = 1.0F;
     return result;
 }
 
