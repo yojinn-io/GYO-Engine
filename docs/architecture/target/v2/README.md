@@ -12,6 +12,7 @@
 - [authority.zh-Hant.md](authority.zh-Hant.md)：權威 Module（`engine/modules/authority`）——權威登記、策略的插口、伺服器權威策略的啟動檢查（AU-E1～AU-E9，含從 Kernel 搬來的 Z6、Z8、D-E15）、一致性指紋、digest、G-5 的匯出；Design Invariants DI-A 1～12 與 Replacement Criteria（`v8-arch-gyo2-authority-rollback`，最終文字使用者 2026-11-22 核准）。
 - [rollback.zh-Hant.md](rollback.zh-Hant.md)：回滾 Module（`engine/modules/rollback`）——`RollbackStrategy` 的契約、公開登記、官方策略（記錄、判斷、還原、重跑、輸入的歷史、權威值的入口）；Design Invariants R-1～R-8（R-7 取代 Kernel 的 D-E16）與 Replacement Criteria（含從 Kernel 搬來的「回滾等價破裂」；`v8-arch-gyo2-authority-rollback`，最終文字使用者 2026-11-22 核准）。
 - [audio.zh-Hant.md](audio.zh-Hant.md)：混音器 Module（`engine/modules/audio`）——clip、voice、提交口與它的執行緒契約、時間點的換算、後端要求的介面；Design Invariants 1～11 與 Replacement Criteria 1～9（`v8-arch-gyo2-audio-review` 從 master 的 `audio.md` 搬來改寫，最終文字在合併前核准定稿）。
+- [image.zh-Hant.md](image.zh-Hant.md)：圖片 Module（`engine/modules/image`）——一種像素排法（RGBA8、第 0 列在最上面、列距＝寬×4，R2b 照它讀）、`image`／`png` 的 Data Contract 與 `PngLoader`（stb_image 只在 `src/adapters/stb_image/`）；Design Invariants IM-1～IM-4 與 RC-IM1～RC-IM3（`v8-arch-gyo2-sdl-i`，最終文字在合併前核准定稿）。
 - [json.zh-Hant.md](json.zh-Hant.md)：JSON Module（`engine/modules/json`）的 Design Invariants J-1～J-9 與 Replacement Criteria（最終文字在 `v8-arch-gyo2-json-module` 合併前的合併前核准定稿）。
 - [text.zh-Hant.md](text.zh-Hant.md)：text Module（`engine/modules/text`）——字型的資料契約 `"font"`、FreeType／HarfBuzz／libunibreak 三個 adapter、Design Invariants TX-1～TX-10 與 Replacement Criteria、使用的一方要照做的四件（CCR-14～16）、授權告示的義務（`v8-arch-gyo2-sdl-t`，最終文字在合併前核准定稿）。
 - [logging.zh-Hant.md](logging.zh-Hant.md)：日誌（`engine/modules/logging`、`engine/modules/world_logging`）——入口 ①②③④⑥、E0 的致命路徑、JSON lines 資料契約、Design Invariants LG-1～LG-11（LG-9 退役）與 Replacement Criteria。trace 是另一個 Module（下一列）。
@@ -19,7 +20,7 @@
 - [asset.zh-Hant.md](asset.zh-Hant.md)：資產（`engine/modules/asset`、`engine/modules/world_asset`）——id、catalog 的 Data Contract（格式、Version、Validation Rule (A)(B)）、World 外的 `AssetStore`（照 Bevy 的演算法）、每個 World 的 `AssetRequests` 與 `AssetView`、狀態與就緒查詢、錯誤與件數、雜湊函式；Design Invariants AS-1～AS-13 與 Replacement Criteria（`v8-arch-gyo2-asset`，取代 `target/assets.zh-Hant.md`；最終文字使用者 2026-11-23 合併前核准）。
 - [state-machine.zh-Hant.md](state-machine.zh-Hant.md)：狀態機 Module（`engine/modules/state_machine`）——名字表、封閉的型別、要求、套用的 System、子狀態、條件的 Design Invariants 與寫法。
 - [entity-ids.zh-Hant.md](entity-ids.zh-Hant.md)：預設的實體配發器 `entity_ids`（`RangeAllotter`）的 Design Invariants EI-1～EI-3 與 Replacement Criteria（`v8-arch-gyo2-world-gen`，使用者 2026-11-22 合併前核准）。
-- [transform.zh-Hant.md](transform.zh-Hant.md)：姿態 `transform`（`Transform`、`GlobalTransform`、沒有父時的同步）的用法、Design Invariants TF-1～TF-4 與 Replacement Criteria（`v8-arch-gyo2-sdl-transform-camera`，SDL 線子批 X1；最終文字在合併前核准）。
+- [transform.zh-Hant.md](transform.zh-Hant.md)：姿態 `transform`（`Transform`、`GlobalTransform`、沿 Kernel 的父子傳播）的用法、Design Invariants TF-1～TF-5 與 Replacement Criteria（`v8-arch-gyo2-sdl-transform-camera`，SDL 線子批 X1；X2 加父子傳播 `v8-arch-gyo2-sdl-transform-hierarchy`；最終文字在合併前核准）。
 - [camera.zh-Hant.md](camera.zh-Hant.md)：相機 `camera`（元件、投影、2D／3D、推導值、目標大小的副本、座標換算）的用法、Design Invariants CM-1～CM-5 與 Replacement Criteria（同上）。
 - [save-version.zh-Hant.md](save-version.zh-Hant.md)：存檔版本 `save_version`（純程式庫、預設不帶）的 Design Invariants SV-1～SV-3 與 Replacement Criteria（`v8-arch-gyo2-restore-impl`，使用者 2026-11-22 合併前核准）。
 - [sdl.zh-Hant.md](sdl.zh-Hant.md)：SDL 的 Plugin（`plugins/sdl*`）——列與依賴、目錄的形、只建被選的 Plugin（`GYO_PLUGINS`）、SDL 3.4.0 的取得與補丁、Design Invariants SDL-1、SDL-2（子批 P `v8-arch-gyo2-sdl-p` 開頁；W、A、R2a 各自補）。
@@ -48,6 +49,7 @@
 ## 計畫與批次的紀錄
 
 - [transform-camera-declaration.zh-Hant.md](transform-camera-declaration.zh-Hant.md)：`v8-arch-gyo2-sdl-transform-camera`（SDL 線子批 X1：`transform`＋`camera`）的事前宣告（修訂 1，使用者 2026-11-23 動工前核准「照建議，第 1 題選乙，同意副本」）。
+- [transform-hierarchy.zh-Hant.md](transform-hierarchy.zh-Hant.md)：`v8-arch-gyo2-sdl-transform-hierarchy`（SDL 線子批 X2：`transform` 的父子傳播）的一頁短說明（設計取捨、和 Bevy／Unity 的對照、後果、量測的判斷）。
 - [state-machine-declaration.zh-Hant.md](state-machine-declaration.zh-Hant.md)：`v8-arch-gyo2-state-machine` 的事前宣告（修訂 8，2026-11-22 核准）。
 - [global-audit.zh-Hant.md](global-audit.zh-Hant.md)：全局計畫審計（2026-11-14）——這條線的起點。
 - [rebuild-declaration.zh-Hant.md](rebuild-declaration.zh-Hant.md)：`v8-arch-rebuild` 的事前宣告（階段 R0～R6）。
@@ -140,11 +142,13 @@
 - [2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)：audio 那一側的小批（clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、參照表與回收環；`WavLoader` 與 `sound`／`wav` 的 Data Contract；`GYO::Audio` 連 `GYO::Asset`）。
 - [2026_11_23_gyo2_os_test_timeout.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_test_timeout.zh-Hant.md)：os 測試在本機偶爾跑很久或逾時的原因（`v8-arch-gyo2-os-test-timeout`；加逐案計時的觀測；時間花在「loses no signal」案例自己的 signaller 每回合 yield、負載下讓出 CPU，不在 WakeSignal；改不改測試交使用者）。
 - [2026_11_23_gyo2_sdl_transform_camera.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_sdl_transform_camera.zh-Hant.md)：SDL 線子批 X1，`transform`＋`camera` Module（`v8-arch-gyo2-sdl-transform-camera`；突變 45/45、合併前核准頁 [transform-camera-merge-approval.zh-Hant.md](transform-camera-merge-approval.zh-Hant.md)）。
+- [2026_11_23_gyo2_sdl_transform_hierarchy.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_sdl_transform_hierarchy.zh-Hant.md)：SDL 線子批 X2，`transform` 的父子傳播（`v8-arch-gyo2-sdl-transform-hierarchy`）。
 - [2026_11_23_gyo2_kernel_relationship.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_relationship.zh-Hant.md)：Kernel 的關係與父子（子批 KR）——`ChildOf`／`Children`、第 5b 步、連帶刪除（深度優先、先拆再刪）、`Restore` 的兩件、`RejectedRelationship`；Kernel DI-KS 29～33、RC 26、27；說明頁第 19 節。
 - [2026_11_23_gyo2_build_games_dir.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_build_games_dir.zh-Hant.md)：建置層認 `games/`，建置與 CI 的 app 改叫 game（`projects.csv`→`games.csv`、`GYO_GAMES`、KIND game、打包清單 4、工具描述 2、身分標頭改巨集）；四個守衛的掃描根；複製整合的 mirror 修正；LIM-9。
 - [2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md)：「loses no signal」退避的調查與撤回（`v8-arch-gyo2-os-wake-test-backoff`；65536 次自旋在 6 次參考量測中讓本機 Mac 的拖延消失（改後都 ≤ 1.4 s），但閒置時檢出力可能變弱；問題在 CI 與 Linux 上沒有，使用者決定撤回，只拿掉 #289 在案例裡的 Note）。
 - [2026_11_23_gyo2_mech_cleanup.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_mech_cleanup.zh-Hant.md)：累積的機械式清理（`v8-arch-gyo2-mech-cleanup`；master 路徑的突變 74 個退役（其中 `tt2-flush-no-wait` 改寫進 logging 清單）、確認前批已做掉的三件、兩份 dev_log 補已合併）。
 - [2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md)：Kernel 診斷紀錄接上交換函式「出」（`WorldLogging::ForwardKernelDiagnostics`；O-3、O-11、O-12、LG-1 對「誰取」改成一致，使用者同意修訂 1）。
+- [2026_11_23_gyo2_sdl_i_image.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_sdl_i_image.zh-Hant.md)：SDL 線子批 I（`v8-arch-gyo2-sdl-i`；image Module＋stb_image v2.34 adapter，下載經使用者同意；Object_Connect 的 11 張 PNG 在本機載過、和獨立解碼器的像素總和一致）。
 
 ## 沒有搬過來的
 
