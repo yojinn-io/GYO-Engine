@@ -9,6 +9,7 @@
 // scan of engine/os/include covers it: libc++ and libstdc++ define _PTHREAD_H
 // from <string> or <filesystem>, so a macro check would fail without a violation.
 #include "engine/os/Console.hpp"
+#include "engine/os/DatagramSocket.hpp"
 #include "engine/os/Files.hpp"
 #include "engine/os/OSError.hpp"
 #include "engine/os/Process.hpp"

@@ -3,6 +3,7 @@
 // target links only gyo_state_machine (with the kernel and the orchestration layer it links): it compiling is half of
 // Design Invariant 8's guard.
 #include "StateMachineTestSupport.hpp"
+#include "engine/state_machine/AdoptValue.hpp"
 
 #include <type_traits>
 
@@ -646,4 +647,219 @@ TEST_CASE("behaviour: an apply with no request does not write the request Resour
     Frame(*p);
     REQUIRE(RequestStamps().size() == 3);
     CHECK(RequestStamps()[1] == RequestStamps()[2]);
+}
+
+// Design Invariant 6: RequestSilent (net-module declaration Q8 (b); revision 7's rules, judgement 1's silent rows).
+namespace {
+struct Stamps {
+    K::ChangeStamp flow = 0;
+    K::ChangeStamp pause = 0;
+};
+std::vector<Stamps>& MachineStamps() {
+    static std::vector<Stamps> stamps;
+    return stamps;
+}
+K::SystemResult RecordMachineStamps(K::ExclusiveWorld<> world) {
+    MachineStamps().push_back({world.ResourceStamp<SM::StateMachine<Flow>>().value_or(0),
+                               world.ResourceStamp<SM::StateMachine<Pause>>().value_or(0)});
+    return {};
+}
+Setup WithMachineStamps() {
+    MachineStamps().clear();
+    Setup s;
+    s.extra = [](O::WorldSetup& w) {
+        w.Registrar().AddSystem<&RecordMachineStamps>(At("RecordMachineStamps", std::string(O::DefaultSchedules::frame),
+                                                         std::string(O::DefaultSchedules::last)));
+    };
+    return s;
+}
+} // namespace
+
+TEST_CASE("behaviour: a silent request changes the value without exits and enters; the children appear at their initial value") {
+    auto p = Make({});
+    REQUIRE(p);
+    Frame(*p);
+    Req<Flow>(*p).RequestSilent(Flow::InLevel);
+    CHECK(Frame(*p).empty());
+    CHECK(Mach<Flow>(*p).Current() == Flow::InLevel);
+    CHECK(Mach<Pause>(*p).Current() == Pause::Running);
+    CHECK(Mach<Inventory>(*p).Current() == Inventory::Closed);
+}
+
+TEST_CASE("behaviour: a silent request to another value makes the children leave without their exits") {
+    auto p = InLevel();
+    Req<Pause>(*p).Request(Pause::Paused);
+    Frame(*p);
+    Req<Flow>(*p).RequestSilent(Flow::MainMenu);
+    CHECK(Frame(*p).empty());
+    CHECK(Mach<Flow>(*p).Current() == Flow::MainMenu);
+    CHECK(Mach<Pause>(*p).Status() == SM::StateStatus::Absent);
+    CHECK(Mach<Inventory>(*p).Status() == SM::StateStatus::Absent);
+}
+
+TEST_CASE("behaviour: a silent request for the parent's own value leaves the children as they are and writes nothing") {
+    auto p = InLevel(WithMachineStamps());
+    Req<Pause>(*p).Request(Pause::Paused);
+    Frame(*p);
+    const std::size_t before = MachineStamps().size();
+    Req<Flow>(*p).RequestSilent(Flow::InLevel);
+    CHECK(Frame(*p).empty());
+    CHECK(Mach<Flow>(*p).Current() == Flow::InLevel);
+    CHECK_MESSAGE(Mach<Pause>(*p).Current() == Pause::Paused, "the child is not reset (silent-parent-keeps-child)");
+    REQUIRE(MachineStamps().size() == before + 1);
+    CHECK_MESSAGE(MachineStamps()[before].flow == MachineStamps()[before - 1].flow, "the same value is not written (CCR-8)");
+    CHECK(MachineStamps()[before].pause == MachineStamps()[before - 1].pause);
+}
+
+TEST_CASE("behaviour: a child's silent request: the value changes without its exit and enter; dropped when absent") {
+    SUBCASE("present") {
+        auto p = InLevel();
+        Req<Pause>(*p).RequestSilent(Pause::Paused);
+        CHECK(Frame(*p).empty());
+        CHECK(Mach<Pause>(*p).Current() == Pause::Paused);
+    }
+    SUBCASE("the same value writes nothing") {
+        auto p = InLevel(WithMachineStamps());
+        const std::size_t before = MachineStamps().size();
+        Req<Pause>(*p).RequestSilent(Pause::Running);
+        CHECK(Frame(*p).empty());
+        REQUIRE(MachineStamps().size() == before + 1);
+        CHECK(MachineStamps()[before].pause == MachineStamps()[before - 1].pause);
+    }
+    SUBCASE("absent") {
+        auto p = Make({});
+        REQUIRE(p);
+        Frame(*p);
+        Req<Pause>(*p).RequestSilent(Pause::Paused);
+        CHECK(Frame(*p).empty());
+        CHECK(Mach<Pause>(*p).Status() == SM::StateStatus::Absent);
+    }
+}
+
+TEST_CASE("behaviour: a Request overwritten by a RequestSilent: counted, and the apply follows the later kind") {
+    auto p = Make({});
+    REQUIRE(p);
+    Frame(*p);
+    Req<Flow>(*p).Request(Flow::InLevel);
+    Req<Flow>(*p).RequestSilent(Flow::InLevel);
+    CHECK(Req<Flow>(*p).Overwritten() == 1);
+    CHECK(Req<Flow>(*p).PendingKind() == SM::RequestKind::Silent);
+    CHECK(Frame(*p).empty());
+    CHECK(Mach<Flow>(*p).Current() == Flow::InLevel);
+    // The kind does not stay: the next Request runs the exits and enters.
+    CHECK(Req<Flow>(*p).PendingKind() == SM::RequestKind::Normal);
+    Req<Flow>(*p).Request(Flow::MainMenu);
+    CHECK(Frame(*p) == List{"Exit.Pause.Running", "Exit.Inventory.Closed", "Exit.Flow.InLevel", "Enter.Flow.MainMenu"});
+}
+
+TEST_CASE("behaviour: a value not in the table asked with RequestSilent: Err SM-E1, the value unchanged") {
+    auto p = InLevel();
+    Events().clear();
+    Req<Flow>(*p).RequestSilent(static_cast<Flow>(7));
+    auto ran = p->RunFrame();
+    REQUIRE_FALSE(ran);
+    CHECK(HasRule(ran.error(), "SM-E1"));
+    CHECK(Events().empty());
+    CHECK(Mach<Flow>(*p).Current() == Flow::InLevel);
+}
+
+// The two apply functions for a value decided elsewhere (Q8 (b)): through a request, and nothing written when the state
+// already goes to that value (CCR-8).
+namespace {
+SM::RequestKind& AdoptKind() {
+    static SM::RequestKind kind = SM::RequestKind::Normal;
+    return kind;
+}
+K::SystemResult AdoptInLevelTwice(K::ExclusiveWorld<> world) {
+    for (int i = 0; i < 2; ++i) {
+        auto adopted = AdoptKind() == SM::RequestKind::Silent ? SM::AdoptByRequestSilent<Flow>(world, Flow::InLevel)
+                                                              : SM::AdoptByRequest<Flow>(world, Flow::InLevel);
+        if (!adopted) return adopted;
+    }
+    return {};
+}
+} // namespace
+
+TEST_CASE("behaviour: AdoptByRequest and AdoptByRequestSilent go through a request and write nothing for the same value") {
+    for (const SM::RequestKind kind : {SM::RequestKind::Normal, SM::RequestKind::Silent}) {
+        CAPTURE(static_cast<int>(kind));
+        AdoptKind() = kind;
+        Setup s = WithMachineStamps();
+        s.extra = [extra = s.extra](O::WorldSetup& w) {
+            extra(w);
+            w.Registrar().AddSystem<&AdoptInLevelTwice>(At("AdoptInLevelTwice", std::string(O::DefaultSchedules::frame),
+                                                           std::string(O::DefaultSchedules::first)));
+        };
+        auto p = Make(std::move(s));
+        REQUIRE(p);
+        const List first = Frame(*p);
+        // The first frame: the first apply enters the initial value; the request waits for the next apply.
+        CHECK(first == List{"Enter.Flow.MainMenu"});
+        CHECK(Req<Flow>(*p).Overwritten() == 0);
+        const List second = Frame(*p);
+        if (kind == SM::RequestKind::Normal) {
+            CHECK(second == List{"Exit.Flow.MainMenu", "Enter.Flow.InLevel", "Enter.Pause.Running", "Enter.Inventory.Closed"});
+        } else {
+            CHECK(second.empty());
+        }
+        CHECK(Mach<Flow>(*p).Current() == Flow::InLevel);
+        CHECK_MESSAGE(Req<Flow>(*p).Overwritten() == 0, "the same value adopted twice before an apply is written once");
+        // Already InLevel: adopting it again writes neither the request nor the value.
+        const std::size_t before = MachineStamps().size();
+        CHECK(Frame(*p).empty());
+        CHECK(MachineStamps()[before].flow == MachineStamps()[before - 1].flow);
+        CHECK(!Req<Flow>(*p).Pending().has_value());
+    }
+}
+
+namespace {
+K::SystemResult AdoptInLevelOnce(K::ExclusiveWorld<> world) { return SM::AdoptByRequest<Flow>(world, Flow::InLevel); }
+} // namespace
+
+TEST_CASE("behaviour: adopting the current value writes nothing even with another request pending (small thing 5)") {
+    // The adopt function runs in Main/First every frame with InLevel; a local request (MainMenu) is pending when the
+    // current value is already InLevel.
+    auto q = Make([] {
+        Setup s;
+        s.extra = [](O::WorldSetup& w) {
+            w.Registrar().AddSystem<&AdoptInLevelOnce>(At("AdoptInLevelOnce", std::string(O::DefaultSchedules::frame),
+                                                          std::string(O::DefaultSchedules::first)));
+        };
+        return s;
+    }());
+    REQUIRE(q);
+    Frame(*q);
+    Frame(*q); // InLevel now (the first frame's adopt was applied in the second)
+    REQUIRE(Mach<Flow>(*q).Current() == Flow::InLevel);
+    Req<Flow>(*q).Request(Flow::MainMenu);
+    const std::uint64_t overwritten = Req<Flow>(*q).Overwritten();
+    const List events = Frame(*q);
+    CHECK_MESSAGE(Req<Flow>(*q).Overwritten() == overwritten, "small thing 5: the current value adopted writes no request (CCR-8)");
+    const List expected{"Exit.Pause.Running", "Exit.Inventory.Closed", "Exit.Flow.InLevel", "Enter.Flow.MainMenu"};
+    CHECK_MESSAGE(events == expected,
+                  "small thing 5: the local request is applied; no exit and enter of InLevel again");
+}
+
+namespace {
+K::SystemResult AdoptInLevelSilentOnce(K::ExclusiveWorld<> world) { return SM::AdoptByRequestSilent<Flow>(world, Flow::InLevel); }
+} // namespace
+
+TEST_CASE("behaviour: adopting the current value silently takes the place of a local request and runs nothing (recheck small thing d)") {
+    auto q = Make([] {
+        Setup s;
+        s.extra = [](O::WorldSetup& w) {
+            w.Registrar().AddSystem<&AdoptInLevelSilentOnce>(At("AdoptInLevelSilentOnce", std::string(O::DefaultSchedules::frame),
+                                                                std::string(O::DefaultSchedules::first)));
+        };
+        return s;
+    }());
+    REQUIRE(q);
+    Frame(*q);
+    Frame(*q);
+    REQUIRE(Mach<Flow>(*q).Current() == Flow::InLevel);
+    // A local request is pending; the value from elsewhere is the current one, adopted silently.
+    Req<Flow>(*q).Request(Flow::MainMenu);
+    const List events = Frame(*q);
+    CHECK_MESSAGE(events.empty(), "recheck small thing d: the silent request of the current value replaced the local one and ran nothing");
+    CHECK(Mach<Flow>(*q).Current() == Flow::InLevel);
 }

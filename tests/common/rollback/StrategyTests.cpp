@@ -1027,3 +1027,95 @@ TEST_CASE("rollback strategy: R-2: an entity a predicted death took comes back a
     CHECK_MESSAGE(WorldOf(*p).Get<Tgt>(1) == nullptr, "[rb-revive-no-initial-value] the revival filled Tgt");
     CHECK_MESSAGE(TgtAdds().empty(), "[rb-revive-no-initial-value] OnAdd of a Tgt nobody recorded: " << TgtAdds().size());
 }
+
+namespace {
+
+// ---- A component input (net Module declaration D-11, section 5): Steer is on each entity, the entry writes each
+// entity's next step, the step adds each entity's own Steer to its Health.
+struct Steer {
+    std::int32_t move = 0;
+    friend bool operator==(const Steer&, const Steer&) = default;
+};
+inline void HashValue(K::Hasher& h, const Steer& v) { HashValue(h, v.move); }
+
+K::SystemResult AdvanceSteered(K::Query<K::Read<Steer>, K::Write<Health>> rows) {
+    rows.ForEach([](K::EntityId, const Steer& steer, K::Mut<Health> hp) { hp->hp += steer.move; });
+    return {};
+}
+// The entry: each entity's Steer of the next step (Tick + 1), different per entity.
+K::SystemResult FeedSteer(K::Query<K::Write<Steer>> steers, K::Res<W::Tick> tick) {
+    steers.ForEach([&tick](K::EntityId id, K::Mut<Steer> steer) {
+        steer->move = kScript[(tick->value + 1 + id) % kScript.size()] * static_cast<std::int32_t>(id);
+    });
+    return {};
+}
+
+void BuildSteerFeed(O::WorldSetup& s, bool feedFirst) {
+    s.Registrar().Component<Health>({.name = "Health"});
+    s.Registrar().Component<Steer>({.name = "Steer"});
+    R::RollbackEntry rollback(s);
+    rollback.Component<Health>();
+    rollback.Input<Steer>(R::InputHistoryLength::StrategyDepth, R::DataKind::Component);
+    rollback.StepSchedule("FixedUpdate", "Last");
+    s.Registrar().AddSystem<&AdvanceSteered>(In("AdvanceSteered", "FixedUpdate", "Update"));
+    K::SystemOptions feed = In("FeedSteer", "Main", "PreUpdate");
+    const R::RollbackOptions* options = s.Options<R::RollbackOptions>();
+    if (options != nullptr && options->strategy != nullptr) {
+        if (feedFirst) {
+            feed.mounts[0].before = {"RunRollback"};
+        } else {
+            feed.mounts[0].after = {"RunRollback"};
+        }
+    }
+    rollback.SkipDuringResimulation(feed);
+    s.Registrar().AddSystem<&FeedSteer>(feed);
+}
+void BuildSteer(O::WorldSetup& s) { BuildSteerFeed(s, false); }
+void BuildSteerFirst(O::WorldSetup& s) { BuildSteerFeed(s, true); }
+
+std::unique_ptr<O::Product> MakeSteer(O::OptionBag options, void (*build)(O::WorldSetup&)) {
+    auto built = O::Product::Build(Game(build, std::move(options)), Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    K::World& world = (*built)->World("Main").GetWorld();
+    world.SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
+    world.Insert(1, Health{100});
+    world.Insert(2, Health{50});
+    world.Insert(1, Steer{});
+    world.Insert(2, Steer{});
+    return std::move(*built);
+}
+
+} // namespace
+
+TEST_CASE("rollback strategy: R-2 with a component input: each entity's input is written back for each step run again") {
+    auto straight = MakeSteer(WithStrategy(), &BuildSteer);
+    Frames(*straight, 12);
+    auto rolled = MakeSteer(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildSteer);
+    Frames(*rolled, 9);
+    Inbox(*rolled).ConfirmedThrough(4);
+    Frames(*rolled, 3);
+    for (const K::EntityId id : {K::EntityId{1}, K::EntityId{2}}) {
+        CAPTURE(id);
+        CHECK_MESSAGE(WorldOf(*rolled).Get<Health>(id)->hp == WorldOf(*straight).Get<Health>(id)->hp,
+                      "[rb-component-input-r2] " << WorldOf(*rolled).Get<Health>(id)->hp << " vs "
+                                                 << WorldOf(*straight).Get<Health>(id)->hp);
+    }
+    CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-component-input-r2] the World summaries differ");
+    const auto& inputs = WorldOf(*rolled).Resource<R::RollbackRegistry>()->inputs;
+    CHECK_MESSAGE((inputs.size() == 1 && inputs[0].kind == R::DataKind::Component), "[rb-component-input-kind]");
+}
+
+TEST_CASE("rollback strategy: a component input's entry that runs before the rollback keeps this frame's input") {
+    auto straight = MakeSteer(WithStrategy(), &BuildSteerFirst);
+    Frames(*straight, 12);
+    auto rolled = MakeSteer(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildSteerFirst);
+    Frames(*rolled, 9);
+    Inbox(*rolled).ConfirmedThrough(4);
+    Frames(*rolled, 3);
+    for (const K::EntityId id : {K::EntityId{1}, K::EntityId{2}}) {
+        CAPTURE(id);
+        CHECK_MESSAGE(WorldOf(*rolled).Get<Health>(id)->hp == WorldOf(*straight).Get<Health>(id)->hp,
+                      "[rb-component-input-put-back] " << WorldOf(*rolled).Get<Health>(id)->hp << " vs "
+                                                       << WorldOf(*straight).Get<Health>(id)->hp);
+    }
+}

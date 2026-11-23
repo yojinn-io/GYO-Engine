@@ -66,8 +66,9 @@ enum class RollbackChoice : std::uint8_t {
 // The options of Component<T> and Resource<T> (authority declaration 4.3).
 struct DataOptions {
     // An outside input's buffer (a decision input): never registered as rollback
-    // state (Z8). With the server authority, a resource input gets its recorded history on the author's behalf
-    // (rollback.Input<T>, the strategy's depth; user 2026-11-22, (c)): declaring an input does not choose
+    // state (Z8). With the server authority, a resource or component input gets its recorded history on the author's
+    // behalf (rollback.Input<T>, the strategy's depth; user 2026-11-22, (c); components: net Module declaration D-11,
+    // section 5): declaring an input does not choose
     // prediction, a World without a rollback strategy keeps no history (R-4).
     bool input = false;
     // Left out of the digest (authority declaration 5.6).
@@ -86,8 +87,8 @@ struct DataOps {
     void (*registerInRollback)(Rollback::RollbackEntry& rollback, RollbackChoice choice) = nullptr;
     // The digest's sum over the type's values in world, each hashed with index (nullptr for a message).
     std::uint64_t (*digest)(const Kernel::World& world, std::uint64_t index) = nullptr;
-    // A decision input's recorded history on the author's behalf (resources only: the rollback Module records
-    // resource inputs); nullptr for the other kinds.
+    // A decision input's recorded history on the author's behalf (a resource, or a component recorded per entity:
+    // net Module declaration D-11, section 5); nullptr for a message and a marked type.
     void (*recordInput)(Rollback::RollbackEntry& rollback) = nullptr;
 };
 
@@ -222,6 +223,11 @@ template <class T>
 void RecordInput(Rollback::RollbackEntry& rollback) {
     rollback.Input<T>();
 }
+// A component input: one value per entity by tick (net Module declaration D-11, section 5).
+template <class T>
+void RecordComponentInput(Rollback::RollbackEntry& rollback) {
+    rollback.Input<T>(Rollback::InputHistoryLength::StrategyDepth, Rollback::DataKind::Component);
+}
 template <class T>
 void ResourceInRollback(Rollback::RollbackEntry& rollback, RollbackChoice choice) {
     GYO_ASSERT(choice != RollbackChoice::Derived && "authority.Resource<T>: Derived is for components only");
@@ -258,7 +264,8 @@ std::uint64_t ResourceDigest(const Kernel::World& world, std::uint64_t index) {
 }
 
 template <class T>
-inline constexpr DataOps kComponentOps{&ComponentIdIn<T>, &RegisterComponent<T>, &ComponentInRollback<T>, &ComponentDigest<T>};
+inline constexpr DataOps kComponentOps{&ComponentIdIn<T>, &RegisterComponent<T>, &ComponentInRollback<T>, &ComponentDigest<T>,
+                                       &RecordComponentInput<T>};
 template <class T>
 inline constexpr DataOps kResourceOps{&ResourceIdIn<T>, &RegisterResource<T>, &ResourceInRollback<T>, &ResourceDigest<T>,
                                       &RecordInput<T>};
