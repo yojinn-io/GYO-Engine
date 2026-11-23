@@ -93,7 +93,13 @@ struct AudioDevice::State final {
 Engine::Base::Result<std::unique_ptr<AudioDevice>, AudioOutputFailure> AudioDevice::Open(
     Audio::Mixer& mixer, const AudioDeviceSettings& settings) {
     auto state = std::make_unique<State>(mixer);
-    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+    // Audio implies SDL's events subsystem, which installs SIGINT and SIGTERM
+    // handlers unless told not to: signals belong to the os layer (os.md DI 8),
+    // so no sdl* lets SDL take them (sdl.zh-Hant.md, SDL's global state).
+    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+    const bool started = SDL_InitSubSystem(SDL_INIT_AUDIO);
+    SDL_ResetHint(SDL_HINT_NO_SIGNAL_HANDLERS);
+    if (!started) {
         return Engine::Base::Err(Failed(AudioOutputFailureCode::SubsystemUnavailable, "SDL audio did not start"));
     }
     state->subsystem = true;
