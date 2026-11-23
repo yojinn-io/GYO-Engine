@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the transform Module (docs/architecture/target/v2/transform-camera-declaration.zh-Hant.md, section 6.3; Design Invariants TF-1 to TF-4 in docs/architecture/target/v2/transform.zh-Hant.md; ids tf-). A mutant is killed only when the named test case fails with the expected message.",
+ "description": "Declared mutants of the transform Module (docs/architecture/target/v2/transform-camera-declaration.zh-Hant.md, section 6.3, and transform-hierarchy.zh-Hant.md section 6; Design Invariants TF-1 to TF-5 in docs/architecture/target/v2/transform.zh-Hant.md; ids tf-). A mutant is killed only when the named test case fails with the expected message.",
  "mutants": [
   {
    "id": "tf-initial-identity",
@@ -18,27 +18,27 @@
   },
   {
    "id": "tf-sync-not-mounted",
-   "what": "SyncTransforms is not registered: a written Transform never reaches GlobalTransform",
+   "what": "PropagateTransforms is not registered: a written Transform never reaches GlobalTransform",
    "guards": [
     "transform TF-3"
    ],
    "file": "engine/modules/transform/src/TransformModule.cpp",
-   "find": "    r.AddSystem<&SyncTransforms>(std::move(sync));",
-   "replace": "    (void)sync;",
+   "find": "    r.AddSystem<&PropagateTransforms>(std::move(propagate));",
+   "replace": "    (void)propagate;",
    "target": "gyo_transform_tests",
    "cases": "transform: a written Transform*",
    "expect": "\\[tf\\-sync\\-writes\\]"
   },
   {
    "id": "tf-sync-ignores-changed",
-   "what": "SyncTransforms drops Changed<Transform> and writes every frame. Only it catches GlobalTransform written when Transform was not",
+   "what": "a root's GlobalTransform is written every run, not only when its Transform was written. Only it catches GlobalTransform written when Transform was not",
    "guards": [
     "transform TF-3",
     "transform-camera-declaration 4.1"
    ],
    "file": "engine/modules/transform/src/TransformModule.cpp",
-   "find": "Kernel::Write<GlobalTransform>, Kernel::Changed<Transform>> poses",
-   "replace": "Kernel::Write<GlobalTransform>> poses",
+   "find": "        if (dirty) global->matrix = ToMatrix(*poses.Get<Transform>(root));",
+   "replace": "        global->matrix = ToMatrix(*poses.Get<Transform>(root));",
    "target": "gyo_transform_tests",
    "cases": "transform: a frame that writes no Transform*",
    "expect": "\\[tf\\-sync\\-changed\\-only\\]"
@@ -112,7 +112,7 @@
   },
   {
    "id": "tf-set-membership-missing",
-   "what": "SyncTransforms is not put in the public set TransformPropagate: a System ordered after the set runs before the propagation. The set is then empty and the kernel reports the reader's order as D-E4 at startup; the case tags that failure too",
+   "what": "PropagateTransforms is not put in the public set TransformPropagate: a System ordered after the set runs before the propagation. The set is then empty and the kernel reports the reader's order as D-E4 at startup; the case tags that failure too",
    "guards": [
     "transform TF-1"
    ],
@@ -125,7 +125,7 @@
   },
   {
    "id": "tf-default-stage-last",
-   "what": "the default stage of SyncTransforms is Last instead of PostUpdate (Bevy's): a PostUpdate reader after the set reads last frame's value. Only it catches the default stage",
+   "what": "the default stage of PropagateTransforms is Last instead of PostUpdate (Bevy's): a PostUpdate reader after the set reads last frame's value. Only it catches the default stage",
    "guards": [
     "transform TF-1",
     "transform-camera-declaration 4.1"
@@ -144,11 +144,117 @@
     "transform TF-4"
    ],
    "file": "config/modules.csv",
-   "find": "and keeping them equal for entities without a parent\",no,yes,,,",
-   "replace": "and keeping them equal for entities without a parent\",no,yes,json,,",
+   "find": "and propagating it down the kernel's parent hierarchy\",no,yes,,,",
+   "replace": "and propagating it down the kernel's parent hierarchy\",no,yes,json,,",
    "target": "gyo_transform_tests",
    "expect_build_failure": true,
    "expect": "gyo_transform\\s+links\\s+\\S*GYO::Json\\S*\\s+expected\\s+exactly"
+  },
+  {
+   "id": "tf-h-no-parent-multiply",
+   "what": "a child's GlobalTransform is its local matrix, the parent's is not applied",
+   "guards": [
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "Math::Multiply(next.parentGlobal, ToMatrix(*transform))",
+   "replace": "ToMatrix(*transform)",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-1: GlobalTransform is the parent's*",
+   "expect": "\\[tf\\-h\\-child\\]"
+  },
+  {
+   "id": "tf-h-one-level",
+   "what": "the walk stops after the root's own children: a grandchild is never written",
+   "guards": [
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "            if (const Kernel::Children* kids = children.Get<Kernel::Children>(next.entity)) {\n                PushChildren(stack, *kids, childGlobal.Read().matrix, childDirty);\n            }\n",
+   "replace": "",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-1: GlobalTransform is the parent's*",
+   "expect": "\\[tf\\-h\\-grandchild\\]"
+  },
+  {
+   "id": "tf-h-dirty-not-inherited",
+   "what": "a child is rewritten only when its own Transform or ChildOf was written: moving the parent leaves the subtree behind",
+   "guards": [
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "const bool childDirty = next.dirty || ",
+   "replace": "const bool childDirty = ",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-2:*",
+   "expect": "\\[tf\\-h\\-follow\\-parent\\]"
+  },
+  {
+   "id": "tf-h-child-always",
+   "what": "every child is rewritten on every run (the parent's dirty flag ignored): a frame without writes writes GlobalTransform",
+   "guards": [
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "            if (childDirty) childGlobal->matrix",
+   "replace": "            childGlobal->matrix",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-2:*",
+   "expect": "\\[tf\\-h\\-changed\\]"
+  },
+  {
+   "id": "tf-h-reparent-ignored",
+   "what": "a written ChildOf does not make the entity dirty: a reparented entity keeps the old parent's pose",
+   "guards": [
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": " ||\n                                    reparented.Contains(next.entity) || added.Contains(next.entity);",
+   "replace": " || added.Contains(next.entity);",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-3:*",
+   "expect": "\\[tf\\-h\\-reparent\\]"
+  },
+  {
+   "id": "tf-h-orphan-missed",
+   "what": "the orphans are not computed: an entity that lost its ChildOf keeps its parent's pose",
+   "guards": [
+    "transform TF-3",
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "                        std::back_inserter(orphans));",
+   "replace": "                        std::back_inserter(orphans));\n    orphans.clear();",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-4:*",
+   "expect": "\\[tf\\-h\\-orphan\\]"
+  },
+  {
+   "id": "tf-h-own-transform-ignored",
+   "what": "a child is not rewritten when only its own Transform was written: moving a child relative to its parent does nothing",
+   "guards": [
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "const bool childDirty = next.dirty || moved.Contains(next.entity) ||",
+   "replace": "const bool childDirty = next.dirty ||",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-2: moving only a child*",
+   "expect": "\\[tf\\-h\\-own\\-transform\\]"
+  },
+  {
+   "id": "tf-h-orphan-missed-restore",
+   "what": "the orphans are not computed, for the path a Restore takes: a child whose parent the Restore leaves out keeps the parent's pose (its Transform is not written, only the orphan list catches it)",
+   "guards": [
+    "transform TF-3",
+    "transform TF-5"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "                        std::back_inserter(orphans));",
+   "replace": "                        std::back_inserter(orphans));\n    orphans.clear();",
+   "target": "gyo_transform_tests",
+   "cases": "transform: H-6: a Restore that leaves*",
+   "expect": "\\[tf\\-h\\-restore\\-orphan\\]"
   }
  ]
 }

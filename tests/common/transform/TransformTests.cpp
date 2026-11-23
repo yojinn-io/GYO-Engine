@@ -1,5 +1,6 @@
 // The transform Module (docs/architecture/target/v2/transform-camera-declaration.zh-Hant.md, section 6.1, T-1 to
-// T-9; Design Invariants TF-1 to TF-4 in docs/architecture/target/v2/transform.zh-Hant.md). Products of synthetic
+// T-9; the parent hierarchy H-1 to H-7 in docs/architecture/target/v2/transform-hierarchy.zh-Hant.md; Design
+// Invariants TF-1 to TF-5 in docs/architecture/target/v2/transform.zh-Hant.md). Products of synthetic
 // units only (no product): the transform Module, the default allotter, and for T-7 the time and rollback Modules.
 // Each CHECK carries a tag in brackets ("[tf-...]"): the mutants expect it
 // (docs/architecture/target/v2/scripts/transform_mutations.json).
@@ -269,7 +270,7 @@ void PutPose(O::Product& p, const K::EntityId id, const T::Transform& pose) {
 // ---- T-1: the initial value
 
 TEST_CASE("transform: a spawned Transform has its GlobalTransform at that sync point, before any propagation") {
-    // Spawned in Update; SyncTransforms is mounted in First, which ran before the spawn: after this frame only the
+    // Spawned in Update; PropagateTransforms is mounted in First, which ran before the spawn: after this frame only the
     // initial value can have put the value.
     O::OptionBag options;
     options.Set(T::TransformOptions{"Main", "First"});
@@ -300,7 +301,7 @@ TEST_CASE("transform: a frame that writes no Transform writes no GlobalTransform
     Log().clear();
     auto p = Make(&BuildMove);
     PutPose(*p, 1, Pose(1.0F));
-    Frames(*p);  // the put-in cells are newer than SyncTransforms' last run: written once
+    Frames(*p);  // the put-in cells are newer than PropagateTransforms' last run: written once
     Frames(*p, 2);
     std::vector<std::string> counts;
     for (const std::string& line : Log()) {
@@ -363,7 +364,7 @@ TEST_CASE("transform: a World with the skeleton off names its stage; without one
         (*built)->World("Main").GetWorld().Insert(1, Pose(4.0F));
         (*built)->World("Main").GetWorld().Insert(1, T::GlobalTransform{});
         Frames(**built);
-        CHECK_MESSAGE(GlobalMatches((*built)->World("Main").GetWorld(), 1), "[tf-mount-named] SyncTransforms did not run in Late");
+        CHECK_MESSAGE(GlobalMatches((*built)->World("Main").GetWorld(), 1), "[tf-mount-named] PropagateTransforms did not run in Late");
     }
     {
         O::ProductDescription d;
@@ -526,4 +527,306 @@ TEST_CASE("transform: the Module registers its two components, one initial value
         if (info.owner == "transform") ++resources;
     }
     CHECK_MESSAGE(resources == 0, "[tf-registrations] the Module registers a Resource (a rollback or authority table)");
+}
+
+// ---- X2: the parent hierarchy (docs/architecture/target/v2/transform-hierarchy.zh-Hant.md, H-1 to H-7; TF-5)
+
+namespace {
+
+M::Matrix4 Under(const M::Matrix4& parent, const T::Transform& local) { return M::Multiply(parent, T::ToMatrix(local)); }
+
+bool GlobalIs(K::World& world, const K::EntityId id, const M::Matrix4& expected) {
+    const T::GlobalTransform* g = world.Get<T::GlobalTransform>(id);
+    return g != nullptr && SameMatrix(g->matrix, expected);
+}
+
+// Root 1, child 2 of 1, grandchild 3 of 2, put in by the Host (it keeps Children too).
+void PutChain(O::Product& p) {
+    PutPose(p, 1, Pose(1.0F));
+    PutPose(p, 2, Pose(2.0F));
+    PutPose(p, 3, Pose(3.0F));
+    WorldOf(p).Insert(2, K::ChildOf{1});
+    WorldOf(p).Insert(3, K::ChildOf{2});
+}
+
+M::Matrix4 ChainChild() { return Under(T::ToMatrix(Pose(1.0F)), Pose(2.0F)); }
+M::Matrix4 ChainGrandchild() { return Under(ChainChild(), Pose(3.0F)); }
+
+// Spawns a child of entity 1000 in Update (H-1; the Host's World::Insert does not move the allotter, so the parent
+// is put far from the ids it hands out).
+K::SystemResult SpawnChildOnce(K::Spawn<K::Bundle<T::Transform, K::ChildOf>> spawn, K::Local<int> done) {
+    if (*done != 0) return {};
+    *done = 1;
+    auto id = spawn.New(Pose(2.0F), K::ChildOf{1000});
+    if (!id) return ::GYO::Engine::Base::Err(std::move(id).error());
+    return {};
+}
+
+// Moves entity MoveWhich::id when MoveTo is on (H-2).
+struct MoveWhich {
+    K::EntityId id = 1;
+};
+inline void HashValue(K::Hasher&, const MoveWhich&) {}
+K::SystemResult MoveOne(K::Query<K::Write<T::Transform>> poses, K::ResMut<MoveTo> move, K::Res<MoveWhich> which) {
+    if (!move->on) return {};
+    move->on = false;
+    if (K::Mut<T::Transform> t = poses.GetMut<T::Transform>(which->id)) t->translation.x = move->x;
+    return {};
+}
+void BuildMoveRoot(O::WorldSetup& s) {
+    K::Registrar& r = s.Registrar();
+    r.Resource<MoveTo>({.name = "MoveTo"});
+    r.Resource<MoveWhich>({.name = "MoveWhich"});
+    r.AddSystem<&MoveOne>(At("MoveOne", "Main", "Update"));
+    r.AddSystem<&CountChanged>(At("CountChanged", "Main", "Last"));
+    s.Prepare([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(MoveTo{});
+        world.SetResource(MoveWhich{});
+        return {};
+    });
+}
+
+// An entity with no Transform (H-5).
+struct Marker {};
+inline void HashValue(K::Hasher&, const Marker&) {}
+
+// Detaches entity 2 through a System's deferred record (H-4).
+struct Detach {
+    bool on = false;
+};
+inline void HashValue(K::Hasher&, const Detach&) {}
+K::SystemResult DetachTwo(K::CommandsFor<K::Inserts<>, K::Removes<K::ChildOf>> commands, K::ResMut<Detach> detach) {
+    if (!detach->on) return {};
+    detach->on = false;
+    commands.Remove<K::ChildOf>(2);
+    return {};
+}
+void BuildDetach(O::WorldSetup& s) {
+    s.Registrar().Resource<Detach>({.name = "Detach"});
+    s.Registrar().AddSystem<&DetachTwo>(At("DetachTwo", "Main", "Update"));
+    s.Prepare([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(Detach{});
+        return {};
+    });
+}
+
+// A Restore script for a hierarchy (H-6): record, despawn the root (its children go with it), restore all. With
+// RestoreDropsRoot nothing is despawned and the restore leaves the root out of the alive set: the root goes, the
+// child stays with the same Transform (not written), and the kernel takes its ChildOf away (KR 5.8 (a)).
+bool& RestoreDropsRoot() {
+    static bool drop = false;
+    return drop;
+}
+K::SystemResult ActChain(K::ExclusiveWorld<> world) {
+    const int step = world.Read<Script>([](const Script& s) { return s.step; })->value_or(0);
+    (void)world.Modify<Script>([](Script& s) { ++s.step; });
+    static std::vector<K::EntityId> alive;
+    static std::vector<std::pair<K::EntityId, T::Transform>> poses;
+    static std::vector<std::pair<K::EntityId, K::ChildOf>> parents;
+    switch (step) {
+    case 0:
+        alive = world.Entities();
+        poses.clear();
+        parents.clear();
+        world.ReadColumn<T::Transform>([](K::EntityId e, K::ChangeStamp, K::ChangeStamp, const T::Transform& t) {
+            poses.emplace_back(e, t);
+        });
+        world.ReadColumn<K::ChildOf>([](K::EntityId e, K::ChangeStamp, K::ChangeStamp, const K::ChildOf& c) {
+            parents.emplace_back(e, c);
+        });
+        return {};
+    case 1: {
+        if (RestoreDropsRoot()) return {};
+        auto gone = world.Despawn(1);
+        if (!gone) return ::GYO::Engine::Base::Err(std::move(gone).error());
+        return {};
+    }
+    case 2: {
+        K::RestoreSet set;
+        if (RestoreDropsRoot()) {
+            std::vector<K::EntityId> kept;
+            std::vector<std::pair<K::EntityId, T::Transform>> keptPoses;
+            for (K::EntityId e : alive) {
+                if (e != 1) kept.push_back(e);
+            }
+            for (const auto& [e, t] : poses) {
+                if (e != 1) keptPoses.emplace_back(e, t);
+            }
+            set.Alive(kept);
+            set.Column<T::Transform>(keptPoses);
+        } else {
+            set.Alive(alive);
+            set.Column<T::Transform>(poses);
+            set.Column<K::ChildOf>(parents);
+        }
+        auto restored = world.Restore(std::move(set));
+        if (!restored) return ::GYO::Engine::Base::Err(std::move(restored).error());
+        return {};
+    }
+    default: return {};
+    }
+}
+void BuildRestoreChain(O::WorldSetup& s) {
+    s.Registrar().Resource<Script>({.name = "Script"});
+    s.Registrar().AddSystem<&ActChain>(At("ActChain", "Main", "Update"));
+    s.Prepare([](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        world.SetResource(Script{});
+        return {};
+    });
+}
+
+} // namespace
+
+TEST_CASE("transform: H-1: GlobalTransform is the parent's GlobalTransform times Transform, down every level") {
+    auto p = Make([](O::WorldSetup&) {});
+    PutChain(*p);
+    Frames(*p);
+    CHECK_MESSAGE(GlobalMatches(WorldOf(*p), 1), "[tf-h-root] the root is not ComposeTRS(Transform)");
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 2, ChainChild()), "[tf-h-child] the child is not parent * local");
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 3, ChainGrandchild()), "[tf-h-grandchild] the grandchild is not parent * local");
+}
+
+TEST_CASE("transform: H-1: a child spawned in Update has its parent's pose applied in this frame's PostUpdate") {
+    auto p = Make([](O::WorldSetup& s) { s.Registrar().AddSystem<&SpawnChildOnce>(At("SpawnChildOnce", "Main", "Update")); });
+    PutPose(*p, 1000, Pose(1.0F));
+    Frames(*p);
+    std::vector<K::EntityId> children = WorldOf(*p).Keys<K::ChildOf>();
+    REQUIRE(children.size() == 1);
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), children[0], ChainChild()), "[tf-h-spawned-child] the spawned child is not parent * local");
+}
+
+TEST_CASE("transform: H-2: moving the root moves the whole subtree; a frame without writes writes no GlobalTransform") {
+    Log().clear();
+    auto p = Make(&BuildMoveRoot);
+    PutChain(*p);
+    Frames(*p, 2);
+    WorldOf(*p).SetResource(MoveTo{9.0F, true});
+    Frames(*p);
+    T::Transform moved = Pose(1.0F);
+    moved.translation.x = 9.0F;
+    const M::Matrix4 child = Under(T::ToMatrix(moved), Pose(2.0F));
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 2, child), "[tf-h-follow-parent] the child kept the old parent pose");
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 3, Under(child, Pose(3.0F))), "[tf-h-follow-parent] the grandchild kept the old pose");
+    Frames(*p);
+    std::vector<std::string> counts;
+    for (const std::string& line : Log()) {
+        if (line.rfind("changed ", 0) == 0) counts.push_back(line);
+    }
+    REQUIRE(counts.size() == 4);
+    CHECK_MESSAGE(counts[0] == "changed 3", "[tf-h-changed] put in: " << counts[0]);
+    CHECK_MESSAGE(counts[1] == "changed 0", "[tf-h-changed] nothing written: " << counts[1]);
+    CHECK_MESSAGE(counts[2] == "changed 3", "[tf-h-changed] the root moved: " << counts[2]);
+    CHECK_MESSAGE(counts[3] == "changed 0", "[tf-h-changed] nothing written: " << counts[3]);
+}
+
+TEST_CASE("transform: H-2: moving only a child rewrites it and its subtree, not its parent") {
+    Log().clear();
+    auto p = Make(&BuildMoveRoot);
+    PutChain(*p);
+    WorldOf(*p).SetResource(MoveWhich{2});
+    Frames(*p, 2);
+    WorldOf(*p).SetResource(MoveTo{9.0F, true});
+    Frames(*p);
+    T::Transform moved = Pose(2.0F);
+    moved.translation.x = 9.0F;
+    const M::Matrix4 child = Under(T::ToMatrix(Pose(1.0F)), moved);
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 2, child), "[tf-h-own-transform] the moved child kept its old pose");
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 3, Under(child, Pose(3.0F))), "[tf-h-own-transform] the grandchild kept the old pose");
+    REQUIRE(!Log().empty());
+    CHECK_MESSAGE(Log().back() == "changed 2", "[tf-h-own-transform-count] " << Log().back());
+}
+
+TEST_CASE("transform: H-3: a new ChildOf moves the entity under its new parent") {
+    auto p = Make([](O::WorldSetup&) {});
+    PutChain(*p);
+    PutPose(*p, 4, Pose(4.0F));
+    Frames(*p);
+    WorldOf(*p).Insert(2, K::ChildOf{4});  // the Host's path: no hook runs, the kernel keeps Children
+    Frames(*p);
+    const M::Matrix4 child = Under(T::ToMatrix(Pose(4.0F)), Pose(2.0F));
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 2, child), "[tf-h-reparent] the child kept the old parent");
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 3, Under(child, Pose(3.0F))), "[tf-h-reparent] the grandchild kept the old parent");
+}
+
+TEST_CASE("transform: H-4: an entity that loses its ChildOf becomes a root, its subtree follows") {
+    SUBCASE("through a System's deferred record") {
+        auto p = Make(&BuildDetach);
+        PutChain(*p);
+        Frames(*p);
+        WorldOf(*p).SetResource(Detach{true});
+        Frames(*p);
+        REQUIRE(WorldOf(*p).Get<K::ChildOf>(2) == nullptr);
+        CHECK_MESSAGE(GlobalMatches(WorldOf(*p), 2), "[tf-h-orphan] the orphan kept the parent's pose");
+        CHECK_MESSAGE(GlobalIs(WorldOf(*p), 3, Under(T::ToMatrix(Pose(2.0F)), Pose(3.0F))),
+                      "[tf-h-orphan] the orphan's child kept the old pose");
+    }
+    SUBCASE("through the Host's World::Remove, an orphan without children") {
+        auto p = Make([](O::WorldSetup&) {});
+        PutChain(*p);
+        Frames(*p);
+        REQUIRE(WorldOf(*p).Remove<K::ChildOf>(3));
+        Frames(*p);
+        CHECK_MESSAGE(GlobalMatches(WorldOf(*p), 3), "[tf-h-orphan] the orphan kept the parent's pose");
+    }
+}
+
+TEST_CASE("transform: H-5: below an entity without Transform the subtree is not propagated; a cycle does not hang") {
+    auto p = Make([](O::WorldSetup& s) { s.Registrar().Component<Marker>({.name = "Marker"}); });
+    // 1 (no Transform) <- 2 <- 3: the walk never reaches 2 and 3; they keep their initial values.
+    WorldOf(*p).Insert(1, Marker{});
+    PutPose(*p, 2, Pose(2.0F));
+    PutPose(*p, 3, Pose(3.0F));
+    WorldOf(*p).Insert(2, K::ChildOf{1});
+    WorldOf(*p).Insert(3, K::ChildOf{2});
+    // 4 <-> 5: a cycle of ChildOf (the kernel does not look for cycles); 6 is a root next to it.
+    PutPose(*p, 4, Pose(4.0F));
+    PutPose(*p, 5, Pose(5.0F));
+    WorldOf(*p).Insert(6, Pose(6.0F));
+    WorldOf(*p).Insert(6, T::GlobalTransform{});  // not the right value: only the propagation makes it right
+    WorldOf(*p).Insert(4, K::ChildOf{5});
+    WorldOf(*p).Insert(5, K::ChildOf{4});
+    Frames(*p);
+    CHECK_MESSAGE(GlobalMatches(WorldOf(*p), 3), "[tf-h-no-transform-parent] the subtree under an entity without Transform moved");
+    CHECK_MESSAGE(GlobalMatches(WorldOf(*p), 4), "[tf-h-cycle] an entity in a cycle was written");
+    CHECK_MESSAGE(GlobalMatches(WorldOf(*p), 6), "[tf-h-cycle] the root next to a cycle was not propagated");
+}
+
+TEST_CASE("transform: H-6: Restore brings a despawned hierarchy back; the next propagation puts the children under it") {
+    RestoreDropsRoot() = false;
+    auto p = Make(&BuildRestoreChain);
+    PutChain(*p);
+    Frames(*p, 3);  // record, despawn 1 (2 and 3 go with it), restore all three
+    REQUIRE(WorldOf(*p).Alive(3));
+    REQUIRE(WorldOf(*p).Get<K::ChildOf>(3) != nullptr);
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 2, ChainChild()), "[tf-h-restore] the revived child is not parent * local");
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 3, ChainGrandchild()), "[tf-h-restore] the revived grandchild is not parent * local");
+}
+
+TEST_CASE("transform: H-6: a Restore that leaves the parent out makes the child a root") {
+    RestoreDropsRoot() = true;
+    auto p = Make(&BuildRestoreChain);
+    PutChain(*p);
+    Frames(*p, 3);  // record, nothing, restore without 1
+    RestoreDropsRoot() = false;
+    REQUIRE(!WorldOf(*p).Alive(1));
+    REQUIRE(WorldOf(*p).Alive(2));
+    REQUIRE(WorldOf(*p).Get<K::ChildOf>(2) == nullptr);
+    CHECK_MESSAGE(GlobalMatches(WorldOf(*p), 2), "[tf-h-restore-orphan] the child left without its parent is not a root");
+    CHECK_MESSAGE(GlobalIs(WorldOf(*p), 3, Under(T::ToMatrix(Pose(2.0F)), Pose(3.0F))),
+                  "[tf-h-restore-orphan] the grandchild is not under the new root");
+}
+
+TEST_CASE("transform: H-7: a deep chain propagates without running out of stack") {
+    auto p = Make([](O::WorldSetup&) {});
+    constexpr K::EntityId kDepth = 20000;
+    T::Transform step;
+    step.translation = {1.0F, 0.0F, 0.0F};
+    for (K::EntityId id = 1; id <= kDepth; ++id) {
+        PutPose(*p, id, step);
+        if (id > 1) WorldOf(*p).Insert(id, K::ChildOf{id - 1});
+    }
+    Frames(*p);
+    const T::GlobalTransform* last = WorldOf(*p).Get<T::GlobalTransform>(kDepth);
+    REQUIRE(last != nullptr);
+    CHECK_MESSAGE(last->matrix.values[12] == static_cast<float>(kDepth), "[tf-h-deep] " << last->matrix.values[12]);
 }
