@@ -5,7 +5,7 @@
 # runs them headless.
 add_executable(gyo_sdl_audio_tests TestMain.cpp SDLAudioPluginTests.cpp)
 gyo_product_units(gyo_sdl_audio_tests PLUGINS sdl_audio)
-target_link_libraries(gyo_sdl_audio_tests PRIVATE doctest::doctest)
+target_link_libraries(gyo_sdl_audio_tests PRIVATE GYO::OS doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_sdl_audio_tests PRIVATE /W4 /permissive-)
     target_compile_definitions(gyo_sdl_audio_tests PRIVATE NOMINMAX)

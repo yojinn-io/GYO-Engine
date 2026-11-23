@@ -6,9 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
-#include <fstream>
 #include <functional>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <span>
@@ -25,6 +23,7 @@
 #include "engine/audio/Mixer.hpp"
 #include "engine/audio/WavLoader.hpp"
 #include "engine/orchestration/Product.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/orchestration/RegisteredUnits.hpp"
 #include "plugins/sdl_audio/AudioOutput.hpp"
 
@@ -113,10 +112,10 @@ TEST_CASE("dummy: creates the mixer, registers the sound loader and plays the mi
 
     const auto* registry = std::as_const(product->Buffer()).Find<Engine::Asset::AssetLoaderRegistry>();
     REQUIRE(registry != nullptr);
-    CHECK(registry->Register<Audio::WavLoader>().has_value()); // the same loader again: no change
-    const auto other = registry->Register<AnotherWavLoader>();
+    const auto other = registry->Register<AnotherWavLoader>(); // WavLoader holds ("sound", "wav") already
     REQUIRE_FALSE(other.has_value());
     CHECK(other.error().code == Engine::Asset::LoaderRegistrationFailureCode::FormatTaken);
+    CHECK(registry->Register<Audio::WavLoader>().has_value()); // the same loader again: no change
 }
 
 TEST_CASE("dummy: creates the mixer from the options") {
@@ -228,9 +227,18 @@ TEST_CASE("disk: writes the mixer's samples to the device") {
         REQUIRE(WaitFor([&] { return mixer.Stats().renderedFrames > 48000; }));
         CHECK(mixer.Stats().playedLate == 1);
     }
-    std::ifstream file(path, std::ios::binary);
-    REQUIRE(file.good());
-    const std::vector<char> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    auto file = Engine::OS::Files::FileReader::Open(path); // plugins/ reads files through the OS layer (R4)
+    REQUIRE(file.has_value());
+    const auto size = file->Size();
+    REQUIRE(size.has_value());
+    std::vector<std::byte> bytes(static_cast<std::size_t>(*size));
+    std::size_t filled = 0;
+    while (filled < bytes.size()) {
+        const auto read = file->Read(std::span<std::byte>(bytes).subspan(filled));
+        REQUIRE(read.has_value());
+        REQUIRE(*read > 0);
+        filled += *read;
+    }
     REQUIRE(bytes.size() % 4 == 0);
     REQUIRE(bytes.size() > 4 * 48000);
     std::size_t sounding = 0;
