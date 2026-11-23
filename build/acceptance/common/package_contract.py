@@ -73,11 +73,11 @@ def validate_manifest(manifest: dict, product: str, platform: str) -> dict:
     if platform not in PLATFORMS:
         raise ValueError(f"Unsupported package platform: {platform}")
     if (not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int
-            or manifest["schema_version"] != 3 or manifest.get("product") != product
+            or manifest["schema_version"] != 4 or manifest.get("product") != product
             or manifest.get("platform") != platform):
         raise ValueError("Package manifest schema or product/platform identity does not match")
     kind = manifest.get("kind")
-    if kind not in ("app", "toolchain") or (kind == "toolchain") != (product == "toolchain"):
+    if kind not in ("game", "toolchain") or (kind == "toolchain") != (product == "toolchain"):
         raise ValueError("Package kind does not match its product identity")
     configuration = manifest.get("configuration")
     if not isinstance(configuration, str) or not configuration.strip():
@@ -92,7 +92,7 @@ def validate_manifest(manifest: dict, product: str, platform: str) -> dict:
         owner, role = executable.get("owner"), executable.get("role")
         validate_product(owner)
         validate_product(role)
-        if name != f"{owner}.{role}" or (kind == "app" and owner != product):
+        if name != f"{owner}.{role}" or (kind == "game" and owner != product):
             raise ValueError("Package executable key must match its owner.role")
         owners.add(owner)
         path = executable.get("path")

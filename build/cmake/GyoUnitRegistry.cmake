@@ -29,7 +29,7 @@
 # Usable with cmake -P (the register tests).
 
 include_guard(GLOBAL)
-include("${CMAKE_CURRENT_LIST_DIR}/GyoAppRegistry.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/GyoRegistryCsv.cmake")
 
 set(GYO_UNIT_REGISTER_COLUMNS name dir target description library_only default depends private_depends unit header)
 
@@ -48,7 +48,7 @@ endfunction()
 # to <prefix>_ORDER in file order).
 function(_gyo_read_unit_register prefix csv kind)
     # A change to the register re-runs configure (the links and the generated
-    # tables come from it), like the product registers (GyoApps.cmake).
+    # tables come from it), like the product registers (GyoGames.cmake).
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${csv}")
     _gyo_registry_csv_records("${csv}" records)
     string(JSON count LENGTH "${records}")

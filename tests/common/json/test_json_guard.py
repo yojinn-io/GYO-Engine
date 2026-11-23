@@ -23,7 +23,7 @@ def clean_tree(root):
           "// the fast_float half\n#include <fast_float/fast_float.h>\n#include \"DecimalToDouble.hpp\"\n"
           "auto r = fast_float::from_chars(a, b, v);\n")
     write(root, "engine/modules/json/src/adapters/yyjson/Uses.cpp", '#include "../fast_float/DecimalToDouble.hpp"\n')
-    write(root, "build/cmake/GyoBuild.cmake", 'set(GYO_APP_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")\n')
+    write(root, "build/cmake/GyoBuild.cmake", 'set(GYO_GAME_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")\n')
     write(root, "CMakeLists.txt", "project(x)\n")
     write(root, "engine/modules/json/CMakeLists.txt", "target_link_libraries(gyo_json PRIVATE gyo_yyjson gyo_fast_float)\n")
     write(root, "engine/modules/json/src/Writer.cpp", '// mentions yyjson.h, yyjson_write_number and fast_float:: in a comment\n'
