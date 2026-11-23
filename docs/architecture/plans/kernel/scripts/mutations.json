@@ -1974,100 +1974,100 @@
     },
     {
       "id": "we-j7-despawn-reverse",
-      "what": "J-7: a despawn destroys in descending ComponentId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find retargeted to the destroy loop by the adversarial check: in gyo2 the old find hit the OnRemove loop)",
+      "what": "J-7: a despawn destroys in descending ComponentId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find retargeted to the destroy loop by the adversarial check: in gyo2 the old find hit the OnRemove loop) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }",
-      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                columns_[c]->Erase(id);\n            }",
+      "find": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }",
+      "replace": "                for (std::size_t c = columns_.size(); c-- > 0;) {\n                    columns_[c]->Erase(id);\n                }",
       "target": "gyo_kernel_tests",
       "cases": "J-7:*",
       "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:1\",\\ \"0:1\"\\}"
     },
     {
       "id": "td-despawn-onremove-descending",
-      "what": "F.2 step 2: a despawn calls OnRemove in descending ComponentId (the property we-j7-despawn-reverse hit before its find was retargeted) (v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: a despawn calls OnRemove in descending ComponentId (the property we-j7-despawn-reverse hit before its find was retargeted) (v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change) (expect: the ComponentIds +2, the kernel's ChildOf and Children come first)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
-      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "find": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "                for (std::size_t c = columns_.size(); c-- > 0;) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
-      "expect": "values: CHECK\\( badge-removed:1/7 mode-removed:1/3 tag-removed:1/2 tag-removed-second:1/2 == "
+      "expect": "values: CHECK\\( badge-removed:1/9 mode-removed:1/5 tag-removed:1/4 tag-removed-second:1/4 == "
     },
     {
       "id": "we-despawn-onremove-interleaved",
-      "what": "F.2 step 2: OnRemove and destroy interleave per component (the user chose every OnRemove first, 2026-11-16) (carried from claude/arch-kernel-world-exec 3d87d916 by v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: OnRemove and destroy interleave per component (the user chose every OnRemove first, 2026-11-16) (carried from claude/arch-kernel-world-exec 3d87d916 by v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }",
-      "replace": "                if (!hooked) return hooked;\n                columns_[c]->Erase(id);\n            }",
+      "find": "                    if (!hooked) return hooked;\n                }\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }",
+      "replace": "                    if (!hooked) return hooked;\n                    columns_[c]->Erase(id);\n                }",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "Join\\(Log\\(\\)\\) == \"mode-removed sees tag:7\""
     },
     {
       "id": "td-despawn-onremove-absent-components",
-      "what": "F.2 step 2: a despawn calls OnRemove for components the entity does not have (v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: a despawn calls OnRemove for components the entity does not have (v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change) (expect: the ComponentIds +2, the kernel's ChildOf and Children come first)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
-      "replace": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "find": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
-      "expect": "values: CHECK\\( tag-removed:1/2 tag-removed-second:1/2 mode-removed:1/3 spare-removed:1/6 badge-removed:1/7"
+      "expect": "values: CHECK\\( tag-removed:1/4 tag-removed-second:1/4 mode-removed:1/5 spare-removed:1/8 badge-removed:1/9"
     },
     {
       "id": "td-despawn-cells-kept",
-      "what": "F.2 step 2: a despawn destroys no cell (caught first by the kernel's W-1 structure check, before the case's own CHECK; expect tied to the new case by the adversarial check) (v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: a despawn destroys no cell (caught first by the kernel's W-1 structure check, before the case's own CHECK; expect tied to the new case by the adversarial check) (v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
-      "replace": "            entities_.erase(",
+      "find": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }\n                entities_.erase(",
+      "replace": "                entities_.erase(",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "TEST CASE:  J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed[^=]*StructureBroken \\[W-1\\]: column 'Tag' has entity 1, which is not alive"
     },
     {
       "id": "td-adv-despawn-onremove-never-for-highest-column",
-      "what": "F.2 step 2: a despawn runs no OnRemove for the World's highest ComponentId (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: a despawn runs no OnRemove for the World's highest ComponentId (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change) (expect: the ComponentIds +2, the kernel's ChildOf and Children come first)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
-      "replace": "            for (std::size_t c = 0; c + 1 < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "find": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "                for (std::size_t c = 0; c + 1 < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
-      "expect": "values: CHECK\\( tag-removed:1/2 tag-removed-second:1/2 mode-removed:1/3 == "
+      "expect": "values: CHECK\\( tag-removed:1/4 tag-removed-second:1/4 mode-removed:1/5 == "
     },
     {
       "id": "td-adv-despawn-highest-column-not-destroyed",
-      "what": "F.2 step 2: a despawn does not destroy the cell of the World's highest ComponentId (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: a despawn does not destroy the cell of the World's highest ComponentId (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
-      "replace": "            for (std::size_t c = 0; c + 1 < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
+      "find": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }\n                entities_.erase(",
+      "replace": "                for (std::size_t c = 0; c + 1 < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }\n                entities_.erase(",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "TEST CASE:  J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed[^=]*StructureBroken \\[W-1\\]: column 'Badge' has entity 1, which is not alive"
     },
     {
       "id": "td-adv-despawn-dead-id-check-weakened",
-      "what": "F.2 step 2: a despawn of an id that is not alive reaches the next alive id (caught first by the W-1 structure check) (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: a despawn of an id that is not alive reaches the next alive id (caught first by the W-1 structure check) (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first",
-      "replace": "            if (at == entities_.end()) continue;\n            // OnRemove for every component first",
+      "find": "                if (!alive(id)) continue;\n                std::vector<EntityId> kids;",
+      "replace": "                std::vector<EntityId> kids;",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "TEST CASE:  J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed[^=]*StructureBroken \\[W-1\\]: column 'Tag' has entity 4, which is not alive"
     },
     {
       "id": "td-adv-despawn-componentless-entity-stays-alive",
-      "what": "F.2 step 2: a despawned entity with no cell stays in the alive list (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: a despawned entity with no cell stays in the alive list (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
-      "replace": "            bool erasedAny = false;\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                erasedAny = columns_[c]->Erase(id) || erasedAny;\n            }\n            if (!erasedAny) continue;\n            entities_.erase(",
+      "find": "                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }\n                entities_.erase(",
+      "replace": "                bool erasedAny = false;\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    erasedAny = columns_[c]->Erase(id) || erasedAny;\n                }\n                if (!erasedAny) continue;\n                entities_.erase(",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "a despawn of an entity without cells removes it from the alive list"
     },
     {
       "id": "td-adv-despawn-onremove-error-swallowed",
-      "what": "F.2 step 2: an Err from a despawn's OnRemove hook is ignored (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: an Err from a despawn's OnRemove hook is ignored (found by the adversarial check of the mutant list, Fable; v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);",
-      "replace": "                (void)RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);",
+      "find": "                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                }\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);",
+      "replace": "                    (void)RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                }\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "an Err from a despawn's OnRemove hook is not swallowed"
@@ -2104,20 +2104,20 @@
     },
     {
       "id": "td-adv-despawn-all-entities-onremove-before-any-destroy",
-      "what": "F.2 step 2: the OnRemove hooks of every despawned entity run before any entity's cells are destroyed (per entity order kept) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: the OnRemove hooks of every despawned entity run before any entity's cells are destroyed (per entity order kept) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change) (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n",
-      "replace": "                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n",
+      "find": "        std::vector<EntityId> pending;\n        for (EntityId root : despawns) {\n            // DI-KS 32 (the user's Q4): an entity, then each of its Children's whole subtree in turn, depth first.\n            pending.assign(1, root);\n            while (!pending.empty()) {\n                const EntityId id = pending.back();\n                pending.pop_back();\n                if (!alive(id)) continue;\n                std::vector<EntityId> kids;\n                if (const Detail::Cell<Children>* cell = children.Find(id)) kids.assign(cell->value.begin(), cell->value.end());\n                std::optional<EntityId> parent;\n                if (const Detail::Cell<ChildOf>* cell = childOf.Find(id)) parent = cell->value.parent;\n                // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n                // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                }\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }\n                entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n                ++entitiesEpoch_;\n                if (parent) detach(id, *parent);\n                std::vector<EntityId> linked;\n                for (EntityId kid : kids) {\n                    // Only a child whose ChildOf names this entity (a Children a restore gives may say otherwise).\n                    const Detail::Cell<ChildOf>* cell = childOf.Find(kid);\n                    if (cell == nullptr || cell->value.parent != id) continue;\n                    if (std::binary_search(rewired.begin(), rewired.end(), kid)) continue;  // Q3: its record decides\n                    if (expandLinked) {\n                        linked.push_back(kid);\n                        continue;\n                    }\n                    // A restore leaves it behind: its ChildOf goes now, after its OnRemove; one the restore\n                    // despawns later in this step keeps it for its own despawn.\n                    if (std::binary_search(despawns.begin(), despawns.end(), kid)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, kid, data_->childOf, planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                    childOf.Erase(kid);\n                }\n                for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);\n            }\n        }\n\n",
+      "replace": "        std::vector<EntityId> destroyLater;\n        std::vector<EntityId> pending;\n        for (EntityId root : despawns) {\n            // DI-KS 32 (the user's Q4): an entity, then each of its Children's whole subtree in turn, depth first.\n            pending.assign(1, root);\n            while (!pending.empty()) {\n                const EntityId id = pending.back();\n                pending.pop_back();\n                if (!alive(id)) continue;\n                std::vector<EntityId> kids;\n                if (const Detail::Cell<Children>* cell = children.Find(id)) kids.assign(cell->value.begin(), cell->value.end());\n                std::optional<EntityId> parent;\n                if (const Detail::Cell<ChildOf>* cell = childOf.Find(id)) parent = cell->value.parent;\n                // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n                // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                }\n                destroyLater.push_back(id);\n                if (parent) detach(id, *parent);\n                std::vector<EntityId> linked;\n                for (EntityId kid : kids) {\n                    // Only a child whose ChildOf names this entity (a Children a restore gives may say otherwise).\n                    const Detail::Cell<ChildOf>* cell = childOf.Find(kid);\n                    if (cell == nullptr || cell->value.parent != id) continue;\n                    if (std::binary_search(rewired.begin(), rewired.end(), kid)) continue;  // Q3: its record decides\n                    if (expandLinked) {\n                        linked.push_back(kid);\n                        continue;\n                    }\n                    // A restore leaves it behind: its ChildOf goes now, after its OnRemove; one the restore\n                    // despawns later in this step keeps it for its own despawn.\n                    if (std::binary_search(despawns.begin(), despawns.end(), kid)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, kid, data_->childOf, planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                    childOf.Erase(kid);\n                }\n                for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);\n            }\n        }\n        for (EntityId id : destroyLater) {\n            if (!alive(id)) continue;\n            for (std::size_t c = 0; c < columns_.size(); ++c) columns_[c]->Erase(id);\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "values: CHECK\\( tag-removed:1\\(other-tag=20\\) mode-removed:1\\(other-tag=20\\) tag-removed:2\\(other-tag=10\\) mode-removed:2\\(other-tag=10\\) == "
     },
     {
       "id": "td-adv-despawn-onremove-component-major-across-entities",
-      "what": "F.2 step 2: OnRemove runs in (ComponentId, EntityId) order across the despawned entities instead of (EntityId, ComponentId) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts)",
+      "what": "F.2 step 2: OnRemove runs in (ComponentId, EntityId) order across the despawned entities instead of (EntityId, ComponentId) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n",
-      "replace": "        for (std::size_t c = 0; c < columns_.size(); ++c) {\n            for (EntityId id : despawns) {\n                if (!std::binary_search(entities_.begin(), entities_.end(), id)) continue;\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n",
+      "find": "        for (EntityId root : despawns) {\n            // DI-KS 32 (the user's Q4): an entity, then each of its Children's whole subtree in turn, depth first.\n            pending.assign(1, root);\n            while (!pending.empty()) {\n                const EntityId id = pending.back();\n                pending.pop_back();\n                if (!alive(id)) continue;\n                std::vector<EntityId> kids;\n                if (const Detail::Cell<Children>* cell = children.Find(id)) kids.assign(cell->value.begin(), cell->value.end());\n                std::optional<EntityId> parent;\n                if (const Detail::Cell<ChildOf>* cell = childOf.Find(id)) parent = cell->value.parent;\n                // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n                // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                }\n",
+      "replace": "        for (std::size_t c = 0; c < columns_.size(); ++c) {\n            for (EntityId id : despawns) {\n                if (!alive(id)) continue;\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId root : despawns) {\n            // DI-KS 32 (the user's Q4): an entity, then each of its Children's whole subtree in turn, depth first.\n            pending.assign(1, root);\n            while (!pending.empty()) {\n                const EntityId id = pending.back();\n                pending.pop_back();\n                if (!alive(id)) continue;\n                std::vector<EntityId> kids;\n                if (const Detail::Cell<Children>* cell = children.Find(id)) kids.assign(cell->value.begin(), cell->value.end());\n                std::optional<EntityId> parent;\n                if (const Detail::Cell<ChildOf>* cell = childOf.Find(id)) parent = cell->value.parent;\n",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "values: CHECK\\( tag-removed:1 tag-removed:2 mode-removed:1 mode-removed:2 == "
@@ -2174,20 +2174,20 @@
     },
     {
       "id": "we-adv-overwrite-fires-onadd",
-      "what": "F.2 step 6 (Fable): an overwrite runs OnAdd (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "F.2 step 6 (Fable): an overwrite runs OnAdd (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            } else if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp)) {",
-      "replace": "            } else if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp); true) {",
+      "find": "            if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp)) {",
+      "replace": "            if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp); true) {",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-tag:2=2\""
     },
     {
       "id": "we-adv-remove-skips-onremove",
-      "what": "F.2 step 3 (Fable): a Remove runs no OnRemove (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "F.2 step 3 (Fable): a Remove runs no OnRemove (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);",
-      "replace": "            columns_[component]->Erase(id);",
+      "find": "            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            std::optional<EntityId> parent;",
+      "replace": "            std::optional<EntityId> parent;",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-tag:2=2\""
@@ -2588,10 +2588,10 @@
     },
     {
       "id": "we-j32-spawn-before-despawn",
-      "what": "J-32: spawn and remove applied before despawn (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; find rebuilt from the post-K0 ApplySync: step 2 moved after step 4) (v8-arch-gyo2-time-events step 4: find and replace follow the sync point number in place of the tick) (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same)",
+      "what": "J-32: spawn and remove applied before despawn (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; find rebuilt from the post-K0 ApplySync: step 2 moved after step 4) (v8-arch-gyo2-time-events step 4: find and replace follow the sync point number in place of the tick) (find rewritten by v8-arch-gyo2-authority-rollback step 2: the code around it changed; the property is the same) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n",
-      "replace": "        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n",
+      "find": "        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        // The user's Q3: a child whose ChildOf this phase removes or replaces is not despawned with its\n        // parent; its ChildOf stays until that record is applied (a replacement is then an overwrite).\n        std::vector<EntityId> rewired;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {\n                rewired.push_back(r.entity);\n            }\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        std::sort(rewired.begin(), rewired.end());\n        const bool expandLinked = relationships == Detail::Relationships::Change;\n        std::vector<EntityId> pending;\n        for (EntityId root : despawns) {\n            // DI-KS 32 (the user's Q4): an entity, then each of its Children's whole subtree in turn, depth first.\n            pending.assign(1, root);\n            while (!pending.empty()) {\n                const EntityId id = pending.back();\n                pending.pop_back();\n                if (!alive(id)) continue;\n                std::vector<EntityId> kids;\n                if (const Detail::Cell<Children>* cell = children.Find(id)) kids.assign(cell->value.begin(), cell->value.end());\n                std::optional<EntityId> parent;\n                if (const Detail::Cell<ChildOf>* cell = childOf.Find(id)) parent = cell->value.parent;\n                // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n                // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                }\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }\n                entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n                ++entitiesEpoch_;\n                if (parent) detach(id, *parent);\n                std::vector<EntityId> linked;\n                for (EntityId kid : kids) {\n                    // Only a child whose ChildOf names this entity (a Children a restore gives may say otherwise).\n                    const Detail::Cell<ChildOf>* cell = childOf.Find(kid);\n                    if (cell == nullptr || cell->value.parent != id) continue;\n                    if (std::binary_search(rewired.begin(), rewired.end(), kid)) continue;  // Q3: its record decides\n                    if (expandLinked) {\n                        linked.push_back(kid);\n                        continue;\n                    }\n                    // A restore leaves it behind: its ChildOf goes now, after its OnRemove; one the restore\n                    // despawns later in this step keeps it for its own despawn.\n                    if (std::binary_search(despawns.begin(), despawns.end(), kid)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, kid, data_->childOf, planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                    childOf.Erase(kid);\n                }\n                for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);\n            }\n        }\n\n        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            std::optional<EntityId> parent;\n            if (component == data_->childOf) parent = childOf.Find(id)->value.parent;\n            columns_[component]->Erase(id);\n            if (parent) detach(id, *parent);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n                if (part.component == data_->childOf) attaches[spawn.entity] = Attach{spawn.planPos, spawn.recSeq, &spawn};\n            }\n        }\n\n",
+      "replace": "        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            std::optional<EntityId> parent;\n            if (component == data_->childOf) parent = childOf.Find(id)->value.parent;\n            columns_[component]->Erase(id);\n            if (parent) detach(id, *parent);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && !spawns[i]->restore && data_->allotter &&\n                    data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n                if (part.component == data_->childOf) attaches[spawn.entity] = Attach{spawn.planPos, spawn.recSeq, &spawn};\n            }\n        }\n\n        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        // The user's Q3: a child whose ChildOf this phase removes or replaces is not despawned with its\n        // parent; its ChildOf stays until that record is applied (a replacement is then an overwrite).\n        std::vector<EntityId> rewired;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {\n                rewired.push_back(r.entity);\n            }\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        std::sort(rewired.begin(), rewired.end());\n        const bool expandLinked = relationships == Detail::Relationships::Change;\n        std::vector<EntityId> pending;\n        for (EntityId root : despawns) {\n            // DI-KS 32 (the user's Q4): an entity, then each of its Children's whole subtree in turn, depth first.\n            pending.assign(1, root);\n            while (!pending.empty()) {\n                const EntityId id = pending.back();\n                pending.pop_back();\n                if (!alive(id)) continue;\n                std::vector<EntityId> kids;\n                if (const Detail::Cell<Children>* cell = children.Find(id)) kids.assign(cell->value.begin(), cell->value.end());\n                std::optional<EntityId> parent;\n                if (const Detail::Cell<ChildOf>* cell = childOf.Find(id)) parent = cell->value.parent;\n                // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n                // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    if (!columns_[c]->Contains(id)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                }\n                for (std::size_t c = 0; c < columns_.size(); ++c) {\n                    columns_[c]->Erase(id);\n                }\n                entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n                ++entitiesEpoch_;\n                if (parent) detach(id, *parent);\n                std::vector<EntityId> linked;\n                for (EntityId kid : kids) {\n                    // Only a child whose ChildOf names this entity (a Children a restore gives may say otherwise).\n                    const Detail::Cell<ChildOf>* cell = childOf.Find(kid);\n                    if (cell == nullptr || cell->value.parent != id) continue;\n                    if (std::binary_search(rewired.begin(), rewired.end(), kid)) continue;  // Q3: its record decides\n                    if (expandLinked) {\n                        linked.push_back(kid);\n                        continue;\n                    }\n                    // A restore leaves it behind: its ChildOf goes now, after its OnRemove; one the restore\n                    // despawns later in this step keeps it for its own despawn.\n                    if (std::binary_search(despawns.begin(), despawns.end(), kid)) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, kid, data_->childOf, planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                    childOf.Erase(kid);\n                }\n                for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);\n            }\n        }\n\n",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "despawn then spawn with the same id: the new entity lives[^=]*CHECK\\( world\\.Alive\\(4\\) \\) is NOT correct"
@@ -2863,10 +2863,10 @@
       "id": "hf-round-skips-onremove",
       "file": "engine/ecs/kernel/src/World.cpp",
       "target": "gyo_kernel_tests",
-      "find": "                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;",
-      "replace": "                if (trackRoundRecorders_) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;",
+      "find": "                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;",
+      "replace": "                    if (trackRoundRecorders_) continue;\n                    auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                    if (!hooked) return hooked;",
       "expect": "JoinLog\\(\\)\\ ==\\ \"removed:3\\ removed:4\"",
-      "what": "a round's despawn runs no OnRemove (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in hf-round-skips-despawn [a round applies no despawn (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)])",
+      "what": "a round's despawn runs no OnRemove (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in hf-round-skips-despawn [a round applies no despawn (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)]) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "cases": "J-54: a round is a whole application*",
       "ran_as": "ck-round-skips-onremove-despawn",
       "note": "同上"
@@ -2919,10 +2919,10 @@
     },
     {
       "id": "sr-no-record",
-      "what": "F-13: a dropped spawn appends no RejectedSpawn record (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-mutation-prune merged in sr-j8-no-record, sr-j32-no-record: the same find and replace, so their cases and assertions now run here; every listed message must appear) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick)",
+      "what": "F-13: a dropped spawn appends no RejectedSpawn record (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-mutation-prune merged in sr-j8-no-record, sr-j32-no-record: the same find and replace, so their cases and assertions now run here; every listed message must appear) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick) (since the relationship batch the buffer write is World::RecordKernelDiagnostics<R>, shared with RejectedRelationship)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});\n",
-      "replace": "    (void)found;\n    (void)epoch;\n",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<R>*>(found)->entries.push_back(\n        typename Detail::DiagnosticsBuffer<R>::Entry{epoch, std::move(record)});\n",
+      "replace": "    (void)found;\n    (void)epoch;\n    (void)record;\n",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*,J-8:*,J-32:*",
       "expect": "(?=[\\s\\S]*J\\-55\\ player\\-7:\\ one\\ record)(?=[\\s\\S]*J\\-8:\\ the\\ dropped\\ spawn\\ is\\ recorded)[\\s\\S]*J\\-32:\\ the\\ dropped\\ spawn\\ is\\ recorded"
@@ -3329,50 +3329,50 @@
     },
     {
       "id": "sr-applied-is-step",
-      "what": "F-13: appliedAt written as the record's position (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "what": "F-13: appliedAt written as the record's position (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            rejected.appliedAt = planPos;",
-      "replace": "            rejected.appliedAt = spawn.planPos;",
+      "find": "            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;",
+      "replace": "            rejected.step = spawn.planPos;\n            rejected.appliedAt = spawn.planPos;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ mid\\-hook:\\ appliedAt\\ is\\ the\\ next\\ sync\\ point"
     },
     {
       "id": "sr-tick-one",
-      "what": "F-13: tick always 1 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in sr-tick-cached-for-world [F-13: the lazily looked-up tick is kept across sync points (static) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)]) (v8-arch-gyo2-time-events step 4: G8: rewritten for the sync point number; the record carries the first sync point number, not the one that dropped it)",
+      "what": "F-13: tick always 1 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in sr-tick-cached-for-world [F-13: the lazily looked-up tick is kept across sync points (static) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)]) (v8-arch-gyo2-time-events step 4: G8: rewritten for the sync point number; the record carries the first sync point number, not the one that dropped it) (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            rejected.syncEpoch = syncEpoch_;",
-      "replace": "            rejected.syncEpoch = 0;",
+      "find": "            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);",
+      "replace": "            rejected.syncEpoch = 0;\n            rejected.otherEmitter = std::string(other);",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ second\\-tick:\\ sync\\ point\\ number"
     },
     {
       "id": "sr-tick-fixed-domain",
-      "what": "F-13: tick always the Fixed domain's (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-time-events step 4: G8: the domain left; rewritten as the number after the sync point instead of before it (off by one))",
+      "what": "F-13: tick always the Fixed domain's (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-time-events step 4: G8: the domain left; rewritten as the number after the sync point instead of before it (off by one)) (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            rejected.syncEpoch = syncEpoch_;",
-      "replace": "            rejected.syncEpoch = syncEpoch_ + 1;",
+      "find": "            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);",
+      "replace": "            rejected.syncEpoch = syncEpoch_ + 1;\n            rejected.otherEmitter = std::string(other);",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "(?=[\\s\\S]*J\\-55\\ early:\\ sync\\ point)[\\s\\S]*J\\-55\\ second\\-tick:\\ sync\\ point\\ number"
     },
     {
       "id": "sr-schedule-first",
-      "what": "F-13: schedule written as the first registered schedule (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "what": "F-13: schedule written as the first registered schedule (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            rejected.schedule = std::string(schedule);",
-      "replace": "            rejected.schedule = data_->schedules.front().options.name;",
+      "find": "            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;",
+      "replace": "            rejected.schedule = data_->schedules.front().options.name;\n            rejected.step = spawn.planPos;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ player\\-7:\\ schedule"
     },
     {
       "id": "sr-schedule-always-tick",
-      "what": "F-13: schedule always written as Tick (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "what": "F-13: schedule always written as Tick (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            rejected.schedule = std::string(schedule);",
-      "replace": "            rejected.schedule = \"Tick\";",
+      "find": "            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;",
+      "replace": "            rejected.schedule = \"Tick\";\n            rejected.step = spawn.planPos;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ early:\\ schedule\\ Early"
@@ -3409,10 +3409,10 @@
     },
     {
       "id": "sr-records-capped",
-      "what": "3.3: the records stop at 8 (a cap the user did not choose) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick)",
+      "what": "3.3: the records stop at 8 (a cap the user did not choose) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick) (since the relationship batch the buffer write is World::RecordKernelDiagnostics<R>, shared with RejectedRelationship)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});\n",
-      "replace": "    if (static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.size() >= 8) return;\n    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});\n",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<R>*>(found)->entries.push_back(\n        typename Detail::DiagnosticsBuffer<R>::Entry{epoch, std::move(record)});\n",
+      "replace": "    if (static_cast<Detail::DiagnosticsBuffer<R>*>(found)->entries.size() >= 8) return;\n    static_cast<Detail::DiagnosticsBuffer<R>*>(found)->entries.push_back(\n        typename Detail::DiagnosticsBuffer<R>::Entry{epoch, std::move(record)});\n",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ many:\\ 64\\ records"
@@ -3449,10 +3449,10 @@
     },
     {
       "id": "sr-drop-takes-stamp",
-      "what": "F-13: a dropped spawn takes a stamp (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick)",
+      "what": "F-13: a dropped spawn takes a stamp (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2) (v8-arch-gyo2-time-events step 4: find follows the sync point number in place of the tick) (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            rejected.syncEpoch = syncEpoch_;",
-      "replace": "            rejected.syncEpoch = syncEpoch_;\n            ++stamp_;",
+      "find": "            rejected.syncEpoch = syncEpoch_;\n            rejected.otherEmitter = std::string(other);",
+      "replace": "            rejected.syncEpoch = syncEpoch_;\n            ++stamp_;\n            rejected.otherEmitter = std::string(other);",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ no\\-stamp:\\ the\\ same\\ stamp\\ and\\ sync\\ epoch\\ steps\\ with\\ and\\ without\\ a\\ dropped\\ spawn"
@@ -4732,10 +4732,10 @@
     },
     {
       "id": "ks-s5-change-deferred",
-      "what": "S5: the immediate change goes into the window and waits for the sync point (not applied now) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (v8-arch-gyo2-mutation-prune merged in ks-s5-j45-spawn-deferred: the same find and replace, so their cases and assertions now run here; every listed message must appear) (v8-arch-gyo2-batch4-followups: find follows ApplySync's derive argument, A3)",
+      "what": "S5: the immediate change goes into the window and waits for the sync point (not applied now) (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (v8-arch-gyo2-mutation-prune merged in ks-s5-j45-spawn-deferred: the same find and replace, so their cases and assertions now run here; every listed message must appear) (v8-arch-gyo2-batch4-followups: find follows ApplySync's derive argument, A3) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);",
-      "replace": "    world.window_.push_back(std::move(change.front()));\n    change.clear();\n    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);",
+      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive, relationships);",
+      "replace": "    world.window_.push_back(std::move(change.front()));\n    change.clear();\n    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive, relationships);",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn takes an id*,J-45:*",
       "expect": "(?=[\\s\\S]*\\[ks\\-s5\\-spawn\\])[\\s\\S]*J\\-45\\ spawn",
@@ -4745,10 +4745,10 @@
     },
     {
       "id": "ks-s5-change-stamp",
-      "what": "S5: the change carries a new stamp instead of the handle's (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (v8-arch-gyo2-batch4-followups: find follows ApplySync's derive argument, A3)",
+      "what": "S5: the change carries a new stamp instead of the handle's (v8-arch-gyo2-kernel-subtract-structure, segment 3, declaration section 6) (v8-arch-gyo2-batch4-followups: find follows ApplySync's derive argument, A3) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);",
-      "replace": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, world.stamp_ + 1, &change, derive);",
+      "find": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive, relationships);",
+      "replace": "    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, world.stamp_ + 1, &change, derive, relationships);",
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 18: ExclusiveWorld::Spawn takes an id*",
       "expect": "\\[ks\\-s5\\-spawn\\-stamp\\]",
@@ -7102,17 +7102,17 @@
       "replace": "constexpr std::uint32_t kSummaryVersion = 3;",
       "target": "gyo_kernel_tests",
       "cases": "J-32: the sync point's result depends only on the records*",
-      "expect": "3:[0-9a-f]{64} == 4:5f5fc699"
+      "expect": "3:[0-9a-f]{64} == 4:31a810e4"
     },
     {
       "id": "obs-host-direct-write-observed",
-      "what": "a direct write from outside the World (World Ready) runs the Remove observers (DI-KS 10: a thing not done; [obs-host-direct] had no mutant). Only it catches it (adversarial check KX, step 7)",
+      "what": "a direct write from outside the World (World Ready) runs the Remove observers (DI-KS 10: a thing not done; [obs-host-direct] had no mutant). Only it catches it (adversarial check KX, step 7) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "guards": [
         "kernel DI-KS 10"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            Access(Detail::EntryKind::Component, static_cast<std::uint32_t>(c), Detail::kModeWrite, true);\n            columns_[c]->Erase(id);",
-      "replace": "            Access(Detail::EntryKind::Component, static_cast<std::uint32_t>(c), Detail::kModeWrite, true);\n            static_cast<void>(RunObservers(ObserverTrigger::Remove, static_cast<std::uint32_t>(c), nullptr, id, 0, {}, stamp_, false));\n            columns_[c]->Erase(id);",
+      "find": "                Access(Detail::EntryKind::Component, static_cast<std::uint32_t>(c), Detail::kModeWrite, true);\n                columns_[c]->Erase(one);",
+      "replace": "                Access(Detail::EntryKind::Component, static_cast<std::uint32_t>(c), Detail::kModeWrite, true);\n                static_cast<void>(RunObservers(ObserverTrigger::Remove, static_cast<std::uint32_t>(c), nullptr, one, 0, {}, stamp_, false));\n                columns_[c]->Erase(one);",
       "target": "gyo_kernel_tests",
       "cases": "J-59: the Host's direct writes in Ready*",
       "expect": "no hook queue for this schedule"
@@ -7614,13 +7614,13 @@
     },
     {
       "id": "ks-restore-new-stamp",
-      "what": "Restore writes with a stamp of its own instead of the handle's (primitive 2: one stamp, the current one). Only it catches the stamp passed",
+      "what": "Restore writes with a stamp of its own instead of the handle's (primitive 2: one stamp, the current one). Only it catches the stamp passed (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "guards": [
         "authority-rollback-declaration 2.1"
       ],
       "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
-      "find": "        return Detail::ApplyRestore(call, std::move(records), stamp_, closures_ > 0);",
-      "replace": "        return Detail::ApplyRestore(call, std::move(records), Detail::NextStamp(*world_), closures_ > 0);",
+      "find": "        return Detail::ApplyRestore(call, std::move(records), stamp_, closures_ > 0, set.namesChildren_);",
+      "replace": "        return Detail::ApplyRestore(call, std::move(records), Detail::NextStamp(*world_), closures_ > 0, set.namesChildren_);",
       "target": "gyo_kernel_tests",
       "cases": "restore: Restore puts*",
       "expect": "\\[ks\\-restore\\-one\\-stamp\\]"
@@ -7810,13 +7810,13 @@
     },
     {
       "id": "ks-restore-record-by-record",
-      "what": "Restore applies record by record: an OnAdd of the first column does not see the later column (only scenario S5-5 caught it). Only it catches the one immediate change for the kernel (v8-arch-gyo2-batch4-followups: find follows ApplyImmediateRecords' derive parameter, A3)",
+      "what": "Restore applies record by record: an OnAdd of the first column does not see the later column (only scenario S5-5 caught it). Only it catches the one immediate change for the kernel (v8-arch-gyo2-batch4-followups: find follows ApplyImmediateRecords' derive parameter, A3) (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "guards": [
         "authority-rollback-declaration 2.1"
       ],
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);",
-      "replace": "    for (Detail::Record& record : records) {\n        std::vector<Detail::Record> one;\n        one.push_back(std::move(record));\n        auto applied = ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(one), stamp, who, where);\n        if (!applied) return applied;\n    }\n    return {};",
+      "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing,\n                                 targetsGiven ? Detail::Relationships::RestoreGiven : Detail::Relationships::Restore, call,\n                                 std::move(records), stamp, who, where);",
+      "replace": "    for (Detail::Record& record : records) {\n        std::vector<Detail::Record> one;\n        one.push_back(std::move(record));\n        auto applied = ApplyImmediateRecords(Detail::Derive::Nothing,\n                                             targetsGiven ? Detail::Relationships::RestoreGiven : Detail::Relationships::Restore,\n                                             call, std::move(one), stamp, who, where);\n        if (!applied) return applied;\n    }\n    return {};",
       "target": "gyo_kernel_tests",
       "cases": "restore: an OnAdd of the first*",
       "expect": "\\[ks\\-restore\\-hooks\\-after\\-any\\-column\\]"
@@ -7877,13 +7877,13 @@
     },
     {
       "id": "ks-restore-derives-initial-values",
-      "what": "Restore derives InitialValue targets from the request cells it puts back (DI-KS 12; user 2026-11-22 (a2): a restore puts back what it is given). Only it catches the restore's no-derive",
+      "what": "Restore derives InitialValue targets from the request cells it puts back (DI-KS 12; user 2026-11-22 (a2): a restore puts back what it is given). Only it catches the restore's no-derive (find/replace rewritten for the relationship batch's despawn loop, v8-arch-gyo2-kernel-relationship; same change)",
       "guards": [
         "kernel DI-KS 12"
       ],
       "file": "engine/ecs/kernel/src/Executor.cpp",
-      "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);",
-      "replace": "    return ApplyImmediateRecords(Detail::Derive::InitialValues, call, std::move(records), stamp, who, where);",
+      "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing,\n                                 targetsGiven ? Detail::Relationships::RestoreGiven : Detail::Relationships::Restore, call,\n                                 std::move(records), stamp, who, where);",
+      "replace": "    return ApplyImmediateRecords(Detail::Derive::InitialValues,\n                                 targetsGiven ? Detail::Relationships::RestoreGiven : Detail::Relationships::Restore, call,\n                                 std::move(records), stamp, who, where);",
       "target": "gyo_kernel_tests",
       "cases": "restore: Restore puts back what it is given*",
       "expect": "\\[ks\\-restore\\-no\\-initial\\-value\\]"
@@ -7965,6 +7965,467 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 28:*",
       "expect": "\\[rc\\-host\\-resourcemut\\]"
+    },
+    {
+      "id": "kr-no-add",
+      "what": "step 5b attaches nothing: a new ChildOf never reaches its parent's Children. Only it catches the attach being skipped (the other kr- mutants keep it)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 判定 12.3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            for (const auto& [pos, seq, child] : order) {",
+      "replace": "            for (const auto& [pos, seq, child] : decltype(order){}) {",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-spawn\\]"
+    },
+    {
+      "id": "kr-validate-at-spawn",
+      "what": "a spawned ChildOf is checked when its spawn is applied, not at step 5b: a child with a smaller id than its parent spawned in the same phase is rejected. Only it catches checking too early (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 5.3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                if (part.component == data_->childOf) attaches[spawn.entity] = Attach{spawn.planPos, spawn.recSeq, &spawn};",
+      "replace": "                if (part.component == data_->childOf) {\n                    if (holds(spawn.entity, childOf.Find(spawn.entity)->value.parent)) attaches[spawn.entity] = Attach{spawn.planPos, spawn.recSeq, &spawn};\n                    else childOf.Erase(spawn.entity);\n                }",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-same\\-phase\\-small\\-id\\]"
+    },
+    {
+      "id": "kr-move-keeps-old",
+      "what": "a new parent does not take the child out of the old parent's Children. Only it catches a reparent leaving the old entry",
+      "guards": [
+        "kernel DI-KS 30"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                    detach(winner.entity, existing->value.parent);\n                }\n                attaches[winner.entity]",
+      "replace": "                }\n                attaches[winner.entity]",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-reparent\\]"
+    },
+    {
+      "id": "kr-empty-kept",
+      "what": "a parent left with no child keeps an empty Children cell. Only it catches the cell not being removed",
+      "guards": [
+        "kernel DI-KS 30"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                children.Erase(parent);",
+      "replace": "                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-detach\\]"
+    },
+    {
+      "id": "kr-erase-no-drop",
+      "what": "a despawned child stays listed in its parent's Children. Only it catches the despawn path not detaching",
+      "guards": [
+        "kernel DI-KS 30"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                if (parent) detach(id, *parent);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-child\\-despawn\\]"
+    },
+    {
+      "id": "kr-order-by-id",
+      "what": "step 5b attaches in child id order, not in (planPos, recSeq) record order. Only it catches the order (the user's Q1 (A'))",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration Q1"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            std::sort(order.begin(), order.end());",
+      "replace": "            std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return std::get<2>(a) < std::get<2>(b); });",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-order\\]"
+    },
+    {
+      "id": "kr-after-initial",
+      "what": "step 5b runs after step 5a: an initial value from Children never sees the Children cell made at this sync point. Only it catches 5b's place before 5a (adversarial check B2) (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 5.3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        // Step 5b: relationships (DI-KS 30, 31), after insert and before the initial values, so an\n        // initial value from ChildOf never rests on a ChildOf that does not hold, and one from Children\n        // sees the Children cells made here. A spawned ChildOf is checked here (its parent may be spawned\n        // later in step 4; one that does not hold goes without a hook: nothing saw it); an inserted one was\n        // checked before it was written, and nothing since changed who is alive. Attached in (planPos,\n        // recSeq) order (Q1 (A')).\n        std::vector<std::tuple<std::uint32_t, std::uint32_t, EntityId>> order;\n        for (const auto& [child, attach] : attaches) {\n            const Detail::Cell<ChildOf>* cell = childOf.Find(child);\n            GYO_ASSERT(cell != nullptr);\n            if (!holds(child, cell->value.parent)) {\n                rejectRelationship(*attach.record, child, cell->value.parent);\n                childOf.Erase(child);\n                std::erase_if(added, [&](const NewCell& c) { return c.entity == child && c.component == data_->childOf; });\n                continue;\n            }\n            order.emplace_back(attach.planPos, attach.recSeq, child);\n        }\n        if (keep) {\n            std::sort(order.begin(), order.end());\n            for (const auto& [pos, seq, child] : order) {\n                const EntityId parent = childOf.Find(child)->value.parent;\n                touch(parent);\n                if (AttachChild(child, parent, stamp)) added.push_back(NewCell{parent, data_->children});\n            }\n            // The net change: a parent that lost its last child and got none back loses its Children cell.\n            std::sort(emptied.begin(), emptied.end());\n            emptied.erase(std::unique(emptied.begin(), emptied.end()), emptied.end());\n            for (EntityId parent : emptied) {\n                const Detail::Cell<Children>* cell = children.Find(parent);\n                if (!alive(parent) || cell == nullptr || !cell->value.empty()) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                children.Erase(parent);\n            }\n            // A Children that ends the phase as it began keeps its changed stamp.\n            for (const auto& [parent, was] : before) {\n                Detail::Cell<Children>* cell = children.Find(parent);\n                if (cell != nullptr && cell->value == was.second) cell->changed = was.first;\n            }\n        }\n\n        // Step 5a: initial values (Registrar::InitialValue). Every cell added by\n        // steps 4 and 5 is looked at once, (EntityId, ComponentId) ascending; a\n        // cell this step adds is looked at in the next round, so a chain of\n        // declarations completes at this sync point. A Target the entity\n        // already has is left as it is, so a round adds each cell at most once\n        // and the rounds end. Only an application that derives (a change, not a restore: DI-KS 12).\n        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {\n            const auto& rules = data_->initialValues;\n            std::vector<NewCell> round = added;\n            while (!round.empty()) {\n                std::sort(round.begin(), round.end(), byCell);\n                std::vector<NewCell> next;\n                for (const NewCell& cell : round) {\n                    auto rule = std::lower_bound(rules.begin(), rules.end(), cell.component,\n                                                 [](const Detail::InitialValueRecord& r, ComponentId request) {\n                                                     return r.requestId < request;\n                                                 });\n                    for (; rule != rules.end() && rule->requestId == cell.component; ++rule) {\n                        if (rule->put(*columns_[rule->requestId], *columns_[rule->targetId], cell.entity, stamp)) {\n                            next.push_back(NewCell{cell.entity, rule->targetId});\n                        }\n                    }\n                }\n                added.insert(added.end(), next.begin(), next.end());\n                round = std::move(next);\n            }\n        }\n\n",
+      "replace": "        // Step 5a: initial values (Registrar::InitialValue). Every cell added by\n        // steps 4 and 5 is looked at once, (EntityId, ComponentId) ascending; a\n        // cell this step adds is looked at in the next round, so a chain of\n        // declarations completes at this sync point. A Target the entity\n        // already has is left as it is, so a round adds each cell at most once\n        // and the rounds end. Only an application that derives (a change, not a restore: DI-KS 12).\n        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {\n            const auto& rules = data_->initialValues;\n            std::vector<NewCell> round = added;\n            while (!round.empty()) {\n                std::sort(round.begin(), round.end(), byCell);\n                std::vector<NewCell> next;\n                for (const NewCell& cell : round) {\n                    auto rule = std::lower_bound(rules.begin(), rules.end(), cell.component,\n                                                 [](const Detail::InitialValueRecord& r, ComponentId request) {\n                                                     return r.requestId < request;\n                                                 });\n                    for (; rule != rules.end() && rule->requestId == cell.component; ++rule) {\n                        if (rule->put(*columns_[rule->requestId], *columns_[rule->targetId], cell.entity, stamp)) {\n                            next.push_back(NewCell{cell.entity, rule->targetId});\n                        }\n                    }\n                }\n                added.insert(added.end(), next.begin(), next.end());\n                round = std::move(next);\n            }\n        }\n\n        // Step 5b: relationships (DI-KS 30, 31), after insert and before the initial values, so an\n        // initial value from ChildOf never rests on a ChildOf that does not hold, and one from Children\n        // sees the Children cells made here. A spawned ChildOf is checked here (its parent may be spawned\n        // later in step 4; one that does not hold goes without a hook: nothing saw it); an inserted one was\n        // checked before it was written, and nothing since changed who is alive. Attached in (planPos,\n        // recSeq) order (Q1 (A')).\n        std::vector<std::tuple<std::uint32_t, std::uint32_t, EntityId>> order;\n        for (const auto& [child, attach] : attaches) {\n            const Detail::Cell<ChildOf>* cell = childOf.Find(child);\n            GYO_ASSERT(cell != nullptr);\n            if (!holds(child, cell->value.parent)) {\n                rejectRelationship(*attach.record, child, cell->value.parent);\n                childOf.Erase(child);\n                std::erase_if(added, [&](const NewCell& c) { return c.entity == child && c.component == data_->childOf; });\n                continue;\n            }\n            order.emplace_back(attach.planPos, attach.recSeq, child);\n        }\n        if (keep) {\n            std::sort(order.begin(), order.end());\n            for (const auto& [pos, seq, child] : order) {\n                const EntityId parent = childOf.Find(child)->value.parent;\n                touch(parent);\n                if (AttachChild(child, parent, stamp)) added.push_back(NewCell{parent, data_->children});\n            }\n            // The net change: a parent that lost its last child and got none back loses its Children cell.\n            std::sort(emptied.begin(), emptied.end());\n            emptied.erase(std::unique(emptied.begin(), emptied.end()), emptied.end());\n            for (EntityId parent : emptied) {\n                const Detail::Cell<Children>* cell = children.Find(parent);\n                if (!alive(parent) || cell == nullptr || !cell->value.empty()) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                children.Erase(parent);\n            }\n            // A Children that ends the phase as it began keeps its changed stamp.\n            for (const auto& [parent, was] : before) {\n                Detail::Cell<Children>* cell = children.Find(parent);\n                if (cell != nullptr && cell->value == was.second) cell->changed = was.first;\n            }\n        }\n\n",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-initial\\-from\\-children\\]"
+    },
+    {
+      "id": "kr-after-onadd",
+      "what": "step 5b runs after the OnAdd step: an Add<ChildOf> observer sees its child not yet listed. Only it catches 5b's place before OnAdd (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 30"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        // Step 5b: relationships (DI-KS 30, 31), after insert and before the initial values, so an\n        // initial value from ChildOf never rests on a ChildOf that does not hold, and one from Children\n        // sees the Children cells made here. A spawned ChildOf is checked here (its parent may be spawned\n        // later in step 4; one that does not hold goes without a hook: nothing saw it); an inserted one was\n        // checked before it was written, and nothing since changed who is alive. Attached in (planPos,\n        // recSeq) order (Q1 (A')).\n        std::vector<std::tuple<std::uint32_t, std::uint32_t, EntityId>> order;\n        for (const auto& [child, attach] : attaches) {\n            const Detail::Cell<ChildOf>* cell = childOf.Find(child);\n            GYO_ASSERT(cell != nullptr);\n            if (!holds(child, cell->value.parent)) {\n                rejectRelationship(*attach.record, child, cell->value.parent);\n                childOf.Erase(child);\n                std::erase_if(added, [&](const NewCell& c) { return c.entity == child && c.component == data_->childOf; });\n                continue;\n            }\n            order.emplace_back(attach.planPos, attach.recSeq, child);\n        }\n        if (keep) {\n            std::sort(order.begin(), order.end());\n            for (const auto& [pos, seq, child] : order) {\n                const EntityId parent = childOf.Find(child)->value.parent;\n                touch(parent);\n                if (AttachChild(child, parent, stamp)) added.push_back(NewCell{parent, data_->children});\n            }\n            // The net change: a parent that lost its last child and got none back loses its Children cell.\n            std::sort(emptied.begin(), emptied.end());\n            emptied.erase(std::unique(emptied.begin(), emptied.end()), emptied.end());\n            for (EntityId parent : emptied) {\n                const Detail::Cell<Children>* cell = children.Find(parent);\n                if (!alive(parent) || cell == nullptr || !cell->value.empty()) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                children.Erase(parent);\n            }\n            // A Children that ends the phase as it began keeps its changed stamp.\n            for (const auto& [parent, was] : before) {\n                Detail::Cell<Children>* cell = children.Find(parent);\n                if (cell != nullptr && cell->value == was.second) cell->changed = was.first;\n            }\n        }\n\n        // Step 5a: initial values (Registrar::InitialValue). Every cell added by\n        // steps 4 and 5 is looked at once, (EntityId, ComponentId) ascending; a\n        // cell this step adds is looked at in the next round, so a chain of\n        // declarations completes at this sync point. A Target the entity\n        // already has is left as it is, so a round adds each cell at most once\n        // and the rounds end. Only an application that derives (a change, not a restore: DI-KS 12).\n        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {\n            const auto& rules = data_->initialValues;\n            std::vector<NewCell> round = added;\n            while (!round.empty()) {\n                std::sort(round.begin(), round.end(), byCell);\n                std::vector<NewCell> next;\n                for (const NewCell& cell : round) {\n                    auto rule = std::lower_bound(rules.begin(), rules.end(), cell.component,\n                                                 [](const Detail::InitialValueRecord& r, ComponentId request) {\n                                                     return r.requestId < request;\n                                                 });\n                    for (; rule != rules.end() && rule->requestId == cell.component; ++rule) {\n                        if (rule->put(*columns_[rule->requestId], *columns_[rule->targetId], cell.entity, stamp)) {\n                            next.push_back(NewCell{cell.entity, rule->targetId});\n                        }\n                    }\n                }\n                added.insert(added.end(), next.begin(), next.end());\n                round = std::move(next);\n            }\n        }\n\n        // Step 6: OnAdd for new cells, (EntityId, ComponentId) ascending; an overwrite is not an add.\n        std::sort(added.begin(), added.end(), byCell);\n        for (const NewCell& cell : added) {\n            auto hooked = RunHooks(HookTrigger::OnAdd, cell.entity, cell.component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n        }\n\n",
+      "replace": "        // Step 5a: initial values (Registrar::InitialValue). Every cell added by\n        // steps 4 and 5 is looked at once, (EntityId, ComponentId) ascending; a\n        // cell this step adds is looked at in the next round, so a chain of\n        // declarations completes at this sync point. A Target the entity\n        // already has is left as it is, so a round adds each cell at most once\n        // and the rounds end. Only an application that derives (a change, not a restore: DI-KS 12).\n        if (derive == Detail::Derive::InitialValues && !data_->initialValues.empty()) {\n            const auto& rules = data_->initialValues;\n            std::vector<NewCell> round = added;\n            while (!round.empty()) {\n                std::sort(round.begin(), round.end(), byCell);\n                std::vector<NewCell> next;\n                for (const NewCell& cell : round) {\n                    auto rule = std::lower_bound(rules.begin(), rules.end(), cell.component,\n                                                 [](const Detail::InitialValueRecord& r, ComponentId request) {\n                                                     return r.requestId < request;\n                                                 });\n                    for (; rule != rules.end() && rule->requestId == cell.component; ++rule) {\n                        if (rule->put(*columns_[rule->requestId], *columns_[rule->targetId], cell.entity, stamp)) {\n                            next.push_back(NewCell{cell.entity, rule->targetId});\n                        }\n                    }\n                }\n                added.insert(added.end(), next.begin(), next.end());\n                round = std::move(next);\n            }\n        }\n\n        // Step 6: OnAdd for new cells, (EntityId, ComponentId) ascending; an overwrite is not an add.\n        std::sort(added.begin(), added.end(), byCell);\n        for (const NewCell& cell : added) {\n            auto hooked = RunHooks(HookTrigger::OnAdd, cell.entity, cell.component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n        }\n\n        // Step 5b: relationships (DI-KS 30, 31), after insert and before the initial values, so an\n        // initial value from ChildOf never rests on a ChildOf that does not hold, and one from Children\n        // sees the Children cells made here. A spawned ChildOf is checked here (its parent may be spawned\n        // later in step 4; one that does not hold goes without a hook: nothing saw it); an inserted one was\n        // checked before it was written, and nothing since changed who is alive. Attached in (planPos,\n        // recSeq) order (Q1 (A')).\n        std::vector<std::tuple<std::uint32_t, std::uint32_t, EntityId>> order;\n        for (const auto& [child, attach] : attaches) {\n            const Detail::Cell<ChildOf>* cell = childOf.Find(child);\n            GYO_ASSERT(cell != nullptr);\n            if (!holds(child, cell->value.parent)) {\n                rejectRelationship(*attach.record, child, cell->value.parent);\n                childOf.Erase(child);\n                std::erase_if(added, [&](const NewCell& c) { return c.entity == child && c.component == data_->childOf; });\n                continue;\n            }\n            order.emplace_back(attach.planPos, attach.recSeq, child);\n        }\n        if (keep) {\n            std::sort(order.begin(), order.end());\n            for (const auto& [pos, seq, child] : order) {\n                const EntityId parent = childOf.Find(child)->value.parent;\n                touch(parent);\n                if (AttachChild(child, parent, stamp)) added.push_back(NewCell{parent, data_->children});\n            }\n            // The net change: a parent that lost its last child and got none back loses its Children cell.\n            std::sort(emptied.begin(), emptied.end());\n            emptied.erase(std::unique(emptied.begin(), emptied.end()), emptied.end());\n            for (EntityId parent : emptied) {\n                const Detail::Cell<Children>* cell = children.Find(parent);\n                if (!alive(parent) || cell == nullptr || !cell->value.empty()) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                children.Erase(parent);\n            }\n            // A Children that ends the phase as it began keeps its changed stamp.\n            for (const auto& [parent, was] : before) {\n                Detail::Cell<Children>* cell = children.Find(parent);\n                if (cell != nullptr && cell->value == was.second) cell->changed = was.first;\n            }\n        }\n\n",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-observer\\-add\\]"
+    },
+    {
+      "id": "kr-drop-before-onremove",
+      "what": "removing a ChildOf takes the child out of Children before its OnRemove runs: the Remove<ChildOf> observer no longer sees it listed. Only it catches the order of OnRemove and detach",
+      "guards": [
+        "kernel DI-KS 30"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            std::optional<EntityId> parent;",
+      "replace": "            if (component == data_->childOf) detach(id, childOf.Find(id)->value.parent);\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            std::optional<EntityId> parent;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-observer\\-remove\\]"
+    },
+    {
+      "id": "kr-no-net-diff",
+      "what": "the parents that became empty are removed before this phase's attaches: a parent that loses one child and gains another is notified when the new child's id is the larger. Only it catches the net change (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 5.3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            std::sort(order.begin(), order.end());\n            for (const auto& [pos, seq, child] : order) {\n                const EntityId parent = childOf.Find(child)->value.parent;\n                touch(parent);\n                if (AttachChild(child, parent, stamp)) added.push_back(NewCell{parent, data_->children});\n            }\n            // The net change: a parent that lost its last child and got none back loses its Children cell.\n            std::sort(emptied.begin(), emptied.end());\n            emptied.erase(std::unique(emptied.begin(), emptied.end()), emptied.end());\n            for (EntityId parent : emptied) {\n                const Detail::Cell<Children>* cell = children.Find(parent);\n                if (!alive(parent) || cell == nullptr || !cell->value.empty()) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                children.Erase(parent);\n            }\n",
+      "replace": "            // The net change: a parent that lost its last child and got none back loses its Children cell.\n            std::sort(emptied.begin(), emptied.end());\n            emptied.erase(std::unique(emptied.begin(), emptied.end()), emptied.end());\n            for (EntityId parent : emptied) {\n                const Detail::Cell<Children>* cell = children.Find(parent);\n                if (!alive(parent) || cell == nullptr || !cell->value.empty()) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                children.Erase(parent);\n            }\n            std::sort(order.begin(), order.end());\n            for (const auto& [pos, seq, child] : order) {\n                const EntityId parent = childOf.Find(child)->value.parent;\n                touch(parent);\n                if (AttachChild(child, parent, stamp)) added.push_back(NewCell{parent, data_->children});\n            }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-net\\-diff\\]"
+    },
+    {
+      "id": "kr-children-stamp-always",
+      "what": "the same parent again also marks the parent's Children changed. Only it catches Children's stamp moving without a change",
+      "guards": [
+        "kernel DI-KS 30"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                        existing->changed = stamp;\n                        i = end;\n                        continue;",
+      "replace": "                        existing->changed = stamp;\n                        if (Detail::Cell<Children>* touched = children.Find(target)) touched->changed = stamp;\n                        i = end;\n                        continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-children\\-changed\\]"
+    },
+    {
+      "id": "kr-dead-kept",
+      "what": "a ChildOf naming an entity that is not alive holds. Only it catches the alive check",
+      "guards": [
+        "kernel DI-KS 31"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        auto holds = [&](EntityId entity, EntityId target) { return target != entity && alive(target); };",
+      "replace": "        auto holds = [&](EntityId entity, EntityId target) { return target != entity; };",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-dead\\-target\\]"
+    },
+    {
+      "id": "kr-self-kept",
+      "what": "a ChildOf naming its own entity holds. Only it catches the self check",
+      "guards": [
+        "kernel DI-KS 31"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        auto holds = [&](EntityId entity, EntityId target) { return target != entity && alive(target); };",
+      "replace": "        auto holds = [&](EntityId entity, EntityId target) { (void)entity; return alive(target); };",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-self\\]"
+    },
+    {
+      "id": "kr-spawn-unchecked",
+      "what": "step 5b does not check a spawned ChildOf: a spawn naming a dead parent keeps its ChildOf. Only it catches the spawn path's check (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 31"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            if (!holds(child, cell->value.parent)) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-spawn\\-dead\\-target\\]"
+    },
+    {
+      "id": "kr-reparent-dead-keeps-old",
+      "what": "a ChildOf that held and is replaced by one that does not hold is kept. Only it catches the result differing from Bevy's (the relationship is removed)",
+      "guards": [
+        "kernel DI-KS 31"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                    } else if (existing != nullptr) {\n                        // A ChildOf that held",
+      "replace": "                    } else if (false) {\n                        // A ChildOf that held",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-reparent\\-dead\\]"
+    },
+    {
+      "id": "kr-linked-off",
+      "what": "despawning a parent does not despawn its children. Only it catches the linked despawn being off (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 32"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                    if (expandLinked) {\n                        linked.push_back(kid);",
+      "replace": "                    if (false) {\n                        linked.push_back(kid);",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-linked\\]"
+    },
+    {
+      "id": "kr-linked-one-level",
+      "what": "only the despawned entity's own children go, not their children. Only it catches the recursion",
+      "guards": [
+        "kernel DI-KS 32"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);",
+      "replace": "                if (id == root) for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-linked\\]"
+    },
+    {
+      "id": "kr-linked-breadth",
+      "what": "linked despawns go breadth first (a queue) instead of depth first. Only it catches the order of the user's Q4",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel-relationship-declaration Q4"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                const EntityId id = pending.back();\n                pending.pop_back();",
+      "replace": "                const EntityId id = pending.front();\n                pending.erase(pending.begin());",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-linked\\-order\\]"
+    },
+    {
+      "id": "kr-linked-sorted",
+      "what": "the children of a despawned entity go in id order instead of Children's order. Only it catches the children's order inside one subtree",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel-relationship-declaration Q4"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);",
+      "replace": "                std::sort(linked.begin(), linked.end());\n                for (auto it = linked.rbegin(); it != linked.rend(); ++it) pending.push_back(*it);",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-linked\\-order\\]"
+    },
+    {
+      "id": "kr-detach-ignored",
+      "what": "a child whose ChildOf this phase removes is despawned with its parent. Only it catches the Remove half of the user's Q3",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel-relationship-declaration Q3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
+      "replace": "            if (r.kind == RecordKind::Insert && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-detach\\-then\\-despawn\\]"
+    },
+    {
+      "id": "kr-reparent-ignored",
+      "what": "a child given a new parent in this phase is despawned with its old parent. Only it catches the Insert half of the user's Q3",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel-relationship-declaration Q3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
+      "replace": "            if (r.kind == RecordKind::Remove && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-reparent\\-then\\-despawn\\]"
+    },
+    {
+      "id": "kr-restore-expands",
+      "what": "a restore expands linked despawns: a child alive at the saved state is despawned with a parent born later. Only it catches the restore's expansion being off. Caught where the restore does not name ChildOf: when it does, the RestoreSet's removal of the child's ChildOf already exempts the child (the user's Q3), so [kr-restore-no-expand] cannot tell",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel DI-KS 12"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        const bool expandLinked = relationships == Detail::Relationships::Change;",
+      "replace": "        const bool expandLinked = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-restore\\-unregistered\\-childof\\]"
+    },
+    {
+      "id": "kr-restore-maintains-given",
+      "what": "a restore that names Children still keeps it: the revived or moved child is listed twice. Only it catches RestoreGiven",
+      "guards": [
+        "kernel DI-KS 33",
+        "kernel DI-KS 12"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        const bool keep = relationships != Detail::Relationships::RestoreGiven;",
+      "replace": "        const bool keep = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-restore\\-reparent\\]"
+    },
+    {
+      "id": "kr-restore-no-maintain",
+      "what": "a restore that does not name Children does not keep it either. Only it catches the plain restore keeping Children",
+      "guards": [
+        "kernel DI-KS 33",
+        "kernel DI-KS 12"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "        const bool keep = relationships != Detail::Relationships::RestoreGiven;",
+      "replace": "        const bool keep = relationships == Detail::Relationships::Change;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-restore\\-maintain\\]"
+    },
+    {
+      "id": "kr-restore-keeps-dangling",
+      "what": "a child left behind by its despawned parent keeps a ChildOf naming it. Only it catches the left-behind rule (DI-KS 12's added sentence (a))",
+      "guards": [
+        "kernel DI-KS 12",
+        "kernel DI-KS 32"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                    auto hooked = RunHooks(HookTrigger::OnRemove, kid, data_->childOf, planPos, schedule, stamp);\n                    if (!hooked) return hooked;\n                    childOf.Erase(kid);",
+      "replace": "                    (void)kid;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-restore\\-unregistered\\-childof\\]"
+    },
+    {
+      "id": "kr-host-no-maintain",
+      "what": "the Host's World::Insert<ChildOf> does not attach to the parent's Children. Only it catches the Host path's upkeep (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 5.7"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "    childOf.Put(child, std::move(value), stamp);\n    AttachChild(child, parent, stamp);",
+      "replace": "    childOf.Put(child, std::move(value), stamp);",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-host\\]"
+    },
+    {
+      "id": "kr-host-no-mark",
+      "what": "the Host's World::Insert<ChildOf> does not mark Children as written through the World API: verification reports a boundary change. Only it catches the mark (find/replace rewritten after the design review's refactor, v8-arch-gyo2-kernel-relationship; same change)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 5.7"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "    AttachChild(child, parent, stamp);\n    MarkApiWritten(Detail::EntryKind::Component, data_->children);\n}",
+      "replace": "    AttachChild(child, parent, stamp);\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-host\\]"
+    },
+    {
+      "id": "kr-hash-children-empty",
+      "what": "Children's hash writes only the count. Only it catches the children leaving the summary",
+      "guards": [
+        "kernel DI-KS 33"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Relationship.hpp",
+      "find": "    for (const auto child : value) HashValue(h, child);",
+      "replace": "    (void)value;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-hash\\]"
+    },
+    {
+      "id": "kr-hash-children-unordered",
+      "what": "Children's hash sorts the children first: the order leaves the summary. Only it catches the order in the hash (Q1 (A'))",
+      "guards": [
+        "kernel DI-KS 33"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Relationship.hpp",
+      "find": "    for (const auto child : value) HashValue(h, child);",
+      "replace": "    std::vector<Engine::EntityStore::EntityId> sorted(value.begin(), value.end());\n    std::sort(sorted.begin(), sorted.end());\n    for (const auto child : sorted) HashValue(h, child);",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-hash\\]"
+    },
+    {
+      "id": "kr-structure-unchecked",
+      "what": "verification does not check that ChildOf and Children agree. Only it catches the check (declaration 10.2 item 8)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 10.2"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "    return RelationshipProblem();\n}",
+      "replace": "    return std::nullopt;\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-structure\\-check\\]"
+    },
+    {
+      "id": "kr-net-stamp-not-restored",
+      "what": "a Children that ends the phase as it began keeps the stamp its detach and attach gave it. Only it catches the net check of the changed stamp (code review S-2)",
+      "guards": [
+        "kernel DI-KS 30",
+        "kernel-relationship-declaration 5.11"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                if (cell != nullptr && cell->value == was.second) cell->changed = was.first;",
+      "replace": "                (void)cell;\n                (void)was;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-children\\-unchanged\\-net\\]"
+    },
+    {
+      "id": "kr-immediate-counts-rounds",
+      "what": "an immediate insert of ChildOf reports false when its hook round records a ChildOf that does not hold. Only it catches counting the rounds (code review S-1)",
+      "guards": [
+        "kernel DI-KS 31"
+      ],
+      "file": "engine/ecs/kernel/src/Executor.cpp",
+      "find": "    if (insertsChildOf && relationshipsAfter > relationshipsBefore) outcome.changed = false;",
+      "replace": "    if (insertsChildOf && world.rejectedRelationships_ > relationshipsBefore) outcome.changed = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-immediate\\-hook\\-reject\\]"
+    },
+    {
+      "id": "kr-rewired-dropped-early",
+      "what": "a child whose ChildOf this phase replaces loses it at the despawn step when its old parent dies: the handover becomes an OnRemove and an OnAdd instead of an overwrite. Only it catches the rewired child keeping its ChildOf until its record (code review S-4)",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel-relationship-declaration Q3"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                    if (std::binary_search(rewired.begin(), rewired.end(), kid)) continue;  // Q3: its record decides",
+      "replace": "                    if (std::binary_search(rewired.begin(), rewired.end(), kid)) {\n                        auto dropped = RunHooks(HookTrigger::OnRemove, kid, data_->childOf, planPos, schedule, stamp);\n                        if (!dropped) return dropped;\n                        childOf.Erase(kid);\n                        continue;\n                    }",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-handover\\-while\\-owner\\-dies\\]"
+    },
+    {
+      "id": "kr-same-parent-rewired",
+      "what": "an insert of the same parent counts as a detach: in the phase the parent dies the child stays without a parent. Only it catches the same-parent rule (R-1, the user 2026-11-23)",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel-relationship-merge-approval R-1"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                if (!sameParent) rewired.push_back(r.entity);",
+      "replace": "                (void)sameParent;\n                rewired.push_back(r.entity);",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-same\\-parent\\-then\\-despawn\\]"
     }
   ]
 }
