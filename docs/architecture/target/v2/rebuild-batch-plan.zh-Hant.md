@@ -107,6 +107,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | README 三語版、`docs/architecture.md`、`docs/creating_games.md`（#294 由 `creating_apps.md` 改名）大多是 master 的舊內容 | apps→games #294 | 圖書管理員 |
 | `RejectedSpawn` 的當場回傳值把 hook 輪也算進去（既有；KR 已把 `ChildOf` 的當場回傳值改成只看這一筆） | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | Kernel 的 `Detail::Relationships` 和 `Derive` 的旗標重疊 | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
+| HarfBuzz 單檔彙整 `harfbuzz.cc` 本機編譯 172.6 s（T 的停止門檻 180 s，只差 4%；FreeType 35.4 s，合計 208 s／門檻 300 s）：單一編譯單位不能並行、可能成為建置的關鍵路徑；起因是 SDL 總宣告第 9.1 節「third_party 無條件加入、每個組態（含 Match）都建」。改法候選：改編上游個別 `hb-*.cc` 讓它並行／HarfBuzz 精簡組態／third_party 跟著有人用才建（建置圖的 Architecture Delta） | T #297（主 checkout `build/evidence/gyo2-sdl-text/build-time/measurements.md`、design-review 第 3 條） | 下一個加 third_party 的批之前看；或 L1 時間明顯變長時 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
