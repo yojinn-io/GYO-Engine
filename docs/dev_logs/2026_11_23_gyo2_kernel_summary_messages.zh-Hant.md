@@ -83,8 +83,13 @@ Fable 5.2／high（唯讀）。報告：主 checkout `build/evidence/gyo2-kernel
 
 改完後：`ctest -L "cpu|shader"` 182/182（`impl/ctest-review.log`）；受影響的突變 7/7 killed（`impl/mutants-kernel-review.log`：`-back` 三個、版本、`ks-summary-message-*` 三個）；改過的 5 個檔的 192 筆突變 find 各命中一次。
 
-## 合併前核准（待使用者）
+## 合併前核准
 
 1. J-36 三個判定翻成「相同」（Design Invariants 守衛的變更，有緩的面；五點在宣告第 9 節）。
 2. `[ks-summary-message-payload]` 收緊成兩筆（只收緊；五點見〈判定的變更〉）。
 3. DI-KS 10、DI-KS 27 的最終文字與 RC 25（目前標「草案」）。
+
+紀錄：
+- **第 1 件：核准**。原話「OK，核准」（使用者 2026-11-23，side chat，經 side chat 轉本卡）。比過的選項：核准／不核准（不核准的話合不進去，`Summary` 停在版本 3）。核准前使用者在 side chat 問了五件：摘要是什麼、hash 是什麼、「序號和游標進摘要」是誰什麼時候定的、#287 解決了哪些問題、別家的方案（答覆照宣告第 2.3、3、9 節）。理由：使用者沒有另外說；屬於選 (b) 時連帶接受的範圍。
+- 第 2、3 件：待定。
+- 合併：等 L1 三平台通過、使用者另說「合併」。
