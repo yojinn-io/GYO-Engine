@@ -53,6 +53,12 @@ SystemResult WriteFlagPing(MessageWriter<Ping> pings, Res<Flag> flag) {
     pings.Send(Ping{static_cast<std::uint32_t>(flag->on)});
     return Ok();
 }
+// Writes Ping{9}, then Ping{Flag}: two records a Run, only the second follows Flag.
+SystemResult WriteNineThenFlag(MessageWriter<Ping> pings, Res<Flag> flag) {
+    pings.Send(Ping{9});
+    pings.Send(Ping{static_cast<std::uint32_t>(flag->on)});
+    return Ok();
+}
 SystemResult WriteQuiet(MessageWriter<Quiet> quiet) {
     quiet.Send(Quiet{1});
     return Ok();
@@ -464,7 +470,10 @@ TEST_CASE("J-36: with verification on, reading and the trim at the end of a Run 
     CHECK(rig->world().MessagePayloads<Ping>().empty());
 }
 
-TEST_CASE("J-36: the World summary holds the message cursors and the write sequence (event cursor declaration 3.2)") {
+// Summary version 4 (v8-arch-gyo2-kernel-summary-messages, the user's (b)): the write sequence number and a
+// record's seq are counts of the history and the cursor table is left out knowingly (kernel RC 25); the held
+// records' count and payloads are in the summary.
+TEST_CASE("J-36: the World summary holds no message cursor and no write sequence (summary version 4)") {
     auto summary = [](std::function<void(Registrar&)> build, int runs) {
         auto rig = MakeRig(std::move(build), false);
         for (int run = 0; run < runs; ++run) KERNEL_REQUIRE_RUN_OK(rig->Run());
@@ -483,12 +492,28 @@ TEST_CASE("J-36: the World summary holds the message cursors and the write seque
         Data(r);
         r.AddSystem<&WriteTwice>(B("Write", "A"));
     };
-    // Equal setups, equal summaries (so the differences below are the cursors' and the sequence's).
-    CHECK(summary(writerOnly, 2) == summary(writerOnly, 2));
     // Both trimmed to nothing; one World has a reader's cursor.
-    CHECK_MESSAGE(summary(writerOnly, 2) != summary(writerAndReader, 2), "[msg-summary-cursors] the cursor table is not in the summary");
+    CHECK_MESSAGE(summary(writerOnly, 2) == summary(writerAndReader, 2), "[msg-summary-cursors] the cursor table is in the summary");
     // Both trimmed to nothing; one World wrote one more record.
-    CHECK_MESSAGE(summary(writerOnly, 2) != summary(writesTwice, 2), "[msg-summary-seq] the write sequence is not in the summary");
+    CHECK_MESSAGE(summary(writerOnly, 2) == summary(writesTwice, 2), "[msg-summary-seq] the write sequence is in the summary");
+}
+
+TEST_CASE("J-36: the same held record with another history gives one World summary (summary version 4)") {
+    // The reader runs before the writer, so each Run ends holding the record it wrote. One World ran twice (it
+    // holds seq 2, the reader has read 1), the other once (it holds seq 1, nothing read): one held Ping{1} each.
+    const auto summary = [](int runs) {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&Reader>(B("Reader", "A"));
+            r.AddSystem<&WriteFlagPing>(B("Write", "B"));
+        }, false);
+        rig->world().SetResource(Flag{1});
+        for (int run = 0; run < runs; ++run) KERNEL_REQUIRE_RUN_OK(rig->Run());
+        REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "1");
+        rig->world().SetResource(TickCount{0});  // the rig counts its Runs there; only the message history differs
+        return SummaryOf(rig->world());
+    };
+    CHECK_MESSAGE(summary(2) == summary(1), "[msg-summary-record-seq] a held record's seq is in the summary");
 }
 
 TEST_CASE("J-18: a message type's capacity changes the Registry fingerprint") {
@@ -541,7 +566,7 @@ TEST_CASE("J-36: a message type's capacity is at least 1: 0 is a Programmer Erro
     }}}));
 }
 
-TEST_CASE("J-36: the World summary holds where each cursor has read to") {
+TEST_CASE("J-36: where each cursor has read to is not in the World summary (summary version 4)") {
     // Two Worlds with the same records kept (Slow holds them) and the same resources; only Fast's cursor differs.
     auto summary = [](bool fastRunsOn) {
         auto rig = MakeRig([](Registrar& r) {
@@ -565,8 +590,7 @@ TEST_CASE("J-36: the World summary holds where each cursor has read to") {
         REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "2 3");
         return SummaryOf(rig->world());
     };
-    CHECK(summary(true) == summary(true));
-    CHECK_MESSAGE(summary(true) != summary(false), "[msg-summary-cursor-position] where a cursor has read to is not in the summary");
+    CHECK_MESSAGE(summary(true) == summary(false), "[msg-summary-cursor-position] where a cursor has read to is in the summary");
 }
 
 TEST_CASE("J-36: the World summary hashes a held message's payload, and reports a message type with no hash function") {
@@ -575,11 +599,13 @@ TEST_CASE("J-36: the World summary hashes a held message's payload, and reports 
             Data(r);
             // The reader runs before the writer: its cursor holds the record written after it.
             r.AddSystem<&Reader>(B("Reader", "A"));
-            r.AddSystem<&WriteFlagPing>(B("Write", "B"));
+            r.AddSystem<&WriteNineThenFlag>(B("Write", "B"));
         }, false);
         rig->world().SetResource(Flag{flag});
         KERNEL_REQUIRE_RUN_OK(rig->Run());
-        REQUIRE(rig->world().MessagePayloads<Ping>().size() == 1);
+        // Two held records; only the second one's payload differs between the two Worlds (merge review S3: every
+        // held record is hashed, not the first only).
+        REQUIRE(Numbers(rig->world().MessagePayloads<Ping>()) == "9 " + std::to_string(flag));
         rig->world().SetResource(Flag{0});  // only the payload differs between the two
         return SummaryOf(rig->world());
     };
