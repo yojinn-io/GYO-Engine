@@ -43,6 +43,12 @@ struct GameFlowResult final {
 
 class GameFlow final {
 public:
+    GameFlow() noexcept = default;
+    // Resumes the menu at a screen and item kept elsewhere (the World keeps the
+    // screen in a state machine and the item in a Resource; world/Systems.cpp).
+    GameFlow(const GameScreen screen, const std::size_t selectedItem) noexcept
+        : screen_(screen), selectedItem_(selectedItem) {}
+
     [[nodiscard]] GameFlowResult Update(const GameFlowInput& input,
                                         std::size_t puzzleCount,
                                         bool hasNextPuzzle) noexcept;
