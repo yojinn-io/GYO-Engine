@@ -7,7 +7,7 @@ Owner：架構。來源：事前宣告 [logging-declaration.zh-Hant.md](logging-
 | Module | 內容 | 依賴（公開；私有） |
 |---|---|---|
 | `logging`（`GYO::Engine::Logging`） | `Record`、`Level`、`FieldValue`、`RecordBuilder`；一個行程一個 `Logger`（`Install` 回 `Result`、`LoggerHandle` 卸下）；輸出端 `Sink` 與三個內建（`ConsoleSink`、`JsonLinesFileSink`、`MemorySink`）；JSON lines 與文字格式；`Write`（直接寫一筆）；`WriteFatalRecord`（致命時的最後一道）；斷言與 `std::terminate` 的處理器。不認得 ECS | `GYO::Base`；私有 `GYO::Json`、`GYO::OS`、`GYO::Threads`、`GYO::Time` |
-| `world_logging`（`GYO::Engine::WorldLogging`） | `Forward<D>`（把健康 World 的 `Message` 寫成紀錄）、`LogWorldLabel<D>`、`TakeKernelDiagnostics` | `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration` |
+| `world_logging`（`GYO::Engine::WorldLogging`） | `Forward<D>`（把健康 World 的 `Message` 寫成紀錄）、`LogWorldLabel<D>`、`TakeKernelDiagnostics`、`ForwardKernelDiagnostics`（登記取診斷紀錄的交換函式「出」） | `GYO::Logging`、`GYO::Kernel`、`GYO::Orchestration` |
 
 兩個都 `library_only=yes`、`default=no`：`Logger` 由 `main` 裝；`Forward` 由接線的人在自己的 `build` 裡呼叫；描述器（例：`WorldTime::TimeDiscardedLog`）由發出訊息的 Module 寫在訊息旁邊（宣告第 13 節第 1 題 D）。沒有外部組件，所以沒有 `src/adapters/`。
 
@@ -16,7 +16,8 @@ Owner：架構。來源：事前宣告 [logging-declaration.zh-Hant.md](logging-
 ```text
 World 健康時
   ① Message ──Forward──→ ┐
-  ② Kernel 的診斷紀錄 ──runner 在兩次 Run 之間取走（TakeKernelDiagnostics）──→ ┤
+  ② Kernel 的診斷紀錄 ──交換函式「出」每輪結束取走（ForwardKernelDiagnostics）──→ ┤
+     （「出」不會再被呼叫的那部分、或沒有登記時：runner 取走，TakeKernelDiagnostics）
 World 外的程式                                                                   ├──→ Logger ──→ Sink
   ③ GYO::Engine::Base::Log ──處理器──→ ┤   （World 壞掉時，產品的 main 要記那一行，通常走這裡）
   ④ Logging::Write（直接寫一筆）──→ ┘
@@ -30,7 +31,7 @@ World 外的程式                                                              
 守衛欄：行為的測試和機制同時寫；綁實作方式的含入掃描在情境測試第 3 段通過之後才立（AGENTS §3「ガードを立てる時期」）。突變清單 `tests/common/logging/mutations.json`（前綴 `lg-`，`guards` 寫條號）。
 
 <a id="lg-1"></a>
-**LG-1 入口。** 進日誌的路只有上面的 ①②③④⑥。Engine 的 Module 在 System 裡報警告走 `Message`（①），不走 ③④；作者自己的 System 可以直接呼叫 ④（宣告第 13 節第 5 題）。致命錯誤與 World 自己的壞掉、建立、替換不經事件。World 壞掉（E1）時記不記、記什麼，由決定接下來怎麼辦的那一方（產品的 main）定，要記就經 ③ 或 ④（宣告 5.6）；日誌不另設 E1 的入口，也不規定誰寫。Kernel 的診斷紀錄（`DroppedMessages`、`RejectedSpawn`）由 runner 取走，一個 World 一個取走的人；中斷的 World 也取，紀錄標 `world_interrupted`；和 E1 那一行沒有規定的先後（讀的人用 `mono_ns` 排），取診斷紀錄失敗時，E1 那一行照寫（使用者 2026-11-20）。`Forward` 在沒有輸出端收的時候只推游標（之後不補記）。不新增別的入口（回呼登記、全域事件匯流排）。**不保證**：讀者第一次跑之前，別張最外層 schedule 寫的、那次 Run 結束就被修剪的訊息；回滾 World 裡固定步寫的訊息（回滾份 7.1，和第 4 批對齊，宣告第 13 節第 7 題）。
+**LG-1 入口。** 進日誌的路只有上面的 ①②③④⑥。Engine 的 Module 在 System 裡報警告走 `Message`（①），不走 ③④；作者自己的 System 可以直接呼叫 ④（宣告第 13 節第 5 題）。致命錯誤與 World 自己的壞掉、建立、替換不經事件。World 壞掉（E1）時記不記、記什麼，由決定接下來怎麼辦的那一方（產品的 main）定，要記就經 ③ 或 ④（宣告 5.6）；日誌不另設 E1 的入口，也不規定誰寫。Kernel 的診斷紀錄（`DroppedMessages`、`RejectedSpawn`）一個 World 一個取走的人：〔`v8-arch-gyo2-kernel-diagnostics-exchange` 修訂 1〕登記了 `ForwardKernelDiagnostics` 的 World，由它登記的交換函式「出」在每輪結束取走（O-12；排在前面的「出」失敗時順延到下一次），runner 只取「出」不會再被呼叫的那部分——有 World 壞掉、Product 結束之後，或替換那個 World、銷毀 Product 之前；沒有登記的 World 由 runner 取；中斷的 World 也取，紀錄標 `world_interrupted`；和 E1 那一行沒有規定的先後（讀的人用 `mono_ns` 排），取診斷紀錄失敗時，E1 那一行照寫（使用者 2026-11-20）。`Forward` 在沒有輸出端收的時候只推游標（之後不補記）。不新增別的入口（回呼登記、全域事件匯流排）。**不保證**：讀者第一次跑之前，別張最外層 schedule 寫的、那次 Run 結束就被修剪的訊息；回滾 World 裡固定步寫的訊息（回滾份 7.1，和第 4 批對齊，宣告第 13 節第 7 題）；〔`v8-arch-gyo2-kernel-diagnostics-exchange` 修訂 1〕沒人先取就隨 World 丟掉的診斷紀錄：最後一次「出」之後產生、下一次「出」之前 World 被替換或 Product 被銷毀的；`ReplaceWorld` 沒換上的新 World 的（runner 拿不到那個 World）。
 守衛：`world_logging.forward`、`world_logging.diagnostics`、`logging.logger`（`Base::Log`）、情境測試 `scenario.segment3`（S3-1 的 ③、S3-2 的 ①②）；突變 `lg-diag-*`、`lg-forward-filtered-cursor-kept`。
 
 <a id="lg-2"></a>

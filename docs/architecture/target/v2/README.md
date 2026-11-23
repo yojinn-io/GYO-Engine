@@ -56,6 +56,7 @@
 - [trace-merge-approval.zh-Hant.md](trace-merge-approval.zh-Hant.md)：`v8-arch-gyo2-trace` 的合併前核准頁。
 - [os-wait-declaration.zh-Hant.md](os-wait-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的事前宣告（core/time 的等待改呼叫 core/os 的 `WakeSignal`；W3 的分析；修訂 3，使用者 2026-11-21 動工前核准「照建議，全部核准，開始」）。
 - [os-wait-merge-approval.zh-Hant.md](os-wait-merge-approval.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的合併前核准頁。
+- [os-wake-test-backoff-declaration.zh-Hant.md](os-wake-test-backoff-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wake-test-backoff` 的事前宣告（WakeSignalTests「loses no signal」的退避：原案自旋 65536 次後才 yield；修訂 4 撤回：問題只在本機 Intel Mac 滿載時出現，CI 與 Linux 沒有；只拿掉 #289 的 Note）。
 - [os-src-platform-declaration.zh-Hant.md](os-src-platform-declaration.zh-Hant.md)：`v8-arch-gyo2-os-src-platform` 的事前宣告（core/os 的平台程式集中到 `src/sys/`，macOS 與 Linux 不同的步驟走抽象類別 `Detail::Platform`；修訂 3）。
 - [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 - [spawn-reject-declaration.zh-Hant.md](spawn-reject-declaration.zh-Hant.md)：`v8-arch-gyo2-spawn-reject` 的事前宣告（同步點丟掉不能生成的那一筆；修訂 2，使用者 2026-11-15 核准）。
@@ -129,7 +130,9 @@
 - [2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)：audio 那一側的小批（clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、參照表與回收環；`WavLoader` 與 `sound`／`wav` 的 Data Contract；`GYO::Audio` 連 `GYO::Asset`）。
 - [2026_11_23_gyo2_os_test_timeout.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_test_timeout.zh-Hant.md)：os 測試在本機偶爾跑很久或逾時的原因（`v8-arch-gyo2-os-test-timeout`；加逐案計時的觀測；時間花在「loses no signal」案例自己的 signaller 每回合 yield、負載下讓出 CPU，不在 WakeSignal；改不改測試交使用者）。
 - [2026_11_23_gyo2_build_games_dir.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_build_games_dir.zh-Hant.md)：建置層認 `games/`，建置與 CI 的 app 改叫 game（`projects.csv`→`games.csv`、`GYO_GAMES`、KIND game、打包清單 4、工具描述 2、身分標頭改巨集）；四個守衛的掃描根；複製整合的 mirror 修正；LIM-9。
+- [2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md)：「loses no signal」退避的調查與撤回（`v8-arch-gyo2-os-wake-test-backoff`；65536 次自旋在 6 次參考量測中讓本機 Mac 的拖延消失（改後都 ≤ 1.4 s），但閒置時檢出力可能變弱；問題在 CI 與 Linux 上沒有，使用者決定撤回，只拿掉 #289 在案例裡的 Note）。
 - [2026_11_23_gyo2_mech_cleanup.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_mech_cleanup.zh-Hant.md)：累積的機械式清理（`v8-arch-gyo2-mech-cleanup`；master 路徑的突變 74 個退役（其中 `tt2-flush-no-wait` 改寫進 logging 清單）、確認前批已做掉的三件、兩份 dev_log 補已合併）。
+- [2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md)：Kernel 診斷紀錄接上交換函式「出」（`WorldLogging::ForwardKernelDiagnostics`；O-3、O-11、O-12、LG-1 對「誰取」改成一致，使用者同意修訂 1）。
 
 ## 沒有搬過來的
 
