@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-23（第 3、15 節、新第 18 節：`v8-arch-gyo2-kernel-res-changed`——Resource 的 `Changed()`；Kernel DI-KS 28）；2026-11-22（新第 17 節「讀檔」、第 13、14 節的讀檔改成指過去：`v8-arch-gyo2-restore-impl`）；2026-11-22（第 5 節「訊息」、第 14 節、新第 15 節：`v8-arch-gyo2-event-cursor-reeval`——帶條件或不常跑的讀者的寫法；Kernel 的規則不變）；2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-23（新第 19 節「父子與關係」、第 17 節補讀檔裡的父子：`v8-arch-gyo2-kernel-relationship`——Kernel DI-KS 29～33）；2026-11-23（第 3、15 節、新第 18 節：`v8-arch-gyo2-kernel-res-changed`——Resource 的 `Changed()`；Kernel DI-KS 28）；2026-11-22（新第 17 節「讀檔」、第 13、14 節的讀檔改成指過去：`v8-arch-gyo2-restore-impl`）；2026-11-22（第 5 節「訊息」、第 14 節、新第 15 節：`v8-arch-gyo2-event-cursor-reeval`——帶條件或不常跑的讀者的寫法；Kernel 的規則不變）；2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -592,6 +592,8 @@ K::SystemResult GenerateMap(K::Spawn<K::Bundle<Tile>> spawn, K::ResMut<MapCursor
 
 **存檔壞了。** 生成期間發現存檔壞了不要回 `Err`（那會結束 `Product`）：把錯寫進自己的 Resource，runner 在兩次入口之間讀它、改發替換回主選單。
 
+**父子怎麼存、怎麼讀。** 存檔只存 `ChildOf`（`Children` 由 Kernel 從 `ChildOf` 長回來，作者也放不進去）。要保留子的先後，讀檔的 System 照存檔的 `Children` 順序在同一個階段生成子（或插入 `ChildOf`）：記錄的先後就是 `Children` 的先後。父要在子的同一個同步點或更早放回，否則子的 `ChildOf` 不成立、留一筆 `RejectedRelationship`；準備函式裡直接放（`World::Insert`）一次一格，所以先放父、再放子。重新配號時用對照表改寫 `ChildOf::parent`（和上面的 `ChaseTarget` 一樣）。不需要 Bevy 讀檔時的「跳過關係的 hook」：`Children` 不存。詳見第 19 節。
+
 **`Restore` 不是預設的讀檔寫法。** `ExclusiveWorld::Restore` 是回滾用的原語，Kernel 不認得放回的用途（DI-KS 12）；它整份換掉 World 的狀態（名單外的實體與格都拿掉、不補初始值、不看配發器的範圍），只適合存了整個 World 的作者。照「先生成關卡、再放回存檔」的流程用它，剛生成的關卡會被整個刪掉。
 
 ### 17.1 存檔版本（`save_version`）
@@ -630,3 +632,39 @@ K::SystemResult RebuildMixer(K::Res<GameSettings> settings, K::ResMut<Mixer> mix
 - **hook 與 observer 裡不要靠它。** hook 沒有上次跑（等於「有值、寫過」）；同步點裡的 observer 看不到同一個同步點後面才寫的（DI-KS 10）。
 - **重跑時反映實際執行的歷史。** stamp 不退回：步的 schedule 上，判定結果取決於 `Changed()` 的 System 不在回滾等價之內（R-2「stamp 除外」）。
 - **Engine 自己每幀或每步都寫、`Changed()` 幾乎恆為 true 的 Resource**：`RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`（每幀，`AdvanceTime`）、`Tick`（每個固定步）、生成中的 `WorldGeneration`、配發器（每配一個編號）。要抓「暫停了沒」讀時間 Module 的 `TimeControl`（它的值由作者寫，作者也要值不同才寫），不要讀 `VirtualTime` 的 `Changed()`。
+
+## 19. 父子與關係（`ChildOf`、`Children`）
+
+（`v8-arch-gyo2-kernel-relationship`，使用者 2026-11-23 動工前核准；規則全文在 kernel [DI-KS 29～33](../kernel.zh-Hant.md#di-ks-29)，本節只講寫法。照 Bevy 的 `ChildOf`／`Children`。）
+
+武器掛在角色手上；角色被刪，武器跟著刪；角色死時把武器丟在地上：
+
+```cpp
+K::SystemResult Equip(K::Spawn<K::Bundle<Weapon, K::ChildOf>> spawn, K::Res<Hero> hero) {
+    auto weapon = spawn.New(Weapon{}, K::ChildOf{hero->entity});   // 同步點之後，角色的 Children 有它
+    if (!weapon) return GYO::Engine::Base::Err(std::move(weapon).error());
+    return {};
+}
+
+K::SystemResult DropOnDeath(K::Query<K::Read<Health>, K::Read<K::Children>> heroes, K::Commands commands,
+                            K::Despawn despawn) {
+    heroes.ForEach([&](K::EntityId hero, const Health& hp, const K::Children& held) {
+        if (hp.current > 0) return;
+        for (K::EntityId item : held) commands.Remove<K::ChildOf>(item);   // 先拆……
+        despawn.Entity(hero);                                              // ……再刪：武器留下
+    });
+    return {};
+}
+```
+
+- **每個 World 都有**，不必登記；再登記 `ChildOf` 或 `Children` 是 R-E2。
+- **從子查父**：`Read<ChildOf>` 的 `parent`。**從父查子**：`Read<Children>`，照**掛上去的先後**（同一個階段裡照記錄的先後）；`With<Children>` 篩「有子的實體」。
+- **換父**：再插入一次 `ChildOf{新的父}`，它排到新父的最後；舊父沒有子了，`Children` 那一格拿掉。同一個父再插入一次只寫 `ChildOf`（`Changed<ChildOf>` 為 true），`Children` 不變。**換父沒有 hook**（hook 只有 OnAdd、OnRemove）：要知道換父，看 `Changed<ChildOf>` 或兩個父的 `Changed<Children>`。
+- **不能就地改**：`Write<ChildOf>`、`Write<Children>`、對 `Children` 的插入、拿掉、生成，在編譯時就失敗。脫離父＝拿掉 `ChildOf`。
+- **什麼時候一致**：同步點套用完（每個階段、清空輪的每一輪、`ExclusiveWorld` 的當場改、`Restore`）兩邊就一致；OnAdd hook 與 observer 看到的已經一致。例外：OnRemove 的時候，連帶刪除中的子看不到父（父先刪），最後一個子離開時父的 `Children` 已經是空的。跨實體的讀用 observer（hook 只讀自己的實體）。
+- **刪父連帶刪子**：子、孫……同一個同步點全刪，父先、再依序每個子的整棵子樹（深度優先），沒有層數上限。**同一個階段裡拿掉或換掉 `ChildOf` 的子不連帶**（上面的掉落武器）；換給活著的新主人時是覆寫、不跑 hook，和舊主人沒死時一樣。同一個階段刪了父、又把子掛到它，子留下、沒有父。
+- **從 Bevy 搬來的寫法**：Bevy 的 `add_child` 對已經是子的實體會把它移到最後；GYO 再插入同一個父不動順序，要移到最後就在同一個階段先拿掉 `ChildOf`、再插入。同一個階段裡一個子離開、另一個子掛上的父，`Children` 不發 Add／Remove 通知（看淨差），只有 `Changed<Children>`。
+- **不成立的關係**：父不活著、或指向自己時，那一筆不成立（原本有的 `ChildOf` 也拿掉），留一筆 `RejectedRelationship`（`World::Diagnostics<RejectedRelationship>()`、`World::RejectedRelationships()`），不是錯誤。網路複製時父比子晚到，等父到了再插入（網路複製那一批處理，照 lightyear 的 `PendingChildOf`）。Kernel 不查環。
+- **回滾**：兩個都登記（`rollback.Component<ChildOf>()`、`rollback.Component<Children>()`）——`Children` 的先後是歷史，只登記 `ChildOf` 時放回後順序可能和直跑不同（回滾頁 R-2 前提 8）。
+- **準備函式裡直接放**（`World::Insert`）也維護兩邊、連帶刪除；先放父再放子。
+

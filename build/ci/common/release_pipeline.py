@@ -27,7 +27,7 @@ from release_channels import (SNAPSHOT_KEEP, TOOLS_TRAIN, Train, derive_trains, 
                               parse_release_tag, parse_snapshot_tag, prepare_event, render_notes, resolve_train,
                               select_expired_snapshots, select_orphan_snapshot_tags, snapshot_tag,
                               train_release_evidence, validate_evidence_reference)
-from app_registry import export_registry, export_tools
+from product_registry import export_registry, export_tools
 
 
 class ApiError(ReleaseError):

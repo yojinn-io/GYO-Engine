@@ -124,6 +124,15 @@ class InstalledCheckTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 validate_manifest(contract, APP, "linux-x64")
 
+    def test_game_package_holds_only_its_own_executables(self):
+        # A game package carries no other product's executable (AGENTS section 7): the key matches,
+        # the owner is another product, and the owner check is what refuses it.
+        foreign = {"other_game.main": {"owner": "other_game", "role": "main", "path": "bin/other",
+                                       "runtime_dependencies": []}}
+        with self.assertRaisesRegex(ValueError, "must match its owner.role"):
+            validate_manifest({**self.contract, "executables": {**self.contract["executables"], **foreign}},
+                              APP, "linux-x64")
+
     def test_generic_package_rejects_catalog_the_runtime_cannot_load(self):
         assets = self.stage / "bin/assets" / APP
         assets.mkdir(parents=True)

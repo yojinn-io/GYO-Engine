@@ -135,11 +135,11 @@ struct Golden {
 // (event types and observers hashed, none here): the judgement is unchanged.
 constexpr std::array<Golden, 3> kGoldens{{
     {"mixed", &MixedRegistry, "8:a7fb49c5c00c39463f55eb4f32eb07e8367512c7856fe5c446a999cd0b6953ed",
-     "9:e571ce032dc98a3983417feae5e8d9efda35d63d2bd1839c08b6e28c138ca3e5"},
+     "9:07b000ddfccee4534478f8c418bc2c0cb9a5f5c4c6c55c8863321f8ce6336821"},
     {"deferred", &DeferredRegistry, "8:2f15310ca49ef932db59c66a486bf9330daa0cd971394c0f0948a3ad8d34a564",
-     "9:6fdae2a36913cba4f0fb8818342534046057d715d212df795a2401f9032f7fcb"},
+     "9:28535dc23ee05bd44d34674cbc3b7cf81140db2ac9c4623add91a537e39f1a6f"},
     {"events", &EventRegistry, "8:bc3cd4d3357645f46efcb7670ee3a51e77b4bdb3eabd81e5493b45b32b38ad1d",
-     "9:2e0f9cad08e9868371819d777c5b365a79f1b8cde0f87036f4d1fb4fee42554b"},
+     "9:7699795091d9cec421769f5b623f6e1449c1c230931deca35cc4eb45c4aa9f4d"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {

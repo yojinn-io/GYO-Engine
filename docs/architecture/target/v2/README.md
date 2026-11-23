@@ -18,6 +18,8 @@
 - [asset.zh-Hant.md](asset.zh-Hant.md)：資產（`engine/modules/asset`、`engine/modules/world_asset`）——id、catalog 的 Data Contract（格式、Version、Validation Rule (A)(B)）、World 外的 `AssetStore`（照 Bevy 的演算法）、每個 World 的 `AssetRequests` 與 `AssetView`、狀態與就緒查詢、錯誤與件數、雜湊函式；Design Invariants AS-1～AS-13 與 Replacement Criteria（`v8-arch-gyo2-asset`，取代 `target/assets.zh-Hant.md`；最終文字使用者 2026-11-23 合併前核准）。
 - [state-machine.zh-Hant.md](state-machine.zh-Hant.md)：狀態機 Module（`engine/modules/state_machine`）——名字表、封閉的型別、要求、套用的 System、子狀態、條件的 Design Invariants 與寫法。
 - [entity-ids.zh-Hant.md](entity-ids.zh-Hant.md)：預設的實體配發器 `entity_ids`（`RangeAllotter`）的 Design Invariants EI-1～EI-3 與 Replacement Criteria（`v8-arch-gyo2-world-gen`，使用者 2026-11-22 合併前核准）。
+- [transform.zh-Hant.md](transform.zh-Hant.md)：姿態 `transform`（`Transform`、`GlobalTransform`、沒有父時的同步）的用法、Design Invariants TF-1～TF-4 與 Replacement Criteria（`v8-arch-gyo2-sdl-transform-camera`，SDL 線子批 X1；最終文字在合併前核准）。
+- [camera.zh-Hant.md](camera.zh-Hant.md)：相機 `camera`（元件、投影、2D／3D、推導值、目標大小的副本、座標換算）的用法、Design Invariants CM-1～CM-5 與 Replacement Criteria（同上）。
 - [save-version.zh-Hant.md](save-version.zh-Hant.md)：存檔版本 `save_version`（純程式庫、預設不帶）的 Design Invariants SV-1～SV-3 與 Replacement Criteria（`v8-arch-gyo2-restore-impl`，使用者 2026-11-22 合併前核准）。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
 - [diagrams/mechanism-runtime.svg](diagrams/mechanism-runtime.svg)：圖一，一個 Product 的機制全貌（11 月 11 日的圖，只換名字）。
@@ -43,6 +45,7 @@
 
 ## 計畫與批次的紀錄
 
+- [transform-camera-declaration.zh-Hant.md](transform-camera-declaration.zh-Hant.md)：`v8-arch-gyo2-sdl-transform-camera`（SDL 線子批 X1：`transform`＋`camera`）的事前宣告（修訂 1，使用者 2026-11-23 動工前核准「照建議，第 1 題選乙，同意副本」）。
 - [state-machine-declaration.zh-Hant.md](state-machine-declaration.zh-Hant.md)：`v8-arch-gyo2-state-machine` 的事前宣告（修訂 8，2026-11-22 核准）。
 - [global-audit.zh-Hant.md](global-audit.zh-Hant.md)：全局計畫審計（2026-11-14）——這條線的起點。
 - [rebuild-declaration.zh-Hant.md](rebuild-declaration.zh-Hant.md)：`v8-arch-rebuild` 的事前宣告（階段 R0～R6）。
@@ -56,6 +59,7 @@
 - [trace-merge-approval.zh-Hant.md](trace-merge-approval.zh-Hant.md)：`v8-arch-gyo2-trace` 的合併前核准頁。
 - [os-wait-declaration.zh-Hant.md](os-wait-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的事前宣告（core/time 的等待改呼叫 core/os 的 `WakeSignal`；W3 的分析；修訂 3，使用者 2026-11-21 動工前核准「照建議，全部核准，開始」）。
 - [os-wait-merge-approval.zh-Hant.md](os-wait-merge-approval.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的合併前核准頁。
+- [os-wake-test-backoff-declaration.zh-Hant.md](os-wake-test-backoff-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wake-test-backoff` 的事前宣告（WakeSignalTests「loses no signal」的退避：原案自旋 65536 次後才 yield；修訂 4 撤回：問題只在本機 Intel Mac 滿載時出現，CI 與 Linux 沒有；只拿掉 #289 的 Note）。
 - [os-src-platform-declaration.zh-Hant.md](os-src-platform-declaration.zh-Hant.md)：`v8-arch-gyo2-os-src-platform` 的事前宣告（core/os 的平台程式集中到 `src/sys/`，macOS 與 Linux 不同的步驟走抽象類別 `Detail::Platform`；修訂 3）。
 - [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 - [spawn-reject-declaration.zh-Hant.md](spawn-reject-declaration.zh-Hant.md)：`v8-arch-gyo2-spawn-reject` 的事前宣告（同步點丟掉不能生成的那一筆；修訂 2，使用者 2026-11-15 核准）。
@@ -66,6 +70,8 @@
 - [event-cursor-reeval-declaration.zh-Hant.md](event-cursor-reeval-declaration.zh-Hant.md)：`v8-arch-gyo2-event-cursor-reeval` 的事前宣告（被條件長期擋住或不常跑的 `Message` 讀者：查證後判為作者的問題，Kernel 不改，說明頁寫寫法、Kernel 加 RC 24）；修訂 3，使用者 2026-11-22 核准。
 - [kernel-res-changed-declaration.zh-Hant.md](kernel-res-changed-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-res-changed` 的事前宣告（`Res`／`ResMut` 的 `Changed()`：比掛載的上次跑、寫入就算；同值不寫的規則登記 CCR-8）。使用者 2026-11-23 核准（3.1 選 (a)）。
 - [kernel-summary-messages-declaration.zh-Hant.md](kernel-summary-messages-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-summary-messages` 的事前宣告（World 摘要與訊息：序號與游標是歷史的計數，回滾重跑或外部事件會讓同樣的狀態得到不同摘要）。使用者 2026-11-23 選 (b)。
+- [kernel-relationship-declaration.zh-Hant.md](kernel-relationship-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-relationship`（子批 KR）的事前宣告（照 Bevy 把父子關係放進 Kernel：`ChildOf`／`Children`、兩邊一致的維護在套用步驟、連帶刪除、回滾與讀檔裡的父子）。使用者 2026-11-23 動工前核准（Q1～Q4 照建議）。
+- [kernel-relationship-merge-approval.zh-Hant.md](kernel-relationship-merge-approval.zh-Hant.md)：KR 的合併前核准頁（R-1 同值再插入算不算拆開、條文的最終文字、和宣告的偏差、判定的變更、審查）。
 - [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
 - [threads-io-review-declaration.zh-Hant.md](threads-io-review-declaration.zh-Hant.md)：`v8-arch-gyo2-threads-io-review` 的重審報告兼事前宣告（threads 加 `WorkerPool`、`RoleThread` 不改名；io 拿掉沒有使用者的部分與 `Vfs`、補 `TooLarge` 與多執行緒讀的契約）；修訂 1，使用者 2026-11-22 動工前核准（74d38577）。
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。
@@ -127,6 +133,13 @@
 - [2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md)：World 摘要版本 4——訊息只收留著的筆數與內容，不收寫入序號、紀錄的序號與游標表（使用者選 (b)；Kernel DI-KS 10、27，RC 25）。
 - [2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md)：負向編譯樣本的判法——「靜態斷言失敗＋標記在同一行」做成共用函式 `tests/common/support/ExpectStaticAssert.cmake`，Kernel、world_logging、world_asset 三處改用（asset 宣告第 15 節第 12 項）。
 - [2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)：audio 那一側的小批（clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、參照表與回收環；`WavLoader` 與 `sound`／`wav` 的 Data Contract；`GYO::Audio` 連 `GYO::Asset`）。
+- [2026_11_23_gyo2_os_test_timeout.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_test_timeout.zh-Hant.md)：os 測試在本機偶爾跑很久或逾時的原因（`v8-arch-gyo2-os-test-timeout`；加逐案計時的觀測；時間花在「loses no signal」案例自己的 signaller 每回合 yield、負載下讓出 CPU，不在 WakeSignal；改不改測試交使用者）。
+- [2026_11_23_gyo2_sdl_transform_camera.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_sdl_transform_camera.zh-Hant.md)：SDL 線子批 X1，`transform`＋`camera` Module（`v8-arch-gyo2-sdl-transform-camera`；突變 45/45、合併前核准頁 [transform-camera-merge-approval.zh-Hant.md](transform-camera-merge-approval.zh-Hant.md)）。
+- [2026_11_23_gyo2_kernel_relationship.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_relationship.zh-Hant.md)：Kernel 的關係與父子（子批 KR）——`ChildOf`／`Children`、第 5b 步、連帶刪除（深度優先、先拆再刪）、`Restore` 的兩件、`RejectedRelationship`；Kernel DI-KS 29～33、RC 26、27；說明頁第 19 節。
+- [2026_11_23_gyo2_build_games_dir.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_build_games_dir.zh-Hant.md)：建置層認 `games/`，建置與 CI 的 app 改叫 game（`projects.csv`→`games.csv`、`GYO_GAMES`、KIND game、打包清單 4、工具描述 2、身分標頭改巨集）；四個守衛的掃描根；複製整合的 mirror 修正；LIM-9。
+- [2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md)：「loses no signal」退避的調查與撤回（`v8-arch-gyo2-os-wake-test-backoff`；65536 次自旋在 6 次參考量測中讓本機 Mac 的拖延消失（改後都 ≤ 1.4 s），但閒置時檢出力可能變弱；問題在 CI 與 Linux 上沒有，使用者決定撤回，只拿掉 #289 在案例裡的 Note）。
+- [2026_11_23_gyo2_mech_cleanup.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_mech_cleanup.zh-Hant.md)：累積的機械式清理（`v8-arch-gyo2-mech-cleanup`；master 路徑的突變 74 個退役（其中 `tt2-flush-no-wait` 改寫進 logging 清單）、確認前批已做掉的三件、兩份 dev_log 補已合併）。
+- [2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md)：Kernel 診斷紀錄接上交換函式「出」（`WorldLogging::ForwardKernelDiagnostics`；O-3、O-11、O-12、LG-1 對「誰取」改成一致，使用者同意修訂 1）。
 
 ## 沒有搬過來的
 

@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from release_support import (RELEASE_PLATFORMS, EvidenceItem, ReleaseError, git, load_release_evidence, single_line_text,
                              validate_commit, validate_product, parse_boolean)
-from app_registry import export_registry
+from product_registry import export_registry
 from go_checks import TOOLCHAIN_PRODUCT
 
 
@@ -69,10 +69,10 @@ class Train:
         return [(self.product, platform) for platform in self.platforms]
 
 
-def derive_trains(app_pairs) -> dict[str, Train]:
+def derive_trains(game_pairs) -> dict[str, Train]:
     """The tools train first, then one train per enabled game in registry order."""
     games: dict[str, list[str]] = {}
-    for product, platform in app_pairs:
+    for product, platform in game_pairs:
         validate_product(product)
         if product in RESERVED_TRAINS:
             raise ReleaseError(f"Game id '{product}' is reserved for the tools train")

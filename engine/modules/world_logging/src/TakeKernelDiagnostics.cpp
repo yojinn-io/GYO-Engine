@@ -82,4 +82,11 @@ std::size_t TakeKernelDiagnostics(Kernel::World& world) {
     return taken;
 }
 
+void ForwardKernelDiagnostics(Orchestration::WorldSetup& setup) {
+    setup.ExchangeOut([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
+        static_cast<void>(TakeKernelDiagnostics(world));
+        return {};
+    });
+}
+
 } // namespace GYO::Engine::WorldLogging

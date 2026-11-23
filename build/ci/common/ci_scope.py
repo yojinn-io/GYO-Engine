@@ -2,7 +2,7 @@
 
 Every skip is decided here, inside a job, never by workflow trigger filters, so
 the single required gate check always reports. Platform rows come from the
-toolchain table owned by app_registry; products are selected later by CMake.
+toolchain table owned by product_registry; products are selected later by CMake.
 """
 
 import argparse
@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from app_registry import RELEASE_PLATFORMS, ROOT, TOOLCHAINS
+from product_registry import RELEASE_PLATFORMS, ROOT, TOOLCHAINS
 
 
 # A change set touching only these roots cannot affect any native build.

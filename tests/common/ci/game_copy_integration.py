@@ -16,7 +16,12 @@ def mirror_sources(repository, destination):
     copied = []
     for name in sorted(set(inputs.decode("utf-8").split("\0"))):
         path = Path(name)
-        include = name in ("CMakeLists.txt", "CMakePresets.json") or name.startswith(("engine/", "services/", "third_party/", "build/cmake/")) or name in ("build/assemble_runtime.py", "build/content_contract.py", "build/workspace.py")
+        # The Engine side of config/ (the Module and Plugin registers) and the
+        # Plugins travel with the engine; the game and tool registers do not:
+        # the copy writes its own game register and carries no tool register.
+        include = (name in ("CMakeLists.txt", "CMakePresets.json", "config/modules.csv", "config/plugins.csv")
+                   or name.startswith(("engine/", "plugins/", "services/", "third_party/", "build/cmake/"))
+                   or name in ("build/assemble_runtime.py", "build/content_contract.py", "build/workspace.py"))
         original = repository / path
         if not include or not original.is_file() or original.is_symlink():
             continue
@@ -29,10 +34,10 @@ def mirror_sources(repository, destination):
 
 def create_copy(source, fixture=FIXTURE, names=("sample_game", "variant_game")):
     for name in names:
-        shutil.copytree(fixture / "app", source / "apps" / name)
+        shutil.copytree(fixture / "game", source / "games" / name)
         shutil.copytree(fixture / "assets", source / "assets" / name)
         (source / "assets" / name / "marker.txt").write_text(name + "\n", encoding="utf-8")
-    registry = source / "config/projects.csv"
+    registry = source / "config/games.csv"
     registry.parent.mkdir(parents=True, exist_ok=True)
     registry.write_text("name,description,version,enabled,windows,linux,macos\n" +
                         "".join(f"{name},Copy fixture,,1,1,1,1\n" for name in names), encoding="utf-8")

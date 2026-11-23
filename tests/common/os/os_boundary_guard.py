@@ -28,8 +28,8 @@ from pathlib import Path
 
 # Top-level roots scanned for R1-R3, and those of them that are runtime code (R4). No product is named: removing one
 # leaves this list unchanged (AGENTS.md sections 7 and 9).
-ROOTS = ("engine", "apps", "tools", "build/acceptance", "tests")
-RUNTIME_ROOTS = ("engine", "apps", "tools")
+ROOTS = ("engine", "games", "tools", "build/acceptance", "tests")
+RUNTIME_ROOTS = ("engine", "games", "tools")
 # Roots that always exist and hold C/C++ sources; the others are skipped, and reported as skipped, while they hold none.
 REQUIRED_ROOTS = ("engine", "tests")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
