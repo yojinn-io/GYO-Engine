@@ -1,6 +1,7 @@
 # The World end of logging (docs/architecture/target/v2/logging-declaration.zh-Hant.md, sections 5.3 to
 # 5.4; Design Invariants in docs/architecture/target/v2/logging.zh-Hant.md): Forward (a Message of a healthy
-# World becomes records) and TakeKernelDiagnostics (the runner takes the Kernel's diagnostics records).
+# World becomes records), TakeKernelDiagnostics (takes the Kernel's diagnostics records) and
+# ForwardKernelDiagnostics (registers an exchange function "out" that takes them after each round).
 # engine/logging stays free of ECS, as engine/time and engine/world_time are split.
 add_library(gyo_world_logging STATIC
     src/Forward.cpp
