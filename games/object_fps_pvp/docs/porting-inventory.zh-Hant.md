@@ -83,8 +83,8 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 | U（ui） | 大廳的 `gyo.ui` 文件（panel、text、text_field、button、focus 順序、binding） |
 | A（audio output） | 混音器輸出到裝置；沒有裝置時遊戲照跑 |
 | 3D 物理（同時開的卡） | 第 3 節 PV1、PV2 |
-| model（ufbx） | FBX 匯入（第 4 節） |
-| 骨骼動畫 | 取樣、混合、retarget、蒙皮（第 4 節） |
+| model（ufbx；現在就開，`v8-arch-gyo2-model-now`） | FBX 匯入、骨架、片段、取樣、混合、retarget（第 4 節） |
+| 骨骼動畫 | 第 1 層併在 model、第 2 層先不做、第 3 層蒙皮在 render（第 4 節） |
 | SDL 總宣告留給 PvP Client 的 | R3（OS modal 迴圈中的 live frame，master 的 live resize）、R5（模擬在自己的執行緒，O-13） |
 
 ### 2.4 不搬
@@ -109,8 +109,8 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 | — | **沒用到的**：移動中角色互推（`MoveCharacterBody` 的 actors 一律傳 `{}`，`Movement.cpp:100`）、台階、斜坡、三角網格碰撞、OBB、剛體 | — | — | 物理卡不必為 PvP 做 |
 | PV2 | **骨頭上的命中形狀**：每 tick 依動畫姿勢把 7 個形狀（頭球 1、軀幹膠囊 2、腿膠囊 4；10 根骨：Head、spine_01、spine_03、pelvis、thigh_l/r、calf_l/r、foot_l/r）擺到骨頭上，射線判定部位 | Engine：射線對球／膠囊（PV1）＋骨架姿勢（第 4 節）；遊戲：`hitbox.json`、部位與倍率 | `PlayerHitModel.cpp:28-53`、`PvpMatch.cpp:632-656`（每 tick 第一次有人開槍時對每個活著的目標算一次） | 3D 物理、model、骨骼動畫 |
 | PV3 | **命中的回溯（lag compensation）** | 未定：網路只帶「玩家看到的時間」（輸入格的 `ViewTime`，網路宣告 F2），歷史姿勢存哪、依時間插值怎麼查，網路宣告寫「產品或 collision 存」、不在網路本線 | **master 沒有**：判定用當 tick 的姿勢（`PvpMatch.cpp:404-415` 的 `TickShapes()`），view tick 只記錄（`client_v9.proto:235`「v7.1 only records them」），只用 `maximumReferenceAgeNs` 擋太舊的請求（⚠A）。GYO2 要做就是全新設計 | 3D 物理或 PvP 搬產品時的宣告 |
-| PV4 | **FBX 匯入** | Engine（model Module，ufbx 在它的 `src/adapters/ufbx/`，使用者已定 Q2） | 第 4 節 | model |
-| PV5 | **骨骼動畫**：clip 取樣（Loop／Clamp）、混合、依名字一對一的 retarget、CPU 蒙皮、動畫事件 | 分層的切法使用者未定（第 4 節只列事實） | 第 4 節 | 骨骼動畫 |
+| PV4 | **FBX 匯入** | Engine（model 函式庫，ufbx 在它的 `src/adapters/ufbx/`，使用者已定 Q2；現在就開，`v8-arch-gyo2-model-now`） | 第 4 節 | model |
+| PV5 | **骨骼動畫**：clip 取樣（Loop／Clamp）、混合、依名字一對一的 retarget、CPU 蒙皮、動畫事件 | Engine：取樣、混合、retarget 在 model 函式庫（第 1 層）、蒙皮在 render（第 3 層）；遊戲：播哪個片段、播到哪裡照 tick 推（第 2 層先不做），分層、additive、附掛（`v8-arch-gyo2-skeletal-animation-layers`） | 第 4 節 | 骨骼動畫 |
 | PV6 | **動畫取樣的跨平台決定性** | 未定。master 要求 Client 與 Match 的載入＋retarget 結果逐 byte 相同（內容 digest 比對，不同就斷線）；量到的結果：載入的 hash 四平台相同，**取樣結果跨平台不同**（linux-x64＝macos-arm64，windows-x64、macos-x64 各自不同，原因是 Slerp 等浮點），同平台重跑相同（dev_log `2026_10_31_pvp_v8_anim_bottlenecks`） | `PlayerAnimationDigest.cpp`、`ClientConnection.cpp:308-316` | 骨骼動畫、網路（伺服器權威下 Client 只呈現，命中只在 Match 算；要不要比對內容，搬產品時判） |
 | PV7 | **viewmodel pass**：另一個相機（FOV、near、far）＋在世界之後清深度 | Engine（R2b 的 3D 管線） | `RenderTypes.hpp` 的 `MeshLayer::ViewModel`、`WeaponViewModel.cpp:147-150` | R2b |
 | PV8 | **voxel 地圖的讀取**：`*.voxel_mesh.json`（gyo.voxel_mesh v1 單檔格式，master 已標 deprecated）的 colliders（AABB，單位 1/16 cell）與畫面用的 quads＋palette；點名地圖 pvp_arena／pvp_corners 各 5 個 collider、biome 1,260 個（1.4 MB） | 未定：這是工具（voxel 地圖編輯器）交出的資料契約；讀它的程式放 Engine 的地圖單位、還是遊戲自己讀 AABB 列表，搬產品時判。master 的 `map_markers` PvP 沒用 | `Arena.cpp`、`engine/voxel_mesh` | 搬產品時（和 3D 物理的靜態幾何接法一起） |
@@ -129,14 +129,19 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 
 **網路頁限界的對照**（`net.zh-Hant.md`）：最多 64 種複製元件（PvP 的玩家、戰鬥、動畫狀態遠低於此）；結構更新 ≤ 16 MiB（4 人遠低於此）；tick 截成 u32 不處理回繞（一局遠短於 2.1 年）；K3 上遠端玩家的輸入不送、實體約一個來回後才出現；可見性啟用時事件可能指向看不到的實體（M6，4 人競技場幾乎全看得到）。pv8 的教訓（假設 HitPart 夠用而漏了 hitbox）：本表的 PV2、PV3 就是 hitbox 的兩半，部位的資料（`HitPart`：頭、身、腿）是遊戲的複製元件或伺服器訊息，網路不必認得。
 
-## 4. model 與骨骼動畫：PvP 的實際需求（只列事實，給使用者定 model Module 與動畫分層用）
+## 4. model 與骨骼動畫：PvP 的實際需求
 
-「model Module 選 (A) 還是 (B)」與「骨骼動畫怎麼分三層」是使用者還沒定的兩題，這張卡不定。題目是主會話 2026-11-23 提的（原文經主會話轉來，批次表由主會話補）：
+「model Module 選 (A) 還是 (B)」與「骨骼動畫怎麼分三層」兩題，**使用者 2026-11-23 照主會話的建議定了**（主會話列出七件後，使用者「這個照你建議就好。」）：
+
+- **model：(B)，現在就開**（HANDOFF `v8-arch-gyo2-model-now`）。另開一張卡，做成不依賴 render、GPU、SDL 的函式庫。
+- **骨骼動畫**（HANDOFF `v8-arch-gyo2-skeletal-animation-layers`）：第 1 層放 model 函式庫（骨架、片段、時刻 t 的姿勢、混合、retarget）；第 2 層（每個實體的播放器 `AnimationModule`）**先不做**，PvP 由遊戲照 tick 推算片段時刻；第 3 層蒙皮放 render。
+
+題目的原文（主會話 2026-11-23 提的，定之前的寫法）：
 
 - **model 的前提**：model 放 Engine，做成 `engine/modules/model` 的函式庫（同 `audio`、`json`：不登記進 World），內容是節點階層、材質、蒙皮網格、動畫片段、取樣出 Pose，加 ufbx loader。**(A)** 照 11-19，model 跟著用它的產品（PvP、model_viewer）回來；**(B)** 現在就當基礎做，排在 SDL 之後或併進 SDL 的畫面子批。
 - **三層**：1 資料與取樣（骨架、片段、「片段在時刻 t 的姿勢」的純函式；model 函式庫）；2 播放（每個實體播哪個片段、播到哪裡，照 World 的時間前進並取樣出 Pose；登記單位 `animation`，要能登記進回滾、取樣照 tick）；3 蒙皮顯示（網格照 Pose 變形，render 經 Extract 拿 Pose）。hitbox、何時切片段、混合規則是遊戲規則，產品讀第 2 層的 Pose。
 
-4.1～4.4 是 PvP 實際用到什麼、誰做的；4.5、4.6 把它們對上兩題。
+4.1～4.4 是 PvP 實際用到什麼、誰做的；4.5、4.6 是定之前給使用者判斷用的對照（事實不變，留著當這兩個決定的根據）。
 
 ### 4.1 格式
 
@@ -181,7 +186,7 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 - **進了權威摘要，沒進預測**：master 的權威摘要從 v4 起把每位玩家的動畫狀態接在每個 tick 的紀錄後面（`tests/object_fps_pvp/AuthorityDigest.cpp:52-53,222-225`）；Client 的預測（`LocalPlayerPrediction.cpp`）完全不碰動畫——自己的身體在第一人稱看不到，遠端玩家的姿勢只是呈現，呈現不回流到判定（`docs/object_fps_pvp/player-presentation.zh-Hant.md` DI 4）。
 - **內容摘要另一件**：`PlayerAnimationDigest`（SHA-256：影響姿勢的數值、16 個 clip 轉換後的 key、骨架）由 Match 送、Client 比對，不同就斷線（`runtime_v9.proto:28`、`ClientConnection.cpp:308-316`）。它比的是「載入＋retarget 的結果」，不是每幀的 Pose。
 
-### 4.5 對上 model 的 (A)／(B)：PvP 需要什麼、什麼時候要
+### 4.5 對上 model 的 (A)／(B)：PvP 需要什麼、什麼時候要（已定 (B)，`v8-arch-gyo2-model-now`）
 
 | 事實 | 出處 |
 |---|---|
@@ -192,7 +197,7 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 | Object_Connect（另一個點名的移植）不用 model | `games/object_connect/docs/porting-inventory.zh-Hant.md`（PR #302） |
 | master 的 model 在 Engine 提供的：`ModelAsset`（節點、材質、網格、片段）、`SamplePose`、`BlendPoses`、`MakeDefaultPose`、`TransferCompatibleAnimation`、`SkinMesh`、動畫事件的 parse／bind；載入用 nlohmann、和 asset 耦合（R0 帶不動的理由，`rebuild-r0-carry-list.zh-Hant.md:264`） | 4.3 |
 
-### 4.6 對上骨骼動畫的三層：PvP 用到的每一項落在哪一層
+### 4.6 對上骨骼動畫的三層：PvP 用到的每一項落在哪一層（已定，`v8-arch-gyo2-skeletal-animation-layers`：第 2 層先不做，「播哪個片段、播到哪裡」由遊戲照 tick 推）
 
 | PvP 用到的 | 第 1 層（資料與取樣） | 第 2 層（播放） | 第 3 層（蒙皮顯示） | 遊戲規則 |
 |---|---|---|---|---|
@@ -231,17 +236,19 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 
 ## 6. 資產
 
+授權：使用者 2026-11-23「除了骨骼動畫，都是我自己做的。」（HANDOFF `v8-arch-gyo2-pvp-assets-license`）——master 記 `unrecorded` 的 8 個是使用者本人製作；骨骼動畫（UAL1）照 CC0。各檔跟著讀它的程式搬（model、A、asset 的接法），搬時把來源記錄改成這個決定。
+
 規則（`docs/object_fps_pvp/assets.zh-Hant.md` §8）：非 text 的項目要有來源記錄；text 由 git 歷史記錄。來源記錄在 `origin/master:tests/object_fps_pvp/asset_sources.json`。
 
 | 檔 | 大小 | 授權 | 狀態 |
 |---|---|---|---|
-| `animations/ual_mannequin/UAL1_Standard.fbx` | 23.8 MB | CC0（Universal Animation Library；`assets.zh-Hant.md` 附錄 A.3） | 授權可放；**大檔，要不要原樣進 git 待使用者定**（已轉主會話） |
-| `characters/player/Player_V20.fbx` | 0.83 MB | 使用者在 Blender 做的（2026-10-29 交付），授權 `unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/viewmodel/Nailer1_FPS.fbx` | 2.8 MB | 使用者交付（2026-10-29），`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/viewmodel/textures/Nailer1_D.png` | 1.3 MB | 由交付的 JPG 轉的，`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/viewmodel/textures/LowPoly_{Skin,Glove,Skin_Shadow}.png` | 各 74 B | 由交付的單色材質生成，`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/world/Nailer2_TPS.fbx` | 0.37 MB | 使用者在 Blender 做的（2026-10-31），`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/world/textures/Nailer2_D.png` | 1.25 MB | 由 FBX 內嵌的 JPG 轉的，`unrecorded` | **待使用者確認** |
+| `animations/ual_mannequin/UAL1_Standard.fbx` | 23.8 MB | CC0（Universal Animation Library；`assets.zh-Hant.md` 附錄 A.3） | 可放；原樣進 git（主會話判，比照 Object_Connect 音訊的先例，`v8-arch-gyo2-pvp-assets-license`） |
+| `characters/player/Player_V20.fbx` | 0.83 MB | 使用者在 Blender 做的（2026-10-29 交付），授權 `unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/viewmodel/Nailer1_FPS.fbx` | 2.8 MB | 使用者交付（2026-10-29），`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/viewmodel/textures/Nailer1_D.png` | 1.3 MB | 由交付的 JPG 轉的，`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/viewmodel/textures/LowPoly_{Skin,Glove,Skin_Shadow}.png` | 各 74 B | 由交付的單色材質生成，`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/world/Nailer2_TPS.fbx` | 0.37 MB | 使用者在 Blender 做的（2026-10-31），`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/world/textures/Nailer2_D.png` | 1.25 MB | 由 FBX 內嵌的 JPG 轉的，`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
 | `audio/{gun_shoot,gun_reload,hit_flesh,player_footstep}.wav` | 共 350 KB（48 kHz、PCM16、stereo） | 使用者自己的混音（2026-10-30 使用者的話） | 可放（等 A 與 asset 的接法時搬） |
 | `fonts/BIZUDPGothic-Regular.ttf` | 4.5 MB | SIL OFL 1.1 | 可放；要一起帶授權文字（Object_Connect 也用同一個字型，可共用一份，搬時判） |
 | `maps/*.json`、`maps/*.voxel_mesh.json`（biome 1.4 MB、其餘各 23 KB） | 1.5 MB | 產品自己的資料（text） | 可放；讀法等 PV8 |
