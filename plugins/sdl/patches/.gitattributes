@@ -1,0 +1,4 @@
+# The patches apply to SDL's release archive, whose sources have LF line ends on
+# every platform: a checkout that turned them into CRLF (core.autocrlf on
+# Windows) would no longer apply. Keep them byte for byte as committed.
+*.patch -text

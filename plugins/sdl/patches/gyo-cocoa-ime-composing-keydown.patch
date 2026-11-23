@@ -1,0 +1,67 @@
+--- a/src/video/cocoa/SDL_cocoakeyboard.m
++++ b/src/video/cocoa/SDL_cocoakeyboard.m
+@@ -45,12 +45,14 @@
+     int _pendingRawCode;
+     SDL_Scancode _pendingScancode;
+     Uint64 _pendingTimestamp;
++    bool _pendingKeyIsCommand; // GYO patch gyo-cocoa-ime-composing-keydown
+ }
+ - (void)doCommandBySelector:(SEL)myselector;
+ - (void)setInputRect:(const SDL_Rect *)rect;
+ - (void)setPendingKey:(int)rawcode scancode:(SDL_Scancode)scancode timestamp:(Uint64)timestamp;
+ - (void)sendPendingKey;
+ - (void)clearPendingKey;
++- (bool)pendingKeyIsCommand;
+ @end
+ 
+ @implementation SDL3TranslatorResponder
+@@ -98,6 +100,9 @@
+        selectors to handle special keys, instead we use SDL
+        key events to do the same job.
+     */
++    // GYO patch gyo-cocoa-ime-composing-keydown: the input method passed the
++    // key on as a command, so the key belongs to the application.
++    _pendingKeyIsCommand = true;
+ }
+ 
+ - (BOOL)hasMarkedText
+@@ -214,6 +219,7 @@
+     _pendingRawCode = rawcode;
+     _pendingScancode = scancode;
+     _pendingTimestamp = timestamp;
++    _pendingKeyIsCommand = false;
+ }
+ 
+ - (void)sendPendingKey
+@@ -229,6 +235,11 @@
+ - (void)clearPendingKey
+ {
+     _pendingRawCode = -1;
++}
++
++- (bool)pendingKeyIsCommand
++{
++    return _pendingKeyIsCommand;
+ }
+ 
+ @end
+@@ -551,8 +562,19 @@
+         }
+ #endif
+         if (SDL_TextInputActive(SDL_GetKeyboardFocus())) {
++            /* GYO patch gyo-cocoa-ime-composing-keydown: while text is being
++               composed, a key belongs to the input method unless it passes the
++               key on as a command. An input method may use a key without
++               changing the composition (the Japanese input method's first
++               Return only settles the chosen candidate), so "the composition
++               did not change" does not mean the key was left to the
++               application. */
++            const bool composing = [data.fieldEdit hasMarkedText];
+             [data.fieldEdit setPendingKey:scancode scancode:code timestamp:Cocoa_GetEventTimestamp([event timestamp])];
+             [data.fieldEdit interpretKeyEvents:[NSArray arrayWithObject:event]];
++            if (composing && ![data.fieldEdit pendingKeyIsCommand]) {
++                [data.fieldEdit clearPendingKey];
++            }
+             [data.fieldEdit sendPendingKey];
+         } else if (SDL_GetKeyboardFocus()) {
+             SDL_SendKeyboardKey(Cocoa_GetEventTimestamp([event timestamp]), SDL_DEFAULT_KEYBOARD_ID, scancode, code, true);
