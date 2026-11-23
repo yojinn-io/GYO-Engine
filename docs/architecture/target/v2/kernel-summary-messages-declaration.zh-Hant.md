@@ -1,6 +1,6 @@
 # 事前宣告：World 摘要與訊息（`v8-arch-gyo2-kernel-summary-messages`）
 
-更新：2026-11-23（修訂 2）。Owner：Kernel（GYO2 主會話開的任務卡 `local_b3d28b59`）。**狀態：使用者 2026-11-23 選 (b)（原話「選 (b)」），同日說「開始」，實作中（dev_log [`2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md`](../../../dev_logs/2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md)）。**
+更新：2026-11-23（修訂 2）。Owner：Kernel（GYO2 主會話開的任務卡 `local_b3d28b59`）。**狀態：使用者 2026-11-23 選 (b)（原話「選 (b)」），同日說「開始」；實作完成，合併前核准三件（side chat「核准」）；合併等 L1 與「合併」（dev_log [`2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md`](../../../dev_logs/2026_11_23_gyo2_kernel_summary_messages.zh-Hant.md)）。**
 
 根據：
 - asset 宣告 [`asset-declaration.zh-Hant.md`](asset-declaration.zh-Hant.md) 第 15 節第 8 項；批次表〈後續小事〉同一列。
