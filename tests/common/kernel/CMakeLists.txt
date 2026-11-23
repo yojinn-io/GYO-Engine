@@ -152,12 +152,15 @@ endif()
 # also J-11, J-13, member functions and hooks): one source, built
 # at configure time once per variant. The control must compile, so a failure of
 # another variant comes from the sample, not from include paths or flags; each
-# rejected variant must fail, and with its own static_assert marker, so a
-# failure for any other reason is not counted as expected (AGENTS 14.2).
+# rejected variant must fail, and with a static assertion's failure that names
+# its own marker on the same line, so a failure for any other reason is not
+# counted as expected (AGENTS 14.2; the judgement and why the marker alone is not
+# enough: tests/common/support/ExpectStaticAssert.cmake).
 # NO_CACHE: the check runs on every configure; the sample and the kernel headers
 # are configure dependencies, so editing one re-runs the check. Any mismatch
 # stops the configure. CMake folds long FATAL_ERROR messages; mutation
 # expectations use the first words only.
+include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectStaticAssert.cmake")
 function(gyo_kernel_compile_fail_samples)
     set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/SystemContractSample.cpp")
@@ -213,11 +216,7 @@ function(gyo_kernel_compile_fail_samples)
             message(FATAL_ERROR "kernel.compile_fail_sample: variant ${name} compiled; "
                 "the System contract no longer rejects it")
         endif()
-        string(FIND "${rejected_output}" "${marker}" found)
-        if(found EQUAL -1)
-            message(FATAL_ERROR "kernel.compile_fail_sample: variant ${name} failed without ${marker}, "
-                "so the failure is not the expected one:\n${rejected_output}")
-        endif()
+        gyo_expect_static_assert_failure(kernel.compile_fail_sample ${name} ${marker} "${rejected_output}")
         string(APPEND summary "; ${name} rejected with ${marker} in ${variant_ms} ms")
     endforeach()
     message(STATUS "kernel.compile_fail_sample (try_compile): ${summary}")
