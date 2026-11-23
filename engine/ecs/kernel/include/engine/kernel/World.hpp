@@ -368,6 +368,8 @@ private:
     friend void Detail::CheckHandle(World&, std::uint64_t, std::uint64_t, std::string_view);
     friend Detail::ColumnBase& Detail::ColumnAt(World&, ComponentId);
     friend Detail::ResourceBase& Detail::ResourceAt(World&, ResourceId);
+    friend const Detail::ColumnBase& Detail::SourceColumnAt(const World&, ComponentId);
+    friend const Detail::ResourceBase& Detail::SourceResourceAt(const World&, ResourceId);
     friend Detail::MessageBufferBase& Detail::MessagesAt(World&, MessageTypeId);
     friend ChangeStamp Detail::CurrentStamp(const World&) noexcept;
     friend std::span<const EntityId> Detail::AliveEntities(const World&) noexcept;

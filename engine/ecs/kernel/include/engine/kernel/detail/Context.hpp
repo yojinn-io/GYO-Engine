@@ -147,6 +147,9 @@ struct ReaderKey {
 // call's serial number instead.
 struct SystemContext {
     World* world = nullptr;
+    // The source World of a RunExtract's step (DI-KS 35): what Extract
+    // parameters read, const only (DI-KS 36); nullptr outside one.
+    const World* extractSource = nullptr;
     // The Executor running this World's schedules: ExclusiveWorld::RunSchedule
     // runs a schedule through it (K0). One World per WorldExecutor today (T5 makes it
     // "this World's Executor").
@@ -230,6 +233,10 @@ void CheckHandle(World& world, std::uint64_t callSerial, std::uint64_t syncEpoch
 
 [[nodiscard]] ColumnBase& ColumnAt(World& world, ComponentId id);
 [[nodiscard]] ResourceBase& ResourceAt(World& world, ResourceId id);
+// Read-only storage of an extract source (DI-KS 36), for Extract parameters only: no
+// running-call check (W-6; the source is not running) and no write.
+[[nodiscard]] const ColumnBase& SourceColumnAt(const World& source, ComponentId id);
+[[nodiscard]] const ResourceBase& SourceResourceAt(const World& source, ResourceId id);
 [[nodiscard]] MessageBufferBase& MessagesAt(World& world, MessageTypeId id);
 [[nodiscard]] ChangeStamp CurrentStamp(const World& world) noexcept;
 [[nodiscard]] std::span<const EntityId> AliveEntities(const World& world) noexcept;

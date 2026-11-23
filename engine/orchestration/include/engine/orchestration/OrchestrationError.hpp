@@ -12,7 +12,7 @@
 // Errors of the orchestration layer (declaration
 // docs/architecture/target/v2/orchestration-skeleton-declaration.zh-Hant.md,
 // sections 3.5, 3.9, 3.10). Two groups that never share a code: the startup
-// codes of Product::Build (O-E1 to O-E7, collected into one
+// codes of Product::Build (O-E1 to O-E7 and O-E9, collected into one
 // ProductStartupReport together with every World's kernel StartupReport and the
 // errors registration units report), and the runtime codes of the Product's
 // entry points (OrchestrationError). The kernel's StartupCode is not extended
@@ -39,6 +39,11 @@ enum class OrchestrationCode : std::uint8_t {
     OE6,
     // O-E7: a prepare function returned an error at startup.
     OE7,
+    // O-E9 (O-E8 is not used: it was proposed and withdrawn once, error-levels-declaration):
+    // an extract source error. extractFrom names no World described before this one (no such
+    // World, itself, or a later one), or an extract schedule is in the frame list of a World
+    // without extractFrom, or in the game initialization list (v8-arch-gyo2-sdl-extract).
+    OE9 = 9,
 };
 
 [[nodiscard]] std::string_view ToString(OrchestrationCode code) noexcept;

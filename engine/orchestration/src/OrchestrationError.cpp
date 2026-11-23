@@ -16,6 +16,7 @@ std::string_view ToString(OrchestrationCode code) noexcept {
     case OrchestrationCode::OE5: return "O-E5";
     case OrchestrationCode::OE6: return "O-E6";
     case OrchestrationCode::OE7: return "O-E7";
+    case OrchestrationCode::OE9: return "O-E9";
     }
     return "O-E?";
 }

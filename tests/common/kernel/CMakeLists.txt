@@ -29,6 +29,7 @@ set(GYO_KERNEL_TEST_SOURCES
     HashTests.cpp
     RestoreTests.cpp
     ResourceChangedTests.cpp
+    ExtractTests.cpp
 )
 function(gyo_kernel_test_executable name)
     add_executable(${name} ${ARGN})

@@ -175,6 +175,20 @@ private:
 };
 
 Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view schedule) {
+    return RunOutermost(schedule, nullptr);
+}
+
+Engine::Base::Result<void, KernelError> WorldExecutor::RunExtract(std::string_view schedule, const World& source) {
+    // DI-KS 35: source is a World made from the Registry this World's Registry
+    // reads (SetExtractSource), not this World, and is between two Runs.
+    GYO_ASSERT(&source != &world_ && "RunExtract: the source is the reading World itself");
+    GYO_ASSERT(world_.data_->extractSource != nullptr && source.data_ == world_.data_->extractSource &&
+               "RunExtract: the source World was not made from this World's extract source Registry");
+    GYO_ASSERT(source.state_ == WorldState::Ready && "RunExtract: the source World is not Ready");
+    return RunOutermost(schedule, &source);
+}
+
+Engine::Base::Result<void, KernelError> WorldExecutor::RunOutermost(std::string_view schedule, const World* source) {
     World& world = world_;
     // E.5: an Interrupted World runs no more (X-9). A System reaching this
     // through a kept pointer finds the World Running: also a GYO_ASSERT (only
@@ -184,9 +198,18 @@ Engine::Base::Result<void, KernelError> WorldExecutor::Run(std::string_view sche
     Attach();
     const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
     GYO_ASSERT(record != nullptr);
+    // DI-KS 35: an extract schedule runs through RunExtract only, and RunExtract runs nothing else.
+    GYO_ASSERT((source == nullptr || record->options.extract) && "RunExtract: the schedule is not an extract schedule");
+    GYO_ASSERT((source != nullptr || !record->options.extract) && "Run: an extract schedule runs through RunExtract");
     ReadSettings();
     // A new outermost Run: its own DroppedMessages records (event cursor declaration 3.2).
     for (World::DroppedEntry& dropped : world.droppedEntry_) dropped = World::DroppedEntry{};
+    // The source for this Run's steps, cleared on every way out (an exception included).
+    struct SourceScope {
+        const World*& slot;
+        ~SourceScope() { slot = nullptr; }
+    } sourceScope{extractSource_};
+    extractSource_ = source;
     return RunPlan(record->options.name, false);
 }
 
@@ -324,6 +347,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
             call.queue = &world.window_;
             call.recSeq = &recSeq;
             call.locals = &mountState.locals;
+            // DI-KS 35: the Plan's steps of a RunExtract read its source; a nested run's steps do not.
+            call.extractSource = nested ? nullptr : extractSource_;
             // Event cursor declaration 3.2: each condition is a reader of its own
             // (slot 1, 2, ... in evaluation order), the System is slot 0.
             call.reader = Detail::ReaderKey{system.seq, static_cast<std::uint32_t>(mountIndex), 0, true};
@@ -498,7 +523,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunNestedFrom(Detail::Sys
     }
     if (record->options.extract) {
         return refuse(KernelErrorCode::ExtractNotNestable, "X-15",
-                      who + " runs extract " + target + ": an extract schedule runs with rollback-extract only");
+                      who + " runs extract " + target + ": an extract schedule runs through RunExtract only");
     }
     for (const World::RunLevel& running : world.runStack_) {
         if (running.schedule == record->options.name) {

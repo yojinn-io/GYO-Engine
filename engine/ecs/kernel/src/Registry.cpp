@@ -864,12 +864,24 @@ void ResolveSystems(RegistryData& data) {
         const std::vector<AccessKey> ownReads = resolver.access.reads;
         for (const Mount& mount : system.options.mounts) {
             AddMessageReaders(data, ownReads, system, mount, {});
+            // H-6 (DI-KS 35): a run condition with Extract parameters is legal only on a
+            // mount in an extract schedule, as for the System's own parameters (CheckSystems).
+            // An unknown schedule is CheckSystems' D-E1.
+            auto conditionExtractOutside = [&](const SystemResolver& condition, const std::string& what) {
+                if (!condition.usesExtract) return;
+                const ScheduleRecord* record = data.FindSchedule(mount.schedule);
+                if (record == nullptr || record->options.extract) return;
+                data.Error(StartupCode::DE7, "H-6",
+                           what + " has Extract parameters but schedule '" + mount.schedule + "' is not an extract schedule",
+                           {system.options.name, mount.schedule}, {SourceText(system.source)});
+            };
             for (const ConditionRef& condition : mount.conditions) {
                 if (condition.Resolver() == nullptr) continue;
                 SystemResolver conditionResolver(data, subject + " run condition '" + condition.Name() + "'",
                                                  SourceText(system.source));
                 condition.Resolver()(conditionResolver);
                 AddMessageReaders(data, conditionResolver.access.reads, system, mount, condition.Name());
+                conditionExtractOutside(conditionResolver, subject + " run condition '" + condition.Name() + "'");
                 MergeCondition(resolver, conditionResolver);
             }
             // Set conditions join every member's reads (spec E.4).
@@ -882,6 +894,8 @@ void ResolveSystems(RegistryData& data) {
                                                          SourceText(system.source));
                         condition.Resolver()(conditionResolver);
                         AddMessageReaders(data, conditionResolver.access.reads, system, mount, condition.Name());
+                        conditionExtractOutside(conditionResolver,
+                                                "set '" + setName + "' run condition '" + condition.Name() + "' (on " + subject + ")");
                         MergeCondition(resolver, conditionResolver);
                     }
                 }

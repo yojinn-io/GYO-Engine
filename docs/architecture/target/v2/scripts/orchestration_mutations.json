@@ -3747,6 +3747,138 @@
    "target": "gyo_orchestration_tests",
    "cases": "restore:*",
    "expect": "\\[or\\-renumber\\-ref\\]"
+  },
+  {
+   "id": "or-ex-source-not-set",
+   "what": "The reader's Registry is not given its extract source before BuildPlans (O-12): the kernel reports D-E14.",
+   "guards": [
+    "orchestration O-12",
+    "kernel DI-KS 37"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (extractSource != nullptr) registry->SetExtractSource(*extractSource);",
+   "replace": "    if (false) registry->SetExtractSource(*extractSource);",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract:*",
+   "expect": "D\\-E14\\ \\(H\\-6\\)"
+  },
+  {
+   "id": "or-ex-oe9-unknown",
+   "what": "O-E9 (a) accepts an extractFrom that names no World.",
+   "guards": [
+    "orchestration O-12",
+    "orchestration O-5"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                problem = \"names no World of the description\";",
+   "replace": "                problem.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: O-E9: extractFrom names no World*",
+   "expect": "\\[or\\-ex\\-oe9\\-unknown\\]"
+  },
+  {
+   "id": "or-ex-oe9-self",
+   "what": "O-E9 (a) accepts an extractFrom that names the World itself.",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                problem = \"names the World itself\";",
+   "replace": "                problem.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: O-E9: extractFrom names no World*",
+   "expect": "\\[or\\-ex\\-oe9\\-self\\]"
+  },
+  {
+   "id": "or-ex-oe9-later",
+   "what": "O-E9 (a) accepts an extractFrom that names a World described after it.",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                problem = \"names a World described after it (the source runs first)\";",
+   "replace": "                problem.clear();",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: O-E9: extractFrom names no World*",
+   "expect": "\\[or\\-ex\\-oe9\\-later\\]"
+  },
+  {
+   "id": "or-ex-oe9-list",
+   "what": "O-E9 (b) accepts an extract schedule in the frame list of a World without extractFrom.",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        } else if (world.extractFrom.empty() && IsExtractSchedule(frozen, name)) {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: O-E9: an extract schedule in a frame list without extractFrom*",
+   "expect": "\\[or\\-ex\\-oe9\\-list\\]"
+  },
+  {
+   "id": "or-ex-oe9-gameinit",
+   "what": "O-E9 (b) accepts an extract schedule in the game initialization list.",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            } else if (IsExtractSchedule(frozen, name)) {",
+   "replace": "            } else if (false) {",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: O-E9: an extract schedule in a frame list without extractFrom*",
+   "expect": "\\[or\\-ex\\-oe9\\-gameinit\\]"
+  },
+  {
+   "id": "or-ex-runon-plain-run",
+   "what": "The orchestration layer runs an extract schedule with Run, not RunExtract (O-12, DI-KS 35).",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (!IsExtractSchedule(executor.GetWorld().Types(), schedule)) return executor.Run(schedule);",
+   "replace": "    return executor.Run(schedule);",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: each frame*",
+   "expect": "Run:\\ an\\ extract\\ schedule\\ runs\\ through\\ RunExtract"
+  },
+  {
+   "id": "or-ex-reader-registered-anyway",
+   "what": "A reader whose source did not register is registered all the same (O-5, user's Q1 (a)): a second error (D-E14) comes with the source's.",
+   "guards": [
+    "orchestration O-5"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (source == nullptr) {\n                results.push_back(WorldStartupResult{slot.description.name, std::nullopt, true});",
+   "replace": "            if (false) {\n                results.push_back(WorldStartupResult{slot.description.name, std::nullopt, true});",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: a source that did not register leaves the reader unchecked*",
+   "expect": "\\[or\\-ex\\-reader\\-unchecked\\]"
+  },
+  {
+   "id": "or-ex-replace-source-allowed",
+   "what": "ReplaceWorld replaces a World another one extracts from (O-8 assert until R1b).",
+   "guards": [
+    "orchestration O-8"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        GYO_ASSERT(other.description.extractFrom != slot.description.name &&",
+   "replace": "        GYO_ASSERT(true ||",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: the asserts: replacing the source of a reader (BuildNewFirst)",
+   "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ \\(\\*built\\)\\->ReplaceWorld\\(\"Sim\",\\ O::ReplaceRequest\\{\\}\\)"
+  },
+  {
+   "id": "or-ex-assert-inside-run",
+   "what": "The \"extract schedule without a source\" assert fires inside the run (as an exception out of the schedule), so a Programmer Error ends the Product.",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    GYO_ASSERT((!IsExtractSchedule(slot.executor->GetWorld().Types(), schedule) || ExtractSourceIndex(slot) < worlds_.size()) &&",
+   "replace": "    GYO_ASSERT(true ||",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: the asserts: an extract schedule on a World without a source*",
+   "expect": "\\[or\\-ex\\-assert\\-before\\-run\\]"
   }
  ]
 }
