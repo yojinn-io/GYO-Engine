@@ -13,7 +13,7 @@ Owner：OS 層的測試（`tests/common/os`）。GYO2 主會話開的任務卡�
 
 **退避的修改撤回。** 這一批最後只拿掉 #289 在「loses no signal」案例裡加的進度 `Note`。測試檔和 #289 之前（`2212637b`）完全相同，退避（4096）與判定都沒有改。
 
-撤回的理由（使用者的決定）：要解決的「機器忙時拖到幾十秒」，在 CI 上基本沒有（L1 三個平台一直通過，唯一慢過的一次 35.8 s 仍在 60 s 內），在 Linux 上沒有（`yes` 32 最長 0.6 s），只出現在這台 Intel Mac 本機滿載時。
+撤回的理由（使用者的決定）：要解決的「機器忙時拖到幾十秒」，在 CI 上基本沒有（L1 三個平台一直通過，唯一慢過的一次 35.8 s 仍在 60 s 內），在 Linux 上沒有（驗收中現狀版本 `yes` 24 最長 1.21 s、`yes` 32 最長 0.95 s，套量測 patch 的版本），只出現在這台 Intel Mac 本機滿載時。
 
 ## 做了什麼
 
@@ -56,7 +56,7 @@ Owner：OS 層的測試（`tests/common/os`）。GYO2 主會話開的任務卡�
 
 | 項目 | 內容 | 證據 |
 |---|---|---|
-| 65536 次自旋對本機逾時的效果 | Mac 環境負載（`load1` 33～49）下，改前 6 次有 4 次碰到 40 s 上限，改後 0.07～1.36 s | `accept/m-t-ambient.txt` |
+| 65536 次自旋對本機逾時的效果（參考，沒有事前宣告） | Mac 環境負載（`load1` 33～49）下，套量測 patch 的改前、改後交錯各 6 次：改前 4 次碰到 40 s 上限，改後 0.07～1.36 s | `accept/m-t-ambient.txt`；宣告第 14.5 節 |
 | 65536 次自旋的代價 | 閒置時每回合的檢出力可能變弱：Linux 比率 0.49、0.23 倍；真實二進位閒置 ow-x19 19/20 | 宣告第 12、13 節 |
 | Linux 負載下現狀的檢出力 | 兩條執行緒在同一顆 CPU 輪流跑；`yes` 24 下 ow-x19 只抓到 8/20（真實二進位） | `accept/linux/p-x.txt` |
 | 掃描 | 遺失只落在 `round % 64` 的頭 0～3 格 | 宣告第 2.4 節 |
@@ -83,6 +83,6 @@ Owner：OS 層的測試（`tests/common/os`）。GYO2 主會話開的任務卡�
 - 驗收：`measure.diff`、`measure-final.diff`、`accept/`（`build_bins.py`、`accept.py`、`judge_mutants.py`、`src/`、Mac 的輸出、`linux/`）。
 - 撤回後的突變：`final-revert-mutants.log`。
 
-Linux 實機上另有副本：`~/Workspace/Remote/gyo2-os-wake-test-backoff/`。
+Linux 實機上另有副本：`~/Workspace/Remote/gyo2-os-wake-test-backoff/`（只是副本，不是判定依據）。
 
 花的時間：牆鐘約 11:00～14:15。其中等待（使用者的回覆、Linux 的背景量測合計 1 小時以上、審查與驗證 agent）占大半。
