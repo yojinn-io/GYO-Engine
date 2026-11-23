@@ -497,19 +497,6 @@
    "expect": "OnServer\\(\\)\\ logic\\ does\\ not\\ run\\ at\\ the\\ client"
   },
   {
-   "id": "nt-k3-as-k2",
-   "what": "a client with a rollback strategy (K3) is built and treated as K2. Only it catches the refusal until step 4",
-   "guards": [
-    "net-module-declaration D-5"
-   ],
-   "file": "engine/modules/net/src/NetModule.cpp",
-   "find": "    if (role->role == NetRole::Client && rollback != nullptr && rollback->strategy != nullptr) {",
-   "replace": "    if (false) {",
-   "target": "gyo_net_tests",
-   "cases": "replication: a client with a rollback strategy*",
-   "expect": "a\\ client\\ with\\ a\\ rollback\\ strategy\\ is\\ refused\\ until\\ step\\ 4\\ \\(NT\\-E5\\)"
-  },
-  {
    "id": "nt-input-not-held",
    "what": "a missing slot does not hold the last input (the default value is written). Only it catches hold-last",
    "guards": [
@@ -1023,6 +1010,387 @@
    "target": "gyo_net_tests",
    "cases": "module:*",
    "expect": "recheck\\ small\\ thing\\ b:\\ a\\ new\\ handshake's\\ salt\\ is\\ larger"
+  },
+  {
+   "id": "nt-k3-entered-missing",
+   "what": "K3 does not tell the rollback Module of the server's spawns (no Entered): the entities never come. Only it catches D-5's entries",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                inbox.Entered(entity, tick);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ the\\ server's\\ spawns\\ reach\\ the\\ client\\ \\(Entered\\)"
+  },
+  {
+   "id": "nt-k3-exit-missing",
+   "what": "K3 does not tell the rollback Module of the server's despawns (no Exited). Only it catches D-5's exits",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.Exited(entity, tick); });\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "an\\ entity\\ the\\ authority\\ removed\\ is\\ gone\\ at\\ the\\ client"
+  },
+  {
+   "id": "nt-k3-not-confirmed",
+   "what": "K3 writes no confirmed point: no rollback ever takes the server's values. Only it catches D-7 at K3",
+   "guards": [
+    "net-module-declaration D-7",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            Inbox(world, [point](Rollback::RollbackInbox& inbox) { inbox.ConfirmedThrough(point); });\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ the\\ confirmed\\ point\\ reaches\\ the\\ rollback\\ Module"
+  },
+  {
+   "id": "nt-k3-as-k1",
+   "what": "A client World with a rollback strategy is written as K1 (spawns, despawns and values directly; no confirmed point). Only it catches the K3 branch as a whole",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    const RollingBack* rolling = rollsBack ? &rollingBack : nullptr;\n",
+   "replace": "    const RollingBack* rolling = nullptr;\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-10:\\ entries\\ in\\ the\\ inbox\\ ==\\ entities\\ the\\ server\\ spawned"
+  },
+  {
+   "id": "nt-k3-waiting-not-written",
+   "what": "A non-rolling-back component's value waiting for its entity is never written. Only it catches the waiting values",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (!rolling->Alive(it->first) || (waiting.notBefore",
+   "replace": "            if (true || (waiting.notBefore",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ a\\ replicated\\ component\\ that\\ does\\ not\\ roll\\ back\\ is\\ written\\ directly"
+  },
+  {
+   "id": "nt-k3-values-direct",
+   "what": "K3 writes a rolling-back component's value directly instead of into the inbox. Only it catches D-5's \"not in First\" for values",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (rolling != nullptr && rolling->Component(wire)) {\n                // K3: into the inbox at the part's tick",
+   "replace": "            if (false) {\n                // K3: into the inbox at the part's tick",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ no\\ rolling\\-back\\ value\\ is\\ written\\ directly\\ in\\ First"
+  },
+  {
+   "id": "nt-k3-resource-direct",
+   "what": "K3 writes a rolling-back Resource with its apply instead of into the inbox. Only it catches Q8 (b) at K3",
+   "guards": [
+    "net-module-declaration Q8",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (rolling != nullptr && rolling->Resource(wire) && registry.resources[wire]->toInbox) {\n",
+   "replace": "        if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ a\\ rolling\\-back\\ Resource\\ goes\\ into\\ the\\ inbox"
+  },
+  {
+   "id": "nt-vis-ignored",
+   "what": "An entity a Peer does not see is sent to it. Only it catches C-VIS1's entity scope",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (visibility && !visibility->Sees(taken.id)) return 0;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ an\\ entity\\ a\\ Peer\\ does\\ not\\ see\\ is\\ not\\ sent\\ to\\ it"
+  },
+  {
+   "id": "nt-vis-loss-not-removed",
+   "what": "An entity a Peer stops seeing stays at that client (no despawn on losing sight). Only it catches WhileVisible",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (still != nullptr && peerMask(*still) != 0) continue;\n",
+   "replace": "                if (still != nullptr) continue;\n",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ an\\ entity\\ a\\ Peer\\ stops\\ seeing\\ is\\ removed"
+  },
+  {
+   "id": "nt-private-to-all",
+   "what": "A private component goes to every Peer that sees the entity. Only it catches C-VIS2's scope",
+   "guards": [
+    "net-module-declaration C-VIS2",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (entry->privateComponent) privateMask |= std::uint64_t{1} << entry->wire;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ the\\ private\\ component\\ reaches\\ no\\ other\\ Peer"
+  },
+  {
+   "id": "nt-private-to-none",
+   "what": "A private component goes to no Peer, also one shown it. Only it catches ShowPrivate",
+   "guards": [
+    "net-module-declaration C-VIS2",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (!visibility || !visibility->SeesPrivate(taken.id, entry->key)) mask &= ~(std::uint64_t{1} << entry->wire);\n",
+   "replace": "                mask &= ~(std::uint64_t{1} << entry->wire);\n",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ the\\ private\\ component\\ reaches\\ the\\ Peer\\ that\\ is\\ shown\\ it"
+  },
+  {
+   "id": "nt-budget-ignored",
+   "what": "The values over the Peer's budget are sent anyway. Only it catches the budget",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (valueBudget > 0 && candidateBytes.size() > valueBudget) {\n",
+   "replace": "            if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "step\\ 5:\\ values\\ over\\ the\\ budget\\ wait\\ for\\ a\\ later\\ tick"
+  },
+  {
+   "id": "nt-priority-not-accumulated",
+   "what": "A waiting entity's priority does not grow, so the lowest ids are always sent first and the others starve. Only it catches the accumulator",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                        ledger.waiting[candidate.entity] = candidate.score;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "step\\ 5:\\ the\\ accumulated\\ priority\\ lets\\ no\\ entity\\ wait\\ long"
+  },
+  {
+   "id": "nt-deferred-not-notsent",
+   "what": "A simulating client writes no NotSent for the values the server deferred. Only it catches D-7's NotSent at K3",
+   "guards": [
+    "net-module-declaration D-7",
+    "rollback R-8",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.NotSent(waits, part.tick); });\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-11\\:\\ the\\ deferred\\ entities\\ are\\ left\\ out\\ of\\ the\\ client's\\ rollback\\ comparison"
+  },
+  {
+   "id": "nt-k3-removed-not-to-inbox",
+   "what": "K3 does not write Removed when the server takes a rolling-back component off: the client keeps it. Only it catches D-5's Removed (S5 of PR-2's review: it had no guard)",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (rolling != nullptr && rolling->Component(wire)) {\n                registry.components[wire]->removedToInbox(world, entity, tick);\n                ++state.inboxRemovals;\n            } else if (wire < registry.components.size()) {",
+   "replace": "            if (rolling != nullptr && rolling->Component(wire)) {\n                ++state.inboxRemovals;\n            } else if (wire < registry.components.size()) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ a\\ rolling\\-back\\ component\\ the\\ server\\ takes\\ off\\ is\\ gone\\ at\\ the\\ client\\ \\(Removed\\)"
+  },
+  {
+   "id": "nt-k3-reentry-removed-missing",
+   "what": "A spawn of an entity the inbox still knows does not write Removed for the rolling-back components it does not carry: one taken off while hidden comes back. Only it catches B1's net side",
+   "guards": [
+    "net 13 (B1 of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (spawnK3 && knownBefore) {",
+   "replace": "        if (spawnK3 && knownBefore && false) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "B1:\\ a\\ rolling\\-back\\ component\\ taken\\ off\\ while\\ hidden\\ does\\ not\\ come\\ back,\\ its\\ exit\\ not\\ yet\\ forgotten"
+  },
+  {
+   "id": "nt-k3-spawn-written-early",
+   "what": "A spawn's non-rolling values are written at once while the entity of before is still in the World; the rollback to a point in [exit, entry) of the same frame removes them for good. Only it catches the waiting at the spawn (S1 b, the recheck's N1). It is also killed through whole (the written value is not among the waiting values, so the write of the spawn's set takes it off), whatever the confirmed point falls on; the case that alone shows the confirmed-point condition works is the later-frame one (nt-k3-spawn-written-before-decided)",
+   "guards": [
+    "net 13 (S1 b of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                } else if (!rolling->Alive(entity) || state.waitingDirect.count(entity) != 0) {",
+   "replace": "                } else if (!rolling->Alive(entity)) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "S1\\ b\\ same\\ frame\\:"
+  },
+  {
+   "id": "nt-k3-waiting-removal-kept",
+   "what": "Taking a non-rolling component off does not drop its waiting value: it is written later. Only it catches S1 a",
+   "guards": [
+    "net 13 (S1 a of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                        std::erase_if(waiting->second.values, [wire](const auto& value) { return value.first == wire; });\n",
+   "replace": "                        static_cast<void>(waiting);\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "S1\\ a:"
+  },
+  {
+   "id": "nt-k3-whole-not-taken-off",
+   "what": "Writing a spawn's waiting values does not take off the non-rolling components the spawn does not carry: the entity of before keeps one taken off while hidden. Only it catches B1's whole set",
+   "guards": [
+    "net 13 (B1 of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (waiting.whole) {",
+   "replace": "            if (waiting.whole && false) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "B1:\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\ taken\\ off\\ while\\ hidden\\ is\\ taken\\ off\\ the\\ entity\\ of\\ before"
+  },
+  {
+   "id": "nt-k3-resource-other-type-accepted",
+   "what": "K3 builds with a rolling-back Resource whose value type is not the Resource: its apply writes rolling-back data in First. Only it catches NT-E6 (B2, U2 (a))",
+   "guards": [
+    "net 13 (B2 of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "            if (record == nullptr || record->kind != Rollback::DataKind::Resource || entry->toInbox) continue;",
+   "replace": "            if (record == nullptr || record->kind != Rollback::DataKind::Resource || entry->toInbox || true) continue;",
+   "target": "gyo_net_tests",
+   "cases": "replication:*",
+   "expect": "B2:\\ K3\\ would\\ write"
+  },
+  {
+   "id": "nt-k3-spawn-written-before-decided",
+   "what": "A spawn's waiting non-rolling values are written as soon as an entity of that id is in the World, before the rollback decided at a confirmed point at or after the spawn's tick; a later rollback to [exit, entry) removes them. Only it catches the confirmed-point condition (S1 b, the recheck's N1)",
+   "guards": [
+    "net 13 (S1 b of PR-2's review)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (!rolling->Alive(it->first) || (waiting.notBefore != 0 && (!decided || *decided < waiting.notBefore))) {",
+   "replace": "            if (!rolling->Alive(it->first) || (waiting.notBefore != 0 && !decided)) {",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "S1\\ b\\ later\\ frame\\:"
+  },
+  {
+   "id": "nt-k3-waiting-value-dropped",
+   "what": "K3 drops a non-rolling component's value that comes while its entity is not in the World yet (or a spawn's values wait): the entity keeps the spawn's value. Only it catches the waiting of later values",
+   "guards": [
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                // K3: the entity comes with the rollback that puts it back; the value waits for it.\n                Wait(state, entity, wire, bytes);\n",
+   "replace": "                // K3: the entity comes with the rollback that puts it back; the value waits for it.\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3\\:\\ a\\ value\\ of\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\,\\ come\\ before\\ the\\ entity\\ is\\ in\\ the\\ World\\,\\ waits\\ for\\ it"
+  },
+  {
+   "id": "nt-k3-direct-not-written",
+   "what": "K3 does not write a non-rolling component a structure update adds to an entity in the World. Only it catches the direct write",
+   "guards": [
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    const ApplyOutcome direct = registry.components[wire]->apply(world, entity, bytes, ApplyMode::Set);",
+   "replace": "                    const ApplyOutcome direct = ApplyOutcome::Applied;",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3\\:\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\ added\\ to\\ a\\ seen\\ entity\\ reaches\\ the\\ client"
+  },
+  {
+   "id": "nt-budget-first-not-sent",
+   "what": "Over the budget, the first candidate is not always sent: an entity larger than the budget never goes. Only it catches net 14's \"the first is always sent\"",
+   "guards": [
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    candidate.sent = used + candidate.size <= valueBudget || used == 0;",
+   "replace": "                    candidate.sent = used + candidate.size <= valueBudget;",
+   "target": "gyo_net_tests",
+   "cases": "k3:*,bandwidth:*,visibility:*",
+   "expect": "step\\ 5\\:\\ a\\ budget\\ smaller\\ than\\ one\\ entity\\ still\\ sends\\ one\\ entity\\ a\\ tick"
+  },
+  {
+   "id": "nt-priority-weight-ignored",
+   "what": "The author's NetPriority::weight is ignored (every entity weighs 1). Only it catches the weight in the score",
+   "guards": [
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    (void)world.Read<NetPriority>(candidate.entity, [&](const NetPriority& p) { weight = p.weight; });",
+   "replace": "                    static_cast<void>(0);",
+   "target": "gyo_net_tests",
+   "cases": "k3:*,bandwidth:*,visibility:*",
+   "expect": "step\\ 5\\:\\ a\\ heavier\\ entity\\ waits\\ less"
+  },
+  {
+   "id": "nt-private-per-type",
+   "what": "A private component shown for one entity is sent for every entity (shown per type, not per entity). Only it catches F4's per-entity scope",
+   "guards": [
+    "net-module-declaration F4, C-VIS2",
+    "net 14"
+   ],
+   "file": "engine/modules/net/include/engine/net/Replication.hpp",
+   "find": "        return std::find(privateComponents.begin(), privateComponents.end(), std::pair<Kernel::EntityId, Kernel::TypeKey>{entity, key}) !=\n               privateComponents.end();",
+   "replace": "        return std::any_of(privateComponents.begin(), privateComponents.end(), [key](const auto& p) { return p.second == key; });",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11\\:\\ a\\ private\\ component\\ of\\ another\\ entity\\ is\\ not\\ sent"
+  },
+  {
+   "id": "nt-private-without-visibility",
+   "what": "A Peer without PeerVisibility gets every private component. Only it catches \"no private component without PeerVisibility\"",
+   "guards": [
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (!visibility || !visibility->SeesPrivate(taken.id, entry->key)) mask &= ~(std::uint64_t{1} << entry->wire);",
+   "replace": "                if (visibility && !visibility->SeesPrivate(taken.id, entry->key)) mask &= ~(std::uint64_t{1} << entry->wire);",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11\\:\\ a\\ Peer\\ without\\ PeerVisibility\\ gets\\ no\\ private\\ component"
+  },
+  {
+   "id": "nt-k3-direct-not-removed",
+   "what": "K3 does not take a non-rolling component off an entity in the World when the server takes it off (A5; the lossy case caught it only by chance). Only it catches the direct removal",
+   "guards": [
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    if (rolling->Alive(entity)) (void)registry.components[wire]->remove(world, entity);",
+   "replace": "                    static_cast<void>(0);",
+   "target": "gyo_net_tests",
+   "cases": "k3: an entity hidden*",
+   "expect": "K3:\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\ taken\\ off\\ a\\ seen\\ entity\\ is\\ gone\\ at\\ the\\ client"
   }
  ]
 }

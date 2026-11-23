@@ -23,7 +23,9 @@ namespace GYO::Engine::Net {
 // The net Module's own protocol version (what the messages above the header mean), compared in the handshake.
 // The header's kProtocolVersion is the framing; a datagram of another framing cannot be read at all.
 // 2: the accept carries the handshake's salt (S2), the request the client World's epoch (R2); not released between.
-inline constexpr std::uint32_t kNetProtocolVersion = 2;
+// 3: every value part carries the list of entities whose values wait for a later tick (step 5 of PR-2, read by a
+// simulating client as NotSent); PR-1 (2) is in gyo2, so a PR-1 client is told ProtocolMismatch (M2 of PR-2's review).
+inline constexpr std::uint32_t kNetProtocolVersion = 3;
 
 // Why a connection ended or was never made. Zero is not a reason.
 enum class DisconnectReason : std::uint8_t {

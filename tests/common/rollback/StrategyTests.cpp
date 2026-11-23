@@ -868,7 +868,7 @@ K::SystemResult RunProbe(K::ExclusiveWorld<> world) {
         CommandHistory().Record(world, probe.tick);
     } else if (probe.phase == 2) {
         K::RestoreSet set;
-        ScoreHistory().AddTo(set, probe.tick, {}, nullptr);
+        ScoreHistory().AddTo(set, probe.tick, {}, nullptr, {});
         return world.Restore(std::move(set));
     } else if (probe.phase == 3) {
         CommandHistory().WriteBack(world, probe.tick);
@@ -1159,5 +1159,305 @@ TEST_CASE("rollback strategy: a component input's entry that runs before the rol
         CHECK_MESSAGE(WorldOf(*rolled).Get<Health>(id)->hp == WorldOf(*straight).Get<Health>(id)->hp,
                       "[rb-component-input-put-back] " << WorldOf(*rolled).Get<Health>(id)->hp << " vs "
                                                        << WorldOf(*straight).Get<Health>(id)->hp);
+    }
+}
+
+// ---- R-8 A and F (the net Module's PR-2 gate 1): explicit entries and exits, and a resource's authoritative value.
+
+TEST_CASE("rollback strategy: R-8 A: an entity said to enter at or before C is put back with its id and kept by later rollbacks") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    // The authority spawned entity 77 at step 3 with Health 40; this World never had it (its history at 3 lacks it).
+    Inbox(*p).Entered(77, 3);
+    Inbox(*p).Value<Health>(77, 3, Health{40});
+    Inbox(*p).ConfirmedThrough(3);
+    Frames(*p, 1);
+    REQUIRE(TickOf(*p) == 10);
+    std::int32_t later = 0;
+    for (std::uint64_t t = 4; t <= 10; ++t) later += kScript[t];
+    REQUIRE_MESSAGE(WorldOf(*p).Alive(77), "[rb-entered-restored] the entity said to enter is not there");
+    CHECK_MESSAGE(WorldOf(*p).Get<Health>(77)->hp == 40 + later, "[rb-entered-restored] " << WorldOf(*p).Get<Health>(77)->hp);
+    // A later rollback (an authoritative value of entity 1 at step 6) keeps it: alive from step 3 on.
+    Inbox(*p).Value<Health>(1, 6, Health{1});
+    Inbox(*p).ConfirmedThrough(6);
+    Frames(*p, 1);
+    CHECK_MESSAGE(WorldOf(*p).Alive(77), "[rb-entered-kept] a later rollback took the entity said to enter");
+}
+
+TEST_CASE("rollback strategy: R-8 A: an entity said to enter after C is not there at C") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Entered(77, 8);
+    Inbox(*p).Value<Health>(77, 8, Health{40});
+    Inbox(*p).Value<Health>(1, 5, Health{7});
+    Inbox(*p).ConfirmedThrough(5);
+    Frames(*p, 1);
+    CHECK_MESSAGE(!WorldOf(*p).Alive(77), "[rb-entered-later-waits] entity 77 is there before step 8 is confirmed");
+}
+
+TEST_CASE("rollback strategy: R-8 A: an entity said to exit at or before C is removed at C and stays removed") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    // No value differs: the exit alone is the reason to go back.
+    Inbox(*p).Exited(2, 4);
+    Inbox(*p).ConfirmedThrough(4);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    CHECK_MESSAGE(StepsRun() > 1, "[rb-exited-differs] the exit alone did not go back: steps " << StepsRun());
+    CHECK_MESSAGE(!WorldOf(*p).Alive(2), "[rb-exited-removed] entity 2 is still there");
+    Frames(*p, 3);
+    CHECK_MESSAGE(!WorldOf(*p).Alive(2), "[rb-exited-removed] entity 2 came back");
+}
+
+TEST_CASE("rollback strategy: R-8 A: an exit at or before C the World's alive set at C agrees with is forgotten (S6)") {
+    R::RollbackInbox inbox;
+    inbox.Entered(5, 2);
+    inbox.Value<Health>(5, 2, Health{3});
+    inbox.NotSent(5, 7);
+    inbox.Exited(5, 6);
+    inbox.Entered(8, 2);
+    inbox.Exited(8, 6);
+    inbox.Entered(8, 9);
+    // Entity 5 left at 6 and the alive set at 7 lacks it: nothing of it is kept. Entity 4 is still in the World's
+    // alive set (a rollback given up): its exit stays.
+    inbox.Entered(4, 2);
+    inbox.Exited(4, 6);
+    // Entity 9 entered at 2 and is not in the alive set yet (not put back: a rollback given up): it is kept.
+    inbox.Entered(9, 2);
+    inbox.Prune(7, std::vector<K::EntityId>{1, 4});
+    CHECK_MESSAGE(!inbox.AliveAt(5, 8).has_value(), "[rb-exited-forgotten] the exit of entity 5 is still kept");
+    CHECK_MESSAGE(!inbox.Values<Health>()->At(5, 8).has_value(), "[rb-exited-forgotten] the values of entity 5 are still kept");
+    CHECK_MESSAGE(inbox.NotCarriedAt(7).empty(), "[rb-exited-forgotten] NotSent of entity 5 is still kept");
+    CHECK_MESSAGE((inbox.AliveAt(4, 8).has_value() && !*inbox.AliveAt(4, 8)), "[rb-exit-kept-while-alive] the exit of entity 4 was dropped");
+    CHECK_MESSAGE((inbox.AliveAt(8, 9).has_value() && *inbox.AliveAt(8, 9)), "an entity entering again after C is kept");
+    CHECK_MESSAGE((inbox.AliveAt(9, 8).has_value() && *inbox.AliveAt(9, 8)), "[rb-entered-not-forgotten] an entry not yet put back is kept");
+}
+
+TEST_CASE("rollback strategy: R-8 A: an exit the rollback carried out is forgotten by the inbox (S6)") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Exited(2, 4);
+    Inbox(*p).ConfirmedThrough(4);
+    Frames(*p, 1);
+    REQUIRE(!WorldOf(*p).Alive(2));
+    CHECK_MESSAGE(!Inbox(*p).AliveAt(2, 9).has_value(), "[rb-exited-forgotten] the inbox still keeps the exit of entity 2");
+    Frames(*p, 3);
+    CHECK(!WorldOf(*p).Alive(2));
+}
+
+TEST_CASE("rollback strategy: R-8 A: an entity that entered and exited between two C is forgotten without a rollback (S6)") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    // The World never had entity 77; at C = 6 it has exited, so nothing differs: no rollback, and the inbox forgets it.
+    Inbox(*p).Entered(77, 3);
+    Inbox(*p).Exited(77, 5);
+    Inbox(*p).ConfirmedThrough(6);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    REQUIRE(StepsRun() == 1);
+    CHECK_MESSAGE(!Inbox(*p).AliveAt(77, 9).has_value(), "[rb-exited-forgotten-without-rollback] the inbox still keeps entity 77");
+}
+
+TEST_CASE("rollback strategy: U3: a rollback for a value alone is not counted as one for an entry") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Value<Health>(1, 6, Health{1});
+    Inbox(*p).ConfirmedThrough(6);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    REQUIRE(StepsRun() > 1);
+    CHECK_MESSAGE(WorldOf(*p).Resource<R::RollbackHistory>()->rollbacksForEntries == 0,
+                  "[rb-entry-rollbacks-only-entries] " << WorldOf(*p).Resource<R::RollbackHistory>()->rollbacksForEntries);
+}
+
+TEST_CASE("rollback strategy: R-8 A: pruning the inbox keeps an entity's last entry or exit at or before C") {
+    R::RollbackInbox inbox;
+    inbox.Entered(5, 2);
+    inbox.Exited(5, 6);
+    inbox.Prune(7);
+    CHECK_MESSAGE((inbox.AliveAt(5, 8).has_value() && !*inbox.AliveAt(5, 8)), "[rb-lifecycle-prune-keeps-c] the exit was pruned");
+    CHECK(!inbox.AliveAt(9, 8).has_value());
+    const std::vector<K::EntityId> alive = inbox.AliveWith({1, 5, 9}, 8);
+    CHECK((alive == std::vector<K::EntityId>{1, 9}));
+}
+
+namespace {
+// A resource that rolls back: the step adds the Command to it.
+struct Tally {
+    std::int32_t sum = 0;
+    friend bool operator==(const Tally&, const Tally&) = default;
+};
+void HashValue(K::Hasher& h, const Tally& v) { HashValue(h, v.sum); }
+K::SystemResult AddUp(K::ResMut<Tally> tally, K::Res<Command> command) {
+    tally->sum += command->move;
+    return {};
+}
+void BuildTally(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Resource<Tally>({.name = "Tally"});
+    R::RollbackEntry(s).Resource<Tally>();
+    s.Registrar().AddSystem<&AddUp>(In("AddUp", "FixedUpdate", "Update"));
+}
+std::unique_ptr<O::Product> MakeTally(O::OptionBag options) {
+    auto p = Make(std::move(options), &BuildTally);
+    WorldOf(*p).SetResource(Tally{});
+    return p;
+}
+} // namespace
+
+TEST_CASE("rollback strategy: R-8 F: a resource's authoritative value that differs goes back; one that agrees does not") {
+    SUBCASE("differs") {
+        auto p = MakeTally(WithStrategy());
+        Frames(*p, 9);
+        Inbox(*p).ResourceValue<Tally>(5, Tally{1000});
+        Inbox(*p).ConfirmedThrough(5);
+        StepsRun() = 0;
+        Frames(*p, 1);
+        // Going back (the lookup) and what is put back are checked apart (S5 of PR-2's review).
+        CHECK_MESSAGE(StepsRun() > 1, "[rb-resource-differs] a differing resource value did not go back: steps " << StepsRun());
+        std::int32_t later = 0;
+        for (std::uint64_t t = 6; t <= 10; ++t) later += kScript[t];
+        CHECK_MESSAGE(WorldOf(*p).Resource<Tally>()->sum == 1000 + later, "[rb-resource-adopted] " << WorldOf(*p).Resource<Tally>()->sum);
+    }
+    SUBCASE("agrees") {
+        auto p = MakeTally(WithStrategy());
+        Frames(*p, 9);
+        std::int32_t at5 = 0;
+        for (std::uint64_t t = 1; t <= 5; ++t) at5 += kScript[t];
+        Inbox(*p).ResourceValue<Tally>(5, Tally{at5});
+        Inbox(*p).ConfirmedThrough(5);
+        StepsRun() = 0;
+        Frames(*p, 1);
+        CHECK_MESSAGE(StepsRun() == 1, "[rb-resource-agrees] steps run in the frame: " << StepsRun());
+    }
+    SUBCASE("a value before C counts at C, and the inbox keeps it after pruning") {
+        auto p = MakeTally(WithStrategy());
+        Frames(*p, 9);
+        Inbox(*p).ResourceValue<Tally>(4, Tally{500});
+        Inbox(*p).ConfirmedThrough(6);
+        Frames(*p, 1);
+        std::int32_t later = 0;
+        for (std::uint64_t t = 7; t <= 10; ++t) later += kScript[t];
+        CHECK_MESSAGE(WorldOf(*p).Resource<Tally>()->sum == 500 + later, "[rb-resource-before-c] " << WorldOf(*p).Resource<Tally>()->sum);
+        const auto* values = Inbox(*p).ResourceValues<Tally>();
+        REQUIRE(values != nullptr);
+        CHECK_MESSAGE(values->At(R::RollbackInbox::kResourceEntity, 6).has_value(), "[rb-resource-pruned-keeps-c]");
+    }
+}
+
+namespace {
+// A component that rolls back and no step changes (the last adversarial check's candidate 1).
+struct Badge {
+    std::int32_t value = 0;
+    friend bool operator==(const Badge&, const Badge&) = default;
+};
+void HashValue(K::Hasher& h, const Badge& v) { HashValue(h, v.value); }
+void BuildBadge(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Component<Badge>({.name = "Badge"});
+    R::RollbackEntry(s).Component<Badge>();
+}
+} // namespace
+
+TEST_CASE("rollback strategy: R-8 third state: the history of an entity kept at C is not overwritten by an older authoritative value") {
+    // U1 (c): an entity not carried at C keeps its history at C. Badge never changes, so the history at a later C is
+    // still the entry of C: had the older authoritative value been laid over it, a later C carrying the predicted
+    // value would find a difference and go back once more.
+    auto p = Make(WithStrategy(), &BuildBadge);
+    WorldOf(*p).Insert(1, Badge{5});
+    WorldOf(*p).Insert(2, Badge{7});
+    Frames(*p, 9);
+    Inbox(*p).Value<Badge>(1, 3, Badge{-1});  // older than C, entity 1 not carried at 6
+    Inbox(*p).NotSent(1, 6);
+    Inbox(*p).Value<Badge>(2, 6, Badge{100}); // entity 2 differs at 6: a rollback to 6
+    Inbox(*p).ConfirmedThrough(6);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    REQUIRE(StepsRun() > 1);
+    REQUIRE(WorldOf(*p).Get<Badge>(1)->value == 5);
+    // C = 8 carries entity 1 with the predicted value and entity 2 with the value it has had since 6.
+    Inbox(*p).Value<Badge>(1, 8, Badge{5});
+    Inbox(*p).Value<Badge>(2, 8, Badge{100});
+    Inbox(*p).ConfirmedThrough(8);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    CHECK_MESSAGE(StepsRun() == 1, "[rb-not-sent-history-not-adopted] a later C carrying the predicted value went back: steps " << StepsRun());
+}
+
+TEST_CASE("rollback strategy: R-8 third state: an entity the snapshot of C does not carry is not compared and keeps its history") {
+    SUBCASE("not compared: an older authoritative value is not inferred unchanged at C") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        // The authority's last value of entity 1 is of step 3; the snapshot of step 6 does not carry entity 1.
+        std::int32_t at3 = 100;
+        for (std::uint64_t t = 1; t <= 3; ++t) at3 += kScript[t];
+        Inbox(*p).Value<Health>(1, 3, Health{at3});
+        Inbox(*p).NotSent(1, 6);
+        Inbox(*p).ConfirmedThrough(6);
+        StepsRun() = 0;
+        Frames(*p, 1);
+        CHECK_MESSAGE(StepsRun() == 1, "[rb-not-sent-not-compared] steps run in the frame: " << StepsRun());
+    }
+    SUBCASE("a restore at C keeps the history of an entity C's snapshot does not carry") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        const std::int32_t predicted1 = WorldOf(*p).Get<Health>(1)->hp;
+        // Entity 2's authoritative value differs at 6 (a rollback to 6); entity 1 has an old value and is not carried.
+        Inbox(*p).Value<Health>(1, 3, Health{-5});
+        Inbox(*p).NotSent(1, 6);
+        Inbox(*p).Value<Health>(2, 6, Health{1});
+        Inbox(*p).ConfirmedThrough(6);
+        Frames(*p, 1);
+        CHECK_MESSAGE(WorldOf(*p).Get<Health>(1)->hp == predicted1 + kScript[10],
+                      "[rb-not-sent-history-kept] " << WorldOf(*p).Get<Health>(1)->hp << " vs " << predicted1 + kScript[10]);
+    }
+    SUBCASE("an entity that entered and is not carried at its first C is put back from the inbox (U1 (c), S2)") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        // The authority spawned entity 77 at step 5 with Health 40; the snapshot of step 6 does not carry it, and this
+        // World has no history of it: the restore takes the inbox's value, not an empty entity.
+        Inbox(*p).Entered(77, 5);
+        Inbox(*p).Value<Health>(77, 5, Health{40});
+        Inbox(*p).NotSent(77, 6);
+        Inbox(*p).ConfirmedThrough(6);
+        Frames(*p, 1);
+        std::int32_t later = 0;
+        for (std::uint64_t t = 7; t <= 10; ++t) later += kScript[t];
+        REQUIRE(WorldOf(*p).Alive(77));
+        const Health* health = WorldOf(*p).Get<Health>(77);
+        CHECK_MESSAGE((health != nullptr && health->hp == 40 + later),
+                      "[rb-not-sent-entered-from-inbox] " << (health != nullptr ? health->hp : -1) << " vs " << 40 + later);
+    }
+    SUBCASE("an entity entering again, not carried at its first C, is put back from the inbox, not from the history of before (N2)") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        // Entity 2 leaves at step 4 (carried out by the rollback); its history keeps the entries of before and the
+        // absence after, within the depth.
+        Inbox(*p).Exited(2, 4);
+        Inbox(*p).ConfirmedThrough(4);
+        Frames(*p, 1);
+        REQUIRE(!WorldOf(*p).Alive(2));
+        // It enters again at step 7 with Health 40; the snapshot of step 8 does not carry it.
+        Inbox(*p).Entered(2, 7);
+        Inbox(*p).Value<Health>(2, 7, Health{40});
+        Inbox(*p).NotSent(2, 8);
+        Inbox(*p).ConfirmedThrough(8);
+        Frames(*p, 1);
+        std::int32_t later = 0;
+        for (std::uint64_t t = 9; t <= 11; ++t) later += kScript[t];
+        REQUIRE(WorldOf(*p).Alive(2));
+        const Health* health = WorldOf(*p).Get<Health>(2);
+        CHECK_MESSAGE((health != nullptr && health->hp == 40 + later),
+                      "[rb-not-sent-recorded-alive] " << (health != nullptr ? health->hp : -1) << " vs " << 40 + later);
+    }
+    SUBCASE("at a later C the entity counts again") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        Inbox(*p).Value<Health>(1, 3, Health{-5});
+        Inbox(*p).NotSent(1, 6);
+        Inbox(*p).ConfirmedThrough(7);
+        StepsRun() = 0;
+        Frames(*p, 1);
+        CHECK_MESSAGE(StepsRun() > 1, "[rb-not-sent-only-at-its-tick] the value of step 3 was not compared at 7");
     }
 }

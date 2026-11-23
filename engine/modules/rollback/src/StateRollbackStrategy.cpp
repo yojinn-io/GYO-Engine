@@ -7,6 +7,7 @@
 #include "engine/world_time/TimeTypes.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <set>
@@ -19,6 +20,19 @@ namespace GYO::Engine::Rollback {
 namespace {
 
 using Ok = Base::Result<void, Kernel::KernelError>;
+
+// alive (ascending) without the entities of drop (ascending).
+std::vector<Kernel::EntityId> Without(const std::vector<Kernel::EntityId>& alive, const std::vector<Kernel::EntityId>& drop) {
+    if (drop.empty()) return alive;
+    std::vector<Kernel::EntityId> out;
+    std::set_difference(alive.begin(), alive.end(), drop.begin(), drop.end(), std::back_inserter(out));
+    return out;
+}
+
+// The inbox's authoritative values for one history column: a component's by entity, a resource's (R-8 F).
+const InboxColumnBase* AuthoritativeOf(const RollbackInbox& inbox, const ColumnHistoryBase& column) {
+    return column.IsResource() ? inbox.ResourceValuesOf(column.Key()) : inbox.ValuesOf(column.Key());
+}
 
 Kernel::KernelError Failed(std::string message) {
     return Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, std::move(message));
@@ -172,10 +186,12 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
     if (point > tick) return {};  // the authority is ahead: wait until this World has run that step
     std::optional<bool> rollBack;
     bool fresh = false;
+    std::optional<std::vector<Kernel::EntityId>> aliveAtPoint;
     auto decided = world.Modify<RollbackHistory>([&](RollbackHistory& history) {
         if (history.decided && point <= *history.decided) return;
         history.decided = point;
         fresh = true;
+        if (const std::vector<Kernel::EntityId>* kept = history.AliveAt(point)) aliveAtPoint = *kept;
         if (settings_.mode == RollbackMode::Disabled) return;
         if (tick - point > settings_.depth || history.AliveAt(point) == nullptr) {
             context.Abandon(point, settings_.depth);
@@ -186,22 +202,42 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
             return;
         }
         bool differs = false;
-        const std::vector<Kernel::EntityId>& alive = *history.AliveAt(point);
+        bool entered = false;
+        const std::vector<Kernel::EntityId>& recorded = *history.AliveAt(point);
         static_cast<void>(world.Read<RollbackInbox>([&](const RollbackInbox& inbox) {
+            // The alive set at C with the caller's explicit entries and exits (R-8 A): one that differs from the
+            // recorded set is a reason to go back by itself.
+            const std::vector<Kernel::EntityId> alive = inbox.AliveWith(recorded, point);
+            differs = alive != recorded;
+            // U3: an entity said to enter that this World's record at C lacks.
+            entered = std::any_of(alive.begin(), alive.end(),
+                                  [&](Kernel::EntityId id) { return !std::binary_search(recorded.begin(), recorded.end(), id); });
+            // R-8's third state: an entity the snapshot of C does not carry is not compared (not inferred unchanged).
+            const std::vector<Kernel::EntityId> compared = Without(alive, inbox.NotCarriedAt(point));
+            history.notSentLeftOut += alive.size() - compared.size();
             for (const auto& column : history.columns) {
-                if (const InboxColumnBase* values = inbox.ValuesOf(column->Key())) {
-                    differs = differs || column->Differs(point, *values, alive);
+                if (const InboxColumnBase* values = AuthoritativeOf(inbox, *column)) {
+                    differs = differs || column->Differs(point, *values, compared);
                 }
             }
         }));
         rollBack = differs;
+        if (differs && entered) ++history.rollbacksForEntries;
     });
     if (!decided) return Base::Err(std::move(decided).error());
     if (fresh && !(rollBack && *rollBack)) {
         // The confirmed point moved and no rollback follows (it agrees, it was given up, or the mode is Check
         // or Disabled): what is older than it is not needed for a later comparison, except per entity the last
         // value at or before it (review of step 4, 1-3: the inbox was pruned only after a rollback).
-        auto pruned = world.Modify<RollbackInbox>([point](RollbackInbox& inbox) { inbox.Prune(point); });
+        // An exit at or before C the alive set at C agrees with is forgotten (S6); without a record at C (given up)
+        // nothing is forgotten.
+        auto pruned = world.Modify<RollbackInbox>([point, &aliveAtPoint](RollbackInbox& inbox) {
+            if (aliveAtPoint) {
+                inbox.Prune(point, *aliveAtPoint);
+            } else {
+                inbox.Prune(point);
+            }
+        });
         if (!pruned) return Base::Err(std::move(pruned).error());
     }
     if (rollBack && *rollBack) {
@@ -217,22 +253,41 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
 Ok StateRollbackStrategy::Restore(RestoreContext& context) {
     Exclusive& world = context.World();
     const std::uint64_t target = context.Target();
+    bool inboxRead = false;
     auto built = world.Modify<RollbackHistory>([&](RollbackHistory& history) -> std::optional<Kernel::RestoreSet> {
-        const std::vector<Kernel::EntityId>* alive = history.AliveAt(target);
-        if (alive == nullptr) return std::nullopt;
+        const std::vector<Kernel::EntityId>* recorded = history.AliveAt(target);
+        if (recorded == nullptr) return std::nullopt;
         Kernel::RestoreSet set;
-        set.Alive(*alive);
-        static_cast<void>(world.Read<RollbackInbox>([&](const RollbackInbox& inbox) {
-            for (const auto& column : history.columns) {
-                const InboxColumnBase* values = inbox.ValuesOf(column->Key());
-                column->AddTo(set, target, *alive, values);
-                // The history at target agrees with the authority afterwards.
-                if (values != nullptr) column->Adopt(target, *values, *alive);
+        const auto read = world.Read<RollbackInbox>([&](const RollbackInbox& inbox) {
+            inboxRead = true;
+            // R-8 A: an entity the caller said entered at or before target and did not exit is put back (spawned
+            // with its id when it is not there, its values from the inbox); one said to have exited is removed.
+            const std::vector<Kernel::EntityId> alive = inbox.AliveWith(*recorded, target);
+            set.Alive(alive);
+            // An entity the snapshot of target does not carry keeps the World's own history when this World had it
+            // at target (its recorded alive set), and takes the inbox's value when it did not, e.g. one that just
+            // entered (R-8's third state; the user's U1 (c), 2026-11-23; the recheck's N2: entries of an entity of
+            // before, or an absence, are not "had it").
+            std::vector<Kernel::EntityId> kept;
+            for (const Kernel::EntityId entity : inbox.NotCarriedAt(target)) {
+                if (std::binary_search(recorded->begin(), recorded->end(), entity)) kept.push_back(entity);
             }
-        }));
+            for (const auto& column : history.columns) {
+                const InboxColumnBase* values = AuthoritativeOf(inbox, *column);
+                column->AddTo(set, target, alive, values, kept);
+                // The history at target agrees with the authority afterwards.
+                if (values != nullptr) column->Adopt(target, *values, Without(alive, kept));
+            }
+            history.SetAliveAt(target, alive);
+        });
+        static_cast<void>(read);  // not read: reported below (the set has no alive set and no columns)
         return set;
     });
     if (!built) return Base::Err(std::move(built).error());
+    if (*built && **built && !inboxRead) {
+        // The rollback Module puts the inbox into every World it prepares; without it nothing can be put back.
+        return Base::Err(Failed("StateRollbackStrategy::Restore: the World has no RollbackInbox"));
+    }
     if (!*built || !**built) return Base::Err(Failed("StateRollbackStrategy::Restore: step " + std::to_string(target) + " is not in the history"));
     return world.Restore(std::move(***built));
 }
@@ -265,7 +320,19 @@ Ok StateRollbackStrategy::Resimulate(ResimulateContext& context) {
     if (!putBack) return Base::Err(std::move(putBack).error());
     auto lowered = world.Modify<WorldTime::Resimulation>([](WorldTime::Resimulation& r) { r.active = 0; });
     if (!lowered) return Base::Err(std::move(lowered).error());
-    auto pruned = world.Modify<RollbackInbox>([target](RollbackInbox& inbox) { inbox.Prune(target); });
+    // The alive set at target is the one the restore put back (SetAliveAt): exits it carried out are forgotten (S6).
+    std::optional<std::vector<Kernel::EntityId>> aliveAtTarget;
+    auto readAlive = world.Read<RollbackHistory>([&](const RollbackHistory& history) {
+        if (const std::vector<Kernel::EntityId>* kept = history.AliveAt(target)) aliveAtTarget = *kept;
+    });
+    if (!readAlive) return Base::Err(std::move(readAlive).error());
+    auto pruned = world.Modify<RollbackInbox>([target, &aliveAtTarget](RollbackInbox& inbox) {
+        if (aliveAtTarget) {
+            inbox.Prune(target, *aliveAtTarget);
+        } else {
+            inbox.Prune(target);
+        }
+    });
     if (!pruned) return Base::Err(std::move(pruned).error());
     return {};
 }

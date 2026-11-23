@@ -52,7 +52,7 @@
   - `od-parse-trailing` 第一次是 wrong_failure：清單裡第一個被它放過的是 `1.2.3.4.5`，不是 `1.2.3.4 `。expect 改成前者（它仍只認這個突變）。
   - `CAPTURE` 原本印出指標，迴圈改成 `std::string`。
 - **§14.5 的確認**：7 個都寫了「只有它捕到的」。非阻塞（`O_NONBLOCK` 拿掉）的突變沒有加：它的失敗是逾時，不是可識別的訊息（§14.2）。
-- **CI（G-7 三平台）**：PR-1 開了之後跑 L1，結果補在這裡。
+- **CI（G-7 三平台）**：PR #275 的 L1。第一、二次 windows-x64 失敗（連結集守衛、`SIO_UDP_CONNRESET` 未宣告），修正後 run 45034563190 起三平台都過；合併時的 run 45098656616 三平台與 CI gate 都過（2026-11-23 補）。
 - **證據**：主 checkout `build/evidence/gyo2-net-module/step0/ctest-os-last.log`。突變的輸出未保存，結果在上面。
 
 ## 判定的變更（§14.4）：`gyo_os` 的連結集加 `ws2_32`
