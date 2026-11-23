@@ -23,6 +23,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "engine/base/Result.hpp"
@@ -82,7 +83,8 @@ constexpr void RequireColliderQuery() {
 }
 
 // Calls visit(entity, collider, pose) for every entity of the Query the filter accepts, in ascending EntityId
-// order; stops at the first error (a scale or what visit returns).
+// order. visit returns Result<bool>: true goes on, false stops; the first error (a scale or what visit returns)
+// stops too and is returned with the entity named.
 template <class... Terms, class Filter, class Visit>
 [[nodiscard]] Base::Result<void, Physics3dError> ForEachCollider(const Kernel::Query<Terms...>& colliders,
                                                                  Filter& filter, Visit&& visit) {
@@ -93,6 +95,7 @@ template <class... Terms, class Filter, class Visit>
         if (!IsUnitScale(transform->scale)) return Base::Err(ScaleError(entity));
         auto visited = visit(entity, *collider, Pose{transform->translation, transform->rotation});
         if (!visited) return Base::Err(AtEntity(std::move(visited).error(), entity));
+        if (!*visited) break;
     }
     return {};
 }
@@ -108,10 +111,10 @@ template <class... Terms, class Filter = AcceptAll>
     auto done = Detail::ForEachCollider(
         colliders, filter,
         [&](const Kernel::EntityId entity, const Collider& collider,
-            const Pose& pose) -> Base::Result<void, Physics3dError> {
+            const Pose& pose) -> Base::Result<bool, Physics3dError> {
             const std::optional<RayHit> hit = CastRay(collider.shape, pose, ray, maxT);
             if (hit && (!best || hit->t < best->hit.t)) best = EntityRayHit{entity, *hit};
-            return {};
+            return true;
         });
     if (!done) return Base::Err(std::move(done).error());
     return best;
@@ -127,31 +130,53 @@ template <class... Terms, class Filter = AcceptAll>
     auto done = Detail::ForEachCollider(
         colliders, filter,
         [&](const Kernel::EntityId entity, const Collider& collider,
-            const Pose& colliderPose) -> Base::Result<void, Physics3dError> {
+            const Pose& colliderPose) -> Base::Result<bool, Physics3dError> {
             auto hit = CastShape(shape, pose, motion, collider.shape, colliderPose, options);
             if (!hit) return Base::Err(std::move(hit).error());
             if (*hit && (!best || (*hit)->time < best->hit.time)) best = EntityShapeHit{entity, **hit};
-            return {};
+            return true;
         });
     if (!done) return Base::Err(std::move(done).error());
     return best;
 }
 
-// The colliders shape (at pose) overlaps or touches (FindContact with prediction 0), by ascending EntityId.
+// Calls visit(entity, box, contact) for every contact within prediction (>= 0) between shape (at pose; a Ball or a
+// Capsule) and the colliders, entities by ascending EntityId and, on a BoxSet collider, every box by ascending index
+// (box is that index; 0 for other shapes). The contact is FindContact's (point1, normal1 on shape). visit returns
+// false to stop. avian's MoveAndSlide::intersections (one deepest contact per pair).
+template <class... Terms, class Filter, class Visit>
+[[nodiscard]] Base::Result<void, Physics3dError> ForEachContact(const Kernel::Query<Terms...>& colliders,
+                                                                const Shape& shape, const Pose& pose,
+                                                                const float prediction, Filter filter, Visit&& visit) {
+    Detail::RequireColliderQuery<Terms...>();
+    return Detail::ForEachCollider(
+        colliders, filter,
+        [&](const Kernel::EntityId entity, const Collider& collider,
+            const Pose& colliderPose) -> Base::Result<bool, Physics3dError> {
+            if (const auto* boxes = std::get_if<BoxSet>(&collider.shape)) {
+                auto all = FindBoxContacts(shape, pose, *boxes, colliderPose, prediction);
+                if (!all) return Base::Err(std::move(all).error());
+                for (const BoxContact& c : *all) {
+                    if (!visit(entity, c.box, c.contact)) return false;
+                }
+                return true;
+            }
+            auto contact = FindContact(shape, pose, collider.shape, colliderPose, prediction);
+            if (!contact) return Base::Err(std::move(contact).error());
+            return !*contact || static_cast<bool>(visit(entity, std::uint32_t{0}, **contact));
+        });
+}
+
+// The colliders shape (at pose) overlaps or touches (a contact with prediction 0), by ascending EntityId.
 template <class... Terms, class Filter = AcceptAll>
 [[nodiscard]] Base::Result<std::vector<Kernel::EntityId>, Physics3dError> Intersections(
     const Kernel::Query<Terms...>& colliders, const Shape& shape, const Pose& pose, Filter filter = {}) {
-    Detail::RequireColliderQuery<Terms...>();
     std::vector<Kernel::EntityId> found;
-    auto done = Detail::ForEachCollider(
-        colliders, filter,
-        [&](const Kernel::EntityId entity, const Collider& collider,
-            const Pose& colliderPose) -> Base::Result<void, Physics3dError> {
-            auto contact = FindContact(shape, pose, collider.shape, colliderPose, 0.0F);
-            if (!contact) return Base::Err(std::move(contact).error());
-            if (*contact) found.push_back(entity);
-            return {};
-        });
+    auto done = ForEachContact(colliders, shape, pose, 0.0F, filter,
+                               [&found](const Kernel::EntityId entity, std::uint32_t, const Contact&) {
+                                   if (found.empty() || found.back() != entity) found.push_back(entity);
+                                   return true;
+                               });
     if (!done) return Base::Err(std::move(done).error());
     return found;
 }

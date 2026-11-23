@@ -113,6 +113,34 @@
    "target": "gyo_physics_3d_tests",
    "cases": "world: a collider whose Transform*",
    "expect": "\\[p3\\-world\\-scale\\] the scale was ignored"
+  },
+  {
+   "id": "p3-mas-pull-back-sign",
+   "what": "CastMove adds the skin distance instead of pulling back by it: the shape ends inside the skin (or past the contact). Only it catches the sign of avian's pull_back",
+   "guards": [
+    "physics-3d P3-1",
+    "physics-3d 3"
+   ],
+   "file": "engine/modules/physics_3d/src/MoveAndSlide.cpp",
+   "find": "        const double back = hitDistance - skinDistance;",
+   "replace": "        const double back = hitDistance + skinDistance;",
+   "target": "gyo_physics_3d_tests",
+   "cases": "move_and_slide: CastMove stops*",
+   "expect": "\\[p3\\-mas\\-pull\\-back\\]"
+  },
+  {
+   "id": "p3-mas-similar-planes-less-blocking",
+   "what": "merging two nearly parallel planes keeps the less blocking one: part of the velocity still points into the more blocking plane",
+   "guards": [
+    "physics-3d P3-1",
+    "physics-3d 3"
+   ],
+   "file": "engine/modules/physics_3d/include/engine/physics_3d/MoveAndSlide.hpp",
+   "find": "if (Math::Dot(n, v) < Math::Dot(ToVec3d(existing), v)) existing = normal;",
+   "replace": "if (Math::Dot(n, v) > Math::Dot(ToVec3d(existing), v)) existing = normal;",
+   "target": "gyo_physics_3d_tests",
+   "cases": "move_and_slide: a nearly parallel*",
+   "expect": "\\[p3\\-mas\\-similar\\-planes\\]"
   }
  ]
 }

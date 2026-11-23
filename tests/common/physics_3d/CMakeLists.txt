@@ -1,13 +1,15 @@
 # Tests of the physics_3d Module (docs/architecture/target/v2/physics-3d-declaration.zh-Hant.md, section 6; Design
 # Invariants P3-1 to P3-6, section 8). Synthetic units only: the pure queries (queries.*), BoxSet equal to a linear
-# scan (box_set.*), the literal binary32 bit patterns every platform must give (golden.*), and the World side
-# (world.*); the rollback case links the time and rollback Modules into the test, not into physics_3d.
+# scan (box_set.*), the literal binary32 bit patterns every platform must give (golden.*), the World side (world.*)
+# and the move-and-slide mechanism (move_and_slide.*); the rollback case links the time and rollback Modules into the
+# test, not into physics_3d.
 add_executable(gyo_physics_3d_tests
     TestMain.cpp
     QueryTests.cpp
     BoxSetTests.cpp
     GoldenTests.cpp
     WorldTests.cpp
+    MoveAndSlideTests.cpp
 )
 target_link_libraries(gyo_physics_3d_tests PRIVATE GYO::Physics3d GYO::Transform GYO::EntityIds GYO::WorldTime
     GYO::Rollback gyo_test_support doctest::doctest)
@@ -17,7 +19,7 @@ if(MSVC)
 else()
     target_compile_options(gyo_physics_3d_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-foreach(group IN ITEMS queries box_set golden world)
+foreach(group IN ITEMS queries box_set golden world move_and_slide)
     add_test(NAME physics_3d.${group} COMMAND gyo_physics_3d_tests "--test-case=${group}:*")
     set_tests_properties(physics_3d.${group} PROPERTIES LABELS "cpu" TIMEOUT 120
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

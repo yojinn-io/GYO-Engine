@@ -8,7 +8,7 @@ Owner：架構。程式：`engine/modules/physics_3d/`（`GYO::Engine::Physics3d
 
 FPS 的地圖是一個實體：`Collider{BoxSet}`（體素工具烘出的 1,260 個方塊）＋`Transform`。每個玩家是一個實體：`Collider{CapsuleY(halfHeight, radius)}`＋`Transform`。
 
-- 走路：產品的移動規則在固定步裡呼叫 `Physics3d::CastShape(colliders, Capsule{…}, pose, motion, options, filter)`，`filter` 排除玩家（只掃牆），拿第一個接觸的比例與法線，自己決定滑動。
+- 走路：產品的移動規則在固定步裡呼叫 `Physics3d::MoveAndSlide(colliders, CapsuleY(…), pose, velocity, dt, config, filter)`，`filter` 排除玩家（只掃牆），把回來的 `position` 寫回 `Transform`；站不站在地上由產品自己判（往下 `CastMove` 加自己的法線門檻），站著時把地面平面放進 `config.planes`。
 - 開槍：`Physics3d::CastRay(colliders, ray, range, filter)` 拿最近的牆；hitbox 不是實體，對每顆骨頭上的球、膠囊直接用 `CastRay(Capsule{a, b, radius}, Pose{}, ray, range)`（世界座標的線段膠囊放在單位姿態；球是 `Ball` 放在球心的姿態）。
 - 出生：`Intersections(colliders, Capsule{…}, pose, filter)` 是空的就放得下。
 - 回滾：查詢只讀 `Transform` 與 `Collider`，重跑時結果逐位元相同。
@@ -20,7 +20,7 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 ```
 
 - 登記檔一列：`library_only=no`、`default=no`、`depends=transform`。
-- 標頭：`Shapes.hpp`（`Ball`、`Capsule`、`CapsuleY`、`Cuboid`、`BoxSet`、`Shape`、`Pose`、`IsValid`）、`Queries.hpp`（純查詢）、`Collider.hpp`、`SpatialQuery.hpp`（接作者 Query 的函式）、`Physics3dModule.hpp`、`Physics3dError.hpp`。
+- 標頭：`Shapes.hpp`（`Ball`、`Capsule`、`CapsuleY`、`Cuboid`、`BoxSet`、`Shape`、`Pose`、`IsValid`）、`Queries.hpp`（純查詢）、`Collider.hpp`、`SpatialQuery.hpp`（接作者 Query 的函式）、`MoveAndSlide.hpp`（運動學角色的機制）、`Physics3dModule.hpp`、`Physics3dError.hpp`。
 - 純查詢不需要 World，工具與測試也能用。
 
 ## 2. 用法與後果
@@ -45,12 +45,25 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 - **`Collider` 的 `==`** 逐位元，`BoxSet` 先比摘要與個數、相同再逐位元比內容；雜湊收種類、各欄、`BoxSet` 的個數與摘要（CCR-13）。回滾、權威要它時作者自己登記（同 `Transform`）。
 - **數值**：內部 double、每個結果捨入成 float 一次；只用 + − × ÷、`sqrt`、比較、`abs`。精確值不是 float 能表示的就照捨入出來（例：接觸點的分量可能是 −4.4e−16，不是 0）。
 
+## 3. MoveAndSlide（運動學角色的機制）
+
+照 avian 的 `MoveAndSlide`（`src/character_controller/move_and_slide.rs`、`velocity_project.rs`），同樣是接作者 Query 與 `filter` 的函式：
+
+- `ProjectVelocity(v, normals)`：純函式，avian 的暴力版（不是對偶解法）：平面數少（`maxPlanes` 20）、沒有自己的迭代與容差，結果只看法線的順序。
+- `CastMove(colliders, shape, pose, movement, skinWidth, filter)` → `Result<optional<MoveHit>>`：沿位移多掃 `skinWidth`，起點的重疊只在往裡走時算（`stopAtPenetration = false`），退回到沿法線離 `skinWidth`（`skinWidth / max(dot, 0.005)`）。`distance` 是可走的距離，`collisionDistance` 是不算皮膚的距離（avian 的程式把它填成掃掠長度，這裡照它文件的意思填）。相機防穿牆也用它。算術（掃掠長度、退回、`MoveHit`）在 `CastMoveWith(movement, skinWidth, cast)`，`cast` 是要用的形狀掃掠（`CastMove` 傳 World 的 `CastShape`）。
+- `Depenetrate(colliders, shape, pose, DepenetrationConfig, filter)` → `Result<Vec3>`：收 `skinWidth` 內的接觸（每個 collider 一個、`BoxSet` 每個方塊一個，`SpatialQuery.hpp` 的 `ForEachContact`），Gauss-Seidel 推出；比 `penetrationRejectionThreshold` 深的接觸不推。
+- `MoveAndSlide(colliders, shape, pose, velocity, deltaSeconds, config, filter, onHit)` → `Result<MoveAndSlideOutput{position, projectedVelocity}>`：先推出；最多 `moveAndSlideIterations` 次「掃到第一個碰撞、走到那裡、收碰撞平面與 `2 × skinWidth` 內的接觸平面（相近的平面合併、留比較擋路的那個；最多 `maxPlanes`）、把速度投影上去」；最後再推出一次。`onHit` 回 `Accept`／`Ignore`／`Abort`，可以改法線、位置、速度。預設值同 avian（4、16、1e−4、0.5、0.01、空、cos 5°、20）；推出的四個欄位是 `config.depenetration`（一個 `DepenetrationConfig`，avian 是重複的四欄）；沒有長度單位資源（GYO 的單位是作者的公尺）。avian 給接觸平面的 `onHit` 傳的是掃掠命中的實體，這裡傳接觸那個實體；接觸平面的 `point` 是 collider 那一側的點（`Contact::point2`），avian 用兩個表面最近點的中點（`collision/contact_types/mod.rs:613-619`）。
+- **作者的規則不在這裡**（§1-1）：站地判定、坡度、台階、貼地、重力。rapier 的 `KinematicCharacterController` 把它們綁在一起，這裡不做；PvP 盤點沒有台階與坡。放置檢查用 `Intersections`。
+- 不支援的組合照樣回錯：對球、膠囊 collider 掃掠是 `Unsupported`，角色自己與其他角色用 `filter` 排除。
+- 走訪的順序固定（實體依 EntityId、方塊依索引），同樣的輸入給同樣的位元；golden 一份（`physics_3d.move_and_slide`）。
+- **已知缺陷（S1，設計審查 2026-11-23 量到）：`BoxSet` 的內部邊。** 兩個天面同高、相鄰的方塊（`[-2,0]×[-1,0]×[-1,1]` 與 `[0,2]×[-1,0]×[-1,1]`），`config.planes = {(0,1,0)}`，`CapsuleY(0.5, 0.5)` 在皮膚高度（y＝1.01）以速度 (∓3, −1, 0)、1/60 秒走 60 步越過接縫：最大 y 1.018824（**高出 8.8 mm**）、最小水平速度 2.700110（**慢約 10%**），兩個方向相同。原因：每個方塊各算最近點，相鄰方塊的頂邊在 `2 × skinWidth` 內時給出約 11° 傾斜的接觸平面，超過 cos 5° 不和地面合併，投影留下往上的分量。avian 用一般複合形狀也一樣。量測案例 `move_and_slide: crossing*` 先 `doctest::skip`（`--no-skip` 可重現）。**修法（下一步）**：照 parry 複合形狀的 `FIX_INTERNAL_EDGES`（`src/shape/compound.rs:30-40`：兩塊相接處當內部、接觸法線夾回外輪廓；建立時跑一次），在 `BoxSet` 加同樣的旗標，作者可選。
+
 ## Design Invariants（草稿）
 
-守衛欄：行為測試（ctest `physics_3d.queries`、`physics_3d.box_set`、`physics_3d.golden`、`physics_3d.world`）與突變（`docs/architecture/target/v2/scripts/physics_3d_mutations.json`，`p3-`）。
+守衛欄：行為測試（ctest `physics_3d.queries`、`physics_3d.box_set`、`physics_3d.golden`、`physics_3d.world`、`physics_3d.move_and_slide`）與突變（`docs/architecture/target/v2/scripts/physics_3d_mutations.json`，`p3-`）。
 
 <a id="p3-1"></a>
-**P3-1 職責。** 形狀、純查詢、`BoxSet`、`Collider` 與空間查詢函式。不做：模擬步與剛體、回滾／權威的登記、角色移動規則、畫面。`Physics3dModule` 只登記 `Collider`。
+**P3-1 職責。** 形狀、純查詢、`BoxSet`、`Collider`、空間查詢函式與運動學角色的機制（`MoveAndSlide`、`CastMove`、`Depenetrate`、`ProjectVelocity`）。不做：模擬步與剛體、回滾／權威的登記、角色移動規則（站地、坡度、台階、貼地、重力是作者的）、畫面。`Physics3dModule` 只登記 `Collider`。
 
 <a id="p3-2"></a>
 **P3-2 判定只讀 `Transform`。** World 查詢的姿態只從 `Transform` 來、不讀 `GlobalTransform`（CCR-12）；縮放不是 (1,1,1) 回錯、不默默忽略。守衛：`physics_3d.world`；突變 `p3-scale-not-checked`；審查。
@@ -76,6 +89,7 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 
 ## 範囲の限界
 
-- 沒有剛體、角色控制器（下一步，照 rapier／avian）、子實體 collider、縮放、半空間、凸包、三角網格。
+- 沒有剛體、角色移動規則（只有 move-and-slide 的機制）、子實體 collider、縮放、半空間、凸包、三角網格。
+- `BoxSet` 的內部邊沒有處理（第 3 節 S1，已知缺陷，下一步修）。
 - golden 是在 Intel Mac（macos-x64）產生的；三平台由 L1 確認。
 - 和 avian、parry、rapier、Jolt 的對照（檔名行號）在[事前宣告](physics-3d-declaration.zh-Hant.md)第 5 節。
