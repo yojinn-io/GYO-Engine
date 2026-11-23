@@ -146,6 +146,7 @@
   - `nt-k3-spawn-written-early`（先留著）的 expect 改指「S1 b same frame」。
   - 新加 `nt-k3-spawn-written-before-decided`（確認點條件），expect 指「S1 b later frame」。
   - 兩個突變都會讓兩案失敗：它們是同一個機制的兩半，都是「值寫到之前那份上」。各自的 expect 指不同的檢查，但兩條檢查分不出是哪一半。
+  - 〔最後一輪敵對式檢查補充〕`nt-k3-spawn-written-early` 也經由 `whole` 被殺，與確認點落在哪裡無關；單獨證明「確認點 ≥ 生成 tick」有作用的是晚兩幀那一案。
 - **過程中的兩個測試問題**（不是方法的更換，同一個做法的除錯）：
   - Client 在連線前設輸入造成崩潰：改成連上之後才設。
   - 第一版暫停時兩端的時鐘一起走，Client 的對時跳了約 90 tick，超過回滾深度、回滾被放棄。改成只有伺服器的時鐘走。
@@ -201,6 +202,23 @@
   - net：全跑 99／100（A6 的第一版存活，見上）；改了 A6 的案例之後，重跑 `k3:*` 的 20 個，20／20 killed。所以 net 100／100。
   - 新加的突變各指自己的檢查。例外：N1 的兩個突變會讓 S1 b 的兩案都失敗（見第 9 節）。
   - 全部 ctest 199／199。
+
+## 11. 最後一輪敵對式檢查
+
+- 檢查者 Opus／high，與作者同模型。報告在主 checkout `build/evidence/gyo2-net-module/mutant-adversarial2-pr2-opus.md`：候選 2、處理不成立 0。
+- **更正說明**：第 9 節與 `nt-k3-spawn-written-early` 的 `what` 補一句：它也經由 `whole` 被殺，與確認點落在哪裡無關；單獨證明確認點條件有作用的是晚兩幀那一案。
+- **候選 1**（U1 (c)：`Adopt` 改成對全部存活實體）：
+  - 實跑存活（`adversarial2-probe.log`）。
+  - 補 rollback 一案：用一個步不會改的元件 `Badge`。實體 1 在 C＝6 沒帶、保留歷史；C＝8 帶著預測值時不該再回滾（`[rb-not-sent-history-not-adopted]`，StepsRun＝1）。
+  - 加突變 `rb-not-sent-history-adopted`，killed。
+- **候選 2**（A5：拿掉看得到的實體上不回滾的元件）：
+  - 實跑時既有測試已經會失敗：「with losses」閃爍案例的 `tintsWrong`（`adversarial2-probe-2-caught-by.txt`）。不過那是靠閃爍的偶然。
+  - 所以仍在「hidden and seen again」加一條確定性的檢查：Client 的第 180 步時，160 tick 被拿掉 `Tint` 的箱子沒有 `Tint`。
+  - 加突變 `nt-k3-direct-not-removed`，指向這條檢查，killed（`adversarial2-probe-after.log`）。
+  - 這和協調者寫的「存活再加」不完全一致：它不是存活，是被偶然抓到，所以照「覆蓋靠偶然」的用意加上。
+- **突變**：兩個新的都 killed（`adversarial2-mutations.log`）。這一輪沒有改程式，只加了檢查，所以只跑這兩個（D184）。
+- 全部 ctest：202／202（merge gyo2 之後，總數從 199 變 202）。
+- 分支上已有協調者 merge gyo2 的 92948532；建置與 ctest 是在它之後跑的。
 
 ## 之後要接的
 

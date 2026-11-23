@@ -1237,7 +1237,7 @@
   },
   {
    "id": "nt-k3-spawn-written-early",
-   "what": "A spawn's non-rolling values are written at once while the entity of before is still in the World; the rollback to a point in [exit, entry) of the same frame removes them for good. Only it catches the waiting at the spawn (S1 b, the recheck's N1)",
+   "what": "A spawn's non-rolling values are written at once while the entity of before is still in the World; the rollback to a point in [exit, entry) of the same frame removes them for good. Only it catches the waiting at the spawn (S1 b, the recheck's N1). It is also killed through whole (the written value is not among the waiting values, so the write of the spawn's set takes it off), whatever the confirmed point falls on; the case that alone shows the confirmed-point condition works is the later-frame one (nt-k3-spawn-written-before-decided)",
    "guards": [
     "net 13 (S1 b of PR-2's review)"
    ],
@@ -1378,6 +1378,19 @@
    "target": "gyo_net_tests",
    "cases": "visibility:*",
    "expect": "G\\-11\\:\\ a\\ Peer\\ without\\ PeerVisibility\\ gets\\ no\\ private\\ component"
+  },
+  {
+   "id": "nt-k3-direct-not-removed",
+   "what": "K3 does not take a non-rolling component off an entity in the World when the server takes it off (A5; the lossy case caught it only by chance). Only it catches the direct removal",
+   "guards": [
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    if (rolling->Alive(entity)) (void)registry.components[wire]->remove(world, entity);",
+   "replace": "                    static_cast<void>(0);",
+   "target": "gyo_net_tests",
+   "cases": "k3: an entity hidden*",
+   "expect": "K3:\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\ taken\\ off\\ a\\ seen\\ entity\\ is\\ gone\\ at\\ the\\ client"
   }
  ]
 }

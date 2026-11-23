@@ -351,6 +351,7 @@ struct Run {
     std::uint64_t rollbacksForEntries = 0;  // U3: rollbacks an entity said to enter took part in
     std::uint64_t notSentLeftOut = 0;       // entities the client's rollback left out of a comparison (NotSent)
     bool tintAddedAgain = false;            // the crate whose Tint was put on again at 200 has it at the client
+    bool tintOffWhileSeen = false;          // at the client's step 180 (taken off at 160, put on again at 200) it has none
     std::uint32_t playerLongestWait = 0;    // the most ticks in a row the player's values waited at the server
     std::uint32_t othersLongestWait = 0;    // the same for every other entity
 };
@@ -399,6 +400,9 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
             if (now.count(id) == 0 && Crates(sample.ServerWorld()).count(id) != 0) ++run.crateLost;
         }
         for (const K::EntityId id : now) seen.insert(id);
+        if (shape == Shape::Seen && sample.ClientTick() == 180 && Reshaped().tintAgain != 0) {
+            run.tintOffWhileSeen = sample.ClientWorld().Alive(Reshaped().tintAgain) && sample.ClientWorld().Get<Tint>(Reshaped().tintAgain) == nullptr;
+        }
         if (const auto* ledger = sample.ServerWorld().Get<N::PeerLedger>(sample.Peer(sample.ServerWorld()))) {
             for (const auto& [entity, waited] : ledger->waitedTicks) {
                 std::uint32_t& longest = entity == kPlayer ? run.playerLongestWait : run.othersLongestWait;
@@ -574,6 +578,7 @@ TEST_CASE("k3: an entity hidden and seen again comes back with the server's comp
     CHECK_MESSAGE(!run.hiddenTint, "B1: a component that does not roll back taken off while hidden is not at the client");
     CHECK_MESSAGE(!run.tintSoon, "S1 a: a component that does not roll back taken off before the entity is in the World is not written");
     CHECK_MESSAGE(run.tintAddedAgain, "K3: a component that does not roll back added to a seen entity reaches the client");
+    CHECK_MESSAGE(run.tintOffWhileSeen, "K3: a component that does not roll back taken off a seen entity is gone at the client");
     CHECK_MESSAGE(run.replica.inboxEntries == run.serverEntered + 1, "K3 visibility: the crate seen again is an entry again (Entered)");
     CHECK_MESSAGE(run.rollbacksForEntries > 0, "U3: the rollbacks entries take part in are counted");
     REQUIRE(run.serverDigest.has_value());

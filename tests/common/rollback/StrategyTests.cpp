@@ -1345,6 +1345,45 @@ TEST_CASE("rollback strategy: R-8 F: a resource's authoritative value that diffe
     }
 }
 
+namespace {
+// A component that rolls back and no step changes (the last adversarial check's candidate 1).
+struct Badge {
+    std::int32_t value = 0;
+    friend bool operator==(const Badge&, const Badge&) = default;
+};
+void HashValue(K::Hasher& h, const Badge& v) { HashValue(h, v.value); }
+void BuildBadge(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Component<Badge>({.name = "Badge"});
+    R::RollbackEntry(s).Component<Badge>();
+}
+} // namespace
+
+TEST_CASE("rollback strategy: R-8 third state: the history of an entity kept at C is not overwritten by an older authoritative value") {
+    // U1 (c): an entity not carried at C keeps its history at C. Badge never changes, so the history at a later C is
+    // still the entry of C: had the older authoritative value been laid over it, a later C carrying the predicted
+    // value would find a difference and go back once more.
+    auto p = Make(WithStrategy(), &BuildBadge);
+    WorldOf(*p).Insert(1, Badge{5});
+    WorldOf(*p).Insert(2, Badge{7});
+    Frames(*p, 9);
+    Inbox(*p).Value<Badge>(1, 3, Badge{-1});  // older than C, entity 1 not carried at 6
+    Inbox(*p).NotSent(1, 6);
+    Inbox(*p).Value<Badge>(2, 6, Badge{100}); // entity 2 differs at 6: a rollback to 6
+    Inbox(*p).ConfirmedThrough(6);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    REQUIRE(StepsRun() > 1);
+    REQUIRE(WorldOf(*p).Get<Badge>(1)->value == 5);
+    // C = 8 carries entity 1 with the predicted value and entity 2 with the value it has had since 6.
+    Inbox(*p).Value<Badge>(1, 8, Badge{5});
+    Inbox(*p).Value<Badge>(2, 8, Badge{100});
+    Inbox(*p).ConfirmedThrough(8);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    CHECK_MESSAGE(StepsRun() == 1, "[rb-not-sent-history-not-adopted] a later C carrying the predicted value went back: steps " << StepsRun());
+}
+
 TEST_CASE("rollback strategy: R-8 third state: an entity the snapshot of C does not carry is not compared and keeps its history") {
     SUBCASE("not compared: an older authoritative value is not inferred unchanged at C") {
         auto p = Make(WithStrategy());

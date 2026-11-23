@@ -1311,6 +1311,19 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: U3*",
    "expect": "\\[rb\\-entry\\-rollbacks\\-only\\-entries\\]"
+  },
+  {
+   "id": "rb-not-sent-history-adopted",
+   "what": "The restore lays the inbox's older authoritative value over the history at C for an entity not carried at C that it kept (U1 (c)): a later C carrying the predicted value goes back once more. Only it catches the adoption leaving kept entities out",
+   "guards": [
+    "rollback R-8 third state (U1 (c))"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "                if (values != nullptr) column->Adopt(target, *values, Without(alive, kept));",
+   "replace": "                if (values != nullptr) column->Adopt(target, *values, alive);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: R-8 third state*",
+   "expect": "\\[rb\\-not\\-sent\\-history\\-not\\-adopted\\]"
   }
  ]
 }
