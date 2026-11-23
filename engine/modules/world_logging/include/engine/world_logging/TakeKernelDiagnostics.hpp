@@ -11,17 +11,20 @@
 // and RejectedSpawn records and writes each as one Warning record of category "kernel" carrying the World's
 // name.
 //
-// Two ways in (Design Invariants LG-1 and O-12; kernel-diagnostics-exchange-declaration.zh-Hant.md):
-//   a healthy World   ForwardKernelDiagnostics, in the World's build, registers an exchange function "out"
-//                     that takes them after each of the World's rounds in RunFrame. Records of RunGameInit and
-//                     RunSchedule stay in the World until the next RunFrame's "out".
-//   a broken World    RunFrame calls no exchange function on it; the runner (or the product's main) calls
-//                     TakeKernelDiagnostics itself to take the records of the frame it broke in.
-// Not guaranteed: records of a RunSchedule after the last RunFrame are lost with the World if ReplaceWorld
-// replaces it next; take them before replacing.
+// One World has one taker (Design Invariant LG-1; O-12; kernel-diagnostics-exchange-declaration.zh-Hant.md):
+//   registered        ForwardKernelDiagnostics, in the World's build, registers an exchange function "out"
+//                     that takes them after each of the World's rounds in RunFrame (a frame later when an
+//                     earlier "out" fails). Records of RunGameInit and RunSchedule stay in the World until the
+//                     next "out". The runner (or the product's main) takes only what no "out" will take: once
+//                     a World is broken (the Product has ended: no exchange function runs on any World), or
+//                     before it replaces that World or destroys the Product.
+//   not registered    the runner takes them itself, outside any Run.
+// Not guaranteed: records nobody took before the World went (made after the last "out" and before the World
+// is replaced or the Product destroyed); records of a new World ReplaceWorld did not put in place (nobody can
+// reach it). Inside RunFrame an exception from writing a record leaves RunFrame as O-12 says.
 //
-// Taking empties them: one World has one taker. A runner that wants to look at them too takes them itself
-// and writes them with Logging::Write. An interrupted World's records are taken too (question 2 (c),
+// Taking empties them. A runner that wants to look at them itself does not register ForwardKernelDiagnostics:
+// it takes them and writes them with Logging::Write. An interrupted World's records are taken too (question 2 (c),
 // approved), marked world_interrupted. Nothing orders them against the line a product's main may write for
 // the failure; readers order lines by mono_ns (revision 3, user 2026-11-21).
 
@@ -32,8 +35,8 @@ std::size_t TakeKernelDiagnostics(Kernel::World& world);
 
 // Registers, on the World being built, an exchange function "out" that calls TakeKernelDiagnostics and always
 // succeeds (O-12). Call it once per World, in the World's build (a unit's Build or the product's own build);
-// it is registered again whenever the build runs again (ReplaceWorld). With it the World has its taker:
-// the runner takes only once the World is broken.
+// it is registered again whenever the build runs again (ReplaceWorld). With it the "out" is the World's taker;
+// the runner takes only what no "out" will take (see above).
 void ForwardKernelDiagnostics(Orchestration::WorldSetup& setup);
 
 } // namespace GYO::Engine::WorldLogging

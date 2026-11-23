@@ -1,6 +1,6 @@
 # 事前宣告：Kernel 診斷紀錄接上交換函式「出」（`v8-arch-gyo2-kernel-diagnostics-exchange`）
 
-狀態：修訂 0。**動工前核准（2026-11-23）**（第 8 節；HANDOFF `v8-arch-gyo2-kernel-diagnostics-exchange-approved`）。核准與修訂都在本檔上做。
+狀態：修訂 1（第 9 節，**2026-11-23 使用者同意**）。修訂 0 **動工前核准（2026-11-23）**（第 8 節；HANDOFF `v8-arch-gyo2-kernel-diagnostics-exchange-approved`）。核准與修訂都在本檔上做。
 
 性質：任務卡（主會話開，2026-11-23）的事前宣告，批次表〈後續小事〉「world_logging 給一個接 `WorldSetup` 的登記函式」那一列。依據：HANDOFF `v8-arch-gyo2-forwarding-audit-exchange-keep`（使用者「照建議，選 (a)」）；已核准的設計 `exchange-declaration.zh-Hant.md:373`、`logging-declaration.zh-Hant.md:229`。
 分支：從 `origin/gyo2`（0bb64a28）開的工作樹分支，draft PR 到 `gyo2`。
@@ -64,6 +64,7 @@
 
 - Bevy 沒有每個 World 的診斷 buffer，也沒有每個 World 一輪前後的掛鉤（Bevy 的 `Events` 雙緩衝溢出時不留紀錄；`bevy_diagnostic` 是 Resource 加 System；SubApp 的 extract 是唯一接近的 World 間掛點）。這是 GYO 自己的機制：交換函式（O-12）＋ Kernel 診斷紀錄（B-13），接合點是 Bevy runner 呼叫 `app.update()` 之後那個位置。
 - 同一件事一個公開出口：取診斷仍只有 `TakeKernelDiagnostics`；新函式只是把它登記成「出」，不另寫一份。
+- 〔修訂 1，審查補〕Bevy 真正對應的做法是每個 World 一份的 error handler 在 World 裡當場記（`bevy_ecs/src/error/handler.rs:116-117`、`:164-199`；ECS 的失敗也是當場 `warn!`，`world/mod.rs:1574-1577`），沒有 buffer、也沒有一輪之後再取。GYO 偏離的理由：Kernel 不寫日誌、紀錄在 Run 外才取（日誌宣告 5.4、異常分級）。衝突點：Bevy 的處理器在 Run 裡呼叫 log；GYO 改成 buffer、在「出」取。膠水只有一個 lambda。
 
 ## 6. 模型／ギア
 
@@ -82,3 +83,28 @@
 - 第 7 節第 1 件：第 2 節三條的改前改後照寫，LG-1 一起改。
 - 第 7 節第 2 件：DI 條文的敵對式檢查與設計審查用 **Opus／high**（不用 Fable）。和實作者同模型，報告寫明「同模型」（navigator「別的模型用不了時」那一條的例外是使用者選的）。
 - 同日主會話也轉來使用者在那邊的原話：「照建議，兩件都同意，用 Opus」（HANDOFF `v8-arch-gyo2-kernel-diagnostics-exchange-approved`）。比過的選項：第 1 件 同意／不改 LG-1（不改就和 O-3、O-12 矛盾）；第 2 件 Fable／high（主會話原本的建議）／Opus／high（使用者選）。理由：條文只寫明「誰在什麼時候取」，沒有放寬任何判定。
+
+## 9. 修訂 1：審查後的條文修正（2026-11-23 使用者同意）
+
+審查：Opus 5.5／high，和實作者**同模型**（使用者選，第 8 節）；設計審查（批次表五項）結論「可合併」，條文的敵對式檢查結論「要改」。報告存主 checkout `build/evidence/gyo2-kernel-diagnostics-exchange/review-r0.md`（git 不追蹤，這台 macOS Intel）。
+
+條文要改的三點：
+1. 修訂 0 的 LG-1 准「沒有登記時 runner 取」，O-3／O-12 卻只准 runner 在壞掉之後取，三條互相矛盾。現有的 `scenario.segment3` S3-2 與 `DiagnosticsTests` 前三案走的就是「沒登記、runner 取」。改法：保留這條路（不登記是產品的選擇），規則只寫在 LG-1，O-3 改成指過去。
+2. 「一個取走的人／runner 只在壞掉後取」和「替換前自己取」打架。改法：runner 只取「出」不會再被呼叫的那部分——有 World 壞掉、Product 結束之後（任何一個 World 壞了，所有 World 的交換函式都不再呼叫），或替換那個 World、銷毀 Product 之前。
+3. 「不保證」漏了 Product 銷毀、`RunGameInit` 與第一次 `RunFrame` 之前的 `RunSchedule`、`ReplaceWorld` 沒換上的新 World。改法：寫成一般式。
+
+另加：O-11「不在事後讀壞掉的 World」括號註明主詞是編排層（審查建議；本來就有的歧義，這次讓它更顯眼）；LG-1 註「排在前面的「出」失敗時順延」。
+
+| 條 | 修訂 0（已核准） | 修訂 1 |
+|---|---|---|
+| O-3 | Module 的資料走套用點或交換函式（例：Kernel 的診斷紀錄，World 健康時由 world_logging 登記的交換函式「出」取走）；World 壞掉之後交換函式不再被呼叫，還要取的由 runner 取（例：壞掉那一幀的診斷紀錄，`WorldLogging::TakeKernelDiagnostics`，O-12）； | Module 的資料走套用點或交換函式；交換函式負責、但「出」不會再被呼叫的那部分由 runner 取（有 World 壞掉、Product 結束之後，或替換那個 World、銷毀 Product 之前；O-12）。例：Kernel 的診斷紀錄誰取，規則只寫在 LG-1； |
+| O-12 交換函式 | （不變）例：…world_logging 的 `ForwardKernelDiagnostics` 在 `Build` 登記一個呼叫 `TakeKernelDiagnostics` 的「出」 | 不變 |
+| O-12 runner 直接讀寫 | 只給 runner 自己擁有的東西，以及 World 壞掉之後交換函式不再呼叫、還要取的東西（例：壞掉那一幀的 Kernel 診斷紀錄）。 | 只給 runner 自己擁有的東西，以及交換函式負責、但「出」不會再被呼叫的那部分（有 World 壞掉、Product 結束之後，或替換那個 World、銷毀 Product 之前；例：Kernel 的診斷紀錄，LG-1）。 |
+| O-12 末段 | 同一件事不要兩種形都做（World 壞掉之後由 runner 接手交換函式沒做完的，不算兩種形）。 | 同一件事不要兩種形都做（runner 接手「出」不會再被呼叫的那部分，不算兩種形）。 |
+| O-11 | 不在事後讀壞掉的 World； | 不在事後讀壞掉的 World（指編排層收集 failure；runner 取診斷紀錄見 O-3、LG-1）； |
+| LG-1 | …World 健康時由 `ForwardKernelDiagnostics` 登記的交換函式「出」在每輪結束取走（O-12），沒有登記時、或 World 壞掉之後由 runner 取走；一個 World 一個取走的人； | …一個 World 一個取走的人：登記了 `ForwardKernelDiagnostics` 的 World，由它登記的交換函式「出」在每輪結束取走（O-12；排在前面的「出」失敗時順延到下一次），runner 只取「出」不會再被呼叫的那部分——有 World 壞掉、Product 結束之後，或替換那個 World、銷毀 Product 之前；沒有登記的 World 由 runner 取； |
+| LG-1 不保證 | 上一次 `RunFrame` 之後用 `RunSchedule` 跑出、接著被 `ReplaceWorld` 換掉的 World 的診斷紀錄（替換前自己取）。 | 沒人先取就隨 World 丟掉的診斷紀錄：最後一次「出」之後產生、下一次「出」之前 World 被替換或 Product 被銷毀的；`ReplaceWorld` 沒換上的新 World 的（runner 拿不到那個 World）。 |
+
+緩的面／緊的面：仍然沒有測試判定被改。程式不變；只改註解（header、CMakeLists、測試檔開頭）與 logging 的入口圖。
+
+**決定**：2026-11-23 使用者在本卡回覆「照修訂 1 改，繼續」。比過的選項：第 1 點 (a) 保留「沒登記時 runner 取」、規則只寫在 LG-1 ←選／(b) LG-1 拿掉這條路並改 S3-2（審查的兩個建議）。

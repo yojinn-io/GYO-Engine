@@ -1,5 +1,5 @@
-// Entrance ② (logging declaration 5.4): the runner takes the Kernel's own diagnostics records between two
-// Runs; each becomes one Warning record of category "kernel" with the World's name, and an interrupted
+// Entrance ② (logging declaration 5.4; LG-1): the Kernel's own diagnostics records are taken outside any Run,
+// by the runner or by the exchange function "out" ForwardKernelDiagnostics registers; each becomes one Warning record of category "kernel" with the World's name, and an interrupted
 // World's records are taken too, marked world_interrupted (question 2 (c), approved).
 #include <doctest/doctest.h>
 
