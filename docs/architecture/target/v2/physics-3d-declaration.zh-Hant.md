@@ -184,4 +184,4 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 4. 真的外緣不被抹掉：單獨一個方塊的頂邊（旁邊沒有方塊）在旗標打開時仍給出傾斜的接觸法線（走出平台邊緣時照樣感覺得到邊）。
 5. 既有測試（含兩份 golden）在旗標關閉時全部不變。
 
-旗標的預設值在實作時照 parry 定（parry 的 `CompoundFlags` 預設是否含 `FIX_INTERNAL_EDGES`，讀原始碼後寫在這裡），不因判定結果改。
+旗標的預設值照 parry：關閉（parry b3c3584 `src/shape/compound.rs` 的 `Compound::new` 設 `flags: CompoundFlags::empty()`，`CompoundFlags` 的 `Default` 也是空；`FIX_INTERNAL_EDGES` 只由 `with_flags`／`set_flags` 打開），所以 `BoxSet::Build(boxes)` 等於 `Build(boxes, BoxSetFlags::None)`；不因判定結果改。

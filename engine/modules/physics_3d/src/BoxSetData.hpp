@@ -26,6 +26,13 @@ struct BoxSetData final {
     std::vector<BoxNode> nodes;
     std::vector<std::uint32_t> order;
     std::uint64_t digest = 0;
+    BoxSetFlags flags = BoxSetFlags::None;
+    // FixInternalEdges only (empty otherwise): the boxes flush against each face. Face f of box i (f = axis * 2 +
+    // side, side 0 for the minimum and 1 for the maximum) has the neighbours faceNeighbours[faceStart[i * 6 + f] ..
+    // faceStart[i * 6 + f + 1]), by ascending index. Per box and independent of the hierarchy, so the single-box
+    // query of the contract (P3-3) and the accelerated one read the same data.
+    std::vector<std::uint32_t> faceStart;
+    std::vector<std::uint32_t> faceNeighbours;
 };
 
 struct BoxSetAccess final {

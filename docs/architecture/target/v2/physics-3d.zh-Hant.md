@@ -56,7 +56,7 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 - **作者的規則不在這裡**（§1-1）：站地判定、坡度、台階、貼地、重力。rapier 的 `KinematicCharacterController` 把它們綁在一起，這裡不做；PvP 盤點沒有台階與坡。放置檢查用 `Intersections`。
 - 不支援的組合照樣回錯：對球、膠囊 collider 掃掠是 `Unsupported`，角色自己與其他角色用 `filter` 排除。
 - 走訪的順序固定（實體依 EntityId、方塊依索引），同樣的輸入給同樣的位元；golden 一份（`physics_3d.move_and_slide`）。
-- **已知缺陷（S1，設計審查 2026-11-23 量到）：`BoxSet` 的內部邊。** 兩個天面同高、相鄰的方塊（`[-2,0]×[-1,0]×[-1,1]` 與 `[0,2]×[-1,0]×[-1,1]`），`config.planes = {(0,1,0)}`，`CapsuleY(0.5, 0.5)` 在皮膚高度（y＝1.01）以速度 (∓3, −1, 0)、1/60 秒走 60 步越過接縫：最大 y 1.018824（**高出 8.8 mm**）、最小水平速度 2.700110（**慢約 10%**），兩個方向相同。原因：每個方塊各算最近點，相鄰方塊的頂邊在 `2 × skinWidth` 內時給出約 11° 傾斜的接觸平面，超過 cos 5° 不和地面合併，投影留下往上的分量。avian 用一般複合形狀也一樣。量測案例 `move_and_slide: crossing*` 先 `doctest::skip`（`--no-skip` 可重現）。**修法（下一步）**：照 parry 複合形狀的 `FIX_INTERNAL_EDGES`（`src/shape/compound.rs:30-40`：兩塊相接處當內部、接觸法線夾回外輪廓；建立時跑一次），在 `BoxSet` 加同樣的旗標，作者可選。
+- **`BoxSet` 的內部邊（S1，已用旗標修好）。** 兩個天面同高、相鄰的方塊（`[-2,0]×[-1,0]×[-1,1]` 與 `[0,2]×[-1,0]×[-1,1]`），`config.planes = {(0,1,0)}`，`CapsuleY(0.5, 0.5)` 在皮膚高度（y＝1.01）以速度 (∓3, −1, 0)、1/60 秒走 60 步越過接縫：不開旗標時最大 y 1.01882386（**高出 8.8 mm**）、最小水平速度 2.70010996（**慢約 10%**）；原因是每個方塊各算最近點，相鄰方塊的頂邊在 `2 × skinWidth` 內時給出約 11° 傾斜的接觸平面，超過 cos 5° 不和地面合併。`BoxSet::Build(boxes, BoxSetFlags::FixInternalEdges)`（照 parry 複合形狀的 `FIX_INTERNAL_EDGES`，`src/shape/compound.rs:30-40`、`490-636`，夾法在 `compound_pseudo_normals.rs`）打開後：抬高 0、最小水平速度 3（判定在[事前宣告](physics-3d-declaration.zh-Hant.md)第 12 節，閾值先寫好）。**怎麼選**：體素地圖、拼起來的地板與牆打開；預設關閉（同 parry）。**規則**（逐位元、沒有容差；parry 預設在 4 ULP 內焊接頂點，這裡不焊）：方塊 j 在方塊 i 的面（軸 a、＋側）上的點 p 延續該面，當 j 在 a 的最小值等於 i 在 a 的最大值（float 相等；−側反過來），且 j 在另外兩軸的閉區間包含 p。接觸與掃掠的法線在被延續的面的軸上的分量去掉、重新正規化（全部都要去掉時照原樣）；在方塊裡的形狀從沒被延續的面中推出量最小的那面出去（都被延續時照舊）。只改法線，距離與點不變。建立時跑一次找每個面的鄰居（存在隱藏的 `BoxSetData`）；旗標算進摘要、`==`、`Collider` 的雜湊。**限制**：只認恰好貼齊的鄰居（差 1 ULP 就不算）；射線的法線不夾（射線只給面法線）；鄰居只看同一個 `BoxSet` 內，跨 `BoxSet` 或與 `Cuboid` 之間的接縫不處理。
 
 ## Design Invariants（草稿）
 
@@ -69,7 +69,7 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 **P3-2 判定只讀 `Transform`。** World 查詢的姿態只從 `Transform` 來、不讀 `GlobalTransform`（CCR-12）；縮放不是 (1,1,1) 回錯、不默默忽略。守衛：`physics_3d.world`；突變 `p3-scale-not-checked`；審查。
 
 <a id="p3-3"></a>
-**P3-3 加速結構不改結果。** `BoxSet` 的每個查詢，和依索引 0…n−1 對每個方塊做同一個單方塊查詢（最近者、平手取索引小的；或依索引遞增收集全部）的結果逐位元相同。守衛：`physics_3d.box_set` 的亂數語料等價測試；突變（平手、剪枝、候選範圍）。
+**P3-3 加速結構不改結果。** `BoxSet` 的每個查詢，和依索引 0…n−1 對每個方塊做同一個單方塊查詢（最近者、平手取索引小的；或依索引遞增收集全部）的結果逐位元相同；`FixInternalEdges` 打開時，單方塊查詢帶那個方塊建立時找到的面鄰居（每方塊的資料，和階層無關）。守衛：`physics_3d.box_set` 的亂數語料等價測試（含旗標打開的一組）；突變（平手、剪枝、候選範圍）。
 
 <a id="p3-4"></a>
 **P3-4 不支援就說不支援。** 沒實作的組合回 `Unsupported`，不回近似值。守衛：`physics_3d.queries`、`physics_3d.world`。
@@ -90,6 +90,6 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 ## 範囲の限界
 
 - 沒有剛體、角色移動規則（只有 move-and-slide 的機制）、子實體 collider、縮放、半空間、凸包、三角網格。
-- `BoxSet` 的內部邊沒有處理（第 3 節 S1，已知缺陷，下一步修）。
+- `BoxSet` 的內部邊只在 `BoxSetFlags::FixInternalEdges` 時處理，且只認同一個 `BoxSet` 內恰好貼齊的鄰居（第 3 節）。
 - golden 是在 Intel Mac（macos-x64）產生的；三平台由 L1 確認。
 - 和 avian、parry、rapier、Jolt 的對照（檔名行號）在[事前宣告](physics-3d-declaration.zh-Hant.md)第 5 節。

@@ -458,11 +458,13 @@ struct SeamRun final {
     std::vector<M::Vec3> normals;  // every plane onHit saw, in order
 };
 
-// A capsule walking across the seam of two boxes with coplanar tops, from startX at speedX, 60 steps of 1/60 s.
-SeamRun WalkSeam(const float startX, const float speedX) {
+// The scene of declaration section 12: a capsule walking across the seam of two boxes with coplanar tops, from
+// startX at speedX (and -1 downward), 60 steps of 1/60 s, the ground plane handed in.
+SeamRun WalkSeam(const float startX, const float speedX, const P3::BoxSetFlags flags) {
     auto p = Make();
     auto boxes = P3::BoxSet::Build(std::vector<M::Aabb>{{{-2.0F, -1.0F, -1.0F}, {0.0F, 0.0F, 1.0F}},
-                                                        {{0.0F, -1.0F, -1.0F}, {2.0F, 0.0F, 1.0F}}});
+                                                        {{0.0F, -1.0F, -1.0F}, {2.0F, 0.0F, 1.0F}}},
+                                   flags);
     REQUIRE(static_cast<bool>(boxes));
     Put(*p, 1, *boxes, 0.0F, 0.0F, 0.0F);
     P3::MoveAndSlideConfig config;
@@ -488,9 +490,16 @@ SeamRun WalkSeam(const float startX, const float speedX) {
     return run;
 }
 
+std::string Digits(const double v) {
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%.9g", v);
+    return buffer;
+}
+
 std::string Describe(const SeamRun& run, const float rest) {
-    std::string text = "max y " + std::to_string(run.maxY) + " (rest " + std::to_string(rest) + ", over by " +
-                       std::to_string(run.maxY - rest) + "), min |vx| " + std::to_string(run.minSpeed) + ", planes:";
+    std::string text = "max y " + Digits(run.maxY) + " (rest " + Digits(rest) + ", over by " +
+                       Digits(static_cast<double>(run.maxY) - static_cast<double>(rest)) + "), min |vx| " +
+                       Digits(run.minSpeed) + ", planes:";
     for (const M::Vec3& n : run.normals) {
         if (n.x == 0.0F && n.y == 1.0F && n.z == 0.0F) continue;  // the ground plane: not listed
         text += " (" + std::to_string(n.x) + "," + std::to_string(n.y) + "," + std::to_string(n.z) + ")";
@@ -498,17 +507,28 @@ std::string Describe(const SeamRun& run, const float rest) {
     return text;
 }
 
+constexpr float kRest = 1.01F;  // declaration section 12: rest height 1.01 (skin height)
+
 } // namespace
 
-// S1 measured, decision pending: whether crossing a seam of coplanar boxes lifts the capsule or slows it (the
-// edge of the next box can give a contact plane that is not the top face).
-TEST_CASE("move_and_slide: crossing the seam of two coplanar boxes neither lifts nor slows the capsule" *
-          doctest::skip(true)) {
-    const float rest = 1.0F + P3::MoveAndSlideConfig{}.depenetration.skinWidth;
+// Declaration section 12, cases 1 and 2 (fixed before the results): with FixInternalEdges, every step stays within
+// 1e-5 m of the rest height and keeps |vx| >= 2.997, in both directions.
+TEST_CASE("move_and_slide: with FixInternalEdges, crossing the seam of two coplanar boxes neither lifts nor slows") {
     for (const float direction : {-1.0F, 1.0F}) {
-        const SeamRun run = WalkSeam(-1.5F * direction, 3.0F * direction);
-        MESSAGE("from " << (direction < 0.0F ? "+X" : "-X") << ": " << Describe(run, rest));
-        CHECK_MESSAGE(run.maxY <= rest + 1.0e-5F, "[p3-mas-seam] lifted: " << Describe(run, rest));
-        CHECK_MESSAGE(run.minSpeed >= 3.0F - 1.0e-5F, "[p3-mas-seam] slowed: " << Describe(run, rest));
+        const SeamRun run = WalkSeam(-1.5F * direction, 3.0F * direction, P3::BoxSetFlags::FixInternalEdges);
+        MESSAGE("flag on, from " << (direction < 0.0F ? "+X" : "-X") << ": " << Describe(run, kRest));
+        CHECK_MESSAGE(run.maxY <= kRest + 1.0e-5F, "[p3-ie-seam-lift] " << Describe(run, kRest));
+        CHECK_MESSAGE(run.minSpeed >= 2.997F, "[p3-ie-seam-speed] " << Describe(run, kRest));
+    }
+}
+
+// Section 12, case 3: without the flag the behaviour is #311's (the lift and the slowdown measured there, 1.018824
+// and 2.700110 printed to six digits, are still there): the flag is a switch, not a change of the default.
+TEST_CASE("move_and_slide: without the flag, the seam still lifts and slows the capsule as measured in #311") {
+    for (const float direction : {-1.0F, 1.0F}) {
+        const SeamRun run = WalkSeam(-1.5F * direction, 3.0F * direction, P3::BoxSetFlags::None);
+        MESSAGE("flag off, from " << (direction < 0.0F ? "+X" : "-X") << ": " << Describe(run, kRest));
+        CHECK_MESSAGE(run.maxY == doctest::Approx(1.018824F).epsilon(5.0e-7), "[p3-ie-flag-off] " << Describe(run, kRest));
+        CHECK_MESSAGE(run.minSpeed == doctest::Approx(2.700110F).epsilon(5.0e-7), "[p3-ie-flag-off] " << Describe(run, kRest));
     }
 }

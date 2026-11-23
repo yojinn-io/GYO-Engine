@@ -375,3 +375,94 @@ TEST_CASE("box_set: a node whose entry equals the best t is still searched for a
     CHECK(hit->t == 1.0F);
     CHECK_MESSAGE((hit->normal.x == 0.0F && hit->normal.y == -1.0F), "[p3-boxset-ray-prune] the node was skipped");
 }
+
+namespace {
+
+float Low(const M::Aabb& b, const int axis) { return axis == 0 ? b.minimum.x : axis == 1 ? b.minimum.y : b.minimum.z; }
+float High(const M::Aabb& b, const int axis) { return axis == 0 ? b.maximum.x : axis == 1 ? b.maximum.y : b.maximum.z; }
+
+// The boxes flush against some face of box i (exact equality of the touching bounds, closed overlap on the two other
+// axes), written out independently of the library's pass.
+std::vector<std::uint32_t> FlushNeighbours(const std::vector<M::Aabb>& boxes, const std::uint32_t i) {
+    std::vector<std::uint32_t> found;
+    for (std::uint32_t j = 0; j < boxes.size(); ++j) {
+        if (j == i) continue;
+        bool flush = false;
+        for (int a = 0; a < 3 && !flush; ++a) {
+            const int b = (a + 1) % 3;
+            const int c = (a + 2) % 3;
+            const bool overlap = Low(boxes[j], b) <= High(boxes[i], b) && Low(boxes[i], b) <= High(boxes[j], b) &&
+                                 Low(boxes[j], c) <= High(boxes[i], c) && Low(boxes[i], c) <= High(boxes[j], c);
+            flush = overlap && (High(boxes[j], a) == Low(boxes[i], a) || Low(boxes[j], a) == High(boxes[i], a));
+        }
+        if (flush) found.push_back(j);
+    }
+    return found;
+}
+
+} // namespace
+
+TEST_CASE("box_set: with FixInternalEdges, contacts equal the per-box query with that box's flush neighbours") {
+    // P3-3 with the flag: the per-box result depends on the box and its flush neighbours only (build data, not the
+    // hierarchy). The reference for box i is box 0 of a set made of box i and its neighbours, with the flag.
+    Random r(0x5EED0201ULL);
+    std::vector<M::Aabb> boxes;
+    for (int i = 0; i < 300; ++i) {
+        const M::Vec3 c{r.Grid(8), static_cast<float>(r.Below(3)) * 0.5F - 0.5F, r.Grid(8)};
+        const M::Vec3 h{0.5F * static_cast<float>(1 + r.Below(3)), 0.5F, 0.5F * static_cast<float>(1 + r.Below(3))};
+        boxes.push_back({c - h, c + h});
+    }
+    auto set = P3::BoxSet::Build(boxes, P3::BoxSetFlags::FixInternalEdges);
+    REQUIRE(static_cast<bool>(set));
+    std::vector<P3::BoxSet> local;
+    std::size_t flush = 0;
+    for (std::uint32_t i = 0; i < boxes.size(); ++i) {
+        std::vector<M::Aabb> part{boxes[i]};
+        for (const std::uint32_t j : FlushNeighbours(boxes, i)) part.push_back(boxes[j]);
+        flush += part.size() - 1;
+        auto built = P3::BoxSet::Build(part, P3::BoxSetFlags::FixInternalEdges);
+        REQUIRE(static_cast<bool>(built));
+        local.push_back(*built);
+    }
+    int contacts = 0;
+    int changed = 0;
+    for (int q = 0; q < 400; ++q) {
+        const P3::Shape shape = r.Chance(50) ? P3::Shape(P3::Ball{r.Uniform(0.2F, 1.0F)})
+                                             : P3::Shape(P3::CapsuleY(r.Uniform(0.0F, 1.0F), r.Uniform(0.2F, 0.8F)));
+        const P3::Pose pose{{r.Uniform(-9.0F, 9.0F), r.Uniform(-0.5F, 2.0F), r.Uniform(-9.0F, 9.0F)}, YRotation(r)};
+        const float prediction = r.Chance(50) ? 0.0F : r.Uniform(0.0F, 0.3F);
+        std::vector<P3::BoxContact> expected;
+        for (std::uint32_t i = 0; i < boxes.size(); ++i) {
+            auto mine = P3::FindBoxContacts(shape, pose, local[i], P3::Pose{}, prediction);
+            REQUIRE(static_cast<bool>(mine));
+            for (const P3::BoxContact& c : *mine) {
+                if (c.box == 0) expected.push_back({c.contact, i});
+            }
+        }
+        auto actual = P3::FindBoxContacts(shape, pose, *set, P3::Pose{}, prediction);
+        REQUIRE(static_cast<bool>(actual));
+        auto plain = P3::FindBoxContacts(shape, pose, P3::BoxSet(*P3::BoxSet::Build(boxes)), P3::Pose{}, prediction);
+        REQUIRE(static_cast<bool>(plain));
+        REQUIRE_MESSAGE(actual->size() == expected.size(), "[p3-ie-equivalence] " << q);
+        for (std::size_t k = 0; k < expected.size(); ++k) {
+            REQUIRE_MESSAGE(((*actual)[k].box == expected[k].box && SameContact((*actual)[k].contact, expected[k].contact)),
+                            "[p3-ie-equivalence] " << q << " at " << k);
+            if (!SameBits((*actual)[k].contact.normal1, (*plain)[k].contact.normal1)) ++changed;
+        }
+        auto deepest = P3::FindDeepestBoxContact(shape, pose, *set, P3::Pose{}, prediction);
+        REQUIRE(static_cast<bool>(deepest));
+        REQUIRE(deepest->has_value() == !expected.empty());
+        if (!expected.empty()) {
+            std::size_t best = 0;
+            for (std::size_t k = 1; k < expected.size(); ++k) {
+                if (expected[k].contact.distance < expected[best].contact.distance) best = k;
+            }
+            REQUIRE_MESSAGE(((*deepest)->box == expected[best].box && SameContact((*deepest)->contact, expected[best].contact)),
+                            "[p3-ie-equivalence] deepest " << q);
+        }
+        contacts += static_cast<int>(expected.size());
+    }
+    MESSAGE("flush neighbour pairs " << flush << ", contacts " << contacts << ", normals the flag changed " << changed);
+    CHECK(flush > 100);
+    CHECK(changed > 0);  // the corpus exercises the clamp
+}

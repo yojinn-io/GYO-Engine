@@ -51,12 +51,32 @@ struct BoxSetAccess;
 
 } // namespace Detail
 
+// How a BoxSet is built (parry's CompoundFlags). The default is None, as parry's (Compound::new sets
+// CompoundFlags::empty()).
+enum class BoxSetFlags : std::uint8_t {
+    None = 0,
+    // parry's FIX_INTERNAL_EDGES for axis-aligned boxes: a face of a box that a neighbouring box continues flush is
+    // interior to the union, and contact and cast normals against the set are clamped to the surviving outline, so a
+    // shape sliding across the seam between two coplanar boxes does not catch on it. Real outer edges keep their
+    // tilted normals. Costs a one-off pass over the boxes at Build (the neighbours of each face are found once).
+    //
+    // The rule, exactly (no tolerance; parry welds corners within 4 ULPs by default, this does not): box j continues
+    // face (axis a, side +) of box i at a point p of that face when j's minimum on a equals i's maximum on a (float
+    // equality; side -: j's maximum equals i's minimum) and j's closed extent on each of the two other axes contains
+    // p. A normal component along a whose face is continued at the contact point is dropped and the normal
+    // renormalized; when every component would be dropped, the normal is kept as it was. A shape inside a box leaves
+    // through the face of smallest push among the faces not continued at their exit point (all continued: the
+    // smallest push, as without the flag).
+    FixInternalEdges = 1,
+};
+
 // Many static boxes in local space (a voxel map's walls), with a static bounding volume hierarchy. Immutable and
 // shared: copies share one body (Bevy/parry's SharedShape).
 //
 // The contract of every query on it (P3-3): the hierarchy never changes a result. Every query returns what the
 // same single-box query over boxes 0..n-1 in index order returns (the nearest, ties to the lowest index; or all,
-// by increasing index). The hierarchy only decides which boxes are tested.
+// by increasing index). The hierarchy only decides which boxes are tested. With FixInternalEdges the single-box
+// query also reads that box's flush neighbours, found at Build (per box, not from the hierarchy).
 class BoxSet final {
 public:
     // The empty set.
@@ -64,16 +84,21 @@ public:
 
     // Checks every box (finite, minimum <= maximum on each axis: InvalidBox with the index) and the count (at most
     // 2^32 - 1: TooManyBoxes), builds the hierarchy and the content digest.
+    // Build(boxes) is Build(boxes, BoxSetFlags::None).
     [[nodiscard]] static Base::Result<BoxSet, Physics3dError> Build(std::span<const Math::Aabb> boxes);
+    [[nodiscard]] static Base::Result<BoxSet, Physics3dError> Build(std::span<const Math::Aabb> boxes,
+                                                                    BoxSetFlags flags);
 
     [[nodiscard]] std::span<const Math::Aabb> Boxes() const noexcept;
     [[nodiscard]] std::uint32_t Size() const noexcept;
     // 64-bit FNV-1a over each box's six floats (minimum x, y, z, maximum x, y, z) bit by bit, little-endian, in
-    // index order; computed once by Build. The empty set has the FNV-1a offset basis.
+    // index order, then the flags byte when the flags are not None; computed once by Build. The empty set without
+    // flags has the FNV-1a offset basis.
     [[nodiscard]] std::uint64_t Digest() const noexcept;
+    [[nodiscard]] BoxSetFlags Flags() const noexcept;
 
-    // The same body, or the same boxes bit by bit (checked only when the counts and digests agree): the equality
-    // Collider's HashValue hashes (CCR-13).
+    // The same body, or the same flags and the same boxes bit by bit (checked only when the counts and digests
+    // agree): the equality Collider's HashValue hashes (CCR-13; the digest carries the flags).
     friend bool operator==(const BoxSet& a, const BoxSet& b) noexcept;
 
 private:

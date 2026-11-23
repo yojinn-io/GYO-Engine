@@ -491,6 +491,78 @@ TEST_CASE("queries: a cast onto a BoxSet returns the earliest box, ties to the l
     CHECK_MESSAGE((*pillar)->time == 0.25F, "[p3-cast-boxset] the nearer box wins");
 }
 
+// ---- BoxSetFlags::FixInternalEdges (declaration section 12; parry's CompoundFlags::FIX_INTERNAL_EDGES)
+
+namespace {
+
+const std::vector<M::Aabb> kSeam{{{-2.0F, -1.0F, -1.0F}, {0.0F, 0.0F, 1.0F}}, {{0.0F, -1.0F, -1.0F}, {2.0F, 0.0F, 1.0F}}};
+
+P3::BoxSet Flagged(const std::vector<M::Aabb>& boxes, const P3::BoxSetFlags flags) {
+    auto built = P3::BoxSet::Build(boxes, flags);
+    REQUIRE(static_cast<bool>(built));
+    return *built;
+}
+
+// The contact of a ball with box `box` of the set.
+P3::Contact BoxContactOf(const P3::BoxSet& set, const P3::Pose& ball, const std::uint32_t box, const float radius = 0.5F) {
+    auto all = P3::FindBoxContacts(P3::Ball{radius}, ball, set, At(0.0F, 0.0F, 0.0F), 0.05F);
+    REQUIRE(static_cast<bool>(all));
+    for (const P3::BoxContact& c : *all) {
+        if (c.box == box) return c.contact;
+    }
+    FAIL("no contact with box " << box);
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("queries: FixInternalEdges clamps a normal on an edge whose face a flush neighbour continues") {
+    const P3::Pose ball = At(0.1F, 0.51F, 0.0F);  // over box 1, near box 0's top edge at the seam
+    const P3::Contact off = BoxContactOf(Flagged(kSeam, P3::BoxSetFlags::None), ball, 0);
+    CHECK_MESSAGE((off.normal1.x < 0.0F && off.normal1.y < 0.0F), "[p3-ie-default] without the flag the edge tilts");
+    const P3::Contact on = BoxContactOf(Flagged(kSeam, P3::BoxSetFlags::FixInternalEdges), ball, 0);
+    CHECK_MESSAGE(Same(on.normal1, {0.0F, -1.0F, 0.0F}), "[p3-ie-clamp] " << on.normal1.x << " " << on.normal1.y);
+    CHECK(Same(on.normal2, {0.0F, 1.0F, 0.0F}));
+    CHECK_MESSAGE((on.distance == off.distance && Same(on.point1, off.point1) && Same(on.point2, off.point2)),
+                  "[p3-ie-clamp] only the normal changes");
+}
+
+TEST_CASE("queries: FixInternalEdges keeps the tilted normal of a real outer edge and of a step") {
+    // Section 12, case 4: an isolated box's top edge, and the far edge of the seam's pair, still tilt.
+    const P3::Contact lone = BoxContactOf(Flagged({kSeam[0]}, P3::BoxSetFlags::FixInternalEdges), At(0.1F, 0.51F, 0.0F), 0);
+    CHECK_MESSAGE((lone.normal1.x < 0.0F && lone.normal1.y < 0.0F), "[p3-ie-outer-edge] isolated box");
+    const P3::Contact far = BoxContactOf(Flagged(kSeam, P3::BoxSetFlags::FixInternalEdges), At(2.1F, 0.51F, 0.0F), 1);
+    CHECK_MESSAGE((far.normal1.x < 0.0F && far.normal1.y < 0.0F), "[p3-ie-outer-edge] the pair's far edge");
+    // A step down: the lower box is flush against the upper box's side but does not reach its top, so the top edge
+    // is a real edge.
+    const std::vector<M::Aabb> step{kSeam[0], {{0.0F, -1.0F, -1.0F}, {2.0F, -0.5F, 1.0F}}};
+    const P3::Contact edge = BoxContactOf(Flagged(step, P3::BoxSetFlags::FixInternalEdges), At(0.1F, 0.4F, 0.0F), 0);
+    CHECK_MESSAGE((edge.normal1.x < 0.0F && edge.normal1.y < 0.0F), "[p3-ie-step-edge] " << edge.normal1.x << " "
+                                                                                          << edge.normal1.y);
+}
+
+TEST_CASE("queries: FixInternalEdges leaves a box through a face no neighbour continues") {
+    // The centre is 0.05 inside box 0's +X face, which box 1 continues: the exit is through the top instead.
+    const P3::Pose inside = At(-0.05F, -0.2F, 0.0F);
+    const P3::Contact off = BoxContactOf(Flagged(kSeam, P3::BoxSetFlags::None), inside, 0);
+    CHECK(Same(off.normal1, {-1.0F, 0.0F, 0.0F}));
+    const P3::Contact on = BoxContactOf(Flagged(kSeam, P3::BoxSetFlags::FixInternalEdges), inside, 0);
+    CHECK_MESSAGE(Same(on.normal1, {0.0F, -1.0F, 0.0F}), "[p3-ie-face-exit] " << on.normal1.x << " " << on.normal1.y);
+    CHECK(on.distance == doctest::Approx(-0.7F));
+}
+
+TEST_CASE("queries: the flags are part of a BoxSet's digest, == and Collider hash") {
+    const P3::BoxSet off = Flagged(kSeam, P3::BoxSetFlags::None);
+    const P3::BoxSet on = Flagged(kSeam, P3::BoxSetFlags::FixInternalEdges);
+    CHECK(off.Flags() == P3::BoxSetFlags::None);
+    CHECK(on.Flags() == P3::BoxSetFlags::FixInternalEdges);
+    CHECK_MESSAGE(off.Digest() != on.Digest(), "[p3-ie-digest]");
+    CHECK_MESSAGE(!(off == on), "[p3-ie-digest] ==");
+    CHECK(on == Flagged(kSeam, P3::BoxSetFlags::FixInternalEdges));
+    CHECK(off == Flagged(kSeam, P3::BoxSetFlags::None));
+    CHECK(off.Digest() == (*P3::BoxSet::Build(kSeam)).Digest());  // Build(boxes) is the None flags
+}
+
 // ---- Programmer errors (section 4.2)
 
 TEST_CASE("queries: invalid query arguments are programmer errors; IsValid tells them") {
