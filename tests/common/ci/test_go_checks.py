@@ -29,8 +29,8 @@ class SyntheticRepository:
     def __init__(self, root: Path):
         self.root = root
         self.module("shared", "go 1.21\n")
-        self.module("apps/alpha", "go 1.22\n", go_sum=True)
-        self.module("apps/beta", "go 1.21\n\ntoolchain go1.23.4\n")
+        self.module("games/alpha", "go 1.22\n", go_sum=True)
+        self.module("games/beta", "go 1.21\n\ntoolchain go1.23.4\n")
 
     def module(self, path: str, directives: str, go_sum=False):
         directory = self.root / path
@@ -42,9 +42,9 @@ class SyntheticRepository:
     def record(self, **changes) -> Path:
         document = {
             "configuration": "Release", "shader_bundles": False, "shader_host_tools": False,
-            "go_modules": [{"owner": "engine", "path": "shared"}, {"owner": "alpha", "path": "apps/alpha"},
-                           {"owner": "beta", "path": "apps/beta"}],
-            "go_services": [{"owner": "alpha", "role": "relay", "module": "apps/alpha", "package": "./cmd/relay",
+            "go_modules": [{"owner": "engine", "path": "shared"}, {"owner": "alpha", "path": "games/alpha"},
+                           {"owner": "beta", "path": "games/beta"}],
+            "go_services": [{"owner": "alpha", "role": "relay", "module": "games/alpha", "package": "./cmd/relay",
                              "platforms": ["linux-x64", "windows-x64"]}],
         }
         document.update(changes)
@@ -64,8 +64,8 @@ class GoRecordTests(unittest.TestCase):
 
     def test_record_lists_modules_and_services_in_configure_order(self):
         modules, services = self.load()
-        self.assertEqual(modules, [Module("engine", "shared"), Module("alpha", "apps/alpha"), Module("beta", "apps/beta")])
-        self.assertEqual(services, [Service("alpha", "relay", "apps/alpha", "./cmd/relay", ("linux-x64", "windows-x64"))])
+        self.assertEqual(modules, [Module("engine", "shared"), Module("alpha", "games/alpha"), Module("beta", "games/beta")])
+        self.assertEqual(services, [Service("alpha", "relay", "games/alpha", "./cmd/relay", ("linux-x64", "windows-x64"))])
         self.assertEqual(services[0].name, "gyo_alpha-relay")
 
     def test_stale_or_invalid_records_fail_instead_of_skipping_go(self):
@@ -75,14 +75,14 @@ class GoRecordTests(unittest.TestCase):
         build_info.write_text(json.dumps(document), encoding="utf-8")
         with self.assertRaisesRegex(GoCheckError, "reconfigure"):
             go_checks.load_record(build_info, self.repository.root)
-        service = {"owner": "alpha", "role": "relay", "module": "apps/alpha", "package": "./cmd/relay",
+        service = {"owner": "alpha", "role": "relay", "module": "games/alpha", "package": "./cmd/relay",
                    "platforms": ["linux-x64"]}
         for label, changes in (
-            ("owner", {"go_modules": [{"owner": "Alpha", "path": "apps/alpha"}], "go_services": []}),
-            ("relative", {"go_modules": [{"owner": "alpha", "path": "../apps/alpha"}], "go_services": []}),
-            ("relative", {"go_modules": [{"owner": "alpha", "path": "/apps/alpha"}], "go_services": []}),
-            ("go.mod", {"go_modules": [{"owner": "alpha", "path": "apps/missing"}], "go_services": []}),
-            ("Duplicate Go module", {"go_modules": [{"owner": "alpha", "path": "apps/alpha"}] * 2, "go_services": []}),
+            ("owner", {"go_modules": [{"owner": "Alpha", "path": "games/alpha"}], "go_services": []}),
+            ("relative", {"go_modules": [{"owner": "alpha", "path": "../games/alpha"}], "go_services": []}),
+            ("relative", {"go_modules": [{"owner": "alpha", "path": "/games/alpha"}], "go_services": []}),
+            ("go.mod", {"go_modules": [{"owner": "alpha", "path": "games/missing"}], "go_services": []}),
+            ("Duplicate Go module", {"go_modules": [{"owner": "alpha", "path": "games/alpha"}] * 2, "go_services": []}),
             ("its owner recorded", {"go_services": [dict(service, owner="beta")]}),
             ("module-relative", {"go_services": [dict(service, package="./../escape")]}),
             ("module-relative", {"go_services": [dict(service, package="cmd/relay")]}),
@@ -98,7 +98,7 @@ class GoRecordTests(unittest.TestCase):
 
     def test_local_only_service_platforms_are_never_cross_built(self):
         # macos-x64 is a local build target; CI archives services only for release platforms.
-        service = {"owner": "alpha", "role": "relay", "module": "apps/alpha", "package": "./cmd/relay",
+        service = {"owner": "alpha", "role": "relay", "module": "games/alpha", "package": "./cmd/relay",
                    "platforms": ["macos-x64", "linux-x64", "macos-arm64"]}
         _, services = self.load(go_services=[service])
         self.assertEqual(services[0].platforms, ("linux-x64", "macos-arm64"))
@@ -107,7 +107,7 @@ class GoRecordTests(unittest.TestCase):
         modules, services = self.load()
         self.assertEqual(go_checks.select(modules, services, None), (modules, services))
         self.assertEqual(go_checks.select(modules, services, "toolchain"), ([Module("engine", "shared")], []))
-        self.assertEqual(go_checks.select(modules, services, "alpha"), ([Module("alpha", "apps/alpha")], services))
+        self.assertEqual(go_checks.select(modules, services, "alpha"), ([Module("alpha", "games/alpha")], services))
         self.assertEqual(go_checks.select(modules, services, "gamma"), ([], []))
         with self.assertRaises(ValueError):
             go_checks.select(modules, services, "../alpha")
@@ -121,9 +121,9 @@ class GoRecordTests(unittest.TestCase):
     def test_plan_selects_the_newest_declared_go_and_every_dependency_file(self):
         outputs = go_checks.plan(*self.load(), self.repository.root)
         # beta's toolchain directive (1.23.4) outranks alpha's go line (1.22).
-        self.assertEqual(outputs["go_version_file"], "apps/beta/go.mod")
+        self.assertEqual(outputs["go_version_file"], "games/beta/go.mod")
         self.assertEqual(outputs["go_dependency_files"].splitlines(),
-                         ["apps/alpha/go.mod", "apps/alpha/go.sum", "apps/beta/go.mod", "shared/go.mod"])
+                         ["games/alpha/go.mod", "games/alpha/go.sum", "games/beta/go.mod", "shared/go.mod"])
         self.assertEqual((outputs["has_go_modules"], outputs["has_go_services"]), ("true", "true"))
         nothing = go_checks.plan(*go_checks.select(*self.load(), "gamma"), self.repository.root)
         self.assertEqual(nothing, {"has_go_modules": "false", "has_go_services": "false",
@@ -138,8 +138,8 @@ class GoRecordTests(unittest.TestCase):
         self.assertEqual(status, 0)
         delimiter = go_checks.DEPENDENCY_DELIMITER
         self.assertEqual(output.read_text(encoding="utf-8"),
-                         "has_go_modules=true\nhas_go_services=true\ngo_version_file=apps/alpha/go.mod\n"
-                         f"go_dependency_files<<{delimiter}\napps/alpha/go.mod\napps/alpha/go.sum\n{delimiter}\n")
+                         "has_go_modules=true\nhas_go_services=true\ngo_version_file=games/alpha/go.mod\n"
+                         f"go_dependency_files<<{delimiter}\ngames/alpha/go.mod\ngames/alpha/go.sum\n{delimiter}\n")
 
 
 class GoCheckTests(unittest.TestCase):
@@ -179,8 +179,8 @@ class GoServiceBuildTests(unittest.TestCase):
         self.workspace = TemporaryDirectory(prefix="gyo-go-services-")
         self.addCleanup(self.workspace.cleanup)
         self.root = Path(self.workspace.name)
-        (self.root / "apps/alpha").mkdir(parents=True)
-        self.service = Service("alpha", "relay", "apps/alpha", "./cmd/relay", ("linux-x64", "windows-x64"))
+        (self.root / "games/alpha").mkdir(parents=True)
+        self.service = Service("alpha", "relay", "games/alpha", "./cmd/relay", ("linux-x64", "windows-x64"))
         self.calls = []
 
     def fake_run(self, fail_platform=None):
@@ -206,7 +206,7 @@ class GoServiceBuildTests(unittest.TestCase):
             {"GOWORK": "off", "CGO_ENABLED": "0", "GOOS": "windows", "GOARCH": "amd64"},
         ])
         for command, cwd, _ in self.calls:
-            self.assertEqual(cwd, self.root / "apps/alpha")
+            self.assertEqual(cwd, self.root / "games/alpha")
             self.assertEqual(command[:4], ["go-bin", "build", "-trimpath", "-buildvcs=false"])
             self.assertEqual(command[-1], "./cmd/relay")
         self.assertEqual(sorted(path.name for path in (self.root / "out").iterdir()), ["stage"])
@@ -235,7 +235,7 @@ class GoServiceBuildTests(unittest.TestCase):
                 self.assertEqual(metadata, {
                     "source_revision": COMMIT, "owner": "alpha", "role": "relay", "platform": platform,
                     "goos": goos, "goarch": goarch, "cgo": False, "go_version": "go1.23.4",
-                    "module": "apps/alpha", "package": "./cmd/relay"})
+                    "module": "games/alpha", "package": "./cmd/relay"})
 
     def test_service_archives_never_enter_release_package_verification(self):
         produced = self.build(run=self.fake_run(), revision=COMMIT)
@@ -267,7 +267,7 @@ class RealGoTests(unittest.TestCase):
         self.workspace = TemporaryDirectory(prefix="gyo-real-go-")
         self.addCleanup(self.workspace.cleanup)
         self.root = Path(self.workspace.name)
-        module = self.root / "apps/alpha"
+        module = self.root / "games/alpha"
         (module / "cmd/relay").mkdir(parents=True)
         (module / "go.mod").write_text("module example.invalid/alpha\n\ngo 1.21\n", encoding="utf-8")
         (module / "cmd/relay/main.go").write_text("package main\n\nfunc main() { println(answer()) }\n", encoding="utf-8")
@@ -277,17 +277,17 @@ class RealGoTests(unittest.TestCase):
             '\tif answer() != 42 {\n\t\tt.Fatal("wrong answer")\n\t}\n}\n', encoding="utf-8")
 
     def test_vet_test_and_a_cgo_free_archive(self):
-        self.assertEqual(go_checks.check([self.root / "apps/alpha"], ["vet", "test"]), [])
-        service = Service("alpha", "relay", "apps/alpha", "./cmd/relay", ("linux-x64",))
+        self.assertEqual(go_checks.check([self.root / "games/alpha"], ["vet", "test"]), [])
+        service = Service("alpha", "relay", "games/alpha", "./cmd/relay", ("linux-x64",))
         archive, = go_checks.build([service], self.root / "out", repository=self.root, revision=COMMIT)
         with tarfile.open(archive) as contents:
             metadata = json.loads(contents.extractfile("gyo-alpha-relay/build_metadata.json").read())
             binary = contents.extractfile("gyo-alpha-relay/bin/gyo_alpha-relay").read()
         self.assertTrue(metadata["go_version"].startswith("go"))
         self.assertEqual(binary[:4], b"\x7fELF")
-        (self.root / "apps/alpha/cmd/relay/answer.go").write_text("package main\n\nfunc answer() int { return 0 }\n",
+        (self.root / "games/alpha/cmd/relay/answer.go").write_text("package main\n\nfunc answer() int { return 0 }\n",
                                                                   encoding="utf-8")
-        self.assertEqual(go_checks.check([self.root / "apps/alpha"], ["test"]), [f"{self.root / 'apps/alpha'}: go test"])
+        self.assertEqual(go_checks.check([self.root / "games/alpha"], ["test"]), [f"{self.root / 'games/alpha'}: go test"])
 
 
 if __name__ == "__main__":

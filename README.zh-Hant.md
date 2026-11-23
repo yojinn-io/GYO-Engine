@@ -8,11 +8,11 @@ GYO 是 C++20 遊戲引擎，明確區分 Base、Runtime、Asset、Math、Time�
 
 | 目錄 | 責任 |
 |---|---|
-| `apps/` | 遊戲程式碼與最小專案宣告 |
+| `games/` | 遊戲程式碼與最小專案宣告 |
 | `assets/<game>/` | 準備完成的 runtime 內容、catalog 與 `content.json` |
-| `engine/` | 所有引擎模組、adapter、`config/projects.csv` 與 `config/tools.csv` |
+| `engine/` | 所有引擎模組、adapter、`config/games.csv` 與 `config/tools.csv` |
 | `tools/` | 設計支援，包含 UI editor 與本機遊戲 preview（目前停用） |
-| `services/` | 引擎擁有的可重用 Go 服務機制（`gyo_gateway`）；遊戲自己的服務放在 `apps/<game>/` |
+| `services/` | 引擎擁有的可重用 Go 服務機制（`gyo_gateway`）；遊戲自己的服務放在 `games/<game>/` |
 | `tests/common`、`tests/<project>` | 共通引擎測試與專案專屬驗證 |
 | `build/cmake`、`build/ci` | 編譯、整合、封裝及驗收支援 |
 | `build/acceptance/` | 從產品外部執行的共通與專案專屬驗收工具 |
@@ -26,10 +26,10 @@ GYO 是 C++20 遊戲引擎，明確區分 Base、Runtime、Asset、Math、Time�
 
 使用 CMake 3.30 以上、C++20 compiler 與 Ninja。Windows 先初始化 x64 MSVC 開發環境。資產組裝使用 Python 3，shader 使用引擎管理的原生 host compiler。第三方來源下載至建置樹，也可明確重用既有 source cache。
 
-在 `config/projects.csv` 啟用遊戲與目標 OS，再從儲存庫根目錄執行：
+在 `config/games.csv` 啟用遊戲與目標 OS，再從儲存庫根目錄執行：
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --preset dev -DGYO_GAMES=object_fps_pvp -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_object_fps_pvp
 ```
 
@@ -48,17 +48,17 @@ ctest --preset core
 ## 設計工具與資產
 
 ```sh
-cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
+cmake --preset dev -DGYO_GAMES= -DGYO_TOOLS=ui_editor
 cmake --build --preset dev --target gyo_ui_editor
 ```
 
 GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 `gyo.ui` JSON。作者手動準備、複製並登錄所選來源資產，之後共通 build hook 依 `content.json` 自動組裝資產與編譯 shader。本機與 CI 使用同一路徑，遊戲 CMake 不維護資產規則。
 
-變異專案只需手動複製 `apps/<game>` 與 `assets/<game>`，再新增 CSV 列。遊戲不攜帶 CI、測試、editor 或原始美術封存。詳見[建立／複製遊戲](docs/creating_apps.md)。
+變異專案只需手動複製 `games/<game>` 與 `assets/<game>`，再新增 CSV 列。遊戲不攜帶 CI、測試、editor 或原始美術封存。詳見[建立／複製遊戲](docs/creating_games.md)。
 
 ## 整合與發佈
 
-`projects.csv` 決定遊戲集合，`tools.csv` 決定設計工具集合，不從目錄數量推測。每個支援平台產生由 release 選取工具組成的 toolchain archive（目前為 UI Editor GUI），再為啟用遊戲產生獨立 archive。任何選中遊戲、工具或必要驗收失敗都會讓 Engine 整合失敗。零遊戲仍可成功發佈。配布物是可執行產品與必要依賴，沒有 Engine SDK 或原始碼套件。
+`games.csv` 決定遊戲集合，`tools.csv` 決定設計工具集合，不從目錄數量推測。每個支援平台產生由 release 選取工具組成的 toolchain archive（目前為 UI Editor GUI），再為啟用遊戲產生獨立 archive。任何選中遊戲、工具或必要驗收失敗都會讓 Engine 整合失敗。零遊戲仍可成功發佈。配布物是可執行產品與必要依賴，沒有 Engine SDK 或原始碼套件。
 
 `Prepare Release` 選擇一條發佈線（`tools` 或某個遊戲）並固定 commit，建置並驗證該發佈線的產品，再準備 tag 與 Draft Release。公開 Draft 是使用者的獨立操作。遊戲包只包含遊戲、資產與 runtime 依賴；驗收工具從產品外部執行。
 
@@ -77,4 +77,4 @@ GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 
 - [渲染與 shader 契約](docs/rendering_architecture.zh-Hant.md)
 - [發佈程序](docs/releasing.zh-Hant.md)
 
-`apps/` 底下每個遊戲都是獨立專案，引擎不依賴其中任何一個，也不定義通用遊戲 framework。目前啟用的是 `object_fps_pvp`（伺服器權威的 LAN 對戰，見[網路架構](docs/object_fps_pvp/network-architecture.zh-Hant.md)）；舊的 `object_fps` 與 `object_fps_v2` 已移除（2026-11-12，`v8-arch-remove-object-fps`；需要時從 git 歷史 `56b8dda3` 讀）。目前不包含一般 scene 管理、完整物理、GPU skinning、PBR、scripting 或動態 plugin ABI。
+`games/` 底下每個遊戲都是獨立專案，引擎不依賴其中任何一個，也不定義通用遊戲 framework。目前啟用的是 `object_fps_pvp`（伺服器權威的 LAN 對戰，見[網路架構](docs/object_fps_pvp/network-architecture.zh-Hant.md)）；舊的 `object_fps` 與 `object_fps_v2` 已移除（2026-11-12，`v8-arch-remove-object-fps`；需要時從 git 歷史 `56b8dda3` 讀）。目前不包含一般 scene 管理、完整物理、GPU skinning、PBR、scripting 或動態 plugin ABI。
