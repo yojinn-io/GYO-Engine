@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.30)
 # The build layer adds only the Plugins that are selected (build/cmake/GyoBuild.cmake;
 # declaration docs/architecture/target/v2/sdl-declaration.zh-Hant.md, section 9.1):
 # the repository configured with no product and GYO_PLUGINS empty adds no Plugin
-# directory and fetches nothing of SDL, though config/plugins.csv has the sdl rows.
+# directory, though config/plugins.csv has rows.
 # Configure only. The sources the parent build fetched are reused and the child
 # is disconnected, so the check needs no network; a Plugin the child added
 # would have to download, and fails the configure instead.
@@ -56,9 +56,12 @@ string(JSON count LENGTH "${plugins}")
 if(NOT count EQUAL 0)
     message(FATAL_ERROR "Plugins added with none selected: ${plugins}")
 endif()
-file(GLOB added LIST_DIRECTORIES true "${binary}/plugins/*" "${binary}/_deps/sdl*")
+# What a Plugin fetches is configured from its directory, so no Plugin
+# directory means nothing of it fetched. This file names no Plugin: removing
+# one (CI's core step, SDL-2) leaves it as it is.
+file(GLOB added LIST_DIRECTORIES true "${binary}/plugins/*")
 if(added)
-    message(FATAL_ERROR "A Plugin directory or SDL was configured with no Plugin selected: ${added}")
+    message(FATAL_ERROR "A Plugin directory was configured with no Plugin selected: ${added}")
 endif()
 file(REMOVE_RECURSE "${binary}")
 message(STATUS "Plugin selection tests passed")
