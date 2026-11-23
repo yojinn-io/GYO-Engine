@@ -1,6 +1,6 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 21）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 21）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：動工前核准（2026-11-23）**——使用者「SDL 照建議核准」（主會話轉達，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）。主會話轉達的範圍：宣告整體（14 個子批，Opus／high）、第 14 節核准清單第 1～3 件確認、第 4 件 O-12 的改字前半與後半、第 5 件 os.md DI 1、2 的根加 `plugins`；第 5 件的 DI 11 守衛涵蓋 `plugins` 與第 6 件（SDL-1 收窄 11-13 (iii)）轉達時沒有逐條列，原話是「照建議」，請主會話確認是否包含。這張卡只寫宣告與分批計畫，不寫實作；各子批由主會話另開卡、各寫事前宣告（給子批的提醒在第 10.3 節）。
 
 **經過**：
 - **修訂 21**：修訂 20 送 Opus／high 窄複查（作者與檢查者同為 Opus；Fable 用量不足）：blocker 0、should 9、nit 8（`build/evidence/gyo2-sdl-declaration/declaration-r20-narrow-check.md`），全部採用（對照在第 34 節）：子批 P 的連帶改動點齊（突變檔的路徑、`os-g11`、`os-g15`、測試）；`plugins/` 的測試也受 R4（不加新的排除機制，沒有緩的面）；code page 屬 os.md DI 11 的守衛、補 1～5；O-12 改後的前後句與讀者一側的緩的面；修飾鍵：SDL 的平台後端自己對齊，第 15 節與 W 的題改正；SDL-1 允許 adapter 目錄裡的私有標頭、介面標頭放 adapter 目錄外；SDL-1 的收窄列進核准清單第 6 件；`SDL_EVENT_QUIT` 與 os 的關機請求進 W。`examples/` 不在根裡回報主會話。
@@ -508,6 +508,20 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 - **U** 等 T、R2b。
 - 會碰同一批檔的：P、W、A、K 都加 Plugin 登記列；T、I 都改 `config/modules.csv` 與 `third_party/CMakeLists.txt`（衝突小，後合併的一方 merge 跟上）；W 改 world-time 頁（取樣、渲染 World 的時間），R1a 不碰時間；KR、R1a、R1b 改 Kernel 頁與 Kernel 的程式（先後見上），R1a、R1b 另改編排層頁。
 - **批次先後最終由主會話照 L17 排**（K 等於 `-keeptool` 那一批併進本線，主會話確認）。
+
+### 10.3 給子批開卡的提醒（動工前核准後整理）
+
+本宣告到修訂 21 為止；細節不再寫進總宣告，由各子批的事前宣告定（子批的宣告照規則送檢查）。開卡時請 brief 帶：
+
+- **讀什麼**：本宣告第 2 節前提表、第 3.3 節（Module／Plugin 的角色表）、第 9 節（建置與 Plugin 的接法）、第 12 節 DI 草案、第 14 節的決定（四樣）與核准清單、該子批在第 10.2 節的那一列；HANDOFF 的 `-sdl-q1-b-prime`～`-sdl-declaration-approved`。主參考 Bevy（P26）。
+- **先後**：第 10.1 節。馬上可以開：KR、R1a、R1b、X1、T、I、P。改 Kernel 的三批建議 R1a → KR → R1b 依序合併（同改 `World.cpp`、`Executor.cpp`）。P 之後 W、A；R2a 等 P、W；K 等 R2a、R1a、W；R2b 等 R2a、R1a、X1、I、T；U 等 T、R2b。
+- **條號**：第 9.2 節末的分配——DI-KS 29～34 給 KR、35～37 給 R1a、38～40 給 R1b；RC 25～27 給 KR、28～29 給 R1a／R1b；編排層 O-E9 給 Extract 的來源。每個 Module 的 DI 與錯誤碼用自己的前綴。
+- **會碰同一批檔的**：P、W、A、K 都加 `config/plugins.csv` 的列；T、I 都改 `config/modules.csv` 與 `third_party/CMakeLists.txt`；W 改 world-time 頁；KR、R1a、R1b 改 Kernel 頁與同一段程式。後合併的一方 fetch＋merge gyo2 跟上，不 rebase。
+- **P**：`plugins/` 加進 code page 與 os 守衛的根（第 9.1 節；os.md DI 1、2 已核准），和 apps→games 那批（#294）碰同幾處，誰後合併誰跟上；DI 11 守衛那一半待主會話確認核准範圍（見開頭）。
+- **W**：動工前要交使用者定的題目都在第 10.2 節 W 列「W 要定的」，至少：時間取樣的形（列兩個選項，主會話已確認由 W 的宣告準備）、SDL-7 的對應表與最終文字、`SDL_EVENT_QUIT` 與 os 的關機請求、關窗與結束迴圈、新 World 的初值、佇列上限與丟棄、請求 System 的錯誤。O-12 的改字（已核准）在 W 合併時落到 `orchestration.zh-Hant.md`，守衛（先後測試、突變「拿掉 `before`」）也由 W 立。
+- **R2a**：`GpuSubmit` 的錯誤、`sdl_gpu` 的把手 Resource、多個渲染 World、shader 工具的 R4 地位（第 16 節 (5)，主會話判誰改 os.md DI 2 的字面）。
+- **檢查的模型**：第 10.2 節寫的「宣告送 Fable／high」，在 Fable 用量不足期間照主會話的指示改 Opus／high，報告寫明同模型。
+- **還懸著、交主會話的**：第 16 節 (5) shader 工具與 os.md DI 2 的字面、(6) `examples/` 不在根裡。
 
 ### 10.2 各子批
 
